@@ -1,9 +1,9 @@
-import { memo, useEffect, useId, useMemo, useRef, useState, type ReactNode } from 'react'
+import { memo, useEffect, useId, useMemo, useRef, useState } from 'react'
 import { motion } from 'framer-motion'
 import { useNexusStore } from '../../store/nexusStore'
 import type { AgentOperationState, AgentResponse, MissionEvent, OpenClawAgent } from '../../types/nexus'
-import { abortStaleGatewayChatTurns, clearRuntimeMonitor, closeRuntimeSession, restartGatewayRuntime, runRuntimeDoctor, startGatewayRuntime, stopCronShift, stopGatewayRuntime, updateCronShift, useRuntimeStatus } from '../../hooks/useRuntimeStatus'
-import type { DoctorRun, GatewayChannelActivity, GatewayLogEntry, OpenAgentSession, RuntimeCronJob, RuntimeMonitorClearResult, RuntimeRun, RuntimeSessionCloseResult, RuntimeStatus } from '../../hooks/useRuntimeStatus'
+import { abortStaleGatewayChatTurns, clearRuntimeMonitor, restartGatewayRuntime, runRuntimeDoctor, startGatewayRuntime, stopCronShift, stopGatewayRuntime, updateCronShift, useRuntimeStatus } from '../../hooks/useRuntimeStatus'
+import type { DoctorRun, GatewayChannelActivity, GatewayLogEntry, OpenAgentSession, RuntimeCronJob, RuntimeMonitorClearResult, RuntimeRun, RuntimeStatus } from '../../hooks/useRuntimeStatus'
 import { ActionStatusBanner } from '../common/ActionStatusBanner'
 
 const CONTROL_CENTER_LOGO_SRC = '/brand/dystopai-app-icon.png'
@@ -51,12 +51,6 @@ function formatRuntimeDuration(ms: number | null | undefined): string {
   return `${seconds}s`
 }
 
-function formatRuntimeDelay(ms: number | null | undefined): string {
-  if (ms === null || ms === undefined || !Number.isFinite(ms)) return '-'
-  if (ms >= 1000) return `${(ms / 1000).toFixed(1)}s`
-  return `${Math.round(ms)}ms`
-}
-
 function formatRuntimeTime(ts: string | null | undefined): string {
   if (!ts) return 'never'
   const date = new Date(ts)
@@ -89,10 +83,6 @@ function cronJobTimeLabel(job: RuntimeCronJob): string {
 
 function shortSessionId(sessionId: string): string {
   return sessionId.length > 12 ? `${sessionId.slice(0, 8)}...` : sessionId
-}
-
-function runtimeSessionKey(session: OpenAgentSession): string {
-  return `${session.agentId}:${session.sessionId}`
 }
 
 function runtimeSessionActivityMs(session: OpenAgentSession): number {
@@ -138,27 +128,6 @@ function sessionLockLabel(session: OpenAgentSession): string {
   if (!lock.stale) return lock.pid ? `Writer pid ${lock.pid} is active` : 'Writer lock present'
   const reason = lock.staleReasons.length ? lock.staleReasons.map((item) => item.replace(/-/g, ' ')).join(', ') : 'stale'
   return lock.removable ? `Stale lock: ${reason}` : `Lock warning: ${reason}`
-}
-
-function sessionLockDetail(session: OpenAgentSession): string {
-  const lock = session.sessionLock
-  if (!lock) return ''
-  const age = lock.ageMs ?? lock.mtimeAgeMs
-  const owner = lock.pid ? `pid ${lock.pid}${lock.ownerAlive === false ? ' dead' : lock.ownerAlive ? ' alive' : ''}` : 'no pid'
-  return `${sessionLockLabel(session)} (${owner}, age ${formatRuntimeDuration(age)})`
-}
-
-function sessionCloseSummary(result: RuntimeSessionCloseResult): string {
-  const terminated = result.terminatedRuns.length
-  const gatewayAborts = result.gatewayAborts || []
-  const gatewayAbortSummary = gatewayAborts.length
-    ? ` Gateway abort requested ${formatCount(gatewayAborts.filter((entry) => entry.ok).length, 'session')} of ${gatewayAborts.length}.`
-    : ''
-  const cleanup = result.sessionLockCleanup
-  const cleanupSummary = cleanup
-    ? ` Lock sweep scanned ${formatCount(cleanup.scanned, 'lock')} and removed ${formatCount(cleanup.removed, 'stale lock')}${cleanup.errors ? ` with ${formatCount(cleanup.errors, 'error')}` : ''}.`
-    : ''
-  return `Closed ${formatCount(result.closedSessions, 'session')}, cleared ${formatCount(result.clearedHistories, 'history', 'histories')}, and terminated ${formatCount(terminated, 'active call')}.${gatewayAbortSummary}${cleanupSummary}`
 }
 
 function compactRuntimeText(value: string, max = 110): string {
@@ -739,46 +708,6 @@ function makeEventActivity(event: MissionEvent): ActivityItem {
   return { kind: 'event', id: event.id, agentId: event.agentId, timestamp: event.timestamp, ok, title, detail: summarizeActivity(event.message), files: extractFiles(event.message), eventType: event.type, failureKind: event.failureKind }
 }
 
-type RuntimeTelemetryTone = MonitorTone | 'neutral'
-
-function RuntimeDatum({
-  label,
-  value,
-  title,
-  wide = false,
-}: {
-  label: string
-  value: string | number
-  title?: string
-  wide?: boolean
-}) {
-  return (
-    <div className={`dy-runtime-datum min-w-0 ${wide ? 'dy-runtime-datum-wide' : ''}`}>
-      <span>{label}</span>
-      <strong title={title || String(value)}>{value}</strong>
-    </div>
-  )
-}
-
-function RuntimeTelemetryCluster({
-  label,
-  tone = 'neutral',
-  children,
-}: {
-  label: string
-  tone?: RuntimeTelemetryTone
-  children: ReactNode
-}) {
-  return (
-    <div className="dy-runtime-cluster min-w-0 rounded-none border border-white/[0.04] bg-black/15 px-2.5 py-2" data-tone={tone}>
-      <p>{label}</p>
-      <div className="dy-runtime-cluster-items">
-        {children}
-      </div>
-    </div>
-  )
-}
-
 function formatCount(value: number, singular: string, plural = `${singular}s`): string {
   return `${value} ${value === 1 ? singular : plural}`
 }
@@ -1294,135 +1223,58 @@ function GatewayActivityLine({ event }: { event: GatewayChannelActivity }) {
 function RuntimeSessionsCard({
   sessions,
   agentById,
-  onClose,
-  closingKey,
 }: {
   sessions: OpenAgentSession[]
   agentById: Map<string, OpenClawAgent>
-  onClose: (session: OpenAgentSession) => void
-  closingKey: string
 }) {
-  const panelId = useId()
-  const [expanded, setExpanded] = useState(false)
   const activeCount = sessions.filter((session) => session.activeRunId || session.active || session.gatewayActive).length
-  const displayedSessions = sessions.slice(0, 16)
-  const hiddenCount = Math.max(0, sessions.length - displayedSessions.length)
-  const sessionSummary = activeCount
-    ? `${activeCount} active lane${activeCount === 1 ? '' : 's'}`
-    : `${sessions.length} total lane${sessions.length === 1 ? '' : 's'}`
+  const lockWarningCount = sessions.filter((session) => Boolean(session.sessionLock)).length
+  const latestActivityMs = sessions.reduce((latest, session) => Math.max(latest, runtimeSessionActivityMs(session)), 0)
+  const latestActivity = latestActivityMs ? formatRuntimeTime(new Date(latestActivityMs).toISOString()) : 'none'
+  const targetNames = Array.from(new Set(sessions.map((session) => agentById.get(session.agentId)?.name || session.agentId).filter(Boolean)))
+  const visibleTargetNames = targetNames.slice(0, 3)
+  const targetSummary = visibleTargetNames.length
+    ? `${visibleTargetNames.join(', ')}${targetNames.length > visibleTargetNames.length ? ` +${targetNames.length - visibleTargetNames.length}` : ''}`
+    : 'none'
+  const targetTitle = targetNames.length ? targetNames.join(', ') : 'No runtime session targets'
+  const stateSample = sessions.find((session) => runtimeSessionState(session) !== 'stored') || sessions[0]
+  const stateLabel = stateSample ? runtimeSessionStateLabel(stateSample) : 'idle'
+  const lockTitle = sessions
+    .filter((session) => session.sessionLock)
+    .map((session) => `${agentById.get(session.agentId)?.name || session.agentId}: ${sessionLockLabel(session)}`)
+    .join('\n')
+  const stripState = activeCount ? 'active' : sessions.length ? 'quiet' : 'empty'
 
   return (
-    <div className="dy-monitor-card dy-runtime-sessions-card flex min-h-0 flex-col rounded-none border border-white/[0.04] bg-white/[0.015]" data-expanded={expanded}>
-      <button
-        type="button"
-        className="dy-runtime-sessions-toggle grid w-full grid-cols-[minmax(0,1fr)_auto] items-center gap-3 rounded-none border-0 bg-transparent px-3 py-2.5 text-left transition hover:bg-white/[0.035] focus-visible:outline focus-visible:outline-1 focus-visible:outline-cyan-200/50"
-        aria-controls={panelId}
-        aria-expanded={expanded}
-        title={expanded ? 'Hide runtime session controls' : 'Show runtime session controls'}
-        onClick={() => setExpanded((value) => !value)}
-      >
-        <div className="min-w-0">
+    <div className="dy-monitor-card dy-runtime-sessions-card dy-runtime-session-strip grid min-h-0 grid-cols-[minmax(0,1fr)_auto] items-center gap-3 rounded-none border border-white/[0.04] bg-white/[0.015] px-3 py-2.5" data-state={stripState}>
+      <div className="dy-runtime-session-strip-copy min-w-0">
+        <div className="flex min-w-0 items-center gap-2">
+          <span className="dy-runtime-session-strip-dot" data-state={stripState} aria-hidden="true" />
           <p className="dy-runtime-sessions-title truncate text-[12px] font-bold text-slate-100">Runtime Sessions</p>
-          <p className="dy-runtime-sessions-summary mt-0.5 truncate text-[9px] text-slate-500">{sessionSummary}</p>
         </div>
-        <div className="dy-runtime-session-stats flex items-center gap-1.5">
-          <span className="dy-channel-activity-stat border border-white/[0.08] px-2 py-1 text-[8px] font-semibold uppercase tracking-[0.08em] text-slate-400" data-state={activeCount ? 'active' : 'quiet'}>
-            {activeCount ? `${activeCount} active` : 'quiet'}
+        <p className="dy-runtime-sessions-summary mt-0.5 truncate text-[9px] text-slate-500">
+          {sessions.length ? `${sessions.length} lane${sessions.length === 1 ? '' : 's'} targeting ${targetSummary}` : 'No open runtime lanes'}
+        </p>
+      </div>
+      <div className="dy-runtime-session-stats dy-runtime-strip-stats flex min-w-0 flex-wrap items-center justify-end gap-1.5" aria-label="Runtime session summary">
+        <span className="dy-runtime-strip-chip" title={`${sessions.length} runtime session lane${sessions.length === 1 ? '' : 's'}`}>
+          {sessions.length} lanes
+        </span>
+        <span className="dy-runtime-strip-chip" data-state={stripState} title={`Representative state: ${stateLabel}`}>
+          {activeCount ? `${activeCount} live` : stripState === 'empty' ? 'idle' : 'quiet'}
+        </span>
+        <span className="dy-runtime-strip-chip dy-runtime-strip-chip-target" title={targetTitle}>
+          target {targetSummary}
+        </span>
+        <span className="dy-runtime-strip-chip" title={latestActivityMs ? `Last runtime session activity at ${latestActivity}` : 'No runtime session activity yet'}>
+          last {latestActivity}
+        </span>
+        {lockWarningCount > 0 && (
+          <span className="dy-runtime-strip-chip" data-state="warning" title={lockTitle || undefined}>
+            {lockWarningCount} lock{lockWarningCount === 1 ? '' : 's'}
           </span>
-          <span className="dy-runtime-sessions-toggle-label border border-white/[0.08] px-2 py-1 text-[8px] font-semibold uppercase tracking-[0.08em] text-slate-400">
-            {expanded ? 'hide' : 'open'}
-          </span>
-        </div>
-      </button>
-      {expanded && (
-        <div id={panelId} className="dy-runtime-sessions-panel min-h-0 px-3 pb-3" role="region" aria-label="Runtime session lanes">
-          <p className="dy-runtime-sessions-description mb-2 text-[10px] text-slate-500">Gateway session lanes, cached history, and lock sweep controls</p>
-          <div className="dy-monitor-stream-box dy-runtime-session-list min-h-0 overflow-auto rounded-none border border-white/[0.04] bg-black/25 shadow-inner shadow-black/20">
-            {displayedSessions.map((session) => {
-              const agent = agentById.get(session.agentId)
-              const key = runtimeSessionKey(session)
-              const busy = closingKey === key
-              const state = runtimeSessionState(session)
-              const latestActivity = session.gatewayLastEventAt || session.updatedAt || session.lastTouchedAt
-              const closeLabel = state === 'stored' || state === 'missing' || state === 'locked' || state === 'stale-lock' ? 'Sweep' : 'Close lane'
-              const closeTitle = state === 'stored' || state === 'missing' || state === 'locked' || state === 'stale-lock'
-                ? 'Clear cached history for this session and sweep any matching stale lock.'
-                : 'Abort active runtime work for this session, clear cached history, and sweep matching stale locks.'
-              const lockDetail = sessionLockDetail(session)
-              return (
-                <div
-                  key={key}
-                  className="dy-runtime-session-card border-b border-white/[0.08] px-3 py-2.5 text-[10px] leading-tight transition hover:bg-white/[0.025]"
-                  data-state={state}
-                  title={`${agent?.name || session.agentId} / ${session.sessionId}`}
-                >
-                  <div className="dy-runtime-session-header grid min-w-0 grid-cols-[minmax(0,1fr)_auto] items-start gap-2">
-                    <div className="min-w-0">
-                      <div className="flex min-w-0 flex-wrap items-center gap-1.5">
-                        <span className="dy-runtime-session-state rounded-none border border-white/10 bg-white/[0.03] px-2 py-0.5 text-[7px] font-semibold uppercase text-slate-300" data-state={state}>
-                          {runtimeSessionStateLabel(session)}
-                        </span>
-                        <p className="min-w-0 truncate text-[11px] font-bold text-slate-100">{agent?.name || session.agentId}</p>
-                      </div>
-                      <p className="mt-1 truncate font-mono text-[8.5px] text-slate-600" title={session.sessionId}>
-                        {shortSessionId(session.sessionId)}
-                      </p>
-                    </div>
-                    <button
-                      type="button"
-                      disabled={Boolean(closingKey)}
-                      onClick={() => onClose(session)}
-                      title={closeTitle}
-                      aria-label={`${closeLabel} session ${session.sessionId} for ${agent?.name || session.agentId}`}
-                      className="dy-gateway-action-button dy-runtime-session-close rounded-none border border-rose-300/15 bg-rose-300/[0.035] px-2 py-1 text-[8px] font-semibold uppercase tracking-[0.10em] text-rose-200/80 transition hover:border-rose-300/30 hover:bg-rose-300/[0.07] disabled:cursor-not-allowed disabled:opacity-50"
-                      data-tone="rose"
-                    >
-                      {busy ? 'Closing' : closeLabel}
-                    </button>
-                  </div>
-                  <div className="dy-runtime-session-details mt-2 grid min-w-0 grid-cols-2 gap-1.5 text-[9px] text-slate-500 sm:grid-cols-4">
-                    <span className="dy-session-meta-chip"><span>Provider</span><strong>{session.provider || 'default'}</strong></span>
-                    <span className="dy-session-meta-chip" title={session.modelId || undefined}><span>Model</span><strong>{session.modelId || 'default'}</strong></span>
-                    <span className="dy-session-meta-chip"><span>Messages</span><strong>{session.conversationMessages}</strong></span>
-                    <span className="dy-session-meta-chip"><span>Activity</span><strong>{formatRuntimeTime(latestActivity)}</strong></span>
-                  </div>
-                  {session.sessionLock && (
-                    <div
-                      className="dy-runtime-session-lock mt-2 min-w-0 rounded-none border px-2 py-1.5 text-[9px] leading-snug"
-                      data-stale={session.sessionLock.stale ? 'true' : 'false'}
-                      data-removable={session.sessionLock.removable ? 'true' : 'false'}
-                      title={`${lockDetail}\n${session.sessionLock.lockPath}`}
-                    >
-                      <span className="font-semibold uppercase tracking-[0.08em]">{session.sessionLock.removable ? 'Reclaimable lock' : session.sessionLock.stale ? 'Lock warning' : 'Writer lock'}</span>
-                      <strong>{lockDetail}</strong>
-                    </div>
-                  )}
-                  {(session.activeRunId || session.gatewayEventCount || !session.sessionFileExists) && (
-                    <p className="mt-1.5 truncate font-mono text-[8.5px] text-slate-500" title={session.activeRunId || session.sessionFile || undefined}>
-                      {session.activeRunId
-                        ? `run ${shortSessionId(session.activeRunId)}`
-                        : !session.sessionFileExists
-                          ? 'session file missing'
-                          : `${session.gatewayEventCount || 0} gateway events`}
-                    </p>
-                  )}
-                </div>
-              )
-            })}
-            {hiddenCount > 0 && (
-              <div className="border-t border-white/[0.05] px-3 py-2 text-[9px] uppercase tracking-[0.10em] text-slate-600">
-                {hiddenCount} older session{hiddenCount === 1 ? '' : 's'} hidden
-              </div>
-            )}
-            {!displayedSessions.length && (
-              <div className="dy-monitor-empty dy-session-empty-state py-6 text-center text-[11px] font-medium text-slate-600">
-                <strong>No runtime sessions.</strong>
-                <span>Gateway-backed agent sessions will appear here when they start.</span>
-              </div>
-            )}
-          </div>
-        </div>
-      )}
+        )}
+      </div>
     </div>
   )
 }
@@ -1504,100 +1356,17 @@ function RuntimeGatewayPanel({
   onRefresh: () => void
 }) {
   const gateway = status?.gateway
-  const gatewayTone: MonitorTone = gateway?.healthy ? 'emerald' : gateway?.processRunning ? 'amber' : 'rose'
-  const runtimeTone: MonitorTone = status?.runtime?.severity === 'error' ? 'rose' : status?.runtime?.severity === 'warning' ? 'amber' : 'emerald'
-  const doctorDiagnostics = status?.diagnostics?.doctor
-  const lastDoctorRun = doctorDiagnostics?.lastRun || null
-  const doctorTone: MonitorTone = doctorDiagnostics?.errorCount
-    ? 'rose'
-    : doctorDiagnostics?.warningCount
-      ? 'amber'
-      : lastDoctorRun
-        ? 'emerald'
-        : 'cyan'
   const activeCronJobs = useMemo(() => status?.shifts?.active || [], [status?.shifts?.active])
   const activeCronCount = status?.shifts?.activeCount ?? activeCronJobs.length
-  const nextCronJob = useMemo(() => {
-    return activeCronJobs.reduce<RuntimeCronJob | null>((next, job) => {
-      const nextTime = next ? cronJobDisplayTime(next) : null
-      const nextMs = nextTime ? Date.parse(nextTime) : Number.POSITIVE_INFINITY
-      const jobTime = cronJobDisplayTime(job)
-      const jobMs = jobTime ? Date.parse(jobTime) : Number.NaN
-      if (Number.isNaN(jobMs)) return next
-      return jobMs < nextMs ? job : next
-    }, null)
-  }, [activeCronJobs])
-  const nextCronTime = nextCronJob ? cronJobDisplayTime(nextCronJob) : null
-  const cronAgents = useMemo(() => new Set(activeCronJobs.map((job) => job.agent)).size, [activeCronJobs])
   const cronCadences = useMemo(() => Array.from(new Set(activeCronJobs.map((job) => job.every).filter(Boolean))), [activeCronJobs])
-  const cronTone: MonitorTone = activeCronCount > 0 ? 'emerald' : 'cyan'
   const logs = gateway?.logs || []
   const activity = gateway?.activity
   const gatewayChat = gateway?.chat
   const gatewayChatActiveRuns = gatewayChat?.activeRuns || 0
-  const gatewayChatActiveObservers = gatewayChat?.activeObservers || 0
   const gatewayChatOldestAgeMs = Math.max(gatewayChat?.oldestRunAgeMs || 0, gatewayChat?.oldestObserverAgeMs || 0)
-  const gatewayChatLatestRecovery = gatewayChat?.recentRecoveries?.[0] || null
-  const gatewayStartup = gateway?.startup
-  const gatewayStartupTimeline = gatewayStartup?.timeline || []
-  const gatewayStartupLatest = gatewayStartupTimeline.length ? gatewayStartupTimeline[gatewayStartupTimeline.length - 1] : null
-  const gatewayStartupGraceRemainingMs = gatewayStartup?.graceRemainingMs ?? gateway?.startupGraceRemainingMs ?? 0
-  const gatewayStartupTone: RuntimeTelemetryTone = gatewayStartupLatest?.status === 'failed'
-    ? 'rose'
-    : gatewayStartupLatest?.status === 'warning'
-      ? 'amber'
-      : gatewayStartupLatest?.phase === 'healthy' || gateway?.healthy
-        ? 'emerald'
-        : gateway?.ensureInFlight || gatewayStartupGraceRemainingMs > 0
-          ? 'cyan'
-          : 'neutral'
-  const gatewayStartupPhase = gatewayStartupLatest?.phase || (gateway?.ensureInFlight ? 'starting' : gateway?.healthy ? 'healthy' : 'idle')
-  const gatewayStartupLastDuration = gatewayStartupLatest?.durationMs !== undefined
-    ? formatRuntimeDuration(gatewayStartupLatest.durationMs)
-    : gatewayStartupLatest?.status || '-'
-  const gatewayReadiness = gateway?.readiness
-  const gatewayReadinessTone: RuntimeTelemetryTone = !gatewayReadiness
-    ? 'neutral'
-    : !gatewayReadiness.reachable
-      ? 'rose'
-      : gatewayReadiness.ready && !gatewayReadiness.degraded
-        ? 'emerald'
-        : 'amber'
-  const gatewayReadinessLabel = gatewayReadiness?.ready
-    ? 'yes'
-    : gatewayReadiness?.reachable
-      ? 'settling'
-      : gateway?.processRunning
-        ? 'probing'
-        : 'offline'
-  const gatewayReadinessDetail = gatewayReadiness?.failing?.length
-    ? gatewayReadiness.failing.join('; ')
-    : gatewayReadiness?.error || gatewayReadiness?.status || (gatewayReadiness?.ready ? 'Gateway readyz reports usable readiness.' : 'Gateway readiness has not been confirmed.')
-  const gatewayEventLoopLabel = gatewayReadiness?.eventLoop
-    ? gatewayReadiness.eventLoop.degraded
-      ? 'degraded'
-      : 'ok'
-    : '-'
-  const gatewayEventLoopTitle = gatewayReadiness?.eventLoop
-    ? [
-        gatewayReadiness.eventLoop.reasons.length ? gatewayReadiness.eventLoop.reasons.join('; ') : 'Event loop within readiness thresholds.',
-        `max ${formatRuntimeDelay(gatewayReadiness.eventLoop.delayMaxMs)}`,
-        `util ${gatewayReadiness.eventLoop.utilization !== undefined ? gatewayReadiness.eventLoop.utilization.toFixed(3) : '-'}`,
-      ].join(' ')
-    : 'No readyz event-loop block was returned.'
-  const gatewayChatTone: RuntimeTelemetryTone = !gatewayChat
-    ? 'neutral'
-    : gatewayChatOldestAgeMs > GATEWAY_CHAT_STALE_TURN_MS * 2
-      ? 'rose'
-      : gatewayChatOldestAgeMs > GATEWAY_CHAT_STALE_TURN_MS
-        ? 'amber'
-        : gatewayChatActiveRuns || gatewayChatActiveObservers
-          ? 'emerald'
-          : 'cyan'
   const gatewayChatHasStaleTurns = gatewayChatOldestAgeMs >= GATEWAY_CHAT_STALE_TURN_MS && gatewayChatActiveRuns > 0
   const runtimeSessions = useMemo(() => [...(status?.sessions || [])].sort(compareRuntimeSessions), [status?.sessions])
   const [runtimeAction, setRuntimeAction] = useState('')
-  const [sessionCloseKey, setSessionCloseKey] = useState('')
   const [cronCancelKey, setCronCancelKey] = useState('')
   const [cronCancelConfirm, setCronCancelConfirm] = useState(false)
   const [cronEditJob, setCronEditJob] = useState<RuntimeCronJob | null>(null)
@@ -1692,24 +1461,6 @@ function RuntimeGatewayPanel({
       throw error
     } finally {
       setCronEditKey('')
-    }
-  }
-  const closeSessionLane = async (session: OpenAgentSession) => {
-    const key = runtimeSessionKey(session)
-    if (sessionCloseKey) return
-    setCronCancelConfirm(false)
-    setSessionCloseKey(key)
-    setActionError('')
-    setRuntimeNotice('')
-    try {
-      const result = await closeRuntimeSession({ agentId: session.agentId, sessionId: session.sessionId, sessionKey: session.sessionKey })
-      setRuntimeNotice(sessionCloseSummary(result))
-      onRefresh()
-      window.setTimeout(onRefresh, 1500)
-    } catch (error) {
-      setActionError(error instanceof Error ? error.message : String(error))
-    } finally {
-      setSessionCloseKey('')
     }
   }
   const stopGateway = async () => {
@@ -1896,91 +1647,7 @@ function RuntimeGatewayPanel({
             <RuntimeSessionsCard
               sessions={runtimeSessions}
               agentById={agentById}
-              onClose={(session) => void closeSessionLane(session)}
-              closingKey={sessionCloseKey}
             />
-            <div className="dy-runtime-compact-grid mt-3">
-              <RuntimeTelemetryCluster label="Process" tone={gatewayTone}>
-                <RuntimeDatum label="Port" value={gateway?.port ?? '-'} />
-                <RuntimeDatum label="PID" value={gateway?.pid ?? 'none'} />
-                <RuntimeDatum label="Uptime" value={formatRuntimeDuration(gateway?.uptimeMs)} wide />
-              </RuntimeTelemetryCluster>
-              <RuntimeTelemetryCluster label="Health" tone={gatewayTone}>
-                <RuntimeDatum label="Healthy" value={formatRuntimeTime(gateway?.lastHealthyAt)} />
-                <RuntimeDatum label="Started" value={formatRuntimeTime(gateway?.lastStartedAt)} />
-                {gatewayStartupGraceRemainingMs > 0 && (
-                  <RuntimeDatum
-                    label="Grace"
-                    value={formatRuntimeDuration(gatewayStartupGraceRemainingMs)}
-                    title="Gateway startup grace remaining before Control Center treats missing health as restart-worthy."
-                  />
-                )}
-                <RuntimeDatum label="Exit" value={formatRuntimeTime(gateway?.lastExitAt)} wide />
-              </RuntimeTelemetryCluster>
-              <RuntimeTelemetryCluster label="Readiness" tone={gatewayReadinessTone}>
-                <RuntimeDatum label="Ready" value={gatewayReadinessLabel} title={gatewayReadinessDetail} />
-                <RuntimeDatum label="Loop" value={gatewayEventLoopLabel} title={gatewayEventLoopTitle} />
-                <RuntimeDatum label="P99" value={formatRuntimeDelay(gatewayReadiness?.eventLoop?.delayP99Ms)} title={gatewayEventLoopTitle} />
-                <RuntimeDatum label="Uptime" value={formatRuntimeDuration(gatewayReadiness?.uptimeMs)} />
-              </RuntimeTelemetryCluster>
-              <RuntimeTelemetryCluster label="Startup" tone={gatewayStartupTone}>
-                <RuntimeDatum label="Phase" value={gatewayStartupPhase} title={gatewayStartupLatest?.message || 'No startup sequence recorded yet.'} />
-                <RuntimeDatum label="Elapsed" value={gatewayStartupLatest ? formatRuntimeDuration(gatewayStartupLatest.elapsedMs) : '-'} />
-                <RuntimeDatum label="Steps" value={gatewayStartupTimeline.length} />
-                <RuntimeDatum
-                  label="Last"
-                  value={gatewayStartupLastDuration}
-                  title={gatewayStartupLatest ? `${gatewayStartupLatest.status}: ${gatewayStartupLatest.message}` : 'No startup sequence recorded yet.'}
-                />
-              </RuntimeTelemetryCluster>
-              <RuntimeTelemetryCluster label="Traffic" tone={activity?.active ? 'emerald' : 'neutral'}>
-                <RuntimeDatum label="Channel" value={activity?.active ? 'active' : 'quiet'} />
-                <RuntimeDatum label="Last event" value={formatRuntimeTime(activity?.lastEventAt)} />
-                <RuntimeDatum label="Counts" value={`${activity?.inboundCount || 0} in / ${activity?.outboundCount || 0} out / ${activity?.systemCount || 0} sys`} wide />
-              </RuntimeTelemetryCluster>
-              <RuntimeTelemetryCluster label="Agent Turns" tone={gatewayChatTone}>
-                <RuntimeDatum label="Runs" value={gatewayChatActiveRuns} />
-                <RuntimeDatum label="Streams" value={gatewayChatActiveObservers} />
-                {gatewayChatLatestRecovery && (
-                  <RuntimeDatum
-                    label="Recovered"
-                    value={`${gatewayChatLatestRecovery.abortedCount} @ ${formatRuntimeTime(gatewayChatLatestRecovery.timestamp)}`}
-                    title={`${gatewayChatLatestRecovery.reason}; threshold ${formatRuntimeDuration(gatewayChatLatestRecovery.minAgeMs)}; ${gatewayChatLatestRecovery.abortedCount} aborted, ${gatewayChatLatestRecovery.skippedCount} still active.`}
-                    wide
-                  />
-                )}
-                <RuntimeDatum
-                  label="Oldest"
-                  value={gatewayChatOldestAgeMs ? formatRuntimeDuration(gatewayChatOldestAgeMs) : 'idle'}
-                  title={gatewayChat ? `Oldest run ${formatRuntimeDuration(gatewayChat.oldestRunAgeMs)} / stream ${formatRuntimeDuration(gatewayChat.oldestObserverAgeMs)}` : 'Gateway chat waiter metrics are not available yet.'}
-                  wide
-                />
-              </RuntimeTelemetryCluster>
-              <RuntimeTelemetryCluster label="Build" tone={runtimeTone}>
-                <RuntimeDatum label="Version" value={status?.runtime?.current || 'unknown'} title={status?.runtime?.current || undefined} wide />
-                <RuntimeDatum label="Restarts" value={gateway?.restartCount ?? 0} />
-                <RuntimeDatum label="Queued" value={gateway?.restartScheduled ? 'yes' : 'no'} />
-              </RuntimeTelemetryCluster>
-              <RuntimeTelemetryCluster label="Doctor" tone={doctorTone}>
-                <RuntimeDatum label="Last" value={formatRuntimeTime(doctorDiagnostics?.lastRunAt)} />
-                <RuntimeDatum label="Issues" value={`${doctorDiagnostics?.errorCount || 0} err / ${doctorDiagnostics?.warningCount || 0} warn`} wide />
-                <RuntimeDatum
-                  label="History"
-                  value={doctorDiagnostics?.recent?.length || 0}
-                  title={lastDoctorRun?.summary || 'Run Doctor to generate an upgrade and runtime readiness report.'}
-                />
-              </RuntimeTelemetryCluster>
-              <RuntimeTelemetryCluster label="Cron Jobs" tone={cronTone}>
-                <RuntimeDatum label="Active" value={activeCronCount} />
-                <RuntimeDatum label="Agents" value={cronAgents || 0} />
-                <RuntimeDatum
-                  label="Next"
-                  value={nextCronTime ? formatCronRemaining(nextCronTime) : 'none'}
-                  title={nextCronJob && nextCronTime ? `${nextCronJob.name} ${cronJobTimeLabel(nextCronJob).toLowerCase()} at ${formatRuntimeTime(nextCronTime)}` : undefined}
-                  wide
-                />
-              </RuntimeTelemetryCluster>
-            </div>
           </div>
 
         <GatewayActivityCard activity={activity} />
