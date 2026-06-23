@@ -25050,7 +25050,7 @@ async function buildRuntimeStatusPayload(forcePluginRefresh: boolean): Promise<R
   const enabledPlugins = pluginControls.plugins.filter((plugin) => plugin.enabled || isPluginRuntimeLoaded(plugin))
   const communicationPlugins = enabledPlugins.filter((plugin) => plugin.category === 'communications' || plugin.channels.length)
   const activeMissions = listMissions().filter((mission) => mission.status === 'active')
-  const cronJobs = listActiveCronJobViews()
+  const cronJobs = listActiveCronJobViews({ sqlite: false })
   gateway.logs = dedupeGatewayLogEntries([...gateway.logs, ...currentGatewayLogs], 80)
   const pluginSummary = (plugin: PluginControlEntry) => {
     const runtimeLoaded = isPluginRuntimeLoaded(plugin)
@@ -25153,7 +25153,7 @@ async function buildRuntimeSummaryPayload(): Promise<Record<string, unknown>> {
   ], 48)
   const currentChannelActivityLogs = gatewayLogEntriesSinceCurrentStart(externalChannelActivityLogs)
   const activity = summarizeGatewayActivity([...currentGatewayLogs, ...currentChannelActivityLogs])
-  const cronJobs = listActiveCronJobViews()
+  const cronJobs = listActiveCronJobViews({ sqlite: false })
   const activeMissions = listMissions().filter((mission) => mission.status === 'active')
   const cachedPlugins = isLooseRecord(runtimeStatusPayloadCache?.payload?.plugins)
     ? runtimeStatusPayloadCache?.payload.plugins as Record<string, unknown>
@@ -25348,7 +25348,7 @@ function withRuntimeFallbackMonitor(
 function minimalRuntimeStatusPayload(reason: string, responseTimeoutMs: number): Record<string, unknown> {
   const gateway = gatewayStatusSnapshot(false)
   const activeMissions = listMissions().filter((mission) => mission.status === 'active')
-  const cronJobs = listActiveCronJobViews()
+  const cronJobs = listActiveCronJobViews({ sqlite: false })
   return {
     ok: true,
     generatedAt: new Date().toISOString(),

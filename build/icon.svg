@@ -1,0 +1,46 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" role="img" aria-label="DystopAI">
+  <defs>
+    <radialGradient id="bg" cx="50%" cy="47%" r="72%">
+      <stop offset="0" stop-color="#17282d"/>
+      <stop offset="0.58" stop-color="#0a1115"/>
+      <stop offset="1" stop-color="#030506"/>
+    </radialGradient>
+    <linearGradient id="edge" x1="36" x2="220" y1="28" y2="230" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#93f8ff"/>
+      <stop offset="0.45" stop-color="#25e7f2"/>
+      <stop offset="1" stop-color="#0b6870"/>
+    </linearGradient>
+    <filter id="glow" x="-40%" y="-40%" width="180%" height="180%">
+      <feGaussianBlur stdDeviation="4" result="blur"/>
+      <feMerge>
+        <feMergeNode in="blur"/>
+        <feMergeNode in="SourceGraphic"/>
+      </feMerge>
+    </filter>
+  </defs>
+  <rect x="12" y="12" width="232" height="232" rx="44" fill="url(#bg)"/>
+  <rect x="13" y="13" width="230" height="230" rx="43" fill="none" stroke="url(#edge)" stroke-opacity="0.5" stroke-width="2"/>
+  <rect x="28" y="28" width="200" height="200" rx="32" fill="none" stroke="#7ff6ff" stroke-opacity="0.12" stroke-width="2"/>
+  <path d="M128 24v42M128 190v42M24 128h42M190 128h42" stroke="#9afaff" stroke-linecap="round" stroke-width="4" filter="url(#glow)"/>
+  <g fill="none" stroke="#6ff3ff" stroke-linecap="round">
+    <circle cx="128" cy="128" r="88" stroke-opacity="0.78" stroke-width="5" filter="url(#glow)"/>
+    <circle cx="128" cy="128" r="62" stroke-opacity="0.6" stroke-width="3"/>
+    <circle cx="128" cy="128" r="39" stroke-opacity="0.45" stroke-width="2"/>
+    <circle cx="128" cy="128" r="22" stroke-opacity="0.35" stroke-width="2"/>
+    <path d="M66 66 190 190M190 66 66 190" stroke-opacity="0.7" stroke-width="3"/>
+    <path d="M72 128h33M151 128h33M128 72v33M128 151v33" stroke-opacity="0.7" stroke-width="3"/>
+    <path d="M84 88c22-18 67-19 91 2M82 169c23 18 70 18 93-2" stroke-opacity="0.52" stroke-width="5"/>
+  </g>
+  <g fill="#7ff6ff" filter="url(#glow)">
+    <circle cx="128" cy="128" r="12"/>
+    <circle cx="86" cy="86" r="6"/>
+    <circle cx="170" cy="86" r="6"/>
+    <circle cx="86" cy="170" r="6"/>
+    <circle cx="170" cy="170" r="6"/>
+    <circle cx="128" cy="46" r="5"/>
+    <circle cx="128" cy="210" r="5"/>
+    <circle cx="46" cy="128" r="5"/>
+    <circle cx="210" cy="128" r="5"/>
+  </g>
+  <path d="M86 170 110 154M86 170l22 10M170 86l-18 26M170 170l-22-22" fill="none" stroke="#7ff6ff" stroke-opacity="0.52" stroke-width="1.75"/>
+</svg>

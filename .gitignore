@@ -4,6 +4,10 @@ node_modules/
 # Build and packaging output
 artifacts/
 build/
+!build/
+build/*
+!build/icon*.png
+!build/icon*.svg
 dist/
 dist-server/
 release/
