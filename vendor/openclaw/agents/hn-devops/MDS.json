@@ -1,0 +1,39 @@
+{
+  "agentId": "hn-devops",
+  "generatedAt": "2026-06-01T03:20:41.229Z",
+  "mds": {
+    "maxContextTokens": 128000,
+    "delegationAllowed": true,
+    "subAgentSpawnLimit": 8,
+    "toolAccess": [],
+    "capabilities": {
+      "codeGeneration": true,
+      "planning": true,
+      "research": true,
+      "orchestration": true,
+      "memoryManagement": true
+    }
+  },
+  "attributes": {
+    "intelligence": 80,
+    "speed": 80,
+    "precision": 80,
+    "creativity": 80,
+    "stability": 80,
+    "compute": 80,
+    "parallelism": 4
+  },
+  "profile": {
+    "role": "",
+    "className": "",
+    "level": 1,
+    "skills": [],
+    "stats": {
+      "execution": 50,
+      "reliability": 50,
+      "speed": 50,
+      "analysis": 50,
+      "communication": 50
+    }
+  }
+}

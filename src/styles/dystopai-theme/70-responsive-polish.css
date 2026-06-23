@@ -1,0 +1,2534 @@
+/* Final responsive polish: viewport-fit shell, cleaner controls, and sharper agent cards. */
+html.dui-pro-overhaul.dui-cohesive-ui {
+  --dui-surface-a: #090c0f;
+  --dui-surface-b: #0d1217;
+  --dui-surface-c: #111820;
+  --dui-edge: rgba(190, 204, 212, .155);
+  --dui-edge-soft: rgba(190, 204, 212, .085);
+  --dui-edge-strong: rgba(214, 226, 232, .24);
+  --dui-text-strong: #f4f7f8;
+  --dui-text-copy: #c4cdd3;
+  --dui-text-muted: #838e96;
+}
+
+html.dui-pro-overhaul.dui-cohesive-ui body {
+  overflow-x: hidden;
+}
+
+/* Agent settings profile fields are form groups, not cards. Keep their label
+   gutters from inheriting the blue panel tint used by generic editor blocks. */
+html.dui-pro-overhaul.dui-cohesive-ui [data-dui-modal="agent-editor"] [data-editor-panel="profile"] > .grid,
+html.dui-pro-overhaul.dui-cohesive-ui [data-dui-modal="agent-editor"] [data-editor-panel="profile"] > .space-y-1 {
+  border-color: transparent !important;
+  background: transparent !important;
+  box-shadow: none !important;
+}
+
+/* Agent settings rows inherit an older blue-black generic panel skin from the
+   editor base styles. Keep layout/status/footer rows clear, then give only the
+   deliberate cards the same graphite treatment used by the profile tab. */
+html.dui-pro-overhaul.dui-cohesive-ui [data-dui-modal="agent-editor"] {
+  --dui-agent-editor-card: #0f1113;
+  --dui-agent-editor-card-soft: #101214;
+  --dui-agent-editor-line: rgba(190, 204, 210, .12);
+  --dui-agent-editor-line-strong: rgba(204, 214, 220, .24);
+}
+
+html.dui-pro-overhaul.dui-cohesive-ui [data-dui-modal="agent-editor"] [data-editor-panel] > div {
+  border-color: transparent !important;
+  background: transparent !important;
+  box-shadow: none !important;
+}
+
+html.dui-pro-overhaul.dui-cohesive-ui [data-dui-modal="agent-editor"] [data-editor-panel] > .rounded-xl,
+html.dui-pro-overhaul.dui-cohesive-ui [data-dui-modal="agent-editor"] [data-editor-panel] > div:has(> h3),
+html.dui-pro-overhaul.dui-cohesive-ui [data-dui-modal="agent-editor"] [data-editor-panel="workspace"] > div:first-child,
+html.dui-pro-overhaul.dui-cohesive-ui [data-dui-modal="agent-editor"] [data-editor-panel="files"] > textarea {
+  border-color: var(--dui-agent-editor-line) !important;
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, .024), rgba(255, 255, 255, .006)),
+    var(--dui-agent-editor-card) !important;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, .035) !important;
+}
+
+html.dui-pro-overhaul.dui-cohesive-ui [data-dui-modal="agent-editor"] [data-editor-panel="model"] > .rounded-xl,
+html.dui-pro-overhaul.dui-cohesive-ui [data-dui-modal="agent-editor"] [data-editor-panel="heartbeat"] > .rounded-xl,
+html.dui-pro-overhaul.dui-cohesive-ui [data-dui-modal="agent-editor"] [data-editor-panel="skills"] > .rounded-xl {
+  border-color: var(--dui-agent-editor-line-strong) !important;
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, .030), rgba(255, 255, 255, .007)),
+    var(--dui-agent-editor-card-soft) !important;
+}
+
+html.dui-pro-overhaul.dui-cohesive-ui [data-dui-modal="agent-editor"] button.dy-agent-editor-preset {
+  position: relative;
+  min-height: 26px;
+  overflow: visible;
+  border-color: rgba(190, 204, 210, .16) !important;
+  background: #0b0d0f !important;
+  color: #7f878d !important;
+  letter-spacing: 0 !important;
+  text-shadow: none !important;
+  box-shadow: none !important;
+}
+
+html.dui-pro-overhaul.dui-cohesive-ui [data-dui-modal="agent-editor"] button.dy-agent-editor-preset:hover {
+  border-color: rgba(214, 226, 232, .30) !important;
+  color: #dce6e9 !important;
+  background: #101315 !important;
+  box-shadow: none !important;
+}
+
+html.dui-pro-overhaul.dui-cohesive-ui [data-dui-modal="agent-editor"] button.dy-agent-editor-preset[data-selected="true"] {
+  border-color: rgba(238, 211, 147, .76) !important;
+  background: #0b0d0f !important;
+  color: #f4e6bd !important;
+  text-shadow: none !important;
+  box-shadow: inset 0 0 0 1px rgba(238, 211, 147, .34) !important;
+}
+
+html.dui-pro-overhaul.dui-cohesive-ui [data-dui-modal="agent-editor"] button.dy-agent-editor-preset[data-selected="true"]::after {
+  display: none !important;
+  content: none !important;
+}
+
+html.dui-pro-overhaul.dui-cohesive-ui [data-dui-modal="agent-editor"] [data-editor-toggle="heartbeat-mode"] {
+  border-color: rgba(190, 204, 210, .14) !important;
+  background: #0f1113 !important;
+  box-shadow: none !important;
+}
+
+html.dui-pro-overhaul.dui-cohesive-ui [data-dui-modal="agent-editor"] [data-editor-toggle="heartbeat-mode"][data-selected="true"] {
+  border-color: rgba(238, 211, 147, .76) !important;
+  background: #11120f !important;
+  box-shadow: inset 0 0 0 1px rgba(238, 211, 147, .30) !important;
+}
+
+html.dui-pro-overhaul.dui-cohesive-ui [data-dui-modal="agent-editor"] .dy-agent-editor-switch-track {
+  border: 1px solid rgba(190, 204, 210, .18) !important;
+  background: #24272a !important;
+  box-shadow: inset 0 1px 2px rgba(0, 0, 0, .46) !important;
+}
+
+html.dui-pro-overhaul.dui-cohesive-ui [data-dui-modal="agent-editor"] [data-editor-toggle="heartbeat-mode"][data-selected="true"] .dy-agent-editor-switch-track {
+  border-color: rgba(238, 211, 147, .62) !important;
+  background: #d0ad57 !important;
+}
+
+html.dui-pro-overhaul.dui-cohesive-ui [data-dui-modal="agent-editor"] .dy-agent-editor-switch-thumb {
+  background: #f4ead1 !important;
+  box-shadow: none !important;
+}
+
+html.dui-pro-overhaul.dui-cohesive-ui .dy-command-header.relative.mb-7,
+html.dui-pro-overhaul.dui-cohesive-ui header.relative.mb-7,
+html.dui-pro-overhaul.dui-cohesive-ui .dy-human-rail,
+html.dui-pro-overhaul.dui-cohesive-ui [data-dui-panel],
+html.dui-pro-overhaul.dui-cohesive-ui [data-chat-panel="true"] {
+  border-color: var(--dui-edge) !important;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, .052),
+    0 18px 42px rgba(0, 0, 0, .26) !important;
+}
+
+html.dui-pro-overhaul.dui-cohesive-ui .dy-status-grid {
+  min-width: 0 !important;
+}
+
+html.dui-pro-overhaul.dui-cohesive-ui .dy-status-chip {
+  flex: 0 0 auto !important;
+}
+
+html.dui-pro-overhaul.dui-cohesive-ui .dy-agents-workspace {
+  gap: 10px !important;
+  grid-template-areas:
+    "party"
+    "registry" !important;
+}
+
+html.dui-pro-overhaul.dui-cohesive-ui .dy-agents-workspace.is-console-visible {
+  grid-template-areas:
+    "party"
+    "registry"
+    "console" !important;
+}
+
+html.dui-pro-overhaul.dui-cohesive-ui .dy-console-toggle {
+  min-height: 30px !important;
+  border-radius: 8px !important;
+  transition:
+    border-color 140ms ease,
+    background-color 140ms ease,
+    color 140ms ease,
+    transform 140ms ease !important;
+}
+
+html.dui-pro-overhaul.dui-cohesive-ui .dy-console-toggle:hover {
+  transform: translateY(-1px) !important;
+}
+
+html.dui-pro-overhaul.dui-cohesive-ui [data-dui-panel="active-party"] .active-party-head {
+  min-height: 50px !important;
+  padding: 10px 14px !important;
+}
+
+html.dui-pro-overhaul.dui-cohesive-ui [data-dui-panel="active-party"] .active-party-head h3 {
+  color: var(--dui-text-strong) !important;
+}
+
+html.dui-pro-overhaul.dui-cohesive-ui [data-dui-panel="active-party"] .active-party-head p {
+  color: var(--dui-text-muted) !important;
+}
+
+html.dui-pro-overhaul.dui-cohesive-ui [data-dui-panel="active-party"] .active-party-actions {
+  flex-wrap: wrap !important;
+  justify-content: flex-end !important;
+  gap: 7px !important;
+}
+
+html.dui-pro-overhaul.dui-cohesive-ui [data-dui-panel="active-party"] .active-party-toolbar {
+  display: inline-flex !important;
+  min-width: 0 !important;
+}
+
+html.dui-pro-overhaul.dui-cohesive-ui [data-dui-panel="active-party"] .active-party-grid {
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)) !important;
+  gap: 8px !important;
+  padding: 10px 12px !important;
+}
+
+html.dui-pro-overhaul.dui-cohesive-ui [data-slot-card] {
+  min-height: 82px !important;
+  border-radius: 8px !important;
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, .030), rgba(255, 255, 255, .008)),
+    var(--dui-surface-b) !important;
+}
+
+html.dui-pro-overhaul.dui-cohesive-ui [data-slot-card][data-slot-state="empty"] {
+  background:
+    repeating-linear-gradient(135deg, rgba(255, 255, 255, .024) 0 1px, transparent 1px 10px),
+    linear-gradient(180deg, rgba(255, 255, 255, .018), rgba(255, 255, 255, .006)),
+    #101418 !important;
+}
+
+/* Active party strip: compact roster rail for the desktop app shell. */
+html.dui-pro-overhaul.dui-cohesive-ui [data-dui-panel="active-party"] {
+  border-radius: 8px !important;
+}
+
+html.dui-pro-overhaul.dui-cohesive-ui [data-dui-panel="active-party"] .active-party-head {
+  min-height: 38px !important;
+  padding: 7px 10px !important;
+  border-bottom-color: rgba(255, 255, 255, .055) !important;
+}
+
+html.dui-pro-overhaul.dui-cohesive-ui [data-dui-panel="active-party"] .active-party-head h3 {
+  font-size: 12px !important;
+  line-height: 1 !important;
+}
+
+html.dui-pro-overhaul.dui-cohesive-ui [data-dui-panel="active-party"] .active-party-head p {
+  display: none !important;
+}
+
+html.dui-pro-overhaul.dui-cohesive-ui [data-dui-panel="active-party"] .active-party-actions {
+  gap: 6px !important;
+}
+
+html.dui-pro-overhaul.dui-cohesive-ui [data-dui-panel="active-party"] [data-party-action] {
+  min-height: 26px !important;
+  padding: 0 9px !important;
+  border-radius: 6px !important;
+  font-size: 8px !important;
+  letter-spacing: .11em !important;
+}
+
+html.dui-pro-overhaul.dui-cohesive-ui [data-dui-panel="active-party"] .active-party-grid {
+  grid-template-columns: minmax(210px, 1.08fr) repeat(5, minmax(112px, .82fr)) !important;
+  gap: 6px !important;
+  padding: 7px 8px 8px !important;
+  border-top: 0 !important;
+}
+
+html.dui-pro-overhaul.dui-cohesive-ui [data-dui-panel="active-party"] .dy-party-slot,
+html.dui-pro-overhaul.dui-cohesive-ui [data-dui-panel="active-party"] [data-slot-card] {
+  height: 70px !important;
+  min-height: 70px !important;
+  padding: 6px !important;
+  border-radius: 7px !important;
+}
+
+html.dui-pro-overhaul.dui-cohesive-ui [data-dui-panel="active-party"] .dy-party-slot.is-filled {
+  align-items: stretch !important;
+  justify-content: center !important;
+  border-radius: 8px !important;
+}
+
+html.dui-pro-overhaul.dui-cohesive-ui [data-dui-panel="active-party"] .dy-party-slot .party-slot-content,
+html.dui-pro-overhaul.dui-cohesive-ui [data-dui-panel="active-party"] .dy-party-slot.is-filled > [draggable="true"],
+html.dui-pro-overhaul.dui-cohesive-ui [data-dui-panel="active-party"] .dy-party-slot.is-filled > [draggable="false"] {
+  height: 56px !important;
+  min-height: 56px !important;
+  gap: 8px !important;
+  padding: 7px 28px 7px 7px !important;
+  border-radius: 6px !important;
+}
+
+html.dui-pro-overhaul.dui-cohesive-ui [data-dui-panel="active-party"] .dy-party-slot.is-filled .active-party-avatar,
+html.dui-pro-overhaul.dui-cohesive-ui [data-dui-panel="active-party"] .dy-party-slot.is-filled .active-party-avatar img {
+  width: 34px !important;
+  height: 34px !important;
+  border-radius: 7px !important;
+}
+
+html.dui-pro-overhaul.dui-cohesive-ui [data-dui-panel="active-party"] .dy-party-slot.is-filled .party-slot-content p:first-child {
+  font-size: 11px !important;
+  line-height: 1.05 !important;
+}
+
+html.dui-pro-overhaul.dui-cohesive-ui [data-dui-panel="active-party"] .dy-party-slot.is-filled .party-slot-content p:nth-child(2) {
+  margin-top: 1px !important;
+  font-size: 8px !important;
+  line-height: 1 !important;
+}
+
+html.dui-pro-overhaul.dui-cohesive-ui [data-dui-panel="active-party"] .dy-party-slot.is-filled .party-rarity-badge {
+  margin-top: 3px !important;
+  min-height: 13px !important;
+  padding: 2px 6px !important;
+  font-size: 6px !important;
+  line-height: 1 !important;
+}
+
+html.dui-pro-overhaul.dui-cohesive-ui [data-dui-panel="active-party"] .dy-party-slot.is-filled::before {
+  top: 6px !important;
+  right: 6px !important;
+  bottom: auto !important;
+  padding: 2px 6px !important;
+  border-radius: 999px !important;
+  font-size: 7px !important;
+  opacity: .82 !important;
+}
+
+html.dui-pro-overhaul.dui-cohesive-ui [data-dui-panel="active-party"] .dy-party-slot.is-empty {
+  justify-content: center !important;
+  border-color: rgba(170, 184, 190, .090) !important;
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, .014), rgba(255, 255, 255, .004)),
+    rgba(8, 10, 11, .34) !important;
+  color: #555e67 !important;
+}
+
+html.dui-pro-overhaul.dui-cohesive-ui [data-dui-panel="active-party"] .dy-party-slot.is-empty::before {
+  inset: 6px !important;
+  border-radius: 6px !important;
+  opacity: .62 !important;
+}
+
+html.dui-pro-overhaul.dui-cohesive-ui [data-dui-panel="active-party"] .dy-party-slot.is-empty p:first-of-type {
+  font-size: 8px !important;
+  letter-spacing: .10em !important;
+}
+
+html.dui-pro-overhaul.dui-cohesive-ui [data-dui-panel="active-party"] .dy-party-slot.is-empty p:last-of-type {
+  margin-top: 2px !important;
+  font-size: 8px !important;
+}
+
+html.dui-pro-overhaul.dui-cohesive-ui [data-dui-panel="active-party"] [data-slot-card] .party-slot-remove {
+  top: 6px !important;
+  right: 6px !important;
+  width: 18px !important;
+  min-width: 18px !important;
+  max-width: 18px !important;
+  height: 18px !important;
+  min-height: 18px !important;
+  border-radius: 999px !important;
+  font-size: 9px !important;
+}
+
+html.dui-pro-overhaul.dui-cohesive-ui [data-dui-panel="agent-registry"] {
+  padding: 14px !important;
+}
+
+html.dui-pro-overhaul.dui-cohesive-ui [data-dui-panel="agent-registry"] > div:first-child {
+  min-height: 46px !important;
+  margin-bottom: 10px !important;
+  padding-bottom: 10px !important;
+}
+
+html.dui-pro-overhaul.dui-cohesive-ui [data-dui-panel="agent-registry"] h2 {
+  font-size: 20px !important;
+  line-height: 1.05 !important;
+}
+
+html.dui-pro-overhaul.dui-cohesive-ui [data-dui-panel="agent-registry"] [data-agent-toolbar] {
+  display: grid !important;
+  grid-template-columns: minmax(240px, 1fr) auto !important;
+  align-items: center !important;
+  gap: 8px !important;
+  margin-bottom: 9px !important;
+  padding: 8px !important;
+  border-radius: 8px !important;
+}
+
+html.dui-pro-overhaul.dui-cohesive-ui [data-agent-search] {
+  min-width: 0 !important;
+}
+
+html.dui-pro-overhaul.dui-cohesive-ui [data-agent-search] input {
+  min-height: 34px !important;
+}
+
+html.dui-pro-overhaul.dui-cohesive-ui [data-agent-controls] {
+  min-width: 0 !important;
+  justify-content: flex-end !important;
+  gap: 5px !important;
+}
+
+html.dui-pro-overhaul.dui-cohesive-ui [data-agent-control],
+html.dui-pro-overhaul.dui-cohesive-ui [data-agent-overlay-control] {
+  min-height: 30px !important;
+  border-radius: 7px !important;
+  border-color: rgba(204, 211, 216, .14) !important;
+  background-color: #090b0d !important;
+  background-image:
+    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='8' height='8' viewBox='0 0 24 24' fill='none' stroke='%23959da4' stroke-width='3' stroke-linecap='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E"),
+    linear-gradient(180deg, rgba(255, 255, 255, .036), rgba(255, 255, 255, .008)) !important;
+  background-repeat: no-repeat, repeat !important;
+  background-position: right 8px center, 0 0 !important;
+  background-size: 8px 8px, auto !important;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, .035) !important;
+  color: #c7cdd2 !important;
+  font-size: 9px !important;
+  font-weight: 700 !important;
+  letter-spacing: .01em !important;
+  line-height: 1 !important;
+  padding: 0 25px 0 10px !important;
+}
+
+html.dui-pro-overhaul.dui-cohesive-ui [data-agent-control]:hover,
+html.dui-pro-overhaul.dui-cohesive-ui [data-agent-overlay-control]:hover {
+  border-color: rgba(218, 223, 227, .22) !important;
+  background-color: #111416 !important;
+  color: #e0e4e7 !important;
+}
+
+html.dui-pro-overhaul.dui-cohesive-ui [data-agent-control]:focus,
+html.dui-pro-overhaul.dui-cohesive-ui [data-agent-overlay-control]:focus {
+  border-color: rgba(218, 223, 227, .28) !important;
+  background-color: #121518 !important;
+  box-shadow:
+    0 0 0 1px rgba(218, 223, 227, .08),
+    inset 0 1px 0 rgba(255, 255, 255, .04) !important;
+}
+
+html.dui-pro-overhaul.dui-cohesive-ui [data-agent-overlay-control] {
+  min-width: 126px !important;
+  color: #cbd1d5 !important;
+}
+
+html.dui-pro-overhaul.dui-cohesive-ui [data-agent-overlay-control] option {
+  background: #0b0d0f !important;
+  color: #e1e5e8 !important;
+}
+
+html.dui-pro-overhaul.dui-cohesive-ui [data-agent-overlay-control] option:checked {
+  background: #181a1d !important;
+  color: #f0f2f3 !important;
+}
+
+html.dui-pro-overhaul.dui-cohesive-ui [data-agent-view-toggle] {
+  min-width: 0 !important;
+  min-height: 30px !important;
+  overflow-x: auto !important;
+  gap: 1px !important;
+  border-radius: 7px !important;
+  border-color: rgba(204, 211, 216, .12) !important;
+  background: #080a0c !important;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, .03) !important;
+  padding: 2px !important;
+  scrollbar-width: none;
+}
+
+html.dui-pro-overhaul.dui-cohesive-ui [data-agent-view-toggle]::-webkit-scrollbar {
+  display: none;
+}
+
+html.dui-pro-overhaul.dui-cohesive-ui [data-agent-view-option] {
+  min-width: max-content !important;
+  min-height: 24px !important;
+  border-radius: 5px !important;
+  color: #889198 !important;
+  font-size: 8.5px !important;
+  font-weight: 750 !important;
+  letter-spacing: .06em !important;
+  line-height: 1 !important;
+  padding-inline: 8px !important;
+}
+
+html.dui-pro-overhaul.dui-cohesive-ui [data-agent-view-option]:hover {
+  background: rgba(255, 255, 255, .055) !important;
+  color: #dce1e4 !important;
+}
+
+html.dui-pro-overhaul.dui-cohesive-ui [data-agent-view-option][data-active="true"] {
+  border-color: rgba(218, 223, 227, .18) !important;
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, .105), rgba(255, 255, 255, .026)),
+    #171a1d !important;
+  color: #eef1f2 !important;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, .045) !important;
+}
+
+html.dui-pro-overhaul.dui-cohesive-ui body section[data-dui-panel="agent-registry"] [data-agent-toolbar] button[data-agent-view-option][data-active="true"] {
+  border-color: rgba(218, 223, 227, .18) !important;
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, .105), rgba(255, 255, 255, .026)),
+    #171a1d !important;
+  color: #eef1f2 !important;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, .045) !important;
+}
+
+html.dui-pro-overhaul.dui-cohesive-ui [data-agent-status] {
+  margin-bottom: 8px !important;
+  color: rgba(196, 205, 211, .72) !important;
+}
+
+html.dui-pro-overhaul.dui-cohesive-ui [data-agent-registry-scroll] {
+  height: min(74dvh, max(480px, calc(100dvh - 250px))) !important;
+  max-height: min(74dvh, max(480px, calc(100dvh - 250px))) !important;
+  scroll-behavior: smooth;
+}
+
+html.dui-pro-overhaul.dui-cohesive-ui .agent-card-registry-grid {
+  --agent-card-col-min: 286px;
+  --agent-card-grid-gap: 12px;
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, var(--agent-card-col-min)), 1fr)) !important;
+  gap: var(--agent-card-grid-gap) !important;
+}
+
+html.dui-pro-overhaul.dui-cohesive-ui .agent-card-registry-grid--showcase {
+  --agent-card-col-min: 390px;
+}
+
+html.dui-pro-overhaul.dui-cohesive-ui .agent-card-registry-grid--grid6 {
+  --agent-card-col-min: 330px;
+}
+
+html.dui-pro-overhaul.dui-cohesive-ui .agent-card-registry-grid--grid8 {
+  --agent-card-col-min: 292px;
+}
+
+html.dui-pro-overhaul.dui-cohesive-ui .agent-card-registry-grid--grid10 {
+  --agent-card-col-min: 258px;
+  --agent-card-grid-gap: 11px;
+}
+
+html.dui-pro-overhaul.dui-cohesive-ui .agent-card-shell.agent-card-pro[data-agent-card="true"] {
+  border-radius: 12px !important;
+  transition:
+    transform 150ms ease,
+    border-color 150ms ease,
+    box-shadow 150ms ease,
+    background-color 150ms ease !important;
+}
+
+html.dui-pro-overhaul.dui-cohesive-ui .agent-card-shell.agent-card-pro[data-agent-card="true"]:hover {
+  transform: translateY(-2px) !important;
+}
+
+html.dui-pro-overhaul.dui-cohesive-ui .agent-card-pro[data-agent-display-mode="grid10"] {
+  min-height: 372px !important;
+}
+
+html.dui-pro-overhaul.dui-cohesive-ui .agent-card-pro[data-agent-display-mode="grid8"] {
+  min-height: 396px !important;
+}
+
+html.dui-pro-overhaul.dui-cohesive-ui .agent-card-pro[data-agent-display-mode="grid6"],
+html.dui-pro-overhaul.dui-cohesive-ui .agent-card-pro[data-agent-display-mode="showcase"] {
+  min-height: 430px !important;
+}
+
+html.dui-pro-overhaul.dui-cohesive-ui .agent-card-pro:not([data-agent-display-mode="list"]) .agent-card-media {
+  aspect-ratio: 1.48 / 1 !important;
+}
+
+html.dui-pro-overhaul.dui-cohesive-ui .agent-card-pro[data-agent-display-mode="grid10"] .agent-card-media-wrap {
+  padding: 12px 12px 0 !important;
+}
+
+html.dui-pro-overhaul.dui-cohesive-ui .agent-card-pro[data-agent-display-mode="grid10"] .agent-card-body {
+  padding: 9px 12px 12px !important;
+}
+
+html.dui-pro-overhaul.dui-cohesive-ui .agent-card-pro .agent-card-media {
+  border-radius: 10px !important;
+  overflow: hidden !important;
+}
+
+html.dui-pro-overhaul.dui-cohesive-ui .agent-card-pro .agent-card-media-shade {
+  background:
+    linear-gradient(180deg, rgba(0, 0, 0, .38), transparent 30%, transparent 66%, rgba(0, 0, 0, .44)),
+    radial-gradient(circle at 50% 0%, rgba(255, 255, 255, .060), transparent 42%) !important;
+}
+
+html.dui-pro-overhaul.dui-cohesive-ui .agent-card-pro .agent-card-heading {
+  min-height: 58px !important;
+  margin-bottom: 10px !important;
+}
+
+html.dui-pro-overhaul.dui-cohesive-ui .agent-card-pro .agent-card-name {
+  color: #fbfcfd !important;
+  text-wrap: balance;
+}
+
+html.dui-pro-overhaul.dui-cohesive-ui .agent-card-pro .agent-card-role {
+  color: rgba(218, 226, 232, .82) !important;
+}
+
+html.dui-pro-overhaul.dui-cohesive-ui .agent-card-pro .agent-card-stat-matrix {
+  gap: 7px !important;
+  margin-bottom: 9px !important;
+}
+
+html.dui-pro-overhaul.dui-cohesive-ui .agent-card-pro .agent-card-stat-matrix > div {
+  min-height: 38px !important;
+  border-radius: 8px !important;
+}
+
+html.dui-pro-overhaul.dui-cohesive-ui .agent-card-pro .agent-card-tags {
+  gap: 6px !important;
+  min-height: 22px !important;
+  max-height: 48px !important;
+  margin-bottom: 9px !important;
+}
+
+html.dui-pro-overhaul.dui-cohesive-ui .agent-card-pro .agent-card-actions {
+  gap: 8px !important;
+  padding-top: 9px !important;
+}
+
+html.dui-pro-overhaul.dui-cohesive-ui .agent-card-pro .agent-card-actions button {
+  min-height: 32px !important;
+  border-radius: 8px !important;
+}
+
+html.dui-pro-overhaul.dui-cohesive-ui [data-chat-panel="true"],
+html.dui-pro-overhaul.dui-cohesive-ui [data-dui-panel="command-console"].dy-command-console {
+  min-width: 0 !important;
+}
+
+html.dui-pro-overhaul.dui-cohesive-ui .dy-command-console__header {
+  min-height: 66px !important;
+}
+
+html.dui-pro-overhaul.dui-cohesive-ui .dy-command-messages {
+  scrollbar-gutter: stable;
+}
+
+html.dui-pro-overhaul.dui-cohesive-ui .dy-command-console__clear {
+  flex: 0 0 auto !important;
+  gap: 0 !important;
+  width: 28px !important;
+  height: 28px !important;
+  min-height: 28px !important;
+  padding: 0 !important;
+  border-radius: 999px !important;
+  border-color: rgba(190, 204, 212, .16) !important;
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, .034), rgba(255, 255, 255, .008)),
+    #0e1214 !important;
+  color: #bfc9cf !important;
+  line-height: 1 !important;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, .040) !important;
+  transition:
+    border-color 150ms ease-out,
+    background-color 150ms ease-out,
+    box-shadow 150ms ease-out,
+    color 150ms ease-out,
+    transform 150ms ease-out !important;
+}
+
+html.dui-pro-overhaul.dui-cohesive-ui .dy-command-console__clear svg {
+  width: 13px !important;
+  height: 13px !important;
+  flex: 0 0 auto !important;
+  color: #93a2aa !important;
+  filter: drop-shadow(0 0 5px rgba(147, 162, 170, .12)) !important;
+  transition:
+    color 150ms ease-out,
+    filter 150ms ease-out !important;
+}
+
+html.dui-pro-overhaul.dui-cohesive-ui .dy-command-console__clear:hover:not(:disabled) {
+  border-color: rgba(255, 114, 128, .34) !important;
+  background:
+    linear-gradient(180deg, rgba(255, 114, 128, .085), rgba(255, 255, 255, .010)),
+    #151113 !important;
+  color: #ffd0d4 !important;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, .055),
+    0 8px 18px -16px rgba(255, 114, 128, .70) !important;
+  transform: translateY(-1px) !important;
+}
+
+html.dui-pro-overhaul.dui-cohesive-ui .dy-command-console__clear:hover:not(:disabled) svg {
+  color: #ff8b95 !important;
+  filter: drop-shadow(0 0 6px rgba(255, 114, 128, .26)) !important;
+}
+
+html.dui-pro-overhaul.dui-cohesive-ui .dy-command-console__clear:active:not(:disabled) {
+  transform: translateY(0) scale(.98) !important;
+}
+
+@media (min-width: 2200px) {
+  html.dui-pro-overhaul.dui-cohesive-ui .agent-card-registry-grid--grid10 {
+    --agent-card-col-min: 286px;
+  }
+
+  html.dui-pro-overhaul.dui-cohesive-ui .agent-card-registry-grid--grid8 {
+    --agent-card-col-min: 318px;
+  }
+}
+
+@media (min-width: 960px) {
+  html.dui-pro-overhaul.dui-cohesive-ui [data-dui-panel="active-party"] .active-party-grid {
+    grid-template-columns: repeat(6, minmax(0, 1fr)) !important;
+  }
+}
+
+@media (min-width: 1461px) and (min-height: 861px) {
+  html.dui-pro-overhaul.dui-cohesive-ui .dy-agents-workspace.is-console-visible {
+    grid-template-columns: minmax(0, 1fr) clamp(330px, 21vw, 380px) !important;
+    grid-template-areas:
+      "party party"
+      "registry console" !important;
+  }
+
+  html.dui-pro-overhaul.dui-cohesive-ui .dy-agents-workspace.is-console-hidden {
+    grid-template-columns: minmax(0, 1fr) !important;
+    grid-template-areas:
+      "party"
+      "registry" !important;
+  }
+}
+
+@media (max-width: 1460px), (max-height: 860px) {
+  html.dui-pro-overhaul.dui-cohesive-ui .dy-agents-workspace.is-console-visible {
+    grid-template-columns: minmax(0, 1fr) !important;
+    grid-template-areas:
+      "party"
+      "registry"
+      "console" !important;
+  }
+
+  html.dui-pro-overhaul.dui-cohesive-ui .dy-agent-console-pane {
+    min-height: clamp(340px, 48dvh, 560px) !important;
+  }
+
+  html.dui-pro-overhaul.dui-cohesive-ui .dy-agent-console-pane [data-dui-panel="command-console"].dy-command-console,
+  html.dui-pro-overhaul.dui-cohesive-ui .dy-agent-console-pane [data-chat-panel="true"] {
+    min-height: clamp(340px, 48dvh, 560px) !important;
+    border-radius: 0 0 var(--dui-shell-radius, 10px) var(--dui-shell-radius, 10px) !important;
+  }
+}
+
+@media (max-height: 820px) {
+  html.dui-pro-overhaul.dui-cohesive-ui .app-bg > .dy-app-main {
+    padding-top: 6px !important;
+    padding-bottom: 6px !important;
+  }
+
+  html.dui-pro-overhaul.dui-cohesive-ui .dy-command-header.relative.mb-7,
+  html.dui-pro-overhaul.dui-cohesive-ui header.relative.mb-7 {
+    min-height: 66px !important;
+    padding: 8px 12px !important;
+  }
+
+  html.dui-pro-overhaul.dui-cohesive-ui .dy-command-header-inner {
+    min-height: 48px !important;
+  }
+
+  html.dui-pro-overhaul.dui-cohesive-ui .brand-lockup.dy-logo-fixed .dy-logo-lockup {
+    height: 44px !important;
+    max-width: 360px !important;
+  }
+
+  html.dui-pro-overhaul.dui-cohesive-ui .dy-status-chip {
+    min-height: 28px !important;
+    padding: 4px 9px !important;
+  }
+
+  html.dui-pro-overhaul.dui-cohesive-ui .dy-agents-workspace {
+    gap: 8px !important;
+  }
+
+  html.dui-pro-overhaul.dui-cohesive-ui .dy-console-toggle {
+    min-height: 28px !important;
+    min-width: 112px !important;
+    padding-inline: 8px !important;
+  }
+
+  html.dui-pro-overhaul.dui-cohesive-ui .dy-console-toggle__icon {
+    width: 17px !important;
+    height: 17px !important;
+  }
+
+  html.dui-pro-overhaul.dui-cohesive-ui [data-dui-panel="active-party"] .active-party-head {
+    min-height: 42px !important;
+    padding: 8px 12px !important;
+  }
+
+  html.dui-pro-overhaul.dui-cohesive-ui [data-dui-panel="active-party"] .active-party-head p {
+    display: none !important;
+  }
+
+  html.dui-pro-overhaul.dui-cohesive-ui [data-dui-panel="active-party"] .active-party-grid {
+    gap: 6px !important;
+    padding: 8px 10px !important;
+  }
+
+  html.dui-pro-overhaul.dui-cohesive-ui [data-slot-card] {
+    min-height: 68px !important;
+    padding: 8px !important;
+  }
+
+  html.dui-pro-overhaul.dui-cohesive-ui [data-slot-card] .party-slot-content {
+    gap: 8px !important;
+    padding: 6px 8px !important;
+  }
+
+  html.dui-pro-overhaul.dui-cohesive-ui [data-slot-card] .active-party-avatar,
+  html.dui-pro-overhaul.dui-cohesive-ui [data-slot-card] .active-party-avatar img {
+    width: 34px !important;
+    height: 34px !important;
+  }
+
+  html.dui-pro-overhaul.dui-cohesive-ui [data-slot-card] .party-slot-content p:first-child {
+    font-size: 11px !important;
+  }
+
+  html.dui-pro-overhaul.dui-cohesive-ui [data-slot-card] .party-slot-content p:nth-child(2) {
+    display: none !important;
+  }
+
+  html.dui-pro-overhaul.dui-cohesive-ui [data-slot-card] .party-rarity-badge {
+    font-size: 6px !important;
+  }
+
+  html.dui-pro-overhaul.dui-cohesive-ui [data-agent-registry-scroll] {
+    height: clamp(320px, calc(100dvh - 248px), 520px) !important;
+    max-height: clamp(320px, calc(100dvh - 248px), 520px) !important;
+  }
+}
+
+@container agent-registry (max-width: 900px) {
+  html.dui-pro-overhaul.dui-cohesive-ui [data-dui-panel="agent-registry"] [data-agent-toolbar] {
+    grid-template-columns: minmax(0, 1fr) !important;
+  }
+
+  html.dui-pro-overhaul.dui-cohesive-ui [data-agent-controls] {
+    justify-content: flex-start !important;
+  }
+}
+
+@container agent-registry (max-width: 620px) {
+  html.dui-pro-overhaul.dui-cohesive-ui [data-agent-controls] {
+    display: grid !important;
+    grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+  }
+
+  html.dui-pro-overhaul.dui-cohesive-ui [data-agent-view-toggle],
+  html.dui-pro-overhaul.dui-cohesive-ui [data-agent-overlay-control] {
+    grid-column: 1 / -1 !important;
+  }
+
+  html.dui-pro-overhaul.dui-cohesive-ui .agent-card-registry-grid--showcase,
+  html.dui-pro-overhaul.dui-cohesive-ui .agent-card-registry-grid--grid6,
+  html.dui-pro-overhaul.dui-cohesive-ui .agent-card-registry-grid--grid8,
+  html.dui-pro-overhaul.dui-cohesive-ui .agent-card-registry-grid--grid10 {
+    --agent-card-col-min: 250px;
+  }
+}
+
+@media (max-width: 860px) {
+  html.dui-pro-overhaul.dui-cohesive-ui .dy-status-grid {
+    flex-wrap: nowrap !important;
+    overflow-x: auto !important;
+    justify-content: flex-start !important;
+    scrollbar-width: none;
+  }
+
+  html.dui-pro-overhaul.dui-cohesive-ui .dy-status-grid::-webkit-scrollbar {
+    display: none;
+  }
+
+  html.dui-pro-overhaul.dui-cohesive-ui [data-dui-panel="active-party"] .active-party-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+  }
+}
+
+/* Recruit modal graphite pass: remove the remaining blue accents while keeping
+   the overlay editor's markdown syntax coloring visible. */
+html.dui-pro-overhaul.dui-cohesive-ui [data-dui-modal="recruit-agent"] {
+  --dui-recruit-cyan: #b8bec2;
+  --dui-recruit-cyan-strong: #c9ced1;
+  --dui-md-file-accent: #b5babd;
+  --dui-md-file-soft: rgba(190, 194, 197, .10);
+  --dui-md-file-border: rgba(190, 194, 197, .24);
+  border-color: rgba(176, 181, 184, .28) !important;
+  background: #0b0c0d !important;
+  background-image: none !important;
+}
+
+html.dui-pro-overhaul.dui-cohesive-ui .dui-recruit-backdrop {
+  background: rgba(4, 5, 6, .92) !important;
+  backdrop-filter: none !important;
+  -webkit-backdrop-filter: none !important;
+}
+
+html.dui-pro-overhaul.dui-cohesive-ui [data-dui-modal="recruit-agent"] :where(
+  .dui-recruit-header,
+  .dui-recruit-footer,
+  .dui-recruit-section,
+  .dui-recruit-files,
+  .dui-recruit-form
+) {
+  border-color: rgba(184, 188, 190, .13) !important;
+  background: #101112 !important;
+  background-image: none !important;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, .025) !important;
+}
+
+html.dui-pro-overhaul.dui-cohesive-ui [data-dui-modal="recruit-agent"] .dui-recruit-form .dui-recruit-section,
+html.dui-pro-overhaul.dui-cohesive-ui [data-dui-modal="recruit-agent"] .dui-recruit-form .dui-recruit-section:first-child,
+html.dui-pro-overhaul.dui-cohesive-ui [data-dui-modal="recruit-agent"] .dui-recruit-form .dui-recruit-section:nth-child(2),
+html.dui-pro-overhaul.dui-cohesive-ui [data-dui-modal="recruit-agent"] .dui-recruit-form .dui-recruit-section:nth-child(3),
+html.dui-pro-overhaul.dui-cohesive-ui [data-dui-modal="recruit-agent"] .dui-recruit-form .dui-recruit-section:nth-child(4) {
+  border-color: rgba(184, 188, 190, .10) !important;
+  border-bottom-color: rgba(184, 188, 190, .10) !important;
+  background: #101010 !important;
+  background-image: none !important;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, .022) !important;
+}
+
+html.dui-pro-overhaul.dui-cohesive-ui [data-dui-modal="recruit-agent"] :where(input, select, textarea) {
+  border-color: rgba(184, 188, 190, .14) !important;
+  background: #070707 !important;
+  background-image: none !important;
+  color: #e5e7e8 !important;
+}
+
+html.dui-pro-overhaul.dui-cohesive-ui [data-dui-modal="recruit-agent"] :where(input, select, textarea):focus {
+  border-color: rgba(218, 222, 224, .34) !important;
+  outline-color: rgba(218, 222, 224, .58) !important;
+  box-shadow: 0 0 0 1px rgba(218, 222, 224, .10) !important;
+}
+
+html.dui-pro-overhaul.dui-cohesive-ui [data-dui-modal="recruit-agent"] .dui-recruit-section-head > span,
+html.dui-pro-overhaul.dui-cohesive-ui [data-dui-modal="recruit-agent"] .dui-recruit-code-mode {
+  border-color: rgba(184, 188, 190, .16) !important;
+  background: rgba(255, 255, 255, .028) !important;
+  color: #c6cacc !important;
+}
+
+html.dui-pro-overhaul.dui-cohesive-ui [data-dui-modal="recruit-agent"] :where(
+  .dui-recruit-section-icon,
+  .dui-recruit-status-icon,
+  .dui-recruit-close,
+  .dui-recruit-code-expand
+) {
+  border-color: rgba(184, 188, 190, .18) !important;
+  background: #141516 !important;
+  color: #d5d8da !important;
+}
+
+html.dui-pro-overhaul.dui-cohesive-ui [data-dui-modal="recruit-agent"] :where(
+  .dui-recruit-behaviors button,
+  .dui-recruit-file-tabs button,
+  .dui-recruit-file-add button,
+  .dui-recruit-personality-depth-scale button,
+  .dui-recruit-primary,
+  .dui-recruit-secondary,
+  .dui-recruit-auto-button
+) {
+  border-color: rgba(184, 188, 190, .16) !important;
+  background: #111213 !important;
+  background-image: none !important;
+  color: #cbd0d3 !important;
+  box-shadow: none !important;
+}
+
+html.dui-pro-overhaul.dui-cohesive-ui [data-dui-modal="recruit-agent"] :where(
+  .dui-recruit-behaviors button:hover,
+  .dui-recruit-file-tabs button:hover,
+  .dui-recruit-file-add button:hover,
+  .dui-recruit-personality-depth-scale button:hover,
+  .dui-recruit-primary:hover,
+  .dui-recruit-secondary:hover,
+  .dui-recruit-auto-button:hover,
+  .dui-recruit-code-expand:hover
+):not(:disabled) {
+  border-color: rgba(216, 220, 222, .26) !important;
+  background: #171819 !important;
+  color: #f0f2f3 !important;
+}
+
+html.dui-pro-overhaul.dui-cohesive-ui [data-dui-modal="recruit-agent"] :where(
+  .dui-recruit-behaviors button.is-active,
+  .dui-recruit-file-tabs button.is-active,
+  .dui-recruit-personality-depth-scale button[data-active="true"],
+  .dui-recruit-code-expand[aria-pressed="true"]
+) {
+  border-color: rgba(218, 222, 224, .32) !important;
+  background: #202123 !important;
+  background-image: linear-gradient(180deg, rgba(255, 255, 255, .06), rgba(255, 255, 255, .010)) !important;
+  color: #ffffff !important;
+  outline: 1px solid rgba(218, 222, 224, .16) !important;
+  outline-offset: -1px !important;
+}
+
+html.dui-pro-overhaul.dui-cohesive-ui [data-dui-modal="recruit-agent"] .dui-recruit-form .dui-recruit-behaviors button.is-active,
+html.dui-pro-overhaul.dui-cohesive-ui [data-dui-modal="recruit-agent"] .dui-recruit-form .dui-recruit-behaviors button.is-active:first-child,
+html.dui-pro-overhaul.dui-cohesive-ui [data-dui-modal="recruit-agent"] .dui-recruit-form .dui-recruit-behaviors button.is-active:last-child {
+  border-color: rgba(218, 222, 224, .32) !important;
+  background-color: #202123 !important;
+  background-image: linear-gradient(180deg, rgba(255, 255, 255, .06), rgba(255, 255, 255, .010)) !important;
+  color: #ffffff !important;
+  outline: 1px solid rgba(218, 222, 224, .16) !important;
+  outline-offset: -1px !important;
+}
+
+html.dui-pro-overhaul.dui-cohesive-ui [data-dui-modal="recruit-agent"] .dui-recruit-primary {
+  border-color: rgba(218, 222, 224, .34) !important;
+  background: #202123 !important;
+  color: #f4f5f6 !important;
+}
+
+html.dui-pro-overhaul.dui-cohesive-ui [data-dui-modal="recruit-agent"] .dui-recruit-primary:disabled {
+  border-color: rgba(184, 188, 190, .16) !important;
+  background: #151617 !important;
+  color: #8e9499 !important;
+}
+
+html.dui-pro-overhaul.dui-cohesive-ui [data-dui-modal="recruit-agent"] .dui-recruit-capability input:checked,
+html.dui-pro-overhaul.dui-cohesive-ui [data-dui-modal="recruit-agent"] .dui-recruit-toggle input:checked {
+  border-color: rgba(238, 240, 241, .72) !important;
+  background: #c9ced1 !important;
+  background-image: none !important;
+}
+
+html.dui-pro-overhaul.dui-cohesive-ui [data-dui-modal="recruit-agent"] .dui-recruit-capability input:checked::after,
+html.dui-pro-overhaul.dui-cohesive-ui [data-dui-modal="recruit-agent"] .dui-recruit-toggle input:checked::after {
+  border-color: #050607 !important;
+}
+
+html.dui-pro-overhaul.dui-cohesive-ui [data-dui-modal="recruit-agent"] .dui-recruit-file-tabs button[data-md-tone] {
+  --dui-md-file-accent: #b5babd;
+  --dui-md-file-soft: rgba(190, 194, 197, .10);
+  --dui-md-file-border: rgba(190, 194, 197, .24);
+  border-color: rgba(184, 188, 190, .16) !important;
+  color: #cbd0d3 !important;
+}
+
+html.dui-pro-overhaul.dui-cohesive-ui [data-dui-modal="recruit-agent"] .dui-recruit-file-tabs button[data-md-tone]::before {
+  background: #aeb4b8 !important;
+  box-shadow: none !important;
+}
+
+html.dui-pro-overhaul.dui-cohesive-ui [data-dui-modal="recruit-agent"] .dui-recruit-file-tabs button.is-active[data-md-tone] {
+  border-color: rgba(218, 222, 224, .32) !important;
+  background: #202123 !important;
+  background-image: linear-gradient(180deg, rgba(255, 255, 255, .06), rgba(255, 255, 255, .010)) !important;
+}
+
+html.dui-pro-overhaul.dui-cohesive-ui [data-dui-modal="recruit-agent"] .dui-recruit-file-tabs button.is-active[data-md-tone]::after {
+  background: #c9ced1 !important;
+  box-shadow: none !important;
+}
+
+html.dui-pro-overhaul.dui-cohesive-ui [data-dui-modal="recruit-agent"] .dui-recruit-code-editor {
+  border-color: rgba(184, 188, 190, .14) !important;
+  background: #050505 !important;
+  background-image: none !important;
+}
+
+html.dui-pro-overhaul.dui-cohesive-ui [data-dui-modal="recruit-agent"] .dui-recruit-code-gutter {
+  border-right-color: rgba(184, 188, 190, .10) !important;
+  color: #6f767b !important;
+}
+
+html.dui-pro-overhaul.dui-cohesive-ui [data-dui-modal="recruit-agent"] .dui-recruit-code-preview {
+  background: transparent !important;
+  color: #d9dcde !important;
+}
+
+html.dui-pro-overhaul.dui-cohesive-ui [data-dui-modal="recruit-agent"] .dui-recruit-code-input {
+  background: transparent !important;
+  color: transparent !important;
+  -webkit-text-fill-color: transparent !important;
+  caret-color: #f5f6f7 !important;
+}
+
+html.dui-pro-overhaul.dui-cohesive-ui [data-dui-modal="recruit-agent"] .dui-recruit-code-editor.is-plain-text .dui-recruit-code-input {
+  color: #e4e7e9 !important;
+  -webkit-text-fill-color: #e4e7e9 !important;
+}
+
+html.dui-pro-overhaul.dui-cohesive-ui [data-dui-modal="recruit-agent"] .dui-recruit-code-input::selection {
+  background: rgba(206, 211, 214, .23) !important;
+  color: transparent !important;
+  -webkit-text-fill-color: transparent !important;
+}
+
+html.dui-pro-overhaul.dui-cohesive-ui [data-dui-modal="recruit-agent"] .dui-recruit-code-editor.is-plain-text .dui-recruit-code-input::selection {
+  color: #f6f7f8 !important;
+  -webkit-text-fill-color: #f6f7f8 !important;
+}
+
+html.dui-pro-overhaul.dui-cohesive-ui [data-dui-modal="recruit-agent"] .dui-recruit-code-status {
+  border-top-color: rgba(184, 188, 190, .10) !important;
+  background: #070707 !important;
+  color: #8f969b !important;
+}
+
+html.dui-pro-overhaul.dui-cohesive-ui [data-dui-modal="recruit-agent"] .dui-token-title {
+  color: #eef0f1 !important;
+  font-weight: 900 !important;
+}
+
+html.dui-pro-overhaul.dui-cohesive-ui [data-dui-modal="recruit-agent"] .dui-token-section {
+  color: #cfd3d5 !important;
+  font-weight: 900 !important;
+}
+
+html.dui-pro-overhaul.dui-cohesive-ui [data-dui-modal="recruit-agent"] .dui-token-label {
+  color: #c3c8cb !important;
+  font-weight: 850 !important;
+}
+
+html.dui-pro-overhaul.dui-cohesive-ui [data-dui-modal="recruit-agent"] .dui-token-id,
+html.dui-pro-overhaul.dui-cohesive-ui [data-dui-modal="recruit-agent"] .dui-token-file-ref {
+  color: #d2c8ad !important;
+  font-weight: 850 !important;
+}
+
+html.dui-pro-overhaul.dui-cohesive-ui [data-dui-modal="recruit-agent"] .dui-token-value {
+  color: #c3ccc5 !important;
+  font-weight: 800 !important;
+}
+
+html.dui-pro-overhaul.dui-cohesive-ui [data-dui-modal="recruit-agent"] .dui-token-list-marker {
+  color: #b7bdc1 !important;
+  font-weight: 900 !important;
+}
+
+html.dui-pro-overhaul.dui-cohesive-ui [data-dui-modal="recruit-agent"] .dui-token-inline-code,
+html.dui-pro-overhaul.dui-cohesive-ui [data-dui-modal="recruit-agent"] .dui-token-code-fence {
+  color: #d7c5d8 !important;
+  font-weight: 850 !important;
+}
+
+html.dui-pro-overhaul.dui-cohesive-ui [data-dui-modal="recruit-agent"] .dui-token-emphasis {
+  color: #e0e2e3 !important;
+  font-weight: 850 !important;
+}
+
+html.dui-pro-overhaul.dui-cohesive-ui [data-dui-modal="recruit-agent"] .dui-token-link {
+  color: #d5d8da !important;
+  font-weight: 820 !important;
+  text-decoration: underline;
+  text-decoration-color: rgba(213, 216, 218, .48);
+}
+
+html.dui-pro-overhaul.dui-cohesive-ui [data-dui-modal="recruit-agent"] .dui-token-rule {
+  color: #6f767b !important;
+  font-weight: 900 !important;
+}
+
+/* Gateway log tail readability pass. Keep this after theme-wide monitor rules. */
+html.dui-pro-overhaul .app-bg.dy-monitor-focus [data-dui-panel="monitor"] .dy-gateway-log-card .dy-monitor-log-box,
+html.dui-pro-overhaul.dui-cohesive-ui .app-bg.dy-monitor-focus [data-dui-panel="monitor"] .dy-gateway-log-card .dy-monitor-log-box {
+  padding: 8px !important;
+  font-size: 9px !important;
+  line-height: 1.45 !important;
+  letter-spacing: 0 !important;
+  color: #aeb7bf !important;
+  tab-size: 2;
+}
+
+html.dui-pro-overhaul .app-bg.dy-monitor-focus [data-dui-panel="monitor"] .dy-gateway-log-header,
+html.dui-pro-overhaul.dui-cohesive-ui .app-bg.dy-monitor-focus [data-dui-panel="monitor"] .dy-gateway-log-header {
+  align-items: center !important;
+  gap: 8px !important;
+}
+
+html.dui-pro-overhaul .app-bg.dy-monitor-focus [data-dui-panel="monitor"] .dy-gateway-log-title,
+html.dui-pro-overhaul.dui-cohesive-ui .app-bg.dy-monitor-focus [data-dui-panel="monitor"] .dy-gateway-log-title {
+  color: #e3e9ed !important;
+  font-size: 13px !important;
+  line-height: 1.2 !important;
+  font-weight: 780 !important;
+  letter-spacing: 0 !important;
+}
+
+html.dui-pro-overhaul .app-bg.dy-monitor-focus [data-dui-panel="monitor"] .dy-gateway-log-controls,
+html.dui-pro-overhaul.dui-cohesive-ui .app-bg.dy-monitor-focus [data-dui-panel="monitor"] .dy-gateway-log-controls {
+  align-items: center !important;
+  gap: 7px !important;
+}
+
+html.dui-pro-overhaul .app-bg.dy-monitor-focus [data-dui-panel="monitor"] .dy-gateway-log-controls > span,
+html.dui-pro-overhaul.dui-cohesive-ui .app-bg.dy-monitor-focus [data-dui-panel="monitor"] .dy-gateway-log-controls > span {
+  color: #6f7a83 !important;
+  font-size: 8px !important;
+  line-height: 1.2 !important;
+  font-weight: 750 !important;
+  letter-spacing: 0 !important;
+}
+
+html.dui-pro-overhaul .app-bg.dy-monitor-focus [data-dui-panel="monitor"] .dy-gateway-log-toggle,
+html.dui-pro-overhaul.dui-cohesive-ui .app-bg.dy-monitor-focus [data-dui-panel="monitor"] .dy-gateway-log-toggle {
+  min-height: 22px !important;
+  padding: 4px 8px !important;
+  border-color: rgba(184, 194, 202, .16) !important;
+  background: rgba(255, 255, 255, .026) !important;
+  color: #c3ccd3 !important;
+  font-size: 8px !important;
+  line-height: 1 !important;
+  font-weight: 820 !important;
+  letter-spacing: 0 !important;
+}
+
+html.dui-pro-overhaul .app-bg.dy-monitor-focus [data-dui-panel="monitor"] .dy-gateway-log-line,
+html.dui-pro-overhaul.dui-cohesive-ui .app-bg.dy-monitor-focus [data-dui-panel="monitor"] .dy-gateway-log-line {
+  display: grid !important;
+  grid-template-columns: 88px 62px minmax(0, 1fr);
+  align-items: start;
+  gap: 8px;
+  width: 100%;
+  min-width: 0;
+  padding: 4px 6px;
+  border-bottom: 1px solid rgba(184, 194, 202, .075);
+  background: rgba(255, 255, 255, .008);
+  color: #aeb7bf !important;
+}
+
+html.dui-pro-overhaul .app-bg.dy-monitor-focus [data-dui-panel="monitor"] .dy-gateway-log-line:nth-child(even),
+html.dui-pro-overhaul.dui-cohesive-ui .app-bg.dy-monitor-focus [data-dui-panel="monitor"] .dy-gateway-log-line:nth-child(even) {
+  background: rgba(255, 255, 255, .018);
+}
+
+html.dui-pro-overhaul .app-bg.dy-monitor-focus [data-dui-panel="monitor"] .dy-gateway-log-line:hover,
+html.dui-pro-overhaul.dui-cohesive-ui .app-bg.dy-monitor-focus [data-dui-panel="monitor"] .dy-gateway-log-line:hover {
+  background: rgba(220, 229, 236, .045);
+}
+
+html.dui-pro-overhaul .app-bg.dy-monitor-focus [data-dui-panel="monitor"] .dy-gateway-log-time,
+html.dui-pro-overhaul.dui-cohesive-ui .app-bg.dy-monitor-focus [data-dui-panel="monitor"] .dy-gateway-log-time {
+  white-space: nowrap;
+  color: #6f7a83 !important;
+  font-size: 8.5px !important;
+  line-height: 1.45 !important;
+  font-weight: 650;
+  letter-spacing: 0 !important;
+  font-variant-numeric: tabular-nums;
+}
+
+html.dui-pro-overhaul .app-bg.dy-monitor-focus [data-dui-panel="monitor"] .dy-gateway-log-stream,
+html.dui-pro-overhaul.dui-cohesive-ui .app-bg.dy-monitor-focus [data-dui-panel="monitor"] .dy-gateway-log-stream {
+  display: inline-flex;
+  width: fit-content;
+  max-width: 100%;
+  min-height: 14px;
+  align-items: center;
+  justify-content: center;
+  padding: 0 5px;
+  border: 1px solid rgba(184, 194, 202, .12);
+  background: rgba(255, 255, 255, .026);
+  text-transform: uppercase;
+  white-space: nowrap;
+  font-size: 8px !important;
+  line-height: 1.25 !important;
+  font-weight: 800;
+  letter-spacing: 0 !important;
+}
+
+html.dui-pro-overhaul .app-bg.dy-monitor-focus [data-dui-panel="monitor"] .dy-gateway-log-line[data-stream="stdout"] .dy-gateway-log-stream,
+html.dui-pro-overhaul.dui-cohesive-ui .app-bg.dy-monitor-focus [data-dui-panel="monitor"] .dy-gateway-log-line[data-stream="stdout"] .dy-gateway-log-stream {
+  border-color: rgba(74, 222, 128, .38) !important;
+  background: rgba(34, 197, 94, .13) !important;
+  color: #9bf3b5 !important;
+}
+
+html.dui-pro-overhaul .app-bg.dy-monitor-focus [data-dui-panel="monitor"] .dy-gateway-log-line[data-stream="lifecycle"] .dy-gateway-log-stream,
+html.dui-pro-overhaul.dui-cohesive-ui .app-bg.dy-monitor-focus [data-dui-panel="monitor"] .dy-gateway-log-line[data-stream="lifecycle"] .dy-gateway-log-stream {
+  border-color: rgba(45, 212, 191, .42) !important;
+  background: rgba(20, 184, 166, .14) !important;
+  color: #8beee1 !important;
+}
+
+html.dui-pro-overhaul .app-bg.dy-monitor-focus [data-dui-panel="monitor"] .dy-gateway-log-line[data-stream="gateway"] .dy-gateway-log-stream,
+html.dui-pro-overhaul.dui-cohesive-ui .app-bg.dy-monitor-focus [data-dui-panel="monitor"] .dy-gateway-log-line[data-stream="gateway"] .dy-gateway-log-stream {
+  border-color: rgba(125, 211, 252, .42) !important;
+  background: rgba(14, 165, 233, .14) !important;
+  color: #a7e4ff !important;
+}
+
+html.dui-pro-overhaul .app-bg.dy-monitor-focus [data-dui-panel="monitor"] .dy-gateway-log-line[data-stream="channel"] .dy-gateway-log-stream,
+html.dui-pro-overhaul.dui-cohesive-ui .app-bg.dy-monitor-focus [data-dui-panel="monitor"] .dy-gateway-log-line[data-stream="channel"] .dy-gateway-log-stream {
+  border-color: rgba(167, 139, 250, .44) !important;
+  background: rgba(139, 92, 246, .15) !important;
+  color: #c9bcff !important;
+}
+
+html.dui-pro-overhaul .app-bg.dy-monitor-focus [data-dui-panel="monitor"] .dy-gateway-log-line[data-stream="stderr"] .dy-gateway-log-stream,
+html.dui-pro-overhaul.dui-cohesive-ui .app-bg.dy-monitor-focus [data-dui-panel="monitor"] .dy-gateway-log-line[data-stream="stderr"] .dy-gateway-log-stream {
+  border-color: rgba(251, 113, 133, .44) !important;
+  background: rgba(244, 63, 94, .15) !important;
+  color: #ffc0ca !important;
+}
+
+html.dui-pro-overhaul .app-bg.dy-monitor-focus [data-dui-panel="monitor"] .dy-gateway-log-line:is([data-level="warning"], [data-level="warn"]) .dy-gateway-log-stream,
+html.dui-pro-overhaul.dui-cohesive-ui .app-bg.dy-monitor-focus [data-dui-panel="monitor"] .dy-gateway-log-line:is([data-level="warning"], [data-level="warn"]) .dy-gateway-log-stream {
+  border-color: rgba(251, 191, 36, .48) !important;
+  background: rgba(245, 158, 11, .16) !important;
+  color: #ffe39a !important;
+}
+
+html.dui-pro-overhaul .app-bg.dy-monitor-focus [data-dui-panel="monitor"] .dy-gateway-log-line[data-level="error"] .dy-gateway-log-stream,
+html.dui-pro-overhaul.dui-cohesive-ui .app-bg.dy-monitor-focus [data-dui-panel="monitor"] .dy-gateway-log-line[data-level="error"] .dy-gateway-log-stream {
+  border-color: rgba(248, 113, 113, .52) !important;
+  background: rgba(220, 38, 38, .18) !important;
+  color: #ffc2c2 !important;
+}
+
+html.dui-pro-overhaul .app-bg.dy-monitor-focus [data-dui-panel="monitor"] .dy-gateway-log-message,
+html.dui-pro-overhaul.dui-cohesive-ui .app-bg.dy-monitor-focus [data-dui-panel="monitor"] .dy-gateway-log-message {
+  min-width: 0;
+  color: #b8c0c7 !important;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  word-break: break-word;
+  font-size: 9px !important;
+  line-height: 1.45 !important;
+  font-weight: 560;
+  letter-spacing: 0 !important;
+}
+
+html.dui-pro-overhaul .app-bg.dy-monitor-focus [data-dui-panel="monitor"] .dy-gateway-log-line[data-level="error"] .dy-gateway-log-message,
+html.dui-pro-overhaul.dui-cohesive-ui .app-bg.dy-monitor-focus [data-dui-panel="monitor"] .dy-gateway-log-line[data-level="error"] .dy-gateway-log-message {
+  color: #f1c2c5 !important;
+}
+
+html.dui-pro-overhaul .app-bg.dy-monitor-focus [data-dui-panel="monitor"] .dy-gateway-log-line[data-level="warning"] .dy-gateway-log-message,
+html.dui-pro-overhaul .app-bg.dy-monitor-focus [data-dui-panel="monitor"] .dy-gateway-log-line[data-level="warn"] .dy-gateway-log-message,
+html.dui-pro-overhaul.dui-cohesive-ui .app-bg.dy-monitor-focus [data-dui-panel="monitor"] .dy-gateway-log-line[data-level="warning"] .dy-gateway-log-message,
+html.dui-pro-overhaul.dui-cohesive-ui .app-bg.dy-monitor-focus [data-dui-panel="monitor"] .dy-gateway-log-line[data-level="warn"] .dy-gateway-log-message {
+  color: #e8d2a4 !important;
+}
+
+html.dui-pro-overhaul .app-bg.dy-monitor-focus [data-dui-panel="monitor"] .dy-gateway-log-hidden,
+html.dui-pro-overhaul .app-bg.dy-monitor-focus [data-dui-panel="monitor"] .dy-gateway-log-empty,
+html.dui-pro-overhaul.dui-cohesive-ui .app-bg.dy-monitor-focus [data-dui-panel="monitor"] .dy-gateway-log-hidden,
+html.dui-pro-overhaul.dui-cohesive-ui .app-bg.dy-monitor-focus [data-dui-panel="monitor"] .dy-gateway-log-empty {
+  color: #6f7a83 !important;
+  font-size: 8.5px !important;
+  line-height: 1.4 !important;
+  letter-spacing: 0 !important;
+}
+
+@media (max-width: 720px) {
+  html.dui-pro-overhaul .app-bg.dy-monitor-focus [data-dui-panel="monitor"] .dy-gateway-log-line,
+  html.dui-pro-overhaul.dui-cohesive-ui .app-bg.dy-monitor-focus [data-dui-panel="monitor"] .dy-gateway-log-line {
+    grid-template-columns: 82px 56px minmax(0, 1fr);
+    gap: 6px;
+    padding-right: 5px;
+    padding-left: 5px;
+  }
+}
+
+/* Minimal monochrome cron cards. Keep this late in the cascade so the monitor theme stays quiet. */
+html.dui-pro-overhaul .app-bg.dy-monitor-focus [data-dui-panel="monitor"] .dy-cron-jobs-card .dy-monitor-stream-box,
+html.dui-pro-overhaul.dui-cohesive-ui .app-bg.dy-monitor-focus [data-dui-panel="monitor"] .dy-cron-jobs-card .dy-monitor-stream-box {
+  display: grid !important;
+  align-content: start !important;
+  gap: 10px !important;
+  padding: 10px !important;
+  border-color: rgba(255, 255, 255, .12) !important;
+  background: #030303 !important;
+  box-shadow: none !important;
+}
+
+html.dui-pro-overhaul .app-bg.dy-monitor-focus [data-dui-panel="monitor"] .dy-cron-jobs-card .dy-monitor-stream-box.dy-cron-stream-empty,
+html.dui-pro-overhaul.dui-cohesive-ui .app-bg.dy-monitor-focus [data-dui-panel="monitor"] .dy-cron-jobs-card .dy-monitor-stream-box.dy-cron-stream-empty {
+  border-color: transparent !important;
+  background: transparent !important;
+  background-image: none !important;
+  box-shadow: none !important;
+}
+
+html.dui-pro-overhaul .app-bg.dy-monitor-focus [data-dui-panel="monitor"] .dy-cron-jobs-card .dy-cron-empty-state,
+html.dui-pro-overhaul.dui-cohesive-ui .app-bg.dy-monitor-focus [data-dui-panel="monitor"] .dy-cron-jobs-card .dy-cron-empty-state {
+  border-color: transparent !important;
+  background: transparent !important;
+  background-image: none !important;
+  box-shadow: none !important;
+}
+
+html.dui-pro-overhaul .app-bg.dy-monitor-focus [data-dui-panel="monitor"] .dy-cron-job-card,
+html.dui-pro-overhaul.dui-cohesive-ui .app-bg.dy-monitor-focus [data-dui-panel="monitor"] .dy-cron-job-card {
+  min-height: 150px !important;
+  gap: 10px !important;
+  border: 1px solid rgba(255, 255, 255, .22) !important;
+  border-radius: 0 !important;
+  background: #090909 !important;
+  padding: 14px !important;
+  color: #f5f5f5 !important;
+  box-shadow: none !important;
+}
+
+html.dui-pro-overhaul .app-bg.dy-monitor-focus [data-dui-panel="monitor"] .dy-cron-job-card:hover,
+html.dui-pro-overhaul.dui-cohesive-ui .app-bg.dy-monitor-focus [data-dui-panel="monitor"] .dy-cron-job-card:hover {
+  border-color: rgba(255, 255, 255, .36) !important;
+  background: #0d0d0d !important;
+}
+
+html.dui-pro-overhaul .app-bg.dy-monitor-focus [data-dui-panel="monitor"] .dy-cron-job-header,
+html.dui-pro-overhaul.dui-cohesive-ui .app-bg.dy-monitor-focus [data-dui-panel="monitor"] .dy-cron-job-header {
+  display: block !important;
+  min-width: 0 !important;
+}
+
+html.dui-pro-overhaul .app-bg.dy-monitor-focus [data-dui-panel="monitor"] .dy-cron-job-meta-row,
+html.dui-pro-overhaul.dui-cohesive-ui .app-bg.dy-monitor-focus [data-dui-panel="monitor"] .dy-cron-job-meta-row {
+  margin-bottom: 6px !important;
+}
+
+html.dui-pro-overhaul .app-bg.dy-monitor-focus [data-dui-panel="monitor"] .dy-cron-job-title-row p,
+html.dui-pro-overhaul.dui-cohesive-ui .app-bg.dy-monitor-focus [data-dui-panel="monitor"] .dy-cron-job-title-row p {
+  max-width: 100% !important;
+  color: #ffffff !important;
+  font-size: 13px !important;
+  line-height: 1.2 !important;
+  font-weight: 820 !important;
+  letter-spacing: 0 !important;
+}
+
+html.dui-pro-overhaul .app-bg.dy-monitor-focus [data-dui-panel="monitor"] .dy-cron-job-subtitle,
+html.dui-pro-overhaul.dui-cohesive-ui .app-bg.dy-monitor-focus [data-dui-panel="monitor"] .dy-cron-job-subtitle {
+  color: #777777 !important;
+  font-size: 8.5px !important;
+  line-height: 1.35 !important;
+  letter-spacing: 0 !important;
+}
+
+html.dui-pro-overhaul .app-bg.dy-monitor-focus [data-dui-panel="monitor"] .dy-cron-job-source,
+html.dui-pro-overhaul.dui-cohesive-ui .app-bg.dy-monitor-focus [data-dui-panel="monitor"] .dy-cron-job-source {
+  color: #7a7a7a !important;
+  font-size: 7.5px !important;
+  line-height: 1 !important;
+  font-weight: 760 !important;
+  text-transform: uppercase !important;
+  letter-spacing: 0 !important;
+}
+
+html.dui-pro-overhaul .app-bg.dy-monitor-focus [data-dui-panel="monitor"] .dy-cron-status-badge,
+html.dui-pro-overhaul .app-bg.dy-monitor-focus [data-dui-panel="monitor"] .dy-cron-status-badge[data-state="active"],
+html.dui-pro-overhaul.dui-cohesive-ui .app-bg.dy-monitor-focus [data-dui-panel="monitor"] .dy-cron-status-badge,
+html.dui-pro-overhaul.dui-cohesive-ui .app-bg.dy-monitor-focus [data-dui-panel="monitor"] .dy-cron-status-badge[data-state="active"] {
+  border-color: rgba(255, 255, 255, .18) !important;
+  border-radius: 0 !important;
+  background: #111111 !important;
+  color: #d7d7d7 !important;
+  font-size: 7.5px !important;
+  line-height: 1 !important;
+  font-weight: 780 !important;
+  letter-spacing: 0 !important;
+}
+
+html.dui-pro-overhaul .app-bg.dy-monitor-focus [data-dui-panel="monitor"] .dy-cron-remove-button,
+html.dui-pro-overhaul.dui-cohesive-ui .app-bg.dy-monitor-focus [data-dui-panel="monitor"] .dy-cron-remove-button {
+  width: 24px !important;
+  height: 24px !important;
+  border: 0 !important;
+  border-radius: 0 !important;
+  background: transparent !important;
+  padding: 0 !important;
+  color: #ff4d58 !important;
+  box-shadow: none !important;
+}
+
+html.dui-pro-overhaul .app-bg.dy-monitor-focus [data-dui-panel="monitor"] .dy-cron-remove-button svg,
+html.dui-pro-overhaul.dui-cohesive-ui .app-bg.dy-monitor-focus [data-dui-panel="monitor"] .dy-cron-remove-button svg {
+  width: 15px !important;
+  height: 15px !important;
+  fill: none !important;
+  stroke: currentColor !important;
+  stroke-width: 2.1 !important;
+  stroke-linecap: square !important;
+}
+
+html.dui-pro-overhaul .app-bg.dy-monitor-focus [data-dui-panel="monitor"] .dy-cron-remove-button:hover:not(:disabled),
+html.dui-pro-overhaul.dui-cohesive-ui .app-bg.dy-monitor-focus [data-dui-panel="monitor"] .dy-cron-remove-button:hover:not(:disabled) {
+  background: rgba(255, 77, 88, .08) !important;
+  color: #ff7078 !important;
+}
+
+html.dui-pro-overhaul .app-bg.dy-monitor-focus [data-dui-panel="monitor"] .dy-cron-remove-button:focus-visible,
+html.dui-pro-overhaul.dui-cohesive-ui .app-bg.dy-monitor-focus [data-dui-panel="monitor"] .dy-cron-remove-button:focus-visible {
+  outline: 1px solid rgba(255, 77, 88, .8) !important;
+  outline-offset: 2px !important;
+}
+
+html.dui-pro-overhaul .app-bg.dy-monitor-focus [data-dui-panel="monitor"] .dy-cron-job-details,
+html.dui-pro-overhaul.dui-cohesive-ui .app-bg.dy-monitor-focus [data-dui-panel="monitor"] .dy-cron-job-details {
+  grid-template-columns: repeat(4, minmax(0, 1fr)) !important;
+  gap: 7px !important;
+}
+
+html.dui-pro-overhaul .app-bg.dy-monitor-focus [data-dui-panel="monitor"] .dy-cron-jobs-card .dy-session-meta-chip,
+html.dui-pro-overhaul.dui-cohesive-ui .app-bg.dy-monitor-focus [data-dui-panel="monitor"] .dy-cron-jobs-card .dy-session-meta-chip {
+  display: grid !important;
+  min-height: 32px !important;
+  grid-template-columns: 1fr !important;
+  align-items: start !important;
+  gap: 3px !important;
+  border: 1px solid rgba(255, 255, 255, .12) !important;
+  border-radius: 0 !important;
+  background: #050505 !important;
+  padding: 6px 7px !important;
+  color: #888888 !important;
+  white-space: normal !important;
+}
+
+html.dui-pro-overhaul .app-bg.dy-monitor-focus [data-dui-panel="monitor"] .dy-cron-jobs-card .dy-session-meta-chip > span,
+html.dui-pro-overhaul.dui-cohesive-ui .app-bg.dy-monitor-focus [data-dui-panel="monitor"] .dy-cron-jobs-card .dy-session-meta-chip > span {
+  color: #777777 !important;
+  font-size: 7.5px !important;
+  line-height: 1 !important;
+  font-weight: 780 !important;
+  text-transform: uppercase !important;
+  letter-spacing: 0 !important;
+}
+
+html.dui-pro-overhaul .app-bg.dy-monitor-focus [data-dui-panel="monitor"] .dy-cron-jobs-card .dy-session-meta-chip strong,
+html.dui-pro-overhaul.dui-cohesive-ui .app-bg.dy-monitor-focus [data-dui-panel="monitor"] .dy-cron-jobs-card .dy-session-meta-chip strong {
+  min-width: 0 !important;
+  overflow: hidden !important;
+  color: #f2f2f2 !important;
+  font-size: 9px !important;
+  line-height: 1.15 !important;
+  font-weight: 760 !important;
+  text-align: left !important;
+  text-overflow: ellipsis !important;
+  white-space: nowrap !important;
+}
+
+html.dui-pro-overhaul .app-bg.dy-monitor-focus [data-dui-panel="monitor"] .dy-cron-mission-info,
+html.dui-pro-overhaul.dui-cohesive-ui .app-bg.dy-monitor-focus [data-dui-panel="monitor"] .dy-cron-mission-info {
+  position: relative !important;
+  display: grid !important;
+  min-height: 56px !important;
+  gap: 5px !important;
+  border: 1px solid rgba(255, 255, 255, .24) !important;
+  border-radius: 0 !important;
+  background: #f6f6f6 !important;
+  padding: 9px 10px !important;
+  color: #080808 !important;
+  cursor: help !important;
+  outline: none !important;
+  white-space: normal !important;
+}
+
+html.dui-pro-overhaul .app-bg.dy-monitor-focus [data-dui-panel="monitor"] .dy-cron-mission-info > span,
+html.dui-pro-overhaul.dui-cohesive-ui .app-bg.dy-monitor-focus [data-dui-panel="monitor"] .dy-cron-mission-info > span {
+  color: #555555 !important;
+  font-size: 7.5px !important;
+  line-height: 1 !important;
+  font-weight: 840 !important;
+  text-transform: uppercase !important;
+  letter-spacing: 0 !important;
+}
+
+html.dui-pro-overhaul .app-bg.dy-monitor-focus [data-dui-panel="monitor"] .dy-cron-mission-info > strong,
+html.dui-pro-overhaul.dui-cohesive-ui .app-bg.dy-monitor-focus [data-dui-panel="monitor"] .dy-cron-mission-info > strong {
+  display: -webkit-box !important;
+  overflow: hidden !important;
+  color: #080808 !important;
+  font-size: 10px !important;
+  line-height: 1.35 !important;
+  font-weight: 720 !important;
+  text-align: left !important;
+  white-space: normal !important;
+  overflow-wrap: anywhere !important;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 3;
+}
+
+html.dui-pro-overhaul .app-bg.dy-monitor-focus [data-dui-panel="monitor"] .dy-cron-mission-info::after,
+html.dui-pro-overhaul.dui-cohesive-ui .app-bg.dy-monitor-focus [data-dui-panel="monitor"] .dy-cron-mission-info::after {
+  content: attr(data-full-description);
+  position: absolute;
+  z-index: 60;
+  left: 0;
+  bottom: calc(100% + 8px);
+  width: min(520px, calc(100vw - 48px));
+  max-height: 260px;
+  overflow: auto;
+  border: 1px solid rgba(255, 255, 255, .28);
+  border-radius: 0;
+  background: #090909;
+  padding: 12px;
+  color: #f7f7f7;
+  box-shadow: 0 18px 34px rgba(0, 0, 0, .52);
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  font-size: 10px;
+  line-height: 1.45;
+  font-weight: 560;
+  letter-spacing: 0;
+  opacity: 0;
+  pointer-events: none;
+  transform: translateY(4px);
+  transition: opacity 120ms ease, transform 120ms ease;
+}
+
+html.dui-pro-overhaul .app-bg.dy-monitor-focus [data-dui-panel="monitor"] .dy-cron-mission-info:hover::after,
+html.dui-pro-overhaul .app-bg.dy-monitor-focus [data-dui-panel="monitor"] .dy-cron-mission-info:focus-visible::after,
+html.dui-pro-overhaul.dui-cohesive-ui .app-bg.dy-monitor-focus [data-dui-panel="monitor"] .dy-cron-mission-info:hover::after,
+html.dui-pro-overhaul.dui-cohesive-ui .app-bg.dy-monitor-focus [data-dui-panel="monitor"] .dy-cron-mission-info:focus-visible::after {
+  opacity: 1;
+  transform: translateY(0);
+}
+
+html.dui-pro-overhaul .app-bg.dy-monitor-focus [data-dui-panel="monitor"] .dy-cron-mission-info:focus-visible,
+html.dui-pro-overhaul.dui-cohesive-ui .app-bg.dy-monitor-focus [data-dui-panel="monitor"] .dy-cron-mission-info:focus-visible {
+  outline: 1px solid rgba(255, 255, 255, .68) !important;
+  outline-offset: 2px !important;
+}
+
+@media (max-width: 720px) {
+  html.dui-pro-overhaul .app-bg.dy-monitor-focus [data-dui-panel="monitor"] .dy-cron-job-details,
+  html.dui-pro-overhaul.dui-cohesive-ui .app-bg.dy-monitor-focus [data-dui-panel="monitor"] .dy-cron-job-details {
+    grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+  }
+
+  html.dui-pro-overhaul .app-bg.dy-monitor-focus [data-dui-panel="monitor"] .dy-cron-mission-info::after,
+  html.dui-pro-overhaul.dui-cohesive-ui .app-bg.dy-monitor-focus [data-dui-panel="monitor"] .dy-cron-mission-info::after {
+    width: min(420px, calc(100vw - 32px));
+    max-height: 220px;
+  }
+}
+
+html.dui-pro-overhaul.dui-cohesive-ui .dy-agent-console-pane {
+  min-height: 0 !important;
+  overflow: hidden !important;
+}
+
+html.dui-pro-overhaul.dui-cohesive-ui .dy-agent-console-pane [data-dui-panel="command-console"].dy-command-console,
+html.dui-pro-overhaul.dui-cohesive-ui .dy-agent-console-pane [data-chat-panel="true"] {
+  height: 100% !important;
+  max-height: 100% !important;
+  min-height: 0 !important;
+  overflow: hidden !important;
+}
+
+html.dui-pro-overhaul.dui-cohesive-ui .dy-agent-console-pane .dy-command-messages {
+  flex: 1 1 auto !important;
+  min-height: 0 !important;
+  overflow-x: hidden !important;
+  overflow-y: auto !important;
+}
+
+@media (min-width: 1461px) and (min-height: 861px) {
+  html.dui-pro-overhaul.dui-cohesive-ui .agent-registry-pane {
+    min-height: 0 !important;
+    overflow: hidden !important;
+  }
+
+  html.dui-pro-overhaul.dui-cohesive-ui [data-dui-panel="agent-registry"] {
+    display: flex !important;
+    height: var(--dy-agent-registry-pane-height, clamp(420px, calc(100dvh - 350px), 760px)) !important;
+    max-height: var(--dy-agent-registry-pane-height, clamp(420px, calc(100dvh - 350px), 760px)) !important;
+    min-height: 0 !important;
+    flex-direction: column !important;
+    overflow: hidden !important;
+  }
+
+  html.dui-pro-overhaul.dui-cohesive-ui [data-agent-registry-scroll] {
+    flex: 1 1 auto !important;
+    height: auto !important;
+    max-height: none !important;
+  }
+
+  html.dui-pro-overhaul.dui-cohesive-ui .dy-agent-console-pane {
+    height: var(--dy-agent-registry-pane-height, clamp(420px, calc(100dvh - 350px), 760px)) !important;
+    max-height: var(--dy-agent-registry-pane-height, clamp(420px, calc(100dvh - 350px), 760px)) !important;
+  }
+}
+
+@media (max-width: 1460px), (max-height: 860px) {
+  html.dui-pro-overhaul.dui-cohesive-ui .dy-agent-console-pane,
+  html.dui-pro-overhaul.dui-cohesive-ui .dy-agent-console-pane [data-dui-panel="command-console"].dy-command-console,
+  html.dui-pro-overhaul.dui-cohesive-ui .dy-agent-console-pane [data-chat-panel="true"] {
+    height: clamp(340px, 48dvh, 560px) !important;
+    max-height: clamp(340px, 48dvh, 560px) !important;
+    min-height: clamp(340px, 48dvh, 560px) !important;
+  }
+}
+
+/* Command console composer: make the agent message box feel like a real prompt surface. */
+html.dui-pro-overhaul.dui-cohesive-ui {
+  --dy-command-console-width: clamp(420px, 30vw, 560px);
+  --dy-command-console-min-width: 360px;
+  --dy-agent-registry-min-width: 640px;
+  --dy-agent-split-resizer-width: 18px;
+  --dy-command-composer-max-height: min(34dvh, 280px);
+}
+
+html.dui-pro-overhaul.dui-cohesive-ui .dy-agent-split-resizer {
+  display: none;
+}
+
+@media (min-width: 1461px) and (min-height: 861px) {
+  html.dui-pro-overhaul.dui-cohesive-ui .dy-agents-workspace.is-console-visible {
+    grid-template-columns:
+      minmax(var(--dy-agent-registry-min-width), 1fr)
+      minmax(var(--dy-command-console-min-width), var(--dy-command-console-width)) !important;
+    grid-template-areas:
+      "party party"
+      "registry console" !important;
+    column-gap: 10px !important;
+    row-gap: 10px !important;
+  }
+
+  html.dui-pro-overhaul.dui-cohesive-ui .dy-agents-workspace.is-console-visible .dy-active-party-pane {
+    margin-bottom: 2px !important;
+  }
+
+  html.dui-pro-overhaul.dui-cohesive-ui .dy-agent-split-resizer {
+    grid-area: registry !important;
+    position: relative;
+    z-index: 8;
+    display: flex;
+    width: var(--dy-agent-split-resizer-width);
+    min-width: var(--dy-agent-split-resizer-width);
+    min-height: 100%;
+    justify-self: end;
+    align-items: stretch;
+    justify-content: center;
+    margin-right: calc(var(--dy-agent-split-resizer-width) / -2);
+    border: 0;
+    border-radius: 0;
+    background: transparent;
+    cursor: col-resize;
+    touch-action: none;
+  }
+
+  html.dui-pro-overhaul.dui-cohesive-ui .dy-agent-split-resizer::before {
+    display: none;
+    content: none;
+  }
+
+  html.dui-pro-overhaul.dui-cohesive-ui .dy-agent-split-resizer > span {
+    display: none;
+  }
+
+  html.dui-pro-overhaul.dui-cohesive-ui .dy-agent-split-resizer:focus,
+  html.dui-pro-overhaul.dui-cohesive-ui .dy-agent-split-resizer:active,
+  html.dui-pro-overhaul.dui-cohesive-ui .dy-agents-workspace[data-agent-split-resizing="true"] .dy-agent-split-resizer {
+    border-color: transparent !important;
+    outline: none !important;
+    box-shadow: none !important;
+    background: transparent !important;
+    -webkit-tap-highlight-color: transparent;
+  }
+
+  html.dui-pro-overhaul.dui-cohesive-ui .dy-agent-split-resizer:focus-visible {
+    outline: none !important;
+    box-shadow: none !important;
+  }
+
+  html.dui-pro-overhaul.dui-cohesive-ui.dy-agent-split-resizing,
+  html.dui-pro-overhaul.dui-cohesive-ui.dy-agent-split-resizing * {
+    cursor: col-resize !important;
+    user-select: none !important;
+  }
+}
+
+html.dui-pro-overhaul.dui-cohesive-ui .dy-command-console .dy-command-composer {
+  padding: 14px 14px 16px !important;
+}
+
+html.dui-pro-overhaul.dui-cohesive-ui .dy-command-console .dy-command-composer__row {
+  align-items: flex-end !important;
+  gap: 10px !important;
+  min-height: 74px !important;
+  padding: 10px !important;
+  border-color: rgba(159, 231, 239, .22) !important;
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, .055), rgba(255, 255, 255, .012) 58%, rgba(0, 0, 0, .18)),
+    rgba(12, 17, 22, .82) !important;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, .080),
+    0 0 0 1px rgba(255, 255, 255, .018),
+    0 18px 34px -28px rgba(0, 0, 0, .95) !important;
+}
+
+html.dui-pro-overhaul.dui-cohesive-ui .dy-command-console .dy-command-composer__row::before {
+  display: block !important;
+  background:
+    linear-gradient(90deg, rgba(126, 214, 226, .16), transparent 34%, rgba(242, 197, 94, .08) 74%, transparent) !important;
+  opacity: .42 !important;
+}
+
+html.dui-pro-overhaul.dui-cohesive-ui .dy-command-console .dy-command-composer__row[data-has-draft="true"],
+html.dui-pro-overhaul.dui-cohesive-ui .dy-command-console .dy-command-composer__row:focus-within {
+  border-color: rgba(139, 221, 232, .44) !important;
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, .070), rgba(255, 255, 255, .016) 58%, rgba(0, 0, 0, .16)),
+    rgba(13, 22, 27, .90) !important;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, .10),
+    0 0 0 3px rgba(126, 214, 226, .070),
+    0 18px 38px -30px rgba(126, 214, 226, .52) !important;
+}
+
+html.dui-pro-overhaul.dui-cohesive-ui .dy-command-console .dy-command-composer__row[data-has-draft="true"]::before,
+html.dui-pro-overhaul.dui-cohesive-ui .dy-command-console .dy-command-composer__row:focus-within::before {
+  opacity: .82 !important;
+}
+
+html.dui-pro-overhaul.dui-cohesive-ui .dy-command-console .dy-command-composer__field {
+  align-items: stretch !important;
+  min-height: 58px !important;
+}
+
+html.dui-pro-overhaul.dui-cohesive-ui .dy-command-console .dy-command-icon-button,
+html.dui-pro-overhaul.dui-cohesive-ui .dy-command-console .dy-command-send {
+  width: 46px !important;
+  height: 46px !important;
+  align-self: flex-end !important;
+  border-radius: 8px !important;
+}
+
+html.dui-pro-overhaul.dui-cohesive-ui .dy-command-console textarea.dy-command-textarea {
+  min-height: 58px !important;
+  max-height: var(--dy-command-composer-max-height) !important;
+  padding: 15px 12px 13px !important;
+  color: #f1f7f8 !important;
+  font-size: 14px !important;
+  font-weight: 620 !important;
+  line-height: 1.5 !important;
+  overflow-wrap: anywhere !important;
+  scrollbar-gutter: stable;
+}
+
+html.dui-pro-overhaul.dui-cohesive-ui .dy-command-console textarea.dy-command-textarea::placeholder {
+  color: #8fa0a7 !important;
+  font-size: 13.5px !important;
+  font-weight: 660 !important;
+}
+
+/* Keep runtime session controls available without letting them reshape the monitor grid. */
+html.dui-pro-overhaul .app-bg.dy-monitor-focus [data-dui-panel="monitor"] .dy-gateway-layout,
+html.dui-pro-overhaul.dui-cohesive-ui .app-bg.dy-monitor-focus [data-dui-panel="monitor"] .dy-gateway-layout {
+  grid-template-columns: minmax(0, 1.15fr) minmax(420px, .85fr) !important;
+  grid-template-areas:
+    "summary summary"
+    "activity jobs"
+    "log log" !important;
+  grid-template-rows: max-content minmax(360px, 1fr) max-content !important;
+}
+
+html.dui-pro-overhaul .app-bg.dy-monitor-focus [data-dui-panel="monitor"] .dy-runtime-sessions-card,
+html.dui-pro-overhaul.dui-cohesive-ui .app-bg.dy-monitor-focus [data-dui-panel="monitor"] .dy-runtime-sessions-card {
+  position: relative !important;
+  z-index: 1 !important;
+  flex: 0 0 auto !important;
+  width: 100% !important;
+  height: auto !important;
+  min-height: 0 !important;
+  max-height: none !important;
+  grid-area: auto !important;
+  overflow: hidden !important;
+  margin-top: 10px !important;
+  border-color: rgba(255, 255, 255, .14) !important;
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, .034), rgba(255, 255, 255, .008)),
+    rgba(5, 7, 9, .58) !important;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, .060),
+    0 8px 18px rgba(0, 0, 0, .22) !important;
+  backdrop-filter: none !important;
+  -webkit-backdrop-filter: none !important;
+}
+
+html.dui-pro-overhaul .app-bg.dy-monitor-focus [data-dui-panel="monitor"] .dy-runtime-sessions-card[data-expanded="false"],
+html.dui-pro-overhaul.dui-cohesive-ui .app-bg.dy-monitor-focus [data-dui-panel="monitor"] .dy-runtime-sessions-card[data-expanded="false"] {
+  width: 100% !important;
+  opacity: .94;
+}
+
+html.dui-pro-overhaul .app-bg.dy-monitor-focus [data-dui-panel="monitor"] .dy-runtime-sessions-card[data-expanded="true"],
+html.dui-pro-overhaul.dui-cohesive-ui .app-bg.dy-monitor-focus [data-dui-panel="monitor"] .dy-runtime-sessions-card[data-expanded="true"] {
+  z-index: 1 !important;
+}
+
+html.dui-pro-overhaul .app-bg.dy-monitor-focus [data-dui-panel="monitor"] .dy-runtime-sessions-card[data-expanded="false"]:hover,
+html.dui-pro-overhaul.dui-cohesive-ui .app-bg.dy-monitor-focus [data-dui-panel="monitor"] .dy-runtime-sessions-card[data-expanded="false"]:hover,
+html.dui-pro-overhaul .app-bg.dy-monitor-focus [data-dui-panel="monitor"] .dy-runtime-sessions-card:focus-within,
+html.dui-pro-overhaul.dui-cohesive-ui .app-bg.dy-monitor-focus [data-dui-panel="monitor"] .dy-runtime-sessions-card:focus-within {
+  opacity: 1;
+}
+
+html.dui-pro-overhaul .app-bg.dy-monitor-focus [data-dui-panel="monitor"] .dy-runtime-sessions-toggle,
+html.dui-pro-overhaul.dui-cohesive-ui .app-bg.dy-monitor-focus [data-dui-panel="monitor"] .dy-runtime-sessions-toggle {
+  min-height: 44px !important;
+  padding: 9px 12px !important;
+  color: #d9e8ec !important;
+  cursor: pointer;
+}
+
+html.dui-pro-overhaul .app-bg.dy-monitor-focus [data-dui-panel="monitor"] .dy-runtime-sessions-toggle:hover,
+html.dui-pro-overhaul.dui-cohesive-ui .app-bg.dy-monitor-focus [data-dui-panel="monitor"] .dy-runtime-sessions-toggle:hover {
+  background: rgba(255, 255, 255, .045) !important;
+}
+
+html.dui-pro-overhaul .app-bg.dy-monitor-focus [data-dui-panel="monitor"] .dy-runtime-sessions-title,
+html.dui-pro-overhaul.dui-cohesive-ui .app-bg.dy-monitor-focus [data-dui-panel="monitor"] .dy-runtime-sessions-title {
+  letter-spacing: 0 !important;
+}
+
+html.dui-pro-overhaul .app-bg.dy-monitor-focus [data-dui-panel="monitor"] .dy-runtime-sessions-summary,
+html.dui-pro-overhaul.dui-cohesive-ui .app-bg.dy-monitor-focus [data-dui-panel="monitor"] .dy-runtime-sessions-summary,
+html.dui-pro-overhaul .app-bg.dy-monitor-focus [data-dui-panel="monitor"] .dy-runtime-sessions-description,
+html.dui-pro-overhaul.dui-cohesive-ui .app-bg.dy-monitor-focus [data-dui-panel="monitor"] .dy-runtime-sessions-description {
+  color: #7d8790 !important;
+  letter-spacing: 0 !important;
+}
+
+html.dui-pro-overhaul .app-bg.dy-monitor-focus [data-dui-panel="monitor"] .dy-runtime-sessions-panel,
+html.dui-pro-overhaul.dui-cohesive-ui .app-bg.dy-monitor-focus [data-dui-panel="monitor"] .dy-runtime-sessions-panel {
+  position: static !important;
+  width: 100% !important;
+  max-height: none !important;
+  border-top: 1px solid rgba(255, 255, 255, .10) !important;
+  background: rgba(0, 0, 0, .14) !important;
+  padding: 10px 12px 12px !important;
+  overflow: visible !important;
+  box-shadow: none !important;
+  backdrop-filter: none !important;
+  -webkit-backdrop-filter: none !important;
+}
+
+html.dui-pro-overhaul .app-bg.dy-monitor-focus [data-dui-panel="monitor"] .dy-runtime-sessions-card .dy-runtime-session-list,
+html.dui-pro-overhaul.dui-cohesive-ui .app-bg.dy-monitor-focus [data-dui-panel="monitor"] .dy-runtime-sessions-card .dy-runtime-session-list {
+  min-height: 86px !important;
+  max-height: min(34dvh, 320px) !important;
+  flex: 0 1 auto !important;
+  overflow: auto !important;
+  scrollbar-gutter: stable;
+}
+
+html.dui-pro-overhaul .app-bg.dy-monitor-focus [data-dui-panel="monitor"] .dy-runtime-sessions-card .dy-runtime-session-details,
+html.dui-pro-overhaul.dui-cohesive-ui .app-bg.dy-monitor-focus [data-dui-panel="monitor"] .dy-runtime-sessions-card .dy-runtime-session-details {
+  grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+}
+
+@media (min-width: 1680px) {
+  html.dui-pro-overhaul .app-bg.dy-monitor-focus [data-dui-panel="monitor"] .dy-gateway-layout,
+  html.dui-pro-overhaul.dui-cohesive-ui .app-bg.dy-monitor-focus [data-dui-panel="monitor"] .dy-gateway-layout {
+    grid-template-columns: minmax(0, 1.18fr) minmax(560px, .92fr) !important;
+    grid-template-rows: max-content minmax(420px, 1fr) max-content !important;
+  }
+}
+
+@media (max-width: 1220px) {
+  html.dui-pro-overhaul .app-bg.dy-monitor-focus [data-dui-panel="monitor"] .dy-gateway-layout,
+  html.dui-pro-overhaul.dui-cohesive-ui .app-bg.dy-monitor-focus [data-dui-panel="monitor"] .dy-gateway-layout {
+    grid-template-columns: minmax(0, 1fr) !important;
+    grid-template-areas:
+      "summary"
+      "activity"
+      "jobs"
+      "log" !important;
+    grid-template-rows: auto auto auto auto !important;
+  }
+}
+
+@media (max-width: 720px) {
+  html.dui-pro-overhaul .app-bg.dy-monitor-focus [data-dui-panel="monitor"] .dy-runtime-sessions-card,
+  html.dui-pro-overhaul.dui-cohesive-ui .app-bg.dy-monitor-focus [data-dui-panel="monitor"] .dy-runtime-sessions-card,
+  html.dui-pro-overhaul .app-bg.dy-monitor-focus [data-dui-panel="monitor"] .dy-runtime-sessions-card[data-expanded="false"],
+  html.dui-pro-overhaul.dui-cohesive-ui .app-bg.dy-monitor-focus [data-dui-panel="monitor"] .dy-runtime-sessions-card[data-expanded="false"] {
+    flex: 1 1 100% !important;
+    width: 100% !important;
+  }
+
+  html.dui-pro-overhaul .app-bg.dy-monitor-focus [data-dui-panel="monitor"] .dy-runtime-sessions-panel,
+  html.dui-pro-overhaul.dui-cohesive-ui .app-bg.dy-monitor-focus [data-dui-panel="monitor"] .dy-runtime-sessions-panel {
+    position: static !important;
+    width: 100% !important;
+    max-height: none !important;
+  }
+
+  html.dui-pro-overhaul .app-bg.dy-monitor-focus [data-dui-panel="monitor"] .dy-runtime-sessions-card .dy-runtime-session-list,
+  html.dui-pro-overhaul.dui-cohesive-ui .app-bg.dy-monitor-focus [data-dui-panel="monitor"] .dy-runtime-sessions-card .dy-runtime-session-list {
+    max-height: min(44dvh, 360px) !important;
+  }
+}
+
+@media (max-width: 720px) {
+  html.dui-pro-overhaul.dui-cohesive-ui {
+    --dy-command-composer-max-height: min(38dvh, 240px);
+  }
+
+  html.dui-pro-overhaul.dui-cohesive-ui .dy-command-console .dy-command-composer {
+    padding: 11px !important;
+  }
+
+  html.dui-pro-overhaul.dui-cohesive-ui .dy-command-console .dy-command-composer__row {
+    gap: 8px !important;
+    min-height: 66px !important;
+    padding: 8px !important;
+  }
+
+  html.dui-pro-overhaul.dui-cohesive-ui .dy-command-console .dy-command-icon-button,
+  html.dui-pro-overhaul.dui-cohesive-ui .dy-command-console .dy-command-send {
+    width: 42px !important;
+    height: 42px !important;
+  }
+
+  html.dui-pro-overhaul.dui-cohesive-ui .dy-command-console .dy-command-composer__field,
+  html.dui-pro-overhaul.dui-cohesive-ui .dy-command-console textarea.dy-command-textarea {
+    min-height: 52px !important;
+  }
+
+  html.dui-pro-overhaul.dui-cohesive-ui .dy-command-console textarea.dy-command-textarea {
+    padding: 13px 10px 11px !important;
+  }
+}
+
+/* Recruit agent: calm default path with optional detail drawers. */
+html.dui-pro-overhaul.dui-cohesive-ui [data-dui-modal="recruit-agent"] {
+  width: min(1120px, calc(100vw - 48px)) !important;
+  border-color: rgba(216, 224, 230, .16) !important;
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, .035), rgba(255, 255, 255, .012)),
+    #0c0d0f !important;
+}
+
+html.dui-pro-overhaul.dui-cohesive-ui [data-dui-modal="recruit-agent"] form {
+  height: auto !important;
+  max-height: min(88vh, 820px) !important;
+}
+
+html.dui-pro-overhaul.dui-cohesive-ui .dui-recruit-header {
+  min-height: 88px !important;
+  grid-template-columns: minmax(0, 1fr) 42px !important;
+  grid-template-rows: auto !important;
+  align-items: center !important;
+  padding: 18px 22px !important;
+  background: #101113 !important;
+}
+
+html.dui-pro-overhaul.dui-cohesive-ui .dui-recruit-header h2 {
+  font-size: 25px !important;
+  font-weight: 830 !important;
+  line-height: 1.08 !important;
+}
+
+html.dui-pro-overhaul.dui-cohesive-ui .dui-recruit-copy {
+  max-width: 440px;
+  margin-top: 7px !important;
+  color: #aab4bc !important;
+  font-size: 13px !important;
+  line-height: 1.35 !important;
+}
+
+html.dui-pro-overhaul.dui-cohesive-ui .dui-recruit-close {
+  grid-column: 2 !important;
+  width: 42px !important;
+  height: 42px !important;
+}
+
+html.dui-pro-overhaul.dui-cohesive-ui .dui-recruit-body {
+  padding: 14px !important;
+  overflow: auto !important;
+  scrollbar-gutter: stable;
+}
+
+html.dui-pro-overhaul.dui-cohesive-ui .dui-recruit-layout {
+  height: auto !important;
+  grid-template-columns: minmax(330px, 430px) minmax(360px, 1fr) !important;
+  gap: 14px !important;
+  align-items: start !important;
+}
+
+html.dui-pro-overhaul.dui-cohesive-ui .dui-recruit-form {
+  border: 0 !important;
+  background: transparent !important;
+  box-shadow: none !important;
+  overflow: visible !important;
+}
+
+html.dui-pro-overhaul.dui-cohesive-ui .dui-recruit-section,
+html.dui-pro-overhaul.dui-cohesive-ui .dui-recruit-files {
+  border-radius: 8px !important;
+  border-color: rgba(214, 222, 228, .14) !important;
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, .026), rgba(255, 255, 255, .008)),
+    #111214 !important;
+}
+
+html.dui-pro-overhaul.dui-cohesive-ui .dui-recruit-section {
+  padding: 15px !important;
+}
+
+html.dui-pro-overhaul.dui-cohesive-ui .dui-recruit-section-primary {
+  border-color: rgba(125, 211, 252, .18) !important;
+}
+
+html.dui-pro-overhaul.dui-cohesive-ui .dui-recruit-section-head {
+  min-height: 24px !important;
+  margin-bottom: 12px !important;
+}
+
+html.dui-pro-overhaul.dui-cohesive-ui .dui-recruit-section-head strong {
+  color: #d9e1e6 !important;
+  font-size: 14px !important;
+  font-weight: 780 !important;
+  letter-spacing: 0 !important;
+  text-transform: none !important;
+}
+
+html.dui-pro-overhaul.dui-cohesive-ui .dui-recruit-section-head > span {
+  min-height: 26px !important;
+  height: auto !important;
+  border-color: rgba(199, 210, 218, .14) !important;
+  background: rgba(255, 255, 255, .045) !important;
+  color: #c7d3da !important;
+  font-size: 11px !important;
+}
+
+html.dui-pro-overhaul.dui-cohesive-ui .dui-recruit-field > span {
+  color: #9da8b1 !important;
+  font-size: 11px !important;
+  font-weight: 740 !important;
+  letter-spacing: 0 !important;
+  text-transform: none !important;
+}
+
+html.dui-pro-overhaul.dui-cohesive-ui .dui-recruit-field input,
+html.dui-pro-overhaul.dui-cohesive-ui .dui-recruit-field select,
+html.dui-pro-overhaul.dui-cohesive-ui .dui-recruit-file-add input {
+  min-height: 38px !important;
+  border-radius: 7px !important;
+  border-color: rgba(214, 222, 228, .13) !important;
+  background: #090a0c !important;
+  color: #eef3f5 !important;
+  font-size: 14px !important;
+}
+
+html.dui-pro-overhaul.dui-cohesive-ui .dui-recruit-avatar-row {
+  grid-template-columns: 52px minmax(0, 1fr) !important;
+  gap: 12px !important;
+  padding: 10px !important;
+  border: 1px solid rgba(214, 222, 228, .10) !important;
+  border-radius: 8px !important;
+  background: rgba(255, 255, 255, .018) !important;
+}
+
+html.dui-pro-overhaul.dui-cohesive-ui .dui-recruit-portrait-preview {
+  width: 52px !important;
+  height: 52px !important;
+  border-color: rgba(148, 163, 184, .32) !important;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, .060) !important;
+}
+
+html.dui-pro-overhaul.dui-cohesive-ui .dui-recruit-portrait-preview span {
+  width: 34px !important;
+  height: 34px !important;
+  font-size: 22px !important;
+}
+
+html.dui-pro-overhaul.dui-cohesive-ui .dui-recruit-behaviors {
+  margin-bottom: 0 !important;
+  border-radius: 8px !important;
+}
+
+html.dui-pro-overhaul.dui-cohesive-ui .dui-recruit-behaviors button {
+  min-height: 42px !important;
+  color: #d6dde2 !important;
+}
+
+html.dui-pro-overhaul.dui-cohesive-ui .dui-recruit-behaviors button strong {
+  font-size: 12px !important;
+  font-weight: 780 !important;
+  letter-spacing: 0 !important;
+}
+
+html.dui-pro-overhaul.dui-cohesive-ui .dui-recruit-behaviors button.is-active {
+  border-color: rgba(125, 211, 252, .24) !important;
+  background:
+    linear-gradient(180deg, rgba(125, 211, 252, .14), rgba(125, 211, 252, .035)),
+    #14191c !important;
+}
+
+html.dui-pro-overhaul.dui-cohesive-ui .dui-recruit-advanced-section {
+  padding: 0 !important;
+  overflow: hidden !important;
+}
+
+html.dui-pro-overhaul.dui-cohesive-ui .dui-recruit-disclosure {
+  display: flex !important;
+  width: 100% !important;
+  min-height: 60px !important;
+  align-items: center !important;
+  justify-content: space-between !important;
+  gap: 12px !important;
+  padding: 13px 15px !important;
+  border: 0 !important;
+  background: transparent !important;
+  color: #e2e8ec !important;
+  text-align: left !important;
+  box-shadow: none !important;
+}
+
+html.dui-pro-overhaul.dui-cohesive-ui .dui-recruit-disclosure span {
+  display: grid;
+  min-width: 0;
+  gap: 5px;
+}
+
+html.dui-pro-overhaul.dui-cohesive-ui .dui-recruit-disclosure strong {
+  color: #e6ecef !important;
+  font-size: 14px !important;
+  font-weight: 800 !important;
+}
+
+html.dui-pro-overhaul.dui-cohesive-ui .dui-recruit-disclosure small {
+  max-width: 100%;
+  overflow: hidden;
+  color: #8d98a1 !important;
+  font-size: 12px !important;
+  font-weight: 640 !important;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+html.dui-pro-overhaul.dui-cohesive-ui .dui-recruit-disclosure svg {
+  width: 18px;
+  height: 18px;
+  flex: 0 0 auto;
+  transition: transform 160ms ease;
+}
+
+html.dui-pro-overhaul.dui-cohesive-ui .dui-recruit-advanced-section[data-open="true"] .dui-recruit-disclosure svg {
+  transform: rotate(180deg);
+}
+
+html.dui-pro-overhaul.dui-cohesive-ui .dui-recruit-advanced-content {
+  display: grid;
+  gap: 14px;
+  padding: 0 15px 15px;
+}
+
+html.dui-pro-overhaul.dui-cohesive-ui .dui-recruit-mini-group {
+  display: grid;
+  gap: 10px;
+  padding-top: 14px;
+  border-top: 1px solid rgba(214, 222, 228, .09);
+}
+
+html.dui-pro-overhaul.dui-cohesive-ui .dui-recruit-mini-group:first-child {
+  padding-top: 0;
+  border-top: 0;
+}
+
+html.dui-pro-overhaul.dui-cohesive-ui .dui-recruit-mini-group .dui-recruit-section-head {
+  margin-bottom: 0 !important;
+}
+
+html.dui-pro-overhaul.dui-cohesive-ui .dui-recruit-files {
+  display: grid !important;
+  min-height: 360px !important;
+  align-content: start !important;
+  gap: 14px !important;
+  padding: 15px !important;
+}
+
+html.dui-pro-overhaul.dui-cohesive-ui .dui-recruit-file-summary {
+  display: grid;
+  gap: 14px;
+}
+
+html.dui-pro-overhaul.dui-cohesive-ui .dui-recruit-file-summary-card {
+  display: grid;
+  gap: 7px;
+  padding: 18px;
+  border: 1px solid rgba(214, 222, 228, .12);
+  border-radius: 8px;
+  background: #0b0c0e;
+}
+
+html.dui-pro-overhaul.dui-cohesive-ui .dui-recruit-file-summary-kicker {
+  width: fit-content;
+  border: 1px solid rgba(117, 226, 165, .20);
+  border-radius: 999px;
+  background: rgba(34, 197, 94, .070);
+  color: #a7f3d0;
+  padding: 4px 8px;
+  font-size: 11px;
+  font-weight: 800;
+}
+
+html.dui-pro-overhaul.dui-cohesive-ui .dui-recruit-file-summary-card strong {
+  color: #eef4f6;
+  font-size: 22px;
+  font-weight: 830;
+  line-height: 1.12;
+}
+
+html.dui-pro-overhaul.dui-cohesive-ui .dui-recruit-file-summary-card p {
+  max-width: 520px;
+  color: #9da8b1;
+  font-size: 13px;
+  line-height: 1.45;
+}
+
+html.dui-pro-overhaul.dui-cohesive-ui .dui-recruit-file-pills {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+html.dui-pro-overhaul.dui-cohesive-ui .dui-recruit-file-pills span {
+  display: inline-flex;
+  min-height: 30px;
+  align-items: center;
+  gap: 7px;
+  border: 1px solid rgba(214, 222, 228, .12);
+  border-radius: 999px;
+  background: rgba(255, 255, 255, .035);
+  color: #d9e2e7;
+  padding: 0 10px;
+  font-size: 11px;
+  font-weight: 780;
+}
+
+html.dui-pro-overhaul.dui-cohesive-ui .dui-recruit-file-pills span::before {
+  content: "";
+  width: 6px;
+  height: 6px;
+  flex: 0 0 auto;
+  border-radius: 999px;
+  background: #94a3b8;
+}
+
+html.dui-pro-overhaul.dui-cohesive-ui .dui-recruit-file-pills span[data-md-tone="identity"]::before,
+html.dui-pro-overhaul.dui-cohesive-ui .dui-recruit-file-pills span[data-md-tone="mission"]::before {
+  background: #6aa8ff;
+}
+
+html.dui-pro-overhaul.dui-cohesive-ui .dui-recruit-file-pills span[data-md-tone="soul"]::before {
+  background: #b590ff;
+}
+
+html.dui-pro-overhaul.dui-cohesive-ui .dui-recruit-file-pills span[data-md-tone="bootstrap"]::before,
+html.dui-pro-overhaul.dui-cohesive-ui .dui-recruit-file-pills span[data-md-tone="tools"]::before {
+  background: #f3c760;
+}
+
+html.dui-pro-overhaul.dui-cohesive-ui .dui-recruit-file-pills span[data-md-tone="agents"]::before,
+html.dui-pro-overhaul.dui-cohesive-ui .dui-recruit-file-pills span[data-md-tone="memory"]::before {
+  background: #75e2a5;
+}
+
+html.dui-pro-overhaul.dui-cohesive-ui .dui-recruit-file-pills span[data-md-tone="user"]::before,
+html.dui-pro-overhaul.dui-cohesive-ui .dui-recruit-file-pills span[data-md-tone="heartbeat"]::before {
+  background: #ff9f8f;
+}
+
+html.dui-pro-overhaul.dui-cohesive-ui .dui-recruit-file-customize,
+html.dui-pro-overhaul.dui-cohesive-ui .dui-recruit-file-hide {
+  display: inline-flex !important;
+  width: fit-content !important;
+  min-height: 38px !important;
+  align-items: center !important;
+  justify-content: center !important;
+  gap: 8px !important;
+  border-radius: 7px !important;
+  border-color: rgba(214, 222, 228, .16) !important;
+  background: #151719 !important;
+  color: #ecf2f5 !important;
+  padding: 0 13px !important;
+  font-size: 13px !important;
+  font-weight: 780 !important;
+}
+
+html.dui-pro-overhaul.dui-cohesive-ui .dui-recruit-file-customize svg {
+  width: 16px;
+  height: 16px;
+  transform: rotate(-90deg);
+}
+
+html.dui-pro-overhaul.dui-cohesive-ui .dui-recruit-file-toolbar {
+  grid-template-columns: minmax(0, 1fr) minmax(160px, 190px) auto !important;
+  align-items: start !important;
+}
+
+html.dui-pro-overhaul.dui-cohesive-ui .dui-recruit-file-hide {
+  white-space: nowrap;
+}
+
+html.dui-pro-overhaul.dui-cohesive-ui .dui-recruit-footer {
+  min-height: 58px !important;
+  padding: 11px 14px !important;
+}
+
+html.dui-pro-overhaul.dui-cohesive-ui .dui-recruit-footer p {
+  color: #b8c3ca !important;
+  font-size: 12px !important;
+}
+
+html.dui-pro-overhaul.dui-cohesive-ui .dui-recruit-primary,
+html.dui-pro-overhaul.dui-cohesive-ui .dui-recruit-secondary,
+html.dui-pro-overhaul.dui-cohesive-ui .dui-recruit-auto-button {
+  min-height: 40px !important;
+  border-radius: 7px !important;
+}
+
+@media (max-width: 1040px) {
+  html.dui-pro-overhaul.dui-cohesive-ui [data-dui-modal="recruit-agent"] {
+    width: min(760px, calc(100vw - 28px)) !important;
+  }
+
+  html.dui-pro-overhaul.dui-cohesive-ui .dui-recruit-layout {
+    grid-template-columns: minmax(0, 1fr) !important;
+  }
+}
+
+@media (max-width: 760px) {
+  html.dui-pro-overhaul.dui-cohesive-ui [data-dui-modal="recruit-agent"] {
+    width: calc(100vw - 18px) !important;
+  }
+
+  html.dui-pro-overhaul.dui-cohesive-ui .dui-recruit-header {
+    min-height: 76px !important;
+    padding: 14px !important;
+  }
+
+  html.dui-pro-overhaul.dui-cohesive-ui .dui-recruit-layout,
+  html.dui-pro-overhaul.dui-cohesive-ui .dui-recruit-grid.two,
+  html.dui-pro-overhaul.dui-cohesive-ui .dui-recruit-grid.three,
+  html.dui-pro-overhaul.dui-cohesive-ui .dui-recruit-file-toolbar {
+    grid-template-columns: 1fr !important;
+  }
+
+  html.dui-pro-overhaul.dui-cohesive-ui .dui-recruit-behaviors {
+    grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+  }
+
+  html.dui-pro-overhaul.dui-cohesive-ui .dui-recruit-behaviors button:nth-child(2n) {
+    border-right: 0 !important;
+  }
+
+  html.dui-pro-overhaul.dui-cohesive-ui .dui-recruit-file-customize,
+  html.dui-pro-overhaul.dui-cohesive-ui .dui-recruit-file-hide {
+    width: 100% !important;
+  }
+}
+
+html.dui-pro-overhaul.dui-cohesive-ui [data-dui-modal="recruit-agent"] .dui-recruit-form {
+  height: auto !important;
+  align-content: start !important;
+  grid-template-rows: none !important;
+}
+
+html.dui-pro-overhaul.dui-cohesive-ui [data-dui-modal="recruit-agent"] .dui-recruit-form .dui-recruit-section,
+html.dui-pro-overhaul.dui-cohesive-ui [data-dui-modal="recruit-agent"] .dui-recruit-form .dui-recruit-section:first-child,
+html.dui-pro-overhaul.dui-cohesive-ui [data-dui-modal="recruit-agent"] .dui-recruit-form .dui-recruit-section:nth-child(2),
+html.dui-pro-overhaul.dui-cohesive-ui [data-dui-modal="recruit-agent"] .dui-recruit-form .dui-recruit-section:nth-child(3) {
+  min-height: 0 !important;
+  padding: 15px !important;
+}
+
+html.dui-pro-overhaul.dui-cohesive-ui [data-dui-modal="recruit-agent"] .dui-recruit-form .dui-recruit-behaviors {
+  height: auto !important;
+}
+
+html.dui-pro-overhaul.dui-cohesive-ui [data-dui-modal="recruit-agent"] .dui-recruit-form .dui-recruit-behaviors button {
+  height: auto !important;
+  min-height: 42px !important;
+}
+
+/* Recruit markdown editor: the summary card is intentionally compact, but the
+   editor needs a real viewport-sized track so the textarea does not collapse to
+   a tiny absolute-positioned fragment. */
+html.dui-pro-overhaul.dui-cohesive-ui [data-dui-modal="recruit-agent"][data-markdown-editor="open"] .dui-recruit-layout {
+  min-height: 0 !important;
+  align-items: stretch !important;
+}
+
+html.dui-pro-overhaul.dui-cohesive-ui [data-dui-modal="recruit-agent"][data-markdown-editor="open"] form {
+  height: min(94vh, 920px) !important;
+  max-height: min(94vh, 920px) !important;
+}
+
+html.dui-pro-overhaul.dui-cohesive-ui [data-dui-modal="recruit-agent"][data-markdown-editor="open"] .dui-recruit-files {
+  min-height: clamp(520px, 78vh, 760px) !important;
+  align-content: stretch !important;
+  grid-template-rows: auto auto minmax(420px, 1fr) !important;
+  overflow: hidden !important;
+}
+
+html.dui-pro-overhaul.dui-cohesive-ui [data-dui-modal="recruit-agent"][data-markdown-editor="open"] .dui-recruit-file-tabs {
+  flex-wrap: nowrap !important;
+  overflow-x: auto !important;
+  overflow-y: hidden !important;
+  scrollbar-width: thin;
+}
+
+html.dui-pro-overhaul.dui-cohesive-ui [data-dui-modal="recruit-agent"][data-markdown-editor="open"] .dui-recruit-code-editor {
+  height: 100% !important;
+  min-height: 420px !important;
+}
+
+html.dui-pro-overhaul.dui-cohesive-ui [data-dui-modal="recruit-agent"][data-markdown-editor="open"] .dui-recruit-code-editor.is-expanded {
+  min-height: clamp(480px, 68vh, 780px) !important;
+}
+
+@media (min-width: 1041px) {
+  html.dui-pro-overhaul.dui-cohesive-ui [data-dui-modal="recruit-agent"][data-markdown-editor="open"] .dui-recruit-body {
+    overflow: auto !important;
+  }
+
+  html.dui-pro-overhaul.dui-cohesive-ui [data-dui-modal="recruit-agent"][data-markdown-editor="open"] .dui-recruit-layout {
+    height: 100% !important;
+  }
+
+  html.dui-pro-overhaul.dui-cohesive-ui [data-dui-modal="recruit-agent"][data-markdown-editor="open"] .dui-recruit-files {
+    height: 100% !important;
+    min-height: 0 !important;
+  }
+
+  html.dui-pro-overhaul.dui-cohesive-ui [data-dui-modal="recruit-agent"][data-markdown-editor="open"] .dui-recruit-code-editor {
+    min-height: 0 !important;
+  }
+}
+
+@media (max-width: 760px) {
+  html.dui-pro-overhaul.dui-cohesive-ui [data-dui-modal="recruit-agent"][data-markdown-editor="open"] .dui-recruit-files {
+    min-height: clamp(500px, 82vh, 680px) !important;
+  }
+
+  html.dui-pro-overhaul.dui-cohesive-ui [data-dui-modal="recruit-agent"][data-markdown-editor="open"] .dui-recruit-code-editor {
+    min-height: 400px !important;
+  }
+}

@@ -1,0 +1,3890 @@
+
+html.dui-pro-overhaul .agent-card-pro button {
+  min-height: 34px !important;
+}
+
+/* Stable collectible-card columns: prevents fullscreen stretching from breaking the template art. */
+html.dui-pro-overhaul .agent-card-registry-grid {
+  --agent-card-col-min: 280px;
+  --agent-card-col-max: 300px;
+  display: grid !important;
+  grid-template-columns: repeat(auto-fill, minmax(var(--agent-card-col-min), var(--agent-card-col-max))) !important;
+  justify-content: center !important;
+  align-items: start !important;
+  gap: 14px !important;
+}
+
+html.dui-pro-overhaul .agent-card-registry-grid--showcase,
+html.dui-pro-overhaul .agent-card-registry-grid--grid6 {
+  --agent-card-col-min: 300px;
+  --agent-card-col-max: 324px;
+}
+
+html.dui-pro-overhaul .agent-card-registry-grid--grid8 {
+  --agent-card-col-min: 288px;
+  --agent-card-col-max: 306px;
+}
+
+html.dui-pro-overhaul .agent-card-registry-grid--grid10 {
+  --agent-card-col-min: 278px;
+  --agent-card-col-max: 294px;
+}
+
+html.dui-pro-overhaul .agent-card-registry-grid > * {
+  width: 100%;
+  min-width: 0;
+}
+
+@media (max-width: 720px) {
+  html.dui-pro-overhaul .agent-card-registry-grid {
+    grid-template-columns: minmax(0, 1fr) !important;
+  }
+}
+
+/* Final template lock: keep the generated 3:4-style frame and overlay coordinates stable. */
+html.dui-pro-overhaul .agent-card-shell.agent-card-pro[data-agent-card="true"] {
+  width: 100% !important;
+  max-width: var(--agent-card-col-max, 300px) !important;
+  background-size: 100% 100% !important;
+}
+
+html.dui-pro-overhaul .agent-card-pro:not([data-agent-display-mode="list"]) {
+  height: 410px !important;
+  min-height: 410px !important;
+  max-height: 410px !important;
+}
+
+html.dui-pro-overhaul .agent-card-pro[data-agent-display-mode="showcase"],
+html.dui-pro-overhaul .agent-card-pro[data-agent-display-mode="grid6"] {
+  height: 432px !important;
+  min-height: 432px !important;
+  max-height: 432px !important;
+}
+
+html.dui-pro-overhaul .agent-card-pro .agent-card-media-wrap {
+  padding: 16px 16px 0 !important;
+}
+
+html.dui-pro-overhaul .agent-card-pro .agent-card-body {
+  padding: 10px 18px 14px !important;
+}
+
+html.dui-pro-overhaul .agent-card-pro:not([data-agent-display-mode="list"]) .agent-card-media {
+  aspect-ratio: 1.45 / 1 !important;
+}
+
+html.dui-pro-overhaul .agent-card-pro .agent-card-heading {
+  min-height: 62px;
+  margin-bottom: 10px !important;
+}
+
+html.dui-pro-overhaul .agent-card-pro .agent-card-name {
+  font-size: 20px !important;
+  line-height: 1.04 !important;
+}
+
+html.dui-pro-overhaul .agent-card-pro[data-agent-display-mode="grid10"] .agent-card-name {
+  font-size: 19px !important;
+}
+
+html.dui-pro-overhaul .agent-card-pro .agent-card-role {
+  margin-top: 4px !important;
+  font-size: 10px !important;
+  line-height: 1.18 !important;
+}
+
+html.dui-pro-overhaul .agent-card-pro .agent-card-level-pill {
+  min-width: 50px !important;
+  padding: 8px 9px !important;
+}
+
+html.dui-pro-overhaul .agent-card-pro .agent-card-stat-matrix {
+  gap: 7px !important;
+  margin-bottom: 8px !important;
+}
+
+html.dui-pro-overhaul .agent-card-pro .agent-card-stat-matrix > div {
+  min-height: 38px !important;
+  grid-template-columns: minmax(0, 1fr) auto !important;
+  gap: 5px !important;
+  border-color: color-mix(in srgb, var(--agent-accent) 22%, rgba(255, 255, 255, .08)) !important;
+  background:
+    linear-gradient(180deg, color-mix(in srgb, var(--agent-accent) 7%, rgba(255, 255, 255, .025)), rgba(0, 0, 0, .08)),
+    rgba(0, 0, 0, .20) !important;
+  padding: 8px 8px !important;
+}
+
+html.dui-pro-overhaul .agent-card-pro .agent-card-stat-matrix span {
+  font-size: 7px !important;
+}
+
+html.dui-pro-overhaul .agent-card-pro .agent-card-stat-matrix strong {
+  font-size: 16px !important;
+}
+
+html.dui-pro-overhaul .agent-card-pro .agent-card-tags {
+  min-height: 24px !important;
+  max-height: 24px !important;
+  margin-bottom: 8px !important;
+}
+
+html.dui-pro-overhaul .agent-card-pro .agent-card-tags span {
+  min-height: 21px !important;
+  padding: 6px 8px !important;
+  font-size: 7px !important;
+}
+
+html.dui-pro-overhaul .agent-card-pro .agent-card-actions {
+  padding-top: 9px !important;
+}
+
+html.dui-pro-overhaul .agent-card-pro button {
+  min-height: 33px !important;
+}
+
+/* Template overlay lock: the card art owns the wells; live content only labels them. */
+html.dui-pro-overhaul .agent-card-pro .agent-card-stat-matrix > div {
+  border-color: transparent !important;
+  border-radius: 0 !important;
+  background: transparent !important;
+  box-shadow: none !important;
+}
+
+html.dui-pro-overhaul .agent-card-pro .agent-card-stat-matrix span {
+  color: color-mix(in srgb, var(--agent-accent) 42%, #aeb6bd) !important;
+  text-shadow: 0 1px 5px rgba(0, 0, 0, .8) !important;
+}
+
+html.dui-pro-overhaul .agent-card-pro .agent-card-stat-matrix strong {
+  color: #fbfcfd !important;
+  text-shadow: 0 1px 7px rgba(0, 0, 0, .82) !important;
+}
+
+html.dui-pro-overhaul .agent-card-pro .agent-card-tags {
+  align-items: center !important;
+  gap: 14px !important;
+  padding-left: 5px !important;
+}
+
+html.dui-pro-overhaul .agent-card-pro .agent-card-tags span,
+html.dui-pro-overhaul .agent-card-pro .agent-card-tags span:first-child {
+  min-height: 0 !important;
+  border: 0 !important;
+  border-radius: 0 !important;
+  background: transparent !important;
+  box-shadow: none !important;
+  padding: 0 !important;
+  color: color-mix(in srgb, var(--agent-accent) 52%, #f4f7fa) !important;
+  font-size: 7px !important;
+  font-weight: 950 !important;
+  line-height: 1 !important;
+  text-shadow: 0 1px 6px rgba(0, 0, 0, .86) !important;
+}
+
+html.dui-pro-overhaul .agent-card-pro .agent-card-tags span + span {
+  color: rgba(231, 236, 241, .82) !important;
+}
+
+html.dui-pro-overhaul .agent-card-pro .agent-card-actions {
+  border-top: 0 !important;
+  padding-top: 8px !important;
+}
+
+html.dui-pro-overhaul .agent-card-pro button,
+html.dui-pro-overhaul .agent-card-pro .agent-card-action-primary,
+html.dui-pro-overhaul .agent-card-pro[data-agent-in-party="true"] .agent-card-action-primary,
+html.dui-pro-overhaul .agent-card-pro .agent-card-action-secondary {
+  border-color: transparent !important;
+  border-radius: 0 !important;
+  background: transparent !important;
+  box-shadow: none !important;
+  color: color-mix(in srgb, var(--agent-accent) 46%, #f8fbff) !important;
+  text-shadow: 0 1px 6px rgba(0, 0, 0, .86) !important;
+}
+
+html.dui-pro-overhaul .agent-card-pro .agent-card-action-secondary {
+  color: rgba(238, 242, 246, .72) !important;
+}
+
+html.dui-pro-overhaul .agent-card-pro .agent-card-action-icon {
+  border: 0 !important;
+  background: transparent !important;
+  box-shadow: none !important;
+}
+
+html.dui-pro-overhaul .agent-card-pro button:hover,
+html.dui-pro-overhaul .agent-card-pro .agent-card-action-primary:hover,
+html.dui-pro-overhaul .agent-card-pro[data-agent-in-party="true"] .agent-card-action-primary:hover,
+html.dui-pro-overhaul .agent-card-pro .agent-card-action-secondary:hover {
+  background: color-mix(in srgb, var(--agent-accent) 7%, transparent) !important;
+  color: #ffffff !important;
+}
+
+html.dui-pro-overhaul .agent-card-pro:not([data-agent-display-mode="list"]) .agent-card-stat-matrix {
+  position: absolute !important;
+  top: 78px !important;
+  left: 23px !important;
+  right: 23px !important;
+  z-index: 12 !important;
+  height: 44px !important;
+  min-height: 44px !important;
+  grid-template-columns: repeat(3, minmax(0, 1fr)) !important;
+  gap: 0 !important;
+  margin: 0 !important;
+}
+
+html.dui-pro-overhaul .agent-card-pro:not([data-agent-display-mode="list"]) .agent-card-stat-matrix > div {
+  display: flex !important;
+  min-height: 44px !important;
+  align-items: center !important;
+  justify-content: center !important;
+  gap: 13px !important;
+  padding: 0 !important;
+}
+
+html.dui-pro-overhaul .agent-card-pro:not([data-agent-display-mode="list"]) .agent-card-stat-matrix span,
+html.dui-pro-overhaul .agent-card-pro:not([data-agent-display-mode="list"]) .agent-card-stat-matrix strong {
+  display: block !important;
+  margin: 0 !important;
+}
+
+html.dui-pro-overhaul .agent-card-pro:not([data-agent-display-mode="list"]) .agent-card-tags {
+  position: absolute !important;
+  top: 140px !important;
+  left: 34px !important;
+  right: 18px !important;
+  z-index: 12 !important;
+  height: 13px !important;
+  min-height: 13px !important;
+  max-height: 13px !important;
+  align-items: center !important;
+  gap: 15px !important;
+  margin: 0 !important;
+  padding: 0 !important;
+}
+
+html.dui-pro-overhaul .agent-card-pro:not([data-agent-display-mode="list"]) .agent-card-actions {
+  position: absolute !important;
+  top: 172px !important;
+  left: 28px !important;
+  right: 9px !important;
+  z-index: 12 !important;
+  display: grid !important;
+
+  height: 31px !important;
+  grid-template-columns: minmax(0, 1fr) 56px !important;
+  gap: 7px !important;
+  margin: 0 !important;
+  padding: 0 !important;
+}
+
+html.dui-pro-overhaul .agent-card-pro:not([data-agent-display-mode="list"]) .agent-card-actions button {
+  min-height: 31px !important;
+  height: 31px !important;
+  padding: 0 !important;
+}
+
+/* Texture card reset: no rarity slot templates, no fixed text wells. */
+html.dui-pro-overhaul .agent-card-shell.agent-card-pro[data-agent-card="true"] {
+  --agent-card-texture: url("/card-templates/agent-card-texture.png");
+  background-color: #06080a !important;
+  background-image:
+    linear-gradient(180deg, rgba(2, 4, 7, .04), rgba(2, 4, 7, .42) 54%, rgba(0, 0, 0, .78)),
+    radial-gradient(circle at 28% 8%, color-mix(in srgb, var(--agent-accent) 20%, transparent), transparent 34%),
+    radial-gradient(circle at 78% 78%, color-mix(in srgb, var(--agent-accent) 15%, transparent), transparent 42%),
+    var(--agent-card-texture) !important;
+  background-position: center !important;
+  background-repeat: no-repeat !important;
+  background-size: cover !important;
+  border-color: color-mix(in srgb, var(--agent-accent) 30%, rgba(255, 255, 255, .12)) !important;
+  box-shadow:
+    0 24px 58px -44px rgba(0, 0, 0, .94),
+    0 0 34px -28px color-mix(in srgb, var(--agent-accent) 62%, transparent),
+    inset 0 1px 0 rgba(255, 255, 255, .08) !important;
+}
+
+html.dui-pro-overhaul .agent-card-shell.agent-card-pro[data-agent-card="true"][data-agent-rarity] {
+  background-image:
+    linear-gradient(180deg, rgba(2, 4, 7, .04), rgba(2, 4, 7, .42) 54%, rgba(0, 0, 0, .78)),
+    radial-gradient(circle at 28% 8%, color-mix(in srgb, var(--agent-accent) 20%, transparent), transparent 34%),
+    radial-gradient(circle at 78% 78%, color-mix(in srgb, var(--agent-accent) 15%, transparent), transparent 42%),
+    var(--agent-card-texture) !important;
+}
+
+html.dui-pro-overhaul .agent-card-shell.agent-card-pro[data-agent-card="true"]::before {
+  background:
+    linear-gradient(180deg, rgba(0, 0, 0, .10), transparent 34%, rgba(0, 0, 0, .50)),
+    linear-gradient(145deg, color-mix(in srgb, var(--agent-accent) 10%, transparent), transparent 42%, color-mix(in srgb, var(--agent-accent) 6%, transparent)) !important;
+  opacity: .86 !important;
+}
+
+html.dui-pro-overhaul .agent-card-shell.agent-card-pro[data-agent-card="true"]::after {
+  box-shadow:
+    inset 0 0 0 1px color-mix(in srgb, var(--agent-accent) 14%, rgba(255, 255, 255, .08)),
+    inset 0 1px 0 rgba(255, 255, 255, .10) !important;
+}
+
+html.dui-pro-overhaul .agent-card-pro:not([data-agent-display-mode="list"]) .agent-card-body {
+  padding: 10px 18px 14px !important;
+}
+
+html.dui-pro-overhaul .agent-card-pro:not([data-agent-display-mode="list"]) .agent-card-stat-matrix,
+html.dui-pro-overhaul .agent-card-pro:not([data-agent-display-mode="list"]) .agent-card-tags,
+html.dui-pro-overhaul .agent-card-pro:not([data-agent-display-mode="list"]) .agent-card-actions {
+  position: relative !important;
+  inset: auto !important;
+  z-index: 12 !important;
+  height: auto !important;
+  min-height: 0 !important;
+  max-height: none !important;
+  margin-left: 0 !important;
+  margin-right: 0 !important;
+  padding: 0 !important;
+}
+
+html.dui-pro-overhaul .agent-card-pro:not([data-agent-display-mode="list"]) .agent-card-stat-matrix {
+  display: grid !important;
+  grid-template-columns: repeat(3, minmax(0, 1fr)) !important;
+  gap: 10px !important;
+  margin-bottom: 12px !important;
+}
+
+html.dui-pro-overhaul .agent-card-pro:not([data-agent-display-mode="list"]) .agent-card-stat-matrix > div {
+  display: grid !important;
+  min-height: 32px !important;
+  grid-template-columns: minmax(0, 1fr) auto !important;
+  align-items: end !important;
+  gap: 6px !important;
+  justify-content: stretch !important;
+  padding: 0 !important;
+}
+
+html.dui-pro-overhaul .agent-card-pro:not([data-agent-display-mode="list"]) .agent-card-tags {
+  display: flex !important;
+  align-items: center !important;
+  gap: 12px !important;
+  min-height: 16px !important;
+  margin-bottom: 12px !important;
+  padding-left: 1px !important;
+}
+
+html.dui-pro-overhaul .agent-card-pro:not([data-agent-display-mode="list"]) .agent-card-actions {
+  display: grid !important;
+  grid-template-columns: minmax(0, 1fr) auto !important;
+  gap: 12px !important;
+  margin-top: auto !important;
+}
+
+html.dui-pro-overhaul .agent-card-pro:not([data-agent-display-mode="list"]) .agent-card-actions button {
+  min-height: 30px !important;
+  height: 30px !important;
+  padding: 0 2px !important;
+}
+
+/* Texture overlay polish: readable HUD panels without template alignment wells. */
+html.dui-pro-overhaul .agent-card-pro .agent-card-heading {
+  position: relative !important;
+  margin-bottom: 13px !important;
+  padding-bottom: 11px !important;
+  border-bottom: 1px solid color-mix(in srgb, var(--agent-accent) 18%, rgba(255, 255, 255, .10)) !important;
+}
+
+html.dui-pro-overhaul .agent-card-pro .agent-card-heading::after {
+  content: "";
+  position: absolute;
+  left: 0;
+  bottom: -1px;
+  width: 44%;
+  height: 1px;
+  background: linear-gradient(90deg, color-mix(in srgb, var(--agent-accent) 78%, white 4%), transparent);
+  box-shadow: 0 0 12px color-mix(in srgb, var(--agent-accent) 34%, transparent);
+}
+
+html.dui-pro-overhaul .agent-card-pro .agent-card-name {
+  letter-spacing: 0 !important;
+  text-shadow:
+    0 2px 12px rgba(0, 0, 0, .92),
+    0 0 18px color-mix(in srgb, var(--agent-accent) 10%, transparent) !important;
+}
+
+html.dui-pro-overhaul .agent-card-pro .agent-card-role,
+html.dui-pro-overhaul .agent-card-pro .agent-card-class {
+  text-shadow: 0 1px 8px rgba(0, 0, 0, .88) !important;
+}
+
+html.dui-pro-overhaul .agent-card-pro .agent-card-level-pill {
+  border-color: color-mix(in srgb, var(--agent-accent) 42%, rgba(255, 255, 255, .14)) !important;
+  border-radius: 8px !important;
+  background:
+    radial-gradient(circle at 50% 0%, color-mix(in srgb, var(--agent-accent) 20%, transparent), transparent 68%),
+    linear-gradient(180deg, rgba(255, 255, 255, .070), rgba(255, 255, 255, .016)),
+    rgba(4, 6, 8, .68) !important;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, .09),
+    0 12px 28px -24px color-mix(in srgb, var(--agent-accent) 70%, transparent) !important;
+  backdrop-filter: blur(12px);
+}
+
+html.dui-pro-overhaul .agent-card-pro:not([data-agent-display-mode="list"]) .agent-card-stat-matrix {
+  gap: 7px !important;
+  margin-bottom: 11px !important;
+}
+
+html.dui-pro-overhaul .agent-card-pro:not([data-agent-display-mode="list"]) .agent-card-stat-matrix > div {
+  min-height: 38px !important;
+  border: 1px solid color-mix(in srgb, var(--agent-accent) 24%, rgba(255, 255, 255, .10)) !important;
+  border-radius: 7px !important;
+  background:
+    linear-gradient(180deg, color-mix(in srgb, var(--agent-accent) 10%, rgba(255, 255, 255, .045)), rgba(255, 255, 255, .010)),
+    rgba(3, 5, 8, .48) !important;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, .07),
+    inset 0 -12px 22px rgba(0, 0, 0, .16) !important;
+  padding: 7px 8px !important;
+  backdrop-filter: blur(10px);
+}
+
+html.dui-pro-overhaul .agent-card-pro .agent-card-stat-matrix span {
+  color: color-mix(in srgb, var(--agent-accent) 38%, #aeb8c0) !important;
+  font-size: 7px !important;
+  font-weight: 950 !important;
+  text-shadow: 0 1px 5px rgba(0, 0, 0, .9) !important;
+}
+
+html.dui-pro-overhaul .agent-card-pro .agent-card-stat-matrix strong {
+  color: #ffffff !important;
+  font-size: 17px !important;
+  text-shadow:
+    0 1px 8px rgba(0, 0, 0, .92),
+    0 0 12px color-mix(in srgb, var(--agent-accent) 14%, transparent) !important;
+}
+
+html.dui-pro-overhaul .agent-card-pro:not([data-agent-display-mode="list"]) .agent-card-tags {
+  gap: 6px !important;
+  min-height: 24px !important;
+  margin-bottom: 12px !important;
+}
+
+html.dui-pro-overhaul .agent-card-pro .agent-card-tags span,
+html.dui-pro-overhaul .agent-card-pro .agent-card-tags span:first-child {
+  display: inline-flex !important;
+  min-height: 19px !important;
+  align-items: center !important;
+  border: 1px solid color-mix(in srgb, var(--agent-accent) 20%, rgba(255, 255, 255, .08)) !important;
+  border-radius: 999px !important;
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, .060), rgba(255, 255, 255, .012)),
+    rgba(2, 4, 7, .45) !important;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, .06) !important;
+  padding: 0 7px !important;
+  color: rgba(231, 237, 242, .82) !important;
+  font-size: 6.8px !important;
+  font-weight: 950 !important;
+  line-height: 1 !important;
+  text-shadow: 0 1px 5px rgba(0, 0, 0, .88) !important;
+  backdrop-filter: blur(10px);
+}
+
+html.dui-pro-overhaul .agent-card-pro .agent-card-tags span:first-child {
+  border-color: color-mix(in srgb, var(--agent-accent) 38%, rgba(255, 255, 255, .12)) !important;
+  background:
+    linear-gradient(180deg, color-mix(in srgb, var(--agent-accent) 18%, rgba(255, 255, 255, .050)), rgba(255, 255, 255, .012)),
+    rgba(4, 6, 8, .54) !important;
+  color: color-mix(in srgb, var(--agent-accent) 58%, #ffffff) !important;
+}
+
+html.dui-pro-overhaul .agent-card-pro:not([data-agent-display-mode="list"]) .agent-card-actions {
+  gap: 10px !important;
+  padding-top: 11px !important;
+  border-top: 1px solid color-mix(in srgb, var(--agent-accent) 16%, rgba(255, 255, 255, .08)) !important;
+}
+
+html.dui-pro-overhaul .agent-card-pro:not([data-agent-display-mode="list"]) .agent-card-actions button,
+html.dui-pro-overhaul .agent-card-pro .agent-card-action-primary,
+html.dui-pro-overhaul .agent-card-pro[data-agent-in-party="true"] .agent-card-action-primary,
+html.dui-pro-overhaul .agent-card-pro .agent-card-action-secondary {
+  min-height: 34px !important;
+  height: 34px !important;
+  border: 1px solid color-mix(in srgb, var(--agent-accent) 34%, rgba(255, 255, 255, .12)) !important;
+  border-radius: 8px !important;
+  background:
+    linear-gradient(180deg, color-mix(in srgb, var(--agent-accent) 16%, rgba(255, 255, 255, .045)), rgba(255, 255, 255, .010)),
+    rgba(4, 6, 9, .62) !important;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, .085),
+    0 12px 24px -22px rgba(0, 0, 0, .9) !important;
+  color: color-mix(in srgb, var(--agent-accent) 50%, #ffffff) !important;
+  text-shadow: 0 1px 6px rgba(0, 0, 0, .9) !important;
+  backdrop-filter: blur(12px);
+}
+
+html.dui-pro-overhaul .agent-card-pro .agent-card-action-secondary {
+  min-width: 56px !important;
+  border-color: rgba(255, 255, 255, .13) !important;
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, .052), rgba(255, 255, 255, .010)),
+    rgba(4, 6, 9, .48) !important;
+  color: rgba(237, 242, 247, .78) !important;
+}
+
+html.dui-pro-overhaul .agent-card-pro .agent-card-action-icon {
+  display: inline-grid !important;
+  width: 14px !important;
+  height: 14px !important;
+  place-items: center !important;
+  border: 1px solid color-mix(in srgb, var(--agent-accent) 44%, rgba(255, 255, 255, .18)) !important;
+  border-radius: 4px !important;
+  background: rgba(0, 0, 0, .28) !important;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, .08) !important;
+}
+
+html.dui-pro-overhaul .agent-card-pro .agent-card-action-primary:hover,
+html.dui-pro-overhaul .agent-card-pro[data-agent-in-party="true"] .agent-card-action-primary:hover,
+html.dui-pro-overhaul .agent-card-pro .agent-card-action-secondary:hover {
+  transform: translateY(-1px);
+  border-color: color-mix(in srgb, var(--agent-accent) 54%, rgba(255, 255, 255, .18)) !important;
+  background:
+    linear-gradient(180deg, color-mix(in srgb, var(--agent-accent) 24%, rgba(255, 255, 255, .060)), rgba(255, 255, 255, .016)),
+    rgba(5, 8, 11, .72) !important;
+  color: #ffffff !important;
+}
+
+/* Give roomy card modes enough bottom space for the polished action buttons. */
+html.dui-pro-overhaul .agent-card-pro[data-agent-display-mode="showcase"],
+html.dui-pro-overhaul .agent-card-pro[data-agent-display-mode="grid6"] {
+  height: 452px !important;
+  min-height: 452px !important;
+  max-height: 452px !important;
+}
+
+html.dui-pro-overhaul .agent-card-pro[data-agent-display-mode="grid8"] {
+  height: 430px !important;
+  min-height: 430px !important;
+  max-height: 430px !important;
+}
+
+/* Dense registry cleanup: fill the pane and keep long-name cards from clipping. */
+html.dui-pro-overhaul .agent-card-registry-grid--grid10 {
+  --agent-card-col-min: 240px;
+  grid-template-columns: repeat(auto-fill, minmax(var(--agent-card-col-min), 1fr)) !important;
+  justify-content: stretch !important;
+  gap: 12px !important;
+}
+
+html.dui-pro-overhaul .agent-card-registry-grid--grid10 .agent-card-shell.agent-card-pro[data-agent-card="true"] {
+  max-width: none !important;
+}
+
+html.dui-pro-overhaul .agent-card-registry-grid--grid6 {
+  --agent-card-col-min: 330px;
+  grid-template-columns: repeat(auto-fill, minmax(var(--agent-card-col-min), 1fr)) !important;
+  justify-content: stretch !important;
+  gap: 12px !important;
+}
+
+html.dui-pro-overhaul .agent-card-registry-grid--grid8 {
+  --agent-card-col-min: 250px;
+  grid-template-columns: repeat(auto-fill, minmax(var(--agent-card-col-min), 1fr)) !important;
+  justify-content: stretch !important;
+  gap: 12px !important;
+}
+
+html.dui-pro-overhaul .agent-card-registry-grid--grid6 .agent-card-shell.agent-card-pro[data-agent-card="true"],
+html.dui-pro-overhaul .agent-card-registry-grid--grid8 .agent-card-shell.agent-card-pro[data-agent-card="true"] {
+  max-width: none !important;
+}
+
+html.dui-pro-overhaul .agent-card-pro[data-agent-display-mode="grid10"] {
+  height: 430px !important;
+  min-height: 430px !important;
+  max-height: 430px !important;
+}
+
+html.dui-pro-overhaul .agent-card-pro[data-agent-display-mode="grid10"] .agent-card-media-wrap {
+  padding: 14px 14px 0 !important;
+}
+
+html.dui-pro-overhaul .agent-card-pro[data-agent-display-mode="grid10"] .agent-card-body {
+  padding: 10px 16px 14px !important;
+}
+
+html.dui-pro-overhaul .agent-card-placeholder-stage {
+  position: relative;
+  overflow: hidden;
+  background:
+    radial-gradient(circle at 50% 35%, color-mix(in srgb, var(--agent-accent) 24%, transparent), transparent 30%),
+    radial-gradient(circle at 12% 12%, rgba(255, 255, 255, .10), transparent 26%),
+    linear-gradient(145deg, rgba(18, 28, 44, .94), rgba(8, 13, 23, .98) 48%, rgba(3, 6, 10, .96)) !important;
+}
+
+html.dui-pro-overhaul .agent-card-placeholder-stage::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  opacity: .34;
+  background:
+    linear-gradient(90deg, rgba(255, 255, 255, .05) 1px, transparent 1px),
+    linear-gradient(rgba(255, 255, 255, .04) 1px, transparent 1px),
+    radial-gradient(circle at 50% 50%, transparent 0 28%, rgba(255, 255, 255, .05) 29%, transparent 30%);
+  background-size: 28px 28px, 28px 28px, 100% 100%;
+}
+
+html.dui-pro-overhaul .agent-card-placeholder-stage::after {
+  content: "";
+  position: absolute;
+  inset: 12%;
+  border: 1px solid color-mix(in srgb, var(--agent-accent) 24%, rgba(255, 255, 255, .08));
+  border-radius: 16px;
+  opacity: .7;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, .06),
+    0 0 28px -18px color-mix(in srgb, var(--agent-accent) 72%, transparent);
+}
+
+html.dui-pro-overhaul .agent-card-pro .agent-card-initials {
+  position: relative;
+  z-index: 2;
+  width: 76px !important;
+  height: 76px !important;
+  border-color: color-mix(in srgb, var(--agent-accent) 28%, rgba(255, 255, 255, .12)) !important;
+  border-radius: 14px !important;
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, .070), rgba(255, 255, 255, .018)),
+    rgba(8, 12, 18, .58) !important;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, .10),
+    0 18px 42px -30px color-mix(in srgb, var(--agent-accent) 68%, transparent) !important;
+  backdrop-filter: blur(12px);
+}
+
+html.dui-pro-overhaul .agent-card-pro .agent-card-initials span {
+  color: color-mix(in srgb, var(--agent-accent) 28%, #e7edf4) !important;
+  text-shadow:
+    0 1px 8px rgba(0, 0, 0, .82),
+    0 0 18px color-mix(in srgb, var(--agent-accent) 18%, transparent);
+}
+
+/* Final registry mode fit: stretched cards and scan rows need separate geometry. */
+html.dui-pro-overhaul .agent-card-registry-grid--showcase,
+html.dui-pro-overhaul .agent-card-registry-grid--grid6 {
+  --agent-card-col-min: 330px;
+  grid-template-columns: repeat(auto-fill, minmax(var(--agent-card-col-min), 1fr)) !important;
+  justify-content: stretch !important;
+  gap: 12px !important;
+}
+
+html.dui-pro-overhaul .agent-card-registry-grid--showcase .agent-card-shell.agent-card-pro[data-agent-card="true"],
+html.dui-pro-overhaul .agent-card-registry-grid--grid6 .agent-card-shell.agent-card-pro[data-agent-card="true"] {
+  max-width: none !important;
+}
+
+html.dui-pro-overhaul .agent-card-pro[data-agent-display-mode="grid6"] {
+  height: 472px !important;
+  min-height: 472px !important;
+  max-height: 472px !important;
+}
+
+html.dui-pro-overhaul .agent-card-pro[data-agent-display-mode="showcase"] {
+  height: 492px !important;
+  min-height: 492px !important;
+  max-height: 492px !important;
+}
+
+html.dui-pro-overhaul .agent-card-pro[data-agent-display-mode="grid6"] .agent-card-media,
+html.dui-pro-overhaul .agent-card-pro[data-agent-display-mode="showcase"] .agent-card-media {
+  aspect-ratio: 1.62 / 1 !important;
+}
+
+html.dui-pro-overhaul .agent-card-pro[data-agent-display-mode="grid6"] .agent-card-body,
+html.dui-pro-overhaul .agent-card-pro[data-agent-display-mode="showcase"] .agent-card-body {
+  padding-bottom: 18px !important;
+}
+
+html.dui-pro-overhaul .agent-card-shell.agent-card-pro[data-agent-card="true"][data-agent-display-mode="list"] {
+  width: 100% !important;
+  max-width: none !important;
+  height: 188px !important;
+  min-height: 188px !important;
+  max-height: 188px !important;
+}
+
+html.dui-pro-overhaul .agent-card-pro[data-agent-display-mode="list"] .agent-card-media-wrap {
+  width: 138px !important;
+  flex: 0 0 138px !important;
+  padding: 10px 0 10px 10px !important;
+}
+
+html.dui-pro-overhaul .agent-card-pro[data-agent-display-mode="list"] .agent-card-media {
+  height: 100% !important;
+  min-height: 0 !important;
+  aspect-ratio: auto !important;
+  border-radius: 8px !important;
+}
+
+html.dui-pro-overhaul .agent-card-pro[data-agent-display-mode="list"] .agent-card-body {
+  display: grid !important;
+  min-width: 0 !important;
+  grid-template-columns: minmax(0, 1fr) 210px;
+  grid-template-rows: auto auto auto;
+  column-gap: 14px;
+  row-gap: 8px;
+  padding: 12px 14px !important;
+}
+
+html.dui-pro-overhaul .agent-card-pro[data-agent-display-mode="list"] .agent-card-heading {
+  grid-column: 1;
+  grid-row: 1;
+  min-height: 0 !important;
+  margin: 0 !important;
+}
+
+html.dui-pro-overhaul .agent-card-pro[data-agent-display-mode="list"] .agent-card-name {
+  display: block !important;
+  max-height: none !important;
+  overflow: hidden;
+  font-size: 22px !important;
+  line-height: 1.02 !important;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+html.dui-pro-overhaul .agent-card-pro[data-agent-display-mode="list"] .agent-card-role {
+  max-height: 15px;
+  margin-top: 4px !important;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+html.dui-pro-overhaul .agent-card-pro[data-agent-display-mode="list"] .agent-card-stat-matrix {
+  grid-column: 1;
+  grid-row: 2;
+  max-width: 390px;
+  min-height: 0 !important;
+  gap: 8px !important;
+  margin: 0 !important;
+}
+
+html.dui-pro-overhaul .agent-card-pro[data-agent-display-mode="list"] .agent-card-stat-matrix > div {
+  min-height: 36px !important;
+  padding: 7px 8px !important;
+}
+
+html.dui-pro-overhaul .agent-card-pro[data-agent-display-mode="list"] .agent-card-tags {
+  grid-column: 1;
+  grid-row: 3;
+  min-height: 22px !important;
+  max-height: 22px !important;
+  margin: 0 !important;
+}
+
+html.dui-pro-overhaul .agent-card-pro[data-agent-display-mode="list"] .agent-card-tags span {
+  min-height: 20px !important;
+  padding: 0 8px !important;
+}
+
+html.dui-pro-overhaul .agent-card-pro[data-agent-display-mode="list"] .agent-card-actions {
+  grid-column: 2;
+  grid-row: 2 / 4;
+  align-self: end;
+  grid-template-columns: 128px 68px !important;
+  justify-content: end;
+  gap: 8px !important;
+  margin-top: 0 !important;
+  padding-top: 0 !important;
+  border-top: 0 !important;
+}
+
+html.dui-pro-overhaul .agent-card-pro[data-agent-display-mode="list"] .agent-card-actions button {
+  min-height: 34px !important;
+  height: 34px !important;
+}
+
+@media (max-width: 760px) {
+  html.dui-pro-overhaul .agent-card-pro[data-agent-display-mode="list"] .agent-card-body {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  html.dui-pro-overhaul .agent-card-pro[data-agent-display-mode="list"] .agent-card-actions {
+    grid-column: 1;
+    grid-row: 4;
+    grid-template-columns: minmax(0, 1fr) 68px !important;
+  }
+}
+
+/* Premium black/gold pass: final palette authority for all app surfaces. */
+html.dui-pro-overhaul {
+  --dui-bg: #030303;
+  --dui-canvas: #070707;
+  --dui-panel: #0d0d0d;
+  --dui-panel-2: #141414;
+  --dui-panel-3: #1b1915;
+  --dui-line: rgba(226, 190, 106, .15);
+  --dui-line-soft: rgba(255, 255, 255, .065);
+  --dui-line-strong: rgba(239, 204, 119, .34);
+  --dui-text: #f6f1e7;
+  --dui-text-2: #d8d0c1;
+  --dui-muted: #9d9588;
+  --dui-faint: #6c655b;
+  --dui-accent: #d6a94a;
+  --dui-gold: #d6a94a;
+  --dui-gold-2: #f0d486;
+  --dui-gold-3: #8f6e2a;
+  --dui-gold-soft: rgba(214, 169, 74, .115);
+  --dui-gold-softer: rgba(214, 169, 74, .055);
+  --dui-danger: #d78b82;
+  --dui-danger-soft: rgba(215, 139, 130, .08);
+  --dui-cyan: var(--dui-gold);
+  --dui-violet: #c9ad6b;
+  --dui-green: var(--dui-gold);
+  --accent-cy: var(--dui-gold);
+  --accent-bl: var(--dui-gold);
+  --accent-vl: #c9ad6b;
+  --accent-em: var(--dui-gold);
+  --accent-am: var(--dui-gold-2);
+  --dui-card-shadow:
+    0 22px 58px rgba(0, 0, 0, .46),
+    0 0 36px -30px rgba(214, 169, 74, .55);
+  --dui-inner-line:
+    inset 0 1px 0 rgba(255, 255, 255, .06),
+    inset 0 -1px 0 rgba(0, 0, 0, .36);
+}
+
+html.dui-pro-overhaul,
+html.dui-pro-overhaul body,
+html.dui-pro-overhaul #root {
+  background: var(--dui-bg) !important;
+  color: var(--dui-text-2) !important;
+}
+
+html.dui-pro-overhaul ::selection {
+  background: rgba(214, 169, 74, .28) !important;
+  color: #fff6dc !important;
+}
+
+html.dui-pro-overhaul .app-bg {
+  background:
+    radial-gradient(ellipse 74% 46% at 18% -8%, rgba(214, 169, 74, .088), transparent 64%),
+    radial-gradient(ellipse 52% 40% at 94% 12%, rgba(255, 232, 166, .052), transparent 66%),
+    linear-gradient(180deg, rgba(255, 255, 255, .014), transparent 260px),
+    linear-gradient(135deg, #030303 0%, #111111 39%, #0b0b0b 72%, #030303 100%) !important;
+}
+
+html.dui-pro-overhaul .grid-overlay {
+  opacity: .16 !important;
+  background-image:
+    linear-gradient(rgba(226, 190, 106, .08) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(226, 190, 106, .055) 1px, transparent 1px) !important;
+  background-size: 72px 72px !important;
+  mask-image: linear-gradient(180deg, rgba(0, 0, 0, .36), transparent 76%) !important;
+}
+
+html.dui-pro-overhaul :where(
+  .dy-human-rail,
+  .dy-command-header,
+  header.relative.mb-7,
+  [data-dui-panel],
+  [data-chat-panel],
+  section[class*="rounded"],
+  aside[class*="rounded"],
+  .glass-card
+) {
+  border-color: var(--dui-line) !important;
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, .032), rgba(255, 255, 255, .010) 44%, rgba(0, 0, 0, .10)),
+    linear-gradient(135deg, rgba(214, 169, 74, .035), transparent 38%),
+    var(--dui-panel) !important;
+  box-shadow: var(--dui-card-shadow), var(--dui-inner-line) !important;
+}
+
+html.dui-pro-overhaul :where(
+  .dy-human-rail,
+  .dy-command-header,
+  header.relative.mb-7,
+  [data-dui-panel],
+  [data-chat-panel],
+  section[class*="rounded"]
+)::after {
+  background:
+    linear-gradient(115deg, transparent 0 36%, rgba(255, 244, 210, .045) 47%, transparent 58%),
+    linear-gradient(180deg, rgba(214, 169, 74, .05), transparent 18%, transparent 84%, rgba(255, 255, 255, .014)) !important;
+  opacity: .52 !important;
+}
+
+html.dui-pro-overhaul .dy-command-header.relative.mb-7,
+html.dui-pro-overhaul header.relative.mb-7 {
+  border-color: rgba(226, 190, 106, .24) !important;
+  background:
+    linear-gradient(90deg, rgba(214, 169, 74, .095), transparent 32%),
+    linear-gradient(180deg, rgba(255, 255, 255, .044), rgba(255, 255, 255, .012) 48%, rgba(0, 0, 0, .18)),
+    #0a0a0a !important;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, .075),
+    inset 0 -1px 0 rgba(214, 169, 74, .075),
+    0 18px 52px rgba(0, 0, 0, .46),
+    0 0 42px -34px rgba(214, 169, 74, .72) !important;
+}
+
+html.dui-pro-overhaul .dy-command-header.relative.mb-7::before {
+  display: block !important;
+  background:
+    linear-gradient(90deg, rgba(214, 169, 74, .16), transparent 22%, transparent 78%, rgba(214, 169, 74, .08)),
+    repeating-linear-gradient(90deg, rgba(255, 255, 255, .018) 0 1px, transparent 1px 68px) !important;
+  opacity: .42 !important;
+}
+
+html.dui-pro-overhaul .dy-command-header.relative.mb-7::after {
+  display: block !important;
+  background: linear-gradient(90deg, transparent, rgba(214, 169, 74, .78), rgba(255, 255, 255, .16), transparent) !important;
+}
+
+html.dui-pro-overhaul .brand-lockup.dy-logo-fixed .dy-logo-mark,
+html.dui-pro-overhaul .dy-human-rail-head img,
+html.dui-pro-overhaul .dui-login-brand img {
+  border-color: rgba(226, 190, 106, .32) !important;
+  background:
+    radial-gradient(circle at 50% 42%, rgba(214, 169, 74, .16), transparent 54%),
+    #11100c !important;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, .09),
+    0 0 0 1px rgba(214, 169, 74, .06),
+    0 14px 32px -24px rgba(214, 169, 74, .90) !important;
+  filter: saturate(1.04) brightness(1.04) contrast(1.04);
+}
+
+html.dui-pro-overhaul .brand-lockup.dy-logo-fixed .dy-logo-word {
+  color: #fff7e6 !important;
+  text-shadow:
+    0 2px 14px rgba(0, 0, 0, .9),
+    0 0 18px rgba(214, 169, 74, .14) !important;
+}
+
+html.dui-pro-overhaul .brand-lockup.dy-logo-fixed .dy-logo-subtitle {
+  color: #b9ad96 !important;
+  letter-spacing: .12em !important;
+}
+
+html.dui-pro-overhaul .dy-human-rail {
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, .030), transparent 54px),
+    linear-gradient(135deg, rgba(214, 169, 74, .032), transparent 58%),
+    #090909 !important;
+}
+
+html.dui-pro-overhaul .dy-human-nav button,
+html.dui-pro-overhaul .dy-human-appearance-button,
+html.dui-pro-overhaul :where(input, textarea, select),
+html.dui-pro-overhaul :where(button, [role="button"]):not([data-agent-card] *):not(.agent-card-shell *) {
+  border-color: rgba(226, 190, 106, .14) !important;
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, .030), rgba(255, 255, 255, .010)),
+    #141414 !important;
+  color: #d8d0c1 !important;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, .045) !important;
+}
+
+html.dui-pro-overhaul .dy-human-nav button:hover,
+html.dui-pro-overhaul .dy-human-appearance-button:hover,
+html.dui-pro-overhaul :where(button, [role="button"]):not([data-agent-card] *):not(.agent-card-shell *):hover {
+  border-color: rgba(226, 190, 106, .28) !important;
+  background:
+    linear-gradient(180deg, rgba(214, 169, 74, .055), rgba(255, 255, 255, .012)),
+    #181818 !important;
+  color: #f3ead8 !important;
+}
+
+html.dui-pro-overhaul .dy-human-nav button.is-active,
+html.dui-pro-overhaul .dy-human-nav button[data-tone].is-active,
+html.dui-pro-overhaul .dy-human-nav button[data-tone="gold"].is-active,
+html.dui-pro-overhaul .dy-human-nav button[data-tone="amber"].is-active,
+html.dui-pro-overhaul .dy-human-nav button[data-tone="green"].is-active {
+  border-color: rgba(226, 190, 106, .34) !important;
+  background:
+    radial-gradient(circle at 100% 50%, rgba(214, 169, 74, .115), transparent 46%),
+    linear-gradient(90deg, rgba(214, 169, 74, .15), rgba(255, 255, 255, .03)) !important;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, .06),
+    0 16px 36px -30px rgba(214, 169, 74, .86) !important;
+}
+
+html.dui-pro-overhaul .dy-human-nav button.is-active::before,
+html.dui-pro-overhaul .dy-human-nav button[data-tone].is-active::before {
+  background: var(--dui-gold) !important;
+  box-shadow: 0 0 14px rgba(214, 169, 74, .58) !important;
+}
+
+html.dui-pro-overhaul .dy-human-nav button.is-active .dy-human-nav-icon,
+html.dui-pro-overhaul .dy-human-nav button[data-tone].is-active .dy-human-nav-icon {
+  color: #ffe8a6 !important;
+  border-color: rgba(226, 190, 106, .32) !important;
+  background:
+    linear-gradient(180deg, rgba(214, 169, 74, .16), rgba(214, 169, 74, .045)),
+    #1a1710 !important;
+}
+
+html.dui-pro-overhaul .dy-human-nav-icon-img {
+  filter: sepia(1) saturate(1.15) hue-rotate(358deg) brightness(.96) contrast(1.05) !important;
+}
+
+html.dui-pro-overhaul .dy-human-nav button:hover .dy-human-nav-icon-img,
+html.dui-pro-overhaul .dy-human-nav button.is-active .dy-human-nav-icon-img {
+  filter: sepia(1) saturate(1.45) hue-rotate(358deg) brightness(1.08) contrast(1.08) drop-shadow(0 0 8px rgba(214, 169, 74, .26)) !important;
+}
+
+html.dui-pro-overhaul .badge,
+html.dui-pro-overhaul header .badge,
+html.dui-pro-overhaul header .badge.dy-status-chip {
+  border-color: rgba(226, 190, 106, .18) !important;
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, .040), rgba(255, 255, 255, .012)),
+    #151515 !important;
+  color: #ded6c7 !important;
+}
+
+html.dui-pro-overhaul header .badge::before,
+html.dui-pro-overhaul header .badge--live::before,
+html.dui-pro-overhaul header .badge--success::before,
+html.dui-pro-overhaul header .badge--warn::before {
+  background: var(--dui-gold) !important;
+  box-shadow: 0 0 11px rgba(214, 169, 74, .56) !important;
+}
+
+html.dui-pro-overhaul header .badge.dy-status-chip[data-tone="live"],
+html.dui-pro-overhaul header .badge.dy-status-chip[data-tone="success"],
+html.dui-pro-overhaul header .badge.dy-status-chip[data-tone="warn"] {
+  border-color: rgba(226, 190, 106, .26) !important;
+}
+
+html.dui-pro-overhaul .dy-status-value {
+  color: #fff5dc !important;
+}
+
+html.dui-pro-overhaul .dy-status-label {
+  color: #9f9688 !important;
+}
+
+html.dui-pro-overhaul body :where(
+  [class*="text-blue"],
+  [class*="text-cyan"],
+  [class*="text-sky"],
+  [class*="text-indigo"],
+  [class*="text-violet"],
+  [class*="text-purple"],
+  [class*="text-emerald"],
+  [class*="text-green"]
+) {
+  color: var(--dui-gold-2) !important;
+}
+
+html.dui-pro-overhaul body :where(
+  [class*="border-blue"],
+  [class*="border-cyan"],
+  [class*="border-sky"],
+  [class*="border-indigo"],
+  [class*="border-violet"],
+  [class*="border-purple"],
+  [class*="border-emerald"],
+  [class*="border-green"]
+) {
+  border-color: rgba(226, 190, 106, .28) !important;
+}
+
+html.dui-pro-overhaul body :where(
+  [class*="ring-blue"],
+  [class*="ring-cyan"],
+  [class*="ring-sky"],
+  [class*="ring-indigo"],
+  [class*="ring-violet"],
+  [class*="ring-purple"],
+  [class*="ring-emerald"],
+  [class*="ring-green"]
+) {
+  --tw-ring-color: rgba(226, 190, 106, .38) !important;
+}
+
+html.dui-pro-overhaul body :where(
+  [class*="bg-blue"],
+  [class*="bg-cyan"],
+  [class*="bg-sky"],
+  [class*="bg-indigo"],
+  [class*="bg-violet"],
+  [class*="bg-purple"],
+  [class*="bg-emerald"],
+  [class*="bg-green"]
+) {
+  background-color: rgba(214, 169, 74, .09) !important;
+}
+
+html.dui-pro-overhaul body :where(
+  [class*="from-blue"],
+  [class*="from-cyan"],
+  [class*="from-sky"],
+  [class*="from-indigo"],
+  [class*="from-violet"],
+  [class*="from-purple"],
+  [class*="from-emerald"],
+  [class*="from-green"],
+  [class*="via-blue"],
+  [class*="via-cyan"],
+  [class*="via-sky"],
+  [class*="via-indigo"],
+  [class*="via-violet"],
+  [class*="via-purple"],
+  [class*="via-emerald"],
+  [class*="via-green"],
+  [class*="to-blue"],
+  [class*="to-cyan"],
+  [class*="to-sky"],
+  [class*="to-indigo"],
+  [class*="to-violet"],
+  [class*="to-purple"],
+  [class*="to-emerald"],
+  [class*="to-green"]
+) {
+  background-image:
+    linear-gradient(135deg, rgba(214, 169, 74, .18), rgba(214, 169, 74, .040) 46%, rgba(255, 255, 255, .012)) !important;
+}
+
+html.dui-pro-overhaul :where(input, textarea, select):focus,
+html.dui-pro-overhaul :where(button, a, input, textarea, select, [tabindex]):focus-visible {
+  outline-color: rgba(226, 190, 106, .76) !important;
+  border-color: rgba(226, 190, 106, .46) !important;
+  box-shadow:
+    0 0 0 4px rgba(214, 169, 74, .13),
+    inset 0 1px 0 rgba(255, 255, 255, .06) !important;
+}
+
+html.dui-pro-overhaul [data-dui-panel="agent-registry"] [data-agent-toolbar],
+html.dui-pro-overhaul [data-dui-panel="agent-registry"] > div:nth-child(2) {
+  border-color: rgba(226, 190, 106, .16) !important;
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, .035), rgba(255, 255, 255, .010)),
+    linear-gradient(90deg, rgba(214, 169, 74, .050), transparent 48%),
+    #0c0c0c !important;
+}
+
+html.dui-pro-overhaul [data-dui-panel="agent-registry"] [data-agent-toolbar]::before {
+  background: linear-gradient(90deg, transparent, rgba(214, 169, 74, .44), rgba(255, 238, 181, .16), transparent) !important;
+}
+
+html.dui-pro-overhaul [data-dui-panel="agent-registry"] [data-agent-search] input:focus,
+html.dui-pro-overhaul [data-dui-panel="agent-registry"] [data-agent-view-option][data-active="true"] {
+  border-color: rgba(226, 190, 106, .36) !important;
+  background:
+    linear-gradient(180deg, rgba(214, 169, 74, .13), rgba(214, 169, 74, .040)),
+    #11100c !important;
+  color: #fff2c4 !important;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, .075),
+    0 10px 22px -18px rgba(214, 169, 74, .95) !important;
+}
+
+html.dui-pro-overhaul .agent-card-pro[data-agent-rarity="legendary"] {
+  --agent-accent: #e5bd5f;
+  --agent-accent-soft: rgba(229, 189, 95, .14);
+  --agent-accent-line: rgba(229, 189, 95, .42);
+  --agent-accent-glow: rgba(229, 189, 95, .28);
+}
+
+html.dui-pro-overhaul .agent-card-pro[data-agent-rarity="epic"] {
+  --agent-accent: #d7bd73;
+  --agent-accent-soft: rgba(215, 189, 115, .12);
+  --agent-accent-line: rgba(215, 189, 115, .34);
+  --agent-accent-glow: rgba(215, 189, 115, .20);
+}
+
+html.dui-pro-overhaul .agent-card-pro[data-agent-rarity="rare"] {
+  --agent-accent: #bfa56a;
+  --agent-accent-soft: rgba(191, 165, 106, .10);
+  --agent-accent-line: rgba(191, 165, 106, .28);
+  --agent-accent-glow: rgba(191, 165, 106, .18);
+}
+
+html.dui-pro-overhaul .agent-card-pro,
+html.dui-pro-overhaul [data-agent-card="true"] {
+  background:
+    radial-gradient(circle at 16% 0%, color-mix(in srgb, var(--agent-accent, #d6a94a) 12%, transparent), transparent 38%),
+    linear-gradient(180deg, rgba(255, 255, 255, .030), rgba(255, 255, 255, .010) 46%, rgba(0, 0, 0, .14)),
+    #0f0f0f !important;
+  border-color: color-mix(in srgb, var(--agent-accent, #d6a94a) 22%, rgba(255, 255, 255, .10)) !important;
+}
+
+html.dui-pro-overhaul .agent-card-pro:hover {
+  border-color: color-mix(in srgb, var(--agent-accent, #d6a94a) 46%, rgba(255, 255, 255, .12)) !important;
+  box-shadow:
+    0 22px 54px rgba(0, 0, 0, .42),
+    0 0 30px -22px color-mix(in srgb, var(--agent-accent, #d6a94a) 58%, transparent),
+    inset 0 1px 0 rgba(255, 255, 255, .06) !important;
+}
+
+html.dui-pro-overhaul .agent-card-pro .agent-card-accent-line {
+  background: linear-gradient(90deg, transparent, var(--agent-accent, #d6a94a), color-mix(in srgb, var(--agent-accent, #d6a94a) 54%, white), transparent) !important;
+}
+
+html.dui-pro-overhaul .agent-card-pro .agent-card-rarity-wash {
+  background:
+    radial-gradient(circle at 24% 0%, color-mix(in srgb, var(--agent-accent, #d6a94a) 16%, transparent), transparent 34%),
+    linear-gradient(145deg, color-mix(in srgb, var(--agent-accent, #d6a94a) 8%, transparent), transparent 52%) !important;
+}
+
+html.dui-pro-overhaul .agent-card-pro .agent-card-media {
+  border-color: color-mix(in srgb, var(--agent-accent, #d6a94a) 22%, rgba(255, 255, 255, .10)) !important;
+  background:
+    radial-gradient(circle at 50% 0%, color-mix(in srgb, var(--agent-accent, #d6a94a) 9%, transparent), transparent 44%),
+    #080808 !important;
+}
+
+html.dui-pro-overhaul .agent-card-pro .agent-card-grid {
+  background-image:
+    linear-gradient(rgba(226, 190, 106, .035) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(226, 190, 106, .026) 1px, transparent 1px),
+    radial-gradient(circle at 50% 0%, rgba(214, 169, 74, .08), transparent 46%) !important;
+}
+
+html.dui-pro-overhaul .agent-card-pro .agent-card-badge-slot,
+html.dui-pro-overhaul .agent-card-pro .agent-card-status-pill.is-live {
+  border-color: rgba(226, 190, 106, .34) !important;
+  color: #ffe8a6 !important;
+  background:
+    linear-gradient(180deg, rgba(214, 169, 74, .14), rgba(0, 0, 0, .18)),
+    rgba(7, 7, 7, .76) !important;
+}
+
+html.dui-pro-overhaul .agent-card-pro .agent-card-status-pill.is-live > span {
+  background: var(--dui-gold) !important;
+  box-shadow: 0 0 0 3px rgba(214, 169, 74, .12), 0 0 14px rgba(214, 169, 74, .42) !important;
+}
+
+html.dui-pro-overhaul .portrait-stage--epic,
+html.dui-pro-overhaul .portrait-stage--rare {
+  box-shadow:
+    0 0 0 6px rgba(86, 67, 24, .20),
+    0 0 30px rgba(214, 169, 74, .24),
+    0 22px 50px rgba(0, 0, 0, .48) !important;
+}
+
+html.dui-pro-overhaul [data-dui-panel="active-party"] .active-party-head {
+  background:
+    linear-gradient(90deg, rgba(214, 169, 74, .060), transparent 46%),
+    rgba(255, 255, 255, .012) !important;
+}
+
+html.dui-pro-overhaul [data-slot-card] {
+  --slot-accent: #d6a94a;
+  border-color: rgba(226, 190, 106, .16) !important;
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, .034), rgba(255, 255, 255, .012)),
+    #141414 !important;
+}
+
+html.dui-pro-overhaul [data-slot-card][data-rarity="legendary"],
+html.dui-pro-overhaul [data-slot-card][data-rarity="epic"],
+html.dui-pro-overhaul [data-slot-card][data-rarity="rare"] {
+  --slot-accent: #d6a94a;
+  border-color: rgba(226, 190, 106, .30) !important;
+}
+
+html.dui-pro-overhaul [data-slot-card][data-rarity="common"] {
+  --slot-accent: #b9aa86;
+}
+
+html.dui-pro-overhaul [data-slot-card]:has(img),
+html.dui-pro-overhaul [data-slot-card]:hover,
+html.dui-pro-overhaul [data-slot-card].is-filled {
+  background:
+    radial-gradient(circle at 9% 50%, rgba(214, 169, 74, .060), transparent 36%),
+    linear-gradient(180deg, rgba(255, 255, 255, .038), rgba(255, 255, 255, .012)),
+    #151515 !important;
+}
+
+html.dui-pro-overhaul [data-slot-card] .party-rarity-badge,
+html.dui-pro-overhaul [data-dui-panel="active-party"] [data-party-action="confirm"] {
+  border-color: rgba(226, 190, 106, .34) !important;
+  background:
+    linear-gradient(180deg, rgba(214, 169, 74, .13), rgba(214, 169, 74, .035)),
+    #15130e !important;
+  color: #ffe8a6 !important;
+}
+
+html.dui-pro-overhaul [data-dui-panel="active-party"] [data-party-action="confirm"]:hover {
+  border-color: rgba(226, 190, 106, .48) !important;
+  background:
+    linear-gradient(180deg, rgba(214, 169, 74, .18), rgba(214, 169, 74, .055)),
+    #1a1710 !important;
+}
+
+html.dui-pro-overhaul [data-dui-panel="command-console"] > div:first-child,
+html.dui-pro-overhaul section > div.relative.overflow-hidden.border-b {
+  background:
+    linear-gradient(90deg, rgba(214, 169, 74, .070), transparent 48%),
+    rgba(255, 255, 255, .012) !important;
+  border-color: rgba(226, 190, 106, .12) !important;
+}
+
+html.dui-pro-overhaul [data-dui-panel="command-console"] > div:first-child > .pointer-events-none,
+html.dui-pro-overhaul section > div.relative.overflow-hidden.border-b > .pointer-events-none[class*="bg-gradient"] {
+  background: linear-gradient(90deg, transparent, rgba(214, 169, 74, .62), rgba(255, 255, 255, .12), transparent) !important;
+}
+
+html.dui-pro-overhaul [data-dui-panel="command-console"] .group\/message {
+  border-color: var(--dy-message-accent-line, rgba(226, 190, 106, .12)) !important;
+  background:
+    radial-gradient(circle at 0% 0%, rgba(255, 255, 255, .030), transparent 42%),
+    radial-gradient(circle at 100% 12%, rgba(148, 163, 184, .018), transparent 44%),
+    linear-gradient(180deg, rgba(255, 255, 255, .032), rgba(255, 255, 255, .014)),
+    #101010 !important;
+}
+
+html.dui-pro-overhaul [data-dui-panel="command-console"] .border-l-\[3px\],
+html.dui-pro-overhaul [data-dui-panel="command-console"] [class*="border-l-"] {
+  border-left-color: var(--dy-message-accent, rgba(214, 169, 74, .72)) !important;
+}
+
+html.dui-pro-overhaul [data-chat-panel="true"] textarea {
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, .022), transparent),
+    #090909 !important;
+}
+
+html.dui-pro-overhaul [data-chat-panel="true"] textarea:focus {
+  border-color: rgba(226, 190, 106, .42) !important;
+  box-shadow:
+    0 0 0 3px rgba(214, 169, 74, .12),
+    0 0 16px rgba(214, 169, 74, .06) !important;
+}
+
+html.dui-pro-overhaul [data-chat-panel="true"] button[aria-label="Send message"] {
+  border-color: rgba(226, 190, 106, .36) !important;
+  background:
+    linear-gradient(180deg, rgba(214, 169, 74, .16), rgba(214, 169, 74, .050)),
+    #15130e !important;
+  color: #ffe8a6 !important;
+}
+
+html.dui-pro-overhaul [data-chat-panel="true"] button[aria-label="Send message"]:hover {
+  border-color: rgba(226, 190, 106, .52) !important;
+  background:
+    linear-gradient(180deg, rgba(214, 169, 74, .22), rgba(214, 169, 74, .070)),
+    #1c1710 !important;
+  box-shadow: 0 0 18px rgba(214, 169, 74, .16) !important;
+}
+
+html.dui-pro-overhaul .status-chip,
+html.dui-pro-overhaul .lane-chip,
+html.dui-pro-overhaul [class*="rounded-full"][class*="border"] {
+  border-color: rgba(226, 190, 106, .18);
+}
+
+html.dui-pro-overhaul .btn--primary {
+  border-color: rgba(226, 190, 106, .36) !important;
+  background: rgba(214, 169, 74, .10) !important;
+  color: #f0d486 !important;
+}
+
+html.dui-pro-overhaul .btn--primary:hover {
+  background: rgba(214, 169, 74, .16) !important;
+  box-shadow: 0 0 20px rgba(214, 169, 74, .12) !important;
+}
+
+html.dui-pro-overhaul ::-webkit-scrollbar-thumb {
+  background: rgba(214, 169, 74, .26) !important;
+  background-clip: padding-box !important;
+}
+
+html.dui-pro-overhaul ::-webkit-scrollbar-thumb:hover {
+  background: rgba(214, 169, 74, .42) !important;
+  background-clip: padding-box !important;
+}
+
+/* Charcoal refinement: keep gold restrained and let dark graphite own the UI. */
+html.dui-pro-overhaul {
+  --dui-bg: #030303;
+  --dui-canvas: #080808;
+  --dui-panel: #0c0c0c;
+  --dui-panel-2: #131313;
+  --dui-panel-3: #191919;
+  --dui-line: rgba(178, 176, 168, .13);
+  --dui-line-soft: rgba(255, 255, 255, .06);
+  --dui-line-strong: rgba(190, 180, 150, .22);
+  --dui-text: #f2f0eb;
+  --dui-text-2: #d0ccc4;
+  --dui-muted: #959089;
+  --dui-faint: #66615a;
+  --dui-accent: #a88b4a;
+  --dui-gold: #a88b4a;
+  --dui-gold-2: #d6bd78;
+  --dui-gold-3: #6f5a2f;
+  --dui-gold-soft: rgba(168, 139, 74, .070);
+  --dui-gold-softer: rgba(168, 139, 74, .032);
+  --dui-cyan: var(--dui-gold);
+  --dui-violet: #aaa49a;
+  --dui-green: var(--dui-gold);
+  --accent-cy: var(--dui-gold);
+  --accent-bl: #9f9b93;
+  --accent-vl: #aaa49a;
+  --accent-em: var(--dui-gold);
+  --accent-am: var(--dui-gold-2);
+  --dui-card-shadow:
+    0 22px 58px rgba(0, 0, 0, .50),
+    0 0 28px -26px rgba(168, 139, 74, .36);
+}
+
+html.dui-pro-overhaul .app-bg {
+  background:
+    radial-gradient(ellipse 64% 38% at 18% -8%, rgba(168, 139, 74, .040), transparent 66%),
+    radial-gradient(ellipse 48% 36% at 94% 12%, rgba(255, 255, 255, .018), transparent 68%),
+    linear-gradient(180deg, rgba(255, 255, 255, .010), transparent 250px),
+    linear-gradient(135deg, #030303 0%, #101010 38%, #0a0a0a 72%, #030303 100%) !important;
+}
+
+html.dui-pro-overhaul .grid-overlay {
+  opacity: .10 !important;
+  background-image:
+    linear-gradient(rgba(210, 206, 196, .060) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(210, 206, 196, .040) 1px, transparent 1px) !important;
+}
+
+html.dui-pro-overhaul :where(
+  .dy-human-rail,
+  .dy-command-header,
+  header.relative.mb-7,
+  [data-dui-panel],
+  [data-chat-panel],
+  section[class*="rounded"],
+  aside[class*="rounded"],
+  .glass-card
+) {
+  border-color: var(--dui-line) !important;
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, .030), rgba(255, 255, 255, .010) 44%, rgba(0, 0, 0, .12)),
+    linear-gradient(135deg, rgba(255, 255, 255, .012), transparent 42%),
+    var(--dui-panel) !important;
+  box-shadow: var(--dui-card-shadow), var(--dui-inner-line) !important;
+}
+
+html.dui-pro-overhaul .dy-command-header.relative.mb-7,
+html.dui-pro-overhaul header.relative.mb-7 {
+  border-color: rgba(190, 180, 150, .18) !important;
+  background:
+    linear-gradient(90deg, rgba(168, 139, 74, .045), transparent 28%),
+    linear-gradient(180deg, rgba(255, 255, 255, .038), rgba(255, 255, 255, .010) 48%, rgba(0, 0, 0, .20)),
+    #090909 !important;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, .070),
+    inset 0 -1px 0 rgba(168, 139, 74, .040),
+    0 18px 52px rgba(0, 0, 0, .48) !important;
+}
+
+html.dui-pro-overhaul .dy-command-header.relative.mb-7::before {
+  background:
+    linear-gradient(90deg, rgba(168, 139, 74, .070), transparent 22%, transparent 78%, rgba(168, 139, 74, .035)),
+    repeating-linear-gradient(90deg, rgba(255, 255, 255, .014) 0 1px, transparent 1px 68px) !important;
+  opacity: .34 !important;
+}
+
+html.dui-pro-overhaul .dy-command-header.relative.mb-7::after {
+  background: linear-gradient(90deg, transparent, rgba(168, 139, 74, .46), rgba(255, 255, 255, .12), transparent) !important;
+  opacity: .56 !important;
+}
+
+html.dui-pro-overhaul .brand-lockup.dy-logo-fixed .dy-logo-mark,
+html.dui-pro-overhaul .dy-human-rail-head img,
+html.dui-pro-overhaul .dui-login-brand img {
+  border-color: rgba(190, 180, 150, .24) !important;
+  background:
+    radial-gradient(circle at 50% 42%, rgba(168, 139, 74, .09), transparent 54%),
+    #101010 !important;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, .08),
+    0 0 0 1px rgba(168, 139, 74, .035),
+    0 14px 30px -26px rgba(168, 139, 74, .46) !important;
+}
+
+html.dui-pro-overhaul .brand-lockup.dy-logo-fixed .dy-logo-word {
+  color: #f5f2ea !important;
+  text-shadow: 0 2px 14px rgba(0, 0, 0, .9) !important;
+}
+
+html.dui-pro-overhaul .brand-lockup.dy-logo-fixed .dy-logo-subtitle {
+  color: #aaa197 !important;
+}
+
+html.dui-pro-overhaul .dy-human-nav button,
+html.dui-pro-overhaul .dy-human-appearance-button,
+html.dui-pro-overhaul :where(input, textarea, select),
+html.dui-pro-overhaul :where(button, [role="button"]):not([data-agent-card] *):not(.agent-card-shell *) {
+  border-color: rgba(190, 188, 180, .12) !important;
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, .028), rgba(255, 255, 255, .010)),
+    #131313 !important;
+  color: #cec9bf !important;
+}
+
+html.dui-pro-overhaul .dy-human-nav button:hover,
+html.dui-pro-overhaul .dy-human-appearance-button:hover,
+html.dui-pro-overhaul :where(button, [role="button"]):not([data-agent-card] *):not(.agent-card-shell *):hover {
+  border-color: rgba(190, 180, 150, .22) !important;
+  background:
+    linear-gradient(180deg, rgba(168, 139, 74, .030), rgba(255, 255, 255, .010)),
+    #171717 !important;
+  color: #ece6dc !important;
+}
+
+html.dui-pro-overhaul .dy-human-nav button.is-active,
+html.dui-pro-overhaul .dy-human-nav button[data-tone].is-active {
+  border-color: rgba(168, 139, 74, .28) !important;
+  background:
+    radial-gradient(circle at 100% 50%, rgba(168, 139, 74, .060), transparent 46%),
+    linear-gradient(90deg, rgba(168, 139, 74, .070), rgba(255, 255, 255, .020)) !important;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, .052),
+    0 14px 32px -30px rgba(168, 139, 74, .55) !important;
+}
+
+html.dui-pro-overhaul .dy-human-nav button.is-active::before,
+html.dui-pro-overhaul .dy-human-nav button[data-tone].is-active::before {
+  background: #b1924c !important;
+  box-shadow: 0 0 11px rgba(168, 139, 74, .42) !important;
+}
+
+html.dui-pro-overhaul .dy-human-nav-icon-img {
+  filter: grayscale(.55) sepia(.45) saturate(.75) brightness(.84) contrast(1.08) !important;
+}
+
+html.dui-pro-overhaul .dy-human-nav button:hover .dy-human-nav-icon-img,
+html.dui-pro-overhaul .dy-human-nav button.is-active .dy-human-nav-icon-img {
+  filter: grayscale(.35) sepia(.55) saturate(.90) brightness(.96) contrast(1.08) drop-shadow(0 0 6px rgba(168, 139, 74, .18)) !important;
+}
+
+html.dui-pro-overhaul .badge,
+html.dui-pro-overhaul header .badge,
+html.dui-pro-overhaul header .badge.dy-status-chip {
+  border-color: rgba(190, 188, 180, .14) !important;
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, .036), rgba(255, 255, 255, .012)),
+    #151515 !important;
+  color: #d2ccc1 !important;
+}
+
+html.dui-pro-overhaul header .badge::before,
+html.dui-pro-overhaul header .badge--live::before,
+html.dui-pro-overhaul header .badge--success::before,
+html.dui-pro-overhaul header .badge--warn::before {
+  background: #a88b4a !important;
+  box-shadow: 0 0 8px rgba(168, 139, 74, .36) !important;
+}
+
+html.dui-pro-overhaul body :where(
+  [class*="text-blue"],
+  [class*="text-cyan"],
+  [class*="text-sky"],
+  [class*="text-indigo"],
+  [class*="text-violet"],
+  [class*="text-purple"],
+  [class*="text-emerald"],
+  [class*="text-green"]
+) {
+  color: #c9b77f !important;
+}
+
+html.dui-pro-overhaul body :where(
+  [class*="border-blue"],
+  [class*="border-cyan"],
+  [class*="border-sky"],
+  [class*="border-indigo"],
+  [class*="border-violet"],
+  [class*="border-purple"],
+  [class*="border-emerald"],
+  [class*="border-green"]
+) {
+  border-color: rgba(168, 139, 74, .20) !important;
+}
+
+html.dui-pro-overhaul body :where(
+  [class*="bg-blue"],
+  [class*="bg-cyan"],
+  [class*="bg-sky"],
+  [class*="bg-indigo"],
+  [class*="bg-violet"],
+  [class*="bg-purple"],
+  [class*="bg-emerald"],
+  [class*="bg-green"]
+) {
+  background-color: rgba(168, 139, 74, .050) !important;
+}
+
+html.dui-pro-overhaul body :where(
+  [class*="from-blue"],
+  [class*="from-cyan"],
+  [class*="from-sky"],
+  [class*="from-indigo"],
+  [class*="from-violet"],
+  [class*="from-purple"],
+  [class*="from-emerald"],
+  [class*="from-green"],
+  [class*="via-blue"],
+  [class*="via-cyan"],
+  [class*="via-sky"],
+  [class*="via-indigo"],
+  [class*="via-violet"],
+  [class*="via-purple"],
+  [class*="via-emerald"],
+  [class*="via-green"],
+  [class*="to-blue"],
+  [class*="to-cyan"],
+  [class*="to-sky"],
+  [class*="to-indigo"],
+  [class*="to-violet"],
+  [class*="to-purple"],
+  [class*="to-emerald"],
+  [class*="to-green"]
+) {
+  background-image:
+    linear-gradient(135deg, rgba(168, 139, 74, .075), rgba(168, 139, 74, .020) 46%, rgba(255, 255, 255, .010)) !important;
+}
+
+html.dui-pro-overhaul .agent-card-shell.agent-card-pro[data-agent-card="true"] {
+  --agent-card-template: url("/card-templates/agent-card-template-common.png") !important;
+  --agent-accent: #a9a298 !important;
+  --agent-rarity: var(--agent-accent) !important;
+  border-color: rgba(190, 188, 180, .14) !important;
+  background-color: #090909 !important;
+  background-image:
+    linear-gradient(180deg, rgba(0, 0, 0, .08), rgba(0, 0, 0, .18)),
+    var(--agent-card-template) !important;
+  box-shadow:
+    0 24px 58px -44px rgba(0, 0, 0, .96),
+    inset 0 1px 0 rgba(255, 255, 255, .070) !important;
+}
+
+html.dui-pro-overhaul .agent-card-shell.agent-card-pro[data-agent-card="true"][data-agent-rarity="legendary"] {
+  --agent-card-template: url("/card-templates/agent-card-template-common.png") !important;
+  --agent-accent: #b39450 !important;
+  border-color: rgba(179, 148, 80, .32) !important;
+  box-shadow:
+    0 24px 58px -44px rgba(0, 0, 0, .96),
+    0 0 22px -20px rgba(179, 148, 80, .55),
+    inset 0 1px 0 rgba(255, 255, 255, .075) !important;
+}
+
+html.dui-pro-overhaul .agent-card-shell.agent-card-pro[data-agent-card="true"][data-agent-rarity="epic"],
+html.dui-pro-overhaul .agent-card-shell.agent-card-pro[data-agent-card="true"][data-agent-rarity="rare"] {
+  --agent-card-template: url("/card-templates/agent-card-template-common.png") !important;
+  --agent-accent: #aaa49a !important;
+  border-color: rgba(190, 188, 180, .16) !important;
+}
+
+html.dui-pro-overhaul .agent-card-pro .agent-card-accent-line {
+  opacity: .36 !important;
+  background: linear-gradient(90deg, transparent, color-mix(in srgb, var(--agent-accent, #a9a298) 72%, #b39450 18%), transparent) !important;
+}
+
+html.dui-pro-overhaul .agent-card-pro .agent-card-rarity-wash,
+html.dui-pro-overhaul .agent-card-pro::after {
+  opacity: .34 !important;
+}
+
+html.dui-pro-overhaul .agent-card-pro .agent-card-media {
+  border-color: rgba(190, 188, 180, .14) !important;
+  background:
+    radial-gradient(circle at 50% 0%, rgba(168, 139, 74, .030), transparent 44%),
+    #080808 !important;
+}
+
+html.dui-pro-overhaul .agent-card-pro .agent-card-badge,
+html.dui-pro-overhaul .agent-card-pro .agent-card-badge-slot,
+html.dui-pro-overhaul .agent-card-pro .agent-card-tags span,
+html.dui-pro-overhaul .agent-card-pro .agent-card-tags span:first-child {
+  border-color: rgba(190, 188, 180, .18) !important;
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, .050), rgba(255, 255, 255, .010)),
+    rgba(5, 5, 5, .66) !important;
+  color: #d8d1c2 !important;
+}
+
+html.dui-pro-overhaul .agent-card-pro[data-agent-rarity="legendary"] .agent-card-badge,
+html.dui-pro-overhaul .agent-card-pro[data-agent-rarity="legendary"] .agent-card-tags span:first-child,
+html.dui-pro-overhaul .agent-card-pro[data-agent-rarity="legendary"] .agent-card-badge-slot {
+  border-color: rgba(179, 148, 80, .32) !important;
+  color: #d6bd78 !important;
+}
+
+html.dui-pro-overhaul .agent-card-pro .agent-card-level-pill,
+html.dui-pro-overhaul .agent-card-pro:not([data-agent-display-mode="list"]) .agent-card-stat-matrix > div,
+html.dui-pro-overhaul .agent-card-pro:not([data-agent-display-mode="list"]) .agent-card-actions button,
+html.dui-pro-overhaul .agent-card-pro .agent-card-action-primary,
+html.dui-pro-overhaul .agent-card-pro[data-agent-in-party="true"] .agent-card-action-primary,
+html.dui-pro-overhaul .agent-card-pro .agent-card-action-secondary {
+  border-color: rgba(190, 188, 180, .15) !important;
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, .046), rgba(255, 255, 255, .010)),
+    rgba(7, 7, 7, .62) !important;
+  color: #d7d1c6 !important;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, .065),
+    0 12px 24px -22px rgba(0, 0, 0, .9) !important;
+}
+
+html.dui-pro-overhaul .agent-card-pro:not([data-agent-display-mode="list"]) .agent-card-actions {
+  border-top-color: rgba(190, 188, 180, .10) !important;
+}
+
+html.dui-pro-overhaul .agent-card-pro:hover {
+  border-color: rgba(190, 180, 150, .26) !important;
+  box-shadow:
+    0 22px 54px rgba(0, 0, 0, .46),
+    0 0 22px -20px rgba(168, 139, 74, .42),
+    inset 0 1px 0 rgba(255, 255, 255, .060) !important;
+}
+
+html.dui-pro-overhaul [data-slot-card],
+html.dui-pro-overhaul [data-slot-card]:has(img),
+html.dui-pro-overhaul [data-slot-card]:hover,
+html.dui-pro-overhaul [data-slot-card].is-filled {
+  border-color: rgba(190, 188, 180, .14) !important;
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, .032), rgba(255, 255, 255, .012)),
+    #141414 !important;
+}
+
+html.dui-pro-overhaul [data-slot-card][data-rarity="legendary"] {
+  --slot-accent: #b39450;
+  border-color: rgba(179, 148, 80, .28) !important;
+}
+
+html.dui-pro-overhaul [data-slot-card][data-rarity="epic"],
+html.dui-pro-overhaul [data-slot-card][data-rarity="rare"],
+html.dui-pro-overhaul [data-slot-card][data-rarity="common"] {
+  --slot-accent: #aaa49a;
+  border-color: rgba(190, 188, 180, .16) !important;
+}
+
+html.dui-pro-overhaul [data-slot-card] .party-rarity-badge,
+html.dui-pro-overhaul [data-dui-panel="active-party"] [data-party-action="confirm"],
+html.dui-pro-overhaul [data-chat-panel="true"] button[aria-label="Send message"] {
+  border-color: rgba(168, 139, 74, .28) !important;
+  background:
+    linear-gradient(180deg, rgba(168, 139, 74, .080), rgba(168, 139, 74, .026)),
+    #151515 !important;
+  color: #d6bd78 !important;
+}
+
+html.dui-pro-overhaul [data-dui-panel="agent-registry"] [data-agent-toolbar],
+html.dui-pro-overhaul [data-dui-panel="agent-registry"] > div:nth-child(2),
+html.dui-pro-overhaul [data-dui-panel="command-console"] > div:first-child,
+html.dui-pro-overhaul section > div.relative.overflow-hidden.border-b {
+  background:
+    linear-gradient(90deg, rgba(168, 139, 74, .030), transparent 48%),
+    rgba(255, 255, 255, .010) !important;
+  border-color: rgba(190, 188, 180, .11) !important;
+}
+
+html.dui-pro-overhaul :where(input, textarea, select):focus,
+html.dui-pro-overhaul :where(button, a, input, textarea, select, [tabindex]):focus-visible {
+  outline-color: rgba(168, 139, 74, .58) !important;
+  border-color: rgba(168, 139, 74, .34) !important;
+  box-shadow:
+    0 0 0 4px rgba(168, 139, 74, .080),
+    inset 0 1px 0 rgba(255, 255, 255, .055) !important;
+}
+
+html.dui-pro-overhaul [data-dui-panel="active-party"] [data-slot-card][data-rarity="legendary"] {
+  --dy-party-rgb: 179, 148, 80 !important;
+}
+
+html.dui-pro-overhaul [data-dui-panel="active-party"] [data-slot-card][data-rarity="epic"],
+html.dui-pro-overhaul [data-dui-panel="active-party"] [data-slot-card][data-rarity="rare"],
+html.dui-pro-overhaul [data-dui-panel="active-party"] [data-slot-card][data-rarity="common"] {
+  --dy-party-rgb: 170, 164, 154 !important;
+}
+
+html.dui-pro-overhaul [data-dui-panel="active-party"] .dy-party-slot.is-filled .party-rarity-badge {
+  border-color: rgba(var(--dy-party-rgb), .22) !important;
+  background:
+    linear-gradient(180deg, rgba(var(--dy-party-rgb), .070), rgba(var(--dy-party-rgb), .026)) !important;
+  color: color-mix(in srgb, rgb(var(--dy-party-rgb)) 46%, #ded8cc) !important;
+  box-shadow: 0 7px 18px -18px rgba(var(--dy-party-rgb), .28) !important;
+}
+
+html.dui-pro-overhaul [data-dui-panel="command-console"].dy-command-console {
+  position: relative !important;
+  isolation: isolate;
+  border: 1px solid rgba(205, 198, 184, .16) !important;
+  border-radius: var(--dui-r) !important;
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, .034), rgba(255, 255, 255, .010) 38%, rgba(0, 0, 0, .12)),
+    repeating-linear-gradient(90deg, rgba(255, 255, 255, .020) 0 1px, transparent 1px 42px),
+    #0d0e0f !important;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, .055),
+    inset 0 0 0 1px rgba(255, 255, 255, .018),
+    0 22px 54px -38px rgba(0, 0, 0, .86) !important;
+}
+
+html.dui-pro-overhaul [data-dui-panel="command-console"].dy-command-console::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  pointer-events: none;
+  background:
+    linear-gradient(90deg, rgba(214, 169, 74, .055), transparent 18%, transparent 78%, rgba(120, 138, 150, .040)),
+    linear-gradient(180deg, rgba(255, 255, 255, .020), transparent 168px);
+}
+
+html.dui-pro-overhaul .dy-command-console__header {
+  padding: 14px 14px 12px !important;
+  border-bottom: 1px solid rgba(205, 198, 184, .13) !important;
+  background:
+    linear-gradient(90deg, rgba(168, 139, 74, .090), rgba(255, 255, 255, .018) 42%, rgba(120, 138, 150, .035)),
+    #101112 !important;
+}
+
+html.dui-pro-overhaul .dy-command-console__header > .pointer-events-none {
+  background: linear-gradient(90deg, transparent, rgba(214, 169, 74, .58), rgba(176, 184, 190, .16), transparent) !important;
+}
+
+html.dui-pro-overhaul .dy-command-console__header-inner {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  min-width: 0;
+  flex-wrap: wrap;
+}
+
+html.dui-pro-overhaul .dy-command-console__title-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex: 1 1 190px;
+}
+
+html.dui-pro-overhaul .dy-command-console__mark {
+  display: inline-grid;
+  width: 34px;
+  height: 34px;
+  flex: 0 0 auto;
+  place-items: center;
+  border: 1px solid rgba(214, 169, 74, .22);
+  border-radius: var(--dui-r);
+  background:
+    linear-gradient(180deg, rgba(214, 169, 74, .105), rgba(214, 169, 74, .020)),
+    #15130e;
+  color: #d8be76;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, .050);
+}
+
+html.dui-pro-overhaul .dy-command-console__mark svg {
+  width: 18px;
+  height: 18px;
+}
+
+html.dui-pro-overhaul .dy-command-console__title {
+  margin: 0;
+  color: #f2f0eb;
+  font-size: 15px;
+  font-weight: 850;
+  line-height: 1.05;
+  white-space: nowrap;
+}
+
+html.dui-pro-overhaul .dy-command-console__subtitle {
+  margin: 4px 0 0;
+  overflow: hidden;
+  color: #8f9598;
+  font-size: 10px;
+  font-weight: 760;
+  line-height: 1.15;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+html.dui-pro-overhaul .dy-command-console__meta {
+  display: flex;
+  flex: 0 0 auto;
+  align-items: center;
+  gap: 7px;
+  margin-left: auto;
+}
+
+html.dui-pro-overhaul .dy-command-console__stat,
+html.dui-pro-overhaul .dy-command-console__pill,
+html.dui-pro-overhaul .dy-command-console__clear {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 28px;
+  border: 1px solid rgba(205, 198, 184, .15);
+  border-radius: 999px;
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, .045), rgba(255, 255, 255, .012)),
+    #151617;
+  color: #c6c1b6;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, .040);
+}
+
+html.dui-pro-overhaul .dy-command-console__stat {
+  gap: 5px;
+  padding: 0 9px;
+}
+
+html.dui-pro-overhaul .dy-command-console__stat strong {
+  color: #f0d283;
+  font-size: 12px;
+  font-weight: 860;
+  line-height: 1;
+}
+
+html.dui-pro-overhaul .dy-command-console__stat span,
+html.dui-pro-overhaul .dy-command-console__pill,
+html.dui-pro-overhaul .dy-command-console__clear {
+  font-size: 9px;
+  font-weight: 820;
+  text-transform: uppercase;
+}
+
+html.dui-pro-overhaul .dy-command-console__pill {
+  gap: 6px;
+  padding: 0 10px;
+}
+
+html.dui-pro-overhaul .dy-command-console__pill > span {
+  width: 6px;
+  height: 6px;
+  border-radius: 999px;
+  background: #86d19a;
+  box-shadow: 0 0 10px rgba(134, 209, 154, .46);
+}
+
+html.dui-pro-overhaul .dy-command-console__clear {
+  padding: 0 10px;
+  cursor: pointer;
+  transition: border-color 150ms ease-out, background-color 150ms ease-out, color 150ms ease-out;
+}
+
+html.dui-pro-overhaul .dy-command-console__clear:hover {
+  border-color: rgba(239, 113, 113, .32);
+  color: #ffaaaa;
+}
+
+html.dui-pro-overhaul .dy-command-target-bar {
+  padding: 9px 12px !important;
+  border-bottom: 1px solid rgba(205, 198, 184, .10) !important;
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, .022), rgba(255, 255, 255, .006)),
+    #0f1011 !important;
+}
+
+html.dui-pro-overhaul .dy-command-targets {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  min-width: 0;
+  flex-wrap: wrap;
+}
+
+html.dui-pro-overhaul .dy-command-target-label {
+  flex: 0 0 auto;
+  color: #767b7e;
+  font-size: 9px;
+  font-weight: 860;
+  text-transform: uppercase;
+}
+
+html.dui-pro-overhaul .dy-command-target-chip {
+  min-width: 0;
+  max-width: 100%;
+  min-height: 30px;
+  padding: 4px 9px 4px 5px;
+  cursor: pointer;
+  border: 1px solid rgba(205, 198, 184, .15) !important;
+  border-radius: 999px;
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, .042), rgba(255, 255, 255, .012)),
+    #151617 !important;
+  color: #ded8cc !important;
+  font-size: 10px;
+  font-weight: 790;
+  transition: border-color 150ms ease-out, background-color 150ms ease-out, transform 150ms ease-out;
+}
+
+html.dui-pro-overhaul .dy-command-target-chip:hover {
+  border-color: rgba(214, 169, 74, .34) !important;
+  transform: translateY(-1px);
+}
+
+html.dui-pro-overhaul .dy-command-target-chip.is-party {
+  border-color: rgba(239, 113, 113, .22) !important;
+  color: #f3c4bd !important;
+}
+
+html.dui-pro-overhaul .dy-command-target-avatar {
+  border-radius: 999px;
+  background: #0b0c0d;
+}
+
+html.dui-pro-overhaul .dy-command-target-remove {
+  color: #c78780;
+  font-size: 10px;
+  font-weight: 900;
+  opacity: .62;
+}
+
+html.dui-pro-overhaul .dy-command-busy {
+  min-height: 28px;
+  padding: 0 10px;
+  border: 1px solid rgba(214, 169, 74, .24);
+  border-radius: 999px;
+  background: rgba(214, 169, 74, .055);
+  color: #dfc987;
+  font-size: 9px;
+  font-weight: 820;
+  text-transform: uppercase;
+}
+
+html.dui-pro-overhaul .dy-command-messages {
+  padding: 14px !important;
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, .010), transparent 88px),
+    repeating-linear-gradient(0deg, rgba(255, 255, 255, .012) 0 1px, transparent 1px 32px) !important;
+  scrollbar-gutter: stable;
+}
+
+html.dui-pro-overhaul .dy-command-messages:has(.dy-command-empty) {
+  display: flex !important;
+  align-items: center;
+  justify-content: center;
+}
+
+html.dui-pro-overhaul .dy-command-message {
+  --dy-message-accent: #b8bec4;
+  --dy-message-accent-line: rgba(184, 190, 196, .22);
+  --dy-message-accent-glow: rgba(184, 190, 196, .16);
+  border-radius: var(--dui-r) !important;
+  border-color: var(--dy-message-accent-line) !important;
+  border-left-color: var(--dy-message-accent) !important;
+  background:
+    radial-gradient(circle at 0% 0%, rgba(255, 255, 255, .030), transparent 42%),
+    radial-gradient(circle at 100% 12%, rgba(148, 163, 184, .018), transparent 44%),
+    linear-gradient(180deg, rgba(255, 255, 255, .040), rgba(255, 255, 255, .014)),
+    #111213 !important;
+  box-shadow:
+    inset 3px 0 0 color-mix(in srgb, var(--dy-message-accent) 62%, transparent),
+    0 14px 28px -28px rgba(0, 0, 0, .90),
+    inset 0 1px 0 rgba(255, 255, 255, .035);
+}
+
+html.dui-pro-overhaul .dy-command-message[data-agent-rarity="legendary"] {
+  --dy-message-accent: #f2cc62;
+  --dy-message-accent-line: rgba(242, 204, 98, .30);
+  --dy-message-accent-glow: rgba(242, 204, 98, .24);
+}
+
+html.dui-pro-overhaul .dy-command-message[data-agent-rarity="epic"] {
+  --dy-message-accent: #b895d6;
+  --dy-message-accent-line: rgba(184, 149, 214, .31);
+  --dy-message-accent-glow: rgba(184, 149, 214, .25);
+}
+
+html.dui-pro-overhaul .dy-command-message[data-agent-rarity="rare"] {
+  --dy-message-accent: #78e7f5;
+  --dy-message-accent-line: rgba(120, 231, 245, .28);
+  --dy-message-accent-glow: rgba(120, 231, 245, .22);
+}
+
+html.dui-pro-overhaul .dy-command-message[data-agent-rarity="common"] {
+  --dy-message-accent: #c4c8ca;
+  --dy-message-accent-line: rgba(196, 200, 202, .18);
+  --dy-message-accent-glow: rgba(196, 200, 202, .12);
+}
+
+html.dui-pro-overhaul .dy-command-message:hover {
+  border-color: color-mix(in srgb, var(--dy-message-accent) 38%, rgba(255, 255, 255, .10)) !important;
+  border-left-color: var(--dy-message-accent) !important;
+}
+
+html.dui-pro-overhaul .dy-command-message-avatar {
+  --tw-ring-color: color-mix(in srgb, var(--dy-message-accent) 45%, transparent) !important;
+  box-shadow:
+    0 0 0 1px color-mix(in srgb, var(--dy-message-accent) 24%, transparent),
+    0 10px 22px -18px var(--dy-message-accent-glow) !important;
+}
+
+html.dui-pro-overhaul .dy-command-message-body {
+  border-radius: var(--dui-r) !important;
+  border-color: color-mix(in srgb, var(--dy-message-accent) 28%, rgba(205, 198, 184, .09)) !important;
+  background:
+    radial-gradient(circle at 0% 0%, rgba(255, 255, 255, .022), transparent 44%),
+    radial-gradient(circle at 100% 0%, rgba(148, 163, 184, .012), transparent 38%),
+    linear-gradient(180deg, rgba(0, 0, 0, .14), rgba(255, 255, 255, .010)),
+    #0a0b0c !important;
+  color: #d8d5ce !important;
+}
+
+html.dui-pro-overhaul .dy-command-message-body-wrap + .dy-command-activity-panel {
+  margin-top: 10px;
+}
+
+html.dui-pro-overhaul .dy-command-message-body[data-body-state="progress"] {
+  border-color: color-mix(in srgb, var(--dy-message-accent) 22%, rgba(255, 255, 255, .08)) !important;
+  background:
+    linear-gradient(180deg, rgba(120, 231, 245, .035), rgba(255, 255, 255, .006)),
+    rgba(5, 6, 8, .40) !important;
+  color: #b9c8cd !important;
+  font-style: italic;
+}
+
+html.dui-pro-overhaul .dy-command-message-body[data-body-state="empty"] {
+  color: #7e8b92 !important;
+  font-style: italic;
+}
+
+html.dui-pro-overhaul .dy-command-message-body[data-body-state="blocked"] {
+  border-color: rgba(248, 113, 113, .18) !important;
+  color: #efc3c1 !important;
+}
+
+html.dui-pro-overhaul .dy-command-empty {
+  position: relative;
+  display: grid;
+  width: 100%;
+  min-height: min(320px, 58vh);
+  place-items: center;
+  overflow: hidden;
+  padding: 28px 18px;
+  border: 1px solid rgba(205, 198, 184, .15);
+  border-radius: var(--dui-r);
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, .030), rgba(255, 255, 255, .010)),
+    #111213;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, .040);
+}
+
+html.dui-pro-overhaul .dy-command-empty__scan {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background:
+    linear-gradient(90deg, rgba(214, 169, 74, .040), transparent 24%, transparent 74%, rgba(120, 138, 150, .035)),
+    repeating-linear-gradient(0deg, transparent 0 23px, rgba(255, 255, 255, .025) 24px);
+  opacity: .86;
+}
+
+html.dui-pro-overhaul .dy-command-empty__icon,
+html.dui-pro-overhaul .dy-command-empty__copy,
+html.dui-pro-overhaul .dy-command-empty__actions {
+  position: relative;
+  z-index: 1;
+}
+
+html.dui-pro-overhaul .dy-command-empty__icon {
+  display: inline-grid;
+  width: 54px;
+  height: 54px;
+  place-items: center;
+  border: 1px solid rgba(214, 169, 74, .20);
+  border-radius: var(--dui-r);
+  background:
+    linear-gradient(180deg, rgba(214, 169, 74, .095), rgba(214, 169, 74, .018)),
+    #15130e;
+  color: #d8be76;
+}
+
+html.dui-pro-overhaul .dy-command-empty__icon svg {
+  width: 25px;
+  height: 25px;
+}
+
+html.dui-pro-overhaul .dy-command-empty__copy {
+  margin-top: 14px;
+  text-align: center;
+}
+
+html.dui-pro-overhaul .dy-command-empty__copy p {
+  margin: 0;
+  color: #ebe6dc;
+  font-size: 14px;
+  font-weight: 840;
+  line-height: 1.2;
+}
+
+html.dui-pro-overhaul .dy-command-empty__copy span {
+  display: block;
+  margin-top: 5px;
+  color: #8f9598;
+  font-size: 10px;
+  font-weight: 760;
+  text-transform: uppercase;
+}
+
+html.dui-pro-overhaul .dy-command-empty__actions {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 7px;
+  width: min(100%, 260px);
+  margin-top: 18px;
+}
+
+html.dui-pro-overhaul .dy-command-empty__actions button {
+  min-width: 0;
+  min-height: 32px;
+  border: 1px solid rgba(205, 198, 184, .14);
+  border-radius: var(--dui-r);
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, .040), rgba(255, 255, 255, .010)),
+    #151617;
+  color: #cbc5b9;
+  font-size: 10px;
+  font-weight: 820;
+  cursor: pointer;
+  transition: border-color 150ms ease-out, color 150ms ease-out, transform 150ms ease-out;
+}
+
+html.dui-pro-overhaul .dy-command-empty__actions button:hover {
+  border-color: rgba(214, 169, 74, .34);
+  color: #f0d283;
+  transform: translateY(-1px);
+}
+
+html.dui-pro-overhaul .dy-command-upload-preview {
+  padding: 11px 14px !important;
+  border-top: 1px solid rgba(205, 198, 184, .12) !important;
+  background: #101112 !important;
+}
+
+html.dui-pro-overhaul .dy-command-attachment-card {
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, .035), 0 14px 30px -24px rgba(0, 0, 0, .9);
+}
+
+html.dui-pro-overhaul .dy-command-attachment-icon {
+  border: 1px solid rgba(255, 255, 255, .08);
+  background: rgba(154, 166, 173, .12);
+  color: #cbd5dc;
+}
+
+html.dui-pro-overhaul .dy-command-attachment-card[data-kind="audio"] .dy-command-attachment-icon {
+  background: rgba(111, 178, 153, .14);
+  color: #a8e6ce;
+}
+
+html.dui-pro-overhaul .dy-command-attachment-card[data-kind="code"] .dy-command-attachment-icon,
+html.dui-pro-overhaul .dy-command-attachment-card[data-kind="data"] .dy-command-attachment-icon {
+  background: rgba(121, 176, 210, .14);
+  color: #a9d9f2;
+}
+
+html.dui-pro-overhaul .dy-command-attachment-card[data-kind="document"] .dy-command-attachment-icon,
+html.dui-pro-overhaul .dy-command-attachment-card[data-kind="presentation"] .dy-command-attachment-icon,
+html.dui-pro-overhaul .dy-command-attachment-card[data-kind="spreadsheet"] .dy-command-attachment-icon {
+  background: rgba(214, 169, 74, .14);
+  color: #f0d283;
+}
+
+html.dui-pro-overhaul .dy-command-upload-remove {
+  border: 1px solid rgba(255, 255, 255, .10);
+  border-radius: 999px;
+  background: #b84c4c;
+  color: white;
+  font-size: 10px;
+  font-weight: 900;
+  box-shadow: 0 10px 20px -14px rgba(184, 76, 76, .8);
+  transition: transform 150ms ease-out, background-color 150ms ease-out;
+}
+
+html.dui-pro-overhaul .dy-command-upload-remove:hover {
+  background: #d25f5f;
+  transform: scale(1.06);
+}
+
+html.dui-pro-overhaul .dy-command-upload-error {
+  padding: 10px 14px;
+  border-top: 1px solid rgba(239, 113, 113, .16);
+  background: rgba(239, 113, 113, .055);
+  color: #f2b6b6;
+  font-size: 11px;
+  font-weight: 730;
+}
+
+html.dui-pro-overhaul .dy-command-composer {
+  padding: 12px !important;
+  border-top: 1px solid rgba(205, 198, 184, .13) !important;
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, .018), rgba(0, 0, 0, .14)),
+    #101112 !important;
+}
+
+html.dui-pro-overhaul .dy-command-composer__row {
+  display: flex;
+  align-items: flex-end;
+  gap: 9px;
+}
+
+html.dui-pro-overhaul .dy-command-icon-button,
+html.dui-pro-overhaul .dy-command-send {
+  width: 42px;
+  height: 42px;
+  border: 1px solid rgba(205, 198, 184, .15);
+  border-radius: var(--dui-r);
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, .040), rgba(255, 255, 255, .010)),
+    #151617;
+  color: #aeb4b8;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, .040);
+  transition: border-color 150ms ease-out, color 150ms ease-out, transform 150ms ease-out, box-shadow 150ms ease-out;
+}
+
+html.dui-pro-overhaul .dy-command-icon-button:hover {
+  border-color: rgba(205, 198, 184, .28);
+  color: #e1ddd5;
+  transform: translateY(-1px);
+}
+
+html.dui-pro-overhaul .dy-command-composer__field {
+  min-width: 0;
+}
+
+html.dui-pro-overhaul textarea.dy-command-textarea {
+  min-height: 42px;
+  max-height: 112px;
+  padding: 11px 13px !important;
+  border: 1px solid rgba(205, 198, 184, .15) !important;
+  border-radius: var(--dui-r) !important;
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, .024), rgba(0, 0, 0, .10)),
+    #080909 !important;
+  color: #ece8df !important;
+  font-size: 12px;
+  font-weight: 670;
+  line-height: 1.35;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, .035),
+    inset 0 -12px 24px rgba(0, 0, 0, .15);
+  transition: border-color 150ms ease-out, box-shadow 150ms ease-out, background-color 150ms ease-out;
+}
+
+html.dui-pro-overhaul textarea.dy-command-textarea::placeholder {
+  color: #6f7578 !important;
+}
+
+html.dui-pro-overhaul textarea.dy-command-textarea:focus {
+  border-color: rgba(214, 169, 74, .38) !important;
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, .034), rgba(0, 0, 0, .08)),
+    #090a0a !important;
+  box-shadow:
+    0 0 0 3px rgba(214, 169, 74, .10),
+    inset 0 1px 0 rgba(255, 255, 255, .050) !important;
+}
+
+html.dui-pro-overhaul .dy-command-send {
+  border-color: rgba(214, 169, 74, .30) !important;
+  background:
+    linear-gradient(180deg, rgba(214, 169, 74, .15), rgba(214, 169, 74, .045)),
+    #17140e !important;
+  color: #f0d283 !important;
+}
+
+html.dui-pro-overhaul .dy-command-send:hover:not(:disabled) {
+  border-color: rgba(214, 169, 74, .48) !important;
+  color: #ffe5a6 !important;
+  transform: translateY(-1px);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, .060),
+    0 14px 28px -24px rgba(214, 169, 74, .72);
+}
+
+html.dui-pro-overhaul .dy-command-send:active:not(:disabled) {
+  transform: translateY(0) scale(.98);
+}
+
+html.dui-pro-overhaul .dy-command-send:disabled {
+  cursor: not-allowed;
+  opacity: .38;
+  filter: grayscale(.35);
+}
+
+@media (max-width: 1180px) {
+  html.dui-pro-overhaul .dy-command-console__header-inner {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  html.dui-pro-overhaul .dy-command-console__meta {
+    width: 100%;
+  }
+
+  html.dui-pro-overhaul .dy-command-console__pill {
+    margin-left: auto;
+  }
+}
+
+/* Rarity texture variants: all are derived from the currently wired card texture. */
+html.dui-pro-overhaul .agent-card-shell.agent-card-pro[data-agent-card="true"] {
+  --agent-card-texture: url("/card-templates/agent-card-texture-common.png") !important;
+  --agent-card-template: var(--agent-card-texture) !important;
+  --agent-accent: #a8a49a !important;
+  --agent-accent-rgb: 168, 164, 154;
+  --agent-rarity: var(--agent-accent) !important;
+  background-color: #070808 !important;
+  background-image:
+    linear-gradient(180deg, rgba(2, 4, 7, .08), rgba(2, 4, 7, .34) 56%, rgba(0, 0, 0, .78)),
+    radial-gradient(circle at 24% 0%, rgba(var(--agent-accent-rgb), .13), transparent 36%),
+    radial-gradient(circle at 80% 78%, rgba(var(--agent-accent-rgb), .09), transparent 44%),
+    var(--agent-card-texture) !important;
+  background-size: cover, cover, cover, cover !important;
+  background-position: center !important;
+  background-repeat: no-repeat !important;
+  border-color: rgba(var(--agent-accent-rgb), .18) !important;
+  box-shadow:
+    0 24px 58px -44px rgba(0, 0, 0, .96),
+    0 0 28px -26px rgba(var(--agent-accent-rgb), .40),
+    inset 0 1px 0 rgba(255, 255, 255, .070) !important;
+}
+
+html.dui-pro-overhaul .agent-card-shell.agent-card-pro[data-agent-card="true"][data-agent-rarity="legendary"] {
+  --agent-card-texture: url("/card-templates/agent-card-texture-legendary.png") !important;
+  --agent-card-template: var(--agent-card-texture) !important;
+  --agent-accent: #be974c !important;
+  --agent-accent-rgb: 190, 151, 76;
+  border-color: rgba(var(--agent-accent-rgb), .34) !important;
+  box-shadow:
+    0 24px 58px -44px rgba(0, 0, 0, .96),
+    0 0 32px -25px rgba(var(--agent-accent-rgb), .58),
+    inset 0 1px 0 rgba(255, 255, 255, .080) !important;
+}
+
+html.dui-pro-overhaul .agent-card-shell.agent-card-pro[data-agent-card="true"][data-agent-rarity="epic"] {
+  --agent-card-texture: url("/card-templates/agent-card-texture-epic.png") !important;
+  --agent-card-template: var(--agent-card-texture) !important;
+  --agent-accent: #9475ae !important;
+  --agent-accent-rgb: 148, 117, 174;
+  border-color: rgba(var(--agent-accent-rgb), .28) !important;
+}
+
+html.dui-pro-overhaul .agent-card-shell.agent-card-pro[data-agent-card="true"][data-agent-rarity="rare"] {
+  --agent-card-texture: url("/card-templates/agent-card-texture-rare.png") !important;
+  --agent-card-template: var(--agent-card-texture) !important;
+  --agent-accent: #7097aa !important;
+  --agent-accent-rgb: 112, 151, 170;
+  border-color: rgba(var(--agent-accent-rgb), .26) !important;
+}
+
+html.dui-pro-overhaul .agent-card-shell.agent-card-pro[data-agent-card="true"][data-agent-rarity="common"],
+html.dui-pro-overhaul .agent-card-shell.agent-card-pro[data-agent-card="true"]:not([data-agent-rarity]) {
+  --agent-card-texture: url("/card-templates/agent-card-texture-common.png") !important;
+  --agent-card-template: var(--agent-card-texture) !important;
+  --agent-accent: #a8a49a !important;
+  --agent-accent-rgb: 168, 164, 154;
+}
+
+html.dui-pro-overhaul .agent-card-shell.agent-card-pro[data-agent-card="true"]:hover {
+  border-color: rgba(var(--agent-accent-rgb), .42) !important;
+  box-shadow:
+    0 22px 54px rgba(0, 0, 0, .46),
+    0 0 34px -24px rgba(var(--agent-accent-rgb), .54),
+    inset 0 1px 0 rgba(255, 255, 255, .065) !important;
+}
+
+html.dui-pro-overhaul .agent-card-pro .agent-card-accent-line {
+  opacity: .58 !important;
+  background:
+    linear-gradient(90deg, transparent, rgba(var(--agent-accent-rgb), .72), color-mix(in srgb, var(--agent-accent) 64%, white), transparent) !important;
+}
+
+html.dui-pro-overhaul .agent-card-pro .agent-card-rarity-wash,
+html.dui-pro-overhaul .agent-card-pro::after {
+  opacity: .46 !important;
+}
+
+html.dui-pro-overhaul .agent-card-pro .agent-card-rarity-wash {
+  background:
+    radial-gradient(circle at 22% 0%, rgba(var(--agent-accent-rgb), .16), transparent 36%),
+    linear-gradient(145deg, rgba(var(--agent-accent-rgb), .070), transparent 54%) !important;
+}
+
+html.dui-pro-overhaul .agent-card-pro .agent-card-media {
+  border-color: rgba(var(--agent-accent-rgb), .22) !important;
+  background:
+    radial-gradient(circle at 50% 0%, rgba(var(--agent-accent-rgb), .075), transparent 44%),
+    #080808 !important;
+}
+
+html.dui-pro-overhaul .agent-card-pro .agent-card-badge,
+html.dui-pro-overhaul .agent-card-pro .agent-card-tags span:first-child,
+html.dui-pro-overhaul .agent-card-pro .agent-card-badge-slot {
+  border-color: rgba(var(--agent-accent-rgb), .34) !important;
+  background:
+    linear-gradient(180deg, rgba(var(--agent-accent-rgb), .105), rgba(0, 0, 0, .18)),
+    rgba(7, 7, 7, .74) !important;
+  color: color-mix(in srgb, var(--agent-accent) 54%, #f7f4ea) !important;
+}
+
+html.dui-pro-overhaul .agent-card-pro .agent-card-level-pill,
+html.dui-pro-overhaul .agent-card-pro:not([data-agent-display-mode="list"]) .agent-card-stat-matrix > div,
+html.dui-pro-overhaul .agent-card-pro .agent-card-action-primary,
+html.dui-pro-overhaul .agent-card-pro[data-agent-in-party="true"] .agent-card-action-primary,
+html.dui-pro-overhaul .agent-card-pro .agent-card-action-secondary {
+  border-color: rgba(var(--agent-accent-rgb), .18) !important;
+}
+
+html.dui-pro-overhaul [data-dui-panel="active-party"] [data-slot-card][data-rarity="legendary"] {
+  --dy-party-rgb: 190, 151, 76 !important;
+  --slot-accent: #be974c !important;
+  border-color: rgba(var(--dy-party-rgb), .34) !important;
+}
+
+html.dui-pro-overhaul [data-dui-panel="active-party"] [data-slot-card][data-rarity="epic"] {
+  --dy-party-rgb: 148, 117, 174 !important;
+  --slot-accent: #9475ae !important;
+  border-color: rgba(var(--dy-party-rgb), .28) !important;
+}
+
+html.dui-pro-overhaul [data-dui-panel="active-party"] [data-slot-card][data-rarity="rare"] {
+  --dy-party-rgb: 112, 151, 170 !important;
+  --slot-accent: #7097aa !important;
+  border-color: rgba(var(--dy-party-rgb), .26) !important;
+}
+
+html.dui-pro-overhaul [data-dui-panel="active-party"] [data-slot-card][data-rarity="common"] {
+  --dy-party-rgb: 168, 164, 154 !important;
+  --slot-accent: #a8a49a !important;
+}
+
+html.dui-pro-overhaul [data-dui-panel="active-party"] .dy-party-slot.is-filled .party-rarity-badge {
+  border-color: rgba(var(--dy-party-rgb), .28) !important;
+  background:
+    linear-gradient(180deg, rgba(var(--dy-party-rgb), .100), rgba(var(--dy-party-rgb), .034)),
+    #151515 !important;
+  color: color-mix(in srgb, rgb(var(--dy-party-rgb)) 52%, #eee8dd) !important;
+  box-shadow: 0 7px 18px -17px rgba(var(--dy-party-rgb), .36) !important;
+}
+
+/* Agent editor: premium settings surface that matches the gold control-center theme. */
+html.dui-pro-overhaul [data-dui-overlay="agent-editor"] {
+  padding: clamp(12px, 2vw, 26px) !important;
+  background:
+    radial-gradient(ellipse at 50% 20%, rgba(168, 139, 74, .105), transparent 38%),
+    radial-gradient(ellipse at 20% 0%, rgba(255, 230, 160, .048), transparent 36%),
+    rgba(2, 3, 5, .91) !important;
+  backdrop-filter: blur(20px) saturate(118%) !important;
+}
+
+html.dui-pro-overhaul [data-dui-modal="agent-editor"] {
+  position: relative;
+  isolation: isolate;
+  width: min(980px, calc(100vw - 28px)) !important;
+  max-width: none !important;
+  max-height: min(88vh, 860px) !important;
+  overflow: hidden !important;
+  border: 1px solid rgba(198, 178, 132, .20) !important;
+  border-radius: 14px !important;
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, .040), rgba(255, 255, 255, .010) 42%, rgba(0, 0, 0, .18)),
+    radial-gradient(circle at 14% 0%, rgba(181, 149, 76, .13), transparent 34%),
+    radial-gradient(circle at 88% 18%, rgba(255, 230, 160, .045), transparent 34%),
+    #090a0b !important;
+  box-shadow:
+    0 34px 90px rgba(0, 0, 0, .62),
+    0 0 48px -34px rgba(190, 161, 90, .72),
+    inset 0 1px 0 rgba(255, 255, 255, .075),
+    inset 0 0 0 1px rgba(255, 255, 255, .025) !important;
+}
+
+html.dui-pro-overhaul [data-dui-modal="agent-editor"]::before,
+html.dui-pro-overhaul [data-dui-modal="agent-editor"]::after {
+  content: "";
+  position: absolute;
+  pointer-events: none;
+  z-index: -1;
+}
+
+html.dui-pro-overhaul [data-dui-modal="agent-editor"]::before {
+  inset: 0;
+  opacity: .62;
+  background:
+    linear-gradient(rgba(255, 255, 255, .028) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(255, 255, 255, .020) 1px, transparent 1px);
+  background-size: 38px 38px;
+  mask-image: linear-gradient(180deg, rgba(0, 0, 0, .55), transparent 66%);
+}
+
+html.dui-pro-overhaul [data-dui-modal="agent-editor"]::after {
+  inset: 9px;
+  border: 1px solid rgba(198, 178, 132, .105);
+  border-radius: 10px;
+  box-shadow: inset 0 0 32px rgba(0, 0, 0, .30);
+}
+
+html.dui-pro-overhaul [data-dui-modal="agent-editor"] [data-editor-header] {
+  position: relative;
+  border-bottom: 1px solid rgba(198, 178, 132, .13) !important;
+  padding: 18px 20px 14px !important;
+  background:
+    linear-gradient(90deg, rgba(168, 139, 74, .070), transparent 48%),
+    rgba(255, 255, 255, .012) !important;
+}
+
+html.dui-pro-overhaul [data-dui-modal="agent-editor"] [data-editor-header] > div:first-child {
+  gap: 18px !important;
+}
+
+html.dui-pro-overhaul [data-dui-modal="agent-editor"] [data-editor-avatar] {
+  width: 56px !important;
+  height: 56px !important;
+  border: 1px solid rgba(198, 178, 132, .30) !important;
+  border-radius: 12px !important;
+  background:
+    radial-gradient(circle at 50% 0%, rgba(168, 139, 74, .18), transparent 50%),
+    #070808 !important;
+  box-shadow:
+    0 14px 30px -24px rgba(196, 164, 82, .95),
+    inset 0 1px 0 rgba(255, 255, 255, .10) !important;
+}
+
+html.dui-pro-overhaul [data-dui-modal="agent-editor"] [data-editor-avatar] img {
+  filter: saturate(1.04) contrast(1.04);
+}
+
+html.dui-pro-overhaul [data-dui-modal="agent-editor"] h2 {
+  color: #f3ead9 !important;
+  font-size: 18px !important;
+  letter-spacing: 0 !important;
+  text-shadow: 0 1px 18px rgba(214, 189, 120, .09);
+}
+
+html.dui-pro-overhaul [data-dui-modal="agent-editor"] h2 + p {
+  margin-top: 3px;
+  color: #8f887b !important;
+  font-size: 10px !important;
+  letter-spacing: .03em;
+}
+
+html.dui-pro-overhaul [data-dui-modal="agent-editor"] [data-editor-action="done"] {
+  min-height: 34px !important;
+  border-color: rgba(198, 178, 132, .26) !important;
+  background:
+    linear-gradient(180deg, rgba(168, 139, 74, .120), rgba(168, 139, 74, .032)),
+    #111111 !important;
+  color: #e5cf91 !important;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, .07) !important;
+}
+
+html.dui-pro-overhaul [data-dui-modal="agent-editor"] [data-editor-tabs] {
+  display: grid !important;
+  grid-template-columns: repeat(7, minmax(0, 1fr));
+  gap: 6px !important;
+  margin-top: 16px !important;
+  padding: 6px !important;
+  overflow-x: auto;
+  border: 1px solid rgba(198, 178, 132, .13) !important;
+  border-radius: 10px !important;
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, .026), rgba(255, 255, 255, .006)),
+    rgba(4, 5, 6, .82) !important;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, .040),
+    0 12px 30px -28px rgba(0, 0, 0, .95) !important;
+}
+
+html.dui-pro-overhaul [data-dui-modal="agent-editor"] [data-editor-tab] {
+  position: relative;
+  display: inline-flex !important;
+  min-width: 92px;
+  min-height: 42px;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  overflow: hidden;
+  border: 1px solid transparent !important;
+  border-radius: 8px !important;
+  background: transparent !important;
+  color: #777064 !important;
+  font-size: 10px !important;
+  letter-spacing: .10em !important;
+  box-shadow: none !important;
+}
+
+html.dui-pro-overhaul [data-dui-modal="agent-editor"] [data-editor-tab]::before {
+  content: "";
+  position: absolute;
+  inset: auto 10px 6px;
+  height: 2px;
+  border-radius: 999px;
+  opacity: 0;
+  background: linear-gradient(90deg, transparent, #d1ad62, transparent);
+  transition: opacity 160ms ease;
+}
+
+html.dui-pro-overhaul [data-dui-modal="agent-editor"] [data-editor-tab] span {
+  display: inline-grid;
+  width: 18px;
+  height: 18px;
+  margin: 0 !important;
+  place-items: center;
+  border: 1px solid rgba(198, 178, 132, .105);
+  border-radius: 6px;
+  background: rgba(255, 255, 255, .026);
+  font-size: 11px;
+  line-height: 1;
+}
+
+html.dui-pro-overhaul [data-dui-modal="agent-editor"] [data-editor-tab]:hover {
+  border-color: rgba(198, 178, 132, .17) !important;
+  background: rgba(255, 255, 255, .026) !important;
+  color: #c9c0ae !important;
+  transform: translateY(-1px);
+}
+
+html.dui-pro-overhaul [data-dui-modal="agent-editor"] [data-editor-tab][data-active="true"] {
+  border-color: rgba(198, 178, 132, .32) !important;
+  background:
+    linear-gradient(180deg, rgba(168, 139, 74, .145), rgba(168, 139, 74, .040)),
+    #111111 !important;
+  color: #f0d99d !important;
+  box-shadow:
+    0 12px 26px -22px rgba(201, 168, 86, .72),
+    inset 0 1px 0 rgba(255, 255, 255, .075) !important;
+}
+
+html.dui-pro-overhaul [data-dui-modal="agent-editor"] [data-editor-tab][data-active="true"]::before {
+  opacity: 1;
+}
+
+html.dui-pro-overhaul [data-dui-modal="agent-editor"] [data-editor-body] {
+  padding: 18px !important;
+  background:
+    radial-gradient(circle at 9% 0%, rgba(168, 139, 74, .050), transparent 34%),
+    linear-gradient(180deg, rgba(255, 255, 255, .010), transparent 24%) !important;
+  scrollbar-gutter: stable;
+}
+
+html.dui-pro-overhaul [data-dui-modal="agent-editor"] [data-editor-content] {
+  width: min(760px, 100%) !important;
+  max-width: none !important;
+}
+
+html.dui-pro-overhaul [data-dui-modal="agent-editor"] [data-editor-panel] {
+  animation: dui-editor-panel-in 180ms ease-out both;
+}
+
+@keyframes dui-editor-panel-in {
+  from {
+    opacity: 0;
+    transform: translateY(4px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+html.dui-pro-overhaul [data-dui-modal="agent-editor"] [data-editor-card="portrait"],
+html.dui-pro-overhaul [data-dui-modal="agent-editor"] [data-editor-panel] > .rounded-xl,
+html.dui-pro-overhaul [data-dui-modal="agent-editor"] [data-editor-panel] > div:has(> h3),
+html.dui-pro-overhaul [data-dui-modal="agent-editor"] [data-editor-panel="policy"] > .grid,
+html.dui-pro-overhaul [data-dui-modal="agent-editor"] [data-editor-panel="workspace"] > div:first-child,
+html.dui-pro-overhaul [data-dui-modal="agent-editor"] [data-editor-panel="skills"] > div:has(input[type="text"]),
+html.dui-pro-overhaul [data-dui-modal="agent-editor"] [data-editor-panel="files"] > textarea {
+  border: 1px solid rgba(198, 178, 132, .13) !important;
+  border-radius: 10px !important;
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, .034), rgba(255, 255, 255, .010)),
+    rgba(12, 13, 13, .78) !important;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, .050),
+    0 16px 34px -34px rgba(0, 0, 0, .95) !important;
+}
+
+html.dui-pro-overhaul [data-dui-modal="agent-editor"] [data-editor-card="portrait"] {
+  padding: 14px;
+}
+
+html.dui-pro-overhaul [data-dui-modal="agent-editor"] [data-editor-panel] > div:has(> h3),
+html.dui-pro-overhaul [data-dui-modal="agent-editor"] [data-editor-panel="policy"] > .grid,
+html.dui-pro-overhaul [data-dui-modal="agent-editor"] [data-editor-panel="workspace"] > div:first-child {
+  padding: 14px !important;
+}
+
+html.dui-pro-overhaul [data-dui-modal="agent-editor"] [data-editor-portrait] {
+  width: 142px !important;
+  height: 142px !important;
+  border: 1px solid rgba(198, 178, 132, .30) !important;
+  border-radius: 12px !important;
+  background:
+    radial-gradient(circle at 50% 0%, rgba(168, 139, 74, .20), transparent 52%),
+    #070808 !important;
+  box-shadow:
+    0 24px 40px -34px rgba(205, 169, 84, .88),
+    inset 0 1px 0 rgba(255, 255, 255, .09) !important;
+}
+
+html.dui-pro-overhaul [data-dui-modal="agent-editor"] [data-editor-portrait]::after {
+  content: "";
+  position: absolute;
+  inset: 8px;
+  pointer-events: none;
+  border: 1px solid rgba(255, 255, 255, .11);
+  border-radius: 8px;
+}
+
+html.dui-pro-overhaul [data-dui-modal="agent-editor"] [data-editor-panel="profile"] > .grid {
+  gap: 12px !important;
+}
+
+html.dui-pro-overhaul [data-dui-modal="agent-editor"] label {
+  color: #8d8679 !important;
+}
+
+html.dui-pro-overhaul [data-dui-modal="agent-editor"] h3,
+html.dui-pro-overhaul [data-dui-modal="agent-editor"] [data-editor-panel] p:first-child {
+  color: #e6ddc9 !important;
+  letter-spacing: .01em !important;
+}
+
+html.dui-pro-overhaul [data-dui-modal="agent-editor"] :where(input[type="text"], select, textarea) {
+  min-height: 38px !important;
+  border: 1px solid rgba(198, 178, 132, .15) !important;
+  border-radius: 8px !important;
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, .028), rgba(255, 255, 255, .008)),
+    #0b0c0c !important;
+  color: #e5dfd2 !important;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, .035) !important;
+}
+
+html.dui-pro-overhaul [data-dui-modal="agent-editor"] :where(input[type="text"], select, textarea)::placeholder {
+  color: #6e675b !important;
+}
+
+html.dui-pro-overhaul [data-dui-modal="agent-editor"] :where(input[type="text"], select, textarea):focus {
+  border-color: rgba(201, 168, 86, .44) !important;
+  box-shadow:
+    0 0 0 4px rgba(168, 139, 74, .085),
+    inset 0 1px 0 rgba(255, 255, 255, .055) !important;
+}
+
+html.dui-pro-overhaul [data-dui-modal="agent-editor"] textarea {
+  min-height: 280px;
+  line-height: 1.55 !important;
+}
+
+html.dui-pro-overhaul [data-dui-modal="agent-editor"] option {
+  background: #0b0c0c;
+  color: #e5dfd2;
+}
+
+html.dui-pro-overhaul [data-dui-modal="agent-editor"] input[type="checkbox"] {
+  accent-color: #c9a856;
+}
+
+html.dui-pro-overhaul [data-dui-modal="agent-editor"] input[type="range"] {
+  height: 20px !important;
+  padding: 0 !important;
+  border: 0 !important;
+  background: transparent !important;
+  accent-color: #c9a856 !important;
+  box-shadow: none !important;
+}
+
+html.dui-pro-overhaul [data-dui-modal="agent-editor"] input[type="range"]::-webkit-slider-runnable-track {
+  height: 7px;
+  border: 1px solid rgba(198, 178, 132, .14);
+  border-radius: 999px;
+  background:
+    linear-gradient(90deg, rgba(201, 168, 86, .56), rgba(168, 139, 74, .16)),
+    #050606;
+  box-shadow: inset 0 1px 2px rgba(0, 0, 0, .70);
+}
+
+html.dui-pro-overhaul [data-dui-modal="agent-editor"] input[type="range"]::-webkit-slider-thumb {
+  width: 18px;
+  height: 18px;
+  margin-top: -6px;
+  appearance: none;
+  border: 1px solid rgba(255, 238, 190, .60);
+  border-radius: 50%;
+  background:
+    radial-gradient(circle at 35% 25%, #fff0bb, #c7a04c 48%, #6f5928);
+  box-shadow:
+    0 0 0 4px rgba(168, 139, 74, .10),
+    0 8px 16px rgba(0, 0, 0, .48);
+}
+
+html.dui-pro-overhaul [data-dui-modal="agent-editor"] button:not([data-editor-tab]):not([data-editor-portrait]) {
+  border-color: rgba(198, 178, 132, .18) !important;
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, .040), rgba(255, 255, 255, .010)),
+    rgba(15, 15, 15, .92) !important;
+  color: #d7cbb5 !important;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, .050) !important;
+}
+
+html.dui-pro-overhaul [data-dui-modal="agent-editor"] button:not([data-editor-tab]):not([data-editor-portrait]):hover {
+  border-color: rgba(201, 168, 86, .36) !important;
+  color: #f0d99d !important;
+  background:
+    linear-gradient(180deg, rgba(168, 139, 74, .105), rgba(168, 139, 74, .025)),
+    #121212 !important;
+}
+
+html.dui-pro-overhaul [data-dui-modal="agent-editor"] button:disabled {
+  opacity: .46 !important;
+  transform: none !important;
+}
+
+html.dui-pro-overhaul [data-dui-modal="agent-editor"] [class*="text-cyan"],
+html.dui-pro-overhaul [data-dui-modal="agent-editor"] [class*="text-violet"],
+html.dui-pro-overhaul [data-dui-modal="agent-editor"] [class*="text-emerald"] {
+  color: #d7bd78 !important;
+}
+
+html.dui-pro-overhaul [data-dui-modal="agent-editor"] [class*="text-amber"] {
+  color: #e8cf8c !important;
+}
+
+html.dui-pro-overhaul [data-dui-modal="agent-editor"] [class*="border-cyan"],
+html.dui-pro-overhaul [data-dui-modal="agent-editor"] [class*="border-violet"],
+html.dui-pro-overhaul [data-dui-modal="agent-editor"] [class*="border-emerald"],
+html.dui-pro-overhaul [data-dui-modal="agent-editor"] [class*="border-amber"] {
+  border-color: rgba(198, 178, 132, .20) !important;
+}
+
+html.dui-pro-overhaul [data-dui-modal="agent-editor"] [class*="bg-cyan"],
+html.dui-pro-overhaul [data-dui-modal="agent-editor"] [class*="bg-violet"],
+html.dui-pro-overhaul [data-dui-modal="agent-editor"] [class*="bg-emerald"],
+html.dui-pro-overhaul [data-dui-modal="agent-editor"] [class*="bg-amber"] {
+  background-color: rgba(168, 139, 74, .075) !important;
+}
+
+html.dui-pro-overhaul [data-dui-modal="agent-editor"] .rounded-full[class*="border"],
+html.dui-pro-overhaul [data-dui-modal="agent-editor"] span[class*="rounded-full"] {
+  border-color: rgba(198, 178, 132, .20) !important;
+  background:
+    linear-gradient(180deg, rgba(168, 139, 74, .080), rgba(168, 139, 74, .022)),
+    rgba(9, 9, 9, .82) !important;
+  color: #e0ca88 !important;
+}
+
+html.dui-pro-overhaul [data-dui-modal="agent-editor"] label:has(input[type="checkbox"].hidden) {
+  border-color: rgba(198, 178, 132, .13) !important;
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, .030), rgba(255, 255, 255, .010)),
+    rgba(12, 13, 13, .76) !important;
+}
+
+html.dui-pro-overhaul [data-dui-modal="agent-editor"] label:has(input[type="checkbox"].hidden):hover {
+  border-color: rgba(201, 168, 86, .28) !important;
+}
+
+html.dui-pro-overhaul [data-dui-modal="agent-editor"] label:has(input[type="checkbox"].hidden) > div:nth-last-of-type(1) {
+  background: #303030 !important;
+  box-shadow: inset 0 1px 2px rgba(0, 0, 0, .55);
+}
+
+html.dui-pro-overhaul [data-dui-modal="agent-editor"] label:has(input[type="checkbox"].hidden) > div:nth-last-of-type(1) > div {
+  background: #f4e6c0 !important;
+}
+
+html.dui-pro-overhaul [data-dui-modal="agent-editor"] [data-editor-panel="skills"] label,
+html.dui-pro-overhaul [data-dui-modal="agent-editor"] [data-editor-panel="model"] label {
+  border-color: rgba(198, 178, 132, .10) !important;
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, .020), rgba(255, 255, 255, .006)),
+    rgba(255, 255, 255, .008) !important;
+}
+
+html.dui-pro-overhaul [data-dui-modal="agent-editor"] [data-editor-panel="skills"] label:hover,
+html.dui-pro-overhaul [data-dui-modal="agent-editor"] [data-editor-panel="model"] label:hover {
+  border-color: rgba(201, 168, 86, .24) !important;
+  background:
+    linear-gradient(180deg, rgba(168, 139, 74, .070), rgba(168, 139, 74, .016)),
+    rgba(255, 255, 255, .012) !important;
+}
+
+html.dui-pro-overhaul [data-dui-modal="agent-editor"] [data-editor-panel="workspace"] button.w-full {
+  color: #d8c690 !important;
+}
+
+html.dui-pro-overhaul [data-dui-modal="agent-editor"] [data-editor-panel="workspace"] button.w-full:hover {
+  background: rgba(168, 139, 74, .070) !important;
+}
+
+@media (max-width: 860px) {
+  html.dui-pro-overhaul [data-dui-modal="agent-editor"] {
+    width: min(100%, calc(100vw - 18px)) !important;
+    max-height: calc(100vh - 18px) !important;
+  }
+
+  html.dui-pro-overhaul [data-dui-modal="agent-editor"] [data-editor-tabs] {
+    grid-template-columns: repeat(7, minmax(92px, 1fr));
+  }
+
+  html.dui-pro-overhaul [data-dui-modal="agent-editor"] [data-editor-body] {
+    padding: 14px !important;
+  }
+}
+
+@media (max-width: 620px) {
+  html.dui-pro-overhaul [data-dui-modal="agent-editor"] [data-editor-header] {
+    padding: 14px !important;
+  }
+
+  html.dui-pro-overhaul [data-dui-modal="agent-editor"] [data-editor-header] > div:first-child {
+    align-items: flex-start !important;
+  }
+
+  html.dui-pro-overhaul [data-dui-modal="agent-editor"] [data-editor-card="portrait"] {
+    align-items: stretch !important;
+    flex-direction: column !important;
+  }
+
+  html.dui-pro-overhaul [data-dui-modal="agent-editor"] [data-editor-portrait] {
+    width: 100% !important;
+    height: auto !important;
+    aspect-ratio: 1 / 1;
+  }
+}
+
+/* Graphite UI refinement: keep rarity cards intact, mute the surrounding app chrome. */
+html.dui-pro-overhaul {
+  --dui-bg: #020303;
+  --dui-canvas: #060708;
+  --dui-panel: #0b0d0e;
+  --dui-panel-2: #111416;
+  --dui-panel-3: #171b1d;
+  --dui-line: rgba(185, 198, 204, .12);
+  --dui-line-soft: rgba(255, 255, 255, .055);
+  --dui-line-strong: rgba(190, 204, 210, .20);
+  --dui-text: #f0f4f5;
+  --dui-text-2: #c9d2d6;
+  --dui-muted: #8f9ca2;
+  --dui-faint: #5f686d;
+  --dui-accent: #9fb3bc;
+  --dui-gold: #9fb3bc;
+  --dui-gold-2: #c8d6db;
+  --dui-gold-3: #4f626a;
+  --dui-gold-soft: rgba(159, 179, 188, .060);
+  --dui-gold-softer: rgba(159, 179, 188, .026);
+  --dui-cyan: #9fb3bc;
+  --dui-violet: #a9a4b2;
+  --dui-green: #9bb8a7;
+  --accent-cy: #9fb3bc;
+  --accent-bl: #8598a0;
+  --accent-vl: #a9a4b2;
+  --accent-em: #9bb8a7;
+  --accent-am: #b9b3aa;
+  --dui-card-shadow:
+    0 22px 58px rgba(0, 0, 0, .52),
+    0 0 30px -28px rgba(159, 179, 188, .32);
+}
+
+html.dui-pro-overhaul .app-bg {
+  background:
+    radial-gradient(ellipse 58% 36% at 18% -10%, rgba(160, 176, 184, .050), transparent 68%),
+    radial-gradient(ellipse 48% 34% at 96% 10%, rgba(120, 132, 138, .035), transparent 70%),
+    linear-gradient(180deg, rgba(255, 255, 255, .012), transparent 260px),
+    linear-gradient(135deg, #020303 0%, #0b0d0e 38%, #08090a 70%, #020303 100%) !important;
+}
+
+html.dui-pro-overhaul .grid-overlay {
+  opacity: .105 !important;
+  background-image:
+    linear-gradient(rgba(210, 222, 226, .050) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(210, 222, 226, .035) 1px, transparent 1px) !important;
+}
+
+html.dui-pro-overhaul :where(
+  .dy-human-rail,
+  .dy-command-header,
+  header.relative.mb-7,
+  [data-dui-panel],
+  [data-chat-panel],
+  section[class*="rounded"],
+  aside[class*="rounded"],
+  .glass-card,
+  [data-dui-modal]
+):not(.agent-card-pro):not(.agent-card-pro *) {
+  border-color: var(--dui-line) !important;
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, .033), rgba(255, 255, 255, .010) 44%, rgba(0, 0, 0, .15)),
+    linear-gradient(135deg, rgba(190, 204, 210, .020), transparent 44%),
+    var(--dui-panel) !important;
+  box-shadow: var(--dui-card-shadow), var(--dui-inner-line) !important;
+}
+
+html.dui-pro-overhaul .dy-command-header.relative.mb-7,
+html.dui-pro-overhaul header.relative.mb-7 {
+  border-color: rgba(190, 204, 210, .16) !important;
+  background:
+    linear-gradient(90deg, rgba(160, 176, 184, .040), transparent 30%),
+    linear-gradient(180deg, rgba(255, 255, 255, .042), rgba(255, 255, 255, .010) 48%, rgba(0, 0, 0, .24)),
+    #080909 !important;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, .074),
+    inset 0 -1px 0 rgba(160, 176, 184, .035),
+    0 18px 52px rgba(0, 0, 0, .50) !important;
+}
+
+html.dui-pro-overhaul .dy-command-header.relative.mb-7::before {
+  background:
+    linear-gradient(90deg, rgba(160, 176, 184, .060), transparent 22%, transparent 78%, rgba(160, 176, 184, .030)),
+    repeating-linear-gradient(90deg, rgba(255, 255, 255, .014) 0 1px, transparent 1px 68px) !important;
+  opacity: .30 !important;
+}
+
+html.dui-pro-overhaul .dy-command-header.relative.mb-7::after,
+html.dui-pro-overhaul [data-dui-panel="agent-registry"] [data-agent-toolbar]::before,
+html.dui-pro-overhaul [data-dui-panel="command-console"] > div:first-child > .pointer-events-none,
+html.dui-pro-overhaul section > div.relative.overflow-hidden.border-b > .pointer-events-none[class*="bg-gradient"] {
+  background: linear-gradient(90deg, transparent, rgba(180, 196, 203, .34), rgba(255, 255, 255, .11), transparent) !important;
+  opacity: .48 !important;
+}
+
+html.dui-pro-overhaul .brand-lockup.dy-logo-fixed .dy-logo-mark,
+html.dui-pro-overhaul .dy-human-rail-head img,
+html.dui-pro-overhaul .dui-login-brand img,
+html.dui-pro-overhaul img[src*="dystopai-mark-graphite"] {
+  border-color: rgba(190, 204, 210, .22) !important;
+  background:
+    radial-gradient(circle at 50% 42%, rgba(160, 176, 184, .10), transparent 54%),
+    #0c0e0f !important;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, .08),
+    0 0 0 1px rgba(160, 176, 184, .035),
+    0 14px 30px -26px rgba(160, 176, 184, .48) !important;
+  filter: saturate(.72) brightness(.98) contrast(1.08) !important;
+}
+
+html.dui-pro-overhaul .brand-lockup.dy-logo-fixed .dy-logo-word {
+  color: #f2f5f6 !important;
+  text-shadow: 0 2px 14px rgba(0, 0, 0, .92) !important;
+}
+
+html.dui-pro-overhaul .brand-lockup.dy-logo-fixed .dy-logo-subtitle {
+  color: #9ca8ad !important;
+}
+
+html.dui-pro-overhaul .dy-human-rail {
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, .030), transparent 54px),
+    linear-gradient(135deg, rgba(160, 176, 184, .026), transparent 58%),
+    #070808 !important;
+}
+
+html.dui-pro-overhaul .dy-human-nav button,
+html.dui-pro-overhaul .dy-human-appearance-button,
+html.dui-pro-overhaul :where(input, textarea, select),
+html.dui-pro-overhaul :where(button, [role="button"]):not([data-agent-card] *):not(.agent-card-shell *) {
+  border-color: rgba(185, 198, 204, .12) !important;
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, .030), rgba(255, 255, 255, .010)),
+    #111314 !important;
+  color: #cbd4d7 !important;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, .045) !important;
+}
+
+html.dui-pro-overhaul .dy-human-nav button:hover,
+html.dui-pro-overhaul .dy-human-appearance-button:hover,
+html.dui-pro-overhaul :where(button, [role="button"]):not([data-agent-card] *):not(.agent-card-shell *):hover {
+  border-color: rgba(190, 204, 210, .22) !important;
+  background:
+    linear-gradient(180deg, rgba(185, 198, 204, .045), rgba(255, 255, 255, .012)),
+    #151819 !important;
+  color: #edf2f4 !important;
+}
+
+html.dui-pro-overhaul .dy-human-nav button.is-active,
+html.dui-pro-overhaul .dy-human-nav button[data-tone].is-active,
+html.dui-pro-overhaul .dy-human-nav button[data-tone="steel"].is-active,
+html.dui-pro-overhaul .dy-human-nav button[data-tone="gold"].is-active {
+  border-color: rgba(190, 204, 210, .28) !important;
+  background:
+    radial-gradient(circle at 100% 50%, rgba(160, 176, 184, .070), transparent 46%),
+    linear-gradient(90deg, rgba(160, 176, 184, .090), rgba(255, 255, 255, .020)) !important;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, .058),
+    0 14px 32px -30px rgba(160, 176, 184, .58) !important;
+}
+
+html.dui-pro-overhaul .dy-human-nav button.is-active::before,
+html.dui-pro-overhaul .dy-human-nav button[data-tone].is-active::before,
+html.dui-pro-overhaul .tab-underline.active::after {
+  background: #aab8bd !important;
+  box-shadow: 0 0 10px rgba(160, 176, 184, .38) !important;
+}
+
+html.dui-pro-overhaul .dy-human-nav-icon,
+html.dui-pro-overhaul .dy-human-nav button.is-active .dy-human-nav-icon,
+html.dui-pro-overhaul .dy-human-nav button[data-tone].is-active .dy-human-nav-icon {
+  border-color: rgba(190, 204, 210, .18) !important;
+  background:
+    linear-gradient(180deg, rgba(185, 198, 204, .070), rgba(255, 255, 255, .012)),
+    #0c0f10 !important;
+  color: #c8d6db !important;
+}
+
+html.dui-pro-overhaul .dy-human-nav-icon-img {
+  filter: grayscale(.92) saturate(.36) brightness(.78) contrast(1.10) !important;
+}
+
+html.dui-pro-overhaul .dy-human-nav button:hover .dy-human-nav-icon-img,
+html.dui-pro-overhaul .dy-human-nav button.is-active .dy-human-nav-icon-img {
+  filter: grayscale(.80) saturate(.48) brightness(.98) contrast(1.10) drop-shadow(0 0 6px rgba(160, 176, 184, .16)) !important;
+}
+
+html.dui-pro-overhaul .badge,
+html.dui-pro-overhaul header .badge,
+html.dui-pro-overhaul header .badge.dy-status-chip,
+html.dui-pro-overhaul .status-chip,
+html.dui-pro-overhaul .lane-chip {
+  border-color: rgba(185, 198, 204, .15) !important;
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, .040), rgba(255, 255, 255, .012)),
+    #131516 !important;
+  color: #ced8dc !important;
+}
+
+html.dui-pro-overhaul header .badge::before,
+html.dui-pro-overhaul header .badge--live::before,
+html.dui-pro-overhaul header .badge--success::before,
+html.dui-pro-overhaul header .badge--warn::before {
+  background: #9fb3bc !important;
+  box-shadow: 0 0 8px rgba(159, 179, 188, .38) !important;
+}
+
+html.dui-pro-overhaul header .badge.dy-status-chip[data-tone="success"]::before,
+html.dui-pro-overhaul body :where([class*="bg-emerald"], [class*="bg-green"]):not(.agent-card-pro):not(.agent-card-pro *) {
+  background-color: #8fb39f !important;
+}
+
+html.dui-pro-overhaul header .badge.dy-status-chip[data-tone="warn"]::before,
+html.dui-pro-overhaul body :where([class*="bg-amber"], [class*="bg-yellow"]):not(.agent-card-pro):not(.agent-card-pro *) {
+  background-color: rgba(177, 190, 196, .16) !important;
+}
+
+html.dui-pro-overhaul .dy-status-value {
+  color: #f2f5f6 !important;
+}
+
+html.dui-pro-overhaul .dy-status-label {
+  color: #909ca2 !important;
+}
+
+html.dui-pro-overhaul body :where(
+  [class*="text-amber"],
+  [class*="text-yellow"],
+  [class*="text-cyan"],
+  [class*="text-blue"]
+):not(.agent-card-pro):not(.agent-card-pro *) {
+  color: #c4d1d6 !important;
+}
+
+html.dui-pro-overhaul body :where(
+  [class*="text-indigo"],
+  [class*="text-violet"],
+  [class*="text-purple"]
+):not(.agent-card-pro):not(.agent-card-pro *) {
+  color: #c4bfcc !important;
+}
+
+html.dui-pro-overhaul body :where(
+  [class*="text-emerald"],
+  [class*="text-green"]
+):not(.agent-card-pro):not(.agent-card-pro *) {
+  color: #acc8b7 !important;
+}
+
+html.dui-pro-overhaul body :where(
+  [class*="border-amber"],
+  [class*="border-yellow"],
+  [class*="border-cyan"],
+  [class*="border-blue"],
+  [class*="border-indigo"],
+  [class*="border-violet"],
+  [class*="border-purple"],
+  [class*="border-emerald"],
+  [class*="border-green"]
+):not(.agent-card-pro):not(.agent-card-pro *) {
+  border-color: rgba(185, 198, 204, .20) !important;
+}
+
+html.dui-pro-overhaul body :where(
+  [class*="ring-amber"],
+  [class*="ring-yellow"],
+  [class*="ring-cyan"],
+  [class*="ring-blue"],
+  [class*="ring-indigo"],
+  [class*="ring-violet"],
+  [class*="ring-purple"],
+  [class*="ring-emerald"],
+  [class*="ring-green"]
+):not(.agent-card-pro):not(.agent-card-pro *) {
+  --tw-ring-color: rgba(185, 198, 204, .28) !important;
+}
+
+html.dui-pro-overhaul body :where(
+  [class*="bg-cyan"],
+  [class*="bg-blue"],
+  [class*="bg-indigo"],
+  [class*="bg-violet"],
+  [class*="bg-purple"]
+):not(.agent-card-pro):not(.agent-card-pro *) {
+  background-color: rgba(160, 176, 184, .075) !important;
+}
+
+html.dui-pro-overhaul body :where(
+  [class*="from-amber"],
+  [class*="from-yellow"],
+  [class*="from-cyan"],
+  [class*="from-blue"],
+  [class*="from-indigo"],
+  [class*="from-violet"],
+  [class*="from-purple"],
+  [class*="from-emerald"],
+  [class*="from-green"],
+  [class*="via-amber"],
+  [class*="via-yellow"],
+  [class*="via-cyan"],
+  [class*="via-blue"],
+  [class*="via-indigo"],
+  [class*="via-violet"],
+  [class*="via-purple"],
+  [class*="via-emerald"],
+  [class*="via-green"],
+  [class*="to-amber"],
+  [class*="to-yellow"],
+  [class*="to-cyan"],
+  [class*="to-blue"],
+  [class*="to-indigo"],
+  [class*="to-violet"],
+  [class*="to-purple"],
+  [class*="to-emerald"],
+  [class*="to-green"]
+):not(.agent-card-pro):not(.agent-card-pro *) {
+  background-image:
+    linear-gradient(135deg, rgba(185, 198, 204, .105), rgba(185, 198, 204, .026) 48%, rgba(255, 255, 255, .010)) !important;
+}
+
+html.dui-pro-overhaul :where(input, textarea, select):focus,
+html.dui-pro-overhaul :where(button, a, input, textarea, select, [tabindex]):focus-visible {
+  outline-color: rgba(190, 204, 210, .66) !important;
+  border-color: rgba(190, 204, 210, .34) !important;
+  box-shadow:
+    0 0 0 4px rgba(160, 176, 184, .085),
+    inset 0 1px 0 rgba(255, 255, 255, .055) !important;
+}
+
+html.dui-pro-overhaul [data-dui-panel="agent-registry"] [data-agent-toolbar],
+html.dui-pro-overhaul [data-dui-panel="agent-registry"] > div:nth-child(2),
+html.dui-pro-overhaul [data-dui-panel="command-console"] > div:first-child,
+html.dui-pro-overhaul section > div.relative.overflow-hidden.border-b,
+html.dui-pro-overhaul [data-dui-panel="active-party"] .active-party-head {
+  border-color: rgba(185, 198, 204, .11) !important;
+  background:
+    linear-gradient(90deg, rgba(160, 176, 184, .030), transparent 48%),
+    rgba(255, 255, 255, .010) !important;
+}
+
+html.dui-pro-overhaul .dy-command-icon-button,
+html.dui-pro-overhaul .dy-command-empty__icon,
+html.dui-pro-overhaul [data-chat-panel="true"] button[aria-label="Send message"],
+html.dui-pro-overhaul [data-dui-panel="active-party"] [data-party-action="confirm"],
+html.dui-pro-overhaul .btn--primary {
+  border-color: rgba(190, 204, 210, .24) !important;
+  background:
+    linear-gradient(180deg, rgba(185, 198, 204, .105), rgba(185, 198, 204, .028)),
+    #111415 !important;
+  color: #d3dee2 !important;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, .065),
+    0 14px 30px -26px rgba(160, 176, 184, .36) !important;
+}
+
+html.dui-pro-overhaul .dy-command-icon-button:hover,
+html.dui-pro-overhaul [data-chat-panel="true"] button[aria-label="Send message"]:hover,
+html.dui-pro-overhaul [data-dui-panel="active-party"] [data-party-action="confirm"]:hover,
+html.dui-pro-overhaul .btn--primary:hover {
+  border-color: rgba(210, 222, 226, .34) !important;
+  background:
+    linear-gradient(180deg, rgba(210, 222, 226, .130), rgba(185, 198, 204, .036)),
+    #15191a !important;
+  color: #f1f5f6 !important;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, .075),
+    0 16px 34px -26px rgba(160, 176, 184, .44) !important;
+}
+
+html.dui-pro-overhaul [data-dui-panel="active-party"] [data-party-action="clear"],
+html.dui-pro-overhaul body :where([class*="text-red"], [class*="text-rose"]):not(.agent-card-pro):not(.agent-card-pro *) {
+  color: #d7a3a3 !important;
+}
+
+html.dui-pro-overhaul body :where([class*="border-red"], [class*="border-rose"]):not(.agent-card-pro):not(.agent-card-pro *) {
+  border-color: rgba(210, 130, 130, .24) !important;
+}
+
+html.dui-pro-overhaul body :where([class*="bg-red"], [class*="bg-rose"]):not(.agent-card-pro):not(.agent-card-pro *) {
+  background-color: rgba(210, 130, 130, .070) !important;
+}
+
+html.dui-pro-overhaul .tab-underline.active {
+  border-color: rgba(190, 204, 210, .22) !important;
+  background:
+    linear-gradient(180deg, rgba(185, 198, 204, .090), rgba(255, 255, 255, .014)),
+    #111415 !important;
+  color: #eef3f5 !important;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, .064),
+    0 14px 30px -26px rgba(160, 176, 184, .40) !important;
+}
+
+html.dui-pro-overhaul .tab-underline:not(.active) {
+  color: #7f8b91 !important;
+}
+
+html.dui-pro-overhaul .tab-underline:not(.active):hover {
+  background: rgba(255, 255, 255, .026) !important;
+  color: #c1ccd1 !important;
+}
+
+html.dui-pro-overhaul [data-dui-modal="agent-editor"] {
+  border-color: rgba(190, 204, 210, .18) !important;
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, .038), rgba(255, 255, 255, .010) 42%, rgba(0, 0, 0, .20)),
+    radial-gradient(circle at 14% 0%, rgba(160, 176, 184, .080), transparent 34%),
+    radial-gradient(circle at 88% 18%, rgba(255, 255, 255, .024), transparent 34%),
+    #080a0b !important;
+  box-shadow:
+    0 34px 90px rgba(0, 0, 0, .64),
+    0 0 48px -36px rgba(160, 176, 184, .42),
+    inset 0 1px 0 rgba(255, 255, 255, .075),
+    inset 0 0 0 1px rgba(255, 255, 255, .025) !important;
+}
+
+html.dui-pro-overhaul [data-dui-overlay="agent-editor"] {
+  background:
+    radial-gradient(ellipse at 50% 20%, rgba(160, 176, 184, .060), transparent 38%),
+    radial-gradient(ellipse at 20% 0%, rgba(255, 255, 255, .026), transparent 36%),
+    rgba(2, 3, 5, .92) !important;
+}
+
+html.dui-pro-overhaul [data-dui-modal="agent-editor"]::after,
+html.dui-pro-overhaul [data-dui-modal="agent-editor"] [data-editor-tabs],
+html.dui-pro-overhaul [data-dui-modal="agent-editor"] [data-editor-card="portrait"],
+html.dui-pro-overhaul [data-dui-modal="agent-editor"] [data-editor-panel] > .rounded-xl,
+html.dui-pro-overhaul [data-dui-modal="agent-editor"] [data-editor-panel] > div:has(> h3),
+html.dui-pro-overhaul [data-dui-modal="agent-editor"] [data-editor-panel="policy"] > .grid,
+html.dui-pro-overhaul [data-dui-modal="agent-editor"] [data-editor-panel="workspace"] > div:first-child,
+html.dui-pro-overhaul [data-dui-modal="agent-editor"] [data-editor-panel="skills"] > div:has(input[type="text"]),
+html.dui-pro-overhaul [data-dui-modal="agent-editor"] [data-editor-panel="files"] > textarea {
+  border-color: rgba(190, 204, 210, .13) !important;
+}
+
+html.dui-pro-overhaul [data-dui-modal="agent-editor"] [data-editor-header],
+html.dui-pro-overhaul [data-dui-modal="agent-editor"] [data-editor-body] {
+  border-color: rgba(190, 204, 210, .11) !important;
+  background:
+    linear-gradient(90deg, rgba(160, 176, 184, .028), transparent 48%),
+    rgba(255, 255, 255, .010) !important;
+}
+
+html.dui-pro-overhaul [data-dui-modal="agent-editor"] [data-editor-avatar],
+html.dui-pro-overhaul [data-dui-modal="agent-editor"] [data-editor-portrait] {
+  border-color: rgba(190, 204, 210, .24) !important;
+  background:
+    radial-gradient(circle at 50% 0%, rgba(160, 176, 184, .12), transparent 50%),
+    #070808 !important;
+  box-shadow:
+    0 18px 34px -28px rgba(160, 176, 184, .58),
+    inset 0 1px 0 rgba(255, 255, 255, .09) !important;
+}
+
+html.dui-pro-overhaul [data-dui-modal="agent-editor"] [data-editor-action="done"],
+html.dui-pro-overhaul [data-dui-modal="agent-editor"] [data-editor-tab][data-active="true"],
+html.dui-pro-overhaul [data-dui-modal="agent-editor"] button:not([data-editor-tab]):not([data-editor-portrait]):hover {
+  border-color: rgba(190, 204, 210, .28) !important;
+  background:
+    linear-gradient(180deg, rgba(185, 198, 204, .100), rgba(185, 198, 204, .026)),
+    #111314 !important;
+  color: #dce6e9 !important;
+  box-shadow:
+    0 12px 26px -22px rgba(160, 176, 184, .48),
+    inset 0 1px 0 rgba(255, 255, 255, .070) !important;
+}
+
+html.dui-pro-overhaul [data-dui-modal="agent-editor"] [data-editor-tab]::before {
+  background: linear-gradient(90deg, transparent, #bac8cd, transparent) !important;
+}
+
+html.dui-pro-overhaul [data-dui-modal="agent-editor"] :where(input[type="text"], select, textarea):focus {
+  border-color: rgba(190, 204, 210, .38) !important;
+  box-shadow:
+    0 0 0 4px rgba(160, 176, 184, .075),
+    inset 0 1px 0 rgba(255, 255, 255, .055) !important;
+}
+
+html.dui-pro-overhaul [data-dui-modal="agent-editor"] input[type="checkbox"],
+html.dui-pro-overhaul [data-dui-modal="agent-editor"] input[type="range"] {
+  accent-color: #9fb3bc !important;
+}
+
+html.dui-pro-overhaul [data-dui-modal="agent-editor"] input[type="range"]::-webkit-slider-runnable-track {
+  border-color: rgba(190, 204, 210, .14) !important;
+  background:
+    linear-gradient(90deg, rgba(185, 198, 204, .42), rgba(120, 134, 140, .14)),
+    #050606 !important;
+}
+
+html.dui-pro-overhaul [data-dui-modal="agent-editor"] input[type="range"]::-webkit-slider-thumb {
+  border-color: rgba(232, 239, 241, .54) !important;
+  background:
+    radial-gradient(circle at 35% 25%, #f1f7f8, #9fb3bc 50%, #4d5f66) !important;
+  box-shadow:
+    0 0 0 4px rgba(160, 176, 184, .10),
+    0 8px 16px rgba(0, 0, 0, .48) !important;
+}
+
+html.dui-pro-overhaul [data-dui-modal="agent-editor"] .rounded-full[class*="border"],
+html.dui-pro-overhaul [data-dui-modal="agent-editor"] span[class*="rounded-full"] {
+  border-color: rgba(190, 204, 210, .18) !important;
+  background:
+    linear-gradient(180deg, rgba(185, 198, 204, .070), rgba(185, 198, 204, .018)),
+    rgba(9, 10, 10, .84) !important;
+  color: #cdd8dc !important;
+}
+
+html.dui-pro-overhaul ::selection {
+  color: #f6fafb !important;
+  background: rgba(160, 176, 184, .30) !important;
+}
+
+html.dui-pro-overhaul ::-webkit-scrollbar-thumb {
+  border-color: rgba(5, 6, 7, .88) !important;
+  background: rgba(140, 154, 160, .28) !important;
+  background-clip: padding-box !important;
+}
+
+html.dui-pro-overhaul ::-webkit-scrollbar-thumb:hover {
+  background: rgba(176, 190, 196, .40) !important;
+  background-clip: padding-box !important;
+}
+
+html.dui-pro-overhaul .dy-command-console__header {
+  border-color: rgba(185, 198, 204, .12) !important;
+  background:
+    linear-gradient(90deg, rgba(160, 176, 184, .040), transparent 48%),
+    linear-gradient(180deg, rgba(255, 255, 255, .034), rgba(255, 255, 255, .010)),
+    #101314 !important;
+}
+
+html.dui-pro-overhaul .dy-command-console__mark,
+html.dui-pro-overhaul .dy-command-console__stat,
+html.dui-pro-overhaul .dy-command-console__pill,
+html.dui-pro-overhaul .dy-command-target-chip,
+html.dui-pro-overhaul .dy-command-busy {
+  border-color: rgba(185, 198, 204, .18) !important;
+  background:
+    linear-gradient(180deg, rgba(185, 198, 204, .075), rgba(255, 255, 255, .010)),
+    #111415 !important;
+  color: #cbd6da !important;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, .060) !important;
+}
+
+html.dui-pro-overhaul .dy-command-console__mark svg,
+html.dui-pro-overhaul .dy-command-empty__icon svg,
+html.dui-pro-overhaul .dy-command-send svg,
+html.dui-pro-overhaul .dy-command-icon-button svg {
+  color: #c7d4d8 !important;
+  filter: drop-shadow(0 0 5px rgba(160, 176, 184, .18)) !important;
+}
+
+html.dui-pro-overhaul .dy-command-console__pill > span,
+html.dui-pro-overhaul .dy-command-busy > span,
+html.dui-pro-overhaul [class*="animate-pulse"]:not(.agent-card-pro):not(.agent-card-pro *) {
+  background-color: #9fb3bc !important;
+  box-shadow: 0 0 9px rgba(159, 179, 188, .34) !important;
+}
+
+html.dui-pro-overhaul .dy-command-empty {
+  border-color: rgba(185, 198, 204, .12) !important;
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, .028), rgba(255, 255, 255, .010)),
+    radial-gradient(circle at 50% 22%, rgba(160, 176, 184, .055), transparent 42%),
+    #101314 !important;
+}
+
+html.dui-pro-overhaul .dy-command-empty__icon {
+  border-color: rgba(185, 198, 204, .22) !important;
+  background:
+    linear-gradient(180deg, rgba(185, 198, 204, .090), rgba(255, 255, 255, .012)),
+    #111516 !important;
+  color: #cbd6da !important;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, .070),
+    0 16px 32px -28px rgba(160, 176, 184, .40) !important;
+}
+
+html.dui-pro-overhaul .dy-command-empty__actions button,
+html.dui-pro-overhaul .dy-command-send,
+html.dui-pro-overhaul [data-chat-panel="true"] button[aria-label="Send message"] {
+  border-color: rgba(185, 198, 204, .20) !important;
+  background-image:
+    linear-gradient(180deg, rgba(185, 198, 204, .095), rgba(185, 198, 204, .024)) !important;
+  background-color: #111415 !important;
+  color: #d7e1e4 !important;
+}
+
+html.dui-pro-overhaul .dy-command-empty__actions button:hover,
+html.dui-pro-overhaul .dy-command-send:hover,
+html.dui-pro-overhaul [data-chat-panel="true"] button[aria-label="Send message"]:hover {
+  border-color: rgba(210, 222, 226, .34) !important;
+  background-image:
+    linear-gradient(180deg, rgba(210, 222, 226, .125), rgba(185, 198, 204, .032)) !important;
+  background-color: #15191a !important;
+  color: #f2f6f7 !important;
+}
+
+html.dui-pro-overhaul header .badge.dy-status-chip[data-tone],
+html.dui-pro-overhaul header .badge.dy-status-chip[data-tone="live"],
+html.dui-pro-overhaul header .badge.dy-status-chip[data-tone="success"],
+html.dui-pro-overhaul header .badge.dy-status-chip[data-tone="warn"] {
+  border-color: rgba(185, 198, 204, .15) !important;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, .055),
+    0 12px 24px -22px rgba(0, 0, 0, .9) !important;
+}
+
+html.dui-pro-overhaul [data-dui-panel="agent-registry"] [data-agent-view-option][data-active="true"],
+html.dui-pro-overhaul [data-agent-view-option][data-active="true"],
+html.dui-pro-overhaul [data-agent-toolbar] button[aria-pressed="true"],
+html.dui-pro-overhaul [data-agent-toolbar] button[data-active="true"] {
+  border-color: rgba(190, 204, 210, .26) !important;
+  background-image:
+    linear-gradient(180deg, rgba(185, 198, 204, .095), rgba(185, 198, 204, .022)) !important;
+  background-color: #151617 !important;
+  color: #dce6e9 !important;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, .070),
+    0 10px 22px -18px rgba(160, 176, 184, .52) !important;
+}
+
+html.dui-pro-overhaul .dy-command-empty__scan {
+  background:
+    linear-gradient(90deg, rgba(160, 176, 184, .034), transparent 24%, transparent 74%, rgba(120, 138, 150, .032)),
+    repeating-linear-gradient(90deg, rgba(255, 255, 255, .012) 0 1px, transparent 1px 52px) !important;
+  opacity: .62 !important;
+}
+
+html.dui-pro-overhaul body :where([class*="rounded-full"][class*="border"]):not(.agent-card-pro):not(.agent-card-pro *):not([data-slot-card]):not([data-slot-card] *) {
+  border-color: rgba(185, 198, 204, .16) !important;
+}
+
+/* Docked surface layout: collapse the shell gutters while keeping readable pane seams. */
+html.dui-pro-overhaul {
+  --dui-shell-gutter: 8px;
+  --dui-shell-radius: 10px;
+  --dui-shell-bg: #07090a;
+  --dui-shell-bg-2: #0b0e10;
+  --dui-shell-border: rgba(185, 198, 204, .145);
+  --dui-shell-border-soft: rgba(185, 198, 204, .085);
+  --dui-shell-highlight: rgba(255, 255, 255, .055);
+  --dui-shell-shadow: inset 0 1px 0 var(--dui-shell-highlight), inset 0 0 0 1px rgba(255, 255, 255, .010);
+}
+
+html.dui-pro-overhaul .app-bg {
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, .014), transparent 220px),
+    linear-gradient(135deg, #020303 0%, #090b0c 40%, #07090a 72%, #020303 100%) !important;
+}
+
+html.dui-pro-overhaul .grid-overlay {
+  opacity: .08 !important;
+}
+
+html.dui-pro-overhaul .app-bg > .dy-app-main {
+  width: 100% !important;
+  max-width: none !important;
+  min-height: 100dvh !important;
+  padding: var(--dui-shell-gutter) var(--dui-shell-gutter) var(--dui-shell-gutter) calc(var(--dui-shell-gutter) + var(--dui-rail) - 1px) !important;
+}
+
+html.dui-pro-overhaul .dy-human-rail {
+  top: var(--dui-shell-gutter) !important;
+  bottom: var(--dui-shell-gutter) !important;
+  left: var(--dui-shell-gutter) !important;
+  width: var(--dui-rail) !important;
+  border-color: var(--dui-shell-border) !important;
+  border-radius: var(--dui-shell-radius) 0 0 var(--dui-shell-radius) !important;
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, .032), rgba(255, 255, 255, .008) 48%, rgba(0, 0, 0, .16)),
+    linear-gradient(135deg, rgba(160, 176, 184, .026), transparent 56%),
+    var(--dui-shell-bg) !important;
+  box-shadow: var(--dui-shell-shadow) !important;
+}
+
+html.dui-pro-overhaul .dy-command-header.relative.mb-7,
+html.dui-pro-overhaul header.relative.mb-7 {
+  top: var(--dui-shell-gutter) !important;
+  min-height: 78px !important;
+  margin: 0 !important;
+  padding: 11px 14px !important;
+  border-color: var(--dui-shell-border) !important;
+  border-radius: 0 var(--dui-shell-radius) 0 0 !important;
+  background:
+    linear-gradient(90deg, rgba(160, 176, 184, .044), transparent 32%),
+    linear-gradient(180deg, rgba(255, 255, 255, .042), rgba(255, 255, 255, .010) 48%, rgba(0, 0, 0, .18)),
+    var(--dui-shell-bg) !important;
+  box-shadow: var(--dui-shell-shadow) !important;
+}
+
+html.dui-pro-overhaul .dy-command-header.relative.mb-7::after {
+  left: 0 !important;
+  right: 0 !important;
+  bottom: -1px !important;
+  height: 1px !important;
+  background: linear-gradient(90deg, rgba(185, 198, 204, .18), rgba(185, 198, 204, .34), rgba(185, 198, 204, .12)) !important;
+  opacity: .72 !important;
+}
+
+html.dui-pro-overhaul .dy-command-header-inner {
+  min-height: 56px !important;
+  gap: 14px !important;
+}
+
+html.dui-pro-overhaul .brand-lockup.dy-logo-fixed .dy-logo-mark {
+  width: 52px !important;
+  height: 52px !important;
+  border-radius: 9px !important;
+}
+
+html.dui-pro-overhaul .brand-lockup.dy-logo-fixed .dy-logo-word {
+  font-size: clamp(32px, 2.4vw, 38px) !important;
+}
+
+html.dui-pro-overhaul .dy-status-grid {
+  gap: 7px !important;
+}
+
+html.dui-pro-overhaul header .badge.dy-status-chip {
+  min-height: 34px !important;
+}
+
+html.dui-pro-overhaul .dy-tab-content {
+  margin-top: -1px !important;
+}
+
+html.dui-pro-overhaul .dy-agents-workspace {
+  gap: 0 !important;
+}
+
+html.dui-pro-overhaul [data-dui-panel="active-party"] {
+  margin: 0 !important;
+  border-color: var(--dui-shell-border) !important;
+  border-radius: 0 !important;
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, .030), rgba(255, 255, 255, .008) 50%, rgba(0, 0, 0, .12)),
+    var(--dui-shell-bg-2) !important;
+  box-shadow: var(--dui-shell-shadow) !important;
+}
+
+html.dui-pro-overhaul [data-dui-panel="active-party"] .active-party-head {
+  min-height: 54px !important;
+  padding: 11px 14px !important;
+  border-color: var(--dui-shell-border-soft) !important;
+  background:
+    linear-gradient(90deg, rgba(160, 176, 184, .034), transparent 42%),
+    rgba(255, 255, 255, .006) !important;
+}
+
+html.dui-pro-overhaul [data-dui-panel="active-party"] .active-party-grid {
+  gap: 8px !important;
+  padding: 10px 12px !important;
+}
+
+html.dui-pro-overhaul [data-dui-panel="active-party"] [data-slot-card] {
+  min-height: 84px !important;
+  padding: 10px !important;
+  border-radius: 7px !important;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, .040) !important;
+}
+
+html.dui-pro-overhaul .agent-command-grid {
+  grid-template-columns: minmax(0, 1fr) clamp(320px, 21.5vw, 360px) !important;
+  align-items: stretch !important;
+  gap: 0 !important;
+  margin-top: -1px !important;
+}
+
+html.dui-pro-overhaul .agent-command-grid > .agent-registry-pane {
+  height: max(520px, calc(100dvh - 124px)) !important;
+  min-height: 520px !important;
+  overflow: hidden !important;
+}
+
+html.dui-pro-overhaul .agent-registry-pane > div,
+html.dui-pro-overhaul .agent-registry-pane [data-dui-panel="agent-registry"] {
+  height: 100% !important;
+}
+
+html.dui-pro-overhaul [data-dui-panel="agent-registry"],
+html.dui-pro-overhaul [data-dui-panel="command-console"].dy-command-console,
+html.dui-pro-overhaul [data-chat-panel="true"] {
+  border-color: var(--dui-shell-border) !important;
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, .028), rgba(255, 255, 255, .008) 42%, rgba(0, 0, 0, .14)),
+    var(--dui-shell-bg) !important;
+  box-shadow: var(--dui-shell-shadow) !important;
+}
+
+html.dui-pro-overhaul [data-dui-panel="agent-registry"] {
+  padding: 16px !important;
+  border-radius: 0 0 0 var(--dui-shell-radius) !important;
+  container: agent-registry / inline-size;
+}
+
+html.dui-pro-overhaul [data-dui-panel="agent-registry"] > div:first-child {
+  margin-bottom: 12px !important;
+  padding-bottom: 12px !important;
+  border-color: var(--dui-shell-border-soft) !important;
+}
+
+html.dui-pro-overhaul [data-dui-panel="agent-registry"] [data-agent-toolbar] {
+  gap: 8px !important;
+  margin-bottom: 10px !important;
+  padding: 9px !important;
+  border-color: var(--dui-shell-border-soft) !important;
+  border-radius: 8px !important;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, .042) !important;
+}
+
+html.dui-pro-overhaul [data-agent-status] {
+  margin-bottom: 10px !important;
+}
+
+html.dui-pro-overhaul [data-dui-panel="command-console"].dy-command-console,
+html.dui-pro-overhaul [data-chat-panel="true"] {
+  align-self: stretch !important;
+  height: auto !important;
+  min-height: 0 !important;
+  margin-left: -1px !important;
+  border-radius: 0 0 var(--dui-shell-radius) 0 !important;
+}
+
+html.dui-pro-overhaul .dy-command-console__header {
+  padding: 12px 12px 11px !important;
+  border-color: var(--dui-shell-border-soft) !important;
+  background:
+    linear-gradient(90deg, rgba(160, 176, 184, .034), transparent 48%),
+    rgba(255, 255, 255, .006) !important;
+}
+
+html.dui-pro-overhaul .dy-command-target-bar,
+html.dui-pro-overhaul .dy-command-composer,
+
+html.dui-pro-overhaul .dy-command-upload-preview {
+  border-color: var(--dui-shell-border-soft) !important;
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, .016), rgba(0, 0, 0, .08)),
+    var(--dui-shell-bg-2) !important;
+}

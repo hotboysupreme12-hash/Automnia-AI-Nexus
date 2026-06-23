@@ -1,0 +1,59 @@
+# Dependencies
+node_modules/
+
+# Build and packaging output
+artifacts/
+build/
+dist/
+dist-server/
+release/
+out/
+output/
+reports/
+coverage/
+
+# Local runtime and generated state
+.cache/
+.codex/
+.dirac-symbol-index/
+.openclaw/
+.playwright-cli/
+.runtime/
+.tmp/
+tmp/
+.agents/
+memory/
+runtime-behavior-probe/
+
+# Python/virtual environments
+.venv/
+.venv-*/
+venv/
+__pycache__/
+*.py[cod]
+
+# Environment and secrets
+.env
+.env.*
+!.env.example
+client_secret.json
+*secret*.json
+*credentials*.json
+
+# Logs and dumps
+*.log
+*.pid
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+MISSION_PROMPT_DUMP.txt
+
+# OS/editor noise
+.DS_Store
+Thumbs.db
+desktop.ini
+.idea/
+.vscode/*
+!.vscode/extensions.json
+!.vscode/settings.json
