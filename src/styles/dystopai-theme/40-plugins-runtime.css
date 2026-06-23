@@ -1,0 +1,3913 @@
+
+html.dui-pro-overhaul .dy-monitor-stream-box {
+  border-color: rgba(184, 188, 190, .095) !important;
+  background:
+    linear-gradient(180deg, rgba(0, 0, 0, .32), rgba(0, 0, 0, .20)),
+    #070808 !important;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, .030), inset 0 0 0 1px rgba(0, 0, 0, .24) !important;
+}
+
+html.dui-pro-overhaul .dy-gateway-event-list,
+html.dui-pro-overhaul .dy-runtime-call-list {
+  display: grid !important;
+  align-content: start !important;
+  gap: 8px !important;
+  overflow-x: hidden !important;
+  padding: 8px !important;
+}
+
+html.dui-pro-overhaul .dy-gateway-event-card,
+html.dui-pro-overhaul .dy-runtime-call-card {
+  border-color: rgba(184, 188, 190, .085) !important;
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, .030), rgba(255, 255, 255, .010)),
+    rgba(255, 255, 255, .012) !important;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, .028) !important;
+}
+
+html.dui-pro-overhaul .dy-runtime-call-card {
+  min-height: 58px !important;
+  min-width: 0 !important;
+}
+
+html.dui-pro-overhaul .dy-gateway-activity-line,
+html.dui-pro-overhaul .dy-cron-job-card,
+html.dui-pro-overhaul .dy-runtime-session-card {
+  border-color: rgba(255, 255, 255, .035) !important;
+}
+
+html.dui-pro-overhaul .dy-cron-job-card,
+html.dui-pro-overhaul .dy-runtime-session-card {
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, .018), rgba(255, 255, 255, .006)),
+    rgba(255, 255, 255, .010) !important;
+}
+
+html.dui-pro-overhaul .dy-session-meta-chip {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  gap: 6px;
+  border: 1px solid rgba(184, 188, 190, .070);
+  border-radius: 6px;
+  background: rgba(0, 0, 0, .18);
+  padding: 4px 6px;
+  color: #707a81;
+  overflow: hidden;
+}
+
+html.dui-pro-overhaul .dy-session-meta-chip strong {
+  min-width: 0;
+  overflow: hidden;
+  color: #aab2b7;
+  font-weight: 750;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+html.dui-pro-overhaul .dy-cron-jobs-card .dy-cron-job-card > div:last-child,
+html.dui-pro-overhaul .dy-open-sessions-card .dy-cron-job-card > div:last-child,
+html.dui-pro-overhaul .dy-open-sessions-card .dy-runtime-session-card > div:last-child {
+  grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+}
+
+html.dui-pro-overhaul .dy-cron-jobs-card .dy-cron-job-card > div:last-child > [class*="col-span"],
+html.dui-pro-overhaul .dy-open-sessions-card .dy-cron-job-card > div:last-child > [class*="col-span"],
+html.dui-pro-overhaul .dy-open-sessions-card .dy-runtime-session-card > div:last-child > [class*="col-span"] {
+  grid-column: 1 / -1 !important;
+}
+
+html.dui-pro-overhaul .dy-runtime-ledger-card .dy-monitor-stream-box {
+  height: 244px !important;
+}
+
+html.dui-pro-overhaul .dy-gateway-log-card {
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, .030), rgba(255, 255, 255, .010)),
+    rgba(4, 5, 6, .42) !important;
+}
+
+html.dui-pro-overhaul .dy-monitor-log-box {
+  border-color: rgba(184, 188, 190, .095) !important;
+  background: #060707 !important;
+}
+
+@media (max-width: 1180px) {
+  html.dui-pro-overhaul .dy-gateway-layout {
+    grid-template-columns: minmax(0, 1fr) !important;
+    grid-template-areas:
+      "summary"
+      "jobs"
+      "activity"
+      "log" !important;
+  }
+
+  html.dui-pro-overhaul .dy-plugin-surface-list {
+    max-height: none !important;
+  }
+}
+
+@media (max-width: 760px) {
+  html.dui-pro-overhaul .dy-monitor-header,
+  html.dui-pro-overhaul .dy-monitor-body {
+    padding: 12px !important;
+  }
+
+  html.dui-pro-overhaul .dy-monitor-health-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+  }
+
+  html.dui-pro-overhaul .dy-runtime-session-card {
+    grid-template-columns: minmax(0, 1fr) !important;
+  }
+
+  html.dui-pro-overhaul .dy-runtime-session-card > div:nth-child(2) {
+    justify-self: start !important;
+  }
+
+  html.dui-pro-overhaul .dy-runtime-session-card > div:nth-child(3) {
+    grid-column: 1 !important;
+  }
+}
+
+@media (max-width: 520px) {
+  html.dui-pro-overhaul .dy-monitor-health-grid {
+    grid-template-columns: minmax(0, 1fr) !important;
+  }
+
+  html.dui-pro-overhaul .dy-runtime-stat-grid,
+  html.dui-pro-overhaul .dy-runtime-meta-grid {
+    grid-template-columns: minmax(0, 1fr) !important;
+  }
+}
+
+/* Imagegen concept translation: premium graphite operations monitor. */
+html.dui-pro-overhaul [data-dui-panel="monitor"].dy-monitor-shell {
+  --ops-bg: #090a0b;
+  --ops-panel: #101112;
+  --ops-panel-2: #151617;
+  --ops-line: rgba(150, 163, 174, .18);
+  --ops-line-soft: rgba(150, 163, 174, .105);
+  --ops-text: #edf2f4;
+  --ops-muted: #8d9ba6;
+  --ops-faint: #5e6972;
+  --ops-cyan: #b8bec2;
+  --ops-emerald: #8eb79c;
+  --ops-rose: #d18d8b;
+  min-height: max(700px, calc(100dvh - 188px)) !important;
+  overflow: hidden !important;
+  border-color: var(--ops-line) !important;
+  border-radius: 8px !important;
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, .025), rgba(255, 255, 255, .008) 44%, rgba(255, 255, 255, .014)),
+    radial-gradient(ellipse at 50% 0%, rgba(184, 188, 190, .028), transparent 42%),
+    var(--ops-bg) !important;
+  box-shadow:
+    0 26px 72px rgba(0, 0, 0, .42),
+    inset 0 1px 0 rgba(255, 255, 255, .052) !important;
+}
+
+html.dui-pro-overhaul [data-dui-panel="monitor"].dy-monitor-shell .dy-monitor-gauge[data-tone="cyan"],
+html.dui-pro-overhaul [data-dui-panel="monitor"].dy-monitor-shell .dy-health-card[data-tone="cyan"] {
+  --dy-gauge-start: #8f9599;
+  --dy-gauge-mid: #b8bec2;
+  --dy-gauge-end: #e1e3e4;
+  --dy-gauge-text: #d7d9da;
+  --dy-gauge-glow: rgba(184, 188, 190, .18);
+  color: #b8bec2 !important;
+}
+
+html.dui-pro-overhaul .dy-monitor-header {
+  padding: 10px 12px 12px !important;
+  border-bottom: 1px solid rgba(150, 163, 174, .10) !important;
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, .018), rgba(255, 255, 255, .006)),
+    rgba(0, 0, 0, .10) !important;
+}
+
+html.dui-pro-overhaul .dy-monitor-header .dy-monitor-health-grid {
+  margin-top: 0 !important;
+  gap: 10px !important;
+}
+
+html.dui-pro-overhaul .dy-monitor-health-grid .dy-health-card {
+  position: relative;
+  display: grid;
+  min-height: 74px !important;
+  grid-template-columns: 42px minmax(0, 128px) minmax(120px, 1fr);
+  align-items: center;
+  gap: 12px;
+  overflow: hidden;
+  padding: 12px 16px !important;
+  border-color: color-mix(in srgb, currentColor 28%, rgba(150, 163, 174, .16)) !important;
+  border-radius: 8px !important;
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, .038), rgba(255, 255, 255, .010)),
+    rgba(16, 20, 24, .82) !important;
+  color: var(--ops-cyan);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, .045),
+    0 14px 34px rgba(0, 0, 0, .20) !important;
+}
+
+html.dui-pro-overhaul .dy-health-card[data-tone="emerald"] {
+  color: var(--ops-emerald);
+}
+
+html.dui-pro-overhaul .dy-health-card[data-tone="rose"] {
+  color: var(--ops-rose);
+}
+
+html.dui-pro-overhaul .dy-health-icon {
+  display: grid;
+  width: 32px;
+  height: 32px;
+  place-items: center;
+  color: currentColor;
+}
+
+html.dui-pro-overhaul .dy-health-icon svg,
+html.dui-pro-overhaul .dy-monitor-tab-list button svg,
+html.dui-pro-overhaul .dy-plugin-glyph svg,
+html.dui-pro-overhaul .dy-session-empty-icon svg {
+  width: 100%;
+  height: 100%;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.8;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+html.dui-pro-overhaul .dy-health-copy {
+  min-width: 0;
+  color: var(--ops-text);
+}
+
+html.dui-pro-overhaul .dy-health-label {
+  margin: 0 !important;
+  color: color-mix(in srgb, currentColor 48%, #dce5ea) !important;
+  font-size: 10px !important;
+  font-weight: 850 !important;
+  line-height: 1 !important;
+  text-transform: uppercase;
+}
+
+html.dui-pro-overhaul .dy-health-value {
+  margin-top: 8px !important;
+  color: color-mix(in srgb, currentColor 36%, #f7fbfc) !important;
+  font-family: var(--dui-font-display) !important;
+  font-size: 24px !important;
+  font-weight: 780 !important;
+  line-height: 1 !important;
+  font-variant-numeric: tabular-nums;
+}
+
+html.dui-pro-overhaul .dy-health-sparkline {
+  width: 100%;
+  height: 38px;
+  color: currentColor;
+  opacity: .9;
+  overflow: visible;
+}
+
+html.dui-pro-overhaul .dy-health-sparkline-grid {
+  fill: none;
+  stroke: currentColor;
+  stroke-width: .7;
+  opacity: .14;
+  vector-effect: non-scaling-stroke;
+}
+
+html.dui-pro-overhaul .dy-health-sparkline-area {
+  opacity: .82;
+}
+
+html.dui-pro-overhaul .dy-health-sparkline-line,
+html.dui-pro-overhaul .dy-health-sparkline polyline {
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 2.2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  vector-effect: non-scaling-stroke;
+  filter: drop-shadow(0 0 5px color-mix(in srgb, currentColor, transparent 55%));
+}
+
+html.dui-pro-overhaul .dy-health-sparkline-dot {
+  fill: currentColor;
+  stroke: rgba(9, 10, 11, .78);
+  stroke-width: .8;
+  vector-effect: non-scaling-stroke;
+  opacity: .92;
+}
+
+html.dui-pro-overhaul .dy-monitor-tabs {
+  padding: 12px !important;
+  border-bottom-color: rgba(150, 163, 174, .12) !important;
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, .012), rgba(255, 255, 255, .004)),
+    rgba(0, 0, 0, .12) !important;
+}
+
+html.dui-pro-overhaul .dy-monitor-tabbar {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: stretch;
+  gap: 10px;
+}
+
+html.dui-pro-overhaul .dy-monitor-tab-list {
+  display: grid !important;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 0 !important;
+  min-height: 48px;
+  overflow: hidden;
+  border-color: rgba(150, 163, 174, .14) !important;
+  border-radius: 8px !important;
+  background: rgba(8, 10, 12, .68) !important;
+  padding: 0 !important;
+}
+
+html.dui-pro-overhaul .dy-monitor-tab-list button {
+  position: relative;
+  display: inline-flex !important;
+  min-width: 0;
+  align-items: center;
+  justify-content: center;
+  gap: 9px;
+  border: 0 !important;
+  border-right: 1px solid rgba(150, 163, 174, .08) !important;
+  border-radius: 0 !important;
+  background: transparent !important;
+  color: #aeb7be !important;
+  font-size: 12px !important;
+  font-weight: 760 !important;
+  text-transform: uppercase;
+  box-shadow: none !important;
+}
+
+html.dui-pro-overhaul .dy-monitor-tab-list button:last-child {
+  border-right: 0 !important;
+}
+
+html.dui-pro-overhaul .dy-monitor-tab-list button::after {
+  content: "";
+  position: absolute;
+  inset: auto 0 0;
+  height: 2px;
+  background: var(--ops-cyan);
+  opacity: 0;
+  transform: scaleX(.55);
+  transition: opacity 150ms ease, transform 150ms ease;
+}
+
+html.dui-pro-overhaul .dy-monitor-tab-list button:hover,
+html.dui-pro-overhaul .dy-monitor-tab-list button[data-active="true"],
+html.dui-pro-overhaul .dy-monitor-tab-list button[class*="text-cyan"] {
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, .060), rgba(255, 255, 255, .015)) !important;
+  color: #f1f2f2 !important;
+}
+
+html.dui-pro-overhaul .dy-monitor-tab-list button[data-active="true"]::after,
+html.dui-pro-overhaul .dy-monitor-tab-list button[class*="text-cyan"]::after {
+  opacity: 1;
+  transform: scaleX(1);
+}
+
+html.dui-pro-overhaul .dy-monitor-tab-list button svg {
+  width: 18px;
+  height: 18px;
+  color: currentColor;
+}
+
+html.dui-pro-overhaul .dy-monitor-tools {
+  display: flex;
+  align-items: stretch;
+  gap: 8px;
+}
+
+html.dui-pro-overhaul .dy-monitor-tool-button {
+  min-height: 48px !important;
+  border-color: rgba(150, 163, 174, .14) !important;
+  border-radius: 8px !important;
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, .030), rgba(255, 255, 255, .010)),
+    rgba(14, 18, 22, .72) !important;
+  padding: 0 14px !important;
+  color: #aeb7be !important;
+  font-size: 10px !important;
+  font-weight: 780 !important;
+  text-transform: uppercase;
+  box-shadow: none !important;
+}
+
+html.dui-pro-overhaul .dy-monitor-tool-button:hover {
+  border-color: rgba(184, 188, 190, .28) !important;
+  background: rgba(255, 255, 255, .055) !important;
+  color: #f1f2f2 !important;
+}
+
+html.dui-pro-overhaul .dy-monitor-body {
+  padding: 12px !important;
+  background: rgba(0, 0, 0, .05) !important;
+}
+
+html.dui-pro-overhaul .dy-gateway-panel {
+  gap: 12px !important;
+}
+
+html.dui-pro-overhaul .dy-gateway-layout {
+  grid-template-columns: minmax(0, 1.18fr) minmax(430px, .86fr) !important;
+  grid-template-areas:
+    "summary jobs"
+    "activity jobs"
+    "activity jobs"
+    "log log" !important;
+  gap: 12px !important;
+}
+
+html.dui-pro-overhaul .dy-monitor-shell .dy-monitor-card {
+  border-color: rgba(150, 163, 174, .15) !important;
+  border-radius: 8px !important;
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, .032), rgba(255, 255, 255, .010)),
+    rgba(17, 22, 27, .82) !important;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, .04),
+    0 16px 38px rgba(0, 0, 0, .24) !important;
+}
+
+html.dui-pro-overhaul .dy-monitor-shell .dy-monitor-card > div:first-child p:first-child,
+html.dui-pro-overhaul .dy-gateway-summary-card > div:first-child p:first-child {
+  color: var(--ops-text) !important;
+  font-size: 15px !important;
+  font-weight: 780 !important;
+}
+
+html.dui-pro-overhaul .dy-monitor-shell .dy-monitor-card > div:first-child p:nth-child(2),
+html.dui-pro-overhaul .dy-gateway-summary-card > div:first-child p:nth-child(2) {
+  color: var(--ops-muted) !important;
+  font-size: 11px !important;
+}
+
+html.dui-pro-overhaul .dy-gateway-summary-card {
+  padding: 16px !important;
+}
+
+html.dui-pro-overhaul .dy-gateway-summary-card .dy-runtime-stat-grid {
+  display: grid !important;
+  grid-template-columns: repeat(5, minmax(0, 1fr)) !important;
+  overflow: hidden;
+  gap: 0 !important;
+  margin-top: 18px !important;
+  border: 1px solid rgba(150, 163, 174, .13);
+  border-radius: 8px;
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, .026), rgba(255, 255, 255, .006)),
+    rgba(7, 9, 11, .42);
+}
+
+html.dui-pro-overhaul .dy-runtime-stat {
+  min-height: 74px !important;
+  border: 0 !important;
+  border-right: 1px solid rgba(150, 163, 174, .12) !important;
+  border-radius: 0 !important;
+  background: transparent !important;
+  padding: 16px !important;
+  color: #dce5e9 !important;
+  box-shadow: none !important;
+}
+
+html.dui-pro-overhaul .dy-runtime-stat:last-child {
+  border-right: 0 !important;
+}
+
+html.dui-pro-overhaul .dy-runtime-stat p:first-child {
+  color: #7d8992 !important;
+  font-size: 10px !important;
+  font-weight: 820 !important;
+}
+
+html.dui-pro-overhaul .dy-runtime-stat p:last-child {
+  margin-top: 8px !important;
+  color: #f1f5f7 !important;
+  font-size: 18px !important;
+  font-weight: 760 !important;
+}
+
+html.dui-pro-overhaul .dy-runtime-meta-grid {
+  grid-template-columns: repeat(6, minmax(0, 1fr)) !important;
+  gap: 0 !important;
+  overflow: hidden;
+  margin-top: 12px !important;
+  border: 1px solid rgba(150, 163, 174, .11);
+  border-radius: 8px;
+}
+
+html.dui-pro-overhaul .dy-runtime-meta-item {
+  min-height: 66px;
+  border: 0 !important;
+  border-right: 1px solid rgba(150, 163, 174, .10) !important;
+  border-radius: 0 !important;
+  background: rgba(6, 8, 10, .34) !important;
+  padding: 13px 14px !important;
+}
+
+html.dui-pro-overhaul .dy-runtime-meta-item:last-child {
+  border-right: 0 !important;
+}
+
+html.dui-pro-overhaul .dy-runtime-meta-item span {
+  color: #66727c !important;
+  font-size: 9px !important;
+  font-weight: 820 !important;
+}
+
+html.dui-pro-overhaul .dy-runtime-meta-item strong {
+  color: #d6dee2 !important;
+  font-size: 12px !important;
+}
+
+html.dui-pro-overhaul .dy-plugin-surface-list {
+  margin-top: 12px !important;
+  padding-right: 0 !important;
+}
+
+html.dui-pro-overhaul .dy-plugin-surface-list > .grid {
+  gap: 0 !important;
+  overflow: hidden;
+  border: 1px solid rgba(150, 163, 174, .12);
+  border-radius: 8px;
+}
+
+html.dui-pro-overhaul .dy-gateway-plugin-row {
+  display: grid !important;
+  grid-template-columns: 48px minmax(0, 1fr) auto;
+
+  align-items: center;
+  gap: 14px;
+  min-height: 66px !important;
+  margin: 0 !important;
+  border: 0 !important;
+  border-bottom: 1px solid rgba(150, 163, 174, .105) !important;
+  border-radius: 0 !important;
+  background:
+    linear-gradient(90deg, rgba(255, 255, 255, .024), rgba(255, 255, 255, .006)),
+    rgba(13, 17, 21, .54) !important;
+  padding: 10px 12px !important;
+  box-shadow: none !important;
+}
+
+html.dui-pro-overhaul .dy-gateway-plugin-row:last-child {
+  border-bottom: 0 !important;
+}
+
+html.dui-pro-overhaul .dy-gateway-plugin-row[data-state="enabled"] {
+  background:
+    linear-gradient(90deg, rgba(91, 226, 141, .052), rgba(255, 255, 255, .006)),
+    rgba(13, 17, 21, .54) !important;
+}
+
+html.dui-pro-overhaul .dy-plugin-glyph {
+  display: grid;
+  width: 42px;
+  height: 42px;
+  place-items: center;
+  border: 1px solid rgba(150, 163, 174, .14);
+  border-radius: 999px;
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, .08), rgba(255, 255, 255, .014)),
+    #222831;
+  color: #d9e1e5;
+  font-family: var(--dui-font-display);
+  font-size: 14px;
+  font-weight: 760;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, .08);
+}
+
+html.dui-pro-overhaul .dy-plugin-glyph svg {
+  width: 24px;
+  height: 24px;
+}
+
+html.dui-pro-overhaul .dy-plugin-row-main p:first-child {
+  color: #f0f4f6 !important;
+  font-size: 12px !important;
+  font-weight: 800 !important;
+}
+
+html.dui-pro-overhaul .dy-plugin-row-main p:nth-child(2),
+html.dui-pro-overhaul .dy-plugin-detail {
+  color: #8d9aa4 !important;
+  font-size: 10px !important;
+}
+
+html.dui-pro-overhaul .dy-plugin-action button {
+  display: inline-flex !important;
+  min-width: 76px;
+  min-height: 34px !important;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  border-radius: 6px !important;
+  background: rgba(255, 107, 104, .065) !important;
+  border-color: rgba(255, 107, 104, .42) !important;
+  color: #ffaba8 !important;
+  box-shadow: none !important;
+}
+
+html.dui-pro-overhaul .dy-gateway-plugin-row[data-state="stopped"] .dy-plugin-action button {
+  background: rgba(91, 226, 141, .070) !important;
+  border-color: rgba(91, 226, 141, .36) !important;
+  color: #a9f8c5 !important;
+}
+
+html.dui-pro-overhaul .dy-action-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 2px;
+  background: currentColor;
+}
+
+html.dui-pro-overhaul .dy-gateway-plugin-row[data-state="stopped"] .dy-action-dot {
+  clip-path: polygon(0 0, 100% 50%, 0 100%);
+  border-radius: 0;
+}
+
+html.dui-pro-overhaul .dy-monitor-stream-box {
+  border-color: rgba(150, 163, 174, .13) !important;
+  border-radius: 8px !important;
+  background:
+    radial-gradient(ellipse at 50% 0%, rgba(184, 188, 190, .020), transparent 46%),
+    #080909 !important;
+}
+
+html.dui-pro-overhaul .dy-gateway-event-list {
+  height: 286px !important;
+}
+
+html.dui-pro-overhaul .dy-gateway-activity-line {
+  min-height: 52px;
+  border-radius: 0 !important;
+  border: 0 !important;
+  border-bottom: 1px solid rgba(150, 163, 174, .095) !important;
+  background: transparent !important;
+  padding: 12px 14px !important;
+  box-shadow: none !important;
+}
+
+html.dui-pro-overhaul .dy-gateway-activity-line:last-child {
+  border-bottom: 0 !important;
+}
+
+html.dui-pro-overhaul .dy-runtime-call-list {
+  height: 232px !important;
+  gap: 0 !important;
+  padding: 0 !important;
+}
+
+html.dui-pro-overhaul .dy-runtime-call-card {
+  display: grid !important;
+  grid-template-columns: 22px auto minmax(0, 1fr) auto auto;
+  align-items: center;
+  gap: 12px;
+  min-height: 52px !important;
+  border: 0 !important;
+  border-bottom: 1px solid rgba(150, 163, 174, .095) !important;
+  border-radius: 0 !important;
+  background: transparent !important;
+  padding: 10px 14px !important;
+  box-shadow: none !important;
+}
+
+html.dui-pro-overhaul .dy-runtime-call-card:last-child {
+  border-bottom: 0 !important;
+}
+
+html.dui-pro-overhaul .dy-runtime-call-icon {
+  position: relative;
+  display: inline-grid;
+  width: 17px;
+  height: 17px;
+  place-items: center;
+  border: 1px solid currentColor;
+  border-radius: 999px;
+  color: var(--ops-emerald);
+}
+
+html.dui-pro-overhaul .dy-runtime-call-icon::after {
+  content: "";
+  width: 7px;
+  height: 4px;
+  border-bottom: 1.6px solid currentColor;
+  border-left: 1.6px solid currentColor;
+  transform: translateY(-1px) rotate(-45deg);
+}
+
+html.dui-pro-overhaul .dy-runtime-call-card[data-status="running"] .dy-runtime-call-icon {
+  color: var(--ops-cyan);
+}
+
+html.dui-pro-overhaul .dy-runtime-call-card[data-status="running"] .dy-runtime-call-icon::after {
+  width: 5px;
+  height: 5px;
+  border: 0;
+  border-radius: 999px;
+  background: currentColor;
+}
+
+html.dui-pro-overhaul .dy-runtime-call-card[data-status="failed"] .dy-runtime-call-icon {
+  color: var(--ops-rose);
+}
+
+html.dui-pro-overhaul .dy-runtime-call-card[data-status="failed"] .dy-runtime-call-icon::after {
+  content: "!";
+  width: auto;
+  height: auto;
+  border: 0;
+  color: currentColor;
+  font-size: 11px;
+  font-weight: 900;
+  line-height: 1;
+  transform: none;
+}
+
+html.dui-pro-overhaul .dy-runtime-call-command {
+  color: #dce6ec !important;
+  font-size: 11px !important;
+}
+
+html.dui-pro-overhaul .dy-runtime-call-duration {
+  min-width: 42px;
+  justify-content: center;
+  border-radius: 6px !important;
+  color: #aab4bc !important;
+}
+
+html.dui-pro-overhaul .dy-cron-jobs-card .dy-monitor-stream-box,
+html.dui-pro-overhaul .dy-open-sessions-card .dy-monitor-stream-box {
+  flex: 1 1 auto !important;
+  min-height: 0 !important;
+  height: auto !important;
+}
+
+html.dui-pro-overhaul .dy-session-empty-state {
+  display: grid;
+  min-height: 100%;
+  place-items: center;
+  align-content: center;
+  gap: 8px;
+  color: #8996a0 !important;
+}
+
+html.dui-pro-overhaul .dy-session-empty-icon {
+  display: grid;
+  width: 74px;
+  height: 74px;
+  place-items: center;
+  border: 1px dashed rgba(150, 163, 174, .25);
+  border-radius: 999px;
+  color: #b5c0c7;
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, .035), rgba(255, 255, 255, .006)),
+    rgba(255, 255, 255, .015);
+}
+
+html.dui-pro-overhaul .dy-session-empty-icon svg {
+  width: 34px;
+  height: 34px;
+}
+
+html.dui-pro-overhaul .dy-session-empty-state strong {
+  color: #e9eff2;
+  font-size: 12px;
+  font-weight: 740;
+}
+
+html.dui-pro-overhaul .dy-session-empty-state span:last-child {
+  color: #8996a0;
+  font-size: 11px;
+}
+
+html.dui-pro-overhaul .dy-gateway-log-card {
+  padding: 12px 14px !important;
+}
+
+@media (max-width: 1320px) {
+  html.dui-pro-overhaul .dy-gateway-layout {
+    grid-template-columns: minmax(0, 1fr) !important;
+    grid-template-areas:
+      "summary"
+      "jobs"
+      "activity"
+      "log" !important;
+  }
+}
+
+@media (max-width: 900px) {
+  html.dui-pro-overhaul .dy-monitor-health-grid .dy-health-card {
+    grid-template-columns: 34px minmax(0, 92px) minmax(84px, 1fr);
+  }
+
+  html.dui-pro-overhaul .dy-monitor-tabbar {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  html.dui-pro-overhaul .dy-monitor-tools {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  html.dui-pro-overhaul .dy-gateway-summary-card .dy-runtime-stat-grid,
+  html.dui-pro-overhaul .dy-runtime-meta-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+  }
+}
+
+@media (max-width: 640px) {
+  html.dui-pro-overhaul .dy-monitor-tab-list {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  html.dui-pro-overhaul .dy-gateway-plugin-row,
+  html.dui-pro-overhaul .dy-runtime-call-card {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  html.dui-pro-overhaul .dy-plugin-glyph,
+  html.dui-pro-overhaul .dy-runtime-call-icon {
+    display: none;
+  }
+}
+
+/* Monitor focus mode: match the reference dashboard proportions exactly. */
+html.dui-pro-overhaul .app-bg.dy-monitor-focus {
+  min-height: 100dvh !important;
+  background:
+    radial-gradient(ellipse at 50% -12%, rgba(184, 188, 190, .026), transparent 42%),
+    linear-gradient(180deg, rgba(255, 255, 255, .012), rgba(255, 255, 255, 0) 160px),
+    #090a0b !important;
+}
+
+html.dui-pro-overhaul .app-bg.dy-monitor-focus .grid-overlay {
+  opacity: .10 !important;
+  background-size: 28px 28px !important;
+  mask-image: linear-gradient(180deg, rgba(0, 0, 0, .48), transparent 68%) !important;
+}
+
+html.dui-pro-overhaul .app-bg.dy-monitor-focus .dy-command-header {
+  display: none !important;
+}
+
+html.dui-pro-overhaul .app-bg.dy-monitor-focus .dy-human-rail {
+  display: flex !important;
+}
+
+html.dui-pro-overhaul .app-bg.dy-monitor-focus > .dy-app-main {
+  width: 100% !important;
+  max-width: none !important;
+  min-height: 100dvh !important;
+  margin: 0 !important;
+  padding: 4px 8px 12px calc(var(--dui-rail) + 30px) !important;
+}
+
+html.dui-pro-overhaul .app-bg.dy-monitor-focus .dy-tab-content {
+  min-height: calc(100dvh - 16px);
+}
+
+html.dui-pro-overhaul .app-bg.dy-monitor-focus [data-dui-panel="monitor"].dy-monitor-shell {
+  min-height: calc(100dvh - 16px) !important;
+  border: 0 !important;
+  border-radius: 0 !important;
+  background: transparent !important;
+  box-shadow: none !important;
+  backdrop-filter: none !important;
+  -webkit-backdrop-filter: none !important;
+}
+
+html.dui-pro-overhaul .app-bg.dy-monitor-focus .dy-monitor-header {
+  padding: 8px 0 6px !important;
+  border-bottom: 0 !important;
+  background: transparent !important;
+}
+
+html.dui-pro-overhaul .app-bg.dy-monitor-focus .dy-monitor-health-grid {
+  display: grid !important;
+  grid-template-columns: repeat(4, minmax(0, 1fr)) !important;
+  gap: 8px !important;
+}
+
+html.dui-pro-overhaul .app-bg.dy-monitor-focus .dy-monitor-health-grid .dy-health-card {
+  min-height: 64px !important;
+  grid-template-columns: 34px minmax(96px, 118px) minmax(120px, 1fr);
+  gap: 12px;
+  padding: 10px 16px !important;
+  border-color: color-mix(in srgb, currentColor 26%, rgba(150, 163, 174, .15)) !important;
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, .030), rgba(255, 255, 255, .006)),
+    rgba(17, 18, 19, .86) !important;
+}
+
+html.dui-pro-overhaul .app-bg.dy-monitor-focus .dy-health-icon {
+  width: 27px;
+  height: 27px;
+}
+
+html.dui-pro-overhaul .app-bg.dy-monitor-focus .dy-health-label {
+  font-size: 9px !important;
+}
+
+html.dui-pro-overhaul .app-bg.dy-monitor-focus .dy-health-value {
+  margin-top: 5px !important;
+  font-size: 22px !important;
+}
+
+html.dui-pro-overhaul .app-bg.dy-monitor-focus .dy-health-sparkline {
+  height: 31px;
+}
+
+html.dui-pro-overhaul .app-bg.dy-monitor-focus .dy-monitor-tabs {
+  padding: 4px 0 5px !important;
+  border-bottom: 1px solid rgba(150, 163, 174, .10) !important;
+  background: transparent !important;
+}
+
+html.dui-pro-overhaul .app-bg.dy-monitor-focus .dy-monitor-tabbar {
+  grid-template-columns: minmax(0, 1fr) 156px;
+  gap: 8px;
+}
+
+html.dui-pro-overhaul .app-bg.dy-monitor-focus .dy-monitor-tab-list {
+  min-height: 42px;
+  border-color: rgba(150, 163, 174, .13) !important;
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, .018), rgba(255, 255, 255, .004)),
+    rgba(13, 16, 19, .82) !important;
+}
+
+html.dui-pro-overhaul .app-bg.dy-monitor-focus .dy-monitor-tab-list button {
+  gap: 8px;
+  min-height: 42px !important;
+  padding: 0 12px !important;
+  font-size: 10px !important;
+}
+
+html.dui-pro-overhaul .app-bg.dy-monitor-focus .dy-monitor-tab-list button svg {
+  width: 15px;
+  height: 15px;
+}
+
+html.dui-pro-overhaul .app-bg.dy-monitor-focus .dy-monitor-tools {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+}
+
+html.dui-pro-overhaul .app-bg.dy-monitor-focus .dy-monitor-tool-button {
+  min-height: 42px !important;
+  padding: 0 8px !important;
+  font-size: 8px !important;
+}
+
+html.dui-pro-overhaul .app-bg.dy-monitor-focus .dy-monitor-body {
+  padding: 10px 0 0 !important;
+  background: transparent !important;
+}
+
+html.dui-pro-overhaul .app-bg.dy-monitor-focus .dy-gateway-layout {
+  grid-template-columns: minmax(0, 1.19fr) minmax(520px, .86fr) !important;
+  grid-template-areas:
+    "summary jobs"
+    "activity jobs"
+    "activity jobs"
+    "log log" !important;
+  gap: 12px !important;
+}
+
+html.dui-pro-overhaul .app-bg.dy-monitor-focus .dy-monitor-shell .dy-monitor-card {
+  border-color: rgba(150, 163, 174, .16) !important;
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, .027), rgba(255, 255, 255, .007)),
+    rgba(17, 18, 19, .86) !important;
+}
+
+html.dui-pro-overhaul .app-bg.dy-monitor-focus .dy-gateway-summary-card,
+html.dui-pro-overhaul .app-bg.dy-monitor-focus .dy-channel-activity-card,
+html.dui-pro-overhaul .app-bg.dy-monitor-focus .dy-runtime-ledger-card,
+html.dui-pro-overhaul .app-bg.dy-monitor-focus .dy-gateway-plugin-card,
+html.dui-pro-overhaul .app-bg.dy-monitor-focus .dy-cron-jobs-card,
+html.dui-pro-overhaul .app-bg.dy-monitor-focus .dy-open-sessions-card {
+  padding: 14px !important;
+}
+
+html.dui-pro-overhaul .app-bg.dy-monitor-focus .dy-gateway-summary-card {
+  height: 226px;
+  min-height: 226px;
+}
+
+html.dui-pro-overhaul .app-bg.dy-monitor-focus .dy-monitor-card > div:first-child {
+  margin-bottom: 10px;
+}
+
+html.dui-pro-overhaul .app-bg.dy-monitor-focus .dy-monitor-card > div:first-child p:first-child,
+html.dui-pro-overhaul .app-bg.dy-monitor-focus .dy-gateway-summary-card > div:first-child p:first-child {
+  font-size: 14px !important;
+  line-height: 1.1 !important;
+}
+
+html.dui-pro-overhaul .app-bg.dy-monitor-focus .dy-monitor-card > div:first-child p:nth-child(2),
+html.dui-pro-overhaul .app-bg.dy-monitor-focus .dy-gateway-summary-card > div:first-child p:nth-child(2) {
+  margin-top: 7px !important;
+  font-size: 10px !important;
+  line-height: 1.2 !important;
+}
+
+html.dui-pro-overhaul .app-bg.dy-monitor-focus .dy-gateway-summary-card .dy-runtime-stat-grid {
+  margin-top: 17px !important;
+}
+
+html.dui-pro-overhaul .app-bg.dy-monitor-focus .dy-runtime-stat {
+  min-height: 64px !important;
+  padding: 14px 16px !important;
+}
+
+html.dui-pro-overhaul .app-bg.dy-monitor-focus .dy-runtime-stat p:first-child,
+html.dui-pro-overhaul .app-bg.dy-monitor-focus .dy-runtime-meta-item span {
+  font-size: 9px !important;
+  line-height: 1 !important;
+}
+
+html.dui-pro-overhaul .app-bg.dy-monitor-focus .dy-runtime-stat p:last-child {
+  margin-top: 10px !important;
+  font-size: 17px !important;
+  line-height: 1 !important;
+}
+
+html.dui-pro-overhaul .app-bg.dy-monitor-focus .dy-runtime-meta-grid {
+  margin-top: 11px !important;
+}
+
+html.dui-pro-overhaul .app-bg.dy-monitor-focus .dy-runtime-meta-item {
+  min-height: 56px;
+  padding: 12px 14px !important;
+}
+
+html.dui-pro-overhaul .app-bg.dy-monitor-focus .dy-runtime-meta-item strong {
+  margin-top: 8px !important;
+  font-size: 11px !important;
+  line-height: 1 !important;
+}
+
+html.dui-pro-overhaul .app-bg.dy-monitor-focus .dy-gateway-event-list {
+  height: 226px !important;
+}
+
+html.dui-pro-overhaul .app-bg.dy-monitor-focus .dy-gateway-activity-line {
+  min-height: 56px;
+  padding: 11px 18px !important;
+}
+
+html.dui-pro-overhaul .app-bg.dy-monitor-focus .dy-gateway-plugin-card {
+  height: 538px !important;
+  min-height: 538px;
+  align-self: start !important;
+}
+
+html.dui-pro-overhaul .app-bg.dy-monitor-focus .dy-gateway-plugin-row {
+  min-height: 58px !important;
+  grid-template-columns: 52px minmax(0, 1fr) 82px;
+  gap: 15px;
+  padding: 7px 12px !important;
+}
+
+html.dui-pro-overhaul .app-bg.dy-monitor-focus .dy-plugin-glyph {
+  width: 38px;
+  height: 38px;
+}
+
+html.dui-pro-overhaul .app-bg.dy-monitor-focus .dy-plugin-row-main p:first-child {
+  font-size: 12px !important;
+  line-height: 1.05 !important;
+}
+
+html.dui-pro-overhaul .app-bg.dy-monitor-focus .dy-plugin-row-main p:nth-child(2) {
+  margin-top: 4px !important;
+}
+
+html.dui-pro-overhaul .app-bg.dy-monitor-focus .dy-plugin-detail {
+  margin-top: 4px !important;
+}
+
+html.dui-pro-overhaul .app-bg.dy-monitor-focus .dy-plugin-action button {
+  min-height: 32px !important;
+  min-width: 70px;
+  font-size: 8px !important;
+}
+
+html.dui-pro-overhaul .app-bg.dy-monitor-focus .dy-runtime-call-list {
+  height: 172px !important;
+}
+
+html.dui-pro-overhaul .app-bg.dy-monitor-focus .dy-runtime-call-card {
+  min-height: 43px !important;
+  padding: 8px 16px !important;
+}
+
+html.dui-pro-overhaul .app-bg.dy-monitor-focus .dy-cron-jobs-card,
+html.dui-pro-overhaul .app-bg.dy-monitor-focus .dy-open-sessions-card {
+  display: flex !important;
+  min-height: 0 !important;
+  height: auto !important;
+  flex-direction: column !important;
+  align-self: stretch !important;
+  overflow: hidden;
+}
+
+html.dui-pro-overhaul .app-bg.dy-monitor-focus .dy-cron-jobs-card .dy-monitor-stream-box,
+html.dui-pro-overhaul .app-bg.dy-monitor-focus .dy-open-sessions-card .dy-monitor-stream-box {
+  flex: 1 1 auto !important;
+  min-height: 0 !important;
+  height: auto !important;
+}
+
+html.dui-pro-overhaul .app-bg.dy-monitor-focus .dy-session-empty-icon {
+  width: 70px;
+  height: 70px;
+}
+
+@media (max-width: 1080px) {
+  html.dui-pro-overhaul .app-bg.dy-monitor-focus .dy-gateway-layout {
+    grid-template-columns: minmax(0, 1fr) !important;
+    grid-template-areas:
+      "summary"
+      "jobs"
+      "activity"
+      "log" !important;
+  }
+
+  html.dui-pro-overhaul .app-bg.dy-monitor-focus .dy-monitor-tabbar {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+@media (max-width: 860px) {
+  html.dui-pro-overhaul .app-bg.dy-monitor-focus .dy-monitor-health-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+  }
+}
+
+/* Monitor segmented navigation: flat, connected, square-edged controls. */
+html.dui-pro-overhaul .dy-monitor-tabbar,
+html.dui-pro-overhaul .app-bg.dy-monitor-focus .dy-monitor-tabbar {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 156px;
+  gap: 0 !important;
+  overflow: hidden;
+  border: 1px solid rgba(150, 163, 174, .14);
+  border-radius: 0 !important;
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, .018), rgba(255, 255, 255, .004)),
+    rgba(13, 16, 19, .86);
+}
+
+html.dui-pro-overhaul .dy-monitor-tab-list,
+html.dui-pro-overhaul .app-bg.dy-monitor-focus .dy-monitor-tab-list {
+  min-height: 42px;
+  overflow: visible;
+  border: 0 !important;
+  border-radius: 0 !important;
+  background: transparent !important;
+  padding: 0 !important;
+}
+
+html.dui-pro-overhaul .dy-monitor-tab-list button,
+html.dui-pro-overhaul .app-bg.dy-monitor-focus .dy-monitor-tab-list button {
+  min-height: 42px !important;
+  border: 0 !important;
+  border-right: 1px solid rgba(150, 163, 174, .12) !important;
+  border-radius: 0 !important;
+  background: transparent !important;
+  box-shadow: none !important;
+}
+
+html.dui-pro-overhaul .dy-monitor-tab-list button::before,
+html.dui-pro-overhaul .app-bg.dy-monitor-focus .dy-monitor-tab-list button::before {
+  display: none !important;
+}
+
+html.dui-pro-overhaul .dy-monitor-tab-list button::after,
+html.dui-pro-overhaul .app-bg.dy-monitor-focus .dy-monitor-tab-list button::after {
+  inset: auto 0 0 !important;
+  height: 2px !important;
+  border-radius: 0 !important;
+  transform: none !important;
+}
+
+html.dui-pro-overhaul .dy-monitor-tab-list button:hover,
+html.dui-pro-overhaul .dy-monitor-tab-list button[data-active="true"],
+html.dui-pro-overhaul .dy-monitor-tab-list button[class*="text-cyan"],
+html.dui-pro-overhaul .app-bg.dy-monitor-focus .dy-monitor-tab-list button:hover,
+html.dui-pro-overhaul .app-bg.dy-monitor-focus .dy-monitor-tab-list button[data-active="true"],
+html.dui-pro-overhaul .app-bg.dy-monitor-focus .dy-monitor-tab-list button[class*="text-cyan"] {
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, .052), rgba(255, 255, 255, .010)) !important;
+  color: #f1f2f2 !important;
+}
+
+html.dui-pro-overhaul .dy-monitor-tools,
+html.dui-pro-overhaul .app-bg.dy-monitor-focus .dy-monitor-tools {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0 !important;
+  border-left: 1px solid rgba(150, 163, 174, .12);
+}
+
+html.dui-pro-overhaul .dy-monitor-tool-button,
+html.dui-pro-overhaul .app-bg.dy-monitor-focus .dy-monitor-tool-button {
+  min-height: 42px !important;
+  border: 0 !important;
+  border-right: 1px solid rgba(150, 163, 174, .12) !important;
+  border-radius: 0 !important;
+  background: transparent !important;
+  box-shadow: none !important;
+}
+
+html.dui-pro-overhaul .dy-monitor-tool-button:last-child,
+html.dui-pro-overhaul .app-bg.dy-monitor-focus .dy-monitor-tool-button:last-child {
+  border-right: 0 !important;
+}
+
+html.dui-pro-overhaul .dy-monitor-tool-button:hover,
+html.dui-pro-overhaul .app-bg.dy-monitor-focus .dy-monitor-tool-button:hover {
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, .038), rgba(255, 255, 255, .010)) !important;
+}
+
+@media (max-width: 1320px) {
+  html.dui-pro-overhaul .app-bg.dy-monitor-focus .dy-monitor-tabbar {
+    grid-template-columns: minmax(0, 1fr) 156px;
+  }
+}
+
+@media (max-width: 760px) {
+  html.dui-pro-overhaul .dy-monitor-tabbar,
+  html.dui-pro-overhaul .app-bg.dy-monitor-focus .dy-monitor-tabbar {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  html.dui-pro-overhaul .dy-monitor-tools,
+  html.dui-pro-overhaul .app-bg.dy-monitor-focus .dy-monitor-tools {
+    border-left: 0;
+    border-top: 1px solid rgba(150, 163, 174, .12);
+  }
+}
+
+/* Final Recruit modal guard: later global theme resets share specificity with some controls. */
+html.dui-pro-overhaul [data-dui-modal="recruit-agent"] .dui-recruit-form {
+  height: 100%;
+  align-content: stretch !important;
+  grid-template-rows: 224px 221px 110px minmax(0, 1fr) !important;
+}
+
+html.dui-pro-overhaul [data-dui-modal="recruit-agent"] form {
+  height: min(95.2vh, 952px) !important;
+  max-height: min(95.2vh, 952px) !important;
+}
+
+html.dui-pro-overhaul [data-dui-modal="recruit-agent"] .dui-recruit-body {
+  overflow: hidden !important;
+}
+
+html.dui-pro-overhaul [data-dui-modal="recruit-agent"] .dui-recruit-file-tabs button,
+html.dui-pro-overhaul [data-dui-modal="recruit-agent"] .dui-recruit-file-add button {
+  min-height: 38px !important;
+}
+
+html.dui-pro-overhaul [data-dui-modal="recruit-agent"] .dui-recruit-file-tabs button {
+  min-height: 34px !important;
+}
+
+html.dui-pro-overhaul [data-dui-modal="recruit-agent"] .dui-recruit-file-add input {
+  min-height: 38px !important;
+  line-height: 38px !important;
+}
+
+html.dui-pro-overhaul [data-dui-modal="recruit-agent"] .dui-recruit-file-toolbar {
+  margin-bottom: 8px;
+}
+
+html.dui-pro-overhaul [data-dui-modal="recruit-agent"] .dui-recruit-form .dui-recruit-section:nth-child(3) {
+  padding: 11px 18px !important;
+}
+
+html.dui-pro-overhaul [data-dui-modal="recruit-agent"] .dui-recruit-form .dui-recruit-section:nth-child(4) {
+  padding: 9px 18px !important;
+}
+
+html.dui-pro-overhaul [data-dui-modal="recruit-agent"] .dui-recruit-form .dui-recruit-section:nth-child(2) {
+  padding: 14px 18px 12px !important;
+}
+
+html.dui-pro-overhaul [data-dui-modal="recruit-agent"] .dui-recruit-form .dui-recruit-section:nth-child(2) .dui-recruit-section-head {
+  min-height: 20px;
+  margin-bottom: 5px !important;
+}
+
+html.dui-pro-overhaul [data-dui-modal="recruit-agent"] .dui-recruit-form .dui-recruit-section:nth-child(2) .dui-recruit-behaviors {
+  margin-bottom: 10px !important;
+}
+
+html.dui-pro-overhaul [data-dui-modal="recruit-agent"] .dui-recruit-behaviors {
+  height: 36px;
+  align-items: stretch;
+  border-color: rgba(145, 164, 180, .28) !important;
+  background: #070a0d !important;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, .035),
+    inset 0 -1px 0 rgba(0, 0, 0, .42) !important;
+}
+
+html.dui-pro-overhaul [data-dui-modal="recruit-agent"] .dui-recruit-behaviors button {
+  display: flex !important;
+  min-height: 34px !important;
+  height: 34px !important;
+  align-items: center !important;
+  justify-content: center !important;
+  padding: 0 10px 1px !important;
+  border: 0 !important;
+  border-right: 1px solid rgba(145, 164, 180, .24) !important;
+  border-radius: 0 !important;
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, .035), rgba(255, 255, 255, .006) 46%, rgba(0, 0, 0, .20)),
+    #080b0f !important;
+  color: #f3f6f7 !important;
+  box-shadow: none !important;
+}
+
+html.dui-pro-overhaul [data-dui-modal="recruit-agent"] .dui-recruit-behaviors button.is-active {
+  border-right-color: rgba(47, 219, 211, .34) !important;
+  background:
+    linear-gradient(180deg, rgba(71, 224, 218, .34), rgba(25, 116, 113, .62)),
+    #123839 !important;
+  color: #f4fffe !important;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, .12),
+    inset 0 -1px 0 rgba(0, 0, 0, .18) !important;
+}
+
+html.dui-pro-overhaul [data-dui-modal="recruit-agent"] .dui-recruit-behaviors button:first-child {
+  border-radius: 4px 0 0 4px !important;
+}
+
+html.dui-pro-overhaul [data-dui-modal="recruit-agent"] .dui-recruit-behaviors button:last-child {
+  border-right: 0 !important;
+  border-radius: 0 4px 4px 0 !important;
+}
+
+html.dui-pro-overhaul [data-dui-modal="recruit-agent"] .dui-recruit-behaviors button strong {
+  display: block !important;
+  color: inherit !important;
+  font-size: 12px !important;
+  font-weight: 850 !important;
+  line-height: 1 !important;
+  transform: translateY(0);
+}
+
+html.dui-pro-overhaul [data-dui-modal="recruit-agent"] .dui-recruit-form .dui-recruit-section:nth-child(3) .dui-recruit-section-head {
+  min-height: 20px;
+  margin-bottom: 8px !important;
+}
+
+html.dui-pro-overhaul [data-dui-modal="recruit-agent"] .dui-recruit-form .dui-recruit-section:nth-child(4) .dui-recruit-section-head {
+  min-height: 18px;
+  margin-bottom: 7px !important;
+}
+
+html.dui-pro-overhaul [data-dui-modal="recruit-agent"] .dui-recruit-form .dui-recruit-section:nth-child(3) .dui-recruit-field {
+  gap: 5px !important;
+}
+
+html.dui-pro-overhaul [data-dui-modal="recruit-agent"] .dui-recruit-form .dui-recruit-section:nth-child(3) .dui-recruit-field input,
+html.dui-pro-overhaul [data-dui-modal="recruit-agent"] .dui-recruit-form .dui-recruit-section:nth-child(3) .dui-recruit-field select {
+  min-height: 36px !important;
+  line-height: 36px !important;
+}
+
+html.dui-pro-overhaul [data-dui-modal="recruit-agent"] .dui-recruit-field select.is-empty {
+  color: #8f9aa4 !important;
+}
+
+html.dui-pro-overhaul [data-dui-modal="recruit-agent"] .dui-recruit-form .dui-recruit-section:nth-child(4) .dui-recruit-capability {
+  min-height: 30px;
+  padding: 6px 8px !important;
+}
+
+html.dui-pro-overhaul [data-dui-modal="recruit-agent"] .dui-recruit-form .dui-recruit-section:nth-child(4) .dui-recruit-toggle {
+  min-height: 30px;
+  margin-top: 5px !important;
+  padding: 6px 10px !important;
+}
+
+html.dui-pro-overhaul [data-dui-modal="recruit-agent"] .dui-recruit-file-toolbar {
+  grid-template-columns: minmax(0, 1fr);
+}
+
+html.dui-pro-overhaul [data-dui-modal="recruit-agent"] .dui-recruit-primary,
+html.dui-pro-overhaul [data-dui-modal="recruit-agent"] .dui-recruit-primary:hover {
+  min-width: 190px;
+  gap: 14px;
+  border: 1px solid rgba(100, 245, 239, .24) !important;
+  background:
+    linear-gradient(180deg, #35d7cf, #249c98),
+    #26bdb7 !important;
+  color: #f5fffd !important;
+  text-transform: none !important;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, .24),
+    0 16px 36px rgba(34, 203, 197, .23) !important;
+}
+
+html.dui-pro-overhaul [data-dui-modal="recruit-agent"] .dui-recruit-secondary,
+html.dui-pro-overhaul [data-dui-modal="recruit-agent"] .dui-recruit-secondary:hover {
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, .055), rgba(255, 255, 255, .016)),
+    #161d25 !important;
+  color: #f0f4f7 !important;
+  text-transform: none !important;
+}
+
+html.dui-pro-overhaul [data-dui-modal="recruit-agent"] .dui-recruit-capability input,
+html.dui-pro-overhaul [data-dui-modal="recruit-agent"] .dui-recruit-toggle input {
+  position: relative;
+  width: 16px !important;
+  height: 16px !important;
+  flex: 0 0 auto;
+  margin: 0 !important;
+  appearance: none !important;
+  -webkit-appearance: none !important;
+  border: 1px solid rgba(159, 173, 188, .46) !important;
+  border-radius: 3px !important;
+  background: rgba(25, 29, 38, .82) !important;
+}
+
+html.dui-pro-overhaul [data-dui-modal="recruit-agent"] .dui-recruit-capability input:checked,
+html.dui-pro-overhaul [data-dui-modal="recruit-agent"] .dui-recruit-toggle input:checked {
+  border-color: rgba(104, 247, 242, .9) !important;
+  background: linear-gradient(180deg, #75f4ef, #25bfb8) !important;
+}
+
+html.dui-pro-overhaul [data-dui-modal="recruit-agent"] .dui-recruit-capability input:checked::after,
+html.dui-pro-overhaul [data-dui-modal="recruit-agent"] .dui-recruit-toggle input:checked::after {
+  content: "";
+  position: absolute;
+  left: 4px;
+  top: 1px;
+  width: 6px;
+  height: 10px;
+  border: solid #062326;
+  border-width: 0 2px 2px 0;
+  transform: rotate(45deg);
+}
+
+/* Mission tab final overhaul: top command bar, horizontal nav, and professional dispatch surface. */
+html.dui-pro-overhaul {
+  --dui-bg: #050607;
+  --dui-bg-2: #090b0d;
+  --dui-panel: rgba(15, 18, 21, .88);
+  --dui-panel-2: rgba(19, 23, 27, .78);
+  --dui-panel-3: rgba(25, 30, 34, .64);
+  --dui-border: rgba(156, 171, 184, .16);
+  --dui-border-soft: rgba(156, 171, 184, .10);
+  --dui-text: #f2f5f6;
+  --dui-muted: #9aa6af;
+  --dui-dim: #65717a;
+  --dui-cyan: #48e0da;
+  --dui-cyan-soft: rgba(72, 224, 218, .14);
+  --dui-green: #75e2a5;
+  --dui-amber: #f3c760;
+  --dui-red: #ff7070;
+}
+
+html.dui-pro-overhaul .dy-human-rail {
+  display: none !important;
+}
+
+html.dui-pro-overhaul .app-bg {
+  min-height: 100vh;
+  background:
+    linear-gradient(180deg, #070809 0%, #040506 100%) !important;
+}
+
+html.dui-pro-overhaul .grid-overlay {
+  opacity: .16 !important;
+  background-image:
+    linear-gradient(rgba(135, 153, 166, .08) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(135, 153, 166, .08) 1px, transparent 1px) !important;
+  background-size: 56px 56px !important;
+}
+
+html.dui-pro-overhaul .app-bg > .dy-app-main {
+  width: 100% !important;
+  max-width: none !important;
+  margin: 0 !important;
+  padding: 0 18px 28px !important;
+}
+
+html.dui-pro-overhaul .dy-command-header.relative.mb-7 {
+  position: sticky !important;
+  top: 0 !important;
+  z-index: 35 !important;
+  min-height: 72px !important;
+  margin: 0 -18px 14px !important;
+  padding: 11px 18px !important;
+  overflow: visible !important;
+  border: 0 !important;
+  border-bottom: 1px solid rgba(167, 181, 194, .13) !important;
+  border-radius: 0 !important;
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, .024), rgba(255, 255, 255, .004)),
+    #070808 !important;
+  box-shadow:
+    0 16px 40px rgba(0, 0, 0, .36),
+    inset 0 -1px 0 rgba(0, 0, 0, .65) !important;
+  backdrop-filter: blur(18px);
+}
+
+html.dui-pro-overhaul .dy-command-header.relative.mb-7::before,
+html.dui-pro-overhaul .dy-command-header.relative.mb-7::after,
+html.dui-pro-overhaul .dy-command-header > .pointer-events-none {
+  display: none !important;
+}
+
+html.dui-pro-overhaul .dy-command-header-inner {
+  display: grid !important;
+  grid-template-columns: minmax(260px, .62fr) minmax(420px, 1fr) auto !important;
+  gap: 18px !important;
+  align-items: center !important;
+  max-width: 2048px !important;
+  margin: 0 auto !important;
+}
+
+html.dui-pro-overhaul .brand-lockup.dy-logo-fixed {
+  min-width: 0 !important;
+  gap: 12px !important;
+}
+
+html.dui-pro-overhaul .brand-lockup .dy-logo-mark {
+  width: 42px !important;
+  height: 42px !important;
+  border: 1px solid rgba(169, 184, 196, .18);
+  border-radius: 8px;
+  background: #080a0b;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, .05);
+}
+
+html.dui-pro-overhaul .brand-wordmark {
+  margin: 0 !important;
+  color: #f6f7f7 !important;
+  font-size: clamp(24px, 1.7vw, 34px) !important;
+  line-height: .96 !important;
+  letter-spacing: 0 !important;
+}
+
+html.dui-pro-overhaul .brand-subtitle {
+  margin-top: 4px !important;
+  color: #9fa8af !important;
+  font-size: 10px !important;
+  font-weight: 800 !important;
+  letter-spacing: .14em !important;
+}
+
+html.dui-pro-overhaul .dy-header-nav {
+  display: grid !important;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  justify-self: center;
+  width: min(100%, 620px);
+  min-height: 42px;
+  overflow: hidden;
+  border: 1px solid rgba(157, 172, 185, .15);
+  border-radius: 9px;
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, .030), rgba(255, 255, 255, .006)),
+    rgba(12, 15, 17, .86);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, .04);
+}
+
+html.dui-pro-overhaul .dy-header-nav button {
+  position: relative;
+  display: grid;
+  align-content: center;
+  min-width: 0;
+  min-height: 42px;
+  padding: 7px 13px;
+  border: 0;
+  border-right: 1px solid rgba(157, 172, 185, .11);
+  border-radius: 0;
+  background: transparent;
+  color: #7b878f;
+  text-align: left;
+  cursor: pointer;
+  transition: background-color .16s ease, color .16s ease;
+}
+
+html.dui-pro-overhaul .dy-header-nav button:last-child {
+  border-right: 0;
+}
+
+html.dui-pro-overhaul .dy-header-nav button::after {
+  content: "";
+  position: absolute;
+  right: 13px;
+  bottom: 0;
+  left: 13px;
+  height: 2px;
+  border-radius: 0;
+  background: linear-gradient(90deg, transparent, var(--dui-cyan), transparent);
+  opacity: 0;
+}
+
+html.dui-pro-overhaul .dy-header-nav button:hover,
+html.dui-pro-overhaul .dy-header-nav button.is-active {
+  background:
+    linear-gradient(180deg, rgba(72, 224, 218, .12), rgba(72, 224, 218, .018)),
+    rgba(255, 255, 255, .014);
+  color: #f2f7f7;
+}
+
+html.dui-pro-overhaul .dy-header-nav button.is-active::after {
+  opacity: 1;
+}
+
+html.dui-pro-overhaul .dy-header-nav span {
+  overflow: hidden;
+  color: inherit;
+  font-size: 12px;
+  font-weight: 850;
+  line-height: 1;
+  letter-spacing: 0;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+html.dui-pro-overhaul .dy-header-nav small {
+  overflow: hidden;
+  margin-top: 5px;
+  color: #84919a;
+  font-size: 8px;
+  font-weight: 850;
+  line-height: 1;
+  letter-spacing: .12em;
+  text-overflow: ellipsis;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+html.dui-pro-overhaul .dy-status-grid {
+  display: grid !important;
+  grid-template-columns: repeat(6, minmax(72px, auto)) !important;
+  gap: 0 !important;
+  overflow: hidden !important;
+  border: 1px solid rgba(157, 172, 185, .14) !important;
+  border-radius: 10px !important;
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, .035), rgba(255, 255, 255, .008)),
+    rgba(13, 16, 18, .86) !important;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, .045) !important;
+}
+
+html.dui-pro-overhaul .badge.dy-status-chip {
+  min-width: 72px !important;
+  height: 34px !important;
+  justify-content: center !important;
+  gap: 6px !important;
+  padding: 0 12px !important;
+  border: 0 !important;
+  border-right: 1px solid rgba(157, 172, 185, .12) !important;
+  border-radius: 0 !important;
+  background: transparent !important;
+  box-shadow: none !important;
+}
+
+html.dui-pro-overhaul .badge.dy-status-chip:last-child {
+  border-right: 0 !important;
+}
+
+html.dui-pro-overhaul .dy-status-value {
+  color: #f6f9f9 !important;
+  font-size: 12px !important;
+  font-weight: 900 !important;
+  line-height: 1 !important;
+}
+
+html.dui-pro-overhaul .dy-status-label {
+  color: #86919a !important;
+  font-size: 7px !important;
+  font-weight: 900 !important;
+  line-height: 1 !important;
+  letter-spacing: .08em !important;
+}
+
+html.dui-pro-overhaul .dy-top-tabs {
+  display: none !important;
+  grid-template-columns: repeat(4, minmax(0, 1fr)) !important;
+  gap: 0 !important;
+  max-width: 2048px !important;
+  margin: 0 auto 14px !important;
+  padding: 0 !important;
+  overflow: hidden !important;
+  border: 1px solid rgba(157, 172, 185, .13) !important;
+  border-radius: 8px !important;
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, .022), rgba(255, 255, 255, .006)),
+    rgba(12, 15, 17, .86) !important;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, .035) !important;
+}
+
+html.dui-pro-overhaul .dy-top-tabs .tab-underline {
+  position: relative !important;
+  min-height: 48px !important;
+  padding: 10px 16px !important;
+  border-right: 1px solid rgba(157, 172, 185, .10) !important;
+  border-radius: 0 !important;
+  background: transparent !important;
+  color: #6f7a82 !important;
+  box-shadow: none !important;
+}
+
+html.dui-pro-overhaul .dy-top-tabs .tab-underline:last-child {
+  border-right: 0 !important;
+}
+
+html.dui-pro-overhaul .dy-top-tabs .tab-underline:hover,
+html.dui-pro-overhaul .dy-top-tabs .tab-underline.active {
+  background:
+    linear-gradient(180deg, rgba(72, 224, 218, .105), rgba(72, 224, 218, .018)),
+    rgba(255, 255, 255, .018) !important;
+  color: #f1f6f6 !important;
+}
+
+html.dui-pro-overhaul .dy-top-tabs .tab-underline::after {
+  right: 14px !important;
+  bottom: 0 !important;
+  left: 14px !important;
+  height: 2px !important;
+  border-radius: 0 !important;
+  background: linear-gradient(90deg, transparent, var(--dui-cyan), transparent) !important;
+}
+
+html.dui-pro-overhaul .dy-top-tabs .tab-underline span:first-child {
+  font-size: 12px !important;
+  font-weight: 850 !important;
+  letter-spacing: 0 !important;
+}
+
+html.dui-pro-overhaul .dy-top-tabs .tab-underline span:last-child {
+  color: #87929a !important;
+  font-size: 8px !important;
+  letter-spacing: .13em !important;
+}
+
+.dui-mission-wrap {
+  max-width: 2048px;
+  margin: 0 auto;
+  color: var(--dui-text);
+}
+
+.dui-mission-screen {
+  position: relative;
+  isolation: isolate;
+  overflow: hidden;
+  min-height: calc(100vh - 168px);
+  border: 1px solid var(--dui-border);
+  border-radius: 8px;
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, .018), rgba(255, 255, 255, .006)),
+    #07090a;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, .04),
+    0 28px 70px rgba(0, 0, 0, .42);
+}
+
+.dui-mission-screen::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: -2;
+  background-image: url("/mission-assets/mission-command-texture.png");
+  background-position: center;
+  background-size: cover;
+  opacity: .34;
+}
+
+.dui-mission-screen::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  background:
+    linear-gradient(90deg, rgba(7, 9, 10, .22), rgba(7, 9, 10, .68) 44%, rgba(7, 9, 10, .24)),
+    linear-gradient(180deg, rgba(6, 7, 8, .10), rgba(6, 7, 8, .72));
+  pointer-events: none;
+}
+
+.dui-mission-hero {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 318px 236px;
+  gap: 14px;
+  align-items: stretch;
+  padding: 18px;
+  border-bottom: 1px solid rgba(157, 172, 185, .13);
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, .024), rgba(255, 255, 255, .006)),
+    rgba(9, 12, 13, .66);
+}
+
+.dui-kicker-row,
+.dui-chip-row,
+.dui-readiness-head,
+.dui-section-head,
+.dui-loadout-head,
+.dui-meter > div:first-child,
+.dui-range-field > span {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.dui-kicker-row {
+  justify-content: flex-start;
+  flex-wrap: wrap;
+}
+
+.dui-kicker,
+.dui-section-head span,
+.dui-loadout-head > span,
+.dui-range-field > span {
+  color: #71808b;
+  font-size: 9px;
+  font-weight: 850;
+  letter-spacing: .13em;
+  text-transform: uppercase;
+}
+
+.dui-hero-copy h2 {
+  margin: 7px 0 0;
+  color: #f7f9f9;
+  font-size: clamp(26px, 2.2vw, 42px);
+  font-weight: 900;
+  line-height: 1;
+  letter-spacing: 0;
+}
+
+.dui-hero-copy p {
+  max-width: 760px;
+  margin: 9px 0 0;
+  color: #9ba7af;
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+.dui-chip-row {
+  justify-content: flex-start;
+  flex-wrap: wrap;
+  margin-top: 12px;
+}
+
+.dui-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  min-height: 24px;
+  padding: 0 9px;
+  border: 1px solid rgba(157, 172, 185, .13);
+  border-radius: 6px;
+  background: rgba(255, 255, 255, .026);
+  color: #c3ccd2;
+  font-size: 9px;
+  font-weight: 800;
+}
+
+.dui-pill i {
+  width: 6px;
+  height: 6px;
+  border-radius: 999px;
+  background: #83909a;
+}
+
+.dui-pill.is-live i {
+  background: var(--dui-amber);
+  box-shadow: 0 0 14px rgba(243, 199, 96, .42);
+}
+
+.dui-pill.is-cool,
+.dui-pill-warm {
+  border-color: rgba(72, 224, 218, .20);
+  background: rgba(72, 224, 218, .065);
+  color: #b8fffb;
+}
+
+.dui-pill-warm {
+  border-color: rgba(243, 199, 96, .20);
+  background: rgba(243, 199, 96, .06);
+  color: #ffe5a4;
+}
+
+.dui-hero-stats,
+.dui-readiness-card,
+.dui-card,
+.dui-mission-history {
+  border: 1px solid var(--dui-border-soft);
+  border-radius: 8px;
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, .035), rgba(255, 255, 255, .010)),
+    rgba(12, 15, 17, .82);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, .036);
+}
+
+.dui-hero-stats {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  overflow: hidden;
+}
+
+.dui-hero-stats div {
+  display: grid;
+  place-content: center;
+  min-height: 88px;
+  border-right: 1px solid rgba(157, 172, 185, .10);
+  text-align: center;
+}
+
+.dui-hero-stats div:last-child {
+  border-right: 0;
+}
+
+.dui-hero-stats span {
+  color: #f6faf9;
+  font-size: 24px;
+  font-weight: 900;
+  line-height: 1;
+}
+
+.dui-hero-stats p {
+  margin: 6px 0 0;
+  color: #72808a;
+  font-size: 8px;
+  font-weight: 850;
+  letter-spacing: .12em;
+  text-transform: uppercase;
+}
+
+.dui-readiness-card {
+  padding: 14px;
+}
+
+.dui-readiness-head p {
+  margin: 0;
+  color: #87949d;
+  font-size: 9px;
+  font-weight: 850;
+  letter-spacing: .13em;
+  text-transform: uppercase;
+}
+
+.dui-readiness-head span {
+  display: block;
+  margin-top: 4px;
+  color: #67737c;
+  font-size: 10px;
+}
+
+.dui-readiness-head strong {
+  color: #f5f9f8;
+  font-size: 26px;
+  font-weight: 900;
+  line-height: 1;
+}
+
+.dui-progress-track {
+  overflow: hidden;
+  height: 7px;
+  margin-top: 12px;
+  border: 1px solid rgba(255, 255, 255, .035);
+  border-radius: 999px;
+  background: rgba(0, 0, 0, .36);
+}
+
+.dui-progress-fill {
+  height: 100%;
+  border-radius: inherit;
+  background: linear-gradient(90deg, #43d0cc, #74f0c5);
+  box-shadow: 0 0 18px rgba(72, 224, 218, .22);
+}
+
+.dui-readiness-card[data-tone="warn"] .dui-progress-fill,
+.dui-meter[data-tone="warn"] .dui-progress-fill,
+.dui-range-field[data-tone="warn"] input {
+  background: linear-gradient(90deg, #d8991d, #f3c760);
+}
+
+.dui-readiness-card[data-tone="danger"] .dui-progress-fill,
+.dui-meter[data-tone="danger"] .dui-progress-fill,
+.dui-range-field[data-tone="danger"] input {
+  background: linear-gradient(90deg, #e35d5d, #ff8c78);
+}
+
+.dui-readiness-checks {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 11px;
+}
+
+.dui-readiness-checks span {
+  min-height: 20px;
+  padding: 4px 7px;
+  border: 1px solid rgba(157, 172, 185, .12);
+  border-radius: 5px;
+  color: #6f7c85;
+  font-size: 8px;
+  font-weight: 850;
+  letter-spacing: .08em;
+  text-transform: uppercase;
+}
+
+.dui-readiness-checks .is-ready {
+  border-color: rgba(117, 226, 165, .22);
+  background: rgba(117, 226, 165, .06);
+  color: #b9f5ce;
+}
+
+.dui-mission-stage {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) clamp(360px, 26vw, 470px);
+  align-items: stretch;
+  gap: 14px;
+  padding: 14px 18px 18px;
+}
+
+.dui-mission-main,
+.dui-mission-sidebar {
+  display: grid;
+  align-content: stretch;
+  gap: 14px;
+  min-width: 0;
+}
+
+.dui-mission-main {
+  grid-template-rows: auto auto auto minmax(156px, 1fr);
+}
+
+.dui-mission-sidebar {
+  grid-template-rows: minmax(0, 1fr) auto;
+}
+
+.dui-objective-card,
+.dui-agents-card {
+  display: flex;
+  min-height: 0;
+  flex-direction: column;
+}
+
+.dui-objective-card .dui-textarea {
+  flex: 1 1 auto;
+}
+
+.dui-card {
+  padding: 14px;
+}
+
+.dui-section-head {
+  margin-bottom: 12px;
+}
+
+.dui-section-head.compact {
+  margin-bottom: 9px;
+}
+
+.dui-section-head div {
+  min-width: 0;
+}
+
+.dui-section-head strong {
+  display: block;
+  overflow: hidden;
+  margin-top: 4px;
+  color: #eef3f3;
+  font-size: 13px;
+  font-weight: 850;
+  letter-spacing: 0;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.dui-section-head p {
+  flex: 0 0 auto;
+  margin: 0;
+  color: #73808a;
+  font-size: 10px;
+  font-weight: 750;
+}
+
+.dui-template-strip {
+  position: relative;
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  overflow: hidden;
+  border: 1px solid rgba(157, 172, 185, .12);
+  border-radius: 8px;
+  background: rgba(0, 0, 0, .22);
+  isolation: isolate;
+}
+
+.dui-template-strip::before {
+  display: none;
+}
+
+.dui-template-tile {
+  position: relative;
+  z-index: 1;
+  --dui-option-color: #9aa0a3;
+  --dui-option-rgb: 154, 160, 163;
+  display: grid;
+  align-content: space-between;
+  gap: 8px;
+  min-height: 98px;
+  padding: 12px 14px;
+  border: 0;
+  border-right: 1px solid rgba(157, 172, 185, .11);
+  background: rgba(255, 255, 255, .012);
+  color: #dce4e7;
+  text-align: left;
+  cursor: pointer;
+  transition: background-color .16s ease, box-shadow .16s ease, color .16s ease;
+}
+
+.dui-template-tile:last-child {
+  border-right: 0;
+}
+
+.dui-template-tile:hover,
+.dui-template-tile.is-active {
+  background:
+    radial-gradient(circle at 50% 24%, rgba(var(--dui-option-rgb), .18), transparent 42%),
+    linear-gradient(180deg, rgba(var(--dui-option-rgb), .14), rgba(var(--dui-option-rgb), .026)),
+    rgba(255, 255, 255, .018);
+}
+
+.dui-template-tile.is-active {
+  box-shadow:
+    inset 0 -3px 0 var(--dui-option-color),
+    inset 0 0 0 1px rgba(var(--dui-option-rgb), .44),
+    inset 0 0 32px rgba(var(--dui-option-rgb), .08),
+    0 0 22px rgba(var(--dui-option-rgb), .10);
+}
+
+.dui-template-art {
+  position: relative;
+  display: grid;
+  place-items: center;
+  height: 52px;
+  color: #87929a;
+  transition: color .16s ease, opacity .16s ease;
+}
+
+.dui-template-art::before {
+  content: "";
+  position: absolute;
+  inset: 50% auto auto 50%;
+  z-index: 0;
+  width: 52px;
+  height: 52px;
+  border: 1px solid rgba(var(--dui-option-rgb), .18);
+  border-radius: 12px;
+  background:
+    radial-gradient(circle at 50% 38%, rgba(var(--dui-option-rgb), .14), transparent 62%),
+    rgba(255, 255, 255, .018);
+  transform: translate(-50%, -50%);
+  transition: border-color .16s ease, background-color .16s ease, box-shadow .16s ease, transform .16s ease;
+}
+
+.dui-option-art::before {
+  content: "";
+  position: absolute;
+  inset: 50% auto auto 50%;
+  z-index: 0;
+  width: 44px;
+  height: 44px;
+  border: 1px solid rgba(var(--dui-option-rgb), .16);
+  border-radius: 11px;
+  background:
+    radial-gradient(circle at 50% 38%, rgba(var(--dui-option-rgb), .12), transparent 64%),
+    rgba(255, 255, 255, .012);
+  transform: translate(-50%, -50%);
+  transition: border-color .16s ease, background-color .16s ease, box-shadow .16s ease, transform .16s ease;
+}
+
+.dui-template-art::after,
+.dui-option-art::after {
+  content: "";
+  display: none;
+}
+
+.dui-template-tile.is-active .dui-template-art::after,
+.dui-option[aria-pressed="true"] .dui-option-art::after {
+  display: none;
+}
+
+.dui-template-tile:hover .dui-template-art,
+.dui-template-tile.is-active .dui-template-art {
+  color: var(--dui-option-color);
+}
+
+.dui-template-tile:hover .dui-template-art::before,
+.dui-template-tile.is-active .dui-template-art::before,
+.dui-option:hover .dui-option-art::before,
+.dui-option[aria-pressed="true"] .dui-option-art::before {
+  border-color: rgba(var(--dui-option-rgb), .46);
+  background:
+    radial-gradient(circle at 50% 38%, rgba(var(--dui-option-rgb), .22), transparent 64%),
+    rgba(var(--dui-option-rgb), .06);
+  box-shadow:
+    0 0 0 1px rgba(var(--dui-option-rgb), .07),
+    0 0 16px rgba(var(--dui-option-rgb), .14);
+}
+
+.dui-template-tile.is-active .dui-template-art::before,
+.dui-option[aria-pressed="true"] .dui-option-art::before {
+  border-color: rgba(var(--dui-option-rgb), .72);
+  box-shadow:
+    0 0 0 1px rgba(var(--dui-option-rgb), .15),
+    0 0 20px rgba(var(--dui-option-rgb), .22);
+  transform: translate(-50%, -50%);
+}
+
+.dui-mission-glyph {
+  overflow: visible;
+  color: currentColor;
+  transform-origin: 50% 50%;
+}
+
+.dui-mission-glyph-fallback {
+  display: none;
+}
+
+.dui-mission-glyph__line,
+.dui-mission-glyph__soft,
+.dui-mission-glyph__panel {
+  fill: none;
+  stroke: currentColor;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  vector-effect: non-scaling-stroke;
+}
+
+.dui-mission-glyph__line {
+  stroke-width: 2.8;
+}
+
+.dui-mission-glyph__soft {
+  opacity: .42;
+  stroke-width: 2.15;
+}
+
+.dui-mission-glyph__panel {
+  fill: rgba(var(--dui-option-rgb), .08);
+  opacity: .9;
+  stroke-width: 2.35;
+}
+
+.dui-mission-glyph__solid,
+.dui-mission-glyph__dot {
+  fill: currentColor;
+  stroke: none;
+}
+
+.dui-mission-glyph__solid {
+  opacity: .9;
+}
+
+.dui-mission-glyph__dot {
+  fill: var(--dui-option-color);
+  opacity: .94;
+}
+
+.dui-template-icon {
+  position: relative;
+  z-index: 2;
+  display: block;
+  width: 44px;
+  height: 44px;
+  opacity: .92;
+  filter:
+    var(--dui-option-icon-filter, none)
+    drop-shadow(0 4px 8px rgba(0, 0, 0, .28));
+  transition: filter .16s ease, opacity .16s ease, transform .16s ease;
+}
+
+.dui-template-tile:hover .dui-template-icon,
+.dui-template-tile.is-active .dui-template-icon {
+  opacity: 1;
+  filter:
+    var(--dui-option-icon-filter, none)
+    drop-shadow(0 4px 8px rgba(0, 0, 0, .22))
+    drop-shadow(0 0 10px rgba(var(--dui-option-rgb), .22));
+  transform: translateY(-1px);
+}
+
+.dui-template-tile.is-active .dui-template-icon {
+  filter:
+    var(--dui-option-icon-filter, none)
+    drop-shadow(0 4px 8px rgba(0, 0, 0, .18))
+    drop-shadow(0 0 13px rgba(var(--dui-option-rgb), .30));
+  transform: translateY(-1px);
+}
+
+.dui-template-copy strong {
+  display: block;
+  overflow: hidden;
+  color: #f1f6f6;
+  font-size: 12px;
+  font-weight: 850;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.dui-template-copy small {
+  display: block;
+  overflow: hidden;
+  margin-top: 3px;
+  color: #7e8b94;
+  font-size: 9px;
+  font-weight: 650;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.dui-template-tile.is-active .dui-template-copy strong,
+.dui-option[aria-pressed="true"] strong {
+  color: #ffffff;
+  text-shadow: 0 0 14px rgba(var(--dui-option-rgb), .26);
+}
+
+.dui-template-tile.is-active .dui-template-copy small {
+  color: rgba(238, 246, 246, .78);
+}
+
+.dui-setup-card {
+  display: grid;
+  grid-template-columns: minmax(240px, .44fr) minmax(0, 1fr);
+  gap: 14px;
+}
+
+.dui-field {
+  display: grid;
+  gap: 7px;
+  min-width: 0;
+}
+
+.dui-field label {
+  color: #71808b;
+  font-size: 9px;
+  font-weight: 850;
+  letter-spacing: .13em;
+  text-transform: uppercase;
+}
+
+.dui-control {
+  width: 100%;
+  min-width: 0;
+  min-height: 38px;
+  border: 1px solid rgba(157, 172, 185, .14);
+  border-radius: 6px;
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, .026), rgba(255, 255, 255, .007)),
+    rgba(6, 8, 9, .66);
+  color: #e9eeee;
+  font-size: 12px;
+  font-weight: 650;
+  line-height: 1.3;
+  outline: 0;
+  padding: 9px 11px;
+  transition: border-color .15s ease, background-color .15s ease, box-shadow .15s ease;
+}
+
+.dui-control:focus {
+  border-color: rgba(72, 224, 218, .42);
+  box-shadow: 0 0 0 3px rgba(72, 224, 218, .065);
+}
+
+.dui-control:disabled {
+  cursor: not-allowed;
+  opacity: .48;
+}
+
+.dui-textarea {
+  min-height: 118px;
+  resize: vertical;
+}
+
+.dui-objective-card .dui-textarea {
+  min-height: 132px;
+}
+
+.dui-segment-grid,
+.dui-type-grid,
+.dui-duration-grid {
+  position: relative;
+  display: grid;
+  gap: 0;
+  overflow: hidden;
+  border: 1px solid rgba(157, 172, 185, .12);
+  border-radius: 8px;
+  background: rgba(0, 0, 0, .22);
+  isolation: isolate;
+}
+
+.dui-segment-grid::before,
+.dui-type-grid::before,
+.dui-duration-grid::before {
+  display: none;
+}
+
+.dui-segment-grid {
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+}
+
+.dui-type-grid {
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+}
+
+.dui-duration-grid {
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+}
+
+.dui-option {
+  position: relative;
+  z-index: 1;
+  --dui-option-color: #9aa0a3;
+  --dui-option-rgb: 154, 160, 163;
+  display: grid;
+  grid-template-rows: 44px minmax(0, auto);
+  gap: 4px;
+  justify-items: center;
+  align-content: center;
+  min-height: 88px;
+  border: 0;
+  border-right: 1px solid rgba(157, 172, 185, .10);
+  background: rgba(255, 255, 255, .012);
+  color: #7b8790;
+  padding: 8px 7px 7px;
+  text-align: center;
+  cursor: pointer;
+  transition: background-color .16s ease, color .16s ease, box-shadow .16s ease;
+}
+
+.dui-segment-grid .dui-option {
+  padding-right: 5px;
+  padding-left: 5px;
+}
+
+.dui-option:last-child {
+  border-right: 0;
+}
+
+.dui-option:hover,
+.dui-option[aria-pressed="true"] {
+  background:
+    radial-gradient(circle at 50% 24%, rgba(var(--dui-option-rgb), .11), transparent 46%),
+    linear-gradient(180deg, rgba(var(--dui-option-rgb), .10), rgba(var(--dui-option-rgb), .018)),
+    rgba(255, 255, 255, .016);
+  color: #eef6f6;
+}
+
+.dui-option[aria-pressed="true"] {
+  box-shadow:
+    inset 0 -3px 0 var(--dui-option-color),
+    inset 0 0 0 1px rgba(var(--dui-option-rgb), .38),
+    inset 0 0 22px rgba(var(--dui-option-rgb), .055),
+    0 0 12px rgba(var(--dui-option-rgb), .055);
+}
+
+.dui-option-art {
+  position: relative;
+  display: grid;
+  place-items: center;
+  width: 100%;
+  height: 44px;
+  color: #87929a;
+  transition: color .16s ease;
+}
+
+.dui-option:hover .dui-option-art,
+.dui-option[aria-pressed="true"] .dui-option-art {
+  color: var(--dui-option-color);
+}
+
+.dui-flat-glyph {
+  position: relative;
+  z-index: 2;
+  display: block;
+  width: 38px;
+  height: 38px;
+  opacity: .9;
+  filter:
+    var(--dui-option-icon-filter, none)
+    drop-shadow(0 4px 7px rgba(0, 0, 0, .24));
+  transition: filter .16s ease, opacity .16s ease, transform .16s ease;
+}
+
+.dui-option:hover .dui-flat-glyph,
+.dui-option[aria-pressed="true"] .dui-flat-glyph {
+  opacity: 1;
+  filter:
+    var(--dui-option-icon-filter, none)
+    drop-shadow(0 4px 7px rgba(0, 0, 0, .18))
+    drop-shadow(0 0 9px rgba(var(--dui-option-rgb), .24));
+  transform: translateY(-1px);
+}
+
+.dui-option[aria-pressed="true"] .dui-flat-glyph {
+  filter:
+    var(--dui-option-icon-filter, none)
+    drop-shadow(0 4px 7px rgba(0, 0, 0, .16))
+    drop-shadow(0 0 12px rgba(var(--dui-option-rgb), .32));
+  transform: translateY(-1px);
+}
+
+.dui-option-copy {
+  min-width: 0;
+  width: 100%;
+}
+
+.dui-option strong {
+  display: block;
+  overflow: hidden;
+  font-size: 11px;
+  font-weight: 850;
+  line-height: 1.15;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.dui-segment-grid .dui-option strong {
+  font-size: 10px;
+}
+
+.dui-option-copy > span {
+  display: block;
+  overflow: hidden;
+  margin-top: 4px;
+  color: #7e8b94;
+  font-size: 9px;
+  font-weight: 650;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.dui-segment-grid .dui-option-copy > span {
+  font-size: 8px;
+}
+
+.dui-option[aria-pressed="true"] .dui-option-copy > span {
+  color: rgba(238, 246, 246, .74);
+}
+
+.dui-inline-note {
+  margin: 11px 0 0;
+  padding: 10px 12px;
+  border: 1px solid rgba(157, 172, 185, .10);
+  border-radius: 6px;
+  background: rgba(0, 0, 0, .20);
+  color: #93a0a8;
+  font-size: 11px;
+  line-height: 1.45;
+}
+
+.dui-agent-list {
+  display: grid;
+  flex: 1 1 auto;
+  align-content: start;
+  gap: 8px;
+  min-height: 0;
+  overflow: auto;
+}
+
+.dui-agent-row {
+  display: grid;
+  grid-template-columns: 42px minmax(0, 1fr) 148px;
+  gap: 10px;
+  align-items: center;
+  min-height: 68px;
+  padding: 8px;
+  border: 1px solid rgba(157, 172, 185, .10);
+  border-radius: 7px;
+  background: rgba(255, 255, 255, .014);
+}
+
+.dui-agent-row.is-busy {
+  border-color: rgba(117, 226, 165, .22);
+}
+
+.dui-agent-row.is-excluded {
+  border-color: rgba(243, 199, 96, .18);
+  background: rgba(243, 199, 96, .035);
+  opacity: .78;
+}
+
+.dui-agent-avatar {
+  position: relative;
+  overflow: hidden;
+  width: 42px;
+  height: 42px;
+  border: 1px solid rgba(157, 172, 185, .16);
+  border-radius: 7px;
+  background: #050607;
+}
+
+.dui-agent-avatar img,
+.dui-avatar-stack img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.dui-agent-avatar span,
+.dui-avatar-stack span {
+  display: grid;
+  place-items: center;
+  width: 100%;
+  height: 100%;
+  color: #9ca7ae;
+  font-size: 12px;
+  font-weight: 850;
+}
+
+.dui-agent-row.is-busy .dui-agent-avatar::after {
+  content: "";
+  position: absolute;
+  right: 4px;
+  top: 4px;
+  width: 8px;
+  height: 8px;
+  border: 2px solid #050607;
+  border-radius: 999px;
+  background: var(--dui-green);
+  box-shadow: 0 0 10px rgba(117, 226, 165, .5);
+}
+
+.dui-agent-main {
+  min-width: 0;
+}
+
+.dui-agent-main strong {
+  display: block;
+  overflow: hidden;
+  color: #edf4f4;
+  font-size: 12px;
+  font-weight: 850;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.dui-agent-main p {
+  overflow: hidden;
+  margin: 3px 0 0;
+  color: #7c8a93;
+  font-size: 10px;
+  font-weight: 650;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.dui-agent-main div {
+  display: flex;
+  gap: 5px;
+  min-width: 0;
+  margin-top: 6px;
+}
+
+.dui-agent-main div span {
+  overflow: hidden;
+  max-width: 92px;
+  padding: 3px 6px;
+  border: 1px solid rgba(157, 172, 185, .10);
+  border-radius: 4px;
+  background: rgba(255, 255, 255, .018);
+  color: #9ba7af;
+  font-size: 8px;
+  font-weight: 800;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.dui-agent-main div span:last-child {
+  border-color: rgba(243, 199, 96, .15);
+  color: #e9ca78;
+}
+
+.dui-agent-cadence {
+  display: grid;
+  grid-template-columns: 60px minmax(82px, 1fr);
+  gap: 6px;
+  min-width: 0;
+}
+
+.dui-agent-cadence .dui-control {
+  min-height: 34px;
+  padding: 7px 8px;
+  font-size: 10px;
+}
+
+.dui-agent-cadence input[type="number"].dui-control {
+  padding-right: 20px;
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
+.dui-empty-state {
+  display: grid;
+  min-height: 92px;
+  place-items: center;
+  border: 1px dashed rgba(157, 172, 185, .14);
+  border-radius: 7px;
+  color: #65717a;
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.dui-dispatch-copy {
+  margin: 0;
+  color: #909da6;
+  font-size: 11px;
+  line-height: 1.48;
+}
+
+.dui-stat-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+  margin-top: 12px;
+}
+
+.dui-stat-grid div,
+.dui-meter {
+  border: 1px solid rgba(157, 172, 185, .10);
+  border-radius: 7px;
+  background: rgba(0, 0, 0, .20);
+  padding: 10px;
+}
+
+.dui-stat-grid span,
+.dui-meter span {
+  display: block;
+  color: #687681;
+  font-size: 8px;
+  font-weight: 850;
+  letter-spacing: .10em;
+  text-transform: uppercase;
+}
+
+.dui-stat-grid strong,
+.dui-meter strong {
+  display: block;
+  overflow: hidden;
+  margin-top: 5px;
+  color: #f1f6f6;
+  font-size: 16px;
+  font-weight: 900;
+  line-height: 1;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.dui-divider {
+  height: 1px;
+  margin: 14px 0;
+  background: rgba(157, 172, 185, .11);
+}
+
+.dui-cadence-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 108px 128px;
+  gap: 8px;
+}
+
+.dui-secondary-button,
+.dui-primary-button,
+.dui-steer-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 38px;
+  border: 1px solid rgba(157, 172, 185, .14);
+  border-radius: 6px;
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, .035), rgba(255, 255, 255, .010)),
+    rgba(12, 15, 17, .72);
+  color: #cfd8dd;
+  font-size: 10px;
+  font-weight: 850;
+  letter-spacing: .08em;
+  text-transform: uppercase;
+  cursor: pointer;
+  transition: transform .12s ease, border-color .14s ease, background-color .14s ease, box-shadow .14s ease;
+}
+
+.dui-secondary-button:hover,
+.dui-steer-button:hover {
+  border-color: rgba(72, 224, 218, .24);
+  background: rgba(72, 224, 218, .055);
+  color: #edfafa;
+}
+
+.dui-secondary-button:disabled,
+.dui-primary-button:disabled,
+.dui-steer-button:disabled {
+  cursor: not-allowed;
+  opacity: .35;
+}
+
+.dui-loadout-head {
+  margin-bottom: 12px;
+}
+
+.dui-avatar-stack {
+  display: flex;
+  flex-direction: row-reverse;
+  justify-content: flex-start;
+}
+
+.dui-avatar-stack div {
+  overflow: hidden;
+  width: 30px;
+  height: 30px;
+  margin-left: -8px;
+  border: 2px solid #07090a;
+  border-radius: 999px;
+  background: #11161a;
+  box-shadow: 0 0 0 1px rgba(157, 172, 185, .14);
+}
+
+.dui-meter-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.dui-meter .dui-progress-track {
+  height: 6px;
+  margin-top: 9px;
+}
+
+.dui-meter[data-tone="cool"] .dui-progress-fill {
+  background: linear-gradient(90deg, #6aa8ff, #48e0da);
+}
+
+.dui-slider-grid {
+  display: grid;
+  gap: 12px;
+  margin-top: 14px;
+}
+
+.dui-range-field {
+  display: grid;
+  gap: 8px;
+}
+
+.dui-range-field > span {
+  color: #75838c;
+}
+
+.dui-range-field > span strong {
+  color: #f0f6f5;
+  font-size: 10px;
+  font-weight: 850;
+}
+
+.dui-range-field input {
+  width: 100%;
+  height: 7px;
+  appearance: none;
+  border-radius: 999px;
+  background:
+    linear-gradient(90deg, #48e0da 0 var(--dy-range-value), rgba(255, 255, 255, .075) var(--dy-range-value) 100%);
+  cursor: pointer;
+}
+
+.dui-range-field input::-webkit-slider-thumb {
+  width: 17px;
+  height: 17px;
+  appearance: none;
+  border: 2px solid #0a0d0e;
+  border-radius: 4px;
+  background: #eef8f5;
+  box-shadow: 0 0 0 1px rgba(72, 224, 218, .5), 0 8px 20px rgba(0, 0, 0, .32);
+}
+
+.dui-action-grid {
+  display: grid;
+  grid-template-columns: minmax(0, .8fr) minmax(0, 1.2fr);
+  gap: 8px;
+  margin-top: 16px;
+}
+
+.dui-secondary-button span {
+  margin-left: 8px;
+  color: #8d9aa3;
+  text-transform: none;
+  letter-spacing: 0;
+}
+
+.dui-primary-button {
+  border-color: rgba(72, 224, 218, .30);
+  background:
+    linear-gradient(180deg, rgba(72, 224, 218, .24), rgba(33, 140, 135, .38)),
+    #112827;
+  color: #f4fffd;
+  box-shadow: 0 16px 36px rgba(36, 214, 205, .12);
+}
+
+.dui-primary-button:not(:disabled):hover {
+  border-color: rgba(72, 224, 218, .48);
+  background:
+    linear-gradient(180deg, rgba(72, 224, 218, .34), rgba(33, 140, 135, .50)),
+    #122e2d;
+}
+
+.dui-primary-button.is-stop {
+  border-color: rgba(255, 112, 112, .32);
+  background: rgba(255, 112, 112, .09);
+  color: #ffd6d6;
+  box-shadow: none;
+}
+
+.dui-timing-panel {
+  margin-top: 12px;
+  padding-top: 12px;
+  border-top: 1px solid rgba(157, 172, 185, .11);
+}
+
+.dui-timed-row {
+  display: grid;
+  grid-template-columns: 92px minmax(0, 1fr);
+  gap: 8px;
+  margin-top: 8px;
+}
+
+.dui-steer-button {
+  width: 100%;
+  margin-top: 8px;
+  border-color: rgba(243, 199, 96, .28);
+  background: rgba(243, 199, 96, .07);
+  color: #ffe3a1;
+}
+
+.dui-mission-history {
+  margin-top: 14px;
+  padding: 14px;
+}
+
+.dui-history-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.dui-history-item {
+  min-width: 0;
+  border: 1px solid rgba(157, 172, 185, .10);
+  border-radius: 7px;
+  background: rgba(0, 0, 0, .18);
+  padding: 11px;
+}
+
+.dui-history-item strong,
+.dui-history-item p {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.dui-history-item strong {
+  display: block;
+  color: #edf4f4;
+  font-size: 12px;
+}
+
+.dui-history-item span {
+  display: inline-flex;
+  margin-top: 7px;
+  padding: 3px 6px;
+  border: 1px solid rgba(117, 226, 165, .18);
+  border-radius: 4px;
+  color: #baf3ce;
+  font-size: 8px;
+  font-weight: 850;
+  letter-spacing: .08em;
+  text-transform: uppercase;
+}
+
+.dui-history-item p {
+  margin: 8px 0 0;
+  color: #7d8a93;
+  font-size: 10px;
+}
+
+@media (max-width: 1420px) {
+  html.dui-pro-overhaul .dy-command-header-inner {
+    grid-template-columns: minmax(220px, .55fr) minmax(360px, 1fr) auto !important;
+  }
+
+  html.dui-pro-overhaul .dy-status-grid {
+    grid-template-columns: repeat(3, minmax(72px, auto)) !important;
+  }
+
+  html.dui-pro-overhaul .dy-header-nav {
+    width: 100%;
+  }
+
+  .dui-mission-hero {
+    grid-template-columns: minmax(0, 1fr) 220px;
+  }
+
+  .dui-hero-stats {
+    display: none;
+  }
+}
+
+@media (max-width: 1180px) {
+  html.dui-pro-overhaul .dy-command-header-inner {
+    grid-template-columns: minmax(0, 1fr) !important;
+  }
+
+  html.dui-pro-overhaul .dy-header-nav {
+    justify-self: stretch;
+    width: 100%;
+  }
+
+  html.dui-pro-overhaul .dy-status-grid {
+    justify-self: stretch;
+  }
+
+  .dui-mission-stage {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .dui-mission-main,
+  .dui-mission-sidebar {
+    grid-template-rows: none;
+  }
+
+  .dui-mission-sidebar {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+@media (max-width: 860px) {
+  html.dui-pro-overhaul .app-bg > .dy-app-main {
+    padding: 0 10px 18px !important;
+  }
+
+  html.dui-pro-overhaul .dy-command-header.relative.mb-7 {
+    margin-right: -10px !important;
+    margin-left: -10px !important;
+    padding: 10px !important;
+  }
+
+  html.dui-pro-overhaul .dy-top-tabs {
+    grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+  }
+
+  html.dui-pro-overhaul .dy-header-nav {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  html.dui-pro-overhaul .dy-top-tabs .tab-underline {
+    border-bottom: 1px solid rgba(157, 172, 185, .10) !important;
+  }
+
+  .dui-mission-hero,
+  .dui-setup-card {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .dui-mission-hero,
+  .dui-mission-stage {
+    padding: 12px;
+  }
+
+  .dui-template-strip,
+  .dui-segment-grid,
+  .dui-type-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .dui-template-tile,
+  .dui-option {
+    border-bottom: 1px solid rgba(157, 172, 185, .10);
+  }
+
+  .dui-agent-row {
+    grid-template-columns: 42px minmax(0, 1fr);
+  }
+
+  .dui-agent-cadence {
+    grid-column: 1 / -1;
+    grid-template-columns: minmax(60px, .34fr) minmax(82px, 1fr);
+  }
+
+  .dui-cadence-grid,
+  .dui-meter-grid,
+  .dui-history-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+/* Recruit modal neutral palette: black / dark gray theme alignment. */
+html.dui-pro-overhaul [data-dui-modal="recruit-agent"] {
+  --dui-recruit-cyan: #b8bec4;
+  --dui-recruit-cyan-strong: #d4d8dc;
+  --dui-recruit-bg: #0b0c0d;
+  --dui-recruit-panel: #151719;
+  --dui-recruit-panel-2: #101214;
+  --dui-recruit-field: #070809;
+  --dui-recruit-border: rgba(184, 188, 190, .15);
+  border-color: rgba(184, 188, 190, .18) !important;
+  background:
+    linear-gradient(180deg, rgba(20, 22, 24, .96), rgba(9, 10, 11, .98)),
+    #0b0c0d !important;
+}
+
+html.dui-pro-overhaul .dui-recruit-backdrop {
+  background:
+    linear-gradient(180deg, rgba(3, 4, 5, .70), rgba(0, 0, 0, .92)),
+    rgba(0, 0, 0, .78) !important;
+}
+
+html.dui-pro-overhaul [data-dui-modal="recruit-agent"] .dui-recruit-header {
+  border-bottom-color: rgba(184, 188, 190, .12) !important;
+  background:
+    linear-gradient(180deg, rgba(22, 24, 26, .72), rgba(12, 13, 14, .34)),
+    transparent !important;
+}
+
+html.dui-pro-overhaul [data-dui-modal="recruit-agent"] .dui-recruit-section,
+html.dui-pro-overhaul [data-dui-modal="recruit-agent"] .dui-recruit-files {
+  border-color: rgba(184, 188, 190, .15) !important;
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, .024), rgba(255, 255, 255, .006)),
+    #151719 !important;
+}
+
+html.dui-pro-overhaul [data-dui-modal="recruit-agent"] .dui-recruit-section-head > span,
+html.dui-pro-overhaul [data-dui-modal="recruit-agent"] .dui-recruit-code-mode {
+  border-color: rgba(184, 188, 190, .18) !important;
+  background: rgba(255, 255, 255, .045) !important;
+  color: #d9dddf !important;
+}
+
+html.dui-pro-overhaul [data-dui-modal="recruit-agent"] .dui-recruit-section-icon,
+html.dui-pro-overhaul [data-dui-modal="recruit-agent"] .dui-recruit-close,
+html.dui-pro-overhaul [data-dui-modal="recruit-agent"] .dui-recruit-status-icon,
+html.dui-pro-overhaul [data-dui-modal="recruit-agent"] .dui-recruit-code-expand {
+  color: #aeb4b9 !important;
+}
+
+html.dui-pro-overhaul [data-dui-modal="recruit-agent"] .dui-recruit-close {
+  display: grid !important;
+  place-items: center !important;
+  padding: 0 !important;
+  line-height: 1 !important;
+}
+
+html.dui-pro-overhaul [data-dui-modal="recruit-agent"] .dui-recruit-close svg {
+  display: block;
+  margin: auto;
+}
+
+html.dui-pro-overhaul [data-dui-modal="recruit-agent"] .dui-recruit-section-icon {
+  border-color: rgba(184, 188, 190, .14) !important;
+  background: rgba(255, 255, 255, .035) !important;
+}
+
+html.dui-pro-overhaul [data-dui-modal="recruit-agent"] .dui-recruit-field input,
+html.dui-pro-overhaul [data-dui-modal="recruit-agent"] .dui-recruit-field select,
+html.dui-pro-overhaul [data-dui-modal="recruit-agent"] .dui-recruit-file-add input {
+  border-color: rgba(184, 188, 190, .16) !important;
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, .018), rgba(255, 255, 255, .004)),
+    #070809 !important;
+  color: #e8ebed !important;
+}
+
+html.dui-pro-overhaul [data-dui-modal="recruit-agent"] .dui-recruit-field input:focus,
+html.dui-pro-overhaul [data-dui-modal="recruit-agent"] .dui-recruit-field select:focus,
+html.dui-pro-overhaul [data-dui-modal="recruit-agent"] .dui-recruit-file-add input:focus {
+  border-color: rgba(235, 238, 240, .42) !important;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, .04),
+    0 0 0 1px rgba(255, 255, 255, .10),
+    0 0 24px rgba(255, 255, 255, .035) !important;
+}
+
+html.dui-pro-overhaul [data-dui-modal="recruit-agent"] .dui-recruit-portrait-preview {
+  border-color: rgba(208, 214, 218, .42) !important;
+  background:
+    radial-gradient(circle at 50% 36%, rgba(255, 255, 255, .10), transparent 48%),
+    #101214 !important;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, .08),
+    0 0 0 4px rgba(255, 255, 255, .035),
+    0 18px 36px rgba(0, 0, 0, .28) !important;
+}
+
+html.dui-pro-overhaul [data-dui-modal="recruit-agent"] .dui-recruit-behaviors {
+  border-color: rgba(184, 188, 190, .22) !important;
+  background: #050607 !important;
+}
+
+html.dui-pro-overhaul [data-dui-modal="recruit-agent"] .dui-recruit-behaviors button {
+  border-right-color: rgba(184, 188, 190, .16) !important;
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, .030), rgba(255, 255, 255, .006) 46%, rgba(0, 0, 0, .20)),
+    #070809 !important;
+  color: #f0f2f3 !important;
+}
+
+html.dui-pro-overhaul [data-dui-modal="recruit-agent"] .dui-recruit-behaviors button.is-active {
+  border-right-color: rgba(225, 228, 231, .24) !important;
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, .105), rgba(255, 255, 255, .035)),
+    #202326 !important;
+  color: #ffffff !important;
+}
+
+html.dui-pro-overhaul [data-dui-modal="recruit-agent"] .dui-recruit-file-tabs button,
+html.dui-pro-overhaul [data-dui-modal="recruit-agent"] .dui-recruit-file-add button {
+  border-color: rgba(184, 188, 190, .15) !important;
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, .035), rgba(255, 255, 255, .008)),
+    #111315 !important;
+  color: #c5c9cc !important;
+}
+
+html.dui-pro-overhaul [data-dui-modal="recruit-agent"] .dui-recruit-file-tabs button.is-active {
+  border-color: rgba(225, 228, 231, .22) !important;
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, .09), rgba(255, 255, 255, .020)),
+    #1b1d20 !important;
+  color: #f5f6f7 !important;
+}
+
+html.dui-pro-overhaul [data-dui-modal="recruit-agent"] .dui-recruit-file-tabs button.is-active::after {
+  background: #c7cbcf !important;
+  box-shadow: none !important;
+}
+
+html.dui-pro-overhaul [data-dui-modal="recruit-agent"] .dui-recruit-code-editor {
+  border-color: rgba(184, 188, 190, .12) !important;
+  background:
+    radial-gradient(ellipse at 48% 10%, rgba(255, 255, 255, .030), transparent 46%),
+    #050607 !important;
+}
+
+html.dui-pro-overhaul [data-dui-modal="recruit-agent"] .dui-recruit-footer {
+  border-top-color: rgba(184, 188, 190, .12) !important;
+  background:
+    linear-gradient(180deg, rgba(18, 20, 22, .66), rgba(8, 9, 10, .88)),
+    #0b0c0d !important;
+}
+
+html.dui-pro-overhaul [data-dui-modal="recruit-agent"] .dui-recruit-footer p[data-tone="success"] {
+  color: #c9ced2 !important;
+}
+
+html.dui-pro-overhaul [data-dui-modal="recruit-agent"] .dui-token-section,
+html.dui-pro-overhaul [data-dui-modal="recruit-agent"] .dui-token-id,
+html.dui-pro-overhaul [data-dui-modal="recruit-agent"] .dui-token-value {
+  color: #d8dcdf !important;
+}
+
+html.dui-pro-overhaul [data-dui-modal="recruit-agent"] .dui-recruit-capability,
+html.dui-pro-overhaul [data-dui-modal="recruit-agent"] .dui-recruit-toggle {
+  border-color: rgba(184, 188, 190, .14) !important;
+  background: #070809 !important;
+}
+
+html.dui-pro-overhaul [data-dui-modal="recruit-agent"] .dui-recruit-capability input,
+html.dui-pro-overhaul [data-dui-modal="recruit-agent"] .dui-recruit-toggle input {
+  border-color: rgba(184, 188, 190, .42) !important;
+  background: #101214 !important;
+}
+
+html.dui-pro-overhaul [data-dui-modal="recruit-agent"] .dui-recruit-capability input:checked,
+html.dui-pro-overhaul [data-dui-modal="recruit-agent"] .dui-recruit-toggle input:checked {
+  border-color: rgba(235, 238, 240, .82) !important;
+  background:
+    linear-gradient(180deg, #d9dddf, #9ca3a8) !important;
+}
+
+html.dui-pro-overhaul [data-dui-modal="recruit-agent"] .dui-recruit-capability input:checked::after,
+html.dui-pro-overhaul [data-dui-modal="recruit-agent"] .dui-recruit-toggle input:checked::after {
+  border-color: #050607 !important;
+}
+
+html.dui-pro-overhaul [data-dui-modal="recruit-agent"] .dui-recruit-personality-depth {
+  display: grid;
+  gap: 8px;
+  margin-top: 10px;
+  padding: 10px;
+  border: 1px solid rgba(184, 188, 190, .14);
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, .026), rgba(255, 255, 255, .006)),
+    #070809;
+}
+
+html.dui-pro-overhaul [data-dui-modal="recruit-agent"] .dui-recruit-personality-depth-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  min-width: 0;
+}
+
+html.dui-pro-overhaul [data-dui-modal="recruit-agent"] .dui-recruit-personality-depth strong {
+  color: #aeb4b9;
+  font-size: 10px;
+  font-weight: 850;
+  text-transform: uppercase;
+}
+
+html.dui-pro-overhaul [data-dui-modal="recruit-agent"] .dui-recruit-personality-depth em {
+  min-width: 78px;
+  border: 1px solid rgba(125, 211, 252, .26);
+  background: rgba(14, 165, 233, .08);
+  color: #d9f4ff;
+  padding: 3px 7px;
+  font-size: 10px;
+  font-style: normal;
+  font-weight: 900;
+  text-align: center;
+  text-transform: uppercase;
+}
+
+html.dui-pro-overhaul [data-dui-modal="recruit-agent"] .dui-recruit-personality-depth input[type="range"] {
+  --dy-range-value: 50%;
+  width: 100%;
+  height: 18px;
+  margin: 0;
+  appearance: none;
+  background: transparent;
+  accent-color: #67e8f9;
+  cursor: pointer;
+}
+
+html.dui-pro-overhaul [data-dui-modal="recruit-agent"] .dui-recruit-personality-depth input[type="range"]::-webkit-slider-runnable-track {
+  height: 7px;
+  border: 1px solid rgba(184, 188, 190, .16);
+  background:
+    linear-gradient(90deg, #38bdf8 0 var(--dy-range-value), rgba(255, 255, 255, .08) var(--dy-range-value) 100%),
+    #050607;
+  box-shadow: inset 0 1px 2px rgba(0, 0, 0, .62);
+}
+
+html.dui-pro-overhaul [data-dui-modal="recruit-agent"] .dui-recruit-personality-depth input[type="range"]::-webkit-slider-thumb {
+  width: 16px;
+  height: 16px;
+  margin-top: -5px;
+  appearance: none;
+  border: 1px solid rgba(225, 248, 255, .82);
+  border-radius: 999px;
+  background: radial-gradient(circle at 35% 28%, #ffffff, #7dd3fc 48%, #075985);
+  box-shadow:
+    0 0 0 3px rgba(56, 189, 248, .14),
+    0 0 14px rgba(56, 189, 248, .20);
+}
+
+html.dui-pro-overhaul [data-dui-modal="recruit-agent"] .dui-recruit-personality-depth input[type="range"]::-moz-range-track {
+  height: 7px;
+  border: 1px solid rgba(184, 188, 190, .16);
+  background: rgba(255, 255, 255, .08);
+}
+
+html.dui-pro-overhaul [data-dui-modal="recruit-agent"] .dui-recruit-personality-depth input[type="range"]::-moz-range-progress {
+  height: 7px;
+  background: #38bdf8;
+}
+
+html.dui-pro-overhaul [data-dui-modal="recruit-agent"] .dui-recruit-personality-depth input[type="range"]::-moz-range-thumb {
+  width: 16px;
+  height: 16px;
+  border: 1px solid rgba(225, 248, 255, .82);
+  border-radius: 999px;
+  background: #7dd3fc;
+}
+
+html.dui-pro-overhaul [data-dui-modal="recruit-agent"] .dui-recruit-personality-depth-scale {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 4px;
+}
+
+html.dui-pro-overhaul [data-dui-modal="recruit-agent"] .dui-recruit-personality-depth-scale button {
+  min-width: 0;
+  min-height: 22px;
+  overflow: hidden;
+  border: 1px solid transparent;
+  background: transparent;
+  color: #7f878d;
+  padding: 0 4px;
+  font-size: 9px;
+  font-weight: 800;
+  text-align: center;
+  text-overflow: ellipsis;
+  text-transform: uppercase;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+html.dui-pro-overhaul [data-dui-modal="recruit-agent"] .dui-recruit-personality-depth-scale button:hover,
+html.dui-pro-overhaul [data-dui-modal="recruit-agent"] .dui-recruit-personality-depth-scale button:focus-visible {
+  border-color: rgba(125, 211, 252, .22);
+  background: rgba(14, 165, 233, .06);
+  color: #c9f1ff;
+}
+
+html.dui-pro-overhaul [data-dui-modal="recruit-agent"] .dui-recruit-personality-depth-scale button[data-active="true"] {
+  border-color: rgba(125, 211, 252, .34);
+  background: rgba(14, 165, 233, .10);
+  color: #e7faff;
+}
+
+html.dui-pro-overhaul [data-dui-modal="recruit-agent"] .dui-recruit-status-icon {
+  border-color: rgba(225, 228, 231, .48) !important;
+  color: #d9dddf !important;
+}
+
+html.dui-pro-overhaul [data-dui-modal="recruit-agent"] .dui-recruit-primary,
+html.dui-pro-overhaul [data-dui-modal="recruit-agent"] .dui-recruit-primary:hover {
+  border-color: rgba(225, 228, 231, .20) !important;
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, .11), rgba(255, 255, 255, .040)),
+    #202326 !important;
+  color: #f5f6f7 !important;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, .12),
+    0 16px 36px rgba(0, 0, 0, .24) !important;
+}
+
+html.dui-pro-overhaul [data-dui-modal="recruit-agent"] .dui-recruit-secondary,
+html.dui-pro-overhaul [data-dui-modal="recruit-agent"] .dui-recruit-secondary:hover {
+  border-color: rgba(184, 188, 190, .18) !important;
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, .055), rgba(255, 255, 255, .016)),
+    #151719 !important;
+  color: #f0f2f3 !important;
+}
+
+html.dui-pro-overhaul [data-dui-modal="recruit-agent"] .dui-recruit-auto-indicator {
+  display: inline-flex;
+  align-items: center;
+  min-height: 34px;
+  max-width: 220px;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  border: 1px solid rgba(74, 222, 128, .26);
+  background: rgba(20, 184, 166, .08);
+  color: #a7f3d0;
+  padding: 0 10px;
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 0;
+  text-transform: uppercase;
+}
+
+html.dui-pro-overhaul [data-dui-modal="recruit-agent"] .dui-recruit-auto-indicator[data-state="running"] {
+  border-color: rgba(125, 211, 252, .32);
+  background: rgba(14, 165, 233, .10);
+  color: #bae6fd;
+}
+
+html.dui-pro-overhaul [data-dui-modal="recruit-agent"] .dui-recruit-auto-indicator[data-state="missing-model"],
+html.dui-pro-overhaul [data-dui-modal="recruit-agent"] .dui-recruit-auto-indicator[data-state="auth"] {
+  border-color: rgba(251, 191, 36, .34);
+  background: rgba(245, 158, 11, .08);
+  color: #fde68a;
+}
+
+html.dui-pro-overhaul [data-dui-modal="recruit-agent"] .dui-recruit-auto-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  min-height: 42px;
+  border: 1px solid rgba(45, 212, 191, .42);
+  background:
+    linear-gradient(180deg, rgba(20, 184, 166, .28), rgba(13, 148, 136, .20)),
+    rgba(8, 47, 73, .30);
+  color: #ecfeff;
+  padding: 0 16px;
+  font-size: 12px;
+  font-weight: 900;
+  letter-spacing: 0;
+  text-transform: none;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, .08),
+    0 10px 28px rgba(20, 184, 166, .12);
+  transition: border-color 160ms ease, background 160ms ease, transform 160ms ease, opacity 160ms ease;
+}
+
+html.dui-pro-overhaul [data-dui-modal="recruit-agent"] .dui-recruit-auto-button:hover:not(:disabled) {
+  border-color: rgba(103, 232, 249, .58);
+  background:
+    linear-gradient(180deg, rgba(34, 211, 238, .28), rgba(20, 184, 166, .22)),
+    rgba(8, 47, 73, .42);
+  transform: translateY(-1px);
+}
+
+html.dui-pro-overhaul [data-dui-modal="recruit-agent"] .dui-recruit-auto-button:disabled {
+  cursor: not-allowed;
+  opacity: .42;
+  transform: none;
+}
+
+html.dui-pro-overhaul [data-dui-modal="recruit-agent"] .dui-recruit-auto-button svg {
+  width: 15px;
+  height: 15px;
+  stroke-width: 2;
+}
+
+@media (max-width: 760px) {
+  html.dui-pro-overhaul [data-dui-modal="recruit-agent"] .dui-recruit-footer {
+    flex: 0 0 auto !important;
+    min-height: auto;
+    gap: 12px;
+    overflow-x: hidden;
+  }
+
+  html.dui-pro-overhaul [data-dui-modal="recruit-agent"] .dui-recruit-footer p {
+    width: 100%;
+    align-items: flex-start;
+    font-size: 12px !important;
+  }
+
+  html.dui-pro-overhaul [data-dui-modal="recruit-agent"] .dui-recruit-footer > div {
+    display: grid !important;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    width: 100%;
+    min-width: 0;
+    gap: 8px;
+  }
+
+  html.dui-pro-overhaul [data-dui-modal="recruit-agent"] .dui-recruit-auto-indicator {
+    grid-column: 1 / -1;
+    max-width: 100%;
+    width: 100%;
+    justify-content: center;
+  }
+
+  html.dui-pro-overhaul [data-dui-modal="recruit-agent"] .dui-recruit-auto-button {
+    grid-column: 1 / -1;
+    width: 100%;
+    min-height: 42px !important;
+  }
+
+  html.dui-pro-overhaul [data-dui-modal="recruit-agent"] .dui-recruit-secondary,
+  html.dui-pro-overhaul [data-dui-modal="recruit-agent"] .dui-recruit-primary {
+    width: 100%;
+    min-height: 42px !important;
+  }
+}
+
+/* Mission nav/full-width correction. Keep nav in the regular tab-bar slot and use the full workspace. */
+html.dui-pro-overhaul .dy-header-nav {
+  display: none !important;
+}
+
+html.dui-pro-overhaul .dy-command-header-inner {
+  grid-template-columns: minmax(260px, 1fr) auto !important;
+}
+
+html.dui-pro-overhaul .dy-top-tabs {
+  display: grid !important;
+  width: 100% !important;
+  max-width: none !important;
+  margin: 0 0 14px !important;
+}
+
+html.dui-pro-overhaul .dy-tab-content,
+html.dui-pro-overhaul .dy-mission-tab-frame,
+html.dui-pro-overhaul .dui-mission-wrap,
+html.dui-pro-overhaul .dui-mission-screen {
+  width: 100% !important;
+  max-width: none !important;
+}
+
+html.dui-pro-overhaul .dy-mission-tab-frame {
+  display: block !important;
+  margin: 0 !important;
+}
+
+html.dui-pro-overhaul .dui-mission-wrap {
+  margin: 0 !important;
+}
+
+/* Recruit markdown editor: restore syntax/file color and make the status strip functional. */
+html.dui-pro-overhaul [data-dui-modal="recruit-agent"] .dui-recruit-file-tabs button[data-md-tone="identity"] {
+  --dui-md-file-accent: #6aa8ff;
+  --dui-md-file-soft: rgba(106, 168, 255, .14);
+  --dui-md-file-border: rgba(106, 168, 255, .38);
+}
+
+html.dui-pro-overhaul [data-dui-modal="recruit-agent"] .dui-recruit-file-tabs button[data-md-tone="soul"] {
+  --dui-md-file-accent: #b590ff;
+  --dui-md-file-soft: rgba(181, 144, 255, .14);
+  --dui-md-file-border: rgba(181, 144, 255, .38);
+}
+
+html.dui-pro-overhaul [data-dui-modal="recruit-agent"] .dui-recruit-file-tabs button[data-md-tone="bootstrap"] {
+  --dui-md-file-accent: #f3c760;
+  --dui-md-file-soft: rgba(243, 199, 96, .15);
+  --dui-md-file-border: rgba(243, 199, 96, .40);
+}
+
+html.dui-pro-overhaul [data-dui-modal="recruit-agent"] .dui-recruit-file-tabs button[data-md-tone="agents"] {
+  --dui-md-file-accent: #48e0da;
+  --dui-md-file-soft: rgba(72, 224, 218, .13);
+  --dui-md-file-border: rgba(72, 224, 218, .36);
+}
+
+html.dui-pro-overhaul [data-dui-modal="recruit-agent"] .dui-recruit-file-tabs button[data-md-tone="user"] {
+  --dui-md-file-accent: #ff8c78;
+  --dui-md-file-soft: rgba(255, 140, 120, .13);
+  --dui-md-file-border: rgba(255, 140, 120, .36);
+}
+
+html.dui-pro-overhaul [data-dui-modal="recruit-agent"] .dui-recruit-file-tabs button[data-md-tone="heartbeat"] {
+  --dui-md-file-accent: #ff6fb1;
+  --dui-md-file-soft: rgba(255, 111, 177, .13);
+  --dui-md-file-border: rgba(255, 111, 177, .35);
+}
+
+html.dui-pro-overhaul [data-dui-modal="recruit-agent"] .dui-recruit-file-tabs button[data-md-tone="memory"] {
+  --dui-md-file-accent: #75e2a5;
+  --dui-md-file-soft: rgba(117, 226, 165, .13);
+  --dui-md-file-border: rgba(117, 226, 165, .35);
+}
+
+html.dui-pro-overhaul [data-dui-modal="recruit-agent"] .dui-recruit-file-tabs button[data-md-tone="tools"] {
+  --dui-md-file-accent: #f59e0b;
+  --dui-md-file-soft: rgba(245, 158, 11, .14);
+  --dui-md-file-border: rgba(245, 158, 11, .36);
+}
+
+html.dui-pro-overhaul [data-dui-modal="recruit-agent"] .dui-recruit-file-tabs button[data-md-tone="mission"] {
+  --dui-md-file-accent: #38bdf8;
+  --dui-md-file-soft: rgba(56, 189, 248, .13);
+  --dui-md-file-border: rgba(56, 189, 248, .35);
+}
+
+html.dui-pro-overhaul [data-dui-modal="recruit-agent"] .dui-recruit-file-tabs button[data-md-tone="custom"] {
+  --dui-md-file-accent: #d1d5db;
+  --dui-md-file-soft: rgba(209, 213, 219, .10);
+  --dui-md-file-border: rgba(209, 213, 219, .24);
+}
+
+html.dui-pro-overhaul [data-dui-modal="recruit-agent"] .dui-recruit-file-tabs button[data-md-tone] {
+  gap: 8px !important;
+  border-color: color-mix(in srgb, var(--dui-md-file-border), rgba(184, 188, 190, .14) 35%) !important;
+  color: #dfe7eb !important;
+}
+
+html.dui-pro-overhaul [data-dui-modal="recruit-agent"] .dui-recruit-file-tabs button[data-md-tone]::before {
+  content: "";
+  width: 7px;
+  height: 7px;
+  flex: 0 0 auto;
+  border-radius: 999px;
+  background: var(--dui-md-file-accent);
+  box-shadow: 0 0 12px color-mix(in srgb, var(--dui-md-file-accent), transparent 42%);
+}
+
+html.dui-pro-overhaul [data-dui-modal="recruit-agent"] .dui-recruit-file-tabs button.is-active[data-md-tone] {
+  border-color: var(--dui-md-file-border) !important;
+  background:
+    linear-gradient(180deg, var(--dui-md-file-soft), rgba(255, 255, 255, .018)),
+    #12161a !important;
+  color: #ffffff !important;
+}
+
+html.dui-pro-overhaul [data-dui-modal="recruit-agent"] .dui-recruit-file-tabs button.is-active[data-md-tone]::after {
+  background: var(--dui-md-file-accent) !important;
+  box-shadow: 0 0 14px color-mix(in srgb, var(--dui-md-file-accent), transparent 36%) !important;
+}
+
+html.dui-pro-overhaul [data-dui-modal="recruit-agent"] .dui-recruit-code-editor.is-expanded {
+  min-height: clamp(420px, 58vh, 720px) !important;
+}
+
+html.dui-pro-overhaul [data-dui-modal="recruit-agent"] .dui-recruit-code-preview {
+  color: #d7dee6 !important;
+}
+
+html.dui-pro-overhaul [data-dui-modal="recruit-agent"] .dui-token-title {
+  color: #ffe08a !important;
+  font-weight: 900 !important;
+}
+
+html.dui-pro-overhaul [data-dui-modal="recruit-agent"] .dui-token-section {
+  color: #7dd3fc !important;
+  font-weight: 900 !important;
+}
+
+html.dui-pro-overhaul [data-dui-modal="recruit-agent"] .dui-token-label {
+  color: #93e6ff !important;
+  font-weight: 850 !important;
+}
+
+html.dui-pro-overhaul [data-dui-modal="recruit-agent"] .dui-token-id {
+  color: #facc6b !important;
+  font-weight: 900 !important;
+}
+
+html.dui-pro-overhaul [data-dui-modal="recruit-agent"] .dui-token-value {
+  color: #74e4a2 !important;
+  font-weight: 850 !important;
+}
+
+html.dui-pro-overhaul [data-dui-modal="recruit-agent"] .dui-token-list-marker {
+  color: #c084fc !important;
+  font-weight: 900 !important;
+}
+
+html.dui-pro-overhaul [data-dui-modal="recruit-agent"] .dui-token-code-fence {
+  color: #f0abfc !important;
+  font-weight: 850 !important;
+}
+
+html.dui-pro-overhaul [data-dui-modal="recruit-agent"] .dui-token-rule {
+  color: #64748b !important;
+  font-weight: 900 !important;
+}
+
+html.dui-pro-overhaul [data-dui-modal="recruit-agent"] .dui-recruit-code-status {
+  justify-content: flex-start !important;
+  gap: 10px !important;
+  overflow-x: auto;
+  scrollbar-width: thin;
+}
+
+html.dui-pro-overhaul [data-dui-modal="recruit-agent"] .dui-recruit-code-status > span {
+  flex: 0 0 auto;
+  white-space: nowrap;
+}
+
+html.dui-pro-overhaul [data-dui-modal="recruit-agent"] .dui-recruit-code-mode {
+  max-width: 150px;
+  overflow: hidden;
+  color: #dffcff !important;
+  text-overflow: ellipsis;
+}
+
+html.dui-pro-overhaul [data-dui-modal="recruit-agent"] .dui-recruit-code-expand {
+  display: inline-grid !important;
+  width: 27px;
+  height: 27px;
+  flex: 0 0 auto;
+  margin-left: auto;
+  padding: 0 !important;
+  place-items: center;
+  border: 1px solid rgba(148, 163, 184, .24) !important;
+  border-radius: 8px !important;
+  background: rgba(255, 255, 255, .045) !important;
+  color: #e6edf2 !important;
+  cursor: pointer;
+}
+
+html.dui-pro-overhaul [data-dui-modal="recruit-agent"] .dui-recruit-code-expand:hover,
+html.dui-pro-overhaul [data-dui-modal="recruit-agent"] .dui-recruit-code-expand[aria-pressed="true"] {
+  border-color: rgba(125, 211, 252, .45) !important;
+  background: rgba(14, 165, 233, .14) !important;
+  color: #f0fbff !important;
+}
+
+/* Flat slate override: square UI, connected plugin rows, viewport-locked gateway tail. */
+html.dui-pro-overhaul {
+  --dui-r: 0;
+  --radius-xs: 0;
+  --radius-sm: 0;
+  --radius-md: 0;
+  --radius-lg: 0;
+  --radius-xl: 0;
+  --radius-2xl: 0;
+  --radius-3xl: 0;
+}
+
+html.dui-pro-overhaul *,
+html.dui-pro-overhaul *::before,
+html.dui-pro-overhaul *::after {
+  border-radius: 0 !important;
+}
+
+html.dui-pro-overhaul .dy-monitor-shell,
+html.dui-pro-overhaul [data-dui-panel="plugins"].dy-plugins-panel {
+  border-radius: 0 !important;
+}
+
+html.dui-pro-overhaul .app-bg.dy-monitor-focus .dy-tab-content {
+  display: flex !important;
+  min-height: calc(100dvh - 16px) !important;
+}
+
+html.dui-pro-overhaul .app-bg.dy-monitor-focus [data-dui-panel="monitor"].dy-monitor-shell {
+  display: flex !important;
+  flex: 1 1 auto !important;
+  flex-direction: column !important;
+  height: calc(100dvh - 16px) !important;
+  min-height: calc(100dvh - 16px) !important;
+  overflow: hidden !important;
+}
+
+html.dui-pro-overhaul .app-bg.dy-monitor-focus .dy-monitor-body {
+  display: flex !important;
+  flex: 1 1 auto !important;
+  flex-direction: column !important;
+  min-height: 0 !important;
+  overflow: hidden !important;
+}
+
+html.dui-pro-overhaul .dy-gateway-panel,
+html.dui-pro-overhaul .app-bg.dy-monitor-focus .dy-gateway-panel {
+  display: flex !important;
+  flex: 1 1 auto !important;
+  flex-direction: column !important;
+  min-height: 0 !important;
+}
+
+html.dui-pro-overhaul .dy-gateway-layout,
+html.dui-pro-overhaul .app-bg.dy-monitor-focus .dy-gateway-layout {
+  flex: 1 1 auto !important;
+  min-height: 0 !important;
+  max-height: 100% !important;
+  align-items: stretch !important;
+  grid-template-rows: min-content minmax(0, auto) minmax(220px, 1fr) minmax(140px, .55fr) !important;
+}
+
+html.dui-pro-overhaul .dy-gateway-log-card,
+html.dui-pro-overhaul .app-bg.dy-monitor-focus .dy-gateway-log-card {
+  display: flex !important;
+  flex-direction: column !important;
+  min-height: 0 !important;
+  height: auto !important;
+  align-self: stretch !important;
+  overflow: hidden !important;
+}
+
+html.dui-pro-overhaul .dy-gateway-log-card .dy-monitor-log-box {
+  flex: 1 1 auto !important;
+  min-height: 0 !important;
+  height: auto !important;
+  max-height: none !important;
+  overflow: auto !important;
+}
+
+html.dui-pro-overhaul [data-dui-panel="plugins"].dy-plugins-panel,
+html.dui-pro-overhaul [data-dui-panel="plugins"].dy-plugins-panel > div {
+  border-radius: 0 !important;
+}
+
+html.dui-pro-overhaul .dy-plugins-list {
+  gap: 0 !important;
+  padding: 0 !important;
+}
+
+html.dui-pro-overhaul .dy-plugins-list > .grid {
+  gap: 0 !important;
+}
+
+html.dui-pro-overhaul .dy-plugins-list article,
+html.dui-pro-overhaul .dy-plugins-list > div:not(.grid) {
+  margin: 0 !important;
+  border-right: 0 !important;
+  border-left: 0 !important;
+  border-top: 0 !important;
+  border-bottom: 1px solid rgba(157, 172, 185, .12) !important;
+  border-radius: 0 !important;
+  box-shadow: none !important;
+}
+
+html.dui-pro-overhaul .dy-plugins-list article:last-child {
+  border-bottom: 0 !important;
+}
+
+html.dui-pro-overhaul .dy-plugins-panel button,
+html.dui-pro-overhaul .dy-gateway-plugin-card button,
+html.dui-pro-overhaul .dy-gateway-plugin-row,
+html.dui-pro-overhaul .dy-plugin-surface-list > .grid {
+  border-radius: 0 !important;
+}

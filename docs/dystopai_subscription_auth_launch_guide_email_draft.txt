@@ -1,0 +1,9 @@
+To: hotboysupreme12@gmail.com
+Subject: DystopAI Subscription/Auth Launch Guide
+
+Attached is the DystopAI Subscription, OAuth, and Authorization Launch Guide PDF.
+
+It covers the first steps, accounts to create, recommended stack, Stripe/Clerk setup, OAuth rules, backend route contracts, database schema, starter code, security rules, and a seven-day implementation plan.
+
+Attachment:
+dystopai_subscription_auth_launch_guide.pdf

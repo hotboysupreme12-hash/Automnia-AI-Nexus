@@ -1,0 +1,51 @@
+# OpenClaw documentation crawler policy
+# Human docs are HTML. Agent-optimized docs are available as Markdown via .md URLs or Accept: text/markdown.
+# Agent-optimized docs are available through /llms.txt and page-level Markdown.
+
+User-agent: *
+Allow: /
+Disallow: /__elements
+Disallow: /ask-molty/api/
+
+User-agent: GPTBot
+Allow: /
+Disallow: /__elements
+Disallow: /ask-molty/api/
+
+User-agent: OAI-SearchBot
+Allow: /
+Disallow: /__elements
+Disallow: /ask-molty/api/
+
+User-agent: ChatGPT-User
+Allow: /
+Disallow: /__elements
+Disallow: /ask-molty/api/
+
+User-agent: ClaudeBot
+Allow: /
+Disallow: /__elements
+Disallow: /ask-molty/api/
+
+User-agent: Claude-User
+Allow: /
+Disallow: /__elements
+Disallow: /ask-molty/api/
+
+User-agent: PerplexityBot
+Allow: /
+Disallow: /__elements
+Disallow: /ask-molty/api/
+
+User-agent: Perplexity-User
+Allow: /
+Disallow: /__elements
+Disallow: /ask-molty/api/
+
+User-agent: Google-Extended
+Allow: /
+Disallow: /__elements
+Disallow: /ask-molty/api/
+
+Sitemap: https://docs.openclaw.ai/sitemap.xml
+LLMS: https://docs.openclaw.ai/llms.txt
