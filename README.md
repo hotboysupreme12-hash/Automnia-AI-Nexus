@@ -20,13 +20,19 @@ DystopAI Core is not just a chatbot wrapper. It is an agent operations layer:
 
 ## Screenshots
 
-| Agents | Missions | Monitor |
-| --- | --- | --- |
-| ![Agents tab](docs/assets/user-guide/agents.png) | ![Missions tab](docs/assets/user-guide/missions.png) | ![Monitor tab](docs/assets/user-guide/monitor.png) |
+Fresh screenshots below were captured from a full browser test against the current Vite app and Control Center backend on June 23, 2026.
 
-| Agent Editor | Gateway Monitor | Plugins |
-| --- | --- | --- |
-| ![Agent editor](docs/assets/user-guide/agent-editor.png) | ![Gateway monitor](docs/assets/user-guide/monitor-gateway-redacted.png) | ![Plugins tab](docs/assets/user-guide/plugins.png) |
+| Agents + Command Console | Mission Board |
+| --- | --- |
+| ![Current Agents and Command Console browser capture](docs/assets/readme/current/agents-console-current.png) | ![Current Mission Board browser capture](docs/assets/readme/current/missions-current.png) |
+
+| Runtime Monitor | Plugins |
+| --- | --- |
+| ![Current Runtime Monitor browser capture](docs/assets/readme/current/monitor-current.png) | ![Current Plugins browser capture](docs/assets/readme/current/plugins-current.png) |
+
+| Agent Editor |
+| --- |
+| ![Current Agent Editor browser capture](docs/assets/readme/current/agent-editor-current.png) |
 
 ## Core Capabilities
 
