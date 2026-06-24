@@ -41,7 +41,7 @@ for (const code of [
 
 const summaryBlock = sliceBetween(server, "app.get('/api/openclaw/summary'", "const RuntimeSessionCloseSchema")
 const commandBlock = sliceBetween(server, "app.post('/api/openclaw/command'", 'async function buildRuntimeStatusPayload')
-const parallelHealthBlock = sliceBetween(server, "app.post('/api/party/parallel-health'", "app.get('/api/missions'")
+const parallelHealthBlock = sliceBetween(server, "app.post('/api/party/parallel-health'", 'registerMissionRoutes(app, {')
 
 assertCanonicalRoute('/api/openclaw/summary', summaryBlock)
 assertCanonicalRoute('/api/openclaw/command', commandBlock)

@@ -30,6 +30,7 @@ import { apiFailure, apiSuccess, installControlPlaneHttp, setStaticSecurityHeade
 import { registerAuthRoutes } from './routes/authRoutes'
 import { registerCommandConsoleFileRoutes } from './routes/commandConsoleFileRoutes'
 import { registerDiagnosticsRoutes } from './routes/diagnosticsRoutes'
+import { registerMissionRoutes } from './routes/missionRoutes'
 import { registerPluginRoutes } from './routes/pluginRoutes'
 import { createControlFilesService } from './services/controlFilesService'
 import { applyDiagnosticRedactions } from '../src/utils/diagnosticRedaction'
@@ -29056,304 +29057,30 @@ app.post('/api/party/parallel-health', async (req, res) => {
   }
 })
 
-app.get('/api/missions', async (_req, res) => {
-  return apiSuccess(res, await buildMissionLifecycleProjection({
-    missionLimit: 500,
-    eventLimit: 300,
-    feedLimit: 120,
-    reportLimit: 80,
-  }))
-})
-
-app.get('/api/missions/projection', async (_req, res) => {
-  return apiSuccess(res, await buildMissionLifecycleProjection({
-    missionLimit: 500,
-    eventLimit: 500,
-    feedLimit: 120,
-    reportLimit: 80,
-  }))
-})
-
-app.get('/api/missions/:missionId/lifecycle', async (req, res) => {
-  const missionId = req.params.missionId?.trim()
-  if (!missionId) return apiFailure(res, 400, 'invalid_payload', 'Mission id is required')
-  const projection = await buildMissionLifecycleProjection({
-    missionId,
-    missionLimit: 1000,
-    eventLimit: 1000,
-    feedLimit: 200,
-    reportLimit: 200,
-  })
-  if (!projection.missions.length && !projection.events.length && !projection.reports.length) {
-    return apiFailure(res, 404, 'mission_not_found', 'Mission lifecycle not found')
-  }
-  return apiSuccess(res, {
-    missionId,
-    ...projection,
-    mission: projection.missions[0] || null,
-    report: projection.reports[0] || null,
-  })
-})
-
-app.get('/api/missions/:missionId/events', async (req, res) => {
-  const missionId = req.params.missionId?.trim()
-  if (!missionId) return apiFailure(res, 400, 'invalid_payload', 'Mission id is required')
-  const events = await readMissionEventLedgerTail<MissionLifecycleEvent>(1000).catch(() => [])
-  return apiSuccess(res, { missionId, events: events.filter((event) => event.missionId === missionId) })
-})
-
-app.get('/api/missions/:missionId/report', async (req, res) => {
-  const missionId = req.params.missionId?.trim()
-  if (!missionId) return apiFailure(res, 400, 'invalid_payload', 'Mission id is required')
-  const reports = await listMissionReports(200)
-  const report = reports.find((entry) => entry.missionId === missionId) || null
-  if (!report) return apiFailure(res, 404, 'mission_report_not_found', 'Mission report not found')
-  return apiSuccess(res, { missionId, report })
-})
-
-app.post('/api/missions/start', async (req, res) => {
-  const schema = z.object({
-    title: z.string().min(1).max(120),
-    brief: z.string().min(1).max(2000),
-    party: z.array(z.string().min(1)).min(1).max(8),
-    mode: z.enum(['instant', 'hours', 'days', 'weeks', 'continuous', 'indefinite']),
-    amount: z.number().int().min(1).max(52).nullable().optional(),
-    missionType: z.string().min(1).max(80).optional(),
-    collaborationMode: z.string().min(1).max(80).optional(),
-    complexity: z.number().int().min(0).max(100).optional(),
-    riskTolerance: z.number().int().min(0).max(100).optional(),
-    cadenceSeconds: z.number().int().min(15).max(24 * 60 * 60).optional(),
-    maxCycles: z.number().int().min(1).max(1000).nullable().optional(),
-    idempotencyKey: z.string().trim().min(8).max(160).optional(),
-  })
-  const parsed = schema.safeParse(req.body)
-  if (!parsed.success) return apiFailure(res, 400, 'invalid_payload', 'Invalid payload', parsed.error.flatten())
-
-  const payload = parsed.data
-  const idempotencyKey = normalizeMissionLaunchIdempotencyKey(payload.idempotencyKey)
-  const uniqueParty = Array.from(new Set(payload.party.map((agentId) => agentId.trim()).filter(Boolean)))
-  if (!uniqueParty.length) return apiFailure(res, 400, 'invalid_payload', 'Mission requires at least one valid agent.')
-  const existingMission = findMissionByIdempotencyKey(idempotencyKey)
-  if (existingMission) {
-    return apiSuccess(res, {
-      deduped: true,
-      idempotencyKey,
-      mission: missionView(existingMission),
-    })
-  }
-
-  const mission: Mission = {
-    id: randomUUID(),
-    ...(idempotencyKey ? { idempotencyKey } : {}),
-    title: payload.title,
-    brief: payload.brief,
-    mode: payload.mode,
-    amount: payload.mode === 'indefinite' || payload.mode === 'continuous' || payload.mode === 'instant' ? null : payload.amount || 1,
-    missionType: payload.missionType,
-    collaborationMode: payload.collaborationMode,
-    complexity: payload.complexity,
-    riskTolerance: payload.riskTolerance,
-    cadenceSeconds: payload.cadenceSeconds,
-    startAt: new Date().toISOString(),
-    endAt: null,
-    status: 'active',
-    lifecycleState: 'draft',
-    party: uniqueParty,
-    createdAt: new Date().toISOString(),
-    completedAt: null,
-    scheduler: missionSchedulerInitialState({
-      party: uniqueParty,
-      cadenceSeconds: payload.cadenceSeconds,
-      maxCycles: payload.maxCycles ?? null,
-    }),
-  }
-  const missionActivity: string[] = []
-  const missionAssignments: TeamSyncAssignment[] = mission.party.map((agentId) => ({
-    agentId,
-    task: mission.brief,
-    status: 'queued',
-    updatedAt: new Date().toISOString(),
-  }))
-
-  const durationMs = missionDurationMs(mission.mode, mission.amount)
-  if (durationMs > 0) {
-    mission.endAt = new Date(Date.now() + durationMs).toISOString()
-    const timer = setTimeout(() => {
-      const target = missions.get(mission.id)
-      if (!target || target.status !== 'active') return
-      missionTimers.delete(mission.id)
-      void completeCronMission(target, 'completed', `Mission completed by cron timer: ${target.title}`, missionAssignments, missionActivity)
-    }, durationMs)
-    missionTimers.set(mission.id, timer)
-  }
-
-  missions.set(mission.id, mission)
-  transitionMissionState(mission, 'validating', 'mission_started', `Cron mission accepted for validation: ${mission.title}`, {
-    idempotencyKey: `${mission.id}:draft->validating`,
-    evidence: { partySize: mission.party.length, mode: mission.mode },
-  })
-  transitionMissionState(mission, 'scheduled', 'mission_started', `Cron mission scheduled: ${mission.title}`, {
-    idempotencyKey: `${mission.id}:validating->scheduled`,
-    evidence: { cadenceSeconds: mission.cadenceSeconds || null, maxCycles: mission.scheduler.maxCycles },
-  })
-  missionActivity.unshift(`${new Date().toISOString()} | cron mission started`)
-  for (const state of missionAssignments) {
-    state.status = 'queued'
-    state.updatedAt = new Date().toISOString()
-    state.note = 'awaiting cron leader round'
-  }
-  for (const agentId of mission.party) {
-    pushMissionEvent({
-      missionId: mission.id,
-      type: 'agent_assigned',
-      agentId,
-      message: `${agentId} assigned to cron mission: ${mission.brief.slice(0, 120)}`,
-    })
-  }
-  await writeTeamSyncSnapshot({
-    missionId: mission.id,
-    title: mission.title,
-    mode: mission.mode,
-    status: mission.status,
-    assignments: missionAssignments,
-    activity: missionActivity,
-  })
-
-  try {
-    if (CONTROL_CENTER_MISSION_SCHEDULER_DRY_RUN) {
-      mission.scheduler.status = 'waiting'
-      mission.scheduler.nextRoundAt = null
-      mission.scheduler.lastError = null
-      missionActivity.unshift(`${new Date().toISOString()} | scheduler | mission scheduler dry-run armed`)
-      persistMissionRecord(mission, 'scheduler-dry-run')
-      pushMissionEvent({
-        missionId: mission.id,
-        type: 'agent_update',
-        message: `Mission scheduler dry-run armed: ${mission.title}`,
-        actor: 'scheduler',
-        evidence: {
-          dryRun: true,
-          reason: 'CONTROL_CENTER_MISSION_SCHEDULER_DRY_RUN',
-          partySize: mission.party.length,
-          mode: mission.mode,
-        },
-      })
-    } else if (mission.mode === 'instant') {
-      scheduleNextMissionRound(mission, missionAssignments, missionActivity, 0)
-    } else {
-      await startRecurringMissionCronJobs(mission, missionAssignments, missionActivity)
-    }
-    transitionMissionState(mission, 'running', 'mission_started', `Cron mission running: ${mission.title}`, {
-      idempotencyKey: `${mission.id}:scheduled->running`,
-      evidence: { schedulerStatus: mission.scheduler.status, jobs: mission.scheduler.jobs.length },
-    })
-  } catch (error) {
-    const timer = missionTimers.get(mission.id)
-    if (timer) {
-      clearTimeout(timer)
-      missionTimers.delete(mission.id)
-    }
-    mission.status = 'cancelled'
-    mission.completedAt = new Date().toISOString()
-    transitionMissionState(mission, 'failed', 'mission_cancelled', `Cron mission failed during scheduler setup: ${String(error)}`, {
-      idempotencyKey: `${mission.id}:scheduled->failed`,
-      evidence: { error: String(error) },
-    })
-    recordMissionReport(mission)
-    missions.delete(mission.id)
-    return apiFailure(res, 500, 'mission_scheduler_failed', 'Failed to create mission cron jobs', String(error))
-  }
-
-  return apiSuccess(res, { deduped: false, idempotencyKey, mission: missionView(mission) })
-})
-
-app.post('/api/missions/stop', async (req, res) => {
-  const schema = z.object({
-    missionId: z.string().min(1),
-    reason: z.string().trim().max(300).optional(),
-  })
-  const parsed = schema.safeParse(req.body)
-  if (!parsed.success) return apiFailure(res, 400, 'invalid_payload', 'Invalid payload', parsed.error.flatten())
-
-  const mission = missions.get(parsed.data.missionId)
-  if (!mission) return apiFailure(res, 404, 'mission_not_found', 'Mission not found')
-  if (mission.status !== 'active') return apiFailure(res, 400, 'mission_invalid_state', `Mission is already ${mission.status}`)
-
-  const timer = missionTimers.get(mission.id)
-  if (timer) {
-    clearTimeout(timer)
-    missionTimers.delete(mission.id)
-  }
-  clearMissionController(mission.id)
-
-  mission.status = 'cancelled'
-  mission.completedAt = new Date().toISOString()
-  mission.endAt ||= mission.completedAt
-  mission.scheduler.status = 'stopping'
-  mission.scheduler.nextRoundAt = null
-  mission.scheduler.activeJobId = null
-  mission.scheduler.lastError = null
-  const cancellationReason = parsed.data.reason || 'mission cancelled by operator'
-  persistMissionRecord(mission, 'cancellation-requested')
-  pushMissionEvent({
-    missionId: mission.id,
-    type: 'agent_update',
-    message: `Mission cancellation requested: ${mission.title}`,
-    actor: 'operator',
-    previousState: mission.lifecycleState,
-    nextState: mission.lifecycleState,
-    idempotencyKey: `${mission.id}:operator-cancel-requested:${mission.completedAt}`,
-    evidence: {
-      reason: cancellationReason,
-      jobs: mission.scheduler.jobs.length,
-      activeJobs: mission.scheduler.jobs.filter(missionCronJobNeedsRecovery).length,
-      round: mission.scheduler.round,
-    },
-  })
-
-  const cleanup = await cleanupMissionCronJobs(mission).catch(missionCronCleanupFailureSummary)
-  if (cleanup.failed > 0) {
-    mission.scheduler.status = 'failed'
-    mission.scheduler.lastError = `Mission cancellation cleanup failed for ${cleanup.failed} job(s).`
-    pushMissionEvent({
-      missionId: mission.id,
-      type: 'agent_update',
-      message: `Mission cancellation cleanup failed for ${cleanup.failed} cron job(s).`,
-      actor: 'scheduler',
-      evidence: { cleanup },
-    })
-  } else {
-    mission.scheduler.status = 'stopped'
-  }
-  transitionMissionState(mission, 'cancelled', 'mission_cancelled', `Cron mission cancelled: ${mission.title}`, {
-    actor: 'operator',
-    idempotencyKey: `${mission.id}:operator-cancel:${mission.completedAt}`,
-    evidence: {
-      reason: cancellationReason,
-      jobs: mission.scheduler.jobs.length,
-      round: mission.scheduler.round,
-      cleanup,
-    },
-  })
-  recordMissionReport(mission)
-  await writeTeamSyncSnapshot({
-    missionId: mission.id,
-    title: mission.title,
-    mode: mission.mode,
-    status: mission.status,
-    assignments: mission.party.map((agentId) => ({
-      agentId,
-      task: mission.brief,
-      status: 'cancelled',
-      updatedAt: new Date().toISOString(),
-      note: cancellationReason,
-    })),
-    activity: [
-      `${new Date().toISOString()} | ${cancellationReason}`,
-      `${new Date().toISOString()} | scheduler | cancellation cleanup removed=${cleanup.removed} disabled=${cleanup.disabled} failed=${cleanup.failed}`,
-    ],
-  })
-  return apiSuccess(res, { mission: missionView(mission), cleanup })
+registerMissionRoutes(app, {
+  buildMissionLifecycleProjection,
+  cleanupMissionCronJobs,
+  clearMissionController,
+  completeCronMission,
+  controlCenterMissionSchedulerDryRun: CONTROL_CENTER_MISSION_SCHEDULER_DRY_RUN,
+  findMissionByIdempotencyKey,
+  listMissionReports,
+  missionCronCleanupFailureSummary,
+  missionCronJobNeedsRecovery,
+  missionDurationMs,
+  missionSchedulerInitialState,
+  missionTimers,
+  missionView,
+  missions,
+  normalizeMissionLaunchIdempotencyKey,
+  persistMissionRecord,
+  pushMissionEvent,
+  readMissionEvents: (limit) => readMissionEventLedgerTail<MissionLifecycleEvent>(limit).catch(() => []),
+  recordMissionReport,
+  scheduleNextMissionRound,
+  startRecurringMissionCronJobs,
+  transitionMissionState,
+  writeTeamSyncSnapshot,
 })
 
 async function runBufferedAgentTurnForStream(
