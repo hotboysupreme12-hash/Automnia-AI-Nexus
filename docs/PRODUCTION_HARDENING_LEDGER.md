@@ -1207,18 +1207,66 @@ Verification:
   - Commit: `fe0bc07`
   - Result: Control Plane CI completed successfully in `8m29s` for the PR-triggered run and `11m42s` for the push-triggered run.
 
+## 2026-06-24 22:32 UTC - Skills And ClawHub Route Extraction
+
+- Started an independent server decomposition slice on protective branch `codex/skills-route-modules`, based on `origin/main` so it can be reviewed separately from open PRs:
+  - `#2` runtime route extraction
+  - `#3` filesystem route extraction
+  - `#4` OpenClaw command route extraction
+  - `#5` release-governance enforcement
+- Read local OpenClaw documentation before touching the skills/ClawHub control surface:
+  - `docs/openclaw-latest/pages/tools/skills.md`
+  - `docs/openclaw-latest/pages/tools/clawhub.md`
+  - `docs/openclaw-latest/pages/clawhub/skill-format.md`
+  - `docs/openclaw-latest/pages/clawhub/cli.md`
+  - `docs/openclaw-latest/pages/cli/skills.md`
+  - `docs/openclaw-latest/pages/clawhub/security.md`
+  - `docs/openclaw-latest/pages/clawhub/api.md`
+  - `docs/openclaw-latest/pages/clawhub/how-it-works.md`
+  - `docs/openclaw-latest/pages/tools/skills-config.md`
+  - `docs/openclaw-latest/pages/gateway/protocol.md`
+- Spawned a read-only subagent to inspect the skills extraction surface and smoke-test expectations while implementation continued locally.
+- Extracted the Skills/ClawHub HTTP route cluster from `server/index.ts` into `server/routes/skillRoutes.ts`:
+  - `GET /api/skills/check`
+  - `GET /api/skills/list`
+  - `GET /api/skills/info/:skillName`
+  - `GET /api/skills/library`
+  - `GET /api/skills/library/:skillId`
+  - `POST /api/skills/learn`
+  - `GET /api/skills/clawhub/search`
+  - `POST /api/skills/clawhub/install`
+  - `POST /api/skills/clawhub/update`
+- Kept the slice route-only: skill library reads, learned-skill writes, OpenClaw CLI execution, managed skills workspace handling, ClawHub install retry/cleanup, and cache invalidation remain owned by the existing server helpers and are injected through `registerSkillRoutes(app, { ... })`.
+- Preserved the original route order by registering the skills module before the agent config routes.
+- Reduced `server/index.ts` from `30,179` lines on `origin/main` to `30,008` lines in this slice.
+- Added `server/routes/skillRoutes.ts` at `234` lines.
+- Updated `scripts/smoke-skills-control-plane.ts` so it now asserts:
+  - `server/index.ts` imports and registers `registerSkillRoutes`.
+  - `server/index.ts` no longer inlines Skills/ClawHub route handlers.
+  - Skills routes remain registered before agent config routes.
+  - `server/routes/skillRoutes.ts` owns the expected route paths, canonical success/error envelopes, and typed skill failure codes.
+
+Verification passed:
+
+- `npm run typecheck:server`
+- `npm run smoke:skills-control-plane`
+- `npm run lint`
+- `npm run build:server`
+- `npm test`
+
+Observed during verification:
+
+- `npm test` again reported one skipped malformed historical JSONL row while reading `runtime-runs`; this is expected corruption-recovery behavior and the smoke passed.
+
 ## In Progress
 
-- Production hardening on protective branch `codex/server-route-modules`.
+- Production hardening on protective branch `codex/skills-route-modules`.
 
 Next action:
 
-- Continue breaking up `server/index.ts` by extracting one coherent domain route cluster next. Highest-value candidates are runtime status/actions or filesystem routes because they already have focused smoke coverage.
-- Add release governance documentation and/or enforcement slices after the next route extraction:
-  - Main branch protection requirements: green CI, no direct pushes, PR review, and signed commits where repository support allows.
-  - Mandatory public release signing and validation failure when signing evidence is absent.
-  - Full CI evidence artifacts on clean release SHAs.
-  - Local-only desktop threat model: localhost API only, no LAN binding, no cloud exposure unless authentication is redesigned.
+- Push `codex/skills-route-modules`, open a PR, and verify Control Plane CI.
+- Continue breaking up `server/index.ts` by extracting one coherent domain route cluster next. The next recommended candidates are provider auth/model catalog routes or mission lifecycle routes; read the relevant local OpenClaw auth or cron/Gateway docs first.
+- After extraction PRs settle, reconcile ledger entries from the independent PR branches during merge order so release-governance and server-decomposition history remain complete on `main`.
 
 ## Backlog
 
