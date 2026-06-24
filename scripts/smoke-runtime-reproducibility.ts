@@ -9,6 +9,7 @@ const packageJson = JSON.parse(read('package.json')) as {
   scripts?: Record<string, string>
 }
 const prepareRuntimeBundles = read('scripts/prepare-runtime-bundles.cjs')
+const prepareOpenClawVendor = read('scripts/prepare-openclaw-vendor.cjs')
 
 assert.match(
   prepareRuntimeBundles,
@@ -89,6 +90,46 @@ assert.match(
   prepareRuntimeBundles,
   /\.dystopai-runtime-bundle\.json/,
   'runtime bundle prep must leave verifiable bundle metadata',
+)
+assert.match(
+  prepareOpenClawVendor,
+  /npm-shrinkwrap\.json/,
+  'vendored OpenClaw dependency prep must install from the published shrinkwrap lockfile',
+)
+assert.match(
+  prepareOpenClawVendor,
+  /DYSTOPAI_OPENCLAW_VENDOR_ROOT/,
+  'vendored OpenClaw dependency prep must be testable against a temporary vendor root',
+)
+assert.match(
+  prepareOpenClawVendor,
+  /'ci'/,
+  'vendored OpenClaw dependency prep must use npm ci',
+)
+assert.match(
+  prepareOpenClawVendor,
+  /--omit=dev/,
+  'vendored OpenClaw dependency prep must omit development dependencies',
+)
+assert.match(
+  prepareOpenClawVendor,
+  /--ignore-scripts/,
+  'vendored OpenClaw dependency prep must not run package lifecycle scripts during packaging',
+)
+assert.match(
+  prepareOpenClawVendor,
+  /sha256File/,
+  'vendored OpenClaw dependency prep must record the shrinkwrap checksum',
+)
+assert.match(
+  prepareOpenClawVendor,
+  /\.dystopai-openclaw-vendor-deps\.json/,
+  'vendored OpenClaw dependency prep must leave verifiable dependency metadata',
+)
+assert.match(
+  packageJson.scripts?.['prepare:openclaw-vendor'] || '',
+  /node scripts\/prepare-openclaw-vendor\.cjs/,
+  'package scripts must expose vendored OpenClaw dependency preparation',
 )
 
 assert.match(

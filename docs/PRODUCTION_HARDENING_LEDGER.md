@@ -1012,13 +1012,52 @@ Verification:
 - `npm test` passed after the Electron CI repair.
 - `npm run audit:dependencies` passed after the Electron CI repair with `found 0 vulnerabilities`.
 
+## 2026-06-24 17:15 UTC - CI OpenClaw Vendor Packaging Repair
+
+- Rechecked the GitHub Actions rerun after the Electron binary repair:
+  - Run: `28116047834`
+  - Commit: `d9f16b0`
+  - Result: OpenClaw smoke, Electron E2E, build, and reproducible runtime bundle steps passed in CI.
+  - New failed step: `Package desktop directory`.
+- The packaging failure came from `scripts/after-pack.cjs` because CI had no ignored `vendor/openclaw/node_modules` directory:
+  - `Missing vendored OpenClaw node_modules at ...\vendor\openclaw\node_modules`
+- Read the local OpenClaw documentation before changing the packaging/runtime dependency path:
+  - `docs/openclaw-latest/pages/cli/agent.md`
+  - `docs/openclaw-latest/pages/install/node.md`
+  - `docs/openclaw-latest/pages/gateway/security/shrinkwrap.md`
+  - `docs/openclaw-latest/pages/plugins/dependency-resolution.md`
+- Added `scripts/prepare-openclaw-vendor.cjs` so the desktop packaging path hydrates vendored OpenClaw production dependencies from `vendor/openclaw/npm-shrinkwrap.json` with:
+  - `npm ci`
+  - `--omit=dev`
+  - `--ignore-scripts`
+  - `--no-audit`
+  - `--no-fund`
+- The script validates key runtime packages against the shrinkwrap versions, records the shrinkwrap SHA-256, writes `.dystopai-openclaw-vendor-deps.json` under the ignored vendor `node_modules`, and no-ops when the existing dependency tree already matches.
+- Added `DYSTOPAI_OPENCLAW_VENDOR_ROOT` support so the missing-node_modules path can be tested in a temporary OpenClaw package copy without touching the real vendored dependency tree.
+- Wired `npm run prepare:openclaw-vendor` into:
+  - `.github/workflows/control-plane-ci.yml` before `node scripts/package-desktop.cjs --dir`
+  - `package:desktop`
+  - `dist:win`
+  - `scripts/package-desktop.cjs` itself, so direct packaging is self-preparing.
+- Strengthened `scripts/smoke-ci-workflow.ts` and `scripts/smoke-runtime-reproducibility.ts` so future changes fail if CI or package scripts stop preparing vendored OpenClaw dependencies from the shrinkwrap.
+- Verification passed:
+  - Temporary clean OpenClaw package copy: `node scripts/prepare-openclaw-vendor.cjs` installed 296 production packages from `npm-shrinkwrap.json` and wrote the metadata file.
+  - `npm run prepare:openclaw-vendor`
+  - `npm run smoke:ci-workflow`
+  - `npm run smoke:runtime-reproducibility`
+  - `npm run lint`
+  - `node scripts/package-desktop.cjs --dir`
+  - `npm run smoke:packaged-electron-launch`
+  - `npm test`
+  - `npm run audit:dependencies` with `found 0 vulnerabilities`.
+
 ## In Progress
 
 - Production hardening on protective branch `codex/ci-openclaw-smoke`.
 
 Next action:
 
-- Push the Electron CI repair and confirm the rerun; then add UI smoke coverage to CI if it can be made stable against built artifacts.
+- Push the OpenClaw vendor packaging repair and confirm the rerun reaches release evidence validation.
 - Avoid the pre-existing local edits in `src/components/mission/MissionDeploymentPanel.tsx` and `src/styles/dystopai-theme/70-responsive-polish.css` unless the selected task explicitly requires those files.
 
 ## Backlog

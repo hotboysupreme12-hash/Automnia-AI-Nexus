@@ -1,4 +1,4 @@
-const { spawn } = require('node:child_process')
+const { spawn, spawnSync } = require('node:child_process')
 const fs = require('node:fs')
 const path = require('node:path')
 
@@ -86,7 +86,19 @@ const pathEntries = [
   process.env.PATH || '',
 ].filter(Boolean)
 const electronBuilderCli = path.join(root, 'node_modules', 'electron-builder', 'cli.js')
+const openClawVendorPrep = path.join(root, 'scripts', 'prepare-openclaw-vendor.cjs')
 const command = process.execPath
+
+const vendorPrep = spawnSync(command, [openClawVendorPrep], {
+  cwd: root,
+  stdio: 'inherit',
+  shell: false,
+  windowsHide: true,
+})
+if (vendorPrep.status !== 0) {
+  process.exit(vendorPrep.status ?? 1)
+}
+
 const child = spawn(command, [electronBuilderCli, ...process.argv.slice(2)], {
   cwd: root,
   stdio: 'inherit',
