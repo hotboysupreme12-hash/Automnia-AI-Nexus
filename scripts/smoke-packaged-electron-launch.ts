@@ -65,6 +65,28 @@ function killPackagedElectronProcesses() {
   })
 }
 
+async function removeTempRootWithWindowsRetries(tempRootPath: string) {
+  const attempts = process.platform === 'win32' ? 12 : 2
+  let lastError: unknown
+  for (let attempt = 1; attempt <= attempts; attempt += 1) {
+    try {
+      rmSync(tempRootPath, {
+        recursive: true,
+        force: true,
+        maxRetries: 3,
+        retryDelay: 250,
+      })
+      return
+    } catch (error) {
+      lastError = error
+      killPackagedElectronProcesses()
+      await new Promise((resolve) => setTimeout(resolve, Math.min(250 * attempt, 2000)))
+    }
+  }
+  console.warn(`[packaged-launch-smoke] could not remove temp directory after launch verification: ${tempRootPath}`)
+  console.warn(lastError instanceof Error ? lastError.message : String(lastError))
+}
+
 async function waitForLogPatterns(logPath: string, patterns: RegExp[], timeoutMs = 60_000) {
   const found = new Set<number>()
   const start = Date.now()
@@ -153,7 +175,7 @@ try {
   ])
 } finally {
   killPackagedElectronProcesses()
-  rmSync(tempRoot, { recursive: true, force: true })
+  await removeTempRootWithWindowsRetries(tempRoot)
 }
 
 console.log('packaged electron launch smoke ok')
