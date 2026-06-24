@@ -229,6 +229,14 @@ npm run dist:win
 The packaging script builds the client/server, prepares runtime bundles, and writes generated output under ignored folders such as `release/` and `artifacts/`.
 Runtime bundle prep is pinned: Node archives are verified against Node's published `SHASUMS256.txt`, and the bundled Codex plugin installs an exact package version with a checked npm integrity value.
 After generating release output, run `npm run release:evidence` to write `release/evidence/dystopai-sbom.cdx.json`, `release/evidence/checksums.sha256`, and `release/evidence/release-evidence.json`. Publish those files with the installer output so operators can verify the shipped dependency graph and artifact hashes.
+For release candidates with a signing key, sign the checksum manifest after evidence generation:
+
+```bash
+DYSTOPAI_RELEASE_SIGNING_PRIVATE_KEY_FILE="C:/secure/dystopai-release-ed25519.pem" npm run release:sign
+```
+
+This writes `release/evidence/checksums.sha256.sig`, `release/evidence/signing-public-key.pem`, and `release/evidence/release-signing.json`. Publish those files with the SBOM and checksum manifest; the private key must never live in the repository.
+Before publishing, run `npm run release:validate`. It verifies the checksum manifest against packaged files, checks SBOM and summary consistency, requires packaged artifacts to be present, and verifies the detached signature when signing evidence exists.
 
 ## Common Commands
 
@@ -243,11 +251,15 @@ After generating release output, run `npm run release:evidence` to write `releas
 | `npm run desktop` | Build standalone output and launch Electron. |
 | `npm run lint` | Run ESLint across the repo. |
 | `npm run smoke:openclaw` | Run OpenClaw contract, redaction, SSE, and stream smoke tests. |
+| `npm run smoke:electron-e2e` | Launch Electron against built server/client artifacts on throwaway ports and verify startup, tray hide/restore behavior, renderer navigation policy, renderer crash recovery, failure exit, and quit cleanup. |
+| `npm run smoke:packaged-electron-launch` | Launch the packaged desktop directory output on throwaway ports and verify the bundled app reaches startup and quit cleanup. |
 | `npm run smoke:ui` | Run Electron UI smoke checks against the built frontend. |
 | `npm run docs:openclaw:sync` | Refresh the local OpenClaw documentation snapshot. |
 | `npm run setup:gateway-auth` | Prepare local Gateway auth config. |
 | `npm run dist:win` | Create the Windows desktop distribution output. |
 | `npm run release:evidence` | Generate the release SBOM, checksum manifest, and evidence summary. |
+| `npm run release:sign` | Sign the release checksum manifest with an Ed25519 release key. |
+| `npm run release:validate` | Verify release checksums, evidence consistency, packaged artifacts, and optional signature evidence. |
 
 ## Configuration
 

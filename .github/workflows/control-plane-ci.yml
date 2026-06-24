@@ -1,0 +1,104 @@
+name: Control Plane CI
+
+on:
+  push:
+    branches:
+      - main
+      - 'codex/**'
+  pull_request:
+    branches:
+      - main
+  workflow_dispatch:
+
+concurrency:
+  group: control-plane-ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    name: Hardened control plane
+    runs-on: windows-latest
+    timeout-minutes: 45
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: npm
+
+      - name: Install locked dependencies
+        run: npm ci
+
+      - name: Audit production dependencies
+        run: npm run audit:dependencies
+
+      - name: Scan for checked-in secrets
+        run: npm run secret:scan
+
+      - name: Lint source
+        run: npm run lint
+
+      - name: Type-check app, server, and Electron
+        run: npm run typecheck
+
+      - name: Run production hardening smoke suite
+        run: npm test
+
+      - name: Build server bundle
+        run: npm run build:server
+
+      - name: Build client bundle
+        run: npm run build:client
+
+      - name: Run Electron end-to-end smoke
+        run: npm run smoke:electron-e2e
+
+      - name: Prepare reproducible runtime bundles
+        run: npm run prepare:runtime-bundles
+
+      - name: Package desktop directory
+        run: node scripts/package-desktop.cjs --dir
+
+      - name: Run packaged desktop launch smoke
+        run: npm run smoke:packaged-electron-launch
+
+      - name: Generate release SBOM and checksums
+        run: npm run release:evidence
+
+      - name: Sign release evidence
+        if: ${{ vars.DYSTOPAI_RELEASE_SIGNING_ENABLED == 'true' }}
+        env:
+          DYSTOPAI_RELEASE_SIGNING_PRIVATE_KEY_PEM: ${{ secrets.DYSTOPAI_RELEASE_SIGNING_PRIVATE_KEY_PEM }}
+          DYSTOPAI_RELEASE_SIGNING_KEY_ID: ${{ vars.DYSTOPAI_RELEASE_SIGNING_KEY_ID }}
+        run: npm run release:sign
+
+      - name: Validate packaged release artifacts
+        run: npm run release:validate
+
+      - name: Verify release evidence exists
+        shell: pwsh
+        run: |
+          $required = @(
+            'release/evidence/dystopai-sbom.cdx.json',
+            'release/evidence/checksums.sha256',
+            'release/evidence/release-evidence.json'
+          )
+          foreach ($path in $required) {
+            if (-not (Test-Path $path)) {
+              throw "Missing release evidence artifact: $path"
+            }
+          }
+
+      - name: Upload release evidence
+        uses: actions/upload-artifact@v4
+        with:
+          name: dystopai-release-evidence
+          path: release/evidence/**
+          if-no-files-found: error
