@@ -23,6 +23,7 @@ function routeBlock(source: string, marker: string): string {
 const server = readWorkspaceFile('server/index.ts')
 const controlPlaneHttp = readWorkspaceFile('server/controlPlaneHttp.ts')
 const diagnosticsRoutes = readWorkspaceFile('server/routes/diagnosticsRoutes.ts')
+const providerAuthRoutes = readWorkspaceFile('server/routes/providerAuthRoutes.ts')
 const runtimeRoutes = readWorkspaceFile('server/routes/runtimeRoutes.ts')
 const runtimeHook = readWorkspaceFile('src/hooks/useRuntimeStatus.ts')
 const editor = readWorkspaceFile('src/components/editor/AgentEditorModal.tsx')
@@ -65,12 +66,16 @@ for (const marker of [
   assert(!server.includes(marker), `${marker} should be owned by server/routes/runtimeRoutes.ts, not server/index.ts`)
 }
 
-const modelsBlock = routeBlock(server, "app.get('/api/models/available'")
-assert(/apiSuccess\s*\(\s*res/.test(modelsBlock), "app.get('/api/models/available' should return canonical success envelopes")
-assert(/apiFailure\s*\(\s*res/.test(modelsBlock), "app.get('/api/models/available' should return canonical error envelopes")
-assert(!/\breturn\s+res\.json\s*\(/.test(modelsBlock), "app.get('/api/models/available' should not return raw res.json payloads")
-assert(!/\breturn\s+res\.status\s*\([^)]*\)\.json\s*\(/.test(modelsBlock), "app.get('/api/models/available' should not return raw status JSON errors")
+{
+  const marker = "app.get('/api/models/available'"
+  const block = routeBlock(providerAuthRoutes, marker)
+  assert(/apiSuccess\s*\(\s*res/.test(block), `${marker} should return canonical success envelopes`)
+  assert(/apiFailure\s*\(\s*res/.test(block), `${marker} should return canonical error envelopes`)
+  assert(!/\breturn\s+res\.json\s*\(/.test(block), `${marker} should not return raw res.json payloads`)
+  assert(!/\breturn\s+res\.status\s*\([^)]*\)\.json\s*\(/.test(block), `${marker} should not return raw status JSON errors`)
+}
 assert(server.includes('registerRuntimeRoutes(app, {'), 'server/index.ts should register extracted runtime routes')
+assert(server.includes('registerProviderAuthRoutes(app, {'), 'server/index.ts should register extracted provider auth routes')
 
 assert(
   runtimeHook.includes("import { apiErrorMessage, apiRequest, type ApiErrorEnvelope, type ApiRequestOptions } from '../api/client'"),
