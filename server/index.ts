@@ -1828,6 +1828,8 @@ const FALLBACK_MODELS: Array<{ id: string; alias?: string }> = [
   { id: 'deepseek/deepseek-v4-flash', alias: 'deepseek-v4-flash' },
   { id: 'deepseek/deepseek-chat', alias: 'deepseek-chat' },
   { id: 'deepseek/deepseek-reasoner', alias: 'deepseek-r1' },
+  { id: 'openrouter/deepseek/deepseek-v4-pro', alias: 'openrouter-deepseek-v4-pro' },
+  { id: 'openrouter/deepseek/deepseek-v4-flash', alias: 'openrouter-deepseek-v4-flash' },
 ]
 const KNOWN_UNAVAILABLE_MODEL_IDS = new Set<string>([
   'openai/gpt-5.3-chat-latest',
@@ -1878,7 +1880,16 @@ const MODEL_RESILIENCE_FALLBACKS: Record<string, string[]> = {
     'deepseek/deepseek-v4-flash',
     'deepseek/deepseek-chat',
   ],
+  'openrouter/deepseek/deepseek-v4-flash': [
+    'openrouter/deepseek/deepseek-v4-pro',
+  ],
+  'openrouter/deepseek/deepseek-v4-pro': [
+    'openrouter/deepseek/deepseek-v4-flash',
+  ],
 }
+const OPENROUTER_PROVIDER_WILDCARD_MODEL_ID = 'openrouter/*'
+const OPENROUTER_DEEPSEEK_V4_PRO_MODEL_ID = 'openrouter/deepseek/deepseek-v4-pro'
+const OPENROUTER_DEEPSEEK_V4_FLASH_MODEL_ID = 'openrouter/deepseek/deepseek-v4-flash'
 const DEEPSEEK_DEFAULT_MODEL_ID = 'deepseek/deepseek-v4-flash'
 const DEEPSEEK_DEFAULT_FALLBACKS = MODEL_RESILIENCE_FALLBACKS[DEEPSEEK_DEFAULT_MODEL_ID] || [
   'deepseek/deepseek-chat',
@@ -2132,6 +2143,53 @@ function ensureConfiguredModelAllowlist(config: OpenClawConfigFile, modelIds: st
   }
 }
 
+function ensureModelAllowlistEntry(config: OpenClawConfigFile, modelId: string, alias?: string) {
+  const canonicalModelId = canonicalAgentModelId(modelId)
+  if (!isModelSafeForOpenClawConfig(canonicalModelId)) return
+
+  if (!config.agents) config.agents = {}
+  if (!config.agents.defaults) config.agents.defaults = {}
+  if (!config.agents.defaults.models) config.agents.defaults.models = {}
+
+  const existing = config.agents.defaults.models[canonicalModelId]
+  const existingRecord = existing && typeof existing === 'object' && !Array.isArray(existing)
+    ? existing as Record<string, unknown>
+    : {}
+  config.agents.defaults.models[canonicalModelId] = {
+    ...(alias && !existingRecord.alias ? { alias } : {}),
+    ...existingRecord,
+  }
+}
+
+function configHasOpenRouterPluginEnabled(config: OpenClawConfigFile) {
+  const entry = config.plugins?.entries?.openrouter
+  if (entry && entry.enabled !== false) return true
+  const allow = Array.isArray(config.plugins?.allow) ? config.plugins.allow : []
+  return allow.some((id) => typeof id === 'string' && id.trim().toLowerCase() === 'openrouter')
+}
+
+function ensureOpenRouterModelCatalogAllowlist(config: OpenClawConfigFile) {
+  ensureModelAllowlistEntry(config, OPENROUTER_PROVIDER_WILDCARD_MODEL_ID, 'OpenRouter catalog')
+  ensureConfiguredModelAllowlist(config, [
+    OPENROUTER_DEEPSEEK_V4_PRO_MODEL_ID,
+    OPENROUTER_DEEPSEEK_V4_FLASH_MODEL_ID,
+  ])
+}
+
+function ensureOpenRouterPluginEnabledForProviderAuth(config: OpenClawConfigFile) {
+  if (!config.plugins) config.plugins = {}
+  if (!config.plugins.entries) config.plugins.entries = {}
+  const existingEntry = config.plugins.entries.openrouter || {}
+  config.plugins.entries.openrouter = {
+    ...(existingEntry || {}),
+    enabled: true,
+  }
+  if (Array.isArray(config.plugins.deny) && config.plugins.deny.includes('openrouter')) {
+    config.plugins.deny = config.plugins.deny.filter((entry) => entry !== 'openrouter')
+  }
+  ensureTrustedPluginAllowlist(config, 'openrouter')
+}
+
 function ensureConfiguredProviderModel(config: OpenClawConfigFile, modelId: string) {
   if (!isModelSafeForOpenClawConfig(modelId)) return
   const { provider, model } = splitModelId(canonicalAgentModelId(modelId))
@@ -2221,6 +2279,18 @@ function orderAvailableModels(models: AvailableModelOutput[]) {
 }
 
 async function loadAvailableModelsFromOpenClaw(): Promise<{ models: AvailableModelOutput[]; source: AvailableModelCatalogCache['source'] }> {
+  try {
+    const config = await readOpenclawConfig()
+    if (configHasOpenRouterPluginEnabled(config) || isProviderConfigured('openrouter')) {
+      const before = JSON.stringify(config.agents?.defaults?.models || {})
+      ensureOpenRouterModelCatalogAllowlist(config)
+      const after = JSON.stringify(config.agents?.defaults?.models || {})
+      if (after !== before) await writeOpenclawConfig(config)
+    }
+  } catch (error) {
+    console.warn('OpenRouter model catalog allowlist normalization failed:', error)
+  }
+
   try {
     const listResult = await runOpenClaw(['models', 'list', '--json'], 30000)
     if (listResult.code === 0 && listResult.stdout) {
@@ -2859,6 +2929,14 @@ async function persistProviderAuth(provider: string, apiKey: string) {
     if (!isValidAgentId(entry.id)) continue
     await writeProviderApiKeyAuthProfiles(openclawAgentFolder(entry.id), provider, apiKey)
   }
+  if (provider === 'openrouter') {
+    const nextConfig = config || createInitialOpenclawConfig()
+    ensureOpenRouterPluginEnabledForProviderAuth(nextConfig)
+    ensureOpenRouterModelCatalogAllowlist(nextConfig)
+    await writeOpenclawConfig(nextConfig)
+    availableModelsCache = null
+    scheduleAvailableModelsCacheRefresh()
+  }
 }
 
 async function persistProviderOAuth(provider: string, oauth: LocalOAuthCredential) {
@@ -3289,6 +3367,16 @@ function authEnvFromProviders(providers: Record<string, { mode: 'oauth' | 'apiKe
   return env
 }
 
+function configuredProviderApiKeyMarker(provider: string) {
+  const config = readJsonFileSyncLoose(OPENCLAW_CONFIG_PATH)
+  if (!config) return ''
+  return (
+    nestedString(config, ['models', 'providers', provider, 'apiKey']) ||
+    nestedString(config, ['plugins', 'entries', provider, 'apiKey']) ||
+    nestedString(config, ['plugins', 'entries', provider, 'config', 'apiKey'])
+  )
+}
+
 async function getAgentAuthEnv(agentId?: string) {
   const globalEnv = getLocalAuthEnv()
   if (!agentId) return {}
@@ -3310,6 +3398,7 @@ function isProviderConfigured(provider: string): boolean {
   for (const envKey of envKeys) {
     if (process.env[envKey]) return true
   }
+  if (configuredProviderApiKeyMarker(provider)) return true
   const stored = authProfileProvidersFor(provider)
     .map((authProvider) => localAuthStore.providers[authProvider]?.apiKey)
     .find((apiKey) => apiKey?.trim())
@@ -3392,6 +3481,7 @@ function providerAuthStatus(provider: string, options: { probeGcloud?: boolean }
   const gcloud = provider === 'google-vertex' ? googleVertexGcloudStatus(options) : undefined
   const vertexOAuthConfigured = provider === 'google-vertex' ? isGoogleVertexLocalOAuthConfigured({}, options) : false
   const envConfigured = envKeys.some((envKey) => Boolean(process.env[envKey]?.trim()))
+  const configApiKeyConfigured = Boolean(configuredProviderApiKeyMarker(provider))
   const sqliteStore = mainAuthProfileSqliteStore()
   const sqliteApiKeyConfigured = authProfileStoreHasProvider(sqliteStore, provider, 'apiKey')
   const sqliteOAuthConfigured = authProfileStoreHasProvider(sqliteStore, provider, 'oauth')
@@ -3406,7 +3496,7 @@ function providerAuthStatus(provider: string, options: { probeGcloud?: boolean }
       : provider === 'openai-codex'
         ? { available: true, missing: [] as string[] }
         : { available: false, missing: [] as string[] }
-  const configured = envConfigured || storedApiKey || sqliteApiKeyConfigured || oauthConfigured || vertexOAuthConfigured || Boolean(gcloud?.configured)
+  const configured = envConfigured || configApiKeyConfigured || storedApiKey || sqliteApiKeyConfigured || oauthConfigured || vertexOAuthConfigured || Boolean(gcloud?.configured)
   const defaultMode: AuthMode = catalog?.oauth && !envKeys.length ? 'oauth' : oauthConfigured ? 'oauth' : 'apiKey'
 
   return {
@@ -3420,9 +3510,10 @@ function providerAuthStatus(provider: string, options: { probeGcloud?: boolean }
     optionalAuth: Boolean(catalog?.optionalAuth),
     stored: storedApiKey || sqliteApiKeyConfigured || oauthConfigured || vertexOAuthConfigured || Boolean(gcloud?.configured),
     apiKey: {
-      configured: envConfigured || storedApiKey || sqliteApiKeyConfigured,
-      stored: storedApiKey || sqliteApiKeyConfigured,
+      configured: envConfigured || configApiKeyConfigured || storedApiKey || sqliteApiKeyConfigured,
+      stored: configApiKeyConfigured || storedApiKey || sqliteApiKeyConfigured,
       envConfigured,
+      configConfigured: configApiKeyConfigured,
       envKeys,
     },
     ...(gcloud ? { gcloud } : {}),
@@ -14256,6 +14347,9 @@ function ensureOpenclawRuntimeDefaults(config: OpenClawConfigFile) {
   if (!config.agents) config.agents = {}
   if (!config.agents.defaults) config.agents.defaults = {}
   normalizeOpenClawConfigModelRefs(config)
+  if (configHasOpenRouterPluginEnabled(config) || isProviderConfigured('openrouter')) {
+    ensureOpenRouterModelCatalogAllowlist(config)
+  }
   if (!Array.isArray(config.agents.list) || !config.agents.list.length) {
     config.agents.list = createInitialOpenclawConfig().agents.list
   }

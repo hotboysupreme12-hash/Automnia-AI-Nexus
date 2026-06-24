@@ -139,6 +139,71 @@ html.dui-pro-overhaul.dui-cohesive-ui .dy-status-chip {
   flex: 0 0 auto !important;
 }
 
+/* Gateway runtime controls: same rhythm, readable labels, compact footprint. */
+html.dui-pro-overhaul.dui-cohesive-ui [data-dui-panel="monitor"] .dy-gateway-control-group {
+  align-items: stretch !important;
+  gap: 8px !important;
+}
+
+html.dui-pro-overhaul.dui-cohesive-ui [data-dui-panel="monitor"] .dy-gateway-control-group .dy-gateway-status-pill,
+html.dui-pro-overhaul.dui-cohesive-ui [data-dui-panel="monitor"] .dy-gateway-control-group .dy-gateway-action-button {
+  display: inline-flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  height: 34px !important;
+  min-height: 34px !important;
+  border-radius: 5px !important;
+  padding: 0 12px !important;
+  font-size: 10px !important;
+  font-weight: 800 !important;
+  line-height: 1 !important;
+  letter-spacing: 0 !important;
+  white-space: nowrap !important;
+  text-shadow: 0 1px 12px rgba(255, 255, 255, .12) !important;
+}
+
+html.dui-pro-overhaul.dui-cohesive-ui [data-dui-panel="monitor"] .dy-gateway-control-group .dy-gateway-status-pill {
+  min-width: 132px !important;
+  border-color: rgba(123, 224, 179, .36) !important;
+  background:
+    linear-gradient(180deg, rgba(123, 224, 179, .12), rgba(123, 224, 179, .035)),
+    rgba(8, 15, 23, .86) !important;
+  color: #c9f8dd !important;
+}
+
+html.dui-pro-overhaul.dui-cohesive-ui [data-dui-panel="monitor"] .dy-gateway-control-group .dy-gateway-action-button {
+  min-width: 132px !important;
+  border-width: 1px !important;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, .060),
+    0 0 0 1px rgba(255, 255, 255, .018) !important;
+}
+
+html.dui-pro-overhaul.dui-cohesive-ui [data-dui-panel="monitor"] .dy-gateway-control-group .dy-gateway-action-button[data-tone="cyan"] {
+  border-color: rgba(123, 224, 179, .42) !important;
+  background:
+    linear-gradient(180deg, rgba(123, 224, 179, .14), rgba(123, 224, 179, .035)),
+    rgba(8, 15, 23, .90) !important;
+  color: #c9f8dd !important;
+}
+
+html.dui-pro-overhaul.dui-cohesive-ui [data-dui-panel="monitor"] .dy-gateway-control-group .dy-gateway-action-button[data-tone="rose"] {
+  border-color: rgba(255, 132, 144, .42) !important;
+  background:
+    linear-gradient(180deg, rgba(255, 132, 144, .14), rgba(255, 132, 144, .035)),
+    rgba(8, 15, 23, .90) !important;
+  color: #ffd2d7 !important;
+}
+
+html.dui-pro-overhaul.dui-cohesive-ui [data-dui-panel="monitor"] .dy-gateway-control-group .dy-gateway-action-button:hover:not(:disabled) {
+  filter: brightness(1.08) saturate(1.08) !important;
+  transform: translateY(-1px) !important;
+}
+
+html.dui-pro-overhaul.dui-cohesive-ui [data-dui-panel="monitor"] .dy-gateway-control-group .dy-gateway-action-button:disabled {
+  opacity: .52 !important;
+}
+
 html.dui-pro-overhaul.dui-cohesive-ui .dy-agents-workspace {
   gap: 10px !important;
   grid-template-areas:
@@ -1834,7 +1899,7 @@ html.dui-pro-overhaul.dui-cohesive-ui .dy-command-console textarea.dy-command-te
   font-weight: 660 !important;
 }
 
-/* Keep runtime session context available without letting it reshape the monitor grid. */
+/* Keep the gateway monitor grid stable across desktop widths. */
 html.dui-pro-overhaul .app-bg.dy-monitor-focus [data-dui-panel="monitor"] .dy-gateway-layout,
 html.dui-pro-overhaul.dui-cohesive-ui .app-bg.dy-monitor-focus [data-dui-panel="monitor"] .dy-gateway-layout {
   grid-template-columns: minmax(0, 1.15fr) minmax(420px, .85fr) !important;
@@ -1843,176 +1908,6 @@ html.dui-pro-overhaul.dui-cohesive-ui .app-bg.dy-monitor-focus [data-dui-panel="
     "activity jobs"
     "log log" !important;
   grid-template-rows: max-content minmax(360px, 1fr) max-content !important;
-}
-
-html.dui-pro-overhaul .app-bg.dy-monitor-focus [data-dui-panel="monitor"] .dy-runtime-sessions-card,
-html.dui-pro-overhaul.dui-cohesive-ui .app-bg.dy-monitor-focus [data-dui-panel="monitor"] .dy-runtime-sessions-card {
-  position: relative !important;
-  z-index: 1 !important;
-  flex: 0 0 auto !important;
-  width: 100% !important;
-  height: auto !important;
-  min-height: 0 !important;
-  max-height: none !important;
-  grid-area: auto !important;
-  overflow: hidden !important;
-  margin-top: 10px !important;
-  border-color: rgba(255, 255, 255, .14) !important;
-  background:
-    linear-gradient(180deg, rgba(255, 255, 255, .034), rgba(255, 255, 255, .008)),
-    rgba(5, 7, 9, .58) !important;
-  box-shadow:
-    inset 0 1px 0 rgba(255, 255, 255, .060),
-    0 8px 18px rgba(0, 0, 0, .22) !important;
-  backdrop-filter: none !important;
-  -webkit-backdrop-filter: none !important;
-}
-
-html.dui-pro-overhaul .app-bg.dy-monitor-focus [data-dui-panel="monitor"] .dy-runtime-session-strip,
-html.dui-pro-overhaul.dui-cohesive-ui .app-bg.dy-monitor-focus [data-dui-panel="monitor"] .dy-runtime-session-strip {
-  display: grid !important;
-  grid-template-columns: minmax(0, 1fr) auto !important;
-  align-items: center !important;
-  min-height: 50px !important;
-  padding: 10px 12px !important;
-  gap: 12px !important;
-}
-
-html.dui-pro-overhaul .app-bg.dy-monitor-focus [data-dui-panel="monitor"] .dy-runtime-session-strip-copy,
-html.dui-pro-overhaul.dui-cohesive-ui .app-bg.dy-monitor-focus [data-dui-panel="monitor"] .dy-runtime-session-strip-copy {
-  min-width: 0 !important;
-}
-
-html.dui-pro-overhaul .app-bg.dy-monitor-focus [data-dui-panel="monitor"] .dy-runtime-session-strip-dot,
-html.dui-pro-overhaul.dui-cohesive-ui .app-bg.dy-monitor-focus [data-dui-panel="monitor"] .dy-runtime-session-strip-dot {
-  display: inline-block !important;
-  width: 7px !important;
-  height: 7px !important;
-  flex: 0 0 auto !important;
-  border-radius: 999px !important;
-  background: #64748b !important;
-  box-shadow: 0 0 0 3px rgba(100, 116, 139, .12) !important;
-}
-
-html.dui-pro-overhaul .app-bg.dy-monitor-focus [data-dui-panel="monitor"] .dy-runtime-session-strip-dot[data-state="active"],
-html.dui-pro-overhaul.dui-cohesive-ui .app-bg.dy-monitor-focus [data-dui-panel="monitor"] .dy-runtime-session-strip-dot[data-state="active"] {
-  background: #67e8f9 !important;
-  box-shadow: 0 0 0 3px rgba(103, 232, 249, .12), 0 0 14px rgba(103, 232, 249, .28) !important;
-}
-
-html.dui-pro-overhaul .app-bg.dy-monitor-focus [data-dui-panel="monitor"] .dy-runtime-strip-stats,
-html.dui-pro-overhaul.dui-cohesive-ui .app-bg.dy-monitor-focus [data-dui-panel="monitor"] .dy-runtime-strip-stats {
-  max-width: min(760px, 68%) !important;
-}
-
-html.dui-pro-overhaul .app-bg.dy-monitor-focus [data-dui-panel="monitor"] .dy-runtime-strip-chip,
-html.dui-pro-overhaul.dui-cohesive-ui .app-bg.dy-monitor-focus [data-dui-panel="monitor"] .dy-runtime-strip-chip {
-  display: inline-flex !important;
-  min-width: 0 !important;
-  max-width: 220px !important;
-  align-items: center !important;
-  overflow: hidden !important;
-  border: 1px solid rgba(255, 255, 255, .10) !important;
-  border-radius: 4px !important;
-  background: rgba(255, 255, 255, .026) !important;
-  padding: 5px 8px !important;
-  color: #aebbc3 !important;
-  font-size: 8px !important;
-  font-weight: 760 !important;
-  line-height: 1 !important;
-  text-overflow: ellipsis !important;
-  text-transform: uppercase !important;
-  white-space: nowrap !important;
-}
-
-html.dui-pro-overhaul .app-bg.dy-monitor-focus [data-dui-panel="monitor"] .dy-runtime-strip-chip-target,
-html.dui-pro-overhaul.dui-cohesive-ui .app-bg.dy-monitor-focus [data-dui-panel="monitor"] .dy-runtime-strip-chip-target {
-  max-width: 300px !important;
-  text-transform: none !important;
-}
-
-html.dui-pro-overhaul .app-bg.dy-monitor-focus [data-dui-panel="monitor"] .dy-runtime-strip-chip[data-state="active"],
-html.dui-pro-overhaul.dui-cohesive-ui .app-bg.dy-monitor-focus [data-dui-panel="monitor"] .dy-runtime-strip-chip[data-state="active"] {
-  border-color: rgba(103, 232, 249, .22) !important;
-  color: #cffafe !important;
-}
-
-html.dui-pro-overhaul .app-bg.dy-monitor-focus [data-dui-panel="monitor"] .dy-runtime-strip-chip[data-state="warning"],
-html.dui-pro-overhaul.dui-cohesive-ui .app-bg.dy-monitor-focus [data-dui-panel="monitor"] .dy-runtime-strip-chip[data-state="warning"] {
-  border-color: rgba(251, 191, 36, .24) !important;
-  color: #fde68a !important;
-}
-
-html.dui-pro-overhaul .app-bg.dy-monitor-focus [data-dui-panel="monitor"] .dy-runtime-sessions-card[data-expanded="false"],
-html.dui-pro-overhaul.dui-cohesive-ui .app-bg.dy-monitor-focus [data-dui-panel="monitor"] .dy-runtime-sessions-card[data-expanded="false"] {
-  width: 100% !important;
-  opacity: .94;
-}
-
-html.dui-pro-overhaul .app-bg.dy-monitor-focus [data-dui-panel="monitor"] .dy-runtime-sessions-card[data-expanded="true"],
-html.dui-pro-overhaul.dui-cohesive-ui .app-bg.dy-monitor-focus [data-dui-panel="monitor"] .dy-runtime-sessions-card[data-expanded="true"] {
-  z-index: 1 !important;
-}
-
-html.dui-pro-overhaul .app-bg.dy-monitor-focus [data-dui-panel="monitor"] .dy-runtime-sessions-card[data-expanded="false"]:hover,
-html.dui-pro-overhaul.dui-cohesive-ui .app-bg.dy-monitor-focus [data-dui-panel="monitor"] .dy-runtime-sessions-card[data-expanded="false"]:hover,
-html.dui-pro-overhaul .app-bg.dy-monitor-focus [data-dui-panel="monitor"] .dy-runtime-sessions-card:focus-within,
-html.dui-pro-overhaul.dui-cohesive-ui .app-bg.dy-monitor-focus [data-dui-panel="monitor"] .dy-runtime-sessions-card:focus-within {
-  opacity: 1;
-}
-
-html.dui-pro-overhaul .app-bg.dy-monitor-focus [data-dui-panel="monitor"] .dy-runtime-sessions-toggle,
-html.dui-pro-overhaul.dui-cohesive-ui .app-bg.dy-monitor-focus [data-dui-panel="monitor"] .dy-runtime-sessions-toggle {
-  min-height: 44px !important;
-  padding: 9px 12px !important;
-  color: #d9e8ec !important;
-  cursor: pointer;
-}
-
-html.dui-pro-overhaul .app-bg.dy-monitor-focus [data-dui-panel="monitor"] .dy-runtime-sessions-toggle:hover,
-html.dui-pro-overhaul.dui-cohesive-ui .app-bg.dy-monitor-focus [data-dui-panel="monitor"] .dy-runtime-sessions-toggle:hover {
-  background: rgba(255, 255, 255, .045) !important;
-}
-
-html.dui-pro-overhaul .app-bg.dy-monitor-focus [data-dui-panel="monitor"] .dy-runtime-sessions-title,
-html.dui-pro-overhaul.dui-cohesive-ui .app-bg.dy-monitor-focus [data-dui-panel="monitor"] .dy-runtime-sessions-title {
-  letter-spacing: 0 !important;
-}
-
-html.dui-pro-overhaul .app-bg.dy-monitor-focus [data-dui-panel="monitor"] .dy-runtime-sessions-summary,
-html.dui-pro-overhaul.dui-cohesive-ui .app-bg.dy-monitor-focus [data-dui-panel="monitor"] .dy-runtime-sessions-summary,
-html.dui-pro-overhaul .app-bg.dy-monitor-focus [data-dui-panel="monitor"] .dy-runtime-sessions-description,
-html.dui-pro-overhaul.dui-cohesive-ui .app-bg.dy-monitor-focus [data-dui-panel="monitor"] .dy-runtime-sessions-description {
-  color: #7d8790 !important;
-  letter-spacing: 0 !important;
-}
-
-html.dui-pro-overhaul .app-bg.dy-monitor-focus [data-dui-panel="monitor"] .dy-runtime-sessions-panel,
-html.dui-pro-overhaul.dui-cohesive-ui .app-bg.dy-monitor-focus [data-dui-panel="monitor"] .dy-runtime-sessions-panel {
-  position: static !important;
-  width: 100% !important;
-  max-height: none !important;
-  border-top: 1px solid rgba(255, 255, 255, .10) !important;
-  background: rgba(0, 0, 0, .14) !important;
-  padding: 10px 12px 12px !important;
-  overflow: visible !important;
-  box-shadow: none !important;
-  backdrop-filter: none !important;
-  -webkit-backdrop-filter: none !important;
-}
-
-html.dui-pro-overhaul .app-bg.dy-monitor-focus [data-dui-panel="monitor"] .dy-runtime-sessions-card .dy-runtime-session-list,
-html.dui-pro-overhaul.dui-cohesive-ui .app-bg.dy-monitor-focus [data-dui-panel="monitor"] .dy-runtime-sessions-card .dy-runtime-session-list {
-  min-height: 86px !important;
-  max-height: min(34dvh, 320px) !important;
-  flex: 0 1 auto !important;
-  overflow: auto !important;
-  scrollbar-gutter: stable;
-}
-
-html.dui-pro-overhaul .app-bg.dy-monitor-focus [data-dui-panel="monitor"] .dy-runtime-sessions-card .dy-runtime-session-details,
-html.dui-pro-overhaul.dui-cohesive-ui .app-bg.dy-monitor-focus [data-dui-panel="monitor"] .dy-runtime-sessions-card .dy-runtime-session-details {
-  grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
 }
 
 @media (min-width: 1680px) {
@@ -2033,39 +1928,6 @@ html.dui-pro-overhaul.dui-cohesive-ui .app-bg.dy-monitor-focus [data-dui-panel="
       "jobs"
       "log" !important;
     grid-template-rows: auto auto auto auto !important;
-  }
-}
-
-@media (max-width: 720px) {
-  html.dui-pro-overhaul .app-bg.dy-monitor-focus [data-dui-panel="monitor"] .dy-runtime-sessions-card,
-  html.dui-pro-overhaul.dui-cohesive-ui .app-bg.dy-monitor-focus [data-dui-panel="monitor"] .dy-runtime-sessions-card,
-  html.dui-pro-overhaul .app-bg.dy-monitor-focus [data-dui-panel="monitor"] .dy-runtime-sessions-card[data-expanded="false"],
-  html.dui-pro-overhaul.dui-cohesive-ui .app-bg.dy-monitor-focus [data-dui-panel="monitor"] .dy-runtime-sessions-card[data-expanded="false"] {
-    flex: 1 1 100% !important;
-    width: 100% !important;
-  }
-
-  html.dui-pro-overhaul .app-bg.dy-monitor-focus [data-dui-panel="monitor"] .dy-runtime-session-strip,
-  html.dui-pro-overhaul.dui-cohesive-ui .app-bg.dy-monitor-focus [data-dui-panel="monitor"] .dy-runtime-session-strip {
-    grid-template-columns: minmax(0, 1fr) !important;
-  }
-
-  html.dui-pro-overhaul .app-bg.dy-monitor-focus [data-dui-panel="monitor"] .dy-runtime-strip-stats,
-  html.dui-pro-overhaul.dui-cohesive-ui .app-bg.dy-monitor-focus [data-dui-panel="monitor"] .dy-runtime-strip-stats {
-    justify-content: flex-start !important;
-    max-width: 100% !important;
-  }
-
-  html.dui-pro-overhaul .app-bg.dy-monitor-focus [data-dui-panel="monitor"] .dy-runtime-sessions-panel,
-  html.dui-pro-overhaul.dui-cohesive-ui .app-bg.dy-monitor-focus [data-dui-panel="monitor"] .dy-runtime-sessions-panel {
-    position: static !important;
-    width: 100% !important;
-    max-height: none !important;
-  }
-
-  html.dui-pro-overhaul .app-bg.dy-monitor-focus [data-dui-panel="monitor"] .dy-runtime-sessions-card .dy-runtime-session-list,
-  html.dui-pro-overhaul.dui-cohesive-ui .app-bg.dy-monitor-focus [data-dui-panel="monitor"] .dy-runtime-sessions-card .dy-runtime-session-list {
-    max-height: min(44dvh, 360px) !important;
   }
 }
 

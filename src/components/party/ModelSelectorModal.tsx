@@ -75,6 +75,8 @@ interface ModelSelectorModalProps {
 
 const DEEPSEEK_PRO_MODEL = 'deepseek/deepseek-v4-pro'
 const DEEPSEEK_FLASH_MODEL = 'deepseek/deepseek-v4-flash'
+const OPENROUTER_DEEPSEEK_PRO_MODEL = 'openrouter/deepseek/deepseek-v4-pro'
+const OPENROUTER_DEEPSEEK_FLASH_MODEL = 'openrouter/deepseek/deepseek-v4-flash'
 const REASONING_EFFORT_LEVELS = ['off', 'minimal', 'low', 'medium', 'high'] as const satisfies readonly ThinkingLevel[]
 const MODEL_SELECTOR_CACHE_MS = 5 * 60 * 1000
 const MODEL_SELECTOR_FETCH_TIMEOUT_MS = 8000
@@ -244,23 +246,36 @@ export function ModelSelectorModal({
   const primaryProviderLabel = authLabelForProvider(primaryProvider, primaryProviderStatus)
   const primaryProviderAuthKind = authKindForProvider(primaryProviderStatus)
   const deepSeekProviderStatus = authProviders.find((entry) => entry.provider === 'deepseek')
-  const deepSeekModels = models.filter((model) => model.id === DEEPSEEK_PRO_MODEL || model.id === DEEPSEEK_FLASH_MODEL)
+  const openRouterProviderStatus = authProviders.find((entry) => entry.provider === 'openrouter')
+  const openRouterReady = openRouterProviderStatus?.configured === true
+  const preferredDeepSeekProModel = openRouterReady ? OPENROUTER_DEEPSEEK_PRO_MODEL : DEEPSEEK_PRO_MODEL
+  const preferredDeepSeekFlashModel = openRouterReady ? OPENROUTER_DEEPSEEK_FLASH_MODEL : DEEPSEEK_FLASH_MODEL
+  const preferredDeepSeekProviderStatus = openRouterReady ? openRouterProviderStatus : deepSeekProviderStatus
+  const deepSeekModels = models.filter((model) =>
+    model.id === DEEPSEEK_PRO_MODEL ||
+    model.id === DEEPSEEK_FLASH_MODEL ||
+    model.id === OPENROUTER_DEEPSEEK_PRO_MODEL ||
+    model.id === OPENROUTER_DEEPSEEK_FLASH_MODEL)
   const modelGroups = useMemo(() => groupAvailableModels(selectableModels), [selectableModels])
   const fallbackModelGroups = useMemo(
     () => groupAvailableModels(selectableModels.filter((model) => model.id !== selectedPrimary)),
     [selectableModels, selectedPrimary],
   )
-  const deepSeekReady = deepSeekProviderStatus?.configured === true
+  const deepSeekReady = openRouterReady || deepSeekProviderStatus?.configured === true
   const selectedThinking: ThinkingLevel = thinkingEnabled ? thinkingLevel : 'off'
 
   const applyDeepSeekStack = () => {
-    setSelectedPrimary(DEEPSEEK_PRO_MODEL)
+    setSelectedPrimary(preferredDeepSeekProModel)
     setSelectedFallbacks((current) => {
-      const next = current.filter((id) => id !== DEEPSEEK_PRO_MODEL && id !== DEEPSEEK_FLASH_MODEL)
-      return [DEEPSEEK_FLASH_MODEL, ...next]
+      const next = current.filter((id) =>
+        id !== DEEPSEEK_PRO_MODEL &&
+        id !== DEEPSEEK_FLASH_MODEL &&
+        id !== OPENROUTER_DEEPSEEK_PRO_MODEL &&
+        id !== OPENROUTER_DEEPSEEK_FLASH_MODEL)
+      return [preferredDeepSeekFlashModel, ...next]
     })
     setStatus(deepSeekReady ? 'DeepSeek V4 stack selected.' : 'DeepSeek V4 selected. Add a key before saving.')
-    if (deepSeekProviderStatus && !deepSeekReady) setAuthModalProvider(deepSeekProviderStatus)
+    if (preferredDeepSeekProviderStatus && !deepSeekReady) setAuthModalProvider(preferredDeepSeekProviderStatus)
   }
 
   if (!isOpen) return null
@@ -316,7 +331,7 @@ export function ModelSelectorModal({
                             : 'border-amber-300/45 bg-amber-900/30 text-amber-100'
                         }`}
                       >
-                        {deepSeekReady ? 'Key Connected' : 'Key Needed'}
+                        {openRouterReady ? 'OpenRouter Ready' : deepSeekReady ? 'Key Connected' : 'Key Needed'}
                       </span>
                     </div>
                     <div className="grid gap-2 sm:grid-cols-2">
@@ -347,13 +362,13 @@ export function ModelSelectorModal({
                       >
                         Use Pro + Flash
                       </button>
-                      {deepSeekProviderStatus && !deepSeekReady && (
+                      {preferredDeepSeekProviderStatus && !deepSeekReady && (
                         <button
                           type="button"
-                          onClick={() => setAuthModalProvider(deepSeekProviderStatus)}
+                          onClick={() => setAuthModalProvider(preferredDeepSeekProviderStatus)}
                           className="rounded-lg border border-amber-300/40 bg-amber-900/25 px-3 py-1.5 text-xs text-amber-100"
                         >
-                          Connect DeepSeek
+                          Connect {authLabelForProvider(preferredDeepSeekProviderStatus.provider, preferredDeepSeekProviderStatus)}
                         </button>
                       )}
                     </div>

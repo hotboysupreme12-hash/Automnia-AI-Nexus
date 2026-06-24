@@ -3583,31 +3583,6 @@ html.dui-pro-overhaul .dy-command-console .dy-command-busy-warning[data-severity
   color: #fecaca !important;
 }
 
-html.dui-pro-overhaul .dy-command-console .dy-command-evidence-preview {
-  margin: -3px 0 10px 52px !important;
-  max-width: min(100%, 560px) !important;
-  border-radius: 6px !important;
-}
-
-html.dui-pro-overhaul .dy-command-console .dy-command-evidence-preview summary {
-  min-height: 24px !important;
-  padding-inline: 8px !important;
-  font-size: 8px !important;
-  letter-spacing: .06em !important;
-}
-
-html.dui-pro-overhaul .dy-command-console .dy-command-evidence-row {
-  grid-template-columns: minmax(64px, .24fr) minmax(0, 1fr) !important;
-  padding: 4px 8px !important;
-  font-size: 9px !important;
-}
-
-@media (max-width: 620px) {
-  html.dui-pro-overhaul .dy-command-console .dy-command-evidence-preview {
-    margin-left: 0 !important;
-  }
-}
-
 html.dui-pro-overhaul .dy-command-console .dy-command-composer__row {
   min-height: 52px !important;
   border-radius: 8px !important;
@@ -3886,10 +3861,6 @@ html.dui-pro-overhaul .app-bg.dy-monitor-focus [data-dui-panel="monitor"] .dy-ch
   grid-area: activity !important;
 }
 
-html.dui-pro-overhaul .app-bg.dy-monitor-focus [data-dui-panel="monitor"] .dy-runtime-sessions-card {
-  grid-area: sessions !important;
-}
-
 html.dui-pro-overhaul .app-bg.dy-monitor-focus [data-dui-panel="monitor"] .dy-cron-jobs-card {
   grid-area: jobs !important;
 }
@@ -3942,8 +3913,7 @@ html.dui-pro-overhaul .app-bg.dy-monitor-focus [data-dui-panel="monitor"] .dy-pl
 }
 
 html.dui-pro-overhaul .app-bg.dy-monitor-focus [data-dui-panel="monitor"] .dy-channel-activity-card,
-html.dui-pro-overhaul .app-bg.dy-monitor-focus [data-dui-panel="monitor"] .dy-cron-jobs-card,
-html.dui-pro-overhaul .app-bg.dy-monitor-focus [data-dui-panel="monitor"] .dy-runtime-sessions-card {
+html.dui-pro-overhaul .app-bg.dy-monitor-focus [data-dui-panel="monitor"] .dy-cron-jobs-card {
   display: flex !important;
   height: 100% !important;
   min-height: 0 !important;
@@ -3952,14 +3922,12 @@ html.dui-pro-overhaul .app-bg.dy-monitor-focus [data-dui-panel="monitor"] .dy-ru
 }
 
 html.dui-pro-overhaul .app-bg.dy-monitor-focus [data-dui-panel="monitor"] .dy-channel-activity-card > div:first-child,
-html.dui-pro-overhaul .app-bg.dy-monitor-focus [data-dui-panel="monitor"] .dy-cron-jobs-card > div:first-child,
-html.dui-pro-overhaul .app-bg.dy-monitor-focus [data-dui-panel="monitor"] .dy-runtime-sessions-card > div:first-child {
+html.dui-pro-overhaul .app-bg.dy-monitor-focus [data-dui-panel="monitor"] .dy-cron-jobs-card > div:first-child {
   flex: 0 0 auto !important;
 }
 
 html.dui-pro-overhaul .app-bg.dy-monitor-focus [data-dui-panel="monitor"] .dy-channel-activity-card .dy-gateway-event-list,
-html.dui-pro-overhaul .app-bg.dy-monitor-focus [data-dui-panel="monitor"] .dy-cron-jobs-card .dy-monitor-stream-box,
-html.dui-pro-overhaul .app-bg.dy-monitor-focus [data-dui-panel="monitor"] .dy-runtime-sessions-card .dy-runtime-session-list {
+html.dui-pro-overhaul .app-bg.dy-monitor-focus [data-dui-panel="monitor"] .dy-cron-jobs-card .dy-monitor-stream-box {
   height: auto !important;
   min-height: 0 !important;
   max-height: none !important;
@@ -4078,39 +4046,6 @@ html.dui-pro-overhaul .app-bg.dy-monitor-focus [data-dui-panel="monitor"] .dy-ru
   text-align: right !important;
 }
 
-html.dui-pro-overhaul .app-bg.dy-monitor-focus [data-dui-panel="monitor"] .dy-runtime-sessions-card .dy-session-meta-chip {
-  display: grid !important;
-  min-height: 26px !important;
-  grid-template-columns: max-content minmax(0, 1fr) !important;
-  align-items: center !important;
-  gap: 8px !important;
-  overflow: hidden !important;
-  padding: 5px 7px !important;
-  white-space: nowrap !important;
-}
-
-html.dui-pro-overhaul .app-bg.dy-monitor-focus [data-dui-panel="monitor"] .dy-runtime-sessions-card .dy-session-meta-chip > span {
-  min-width: 0 !important;
-  overflow: hidden !important;
-  color: var(--dy-monitor-graphite-muted) !important;
-  font-size: 7.25px !important;
-  font-weight: 700 !important;
-  line-height: 1 !important;
-  text-overflow: ellipsis !important;
-  text-transform: uppercase !important;
-}
-
-html.dui-pro-overhaul .app-bg.dy-monitor-focus [data-dui-panel="monitor"] .dy-runtime-sessions-card .dy-session-meta-chip strong {
-  min-width: 0 !important;
-  overflow: hidden !important;
-  color: var(--dy-monitor-graphite-text) !important;
-  font-size: 8.5px !important;
-  line-height: 1.1 !important;
-  text-align: right !important;
-  text-overflow: ellipsis !important;
-  white-space: nowrap !important;
-}
-
 html.dui-pro-overhaul .app-bg.dy-monitor-focus [data-dui-panel="monitor"] .dy-cron-job-header {
   align-items: center !important;
 }
@@ -4216,16 +4151,14 @@ html.dui-pro-overhaul .app-bg.dy-monitor-focus [data-dui-panel="monitor"] .dy-ga
     grid-template-columns: minmax(0, 1fr) !important;
     grid-template-areas:
       "summary"
-      "sessions"
       "activity"
       "jobs"
       "log" !important;
-    grid-template-rows: auto auto auto auto auto !important;
+    grid-template-rows: auto auto auto auto !important;
   }
 
   html.dui-pro-overhaul .app-bg.dy-monitor-focus [data-dui-panel="monitor"] .dy-channel-activity-card .dy-gateway-event-list,
-  html.dui-pro-overhaul .app-bg.dy-monitor-focus [data-dui-panel="monitor"] .dy-cron-jobs-card .dy-monitor-stream-box,
-  html.dui-pro-overhaul .app-bg.dy-monitor-focus [data-dui-panel="monitor"] .dy-runtime-sessions-card .dy-runtime-session-list {
+  html.dui-pro-overhaul .app-bg.dy-monitor-focus [data-dui-panel="monitor"] .dy-cron-jobs-card .dy-monitor-stream-box {
     min-height: 260px !important;
     flex-basis: auto !important;
   }
