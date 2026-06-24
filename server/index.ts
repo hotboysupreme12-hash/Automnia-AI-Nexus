@@ -28,6 +28,8 @@ import {
 } from './runtimeLedger'
 import { apiFailure, apiSuccess, installControlPlaneHttp, setStaticSecurityHeaders } from './controlPlaneHttp'
 import { registerAuthRoutes } from './routes/authRoutes'
+import { registerCommandConsoleFileRoutes } from './routes/commandConsoleFileRoutes'
+import { createControlFilesService } from './services/controlFilesService'
 import { applyDiagnosticRedactions } from '../src/utils/diagnosticRedaction'
 
 const app = express()
@@ -224,7 +226,7 @@ configureRuntimeLedger({
   missionReportsJsonl: MISSION_REPORT_LEDGER_PATH,
 })
 
-const CONTROL_FILES = ['AGENTS.md', 'BOOTSTRAP.md', 'HEARTBEAT.md', 'IDENTITY.md', 'SOUL.md', 'USER.md', 'MEMORY.md'] as const
+const controlFilesService = createControlFilesService(WORKSPACE_ROOT)
 const OPENCLAW_BOOTSTRAP_FILES = ['AGENTS.md', 'SOUL.md', 'TOOLS.md', 'IDENTITY.md', 'USER.md', 'HEARTBEAT.md', 'BOOTSTRAP.md'] as const
 const OPENCLAW_OPTIONAL_BOOTSTRAP_FILES = ['SOUL.md', 'USER.md', 'HEARTBEAT.md', 'IDENTITY.md'] as const
 const AGENT_RESOURCE_FILES = [
@@ -6843,13 +6845,6 @@ process.on('SIGHUP', () => handleControlCenterShutdown('SIGHUP'))
 process.on('exit', () => {
   handleControlCenterShutdown('process exit')
 })
-
-// Export helpers for potential runtime use
-
-
-function isAllowedFile(file: string): file is (typeof CONTROL_FILES)[number] {
-  return (CONTROL_FILES as readonly string[]).includes(file)
-}
 
 function isMarkdownResourceFile(file: string) {
   return /^[^\\/]+\.md$/i.test(file)
@@ -14858,10 +14853,6 @@ async function runMissionCronRound(missionId: string, assignments: TeamSyncAssig
       }
     }
   }
-}
-
-async function readControlFile(file: string) {
-  return fs.readFile(path.join(WORKSPACE_ROOT, file), 'utf-8')
 }
 
 const DEFAULT_CONTEXT_PRUNING_TOOL_DENY = ['browser', 'canvas']
@@ -26162,72 +26153,10 @@ app.get('/api/doctor/recent', async (req, res) => {
   }
 })
 
-app.get('/api/files', (_req, res) => {
-  return apiSuccess(res, { files: CONTROL_FILES })
-})
-
-app.post('/api/files/upload', express.raw({
-  type: [
-    'image/*',
-    'audio/*',
-    'text/*',
-    'application/octet-stream',
-    'application/pdf',
-    'application/json',
-    'application/x-ndjson',
-    'application/xml',
-    'application/yaml',
-    'application/x-yaml',
-    'application/msword',
-    'application/rtf',
-    'application/vnd.ms-powerpoint',
-    'application/vnd.ms-excel',
-    'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
-    'application/vnd.openxmlformats-officedocument.presentationml.presentation',
-    'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
-  ],
-  limit: COMMAND_CONSOLE_UPLOAD_LIMIT_BYTES,
-}), async (req, res) => {
-  try {
-    const bytes = Buffer.isBuffer(req.body) ? req.body : Buffer.alloc(0)
-    const name = typeof req.query.name === 'string' ? req.query.name : undefined
-    const mimeType =
-      (typeof req.query.mimeType === 'string' ? req.query.mimeType : undefined) ||
-      req.get('x-file-type') ||
-      req.get('content-type') ||
-      undefined
-    const attachment = await persistCommandConsoleUpload(bytes, name, mimeType)
-    return apiSuccess(res, { attachment })
-  } catch (error) {
-    return apiFailure(res, 400, 'file_upload_failed', 'Upload failed', error instanceof Error ? error.message : String(error))
-  }
-})
-
-app.get('/api/files/:file', async (req, res) => {
-  const file = req.params.file
-  if (!isAllowedFile(file)) return apiFailure(res, 400, 'invalid_payload', 'File is not in allowed control list.')
-
-  try {
-    return apiSuccess(res, { file, content: await readControlFile(file) })
-  } catch (error) {
-    return apiFailure(res, 404, 'control_file_operation_failed', `Could not read ${file}`, String(error))
-  }
-})
-
-app.put('/api/files/:file', async (req, res) => {
-  const file = req.params.file
-  if (!isAllowedFile(file)) return apiFailure(res, 400, 'invalid_payload', 'File is not in allowed control list.')
-
-  const schema = z.object({ content: z.string() })
-  const parsed = schema.safeParse(req.body)
-  if (!parsed.success) return apiFailure(res, 400, 'invalid_payload', 'Invalid payload', parsed.error.flatten())
-
-  try {
-    await fs.writeFile(path.join(WORKSPACE_ROOT, file), parsed.data.content, 'utf-8')
-    return apiSuccess(res, { file })
-  } catch (error) {
-    return apiFailure(res, 500, 'control_file_operation_failed', `Could not write ${file}`, String(error))
-  }
+registerCommandConsoleFileRoutes(app, {
+  controlFiles: controlFilesService,
+  persistCommandConsoleUpload,
+  uploadLimitBytes: COMMAND_CONSOLE_UPLOAD_LIMIT_BYTES,
 })
 
 app.get('/api/openclaw/summary', async (_req, res) => {

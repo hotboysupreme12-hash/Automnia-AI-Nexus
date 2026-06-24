@@ -1091,6 +1091,39 @@ Verification:
   - `npm run smoke:misc-control-plane`
   - `npm run lint`
   - `npm test`
+- GitHub Actions verification passed for the pushed PR branch:
+  - PR: `#1`
+  - Run: `28120340143`
+  - Commit: `7c2bc8d`
+  - Result: Control Plane CI completed successfully.
+
+## 2026-06-24 18:59 UTC - Command Console File Route And Service Extraction
+
+- Continued server decomposition on protective branch `codex/server-route-modules`.
+- Read local OpenClaw/Command Console documentation before touching Command Console-owned endpoints:
+  - `docs/OPENCLAW_GATEWAY_COMMAND_CONSOLE_GUIDE.md`
+  - `docs/openclaw-latest/pages/web/control-ui.md`
+- Extracted the Command Console file-control service into `server/services/controlFilesService.ts`:
+  - Allowed control-file list.
+  - Control-file validation.
+  - Workspace-root scoped read/write operations.
+- Extracted the `/api/files` route cluster into `server/routes/commandConsoleFileRoutes.ts`:
+  - `GET /api/files`
+  - `POST /api/files/upload`
+  - `GET /api/files/:file`
+  - `PUT /api/files/:file`
+- Kept the existing upload persistence helper injected from `server/index.ts` so this slice does not entangle the route extraction with the larger Command Console runtime/upload pipeline.
+- Reduced `server/index.ts` from `30,585` lines after the prior slice to `30,524` lines after this extraction.
+- Strengthened `scripts/smoke-command-console-files-control-plane.ts` so it now asserts:
+  - `server/index.ts` registers the extracted route module.
+  - `server/index.ts` no longer inlines `/api/files` handlers.
+  - `server/services/controlFilesService.ts` owns the control-file list and validator.
+  - `server/routes/commandConsoleFileRoutes.ts` still emits canonical success/error envelopes.
+- Verification passed:
+  - `npm run typecheck:server`
+  - `npm run smoke:command-console-files`
+  - `npm run lint`
+  - `npm test`
 
 ## In Progress
 
@@ -1098,7 +1131,8 @@ Verification:
 
 Next action:
 
-- Continue breaking up `server/index.ts` by extracting one coherent domain route cluster next. Highest-value candidates are runtime status/actions, command-console files, plugins, or filesystem routes because they already have focused smoke coverage.
+- Push the Command Console file extraction to PR `#1`, wait for GitHub Control Plane CI, and record the resulting run evidence.
+- Continue breaking up `server/index.ts` by extracting one coherent domain route cluster next. Highest-value candidates are runtime status/actions, plugins, or filesystem routes because they already have focused smoke coverage.
 - Add release governance documentation and/or enforcement slices after the next route extraction:
   - Main branch protection requirements: green CI, no direct pushes, PR review, and signed commits where repository support allows.
   - Mandatory public release signing and validation failure when signing evidence is absent.
