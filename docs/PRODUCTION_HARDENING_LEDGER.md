@@ -992,13 +992,32 @@ Verification:
 - `npm test` passed after the CI-safe smoke update.
 - `npm run audit:dependencies` passed after the CI-safe smoke update with `found 0 vulnerabilities`.
 
+## 2026-06-24 16:55 UTC - CI Electron Binary Repair
+
+- Rechecked the GitHub Actions rerun after the OpenClaw artifact fix:
+  - Run: `28114149749`
+  - Commit: `11167e1`
+  - Result: `npm test` and `smoke:openclaw` passed in CI.
+  - New failed step: `Run Electron end-to-end smoke`.
+- The CI Electron smoke failed before launching the app because the Electron package import could not read `node_modules/electron/path.txt`.
+- Made `scripts/smoke-electron-e2e.ts` explicitly ensure the Electron binary before importing the `electron` package:
+  - Resolves `electron/package.json` without importing Electron first.
+  - Reuses an existing binary when present.
+  - Restores `path.txt` when the executable exists but the package metadata file is missing.
+  - Falls back to downloading and extracting the Electron artifact with `@electron/get` and `extract-zip` when needed.
+- Strengthened `scripts/smoke-ci-workflow.ts` so future changes fail if the Electron E2E smoke loses this explicit binary preparation.
+- `npm run smoke:ci-workflow` passed after adding the Electron binary-prep assertions.
+- `npm run smoke:electron-e2e` passed after adding explicit Electron binary preparation.
+- `npm test` passed after the Electron CI repair.
+- `npm run audit:dependencies` passed after the Electron CI repair with `found 0 vulnerabilities`.
+
 ## In Progress
 
 - Production hardening on protective branch `codex/ci-openclaw-smoke`.
 
 Next action:
 
-- Push the CI OpenClaw smoke fix and confirm the rerun; then add UI smoke coverage to CI if it can be made stable against built artifacts.
+- Push the Electron CI repair and confirm the rerun; then add UI smoke coverage to CI if it can be made stable against built artifacts.
 - Avoid the pre-existing local edits in `src/components/mission/MissionDeploymentPanel.tsx` and `src/styles/dystopai-theme/70-responsive-polish.css` unless the selected task explicitly requires those files.
 
 ## Backlog

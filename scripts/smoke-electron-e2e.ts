@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict'
 import { spawn, spawnSync } from 'node:child_process'
-import { existsSync, mkdirSync, mkdtempSync, rmSync } from 'node:fs'
+import { existsSync, mkdirSync, mkdtempSync, renameSync, rmSync, writeFileSync } from 'node:fs'
 import { createRequire } from 'node:module'
 import { tmpdir } from 'node:os'
 import path from 'node:path'
@@ -8,6 +8,70 @@ import net from 'node:net'
 
 const root = process.cwd()
 const require = createRequire(import.meta.url)
+
+function electronPlatformPath(platform = process.env.ELECTRON_INSTALL_PLATFORM || process.env.npm_config_platform || process.platform) {
+  switch (platform) {
+    case 'mas':
+    case 'darwin':
+      return 'Electron.app/Contents/MacOS/Electron'
+    case 'freebsd':
+    case 'openbsd':
+    case 'linux':
+      return 'electron'
+    case 'win32':
+      return 'electron.exe'
+    default:
+      throw new Error(`Electron builds are not available on platform: ${platform}`)
+  }
+}
+
+async function ensureElectronBinary() {
+  const electronPackageDir = path.dirname(require.resolve('electron/package.json'))
+  const platformPath = electronPlatformPath()
+  const pathFile = path.join(electronPackageDir, 'path.txt')
+  const distPath = process.env.ELECTRON_OVERRIDE_DIST_PATH || path.join(electronPackageDir, 'dist')
+  const executablePath = path.join(distPath, platformPath)
+
+  if (existsSync(pathFile) && existsSync(executablePath)) return
+  if (existsSync(executablePath)) {
+    writeFileSync(pathFile, platformPath)
+    return
+  }
+
+  const { downloadArtifact } = require('@electron/get') as typeof import('@electron/get')
+  const extract = require('extract-zip') as (zipPath: string, options: { dir: string }) => Promise<void>
+  const { version } = require(path.join(electronPackageDir, 'package.json')) as { version: string }
+  const checksums = process.env.electron_use_remote_checksums || process.env.npm_config_electron_use_remote_checksums
+    ? undefined
+    : require(path.join(electronPackageDir, 'checksums.json'))
+  const platform = process.env.ELECTRON_INSTALL_PLATFORM || process.env.npm_config_platform || process.platform
+  const arch = process.env.ELECTRON_INSTALL_ARCH || process.env.npm_config_arch || process.arch
+
+  const zipPath = await downloadArtifact({
+    version,
+    artifactName: 'electron',
+    force: process.env.force_no_cache === 'true',
+    cacheRoot: process.env.electron_config_cache,
+    checksums,
+    platform,
+    arch,
+  })
+
+  rmSync(distPath, { recursive: true, force: true })
+  mkdirSync(distPath, { recursive: true })
+  await extract(zipPath, { dir: distPath })
+
+  const srcTypeDefPath = path.join(distPath, 'electron.d.ts')
+  const targetTypeDefPath = path.join(electronPackageDir, 'electron.d.ts')
+  if (existsSync(srcTypeDefPath) && !existsSync(targetTypeDefPath)) {
+    renameSync(srcTypeDefPath, targetTypeDefPath)
+  }
+
+  writeFileSync(pathFile, platformPath)
+  assert.ok(existsSync(executablePath), `Electron binary was not installed at ${executablePath}`)
+}
+
+await ensureElectronBinary()
 const electronPath = require('electron') as string
 
 assert.ok(existsSync(path.join(root, 'dist', 'index.html')), 'Electron E2E requires dist/index.html; run npm run build:client first')

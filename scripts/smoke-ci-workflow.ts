@@ -14,6 +14,7 @@ assert.ok(existsSync(workflowPath), 'control-plane CI workflow must exist')
 
 const workflow = readFileSync(workflowPath, 'utf8')
 const secretScanner = readFileSync(path.join(root, 'scripts', 'secret-scan.cjs'), 'utf8')
+const electronE2eSmoke = readFileSync(path.join(root, 'scripts', 'smoke-electron-e2e.ts'), 'utf8')
 
 assert.match(workflow, /name:\s*Control Plane CI/, 'workflow must have a stable production-hardening name')
 assert.match(workflow, /push:/, 'workflow must run on pushes')
@@ -89,6 +90,9 @@ assert.match(scripts['lint'] || '', /eslint \./, 'package scripts must expose so
 assert.match(scripts['release:validate'] || '', /node scripts\/validate-release-artifacts\.cjs/, 'package scripts must expose release artifact validation')
 assert.match(scripts['smoke:electron-e2e'] || '', /tsx scripts\/smoke-electron-e2e\.ts/, 'package scripts must expose Electron E2E smoke coverage')
 assert.match(scripts['smoke:packaged-electron-launch'] || '', /tsx scripts\/smoke-packaged-electron-launch\.ts/, 'package scripts must expose packaged Electron launch smoke coverage')
+assert.match(electronE2eSmoke, /async function ensureElectronBinary/, 'Electron E2E smoke must explicitly ensure the Electron binary before import')
+assert.match(electronE2eSmoke, /require\.resolve\('electron\/package\.json'\)/, 'Electron E2E smoke must resolve the Electron package without importing electron first')
+assert.match(electronE2eSmoke, /writeFileSync\(pathFile, platformPath\)/, 'Electron E2E smoke must restore path.txt when Actions checkout/install misses it')
 assert.match(scripts['smoke:openclaw'] || '', /smoke-openclaw-contracts\.mjs/, 'package scripts must expose OpenClaw contract smoke coverage')
 assert.match(testCiScript, /npm run lint && npm run typecheck/, 'test:ci must lint before type-checking')
 assert.match(testCiScript, /npm run smoke:openclaw/, 'test:ci must include OpenClaw contract smoke coverage')
