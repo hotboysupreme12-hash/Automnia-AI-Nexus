@@ -90,7 +90,7 @@ assert.match(scripts['lint'] || '', /eslint \./, 'package scripts must expose so
 assert.match(scripts['release:validate'] || '', /node scripts\/validate-release-artifacts\.cjs/, 'package scripts must expose release artifact validation')
 assert.match(scripts['smoke:electron-e2e'] || '', /tsx scripts\/smoke-electron-e2e\.ts/, 'package scripts must expose Electron E2E smoke coverage')
 assert.match(scripts['smoke:packaged-electron-launch'] || '', /tsx scripts\/smoke-packaged-electron-launch\.ts/, 'package scripts must expose packaged Electron launch smoke coverage')
-assert.match(electronE2eSmoke, /async function ensureElectronBinary/, 'Electron E2E smoke must explicitly ensure the Electron binary before import')
+assert.match(electronE2eSmoke, /function ensureElectronBinary/, 'Electron E2E smoke must explicitly ensure the Electron binary before import')
 assert.match(electronE2eSmoke, /require\.resolve\('electron\/package\.json'\)/, 'Electron E2E smoke must resolve the Electron package without importing electron first')
 assert.match(electronE2eSmoke, /writeFileSync\(pathFile, platformPath\)/, 'Electron E2E smoke must restore path.txt when Actions checkout/install misses it')
 assert.match(scripts['smoke:openclaw'] || '', /smoke-openclaw-contracts\.mjs/, 'package scripts must expose OpenClaw contract smoke coverage')
