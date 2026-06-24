@@ -1200,6 +1200,12 @@ Verification:
   - `npm run lint`
   - `npm test`
 - Observed during `npm test`: `smoke:ledger` reported one skipped malformed historical JSONL row while reading `runtime-runs`; the smoke passed and preserved the corruption-recovery warning instead of treating the file as empty.
+- GitHub Actions verification passed for the pushed PR branch:
+  - PR: `#1`
+  - PR run: `28125277911`
+  - Push run: `28125275632`
+  - Commit: `fe0bc07`
+  - Result: Control Plane CI completed successfully in `8m29s` for the PR-triggered run and `11m42s` for the push-triggered run.
 
 ## In Progress
 
@@ -1207,7 +1213,6 @@ Verification:
 
 Next action:
 
-- Push the plugin route extraction to PR `#1`, wait for GitHub Control Plane CI, and record the resulting run evidence.
 - Continue breaking up `server/index.ts` by extracting one coherent domain route cluster next. Highest-value candidates are runtime status/actions or filesystem routes because they already have focused smoke coverage.
 - Add release governance documentation and/or enforcement slices after the next route extraction:
   - Main branch protection requirements: green CI, no direct pushes, PR review, and signed commits where repository support allows.
