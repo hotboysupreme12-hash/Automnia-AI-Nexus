@@ -19,6 +19,15 @@ function sliceBetween(source: string, startMarker: string, endMarker: string): s
   return source.slice(start, end)
 }
 
+function routeBlock(source: string, marker: string): string {
+  const start = source.indexOf(marker)
+  assert(start >= 0, `Missing route marker: ${marker}`)
+  const remaining = source.slice(start + marker.length)
+  const nextMatch = /\n\s+app\./.exec(remaining)
+  const next = nextMatch ? start + marker.length + nextMatch.index : -1
+  return source.slice(start, next >= 0 ? next : source.length)
+}
+
 function assertCanonicalRoute(name: string, source: string) {
   assert(/apiSuccess\s*\(\s*res/.test(source), `${name} should return canonical success envelopes`)
   assert(/apiFailure\s*\(\s*res/.test(source), `${name} should return canonical error envelopes`)
@@ -28,6 +37,7 @@ function assertCanonicalRoute(name: string, source: string) {
 
 const server = readWorkspaceFile('server/index.ts')
 const controlPlaneHttp = readWorkspaceFile('server/controlPlaneHttp.ts')
+const openclawCommandRoutes = readWorkspaceFile('server/routes/openclawCommandRoutes.ts')
 const pluginsPanel = readWorkspaceFile('src/components/plugins/PluginsPanel.tsx')
 const packageJson = JSON.parse(readWorkspaceFile('package.json')) as { scripts?: Record<string, string> }
 
@@ -39,13 +49,18 @@ for (const code of [
   assert(controlPlaneHttp.includes(`| '${code}'`), `ApiErrorCode is missing ${code}`)
 }
 
-const summaryBlock = sliceBetween(server, "app.get('/api/openclaw/summary'", 'function clearRuntimeMonitorHistory')
-const commandBlock = sliceBetween(server, "app.post('/api/openclaw/command'", 'async function buildRuntimeStatusPayload')
+const summaryBlock = routeBlock(openclawCommandRoutes, "app.get('/api/openclaw/summary'")
+const commandBlock = routeBlock(openclawCommandRoutes, "app.post('/api/openclaw/command'")
 const parallelHealthBlock = sliceBetween(server, "app.post('/api/party/parallel-health'", "app.get('/api/missions'")
 
 assertCanonicalRoute('/api/openclaw/summary', summaryBlock)
 assertCanonicalRoute('/api/openclaw/command', commandBlock)
 assertCanonicalRoute('/api/party/parallel-health', parallelHealthBlock)
+
+assert(!server.includes("app.get('/api/openclaw/summary'"), 'OpenClaw summary route should be owned by server/routes/openclawCommandRoutes.ts')
+assert(!server.includes("app.post('/api/openclaw/command'"), 'OpenClaw command route should be owned by server/routes/openclawCommandRoutes.ts')
+assert(server.includes('registerOpenClawCommandRoutes(app, {'), 'server/index.ts should register extracted OpenClaw command routes')
+assert(server.includes('openclawConfigPath: OPENCLAW_CONFIG_PATH'), 'server/index.ts should inject the OpenClaw config path')
 
 assert(commandBlock.includes('pluginCommandResult(args, result)'), 'OpenClaw command route should preserve command result evidence')
 assert(commandBlock.includes('ok: result.code === 0'), 'OpenClaw command route should preserve command success data')
