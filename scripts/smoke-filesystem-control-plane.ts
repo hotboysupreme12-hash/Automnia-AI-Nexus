@@ -14,12 +14,15 @@ function assert(condition: unknown, message: string): asserts condition {
 function routeBlock(source: string, marker: string): string {
   const start = source.indexOf(marker)
   assert(start >= 0, `Missing route marker: ${marker}`)
-  const next = source.indexOf('\napp.', start + marker.length)
+  const remaining = source.slice(start + marker.length)
+  const nextMatch = /\n\s+app\./.exec(remaining)
+  const next = nextMatch ? start + marker.length + nextMatch.index : -1
   return source.slice(start, next >= 0 ? next : source.length)
 }
 
 const server = readWorkspaceFile('server/index.ts')
 const controlPlaneHttp = readWorkspaceFile('server/controlPlaneHttp.ts')
+const filesystemRoutes = readWorkspaceFile('server/routes/filesystemRoutes.ts')
 const editorModal = readWorkspaceFile('src/components/editor/AgentEditorModal.tsx')
 const nexusStore = readWorkspaceFile('src/store/nexusStore.ts')
 const packageJson = JSON.parse(readWorkspaceFile('package.json')) as { scripts?: Record<string, string> }
@@ -47,12 +50,17 @@ const canonicalRouteMarkers = [
 ]
 
 for (const marker of canonicalRouteMarkers) {
-  const block = routeBlock(server, marker)
+  const block = routeBlock(filesystemRoutes, marker)
   assert(/apiSuccess\s*\(\s*res/.test(block), `${marker} should return canonical success envelopes`)
   assert(/apiFailure\s*\(\s*res/.test(block), `${marker} should return canonical error envelopes`)
   assert(!/\breturn\s+res\.json\s*\(/.test(block), `${marker} should not return raw res.json payloads`)
   assert(!/\breturn\s+res\.status\s*\([^)]*\)\.json\s*\(/.test(block), `${marker} should not return raw status JSON errors`)
+  assert(!server.includes(marker), `${marker} should be owned by server/routes/filesystemRoutes.ts, not server/index.ts`)
 }
+
+assert(server.includes('registerFilesystemRoutes(app, {'), 'server/index.ts should register extracted filesystem routes')
+assert(server.includes('editorResourceFiles: EDITOR_RESOURCE_FILES'), 'server/index.ts should inject editor resource files')
+assert(server.includes('sharedTeamFiles: SHARED_TEAM_FILES'), 'server/index.ts should inject shared team files')
 
 const serializerStart = server.indexOf('function serializeFolderPickerSession')
 const serializerEnd = server.indexOf('function serializeImagePickerSession', serializerStart)
@@ -61,7 +69,7 @@ const serializerBlock = server.slice(serializerStart, serializerEnd)
 assert(!/\bok:\s*/.test(serializerBlock), 'Picker session data should not include a nested ok flag')
 assert(serializerBlock.includes("cancelled: session.status === 'cancelled'"), 'Picker session data should make cancellation explicit')
 
-const directPickerBlock = routeBlock(server, "app.post('/api/party/folder-picker'")
+const directPickerBlock = routeBlock(filesystemRoutes, "app.post('/api/party/folder-picker'")
 assert(directPickerBlock.includes("status: 'cancelled'"), 'Immediate folder picker should model cancellation as a state')
 assert(directPickerBlock.includes('cancelled: true'), 'Immediate folder picker should include cancelled=true')
 assert(!directPickerBlock.includes('ok: false, path: null, cancelled: true'), 'Cancelled folder picker should not use legacy ok=false payloads')
