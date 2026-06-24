@@ -1,6 +1,8 @@
 import assert from 'node:assert/strict'
 import { spawn, spawnSync } from 'node:child_process'
-import { existsSync, mkdirSync, mkdtempSync, renameSync, rmSync, writeFileSync } from 'node:fs'
+import { createHash } from 'node:crypto'
+import { createWriteStream, existsSync, mkdirSync, mkdtempSync, readFileSync, renameSync, rmSync, writeFileSync } from 'node:fs'
+import { get as httpsGet } from 'node:https'
 import { createRequire } from 'node:module'
 import { tmpdir } from 'node:os'
 import path from 'node:path'
@@ -25,6 +27,42 @@ function electronPlatformPath(platform = process.env.ELECTRON_INSTALL_PLATFORM |
   }
 }
 
+function downloadFile(url: string, destination: string, redirects = 0): Promise<void> {
+  if (redirects > 5) throw new Error(`Too many redirects while downloading ${url}`)
+
+  return new Promise((resolve, reject) => {
+    const request = httpsGet(url, (response) => {
+      const statusCode = response.statusCode || 0
+      const location = response.headers.location
+      if ([301, 302, 303, 307, 308].includes(statusCode) && location) {
+        response.resume()
+        const nextUrl = new URL(location, url).toString()
+        void downloadFile(nextUrl, destination, redirects + 1).then(resolve, reject)
+        return
+      }
+
+      if (statusCode < 200 || statusCode >= 300) {
+        response.resume()
+        reject(new Error(`Download failed ${statusCode} for ${url}`))
+        return
+      }
+
+      const file = createWriteStream(destination)
+      file.on('error', reject)
+      file.on('finish', () => file.close((error) => (error ? reject(error) : resolve())))
+      response.on('error', reject)
+      response.pipe(file)
+    })
+
+    request.setTimeout(180_000, () => request.destroy(new Error(`Timed out downloading ${url}`)))
+    request.on('error', reject)
+  })
+}
+
+function sha256File(filePath: string) {
+  return createHash('sha256').update(readFileSync(filePath)).digest('hex')
+}
+
 async function ensureElectronBinary() {
   const electronPackageDir = path.dirname(require.resolve('electron/package.json'))
   const platformPath = electronPlatformPath()
@@ -38,24 +76,19 @@ async function ensureElectronBinary() {
     return
   }
 
-  const { downloadArtifact } = require('@electron/get') as typeof import('@electron/get')
   const extract = require('extract-zip') as (zipPath: string, options: { dir: string }) => Promise<void>
   const { version } = require(path.join(electronPackageDir, 'package.json')) as { version: string }
-  const checksums = process.env.electron_use_remote_checksums || process.env.npm_config_electron_use_remote_checksums
-    ? undefined
-    : require(path.join(electronPackageDir, 'checksums.json'))
   const platform = process.env.ELECTRON_INSTALL_PLATFORM || process.env.npm_config_platform || process.platform
   const arch = process.env.ELECTRON_INSTALL_ARCH || process.env.npm_config_arch || process.arch
+  const artifactName = `electron-v${version}-${platform}-${arch}.zip`
+  const checksums = require(path.join(electronPackageDir, 'checksums.json')) as Record<string, string>
+  const expectedChecksum = checksums[artifactName]
+  assert.ok(expectedChecksum, `Electron checksum is missing for ${artifactName}`)
+  const zipPath = path.join(tmpdir(), artifactName)
+  const artifactUrl = `https://github.com/electron/electron/releases/download/v${version}/${artifactName}`
 
-  const zipPath = await downloadArtifact({
-    version,
-    artifactName: 'electron',
-    force: process.env.force_no_cache === 'true',
-    cacheRoot: process.env.electron_config_cache,
-    checksums,
-    platform,
-    arch,
-  })
+  await downloadFile(artifactUrl, zipPath)
+  assert.equal(sha256File(zipPath), expectedChecksum, `Electron checksum mismatch for ${artifactName}`)
 
   rmSync(distPath, { recursive: true, force: true })
   mkdirSync(distPath, { recursive: true })
