@@ -63,6 +63,9 @@ jobs:
       - name: Prepare reproducible runtime bundles
         run: npm run prepare:runtime-bundles
 
+      - name: Prepare vendored OpenClaw dependencies
+        run: npm run prepare:openclaw-vendor
+
       - name: Package desktop directory
         run: node scripts/package-desktop.cjs --dir
 
