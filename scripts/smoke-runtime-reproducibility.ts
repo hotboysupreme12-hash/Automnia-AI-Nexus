@@ -103,6 +103,21 @@ assert.match(
 )
 assert.match(
   prepareOpenClawVendor,
+  /DEFAULT_OPENCLAW_PACKAGE_INTEGRITY = 'sha512-/,
+  'vendored OpenClaw package hydration must pin the published package integrity',
+)
+assert.match(
+  prepareOpenClawVendor,
+  /hydratePublishedPackageArtifacts/,
+  'vendored OpenClaw dependency prep must hydrate missing package artifacts before packaging',
+)
+assert.match(
+  prepareOpenClawVendor,
+  /sriSha512File/,
+  'vendored OpenClaw package hydration must verify the package tarball SRI',
+)
+assert.match(
+  prepareOpenClawVendor,
   /'ci'/,
   'vendored OpenClaw dependency prep must use npm ci',
 )

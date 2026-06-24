@@ -1021,12 +1021,16 @@ Verification:
   - New failed step: `Package desktop directory`.
 - The packaging failure came from `scripts/after-pack.cjs` because CI had no ignored `vendor/openclaw/node_modules` directory:
   - `Missing vendored OpenClaw node_modules at ...\vendor\openclaw\node_modules`
+- After the first vendor dependency repair was pushed, CI run `28117209900` confirmed that the vendored dependency preparation step passed, then exposed the next ignored-artifact assumption:
+  - `Missing vendored OpenClaw extensions at ...\vendor\openclaw\dist\extensions`
 - Read the local OpenClaw documentation before changing the packaging/runtime dependency path:
   - `docs/openclaw-latest/pages/cli/agent.md`
   - `docs/openclaw-latest/pages/install/node.md`
   - `docs/openclaw-latest/pages/gateway/security/shrinkwrap.md`
   - `docs/openclaw-latest/pages/plugins/dependency-resolution.md`
-- Added `scripts/prepare-openclaw-vendor.cjs` so the desktop packaging path hydrates vendored OpenClaw production dependencies from `vendor/openclaw/npm-shrinkwrap.json` with:
+- Added `scripts/prepare-openclaw-vendor.cjs` so the desktop packaging path hydrates the full published OpenClaw runtime payload from the exact `openclaw@2026.6.6` npm tarball before hydrating production dependencies.
+- The package-payload hydration verifies the pinned npm SHA-512 integrity for `https://registry.npmjs.org/openclaw/-/openclaw-2026.6.6.tgz`, validates the extracted package name/version, and copies the published `dist/` tree into the ignored vendored package directory when clean CI lacks it.
+- The dependency hydration installs vendored OpenClaw production dependencies from `vendor/openclaw/npm-shrinkwrap.json` with:
   - `npm ci`
   - `--omit=dev`
   - `--ignore-scripts`
@@ -1041,7 +1045,7 @@ Verification:
   - `scripts/package-desktop.cjs` itself, so direct packaging is self-preparing.
 - Strengthened `scripts/smoke-ci-workflow.ts` and `scripts/smoke-runtime-reproducibility.ts` so future changes fail if CI or package scripts stop preparing vendored OpenClaw dependencies from the shrinkwrap.
 - Verification passed:
-  - Temporary clean OpenClaw package copy: `node scripts/prepare-openclaw-vendor.cjs` installed 296 production packages from `npm-shrinkwrap.json` and wrote the metadata file.
+  - Temporary clean OpenClaw package copy: `node scripts/prepare-openclaw-vendor.cjs` hydrated `dist/` from the integrity-checked OpenClaw package tarball, installed 296 production packages from `npm-shrinkwrap.json`, and wrote the metadata file.
   - `npm run prepare:openclaw-vendor`
   - `npm run smoke:ci-workflow`
   - `npm run smoke:runtime-reproducibility`

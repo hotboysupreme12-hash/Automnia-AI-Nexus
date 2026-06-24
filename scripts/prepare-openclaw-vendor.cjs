@@ -1,6 +1,8 @@
 const { spawnSync } = require('node:child_process')
 const { createHash } = require('node:crypto')
 const fs = require('node:fs')
+const https = require('node:https')
+const { tmpdir } = require('node:os')
 const path = require('node:path')
 
 const root = path.resolve(__dirname, '..')
@@ -9,7 +11,12 @@ const packageJsonPath = path.join(vendorRoot, 'package.json')
 const shrinkwrapPath = path.join(vendorRoot, 'npm-shrinkwrap.json')
 const nodeModulesRoot = path.join(vendorRoot, 'node_modules')
 const metadataPath = path.join(nodeModulesRoot, '.dystopai-openclaw-vendor-deps.json')
+const cacheRoot = path.join(root, '.cache', 'openclaw-vendor')
 const refresh = /^(1|true|yes)$/i.test(process.env.DYSTOPAI_REFRESH_OPENCLAW_VENDOR_DEPS || '')
+
+const DEFAULT_OPENCLAW_PACKAGE_VERSION = '2026.6.6'
+const DEFAULT_OPENCLAW_PACKAGE_TARBALL = 'https://registry.npmjs.org/openclaw/-/openclaw-2026.6.6.tgz'
+const DEFAULT_OPENCLAW_PACKAGE_INTEGRITY = 'sha512-oMYoQ8a7zummw1tD+AX98yYLzqoq0tQmYWHG65AA0ZivgzmOb2oD0cVdhcWP9IT3opkHdJ5vBdWywUe6xWQXtw=='
 
 const installArgs = [
   'ci',
@@ -28,6 +35,15 @@ const requiredRuntimePackages = [
   'zod',
 ]
 
+const requiredPackageArtifacts = [
+  path.join('dist', 'index.js'),
+  path.join('dist', 'plugin-sdk', 'index.js'),
+  path.join('dist', 'extensions', 'browser', 'index.js'),
+  path.join('dist', 'extensions', 'memory-wiki', 'skills', 'wiki-maintainer', 'SKILL.md'),
+  path.join('dist', 'extensions', 'open-prose', 'skills', 'prose', 'SKILL.md'),
+  path.join('dist', 'extensions', 'tavily', 'skills', 'tavily', 'SKILL.md'),
+]
+
 function readJson(filePath) {
   return JSON.parse(fs.readFileSync(filePath, 'utf8'))
 }
@@ -38,14 +54,65 @@ function sha256File(filePath) {
   return hash.digest('hex')
 }
 
+function sriSha512File(filePath) {
+  const hash = createHash('sha512')
+  hash.update(fs.readFileSync(filePath))
+  return `sha512-${hash.digest('base64')}`
+}
+
+function downloadFile(url, targetPath) {
+  fs.mkdirSync(path.dirname(targetPath), { recursive: true })
+  return new Promise((resolve, reject) => {
+    const request = https.get(url, { timeout: 180_000 }, (response) => {
+      const status = response.statusCode || 0
+      if (status >= 300 && status < 400 && response.headers.location) {
+        response.resume()
+        downloadFile(new URL(response.headers.location, url).toString(), targetPath).then(resolve, reject)
+        return
+      }
+      if (status < 200 || status >= 300) {
+        response.resume()
+        reject(new Error(`[openclaw-vendor] HTTP ${status} while downloading ${url}`))
+        return
+      }
+      const file = fs.createWriteStream(targetPath)
+      file.on('error', reject)
+      file.on('finish', () => file.close(resolve))
+      response.pipe(file)
+    })
+    request.on('timeout', () => request.destroy(new Error(`[openclaw-vendor] Download timed out: ${url}`)))
+    request.on('error', reject)
+  })
+}
+
+function run(command, args, options = {}) {
+  const result = spawnSync(command, args, {
+    cwd: options.cwd || root,
+    encoding: 'utf8',
+    stdio: options.stdio || 'inherit',
+    shell: false,
+    windowsHide: true,
+  })
+  if (result.status !== 0) {
+    throw new Error(`[openclaw-vendor] ${command} ${args.join(' ')} failed with exit code ${result.status}`)
+  }
+}
+
 function npmCommandSpec() {
   if (process.env.npm_execpath && fs.existsSync(process.env.npm_execpath)) {
     return { command: process.execPath, prefix: [process.env.npm_execpath], shell: false }
   }
+  if (process.platform === 'win32') {
+    return {
+      command: process.env.ComSpec || 'cmd.exe',
+      prefix: ['/d', '/s', '/c', 'npm.cmd'],
+      shell: false,
+    }
+  }
   return {
-    command: process.platform === 'win32' ? 'npm.cmd' : 'npm',
+    command: 'npm',
     prefix: [],
-    shell: process.platform === 'win32',
+    shell: false,
   }
 }
 
@@ -60,6 +127,86 @@ function runNpm(args) {
   })
   if (result.status !== 0) {
     throw new Error(`[openclaw-vendor] npm ${args.join(' ')} failed with exit code ${result.status}`)
+  }
+}
+
+function resolvePackageTarball(packageJson) {
+  const tarball = String(
+    process.env.DYSTOPAI_OPENCLAW_PACKAGE_TARBALL ||
+    (packageJson.version === DEFAULT_OPENCLAW_PACKAGE_VERSION ? DEFAULT_OPENCLAW_PACKAGE_TARBALL : ''),
+  ).trim()
+  const integrity = String(
+    process.env.DYSTOPAI_OPENCLAW_PACKAGE_INTEGRITY ||
+    (packageJson.version === DEFAULT_OPENCLAW_PACKAGE_VERSION ? DEFAULT_OPENCLAW_PACKAGE_INTEGRITY : ''),
+  ).trim()
+
+  if (!tarball || !integrity) {
+    throw new Error(
+      `[openclaw-vendor] Set DYSTOPAI_OPENCLAW_PACKAGE_TARBALL and DYSTOPAI_OPENCLAW_PACKAGE_INTEGRITY for OpenClaw ${packageJson.version}`,
+    )
+  }
+  if (!/^sha512-[A-Za-z0-9+/=]+$/.test(integrity)) {
+    throw new Error('[openclaw-vendor] DYSTOPAI_OPENCLAW_PACKAGE_INTEGRITY must be an npm sha512 integrity value')
+  }
+  return { tarball, integrity }
+}
+
+function missingPackageArtifacts() {
+  return requiredPackageArtifacts.filter((artifact) => !fs.existsSync(path.join(vendorRoot, artifact)))
+}
+
+async function hydratePublishedPackageArtifacts(packageJson) {
+  const missing = missingPackageArtifacts()
+  if (!refresh && missing.length === 0) {
+    return { mode: 'existing-package-artifacts' }
+  }
+
+  if (missing.length) {
+    console.log(`[openclaw-vendor] missing published package artifacts: ${missing.join(', ')}`)
+  }
+  const source = resolvePackageTarball(packageJson)
+  const tarballPath = path.join(cacheRoot, `openclaw-${packageJson.version}.tgz`)
+  const extractRoot = fs.mkdtempSync(path.join(tmpdir(), 'dystopai-openclaw-package-'))
+
+  try {
+    if (refresh || !fs.existsSync(tarballPath)) {
+      console.log(`[openclaw-vendor] downloading OpenClaw package payload: ${source.tarball}`)
+      await downloadFile(source.tarball, tarballPath)
+    }
+    const actualIntegrity = sriSha512File(tarballPath)
+    if (actualIntegrity !== source.integrity) {
+      throw new Error(
+        `[openclaw-vendor] OpenClaw package tarball integrity mismatch: expected ${source.integrity}, got ${actualIntegrity}`,
+      )
+    }
+
+    run('tar', ['-xzf', tarballPath, '-C', extractRoot])
+    const packageRoot = path.join(extractRoot, 'package')
+    const packageDist = path.join(packageRoot, 'dist')
+    if (!fs.existsSync(path.join(packageRoot, 'package.json')) || !fs.existsSync(packageDist)) {
+      throw new Error('[openclaw-vendor] OpenClaw package tarball did not contain package/dist')
+    }
+    const publishedPackage = readJson(path.join(packageRoot, 'package.json'))
+    if (publishedPackage.name !== packageJson.name || publishedPackage.version !== packageJson.version) {
+      throw new Error(
+        `[openclaw-vendor] OpenClaw package tarball mismatch: expected ${packageJson.name}@${packageJson.version}, got ${publishedPackage.name}@${publishedPackage.version}`,
+      )
+    }
+
+    fs.rmSync(path.join(vendorRoot, 'dist'), { recursive: true, force: true })
+    fs.cpSync(packageDist, path.join(vendorRoot, 'dist'), { recursive: true })
+    const stillMissing = missingPackageArtifacts()
+    if (stillMissing.length) {
+      throw new Error(`[openclaw-vendor] OpenClaw package payload is missing required artifacts: ${stillMissing.join(', ')}`)
+    }
+    console.log(`[openclaw-vendor] hydrated OpenClaw ${packageJson.version} package payload from npm tarball`)
+    return {
+      mode: 'npm-package-tarball',
+      tarball: source.tarball,
+      integrity: source.integrity,
+    }
+  } finally {
+    fs.rmSync(extractRoot, { recursive: true, force: true })
   }
 }
 
@@ -123,7 +270,7 @@ function metadataMatches(metadata, packageJson, shrinkwrapSha256) {
   )
 }
 
-function writeMetadata(packageJson, shrinkwrapSha256, mode) {
+function writeMetadata(packageJson, shrinkwrapSha256, mode, packageArtifacts) {
   fs.mkdirSync(nodeModulesRoot, { recursive: true })
   fs.writeFileSync(metadataPath, `${JSON.stringify({
     schema: 1,
@@ -134,6 +281,7 @@ function writeMetadata(packageJson, shrinkwrapSha256, mode) {
       version: packageJson.version,
       shrinkwrap: 'npm-shrinkwrap.json',
       shrinkwrapSha256,
+      packageArtifacts,
     },
     install: {
       command: 'npm',
@@ -145,7 +293,7 @@ function writeMetadata(packageJson, shrinkwrapSha256, mode) {
   }, null, 2)}\n`)
 }
 
-function main() {
+async function main() {
   if (!fs.existsSync(packageJsonPath)) {
     throw new Error(`[openclaw-vendor] Missing vendored OpenClaw package at ${packageJsonPath}`)
   }
@@ -157,6 +305,7 @@ function main() {
   const lock = readJson(shrinkwrapPath)
   const shrinkwrapSha256 = sha256File(shrinkwrapPath)
   validateVendorSource(lock)
+  const packageArtifacts = await hydratePublishedPackageArtifacts(packageJson)
 
   if (!refresh && fs.existsSync(nodeModulesRoot)) {
     const missing = validateInstalledPackages(lock)
@@ -166,7 +315,7 @@ function main() {
       return
     }
     if (missing.length === 0) {
-      writeMetadata(packageJson, shrinkwrapSha256, 'validated-existing-node-modules')
+      writeMetadata(packageJson, shrinkwrapSha256, 'validated-existing-node-modules', packageArtifacts)
       console.log(`[openclaw-vendor] validated existing OpenClaw ${packageJson.version} production dependencies`)
       return
     }
@@ -179,13 +328,11 @@ function main() {
   if (missing.length) {
     throw new Error(`[openclaw-vendor] npm ci completed but runtime dependencies are still missing: ${missing.join(', ')}`)
   }
-  writeMetadata(packageJson, shrinkwrapSha256, 'npm-ci-omit-dev')
+  writeMetadata(packageJson, shrinkwrapSha256, 'npm-ci-omit-dev', packageArtifacts)
   console.log(`[openclaw-vendor] prepared OpenClaw ${packageJson.version} production dependencies`)
 }
 
-try {
-  main()
-} catch (error) {
+main().catch((error) => {
   console.error(error.stack || error.message || error)
   process.exit(1)
-}
+})
