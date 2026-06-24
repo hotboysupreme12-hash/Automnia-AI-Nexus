@@ -1005,6 +1005,7 @@ Verification:
   - Reuses an existing binary when present.
   - Restores `path.txt` when the executable exists but the package metadata file is missing.
   - Falls back to downloading the exact Electron release zip from GitHub with synchronous platform tools, verifies it against `node_modules/electron/checksums.json`, and extracts it before importing Electron.
+  - Uses literal PowerShell command arguments on Windows so Actions receives the URL and file paths reliably.
 - Strengthened `scripts/smoke-ci-workflow.ts` so future changes fail if the Electron E2E smoke loses this explicit binary preparation.
 - `npm run smoke:ci-workflow` passed after adding the Electron binary-prep assertions.
 - `npm run smoke:electron-e2e` passed after adding explicit Electron binary preparation.

@@ -40,6 +40,10 @@ function runChecked(command: string, args: string[], label: string) {
   if (result.status !== 0) throw new Error(`${label} failed with status ${result.status}`)
 }
 
+function psLiteral(value: string) {
+  return `'${value.replace(/'/g, "''")}'`
+}
+
 function downloadFile(url: string, destination: string) {
   if (process.platform === 'win32') {
     runChecked('powershell.exe', [
@@ -48,9 +52,7 @@ function downloadFile(url: string, destination: string) {
       '-ExecutionPolicy',
       'Bypass',
       '-Command',
-      "$ProgressPreference = 'SilentlyContinue'; Invoke-WebRequest -Uri $args[0] -OutFile $args[1]",
-      url,
-      destination,
+      `$ProgressPreference = 'SilentlyContinue'; Invoke-WebRequest -Uri ${psLiteral(url)} -OutFile ${psLiteral(destination)}`,
     ], 'Electron download')
     return
   }
@@ -65,9 +67,7 @@ function extractZip(zipPath: string, destination: string) {
       '-ExecutionPolicy',
       'Bypass',
       '-Command',
-      'Expand-Archive -LiteralPath $args[0] -DestinationPath $args[1] -Force',
-      zipPath,
-      destination,
+      `Expand-Archive -LiteralPath ${psLiteral(zipPath)} -DestinationPath ${psLiteral(destination)} -Force`,
     ], 'Electron extract')
     return
   }
