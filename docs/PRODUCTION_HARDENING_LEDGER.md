@@ -1004,7 +1004,7 @@ Verification:
   - Resolves `electron/package.json` without importing Electron first.
   - Reuses an existing binary when present.
   - Restores `path.txt` when the executable exists but the package metadata file is missing.
-  - Falls back to downloading and extracting the Electron artifact with `@electron/get` and `extract-zip` when needed.
+  - Falls back to downloading the exact Electron release zip from GitHub, verifies it against `node_modules/electron/checksums.json`, and extracts it with `extract-zip` when needed.
 - Strengthened `scripts/smoke-ci-workflow.ts` so future changes fail if the Electron E2E smoke loses this explicit binary preparation.
 - `npm run smoke:ci-workflow` passed after adding the Electron binary-prep assertions.
 - `npm run smoke:electron-e2e` passed after adding explicit Electron binary preparation.
