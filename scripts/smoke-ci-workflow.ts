@@ -8,6 +8,7 @@ const packageJson = JSON.parse(readFileSync(path.join(root, 'package.json'), 'ut
   scripts?: Record<string, string>
 }
 const scripts = packageJson.scripts || {}
+const testCiScript = scripts['test:ci'] || ''
 
 assert.ok(existsSync(workflowPath), 'control-plane CI workflow must exist')
 
@@ -61,6 +62,9 @@ const evidenceIndex = workflow.indexOf('npm run release:evidence')
 const signingIndex = workflow.indexOf('npm run release:sign')
 const validationIndex = workflow.indexOf('npm run release:validate')
 const uploadIndex = workflow.indexOf('actions/upload-artifact@v4')
+const testCiTypecheckIndex = testCiScript.indexOf('npm run typecheck')
+const testCiOpenClawIndex = testCiScript.indexOf('npm run smoke:openclaw')
+const testCiCiWorkflowIndex = testCiScript.indexOf('npm run smoke:ci-workflow')
 
 assert.ok(auditIndex >= 0 && auditIndex < secretScanIndex, 'workflow must audit dependencies before local secret scanning')
 assert.ok(secretScanIndex < lintIndex, 'workflow must run secret scanning before local source linting')
@@ -85,10 +89,14 @@ assert.match(scripts['lint'] || '', /eslint \./, 'package scripts must expose so
 assert.match(scripts['release:validate'] || '', /node scripts\/validate-release-artifacts\.cjs/, 'package scripts must expose release artifact validation')
 assert.match(scripts['smoke:electron-e2e'] || '', /tsx scripts\/smoke-electron-e2e\.ts/, 'package scripts must expose Electron E2E smoke coverage')
 assert.match(scripts['smoke:packaged-electron-launch'] || '', /tsx scripts\/smoke-packaged-electron-launch\.ts/, 'package scripts must expose packaged Electron launch smoke coverage')
-assert.match(scripts['test:ci'] || '', /npm run lint && npm run typecheck/, 'test:ci must lint before type-checking')
-assert.match(scripts['test:ci'] || '', /npm run smoke:ci-workflow/, 'test:ci must include CI workflow smoke coverage')
-assert.match(scripts['test:ci'] || '', /npm run secret:scan/, 'test:ci must include checked-in secret scanning')
-assert.match(scripts['test:ci'] || '', /npm run smoke:release-validation/, 'test:ci must include release validation smoke coverage')
+assert.match(scripts['smoke:openclaw'] || '', /smoke-openclaw-contracts\.mjs/, 'package scripts must expose OpenClaw contract smoke coverage')
+assert.match(testCiScript, /npm run lint && npm run typecheck/, 'test:ci must lint before type-checking')
+assert.match(testCiScript, /npm run smoke:openclaw/, 'test:ci must include OpenClaw contract smoke coverage')
+assert.match(testCiScript, /npm run smoke:ci-workflow/, 'test:ci must include CI workflow smoke coverage')
+assert.match(testCiScript, /npm run secret:scan/, 'test:ci must include checked-in secret scanning')
+assert.match(testCiScript, /npm run smoke:release-validation/, 'test:ci must include release validation smoke coverage')
+assert.ok(testCiTypecheckIndex >= 0 && testCiTypecheckIndex < testCiOpenClawIndex, 'test:ci must type-check before OpenClaw contract smoke coverage')
+assert.ok(testCiOpenClawIndex >= 0 && testCiOpenClawIndex < testCiCiWorkflowIndex, 'test:ci must run OpenClaw contract smoke before final CI workflow contract checks')
 
 assert.match(secretScanner, /git', \['ls-files', '-z', '--cached', '--others', '--exclude-standard'\]/, 'secret scan must inspect tracked and untracked non-ignored repository files')
 assert.match(secretScanner, /private-key/, 'secret scan must detect private key material')
