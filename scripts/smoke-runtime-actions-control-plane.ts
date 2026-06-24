@@ -14,12 +14,15 @@ function assert(condition: unknown, message: string): asserts condition {
 function routeBlock(source: string, marker: string): string {
   const start = source.indexOf(marker)
   assert(start >= 0, `Missing route marker: ${marker}`)
-  const next = source.indexOf('\napp.', start + marker.length)
+  const remaining = source.slice(start + marker.length)
+  const nextMatch = /\n\s+app\./.exec(remaining)
+  const next = nextMatch ? start + marker.length + nextMatch.index : -1
   return source.slice(start, next >= 0 ? next : source.length)
 }
 
 const server = readWorkspaceFile('server/index.ts')
 const controlPlaneHttp = readWorkspaceFile('server/controlPlaneHttp.ts')
+const diagnosticsRoutes = readWorkspaceFile('server/routes/diagnosticsRoutes.ts')
 const runtimeHook = readWorkspaceFile('src/hooks/useRuntimeStatus.ts')
 const editor = readWorkspaceFile('src/components/editor/AgentEditorModal.tsx')
 const store = readWorkspaceFile('src/store/nexusStore.ts')
@@ -36,6 +39,15 @@ for (const code of [
 for (const marker of [
   "app.post('/api/doctor/run'",
   "app.get('/api/doctor/recent'",
+]) {
+  const block = routeBlock(diagnosticsRoutes, marker)
+  assert(/apiSuccess\s*\(\s*res/.test(block), `${marker} should return canonical success envelopes`)
+  assert(/apiFailure\s*\(\s*res/.test(block), `${marker} should return canonical error envelopes`)
+  assert(!/\breturn\s+res\.json\s*\(/.test(block), `${marker} should not return raw res.json payloads`)
+  assert(!/\breturn\s+res\.status\s*\([^)]*\)\.json\s*\(/.test(block), `${marker} should not return raw status JSON errors`)
+}
+
+for (const marker of [
   "app.post('/api/openclaw/runtime/session/close'",
   "app.post('/api/openclaw/runtime/chat/abort-stale'",
   "app.post('/api/openclaw/runtime/monitor/clear'",

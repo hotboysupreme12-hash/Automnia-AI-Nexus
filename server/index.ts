@@ -29,6 +29,7 @@ import {
 import { apiFailure, apiSuccess, installControlPlaneHttp, setStaticSecurityHeaders } from './controlPlaneHttp'
 import { registerAuthRoutes } from './routes/authRoutes'
 import { registerCommandConsoleFileRoutes } from './routes/commandConsoleFileRoutes'
+import { registerDiagnosticsRoutes } from './routes/diagnosticsRoutes'
 import { createControlFilesService } from './services/controlFilesService'
 import { applyDiagnosticRedactions } from '../src/utils/diagnosticRedaction'
 
@@ -26107,50 +26108,24 @@ async function runDoctorChecks(): Promise<{ id: string; startedAt: string; ended
   return result
 }
 
-app.get('/api/health', async (_req, res) => {
-  const disk = await diskFreeSpaceCheck()
-  return apiSuccess(res, {
-    ok: true,
-    workspace: WORKSPACE_ROOT,
-    openclaw: resolvedOpenClawRuntimeInfo(),
-    recommendedOpenClawVersion: RECOMMENDED_OPENCLAW_VERSION,
-    disk,
-    persistence: runtimeLedgerStatus({ sqlite: false }),
-    diagnostics: {
-      doctor: cachedDoctorDiagnosticsSummary(),
-    },
-    agentConfigSync: { updated: 0, mode: 'read-only' },
-    gatewayChat: {
-      enabled: CONTROL_CENTER_GATEWAY_AGENT_SESSIONS && CONTROL_CENTER_GATEWAY_CHAT_CLIENT && !FORCE_LOCAL_AGENT_RUNTIME,
-      ready: gatewayClientState?.ready === true,
-      prewarming: Boolean(controlCenterGatewayPrewarmPromise),
-      prewarmOnStartup: CONTROL_CENTER_GATEWAY_PREWARM_ON_STARTUP,
-      prewarmedAt: controlCenterGatewayPrewarmedAt || null,
-      defaultsReady: openclawAgentRunDefaultsReady,
-      ...gatewayChatRuntimeSnapshot(),
-    },
-  })
-})
-
-app.get('/api/runtime/version-check', (_req, res) => {
-  return apiSuccess(res, runtimeVersionCheckPayload())
-})
-
-app.post('/api/doctor/run', async (_req, res) => {
-  try {
-    return apiSuccess(res, await runDoctorChecks())
-  } catch (error) {
-    return apiFailure(res, 500, 'doctor_operation_failed', 'Doctor run failed', redactSensitiveText(String(error)))
-  }
-})
-
-app.get('/api/doctor/recent', async (req, res) => {
-  try {
-    const forceRefresh = req.query.refresh === '1' || req.query.refresh === 'true'
-    return apiSuccess(res, { doctor: await readDoctorDiagnosticsSummary(forceRefresh) })
-  } catch (error) {
-    return apiFailure(res, 500, 'doctor_operation_failed', 'Doctor history failed', redactSensitiveText(String(error)))
-  }
+registerDiagnosticsRoutes(app, {
+  cachedDoctorDiagnosticsSummary,
+  diskFreeSpaceCheck,
+  gatewayChatEnabled: () => CONTROL_CENTER_GATEWAY_AGENT_SESSIONS && CONTROL_CENTER_GATEWAY_CHAT_CLIENT && !FORCE_LOCAL_AGENT_RUNTIME,
+  gatewayChatPrewarmedAt: () => controlCenterGatewayPrewarmedAt || null,
+  gatewayChatPrewarming: () => Boolean(controlCenterGatewayPrewarmPromise),
+  gatewayChatPrewarmOnStartup: CONTROL_CENTER_GATEWAY_PREWARM_ON_STARTUP,
+  gatewayChatReady: () => gatewayClientState?.ready === true,
+  gatewayChatRuntimeSnapshot,
+  openClawAgentRunDefaultsReady: () => openclawAgentRunDefaultsReady,
+  readDoctorDiagnosticsSummary,
+  recommendedOpenClawVersion: RECOMMENDED_OPENCLAW_VERSION,
+  redactSensitiveText,
+  resolvedOpenClawRuntimeInfo,
+  runDoctorChecks,
+  runtimeLedgerStatus,
+  runtimeVersionCheckPayload,
+  workspaceRoot: WORKSPACE_ROOT,
 })
 
 registerCommandConsoleFileRoutes(app, {
