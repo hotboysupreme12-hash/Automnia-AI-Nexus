@@ -46,6 +46,7 @@ function assertOrderedIncludes(text, needles, label) {
 }
 
 const server = read('server/index.ts')
+const runtimeRoutes = read('server/routes/runtimeRoutes.ts')
 const runtimeLedger = read('server/runtimeLedger.ts')
 const runtimeHook = read('src/hooks/useRuntimeStatus.ts')
 const nexusStore = read('src/store/nexusStore.ts')
@@ -62,7 +63,8 @@ const commandConsoleGuide = read('docs/OPENCLAW_GATEWAY_COMMAND_CONSOLE_GUIDE.md
 
 assertIncludes(runtimeLedger, 'readGatewayEventLedgerTail', 'gateway event ledger reader')
 assertIncludes(runtimeLedger, 'readDiagnosticRunLedgerTail', 'diagnostic run ledger reader')
-assertIncludes(server, "app.get('/api/openclaw/runtime/summary'", 'runtime summary endpoint')
+assertIncludes(runtimeRoutes, "app.get('/api/openclaw/runtime/summary'", 'runtime summary endpoint')
+assertIncludes(server, 'registerRuntimeRoutes(app, {', 'runtime routes are extracted from server/index.ts')
 assertIncludes(runtimeHook, 'useRuntimeSummaryStatus', 'runtime summary hook')
 assertIncludes(server, 'readGatewayLedgerLogEntries', 'ledger-backed gateway log status path')
 
@@ -283,7 +285,7 @@ assertIncludes(server, 'delete nextConfig.apiKeyStorage', 'ClawTalk unsupported 
 assertIncludes(server, 'allowExternalTakeover', 'Gateway restart ownership guard')
 
 assertRegex(
-  server,
+  runtimeRoutes,
   /tryRestartGatewayService\(\{ force: true, allowExternalTakeover: true \}\)/,
   'manual restart takeover flag',
 )

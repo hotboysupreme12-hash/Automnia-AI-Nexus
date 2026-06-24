@@ -1207,13 +1207,52 @@ Verification:
   - Commit: `fe0bc07`
   - Result: Control Plane CI completed successfully in `8m29s` for the PR-triggered run and `11m42s` for the push-triggered run.
 
+## 2026-06-24 20:21 UTC - Runtime Route Extraction
+
+- Continued server decomposition on protective branch `codex/server-route-modules`.
+- Confirmed latest GitHub Actions state before editing:
+  - PR run `28125983188` passed.
+  - Push run `28125980909` passed.
+- Read the local OpenClaw runtime/Gateway documentation before touching runtime and Gateway-adjacent routes:
+  - `docs/openclaw-latest/pages/gateway/protocol.md`
+  - `docs/openclaw-latest/pages/web/control-ui.md`
+  - `docs/OPENCLAW_GATEWAY_COMMAND_CONSOLE_GUIDE.md`
+- Extracted runtime HTTP routing into `server/routes/runtimeRoutes.ts` while preserving the existing Gateway/runtime helper functions in `server/index.ts`:
+  - `POST /api/openclaw/runtime/session/close`
+  - `POST /api/openclaw/runtime/chat/abort-stale`
+  - `POST /api/openclaw/runtime/monitor/clear`
+  - `POST /api/openclaw/runtime/shutdown`
+  - `POST /api/openclaw/runtime/gateway/stop`
+  - `POST /api/openclaw/runtime/gateway/start`
+  - `POST /api/openclaw/runtime/gateway/restart`
+  - `GET /api/openclaw/runtime/status`
+  - `GET /api/openclaw/runtime/summary`
+- Kept this slice route-only: runtime ownership, Gateway lifecycle, session cleanup, status payload construction, and activity summarization are injected from the existing server helpers.
+- Reduced `server/index.ts` from `30,179` lines at the prior HEAD to `30,052` lines after this extraction.
+- Added `server/routes/runtimeRoutes.ts` at `264` lines.
+- Updated route contract smokes so they follow the extracted runtime module instead of forcing runtime handlers to remain in `server/index.ts`:
+  - `scripts/smoke-runtime-status-control-plane.ts`
+  - `scripts/smoke-runtime-actions-control-plane.ts`
+  - `scripts/smoke-openclaw-command-control-plane.ts`
+  - `scripts/smoke-openclaw-contracts.mjs`
+- Verification passed:
+  - `npm run typecheck:server`
+  - `npm run smoke:runtime-status-control-plane`
+  - `npm run smoke:runtime-actions-control-plane`
+  - `npm run smoke:openclaw-command-control-plane`
+  - `npm run smoke:openclaw`
+  - `npm run lint`
+  - `npm test`
+- Observed during `npm test`: `smoke:ledger` again reported one skipped malformed historical JSONL row while reading `runtime-runs`; the smoke passed and preserved the corruption-recovery warning instead of treating the file as empty.
+- GitHub Actions verification for this slice is pending until the branch is pushed.
+
 ## In Progress
 
 - Production hardening on protective branch `codex/server-route-modules`.
 
 Next action:
 
-- Continue breaking up `server/index.ts` by extracting one coherent domain route cluster next. Highest-value candidates are runtime status/actions or filesystem routes because they already have focused smoke coverage.
+- Continue breaking up `server/index.ts` by extracting one coherent domain route cluster next. Highest-value candidates are filesystem routes or OpenClaw command/summary routes because they already have focused smoke coverage.
 - Add release governance documentation and/or enforcement slices after the next route extraction:
   - Main branch protection requirements: green CI, no direct pushes, PR review, and signed commits where repository support allows.
   - Mandatory public release signing and validation failure when signing evidence is absent.

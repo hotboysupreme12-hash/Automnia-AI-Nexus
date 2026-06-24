@@ -39,7 +39,7 @@ for (const code of [
   assert(controlPlaneHttp.includes(`| '${code}'`), `ApiErrorCode is missing ${code}`)
 }
 
-const summaryBlock = sliceBetween(server, "app.get('/api/openclaw/summary'", "const RuntimeSessionCloseSchema")
+const summaryBlock = sliceBetween(server, "app.get('/api/openclaw/summary'", 'function clearRuntimeMonitorHistory')
 const commandBlock = sliceBetween(server, "app.post('/api/openclaw/command'", 'async function buildRuntimeStatusPayload')
 const parallelHealthBlock = sliceBetween(server, "app.post('/api/party/parallel-health'", "app.get('/api/missions'")
 
@@ -50,6 +50,7 @@ assertCanonicalRoute('/api/party/parallel-health', parallelHealthBlock)
 assert(commandBlock.includes('pluginCommandResult(args, result)'), 'OpenClaw command route should preserve command result evidence')
 assert(commandBlock.includes('ok: result.code === 0'), 'OpenClaw command route should preserve command success data')
 assert(commandBlock.includes('listPluginControls({ forceRefresh: true })'), 'OpenClaw command route should preserve optional plugin refresh')
+assert(server.includes('registerRuntimeRoutes(app, {'), 'OpenClaw command smoke should allow extracted runtime route registration')
 assert(parallelHealthBlock.includes('looksParallel'), 'parallel-health should preserve parallel timing diagnostics')
 assert(parallelHealthBlock.includes('parallelEfficiency'), 'parallel-health should preserve efficiency diagnostics')
 
