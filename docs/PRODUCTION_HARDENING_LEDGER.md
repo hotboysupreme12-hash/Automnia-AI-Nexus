@@ -1240,7 +1240,14 @@ Verification:
   - `npm run lint`
   - `npm test`
 - Observed during `npm test`: `smoke:ledger` again reported one skipped malformed historical JSONL row while reading `runtime-runs`; the smoke passed and preserved the corruption-recovery warning instead of treating the file as empty.
-- GitHub Actions verification for this slice is pending until the branch is pushed.
+- Opened PR `#3`: `https://github.com/hotboysupreme12-hash/DystopAI-Core/pull/3`.
+- GitHub Actions verification for implementation commit `b51e958` passed:
+  - Workflow: `Control Plane CI`
+  - Run: `28129115630`
+  - Job: `Hardened control plane`
+  - Result: success
+  - Passed stages included locked install, dependency audit, secret scan, lint, app/server/Electron type-check, hardening smoke suite, server build, client build, Electron E2E smoke, runtime bundle prep, vendored OpenClaw prep, desktop packaging, packaged launch smoke, SBOM/checksum generation, packaged artifact validation, release evidence existence check, and release evidence upload.
+  - Noted governance gap for the release-signing roadmap: `Sign release evidence` was skipped while the non-release PR run still passed. Public release validation should fail when signing evidence is required but absent.
 
 ## In Progress
 
