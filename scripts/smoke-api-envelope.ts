@@ -9,6 +9,7 @@ const read = (relativePath: string) => readFileSync(join(rootDir, relativePath),
 const server = read('server/index.ts')
 const controlPlaneHttp = read('server/controlPlaneHttp.ts')
 const authRoutes = read('server/routes/authRoutes.ts')
+const missionRoutes = read('server/routes/missionRoutes.ts')
 const apiClient = read('src/api/client.ts')
 const editor = read('src/components/editor/AgentEditorModal.tsx')
 const packageJson = JSON.parse(read('package.json')) as { scripts?: Record<string, string> }
@@ -52,7 +53,12 @@ assert.match(apiClient, /payload\.ok === true && Object\.prototype\.hasOwnProper
 assert.match(apiClient, /if \(isRecord\(error\)\)/, 'API client must parse structured error envelopes')
 assert.match(apiClient, /message: typeof error\.message === 'string'/, 'API client must read structured error messages')
 
-const missionSlice = sliceBetween(server, "app.get('/api/missions'", 'async function runBufferedAgentTurnForStream')
+assert.match(server, /import \{ registerMissionRoutes \} from '\.\/routes\/missionRoutes'/, 'server index must import extracted mission routes')
+assert.match(server, /registerMissionRoutes\(app, \{/, 'server index must register extracted mission routes')
+assert.doesNotMatch(server, /app\.get\('\/api\/missions'/, 'server index must not inline mission read routes')
+assert.doesNotMatch(server, /app\.post\('\/api\/missions\/start'/, 'server index must not inline mission start route')
+assert.doesNotMatch(server, /app\.post\('\/api\/missions\/stop'/, 'server index must not inline mission stop route')
+const missionSlice = sliceFrom(missionRoutes, "app.get('/api/missions'")
 assertCanonicalRouteSlice('mission control-plane routes', missionSlice)
 assert.match(missionSlice, /apiFailure\(res, 400, 'invalid_payload'/, 'mission routes must expose invalid-payload codes')
 assert.match(missionSlice, /apiFailure\(res, 404, 'mission_not_found'/, 'mission routes must expose not-found codes')

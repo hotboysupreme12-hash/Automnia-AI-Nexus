@@ -51,7 +51,7 @@ for (const code of [
 
 const summaryBlock = routeBlock(openclawCommandRoutes, "app.get('/api/openclaw/summary'")
 const commandBlock = routeBlock(openclawCommandRoutes, "app.post('/api/openclaw/command'")
-const parallelHealthBlock = sliceBetween(server, "app.post('/api/party/parallel-health'", "app.get('/api/missions'")
+const parallelHealthBlock = sliceBetween(server, "app.post('/api/party/parallel-health'", 'registerMissionRoutes(app, {')
 
 assertCanonicalRoute('/api/openclaw/summary', summaryBlock)
 assertCanonicalRoute('/api/openclaw/command', commandBlock)
