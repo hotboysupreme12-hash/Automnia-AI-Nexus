@@ -71,6 +71,10 @@ const EDITOR_AUTH_CACHE_MS = 15 * 1000
 const EDITOR_MODEL_FETCH_TIMEOUT_MS = 8000
 const EDITOR_PATCH_DEBOUNCE_MS = 500
 const IS_WINDOWS_CLIENT = typeof navigator !== 'undefined' && /Windows/i.test(navigator.userAgent)
+const DEEPSEEK_PRO_MODEL = 'deepseek/deepseek-v4-pro'
+const DEEPSEEK_FLASH_MODEL = 'deepseek/deepseek-v4-flash'
+const OPENROUTER_DEEPSEEK_PRO_MODEL = 'openrouter/deepseek/deepseek-v4-pro'
+const OPENROUTER_DEEPSEEK_FLASH_MODEL = 'openrouter/deepseek/deepseek-v4-flash'
 let modelsCache: TimedEditorCache<AvailableModel[]> | null = null
 let modelsRequest: Promise<AvailableModel[]> | null = null
 let authProvidersCache: TimedEditorCache<AuthProviderStatus[]> | null = null
@@ -629,6 +633,9 @@ export function AgentEditorModal() {
   const maybePromptProviderAuth = (modelId:string)=>{const status=authForProvider(providerForModel(modelId));if(status&&!status.configured)setAuthModalProvider(status)}
   const modelGroups = useMemo(() => groupAvailableModels(selectableModels), [selectableModels])
   const fallbackModelGroups = useMemo(() => groupAvailableModels(selectableModels.filter((m) => m.id !== primary)), [selectableModels, primary])
+  const openRouterReady = authForProvider('openrouter')?.configured === true
+  const deepSeekStackPrimary = openRouterReady ? OPENROUTER_DEEPSEEK_PRO_MODEL : DEEPSEEK_PRO_MODEL
+  const deepSeekStackFallback = openRouterReady ? OPENROUTER_DEEPSEEK_FLASH_MODEL : DEEPSEEK_FLASH_MODEL
   const SvM = async () => {
     if (!agent) return
     const providerStatus = authForProvider(providerForModel(primary))
@@ -1211,7 +1218,7 @@ export function AgentEditorModal() {
                           <p className="text-[11px] font-extrabold text-cyan-100">DeepSeek V4 Stack</p>
                           <p className="mt-0.5 text-[9px] text-slate-500">Pro primary, Flash fallback.</p>
                         </div>
-                        <button onClick={()=>{markConfigDirty(agent.id,'model');setPrimary('deepseek/deepseek-v4-pro');setFallbacks((p)=>['deepseek/deepseek-v4-flash',...p.filter((id)=>id!=='deepseek/deepseek-v4-pro'&&id!=='deepseek/deepseek-v4-flash')]);maybePromptProviderAuth('deepseek/deepseek-v4-pro')}} title="Apply DeepSeek Pro as primary with Flash fallback" className="rounded-lg border border-cyan-400/25 bg-cyan-400/[0.08] px-3 py-1.5 text-[9px] font-bold uppercase tracking-[0.12em] text-cyan-200 hover:bg-cyan-400/[0.14]">
+                        <button onClick={()=>{markConfigDirty(agent.id,'model');setPrimary(deepSeekStackPrimary);setFallbacks((p)=>[deepSeekStackFallback,...p.filter((id)=>id!==DEEPSEEK_PRO_MODEL&&id!==DEEPSEEK_FLASH_MODEL&&id!==OPENROUTER_DEEPSEEK_PRO_MODEL&&id!==OPENROUTER_DEEPSEEK_FLASH_MODEL)]);maybePromptProviderAuth(deepSeekStackPrimary)}} title="Apply DeepSeek Pro as primary with Flash fallback" className="rounded-lg border border-cyan-400/25 bg-cyan-400/[0.08] px-3 py-1.5 text-[9px] font-bold uppercase tracking-[0.12em] text-cyan-200 hover:bg-cyan-400/[0.14]">
                           Apply
                         </button>
                       </div>

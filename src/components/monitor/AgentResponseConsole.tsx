@@ -283,12 +283,6 @@ function latestRunStatus(entry?: AgentResponse) {
   return latestActivity?.label.trim() || latestProgress?.trim() || entry.progressLabel?.trim() || 'Agent started working.'
 }
 
-type RunTraceEvidenceRow = {
-  key: string
-  label: string
-  value: string
-}
-
 type CommandConsoleRunTrace = {
   runId: string
   sessionKey: string
@@ -300,7 +294,6 @@ type CommandConsoleRunTrace = {
   title: string
   ariaLabel: string
   copyText: string
-  evidenceRows: RunTraceEvidenceRow[]
 }
 
 function activityStringValue(event: AgentActivityEvent, key: string) {
@@ -342,17 +335,6 @@ function buildLatestRunTrace(entry: AgentResponse, transport: string, status: st
   if (!runId && !sessionKey && !progressLabel && !latestProgress) return null
 
   const rawTransport = entry.transport?.trim() || ''
-  const evidenceRows: RunTraceEvidenceRow[] = [
-    { key: 'agent', label: 'Agent', value: entry.agentId },
-    { key: 'state', label: 'State', value: status },
-    { key: 'run', label: 'Run', value: runId || 'pending' },
-    { key: 'session', label: 'Session', value: sessionKey || 'pending' },
-    { key: 'transport', label: 'Transport', value: transport || rawTransport || 'unknown' },
-    { key: 'progress', label: 'Progress', value: progressLabel || 'pending' },
-    { key: 'latest', label: 'Latest', value: latestProgress || 'pending' },
-    { key: 'content', label: 'Content', value: 'omitted' },
-  ]
-  const contentEvidence = ['Content', 'omitted']
   const copyText = redactDiagnosticText([
     `runId=${runId || 'pending'}`,
     `agentId=${entry.agentId}`,
@@ -361,7 +343,7 @@ function buildLatestRunTrace(entry: AgentResponse, transport: string, status: st
     `transport=${rawTransport || 'unknown'}`,
     `progressLabel=${progressLabel || 'pending'}`,
     `latestProgress=${latestProgress || 'pending'}`,
-    `${contentEvidence[0].toLowerCase()}=${contentEvidence[1]}`,
+    'content=omitted',
   ].join('\n'), 2000)
 
   return {
@@ -375,7 +357,6 @@ function buildLatestRunTrace(entry: AgentResponse, transport: string, status: st
     title: `Run: ${runId || 'pending'} / Session key: ${sessionKey || 'pending'}`,
     ariaLabel: `Copy Command Console trace for ${entry.agentId}`,
     copyText,
-    evidenceRows,
   }
 }
 
@@ -651,20 +632,6 @@ const ResponseMessage = memo(function ResponseMessage({
           <span className="h-1 w-1 rounded-full bg-slate-600" />
           {entry.ok ? 'No output' : 'Request failed'}
         </div>
-      )}
-
-      {latestRunTrace && (
-        <details className="dy-command-evidence-preview" aria-label="Command Console run evidence">
-          <summary>Evidence</summary>
-          <dl>
-            {latestRunTrace.evidenceRows.map((row) => (
-              <div key={row.key} data-evidence-key={row.key}>
-                <dt>{row.label}</dt>
-                <dd>{row.value}</dd>
-              </div>
-            ))}
-          </dl>
-        </details>
       )}
 
       {cta && (

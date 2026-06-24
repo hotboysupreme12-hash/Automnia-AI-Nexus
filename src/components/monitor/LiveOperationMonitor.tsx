@@ -3,7 +3,7 @@ import { motion } from 'framer-motion'
 import { useNexusStore } from '../../store/nexusStore'
 import type { AgentOperationState, AgentResponse, MissionEvent, OpenClawAgent } from '../../types/nexus'
 import { abortStaleGatewayChatTurns, clearRuntimeMonitor, restartGatewayRuntime, runRuntimeDoctor, startGatewayRuntime, stopCronShift, stopGatewayRuntime, updateCronShift, useRuntimeStatus } from '../../hooks/useRuntimeStatus'
-import type { DoctorRun, GatewayChannelActivity, GatewayLogEntry, OpenAgentSession, RuntimeCronJob, RuntimeMonitorClearResult, RuntimeRun, RuntimeStatus } from '../../hooks/useRuntimeStatus'
+import type { DoctorRun, GatewayChannelActivity, GatewayLogEntry, RuntimeCronJob, RuntimeMonitorClearResult, RuntimeRun, RuntimeStatus } from '../../hooks/useRuntimeStatus'
 import { ActionStatusBanner } from '../common/ActionStatusBanner'
 
 const CONTROL_CENTER_LOGO_SRC = '/brand/dystopai-app-icon.png'
@@ -83,51 +83,6 @@ function cronJobTimeLabel(job: RuntimeCronJob): string {
 
 function shortSessionId(sessionId: string): string {
   return sessionId.length > 12 ? `${sessionId.slice(0, 8)}...` : sessionId
-}
-
-function runtimeSessionActivityMs(session: OpenAgentSession): number {
-  return Math.max(
-    Date.parse(session.gatewayLastEventAt || '') || 0,
-    Date.parse(session.updatedAt || '') || 0,
-    Date.parse(session.lastTouchedAt || '') || 0,
-  )
-}
-
-function runtimeSessionState(session: OpenAgentSession): 'running' | 'gateway' | 'active' | 'locked' | 'stale-lock' | 'stored' | 'missing' {
-  if (session.activeRunId) return 'running'
-  if (session.gatewayActive) return 'gateway'
-  if (session.active) return 'active'
-  if (session.sessionLock?.removable) return 'stale-lock'
-  if (session.sessionLock) return 'locked'
-  return session.sessionFileExists ? 'stored' : 'missing'
-}
-
-function runtimeSessionStateLabel(session: OpenAgentSession): string {
-  const state = runtimeSessionState(session)
-  if (state === 'running') return 'running'
-  if (state === 'gateway') return 'gateway active'
-  if (state === 'active') return 'active'
-  if (state === 'stale-lock') return 'stale lock'
-  if (state === 'locked') return 'locked'
-  if (state === 'stored') return 'stored'
-  return 'missing file'
-}
-
-function compareRuntimeSessions(a: OpenAgentSession, b: OpenAgentSession): number {
-  const activeWeight = (session: OpenAgentSession) => (
-    session.activeRunId ? 5 : session.gatewayActive ? 4 : session.active ? 3 : session.sessionLock?.removable ? 2 : session.sessionLock ? 1 : 0
-  )
-  const activeDelta = activeWeight(b) - activeWeight(a)
-  if (activeDelta) return activeDelta
-  return runtimeSessionActivityMs(b) - runtimeSessionActivityMs(a)
-}
-
-function sessionLockLabel(session: OpenAgentSession): string {
-  const lock = session.sessionLock
-  if (!lock) return ''
-  if (!lock.stale) return lock.pid ? `Writer pid ${lock.pid} is active` : 'Writer lock present'
-  const reason = lock.staleReasons.length ? lock.staleReasons.map((item) => item.replace(/-/g, ' ')).join(', ') : 'stale'
-  return lock.removable ? `Stale lock: ${reason}` : `Lock warning: ${reason}`
 }
 
 function compactRuntimeText(value: string, max = 110): string {
@@ -1220,65 +1175,6 @@ function GatewayActivityLine({ event }: { event: GatewayChannelActivity }) {
   )
 }
 
-function RuntimeSessionsCard({
-  sessions,
-  agentById,
-}: {
-  sessions: OpenAgentSession[]
-  agentById: Map<string, OpenClawAgent>
-}) {
-  const activeCount = sessions.filter((session) => session.activeRunId || session.active || session.gatewayActive).length
-  const lockWarningCount = sessions.filter((session) => Boolean(session.sessionLock)).length
-  const latestActivityMs = sessions.reduce((latest, session) => Math.max(latest, runtimeSessionActivityMs(session)), 0)
-  const latestActivity = latestActivityMs ? formatRuntimeTime(new Date(latestActivityMs).toISOString()) : 'none'
-  const targetNames = Array.from(new Set(sessions.map((session) => agentById.get(session.agentId)?.name || session.agentId).filter(Boolean)))
-  const visibleTargetNames = targetNames.slice(0, 3)
-  const targetSummary = visibleTargetNames.length
-    ? `${visibleTargetNames.join(', ')}${targetNames.length > visibleTargetNames.length ? ` +${targetNames.length - visibleTargetNames.length}` : ''}`
-    : 'none'
-  const targetTitle = targetNames.length ? targetNames.join(', ') : 'No runtime session targets'
-  const stateSample = sessions.find((session) => runtimeSessionState(session) !== 'stored') || sessions[0]
-  const stateLabel = stateSample ? runtimeSessionStateLabel(stateSample) : 'idle'
-  const lockTitle = sessions
-    .filter((session) => session.sessionLock)
-    .map((session) => `${agentById.get(session.agentId)?.name || session.agentId}: ${sessionLockLabel(session)}`)
-    .join('\n')
-  const stripState = activeCount ? 'active' : sessions.length ? 'quiet' : 'empty'
-
-  return (
-    <div className="dy-monitor-card dy-runtime-sessions-card dy-runtime-session-strip grid min-h-0 grid-cols-[minmax(0,1fr)_auto] items-center gap-3 rounded-none border border-white/[0.04] bg-white/[0.015] px-3 py-2.5" data-state={stripState}>
-      <div className="dy-runtime-session-strip-copy min-w-0">
-        <div className="flex min-w-0 items-center gap-2">
-          <span className="dy-runtime-session-strip-dot" data-state={stripState} aria-hidden="true" />
-          <p className="dy-runtime-sessions-title truncate text-[12px] font-bold text-slate-100">Runtime Sessions</p>
-        </div>
-        <p className="dy-runtime-sessions-summary mt-0.5 truncate text-[9px] text-slate-500">
-          {sessions.length ? `${sessions.length} lane${sessions.length === 1 ? '' : 's'} targeting ${targetSummary}` : 'No open runtime lanes'}
-        </p>
-      </div>
-      <div className="dy-runtime-session-stats dy-runtime-strip-stats flex min-w-0 flex-wrap items-center justify-end gap-1.5" aria-label="Runtime session summary">
-        <span className="dy-runtime-strip-chip" title={`${sessions.length} runtime session lane${sessions.length === 1 ? '' : 's'}`}>
-          {sessions.length} lanes
-        </span>
-        <span className="dy-runtime-strip-chip" data-state={stripState} title={`Representative state: ${stateLabel}`}>
-          {activeCount ? `${activeCount} live` : stripState === 'empty' ? 'idle' : 'quiet'}
-        </span>
-        <span className="dy-runtime-strip-chip dy-runtime-strip-chip-target" title={targetTitle}>
-          target {targetSummary}
-        </span>
-        <span className="dy-runtime-strip-chip" title={latestActivityMs ? `Last runtime session activity at ${latestActivity}` : 'No runtime session activity yet'}>
-          last {latestActivity}
-        </span>
-        {lockWarningCount > 0 && (
-          <span className="dy-runtime-strip-chip" data-state="warning" title={lockTitle || undefined}>
-            {lockWarningCount} lock{lockWarningCount === 1 ? '' : 's'}
-          </span>
-        )}
-      </div>
-    </div>
-  )
-}
-
 function GatewayActivityCard({ activity }: { activity: RuntimeStatus['gateway']['activity'] | undefined }) {
   const events = activity?.events || []
   return (
@@ -1365,7 +1261,6 @@ function RuntimeGatewayPanel({
   const gatewayChatActiveRuns = gatewayChat?.activeRuns || 0
   const gatewayChatOldestAgeMs = Math.max(gatewayChat?.oldestRunAgeMs || 0, gatewayChat?.oldestObserverAgeMs || 0)
   const gatewayChatHasStaleTurns = gatewayChatOldestAgeMs >= GATEWAY_CHAT_STALE_TURN_MS && gatewayChatActiveRuns > 0
-  const runtimeSessions = useMemo(() => [...(status?.sessions || [])].sort(compareRuntimeSessions), [status?.sessions])
   const [runtimeAction, setRuntimeAction] = useState('')
   const [cronCancelKey, setCronCancelKey] = useState('')
   const [cronCancelConfirm, setCronCancelConfirm] = useState(false)
@@ -1605,7 +1500,7 @@ function RuntimeGatewayPanel({
                 <p className="text-[13px] font-bold text-slate-100">Gateway Runtime</p>
                 <p className="mt-0.5 text-[10px] text-slate-500">OpenClaw gateway health, process, and restart state</p>
               </div>
-              <div className="flex flex-wrap items-center justify-end gap-1.5">
+              <div className="dy-gateway-control-group flex flex-wrap items-center justify-end gap-2">
                 <span className={`dy-gateway-status-pill inline-flex items-center gap-1.5 rounded-none border px-2.5 py-1 text-[8px] font-semibold uppercase tracking-[0.10em] ${gateway?.healthy ? 'border-emerald-400/20 bg-emerald-400/[0.06] text-emerald-200' : gateway?.processRunning ? 'border-amber-400/20 bg-amber-400/[0.06] text-amber-200' : 'border-rose-400/20 bg-rose-400/[0.06] text-rose-200'}`} data-tone={gateway?.healthy ? 'emerald' : gateway?.processRunning ? 'amber' : 'rose'}>
                   <span className={`h-1.5 w-1.5 rounded-none ${gateway?.healthy ? 'bg-emerald-400' : gateway?.processRunning ? 'bg-amber-400 animate-pulse' : 'bg-rose-400'}`} />
                   {gateway?.state || 'checking'}
@@ -1644,10 +1539,6 @@ function RuntimeGatewayPanel({
                 )}
               </div>
             </div>
-            <RuntimeSessionsCard
-              sessions={runtimeSessions}
-              agentById={agentById}
-            />
           </div>
 
         <GatewayActivityCard activity={activity} />
