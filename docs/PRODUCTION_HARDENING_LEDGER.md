@@ -974,13 +974,31 @@ Verification:
 - `npm test` passed with `smoke:openclaw` now included in `test:ci`.
 - `npm run audit:dependencies` passed after the OpenClaw smoke-gate changes with `found 0 vulnerabilities`.
 
+## 2026-06-24 16:45 UTC - CI OpenClaw Smoke Fix
+
+- Investigated the failed GitHub Actions run reported by notification:
+  - Run: `28113505903`
+  - Branch: `codex/ci-openclaw-smoke`
+  - Commit: `d7d209c`
+  - Failed step: `Run production hardening smoke suite`
+- Confirmed the failing CI log stopped in `npm run smoke:openclaw` while reading `vendor/openclaw/dist/plugin-sdk/packages/gateway-protocol/src/schema/logs-chat.d.ts`.
+- Verified that file exists locally but is ignored by the repository-wide `dist/` rule, so GitHub Actions correctly checks out without it.
+- Kept OpenClaw protocol coverage, but moved `scripts/smoke-openclaw-contracts.mjs` away from the ignored generated `vendor/openclaw/dist` schema artifact.
+- Re-anchored the chat protocol assertions to committed sources:
+  - `docs/openclaw-latest/pages/gateway/protocol.md` for idempotency, chat methods, `deltaText`, `runId`, and `sessionKey`.
+  - `docs/OPENCLAW_GATEWAY_COMMAND_CONSOLE_GUIDE.md` for Command Console expectations around `chat` `delta`, `final`, `error`, `aborted`, `chat.history`, `chat.message.get`, and `chat.abort`.
+- `npm run smoke:openclaw` passed after removing the ignored generated-artifact dependency.
+- `npm run smoke:ci-workflow` passed after the CI-safe smoke update.
+- `npm test` passed after the CI-safe smoke update.
+- `npm run audit:dependencies` passed after the CI-safe smoke update with `found 0 vulnerabilities`.
+
 ## In Progress
 
 - Production hardening on protective branch `codex/ci-openclaw-smoke`.
 
 Next action:
 
-- Commit/push the OpenClaw smoke gate slice when ready, then add UI smoke coverage to CI if it can be made stable against built artifacts.
+- Push the CI OpenClaw smoke fix and confirm the rerun; then add UI smoke coverage to CI if it can be made stable against built artifacts.
 - Avoid the pre-existing local edits in `src/components/mission/MissionDeploymentPanel.tsx` and `src/styles/dystopai-theme/70-responsive-polish.css` unless the selected task explicitly requires those files.
 
 ## Backlog
