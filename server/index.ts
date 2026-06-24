@@ -16853,7 +16853,7 @@ function patchedClawTalkRuntimeSource(source: string) {
       'function resolveClawTalkDataDir(api) {',
       "    var resolved = typeof api.resolvePath === 'function' ? api.resolvePath('.') : '';",
       "    if (typeof resolved === 'string' && resolved.trim() && resolved.trim() !== 'undefined') return resolved.trim();",
-      "    var home = process.env.OPENCLAW_STATE_ROOT || process.env.OPENCLAW_HOME || process.env.USERPROFILE || process.env.HOME || process.cwd();",
+      "    var home = process.env.OPENCLAW_STATE_ROOT || process.env.OPENCLAW_STATE_DIR || process.env.OPENCLAW_HOME || process.env.USERPROFILE || process.env.HOME || process.cwd();",
       "    if (!/[\\\\/]\\.openclaw$/i.test(home)) home = \"\".concat(home, \"/.openclaw\");",
       "    return \"\".concat(home, \"/plugins/clawtalk\");",
       '}',
@@ -16870,9 +16870,9 @@ function patchedClawTalkRuntimeSource(source: string) {
 }
 
 const CLAWTALK_CORE_BRIDGE_ROUTING_HELPER = String.raw`
-var CLAWTALK_ROUTING_PATCH_VERSION = 10;
+var CLAWTALK_ROUTING_PATCH_VERSION = 11;
 function resolveClawTalkStateRoot() {
-    var root = process.env.OPENCLAW_STATE_ROOT || process.env.OPENCLAW_HOME || '';
+    var root = process.env.OPENCLAW_STATE_ROOT || process.env.OPENCLAW_STATE_DIR || process.env.OPENCLAW_HOME || '';
     if (!root) {
         var home = process.env.USERPROFILE || process.env.HOME || process.cwd();
         root = /[\\/]\.openclaw$/i.test(home) ? home : path.join(home, '.openclaw');
@@ -16965,6 +16965,44 @@ function buildClawTalkAgentAliases(config, fallbackAgentId) {
         }),
         agentIds: agentIds
     };
+}
+function normalizeClawTalkModelRef(value) {
+    var text = String(value == null ? '' : value).trim();
+    if (!text) return '';
+    if (text.indexOf('/') === -1 && /^gpt-5(?:\.\d+)?(?:-[a-z0-9][a-z0-9.-]*)?$/i.test(text)) return 'openai/' + text;
+    return text;
+}
+function modelRefFromClawTalkModelSelection(selection) {
+    if (typeof selection === 'string') return normalizeClawTalkModelRef(selection);
+    if (!selection || typeof selection !== 'object') return '';
+    return normalizeClawTalkModelRef(selection.primary || selection.model || selection.id || '');
+}
+function findClawTalkAgentConfig(config, agentId) {
+    var wanted = String(agentId || '').trim().toLowerCase();
+    if (!wanted) return null;
+    var list = config && config.agents && Array.isArray(config.agents.list) ? config.agents.list : [];
+    for(var i = 0; i < list.length; i++){
+        var entry = list[i] || {};
+        if (String(entry.id || '').trim().toLowerCase() === wanted) return entry;
+    }
+    return null;
+}
+function readClawTalkAgentLocalModelRef(agent) {
+    try {
+        var agentDir = String(agent && agent.agentDir || '').trim();
+        if (!agentDir) return '';
+        var parsed = JSON.parse(fs.readFileSync(path.join(agentDir, 'config.json'), 'utf8'));
+        return modelRefFromClawTalkModelSelection(parsed && parsed.model);
+    } catch (unused) {
+        return '';
+    }
+}
+function resolveClawTalkAgentModelRef(config, agentId) {
+    var agent = findClawTalkAgentConfig(config, agentId);
+    var agentModel = modelRefFromClawTalkModelSelection(agent && agent.model) || readClawTalkAgentLocalModelRef(agent);
+    if (agentModel) return agentModel;
+    var defaults = config && config.agents && config.agents.defaults ? config.agents.defaults.model : null;
+    return modelRefFromClawTalkModelSelection(defaults);
 }
 function escapeClawTalkRegExp(value) {
     var text = String(value);
@@ -17344,7 +17382,7 @@ async function runClawTalkControlCenterOrEmbeddedAgentTurn(options) {
 }
 `.trim()
 
-const CLAWTALK_REPAIR_SIGNATURE_VERSION = 'clawtalk-repair:v11'
+const CLAWTALK_REPAIR_SIGNATURE_VERSION = 'clawtalk-repair:v12'
 const TELEGRAM_REPAIR_SIGNATURE_VERSION = 'telegram-routing-repair:v2'
 const clawTalkRepairSignatureCache = new Map<string, string>()
 const telegramRepairSignatureCache = new Map<string, string>()
@@ -17384,7 +17422,7 @@ function clawTalkCoreBridgeStreamHelper() {
 
 function patchedClawTalkCoreBridgeSource(source: string) {
   let next = source
-  const routingPatchVersion = 'var CLAWTALK_ROUTING_PATCH_VERSION = 10;'
+  const routingPatchVersion = 'var CLAWTALK_ROUTING_PATCH_VERSION = 11;'
   const routingHelperPattern = /var CLAWTALK_ROUTING_PATCH_VERSION = \d+;[\s\S]*?\nvar DEFAULT_TIMEOUT_MS = 120000;/
   const canPatchBridge = source.includes(routingPatchVersion)
     || routingHelperPattern.test(source)
@@ -17437,6 +17475,21 @@ function patchedClawTalkCoreBridgeSource(source: string) {
   )
   next = next.replace('sessionKey: params.sessionKey,', 'sessionKey: runSessionKey,')
   next = next.replace('prompt: params.prompt,', 'prompt: prompt,')
+  next = next.replace(
+    [
+      '                                // Resolve model - prefer params, then config (string or object.primary), fall back to extensionAPI defaults',
+      '                                modelCfg = cfg === null || cfg === void 0 ? void 0 : (_cfg_agents = cfg.agents) === null || _cfg_agents === void 0 ? void 0 : (_cfg_agents_defaults = _cfg_agents.defaults) === null || _cfg_agents_defaults === void 0 ? void 0 : _cfg_agents_defaults.model;',
+      '                                configModel = typeof modelCfg === \'string\' ? modelCfg : modelCfg === null || modelCfg === void 0 ? void 0 : modelCfg.primary;',
+      '                                modelRef = (_ref = (_params_model = params.model) !== null && _params_model !== void 0 ? _params_model : configModel) !== null && _ref !== void 0 ? _ref : "".concat(deps.DEFAULT_PROVIDER, "/").concat(deps.DEFAULT_MODEL);',
+    ].join('\n'),
+    [
+      '                                // Resolve model - prefer the routed agent, then explicit params, then config defaults.',
+      '                                configModel = resolveClawTalkAgentModelRef(cfg, agentId);',
+      '                                modelCfg = cfg === null || cfg === void 0 ? void 0 : (_cfg_agents = cfg.agents) === null || _cfg_agents === void 0 ? void 0 : (_cfg_agents_defaults = _cfg_agents.defaults) === null || _cfg_agents_defaults === void 0 ? void 0 : _cfg_agents_defaults.model;',
+      '                                if (!configModel) configModel = typeof modelCfg === \'string\' ? modelCfg : modelCfg === null || modelCfg === void 0 ? void 0 : modelCfg.primary;',
+      '                                modelRef = normalizeClawTalkModelRef((_ref = configModel || params.model) !== null && _ref !== void 0 ? _ref : "".concat(deps.DEFAULT_PROVIDER, "/").concat(deps.DEFAULT_MODEL));',
+    ].join('\n'),
+  )
   next = next.replace(
     /deps\.runEmbeddedPiAgent\(\{\s*sessionId: sessionId,\s*sessionKey: runSessionKey,\s*messageProvider: 'clawtalk',\s*sessionFile: sessionFile,\s*workspaceDir: workspaceDir,\s*config: cfg,\s*prompt: prompt,\s*provider: provider,\s*model: model,\s*thinkLevel: thinkLevel,\s*verboseLevel: 'off',\s*timeoutMs: timeoutMs,\s*runId: runId,\s*lane: 'clawtalk',\s*extraSystemPrompt: params\.extraSystemPrompt,\s*agentDir: agentDir\s*\}\)/,
     [
