@@ -13,11 +13,17 @@ import { z } from 'zod'
 import {
   appendDiagnosticRunLedger,
   appendGatewayEventLedger,
+  appendMissionEventLedger,
+  appendMissionRecordLedger,
+  appendMissionReportLedger,
   appendRuntimeRunLedger,
   closeRuntimeLedger,
   configureRuntimeLedger,
   readDiagnosticRunLedgerTail,
   readGatewayEventLedgerTail,
+  readMissionEventLedgerTail,
+  readMissionRecordLedgerTail,
+  readMissionReportLedgerTail,
   readRuntimeRunLedgerTail,
   runtimeLedgerStatus,
 } from './runtimeLedger'
@@ -25,7 +31,185 @@ import { applyDiagnosticRedactions } from '../src/utils/diagnosticRedaction'
 
 const app = express()
 app.set('etag', false)
-app.use(cors())
+
+const PORT = Number(process.env.CONTROL_CENTER_PORT || 4050)
+const CONFIGURED_AUTH_TOKEN = process.env.CONTROL_CENTER_TOKEN?.trim()
+const AUTH_TOKEN = CONFIGURED_AUTH_TOKEN || randomBytes(32).toString('base64url')
+const AUTH_TOKEN_SOURCE = CONFIGURED_AUTH_TOKEN ? 'environment' : 'generated'
+const sessionTokens = new Set<string>()
+const CONTROL_CENTER_FRONTEND_PORT = Number(process.env.CONTROL_CENTER_FRONTEND_PORT || 5173)
+const PUBLIC_API_PATHS = new Set(['/api/health', '/api/auth/login', '/api/auth/status'])
+const CONTROL_CENTER_CONTENT_SECURITY_POLICY = [
+  "default-src 'self'",
+  "script-src 'self'",
+  "style-src 'self' 'unsafe-inline'",
+  "img-src 'self' data: blob:",
+  "font-src 'self' data:",
+  "connect-src 'self' http://127.0.0.1:* http://localhost:* ws://127.0.0.1:* ws://localhost:*",
+  "media-src 'self' data: blob:",
+  "worker-src 'self' blob:",
+  "object-src 'none'",
+  "base-uri 'none'",
+  "form-action 'none'",
+  "frame-src 'none'",
+  "frame-ancestors 'none'",
+].join('; ')
+
+function controlCenterAllowedOrigins() {
+  return new Set([
+    `http://127.0.0.1:${PORT}`,
+    `http://localhost:${PORT}`,
+    `http://127.0.0.1:${CONTROL_CENTER_FRONTEND_PORT}`,
+    `http://localhost:${CONTROL_CENTER_FRONTEND_PORT}`,
+  ])
+}
+
+function isAllowedControlCenterOrigin(origin: string | undefined) {
+  if (!origin) return true
+  try {
+    return controlCenterAllowedOrigins().has(new URL(origin).origin)
+  } catch {
+    return false
+  }
+}
+
+function requestIdFor(req: Request) {
+  const existing = req.get('x-request-id') || req.get('x-control-center-request-id')
+  return existing?.trim() || randomUUID()
+}
+
+function bearerToken(req: Request) {
+  const header = req.get('authorization') || ''
+  const match = /^Bearer\s+(.+)$/i.exec(header)
+  return match?.[1]?.trim() || ''
+}
+
+function apiPath(req: Request) {
+  return (req.originalUrl.split('?')[0] || req.path).replace(/\/+$/, '') || '/'
+}
+
+function isPublicApiRequest(req: Request) {
+  return req.method === 'OPTIONS' || PUBLIC_API_PATHS.has(apiPath(req))
+}
+
+function setStaticSecurityHeaders(res: Response, filePath: string) {
+  res.setHeader('X-Content-Type-Options', 'nosniff')
+  res.setHeader('Referrer-Policy', 'no-referrer')
+  res.setHeader('Cross-Origin-Opener-Policy', 'same-origin')
+  const ext = path.extname(filePath).toLowerCase()
+  if (ext === '.html' || ext === '.htm') {
+    res.setHeader('Content-Security-Policy', CONTROL_CENTER_CONTENT_SECURITY_POLICY)
+  }
+}
+
+type ApiErrorCode =
+  | 'agent_not_found'
+  | 'agent_preflight_failed'
+  | 'agent_retire_failed'
+  | 'agent_session_operation_failed'
+  | 'agent_turn_failed'
+  | 'agent_config_sync_failed'
+  | 'avatar_preview_failed'
+  | 'avatar_upload_failed'
+  | 'auth_required'
+  | 'auth_provider_failed'
+  | 'clawtalk_console_failed'
+  | 'control_file_operation_failed'
+  | 'doctor_operation_failed'
+  | 'filesystem_operation_failed'
+  | 'file_upload_failed'
+  | 'folder_list_failed'
+  | 'folder_picker_failed'
+  | 'image_picker_failed'
+  | 'invalid_json'
+  | 'invalid_payload'
+  | 'invalid_token'
+  | 'mission_invalid_state'
+  | 'mission_not_found'
+  | 'mission_report_not_found'
+  | 'mission_scheduler_failed'
+  | 'model_auth_required'
+  | 'model_catalog_failed'
+  | 'model_operation_failed'
+  | 'origin_not_allowed'
+  | 'oauth_operation_failed'
+  | 'openclaw_command_failed'
+  | 'openclaw_summary_failed'
+  | 'party_dispatch_failed'
+  | 'party_handoff_failed'
+  | 'party_operation_failed'
+  | 'party_coordination_failed'
+  | 'plugin_command_failed'
+  | 'plugin_not_found'
+  | 'plugin_operation_failed'
+  | 'plugin_terminal_failed'
+  | 'runtime_status_failed'
+  | 'runtime_action_failed'
+  | 'runtime_summary_failed'
+  | 'resource_not_found'
+  | 'recruit_failed'
+  | 'shift_command_failed'
+  | 'shift_operation_failed'
+  | 'skill_command_failed'
+  | 'skill_not_found'
+  | 'skill_operation_failed'
+  | 'team_sync_failed'
+  | 'workspace_unwritable'
+
+function responseRequestId(res: Response): string {
+  return String(res.getHeader('X-Request-Id') || randomUUID())
+}
+
+function apiSuccess<T>(res: Response, data: T, status = 200) {
+  return res.status(status).json({
+    ok: true,
+    data,
+    requestId: responseRequestId(res),
+  })
+}
+
+function sanitizeApiErrorDetail(detail: unknown): unknown {
+  if (detail === undefined || detail === null) return undefined
+  if (typeof detail === 'string') return applyDiagnosticRedactions(detail)
+  if (detail instanceof Error) return applyDiagnosticRedactions(detail.message)
+  return detail
+}
+
+function apiFailure(res: Response, status: number, code: ApiErrorCode, message: string, detail?: unknown) {
+  const error: Record<string, unknown> = {
+    code,
+    message: applyDiagnosticRedactions(message),
+    status,
+  }
+  const cleanDetail = sanitizeApiErrorDetail(detail)
+  if (cleanDetail !== undefined) error.detail = cleanDetail
+  return res.status(status).json({
+    ok: false,
+    error,
+    requestId: responseRequestId(res),
+  })
+}
+
+function pluginErrorStatus(error: unknown): number {
+  return typeof (error as Error & { code?: unknown }).code === 'number' ? 502 : 500
+}
+
+function pluginErrorDetail(error: unknown): string {
+  return redactSensitiveText(String(error))
+}
+
+app.use((req, res, next) => {
+  res.setHeader('X-Request-Id', requestIdFor(req))
+  next()
+})
+app.use(cors({
+  origin(origin, callback) {
+    callback(null, isAllowedControlCenterOrigin(origin) ? origin || true : false)
+  },
+  allowedHeaders: ['Content-Type', 'Authorization', 'X-Request-Id', 'X-Control-Center-Request-Id'],
+  exposedHeaders: ['X-Request-Id'],
+  methods: ['GET', 'HEAD', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
+}))
 app.use('/api', (_req, res, next) => {
   res.setHeader('Cache-Control', 'no-store')
   next()
@@ -33,18 +217,33 @@ app.use('/api', (_req, res, next) => {
 app.use(express.json({ limit: '4mb' }))
 const jsonParseErrorHandler: ErrorRequestHandler = (error, _req, res, next) => {
   if (error instanceof SyntaxError && 'body' in error) {
-    res.status(400).json({
-      error: 'Invalid JSON payload',
-      detail: error.message,
-      hint: 'Send valid JSON with Content-Type: application/json. For fetch, use body: JSON.stringify(payload).',
-    })
+    apiFailure(
+      res,
+      400,
+      'invalid_json',
+      'Invalid JSON payload',
+      {
+        detail: error.message,
+        hint: 'Send valid JSON with Content-Type: application/json. For fetch, use body: JSON.stringify(payload).',
+      },
+    )
     return
   }
   next(error)
 }
 app.use(jsonParseErrorHandler)
-
-const PORT = Number(process.env.CONTROL_CENTER_PORT || 4050)
+app.use('/api', (req, res, next) => {
+  const origin = req.get('origin')
+  if (!isAllowedControlCenterOrigin(origin)) {
+    return apiFailure(res, 403, 'origin_not_allowed', 'Request origin is not allowed')
+  }
+  if (isPublicApiRequest(req)) return next()
+  const token = bearerToken(req)
+  if (!token || (!sessionTokens.has(token) && token !== AUTH_TOKEN)) {
+    return apiFailure(res, 401, 'auth_required', 'Authentication required')
+  }
+  return next()
+})
 let controlServer: Server | null = null
 const optionalRequire = createRequire(import.meta.url || __filename)
 type SqliteStatement = {
@@ -63,6 +262,15 @@ type SqliteModule = {
 const WORKSPACE_ROOT = path.resolve(process.env.CONTROL_CENTER_WORKSPACE_ROOT || process.cwd())
 const HOME_DIR = process.env.USERPROFILE || process.env.HOME || WORKSPACE_ROOT
 const NATIVE_OPENCLAW_STATE_ROOT = path.join(HOME_DIR, '.openclaw')
+function getElectronResourcesPath() {
+  const resourcesPath = (process as NodeJS.Process & { resourcesPath?: unknown }).resourcesPath
+  return typeof resourcesPath === 'string' ? resourcesPath : ''
+}
+
+function mutableRecord(value: unknown): Record<string, unknown> {
+  return value && typeof value === 'object' && !Array.isArray(value) ? value as Record<string, unknown> : {}
+}
+
 function isLegacyControlCenterOpenClawPath(value: string | undefined) {
   if (!value) return false
   return value.replace(/\\/g, '/').toLowerCase().includes('/openclaw-control-center/openclaw')
@@ -105,6 +313,9 @@ const CONTROL_CENTER_SQLITE_LEDGER_PATH = path.join(CONTROL_CENTER_LEDGER_DIR, '
 const RUNTIME_RUN_LEDGER_PATH = path.join(CONTROL_CENTER_LEDGER_DIR, 'runtime-runs.jsonl')
 const GATEWAY_EVENT_LEDGER_PATH = path.join(CONTROL_CENTER_LEDGER_DIR, 'gateway-events.jsonl')
 const DIAGNOSTIC_RUN_LEDGER_PATH = path.join(CONTROL_CENTER_LEDGER_DIR, 'diagnostic-runs.jsonl')
+const MISSION_RECORD_LEDGER_PATH = path.join(CONTROL_CENTER_LEDGER_DIR, 'mission-records.jsonl')
+const MISSION_EVENT_LEDGER_PATH = path.join(CONTROL_CENTER_LEDGER_DIR, 'mission-events.jsonl')
+const MISSION_REPORT_LEDGER_PATH = path.join(CONTROL_CENTER_LEDGER_DIR, 'mission-reports.jsonl')
 const RUNTIME_MONITOR_CLEAR_MARKER_PATH = path.join(CONTROL_CENTER_LEDGER_DIR, 'runtime-monitor-clear.json')
 const RECOMMENDED_OPENCLAW_VERSION = '2026.6.6'
 const MAX_RUNTIME_OUTPUT_CHARS = 1_200_000
@@ -199,6 +410,9 @@ configureRuntimeLedger({
   runtimeRunsJsonl: RUNTIME_RUN_LEDGER_PATH,
   gatewayEventsJsonl: GATEWAY_EVENT_LEDGER_PATH,
   diagnosticRunsJsonl: DIAGNOSTIC_RUN_LEDGER_PATH,
+  missionRecordsJsonl: MISSION_RECORD_LEDGER_PATH,
+  missionEventsJsonl: MISSION_EVENT_LEDGER_PATH,
+  missionReportsJsonl: MISSION_REPORT_LEDGER_PATH,
 })
 
 const CONTROL_FILES = ['AGENTS.md', 'BOOTSTRAP.md', 'HEARTBEAT.md', 'IDENTITY.md', 'SOUL.md', 'USER.md', 'MEMORY.md'] as const
@@ -252,6 +466,9 @@ const CONTROL_CENTER_GATEWAY_TOOLS_EFFECTIVE_DIAGNOSTIC = /^(1|true|yes)$/i.test
 const FORCE_LOCAL_AGENT_RUNTIME = /^(1|true|yes)$/i.test(process.env.CONTROL_CENTER_FORCE_LOCAL_AGENT_RUNTIME || '')
 const CONTROL_CENTER_AGENT_TURN_STREAM_SMOKE_MOCK = /^(1|true|yes)$/i.test(
   process.env.CONTROL_CENTER_AGENT_TURN_STREAM_SMOKE_MOCK || '',
+)
+const CONTROL_CENTER_MISSION_SCHEDULER_DRY_RUN = /^(1|true|yes)$/i.test(
+  process.env.CONTROL_CENTER_MISSION_SCHEDULER_DRY_RUN || '',
 )
 const AUTO_START_GATEWAY = /^(1|true|yes)$/i.test(
   process.env.CONTROL_CENTER_AUTOSTART_GATEWAY || (CONTROL_CENTER_GATEWAY_AGENT_SESSIONS ? '1' : ''),
@@ -326,11 +543,22 @@ type OpenClawResult = {
   stdout: string
   stderr: string
   code: number
+  controlCenterRunId?: string
   failureKind?: FailureKind
   elapsedMs?: number
   timedOut?: boolean
   runtimeTransport?: 'gateway-chat' | 'gateway' | 'local'
   gatewayFallbackDetail?: string
+}
+
+function openClawErrorResult(error: unknown): OpenClawResult {
+  const text = error instanceof Error ? error.message : String(error)
+  return {
+    stdout: '',
+    stderr: text,
+    code: 1,
+    failureKind: classifyFailureKind(text, 'failed') || 'unknown',
+  }
 }
 
 type PtyDisposable = { dispose: () => void }
@@ -587,7 +815,7 @@ function isUsableOpenClawBin(candidate: string) {
 }
 
 function embeddedOpenClawBinCandidates() {
-  const electronResourcesPath = typeof process.resourcesPath === 'string' ? process.resourcesPath : ''
+  const electronResourcesPath = getElectronResourcesPath()
   const resourceCandidates = electronResourcesPath
     ? openClawExecutableCandidatesForDir(path.join(electronResourcesPath, 'openclaw'))
     : []
@@ -965,6 +1193,10 @@ type OpenClawConfigFile = {
   }
   gateway?: {
     mode?: string
+    [key: string]: unknown
+  }
+  env?: {
+    vars?: Record<string, unknown>
     [key: string]: unknown
   }
   session?: OpenClawSessionConfig
@@ -3302,9 +3534,9 @@ function repairGatewayTokenConfigSync(): { repaired: boolean; detail: string } {
   const token = findFallbackGatewayToken() || randomBytes(32).toString('hex')
   const password = findFallbackGatewayPassword(config)
 
-  const gateway = (config.gateway && typeof config.gateway === 'object') ? config.gateway : {}
-  const auth = (gateway.auth && typeof gateway.auth === 'object') ? gateway.auth : {}
-  const remote = (gateway.remote && typeof gateway.remote === 'object') ? gateway.remote : {}
+  const gateway = mutableRecord(config.gateway)
+  const auth = mutableRecord(gateway.auth)
+  const remote = mutableRecord(gateway.remote)
   const needsAuthToken = auth.token !== token || auth.mode !== 'token'
   const needsRemoteToken = remote.token !== token
   const needsAuthPassword = auth.password !== password
@@ -3565,6 +3797,16 @@ function modelAuthProblem(modelId: string | undefined) {
 
 type MissionMode = 'instant' | 'hours' | 'days' | 'weeks' | 'continuous' | 'indefinite'
 type MissionStatus = 'active' | 'completed' | 'cancelled'
+type MissionLifecycleState =
+  | 'draft'
+  | 'validating'
+  | 'scheduled'
+  | 'dispatching'
+  | 'running'
+  | 'verifying'
+  | 'completed'
+  | 'failed'
+  | 'cancelled'
 
 type MissionCronRole = 'leader' | 'worker' | 'reviewer'
 type MissionCronJobStatus = 'created' | 'running' | 'completed' | 'failed' | 'disabled' | 'removed'
@@ -3582,6 +3824,78 @@ type MissionCronJob = {
   startedAt: string | null
   endedAt: string | null
   summary: string | null
+  runtimeRunId: string | null
+  cronRunId: string | null
+  sessionId: string | null
+  sessionKey: string | null
+}
+
+type MissionCronRunReference = {
+  cronRunId: string | null
+  sessionId: string | null
+  sessionKey: string | null
+}
+
+type MissionCronCleanupResult = {
+  jobId: string
+  cronId: string
+  agentId: string
+  previousStatus: MissionCronJobStatus
+  status: MissionCronJobStatus
+  ok: boolean
+  action: 'removed' | 'disabled' | 'unchanged'
+  detail: string | null
+}
+
+type MissionCronCleanupSummary = {
+  attempted: number
+  removed: number
+  disabled: number
+  failed: number
+  results: MissionCronCleanupResult[]
+}
+
+type MissionCronReconciliationSnapshot = {
+  available: boolean
+  activeCronIds: Set<string>
+  disabledCronIds: Set<string>
+  knownCronIds: Set<string>
+  error?: string
+}
+
+type MissionGatewaySessionReconciliationStatus = 'verified' | 'missing' | 'unavailable' | 'not-checked'
+type MissionRuntimeReconciliationStatus = OpenClawRunStatus | 'unknown'
+
+type MissionGatewaySessionReconciliationDetail = {
+  jobId: string
+  cronId: string
+  agentId: string
+  runtimeRunId: string | null
+  cronRunId: string | null
+  sessionId: string | null
+  sessionKey: string | null
+  gatewayStatus: MissionGatewaySessionReconciliationStatus
+  runtimeStatus: MissionRuntimeReconciliationStatus
+  detail?: string
+}
+
+type MissionGatewaySessionReconciliationResult = {
+  available: boolean
+  checked: number
+  sessionChecked: number
+  verified: number
+  missing: number
+  unavailable: number
+  notChecked: number
+  runtimeRunning: number
+  runtimeCompleted: number
+  runtimeFailed: number
+  runtimeTimedOut: number
+  runtimeAborted: number
+  runtimeInterrupted: number
+  runtimeUnknown: number
+  details: MissionGatewaySessionReconciliationDetail[]
+  error?: string
 }
 
 type MissionSchedulerState = {
@@ -3600,6 +3914,7 @@ type MissionSchedulerState = {
 
 type Mission = {
   id: string
+  idempotencyKey?: string
   title: string
   brief: string
   mode: MissionMode
@@ -3612,6 +3927,7 @@ type Mission = {
   startAt: string
   endAt: string | null
   status: MissionStatus
+  lifecycleState: MissionLifecycleState
   party: string[]
   createdAt: string
   completedAt: string | null
@@ -3625,14 +3941,94 @@ type MissionFeedEvent = {
   type: 'mission_started' | 'agent_assigned' | 'agent_update' | 'mission_completed' | 'mission_cancelled'
   message: string
   agentId?: string
+  actor?: string
+  previousState?: MissionLifecycleState
+  nextState?: MissionLifecycleState
+  idempotencyKey?: string
+  evidence?: Record<string, unknown>
+}
+
+type MissionLifecycleEvent = {
+  id: string
+  missionId: string
+  timestamp: string
+  at: string
+  type: MissionFeedEvent['type']
+  message: string
+  actor: string
+  previousState: MissionLifecycleState | null
+  nextState: MissionLifecycleState | null
+  idempotencyKey: string
+  agentId?: string
+  evidence?: Record<string, unknown>
+}
+
+type BackendMissionReportEvidence = {
+  source: 'runtime-responses' | 'mission-feed' | 'mixed' | 'none'
+  acceptedRuns: number
+  startedRuns: number
+  completedRuns: number
+  failedRuns: number
+  cancelledRuns: number
+  timedOutRuns: number
+  retryCount: number
+  fallbackCount: number
+  verificationFailures: number
+  toolFailures: number
+  commandFailures: number
+  humanInterventions: number
+  agentParticipation: string[]
+  queueDelayMs: number | null
+  timeToFirstTokenMs: number | null
+  totalExecutionDurationMs: number | null
+  missionWallTimeMs: number | null
+  tokenUsageEstimate: number | null
+  runtimeRunIds: string[]
+  cronRunIds: string[]
+  sessionIds: string[]
+  sessionKeys: string[]
+  unavailableMetrics: string[]
+}
+
+type BackendMissionReport = {
+  id: string
+  missionId: string
+  generatedAt: string
+  efficiencyRating: number | null
+  soulDrift: number | null
+  heartbeatStabilityScore: number | null
+  runtimeEfficiency: number | null
+  errors: number | null
+  xpGained: number | null
+  skillUnlocks: string[]
+  evidence: BackendMissionReportEvidence
+}
+
+type MissionRecordSnapshot = Mission & {
+  missionId: string
+  updatedAt: string
+  persistedAt: string
+  persistReason: string
 }
 
 type DelegationHandoffPayload = {
+  ok?: unknown
   reply?: unknown
   to?: {
     reply?: unknown
   }
   handoffId?: unknown
+}
+
+function unwrapCanonicalApiPayload(payload: unknown): unknown {
+  if (!payload || typeof payload !== 'object' || Array.isArray(payload)) return payload
+  const record = payload as Record<string, unknown>
+  if (record.ok === true && Object.prototype.hasOwnProperty.call(record, 'data')) return record.data
+  if (record.ok === false && record.error && typeof record.error === 'object' && !Array.isArray(record.error)) {
+    const error = record.error as Record<string, unknown>
+    if (Object.prototype.hasOwnProperty.call(error, 'detail')) return error.detail
+  }
+  return payload
 }
 
 const shiftTimers = new Map<string, NodeJS.Timeout>()
@@ -3643,6 +4039,7 @@ const missionLoopTimers = new Map<string, NodeJS.Timeout>()
 const missionRunControllers = new Map<string, AbortController>()
 const missions = new Map<string, Mission>()
 const missionFeed: MissionFeedEvent[] = []
+const missionReports = new Map<string, BackendMissionReport>()
 const TIMED_MISSION_AGENT_TIMEOUT_SECONDS = 900
 const MISSION_CRON_EXPIRY_SWEEP_MS = 30_000
 let missionCronExpirySweepTimer: NodeJS.Timeout | null = null
@@ -6567,6 +6964,7 @@ async function shutdownControlCenterRuntime(reason = 'control center shutdown') 
     clearShutdownPinnedTimers()
     stopGatewayHealthMonitor()
     stopMissionCronExpirySweep()
+    await persistAllMissionRecords(`${reason}:snapshot-before-shutdown`)
     const sessions = clearAgentTurnSessions()
     const terminatedRuns = await terminateAllOpenClawRunsNow(reason)
     const gateway = await stopGatewayRuntime(reason).catch((error) => {
@@ -6889,6 +7287,45 @@ function recruitMdsDefaults(profile: AgentProfile): AgentLocalConfig['mds'] {
   }
 }
 
+type AgentMdsPatch = Partial<Omit<AgentLocalConfig['mds'], 'capabilities' | 'skillLibrary'>> & {
+  capabilities?: Partial<AgentLocalConfig['mds']['capabilities']>
+  skillLibrary?: Partial<AgentSkillLibraryState>
+}
+
+function normalizeAgentMdsState(base: AgentLocalConfig['mds'], patch?: AgentMdsPatch): AgentLocalConfig['mds'] {
+  const capabilities = patch?.capabilities
+  const toolAccess = patch?.toolAccess
+  const scalarPatch: Partial<Omit<AgentLocalConfig['mds'], 'capabilities' | 'skillLibrary' | 'toolAccess'>> = {
+    ...(patch?.maxContextTokens !== undefined ? { maxContextTokens: patch.maxContextTokens } : {}),
+    ...(patch?.delegationAllowed !== undefined ? { delegationAllowed: patch.delegationAllowed } : {}),
+    ...(patch?.subAgentSpawnLimit !== undefined ? { subAgentSpawnLimit: patch.subAgentSpawnLimit } : {}),
+  }
+  const skillLibraryPatch = patch?.skillLibrary
+  const existingSkillLibrary = base.skillLibrary
+  const skillLibrary = skillLibraryPatch || existingSkillLibrary
+
+  return {
+    ...base,
+    ...scalarPatch,
+    capabilities: {
+      ...base.capabilities,
+      ...(capabilities || {}),
+    },
+    toolAccess: toolAccess?.length ? toolAccess : base.toolAccess,
+    ...(skillLibrary
+      ? {
+          skillLibrary: {
+            knownSkills: skillLibraryPatch?.knownSkills || existingSkillLibrary?.knownSkills || [],
+            preferredSkills: skillLibraryPatch?.preferredSkills || existingSkillLibrary?.preferredSkills || [],
+            ...(skillLibraryPatch?.lastSyncedAt || existingSkillLibrary?.lastSyncedAt
+              ? { lastSyncedAt: skillLibraryPatch?.lastSyncedAt || existingSkillLibrary?.lastSyncedAt }
+              : {}),
+          },
+        }
+      : {}),
+  }
+}
+
 function isLegacyGenericRecruitRuntime(value?: Partial<AgentLocalConfig['runtime']>) {
   if (!value) return false
   return value.thinkingDefault === 'medium'
@@ -6927,9 +7364,9 @@ function isLegacyGenericRecruitAttributes(value?: Partial<AgentLocalConfig['attr
     && value.parallelism === 4
 }
 
-function isLegacyGenericRecruitMds(value: Partial<AgentLocalConfig['mds']> | undefined, inferred: AgentLocalConfig['mds']) {
+function isLegacyGenericRecruitMds(value: AgentMdsPatch | undefined, inferred: AgentLocalConfig['mds']) {
   if (!value) return false
-  const caps = value.capabilities || {}
+  const caps: Partial<AgentLocalConfig['mds']['capabilities']> = value.capabilities || {}
   const allCapabilitiesOn =
     caps.codeGeneration === true
     && caps.planning === true
@@ -7700,7 +8137,7 @@ async function runOpenClaw(
     const runRecord = beginOpenClawRun(args, runCwd, timeoutMs)
     const stderr = openClawRuntimeUnavailableMessage()
     finishOpenClawRun(runRecord, 'failed', { stdout: '', stderr, code: 1, failureKind: 'runtime_unavailable' })
-    return { stdout: '', stderr, code: 1, failureKind: 'runtime_unavailable', elapsedMs: 0 }
+    return { stdout: '', stderr, code: 1, controlCenterRunId: runRecord.id, failureKind: 'runtime_unavailable', elapsedMs: 0 }
   }
 
   if (args[0] === 'agent') {
@@ -7741,6 +8178,7 @@ async function runOpenClaw(
       // produce a JSON reply but kept handles open past the wrapper timeout.
       setTimeout(() => resolve({
         ...resolveOpenClawTimeoutResult(stdout, stderr, timeoutMs),
+        controlCenterRunId: runRecord.id,
         failureKind: 'timeout',
         elapsedMs: Date.now() - startedAt,
         timedOut: true,
@@ -7769,7 +8207,7 @@ async function runOpenClaw(
       void terminateProcessTree(child.pid, 'openclaw json reply complete')
       scheduleStaleOpenClawSessionLockCleanup(args)
       finishOpenClawRun(runRecord, 'completed', { stdout, stderr, code: 0 })
-      resolve({ stdout: stdout.trim(), stderr: stderr.trim(), code: 0, elapsedMs: Date.now() - startedAt })
+      resolve({ stdout: stdout.trim(), stderr: stderr.trim(), code: 0, controlCenterRunId: runRecord.id, elapsedMs: Date.now() - startedAt })
     })
     child.stderr.on('data', (chunk) => {
       stderr = appendBoundedRuntimeOutput(stderr, chunk)
@@ -7791,7 +8229,7 @@ async function runOpenClaw(
       const status = exitCode === 0 ? 'completed' : 'failed'
       const failureKind = status === 'completed' ? undefined : classifyFailureKind(`${stderr}\n${stdout}`, status) || 'unknown'
       finishOpenClawRun(runRecord, status, { stdout, stderr, code: exitCode, failureKind })
-      resolve({ stdout: stdout.trim(), stderr: stderr.trim(), code: exitCode, failureKind, elapsedMs: Date.now() - startedAt })
+      resolve({ stdout: stdout.trim(), stderr: stderr.trim(), code: exitCode, controlCenterRunId: runRecord.id, failureKind, elapsedMs: Date.now() - startedAt })
     })
   })
 }
@@ -7806,21 +8244,13 @@ async function runOpenClawWithRetry(
   args: string[],
   timeoutMs = 120000,
   options?: { cwd?: string; envOverrides?: Record<string, string>; signal?: AbortSignal },
-) {
-  const first = await runOpenClaw(args, timeoutMs, options).catch((error) => ({
-    stdout: '',
-    stderr: String(error),
-    code: 1,
-  }))
+): Promise<OpenClawResult> {
+  const first = await runOpenClaw(args, timeoutMs, options).catch(openClawErrorResult)
   const combined = `${first.stdout || ''}\n${first.stderr || ''}`
   if (args[0] !== 'agent' || !isRateLimitText(combined)) return first
 
   await new Promise((resolve) => setTimeout(resolve, 2200))
-  return runOpenClaw(args, timeoutMs, options).catch((error) => ({
-    stdout: '',
-    stderr: String(error),
-    code: 1,
-  }))
+  return runOpenClaw(args, timeoutMs, options).catch(openClawErrorResult)
 }
 
 async function refreshOpenClawPluginRegistry(reason: string): Promise<OpenClawResult> {
@@ -8050,7 +8480,7 @@ function startPluginSetupTerminalSession(params: {
   const spec = openClawSpawnSpec(args)
   const pty = loadPtyModule()
   const now = new Date().toISOString()
-  const processHandle = pty.spawn(spec.command, spec.args, {
+  const processHandle = pty.spawn(spec.command, [...spec.args], {
     name: 'xterm-256color',
     cols: Math.max(40, Math.min(180, Math.floor(params.cols || 96))),
     rows: Math.max(10, Math.min(60, Math.floor(params.rows || 20))),
@@ -8670,7 +9100,7 @@ function openClawDistModulePathByPrefix(prefix: string) {
 }
 
 function openClawDistDirCandidates() {
-  const electronResourcesPath = typeof process.resourcesPath === 'string' ? process.resourcesPath : ''
+  const electronResourcesPath = getElectronResourcesPath()
   const binDir = openclawBin && openclawBin !== 'openclaw' ? path.dirname(path.resolve(openclawBin)) : ''
   return uniqueStrings(
     binDir ? path.join(binDir, 'dist') : '',
@@ -8845,7 +9275,7 @@ async function exchangeGoogleOAuthCodeForTokens(code: string, verifier: string, 
     throw new Error(data.error_description || data.error || `Google token exchange failed (${response.status})`)
   }
 
-  const user = await fetchGoogleUserInfo(data.access_token).catch(() => ({}))
+  const user = await fetchGoogleUserInfo(data.access_token).catch((): { email?: string } => ({}))
   const expiresAt = Date.now() + Math.max(60, Number(data.expires_in || 3600)) * 1000 - 300000
   return {
     accessToken: data.access_token,
@@ -8899,7 +9329,7 @@ async function refreshGoogleOAuthCredential(oauth: LocalOAuthCredential): Promis
   }
 }
 
-function isOAuthCredentialUsable(oauth: LocalOAuthCredential | undefined) {
+function isOAuthCredentialUsable(oauth: LocalOAuthCredential | undefined): oauth is LocalOAuthCredential {
   return Boolean(oauth?.accessToken?.trim() || oauth?.refreshToken?.trim())
 }
 
@@ -10813,10 +11243,10 @@ function pruneFolderPickerSessions() {
 
 function serializeFolderPickerSession(session: FolderPickerSession) {
   return {
-    ok: session.status !== 'error',
     sessionId: session.id,
     status: session.status,
     path: session.path ?? null,
+    cancelled: session.status === 'cancelled',
     detail: session.detail,
   }
 }
@@ -12084,12 +12514,58 @@ function isRecoverableMissionCronProviderRateLimit(stdout: string, stderr: strin
   return /(?:RESOURCE_EXHAUSTED|API rate limit reached|rate_limit|Google Vertex AI API error \(429\)|\b429\b)/i.test(text)
 }
 
-function extractCronRunSessionId(stdout: string, stderr: string): string {
+function stringAtAnyPath(value: unknown, paths: string[][]): string {
+  for (const pathSegments of paths) {
+    const candidate = valueAtPath(value, pathSegments)
+    if (typeof candidate === 'string' && candidate.trim()) return candidate.trim()
+  }
+  return ''
+}
+
+function extractCronRunReference(stdout: string, stderr: string): MissionCronRunReference {
   const text = `${stdout || ''}\n${stderr || ''}`
-  const match =
+  const parsed = collectParsedAgentRunOutputs(stdout, stderr)
+  const cronRunIdFromJson = parsed.map((entry) => stringAtAnyPath(entry, [
+    ['runId'],
+    ['run', 'id'],
+    ['run', 'runId'],
+    ['cronRunId'],
+    ['result', 'runId'],
+    ['result', 'run', 'id'],
+    ['task', 'runId'],
+  ])).find(Boolean) || ''
+  const sessionIdFromJson = parsed.map((entry) => stringAtAnyPath(entry, [
+    ['sessionId'],
+    ['session', 'id'],
+    ['run', 'sessionId'],
+    ['run', 'session', 'id'],
+    ['result', 'sessionId'],
+    ['result', 'session', 'id'],
+    ['task', 'sessionId'],
+  ])).find(Boolean) || ''
+  const sessionKeyFromJson = parsed.map((entry) => stringAtAnyPath(entry, [
+    ['sessionKey'],
+    ['session', 'key'],
+    ['run', 'sessionKey'],
+    ['run', 'session', 'key'],
+    ['result', 'sessionKey'],
+    ['result', 'session', 'key'],
+    ['task', 'sessionKey'],
+  ])).find(Boolean) || ''
+  const sessionIdMatch =
     /sessionId["'\s:=]+([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})/i.exec(text) ||
     /session\s+id["'\s:=]+([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})/i.exec(text)
-  return match?.[1] || ''
+  const runIdMatch =
+    /(?:cronRunId|runId)["'\s:=]+([a-z0-9][a-z0-9._:-]{5,160})/i.exec(text) ||
+    /(?:cron\s+run|run)\s+id["'\s:=]+([a-z0-9][a-z0-9._:-]{5,160})/i.exec(text)
+  const sessionKeyMatch =
+    /sessionKey["'\s:=]+([a-z0-9][a-z0-9._:/-]{5,240})/i.exec(text) ||
+    /session\s+key["'\s:=]+([a-z0-9][a-z0-9._:/-]{5,240})/i.exec(text)
+  return {
+    cronRunId: cronRunIdFromJson || runIdMatch?.[1] || null,
+    sessionId: sessionIdFromJson || sessionIdMatch?.[1] || null,
+    sessionKey: sessionKeyFromJson || sessionKeyMatch?.[1] || null,
+  }
 }
 
 async function agentSessionCandidateFiles(agentId: string, sessionId: string, startedAt?: string | null): Promise<string[]> {
@@ -12859,15 +13335,848 @@ function missionView(mission: Mission) {
   }
 }
 
+type MissionView = ReturnType<typeof missionView>
+
+type MissionLifecycleProjection = {
+  generatedAt: string
+  missions: MissionView[]
+  feed: MissionFeedEvent[]
+  events: MissionLifecycleEvent[]
+  reports: BackendMissionReport[]
+  projection: {
+    source: 'memory+ledger'
+    missionCount: number
+    activeMissionCount: number
+    feedCount: number
+    eventCount: number
+    reportCount: number
+    durableRecordCount: number
+    memoryRecordCount: number
+  }
+}
+
+function missionSortMs(mission: Pick<Mission, 'createdAt' | 'startAt' | 'completedAt'>) {
+  const candidates = [mission.completedAt, mission.createdAt, mission.startAt]
+  for (const value of candidates) {
+    const parsed = value ? Date.parse(value) : NaN
+    if (Number.isFinite(parsed)) return parsed
+  }
+  return 0
+}
+
+function missionFeedEventFromLifecycleEvent(event: MissionLifecycleEvent): MissionFeedEvent | null {
+  if (!event?.id || !event.missionId || !event.message) return null
+  const type = event.type
+  if (type !== 'mission_started' && type !== 'agent_assigned' && type !== 'agent_update' && type !== 'mission_completed' && type !== 'mission_cancelled') return null
+  return {
+    id: event.id,
+    missionId: event.missionId,
+    at: event.at || event.timestamp || new Date().toISOString(),
+    type,
+    message: event.message,
+    ...(event.agentId ? { agentId: event.agentId } : {}),
+    ...(event.actor ? { actor: event.actor } : {}),
+    ...(event.previousState ? { previousState: event.previousState } : {}),
+    ...(event.nextState ? { nextState: event.nextState } : {}),
+    ...(event.idempotencyKey ? { idempotencyKey: event.idempotencyKey } : {}),
+    ...(event.evidence ? { evidence: event.evidence } : {}),
+  }
+}
+
+function mergeMissionFeedEvents(lifecycleEvents: MissionLifecycleEvent[], limit: number, missionId?: string | null) {
+  const byId = new Map<string, MissionFeedEvent>()
+  const matchesMission = (id: string) => !missionId || id === missionId
+  for (const event of missionFeed) {
+    if (!matchesMission(event.missionId)) continue
+    byId.set(event.id, event)
+  }
+  for (const event of lifecycleEvents) {
+    if (!matchesMission(event.missionId)) continue
+    const feedEvent = missionFeedEventFromLifecycleEvent(event)
+    if (feedEvent) byId.set(feedEvent.id, feedEvent)
+  }
+  return Array.from(byId.values())
+    .sort((a, b) => Date.parse(b.at) - Date.parse(a.at))
+    .slice(0, Math.max(1, Math.min(300, Math.round(limit))))
+}
+
+async function listMissionRecordsForProjection(limit = 500) {
+  const records = await readMissionRecordLedgerTail<MissionRecordSnapshot>(limit).catch(() => [])
+  const latestByMission = new Map<string, Mission>()
+  let durableRecordCount = 0
+  for (const record of records) {
+    const mission = normalizeMissionRecordSnapshot(record)
+    if (!mission) continue
+    latestByMission.set(mission.id, mission)
+    durableRecordCount += 1
+  }
+  for (const mission of missions.values()) {
+    latestByMission.set(mission.id, mission)
+  }
+  return {
+    missions: Array.from(latestByMission.values())
+      .sort((a, b) => missionSortMs(b) - missionSortMs(a)),
+    durableRecordCount,
+    memoryRecordCount: missions.size,
+  }
+}
+
+async function buildMissionLifecycleProjection(options: {
+  missionId?: string | null
+  missionLimit?: number
+  eventLimit?: number
+  feedLimit?: number
+  reportLimit?: number
+} = {}): Promise<MissionLifecycleProjection> {
+  const missionId = options.missionId?.trim() || null
+  const [recordProjection, events, reports] = await Promise.all([
+    listMissionRecordsForProjection(options.missionLimit || 500),
+    readMissionEventLedgerTail<MissionLifecycleEvent>(options.eventLimit || 1000).catch(() => []),
+    listMissionReports(options.reportLimit || 100),
+  ])
+  const projectedMissions = missionId
+    ? recordProjection.missions.filter((mission) => mission.id === missionId)
+    : recordProjection.missions
+  const projectedEvents = (missionId ? events.filter((event) => event.missionId === missionId) : events)
+    .slice(-Math.max(1, Math.min(1000, Math.round(options.eventLimit || 300))))
+  const projectedReports = missionId
+    ? reports.filter((report) => report.missionId === missionId)
+    : reports
+  const feed = mergeMissionFeedEvents(projectedEvents, options.feedLimit || 120, missionId)
+  return {
+    generatedAt: new Date().toISOString(),
+    missions: projectedMissions.map((mission) => missionView(mission)),
+    feed,
+    events: projectedEvents,
+    reports: projectedReports,
+    projection: {
+      source: 'memory+ledger',
+      missionCount: projectedMissions.length,
+      activeMissionCount: projectedMissions.filter((mission) => mission.status === 'active').length,
+      feedCount: feed.length,
+      eventCount: projectedEvents.length,
+      reportCount: projectedReports.length,
+      durableRecordCount: recordProjection.durableRecordCount,
+      memoryRecordCount: recordProjection.memoryRecordCount,
+    },
+  }
+}
+
 function pushMissionEvent(event: Omit<MissionFeedEvent, 'id' | 'at'>) {
-  missionFeed.unshift({
+  const fullEvent: MissionFeedEvent = {
     id: randomUUID(),
     at: new Date().toISOString(),
     ...event,
-  })
+  }
+  missionFeed.unshift(fullEvent)
   if (missionFeed.length > 300) {
     missionFeed.length = 300
   }
+  const ledgerEvent: MissionLifecycleEvent = {
+    id: fullEvent.id,
+    missionId: fullEvent.missionId,
+    timestamp: fullEvent.at,
+    at: fullEvent.at,
+    type: fullEvent.type,
+    message: fullEvent.message,
+    actor: fullEvent.actor || fullEvent.agentId || 'control-center',
+    previousState: fullEvent.previousState || null,
+    nextState: fullEvent.nextState || null,
+    idempotencyKey: fullEvent.idempotencyKey || `${fullEvent.missionId}:${fullEvent.type}:${fullEvent.id}`,
+    ...(fullEvent.agentId ? { agentId: fullEvent.agentId } : {}),
+    ...(fullEvent.evidence ? { evidence: fullEvent.evidence } : {}),
+  }
+  void appendMissionEventLedger(ledgerEvent).catch((error) => {
+    console.warn('[missions] failed to append mission event ledger:', error)
+  })
+}
+
+function missionRecordSnapshot(mission: Mission, reason: string): MissionRecordSnapshot {
+  const updatedAt = new Date().toISOString()
+  return {
+    ...mission,
+    missionId: mission.id,
+    updatedAt,
+    persistedAt: updatedAt,
+    persistReason: reason,
+    scheduler: {
+      ...mission.scheduler,
+      jobs: mission.scheduler.jobs.map((job) => ({ ...job })),
+    },
+    party: [...mission.party],
+  }
+}
+
+function persistMissionRecord(mission: Mission, reason: string) {
+  void appendMissionRecordLedger(missionRecordSnapshot(mission, reason)).catch((error) => {
+    console.warn('[missions] failed to append mission record ledger:', error)
+  })
+}
+
+async function persistAllMissionRecords(reason: string) {
+  await Promise.allSettled(Array.from(missions.values()).map((mission) => appendMissionRecordLedger(missionRecordSnapshot(mission, reason))))
+}
+
+function transitionMissionState(
+  mission: Mission,
+  nextState: MissionLifecycleState,
+  type: MissionFeedEvent['type'],
+  message: string,
+  options: {
+    actor?: string
+    idempotencyKey?: string
+    evidence?: Record<string, unknown>
+  } = {},
+) {
+  const previousState = mission.lifecycleState
+  mission.lifecycleState = nextState
+  pushMissionEvent({
+    missionId: mission.id,
+    type,
+    message,
+    actor: options.actor || 'control-center',
+    previousState,
+    nextState,
+    idempotencyKey: options.idempotencyKey || `${mission.id}:${previousState}->${nextState}:${type}`,
+    ...(options.evidence ? { evidence: options.evidence } : {}),
+  })
+  persistMissionRecord(mission, `transition:${previousState}->${nextState}`)
+}
+
+function stringValue(value: unknown): string | null {
+  return typeof value === 'string' && value.trim() ? value.trim() : null
+}
+
+function numberValue(value: unknown): number | null {
+  return typeof value === 'number' && Number.isFinite(value) ? value : null
+}
+
+function arrayValue(value: unknown): unknown[] {
+  return Array.isArray(value) ? value : []
+}
+
+function normalizeMissionMode(value: unknown): MissionMode {
+  return value === 'instant' || value === 'hours' || value === 'days' || value === 'weeks' || value === 'continuous' || value === 'indefinite'
+    ? value
+    : 'instant'
+}
+
+function normalizeMissionStatus(value: unknown): MissionStatus {
+  return value === 'completed' || value === 'cancelled' ? value : 'active'
+}
+
+function lifecycleStateFromStatus(status: MissionStatus): MissionLifecycleState {
+  if (status === 'completed') return 'completed'
+  if (status === 'cancelled') return 'cancelled'
+  return 'running'
+}
+
+function normalizeMissionLifecycleState(value: unknown, status: MissionStatus): MissionLifecycleState {
+  return value === 'draft' ||
+    value === 'validating' ||
+    value === 'scheduled' ||
+    value === 'dispatching' ||
+    value === 'running' ||
+    value === 'verifying' ||
+    value === 'completed' ||
+    value === 'failed' ||
+    value === 'cancelled'
+    ? value
+    : lifecycleStateFromStatus(status)
+}
+
+function normalizeMissionCronRole(value: unknown): MissionCronRole {
+  return value === 'leader' || value === 'reviewer' ? value : 'worker'
+}
+
+function normalizeMissionCronJobStatus(value: unknown): MissionCronJobStatus {
+  return value === 'created' || value === 'running' || value === 'completed' || value === 'failed' || value === 'disabled' || value === 'removed'
+    ? value
+    : 'created'
+}
+
+function normalizeMissionCronJob(value: unknown, missionId: string): MissionCronJob | null {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return null
+  const record = value as Record<string, unknown>
+  const id = stringValue(record.id)
+  const cronId = stringValue(record.cronId)
+  const agentId = stringValue(record.agentId)
+  if (!id || !cronId || !agentId) return null
+  return {
+    id,
+    cronId,
+    missionId: stringValue(record.missionId) || missionId,
+    agentId,
+    role: normalizeMissionCronRole(record.role),
+    round: Math.max(0, Math.round(numberValue(record.round) || 0)),
+    name: stringValue(record.name) || `mission-${missionId}-${agentId}`,
+    status: normalizeMissionCronJobStatus(record.status),
+    createdAt: stringValue(record.createdAt) || new Date().toISOString(),
+    startedAt: stringValue(record.startedAt),
+    endedAt: stringValue(record.endedAt),
+    summary: stringValue(record.summary),
+    runtimeRunId: stringValue(record.runtimeRunId),
+    cronRunId: stringValue(record.cronRunId) || stringValue(record.runId),
+    sessionId: stringValue(record.sessionId),
+    sessionKey: stringValue(record.sessionKey),
+  }
+}
+
+function normalizeMissionSchedulerState(value: unknown, missionId: string, party: string[], cadenceSeconds?: number | null): MissionSchedulerState {
+  const record = value && typeof value === 'object' && !Array.isArray(value) ? value as Record<string, unknown> : {}
+  const fallback = missionSchedulerInitialState({ party, cadenceSeconds })
+  const status = record.status
+  const schedulerStatus: MissionSchedulerState['status'] =
+    status === 'idle' ||
+    status === 'running' ||
+    status === 'waiting' ||
+    status === 'completed' ||
+    status === 'failed' ||
+    status === 'stopping' ||
+    status === 'stopped'
+      ? status
+      : fallback.status
+  return {
+    engine: 'openclaw-cron',
+    policy: 'leader-first',
+    status: schedulerStatus,
+    round: Math.max(0, Math.round(numberValue(record.round) || fallback.round)),
+    cycleIntervalMs: Math.max(15_000, Math.round(numberValue(record.cycleIntervalMs) || fallback.cycleIntervalMs)),
+    nextRoundAt: stringValue(record.nextRoundAt),
+    maxCycles: numberValue(record.maxCycles),
+    leaderAgentId: stringValue(record.leaderAgentId) || fallback.leaderAgentId,
+    activeJobId: stringValue(record.activeJobId),
+    jobs: arrayValue(record.jobs)
+      .map((job) => normalizeMissionCronJob(job, missionId))
+      .filter((job): job is MissionCronJob => Boolean(job)),
+    lastError: stringValue(record.lastError),
+  }
+}
+
+function normalizeMissionRecordSnapshot(value: unknown): Mission | null {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return null
+  const record = value as Record<string, unknown>
+  const id = stringValue(record.id) || stringValue(record.missionId)
+  const title = stringValue(record.title)
+  const brief = stringValue(record.brief)
+  if (!id || !title || !brief) return null
+  const party = arrayValue(record.party).map((agentId) => stringValue(agentId)).filter((agentId): agentId is string => Boolean(agentId))
+  if (!party.length) return null
+  const status = normalizeMissionStatus(record.status)
+  const mode = normalizeMissionMode(record.mode)
+  const cadenceSeconds = numberValue(record.cadenceSeconds)
+  return {
+    id,
+    ...(stringValue(record.idempotencyKey) ? { idempotencyKey: stringValue(record.idempotencyKey) || undefined } : {}),
+    title,
+    brief,
+    mode,
+    amount: numberValue(record.amount),
+    ...(stringValue(record.missionType) ? { missionType: stringValue(record.missionType) || undefined } : {}),
+    ...(stringValue(record.collaborationMode) ? { collaborationMode: stringValue(record.collaborationMode) || undefined } : {}),
+    ...(numberValue(record.complexity) !== null ? { complexity: numberValue(record.complexity) || 0 } : {}),
+    ...(numberValue(record.riskTolerance) !== null ? { riskTolerance: numberValue(record.riskTolerance) || 0 } : {}),
+    ...(cadenceSeconds !== null ? { cadenceSeconds } : {}),
+    startAt: stringValue(record.startAt) || stringValue(record.createdAt) || new Date().toISOString(),
+    endAt: stringValue(record.endAt),
+    status,
+    lifecycleState: normalizeMissionLifecycleState(record.lifecycleState, status),
+    party,
+    createdAt: stringValue(record.createdAt) || stringValue(record.startAt) || new Date().toISOString(),
+    completedAt: stringValue(record.completedAt),
+    scheduler: normalizeMissionSchedulerState(record.scheduler, id, party, cadenceSeconds),
+  }
+}
+
+function normalizeMissionLaunchIdempotencyKey(value: unknown): string | null {
+  if (typeof value !== 'string') return null
+  const trimmed = value.trim()
+  return trimmed.length >= 8 && trimmed.length <= 160 ? trimmed : null
+}
+
+function findMissionByIdempotencyKey(idempotencyKey: string | null): Mission | null {
+  if (!idempotencyKey) return null
+  return Array.from(missions.values())
+    .filter((mission) => mission.idempotencyKey === idempotencyKey)
+    .sort((a, b) => Date.parse(b.createdAt) - Date.parse(a.createdAt))[0] || null
+}
+
+function missionAssignmentsFromRecord(mission: Mission): TeamSyncAssignment[] {
+  const terminalStatus = mission.status === 'completed' ? 'completed' : mission.status === 'cancelled' ? 'cancelled' : 'queued'
+  return mission.party.map((agentId) => ({
+    agentId,
+    task: mission.brief,
+    status: terminalStatus,
+    updatedAt: new Date().toISOString(),
+    note: `rehydrated mission record (${mission.lifecycleState})`,
+  }))
+}
+
+function missionCronJobNeedsRecovery(job: MissionCronJob) {
+  return job.status === 'created' || job.status === 'running'
+}
+
+function failRehydratedMissionScheduler(
+  mission: Mission,
+  reason: string,
+  evidence: {
+    missingCronIds: string[]
+    disabledCronIds: string[]
+    affectedJobIds: string[]
+  },
+) {
+  const completedAt = new Date().toISOString()
+  mission.status = 'cancelled'
+  mission.completedAt = completedAt
+  mission.endAt ||= completedAt
+  mission.scheduler.status = 'failed'
+  mission.scheduler.nextRoundAt = null
+  mission.scheduler.activeJobId = null
+  mission.scheduler.lastError = reason
+  clearMissionController(mission.id)
+  transitionMissionState(mission, 'failed', 'mission_cancelled', `Mission scheduler reconciliation failed: ${reason}`, {
+    actor: 'recovery',
+    idempotencyKey: `${mission.id}:cron-reconciliation-failed:${CONTROL_CENTER_STARTED_AT_MS}`,
+    evidence,
+  })
+  recordMissionReport(mission)
+}
+
+function reconcileRehydratedMissionCronJobs(mission: Mission, cronState: MissionCronReconciliationSnapshot) {
+  const pendingJobs = mission.scheduler.jobs.filter(missionCronJobNeedsRecovery)
+  if (!pendingJobs.length) return true
+
+  if (!cronState.available) {
+    pushGatewayLog('lifecycle', `mission cron reconciliation skipped for ${mission.id}: ${cronState.error || 'OpenClaw cron state unavailable'}`)
+    return true
+  }
+
+  const missingCronIds: string[] = []
+  const disabledCronIds: string[] = []
+  const affectedJobIds: string[] = []
+  const endedAt = new Date().toISOString()
+
+  for (const job of pendingJobs) {
+    if (cronState.activeCronIds.has(job.cronId)) continue
+    affectedJobIds.push(job.id)
+    if (cronState.disabledCronIds.has(job.cronId)) {
+      disabledCronIds.push(job.cronId)
+      job.status = 'disabled'
+      job.summary = 'OpenClaw cron job was disabled during startup reconciliation.'
+    } else {
+      missingCronIds.push(job.cronId)
+      job.status = 'removed'
+      job.summary = 'OpenClaw cron job was missing during startup reconciliation.'
+    }
+    job.endedAt ||= endedAt
+    clearShiftRuntimeStateForCronId(job.cronId)
+  }
+
+  if (!affectedJobIds.length) return true
+
+  const reason = [
+    missingCronIds.length ? `${missingCronIds.length} missing cron job(s)` : '',
+    disabledCronIds.length ? `${disabledCronIds.length} disabled cron job(s)` : '',
+  ].filter(Boolean).join('; ')
+  failRehydratedMissionScheduler(mission, reason || 'mission cron jobs are no longer active', {
+    missingCronIds,
+    disabledCronIds,
+    affectedJobIds,
+  })
+  return false
+}
+
+function runtimeRunRecordById(id: string | null | undefined): OpenClawRunRecord | null {
+  const cleanId = typeof id === 'string' ? id.trim() : ''
+  if (!cleanId) return null
+  return activeOpenClawRuns.get(cleanId) || recentOpenClawRuns.find((run) => run.id === cleanId) || null
+}
+
+function missionGatewaySessionReconciliationCandidates(mission: Mission) {
+  return mission.scheduler.jobs
+    .filter(missionCronJobNeedsRecovery)
+    .filter((job) => Boolean(job.runtimeRunId || job.cronRunId || job.sessionId || job.sessionKey))
+    .slice(0, 80)
+}
+
+function gatewayErrorLooksNotFound(error: unknown) {
+  const record = isLooseRecord(error) ? error : {}
+  const code = typeof record.gatewayCode === 'string' ? record.gatewayCode : typeof record.code === 'string' ? record.code : ''
+  const message = error instanceof Error ? error.message : String(error || '')
+  return /not[_-]?found|missing|unknown/i.test(code) || /\b(not\s*found|missing|unknown)\b/i.test(message)
+}
+
+function missionGatewaySessionDetail(
+  job: MissionCronJob,
+  gatewayStatus: MissionGatewaySessionReconciliationStatus,
+  runtimeStatus: MissionRuntimeReconciliationStatus,
+  detail?: string,
+): MissionGatewaySessionReconciliationDetail {
+  return {
+    jobId: job.id,
+    cronId: job.cronId,
+    agentId: job.agentId,
+    runtimeRunId: job.runtimeRunId,
+    cronRunId: job.cronRunId,
+    sessionId: job.sessionId,
+    sessionKey: job.sessionKey,
+    gatewayStatus,
+    runtimeStatus,
+    ...(detail ? { detail: redactSensitiveText(trimTask(detail, 500)) } : {}),
+  }
+}
+
+function summarizeMissionGatewaySessionReconciliation(details: MissionGatewaySessionReconciliationDetail[], gatewayAvailable: boolean, error?: string): MissionGatewaySessionReconciliationResult {
+  const result: MissionGatewaySessionReconciliationResult = {
+    available: gatewayAvailable,
+    checked: details.length,
+    sessionChecked: details.filter((detail) => Boolean(detail.sessionKey)).length,
+    verified: details.filter((detail) => detail.gatewayStatus === 'verified').length,
+    missing: details.filter((detail) => detail.gatewayStatus === 'missing').length,
+    unavailable: details.filter((detail) => detail.gatewayStatus === 'unavailable').length,
+    notChecked: details.filter((detail) => detail.gatewayStatus === 'not-checked').length,
+    runtimeRunning: details.filter((detail) => detail.runtimeStatus === 'running').length,
+    runtimeCompleted: details.filter((detail) => detail.runtimeStatus === 'completed').length,
+    runtimeFailed: details.filter((detail) => detail.runtimeStatus === 'failed').length,
+    runtimeTimedOut: details.filter((detail) => detail.runtimeStatus === 'timeout').length,
+    runtimeAborted: details.filter((detail) => detail.runtimeStatus === 'aborted').length,
+    runtimeInterrupted: details.filter((detail) => detail.runtimeStatus === 'interrupted').length,
+    runtimeUnknown: details.filter((detail) => detail.runtimeStatus === 'unknown').length,
+    details,
+  }
+  if (error) result.error = redactSensitiveText(trimTask(error, 500))
+  return result
+}
+
+function missionGatewaySessionReconciliationMessage(mission: Mission, result: MissionGatewaySessionReconciliationResult) {
+  if (!result.checked) return ''
+  if (!result.available) {
+    return `Mission Gateway session reconciliation deferred for ${mission.title}: Gateway unavailable for ${result.sessionChecked} session reference(s)`
+  }
+  const parts = [
+    `${result.checked} referenced job(s) checked`,
+    result.verified ? `${result.verified} session(s) verified` : '',
+    result.missing ? `${result.missing} session(s) missing` : '',
+    result.notChecked ? `${result.notChecked} job(s) without session key` : '',
+    result.runtimeInterrupted ? `${result.runtimeInterrupted} runtime run(s) interrupted` : '',
+    result.runtimeTimedOut ? `${result.runtimeTimedOut} runtime run(s) timed out` : '',
+    result.runtimeFailed ? `${result.runtimeFailed} runtime run(s) failed` : '',
+  ].filter(Boolean)
+  return `Mission Gateway session reconciliation for ${mission.title}: ${parts.join('; ')}`
+}
+
+function shouldRecordMissionGatewaySessionReconciliation(result: MissionGatewaySessionReconciliationResult) {
+  return result.checked > 0 || !result.available || Boolean(result.error)
+}
+
+async function reconcileMissionGatewaySessions(mission: Mission): Promise<MissionGatewaySessionReconciliationResult> {
+  const candidates = missionGatewaySessionReconciliationCandidates(mission)
+  if (!candidates.length) return summarizeMissionGatewaySessionReconciliation([], true)
+
+  const runtimeStatuses = new Map<string, MissionRuntimeReconciliationStatus>()
+  for (const job of candidates) {
+    runtimeStatuses.set(job.id, runtimeRunRecordById(job.runtimeRunId)?.status || 'unknown')
+  }
+
+  const jobsWithSessionKeys = candidates.filter((job) => Boolean(job.sessionKey))
+  if (!jobsWithSessionKeys.length) {
+    return summarizeMissionGatewaySessionReconciliation(
+      candidates.map((job) => missionGatewaySessionDetail(job, 'not-checked', runtimeStatuses.get(job.id) || 'unknown', 'No durable Gateway session key was recorded for this job.')),
+      true,
+    )
+  }
+
+  let state: GatewayClientState
+  try {
+    state = gatewayClientState?.ready
+      ? gatewayClientState
+      : await ensureControlCenterGatewayClient(AbortSignal.timeout(5_000))
+  } catch (error) {
+    const detail = redactSensitiveText(String(error))
+    return summarizeMissionGatewaySessionReconciliation(
+      candidates.map((job) => missionGatewaySessionDetail(
+        job,
+        job.sessionKey ? 'unavailable' : 'not-checked',
+        runtimeStatuses.get(job.id) || 'unknown',
+        job.sessionKey ? detail : 'No durable Gateway session key was recorded for this job.',
+      )),
+      false,
+      detail,
+    )
+  }
+
+  const details: MissionGatewaySessionReconciliationDetail[] = []
+  for (const job of candidates) {
+    const runtimeStatus = runtimeStatuses.get(job.id) || 'unknown'
+    if (!job.sessionKey) {
+      details.push(missionGatewaySessionDetail(job, 'not-checked', runtimeStatus, 'No durable Gateway session key was recorded for this job.'))
+      continue
+    }
+    try {
+      const payload = await state.client.request('sessions.describe', { key: job.sessionKey }, { timeoutMs: 3_000 })
+      if (isLooseRecord(payload) && payload.ok === false) {
+        const errorText = typeof payload.error === 'string' ? payload.error : 'sessions.describe returned ok=false'
+        details.push(missionGatewaySessionDetail(job, gatewayErrorLooksNotFound(errorText) ? 'missing' : 'unavailable', runtimeStatus, errorText))
+        continue
+      }
+      details.push(missionGatewaySessionDetail(job, 'verified', runtimeStatus))
+    } catch (error) {
+      details.push(missionGatewaySessionDetail(
+        job,
+        gatewayErrorLooksNotFound(error) ? 'missing' : 'unavailable',
+        runtimeStatus,
+        String(error),
+      ))
+    }
+  }
+
+  return summarizeMissionGatewaySessionReconciliation(details, details.every((detail) => detail.gatewayStatus !== 'unavailable'))
+}
+
+function rehydrateRecurringMissionShifts(mission: Mission, cronState: MissionCronReconciliationSnapshot) {
+  const every = missionCronEvery(mission.cadenceSeconds)
+  for (const job of mission.scheduler.jobs) {
+    if (!missionCronJobNeedsRecovery(job)) continue
+    if (cronState.available && !cronState.activeCronIds.has(job.cronId)) continue
+    activeShifts.set(`mission:${job.id}`, {
+      id: `mission:${job.id}`,
+      name: job.name,
+      agent: job.agentId,
+      every,
+      durationMinutes: missionRemainingDurationMinutes(mission),
+      message: `Rehydrated mission cron pulse for ${mission.title}`,
+      model: undefined,
+      thinking: 'medium',
+      timeoutSeconds: TIMED_MISSION_AGENT_TIMEOUT_SECONDS,
+      wake: 'now',
+      session: 'isolated',
+      announce: false,
+      cronId: job.cronId,
+      startedAt: job.createdAt,
+      endsAt: mission.endAt,
+    })
+  }
+}
+
+function armRehydratedMissionTimer(mission: Mission, assignments: TeamSyncAssignment[], activity: string[]) {
+  if (mission.status !== 'active') return
+  if (mission.endAt) {
+    const remainingMs = Date.parse(mission.endAt) - Date.now()
+    if (Number.isFinite(remainingMs) && remainingMs > 0) {
+      const timer = setTimeout(() => {
+        const target = missions.get(mission.id)
+        if (!target || target.status !== 'active') return
+        missionTimers.delete(mission.id)
+        void completeCronMission(target, 'completed', `Mission completed by rehydrated cron timer: ${target.title}`, assignments, activity)
+      }, remainingMs)
+      missionTimers.set(mission.id, timer)
+    } else {
+      void completeCronMission(mission, 'completed', `Mission completed during restart recovery: ${mission.title}`, assignments, activity)
+    }
+  }
+
+  if (mission.mode === 'instant') {
+    const nextRoundAtMs = mission.scheduler.nextRoundAt ? Date.parse(mission.scheduler.nextRoundAt) : NaN
+    const delayMs = Number.isFinite(nextRoundAtMs) ? Math.max(0, nextRoundAtMs - Date.now()) : 0
+    scheduleNextMissionRound(mission, assignments, activity, delayMs)
+  }
+}
+
+async function hydrateMissionRecordsFromLedger() {
+  const records = await readMissionRecordLedgerTail<MissionRecordSnapshot>(500)
+  if (!records.length) return
+  const latestByMission = new Map<string, Mission>()
+  for (const record of records) {
+    const mission = normalizeMissionRecordSnapshot(record)
+    if (!mission) continue
+    latestByMission.set(mission.id, mission)
+  }
+  let restored = 0
+  let activeRestored = 0
+  const cronState = listMissionCronReconciliationSnapshotFromStateDb()
+  for (const mission of latestByMission.values()) {
+    missions.set(mission.id, mission)
+    restored += 1
+    if (mission.status === 'active') {
+      activeRestored += 1
+      const assignments = missionAssignmentsFromRecord(mission)
+      const activity = [`${new Date().toISOString()} | mission rehydrated from durable record`]
+      const schedulerRecovered = reconcileRehydratedMissionCronJobs(mission, cronState)
+      if (!schedulerRecovered) continue
+      const gatewaySessionReconciliation = await reconcileMissionGatewaySessions(mission)
+      if (shouldRecordMissionGatewaySessionReconciliation(gatewaySessionReconciliation)) {
+        pushMissionEvent({
+          missionId: mission.id,
+          type: 'agent_update',
+          message: missionGatewaySessionReconciliationMessage(mission, gatewaySessionReconciliation),
+          actor: 'recovery',
+          previousState: mission.lifecycleState,
+          nextState: mission.lifecycleState,
+          idempotencyKey: `${mission.id}:gateway-session-reconciled:${CONTROL_CENTER_STARTED_AT_MS}`,
+          evidence: {
+            gatewaySessionReconciliation,
+          },
+        })
+        persistMissionRecord(mission, 'gateway-session-reconciled')
+      }
+      rehydrateRecurringMissionShifts(mission, cronState)
+      armRehydratedMissionTimer(mission, assignments, activity)
+      pushMissionEvent({
+        missionId: mission.id,
+        type: 'agent_update',
+        message: `Mission rehydrated from durable record: ${mission.title}`,
+        actor: 'recovery',
+        previousState: mission.lifecycleState,
+        nextState: mission.lifecycleState,
+        idempotencyKey: `${mission.id}:rehydrated:${CONTROL_CENTER_STARTED_AT_MS}`,
+        evidence: {
+          schedulerStatus: mission.scheduler.status,
+          jobs: mission.scheduler.jobs.length,
+          cronReconciliation: cronState.available ? 'verified' : 'unavailable',
+          ...(cronState.error ? { cronReconciliationError: cronState.error } : {}),
+        },
+      })
+    }
+  }
+  if (restored) {
+    pushGatewayLog('lifecycle', `rehydrated ${restored} mission record(s) from the ledger after restart (${activeRestored} active)`)
+  }
+}
+
+function numberOrNull(value: number | null | undefined) {
+  return typeof value === 'number' && Number.isFinite(value) ? value : null
+}
+
+function clampMissionScore(value: number) {
+  if (!Number.isFinite(value)) return null
+  return Math.max(0, Math.min(100, Math.round(value)))
+}
+
+function missionWallTimeMs(mission: Mission) {
+  const started = Date.parse(mission.startAt)
+  const ended = Date.parse(mission.completedAt || mission.endAt || '')
+  if (!Number.isFinite(started) || !Number.isFinite(ended)) return null
+  return Math.max(0, ended - started)
+}
+
+function missionReportUnavailableMetrics(report: Pick<BackendMissionReport, 'efficiencyRating' | 'soulDrift' | 'heartbeatStabilityScore' | 'runtimeEfficiency' | 'errors' | 'xpGained'>) {
+  return ([
+    ['efficiencyRating', report.efficiencyRating],
+    ['soulDrift', report.soulDrift],
+    ['heartbeatStabilityScore', report.heartbeatStabilityScore],
+    ['runtimeEfficiency', report.runtimeEfficiency],
+    ['errors', report.errors],
+    ['xpGained', report.xpGained],
+  ] as const)
+    .filter(([, value]) => value === null)
+    .map(([key]) => key)
+}
+
+function buildBackendMissionReport(mission: Mission, events: MissionFeedEvent[] = missionFeed): BackendMissionReport {
+  const missionEvents = events.filter((event) => event.missionId === mission.id)
+  const jobs = mission.scheduler.jobs
+  const terminalJobs = jobs.filter((job) => job.status === 'completed' || job.status === 'failed')
+  const completedRuns = terminalJobs.filter((job) => job.status === 'completed').length
+  const failedRuns = terminalJobs.filter((job) => job.status === 'failed').length
+  const terminalRuns = completedRuns + failedRuns
+  const runtimeRunIds = Array.from(new Set(jobs.map((job) => job.runtimeRunId).filter((value): value is string => Boolean(value))))
+  const cronRunIds = Array.from(new Set(jobs.map((job) => job.cronRunId).filter((value): value is string => Boolean(value))))
+  const sessionIds = Array.from(new Set(jobs.map((job) => job.sessionId).filter((value): value is string => Boolean(value))))
+  const sessionKeys = Array.from(new Set(jobs.map((job) => job.sessionKey).filter((value): value is string => Boolean(value))))
+  const hasRuntimeEvidence = runtimeRunIds.length > 0 || cronRunIds.length > 0 || sessionIds.length > 0 || sessionKeys.length > 0
+  const verificationFailures = missionEvents.filter((event) => /\b(verification|acceptance|test|build)\b.*\b(fail|failed|failure|error)\b/i.test(event.message)).length
+  const commandFailures = missionEvents.filter((event) => /\b(command|cron|openclaw)\b.*\b(fail|failed|error)\b/i.test(event.message)).length
+  const retryCount = missionEvents.filter((event) => /\bretry(?:ing| attempts?)?\b/i.test(event.message)).length
+  const fallbackCount = missionEvents.filter((event) => /\bfallback|fall back\b/i.test(event.message)).length
+  const cancelledRuns = mission.lifecycleState === 'cancelled' ? Math.max(1, mission.party.length) : 0
+  const acceptedRuns = Math.max(
+    mission.party.length,
+    missionEvents.filter((event) => event.type === 'agent_assigned').length,
+  )
+  const startedRuns = Math.max(
+    jobs.filter((job) => job.startedAt).length,
+    missionEvents.filter((event) => /\b(round|started|running)\b/i.test(event.message)).length,
+  )
+  const startedTimes = jobs
+    .map((job) => (job.startedAt ? Date.parse(job.startedAt) : null))
+    .filter((value): value is number => typeof value === 'number' && Number.isFinite(value))
+  const totalExecutionDurationMs = terminalJobs.length
+    ? terminalJobs.reduce((total, job) => {
+        const started = job.startedAt ? Date.parse(job.startedAt) : NaN
+        const ended = job.endedAt ? Date.parse(job.endedAt) : NaN
+        return total + (Number.isFinite(started) && Number.isFinite(ended) ? Math.max(0, ended - started) : 0)
+      }, 0)
+    : null
+  const queueDelayMs = startedTimes.length
+    ? Math.round(startedTimes.reduce((total, value) => total + Math.max(0, value - Date.parse(mission.createdAt)), 0) / startedTimes.length)
+    : null
+  const runtimeEfficiency = terminalRuns ? clampMissionScore((completedRuns / terminalRuns) * 100 - retryCount * 3 - commandFailures * 5) : null
+  const efficiencyRating = terminalRuns ? clampMissionScore((completedRuns / terminalRuns) * 100 - retryCount * 3 - verificationFailures * 10 - commandFailures * 4) : null
+  const heartbeatStabilityScore = clampMissionScore(100 - failedRuns * 8 - cancelledRuns * 8 - retryCount * 3 - fallbackCount * 4)
+  const errors = missionEvents.length || terminalRuns ? failedRuns + verificationFailures + commandFailures : null
+  const baseReport = {
+    efficiencyRating,
+    soulDrift: null,
+    heartbeatStabilityScore,
+    runtimeEfficiency,
+    errors,
+    xpGained: null,
+  }
+  return {
+    id: `mission-report:${mission.id}`,
+    missionId: mission.id,
+    generatedAt: new Date().toISOString(),
+    ...baseReport,
+    skillUnlocks: [],
+    evidence: {
+      source: hasRuntimeEvidence && missionEvents.length ? 'mixed' : hasRuntimeEvidence ? 'runtime-responses' : missionEvents.length || jobs.length ? 'mission-feed' : 'none',
+      acceptedRuns,
+      startedRuns,
+      completedRuns,
+      failedRuns,
+      cancelledRuns,
+      timedOutRuns: 0,
+      retryCount,
+      fallbackCount,
+      verificationFailures,
+      toolFailures: 0,
+      commandFailures,
+      humanInterventions: missionEvents.filter((event) => event.actor === 'operator').length,
+      agentParticipation: Array.from(new Set([
+        ...jobs.map((job) => job.agentId),
+        ...missionEvents.map((event) => event.agentId).filter((agentId): agentId is string => Boolean(agentId)),
+      ])).filter((agentId) => mission.party.includes(agentId)),
+      queueDelayMs: numberOrNull(queueDelayMs),
+      timeToFirstTokenMs: null,
+      totalExecutionDurationMs: numberOrNull(totalExecutionDurationMs),
+      missionWallTimeMs: missionWallTimeMs(mission),
+      tokenUsageEstimate: null,
+      runtimeRunIds,
+      cronRunIds,
+      sessionIds,
+      sessionKeys,
+      unavailableMetrics: missionReportUnavailableMetrics(baseReport),
+    },
+  }
+}
+
+function recordMissionReport(mission: Mission) {
+  const report = buildBackendMissionReport(mission)
+  missionReports.set(mission.id, report)
+  void appendMissionReportLedger(report).catch((error) => {
+    console.warn('[missions] failed to append mission report ledger:', error)
+  })
+  return report
+}
+
+async function listMissionReports(limit = 80): Promise<BackendMissionReport[]> {
+  const persisted = await readMissionReportLedgerTail<BackendMissionReport>(limit).catch(() => [])
+  const byMission = new Map<string, BackendMissionReport>()
+  for (const report of persisted) byMission.set(report.missionId, report)
+  for (const report of missionReports.values()) byMission.set(report.missionId, report)
+  return Array.from(byMission.values())
+    .sort((a, b) => Date.parse(b.generatedAt) - Date.parse(a.generatedAt))
+    .slice(0, limit)
 }
 
 function parseCronIdFromOutput(stdout: string) {
@@ -13195,9 +14504,14 @@ async function createMissionCronJob(params: {
     startedAt: null,
     endedAt: null,
     summary: null,
+    runtimeRunId: null,
+    cronRunId: null,
+    sessionId: null,
+    sessionKey: null,
   }
   mission.scheduler.jobs.unshift(job)
   if (mission.scheduler.jobs.length > 160) mission.scheduler.jobs.length = 160
+  persistMissionRecord(mission, `cron-job-created:${job.id}`)
   pushMissionEvent({
     missionId: mission.id,
     type: role === 'worker' ? 'agent_assigned' : 'agent_update',
@@ -13280,9 +14594,14 @@ async function createRecurringMissionCronJob(params: {
     startedAt: null,
     endedAt: null,
     summary: null,
+    runtimeRunId: null,
+    cronRunId: null,
+    sessionId: null,
+    sessionKey: null,
   }
   mission.scheduler.jobs.unshift(job)
   if (mission.scheduler.jobs.length > 160) mission.scheduler.jobs.length = 160
+  persistMissionRecord(mission, `recurring-cron-job-created:${job.id}`)
   activeShifts.set(`mission:${job.id}`, {
     id: `mission:${job.id}`,
     name,
@@ -13309,7 +14628,37 @@ async function createRecurringMissionCronJob(params: {
   return job
 }
 
-async function removeMissionCronJob(job: MissionCronJob, signal?: AbortSignal) {
+function missionCronCleanupResult(
+  job: MissionCronJob,
+  previousStatus: MissionCronJobStatus,
+  ok: boolean,
+  action: MissionCronCleanupResult['action'],
+  detail: string | null = null,
+): MissionCronCleanupResult {
+  return {
+    jobId: job.id,
+    cronId: job.cronId,
+    agentId: job.agentId,
+    previousStatus,
+    status: job.status,
+    ok,
+    action,
+    detail,
+  }
+}
+
+function summarizeMissionCronCleanupResults(results: MissionCronCleanupResult[]): MissionCronCleanupSummary {
+  return {
+    attempted: results.length,
+    removed: results.filter((result) => result.action === 'removed').length,
+    disabled: results.filter((result) => result.action === 'disabled').length,
+    failed: results.filter((result) => !result.ok).length,
+    results,
+  }
+}
+
+async function removeMissionCronJob(job: MissionCronJob, signal?: AbortSignal): Promise<MissionCronCleanupResult> {
+  const previousStatus = job.status
   const remove = await runOpenClaw(['cron', 'rm', job.cronId, '--json'], 45000, { signal }).catch((error) => ({
     stdout: '',
     stderr: String(error),
@@ -13318,7 +14667,7 @@ async function removeMissionCronJob(job: MissionCronJob, signal?: AbortSignal) {
   if (remove.code === 0 || /not\s*found|missing|unknown/i.test(`${remove.stdout}\n${remove.stderr}`)) {
     job.status = job.status === 'completed' || job.status === 'failed' ? job.status : 'removed'
     clearShiftRuntimeStateForCronId(job.cronId)
-    return
+    return missionCronCleanupResult(job, previousStatus, true, 'removed')
   }
   const disable = await runOpenClaw(['cron', 'disable', job.cronId], 45000, { signal }).catch((error) => ({
     stdout: '',
@@ -13328,7 +14677,13 @@ async function removeMissionCronJob(job: MissionCronJob, signal?: AbortSignal) {
   if (disable.code === 0) {
     job.status = 'disabled'
     clearShiftRuntimeStateForCronId(job.cronId)
+    return missionCronCleanupResult(job, previousStatus, true, 'disabled')
   }
+  const detail = redactSensitiveText(trimTask(`${remove.stderr || remove.stdout || ''}\n${disable.stderr || disable.stdout || ''}`.trim() || 'OpenClaw cron cleanup failed', 500))
+  if (job.status !== 'completed' && job.status !== 'failed') job.status = 'failed'
+  job.endedAt ||= new Date().toISOString()
+  job.summary = detail
+  return missionCronCleanupResult(job, previousStatus, false, 'unchanged', detail)
 }
 
 async function runMissionCronJob(job: MissionCronJob, signal?: AbortSignal) {
@@ -13342,6 +14697,7 @@ async function runMissionCronJob(job: MissionCronJob, signal?: AbortSignal) {
   job.status = 'running'
   job.startedAt = new Date().toISOString()
   mission.scheduler.activeJobId = job.id
+  persistMissionRecord(mission, `cron-job-running:${job.id}`)
   pushMissionEvent({
     missionId: mission.id,
     type: 'agent_update',
@@ -13353,12 +14709,17 @@ async function runMissionCronJob(job: MissionCronJob, signal?: AbortSignal) {
     ['cron', 'run', job.cronId, '--wait', '--expect-final', '--wait-timeout', waitTimeout, '--timeout', String((runtime.timeoutSeconds + 90) * 1000)],
     (runtime.timeoutSeconds + 120) * 1000,
     { cwd: runCwdForContext(context), envOverrides, signal },
-  ).catch((error) => ({ stdout: '', stderr: String(error), code: 1 }))
+  ).catch(openClawErrorResult)
   await clearDisallowedAutoModelOverridesForAgent(job.agentId).catch(() => undefined)
   const exitOk = result.code === 0
   const rawExtractedReply = extractAgentReply(result.stdout, result.stderr)
   const rawCredibleReply = isCredibleMissionCronFinalReply(rawExtractedReply)
-  const cronRunSessionId = extractCronRunSessionId(result.stdout, result.stderr)
+  const cronRunReference = extractCronRunReference(result.stdout, result.stderr)
+  job.runtimeRunId = result.controlCenterRunId || null
+  job.cronRunId = cronRunReference.cronRunId
+  job.sessionId = cronRunReference.sessionId
+  job.sessionKey = cronRunReference.sessionKey
+  const cronRunSessionId = cronRunReference.sessionId || ''
   const recoveredReply = exitOk || rawCredibleReply
     ? ''
     : await readLatestAgentSessionFinalReply(job.agentId, cronRunSessionId, job.startedAt)
@@ -13375,11 +14736,19 @@ async function runMissionCronJob(job: MissionCronJob, signal?: AbortSignal) {
   job.endedAt = new Date().toISOString()
   job.summary = summary
   if (mission.scheduler.activeJobId === job.id) mission.scheduler.activeJobId = null
+  persistMissionRecord(mission, `cron-job-${job.status}:${job.id}`)
   pushMissionEvent({
     missionId: mission.id,
     type: 'agent_update',
     agentId: job.agentId,
     message: ok ? `${job.agentId} cron ${job.role} round ${job.round} completed: ${summary}` : `${job.agentId} cron ${job.role} round ${job.round} failed: ${summary}`,
+    evidence: {
+      cronId: job.cronId,
+      runtimeRunId: job.runtimeRunId,
+      cronRunId: job.cronRunId,
+      sessionId: job.sessionId,
+      sessionKey: job.sessionKey,
+    },
   })
   await appendAgentDailyMemory(job.agentId, `[mission:${mission.id}] cron ${job.role} round ${job.round} ${ok ? 'completed' : 'failed'} | ${trimTask(summary, 200)}`)
   await removeMissionCronJob(job, signal).catch(() => undefined)
@@ -13401,7 +14770,50 @@ function clearMissionController(missionId: string) {
 
 async function cleanupMissionCronJobs(mission: Mission) {
   const jobs = mission.scheduler.jobs.filter((job) => job.status === 'created' || job.status === 'running')
-  await Promise.allSettled(jobs.map((job) => removeMissionCronJob(job)))
+  const settled = await Promise.allSettled(jobs.map((job) => removeMissionCronJob(job)))
+  const results = settled.map((result, index) => {
+    if (result.status === 'fulfilled') return result.value
+    const job = jobs[index]
+    const detail = redactSensitiveText(trimTask(String(result.reason), 500))
+    if (job) {
+      const previousStatus = job.status
+      if (job.status !== 'completed' && job.status !== 'failed') job.status = 'failed'
+      job.endedAt ||= new Date().toISOString()
+      job.summary = detail
+      return missionCronCleanupResult(job, previousStatus, false, 'unchanged', detail)
+    }
+    return {
+      jobId: 'unknown',
+      cronId: 'unknown',
+      agentId: 'unknown',
+      previousStatus: 'failed',
+      status: 'failed',
+      ok: false,
+      action: 'unchanged',
+      detail,
+    } satisfies MissionCronCleanupResult
+  })
+  return summarizeMissionCronCleanupResults(results)
+}
+
+function missionCronCleanupFailureSummary(error: unknown): MissionCronCleanupSummary {
+  const detail = redactSensitiveText(trimTask(String(error), 500))
+  return {
+    attempted: 0,
+    removed: 0,
+    disabled: 0,
+    failed: 1,
+    results: [{
+      jobId: 'unknown',
+      cronId: 'unknown',
+      agentId: 'unknown',
+      previousStatus: 'failed',
+      status: 'failed',
+      ok: false,
+      action: 'unchanged',
+      detail,
+    }],
+  }
 }
 
 async function startRecurringMissionCronJobs(mission: Mission, assignments: TeamSyncAssignment[], activity: string[]) {
@@ -13424,6 +14836,7 @@ async function startRecurringMissionCronJobs(mission: Mission, assignments: Team
   } catch (error) {
     mission.scheduler.status = 'failed'
     mission.scheduler.lastError = String(error)
+    persistMissionRecord(mission, 'recurring-cron-setup-failed')
     await cleanupMissionCronJobs(mission).catch(() => undefined)
     throw error
   }
@@ -13438,6 +14851,7 @@ async function startRecurringMissionCronJobs(mission: Mission, assignments: Team
     assignments,
     activity,
   })
+  persistMissionRecord(mission, 'recurring-cron-armed')
 }
 
 async function completeCronMission(mission: Mission, status: MissionStatus, note: string, assignments: TeamSyncAssignment[], activity: string[]) {
@@ -13448,12 +14862,28 @@ async function completeCronMission(mission: Mission, status: MissionStatus, note
   mission.scheduler.status = status === 'completed' ? 'completed' : 'stopped'
   mission.scheduler.nextRoundAt = null
   mission.scheduler.activeJobId = null
-  await cleanupMissionCronJobs(mission).catch(() => undefined)
-  pushMissionEvent({
-    missionId: mission.id,
-    type: status === 'completed' ? 'mission_completed' : 'mission_cancelled',
-    message: note,
+  const cleanup = await cleanupMissionCronJobs(mission).catch(missionCronCleanupFailureSummary)
+  if (cleanup.failed > 0) {
+    mission.scheduler.status = 'failed'
+    mission.scheduler.lastError = `Mission cron cleanup failed for ${cleanup.failed} job(s).`
+    pushMissionEvent({
+      missionId: mission.id,
+      type: 'agent_update',
+      message: `Mission cron cleanup failed for ${cleanup.failed} job(s).`,
+      actor: 'scheduler',
+      evidence: { cleanup },
+    })
+  }
+  transitionMissionState(mission, status === 'completed' ? 'completed' : 'cancelled', status === 'completed' ? 'mission_completed' : 'mission_cancelled', note, {
+    idempotencyKey: `${mission.id}:${status}:${mission.completedAt}`,
+    evidence: {
+      round: mission.scheduler.round,
+      jobs: mission.scheduler.jobs.length,
+      failedJobs: mission.scheduler.jobs.filter((job) => job.status === 'failed').length,
+      cleanup,
+    },
   })
+  recordMissionReport(mission)
   await writeTeamSyncSnapshot({
     missionId: mission.id,
     title: mission.title,
@@ -13480,6 +14910,7 @@ function scheduleNextMissionRound(mission: Mission, assignments: TeamSyncAssignm
     void runMissionCronRound(mission.id, assignments, activity)
   }, delayMs)
   missionLoopTimers.set(mission.id, timer)
+  persistMissionRecord(mission, 'next-round-scheduled')
 }
 
 async function runMissionCronRound(missionId: string, assignments: TeamSyncAssignment[], activity: string[]) {
@@ -13504,6 +14935,16 @@ async function runMissionCronRound(missionId: string, assignments: TeamSyncAssig
   const round = mission.scheduler.round
   const leaderAgentId = mission.party[0]
   const workers = mission.party.length > 1 ? mission.party.slice(1) : mission.party.slice(0, 1)
+  transitionMissionState(mission, 'dispatching', 'agent_update', `Cron mission round ${round} dispatching.`, {
+    actor: 'scheduler',
+    idempotencyKey: `${mission.id}:round-${round}:dispatching`,
+    evidence: { round, policy: mission.scheduler.policy },
+  })
+  transitionMissionState(mission, 'running', 'agent_update', `Cron mission round ${round} running.`, {
+    actor: 'scheduler',
+    idempotencyKey: `${mission.id}:round-${round}:running`,
+    evidence: { round, partySize: mission.party.length },
+  })
   const roundTask = [
     mission.brief,
     '',
@@ -14111,7 +15552,7 @@ function rawProviderModelId(entry: unknown) {
 function migrateLegacyOpenAiCodexProviderConfig(config: OpenClawConfigFile) {
   const providers = config.models?.providers
   const openAiProvider = providers?.openai
-  if (!providers || !isLegacyOpenAiCodexProviderConfig(openAiProvider)) return
+  if (!providers || !openAiProvider || !isLegacyOpenAiCodexProviderConfig(openAiProvider)) return
 
   const remainingOpenAiModels: unknown[] = []
   for (const entry of Array.isArray(openAiProvider.models) ? openAiProvider.models : []) {
@@ -14120,7 +15561,7 @@ function migrateLegacyOpenAiCodexProviderConfig(config: OpenClawConfigFile) {
     const canonical = canonicalAgentModelId(`openai/${rawId}`)
     const { provider, model } = splitModelId(canonical)
     if (provider === 'openai' && model && isModelSafeForOpenClawConfig(canonical)) {
-      const normalizedEntry = entry && typeof entry === 'object' && !Array.isArray(entry) ? { ...(entry as Record<string, unknown>) } : { id: model, name: model }
+      const normalizedEntry: Record<string, unknown> = entry && typeof entry === 'object' && !Array.isArray(entry) ? { ...(entry as Record<string, unknown>) } : { id: model, name: model }
       normalizedEntry.id = model
       if (!normalizedEntry.name) normalizedEntry.name = model
       if (normalizedEntry.api === 'openai-chatgpt-responses') normalizedEntry.api = 'openai-responses'
@@ -14294,7 +15735,7 @@ function normalizeOpenClawConfigModelRefs(config: OpenClawConfigFile) {
   const defaults = config.agents?.defaults
   const models = defaults?.models
   if (models && typeof models === 'object' && !Array.isArray(models)) {
-    const normalizedModels: Record<string, unknown> = {}
+    const normalizedModels: Record<string, OpenClawModelAllowlistEntry> = {}
     for (const [modelId, entry] of Object.entries(models)) {
       const canonicalModelId = canonicalAgentModelId(modelId)
       if (!isModelSafeForOpenClawConfig(canonicalModelId)) continue
@@ -14351,7 +15792,7 @@ function ensureOpenclawRuntimeDefaults(config: OpenClawConfigFile) {
     ensureOpenRouterModelCatalogAllowlist(config)
   }
   if (!Array.isArray(config.agents.list) || !config.agents.list.length) {
-    config.agents.list = createInitialOpenclawConfig().agents.list
+    config.agents.list = createInitialOpenclawConfig().agents?.list || []
   }
   applyDeepSeekOnlyRuntimeDefaults(config)
   ensureClawTalkBundledPluginDefaults(config)
@@ -15273,7 +16714,7 @@ function isClawTalkPluginPath(value: unknown) {
 }
 
 function bundledOpenClawPluginExtensionRootCandidates() {
-  const electronResourcesPath = typeof process.resourcesPath === 'string' ? process.resourcesPath : ''
+  const electronResourcesPath = getElectronResourcesPath()
   const openclawDir = openclawBin && openclawBin !== 'openclaw' ? path.dirname(path.resolve(openclawBin)) : ''
   return uniqueStrings(
     openclawDir ? path.join(openclawDir, 'dist', 'extensions') : '',
@@ -15313,7 +16754,7 @@ function sanitizeBundledPluginLoadPaths(config: OpenClawConfigFile) {
 }
 
 function bundledClawTalkPluginRootCandidates() {
-  const electronResourcesPath = typeof process.resourcesPath === 'string' ? process.resourcesPath : ''
+  const electronResourcesPath = getElectronResourcesPath()
   const openclawDir = openclawBin && openclawBin !== 'openclaw' ? path.dirname(path.resolve(openclawBin)) : ''
   return uniqueStrings(
     openclawDir ? path.join(openclawDir, 'dist', 'extensions', CLAWTALK_PLUGIN_ID) : '',
@@ -16424,7 +17865,7 @@ function patchedTelegramBotRuntimeSource(source: string) {
 }
 
 function openClawPackageRootCandidates() {
-  const electronResourcesPath = typeof process.resourcesPath === 'string' ? process.resourcesPath : ''
+  const electronResourcesPath = getElectronResourcesPath()
   return uniqueStrings(
     openclawBin && openclawBin !== 'openclaw' ? path.dirname(path.resolve(openclawBin)) : '',
     path.resolve(process.cwd(), 'vendor', 'openclaw'),
@@ -17709,7 +19150,7 @@ function isCodexPluginInstallRequest(params: { spec: string; pluginId?: string }
 }
 
 function bundledCodexPluginRootCandidates() {
-  const electronResourcesPath = typeof process.resourcesPath === 'string' ? process.resourcesPath : ''
+  const electronResourcesPath = getElectronResourcesPath()
   const openclawDir = openclawBin && openclawBin !== 'openclaw' ? path.dirname(path.resolve(openclawBin)) : ''
   return uniqueStrings(
     openclawDir ? path.join(openclawDir, 'dist', 'extensions', 'codex') : '',
@@ -20205,7 +21646,7 @@ function legacyAgentLocalConfigPath(agentId: string) {
 }
 
 function embeddedAgentRootCandidates(agentId?: string) {
-  const electronResourcesPath = typeof process.resourcesPath === 'string' ? process.resourcesPath : ''
+  const electronResourcesPath = getElectronResourcesPath()
   const openclawRuntimeAgentRoot = openclawBin && openclawBin !== 'openclaw'
     ? path.join(path.dirname(openclawBin), 'agents')
     : ''
@@ -20352,7 +21793,7 @@ async function recoverLocalAgentEntries(
     const local = await readAgentLocalConfigIfPresent(id)
     const entry = local
       ? agentEntryFromLocalConfig(id, local, config.agents?.defaults?.workspace)
-      : agentEntryFromBootstrapAgent(id, config.agents?.defaults?.workspace, await readAgentNameFromDoctrineFolders(id))
+      : agentEntryFromBootstrapAgent(id, config.agents?.defaults?.workspace, (await readAgentNameFromDoctrineFolders(id)) ?? undefined)
     recovered.push(entry)
     existingIds.add(id)
   }
@@ -21729,14 +23170,17 @@ type LightweightGatewayClientOptions = {
   role: string
   scopes: string[]
   caps: string[]
+  deviceIdentity?: null | Record<string, unknown>
   instanceId: string
   minProtocol: number
   maxProtocol: number
   requestTimeoutMs: number
+  preauthHandshakeTimeoutMs?: number
   onHelloOk?: (hello: unknown) => void
   onEvent?: (evt: { event?: unknown; payload?: unknown; seq?: unknown; stateVersion?: unknown }) => void
   onConnectError?: (error: Error & { gatewayCode?: string; details?: unknown; retryable?: boolean; retryAfterMs?: number }) => void
   onClose?: (code: number, reason: string) => void
+  onReconnectPaused?: (info: unknown) => void
   onGap?: (info: { expected: number; received: number }) => void
 }
 
@@ -22319,11 +23763,13 @@ type LightweightWebSocketConstructor = new (url: string) => LightweightWebSocket
 class LightweightGatewayClient implements GatewayClientLike {
   private ws: LightweightWebSocket | null = null
   private closed = false
-  private connectAccepted = false
   private pending = new Map<string, LightweightGatewayPendingRequest>()
   private lastSeq: number | null = null
+  private readonly options: LightweightGatewayClientOptions
 
-  constructor(private readonly options: LightweightGatewayClientOptions) {}
+  constructor(options: LightweightGatewayClientOptions) {
+    this.options = options
+  }
 
   start(): void {
     const WebSocketCtor = (globalThis as unknown as { WebSocket?: LightweightWebSocketConstructor }).WebSocket
@@ -22469,7 +23915,6 @@ class LightweightGatewayClient implements GatewayClientLike {
     this.clearPendingRequest(pending)
     if (frame.ok === true) {
       if (pending.method === 'connect') {
-        this.connectAccepted = true
         this.options.onHelloOk?.(frame.payload)
       }
       pending.resolve(frame.payload)
@@ -23104,7 +24549,7 @@ async function runControlCenterAgentRuntimeTurn(params: {
     attachments?: unknown[]
     streamObserverId?: string
   }
-}) {
+}): Promise<OpenClawResult> {
   const run = (mode: AgentRuntimeFlagMode, extraEnv?: Record<string, string>) =>
     runOpenClawWithGeminiToolWritePolicy(
       params.agentId,
@@ -23949,6 +25394,75 @@ function missionCronExpiryInfo(row: Record<string, unknown>) {
   return expiry ? { cronId, ...expiry } : null
 }
 
+function missionCronRowIsEnabled(row: Record<string, unknown>) {
+  if (typeof row.enabled === 'boolean') return row.enabled
+  const numeric = cleanCronNumber(row.enabled)
+  return numeric === null ? true : numeric !== 0
+}
+
+function missionCronRowLooksLikeControlCenterMission(row: Record<string, unknown>) {
+  const sourceText = `${cronRowDescription(row)}\n${cronPayloadMessage(row)}\n${cleanCronString(row.job_json)}`
+  return /\bcontrol-center\s+mission=/i.test(sourceText) || /\bMission ID:/i.test(sourceText)
+}
+
+function unavailableMissionCronReconciliationSnapshot(error: string): MissionCronReconciliationSnapshot {
+  return {
+    available: false,
+    activeCronIds: new Set(),
+    disabledCronIds: new Set(),
+    knownCronIds: new Set(),
+    error,
+  }
+}
+
+function listMissionCronReconciliationSnapshotFromStateDb(): MissionCronReconciliationSnapshot {
+  const dbPath = cronStateDbPath()
+  if (!existsSync(dbPath)) return unavailableMissionCronReconciliationSnapshot(`OpenClaw cron state database not found: ${dbPath}`)
+  let db: SqliteDatabase | null = null
+  try {
+    const sqlite = optionalRequire('node:sqlite') as SqliteModule
+    if (!sqlite?.DatabaseSync) return unavailableMissionCronReconciliationSnapshot('node:sqlite DatabaseSync is unavailable')
+    db = new sqlite.DatabaseSync(dbPath, { readOnly: true })
+    const rows = db.prepare(`
+      SELECT
+        job_id,
+        description,
+        enabled,
+        payload_message,
+        job_json
+      FROM cron_jobs
+      WHERE description LIKE '%control-center mission=%'
+        OR payload_message LIKE '%Mission ID:%'
+        OR job_json LIKE '%control-center mission=%'
+        OR job_json LIKE '%Mission ID:%'
+      LIMIT 1000
+    `).all()
+    const activeCronIds = new Set<string>()
+    const disabledCronIds = new Set<string>()
+    const knownCronIds = new Set<string>()
+    for (const row of rows) {
+      if (!missionCronRowLooksLikeControlCenterMission(row)) continue
+      const cronId = cleanCronString(row.job_id)
+      if (!cronId) continue
+      knownCronIds.add(cronId)
+      if (missionCronRowIsEnabled(row)) {
+        activeCronIds.add(cronId)
+      } else {
+        disabledCronIds.add(cronId)
+      }
+    }
+    return { available: true, activeCronIds, disabledCronIds, knownCronIds }
+  } catch (error) {
+    return unavailableMissionCronReconciliationSnapshot(redactSensitiveText(String(error)))
+  } finally {
+    try {
+      db?.close?.()
+    } catch {
+      // Ignore close failures on read-only status snapshots.
+    }
+  }
+}
+
 function listActiveMissionCronExpiryRowsFromStateDb(): Array<{ cronId: string; expiresAt: string; expiresMs: number }> {
   const dbPath = cronStateDbPath()
   if (!existsSync(dbPath)) return []
@@ -24744,7 +26258,7 @@ async function runDoctorChecks(): Promise<{ id: string; startedAt: string; ended
 
 app.get('/api/health', async (_req, res) => {
   const disk = await diskFreeSpaceCheck()
-  res.json({
+  return apiSuccess(res, {
     ok: true,
     workspace: WORKSPACE_ROOT,
     openclaw: resolvedOpenClawRuntimeInfo(),
@@ -24768,28 +26282,28 @@ app.get('/api/health', async (_req, res) => {
 })
 
 app.get('/api/runtime/version-check', (_req, res) => {
-  res.json(runtimeVersionCheckPayload())
+  return apiSuccess(res, runtimeVersionCheckPayload())
 })
 
 app.post('/api/doctor/run', async (_req, res) => {
   try {
-    return res.json(await runDoctorChecks())
+    return apiSuccess(res, await runDoctorChecks())
   } catch (error) {
-    return res.status(500).json({ ok: false, error: 'Doctor run failed', detail: redactSensitiveText(String(error)) })
+    return apiFailure(res, 500, 'doctor_operation_failed', 'Doctor run failed', redactSensitiveText(String(error)))
   }
 })
 
 app.get('/api/doctor/recent', async (req, res) => {
   try {
     const forceRefresh = req.query.refresh === '1' || req.query.refresh === 'true'
-    return res.json({ ok: true, doctor: await readDoctorDiagnosticsSummary(forceRefresh) })
+    return apiSuccess(res, { doctor: await readDoctorDiagnosticsSummary(forceRefresh) })
   } catch (error) {
-    return res.status(500).json({ ok: false, error: 'Doctor history failed', detail: redactSensitiveText(String(error)) })
+    return apiFailure(res, 500, 'doctor_operation_failed', 'Doctor history failed', redactSensitiveText(String(error)))
   }
 })
 
 app.get('/api/files', (_req, res) => {
-  res.json({ files: CONTROL_FILES })
+  return apiSuccess(res, { files: CONTROL_FILES })
 })
 
 app.post('/api/files/upload', express.raw({
@@ -24823,37 +26337,37 @@ app.post('/api/files/upload', express.raw({
       req.get('content-type') ||
       undefined
     const attachment = await persistCommandConsoleUpload(bytes, name, mimeType)
-    return res.json({ ok: true, attachment })
+    return apiSuccess(res, { attachment })
   } catch (error) {
-    return res.status(400).json({
-      ok: false,
-      error: 'Upload failed',
-      detail: error instanceof Error ? error.message : String(error),
-    })
+    return apiFailure(res, 400, 'file_upload_failed', 'Upload failed', error instanceof Error ? error.message : String(error))
   }
 })
 
 app.get('/api/files/:file', async (req, res) => {
   const file = req.params.file
-  if (!isAllowedFile(file)) return res.status(400).json({ error: 'File is not in allowed control list.' })
+  if (!isAllowedFile(file)) return apiFailure(res, 400, 'invalid_payload', 'File is not in allowed control list.')
 
   try {
-    return res.json({ file, content: await readControlFile(file) })
+    return apiSuccess(res, { file, content: await readControlFile(file) })
   } catch (error) {
-    return res.status(404).json({ error: `Could not read ${file}`, detail: String(error) })
+    return apiFailure(res, 404, 'control_file_operation_failed', `Could not read ${file}`, String(error))
   }
 })
 
 app.put('/api/files/:file', async (req, res) => {
   const file = req.params.file
-  if (!isAllowedFile(file)) return res.status(400).json({ error: 'File is not in allowed control list.' })
+  if (!isAllowedFile(file)) return apiFailure(res, 400, 'invalid_payload', 'File is not in allowed control list.')
 
   const schema = z.object({ content: z.string() })
   const parsed = schema.safeParse(req.body)
-  if (!parsed.success) return res.status(400).json({ error: 'Invalid payload', detail: parsed.error.flatten() })
+  if (!parsed.success) return apiFailure(res, 400, 'invalid_payload', 'Invalid payload', parsed.error.flatten())
 
-  await fs.writeFile(path.join(WORKSPACE_ROOT, file), parsed.data.content, 'utf-8')
-  return res.json({ ok: true, file })
+  try {
+    await fs.writeFile(path.join(WORKSPACE_ROOT, file), parsed.data.content, 'utf-8')
+    return apiSuccess(res, { file })
+  } catch (error) {
+    return apiFailure(res, 500, 'control_file_operation_failed', `Could not write ${file}`, String(error))
+  }
 })
 
 app.get('/api/openclaw/summary', async (_req, res) => {
@@ -24866,7 +26380,7 @@ app.get('/api/openclaw/summary', async (_req, res) => {
     ])
     const parsedGateway = gateway.code === 0 ? JSON.parse(gateway.stdout) : null
 
-    return res.json({
+    return apiSuccess(res, {
       status: status.stdout,
       gateway: parsedGateway,
       cron: cron.stdout,
@@ -24876,7 +26390,7 @@ app.get('/api/openclaw/summary', async (_req, res) => {
       missionFeed: missionFeed.slice(0, 120),
     })
   } catch (error) {
-    return res.status(500).json({ error: 'Failed to fetch summary', detail: String(error) })
+    return apiFailure(res, 500, 'openclaw_summary_failed', 'Failed to fetch summary', String(error))
   }
 })
 
@@ -24895,10 +26409,10 @@ const RuntimeGatewayChatAbortStaleSchema = z.object({
 
 app.post('/api/openclaw/runtime/session/close', async (req, res) => {
   const parsed = RuntimeSessionCloseSchema.safeParse(req.body)
-  if (!parsed.success) return res.status(400).json({ ok: false, error: 'Invalid payload', detail: parsed.error.flatten() })
+  if (!parsed.success) return apiFailure(res, 400, 'invalid_payload', 'Invalid payload', parsed.error.flatten())
   const { agentId, sessionId, sessionKey, all } = parsed.data
   if (agentId && !isValidAgentId(agentId)) {
-    return res.status(400).json({ ok: false, error: 'Invalid agent id.' })
+    return apiFailure(res, 400, 'invalid_payload', 'Invalid agent id.')
   }
 
   try {
@@ -24917,7 +26431,7 @@ app.post('/api/openclaw/runtime/session/close', async (req, res) => {
       readExternalChannelActivityEntries(),
     ])
     const activity = summarizeGatewayActivity([...externalGatewayLogs, ...externalChannelActivityLogs])
-    return res.json({
+    return apiSuccess(res, {
       ok: true,
       ...result,
       gatewayAborts,
@@ -24929,20 +26443,20 @@ app.post('/api/openclaw/runtime/session/close', async (req, res) => {
       sessions: await openAgentSessionSnapshots(activity),
     })
   } catch (error) {
-    return res.status(500).json({ ok: false, error: 'Failed to close runtime session', detail: String(error) })
+    return apiFailure(res, 500, 'runtime_action_failed', 'Failed to close runtime session', String(error))
   }
 })
 
 app.post('/api/openclaw/runtime/chat/abort-stale', async (req, res) => {
   const parsed = RuntimeGatewayChatAbortStaleSchema.safeParse(req.body || {})
-  if (!parsed.success) return res.status(400).json({ ok: false, error: 'Invalid payload', detail: parsed.error.flatten() })
+  if (!parsed.success) return apiFailure(res, 400, 'invalid_payload', 'Invalid payload', parsed.error.flatten())
 
   try {
     const result = abortStaleGatewayChatWaiters(parsed.data.minAgeMs, 'operator stale-turn recovery')
     invalidateRuntimeStatusCache()
-    return res.json({ ok: true, ...result })
+    return apiSuccess(res, { ok: true, ...result })
   } catch (error) {
-    return res.status(500).json({ ok: false, error: 'Failed to abort stale gateway chat turns', detail: String(error) })
+    return apiFailure(res, 500, 'runtime_action_failed', 'Failed to abort stale gateway chat turns', String(error))
   }
 })
 
@@ -24968,27 +26482,31 @@ function clearRuntimeMonitorHistory(clearedAt = new Date()) {
 }
 
 app.post('/api/openclaw/runtime/monitor/clear', async (_req, res) => {
-  const lockCleanup = await sweepOpenClawSessionLocks('monitor clear', { minIntervalMs: 0, minAgeMs: 0 })
-  const clearedAt = new Date()
-  const cleared = clearRuntimeMonitorHistory(clearedAt)
-  await writeRuntimeMonitorClearMarker(clearedAt)
-  return res.json({
-    ok: true,
-    ...cleared,
-    sessionLockCleanup: {
-      scanned: lockCleanup.scanned,
-      removed: lockCleanup.removed.length,
-      errors: lockCleanup.errors.length,
-    },
-  })
+  try {
+    const lockCleanup = await sweepOpenClawSessionLocks('monitor clear', { minIntervalMs: 0, minAgeMs: 0 })
+    const clearedAt = new Date()
+    const cleared = clearRuntimeMonitorHistory(clearedAt)
+    await writeRuntimeMonitorClearMarker(clearedAt)
+    return apiSuccess(res, {
+      ok: true,
+      ...cleared,
+      sessionLockCleanup: {
+        scanned: lockCleanup.scanned,
+        removed: lockCleanup.removed.length,
+        errors: lockCleanup.errors.length,
+      },
+    })
+  } catch (error) {
+    return apiFailure(res, 500, 'runtime_action_failed', 'Failed to clear runtime monitor', String(error))
+  }
 })
 
 app.post('/api/openclaw/runtime/shutdown', async (_req, res) => {
   try {
     const shutdown = await shutdownControlCenterRuntime('desktop quit')
-    return res.json({ ok: true, shutdown })
+    return apiSuccess(res, { ok: true, shutdown })
   } catch (error) {
-    return res.status(500).json({ ok: false, error: 'Failed to shut down runtime processes', detail: String(error) })
+    return apiFailure(res, 500, 'runtime_action_failed', 'Failed to shut down runtime processes', String(error))
   }
 })
 
@@ -24999,13 +26517,13 @@ app.post('/api/openclaw/runtime/gateway/stop', async (_req, res) => {
     const gatewayHealthy = await isGatewayHealthy()
     const listenerPid = gatewayHealthy ? await gatewayListenerPidForPort(GATEWAY_HTTP_PORT) : null
     const gateway = gatewayStatusSnapshot(gatewayHealthy, listenerPid)
-    return res.json({
+    return apiSuccess(res, {
       ok: true,
       stop,
       gateway,
     })
   } catch (error) {
-    return res.status(500).json({ ok: false, error: 'Failed to stop gateway', detail: String(error) })
+    return apiFailure(res, 500, 'runtime_action_failed', 'Failed to stop gateway', String(error))
   }
 })
 
@@ -25017,7 +26535,7 @@ app.post('/api/openclaw/runtime/gateway/start', async (_req, res) => {
     const gatewayHealthy = await isGatewayHealthy()
     const listenerPid = await gatewayListenerPidForPort(GATEWAY_HTTP_PORT)
     const gateway = gatewayStatusSnapshot(gatewayHealthy, listenerPid)
-    return res.json({
+    return apiSuccess(res, {
       ok: true,
       start: {
         started: gateway.healthy || gateway.processRunning,
@@ -25026,7 +26544,7 @@ app.post('/api/openclaw/runtime/gateway/start', async (_req, res) => {
       gateway,
     })
   } catch (error) {
-    return res.status(500).json({ ok: false, error: 'Failed to start gateway', detail: String(error) })
+    return apiFailure(res, 500, 'runtime_action_failed', 'Failed to start gateway', String(error))
   }
 })
 
@@ -25037,13 +26555,13 @@ app.post('/api/openclaw/runtime/gateway/restart', async (_req, res) => {
     const gatewayHealthy = await isGatewayHealthy()
     const listenerPid = gatewayHealthy ? await gatewayListenerPidForPort(GATEWAY_HTTP_PORT) : null
     const gateway = gatewayStatusSnapshot(gatewayHealthy, listenerPid)
-    return res.json({
+    return apiSuccess(res, {
       ok: true,
       restart,
       gateway,
     })
   } catch (error) {
-    return res.status(500).json({ ok: false, error: 'Failed to restart gateway', detail: String(error) })
+    return apiFailure(res, 500, 'runtime_action_failed', 'Failed to restart gateway', String(error))
   }
 })
 
@@ -25054,13 +26572,13 @@ app.post('/api/openclaw/command', async (req, res) => {
     refreshPlugins: z.boolean().optional().default(true),
   })
   const parsed = schema.safeParse(req.body)
-  if (!parsed.success) return res.status(400).json({ ok: false, error: 'Invalid payload', detail: parsed.error.flatten() })
+  if (!parsed.success) return apiFailure(res, 400, 'invalid_payload', 'Invalid payload', parsed.error.flatten())
 
   let args: string[]
   try {
     args = parseOpenClawCommandInput(parsed.data.command)
   } catch (error) {
-    return res.status(400).json({ ok: false, error: String(error) })
+    return apiFailure(res, 400, 'invalid_payload', 'Invalid OpenClaw command', String(error))
   }
 
   const timeoutMs = parsed.data.timeoutSeconds * 1000
@@ -25082,7 +26600,7 @@ app.post('/api/openclaw/command', async (req, res) => {
           cliError: String(error),
         }))
       : null
-    return res.json({
+    return apiSuccess(res, {
       ok: result.code === 0,
       command: pluginCommandResult(args, result),
       ...(controls ? {
@@ -25095,7 +26613,7 @@ app.post('/api/openclaw/command', async (req, res) => {
   } catch (error) {
     const detail = redactSensitiveText(String(error))
     pushGatewayLog('stderr', `openclaw command failed: ${detail}`)
-    return res.status(500).json({ ok: false, error: 'OpenClaw command failed', detail })
+    return apiFailure(res, 500, 'openclaw_command_failed', 'OpenClaw command failed', detail)
   }
 })
 
@@ -25636,27 +27154,27 @@ async function getRuntimeSummaryPayload(forceRefresh: boolean): Promise<Record<s
 app.get('/api/openclaw/runtime/status', async (req, res) => {
   try {
     const forcePluginRefresh = req.query.refresh === '1' || req.query.refresh === 'true'
-    return res.json(await getRuntimeStatusPayload(forcePluginRefresh))
+    return apiSuccess(res, await getRuntimeStatusPayload(forcePluginRefresh))
   } catch (error) {
-    return res.status(500).json({ ok: false, error: 'Failed to fetch runtime status', detail: String(error) })
+    return apiFailure(res, 500, 'runtime_status_failed', 'Failed to fetch runtime status', String(error))
   }
 })
 
 app.get('/api/openclaw/runtime/summary', async (req, res) => {
   try {
     const forceRefresh = req.query.refresh === '1' || req.query.refresh === 'true'
-    return res.json(await getRuntimeSummaryPayload(forceRefresh))
+    return apiSuccess(res, await getRuntimeSummaryPayload(forceRefresh))
   } catch (error) {
-    return res.status(500).json({ ok: false, error: 'Failed to fetch runtime summary', detail: String(error) })
+    return apiFailure(res, 500, 'runtime_summary_failed', 'Failed to fetch runtime summary', String(error))
   }
 })
 
 app.get('/api/plugins', async (req, res) => {
   try {
     const forceRefresh = req.query.refresh === '1' || req.query.refresh === 'true'
-    return res.json(await listPluginControls({ forceRefresh }))
+    return apiSuccess(res, await listPluginControls({ forceRefresh }))
   } catch (error) {
-    return res.status(500).json({ error: 'Failed to list plugins', detail: String(error) })
+    return apiFailure(res, 500, 'plugin_operation_failed', 'Failed to list plugins', pluginErrorDetail(error))
   }
 })
 
@@ -25664,12 +27182,12 @@ app.get('/api/plugins/search', async (req, res) => {
   const query = typeof req.query.q === 'string' ? req.query.q.trim() : ''
   const limitRaw = Number(req.query.limit || 20)
   const limit = Number.isFinite(limitRaw) ? Math.max(1, Math.min(50, Math.round(limitRaw))) : 20
-  if (!query) return res.json({ results: [] })
+  if (!query) return apiSuccess(res, { results: [] })
 
   try {
-    return res.json(await searchOpenClawPlugins(query, limit))
+    return apiSuccess(res, await searchOpenClawPlugins(query, limit))
   } catch (error) {
-    return res.status(502).json({ error: 'Plugin search failed', detail: redactSensitiveText(String(error)) })
+    return apiFailure(res, 502, 'plugin_command_failed', 'Plugin search failed', pluginErrorDetail(error))
   }
 })
 
@@ -25683,13 +27201,12 @@ app.post('/api/plugins/install', async (req, res) => {
     restart: z.boolean().optional().default(true),
   })
   const parsed = schema.safeParse(req.body)
-  if (!parsed.success) return res.status(400).json({ error: 'Invalid payload', detail: parsed.error.flatten() })
+  if (!parsed.success) return apiFailure(res, 400, 'invalid_payload', 'Invalid payload', parsed.error.flatten())
 
   try {
     const result = await installOpenClawPlugin(parsed.data)
     invalidateRuntimeStatusCache()
-    return res.json({
-      ok: true,
+    return apiSuccess(res, {
       install: result.install,
       activation: result.activation,
       repair: result.repair,
@@ -25703,8 +27220,7 @@ app.post('/api/plugins/install', async (req, res) => {
       ...(result.controls.cliError ? { cliError: result.controls.cliError } : {}),
     })
   } catch (error) {
-    const status = typeof (error as Error & { code?: unknown }).code === 'number' ? 502 : 500
-    return res.status(status).json({ error: 'Plugin install failed', detail: redactSensitiveText(String(error)) })
+    return apiFailure(res, pluginErrorStatus(error), 'plugin_command_failed', 'Plugin install failed', pluginErrorDetail(error))
   }
 })
 
@@ -25713,13 +27229,12 @@ app.post('/api/plugins/update-all', async (req, res) => {
     restart: z.boolean().optional().default(true),
   })
   const parsed = schema.safeParse(req.body || {})
-  if (!parsed.success) return res.status(400).json({ error: 'Invalid payload', detail: parsed.error.flatten() })
+  if (!parsed.success) return apiFailure(res, 400, 'invalid_payload', 'Invalid payload', parsed.error.flatten())
 
   try {
     const result = await updateAllOpenClawPlugins(parsed.data.restart)
     invalidateRuntimeStatusCache()
-    return res.json({
-      ok: true,
+    return apiSuccess(res, {
       command: result.command,
       restart: result.restart,
       plugins: result.controls.plugins,
@@ -25729,8 +27244,7 @@ app.post('/api/plugins/update-all', async (req, res) => {
       ...(result.controls.cliError ? { cliError: result.controls.cliError } : {}),
     })
   } catch (error) {
-    const status = typeof (error as Error & { code?: unknown }).code === 'number' ? 502 : 500
-    return res.status(status).json({ error: 'Plugin update failed', detail: redactSensitiveText(String(error)) })
+    return apiFailure(res, pluginErrorStatus(error), 'plugin_command_failed', 'Plugin update failed', pluginErrorDetail(error))
   }
 })
 
@@ -25742,8 +27256,7 @@ app.post('/api/plugins/gateway/restart', async (_req, res) => {
     }
     invalidateRuntimeStatusCache()
     const controls = await listPluginControls()
-    return res.json({
-      ok: true,
+    return apiSuccess(res, {
       restart,
       plugins: controls.plugins,
       configPath: controls.configPath,
@@ -25751,7 +27264,7 @@ app.post('/api/plugins/gateway/restart', async (_req, res) => {
       ...(controls.cliError ? { cliError: controls.cliError } : {}),
     })
   } catch (error) {
-    return res.status(500).json({ error: 'Gateway restart failed', detail: redactSensitiveText(String(error)) })
+    return apiFailure(res, 500, 'plugin_operation_failed', 'Gateway restart failed', pluginErrorDetail(error))
   }
 })
 
@@ -25763,13 +27276,12 @@ app.post('/api/plugins/clawtalk/setup', async (req, res) => {
     restart: z.boolean().optional().default(true),
   })
   const parsed = schema.safeParse(req.body)
-  if (!parsed.success) return res.status(400).json({ error: 'Invalid payload', detail: parsed.error.flatten() })
+  if (!parsed.success) return apiFailure(res, 400, 'invalid_payload', 'Invalid payload', parsed.error.flatten())
 
   try {
     const result = await setupClawTalkPlugin(parsed.data)
     invalidateRuntimeStatusCache()
-    return res.json({
-      ok: true,
+    return apiSuccess(res, {
       install: result.installResult?.install,
       activation: result.installResult?.activation,
       repair: result.installResult?.repair,
@@ -25792,26 +27304,31 @@ app.post('/api/plugins/clawtalk/setup', async (req, res) => {
       : typeof (error as Error & { code?: unknown }).code === 'number'
         ? 502
         : 500
-    return res.status(status).json({ error: 'ClawTalk setup failed', detail: redactSensitiveText(message) })
+    return apiFailure(
+      res,
+      status,
+      status === 400 ? 'invalid_payload' : 'plugin_command_failed',
+      'ClawTalk setup failed',
+      redactSensitiveText(message),
+    )
   }
 })
 
 app.post('/api/plugins/:pluginId/update', async (req, res) => {
   const pluginId = (req.params.pluginId || '').trim().toLowerCase()
   if (!PLUGIN_ID_PATTERN.test(pluginId)) {
-    return res.status(400).json({ error: 'Invalid plugin id.' })
+    return apiFailure(res, 400, 'invalid_payload', 'Invalid plugin id.')
   }
   const schema = z.object({
     restart: z.boolean().optional().default(true),
   })
   const parsed = schema.safeParse(req.body || {})
-  if (!parsed.success) return res.status(400).json({ error: 'Invalid payload', detail: parsed.error.flatten() })
+  if (!parsed.success) return apiFailure(res, 400, 'invalid_payload', 'Invalid payload', parsed.error.flatten())
 
   try {
     const result = await updateOpenClawPlugin(pluginId, parsed.data.restart)
     invalidateRuntimeStatusCache()
-    return res.json({
-      ok: true,
+    return apiSuccess(res, {
       command: result.command,
       plugin: result.plugin,
       restart: result.restart,
@@ -25822,15 +27339,14 @@ app.post('/api/plugins/:pluginId/update', async (req, res) => {
       ...(result.controls.cliError ? { cliError: result.controls.cliError } : {}),
     })
   } catch (error) {
-    const status = typeof (error as Error & { code?: unknown }).code === 'number' ? 502 : 500
-    return res.status(status).json({ error: 'Plugin update failed', detail: redactSensitiveText(String(error)) })
+    return apiFailure(res, pluginErrorStatus(error), 'plugin_command_failed', 'Plugin update failed', pluginErrorDetail(error))
   }
 })
 
 app.post('/api/plugins/:pluginId/uninstall', async (req, res) => {
   const pluginId = (req.params.pluginId || '').trim().toLowerCase()
   if (!PLUGIN_ID_PATTERN.test(pluginId)) {
-    return res.status(400).json({ error: 'Invalid plugin id.' })
+    return apiFailure(res, 400, 'invalid_payload', 'Invalid plugin id.')
   }
   const schema = z.object({
     keepFiles: z.boolean().optional().default(false),
@@ -25838,13 +27354,12 @@ app.post('/api/plugins/:pluginId/uninstall', async (req, res) => {
     restart: z.boolean().optional().default(true),
   })
   const parsed = schema.safeParse(req.body || {})
-  if (!parsed.success) return res.status(400).json({ error: 'Invalid payload', detail: parsed.error.flatten() })
+  if (!parsed.success) return apiFailure(res, 400, 'invalid_payload', 'Invalid payload', parsed.error.flatten())
 
   try {
     const result = await uninstallOpenClawPlugin(pluginId, parsed.data)
     invalidateRuntimeStatusCache()
-    return res.json({
-      ok: true,
+    return apiSuccess(res, {
       command: result.command,
       plugin: null,
       restart: result.restart,
@@ -25855,22 +27370,20 @@ app.post('/api/plugins/:pluginId/uninstall', async (req, res) => {
       ...(result.controls.cliError ? { cliError: result.controls.cliError } : {}),
     })
   } catch (error) {
-    const status = typeof (error as Error & { code?: unknown }).code === 'number' ? 502 : 500
-    return res.status(status).json({ error: 'Plugin uninstall failed', detail: redactSensitiveText(String(error)) })
+    return apiFailure(res, pluginErrorStatus(error), 'plugin_command_failed', 'Plugin uninstall failed', pluginErrorDetail(error))
   }
 })
 
 app.post('/api/plugins/:pluginId/inspect', async (req, res) => {
   const pluginId = (req.params.pluginId || '').trim().toLowerCase()
   if (!PLUGIN_ID_PATTERN.test(pluginId)) {
-    return res.status(400).json({ error: 'Invalid plugin id.' })
+    return apiFailure(res, 400, 'invalid_payload', 'Invalid plugin id.')
   }
 
   try {
     const inspect = await inspectOpenClawPluginRuntime(pluginId)
     const controls = await listPluginControls()
-    return res.json({
-      ok: true,
+    return apiSuccess(res, {
       inspect,
       plugin: controls.plugins.find((entry) => entry.id === pluginId) || null,
       plugins: controls.plugins,
@@ -25879,15 +27392,14 @@ app.post('/api/plugins/:pluginId/inspect', async (req, res) => {
       ...(controls.cliError ? { cliError: controls.cliError } : {}),
     })
   } catch (error) {
-    const status = typeof (error as Error & { code?: unknown }).code === 'number' ? 502 : 500
-    return res.status(status).json({ error: 'Plugin runtime inspect failed', detail: redactSensitiveText(String(error)) })
+    return apiFailure(res, pluginErrorStatus(error), 'plugin_command_failed', 'Plugin runtime inspect failed', pluginErrorDetail(error))
   }
 })
 
 app.post('/api/plugins/:pluginId/config', async (req, res) => {
   const pluginId = (req.params.pluginId || '').trim().toLowerCase()
   if (!PLUGIN_ID_PATTERN.test(pluginId)) {
-    return res.status(400).json({ error: 'Invalid plugin id.' })
+    return apiFailure(res, 400, 'invalid_payload', 'Invalid plugin id.')
   }
 
   const schema = z.object({
@@ -25896,15 +27408,14 @@ app.post('/api/plugins/:pluginId/config', async (req, res) => {
     restart: z.boolean().optional().default(true),
   })
   const parsed = schema.safeParse(req.body)
-  if (!parsed.success) return res.status(400).json({ error: 'Invalid payload', detail: parsed.error.flatten() })
+  if (!parsed.success) return apiFailure(res, 400, 'invalid_payload', 'Invalid payload', parsed.error.flatten())
 
   try {
     await savePluginDirectConfig(pluginId, parsed.data.values, parsed.data.providerAuth)
     invalidateRuntimeStatusCache()
     const restart = parsed.data.restart ? schedulePluginGatewayRestart() : { restarted: false, scheduled: false, detail: 'gateway restart skipped' }
     const controls = await listPluginControls()
-    return res.json({
-      ok: true,
+    return apiSuccess(res, {
       plugin: controls.plugins.find((entry) => entry.id === pluginId) || null,
       restart,
       plugins: controls.plugins,
@@ -25913,7 +27424,7 @@ app.post('/api/plugins/:pluginId/config', async (req, res) => {
       ...(controls.cliError ? { cliError: controls.cliError } : {}),
     })
   } catch (error) {
-    return res.status(500).json({ error: 'Failed to save plugin config', detail: redactSensitiveText(String(error)) })
+    return apiFailure(res, 500, 'plugin_operation_failed', 'Failed to save plugin config', pluginErrorDetail(error))
   }
 })
 
@@ -25925,19 +27436,19 @@ app.post('/api/plugins/setup-terminal', async (req, res) => {
     rows: z.number().int().min(10).max(60).optional(),
   })
   const parsed = schema.safeParse(req.body)
-  if (!parsed.success) return res.status(400).json({ error: 'Invalid payload', detail: parsed.error.flatten() })
+  if (!parsed.success) return apiFailure(res, 400, 'invalid_payload', 'Invalid payload', parsed.error.flatten())
 
   try {
     const session = startPluginSetupTerminalSession(parsed.data)
-    return res.json({ ok: true, session: pluginSetupTerminalSnapshot(session) })
+    return apiSuccess(res, { session: pluginSetupTerminalSnapshot(session) })
   } catch (error) {
-    return res.status(500).json({ error: 'Failed to start setup terminal', detail: String(error) })
+    return apiFailure(res, 500, 'plugin_terminal_failed', 'Failed to start setup terminal', pluginErrorDetail(error))
   }
 })
 
 app.get('/api/plugins/setup-terminal/:sessionId/stream', (req, res) => {
   const session = pluginSetupTerminalSessions.get(req.params.sessionId)
-  if (!session) return res.status(404).json({ error: 'Setup terminal session not found.' })
+  if (!session) return apiFailure(res, 404, 'plugin_not_found', 'Setup terminal session not found.')
 
   res.writeHead(200, {
     'Content-Type': 'text/event-stream; charset=utf-8',
@@ -25964,53 +27475,53 @@ app.get('/api/plugins/setup-terminal/:sessionId/stream', (req, res) => {
 
 app.post('/api/plugins/setup-terminal/:sessionId/input', (req, res) => {
   const session = pluginSetupTerminalSessions.get(req.params.sessionId)
-  if (!session) return res.status(404).json({ error: 'Setup terminal session not found.' })
-  if (session.status !== 'running') return res.status(409).json({ error: 'Setup terminal is not running.' })
+  if (!session) return apiFailure(res, 404, 'plugin_not_found', 'Setup terminal session not found.')
+  if (session.status !== 'running') return apiFailure(res, 409, 'plugin_terminal_failed', 'Setup terminal is not running.')
 
   const schema = z.object({ data: z.string().max(20_000) })
   const parsed = schema.safeParse(req.body)
-  if (!parsed.success) return res.status(400).json({ error: 'Invalid payload', detail: parsed.error.flatten() })
+  if (!parsed.success) return apiFailure(res, 400, 'invalid_payload', 'Invalid payload', parsed.error.flatten())
 
   try {
     session.process.write(parsed.data.data)
     session.updatedAt = new Date().toISOString()
-    return res.json({ ok: true })
+    return apiSuccess(res, { session: pluginSetupTerminalSnapshot(session) })
   } catch (error) {
-    return res.status(500).json({ error: 'Failed to write terminal input', detail: String(error) })
+    return apiFailure(res, 500, 'plugin_terminal_failed', 'Failed to write terminal input', pluginErrorDetail(error))
   }
 })
 
 app.post('/api/plugins/setup-terminal/:sessionId/resize', (req, res) => {
   const session = pluginSetupTerminalSessions.get(req.params.sessionId)
-  if (!session) return res.status(404).json({ error: 'Setup terminal session not found.' })
+  if (!session) return apiFailure(res, 404, 'plugin_not_found', 'Setup terminal session not found.')
 
   const schema = z.object({
     cols: z.number().int().min(40).max(180),
     rows: z.number().int().min(10).max(60),
   })
   const parsed = schema.safeParse(req.body)
-  if (!parsed.success) return res.status(400).json({ error: 'Invalid payload', detail: parsed.error.flatten() })
+  if (!parsed.success) return apiFailure(res, 400, 'invalid_payload', 'Invalid payload', parsed.error.flatten())
 
   try {
     session.process.resize(parsed.data.cols, parsed.data.rows)
     session.updatedAt = new Date().toISOString()
-    return res.json({ ok: true })
+    return apiSuccess(res, { session: pluginSetupTerminalSnapshot(session) })
   } catch (error) {
-    return res.status(500).json({ error: 'Failed to resize setup terminal', detail: String(error) })
+    return apiFailure(res, 500, 'plugin_terminal_failed', 'Failed to resize setup terminal', pluginErrorDetail(error))
   }
 })
 
 app.delete('/api/plugins/setup-terminal/:sessionId', (req, res) => {
   const session = pluginSetupTerminalSessions.get(req.params.sessionId)
-  if (!session) return res.status(404).json({ error: 'Setup terminal session not found.' })
+  if (!session) return apiFailure(res, 404, 'plugin_not_found', 'Setup terminal session not found.')
   stopPluginSetupTerminalSession(session)
-  return res.json({ ok: true, session: pluginSetupTerminalSnapshot(session) })
+  return apiSuccess(res, { session: pluginSetupTerminalSnapshot(session) })
 })
 
 app.post('/api/plugins/:pluginId', async (req, res) => {
   const pluginId = (req.params.pluginId || '').trim().toLowerCase()
   if (!PLUGIN_ID_PATTERN.test(pluginId)) {
-    return res.status(400).json({ error: 'Invalid plugin id.' })
+    return apiFailure(res, 400, 'invalid_payload', 'Invalid plugin id.')
   }
 
   const schema = z.object({
@@ -26019,7 +27530,7 @@ app.post('/api/plugins/:pluginId', async (req, res) => {
     immediateRestart: z.boolean().optional().default(false),
   })
   const parsed = schema.safeParse(req.body)
-  if (!parsed.success) return res.status(400).json({ error: 'Invalid payload', detail: parsed.error.flatten() })
+  if (!parsed.success) return apiFailure(res, 400, 'invalid_payload', 'Invalid payload', parsed.error.flatten())
 
   try {
     const result = await setOpenClawPluginEnabledForControlCenter(pluginId, parsed.data.enabled, {
@@ -26027,8 +27538,7 @@ app.post('/api/plugins/:pluginId', async (req, res) => {
       immediateRestart: parsed.data.immediateRestart,
     })
     invalidateRuntimeStatusCache()
-    return res.json({
-      ok: true,
+    return apiSuccess(res, {
       command: result.command,
       plugin: result.controls.plugins.find((entry) => entry.id === pluginId) || null,
       restart: result.restart,
@@ -26040,17 +27550,16 @@ app.post('/api/plugins/:pluginId', async (req, res) => {
       ...(result.controls.cliError ? { cliError: result.controls.cliError } : {}),
     })
   } catch (error) {
-    const status = typeof (error as Error & { code?: unknown }).code === 'number' ? 502 : 500
-    return res.status(status).json({ error: 'Failed to update plugin', detail: redactSensitiveText(String(error)) })
+    return apiFailure(res, pluginErrorStatus(error), 'plugin_command_failed', 'Failed to update plugin', pluginErrorDetail(error))
   }
 })
 
 app.get('/api/party/overview', async (_req, res) => {
   try {
     const party = await getPartyMembers()
-    return res.json({ party })
+    return apiSuccess(res, { party })
   } catch (error) {
-    return res.status(500).json({ error: 'Failed to fetch party', detail: String(error) })
+    return apiFailure(res, 500, 'party_operation_failed', 'Failed to fetch party', String(error))
   }
 })
 
@@ -26078,7 +27587,7 @@ app.put('/api/party/profile/:agentId', async (req, res) => {
       .optional(),
   })
   const parsed = schema.safeParse(req.body)
-  if (!parsed.success) return res.status(400).json({ error: 'Invalid payload', detail: parsed.error.flatten() })
+  if (!parsed.success) return apiFailure(res, 400, 'invalid_payload', 'Invalid payload', parsed.error.flatten())
 
   const profiles = await readPartyProfiles()
   const sanitized = sanitizeProfile(parsed.data as Partial<AgentProfile>)
@@ -26103,7 +27612,7 @@ app.put('/api/party/profile/:agentId', async (req, res) => {
     // profile still persisted in party-profiles; local file sync best-effort
   }
 
-  return res.json({ ok: true, agentId })
+  return apiSuccess(res, { ok: true, agentId })
 })
 
 app.post('/api/party/identity', async (req, res) => {
@@ -26116,7 +27625,7 @@ app.post('/api/party/identity', async (req, res) => {
     workspace: z.string().optional(),
   })
   const parsed = schema.safeParse(req.body)
-  if (!parsed.success) return res.status(400).json({ error: 'Invalid payload', detail: parsed.error.flatten() })
+  if (!parsed.success) return apiFailure(res, 400, 'invalid_payload', 'Invalid payload', parsed.error.flatten())
 
   const { agentId, name, emoji, theme, avatar, workspace } = parsed.data
   const args = ['agents', 'set-identity', '--agent', agentId]
@@ -26174,7 +27683,7 @@ app.post('/api/party/identity', async (req, res) => {
       // keep identity update success even if local mirror update fails
     }
   }
-  return res.status(result.code === 0 ? 200 : 500).json({
+  return apiSuccess(res, {
     ok: result.code === 0,
     stdout: result.stdout,
     stderr: result.stderr,
@@ -26527,18 +28036,18 @@ app.post('/api/party/recruit/auto-markdown', async (req, res) => {
     currentFiles: z.record(z.string(), z.string().max(20000)).optional(),
   })
   const parsed = schema.safeParse(req.body ?? {})
-  if (!parsed.success) return res.status(400).json({ error: 'Invalid payload', detail: parsed.error.flatten() })
+  if (!parsed.success) return apiFailure(res, 400, 'invalid_payload', 'Invalid payload', parsed.error.flatten())
 
   const payload = parsed.data
   const normalizedAgentId = payload.agentId?.trim()
   if (normalizedAgentId && !/^[a-z0-9-]{3,60}$/.test(normalizedAgentId)) {
-    return res.status(400).json({ error: 'Agent ID must be 3-60 lowercase letters, numbers, and hyphens.' })
+    return apiFailure(res, 400, 'invalid_payload', 'Agent ID must be 3-60 lowercase letters, numbers, and hyphens.')
   }
 
   const files = (payload.files?.length ? payload.files : RECRUIT_AUTO_MARKDOWN_DEFAULT_FILES)
     .map(normalizeRecruitMarkdownFileName)
     .filter(Boolean)
-  if (!files.length) return res.status(400).json({ error: 'Auto Forge requires at least one markdown file name.' })
+  if (!files.length) return apiFailure(res, 400, 'invalid_payload', 'Auto Forge requires at least one markdown file name.')
 
   const controller = new AbortController()
   const timeout = setTimeout(() => controller.abort(), 120_000)
@@ -26566,7 +28075,7 @@ app.post('/api/party/recruit/auto-markdown', async (req, res) => {
     const markdownFiles = normalizeRecruitAutoForgeFiles(parsedJson, files)
     const canonicalModelId = canonicalAgentModelId(payload.model)
     const { provider, model } = splitModelId(canonicalModelId)
-    return res.json({
+    return apiSuccess(res, {
       ok: true,
       modelId: canonicalModelId,
       provider: isOpenAiCodexSubscriptionModel(canonicalModelId) ? 'openai-codex' : provider,
@@ -26578,7 +28087,9 @@ app.post('/api/party/recruit/auto-markdown', async (req, res) => {
   } catch (error) {
     const typed = error as Error & { statusCode?: number; provider?: string; providerStatus?: unknown }
     const statusCode = typed.name === 'AbortError' ? 504 : typed.statusCode || 500
-    return res.status(statusCode).json({
+    return apiFailure(res, statusCode, 'recruit_failed', statusCode === 504
+      ? 'Auto Forge timed out while waiting for the selected model.'
+      : (typed.message || String(error)), {
       ok: false,
       error: statusCode === 504 ? 'Auto Forge timed out while waiting for the selected model.' : (typed.message || String(error)),
       ...(typed.provider ? { provider: typed.provider } : {}),
@@ -26700,7 +28211,7 @@ app.post('/api/party/recruit', async (req, res) => {
       .optional(),
   })
   const parsed = schema.safeParse(req.body)
-  if (!parsed.success) return res.status(400).json({ error: 'Invalid payload', detail: parsed.error.flatten() })
+  if (!parsed.success) return apiFailure(res, 400, 'invalid_payload', 'Invalid payload', parsed.error.flatten())
 
   const payload = parsed.data
   try {
@@ -26715,7 +28226,7 @@ app.post('/api/party/recruit', async (req, res) => {
     }
 
     if (config.agents.list.some((agent) => agent.id === payload.agentId)) {
-      return res.status(409).json({ error: `Agent already exists: ${payload.agentId}` })
+      return apiFailure(res, 409, 'recruit_failed', `Agent already exists: ${payload.agentId}`)
     }
 
     const workspacePath = payload.workspace?.trim() ? path.resolve(payload.workspace) : WORKSPACE_ROOT
@@ -26723,20 +28234,25 @@ app.post('/api/party/recruit', async (req, res) => {
     try {
       await validateWorkspaceAccess(workspacePath)
     } catch (error) {
-      return res.status(400).json({
-        error: 'Workspace is not writable. Choose a folder you own (for example in your user profile).',
-        detail: String(error),
-      })
+      return apiFailure(
+        res,
+        400,
+        'workspace_unwritable',
+        'Workspace is not writable. Choose a folder you own (for example in your user profile).',
+        String(error),
+      )
     }
 
     if (payload.model) {
       const authProblem = modelAuthProblem(payload.model.primary)
       if (authProblem) {
-        return res.status(409).json({
-          error: `Missing auth for ${authProblem.provider}. Connect this provider before recruiting with this model.`,
-          provider: authProblem.provider,
-          providerStatus: authProblem.providerStatus,
-        })
+        return apiFailure(
+          res,
+          409,
+          'recruit_failed',
+          `Missing auth for ${authProblem.provider}. Connect this provider before recruiting with this model.`,
+          { provider: authProblem.provider, providerStatus: authProblem.providerStatus },
+        )
       }
     }
 
@@ -26786,15 +28302,7 @@ app.post('/api/party/recruit', async (req, res) => {
     local.runtime = { ...recruitRuntimeDefaults(), ...(runtimePayload || {}) }
     if (payload.profile) local.profile = sanitized
     local.attributes = { ...recruitAttributesFromProfile(sanitized), ...(attributesPayload || {}) }
-    local.mds = {
-      ...inferredMds,
-      ...(mdsPayload || {}),
-      capabilities: {
-        ...inferredMds.capabilities,
-        ...(mdsPayload?.capabilities || {}),
-      },
-      toolAccess: mdsPayload?.toolAccess || inferredMds.toolAccess,
-    }
+    local.mds = normalizeAgentMdsState(inferredMds, mdsPayload)
     local.heartbeat = { ...recruitHeartbeatDefaults(), ...(heartbeatPayload || {}) }
     local.soul = { ...recruitSoulDefaults(sanitized.behaviorProfile), ...(soulPayload || {}) }
     local.sandbox = normalizeSandboxConfig({
@@ -26818,19 +28326,18 @@ app.post('/api/party/recruit', async (req, res) => {
     applyLocalConfigToGlobal(payload.agentId, local, config)
     await writeOpenclawConfig(config)
 
-    return res.json({ ok: true, agentId: payload.agentId })
+    return apiSuccess(res, { agentId: payload.agentId })
   } catch (error) {
-    return res.status(500).json({ error: 'Failed to recruit agent', detail: String(error) })
+    return apiFailure(res, 500, 'recruit_failed', 'Failed to recruit agent', String(error))
   }
 })
 
 app.delete('/api/party/agent/:agentId', async (req, res) => {
   const agentId = (req.params.agentId || '').trim().toLowerCase()
-  if (!isValidAgentId(agentId)) return res.status(400).json({ ok: false, error: 'Invalid agent id.' })
-  if (agentId === 'main') return res.status(400).json({ ok: false, error: 'The main agent cannot be retired.' })
+  if (!isValidAgentId(agentId)) return apiFailure(res, 400, 'invalid_payload', 'Invalid agent id.')
+  if (agentId === 'main') return apiFailure(res, 400, 'invalid_payload', 'The main agent cannot be retired.')
   if (isRetiredAgentId(agentId)) {
-    return res.json({
-      ok: true,
+    return apiSuccess(res, {
       agentId,
       alreadyRetired: true,
       workspaceDeleted: false,
@@ -26848,14 +28355,13 @@ app.delete('/api/party/agent/:agentId', async (req, res) => {
 
   try {
     const result = await purgeAgentState(agentId)
-    return res.json({
-      ok: true,
+    return apiSuccess(res, {
       agentId,
       workspaceDeleted: false,
       ...result,
     })
   } catch (error) {
-    return res.status(500).json({ ok: false, error: 'Failed to retire agent', detail: String(error) })
+    return apiFailure(res, 500, 'agent_retire_failed', 'Failed to retire agent', String(error))
   }
 })
 
@@ -26865,19 +28371,19 @@ app.post('/api/party/workspace', async (req, res) => {
     workspace: z.string().min(1),
   })
   const parsed = schema.safeParse(req.body)
-  if (!parsed.success) return res.status(400).json({ error: 'Invalid payload', detail: parsed.error.flatten() })
+  if (!parsed.success) return apiFailure(res, 400, 'invalid_payload', 'Invalid payload', parsed.error.flatten())
 
   const normalizedWorkspace = path.resolve(parsed.data.workspace)
   try {
     await validateWorkspaceAccess(normalizedWorkspace)
   } catch (error) {
-    return res.status(400).json(await workspaceAccessFailurePayload(error, normalizedWorkspace))
+    return apiSuccess(res, await workspaceAccessFailurePayload(error, normalizedWorkspace))
   }
 
   try {
     const requestedAgent = parsed.data.agentId
     const resolved = await getAgentById(requestedAgent)
-    if (!resolved.target) return res.status(404).json({ error: `Agent not found: ${requestedAgent}` })
+    if (!resolved.target) return apiFailure(res, 404, 'agent_not_found', `Agent not found: ${requestedAgent}`)
     const agentId = resolved.target.id
     const { config } = await syncAgentProjectionToGlobal(agentId)
     const current = (config.agents?.list || []).find((entry) => entry.id === agentId)
@@ -26911,7 +28417,7 @@ app.post('/api/party/workspace', async (req, res) => {
     if (!config.agents) config.agents = {}
     if (!config.agents.list) config.agents.list = []
     const target = config.agents.list.find((entry) => entry.id === agentId)
-    if (!target) return res.status(404).json({ error: `Agent not found: ${agentId}` })
+    if (!target) return apiFailure(res, 404, 'agent_not_found', `Agent not found: ${agentId}`)
 
     const local = await ensureAgentLocalConfig({
       agentId,
@@ -26953,13 +28459,14 @@ app.post('/api/party/workspace', async (req, res) => {
     })
     const persisted = persistedLocal.routing.workspace?.trim()
     if (!persisted || !samePath(persisted, normalizedWorkspace)) {
-      return res.status(500).json({
-        error: 'Workspace update did not persist to config.',
-        detail: { agentId, expected: normalizedWorkspace, persisted: persisted || null },
+      return apiFailure(res, 500, 'party_operation_failed', 'Workspace update did not persist to config.', {
+        agentId,
+        expected: normalizedWorkspace,
+        persisted: persisted || null,
       })
     }
 
-    return res.json({
+    return apiSuccess(res, {
       ok: true,
       agentId,
       workspace: normalizedWorkspace,
@@ -26969,7 +28476,7 @@ app.post('/api/party/workspace', async (req, res) => {
       doctrineWorkspace: resolveDoctrineWorkspaceForRun(agentId, normalizedWorkspace, canonicalDoctrineRoot(agentId)),
     })
   } catch (error) {
-    return res.status(500).json({ error: 'Failed to update workspace', detail: String(error) })
+    return apiFailure(res, 500, 'party_operation_failed', 'Failed to update workspace', String(error))
   }
 })
 
@@ -26980,7 +28487,7 @@ app.post('/api/party/provision-resources', async (req, res) => {
     force: z.boolean().default(false),
   })
   const parsed = schema.safeParse(req.body ?? {})
-  if (!parsed.success) return res.status(400).json({ error: 'Invalid payload', detail: parsed.error.flatten() })
+  if (!parsed.success) return apiFailure(res, 400, 'invalid_payload', 'Invalid payload', parsed.error.flatten())
 
   try {
     const config = await readOpenclawConfig()
@@ -27030,13 +28537,13 @@ app.post('/api/party/provision-resources', async (req, res) => {
       await writeOpenclawConfig(config)
     }
 
-    return res.json({
+    return apiSuccess(res, {
       ok: true,
       provisioned: report.length,
       report,
     })
   } catch (error) {
-    return res.status(500).json({ error: 'Failed to provision agent resources', detail: String(error) })
+    return apiFailure(res, 500, 'party_operation_failed', 'Failed to provision agent resources', String(error))
   }
 })
 
@@ -27048,7 +28555,7 @@ app.post('/api/party/workspace/cleanup-doctrine', async (req, res) => {
     force: z.boolean().default(false),
   })
   const parsed = schema.safeParse(req.body ?? {})
-  if (!parsed.success) return res.status(400).json({ error: 'Invalid payload', detail: parsed.error.flatten() })
+  if (!parsed.success) return apiFailure(res, 400, 'invalid_payload', 'Invalid payload', parsed.error.flatten())
 
   try {
     const config = await readOpenclawConfig()
@@ -27074,7 +28581,7 @@ app.post('/api/party/workspace/cleanup-doctrine', async (req, res) => {
       report.push(result)
     }
 
-    return res.json({
+    return apiSuccess(res, {
       ok: true,
       dryRun: parsed.data.dryRun,
       force: parsed.data.force,
@@ -27084,24 +28591,23 @@ app.post('/api/party/workspace/cleanup-doctrine', async (req, res) => {
       report,
     })
   } catch (error) {
-    return res.status(500).json({ error: 'Failed to cleanup doctrine mirrors', detail: String(error) })
+    return apiFailure(res, 500, 'party_operation_failed', 'Failed to cleanup doctrine mirrors', String(error))
   }
 })
 
 app.get('/api/party/resources/:agentId', async (req, res) => {
   const { agentId } = req.params
-  if (!isValidAgentId(agentId)) return res.status(400).json({ error: 'Invalid agent id.' })
+  if (!isValidAgentId(agentId)) return apiFailure(res, 400, 'invalid_payload', 'Invalid agent id.')
 
   try {
     const context = await resolveAgentResourceContext(agentId)
-    if (!context) return res.status(404).json({ error: `Agent not found: ${agentId}` })
+    if (!context) return apiFailure(res, 404, 'agent_not_found', `Agent not found: ${agentId}`)
     const entries = await fs.readdir(context.canonicalWorkspace, { withFileTypes: true })
     const files = entries
       .filter((entry) => entry.isFile() && entry.name.toLowerCase().endsWith('.md'))
       .map((entry) => entry.name)
       .sort((a, b) => a.localeCompare(b))
-    return res.json({
-      ok: true,
+    return apiSuccess(res, {
       agentId,
       workspace: context.workspace,
       executionWorkspace: context.executionWorkspace,
@@ -27110,23 +28616,22 @@ app.get('/api/party/resources/:agentId', async (req, res) => {
       files,
     })
   } catch (error) {
-    return res.status(500).json({ error: 'Failed to fetch agent resources', detail: String(error) })
+    return apiFailure(res, 500, 'filesystem_operation_failed', 'Failed to fetch agent resources', String(error))
   }
 })
 
 app.get('/api/party/resources/:agentId/:file', async (req, res) => {
   const { agentId, file } = req.params
-  if (!isValidAgentId(agentId)) return res.status(400).json({ error: 'Invalid agent id.' })
-  if (!isMarkdownResourceFile(file)) return res.status(400).json({ error: 'Resource file not allowed.' })
+  if (!isValidAgentId(agentId)) return apiFailure(res, 400, 'invalid_payload', 'Invalid agent id.')
+  if (!isMarkdownResourceFile(file)) return apiFailure(res, 400, 'invalid_payload', 'Resource file not allowed.')
 
   try {
     const seedFiles = (EDITOR_RESOURCE_FILES as readonly string[]).includes(file) ? [file as AgentResourceFile] : []
     const context = await resolveAgentResourceContext(agentId, seedFiles)
-    if (!context) return res.status(404).json({ error: `Agent not found: ${agentId}` })
+    if (!context) return apiFailure(res, 404, 'agent_not_found', `Agent not found: ${agentId}`)
     const filePath = canonicalResourcePath(agentId, file)
     const content = await fs.readFile(filePath, 'utf-8')
-    return res.json({
-      ok: true,
+    return apiSuccess(res, {
       agentId,
       workspace: context.workspace,
       executionWorkspace: context.executionWorkspace,
@@ -27137,31 +28642,41 @@ app.get('/api/party/resources/:agentId/:file', async (req, res) => {
       content,
     })
   } catch (error) {
-    return res.status(404).json({ error: 'Could not read resource file', detail: String(error) })
+    const status = (error as NodeJS.ErrnoException)?.code === 'ENOENT' ? 404 : 500
+    return apiFailure(
+      res,
+      status,
+      status === 404 ? 'resource_not_found' : 'filesystem_operation_failed',
+      status === 404 ? 'Resource file not found' : 'Could not read resource file',
+      String(error),
+    )
   }
 })
 
 app.put('/api/party/resources/:agentId/:file', async (req, res) => {
   const { agentId, file } = req.params
-  if (!isValidAgentId(agentId)) return res.status(400).json({ error: 'Invalid agent id.' })
-  if (!isMarkdownResourceFile(file)) return res.status(400).json({ error: 'Resource file not allowed.' })
+  if (!isValidAgentId(agentId)) return apiFailure(res, 400, 'invalid_payload', 'Invalid agent id.')
+  if (!isMarkdownResourceFile(file)) return apiFailure(res, 400, 'invalid_payload', 'Resource file not allowed.')
   const schema = z.object({ content: z.string() })
   const parsed = schema.safeParse(req.body)
-  if (!parsed.success) return res.status(400).json({ error: 'Invalid payload', detail: parsed.error.flatten() })
+  if (!parsed.success) return apiFailure(res, 400, 'invalid_payload', 'Invalid payload', parsed.error.flatten())
 
   try {
     const seedFiles = (EDITOR_RESOURCE_FILES as readonly string[]).includes(file) ? [file as AgentResourceFile] : []
     const context = await resolveAgentResourceContext(agentId, seedFiles)
-    if (!context) return res.status(404).json({ error: `Agent not found: ${agentId}` })
+    if (!context) return apiFailure(res, 404, 'agent_not_found', `Agent not found: ${agentId}`)
     await fs.mkdir(context.canonicalWorkspace, { recursive: true })
     const filePath = canonicalResourcePath(agentId, file)
     await fs.writeFile(filePath, parsed.data.content, 'utf-8')
     const persisted = await fs.readFile(filePath, 'utf-8')
     if (persisted !== parsed.data.content) {
-      return res.status(500).json({
-        error: 'Canonical save verification failed.',
-        detail: { expectedPath: filePath, persistedPath: filePath },
-      })
+      return apiFailure(
+        res,
+        500,
+        'filesystem_operation_failed',
+        'Canonical save verification failed.',
+        { expectedPath: filePath, persistedPath: filePath },
+      )
     }
     await saveAgentFileToCodexProfile(agentId, file, parsed.data.content)
 
@@ -27196,8 +28711,7 @@ app.put('/api/party/resources/:agentId/:file', async (req, res) => {
     if (!samePath(context.executionWorkspace, context.canonicalWorkspace)) {
       await syncDoctrineToWorkspace(agentId, context.executionWorkspace)
     }
-    return res.json({
-      ok: true,
+    return apiSuccess(res, {
       agentId,
       workspace: context.workspace,
       executionWorkspace: context.executionWorkspace,
@@ -27207,7 +28721,7 @@ app.put('/api/party/resources/:agentId/:file', async (req, res) => {
       resourcePath: filePath,
     })
   } catch (error) {
-    return res.status(500).json({ error: 'Failed to update resource file', detail: String(error) })
+    return apiFailure(res, 500, 'filesystem_operation_failed', 'Failed to update resource file', String(error))
   }
 })
 
@@ -27215,13 +28729,13 @@ app.get('/api/party/avatar/:agentId', async (req, res) => {
   try {
     const party = await getPartyMembers()
     const agent = party.find((member) => member.id === req.params.agentId)
-    if (!agent?.avatar) return res.status(404).json({ error: 'Avatar not set' })
+    if (!agent?.avatar) return apiFailure(res, 404, 'avatar_preview_failed', 'Avatar not set')
 
     if (agent.avatar.startsWith('http://') || agent.avatar.startsWith('https://')) {
       return res.redirect(agent.avatar)
     }
     if (agent.avatar.startsWith('data:')) {
-      return res.status(400).json({ error: 'Data URI avatar preview is not supported through this endpoint.' })
+      return apiFailure(res, 400, 'avatar_preview_failed', 'Data URI avatar preview is not supported through this endpoint.')
     }
 
     const candidate = path.isAbsolute(agent.avatar)
@@ -27231,21 +28745,20 @@ app.get('/api/party/avatar/:agentId', async (req, res) => {
     res.setHeader('Content-Type', contentTypeFromExt(candidate))
     return res.send(bytes)
   } catch (error) {
-    return res.status(404).json({ error: 'Avatar preview not available', detail: String(error) })
+    return apiFailure(res, 404, 'avatar_preview_failed', 'Avatar preview not available', String(error))
   }
 })
 
 app.post('/api/party/avatar-upload/:agentId', express.raw({ type: ['image/*', 'application/octet-stream'], limit: '15mb' }), async (req, res) => {
   const agentId = String(req.params.agentId || '')
-  if (!isValidAgentId(agentId)) return res.status(400).json({ ok: false, error: 'Invalid agent id.' })
+  if (!isValidAgentId(agentId)) return apiFailure(res, 400, 'invalid_payload', 'Invalid agent id.')
 
   try {
     const rawName = typeof req.query.filename === 'string' ? req.query.filename : 'avatar'
     const sourceName = avatarUploadFileName(rawName, req.headers['content-type'])
     const bytes = Buffer.isBuffer(req.body) ? req.body : Buffer.alloc(0)
     const persisted = await persistAgentAvatarBytes(agentId, bytes, sourceName)
-    return res.json({
-      ok: true,
+    return apiSuccess(res, {
       status: 'selected',
       sourcePath: null,
       path: persisted.avatarPath,
@@ -27254,12 +28767,13 @@ app.post('/api/party/avatar-upload/:agentId', express.raw({ type: ['image/*', 'a
       detail: 'Profile picture selected.',
     })
   } catch (error) {
-    return res.status(400).json({
-      ok: false,
-      status: 'error',
-      error: 'Avatar upload failed',
-      detail: error instanceof Error && error.message ? error.message : String(error),
-    })
+    return apiFailure(
+      res,
+      400,
+      'avatar_upload_failed',
+      'Avatar upload failed',
+      error instanceof Error && error.message ? error.message : String(error),
+    )
   }
 })
 
@@ -27270,7 +28784,7 @@ app.get('/api/party/folders', async (req, res) => {
     const cacheKey = full.toLowerCase()
     const cached = folderListCache.get(cacheKey)
     if (cached && cached.expiresAt > Date.now()) {
-      return res.json(cloneJson(cached.value))
+      return apiSuccess(res, cloneJson(cached.value))
     }
     const entries = await fs.readdir(full, { withFileTypes: true })
     const folders = entries
@@ -27279,9 +28793,9 @@ app.get('/api/party/folders', async (req, res) => {
       .slice(0, 200)
     const payload = { base: full, folders }
     folderListCache.set(cacheKey, { expiresAt: Date.now() + FOLDER_LIST_CACHE_MS, value: cloneJson(payload) })
-    return res.json(payload)
+    return apiSuccess(res, payload)
   } catch (error) {
-    return res.status(400).json({ error: 'Could not list folders', detail: String(error) })
+    return apiFailure(res, 400, 'folder_list_failed', 'Could not list folders', String(error))
   }
 })
 
@@ -27290,7 +28804,7 @@ app.post('/api/party/folder-picker', async (req, res) => {
     startPath: z.string().optional(),
   })
   const parsed = schema.safeParse(req.body ?? {})
-  if (!parsed.success) return res.status(400).json({ error: 'Invalid payload', detail: parsed.error.flatten() })
+  if (!parsed.success) return apiFailure(res, 400, 'invalid_payload', 'Invalid payload', parsed.error.flatten())
 
   const startPath = normalizePickerStartPath(parsed.data.startPath)
   const controller = new AbortController()
@@ -27299,15 +28813,18 @@ app.post('/api/party/folder-picker', async (req, res) => {
   if (res.writableEnded) return
 
   if (picked.ok && picked.path) {
-    return res.json({ ok: true, path: path.resolve(picked.path) })
+    return apiSuccess(res, { status: 'selected', path: path.resolve(picked.path), cancelled: false, detail: 'Folder selected.' })
   }
-  if (picked.cancelled) return res.json({ ok: false, path: null, cancelled: true, detail: 'No folder selected.' })
-  return res.status(501).json({
-    ok: false,
-    path: null,
-    error: 'Folder picker unavailable',
-    detail: picked.detail || 'No supported native folder picker is available in this environment.',
-  })
+  if (picked.cancelled) {
+    return apiSuccess(res, { status: 'cancelled', path: null, cancelled: true, detail: 'No folder selected.' })
+  }
+  return apiFailure(
+    res,
+    501,
+    'folder_picker_failed',
+    'Folder picker unavailable',
+    picked.detail || 'No supported native folder picker is available in this environment.',
+  )
 })
 
 app.post('/api/party/folder-picker/start', async (req, res) => {
@@ -27315,25 +28832,26 @@ app.post('/api/party/folder-picker/start', async (req, res) => {
     startPath: z.string().optional(),
   })
   const parsed = schema.safeParse(req.body ?? {})
-  if (!parsed.success) return res.status(400).json({ ok: false, error: 'Invalid payload', detail: parsed.error.flatten() })
+  if (!parsed.success) return apiFailure(res, 400, 'invalid_payload', 'Invalid payload', parsed.error.flatten())
 
   const startPath = normalizePickerStartPath(parsed.data.startPath)
   const session = startFolderPickerSession(startPath)
-  return res.json(serializeFolderPickerSession(session))
+  return apiSuccess(res, serializeFolderPickerSession(session))
 })
 
 app.get('/api/party/folder-picker/:sessionId', (req, res) => {
   pruneFolderPickerSessions()
   const session = folderPickerSessions.get(String(req.params.sessionId || ''))
   if (!session) {
-    return res.status(404).json({
-      ok: false,
-      status: 'error',
-      error: 'Folder picker session not found.',
-      detail: 'The folder picker session expired. Press Browse again.',
-    })
+    return apiFailure(
+      res,
+      404,
+      'folder_picker_failed',
+      'Folder picker session not found.',
+      'The folder picker session expired. Press Browse again.',
+    )
   }
-  return res.json(serializeFolderPickerSession(session))
+  return apiSuccess(res, serializeFolderPickerSession(session))
 })
 
 app.post('/api/party/avatar-picker/start', async (req, res) => {
@@ -27342,30 +28860,35 @@ app.post('/api/party/avatar-picker/start', async (req, res) => {
     startPath: z.string().optional(),
   })
   const parsed = schema.safeParse(req.body ?? {})
-  if (!parsed.success) return res.status(400).json({ ok: false, error: 'Invalid payload', detail: parsed.error.flatten() })
-  if (!isValidAgentId(parsed.data.agentId)) return res.status(400).json({ ok: false, error: 'Invalid agent id.' })
+  if (!parsed.success) return apiFailure(res, 400, 'invalid_payload', 'Invalid payload', parsed.error.flatten())
+  if (!isValidAgentId(parsed.data.agentId)) return apiFailure(res, 400, 'invalid_payload', 'Invalid agent id.')
 
-  const { config, target } = await getAgentById(parsed.data.agentId)
-  if (!target) return res.status(404).json({ ok: false, error: `Agent not found: ${parsed.data.agentId}` })
+  try {
+    const { config, target } = await getAgentById(parsed.data.agentId)
+    if (!target) return apiFailure(res, 404, 'agent_not_found', `Agent not found: ${parsed.data.agentId}`)
 
-  const fallbackStart = path.resolve(resolveWorkspaceForAgent(target, target.id, config.agents?.defaults?.workspace))
-  const startPath = normalizePickerStartPath(parsed.data.startPath, fallbackStart)
-  const session = startImagePickerSession(target.id, startPath)
-  return res.json(serializeImagePickerSession(session))
+    const fallbackStart = path.resolve(resolveWorkspaceForAgent(target, target.id, config.agents?.defaults?.workspace))
+    const startPath = normalizePickerStartPath(parsed.data.startPath, fallbackStart)
+    const session = startImagePickerSession(target.id, startPath)
+    return apiSuccess(res, serializeImagePickerSession(session))
+  } catch (error) {
+    return apiFailure(res, 500, 'image_picker_failed', 'Failed to start image picker', String(error))
+  }
 })
 
 app.get('/api/party/avatar-picker/:sessionId', (req, res) => {
   pruneFolderPickerSessions()
   const session = imagePickerSessions.get(String(req.params.sessionId || ''))
   if (!session) {
-    return res.status(404).json({
-      ok: false,
-      status: 'error',
-      error: 'Image picker session not found.',
-      detail: 'The image picker session expired. Press Browse again.',
-    })
+    return apiFailure(
+      res,
+      404,
+      'image_picker_failed',
+      'Image picker session not found.',
+      'The image picker session expired. Press Browse again.',
+    )
   }
-  return res.json(serializeImagePickerSession(session))
+  return apiSuccess(res, serializeImagePickerSession(session))
 })
 
 app.post('/api/party/dispatch', async (req, res) => {
@@ -27385,12 +28908,29 @@ app.post('/api/party/dispatch', async (req, res) => {
   })
 
   const parsed = schema.safeParse(req.body)
-  if (!parsed.success) return res.status(400).json({ error: 'Invalid payload', detail: parsed.error.flatten() })
+  if (!parsed.success) return apiFailure(res, 400, 'invalid_payload', 'Invalid payload', parsed.error.flatten())
+
+  try {
+  const invalidAssignmentAgent = parsed.data.assignments.find(
+    (assignment) => !isValidAgentId(assignment.agent) || isRetiredAgentId(assignment.agent),
+  )
+  if (invalidAssignmentAgent) {
+    return apiFailure(res, 400, 'invalid_payload', `Invalid or retired agent id: ${invalidAssignmentAgent.agent}`)
+  }
+
+  const party = await getPartyMembers()
+  const partyById = new Map(party.map((agent) => [agent.id, agent]))
+  const missingAgents = Array.from(new Set(parsed.data.assignments.map((assignment) => assignment.agent))).filter(
+    (agentId) => !partyById.has(agentId),
+  )
+  if (missingAgents.length) {
+    return apiFailure(res, 404, 'agent_not_found', 'Dispatch includes agent ids that are not in the party.', {
+      agents: missingAgents,
+    })
+  }
 
   const dispatchId = randomUUID()
   const activity: string[] = []
-  const party = await getPartyMembers().catch(() => [])
-  const partyById = new Map(party.map((agent) => [agent.id, agent]))
   const assignmentsState: TeamSyncAssignment[] = parsed.data.assignments.map((assignment) => ({
     agentId: assignment.agent,
     task: assignment.message,
@@ -27757,7 +29297,7 @@ app.post('/api/party/dispatch', async (req, res) => {
   const summedDurationMs = outputs.reduce((sum, item) => sum + item.durationMs, 0)
   const peakConcurrency = computePeakConcurrency(spans)
 
-  return res.json({
+  return apiSuccess(res, {
     ok: outputs.every((item) => item.ok),
     mode: parsed.data.mode,
     outputs,
@@ -27768,6 +29308,9 @@ app.post('/api/party/dispatch', async (req, res) => {
       parallelEfficiency: summedDurationMs > 0 ? Number((wallClockMs / summedDurationMs).toFixed(3)) : 1,
     },
   })
+  } catch (error) {
+    return apiFailure(res, 500, 'party_dispatch_failed', 'Party dispatch failed', String(error))
+  }
 })
 
 app.post('/api/party/agent-to-agent', async (req, res) => {
@@ -27779,34 +29322,35 @@ app.post('/api/party/agent-to-agent', async (req, res) => {
     timeoutSeconds: z.number().int().min(30).max(7200).optional(),
   })
   const parsed = schema.safeParse(req.body)
-  if (!parsed.success) return res.status(400).json({ error: 'Invalid payload', detail: parsed.error.flatten() })
+  if (!parsed.success) return apiFailure(res, 400, 'invalid_payload', 'Invalid payload', parsed.error.flatten())
 
+  try {
   const { fromAgent, toAgent, instruction, thinking, timeoutSeconds } = parsed.data
   if (!isValidAgentId(fromAgent) || !isValidAgentId(toAgent)) {
-    return res.status(400).json({ error: 'Invalid agent id(s).' })
+    return apiFailure(res, 400, 'invalid_payload', 'Invalid agent id(s).')
   }
   if (isRetiredAgentId(fromAgent) || isRetiredAgentId(toAgent)) {
-    return res.status(400).json({ error: 'Retired agent id cannot be used for agent-to-agent routing.' })
+    return apiFailure(res, 400, 'invalid_payload', 'Retired agent id cannot be used for agent-to-agent routing.')
   }
   if (fromAgent === toAgent) {
-    return res.status(400).json({ error: 'fromAgent and toAgent must be different.' })
+    return apiFailure(res, 400, 'invalid_payload', 'fromAgent and toAgent must be different.')
   }
 
-  const party = await getPartyMembers().catch(() => [])
+  const party = await getPartyMembers()
   const partyById = new Map(party.map((agent) => [agent.id, agent]))
   if (!partyById.has(fromAgent) || !partyById.has(toAgent)) {
-    return res.status(404).json({ error: 'Both fromAgent and toAgent must exist in party.' })
+    return apiFailure(res, 404, 'agent_not_found', 'Both fromAgent and toAgent must exist in party.', {
+      fromAgent,
+      toAgent,
+    })
   }
 
   const policy = await getAgentToAgentPolicy().catch(() => ({ enabled: true, allow: [] as string[] }))
   if (!policy.enabled) {
-    return res.status(403).json({ error: 'Agent-to-agent routing is disabled by policy.' })
+    return apiFailure(res, 403, 'party_handoff_failed', 'Agent-to-agent routing is disabled by policy.')
   }
   if (!isAgentAllowedByPolicy(fromAgent, policy.allow) || !isAgentAllowedByPolicy(toAgent, policy.allow)) {
-    return res.status(403).json({
-      error: 'Agent-to-agent policy denies this route.',
-      detail: { allow: policy.allow },
-    })
+    return apiFailure(res, 403, 'party_handoff_failed', 'Agent-to-agent policy denies this route.', { allow: policy.allow })
   }
 
   const handoffId = randomUUID()
@@ -27905,7 +29449,7 @@ app.post('/api/party/agent-to-agent', async (req, res) => {
     })
 
     await appendAgentDailyMemory(fromAgent, `[handoff:${handoffId}] failed drafting directive for ${toAgent} | ${trimTask(fromReply, 180)}`)
-    return res.status(500).json({
+    return apiSuccess(res, {
       ok: false,
       handoffId,
       from: {
@@ -27915,6 +29459,14 @@ app.post('/api/party/agent-to-agent', async (req, res) => {
         reply: fromReply,
         stdout: fromResult.stdout,
         stderr: fromResult.stderr,
+      },
+      to: {
+        agent: toAgent,
+        ok: false,
+        code: 1,
+        reply: '',
+        stdout: '',
+        stderr: 'Upstream handoff directive failed.',
       },
     })
   }
@@ -27990,7 +29542,7 @@ app.post('/api/party/agent-to-agent', async (req, res) => {
     `[handoff:${handoffId}] received from ${fromAgent} | ${trimTask(toReply || toResult.stderr || toResult.stdout || 'no response', 180)}`,
   )
 
-  return res.status(toResult.code === 0 ? 200 : 500).json({
+  return apiSuccess(res, {
     ok: toResult.code === 0,
     handoffId,
     from: {
@@ -28010,6 +29562,9 @@ app.post('/api/party/agent-to-agent', async (req, res) => {
       stderr: toResult.stderr,
     },
   })
+  } catch (error) {
+    return apiFailure(res, 500, 'party_handoff_failed', 'Agent-to-agent handoff failed', String(error))
+  }
 })
 
 app.post('/api/party/parallel-health', async (req, res) => {
@@ -28020,12 +29575,12 @@ app.post('/api/party/parallel-health', async (req, res) => {
     prompt: z.string().min(1).max(500).default('Parallel health check: reply HEALTH_OK only.'),
   })
   const parsed = schema.safeParse(req.body ?? {})
-  if (!parsed.success) return res.status(400).json({ error: 'Invalid payload', detail: parsed.error.flatten() })
+  if (!parsed.success) return apiFailure(res, 400, 'invalid_payload', 'Invalid payload', parsed.error.flatten())
 
   try {
     const party = await getPartyMembers()
     const pool = (parsed.data.agents?.length ? parsed.data.agents : party.slice(0, 3).map((entry) => entry.id)).filter(Boolean)
-    if (pool.length < 2) return res.status(400).json({ error: 'Need at least 2 agents for parallel health check.' })
+    if (pool.length < 2) return apiFailure(res, 400, 'party_coordination_failed', 'Need at least 2 agents for parallel health check.')
 
     const runOne = async (agentId: string) => {
       const startedAt = new Date().toISOString()
@@ -28075,7 +29630,7 @@ app.post('/api/party/parallel-health', async (req, res) => {
     const peakConcurrency = computePeakConcurrency(spans)
     const looksParallel = peakConcurrency >= 2 && wallClockMs < summedDurationMs * 0.9
 
-    return res.json({
+    return apiSuccess(res, {
       ok: outputs.every((item) => item.ok),
       looksParallel,
       outputs,
@@ -28090,12 +29645,63 @@ app.post('/api/party/parallel-health', async (req, res) => {
         : 'Execution appears staggered. Check runtime queueing, agent availability, or reduce parallel load.',
     })
   } catch (error) {
-    return res.status(500).json({ error: 'Parallel health check failed', detail: String(error) })
+    return apiFailure(res, 500, 'party_coordination_failed', 'Parallel health check failed', String(error))
   }
 })
 
-app.get('/api/missions', (_req, res) => {
-  res.json({ missions: listMissions().map((mission) => missionView(mission)), feed: missionFeed.slice(0, 120) })
+app.get('/api/missions', async (_req, res) => {
+  return apiSuccess(res, await buildMissionLifecycleProjection({
+    missionLimit: 500,
+    eventLimit: 300,
+    feedLimit: 120,
+    reportLimit: 80,
+  }))
+})
+
+app.get('/api/missions/projection', async (_req, res) => {
+  return apiSuccess(res, await buildMissionLifecycleProjection({
+    missionLimit: 500,
+    eventLimit: 500,
+    feedLimit: 120,
+    reportLimit: 80,
+  }))
+})
+
+app.get('/api/missions/:missionId/lifecycle', async (req, res) => {
+  const missionId = req.params.missionId?.trim()
+  if (!missionId) return apiFailure(res, 400, 'invalid_payload', 'Mission id is required')
+  const projection = await buildMissionLifecycleProjection({
+    missionId,
+    missionLimit: 1000,
+    eventLimit: 1000,
+    feedLimit: 200,
+    reportLimit: 200,
+  })
+  if (!projection.missions.length && !projection.events.length && !projection.reports.length) {
+    return apiFailure(res, 404, 'mission_not_found', 'Mission lifecycle not found')
+  }
+  return apiSuccess(res, {
+    missionId,
+    ...projection,
+    mission: projection.missions[0] || null,
+    report: projection.reports[0] || null,
+  })
+})
+
+app.get('/api/missions/:missionId/events', async (req, res) => {
+  const missionId = req.params.missionId?.trim()
+  if (!missionId) return apiFailure(res, 400, 'invalid_payload', 'Mission id is required')
+  const events = await readMissionEventLedgerTail<MissionLifecycleEvent>(1000).catch(() => [])
+  return apiSuccess(res, { missionId, events: events.filter((event) => event.missionId === missionId) })
+})
+
+app.get('/api/missions/:missionId/report', async (req, res) => {
+  const missionId = req.params.missionId?.trim()
+  if (!missionId) return apiFailure(res, 400, 'invalid_payload', 'Mission id is required')
+  const reports = await listMissionReports(200)
+  const report = reports.find((entry) => entry.missionId === missionId) || null
+  if (!report) return apiFailure(res, 404, 'mission_report_not_found', 'Mission report not found')
+  return apiSuccess(res, { missionId, report })
 })
 
 app.post('/api/missions/start', async (req, res) => {
@@ -28111,16 +29717,27 @@ app.post('/api/missions/start', async (req, res) => {
     riskTolerance: z.number().int().min(0).max(100).optional(),
     cadenceSeconds: z.number().int().min(15).max(24 * 60 * 60).optional(),
     maxCycles: z.number().int().min(1).max(1000).nullable().optional(),
+    idempotencyKey: z.string().trim().min(8).max(160).optional(),
   })
   const parsed = schema.safeParse(req.body)
-  if (!parsed.success) return res.status(400).json({ error: 'Invalid payload', detail: parsed.error.flatten() })
+  if (!parsed.success) return apiFailure(res, 400, 'invalid_payload', 'Invalid payload', parsed.error.flatten())
 
   const payload = parsed.data
+  const idempotencyKey = normalizeMissionLaunchIdempotencyKey(payload.idempotencyKey)
   const uniqueParty = Array.from(new Set(payload.party.map((agentId) => agentId.trim()).filter(Boolean)))
-  if (!uniqueParty.length) return res.status(400).json({ error: 'Mission requires at least one valid agent.' })
+  if (!uniqueParty.length) return apiFailure(res, 400, 'invalid_payload', 'Mission requires at least one valid agent.')
+  const existingMission = findMissionByIdempotencyKey(idempotencyKey)
+  if (existingMission) {
+    return apiSuccess(res, {
+      deduped: true,
+      idempotencyKey,
+      mission: missionView(existingMission),
+    })
+  }
 
   const mission: Mission = {
     id: randomUUID(),
+    ...(idempotencyKey ? { idempotencyKey } : {}),
     title: payload.title,
     brief: payload.brief,
     mode: payload.mode,
@@ -28133,6 +29750,7 @@ app.post('/api/missions/start', async (req, res) => {
     startAt: new Date().toISOString(),
     endAt: null,
     status: 'active',
+    lifecycleState: 'draft',
     party: uniqueParty,
     createdAt: new Date().toISOString(),
     completedAt: null,
@@ -28163,10 +29781,13 @@ app.post('/api/missions/start', async (req, res) => {
   }
 
   missions.set(mission.id, mission)
-  pushMissionEvent({
-    missionId: mission.id,
-    type: 'mission_started',
-    message: `Cron mission started: ${mission.title}`,
+  transitionMissionState(mission, 'validating', 'mission_started', `Cron mission accepted for validation: ${mission.title}`, {
+    idempotencyKey: `${mission.id}:draft->validating`,
+    evidence: { partySize: mission.party.length, mode: mission.mode },
+  })
+  transitionMissionState(mission, 'scheduled', 'mission_started', `Cron mission scheduled: ${mission.title}`, {
+    idempotencyKey: `${mission.id}:validating->scheduled`,
+    evidence: { cadenceSeconds: mission.cadenceSeconds || null, maxCycles: mission.scheduler.maxCycles },
   })
   missionActivity.unshift(`${new Date().toISOString()} | cron mission started`)
   for (const state of missionAssignments) {
@@ -28192,11 +29813,33 @@ app.post('/api/missions/start', async (req, res) => {
   })
 
   try {
-    if (mission.mode === 'instant') {
+    if (CONTROL_CENTER_MISSION_SCHEDULER_DRY_RUN) {
+      mission.scheduler.status = 'waiting'
+      mission.scheduler.nextRoundAt = null
+      mission.scheduler.lastError = null
+      missionActivity.unshift(`${new Date().toISOString()} | scheduler | mission scheduler dry-run armed`)
+      persistMissionRecord(mission, 'scheduler-dry-run')
+      pushMissionEvent({
+        missionId: mission.id,
+        type: 'agent_update',
+        message: `Mission scheduler dry-run armed: ${mission.title}`,
+        actor: 'scheduler',
+        evidence: {
+          dryRun: true,
+          reason: 'CONTROL_CENTER_MISSION_SCHEDULER_DRY_RUN',
+          partySize: mission.party.length,
+          mode: mission.mode,
+        },
+      })
+    } else if (mission.mode === 'instant') {
       scheduleNextMissionRound(mission, missionAssignments, missionActivity, 0)
     } else {
       await startRecurringMissionCronJobs(mission, missionAssignments, missionActivity)
     }
+    transitionMissionState(mission, 'running', 'mission_started', `Cron mission running: ${mission.title}`, {
+      idempotencyKey: `${mission.id}:scheduled->running`,
+      evidence: { schedulerStatus: mission.scheduler.status, jobs: mission.scheduler.jobs.length },
+    })
   } catch (error) {
     const timer = missionTimers.get(mission.id)
     if (timer) {
@@ -28205,21 +29848,29 @@ app.post('/api/missions/start', async (req, res) => {
     }
     mission.status = 'cancelled'
     mission.completedAt = new Date().toISOString()
+    transitionMissionState(mission, 'failed', 'mission_cancelled', `Cron mission failed during scheduler setup: ${String(error)}`, {
+      idempotencyKey: `${mission.id}:scheduled->failed`,
+      evidence: { error: String(error) },
+    })
+    recordMissionReport(mission)
     missions.delete(mission.id)
-    return res.status(500).json({ error: 'Failed to create mission cron jobs', detail: String(error) })
+    return apiFailure(res, 500, 'mission_scheduler_failed', 'Failed to create mission cron jobs', String(error))
   }
 
-  return res.json({ ok: true, mission: missionView(mission) })
+  return apiSuccess(res, { deduped: false, idempotencyKey, mission: missionView(mission) })
 })
 
-app.post('/api/missions/stop', (req, res) => {
-  const schema = z.object({ missionId: z.string().min(1) })
+app.post('/api/missions/stop', async (req, res) => {
+  const schema = z.object({
+    missionId: z.string().min(1),
+    reason: z.string().trim().max(300).optional(),
+  })
   const parsed = schema.safeParse(req.body)
-  if (!parsed.success) return res.status(400).json({ error: 'Invalid payload', detail: parsed.error.flatten() })
+  if (!parsed.success) return apiFailure(res, 400, 'invalid_payload', 'Invalid payload', parsed.error.flatten())
 
   const mission = missions.get(parsed.data.missionId)
-  if (!mission) return res.status(404).json({ error: 'Mission not found' })
-  if (mission.status !== 'active') return res.status(400).json({ error: `Mission is already ${mission.status}` })
+  if (!mission) return apiFailure(res, 404, 'mission_not_found', 'Mission not found')
+  if (mission.status !== 'active') return apiFailure(res, 400, 'mission_invalid_state', `Mission is already ${mission.status}`)
 
   const timer = missionTimers.get(mission.id)
   if (timer) {
@@ -28230,18 +29881,55 @@ app.post('/api/missions/stop', (req, res) => {
 
   mission.status = 'cancelled'
   mission.completedAt = new Date().toISOString()
+  mission.endAt ||= mission.completedAt
   mission.scheduler.status = 'stopping'
   mission.scheduler.nextRoundAt = null
   mission.scheduler.activeJobId = null
-  void cleanupMissionCronJobs(mission).then(() => {
-    mission.scheduler.status = 'stopped'
-  })
+  mission.scheduler.lastError = null
+  const cancellationReason = parsed.data.reason || 'mission cancelled by operator'
+  persistMissionRecord(mission, 'cancellation-requested')
   pushMissionEvent({
     missionId: mission.id,
-    type: 'mission_cancelled',
-    message: `Cron mission cancelled: ${mission.title}`,
+    type: 'agent_update',
+    message: `Mission cancellation requested: ${mission.title}`,
+    actor: 'operator',
+    previousState: mission.lifecycleState,
+    nextState: mission.lifecycleState,
+    idempotencyKey: `${mission.id}:operator-cancel-requested:${mission.completedAt}`,
+    evidence: {
+      reason: cancellationReason,
+      jobs: mission.scheduler.jobs.length,
+      activeJobs: mission.scheduler.jobs.filter(missionCronJobNeedsRecovery).length,
+      round: mission.scheduler.round,
+    },
   })
-  void writeTeamSyncSnapshot({
+
+  const cleanup = await cleanupMissionCronJobs(mission).catch(missionCronCleanupFailureSummary)
+  if (cleanup.failed > 0) {
+    mission.scheduler.status = 'failed'
+    mission.scheduler.lastError = `Mission cancellation cleanup failed for ${cleanup.failed} job(s).`
+    pushMissionEvent({
+      missionId: mission.id,
+      type: 'agent_update',
+      message: `Mission cancellation cleanup failed for ${cleanup.failed} cron job(s).`,
+      actor: 'scheduler',
+      evidence: { cleanup },
+    })
+  } else {
+    mission.scheduler.status = 'stopped'
+  }
+  transitionMissionState(mission, 'cancelled', 'mission_cancelled', `Cron mission cancelled: ${mission.title}`, {
+    actor: 'operator',
+    idempotencyKey: `${mission.id}:operator-cancel:${mission.completedAt}`,
+    evidence: {
+      reason: cancellationReason,
+      jobs: mission.scheduler.jobs.length,
+      round: mission.scheduler.round,
+      cleanup,
+    },
+  })
+  recordMissionReport(mission)
+  await writeTeamSyncSnapshot({
     missionId: mission.id,
     title: mission.title,
     mode: mission.mode,
@@ -28251,11 +29939,14 @@ app.post('/api/missions/stop', (req, res) => {
       task: mission.brief,
       status: 'cancelled',
       updatedAt: new Date().toISOString(),
-      note: 'mission cancelled by operator',
+      note: cancellationReason,
     })),
-    activity: [`${new Date().toISOString()} | mission cancelled by operator`],
+    activity: [
+      `${new Date().toISOString()} | ${cancellationReason}`,
+      `${new Date().toISOString()} | scheduler | cancellation cleanup removed=${cleanup.removed} disabled=${cleanup.disabled} failed=${cleanup.failed}`,
+    ],
   })
-  return res.json({ ok: true, mission: missionView(mission) })
+  return apiSuccess(res, { mission: missionView(mission), cleanup })
 })
 
 async function runBufferedAgentTurnForStream(
@@ -28409,7 +30100,15 @@ async function runBufferedAgentTurnForStream(
   const text = response.text || ''
   let payload: Record<string, unknown>
   try {
-    payload = text ? (JSON.parse(text) as Record<string, unknown>) : {}
+    const parsedPayload = text ? unwrapCanonicalApiPayload(JSON.parse(text) as unknown) : {}
+    payload = parsedPayload && typeof parsedPayload === 'object' && !Array.isArray(parsedPayload)
+      ? parsedPayload as Record<string, unknown>
+      : {
+          ok: false,
+          reply: text.trim() ? `HTTP ${response.status}: ${trimTask(text, 300)}` : `HTTP ${response.status}`,
+          stderr: text,
+          code: response.status,
+        }
   } catch {
     payload = {
       ok: false,
@@ -28864,11 +30563,11 @@ async function streamProviderAgentTurn(
 app.post('/api/openclaw/agent-preflight', async (req, res) => {
   const schema = z.object({ agent: z.string().min(1) })
   const parsed = schema.safeParse(req.body)
-  if (!parsed.success) return res.status(400).json({ ok: false, message: 'Invalid payload', detail: parsed.error.flatten() })
+  if (!parsed.success) return apiFailure(res, 400, 'invalid_payload', 'Invalid payload', parsed.error.flatten())
 
   const agent = parsed.data.agent
   if (!isValidAgentId(agent) || isRetiredAgentId(agent)) {
-    return res.status(400).json({ ok: false, message: 'Invalid or retired agent id.' })
+    return apiFailure(res, 400, 'invalid_payload', 'Invalid or retired agent id.')
   }
 
   try {
@@ -28876,8 +30575,7 @@ app.post('/api/openclaw/agent-preflight', async (req, res) => {
     const config = await readOpenclawConfig()
     const healthChecks = await ensureAgentRuntimeHealthPreflight(agent, config)
     const sandbox = await ensureAgentSandboxCompatibleWithHost(agent)
-    return res.json({
-      ok: true,
+    return apiSuccess(res, {
       agent,
       checks: [
         ...healthChecks,
@@ -28896,32 +30594,37 @@ app.post('/api/openclaw/agent-preflight', async (req, res) => {
     })
   } catch (error) {
     const message = `Agent runtime preflight failed for ${agent}: ${String(error)}`
-    return res.status(500).json({ ok: false, message, checks: (error as Error & { checks?: AgentRuntimePreflightCheck[] }).checks })
+    return apiFailure(res, 500, 'agent_preflight_failed', message, {
+      checks: (error as Error & { checks?: AgentRuntimePreflightCheck[] }).checks,
+    })
   }
 })
 
 app.post('/api/openclaw/agent-turn/sessions/clear', async (req, res) => {
   const schema = z.object({ agent: z.string().min(1).optional() }).optional()
   const parsed = schema.safeParse(req.body)
-  if (!parsed.success) return res.status(400).json({ error: 'Invalid payload', detail: parsed.error.flatten() })
+  if (!parsed.success) return apiFailure(res, 400, 'invalid_payload', 'Invalid payload', parsed.error.flatten())
   const agent = parsed.data?.agent?.trim()
-  const cleared = clearAgentTurnSessions(agent || undefined)
-  const lockCleanup = await cleanupOpenClawSessionLocks({
-    agentId: agent || undefined,
-    all: !agent,
-    minAgeMs: 0,
-    reason: 'agent session cache clear',
-  })
-  return res.json({
-    ok: true,
-    cleared,
-    scope: agent ? 'agent' : 'all',
-    sessionLockCleanup: {
-      scanned: lockCleanup.scanned,
-      removed: lockCleanup.removed.length,
-      errors: lockCleanup.errors.length,
-    },
-  })
+  try {
+    const cleared = clearAgentTurnSessions(agent || undefined)
+    const lockCleanup = await cleanupOpenClawSessionLocks({
+      agentId: agent || undefined,
+      all: !agent,
+      minAgeMs: 0,
+      reason: 'agent session cache clear',
+    })
+    return apiSuccess(res, {
+      cleared,
+      scope: agent ? 'agent' : 'all',
+      sessionLockCleanup: {
+        scanned: lockCleanup.scanned,
+        removed: lockCleanup.removed.length,
+        errors: lockCleanup.errors.length,
+      },
+    })
+  } catch (error) {
+    return apiFailure(res, 500, 'agent_session_operation_failed', 'Failed to clear agent turn sessions', String(error))
+  }
 })
 
 app.get('/api/openclaw/clawtalk-console/stream', (_req, res) => {
@@ -28962,23 +30665,30 @@ app.post('/api/openclaw/clawtalk-console/final', (req, res) => {
     liveTokens: z.boolean().optional(),
   })
   const parsed = schema.safeParse(req.body)
-  if (!parsed.success) return res.status(400).json({ error: 'Invalid payload', detail: parsed.error.flatten() })
+  if (!parsed.success) return apiFailure(res, 400, 'invalid_payload', 'Invalid payload', parsed.error.flatten())
 
-  const agentId = parsed.data.agent.trim()
-  const sessionKey = parsed.data.sessionKey?.trim() || `clawtalk:${agentId}`
-  const prompt = parsed.data.prompt?.trim() || 'ClawTalk message'
-  const reply = (parsed.data.reply || parsed.data.text || '').trim()
-  const context = resolveClawTalkConsoleMirrorContext({ agentId, sessionKey, prompt })
-  const emitted = emitClawTalkConsoleFrame('final', context, {
-    ok: parsed.data.ok !== false,
-    reply: reply || 'No response returned.',
-    transport: parsed.data.transport?.trim() || 'clawtalk-control-center',
-    buffered: parsed.data.buffered ?? true,
-    liveTokens: parsed.data.liveTokens ?? false,
-    consoleBridgeFinal: true,
-  })
+  try {
+    const agentId = parsed.data.agent.trim()
+    if (!isValidAgentId(agentId) || isRetiredAgentId(agentId)) {
+      return apiFailure(res, 400, 'invalid_payload', 'Invalid or retired agent id.')
+    }
+    const sessionKey = parsed.data.sessionKey?.trim() || `clawtalk:${agentId}`
+    const prompt = parsed.data.prompt?.trim() || 'ClawTalk message'
+    const reply = (parsed.data.reply || parsed.data.text || '').trim()
+    const context = resolveClawTalkConsoleMirrorContext({ agentId, sessionKey, prompt })
+    const emitted = emitClawTalkConsoleFrame('final', context, {
+      ok: parsed.data.ok !== false,
+      reply: reply || 'No response returned.',
+      transport: parsed.data.transport?.trim() || 'clawtalk-control-center',
+      buffered: parsed.data.buffered ?? true,
+      liveTokens: parsed.data.liveTokens ?? false,
+      consoleBridgeFinal: true,
+    })
 
-  return res.json({ ok: true, deduped: !emitted, clawTalkRunId: context.clawTalkRunId })
+    return apiSuccess(res, { ok: true, deduped: !emitted, clawTalkRunId: context.clawTalkRunId })
+  } catch (error) {
+    return apiFailure(res, 500, 'clawtalk_console_failed', 'Failed to record ClawTalk final event', String(error))
+  }
 })
 
 app.post('/api/openclaw/agent-turn/stream', async (req, res) => {
@@ -28995,7 +30705,7 @@ app.post('/api/openclaw/agent-turn/stream', async (req, res) => {
     forceOpenClawRuntime: z.boolean().optional().default(false),
   })
   const parsed = schema.safeParse(req.body)
-  if (!parsed.success) return res.status(400).json({ error: 'Invalid payload', detail: parsed.error.flatten() })
+  if (!parsed.success) return apiFailure(res, 400, 'invalid_payload', 'Invalid payload', parsed.error.flatten())
 
   initializeSseResponse(res)
   const abortController = new AbortController()
@@ -29221,7 +30931,7 @@ app.post('/api/openclaw/agent-turn', async (req, res) => {
     gatewayStreamObserverId: z.string().uuid().optional(),
   })
   const parsed = schema.safeParse(req.body)
-  if (!parsed.success) return res.status(400).json({ error: 'Invalid payload', detail: parsed.error.flatten() })
+  if (!parsed.success) return apiFailure(res, 400, 'invalid_payload', 'Invalid payload', parsed.error.flatten())
 
   const requestAbortController = new AbortController()
   try {
@@ -29242,7 +30952,7 @@ app.post('/api/openclaw/agent-turn', async (req, res) => {
   const message = runtimeShortcut?.message || rawMessage
   const intentMessage = runtimeShortcut ? runtimeShortcut.message : rawIntentMessage
   if (!isValidAgentId(agent) || isRetiredAgentId(agent)) {
-    return res.status(400).json({
+    return apiFailure(res, 400, 'invalid_payload', 'Invalid or retired agent id.', {
       ok: false,
       reply: 'Invalid or retired agent id.',
       stdout: '',
@@ -29271,7 +30981,7 @@ app.post('/api/openclaw/agent-turn', async (req, res) => {
   if (browserIntent) {
     const preflight = await checkBrowserPreflight(agent)
     if (!preflight.ok) {
-      return res.status(503).json({
+      return apiSuccess(res, {
         ok: false,
         reply: preflight.message,
         stdout: '',
@@ -29295,7 +31005,7 @@ app.post('/api/openclaw/agent-turn', async (req, res) => {
 
     await appendAgentDailyMemory(agent, `[turn] ${launched.ok ? 'completed' : 'failed'} | ${hostMessage}`)
 
-    return res.status(launched.ok ? 200 : 500).json({
+    return apiSuccess(res, {
       ok: launched.ok,
       reply: hostMessage,
       stdout: launched.ok
@@ -29331,7 +31041,7 @@ app.post('/api/openclaw/agent-turn', async (req, res) => {
     if (target) {
       const policy = await getAgentToAgentPolicy().catch(() => ({ enabled: true, allow: [] as string[] }))
       if (!policy.enabled) {
-        return res.status(403).json({
+        return apiFailure(res, 403, 'party_handoff_failed', 'Agent-to-agent routing is disabled by policy.', {
           ok: false,
           reply: 'Agent-to-agent routing is disabled by policy.',
           stderr: 'tools.agentToAgent.enabled is false',
@@ -29340,7 +31050,7 @@ app.post('/api/openclaw/agent-turn', async (req, res) => {
         })
       }
       if (!isAgentAllowedByPolicy(agent, policy.allow) || !isAgentAllowedByPolicy(target.id, policy.allow)) {
-        return res.status(403).json({
+        return apiFailure(res, 403, 'party_handoff_failed', `Agent-to-agent policy denies routing from ${agent} to ${target.id}.`, {
           ok: false,
           reply: `Agent-to-agent policy denies routing from ${agent} to ${target.id}.`,
           stderr: JSON.stringify({ allow: policy.allow }),
@@ -29349,9 +31059,9 @@ app.post('/api/openclaw/agent-turn', async (req, res) => {
         })
       }
 
-      const handoffResponse = await fetch(`http://127.0.0.1:${PORT}/api/party/agent-to-agent`, {
+      const handoffResponse: { ok: boolean; status: number; json: () => Promise<unknown> } = await fetch(`http://127.0.0.1:${PORT}/api/party/agent-to-agent`, {
         method: 'POST',
-        headers: { 'content-type': 'application/json' },
+        headers: { 'content-type': 'application/json', Authorization: `Bearer ${AUTH_TOKEN}` },
         body: JSON.stringify({
           fromAgent: agent,
           toAgent: target.id,
@@ -29359,13 +31069,15 @@ app.post('/api/openclaw/agent-turn', async (req, res) => {
           thinking: effectiveThinking,
           timeoutSeconds: effectiveTimeoutSeconds,
         }),
-      }).catch((error) => ({ ok: false, status: 500, json: async () => ({ error: String(error) }) } as Response))
+      }).catch((error) => ({ ok: false, status: 500, json: async () => ({ error: String(error) }) }))
 
-      const payload = await handoffResponse.json().catch(() => ({}))
+      const rawPayload = await handoffResponse.json().catch((): Record<string, unknown> => ({}))
+      const payload = unwrapCanonicalApiPayload(rawPayload)
       const handoffPayload = payload as DelegationHandoffPayload
+      const handoffOk = handoffResponse.ok && handoffPayload.ok !== false
       const delegatedReply =
-        (handoffPayload.to?.reply && String(handoffPayload.to.reply)) ||
-        (handoffPayload.reply && String(handoffPayload.reply)) ||
+        (handoffPayload.to?.reply !== undefined && handoffPayload.to?.reply !== null ? String(handoffPayload.to.reply) : '') ||
+        (handoffPayload.reply !== undefined && handoffPayload.reply !== null ? String(handoffPayload.reply) : '') ||
         `Delegated to ${target.id}.`
 
       await appendAgentDailyMemory(
@@ -29373,12 +31085,12 @@ app.post('/api/openclaw/agent-turn', async (req, res) => {
         `[turn] delegated to ${target.id} | ${trimTask(delegation.instruction, 140)} | outcome: ${trimTask(delegatedReply, 180)}`,
       )
 
-      return res.status(handoffResponse.ok ? 200 : handoffResponse.status || 500).json({
-        ok: handoffResponse.ok,
+      return apiSuccess(res, {
+        ok: handoffOk,
         reply: delegatedReply,
         stdout: payload,
-        stderr: handoffResponse.ok ? '' : JSON.stringify(payload),
-        code: handoffResponse.ok ? 0 : 1,
+        stderr: handoffOk ? '' : JSON.stringify(rawPayload),
+        code: handoffOk ? 0 : 1,
         modelId: agentPrimaryModelId,
         delegation: {
           fromAgent: agent,
@@ -29527,12 +31239,7 @@ app.post('/api/openclaw/agent-turn', async (req, res) => {
         attachments: parsed.data.attachments,
         streamObserverId: parsed.data.gatewayStreamObserverId,
       },
-    }).catch((error): OpenClawResult => ({
-      stdout: '',
-      stderr: String(error),
-      code: 1,
-      failureKind: classifyFailureKind(String(error), 'failed') || 'unknown',
-    }))
+    }).catch(openClawErrorResult)
 
     const previousFailure = [result.stderr, result.stdout].filter(Boolean).join('\n')
     result = retry.code === 0
@@ -29585,7 +31292,7 @@ app.post('/api/openclaw/agent-turn', async (req, res) => {
         attachments: parsed.data.attachments,
         streamObserverId: parsed.data.gatewayStreamObserverId,
       },
-    }).catch((error) => ({ stdout: '', stderr: String(error), code: 1 }))
+    }).catch(openClawErrorResult)
     result = retry
     reply = extractAgentReply(retry.stdout, retry.stderr)
   }
@@ -29631,7 +31338,7 @@ app.post('/api/openclaw/agent-turn', async (req, res) => {
         attachments: parsed.data.attachments,
         streamObserverId: parsed.data.gatewayStreamObserverId,
       },
-    }).catch((error) => ({ stdout: '', stderr: String(error), code: 1 }))
+    }).catch(openClawErrorResult)
     result = retry
     reply = extractAgentReply(retry.stdout, retry.stderr)
   }
@@ -29682,7 +31389,7 @@ app.post('/api/openclaw/agent-turn', async (req, res) => {
           attachments: parsed.data.attachments,
           streamObserverId: parsed.data.gatewayStreamObserverId,
         },
-      }).catch((error) => ({ stdout: '', stderr: String(error), code: 1 }))
+      }).catch(openClawErrorResult)
       result = retry
       reply = extractAgentReply(retry.stdout, retry.stderr)
     }
@@ -29734,7 +31441,7 @@ app.post('/api/openclaw/agent-turn', async (req, res) => {
           attachments: parsed.data.attachments,
           streamObserverId: parsed.data.gatewayStreamObserverId,
         },
-      }).catch((error) => ({ stdout: '', stderr: String(error), code: 1 }))
+      }).catch(openClawErrorResult)
       result = retry
       reply = extractAgentReply(retry.stdout, retry.stderr)
     }
@@ -29775,7 +31482,7 @@ app.post('/api/openclaw/agent-turn', async (req, res) => {
       } catch (error) {
         const fallbackError = `Google Vertex artifact fallback failed: ${String(error)}`
         if (result.code === 0 && !reply.trim()) {
-          result = { stdout: '', stderr: String(error), code: 1 }
+          result = openClawErrorResult(error)
           reply = String(error)
         } else {
           result.stderr = [result.stderr, fallbackError].filter(Boolean).join('\n')
@@ -29816,7 +31523,7 @@ app.post('/api/openclaw/agent-turn', async (req, res) => {
       }
     : undefined
 
-  return res.status(result.code === 0 ? 200 : 500).json(compactHttpJsonPayload({
+  return apiSuccess(res, compactHttpJsonPayload({
     ok: result.code === 0,
     reply,
     stdout: result.stdout,
@@ -29854,7 +31561,9 @@ app.post('/api/openclaw/agent-turn', async (req, res) => {
           ? 422
           : 500
     console.error(`[agent-turn] ${requestedAgent || 'unknown'} failed before OpenClaw reply:`, detail)
-    return res.status(status).json(compactHttpJsonPayload({
+    return apiFailure(res, status, 'agent_turn_failed', aborted
+      ? 'Agent turn was cancelled before completion.'
+      : 'Agent turn failed before OpenClaw returned a reply.', compactHttpJsonPayload({
       ok: false,
       reply: aborted
         ? 'Agent turn was cancelled before completion.'
@@ -29875,7 +31584,7 @@ app.post('/api/openclaw/agent-turn', async (req, res) => {
 app.get('/api/browser/preflight', async (_req, res) => {
   const agentId = typeof _req.query.agentId === 'string' ? _req.query.agentId : undefined
   const preflight = await checkBrowserPreflight(agentId)
-  return res.status(preflight.ok ? 200 : 503).json({ ok: preflight.ok, preflight })
+  return apiSuccess(res, { ok: preflight.ok, preflight })
 })
 
 type StartShiftPayload = {
@@ -30077,13 +31786,13 @@ app.post('/api/shifts/start', async (req, res) => {
     announce: z.boolean().optional(),
   })
   const parsed = schema.safeParse(req.body)
-  if (!parsed.success) return res.status(400).json({ error: 'Invalid payload', detail: parsed.error.flatten() })
+  if (!parsed.success) return apiFailure(res, 400, 'invalid_payload', 'Invalid payload', parsed.error.flatten())
 
   try {
     const shift = await createShiftFromPayload(parsed.data)
-    return res.json({ ok: true, shift })
+    return apiSuccess(res, { shift })
   } catch (error) {
-    return res.status(500).json({ error: 'Failed to create shift', detail: String(error) })
+    return apiFailure(res, 502, 'shift_command_failed', 'Failed to create shift', String(error))
   }
 })
 
@@ -30116,11 +31825,11 @@ app.post('/api/shifts/start-batch', async (req, res) => {
     announce: z.boolean().optional(),
   })
   const parsed = schema.safeParse(req.body)
-  if (!parsed.success) return res.status(400).json({ error: 'Invalid payload', detail: parsed.error.flatten() })
+  if (!parsed.success) return apiFailure(res, 400, 'invalid_payload', 'Invalid payload', parsed.error.flatten())
 
   const payload = parsed.data
   const uniqueAgents = Array.from(new Set(payload.agentIds.map((agentId) => agentId.trim()).filter(Boolean)))
-  if (!uniqueAgents.length) return res.status(400).json({ error: 'No valid agent ids supplied' })
+  if (!uniqueAgents.length) return apiFailure(res, 400, 'invalid_payload', 'No valid agent ids supplied')
 
   const leadAgent = uniqueAgents[0]
   const defaultsMessage = payload.message || 'Read TEAM_SYNC.md, execute one concrete assigned task, and update status.'
@@ -30178,8 +31887,7 @@ app.post('/api/shifts/start-batch', async (req, res) => {
     }).catch(() => undefined)
   }
 
-  return res.json({
-    ok: shifts.length > 0,
+  const batchPayload = {
     batchId,
     managedTeamSync: managedEnabled,
     runId: effectiveRunId,
@@ -30188,18 +31896,22 @@ app.post('/api/shifts/start-batch', async (req, res) => {
     failedCount: errors.length,
     shifts,
     errors,
-  })
+  }
+  if (!shifts.length) {
+    return apiFailure(res, 502, 'shift_command_failed', 'Failed to start team workflow', batchPayload)
+  }
+  return apiSuccess(res, batchPayload)
 })
 
 app.post('/api/shifts/stop', async (req, res) => {
   const schema = z.object({ shiftId: z.string().min(1) })
   const parsed = schema.safeParse(req.body)
-  if (!parsed.success) return res.status(400).json({ error: 'Invalid payload', detail: parsed.error.flatten() })
+  if (!parsed.success) return apiFailure(res, 400, 'invalid_payload', 'Invalid payload', parsed.error.flatten())
 
   const shift = activeShifts.get(parsed.data.shiftId)
   const cronId = shift?.cronId || parsed.data.shiftId.replace(/^cron:/, '').trim()
   if (!isValidCronJobId(cronId)) {
-    return res.status(400).json({ error: 'Invalid cron job id' })
+    return apiFailure(res, 400, 'invalid_payload', 'Invalid cron job id')
   }
 
   try {
@@ -30214,9 +31926,9 @@ app.post('/api/shifts/stop', async (req, res) => {
       if (matchingShift) clearShiftRuntimeState(matchingShift)
     }
     invalidateRuntimeStatusCache()
-    return res.json({ ok: true, shiftId: parsed.data.shiftId, cronId })
+    return apiSuccess(res, { shiftId: parsed.data.shiftId, cronId })
   } catch (error) {
-    return res.status(500).json({ error: 'Failed to stop shift', detail: String(error) })
+    return apiFailure(res, 502, 'shift_command_failed', 'Failed to stop shift', String(error))
   }
 })
 
@@ -30230,13 +31942,13 @@ app.post('/api/shifts/update', async (req, res) => {
     messageMode: z.enum(['message', 'system-event']).optional(),
   })
   const parsed = schema.safeParse(req.body)
-  if (!parsed.success) return res.status(400).json({ error: 'Invalid payload', detail: parsed.error.flatten() })
+  if (!parsed.success) return apiFailure(res, 400, 'invalid_payload', 'Invalid payload', parsed.error.flatten())
 
   const payload = parsed.data
   const shift = activeShifts.get(payload.shiftId)
   const cronId = shift?.cronId || payload.shiftId.replace(/^cron:/, '').trim()
   if (!isValidCronJobId(cronId)) {
-    return res.status(400).json({ error: 'Invalid cron job id' })
+    return apiFailure(res, 400, 'invalid_payload', 'Invalid cron job id')
   }
 
   const args = ['cron', 'edit', cronId]
@@ -30250,12 +31962,12 @@ app.post('/api/shifts/update', async (req, res) => {
 
   if (payload.schedule || payload.scheduleKind) {
     if (!payload.schedule || !payload.scheduleKind) {
-      return res.status(400).json({ error: 'Schedule kind and value are both required to edit timing' })
+      return apiFailure(res, 400, 'invalid_payload', 'Schedule kind and value are both required to edit timing')
     }
     const rawSchedule = payload.schedule.trim()
     if (payload.scheduleKind === 'every') {
       const every = normalizeCronEveryEditInput(rawSchedule)
-      if (!every) return res.status(400).json({ error: 'Use a simple interval like 10m, 1h, 2d, or 1w.' })
+      if (!every) return apiFailure(res, 400, 'invalid_payload', 'Use a simple interval like 10m, 1h, 2d, or 1w.')
       args.push('--every', every)
       updatePatch.schedule = every
     } else if (payload.scheduleKind === 'cron') {
@@ -30275,7 +31987,7 @@ app.post('/api/shifts/update', async (req, res) => {
   }
 
   if (args.length <= 3) {
-    return res.status(400).json({ error: 'No cron job changes supplied' })
+    return apiFailure(res, 400, 'invalid_payload', 'No cron job changes supplied')
   }
 
   try {
@@ -30286,19 +31998,23 @@ app.post('/api/shifts/update', async (req, res) => {
     updateActiveShiftFromCronEdit(shift, updatePatch)
     invalidateRuntimeStatusCache()
     const updated = listActiveCronJobViews().active.find((job) => job.cronId === cronId || job.id === payload.shiftId)
-    return res.json({ ok: true, shiftId: payload.shiftId, cronId, shift: updated || null })
+    return apiSuccess(res, { shiftId: payload.shiftId, cronId, shift: updated || null })
   } catch (error) {
-    return res.status(500).json({ error: 'Failed to update cron job', detail: String(error) })
+    return apiFailure(res, 502, 'shift_command_failed', 'Failed to update cron job', String(error))
   }
 })
 
 app.get('/api/shifts', async (_req, res) => {
-  await sweepExpiredMissionCronJobs('shifts endpoint mission cron expiry sweep').catch(() => undefined)
-  const cronJobs = listActiveCronJobViews()
-  res.json({
-    shifts: cronJobs.active,
-    ...(cronJobs.error ? { error: cronJobs.error } : {}),
-  })
+  try {
+    await sweepExpiredMissionCronJobs('shifts endpoint mission cron expiry sweep').catch(() => undefined)
+    const cronJobs = listActiveCronJobViews()
+    return apiSuccess(res, {
+      shifts: cronJobs.active,
+      ...(cronJobs.error ? { error: cronJobs.error } : {}),
+    })
+  } catch (error) {
+    return apiFailure(res, 500, 'shift_operation_failed', 'Failed to list shifts', String(error))
+  }
 })
 
 app.post('/api/team-sync/append', async (req, res) => {
@@ -30311,10 +32027,10 @@ app.post('/api/team-sync/append', async (req, res) => {
     filePath: z.string().min(1).max(500).optional(),
   })
   const parsed = schema.safeParse(req.body)
-  if (!parsed.success) return res.status(400).json({ error: 'Invalid payload', detail: parsed.error.flatten() })
+  if (!parsed.success) return apiFailure(res, 400, 'invalid_payload', 'Invalid payload', parsed.error.flatten())
 
   const { agentId, role, runId, note, line, filePath } = parsed.data
-  if (!isValidAgentId(agentId)) return res.status(400).json({ error: 'Invalid agent id' })
+  if (!isValidAgentId(agentId)) return apiFailure(res, 400, 'invalid_payload', 'Invalid agent id')
 
   try {
     const requestedPath = filePath?.trim() ? path.resolve(filePath.trim()) : undefined
@@ -30322,7 +32038,7 @@ app.post('/api/team-sync/append', async (req, res) => {
       const normalizedRequestedPath = requestedPath.replace(/\\/g, '/').toLowerCase()
       const scopedTeamSyncSuffix = `/.openclaw/agents/${agentId.toLowerCase()}/team_sync.md`
       if (path.basename(requestedPath).toLowerCase() === 'team_sync.md' && !normalizedRequestedPath.endsWith(scopedTeamSyncSuffix)) {
-        return res.status(400).json({ error: 'Workspace-root TEAM_SYNC.md is disabled; use the scoped doctrine path.' })
+        return apiFailure(res, 400, 'team_sync_failed', 'Workspace-root TEAM_SYNC.md is disabled; use the scoped doctrine path.')
       }
     }
 
@@ -30332,7 +32048,10 @@ app.post('/api/team-sync/append', async (req, res) => {
     const targetPath = requestedPath || sharedTeamSyncPath
 
     if (!isPathUnder(executionWorkspace, targetPath) && !samePath(targetPath, sharedTeamSyncPath)) {
-      return res.status(400).json({ error: 'TEAM_SYNC path must be inside execution workspace' })
+      return apiFailure(res, 400, 'team_sync_failed', 'TEAM_SYNC path must be inside execution workspace', {
+        executionWorkspace,
+        targetPath,
+      })
     }
 
     if (
@@ -30340,11 +32059,11 @@ app.post('/api/team-sync/append', async (req, res) => {
       samePath(targetPath, path.join(executionWorkspace, 'TEAM_SYNC.md')) &&
       !samePath(targetPath, sharedTeamSyncPath)
     ) {
-      return res.status(400).json({ error: 'Workspace-root TEAM_SYNC.md is disabled; use the scoped doctrine path.' })
+      return apiFailure(res, 400, 'team_sync_failed', 'Workspace-root TEAM_SYNC.md is disabled; use the scoped doctrine path.')
     }
 
     if (path.basename(targetPath).toLowerCase() !== 'team_sync.md') {
-      return res.status(400).json({ error: 'Only TEAM_SYNC.md is allowed for this endpoint' })
+      return apiFailure(res, 400, 'team_sync_failed', 'Only TEAM_SYNC.md is allowed for this endpoint')
     }
 
     await ensureTeamSyncFile(targetPath)
@@ -30364,11 +32083,11 @@ app.post('/api/team-sync/append', async (req, res) => {
           .filter(Boolean)
           .join(' | '))
 
-    if (!appendLines.length) return res.status(400).json({ error: 'Invalid payload', detail: 'note or line is required' })
+    if (!appendLines.length) return apiFailure(res, 400, 'invalid_payload', 'note or line is required')
 
     await fs.appendFile(targetPath, `${appendLines.join('\n')}\n`, 'utf-8')
 
-    return res.json({
+    return apiSuccess(res, {
       ok: true,
       path: targetPath,
       line: appendLines[0],
@@ -30378,16 +32097,16 @@ app.post('/api/team-sync/append', async (req, res) => {
       runId: normalizedRunId || undefined,
     })
   } catch (error) {
-    return res.status(500).json({ error: 'Failed to append TEAM_SYNC', detail: String(error) })
+    return apiFailure(res, 500, 'team_sync_failed', 'Failed to append TEAM_SYNC', String(error))
   }
 })
 
 app.get('/api/shifts/defaults', async (_req, res) => {
   try {
     const defaults = await readHeartbeatRuntimeDefaults()
-    return res.json({ defaults })
+    return apiSuccess(res, { defaults })
   } catch (error) {
-    return res.status(500).json({ error: 'Failed to read shift defaults', detail: String(error) })
+    return apiFailure(res, 500, 'shift_operation_failed', 'Failed to read shift defaults', String(error))
   }
 })
 
@@ -30402,36 +32121,36 @@ app.post('/api/shifts/defaults', async (req, res) => {
     leadAgent: z.string().min(1).max(80).optional(),
   })
   const parsed = schema.safeParse(req.body)
-  if (!parsed.success) return res.status(400).json({ error: 'Invalid payload', detail: parsed.error.flatten() })
+  if (!parsed.success) return apiFailure(res, 400, 'invalid_payload', 'Invalid payload', parsed.error.flatten())
 
   try {
     const current = await readHeartbeatRuntimeDefaults()
     const next = mergeHeartbeatRuntimeDefaults(current, parsed.data)
     await writeHeartbeatRuntimeDefaults(next)
 
-    return res.json({ ok: true, defaults: next })
+    return apiSuccess(res, { defaults: next })
   } catch (error) {
-    return res.status(500).json({ error: 'Failed to update shift defaults', detail: String(error) })
+    return apiFailure(res, 500, 'shift_operation_failed', 'Failed to update shift defaults', String(error))
   }
 })
 
 app.get('/api/shifts/defaults/:agentId', async (req, res) => {
   const { agentId } = req.params
-  if (!isValidAgentId(agentId)) return res.status(400).json({ error: 'Invalid agent id' })
+  if (!isValidAgentId(agentId)) return apiFailure(res, 400, 'invalid_payload', 'Invalid agent id')
   try {
     const globalDefaults = await readHeartbeatRuntimeDefaults()
     const perAgentStore = await readHeartbeatRuntimePerAgent()
     const agentDefaults = perAgentStore[agentId] || {}
     const resolved = mergeHeartbeatRuntimeDefaults(globalDefaults, agentDefaults)
-    return res.json({ agentId, globalDefaults, agentDefaults, resolved })
+    return apiSuccess(res, { agentId, globalDefaults, agentDefaults, resolved })
   } catch (error) {
-    return res.status(500).json({ error: 'Failed to read per-agent shift defaults', detail: String(error) })
+    return apiFailure(res, 500, 'shift_operation_failed', 'Failed to read per-agent shift defaults', String(error))
   }
 })
 
 app.post('/api/shifts/defaults/:agentId', async (req, res) => {
   const { agentId } = req.params
-  if (!isValidAgentId(agentId)) return res.status(400).json({ error: 'Invalid agent id' })
+  if (!isValidAgentId(agentId)) return apiFailure(res, 400, 'invalid_payload', 'Invalid agent id')
 
   const schema = z.object({
     model: z.string().min(3).max(160).optional(),
@@ -30444,7 +32163,7 @@ app.post('/api/shifts/defaults/:agentId', async (req, res) => {
     clear: z.boolean().optional(),
   })
   const parsed = schema.safeParse(req.body)
-  if (!parsed.success) return res.status(400).json({ error: 'Invalid payload', detail: parsed.error.flatten() })
+  if (!parsed.success) return apiFailure(res, 400, 'invalid_payload', 'Invalid payload', parsed.error.flatten())
 
   try {
     const perAgent = await readHeartbeatRuntimePerAgent()
@@ -30466,56 +32185,68 @@ app.post('/api/shifts/defaults/:agentId', async (req, res) => {
     const globalDefaults = await readHeartbeatRuntimeDefaults()
     const agentDefaults = perAgent[agentId] || {}
     const resolved = mergeHeartbeatRuntimeDefaults(globalDefaults, agentDefaults)
-    return res.json({ ok: true, agentId, agentDefaults, resolved })
+    return apiSuccess(res, { agentId, agentDefaults, resolved })
   } catch (error) {
-    return res.status(500).json({ error: 'Failed to update per-agent shift defaults', detail: String(error) })
+    return apiFailure(res, 500, 'shift_operation_failed', 'Failed to update per-agent shift defaults', String(error))
   }
 })
 
 app.get('/api/auth/providers', (req, res) => {
-  const probeGcloud = req.query.refresh === '1' || req.query.probe === '1'
-  const options = probeGcloud ? { probeGcloud: true } : {}
-  const providers = Object.keys(AUTH_PROVIDER_CATALOG).map((provider) => providerAuthStatus(provider, options))
-  res.json({ providers, persistencePath: LOCAL_AUTH_PATH })
+  try {
+    const probeGcloud = req.query.refresh === '1' || req.query.probe === '1'
+    const options = probeGcloud ? { probeGcloud: true } : {}
+    const providers = Object.keys(AUTH_PROVIDER_CATALOG).map((provider) => providerAuthStatus(provider, options))
+    return apiSuccess(res, { providers, persistencePath: LOCAL_AUTH_PATH })
+  } catch (error) {
+    return apiFailure(res, 500, 'auth_provider_failed', 'Failed to read provider status', String(error))
+  }
 })
 
 app.post('/api/auth/providers/:provider', async (req, res) => {
   const { provider } = req.params
-  if (!AUTH_ENV_MAP[provider]) return res.status(400).json({ error: 'Unsupported provider' })
+  if (!AUTH_ENV_MAP[provider]) return apiFailure(res, 400, 'auth_provider_failed', 'Unsupported provider', { provider })
 
   const schema = z.object({ apiKey: z.string().min(6) })
   const parsed = schema.safeParse(req.body)
-  if (!parsed.success) return res.status(400).json({ error: 'Invalid payload', detail: parsed.error.flatten() })
+  if (!parsed.success) return apiFailure(res, 400, 'invalid_payload', 'Invalid payload', parsed.error.flatten())
 
-  await persistProviderAuth(provider, parsed.data.apiKey.trim())
-  res.json({ ok: true, provider, persisted: true, persistencePath: LOCAL_AUTH_PATH })
+  try {
+    await persistProviderAuth(provider, parsed.data.apiKey.trim())
+    return apiSuccess(res, { ok: true, provider, persisted: true, persistencePath: LOCAL_AUTH_PATH })
+  } catch (error) {
+    return apiFailure(res, 500, 'auth_provider_failed', 'Failed to persist provider credentials', { provider, detail: String(error) })
+  }
 })
 
 app.delete('/api/auth/providers/:provider', async (req, res) => {
   const { provider } = req.params
-  if (!AUTH_ENV_MAP[provider]) return res.status(400).json({ error: 'Unsupported provider' })
+  if (!AUTH_ENV_MAP[provider]) return apiFailure(res, 400, 'auth_provider_failed', 'Unsupported provider', { provider })
 
-  await removeProviderAuth(provider)
-  res.json({ ok: true, provider, persisted: true, persistencePath: LOCAL_AUTH_PATH })
+  try {
+    await removeProviderAuth(provider)
+    return apiSuccess(res, { ok: true, provider, persisted: true, persistencePath: LOCAL_AUTH_PATH })
+  } catch (error) {
+    return apiFailure(res, 500, 'auth_provider_failed', 'Failed to remove provider credentials', { provider, detail: String(error) })
+  }
 })
 
 app.post('/api/auth/providers/:provider/oauth/start', async (req, res) => {
   const { provider } = req.params
   if (provider !== 'google' && provider !== 'openai-codex') {
-    return res.status(400).json({ error: 'OAuth is not supported for this provider in the direct model runtime.' })
+    return apiFailure(res, 400, 'oauth_operation_failed', 'OAuth is not supported for this provider in the direct model runtime.', { provider })
   }
 
   const schema = z.object({
     projectId: z.string().optional(),
   }).optional()
   const parsed = schema.safeParse(req.body)
-  if (!parsed.success) return res.status(400).json({ error: 'Invalid payload', detail: parsed.error.flatten() })
+  if (!parsed.success) return apiFailure(res, 400, 'invalid_payload', 'Invalid payload', parsed.error.flatten())
 
   try {
     const { session, launched } = provider === 'google'
       ? await startGoogleOAuthSession(parsed.data?.projectId)
       : await startOpenAICodexOAuthSession()
-    return res.json({
+    return apiSuccess(res, {
       ok: true,
       provider,
       sessionId: session.id,
@@ -30526,19 +32257,19 @@ app.post('/api/auth/providers/:provider/oauth/start', async (req, res) => {
       projectId: session.projectId || null,
     })
   } catch (error) {
-    return res.status(500).json({ error: `Failed to start ${provider} OAuth`, detail: String(error), provider })
+    return apiFailure(res, 500, 'oauth_operation_failed', `Failed to start ${provider} OAuth`, { provider, detail: String(error) })
   }
 })
 
 app.get('/api/auth/providers/:provider/oauth/session/:sessionId', (req, res) => {
   const { provider, sessionId } = req.params
   if (provider !== 'google' && provider !== 'openai-codex') {
-    return res.status(400).json({ error: 'OAuth is not supported for this provider.' })
+    return apiFailure(res, 400, 'oauth_operation_failed', 'OAuth is not supported for this provider.', { provider })
   }
   const session = oauthSessions.get(sessionId)
-  if (!session) return res.status(404).json({ error: 'OAuth session not found' })
-  if (session.provider !== provider) return res.status(404).json({ error: 'OAuth session not found for this provider' })
-  return res.json({
+  if (!session) return apiFailure(res, 404, 'oauth_operation_failed', 'OAuth session not found', { provider, sessionId })
+  if (session.provider !== provider) return apiFailure(res, 404, 'oauth_operation_failed', 'OAuth session not found for this provider', { provider, sessionId })
+  return apiSuccess(res, {
     ok: true,
     provider,
     sessionId,
@@ -30556,27 +32287,27 @@ app.get('/api/auth/providers/:provider/oauth/session/:sessionId', (req, res) => 
 app.post('/api/auth/providers/:provider/oauth/session/:sessionId/manual', async (req, res) => {
   const { provider, sessionId } = req.params
   if (provider !== 'openai-codex') {
-    return res.status(400).json({ error: 'Manual OAuth input is only supported for OpenAI Codex.' })
+    return apiFailure(res, 400, 'oauth_operation_failed', 'Manual OAuth input is only supported for OpenAI Codex.', { provider })
   }
 
   const session = oauthSessions.get(sessionId)
   if (!session || session.provider !== provider) {
-    return res.status(404).json({ error: 'OAuth session not found for this provider' })
+    return apiFailure(res, 404, 'oauth_operation_failed', 'OAuth session not found for this provider', { provider, sessionId })
   }
   if (session.status !== 'pending') {
-    return res.status(409).json({ error: `OAuth session is already ${session.status}.` })
+    return apiFailure(res, 409, 'oauth_operation_failed', `OAuth session is already ${session.status}.`, { provider, sessionId })
   }
 
   const schema = z.object({
     input: z.string().trim().min(1).max(12000),
   })
   const parsed = schema.safeParse(req.body)
-  if (!parsed.success) return res.status(400).json({ error: 'Invalid payload', detail: parsed.error.flatten() })
+  if (!parsed.success) return apiFailure(res, 400, 'invalid_payload', 'Invalid payload', parsed.error.flatten())
 
   try {
     const { code, state } = parseOpenAICodexAuthorizationInput(parsed.data.input)
     await completeOpenAICodexOAuthSession(session, code, state)
-    return res.json({
+    return apiSuccess(res, {
       ok: true,
       provider,
       sessionId,
@@ -30588,7 +32319,7 @@ app.post('/api/auth/providers/:provider/oauth/session/:sessionId/manual', async 
     session.status = 'error'
     session.error = String(error)
     session.completedAt = new Date().toISOString()
-    return res.status(400).json({ error: 'Failed to complete OpenAI Codex OAuth', detail: String(error), provider })
+    return apiFailure(res, 400, 'oauth_operation_failed', 'Failed to complete OpenAI Codex OAuth', { provider, detail: String(error) })
   }
 })
 
@@ -30596,7 +32327,7 @@ app.get('/api/models/available', async (req, res) => {
   try {
     if (req.query.refresh === '1') {
       const cache = await refreshAvailableModelsCache()
-      return res.json({
+      return apiSuccess(res, {
         models: cache.models,
         source: cache.source,
         refreshing: false,
@@ -30607,10 +32338,13 @@ app.get('/api/models/available', async (req, res) => {
     const refreshStale = req.query.background === '0' || req.query.noRefresh === '1'
       ? false
       : true
-    return res.json(getFastAvailableModelsCatalog({ refreshStale }))
+    return apiSuccess(res, getFastAvailableModelsCatalog({ refreshStale }))
   } catch (error) {
     console.error('Failed to load models:', error)
-    res.status(500).json({ error: 'Failed to load models', detail: String(error), models: fallbackAvailableModels() })
+    return apiFailure(res, 500, 'model_catalog_failed', 'Failed to load models', {
+      detail: String(error),
+      models: fallbackAvailableModels(),
+    })
   }
 })
 
@@ -30619,15 +32353,13 @@ app.get('/api/skills/check', async (req, res) => {
     const agentId = typeof req.query.agentId === 'string' ? req.query.agentId : undefined
     const context = await resolveSkillsCommandContext(agentId)
     const result = await runOpenClaw(['skills', 'check'], 90000, context)
-    return res.status(result.code === 0 ? 200 : 500).json({
-      ok: result.code === 0,
-      agentId: agentId || null,
-      output: result.stdout,
-      error: result.stderr,
-      code: result.code,
-    })
+    const data = { agentId: agentId || null, output: result.stdout, code: result.code }
+    if (result.code !== 0) {
+      return apiFailure(res, 500, 'skill_command_failed', 'Skill check failed', { ...data, error: result.stderr })
+    }
+    return apiSuccess(res, data)
   } catch (error) {
-    return res.status(500).json({ error: 'Failed to check skills', detail: String(error) })
+    return apiFailure(res, 500, 'skill_operation_failed', 'Failed to check skills', String(error))
   }
 })
 
@@ -30636,35 +32368,30 @@ app.get('/api/skills/list', async (req, res) => {
     const agentId = typeof req.query.agentId === 'string' ? req.query.agentId : undefined
     const context = await resolveSkillsCommandContext(agentId)
     const result = await runOpenClaw(['skills', 'list'], 90000, context)
-    return res.status(result.code === 0 ? 200 : 500).json({
-      ok: result.code === 0,
-      agentId: agentId || null,
-      output: result.stdout,
-      error: result.stderr,
-      code: result.code,
-    })
+    const data = { agentId: agentId || null, output: result.stdout, code: result.code }
+    if (result.code !== 0) {
+      return apiFailure(res, 500, 'skill_command_failed', 'Skill list failed', { ...data, error: result.stderr })
+    }
+    return apiSuccess(res, data)
   } catch (error) {
-    return res.status(500).json({ error: 'Failed to list skills', detail: String(error) })
+    return apiFailure(res, 500, 'skill_operation_failed', 'Failed to list skills', String(error))
   }
 })
 
 app.get('/api/skills/info/:skillName', async (req, res) => {
   try {
     const skillName = req.params.skillName?.trim()
-    if (!skillName) return res.status(400).json({ error: 'Skill name is required' })
+    if (!skillName) return apiFailure(res, 400, 'invalid_payload', 'Skill name is required')
     const agentId = typeof req.query.agentId === 'string' ? req.query.agentId : undefined
     const context = await resolveSkillsCommandContext(agentId)
     const result = await runOpenClaw(['skills', 'info', skillName], 90000, context)
-    return res.status(result.code === 0 ? 200 : 500).json({
-      ok: result.code === 0,
-      agentId: agentId || null,
-      skillName,
-      output: result.stdout,
-      error: result.stderr,
-      code: result.code,
-    })
+    const data = { agentId: agentId || null, skillName, output: result.stdout, code: result.code }
+    if (result.code !== 0) {
+      return apiFailure(res, 500, 'skill_command_failed', 'Skill info failed', { ...data, error: result.stderr })
+    }
+    return apiSuccess(res, data)
   } catch (error) {
-    return res.status(500).json({ error: 'Failed to read skill info', detail: String(error) })
+    return apiFailure(res, 500, 'skill_operation_failed', 'Failed to read skill info', String(error))
   }
 })
 
@@ -30673,8 +32400,7 @@ app.get('/api/skills/library', async (req, res) => {
     const agentId = typeof req.query.agentId === 'string' ? req.query.agentId : undefined
     if (req.query.refresh === '1') invalidateSkillLibraryCache()
     const { shared, agent, agentSkillsRoot } = await readAgentSkillLibrary(agentId)
-    return res.json({
-      ok: true,
+    return apiSuccess(res, {
       agentId: agentId || null,
       shared,
       agent,
@@ -30685,20 +32411,20 @@ app.get('/api/skills/library', async (req, res) => {
       },
     })
   } catch (error) {
-    return res.status(500).json({ ok: false, error: 'Failed to load skill library', detail: String(error) })
+    return apiFailure(res, 500, 'skill_operation_failed', 'Failed to load skill library', String(error))
   }
 })
 
 app.get('/api/skills/library/:skillId', async (req, res) => {
   try {
     const skillId = req.params.skillId?.trim()
-    if (!skillId) return res.status(400).json({ ok: false, error: 'Skill id is required' })
+    if (!skillId) return apiFailure(res, 400, 'invalid_payload', 'Skill id is required')
     const agentId = typeof req.query.agentId === 'string' ? req.query.agentId : undefined
     const result = await findSkillContent(skillId, agentId)
-    if (!result) return res.status(404).json({ ok: false, error: 'Skill not found' })
-    return res.json({ ok: true, ...result })
+    if (!result) return apiFailure(res, 404, 'skill_not_found', 'Skill not found')
+    return apiSuccess(res, result)
   } catch (error) {
-    return res.status(500).json({ ok: false, error: 'Failed to read skill content', detail: String(error) })
+    return apiFailure(res, 500, 'skill_operation_failed', 'Failed to read skill content', String(error))
   }
 })
 
@@ -30712,13 +32438,13 @@ app.post('/api/skills/learn', async (req, res) => {
     xpValue: z.number().int().min(0).max(5000).default(250),
   })
   const parsed = schema.safeParse(req.body)
-  if (!parsed.success) return res.status(400).json({ ok: false, error: 'Invalid payload', detail: parsed.error.flatten() })
+  if (!parsed.success) return apiFailure(res, 400, 'invalid_payload', 'Invalid payload', parsed.error.flatten())
 
   try {
     const skill = await writeLearnedSkill(parsed.data)
-    return res.json({ ok: true, skill })
+    return apiSuccess(res, { skill })
   } catch (error) {
-    return res.status(500).json({ ok: false, error: 'Failed to save learned skill', detail: String(error) })
+    return apiFailure(res, 500, 'skill_operation_failed', 'Failed to save learned skill', String(error))
   }
 })
 
@@ -30732,12 +32458,18 @@ app.get('/api/skills/clawhub/search', async (req, res) => {
     args.push('--json', '--limit', String(limit))
     const result = await runOpenClawWithManagedSkillsWorkspace(args, 90000)
     if (result.code !== 0) {
-      return res.status(502).json({ ok: false, error: result.stderr || result.stdout || 'ClawHub search failed', code: result.code })
+      return apiFailure(
+        res,
+        502,
+        'skill_command_failed',
+        'ClawHub search failed',
+        { output: result.stdout, error: result.stderr, code: result.code },
+      )
     }
     const parsed = JSON.parse(result.stdout || '{"results":[]}') as { results?: unknown[] }
-    return res.json({ ok: true, results: Array.isArray(parsed.results) ? parsed.results : [] })
+    return apiSuccess(res, { results: Array.isArray(parsed.results) ? parsed.results : [] })
   } catch (error) {
-    return res.status(500).json({ ok: false, error: 'Failed to search ClawHub', detail: String(error) })
+    return apiFailure(res, 500, 'skill_operation_failed', 'Failed to search ClawHub', String(error))
   }
 })
 
@@ -30748,13 +32480,12 @@ app.post('/api/skills/clawhub/install', async (req, res) => {
     force: z.boolean().default(false),
   })
   const parsed = schema.safeParse(req.body)
-  if (!parsed.success) return res.status(400).json({ ok: false, error: 'Invalid payload', detail: parsed.error.flatten() })
+  if (!parsed.success) return apiFailure(res, 400, 'invalid_payload', 'Invalid payload', parsed.error.flatten())
 
   try {
     const existing = await readSkillEntryFromDir(SHARED_SKILLS_ROOT, slugifySkillId(parsed.data.slug), 'library')
     if (existing && !parsed.data.force) {
-      return res.json({
-        ok: true,
+      return apiSuccess(res, {
         output: `Skill ${parsed.data.slug} is already installed in the shared OpenClaw skills folder.`,
         skill: existing,
         alreadyInstalled: true,
@@ -30768,18 +32499,20 @@ app.post('/api/skills/clawhub/install', async (req, res) => {
     const { result } = install
     invalidateSkillLibraryCache(SHARED_SKILLS_ROOT)
     const skill = await readSkillEntryFromDir(SHARED_SKILLS_ROOT, slugifySkillId(parsed.data.slug), 'library')
-    return res.status(result.code === 0 ? 200 : 500).json({
-      ok: result.code === 0,
+    const data = {
       output: result.stdout,
-      error: result.stderr,
       code: result.code,
       retried: install.retried,
       cleanup: install.cleanup,
       skill,
       sharedRoot: SHARED_SKILLS_ROOT,
-    })
+    }
+    if (result.code !== 0) {
+      return apiFailure(res, 500, 'skill_command_failed', 'ClawHub skill install failed', { ...data, error: result.stderr })
+    }
+    return apiSuccess(res, data)
   } catch (error) {
-    return res.status(500).json({ ok: false, error: 'Failed to install ClawHub skill', detail: String(error) })
+    return apiFailure(res, 500, 'skill_operation_failed', 'Failed to install ClawHub skill', String(error))
   }
 })
 
@@ -30789,32 +32522,34 @@ app.post('/api/skills/clawhub/update', async (req, res) => {
     all: z.boolean().default(false),
   })
   const parsed = schema.safeParse(req.body)
-  if (!parsed.success) return res.status(400).json({ ok: false, error: 'Invalid payload', detail: parsed.error.flatten() })
-  if (!parsed.data.slug && !parsed.data.all) return res.status(400).json({ ok: false, error: 'Provide a slug or set all=true' })
-  if (parsed.data.slug && parsed.data.all) return res.status(400).json({ ok: false, error: 'Use either slug or all, not both' })
+  if (!parsed.success) return apiFailure(res, 400, 'invalid_payload', 'Invalid payload', parsed.error.flatten())
+  if (!parsed.data.slug && !parsed.data.all) return apiFailure(res, 400, 'invalid_payload', 'Provide a slug or set all=true')
+  if (parsed.data.slug && parsed.data.all) return apiFailure(res, 400, 'invalid_payload', 'Use either slug or all, not both')
 
   try {
     const args = parsed.data.all ? ['skills', 'update', '--all'] : ['skills', 'update', parsed.data.slug as string]
     const result = await runOpenClawWithManagedSkillsWorkspace(args, 180000)
     invalidateSkillLibraryCache(SHARED_SKILLS_ROOT)
     const shared = await listSkillsFromRoot(SHARED_SKILLS_ROOT, 'library')
-    return res.status(result.code === 0 ? 200 : 500).json({
-      ok: result.code === 0,
+    const data = {
       output: result.stdout,
-      error: result.stderr,
       code: result.code,
       shared,
       sharedRoot: SHARED_SKILLS_ROOT,
-    })
+    }
+    if (result.code !== 0) {
+      return apiFailure(res, 500, 'skill_command_failed', 'ClawHub skill update failed', { ...data, error: result.stderr })
+    }
+    return apiSuccess(res, data)
   } catch (error) {
-    return res.status(500).json({ ok: false, error: 'Failed to update ClawHub skill', detail: String(error) })
+    return apiFailure(res, 500, 'skill_operation_failed', 'Failed to update ClawHub skill', String(error))
   }
 })
 
 app.get('/api/party/agent/:agentId/config', async (req, res) => {
   const requestedAgent = req.params.agentId
   const { config, target } = await getAgentById(requestedAgent)
-  if (!target) return res.status(404).json({ error: 'Agent not found' })
+  if (!target) return apiFailure(res, 404, 'agent_not_found', 'Agent not found')
 
   const local = await ensureAgentLocalConfig({
     agentId: target.id,
@@ -30823,8 +32558,7 @@ app.get('/api/party/agent/:agentId/config', async (req, res) => {
     defaultsSandbox: (config.agents?.defaults as { sandbox?: AgentSandboxConfig } | undefined)?.sandbox,
   })
 
-  return res.json({
-    ok: true,
+  return apiSuccess(res, {
     agentId: target.id,
     path: agentLocalConfigPath(target.id),
     config: local,
@@ -30834,16 +32568,16 @@ app.get('/api/party/agent/:agentId/config', async (req, res) => {
 app.post('/api/party/configs/sync', async (_req, res) => {
   try {
     const result = await syncAllAgentLocalConfigs()
-    return res.json({ ok: true, ...result })
+    return apiSuccess(res, { ok: true, ...result })
   } catch (error) {
-    return res.status(500).json({ error: 'Failed to sync agent configs', detail: String(error) })
+    return apiFailure(res, 500, 'agent_config_sync_failed', 'Failed to sync agent configs', String(error))
   }
 })
 
 app.post('/api/party/agent/:agentId/config', async (req, res) => {
   const requestedAgent = req.params.agentId
   const { config, target } = await getAgentById(requestedAgent)
-  if (!target) return res.status(404).json({ error: 'Agent not found' })
+  if (!target) return apiFailure(res, 404, 'agent_not_found', 'Agent not found')
 
   const schema = z.object({
     identity: z
@@ -31012,7 +32746,7 @@ app.post('/api/party/agent/:agentId/config', async (req, res) => {
       .optional(),
   })
   const parsed = schema.safeParse(req.body ?? {})
-  if (!parsed.success) return res.status(400).json({ error: 'Invalid payload', detail: parsed.error.flatten() })
+  if (!parsed.success) return apiFailure(res, 400, 'invalid_payload', 'Invalid payload', parsed.error.flatten())
 
   const local = await ensureAgentLocalConfig({
     agentId: target.id,
@@ -31050,10 +32784,7 @@ app.post('/api/party/agent/:agentId/config', async (req, res) => {
     try {
       await validateWorkspaceAccess(workspace)
     } catch (error) {
-      return res.status(400).json({
-        error: 'Workspace is not writable. Choose a folder you own (for example in your user profile).',
-        detail: String(error),
-      })
+      return apiFailure(res, 400, 'workspace_unwritable', 'Workspace is not writable. Choose a folder you own (for example in your user profile).', String(error))
     }
     applyExecutionWorkspaceToLocalConfig(local, workspace)
     await fs.mkdir(local.memory.journalDir, { recursive: true })
@@ -31061,8 +32792,7 @@ app.post('/api/party/agent/:agentId/config', async (req, res) => {
   if (patch.model) {
     const authProblem = modelAuthProblem(patch.model.primary || local.model.primary)
     if (authProblem) {
-      return res.status(409).json({
-        error: `Missing auth for ${authProblem.provider}. Connect this provider before saving the model.`,
+      return apiFailure(res, 409, 'invalid_payload', `Missing auth for ${authProblem.provider}. Connect this provider before saving the model.`, {
         provider: authProblem.provider,
         providerStatus: authProblem.providerStatus,
       })
@@ -31101,15 +32831,7 @@ app.post('/api/party/agent/:agentId/config', async (req, res) => {
     const mdsPatch = isRecruitProfileConfigPatch && isLegacyGenericRecruitMds(patch.mds, inferredMds)
       ? inferredMds
       : patch.mds
-    local.mds = {
-      ...local.mds,
-      ...mdsPatch,
-      capabilities: {
-        ...local.mds.capabilities,
-        ...(mdsPatch.capabilities || {}),
-      },
-      toolAccess: mdsPatch.toolAccess || local.mds.toolAccess,
-    }
+    local.mds = normalizeAgentMdsState(local.mds, mdsPatch)
   }
   if (patch.heartbeat) {
     const heartbeatPatch = isRecruitProfileConfigPatch && isLegacyGenericRecruitHeartbeat(patch.heartbeat)
@@ -31165,8 +32887,7 @@ app.post('/api/party/agent/:agentId/config', async (req, res) => {
   applyExecutionWorkspaceToLocalConfig(local, local.routing.workspace)
   const changed = JSON.stringify(local) !== beforeSerialized
   if (!changed) {
-    return res.json({
-      ok: true,
+    return apiSuccess(res, {
       agentId: target.id,
       path: agentLocalConfigPath(target.id),
       config: local,
@@ -31205,8 +32926,7 @@ app.post('/api/party/agent/:agentId/config', async (req, res) => {
     ? schedulePluginGatewayRestart()
     : null
 
-  return res.json({
-    ok: true,
+  return apiSuccess(res, {
     agentId: target.id,
     path: agentLocalConfigPath(target.id),
     config: local,
@@ -31218,19 +32938,23 @@ app.post('/api/party/agent/:agentId/config', async (req, res) => {
 
 app.get('/api/party/agent/:agentId/model', async (req, res) => {
   const requestedAgent = req.params.agentId
-  const { config, target } = await getAgentById(requestedAgent)
-  if (!target) return res.status(404).json({ error: 'Agent not found' })
-  const agentId = target.id
+  try {
+    const { config, target } = await getAgentById(requestedAgent)
+    if (!target) return apiFailure(res, 404, 'agent_not_found', 'Agent not found', { agentId: requestedAgent })
+    const agentId = target.id
 
-  const defaults = config.agents?.defaults?.model || {}
-  const local = await ensureAgentLocalConfig({
-    agentId,
-    entry: target,
-    defaultsModel: defaults,
-    defaultsSandbox: (config.agents?.defaults as { sandbox?: AgentSandboxConfig } | undefined)?.sandbox,
-  })
-  const model = normalizeModelWithFallback(local.model, defaults)
-  return res.json({ model })
+    const defaults = config.agents?.defaults?.model || {}
+    const local = await ensureAgentLocalConfig({
+      agentId,
+      entry: target,
+      defaultsModel: defaults,
+      defaultsSandbox: (config.agents?.defaults as { sandbox?: AgentSandboxConfig } | undefined)?.sandbox,
+    })
+    const model = normalizeModelWithFallback(local.model, defaults)
+    return apiSuccess(res, { model })
+  } catch (error) {
+    return apiFailure(res, 500, 'model_operation_failed', 'Failed to read agent model', { agentId: requestedAgent, detail: String(error) })
+  }
 })
 
 app.post('/api/party/agent/:agentId/model', async (req, res) => {
@@ -31240,90 +32964,85 @@ app.post('/api/party/agent/:agentId/model', async (req, res) => {
     fallbacks: z.array(z.string()).optional(),
   })
   const parsed = schema.safeParse(req.body)
-  if (!parsed.success) return res.status(400).json({ error: 'Invalid payload', detail: parsed.error.flatten() })
+  if (!parsed.success) return apiFailure(res, 400, 'invalid_payload', 'Invalid payload', parsed.error.flatten())
 
   const unavailableModel = [parsed.data.primary, ...(parsed.data.fallbacks || [])]
     .map((modelId) => canonicalAgentModelId(modelId))
     .find((modelId) => KNOWN_UNAVAILABLE_MODEL_IDS.has(modelId))
   if (unavailableModel) {
-    return res.status(422).json({
-      ok: false,
-      error: `${unavailableModel} is temporarily blocked because this model is known to fail Gateway-backed agent runs. Pick another model or fallback before saving.`,
+    return apiFailure(res, 422, 'model_operation_failed', `${unavailableModel} is temporarily blocked because this model is known to fail Gateway-backed agent runs. Pick another model or fallback before saving.`, {
       modelId: unavailableModel,
       failureKind: 'provider_unsupported',
     })
   }
 
-  const { config, target } = await getAgentById(requestedAgent)
-  if (!target) return res.status(404).json({ error: 'Agent not found' })
-  const agentId = target.id
+  try {
+    const { config, target } = await getAgentById(requestedAgent)
+    if (!target) return apiFailure(res, 404, 'agent_not_found', 'Agent not found', { agentId: requestedAgent })
+    const agentId = target.id
 
-  const local = await ensureAgentLocalConfig({
-    agentId,
-    entry: target,
-    defaultsModel: config.agents?.defaults?.model || {},
-    defaultsSandbox: (config.agents?.defaults as { sandbox?: AgentSandboxConfig } | undefined)?.sandbox,
-  })
-  const requestedAuthProblem = modelAuthProblem(parsed.data.primary)
-  if (requestedAuthProblem) {
-    return res.status(409).json({
-      ok: false,
-      error: `Missing auth for ${requestedAuthProblem.provider}. Connect this provider before saving the model.`,
-      provider: requestedAuthProblem.provider,
-      providerStatus: requestedAuthProblem.providerStatus,
+    const local = await ensureAgentLocalConfig({
+      agentId,
+      entry: target,
+      defaultsModel: config.agents?.defaults?.model || {},
+      defaultsSandbox: (config.agents?.defaults as { sandbox?: AgentSandboxConfig } | undefined)?.sandbox,
     })
-  }
-  const nextModel = normalizeModelWithFallback(
-    { primary: parsed.data.primary, fallbacks: parsed.data.fallbacks || [] },
-    config.agents?.defaults?.model || {},
-  )
-  const authProblem = modelAuthProblem(nextModel.primary)
-  if (authProblem) {
-    return res.status(409).json({
-      ok: false,
-      error: `Missing auth for ${authProblem.provider}. Connect this provider before saving the model.`,
-      provider: authProblem.provider,
-      providerStatus: authProblem.providerStatus,
-    })
-  }
-  local.model = nextModel
-  ensureConfiguredModelAllowlist(config, [nextModel.primary, ...nextModel.fallbacks])
-  local.agent.updatedAt = new Date().toISOString()
-  await writeTextFileWithLockRetry(agentLocalConfigPath(agentId), `${JSON.stringify(local, null, 2)}\n`)
-  await rememberAgentLocalConfigCache(agentLocalConfigPath(agentId), local)
-  await syncAgentDerivedFiles(agentId, local)
+    const requestedAuthProblem = modelAuthProblem(parsed.data.primary)
+    if (requestedAuthProblem) {
+      return apiFailure(res, 409, 'model_auth_required', `Missing auth for ${requestedAuthProblem.provider}. Connect this provider before saving the model.`, {
+        provider: requestedAuthProblem.provider,
+        providerStatus: requestedAuthProblem.providerStatus,
+      })
+    }
+    const nextModel = normalizeModelWithFallback(
+      { primary: parsed.data.primary, fallbacks: parsed.data.fallbacks || [] },
+      config.agents?.defaults?.model || {},
+    )
+    const authProblem = modelAuthProblem(nextModel.primary)
+    if (authProblem) {
+      return apiFailure(res, 409, 'model_auth_required', `Missing auth for ${authProblem.provider}. Connect this provider before saving the model.`, {
+        provider: authProblem.provider,
+        providerStatus: authProblem.providerStatus,
+      })
+    }
+    local.model = nextModel
+    ensureConfiguredModelAllowlist(config, [nextModel.primary, ...nextModel.fallbacks])
+    local.agent.updatedAt = new Date().toISOString()
+    await writeTextFileWithLockRetry(agentLocalConfigPath(agentId), `${JSON.stringify(local, null, 2)}\n`)
+    await rememberAgentLocalConfigCache(agentLocalConfigPath(agentId), local)
+    await syncAgentDerivedFiles(agentId, local)
 
-  applyLocalConfigToGlobal(agentId, local, config)
+    applyLocalConfigToGlobal(agentId, local, config)
 
-  await writeOpenclawConfig(config)
-  const modelSessionReset = resetAgentTurnSessionsForModelChange(agentId)
-  const modelOverrideCleanup = await clearDisallowedAutoModelOverridesForAgent(agentId, nextModel)
-  res.json({ ok: true, model: nextModel, modelOverrideCleanup, modelSessionReset })
+    await writeOpenclawConfig(config)
+    const modelSessionReset = resetAgentTurnSessionsForModelChange(agentId)
+    const modelOverrideCleanup = await clearDisallowedAutoModelOverridesForAgent(agentId, nextModel)
+    return apiSuccess(res, { ok: true, model: nextModel, modelOverrideCleanup, modelSessionReset })
+  } catch (error) {
+    return apiFailure(res, 500, 'model_operation_failed', 'Failed to update agent model', { agentId: requestedAgent, detail: String(error) })
+  }
 })
-
-const AUTH_TOKEN = process.env.CONTROL_CENTER_TOKEN || 'dev-token-change-me'
-const sessionTokens = new Set<string>()
 
 app.post('/api/auth/login', (req, res) => {
   const schema = z.object({ token: z.string().min(1) })
   const parsed = schema.safeParse(req.body)
-  if (!parsed.success) return res.status(400).json({ error: 'Invalid payload' })
+  if (!parsed.success) return apiFailure(res, 400, 'invalid_payload', 'Invalid payload', parsed.error.flatten())
 
   if (parsed.data.token === AUTH_TOKEN) {
     const sessionToken = randomUUID()
     sessionTokens.add(sessionToken)
-    return res.json({ ok: true, token: sessionToken })
+    return apiSuccess(res, { token: sessionToken })
   }
 
-  return res.status(401).json({ error: 'Invalid token' })
+  return apiFailure(res, 401, 'invalid_token', 'Invalid token')
 })
 
 app.get('/api/auth/status', (req, res) => {
   const token = req.headers.authorization?.replace('Bearer ', '')
   if (token && sessionTokens.has(token)) {
-    return res.json({ authenticated: true })
+    return apiSuccess(res, { authenticated: true })
   }
-  return res.json({ authenticated: false })
+  return apiSuccess(res, { authenticated: false })
 })
 
 const STATIC_DIR = process.env.CONTROL_CENTER_STATIC_DIR?.trim()
@@ -31381,6 +33100,7 @@ async function safeOpenStaticFile(filePath: string) {
 
 function streamSafeStaticFile(req: Request, res: Response, file: NonNullable<Awaited<ReturnType<typeof safeOpenStaticFile>>>) {
   res.status(200)
+  setStaticSecurityHeaders(res, file.filePath)
   res.setHeader('Content-Type', contentTypeFromExt(file.filePath))
   res.setHeader('Content-Length', String(file.stat.size))
   if (req.method === 'HEAD') {
@@ -31439,8 +33159,15 @@ controlServer = app.listen(PORT, '127.0.0.1', () => {
   console.log(`OpenClaw Control Center API running at http://127.0.0.1:${PORT}`)
   console.log(`Workspace root: ${WORKSPACE_ROOT}`)
   if (STATIC_ROOT) console.log(`Static UI root: ${STATIC_ROOT}`)
-  void hydrateRecentOpenClawRunsFromLedger().catch((error) => {
-    console.warn('[runtime-ledger] hydration skipped:', error)
+  if (AUTH_TOKEN_SOURCE === 'generated') {
+    console.log(`Generated local Control Center login token: ${AUTH_TOKEN}`)
+    console.log('Set CONTROL_CENTER_TOKEN before startup to choose a stable local token.')
+  }
+  void (async () => {
+    await hydrateRecentOpenClawRunsFromLedger()
+    await hydrateMissionRecordsFromLedger()
+  })().catch((error) => {
+    console.warn('[startup-recovery] runtime or mission hydration skipped:', error)
   })
   void sweepOpenClawSessionLocks('app startup', { minIntervalMs: 0, minAgeMs: 0 }).catch((error) => {
     console.warn('[session-lock] startup cleanup skipped:', error)

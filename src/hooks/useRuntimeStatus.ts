@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react'
-import { apiUrl } from '../utils/apiUrl'
+import { apiErrorMessage, apiRequest, type ApiErrorEnvelope, type ApiRequestOptions } from '../api/client'
 
 const RUNTIME_STATUS_MIN_TIMEOUT_MS = 25_000
 const RUNTIME_STATUS_MAX_TIMEOUT_MS = 45_000
@@ -441,67 +441,41 @@ export type RuntimeSessionCloseResult = {
   sessions?: OpenAgentSession[]
 }
 
-async function fetchJsonWithTimeout<T>(url: string, init: RequestInit = {}, timeoutMs = RUNTIME_ACTION_TIMEOUT_MS) {
-  const controller = new AbortController()
-  const timeout = window.setTimeout(() => controller.abort(), timeoutMs)
-  try {
-    const response = await fetch(url, {
-      ...init,
-      signal: controller.signal,
-    })
-    const data = await response.json().catch(() => null) as T | null
-    return { response, data }
-  } catch (error) {
-    if (error instanceof DOMException && error.name === 'AbortError') {
-      throw new Error(`Request timed out after ${Math.round(timeoutMs / 1000)}s.`)
-    }
-    throw error
-  } finally {
-    window.clearTimeout(timeout)
-  }
+async function runtimeActionRequest<T>(path: string, options: ApiRequestOptions = {}, timeoutMs = RUNTIME_ACTION_TIMEOUT_MS): Promise<T> {
+  const result = await apiRequest<T>(path, {
+    ...options,
+    timeoutMs: options.timeoutMs ?? timeoutMs,
+  })
+  if (!result.ok) throw runtimeApiRequestError(result.error)
+  return result.data
 }
 
 export async function closeRuntimeSession(payload: { agentId?: string; sessionId?: string; sessionKey?: string | null; all?: boolean }) {
-  type RuntimeActionError = { ok?: boolean; error?: string; detail?: unknown }
-  const { response, data } = await fetchJsonWithTimeout<RuntimeSessionCloseResult | RuntimeActionError>(apiUrl('/api/openclaw/runtime/session/close'), {
+  const data = await runtimeActionRequest<RuntimeSessionCloseResult>('/api/openclaw/runtime/session/close', {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(payload),
+    body: payload,
   })
-  if (!response.ok || !data?.ok) {
-    const errorData = data as RuntimeActionError | null
-    const detail = errorData?.detail ? ` ${typeof errorData.detail === 'string' ? errorData.detail : JSON.stringify(errorData.detail)}` : ''
-    throw new Error(errorData?.error ? `${errorData.error}.${detail}` : `Close session failed (${response.status})`)
-  }
-  return data as RuntimeSessionCloseResult
+  if (data.ok !== true) throw new Error('Close session failed.')
+  return data
 }
 
 export async function abortStaleGatewayChatTurns(minAgeMs = 5 * 60_000) {
-  type RuntimeActionError = { ok?: boolean; error?: string; detail?: unknown }
-  const { response, data } = await fetchJsonWithTimeout<GatewayChatAbortStaleResult | RuntimeActionError>(apiUrl('/api/openclaw/runtime/chat/abort-stale'), {
+  const data = await runtimeActionRequest<GatewayChatAbortStaleResult>('/api/openclaw/runtime/chat/abort-stale', {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ minAgeMs }),
+    body: { minAgeMs },
   })
-  if (!response.ok || !data?.ok) {
-    const errorData = data as RuntimeActionError | null
-    const detail = errorData?.detail ? ` ${typeof errorData.detail === 'string' ? errorData.detail : JSON.stringify(errorData.detail)}` : ''
-    throw new Error(errorData?.error ? `${errorData.error}.${detail}` : `Abort stale turns failed (${response.status})`)
-  }
-  return data as GatewayChatAbortStaleResult
+  if (data.ok !== true) throw new Error('Abort stale turns failed.')
+  return data
 }
 
 export async function stopCronShift(shiftId: string) {
-  const { response, data } = await fetchJsonWithTimeout<{ ok?: boolean; error?: string; detail?: unknown; shiftId?: string }>(apiUrl('/api/shifts/stop'), {
+  const result = await apiRequest<{ shiftId: string; cronId: string }>('/api/shifts/stop', {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ shiftId }),
+    body: { shiftId },
+    timeoutMs: RUNTIME_ACTION_TIMEOUT_MS,
   })
-  if (!response.ok || !data?.ok) {
-    const detail = data?.detail ? ` ${typeof data.detail === 'string' ? data.detail : JSON.stringify(data.detail)}` : ''
-    throw new Error(data?.error ? `${data.error}.${detail}` : `Pause cron failed (${response.status})`)
-  }
-  return data
+  if (!result.ok) throw new Error(apiErrorMessage(result.error))
+  return result.data
 }
 
 export async function updateCronShift(payload: {
@@ -512,81 +486,66 @@ export async function updateCronShift(payload: {
   message?: string
   messageMode?: 'message' | 'system-event'
 }) {
-  const { response, data } = await fetchJsonWithTimeout<{ ok?: boolean; error?: string; detail?: unknown; shift?: RuntimeCronJob }>(apiUrl('/api/shifts/update'), {
+  const result = await apiRequest<{ shiftId: string; cronId: string; shift: RuntimeCronJob | null }>('/api/shifts/update', {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(payload),
-  }, 60_000)
-  if (!response.ok || !data?.ok) {
-    const detail = data?.detail ? ` ${typeof data.detail === 'string' ? data.detail : JSON.stringify(data.detail)}` : ''
-    throw new Error(data?.error ? `${data.error}.${detail}` : `Update cron failed (${response.status})`)
-  }
-  return data
+    body: payload,
+    timeoutMs: 60_000,
+  })
+  if (!result.ok) throw new Error(apiErrorMessage(result.error))
+  return result.data
 }
 
 export async function listCronShifts(): Promise<RuntimeCronJob[]> {
-  const { response, data } = await fetchJsonWithTimeout<{ shifts?: RuntimeCronJob[]; error?: string; detail?: unknown }>(apiUrl('/api/shifts'), { cache: 'no-store' }, 20_000)
-  if (!response.ok || !data || !Array.isArray(data.shifts)) {
-    const detail = data?.detail ? ` ${typeof data.detail === 'string' ? data.detail : JSON.stringify(data.detail)}` : ''
-    throw new Error(data?.error ? `${data.error}.${detail}` : `Cron list failed (${response.status})`)
-  }
-  return data.shifts
+  const result = await apiRequest<{ shifts?: RuntimeCronJob[] }>('/api/shifts', { cache: 'no-store', timeoutMs: 20_000 })
+  if (!result.ok) throw new Error(apiErrorMessage(result.error))
+  if (!Array.isArray(result.data.shifts)) throw new Error('Cron list response missing shifts.')
+  return result.data.shifts
 }
 
 export async function stopGatewayRuntime() {
-  const { response, data } = await fetchJsonWithTimeout<{ ok?: boolean; error?: string; detail?: unknown; stop?: unknown }>(apiUrl('/api/openclaw/runtime/gateway/stop'), {
+  const data = await runtimeActionRequest<{ ok?: boolean; stop?: unknown; gateway?: unknown }>('/api/openclaw/runtime/gateway/stop', {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: '{}',
   })
-  if (!response.ok || !data?.ok) {
-    const detail = data?.detail ? ` ${typeof data.detail === 'string' ? data.detail : JSON.stringify(data.detail)}` : ''
-    throw new Error(data?.error ? `${data.error}.${detail}` : `Stop gateway failed (${response.status})`)
-  }
+  if (data.ok !== true) throw new Error('Stop gateway failed.')
   return data
 }
 
 export async function startGatewayRuntime() {
-  const { response, data } = await fetchJsonWithTimeout<{ ok?: boolean; error?: string; detail?: unknown; start?: unknown }>(apiUrl('/api/openclaw/runtime/gateway/start'), {
+  const data = await runtimeActionRequest<{ ok?: boolean; start?: unknown; gateway?: unknown }>('/api/openclaw/runtime/gateway/start', {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: '{}',
   })
-  if (!response.ok || !data?.ok) {
-    const detail = data?.detail ? ` ${typeof data.detail === 'string' ? data.detail : JSON.stringify(data.detail)}` : ''
-    throw new Error(data?.error ? `${data.error}.${detail}` : `Start gateway failed (${response.status})`)
-  }
+  if (data.ok !== true) throw new Error('Start gateway failed.')
   return data
 }
 
 export async function restartGatewayRuntime() {
-  const { response, data } = await fetchJsonWithTimeout<{ ok?: boolean; error?: string; detail?: unknown; restart?: unknown }>(apiUrl('/api/openclaw/runtime/gateway/restart'), {
+  const data = await runtimeActionRequest<{ ok?: boolean; restart?: unknown; gateway?: unknown }>('/api/openclaw/runtime/gateway/restart', {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: '{}',
   })
-  if (!response.ok || !data?.ok) {
-    const detail = data?.detail ? ` ${typeof data.detail === 'string' ? data.detail : JSON.stringify(data.detail)}` : ''
-    throw new Error(data?.error ? `${data.error}.${detail}` : `Restart gateway failed (${response.status})`)
-  }
+  if (data.ok !== true) throw new Error('Restart gateway failed.')
   return data
 }
 
 export async function setRuntimePluginEnabled(pluginId: string, enabled: boolean) {
-  const { response, data } = await fetchJsonWithTimeout<{ error?: string; detail?: unknown; restart?: { detail?: string; scheduled?: boolean; restarted?: boolean } }>(apiUrl(`/api/plugins/${encodeURIComponent(pluginId)}`), {
+  return runtimeActionRequest<{ restart?: { detail?: string; scheduled?: boolean; restarted?: boolean } }>(`/api/plugins/${encodeURIComponent(pluginId)}`, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ enabled, restart: false }),
+    body: { enabled, restart: false },
   }, 45_000)
-  if (!response.ok) {
-    const detail = data?.detail ? ` ${typeof data.detail === 'string' ? data.detail : JSON.stringify(data.detail)}` : ''
-    throw new Error(data?.error ? `${data.error}.${detail}` : `Plugin update failed (${response.status})`)
-  }
-  return data
 }
 
 function errorMessage(error: unknown) {
   return error instanceof Error && error.message ? error.message : String(error)
+}
+
+function isRuntimeStatusPayload(value: unknown): value is RuntimeStatus {
+  return Boolean(value && typeof value === 'object' && 'gateway' in value)
+}
+
+function runtimeApiRequestError(error: ApiErrorEnvelope) {
+  const message = apiErrorMessage(error)
+  if (error.code === 'timeout') return new DOMException(message, 'TimeoutError')
+  if (error.code === 'aborted') return new DOMException(message, 'AbortError')
+  return new Error(message)
 }
 
 type RuntimeStatusSnapshot = {
@@ -664,16 +623,10 @@ function isRuntimeMonitorClearResult(value: unknown): value is RuntimeMonitorCle
 }
 
 export async function clearRuntimeMonitor(): Promise<RuntimeMonitorClearResult> {
-  const { response, data } = await fetchJsonWithTimeout<unknown>(apiUrl('/api/openclaw/runtime/monitor/clear'), {
+  const data = await runtimeActionRequest<unknown>('/api/openclaw/runtime/monitor/clear', {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: '{}',
   })
-  if (!response.ok || !isRuntimeMonitorClearResult(data)) {
-    const errorData = data && typeof data === 'object' ? data as { error?: unknown; detail?: unknown } : null
-    const detail = errorData?.detail ? ` ${typeof errorData.detail === 'string' ? errorData.detail : JSON.stringify(errorData.detail)}` : ''
-    throw new Error(typeof errorData?.error === 'string' ? `${errorData.error}.${detail}` : `Clear runtime monitor failed (${response.status})`)
-  }
+  if (!isRuntimeMonitorClearResult(data)) throw new Error('Clear runtime monitor returned an invalid response.')
 
   if (cachedRuntimeStatus) {
     cachedRuntimeStatus = {
@@ -729,15 +682,10 @@ function runtimeStatusAgeMs(status: RuntimeStatus | null) {
 }
 
 export async function runRuntimeDoctor(): Promise<DoctorRun> {
-  const { response, data } = await fetchJsonWithTimeout<DoctorRun | { error?: string; detail?: unknown }>(apiUrl('/api/doctor/run'), {
+  const data = await runtimeActionRequest<DoctorRun>('/api/doctor/run', {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: '{}',
   }, RUNTIME_DOCTOR_TIMEOUT_MS)
-  if (!response.ok || !data || !('checks' in data)) {
-    const detail = data && 'detail' in data && data.detail ? ` ${typeof data.detail === 'string' ? data.detail : JSON.stringify(data.detail)}` : ''
-    throw new Error(data && 'error' in data && data.error ? `${data.error}.${detail}` : `Doctor failed (${response.status})`)
-  }
+  if (!data || !('checks' in data)) throw new Error('Doctor returned an invalid response.')
   return data
 }
 
@@ -844,31 +792,33 @@ async function loadRuntimeStatus(intervalMs: number, forceRefresh = false) {
     RUNTIME_STATUS_MIN_TIMEOUT_MS,
     Math.min(RUNTIME_STATUS_MAX_TIMEOUT_MS, intervalMs + 7_500),
   )
-  const timeout = window.setTimeout(() => controller.abort(), requestTimeoutMs)
 
   try {
-    const response = await fetch(apiUrl(`/api/openclaw/runtime/status${forceRefresh ? '?refresh=1' : ''}`), {
+    const result = await apiRequest<RuntimeStatus>(`/api/openclaw/runtime/status${forceRefresh ? '?refresh=1' : ''}`, {
       cache: 'no-store',
       signal: controller.signal,
+      timeoutMs: requestTimeoutMs,
     })
-    const payload = (await response.json().catch(() => null)) as RuntimeStatus | { error?: string; detail?: string } | null
-    if (!response.ok || !payload || !('gateway' in payload)) {
-      const detail = payload && 'detail' in payload && payload.detail ? ` ${payload.detail}` : ''
-      throw new Error(payload && 'error' in payload && payload.error ? `${payload.error}.${detail}` : `Runtime status failed (${response.status})`)
+    const idleAbort = runtimeStatusRequestAbortReason === 'idle' && controller.signal.aborted
+    if (!result.ok) {
+      if (idleAbort) return
+      throw runtimeApiRequestError(result.error)
     }
-    cachedRuntimeStatus = payload
+    if (!isRuntimeStatusPayload(result.data)) {
+      throw new Error('Runtime status response missing gateway data.')
+    }
+    cachedRuntimeStatus = result.data
     cachedRuntimeError = ''
   } catch (loadError) {
     const idleAbort = runtimeStatusRequestAbortReason === 'idle' && controller.signal.aborted
     if (!idleAbort) {
-      cachedRuntimeError = loadError instanceof DOMException && loadError.name === 'AbortError'
+      cachedRuntimeError = loadError instanceof DOMException && (loadError.name === 'AbortError' || loadError.name === 'TimeoutError')
         ? cachedRuntimeStatus
           ? 'Runtime status timed out; showing the last snapshot.'
           : 'Runtime status timed out.'
         : errorMessage(loadError)
     }
   } finally {
-    window.clearTimeout(timeout)
     if (runtimeStatusRequest === controller) {
       runtimeStatusRequest = null
       runtimeStatusRequestAbortReason = null
@@ -903,31 +853,33 @@ async function loadRuntimeSummaryStatus(intervalMs: number, forceRefresh = false
     RUNTIME_STATUS_MIN_TIMEOUT_MS,
     Math.min(RUNTIME_STATUS_MAX_TIMEOUT_MS, intervalMs + 7_500),
   )
-  const timeout = window.setTimeout(() => controller.abort(), requestTimeoutMs)
 
   try {
-    const response = await fetch(apiUrl(`/api/openclaw/runtime/summary${forceRefresh ? '?refresh=1' : ''}`), {
+    const result = await apiRequest<RuntimeStatus>(`/api/openclaw/runtime/summary${forceRefresh ? '?refresh=1' : ''}`, {
       cache: 'no-store',
       signal: controller.signal,
+      timeoutMs: requestTimeoutMs,
     })
-    const payload = (await response.json().catch(() => null)) as RuntimeStatus | { error?: string; detail?: string } | null
-    if (!response.ok || !payload || !('gateway' in payload)) {
-      const detail = payload && 'detail' in payload && payload.detail ? ` ${payload.detail}` : ''
-      throw new Error(payload && 'error' in payload && payload.error ? `${payload.error}.${detail}` : `Runtime summary failed (${response.status})`)
+    const idleAbort = runtimeSummaryRequestAbortReason === 'idle' && controller.signal.aborted
+    if (!result.ok) {
+      if (idleAbort) return
+      throw runtimeApiRequestError(result.error)
     }
-    cachedRuntimeSummaryStatus = payload
+    if (!isRuntimeStatusPayload(result.data)) {
+      throw new Error('Runtime summary response missing gateway data.')
+    }
+    cachedRuntimeSummaryStatus = result.data
     cachedRuntimeSummaryError = ''
   } catch (loadError) {
     const idleAbort = runtimeSummaryRequestAbortReason === 'idle' && controller.signal.aborted
     if (!idleAbort) {
-      cachedRuntimeSummaryError = loadError instanceof DOMException && loadError.name === 'AbortError'
+      cachedRuntimeSummaryError = loadError instanceof DOMException && (loadError.name === 'AbortError' || loadError.name === 'TimeoutError')
         ? cachedRuntimeSummaryStatus
           ? 'Runtime summary timed out; showing the last snapshot.'
           : 'Runtime summary timed out.'
         : errorMessage(loadError)
     }
   } finally {
-    window.clearTimeout(timeout)
     if (runtimeSummaryRequest === controller) {
       runtimeSummaryRequest = null
       runtimeSummaryRequestAbortReason = null

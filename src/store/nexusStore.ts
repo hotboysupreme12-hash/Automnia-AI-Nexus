@@ -1,11 +1,11 @@
 import { create } from 'zustand'
 import { createJSONStorage, persist } from 'zustand/middleware'
 import type { StateStorage } from 'zustand/middleware'
-import { MissionOrchestrator } from '../engine/MissionOrchestrator'
 import { CoordinationBus } from '../engine/CoordinationBus'
 import { RuntimeComposer } from '../engine/RuntimeComposer'
 import { MDSValidator } from '../engine/MDSValidator'
 import { DEFAULT_MISSION_DRAFT, SKILL_TREE, makeDormantState, makeSeedAgents } from '../data/seeds'
+import { apiErrorMessage, apiRequest } from '../api/client'
 import { apiUrl } from '../utils/apiUrl'
 import { redactDiagnosticText, safeDiagnosticPayload } from '../utils/diagnosticRedaction'
 import { createSseFrameParser } from '../utils/sseStream'
@@ -77,8 +77,6 @@ const MISSION_THINKING: ThinkingLevel = 'minimal'
 const FAST_TIMEOUT_SECONDS = 90
 const MISSION_DEFAULT_TIMEOUT_SECONDS = 12 * 60
 const WORKING_STATUS_INTERVAL_MS = 60 * 1000
-const HEARTBEAT_SKIP_NOTICE_COOLDOWN_MS = 5 * 60 * 1000
-const LOOP_COMMANDER_WATCHDOG_MS = 75 * 1000
 const seenClawTalkConsoleEventIds = new Set<string>()
 const TEAMMATE_MEMORY_REPLY_LIMIT = 10
 const TEAMMATE_MEMORY_LINE_MAX = 180
@@ -92,6 +90,7 @@ const heartbeatConfigSaveTimers = new Map<string, ReturnType<typeof setTimeout>>
 const heartbeatConfigSaveSeq = new Map<string, number>()
 const runtimePolicySaveTimers = new Map<string, ReturnType<typeof setTimeout>>()
 const runtimePolicySaveSeq = new Map<string, number>()
+const agentConfigPatchSaveSeq = new Map<string, number>()
 const pendingStorageWrites = new Map<string, string>()
 const storageQuotaLastWarnedAt = new Map<string, number>()
 let pendingStorageWriteTimer: ReturnType<typeof setTimeout> | null = null
@@ -184,9 +183,76 @@ function updateAgentInList(agents: OpenClawAgent[], agentId: string, updater: (a
   return agents.map((a) => (a.id === agentId ? withComputedRuntime(updater(a)) : a))
 }
 
-function persistHeartbeatConfig(agentId: string, heartbeat: HeartbeatConfig) {
+type AgentConfigSaveScope = 'heartbeat' | 'runtime' | 'profile' | 'policy' | 'mds' | 'skills'
+type AgentConfigSavePhase = 'saving' | 'saved' | 'failed'
+
+type AgentConfigSaveEntry = {
+  phase: AgentConfigSavePhase
+  message: string
+  revision: number
+  updatedAt: string
+  requestId?: string
+}
+
+type AgentConfigSaveStatus = Partial<Record<AgentConfigSaveScope, AgentConfigSaveEntry>>
+
+type AgentConfigSaveReporter = (agentId: string, scope: AgentConfigSaveScope, entry: AgentConfigSaveEntry) => void
+
+function updateAgentConfigSaveStatus(
+  current: Record<string, AgentConfigSaveStatus>,
+  agentId: string,
+  scope: AgentConfigSaveScope,
+  entry: AgentConfigSaveEntry,
+): Record<string, AgentConfigSaveStatus> {
+  return {
+    ...current,
+    [agentId]: {
+      ...(current[agentId] || {}),
+      [scope]: entry,
+    },
+  }
+}
+
+function configSaveEntry(phase: AgentConfigSavePhase, message: string, revision: number, requestId?: string): AgentConfigSaveEntry {
+  return { phase, message, revision, requestId, updatedAt: new Date().toISOString() }
+}
+
+function agentConfigPatchKey(agentId: string, scope: AgentConfigSaveScope): string {
+  return `${agentId}:${scope}`
+}
+
+function persistAgentConfigPatch(
+  agentId: string,
+  scope: AgentConfigSaveScope,
+  body: Record<string, unknown>,
+  messages: { saving: string; saved: string; failed: string },
+  report: AgentConfigSaveReporter,
+) {
+  const key = agentConfigPatchKey(agentId, scope)
+  const nextSeq = (agentConfigPatchSaveSeq.get(key) || 0) + 1
+  agentConfigPatchSaveSeq.set(key, nextSeq)
+  report(agentId, scope, configSaveEntry('saving', messages.saving, nextSeq))
+
+  void apiRequest<{ ok?: boolean; error?: string; detail?: unknown }>(`/api/party/agent/${encodeURIComponent(agentId)}/config`, {
+    method: 'POST',
+    timeoutMs: 18_000,
+    body,
+  }).then((result) => {
+    if (agentConfigPatchSaveSeq.get(key) !== nextSeq) return
+    report(
+      agentId,
+      scope,
+      result.ok
+        ? configSaveEntry('saved', messages.saved, nextSeq, result.requestId)
+        : configSaveEntry('failed', `${messages.failed}: ${apiErrorMessage(result.error)}`, nextSeq, result.requestId),
+    )
+  })
+}
+
+function persistHeartbeatConfig(agentId: string, heartbeat: HeartbeatConfig, report: AgentConfigSaveReporter) {
   const nextSeq = (heartbeatConfigSaveSeq.get(agentId) || 0) + 1
   heartbeatConfigSaveSeq.set(agentId, nextSeq)
+  report(agentId, 'heartbeat', configSaveEntry('saving', 'Saving heartbeat settings...', nextSeq))
 
   const existingTimer = heartbeatConfigSaveTimers.get(agentId)
   if (existingTimer) clearTimeout(existingTimer)
@@ -195,10 +261,10 @@ function persistHeartbeatConfig(agentId: string, heartbeat: HeartbeatConfig) {
     heartbeatConfigSaveTimers.delete(agentId)
     const seq = heartbeatConfigSaveSeq.get(agentId)
     if (seq !== nextSeq) return
-    void fetch(`/api/party/agent/${agentId}/config`, {
+    void apiRequest<{ ok?: boolean; error?: string; detail?: unknown }>(`/api/party/agent/${encodeURIComponent(agentId)}/config`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
+      timeoutMs: 18_000,
+      body: {
         heartbeat: {
           tickIntervalMs: heartbeat.tickIntervalMs,
           maxExecutionTimeMs: heartbeat.maxExecutionTimeMs,
@@ -206,16 +272,26 @@ function persistHeartbeatConfig(agentId: string, heartbeat: HeartbeatConfig) {
           continuous: heartbeat.continuous,
           recoveryMode: heartbeat.recoveryMode,
         },
-      }),
-    }).catch(() => {})
+      },
+    }).then((result) => {
+      if (heartbeatConfigSaveSeq.get(agentId) !== nextSeq) return
+      report(
+        agentId,
+        'heartbeat',
+        result.ok
+          ? configSaveEntry('saved', 'Heartbeat settings saved.', nextSeq, result.requestId)
+          : configSaveEntry('failed', `Heartbeat save failed: ${apiErrorMessage(result.error)}`, nextSeq, result.requestId),
+      )
+    })
   }, HEARTBEAT_CONFIG_SAVE_DEBOUNCE_MS)
 
   heartbeatConfigSaveTimers.set(agentId, timer)
 }
 
-function persistRuntimePolicy(agentId: string, runtimePolicy: AgentRuntimePolicy | undefined) {
+function persistRuntimePolicy(agentId: string, runtimePolicy: AgentRuntimePolicy | undefined, report: AgentConfigSaveReporter) {
   const nextSeq = (runtimePolicySaveSeq.get(agentId) || 0) + 1
   runtimePolicySaveSeq.set(agentId, nextSeq)
+  report(agentId, 'runtime', configSaveEntry('saving', 'Saving runtime policy...', nextSeq))
 
   const existingTimer = runtimePolicySaveTimers.get(agentId)
   if (existingTimer) clearTimeout(existingTimer)
@@ -224,17 +300,26 @@ function persistRuntimePolicy(agentId: string, runtimePolicy: AgentRuntimePolicy
     runtimePolicySaveTimers.delete(agentId)
     const seq = runtimePolicySaveSeq.get(agentId)
     if (seq !== nextSeq) return
-    void fetch(`/api/party/agent/${agentId}/config`, {
+    void apiRequest<{ ok?: boolean; error?: string; detail?: unknown }>(`/api/party/agent/${encodeURIComponent(agentId)}/config`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
+      timeoutMs: 18_000,
+      body: {
         runtime: {
           thinkingDefault: runtimePolicy?.thinkingDefault,
           timeoutSeconds: runtimePolicy?.timeoutSeconds,
           parallelPreferred: runtimePolicy?.parallelPreferred,
         },
-      }),
-    }).catch(() => {})
+      },
+    }).then((result) => {
+      if (runtimePolicySaveSeq.get(agentId) !== nextSeq) return
+      report(
+        agentId,
+        'runtime',
+        result.ok
+          ? configSaveEntry('saved', 'Runtime policy saved.', nextSeq, result.requestId)
+          : configSaveEntry('failed', `Runtime policy save failed: ${apiErrorMessage(result.error)}`, nextSeq, result.requestId),
+      )
+    })
   }, RUNTIME_POLICY_SAVE_DEBOUNCE_MS)
 
   runtimePolicySaveTimers.set(agentId, timer)
@@ -253,11 +338,6 @@ function isLoopingMission(mission: Pick<MissionDraft, 'durationMode'>): boolean 
   return mission.durationMode === 'timed' || mission.durationMode === 'continuous' || mission.durationMode === 'indefinite'
 }
 
-function missionWakeIntervalMs(agent: OpenClawAgent): number {
-  const interval = Number(agent.heartbeat.tickIntervalMs || 3000)
-  return Math.max(1000, Math.min(24 * 60 * 60 * 1000, Math.round(interval)))
-}
-
 function missionWorkTimeoutSeconds(agent: OpenClawAgent | undefined): number {
   const timeout = Number(agent?.runtimePolicy?.timeoutSeconds ?? MISSION_DEFAULT_TIMEOUT_SECONDS)
   return Math.max(30, Math.min(7200, Math.round(Number.isFinite(timeout) ? timeout : MISSION_DEFAULT_TIMEOUT_SECONDS)))
@@ -270,10 +350,6 @@ function shouldUseCommanderCycle(mission: MissionRun): boolean {
 function compactLine(value: string, max = 140): string {
   const clean = value.replace(/\s+/g, ' ').trim()
   return clean.length > max ? `${clean.slice(0, max - 1).trim()}...` : clean
-}
-
-function isAbortError(error: unknown) {
-  return typeof error === 'object' && error !== null && 'name' in error && String((error as { name?: unknown }).name) === 'AbortError'
 }
 
 function redactActivityText(value: string, max = 500): string {
@@ -693,45 +769,6 @@ function missionLaneTask(agent: OpenClawAgent, mission: MissionDraft, index: num
   return `${directive} Goal: ${base}`
 }
 
-function loopContinuationTask(agent: OpenClawAgent, mission: MissionDraft, index: number, laneAgents: OpenClawAgent[], commanderOutput: string): string {
-  const directed = directedAssignmentForAgent(agent, index, commanderOutput)
-  if (directed) return directed
-  const baseTask = missionLaneTask(agent, mission, index, laneAgents)
-  return `Next continuous cycle: ${baseTask} Re-check current evidence, advance one concrete unit of work, and report blockers or verification.`
-}
-
-function missionModeDirective(mission: MissionDraft, index: number, total: number): string {
-  if (mission.collaborationMode === 'hierarchical') {
-    return index === 0
-      ? 'Mode: hierarchical commander. Delegate lanes, then synthesize evidence.'
-      : 'Mode: hierarchical worker. Execute assigned lane; avoid duplicate scope; report blockers.'
-  }
-  if (mission.collaborationMode === 'sequential') {
-    return `Mode: sequential relay ${index + 1}/${total}. Build on prior context; leave continuation notes.`
-  }
-  if (mission.collaborationMode === 'swarm') {
-    return 'Mode: swarm. Take a distinct angle, surface contradictions, converge on evidence.'
-  }
-  if (mission.collaborationMode === 'specialist') {
-    return `Mode: specialist for ${mission.missionType}. Stay in specialty; produce expert output.`
-  }
-  return 'Mode: parallel. Claim a distinct lane and produce verified progress.'
-}
-
-function formatMissionContract(mission: MissionDraft, verdictPolicy: 'allow' | 'defer' = 'allow'): string {
-  const loopMode = isLoopingMission(mission)
-  return [
-    `Success: ${compactLine(mission.description || mission.title, 160)}`,
-    'Evidence: changed files or read-only status; checks run or blocker; human path for app work; residual risks.',
-    'Update TEAM_SYNC.md with owner, status, and evidence.',
-    verdictPolicy === 'defer'
-      ? 'Verdict: do not write FINAL_VERDICT or CYCLE_VERDICT on this turn; report lane evidence/blockers only.'
-      : loopMode
-      ? 'Loop verdict: CYCLE_VERDICT: PASS when verified, then assign next cycle.'
-      : 'Final verdict: commander writes FINAL_VERDICT: PASS or FINAL_VERDICT: FAIL.',
-  ].join('\n')
-}
-
 function agentCanSpecialize(agent: OpenClawAgent, mission: MissionDraft): boolean {
   return Boolean(agent.mds.capabilities[mission.missionType])
 }
@@ -795,54 +832,6 @@ function shouldUseAdHocCoordinationForPrompt(prompt: string, laneAgents: OpenCla
   if (!text || laneAgents.length <= 1) return false
   if (laneAgents.some((agent, index) => Boolean(directedAssignmentForAgent(agent, index, text)))) return true
   return /\b(mission|coordinate|orchestrate|parallel\s+lanes?|lanes?|split\s+(?:this|the\s+work|it)|delegate|delegation|assign\s+lanes?|commander|team\s*sync|TEAM_SYNC|claim\s+files?|work\s+together)\b/i.test(text)
-}
-
-function buildMissionAssignmentPrompt(
-  agent: OpenClawAgent,
-  mission: MissionDraft,
-  laneAgents: OpenClawAgent[],
-  index: number,
-  options: { phase?: string; verdictPolicy?: 'allow' | 'defer' } = {},
-): string {
-  const commanderBrief = isCommanderAgent(agent, index) && laneAgents.length > 1 ? `${buildCommanderDelegationBrief(agent, mission, laneAgents)}\n` : ''
-  return [
-    `Mission: ${mission.title} | ${mission.collaborationMode} | ${mission.missionType} ${mission.complexity}% risk ${mission.riskTolerance}%`,
-    options.phase ? `Phase: ${options.phase}` : '',
-    `Lane ${index+1}/${laneAgents.length}: ${agent.name} (${agent.id})${index === 0 ? ' [commander]' : ''}. ${laneDirectiveFor(agent, index)}`,
-    `Team: ${laneAgents.map((a)=>`${a.name} (${a.id})`).join(', ')}`,
-    missionModeDirective(mission, index, laneAgents.length),
-    formatMissionContract(mission, options.verdictPolicy ?? (laneAgents.length > 1 ? 'defer' : 'allow')),
-    commanderBrief,
-    mission.description,
-    '',
-    'Claim files/lane first. Return concrete output: files touched, verification, blocker or next step.',
-  ].join('\n')
-}
-
-function buildMissionSynthesisPrompt(
-  commander: OpenClawAgent,
-  mission: MissionDraft,
-  laneAgents: OpenClawAgent[],
-  laneResults: Array<{ agent: OpenClawAgent; result?: { ok: boolean; output: string } }>,
-): string {
-  const resultLines = laneResults.map(({ agent, result }, index) => {
-    const status = result?.ok ? 'ok' : 'blocked'
-    return `L${index + 1} ${agent.id}: ${status} | ${compactLine(result?.output || 'No result returned.', 260)}`
-  })
-  return [
-    `Mission synthesis: ${mission.title}`,
-    `Commander: ${commander.name} (${commander.id})`,
-    `Team: ${laneAgents.map((a) => `${a.name} (${a.id})`).join(', ')}`,
-    'Phase: final commander synthesis after lane turns.',
-    formatMissionContract(mission, 'allow'),
-    '',
-    'Lane result ledger:',
-    resultLines.join('\n'),
-    '',
-    'Review lane evidence and write the operator-facing final summary.',
-    'Use FINAL_VERDICT: PASS only if the lane evidence satisfies the mission objective. Use FINAL_VERDICT: FAIL if any required lane is blocked or unverified.',
-    'Keep it concise: verdict, evidence, blockers, residual risks, and next action.',
-  ].join('\n')
 }
 
 /* ------------------------------------------------------------------ */
@@ -921,6 +910,7 @@ interface NexusState {
   busyAgentIds: string[]
   operationStates: Record<string, AgentOperationState>
   sessionWarmAgentIds: string[]
+  agentConfigSaveStatus: Record<string, AgentConfigSaveStatus>
 
   /* --- coordination state (volatile) ------------------------------ */
   coordinationMessages: AgentMessage[]
@@ -941,6 +931,7 @@ interface NexusState {
   closeEditor: () => void
 
   updateMissionDraft: (patch: Partial<MissionDraft>) => void
+  syncMissionProjection: () => Promise<void>
   deployMission: () => void
   steerMission: () => void
   stopMission: () => void
@@ -1022,11 +1013,32 @@ type PartyOverviewAgent = {
   }
 }
 
-type RecruitApiResponse = {
-  ok?: boolean
+type PartyOverviewPayload = {
+  party?: PartyOverviewAgent[]
+}
+
+type RecruitAgentPayload = {
   agentId?: string
-  error?: string
-  detail?: unknown
+}
+
+type AgentRuntimePreflightPayload = {
+  agent?: string
+  message?: string
+  checks?: Array<{ ok?: boolean; message?: string; severity?: string }>
+  sandbox?: {
+    mode?: string
+    autoDisabled?: boolean
+  }
+}
+
+type AgentTurnSessionClearPayload = {
+  cleared?: number
+  scope?: 'agent' | 'all'
+  sessionLockCleanup?: {
+    scanned?: number
+    removed?: number
+    errors?: number
+  }
 }
 
 /* ------------------------------------------------------------------ */
@@ -1111,14 +1123,6 @@ function recruitSkillIds(capabilities: Record<CapabilityKey, boolean>) {
   return SKILL_TREE
     .filter((skill) => capabilities[skill.capability])
     .map((skill) => skill.id)
-}
-
-function formatRecruitApiError(status: number, payload: RecruitApiResponse | undefined, text: string) {
-  const base = payload?.error || `HTTP ${status}`
-  const detail = payload?.detail
-  if (typeof detail === 'string' && detail.trim()) return `${base}: ${detail}`
-  if (detail && typeof detail === 'object') return `${base}: ${JSON.stringify(detail)}`
-  return text.trim() ? `${base}: ${compactLine(text, 240)}` : base
 }
 
 function makeRecruitAgentDraft(input: RecruitAgentInput): OpenClawAgent {
@@ -1348,12 +1352,10 @@ function sanitizeAgentForPersistentStore(agent: OpenClawAgent): OpenClawAgent {
 /*  Initial state factory                                             */
 /* ------------------------------------------------------------------ */
 
-let orchestrator: MissionOrchestrator | null = null
 let coordinationBus: CoordinationBus | null = null
 const continuousTimers = new Map<string, ReturnType<typeof setInterval>>()
 const agentWorkingTimers = new Map<string, ReturnType<typeof setInterval>>()
 const lastAgentTurnStartedAt = new Map<string, number>()
-const lastHeartbeatSkipNoticeAt = new Map<string, number>()
 const activeAgentTurnControllers = new Map<string, Set<AbortController>>()
 const operatorCancelledAgentTurns = new Set<string>()
 let cycleToCommanderFn: (() => void) | null = null
@@ -1362,12 +1364,6 @@ let refreshLoopDelegationsFn: ((commanderId: string, commanderOutput: string) =>
 const pendingWorkerCycle = new Set<string>()
 let commanderCycleRetryTimer: ReturnType<typeof setTimeout> | null = null
 let missionBackendPollTimer: ReturnType<typeof setInterval> | null = null
-
-function clearContinuousTimer(key: string) {
-  const timer = continuousTimers.get(key)
-  if (timer) clearInterval(timer)
-  continuousTimers.delete(key)
-}
 
 function clearAllContinuousTimers() {
   for (const timer of continuousTimers.values()) clearInterval(timer)
@@ -1440,6 +1436,7 @@ function makeInitialState() {
     busyAgentIds: [] as string[],
     operationStates: ops,
     sessionWarmAgentIds: [] as string[],
+    agentConfigSaveStatus: {} as Record<string, AgentConfigSaveStatus>,
     coordinationMessages: [] as AgentMessage[],
     coordinationDelegations: [] as DelegationRequest[],
     coordinationWorkspace: [] as WorkspaceClaim[],
@@ -1507,7 +1504,6 @@ export const useNexusStore = create<NexusState>()(
         trackMissionCycle?: boolean
         contextAgentIds?: string[]
       }
-      type PromptRunResult = { ok: boolean; output: string; payload?: AT; streamed?: boolean }
       type QueuedCommandConsoleFollowup = {
         id: string
         agentId: string
@@ -1517,6 +1513,17 @@ export const useNexusStore = create<NexusState>()(
         queuedAt: string
         createdAt: number
       }
+      const reportAgentConfigSave: AgentConfigSaveReporter = (agentId, scope, entry) => {
+        set((s) => ({
+          agentConfigSaveStatus: updateAgentConfigSaveStatus(s.agentConfigSaveStatus, agentId, scope, entry),
+        }))
+      }
+      const persistConfigPatch = (
+        agentId: string,
+        scope: AgentConfigSaveScope,
+        body: Record<string, unknown>,
+        messages: { saving: string; saved: string; failed: string },
+      ) => persistAgentConfigPatch(agentId, scope, body, messages, reportAgentConfigSave)
       const queuedCommandConsoleFollowups = new Map<string, QueuedCommandConsoleFollowup[]>()
       const queuedCommandConsoleTimers = new Map<string, ReturnType<typeof setInterval>>()
 
@@ -1662,9 +1669,10 @@ export const useNexusStore = create<NexusState>()(
         const seconds = Math.round(dur / 1000)
         const summary = compactLine(response || (ok ? 'completed' : 'blocked'), 160)
         const failureKind = meta.failureKind || (!ok ? inferFailureKind(response) : undefined)
+        const missionId = get().activeMission?.id
         const fe: MissionEvent = {
           id: crypto.randomUUID(),
-          missionId: get().activeMission?.id ?? 'direct-query',
+          missionId: missionId ?? 'direct-query',
           timestamp: ts,
           type: 'agent',
           agentId: aid,
@@ -1677,6 +1685,7 @@ export const useNexusStore = create<NexusState>()(
           return {
             agentResponses: [{
               id: crypto.randomUUID(),
+              ...(missionId ? { missionId } : {}),
               agentId: aid,
               prompt,
               response,
@@ -1714,6 +1723,7 @@ export const useNexusStore = create<NexusState>()(
       type BackendMissionStatus = 'active' | 'completed' | 'cancelled'
       type BackendMission = {
         id: string
+        idempotencyKey?: string
         title: string
         brief: string
         mode: 'instant' | 'hours' | 'days' | 'weeks' | 'continuous' | 'indefinite'
@@ -1731,6 +1741,7 @@ export const useNexusStore = create<NexusState>()(
         completedAt: string | null
         progress?: number | null
         scheduler?: MissionRun['scheduler']
+        lifecycleState?: string
       }
       type BackendMissionEvent = {
         id: string
@@ -1741,8 +1752,18 @@ export const useNexusStore = create<NexusState>()(
         agentId?: string
       }
       type BackendMissionsPayload = {
+        generatedAt?: string
         missions?: BackendMission[]
         feed?: BackendMissionEvent[]
+        events?: unknown[]
+        reports?: MissionReport[]
+        projection?: {
+          source?: string
+          missionCount?: number
+          activeMissionCount?: number
+          durableRecordCount?: number
+          memoryRecordCount?: number
+        }
       }
       const backendMissionToRun = (mission: BackendMission, fallback: MissionDraft): MissionRun => {
         const durationMode: DurationMode =
@@ -1792,21 +1813,32 @@ export const useNexusStore = create<NexusState>()(
         }
       }
       const syncBackendMissions = async () => {
-        const res = await fetch(apiUrl('/api/missions'))
-        const payload = (await res.json()) as BackendMissionsPayload
+        const result = await apiRequest<BackendMissionsPayload>('/api/missions/projection')
+        if (!result.ok) throw new Error(apiErrorMessage(result.error))
+        const payload = result.data || {}
         const backendMissions = payload.missions || []
+        const backendReports = (payload.reports || []).slice(0, MAX_REPORTS)
         const active = backendMissions.find((mission) => mission.status === 'active')
         const fallback = get().missionDraft
         const activeRun = active ? backendMissionToRun(active, fallback) : null
+        const missionFeed = (payload.feed || []).map(backendEventToMissionEvent).slice(0, MAX_FEED_EVENTS)
         const historyRuns = backendMissions
           .filter((mission) => mission.status !== 'active')
           .map((mission) => backendMissionToRun(mission, fallback))
           .slice(0, MAX_HISTORY)
-        set((s) => ({
-          activeMission: activeRun,
-          missionHistory: historyRuns.length ? historyRuns : s.missionHistory,
-          missionFeed: (payload.feed || []).map(backendEventToMissionEvent).slice(0, MAX_FEED_EVENTS),
-        }))
+        set((s) => {
+          const backendReportIds = new Set(backendReports.map((report) => report.missionId))
+          const backendMissionIds = new Set(backendMissions.map((mission) => mission.id))
+          const retainedReports = s.missionReports.filter((report) => !backendReportIds.has(report.missionId) && !backendMissionIds.has(report.missionId))
+          return {
+            activeMission: activeRun,
+            missionHistory: historyRuns.length ? historyRuns : s.missionHistory,
+            missionFeed,
+            missionReports: backendReports.length || backendMissionIds.size
+              ? [...backendReports, ...retainedReports].slice(0, MAX_REPORTS)
+              : s.missionReports,
+          }
+        })
         if (!activeRun) clearMissionBackendPollTimer()
       }
       const startMissionBackendPolling = () => {
@@ -1815,54 +1847,11 @@ export const useNexusStore = create<NexusState>()(
           void syncBackendMissions().catch(() => undefined)
         }, 4000)
       }
-      void startMissionBackendPolling
-      const upsertWorkingDelegationsEvent = (
-        missionId: string,
-        activeDelegations: DelegationRequest[],
-        workspaceClaims: WorkspaceClaim[],
-        missionAgents: OpenClawAgent[],
-      ) => {
-        const eventId = `${missionId}:coordination-working`
-        set((s) => {
-          const existing = s.missionFeed.find((event) => event.id === eventId)
-          const agentName = (agentId: string) => missionAgents.find((agent) => agent.id === agentId)?.name || agentId
-          const activeAgentIds = Array.from(new Set(activeDelegations.map((delegation) => delegation.toAgentId)))
-          const activeAgents = activeAgentIds
-            .map((agentId) => {
-              const claim = workspaceClaims.find((entry) => entry.agentId === agentId)
-              const task = claim?.task || activeDelegations.find((delegation) => delegation.toAgentId === agentId)?.task || 'active lane work'
-              return `${agentName(agentId)}: ${compactLine(task, 58)}`
-            })
-            .slice(0, 4)
-          const files = Array.from(new Set(workspaceClaims.flatMap((claim) => claim.files).filter((file) => !/^lane:/i.test(file)))).slice(0, 5)
-          const recent = s.agentResponses
-            .filter((response) => missionAgents.some((agent) => agent.id === response.agentId))
-            .slice(0, 3)
-            .map((response) => `${agentName(response.agentId)} ${response.ok ? 'finished' : 'blocked'}: ${compactLine(response.response || response.prompt, 54)}`)
-          const parts = [
-            `${activeDelegations.length} active delegation${activeDelegations.length === 1 ? '' : 's'}`,
-            activeAgents.length ? `Working: ${activeAgents.join(' | ')}` : 'Working: waiting for agent turn results',
-            files.length ? `Files: ${files.join(', ')}` : '',
-            recent.length ? `Latest: ${recent.join(' | ')}` : '',
-            'Agents working...',
-          ].filter(Boolean)
-          const message = parts.join(' · ')
-          const nextEvent: MissionEvent = {
-            id: eventId,
-            missionId,
-            timestamp: existing?.timestamp || new Date().toISOString(),
-            type: 'coordination',
-            message,
-          }
-          return {
-            missionFeed: [
-              nextEvent,
-              ...s.missionFeed.filter((event) => event.id !== eventId && !/active delegation\(s\);\s*team context circulating/i.test(event.message)),
-            ].slice(0, MAX_FEED_EVENTS),
-          }
-        })
+      const syncMissionProjection = async () => {
+        await syncBackendMissions()
+        if (get().activeMission?.status === 'running') startMissionBackendPolling()
       }
-
+      void startMissionBackendPolling
       const maybeStopMissionAfterVerifiedEvidence = (aid: string, response: string) => {
         const mission = get().activeMission
         if (!mission || mission.status !== 'running') return
@@ -1905,24 +1894,21 @@ export const useNexusStore = create<NexusState>()(
           return
         }
         clearAllContinuousTimers()
-        addMissionFeedEvent(mission.id, `Commander ${aid} verified completion; heartbeat loop stopped.`, 'mission', aid)
-        orchestrator?.stop('completed')
+        addMissionFeedEvent(mission.id, `Commander ${aid} verified completion evidence; backend mission lifecycle remains authoritative.`, 'mission', aid)
       }
 
       const preflightAgentRuntime = async (aid: string): Promise<{ ok: boolean; message?: string }> => {
         try {
-          const res = await fetch(apiUrl('/api/openclaw/agent-preflight'), {
+          const result = await apiRequest<AgentRuntimePreflightPayload>('/api/openclaw/agent-preflight', {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ agent: aid }),
+            timeoutMs: 30_000,
+            body: { agent: aid },
           })
-          if (res.status === 404) return { ok: true }
-          const payload = await res.json().catch(() => null) as { ok?: boolean; message?: string; checks?: Array<{ ok?: boolean; message?: string; severity?: string }> } | null
-          if (!res.ok || payload?.ok === false) {
-            const detail = payload?.message || payload?.checks?.filter((check) => check.ok === false).map((check) => check.message).filter(Boolean).join('; ')
-            return { ok: false, message: detail || `Runtime preflight failed for ${aid}` }
+          if (!result.ok) {
+            if (result.status === 404) return { ok: true }
+            return { ok: false, message: apiErrorMessage(result.error) || `Runtime preflight failed for ${aid}` }
           }
-          return { ok: true, message: payload?.message }
+          return { ok: true, message: result.data.message }
         } catch {
           return { ok: true }
         }
@@ -2258,6 +2244,7 @@ export const useNexusStore = create<NexusState>()(
           const ts = new Date().toISOString()
           set((s) => {
             const existing = s.agentResponses.find((entry) => entry.id === liveResponseId)
+            const missionId = existing?.missionId || s.activeMission?.id
             const responseModelId = modelId.trim() || existing?.modelId || s.agents.find((entry) => entry.id === aid)?.model?.primary?.trim() || undefined
             const runtimeNoticeActive = streaming && (
               existing?.runtimeNoticeActive ||
@@ -2266,6 +2253,7 @@ export const useNexusStore = create<NexusState>()(
             )
             const next: AgentResponse = {
               id: liveResponseId,
+              ...(missionId ? { missionId } : {}),
               agentId: aid,
               prompt: visiblePrompt,
               response: visibleResponse,
@@ -2364,10 +2352,12 @@ export const useNexusStore = create<NexusState>()(
           set((s) => {
             const prev = s.operationStates[aid] ?? makeDormantState(aid, 3000)
             const existing = s.agentResponses.find((entry) => entry.id === liveResponseId)
+            const missionId = existing?.missionId || s.activeMission?.id
             const responseModelId = liveResponseModelId || existing?.modelId || s.agents.find((entry) => entry.id === aid)?.model?.primary?.trim() || undefined
             const finalFailureKind = existing?.failureKind || failureKind
             const next: AgentResponse = {
               id: liveResponseId,
+              ...(missionId ? { missionId } : {}),
               agentId: aid,
               prompt: visiblePrompt,
               response,
@@ -2584,19 +2574,18 @@ export const useNexusStore = create<NexusState>()(
           if (liveStarted) upsertLiveResponse(finalText, !!payload.ok, Date.now() - start, false, liveResponseModelId, failureKind)
           return { payload: { ...payload, reply: finalText }, responseOk: res.ok, streamed: liveStarted }
         }
-        const postJson = async (msg: string, forceOpenClawRuntime = false) => {
+        const postJson = async (msg: string, forceOpenClawRuntime = false): Promise<{ payload: AT; responseOk: boolean; streamed: boolean }> => {
           const controller = new AbortController()
           const releaseController = trackActiveAgentTurnController(aid, controller)
           const requestTimeoutMs = 6 * 60 * 60 * 1000
-          const timer = window.setTimeout(() => controller.abort(), requestTimeoutMs)
           const intentMessage = options.displayPrompt || normalized
           const sessionKey = options.sessionKey?.trim()
           try {
-            return await fetch(apiUrl('/api/openclaw/agent-turn'), {
+            const result = await apiRequest<AT>('/api/openclaw/agent-turn', {
               method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
               signal: controller.signal,
-              body: JSON.stringify({
+              timeoutMs: requestTimeoutMs,
+              body: {
                 agent: aid,
                 message: msg,
                 intentMessage,
@@ -2606,11 +2595,23 @@ export const useNexusStore = create<NexusState>()(
                 attachments: options.attachments || [],
                 ...(sessionKey ? { sessionKey } : {}),
                 ...(forceOpenClawRuntime ? { forceOpenClawRuntime: true } : {}),
-              }),
+              },
             })
+            if (result.ok) return { payload: result.data, responseOk: true, streamed: liveResponseCreated }
+            const message = apiErrorMessage(result.error)
+            return {
+              payload: {
+                ok: false,
+                reply: message,
+                stderr: message,
+                code: result.status || 1,
+                failureKind: result.error.code,
+              },
+              responseOk: false,
+              streamed: liveResponseCreated,
+            }
           } finally {
             releaseController()
-            window.clearTimeout(timer)
           }
         }
         const post = async (msg: string, forceOpenClawRuntime = false): Promise<{ payload: AT; responseOk: boolean; streamed: boolean }> => {
@@ -2644,9 +2645,7 @@ export const useNexusStore = create<NexusState>()(
           } catch (streamError) {
             if (controller.signal.aborted) throw streamError
             try {
-              const res = await postJson(msg, forceOpenClawRuntime)
-              const read = await readApi<AT>(res)
-              return { payload: read.payload || fallback(res, read.text), responseOk: res.ok, streamed: liveResponseCreated }
+              return await postJson(msg, forceOpenClawRuntime)
             } catch (fallbackError) {
               throw new Error([
                 'Control Center API request failed for both streaming and buffered agent-turn routes.',
@@ -2672,11 +2671,11 @@ export const useNexusStore = create<NexusState>()(
           } else {
           let preflight = await preflightAgentRuntime(aid)
           if (!preflight.ok && /docker|sandbox/i.test(preflight.message || '')) {
-            await fetch(`/api/party/agent/${aid}/config`, {
+            await apiRequest(`/api/party/agent/${encodeURIComponent(aid)}/config`, {
               method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ sandbox: { mode: 'off', scope: 'agent', workspaceAccess: 'rw' } }),
-            }).catch(() => undefined)
+              timeoutMs: 20_000,
+              body: { sandbox: { mode: 'off', scope: 'agent', workspaceAccess: 'rw' } },
+            })
             preflight = await preflightAgentRuntime(aid)
           }
           if (!preflight.ok) {
@@ -2714,7 +2713,11 @@ export const useNexusStore = create<NexusState>()(
           }
           const dockerTxt = `${payload.stderr || ''}\n${payload.stdout || ''}`
           if (!payload.ok && hasDockerFail(dockerTxt)) {
-            await fetch(`/api/party/agent/${aid}/config`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ sandbox: { mode: 'off', scope: 'agent', workspaceAccess: 'rw' } }) }).catch(() => undefined)
+            await apiRequest(`/api/party/agent/${encodeURIComponent(aid)}/config`, {
+              method: 'POST',
+              timeoutMs: 20_000,
+              body: { sandbox: { mode: 'off', scope: 'agent', workspaceAccess: 'rw' } },
+            })
             turn = await post(outboundMessage, preferOpenClawRuntime)
             payload = turn.payload
           }
@@ -3061,8 +3064,10 @@ export const useNexusStore = create<NexusState>()(
           }
           const queue = queuedCommandConsoleFollowups.get(agent.id) || []
           const queuePosition = queue.length + 1
+          const missionId = get().activeMission?.id
           const entry: AgentResponse = {
             id: queued.id,
+            ...(missionId ? { missionId } : {}),
             agentId: agent.id,
             prompt: visiblePrompt,
             response,
@@ -3147,26 +3152,6 @@ export const useNexusStore = create<NexusState>()(
         operatorCancelledAgentTurns.clear()
       }
 
-      /* ---- orchestrator hooks ---- */
-      orchestrator = new MissionOrchestrator({
-        onMissionChange: (m) => set({ activeMission: m }),
-        onMissionEvent: (e) => set((s) => ({ missionFeed: [e, ...s.missionFeed].slice(0, MAX_FEED_EVENTS) })),
-        onOperationUpdate: (inc) => set((s) => { const prev = s.operationStates[inc.agentId] ?? makeDormantState(inc.agentId, inc.tickRate); return { operationStates: { ...s.operationStates, [inc.agentId]: { ...prev, ...inc, logStream: [...inc.logStream, ...prev.logStream].slice(0, 28) } } } }),
-        onRuntimeUpdate: (aid, rt) => set((s) => ({ agents: s.agents.map((a) => (a.id === aid ? { ...a, runtime: rt } : a)) })),
-        onPerformanceUpdate: (aid, xpD, errD, ret) => set((s) => ({ agents: s.agents.map((a) => a.id === aid ? (() => { const lv = applyLevelGrowth(a, Math.max(0, a.performance.xp + xpD)); return { ...lv, performance: { ...lv.performance, errors: Math.max(0, lv.performance.errors + errD), efficiencyAverage: Math.min(99, Math.max(1, Math.round(lv.performance.efficiencyAverage + xpD / 25 - errD))), heartbeatStability: Math.max(0, Math.round(lv.performance.heartbeatStability - ret * 0.8 - errD * 1.3)), runtimeEfficiency: Math.max(0, Math.round(lv.performance.runtimeEfficiency + xpD / 30 - ret * 0.7)) } } })() : a) })),
-        onMissionComplete: (rpt, m) => set((s) => {
-          const ops = { ...s.operationStates }
-          for (const id of m.selectedAgents) { const e = ops[id]; if (e) ops[id] = { ...e, heartbeatActive: false, heartbeatStatus: 'idle', currentPhase: 'Standby', retryCount: 0 } }
-          if (coordinationBus) coordinationBus.destroySession(m.id)
-          if (commanderCycleRetryTimer) clearTimeout(commanderCycleRetryTimer || undefined)
-          commanderCycleRetryTimer = null
-          pendingWorkerCycle.clear()
-          dispatchNextWorkerCycleFn = null
-          refreshLoopDelegationsFn = null
-          return { missionReports: [rpt, ...s.missionReports].slice(0, MAX_REPORTS), missionHistory: [m, ...s.missionHistory].slice(0, MAX_HISTORY), operationStates: ops, coordinationMessages: [], coordinationDelegations: [], coordinationWorkspace: [] }
-        }),
-      })
-
       /* ---- coordination bus wiring ---- */
       coordinationBus = new CoordinationBus({
         onMessage: (msg) => set((s) => {
@@ -3214,9 +3199,9 @@ export const useNexusStore = create<NexusState>()(
 
         syncPartyOverview: async () => {
           try {
-            const res = await fetch('/api/party/overview'), payload = (await res.json()) as { party?: PartyOverviewAgent[] }
-            if (!res.ok || !Array.isArray(payload.party)) return
-            const party = payload.party
+            const result = await apiRequest<PartyOverviewPayload>('/api/party/overview', { timeoutMs: 20_000 })
+            if (!result.ok || !Array.isArray(result.data.party)) return
+            const party = result.data.party
             set((s) => {
               const byId = new Map(s.agents.map((a) => [a.id, a]))
               const incoming = party.filter((e) => e?.id && !isRetiredAgentId(e.id)).map((e) => mapOverviewAgentToLocal(e, byId.get(e.id)))
@@ -3237,7 +3222,11 @@ export const useNexusStore = create<NexusState>()(
               .slice(0, PARTY_PREWARM_LIMIT)
             if (fresh.length) {
               set((s) => ({ sessionWarmAgentIds: [...new Set([...s.sessionWarmAgentIds, ...fresh.map((f) => f.id)])] }))
-              void Promise.allSettled(fresh.map((e) => fetch('/api/openclaw/agent-turn', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ agent: e.id, message: 'Confirm readiness in one word: ready.', thinking: 'off', promptProfile: 'fast' }) }).catch(() => null)))
+              void Promise.allSettled(fresh.map((e) => apiRequest('/api/openclaw/agent-turn', {
+                method: 'POST',
+                timeoutMs: 60_000,
+                body: { agent: e.id, message: 'Confirm readiness in one word: ready.', thinking: 'off', promptProfile: 'fast' },
+              })))
             }
           } catch { /* seed fallback */ }
         },
@@ -3270,10 +3259,10 @@ export const useNexusStore = create<NexusState>()(
             tools: draft.mds.toolAccess,
             stats: profileStats,
           }
-          const recruitResponse = await fetch('/api/party/recruit', {
+          const recruitResult = await apiRequest<RecruitAgentPayload>('/api/party/recruit', {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
+            timeoutMs: 120_000,
+            body: {
               agentId,
               name: draft.name,
               workspace: draft.workspace || undefined,
@@ -3289,11 +3278,13 @@ export const useNexusStore = create<NexusState>()(
               soul: draft.soul,
               sandbox: draft.sandbox,
               tools: draft.toolsPolicy,
-            }),
+            },
           })
-          const recruitRead = await readApi<RecruitApiResponse>(recruitResponse)
-          if (!recruitResponse.ok || !recruitRead.payload?.ok) {
-            throw new Error(formatRecruitApiError(recruitResponse.status, recruitRead.payload, recruitRead.text))
+          if (!recruitResult.ok) {
+            throw new Error(apiErrorMessage(recruitResult.error))
+          }
+          if (!recruitResult.data.agentId) {
+            throw new Error('Recruit completed without an agent id.')
           }
 
           const partyWillOverflow = Boolean(input.addToParty && !current.activePartyIds.includes(agentId) && current.activePartyIds.length >= MAX_PARTY_SIZE)
@@ -3319,10 +3310,10 @@ export const useNexusStore = create<NexusState>()(
             }
           })
 
-          const configResponse = await fetch(`/api/party/agent/${agentId}/config`, {
+          const configResult = await apiRequest(`/api/party/agent/${encodeURIComponent(agentId)}/config`, {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
+            timeoutMs: 30_000,
+            body: {
               model: draft.model?.primary ? draft.model : undefined,
               runtime: draft.runtimePolicy,
               profile: recruitProfile,
@@ -3332,11 +3323,10 @@ export const useNexusStore = create<NexusState>()(
               soul: draft.soul,
               sandbox: draft.sandbox,
               tools: draft.toolsPolicy,
-            }),
-          }).catch((error) => ({ ok: false, status: 0, text: async () => String(error) } as Response))
-          if (!configResponse.ok) {
-            const configRead = await readApi<RecruitApiResponse>(configResponse)
-            warnings.push(`Agent was created, but post-create config did not fully save: ${formatRecruitApiError(configResponse.status, configRead.payload, configRead.text)}`)
+            },
+          })
+          if (!configResult.ok) {
+            warnings.push(`Agent was created, but post-create config did not fully save: ${apiErrorMessage(configResult.error)}`)
           }
 
           const resourceFiles = (input.resourceFiles || [])
@@ -3344,14 +3334,13 @@ export const useNexusStore = create<NexusState>()(
             .filter((entry) => /^[^\\/]+\.md$/i.test(entry.file))
           if (resourceFiles.length) {
             const saved = await Promise.allSettled(resourceFiles.map(async (entry) => {
-              const response = await fetch(`/api/party/resources/${agentId}/${encodeURIComponent(entry.file)}`, {
+              const result = await apiRequest<{ file?: string; resourcePath?: string }>(`/api/party/resources/${encodeURIComponent(agentId)}/${encodeURIComponent(entry.file)}`, {
                 method: 'PUT',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ content: entry.content.endsWith('\n') ? entry.content : `${entry.content}\n` }),
+                timeoutMs: 20_000,
+                body: { content: entry.content.endsWith('\n') ? entry.content : `${entry.content}\n` },
               })
-              const read = await readApi<RecruitApiResponse>(response)
-              if (!response.ok || read.payload?.ok === false) {
-                throw new Error(`${entry.file}: ${formatRecruitApiError(response.status, read.payload, read.text)}`)
+              if (!result.ok) {
+                throw new Error(`${entry.file}: ${apiErrorMessage(result.error)}`)
               }
             }))
             const failed = saved
@@ -3379,26 +3368,15 @@ export const useNexusStore = create<NexusState>()(
           if (!normalized) throw new Error('Agent ID is required.')
           if (normalized === 'main') throw new Error('The main agent cannot be retired.')
 
-          const controller = new AbortController()
-          const timeout = window.setTimeout(() => controller.abort(), RETIRE_AGENT_TIMEOUT_MS)
-          let response: Response
-          let read: ApiRead<RecruitApiResponse>
-          try {
-            response = await fetch(apiUrl(`/api/party/agent/${encodeURIComponent(normalized)}`), {
-              method: 'DELETE',
-              signal: controller.signal,
-            })
-            read = await readApi<RecruitApiResponse>(response)
-          } catch (error) {
-            if (isAbortError(error)) {
+          const retireResult = await apiRequest(`/api/party/agent/${encodeURIComponent(normalized)}`, {
+            method: 'DELETE',
+            timeoutMs: RETIRE_AGENT_TIMEOUT_MS,
+          })
+          if (!retireResult.ok) {
+            if (retireResult.error.code === 'timeout') {
               throw new Error('Retire request timed out. Refresh the party list; if the agent disappeared, retirement finished in the background.')
             }
-            throw error
-          } finally {
-            window.clearTimeout(timeout)
-          }
-          if (!response.ok || read.payload?.ok === false) {
-            throw new Error(formatRecruitApiError(response.status, read.payload, read.text))
+            throw new Error(apiErrorMessage(retireResult.error))
           }
           const retiredAgentIds = rememberRetiredAgentId(normalized)
 
@@ -3411,6 +3389,9 @@ export const useNexusStore = create<NexusState>()(
           if (runtimeTimer) clearTimeout(runtimeTimer)
           runtimePolicySaveTimers.delete(normalized)
           runtimePolicySaveSeq.delete(normalized)
+          for (const key of Array.from(agentConfigPatchSaveSeq.keys())) {
+            if (key.startsWith(`${normalized}:`)) agentConfigPatchSaveSeq.delete(key)
+          }
 
           if (typeof window !== 'undefined') {
             try {
@@ -3429,7 +3410,6 @@ export const useNexusStore = create<NexusState>()(
           if (activeMissionUsesAgent) {
             clearAllContinuousTimers()
             clearMissionBackendPollTimer()
-            orchestrator?.stop('cancelled')
           }
 
           set((s) => {
@@ -3442,6 +3422,8 @@ export const useNexusStore = create<NexusState>()(
             if (s.activeMission?.selectedAgents.includes(normalized)) retiredMissionIds.add(s.activeMission.id)
             const operationStates = { ...s.operationStates }
             delete operationStates[normalized]
+            const agentConfigSaveStatus = { ...s.agentConfigSaveStatus }
+            delete agentConfigSaveStatus[normalized]
             const selected = normalizeInitialSelection(
               agents,
               s.selectedAgentId === normalized ? undefined : s.selectedAgentId,
@@ -3463,6 +3445,7 @@ export const useNexusStore = create<NexusState>()(
               busyAgentIds: s.busyAgentIds.filter((id) => id !== normalized),
               operationStates,
               sessionWarmAgentIds: s.sessionWarmAgentIds.filter((id) => id !== normalized),
+              agentConfigSaveStatus,
               coordinationMessages: s.coordinationMessages
                 .filter((message) => message.fromAgentId !== normalized && message.toAgentId !== normalized)
                 .map((message) => ({
@@ -3497,6 +3480,7 @@ export const useNexusStore = create<NexusState>()(
         openEditor: (aid) => set({ isEditorOpen: true, editingAgentId: aid }),
         closeEditor: () => set({ isEditorOpen: false, editingAgentId: null }),
         updateMissionDraft: (p) => set((s) => ({ missionDraft: { ...s.missionDraft, ...p } })),
+        syncMissionProjection,
 
         steerMission: () => {
           const current = get().activeMission
@@ -3611,10 +3595,10 @@ export const useNexusStore = create<NexusState>()(
 
             void (async () => {
               try {
-                const res = await fetch(apiUrl('/api/missions/start'), {
+                const result = await apiRequest<{ ok?: boolean; deduped?: boolean; idempotencyKey?: string | null; mission?: BackendMission; error?: string; detail?: unknown }>('/api/missions/start', {
                   method: 'POST',
-                  headers: { 'Content-Type': 'application/json' },
-                  body: JSON.stringify({
+                  body: {
+                    idempotencyKey: requestId,
                     title: draft.title,
                     brief: draft.description,
                     party: candidateAgents.map((agent) => agent.id),
@@ -3625,17 +3609,20 @@ export const useNexusStore = create<NexusState>()(
                     complexity: draft.complexity,
                     riskTolerance: draft.riskTolerance,
                     cadenceSeconds,
-                  }),
+                  },
                 })
-                const out = await res.json() as { ok?: boolean; mission?: BackendMission; error?: string; detail?: unknown }
-                if (!res.ok || !out.mission) throw new Error(out.error || (typeof out.detail === 'string' ? out.detail : 'Failed to start cron mission'))
+                if (!result.ok) throw new Error(apiErrorMessage(result.error))
+                const out = result.data
+                if (!out.mission) throw new Error(out.error || (typeof out.detail === 'string' ? out.detail : 'Failed to start cron mission'))
                 const run = backendMissionToRun(out.mission, draft)
                 const launchEvents: MissionEvent[] = [{
                   id: crypto.randomUUID(),
                   missionId: run.id,
                   timestamp: new Date().toISOString(),
                   type: 'mission',
-                  message: `Cron mission deployed: ${run.schedulerLifecycle || 'leader-first scheduler'}`,
+                  message: out.deduped
+                    ? `Cron mission launch deduplicated: ${run.schedulerLifecycle || 'leader-first scheduler'}`
+                    : `Cron mission deployed: ${run.schedulerLifecycle || 'leader-first scheduler'}`,
                 }]
                 if (readinessWarnings.length) {
                   launchEvents.push({
@@ -3667,533 +3654,41 @@ export const useNexusStore = create<NexusState>()(
             })()
             return
           }
-
-          const s = get(); const party = s.confirmedPartyIds.length ? s.confirmedPartyIds : s.activePartyIds
-          if (!party.length) return
-          const candidateAgents = selectMissionAgentsForDraft(s.agents, party, s.missionDraft)
-          if (!candidateAgents.length) {
-            set((st) => ({
-              missionFeed: [{
-                id: crypto.randomUUID(),
-                missionId: 'mission-draft',
-                timestamp: new Date().toISOString(),
-                type: 'mission' as const,
-                message: `No eligible agents for ${s.missionDraft.collaborationMode} ${s.missionDraft.missionType} mission`,
-              }, ...st.missionFeed].slice(0, MAX_FEED_EVENTS),
-            }))
-            return
-          }
-          const readiness = MDSValidator.readinessReport(candidateAgents, s.missionDraft)
-          if (!readiness.ok) {
-            set((st) => ({
-              missionFeed: [{
-                id: crypto.randomUUID(),
-                missionId: 'mission-draft',
-                timestamp: new Date().toISOString(),
-                type: 'mission' as const,
-                message: `Mission blocked by readiness gates: ${readiness.issues.filter((issue) => issue.severity === 'error').map((issue) => issue.message).join(' | ')}`,
-              }, ...st.missionFeed].slice(0, MAX_FEED_EVENTS),
-            }))
-            return
-          }
-          const readinessWarnings = readiness.issues.filter((issue) => issue.severity === 'warning')
-
-          const mode = s.missionDraft.durationMode
-
-          // Stop any existing continuous timers
-          clearAllContinuousTimers()
-          if (commanderCycleRetryTimer) clearTimeout(commanderCycleRetryTimer || undefined)
-          commanderCycleRetryTimer = null
-          pendingWorkerCycle.clear()
-          cycleToCommanderFn = null
-          dispatchNextWorkerCycleFn = null
-          refreshLoopDelegationsFn = null
-
-          const m = orchestrator?.start({ agents: s.agents, partyIds: party, mission: s.missionDraft }) as MissionRun
-          if (!m) return
-          if (m.status !== 'running' || !m.selectedAgents.length) return
-          const missionAgents = m.selectedAgents
-            .map((id) => s.agents.find((agent) => agent.id === id))
-            .filter((agent): agent is OpenClawAgent => Boolean(agent))
-          if (!missionAgents.length) return
-          seedMissionCoordination(m, missionAgents, s.missionDraft)
-          const launchEvents: MissionEvent[] = [{
-            id: crypto.randomUUID(),
-            missionId: m.id,
-            timestamp: new Date().toISOString(),
-            type: 'mission',
-            message: mode === 'continuous' || mode === 'indefinite'
-              ? `Continuous heartbeat deployed for ${missionAgents.length} agents with commander delegation`
-              : `${s.missionDraft.collaborationMode} dispatch launched for ${missionAgents.length} eligible agents`,
-          }]
-          if (readinessWarnings.length) {
-            launchEvents.push({
-              id: crypto.randomUUID(),
-              missionId: m.id,
-              timestamp: new Date().toISOString(),
-              type: 'mission',
-              message: `Readiness warnings: ${readinessWarnings.map((issue) => issue.message).join(' | ')}`,
-            })
-          }
-          set((st) => ({
-            activeMission: m,
-            missionFeed: [...launchEvents, ...st.missionFeed].slice(0, MAX_FEED_EVENTS),
-          }))
-
-          const launchAgent = (agent: OpenClawAgent, index: number, options?: { includeRecentContext?: boolean; freshSession?: boolean; displayPrompt?: string; trackMissionCycle?: boolean; heartbeatTurn?: boolean; customPrompt?: string; contextAgentIds?: string[] }): Promise<PromptRunResult | undefined> => {
-            const activeDraft = get().activeMission || s.missionDraft
-            const isHeartbeat = options?.heartbeatTurn === true
-            const isCommander = index === 0 && missionAgents.length > 1
-            const prompt = options?.customPrompt ?? (isHeartbeat
-              ? isCommander
-                ? [
-                    `Commander heartbeat — slot 1 orchestrator: ${agent.name} (${agent.id})`,
-                    `Mission: ${activeDraft.title || 'Active mission'} | Mode: ${activeDraft.durationMode}`,
-                    '',
-                    `Your team has been working. Review TEAM_SYNC.md for the latest status from all lanes.`,
-                    `CRITICAL: You MUST explicitly delegate new work to each teammate. Use the format "Agent N: specific task with concrete files/commands". Do NOT just summarize — assign ownership.`,
-                    `For each worker lane, write a clear next action: what to build, verify, research, or review with named files or components.`,
-                    `If a lane is complete, mark it and assign the next edge, risk, or improvement cycle. Never leave a worker idle.`,
-                    isLoopingMission(activeDraft)
-                      ? `If all lanes are complete and verified, treat that as cycle completion only: write CYCLE_VERDICT: PASS followed by explicit new lane assignments for every teammate. Do not end the mission — the system will dispatch next-cycle turns automatically.`
-                      : `If all lanes are complete and verified, issue FINAL_VERDICT: PASS with a brief summary.`,
-                    `If lanes still need work, give specific direction: what each teammate should do next.`,
-                    `Be concise. Focus on concrete next actions for each lane.`,
-                  ].join('\n')
-                : [
-                    `Heartbeat lane execution — slot ${index + 1}: ${agent.name} (${agent.id})`,
-                    `Mission: ${activeDraft.title || 'Active mission'}`,
-                    `Check your DELEGATIONS section above for the lane the commander assigned to you.`,
-                    `If you have an active delegation: EXECUTE your assigned lane. Produce concrete output — files, commands, verification, evidence markers.`,
-                    `If no active delegation is visible: continue your lane-status task from the roster/matrix, claim one concrete next step, and report that the commander should refresh delegation if scope is unclear.`,
-                    `If your lane is complete: report what you finished and what evidence proves it.`,
-                    `If blocked: describe exactly what you need from the commander or teammates.`,
-                    `Be concise. Do one unit of real work per heartbeat.`,
-                  ].join('\n')
-              : buildMissionAssignmentPrompt(agent, activeDraft, missionAgents, index, {
-                  phase: 'opening lane execution',
-                  verdictPolicy: missionAgents.length > 1 ? 'defer' : 'allow',
-                }))
-            return runAgentPrompt(agent.id, prompt, {
-              displayPrompt: options?.displayPrompt || activeDraft.description || activeDraft.title || 'Mission',
-              includeRecentContext: options?.includeRecentContext ?? false,
-              freshSession: options?.freshSession ?? true,
-              heartbeatTurn: isHeartbeat,
-              thinking: isHeartbeat ? 'off' : (agent.runtimePolicy?.thinkingDefault ?? MISSION_THINKING),
-              timeoutSeconds: resolveMissionTimeoutSeconds(agent, { heartbeat: isHeartbeat }),
-              trackMissionCycle: options?.trackMissionCycle,
-              contextAgentIds: options?.contextAgentIds || missionAgents.map((entry) => entry.id),
-            })
-          }
-
-          const issueWorkerDelegationsFromCommander = (
-            commanderId: string,
-            commanderOutput: string,
-            options?: { requireLoop?: boolean; label?: string },
-          ) => {
-            const current = get().activeMission
-            if (!current || current.id !== m.id || current.status !== 'running') return
-            if (options?.requireLoop && !shouldUseCommanderCycle(current)) return
-            if (!coordinationBus) return
-            const workers = missionAgents.slice(1)
-            if (!workers.length) return
-
-            let created = 0
-            for (const [workerIndex, worker] of workers.entries()) {
-              const laneIndex = workerIndex + 1
-              const activeDelegations = coordinationBus.getActiveDelegationsFor(current.id, worker.id)
-              if (activeDelegations.length) continue
-              const task = loopContinuationTask(worker, current, laneIndex, missionAgents, commanderOutput)
-              coordinationBus.claimWorkspace(current.id, worker.id, [`lane:${laneIndex + 1}`], compactLine(task, 120), 30)
-              coordinationBus.createDelegation(
-                current.id,
-                commanderId,
-                worker.id,
-                task,
-                [
-                  `Continuous mission: ${current.title}`,
-                  `Commander cycle review: ${compactLine(commanderOutput, 700)}`,
-                  'Execute exactly one useful next unit, then report evidence, blockers, and what should happen next.',
-                ].join('\n'),
-                30,
-              )
-              created += 1
-            }
-
-            addMissionFeedEvent(
-              current.id,
-              created
-                ? `Commander ${commanderId} issued ${created} ${options?.label || 'next-cycle'} delegation(s).`
-                : `Commander ${commanderId} review found active delegations already in flight.`,
-              'coordination',
-              commanderId,
-            )
-          }
-          const refreshLoopDelegationsFromCommander = (commanderId: string, commanderOutput: string) => {
-            issueWorkerDelegationsFromCommander(commanderId, commanderOutput, { requireLoop: true, label: 'next-cycle' })
-          }
-          refreshLoopDelegationsFn = refreshLoopDelegationsFromCommander
-          let lastCommanderWatchdogKick = 0
-          const msUntilNextAgentWake = (agent: OpenClawAgent) => {
-            const lastStartedAt = lastAgentTurnStartedAt.get(agent.id)
-            if (!lastStartedAt) return 0
-            return Math.max(0, missionWakeIntervalMs(agent) - (Date.now() - lastStartedAt))
-          }
-          const scheduleAgentWake = (key: string, agent: OpenClawAgent, run: () => void) => {
-            if (continuousTimers.has(key)) return
-            const delayMs = msUntilNextAgentWake(agent)
-            if (delayMs <= 0) {
-              run()
-              return
-            }
-            const timer = setTimeout(() => {
-              continuousTimers.delete(key)
-              const current = get().activeMission
-              if (!current || current.id !== m.id || current.status !== 'running') return
-              if (msUntilNextAgentWake(agent) > 0) {
-                scheduleAgentWake(key, agent, run)
-                return
-              }
-              run()
-            }, delayMs)
-            continuousTimers.set(key, timer)
-          }
-
-          cycleToCommanderFn = () => {
-            const currentState = get()
-            const current = currentState.activeMission
-            if (!current || current.id !== m.id || current.status !== 'running') return
-            if (!shouldUseCommanderCycle(current)) return
-            const commander = missionAgents[0]
-            if (!commander) return
-            if (currentState.busyAgentIds.includes(commander.id)) {
-              addMissionFeedEvent(
-                current.id,
-                `${commander.id} commander cycle queued; slot 1 is still working.`,
-                'coordination',
-                commander.id,
-              )
-              if (!commanderCycleRetryTimer) {
-                commanderCycleRetryTimer = setTimeout(() => {
-                  commanderCycleRetryTimer = null
-                  if (get().activeMission?.id === m.id) cycleToCommanderFn?.()
-                }, 30_000)
-              }
-              return
-            }
-            lastCommanderWatchdogKick = Date.now()
-            scheduleAgentWake(`${m.id}:wake-${commander.id}`, commander, () => {
-              void launchAgent(commander, 0, {
-                displayPrompt: `${current.title} (commander cycle review)`,
-                includeRecentContext: true,
-                freshSession: false,
-                heartbeatTurn: true,
-                trackMissionCycle: true,
-              })
-            })
-          }
-          dispatchNextWorkerCycleFn = () => {
-            const currentState = get()
-            const current = currentState.activeMission
-            if (!current || current.id !== m.id || current.status !== 'running') return
-            if (!shouldUseCommanderCycle(current)) return
-            pendingWorkerCycle.clear()
-            const workers = missionAgents.slice(1) // skip commander at index 0
-            let dispatchedCount = 0
-            for (const [workerIndex, worker] of workers.entries()) {
-              const index = workerIndex + 1
-              if (currentState.busyAgentIds.includes(worker.id)) {
-                addMissionFeedEvent(
-                  current.id,
-                  `${worker.id} next-cycle turn queued; agent is still working.`,
-                  'coordination',
-                  worker.id,
-                )
-                // Poll until worker is free, then dispatch
-                const pollInterval = setInterval(() => {
-                  const latestState = get()
-                  if (!latestState.activeMission || latestState.activeMission.id !== m.id || latestState.activeMission.status !== 'running') {
-                    clearContinuousTimer(`${m.id}:poll-${worker.id}`)
-                    return
-                  }
-                  if (!latestState.busyAgentIds.includes(worker.id)) {
-                    clearContinuousTimer(`${m.id}:poll-${worker.id}`)
-                    scheduleAgentWake(`${m.id}:wake-${worker.id}`, worker, () => {
-                      void launchAgent(worker, index, {
-                        displayPrompt: `${current.title} (next cycle)`,
-                        includeRecentContext: true,
-                        freshSession: false,
-                        heartbeatTurn: true,
-                        trackMissionCycle: true,
-                      })
-                    })
-                  }
-                }, 3000)
-                clearContinuousTimer(`${m.id}:poll-${worker.id}`)
-                continuousTimers.set(`${m.id}:poll-${worker.id}`, pollInterval)
-                continue
-              }
-              scheduleAgentWake(`${m.id}:wake-${worker.id}`, worker, () => {
-                void launchAgent(worker, index, {
-                  displayPrompt: `${current.title} (next cycle)`,
-                  includeRecentContext: true,
-                  freshSession: false,
-                  heartbeatTurn: true,
-                  trackMissionCycle: true,
-                })
-              })
-              dispatchedCount += 1
-            }
-            if (dispatchedCount > 0 || workers.length === 0) {
-              addMissionFeedEvent(
-                current.id,
-                `Next cycle dispatched: ${dispatchedCount} worker(s) started, ${workers.length - dispatchedCount} queued.`,
-                'coordination',
-              )
-            }
-          }
-
-          // Coordination pulse timer: every 8 seconds, refresh team context
-          // for ALL agents by publishing a lightweight status update into the feed.
-          // This keeps the coordination bus state visible without launching a full turn.
-          const coordPulseTimer = setInterval(() => {
-            const cur = get()
-            if (!cur.activeMission || cur.activeMission.id !== m.id || cur.activeMission.status !== 'running') {
-              clearContinuousTimer(`${m.id}:coord-pulse`)
-              return
-            }
-            const bus = coordinationBus
-            if (!bus || !missionAgents.length) return
-            // Push a lightweight coordination heartbeat into the feed so operators see
-            // live delegation/message state without waiting for agent turns
-            const pending = missionAgents.flatMap((agent) =>
-              bus.getActiveDelegationsFor(cur.activeMission!.id, agent.id),
-            )
-            if (pending.length) {
-              upsertWorkingDelegationsEvent(cur.activeMission.id, pending, bus.getWorkspaceRegistry(cur.activeMission.id), missionAgents)
-            }
-          }, 8000)
-          clearContinuousTimer(`${m.id}:coord-pulse`)
-          continuousTimers.set(`${m.id}:coord-pulse`, coordPulseTimer)
-
-          const commanderWatchdogTimer = setInterval(() => {
-            const cur = get()
-            const current = cur.activeMission
-            if (!current || current.id !== m.id || current.status !== 'running') {
-              clearContinuousTimer(`${m.id}:commander-watchdog`)
-              return
-            }
-            if (!shouldUseCommanderCycle(current)) return
-            if (cur.busyAgentIds.some((id) => current.selectedAgents.includes(id))) return
-            if (Date.now() - lastCommanderWatchdogKick < LOOP_COMMANDER_WATCHDOG_MS) return
-            const bus = coordinationBus
-            const workers = missionAgents.slice(1)
-            const hasOpenWorkerDelegations = Boolean(
-              bus && workers.some((worker) => bus.getActiveDelegationsFor(current.id, worker.id).length > 0),
-            )
-            if (hasOpenWorkerDelegations || pendingWorkerCycle.size > 0) return
-            lastCommanderWatchdogKick = Date.now()
-            addMissionFeedEvent(
-              current.id,
-              'Loop watchdog found all lanes idle; waking slot 1 commander to assign the next cycle.',
-              'coordination',
-              missionAgents[0]?.id,
-            )
-            cycleToCommanderFn?.()
-          }, LOOP_COMMANDER_WATCHDOG_MS)
-          clearContinuousTimer(`${m.id}:commander-watchdog`)
-          continuousTimers.set(`${m.id}:commander-watchdog`, commanderWatchdogTimer)
-
-          const startHeartbeatLoops = () => {
-            const current = get().activeMission
-            if (!current || current.id !== m.id || current.status !== 'running') return
-            if (!(mode === 'timed' || mode === 'continuous' || mode === 'indefinite')) return
-            const useCommanderCycle = shouldUseCommanderCycle(current)
-
-            const shouldSkipAgentHeartbeat = (agentId: string) => {
-              const now = Date.now()
-              const currentState = get()
-              const isBusy = currentState.busyAgentIds.includes(agentId)
-              if (!isBusy) return false
-              const lastNotice = lastHeartbeatSkipNoticeAt.get(agentId) || 0
-              if (now - lastNotice > HEARTBEAT_SKIP_NOTICE_COOLDOWN_MS) {
-                lastHeartbeatSkipNoticeAt.set(agentId, now)
-                addMissionFeedEvent(
-                  currentState.activeMission?.id || m.id,
-                  `${agentId} heartbeat skipped (still working); no model turn spent.`,
-                  'runtime',
-                  agentId,
-                )
-              }
-              return true
-            }
-
-            if (m.collaborationMode === 'sequential') {
-              let cursor = 0
-              const timer = setInterval(() => {
-                const currentState = get()
-                if (!currentState.activeMission || currentState.activeMission.id !== m.id || currentState.activeMission.status !== 'running') {
-                  clearContinuousTimer(`${m.id}:sequential`)
-                  return
-                }
-                const index = cursor % missionAgents.length
-                const agent = missionAgents[index]
-                cursor += 1
-                if (shouldSkipAgentHeartbeat(agent.id)) return
-                void launchAgent(agent, index, {
-                  displayPrompt: `${currentState.activeMission.title} (relay heartbeat)`,
-                  includeRecentContext: true,
-                  freshSession: false,
-                  heartbeatTurn: true,
-                  trackMissionCycle: false,
-                })
-              }, Math.min(...missionAgents.map(missionWakeIntervalMs)))
-              clearContinuousTimer(`${m.id}:sequential`)
-              continuousTimers.set(`${m.id}:sequential`, timer)
-              return
-            }
-
-            for (const [index, agent] of missionAgents.entries()) {
-              if (useCommanderCycle && index === 0) continue
-              const intervalMs = missionWakeIntervalMs(agent)
-              const timer = setInterval(() => {
-                const currentState = get()
-                if (!currentState.activeMission || currentState.activeMission.id !== m.id || currentState.activeMission.status !== 'running') {
-                  clearContinuousTimer(`${m.id}:heartbeat-${agent.id}`)
-                  return
-                }
-                if (shouldSkipAgentHeartbeat(agent.id)) return
-                void launchAgent(agent, index, {
-                  displayPrompt: `${currentState.activeMission.title} (heartbeat)`,
-                  includeRecentContext: true,
-                  freshSession: false,
-                  heartbeatTurn: true,
-                  trackMissionCycle: useCommanderCycle,
-                })
-              }, intervalMs)
-
-              clearContinuousTimer(`${m.id}:heartbeat-${agent.id}`)
-              continuousTimers.set(`${m.id}:heartbeat-${agent.id}`, timer)
-            }
-          }
-
-          const runOpeningTurns = async () => {
-            const openingResults: Array<{ agent: OpenClawAgent; result?: PromptRunResult }> = []
-            const captureResult = (agent: OpenClawAgent, result: PromptRunResult | undefined) => {
-              openingResults.push({
-                agent,
-                result: result || { ok: false, output: 'No turn result returned.' },
-              })
-            }
-
-            if (m.collaborationMode === 'sequential') {
-              for (const [index, agent] of missionAgents.entries()) {
-                captureResult(
-                  agent,
-                  await launchAgent(agent, index, { includeRecentContext: index > 0, freshSession: index === 0, trackMissionCycle: true }),
-                )
-              }
-            } else if (m.collaborationMode === 'hierarchical' && missionAgents.length > 1) {
-              const [commander, ...workers] = missionAgents
-              const commanderTurn = await launchAgent(commander, 0, { includeRecentContext: false, freshSession: true, trackMissionCycle: true })
-              captureResult(commander, commanderTurn)
-              issueWorkerDelegationsFromCommander(commander.id, commanderTurn?.output || m.description || m.title, { label: 'opening' })
-              const workerSettled = await Promise.allSettled(
-                workers.map((agent, workerIndex) => launchAgent(agent, workerIndex + 1, { includeRecentContext: true, freshSession: true, trackMissionCycle: true })),
-              )
-              for (const [workerIndex, settled] of workerSettled.entries()) {
-                captureResult(
-                  workers[workerIndex],
-                  settled.status === 'fulfilled'
-                    ? settled.value
-                    : { ok: false, output: String(settled.reason) },
-                )
-              }
-            } else {
-              const settled = await Promise.allSettled(
-                missionAgents.map((agent, index) => launchAgent(agent, index, { includeRecentContext: false, freshSession: true, trackMissionCycle: true })),
-              )
-              for (const [index, item] of settled.entries()) {
-                captureResult(
-                  missionAgents[index],
-                  item.status === 'fulfilled'
-                    ? item.value
-                    : { ok: false, output: String(item.reason) },
-                )
-              }
-            }
-
-            const current = get().activeMission
-            if (!current || current.id !== m.id || current.status !== 'running') return
-            if (mode === 'instant') {
-              let synthesisResult: PromptRunResult | undefined
-              if (missionAgents.length > 1) {
-                const commander = missionAgents[0]
-                synthesisResult = await launchAgent(commander, 0, {
-                  customPrompt: buildMissionSynthesisPrompt(commander, current, missionAgents, openingResults),
-                  displayPrompt: `${current.title} (commander synthesis)`,
-                  includeRecentContext: true,
-                  freshSession: false,
-                  trackMissionCycle: false,
-                })
-              }
-              const latest = get().activeMission
-              if (!latest || latest.id !== m.id || latest.status !== 'running') return
-              const failedOpening = openingResults.some((entry) => entry.result?.ok === false)
-              const failedSynthesis = synthesisResult ? !synthesisResult.ok || /\bFINAL_VERDICT:\s*FAIL\b/i.test(synthesisResult.output) : false
-              orchestrator?.stop(failedOpening || failedSynthesis ? 'failed' : 'completed')
-              return
-            }
-            startHeartbeatLoops()
-          }
-
-          void runOpeningTurns()
         },
         stopMission: () => {
-          {
-            const current = get().activeMission
-            clearAllContinuousTimers()
-            clearMissionBackendPollTimer()
-            if (commanderCycleRetryTimer) clearTimeout(commanderCycleRetryTimer || undefined)
-            commanderCycleRetryTimer = null
-            pendingWorkerCycle.clear()
-            cycleToCommanderFn = null
-            dispatchNextWorkerCycleFn = null
-            refreshLoopDelegationsFn = null
-            if (!current) return
-            void (async () => {
-              try {
-                await fetch(apiUrl('/api/missions/stop'), {
-                  method: 'POST',
-                  headers: { 'Content-Type': 'application/json' },
-                  body: JSON.stringify({ missionId: current.id }),
-                })
-                await syncBackendMissions().catch(() => undefined)
-              } catch (error) {
-                addMissionFeedEvent(current.id, `Cron mission stop failed: ${String(error)}`, 'mission')
-              }
-            })()
-            set((s) => ({
-              activeMission: { ...current, status: 'cancelled', endedAt: new Date().toISOString() },
-              missionFeed: [{
-                id: crypto.randomUUID(),
-                missionId: current.id,
-                timestamp: new Date().toISOString(),
-                type: 'mission' as const,
-                message: 'Cron mission stop requested.',
-              }, ...s.missionFeed].slice(0, MAX_FEED_EVENTS),
-            }))
-            return
-          }
-
+          const current = get().activeMission
           clearAllContinuousTimers()
+          clearMissionBackendPollTimer()
           if (commanderCycleRetryTimer) clearTimeout(commanderCycleRetryTimer || undefined)
           commanderCycleRetryTimer = null
           pendingWorkerCycle.clear()
           cycleToCommanderFn = null
           dispatchNextWorkerCycleFn = null
           refreshLoopDelegationsFn = null
-          orchestrator?.stop('cancelled')
+          if (!current) return
+          void (async () => {
+            try {
+              const result = await apiRequest('/api/missions/stop', {
+                method: 'POST',
+                body: { missionId: current.id },
+                timeoutMs: 120_000,
+              })
+              if (!result.ok) throw new Error(apiErrorMessage(result.error))
+              await syncBackendMissions().catch(() => undefined)
+            } catch (error) {
+              addMissionFeedEvent(current.id, `Cron mission stop failed: ${String(error)}`, 'mission')
+            }
+          })()
+          set((s) => ({
+            activeMission: { ...current, status: 'cancelled', endedAt: new Date().toISOString() },
+            missionFeed: [{
+              id: crypto.randomUUID(),
+              missionId: current.id,
+              timestamp: new Date().toISOString(),
+              type: 'mission' as const,
+              message: 'Cron mission stop requested.',
+            }, ...s.missionFeed].slice(0, MAX_FEED_EVENTS),
+          }))
         },
 
         sendPromptToAgent: async (aid, prompt, attachments) => {
@@ -4451,8 +3946,10 @@ export const useNexusStore = create<NexusState>()(
             const transport = frame.transport?.trim() || existing?.transport || 'clawtalk-control-center'
             const completedAt = isTerminal ? ts : existing?.completedAt
             const firstTokenAt = eventName === 'delta' && text && !existing?.firstTokenAt ? ts : existing?.firstTokenAt
+            const missionId = existing?.missionId || s.activeMission?.id
             const next: AgentResponse = {
               id: responseId,
+              ...(missionId ? { missionId } : {}),
               agentId,
               prompt,
               response,
@@ -4515,21 +4012,25 @@ export const useNexusStore = create<NexusState>()(
         clearAgentResponses: () => {
           clearQueuedCommandConsoleFollowups()
           resetCommandConsoleRuntimeState()
-          void fetch('/api/openclaw/agent-turn/sessions/clear', {
+          void apiRequest<AgentTurnSessionClearPayload>('/api/openclaw/agent-turn/sessions/clear', {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({}),
-          }).catch(() => undefined)
+            timeoutMs: 20_000,
+            body: {},
+          }).then((result) => {
+            if (!result.ok) console.warn('Failed to clear Command Console sessions:', apiErrorMessage(result.error))
+          })
           set({ agentResponses: [], busyAgentIds: [] })
         },
         clearAll: () => {
           clearQueuedCommandConsoleFollowups()
           resetCommandConsoleRuntimeState()
-          void fetch('/api/openclaw/agent-turn/sessions/clear', {
+          void apiRequest<AgentTurnSessionClearPayload>('/api/openclaw/agent-turn/sessions/clear', {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({}),
-          }).catch(() => undefined)
+            timeoutMs: 20_000,
+            body: {},
+          }).then((result) => {
+            if (!result.ok) console.warn('Failed to clear Command Console sessions:', apiErrorMessage(result.error))
+          })
           set({ activePartyIds: [], confirmedPartyIds: [], selectedAgentId: null, selectedAgentIds: [], agentResponses: [], busyAgentIds: [] })
         },
 
@@ -4537,11 +4038,11 @@ export const useNexusStore = create<NexusState>()(
           set((s) => ({ agents: updateAgentInList(s.agents, aid, (a) => ({ ...a, attributes: { ...a.attributes, ...p } })) }))
           const agent = get().agents.find((a) => a.id === aid)
           if (agent) {
-            void fetch(`/api/party/agent/${aid}/config`, {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ attributes: agent.attributes }),
-            }).catch(() => {})
+            persistConfigPatch(aid, 'profile', { attributes: agent.attributes }, {
+              saving: 'Saving core attributes...',
+              saved: 'Core attributes saved.',
+              failed: 'Core attributes save failed',
+            })
           }
         },
         updateSoul: (aid, p) => {
@@ -4549,17 +4050,34 @@ export const useNexusStore = create<NexusState>()(
           // Persist soul to backend disk so settings survive refresh
           const agent = get().agents.find((a) => a.id === aid)
           if (agent) {
-            void fetch(`/api/party/agent/${aid}/config`, {
-              method: 'POST', headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ soul: { personality: agent.soul.personality, autonomyLevel: agent.soul.autonomyLevel, riskTolerance: agent.soul.riskTolerance, reflectionDepth: agent.soul.reflectionDepth, goalOrientation: agent.soul.goalOrientation, persistence: agent.soul.persistence, alignmentMode: agent.soul.alignmentMode } })
-            }).catch(() => {})
+            persistConfigPatch(aid, 'profile', {
+              soul: {
+                personality: agent.soul.personality,
+                autonomyLevel: agent.soul.autonomyLevel,
+                riskTolerance: agent.soul.riskTolerance,
+                reflectionDepth: agent.soul.reflectionDepth,
+                goalOrientation: agent.soul.goalOrientation,
+                persistence: agent.soul.persistence,
+                alignmentMode: agent.soul.alignmentMode,
+              },
+            }, {
+              saving: 'Saving soul profile...',
+              saved: 'Soul profile saved.',
+              failed: 'Soul profile save failed',
+            })
           }
         },
         updateHeartbeat: (aid, p, options) => {
           set((s) => ({ agents: updateAgentInList(s.agents, aid, (a) => ({ ...a, heartbeat: { ...a.heartbeat, ...p } })) }))
           if (options?.persist === false) return
           const agent = get().agents.find((a) => a.id === aid)
-          if (agent) persistHeartbeatConfig(aid, agent.heartbeat)
+          if (agent) {
+            persistHeartbeatConfig(aid, agent.heartbeat, (agentId, scope, entry) => {
+              set((s) => ({
+                agentConfigSaveStatus: updateAgentConfigSaveStatus(s.agentConfigSaveStatus, agentId, scope, entry),
+              }))
+            })
+          }
         },
         updateMDS: (aid, p) => {
           set((s) => ({ agents: updateAgentInList(s.agents, aid, (a) => ({ ...a, mds: { ...a.mds, ...p, capabilities: { ...a.mds.capabilities, ...(p.capabilities || {}) }, toolAccess: p.toolAccess || a.mds.toolAccess } })) }))
@@ -4572,10 +4090,11 @@ export const useNexusStore = create<NexusState>()(
             ...(p.subAgentSpawnLimit !== undefined ? { subAgentSpawnLimit: p.subAgentSpawnLimit } : {}),
           }
           if (Object.keys(mdsPatch).length) {
-            void fetch(`/api/party/agent/${aid}/config`, {
-              method: 'POST', headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ mds: mdsPatch })
-            }).catch(() => {})
+            persistConfigPatch(aid, 'mds', { mds: mdsPatch }, {
+              saving: 'Saving MDS policy...',
+              saved: 'MDS policy saved.',
+              failed: 'MDS policy save failed',
+            })
           }
         },
         updateAgentMeta: (aid, p) => set((s) => ({ agents: updateAgentInList(s.agents, aid, (a) => ({ ...a, ...p })) })),
@@ -4585,7 +4104,13 @@ export const useNexusStore = create<NexusState>()(
           if (options?.persist === false) return
           // Persist runtime policy to backend disk so thinking/timeout survive refresh
           const agent = get().agents.find((a) => a.id === aid)
-          if (agent) persistRuntimePolicy(aid, agent.runtimePolicy)
+          if (agent) {
+            persistRuntimePolicy(aid, agent.runtimePolicy, (agentId, scope, entry) => {
+              set((s) => ({
+                agentConfigSaveStatus: updateAgentConfigSaveStatus(s.agentConfigSaveStatus, agentId, scope, entry),
+              }))
+            })
+          }
         },
         toggleSkillUnlock: (aid, sid, on) => {
           const sk = SKILL_TREE.find((e) => e.id === sid); if (!sk) return
@@ -4596,13 +4121,14 @@ export const useNexusStore = create<NexusState>()(
           }) }))
           const agent = get().agents.find((a) => a.id === aid)
           if (agent) {
-            void fetch(`/api/party/agent/${aid}/config`, {
-              method: 'POST', headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({
-                profile: { skills: agent.unlockedSkills },
-                mds: { capabilities: agent.mds.capabilities },
-              })
-            }).catch(() => {})
+            persistConfigPatch(aid, 'skills', {
+              profile: { skills: agent.unlockedSkills },
+              mds: { capabilities: agent.mds.capabilities },
+            }, {
+              saving: 'Saving skill unlocks...',
+              saved: 'Skill unlocks saved.',
+              failed: 'Skill unlock save failed',
+            })
           }
         },
         setAgentEnabledSkills: (aid, installedSkills, enabledSkillIds) => {
@@ -4631,14 +4157,14 @@ export const useNexusStore = create<NexusState>()(
             },
           })) }))
 
-          void fetch(apiUrl(`/api/party/agent/${aid}/config`), {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              profile: { skills: enabled },
-              mds: { skillLibrary },
-            }),
-          }).catch(() => {})
+          persistConfigPatch(aid, 'skills', {
+            profile: { skills: enabled },
+            mds: { skillLibrary },
+          }, {
+            saving: 'Saving enabled skills...',
+            saved: 'Enabled skills saved.',
+            failed: 'Enabled skills save failed',
+          })
         },
         recordSkillLearned: (aid, skill) => {
           set((s) => {
@@ -4699,14 +4225,14 @@ export const useNexusStore = create<NexusState>()(
           })
           const agent = get().agents.find((a) => a.id === aid)
           if (agent) {
-            void fetch(apiUrl(`/api/party/agent/${aid}/config`), {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({
-                profile: { skills: agent.unlockedSkills },
-                mds: { skillLibrary: agent.mds.skillLibrary },
-              }),
-            }).catch(() => {})
+            persistConfigPatch(aid, 'skills', {
+              profile: { skills: agent.unlockedSkills },
+              mds: { skillLibrary: agent.mds.skillLibrary },
+            }, {
+              saving: 'Saving learned skill...',
+              saved: 'Learned skill saved.',
+              failed: 'Learned skill save failed',
+            })
           }
         },
 
@@ -4766,7 +4292,6 @@ export const useNexusStore = create<NexusState>()(
           cycleToCommanderFn = null
           dispatchNextWorkerCycleFn = null
           refreshLoopDelegationsFn = null
-          orchestrator?.stop('cancelled')
           set({ missionDraft: { ...DEFAULT_MISSION_DRAFT }, activeMission: null })
         },
         resetSimulation: () => {
@@ -4778,7 +4303,6 @@ export const useNexusStore = create<NexusState>()(
           cycleToCommanderFn = null
           dispatchNextWorkerCycleFn = null
           refreshLoopDelegationsFn = null
-          orchestrator?.stop('cancelled')
           set((s) => {
             const ops: Record<string, AgentOperationState> = {}; for (const a of s.agents) ops[a.id] = makeDormantState(a.id, a.heartbeat.tickIntervalMs)
             const selected = normalizeInitialSelection(s.agents, s.selectedAgentId, s.selectedAgentIds)
@@ -4825,14 +4349,17 @@ export const useNexusStore = create<NexusState>()(
           activePartyIds,
           confirmedPartyIds,
           ...selection,
+          missionHistory: (merged.missionHistory || []).slice(0, MAX_HISTORY),
+          missionReports: (merged.missionReports || []).slice(0, MAX_REPORTS),
           agentResponses: current.agentResponses,
           missionFeed: current.missionFeed,
           busyAgentIds: current.busyAgentIds,
           operationStates: current.operationStates,
           sessionWarmAgentIds: [],
+          agentConfigSaveStatus: {},
         }
       },
-      // Only persist agent configs and party — NOT volatile runtime state
+      // Persist operator configuration and completed mission summaries; keep active runtime state volatile.
       partialize: (s) => ({
         _version: 5,
         retiredAgentIds: s.retiredAgentIds,
@@ -4840,6 +4367,8 @@ export const useNexusStore = create<NexusState>()(
         activePartyIds: s.activePartyIds.filter((id) => !isRetiredAgentId(id)),
         confirmedPartyIds: s.confirmedPartyIds.filter((id) => !isRetiredAgentId(id)),
         missionDraft: s.missionDraft,
+        missionHistory: s.missionHistory.slice(0, MAX_HISTORY),
+        missionReports: s.missionReports.slice(0, MAX_REPORTS),
       }),
     },
   ),

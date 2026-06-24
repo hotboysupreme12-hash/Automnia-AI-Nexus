@@ -26,9 +26,12 @@ type LedgerPaths = {
   runtimeRunsJsonl: string
   gatewayEventsJsonl: string
   diagnosticRunsJsonl: string
+  missionRecordsJsonl: string
+  missionEventsJsonl: string
+  missionReportsJsonl: string
 }
 
-type LedgerKind = 'runtime_run' | 'gateway_event' | 'diagnostic_run'
+type LedgerKind = 'runtime_run' | 'gateway_event' | 'diagnostic_run' | 'mission_record' | 'mission_event' | 'mission_report'
 
 type LedgerAppendOptions = {
   mirrorJsonl?: boolean
@@ -39,6 +42,15 @@ type LedgerReadOptions = {
   sqlite?: boolean
 }
 
+type JsonlTailDiagnostic = {
+  ledger: string
+  filePath: string
+  startOffset: number
+  malformedRows: number
+  discardedPartialLine: boolean
+  message: string
+}
+
 const optionalRequire = createRequire(typeof __filename === 'string' ? __filename : import.meta.url)
 const LEDGER_TAIL_MAX_BYTES = 512 * 1024
 
@@ -46,6 +58,7 @@ let paths: LedgerPaths | null = null
 let database: SqliteDatabase | null = null
 let sqliteUnavailableReason = ''
 let legacyImportWarning = ''
+let jsonlTailDiagnostic: JsonlTailDiagnostic | null = null
 
 export function configureRuntimeLedger(input: Omit<LedgerPaths, 'sqlite'> & { sqlite?: string }) {
   const nextPaths = {
@@ -56,6 +69,7 @@ export function configureRuntimeLedger(input: Omit<LedgerPaths, 'sqlite'> & { sq
   paths = nextPaths
   sqliteUnavailableReason = ''
   legacyImportWarning = ''
+  jsonlTailDiagnostic = null
 }
 
 function configuredPaths() {
@@ -69,7 +83,19 @@ async function appendJsonlLedger(filePath: string, value: Record<string, unknown
   await fs.chmod(filePath, 0o600).catch(() => undefined)
 }
 
-async function readJsonlLedgerTail<T>(filePath: string, limit: number): Promise<T[]> {
+function normalizedTailLimit(limit: number) {
+  return Math.max(1, Math.min(1000, Math.round(Number.isFinite(limit) ? limit : 1)))
+}
+
+function recordJsonlTailDiagnostic(diagnostic: JsonlTailDiagnostic | null) {
+  jsonlTailDiagnostic = diagnostic
+  if (diagnostic?.malformedRows) {
+    console.warn(`[dystopai] ${diagnostic.message}`)
+  }
+}
+
+async function readJsonlLedgerTail<T>(ledger: string, filePath: string, limit: number): Promise<T[]> {
+  const normalizedLimit = normalizedTailLimit(limit)
   try {
     const stat = await fs.stat(filePath)
     const start = Math.max(0, stat.size - LEDGER_TAIL_MAX_BYTES)
@@ -77,17 +103,68 @@ async function readJsonlLedgerTail<T>(filePath: string, limit: number): Promise<
     try {
       const buffer = Buffer.alloc(stat.size - start)
       await handle.read(buffer, 0, buffer.length, start)
-      return buffer
-        .toString('utf-8')
+      let text = buffer.toString('utf-8')
+      let discardedPartialLine = false
+      if (start > 0) {
+        const firstNewlineIndex = text.search(/\r?\n/)
+        if (firstNewlineIndex === -1) {
+          recordJsonlTailDiagnostic({
+            ledger,
+            filePath,
+            startOffset: start,
+            malformedRows: 0,
+            discardedPartialLine: true,
+            message: `Discarded partial JSONL tail for ${ledger} at offset ${start}; no complete rows were present.`,
+          })
+          return []
+        }
+        const newlineLength = text[firstNewlineIndex] === '\r' && text[firstNewlineIndex + 1] === '\n' ? 2 : 1
+        text = text.slice(firstNewlineIndex + newlineLength)
+        discardedPartialLine = true
+      }
+
+      let malformedRows = 0
+      const records = text
         .split(/\r?\n/)
         .map((line) => line.trim())
         .filter(Boolean)
-        .slice(-limit)
-        .map((line) => JSON.parse(line) as T)
+        .reduce<T[]>((acc, line) => {
+          try {
+            acc.push(JSON.parse(line) as T)
+          } catch {
+            malformedRows += 1
+          }
+          return acc
+        }, [])
+
+      recordJsonlTailDiagnostic(
+        discardedPartialLine || malformedRows
+          ? {
+              ledger,
+              filePath,
+              startOffset: start,
+              malformedRows,
+              discardedPartialLine,
+              message: `Skipped ${malformedRows} malformed JSONL row(s) while reading ${ledger} from offset ${start}.`,
+            }
+          : null,
+      )
+      return records.slice(-normalizedLimit)
     } finally {
       await handle.close()
     }
-  } catch {
+  } catch (error) {
+    const nodeError = error as NodeJS.ErrnoException
+    if (nodeError?.code !== 'ENOENT') {
+      recordJsonlTailDiagnostic({
+        ledger,
+        filePath,
+        startOffset: 0,
+        malformedRows: 0,
+        discardedPartialLine: false,
+        message: `Failed to read JSONL ledger ${ledger}: ${nodeError?.message || String(error)}`,
+      })
+    }
     return []
   }
 }
@@ -150,6 +227,45 @@ function openDatabase() {
       );
       CREATE INDEX IF NOT EXISTS idx_diagnostic_runs_recent
         ON diagnostic_runs(COALESCE(ended_at, started_at), created_at_ms);
+
+      CREATE TABLE IF NOT EXISTS mission_records (
+        mission_id TEXT PRIMARY KEY,
+        status TEXT,
+        lifecycle_state TEXT,
+        updated_at TEXT,
+        created_at_ms INTEGER NOT NULL,
+        payload_json TEXT NOT NULL
+      );
+      CREATE INDEX IF NOT EXISTS idx_mission_records_recent
+        ON mission_records(updated_at, created_at_ms);
+
+      CREATE TABLE IF NOT EXISTS mission_events (
+        id TEXT PRIMARY KEY,
+        mission_id TEXT,
+        timestamp TEXT,
+        actor TEXT,
+        previous_state TEXT,
+        next_state TEXT,
+        event_type TEXT,
+        idempotency_key TEXT,
+        created_at_ms INTEGER NOT NULL,
+        payload_json TEXT NOT NULL
+      );
+      CREATE UNIQUE INDEX IF NOT EXISTS idx_mission_events_idempotency
+        ON mission_events(idempotency_key)
+        WHERE idempotency_key IS NOT NULL;
+      CREATE INDEX IF NOT EXISTS idx_mission_events_recent
+        ON mission_events(mission_id, timestamp, created_at_ms);
+
+      CREATE TABLE IF NOT EXISTS mission_reports (
+        id TEXT PRIMARY KEY,
+        mission_id TEXT,
+        generated_at TEXT,
+        created_at_ms INTEGER NOT NULL,
+        payload_json TEXT NOT NULL
+      );
+      CREATE INDEX IF NOT EXISTS idx_mission_reports_recent
+        ON mission_reports(generated_at, created_at_ms);
 
       CREATE TABLE IF NOT EXISTS ledger_imports (
         ledger TEXT PRIMARY KEY,
@@ -239,6 +355,57 @@ function insertSqliteLedgerInto(
       stringField(value, 'channel'),
       stringField(value, 'direction'),
       stringField(value, 'message'),
+      createdAtMs,
+      payload,
+    )
+    return true
+  }
+
+  if (kind === 'mission_record') {
+    db.prepare(`
+      INSERT OR REPLACE INTO mission_records
+        (mission_id, status, lifecycle_state, updated_at, created_at_ms, payload_json)
+      VALUES (?, ?, ?, ?, ?, ?)
+    `).run(
+      stringField(value, 'missionId') || stringField(value, 'id') || randomUUID(),
+      stringField(value, 'status'),
+      stringField(value, 'lifecycleState'),
+      stringField(value, 'updatedAt'),
+      createdAtMs,
+      payload,
+    )
+    return true
+  }
+
+  if (kind === 'mission_event') {
+    db.prepare(`
+      INSERT OR IGNORE INTO mission_events
+        (id, mission_id, timestamp, actor, previous_state, next_state, event_type, idempotency_key, created_at_ms, payload_json)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `).run(
+      stringField(value, 'id') || randomUUID(),
+      stringField(value, 'missionId'),
+      stringField(value, 'timestamp') || stringField(value, 'at'),
+      stringField(value, 'actor'),
+      stringField(value, 'previousState'),
+      stringField(value, 'nextState'),
+      stringField(value, 'type'),
+      stringField(value, 'idempotencyKey'),
+      createdAtMs,
+      payload,
+    )
+    return true
+  }
+
+  if (kind === 'mission_report') {
+    db.prepare(`
+      INSERT OR REPLACE INTO mission_reports
+        (id, mission_id, generated_at, created_at_ms, payload_json)
+      VALUES (?, ?, ?, ?, ?)
+    `).run(
+      stringField(value, 'id') || randomUUID(),
+      stringField(value, 'missionId'),
+      stringField(value, 'generatedAt'),
       createdAtMs,
       payload,
     )
@@ -337,6 +504,9 @@ function importLegacyJsonlLedgers(db: SqliteDatabase, currentPaths: LedgerPaths)
     importLegacyJsonlLedger(db, 'runtime-runs', currentPaths.runtimeRunsJsonl, 'runtime_run')
     importLegacyJsonlLedger(db, 'gateway-events', currentPaths.gatewayEventsJsonl, 'gateway_event')
     importLegacyJsonlLedger(db, 'diagnostic-runs', currentPaths.diagnosticRunsJsonl, 'diagnostic_run')
+    importLegacyJsonlLedger(db, 'mission-records', currentPaths.missionRecordsJsonl, 'mission_record')
+    importLegacyJsonlLedger(db, 'mission-events', currentPaths.missionEventsJsonl, 'mission_event')
+    importLegacyJsonlLedger(db, 'mission-reports', currentPaths.missionReportsJsonl, 'mission_report')
     legacyImportWarning = ''
   } catch (error) {
     legacyImportWarning = error instanceof Error && error.message ? error.message : String(error)
@@ -375,6 +545,18 @@ export async function appendDiagnosticRunLedger(value: Record<string, unknown>, 
   await appendLedger('diagnostic_run', value, configuredPaths().diagnosticRunsJsonl, options)
 }
 
+export async function appendMissionRecordLedger(value: Record<string, unknown>, options?: LedgerAppendOptions) {
+  await appendLedger('mission_record', value, configuredPaths().missionRecordsJsonl, options)
+}
+
+export async function appendMissionEventLedger(value: Record<string, unknown>, options?: LedgerAppendOptions) {
+  await appendLedger('mission_event', value, configuredPaths().missionEventsJsonl, options)
+}
+
+export async function appendMissionReportLedger(value: Record<string, unknown>, options?: LedgerAppendOptions) {
+  await appendLedger('mission_report', value, configuredPaths().missionReportsJsonl, options)
+}
+
 export async function readRuntimeRunLedgerTail<T>(limit: number, options: LedgerReadOptions = {}): Promise<T[]> {
   const currentPaths = configuredPaths()
   const db = options.sqlite === false ? null : openDatabase()
@@ -389,7 +571,7 @@ export async function readRuntimeRunLedgerTail<T>(limit: number, options: Ledger
     if (records.length) return records
   }
 
-  return readJsonlLedgerTail<T>(currentPaths.runtimeRunsJsonl, limit)
+  return readJsonlLedgerTail<T>('runtime-runs', currentPaths.runtimeRunsJsonl, limit)
 }
 
 export async function readGatewayEventLedgerTail<T>(limit: number, options: LedgerReadOptions = {}): Promise<T[]> {
@@ -406,7 +588,7 @@ export async function readGatewayEventLedgerTail<T>(limit: number, options: Ledg
     if (records.length) return records
   }
 
-  return readJsonlLedgerTail<T>(currentPaths.gatewayEventsJsonl, limit)
+  return readJsonlLedgerTail<T>('gateway-events', currentPaths.gatewayEventsJsonl, limit)
 }
 
 export async function readDiagnosticRunLedgerTail<T>(limit: number, options: LedgerReadOptions = {}): Promise<T[]> {
@@ -423,7 +605,58 @@ export async function readDiagnosticRunLedgerTail<T>(limit: number, options: Led
     if (records.length) return records
   }
 
-  return readJsonlLedgerTail<T>(currentPaths.diagnosticRunsJsonl, limit)
+  return readJsonlLedgerTail<T>('diagnostic-runs', currentPaths.diagnosticRunsJsonl, limit)
+}
+
+export async function readMissionRecordLedgerTail<T>(limit: number, options: LedgerReadOptions = {}): Promise<T[]> {
+  const currentPaths = configuredPaths()
+  const db = options.sqlite === false ? null : openDatabase()
+  if (db) {
+    const rows = db.prepare(`
+      SELECT payload_json
+      FROM mission_records
+      ORDER BY updated_at DESC, created_at_ms DESC
+      LIMIT ?
+    `).all(Math.max(1, Math.min(1000, Math.round(limit))))
+    const records = parsePayloadRows<T>(rows).reverse()
+    if (records.length) return records
+  }
+
+  return readJsonlLedgerTail<T>('mission-records', currentPaths.missionRecordsJsonl, limit)
+}
+
+export async function readMissionEventLedgerTail<T>(limit: number, options: LedgerReadOptions = {}): Promise<T[]> {
+  const currentPaths = configuredPaths()
+  const db = options.sqlite === false ? null : openDatabase()
+  if (db) {
+    const rows = db.prepare(`
+      SELECT payload_json
+      FROM mission_events
+      ORDER BY timestamp DESC, created_at_ms DESC
+      LIMIT ?
+    `).all(Math.max(1, Math.min(2000, Math.round(limit))))
+    const records = parsePayloadRows<T>(rows).reverse()
+    if (records.length) return records
+  }
+
+  return readJsonlLedgerTail<T>('mission-events', currentPaths.missionEventsJsonl, limit)
+}
+
+export async function readMissionReportLedgerTail<T>(limit: number, options: LedgerReadOptions = {}): Promise<T[]> {
+  const currentPaths = configuredPaths()
+  const db = options.sqlite === false ? null : openDatabase()
+  if (db) {
+    const rows = db.prepare(`
+      SELECT payload_json
+      FROM mission_reports
+      ORDER BY generated_at DESC, created_at_ms DESC
+      LIMIT ?
+    `).all(Math.max(1, Math.min(1000, Math.round(limit))))
+    const records = parsePayloadRows<T>(rows).reverse()
+    if (records.length) return records
+  }
+
+  return readJsonlLedgerTail<T>('mission-reports', currentPaths.missionReportsJsonl, limit)
 }
 
 export function runtimeLedgerStatus(options: LedgerReadOptions = {}) {
@@ -434,6 +667,7 @@ export function runtimeLedgerStatus(options: LedgerReadOptions = {}) {
     sqliteAvailable: skipSqlite ? false : Boolean(openDatabase()),
     fallback: skipSqlite ? 'skipped for non-blocking status snapshot' : sqliteUnavailableReason || null,
     legacyImportWarning: legacyImportWarning || null,
+    jsonlTailDiagnostic,
   }
 }
 

@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { apiErrorMessage, apiRequest, type ApiRequestOptions } from '../../api/client'
 import { useNexusStore } from '../../store/nexusStore'
 import { ActionStatusBanner } from '../common/ActionStatusBanner'
 
@@ -38,6 +39,37 @@ type ShiftSummary = {
   status?: string
   scheduleKind?: string
   scheduleLabel?: string
+}
+
+type ShiftDefaultsResponse = {
+  defaults?: HeartbeatDefaults
+  resolved?: HeartbeatDefaults
+  agentDefaults?: Partial<HeartbeatDefaults>
+}
+
+type ShiftStartResponse = {
+  shift?: ShiftSummary
+}
+
+type ShiftBatchStartResponse = {
+  batchId: string
+  managedTeamSync: boolean
+  runId: string
+  leadAgent: string
+  startedCount: number
+  failedCount: number
+  shifts: ShiftSummary[]
+  errors: Array<{ agentId: string; error: string }>
+}
+
+async function schedulerApiData<T>(path: string, options: ApiRequestOptions | undefined, fallbackMessage: string): Promise<T> {
+  const result = await apiRequest<T>(path, { cache: 'no-store', ...(options || {}) })
+  if (!result.ok) throw new Error(apiErrorMessage(result.error) || fallbackMessage)
+  return result.data
+}
+
+function schedulerErrorMessage(error: unknown) {
+  return error instanceof Error && error.message ? error.message : String(error)
 }
 
 const cadenceUnits: Array<{ label: string; value: DurationUnit; suffix: string }> = [
@@ -141,8 +173,7 @@ export function HeartbeatSchedulerPanel() {
   }, [])
 
   const refreshShifts = useCallback(async () => {
-    const res = await fetch('/api/shifts')
-    const payload = (await res.json()) as { shifts?: ShiftSummary[] }
+    const payload = await schedulerApiData<{ shifts?: ShiftSummary[] }>('/api/shifts', { timeoutMs: 20_000 }, 'Failed to load cron shifts.')
     setShifts(payload.shifts || [])
   }, [])
 
@@ -151,8 +182,7 @@ export function HeartbeatSchedulerPanel() {
     const url = scopedAgent ? `/api/shifts/defaults/${scopedAgent}` : '/api/shifts/defaults'
     defaultsHydratingRef.current = true
     try {
-      const res = await fetch(url)
-      const payload = await res.json()
+      const payload = await schedulerApiData<ShiftDefaultsResponse>(url, { timeoutMs: 20_000 }, 'Failed to load cron defaults.')
       const source = scopedAgent ? payload.resolved : payload.defaults
       if (!source) return
 
@@ -167,6 +197,8 @@ export function HeartbeatSchedulerPanel() {
         leadAgent: source.leadAgent || prev.leadAgent,
       }))
       defaultsDirtyRef.current = false
+    } catch (error) {
+      setStatus(`Load failed: ${schedulerErrorMessage(error)}`)
     } finally {
       defaultsHydratingRef.current = false
     }
@@ -213,16 +245,15 @@ export function HeartbeatSchedulerPanel() {
           }
         : defaults
 
-      const res = await fetch(url, {
+      await schedulerApiData<ShiftDefaultsResponse>(url, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload),
-      })
-      if (!res.ok) throw new Error((await res.json()).error || 'Failed to save defaults')
+        body: payload,
+        timeoutMs: 20_000,
+      }, 'Failed to save defaults.')
       defaultsDirtyRef.current = false
       if (!options?.silent) setStatus(`Saved ${scopedAgent ? `${scopedAgent} cron` : 'global cron'} defaults.`)
     } catch (error) {
-      if (!options?.silent) setStatus(`Save failed: ${String(error)}`)
+      setStatus(`${options?.silent ? 'Autosave' : 'Save'} failed: ${schedulerErrorMessage(error)}`)
     } finally {
       if (!options?.silent) setBusy(false)
     }
@@ -257,17 +288,15 @@ export function HeartbeatSchedulerPanel() {
         announce: defaults.announce,
       }
 
-      const res = await fetch('/api/shifts/start', {
+      const out = await schedulerApiData<ShiftStartResponse>('/api/shifts/start', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload),
-      })
-      const out = await res.json()
-      if (!res.ok) throw new Error(out.error || out.detail || 'Failed to start shift')
+        body: payload,
+        timeoutMs: 95_000,
+      }, 'Failed to start shift.')
       setStatus(`Started cron shift ${out.shift?.name || ''} (${out.shift?.agent || 'auto'}).`)
       await refreshShifts()
     } catch (error) {
-      setStatus(`Start failed: ${String(error)}`)
+      setStatus(`Start failed: ${schedulerErrorMessage(error)}`)
     } finally {
       setBusy(false)
     }
@@ -316,17 +345,15 @@ export function HeartbeatSchedulerPanel() {
         announce: defaults.announce,
       }
 
-      const res = await fetch('/api/shifts/start-batch', {
+      const out = await schedulerApiData<ShiftBatchStartResponse>('/api/shifts/start-batch', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload),
-      })
-      const out = await res.json()
-      if (!res.ok) throw new Error(out.error || out.detail || 'Failed to start team workflow')
+        body: payload,
+        timeoutMs: 120_000,
+      }, 'Failed to start team workflow.')
       setStatus(`Started ${out.startedCount || 0} cron job(s); ${out.failedCount || 0} failed.`)
       await refreshShifts()
     } catch (error) {
-      setStatus(`Team start failed: ${String(error)}`)
+      setStatus(`Team start failed: ${schedulerErrorMessage(error)}`)
     } finally {
       setBusy(false)
     }
@@ -337,17 +364,15 @@ export function HeartbeatSchedulerPanel() {
     setBusy(true)
     setStatus('Stopping cron shift...')
     try {
-      const res = await fetch('/api/shifts/stop', {
+      await schedulerApiData<{ shiftId: string; cronId: string }>('/api/shifts/stop', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ shiftId }),
-      })
-      const out = await res.json()
-      if (!res.ok) throw new Error(out.error || 'Failed to stop shift')
+        body: { shiftId },
+        timeoutMs: 45_000,
+      }, 'Failed to stop shift.')
       setStatus(`Stopped shift ${shiftId}.`)
       await refreshShifts()
     } catch (error) {
-      setStatus(`Stop failed: ${String(error)}`)
+      setStatus(`Stop failed: ${schedulerErrorMessage(error)}`)
     } finally {
       setBusy(false)
     }
@@ -358,15 +383,11 @@ export function HeartbeatSchedulerPanel() {
     setStatus('Stopping cron shift(s)...')
     try {
       for (const shift of targetShifts) {
-        const res = await fetch('/api/shifts/stop', {
+        await schedulerApiData<{ shiftId: string; cronId: string }>('/api/shifts/stop', {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ shiftId: shift.id }),
-        })
-        if (!res.ok) {
-          const out = await res.json().catch(() => ({}))
-          throw new Error(out.error || `Failed stopping shift ${shift.id}`)
-        }
+          body: { shiftId: shift.id },
+          timeoutMs: 45_000,
+        }, `Failed stopping shift ${shift.id}`)
       }
 
       setStatus(
@@ -376,7 +397,7 @@ export function HeartbeatSchedulerPanel() {
       )
       await refreshShifts()
     } catch (error) {
-      setStatus(`Stop failed: ${String(error)}`)
+      setStatus(`Stop failed: ${schedulerErrorMessage(error)}`)
     } finally {
       setBusy(false)
     }

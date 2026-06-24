@@ -1,17 +1,17 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
+import { apiErrorMessage, apiRequest } from '../../api/client'
 import { useNexusStore } from '../../store/nexusStore'
 import type { AgentResponse, AgentSkillEntry } from '../../types/nexus'
-import { apiUrl } from '../../utils/apiUrl'
 
 type SkillsApiPayload = {
   ok: boolean
-  agentId?: string
+  agentId?: string | null
   output?: string
   error?: string
 }
 
 type SkillLibraryPayload = {
-  ok: boolean
+  agentId?: string | null
   shared?: AgentSkillEntry[]
   agent?: AgentSkillEntry[]
   index?: {
@@ -19,14 +19,11 @@ type SkillLibraryPayload = {
     preferredSkills?: string[]
     lastSyncedAt?: string
   } | null
-  error?: string
 }
 
 type SkillContentPayload = {
-  ok: boolean
   skill?: AgentSkillEntry
   content?: string
-  error?: string
 }
 
 type ClawHubSkillResult = {
@@ -44,18 +41,12 @@ type ClawHubSkillResult = {
 }
 
 type ClawHubSearchPayload = {
-  ok: boolean
   results?: ClawHubSkillResult[]
-  error?: string
-  detail?: string
 }
 
 type ClawHubInstallPayload = {
-  ok: boolean
   skill?: AgentSkillEntry
   output?: string
-  error?: string
-  detail?: string
 }
 
 type SkillSourceFilter = 'all' | 'equipped' | AgentSkillEntry['source']
@@ -67,16 +58,6 @@ type SkillCandidate = {
   body: string
   sourcePrompt: string
   createdAt: string
-}
-
-async function readJsonResponse<T>(response: Response): Promise<T> {
-  const text = await response.text()
-  if (!text.trim()) throw new Error(`Empty server response (${response.status})`)
-  try {
-    return JSON.parse(text) as T
-  } catch {
-    throw new Error(`Invalid server JSON (${response.status}): ${text.slice(0, 160)}`)
-  }
 }
 
 function stripAnsi(text: string): string {
@@ -171,14 +152,12 @@ function makeSkillCandidate(response: AgentResponse, agentName: string): SkillCa
 
 async function readSkillsEndpoint(url: string): Promise<SkillsApiPayload> {
   try {
-    const response = await fetch(apiUrl(url), { cache: 'no-store' })
-    let payload: SkillsApiPayload
-    try { payload = (await response.json()) as SkillsApiPayload }
-    catch { payload = { ok: false, error: `Invalid response from ${url}` } }
-    if (!response.ok || !payload.ok) {
-      return { ok: false, agentId: payload.agentId, output: payload.output, error: payload.error || `Request failed (${response.status})` }
-    }
-    return payload
+    const result = await apiRequest<Omit<SkillsApiPayload, 'ok' | 'error'>>(url, {
+      cache: 'no-store',
+      timeoutMs: 90_000,
+    })
+    if (!result.ok) return { ok: false, error: apiErrorMessage(result.error) }
+    return { ok: true, ...result.data }
   } catch (error) {
     return { ok: false, error: `Request failed: ${String(error)}` }
   }
@@ -288,9 +267,12 @@ export function SkillsPanel() {
   const runLibrary = useCallback(async (agentId: string) => {
     setLoadingLibrary(true)
     try {
-      const response = await fetch(apiUrl(`/api/skills/library?agentId=${encodeURIComponent(agentId)}`), { cache: 'no-store' })
-      const payload = await readJsonResponse<SkillLibraryPayload>(response)
-      if (!response.ok || !payload.ok) { setError(payload.error || 'Failed to load skill library.'); return }
+      const result = await apiRequest<SkillLibraryPayload>(`/api/skills/library?agentId=${encodeURIComponent(agentId)}`, {
+        cache: 'no-store',
+        timeoutMs: 20_000,
+      })
+      if (!result.ok) { setError(apiErrorMessage(result.error)); return }
+      const payload = result.data
       const merged = new Map<string, AgentSkillEntry>()
       for (const skill of [...(payload.shared || []), ...(payload.agent || []), ...(payload.index?.knownSkills || [])]) {
         merged.set(skill.id, skill)
@@ -309,12 +291,14 @@ export function SkillsPanel() {
   const searchClawHub = useCallback(async () => {
     setLoadingClawHubSearch(true)
     try {
-      const response = await fetch(apiUrl(`/api/skills/clawhub/search?q=${encodeURIComponent(clawHubQuery.trim())}&limit=10`))
-      const payload = (await response.json().catch(() => ({ ok: false, error: 'Invalid ClawHub response' }))) as ClawHubSearchPayload
-      if (!response.ok || !payload.ok) {
-        setError(payload.error || payload.detail || 'Failed to search ClawHub.')
+      const result = await apiRequest<ClawHubSearchPayload>(`/api/skills/clawhub/search?q=${encodeURIComponent(clawHubQuery.trim())}&limit=10`, {
+        timeoutMs: 90_000,
+      })
+      if (!result.ok) {
+        setError(apiErrorMessage(result.error))
         return
       }
+      const payload = result.data
       const results = (payload.results || []).filter((result): result is ClawHubSkillResult => typeof result.slug === 'string' && result.slug.trim().length > 0)
       setClawHubResults(results)
       setError('')
@@ -330,16 +314,16 @@ export function SkillsPanel() {
     if (!activeAgentId) return
     setInstallingClawHubSlug(skill.slug)
     try {
-      const response = await fetch(apiUrl('/api/skills/clawhub/install'), {
+      const result = await apiRequest<ClawHubInstallPayload>('/api/skills/clawhub/install', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ slug: skill.slug }),
+        timeoutMs: 120_000,
+        body: { slug: skill.slug },
       })
-      const payload = (await response.json().catch(() => ({ ok: false, error: 'Invalid install response' }))) as ClawHubInstallPayload
-      if (!response.ok || !payload.ok) {
-        setError(payload.error || payload.detail || 'Failed to install ClawHub skill.')
+      if (!result.ok) {
+        setError(apiErrorMessage(result.error))
         return
       }
+      const payload = result.data
       setError('')
       setStatus(`Installed ${payload.skill?.name || skill.displayName || skill.slug} into the shared OpenClaw skills folder.`)
       setInfoOutput(stripAnsi(payload.output || `Installed ${skill.slug}.`))
@@ -355,16 +339,16 @@ export function SkillsPanel() {
     if (!activeAgentId) return
     setUpdatingClawHubSlug(skill.slug)
     try {
-      const response = await fetch(apiUrl('/api/skills/clawhub/update'), {
+      const result = await apiRequest<ClawHubInstallPayload>('/api/skills/clawhub/update', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ slug: skill.slug }),
+        timeoutMs: 180_000,
+        body: { slug: skill.slug },
       })
-      const payload = (await response.json().catch(() => ({ ok: false, error: 'Invalid update response' }))) as ClawHubInstallPayload
-      if (!response.ok || !payload.ok) {
-        setError(payload.error || payload.detail || 'Failed to update ClawHub skill.')
+      if (!result.ok) {
+        setError(apiErrorMessage(result.error))
         return
       }
+      const payload = result.data
       setError('')
       setStatus(`Updated ${skill.displayName || skill.slug}.`)
       setInfoOutput(stripAnsi(payload.output || `Updated ${skill.slug}.`))
@@ -417,10 +401,17 @@ export function SkillsPanel() {
     if (!activeAgentId) return
     setLoadingSkillId(skill.id)
     try {
-      const response = await fetch(apiUrl(`/api/skills/library/${encodeURIComponent(skill.id)}?agentId=${encodeURIComponent(activeAgentId)}`), { cache: 'no-store' })
-      const payload = await readJsonResponse<SkillContentPayload>(response)
-      if (!response.ok || !payload.ok || !payload.content) {
-        setError(payload.error || 'Failed to read skill content.')
+      const result = await apiRequest<SkillContentPayload>(`/api/skills/library/${encodeURIComponent(skill.id)}?agentId=${encodeURIComponent(activeAgentId)}`, {
+        cache: 'no-store',
+        timeoutMs: 20_000,
+      })
+      if (!result.ok) {
+        setError(apiErrorMessage(result.error))
+        return
+      }
+      const payload = result.data
+      if (!payload.content) {
+        setError('Failed to read skill content.')
         return
       }
       const content = payload.content.trim()
@@ -451,21 +442,25 @@ export function SkillsPanel() {
     }
     setLearning(true)
     try {
-      const response = await fetch(apiUrl('/api/skills/learn'), {
+      const result = await apiRequest<{ skill?: AgentSkillEntry }>('/api/skills/learn', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
+        timeoutMs: 20_000,
+        body: {
           agentId: activeAgentId,
           name,
           description,
           body: newSkillBody,
           shared: shareSkill,
           xpValue: duplicateSkill ? 0 : 250,
-        }),
+        },
       })
-      const payload = (await response.json().catch(() => ({ ok: false, error: 'Invalid learn response' }))) as { ok: boolean; skill?: AgentSkillEntry; error?: string }
-      if (!response.ok || !payload.ok || !payload.skill) {
-        setError(payload.error || 'Failed to save learned skill.')
+      if (!result.ok) {
+        setError(apiErrorMessage(result.error))
+        return
+      }
+      const payload = result.data
+      if (!payload.skill) {
+        setError('Failed to save learned skill.')
         return
       }
       setError('')

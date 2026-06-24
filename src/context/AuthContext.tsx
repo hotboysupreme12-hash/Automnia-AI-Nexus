@@ -1,6 +1,13 @@
 import { useEffect, useState } from 'react'
 import type { ReactNode } from 'react'
+import { apiErrorMessage, apiRequest } from '../api/client'
 import { AuthContext } from './authContextValue'
+
+type DesktopAuthBridge = {
+  dystopaiDesktop?: {
+    getControlCenterToken?: () => Promise<string | null> | string | null
+  }
+}
 
 function readStoredToken(): string | null {
   try {
@@ -26,24 +33,75 @@ function removeStoredToken(): void {
   }
 }
 
+function desktopAuthBridge(): DesktopAuthBridge['dystopaiDesktop'] {
+  if (typeof window === 'undefined') return undefined
+  return (window as Window & DesktopAuthBridge).dystopaiDesktop
+}
+
+function hasDesktopLaunchTokenProvider(): boolean {
+  return typeof desktopAuthBridge()?.getControlCenterToken === 'function'
+}
+
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [isAuthenticated, setIsAuthenticated] = useState(false)
   const [token, setToken] = useState<string | null>(() => readStoredToken())
-  const [checking, setChecking] = useState(() => Boolean(readStoredToken()))
+  const [checking, setChecking] = useState(() => Boolean(readStoredToken()) || hasDesktopLaunchTokenProvider())
+
+  const completeLogin = (sessionToken: string) => {
+    writeStoredToken(sessionToken)
+    setToken(sessionToken)
+    setIsAuthenticated(true)
+    setChecking(false)
+  }
 
   useEffect(() => {
-    if (!token) return
+    if (!token) {
+      const provider = desktopAuthBridge()?.getControlCenterToken
+      if (!provider) {
+        setChecking(false)
+        return
+      }
+      let cancelled = false
+      setChecking(true)
+      Promise.resolve(provider())
+        .then(async (launchToken) => {
+          if (!launchToken || cancelled) return false
+          const result = await apiRequest<{ ok?: boolean; token?: string }>('/api/auth/login', {
+            method: 'POST',
+            timeoutMs: 10_000,
+            authToken: '',
+            body: { token: launchToken },
+          })
+          if (!result.ok || !result.data.token) throw new Error(result.ok ? 'Login response did not include a session token' : apiErrorMessage(result.error))
+          if (!cancelled) completeLogin(result.data.token)
+          return true
+        })
+        .catch(() => {
+          if (!cancelled) {
+            removeStoredToken()
+            setToken(null)
+            setIsAuthenticated(false)
+          }
+        })
+        .finally(() => {
+          if (!cancelled) setChecking(false)
+        })
+      return () => {
+        cancelled = true
+      }
+    }
 
     const controller = new AbortController()
 
-    fetch('/api/auth/status', {
-      headers: { Authorization: `Bearer ${token}` },
+    void apiRequest<{ authenticated: boolean }>('/api/auth/status', {
+      authToken: token,
       signal: controller.signal,
+      timeoutMs: 10_000,
     })
-      .then((res) => res.json())
-      .then((data: { authenticated: boolean }) => {
-        setIsAuthenticated(data.authenticated)
-        if (!data.authenticated) {
+      .then((result) => {
+        const authenticated = result.ok && result.data.authenticated
+        setIsAuthenticated(authenticated)
+        if (!authenticated) {
           removeStoredToken()
           setToken(null)
         }
@@ -64,21 +122,18 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, [token])
 
   const login = async (accessToken: string) => {
-    const response = await fetch('/api/auth/login', {
+    const result = await apiRequest<{ ok?: boolean; token?: string }>('/api/auth/login', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ token: accessToken }),
+      authToken: '',
+      timeoutMs: 10_000,
+      body: { token: accessToken },
     })
 
-    if (!response.ok) {
-      throw new Error('Invalid token')
+    if (!result.ok || !result.data.token) {
+      throw new Error(result.ok ? 'Login response did not include a session token' : apiErrorMessage(result.error))
     }
 
-    const data = (await response.json()) as { token: string }
-    writeStoredToken(data.token)
-    setToken(data.token)
-    setIsAuthenticated(true)
-    setChecking(false)
+    completeLogin(result.data.token)
   }
 
   const logout = () => {

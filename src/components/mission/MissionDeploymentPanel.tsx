@@ -474,14 +474,14 @@ export function MissionDeploymentPanel() {
         </div>
 
         <div className="dui-mission-stage">
-          <main className="dui-mission-main">
-            <div className="dui-card dui-template-card">
+          <main className="dui-mission-main dui-mission-main--organized">
+            <div className="dui-card dui-template-card dui-template-card--organized">
               <div className="dui-section-head">
                 <div>
-                  <span>Templates</span>
-                  <strong>{currentMode.hint}</strong>
+                  <span>Mission Presets</span>
+                  <strong>{activePreset?.label || 'Custom setup'}</strong>
                 </div>
-                <p>Preset dispatch shapes</p>
+                <p>Preset shapes</p>
               </div>
               <div className="dui-template-strip">
                 {PRESETS.map((preset) => (
@@ -515,73 +515,90 @@ export function MissionDeploymentPanel() {
               </div>
             </div>
 
-            <div className="dui-card dui-setup-card">
-              <div className="dui-field">
-                <label>Title</label>
-                <input
-                  type="text"
-                  value={missionDraft.title}
-                  onChange={(e) => updateMissionDraft({ title: e.target.value })}
-                  placeholder="Name the operation"
-                  className="dui-control"
-                />
-              </div>
-              <div className="dui-field">
-                <label>Mode</label>
-                <div className="dui-segment-grid">
-                  {COLLAB_MODES.map((mode) => (
-                    <button
-                      key={mode.id}
-                      type="button"
-                      onClick={() => updateMissionDraft({ collaborationMode: mode.id })}
-                      aria-pressed={missionDraft.collaborationMode === mode.id}
-                      title={mode.detail}
-                      style={accentVars(mode.accent)}
-                      className="dui-option"
-                    >
-                      <span className="dui-option-art">
-                        <FlatGlyph icon={mode.icon} />
-                      </span>
-                      <span className="dui-option-copy">
-                        <strong>{mode.label}</strong>
-                        <span>{mode.hint}</span>
-                      </span>
-                    </button>
-                  ))}
-                </div>
-              </div>
-            </div>
-
-            <div className="dui-card">
+            <div className="dui-card dui-mission-config-card">
               <div className="dui-section-head">
                 <div>
-                  <span>Mission Type</span>
-                  <strong>{currentType.label}</strong>
+                  <span>Mission Setup</span>
+                  <strong>{currentMode.label} / {currentType.label}</strong>
                 </div>
-                <p>{currentType.hint}</p>
+                <p>{currentMode.hint}</p>
               </div>
-              <div className="dui-type-grid">
-                {MISSION_TYPES.map((type) => (
-                  <button
-                    key={type.id}
-                    type="button"
-                    onClick={() => updateMissionDraft({ missionType: type.id })}
-                    aria-pressed={missionDraft.missionType === type.id}
-                    title={type.detail}
-                    style={accentVars(type.accent)}
-                    className="dui-option"
-                  >
-                    <span className="dui-option-art">
-                      <FlatGlyph icon={type.icon} />
-                    </span>
-                    <span className="dui-option-copy">
-                      <strong>{type.label}</strong>
-                      <span>{type.hint}</span>
-                    </span>
-                  </button>
-                ))}
+              <div className="dui-mission-config-grid">
+                <div className="dui-field dui-mission-title-field">
+                  <label>Mission title</label>
+                  <input
+                    type="text"
+                    value={missionDraft.title}
+                    onChange={(e) => updateMissionDraft({ title: e.target.value })}
+                    placeholder="Name the operation"
+                    className="dui-control"
+                  />
+                </div>
+
+                <div className="dui-mission-choice-group dui-mission-choice-group--mode">
+                  <div className="dui-choice-head">
+                    <div>
+                      <span>Dispatch mode</span>
+                      <strong>{currentMode.label}</strong>
+                    </div>
+                    <p>{currentMode.hint}</p>
+                  </div>
+                  <div className="dui-segment-grid dui-segment-grid--organized">
+                    {COLLAB_MODES.map((mode) => (
+                      <button
+                        key={mode.id}
+                        type="button"
+                        onClick={() => updateMissionDraft({ collaborationMode: mode.id })}
+                        aria-pressed={missionDraft.collaborationMode === mode.id}
+                        title={mode.detail}
+                        style={accentVars(mode.accent)}
+                        className="dui-option"
+                      >
+                        <span className="dui-option-art">
+                          <FlatGlyph icon={mode.icon} />
+                        </span>
+                        <span className="dui-option-copy">
+                          <strong>{mode.label}</strong>
+                          <span>{mode.hint}</span>
+                        </span>
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                <div className="dui-mission-choice-group dui-mission-choice-group--type">
+                  <div className="dui-choice-head">
+                    <div>
+                      <span>Mission type</span>
+                      <strong>{currentType.label}</strong>
+                    </div>
+                    <p>{currentType.hint}</p>
+                  </div>
+                  <div className="dui-type-grid dui-type-grid--organized">
+                    {MISSION_TYPES.map((type) => (
+                      <button
+                        key={type.id}
+                        type="button"
+                        onClick={() => updateMissionDraft({ missionType: type.id })}
+                        aria-pressed={missionDraft.missionType === type.id}
+                        title={type.detail}
+                        style={accentVars(type.accent)}
+                        className="dui-option"
+                      >
+                        <span className="dui-option-art">
+                          <FlatGlyph icon={type.icon} />
+                        </span>
+                        <span className="dui-option-copy">
+                          <strong>{type.label}</strong>
+                          <span>{type.hint}</span>
+                        </span>
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                <p className="dui-inline-note dui-mission-config-note">{currentType.detail}</p>
               </div>
-              <p className="dui-inline-note">{currentType.detail}</p>
             </div>
 
             <div className="dui-card dui-objective-card">

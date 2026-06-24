@@ -183,6 +183,12 @@ flowchart LR
 npm install
 ```
 
+For reproducible verification or release work, prefer the checked-in lockfile:
+
+```bash
+npm ci
+```
+
 ### Run In Development
 
 ```bash
@@ -201,13 +207,7 @@ The backend API runs on:
 http://127.0.0.1:4050/
 ```
 
-If prompted for a local token, the default development token is:
-
-```text
-dev-token-change-me
-```
-
-Set a real token before sharing access:
+If prompted for a local token, use the token configured for this Control Center. When `CONTROL_CENTER_TOKEN` is not set, the server generates a one-time local token and prints it in the startup log. Set a stable token before sharing access:
 
 ```bash
 CONTROL_CENTER_TOKEN="your-local-token" npm run dev
@@ -227,6 +227,7 @@ npm run dist:win
 ```
 
 The packaging script builds the client/server, prepares runtime bundles, and writes generated output under ignored folders such as `release/` and `artifacts/`.
+Runtime bundle prep is pinned: Node archives are verified against Node's published `SHASUMS256.txt`, and the bundled Codex plugin installs an exact package version with a checked npm integrity value.
 
 ## Common Commands
 
@@ -254,7 +255,7 @@ The app is local-first and mostly controlled by environment variables plus the O
 | --- | --- | --- |
 | `CONTROL_CENTER_PORT` | `4050` | Backend/API and packaged app port. |
 | `CONTROL_CENTER_FRONTEND_PORT` | `5173` | Vite development frontend port. |
-| `CONTROL_CENTER_TOKEN` | `dev-token-change-me` | Local app login token. |
+| `CONTROL_CENTER_TOKEN` | generated per launch | Local app login token. |
 | `CONTROL_CENTER_WORKSPACE_ROOT` | current repo or OpenClaw workspace | Workspace root exposed to agents. |
 | `CONTROL_CENTER_AUTOSTART_GATEWAY` | `1` when Gateway sessions are enabled | Start Gateway automatically for agent runs. |
 | `CONTROL_CENTER_GATEWAY_AGENT_SESSIONS` | `1` | Prefer Gateway-backed console sessions. |
@@ -268,6 +269,10 @@ The app is local-first and mostly controlled by environment variables plus the O
 | `OPENCLAW_BIN` | auto-detected | Explicit OpenClaw runtime binary/script. |
 | `DYSTOPAI_USER_DATA_DIR` | `~/.dystopai-control-center` | Electron user data directory. |
 | `DYSTOPAI_DEFAULT_AGENT_MODEL` | DeepSeek default | Seed/default model override. |
+| `DYSTOPAI_BUNDLED_NODE_VERSION` | `v24.16.0` | Exact Node runtime version packaged with desktop builds. |
+| `DYSTOPAI_BUNDLED_CODEX_SPEC` | `@openclaw/codex@2026.6.10` | Exact Codex plugin package bundled for OpenClaw. |
+| `DYSTOPAI_BUNDLED_CODEX_INTEGRITY` | pinned sha512 | Required npm integrity when overriding the bundled Codex spec. |
+| `DYSTOPAI_BUNDLED_CODEX_TARBALL` | pinned npm tarball | Optional tarball assertion for the bundled Codex package. |
 
 ## Repository Layout
 
@@ -355,13 +360,7 @@ Ignored local/generated data includes:
 
 ### The UI asks for a token
 
-Use the development token locally:
-
-```text
-dev-token-change-me
-```
-
-For anything beyond local development, set:
+Use the local token configured for this Control Center. If no token was configured, check the server startup log for the generated one-time token. For a stable local token, set:
 
 ```bash
 CONTROL_CENTER_TOKEN="your-local-token"

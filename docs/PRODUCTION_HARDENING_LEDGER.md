@@ -1,0 +1,796 @@
+# DystopAI Core Production Hardening Ledger
+
+Last updated: 2026-06-24
+
+Automation: `dystopai-production-hardening`
+
+## Operating Rules
+
+- Work from the repository audit as the production-readiness roadmap.
+- Prioritize P0 correctness, security, durable control-plane state, reproducible builds, tests, and accessibility before visual polish.
+- Protect user work. Do not revert unrelated local changes.
+- For risky or broad changes, create or use a protective `codex/` branch or worktree before editing.
+- Read the local OpenClaw documentation snapshot before changing OpenClaw, Gateway, Command Console, ClawTalk, runtime, tool routing, agent sessions, plugins, or related Control Center behavior.
+- Complete one coherent hardening slice per run when possible.
+- Record verification evidence, blockers, and the next planned task before stopping.
+
+## Current Repository State At Ledger Creation
+
+- Branch: `main`
+- Existing local changes not made by Codex during ledger creation:
+  - `src/components/mission/MissionDeploymentPanel.tsx`
+  - `src/styles/dystopai-theme/70-responsive-polish.css`
+- No existing production-hardening ledger was found.
+
+## Completed
+
+### 2026-06-24
+
+- Created recurring thread heartbeat automation to continue production hardening every 30 minutes.
+- Created this durable ledger so future runs can resume from repository evidence instead of thread memory alone.
+- Added an Electron/preload semantic type-check gate with `tsconfig.electron.json` and `npm run typecheck:electron`.
+- Fixed two Electron tray gateway actions that accidentally called a Promise returned by `.then(...)` as a function before `.finally(...)`.
+- Added JSDoc type anchors for Electron directory picker options and context menu templates so the new check can validate Electron API shapes.
+- Fixed JSONL ledger tail recovery so a seek into the middle of a large file discards the first partial line, parses remaining rows independently, preserves valid records when another row is malformed, and records diagnostics with ledger name, file path, start offset, malformed-row count, and partial-line state.
+- Added `scripts/smoke-runtime-ledger-jsonl-tail.ts` and `npm run smoke:ledger` to reproduce the corrupt-tail scenario.
+- Created and switched to protective branch `codex/production-hardening` before broader server/OpenClaw-adjacent hardening.
+- Read local OpenClaw docs before server/Gateway-adjacent edits:
+  - `docs/openclaw-latest/pages/gateway/protocol.md`
+  - `docs/openclaw-latest/pages/cli/agent.md`
+  - `docs/OPENCLAW_GATEWAY_COMMAND_CONSOLE_GUIDE.md`
+- Added `tsconfig.server.json` and `npm run typecheck:server`.
+- Added combined `npm run typecheck` gate for app, server, and Electron/preload checks.
+- Made `server/index.ts` pass strict semantic server type-checking by tightening Electron resource path access, loose config record boundaries, OAuth credential narrowing, OpenClaw provider migration narrowing, MDS patch normalization, Gateway backend client option typing, delegation fetch response typing, and OpenClaw runtime fallback result shapes.
+- Added a real repository test gate: `npm test` now delegates to `npm run test:ci`, and `test:ci` runs semantic type-checking plus the JSONL ledger and mission-verification smoke checks.
+- Centralized mission build/test evidence commands in `src/engine/missionVerification.ts`.
+- Replaced code-generation mission evidence that pointed agents at nonexistent `npm test` with `npm run test:ci` in both the readiness validator and default mission seed.
+- Added `scripts/smoke-mission-verification.ts` and `npm run smoke:mission-verification` to guard package scripts and mission evidence defaults against drifting back to an unavailable test command.
+- Restored the Command Console run-evidence preview contract that was blocking the OpenClaw smoke suite.
+- Added a closed-by-default `dy-command-evidence-preview` disclosure to rendered Command Console traces with smoke-addressable evidence rows for agent, state, run, session, transport, progress, latest activity, and omitted content.
+- Kept Command Console trace evidence behind the shared diagnostic redaction boundary so previewed latest activity and copied trace text redact secrets, phone-like identifiers, and email addresses while never exposing transcript content.
+- Added the required final-overrides styling for the Command Console evidence preview.
+- Introduced a canonical renderer API client in `src/api/client.ts` with dev/prod base URL resolution, bearer-token attachment from the existing control-center token store, generated `X-Request-Id`, timeout/abort handling, JSON parsing, normalized error envelopes, and shared diagnostic redaction for error details.
+- Reworked debounced heartbeat and runtime-policy persistence in `nexusStore` to use the canonical API client instead of raw `fetch(...).catch(() => {})`.
+- Added per-agent `agentConfigSaveStatus` lifecycle state for heartbeat/runtime config saves: `saving`, `saved`, and `failed`, with revision sequencing so stale delayed responses cannot overwrite newer save status.
+- Surfaced heartbeat/runtime save failures in `AgentEditorModal` as accessible `status`/`alert` text instead of always claiming automatic saves succeeded.
+- Migrated the editor's pending runtime/heartbeat config flushes to the canonical API client and made delayed runtime patch failures visible to the operator.
+- Added `scripts/smoke-config-save-lifecycle.ts`, `npm run smoke:config-save`, and wired the smoke into `npm run test:ci`.
+- Extended agent configuration save lifecycle coverage beyond heartbeat/runtime to profile, MDS, and skill-library changes that previously persisted with empty catches.
+- Added a canonical `persistAgentConfigPatch` path in `nexusStore` so profile, MDS, and skill saves now report `saving`, `saved`, or `failed` with request IDs and stale-response sequencing.
+- Migrated editor model, sandbox/tool policy, workspace, resource-file, and provider-key saves to the canonical API client.
+- Migrated the model selector's model list, provider-status refresh, and provider-key save paths to the canonical API client.
+- Migrated the provider-auth modal's provider refresh and OAuth helper requests to the canonical API client while preserving existing status handling.
+- Strengthened `scripts/smoke-config-save-lifecycle.ts` so future regressions fail if these config/provider paths bypass the API client or reintroduce swallowed config-save failures.
+- Mounted the live renderer authentication flow by wrapping `NexusShell` in `AuthProvider` and rendering `LoginModal` until a valid session exists.
+- Added `src/api/authenticatedFetch.ts` as a transitional bridge so remaining legacy same-origin `/api` fetches attach the current bearer token while the codebase continues migrating to `apiRequest`.
+- Reworked `AuthContext` to use the canonical API client for login/status checks and to bootstrap packaged desktop sessions through a narrow preload capability.
+- Added a per-launch Electron control token: Electron generates a strong launch secret when `CONTROL_CENTER_TOKEN` is not provided, passes it to the child API server, and exposes only `getControlCenterToken` to the trusted renderer.
+- Added Electron IPC sender-origin validation for the directory picker and desktop auth token bridge.
+- Replaced permissive server CORS with an exact local-origin allowlist for the packaged app and Vite dev frontend.
+- Added early API request IDs and a server auth/origin guard before privileged routes. Only `/api/health`, `/api/auth/login`, and `/api/auth/status` bypass bearer validation.
+- Updated Electron tray/control API calls to include the launch token now that privileged server routes require authentication.
+- Updated the internal server-to-server agent handoff call to authenticate through the same guard with the server-owned launch token.
+- Added `scripts/smoke-auth-control-plane.ts`, `npm run smoke:auth`, and wired the smoke into `npm run test:ci`.
+- Added packaged UI static security headers, including a restrictive `Content-Security-Policy` for HTML responses, `X-Content-Type-Options: nosniff`, `Referrer-Policy: no-referrer`, and `Cross-Origin-Opener-Policy: same-origin`.
+- Tightened Electron popup and navigation policy: popup creation is always denied, allowed external URLs are opened through the system browser only when they are external HTTPS URLs, exact internal app URLs may navigate, and all other navigation is prevented.
+- Added `scripts/smoke-security-hardening.ts`, `npm run smoke:security`, and wired the smoke into `npm run test:ci`.
+- Removed the production-facing fixed fallback credential. The server now uses `CONTROL_CENTER_TOKEN` when provided, otherwise generates a strong per-launch local token instead of accepting the old fixed dev token.
+- Updated browser-login copy and operator docs so they direct users to the configured local token or generated startup token, while packaged desktop sessions continue to sign in through the Electron launch-token bridge.
+- Migrated the recruit dialog's model lookup, provider lookup, Auto Forge markdown generation, and provider-key save paths from raw fetches to the canonical `apiRequest` client.
+- Strengthened `scripts/smoke-auth-control-plane.ts` so future regressions fail if the fixed default token reappears in server/UI/docs or if `RecruitAgentModal` returns to raw `fetch(...)`.
+- Re-read local OpenClaw runtime docs before packaging/runtime changes:
+  - `docs/openclaw-latest/pages/install/node.md`
+  - `docs/openclaw-latest/pages/cli/agent.md`
+  - `docs/OPENCLAW_GATEWAY_COMMAND_CONSOLE_GUIDE.md`
+- Removed production moving-version Codex resolution from `scripts/prepare-runtime-bundles.cjs`; the bundled Codex plugin now defaults to exact `@openclaw/codex@2026.6.10`.
+- Added expected npm integrity and tarball assertions for the bundled Codex plugin, with exact-version and integrity requirements for any override through `DYSTOPAI_BUNDLED_CODEX_SPEC`.
+- Added exact Node version validation and Node archive verification against Node's published `SHASUMS256.txt` before extracting bundled Node/npm archives.
+- Changed Codex runtime dependency hydration to copy the package's already locked dependency tree from its shrinkwrap instead of rerunning npm inside the plugin root.
+- Added runtime-bundle metadata files recording the exact Node archive checksum, Codex package integrity, Codex tarball, and native `@openai/codex` package integrity used for the prepared desktop runtime bundle.
+- Added `scripts/smoke-runtime-reproducibility.ts`, `npm run smoke:runtime-reproducibility`, and wired the smoke into `npm run test:ci`.
+- Updated README/User Guide install and packaging notes to prefer `npm ci` for reproducible local verification and document the exact runtime-bundle inputs.
+
+Verification:
+
+- Automation created successfully with id `dystopai-production-hardening`.
+- `git status --short --branch` inspected before creating this file.
+- Existing ledger search found only OpenClaw security audit docs, not an application hardening ledger.
+- `npm run typecheck:electron` passed.
+- `node --check electron/main.cjs` passed.
+- `node --check electron/preload.cjs` passed.
+- Probed backend type-checking with TypeScript. The server monolith still has existing semantic errors around Electron `process.resourcesPath`, loosely typed config records, provider optionality, runtime transport result unions, and agent capability partials. This remains a priority backlog item rather than being hidden.
+- `npm run smoke:ledger` passed and logged the expected malformed-row diagnostic.
+- Focused TypeScript check passed for `server/runtimeLedger.ts` and `scripts/smoke-runtime-ledger-jsonl-tail.ts`.
+- `npm run typecheck:electron` still passed after the ledger smoke script addition.
+- Earlier in this branch, `npm run smoke:openclaw` failed before reaching runtime-ledger checks because `scripts/smoke-openclaw-contracts.mjs` expected `dy-command-evidence-preview`; that blocker was resolved by the Command Console evidence preview restoration below.
+- `npm run typecheck:server` passed.
+- `npx tsc -p tsconfig.app.json --noEmit` passed.
+- `npm run typecheck` passed.
+- `npm run typecheck:electron` passed after server changes.
+- `npm run smoke:ledger` passed after server changes.
+- `npm run build:server` passed and produced `dist-server/index.cjs`.
+- `npm run build:standalone` passed.
+- `npm run smoke:mission-verification` passed.
+- Source search confirmed no live mission evidence defaults still embed `command: 'npm test'`; remaining matches are the smoke guard and ledger notes.
+- `npm test` passed. This ran `npm run typecheck`, `npm run smoke:ledger`, and `npm run smoke:mission-verification`.
+- `npm run build:standalone` passed after the mission verification command changes.
+- Re-read local OpenClaw Command Console/Gateway docs before restoring the Command Console evidence preview:
+  - `docs/OPENCLAW_GATEWAY_COMMAND_CONSOLE_GUIDE.md`
+  - `docs/openclaw-latest/pages/gateway/protocol.md`
+- `npm run smoke:openclaw` passed after the evidence preview restoration.
+- Initial `npm run typecheck` caught a Command Console evidence-row key widening issue; the row construction was tightened with a typed `satisfies` check.
+- `npm run typecheck` then passed.
+- `npm run build:client` passed and rebuilt the Electron UI smoke bundle with the restored evidence preview.
+- Initial `npm run smoke:ui` ran the previous built bundle and still showed the preview missing; after rebuilding the client, `npm run smoke:ui` passed on desktop and mobile, including evidence-preview accessibility labels, row content, redaction, copy behavior, stop behavior, and monitor Clean Slate checks.
+- `npm test` passed after the Command Console evidence preview changes.
+- `npm run smoke:config-save` passed.
+- Initial `npm run typecheck` caught `RequestInit.signal` nullability in the new API client; the client now normalizes `null` to `undefined` before composing abort signals.
+- `npm run typecheck` passed after the API/config-save lifecycle changes.
+- `npm test` passed with the new `smoke:config-save` gate included in `test:ci`.
+- `npm run build:client` passed after the API/config-save lifecycle changes.
+- `npm run smoke:config-save` initially caught the smoke locator pointing at the `NexusState` interface instead of the implementation; the guard now anchors to the action implementation.
+- `npx tsc -p tsconfig.app.json --noEmit` initially caught nullable `suggestedWorkspace` handling after the workspace save API-client migration; the workspace branch now narrows before updating state.
+- `npm run smoke:config-save` passed after the expanded config/provider API-client migration.
+- `npx tsc -p tsconfig.app.json --noEmit` passed after the expanded config/provider API-client migration.
+- `npm run typecheck` passed after the expanded config/provider API-client migration.
+- `npm test` passed after the expanded config/provider API-client migration.
+- `npm run build:client` passed after the expanded config/provider API-client migration.
+- `npm run smoke:auth` passed after the auth control-plane wiring.
+- `npm run typecheck` passed after the auth control-plane wiring.
+- `npm test` passed after the auth control-plane wiring, including typecheck, ledger recovery, mission verification, config-save lifecycle, and auth control-plane smokes.
+- `npm run build:server` passed after the auth control-plane wiring.
+- `node --check electron/main.cjs` and `node --check electron/preload.cjs` passed after the Electron launch-token and IPC changes.
+- `npm run build:client` passed after the auth control-plane wiring.
+- A final internal-call scan found the server's `/api/party/agent-to-agent` handoff fetch would have been blocked by the new guard; it now sends `Authorization: Bearer ${AUTH_TOKEN}` and `smoke:auth` asserts that contract.
+- `npm run smoke:auth` passed after the internal handoff auth fix.
+- `npm run typecheck` passed after the internal handoff auth fix.
+- `npm test` passed after the internal handoff auth fix.
+- `npm run build:server` passed after the internal handoff auth fix.
+- `npm run smoke:security` passed after the CSP/Electron navigation hardening.
+- `npm run typecheck` passed after the CSP/Electron navigation hardening.
+- `node --check electron/main.cjs` and `node --check electron/preload.cjs` passed after the CSP/Electron navigation hardening.
+- `npm test` passed after the CSP/Electron navigation hardening, including typecheck, ledger recovery, mission verification, config-save lifecycle, auth control-plane, and security hardening smokes.
+- `npm run build:server` passed after the CSP/Electron navigation hardening.
+- `npm run build:client` passed after the CSP/Electron navigation hardening.
+- `npm run smoke:auth` passed after the static-default-token removal and recruit-dialog API-client migration.
+- `npm run typecheck` passed after the static-default-token removal and recruit-dialog API-client migration.
+- Source search confirmed the old fixed dev token literal now exists only in the auth smoke regression guard, not in server, renderer, operator docs, or this ledger.
+- `npm test` passed after the static-default-token removal and recruit-dialog API-client migration, including typecheck, ledger recovery, mission verification, config-save lifecycle, auth control-plane, and security hardening smokes.
+- `npm run build:server` passed after the static-default-token removal and recruit-dialog API-client migration.
+- `npm run build:client` passed after the static-default-token removal and recruit-dialog API-client migration.
+- `node --check electron/main.cjs` and `node --check electron/preload.cjs` passed after the static-default-token removal and recruit-dialog API-client migration.
+- `npm view @openclaw/codex version dist.integrity dist.tarball --json` confirmed current package metadata for exact `2026.6.10` and its sha512 integrity before pinning.
+- `npm run smoke:runtime-reproducibility` passed after adding the reproducibility contract.
+- `node --check scripts/prepare-runtime-bundles.cjs` passed after the runtime-bundle prep changes.
+- A forced `DYSTOPAI_REFRESH_RUNTIME_BUNDLES=1 npm run prepare:runtime-bundles` passed. It downloaded Node `v24.16.0`, verified `node-v24.16.0-win-x64.zip` against `SHASUMS256.txt`, installed exact `@openclaw/codex@2026.6.10`, copied the locked Codex dependency tree, and validated the native `codex.exe`.
+- Generated runtime metadata confirmed Node archive SHA-256 `edaca9bd58ec8e92037dac4e877d52f6b8f430b81c18b57e264b4e2fb111cd56`, Codex package integrity `sha512-0M5FsRb3IxsJ/xb2U1eMOZL/7w9W27tnzhSANY7JbbCRhz1+v7WUE6uS3YRWoTKv/9sNx9MAJXFntCK8MpWKYQ==`, and native `@openai/codex-win32-x64` integrity `sha512-lQrVLNz+90wdvWVNFDvCkHQRiAK9ZllmkTka3c8eqSDqdJk35Gpgppfv9Xtw5M2ZBtTq0sBdWBiCMyzGDBSpmQ==`.
+- `npm test` passed after the runtime reproducibility changes, including typecheck, ledger recovery, mission verification, config-save lifecycle, auth, security, and runtime reproducibility smokes.
+- `npm run build:server` passed after the runtime reproducibility changes.
+- `npm run build:client` passed after the runtime reproducibility changes.
+- `node --check scripts/prepare-runtime-bundles.cjs`, `node --check electron/main.cjs`, and `node --check electron/preload.cjs` passed after the runtime reproducibility changes.
+- Replaced the preset-looking mission report counters in `MissionOrchestrator` with evidence-backed report assembly in `src/engine/missionReport.ts`.
+- Added mission report evidence fields for accepted, started, completed, failed, cancelled, timed-out, retry, fallback, verification-failure, tool-failure, command-failure, human-intervention, timing, participation, and token-usage signals.
+- Changed mission report metrics that lack valid evidence, including XP gained and soul drift, to remain `null` and display as `Unavailable` instead of invented values.
+- Tagged new live agent responses with the active mission ID where available so completed mission reports can be reconstructed from runtime evidence.
+- Generated completed mission reports from runtime responses and mission feed events for both renderer-owned completions and backend cron mission history.
+- Persisted completed mission reports and mission history across restart while keeping active mission/runtime state volatile.
+- Migrated mission list polling plus cron mission start/stop calls to the canonical authenticated API client.
+- Added `scripts/smoke-mission-report-truth.ts`, `npm run smoke:mission-report`, and wired the smoke into `npm run test:ci`.
+- Updated the Mission Report and Live Operation Monitor UI to display unavailable metrics explicitly and expose the evidence counts behind the latest report.
+- `npm run smoke:mission-report` passed after the mission-report truth changes.
+- `npm run typecheck` passed after the mission-report truth changes.
+- `npm test` passed after the mission-report truth changes, including typecheck, JSONL recovery, mission verification, mission report truth, config-save lifecycle, auth, security, and runtime reproducibility smokes.
+- `npm run build:client` passed after the mission-report truth changes.
+- Source search confirmed the removed mission report counters/formulas no longer exist in app code; only the new smoke regression guard names those old counters.
+- Re-read the local OpenClaw Gateway protocol documentation before the mission durability/server changes:
+  - `docs/openclaw-latest/pages/gateway/protocol.md`
+- Extended the runtime ledger with first-class durable mission event and mission report storage:
+  - SQLite tables: `mission_events` and `mission_reports`
+  - JSONL fallbacks: `mission-events.jsonl` and `mission-reports.jsonl`
+  - Append/read APIs: `appendMissionEventLedger`, `appendMissionReportLedger`, `readMissionEventLedgerTail`, and `readMissionReportLedgerTail`
+- Added backend mission lifecycle state vocabulary: `draft`, `validating`, `scheduled`, `dispatching`, `running`, `verifying`, `completed`, `failed`, and `cancelled`.
+- Wrapped the existing cron mission routes with immutable backend state transition events that include timestamp, actor, previous state, next state, idempotency key, and supporting evidence.
+- Added durable backend report generation for completed, cancelled, and scheduler-setup-failed missions.
+- Exposed backend mission durability projections:
+  - `GET /api/missions` now includes durable `events` and backend-authored `reports`.
+  - `GET /api/missions/:missionId/events` returns the durable transition/event history for one mission.
+  - `GET /api/missions/:missionId/report` returns the backend-authored mission report for one mission.
+- Updated renderer mission sync to prefer backend-authored mission reports and only build local fallback reports when the backend has not produced one.
+- Added `scripts/smoke-mission-durable-state.ts`, `npm run smoke:mission-durable-state`, and wired the smoke into `npm run test:ci`.
+- `npm run smoke:mission-durable-state` passed after the backend mission durability changes.
+- `npm run typecheck` passed after the backend mission durability changes.
+- `npm test` passed after the backend mission durability changes, including typecheck, JSONL recovery, mission verification, mission report truth, mission durable state, config-save lifecycle, auth, security, and runtime reproducibility smokes.
+- `npm run build:server` passed after the backend mission durability changes.
+- `npm run build:client` passed after the backend mission durability changes.
+- Re-read the local OpenClaw Gateway protocol documentation before the mission-record rehydration changes:
+  - `docs/openclaw-latest/pages/gateway/protocol.md`
+- Extended the runtime ledger with durable backend mission records:
+  - SQLite table: `mission_records`
+  - JSONL fallback: `mission-records.jsonl`
+  - Append/read APIs: `appendMissionRecordLedger` and `readMissionRecordLedgerTail`
+- Added mission record snapshots for backend mission state, scheduler state, cron jobs, lifecycle state, party, timing, and persistence reason.
+- Persisted backend mission snapshots on lifecycle transitions, cron job creation, cron job start/end, recurring cron setup, next-round scheduling, and graceful server shutdown.
+- Added startup mission-record hydration that restores mission records into the backend mission map, rebuilds recurring mission shift projections, re-arms fixed-duration mission timers, and resumes waiting instant mission rounds where possible.
+- Added defensive normalization for persisted mission records so malformed or incomplete ledger rows are ignored rather than becoming live backend state.
+- Extended `scripts/smoke-mission-durable-state.ts` to verify mission-record append/read behavior and guard the new startup hydration/re-arm source contracts.
+- `npm run smoke:mission-durable-state` passed after the mission-record rehydration changes.
+- `npm run typecheck` passed after the mission-record rehydration changes.
+- `npm test` passed after the mission-record rehydration changes, including typecheck, JSONL recovery, mission verification, mission report truth, mission durable state, config-save lifecycle, auth, security, and runtime reproducibility smokes.
+- `npm run build:server` passed after the mission-record rehydration changes.
+- Re-read the local OpenClaw Gateway protocol documentation before mission dispatch idempotency changes:
+  - `docs/openclaw-latest/pages/gateway/protocol.md`
+- Added backend mission launch idempotency:
+  - `/api/missions/start` now accepts a bounded `idempotencyKey`.
+  - Mission records persist the launch idempotency key.
+  - Duplicate launch requests with the same key return the existing mission with `deduped: true` instead of creating another mission or cron job set.
+  - Rehydrated mission records preserve the same launch dedupe behavior after restart.
+- Updated renderer mission launch requests to send the existing launch request ID as the backend idempotency key.
+- Updated mission launch feed text to surface deduped backend launches when a duplicate request returns the existing mission.
+- Added `scripts/smoke-mission-idempotency.ts`, `npm run smoke:mission-idempotency`, and wired the smoke into `npm run test:ci`.
+- `npm run smoke:mission-idempotency` passed after the idempotent mission dispatch changes.
+- `npm run typecheck` passed after the idempotent mission dispatch changes.
+- `npm test` passed after the idempotent mission dispatch changes, including typecheck, JSONL recovery, mission verification, mission report truth, mission durable state, mission idempotency, config-save lifecycle, auth, security, and runtime reproducibility smokes.
+- `npm run build:server` passed after the idempotent mission dispatch changes.
+- `npm run build:client` passed after the idempotent mission dispatch changes.
+- Re-read the local OpenClaw cron and Gateway documentation before the rehydrated cron reconciliation changes:
+  - `docs/openclaw-latest/pages/gateway/protocol.md`
+  - `docs/openclaw-latest/pages/automation/cron-jobs.md`
+- Added startup reconciliation between durable DystopAI mission records and OpenClaw's persisted cron SQLite state.
+- Rehydrated mission cron jobs now rebuild `activeShifts` only when their exact OpenClaw cron IDs are still enabled.
+- Missing or disabled recovered mission cron jobs are now observable scheduler failures:
+  - The affected job is marked `removed` or `disabled`.
+  - The mission scheduler moves to `failed` with a durable `lastError`.
+  - The mission lifecycle moves to `failed` while the public mission status follows the existing cancelled-failure convention.
+  - A durable recovery event records `missingCronIds`, `disabledCronIds`, and affected job IDs.
+  - A backend mission report is recorded from that failure evidence.
+- If the OpenClaw cron state database cannot be read, recovery does not treat that uncertainty as proof that jobs vanished; it logs the skipped reconciliation and keeps the prior projection behavior.
+- Added `scripts/smoke-mission-cron-reconciliation.ts`, `npm run smoke:mission-cron-reconciliation`, and wired it into `npm run test:ci`.
+- `npm run smoke:mission-cron-reconciliation` passed after the rehydrated cron reconciliation changes.
+- `npm run typecheck` passed after the rehydrated cron reconciliation changes.
+- `npm test` passed after the rehydrated cron reconciliation changes, including typecheck, JSONL recovery, mission verification, mission report truth, mission durable state, mission idempotency, mission cron reconciliation, config-save lifecycle, auth, security, and runtime reproducibility smokes.
+- `npm run build:server` passed after the rehydrated cron reconciliation changes.
+- Re-read the local OpenClaw cron management documentation before the mission cancellation durability changes:
+  - `docs/openclaw-latest/pages/automation/cron-jobs.md`
+- Made mission cancellation durable and observable:
+  - `/api/missions/stop` is now an async lifecycle rather than a fire-and-forget cleanup request.
+  - Cancellation requests persist a `cancellation-requested` mission snapshot before cron cleanup begins.
+  - Cron cleanup now returns structured evidence for each job: removed, disabled, unchanged/failed, previous status, final status, and redacted detail.
+  - Completion and cancellation events now include cleanup evidence in their durable mission lifecycle event payloads.
+  - Cleanup failures set `scheduler.status = failed`, write `scheduler.lastError`, emit an observable mission event, and are included in backend mission reports.
+  - Successful operator cancellation finishes with `scheduler.status = stopped` after cleanup has actually settled.
+  - The renderer stop request now uses a 120-second timeout so legitimate OpenClaw remove/disable cycles do not get misreported as stop failures.
+- Added `scripts/smoke-mission-cancellation.ts`, `npm run smoke:mission-cancellation`, and wired it into `npm run test:ci`.
+- `npm run smoke:mission-cancellation` passed after the mission cancellation durability changes.
+- `npm run typecheck` passed after the mission cancellation durability changes.
+- `npm test` passed after the mission cancellation durability changes, including typecheck, JSONL recovery, mission verification, mission report truth, mission durable state, mission idempotency, mission cron reconciliation, mission cancellation, config-save lifecycle, auth, security, and runtime reproducibility smokes.
+- `npm run build:server` passed after the mission cancellation durability changes.
+- `npm run build:client` passed after the mission cancellation durability changes.
+- Re-read the local OpenClaw Gateway protocol and cron durability documentation before mission runtime-reference reconciliation:
+  - `docs/openclaw-latest/pages/gateway/protocol.md`
+  - `docs/openclaw-latest/pages/automation/cron-jobs.md`
+- Added durable runtime/session references to mission cron jobs:
+  - `runOpenClaw` now returns the Control Center runtime ledger ID as `controlCenterRunId`.
+  - Mission cron jobs persist `runtimeRunId`, `cronRunId`, `sessionId`, and `sessionKey`.
+  - Cron run/session references are extracted from structured JSON output when available and fall back to conservative log parsing.
+  - Mission cron completion events include the runtime/session references as durable evidence.
+- Backend mission reports now expose runtime/session evidence:
+  - `runtimeRunIds`
+  - `cronRunIds`
+  - `sessionIds`
+  - `sessionKeys`
+  - Evidence source now becomes `mixed` or `runtime-responses` when confirmed runtime identifiers are present.
+- Mission Report UI now shows shortened runtime run IDs, cron run IDs, and session IDs when backend evidence provides them.
+- Added `scripts/smoke-mission-runtime-references.ts`, `npm run smoke:mission-runtime-references`, and wired it into `npm run test:ci`.
+- `npm run smoke:mission-runtime-references` passed after the mission runtime-reference changes.
+- `npm run typecheck` passed after the mission runtime-reference changes.
+- `npm test` passed after the mission runtime-reference changes, including typecheck, JSONL recovery, mission verification, mission report truth, mission durable state, mission idempotency, mission cron reconciliation, mission cancellation, mission runtime references, config-save lifecycle, auth, security, and runtime reproducibility smokes.
+- `npm run build:server` passed after the mission runtime-reference changes.
+- `npm run build:client` passed after the mission runtime-reference changes.
+- Re-read the local OpenClaw Gateway protocol, cron durability, and Command Console guidance before Gateway session reconciliation changes:
+  - `docs/openclaw-latest/pages/gateway/protocol.md`
+  - `docs/openclaw-latest/pages/automation/cron-jobs.md`
+  - `docs/OPENCLAW_GATEWAY_COMMAND_CONSOLE_GUIDE.md`
+- Added startup reconciliation between durable mission records, the Control Center runtime run ledger, and exact Gateway session references:
+  - Mission hydration now runs after runtime-run ledger hydration so old wrapper runs are classified as `interrupted` or `timeout` before mission recovery evidence is assembled.
+  - Active recovered mission jobs with durable runtime/session references now produce a `gatewaySessionReconciliation` event on startup.
+  - Runtime run IDs are matched against active/recent Control Center runtime records.
+  - Gateway session keys are checked with the documented `sessions.describe` RPC.
+  - Reconciliation distinguishes `verified`, `missing`, `unavailable`, and `not-checked` session states.
+  - Gateway unavailability is recorded as evidence and does not mutate mission or job state.
+  - The helper intentionally avoids changing `mission.status`, `mission.lifecycleState`, or `job.status`; confirmed cron loss remains the only startup recovery path that fails a scheduler.
+- Added `scripts/smoke-mission-gateway-reconciliation.ts`, `npm run smoke:mission-gateway-reconciliation`, and wired the smoke into `npm run test:ci`.
+- `npm run smoke:mission-gateway-reconciliation` passed after the Gateway session reconciliation changes.
+- `npm run typecheck` passed after the Gateway session reconciliation changes.
+- `npm test` passed after the Gateway session reconciliation changes, including typecheck, JSONL recovery, mission verification, mission report truth, mission durable state, mission idempotency, mission cron reconciliation, mission cancellation, mission runtime references, mission Gateway reconciliation, config-save lifecycle, auth, security, and runtime reproducibility smokes.
+- `npm run build:server` passed after the Gateway session reconciliation changes.
+- Added backend mission lifecycle projections backed by durable mission ledgers:
+  - `/api/missions` now returns a projection built from latest durable mission records plus live in-memory mission state.
+  - `/api/missions/projection` exposes the same durable projection explicitly for renderer hydration.
+  - `/api/missions/:missionId/lifecycle` returns one mission's durable projection, feed, lifecycle events, reports, latest mission view, and latest report.
+  - Projection metadata records source, mission counts, active mission counts, feed/event/report counts, durable record counts, and live memory record counts.
+  - Durable lifecycle events are folded back into the existing mission-feed shape so the renderer can display recovery/state-machine events after a reload.
+- Added renderer startup mission hydration from the backend projection:
+  - `nexusStore` now exposes `syncMissionProjection`.
+  - `NexusShell` calls `syncMissionProjection()` on authenticated app mount.
+  - If the backend projection contains an active mission, the store starts backend polling so ongoing mission state continues refreshing after reload.
+  - The active mission remains intentionally excluded from localStorage; the renderer now hydrates it from backend control-plane state instead.
+- Added `scripts/smoke-mission-lifecycle-projection.ts`, `npm run smoke:mission-lifecycle-projection`, and wired the smoke into `npm run test:ci`.
+- Updated `scripts/smoke-mission-durable-state.ts` so it validates the new projection contract instead of the obsolete inline `/api/missions` response literal.
+- `npm run smoke:mission-lifecycle-projection` passed after the mission lifecycle projection changes.
+- `npm run smoke:mission-durable-state` passed after updating the durable-state smoke for the projection path.
+- `npm run typecheck` passed after the mission lifecycle projection changes.
+- `npm test` passed after the mission lifecycle projection changes, including typecheck, JSONL recovery, mission verification, mission report truth, mission durable state, mission idempotency, mission cron reconciliation, mission cancellation, mission runtime references, mission Gateway reconciliation, mission lifecycle projection, config-save lifecycle, auth, security, and runtime reproducibility smokes.
+- `npm run build:server` passed after the mission lifecycle projection changes.
+- `npm run build:client` passed after the mission lifecycle projection changes.
+- Removed renderer-generated report fallback for backend-controlled missions:
+  - Backend mission projection sync now treats backend reports as authoritative.
+  - When backend missions are present but no backend report exists yet, the renderer no longer synthesizes a report from local feed/response state.
+  - Existing local reports are retained only when they do not collide with backend mission IDs or backend report IDs.
+  - The renderer `MissionOrchestrator` path is now explicitly documented as local simulation-only, not the production mission control plane.
+- Strengthened mission truth smokes:
+  - `scripts/smoke-mission-report-truth.ts` now fails if backend-controlled missions use renderer-generated reports.
+  - `scripts/smoke-mission-durable-state.ts` now fails if backend mission projections reintroduce `generatedReports`.
+- `npm run smoke:mission-report` passed after removing renderer-generated backend reports.
+- `npm run smoke:mission-durable-state` passed after removing renderer-generated backend reports.
+- `npm run typecheck` passed after removing renderer-generated backend reports.
+- `npm test` passed after removing renderer-generated backend reports, including typecheck, JSONL recovery, mission verification, mission report truth, mission durable state, mission idempotency, mission cron reconciliation, mission cancellation, mission runtime references, mission Gateway reconciliation, mission lifecycle projection, config-save lifecycle, auth, security, and runtime reproducibility smokes.
+- `npm run build:client` passed after removing renderer-generated backend reports.
+- Retired the legacy renderer mission lifecycle owner:
+  - Removed the `MissionOrchestrator` import, instance, completion hooks, renderer-owned start branch, renderer-owned stop fallback, and reset-time orchestrator side effects from `nexusStore`.
+  - Production mission launch now has one start path through the canonical authenticated `/api/missions/start` client call.
+  - Production mission cancellation now has one stop path through the canonical authenticated `/api/missions/stop` client call.
+  - Removed stale renderer mission helpers for local assignment prompts, commander synthesis prompts, heartbeat loop intervals, local completion scoring, and working-delegation event upserts.
+  - Deleted `src/engine/MissionOrchestrator.ts` and removed its engine export so the retired lifecycle owner is no longer available to new production code.
+  - Kept backend cron launch/stop feed messages and backend polling intact, preserving the durable mission projection flow.
+- Added `scripts/smoke-mission-backend-owned.ts`, `npm run smoke:mission-backend-owned`, and wired it into `npm run test:ci`.
+- Strengthened `scripts/smoke-mission-report-truth.ts` so it also guards against re-exporting the retired renderer mission owner.
+- `npm run smoke:mission-backend-owned` passed after retiring the renderer mission lifecycle owner.
+- `npm run smoke:mission-report` passed after retiring the renderer mission lifecycle owner.
+- `npm run smoke:mission-durable-state` passed after retiring the renderer mission lifecycle owner.
+- `npm run typecheck` passed after retiring the renderer mission lifecycle owner.
+- `npm run build:server` passed after retiring the renderer mission lifecycle owner.
+- `npm run build:client` passed after retiring the renderer mission lifecycle owner.
+- `npm test` passed after retiring the renderer mission lifecycle owner, including typecheck, JSONL recovery, mission verification, mission report truth, mission durable state, mission idempotency, mission cron reconciliation, mission cancellation, mission runtime references, mission Gateway reconciliation, mission lifecycle projection, mission backend-owned lifecycle, config-save lifecycle, auth, security, and runtime reproducibility smokes.
+- Established the first canonical API response-envelope slice:
+  - Added server helpers `apiSuccess` and `apiFailure` that emit `{ ok: true, data, requestId }` and `{ ok: false, error: { code, message, status, detail? }, requestId }`.
+  - Updated JSON parse failures plus the API origin/auth guard to return typed canonical error envelopes.
+  - Migrated mission projection, mission lifecycle, mission events, mission reports, mission start, and mission stop routes to canonical envelopes.
+  - Migrated auth login/status to canonical envelopes while preserving desktop launch-token and browser session behavior.
+  - Migrated agent config read/write routes to canonical envelopes for not-found, invalid payload, workspace validation, model-auth failure, unchanged, and saved responses.
+  - Made the renderer API client backward-compatible: it now unwraps canonical `{ ok: true, data }` payloads and parses structured `error.code`, `error.message`, and `error.detail` while continuing to support older endpoint shapes.
+  - Updated the editor config-load path to consume the unwrapped config payload from the canonical client.
+- Added `scripts/smoke-api-envelope.ts`, `npm run smoke:api-envelope`, and wired it into `npm run test:ci`.
+- Updated mission idempotency, cancellation, and lifecycle-projection smokes so they validate canonical response envelopes instead of the retired raw JSON literals.
+- `npm run smoke:api-envelope` passed after the first API envelope migration.
+- `npm run smoke:auth` passed after the first API envelope migration.
+- `npm run smoke:mission-backend-owned` passed after the first API envelope migration.
+- `npm run smoke:config-save` passed after the first API envelope migration.
+- `npm run smoke:mission-idempotency` passed after updating idempotency envelope expectations.
+- `npm run smoke:mission-cancellation` passed after updating cancellation envelope expectations.
+- `npm run smoke:mission-lifecycle-projection` passed after updating projection envelope expectations.
+- `npm run typecheck` passed after the first API envelope migration.
+- `npm run build:server` passed after the first API envelope migration.
+- `npm run build:client` passed after the first API envelope migration.
+- `npm test` passed after the first API envelope migration, including the new API envelope smoke plus all mission, config-save, auth, security, ledger, typecheck, and runtime reproducibility smokes.
+- Re-read local OpenClaw Gateway and cron documentation before adding isolated mission API integration coverage:
+  - `docs/openclaw-latest/pages/gateway/protocol.md`
+  - `docs/openclaw-latest/pages/automation/cron-jobs.md`
+- Added an explicit test-only mission scheduler dry-run gate:
+  - `CONTROL_CENTER_MISSION_SCHEDULER_DRY_RUN=1` lets integration tests exercise real mission start/stop/idempotency routes without creating OpenClaw cron jobs or touching Gateway runtime state.
+  - Dry-run launches still persist mission records, emit scheduler evidence, transition the mission lifecycle to running, and keep cancellation/reporting behavior observable.
+- Added `scripts/smoke-api-integration.ts`, a real HTTP integration smoke that launches the Control Center server in a child process with temporary workspace, temporary OpenClaw state, and temporary home directories.
+- The API integration smoke verifies:
+  - Invalid JSON returns the canonical `invalid_json` envelope.
+  - Bad login returns `invalid_token`.
+  - Good login returns a session token and authenticated status works.
+  - Privileged mission projection without auth returns `auth_required`.
+  - Disallowed request origins return `origin_not_allowed`.
+  - Invalid mission launch payloads return `invalid_payload`.
+  - Mission launch returns canonical data with the idempotency key and no cron jobs in dry-run mode.
+  - Duplicate mission launch returns the existing mission with `deduped: true`.
+  - Mission projection includes the launched mission.
+  - Mission stop returns cleanup evidence and cancelled state.
+  - Repeated mission stop returns `mission_invalid_state`.
+  - Mission record JSONL is written under the temporary OpenClaw state root, proving the test does not use the operator's live state.
+- Added `npm run smoke:api-integration` and wired it into `npm run test:ci`.
+- `npm run smoke:api-integration` passed after adding the isolated HTTP integration smoke.
+- `npm run typecheck` passed after adding the isolated HTTP integration smoke.
+- `npm run build:server` passed after adding the isolated HTTP integration smoke.
+- `npm run build:client` passed after adding the isolated HTTP integration smoke.
+- `npm test` passed after adding the isolated HTTP integration smoke, including typecheck, all mission smokes, API envelope coverage, API integration coverage, config-save, auth, security, ledger, and runtime reproducibility.
+- Inspected branch/status and this ledger at the start of the renderer-resilience run; work remained on protective branch `codex/production-hardening`.
+- Added an application-level renderer recovery boundary in `src/components/system/AppErrorBoundary.tsx` and wrapped the live React tree at `src/main.tsx` so crashes in auth, shell, or lazy workspace rendering produce a controlled recovery surface instead of a blank console.
+- Installed global renderer error handlers for `error` and `unhandledrejection` before React render, with a custom event bridge so non-React script failures are surfaced through the same recovery UI.
+- Added a session-scoped crash-loop guard that records recent renderer failures in `sessionStorage`, uses a bounded 60-second crash window, and pauses normal rendering after repeated failures so reload loops stay visible and operator-recoverable.
+- Added an accessible recovery screen with `role="alert"`, assertive live-region behavior, readable diagnostics, recent-crash counts, last-crash timing, and explicit Retry Shell, Reload Console, and Clear Crash Guard actions.
+- Added scoped error-boundary styling in `src/components/system/AppErrorBoundary.css` with readable 14px body text and 36px minimum recovery controls.
+- Added `scripts/smoke-error-boundary.ts`, `npm run smoke:error-boundary`, and wired the smoke into `npm run test:ci`.
+- `npm run smoke:error-boundary` passed after adding the renderer recovery boundary.
+- `npm run typecheck` passed after adding the renderer recovery boundary.
+- `npm run build:server` passed after adding the renderer recovery boundary.
+- `npm run build:client` passed after adding the renderer recovery boundary.
+- `npm test` passed after adding the renderer recovery boundary, including typecheck, all mission smokes, API envelope coverage, API integration coverage, renderer recovery coverage, config-save, auth, security, ledger, and runtime reproducibility.
+- Inspected branch/status and this ledger at the start of the skills/avatar control-plane run; work remained on protective branch `codex/production-hardening`.
+- Extended canonical API response envelopes to the skills control plane:
+  - `/api/skills/check`
+  - `/api/skills/list`
+  - `/api/skills/info/:skillName`
+  - `/api/skills/library`
+  - `/api/skills/library/:skillId`
+  - `/api/skills/learn`
+  - `/api/skills/clawhub/search`
+  - `/api/skills/clawhub/install`
+  - `/api/skills/clawhub/update`
+- Added typed skills API errors for `skill_command_failed`, `skill_operation_failed`, and `skill_not_found`, preserving command output, exit code, retry, cleanup, and stderr evidence inside canonical redacted error details where applicable.
+- Migrated avatar upload to the canonical envelope path with typed `avatar_upload_failed` errors instead of legacy `{ ok: false, error }` JSON.
+- Migrated `SkillsPanel` from direct `fetch` and local JSON parsing to `apiRequest`/`apiErrorMessage` for skills check/list/info, library sync, library content reads, ClawHub search/install/update, and learned-skill saves.
+- Migrated the agent editor's avatar upload and embedded skills tab from direct skill/avatar fetches to `apiRequest`, including shared skill library load, ClawHub search, ClawHub install, and ClawHub update.
+- Added `scripts/smoke-skills-control-plane.ts`, `npm run smoke:skills-control-plane`, and wired the smoke into `npm run test:ci`.
+- `npm run smoke:skills-control-plane` initially caught two overly line-oriented assertions; the smoke was relaxed to remain formatting-tolerant while preserving the contract.
+- `npm run smoke:skills-control-plane` passed after adding the skills/avatar control-plane contract.
+- `npm run typecheck` passed after the skills/avatar control-plane migration.
+- `npm run build:server` passed after the skills/avatar control-plane migration.
+- `npm run build:client` passed after the skills/avatar control-plane migration.
+- `npm test` passed after the skills/avatar control-plane migration, including typecheck, all mission smokes, API envelope coverage, API integration coverage, renderer recovery coverage, skills control-plane coverage, config-save, auth, security, ledger, and runtime reproducibility.
+- Inspected branch/status and this ledger at the start of the plugin control-plane run; work remained on protective branch `codex/production-hardening`.
+- Read the local OpenClaw plugin/runtime documentation before changing the plugin management surface:
+  - `docs/openclaw-latest/pages/cli/plugins.md`
+  - `docs/openclaw-latest/pages/plugins/building-plugins.md`
+  - `docs/openclaw-latest/pages/plugins/sdk-setup.md`
+  - `docs/openclaw-latest/pages/tools/skills-config.md`
+- Extended canonical API response envelopes to the plugin control plane while preserving existing OpenClaw CLI command semantics:
+  - `/api/plugins`
+  - `/api/plugins/search`
+  - `/api/plugins/install`
+  - `/api/plugins/update-all`
+  - `/api/plugins/gateway/restart`
+  - `/api/plugins/clawtalk/setup`
+  - `/api/plugins/:pluginId/update`
+  - `/api/plugins/:pluginId/uninstall`
+  - `/api/plugins/:pluginId/inspect`
+  - `/api/plugins/:pluginId/config`
+  - `/api/plugins/setup-terminal`
+  - `/api/plugins/setup-terminal/:sessionId/input`
+  - `/api/plugins/setup-terminal/:sessionId/resize`
+  - `DELETE /api/plugins/setup-terminal/:sessionId`
+  - `/api/plugins/:pluginId`
+- Left `/api/plugins/setup-terminal/:sessionId/stream` as an SSE stream by design, with raw event framing preserved.
+- Added typed plugin API errors for `plugin_command_failed`, `plugin_operation_failed`, `plugin_terminal_failed`, and `plugin_not_found`, with shared status mapping and redaction-safe diagnostics for OpenClaw command failures.
+- Migrated `PluginsPanel` from its local `fetchJsonWithTimeout` helper and legacy `{ ok, error }` parsing to shared `apiRequest`/`apiErrorMessage` plumbing for plugin list/search/install/setup/toggle/update/inspect/restart/uninstall/update-all and the embedded OpenClaw command runner.
+- Added `scripts/smoke-plugins-control-plane.ts`, `npm run smoke:plugins-control-plane`, and wired the smoke into `npm run test:ci`.
+- `npm run smoke:plugins-control-plane` passed after adding the plugin control-plane contract.
+- `npm run typecheck` passed after the plugin control-plane migration.
+- `npm run build:server` passed after the plugin control-plane migration.
+- `npm run build:client` passed after the plugin control-plane migration.
+- `npm test` passed after the plugin control-plane migration, including typecheck, all mission smokes, API envelope coverage, API integration coverage, renderer recovery coverage, skills and plugin control-plane coverage, config-save, auth, security, ledger, and runtime reproducibility.
+- Inspected branch/status and this ledger at the start of the runtime status control-plane run; work remained on protective branch `codex/production-hardening`.
+- Read the local OpenClaw Gateway/runtime docs before changing runtime status polling:
+  - `docs/openclaw-latest/pages/gateway/protocol.md`
+  - `docs/openclaw-latest/pages/web/control-ui.md`
+  - `docs/OPENCLAW_GATEWAY_COMMAND_CONSOLE_GUIDE.md`
+- Extended canonical API response envelopes to the hot runtime polling endpoints:
+  - `/api/openclaw/runtime/status`
+  - `/api/openclaw/runtime/summary`
+- Added typed runtime API errors for `runtime_status_failed` and `runtime_summary_failed`.
+- Preserved the existing lightweight runtime status payload builders, cache reuse, fallback payloads, and timeout behavior described in the OpenClaw Gateway Command Console guide; only the Control Center HTTP contract changed.
+- Migrated `useRuntimeStatus` and `useRuntimeSummaryStatus` polling from direct `fetch(apiUrl(...))` and hand-parsed legacy errors to shared `apiRequest`/`apiErrorMessage` plumbing.
+- Preserved the existing renderer-side runtime polling behavior:
+  - Subscriber-aware in-flight request coalescing.
+  - Visibility/online-aware polling.
+  - Idle abort handling when the last subscriber unsubscribes.
+  - Force-refresh queuing while a request is already in flight.
+  - Bounded request timeout calculation.
+  - Last-snapshot timeout messaging for full status and summary polling.
+- Added `scripts/smoke-runtime-status-control-plane.ts`, `npm run smoke:runtime-status-control-plane`, and wired the smoke into `npm run test:ci`.
+- `npm run smoke:runtime-status-control-plane` passed after adding the runtime status control-plane contract.
+- `npm run typecheck` passed after the runtime status control-plane migration.
+- `npm run build:server` passed after the runtime status control-plane migration.
+- `npm run build:client` passed after the runtime status control-plane migration.
+- `npm test` passed after the runtime status control-plane migration, including typecheck, all mission smokes, API envelope coverage, API integration coverage, renderer recovery coverage, skills/plugin/runtime-status control-plane coverage, config-save, auth, security, ledger, and runtime reproducibility.
+- Inspected branch/status and this ledger at the start of the shift scheduler control-plane run; work remained on protective branch `codex/production-hardening`.
+- Read the local OpenClaw scheduled-task documentation before changing cron/shift behavior:
+  - `docs/openclaw-latest/pages/automation/cron-jobs.md`
+- Extended canonical API response envelopes to the shift scheduler and cron route family:
+  - `/api/shifts/start`
+  - `/api/shifts/start-batch`
+  - `/api/shifts/stop`
+  - `/api/shifts/update`
+  - `/api/shifts`
+  - `/api/shifts/defaults`
+  - `/api/shifts/defaults/:agentId`
+- Added typed shift API errors for `shift_command_failed` and `shift_operation_failed`.
+- Preserved OpenClaw cron CLI semantics and Control Center's existing active-shift runtime state, but changed the HTTP contract so create/edit/stop/list/defaults responses use canonical envelopes and request IDs.
+- Changed the team workflow batch start path so an all-failed batch now returns a canonical `shift_command_failed` error instead of a 200 response with `ok: false` hidden in the payload.
+- Migrated `stopCronShift`, `updateCronShift`, and `listCronShifts` in `useRuntimeStatus` from legacy `fetchJsonWithTimeout` parsing to shared `apiRequest`/`apiErrorMessage` plumbing.
+- Migrated `HeartbeatSchedulerPanel` from direct `fetch` and `JSON.stringify` request bodies to shared `apiRequest` handling for shift list/defaults/start/start-batch/stop operations.
+- Surfaced shift-default autosave failures in the scheduler panel instead of keeping them silent.
+- Added `scripts/smoke-shifts-control-plane.ts`, `npm run smoke:shifts-control-plane`, and wired the smoke into `npm run test:ci`.
+- `npm run smoke:shifts-control-plane` passed after adding the shift scheduler control-plane contract.
+- `npm run typecheck` passed after the shift scheduler control-plane migration.
+- `npm run build:server` passed after the shift scheduler control-plane migration.
+- `npm run build:client` passed after the shift scheduler control-plane migration.
+- `npm test` passed after the shift scheduler control-plane migration, including typecheck, all mission smokes, API envelope coverage, API integration coverage, renderer recovery coverage, skills/plugin/runtime-status/shift control-plane coverage, config-save, auth, security, ledger, and runtime reproducibility.
+- Inspected branch/status and this ledger at the start of the filesystem control-plane run; work remained on protective branch `codex/production-hardening`.
+- Read the local OpenClaw CLI agent documentation before changing agent resource file behavior:
+  - `docs/openclaw-latest/pages/cli/agent.md`
+- Extended canonical API response envelopes to the filesystem-backed workspace/resource route family:
+  - `/api/party/resources/:agentId`
+  - `/api/party/resources/:agentId/:file`
+  - `/api/party/folders`
+  - `/api/party/folder-picker`
+  - `/api/party/folder-picker/start`
+  - `/api/party/folder-picker/:sessionId`
+  - `/api/party/avatar-picker/start`
+  - `/api/party/avatar-picker/:sessionId`
+- Added typed filesystem/picker API errors for `filesystem_operation_failed`, `folder_list_failed`, `folder_picker_failed`, `image_picker_failed`, and `resource_not_found`.
+- Changed folder picker cancellation from a legacy `{ ok: false }` payload into canonical success data with `status: "cancelled"` and `cancelled: true`, so operator cancellation is no longer reported like an infrastructure failure.
+- Migrated `AgentEditorModal` workspace folder listing, folder-picker polling, resource file listing, resource file reading, and resource file saving to shared `apiRequest`/`apiErrorMessage` plumbing.
+- Migrated recruit-time markdown bootstrap resource saves in `nexusStore` to `apiRequest` so newly recruited agents inherit standard request IDs, auth, timeout handling, and redaction-safe errors.
+- Added `scripts/smoke-filesystem-control-plane.ts`, `npm run smoke:filesystem-control-plane`, and wired the smoke into `npm run test:ci`.
+- `npm run smoke:filesystem-control-plane` passed after adding the filesystem control-plane contract.
+- `npm run typecheck` passed after the filesystem control-plane migration.
+- `npm run build:server` passed after the filesystem control-plane migration.
+- `npm run build:client` passed after the filesystem control-plane migration.
+- `npm test` passed after the filesystem control-plane migration, including typecheck, all mission smokes, API envelope coverage, API integration coverage, renderer recovery coverage, skills/plugin/runtime-status/shift/filesystem control-plane coverage, config-save, auth, security, ledger, and runtime reproducibility.
+- Inspected branch/status and this ledger at the start of the command-console file control-plane run; work remained on protective branch `codex/production-hardening`.
+- Read the local Command Console/OpenClaw Gateway implementation guide before changing Command Console upload behavior:
+  - `docs/OPENCLAW_GATEWAY_COMMAND_CONSOLE_GUIDE.md`
+- Extended canonical API response envelopes to the Command Console file/control route family:
+  - `/api/files`
+  - `/api/files/upload`
+  - `/api/files/:file`
+- Added typed file/control API errors for `file_upload_failed` and `control_file_operation_failed`.
+- Migrated Command Console attachment upload in `AgentResponseConsole` from direct `fetch` plus hand-parsed JSON to shared `apiRequest`/`apiErrorMessage` plumbing, while preserving raw binary upload semantics, upload MIME hints, and the existing attachment payload shape sent into agent turns.
+- Added `scripts/smoke-command-console-files-control-plane.ts`, `npm run smoke:command-console-files`, and wired the smoke into `npm run test:ci`.
+- `npm run smoke:command-console-files` passed after adding the Command Console file/upload contract.
+- `npm run typecheck` passed after the Command Console file/upload migration.
+- `npm run build:server` passed after the Command Console file/upload migration.
+- `npm run build:client` passed after the Command Console file/upload migration.
+- `npm test` passed after the Command Console file/upload migration, including typecheck, all mission smokes, API envelope coverage, API integration coverage, renderer recovery coverage, skills/plugin/runtime-status/shift/filesystem/command-console-file control-plane coverage, config-save, auth, security, ledger, and runtime reproducibility.
+- Inspected branch/status and this ledger at the start of the `nexusStore` control-plane run; work remained on protective branch `codex/production-hardening`.
+- Read the local Command Console/OpenClaw Gateway implementation guide before changing agent-turn and Command Console control-plane behavior:
+  - `docs/OPENCLAW_GATEWAY_COMMAND_CONSOLE_GUIDE.md`
+- Extended canonical API response envelopes to the remaining `nexusStore`-owned non-SSE control-plane route family:
+  - `/api/party/overview`
+  - `/api/party/recruit`
+  - `DELETE /api/party/agent/:agentId`
+  - `/api/openclaw/agent-preflight`
+  - `/api/openclaw/agent-turn/sessions/clear`
+- Added typed API errors for `agent_preflight_failed`, `agent_retire_failed`, `agent_session_operation_failed`, `party_operation_failed`, and `recruit_failed`.
+- Migrated `nexusStore` party overview sync, recruit creation, post-recruit config save, retire, session warm-up, agent runtime preflight, buffered agent-turn fallback, sandbox auto-disable retry saves, and Command Console session-clear calls to shared `apiRequest`/`apiErrorMessage` plumbing.
+- Preserved the live `/api/openclaw/agent-turn/stream` direct fetch because it reads SSE bytes and feeds the Command Console streaming parser; the new smoke requires it to remain the only direct fetch in `nexusStore`.
+- Removed the now-unused `isAbortError` helper from `nexusStore` after the retire path moved to API-client timeout handling.
+- Added `scripts/smoke-nexus-control-plane.ts`, `npm run smoke:nexus-control-plane`, and wired the smoke into `npm run test:ci`.
+- `npm run smoke:nexus-control-plane` passed after adding the nexus control-plane contract.
+- `npm run typecheck` initially caught the stale `isAbortError` helper, then passed after cleanup.
+- `npm run build:server` passed after the nexus control-plane migration.
+- `npm run build:client` passed after the nexus control-plane migration.
+- `npm test` passed after the nexus control-plane migration, including typecheck, all mission smokes, API envelope coverage, API integration coverage, renderer recovery coverage, skills/plugin/runtime-status/shift/filesystem/command-console-file/nexus control-plane coverage, config-save, auth, security, ledger, and runtime reproducibility.
+- Inspected branch/status and this ledger at the start of the runtime-action/editor model control-plane run; work remained on protective branch `codex/production-hardening`.
+- Read the local OpenClaw Gateway/runtime docs before changing runtime action and model catalog behavior:
+  - `docs/OPENCLAW_GATEWAY_COMMAND_CONSOLE_GUIDE.md`
+  - `docs/openclaw-latest/pages/gateway/protocol.md`
+  - `docs/openclaw-latest/pages/web/control-ui.md`
+- Extended canonical API response envelopes to the runtime action and model catalog route family:
+  - `/api/doctor/run`
+  - `/api/doctor/recent`
+  - `/api/openclaw/runtime/session/close`
+  - `/api/openclaw/runtime/chat/abort-stale`
+  - `/api/openclaw/runtime/monitor/clear`
+  - `/api/openclaw/runtime/shutdown`
+  - `/api/openclaw/runtime/gateway/stop`
+  - `/api/openclaw/runtime/gateway/start`
+  - `/api/openclaw/runtime/gateway/restart`
+  - `/api/models/available`
+- Added typed API errors for `doctor_operation_failed`, `runtime_action_failed`, and `model_catalog_failed`.
+- Migrated `useRuntimeStatus` runtime actions from the legacy `fetchJsonWithTimeout` helper to a shared `runtimeActionRequest` wrapper over `apiRequest`, preserving structured timeout/abort errors for existing monitor UX.
+- Migrated `AgentEditorModal` model catalog loading from its local `fetchWithTimeout` and `readJsonResponse` helpers to `apiRequest`/`apiErrorMessage`.
+- Removed the remaining non-SSE direct React fetch helpers from the runtime hook and editor model loader; the renderer now keeps only the intentional Command Console SSE fetch plus the central API client fetch.
+- Added `scripts/smoke-runtime-actions-control-plane.ts`, `npm run smoke:runtime-actions-control-plane`, and wired the smoke into `npm run test:ci`.
+- Updated the existing runtime-status smoke to remain compatible with the expanded shared API-client import.
+- `npm run smoke:runtime-actions-control-plane` passed after adding the runtime action/model catalog contract.
+- `npm run smoke:runtime-status-control-plane` passed after updating the import assertion.
+- `npm run typecheck` passed after the runtime-action/editor model migration.
+- `npm run build:server` passed after the runtime-action/editor model migration.
+- `npm run build:client` passed after the runtime-action/editor model migration.
+- `npm test` initially caught the stale runtime-status smoke assertion, then passed after the smoke update, including typecheck, all mission smokes, API envelope coverage, API integration coverage, renderer recovery coverage, skills/plugin/runtime-status/runtime-action/shift/filesystem/command-console-file/nexus control-plane coverage, config-save, auth, security, ledger, and runtime reproducibility.
+- Inspected branch/status and this ledger at the start of the auth/provider/model control-plane run; work remained on protective branch `codex/production-hardening`.
+- Read the local OpenClaw Control UI and agent CLI docs before changing provider-auth and per-agent model behavior:
+  - `docs/openclaw-latest/pages/web/control-ui.md`
+  - `docs/openclaw-latest/pages/cli/agent.md`
+- Extended canonical API response envelopes to the provider auth, OAuth, and per-agent model route family:
+  - `/api/auth/providers`
+  - `/api/auth/providers/:provider`
+  - `DELETE /api/auth/providers/:provider`
+  - `/api/auth/providers/:provider/oauth/start`
+  - `/api/auth/providers/:provider/oauth/session/:sessionId`
+  - `/api/auth/providers/:provider/oauth/session/:sessionId/manual`
+  - `/api/party/agent/:agentId/model`
+- Added typed API errors for `auth_provider_failed`, `oauth_operation_failed`, `model_auth_required`, and `model_operation_failed`.
+- Added explicit catch paths around provider status probing, provider credential persistence/removal, OAuth start/manual completion, and per-agent model read/write so these control-plane failures no longer fall through to ad hoc or framework-default JSON.
+- Preserved existing success data shapes such as `ok`, `provider`, `sessionId`, `providerStatus`, and `model`, but now inside canonical envelopes with request IDs.
+- Migrated `ProviderAuthModal` away from its legacy `fetchJsonWithTimeout` compatibility shim; provider refresh, OAuth start, OAuth polling, and manual OAuth submission now use direct `apiRequest`/`apiErrorMessage` result handling.
+- Added `scripts/smoke-auth-provider-model-control-plane.ts`, `npm run smoke:auth-provider-model`, and wired the smoke into `npm run test:ci`.
+- `npm run smoke:auth-provider-model` initially caught that `/api/auth/providers` lacked a canonical failure path, then passed after wrapping provider-status probing.
+- `npm run typecheck` passed after the auth/provider/model migration.
+- `npm run build:server` passed after the auth/provider/model migration.
+- `npm run build:client` passed after the auth/provider/model migration.
+- `npm test` passed after the auth/provider/model migration, including typecheck, all mission smokes, API envelope coverage, API integration coverage, renderer recovery coverage, skills/plugin/runtime-status/runtime-action/shift/filesystem/command-console-file/nexus/config-save/auth/auth-provider-model/security/runtime-reproducibility coverage.
+- Inspected branch/status and this ledger at the start of the OpenClaw command/summary control-plane run; work remained on protective branch `codex/production-hardening`.
+- Read the local OpenClaw Gateway and Command Console docs before changing OpenClaw command behavior:
+  - `docs/OPENCLAW_GATEWAY_COMMAND_CONSOLE_GUIDE.md`
+  - `docs/openclaw-latest/pages/gateway/protocol.md`
+- Extended canonical API response envelopes to the OpenClaw command/summary and coordination diagnostic route slice:
+  - `/api/openclaw/summary`
+  - `/api/openclaw/command`
+  - `/api/party/parallel-health`
+- Added typed API errors for `openclaw_summary_failed`, `openclaw_command_failed`, and `party_coordination_failed`.
+- Preserved operator diagnostic semantics for `/api/openclaw/command`: OpenClaw process exit codes are still returned as data with `ok: result.code === 0`, while malformed requests and infrastructure failures now use canonical error envelopes.
+- Preserved `parallel-health` timing evidence (`looksParallel`, wall-clock/summed duration, peak concurrency, and parallel efficiency) inside canonical data envelopes.
+- Added `scripts/smoke-openclaw-command-control-plane.ts`, `npm run smoke:openclaw-command-control-plane`, and wired the smoke into `npm run test:ci`.
+- `npm run smoke:openclaw-command-control-plane` passed after adding the OpenClaw command/summary contract.
+- `npm run typecheck` passed after the OpenClaw command/summary migration.
+- `npm run build:server` passed after the OpenClaw command/summary migration.
+- `npm run build:client` passed after the OpenClaw command/summary migration.
+- `npm test` passed after the OpenClaw command/summary migration, including typecheck, all mission smokes, API envelope coverage, API integration coverage, renderer recovery coverage, skills/plugin/openclaw-command/runtime-status/runtime-action/shift/filesystem/command-console-file/nexus/config-save/auth/auth-provider-model/security/runtime-reproducibility coverage.
+- Inspected branch/status and this ledger at the start of the party coordination/handoff control-plane run; work remained on protective branch `codex/production-hardening`.
+- Read the local OpenClaw Gateway, Command Console, and agent CLI docs before changing agent coordination/handoff behavior:
+  - `docs/OPENCLAW_GATEWAY_COMMAND_CONSOLE_GUIDE.md`
+  - `docs/openclaw-latest/pages/cli/agent.md`
+  - `docs/openclaw-latest/pages/gateway/protocol.md`
+- Extended canonical API response envelopes to the party dispatch/handoff route slice:
+  - `/api/party/dispatch`
+  - `/api/party/agent-to-agent`
+- Added typed API errors for `party_dispatch_failed` and `party_handoff_failed`.
+- Added pre-dispatch validation so invalid, retired, or missing party agents are rejected before `TEAM_SYNC.md` is written or OpenClaw agent runs are started.
+- Preserved party execution evidence as canonical success data with `data.ok`, per-agent `outputs`, handoff `from`/`to` evidence, and timing telemetry instead of returning ad hoc JSON.
+- Updated the internal agent-turn delegation compatibility caller to unwrap canonical handoff `data` and treat `data.ok === false` as a failed delegation even when the route transport succeeded.
+- Added `scripts/smoke-party-coordination-control-plane.ts`, `npm run smoke:party-coordination-control-plane`, and wired the smoke into `npm run test:ci`.
+- `npm run smoke:party-coordination-control-plane` passed after adding the party coordination contract.
+- `npm run typecheck` passed after the party dispatch/handoff migration.
+- `npm run build:server` passed after the party dispatch/handoff migration.
+- `npm run build:client` passed after the party dispatch/handoff migration.
+- `npm test` passed after the party dispatch/handoff migration, including typecheck, all mission smokes, API envelope coverage, API integration coverage, renderer recovery coverage, skills/plugin/openclaw-command/party-coordination/runtime-status/runtime-action/shift/filesystem/command-console-file/nexus/config-save/auth/auth-provider-model/security/runtime-reproducibility coverage.
+- Inspected branch/status and this ledger at the start of the Team Sync control-plane run; work remained on protective branch `codex/production-hardening`.
+- Read the local OpenClaw Gateway, Command Console, and agent CLI docs before changing the Team Sync coordination endpoint:
+  - `docs/OPENCLAW_GATEWAY_COMMAND_CONSOLE_GUIDE.md`
+  - `docs/openclaw-latest/pages/cli/agent.md`
+  - `docs/openclaw-latest/pages/gateway/protocol.md`
+- Extended canonical API response envelopes to `/api/team-sync/append`.
+- Added typed API error `team_sync_failed`.
+- Preserved agent-script compatibility by keeping `ok: true` inside canonical success `data`, while moving policy/write failures to request-ID-bearing canonical errors.
+- Preserved Team Sync path-containment rules, canonical doctrine-only enforcement, basename checks, bounded append chunking, and split-line evidence in the canonical response data.
+- Added `scripts/smoke-team-sync-control-plane.ts`, `npm run smoke:team-sync-control-plane`, and wired the smoke into `npm run test:ci`.
+- `npm run smoke:team-sync-control-plane` passed after adding the Team Sync contract.
+- `npm run typecheck` passed after the Team Sync migration.
+- `npm run build:server` passed after the Team Sync migration.
+- `npm run build:client` passed after the Team Sync migration.
+- `npm test` passed after the Team Sync migration, including typecheck, all mission smokes, API envelope coverage, API integration coverage, renderer recovery coverage, skills/plugin/openclaw-command/party-coordination/team-sync/runtime-status/runtime-action/shift/filesystem/command-console-file/nexus/config-save/auth/auth-provider-model/security/runtime-reproducibility coverage.
+- Inspected branch/status and this ledger at the start of the agent-turn compatibility control-plane run; work remained on protective branch `codex/production-hardening`.
+- Re-read the local OpenClaw Command Console, Gateway, Control UI, WebChat, and agent CLI docs before changing agent-turn, ClawTalk, and stream fallback behavior:
+  - `docs/OPENCLAW_GATEWAY_COMMAND_CONSOLE_GUIDE.md`
+  - `docs/openclaw-latest/pages/gateway/protocol.md`
+  - `docs/openclaw-latest/pages/web/control-ui.md`
+  - `docs/openclaw-latest/pages/web/webchat.md`
+  - `docs/openclaw-latest/pages/cli/agent.md`
+- Extended canonical API response envelopes to the agent-turn/ClawTalk compatibility route cluster:
+  - `/api/openclaw/clawtalk-console/final`
+  - `/api/openclaw/agent-turn`
+  - `/api/browser/preflight`
+- Added typed API errors for `agent_turn_failed` and `clawtalk_console_failed`.
+- Preserved SSE behavior on `/api/openclaw/agent-turn/stream`; the stream route still initializes SSE and emits final frames instead of being converted to a buffered JSON route.
+- Preserved failed agent execution evidence as canonical success `data` with `data.ok: false` for browser preflight failures, host-action failures, delegated handoff failures, and OpenClaw process failures, so the renderer can display reply/stdout/stderr/runtime context instead of losing the payload to an API-client exception.
+- Moved malformed agent-turn payloads, invalid/retired agent IDs, delegation policy denials, and pre-reply infrastructure failures to request-ID-bearing canonical error envelopes.
+- Updated the stream fallback helper to unwrap canonical `/api/openclaw/agent-turn` data and reject non-object parsed payloads before constructing a fallback final payload.
+- Updated the party coordination smoke to match the evidence-preserving delegation contract: failed delegated handoffs are now canonical data with `data.ok: false`, not transport failures.
+- Added `scripts/smoke-agent-turn-control-plane.ts`, `npm run smoke:agent-turn-control-plane`, and wired the smoke into `npm run test:ci`.
+- `npm run smoke:agent-turn-control-plane` passed after adding the agent-turn compatibility contract.
+- `npm run typecheck` passed after the agent-turn compatibility migration.
+- `npm run build:server` passed after the agent-turn compatibility migration.
+- `npm run build:client` passed after the agent-turn compatibility migration.
+- `npm test` initially caught the stale party coordination smoke expectation, then passed after the smoke update, including typecheck, all mission smokes, API envelope coverage, API integration coverage, renderer recovery coverage, skills/plugin/openclaw-command/party-coordination/team-sync/agent-turn/runtime-status/runtime-action/shift/filesystem/command-console-file/nexus/config-save/auth/auth-provider-model/security/runtime-reproducibility coverage.
+- Inspected branch/status and this ledger at the start of the remaining raw-envelope cleanup run; work remained on protective branch `codex/production-hardening`.
+- Re-read the local OpenClaw Command Console, Control UI, and agent CLI docs before changing recruit utility, workspace/config, and plugin terminal control-plane behavior:
+  - `docs/OPENCLAW_GATEWAY_COMMAND_CONSOLE_GUIDE.md`
+  - `docs/openclaw-latest/pages/cli/agent.md`
+  - `docs/openclaw-latest/pages/web/control-ui.md`
+- Extended canonical API response envelopes to the remaining JSON route slice:
+  - `/api/health`
+  - `/api/runtime/version-check`
+  - `/api/plugins/setup-terminal/:sessionId/stream` not-found error path
+  - `/api/party/profile/:agentId`
+  - `/api/party/identity`
+  - `/api/party/recruit/auto-markdown`
+  - `/api/party/workspace`
+  - `/api/party/provision-resources`
+  - `/api/party/workspace/cleanup-doctrine`
+  - `/api/party/configs/sync`
+- Added typed API errors for `agent_config_sync_failed` and `avatar_preview_failed`.
+- Preserved native transports where JSON would be wrong: plugin setup terminal success still streams SSE frames, and avatar preview success still returns either a redirect or image bytes.
+- Preserved compatibility payloads inside canonical data envelopes, including workspace validation `ok: false`/`suggestedWorkspace`, identity OpenClaw CLI `stdout`/`stderr`/`code`, Auto Forge generated file evidence, profile `agentId`, and config-sync result counts.
+- Added `scripts/smoke-misc-control-plane.ts`, `npm run smoke:misc-control-plane`, and wired the smoke into `npm run test:ci`.
+- Source scan now finds raw API JSON responses only inside the canonical `apiSuccess`/`apiFailure` helper implementations; API route bodies no longer emit ad hoc `res.json` or `res.status(...).json` payloads.
+- `npm run smoke:misc-control-plane` initially caught that health/version routes have no route-local failure branch, then passed after narrowing those assertions to canonical success/no-raw-JSON contracts.
+- `npm run typecheck` passed after the remaining raw-envelope cleanup.
+- `npm run build:server` passed after the remaining raw-envelope cleanup.
+- `npm run build:client` passed after the remaining raw-envelope cleanup.
+- `npm test` passed after the remaining raw-envelope cleanup, including typecheck, all mission smokes, API envelope/integration coverage, renderer recovery coverage, skills/plugin/openclaw-command/party-coordination/team-sync/agent-turn/runtime-status/runtime-action/shift/filesystem/command-console-file/nexus/misc/config-save/auth/auth-provider-model/security/runtime-reproducibility coverage.
+- Inspected branch/status and this ledger at the start of the Electron sandbox hardening run; work remained on protective branch `codex/production-hardening`.
+- Removed the packaged Windows production single-process escape hatch:
+  - Removed the old `DYSTOPAI_WINDOWS_SINGLE_PROCESS` path.
+  - Removed `WINDOWS_PACKAGED_SINGLE_PROCESS`.
+  - Stopped tying BrowserWindow renderer sandboxing to that flag.
+- Kept an intentionally explicit development-only diagnostic path for rare Windows renderer debugging:
+  - Requires `DYSTOPAI_WINDOWS_DIAGNOSTIC_SINGLE_PROCESS=1`.
+  - Requires `DYSTOPAI_ACK_UNSAFE_ELECTRON_SANDBOX_DIAGNOSTIC=1`.
+  - Requires `isDev`.
+  - Logs a warning before appending `single-process`, `in-process-gpu`, and `disable-gpu-sandbox`.
+- Made the BrowserWindow always request `sandbox: true` while preserving existing context isolation and disabled Node integration.
+- Strengthened `scripts/smoke-security-hardening.ts` so future regressions fail if the old production env flag returns, if the packaged single-process variable returns, if sandboxing becomes conditional again, or if unsafe process switches are not diagnostic-gated.
+- `npm run smoke:security` passed after the Electron sandbox hardening.
+- `node --check electron/main.cjs` and `node --check electron/preload.cjs` passed after the Electron sandbox hardening.
+- `npm run typecheck:electron` passed after the Electron sandbox hardening.
+- `npm run typecheck` passed after the Electron sandbox hardening.
+- `npm run build:server` passed after the Electron sandbox hardening.
+- `npm run build:client` passed after the Electron sandbox hardening.
+- `npm test` passed after the Electron sandbox hardening, including typecheck, all mission smokes, API envelope/integration coverage, renderer recovery coverage, skills/plugin/openclaw-command/party-coordination/team-sync/agent-turn/runtime-status/runtime-action/shift/filesystem/command-console-file/nexus/misc/config-save/auth/auth-provider-model/security/runtime-reproducibility coverage.
+
+## In Progress
+
+- Production hardening on protective branch `codex/production-hardening`.
+
+Next action:
+
+- Continue Phase 2/runtime supply-chain hardening: add an SBOM/checksum generation path for release artifacts and wire it into smoke/test coverage without changing installer packaging semantics.
+- Avoid the pre-existing local edits in `src/components/mission/MissionDeploymentPanel.tsx` and `src/styles/dystopai-theme/70-responsive-polish.css` unless the selected task explicitly requires those files.
+
+## Backlog
+
+### Phase 1: Restore Truth
+
+- Extend the evidence-backed mission report path into backend-owned durable reports once the mission state machine is extracted.
+- Continue replacing compatibility-only response/result shapes with shared Zod contracts now that the API route bodies use canonical envelopes.
+
+### Phase 2: Secure The Control Plane
+
+- Continue hardening authentication after the first live auth/enforcement pass.
+- Continue canonical API-client migration for remaining legacy raw fetches.
+- Continue CSP tightening over time by removing the temporary inline-style allowance once the legacy inline styles are migrated.
+- Continue Electron IPC sender validation for any future IPC bridge additions.
+- Production sandbox-disabling flags are removed from packaged Electron startup; keep the remaining dev-only unsafe diagnostic gate covered by `smoke:security`.
+- Continue runtime supply-chain hardening beyond the first bundle-prep pass: SBOM generation, release checksums/signing, frozen release install documentation, and checksum verification for any remaining managed runtime downloads.
+
+### Phase 3: Make Missions Durable
+
+- Continue extracting mission networking and projection logic out of the Zustand store now that production mission lifecycle ownership is backend-only.
+
+### Phase 4: Build Real Tests
+
+- Add Vitest unit coverage for scoring, state transitions, SSE parsing, JSONL recovery, dedupe, path containment, redaction, coordination limits, agent eligibility, and retry classification.
+- Broaden API integration tests beyond the first temporary-state auth/mission/envelope coverage.
+- Add Electron end-to-end tests.
+- Add CI for lint, typecheck, tests, builds, smoke tests, dependency audit, secret scan, and SBOM generation.
+
+### Phase 5: Extract Monoliths
+
+- Extract server routes by domain.
+- Split the Zustand store.
+- Move network operations out of state actions.
+- Split large agent console, recruit, and editor dialogs.
+- Introduce shared Zod contracts.
+
+### Phase 6: Rebuild The Design System Beneath The Current UI
+
+- Freeze new global CSS override files.
+- Create design tokens and primitives.
+- Fix typography and contrast.
+- Remove hidden duplicate navigation.
+- Simplify the header.
+- Replace hidden gestures with explicit controls.
+- Migrate components one at a time with screenshot tests.
+
+## Blockers And Risks
+
+- Existing local modifications were moved from `main` onto `codex/production-hardening`; future work should stay on this protective branch unless the user asks otherwise.
+- A protective branch or worktree should be used before broad hardening work.
+- The audit notes vendored OpenClaw and generated packages were not treated as DystopAI-authored code; future changes should preserve that boundary unless explicitly needed.

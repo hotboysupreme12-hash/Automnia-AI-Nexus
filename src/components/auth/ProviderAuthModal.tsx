@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
+import { apiErrorMessage, apiRequest } from '../../api/client'
 
 interface AuthProviderOAuthStatus {
   supported: boolean
@@ -62,6 +63,22 @@ const providerLabels: Record<string, string> = {
 
 const sleep = (ms: number) => new Promise((resolve) => window.setTimeout(resolve, ms))
 
+type OAuthSessionPayload = {
+  status?: 'pending' | 'complete' | 'error'
+  error?: string
+  authorizationUrl?: string
+  manualInputRequired?: boolean
+  manualPrompt?: string
+  result?: { email?: string; projectId?: string }
+}
+
+type OAuthStartPayload = {
+  ok?: boolean
+  sessionId?: string
+  authorizationUrl?: string
+  openedBrowser?: boolean
+}
+
 function formatOAuthExpiry(expiresAt?: number, refreshAvailable = false) {
   if (!expiresAt) return refreshAvailable ? 'refresh token available' : 'not reported'
   const deltaMs = expiresAt - Date.now()
@@ -79,24 +96,6 @@ function oauthHealth(expiresAt?: number, refreshAvailable = false) {
   if (deltaMs <= 0) return refreshAvailable ? { label: 'Refreshable', tone: 'amber' as const } : { label: 'Expired', tone: 'rose' as const }
   if (deltaMs < 15 * 60 * 1000) return { label: refreshAvailable ? 'Refresh Soon' : 'Expiring', tone: 'amber' as const }
   return { label: 'Ready', tone: 'emerald' as const }
-}
-
-async function fetchJsonWithTimeout<T>(url: string, options: RequestInit = {}, timeoutMs = 15000) {
-  const controller = new AbortController()
-  const timeout = window.setTimeout(() => controller.abort(), timeoutMs)
-  try {
-    const response = await fetch(url, {
-      ...options,
-      headers: {
-        ...(options.headers || {}),
-      },
-      signal: controller.signal,
-    })
-    const data = (await response.json().catch(() => ({}))) as T
-    return { response, data }
-  } finally {
-    window.clearTimeout(timeout)
-  }
 }
 
 export function ProviderAuthModal({ isOpen, provider, envKeys, providerStatus, onClose, onSave, onConnected }: ProviderAuthModalProps) {
@@ -119,13 +118,12 @@ export function ProviderAuthModal({ isOpen, provider, envKeys, providerStatus, o
   const refreshProviderStatus = useCallback(async (announceReady = false) => {
     setGcloudRefreshing(true)
     try {
-      const { response, data } = await fetchJsonWithTimeout<{ providers?: AuthProviderStatus[]; error?: string; detail?: string }>(
-        '/api/auth/providers?refresh=1',
-        { cache: 'no-store' },
-        30000,
-      )
-      if (!response.ok) throw new Error(data.detail || data.error || 'Could not refresh provider status.')
-      const next = data.providers?.find((entry) => entry.provider === provider) || null
+      const result = await apiRequest<{ providers?: AuthProviderStatus[] }>('/api/auth/providers?refresh=1', {
+        cache: 'no-store',
+        timeoutMs: 30_000,
+      })
+      if (!result.ok) throw new Error(apiErrorMessage(result.error))
+      const next = result.data.providers?.find((entry) => entry.provider === provider) || null
       if (next) {
         setLiveProviderStatus(next)
         if (next.configured) {
@@ -192,15 +190,12 @@ export function ProviderAuthModal({ isOpen, provider, envKeys, providerStatus, o
   const pollOAuthSession = async (sessionId: string) => {
     for (let attempt = 0; attempt < 90; attempt += 1) {
       await sleep(1500)
-      const { response, data } = await fetchJsonWithTimeout<{
-        status?: 'pending' | 'complete' | 'error'
-        error?: string
-        authorizationUrl?: string
-        manualInputRequired?: boolean
-        manualPrompt?: string
-        result?: { email?: string; projectId?: string }
-      }>(`/api/auth/providers/${provider}/oauth/session/${sessionId}`, { cache: 'no-store' }, 10000)
-      if (!response.ok) throw new Error(data.error || 'OAuth status check failed.')
+      const result = await apiRequest<OAuthSessionPayload>(`/api/auth/providers/${provider}/oauth/session/${sessionId}`, {
+        cache: 'no-store',
+        timeoutMs: 10_000,
+      })
+      if (!result.ok) throw new Error(apiErrorMessage(result.error))
+      const data = result.data
       if (data.authorizationUrl) setAuthorizationUrl(data.authorizationUrl)
       if (data.manualInputRequired) {
         setManualSessionId(sessionId)
@@ -228,20 +223,15 @@ export function ProviderAuthModal({ isOpen, provider, envKeys, providerStatus, o
     setManualPrompt('')
     setManualSessionId('')
     try {
-      const { response, data } = await fetchJsonWithTimeout<{
-        ok?: boolean
-        sessionId?: string
-        authorizationUrl?: string
-        error?: string
-        detail?: string
-        openedBrowser?: boolean
-      }>(`/api/auth/providers/${provider}/oauth/start`, {
+      const result = await apiRequest<OAuthStartPayload>(`/api/auth/providers/${provider}/oauth/start`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ projectId: projectId.trim() || undefined }),
-      }, 20000)
-      if (!response.ok || !data.ok || !data.sessionId) {
-        throw new Error(data.detail || data.error || 'Could not start OAuth.')
+        body: { projectId: projectId.trim() || undefined },
+        timeoutMs: 20_000,
+      })
+      if (!result.ok) throw new Error(apiErrorMessage(result.error))
+      const data = result.data
+      if (!data.ok || !data.sessionId) {
+        throw new Error('Could not start OAuth.')
       }
       if (data.authorizationUrl) setAuthorizationUrl(data.authorizationUrl)
       setStatus(data.openedBrowser ? `Browser opened. Finish ${label} sign-in there.` : 'Open the authorization link to continue.')
@@ -259,16 +249,12 @@ export function ProviderAuthModal({ isOpen, provider, envKeys, providerStatus, o
     setManualSubmitting(true)
     setStatus('')
     try {
-      const { response, data } = await fetchJsonWithTimeout<{ error?: string; detail?: string }>(
-        `/api/auth/providers/${provider}/oauth/session/${manualSessionId}/manual`,
-        {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ input: manualCode.trim() }),
-        },
-        15000,
-      )
-      if (!response.ok) throw new Error(data.detail || data.error || 'Could not submit authorization code.')
+      const result = await apiRequest(`/api/auth/providers/${provider}/oauth/session/${manualSessionId}/manual`, {
+        method: 'POST',
+        body: { input: manualCode.trim() },
+        timeoutMs: 15_000,
+      })
+      if (!result.ok) throw new Error(apiErrorMessage(result.error))
       setManualCode('')
       setManualPrompt('')
       setStatus('Authorization submitted. Finishing sign-in.')

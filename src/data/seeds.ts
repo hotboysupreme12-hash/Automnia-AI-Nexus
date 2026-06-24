@@ -4,6 +4,10 @@ import type {
   MissionDraft,
   OpenClawAgent,
 } from '../types/nexus'
+import {
+  PROJECT_BUILD_VERIFICATION_COMMAND,
+  PROJECT_TEST_VERIFICATION_COMMAND,
+} from '../engine/missionVerification'
 
 export const SKILL_TREE: Array<{
   id: string
@@ -57,8 +61,8 @@ export const DEFAULT_MISSION_DRAFT: MissionDraft = {
     { kind: 'runtimePreflight', label: 'Agent runtime and workspace access checked before launch.', required: true },
     { kind: 'filesChanged', label: 'Every implementation lane reports exact files changed or confirms read-only work.', required: true },
     { kind: 'humanPath', label: 'A provider/browser/integration path proves the user workflow, not just isolated pieces.', required: true },
-    { kind: 'build', label: 'Build result or explicit build blocker.', required: true, command: 'npm run build' },
-    { kind: 'tests', label: 'Relevant tests result or explicit test blocker.', required: false, command: 'npm test' },
+    { kind: 'build', label: 'Build result or explicit build blocker.', required: true, command: PROJECT_BUILD_VERIFICATION_COMMAND },
+    { kind: 'tests', label: 'Project test gate result or explicit unavailable reason.', required: false, command: PROJECT_TEST_VERIFICATION_COMMAND },
     { kind: 'riskReview', label: 'Final review states what could still be broken despite passing checks.', required: true },
     { kind: 'teamSync', label: 'TEAM_SYNC.md acceptance ledger is updated with owner, status, and evidence.', required: true },
   ],

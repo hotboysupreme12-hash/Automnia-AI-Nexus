@@ -10,7 +10,7 @@ This guide is written for operators and new users. It focuses on what to click, 
 
 1. Start the app.
    - Desktop build: open the DystopAI app.
-   - Development mode: run `npm install`, then `npm run dev`.
+   - Development mode: run `npm ci`, then `npm run dev`.
    - Bundled server mode: run `npm run build:standalone`, then start the packaged app or run the server bundle.
 
 2. Open the Control Center.
@@ -18,8 +18,9 @@ This guide is written for operators and new users. It focuses on what to click, 
    - Development Vite URL, when using `npm run dev`: `http://127.0.0.1:5173/`
 
 3. Log in if prompted.
-   - Default local development token: `dev-token-change-me`
-   - To change it, set `CONTROL_CENTER_TOKEN` before starting the server.
+   - Desktop sessions sign in automatically through the packaged app.
+   - Browser sessions use the configured `CONTROL_CENTER_TOKEN`.
+   - If no token was configured, use the one-time local token printed in the server startup log.
 
 4. Connect model credentials.
    - Open an agent.
@@ -321,8 +322,8 @@ If a model works in the direct chat UI but fails from a plugin, check Monitor Ga
 
 Check the token.
 
-- Default local token: `dev-token-change-me`
-- Custom token: `CONTROL_CENTER_TOKEN`
+- Desktop sessions should sign in automatically through the packaged app.
+- Browser sessions need the configured `CONTROL_CENTER_TOKEN`, or the generated one-time token printed in the server startup log.
 
 If the token changed, clear the browser's stored `control-center-token` or log in again.
 

@@ -51,6 +51,10 @@ function formatRuntimeDuration(ms: number | null | undefined): string {
   return `${seconds}s`
 }
 
+function formatReportMetric(value: number | null): string {
+  return value === null ? 'Unavailable' : String(value)
+}
+
 function formatRuntimeTime(ts: string | null | undefined): string {
   if (!ts) return 'never'
   const date = new Date(ts)
@@ -1855,7 +1859,7 @@ export function LiveOperationMonitor() {
             {latestReport && (
               <div className="rounded-xl border border-cyan-400/15 bg-cyan-400/[0.04] p-3.5">
                 <p className="text-[11px] text-cyan-200/90 leading-relaxed">
-                  Last report: efficiency {latestReport.efficiencyRating}, drift {latestReport.soulDrift}, errors {latestReport.errors}, XP +{latestReport.xpGained}
+                  Last report: efficiency {formatReportMetric(latestReport.efficiencyRating)}, drift {formatReportMetric(latestReport.soulDrift)}, errors {formatReportMetric(latestReport.errors)}, XP {formatReportMetric(latestReport.xpGained)}
                 </p>
               </div>
             )}

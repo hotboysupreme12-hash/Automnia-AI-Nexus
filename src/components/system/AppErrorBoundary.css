@@ -1,0 +1,123 @@
+.dy-error-boundary {
+  min-height: 100vh;
+  display: grid;
+  place-items: center;
+  padding: 32px;
+  background: #080b0f;
+  color: #f4f7fb;
+}
+
+.dy-error-boundary__panel {
+  width: min(760px, 100%);
+  border: 1px solid rgba(148, 163, 184, 0.34);
+  border-radius: 8px;
+  background: #111720;
+  box-shadow: 0 18px 48px rgba(0, 0, 0, 0.42);
+  padding: 24px;
+}
+
+.dy-error-boundary__kicker {
+  margin: 0 0 8px;
+  color: #8bd3ff;
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.dy-error-boundary__title {
+  margin: 0;
+  color: #ffffff;
+  font-size: 24px;
+  line-height: 1.2;
+}
+
+.dy-error-boundary__summary {
+  margin: 14px 0 0;
+  max-width: 68ch;
+  color: #c8d2dc;
+  font-size: 14px;
+  line-height: 1.6;
+}
+
+.dy-error-boundary__status {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin: 18px 0 0;
+}
+
+.dy-error-boundary__chip {
+  border: 1px solid rgba(148, 163, 184, 0.28);
+  border-radius: 999px;
+  padding: 6px 10px;
+  color: #dce7f1;
+  background: rgba(15, 23, 42, 0.78);
+  font-size: 12px;
+}
+
+.dy-error-boundary__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-top: 22px;
+}
+
+.dy-error-boundary__button {
+  min-height: 36px;
+  border: 1px solid rgba(148, 163, 184, 0.34);
+  border-radius: 6px;
+  padding: 8px 13px;
+  color: #eef6ff;
+  background: #1a2736;
+  font: inherit;
+  font-size: 13px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.dy-error-boundary__button:hover,
+.dy-error-boundary__button:focus-visible {
+  border-color: rgba(139, 211, 255, 0.72);
+  background: #213245;
+  outline: none;
+}
+
+.dy-error-boundary__button--primary {
+  border-color: rgba(63, 185, 255, 0.78);
+  background: #075d8f;
+}
+
+.dy-error-boundary__button--primary:hover,
+.dy-error-boundary__button--primary:focus-visible {
+  background: #0a6fa8;
+}
+
+.dy-error-boundary__details {
+  margin-top: 20px;
+  border-top: 1px solid rgba(148, 163, 184, 0.22);
+  padding-top: 16px;
+}
+
+.dy-error-boundary__details summary {
+  color: #eef6ff;
+  cursor: pointer;
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.dy-error-boundary__pre {
+  max-height: 280px;
+  overflow: auto;
+  margin: 12px 0 0;
+  border: 1px solid rgba(148, 163, 184, 0.22);
+  border-radius: 6px;
+  padding: 12px;
+  color: #c9d7e3;
+  background: #071018;
+  font-family: "Geist Mono", "SFMono-Regular", Consolas, monospace;
+  font-size: 12px;
+  line-height: 1.5;
+  white-space: pre-wrap;
+  word-break: break-word;
+}

@@ -1,5 +1,6 @@
 import { useCallback, useDeferredValue, useEffect, useMemo, useRef, useState } from 'react'
 import type { CSSProperties, FormEvent, KeyboardEvent, ReactNode } from 'react'
+import { apiErrorMessage, apiRequest } from '../../api/client'
 import { useNexusStore } from '../../store/nexusStore'
 import type { RecruitAgentInput } from '../../store/nexusStore'
 import type { BehaviorProfile, CapabilityKey } from '../../types/nexus'
@@ -82,10 +83,10 @@ async function loadRecruitModels() {
   if (cached) return cached
   if (recruitModelsRequest) return recruitModelsRequest
 
-  recruitModelsRequest = fetch('/api/models/available?background=0')
-    .then(async (response) => {
-      if (!response.ok) throw new Error(`Models request failed with HTTP ${response.status}`)
-      const payload = await response.json() as { models?: unknown }
+  recruitModelsRequest = apiRequest<{ models?: unknown }>('/api/models/available?background=0', { timeoutMs: 10_000 })
+    .then((result) => {
+      if (!result.ok) throw new Error(apiErrorMessage(result.error))
+      const payload = result.data
       const models = safeAvailableModels(payload.models)
       recruitModelsCache = { value: models, expiresAt: Date.now() + RECRUIT_LOOKUP_CACHE_MS }
       return models
@@ -101,10 +102,10 @@ async function loadRecruitAuthProviders(force = false) {
   if (cached) return cached
   if (!force && recruitAuthProvidersRequest) return recruitAuthProvidersRequest
 
-  recruitAuthProvidersRequest = fetch('/api/auth/providers')
-    .then(async (response) => {
-      if (!response.ok) throw new Error(`Auth providers request failed with HTTP ${response.status}`)
-      const data = (await response.json()) as { providers?: unknown }
+  recruitAuthProvidersRequest = apiRequest<{ providers?: unknown }>('/api/auth/providers', { timeoutMs: 10_000 })
+    .then((result) => {
+      if (!result.ok) throw new Error(apiErrorMessage(result.error))
+      const data = result.data
       const providers = safeAuthProviders(data.providers)
       recruitAuthProvidersCache = { value: providers, expiresAt: Date.now() + RECRUIT_LOOKUP_CACHE_MS }
       return providers
@@ -888,10 +889,10 @@ export function RecruitAgentModal({ isOpen, onClose }: { isOpen: boolean; onClos
     setStatus(`Auto Forge is generating ${selectedPersonalityDepth.label.toLowerCase()} persona markdown with ${autoForgeModelLabel || primaryModel.trim()}...`)
 
     try {
-      const response = await fetch('/api/party/recruit/auto-markdown', {
+      const result = await apiRequest<AutoForgeApiResponse>('/api/party/recruit/auto-markdown', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
+        timeoutMs: 90_000,
+        body: {
           model: primaryModel.trim(),
           name: autoName,
           agentId: autoId || undefined,
@@ -903,22 +904,17 @@ export function RecruitAgentModal({ isOpen, onClose }: { isOpen: boolean; onClos
           capabilities,
           files: fileOrder,
           currentFiles: resourceFiles,
-        }),
+        },
       })
-      const text = await response.text()
-      let payload: AutoForgeApiResponse = {}
-      try {
-        payload = text ? JSON.parse(text) as AutoForgeApiResponse : {}
-      } catch {
-        payload = { error: text }
-      }
-      if (!response.ok || !payload.ok) {
+      if (!result.ok) throw new Error(apiErrorMessage(result.error))
+      const payload = result.data
+      if (!payload.ok) {
         const detail = typeof payload.detail === 'string'
           ? payload.detail
           : payload.detail
             ? JSON.stringify(payload.detail)
             : ''
-        throw new Error([payload.error || `Auto Forge failed with HTTP ${response.status}`, detail].filter(Boolean).join(': '))
+        throw new Error([payload.error || 'Auto Forge failed.', detail].filter(Boolean).join(': '))
       }
 
       const generatedFiles = (payload.files || [])
@@ -1454,12 +1450,12 @@ export function RecruitAgentModal({ isOpen, onClose }: { isOpen: boolean; onClos
           providerStatus={authModalProvider}
           onClose={() => setAuthModalProvider(null)}
           onSave={async (apiKey) => {
-            const response = await fetch(`/api/auth/providers/${authModalProvider.provider}`, {
+            const result = await apiRequest(`/api/auth/providers/${encodeURIComponent(authModalProvider.provider)}`, {
               method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ apiKey }),
+              timeoutMs: 20_000,
+              body: { apiKey },
             })
-            if (!response.ok) throw new Error('Failed to save provider key')
+            if (!result.ok) throw new Error(apiErrorMessage(result.error))
             await fetchAuthProviders(true)
           }}
           onConnected={() => fetchAuthProviders(true)}

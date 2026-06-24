@@ -6,6 +6,10 @@ import type {
   MissionReadinessReport,
   OpenClawAgent,
 } from '../types/nexus'
+import {
+  PROJECT_BUILD_VERIFICATION_COMMAND,
+  PROJECT_TEST_VERIFICATION_COMMAND,
+} from './missionVerification'
 
 function hasWorkspaceToolAccess(agent: OpenClawAgent): boolean {
   return (
@@ -33,8 +37,8 @@ export class MDSValidator {
       defaults.push(
         { kind: 'filesChanged', label: 'Implementation lanes report exact files changed.', required: true },
         { kind: 'humanPath', label: 'One end-to-end user path is proven through the app.', required: true },
-        { kind: 'build', label: 'Build output is reported or explicitly blocked.', required: true, command: 'npm run build' },
-        { kind: 'tests', label: 'Relevant test output is reported or explicitly blocked.', required: false, command: 'npm test' },
+        { kind: 'build', label: 'Build output is reported or explicitly blocked.', required: true, command: PROJECT_BUILD_VERIFICATION_COMMAND },
+        { kind: 'tests', label: 'Project test gate passes or an explicit unavailable reason is recorded.', required: false, command: PROJECT_TEST_VERIFICATION_COMMAND },
       )
     }
     return defaults
