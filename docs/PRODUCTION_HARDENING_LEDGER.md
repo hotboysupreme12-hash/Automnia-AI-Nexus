@@ -751,6 +751,203 @@ Verification:
 - `npm run build:server` passed after the release-evidence changes.
 - `npm run build:client` passed after the release-evidence changes.
 - `npm test` passed after the release-evidence changes, including typecheck, all mission smokes, API envelope/integration coverage, renderer recovery coverage, skills/plugin/openclaw-command/party-coordination/team-sync/agent-turn/runtime-status/runtime-action/shift/filesystem/command-console-file/nexus/misc/config-save/auth/auth-provider-model/security/runtime-reproducibility, and release-evidence coverage.
+- Inspected branch/status and this ledger at the start of the CI workflow hardening run; switched from `main` back to protective branch `codex/production-hardening` before editing.
+- Added the first GitHub Actions workflow for the hardened control plane at `.github/workflows/control-plane-ci.yml`.
+- The workflow runs on pushes to `main` and `codex/**`, pull requests to `main`, and manual `workflow_dispatch` release-candidate runs.
+- The workflow uses read-only repository permissions, Windows runners, Node 24, `npm ci`, semantic type-checking, the full production hardening smoke suite, server and client builds, reproducible runtime bundle preparation, release evidence generation, explicit release-evidence existence checks, and release evidence artifact upload.
+- Added `scripts/smoke-ci-workflow.ts`, `npm run smoke:ci-workflow`, and wired the smoke into `npm run test:ci` so CI coverage cannot silently drop typecheck, tests, builds, runtime preparation, SBOM/checksum generation, or artifact upload.
+- `npm run smoke:ci-workflow` passed after adding the workflow guard.
+- `npm run typecheck` passed after the CI workflow changes.
+- `npm run build:server` passed after the CI workflow changes.
+- `npm run build:client` passed after the CI workflow changes.
+- `npm run prepare:runtime-bundles` passed after the CI workflow changes and reused the prepared Node/Codex runtime metadata.
+- `npm run release:evidence` passed after the CI workflow changes and wrote `release/evidence/dystopai-sbom.cdx.json`, `release/evidence/checksums.sha256`, and `release/evidence/release-evidence.json`.
+- `npm test` passed after the CI workflow changes, including the new CI workflow smoke and all existing production hardening smokes.
+- Inspected branch/status and this ledger at the start of the CI security-gates run; continued on protective branch `codex/production-hardening` with the uncommitted CI workflow slice still in progress.
+- Added `npm run audit:dependencies` as a production dependency audit gate using `npm audit --omit=dev --audit-level=high`.
+- Added `scripts/secret-scan.cjs` and `npm run secret:scan` for checked-in secret scanning.
+- The secret scanner inspects tracked plus untracked non-ignored text files, skips generated/vendor/binary surfaces, detects high-confidence private keys and common provider tokens, redacts findings, and supports explicit one-line allowlist markers for intentional examples.
+- Wired `npm run secret:scan` into `npm run test:ci` so local hardening checks fail before commits when obvious secrets are present.
+- Extended `.github/workflows/control-plane-ci.yml` so CI runs production dependency audit and checked-in secret scanning before heavier typecheck/test/build work.
+- Strengthened `scripts/smoke-ci-workflow.ts` so future regressions fail if dependency audit, secret scanning, scanner coverage, or CI step ordering is removed.
+- `npm run audit:dependencies` passed with `found 0 vulnerabilities`.
+- `node --check scripts/secret-scan.cjs` passed after adding the scanner.
+- `npm run secret:scan` passed after adding and then expanding the scanner to include untracked non-ignored files.
+- `npm run smoke:ci-workflow` initially caught an overly literal scanner allowlist assertion, then passed after tightening the smoke guard.
+- `npm test` passed after the CI security-gates changes, including checked-in secret scanning and the strengthened CI workflow smoke.
+- Inspected branch/status and this ledger at the start of the release-signing run; continued on protective branch `codex/production-hardening` with the uncommitted CI/security-gates slice still in progress.
+- Added `scripts/sign-release-evidence.cjs` and `npm run release:sign`.
+- Release signing now signs `release/evidence/checksums.sha256` with an Ed25519 private key supplied by `DYSTOPAI_RELEASE_SIGNING_PRIVATE_KEY_FILE` or `DYSTOPAI_RELEASE_SIGNING_PRIVATE_KEY_PEM`.
+- The signing command writes:
+  - `release/evidence/checksums.sha256.sig`
+  - `release/evidence/signing-public-key.pem`
+  - `release/evidence/release-signing.json`
+- The signing summary records algorithm, key ID, signed-file digest, signature digest, public-key digest, CI metadata, and evidence paths without writing private-key material to artifacts.
+- Added `scripts/smoke-release-signing.ts`, `npm run smoke:release-signing`, and wired the smoke into `npm run test:ci`.
+- Extended `.github/workflows/control-plane-ci.yml` with an explicit opt-in release-signing step gated by `vars.DYSTOPAI_RELEASE_SIGNING_ENABLED == 'true'` and backed by the `DYSTOPAI_RELEASE_SIGNING_PRIVATE_KEY_PEM` secret.
+- Strengthened `scripts/smoke-ci-workflow.ts` so future regressions fail if the optional signing step, signing key secret, or signing order is removed.
+- Updated README release instructions so operators know to run `npm run release:sign` after `npm run release:evidence` and publish the signature, public key, and signing summary with the SBOM/checksum files.
+- `node --check scripts/sign-release-evidence.cjs` passed after adding the signing script.
+- `npm run smoke:release-signing` passed and verified fail-closed missing-key behavior plus a real Ed25519 signature against the generated public key.
+- `npm run smoke:ci-workflow` passed after the optional signing workflow guard was added.
+- `npm run secret:scan` passed after adding signing code and docs.
+- `npm test` passed after the release-signing changes, including release-signing smoke coverage.
+- `npm run audit:dependencies` passed after the release-signing changes with `found 0 vulnerabilities`.
+- Inspected branch/status and this ledger at the start of the packaged artifact validation run; continued on protective branch `codex/production-hardening` with the uncommitted CI/release-hardening slices still in progress.
+- Added `scripts/validate-release-artifacts.cjs` and `npm run release:validate`.
+- Release validation now:
+  - Parses `release/evidence/checksums.sha256`.
+  - Recomputes SHA-256 for every manifest entry.
+  - Requires the generated SBOM to be included in the checksum manifest.
+  - Requires at least one packaged artifact under `release/` outside `release/evidence/` unless `DYSTOPAI_RELEASE_VALIDATE_ALLOW_NO_ARTIFACTS=1` is explicitly set.
+  - Validates CycloneDX SBOM format/version and release evidence summary counts.
+  - Verifies the detached Ed25519 checksum signature when signing evidence is present.
+- Added `scripts/smoke-release-validation.ts`, `npm run smoke:release-validation`, and wired the smoke into `npm run test:ci`.
+- The release-validation smoke generates a temporary packaged artifact, creates release evidence, validates unsigned evidence, signs the checksum manifest, validates signed evidence, then proves tampering with the packaged artifact fails validation.
+- Extended `.github/workflows/control-plane-ci.yml` so CI packages the desktop directory with `node scripts/package-desktop.cjs --dir` before generating release evidence, then runs `npm run release:validate` before uploading evidence.
+- Strengthened `scripts/smoke-ci-workflow.ts` so future regressions fail if desktop packaging, release validation, or the validation-before-upload ordering is removed.
+- Updated README release instructions and command table for `npm run release:validate`.
+- `node --check scripts/validate-release-artifacts.cjs` passed after adding the validator.
+- `npm run smoke:release-validation` passed after adding the validator and smoke.
+- `npm run smoke:ci-workflow` passed after adding packaging and validation workflow guards.
+- `npm run secret:scan` passed after adding release validation code and docs.
+- `npm test` passed after the packaged artifact validation changes, including release-validation smoke coverage.
+- `npm run audit:dependencies` passed after the packaged artifact validation changes with `found 0 vulnerabilities`.
+
+## 2026-06-24 15:10 UTC - Electron End-To-End Startup And Shutdown Smoke
+
+- Inspected branch/status and this ledger at the start of the run; continued on protective branch `codex/production-hardening` with the prior CI/release-hardening work still uncommitted.
+- Added E2E-only Electron main-process hooks guarded by `DYSTOPAI_ELECTRON_E2E`:
+  - Forced missing-server startup failure mode for deterministic failure-path coverage.
+  - Modal-free startup/UI error handling so CI cannot hang behind blocking Electron dialogs.
+  - Testable named popup and navigation handlers that deny popups by default, allow exact internal origins, and route allowed external HTTPS URLs through the external opener.
+  - E2E-only external-open suppression and navigation policy self-test assertions.
+  - E2E-only port-cleanup skip so smoke runs do not kill the operator's live backend/frontend.
+  - E2E-only app-ownership roots that avoid treating the source checkout itself as a cleanup target.
+  - Auto-quit and quit-cleanup lifecycle markers for observable shutdown coverage.
+- Added `scripts/smoke-electron-e2e.ts` and `npm run smoke:electron-e2e`.
+- The Electron smoke launches Electron on random throwaway API/frontend/Gateway ports with temporary user-data, OpenClaw state, and workspace directories.
+- The smoke covers successful desktop startup, server readiness, popup/navigation policy assertions, auto-quit, quit cleanup, and forced missing-server startup failure.
+- Wired the Electron smoke into `.github/workflows/control-plane-ci.yml` after server/client builds and before runtime packaging/release evidence.
+- Extended `scripts/smoke-ci-workflow.ts` so CI fails if the Electron smoke script or workflow ordering is removed.
+- Updated `scripts/smoke-security-hardening.ts` to assert the named popup/navigation handlers and E2E navigation assertions.
+- Documented `npm run smoke:electron-e2e` in the README command table.
+- Verified the user's live development ports remained up after the Electron smoke: `4050` and `5173` were still listening.
+- Confirmed the live launch token must be exchanged through `/api/auth/login` for a session token before `/api/auth/status` returns `authenticated: true`; a direct `/api/auth/status` check with the launch token returns `authenticated: false` by design.
+- `node --check electron/main.cjs` passed after adding the E2E hooks.
+- `npm run smoke:electron-e2e` passed after switching early E2E failure exits from `app.exit()` to `process.exit()` to avoid a Windows Electron access-violation exit.
+- `npm run smoke:ci-workflow` passed after adding the Electron workflow gate.
+- `npm run smoke:security` passed after updating the Electron handler assertions.
+- `npm run typecheck:electron` passed after adding JSDoc typing for the extracted window-open handler.
+- `npm test` passed after the Electron E2E changes.
+- `npm run audit:dependencies` passed after the Electron E2E changes with `found 0 vulnerabilities`.
+
+## 2026-06-24 15:25 UTC - Electron Renderer Policy And Crash Recovery E2E
+
+- Inspected branch/status and this ledger at the start of the run; continued on protective branch `codex/production-hardening` with the existing CI/release/Electron hardening work still uncommitted.
+- Expanded the Electron E2E hooks to exercise the loaded renderer, not only main-process helper functions:
+  - Added renderer load markers under `DYSTOPAI_ELECTRON_E2E`.
+  - Added a guarded renderer-originated `window.open` probe and external `window.location` navigation probe.
+  - Kept external opening suppressed under E2E while still asserting that HTTPS external attempts pass through the same central external opener.
+  - Added renderer crash request and recovery markers around Electron's `render-process-gone` reload path.
+  - Added an E2E-only quit-after-renderer-assertions path so the smoke exits only after renderer recovery is observed.
+- Expanded `scripts/smoke-electron-e2e.ts` with a new `renderer-recovery` case covering:
+  - Successful Electron/server startup on throwaway ports.
+  - First renderer load.
+  - Renderer-originated popup denial and external navigation prevention.
+  - Central external-open handling for allowed HTTPS targets.
+  - Forced renderer crash.
+  - `render-process-gone` observation.
+  - Renderer reload/recovery.
+  - Quit cleanup.
+- Updated `scripts/smoke-security-hardening.ts` to assert that renderer-originated external-navigation and renderer-recovery E2E hooks remain present.
+- Updated the README command table so `npm run smoke:electron-e2e` documents renderer navigation policy and renderer crash recovery coverage.
+- Verified the user's live development ports remained up after the Electron smoke: `4050` and `5173` were still listening.
+- `node --check electron/main.cjs` initially caught a patch-escaped template literal, then passed after correcting it.
+- `npm run typecheck:electron` initially caught the same syntax issue, then passed after correction.
+- `npm run smoke:electron-e2e` initially failed on the syntax issue, then passed after correction.
+- `npm run smoke:security` passed after adding the renderer E2E assertions.
+- `npm test` passed after the renderer E2E changes.
+- `npm run audit:dependencies` passed after the renderer E2E changes with `found 0 vulnerabilities`.
+
+## 2026-06-24 15:40 UTC - Electron Tray Hide/Restore E2E
+
+- Inspected branch/status and this ledger at the start of the run; continued on protective branch `codex/production-hardening` with the existing hardening work still uncommitted.
+- Expanded the Electron E2E harness to cover tray behavior:
+  - Added a typed tray menu template snapshot so smoke tests can assert labels and enabled state without changing the visible menu.
+  - Added E2E-only tray behavior assertions guarded by `DYSTOPAI_ELECTRON_E2E_ASSERT_TRAY_BEHAVIOR`.
+  - The tray behavior self-test explicitly shows the main window, asserts the tray menu offers `Hide UI`, closes the window, verifies the normal close handler hides the window instead of quitting, asserts the tray menu flips to `Show UI`, emits the tray click path, and verifies the window is restored with `Hide UI` available again.
+  - Added E2E markers for `tray-visible-state-ok`, `tray-hide-on-close-ok`, and `tray-click-restore-ok`.
+- Expanded `scripts/smoke-electron-e2e.ts` with a dedicated `tray-behavior` case so tray lifecycle regressions are isolated from startup, renderer-recovery, and startup-failure checks.
+- Updated `scripts/smoke-security-hardening.ts` so future edits fail if the tray behavior E2E hook or tray click path assertion disappears.
+- Updated the README command table so `npm run smoke:electron-e2e` documents tray hide/restore coverage.
+- Verified the user's live development ports remained up after the Electron smoke: `4050` and `5173` were still listening.
+- `npm run typecheck:electron` initially caught the tray menu template type widening; added an explicit `MenuItemConstructorOptions[]` JSDoc annotation and reran successfully.
+- `npm run smoke:electron-e2e` initially timed out because CI-style windows may not become visible on their own; adjusted the E2E tray self-test to explicitly show/focus the window before exercising close-to-tray behavior, then reran successfully.
+- `node --check electron/main.cjs` passed after the tray E2E changes.
+- `npm run smoke:security` passed after adding the tray E2E assertions.
+- `npm test` passed after the tray E2E changes.
+- `npm run audit:dependencies` passed after the tray E2E changes with `found 0 vulnerabilities`.
+
+## 2026-06-24 15:52 UTC - Packaged Desktop Launch Smoke
+
+- Inspected branch/status and this ledger at the start of the run; continued on protective branch `codex/production-hardening` with the existing hardening work still uncommitted.
+- Added file-backed Electron E2E logging through `DYSTOPAI_ELECTRON_E2E_LOG_PATH`.
+  - Normal production behavior is unchanged.
+  - E2E markers still print to stdout when available.
+  - Packaged/GUI launch tests can now wait on deterministic marker files even when launcher stdout is unavailable.
+- Added `scripts/smoke-packaged-electron-launch.ts` and `npm run smoke:packaged-electron-launch`.
+- The packaged launch smoke:
+  - Requires the unpacked packaged app layout under `release/win-unpacked`.
+  - Verifies the Windows launcher, bundled Electron runtime, `app.asar`, packaged frontend, packaged backend, bundled Node/npm toolchain, and bundled OpenClaw resources exist.
+  - Launches `release/win-unpacked/DystopAI.exe`, exercising the custom Windows launcher rather than only the development Electron binary.
+  - Uses random throwaway API/frontend/Gateway/browser-relay ports and temporary user-data, OpenClaw state, and workspace directories.
+  - Waits for packaged app E2E markers proving port-cleanup skip, server readiness, navigation-policy self-test, auto-quit, and quit cleanup.
+  - Cleans up exact packaged Electron runtime processes on failure by targeting `release/win-unpacked/electron.exe`.
+- Wired `npm run smoke:packaged-electron-launch` into `.github/workflows/control-plane-ci.yml` after `node scripts/package-desktop.cjs --dir` and before release evidence generation.
+- Extended `scripts/smoke-ci-workflow.ts` so future CI edits fail if the packaged launch smoke or its package-before-launch-before-evidence ordering is removed.
+- Updated the README command table for `npm run smoke:packaged-electron-launch`.
+- Rebuilt the current packaged desktop directory with `npm run package:desktop` before running the packaged-launch smoke, so the smoke exercised the current Electron code.
+- Regenerated release evidence after packaging and validated it against the rebuilt packaged artifacts.
+- Verified the user's live development ports remained up after the packaged launch smoke: `4050` and `5173` were still listening.
+- `node --check electron/main.cjs` passed after adding file-backed E2E logging.
+- `npm run typecheck:electron` passed after adding file-backed E2E logging.
+- `npm run smoke:ci-workflow` passed after wiring packaged launch into CI.
+- `npm run package:desktop` passed and rebuilt `release/win-unpacked`.
+- `npm run smoke:packaged-electron-launch` passed against `release/win-unpacked/DystopAI.exe`.
+- `npm run smoke:electron-e2e` passed after adding file-backed E2E logging.
+- `npm run smoke:security` passed after the packaged launch additions.
+- `npm run release:evidence` passed after rebuilding the packaged desktop directory.
+- `npm test` passed after the packaged launch additions.
+- `npm run audit:dependencies` passed after the packaged launch additions with `found 0 vulnerabilities`.
+- `npm run release:validate` passed after regenerating evidence, verifying `68476` checksums, `68464` packaged artifact files, and `634` SBOM components.
+
+## 2026-06-24 16:05 UTC - CI Lint Gate
+
+- Inspected branch/status and this ledger at the start of the run; continued on protective branch `codex/production-hardening` with the existing hardening work still uncommitted.
+- Ran `npm run lint` before wiring the gate to identify the current blocker shape.
+- Fixed the lint findings instead of suppressing the rule globally:
+  - Added a short cleanup comment to the best-effort process-kill fallback in `scripts/smoke-electron-e2e.ts` so `no-empty` stays active.
+  - Removed the redundant synchronous `setChecking(false)` call from the no-token/no-desktop-provider branch in `src/context/AuthContext.tsx`.
+  - Moved the desktop launch-token login `setChecking(true)` call into the async login turn so the React hooks lint rule does not see a synchronous state update inside the effect body.
+- Added `npm run lint` to the CI workflow after dependency audit/secret scanning and before semantic type-checking.
+- Prepended `npm run lint` to `npm run test:ci` so local `npm test` mirrors the CI gate order.
+- Extended `scripts/smoke-ci-workflow.ts` so future workflow or script edits fail if:
+  - The workflow loses `npm run lint`.
+  - Lint no longer runs after secret scanning and before type-checking.
+  - `test:ci` no longer lints before type-checking.
+- While verifying the slice, `npm run smoke:electron-e2e` exposed an intermittent Windows Electron access-violation exit for the E2E-only forced startup-failure path when using `process.exit(2)`.
+  - Changed the E2E startup-failure path to log the modal-free startup error and exit with normal `app.quit()`.
+  - Updated the startup-failure smoke expectation to validate the observable failure marker and non-hanging exit instead of a fragile forced nonzero Electron exit.
+- Verified the live development ports remained available after the run: `4050` and `5173` were listening.
+- `npm run lint` initially failed, then passed after the lint fixes.
+- `npm run smoke:ci-workflow` passed after adding the lint workflow/script assertions.
+- `npm run typecheck` passed after the lint fixes.
+- `node --check electron/main.cjs` passed after the Electron startup-failure adjustment.
+- `npm run typecheck:electron` passed after the Electron startup-failure adjustment.
+- `npm run smoke:electron-e2e` initially exposed the Windows forced-exit issue, then passed after the startup-failure adjustment.
+- `npm test` passed with lint now running first in `test:ci`.
+- `npm run audit:dependencies` passed after the lint-gate changes with `found 0 vulnerabilities`.
 
 ## In Progress
 
@@ -758,7 +955,7 @@ Verification:
 
 Next action:
 
-- Add the first CI workflow for the hardened control plane: run typecheck, `npm test`, client/server builds, and release-evidence generation so the new SBOM/checksum gate cannot be skipped before packaging.
+- Add remaining CI push gates from the audit that are still outside the workflow, starting with OpenClaw smoke coverage and then UI smoke coverage if it can be made stable against built artifacts.
 - Avoid the pre-existing local edits in `src/components/mission/MissionDeploymentPanel.tsx` and `src/styles/dystopai-theme/70-responsive-polish.css` unless the selected task explicitly requires those files.
 
 ## Backlog
@@ -775,7 +972,7 @@ Next action:
 - Continue CSP tightening over time by removing the temporary inline-style allowance once the legacy inline styles are migrated.
 - Continue Electron IPC sender validation for any future IPC bridge additions.
 - Production sandbox-disabling flags are removed from packaged Electron startup; keep the remaining dev-only unsafe diagnostic gate covered by `smoke:security`.
-- Continue runtime supply-chain hardening beyond the first bundle-prep pass: release artifact signing, frozen release install documentation, and checksum verification for any remaining managed runtime downloads.
+- Continue runtime supply-chain hardening beyond the first bundle-prep pass: frozen release install documentation and checksum verification for any remaining managed runtime downloads.
 
 ### Phase 3: Make Missions Durable
 
@@ -786,7 +983,7 @@ Next action:
 - Add Vitest unit coverage for scoring, state transitions, SSE parsing, JSONL recovery, dedupe, path containment, redaction, coordination limits, agent eligibility, and retry classification.
 - Broaden API integration tests beyond the first temporary-state auth/mission/envelope coverage.
 - Add Electron end-to-end tests.
-- Add CI for lint, typecheck, tests, builds, smoke tests, dependency audit, secret scan, and SBOM generation.
+- Expand CI beyond the first workflow with lint and Electron end-to-end coverage.
 
 ### Phase 5: Extract Monoliths
 

@@ -263,8 +263,8 @@ assertIncludes(server, "if (state === 'final') emitGatewayChatDelta", 'Gateway f
 assertIncludes(server, "const ok = finalState !== 'error' && finalState !== 'aborted'", 'Gateway terminal error/abort handling')
 assertIncludes(server, "gatewayChatRunWaiters.delete(runId)", 'Gateway terminal waiter cleanup')
 
-assertIncludes(server, 'CLAWTALK_ROUTING_PATCH_VERSION = 10', 'ClawTalk routing patch version')
-assertIncludes(server, "CLAWTALK_REPAIR_SIGNATURE_VERSION = 'clawtalk-repair:v11'", 'ClawTalk repair signature version')
+assertIncludes(server, 'CLAWTALK_ROUTING_PATCH_VERSION = 11', 'ClawTalk routing patch version')
+assertIncludes(server, "CLAWTALK_REPAIR_SIGNATURE_VERSION = 'clawtalk-repair:v12'", 'ClawTalk repair signature version')
 assertIncludes(server, 'CoreBridge patch skipped: unsupported bridge shape', 'ClawTalk bridge shape guard')
 assertIncludes(server, 'delete nextConfig.apiKeyRef', 'ClawTalk unsupported apiKeyRef scrubber')
 assertIncludes(server, 'delete nextConfig.apiKeyStorage', 'ClawTalk unsupported apiKeyStorage scrubber')
