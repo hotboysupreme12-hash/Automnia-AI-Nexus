@@ -1207,13 +1207,48 @@ Verification:
   - Commit: `fe0bc07`
   - Result: Control Plane CI completed successfully in `8m29s` for the PR-triggered run and `11m42s` for the push-triggered run.
 
+## 2026-06-24 20:54 UTC - Filesystem Route Extraction
+
+- Continued server decomposition on clean protective branch `codex/filesystem-route-modules`, based on `origin/main` so it can be reviewed independently from PR `#2`.
+- Used parallel subagent reconnaissance to accelerate the monolith split:
+  - Filesystem explorer recommended extracting editor filesystem/resource/folder/picker routes first and identified adjacent workspace/provisioning routes as a later expansion.
+  - Coordination explorer mapped party dispatch, agent-to-agent, shift, and team-sync routes as a future `coordinationRoutes.ts` slice.
+  - OpenClaw explorer confirmed `/api/openclaw/summary` and `/api/openclaw/command` are safe as a future small route extraction, while agent-turn routes should wait for SSE/Gateway helper extraction.
+- Extracted editor filesystem routing into `server/routes/filesystemRoutes.ts` while preserving existing filesystem, picker, doctrine, and agent-config helper ownership in `server/index.ts`:
+  - `GET /api/party/resources/:agentId`
+  - `GET /api/party/resources/:agentId/:file`
+  - `PUT /api/party/resources/:agentId/:file`
+  - `GET /api/party/folders`
+  - `POST /api/party/folder-picker`
+  - `POST /api/party/folder-picker/start`
+  - `GET /api/party/folder-picker/:sessionId`
+  - `POST /api/party/avatar-picker/start`
+  - `GET /api/party/avatar-picker/:sessionId`
+- Kept avatar preview/upload, workspace migration, resource provisioning, and doctrine cleanup in `server/index.ts` for later focused slices.
+- Moved the folder-list response cache into the filesystem route module because it is HTTP-route-local state.
+- Reduced `server/index.ts` from `30,179` lines at the prior HEAD to `29,987` lines after this extraction.
+- Added `server/routes/filesystemRoutes.ts` at `352` lines.
+- Updated contract smokes:
+  - `scripts/smoke-filesystem-control-plane.ts` now asserts the extracted module owns the moved routes and that `server/index.ts` only registers/injects them.
+  - `scripts/smoke-skills-control-plane.ts` now bounds the avatar-upload route before the extracted filesystem registration marker.
+- Verification passed:
+  - `npm run typecheck:server`
+  - `npm run smoke:filesystem-control-plane`
+  - `npm run smoke:skills-control-plane`
+  - `npm run smoke:misc-control-plane`
+  - `npm run smoke:api-envelope`
+  - `npm run lint`
+  - `npm test`
+- Observed during `npm test`: `smoke:ledger` again reported one skipped malformed historical JSONL row while reading `runtime-runs`; the smoke passed and preserved the corruption-recovery warning instead of treating the file as empty.
+- GitHub Actions verification for this slice is pending until the branch is pushed.
+
 ## In Progress
 
-- Production hardening on protective branch `codex/server-route-modules`.
+- Production hardening on protective branch `codex/filesystem-route-modules`.
 
 Next action:
 
-- Continue breaking up `server/index.ts` by extracting one coherent domain route cluster next. Highest-value candidates are runtime status/actions or filesystem routes because they already have focused smoke coverage.
+- Continue breaking up `server/index.ts` by extracting one coherent domain route cluster next. Highest-value candidates are coordination routes, OpenClaw command/summary routes, or the remaining workspace/provisioning filesystem routes.
 - Add release governance documentation and/or enforcement slices after the next route extraction:
   - Main branch protection requirements: green CI, no direct pushes, PR review, and signed commits where repository support allows.
   - Mandatory public release signing and validation failure when signing evidence is absent.
