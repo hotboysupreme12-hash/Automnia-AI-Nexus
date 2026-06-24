@@ -1124,6 +1124,33 @@ Verification:
   - `npm run smoke:command-console-files`
   - `npm run lint`
   - `npm test`
+- GitHub Actions verification passed for the pushed PR branch:
+  - PR: `#1`
+  - Run: `28122536668`
+  - Commit: `c8d6a76`
+  - Result: Control Plane CI completed successfully in `8m40s`.
+
+## 2026-06-24 19:14 UTC - Diagnostics And Health Route Extraction
+
+- Continued server decomposition on protective branch `codex/server-route-modules`.
+- Extracted diagnostics/health routes into `server/routes/diagnosticsRoutes.ts`:
+  - `GET /api/health`
+  - `GET /api/runtime/version-check`
+  - `POST /api/doctor/run`
+  - `GET /api/doctor/recent`
+- Kept existing diagnostic/runtime/doctor calculation functions in `server/index.ts` and injected them into the route module to avoid mixing route extraction with behavior rewrites.
+- Reduced `server/index.ts` from `30,524` lines after the prior slice to `30,502` lines after this extraction.
+- Strengthened `scripts/smoke-misc-control-plane.ts` so it asserts:
+  - `server/index.ts` registers the extracted diagnostics route module.
+  - `server/index.ts` no longer inlines the health/version/doctor routes.
+  - `server/routes/diagnosticsRoutes.ts` still emits canonical success/error envelopes.
+- Updated `scripts/smoke-runtime-actions-control-plane.ts` so doctor route assertions follow the extracted diagnostics module while runtime action assertions remain against `server/index.ts`.
+- Verification passed:
+  - `npm run typecheck:server`
+  - `npm run smoke:misc-control-plane`
+  - `npm run smoke:runtime-actions-control-plane`
+  - `npm run lint`
+  - `npm test`
 
 ## In Progress
 
@@ -1131,7 +1158,7 @@ Verification:
 
 Next action:
 
-- Push the Command Console file extraction to PR `#1`, wait for GitHub Control Plane CI, and record the resulting run evidence.
+- Push the diagnostics extraction to PR `#1`, wait for GitHub Control Plane CI, and record the resulting run evidence.
 - Continue breaking up `server/index.ts` by extracting one coherent domain route cluster next. Highest-value candidates are runtime status/actions, plugins, or filesystem routes because they already have focused smoke coverage.
 - Add release governance documentation and/or enforcement slices after the next route extraction:
   - Main branch protection requirements: green CI, no direct pushes, PR review, and signed commits where repository support allows.
