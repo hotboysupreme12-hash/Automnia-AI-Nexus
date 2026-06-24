@@ -31,6 +31,7 @@ import { registerAuthRoutes } from './routes/authRoutes'
 import { registerCommandConsoleFileRoutes } from './routes/commandConsoleFileRoutes'
 import { registerDiagnosticsRoutes } from './routes/diagnosticsRoutes'
 import { registerFilesystemRoutes } from './routes/filesystemRoutes'
+import { registerOpenClawCommandRoutes } from './routes/openclawCommandRoutes'
 import { registerPluginRoutes } from './routes/pluginRoutes'
 import { registerRuntimeRoutes } from './routes/runtimeRoutes'
 import { createControlFilesService } from './services/controlFilesService'
@@ -26135,28 +26136,20 @@ registerCommandConsoleFileRoutes(app, {
   uploadLimitBytes: COMMAND_CONSOLE_UPLOAD_LIMIT_BYTES,
 })
 
-app.get('/api/openclaw/summary', async (_req, res) => {
-  try {
-    const [status, gateway, cron, party] = await Promise.all([
-      runOpenClaw(['status'], 90000),
-      runOpenClaw(['config', 'get', 'gateway']),
-      runOpenClaw(['cron', 'list']),
-      getPartyMembers(),
-    ])
-    const parsedGateway = gateway.code === 0 ? JSON.parse(gateway.stdout) : null
-
-    return apiSuccess(res, {
-      status: status.stdout,
-      gateway: parsedGateway,
-      cron: cron.stdout,
-      party,
-      activeShifts: Array.from(activeShifts.values()),
-      missions: listMissions().map((mission) => missionView(mission)),
-      missionFeed: missionFeed.slice(0, 120),
-    })
-  } catch (error) {
-    return apiFailure(res, 500, 'openclaw_summary_failed', 'Failed to fetch summary', String(error))
-  }
+registerOpenClawCommandRoutes(app, {
+  activeShifts: () => Array.from(activeShifts.values()),
+  getPartyMembers,
+  invalidateRuntimeStatusCache,
+  listMissionViews: () => listMissions().map((mission) => missionView(mission)),
+  listPluginControls,
+  missionFeed: () => missionFeed.slice(0, 120),
+  openclawConfigPath: OPENCLAW_CONFIG_PATH,
+  parseOpenClawCommandInput,
+  pluginCommandResult: (args, result) => pluginCommandResult(args, result),
+  pluginCommandString,
+  pushGatewayLog,
+  redactSensitiveText,
+  runOpenClaw,
 })
 
 function clearRuntimeMonitorHistory(clearedAt = new Date()) {
@@ -26206,58 +26199,6 @@ registerRuntimeRoutes(app, {
   sweepOpenClawSessionLocks,
   tryRestartGatewayService,
   writeRuntimeMonitorClearMarker,
-})
-
-app.post('/api/openclaw/command', async (req, res) => {
-  const schema = z.object({
-    command: z.string().trim().min(1).max(4000),
-    timeoutSeconds: z.number().int().min(5).max(7200).optional().default(600),
-    refreshPlugins: z.boolean().optional().default(true),
-  })
-  const parsed = schema.safeParse(req.body)
-  if (!parsed.success) return apiFailure(res, 400, 'invalid_payload', 'Invalid payload', parsed.error.flatten())
-
-  let args: string[]
-  try {
-    args = parseOpenClawCommandInput(parsed.data.command)
-  } catch (error) {
-    return apiFailure(res, 400, 'invalid_payload', 'Invalid OpenClaw command', String(error))
-  }
-
-  const timeoutMs = parsed.data.timeoutSeconds * 1000
-  pushGatewayLog('lifecycle', `$ ${pluginCommandString(args)}`)
-  try {
-    const result = await runOpenClaw(args, timeoutMs)
-    invalidateRuntimeStatusCache()
-    if (result.stdout.trim()) pushGatewayLog('stdout', result.stdout)
-    if (result.stderr.trim()) pushGatewayLog('stderr', result.stderr)
-    pushGatewayLog(
-      result.code === 0 ? 'lifecycle' : 'stderr',
-      `openclaw command exited ${result.code}${typeof result.elapsedMs === 'number' ? ` after ${result.elapsedMs}ms` : ''}`,
-    )
-    const controls = parsed.data.refreshPlugins
-      ? await listPluginControls({ forceRefresh: true }).catch((error) => ({
-          plugins: [],
-          configPath: OPENCLAW_CONFIG_PATH,
-          cache: { source: 'openclaw' as const, refreshedAt: Date.now(), refreshing: false },
-          cliError: String(error),
-        }))
-      : null
-    return apiSuccess(res, {
-      ok: result.code === 0,
-      command: pluginCommandResult(args, result),
-      ...(controls ? {
-        plugins: controls.plugins,
-        configPath: controls.configPath,
-        cache: controls.cache,
-        ...(controls.cliError ? { cliError: controls.cliError } : {}),
-      } : {}),
-    })
-  } catch (error) {
-    const detail = redactSensitiveText(String(error))
-    pushGatewayLog('stderr', `openclaw command failed: ${detail}`)
-    return apiFailure(res, 500, 'openclaw_command_failed', 'OpenClaw command failed', detail)
-  }
 })
 
 async function buildRuntimeStatusPayload(forcePluginRefresh: boolean): Promise<Record<string, unknown>> {
