@@ -7,6 +7,8 @@ const rootDir = fileURLToPath(new URL('..', import.meta.url))
 const read = (relativePath: string) => readFileSync(join(rootDir, relativePath), 'utf8')
 
 const server = read('server/index.ts')
+const controlPlaneHttp = read('server/controlPlaneHttp.ts')
+const authRoutes = read('server/routes/authRoutes.ts')
 const apiClient = read('src/api/client.ts')
 const editor = read('src/components/editor/AgentEditorModal.tsx')
 const packageJson = JSON.parse(read('package.json')) as { scripts?: Record<string, string> }
@@ -19,6 +21,12 @@ function sliceBetween(source: string, start: string, end: string): string {
   return source.slice(startIndex, endIndex)
 }
 
+function sliceFrom(source: string, start: string): string {
+  const startIndex = source.indexOf(start)
+  assert.notEqual(startIndex, -1, `missing slice start: ${start}`)
+  return source.slice(startIndex)
+}
+
 function assertCanonicalRouteSlice(name: string, source: string): void {
   assert.match(source, /apiSuccess\(res,/, `${name} must use canonical API success envelopes`)
   assert.match(source, /apiFailure\(res,/, `${name} must use canonical API error envelopes`)
@@ -26,12 +34,18 @@ function assertCanonicalRouteSlice(name: string, source: string): void {
   assert.doesNotMatch(source, /res\.json\(\{\s*ok:\s*true/, `${name} must not emit ad hoc success JSON`)
 }
 
-assert.match(server, /type ApiErrorCode =/, 'server must define bounded API error codes')
-assert.match(server, /function apiSuccess<[\s\S]*requestId: responseRequestId\(res\)/, 'apiSuccess must include the response request id')
-assert.match(server, /function apiFailure[\s\S]*ok: false,[\s\S]*error,[\s\S]*requestId: responseRequestId\(res\)/, 'apiFailure must emit a standard error envelope')
-assert.match(server, /apiFailure\(res, 403, 'origin_not_allowed'/, 'origin guard must use canonical errors')
-assert.match(server, /apiFailure\(res, 401, 'auth_required'/, 'auth guard must use canonical errors')
-assert.match(server, /apiFailure\([\s\S]*'invalid_json'/, 'JSON parse failures must use canonical errors')
+assert.match(server, /installControlPlaneHttp\(app, \{/, 'server must install shared control-plane HTTP middleware')
+assert.match(server, /registerAuthRoutes\(app, \{ authToken: AUTH_TOKEN, sessionTokens \}\)/, 'server must register extracted auth routes')
+assert.doesNotMatch(server, /app\.post\('\/api\/auth\/login'/, 'server index must not inline auth login routes')
+assert.doesNotMatch(server, /app\.get\('\/api\/auth\/status'/, 'server index must not inline auth status routes')
+assert.doesNotMatch(server, /app\.use\(cors\(/, 'server index must not own CORS/auth middleware directly')
+assert.doesNotMatch(server, /express\.json\(\{ limit: '4mb' \}\)/, 'server index must not own JSON parsing middleware directly')
+assert.match(controlPlaneHttp, /export type ApiErrorCode =/, 'control-plane HTTP module must define bounded API error codes')
+assert.match(controlPlaneHttp, /export function apiSuccess<[\s\S]*requestId: responseRequestId\(res\)/, 'apiSuccess must include the response request id')
+assert.match(controlPlaneHttp, /export function apiFailure[\s\S]*ok: false,[\s\S]*error,[\s\S]*requestId: responseRequestId\(res\)/, 'apiFailure must emit a standard error envelope')
+assert.match(controlPlaneHttp, /apiFailure\(res, 403, 'origin_not_allowed'/, 'origin guard must use canonical errors')
+assert.match(controlPlaneHttp, /apiFailure\(res, 401, 'auth_required'/, 'auth guard must use canonical errors')
+assert.match(controlPlaneHttp, /apiFailure\([\s\S]*'invalid_json'/, 'JSON parse failures must use canonical errors')
 
 assert.match(apiClient, /function successPayloadData/, 'API client must unwrap canonical success envelopes')
 assert.match(apiClient, /payload\.ok === true && Object\.prototype\.hasOwnProperty\.call\(payload, 'data'\)/, 'API client must only unwrap explicit data envelopes')
@@ -55,11 +69,11 @@ assert.match(configPostSlice, /apiFailure\(res, 400, 'invalid_payload'/, 'agent 
 assert.match(configPostSlice, /apiFailure\(res, 400, 'workspace_unwritable'/, 'agent config mutation must type workspace validation failures')
 assert.match(editor, /if\(result\.ok&&result\.data\.config\)/, 'editor config load must accept unwrapped canonical config data')
 
-const authLoginSlice = sliceBetween(server, "app.post('/api/auth/login'", "app.get('/api/auth/status'")
+const authLoginSlice = sliceBetween(authRoutes, "app.post('/api/auth/login'", "app.get('/api/auth/status'")
 assertCanonicalRouteSlice('auth login route', authLoginSlice)
 assert.match(authLoginSlice, /apiFailure\(res, 401, 'invalid_token'/, 'login failures must expose invalid-token codes')
 
-const authStatusSlice = sliceBetween(server, "app.get('/api/auth/status'", 'const STATIC_DIR')
+const authStatusSlice = sliceFrom(authRoutes, "app.get('/api/auth/status'")
 assert.match(authStatusSlice, /apiSuccess\(res, \{ authenticated: true \}\)/, 'auth status success must use canonical true envelope')
 assert.match(authStatusSlice, /apiSuccess\(res, \{ authenticated: false \}\)/, 'auth status false must use canonical false envelope')
 assert.doesNotMatch(authStatusSlice, /res\.json\(/, 'auth status must not emit ad hoc JSON')

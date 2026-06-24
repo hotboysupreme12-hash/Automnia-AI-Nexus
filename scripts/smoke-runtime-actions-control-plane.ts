@@ -19,6 +19,7 @@ function routeBlock(source: string, marker: string): string {
 }
 
 const server = readWorkspaceFile('server/index.ts')
+const controlPlaneHttp = readWorkspaceFile('server/controlPlaneHttp.ts')
 const runtimeHook = readWorkspaceFile('src/hooks/useRuntimeStatus.ts')
 const editor = readWorkspaceFile('src/components/editor/AgentEditorModal.tsx')
 const store = readWorkspaceFile('src/store/nexusStore.ts')
@@ -29,7 +30,7 @@ for (const code of [
   'model_catalog_failed',
   'runtime_action_failed',
 ]) {
-  assert(server.includes(`| '${code}'`), `ApiErrorCode is missing ${code}`)
+  assert(controlPlaneHttp.includes(`| '${code}'`), `ApiErrorCode is missing ${code}`)
 }
 
 for (const marker of [

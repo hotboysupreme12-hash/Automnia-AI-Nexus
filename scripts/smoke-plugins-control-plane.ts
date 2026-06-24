@@ -21,6 +21,7 @@ function routeBlock(source: string, marker: string): string {
 }
 
 const server = readWorkspaceFile('server/index.ts')
+const controlPlaneHttp = readWorkspaceFile('server/controlPlaneHttp.ts')
 const pluginsPanel = readWorkspaceFile('src/components/plugins/PluginsPanel.tsx')
 const packageJson = JSON.parse(readWorkspaceFile('package.json')) as { scripts?: Record<string, string> }
 
@@ -43,7 +44,7 @@ const pluginRouteMarkers = [
 ]
 
 for (const code of ['plugin_command_failed', 'plugin_not_found', 'plugin_operation_failed', 'plugin_terminal_failed']) {
-  assert(server.includes(`| '${code}'`), `ApiErrorCode is missing ${code}`)
+  assert(controlPlaneHttp.includes(`| '${code}'`), `ApiErrorCode is missing ${code}`)
 }
 
 assert(server.includes('function pluginErrorStatus'), 'Plugin routes should share command-error status mapping')

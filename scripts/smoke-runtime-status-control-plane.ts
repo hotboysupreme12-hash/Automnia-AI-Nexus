@@ -19,11 +19,12 @@ function routeBlock(source: string, marker: string): string {
 }
 
 const server = readWorkspaceFile('server/index.ts')
+const controlPlaneHttp = readWorkspaceFile('server/controlPlaneHttp.ts')
 const runtimeHook = readWorkspaceFile('src/hooks/useRuntimeStatus.ts')
 const packageJson = JSON.parse(readWorkspaceFile('package.json')) as { scripts?: Record<string, string> }
 
 for (const code of ['runtime_status_failed', 'runtime_summary_failed']) {
-  assert(server.includes(`| '${code}'`), `ApiErrorCode is missing ${code}`)
+  assert(controlPlaneHttp.includes(`| '${code}'`), `ApiErrorCode is missing ${code}`)
 }
 
 for (const marker of [

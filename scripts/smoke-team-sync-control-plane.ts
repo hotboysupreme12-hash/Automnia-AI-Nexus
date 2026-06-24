@@ -19,9 +19,10 @@ function routeBlock(source: string, marker: string): string {
 }
 
 const server = readWorkspaceFile('server/index.ts')
+const controlPlaneHttp = readWorkspaceFile('server/controlPlaneHttp.ts')
 const packageJson = JSON.parse(readWorkspaceFile('package.json')) as { scripts?: Record<string, string> }
 
-assert(server.includes("| 'team_sync_failed'"), 'ApiErrorCode is missing team_sync_failed')
+assert(controlPlaneHttp.includes("| 'team_sync_failed'"), 'ApiErrorCode is missing team_sync_failed')
 
 const teamSyncBlock = routeBlock(server, "app.post('/api/team-sync/append'")
 
