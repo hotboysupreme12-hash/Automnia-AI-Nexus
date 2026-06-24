@@ -10,8 +10,10 @@ next planned extraction.
 
 - Branch: `codex/mission-route-modules`
 - Base: `origin/main`
-- Status: mission route extraction implemented locally; awaiting commit, push,
-  PR, and remote CI evidence.
+- PR: https://github.com/hotboysupreme12-hash/DystopAI-Core/pull/8
+- Status: mission route extraction committed and pushed. GitHub CI is the merge
+  gate; reviewers should verify the latest PR head checks and release-evidence
+  artifact before merge.
 - Policy: keep work on `codex/` branches and avoid direct pushes to `main`.
 
 ## Open Production-Hardening PR Stack
@@ -22,7 +24,7 @@ next planned extraction.
 - PR #5: release governance and signing enforcement.
 - PR #6: skills route extraction.
 - PR #7: provider-auth/model route extraction.
-- Current branch: mission lifecycle/projection route extraction.
+- PR #8: mission lifecycle/projection route extraction.
 
 ## Completed Work
 
@@ -66,6 +68,8 @@ Evidence:
 - `npm test`: passed, including release signing, release validation, security,
   control-plane, OpenClaw, and CI workflow smokes.
 - `npm run smoke:packaged-electron-launch`: passed.
+- GitHub CI for PR #8 must remain green on the latest head before merge. Remote
+  release-evidence artifact metadata is attached to the PR conversation.
 
 Notes:
 
@@ -90,8 +94,9 @@ Subagent coordination:
 
 ## In Progress
 
-- Push `codex/mission-route-modules`, open a PR, run GitHub CI, and attach CI
-  evidence/artifact digest to the PR.
+- Await PR review/merge for PR #8 after latest GitHub checks are green.
+- If the PR head changes, refresh the PR evidence comment with the new CI run
+  and release-evidence artifact digest.
 
 ## Remaining High-Impact Work
 
