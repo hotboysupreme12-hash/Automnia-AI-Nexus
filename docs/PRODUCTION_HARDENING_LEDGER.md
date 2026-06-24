@@ -1207,18 +1207,58 @@ Verification:
   - Commit: `fe0bc07`
   - Result: Control Plane CI completed successfully in `8m29s` for the PR-triggered run and `11m42s` for the push-triggered run.
 
+## 2026-06-24 22:06 UTC - Release Governance And Mandatory Public Signing
+
+- Started a focused release-governance slice on protective branch `codex/release-signing-governance` while the route-extraction PRs remain open and mergeable.
+- Inspected the current open extraction work before choosing the slice:
+  - `codex/runtime-route-modules`
+  - `codex/filesystem-route-modules`
+  - `codex/openclaw-command-routes`
+- Added `docs/RELEASE_GOVERNANCE.md` covering:
+  - Main branch protection expectations: green `Control Plane CI / Hardened control plane`, no direct pushes to `main`, PR review, stale approval dismissal, and signed commits where supported or signed tags plus signed release evidence at minimum.
+  - Mandatory public release signing policy.
+  - Release evidence retention for clean release SHAs.
+  - Local-only desktop threat model: localhost API only, no LAN binding, no cloud exposure unless authentication and transport security are redesigned.
+- Updated `.github/workflows/control-plane-ci.yml` so public release validation is explicit and fail-closed:
+  - Version-tag pushes matching `v*` run the workflow.
+  - Manual `workflow_dispatch` runs expose a `public_release` input.
+  - `DYSTOPAI_RELEASE_REQUIRE_SIGNING` is set automatically for version tags, manual public-release runs, or repository-variable enforcement.
+  - The release signing step runs when signing is enabled or required.
+  - Required evidence verification includes signature, public key, and signing summary when public release signing is required.
+- Updated `scripts/validate-release-artifacts.cjs` so `DYSTOPAI_RELEASE_REQUIRE_SIGNING=1` fails validation when signing evidence is absent instead of treating signatures as optional.
+- Updated release signing, release validation, and CI workflow smoke tests so future changes must preserve:
+  - Unsigned PR-style release validation remains allowed.
+  - Unsigned public-release validation fails with an operator-facing error.
+  - Signed public-release validation succeeds.
+  - CI exposes public release signing gates and version-tag enforcement.
+  - README and governance docs mention mandatory public-release signing.
+- Updated README packaging notes to point operators at `DYSTOPAI_RELEASE_REQUIRE_SIGNING=1 npm run release:validate` and the release governance document.
+- Carried forward the Windows packaged-launch smoke cleanup hardening so CI is less likely to fail release evidence validation because Windows still holds temporary user-data files after packaged Electron exits.
+- Spawned a read-only subagent to map next server-monolith extraction candidates while this centralized governance slice was implemented. The next recommended extraction order is:
+  - Skills/ClawHub routes, after reading OpenClaw skills/ClawHub docs.
+  - Provider auth and model catalog routes, after reading auth credential semantics.
+  - Mission lifecycle routes, after reading cron/Gateway scheduling docs.
+
+Verification passed:
+
+- `npm run smoke:release-validation`
+- `npm run smoke:release-signing`
+- `npm run smoke:ci-workflow`
+- `npm test`
+
+Blockers and notes:
+
+- Branch protection itself still requires repository-admin enforcement through GitHub settings or API permissions. This slice documents the expected policy and adds release-signing enforcement in CI, but does not claim GitHub settings were toggled.
+- Public release signing requires a real Ed25519 signing key in `DYSTOPAI_RELEASE_SIGNING_PRIVATE_KEY_PEM` or local `DYSTOPAI_RELEASE_SIGNING_PRIVATE_KEY_FILE`. Do not fake or commit signing material.
+
 ## In Progress
 
-- Production hardening on protective branch `codex/server-route-modules`.
+- Production hardening on protective branch `codex/release-signing-governance`.
 
 Next action:
 
-- Continue breaking up `server/index.ts` by extracting one coherent domain route cluster next. Highest-value candidates are runtime status/actions or filesystem routes because they already have focused smoke coverage.
-- Add release governance documentation and/or enforcement slices after the next route extraction:
-  - Main branch protection requirements: green CI, no direct pushes, PR review, and signed commits where repository support allows.
-  - Mandatory public release signing and validation failure when signing evidence is absent.
-  - Full CI evidence artifacts on clean release SHAs.
-  - Local-only desktop threat model: localhost API only, no LAN binding, no cloud exposure unless authentication is redesigned.
+- Push `codex/release-signing-governance`, open a PR, and verify Control Plane CI.
+- Continue breaking up `server/index.ts` by extracting one coherent domain route cluster next. The next best candidate is the Skills/ClawHub route cluster; read the relevant local OpenClaw skills/ClawHub docs first and keep the extraction route-only unless the service boundary is obvious.
 
 ## Backlog
 

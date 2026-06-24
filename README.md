@@ -237,6 +237,13 @@ DYSTOPAI_RELEASE_SIGNING_PRIVATE_KEY_FILE="C:/secure/dystopai-release-ed25519.pe
 
 This writes `release/evidence/checksums.sha256.sig`, `release/evidence/signing-public-key.pem`, and `release/evidence/release-signing.json`. Publish those files with the SBOM and checksum manifest; the private key must never live in the repository.
 Before publishing, run `npm run release:validate`. It verifies the checksum manifest against packaged files, checks SBOM and summary consistency, requires packaged artifacts to be present, and verifies the detached signature when signing evidence exists.
+For public release builds, validation must require signing evidence:
+
+```bash
+DYSTOPAI_RELEASE_REQUIRE_SIGNING=1 npm run release:validate
+```
+
+The CI workflow enforces the same requirement for version tags, manual `public_release` workflow runs, or runs where `DYSTOPAI_RELEASE_REQUIRE_SIGNING=true`. Branch protection, release evidence retention, and the local-only desktop threat model are documented in `docs/RELEASE_GOVERNANCE.md`.
 
 ## Common Commands
 
@@ -259,7 +266,7 @@ Before publishing, run `npm run release:validate`. It verifies the checksum mani
 | `npm run dist:win` | Create the Windows desktop distribution output. |
 | `npm run release:evidence` | Generate the release SBOM, checksum manifest, and evidence summary. |
 | `npm run release:sign` | Sign the release checksum manifest with an Ed25519 release key. |
-| `npm run release:validate` | Verify release checksums, evidence consistency, packaged artifacts, and optional signature evidence. |
+| `npm run release:validate` | Verify release checksums, evidence consistency, packaged artifacts, and required public-release signature evidence when `DYSTOPAI_RELEASE_REQUIRE_SIGNING=1`. |
 
 ## Configuration
 
