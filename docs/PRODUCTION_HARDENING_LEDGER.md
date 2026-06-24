@@ -1254,6 +1254,14 @@ Verification passed:
 - `npm run build:server`
 - `npm test`
 
+Follow-up CI fix:
+
+- GitHub Actions run `28133663488` passed install, production dependency audit, secret scan, lint, typecheck, full hardening smoke suite, server build, client build, Electron E2E, runtime bundle prep, vendored OpenClaw prep, and desktop packaging.
+- The same run then failed at `npm run smoke:packaged-electron-launch` because Windows returned `EPERM` while deleting the temporary packaged-launch user-data root after the app had already reached startup and quit cleanup.
+- Added retrying Windows temp-root cleanup to `scripts/smoke-packaged-electron-launch.ts` so this independent PR does not rely on the identical cleanup hardening from the release-governance branch merge order.
+- Additional verification after the CI fix:
+  - `npm run smoke:packaged-electron-launch`
+
 Observed during verification:
 
 - `npm test` again reported one skipped malformed historical JSONL row while reading `runtime-runs`; this is expected corruption-recovery behavior and the smoke passed.

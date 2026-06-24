@@ -65,6 +65,22 @@ function killPackagedElectronProcesses() {
   })
 }
 
+async function removeTempRootWithWindowsRetries(rootPath: string) {
+  const attempts = process.platform === 'win32' ? 8 : 1
+  let lastError: unknown = null
+  for (let attempt = 1; attempt <= attempts; attempt += 1) {
+    try {
+      rmSync(rootPath, { recursive: true, force: true, maxRetries: 3, retryDelay: 150 })
+      return
+    } catch (error) {
+      lastError = error
+      if (attempt === attempts) break
+      await new Promise((resolve) => setTimeout(resolve, attempt * 250))
+    }
+  }
+  throw lastError
+}
+
 async function waitForLogPatterns(logPath: string, patterns: RegExp[], timeoutMs = 60_000) {
   const found = new Set<number>()
   const start = Date.now()
@@ -153,7 +169,7 @@ try {
   ])
 } finally {
   killPackagedElectronProcesses()
-  rmSync(tempRoot, { recursive: true, force: true })
+  await removeTempRootWithWindowsRetries(tempRoot)
 }
 
 console.log('packaged electron launch smoke ok')
