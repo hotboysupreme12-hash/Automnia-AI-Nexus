@@ -40,6 +40,7 @@ function assertCanonicalSuccessRoute(name: string, source: string) {
 const server = readWorkspaceFile('server/index.ts')
 const controlPlaneHttp = readWorkspaceFile('server/controlPlaneHttp.ts')
 const diagnosticsRoutes = readWorkspaceFile('server/routes/diagnosticsRoutes.ts')
+const pluginRoutes = readWorkspaceFile('server/routes/pluginRoutes.ts')
 const packageJson = JSON.parse(readWorkspaceFile('package.json')) as { scripts?: Record<string, string> }
 
 for (const code of [
@@ -83,7 +84,7 @@ for (const marker of [
   assertCanonicalRoute(marker, routeBlock(server, marker))
 }
 
-const pluginSetupStreamBlock = routeBlock(server, "app.get('/api/plugins/setup-terminal/:sessionId/stream'")
+const pluginSetupStreamBlock = routeBlock(pluginRoutes, "app.get('/api/plugins/setup-terminal/:sessionId/stream'")
 assertNoRawJsonResponse('/api/plugins/setup-terminal/:sessionId/stream', pluginSetupStreamBlock)
 assert(pluginSetupStreamBlock.includes("apiFailure(res, 404, 'plugin_not_found'"), 'setup-terminal stream should return canonical not-found errors before SSE starts')
 assert(pluginSetupStreamBlock.includes("'Content-Type': 'text/event-stream; charset=utf-8'"), 'setup-terminal stream should preserve SSE transport')
