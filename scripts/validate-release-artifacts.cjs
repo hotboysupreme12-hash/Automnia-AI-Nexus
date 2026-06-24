@@ -6,6 +6,7 @@ const root = path.resolve(__dirname, '..')
 const evidenceDir = path.resolve(process.env.DYSTOPAI_RELEASE_EVIDENCE_DIR || path.join(root, 'release', 'evidence'))
 const artifactRoot = path.resolve(process.env.DYSTOPAI_RELEASE_ARTIFACT_ROOT || path.join(root, 'release'))
 const allowNoArtifacts = process.env.DYSTOPAI_RELEASE_VALIDATE_ALLOW_NO_ARTIFACTS === '1'
+const requireSigning = /^(1|true|yes)$/i.test(String(process.env.DYSTOPAI_RELEASE_REQUIRE_SIGNING || ''))
 
 const sbomPath = path.join(evidenceDir, 'dystopai-sbom.cdx.json')
 const checksumsPath = path.join(evidenceDir, 'checksums.sha256')
@@ -135,7 +136,12 @@ function validateEvidenceSummary(checksumCount, componentCount) {
 function validateSignatureIfPresent() {
   const signatureFiles = [signaturePath, publicKeyPath, signingSummaryPath]
   const existing = signatureFiles.filter((filePath) => fs.existsSync(filePath))
-  if (!existing.length) return { signed: false }
+  if (!existing.length) {
+    if (requireSigning) {
+      throw new Error('[release-validate] Release signing evidence is required for this public release build. Run npm run release:sign with DYSTOPAI_RELEASE_SIGNING_PRIVATE_KEY_FILE or DYSTOPAI_RELEASE_SIGNING_PRIVATE_KEY_PEM before publishing.')
+    }
+    return { signed: false }
+  }
   if (existing.length !== signatureFiles.length) {
     throw new Error('[release-validate] Partial release-signing evidence found. Expected signature, public key, and signing summary.')
   }
