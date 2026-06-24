@@ -1151,6 +1151,11 @@ Verification:
   - `npm run smoke:runtime-actions-control-plane`
   - `npm run lint`
   - `npm test`
+- GitHub Actions verification passed for the pushed PR branch:
+  - PR: `#1`
+  - Run: `28123433878`
+  - Commit: `a593d5c`
+  - Result: Control Plane CI completed successfully in `9m4s`.
 
 ## In Progress
 
@@ -1158,7 +1163,6 @@ Verification:
 
 Next action:
 
-- Push the diagnostics extraction to PR `#1`, wait for GitHub Control Plane CI, and record the resulting run evidence.
 - Continue breaking up `server/index.ts` by extracting one coherent domain route cluster next. Highest-value candidates are runtime status/actions, plugins, or filesystem routes because they already have focused smoke coverage.
 - Add release governance documentation and/or enforcement slices after the next route extraction:
   - Main branch protection requirements: green CI, no direct pushes, PR review, and signed commits where repository support allows.
