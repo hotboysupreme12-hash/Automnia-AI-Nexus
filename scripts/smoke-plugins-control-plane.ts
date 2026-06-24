@@ -16,11 +16,15 @@ function assert(condition: unknown, message: string): asserts condition {
 function routeBlock(source: string, marker: string): string {
   const start = source.indexOf(marker)
   assert(start >= 0, `Missing route marker: ${marker}`)
-  const next = source.indexOf('\napp.', start + marker.length)
+  const remaining = source.slice(start + marker.length)
+  const nextMatch = /\n\s+app\./.exec(remaining)
+  const next = nextMatch ? start + marker.length + nextMatch.index : -1
   return source.slice(start, next >= 0 ? next : source.length)
 }
 
 const server = readWorkspaceFile('server/index.ts')
+const controlPlaneHttp = readWorkspaceFile('server/controlPlaneHttp.ts')
+const pluginRoutes = readWorkspaceFile('server/routes/pluginRoutes.ts')
 const pluginsPanel = readWorkspaceFile('src/components/plugins/PluginsPanel.tsx')
 const packageJson = JSON.parse(readWorkspaceFile('package.json')) as { scripts?: Record<string, string> }
 
@@ -43,14 +47,16 @@ const pluginRouteMarkers = [
 ]
 
 for (const code of ['plugin_command_failed', 'plugin_not_found', 'plugin_operation_failed', 'plugin_terminal_failed']) {
-  assert(server.includes(`| '${code}'`), `ApiErrorCode is missing ${code}`)
+  assert(controlPlaneHttp.includes(`| '${code}'`), `ApiErrorCode is missing ${code}`)
 }
 
 assert(server.includes('function pluginErrorStatus'), 'Plugin routes should share command-error status mapping')
 assert(server.includes('function pluginErrorDetail'), 'Plugin routes should share redaction-safe error details')
+assert(server.includes('registerPluginRoutes(app, {'), 'server index should register extracted plugin routes')
 
 for (const marker of pluginRouteMarkers) {
-  const block = routeBlock(server, marker)
+  assert(!server.includes(marker), `server index should not inline plugin route ${marker}`)
+  const block = routeBlock(pluginRoutes, marker)
   assert(block.includes('apiSuccess(res') || marker.includes('/:sessionId/input') || marker.includes('/:sessionId/resize'), `${marker} should return canonical success envelopes`)
   assert(block.includes('apiFailure(res'), `${marker} should return canonical error envelopes`)
   assert(!/\breturn\s+res\.json\s*\(/.test(block), `${marker} should not return raw res.json payloads`)
@@ -58,7 +64,7 @@ for (const marker of pluginRouteMarkers) {
   assert(!/\bok:\s*true\b/.test(block), `${marker} should put success data under apiSuccess, not inline ok=true`)
 }
 
-const streamBlock = routeBlock(server, "app.get('/api/plugins/setup-terminal/:sessionId/stream'")
+const streamBlock = routeBlock(pluginRoutes, "app.get('/api/plugins/setup-terminal/:sessionId/stream'")
 assert(streamBlock.includes("'text/event-stream; charset=utf-8'"), 'Plugin setup terminal stream must remain SSE')
 assert(streamBlock.includes('writeSseEvent'), 'Plugin setup terminal stream must emit SSE events')
 

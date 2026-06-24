@@ -38,11 +38,12 @@ function assertCanonicalRoute(name: string, source: string) {
 }
 
 const server = readWorkspaceFile('server/index.ts')
+const controlPlaneHttp = readWorkspaceFile('server/controlPlaneHttp.ts')
 const store = readWorkspaceFile('src/store/nexusStore.ts')
 const packageJson = JSON.parse(readWorkspaceFile('package.json')) as { scripts?: Record<string, string> }
 
 for (const code of ['agent_turn_failed', 'clawtalk_console_failed', 'party_handoff_failed']) {
-  assert(server.includes(`| '${code}'`), `ApiErrorCode is missing ${code}`)
+  assert(controlPlaneHttp.includes(`| '${code}'`), `ApiErrorCode is missing ${code}`)
 }
 
 const clawTalkFinalBlock = routeBlock(server, "app.post('/api/openclaw/clawtalk-console/final'")

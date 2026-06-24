@@ -27,6 +27,7 @@ function assertCanonicalRoute(name: string, source: string) {
 }
 
 const server = readWorkspaceFile('server/index.ts')
+const controlPlaneHttp = readWorkspaceFile('server/controlPlaneHttp.ts')
 const pluginsPanel = readWorkspaceFile('src/components/plugins/PluginsPanel.tsx')
 const packageJson = JSON.parse(readWorkspaceFile('package.json')) as { scripts?: Record<string, string> }
 
@@ -35,7 +36,7 @@ for (const code of [
   'openclaw_summary_failed',
   'party_coordination_failed',
 ]) {
-  assert(server.includes(`| '${code}'`), `ApiErrorCode is missing ${code}`)
+  assert(controlPlaneHttp.includes(`| '${code}'`), `ApiErrorCode is missing ${code}`)
 }
 
 const summaryBlock = sliceBetween(server, "app.get('/api/openclaw/summary'", "const RuntimeSessionCloseSchema")

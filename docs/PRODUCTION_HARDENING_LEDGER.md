@@ -1059,14 +1059,166 @@ Verification:
   - Commit: `94dfbf2`
   - Result: Control Plane CI passed in `7m38s`, including vendored OpenClaw dependency prep, desktop packaging, packaged launch smoke, release evidence generation, release validation, and evidence upload.
 
+## 2026-06-24 18:21 UTC - Server HTTP Boundary And Public Auth Route Extraction
+
+- Revised heartbeat automation `dystopai-production-hardening` to prioritize:
+  - Breaking up `server/index.ts` into route modules and services.
+  - Main branch protection expectations.
+  - Mandatory release signing for public builds.
+  - Full CI evidence on clean release SHAs.
+  - A documented local-only desktop threat model.
+- Started the server decomposition work on protective branch `codex/server-route-modules`.
+- Extracted shared HTTP/control-plane behavior from `server/index.ts` into `server/controlPlaneHttp.ts`:
+  - Request ID assignment.
+  - Exact local-origin CORS validation.
+  - JSON body parsing and canonical invalid-JSON failures.
+  - Public API allowlist.
+  - Bearer-token auth guard.
+  - Canonical `apiSuccess` and `apiFailure` envelopes.
+  - Bounded `ApiErrorCode` union.
+  - Packaged UI CSP and static security headers.
+- Extracted public auth login/status routes into `server/routes/authRoutes.ts` and wired `server/index.ts` through `registerAuthRoutes(app, { authToken: AUTH_TOKEN, sessionTokens })`.
+- Reduced `server/index.ts` from `30,816` lines on `main` to `30,585` lines in this slice, while creating the first route-module pattern for later domain extraction.
+- Updated control-plane smoke tests so API error-code ownership is asserted against `server/controlPlaneHttp.ts` while existing domain route assertions continue to inspect `server/index.ts` until those routes are extracted.
+- Verification passed:
+  - `npm run typecheck:server`
+  - `npm run smoke:api-envelope`
+  - `npm run smoke:auth`
+  - `npm run smoke:security`
+  - `npm run smoke:plugins-control-plane`
+  - `npm run smoke:agent-turn-control-plane`
+  - `npm run smoke:shifts-control-plane`
+  - `npm run smoke:misc-control-plane`
+  - `npm run lint`
+  - `npm test`
+- GitHub Actions verification passed for the pushed PR branch:
+  - PR: `#1`
+  - Run: `28120340143`
+  - Commit: `7c2bc8d`
+  - Result: Control Plane CI completed successfully.
+
+## 2026-06-24 18:59 UTC - Command Console File Route And Service Extraction
+
+- Continued server decomposition on protective branch `codex/server-route-modules`.
+- Read local OpenClaw/Command Console documentation before touching Command Console-owned endpoints:
+  - `docs/OPENCLAW_GATEWAY_COMMAND_CONSOLE_GUIDE.md`
+  - `docs/openclaw-latest/pages/web/control-ui.md`
+- Extracted the Command Console file-control service into `server/services/controlFilesService.ts`:
+  - Allowed control-file list.
+  - Control-file validation.
+  - Workspace-root scoped read/write operations.
+- Extracted the `/api/files` route cluster into `server/routes/commandConsoleFileRoutes.ts`:
+  - `GET /api/files`
+  - `POST /api/files/upload`
+  - `GET /api/files/:file`
+  - `PUT /api/files/:file`
+- Kept the existing upload persistence helper injected from `server/index.ts` so this slice does not entangle the route extraction with the larger Command Console runtime/upload pipeline.
+- Reduced `server/index.ts` from `30,585` lines after the prior slice to `30,524` lines after this extraction.
+- Strengthened `scripts/smoke-command-console-files-control-plane.ts` so it now asserts:
+  - `server/index.ts` registers the extracted route module.
+  - `server/index.ts` no longer inlines `/api/files` handlers.
+  - `server/services/controlFilesService.ts` owns the control-file list and validator.
+  - `server/routes/commandConsoleFileRoutes.ts` still emits canonical success/error envelopes.
+- Verification passed:
+  - `npm run typecheck:server`
+  - `npm run smoke:command-console-files`
+  - `npm run lint`
+  - `npm test`
+- GitHub Actions verification passed for the pushed PR branch:
+  - PR: `#1`
+  - Run: `28122536668`
+  - Commit: `c8d6a76`
+  - Result: Control Plane CI completed successfully in `8m40s`.
+
+## 2026-06-24 19:14 UTC - Diagnostics And Health Route Extraction
+
+- Continued server decomposition on protective branch `codex/server-route-modules`.
+- Extracted diagnostics/health routes into `server/routes/diagnosticsRoutes.ts`:
+  - `GET /api/health`
+  - `GET /api/runtime/version-check`
+  - `POST /api/doctor/run`
+  - `GET /api/doctor/recent`
+- Kept existing diagnostic/runtime/doctor calculation functions in `server/index.ts` and injected them into the route module to avoid mixing route extraction with behavior rewrites.
+- Reduced `server/index.ts` from `30,524` lines after the prior slice to `30,502` lines after this extraction.
+- Strengthened `scripts/smoke-misc-control-plane.ts` so it asserts:
+  - `server/index.ts` registers the extracted diagnostics route module.
+  - `server/index.ts` no longer inlines the health/version/doctor routes.
+  - `server/routes/diagnosticsRoutes.ts` still emits canonical success/error envelopes.
+- Updated `scripts/smoke-runtime-actions-control-plane.ts` so doctor route assertions follow the extracted diagnostics module while runtime action assertions remain against `server/index.ts`.
+- Verification passed:
+  - `npm run typecheck:server`
+  - `npm run smoke:misc-control-plane`
+  - `npm run smoke:runtime-actions-control-plane`
+  - `npm run lint`
+  - `npm test`
+- GitHub Actions verification passed for the pushed PR branch:
+  - PR: `#1`
+  - Run: `28123433878`
+  - Commit: `a593d5c`
+  - Result: Control Plane CI completed successfully in `9m4s`.
+
+## 2026-06-24 19:47 UTC - Plugin Route Extraction
+
+- Continued server decomposition on protective branch `codex/server-route-modules`.
+- Confirmed latest GitHub Actions state before editing:
+  - PR run `28124035710` passed.
+  - Push run `28124033719` passed.
+- Read the local OpenClaw plugin documentation before changing the plugin management surface:
+  - `docs/openclaw-latest/pages/cli/plugins.md`
+  - `docs/openclaw-latest/pages/plugins/building-plugins.md`
+  - `docs/openclaw-latest/pages/plugins/sdk-setup.md`
+- Extracted plugin HTTP routing into `server/routes/pluginRoutes.ts` while preserving the existing OpenClaw CLI/runtime helper functions in `server/index.ts`:
+  - `GET /api/plugins`
+  - `GET /api/plugins/search`
+  - `POST /api/plugins/install`
+  - `POST /api/plugins/update-all`
+  - `POST /api/plugins/gateway/restart`
+  - `POST /api/plugins/clawtalk/setup`
+  - `POST /api/plugins/:pluginId/update`
+  - `POST /api/plugins/:pluginId/uninstall`
+  - `POST /api/plugins/:pluginId/inspect`
+  - `POST /api/plugins/:pluginId/config`
+  - `POST /api/plugins/setup-terminal`
+  - `GET /api/plugins/setup-terminal/:sessionId/stream`
+  - `POST /api/plugins/setup-terminal/:sessionId/input`
+  - `POST /api/plugins/setup-terminal/:sessionId/resize`
+  - `DELETE /api/plugins/setup-terminal/:sessionId`
+  - `POST /api/plugins/:pluginId`
+- Preserved the setup-terminal SSE transport: the module still returns canonical not-found errors before the stream starts and then emits raw SSE frames by design.
+- Kept this slice route-only: plugin install/update/config/restart logic is injected from the existing server helpers so behavior is not mixed with the extraction.
+- Reduced `server/index.ts` from `30,502` lines after the diagnostics slice to `30,179` lines after this extraction.
+- Added `server/routes/pluginRoutes.ts` at `452` lines.
+- Updated `scripts/smoke-plugins-control-plane.ts` so it now asserts:
+  - `server/index.ts` registers `registerPluginRoutes(app, { ... })`.
+  - `server/index.ts` no longer inlines plugin routes.
+  - `server/routes/pluginRoutes.ts` owns canonical success/error envelopes and plugin setup-terminal SSE.
+- Updated `scripts/smoke-misc-control-plane.ts` so its setup-terminal SSE assertions follow the extracted plugin route module.
+- Verification passed:
+  - `npm run typecheck:server`
+  - `npm run smoke:plugins-control-plane`
+  - `npm run smoke:misc-control-plane`
+  - `npm run lint`
+  - `npm test`
+- Observed during `npm test`: `smoke:ledger` reported one skipped malformed historical JSONL row while reading `runtime-runs`; the smoke passed and preserved the corruption-recovery warning instead of treating the file as empty.
+- GitHub Actions verification passed for the pushed PR branch:
+  - PR: `#1`
+  - PR run: `28125277911`
+  - Push run: `28125275632`
+  - Commit: `fe0bc07`
+  - Result: Control Plane CI completed successfully in `8m29s` for the PR-triggered run and `11m42s` for the push-triggered run.
+
 ## In Progress
 
-- Production hardening on protective branch `codex/ci-openclaw-smoke`.
+- Production hardening on protective branch `codex/server-route-modules`.
 
 Next action:
 
-- Merge the green `codex/ci-openclaw-smoke` repair branch to `main`, then continue with the next highest-impact production-hardening slice.
-- Avoid the pre-existing local edits in `src/components/mission/MissionDeploymentPanel.tsx` and `src/styles/dystopai-theme/70-responsive-polish.css` unless the selected task explicitly requires those files.
+- Continue breaking up `server/index.ts` by extracting one coherent domain route cluster next. Highest-value candidates are runtime status/actions or filesystem routes because they already have focused smoke coverage.
+- Add release governance documentation and/or enforcement slices after the next route extraction:
+  - Main branch protection requirements: green CI, no direct pushes, PR review, and signed commits where repository support allows.
+  - Mandatory public release signing and validation failure when signing evidence is absent.
+  - Full CI evidence artifacts on clean release SHAs.
+  - Local-only desktop threat model: localhost API only, no LAN binding, no cloud exposure unless authentication is redesigned.
 
 ## Backlog
 
@@ -1097,7 +1249,7 @@ Next action:
 
 ### Phase 5: Extract Monoliths
 
-- Extract server routes by domain.
+- Continue extracting server routes by domain using `server/controlPlaneHttp.ts` and `server/routes/*` as the first pattern.
 - Split the Zustand store.
 - Move network operations out of state actions.
 - Split large agent console, recruit, and editor dialogs.
@@ -1115,6 +1267,7 @@ Next action:
 
 ## Blockers And Risks
 
-- Existing local modifications were moved from `main` onto `codex/production-hardening`; future work should stay on this protective branch unless the user asks otherwise.
-- A protective branch or worktree should be used before broad hardening work.
+- Branch protection changes may require repository-admin access through GitHub settings or `gh`; verify permissions before claiming enforcement is active.
+- Mandatory release signing may require a signing certificate/key and CI secrets; do not fake signing evidence.
+- Continue using protective `codex/` branches or worktrees before broad hardening work.
 - The audit notes vendored OpenClaw and generated packages were not treated as DystopAI-authored code; future changes should preserve that boundary unless explicitly needed.

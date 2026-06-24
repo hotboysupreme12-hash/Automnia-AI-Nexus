@@ -16,6 +16,8 @@ const authenticatedFetch = read('src/api/authenticatedFetch.ts')
 const electronMain = read('electron/main.cjs')
 const preload = read('electron/preload.cjs')
 const server = read('server/index.ts')
+const controlPlaneHttp = read('server/controlPlaneHttp.ts')
+const authRoutes = read('server/routes/authRoutes.ts')
 const readme = read('README.md')
 const userGuide = read('docs/USER_GUIDE.md')
 const packageJson = JSON.parse(read('package.json')) as { scripts?: Record<string, string> }
@@ -45,18 +47,24 @@ assert.match(electronMain, /isTrustedRendererSender\(event\)/, 'Electron IPC han
 assert.match(preload, /getControlCenterToken/, 'Preload must expose the launch-token capability to the isolated renderer')
 
 assert.doesNotMatch(server, /app\.use\(cors\(\)\)/, 'Server must not use permissive default CORS')
-assert.match(server, /function isAllowedControlCenterOrigin/, 'Server must validate exact request origins')
-assert.match(server, /PUBLIC_API_PATHS = new Set\(\['\/api\/health', '\/api\/auth\/login', '\/api\/auth\/status'\]\)/, 'Only health/login/status should bypass auth')
-assert.match(server, /app\.use\('\/api', \(req, res, next\) => \{[\s\S]*auth_required/, 'Server must register an API auth guard before privileged routes')
-assert.match(server, /sessionTokens\.has\(token\) && token !== AUTH_TOKEN/, 'Server auth guard must reject tokens outside live sessions or the Electron launch token')
+assert.match(server, /installControlPlaneHttp\(app, \{[\s\S]*authToken: AUTH_TOKEN[\s\S]*sessionTokens/, 'Server must install the shared API auth guard before privileged routes')
+assert.match(server, /registerAuthRoutes\(app, \{ authToken: AUTH_TOKEN, sessionTokens \}\)/, 'Server must mount extracted public auth routes')
+assert.match(authRoutes, /app\.post\('\/api\/auth\/login'/, 'Auth routes module must own login')
+assert.match(authRoutes, /app\.get\('\/api\/auth\/status'/, 'Auth routes module must own status')
+assert.match(authRoutes, /options\.sessionTokens\.add\(sessionToken\)/, 'Auth login must mint live session tokens')
+assert.match(controlPlaneHttp, /function isAllowedControlCenterOrigin/, 'Server must validate exact request origins')
+assert.match(controlPlaneHttp, /PUBLIC_API_PATHS = new Set\(\['\/api\/health', '\/api\/auth\/login', '\/api\/auth\/status'\]\)/, 'Only health/login/status should bypass auth')
+assert.match(controlPlaneHttp, /app\.use\('\/api', \(req, res, next\) => \{[\s\S]*auth_required/, 'Server must register an API auth guard before privileged routes')
+assert.match(controlPlaneHttp, /options\.sessionTokens\.has\(token\) && token !== options\.authToken/, 'Server auth guard must reject tokens outside live sessions or the Electron launch token')
 assert.match(server, /agent-to-agent`[\s\S]*Authorization: `Bearer \$\{AUTH_TOKEN\}`/, 'Internal server-to-server API calls must authenticate through the guard')
 assert.match(server, /CONFIGURED_AUTH_TOKEN = process\.env\.CONTROL_CENTER_TOKEN\?\.trim\(\)/, 'Server must read an explicit configured auth token')
 assert.match(server, /const AUTH_TOKEN = CONFIGURED_AUTH_TOKEN \|\| randomBytes\(32\)\.toString\('base64url'\)/, 'Server must generate a per-launch auth token when none is configured')
-assert.match(server, /X-Request-Id/, 'Server must expose request IDs for diagnostics')
+assert.match(controlPlaneHttp, /X-Request-Id/, 'Server must expose request IDs for diagnostics')
 
 for (const [name, content] of [
   ['LoginModal', loginModal],
   ['server', server],
+  ['auth routes', authRoutes],
   ['README', readme],
   ['USER_GUIDE', userGuide],
 ] as const) {

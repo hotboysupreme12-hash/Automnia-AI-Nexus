@@ -14,7 +14,9 @@ function assert(condition: unknown, message: string): asserts condition {
 function routeBlock(source: string, marker: string): string {
   const start = source.indexOf(marker)
   assert(start >= 0, `Missing route marker: ${marker}`)
-  const next = source.indexOf('\napp.', start + marker.length)
+  const remaining = source.slice(start + marker.length)
+  const nextMatch = /\n\s+app\./.exec(remaining)
+  const next = nextMatch ? start + marker.length + nextMatch.index : -1
   return source.slice(start, next >= 0 ? next : source.length)
 }
 
@@ -36,6 +38,9 @@ function assertCanonicalSuccessRoute(name: string, source: string) {
 }
 
 const server = readWorkspaceFile('server/index.ts')
+const controlPlaneHttp = readWorkspaceFile('server/controlPlaneHttp.ts')
+const diagnosticsRoutes = readWorkspaceFile('server/routes/diagnosticsRoutes.ts')
+const pluginRoutes = readWorkspaceFile('server/routes/pluginRoutes.ts')
 const packageJson = JSON.parse(readWorkspaceFile('package.json')) as { scripts?: Record<string, string> }
 
 for (const code of [
@@ -45,14 +50,26 @@ for (const code of [
   'party_operation_failed',
   'recruit_failed',
 ]) {
-  assert(server.includes(`| '${code}'`), `ApiErrorCode is missing ${code}`)
+  assert(controlPlaneHttp.includes(`| '${code}'`), `ApiErrorCode is missing ${code}`)
 }
+
+assert(server.includes('registerDiagnosticsRoutes(app, {'), 'server index should register extracted diagnostics routes')
+assert(!server.includes("app.get('/api/health'"), 'server index should not inline the health route')
+assert(!server.includes("app.get('/api/runtime/version-check'"), 'server index should not inline the runtime version-check route')
+assert(!server.includes("app.post('/api/doctor/run'"), 'server index should not inline the doctor run route')
 
 for (const marker of [
   "app.get('/api/health'",
   "app.get('/api/runtime/version-check'",
 ] ) {
-  assertCanonicalSuccessRoute(marker, routeBlock(server, marker))
+  assertCanonicalSuccessRoute(marker, routeBlock(diagnosticsRoutes, marker))
+}
+
+for (const marker of [
+  "app.post('/api/doctor/run'",
+  "app.get('/api/doctor/recent'",
+]) {
+  assertCanonicalRoute(marker, routeBlock(diagnosticsRoutes, marker))
 }
 
 for (const marker of [
@@ -67,7 +84,7 @@ for (const marker of [
   assertCanonicalRoute(marker, routeBlock(server, marker))
 }
 
-const pluginSetupStreamBlock = routeBlock(server, "app.get('/api/plugins/setup-terminal/:sessionId/stream'")
+const pluginSetupStreamBlock = routeBlock(pluginRoutes, "app.get('/api/plugins/setup-terminal/:sessionId/stream'")
 assertNoRawJsonResponse('/api/plugins/setup-terminal/:sessionId/stream', pluginSetupStreamBlock)
 assert(pluginSetupStreamBlock.includes("apiFailure(res, 404, 'plugin_not_found'"), 'setup-terminal stream should return canonical not-found errors before SSE starts')
 assert(pluginSetupStreamBlock.includes("'Content-Type': 'text/event-stream; charset=utf-8'"), 'setup-terminal stream should preserve SSE transport')
