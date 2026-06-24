@@ -1207,13 +1207,70 @@ Verification:
   - Commit: `fe0bc07`
   - Result: Control Plane CI completed successfully in `8m29s` for the PR-triggered run and `11m42s` for the push-triggered run.
 
+## 2026-06-24 22:56 UTC - Provider Auth And Model Route Extraction
+
+- Started an independent server-decomposition slice on protective branch `codex/provider-auth-route-modules`, based on `origin/main` so the review is not entangled with currently open route/governance PRs:
+  - `#2` runtime route extraction
+  - `#3` filesystem route extraction
+  - `#4` OpenClaw command route extraction
+  - `#5` release-governance enforcement
+  - `#6` skills/ClawHub route extraction
+- Read local OpenClaw auth and model-provider documentation before touching provider/auth/model control-plane behavior:
+  - `docs/openclaw-latest/pages/auth-credential-semantics.md`
+  - `docs/openclaw-latest/pages/concepts/oauth.md`
+  - `docs/openclaw-latest/pages/concepts/models.md`
+  - `docs/openclaw-latest/pages/concepts/model-providers.md`
+  - `docs/openclaw-latest/pages/providers.md`
+  - `docs/openclaw-latest/pages/providers/models.md`
+  - `docs/openclaw-latest/pages/gateway/authentication.md`
+  - `docs/openclaw-latest/pages/gateway/network-model.md`
+  - `docs/openclaw-latest/pages/reference/secretref-credential-surface.md`
+- Spawned a read-only subagent to inspect the provider auth/model route cluster, dependency-injection surface, route ordering, smoke expectations, and TypeScript risks while implementation continued locally.
+- Extracted the provider auth and available-model HTTP route cluster from `server/index.ts` into `server/routes/providerAuthRoutes.ts`:
+  - `GET /api/auth/providers`
+  - `POST /api/auth/providers/:provider`
+  - `DELETE /api/auth/providers/:provider`
+  - `POST /api/auth/providers/:provider/oauth/start`
+  - `GET /api/auth/providers/:provider/oauth/session/:sessionId`
+  - `POST /api/auth/providers/:provider/oauth/session/:sessionId/manual`
+  - `GET /api/models/available`
+- Kept this slice route-only: local auth stores, provider catalog, OpenClaw auth-profile JSON/SQLite helpers, OAuth callback servers, OAuth token exchange, gcloud probing, and model-cache refresh state remain owned by existing server helpers and are injected through `registerProviderAuthRoutes(app, { ... })`.
+- Preserved route order by registering the provider auth/model module after shift defaults and before Skills/ClawHub routes.
+- Reduced `server/index.ts` from `30,179` lines on `origin/main` to `30,057` lines in this slice.
+- Added `server/routes/providerAuthRoutes.ts` at `209` lines.
+- Updated `scripts/smoke-auth-provider-model-control-plane.ts` so it now asserts:
+  - `server/index.ts` imports and registers `registerProviderAuthRoutes`.
+  - `server/index.ts` no longer inlines provider auth or available-model route handlers.
+  - `server/routes/providerAuthRoutes.ts` owns the extracted routes and canonical success/error envelopes.
+  - Auth/provider/model API error coverage includes `model_catalog_failed`.
+- Updated `scripts/smoke-runtime-actions-control-plane.ts` so `/api/models/available` assertions follow the extracted provider route module instead of `server/index.ts`.
+- Carried forward retrying Windows temp-root cleanup in `scripts/smoke-packaged-electron-launch.ts` so this independent branch does not depend on the release-governance or skills PR merge order for the known packaged-launch cleanup fix.
+
+Verification passed:
+
+- `npm run typecheck:server`
+- `npm run smoke:auth-provider-model`
+- `npm run smoke:runtime-actions-control-plane`
+- `npm run lint`
+- `npm run build:server`
+- `npm test`
+- `npm run smoke:api-envelope`
+- `npm run smoke:auth`
+- `npm run smoke:packaged-electron-launch`
+
+Observed during verification:
+
+- `npm test` again reported one skipped malformed historical JSONL row while reading `runtime-runs`; this is expected corruption-recovery behavior and the smoke passed.
+- `npm run lint` still emits Babel's large-file deoptimization notice for `server/index.ts`; route extraction continues reducing that file.
+
 ## In Progress
 
-- Production hardening on protective branch `codex/server-route-modules`.
+- Production hardening on protective branch `codex/provider-auth-route-modules`.
 
 Next action:
 
-- Continue breaking up `server/index.ts` by extracting one coherent domain route cluster next. Highest-value candidates are runtime status/actions or filesystem routes because they already have focused smoke coverage.
+- Push `codex/provider-auth-route-modules`, open a PR, and verify Control Plane CI.
+- Continue breaking up `server/index.ts` by extracting one coherent domain route cluster next. Highest-value candidates after the current independent PR stack are mission lifecycle/projection routes or agent-turn/Gateway chat routes; read the relevant OpenClaw Gateway docs first and keep SSE behavior isolated.
 - Add release governance documentation and/or enforcement slices after the next route extraction:
   - Main branch protection requirements: green CI, no direct pushes, PR review, and signed commits where repository support allows.
   - Mandatory public release signing and validation failure when signing evidence is absent.

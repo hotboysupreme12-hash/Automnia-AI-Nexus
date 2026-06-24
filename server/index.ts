@@ -31,6 +31,7 @@ import { registerAuthRoutes } from './routes/authRoutes'
 import { registerCommandConsoleFileRoutes } from './routes/commandConsoleFileRoutes'
 import { registerDiagnosticsRoutes } from './routes/diagnosticsRoutes'
 import { registerPluginRoutes } from './routes/pluginRoutes'
+import { registerProviderAuthRoutes } from './routes/providerAuthRoutes'
 import { createControlFilesService } from './services/controlFilesService'
 import { applyDiagnosticRedactions } from '../src/utils/diagnosticRedaction'
 
@@ -31598,161 +31599,23 @@ app.post('/api/shifts/defaults/:agentId', async (req, res) => {
   }
 })
 
-app.get('/api/auth/providers', (req, res) => {
-  try {
-    const probeGcloud = req.query.refresh === '1' || req.query.probe === '1'
-    const options = probeGcloud ? { probeGcloud: true } : {}
-    const providers = Object.keys(AUTH_PROVIDER_CATALOG).map((provider) => providerAuthStatus(provider, options))
-    return apiSuccess(res, { providers, persistencePath: LOCAL_AUTH_PATH })
-  } catch (error) {
-    return apiFailure(res, 500, 'auth_provider_failed', 'Failed to read provider status', String(error))
-  }
-})
-
-app.post('/api/auth/providers/:provider', async (req, res) => {
-  const { provider } = req.params
-  if (!AUTH_ENV_MAP[provider]) return apiFailure(res, 400, 'auth_provider_failed', 'Unsupported provider', { provider })
-
-  const schema = z.object({ apiKey: z.string().min(6) })
-  const parsed = schema.safeParse(req.body)
-  if (!parsed.success) return apiFailure(res, 400, 'invalid_payload', 'Invalid payload', parsed.error.flatten())
-
-  try {
-    await persistProviderAuth(provider, parsed.data.apiKey.trim())
-    return apiSuccess(res, { ok: true, provider, persisted: true, persistencePath: LOCAL_AUTH_PATH })
-  } catch (error) {
-    return apiFailure(res, 500, 'auth_provider_failed', 'Failed to persist provider credentials', { provider, detail: String(error) })
-  }
-})
-
-app.delete('/api/auth/providers/:provider', async (req, res) => {
-  const { provider } = req.params
-  if (!AUTH_ENV_MAP[provider]) return apiFailure(res, 400, 'auth_provider_failed', 'Unsupported provider', { provider })
-
-  try {
-    await removeProviderAuth(provider)
-    return apiSuccess(res, { ok: true, provider, persisted: true, persistencePath: LOCAL_AUTH_PATH })
-  } catch (error) {
-    return apiFailure(res, 500, 'auth_provider_failed', 'Failed to remove provider credentials', { provider, detail: String(error) })
-  }
-})
-
-app.post('/api/auth/providers/:provider/oauth/start', async (req, res) => {
-  const { provider } = req.params
-  if (provider !== 'google' && provider !== 'openai-codex') {
-    return apiFailure(res, 400, 'oauth_operation_failed', 'OAuth is not supported for this provider in the direct model runtime.', { provider })
-  }
-
-  const schema = z.object({
-    projectId: z.string().optional(),
-  }).optional()
-  const parsed = schema.safeParse(req.body)
-  if (!parsed.success) return apiFailure(res, 400, 'invalid_payload', 'Invalid payload', parsed.error.flatten())
-
-  try {
-    const { session, launched } = provider === 'google'
-      ? await startGoogleOAuthSession(parsed.data?.projectId)
-      : await startOpenAICodexOAuthSession()
-    return apiSuccess(res, {
-      ok: true,
-      provider,
-      sessionId: session.id,
-      authorizationUrl: session.authorizationUrl,
-      openedBrowser: launched.ok,
-      browserDetail: launched.detail,
-      redirectUri: session.redirectUri || (provider === 'google' ? GOOGLE_OAUTH_REDIRECT_URI : OPENAI_CODEX_OAUTH_REDIRECT_URI),
-      projectId: session.projectId || null,
-    })
-  } catch (error) {
-    return apiFailure(res, 500, 'oauth_operation_failed', `Failed to start ${provider} OAuth`, { provider, detail: String(error) })
-  }
-})
-
-app.get('/api/auth/providers/:provider/oauth/session/:sessionId', (req, res) => {
-  const { provider, sessionId } = req.params
-  if (provider !== 'google' && provider !== 'openai-codex') {
-    return apiFailure(res, 400, 'oauth_operation_failed', 'OAuth is not supported for this provider.', { provider })
-  }
-  const session = oauthSessions.get(sessionId)
-  if (!session) return apiFailure(res, 404, 'oauth_operation_failed', 'OAuth session not found', { provider, sessionId })
-  if (session.provider !== provider) return apiFailure(res, 404, 'oauth_operation_failed', 'OAuth session not found for this provider', { provider, sessionId })
-  return apiSuccess(res, {
-    ok: true,
-    provider,
-    sessionId,
-    status: session.status,
-    error: session.error,
-    authorizationUrl: session.authorizationUrl,
-    manualInputRequired: Boolean(session.manualInputRequired),
-    manualInputSubmittedAt: session.manualInputSubmittedAt,
-    manualPrompt: session.manualPrompt,
-    result: session.result,
-    providerStatus: providerAuthStatus(provider),
-  })
-})
-
-app.post('/api/auth/providers/:provider/oauth/session/:sessionId/manual', async (req, res) => {
-  const { provider, sessionId } = req.params
-  if (provider !== 'openai-codex') {
-    return apiFailure(res, 400, 'oauth_operation_failed', 'Manual OAuth input is only supported for OpenAI Codex.', { provider })
-  }
-
-  const session = oauthSessions.get(sessionId)
-  if (!session || session.provider !== provider) {
-    return apiFailure(res, 404, 'oauth_operation_failed', 'OAuth session not found for this provider', { provider, sessionId })
-  }
-  if (session.status !== 'pending') {
-    return apiFailure(res, 409, 'oauth_operation_failed', `OAuth session is already ${session.status}.`, { provider, sessionId })
-  }
-
-  const schema = z.object({
-    input: z.string().trim().min(1).max(12000),
-  })
-  const parsed = schema.safeParse(req.body)
-  if (!parsed.success) return apiFailure(res, 400, 'invalid_payload', 'Invalid payload', parsed.error.flatten())
-
-  try {
-    const { code, state } = parseOpenAICodexAuthorizationInput(parsed.data.input)
-    await completeOpenAICodexOAuthSession(session, code, state)
-    return apiSuccess(res, {
-      ok: true,
-      provider,
-      sessionId,
-      status: session.status,
-      result: session.result,
-      providerStatus: providerAuthStatus(provider),
-    })
-  } catch (error) {
-    session.status = 'error'
-    session.error = String(error)
-    session.completedAt = new Date().toISOString()
-    return apiFailure(res, 400, 'oauth_operation_failed', 'Failed to complete OpenAI Codex OAuth', { provider, detail: String(error) })
-  }
-})
-
-app.get('/api/models/available', async (req, res) => {
-  try {
-    if (req.query.refresh === '1') {
-      const cache = await refreshAvailableModelsCache()
-      return apiSuccess(res, {
-        models: cache.models,
-        source: cache.source,
-        refreshing: false,
-        refreshedAt: cache.refreshedAt,
-      })
-    }
-
-    const refreshStale = req.query.background === '0' || req.query.noRefresh === '1'
-      ? false
-      : true
-    return apiSuccess(res, getFastAvailableModelsCatalog({ refreshStale }))
-  } catch (error) {
-    console.error('Failed to load models:', error)
-    return apiFailure(res, 500, 'model_catalog_failed', 'Failed to load models', {
-      detail: String(error),
-      models: fallbackAvailableModels(),
-    })
-  }
+registerProviderAuthRoutes(app, {
+  authEnvMap: AUTH_ENV_MAP,
+  authProviderCatalog: AUTH_PROVIDER_CATALOG,
+  fallbackAvailableModels,
+  getFastAvailableModelsCatalog,
+  googleOAuthRedirectUri: GOOGLE_OAUTH_REDIRECT_URI,
+  localAuthPath: LOCAL_AUTH_PATH,
+  oauthSessions,
+  openAiCodexOAuthRedirectUri: OPENAI_CODEX_OAUTH_REDIRECT_URI,
+  parseOpenAICodexAuthorizationInput,
+  completeOpenAICodexOAuthSession,
+  persistProviderAuth,
+  providerAuthStatus,
+  refreshAvailableModelsCache,
+  removeProviderAuth,
+  startGoogleOAuthSession,
+  startOpenAICodexOAuthSession,
 })
 
 app.get('/api/skills/check', async (req, res) => {
