@@ -19,6 +19,7 @@ function routeBlock(source: string, marker: string): string {
 }
 
 const server = readWorkspaceFile('server/index.ts')
+const controlPlaneHttp = readWorkspaceFile('server/controlPlaneHttp.ts')
 const editorModal = readWorkspaceFile('src/components/editor/AgentEditorModal.tsx')
 const nexusStore = readWorkspaceFile('src/store/nexusStore.ts')
 const packageJson = JSON.parse(readWorkspaceFile('package.json')) as { scripts?: Record<string, string> }
@@ -30,7 +31,7 @@ for (const code of [
   'image_picker_failed',
   'resource_not_found',
 ]) {
-  assert(server.includes(`| '${code}'`), `ApiErrorCode is missing ${code}`)
+  assert(controlPlaneHttp.includes(`| '${code}'`), `ApiErrorCode is missing ${code}`)
 }
 
 const canonicalRouteMarkers = [

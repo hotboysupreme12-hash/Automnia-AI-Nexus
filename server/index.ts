@@ -1,5 +1,4 @@
-import cors from 'cors'
-import express, { type ErrorRequestHandler, type Request, type Response } from 'express'
+import express, { type Request, type Response } from 'express'
 import { createHash, randomBytes, randomUUID } from 'node:crypto'
 import { chmodSync, createReadStream, existsSync, mkdirSync, readdirSync, readFileSync, statSync, writeFileSync, promises as fs } from 'node:fs'
 import { createServer, request as httpRequest, type Server } from 'node:http'
@@ -27,10 +26,15 @@ import {
   readRuntimeRunLedgerTail,
   runtimeLedgerStatus,
 } from './runtimeLedger'
+import { apiFailure, apiSuccess, installControlPlaneHttp, setStaticSecurityHeaders } from './controlPlaneHttp'
+import { registerAuthRoutes } from './routes/authRoutes'
+import { registerCommandConsoleFileRoutes } from './routes/commandConsoleFileRoutes'
+import { registerDiagnosticsRoutes } from './routes/diagnosticsRoutes'
+import { registerPluginRoutes } from './routes/pluginRoutes'
+import { createControlFilesService } from './services/controlFilesService'
 import { applyDiagnosticRedactions } from '../src/utils/diagnosticRedaction'
 
 const app = express()
-app.set('etag', false)
 
 const PORT = Number(process.env.CONTROL_CENTER_PORT || 4050)
 const CONFIGURED_AUTH_TOKEN = process.env.CONTROL_CENTER_TOKEN?.trim()
@@ -38,157 +42,12 @@ const AUTH_TOKEN = CONFIGURED_AUTH_TOKEN || randomBytes(32).toString('base64url'
 const AUTH_TOKEN_SOURCE = CONFIGURED_AUTH_TOKEN ? 'environment' : 'generated'
 const sessionTokens = new Set<string>()
 const CONTROL_CENTER_FRONTEND_PORT = Number(process.env.CONTROL_CENTER_FRONTEND_PORT || 5173)
-const PUBLIC_API_PATHS = new Set(['/api/health', '/api/auth/login', '/api/auth/status'])
-const CONTROL_CENTER_CONTENT_SECURITY_POLICY = [
-  "default-src 'self'",
-  "script-src 'self'",
-  "style-src 'self' 'unsafe-inline'",
-  "img-src 'self' data: blob:",
-  "font-src 'self' data:",
-  "connect-src 'self' http://127.0.0.1:* http://localhost:* ws://127.0.0.1:* ws://localhost:*",
-  "media-src 'self' data: blob:",
-  "worker-src 'self' blob:",
-  "object-src 'none'",
-  "base-uri 'none'",
-  "form-action 'none'",
-  "frame-src 'none'",
-  "frame-ancestors 'none'",
-].join('; ')
-
-function controlCenterAllowedOrigins() {
-  return new Set([
-    `http://127.0.0.1:${PORT}`,
-    `http://localhost:${PORT}`,
-    `http://127.0.0.1:${CONTROL_CENTER_FRONTEND_PORT}`,
-    `http://localhost:${CONTROL_CENTER_FRONTEND_PORT}`,
-  ])
-}
-
-function isAllowedControlCenterOrigin(origin: string | undefined) {
-  if (!origin) return true
-  try {
-    return controlCenterAllowedOrigins().has(new URL(origin).origin)
-  } catch {
-    return false
-  }
-}
-
-function requestIdFor(req: Request) {
-  const existing = req.get('x-request-id') || req.get('x-control-center-request-id')
-  return existing?.trim() || randomUUID()
-}
-
-function bearerToken(req: Request) {
-  const header = req.get('authorization') || ''
-  const match = /^Bearer\s+(.+)$/i.exec(header)
-  return match?.[1]?.trim() || ''
-}
-
-function apiPath(req: Request) {
-  return (req.originalUrl.split('?')[0] || req.path).replace(/\/+$/, '') || '/'
-}
-
-function isPublicApiRequest(req: Request) {
-  return req.method === 'OPTIONS' || PUBLIC_API_PATHS.has(apiPath(req))
-}
-
-function setStaticSecurityHeaders(res: Response, filePath: string) {
-  res.setHeader('X-Content-Type-Options', 'nosniff')
-  res.setHeader('Referrer-Policy', 'no-referrer')
-  res.setHeader('Cross-Origin-Opener-Policy', 'same-origin')
-  const ext = path.extname(filePath).toLowerCase()
-  if (ext === '.html' || ext === '.htm') {
-    res.setHeader('Content-Security-Policy', CONTROL_CENTER_CONTENT_SECURITY_POLICY)
-  }
-}
-
-type ApiErrorCode =
-  | 'agent_not_found'
-  | 'agent_preflight_failed'
-  | 'agent_retire_failed'
-  | 'agent_session_operation_failed'
-  | 'agent_turn_failed'
-  | 'agent_config_sync_failed'
-  | 'avatar_preview_failed'
-  | 'avatar_upload_failed'
-  | 'auth_required'
-  | 'auth_provider_failed'
-  | 'clawtalk_console_failed'
-  | 'control_file_operation_failed'
-  | 'doctor_operation_failed'
-  | 'filesystem_operation_failed'
-  | 'file_upload_failed'
-  | 'folder_list_failed'
-  | 'folder_picker_failed'
-  | 'image_picker_failed'
-  | 'invalid_json'
-  | 'invalid_payload'
-  | 'invalid_token'
-  | 'mission_invalid_state'
-  | 'mission_not_found'
-  | 'mission_report_not_found'
-  | 'mission_scheduler_failed'
-  | 'model_auth_required'
-  | 'model_catalog_failed'
-  | 'model_operation_failed'
-  | 'origin_not_allowed'
-  | 'oauth_operation_failed'
-  | 'openclaw_command_failed'
-  | 'openclaw_summary_failed'
-  | 'party_dispatch_failed'
-  | 'party_handoff_failed'
-  | 'party_operation_failed'
-  | 'party_coordination_failed'
-  | 'plugin_command_failed'
-  | 'plugin_not_found'
-  | 'plugin_operation_failed'
-  | 'plugin_terminal_failed'
-  | 'runtime_status_failed'
-  | 'runtime_action_failed'
-  | 'runtime_summary_failed'
-  | 'resource_not_found'
-  | 'recruit_failed'
-  | 'shift_command_failed'
-  | 'shift_operation_failed'
-  | 'skill_command_failed'
-  | 'skill_not_found'
-  | 'skill_operation_failed'
-  | 'team_sync_failed'
-  | 'workspace_unwritable'
-
-function responseRequestId(res: Response): string {
-  return String(res.getHeader('X-Request-Id') || randomUUID())
-}
-
-function apiSuccess<T>(res: Response, data: T, status = 200) {
-  return res.status(status).json({
-    ok: true,
-    data,
-    requestId: responseRequestId(res),
-  })
-}
-
-function sanitizeApiErrorDetail(detail: unknown): unknown {
-  if (detail === undefined || detail === null) return undefined
-  if (typeof detail === 'string') return applyDiagnosticRedactions(detail)
-  if (detail instanceof Error) return applyDiagnosticRedactions(detail.message)
-  return detail
-}
-
-function apiFailure(res: Response, status: number, code: ApiErrorCode, message: string, detail?: unknown) {
-  const error: Record<string, unknown> = {
-    code,
-    message: applyDiagnosticRedactions(message),
-    status,
-  }
-  const cleanDetail = sanitizeApiErrorDetail(detail)
-  if (cleanDetail !== undefined) error.detail = cleanDetail
-  return res.status(status).json({
-    ok: false,
-    error,
-    requestId: responseRequestId(res),
-  })
-}
+installControlPlaneHttp(app, {
+  authToken: AUTH_TOKEN,
+  frontendPort: CONTROL_CENTER_FRONTEND_PORT,
+  port: PORT,
+  sessionTokens,
+})
 
 function pluginErrorStatus(error: unknown): number {
   return typeof (error as Error & { code?: unknown }).code === 'number' ? 502 : 500
@@ -198,52 +57,6 @@ function pluginErrorDetail(error: unknown): string {
   return redactSensitiveText(String(error))
 }
 
-app.use((req, res, next) => {
-  res.setHeader('X-Request-Id', requestIdFor(req))
-  next()
-})
-app.use(cors({
-  origin(origin, callback) {
-    callback(null, isAllowedControlCenterOrigin(origin) ? origin || true : false)
-  },
-  allowedHeaders: ['Content-Type', 'Authorization', 'X-Request-Id', 'X-Control-Center-Request-Id'],
-  exposedHeaders: ['X-Request-Id'],
-  methods: ['GET', 'HEAD', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
-}))
-app.use('/api', (_req, res, next) => {
-  res.setHeader('Cache-Control', 'no-store')
-  next()
-})
-app.use(express.json({ limit: '4mb' }))
-const jsonParseErrorHandler: ErrorRequestHandler = (error, _req, res, next) => {
-  if (error instanceof SyntaxError && 'body' in error) {
-    apiFailure(
-      res,
-      400,
-      'invalid_json',
-      'Invalid JSON payload',
-      {
-        detail: error.message,
-        hint: 'Send valid JSON with Content-Type: application/json. For fetch, use body: JSON.stringify(payload).',
-      },
-    )
-    return
-  }
-  next(error)
-}
-app.use(jsonParseErrorHandler)
-app.use('/api', (req, res, next) => {
-  const origin = req.get('origin')
-  if (!isAllowedControlCenterOrigin(origin)) {
-    return apiFailure(res, 403, 'origin_not_allowed', 'Request origin is not allowed')
-  }
-  if (isPublicApiRequest(req)) return next()
-  const token = bearerToken(req)
-  if (!token || (!sessionTokens.has(token) && token !== AUTH_TOKEN)) {
-    return apiFailure(res, 401, 'auth_required', 'Authentication required')
-  }
-  return next()
-})
 let controlServer: Server | null = null
 const optionalRequire = createRequire(import.meta.url || __filename)
 type SqliteStatement = {
@@ -415,7 +228,7 @@ configureRuntimeLedger({
   missionReportsJsonl: MISSION_REPORT_LEDGER_PATH,
 })
 
-const CONTROL_FILES = ['AGENTS.md', 'BOOTSTRAP.md', 'HEARTBEAT.md', 'IDENTITY.md', 'SOUL.md', 'USER.md', 'MEMORY.md'] as const
+const controlFilesService = createControlFilesService(WORKSPACE_ROOT)
 const OPENCLAW_BOOTSTRAP_FILES = ['AGENTS.md', 'SOUL.md', 'TOOLS.md', 'IDENTITY.md', 'USER.md', 'HEARTBEAT.md', 'BOOTSTRAP.md'] as const
 const OPENCLAW_OPTIONAL_BOOTSTRAP_FILES = ['SOUL.md', 'USER.md', 'HEARTBEAT.md', 'IDENTITY.md'] as const
 const AGENT_RESOURCE_FILES = [
@@ -7034,13 +6847,6 @@ process.on('SIGHUP', () => handleControlCenterShutdown('SIGHUP'))
 process.on('exit', () => {
   handleControlCenterShutdown('process exit')
 })
-
-// Export helpers for potential runtime use
-
-
-function isAllowedFile(file: string): file is (typeof CONTROL_FILES)[number] {
-  return (CONTROL_FILES as readonly string[]).includes(file)
-}
 
 function isMarkdownResourceFile(file: string) {
   return /^[^\\/]+\.md$/i.test(file)
@@ -15049,10 +14855,6 @@ async function runMissionCronRound(missionId: string, assignments: TeamSyncAssig
       }
     }
   }
-}
-
-async function readControlFile(file: string) {
-  return fs.readFile(path.join(WORKSPACE_ROOT, file), 'utf-8')
 }
 
 const DEFAULT_CONTEXT_PRUNING_TOOL_DENY = ['browser', 'canvas']
@@ -26307,118 +26109,30 @@ async function runDoctorChecks(): Promise<{ id: string; startedAt: string; ended
   return result
 }
 
-app.get('/api/health', async (_req, res) => {
-  const disk = await diskFreeSpaceCheck()
-  return apiSuccess(res, {
-    ok: true,
-    workspace: WORKSPACE_ROOT,
-    openclaw: resolvedOpenClawRuntimeInfo(),
-    recommendedOpenClawVersion: RECOMMENDED_OPENCLAW_VERSION,
-    disk,
-    persistence: runtimeLedgerStatus({ sqlite: false }),
-    diagnostics: {
-      doctor: cachedDoctorDiagnosticsSummary(),
-    },
-    agentConfigSync: { updated: 0, mode: 'read-only' },
-    gatewayChat: {
-      enabled: CONTROL_CENTER_GATEWAY_AGENT_SESSIONS && CONTROL_CENTER_GATEWAY_CHAT_CLIENT && !FORCE_LOCAL_AGENT_RUNTIME,
-      ready: gatewayClientState?.ready === true,
-      prewarming: Boolean(controlCenterGatewayPrewarmPromise),
-      prewarmOnStartup: CONTROL_CENTER_GATEWAY_PREWARM_ON_STARTUP,
-      prewarmedAt: controlCenterGatewayPrewarmedAt || null,
-      defaultsReady: openclawAgentRunDefaultsReady,
-      ...gatewayChatRuntimeSnapshot(),
-    },
-  })
+registerDiagnosticsRoutes(app, {
+  cachedDoctorDiagnosticsSummary,
+  diskFreeSpaceCheck,
+  gatewayChatEnabled: () => CONTROL_CENTER_GATEWAY_AGENT_SESSIONS && CONTROL_CENTER_GATEWAY_CHAT_CLIENT && !FORCE_LOCAL_AGENT_RUNTIME,
+  gatewayChatPrewarmedAt: () => controlCenterGatewayPrewarmedAt || null,
+  gatewayChatPrewarming: () => Boolean(controlCenterGatewayPrewarmPromise),
+  gatewayChatPrewarmOnStartup: CONTROL_CENTER_GATEWAY_PREWARM_ON_STARTUP,
+  gatewayChatReady: () => gatewayClientState?.ready === true,
+  gatewayChatRuntimeSnapshot,
+  openClawAgentRunDefaultsReady: () => openclawAgentRunDefaultsReady,
+  readDoctorDiagnosticsSummary,
+  recommendedOpenClawVersion: RECOMMENDED_OPENCLAW_VERSION,
+  redactSensitiveText,
+  resolvedOpenClawRuntimeInfo,
+  runDoctorChecks,
+  runtimeLedgerStatus,
+  runtimeVersionCheckPayload,
+  workspaceRoot: WORKSPACE_ROOT,
 })
 
-app.get('/api/runtime/version-check', (_req, res) => {
-  return apiSuccess(res, runtimeVersionCheckPayload())
-})
-
-app.post('/api/doctor/run', async (_req, res) => {
-  try {
-    return apiSuccess(res, await runDoctorChecks())
-  } catch (error) {
-    return apiFailure(res, 500, 'doctor_operation_failed', 'Doctor run failed', redactSensitiveText(String(error)))
-  }
-})
-
-app.get('/api/doctor/recent', async (req, res) => {
-  try {
-    const forceRefresh = req.query.refresh === '1' || req.query.refresh === 'true'
-    return apiSuccess(res, { doctor: await readDoctorDiagnosticsSummary(forceRefresh) })
-  } catch (error) {
-    return apiFailure(res, 500, 'doctor_operation_failed', 'Doctor history failed', redactSensitiveText(String(error)))
-  }
-})
-
-app.get('/api/files', (_req, res) => {
-  return apiSuccess(res, { files: CONTROL_FILES })
-})
-
-app.post('/api/files/upload', express.raw({
-  type: [
-    'image/*',
-    'audio/*',
-    'text/*',
-    'application/octet-stream',
-    'application/pdf',
-    'application/json',
-    'application/x-ndjson',
-    'application/xml',
-    'application/yaml',
-    'application/x-yaml',
-    'application/msword',
-    'application/rtf',
-    'application/vnd.ms-powerpoint',
-    'application/vnd.ms-excel',
-    'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
-    'application/vnd.openxmlformats-officedocument.presentationml.presentation',
-    'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
-  ],
-  limit: COMMAND_CONSOLE_UPLOAD_LIMIT_BYTES,
-}), async (req, res) => {
-  try {
-    const bytes = Buffer.isBuffer(req.body) ? req.body : Buffer.alloc(0)
-    const name = typeof req.query.name === 'string' ? req.query.name : undefined
-    const mimeType =
-      (typeof req.query.mimeType === 'string' ? req.query.mimeType : undefined) ||
-      req.get('x-file-type') ||
-      req.get('content-type') ||
-      undefined
-    const attachment = await persistCommandConsoleUpload(bytes, name, mimeType)
-    return apiSuccess(res, { attachment })
-  } catch (error) {
-    return apiFailure(res, 400, 'file_upload_failed', 'Upload failed', error instanceof Error ? error.message : String(error))
-  }
-})
-
-app.get('/api/files/:file', async (req, res) => {
-  const file = req.params.file
-  if (!isAllowedFile(file)) return apiFailure(res, 400, 'invalid_payload', 'File is not in allowed control list.')
-
-  try {
-    return apiSuccess(res, { file, content: await readControlFile(file) })
-  } catch (error) {
-    return apiFailure(res, 404, 'control_file_operation_failed', `Could not read ${file}`, String(error))
-  }
-})
-
-app.put('/api/files/:file', async (req, res) => {
-  const file = req.params.file
-  if (!isAllowedFile(file)) return apiFailure(res, 400, 'invalid_payload', 'File is not in allowed control list.')
-
-  const schema = z.object({ content: z.string() })
-  const parsed = schema.safeParse(req.body)
-  if (!parsed.success) return apiFailure(res, 400, 'invalid_payload', 'Invalid payload', parsed.error.flatten())
-
-  try {
-    await fs.writeFile(path.join(WORKSPACE_ROOT, file), parsed.data.content, 'utf-8')
-    return apiSuccess(res, { file })
-  } catch (error) {
-    return apiFailure(res, 500, 'control_file_operation_failed', `Could not write ${file}`, String(error))
-  }
+registerCommandConsoleFileRoutes(app, {
+  controlFiles: controlFilesService,
+  persistCommandConsoleUpload,
+  uploadLimitBytes: COMMAND_CONSOLE_UPLOAD_LIMIT_BYTES,
 })
 
 app.get('/api/openclaw/summary', async (_req, res) => {
@@ -27220,389 +26934,31 @@ app.get('/api/openclaw/runtime/summary', async (req, res) => {
   }
 })
 
-app.get('/api/plugins', async (req, res) => {
-  try {
-    const forceRefresh = req.query.refresh === '1' || req.query.refresh === 'true'
-    return apiSuccess(res, await listPluginControls({ forceRefresh }))
-  } catch (error) {
-    return apiFailure(res, 500, 'plugin_operation_failed', 'Failed to list plugins', pluginErrorDetail(error))
-  }
-})
-
-app.get('/api/plugins/search', async (req, res) => {
-  const query = typeof req.query.q === 'string' ? req.query.q.trim() : ''
-  const limitRaw = Number(req.query.limit || 20)
-  const limit = Number.isFinite(limitRaw) ? Math.max(1, Math.min(50, Math.round(limitRaw))) : 20
-  if (!query) return apiSuccess(res, { results: [] })
-
-  try {
-    return apiSuccess(res, await searchOpenClawPlugins(query, limit))
-  } catch (error) {
-    return apiFailure(res, 502, 'plugin_command_failed', 'Plugin search failed', pluginErrorDetail(error))
-  }
-})
-
-app.post('/api/plugins/install', async (req, res) => {
-  const schema = z.object({
-    spec: z.string().trim().min(1).max(320),
-    pluginId: z.string().regex(PLUGIN_ID_PATTERN).optional(),
-    pin: z.boolean().optional().default(true),
-    enable: z.boolean().optional().default(true),
-    force: z.boolean().optional().default(false),
-    restart: z.boolean().optional().default(true),
-  })
-  const parsed = schema.safeParse(req.body)
-  if (!parsed.success) return apiFailure(res, 400, 'invalid_payload', 'Invalid payload', parsed.error.flatten())
-
-  try {
-    const result = await installOpenClawPlugin(parsed.data)
-    invalidateRuntimeStatusCache()
-    return apiSuccess(res, {
-      install: result.install,
-      activation: result.activation,
-      repair: result.repair,
-      postInstallRepair: result.postInstallRepair,
-      plugin: result.plugin,
-      restart: result.restart,
-      plugins: result.controls.plugins,
-      configPath: result.controls.configPath,
-      runtimeStatePath: PLUGIN_RUNTIME_STATE_PATH,
-      cache: result.controls.cache,
-      ...(result.controls.cliError ? { cliError: result.controls.cliError } : {}),
-    })
-  } catch (error) {
-    return apiFailure(res, pluginErrorStatus(error), 'plugin_command_failed', 'Plugin install failed', pluginErrorDetail(error))
-  }
-})
-
-app.post('/api/plugins/update-all', async (req, res) => {
-  const schema = z.object({
-    restart: z.boolean().optional().default(true),
-  })
-  const parsed = schema.safeParse(req.body || {})
-  if (!parsed.success) return apiFailure(res, 400, 'invalid_payload', 'Invalid payload', parsed.error.flatten())
-
-  try {
-    const result = await updateAllOpenClawPlugins(parsed.data.restart)
-    invalidateRuntimeStatusCache()
-    return apiSuccess(res, {
-      command: result.command,
-      restart: result.restart,
-      plugins: result.controls.plugins,
-      configPath: result.controls.configPath,
-      runtimeStatePath: PLUGIN_RUNTIME_STATE_PATH,
-      cache: result.controls.cache,
-      ...(result.controls.cliError ? { cliError: result.controls.cliError } : {}),
-    })
-  } catch (error) {
-    return apiFailure(res, pluginErrorStatus(error), 'plugin_command_failed', 'Plugin update failed', pluginErrorDetail(error))
-  }
-})
-
-app.post('/api/plugins/gateway/restart', async (_req, res) => {
-  try {
-    const restart = {
-      ...(await tryRestartGatewayService({ force: true })),
-      scheduled: false,
-    }
-    invalidateRuntimeStatusCache()
-    const controls = await listPluginControls()
-    return apiSuccess(res, {
-      restart,
-      plugins: controls.plugins,
-      configPath: controls.configPath,
-      cache: controls.cache,
-      ...(controls.cliError ? { cliError: controls.cliError } : {}),
-    })
-  } catch (error) {
-    return apiFailure(res, 500, 'plugin_operation_failed', 'Gateway restart failed', pluginErrorDetail(error))
-  }
-})
-
-app.post('/api/plugins/clawtalk/setup', async (req, res) => {
-  const schema = z.object({
-    apiKey: z.string().trim().min(1).max(512),
-    server: z.string().trim().max(320).optional(),
-    install: z.boolean().optional().default(true),
-    restart: z.boolean().optional().default(true),
-  })
-  const parsed = schema.safeParse(req.body)
-  if (!parsed.success) return apiFailure(res, 400, 'invalid_payload', 'Invalid payload', parsed.error.flatten())
-
-  try {
-    const result = await setupClawTalkPlugin(parsed.data)
-    invalidateRuntimeStatusCache()
-    return apiSuccess(res, {
-      install: result.installResult?.install,
-      activation: result.installResult?.activation,
-      repair: result.installResult?.repair,
-      postInstallRepair: result.installResult?.postInstallRepair,
-      clawTalkSetup: result.setup,
-      doctor: result.doctor.command,
-      inspect: result.inspect,
-      plugin: result.controls.plugins.find((entry) => entry.id === CLAWTALK_PLUGIN_ID) || null,
-      restart: result.restart,
-      plugins: result.controls.plugins,
-      configPath: result.controls.configPath,
-      runtimeStatePath: PLUGIN_RUNTIME_STATE_PATH,
-      cache: result.controls.cache,
-      ...(result.controls.cliError ? { cliError: result.controls.cliError } : {}),
-    })
-  } catch (error) {
-    const message = String(error)
-    const status = /valid ClawTalk API key|server must be/i.test(message)
-      ? 400
-      : typeof (error as Error & { code?: unknown }).code === 'number'
-        ? 502
-        : 500
-    return apiFailure(
-      res,
-      status,
-      status === 400 ? 'invalid_payload' : 'plugin_command_failed',
-      'ClawTalk setup failed',
-      redactSensitiveText(message),
-    )
-  }
-})
-
-app.post('/api/plugins/:pluginId/update', async (req, res) => {
-  const pluginId = (req.params.pluginId || '').trim().toLowerCase()
-  if (!PLUGIN_ID_PATTERN.test(pluginId)) {
-    return apiFailure(res, 400, 'invalid_payload', 'Invalid plugin id.')
-  }
-  const schema = z.object({
-    restart: z.boolean().optional().default(true),
-  })
-  const parsed = schema.safeParse(req.body || {})
-  if (!parsed.success) return apiFailure(res, 400, 'invalid_payload', 'Invalid payload', parsed.error.flatten())
-
-  try {
-    const result = await updateOpenClawPlugin(pluginId, parsed.data.restart)
-    invalidateRuntimeStatusCache()
-    return apiSuccess(res, {
-      command: result.command,
-      plugin: result.plugin,
-      restart: result.restart,
-      plugins: result.controls.plugins,
-      configPath: result.controls.configPath,
-      runtimeStatePath: PLUGIN_RUNTIME_STATE_PATH,
-      cache: result.controls.cache,
-      ...(result.controls.cliError ? { cliError: result.controls.cliError } : {}),
-    })
-  } catch (error) {
-    return apiFailure(res, pluginErrorStatus(error), 'plugin_command_failed', 'Plugin update failed', pluginErrorDetail(error))
-  }
-})
-
-app.post('/api/plugins/:pluginId/uninstall', async (req, res) => {
-  const pluginId = (req.params.pluginId || '').trim().toLowerCase()
-  if (!PLUGIN_ID_PATTERN.test(pluginId)) {
-    return apiFailure(res, 400, 'invalid_payload', 'Invalid plugin id.')
-  }
-  const schema = z.object({
-    keepFiles: z.boolean().optional().default(false),
-    force: z.boolean().optional().default(true),
-    restart: z.boolean().optional().default(true),
-  })
-  const parsed = schema.safeParse(req.body || {})
-  if (!parsed.success) return apiFailure(res, 400, 'invalid_payload', 'Invalid payload', parsed.error.flatten())
-
-  try {
-    const result = await uninstallOpenClawPlugin(pluginId, parsed.data)
-    invalidateRuntimeStatusCache()
-    return apiSuccess(res, {
-      command: result.command,
-      plugin: null,
-      restart: result.restart,
-      plugins: result.controls.plugins,
-      configPath: result.controls.configPath,
-      runtimeStatePath: PLUGIN_RUNTIME_STATE_PATH,
-      cache: result.controls.cache,
-      ...(result.controls.cliError ? { cliError: result.controls.cliError } : {}),
-    })
-  } catch (error) {
-    return apiFailure(res, pluginErrorStatus(error), 'plugin_command_failed', 'Plugin uninstall failed', pluginErrorDetail(error))
-  }
-})
-
-app.post('/api/plugins/:pluginId/inspect', async (req, res) => {
-  const pluginId = (req.params.pluginId || '').trim().toLowerCase()
-  if (!PLUGIN_ID_PATTERN.test(pluginId)) {
-    return apiFailure(res, 400, 'invalid_payload', 'Invalid plugin id.')
-  }
-
-  try {
-    const inspect = await inspectOpenClawPluginRuntime(pluginId)
-    const controls = await listPluginControls()
-    return apiSuccess(res, {
-      inspect,
-      plugin: controls.plugins.find((entry) => entry.id === pluginId) || null,
-      plugins: controls.plugins,
-      configPath: controls.configPath,
-      cache: controls.cache,
-      ...(controls.cliError ? { cliError: controls.cliError } : {}),
-    })
-  } catch (error) {
-    return apiFailure(res, pluginErrorStatus(error), 'plugin_command_failed', 'Plugin runtime inspect failed', pluginErrorDetail(error))
-  }
-})
-
-app.post('/api/plugins/:pluginId/config', async (req, res) => {
-  const pluginId = (req.params.pluginId || '').trim().toLowerCase()
-  if (!PLUGIN_ID_PATTERN.test(pluginId)) {
-    return apiFailure(res, 400, 'invalid_payload', 'Invalid plugin id.')
-  }
-
-  const schema = z.object({
-    values: z.record(z.string(), z.string().max(20_000)).optional().default({}),
-    providerAuth: z.record(z.string(), z.string().max(20_000)).optional().default({}),
-    restart: z.boolean().optional().default(true),
-  })
-  const parsed = schema.safeParse(req.body)
-  if (!parsed.success) return apiFailure(res, 400, 'invalid_payload', 'Invalid payload', parsed.error.flatten())
-
-  try {
-    await savePluginDirectConfig(pluginId, parsed.data.values, parsed.data.providerAuth)
-    invalidateRuntimeStatusCache()
-    const restart = parsed.data.restart ? schedulePluginGatewayRestart() : { restarted: false, scheduled: false, detail: 'gateway restart skipped' }
-    const controls = await listPluginControls()
-    return apiSuccess(res, {
-      plugin: controls.plugins.find((entry) => entry.id === pluginId) || null,
-      restart,
-      plugins: controls.plugins,
-      configPath: controls.configPath,
-      cache: controls.cache,
-      ...(controls.cliError ? { cliError: controls.cliError } : {}),
-    })
-  } catch (error) {
-    return apiFailure(res, 500, 'plugin_operation_failed', 'Failed to save plugin config', pluginErrorDetail(error))
-  }
-})
-
-app.post('/api/plugins/setup-terminal', async (req, res) => {
-  const schema = z.object({
-    command: z.enum(['plugins', 'model', 'full', 'doctor', 'registry']).optional().default('plugins'),
-    pluginId: z.string().regex(PLUGIN_ID_PATTERN).optional(),
-    cols: z.number().int().min(40).max(180).optional(),
-    rows: z.number().int().min(10).max(60).optional(),
-  })
-  const parsed = schema.safeParse(req.body)
-  if (!parsed.success) return apiFailure(res, 400, 'invalid_payload', 'Invalid payload', parsed.error.flatten())
-
-  try {
-    const session = startPluginSetupTerminalSession(parsed.data)
-    return apiSuccess(res, { session: pluginSetupTerminalSnapshot(session) })
-  } catch (error) {
-    return apiFailure(res, 500, 'plugin_terminal_failed', 'Failed to start setup terminal', pluginErrorDetail(error))
-  }
-})
-
-app.get('/api/plugins/setup-terminal/:sessionId/stream', (req, res) => {
-  const session = pluginSetupTerminalSessions.get(req.params.sessionId)
-  if (!session) return apiFailure(res, 404, 'plugin_not_found', 'Setup terminal session not found.')
-
-  res.writeHead(200, {
-    'Content-Type': 'text/event-stream; charset=utf-8',
-    'Cache-Control': 'no-cache, no-transform',
-    Connection: 'keep-alive',
-  })
-  writeSseEvent(res, 'snapshot', {
-    session: pluginSetupTerminalSnapshot(session),
-    output: session.output,
-  })
-
-  const client: PluginSetupTerminalClient = (event, payload) => {
-    writeSseEvent(res, event, payload && typeof payload === 'object' ? payload as Record<string, unknown> : { value: payload })
-  }
-  session.clients.add(client)
-
-  const heartbeat = setInterval(() => writeSseEvent(res, 'heartbeat', { at: new Date().toISOString() }), 20_000)
-  heartbeat.unref?.()
-  req.on('close', () => {
-    clearInterval(heartbeat)
-    session.clients.delete(client)
-  })
-})
-
-app.post('/api/plugins/setup-terminal/:sessionId/input', (req, res) => {
-  const session = pluginSetupTerminalSessions.get(req.params.sessionId)
-  if (!session) return apiFailure(res, 404, 'plugin_not_found', 'Setup terminal session not found.')
-  if (session.status !== 'running') return apiFailure(res, 409, 'plugin_terminal_failed', 'Setup terminal is not running.')
-
-  const schema = z.object({ data: z.string().max(20_000) })
-  const parsed = schema.safeParse(req.body)
-  if (!parsed.success) return apiFailure(res, 400, 'invalid_payload', 'Invalid payload', parsed.error.flatten())
-
-  try {
-    session.process.write(parsed.data.data)
-    session.updatedAt = new Date().toISOString()
-    return apiSuccess(res, { session: pluginSetupTerminalSnapshot(session) })
-  } catch (error) {
-    return apiFailure(res, 500, 'plugin_terminal_failed', 'Failed to write terminal input', pluginErrorDetail(error))
-  }
-})
-
-app.post('/api/plugins/setup-terminal/:sessionId/resize', (req, res) => {
-  const session = pluginSetupTerminalSessions.get(req.params.sessionId)
-  if (!session) return apiFailure(res, 404, 'plugin_not_found', 'Setup terminal session not found.')
-
-  const schema = z.object({
-    cols: z.number().int().min(40).max(180),
-    rows: z.number().int().min(10).max(60),
-  })
-  const parsed = schema.safeParse(req.body)
-  if (!parsed.success) return apiFailure(res, 400, 'invalid_payload', 'Invalid payload', parsed.error.flatten())
-
-  try {
-    session.process.resize(parsed.data.cols, parsed.data.rows)
-    session.updatedAt = new Date().toISOString()
-    return apiSuccess(res, { session: pluginSetupTerminalSnapshot(session) })
-  } catch (error) {
-    return apiFailure(res, 500, 'plugin_terminal_failed', 'Failed to resize setup terminal', pluginErrorDetail(error))
-  }
-})
-
-app.delete('/api/plugins/setup-terminal/:sessionId', (req, res) => {
-  const session = pluginSetupTerminalSessions.get(req.params.sessionId)
-  if (!session) return apiFailure(res, 404, 'plugin_not_found', 'Setup terminal session not found.')
-  stopPluginSetupTerminalSession(session)
-  return apiSuccess(res, { session: pluginSetupTerminalSnapshot(session) })
-})
-
-app.post('/api/plugins/:pluginId', async (req, res) => {
-  const pluginId = (req.params.pluginId || '').trim().toLowerCase()
-  if (!PLUGIN_ID_PATTERN.test(pluginId)) {
-    return apiFailure(res, 400, 'invalid_payload', 'Invalid plugin id.')
-  }
-
-  const schema = z.object({
-    enabled: z.boolean(),
-    restart: z.boolean().optional().default(false),
-    immediateRestart: z.boolean().optional().default(false),
-  })
-  const parsed = schema.safeParse(req.body)
-  if (!parsed.success) return apiFailure(res, 400, 'invalid_payload', 'Invalid payload', parsed.error.flatten())
-
-  try {
-    const result = await setOpenClawPluginEnabledForControlCenter(pluginId, parsed.data.enabled, {
-      restart: parsed.data.restart,
-      immediateRestart: parsed.data.immediateRestart,
-    })
-    invalidateRuntimeStatusCache()
-    return apiSuccess(res, {
-      command: result.command,
-      plugin: result.controls.plugins.find((entry) => entry.id === pluginId) || null,
-      restart: result.restart,
-      registryRefresh: result.registryRefresh,
-      plugins: result.controls.plugins,
-      configPath: result.controls.configPath,
-      runtimeStatePath: PLUGIN_RUNTIME_STATE_PATH,
-      cache: result.controls.cache,
-      ...(result.controls.cliError ? { cliError: result.controls.cliError } : {}),
-    })
-  } catch (error) {
-    return apiFailure(res, pluginErrorStatus(error), 'plugin_command_failed', 'Failed to update plugin', pluginErrorDetail(error))
-  }
+registerPluginRoutes(app, {
+  clawTalkPluginId: CLAWTALK_PLUGIN_ID,
+  invalidateRuntimeStatusCache,
+  inspectOpenClawPluginRuntime,
+  installOpenClawPlugin,
+  listPluginControls,
+  pluginErrorDetail,
+  pluginErrorStatus,
+  pluginIdPattern: PLUGIN_ID_PATTERN,
+  pluginRuntimeStatePath: PLUGIN_RUNTIME_STATE_PATH,
+  pluginSetupTerminalSessions,
+  pluginSetupTerminalSnapshot,
+  redactSensitiveText,
+  savePluginDirectConfig,
+  schedulePluginGatewayRestart,
+  searchOpenClawPlugins,
+  setOpenClawPluginEnabledForControlCenter,
+  setupClawTalkPlugin,
+  startPluginSetupTerminalSession,
+  stopPluginSetupTerminalSession,
+  tryRestartGatewayService,
+  uninstallOpenClawPlugin,
+  updateAllOpenClawPlugins,
+  updateOpenClawPlugin,
+  writeSseEvent,
 })
 
 app.get('/api/party/overview', async (_req, res) => {
@@ -33074,27 +32430,7 @@ app.post('/api/party/agent/:agentId/model', async (req, res) => {
   }
 })
 
-app.post('/api/auth/login', (req, res) => {
-  const schema = z.object({ token: z.string().min(1) })
-  const parsed = schema.safeParse(req.body)
-  if (!parsed.success) return apiFailure(res, 400, 'invalid_payload', 'Invalid payload', parsed.error.flatten())
-
-  if (parsed.data.token === AUTH_TOKEN) {
-    const sessionToken = randomUUID()
-    sessionTokens.add(sessionToken)
-    return apiSuccess(res, { token: sessionToken })
-  }
-
-  return apiFailure(res, 401, 'invalid_token', 'Invalid token')
-})
-
-app.get('/api/auth/status', (req, res) => {
-  const token = req.headers.authorization?.replace('Bearer ', '')
-  if (token && sessionTokens.has(token)) {
-    return apiSuccess(res, { authenticated: true })
-  }
-  return apiSuccess(res, { authenticated: false })
-})
+registerAuthRoutes(app, { authToken: AUTH_TOKEN, sessionTokens })
 
 const STATIC_DIR = process.env.CONTROL_CENTER_STATIC_DIR?.trim()
 const STATIC_ROOT = STATIC_DIR ? path.resolve(STATIC_DIR) : ''
