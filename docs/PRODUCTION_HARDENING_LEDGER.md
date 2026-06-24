@@ -1054,6 +1054,10 @@ Verification:
   - `npm run smoke:packaged-electron-launch`
   - `npm test`
   - `npm run audit:dependencies` with `found 0 vulnerabilities`.
+- GitHub Actions verification passed after the package-payload hydration:
+  - Run: `28118191004`
+  - Commit: `94dfbf2`
+  - Result: Control Plane CI passed in `7m38s`, including vendored OpenClaw dependency prep, desktop packaging, packaged launch smoke, release evidence generation, release validation, and evidence upload.
 
 ## In Progress
 
@@ -1061,7 +1065,7 @@ Verification:
 
 Next action:
 
-- Push the OpenClaw vendor packaging repair and confirm the rerun reaches release evidence validation.
+- Merge the green `codex/ci-openclaw-smoke` repair branch to `main`, then continue with the next highest-impact production-hardening slice.
 - Avoid the pre-existing local edits in `src/components/mission/MissionDeploymentPanel.tsx` and `src/styles/dystopai-theme/70-responsive-polish.css` unless the selected task explicitly requires those files.
 
 ## Backlog
