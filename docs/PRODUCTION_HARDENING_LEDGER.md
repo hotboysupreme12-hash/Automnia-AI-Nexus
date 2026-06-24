@@ -1099,7 +1099,7 @@ Verification:
 
 ## 2026-06-24 18:59 UTC - Command Console File Route And Service Extraction
 
-- Continued server decomposition on protective branch `codex/server-route-modules`.
+- Continued server decomposition on protective branch `codex/server-route-modules`, then cherry-picked the runtime-only slice onto clean PR branch `codex/runtime-route-modules` after PR `#1` was merged into `main`.
 - Read local OpenClaw/Command Console documentation before touching Command Console-owned endpoints:
   - `docs/OPENCLAW_GATEWAY_COMMAND_CONSOLE_GUIDE.md`
   - `docs/openclaw-latest/pages/web/control-ui.md`
@@ -1244,11 +1244,17 @@ Verification:
   - `npm run lint`
   - `npm test`
 - Observed during `npm test`: `smoke:ledger` again reported one skipped malformed historical JSONL row while reading `runtime-runs`; the smoke passed and preserved the corruption-recovery warning instead of treating the file as empty.
-- GitHub Actions verification for this slice is pending until the branch is pushed.
+- GitHub Actions verification passed for the original pushed source-branch commit before the clean PR branch was prepared:
+  - Run: `28127179243`
+  - Source commit: `7a17351`
+  - Clean-branch extraction commit: `25dd9b3`
+  - Result: Control Plane CI completed successfully in `7m28s`.
+  - Evidence: lint, app/server/Electron typecheck, production hardening smoke suite, server build, client build, Electron end-to-end smoke, reproducible runtime bundle prep, vendored OpenClaw dependency prep, desktop packaging, packaged desktop launch smoke, SBOM/checksum generation, release artifact validation, release evidence verification, and release evidence upload all passed.
+  - Note: the `Sign release evidence` CI step was skipped for this non-release push run; public release signing remains tracked as a mandatory release-governance item.
 
 ## In Progress
 
-- Production hardening on protective branch `codex/server-route-modules`.
+- Production hardening on protective branch `codex/runtime-route-modules`.
 
 Next action:
 
