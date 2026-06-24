@@ -46,6 +46,7 @@ function assertOrderedIncludes(text, needles, label) {
 }
 
 const server = read('server/index.ts')
+const agentTurnRoutes = read('server/routes/agentTurnRoutes.ts')
 const runtimeLedger = read('server/runtimeLedger.ts')
 const runtimeHook = read('src/hooks/useRuntimeStatus.ts')
 const nexusStore = read('src/store/nexusStore.ts')
@@ -101,8 +102,8 @@ assertIncludes(server, 'runtimeLedgerStatus({ sqlite: false })', 'Runtime health
 assertIncludes(server, 'listActiveCronJobViews({ sqlite: false })', 'Runtime status summaries avoid synchronous cron SQLite reads')
 assertIncludes(runtimeLedger, 'runtimeLedgerStatus(options: LedgerReadOptions = {})', 'Runtime ledger status can skip synchronous SQLite')
 assertIncludes(server, 'const gatewayMessage = isClawTalkRoute ? composedPrompt : effectiveMessage', 'Command Console plain Gateway chat message')
-assertIncludes(server, "const forcedGatewayConsoleTurn = parsed.data.forceOpenClawRuntime && parsed.data.source !== 'clawtalk'", 'Command Console forced Gateway fast path')
-assertIncludes(server, "if (!forcedGatewayConsoleTurn)", 'Command Console skips heavy route preflight for forced Gateway turns')
+assertIncludes(agentTurnRoutes, "const forcedGatewayConsoleTurn = parsed.data.forceOpenClawRuntime && parsed.data.source !== 'clawtalk'", 'Command Console forced Gateway fast path')
+assertIncludes(agentTurnRoutes, "if (!forcedGatewayConsoleTurn)", 'Command Console skips heavy route preflight for forced Gateway turns')
 assertIncludes(server, 'if (isClawTalkRoute)', 'ClawTalk keeps channel-specific runtime preflight')
 assertIncludes(server, "request('chat.send'", 'Gateway chat.send call')
 assertNotIncludes(server, 'deliver: false', 'Command Console chat.send leaves WebChat delivery semantics to Gateway')
@@ -115,13 +116,13 @@ assertIncludes(server, 'isGatewayProtocolStatusText(finalText)', 'Gateway status
 assertIncludes(server, 'without a visible assistant transcript', 'Gateway terminal status without assistant text surfaces as error')
 assertIncludes(server, 'void finalPromise.catch(() => undefined)', 'Gateway final waiter early rejection guard')
 assertIncludes(server, 'CONTROL_CENTER_GATEWAY_TOOLS_EFFECTIVE_DIAGNOSTIC', 'tools.effective diagnostic gate')
-assertIncludes(server, 'CONTROL_CENTER_AGENT_TURN_STREAM_SMOKE_MOCK', 'Command Console stream smoke mock gate')
-assertIncludes(server, "req.get('x-control-center-stream-smoke')", 'Command Console stream smoke mock header gate')
-assertIncludes(server, "streamSmokeMode === 'abort'", 'Command Console stream smoke abort mode')
-assertIncludes(server, 'agent-turn-stream-smoke-abort.json', 'Command Console stream smoke abort marker')
-assertIncludes(server, "reason: closed ? 'client-close' : 'timeout'", 'Command Console abort marker reason')
-assertIncludes(server, 'Command accepted; opening the Gateway-backed OpenClaw session.', 'Command Console early Gateway ACK')
-assertIncludes(server, 'Runtime ready; dispatching through Gateway chat.', 'Command Console runtime ready progress')
+assertIncludes(agentTurnRoutes, 'CONTROL_CENTER_AGENT_TURN_STREAM_SMOKE_MOCK', 'Command Console stream smoke mock gate')
+assertIncludes(agentTurnRoutes, "req.get('x-control-center-stream-smoke')", 'Command Console stream smoke mock header gate')
+assertIncludes(agentTurnRoutes, "streamSmokeMode === 'abort'", 'Command Console stream smoke abort mode')
+assertIncludes(agentTurnRoutes, 'agent-turn-stream-smoke-abort.json', 'Command Console stream smoke abort marker')
+assertIncludes(agentTurnRoutes, "reason: closed ? 'client-close' : 'timeout'", 'Command Console abort marker reason')
+assertIncludes(agentTurnRoutes, 'Command accepted; opening the Gateway-backed OpenClaw session.', 'Command Console early Gateway ACK')
+assertIncludes(agentTurnRoutes, 'Runtime ready; dispatching through Gateway chat.', 'Command Console runtime ready progress')
 assertIncludes(nexusStore, 'commandConsoleSessionKey', 'Command Console stable session key')
 assertIncludes(nexusStore, 'forceOpenClawRuntime: true', 'Command Console forced OpenClaw runtime route')
 assertIncludes(nexusStore, 'const gatewayChatMessage = options.freshSession', 'Command Console frontend plain Gateway chat message')
@@ -193,7 +194,7 @@ assertIncludes(agentTurnStreamSmoke, "assert.equal(abortMarker.runId, abortStatu
 assertIncludes(agentTurnStreamSmoke, "assert.equal(abortMarker.reason, 'client-close')", 'Agent turn stream smoke checks abort close reason')
 
 const agentTurnStreamRoute = sectionBetween(
-  server,
+  agentTurnRoutes,
   "app.post('/api/openclaw/agent-turn/stream'",
   "app.post('/api/openclaw/agent-turn'",
   'Command Console stream route',

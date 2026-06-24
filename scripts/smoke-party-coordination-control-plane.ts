@@ -14,7 +14,10 @@ function assert(condition: unknown, message: string): asserts condition {
 function routeBlock(source: string, marker: string): string {
   const start = source.indexOf(marker)
   assert(start >= 0, `Missing route marker: ${marker}`)
-  const next = source.indexOf('\napp.', start + marker.length)
+  const nextCandidates = ['\napp.', '\n  app.']
+    .map((needle) => source.indexOf(needle, start + marker.length))
+    .filter((index) => index >= 0)
+  const next = nextCandidates.length ? Math.min(...nextCandidates) : -1
   return source.slice(start, next >= 0 ? next : source.length)
 }
 
@@ -34,6 +37,7 @@ function assertCanonicalRoute(name: string, source: string) {
 }
 
 const server = readWorkspaceFile('server/index.ts')
+const agentTurnRoutes = readWorkspaceFile('server/routes/agentTurnRoutes.ts')
 const controlPlaneHttp = readWorkspaceFile('server/controlPlaneHttp.ts')
 const packageJson = JSON.parse(readWorkspaceFile('package.json')) as { scripts?: Record<string, string> }
 
@@ -44,7 +48,7 @@ for (const code of ['party_dispatch_failed', 'party_handoff_failed', 'party_coor
 const dispatchBlock = routeBlock(server, "app.post('/api/party/dispatch'")
 const handoffBlock = routeBlock(server, "app.post('/api/party/agent-to-agent'")
 const delegationCompatibilityBlock = sliceBetween(
-  server,
+  agentTurnRoutes,
   "const handoffResponse: { ok: boolean; status: number; json: () => Promise<unknown> } = await fetch(`http://127.0.0.1:${PORT}/api/party/agent-to-agent`",
   'const context = await resolveAgentRunContext(agent)',
 )
