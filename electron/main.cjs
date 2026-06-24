@@ -46,6 +46,8 @@ const WINDOWS_DIAGNOSTIC_SINGLE_PROCESS = process.platform === 'win32' &&
   isDev &&
   process.env.DYSTOPAI_WINDOWS_DIAGNOSTIC_SINGLE_PROCESS === '1' &&
   process.env.DYSTOPAI_ACK_UNSAFE_ELECTRON_SANDBOX_DIAGNOSTIC === '1'
+const ELECTRON_E2E = process.env.DYSTOPAI_ELECTRON_E2E === '1'
+const ELECTRON_E2E_AUTO_QUIT_MS = Math.max(0, Number(process.env.DYSTOPAI_ELECTRON_E2E_AUTO_QUIT_MS || 0) || 0)
 process.env.OPENCLAW_SUPPRESS_EXTENSION_API_WARNING = process.env.OPENCLAW_SUPPRESS_EXTENSION_API_WARNING || '1'
 if (WINDOWS_DISABLE_GPU) {
   app.disableHardwareAcceleration()
@@ -83,8 +85,31 @@ let controlServerEntry = null
 let serverRestartTimer = null
 let serverRestartAttempts = 0
 let controlCenterLaunchToken = ''
+let lastTrayMenuSnapshot = []
 const SERVER_RESTART_BASE_DELAY_MS = 1000
 const SERVER_RESTART_MAX_DELAY_MS = 10_000
+
+function logE2e(message) {
+  if (!ELECTRON_E2E) return
+  const line = `[dystopai-e2e] ${message}`
+  console.log(line)
+  const logPath = process.env.DYSTOPAI_ELECTRON_E2E_LOG_PATH
+  if (!logPath) return
+  try {
+    fs.mkdirSync(path.dirname(logPath), { recursive: true })
+    fs.appendFileSync(logPath, `${line}\n`, 'utf8')
+  } catch {
+    // E2E logging should not alter app behavior.
+  }
+}
+
+function showBlockingError(title, message) {
+  if (ELECTRON_E2E) {
+    logE2e(`${title}: ${message}`)
+    return
+  }
+  dialog.showErrorBox(title, message)
+}
 
 function appRoot() {
   return app.getAppPath()
@@ -165,6 +190,9 @@ ipcMain.handle('dystopai:get-control-center-token', async (event) => {
 })
 
 function resolveServerEntry() {
+  if (process.env.DYSTOPAI_ELECTRON_E2E_FORCE_MISSING_SERVER === '1') {
+    throw new Error('E2E forced missing server')
+  }
   const candidates = [
     resourcePath('dist-server', 'index.cjs'),
     path.join(appRoot(), 'dist-server', 'index.cjs'),
@@ -492,14 +520,21 @@ async function ensureNpmToolchainAvailable() {
 }
 
 function appOwnershipRoots() {
-  return [
-    appRoot(),
-    process.resourcesPath,
-    path.dirname(process.execPath),
-    DYSTOPAI_USER_DATA_DIR,
-    NPM_TOOLCHAIN_ROOT,
-    resolveOpenClawHomeDir(),
-  ]
+  const roots = ELECTRON_E2E
+    ? [
+        DYSTOPAI_USER_DATA_DIR,
+        NPM_TOOLCHAIN_ROOT,
+        resolveOpenClawHomeDir(),
+      ]
+    : [
+        appRoot(),
+        process.resourcesPath,
+        path.dirname(process.execPath),
+        DYSTOPAI_USER_DATA_DIR,
+        NPM_TOOLCHAIN_ROOT,
+        resolveOpenClawHomeDir(),
+      ]
+  return roots
     .filter(Boolean)
     .map((entry) => normalizeForMatch(path.resolve(entry)))
     .filter((entry, index, list) => entry && list.indexOf(entry) === index)
@@ -1125,6 +1160,7 @@ async function performQuitCleanup() {
       console.warn('[dystopai] helper cleanup failed:', err?.message || err)
     }
     quitCleanupComplete = true
+    logE2e('quit-cleanup-complete')
   }).finally(() => {
     quitCleanupInFlight = null
     updateTrayMenu()
@@ -1219,26 +1255,89 @@ function createMainWindow() {
 
   mainWindow = win
   configureTextAssistance(win)
+  let e2eRendererLoadCount = 0
+  let e2eRendererGone = false
+  let e2eExternalAssertionsComplete = false
+  let e2eRendererCrashRequested = false
+  let e2eTrayAssertionsStarted = false
 
   win.on('unresponsive', () => {
     console.warn('[dystopai] renderer became unresponsive')
   })
   win.webContents.on('render-process-gone', (_event, details) => {
     console.error('[dystopai] renderer process gone:', details)
+    logE2e(`renderer-process-gone:${details?.reason || 'unknown'}`)
+    e2eRendererGone = true
     if (isQuitting || win.isDestroyed()) return
     setTimeout(() => {
       if (!win.isDestroyed()) win.reload()
     }, 750)
   })
-  win.webContents.setWindowOpenHandler(({ url }) => {
-    openAllowedExternalUrl(url)
-    return { action: 'deny' }
+  win.webContents.on('did-finish-load', () => {
+    if (!ELECTRON_E2E) return
+    e2eRendererLoadCount += 1
+    logE2e(`renderer-load:${e2eRendererLoadCount}`)
+
+    if (
+      process.env.DYSTOPAI_ELECTRON_E2E_ASSERT_TRAY_BEHAVIOR === '1' &&
+      !e2eTrayAssertionsStarted
+    ) {
+      e2eTrayAssertionsStarted = true
+      setTimeout(() => {
+        void runElectronE2eTraySelfTest(win).catch((error) => {
+          logE2e(`tray-behavior-failed:${error?.message || error}`)
+          process.exit(5)
+        })
+      }, 250)
+      return
+    }
+
+    const assertRendererExternals = process.env.DYSTOPAI_ELECTRON_E2E_ASSERT_RENDERER_EXTERNALS === '1'
+    const assertRendererRecovery = process.env.DYSTOPAI_ELECTRON_E2E_ASSERT_RENDERER_RECOVERY === '1'
+    const quitAfterRendererAssertions = process.env.DYSTOPAI_ELECTRON_E2E_QUIT_AFTER_RENDERER_ASSERTIONS === '1'
+    const requestRendererCrash = () => {
+      if (!assertRendererRecovery || e2eRendererCrashRequested || win.isDestroyed()) return
+      e2eRendererCrashRequested = true
+      logE2e('renderer-crash-requested')
+      win.webContents.forcefullyCrashRenderer()
+    }
+
+    if (e2eRendererLoadCount === 1 && assertRendererExternals) {
+      void win.webContents.executeJavaScript(`
+        (() => {
+          window.open('https://example.com/dystopai-e2e-window-open', '_blank', 'noopener,noreferrer');
+          setTimeout(() => {
+            window.location.href = 'https://example.com/dystopai-e2e-navigation';
+          }, 25);
+          return true;
+        })()
+      `).catch((error) => {
+        logE2e(`renderer-external-policy-failed:${error?.message || error}`)
+        process.exit(4)
+      })
+      setTimeout(() => {
+        e2eExternalAssertionsComplete = true
+        logE2e('renderer-external-policy-ok')
+        requestRendererCrash()
+      }, 600)
+      return
+    }
+
+    if (e2eRendererLoadCount === 1) {
+      e2eExternalAssertionsComplete = !assertRendererExternals
+      requestRendererCrash()
+      return
+    }
+
+    if (assertRendererRecovery && e2eRendererGone && e2eRendererLoadCount >= 2) {
+      logE2e('renderer-recovered')
+      if ((!assertRendererExternals || e2eExternalAssertionsComplete) && quitAfterRendererAssertions) {
+        app.quit()
+      }
+    }
   })
-  win.webContents.on('will-navigate', (event, url) => {
-    if (isInternalAppUrl(url)) return
-    event.preventDefault()
-    openAllowedExternalUrl(url)
-  })
+  win.webContents.setWindowOpenHandler(handleWindowOpen)
+  win.webContents.on('will-navigate', handleWillNavigate)
 
   win.on('close', (event) => {
     if (isQuitting) return
@@ -1291,7 +1390,8 @@ function updateTrayMenu() {
   const resetLabel = gatewayResetInFlight ? 'Restarting Gateway...' : 'Restart Gateway'
   const shutdownLabel = gatewayShutdownInFlight && !isQuitting ? 'Shutting Gateway Off...' : 'Shut Gateway Off'
   const exitLabel = isQuitting ? 'Exiting Everything...' : 'Exit Everything'
-  tray.setContextMenu(Menu.buildFromTemplate([
+  /** @type {import('electron').MenuItemConstructorOptions[]} */
+  const template = [
     {
       label: uiLabel,
       click: windowVisible ? hideFrontend : openFrontend,
@@ -1325,7 +1425,17 @@ function updateTrayMenu() {
         app.exit(0)
       },
     },
-  ]))
+  ]
+  lastTrayMenuSnapshot = template
+    .filter((item) => item && item.type !== 'separator')
+    .map((item) => ({
+      label: String(item.label || ''),
+      enabled: item.enabled !== false,
+    }))
+  if (ELECTRON_E2E && process.env.DYSTOPAI_ELECTRON_E2E_LOG_TRAY_MENU === '1') {
+    logE2e(`tray-menu:${lastTrayMenuSnapshot.map((item) => `${item.label}:${item.enabled ? 'enabled' : 'disabled'}`).join('|')}`)
+  }
+  tray.setContextMenu(Menu.buildFromTemplate(template))
 }
 
 function createTray() {
@@ -1363,10 +1473,98 @@ function shouldOpenExternally(targetUrl) {
 
 function openAllowedExternalUrl(targetUrl) {
   if (!shouldOpenExternally(targetUrl)) return false
+  if (process.env.DYSTOPAI_ELECTRON_E2E_DISABLE_OPEN_EXTERNAL === '1') {
+    logE2e(`external-open:${targetUrl}`)
+    return true
+  }
   void shell.openExternal(targetUrl).catch((error) => {
     console.warn('[dystopai] failed to open external URL:', error?.message || error)
   })
   return true
+}
+
+/**
+ * @param {{ url: string }} details
+ * @returns {import('electron').WindowOpenHandlerResponse}
+ */
+function handleWindowOpen({ url }) {
+  openAllowedExternalUrl(url)
+  return { action: 'deny' }
+}
+
+/**
+ * @param {{ preventDefault: () => void }} event
+ * @param {string} url
+ */
+function handleWillNavigate(event, url) {
+  if (isInternalAppUrl(url)) return
+  event.preventDefault()
+  openAllowedExternalUrl(url)
+}
+
+function assertElectronE2e(condition, message) {
+  if (!condition) throw new Error(`Electron E2E policy assertion failed: ${message}`)
+}
+
+async function waitForElectronE2e(condition, label, timeoutMs = 5000) {
+  const start = Date.now()
+  while (Date.now() - start < timeoutMs) {
+    if (condition()) return
+    await sleep(50)
+  }
+  throw new Error(`Electron E2E timed out waiting for ${label}`)
+}
+
+function runElectronE2ePolicySelfTest() {
+  if (!ELECTRON_E2E || process.env.DYSTOPAI_ELECTRON_E2E_ASSERT_NAVIGATION !== '1') return
+
+  const allowedExternal = 'https://example.com/docs'
+  const deniedExternal = 'http://example.com/docs'
+  const popupResult = handleWindowOpen({ url: allowedExternal })
+  assertElectronE2e(popupResult?.action === 'deny', 'all popup windows must be denied')
+
+  const deniedPopupResult = handleWindowOpen({ url: deniedExternal })
+  assertElectronE2e(deniedPopupResult?.action === 'deny', 'non-HTTPS popup windows must be denied')
+
+  let prevented = false
+  handleWillNavigate({ preventDefault: () => { prevented = true } }, allowedExternal)
+  assertElectronE2e(prevented, 'external navigations must be prevented before opening externally')
+
+  prevented = false
+  handleWillNavigate({ preventDefault: () => { prevented = true } }, controlCenterOrigin())
+  assertElectronE2e(!prevented, 'internal control-center navigation must remain allowed')
+
+  logE2e('navigation-policy-ok')
+}
+
+async function runElectronE2eTraySelfTest(win) {
+  if (!ELECTRON_E2E || process.env.DYSTOPAI_ELECTRON_E2E_ASSERT_TRAY_BEHAVIOR !== '1') return
+  const menuHas = (label) => lastTrayMenuSnapshot.some((item) => item.label === label && item.enabled)
+
+  assertElectronE2e(Boolean(tray), 'tray must be created before renderer tray assertions run')
+  if (!win.isDestroyed() && !win.isVisible()) {
+    win.setSkipTaskbar(false)
+    win.show()
+    win.focus()
+  }
+  await waitForElectronE2e(() => !win.isDestroyed() && win.isVisible(), 'main window to become visible')
+  updateTrayMenu()
+  assertElectronE2e(menuHas('Hide UI'), 'visible window tray menu must offer Hide UI')
+  logE2e('tray-visible-state-ok')
+
+  win.close()
+  await waitForElectronE2e(() => !win.isDestroyed() && !win.isVisible(), 'main window to hide after close')
+  updateTrayMenu()
+  assertElectronE2e(menuHas('Show UI'), 'hidden window tray menu must offer Show UI')
+  logE2e('tray-hide-on-close-ok')
+
+  tray.emit('click')
+  await waitForElectronE2e(() => !win.isDestroyed() && win.isVisible(), 'tray click to restore main window')
+  updateTrayMenu()
+  assertElectronE2e(menuHas('Hide UI'), 'restored window tray menu must offer Hide UI')
+  logE2e('tray-click-restore-ok')
+
+  if (process.env.DYSTOPAI_ELECTRON_E2E_QUIT_AFTER_TRAY_ASSERTIONS === '1') app.quit()
 }
 
 app.whenReady().then(async () => {
@@ -1398,7 +1596,11 @@ app.whenReady().then(async () => {
     if (openclawRuntime) process.env.OPENCLAW_BIN = openclawRuntime
 
     await ensureNpmToolchainAvailable()
-    await prepareManagedPortsForStartup()
+    if (process.env.DYSTOPAI_ELECTRON_E2E_SKIP_PORT_CLEANUP === '1') {
+      logE2e('port-cleanup-skipped')
+    } else {
+      await prepareManagedPortsForStartup()
+    }
 
     const serverEntry = resolveServerEntry()
     console.log('[dystopai] starting server process:', serverEntry)
@@ -1409,6 +1611,8 @@ app.whenReady().then(async () => {
     serverRestartAttempts = 0
 
     console.log('[dystopai] server ready on port', APP_PORT)
+    logE2e('server-ready')
+    runElectronE2ePolicySelfTest()
 
     createTray()
 
@@ -1418,13 +1622,24 @@ app.whenReady().then(async () => {
     await stopControlServerProcess('startup failure').catch((cleanupError) => {
       console.warn('[dystopai] startup failure cleanup skipped:', cleanupError?.message || cleanupError)
     })
-    dialog.showErrorBox('DystopAI — Startup Error', String(err))
+    showBlockingError('DystopAI - Startup Error', String(err))
+    if (ELECTRON_E2E) {
+      app.quit()
+      return
+    }
     app.quit()
     return
   }
 
   try {
     createMainWindow()
+    if (ELECTRON_E2E_AUTO_QUIT_MS > 0) {
+      const timer = setTimeout(() => {
+        logE2e('auto-quit')
+        app.quit()
+      }, ELECTRON_E2E_AUTO_QUIT_MS)
+      if (typeof timer.unref === 'function') timer.unref()
+    }
     startingUp = false
   } catch (err) {
     startupFailed = true
@@ -1432,7 +1647,11 @@ app.whenReady().then(async () => {
     await stopRuntimeCompletelyForQuit().catch((cleanupError) => {
       console.warn('[dystopai] UI failure cleanup skipped:', cleanupError?.message || cleanupError)
     })
-    dialog.showErrorBox('DystopAI — UI Error', String(err))
+    showBlockingError('DystopAI - UI Error', String(err))
+    if (ELECTRON_E2E) {
+      process.exit(3)
+      return
+    }
     app.quit()
   }
 })
@@ -1443,7 +1662,7 @@ app.on('activate', () => {
     openFrontend()
   } catch (err) {
     startupFailed = true
-    dialog.showErrorBox('DystopAI', String(err))
+    showBlockingError('DystopAI', String(err))
     app.quit()
   }
 })

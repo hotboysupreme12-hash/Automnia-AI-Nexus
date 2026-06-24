@@ -58,13 +58,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     if (!token) {
       const provider = desktopAuthBridge()?.getControlCenterToken
       if (!provider) {
-        setChecking(false)
         return
       }
       let cancelled = false
-      setChecking(true)
-      Promise.resolve(provider())
-        .then(async (launchToken) => {
+      Promise.resolve()
+        .then(async () => {
+          if (!cancelled) setChecking(true)
+          const launchToken = await Promise.resolve(provider())
           if (!launchToken || cancelled) return false
           const result = await apiRequest<{ ok?: boolean; token?: string }>('/api/auth/login', {
             method: 'POST',
