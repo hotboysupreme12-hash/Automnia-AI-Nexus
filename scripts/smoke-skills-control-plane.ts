@@ -43,9 +43,9 @@ assert.match(skillsRoutes, /apiFailure\([\s\S]*?500,[\s\S]*?'skill_command_faile
 assert.match(skillsRoutes, /apiFailure\([\s\S]*?500,[\s\S]*?'skill_command_failed',[\s\S]*?'ClawHub skill update failed'/, 'ClawHub update command failures must be typed')
 
 const avatarUploadStart = server.indexOf("app.post('/api/party/avatar-upload/:agentId'")
-const avatarUploadEnd = server.indexOf("app.get('/api/party/folders'", avatarUploadStart)
+const avatarUploadEnd = server.indexOf('registerFilesystemRoutes(app, {', avatarUploadStart)
 assert.notEqual(avatarUploadStart, -1, 'avatar upload route must exist')
-assert.notEqual(avatarUploadEnd, -1, 'avatar upload route block must end before folder routes')
+assert.notEqual(avatarUploadEnd, -1, 'avatar upload route block must end before extracted filesystem routes')
 const avatarUploadRoute = server.slice(avatarUploadStart, avatarUploadEnd)
 assert.match(avatarUploadRoute, /apiSuccess\(res/, 'avatar uploads must use canonical success envelopes')
 assert.match(avatarUploadRoute, /apiFailure\([\s\S]*?400,[\s\S]*?'avatar_upload_failed'/, 'avatar upload failures must use canonical typed errors')
