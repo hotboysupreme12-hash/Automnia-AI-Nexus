@@ -1246,7 +1246,15 @@ Verification:
   - `npm run smoke:ci-workflow`
   - `npm run smoke:packaged-electron-launch`
   - `npm run smoke:openclaw-command-control-plane`
-- GitHub Actions verification for the final branch tip is pending until the cleanup fix is pushed.
+- GitHub Actions verification for cleanup-fix commit `92e2a9e` passed:
+  - Workflow: `Control Plane CI`
+  - Run: `28131327304`
+  - Job: `Hardened control plane`
+  - Result: success
+  - The previously failing `Run packaged desktop launch smoke` step passed after the cleanup hardening.
+  - Release evidence artifact: `dystopai-release-evidence`
+  - Artifact digest: `sha256:61874a27b609a74e2fd736e22fd737cac5e39bd1a64bf6ebce25e83a6c7a174d`
+  - Noted governance gap remains: `Sign release evidence` was skipped for this non-release PR run while validation still passed. Public release validation should fail when signing evidence is required but absent.
 
 ## In Progress
 
