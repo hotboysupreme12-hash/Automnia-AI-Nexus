@@ -734,6 +734,23 @@ Verification:
 - `npm run build:server` passed after the Electron sandbox hardening.
 - `npm run build:client` passed after the Electron sandbox hardening.
 - `npm test` passed after the Electron sandbox hardening, including typecheck, all mission smokes, API envelope/integration coverage, renderer recovery coverage, skills/plugin/openclaw-command/party-coordination/team-sync/agent-turn/runtime-status/runtime-action/shift/filesystem/command-console-file/nexus/misc/config-save/auth/auth-provider-model/security/runtime-reproducibility coverage.
+- Inspected branch/status and this ledger at the start of the release evidence hardening run; work remained on protective branch `codex/production-hardening`.
+- Added a release evidence generator path for production artifacts:
+  - `scripts/generate-release-evidence.cjs` emits `release/evidence/dystopai-sbom.cdx.json`.
+  - It builds a CycloneDX 1.5 SBOM from `package-lock.json` plus prepared runtime metadata files.
+  - It includes the prepared Node runtime, bundled `@openclaw/codex`, and native Codex runtime dependency metadata.
+  - It writes `release/evidence/checksums.sha256` with SHA-256 hashes for release artifacts, build outputs, runtime metadata, packaging scripts, and the generated SBOM.
+  - It writes `release/evidence/release-evidence.json` with component, checksum, and runtime metadata counts.
+- Fixed release-evidence package-name derivation so lockfile components are recorded as real package names such as `react` instead of `node_modules/react`.
+- Added `npm run release:evidence` as the operator command for generating SBOM/checksum evidence after packaging.
+- Added `scripts/smoke-release-evidence.ts`, `npm run smoke:release-evidence`, and wired the smoke into `npm run test:ci`.
+- Updated README packaging notes and common commands so release operators know to publish the SBOM, checksum manifest, and evidence summary with installer output.
+- `node --check scripts/generate-release-evidence.cjs` passed after the release-evidence changes.
+- `npm run smoke:release-evidence` initially caught the lockfile package-name bug, then passed after the generator fix.
+- `npm run typecheck` passed after the release-evidence changes.
+- `npm run build:server` passed after the release-evidence changes.
+- `npm run build:client` passed after the release-evidence changes.
+- `npm test` passed after the release-evidence changes, including typecheck, all mission smokes, API envelope/integration coverage, renderer recovery coverage, skills/plugin/openclaw-command/party-coordination/team-sync/agent-turn/runtime-status/runtime-action/shift/filesystem/command-console-file/nexus/misc/config-save/auth/auth-provider-model/security/runtime-reproducibility, and release-evidence coverage.
 
 ## In Progress
 
@@ -741,7 +758,7 @@ Verification:
 
 Next action:
 
-- Continue Phase 2/runtime supply-chain hardening: add an SBOM/checksum generation path for release artifacts and wire it into smoke/test coverage without changing installer packaging semantics.
+- Add the first CI workflow for the hardened control plane: run typecheck, `npm test`, client/server builds, and release-evidence generation so the new SBOM/checksum gate cannot be skipped before packaging.
 - Avoid the pre-existing local edits in `src/components/mission/MissionDeploymentPanel.tsx` and `src/styles/dystopai-theme/70-responsive-polish.css` unless the selected task explicitly requires those files.
 
 ## Backlog
@@ -758,7 +775,7 @@ Next action:
 - Continue CSP tightening over time by removing the temporary inline-style allowance once the legacy inline styles are migrated.
 - Continue Electron IPC sender validation for any future IPC bridge additions.
 - Production sandbox-disabling flags are removed from packaged Electron startup; keep the remaining dev-only unsafe diagnostic gate covered by `smoke:security`.
-- Continue runtime supply-chain hardening beyond the first bundle-prep pass: SBOM generation, release checksums/signing, frozen release install documentation, and checksum verification for any remaining managed runtime downloads.
+- Continue runtime supply-chain hardening beyond the first bundle-prep pass: release artifact signing, frozen release install documentation, and checksum verification for any remaining managed runtime downloads.
 
 ### Phase 3: Make Missions Durable
 
