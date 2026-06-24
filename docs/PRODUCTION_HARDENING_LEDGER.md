@@ -949,13 +949,38 @@ Verification:
 - `npm test` passed with lint now running first in `test:ci`.
 - `npm run audit:dependencies` passed after the lint-gate changes with `found 0 vulnerabilities`.
 
+## 2026-06-24 16:20 UTC - CI OpenClaw Smoke Gate
+
+- Inspected branch/status and this ledger at the start of the run; continued on protective branch `codex/ci-openclaw-smoke` from clean `main` after the prior production-hardening merge.
+- Re-read the relevant local OpenClaw/Gateway docs before changing OpenClaw-adjacent smoke coverage:
+  - `docs/OPENCLAW_GATEWAY_COMMAND_CONSOLE_GUIDE.md`
+  - `docs/openclaw-latest/pages/gateway/protocol.md`
+- Ran `npm run smoke:openclaw` and confirmed it was not a product regression: the first failure was a stale source-contract assertion expecting an exact whitespace substring for the Gateway health-gated startup path.
+- Replaced that brittle assertion in `scripts/smoke-openclaw-contracts.mjs` with an ordered function-section check that still verifies:
+  - Gateway health monitoring starts.
+  - Gateway startup is only attempted when the health probe fails.
+  - Health is rechecked after startup.
+  - Stale Gateway clients are reset only after the health-gated startup path.
+- Ran `npm run smoke:openclaw` again and exposed a second real test drift: the agent-turn SSE smoke was receiving `401` because the hardened control-plane auth guard now protects `/api/openclaw/agent-turn/stream`.
+- Updated `scripts/smoke-agent-turn-stream.ts` to start its isolated server with a throwaway `CONTROL_CENTER_TOKEN` and send `Authorization: Bearer ...` on each privileged stream request.
+- Wired `npm run smoke:openclaw` into `npm run test:ci` immediately after the OpenClaw command-control-plane smoke.
+- Strengthened `scripts/smoke-ci-workflow.ts` so future edits fail if:
+  - `smoke:openclaw` no longer points at the OpenClaw contract smoke.
+  - `test:ci` drops the OpenClaw smoke gate.
+  - `test:ci` runs OpenClaw smoke before semantic type-checking or after the final CI workflow contract check.
+- Verified the user's live development ports remained available after the run: `4050` and `5173` were listening.
+- `npm run smoke:ci-workflow` passed after adding the OpenClaw gate assertions.
+- `npm run smoke:openclaw` initially failed on stale contract and missing smoke auth, then passed after the smoke updates.
+- `npm test` passed with `smoke:openclaw` now included in `test:ci`.
+- `npm run audit:dependencies` passed after the OpenClaw smoke-gate changes with `found 0 vulnerabilities`.
+
 ## In Progress
 
-- Production hardening on protective branch `codex/production-hardening`.
+- Production hardening on protective branch `codex/ci-openclaw-smoke`.
 
 Next action:
 
-- Add remaining CI push gates from the audit that are still outside the workflow, starting with OpenClaw smoke coverage and then UI smoke coverage if it can be made stable against built artifacts.
+- Commit/push the OpenClaw smoke gate slice when ready, then add UI smoke coverage to CI if it can be made stable against built artifacts.
 - Avoid the pre-existing local edits in `src/components/mission/MissionDeploymentPanel.tsx` and `src/styles/dystopai-theme/70-responsive-polish.css` unless the selected task explicitly requires those files.
 
 ## Backlog

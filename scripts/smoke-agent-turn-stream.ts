@@ -8,6 +8,7 @@ import { fileURLToPath } from 'node:url'
 import { createSseFrameParser } from '../src/utils/sseStream'
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..')
+const smokeAuthToken = 'agent-turn-stream-smoke-token'
 
 async function reservePort() {
   const { createServer } = await import('node:net')
@@ -36,6 +37,7 @@ function spawnServer(port: number, stateDir: string) {
     CONTROL_CENTER_AUTOSTART_GATEWAY: '0',
     CONTROL_CENTER_GATEWAY_AGENT_SESSIONS: '0',
     CONTROL_CENTER_GATEWAY_CHAT_CLIENT: '0',
+    CONTROL_CENTER_TOKEN: smokeAuthToken,
     CONTROL_CENTER_AGENT_TURN_STREAM_SMOKE_MOCK: '1',
     CONTROL_CENTER_STARTUP_AUTH_PROFILE_SYNC: '0',
     CONTROL_CENTER_STARTUP_AGENT_CONFIG_SYNC: '0',
@@ -53,6 +55,14 @@ function spawnServer(port: number, stateDir: string) {
     env,
     windowsHide: true,
   })
+}
+
+function streamHeaders(smokeMode?: '1' | 'abort') {
+  return {
+    'Content-Type': 'application/json',
+    Authorization: `Bearer ${smokeAuthToken}`,
+    ...(smokeMode ? { 'x-control-center-stream-smoke': smokeMode } : {}),
+  }
 }
 
 function waitForServer(child: ChildProcessWithoutNullStreams, port: number) {
@@ -151,7 +161,7 @@ async function main() {
     await waitForServer(child, port)
     const response = await fetch(`http://127.0.0.1:${port}/api/openclaw/agent-turn/stream`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: streamHeaders(),
       body: JSON.stringify({
         agent: 'invalid agent id',
         message: 'Smoke test the stream contract.',
@@ -174,10 +184,7 @@ async function main() {
 
     const successResponse = await fetch(`http://127.0.0.1:${port}/api/openclaw/agent-turn/stream`, {
       method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'x-control-center-stream-smoke': '1',
-      },
+      headers: streamHeaders('1'),
       body: JSON.stringify({
         agent: 'hn-commander',
         message: 'Smoke test the successful stream contract.',
@@ -212,10 +219,7 @@ async function main() {
 
     const abortResponse = await fetch(`http://127.0.0.1:${port}/api/openclaw/agent-turn/stream`, {
       method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'x-control-center-stream-smoke': 'abort',
-      },
+      headers: streamHeaders('abort'),
       body: JSON.stringify({
         agent: 'hn-commander',
         message: 'Smoke test stream abort handling.',

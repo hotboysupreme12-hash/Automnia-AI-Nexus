@@ -76,7 +76,20 @@ assertNotIncludes(server, 'gateway-runtime.js', 'Command Console hot path avoids
 assertIncludes(server, 'waitForGatewayClientConnect(gatewayClientConnectPromise, signal)', 'Gateway chat client request abort isolation')
 assertIncludes(server, 'stopStaleControlCenterGatewayClient', 'Gateway chat client poisoned startup reset')
 assertIncludes(server, 'if (await isGatewayHealthy()) return', 'Gateway startup skips repair work when already healthy')
-assertIncludes(server, 'if (!(await isGatewayHealthy())) {\n    await ensureGatewayRunning()', 'Gateway chat client only runs startup when health probe fails')
+const gatewayClientStartup = sectionBetween(
+  server,
+  'async function startControlCenterGatewayClient(): Promise<GatewayClientState> {',
+  'async function ensureControlCenterGatewayClient(signal?: AbortSignal): Promise<GatewayClientState> {',
+  'Gateway chat client startup',
+)
+assertOrderedIncludes(gatewayClientStartup, [
+  'startGatewayHealthMonitor()',
+  'if (!(await isGatewayHealthy())) {',
+  'await ensureGatewayRunning()',
+  'if (!(await isGatewayHealthy())) {',
+  'throw new Error(`gateway not healthy on port ${GATEWAY_HTTP_PORT}`)',
+  'stopStaleControlCenterGatewayClient()',
+], 'Gateway chat client only runs startup when health probe fails')
 assertIncludes(server, "gateway agent run aborted before Gateway dispatch", 'Command Console Gateway abort checkpoint')
 assertIncludes(server, 'appendRuntimeRunLedger(openClawRunLedgerPayload(record), { sqlite: false })', 'Runtime run hot path avoids synchronous SQLite')
 assertIncludes(server, 'appendGatewayEventLedger({', 'Gateway log ledger append remains mirrored')
