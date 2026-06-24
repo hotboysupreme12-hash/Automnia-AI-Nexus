@@ -228,6 +228,7 @@ npm run dist:win
 
 The packaging script builds the client/server, prepares runtime bundles, and writes generated output under ignored folders such as `release/` and `artifacts/`.
 Runtime bundle prep is pinned: Node archives are verified against Node's published `SHASUMS256.txt`, and the bundled Codex plugin installs an exact package version with a checked npm integrity value.
+After generating release output, run `npm run release:evidence` to write `release/evidence/dystopai-sbom.cdx.json`, `release/evidence/checksums.sha256`, and `release/evidence/release-evidence.json`. Publish those files with the installer output so operators can verify the shipped dependency graph and artifact hashes.
 
 ## Common Commands
 
@@ -246,6 +247,7 @@ Runtime bundle prep is pinned: Node archives are verified against Node's publish
 | `npm run docs:openclaw:sync` | Refresh the local OpenClaw documentation snapshot. |
 | `npm run setup:gateway-auth` | Prepare local Gateway auth config. |
 | `npm run dist:win` | Create the Windows desktop distribution output. |
+| `npm run release:evidence` | Generate the release SBOM, checksum manifest, and evidence summary. |
 
 ## Configuration
 
