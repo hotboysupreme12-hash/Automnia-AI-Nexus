@@ -19,6 +19,7 @@ function routeBlock(source: string, marker: string): string {
 }
 
 const server = readWorkspaceFile('server/index.ts')
+const controlPlaneHttp = readWorkspaceFile('server/controlPlaneHttp.ts')
 const store = readWorkspaceFile('src/store/nexusStore.ts')
 const packageJson = JSON.parse(readWorkspaceFile('package.json')) as { scripts?: Record<string, string> }
 
@@ -29,7 +30,7 @@ for (const code of [
   'party_operation_failed',
   'recruit_failed',
 ]) {
-  assert(server.includes(`| '${code}'`), `ApiErrorCode is missing ${code}`)
+  assert(controlPlaneHttp.includes(`| '${code}'`), `ApiErrorCode is missing ${code}`)
 }
 
 for (const marker of [

@@ -1,5 +1,4 @@
-import cors from 'cors'
-import express, { type ErrorRequestHandler, type Request, type Response } from 'express'
+import express, { type Request, type Response } from 'express'
 import { createHash, randomBytes, randomUUID } from 'node:crypto'
 import { chmodSync, createReadStream, existsSync, mkdirSync, readdirSync, readFileSync, statSync, writeFileSync, promises as fs } from 'node:fs'
 import { createServer, request as httpRequest, type Server } from 'node:http'
@@ -27,10 +26,11 @@ import {
   readRuntimeRunLedgerTail,
   runtimeLedgerStatus,
 } from './runtimeLedger'
+import { apiFailure, apiSuccess, installControlPlaneHttp, setStaticSecurityHeaders } from './controlPlaneHttp'
+import { registerAuthRoutes } from './routes/authRoutes'
 import { applyDiagnosticRedactions } from '../src/utils/diagnosticRedaction'
 
 const app = express()
-app.set('etag', false)
 
 const PORT = Number(process.env.CONTROL_CENTER_PORT || 4050)
 const CONFIGURED_AUTH_TOKEN = process.env.CONTROL_CENTER_TOKEN?.trim()
@@ -38,157 +38,12 @@ const AUTH_TOKEN = CONFIGURED_AUTH_TOKEN || randomBytes(32).toString('base64url'
 const AUTH_TOKEN_SOURCE = CONFIGURED_AUTH_TOKEN ? 'environment' : 'generated'
 const sessionTokens = new Set<string>()
 const CONTROL_CENTER_FRONTEND_PORT = Number(process.env.CONTROL_CENTER_FRONTEND_PORT || 5173)
-const PUBLIC_API_PATHS = new Set(['/api/health', '/api/auth/login', '/api/auth/status'])
-const CONTROL_CENTER_CONTENT_SECURITY_POLICY = [
-  "default-src 'self'",
-  "script-src 'self'",
-  "style-src 'self' 'unsafe-inline'",
-  "img-src 'self' data: blob:",
-  "font-src 'self' data:",
-  "connect-src 'self' http://127.0.0.1:* http://localhost:* ws://127.0.0.1:* ws://localhost:*",
-  "media-src 'self' data: blob:",
-  "worker-src 'self' blob:",
-  "object-src 'none'",
-  "base-uri 'none'",
-  "form-action 'none'",
-  "frame-src 'none'",
-  "frame-ancestors 'none'",
-].join('; ')
-
-function controlCenterAllowedOrigins() {
-  return new Set([
-    `http://127.0.0.1:${PORT}`,
-    `http://localhost:${PORT}`,
-    `http://127.0.0.1:${CONTROL_CENTER_FRONTEND_PORT}`,
-    `http://localhost:${CONTROL_CENTER_FRONTEND_PORT}`,
-  ])
-}
-
-function isAllowedControlCenterOrigin(origin: string | undefined) {
-  if (!origin) return true
-  try {
-    return controlCenterAllowedOrigins().has(new URL(origin).origin)
-  } catch {
-    return false
-  }
-}
-
-function requestIdFor(req: Request) {
-  const existing = req.get('x-request-id') || req.get('x-control-center-request-id')
-  return existing?.trim() || randomUUID()
-}
-
-function bearerToken(req: Request) {
-  const header = req.get('authorization') || ''
-  const match = /^Bearer\s+(.+)$/i.exec(header)
-  return match?.[1]?.trim() || ''
-}
-
-function apiPath(req: Request) {
-  return (req.originalUrl.split('?')[0] || req.path).replace(/\/+$/, '') || '/'
-}
-
-function isPublicApiRequest(req: Request) {
-  return req.method === 'OPTIONS' || PUBLIC_API_PATHS.has(apiPath(req))
-}
-
-function setStaticSecurityHeaders(res: Response, filePath: string) {
-  res.setHeader('X-Content-Type-Options', 'nosniff')
-  res.setHeader('Referrer-Policy', 'no-referrer')
-  res.setHeader('Cross-Origin-Opener-Policy', 'same-origin')
-  const ext = path.extname(filePath).toLowerCase()
-  if (ext === '.html' || ext === '.htm') {
-    res.setHeader('Content-Security-Policy', CONTROL_CENTER_CONTENT_SECURITY_POLICY)
-  }
-}
-
-type ApiErrorCode =
-  | 'agent_not_found'
-  | 'agent_preflight_failed'
-  | 'agent_retire_failed'
-  | 'agent_session_operation_failed'
-  | 'agent_turn_failed'
-  | 'agent_config_sync_failed'
-  | 'avatar_preview_failed'
-  | 'avatar_upload_failed'
-  | 'auth_required'
-  | 'auth_provider_failed'
-  | 'clawtalk_console_failed'
-  | 'control_file_operation_failed'
-  | 'doctor_operation_failed'
-  | 'filesystem_operation_failed'
-  | 'file_upload_failed'
-  | 'folder_list_failed'
-  | 'folder_picker_failed'
-  | 'image_picker_failed'
-  | 'invalid_json'
-  | 'invalid_payload'
-  | 'invalid_token'
-  | 'mission_invalid_state'
-  | 'mission_not_found'
-  | 'mission_report_not_found'
-  | 'mission_scheduler_failed'
-  | 'model_auth_required'
-  | 'model_catalog_failed'
-  | 'model_operation_failed'
-  | 'origin_not_allowed'
-  | 'oauth_operation_failed'
-  | 'openclaw_command_failed'
-  | 'openclaw_summary_failed'
-  | 'party_dispatch_failed'
-  | 'party_handoff_failed'
-  | 'party_operation_failed'
-  | 'party_coordination_failed'
-  | 'plugin_command_failed'
-  | 'plugin_not_found'
-  | 'plugin_operation_failed'
-  | 'plugin_terminal_failed'
-  | 'runtime_status_failed'
-  | 'runtime_action_failed'
-  | 'runtime_summary_failed'
-  | 'resource_not_found'
-  | 'recruit_failed'
-  | 'shift_command_failed'
-  | 'shift_operation_failed'
-  | 'skill_command_failed'
-  | 'skill_not_found'
-  | 'skill_operation_failed'
-  | 'team_sync_failed'
-  | 'workspace_unwritable'
-
-function responseRequestId(res: Response): string {
-  return String(res.getHeader('X-Request-Id') || randomUUID())
-}
-
-function apiSuccess<T>(res: Response, data: T, status = 200) {
-  return res.status(status).json({
-    ok: true,
-    data,
-    requestId: responseRequestId(res),
-  })
-}
-
-function sanitizeApiErrorDetail(detail: unknown): unknown {
-  if (detail === undefined || detail === null) return undefined
-  if (typeof detail === 'string') return applyDiagnosticRedactions(detail)
-  if (detail instanceof Error) return applyDiagnosticRedactions(detail.message)
-  return detail
-}
-
-function apiFailure(res: Response, status: number, code: ApiErrorCode, message: string, detail?: unknown) {
-  const error: Record<string, unknown> = {
-    code,
-    message: applyDiagnosticRedactions(message),
-    status,
-  }
-  const cleanDetail = sanitizeApiErrorDetail(detail)
-  if (cleanDetail !== undefined) error.detail = cleanDetail
-  return res.status(status).json({
-    ok: false,
-    error,
-    requestId: responseRequestId(res),
-  })
-}
+installControlPlaneHttp(app, {
+  authToken: AUTH_TOKEN,
+  frontendPort: CONTROL_CENTER_FRONTEND_PORT,
+  port: PORT,
+  sessionTokens,
+})
 
 function pluginErrorStatus(error: unknown): number {
   return typeof (error as Error & { code?: unknown }).code === 'number' ? 502 : 500
@@ -198,52 +53,6 @@ function pluginErrorDetail(error: unknown): string {
   return redactSensitiveText(String(error))
 }
 
-app.use((req, res, next) => {
-  res.setHeader('X-Request-Id', requestIdFor(req))
-  next()
-})
-app.use(cors({
-  origin(origin, callback) {
-    callback(null, isAllowedControlCenterOrigin(origin) ? origin || true : false)
-  },
-  allowedHeaders: ['Content-Type', 'Authorization', 'X-Request-Id', 'X-Control-Center-Request-Id'],
-  exposedHeaders: ['X-Request-Id'],
-  methods: ['GET', 'HEAD', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
-}))
-app.use('/api', (_req, res, next) => {
-  res.setHeader('Cache-Control', 'no-store')
-  next()
-})
-app.use(express.json({ limit: '4mb' }))
-const jsonParseErrorHandler: ErrorRequestHandler = (error, _req, res, next) => {
-  if (error instanceof SyntaxError && 'body' in error) {
-    apiFailure(
-      res,
-      400,
-      'invalid_json',
-      'Invalid JSON payload',
-      {
-        detail: error.message,
-        hint: 'Send valid JSON with Content-Type: application/json. For fetch, use body: JSON.stringify(payload).',
-      },
-    )
-    return
-  }
-  next(error)
-}
-app.use(jsonParseErrorHandler)
-app.use('/api', (req, res, next) => {
-  const origin = req.get('origin')
-  if (!isAllowedControlCenterOrigin(origin)) {
-    return apiFailure(res, 403, 'origin_not_allowed', 'Request origin is not allowed')
-  }
-  if (isPublicApiRequest(req)) return next()
-  const token = bearerToken(req)
-  if (!token || (!sessionTokens.has(token) && token !== AUTH_TOKEN)) {
-    return apiFailure(res, 401, 'auth_required', 'Authentication required')
-  }
-  return next()
-})
 let controlServer: Server | null = null
 const optionalRequire = createRequire(import.meta.url || __filename)
 type SqliteStatement = {
@@ -33074,27 +32883,7 @@ app.post('/api/party/agent/:agentId/model', async (req, res) => {
   }
 })
 
-app.post('/api/auth/login', (req, res) => {
-  const schema = z.object({ token: z.string().min(1) })
-  const parsed = schema.safeParse(req.body)
-  if (!parsed.success) return apiFailure(res, 400, 'invalid_payload', 'Invalid payload', parsed.error.flatten())
-
-  if (parsed.data.token === AUTH_TOKEN) {
-    const sessionToken = randomUUID()
-    sessionTokens.add(sessionToken)
-    return apiSuccess(res, { token: sessionToken })
-  }
-
-  return apiFailure(res, 401, 'invalid_token', 'Invalid token')
-})
-
-app.get('/api/auth/status', (req, res) => {
-  const token = req.headers.authorization?.replace('Bearer ', '')
-  if (token && sessionTokens.has(token)) {
-    return apiSuccess(res, { authenticated: true })
-  }
-  return apiSuccess(res, { authenticated: false })
-})
+registerAuthRoutes(app, { authToken: AUTH_TOKEN, sessionTokens })
 
 const STATIC_DIR = process.env.CONTROL_CENTER_STATIC_DIR?.trim()
 const STATIC_ROOT = STATIC_DIR ? path.resolve(STATIC_DIR) : ''

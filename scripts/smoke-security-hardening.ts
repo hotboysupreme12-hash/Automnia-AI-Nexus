@@ -7,10 +7,11 @@ const rootDir = fileURLToPath(new URL('..', import.meta.url))
 const read = (relativePath: string) => readFileSync(join(rootDir, relativePath), 'utf8')
 
 const server = read('server/index.ts')
+const controlPlaneHttp = read('server/controlPlaneHttp.ts')
 const electronMain = read('electron/main.cjs')
 const packageJson = JSON.parse(read('package.json')) as { scripts?: Record<string, string> }
 
-assert.match(server, /CONTROL_CENTER_CONTENT_SECURITY_POLICY/, 'server must define a packaged UI CSP')
+assert.match(controlPlaneHttp, /CONTROL_CENTER_CONTENT_SECURITY_POLICY/, 'server must define a packaged UI CSP')
 for (const directive of [
   "default-src 'self'",
   "script-src 'self'",
@@ -21,11 +22,11 @@ for (const directive of [
   "form-action 'none'",
   "connect-src 'self' http://127.0.0.1:* http://localhost:* ws://127.0.0.1:* ws://localhost:*",
 ]) {
-  assert.ok(server.includes(directive), `CSP must include ${directive}`)
+  assert.ok(controlPlaneHttp.includes(directive), `CSP must include ${directive}`)
 }
-assert.match(server, /setHeader\('Content-Security-Policy', CONTROL_CENTER_CONTENT_SECURITY_POLICY\)/, 'HTML static responses must receive the CSP header')
-assert.match(server, /setHeader\('X-Content-Type-Options', 'nosniff'\)/, 'static responses must set nosniff')
-assert.match(server, /setHeader\('Referrer-Policy', 'no-referrer'\)/, 'static responses must set no-referrer')
+assert.match(controlPlaneHttp, /setHeader\('Content-Security-Policy', CONTROL_CENTER_CONTENT_SECURITY_POLICY\)/, 'HTML static responses must receive the CSP header')
+assert.match(controlPlaneHttp, /setHeader\('X-Content-Type-Options', 'nosniff'\)/, 'static responses must set nosniff')
+assert.match(controlPlaneHttp, /setHeader\('Referrer-Policy', 'no-referrer'\)/, 'static responses must set no-referrer')
 assert.match(server, /setStaticSecurityHeaders\(res, file\.filePath\)/, 'static file streaming must apply security headers')
 
 assert.match(electronMain, /function openAllowedExternalUrl/, 'Electron must centralize external URL handling')
