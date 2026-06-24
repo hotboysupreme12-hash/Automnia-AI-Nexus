@@ -1237,7 +1237,16 @@ Verification:
   - `npm run lint`
   - `npm test`
 - Observed during `npm test`: `smoke:ledger` again reported one skipped malformed historical JSONL row while reading `runtime-runs`; the smoke passed and preserved the corruption-recovery warning instead of treating the file as empty.
-- GitHub Actions verification for this slice is pending until the branch is pushed.
+- Opened PR `#4`: `https://github.com/hotboysupreme12-hash/DystopAI-Core/pull/4`.
+- Initial GitHub Actions run `28130749384` passed install, dependency audit, secret scan, lint, app/server/Electron type-check, hardening smoke suite, server build, client build, Electron E2E, runtime bundle prep, vendored OpenClaw prep, and desktop packaging, then failed in `Run packaged desktop launch smoke`.
+- CI root cause: the packaged app reached the required E2E log markers, but the smoke failed after verification while deleting its temporary user-data directory on Windows with `EPERM`. This indicated cleanup racing a still-held Electron/child-process file handle, not an OpenClaw command route regression.
+- Hardened `scripts/smoke-packaged-electron-launch.ts` cleanup with bounded Windows retries, repeated packaged Electron process cleanup, and a warning-only fallback after launch verification has already succeeded.
+- Additional verification after the CI cleanup fix passed:
+  - `npm run typecheck:server`
+  - `npm run smoke:ci-workflow`
+  - `npm run smoke:packaged-electron-launch`
+  - `npm run smoke:openclaw-command-control-plane`
+- GitHub Actions verification for the final branch tip is pending until the cleanup fix is pushed.
 
 ## In Progress
 
