@@ -67,7 +67,6 @@ const DEFAULT_ACTIVE_PARTY_IDS = [
 const LEGACY_DEFAULT_PARTY_IDS = [
   'hn-netanyahu',
   'hn-commander',
-  'hn-epstein',
   'hn-coordinator',
   'hn-builder',
   'hn-reviewer',
@@ -528,7 +527,6 @@ const BUILTIN_RETIRED_AGENT_IDS = new Set([
   'hn-builder',
   'hn-franklin',
   'hn-trump',
-  'hn-epstein',
 ])
 const RETIRED_AGENT_IDS = new Set(BUILTIN_RETIRED_AGENT_IDS)
 
@@ -630,7 +628,6 @@ function normalizeInitialSelection(agents: OpenClawAgent[], selectedAgentId?: un
 const DEFAULT_AGENT_PORTRAIT_SUFFIXES: Record<string, string[]> = {
   'hn-netanyahu': ['agents/benjamin-netanyahu.jpg', 'agents/generated/benjamin-netanyahu.jpg'],
   'hn-commander': ['agents/donald-trump.jpg', 'agents/generated/donald-trump.jpg'],
-  'hn-epstein': ['agents/jeffrey-epstein.jpg', 'agents/generated/jeffrey-epstein.jpg'],
   'hn-coordinator': ['agents/sarah-cooper.jpg', 'agents/generated/sarah-cooper.jpg'],
   'hn-builder': ['agents/james-roberts.jpg', 'agents/generated/james-roberts.jpg'],
   'hn-reviewer': ['agents/brandon-riley.jpg', 'agents/generated/brandon-riley.jpg'],
@@ -1213,7 +1210,6 @@ function deriveBehaviorProfile(role: string, className: string): OpenClawAgent['
 
 function deriveRarity(a: PartyOverviewAgent): AgentRarity {
   if ((a.id || '').toLowerCase().includes('franklin') || (a.name || '').toLowerCase().includes('franklin')) return 'legendary'
-  if ((a.id || '').toLowerCase().includes('epstein') || (a.name || '').toLowerCase().includes('epstein')) return 'legendary'
   const lv = Math.max(1, Math.round(a.level || 1))
   if (lv >= 45) return 'legendary'
   if (lv >= 30) return 'epic'

@@ -2618,7 +2618,6 @@ const DEFAULT_BOOTSTRAP_AGENTS: Array<{ id: string; name: string }> = [
   { id: 'hn-architect', name: 'Elena Vasquez' },
   { id: 'hn-fullstack', name: 'Priya Sharma' },
   { id: 'hn-netanyahu', name: 'Benjamin Netanyahu' },
-  { id: 'hn-epstein', name: 'Jeffrey Epstein Case File' },
   { id: 'hn-crypto-lead', name: 'Marcus Chen' },
   { id: 'hn-crypto-technical', name: 'Diana Reyes' },
   { id: 'hn-crypto-onchain', name: 'Viktor Volkov' },
@@ -21367,7 +21366,6 @@ const BUILTIN_RETIRED_AGENT_IDS = new Set([
   'hn-builder',
   'hn-franklin',
   'hn-trump',
-  'hn-epstein',
 ])
 const RETIRED_AGENT_IDS = new Set(BUILTIN_RETIRED_AGENT_IDS)
 

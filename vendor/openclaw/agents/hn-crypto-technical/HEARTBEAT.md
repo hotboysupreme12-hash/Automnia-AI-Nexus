@@ -17,7 +17,7 @@ STORY: [2-sentence story using the word]
 ```
 
 ## COORDINATION:
-After writing your story, spawn sub-agents for the other 4 team members (Sarah Cooper/hn-coordinator, James Roberts/hn-builder, Benjamin Netanyahu/hn-netanyahu, Jeffrey Epstein/hn-epstein) telling them the word and instructing them to write their 2-sentence story to story.txt.
+After writing your story, spawn sub-agents for the other 3 team members (Sarah Cooper/hn-coordinator, James Roberts/hn-builder, Benjamin Netanyahu/hn-netanyahu) telling them the word and instructing them to write their 2-sentence story to story.txt.
 
 ## RULES:
 - NEVER repeat a word - check words.txt first
