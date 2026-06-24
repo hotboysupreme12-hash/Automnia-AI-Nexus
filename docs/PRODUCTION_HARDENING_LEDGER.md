@@ -1157,13 +1157,58 @@ Verification:
   - Commit: `a593d5c`
   - Result: Control Plane CI completed successfully in `9m4s`.
 
+## 2026-06-24 19:47 UTC - Plugin Route Extraction
+
+- Continued server decomposition on protective branch `codex/server-route-modules`.
+- Confirmed latest GitHub Actions state before editing:
+  - PR run `28124035710` passed.
+  - Push run `28124033719` passed.
+- Read the local OpenClaw plugin documentation before changing the plugin management surface:
+  - `docs/openclaw-latest/pages/cli/plugins.md`
+  - `docs/openclaw-latest/pages/plugins/building-plugins.md`
+  - `docs/openclaw-latest/pages/plugins/sdk-setup.md`
+- Extracted plugin HTTP routing into `server/routes/pluginRoutes.ts` while preserving the existing OpenClaw CLI/runtime helper functions in `server/index.ts`:
+  - `GET /api/plugins`
+  - `GET /api/plugins/search`
+  - `POST /api/plugins/install`
+  - `POST /api/plugins/update-all`
+  - `POST /api/plugins/gateway/restart`
+  - `POST /api/plugins/clawtalk/setup`
+  - `POST /api/plugins/:pluginId/update`
+  - `POST /api/plugins/:pluginId/uninstall`
+  - `POST /api/plugins/:pluginId/inspect`
+  - `POST /api/plugins/:pluginId/config`
+  - `POST /api/plugins/setup-terminal`
+  - `GET /api/plugins/setup-terminal/:sessionId/stream`
+  - `POST /api/plugins/setup-terminal/:sessionId/input`
+  - `POST /api/plugins/setup-terminal/:sessionId/resize`
+  - `DELETE /api/plugins/setup-terminal/:sessionId`
+  - `POST /api/plugins/:pluginId`
+- Preserved the setup-terminal SSE transport: the module still returns canonical not-found errors before the stream starts and then emits raw SSE frames by design.
+- Kept this slice route-only: plugin install/update/config/restart logic is injected from the existing server helpers so behavior is not mixed with the extraction.
+- Reduced `server/index.ts` from `30,502` lines after the diagnostics slice to `30,179` lines after this extraction.
+- Added `server/routes/pluginRoutes.ts` at `452` lines.
+- Updated `scripts/smoke-plugins-control-plane.ts` so it now asserts:
+  - `server/index.ts` registers `registerPluginRoutes(app, { ... })`.
+  - `server/index.ts` no longer inlines plugin routes.
+  - `server/routes/pluginRoutes.ts` owns canonical success/error envelopes and plugin setup-terminal SSE.
+- Updated `scripts/smoke-misc-control-plane.ts` so its setup-terminal SSE assertions follow the extracted plugin route module.
+- Verification passed:
+  - `npm run typecheck:server`
+  - `npm run smoke:plugins-control-plane`
+  - `npm run smoke:misc-control-plane`
+  - `npm run lint`
+  - `npm test`
+- Observed during `npm test`: `smoke:ledger` reported one skipped malformed historical JSONL row while reading `runtime-runs`; the smoke passed and preserved the corruption-recovery warning instead of treating the file as empty.
+
 ## In Progress
 
 - Production hardening on protective branch `codex/server-route-modules`.
 
 Next action:
 
-- Continue breaking up `server/index.ts` by extracting one coherent domain route cluster next. Highest-value candidates are runtime status/actions, plugins, or filesystem routes because they already have focused smoke coverage.
+- Push the plugin route extraction to PR `#1`, wait for GitHub Control Plane CI, and record the resulting run evidence.
+- Continue breaking up `server/index.ts` by extracting one coherent domain route cluster next. Highest-value candidates are runtime status/actions or filesystem routes because they already have focused smoke coverage.
 - Add release governance documentation and/or enforcement slices after the next route extraction:
   - Main branch protection requirements: green CI, no direct pushes, PR review, and signed commits where repository support allows.
   - Mandatory public release signing and validation failure when signing evidence is absent.
