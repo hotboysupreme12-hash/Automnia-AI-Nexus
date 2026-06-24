@@ -71,8 +71,9 @@ function encodePurlName(name) {
 function lockPackageName(packagePath, entry) {
   if (entry.name && typeof entry.name === 'string') return entry.name
   const normalized = packagePath.replace(/\\/g, '/')
-  const segments = normalized.split('/node_modules/')
-  const last = segments[segments.length - 1] || normalized.replace(/^node_modules\//, '')
+  const withoutRootPrefix = normalized.replace(/^node_modules\//, '')
+  const segments = withoutRootPrefix.split('/node_modules/')
+  const last = segments[segments.length - 1] || withoutRootPrefix
   return last
 }
 
