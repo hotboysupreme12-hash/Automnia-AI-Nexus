@@ -80,8 +80,8 @@ export function LoginModal() {
           </button>
 
           <div className="mt-4 text-center text-xs text-slate-400">
-            <p>Default dev token: dev-token-change-me</p>
-            <p className="mt-1">Set CONTROL_CENTER_TOKEN env var to change</p>
+            <p>Use the local token configured for this Control Center.</p>
+            <p className="mt-1">Desktop sessions sign in automatically; browser sessions use CONTROL_CENTER_TOKEN or the generated startup token.</p>
           </div>
         </form>
       </motion.div>

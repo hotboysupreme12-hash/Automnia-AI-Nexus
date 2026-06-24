@@ -11,4 +11,5 @@ contextBridge.exposeInMainWorld('dystopaiDesktop', {
   pickDirectory: (options = {}) => ipcRenderer.invoke('dystopai:pick-directory', {
     startPath: typeof options.startPath === 'string' ? options.startPath : '',
   }),
+  getControlCenterToken: () => ipcRenderer.invoke('dystopai:get-control-center-token'),
 })

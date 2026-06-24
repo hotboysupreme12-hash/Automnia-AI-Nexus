@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type { CSSProperties } from 'react'
 import { AnimatePresence, motion } from 'framer-motion'
+import { apiErrorMessage, apiRequest } from '../../api/client'
 import { useNexusStore } from '../../store/nexusStore'
 import type { AgentSkillEntry, BehaviorProfile, HeartbeatConfig, OpenClawAgent, ThinkingLevel } from '../../types/nexus'
 import { apiUrl } from '../../utils/apiUrl'
@@ -53,6 +54,11 @@ type AgentConfigPatch = {
 type AgentConfigDirtySection = 'profile'|'model'|'runtime'|'heartbeat'|'policy'
 type ApplyAgentConfigOptions = { skipDirty?: boolean }
 type DesktopDirectoryPickerPayload = { ok?:boolean; path?:string|null; cancelled?:boolean; error?:string; detail?:string }
+type FolderListPayload = { base?:string; folders?:string[] }
+type FolderPickerSessionPayload = { sessionId?:string; status?:'pending'|'selected'|'cancelled'|'error'; path?:string|null; cancelled?:boolean; detail?:string }
+type AgentResourceListPayload = { files?:string[] }
+type AgentResourceContentPayload = { content?:string }
+type AgentResourceSavePayload = { file?:string; resourcePath?:string }
 
 declare global {
   interface Window {
@@ -146,13 +152,10 @@ async function loadEditorModels(force = false) {
   if (!force && modelsRequest) return modelsRequest
 
   const path = force ? '/api/models/available?refresh=1' : '/api/models/available?background=0'
-  modelsRequest = fetchWithTimeout(apiUrl(path), undefined, EDITOR_MODEL_FETCH_TIMEOUT_MS)
-    .then(async (response) => {
-      const payload = await readJsonResponse<{ models?: unknown; error?: string; detail?: string }>(response)
-      if (!response.ok || payload.error) {
-        throw new Error(payload.detail || payload.error || `Models request failed with HTTP ${response.status}`)
-      }
-      const next = safeAvailableModels(payload.models)
+  modelsRequest = apiRequest<{ models?: unknown }>(path, { timeoutMs: EDITOR_MODEL_FETCH_TIMEOUT_MS })
+    .then((result) => {
+      if (!result.ok) throw new Error(apiErrorMessage(result.error))
+      const next = safeAvailableModels(result.data.models)
       modelsCache = { expiresAt: Date.now() + EDITOR_CACHE_MS, value: next }
       return next
     })
@@ -172,8 +175,8 @@ interface ClawHubSkillResult {
   ownerHandle?: string
   owner?: { handle?: string; displayName?: string; image?: string }
 }
-interface ClawHubSearchPayload { ok:boolean; results?:ClawHubSkillResult[]; error?:string; detail?:string }
-interface ClawHubInstallPayload { ok:boolean; alreadyInstalled?:boolean; skill?:AgentSkillEntry; output?:string; error?:string; detail?:string }
+interface ClawHubSearchPayload { results?:ClawHubSkillResult[] }
+interface ClawHubInstallPayload { alreadyInstalled?:boolean; skill?:AgentSkillEntry; output?:string }
 
 const ICON: Record<EditorTab,string> = { profile:'ID', model:'AI', heartbeat:'HB', policy:'SC', workspace:'WS', skills:'SK', files:'MD' }
 const EDITOR_TAB_LABEL: Record<EditorTab,string> = {
@@ -296,16 +299,6 @@ function mergeSkillEntries(...groups: Array<AgentSkillEntry[] | undefined>) {
   return Array.from(byId.values()).sort((a,b)=>a.name.localeCompare(b.name))
 }
 
-async function readJsonResponse<T>(response: Response): Promise<T> {
-  const text = await response.text()
-  if (!text.trim()) throw new Error(`Empty server response (${response.status})`)
-  try {
-    return JSON.parse(text) as T
-  } catch {
-    throw new Error(`Invalid server JSON (${response.status}): ${text.slice(0, 160)}`)
-  }
-}
-
 function isAbortError(error: unknown) {
   return typeof error === 'object' && error !== null && 'name' in error && String((error as { name?: unknown }).name) === 'AbortError'
 }
@@ -317,16 +310,6 @@ function errorMessage(error: unknown) {
 
 function isFetchNetworkError(error: unknown) {
   return /\b(failed to fetch|networkerror)\b/i.test(errorMessage(error))
-}
-
-async function fetchWithTimeout(input: Parameters<typeof fetch>[0], init?: Parameters<typeof fetch>[1], timeoutMs = 30000) {
-  const controller = new AbortController()
-  const timeout = window.setTimeout(() => controller.abort(), timeoutMs)
-  try {
-    return await fetch(input, { ...(init || {}), signal: controller.signal })
-  } finally {
-    window.clearTimeout(timeout)
-  }
 }
 
 function wait(ms: number) {
@@ -375,6 +358,7 @@ export function AgentEditorModal() {
   const closeEditor = useNexusStore((s)=>s.closeEditor)
   const editingAgentId = useNexusStore((s)=>s.editingAgentId)
   const editingAgentRenderKey = useNexusStore((s)=>agentEditorRenderKey(s.editingAgentId?s.agents.find((a)=>a.id===s.editingAgentId):null))
+  const agentConfigSaveStatus = useNexusStore((s)=>editingAgentId?s.agentConfigSaveStatus[editingAgentId]:undefined)
   const agent = useMemo(()=>editingAgentId&&editingAgentRenderKey?useNexusStore.getState().agents.find((a)=>a.id===editingAgentId)??null:null,[editingAgentId,editingAgentRenderKey])
   const activePartyIds = useNexusStore((s)=>s.activePartyIds)
   const updateAgentMeta = useNexusStore((s)=>s.updateAgentMeta)
@@ -484,12 +468,12 @@ export function AgentEditorModal() {
     configPatchRef.current = null
     configPatchAgentIdRef.current = ''
     if(!patch||!agentId)return
-    const response = await fetch(apiUrl(`/api/party/agent/${agentId}/config`),{
+    const result = await apiRequest<{ok?:boolean;error?:string;detail?:unknown}>(`/api/party/agent/${encodeURIComponent(agentId)}/config`,{
       method:'POST',
-      headers:{'Content-Type':'application/json'},
-      body:JSON.stringify(patch),
+      timeoutMs:18_000,
+      body:patch,
     })
-    if(!response.ok)throw new Error(`Agent config save failed (${response.status})`)
+    if(!result.ok)throw new Error(apiErrorMessage(result.error))
     agentConfigCache.delete(agentId)
     clearConfigDirty(...patchDirtySections(patch))
   },[clearConfigDirty,patchDirtySections])
@@ -503,7 +487,10 @@ export function AgentEditorModal() {
     configPatchRef.current = mergeAgentConfigPatch(configPatchRef.current||{},patch)
     if(configPatchTimerRef.current)window.clearTimeout(configPatchTimerRef.current)
     configPatchTimerRef.current = window.setTimeout(()=>{
-      void flushPendingConfigPatch().catch(()=>{})
+      const scheduledPatch = configPatchRef.current
+      void flushPendingConfigPatch().catch((error)=>{
+        if(scheduledPatch?.runtime)setMsStatus(`Failed to save runtime policy: ${errorMessage(error)}`)
+      })
     },EDITOR_PATCH_DEBOUNCE_MS)
   },[flushPendingConfigPatch,markConfigDirty,patchDirtySections])
 
@@ -548,8 +535,8 @@ export function AgentEditorModal() {
   const saveHeartbeatConfig = useCallback(async (agentId:string, heartbeat:HeartbeatConfig)=>{
     const seq = ++heartbeatSaveSeqRef.current
     heartbeatDraftRef.current = heartbeat
-    const response = await fetch(apiUrl(`/api/party/agent/${agentId}/config`),{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({heartbeat})})
-    if(!response.ok)throw new Error(`Heartbeat save failed (${response.status})`)
+    const result = await apiRequest<{ok?:boolean;error?:string;detail?:unknown}>(`/api/party/agent/${encodeURIComponent(agentId)}/config`,{method:'POST',timeoutMs:18_000,body:{heartbeat}})
+    if(!result.ok)throw new Error(apiErrorMessage(result.error))
     agentConfigCache.delete(agentId)
     if(seq===heartbeatSaveSeqRef.current){
       heartbeatDraftRef.current = null
@@ -572,7 +559,7 @@ export function AgentEditorModal() {
     markConfigDirty(agent.id,'heartbeat')
     updateHeartbeat(agent.id,heartbeat)
   }
-  const closeWithHeartbeatFlush = async ()=>{try{await flushPendingConfigPatch()}catch{/* local store already has the latest draft */}if(agent&&heartbeatDraftRef.current){try{await saveHeartbeatConfig(agent.id,heartbeatDraftRef.current)}catch{/* store already has the latest local draft */}}closeEditor()}
+  const closeWithHeartbeatFlush = async ()=>{try{await flushPendingConfigPatch()}catch(e){setMsStatus(`Failed to save pending settings: ${errorMessage(e)}`)}if(agent&&heartbeatDraftRef.current){try{await saveHeartbeatConfig(agent.id,heartbeatDraftRef.current)}catch(e){setMsStatus(`Failed to save heartbeat settings: ${errorMessage(e)}`)}}closeEditor()}
   const PR = (p:Partial<NonNullable<OpenClawAgent['runtimePolicy']>>)=>{
     if(!agent)return
     const runtime={
@@ -617,9 +604,9 @@ export function AgentEditorModal() {
       return
     }
     try{
-      const r=await fetch(apiUrl('/api/auth/providers'))
-      const d=(await r.json()) as {providers:AuthProviderStatus[]}
-      const next=d.providers||[]
+      const result=await apiRequest<{providers:AuthProviderStatus[]}>('/api/auth/providers',{timeoutMs:8000})
+      if(!result.ok)throw new Error(apiErrorMessage(result.error))
+      const next=result.data.providers||[]
       authProvidersCache={expiresAt:Date.now()+EDITOR_AUTH_CACHE_MS,value:next}
       setAuthProviders(next)
     }catch{
@@ -649,15 +636,7 @@ export function AgentEditorModal() {
     const thinkingDefault: ThinkingLevel = thinkingOn ? thinkingLevel : 'off'
     const timeoutSeconds = Math.max(30, Math.min(7200, Math.round(runtimeTimeoutSeconds)))
     try {
-      const response = await fetch(apiUrl(`/api/party/agent/${agent.id}/config`), {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          model: { primary, fallbacks },
-          runtime: { thinkingDefault, timeoutSeconds, parallelPreferred: true },
-        }),
-      })
-      const data = (await response.json()) as {
+      const result = await apiRequest<{
         ok?: boolean
         error?: string
         config?: {
@@ -668,11 +647,19 @@ export function AgentEditorModal() {
             parallelPreferred?: boolean
           }
         }
-      }
-      if (!response.ok || !data.ok) {
-        setMsStatus(data.error || 'Failed.')
+      }>(`/api/party/agent/${encodeURIComponent(agent.id)}/config`, {
+        method: 'POST',
+        timeoutMs: 18_000,
+        body: {
+          model: { primary, fallbacks },
+          runtime: { thinkingDefault, timeoutSeconds, parallelPreferred: true },
+        },
+      })
+      if (!result.ok) {
+        setMsStatus(apiErrorMessage(result.error))
         return
       }
+      const data = result.data
       const savedModel = data.config?.model || { primary, fallbacks }
       const savedRuntime = data.config?.runtime || { thinkingDefault, timeoutSeconds, parallelPreferred: true }
       updateAgentModel(agent.id, savedModel)
@@ -738,20 +725,51 @@ export function AgentEditorModal() {
       return
     }
     const seq = ++configLoadSeqRef.current
-    try{
-      const r=await fetch(apiUrl(`/api/party/agent/${agentId}/config`))
-      const d=(await r.json()) as {ok?:boolean;config?:AgentConfigPayload}
-      if(seq!==configLoadSeqRef.current)return
-      if(d.ok&&d.config){
-        agentConfigCache.set(agentId,{expiresAt:Date.now()+EDITOR_CONFIG_CACHE_MS,value:d.config})
-        applyAgentConfigPayload(agentId,d.config,{skipDirty:true})
-      }
-    }catch{/* policy is optional until the agent config exists */}
+    const result=await apiRequest<{ok?:boolean;config?:AgentConfigPayload}>(`/api/party/agent/${encodeURIComponent(agentId)}/config`,{timeoutMs:12000})
+    if(seq!==configLoadSeqRef.current)return
+    if(result.ok&&result.data.config){
+      agentConfigCache.set(agentId,{expiresAt:Date.now()+EDITOR_CONFIG_CACHE_MS,value:result.data.config})
+      applyAgentConfigPayload(agentId,result.data.config,{skipDirty:true})
+    }
   },[agent?.id,applyAgentConfigPayload])
-  const SvP = async ()=>{if(!agent)return;setPs(true);setPsStatus('');try{const r=await fetch(apiUrl(`/api/party/agent/${agent.id}/config`),{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({sandbox:{mode:sbMode,scope:sbScope,workspaceAccess:sbAccess},tools:{allow:csv(tAllow),deny:csv(tDeny)}})});const d=(await r.json()) as {ok?:boolean;error?:string};if(r.ok&&d.ok){agentConfigCache.delete(agent.id);clearConfigDirty('policy')}setPsStatus(r.ok&&d.ok?'Saved.':d.error||'Failed.')}catch(e){setPsStatus(String(e))}finally{setPs(false)}}
+  const SvP = async ()=>{if(!agent)return;setPs(true);setPsStatus('');try{const result=await apiRequest<{ok?:boolean;error?:string}>(`/api/party/agent/${encodeURIComponent(agent.id)}/config`,{method:'POST',timeoutMs:18000,body:{sandbox:{mode:sbMode,scope:sbScope,workspaceAccess:sbAccess},tools:{allow:csv(tAllow),deny:csv(tDeny)}}});if(result.ok){agentConfigCache.delete(agent.id);clearConfigDirty('policy')}setPsStatus(result.ok?'Saved.':apiErrorMessage(result.error))}catch(e){setPsStatus(String(e))}finally{setPs(false)}}
 
-  const LdW = useCallback(async ()=>{const agentId=agent?.id;if(!agentId)return;setWsLoading(true);try{const q=agent?.workspace?`?path=${encodeURIComponent(agent.workspace)}`:'';const r=await fetchWithTimeout(`/api/party/folders${q}`,undefined,20000);const d=(await r.json()) as {base?:string;folders?:string[]};if(r.ok&&d.folders){setWsFolders(d.folders);if(d.base)setWsPath((current)=>current||d.base||'')}}catch(e){setWsFolders([]);if(isAbortError(e))setWsStatus('Folder list timed out. Paste a path manually or try Browse again.')}finally{setWsLoading(false)}},[agent?.id,agent?.workspace])
-  const Br = async (f:string)=>{if(!f.trim()){setWsStatus('Enter a path or use default.');return}setWsPath(f);setWsLoading(true);setWsStatus('');try{const r=await fetchWithTimeout(`/api/party/folders?path=${encodeURIComponent(f)}`,undefined,20000);const d=(await r.json()) as {base?:string;folders?:string[];error?:string;detail?:string};if(r.ok&&d.folders){setWsFolders(d.folders);setWsStatus(d.base?`Browsing: ${d.base}`:'')}else{setWsStatus((d.error||d.detail||'Could not list folders')+` (path: ${f})`);setWsFolders([])}}catch(e){setWsStatus(isAbortError(e)?'Browse timed out. Paste a directory path manually and press Set.':isFetchNetworkError(e)?'Browse request failed before the server responded. Check that the backend is running, then try again.':`Browse failed: ${errorMessage(e)}`);setWsFolders([])}finally{setWsLoading(false)}}
+  const LdW = useCallback(async ()=>{
+    const agentId=agent?.id
+    if(!agentId)return
+    setWsLoading(true)
+    try{
+      const q=agent?.workspace?`?path=${encodeURIComponent(agent.workspace)}`:''
+      const result=await apiRequest<FolderListPayload>(`/api/party/folders${q}`,{timeoutMs:20000})
+      if(result.ok&&result.data.folders){
+        setWsFolders(result.data.folders)
+        if(result.data.base)setWsPath((current)=>current||result.data.base||'')
+      }else{
+        setWsFolders([])
+        setWsStatus(result.ok?'Could not load folders.':apiErrorMessage(result.error))
+      }
+    }catch(e){
+      setWsFolders([])
+      if(isAbortError(e))setWsStatus('Folder list timed out. Paste a path manually or try Browse again.')
+    }finally{setWsLoading(false)}
+  },[agent?.id,agent?.workspace])
+  const Br = async (f:string)=>{
+    if(!f.trim()){setWsStatus('Enter a path or use default.');return}
+    setWsPath(f);setWsLoading(true);setWsStatus('')
+    try{
+      const result=await apiRequest<FolderListPayload>(`/api/party/folders?path=${encodeURIComponent(f)}`,{timeoutMs:20000})
+      if(result.ok&&result.data.folders){
+        setWsFolders(result.data.folders)
+        setWsStatus(result.data.base?`Browsing: ${result.data.base}`:'')
+      }else{
+        setWsStatus(`${result.ok?'Could not list folders':apiErrorMessage(result.error)} (path: ${f})`)
+        setWsFolders([])
+      }
+    }catch(e){
+      setWsStatus(isAbortError(e)?'Browse timed out. Paste a directory path manually and press Set.':isFetchNetworkError(e)?'Browse request failed before the server responded. Check that the backend is running, then try again.':`Browse failed: ${errorMessage(e)}`)
+      setWsFolders([])
+    }finally{setWsLoading(false)}
+  }
   const applyPickedWorkspace = (pickedPath:string)=>{
     const p=pickedPath.trim()
     if(!p)return false
@@ -801,22 +819,23 @@ export function AgentEditorModal() {
         workspaceDirectoryRef.current.click()
         return
       }
-      const r=await fetchWithTimeout('/api/party/folder-picker/start',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({startPath:wsPath||agent?.workspace||''})},30000)
-      const text=await r.text()
-      let d:{ok?:boolean;sessionId?:string;status?:string;path?:string|null;error?:string;detail?:string}
-      try{d=JSON.parse(text) as typeof d}catch{throw new Error(text.trim().startsWith('<')?'Folder picker API was not reached. Reinstall/restart the desktop app.':text.slice(0,180).trim()||'Folder picker returned an empty server response. Restart the desktop app, then try Browse again.')}
+      const pickerStart=await apiRequest<FolderPickerSessionPayload>('/api/party/folder-picker/start',{method:'POST',timeoutMs:30000,body:{startPath:wsPath||agent?.workspace||''}})
+      if(!pickerStart.ok){setWsStatus(apiErrorMessage(pickerStart.error));return}
+      const d=pickerStart.data
       if(d.path?.trim()){applyPickedWorkspace(d.path);return}
-      if(!r.ok||!d.ok||!d.sessionId){setWsStatus(d.detail||d.error||'Folder picker could not start.');return}
+      if(d.status==='cancelled'||d.cancelled){setWsStatus(d.detail||'No folder selected.');return}
+      if(!d.sessionId){setWsStatus(d.detail||'Folder picker could not start.');return}
       setWsStatus('Folder picker is open. Choose a folder or cancel it.')
       const deadline=Date.now()+120000
       while(Date.now()<deadline){
         await wait(750)
-        const pr=await fetchWithTimeout(`/api/party/folder-picker/${encodeURIComponent(d.sessionId)}`,undefined,10000)
-        const pd=await readJsonResponse<{ok?:boolean;status?:string;path?:string|null;error?:string;detail?:string}>(pr)
+        const poll=await apiRequest<FolderPickerSessionPayload>(`/api/party/folder-picker/${encodeURIComponent(d.sessionId)}`,{timeoutMs:10000})
+        if(!poll.ok){setWsStatus(apiErrorMessage(poll.error));return}
+        const pd=poll.data
         if(pd.status==='pending')continue
         if(pd.status==='selected'&&pd.path?.trim()){applyPickedWorkspace(pd.path);return}
-        if(pd.status==='cancelled'){setWsStatus(pd.detail||'No folder selected.');return}
-        setWsStatus(pd.detail||pd.error||'Folder picker failed.')
+        if(pd.status==='cancelled'||pd.cancelled){setWsStatus(pd.detail||'No folder selected.');return}
+        setWsStatus(pd.detail||'Folder picker failed.')
         return
       }
       setWsStatus('Folder picker timed out. Paste a directory path manually and press Set, or try Browse again.')
@@ -831,18 +850,21 @@ export function AgentEditorModal() {
     setWsSaving(true)
     setWsStatus('Setting workspace...')
     try{
-      const r=await fetchWithTimeout(apiUrl('/api/party/workspace'),{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({agentId:agent.id,workspace:wsPath})},90000)
-      const d=await readJsonResponse<{ok?:boolean;workspace?:string;error?:string;detail?:string;suggestedWorkspace?:string|null}>(r)
-      if(r.ok&&d.ok){
+      const result=await apiRequest<{ok?:boolean;workspace?:string;error?:string;detail?:string;suggestedWorkspace?:string|null}>('/api/party/workspace',{method:'POST',timeoutMs:90000,body:{agentId:agent.id,workspace:wsPath}})
+      if(result.ok&&result.data.ok){
+        const d=result.data
         const finalPath=d.workspace||wsPath
         setWsPath(finalPath)
         updateAgentMeta(agent.id,{workspace:finalPath})
         setWsStatus(`Set: ${finalPath}`)
         void Br(finalPath)
-      }else if(d.suggestedWorkspace){
-        setWsPath(d.suggestedWorkspace)
-        setWsStatus(`${d.error||d.detail||'Failed.'} Suggested: ${d.suggestedWorkspace}`)
-      }else setWsStatus(d.error||d.detail||`Failed (${r.status}).`)
+      }else if(result.ok&&result.data.suggestedWorkspace){
+        const d=result.data
+        const suggestedWorkspace=d.suggestedWorkspace||''
+        setWsPath(suggestedWorkspace)
+        setWsStatus(`${d.error||d.detail||'Failed.'} Suggested: ${suggestedWorkspace}`)
+      }else if(result.ok)setWsStatus(result.data.error||result.data.detail||'Failed.')
+      else setWsStatus(result.error.code==='timeout'?'Workspace setting timed out. The server may still be syncing; try Set again.':`Workspace failed: ${apiErrorMessage(result.error)}`)
     }catch(e){
       setWsStatus(isAbortError(e)?'Workspace setting timed out. The server may still be syncing; try Set again.':isFetchNetworkError(e)?'Workspace request failed before the server responded. The desktop app will try to restart the backend automatically; try Set again in a moment.':`Workspace failed: ${errorMessage(e)}`)
     }finally{setWsSaving(false)}
@@ -873,19 +895,24 @@ export function AgentEditorModal() {
     setPortraitPreviewSrc(localPreview)
     setPortraitStatus('Uploading image...')
     try{
-      const r=await fetchWithTimeout(apiUrl(`/api/party/avatar-upload/${encodeURIComponent(agent.id)}?filename=${encodeURIComponent(file.name||'avatar')}`),{
+      const result=await apiRequest<AvatarPickerPayload>(`/api/party/avatar-upload/${encodeURIComponent(agent.id)}?filename=${encodeURIComponent(file.name||'avatar')}`,{
         method:'POST',
+        timeoutMs:90000,
         headers:{'Content-Type':file.type||'application/octet-stream'},
         body:file,
-      },90000)
-      const d=await readJsonResponse<AvatarPickerPayload>(r)
-      if(!r.ok||!d.ok)throw new Error(d.detail||d.error||'Avatar upload failed.')
-      if(!applyPickedPortrait(d)){
+      })
+      if(!result.ok){
+        if(result.error.code==='timeout')throw new Error('Avatar upload timed out. Try a smaller image or try again.')
+        if(result.error.code==='network_error')throw new Error('Avatar upload failed before the server responded. Restart the backend if this repeats.')
+        throw new Error(apiErrorMessage(result.error))
+      }
+      if(!applyPickedPortrait(result.data)){
         throw new Error('Avatar upload finished but no preview was returned.')
       }
     }catch(e){
       setPortraitPreviewSrc('')
-      setPortraitStatus(isAbortError(e)?'Avatar upload timed out. Try a smaller image or try again.':isFetchNetworkError(e)?'Avatar upload failed before the server responded. Restart the backend if this repeats.':`Upload failed: ${errorMessage(e)}`)
+      const message=errorMessage(e)
+      setPortraitStatus(isAbortError(e)?'Avatar upload timed out. Try a smaller image or try again.':isFetchNetworkError(e)?'Avatar upload failed before the server responded. Restart the backend if this repeats.':message.startsWith('Avatar upload')?message:`Upload failed: ${message}`)
     }finally{
       setPortraitPicking(false)
       window.setTimeout(()=>URL.revokeObjectURL(localPreview),30000)
@@ -905,14 +932,17 @@ export function AgentEditorModal() {
     }
     setSharedSkillsLoading(true)
     try {
-      const r = await fetch(apiUrl(`/api/skills/library?agentId=${encodeURIComponent(agentId)}${force?'&refresh=1':''}`), { cache: force ? 'no-store' : 'default' })
-      const d = await readJsonResponse<{ok?:boolean; shared?:AgentSkillEntry[]; agent?:AgentSkillEntry[]; error?:string}>(r)
-      if (r.ok && d.ok) {
+      const result = await apiRequest<{shared?:AgentSkillEntry[]; agent?:AgentSkillEntry[]}>(`/api/skills/library?agentId=${encodeURIComponent(agentId)}${force?'&refresh=1':''}`, {
+        cache: force ? 'no-store' : 'default',
+        timeoutMs: 20_000,
+      })
+      if (result.ok) {
+        const d = result.data
         const next=mergeSkillEntries(d.shared, d.agent)
         skillsCache.set(agentId,{expiresAt:Date.now()+EDITOR_CONFIG_CACHE_MS,value:next})
         setInstalledSkills(next)
       }
-      else setClawHubError(d.error || 'Could not load shared skills.')
+      else setClawHubError(apiErrorMessage(result.error))
     } catch(e) {
       setClawHubError(`Could not load shared skills: ${String(e)}`)
     } finally {
@@ -925,9 +955,9 @@ export function AgentEditorModal() {
     if(!q){setClawHubError('Enter a ClawHub search term.');return}
     setClawHubSearching(true);setClawHubError('');setClawHubStatus('')
     try {
-      const r = await fetch(apiUrl(`/api/skills/clawhub/search?q=${encodeURIComponent(q)}&limit=8`))
-      const d = (await r.json()) as ClawHubSearchPayload
-      if(!r.ok||!d.ok){setClawHubError(d.error||d.detail||'ClawHub search failed.');return}
+      const result = await apiRequest<ClawHubSearchPayload>(`/api/skills/clawhub/search?q=${encodeURIComponent(q)}&limit=8`, { timeoutMs: 90_000 })
+      if(!result.ok){setClawHubError(apiErrorMessage(result.error));return}
+      const d = result.data
       setClawHubResults(d.results||[])
       setClawHubStatus((d.results||[]).length?`Found ${(d.results||[]).length} skills.`:'No ClawHub skills matched that search.')
     } catch(e) {
@@ -941,9 +971,9 @@ export function AgentEditorModal() {
     if(!agent)return
     setClawHubInstalling(skill.slug);setClawHubError('');setClawHubStatus('')
     try {
-      const r = await fetch(apiUrl('/api/skills/clawhub/install'),{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({slug:skill.slug})})
-      const d = (await r.json()) as ClawHubInstallPayload
-      if(!r.ok||!d.ok){setClawHubError(d.error||d.detail||'ClawHub install failed.');return}
+      const result = await apiRequest<ClawHubInstallPayload>('/api/skills/clawhub/install',{method:'POST',timeoutMs:120_000,body:{slug:skill.slug}})
+      if(!result.ok){setClawHubError(apiErrorMessage(result.error));return}
+      const d = result.data
       setClawHubStatus(d.alreadyInstalled?`${skill.displayName||skill.slug} is already installed.`:`Installed ${d.skill?.name||skill.displayName||skill.slug} to the shared OpenClaw skills folder.`)
       skillsCache.delete(agent.id)
       await LdSharedSkills(agent.id,true)
@@ -958,9 +988,9 @@ export function AgentEditorModal() {
     if(!agent)return
     setClawHubUpdating(skill.slug);setClawHubError('');setClawHubStatus('')
     try {
-      const r = await fetch(apiUrl('/api/skills/clawhub/update'),{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({slug:skill.slug})})
-      const d = (await r.json()) as ClawHubInstallPayload
-      if(!r.ok||!d.ok){setClawHubError(d.error||d.detail||'ClawHub update failed.');return}
+      const result = await apiRequest<ClawHubInstallPayload>('/api/skills/clawhub/update',{method:'POST',timeoutMs:180_000,body:{slug:skill.slug}})
+      if(!result.ok){setClawHubError(apiErrorMessage(result.error));return}
+      const d = result.data
       setClawHubStatus(`Updated ${d.skill?.name||skill.displayName||skill.slug}.`)
       skillsCache.delete(agent.id)
       await LdSharedSkills(agent.id,true)
@@ -987,15 +1017,14 @@ export function AgentEditorModal() {
     const seq=++fileListSeqRef.current
     setRloading(true);setRstatus('')
     try{
-      const r=await fetchWithTimeout(`/api/party/resources/${agentId}`,undefined,15000)
-      const d=(await r.json()) as {ok?:boolean;files?:string[];error?:string}
+      const result=await apiRequest<AgentResourceListPayload>(`/api/party/resources/${encodeURIComponent(agentId)}`,{timeoutMs:15000})
       if(seq!==fileListSeqRef.current)return
-      if(r.ok&&d.ok&&d.files){
-        setRfiles(d.files)
-        setRfile((current)=>d.files?.includes(current)?current:d.files?.[0]||'SOUL.md')
+      if(result.ok&&result.data.files){
+        setRfiles(result.data.files)
+        setRfile((current)=>result.data.files?.includes(current)?current:result.data.files?.[0]||'SOUL.md')
       }else{
         setRfiles([])
-        setRstatus(d.error||'Could not load files.')
+        setRstatus(result.ok?'Could not load files.':apiErrorMessage(result.error))
       }
     }catch(e){
       if(seq===fileListSeqRef.current){
@@ -1012,11 +1041,10 @@ export function AgentEditorModal() {
     const seq=++fileContentSeqRef.current
     setRcontentLoading(true);setRstatus('')
     try{
-      const r=await fetchWithTimeout(`/api/party/resources/${agentId}/${encodeURIComponent(f)}`,undefined,15000)
-      const d=(await r.json()) as {ok?:boolean;content?:string;error?:string}
+      const result=await apiRequest<AgentResourceContentPayload>(`/api/party/resources/${encodeURIComponent(agentId)}/${encodeURIComponent(f)}`,{timeoutMs:15000})
       if(seq!==fileContentSeqRef.current)return
-      if(r.ok&&d.ok)setRcontent(d.content||'')
-      else{setRcontent('');setRstatus(d.error||`Could not load ${f}.`)}
+      if(result.ok)setRcontent(result.data.content||'')
+      else{setRcontent('');setRstatus(apiErrorMessage(result.error)||`Could not load ${f}.`)}
     }catch(e){
       if(seq===fileContentSeqRef.current){
         setRcontent('')
@@ -1026,7 +1054,7 @@ export function AgentEditorModal() {
       if(seq===fileContentSeqRef.current)setRcontentLoading(false)
     }
   },[agent?.id])
-  const SvF = async ()=>{if(!agent)return;setRsaving(true);try{const r=await fetch(`/api/party/resources/${agent.id}/${encodeURIComponent(rfile)}`,{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify({content:rcontent})});const d=(await r.json()) as {ok?:boolean;error?:string};setRstatus(r.ok&&d.ok?'Saved.':d.error||'Failed.')}catch(e){setRstatus(String(e))}finally{setRsaving(false)}}
+  const SvF = async ()=>{if(!agent)return;setRsaving(true);try{const result=await apiRequest<AgentResourceSavePayload>(`/api/party/resources/${encodeURIComponent(agent.id)}/${encodeURIComponent(rfile)}`,{method:'PUT',timeoutMs:20000,body:{content:rcontent}});setRstatus(result.ok?'Saved.':apiErrorMessage(result.error))}catch(e){setRstatus(String(e))}finally{setRsaving(false)}}
   const RetireAgent = useCallback(async ()=>{
     if(!agent||retiring)return
     if(configPatchTimerRef.current){
@@ -1105,6 +1133,19 @@ export function AgentEditorModal() {
 
   if(!agent)return null
 
+  const heartbeatSaveStatus = agentConfigSaveStatus?.heartbeat
+  const runtimeSaveStatus = agentConfigSaveStatus?.runtime
+  const heartbeatSaveStatusClass = heartbeatSaveStatus?.phase === 'failed'
+    ? 'text-red-300'
+    : heartbeatSaveStatus?.phase === 'saving'
+    ? 'text-amber-300/80'
+    : 'text-emerald-400/70'
+  const heartbeatSaveStatusText = heartbeatSaveStatus?.phase === 'saved'
+    ? 'Saved to backend.'
+    : heartbeatSaveStatus?.message || 'Changes save automatically'
+  const runtimeStoreStatusText = runtimeSaveStatus?.phase === 'failed' || runtimeSaveStatus?.phase === 'saving'
+    ? runtimeSaveStatus.message
+    : ''
   const primaryProvider = providerForModel(primary)
   const primaryAuth = primaryProvider ? authForProvider(primaryProvider) : undefined
   const primaryAuthLabel = authLabelForProvider(primaryProvider, primaryAuth)
@@ -1304,7 +1345,7 @@ export function AgentEditorModal() {
                     </div>
                     <div className="flex items-center gap-2">
                       <button onClick={()=>void SvM()} disabled={ms} className="rounded-lg border border-cyan-400/30 bg-cyan-400/[0.06] px-4 py-2 text-[9px] font-bold uppercase tracking-[0.12em] text-cyan-300 hover:bg-cyan-400/[0.12] disabled:opacity-40">{ms?'Saving...':'Save'}</button>
-                      {msStatus&&<span className={`text-[9px] font-semibold ${msStatus.includes('Failed')?'text-red-400':'text-emerald-400'}`}>{msStatus}</span>}
+                      {(msStatus||runtimeStoreStatusText)&&<span className={`text-[9px] font-semibold ${(msStatus||runtimeStoreStatusText).includes('Failed')?'text-red-400':'text-emerald-400'}`} role={(msStatus||runtimeStoreStatusText).includes('Failed')?'alert':'status'} aria-live={(msStatus||runtimeStoreStatusText).includes('Failed')?'assertive':'polite'}>{msStatus||runtimeStoreStatusText}</span>}
                     </div>
                   </div>
                 )}
@@ -1417,7 +1458,13 @@ export function AgentEditorModal() {
                     </div>
 
                     {/* Auto-save indicator */}
-                    <p className="text-center text-[8px] font-semibold text-emerald-400/70">✓ Changes save automatically</p>
+                    <p
+                      className={`text-center text-[8px] font-semibold ${heartbeatSaveStatusClass}`}
+                      role={heartbeatSaveStatus?.phase === 'failed' ? 'alert' : 'status'}
+                      aria-live={heartbeatSaveStatus?.phase === 'failed' ? 'assertive' : 'polite'}
+                    >
+                      {heartbeatSaveStatusText}
+                    </p>
                   </div>
                 )}
 
@@ -1598,8 +1645,8 @@ export function AgentEditorModal() {
           providerStatus={authModalProvider}
           onClose={()=>setAuthModalProvider(null)}
           onSave={async(apiKey)=>{
-            const r=await fetch(`/api/auth/providers/${authModalProvider.provider}`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({apiKey})})
-            if(!r.ok)throw new Error('Failed to save provider key')
+            const result=await apiRequest(`/api/auth/providers/${encodeURIComponent(authModalProvider.provider)}`,{method:'POST',timeoutMs:20000,body:{apiKey}})
+            if(!result.ok)throw new Error(apiErrorMessage(result.error))
             await LdAuth(true)
             setMsStatus(`${authModalProvider.provider} key saved.`)
           }}

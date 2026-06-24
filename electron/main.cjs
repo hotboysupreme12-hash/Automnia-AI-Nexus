@@ -3,6 +3,7 @@ const { spawn, spawnSync } = require('node:child_process')
 const fs = require('node:fs')
 const https = require('node:https')
 const http = require('node:http')
+const { randomBytes } = require('node:crypto')
 const path = require('node:path')
 
 const APP_PORT = Number(process.env.CONTROL_CENTER_PORT || 4050)
@@ -41,12 +42,16 @@ const WINDOWS_DISABLE_GPU = process.platform === 'win32' && (
   process.env.DYSTOPAI_WINDOWS_DISABLE_GPU === '1' ||
   process.env.DYSTOPAI_WINDOWS_SAFE_RENDERER === '1'
 )
+const WINDOWS_DIAGNOSTIC_SINGLE_PROCESS = process.platform === 'win32' &&
+  isDev &&
+  process.env.DYSTOPAI_WINDOWS_DIAGNOSTIC_SINGLE_PROCESS === '1' &&
+  process.env.DYSTOPAI_ACK_UNSAFE_ELECTRON_SANDBOX_DIAGNOSTIC === '1'
 process.env.OPENCLAW_SUPPRESS_EXTENSION_API_WARNING = process.env.OPENCLAW_SUPPRESS_EXTENSION_API_WARNING || '1'
 if (WINDOWS_DISABLE_GPU) {
   app.disableHardwareAcceleration()
 }
-const WINDOWS_PACKAGED_SINGLE_PROCESS = process.platform === 'win32' && !isDev && !WINDOWS_DISABLE_GPU && process.env.DYSTOPAI_WINDOWS_SINGLE_PROCESS === '1'
-if (WINDOWS_PACKAGED_SINGLE_PROCESS) {
+if (WINDOWS_DIAGNOSTIC_SINGLE_PROCESS) {
+  console.warn('[dystopai] unsafe Electron single-process diagnostic mode is enabled for this development run only.')
   app.commandLine.appendSwitch('single-process')
   app.commandLine.appendSwitch('in-process-gpu')
   app.commandLine.appendSwitch('disable-gpu-sandbox')
@@ -77,6 +82,7 @@ let quitCleanupComplete = false
 let controlServerEntry = null
 let serverRestartTimer = null
 let serverRestartAttempts = 0
+let controlCenterLaunchToken = ''
 const SERVER_RESTART_BASE_DELAY_MS = 1000
 const SERVER_RESTART_MAX_DELAY_MS = 10_000
 
@@ -87,6 +93,28 @@ function appRoot() {
 function resourcePath(...parts) {
   if (isDev) return path.join(appRoot(), ...parts)
   return path.join(process.resourcesPath, ...parts)
+}
+
+function controlCenterOrigin() {
+  return `http://127.0.0.1:${APP_PORT}`
+}
+
+function isTrustedRendererSender(event) {
+  const frameUrl = event?.senderFrame?.url || event?.sender?.getURL?.() || ''
+  try {
+    const parsed = new URL(frameUrl)
+    return parsed.origin === controlCenterOrigin() || parsed.origin === `http://localhost:${APP_PORT}`
+  } catch {
+    return false
+  }
+}
+
+function ensureControlCenterLaunchToken() {
+  if (!controlCenterLaunchToken) {
+    controlCenterLaunchToken = process.env.CONTROL_CENTER_TOKEN || randomBytes(32).toString('base64url')
+  }
+  process.env.CONTROL_CENTER_TOKEN = controlCenterLaunchToken
+  return controlCenterLaunchToken
 }
 
 function resolveDirectoryPickerStartPath(startPath) {
@@ -112,7 +140,11 @@ function resolveDirectoryPickerStartPath(startPath) {
 
 ipcMain.handle('dystopai:pick-directory', async (event, input = {}) => {
   try {
+    if (!isTrustedRendererSender(event)) {
+      return { ok: false, error: 'Untrusted renderer origin', path: null }
+    }
     const owner = BrowserWindow.fromWebContents(event.sender) || mainWindow || undefined
+    /** @type {import('electron').OpenDialogOptions} */
     const options = {
       title: 'Select Agent Workspace',
       defaultPath: resolveDirectoryPickerStartPath(input.startPath),
@@ -125,6 +157,11 @@ ipcMain.handle('dystopai:pick-directory', async (event, input = {}) => {
   } catch (error) {
     return { ok: false, error: error?.message || String(error), path: null }
   }
+})
+
+ipcMain.handle('dystopai:get-control-center-token', async (event) => {
+  if (!isTrustedRendererSender(event)) return null
+  return ensureControlCenterLaunchToken()
 })
 
 function resolveServerEntry() {
@@ -787,7 +824,11 @@ function postControlApi(pathname, timeoutMs = 5000) {
       path: pathname,
       method: 'POST',
       timeout: timeoutMs,
-      headers: { 'Content-Type': 'application/json', 'Content-Length': '2' },
+      headers: {
+        'Content-Type': 'application/json',
+        'Content-Length': '2',
+        Authorization: `Bearer ${ensureControlCenterLaunchToken()}`,
+      },
     }, (res) => {
       let body = ''
       res.setEncoding('utf8')
@@ -1033,7 +1074,7 @@ async function stopGatewayCompletely() {
     }
     await forceKillSpawnedGateway()
     updateTrayMenu()
-  })().finally(() => {
+  }).finally(() => {
     gatewayShutdownInFlight = null
   })
   return gatewayShutdownInFlight
@@ -1059,7 +1100,7 @@ async function resetGateway() {
     appendGatewayLog('lifecycle', 'tray requested gateway reset')
     await startGateway()
     updateTrayMenu()
-  })().finally(() => {
+  }).finally(() => {
     gatewayResetInFlight = null
     updateTrayMenu()
   })
@@ -1099,6 +1140,7 @@ function configureTextAssistance(win) {
   }
 
   win.webContents.on('context-menu', (_event, params) => {
+    /** @type {import('electron').MenuItemConstructorOptions[]} */
     const template = []
     const editFlags = params.editFlags || {}
     const hasSelection = Boolean(params.selectionText && params.selectionText.trim())
@@ -1169,7 +1211,7 @@ function createMainWindow() {
       preload: path.join(__dirname, 'preload.cjs'),
       contextIsolation: true,
       nodeIntegration: false,
-      sandbox: !WINDOWS_PACKAGED_SINGLE_PROCESS,
+      sandbox: true,
       backgroundThrottling: false,
       spellcheck: true,
     },
@@ -1189,20 +1231,13 @@ function createMainWindow() {
     }, 750)
   })
   win.webContents.setWindowOpenHandler(({ url }) => {
-    if (shouldOpenExternally(url)) {
-      void shell.openExternal(url).catch((error) => {
-        console.warn('[dystopai] failed to open external URL:', error?.message || error)
-      })
-      return { action: 'deny' }
-    }
-    return { action: 'allow' }
+    openAllowedExternalUrl(url)
+    return { action: 'deny' }
   })
   win.webContents.on('will-navigate', (event, url) => {
-    if (!shouldOpenExternally(url)) return
+    if (isInternalAppUrl(url)) return
     event.preventDefault()
-    void shell.openExternal(url).catch((error) => {
-      console.warn('[dystopai] failed to open external URL:', error?.message || error)
-    })
+    openAllowedExternalUrl(url)
   })
 
   win.on('close', (event) => {
@@ -1320,11 +1355,18 @@ function isInternalAppUrl(targetUrl) {
 function shouldOpenExternally(targetUrl) {
   try {
     const parsed = new URL(targetUrl)
-    if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') return false
-    return !isInternalAppUrl(targetUrl)
+    return parsed.protocol === 'https:' && !isInternalAppUrl(targetUrl)
   } catch {
     return false
   }
+}
+
+function openAllowedExternalUrl(targetUrl) {
+  if (!shouldOpenExternally(targetUrl)) return false
+  void shell.openExternal(targetUrl).catch((error) => {
+    console.warn('[dystopai] failed to open external URL:', error?.message || error)
+  })
+  return true
 }
 
 app.whenReady().then(async () => {
@@ -1346,6 +1388,7 @@ app.whenReady().then(async () => {
     process.env.CONTROL_CENTER_APP_ROOT = appRoot()
     process.env.CONTROL_CENTER_STATIC_DIR = staticDir
     process.env.CONTROL_CENTER_WORKSPACE_ROOT = workspaceRoot
+    ensureControlCenterLaunchToken()
     process.env.OPENCLAW_GATEWAY_PORT = String(GATEWAY_PORT)
     process.env.OPENCLAW_STATE_DIR = openclawStateDir
     process.env.OPENCLAW_HOME = openclawStateDir

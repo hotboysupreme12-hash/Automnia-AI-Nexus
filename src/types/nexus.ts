@@ -312,13 +312,41 @@ export interface MissionReport {
   id: string
   missionId: string
   generatedAt: string
-  efficiencyRating: number
-  soulDrift: number
-  heartbeatStabilityScore: number
-  runtimeEfficiency: number
-  errors: number
-  xpGained: number
+  efficiencyRating: number | null
+  soulDrift: number | null
+  heartbeatStabilityScore: number | null
+  runtimeEfficiency: number | null
+  errors: number | null
+  xpGained: number | null
   skillUnlocks: string[]
+  evidence?: MissionReportEvidence
+}
+
+export interface MissionReportEvidence {
+  source: 'runtime-responses' | 'mission-feed' | 'mixed' | 'none'
+  acceptedRuns: number
+  startedRuns: number
+  completedRuns: number
+  failedRuns: number
+  cancelledRuns: number
+  timedOutRuns: number
+  retryCount: number
+  fallbackCount: number
+  verificationFailures: number
+  toolFailures: number
+  commandFailures: number
+  humanInterventions: number
+  agentParticipation: string[]
+  queueDelayMs: number | null
+  timeToFirstTokenMs: number | null
+  totalExecutionDurationMs: number | null
+  missionWallTimeMs: number | null
+  tokenUsageEstimate: number | null
+  runtimeRunIds?: string[]
+  cronRunIds?: string[]
+  sessionIds?: string[]
+  sessionKeys?: string[]
+  unavailableMetrics: string[]
 }
 
 export type AgentActivityType =
@@ -394,6 +422,7 @@ export interface AgentActivityEvent {
 
 export interface AgentResponse {
   id: string
+  missionId?: string
   agentId: string
   prompt: string
   response: string

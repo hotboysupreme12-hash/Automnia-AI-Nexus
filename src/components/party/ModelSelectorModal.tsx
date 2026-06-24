@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { ProviderAuthModal } from '../auth/ProviderAuthModal'
 import type { ThinkingLevel } from '../../types/nexus'
-import { apiUrl } from '../../utils/apiUrl'
+import { apiErrorMessage, apiRequest } from '../../api/client'
 import { formatModelGroupLabel, groupAvailableModels } from '../../utils/modelGrouping'
 
 interface AvailableModel {
@@ -119,18 +119,17 @@ async function fetchModelSelectorModels() {
   if (cached) return cached
   if (modelSelectorModelsRequest) return modelSelectorModelsRequest
 
-  const controller = new AbortController()
-  const timeout = window.setTimeout(() => controller.abort(), MODEL_SELECTOR_FETCH_TIMEOUT_MS)
-  modelSelectorModelsRequest = fetch(apiUrl('/api/models/available?background=0'), { signal: controller.signal })
-    .then(async (response) => {
-      const payload = await response.json() as { models?: unknown; error?: string; detail?: string }
-      if (!response.ok || payload.error) throw new Error(payload.detail || payload.error || `Models request failed with HTTP ${response.status}`)
+  modelSelectorModelsRequest = apiRequest<{ models?: unknown; error?: string; detail?: string }>('/api/models/available?background=0', {
+    timeoutMs: MODEL_SELECTOR_FETCH_TIMEOUT_MS,
+  })
+    .then((result) => {
+      if (!result.ok) throw new Error(apiErrorMessage(result.error))
+      const payload = result.data
       const models = safeAvailableModels(payload.models)
       modelSelectorModelsCache = { value: models, expiresAt: Date.now() + MODEL_SELECTOR_CACHE_MS }
       return models
     })
     .finally(() => {
-      window.clearTimeout(timeout)
       modelSelectorModelsRequest = null
     })
 
@@ -180,9 +179,8 @@ export function ModelSelectorModal({
 
   const fetchAuthProviders = useCallback(async () => {
     try {
-      const response = await fetch('/api/auth/providers')
-      const data = (await response.json()) as { providers: AuthProviderStatus[] }
-      setAuthProviders(data.providers || [])
+      const result = await apiRequest<{ providers: AuthProviderStatus[] }>('/api/auth/providers', { timeoutMs: 8000 })
+      setAuthProviders(result.ok ? result.data.providers || [] : [])
     } catch {
       setAuthProviders([])
     }
@@ -509,12 +507,12 @@ export function ModelSelectorModal({
           providerStatus={authModalProvider}
           onClose={() => setAuthModalProvider(null)}
           onSave={async (apiKey) => {
-            const response = await fetch(`/api/auth/providers/${authModalProvider.provider}`, {
+            const result = await apiRequest(`/api/auth/providers/${encodeURIComponent(authModalProvider.provider)}`, {
               method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ apiKey }),
+              timeoutMs: 20_000,
+              body: { apiKey },
             })
-            if (!response.ok) throw new Error('Failed to save provider key')
+            if (!result.ok) throw new Error(apiErrorMessage(result.error))
             await fetchAuthProviders()
           }}
           onConnected={fetchAuthProviders}

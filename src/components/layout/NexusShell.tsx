@@ -73,6 +73,7 @@ export function NexusShell() {
   const tab = useNexusStore((s) => s.tab)
   const setTab = useNexusStore((s) => s.setTab)
   const syncPartyOverview = useNexusStore((s) => s.syncPartyOverview)
+  const syncMissionProjection = useNexusStore((s) => s.syncMissionProjection)
   const agentCount = useNexusStore((s) => s.agents.length)
   const activePartyCount = useNexusStore((s) => s.activePartyIds.length)
   const busyAgentCount = useNexusStore((s) => s.busyAgentIds.length)
@@ -237,6 +238,7 @@ export function NexusShell() {
     : undefined
 
   useEffect(() => { void syncPartyOverview() }, [syncPartyOverview])
+  useEffect(() => { void syncMissionProjection() }, [syncMissionProjection])
   useEffect(() => { void preloadMissionIconAssets() }, [])
   useEffect(() => {
     if (tab === 'missions') setHasMountedMissionPanel(true)

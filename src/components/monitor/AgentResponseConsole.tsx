@@ -1,4 +1,5 @@
 import { memo, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
+import { apiErrorMessage, apiRequest } from '../../api/client'
 import { restartGatewayRuntime, useRuntimeSummaryStatus } from '../../hooks/useRuntimeStatus'
 import type { GatewayStabilityStatus } from '../../hooks/useRuntimeStatus'
 import { useNexusStore } from '../../store/nexusStore'
@@ -34,6 +35,10 @@ type PendingAttachment = {
   file: File
   preview: string
   kind: PendingAttachmentKind
+}
+
+type CommandConsoleUploadPayload = {
+  attachment?: AgentTurnAttachment
 }
 
 type CommandConsoleDraft = {
@@ -294,6 +299,13 @@ type CommandConsoleRunTrace = {
   title: string
   ariaLabel: string
   copyText: string
+  evidenceRows: CommandConsoleEvidenceRow[]
+}
+
+type CommandConsoleEvidenceRow = {
+  key: 'agent' | 'state' | 'run' | 'session' | 'transport' | 'progress' | 'latest' | 'content'
+  label: string
+  value: string
 }
 
 function activityStringValue(event: AgentActivityEvent, key: string) {
@@ -335,6 +347,20 @@ function buildLatestRunTrace(entry: AgentResponse, transport: string, status: st
   if (!runId && !sessionKey && !progressLabel && !latestProgress) return null
 
   const rawTransport = entry.transport?.trim() || ''
+  const contentEvidence = ['Content', 'omitted'] as const
+  const evidenceRows = ([
+    { key: 'agent', label: 'Agent', value: entry.agentId },
+    { key: 'state', label: 'State', value: status },
+    { key: 'run', label: 'Run', value: runId || 'pending' },
+    { key: 'session', label: 'Session', value: sessionKey || 'pending' },
+    { key: 'transport', label: 'Transport', value: transport || rawTransport || 'unknown' },
+    { key: 'progress', label: 'Progress', value: progressLabel || 'pending' },
+    { key: 'latest', label: 'Latest', value: latestProgress || 'pending' },
+    { key: 'content', label: contentEvidence[0], value: contentEvidence[1] },
+  ] satisfies CommandConsoleEvidenceRow[]).map((row): CommandConsoleEvidenceRow => ({
+    ...row,
+    value: redactDiagnosticText(row.value, 500),
+  }))
   const copyText = redactDiagnosticText([
     `runId=${runId || 'pending'}`,
     `agentId=${entry.agentId}`,
@@ -357,6 +383,7 @@ function buildLatestRunTrace(entry: AgentResponse, transport: string, status: st
     title: `Run: ${runId || 'pending'} / Session key: ${sessionKey || 'pending'}`,
     ariaLabel: `Copy Command Console trace for ${entry.agentId}`,
     copyText,
+    evidenceRows,
   }
 }
 
@@ -615,6 +642,20 @@ const ResponseMessage = memo(function ResponseMessage({
           )}
         </div>
       </div>
+
+      {latestRunTrace && (
+        <details className="dy-command-evidence-preview" aria-label="Command Console run evidence">
+          <summary>Evidence</summary>
+          <dl>
+            {latestRunTrace.evidenceRows.map((row) => (
+              <div key={row.key} data-evidence-key={row.key}>
+                <dt>{row.label}</dt>
+                <dd>{row.value}</dd>
+              </div>
+            ))}
+          </dl>
+        </details>
+      )}
 
       {displayText ? (
         <div className="dy-command-message-body-wrap relative">
@@ -1013,17 +1054,18 @@ export function AgentResponseConsole() {
 
   const uploadAttachment = async (file: File): Promise<AgentTurnAttachment> => {
     const uploadFile = await compressImageForUpload(file)
-    const res = await fetch(`/api/files/upload?name=${encodeURIComponent(uploadFile.name)}&mimeType=${encodeURIComponent(uploadFile.type || 'application/octet-stream')}`, {
+    const result = await apiRequest<CommandConsoleUploadPayload>(`/api/files/upload?name=${encodeURIComponent(uploadFile.name)}&mimeType=${encodeURIComponent(uploadFile.type || 'application/octet-stream')}`, {
       method: 'POST',
+      timeoutMs: 90_000,
       headers: {
         'Content-Type': 'application/octet-stream',
         'X-File-Type': uploadFile.type || 'application/octet-stream',
       },
       body: uploadFile,
     })
-    const payload = (await res.json().catch(() => ({}))) as { attachment?: AgentTurnAttachment; error?: string }
-    if (!res.ok || !payload.attachment) throw new Error(payload.error || `Upload failed (${res.status})`)
-    return payload.attachment
+    if (!result.ok) throw new Error(apiErrorMessage(result.error))
+    if (!result.data.attachment) throw new Error('Upload finished without an attachment record.')
+    return result.data.attachment
   }
 
   const handleSend = async () => {

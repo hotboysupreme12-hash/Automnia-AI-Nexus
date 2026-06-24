@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
+import { apiErrorMessage, apiRequest, type ApiRequestOptions } from '../../api/client'
 import { ActionStatusBanner } from '../common/ActionStatusBanner'
 
 type PluginConfigField = {
@@ -233,26 +234,17 @@ function responseNotice(payload: PluginsResponse) {
   return warning ? `Plugin list loaded with CLI warning: ${warning}` : ''
 }
 
-async function fetchJsonWithTimeout<T>(input: string, init?: RequestInit, timeoutMs = 10_000): Promise<{ response: Response; payload: T }> {
-  const controller = new AbortController()
-  const timeout = window.setTimeout(() => controller.abort(), timeoutMs)
-  try {
-    const response = await fetch(input, {
-      ...(init || {}),
-      cache: init?.cache || 'no-store',
-      signal: controller.signal,
-    })
-    const payload = (await response.json().catch(() => ({}))) as T
-    return { response, payload }
-  } finally {
-    window.clearTimeout(timeout)
-  }
+async function pluginApiData<T>(path: string, options: ApiRequestOptions | undefined, fallbackMessage: string): Promise<T> {
+  const result = await apiRequest<T>(path, { cache: 'no-store', ...(options || {}) })
+  if (!result.ok) throw new Error(apiErrorMessage(result.error) || fallbackMessage)
+  return result.data
 }
 
 function pluginRequestError(error: unknown) {
-  return error instanceof DOMException && error.name === 'AbortError'
-    ? 'Plugin request timed out. Refresh again after the backend finishes.'
-    : String(error)
+  if (error instanceof DOMException && error.name === 'AbortError') {
+    return 'Plugin request timed out. Refresh again after the backend finishes.'
+  }
+  return error instanceof Error ? error.message : String(error)
 }
 
 function statusClass(plugin: PluginEntry) {
@@ -523,20 +515,20 @@ function OpenClawCommandPanel({
     setError('')
     setNotice('')
     try {
-      const { response, payload } = await fetchJsonWithTimeout<PluginApiPayload>(
+      const payload = await pluginApiData<PluginApiPayload>(
         '/api/openclaw/command',
         {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
+          body: {
             command: trimmed,
             timeoutSeconds: 600,
             refreshPlugins: true,
-          }),
+          },
+          timeoutMs: 620_000,
         },
-        620_000,
+        'OpenClaw command failed.',
       )
-      if (!response.ok || !payload.command) throw new Error(payload.detail || payload.error || 'OpenClaw command failed.')
+      if (!payload.command) throw new Error('OpenClaw command failed.')
       onPayload(payload)
       setLastRun({ command: trimmed, result: payload.command, ok: payload.ok !== false })
       setNotice(`${payload.command.command} exited ${payload.command.code}; output added to gateway tail.`)
@@ -640,12 +632,11 @@ function PluginSetupModal({
     setLocalError('')
     setError('')
     try {
-      const { response, payload } = await fetchJsonWithTimeout<PluginApiPayload>(
+      const payload = await pluginApiData<PluginApiPayload>(
         isClawTalk ? '/api/plugins/clawtalk/setup' : `/api/plugins/${encodeURIComponent(plugin.id)}/config`,
         {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(isClawTalk
+          body: isClawTalk
             ? {
                 apiKey: configValues.apiKey,
                 install: true,
@@ -655,11 +646,11 @@ function PluginSetupModal({
                 values: configValues,
                 providerAuth,
                 restart: true,
-              }),
+              },
+          timeoutMs: isClawTalk ? 190_000 : 30_000,
         },
-        isClawTalk ? 190_000 : 30_000,
+        'Plugin setup failed.',
       )
-      if (!response.ok) throw new Error(payload.detail || payload.error || 'Plugin setup failed.')
       onSaved(payload)
       setNotice(isClawTalk
         ? `${plugin.name} connected; bot and WebSocket verified.`
@@ -874,12 +865,11 @@ function PluginDiscoveryPanel({
     setLocalError('')
     setError('')
     try {
-      const { response, payload } = await fetchJsonWithTimeout<{ results?: PluginSearchResult[]; cliError?: string; error?: string; detail?: string }>(
+      const payload = await pluginApiData<{ results?: PluginSearchResult[]; cliError?: string }>(
         `/api/plugins/search?q=${encodeURIComponent(q)}&limit=20`,
-        undefined,
-        130_000,
+        { timeoutMs: 130_000 },
+        'Plugin search failed.',
       )
-      if (!response.ok) throw new Error(payload.detail || payload.error || 'Plugin search failed.')
       setResults(payload.results || [])
       const warning = formatPluginCliWarning(payload.cliError)
       setNotice(warning ? `Search warning: ${warning}` : `${payload.results?.length || 0} search results.`)
@@ -897,22 +887,21 @@ function PluginDiscoveryPanel({
     setLocalError('')
     setError('')
     try {
-      const { response, payload } = await fetchJsonWithTimeout<PluginApiPayload>(
+      const payload = await pluginApiData<PluginApiPayload>(
         '/api/plugins/install',
         {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
+          body: {
             spec: installSpec,
             pluginId,
             pin,
             enable: true,
             restart: true,
-          }),
+          },
+          timeoutMs: 260_000,
         },
-        260_000,
+        'Plugin install failed.',
       )
-      if (!response.ok) throw new Error(payload.detail || payload.error || 'Plugin install failed.')
       onInstalled(payload)
       const repairSuffix = payload.repair?.applied ? ' Auto-repaired installer staging lock.' : ''
       setNotice(`${payload.plugin?.name || installSpec} installed and enabled; ${restartNotice(payload.restart)}.${repairSuffix}`)
@@ -1052,12 +1041,11 @@ export function PluginsPanel() {
     if (!options.silent) setLoading(true)
     setError('')
     try {
-      const { response, payload } = await fetchJsonWithTimeout<PluginApiPayload>(
+      const payload = await pluginApiData<PluginApiPayload>(
         options.force ? '/api/plugins?refresh=1' : '/api/plugins',
-        undefined,
-        options.force ? 30_000 : 10_000,
+        { timeoutMs: options.force ? 30_000 : 10_000 },
+        'Plugin list failed.',
       )
-      if (!response.ok) throw new Error(payload.detail || payload.error || 'Plugin list failed.')
       setPlugins(payload.plugins || [])
       pluginsPanelCache = {
         plugins: payload.plugins || [],
@@ -1091,12 +1079,11 @@ export function PluginsPanel() {
       return next
     })
     try {
-      const { response, payload } = await fetchJsonWithTimeout<PluginApiPayload>(`/api/plugins/${encodeURIComponent(plugin.id)}`, {
+      const payload = await pluginApiData<PluginApiPayload>(`/api/plugins/${encodeURIComponent(plugin.id)}`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ enabled: nextEnabled, restart: false }),
-      }, 45_000)
-      if (!response.ok) throw new Error(payload.detail || payload.error || 'Plugin update failed.')
+        body: { enabled: nextEnabled, restart: false },
+        timeoutMs: 45_000,
+      }, 'Plugin update failed.')
       applyPayload(payload)
       const updated = payload.plugins?.find((entry) => entry.id === plugin.id)
       const setupSuffix = nextEnabled && updated?.needsSetup ? ' Setup required.' : ''
@@ -1135,16 +1122,15 @@ export function PluginsPanel() {
     setError('')
     setNotice('')
     try {
-      const { response, payload } = await fetchJsonWithTimeout<PluginApiPayload>(
+      const payload = await pluginApiData<PluginApiPayload>(
         `/api/plugins/${encodeURIComponent(plugin.id)}/update`,
         {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ restart: true }),
+          body: { restart: true },
+          timeoutMs: 280_000,
         },
-        280_000,
+        'Plugin update failed.',
       )
-      if (!response.ok) throw new Error(payload.detail || payload.error || 'Plugin update failed.')
       applyPayload(payload)
       setNotice(commandNotice(payload, `${payload.plugin?.name || plugin.name} updated; ${restartNotice(payload.restart)}`))
     } catch (err) {
@@ -1159,12 +1145,12 @@ export function PluginsPanel() {
     setError('')
     setNotice('')
     try {
-      const { response, payload } = await fetchJsonWithTimeout<PluginApiPayload>(
+      const payload = await pluginApiData<PluginApiPayload>(
         `/api/plugins/${encodeURIComponent(plugin.id)}/inspect`,
-        { method: 'POST' },
-        140_000,
+        { method: 'POST', timeoutMs: 140_000 },
+        'Plugin runtime inspect failed.',
       )
-      if (!response.ok || !payload.inspect) throw new Error(payload.detail || payload.error || 'Plugin runtime inspect failed.')
+      if (!payload.inspect) throw new Error('Plugin runtime inspect failed.')
       applyPayload(payload)
       setInspectState({ plugin: payload.plugin || plugin, inspect: payload.inspect })
       setNotice(`${plugin.name} runtime checked.`)
@@ -1180,12 +1166,11 @@ export function PluginsPanel() {
     setError('')
     setNotice('')
     try {
-      const { response, payload } = await fetchJsonWithTimeout<PluginApiPayload>(
+      const payload = await pluginApiData<PluginApiPayload>(
         '/api/plugins/gateway/restart',
-        { method: 'POST' },
-        90_000,
+        { method: 'POST', timeoutMs: 90_000 },
+        'Gateway restart failed.',
       )
-      if (!response.ok) throw new Error(payload.detail || payload.error || 'Gateway restart failed.')
       applyPayload(payload)
       setNotice(`${plugin.name} gateway restart finished; ${restartNotice(payload.restart)}.`)
     } catch (err) {
@@ -1201,16 +1186,15 @@ export function PluginsPanel() {
     setError('')
     setNotice('')
     try {
-      const { response, payload } = await fetchJsonWithTimeout<PluginApiPayload>(
+      const payload = await pluginApiData<PluginApiPayload>(
         `/api/plugins/${encodeURIComponent(plugin.id)}/uninstall`,
         {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ keepFiles: false, force: true, restart: true }),
+          body: { keepFiles: false, force: true, restart: true },
+          timeoutMs: 280_000,
         },
-        280_000,
+        'Plugin uninstall failed.',
       )
-      if (!response.ok) throw new Error(payload.detail || payload.error || 'Plugin uninstall failed.')
       applyPayload(payload)
       setExpandedPluginId(null)
       setNotice(commandNotice(payload, `${plugin.name} uninstalled; ${restartNotice(payload.restart)}`))
@@ -1238,16 +1222,15 @@ export function PluginsPanel() {
     setError('')
     setNotice('')
     try {
-      const { response, payload } = await fetchJsonWithTimeout<PluginApiPayload>(
+      const payload = await pluginApiData<PluginApiPayload>(
         '/api/plugins/update-all',
         {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ restart: true }),
+          body: { restart: true },
+          timeoutMs: 340_000,
         },
-        340_000,
+        'Plugin update failed.',
       )
-      if (!response.ok) throw new Error(payload.detail || payload.error || 'Plugin update failed.')
       applyPayload(payload)
       setNotice(commandNotice(payload, `All tracked plugins updated; ${restartNotice(payload.restart)}`))
     } catch (err) {
