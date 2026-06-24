@@ -1207,13 +1207,45 @@ Verification:
   - Commit: `fe0bc07`
   - Result: Control Plane CI completed successfully in `8m29s` for the PR-triggered run and `11m42s` for the push-triggered run.
 
+## 2026-06-24 21:35 UTC - OpenClaw Command Route Extraction
+
+- Continued server decomposition on clean protective branch `codex/openclaw-command-routes`, based on `origin/main` so the review stays independent from PR `#2` and PR `#3`.
+- Re-read local OpenClaw docs before touching this surface:
+  - `docs/openclaw-latest/pages/gateway/protocol.md`
+  - `docs/openclaw-latest/pages/web/control-ui.md`
+  - `docs/openclaw-latest/pages/web/webchat.md`
+  - `docs/openclaw-latest/pages/cli/agent.md`
+  - `docs/OPENCLAW_GATEWAY_COMMAND_CONSOLE_GUIDE.md`
+- Extracted the bounded OpenClaw command/summary HTTP shell into `server/routes/openclawCommandRoutes.ts`:
+  - `GET /api/openclaw/summary`
+  - `POST /api/openclaw/command`
+- Kept Gateway chat, agent-turn SSE, runtime status, runtime actions, and plugin control helpers in their existing owners. This intentionally avoids moving the documented live Gateway chat path or the agent-turn fallback ladder in the same slice.
+- Injected existing helpers/state from `server/index.ts` instead of importing back into the route module:
+  - `runOpenClaw`, `parseOpenClawCommandInput`, `pushGatewayLog`, `pluginCommandString`, `pluginCommandResult`, `listPluginControls`, runtime cache invalidation, party/mission projections, and redaction.
+- Reduced `server/index.ts` from `30,179` lines at `origin/main` to `30,124` lines after this extraction.
+- Added `server/routes/openclawCommandRoutes.ts` at `103` lines.
+- Updated `scripts/smoke-openclaw-command-control-plane.ts` so the OpenClaw command/summary assertions read the extracted module, assert `server/index.ts` no longer owns those route handlers, and still preserve the parallel-health assertion against `server/index.ts`.
+- Used parallel subagent reconnaissance for the next monolith splits:
+  - Coordination route explorer mapped a future `server/routes/coordinationRoutes.ts` slice covering party dispatch, agent-to-agent, parallel-health, shifts, and team-sync routes, while warning to preserve shared shift state and agent-turn delegation semantics.
+  - Workspace/provisioning explorer mapped a future `partyWorkspaceRoutes.ts`/filesystem follow-up, but recommended waiting until PR `#3` lands because that branch already extracts resource/folder/picker routes.
+- Verification passed:
+  - `npm run typecheck:server`
+  - `npm run smoke:openclaw-command-control-plane`
+  - `npm run smoke:openclaw`
+  - `npm run smoke:runtime-status-control-plane`
+  - `npm run smoke:api-envelope`
+  - `npm run lint`
+  - `npm test`
+- Observed during `npm test`: `smoke:ledger` again reported one skipped malformed historical JSONL row while reading `runtime-runs`; the smoke passed and preserved the corruption-recovery warning instead of treating the file as empty.
+- GitHub Actions verification for this slice is pending until the branch is pushed.
+
 ## In Progress
 
-- Production hardening on protective branch `codex/server-route-modules`.
+- Production hardening on protective branch `codex/openclaw-command-routes`.
 
 Next action:
 
-- Continue breaking up `server/index.ts` by extracting one coherent domain route cluster next. Highest-value candidates are runtime status/actions or filesystem routes because they already have focused smoke coverage.
+- Continue breaking up `server/index.ts` by extracting one coherent domain route cluster next. Highest-value candidates are coordination routes after this PR, or the remaining workspace/provisioning filesystem routes after PR `#3` lands.
 - Add release governance documentation and/or enforcement slices after the next route extraction:
   - Main branch protection requirements: green CI, no direct pushes, PR review, and signed commits where repository support allows.
   - Mandatory public release signing and validation failure when signing evidence is absent.
