@@ -1,0 +1,47 @@
+name: Server Index Architecture Report
+
+on:
+  push:
+    branches:
+      - production-readiness-2026-06-25
+    paths:
+      - scripts/report-server-index-architecture.mjs
+      - .github/workflows/server-index-architecture.yml
+
+permissions:
+  contents: write
+
+jobs:
+  report:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Check out branch
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+
+      - name: Install locked dependencies
+        run: npm ci
+
+      - name: Generate architecture report
+        run: node scripts/report-server-index-architecture.mjs
+
+      - name: Commit report when changed
+        shell: bash
+        run: |
+          if git diff --quiet -- docs/generated/server-index-architecture.md; then
+            echo "Architecture report is already current."
+            exit 0
+          fi
+          git config user.name "dystopai-architecture-bot"
+          git config user.email "actions@users.noreply.github.com"
+          git add docs/generated/server-index-architecture.md
+          git commit -m "docs: generate server index architecture report [skip ci]"
+          git push origin HEAD:production-readiness-2026-06-25
