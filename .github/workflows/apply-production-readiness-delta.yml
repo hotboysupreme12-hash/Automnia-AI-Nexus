@@ -1,0 +1,68 @@
+name: Apply Production Readiness Refactor
+
+on:
+  push:
+    branches:
+      - production-readiness-2026-06-25
+    paths:
+      - .production-readiness/apply-delta.b64
+      - scripts/apply-production-readiness-delta.py
+      - .github/workflows/apply-production-readiness-delta.yml
+
+permissions:
+  contents: write
+
+concurrency:
+  group: production-readiness-refactor
+  cancel-in-progress: false
+
+jobs:
+  apply-and-validate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - name: Check out production branch
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+
+      - name: Apply verified source delta
+        run: python3 scripts/apply-production-readiness-delta.py
+
+      - name: Remove one-shot staging machinery
+        shell: bash
+        run: |
+          rm -rf .production-readiness
+          rm -f scripts/apply-production-readiness-delta.py
+          rm -f .github/workflows/apply-production-readiness-delta.yml
+
+      - name: Install locked dependencies
+        run: npm ci
+
+      - name: Reject malformed patches
+        run: git diff --check
+
+      - name: Run production test gate
+        run: npm test
+
+      - name: Build standalone application
+        run: npm run build:standalone
+
+      - name: Commit validated production pass
+        shell: bash
+        run: |
+          git add -A
+          if git diff --cached --quiet; then
+            echo "No generated changes to commit."
+            exit 0
+          fi
+          git config user.name "dystopai-production-bot"
+          git config user.email "actions@users.noreply.github.com"
+          git commit -m "refactor: split control plane and harden desktop shell"
+          git push origin HEAD:production-readiness-2026-06-25
