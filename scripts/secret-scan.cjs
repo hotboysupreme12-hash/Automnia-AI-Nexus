@@ -8,6 +8,8 @@ const allowlistMarker = /(?:pragma:\s*allowlist\s+secret|secret-scan:\s*allow)/i
 
 const skippedPathPrefixes = [
   '.cache/',
+  '.git/',
+  '.tmp/',
   'artifacts/',
   'dist/',
   'dist-server/',
@@ -89,16 +91,44 @@ const detectors = [
   },
 ]
 
+function walkCandidateFiles(directory = root, relativeDirectory = '') {
+  const entries = fs.readdirSync(directory, { withFileTypes: true })
+  const files = []
+  for (const entry of entries) {
+    const relativePath = path.posix.join(relativeDirectory.replace(/\\/g, '/'), entry.name)
+    if (entry.isSymbolicLink()) continue
+    if (entry.isDirectory()) {
+      if (shouldSkip(`${relativePath}/`)) continue
+      files.push(...walkCandidateFiles(path.join(directory, entry.name), relativePath))
+      continue
+    }
+    if (entry.isFile()) files.push(relativePath)
+  }
+  return files
+}
+
 function candidateFiles() {
-  const output = execFileSync('git', ['ls-files', '-z', '--cached', '--others', '--exclude-standard'], {
-    cwd: root,
-    encoding: 'buffer',
-  })
-  return output
-    .toString('utf8')
-    .split('\0')
-    .filter(Boolean)
-    .map((filePath) => filePath.replace(/\\/g, '/'))
+  try {
+    const insideWorkTree = execFileSync('git', ['rev-parse', '--is-inside-work-tree'], {
+      cwd: root,
+      encoding: 'utf8',
+      stdio: ['ignore', 'pipe', 'ignore'],
+    }).trim()
+    if (insideWorkTree === 'true') {
+      const output = execFileSync('git', ['ls-files', '-z', '--cached', '--others', '--exclude-standard'], {
+        cwd: root,
+        encoding: 'buffer',
+      })
+      return output
+        .toString('utf8')
+        .split('\0')
+        .filter(Boolean)
+        .map((filePath) => filePath.replace(/\\/g, '/'))
+    }
+  } catch {
+    // Source archives and release qualification folders may not include .git.
+  }
+  return walkCandidateFiles()
 }
 
 function shouldSkip(filePath) {

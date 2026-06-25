@@ -80,6 +80,9 @@ function spawnServer(port: number, workspaceRoot: string, stateDir: string, home
       USERPROFILE: homeDir,
       CONTROL_CENTER_PORT: String(port),
       CONTROL_CENTER_TOKEN: CONTROL_TOKEN,
+      CONTROL_CENTER_LOGIN_MAX_ATTEMPTS: '3',
+      CONTROL_CENTER_LOGIN_BASE_LOCKOUT_MS: '1000',
+      CONTROL_CENTER_LOGIN_MAX_LOCKOUT_MS: '4000',
       CONTROL_CENTER_EXIT_ON_PORT_ERROR: '1',
       CONTROL_CENTER_AUTOSTART_GATEWAY: '0',
       CONTROL_CENTER_GATEWAY_AGENT_SESSIONS: '0',
@@ -202,6 +205,33 @@ async function main() {
     })
     assert.equal(badLogin.response.status, 401)
     assertError(badLogin.payload, 'invalid_token', 401)
+
+    const throttleOrigin = `http://localhost:${port}`
+    for (let attempt = 1; attempt <= 2; attempt += 1) {
+      const failed = await request(port, 'POST', '/api/auth/login', {
+        body: { token: `wrong-token-${attempt}` },
+        origin: throttleOrigin,
+        requestId: `integration-rate-limit-failure-${attempt}`,
+      })
+      assert.equal(failed.response.status, 401)
+      assertError(failed.payload, 'invalid_token', 401)
+    }
+    const thresholdFailure = await request(port, 'POST', '/api/auth/login', {
+      body: { token: 'wrong-token-threshold' },
+      origin: throttleOrigin,
+      requestId: 'integration-rate-limit-threshold',
+    })
+    assert.equal(thresholdFailure.response.status, 429)
+    assertError(thresholdFailure.payload, 'rate_limited', 429)
+
+    const throttled = await request(port, 'POST', '/api/auth/login', {
+      body: { token: CONTROL_TOKEN },
+      origin: throttleOrigin,
+      requestId: 'integration-rate-limited-login',
+    })
+    assert.equal(throttled.response.status, 429)
+    assertError(throttled.payload, 'rate_limited', 429)
+    assert.ok(Number(throttled.response.headers.get('retry-after')) >= 1)
 
     const login = await request<{ token: string; expiresAt: string }>(port, 'POST', '/api/auth/login', {
       body: { token: CONTROL_TOKEN },

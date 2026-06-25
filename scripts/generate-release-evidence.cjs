@@ -203,6 +203,12 @@ function checksumInputFiles(runtimeMetadata) {
     'scripts/package-desktop.cjs',
     'scripts/prepare-runtime-bundles.cjs',
     'scripts/generate-release-evidence.cjs',
+    'scripts/validate-release-artifacts.cjs',
+    'scripts/generate-update-manifest.cjs',
+    'scripts/verify-update-manifest.cjs',
+    'scripts/lib/update-manifest.cjs',
+    'scripts/windows-release-lifecycle.ps1',
+    'build/entitlements.mac.plist',
     'dist/index.html',
     'dist-server/index.cjs',
   ].map((entry) => path.join(root, entry))

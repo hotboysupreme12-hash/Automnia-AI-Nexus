@@ -1,6 +1,7 @@
 const crypto = require('node:crypto')
 const fs = require('node:fs')
 const path = require('node:path')
+const { verifyUpdateManifest } = require('./lib/update-manifest.cjs')
 
 const root = path.resolve(__dirname, '..')
 const evidenceDir = path.resolve(process.env.DYSTOPAI_RELEASE_EVIDENCE_DIR || path.join(root, 'release', 'evidence'))
@@ -16,6 +17,12 @@ const publicKeyPath = path.join(evidenceDir, 'signing-public-key.pem')
 const signingSummaryPath = path.join(evidenceDir, 'release-signing.json')
 const distributionSigningPath = path.join(evidenceDir, 'distribution-signing.json')
 const requiredDistributionTests = ['freshInstall', 'upgrade', 'uninstall', 'corruptedUpdate']
+const updateDir = path.join(artifactRoot, 'updates')
+const updateManifestPath = path.join(updateDir, 'update-manifest.json')
+const updateSignaturePath = path.join(updateDir, 'update-manifest.json.sig')
+const updatePublicKeyPath = path.join(updateDir, 'update-manifest-public-key.pem')
+const updateSigningSummaryPath = path.join(updateDir, 'update-signing.json')
+
 
 function relativePath(filePath) {
   return path.relative(root, filePath).replace(/\\/g, '/')
@@ -170,6 +177,46 @@ function validateSignatureIfPresent() {
   return { signed: true, keyId: summary.keyId || null }
 }
 
+function validateUpdateChannelIfPresent(checksumRows) {
+  const requiredFiles = [updateManifestPath, updateSignaturePath, updatePublicKeyPath, updateSigningSummaryPath]
+  const existing = requiredFiles.filter((filePath) => fs.existsSync(filePath))
+  if (!existing.length) {
+    if (requireSigning) {
+      throw new Error('[release-validate] Public releases require a signed update manifest. Run npm run release:update-manifest with update signing credentials before release:evidence.')
+    }
+    return { present: false, signed: false, artifactCount: 0 }
+  }
+  if (existing.length !== requiredFiles.length) {
+    throw new Error('[release-validate] Partial signed-update evidence found. Expected manifest, signature, public key, and signing summary.')
+  }
+
+  const checksumPaths = new Set(checksumRows.map((row) => normalizedManifestPath(row.manifestPath)))
+  for (const filePath of requiredFiles) {
+    const manifestPath = normalizedManifestPath(relativePath(filePath))
+    if (!checksumPaths.has(manifestPath)) {
+      throw new Error(`[release-validate] Signed update evidence is missing from checksums.sha256: ${manifestPath}`)
+    }
+  }
+
+  const verified = verifyUpdateManifest({
+    artifactRoot,
+    manifestPath: updateManifestPath,
+    signaturePath: updateSignaturePath,
+    publicKeyPath: updatePublicKeyPath,
+    requireSigning: true,
+  })
+  const summary = readRequiredJson(updateSigningSummaryPath, 'update signing summary')
+  const manifestBytes = fs.readFileSync(updateManifestPath)
+  const signature = Buffer.from(readRequiredText(updateSignaturePath, 'update signature').trim(), 'base64')
+  const publicKey = crypto.createPublicKey(readRequiredText(updatePublicKeyPath, 'update public key'))
+  const publicKeyDer = publicKey.export({ type: 'spki', format: 'der' })
+  if (summary.algorithm !== 'Ed25519') throw new Error('[release-validate] Update signing summary algorithm must be Ed25519')
+  if (summary.manifestSha256 !== sha256Bytes(manifestBytes)) throw new Error('[release-validate] Update signing summary manifestSha256 does not match manifest')
+  if (summary.signatureSha256 !== sha256Bytes(signature)) throw new Error('[release-validate] Update signing summary signatureSha256 does not match signature')
+  if (summary.publicKeySha256 !== sha256Bytes(publicKeyDer)) throw new Error('[release-validate] Update signing summary publicKeySha256 does not match public key')
+  return { present: true, signed: verified.signed, artifactCount: verified.artifactCount }
+}
+
 function objectRecord(value) {
   return value && typeof value === 'object' && !Array.isArray(value) ? value : null
 }
@@ -240,7 +287,7 @@ function validateDistributionArtifactEntry(entry, checksumPaths) {
   }
 }
 
-function validateDistributionSigningIfRequired(checksumRows) {
+function validateDistributionSigningIfRequired(checksumRows, updateChannel) {
   if (!fs.existsSync(distributionSigningPath)) {
     if (requireSigning) {
       throw new Error('[release-validate] Distribution signing evidence is required for public release builds. Record Windows Authenticode signing, signed update channel, rollback, and install/upgrade/uninstall/corrupted-update test evidence in release/evidence/distribution-signing.json before running release:evidence and release:sign.')
@@ -265,11 +312,12 @@ function validateDistributionSigningIfRequired(checksumRows) {
     artifact.signingType === 'authenticode' &&
     isWindowsInstallerManifestPath(artifact.artifactPath))
 
-  const updateChannel = objectRecord(evidence.updateChannel)
-  if (!updateChannel) throw new Error('[release-validate] Distribution signing evidence must include updateChannel')
-  requireStatus(updateChannel.signed, 'updateChannel.signed', true)
-  requireStatus(updateChannel.rollbackTested, 'updateChannel.rollbackTested', true)
-  requireString(updateChannel.verificationCommand, 'update channel verification command')
+  const distributionUpdateChannel = objectRecord(evidence.updateChannel)
+  if (!distributionUpdateChannel) throw new Error('[release-validate] Distribution signing evidence must include updateChannel')
+  requireStatus(distributionUpdateChannel.signed, 'updateChannel.signed', true)
+  if (!updateChannel?.signed) throw new Error('[release-validate] Distribution evidence claims a signed update channel but the signed update manifest did not verify')
+  requireStatus(distributionUpdateChannel.rollbackTested, 'updateChannel.rollbackTested', true)
+  requireString(distributionUpdateChannel.verificationCommand, 'update channel verification command')
 
   const installTests = objectRecord(evidence.installTests)
   if (!installTests) throw new Error('[release-validate] Distribution signing evidence must include installTests')
@@ -292,11 +340,15 @@ function main() {
   const { componentCount } = validateSbom()
   validateEvidenceSummary(checksumCount, componentCount)
   const signature = validateSignatureIfPresent()
-  const distribution = validateDistributionSigningIfRequired(rows)
+  const updateChannel = validateUpdateChannelIfPresent(rows)
+  const distribution = validateDistributionSigningIfRequired(rows, updateChannel)
 
   console.log(`[release-validate] verified ${checksumCount} checksum(s)`)
   console.log(`[release-validate] verified ${artifactCount} packaged artifact file(s) under ${relativePath(artifactRoot)}`)
   console.log(`[release-validate] verified ${componentCount} SBOM component(s)`)
+  console.log(updateChannel.present
+    ? `[release-validate] verified signed update manifest for ${updateChannel.artifactCount} artifact(s)`
+    : '[release-validate] no update manifest present; update-channel validation skipped')
   console.log(signature.signed
     ? `[release-validate] verified Ed25519 checksum signature${signature.keyId ? ` (${signature.keyId})` : ''}`
     : '[release-validate] no signing evidence present; checksum signature verification skipped')

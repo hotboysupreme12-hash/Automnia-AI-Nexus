@@ -4,6 +4,7 @@ const fs = require('node:fs')
 const https = require('node:https')
 const http = require('node:http')
 const { randomBytes } = require('node:crypto')
+const { assertTrustedHttpsUrl, parseSha256Manifest, sha256File } = require('./runtime-download-security.cjs')
 const path = require('node:path')
 
 const APP_PORT = Number(process.env.CONTROL_CENTER_PORT || 4050)
@@ -191,9 +192,14 @@ ipcMain.handle('dystopai:pick-directory', async (event, input = {}) => {
   }
 })
 
-ipcMain.handle('dystopai:get-control-center-token', async (event) => {
+ipcMain.handle('dystopai:bootstrap-control-center-session', async (event) => {
   if (!isTrustedRendererSender(event)) return null
-  return ensureControlCenterLaunchToken()
+  try {
+    return await bootstrapControlCenterSession()
+  } catch (error) {
+    console.warn('[dystopai] desktop session bootstrap failed:', error?.message || error)
+    return null
+  }
 })
 
 function resolveServerEntry() {
@@ -376,22 +382,46 @@ function existingManagedNpmBin() {
   return existingNpmBinInToolchainRoot(NPM_TOOLCHAIN_ROOT)
 }
 
-function requestBuffer(url, timeoutMs = 30_000, redirects = 3) {
+const NODE_DOWNLOAD_HOSTS = ['nodejs.org']
+const NODE_METADATA_MAX_BYTES = 5 * 1024 * 1024
+
+function trustedNodeDownloadUrl(url) {
+  return assertTrustedHttpsUrl(url, NODE_DOWNLOAD_HOSTS)
+}
+
+function requestBuffer(url, timeoutMs = 30_000, redirects = 3, maxBytes = NODE_METADATA_MAX_BYTES) {
   return new Promise((resolve, reject) => {
-    const req = https.get(url, { timeout: timeoutMs }, (res) => {
+    let parsed
+    try {
+      parsed = trustedNodeDownloadUrl(url)
+    } catch (error) {
+      reject(error)
+      return
+    }
+    const req = https.get(parsed, { timeout: timeoutMs }, (res) => {
       const status = res.statusCode || 0
       if (status >= 300 && status < 400 && res.headers.location && redirects > 0) {
         res.resume()
-        resolve(requestBuffer(new URL(res.headers.location, url).toString(), timeoutMs, redirects - 1))
+        const redirected = new URL(res.headers.location, parsed)
+        requestBuffer(redirected, timeoutMs, redirects - 1, maxBytes).then(resolve, reject)
         return
       }
       if (status < 200 || status >= 300) {
         res.resume()
-        reject(new Error(`HTTP ${status} from ${url}`))
+        reject(new Error(`HTTP ${status} from ${parsed.href}`))
         return
       }
       const chunks = []
-      res.on('data', (chunk) => chunks.push(Buffer.from(chunk)))
+      let totalBytes = 0
+      res.on('data', (chunk) => {
+        const bytes = Buffer.from(chunk)
+        totalBytes += bytes.length
+        if (totalBytes > maxBytes) {
+          req.destroy(new Error(`response exceeded ${maxBytes} bytes from ${parsed.href}`))
+          return
+        }
+        chunks.push(bytes)
+      })
       res.on('end', () => resolve(Buffer.concat(chunks)))
     })
     req.on('timeout', () => req.destroy(new Error(`request timed out after ${timeoutMs}ms`)))
@@ -399,29 +429,54 @@ function requestBuffer(url, timeoutMs = 30_000, redirects = 3) {
   })
 }
 
-async function downloadFile(url, targetPath, timeoutMs = 180_000, redirects = 3) {
-  await fs.promises.mkdir(path.dirname(targetPath), { recursive: true })
-  await new Promise((resolve, reject) => {
-    const req = https.get(url, { timeout: timeoutMs }, (res) => {
+function downloadFileToPath(url, targetPath, timeoutMs = 180_000, redirects = 3) {
+  return new Promise((resolve, reject) => {
+    let parsed
+    try {
+      parsed = trustedNodeDownloadUrl(url)
+    } catch (error) {
+      reject(error)
+      return
+    }
+    const req = https.get(parsed, { timeout: timeoutMs }, (res) => {
       const status = res.statusCode || 0
       if (status >= 300 && status < 400 && res.headers.location && redirects > 0) {
         res.resume()
-        downloadFile(new URL(res.headers.location, url).toString(), targetPath, timeoutMs, redirects - 1).then(resolve, reject)
+        const redirected = new URL(res.headers.location, parsed)
+        downloadFileToPath(redirected, targetPath, timeoutMs, redirects - 1).then(resolve, reject)
         return
       }
       if (status < 200 || status >= 300) {
         res.resume()
-        reject(new Error(`HTTP ${status} from ${url}`))
+        reject(new Error(`HTTP ${status} from ${parsed.href}`))
         return
       }
-      const file = fs.createWriteStream(targetPath)
-      file.on('error', reject)
+      const file = fs.createWriteStream(targetPath, { flags: 'w' })
+      const fail = (error) => {
+        file.destroy()
+        fs.rmSync(targetPath, { force: true })
+        reject(error)
+      }
+      file.on('error', fail)
+      res.on('error', fail)
       file.on('finish', () => file.close(resolve))
       res.pipe(file)
     })
     req.on('timeout', () => req.destroy(new Error(`download timed out after ${timeoutMs}ms`)))
     req.on('error', reject)
   })
+}
+
+async function downloadFile(url, targetPath, timeoutMs = 180_000, redirects = 3) {
+  await fs.promises.mkdir(path.dirname(targetPath), { recursive: true })
+  const partialPath = `${targetPath}.partial-${process.pid}-${Date.now()}`
+  try {
+    await downloadFileToPath(url, partialPath, timeoutMs, redirects)
+    fs.rmSync(targetPath, { force: true })
+    fs.renameSync(partialPath, targetPath)
+  } finally {
+    fs.rmSync(partialPath, { force: true })
+  }
 }
 
 function parseNodeVersion(version) {
@@ -475,8 +530,23 @@ async function installManagedNodeToolchain() {
 
   const downloadsDir = path.join(NPM_TOOLCHAIN_ROOT, '.downloads')
   const extractDir = path.join(downloadsDir, `extract-${process.pid}-${Date.now()}`)
-  const zipPath = path.join(downloadsDir, `${archiveName}.zip`)
-  await downloadFile(`https://nodejs.org/dist/${version}/${archiveName}.zip`, zipPath)
+  const archiveFileName = `${archiveName}.zip`
+  const zipPath = path.join(downloadsDir, archiveFileName)
+  const checksumManifest = await requestBuffer(
+    `https://nodejs.org/dist/${version}/SHASUMS256.txt`,
+    30_000,
+    3,
+    2 * 1024 * 1024,
+  )
+  const expectedSha256 = parseSha256Manifest(checksumManifest.toString('utf8')).get(archiveFileName)
+  if (!expectedSha256) throw new Error(`Node.js checksum manifest did not include ${archiveFileName}`)
+  await downloadFile(`https://nodejs.org/dist/${version}/${archiveFileName}`, zipPath)
+  const actualSha256 = sha256File(zipPath)
+  if (actualSha256 !== expectedSha256) {
+    fs.rmSync(zipPath, { force: true })
+    throw new Error(`Node.js archive checksum mismatch for ${archiveFileName}`)
+  }
+  console.log(`[dystopai] verified Node.js archive ${archiveFileName} against the published SHA-256 manifest`)
   fs.rmSync(extractDir, { recursive: true, force: true })
   fs.mkdirSync(extractDir, { recursive: true })
   expandZip(zipPath, extractDir)
@@ -487,6 +557,7 @@ async function installManagedNodeToolchain() {
   fs.mkdirSync(NPM_TOOLCHAIN_ROOT, { recursive: true })
   if (!fs.existsSync(finalDir)) fs.renameSync(extractedDir, finalDir)
   fs.rmSync(extractDir, { recursive: true, force: true })
+  fs.rmSync(zipPath, { force: true })
   return finalNpm
 }
 
@@ -856,6 +927,43 @@ async function startGateway() {
   } finally {
     updateTrayMenu()
   }
+}
+
+function bootstrapControlCenterSession(timeoutMs = 5000) {
+  const body = JSON.stringify({ token: ensureControlCenterLaunchToken() })
+  return new Promise((resolve, reject) => {
+    const req = http.request({
+      hostname: '127.0.0.1',
+      port: APP_PORT,
+      path: '/api/auth/login',
+      method: 'POST',
+      timeout: timeoutMs,
+      headers: {
+        'Content-Type': 'application/json',
+        'Content-Length': Buffer.byteLength(body),
+      },
+    }, (res) => {
+      let responseBody = ''
+      res.setEncoding('utf8')
+      res.on('data', (chunk) => { responseBody += chunk })
+      res.on('end', () => {
+        try {
+          const payload = JSON.parse(responseBody || '{}')
+          const sessionToken = payload?.ok === true ? payload?.data?.token : null
+          if (res.statusCode && res.statusCode >= 200 && res.statusCode < 300 && typeof sessionToken === 'string' && sessionToken) {
+            resolve(sessionToken)
+            return
+          }
+          reject(new Error(`Desktop session bootstrap failed: HTTP ${res.statusCode || 'unknown'}`))
+        } catch (error) {
+          reject(new Error(`Desktop session bootstrap returned invalid JSON: ${error?.message || error}`))
+        }
+      })
+    })
+    req.on('timeout', () => req.destroy(new Error(`desktop session bootstrap timed out after ${timeoutMs}ms`)))
+    req.on('error', reject)
+    req.end(body)
+  })
 }
 
 function postControlApi(pathname, timeoutMs = 5000) {
@@ -1305,6 +1413,7 @@ function createMainWindow() {
   let e2eExternalAssertionsComplete = false
   let e2eRendererCrashRequested = false
   let e2eTrayAssertionsStarted = false
+  let e2eRendererJourneyStarted = false
 
   win.on('unresponsive', () => {
     console.warn('[dystopai] renderer became unresponsive')
@@ -1322,6 +1431,23 @@ function createMainWindow() {
     if (!ELECTRON_E2E) return
     e2eRendererLoadCount += 1
     logE2e(`renderer-load:${e2eRendererLoadCount}`)
+
+    if (
+      process.env.DYSTOPAI_ELECTRON_E2E_ASSERT_RENDERER_JOURNEY === '1' &&
+      !e2eRendererJourneyStarted
+    ) {
+      e2eRendererJourneyStarted = true
+      setTimeout(() => {
+        void runElectronE2eRendererJourney(win).then(() => {
+          logE2e('renderer-journey-ok')
+          if (process.env.DYSTOPAI_ELECTRON_E2E_QUIT_AFTER_RENDERER_JOURNEY === '1') app.quit()
+        }).catch((error) => {
+          logE2e(`renderer-journey-failed:${error?.message || error}`)
+          process.exit(6)
+        })
+      }, 250)
+      return
+    }
 
     if (
       process.env.DYSTOPAI_ELECTRON_E2E_ASSERT_TRAY_BEHAVIOR === '1' &&
@@ -1583,6 +1709,54 @@ function runElectronE2ePolicySelfTest() {
   assertElectronE2e(!prevented, 'internal control-center navigation must remain allowed')
 
   logE2e('navigation-policy-ok')
+}
+
+async function runElectronE2eRendererJourney(win) {
+  if (!ELECTRON_E2E || process.env.DYSTOPAI_ELECTRON_E2E_ASSERT_RENDERER_JOURNEY !== '1') return
+  const result = await win.webContents.executeJavaScript(`
+    (async () => {
+      const waitFor = async (predicate, label, timeoutMs = 15000) => {
+        const startedAt = Date.now();
+        while (Date.now() - startedAt < timeoutMs) {
+          const value = predicate();
+          if (value) return value;
+          await new Promise((resolve) => setTimeout(resolve, 50));
+        }
+        throw new Error('Timed out waiting for ' + label);
+      };
+      const nav = await waitFor(
+        () => document.querySelector('nav[aria-label="Primary navigation"]'),
+        'primary navigation',
+      );
+      const main = document.querySelector('#dystopai-main');
+      const skip = document.querySelector('a.dy-skip-link[href="#dystopai-main"]');
+      if (!main || !skip) throw new Error('Main landmark or skip link is missing');
+
+      const visited = [];
+      for (const label of ['Missions', 'Monitor', 'Plugins', 'Agents']) {
+        const button = [...nav.querySelectorAll('button')]
+          .find((candidate) => candidate.getAttribute('aria-label')?.startsWith(label + ' '));
+        if (!button) throw new Error('Missing navigation button for ' + label);
+        button.click();
+        await waitFor(
+          () => button.getAttribute('aria-current') === 'page',
+          label + ' navigation state',
+        );
+        await waitFor(
+          () => document.querySelector('#dystopai-workspace-title')?.textContent?.trim() === label,
+          label + ' workspace title',
+        );
+        await waitFor(
+          () => document.querySelector('[role="region"][aria-label="' + label + ' workspace"]'),
+          label + ' workspace region',
+        );
+        visited.push(label);
+      }
+      return { ok: true, visited };
+    })()
+  `, true)
+  assertElectronE2e(Boolean(result?.ok), 'renderer journey must finish successfully')
+  assertElectronE2e(Array.isArray(result?.visited) && result.visited.join(',') === 'Missions,Monitor,Plugins,Agents', 'renderer journey must visit every primary workspace')
 }
 
 async function runElectronE2eTraySelfTest(win) {

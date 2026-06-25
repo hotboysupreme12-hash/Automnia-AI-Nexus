@@ -273,6 +273,24 @@ await runElectronCase({
 })
 
 await runElectronCase({
+  name: 'renderer-journey',
+  expectedStatus: 0,
+  timeoutMs: 60_000,
+  env: {
+    DYSTOPAI_ELECTRON_E2E_AUTO_QUIT_MS: '20000',
+    DYSTOPAI_ELECTRON_E2E_ASSERT_RENDERER_JOURNEY: '1',
+    DYSTOPAI_ELECTRON_E2E_QUIT_AFTER_RENDERER_JOURNEY: '1',
+  },
+  requiredOutput: [
+    /\[dystopai-e2e\] port-cleanup-skipped/,
+    /\[dystopai-e2e\] server-ready/,
+    /\[dystopai-e2e\] renderer-load:1/,
+    /\[dystopai-e2e\] renderer-journey-ok/,
+    /\[dystopai-e2e\] quit-cleanup-complete/,
+  ],
+})
+
+await runElectronCase({
   name: 'renderer-recovery',
   expectedStatus: 0,
   env: {

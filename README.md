@@ -246,9 +246,15 @@ Generated desktop output is written to ignored build folders such as `release/` 
 | `npm run lint` | Run ESLint across the repository. |
 | `npm run typecheck` | Type-check frontend, server, Electron, and preload surfaces. |
 | `npm test` | Run the complete local control-plane quality gate. |
+| `npm run test:unit:coverage` | Run behavioral unit tests and enforce coverage thresholds. |
+| `npm run smoke:api-soak` | Exercise 400 authenticated and public API requests under bounded concurrency. |
+| `npm run verify:release-candidate` | Run the release-candidate test, soak, build, budget, and Electron gates. |
 | `npm run smoke:electron-e2e` | Validate Electron startup, navigation policy, crash recovery, tray behavior, and cleanup. |
 | `npm run package:desktop` | Create an unpacked desktop package for launch validation. |
 | `npm run dist:win` | Create the Windows NSIS installer output. |
+| `npm run state:backup -- --source <state> --output <archive>` | Create a checksummed runtime-state backup. |
+| `npm run state:verify -- --archive <archive>` | Verify every file in a runtime-state backup. |
+| `npm run state:restore -- --archive <archive> --target <state>` | Restore a verified backup with rollback retention. |
 | `npm run docs:openclaw:sync` | Refresh the local OpenClaw documentation snapshot. |
 | `npm run smoke:server-architecture` | Enforce entrypoint, composition-size, and inline-route budgets. |
 
@@ -262,31 +268,24 @@ npm test
 
 ### Release Integrity
 
-Generate the SBOM, checksum manifest, and release summary only after creating the packaged desktop artifacts:
+A public release is qualified from the exact packaged bytes, not from a later rebuild. The repository now supports the following fail-closed sequence:
 
 ```bash
+npm run verify:release-candidate
+npm run dist:win
+npm run release:update-manifest
+npm run release:update-verify
+npm run release:lifecycle:windows
 npm run release:evidence
-```
-
-Sign the checksum manifest with an Ed25519 private key stored outside the repository:
-
-```bash
 DYSTOPAI_RELEASE_SIGNING_PRIVATE_KEY_FILE="C:/secure/dystopai-release-ed25519.pem" npm run release:sign
-```
-
-Validate the packaged files and generated evidence before publishing:
-
-```bash
-npm run release:validate
-```
-
-Public releases must also include verified consumer-distribution evidence in `release/evidence/distribution-signing.json`, covering installer signing, signed update verification, rollback testing, fresh installation, upgrade, uninstall, and corrupted-update recovery. Enforce the complete public-release gate with:
-
-```bash
 DYSTOPAI_RELEASE_REQUIRE_SIGNING=1 npm run release:validate
 ```
 
-Private signing keys must never be committed. The complete signing policy, evidence schema, branch-protection requirements, and release procedure are documented in [`docs/RELEASE_GOVERNANCE.md`](docs/RELEASE_GOVERNANCE.md).
+The update manifest uses a separate Ed25519 key and records the exact artifact size and SHA-256 digest. Windows lifecycle qualification verifies Authenticode, a fresh install, upgrade or repair, corrupted-update rejection, rollback continuity, and uninstall before creating `release/evidence/distribution-signing.json`.
+
+The `Public Release Candidate` workflow performs signed Windows qualification, macOS signing and notarization, and Linux package construction. It does not publish releases automatically. Review the retained artifacts, then publish the exact qualified bytes without rebuilding or renaming them.
+
+Private signing keys must never be committed. See [`docs/PRODUCTION_RELEASE_RUNBOOK.md`](docs/PRODUCTION_RELEASE_RUNBOOK.md), [`docs/RELEASE_GOVERNANCE.md`](docs/RELEASE_GOVERNANCE.md), and [`release.env.example`](release.env.example).
 
 ## Configuration
 
@@ -316,7 +315,8 @@ DystopAI controls a privileged local agent runtime. Treat it like an administrat
 - OpenClaw agents may receive shell, filesystem, browser, communication, or provider tools based on operator policy.
 - Broad tool or workspace access should be granted deliberately and reviewed in each agent's policy and doctrine.
 - Provider secrets, OAuth credentials, local sessions, generated runtime data, and release output must remain outside Git.
-- Browser session tokens expire, are bounded in memory, and are revoked server-side on logout.
+- Browser session tokens expire, are bounded in memory, use session-scoped renderer storage, and are revoked server-side on logout.
+- The Electron launch secret never crosses the preload bridge; the main process exchanges it for a short-lived server session token.
 - OpenClaw Gateway setup is token-only by default; a password fallback is written only when explicitly supplied.
 - The Electron renderer denies Chromium permission requests by default and binds privileged IPC to the main application frame.
 - Exposing the Control Plane to a LAN or the public internet is outside the current threat model and requires a separate authentication, authorization, transport, and audit design.
@@ -347,6 +347,9 @@ The detailed threat model, branch protections, signing policy, and release requi
 - [`docs/OPENCLAW_GATEWAY_COMMAND_CONSOLE_GUIDE.md`](docs/OPENCLAW_GATEWAY_COMMAND_CONSOLE_GUIDE.md): Gateway protocol and Command Console integration guidance.
 - [`docs/PRODUCTION_HARDENING_LEDGER.md`](docs/PRODUCTION_HARDENING_LEDGER.md): prioritized engineering and production-readiness work.
 - [`docs/RELEASE_GOVERNANCE.md`](docs/RELEASE_GOVERNANCE.md): CI, signing, evidence, release, and threat-model policy.
+- [`docs/PRODUCTION_RELEASE_RUNBOOK.md`](docs/PRODUCTION_RELEASE_RUNBOOK.md): exact signed Windows qualification and publication sequence.
+- [`DATA_HANDLING.md`](DATA_HANDLING.md): local state, external provider, telemetry, and operator data-handling boundaries.
+- [`THIRD_PARTY_NOTICES.txt`](THIRD_PARTY_NOTICES.txt): generated dependency and license inventory.
 - [`docs/openclaw-latest/`](docs/openclaw-latest/): local snapshot of the OpenClaw documentation used by the project.
 
 ## Project Status
