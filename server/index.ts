@@ -29,9 +29,17 @@ import {
 import { apiFailure, apiSuccess, installControlPlaneHttp, setStaticSecurityHeaders } from './controlPlaneHttp'
 import { registerAuthRoutes } from './routes/authRoutes'
 import { registerCommandConsoleFileRoutes } from './routes/commandConsoleFileRoutes'
+import { registerClawTalkConsoleRoutes } from './routes/clawTalkConsoleRoutes'
 import { registerDiagnosticsRoutes } from './routes/diagnosticsRoutes'
+import { registerAgentTurnRoutes } from './routes/agentTurnRoutes'
+import { registerFilesystemRoutes } from './routes/filesystemRoutes'
+import { registerMissionRoutes } from './routes/missionRoutes'
+import { registerOpenClawCommandRoutes } from './routes/openclawCommandRoutes'
+import { registerPartyCoordinationRoutes } from './routes/partyCoordinationRoutes'
 import { registerPluginRoutes } from './routes/pluginRoutes'
+import { registerProviderAuthRoutes } from './routes/providerAuthRoutes'
 import { registerRuntimeRoutes } from './routes/runtimeRoutes'
+import { registerSkillRoutes } from './routes/skillRoutes'
 import { createControlFilesService } from './services/controlFilesService'
 import { applyDiagnosticRedactions } from '../src/utils/diagnosticRedaction'
 
@@ -215,7 +223,6 @@ const AVATAR_IMAGE_MIME_EXTENSIONS: Record<string, string> = {
 }
 const JSON_DISK_CACHE_STAT_MS = 750
 const SKILL_LIBRARY_CACHE_MS = 15_000
-const FOLDER_LIST_CACHE_MS = 30_000
 const CONTROL_CENTER_STARTED_AT_MS = Date.now()
 
 configureRuntimeLedger({
@@ -1993,7 +2000,6 @@ let openclawConfigCache: JsonFileCacheEntry<OpenClawConfigFile> | null = null
 let partyProfilesCache: JsonFileCacheEntry<PartyProfiles> | null = null
 const agentLocalConfigCache = new Map<string, JsonFileCacheEntry<AgentLocalConfig>>()
 const skillRootCache = new Map<string, TimedValueCache<AgentSkillEntry[]>>()
-const folderListCache = new Map<string, TimedValueCache<{ base: string; folders: string[] }>>()
 
 function isOpenAiCodexSubscriptionModelName(model: string) {
   return /^gpt-5(?:\.\d+)?(?:-[a-z0-9][a-z0-9.-]*)?$/i.test(model.trim())
@@ -3822,15 +3828,6 @@ type MissionRecordSnapshot = Mission & {
   updatedAt: string
   persistedAt: string
   persistReason: string
-}
-
-type DelegationHandoffPayload = {
-  ok?: unknown
-  reply?: unknown
-  to?: {
-    reply?: unknown
-  }
-  handoffId?: unknown
 }
 
 function unwrapCanonicalApiPayload(payload: unknown): unknown {
@@ -26136,28 +26133,20 @@ registerCommandConsoleFileRoutes(app, {
   uploadLimitBytes: COMMAND_CONSOLE_UPLOAD_LIMIT_BYTES,
 })
 
-app.get('/api/openclaw/summary', async (_req, res) => {
-  try {
-    const [status, gateway, cron, party] = await Promise.all([
-      runOpenClaw(['status'], 90000),
-      runOpenClaw(['config', 'get', 'gateway']),
-      runOpenClaw(['cron', 'list']),
-      getPartyMembers(),
-    ])
-    const parsedGateway = gateway.code === 0 ? JSON.parse(gateway.stdout) : null
-
-    return apiSuccess(res, {
-      status: status.stdout,
-      gateway: parsedGateway,
-      cron: cron.stdout,
-      party,
-      activeShifts: Array.from(activeShifts.values()),
-      missions: listMissions().map((mission) => missionView(mission)),
-      missionFeed: missionFeed.slice(0, 120),
-    })
-  } catch (error) {
-    return apiFailure(res, 500, 'openclaw_summary_failed', 'Failed to fetch summary', String(error))
-  }
+registerOpenClawCommandRoutes(app, {
+  activeShifts: () => Array.from(activeShifts.values()),
+  getPartyMembers,
+  invalidateRuntimeStatusCache,
+  listMissionViews: () => listMissions().map((mission) => missionView(mission)),
+  listPluginControls,
+  missionFeed: () => missionFeed.slice(0, 120),
+  openclawConfigPath: OPENCLAW_CONFIG_PATH,
+  parseOpenClawCommandInput,
+  pluginCommandResult: (args, result) => pluginCommandResult(args, result),
+  pluginCommandString,
+  pushGatewayLog,
+  redactSensitiveText,
+  runOpenClaw,
 })
 
 function clearRuntimeMonitorHistory(clearedAt = new Date()) {
@@ -26207,58 +26196,6 @@ registerRuntimeRoutes(app, {
   sweepOpenClawSessionLocks,
   tryRestartGatewayService,
   writeRuntimeMonitorClearMarker,
-})
-
-app.post('/api/openclaw/command', async (req, res) => {
-  const schema = z.object({
-    command: z.string().trim().min(1).max(4000),
-    timeoutSeconds: z.number().int().min(5).max(7200).optional().default(600),
-    refreshPlugins: z.boolean().optional().default(true),
-  })
-  const parsed = schema.safeParse(req.body)
-  if (!parsed.success) return apiFailure(res, 400, 'invalid_payload', 'Invalid payload', parsed.error.flatten())
-
-  let args: string[]
-  try {
-    args = parseOpenClawCommandInput(parsed.data.command)
-  } catch (error) {
-    return apiFailure(res, 400, 'invalid_payload', 'Invalid OpenClaw command', String(error))
-  }
-
-  const timeoutMs = parsed.data.timeoutSeconds * 1000
-  pushGatewayLog('lifecycle', `$ ${pluginCommandString(args)}`)
-  try {
-    const result = await runOpenClaw(args, timeoutMs)
-    invalidateRuntimeStatusCache()
-    if (result.stdout.trim()) pushGatewayLog('stdout', result.stdout)
-    if (result.stderr.trim()) pushGatewayLog('stderr', result.stderr)
-    pushGatewayLog(
-      result.code === 0 ? 'lifecycle' : 'stderr',
-      `openclaw command exited ${result.code}${typeof result.elapsedMs === 'number' ? ` after ${result.elapsedMs}ms` : ''}`,
-    )
-    const controls = parsed.data.refreshPlugins
-      ? await listPluginControls({ forceRefresh: true }).catch((error) => ({
-          plugins: [],
-          configPath: OPENCLAW_CONFIG_PATH,
-          cache: { source: 'openclaw' as const, refreshedAt: Date.now(), refreshing: false },
-          cliError: String(error),
-        }))
-      : null
-    return apiSuccess(res, {
-      ok: result.code === 0,
-      command: pluginCommandResult(args, result),
-      ...(controls ? {
-        plugins: controls.plugins,
-        configPath: controls.configPath,
-        cache: controls.cache,
-        ...(controls.cliError ? { cliError: controls.cliError } : {}),
-      } : {}),
-    })
-  } catch (error) {
-    const detail = redactSensitiveText(String(error))
-    pushGatewayLog('stderr', `openclaw command failed: ${detail}`)
-    return apiFailure(res, 500, 'openclaw_command_failed', 'OpenClaw command failed', detail)
-  }
 })
 
 async function buildRuntimeStatusPayload(forcePluginRefresh: boolean): Promise<Record<string, unknown>> {
@@ -27863,136 +27800,6 @@ app.post('/api/party/workspace/cleanup-doctrine', async (req, res) => {
   }
 })
 
-app.get('/api/party/resources/:agentId', async (req, res) => {
-  const { agentId } = req.params
-  if (!isValidAgentId(agentId)) return apiFailure(res, 400, 'invalid_payload', 'Invalid agent id.')
-
-  try {
-    const context = await resolveAgentResourceContext(agentId)
-    if (!context) return apiFailure(res, 404, 'agent_not_found', `Agent not found: ${agentId}`)
-    const entries = await fs.readdir(context.canonicalWorkspace, { withFileTypes: true })
-    const files = entries
-      .filter((entry) => entry.isFile() && entry.name.toLowerCase().endsWith('.md'))
-      .map((entry) => entry.name)
-      .sort((a, b) => a.localeCompare(b))
-    return apiSuccess(res, {
-      agentId,
-      workspace: context.workspace,
-      executionWorkspace: context.executionWorkspace,
-      canonicalWorkspace: context.canonicalWorkspace,
-      doctrineWorkspace: context.doctrineWorkspace,
-      files,
-    })
-  } catch (error) {
-    return apiFailure(res, 500, 'filesystem_operation_failed', 'Failed to fetch agent resources', String(error))
-  }
-})
-
-app.get('/api/party/resources/:agentId/:file', async (req, res) => {
-  const { agentId, file } = req.params
-  if (!isValidAgentId(agentId)) return apiFailure(res, 400, 'invalid_payload', 'Invalid agent id.')
-  if (!isMarkdownResourceFile(file)) return apiFailure(res, 400, 'invalid_payload', 'Resource file not allowed.')
-
-  try {
-    const seedFiles = (EDITOR_RESOURCE_FILES as readonly string[]).includes(file) ? [file as AgentResourceFile] : []
-    const context = await resolveAgentResourceContext(agentId, seedFiles)
-    if (!context) return apiFailure(res, 404, 'agent_not_found', `Agent not found: ${agentId}`)
-    const filePath = canonicalResourcePath(agentId, file)
-    const content = await fs.readFile(filePath, 'utf-8')
-    return apiSuccess(res, {
-      agentId,
-      workspace: context.workspace,
-      executionWorkspace: context.executionWorkspace,
-      canonicalWorkspace: context.canonicalWorkspace,
-      doctrineWorkspace: context.doctrineWorkspace,
-      file,
-      resourcePath: filePath,
-      content,
-    })
-  } catch (error) {
-    const status = (error as NodeJS.ErrnoException)?.code === 'ENOENT' ? 404 : 500
-    return apiFailure(
-      res,
-      status,
-      status === 404 ? 'resource_not_found' : 'filesystem_operation_failed',
-      status === 404 ? 'Resource file not found' : 'Could not read resource file',
-      String(error),
-    )
-  }
-})
-
-app.put('/api/party/resources/:agentId/:file', async (req, res) => {
-  const { agentId, file } = req.params
-  if (!isValidAgentId(agentId)) return apiFailure(res, 400, 'invalid_payload', 'Invalid agent id.')
-  if (!isMarkdownResourceFile(file)) return apiFailure(res, 400, 'invalid_payload', 'Resource file not allowed.')
-  const schema = z.object({ content: z.string() })
-  const parsed = schema.safeParse(req.body)
-  if (!parsed.success) return apiFailure(res, 400, 'invalid_payload', 'Invalid payload', parsed.error.flatten())
-
-  try {
-    const seedFiles = (EDITOR_RESOURCE_FILES as readonly string[]).includes(file) ? [file as AgentResourceFile] : []
-    const context = await resolveAgentResourceContext(agentId, seedFiles)
-    if (!context) return apiFailure(res, 404, 'agent_not_found', `Agent not found: ${agentId}`)
-    await fs.mkdir(context.canonicalWorkspace, { recursive: true })
-    const filePath = canonicalResourcePath(agentId, file)
-    await fs.writeFile(filePath, parsed.data.content, 'utf-8')
-    const persisted = await fs.readFile(filePath, 'utf-8')
-    if (persisted !== parsed.data.content) {
-      return apiFailure(
-        res,
-        500,
-        'filesystem_operation_failed',
-        'Canonical save verification failed.',
-        { expectedPath: filePath, persistedPath: filePath },
-      )
-    }
-    await saveAgentFileToCodexProfile(agentId, file, parsed.data.content)
-
-    if (file.toUpperCase() === 'IDENTITY.MD') {
-      const parsedName = extractIdentityNameFromMarkdown(parsed.data.content)
-      if (parsedName) {
-        const existingLocal = await readAgentLocalConfigIfPresent(agentId)
-        const currentName = existingLocal?.identity?.name || context.target.identity?.name || context.target.name || ''
-        if (parsedName !== currentName) {
-          const local = await ensureAgentLocalConfig({
-            agentId,
-            entry: context.target,
-            defaultsModel: context.config.agents?.defaults?.model || {},
-          })
-          const previousName = local.identity.name || local.agent.displayName || ''
-          local.identity.name = parsedName
-          local.agent.displayName = parsedName
-          local.agent.aliases = deriveAgentAliases(agentId, parsedName)
-          local.agent.updatedAt = new Date().toISOString()
-          await writeTextFileWithLockRetry(agentLocalConfigPath(agentId), `${JSON.stringify(local, null, 2)}\n`)
-          await rememberAgentLocalConfigCache(agentLocalConfigPath(agentId), local)
-          await propagateDisplayNameAcrossAgentFiles(agentId, previousName, local)
-          applyLocalConfigToGlobal(agentId, local, context.config)
-          await writeOpenclawConfig(context.config)
-        }
-      }
-    }
-
-    if ((SHARED_TEAM_FILES as readonly string[]).includes(file)) {
-      await mirrorSharedTeamFile(file as SharedTeamFile, parsed.data.content)
-    }
-    if (!samePath(context.executionWorkspace, context.canonicalWorkspace)) {
-      await syncDoctrineToWorkspace(agentId, context.executionWorkspace)
-    }
-    return apiSuccess(res, {
-      agentId,
-      workspace: context.workspace,
-      executionWorkspace: context.executionWorkspace,
-      canonicalWorkspace: context.canonicalWorkspace,
-      doctrineWorkspace: context.doctrineWorkspace,
-      file,
-      resourcePath: filePath,
-    })
-  } catch (error) {
-    return apiFailure(res, 500, 'filesystem_operation_failed', 'Failed to update resource file', String(error))
-  }
-})
-
 app.get('/api/party/avatar/:agentId', async (req, res) => {
   try {
     const party = await getPartyMembers()
@@ -28045,1176 +27852,110 @@ app.post('/api/party/avatar-upload/:agentId', express.raw({ type: ['image/*', 'a
   }
 })
 
-app.get('/api/party/folders', async (req, res) => {
-  const base = typeof req.query.path === 'string' && req.query.path.trim() ? req.query.path : WORKSPACE_ROOT
-  const full = path.resolve(base)
-  try {
-    const cacheKey = full.toLowerCase()
-    const cached = folderListCache.get(cacheKey)
-    if (cached && cached.expiresAt > Date.now()) {
-      return apiSuccess(res, cloneJson(cached.value))
-    }
-    const entries = await fs.readdir(full, { withFileTypes: true })
-    const folders = entries
-      .filter((entry) => entry.isDirectory())
-      .map((entry) => path.join(full, entry.name))
-      .slice(0, 200)
-    const payload = { base: full, folders }
-    folderListCache.set(cacheKey, { expiresAt: Date.now() + FOLDER_LIST_CACHE_MS, value: cloneJson(payload) })
-    return apiSuccess(res, payload)
-  } catch (error) {
-    return apiFailure(res, 400, 'folder_list_failed', 'Could not list folders', String(error))
-  }
+registerFilesystemRoutes(app, {
+  agentLocalConfigPath,
+  applyLocalConfigToGlobal: (agentId, local, config) => applyLocalConfigToGlobal(agentId, local as AgentLocalConfig, config),
+  canonicalResourcePath,
+  deriveAgentAliases,
+  editorResourceFiles: EDITOR_RESOURCE_FILES,
+  ensureAgentLocalConfig: (params) => ensureAgentLocalConfig(params),
+  extractIdentityNameFromMarkdown,
+  getAgentById,
+  getFolderPickerSession: (sessionId) => folderPickerSessions.get(sessionId),
+  getImagePickerSession: (sessionId) => imagePickerSessions.get(sessionId),
+  isMarkdownResourceFile,
+  isValidAgentId,
+  mirrorSharedTeamFile: (file, content) => mirrorSharedTeamFile(file as SharedTeamFile, content),
+  normalizePickerStartPath,
+  pickFolderWithOsDialog,
+  pruneFolderPickerSessions,
+  propagateDisplayNameAcrossAgentFiles: (agentId, previousName, local) => propagateDisplayNameAcrossAgentFiles(agentId, previousName, local as AgentLocalConfig),
+  readAgentLocalConfigIfPresent,
+  rememberAgentLocalConfigCache: (filePath, local) => rememberAgentLocalConfigCache(filePath, local as AgentLocalConfig),
+  resolveAgentResourceContext: (agentId, seedFiles) => resolveAgentResourceContext(agentId, seedFiles as readonly AgentResourceFile[] | undefined),
+  resolveWorkspaceForAgent,
+  samePath,
+  saveAgentFileToCodexProfile,
+  serializeFolderPickerSession,
+  serializeImagePickerSession,
+  sharedTeamFiles: SHARED_TEAM_FILES,
+  startFolderPickerSession,
+  startImagePickerSession,
+  syncDoctrineToWorkspace,
+  workspaceRoot: WORKSPACE_ROOT,
+  writeOpenclawConfig: (config) => writeOpenclawConfig(config),
+  writeTextFileWithLockRetry,
 })
 
-app.post('/api/party/folder-picker', async (req, res) => {
-  const schema = z.object({
-    startPath: z.string().optional(),
-  })
-  const parsed = schema.safeParse(req.body ?? {})
-  if (!parsed.success) return apiFailure(res, 400, 'invalid_payload', 'Invalid payload', parsed.error.flatten())
-
-  const startPath = normalizePickerStartPath(parsed.data.startPath)
-  const controller = new AbortController()
-  req.once('aborted', () => controller.abort())
-  const picked = await pickFolderWithOsDialog(startPath, controller.signal)
-  if (res.writableEnded) return
-
-  if (picked.ok && picked.path) {
-    return apiSuccess(res, { status: 'selected', path: path.resolve(picked.path), cancelled: false, detail: 'Folder selected.' })
-  }
-  if (picked.cancelled) {
-    return apiSuccess(res, { status: 'cancelled', path: null, cancelled: true, detail: 'No folder selected.' })
-  }
-  return apiFailure(
-    res,
-    501,
-    'folder_picker_failed',
-    'Folder picker unavailable',
-    picked.detail || 'No supported native folder picker is available in this environment.',
-  )
+registerPartyCoordinationRoutes(app, {
+  CANONICAL_DOCTRINE_ONLY,
+  ENABLE_HOST_ACTION_SHORTCUTS,
+  agentWorkTimeoutWrapperMs,
+  appendAgentDailyMemory,
+  appendAgentPromptDump,
+  buildBrowserRecoveryInstruction,
+  buildDispatchExecutionDirective,
+  buildWebsiteContributionDirective,
+  checkBrowserPreflight,
+  cleanupDoctrineMirrorsAfterRun,
+  composeAgentDoctrinePrompt,
+  computePeakConcurrency,
+  detectHostActionRequest,
+  ensureTeamSyncFile,
+  extractAgentReply,
+  getAgentAuthEnv,
+  getAgentToAgentPolicy,
+  getPartyMembers,
+  hasBrowserRelayDisconnected,
+  hasBrowserRelayPortConflict,
+  isAgentAllowedByPolicy,
+  isBrowserServiceReadyOnlyReply,
+  isPathUnder,
+  isRetiredAgentId,
+  isSharedWebsiteCollaboration,
+  isValidAgentId,
+  launchChromeHost,
+  resolveAgentRunContext,
+  resolveEffectiveAgentWorkTimeoutSeconds,
+  resolveFilenameHintsForMessage,
+  resolveSharedTeamSyncPath,
+  runCwdForContext,
+  runOpenClaw,
+  runOpenClawWithGeminiToolWritePolicy,
+  samePath,
+  shouldRouteBrowserIntentThroughBrowserPlugin,
+  splitTextForAppend,
+  trimTask,
+  tryReleaseBrowserRelayPort,
+  tryRestartGatewayService,
+  withAgentRuntimeFlags,
+  writeTeamSyncSnapshot,
 })
 
-app.post('/api/party/folder-picker/start', async (req, res) => {
-  const schema = z.object({
-    startPath: z.string().optional(),
-  })
-  const parsed = schema.safeParse(req.body ?? {})
-  if (!parsed.success) return apiFailure(res, 400, 'invalid_payload', 'Invalid payload', parsed.error.flatten())
-
-  const startPath = normalizePickerStartPath(parsed.data.startPath)
-  const session = startFolderPickerSession(startPath)
-  return apiSuccess(res, serializeFolderPickerSession(session))
-})
-
-app.get('/api/party/folder-picker/:sessionId', (req, res) => {
-  pruneFolderPickerSessions()
-  const session = folderPickerSessions.get(String(req.params.sessionId || ''))
-  if (!session) {
-    return apiFailure(
-      res,
-      404,
-      'folder_picker_failed',
-      'Folder picker session not found.',
-      'The folder picker session expired. Press Browse again.',
-    )
-  }
-  return apiSuccess(res, serializeFolderPickerSession(session))
-})
-
-app.post('/api/party/avatar-picker/start', async (req, res) => {
-  const schema = z.object({
-    agentId: z.string().min(1),
-    startPath: z.string().optional(),
-  })
-  const parsed = schema.safeParse(req.body ?? {})
-  if (!parsed.success) return apiFailure(res, 400, 'invalid_payload', 'Invalid payload', parsed.error.flatten())
-  if (!isValidAgentId(parsed.data.agentId)) return apiFailure(res, 400, 'invalid_payload', 'Invalid agent id.')
-
-  try {
-    const { config, target } = await getAgentById(parsed.data.agentId)
-    if (!target) return apiFailure(res, 404, 'agent_not_found', `Agent not found: ${parsed.data.agentId}`)
-
-    const fallbackStart = path.resolve(resolveWorkspaceForAgent(target, target.id, config.agents?.defaults?.workspace))
-    const startPath = normalizePickerStartPath(parsed.data.startPath, fallbackStart)
-    const session = startImagePickerSession(target.id, startPath)
-    return apiSuccess(res, serializeImagePickerSession(session))
-  } catch (error) {
-    return apiFailure(res, 500, 'image_picker_failed', 'Failed to start image picker', String(error))
-  }
-})
-
-app.get('/api/party/avatar-picker/:sessionId', (req, res) => {
-  pruneFolderPickerSessions()
-  const session = imagePickerSessions.get(String(req.params.sessionId || ''))
-  if (!session) {
-    return apiFailure(
-      res,
-      404,
-      'image_picker_failed',
-      'Image picker session not found.',
-      'The image picker session expired. Press Browse again.',
-    )
-  }
-  return apiSuccess(res, serializeImagePickerSession(session))
-})
-
-app.post('/api/party/dispatch', async (req, res) => {
-  const schema = z.object({
-    mode: z.enum(['parallel', 'sequential']).default('parallel'),
-    assignments: z
-      .array(
-        z.object({
-          agent: z.string().min(1),
-          message: z.string().min(1),
-          thinking: z.enum(['off', 'minimal', 'low', 'medium', 'high']).default('medium'),
-          timeoutSeconds: z.number().int().min(30).max(7200).optional(),
-        }),
-      )
-      .min(1)
-      .max(12),
-  })
-
-  const parsed = schema.safeParse(req.body)
-  if (!parsed.success) return apiFailure(res, 400, 'invalid_payload', 'Invalid payload', parsed.error.flatten())
-
-  try {
-  const invalidAssignmentAgent = parsed.data.assignments.find(
-    (assignment) => !isValidAgentId(assignment.agent) || isRetiredAgentId(assignment.agent),
-  )
-  if (invalidAssignmentAgent) {
-    return apiFailure(res, 400, 'invalid_payload', `Invalid or retired agent id: ${invalidAssignmentAgent.agent}`)
-  }
-
-  const party = await getPartyMembers()
-  const partyById = new Map(party.map((agent) => [agent.id, agent]))
-  const missingAgents = Array.from(new Set(parsed.data.assignments.map((assignment) => assignment.agent))).filter(
-    (agentId) => !partyById.has(agentId),
-  )
-  if (missingAgents.length) {
-    return apiFailure(res, 404, 'agent_not_found', 'Dispatch includes agent ids that are not in the party.', {
-      agents: missingAgents,
-    })
-  }
-
-  const dispatchId = randomUUID()
-  const activity: string[] = []
-  const assignmentsState: TeamSyncAssignment[] = parsed.data.assignments.map((assignment) => ({
-    agentId: assignment.agent,
-    task: assignment.message,
-    status: 'queued',
-    updatedAt: new Date().toISOString(),
-  }))
-  const sharedWebsiteCollaboration = isSharedWebsiteCollaboration(parsed.data.assignments)
-  await writeTeamSyncSnapshot({
-    missionId: dispatchId,
-    title: 'Parallel Dispatch',
-    mode: parsed.data.mode,
-    status: 'running',
-    assignments: assignmentsState,
-    activity,
-  })
-
-  const runAssignment = async (assignment: (typeof parsed.data.assignments)[number], assignmentIndex: number) => {
-    const state = assignmentsState.find((item) => item.agentId === assignment.agent)
-    if (state) {
-      state.status = 'running'
-      state.updatedAt = new Date().toISOString()
-    }
-    const meta = partyById.get(assignment.agent)
-    const agentLabel = meta?.name || assignment.agent
-    const assignedTeamIds = parsed.data.assignments.map((entry) => entry.agent)
-    const context = await resolveAgentRunContext(assignment.agent)
-    const filenameResolution = await resolveFilenameHintsForMessage(assignment.message, context.executionWorkspace)
-    const effectiveAssignmentMessage = filenameResolution.message
-    const websiteContributionDirective = buildWebsiteContributionDirective({
-      active: sharedWebsiteCollaboration,
-      assignmentIndex,
-      totalAssignments: parsed.data.assignments.length,
-      message: assignment.message,
-      resolutionNotes: filenameResolution.notes,
-    })
-    const roleDirective = buildDispatchExecutionDirective({
-      id: assignment.agent,
-      name: meta?.name,
-      role: meta?.role,
-      className: meta?.className,
-    })
-    const hostAction = ENABLE_HOST_ACTION_SHORTCUTS ? detectHostActionRequest(assignment.message) : null
-
-    const assignmentBrowserIntent = await shouldRouteBrowserIntentThroughBrowserPlugin(assignment.message, hostAction)
-    if (assignmentBrowserIntent) {
-      const preflight = await checkBrowserPreflight(assignment.agent)
-      if (!preflight.ok) {
-        const startedAt = new Date().toISOString()
-        const endedAt = startedAt
-        const durationMs = 0
-        const failure = preflight.message
-        activity.unshift(`${new Date().toISOString()} | ${assignment.agent} | failed | ${trimTask(failure, 160)}`)
-        if (activity.length > 80) activity.length = 80
-        if (state) {
-          state.status = 'failed'
-          state.updatedAt = new Date().toISOString()
-          state.note = trimTask(preflight.reason, 90)
-        }
-        await appendAgentDailyMemory(assignment.agent, `[dispatch:${dispatchId}] failed | ${trimTask(failure, 200)}`)
-        return {
-          agent: assignment.agent,
-          ok: false,
-          stdout: '',
-          stderr: JSON.stringify({
-            status: 'error',
-            message: preflight.message,
-            reason: preflight.reason,
-            detail: preflight.detail,
-          }),
-          code: 1,
-          startedAt,
-          endedAt,
-          durationMs,
-        }
-      }
-    }
-
-    if (hostAction?.kind === 'launch-chrome') {
-      const startedAt = new Date().toISOString()
-      const startMs = Date.now()
-      const launched = await launchChromeHost(hostAction.url)
-      const endedAt = new Date().toISOString()
-      const durationMs = Date.now() - startMs
-      const success = launched.ok
-      const hostMessage = success
-        ? `Host action executed: launched Google Chrome${hostAction.url ? ` (${hostAction.url})` : ''}.`
-        : `Host action failed: could not launch Google Chrome.`
-      activity.unshift(`${new Date().toISOString()} | ${assignment.agent} | ${success ? 'completed' : 'failed'} | ${hostMessage}`)
-      if (activity.length > 80) activity.length = 80
-      if (state) {
-        state.status = success ? 'completed' : 'failed'
-        state.updatedAt = new Date().toISOString()
-        state.note = success ? 'host action completed' : trimTask(launched.detail || 'host action failed', 90)
-      }
-      await appendAgentDailyMemory(
-        assignment.agent,
-        `[dispatch:${dispatchId}] host action ${success ? 'completed' : 'failed'} | ${hostMessage}`,
-      )
-      return {
-        agent: assignment.agent,
-        ok: success,
-        stdout: success
-          ? JSON.stringify({
-              status: 'ok',
-              message: hostMessage,
-              command: launched.command,
-              detail: launched.detail,
-            })
-          : '',
-        stderr: success
-          ? ''
-          : JSON.stringify({
-              status: 'error',
-              message: hostMessage,
-              command: launched.command,
-              detail: launched.detail,
-            }),
-        code: success ? 0 : 1,
-        startedAt,
-        endedAt,
-        durationMs,
-      }
-    }
-    const prompt = composeAgentDoctrinePrompt(
-      assignment.agent,
-      [
-      `/new You are ${agentLabel} (${assignment.agent}).`,
-      'Respond only as this specific agent.',
-      `Assigned team: ${assignedTeamIds.join(', ')}`,
-      'Do not answer for teammates unless explicitly asked to coordinate.',
-      'For direct format tasks, return only the requested format with no extra commentary.',
-      'Read TEAM_SYNC.md first for active teammate ownership and status.',
-      roleDirective,
-      websiteContributionDirective,
-      '',
-      'Your assignment:',
-      effectiveAssignmentMessage,
-      ].join('\n'),
-      context.executionWorkspace,
-      context.doctrineWorkspace,
-    )
-    const startedAt = new Date().toISOString()
-    const startMs = Date.now()
-    const sessionId = randomUUID()
-    const envOverrides = await getAgentAuthEnv(assignment.agent)
-    const runCwd = runCwdForContext(context)
-    const effectiveTimeoutSeconds = await resolveEffectiveAgentWorkTimeoutSeconds(assignment.agent, assignment.timeoutSeconds)
-    const effectiveThinking = assignment.thinking
-    await appendAgentPromptDump({
-      route: '/api/party/dispatch',
-      agent: assignment.agent,
-      sessionId,
-      thinking: effectiveThinking,
-      timeoutSeconds: effectiveTimeoutSeconds,
-      cwd: runCwd,
-      requestMessage: assignment.message,
-      intentMessage: assignment.message,
-      finalMessage: prompt,
-      note: 'dispatch assignment before OpenClaw runtime call',
-    })
-    let result = await runOpenClawWithGeminiToolWritePolicy(
-      assignment.agent,
-      effectiveAssignmentMessage,
-      context,
-      withAgentRuntimeFlags([
-        'agent',
-        '--agent',
-        assignment.agent,
-        '--session-id',
-        sessionId,
-        '--message',
-        prompt,
-        '--thinking',
-        effectiveThinking,
-        '--timeout',
-        String(effectiveTimeoutSeconds),
-        '--json',
-      ]),
-      agentWorkTimeoutWrapperMs(effectiveTimeoutSeconds),
-      { cwd: runCwd, envOverrides },
-    )
-
-    let assignmentReply = extractAgentReply(result.stdout, result.stderr)
-    if (result.code === 0 && assignmentBrowserIntent && isBrowserServiceReadyOnlyReply(assignmentReply)) {
-      const recoveryPrompt = composeAgentDoctrinePrompt(
-        assignment.agent,
-        [
-          `/new You are ${agentLabel} (${assignment.agent}).`,
-          'Respond only as this specific agent.',
-          'Do not answer for teammates.',
-          'Read TEAM_SYNC.md first for active teammate ownership and status.',
-          '',
-          'Your assignment:',
-          buildBrowserRecoveryInstruction(assignment.message),
-        ].join('\n'),
-        context.executionWorkspace,
-        context.doctrineWorkspace,
-      )
-
-      const retrySessionId = randomUUID()
-      const retry = await runOpenClawWithGeminiToolWritePolicy(
-        assignment.agent,
-        effectiveAssignmentMessage,
-        context,
-        withAgentRuntimeFlags([
-          'agent',
-          '--agent',
-          assignment.agent,
-          '--session-id',
-          retrySessionId,
-          '--message',
-          recoveryPrompt,
-          '--thinking',
-          effectiveThinking,
-          '--timeout',
-          String(effectiveTimeoutSeconds),
-          '--json',
-        ]),
-        agentWorkTimeoutWrapperMs(effectiveTimeoutSeconds),
-        { cwd: runCwdForContext(context), envOverrides, retry: false },
-      ).catch((error) => ({ stdout: '', stderr: String(error), code: 1 }))
-      result = retry
-      assignmentReply = extractAgentReply(retry.stdout, retry.stderr)
-    }
-
-    if (result.code === 0 && assignmentBrowserIntent && hasBrowserRelayPortConflict(result.stderr || '')) {
-      const released = await tryReleaseBrowserRelayPort()
-      if (released.released) {
-        const portRecoveryPrompt = composeAgentDoctrinePrompt(
-          assignment.agent,
-          [
-            `/new You are ${agentLabel} (${assignment.agent}).`,
-            'Browser relay was recovered after a transient port conflict.',
-            buildBrowserRecoveryInstruction(assignment.message),
-          ].join('\n'),
-          context.executionWorkspace,
-          context.doctrineWorkspace,
-        )
-        const retrySessionId = randomUUID()
-        const retry = await runOpenClawWithGeminiToolWritePolicy(
-          assignment.agent,
-          effectiveAssignmentMessage,
-          context,
-          withAgentRuntimeFlags([
-            'agent',
-            '--agent',
-            assignment.agent,
-            '--session-id',
-            retrySessionId,
-            '--message',
-            portRecoveryPrompt,
-            '--thinking',
-            effectiveThinking,
-            '--timeout',
-            String(effectiveTimeoutSeconds),
-            '--json',
-          ]),
-          agentWorkTimeoutWrapperMs(effectiveTimeoutSeconds),
-          { cwd: runCwdForContext(context), envOverrides, retry: false },
-        ).catch((error) => ({ stdout: '', stderr: String(error), code: 1 }))
-        result = retry
-        assignmentReply = extractAgentReply(retry.stdout, retry.stderr)
-      }
-    }
-
-    if (result.code === 0 && assignmentBrowserIntent && hasBrowserRelayDisconnected(result.stderr || '')) {
-      const gateway = await tryRestartGatewayService()
-      if (gateway.restarted) {
-        const gatewayRecoveryPrompt = composeAgentDoctrinePrompt(
-          assignment.agent,
-          [
-            `/new You are ${agentLabel} (${assignment.agent}).`,
-            'Browser relay gateway was restarted after a transient disconnect.',
-            buildBrowserRecoveryInstruction(assignment.message),
-          ].join('\n'),
-          context.executionWorkspace,
-          context.doctrineWorkspace,
-        )
-        const retrySessionId = randomUUID()
-        const retry = await runOpenClawWithGeminiToolWritePolicy(
-          assignment.agent,
-          effectiveAssignmentMessage,
-          context,
-          withAgentRuntimeFlags([
-            'agent',
-            '--agent',
-            assignment.agent,
-            '--session-id',
-            retrySessionId,
-            '--message',
-            gatewayRecoveryPrompt,
-            '--thinking',
-            effectiveThinking,
-            '--timeout',
-            String(effectiveTimeoutSeconds),
-            '--json',
-          ]),
-          agentWorkTimeoutWrapperMs(effectiveTimeoutSeconds),
-          { cwd: runCwdForContext(context), envOverrides, retry: false },
-        ).catch((error) => ({ stdout: '', stderr: String(error), code: 1 }))
-        result = retry
-        assignmentReply = extractAgentReply(retry.stdout, retry.stderr)
-      }
-    }
-
-    await cleanupDoctrineMirrorsAfterRun(assignment.agent, context.executionWorkspace)
-    const endedAt = new Date().toISOString()
-    const durationMs = Date.now() - startMs
-    const line = `${new Date().toISOString()} | ${assignment.agent} | ${result.code === 0 ? 'completed' : 'failed'} | ${trimTask(
-      result.code === 0 ? trimTask(assignmentReply || 'finished assigned task step', 160) : result.stderr || result.stdout || 'unknown error',
-      160,
-    )}`
-    activity.unshift(line)
-    if (activity.length > 80) activity.length = 80
-    if (state) {
-      state.status = result.code === 0 ? 'completed' : 'failed'
-      state.updatedAt = new Date().toISOString()
-      state.note = result.code === 0 ? 'completed current step' : trimTask(result.stderr || result.stdout || 'failed', 90)
-    }
-    await appendAgentDailyMemory(
-      assignment.agent,
-      `[dispatch:${dispatchId}] ${result.code === 0 ? 'completed' : 'failed'}${
-        filenameResolution.notes.length ? ` | resolved: ${trimTask(filenameResolution.notes.join('; '), 120)}` : ''
-      } | ${trimTask(result.code === 0 ? assignmentReply || 'finished assigned task step' : result.stderr || result.stdout || 'unknown error', 200)}`,
-    )
-    return {
-      agent: assignment.agent,
-      ok: result.code === 0,
-      stdout: result.stdout,
-      stderr: result.stderr,
-      code: result.code,
-      startedAt,
-      endedAt,
-      durationMs,
-    }
-  }
-
-  const outputs: Array<Awaited<ReturnType<typeof runAssignment>>> = []
-  if (parsed.data.mode === 'parallel') {
-    const results = await Promise.all(parsed.data.assignments.map((assignment, index) => runAssignment(assignment, index)))
-    outputs.push(...results)
-  } else {
-    for (const [index, assignment] of parsed.data.assignments.entries()) {
-      outputs.push(await runAssignment(assignment, index))
-    }
-  }
-
-  await writeTeamSyncSnapshot({
-    missionId: dispatchId,
-    title: 'Parallel Dispatch',
-    mode: parsed.data.mode,
-    status: outputs.every((item) => item.ok) ? 'completed' : 'completed_with_errors',
-    assignments: assignmentsState,
-    activity,
-  })
-  const spans = outputs.map((item) => ({ startedAt: item.startedAt, endedAt: item.endedAt }))
-  const earliestStart = spans.length
-    ? Math.min(...spans.map((span) => new Date(span.startedAt).getTime()))
-    : Date.now()
-  const latestEnd = spans.length
-    ? Math.max(...spans.map((span) => new Date(span.endedAt).getTime()))
-    : Date.now()
-  const wallClockMs = Math.max(0, latestEnd - earliestStart)
-  const summedDurationMs = outputs.reduce((sum, item) => sum + item.durationMs, 0)
-  const peakConcurrency = computePeakConcurrency(spans)
-
-  return apiSuccess(res, {
-    ok: outputs.every((item) => item.ok),
-    mode: parsed.data.mode,
-    outputs,
-    telemetry: {
-      wallClockMs,
-      summedDurationMs,
-      peakConcurrency,
-      parallelEfficiency: summedDurationMs > 0 ? Number((wallClockMs / summedDurationMs).toFixed(3)) : 1,
-    },
-  })
-  } catch (error) {
-    return apiFailure(res, 500, 'party_dispatch_failed', 'Party dispatch failed', String(error))
-  }
-})
-
-app.post('/api/party/agent-to-agent', async (req, res) => {
-  const schema = z.object({
-    fromAgent: z.string().min(1),
-    toAgent: z.string().min(1),
-    instruction: z.string().min(1),
-    thinking: z.enum(['off', 'minimal', 'low', 'medium', 'high']).default('low'),
-    timeoutSeconds: z.number().int().min(30).max(7200).optional(),
-  })
-  const parsed = schema.safeParse(req.body)
-  if (!parsed.success) return apiFailure(res, 400, 'invalid_payload', 'Invalid payload', parsed.error.flatten())
-
-  try {
-  const { fromAgent, toAgent, instruction, thinking, timeoutSeconds } = parsed.data
-  if (!isValidAgentId(fromAgent) || !isValidAgentId(toAgent)) {
-    return apiFailure(res, 400, 'invalid_payload', 'Invalid agent id(s).')
-  }
-  if (isRetiredAgentId(fromAgent) || isRetiredAgentId(toAgent)) {
-    return apiFailure(res, 400, 'invalid_payload', 'Retired agent id cannot be used for agent-to-agent routing.')
-  }
-  if (fromAgent === toAgent) {
-    return apiFailure(res, 400, 'invalid_payload', 'fromAgent and toAgent must be different.')
-  }
-
-  const party = await getPartyMembers()
-  const partyById = new Map(party.map((agent) => [agent.id, agent]))
-  if (!partyById.has(fromAgent) || !partyById.has(toAgent)) {
-    return apiFailure(res, 404, 'agent_not_found', 'Both fromAgent and toAgent must exist in party.', {
-      fromAgent,
-      toAgent,
-    })
-  }
-
-  const policy = await getAgentToAgentPolicy().catch(() => ({ enabled: true, allow: [] as string[] }))
-  if (!policy.enabled) {
-    return apiFailure(res, 403, 'party_handoff_failed', 'Agent-to-agent routing is disabled by policy.')
-  }
-  if (!isAgentAllowedByPolicy(fromAgent, policy.allow) || !isAgentAllowedByPolicy(toAgent, policy.allow)) {
-    return apiFailure(res, 403, 'party_handoff_failed', 'Agent-to-agent policy denies this route.', { allow: policy.allow })
-  }
-
-  const handoffId = randomUUID()
-  const activity: string[] = []
-  const assignmentsState: TeamSyncAssignment[] = [
-    {
-      agentId: fromAgent,
-      task: `Draft execution directive for ${toAgent}: ${trimTask(instruction, 140)}`,
-      status: 'running',
-      updatedAt: new Date().toISOString(),
-      note: 'preparing handoff directive',
-    },
-    {
-      agentId: toAgent,
-      task: `Execute directive from ${fromAgent}`,
-      status: 'queued',
-      updatedAt: new Date().toISOString(),
-    },
-  ]
-
-  await writeTeamSyncSnapshot({
-    missionId: handoffId,
-    title: `Agent Handoff: ${fromAgent} -> ${toAgent}`,
-    mode: 'handoff',
-    status: 'running',
-    assignments: assignmentsState,
-    activity,
-  })
-
-  const fromContext = await resolveAgentRunContext(fromAgent)
-  const fromEnv = await getAgentAuthEnv(fromAgent)
-  const fromEffectiveTimeoutSeconds = await resolveEffectiveAgentWorkTimeoutSeconds(fromAgent, timeoutSeconds)
-  const fromPrompt = composeAgentDoctrinePrompt(
-    fromAgent,
-    [
-      `You are handing off execution to teammate ${toAgent}.`,
-      'Produce an actionable execution directive. Do not ask the user clarifying questions unless absolutely required.',
-      'Return concise instructions with concrete file-level actions and done conditions.',
-      'Output format:',
-      'HANDOFF_DIRECTIVE',
-      '- mission: <one line>',
-      '- target files: <list>',
-      '- steps: <numbered>',
-      '- done when: <checklist>',
-      '',
-      'User request to fulfill:',
-      instruction,
-    ].join('\n'),
-    fromContext.executionWorkspace,
-    fromContext.doctrineWorkspace,
-  )
-
-  const fromSessionId = randomUUID()
-  const fromResult = await runOpenClaw(
-    withAgentRuntimeFlags([
-      'agent',
-      '--agent',
-      fromAgent,
-      '--session-id',
-      fromSessionId,
-      '--message',
-      `/new ${fromPrompt}`,
-      '--thinking',
-      thinking,
-      '--timeout',
-      String(fromEffectiveTimeoutSeconds),
-      '--json',
-    ]),
-    agentWorkTimeoutWrapperMs(fromEffectiveTimeoutSeconds),
-    { cwd: fromContext.doctrineWorkspace, envOverrides: fromEnv },
-  ).catch((error) => ({ stdout: '', stderr: String(error), code: 1 }))
-
-  const fromReply = extractAgentReply(fromResult.stdout, fromResult.stderr)
-  assignmentsState[0] = {
-    ...assignmentsState[0],
-    status: fromResult.code === 0 ? 'completed' : 'failed',
-    updatedAt: new Date().toISOString(),
-    note: fromResult.code === 0 ? 'directive prepared' : trimTask(fromResult.stderr || fromResult.stdout || 'failed', 90),
-  }
-  activity.unshift(`${new Date().toISOString()} | ${fromAgent} | ${fromResult.code === 0 ? 'completed' : 'failed'} | handoff directive`)
-
-  if (fromResult.code !== 0) {
-    assignmentsState[1] = {
-      ...assignmentsState[1],
-      status: 'cancelled',
-      updatedAt: new Date().toISOString(),
-      note: 'upstream handoff failed',
-    }
-    await writeTeamSyncSnapshot({
-      missionId: handoffId,
-      title: `Agent Handoff: ${fromAgent} -> ${toAgent}`,
-      mode: 'handoff',
-      status: 'failed',
-      assignments: assignmentsState,
-      activity,
-    })
-
-    await appendAgentDailyMemory(fromAgent, `[handoff:${handoffId}] failed drafting directive for ${toAgent} | ${trimTask(fromReply, 180)}`)
-    return apiSuccess(res, {
-      ok: false,
-      handoffId,
-      from: {
-        agent: fromAgent,
-        ok: false,
-        code: fromResult.code,
-        reply: fromReply,
-        stdout: fromResult.stdout,
-        stderr: fromResult.stderr,
-      },
-      to: {
-        agent: toAgent,
-        ok: false,
-        code: 1,
-        reply: '',
-        stdout: '',
-        stderr: 'Upstream handoff directive failed.',
-      },
-    })
-  }
-
-  assignmentsState[1] = {
-    ...assignmentsState[1],
-    status: 'running',
-    updatedAt: new Date().toISOString(),
-    note: `executing directive from ${fromAgent}`,
-  }
-
-  const toContext = await resolveAgentRunContext(toAgent)
-  const toEnv = await getAgentAuthEnv(toAgent)
-  const toEffectiveTimeoutSeconds = await resolveEffectiveAgentWorkTimeoutSeconds(toAgent, timeoutSeconds)
-  const toPrompt = composeAgentDoctrinePrompt(
-    toAgent,
-    [
-      `You received a directive from teammate ${fromAgent}.`,
-      'Execute it now in the execution workspace. Prefer concrete edits over planning-only output.',
-      'At end, report exactly what changed and where.',
-      '',
-      'Directive:',
-      fromReply,
-      '',
-      'Original user request:',
-      instruction,
-    ].join('\n'),
-    toContext.executionWorkspace,
-    toContext.doctrineWorkspace,
-  )
-
-  const toSessionId = randomUUID()
-  const toResult = await runOpenClaw(
-    withAgentRuntimeFlags([
-      'agent',
-      '--agent',
-      toAgent,
-      '--session-id',
-      toSessionId,
-      '--message',
-      `/new ${toPrompt}`,
-      '--thinking',
-      thinking,
-      '--timeout',
-      String(toEffectiveTimeoutSeconds),
-      '--json',
-    ]),
-    agentWorkTimeoutWrapperMs(toEffectiveTimeoutSeconds),
-    { cwd: toContext.doctrineWorkspace, envOverrides: toEnv },
-  ).catch((error) => ({ stdout: '', stderr: String(error), code: 1 }))
-
-  const toReply = extractAgentReply(toResult.stdout, toResult.stderr)
-  assignmentsState[1] = {
-    ...assignmentsState[1],
-    status: toResult.code === 0 ? 'completed' : 'failed',
-    updatedAt: new Date().toISOString(),
-    note: toResult.code === 0 ? 'handoff executed' : trimTask(toResult.stderr || toResult.stdout || 'failed', 90),
-  }
-  activity.unshift(`${new Date().toISOString()} | ${toAgent} | ${toResult.code === 0 ? 'completed' : 'failed'} | handoff execution`)
-
-  await writeTeamSyncSnapshot({
-    missionId: handoffId,
-    title: `Agent Handoff: ${fromAgent} -> ${toAgent}`,
-    mode: 'handoff',
-    status: toResult.code === 0 ? 'completed' : 'completed_with_errors',
-    assignments: assignmentsState,
-    activity,
-  })
-
-  await appendAgentDailyMemory(fromAgent, `[handoff:${handoffId}] directed ${toAgent} | ${trimTask(instruction, 160)}`)
-  await appendAgentDailyMemory(
-    toAgent,
-    `[handoff:${handoffId}] received from ${fromAgent} | ${trimTask(toReply || toResult.stderr || toResult.stdout || 'no response', 180)}`,
-  )
-
-  return apiSuccess(res, {
-    ok: toResult.code === 0,
-    handoffId,
-    from: {
-      agent: fromAgent,
-      ok: fromResult.code === 0,
-      code: fromResult.code,
-      reply: fromReply,
-      stdout: fromResult.stdout,
-      stderr: fromResult.stderr,
-    },
-    to: {
-      agent: toAgent,
-      ok: toResult.code === 0,
-      code: toResult.code,
-      reply: toReply,
-      stdout: toResult.stdout,
-      stderr: toResult.stderr,
-    },
-  })
-  } catch (error) {
-    return apiFailure(res, 500, 'party_handoff_failed', 'Agent-to-agent handoff failed', String(error))
-  }
-})
-
-app.post('/api/party/parallel-health', async (req, res) => {
-  const schema = z.object({
-    agents: z.array(z.string().min(1)).min(2).max(8).optional(),
-    timeoutSeconds: z.number().int().min(30).max(7200).optional(),
-    thinking: z.enum(['off', 'minimal', 'low', 'medium', 'high']).default('off'),
-    prompt: z.string().min(1).max(500).default('Parallel health check: reply HEALTH_OK only.'),
-  })
-  const parsed = schema.safeParse(req.body ?? {})
-  if (!parsed.success) return apiFailure(res, 400, 'invalid_payload', 'Invalid payload', parsed.error.flatten())
-
-  try {
-    const party = await getPartyMembers()
-    const pool = (parsed.data.agents?.length ? parsed.data.agents : party.slice(0, 3).map((entry) => entry.id)).filter(Boolean)
-    if (pool.length < 2) return apiFailure(res, 400, 'party_coordination_failed', 'Need at least 2 agents for parallel health check.')
-
-    const runOne = async (agentId: string) => {
-      const startedAt = new Date().toISOString()
-      const startMs = Date.now()
-      const sessionId = randomUUID()
-      const context = await resolveAgentRunContext(agentId)
-      const envOverrides = await getAgentAuthEnv(agentId)
-      const effectiveTimeoutSeconds = await resolveEffectiveAgentWorkTimeoutSeconds(agentId, parsed.data.timeoutSeconds)
-      const result = await runOpenClaw(
-        withAgentRuntimeFlags([
-          'agent',
-          '--agent',
-          agentId,
-          '--session-id',
-          sessionId,
-          '--message',
-          composeAgentDoctrinePrompt(agentId, `Read TEAM_SYNC.md first. ${parsed.data.prompt}`, context.executionWorkspace, context.doctrineWorkspace),
-          '--thinking',
-          parsed.data.thinking,
-          '--timeout',
-          String(effectiveTimeoutSeconds),
-          '--json',
-        ]),
-        agentWorkTimeoutWrapperMs(effectiveTimeoutSeconds),
-        { cwd: runCwdForContext(context), envOverrides },
-      ).catch((error) => ({ stdout: '', stderr: String(error), code: 1 }))
-      await cleanupDoctrineMirrorsAfterRun(agentId, context.executionWorkspace)
-      const endedAt = new Date().toISOString()
-      const durationMs = Date.now() - startMs
-      return {
-        agent: agentId,
-        ok: result.code === 0,
-        code: result.code,
-        reply: extractAgentReply(result.stdout, result.stderr),
-        startedAt,
-        endedAt,
-        durationMs,
-      }
-    }
-
-    const outputs = await Promise.all(pool.map((agentId) => runOne(agentId)))
-    const spans = outputs.map((item) => ({ startedAt: item.startedAt, endedAt: item.endedAt }))
-    const earliestStart = Math.min(...spans.map((span) => new Date(span.startedAt).getTime()))
-    const latestEnd = Math.max(...spans.map((span) => new Date(span.endedAt).getTime()))
-    const wallClockMs = Math.max(0, latestEnd - earliestStart)
-    const summedDurationMs = outputs.reduce((sum, item) => sum + item.durationMs, 0)
-    const peakConcurrency = computePeakConcurrency(spans)
-    const looksParallel = peakConcurrency >= 2 && wallClockMs < summedDurationMs * 0.9
-
-    return apiSuccess(res, {
-      ok: outputs.every((item) => item.ok),
-      looksParallel,
-      outputs,
-      telemetry: {
-        wallClockMs,
-        summedDurationMs,
-        peakConcurrency,
-        parallelEfficiency: summedDurationMs > 0 ? Number((wallClockMs / summedDurationMs).toFixed(3)) : 1,
-      },
-      guidance: looksParallel
-        ? 'Parallel execution confirmed from server-side process timing.'
-        : 'Execution appears staggered. Check runtime queueing, agent availability, or reduce parallel load.',
-    })
-  } catch (error) {
-    return apiFailure(res, 500, 'party_coordination_failed', 'Parallel health check failed', String(error))
-  }
-})
-
-app.get('/api/missions', async (_req, res) => {
-  return apiSuccess(res, await buildMissionLifecycleProjection({
-    missionLimit: 500,
-    eventLimit: 300,
-    feedLimit: 120,
-    reportLimit: 80,
-  }))
-})
-
-app.get('/api/missions/projection', async (_req, res) => {
-  return apiSuccess(res, await buildMissionLifecycleProjection({
-    missionLimit: 500,
-    eventLimit: 500,
-    feedLimit: 120,
-    reportLimit: 80,
-  }))
-})
-
-app.get('/api/missions/:missionId/lifecycle', async (req, res) => {
-  const missionId = req.params.missionId?.trim()
-  if (!missionId) return apiFailure(res, 400, 'invalid_payload', 'Mission id is required')
-  const projection = await buildMissionLifecycleProjection({
-    missionId,
-    missionLimit: 1000,
-    eventLimit: 1000,
-    feedLimit: 200,
-    reportLimit: 200,
-  })
-  if (!projection.missions.length && !projection.events.length && !projection.reports.length) {
-    return apiFailure(res, 404, 'mission_not_found', 'Mission lifecycle not found')
-  }
-  return apiSuccess(res, {
-    missionId,
-    ...projection,
-    mission: projection.missions[0] || null,
-    report: projection.reports[0] || null,
-  })
-})
-
-app.get('/api/missions/:missionId/events', async (req, res) => {
-  const missionId = req.params.missionId?.trim()
-  if (!missionId) return apiFailure(res, 400, 'invalid_payload', 'Mission id is required')
-  const events = await readMissionEventLedgerTail<MissionLifecycleEvent>(1000).catch(() => [])
-  return apiSuccess(res, { missionId, events: events.filter((event) => event.missionId === missionId) })
-})
-
-app.get('/api/missions/:missionId/report', async (req, res) => {
-  const missionId = req.params.missionId?.trim()
-  if (!missionId) return apiFailure(res, 400, 'invalid_payload', 'Mission id is required')
-  const reports = await listMissionReports(200)
-  const report = reports.find((entry) => entry.missionId === missionId) || null
-  if (!report) return apiFailure(res, 404, 'mission_report_not_found', 'Mission report not found')
-  return apiSuccess(res, { missionId, report })
-})
-
-app.post('/api/missions/start', async (req, res) => {
-  const schema = z.object({
-    title: z.string().min(1).max(120),
-    brief: z.string().min(1).max(2000),
-    party: z.array(z.string().min(1)).min(1).max(8),
-    mode: z.enum(['instant', 'hours', 'days', 'weeks', 'continuous', 'indefinite']),
-    amount: z.number().int().min(1).max(52).nullable().optional(),
-    missionType: z.string().min(1).max(80).optional(),
-    collaborationMode: z.string().min(1).max(80).optional(),
-    complexity: z.number().int().min(0).max(100).optional(),
-    riskTolerance: z.number().int().min(0).max(100).optional(),
-    cadenceSeconds: z.number().int().min(15).max(24 * 60 * 60).optional(),
-    maxCycles: z.number().int().min(1).max(1000).nullable().optional(),
-    idempotencyKey: z.string().trim().min(8).max(160).optional(),
-  })
-  const parsed = schema.safeParse(req.body)
-  if (!parsed.success) return apiFailure(res, 400, 'invalid_payload', 'Invalid payload', parsed.error.flatten())
-
-  const payload = parsed.data
-  const idempotencyKey = normalizeMissionLaunchIdempotencyKey(payload.idempotencyKey)
-  const uniqueParty = Array.from(new Set(payload.party.map((agentId) => agentId.trim()).filter(Boolean)))
-  if (!uniqueParty.length) return apiFailure(res, 400, 'invalid_payload', 'Mission requires at least one valid agent.')
-  const existingMission = findMissionByIdempotencyKey(idempotencyKey)
-  if (existingMission) {
-    return apiSuccess(res, {
-      deduped: true,
-      idempotencyKey,
-      mission: missionView(existingMission),
-    })
-  }
-
-  const mission: Mission = {
-    id: randomUUID(),
-    ...(idempotencyKey ? { idempotencyKey } : {}),
-    title: payload.title,
-    brief: payload.brief,
-    mode: payload.mode,
-    amount: payload.mode === 'indefinite' || payload.mode === 'continuous' || payload.mode === 'instant' ? null : payload.amount || 1,
-    missionType: payload.missionType,
-    collaborationMode: payload.collaborationMode,
-    complexity: payload.complexity,
-    riskTolerance: payload.riskTolerance,
-    cadenceSeconds: payload.cadenceSeconds,
-    startAt: new Date().toISOString(),
-    endAt: null,
-    status: 'active',
-    lifecycleState: 'draft',
-    party: uniqueParty,
-    createdAt: new Date().toISOString(),
-    completedAt: null,
-    scheduler: missionSchedulerInitialState({
-      party: uniqueParty,
-      cadenceSeconds: payload.cadenceSeconds,
-      maxCycles: payload.maxCycles ?? null,
-    }),
-  }
-  const missionActivity: string[] = []
-  const missionAssignments: TeamSyncAssignment[] = mission.party.map((agentId) => ({
-    agentId,
-    task: mission.brief,
-    status: 'queued',
-    updatedAt: new Date().toISOString(),
-  }))
-
-  const durationMs = missionDurationMs(mission.mode, mission.amount)
-  if (durationMs > 0) {
-    mission.endAt = new Date(Date.now() + durationMs).toISOString()
-    const timer = setTimeout(() => {
-      const target = missions.get(mission.id)
-      if (!target || target.status !== 'active') return
-      missionTimers.delete(mission.id)
-      void completeCronMission(target, 'completed', `Mission completed by cron timer: ${target.title}`, missionAssignments, missionActivity)
-    }, durationMs)
-    missionTimers.set(mission.id, timer)
-  }
-
-  missions.set(mission.id, mission)
-  transitionMissionState(mission, 'validating', 'mission_started', `Cron mission accepted for validation: ${mission.title}`, {
-    idempotencyKey: `${mission.id}:draft->validating`,
-    evidence: { partySize: mission.party.length, mode: mission.mode },
-  })
-  transitionMissionState(mission, 'scheduled', 'mission_started', `Cron mission scheduled: ${mission.title}`, {
-    idempotencyKey: `${mission.id}:validating->scheduled`,
-    evidence: { cadenceSeconds: mission.cadenceSeconds || null, maxCycles: mission.scheduler.maxCycles },
-  })
-  missionActivity.unshift(`${new Date().toISOString()} | cron mission started`)
-  for (const state of missionAssignments) {
-    state.status = 'queued'
-    state.updatedAt = new Date().toISOString()
-    state.note = 'awaiting cron leader round'
-  }
-  for (const agentId of mission.party) {
-    pushMissionEvent({
-      missionId: mission.id,
-      type: 'agent_assigned',
-      agentId,
-      message: `${agentId} assigned to cron mission: ${mission.brief.slice(0, 120)}`,
-    })
-  }
-  await writeTeamSyncSnapshot({
-    missionId: mission.id,
-    title: mission.title,
-    mode: mission.mode,
-    status: mission.status,
-    assignments: missionAssignments,
-    activity: missionActivity,
-  })
-
-  try {
-    if (CONTROL_CENTER_MISSION_SCHEDULER_DRY_RUN) {
-      mission.scheduler.status = 'waiting'
-      mission.scheduler.nextRoundAt = null
-      mission.scheduler.lastError = null
-      missionActivity.unshift(`${new Date().toISOString()} | scheduler | mission scheduler dry-run armed`)
-      persistMissionRecord(mission, 'scheduler-dry-run')
-      pushMissionEvent({
-        missionId: mission.id,
-        type: 'agent_update',
-        message: `Mission scheduler dry-run armed: ${mission.title}`,
-        actor: 'scheduler',
-        evidence: {
-          dryRun: true,
-          reason: 'CONTROL_CENTER_MISSION_SCHEDULER_DRY_RUN',
-          partySize: mission.party.length,
-          mode: mission.mode,
-        },
-      })
-    } else if (mission.mode === 'instant') {
-      scheduleNextMissionRound(mission, missionAssignments, missionActivity, 0)
-    } else {
-      await startRecurringMissionCronJobs(mission, missionAssignments, missionActivity)
-    }
-    transitionMissionState(mission, 'running', 'mission_started', `Cron mission running: ${mission.title}`, {
-      idempotencyKey: `${mission.id}:scheduled->running`,
-      evidence: { schedulerStatus: mission.scheduler.status, jobs: mission.scheduler.jobs.length },
-    })
-  } catch (error) {
-    const timer = missionTimers.get(mission.id)
-    if (timer) {
-      clearTimeout(timer)
-      missionTimers.delete(mission.id)
-    }
-    mission.status = 'cancelled'
-    mission.completedAt = new Date().toISOString()
-    transitionMissionState(mission, 'failed', 'mission_cancelled', `Cron mission failed during scheduler setup: ${String(error)}`, {
-      idempotencyKey: `${mission.id}:scheduled->failed`,
-      evidence: { error: String(error) },
-    })
-    recordMissionReport(mission)
-    missions.delete(mission.id)
-    return apiFailure(res, 500, 'mission_scheduler_failed', 'Failed to create mission cron jobs', String(error))
-  }
-
-  return apiSuccess(res, { deduped: false, idempotencyKey, mission: missionView(mission) })
-})
-
-app.post('/api/missions/stop', async (req, res) => {
-  const schema = z.object({
-    missionId: z.string().min(1),
-    reason: z.string().trim().max(300).optional(),
-  })
-  const parsed = schema.safeParse(req.body)
-  if (!parsed.success) return apiFailure(res, 400, 'invalid_payload', 'Invalid payload', parsed.error.flatten())
-
-  const mission = missions.get(parsed.data.missionId)
-  if (!mission) return apiFailure(res, 404, 'mission_not_found', 'Mission not found')
-  if (mission.status !== 'active') return apiFailure(res, 400, 'mission_invalid_state', `Mission is already ${mission.status}`)
-
-  const timer = missionTimers.get(mission.id)
-  if (timer) {
-    clearTimeout(timer)
-    missionTimers.delete(mission.id)
-  }
-  clearMissionController(mission.id)
-
-  mission.status = 'cancelled'
-  mission.completedAt = new Date().toISOString()
-  mission.endAt ||= mission.completedAt
-  mission.scheduler.status = 'stopping'
-  mission.scheduler.nextRoundAt = null
-  mission.scheduler.activeJobId = null
-  mission.scheduler.lastError = null
-  const cancellationReason = parsed.data.reason || 'mission cancelled by operator'
-  persistMissionRecord(mission, 'cancellation-requested')
-  pushMissionEvent({
-    missionId: mission.id,
-    type: 'agent_update',
-    message: `Mission cancellation requested: ${mission.title}`,
-    actor: 'operator',
-    previousState: mission.lifecycleState,
-    nextState: mission.lifecycleState,
-    idempotencyKey: `${mission.id}:operator-cancel-requested:${mission.completedAt}`,
-    evidence: {
-      reason: cancellationReason,
-      jobs: mission.scheduler.jobs.length,
-      activeJobs: mission.scheduler.jobs.filter(missionCronJobNeedsRecovery).length,
-      round: mission.scheduler.round,
-    },
-  })
-
-  const cleanup = await cleanupMissionCronJobs(mission).catch(missionCronCleanupFailureSummary)
-  if (cleanup.failed > 0) {
-    mission.scheduler.status = 'failed'
-    mission.scheduler.lastError = `Mission cancellation cleanup failed for ${cleanup.failed} job(s).`
-    pushMissionEvent({
-      missionId: mission.id,
-      type: 'agent_update',
-      message: `Mission cancellation cleanup failed for ${cleanup.failed} cron job(s).`,
-      actor: 'scheduler',
-      evidence: { cleanup },
-    })
-  } else {
-    mission.scheduler.status = 'stopped'
-  }
-  transitionMissionState(mission, 'cancelled', 'mission_cancelled', `Cron mission cancelled: ${mission.title}`, {
-    actor: 'operator',
-    idempotencyKey: `${mission.id}:operator-cancel:${mission.completedAt}`,
-    evidence: {
-      reason: cancellationReason,
-      jobs: mission.scheduler.jobs.length,
-      round: mission.scheduler.round,
-      cleanup,
-    },
-  })
-  recordMissionReport(mission)
-  await writeTeamSyncSnapshot({
-    missionId: mission.id,
-    title: mission.title,
-    mode: mission.mode,
-    status: mission.status,
-    assignments: mission.party.map((agentId) => ({
-      agentId,
-      task: mission.brief,
-      status: 'cancelled',
-      updatedAt: new Date().toISOString(),
-      note: cancellationReason,
-    })),
-    activity: [
-      `${new Date().toISOString()} | ${cancellationReason}`,
-      `${new Date().toISOString()} | scheduler | cancellation cleanup removed=${cleanup.removed} disabled=${cleanup.disabled} failed=${cleanup.failed}`,
-    ],
-  })
-  return apiSuccess(res, { mission: missionView(mission), cleanup })
+registerMissionRoutes(app, {
+  buildMissionLifecycleProjection,
+  cleanupMissionCronJobs,
+  clearMissionController,
+  completeCronMission,
+  controlCenterMissionSchedulerDryRun: CONTROL_CENTER_MISSION_SCHEDULER_DRY_RUN,
+  findMissionByIdempotencyKey,
+  listMissionReports,
+  missionCronCleanupFailureSummary,
+  missionCronJobNeedsRecovery,
+  missionDurationMs,
+  missionSchedulerInitialState,
+  missionTimers,
+  missionView,
+  missions,
+  normalizeMissionLaunchIdempotencyKey,
+  persistMissionRecord,
+  pushMissionEvent,
+  readMissionEvents: (limit) => readMissionEventLedgerTail<MissionLifecycleEvent>(limit).catch(() => []),
+  recordMissionReport,
+  scheduleNextMissionRound,
+  startRecurringMissionCronJobs,
+  transitionMissionState,
+  writeTeamSyncSnapshot,
 })
 
 async function runBufferedAgentTurnForStream(
@@ -29828,1026 +28569,117 @@ async function streamProviderAgentTurn(
   }
 }
 
-app.post('/api/openclaw/agent-preflight', async (req, res) => {
-  const schema = z.object({ agent: z.string().min(1) })
-  const parsed = schema.safeParse(req.body)
-  if (!parsed.success) return apiFailure(res, 400, 'invalid_payload', 'Invalid payload', parsed.error.flatten())
-
-  const agent = parsed.data.agent
-  if (!isValidAgentId(agent) || isRetiredAgentId(agent)) {
-    return apiFailure(res, 400, 'invalid_payload', 'Invalid or retired agent id.')
-  }
-
-  try {
-    await ensureOpenclawAgentRunConfigDefaults()
-    const config = await readOpenclawConfig()
-    const healthChecks = await ensureAgentRuntimeHealthPreflight(agent, config)
-    const sandbox = await ensureAgentSandboxCompatibleWithHost(agent)
-    return apiSuccess(res, {
-      agent,
-      checks: [
-        ...healthChecks,
-        {
-          ok: true,
-          severity: sandbox.changed ? 'warning' : 'info',
-          id: 'sandbox',
-          label: 'Sandbox',
-          message: sandbox.changed ? sandbox.message : 'Agent runtime preflight passed.',
-        },
-      ],
-      sandbox: {
-        mode: sandbox.local.sandbox.mode || 'off',
-        autoDisabled: sandbox.changed,
-      },
-    })
-  } catch (error) {
-    const message = `Agent runtime preflight failed for ${agent}: ${String(error)}`
-    return apiFailure(res, 500, 'agent_preflight_failed', message, {
-      checks: (error as Error & { checks?: AgentRuntimePreflightCheck[] }).checks,
-    })
-  }
+registerAgentTurnRoutes(app, {
+  AUTH_TOKEN,
+  CONTROL_CENTER_AGENT_TURN_STREAM_SMOKE_MOCK,
+  ENABLE_HOST_ACTION_SHORTCUTS,
+  MIN_BROWSER_TIMEOUT_SECONDS,
+  OPENCLAW_AGENT_TURN_TIMEOUT_FLOOR_SECONDS,
+  OPENCLAW_STATE_ROOT,
+  OPENCLAW_TIMEOUT_RECOVERY_SECONDS,
+  PORT,
+  SSE_DELTA_CHUNK_CHARS,
+  SSE_FINAL_TEXT_LIMIT,
+  agentRuntimeContextPayload,
+  agentTurnSessionScope,
+  agentTurnSessions,
+  agentWorkTimeoutWrapperMs,
+  appendAgentDailyMemory,
+  appendAgentPromptDump,
+  buildBrowserRecoveryInstruction,
+  buildClawTalkRuntimeInstruction,
+  buildDoctrineSyncReport,
+  buildRuntimeTimeoutContinuationInstruction,
+  checkBrowserPreflight,
+  classifyFailureKind,
+  cleanupDoctrineMirrorsAfterRun,
+  cleanupOpenClawSessionLocks,
+  clearAgentTurnSessions,
+  compactClawTalkConsoleValue,
+  compactFinalSsePayload,
+  compactHttpJsonPayload,
+  composeAgentDoctrinePrompt,
+  delayMs,
+  detectHostActionRequest,
+  emitClawTalkConsoleFrame,
+  ensureAgentRuntimeHealthPreflight,
+  ensureAgentSandboxCompatibleWithHost,
+  ensureOpenclawAgentRunConfigDefaults,
+  extractAgentReply,
+  fileExists,
+  getAgentAuthEnv,
+  getAgentToAgentPolicy,
+  getPartyMembers,
+  hasBrowserRelayDisconnected,
+  hasBrowserRelayPortConflict,
+  initializeSseResponse,
+  isAgentAllowedByPolicy,
+  isAgentRuntimeTimeoutResult,
+  isBrowserServiceReadyOnlyReply,
+  isClawTalkIntentMessage,
+  isClawTalkSetupIntentMessage,
+  isContextOverflowReply,
+  isEmptyAgentNoResponseReply,
+  isGoogleGeminiModelId,
+  isRetiredAgentId,
+  isValidAgentId,
+  launchChromeHost,
+  openClawErrorResult,
+  parseAgentRuntimeShortcut,
+  parseDelegationIntent,
+  providerConversationHistories,
+  readAgentPrimaryModelIdSync,
+  readOpenclawConfig,
+  redactHiddenReasoningAndSecrets,
+  redactSensitiveText,
+  rememberClawTalkConsoleMirror,
+  resolveAgentReference,
+  resolveAgentRunContext,
+  resolveEffectiveAgentWorkTimeoutSeconds,
+  resolveFilenameHintsForMessage,
+  resolveGoogleGeminiArtifactTarget,
+  runControlCenterAgentRuntimeTurn,
+  runCwdForContext,
+  runtimeTimeoutResumeAdvice,
+  shouldRouteBrowserIntentThroughBrowserPlugin,
+  shouldUseGoogleGeminiMinimalToolWriteRuntime,
+  splitTextForSse,
+  streamProviderAgentTurn,
+  thinkingForOpenClawRuntimeModel,
+  trimTask,
+  tryGoogleGeminiDirectArtifactWriteFallback,
+  tryReleaseBrowserRelayPort,
+  tryRestartGatewayService,
+  unwrapCanonicalApiPayload,
+  withRuntimeTimeoutResumeAdvice,
+  writeSseEvent,
 })
 
-app.post('/api/openclaw/agent-turn/sessions/clear', async (req, res) => {
-  const schema = z.object({ agent: z.string().min(1).optional() }).optional()
-  const parsed = schema.safeParse(req.body)
-  if (!parsed.success) return apiFailure(res, 400, 'invalid_payload', 'Invalid payload', parsed.error.flatten())
-  const agent = parsed.data?.agent?.trim()
-  try {
-    const cleared = clearAgentTurnSessions(agent || undefined)
-    const lockCleanup = await cleanupOpenClawSessionLocks({
-      agentId: agent || undefined,
-      all: !agent,
-      minAgeMs: 0,
-      reason: 'agent session cache clear',
+registerClawTalkConsoleRoutes(app, {
+  clawTalkConsoleClients,
+  clawTalkConsoleEvents,
+  initializeSseResponse,
+  isRetiredAgentId,
+  isValidAgentId,
+  recordClawTalkConsoleFinal(input) {
+    const context = resolveClawTalkConsoleMirrorContext({
+      agentId: input.agentId,
+      sessionKey: input.sessionKey,
+      prompt: input.prompt,
     })
-    return apiSuccess(res, {
-      cleared,
-      scope: agent ? 'agent' : 'all',
-      sessionLockCleanup: {
-        scanned: lockCleanup.scanned,
-        removed: lockCleanup.removed.length,
-        errors: lockCleanup.errors.length,
-      },
-    })
-  } catch (error) {
-    return apiFailure(res, 500, 'agent_session_operation_failed', 'Failed to clear agent turn sessions', String(error))
-  }
-})
-
-app.get('/api/openclaw/clawtalk-console/stream', (_req, res) => {
-  initializeSseResponse(res)
-  const clientId = randomUUID()
-  const client = { write: (chunk: string) => res.write(chunk), closed: false }
-  clawTalkConsoleClients.set(clientId, client)
-
-  for (const event of [...clawTalkConsoleEvents].reverse()) {
-    const eventName = typeof event.event === 'string' && event.event.trim() ? event.event.trim() : 'message'
-    writeSseEvent(res, eventName, event)
-  }
-
-  const heartbeat = setInterval(() => {
-    if (client.closed) return
-    writeSseEvent(res, 'heartbeat', { at: new Date().toISOString() })
-  }, 20_000)
-  heartbeat.unref?.()
-
-  res.on('close', () => {
-    client.closed = true
-    clearInterval(heartbeat)
-    clawTalkConsoleClients.delete(clientId)
-  })
-})
-
-app.post('/api/openclaw/clawtalk-console/final', (req, res) => {
-  const schema = z.object({
-    source: z.literal('clawtalk').optional(),
-    agent: z.string().min(1),
-    sessionKey: z.string().min(1).optional(),
-    prompt: z.string().optional(),
-    reply: z.string().optional(),
-    text: z.string().optional(),
-    ok: z.boolean().optional(),
-    transport: z.string().optional(),
-    buffered: z.boolean().optional(),
-    liveTokens: z.boolean().optional(),
-  })
-  const parsed = schema.safeParse(req.body)
-  if (!parsed.success) return apiFailure(res, 400, 'invalid_payload', 'Invalid payload', parsed.error.flatten())
-
-  try {
-    const agentId = parsed.data.agent.trim()
-    if (!isValidAgentId(agentId) || isRetiredAgentId(agentId)) {
-      return apiFailure(res, 400, 'invalid_payload', 'Invalid or retired agent id.')
-    }
-    const sessionKey = parsed.data.sessionKey?.trim() || `clawtalk:${agentId}`
-    const prompt = parsed.data.prompt?.trim() || 'ClawTalk message'
-    const reply = (parsed.data.reply || parsed.data.text || '').trim()
-    const context = resolveClawTalkConsoleMirrorContext({ agentId, sessionKey, prompt })
     const emitted = emitClawTalkConsoleFrame('final', context, {
-      ok: parsed.data.ok !== false,
-      reply: reply || 'No response returned.',
-      transport: parsed.data.transport?.trim() || 'clawtalk-control-center',
-      buffered: parsed.data.buffered ?? true,
-      liveTokens: parsed.data.liveTokens ?? false,
+      ok: input.ok,
+      reply: input.reply || 'No response returned.',
+      transport: input.transport,
+      buffered: input.buffered,
+      liveTokens: input.liveTokens,
       consoleBridgeFinal: true,
     })
-
-    return apiSuccess(res, { ok: true, deduped: !emitted, clawTalkRunId: context.clawTalkRunId })
-  } catch (error) {
-    return apiFailure(res, 500, 'clawtalk_console_failed', 'Failed to record ClawTalk final event', String(error))
-  }
+    return { emitted, clawTalkRunId: context.clawTalkRunId }
+  },
+  writeSseEvent,
 })
 
-app.post('/api/openclaw/agent-turn/stream', async (req, res) => {
-  const schema = z.object({
-    agent: z.string().min(1),
-    message: z.string().min(1),
-    intentMessage: z.string().optional(),
-    displayPrompt: z.string().optional(),
-    source: z.enum(['clawtalk']).optional(),
-    sessionKey: z.string().min(1).optional(),
-    thinking: z.enum(['off', 'minimal', 'low', 'medium', 'high']).default('low'),
-    timeoutSeconds: z.number().int().min(30).max(7200).optional(),
-    attachments: z.array(z.unknown()).optional(),
-    forceOpenClawRuntime: z.boolean().optional().default(false),
-  })
-  const parsed = schema.safeParse(req.body)
-  if (!parsed.success) return apiFailure(res, 400, 'invalid_payload', 'Invalid payload', parsed.error.flatten())
-
-  initializeSseResponse(res)
-  const abortController = new AbortController()
-  const clawTalkMirror = parsed.data.source === 'clawtalk'
-    ? {
-        clawTalkRunId: randomUUID(),
-        agentId: parsed.data.agent.trim(),
-        sessionKey: parsed.data.sessionKey?.trim() || `clawtalk:${parsed.data.agent.trim()}`,
-        prompt: compactClawTalkConsoleValue(parsed.data.displayPrompt || parsed.data.intentMessage || parsed.data.message, 4000),
-      } satisfies ClawTalkConsoleMirrorContext
-    : null
-  if (clawTalkMirror) rememberClawTalkConsoleMirror(clawTalkMirror)
-  let closed = false
-  let liveTextStreamed = false
-  res.on('close', () => {
-    closed = true
-    abortController.abort()
-  })
-  const emit: StreamEmitter = (event, data) => {
-    if (event === 'delta' && typeof data.text === 'string') {
-      const text = data.text
-      if (text) liveTextStreamed = true
-      if (text.length > SSE_DELTA_CHUNK_CHARS) {
-        for (const chunk of splitTextForSse(text)) {
-          if (!chunk) continue
-          const chunkPayload = { ...data, text: chunk, chunked: true }
-          if (clawTalkMirror) emitClawTalkConsoleFrame(event, clawTalkMirror, chunkPayload)
-          if (closed) continue
-          writeSseEvent(res, event, chunkPayload)
-        }
-        return
-      }
-    }
-    if (clawTalkMirror) emitClawTalkConsoleFrame(event, clawTalkMirror, data)
-    if (closed) return
-    writeSseEvent(res, event, data)
-    res.flushHeaders?.()
-  }
-
-  try {
-    const streamAgent = parsed.data.agent.trim()
-    if (!isValidAgentId(streamAgent) || isRetiredAgentId(streamAgent)) {
-      emit('error', { message: 'Invalid or retired agent id.', failureKind: 'validation' })
-      emit('final', compactFinalSsePayload({
-        ok: false,
-        reply: 'Invalid or retired agent id.',
-        stderr: 'Invalid or retired agent id.',
-        code: 1,
-        failureKind: 'validation',
-        streaming: { transport: 'control-center-sse', liveTokens: false },
-      }, liveTextStreamed))
-      return
-    }
-    const streamSmokeMode = CONTROL_CENTER_AGENT_TURN_STREAM_SMOKE_MOCK
-      ? (req.get('x-control-center-stream-smoke') || '').trim().toLowerCase()
-      : ''
-    if (streamSmokeMode === 'abort') {
-      const runId = randomUUID()
-      const sessionKey = parsed.data.sessionKey?.trim() || `agent:${streamAgent}:control-center:smoke-abort`
-      emit('status', {
-        transport: 'gateway-chat',
-        mode: 'progress',
-        label: 'OpenClaw session',
-        message: 'Gateway accepted the live chat run.',
-        agent: streamAgent,
-        sessionKey,
-        runId,
-        liveTokens: true,
-      })
-      await new Promise<void>((resolve) => {
-        if (abortController.signal.aborted) {
-          resolve()
-          return
-        }
-        const timer = setTimeout(resolve, 5000)
-        abortController.signal.addEventListener('abort', () => {
-          clearTimeout(timer)
-          resolve()
-        }, { once: true })
-      })
-      writeFileSync(
-        path.join(OPENCLAW_STATE_ROOT, 'agent-turn-stream-smoke-abort.json'),
-        `${JSON.stringify({
-          aborted: abortController.signal.aborted,
-          agent: streamAgent,
-          runId,
-          sessionKey,
-          transport: 'gateway-chat',
-          reason: closed ? 'client-close' : 'timeout',
-          closed,
-        })}\n`,
-        'utf-8',
-      )
-      return
-    }
-    if (streamSmokeMode && /^(1|true|yes|success)$/i.test(streamSmokeMode)) {
-      const runId = randomUUID()
-      const sessionKey = parsed.data.sessionKey?.trim() || `agent:${streamAgent}:control-center:smoke`
-      emit('status', {
-        transport: 'gateway-chat',
-        mode: 'progress',
-        label: 'OpenClaw session',
-        message: 'Command accepted; opening the Gateway-backed OpenClaw session.',
-        agent: streamAgent,
-        sessionKey,
-        runId,
-        liveTokens: true,
-      })
-      emit('progress', {
-        transport: 'gateway-chat',
-        text: 'Runtime ready; dispatching through Gateway chat.',
-        agent: streamAgent,
-        sessionKey,
-        runId,
-        liveTokens: true,
-      })
-      emit('delta', {
-        transport: 'gateway-chat',
-        text: 'Draft gateway reply.',
-        agent: streamAgent,
-        sessionKey,
-        runId,
-        liveTokens: true,
-      })
-      emit('delta', {
-        transport: 'gateway-chat',
-        text: 'Mock gateway reply complete.',
-        replace: true,
-        agent: streamAgent,
-        sessionKey,
-        runId,
-        liveTokens: true,
-      })
-      emit('final', compactFinalSsePayload({
-        ok: true,
-        reply: 'Mock gateway reply complete.',
-        stdout: 'Mock gateway reply complete.',
-        stderr: '',
-        code: 0,
-        agent: streamAgent,
-        sessionKey,
-        runId,
-        streaming: { transport: 'gateway-chat', liveTokens: true },
-      }, liveTextStreamed))
-      return
-    }
-    emit('status', {
-      transport: parsed.data.forceOpenClawRuntime ? 'gateway-chat' : 'control-center-sse',
-      mode: 'progress',
-      label: parsed.data.forceOpenClawRuntime ? 'OpenClaw session' : 'Command Console',
-      message: parsed.data.forceOpenClawRuntime
-        ? 'Command accepted; opening the Gateway-backed OpenClaw session.'
-        : 'Command accepted; preparing the agent session.',
-      agent: streamAgent,
-      ...(parsed.data.sessionKey ? { sessionKey: parsed.data.sessionKey.trim() } : {}),
-      liveTokens: parsed.data.forceOpenClawRuntime,
-    })
-    const forcedGatewayConsoleTurn = parsed.data.forceOpenClawRuntime && parsed.data.source !== 'clawtalk'
-    emit('progress', {
-      transport: parsed.data.forceOpenClawRuntime ? 'gateway-chat' : 'control-center-sse',
-      text: forcedGatewayConsoleTurn
-        ? 'Opening Gateway chat session.'
-        : 'Checking runtime health and workspace access.',
-      agent: streamAgent,
-      ...(parsed.data.sessionKey ? { sessionKey: parsed.data.sessionKey.trim() } : {}),
-    })
-    if (!forcedGatewayConsoleTurn) {
-      await ensureOpenclawAgentRunConfigDefaults()
-      const config = await readOpenclawConfig()
-      await ensureAgentRuntimeHealthPreflight(streamAgent, config)
-      await ensureAgentSandboxCompatibleWithHost(streamAgent)
-    }
-    emit('progress', {
-      transport: parsed.data.forceOpenClawRuntime ? 'gateway-chat' : 'control-center-sse',
-      text: parsed.data.forceOpenClawRuntime
-        ? 'Runtime ready; dispatching through Gateway chat.'
-        : 'Runtime ready; dispatching agent turn.',
-      agent: streamAgent,
-      ...(parsed.data.sessionKey ? { sessionKey: parsed.data.sessionKey.trim() } : {}),
-    })
-    await delayMs(0)
-    const payload = await streamProviderAgentTurn(parsed.data, emit, abortController.signal)
-    emit('final', compactFinalSsePayload(payload, liveTextStreamed))
-  } catch (error) {
-    const message = redactHiddenReasoningAndSecrets(String(error))
-    const failureKind = classifyFailureKind(message, abortController.signal.aborted ? 'aborted' : 'failed') || 'unknown'
-    const clawTalkFallbackPending = Boolean(clawTalkMirror && closed && abortController.signal.aborted && failureKind === 'aborted')
-    if (clawTalkFallbackPending) {
-      emit('status', {
-        transport: 'clawtalk-control-center',
-        mode: 'progress',
-        label: 'Fallback runtime',
-        message: 'Control Center stream closed; ClawTalk is continuing through the embedded runtime.',
-        fallbackPending: true,
-        liveTokens: false,
-      })
-      return
-    }
-    emit('error', { message: message.length > SSE_FINAL_TEXT_LIMIT ? `${message.slice(0, SSE_FINAL_TEXT_LIMIT).trimEnd()}\n\n[Error truncated.]` : message, failureKind })
-    emit('final', compactFinalSsePayload({
-      ok: false,
-      reply: message,
-      stderr: message,
-      code: 1,
-      failureKind,
-      streaming: { transport: 'control-center-sse', liveTokens: false },
-    }, liveTextStreamed))
-  } finally {
-    if (!closed) res.end()
-  }
-})
-
-app.post('/api/openclaw/agent-turn', async (req, res) => {
-  const schema = z.object({
-    agent: z.string().min(1),
-    message: z.string().min(1),
-    intentMessage: z.string().optional(),
-    sessionKey: z.string().min(1).optional(),
-    thinking: z.enum(['off', 'minimal', 'low', 'medium', 'high']).default('low'),
-    timeoutSeconds: z.number().int().min(30).max(7200).optional(),
-    attachments: z.array(z.unknown()).optional(),
-    forceOpenClawRuntime: z.boolean().optional().default(false),
-    gatewayStreamObserverId: z.string().uuid().optional(),
-  })
-  const parsed = schema.safeParse(req.body)
-  if (!parsed.success) return apiFailure(res, 400, 'invalid_payload', 'Invalid payload', parsed.error.flatten())
-
-  const requestAbortController = new AbortController()
-  try {
-    res.on('close', () => {
-      if (!res.writableEnded) requestAbortController.abort()
-    })
-
-  const {
-    agent,
-    message: rawMessage,
-    intentMessage: rawIntentMessage,
-    thinking,
-    timeoutSeconds,
-    forceOpenClawRuntime: requestedForceOpenClawRuntime,
-  } = parsed.data
-  const runtimeShortcut = parseAgentRuntimeShortcut(rawMessage)
-  const forceOpenClawRuntime = requestedForceOpenClawRuntime || Boolean(runtimeShortcut)
-  const message = runtimeShortcut?.message || rawMessage
-  const intentMessage = runtimeShortcut ? runtimeShortcut.message : rawIntentMessage
-  if (!isValidAgentId(agent) || isRetiredAgentId(agent)) {
-    return apiFailure(res, 400, 'invalid_payload', 'Invalid or retired agent id.', {
-      ok: false,
-      reply: 'Invalid or retired agent id.',
-      stdout: '',
-      stderr: 'Invalid or retired agent id.',
-      code: 1,
-    })
-  }
-  await ensureOpenclawAgentRunConfigDefaults()
-  const runtimeConfig = await readOpenclawConfig()
-  await ensureAgentRuntimeHealthPreflight(agent, runtimeConfig)
-  await ensureAgentSandboxCompatibleWithHost(agent)
-  const intentText = intentMessage?.trim() || message
-  const hostAction = ENABLE_HOST_ACTION_SHORTCUTS && !forceOpenClawRuntime ? detectHostActionRequest(intentText) : null
-  const browserIntent = forceOpenClawRuntime ? false : await shouldRouteBrowserIntentThroughBrowserPlugin(intentText, hostAction)
-  const clawTalkSetupIntent = isClawTalkSetupIntentMessage(intentText)
-  const clawTalkIntent = clawTalkSetupIntent || isClawTalkIntentMessage(intentText)
-  const agentPrimaryModelId = readAgentPrimaryModelIdSync(agent)
-  const vertexCompactMode = isGoogleGeminiModelId(agentPrimaryModelId)
-  const effectiveThinking = browserIntent || clawTalkIntent ? 'off' : thinkingForOpenClawRuntimeModel(agentPrimaryModelId, thinking)
-  const policyTimeoutSeconds = Math.max(
-    await resolveEffectiveAgentWorkTimeoutSeconds(agent, timeoutSeconds),
-    OPENCLAW_AGENT_TURN_TIMEOUT_FLOOR_SECONDS,
-  )
-  const effectiveTimeoutSeconds = browserIntent ? Math.max(policyTimeoutSeconds, MIN_BROWSER_TIMEOUT_SECONDS) : policyTimeoutSeconds
-
-  if (browserIntent) {
-    const preflight = await checkBrowserPreflight(agent)
-    if (!preflight.ok) {
-      return apiSuccess(res, {
-        ok: false,
-        reply: preflight.message,
-        stdout: '',
-        stderr: preflight.detail || preflight.message,
-        code: 1,
-        modelId: agentPrimaryModelId,
-        preflight,
-        doctrineSync: {
-          attempted: false,
-          skipped: true,
-        },
-      })
-    }
-  }
-
-  if (hostAction?.kind === 'launch-chrome') {
-    const launched = await launchChromeHost(hostAction.url)
-    const hostMessage = launched.ok
-      ? `Host action executed: launched Google Chrome${hostAction.url ? ` (${hostAction.url})` : ''}.`
-      : 'Host action failed: could not launch Google Chrome.'
-
-    await appendAgentDailyMemory(agent, `[turn] ${launched.ok ? 'completed' : 'failed'} | ${hostMessage}`)
-
-    return apiSuccess(res, {
-      ok: launched.ok,
-      reply: hostMessage,
-      stdout: launched.ok
-        ? JSON.stringify({
-            status: 'ok',
-            message: hostMessage,
-            command: launched.command,
-            detail: launched.detail,
-          })
-        : '',
-      stderr: launched.ok
-        ? ''
-        : JSON.stringify({
-            status: 'error',
-            message: hostMessage,
-            command: launched.command,
-            detail: launched.detail,
-          }),
-      code: launched.ok ? 0 : 1,
-      modelId: agentPrimaryModelId,
-      doctrineSync: {
-        attempted: false,
-        skipped: true,
-      },
-    })
-  }
-
-  const delegation = forceOpenClawRuntime ? null : parseDelegationIntent(message)
-  if (delegation) {
-    const party = await getPartyMembers().catch(() => [])
-    const target = resolveAgentReference(delegation.targetRef, party, agent)
-
-    if (target) {
-      const policy = await getAgentToAgentPolicy().catch(() => ({ enabled: true, allow: [] as string[] }))
-      if (!policy.enabled) {
-        return apiFailure(res, 403, 'party_handoff_failed', 'Agent-to-agent routing is disabled by policy.', {
-          ok: false,
-          reply: 'Agent-to-agent routing is disabled by policy.',
-          stderr: 'tools.agentToAgent.enabled is false',
-          code: 1,
-          modelId: agentPrimaryModelId,
-        })
-      }
-      if (!isAgentAllowedByPolicy(agent, policy.allow) || !isAgentAllowedByPolicy(target.id, policy.allow)) {
-        return apiFailure(res, 403, 'party_handoff_failed', `Agent-to-agent policy denies routing from ${agent} to ${target.id}.`, {
-          ok: false,
-          reply: `Agent-to-agent policy denies routing from ${agent} to ${target.id}.`,
-          stderr: JSON.stringify({ allow: policy.allow }),
-          code: 1,
-          modelId: agentPrimaryModelId,
-        })
-      }
-
-      const handoffResponse: { ok: boolean; status: number; json: () => Promise<unknown> } = await fetch(`http://127.0.0.1:${PORT}/api/party/agent-to-agent`, {
-        method: 'POST',
-        headers: { 'content-type': 'application/json', Authorization: `Bearer ${AUTH_TOKEN}` },
-        body: JSON.stringify({
-          fromAgent: agent,
-          toAgent: target.id,
-          instruction: delegation.instruction,
-          thinking: effectiveThinking,
-          timeoutSeconds: effectiveTimeoutSeconds,
-        }),
-      }).catch((error) => ({ ok: false, status: 500, json: async () => ({ error: String(error) }) }))
-
-      const rawPayload = await handoffResponse.json().catch((): Record<string, unknown> => ({}))
-      const payload = unwrapCanonicalApiPayload(rawPayload)
-      const handoffPayload = payload as DelegationHandoffPayload
-      const handoffOk = handoffResponse.ok && handoffPayload.ok !== false
-      const delegatedReply =
-        (handoffPayload.to?.reply !== undefined && handoffPayload.to?.reply !== null ? String(handoffPayload.to.reply) : '') ||
-        (handoffPayload.reply !== undefined && handoffPayload.reply !== null ? String(handoffPayload.reply) : '') ||
-        `Delegated to ${target.id}.`
-
-      await appendAgentDailyMemory(
-        agent,
-        `[turn] delegated to ${target.id} | ${trimTask(delegation.instruction, 140)} | outcome: ${trimTask(delegatedReply, 180)}`,
-      )
-
-      return apiSuccess(res, {
-        ok: handoffOk,
-        reply: delegatedReply,
-        stdout: payload,
-        stderr: handoffOk ? '' : JSON.stringify(rawPayload),
-        code: handoffOk ? 0 : 1,
-        modelId: agentPrimaryModelId,
-        delegation: {
-          fromAgent: agent,
-          toAgent: target.id,
-          targetRef: delegation.targetRef,
-          instruction: delegation.instruction,
-          handoffId: handoffPayload.handoffId,
-        },
-      })
-    }
-  }
-
-  const context = await resolveAgentRunContext(agent)
-  const envOverrides = await getAgentAuthEnv(agent)
-  const sessionScope = agentTurnSessionScope(agent, parsed.data.sessionKey)
-  const explicitFreshSession = /^\s*\/new\b/i.test(message)
-  const wantsFreshSession = explicitFreshSession || vertexCompactMode
-  const cleanedMessage = explicitFreshSession ? message.replace(/^\s*\/new\b\s*/i, '') : message
-  const filenameResolution = await resolveFilenameHintsForMessage(cleanedMessage, context.executionWorkspace)
-  let effectiveMessage = filenameResolution.message
-  if (clawTalkIntent) effectiveMessage = buildClawTalkRuntimeInstruction(effectiveMessage, clawTalkSetupIntent)
-  const googleGeminiToolWriteRuntime = shouldUseGoogleGeminiMinimalToolWriteRuntime(agent, effectiveMessage)
-  const previousSessionId = agentTurnSessions.get(sessionScope)
-  let sessionId = wantsFreshSession ? randomUUID() : previousSessionId || randomUUID()
-  const isFreshSession = wantsFreshSession || !agentTurnSessions.has(sessionScope)
-  if (wantsFreshSession && previousSessionId) providerConversationHistories.delete(previousSessionId)
-  agentTurnSessions.set(sessionScope, sessionId)
-  const party = await getPartyMembers().catch(() => [])
-  const self = party.find((member) => member.id === agent)
-  const identityLine = self?.name ? `You are ${self.name} (${agent}).` : `You are ${agent}.`
-  const enforcedMessage = [
-    identityLine,
-    'Do not claim to be any other person or agent.',
-    'If any prior persona conflicts with this identity, discard it now.',
-    '',
-    effectiveMessage,
-  ].join('\n')
-
-  const composedPrompt = composeAgentDoctrinePrompt(agent, enforcedMessage, context.executionWorkspace, context.doctrineWorkspace)
-  const turnMessage = isFreshSession ? `/new ${composedPrompt}` : composedPrompt
-  const runCwd = runCwdForContext(context)
-  await appendAgentPromptDump({
-    route: '/api/openclaw/agent-turn',
-    agent,
-    sessionId,
-    thinking: effectiveThinking,
-    timeoutSeconds: effectiveTimeoutSeconds,
-    cwd: runCwd,
-    requestMessage: rawMessage,
-    intentMessage: intentMessage || intentText,
-    finalMessage: turnMessage,
-    note: [
-      isFreshSession ? 'fresh session turn before OpenClaw runtime call' : 'continuation turn before OpenClaw runtime call',
-      forceOpenClawRuntime ? 'forced OpenClaw runtime route' : '',
-    ].filter(Boolean).join('; '),
-  })
-  const baseArgs = [
-    'agent',
-    '--agent',
-    agent,
-    '--session-id',
-    sessionId,
-    '--message',
-    turnMessage,
-    '--thinking',
-    effectiveThinking,
-    '--timeout',
-    String(effectiveTimeoutSeconds),
-    '--json',
-  ]
-  const openClawTimeoutMs = agentWorkTimeoutWrapperMs(effectiveTimeoutSeconds)
-  let result = await runControlCenterAgentRuntimeTurn({
-    agentId: agent,
-    message: effectiveMessage,
-    context,
-    args: baseArgs,
-    timeoutMs: openClawTimeoutMs,
-    cwd: runCwd,
-    envOverrides,
-    signal: requestAbortController.signal,
-    gatewayChat: {
-      enabled: !googleGeminiToolWriteRuntime,
-      sessionId,
-      requestedSessionKey: parsed.data.sessionKey,
-      thinking: effectiveThinking,
-      message: composedPrompt,
-      attachments: parsed.data.attachments,
-      streamObserverId: parsed.data.gatewayStreamObserverId,
-    },
-  })
-  let reply = extractAgentReply(result.stdout, result.stderr)
-
-  // A provider-side timeout can happen after the Gateway/OpenClaw session was
-  // already created. Retry once in the same session with a longer window so
-  // the agent can continue instead of leaving the user with a dead-end error.
-  if (isAgentRuntimeTimeoutResult(result, reply) && !requestAbortController.signal.aborted) {
-    const recoveryTimeoutSeconds = Math.max(effectiveTimeoutSeconds, OPENCLAW_TIMEOUT_RECOVERY_SECONDS)
-    const recoveryInstruction = buildRuntimeTimeoutContinuationInstruction(effectiveMessage, recoveryTimeoutSeconds)
-    const recoveryPrompt = composeAgentDoctrinePrompt(
-      agent,
-      recoveryInstruction,
-      context.executionWorkspace,
-      context.doctrineWorkspace,
-    )
-    await appendAgentPromptDump({
-      route: '/api/openclaw/agent-turn',
-      agent,
-      sessionId,
-      thinking: effectiveThinking,
-      timeoutSeconds: recoveryTimeoutSeconds,
-      cwd: runCwd,
-      requestMessage: rawMessage,
-      intentMessage: intentMessage || intentText,
-      finalMessage: recoveryPrompt,
-      note: 'timeout recovery turn using preserved OpenClaw session',
-    })
-    const retry = await runControlCenterAgentRuntimeTurn({
-      agentId: agent,
-      message: recoveryInstruction,
-      context,
-      args: [
-        'agent',
-        '--agent',
-        agent,
-        '--session-id',
-        sessionId,
-        '--message',
-        recoveryPrompt,
-        '--thinking',
-        effectiveThinking,
-        '--timeout',
-        String(recoveryTimeoutSeconds),
-        '--json',
-      ],
-      timeoutMs: agentWorkTimeoutWrapperMs(recoveryTimeoutSeconds),
-      cwd: runCwd,
-      envOverrides,
-      signal: requestAbortController.signal,
-      retry: false,
-      gatewayChat: {
-        enabled: !googleGeminiToolWriteRuntime,
-        sessionId,
-        requestedSessionKey: parsed.data.sessionKey,
-        thinking: effectiveThinking,
-        message: recoveryPrompt,
-        attachments: parsed.data.attachments,
-        streamObserverId: parsed.data.gatewayStreamObserverId,
-      },
-    }).catch(openClawErrorResult)
-
-    const previousFailure = [result.stderr, result.stdout].filter(Boolean).join('\n')
-    result = retry.code === 0
-      ? retry
-      : {
-          ...retry,
-          failureKind: retry.failureKind || classifyFailureKind(`${retry.stderr}\n${retry.stdout}`, 'failed') || 'unknown',
-          stderr: [
-            retry.stderr,
-            previousFailure ? `Previous timeout: ${trimTask(previousFailure, 1200)}` : 'Previous runtime turn timed out before a final reply.',
-          ].filter(Boolean).join('\n'),
-        }
-    reply = extractAgentReply(result.stdout, result.stderr)
-  }
-
-  // If the session context is bloated, retry once with a fresh session + /new.
-  if (result.code === 0 && isContextOverflowReply(reply)) {
-    const retrySessionId = randomUUID()
-    agentTurnSessions.set(sessionScope, retrySessionId)
-    sessionId = retrySessionId
-    const retry = await runControlCenterAgentRuntimeTurn({
-      agentId: agent,
-      message: effectiveMessage,
-      context,
-      args: [
-        'agent',
-        '--agent',
-        agent,
-        '--session-id',
-        retrySessionId,
-        '--message',
-        `/new ${composedPrompt}`,
-        '--thinking',
-        effectiveThinking,
-        '--timeout',
-        String(effectiveTimeoutSeconds),
-        '--json',
-      ],
-      timeoutMs: openClawTimeoutMs,
-      cwd: runCwdForContext(context),
-      envOverrides,
-      signal: requestAbortController.signal,
-      retry: false,
-      gatewayChat: {
-        enabled: !googleGeminiToolWriteRuntime,
-        sessionId: retrySessionId,
-        requestedSessionKey: parsed.data.sessionKey,
-        thinking: effectiveThinking,
-        message: composedPrompt,
-        attachments: parsed.data.attachments,
-        streamObserverId: parsed.data.gatewayStreamObserverId,
-      },
-    }).catch(openClawErrorResult)
-    result = retry
-    reply = extractAgentReply(retry.stdout, retry.stderr)
-  }
-
-  if (result.code === 0 && browserIntent && isBrowserServiceReadyOnlyReply(reply)) {
-    const retrySessionId = randomUUID()
-    const recoveryPrompt = composeAgentDoctrinePrompt(
-      agent,
-      buildBrowserRecoveryInstruction(message),
-      context.executionWorkspace,
-      context.doctrineWorkspace,
-    )
-    const recoveryMessage = `/new ${recoveryPrompt}`
-    const retry = await runControlCenterAgentRuntimeTurn({
-      agentId: agent,
-      message: effectiveMessage,
-      context,
-      args: [
-        'agent',
-        '--agent',
-        agent,
-        '--session-id',
-        retrySessionId,
-        '--message',
-        recoveryMessage,
-        '--thinking',
-        effectiveThinking,
-        '--timeout',
-        String(effectiveTimeoutSeconds),
-        '--json',
-      ],
-      timeoutMs: openClawTimeoutMs,
-      cwd: runCwdForContext(context),
-      envOverrides,
-      signal: requestAbortController.signal,
-      retry: false,
-      gatewayChat: {
-        enabled: !googleGeminiToolWriteRuntime,
-        sessionId: retrySessionId,
-        requestedSessionKey: parsed.data.sessionKey,
-        thinking: effectiveThinking,
-        message: recoveryPrompt,
-        attachments: parsed.data.attachments,
-        streamObserverId: parsed.data.gatewayStreamObserverId,
-      },
-    }).catch(openClawErrorResult)
-    result = retry
-    reply = extractAgentReply(retry.stdout, retry.stderr)
-  }
-
-  if (result.code === 0 && browserIntent && hasBrowserRelayPortConflict(result.stderr || '')) {
-    const released = await tryReleaseBrowserRelayPort()
-    if (released.released) {
-      const retrySessionId = randomUUID()
-      const recoveryPrompt = composeAgentDoctrinePrompt(
-        agent,
-        [
-          'Browser relay was recovered after a transient port conflict.',
-          buildBrowserRecoveryInstruction(message),
-        ].join('\n'),
-        context.executionWorkspace,
-        context.doctrineWorkspace,
-      )
-      const recoveryMessage = `/new ${recoveryPrompt}`
-      const retry = await runControlCenterAgentRuntimeTurn({
-        agentId: agent,
-        message: effectiveMessage,
-        context,
-        args: [
-          'agent',
-          '--agent',
-          agent,
-          '--session-id',
-          retrySessionId,
-          '--message',
-          recoveryMessage,
-          '--thinking',
-          effectiveThinking,
-          '--timeout',
-          String(effectiveTimeoutSeconds),
-          '--json',
-        ],
-        timeoutMs: openClawTimeoutMs,
-        cwd: runCwdForContext(context),
-        envOverrides,
-        signal: requestAbortController.signal,
-        retry: false,
-        gatewayChat: {
-          enabled: !googleGeminiToolWriteRuntime,
-          sessionId: retrySessionId,
-          requestedSessionKey: parsed.data.sessionKey,
-          thinking: effectiveThinking,
-          message: recoveryPrompt,
-          attachments: parsed.data.attachments,
-          streamObserverId: parsed.data.gatewayStreamObserverId,
-        },
-      }).catch(openClawErrorResult)
-      result = retry
-      reply = extractAgentReply(retry.stdout, retry.stderr)
-    }
-  }
-
-  if (result.code === 0 && browserIntent && hasBrowserRelayDisconnected(result.stderr || '')) {
-    const gateway = await tryRestartGatewayService()
-    if (gateway.restarted) {
-      const retrySessionId = randomUUID()
-      const recoveryPrompt = composeAgentDoctrinePrompt(
-        agent,
-        [
-          'Browser relay gateway was restarted after a transient disconnect.',
-          buildBrowserRecoveryInstruction(message),
-        ].join('\n'),
-        context.executionWorkspace,
-        context.doctrineWorkspace,
-      )
-      const recoveryMessage = `/new ${recoveryPrompt}`
-      const retry = await runControlCenterAgentRuntimeTurn({
-        agentId: agent,
-        message: effectiveMessage,
-        context,
-        args: [
-          'agent',
-          '--agent',
-          agent,
-          '--session-id',
-          retrySessionId,
-          '--message',
-          recoveryMessage,
-          '--thinking',
-          effectiveThinking,
-          '--timeout',
-          String(effectiveTimeoutSeconds),
-          '--json',
-        ],
-        timeoutMs: openClawTimeoutMs,
-        cwd: runCwdForContext(context),
-        envOverrides,
-        signal: requestAbortController.signal,
-        retry: false,
-        gatewayChat: {
-          enabled: !googleGeminiToolWriteRuntime,
-          sessionId: retrySessionId,
-          requestedSessionKey: parsed.data.sessionKey,
-          thinking: effectiveThinking,
-          message: recoveryPrompt,
-          attachments: parsed.data.attachments,
-          streamObserverId: parsed.data.gatewayStreamObserverId,
-        },
-      }).catch(openClawErrorResult)
-      result = retry
-      reply = extractAgentReply(retry.stdout, retry.stderr)
-    }
-  }
-
-  let geminiArtifactFallback:
-    | Awaited<ReturnType<typeof tryGoogleGeminiDirectArtifactWriteFallback>>
-    | null = null
-  if (googleGeminiToolWriteRuntime) {
-    const target = resolveGoogleGeminiArtifactTarget(effectiveMessage, context.executionWorkspace)
-    const targetExists = target ? await fileExists(target.absolutePath) : false
-    if (result.code === 0 && isEmptyAgentNoResponseReply(reply) && targetExists && target) {
-      reply = `${target.relativePath.replace(/\\/g, '/')} - File written.`
-    } else if (result.code !== 0 || isEmptyAgentNoResponseReply(reply) || (target && !targetExists && !reply.trim())) {
-      try {
-        geminiArtifactFallback = await tryGoogleGeminiDirectArtifactWriteFallback({
-          agentId: agent,
-          modelId: agentPrimaryModelId,
-          thinking: effectiveThinking,
-          message: effectiveMessage,
-          context,
-          envOverrides,
-          signal: requestAbortController.signal,
-        })
-        if (geminiArtifactFallback) {
-          result = {
-            stdout: JSON.stringify({
-              status: 'ok',
-              fallback: 'google-vertex-direct-artifact-write',
-              file: geminiArtifactFallback.target.relativePath,
-              contentLength: geminiArtifactFallback.contentLength,
-            }),
-            stderr: result.code === 0 ? result.stderr : [result.stderr, result.stdout].filter(Boolean).join('\n'),
-            code: 0,
-          }
-          reply = geminiArtifactFallback.reply
-        }
-      } catch (error) {
-        const fallbackError = `Google Vertex artifact fallback failed: ${String(error)}`
-        if (result.code === 0 && !reply.trim()) {
-          result = openClawErrorResult(error)
-          reply = String(error)
-        } else {
-          result.stderr = [result.stderr, fallbackError].filter(Boolean).join('\n')
-          if (result.code !== 0) {
-            reply = [reply || result.stderr || result.stdout, fallbackError].filter(Boolean).join('\n')
-          }
-        }
-      }
-    }
-  }
-
-  if (isAgentRuntimeTimeoutResult(result, reply)) {
-    reply = withRuntimeTimeoutResumeAdvice(reply, agent, sessionId)
-  }
-
-  await cleanupDoctrineMirrorsAfterRun(agent, context.executionWorkspace)
-
-  await appendAgentDailyMemory(
-    agent,
-    `[turn] ${result.code === 0 ? 'completed' : 'failed'} | prompt: ${trimTask(message, 120)}${
-      filenameResolution.notes.length ? ` | resolved: ${trimTask(filenameResolution.notes.join('; '), 120)}` : ''
-    } | outcome: ${trimTask(
-      reply || result.stderr || result.stdout || 'no response',
-      220,
-    )}`,
-  )
-
-  const doctrineSync = await buildDoctrineSyncReport(agent, context.executionWorkspace)
-  const failureKind = result.code === 0
-    ? undefined
-    : result.failureKind || classifyFailureKind(`${reply}\n${result.stderr}\n${result.stdout}`, 'failed') || 'unknown'
-  const runtimeRecovery = failureKind === 'timeout'
-    ? {
-        resumeAvailable: true,
-        agent,
-        sessionId,
-        advice: runtimeTimeoutResumeAdvice(agent, sessionId),
-      }
-    : undefined
-
-  return apiSuccess(res, compactHttpJsonPayload({
-    ok: result.code === 0,
-    reply,
-    stdout: result.stdout,
-    stderr: result.stderr,
-    code: result.code,
-    ...(failureKind ? { failureKind } : {}),
-    ...(result.runtimeTransport ? { runtimeTransport: result.runtimeTransport } : {}),
-    ...(result.gatewayFallbackDetail ? { gatewayFallbackDetail: result.gatewayFallbackDetail } : {}),
-    ...(runtimeRecovery ? { runtimeRecovery } : {}),
-    modelId: agentPrimaryModelId,
-    ...(forceOpenClawRuntime ? {
-      runtimeShortcut: {
-        forced: true,
-        command: runtimeShortcut?.command || 'runtime',
-      },
-    } : {}),
-    doctrineSync,
-    runtimeContext: agentRuntimeContextPayload(agent, context),
-  }))
-  } catch (error) {
-    if (res.headersSent) return
-    const requestedAgent = typeof req.body?.agent === 'string' ? req.body.agent.trim() : ''
-    const modelId = requestedAgent && isValidAgentId(requestedAgent) && !isRetiredAgentId(requestedAgent)
-      ? readAgentPrimaryModelIdSync(requestedAgent)
-      : ''
-    const rawMessage = error instanceof Error && error.message ? error.message : String(error)
-    const detail = redactSensitiveText(rawMessage)
-    const aborted = requestAbortController.signal.aborted
-    const failureKind = classifyFailureKind(detail, aborted ? 'aborted' : 'failed') || 'unknown'
-    const status = aborted
-      ? 499
-      : failureKind === 'auth_missing' || failureKind === 'auth_expired'
-        ? 401
-        : failureKind === 'provider_unsupported'
-          ? 422
-          : 500
-    console.error(`[agent-turn] ${requestedAgent || 'unknown'} failed before OpenClaw reply:`, detail)
-    return apiFailure(res, status, 'agent_turn_failed', aborted
-      ? 'Agent turn was cancelled before completion.'
-      : 'Agent turn failed before OpenClaw returned a reply.', compactHttpJsonPayload({
-      ok: false,
-      reply: aborted
-        ? 'Agent turn was cancelled before completion.'
-        : `Agent turn failed before OpenClaw returned a reply.\n\n${trimTask(detail, 1000)}`,
-      stdout: '',
-      stderr: detail,
-      code: 1,
-      failureKind,
-      ...(modelId ? { modelId } : {}),
-      doctrineSync: {
-        attempted: false,
-        skipped: true,
-      },
-    }))
-  }
-})
 
 app.get('/api/browser/preflight', async (_req, res) => {
   const agentId = typeof _req.query.agentId === 'string' ? _req.query.agentId : undefined
@@ -31285,90 +29117,6 @@ app.get('/api/shifts', async (_req, res) => {
   }
 })
 
-app.post('/api/team-sync/append', async (req, res) => {
-  const schema = z.object({
-    agentId: z.string().min(1),
-    role: z.string().min(1).max(40).optional(),
-    runId: z.string().min(1).max(120).optional(),
-    note: z.string().min(1).max(50000).optional(),
-    line: z.string().min(1).max(50000).optional(),
-    filePath: z.string().min(1).max(500).optional(),
-  })
-  const parsed = schema.safeParse(req.body)
-  if (!parsed.success) return apiFailure(res, 400, 'invalid_payload', 'Invalid payload', parsed.error.flatten())
-
-  const { agentId, role, runId, note, line, filePath } = parsed.data
-  if (!isValidAgentId(agentId)) return apiFailure(res, 400, 'invalid_payload', 'Invalid agent id')
-
-  try {
-    const requestedPath = filePath?.trim() ? path.resolve(filePath.trim()) : undefined
-    if (CANONICAL_DOCTRINE_ONLY && requestedPath) {
-      const normalizedRequestedPath = requestedPath.replace(/\\/g, '/').toLowerCase()
-      const scopedTeamSyncSuffix = `/.openclaw/agents/${agentId.toLowerCase()}/team_sync.md`
-      if (path.basename(requestedPath).toLowerCase() === 'team_sync.md' && !normalizedRequestedPath.endsWith(scopedTeamSyncSuffix)) {
-        return apiFailure(res, 400, 'team_sync_failed', 'Workspace-root TEAM_SYNC.md is disabled; use the scoped doctrine path.')
-      }
-    }
-
-    const context = await resolveAgentRunContext(agentId)
-    const executionWorkspace = context.executionWorkspace
-    const sharedTeamSyncPath = await resolveSharedTeamSyncPath(agentId)
-    const targetPath = requestedPath || sharedTeamSyncPath
-
-    if (!isPathUnder(executionWorkspace, targetPath) && !samePath(targetPath, sharedTeamSyncPath)) {
-      return apiFailure(res, 400, 'team_sync_failed', 'TEAM_SYNC path must be inside execution workspace', {
-        executionWorkspace,
-        targetPath,
-      })
-    }
-
-    if (
-      CANONICAL_DOCTRINE_ONLY &&
-      samePath(targetPath, path.join(executionWorkspace, 'TEAM_SYNC.md')) &&
-      !samePath(targetPath, sharedTeamSyncPath)
-    ) {
-      return apiFailure(res, 400, 'team_sync_failed', 'Workspace-root TEAM_SYNC.md is disabled; use the scoped doctrine path.')
-    }
-
-    if (path.basename(targetPath).toLowerCase() !== 'team_sync.md') {
-      return apiFailure(res, 400, 'team_sync_failed', 'Only TEAM_SYNC.md is allowed for this endpoint')
-    }
-
-    await ensureTeamSyncFile(targetPath)
-
-    const timestamp = new Date().toISOString()
-    const normalizedRole = (role || 'agent').trim()
-    const normalizedRunId = (runId || '').trim()
-    const appendLines = line?.trim()
-      ? splitTextForAppend(line, 4000)
-      : splitTextForAppend(note || '', 1800).map((chunk, index, chunks) => [
-          timestamp,
-          normalizedRole,
-          agentId,
-          normalizedRunId ? `run=${normalizedRunId}` : '',
-          chunks.length > 1 ? `part ${index + 1}/${chunks.length}: ${chunk}` : chunk,
-        ]
-          .filter(Boolean)
-          .join(' | '))
-
-    if (!appendLines.length) return apiFailure(res, 400, 'invalid_payload', 'note or line is required')
-
-    await fs.appendFile(targetPath, `${appendLines.join('\n')}\n`, 'utf-8')
-
-    return apiSuccess(res, {
-      ok: true,
-      path: targetPath,
-      line: appendLines[0],
-      lines: appendLines,
-      split: appendLines.length,
-      agentId,
-      runId: normalizedRunId || undefined,
-    })
-  } catch (error) {
-    return apiFailure(res, 500, 'team_sync_failed', 'Failed to append TEAM_SYNC', String(error))
-  }
-})
-
 app.get('/api/shifts/defaults', async (_req, res) => {
   try {
     const defaults = await readHeartbeatRuntimeDefaults()
@@ -31459,359 +29207,38 @@ app.post('/api/shifts/defaults/:agentId', async (req, res) => {
   }
 })
 
-app.get('/api/auth/providers', (req, res) => {
-  try {
-    const probeGcloud = req.query.refresh === '1' || req.query.probe === '1'
-    const options = probeGcloud ? { probeGcloud: true } : {}
-    const providers = Object.keys(AUTH_PROVIDER_CATALOG).map((provider) => providerAuthStatus(provider, options))
-    return apiSuccess(res, { providers, persistencePath: LOCAL_AUTH_PATH })
-  } catch (error) {
-    return apiFailure(res, 500, 'auth_provider_failed', 'Failed to read provider status', String(error))
-  }
+registerProviderAuthRoutes(app, {
+  authEnvMap: AUTH_ENV_MAP,
+  authProviderCatalog: AUTH_PROVIDER_CATALOG,
+  fallbackAvailableModels,
+  getFastAvailableModelsCatalog,
+  googleOAuthRedirectUri: GOOGLE_OAUTH_REDIRECT_URI,
+  localAuthPath: LOCAL_AUTH_PATH,
+  oauthSessions,
+  openAiCodexOAuthRedirectUri: OPENAI_CODEX_OAUTH_REDIRECT_URI,
+  parseOpenAICodexAuthorizationInput,
+  completeOpenAICodexOAuthSession,
+  persistProviderAuth,
+  providerAuthStatus,
+  refreshAvailableModelsCache,
+  removeProviderAuth,
+  startGoogleOAuthSession,
+  startOpenAICodexOAuthSession,
 })
 
-app.post('/api/auth/providers/:provider', async (req, res) => {
-  const { provider } = req.params
-  if (!AUTH_ENV_MAP[provider]) return apiFailure(res, 400, 'auth_provider_failed', 'Unsupported provider', { provider })
-
-  const schema = z.object({ apiKey: z.string().min(6) })
-  const parsed = schema.safeParse(req.body)
-  if (!parsed.success) return apiFailure(res, 400, 'invalid_payload', 'Invalid payload', parsed.error.flatten())
-
-  try {
-    await persistProviderAuth(provider, parsed.data.apiKey.trim())
-    return apiSuccess(res, { ok: true, provider, persisted: true, persistencePath: LOCAL_AUTH_PATH })
-  } catch (error) {
-    return apiFailure(res, 500, 'auth_provider_failed', 'Failed to persist provider credentials', { provider, detail: String(error) })
-  }
-})
-
-app.delete('/api/auth/providers/:provider', async (req, res) => {
-  const { provider } = req.params
-  if (!AUTH_ENV_MAP[provider]) return apiFailure(res, 400, 'auth_provider_failed', 'Unsupported provider', { provider })
-
-  try {
-    await removeProviderAuth(provider)
-    return apiSuccess(res, { ok: true, provider, persisted: true, persistencePath: LOCAL_AUTH_PATH })
-  } catch (error) {
-    return apiFailure(res, 500, 'auth_provider_failed', 'Failed to remove provider credentials', { provider, detail: String(error) })
-  }
-})
-
-app.post('/api/auth/providers/:provider/oauth/start', async (req, res) => {
-  const { provider } = req.params
-  if (provider !== 'google' && provider !== 'openai-codex') {
-    return apiFailure(res, 400, 'oauth_operation_failed', 'OAuth is not supported for this provider in the direct model runtime.', { provider })
-  }
-
-  const schema = z.object({
-    projectId: z.string().optional(),
-  }).optional()
-  const parsed = schema.safeParse(req.body)
-  if (!parsed.success) return apiFailure(res, 400, 'invalid_payload', 'Invalid payload', parsed.error.flatten())
-
-  try {
-    const { session, launched } = provider === 'google'
-      ? await startGoogleOAuthSession(parsed.data?.projectId)
-      : await startOpenAICodexOAuthSession()
-    return apiSuccess(res, {
-      ok: true,
-      provider,
-      sessionId: session.id,
-      authorizationUrl: session.authorizationUrl,
-      openedBrowser: launched.ok,
-      browserDetail: launched.detail,
-      redirectUri: session.redirectUri || (provider === 'google' ? GOOGLE_OAUTH_REDIRECT_URI : OPENAI_CODEX_OAUTH_REDIRECT_URI),
-      projectId: session.projectId || null,
-    })
-  } catch (error) {
-    return apiFailure(res, 500, 'oauth_operation_failed', `Failed to start ${provider} OAuth`, { provider, detail: String(error) })
-  }
-})
-
-app.get('/api/auth/providers/:provider/oauth/session/:sessionId', (req, res) => {
-  const { provider, sessionId } = req.params
-  if (provider !== 'google' && provider !== 'openai-codex') {
-    return apiFailure(res, 400, 'oauth_operation_failed', 'OAuth is not supported for this provider.', { provider })
-  }
-  const session = oauthSessions.get(sessionId)
-  if (!session) return apiFailure(res, 404, 'oauth_operation_failed', 'OAuth session not found', { provider, sessionId })
-  if (session.provider !== provider) return apiFailure(res, 404, 'oauth_operation_failed', 'OAuth session not found for this provider', { provider, sessionId })
-  return apiSuccess(res, {
-    ok: true,
-    provider,
-    sessionId,
-    status: session.status,
-    error: session.error,
-    authorizationUrl: session.authorizationUrl,
-    manualInputRequired: Boolean(session.manualInputRequired),
-    manualInputSubmittedAt: session.manualInputSubmittedAt,
-    manualPrompt: session.manualPrompt,
-    result: session.result,
-    providerStatus: providerAuthStatus(provider),
-  })
-})
-
-app.post('/api/auth/providers/:provider/oauth/session/:sessionId/manual', async (req, res) => {
-  const { provider, sessionId } = req.params
-  if (provider !== 'openai-codex') {
-    return apiFailure(res, 400, 'oauth_operation_failed', 'Manual OAuth input is only supported for OpenAI Codex.', { provider })
-  }
-
-  const session = oauthSessions.get(sessionId)
-  if (!session || session.provider !== provider) {
-    return apiFailure(res, 404, 'oauth_operation_failed', 'OAuth session not found for this provider', { provider, sessionId })
-  }
-  if (session.status !== 'pending') {
-    return apiFailure(res, 409, 'oauth_operation_failed', `OAuth session is already ${session.status}.`, { provider, sessionId })
-  }
-
-  const schema = z.object({
-    input: z.string().trim().min(1).max(12000),
-  })
-  const parsed = schema.safeParse(req.body)
-  if (!parsed.success) return apiFailure(res, 400, 'invalid_payload', 'Invalid payload', parsed.error.flatten())
-
-  try {
-    const { code, state } = parseOpenAICodexAuthorizationInput(parsed.data.input)
-    await completeOpenAICodexOAuthSession(session, code, state)
-    return apiSuccess(res, {
-      ok: true,
-      provider,
-      sessionId,
-      status: session.status,
-      result: session.result,
-      providerStatus: providerAuthStatus(provider),
-    })
-  } catch (error) {
-    session.status = 'error'
-    session.error = String(error)
-    session.completedAt = new Date().toISOString()
-    return apiFailure(res, 400, 'oauth_operation_failed', 'Failed to complete OpenAI Codex OAuth', { provider, detail: String(error) })
-  }
-})
-
-app.get('/api/models/available', async (req, res) => {
-  try {
-    if (req.query.refresh === '1') {
-      const cache = await refreshAvailableModelsCache()
-      return apiSuccess(res, {
-        models: cache.models,
-        source: cache.source,
-        refreshing: false,
-        refreshedAt: cache.refreshedAt,
-      })
-    }
-
-    const refreshStale = req.query.background === '0' || req.query.noRefresh === '1'
-      ? false
-      : true
-    return apiSuccess(res, getFastAvailableModelsCatalog({ refreshStale }))
-  } catch (error) {
-    console.error('Failed to load models:', error)
-    return apiFailure(res, 500, 'model_catalog_failed', 'Failed to load models', {
-      detail: String(error),
-      models: fallbackAvailableModels(),
-    })
-  }
-})
-
-app.get('/api/skills/check', async (req, res) => {
-  try {
-    const agentId = typeof req.query.agentId === 'string' ? req.query.agentId : undefined
-    const context = await resolveSkillsCommandContext(agentId)
-    const result = await runOpenClaw(['skills', 'check'], 90000, context)
-    const data = { agentId: agentId || null, output: result.stdout, code: result.code }
-    if (result.code !== 0) {
-      return apiFailure(res, 500, 'skill_command_failed', 'Skill check failed', { ...data, error: result.stderr })
-    }
-    return apiSuccess(res, data)
-  } catch (error) {
-    return apiFailure(res, 500, 'skill_operation_failed', 'Failed to check skills', String(error))
-  }
-})
-
-app.get('/api/skills/list', async (req, res) => {
-  try {
-    const agentId = typeof req.query.agentId === 'string' ? req.query.agentId : undefined
-    const context = await resolveSkillsCommandContext(agentId)
-    const result = await runOpenClaw(['skills', 'list'], 90000, context)
-    const data = { agentId: agentId || null, output: result.stdout, code: result.code }
-    if (result.code !== 0) {
-      return apiFailure(res, 500, 'skill_command_failed', 'Skill list failed', { ...data, error: result.stderr })
-    }
-    return apiSuccess(res, data)
-  } catch (error) {
-    return apiFailure(res, 500, 'skill_operation_failed', 'Failed to list skills', String(error))
-  }
-})
-
-app.get('/api/skills/info/:skillName', async (req, res) => {
-  try {
-    const skillName = req.params.skillName?.trim()
-    if (!skillName) return apiFailure(res, 400, 'invalid_payload', 'Skill name is required')
-    const agentId = typeof req.query.agentId === 'string' ? req.query.agentId : undefined
-    const context = await resolveSkillsCommandContext(agentId)
-    const result = await runOpenClaw(['skills', 'info', skillName], 90000, context)
-    const data = { agentId: agentId || null, skillName, output: result.stdout, code: result.code }
-    if (result.code !== 0) {
-      return apiFailure(res, 500, 'skill_command_failed', 'Skill info failed', { ...data, error: result.stderr })
-    }
-    return apiSuccess(res, data)
-  } catch (error) {
-    return apiFailure(res, 500, 'skill_operation_failed', 'Failed to read skill info', String(error))
-  }
-})
-
-app.get('/api/skills/library', async (req, res) => {
-  try {
-    const agentId = typeof req.query.agentId === 'string' ? req.query.agentId : undefined
-    if (req.query.refresh === '1') invalidateSkillLibraryCache()
-    const { shared, agent, agentSkillsRoot } = await readAgentSkillLibrary(agentId)
-    return apiSuccess(res, {
-      agentId: agentId || null,
-      shared,
-      agent,
-      index: null,
-      paths: {
-        shared: SHARED_SKILLS_ROOT,
-        agent: agentSkillsRoot,
-      },
-    })
-  } catch (error) {
-    return apiFailure(res, 500, 'skill_operation_failed', 'Failed to load skill library', String(error))
-  }
-})
-
-app.get('/api/skills/library/:skillId', async (req, res) => {
-  try {
-    const skillId = req.params.skillId?.trim()
-    if (!skillId) return apiFailure(res, 400, 'invalid_payload', 'Skill id is required')
-    const agentId = typeof req.query.agentId === 'string' ? req.query.agentId : undefined
-    const result = await findSkillContent(skillId, agentId)
-    if (!result) return apiFailure(res, 404, 'skill_not_found', 'Skill not found')
-    return apiSuccess(res, result)
-  } catch (error) {
-    return apiFailure(res, 500, 'skill_operation_failed', 'Failed to read skill content', String(error))
-  }
-})
-
-app.post('/api/skills/learn', async (req, res) => {
-  const schema = z.object({
-    agentId: z.string().regex(/^[a-z0-9-]+$/),
-    name: z.string().min(1).max(120),
-    description: z.string().min(1).max(1200),
-    body: z.string().max(60000).default(''),
-    shared: z.boolean().default(false),
-    xpValue: z.number().int().min(0).max(5000).default(250),
-  })
-  const parsed = schema.safeParse(req.body)
-  if (!parsed.success) return apiFailure(res, 400, 'invalid_payload', 'Invalid payload', parsed.error.flatten())
-
-  try {
-    const skill = await writeLearnedSkill(parsed.data)
-    return apiSuccess(res, { skill })
-  } catch (error) {
-    return apiFailure(res, 500, 'skill_operation_failed', 'Failed to save learned skill', String(error))
-  }
-})
-
-app.get('/api/skills/clawhub/search', async (req, res) => {
-  try {
-    const query = typeof req.query.q === 'string' ? req.query.q.trim() : ''
-    const rawLimit = typeof req.query.limit === 'string' ? Number.parseInt(req.query.limit, 10) : 12
-    const limit = Number.isFinite(rawLimit) ? Math.max(1, Math.min(30, rawLimit)) : 12
-    const args = ['skills', 'search']
-    if (query) args.push(query)
-    args.push('--json', '--limit', String(limit))
-    const result = await runOpenClawWithManagedSkillsWorkspace(args, 90000)
-    if (result.code !== 0) {
-      return apiFailure(
-        res,
-        502,
-        'skill_command_failed',
-        'ClawHub search failed',
-        { output: result.stdout, error: result.stderr, code: result.code },
-      )
-    }
-    const parsed = JSON.parse(result.stdout || '{"results":[]}') as { results?: unknown[] }
-    return apiSuccess(res, { results: Array.isArray(parsed.results) ? parsed.results : [] })
-  } catch (error) {
-    return apiFailure(res, 500, 'skill_operation_failed', 'Failed to search ClawHub', String(error))
-  }
-})
-
-app.post('/api/skills/clawhub/install', async (req, res) => {
-  const schema = z.object({
-    slug: z.string().regex(/^[a-z0-9](?:[a-z0-9-]*[a-z0-9])?$/i),
-    version: z.string().min(1).max(80).optional(),
-    force: z.boolean().default(false),
-  })
-  const parsed = schema.safeParse(req.body)
-  if (!parsed.success) return apiFailure(res, 400, 'invalid_payload', 'Invalid payload', parsed.error.flatten())
-
-  try {
-    const existing = await readSkillEntryFromDir(SHARED_SKILLS_ROOT, slugifySkillId(parsed.data.slug), 'library')
-    if (existing && !parsed.data.force) {
-      return apiSuccess(res, {
-        output: `Skill ${parsed.data.slug} is already installed in the shared OpenClaw skills folder.`,
-        skill: existing,
-        alreadyInstalled: true,
-        sharedRoot: SHARED_SKILLS_ROOT,
-      })
-    }
-    const args = ['skills', 'install', parsed.data.slug]
-    if (parsed.data.version) args.push('--version', parsed.data.version)
-    if (parsed.data.force) args.push('--force')
-    const install = await installClawHubSkillWithRetry(args, parsed.data.slug)
-    const { result } = install
-    invalidateSkillLibraryCache(SHARED_SKILLS_ROOT)
-    const skill = await readSkillEntryFromDir(SHARED_SKILLS_ROOT, slugifySkillId(parsed.data.slug), 'library')
-    const data = {
-      output: result.stdout,
-      code: result.code,
-      retried: install.retried,
-      cleanup: install.cleanup,
-      skill,
-      sharedRoot: SHARED_SKILLS_ROOT,
-    }
-    if (result.code !== 0) {
-      return apiFailure(res, 500, 'skill_command_failed', 'ClawHub skill install failed', { ...data, error: result.stderr })
-    }
-    return apiSuccess(res, data)
-  } catch (error) {
-    return apiFailure(res, 500, 'skill_operation_failed', 'Failed to install ClawHub skill', String(error))
-  }
-})
-
-app.post('/api/skills/clawhub/update', async (req, res) => {
-  const schema = z.object({
-    slug: z.string().regex(/^[a-z0-9](?:[a-z0-9-]*[a-z0-9])?$/i).optional(),
-    all: z.boolean().default(false),
-  })
-  const parsed = schema.safeParse(req.body)
-  if (!parsed.success) return apiFailure(res, 400, 'invalid_payload', 'Invalid payload', parsed.error.flatten())
-  if (!parsed.data.slug && !parsed.data.all) return apiFailure(res, 400, 'invalid_payload', 'Provide a slug or set all=true')
-  if (parsed.data.slug && parsed.data.all) return apiFailure(res, 400, 'invalid_payload', 'Use either slug or all, not both')
-
-  try {
-    const args = parsed.data.all ? ['skills', 'update', '--all'] : ['skills', 'update', parsed.data.slug as string]
-    const result = await runOpenClawWithManagedSkillsWorkspace(args, 180000)
-    invalidateSkillLibraryCache(SHARED_SKILLS_ROOT)
-    const shared = await listSkillsFromRoot(SHARED_SKILLS_ROOT, 'library')
-    const data = {
-      output: result.stdout,
-      code: result.code,
-      shared,
-      sharedRoot: SHARED_SKILLS_ROOT,
-    }
-    if (result.code !== 0) {
-      return apiFailure(res, 500, 'skill_command_failed', 'ClawHub skill update failed', { ...data, error: result.stderr })
-    }
-    return apiSuccess(res, data)
-  } catch (error) {
-    return apiFailure(res, 500, 'skill_operation_failed', 'Failed to update ClawHub skill', String(error))
-  }
+registerSkillRoutes(app, {
+  findSkillContent,
+  installClawHubSkillWithRetry,
+  invalidateSkillLibraryCache,
+  listSkillsFromRoot,
+  readAgentSkillLibrary,
+  readSkillEntryFromDir,
+  resolveSkillsCommandContext,
+  runOpenClaw,
+  runOpenClawWithManagedSkillsWorkspace,
+  sharedSkillsRoot: SHARED_SKILLS_ROOT,
+  slugifySkillId,
+  writeLearnedSkill,
 })
 
 app.get('/api/party/agent/:agentId/config', async (req, res) => {

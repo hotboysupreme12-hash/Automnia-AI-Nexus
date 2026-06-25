@@ -5,6 +5,7 @@ import { fileURLToPath } from 'node:url'
 
 const rootDir = fileURLToPath(new URL('..', import.meta.url))
 const serverSource = readFileSync(join(rootDir, 'server/index.ts'), 'utf8')
+const missionRoutesSource = readFileSync(join(rootDir, 'server/routes/missionRoutes.ts'), 'utf8')
 const storeSource = readFileSync(join(rootDir, 'src/store/nexusStore.ts'), 'utf8')
 const packageJson = JSON.parse(readFileSync(join(rootDir, 'package.json'), 'utf8')) as { scripts?: Record<string, string> }
 const scripts = packageJson.scripts || {}
@@ -12,20 +13,22 @@ const scripts = packageJson.scripts || {}
 assert.match(serverSource, /idempotencyKey\?: string/, 'Mission records must retain a launch idempotency key')
 assert.match(serverSource, /normalizeMissionLaunchIdempotencyKey/, 'Mission launch idempotency keys must be normalized')
 assert.match(serverSource, /findMissionByIdempotencyKey/, 'Mission starts must lookup existing launches by idempotency key')
-assert.match(serverSource, /idempotencyKey:\s*z\.string\(\)\.trim\(\)\.min\(8\)\.max\(160\)\.optional\(\)/, 'Mission start payload must accept bounded idempotency keys')
+assert.match(serverSource, /registerMissionRoutes\(app, \{/, 'Mission routes must be registered from the extracted module')
+assert.doesNotMatch(serverSource, /app\.post\('\/api\/missions\/start'/, 'server index must not inline mission start route')
+assert.match(missionRoutesSource, /idempotencyKey:\s*z\.string\(\)\.trim\(\)\.min\(8\)\.max\(160\)\.optional\(\)/, 'Mission start payload must accept bounded idempotency keys')
 assert.match(
-  serverSource,
-  /const existingMission = findMissionByIdempotencyKey\(idempotencyKey\)[\s\S]*?deduped:\s*true[\s\S]*?mission:\s*missionView\(existingMission\)/,
+  missionRoutesSource,
+  /const existingMission = options\.findMissionByIdempotencyKey\(idempotencyKey\)[\s\S]*?deduped:\s*true[\s\S]*?mission:\s*options\.missionView\(existingMission\)/,
   'Duplicate mission launch requests must return the existing mission instead of creating another one',
 )
 assert.match(
-  serverSource,
+  missionRoutesSource,
   /const mission: Mission = \{[\s\S]*?\.\.\.\(idempotencyKey \? \{ idempotencyKey \} : \{\}\)/,
   'New backend missions must persist the launch idempotency key',
 )
 assert.match(
-  serverSource,
-  /return apiSuccess\(res, \{\s*deduped:\s*false,\s*idempotencyKey,\s*mission:\s*missionView\(mission\)\s*\}\)/,
+  missionRoutesSource,
+  /return apiSuccess\(res, \{\s*deduped:\s*false,\s*idempotencyKey,\s*mission:\s*options\.missionView\(mission\)\s*\}\)/,
   'Fresh mission launch responses should expose the launch idempotency result',
 )
 
