@@ -1,0 +1,50 @@
+name: Production 90 Source Snapshot
+
+on:
+  push:
+    branches:
+      - codex/production-90-pass-2026-06-25
+    paths:
+      - .github/workflows/production-90-source-snapshot.yml
+
+permissions:
+  contents: read
+
+jobs:
+  snapshot:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Stage authored source
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p source-snapshot
+          cp -R .github source-snapshot/.github
+          cp -R electron source-snapshot/electron
+          cp -R server source-snapshot/server
+          cp -R src source-snapshot/src
+          cp -R scripts source-snapshot/scripts
+          cp -R docs source-snapshot/docs
+          cp -R public source-snapshot/public
+          cp package.json package-lock.json source-snapshot/
+          cp tsconfig*.json source-snapshot/
+          cp eslint.config.* source-snapshot/ 2>/dev/null || true
+          cp vite.config.* source-snapshot/ 2>/dev/null || true
+          cp tailwind.config.* source-snapshot/ 2>/dev/null || true
+          cp postcss.config.* source-snapshot/ 2>/dev/null || true
+          cp index.html README.md SECURITY.md source-snapshot/ 2>/dev/null || true
+          find source-snapshot -type f -printf '%s\t%p\n' | sort -nr > source-snapshot-file-sizes.tsv
+
+      - name: Upload source snapshot
+        uses: actions/upload-artifact@v4
+        with:
+          name: dystopai-production-90-source
+          path: |
+            source-snapshot/**
+            source-snapshot-file-sizes.tsv
+          if-no-files-found: error
+          retention-days: 1
