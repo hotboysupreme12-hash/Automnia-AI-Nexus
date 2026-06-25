@@ -1347,13 +1347,41 @@ Notes:
 
 - This completes repository enforcement for consumer-distribution evidence, but actual public release readiness still requires real signing infrastructure: Windows Authenticode certificate/timestamping, macOS Developer ID signing/notarization on macOS runners, signed update-channel implementation, rollback automation, and installer lifecycle test artifacts produced by CI.
 
+### 2026-06-25 - Fresh GitHub Source OpenClaw Startup Repair
+
+Scope:
+
+- Investigated user-provided fresh-download logs showing repeated Gateway startup failures from `vendor/openclaw/openclaw.mjs`:
+  - `Error: openclaw: missing dist/entry.(m)js (build output).`
+  - `Gateway auto-restart paused: OpenClaw config is still invalid after repair.`
+- Confirmed the local working copy had ignored generated `vendor/openclaw/dist`, while GitHub source archives do not include it because `dist/` is ignored.
+- Strengthened `scripts/prepare-openclaw-vendor.cjs` so `dist/entry.js` is an explicit required package artifact, matching the OpenClaw bootstrap entry that failed in the downloaded copy.
+- Updated fresh-source app commands so normal startup hydrates the vendored OpenClaw runtime before launching:
+  - `npm run dev:server`
+  - `npm run desktop`
+  - `npm run dev:desktop`
+  - `npm run start`
+- Added a server startup self-heal path that detects a source checkout with `vendor/openclaw/openclaw.mjs` but missing `vendor/openclaw/dist/entry.js`/`entry.mjs`, then runs `scripts/prepare-openclaw-vendor.cjs` against that vendor root before resolving and preflighting the OpenClaw binary.
+- Updated runtime reproducibility smoke coverage to enforce the new first-run preparation contract.
+- Documented the GitHub source archive behavior in `README.md`.
+
+Verification:
+
+- `npm run smoke:runtime-reproducibility` passed.
+- `npm run typecheck:server` passed.
+- `npm run prepare:openclaw-vendor` passed.
+- After rebasing onto the latest `origin/main`, `npm run smoke:server-architecture` passed.
+- After rebasing onto the latest `origin/main`, `npm run smoke:release-signing` passed once the README release-signing command contract was restored.
+- After rebasing onto the latest `origin/main`, `npm run smoke:release-validation` passed once the README consumer distribution evidence contract named `release/evidence/distribution-signing.json`.
+- After rebasing onto the latest `origin/main`, `npm test` passed. This included lint, app/server/Electron typecheck, server architecture, mission durability, API/security/auth, OpenClaw, runtime reproducibility, release evidence, release signing, release validation, and CI workflow smoke checks.
+
 ## In Progress
 
-- Consumer release-chain hardening is in progress on branch `codex/release-security-hardening`.
+- Fresh GitHub source startup repair is complete locally and queued for publication to GitHub `main`.
 
 Next action:
 
-- Publish the release-chain/security-redaction slice through PR/CI, then either:
+- Push the verified fresh-source startup repair to GitHub `main`, then either:
   - wire real Authenticode/macOS signing and update-channel evidence generation when certificates/secrets are available, or
   - resume extraction of remaining `server/index.ts` route clusters, with Nexus/misc, shift/cron scheduler, and browser/preflight areas as high-value candidates.
 

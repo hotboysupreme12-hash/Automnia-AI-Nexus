@@ -10,6 +10,7 @@ const packageJson = JSON.parse(read('package.json')) as {
 }
 const prepareRuntimeBundles = read('scripts/prepare-runtime-bundles.cjs')
 const prepareOpenClawVendor = read('scripts/prepare-openclaw-vendor.cjs')
+const serverIndex = read('server/index.ts')
 
 assert.match(
   prepareRuntimeBundles,
@@ -113,6 +114,11 @@ assert.match(
 )
 assert.match(
   prepareOpenClawVendor,
+  /path\.join\('dist', 'entry\.js'\)/,
+  'vendored OpenClaw dependency prep must require the CLI dist/entry.js artifact',
+)
+assert.match(
+  prepareOpenClawVendor,
   /sriSha512File/,
   'vendored OpenClaw package hydration must verify the package tarball SRI',
 )
@@ -145,6 +151,36 @@ assert.match(
   packageJson.scripts?.['prepare:openclaw-vendor'] || '',
   /node scripts\/prepare-openclaw-vendor\.cjs/,
   'package scripts must expose vendored OpenClaw dependency preparation',
+)
+assert.match(
+  packageJson.scripts?.['dev:server'] || '',
+  /prepare:openclaw-vendor/,
+  'fresh-source dev server startup must prepare the vendored OpenClaw runtime first',
+)
+assert.match(
+  packageJson.scripts?.desktop || '',
+  /prepare:openclaw-vendor/,
+  'fresh-source desktop startup must prepare the vendored OpenClaw runtime first',
+)
+assert.match(
+  packageJson.scripts?.start || '',
+  /prepare:openclaw-vendor/,
+  'fresh-source backend startup must prepare the vendored OpenClaw runtime first',
+)
+assert.match(
+  serverIndex,
+  /prepareSourceOpenClawVendorIfMissing/,
+  'server startup must self-heal a source checkout missing ignored OpenClaw package artifacts',
+)
+assert.match(
+  serverIndex,
+  /hasOpenClawEntryArtifact/,
+  'server startup must explicitly check for OpenClaw dist entry artifacts',
+)
+assert.match(
+  serverIndex,
+  /DYSTOPAI_OPENCLAW_VENDOR_ROOT/,
+  'server startup self-heal must run the vendor prep script against the detected vendor root',
 )
 
 assert.match(

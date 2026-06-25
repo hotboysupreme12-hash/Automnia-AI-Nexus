@@ -207,6 +207,8 @@ cd DystopAI-Core
 npm ci
 ```
 
+Fresh GitHub source archives do not include ignored generated OpenClaw package output such as `vendor/openclaw/dist/entry.js`. Normal app commands run `npm run prepare:openclaw-vendor` before starting so the vendored OpenClaw runtime is hydrated from the pinned npm tarball and shrinkwrap before Gateway starts.
+
 ### Run in Development
 
 ```bash
@@ -258,6 +260,20 @@ npm run lint
 npm run typecheck
 npm test
 ```
+
+### Public Release Signing
+
+Public release builds must include release evidence and signing evidence before publication:
+
+```bash
+npm run dist:win
+# Write release/evidence/distribution-signing.json from installer signing, update-channel, and lifecycle-test evidence.
+npm run release:evidence
+DYSTOPAI_RELEASE_SIGNING_PRIVATE_KEY_FILE="C:/secure/dystopai-release-ed25519.pem" npm run release:sign
+DYSTOPAI_RELEASE_REQUIRE_SIGNING=1 npm run release:validate
+```
+
+CI release runs can also sign with `DYSTOPAI_RELEASE_SIGNING_PRIVATE_KEY_PEM`. The release signing key must be Ed25519, must never be committed, and does not replace platform distribution signing such as Windows Authenticode or macOS Developer ID notarization. Public release validation requires `release/evidence/distribution-signing.json` so installer signatures, signed update-channel rollback, fresh-install, upgrade, uninstall, and corrupted-update evidence are covered by the signed checksum manifest.
 
 Public release work, signing policy, SBOM generation, checksum validation, installer evidence, and release governance are documented separately in [`docs/RELEASE_GOVERNANCE.md`](docs/RELEASE_GOVERNANCE.md).
 
