@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict'
-import { readFileSync } from 'node:fs'
+import { existsSync, readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 
@@ -9,7 +9,14 @@ const read = (relativePath: string) => readFileSync(join(rootDir, relativePath),
 const server = read('server/index.ts')
 const controlPlaneHttp = read('server/controlPlaneHttp.ts')
 const electronMain = read('electron/main.cjs')
-const packageJson = JSON.parse(read('package.json')) as { scripts?: Record<string, string> }
+const packageSource = read('package.json')
+const packageJson = JSON.parse(packageSource) as {
+  homepage?: string
+  scripts?: Record<string, string>
+  build?: {
+    win?: { target?: string[] }
+  }
+}
 
 assert.match(controlPlaneHttp, /CONTROL_CENTER_CONTENT_SECURITY_POLICY/, 'server must define a packaged UI CSP')
 for (const directive of [
@@ -47,7 +54,11 @@ assert.match(electronMain, /const WINDOWS_DIAGNOSTIC_SINGLE_PROCESS = process\.p
 assert.match(electronMain, /if \(WINDOWS_DIAGNOSTIC_SINGLE_PROCESS\) \{[\s\S]*appendSwitch\('single-process'\)[\s\S]*appendSwitch\('in-process-gpu'\)[\s\S]*appendSwitch\('disable-gpu-sandbox'\)/, 'Unsafe Electron process switches must be gated behind diagnostic mode only')
 assert.match(electronMain, /sandbox: true,/, 'BrowserWindow must always request renderer sandboxing')
 assert.doesNotMatch(electronMain, /sandbox:\s*!/, 'BrowserWindow sandbox must not depend on an unsafe mode flag')
+assert.equal(existsSync(join(rootDir, 'main.cjs')), false, 'stale root Electron entrypoint must not exist')
 
 assert.match(packageJson.scripts?.['test:ci'] || '', /smoke:security/, 'test:ci must include security hardening smoke')
+assert.equal(packageJson.homepage, 'https://github.com/hotboysupreme12-hash/DystopAI-Core', 'package metadata must point at the public project URL')
+assert.ok(packageJson.build?.win?.target?.includes('nsis'), 'Windows consumer distribution must target an installer')
+assert.doesNotMatch(packageSource, /dystopai\.local|support@dystopai\.local/, 'package metadata must not publish stale .local support URLs')
 
 console.log('security hardening contract ok')

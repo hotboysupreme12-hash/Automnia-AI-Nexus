@@ -16,7 +16,7 @@ DystopAI Core is being moved from advanced prototype toward production-grade loc
 - Backend route extraction in progress: critical Control Plane domains now live in `server/routes/*` instead of one unreviewable server file.
 - Durable mission, runtime, JSONL recovery, configuration-save, auth, release, and OpenClaw integration smoke coverage wired into `npm test`.
 - Reproducible desktop runtime bundle preparation with exact Node/Codex runtime versions and checksum/integrity verification.
-- Release evidence generation for SBOMs, checksum manifests, release summaries, and optional mandatory public-release signing.
+- Release evidence generation for SBOMs, checksum manifests, release summaries, public-release signing, and consumer distribution evidence.
 
 The remaining high-priority engineering work is tracked in `docs/PRODUCTION_HARDENING_LEDGER.md`. Release governance, branch-protection expectations, signing policy, CI evidence, and threat model are documented in `docs/RELEASE_GOVERNANCE.md`.
 
@@ -260,9 +260,10 @@ npm run desktop
 npm run dist:win
 ```
 
-The packaging script builds the client/server, prepares runtime bundles, and writes generated output under ignored folders such as `release/` and `artifacts/`.
+The Windows distribution script builds the client/server, prepares runtime bundles, and targets a consumer NSIS installer under ignored output folders such as `release/` and `artifacts/`. For unpacked CI or local launch checks, use `npm run package:desktop` or `npm run dist:win:dir`.
 Runtime bundle prep is pinned: Node archives are verified against Node's published `SHASUMS256.txt`, and the bundled Codex plugin installs an exact package version with a checked npm integrity value.
-After generating release output, run `npm run release:evidence` to write `release/evidence/dystopai-sbom.cdx.json`, `release/evidence/checksums.sha256`, and `release/evidence/release-evidence.json`. Publish those files with the installer output so operators can verify the shipped dependency graph and artifact hashes.
+Before generating public release evidence, produce platform distribution evidence in `release/evidence/distribution-signing.json`. Public Windows builds must record verified Authenticode signing for the installer, signed update-channel verification, update rollback proof, and fresh-install, upgrade, uninstall, and corrupted-update test evidence.
+After generating release output and distribution evidence, run `npm run release:evidence` to write `release/evidence/dystopai-sbom.cdx.json`, `release/evidence/checksums.sha256`, and `release/evidence/release-evidence.json`. Publish those files with the installer output so operators can verify the shipped dependency graph and artifact hashes.
 For release candidates with a signing key, sign the checksum manifest after evidence generation:
 
 ```bash
@@ -270,7 +271,7 @@ DYSTOPAI_RELEASE_SIGNING_PRIVATE_KEY_FILE="C:/secure/dystopai-release-ed25519.pe
 ```
 
 This writes `release/evidence/checksums.sha256.sig`, `release/evidence/signing-public-key.pem`, and `release/evidence/release-signing.json`. Publish those files with the SBOM and checksum manifest; the private key must never live in the repository.
-Before publishing, run `npm run release:validate`. It verifies the checksum manifest against packaged files, checks SBOM and summary consistency, requires packaged artifacts to be present, and verifies the detached signature when signing evidence exists.
+Before publishing, run `npm run release:validate`. It verifies the checksum manifest against packaged files, checks SBOM and summary consistency, requires packaged artifacts to be present, verifies the detached signature when signing evidence exists, and requires consumer distribution evidence for public release builds.
 For public release builds, validation must require signing evidence:
 
 ```bash
@@ -299,10 +300,11 @@ The CI workflow enforces the same requirement for version tags, manual `public_r
 | `npm run smoke:ui` | Run Electron UI smoke checks against the built frontend. |
 | `npm run docs:openclaw:sync` | Refresh the local OpenClaw documentation snapshot. |
 | `npm run setup:gateway-auth` | Prepare local Gateway auth config. |
-| `npm run dist:win` | Create the Windows desktop distribution output. |
+| `npm run dist:win` | Create the Windows NSIS installer distribution output. |
+| `npm run dist:win:dir` | Create an unpacked Windows directory build for launch smoke/debugging. |
 | `npm run release:evidence` | Generate the release SBOM, checksum manifest, and evidence summary. |
 | `npm run release:sign` | Sign the release checksum manifest with an Ed25519 release key. |
-| `npm run release:validate` | Verify release checksums, evidence consistency, packaged artifacts, and required public-release signature evidence when `DYSTOPAI_RELEASE_REQUIRE_SIGNING=1`. |
+| `npm run release:validate` | Verify release checksums, evidence consistency, packaged artifacts, required public-release checksum signature evidence, and public consumer distribution evidence when `DYSTOPAI_RELEASE_REQUIRE_SIGNING=1`. |
 
 ## Configuration
 

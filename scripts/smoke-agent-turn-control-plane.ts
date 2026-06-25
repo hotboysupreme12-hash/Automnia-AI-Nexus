@@ -45,6 +45,7 @@ const agentTurnRoutes = readWorkspaceFile('server/routes/agentTurnRoutes.ts')
 const clawTalkConsoleRoutes = readWorkspaceFile('server/routes/clawTalkConsoleRoutes.ts')
 const controlPlaneHttp = readWorkspaceFile('server/controlPlaneHttp.ts')
 const store = readWorkspaceFile('src/store/nexusStore.ts')
+const consolePanel = readWorkspaceFile('src/components/monitor/AgentResponseConsole.tsx')
 const packageJson = JSON.parse(readWorkspaceFile('package.json')) as { scripts?: Record<string, string> }
 
 for (const code of ['agent_turn_failed', 'clawtalk_console_failed', 'party_handoff_failed']) {
@@ -88,6 +89,11 @@ assert(clawTalkRegistrationBlock.includes("emitClawTalkConsoleFrame('final'"), '
 assert(clawTalkStreamConsoleBlock.includes('options.initializeSseResponse(res)'), 'ClawTalk console stream should remain an SSE endpoint')
 assert(clawTalkStreamConsoleBlock.includes('[...options.clawTalkConsoleEvents].reverse()'), 'ClawTalk console stream should replay buffered events')
 assert(clawTalkStreamConsoleBlock.includes("options.writeSseEvent(res, 'heartbeat'"), 'ClawTalk console stream should emit heartbeat events')
+assert(consolePanel.includes("import { createSseFrameParser } from '../../utils/sseStream'"), 'Command Console should parse authenticated ClawTalk SSE fetches')
+assert(consolePanel.includes("fetch(apiUrl('/api/openclaw/clawtalk-console/stream')"), 'Command Console should use fetch for the ClawTalk SSE stream so the auth bridge can attach bearer tokens')
+assert(consolePanel.includes("headers: { Accept: 'text/event-stream' }"), 'Command Console should request ClawTalk SSE with an event-stream Accept header')
+assert(consolePanel.includes('response.body.getReader()'), 'Command Console should read ClawTalk SSE frames from the fetch response body')
+assert(!consolePanel.includes('new EventSource('), 'Command Console should not use EventSource because it cannot send Authorization headers')
 
 assertCanonicalRoute('/api/openclaw/clawtalk-console/final', clawTalkFinalBlock)
 assert(clawTalkFinalBlock.includes('isValidAgentId(agentId)'), 'ClawTalk final should validate agent ids')

@@ -128,6 +128,7 @@ function redact(value) {
 
 function scanFile(filePath) {
   const absolutePath = path.join(root, filePath)
+  if (!fs.existsSync(absolutePath)) return []
   const stat = fs.statSync(absolutePath)
   if (!stat.isFile() || stat.size > maxFileBytes) return []
 

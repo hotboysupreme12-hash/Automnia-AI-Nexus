@@ -26,6 +26,10 @@ assert.match(validatorSource, /artifactCount < 1/, 'release validation must requ
 assert.match(validatorSource, /crypto\.verify\(null, checksums, publicKey, signature\)/, 'release validation must verify release signatures when present')
 assert.match(validatorSource, /DYSTOPAI_RELEASE_VALIDATE_ALLOW_NO_ARTIFACTS/, 'release validation must provide an explicit no-artifact escape hatch')
 assert.match(validatorSource, /DYSTOPAI_RELEASE_REQUIRE_SIGNING/, 'release validation must support mandatory public-release signing')
+assert.match(validatorSource, /distribution-signing\.json/, 'release validation must require consumer distribution signing evidence for public builds')
+assert.match(validatorSource, /authenticode/, 'release validation must require Windows Authenticode evidence for public Windows builds')
+assert.match(validatorSource, /rollbackTested/, 'release validation must require signed update rollback evidence')
+assert.match(validatorSource, /freshInstall.*upgrade.*uninstall.*corruptedUpdate/, 'release validation must require install, upgrade, uninstall, and corrupted-update test evidence')
 assert.match(scripts['release:validate'] || '', /node scripts\/validate-release-artifacts\.cjs/, 'package scripts must expose release validation')
 assert.match(scripts['smoke:release-validation'] || '', /tsx scripts\/smoke-release-validation\.ts/, 'package scripts must expose release validation smoke coverage')
 assert.match(scripts['test:ci'] || '', /npm run smoke:release-validation/, 'test:ci must include release validation smoke coverage')
@@ -35,6 +39,7 @@ assert.match(workflowSource, /DYSTOPAI_RELEASE_REQUIRE_SIGNING/, 'CI must pass t
 assert.match(workflowSource, /npm run release:validate/, 'CI must validate packaged release artifacts')
 assert.match(readme, /npm run release:validate/, 'README must document release validation')
 assert.match(readme, /DYSTOPAI_RELEASE_REQUIRE_SIGNING/, 'README must document mandatory public-release signing validation')
+assert.match(readme, /distribution-signing\.json/, 'README must document consumer distribution signing evidence')
 
 function run(command: string, args: string[], env: NodeJS.ProcessEnv, expectedStatus = 0) {
   const result = spawnSync(command, args, {
@@ -63,6 +68,7 @@ mkdirSync(path.join(artifactRoot, 'win-unpacked'), { recursive: true })
 mkdirSync(nodeRuntimeDir, { recursive: true })
 mkdirSync(codexRuntimeDir, { recursive: true })
 writeFileSync(path.join(artifactRoot, 'win-unpacked', 'DystopAI.exe'), 'packaged-app-binary-placeholder\n')
+writeFileSync(path.join(artifactRoot, 'DystopAI-Setup-0.0.6.exe'), 'windows-installer-placeholder\n')
 writeFileSync(path.join(nodeRuntimeDir, '.dystopai-runtime-bundle.json'), `${JSON.stringify({
   schema: 1,
   generatedAt: '2026-06-24T00:00:00.000Z',
@@ -117,9 +123,52 @@ run(process.execPath, ['scripts/sign-release-evidence.cjs'], {
 validation = run(process.execPath, ['scripts/validate-release-artifacts.cjs'], {
   ...env,
   DYSTOPAI_RELEASE_REQUIRE_SIGNING: '1',
+}, 1)
+assert.match(validation.stderr, /Distribution signing evidence is required/, 'public release validation must require consumer distribution evidence after checksum signing exists')
+
+writeFileSync(path.join(evidenceDir, 'distribution-signing.json'), `${JSON.stringify({
+  schema: 1,
+  generatedAt: '2026-06-24T00:00:00.000Z',
+  artifacts: [
+    {
+      platform: 'windows',
+      artifact: path.relative(root, path.join(artifactRoot, 'DystopAI-Setup-0.0.6.exe')).replace(/\\/g, '/'),
+      signing: {
+        type: 'authenticode',
+        status: 'verified',
+        signer: 'DystopAI Release Test Certificate',
+        thumbprint: '0123456789abcdef0123456789abcdef01234567',
+        timestamp: '2026-06-24T00:00:00.000Z',
+        verificationCommand: 'signtool verify /pa /tw DystopAI-Setup-0.0.6.exe',
+      },
+    },
+  ],
+  updateChannel: {
+    signed: true,
+    rollbackTested: true,
+    verificationCommand: 'verify signed update manifest and rollback marker',
+  },
+  installTests: {
+    freshInstall: { status: 'passed', evidence: 'fresh install smoke log' },
+    upgrade: { status: 'passed', evidence: 'upgrade smoke log' },
+    uninstall: { status: 'passed', evidence: 'uninstall smoke log' },
+    corruptedUpdate: { status: 'passed', evidence: 'corrupted update rollback smoke log' },
+  },
+}, null, 2)}\n`)
+
+run(process.execPath, ['scripts/generate-release-evidence.cjs'], env)
+run(process.execPath, ['scripts/sign-release-evidence.cjs'], {
+  ...env,
+  DYSTOPAI_RELEASE_SIGNING_PRIVATE_KEY_PEM: privatePem,
+  DYSTOPAI_RELEASE_SIGNING_KEY_ID: 'validation-smoke-key',
+})
+validation = run(process.execPath, ['scripts/validate-release-artifacts.cjs'], {
+  ...env,
+  DYSTOPAI_RELEASE_REQUIRE_SIGNING: '1',
 })
 assert.match(validation.stdout, /verified Ed25519 checksum signature/)
 assert.match(validation.stdout, /validation-smoke-key/)
+assert.match(validation.stdout, /verified distribution signing evidence/)
 
 appendFileSync(path.join(artifactRoot, 'win-unpacked', 'DystopAI.exe'), 'tampered\n')
 const tampered = spawnSync(process.execPath, ['scripts/validate-release-artifacts.cjs'], {

@@ -13,7 +13,10 @@ const outputDir = path.join(repoRoot, 'output', 'playwright')
 const tmpDir = path.join(repoRoot, '.tmp')
 const runnerAppDir = path.join(tmpDir, 'ui-smoke-electron-app')
 const runnerPath = path.join(runnerAppDir, 'main.cjs')
+const runnerPreloadPath = path.join(runnerAppDir, 'preload.cjs')
 const electronPath = require('electron')
+const uiSmokeLaunchToken = 'ui-smoke-launch-token'
+const uiSmokeSessionToken = 'ui-smoke-session-token'
 
 const mimeTypes = new Map([
   ['.css', 'text/css; charset=utf-8'],
@@ -37,6 +40,105 @@ function sendJson(response, status, payload) {
 function assertBuildExists() {
   if (!existsSync(path.join(distDir, 'index.html'))) {
     throw new Error('Missing dist/index.html. Run npm run build:client before npm run smoke:ui.')
+  }
+}
+
+function uiSmokeRuntimeStatus() {
+  const now = new Date().toISOString()
+  return {
+    ok: true,
+    generatedAt: now,
+    runtime: {
+      ok: true,
+      current: 'ui-smoke',
+      expected: 'ui-smoke',
+      embedded: true,
+      bin: 'ui-smoke-openclaw',
+      node: process.execPath,
+      severity: 'info',
+      message: 'UI smoke runtime stub is healthy.',
+    },
+    gateway: {
+      state: 'running',
+      healthy: true,
+      processRunning: true,
+      pid: 4242,
+      port: 58288,
+      restartCount: 0,
+      restartScheduled: false,
+      ensureInFlight: false,
+      lastStartedAt: now,
+      lastHealthyAt: now,
+      lastExitAt: null,
+      lastExitCode: null,
+      uptimeMs: 120000,
+      logs: [
+        { id: 1, timestamp: now, stream: 'gateway', message: 'UI smoke gateway ready.', level: 'info', source: 'ui-smoke' },
+      ],
+      activity: {
+        active: true,
+        lastEventAt: now,
+        sourcePath: 'ui-smoke',
+        inboundCount: 1,
+        outboundCount: 1,
+        systemCount: 1,
+        events: [],
+      },
+      stability: {
+        available: true,
+        source: 'diagnostics.stability',
+        generatedAt: now,
+        count: 1,
+        dropped: 0,
+        lastSeq: 1,
+        summary: {
+          byType: { ready: 1 },
+          active: 0,
+          waiting: 0,
+          queued: 0,
+          maxQueueDepth: 0,
+          warningCount: 0,
+          latestEventType: 'ready',
+          latestEventAt: now,
+          recentWarnings: [],
+        },
+        events: [],
+      },
+      chat: {
+        activeRuns: 0,
+        activeObservers: 0,
+        oldestRunAgeMs: 0,
+        oldestObserverAgeMs: 0,
+      },
+    },
+    sessions: [],
+    activeRuns: [],
+    recentRuns: [],
+    plugins: {
+      enabledCount: 0,
+      totalCount: 0,
+      all: [],
+      enabled: [],
+      communication: [],
+      cache: { source: 'ui-smoke', refreshedAt: Date.now(), refreshing: false },
+    },
+    shifts: {
+      activeCount: 0,
+      active: [],
+    },
+    missions: {
+      activeCount: 0,
+      active: [],
+    },
+    diagnostics: {
+      doctor: {
+        lastRun: null,
+        recent: [],
+        warningCount: 0,
+        errorCount: 0,
+        lastRunAt: null,
+      },
+    },
   }
 }
 
@@ -73,6 +175,45 @@ function startStaticServer() {
     try {
       const requestUrl = new URL(request.url || '/', 'http://127.0.0.1')
       const requestPath = requestUrl.pathname
+      if (requestPath === '/api/auth/login') {
+        sendJson(response, 200, { token: uiSmokeSessionToken })
+        return
+      }
+      if (requestPath === '/api/auth/status') {
+        const authorization = request.headers.authorization || ''
+        sendJson(response, 200, {
+          authenticated: authorization === `Bearer ${uiSmokeSessionToken}` || authorization === `Bearer ${uiSmokeLaunchToken}`,
+        })
+        return
+      }
+      if (requestPath === '/api/missions/projection') {
+        sendJson(response, 200, { missions: [], reports: [], feed: [] })
+        return
+      }
+      if (requestPath === '/api/party/overview') {
+        sendJson(response, 200, { party: [] })
+        return
+      }
+      if (requestPath === '/api/openclaw/runtime/status' || requestPath === '/api/openclaw/runtime/summary') {
+        sendJson(response, 200, uiSmokeRuntimeStatus())
+        return
+      }
+      if (requestPath === '/api/shifts') {
+        sendJson(response, 200, { shifts: [] })
+        return
+      }
+      if (requestPath === '/api/shifts/defaults') {
+        sendJson(response, 200, {
+          defaults: {
+            every: '15m',
+            durationMinutes: 60,
+            message: 'UI smoke heartbeat.',
+            thinking: 'off',
+            timeoutSeconds: 720,
+          },
+        })
+        return
+      }
       if (requestPath === '/api/openclaw/clawtalk-console/stream') {
         response.writeHead(200, {
           'Cache-Control': 'no-store',
@@ -196,6 +337,13 @@ function writeElectronRunner() {
     private: true,
     main: 'main.cjs',
   }, null, 2), 'utf8')
+  writeFileSync(runnerPreloadPath, String.raw`
+const { contextBridge } = require('electron')
+
+contextBridge.exposeInMainWorld('dystopaiDesktop', {
+  getControlCenterToken: () => ${JSON.stringify(uiSmokeLaunchToken)},
+})
+`, 'utf8')
   writeFileSync(runnerPath, String.raw`
 const { app, BrowserWindow } = require('electron')
 const fs = require('node:fs')
@@ -583,6 +731,7 @@ async function inspectViewport(viewport) {
     webPreferences: {
       contextIsolation: true,
       nodeIntegration: false,
+      preload: path.join(__dirname, 'preload.cjs'),
       sandbox: true,
     },
   })

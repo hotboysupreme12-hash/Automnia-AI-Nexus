@@ -23,6 +23,7 @@ assert.match(generatorSource, /package-lock\.json/, 'release evidence must deriv
 assert.match(generatorSource, /\.dystopai-runtime-bundle\.json/, 'release evidence must include prepared runtime metadata')
 assert.match(generatorSource, /crypto\.createHash\('sha256'\)/, 'release evidence must compute SHA-256 checksums')
 assert.match(generatorSource, /checksums\.sha256/, 'release evidence must write a checksum manifest')
+assert.match(generatorSource, /distribution-signing\.json/, 'release evidence must include platform distribution signing evidence when present')
 assert.match(generatorSource, /DYSTOPAI_RELEASE_EVIDENCE_DIR/, 'release evidence must support a testable evidence directory override')
 assert.match(generatorSource, /DYSTOPAI_RELEASE_ARTIFACT_ROOT/, 'release evidence must support a release artifact root override')
 assert.match(generatorSource, /DYSTOPAI_RUNTIME_BUNDLE_ROOT/, 'release evidence must support a runtime bundle root override')

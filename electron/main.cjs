@@ -10,6 +10,10 @@ const APP_PORT = Number(process.env.CONTROL_CENTER_PORT || 4050)
 const DEV_FRONTEND_PORT = Number(process.env.CONTROL_CENTER_FRONTEND_PORT || 5173)
 const GATEWAY_PORT = Number(process.env.OPENCLAW_GATEWAY_PORT || 18789)
 const BROWSER_RELAY_PORT = Number(process.env.OPENCLAW_BROWSER_RELAY_PORT || 18792)
+const CONTROL_SERVER_STARTUP_TIMEOUT_MS = Math.max(
+  20_000,
+  Number(process.env.CONTROL_CENTER_STARTUP_TIMEOUT_MS || 180_000) || 180_000,
+)
 const MANAGED_PORTS = Array.from(new Set([
   APP_PORT,
   DEV_FRONTEND_PORT,
@@ -884,29 +888,54 @@ function postControlApi(pathname, timeoutMs = 5000) {
   })
 }
 
-function waitForControlServer(timeoutMs = 15_000) {
+function waitForControlServer(timeoutMs = CONTROL_SERVER_STARTUP_TIMEOUT_MS) {
   const startedAt = Date.now()
   return new Promise((resolve, reject) => {
+    let settled = false
+    let retryTimer = null
+    const finish = (callback, value) => {
+      if (settled) return
+      settled = true
+      if (retryTimer) clearTimeout(retryTimer)
+      callback(value)
+    }
+    const retry = () => {
+      if (settled) return
+      retryTimer = setTimeout(check, 250)
+      retryTimer.unref?.()
+    }
     const check = () => {
+      if (settled) return
       const req = http.request({
         hostname: '127.0.0.1',
         port: APP_PORT,
-        path: '/',
+        path: '/api/ready',
         method: 'GET',
-        timeout: 750,
+        timeout: 1000,
+        headers: {
+          Accept: 'application/json',
+        },
       }, (res) => {
         res.resume()
-        resolve()
+        if (res.statusCode && res.statusCode >= 200 && res.statusCode < 300) {
+          finish(resolve)
+          return
+        }
+        if (Date.now() - startedAt >= timeoutMs) {
+          finish(reject, new Error(`Control Center API did not become ready on port ${APP_PORT}: HTTP ${res.statusCode || 'unknown'}`))
+          return
+        }
+        retry()
       })
       req.on('timeout', () => {
         req.destroy(new Error('control server probe timed out'))
       })
       req.on('error', (err) => {
         if (Date.now() - startedAt >= timeoutMs) {
-          reject(new Error(`Control Center API did not become ready on port ${APP_PORT}: ${err.message}`))
+          finish(reject, new Error(`Control Center API did not become ready on port ${APP_PORT}: ${err.message}`))
           return
         }
-        setTimeout(check, 250)
+        retry()
       })
       req.end()
     }
@@ -991,7 +1020,7 @@ function startControlServerProcess(serverEntry) {
   return child
 }
 
-function waitForSpawnedControlServer(child, timeoutMs = 20_000) {
+function waitForSpawnedControlServer(child, timeoutMs = CONTROL_SERVER_STARTUP_TIMEOUT_MS) {
   return new Promise((resolve, reject) => {
     let settled = false
     const cleanup = () => {
