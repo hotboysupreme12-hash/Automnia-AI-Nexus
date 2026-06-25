@@ -70,3 +70,5 @@ for relative_path, text in outputs.items():
     os.replace(temporary, target)
 
 print(f"Applied verified production readiness delta to {len(outputs)} files.")
+
+# Trigger marker: checksum-verified source payload remains unchanged.
