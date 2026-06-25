@@ -40,6 +40,8 @@ assert.match(polish, /@media \(forced-colors: active\)/, 'focus treatment should
 assert.match(polish, /\.dy-workspace-context\[data-workspace="agents"\]/, 'agent workspace should have a dedicated visual accent')
 assert.match(polish, /\.dy-workspace-context\[data-workspace="missions"\]/, 'mission workspace should have a dedicated visual accent')
 assert.match(polish, /\.dy-workspace-context__state\[data-state="offline"\]/, 'offline runtime state should remain visually distinct')
+assert.match(polish, /\.app-bg > \.dy-app-main[\s\S]*width: 100vw !important/, 'desktop shell should fill the available viewport width')
+assert.doesNotMatch(polish, /\.app-bg > \.dy-app-main[\s\S]*width: min\(100%, 1780px\)/, 'desktop shell should not cap wide windows')
 assert.match(polish, /\.dy-human-rail-head--lockup[\s\S]*min-height: 84px/, 'sidebar lockup should reserve space for the full logo')
 assert.match(polish, /\.dy-workspace-context__meta[\s\S]*flex-direction: column/, 'workspace status controls should live in the tab header')
 assert.ok(theme.trimEnd().endsWith("@import './styles/dystopai-theme/80-production-polish.css';"), 'production polish must load last in the theme cascade')

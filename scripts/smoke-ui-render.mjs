@@ -356,6 +356,7 @@ if (!targetUrl || !outputDir) {
 }
 const checks = [
   { label: 'desktop', width: 1440, height: 1000 },
+  { label: 'wide', width: 2048, height: 1152 },
   { label: 'mobile', width: 390, height: 844 },
 ]
 
@@ -750,7 +751,11 @@ async function inspectViewport(viewport) {
   const inspectScript = [
     "(() => {",
     "  const root = document.querySelector('#root')",
+    "  const main = document.querySelector('#dystopai-main')",
+    "  const workspaceContext = document.querySelector('.dy-workspace-context')",
     "  const rootRect = root ? root.getBoundingClientRect() : null",
+    "  const mainRect = main ? main.getBoundingClientRect() : null",
+    "  const workspaceContextRect = workspaceContext ? workspaceContext.getBoundingClientRect() : null",
     "  const text = document.body.innerText.replace(/\\s+/g, ' ').trim()",
     "  const tabs = Array.from(document.querySelectorAll('[role=\"tab\"]')).map((element) => element.textContent.replace(/\\s+/g, ' ').trim()).filter(Boolean)",
     "  const buttons = Array.from(document.querySelectorAll('button')).filter((button) => {",
@@ -764,6 +769,8 @@ async function inspectViewport(viewport) {
     "    textLength: text.length,",
     "    textSample: text.slice(0, 220),",
     "    rootRect: rootRect ? { width: Math.round(rootRect.width), height: Math.round(rootRect.height) } : null,",
+    "    mainRect: mainRect ? { left: Math.round(mainRect.left), right: Math.round(mainRect.right), width: Math.round(mainRect.width), height: Math.round(mainRect.height) } : null,",
+    "    workspaceContextRect: workspaceContextRect ? { left: Math.round(workspaceContextRect.left), right: Math.round(workspaceContextRect.right), width: Math.round(workspaceContextRect.width), height: Math.round(workspaceContextRect.height) } : null,",
     "    tabs,",
     "    visibleButtonCount: buttons,",
     "    brokenImages,",
@@ -785,6 +792,11 @@ async function inspectViewport(viewport) {
   window.destroy()
 
   const bitmap = bitmapStats(image)
+  const shellFillsViewport = viewport.label === 'mobile'
+    || (
+      dom.mainRect?.right >= dom.viewport.width - 2
+      && dom.workspaceContextRect?.right >= dom.viewport.width - 24
+    )
   const workspaceTabsOk = workspaceTabs.length >= 4 && workspaceTabs.every((workspaceTab) => (
     workspaceTab.selected
       && workspaceTab.panelTextLength > 80
@@ -850,6 +862,7 @@ async function inspectViewport(viewport) {
     && dom.textLength > 120
     && dom.rootRect?.width > 0
     && dom.rootRect?.height > 0
+    && shellFillsViewport
     && dom.tabs.length >= 4
     && workspaceTabsOk
     && commandConsoleOk
@@ -910,6 +923,7 @@ async function inspectViewport(viewport) {
     consoleErrors: consoleErrors.slice(0, 8),
     screenshotPath,
     bitmap,
+    shellFillsViewport,
     dom,
     commandConsoleStopSeed,
     commandConsoleTraceCopy,

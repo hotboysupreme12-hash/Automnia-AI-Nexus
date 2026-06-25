@@ -104,7 +104,11 @@ html.dui-pro-overhaul.dui-cohesive-ui :where(
 
 
 html.dui-pro-overhaul.dui-cohesive-ui .app-bg > .dy-app-main {
-  width: min(100%, 1780px) !important;
+  box-sizing: border-box !important;
+  width: 100vw !important;
+  max-width: none !important;
+  min-width: 0 !important;
+  margin: 0 !important;
 }
 
 html.dui-pro-overhaul.dui-cohesive-ui .dy-command-header.relative.mb-7 {
