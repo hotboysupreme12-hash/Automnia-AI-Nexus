@@ -1,6 +1,6 @@
 # DystopAI Core Production Hardening Ledger
 
-Last updated: 2026-06-24
+Last updated: 2026-06-25
 
 Automation: `dystopai-production-hardening`
 
@@ -1283,20 +1283,23 @@ Verification:
 - `npm run lint` passed.
 - `npm test` passed after integration conflict resolution. This included lint, app/server/Electron typecheck, all production hardening smoke suites, secret scan, runtime reproducibility, release evidence, release signing, release validation, and CI workflow checks.
 - Observed during `npm test`: `smoke:ledger` again reported one skipped malformed historical JSONL row while reading `runtime-runs`; the smoke passed and preserved valid rows.
+- GitHub PR #12 initially failed Control Plane CI in the packaged desktop launch smoke before app launch because the integration branch carried two `removeTempRootWithWindowsRetries` declarations in `scripts/smoke-packaged-electron-launch.ts`.
+- Removed the stale duplicate cleanup helper and kept the stronger Windows-safe process-kill/retry cleanup helper.
+- `npm run smoke:packaged-electron-launch` passed after the duplicate cleanup helper was removed.
 
 Notes:
 
 - Evidence-only PR commits were not cherry-picked individually; their evidence is consolidated here to avoid stale ledger conflicts.
-- The integration branch still requires remote GitHub Actions verification before merging to `main`.
+- The integration branch requires one fresh remote GitHub Actions pass on PR #12 after the packaged launch smoke fix before merging to `main`.
 - Superseded source PRs should be closed after the integration PR lands, since their code changes are included in this branch.
 
 ## In Progress
 
-- Production hardening integration on protective branch `codex/integrate-today-hardening`.
+- Production hardening integration on protective branch `codex/integrate-today-hardening`; PR #12 is open and awaiting the refreshed Control Plane CI run after the packaged launch smoke duplicate-declaration fix.
 
 Next action:
 
-- Push `codex/integrate-today-hardening`, open a PR to `main`, verify remote Control Plane CI, merge it, then close superseded open PRs #3 through #11 after confirming their code is present on `main`.
+- Push the packaged launch smoke fix to PR #12, verify remote Control Plane CI, merge it to `main`, then close superseded open PRs #3 through #11 after confirming their code is present on `main`.
 - Continue breaking up remaining `server/index.ts` route clusters after integration settles. Highest-value candidates are Nexus/misc, shift/cron scheduler, and remaining browser/preflight areas because the major OpenClaw, mission, party, provider, filesystem, runtime, plugin, diagnostics, command-console, agent-turn, and ClawTalk surfaces now have route-module seams.
 - Add release governance documentation and/or enforcement slices after the next route extraction:
   - Main branch protection requirements: green CI, no direct pushes, PR review, and signed commits where repository support allows.
