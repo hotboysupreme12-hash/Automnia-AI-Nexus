@@ -14,6 +14,7 @@ export default defineConfig([
     'release-*/**',
     'build/**',
     'vendor/**',
+    'docs/openclaw-latest/**',
     'rleeae complete/**',
     '.agents/**',
     '.cache/**',

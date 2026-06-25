@@ -8,6 +8,7 @@ build/
 build/*
 !build/icon*.png
 !build/icon*.svg
+!build/entitlements.mac.plist
 dist/
 dist-server/
 release/

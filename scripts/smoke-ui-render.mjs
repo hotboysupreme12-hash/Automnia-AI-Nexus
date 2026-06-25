@@ -341,7 +341,7 @@ function writeElectronRunner() {
 const { contextBridge } = require('electron')
 
 contextBridge.exposeInMainWorld('dystopaiDesktop', {
-  getControlCenterToken: () => ${JSON.stringify(uiSmokeLaunchToken)},
+  bootstrapControlCenterSession: () => ${JSON.stringify(uiSmokeSessionToken)},
 })
 `, 'utf8')
   writeFileSync(runnerPath, String.raw`

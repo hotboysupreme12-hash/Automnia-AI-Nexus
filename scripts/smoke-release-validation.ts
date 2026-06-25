@@ -18,6 +18,7 @@ const packageJson = JSON.parse(readFileSync(path.join(root, 'package.json'), 'ut
 const scripts = packageJson.scripts || {}
 const validatorSource = readFileSync(path.join(root, 'scripts/validate-release-artifacts.cjs'), 'utf8')
 const workflowSource = readFileSync(path.join(root, '.github/workflows/control-plane-ci.yml'), 'utf8')
+const publicReleaseWorkflow = readFileSync(path.join(root, '.github/workflows/public-release.yml'), 'utf8')
 const readme = readFileSync(path.join(root, 'README.md'), 'utf8')
 
 assert.match(validatorSource, /parseChecksumManifest/, 'release validation must parse the checksum manifest')
@@ -28,14 +29,16 @@ assert.match(validatorSource, /DYSTOPAI_RELEASE_VALIDATE_ALLOW_NO_ARTIFACTS/, 'r
 assert.match(validatorSource, /DYSTOPAI_RELEASE_REQUIRE_SIGNING/, 'release validation must support mandatory public-release signing')
 assert.match(validatorSource, /distribution-signing\.json/, 'release validation must require consumer distribution signing evidence for public builds')
 assert.match(validatorSource, /authenticode/, 'release validation must require Windows Authenticode evidence for public Windows builds')
+assert.match(validatorSource, /validateUpdateChannelIfPresent/, 'release validation must cryptographically verify the signed update channel')
 assert.match(validatorSource, /rollbackTested/, 'release validation must require signed update rollback evidence')
 assert.match(validatorSource, /freshInstall.*upgrade.*uninstall.*corruptedUpdate/, 'release validation must require install, upgrade, uninstall, and corrupted-update test evidence')
 assert.match(scripts['release:validate'] || '', /node scripts\/validate-release-artifacts\.cjs/, 'package scripts must expose release validation')
 assert.match(scripts['smoke:release-validation'] || '', /tsx scripts\/smoke-release-validation\.ts/, 'package scripts must expose release validation smoke coverage')
 assert.match(scripts['test:ci'] || '', /npm run smoke:release-validation/, 'test:ci must include release validation smoke coverage')
 assert.match(workflowSource, /node scripts\/package-desktop\.cjs --dir/, 'CI must package the desktop directory before release evidence')
-assert.match(workflowSource, /public_release/, 'CI manual release runs must expose a public release signing gate')
-assert.match(workflowSource, /DYSTOPAI_RELEASE_REQUIRE_SIGNING/, 'CI must pass the mandatory release-signing policy into validation')
+assert.match(publicReleaseWorkflow, /tags:[\s\S]*'v\*'/, 'version tags must use the dedicated public release workflow')
+assert.match(publicReleaseWorkflow, /DYSTOPAI_RELEASE_REQUIRE_SIGNING/, 'public release CI must pass the mandatory release-signing policy into validation')
+assert.match(publicReleaseWorkflow, /DYSTOPAI_UPDATE_REQUIRE_SIGNING/, 'public release CI must require signed update manifests')
 assert.match(workflowSource, /npm run release:validate/, 'CI must validate packaged release artifacts')
 assert.match(readme, /npm run release:validate/, 'README must document release validation')
 assert.match(readme, /DYSTOPAI_RELEASE_REQUIRE_SIGNING/, 'README must document mandatory public-release signing validation')
@@ -124,7 +127,26 @@ validation = run(process.execPath, ['scripts/validate-release-artifacts.cjs'], {
   ...env,
   DYSTOPAI_RELEASE_REQUIRE_SIGNING: '1',
 }, 1)
-assert.match(validation.stderr, /Distribution signing evidence is required/, 'public release validation must require consumer distribution evidence after checksum signing exists')
+assert.match(validation.stderr, /signed update manifest/i, 'public release validation must require a cryptographically signed update channel after checksum signing exists')
+
+run(process.execPath, ['scripts/generate-update-manifest.cjs'], {
+  ...env,
+  DYSTOPAI_UPDATE_OUTPUT_DIR: path.join(artifactRoot, 'updates'),
+  DYSTOPAI_UPDATE_REQUIRE_SIGNING: '1',
+  DYSTOPAI_UPDATE_SIGNING_PRIVATE_KEY_PEM: privatePem,
+  DYSTOPAI_UPDATE_SIGNING_KEY_ID: 'update-validation-smoke-key',
+})
+run(process.execPath, ['scripts/generate-release-evidence.cjs'], env)
+run(process.execPath, ['scripts/sign-release-evidence.cjs'], {
+  ...env,
+  DYSTOPAI_RELEASE_SIGNING_PRIVATE_KEY_PEM: privatePem,
+  DYSTOPAI_RELEASE_SIGNING_KEY_ID: 'validation-smoke-key',
+})
+validation = run(process.execPath, ['scripts/validate-release-artifacts.cjs'], {
+  ...env,
+  DYSTOPAI_RELEASE_REQUIRE_SIGNING: '1',
+}, 1)
+assert.match(validation.stderr, /Distribution signing evidence is required/, 'public release validation must require consumer distribution evidence after update signing exists')
 
 writeFileSync(path.join(evidenceDir, 'distribution-signing.json'), `${JSON.stringify({
   schema: 1,
@@ -166,6 +188,7 @@ validation = run(process.execPath, ['scripts/validate-release-artifacts.cjs'], {
   ...env,
   DYSTOPAI_RELEASE_REQUIRE_SIGNING: '1',
 })
+assert.match(validation.stdout, /verified signed update manifest/)
 assert.match(validation.stdout, /verified Ed25519 checksum signature/)
 assert.match(validation.stdout, /validation-smoke-key/)
 assert.match(validation.stdout, /verified distribution signing evidence/)

@@ -37,7 +37,7 @@ function assertCanonicalRouteSlice(name: string, source: string): void {
 }
 
 assert.match(server, /installControlPlaneHttp\(app, \{/, 'server must install shared control-plane HTTP middleware')
-assert.match(server, /registerAuthRoutes\(app, \{ authToken: AUTH_TOKEN, sessionTokens \}\)/, 'server must register extracted auth routes')
+assert.match(server, /registerAuthRoutes\(app, \{ authToken: AUTH_TOKEN, loginAttempts, sessionTokens \}\)/, 'server must register extracted auth routes with login throttling')
 assert.doesNotMatch(server, /app\.post\('\/api\/auth\/login'/, 'server index must not inline auth login routes')
 assert.doesNotMatch(server, /app\.get\('\/api\/auth\/status'/, 'server index must not inline auth status routes')
 assert.doesNotMatch(server, /app\.use\(cors\(/, 'server index must not own CORS/auth middleware directly')

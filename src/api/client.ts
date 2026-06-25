@@ -1,8 +1,8 @@
 import { apiUrl } from '../utils/apiUrl'
 import { redactDiagnosticText } from '../utils/diagnosticRedaction'
+import { readAuthToken } from './authTokenStore'
 
 const DEFAULT_TIMEOUT_MS = 20_000
-const CONTROL_CENTER_TOKEN_KEY = 'control-center-token'
 
 export type ApiErrorEnvelope = {
   code: string
@@ -30,14 +30,6 @@ function randomRequestId(): string {
   return `req-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`
 }
 
-function readStoredAuthToken(): string | null {
-  if (typeof localStorage === 'undefined') return null
-  try {
-    return localStorage.getItem(CONTROL_CENTER_TOKEN_KEY)
-  } catch {
-    return null
-  }
-}
 
 function hasHeader(headers: Headers, name: string): boolean {
   return Boolean(headers.get(name))
@@ -141,7 +133,7 @@ export async function apiRequest<T = unknown>(path: string, options: ApiRequestO
   const headers = new Headers(options.headers)
   headers.set('X-Request-Id', requestId)
 
-  const token = options.authToken ?? readStoredAuthToken()
+  const token = options.authToken ?? readAuthToken()
   if (token && !hasHeader(headers, 'Authorization')) headers.set('Authorization', `Bearer ${token}`)
 
   const timeoutMs = Math.max(1, options.timeoutMs ?? DEFAULT_TIMEOUT_MS)

@@ -42,6 +42,7 @@ import { registerProviderAuthRoutes } from './routes/providerAuthRoutes'
 import { registerRuntimeRoutes } from './routes/runtimeRoutes'
 import { registerSkillRoutes } from './routes/skillRoutes'
 import { createControlFilesService } from './services/controlFilesService'
+import { createLoginAttemptLimiter } from './loginAttemptLimiter'
 import { createSessionTokenStore } from './sessionTokenStore'
 import {
   AUTH_ENV_MAP,
@@ -79,6 +80,12 @@ const AUTH_TOKEN_SOURCE = CONFIGURED_AUTH_TOKEN ? 'environment' : 'generated'
 const sessionTokens = createSessionTokenStore({
   ttlMs: Number(process.env.CONTROL_CENTER_SESSION_TTL_MS || 12 * 60 * 60 * 1000),
   maxSessions: Number(process.env.CONTROL_CENTER_MAX_SESSIONS || 64),
+})
+const loginAttempts = createLoginAttemptLimiter({
+  windowMs: Number(process.env.CONTROL_CENTER_LOGIN_WINDOW_MS || 60_000),
+  maxAttempts: Number(process.env.CONTROL_CENTER_LOGIN_MAX_ATTEMPTS || 5),
+  baseLockoutMs: Number(process.env.CONTROL_CENTER_LOGIN_BASE_LOCKOUT_MS || 2_000),
+  maxLockoutMs: Number(process.env.CONTROL_CENTER_LOGIN_MAX_LOCKOUT_MS || 60_000),
 })
 const CONTROL_CENTER_FRONTEND_PORT = Number(process.env.CONTROL_CENTER_FRONTEND_PORT || 5173)
 installControlPlaneHttp(app, {
@@ -9032,7 +9039,7 @@ async function ensureOpenAICodexOAuthCallbackServer() {
       openAICodexOAuthCallbackServerStarting = null
       reject(error)
     })
-    server.listen(1455, () => {
+    server.listen(1455, '127.0.0.1', () => {
       openAICodexOAuthCallbackServer = server
       openAICodexOAuthCallbackServerStarting = null
       resolve()
@@ -27074,7 +27081,7 @@ const agentConfigRoutesContext: AgentConfigRoutesContext = {
 
 registerAgentConfigRoutes(app, agentConfigRoutesContext)
 
-registerAuthRoutes(app, { authToken: AUTH_TOKEN, sessionTokens })
+registerAuthRoutes(app, { authToken: AUTH_TOKEN, loginAttempts, sessionTokens })
 
 const { staticRoot: STATIC_ROOT } = registerStaticUi(app, {
   staticDir: process.env.CONTROL_CENTER_STATIC_DIR?.trim(),

@@ -32,9 +32,11 @@
     "smoke:auth": "tsx scripts/smoke-auth-control-plane.ts",
     "smoke:auth-provider-model": "tsx scripts/smoke-auth-provider-model-control-plane.ts",
     "smoke:security": "tsx scripts/smoke-security-hardening.ts",
+    "smoke:runtime-recovery-soak": "tsx scripts/smoke-runtime-recovery-soak.ts",
     "smoke:runtime-reproducibility": "tsx scripts/smoke-runtime-reproducibility.ts",
     "smoke:release-evidence": "tsx scripts/smoke-release-evidence.ts",
     "smoke:release-signing": "tsx scripts/smoke-release-signing.ts",
+    "smoke:release-lifecycle": "tsx scripts/smoke-release-lifecycle.ts",
     "smoke:release-validation": "tsx scripts/smoke-release-validation.ts",
     "smoke:electron-e2e": "tsx scripts/smoke-electron-e2e.ts",
     "smoke:packaged-electron-launch": "tsx scripts/smoke-packaged-electron-launch.ts",
@@ -76,11 +78,16 @@
     "smoke:nexus-control-plane": "tsx scripts/smoke-nexus-control-plane.ts",
     "smoke:misc-control-plane": "tsx scripts/smoke-misc-control-plane.ts",
     "smoke:ui": "node scripts/smoke-ui-render.mjs",
+    "test:unit": "node scripts/run-unit-tests.mjs",
+    "test:unit:coverage": "node scripts/run-unit-tests.mjs --coverage",
     "test": "npm run test:ci",
-    "test:ci": "npm run lint && npm run typecheck && npm run smoke:server-architecture && npm run smoke:route-inventory && npm run smoke:shell-production-ui && npm run smoke:interactive-controls && npm run smoke:ledger && npm run smoke:mission-verification && npm run smoke:mission-report && npm run smoke:mission-durable-state && npm run smoke:mission-idempotency && npm run smoke:mission-cron-reconciliation && npm run smoke:mission-cancellation && npm run smoke:mission-runtime-references && npm run smoke:mission-gateway-reconciliation && npm run smoke:mission-lifecycle-projection && npm run smoke:mission-backend-owned && npm run smoke:api-envelope && npm run smoke:api-error-redaction && npm run smoke:control-plane-errors && npm run smoke:api-integration && npm run smoke:error-boundary && npm run smoke:skills-control-plane && npm run smoke:plugins-control-plane && npm run smoke:openclaw-command-control-plane && npm run smoke:openclaw && npm run smoke:party-coordination-control-plane && npm run smoke:team-sync-control-plane && npm run smoke:agent-turn-control-plane && npm run smoke:runtime-status-control-plane && npm run smoke:runtime-actions-control-plane && npm run smoke:shifts-control-plane && npm run smoke:filesystem-control-plane && npm run smoke:command-console-files && npm run smoke:nexus-control-plane && npm run smoke:misc-control-plane && npm run smoke:config-save && npm run smoke:auth && npm run smoke:auth-provider-model && npm run smoke:security && npm run smoke:session-tokens && npm run smoke:gateway-auth-hardening && npm run secret:scan && npm run smoke:runtime-reproducibility && npm run smoke:release-evidence && npm run smoke:release-signing && npm run smoke:release-validation && npm run smoke:ci-workflow",
+    "test:ci": "npm run lint && npm run typecheck && npm run test:unit && npm run notices:check && npm run smoke:server-architecture && npm run smoke:route-inventory && npm run smoke:shell-production-ui && npm run smoke:interactive-controls && npm run smoke:ledger && npm run smoke:mission-verification && npm run smoke:mission-report && npm run smoke:mission-durable-state && npm run smoke:mission-idempotency && npm run smoke:mission-cron-reconciliation && npm run smoke:mission-cancellation && npm run smoke:mission-runtime-references && npm run smoke:mission-gateway-reconciliation && npm run smoke:mission-lifecycle-projection && npm run smoke:mission-backend-owned && npm run smoke:api-envelope && npm run smoke:api-error-redaction && npm run smoke:control-plane-errors && npm run smoke:api-integration && npm run smoke:runtime-recovery-soak && npm run smoke:error-boundary && npm run smoke:skills-control-plane && npm run smoke:plugins-control-plane && npm run smoke:openclaw-command-control-plane && npm run smoke:openclaw && npm run smoke:party-coordination-control-plane && npm run smoke:team-sync-control-plane && npm run smoke:agent-turn-control-plane && npm run smoke:runtime-status-control-plane && npm run smoke:runtime-actions-control-plane && npm run smoke:shifts-control-plane && npm run smoke:filesystem-control-plane && npm run smoke:command-console-files && npm run smoke:nexus-control-plane && npm run smoke:misc-control-plane && npm run smoke:config-save && npm run smoke:auth && npm run smoke:auth-provider-model && npm run smoke:security && npm run smoke:production-security-delta && npm run smoke:session-tokens && npm run smoke:gateway-auth-hardening && npm run secret:scan && npm run smoke:runtime-reproducibility && npm run smoke:release-evidence && npm run smoke:release-signing && npm run smoke:release-validation && npm run smoke:release-lifecycle && npm run smoke:ci-workflow",
     "desktop": "npm run build:standalone && npm run prepare:openclaw-vendor && electron .",
     "prepare:runtime-bundles": "node scripts/prepare-runtime-bundles.cjs",
     "prepare:openclaw-vendor": "node scripts/prepare-openclaw-vendor.cjs",
+    "release:update-manifest": "node scripts/generate-update-manifest.cjs",
+    "release:update-verify": "node scripts/verify-update-manifest.cjs",
+    "release:lifecycle:windows": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/windows-release-lifecycle.ps1",
     "release:evidence": "node scripts/generate-release-evidence.cjs",
     "release:sign": "node scripts/sign-release-evidence.cjs",
     "release:validate": "node scripts/validate-release-artifacts.cjs",
@@ -88,14 +95,24 @@
     "dist:desktop": "npm run package:desktop",
     "dist:win": "npm run build:standalone && npm run prepare:runtime-bundles && npm run prepare:openclaw-vendor && node scripts/package-desktop.cjs --win --x64",
     "dist:win:dir": "npm run build:standalone && npm run prepare:runtime-bundles && npm run prepare:openclaw-vendor && node scripts/package-desktop.cjs --dir --win --x64",
+    "state:backup": "node scripts/runtime-state-backup.cjs backup",
+    "state:verify": "node scripts/runtime-state-backup.cjs verify",
+    "state:restore": "node scripts/runtime-state-backup.cjs restore",
+    "verify:release-candidate": "npm test && npm run test:unit:coverage && npm run smoke:api-soak && npm run build:standalone && npm run check:bundle-budgets && npm run smoke:electron-e2e",
+    "dist:mac": "npm run build:standalone && npm run prepare:runtime-bundles && npm run prepare:openclaw-vendor && node scripts/package-desktop.cjs --mac",
+    "dist:linux": "npm run build:standalone && npm run prepare:runtime-bundles && npm run prepare:openclaw-vendor && node scripts/package-desktop.cjs --linux --x64",
     "docs:openclaw:sync": "node scripts/sync-openclaw-docs.mjs",
     "setup:gateway-auth": "node scripts/setup-openclaw-gateway-auth.mjs",
-    "typecheck": "tsc -p tsconfig.app.json --noEmit && npm run typecheck:server && npm run typecheck:electron",
-    "typecheck:electron": "tsc -p tsconfig.electron.json --noEmit",
-    "typecheck:server": "tsc -p tsconfig.server.json --noEmit",
-    "lint": "eslint .",
+    "typecheck": "node ./node_modules/typescript/bin/tsc -p tsconfig.app.json --noEmit && node ./node_modules/typescript/bin/tsc -p tsconfig.server.json --noEmit && node ./node_modules/typescript/bin/tsc -p tsconfig.electron.json --noEmit",
+    "typecheck:electron": "node ./node_modules/typescript/bin/tsc -p tsconfig.electron.json --noEmit",
+    "typecheck:server": "node ./node_modules/typescript/bin/tsc -p tsconfig.server.json --noEmit",
+    "lint": "eslint src server scripts tests",
     "preview": "vite preview",
-    "start": "npm run prepare:openclaw-vendor && tsx server/index.ts"
+    "start": "npm run prepare:openclaw-vendor && tsx server/index.ts",
+    "smoke:api-soak": "tsx scripts/smoke-api-soak.ts",
+    "smoke:production-security-delta": "tsx scripts/smoke-production-security-delta.ts",
+    "notices:generate": "node scripts/generate-third-party-notices.cjs",
+    "notices:check": "node scripts/generate-third-party-notices.cjs --check"
   },
   "build": {
     "appId": "ai.dystopai.controlcenter",
@@ -133,6 +150,14 @@
       {
         "from": ".openclaw/agents",
         "to": "openclaw/agents"
+      },
+      {
+        "from": "THIRD_PARTY_NOTICES.txt",
+        "to": "legal/THIRD_PARTY_NOTICES.txt"
+      },
+      {
+        "from": "DATA_HANDLING.md",
+        "to": "legal/DATA_HANDLING.md"
       }
     ],
     "linux": {
@@ -141,25 +166,39 @@
         "deb"
       ],
       "category": "Development",
-      "maintainer": "DystopAI"
+      "maintainer": "DystopAI",
+      "artifactName": "${productName}-${version}-${arch}.${ext}"
     },
     "mac": {
       "target": [
         "dmg"
       ],
-      "category": "public.app-category.developer-tools"
+      "category": "public.app-category.developer-tools",
+      "artifactName": "${productName}-${version}-${arch}.${ext}",
+      "hardenedRuntime": true,
+      "gatekeeperAssess": false,
+      "entitlements": "build/entitlements.mac.plist",
+      "entitlementsInherit": "build/entitlements.mac.plist",
+      "notarize": true
     },
     "win": {
       "target": [
         "nsis"
-      ]
+      ],
+      "artifactName": "${productName}-Setup-${version}-${arch}.${ext}"
     },
     "nsis": {
       "oneClick": false,
       "allowToChangeInstallationDirectory": true,
       "perMachine": false,
-      "deleteAppDataOnUninstall": false
-    }
+      "deleteAppDataOnUninstall": false,
+      "createDesktopShortcut": "always",
+      "createStartMenuShortcut": true
+    },
+    "asarUnpack": [
+      "node_modules/node-pty/**"
+    ],
+    "compression": "maximum"
   },
   "dependencies": {
     "@fontsource-variable/geist": "^5.2.9",

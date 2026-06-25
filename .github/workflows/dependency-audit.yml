@@ -1,0 +1,46 @@
+name: Dependency Audit Report
+
+on:
+  schedule:
+    - cron: '17 11 * * 1'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  audit:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
+
+      - name: Set up Node.js
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: '24'
+          cache: npm
+
+      - name: Install locked dependencies
+        run: npm ci
+
+      - name: Enforce production dependency policy
+        run: npm run audit:dependencies
+
+      - name: Capture complete development and build audit
+        shell: bash
+        run: |
+          set +e
+          npm audit --json > full-dependency-audit.json
+          status=$?
+          echo "Full audit exit status: $status"
+          exit 0
+
+      - name: Upload complete dependency audit
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: dystopai-full-dependency-audit
+          path: full-dependency-audit.json
+          if-no-files-found: error
+          retention-days: 30

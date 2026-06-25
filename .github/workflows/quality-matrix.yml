@@ -18,16 +18,22 @@ permissions:
   contents: read
 
 jobs:
-  linux:
-    name: Linux source and build validation
-    runs-on: ubuntu-latest
-    timeout-minutes: 25
+  source-and-build:
+    name: ${{ matrix.os }} source and build validation
+    strategy:
+      fail-fast: false
+      matrix:
+        os:
+          - ubuntu-latest
+          - macos-latest
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 35
     steps:
       - name: Check out repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
 
       - name: Set up Node.js
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
         with:
           node-version: '24'
           cache: npm
@@ -46,6 +52,9 @@ jobs:
           npm run lint
           npm run typecheck
 
+      - name: Run behavioral unit tests with coverage
+        run: npm run test:unit:coverage
+
       - name: Verify architecture and security contracts
         run: |
           npm run smoke:server-architecture
@@ -55,6 +64,7 @@ jobs:
           npm run smoke:security
           npm run smoke:session-tokens
           npm run smoke:gateway-auth-hardening
+          npm run smoke:release-lifecycle
 
       - name: Build standalone application
         run: npm run build:standalone

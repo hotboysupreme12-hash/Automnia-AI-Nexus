@@ -16,7 +16,7 @@ These settings are governance requirements. The repository can document and smok
 
 ## Public Release Signing
 
-Public release validation must fail closed when signing evidence is absent. A public release is any version-tag run matching `refs/tags/v*`, a manual `workflow_dispatch` run with `public_release: true`, or any CI run with `DYSTOPAI_RELEASE_REQUIRE_SIGNING=true`.
+Public release validation must fail closed when signing evidence is absent. A public release is qualified by the dedicated `Public Release Candidate` workflow on a `v*` tag or a manual `workflow_dispatch` run. The workflow sets `DYSTOPAI_RELEASE_REQUIRE_SIGNING=true`; local validation can enforce the same policy explicitly.
 
 The required evidence files are:
 
@@ -27,6 +27,10 @@ The required evidence files are:
 - `release/evidence/signing-public-key.pem`
 - `release/evidence/release-signing.json`
 - `release/evidence/distribution-signing.json`
+- `release/updates/update-manifest.json`
+- `release/updates/update-manifest.json.sig`
+- `release/updates/update-manifest-public-key.pem`
+- `release/updates/update-signing.json`
 
 The Ed25519 signature signs the checksum manifest. It is necessary release evidence, but it does not replace operating-system distribution trust. Public consumer builds must also include platform distribution evidence:
 
@@ -81,7 +85,33 @@ DYSTOPAI_RELEASE_SIGNING_PRIVATE_KEY_FILE="C:/secure/dystopai-release-ed25519.pe
 DYSTOPAI_RELEASE_REQUIRE_SIGNING=1 npm run release:validate
 ```
 
-In GitHub Actions, configure `DYSTOPAI_RELEASE_SIGNING_PRIVATE_KEY_PEM` as a secret and `DYSTOPAI_RELEASE_SIGNING_KEY_ID` as a variable. The signing key must be Ed25519 and must never be committed to the repository.
+In GitHub Actions, configure the Windows or Apple platform-signing credentials plus `DYSTOPAI_RELEASE_SIGNING_PRIVATE_KEY_PEM` and `DYSTOPAI_UPDATE_SIGNING_PRIVATE_KEY_PEM` as secrets. Configure key IDs as repository variables. Each signing key must be Ed25519 and must never be committed to the repository.
+
+The exact release sequence and stop conditions are documented in [`PRODUCTION_RELEASE_RUNBOOK.md`](PRODUCTION_RELEASE_RUNBOOK.md).
+
+
+## Signed Update Channel
+
+The update manifest is a manual-download integrity channel. It does not silently install updates. Generate it only after the final platform artifacts exist:
+
+```bash
+DYSTOPAI_UPDATE_SIGNING_PRIVATE_KEY_FILE="C:/secure/dystopai-update-ed25519.pem" npm run release:update-manifest
+DYSTOPAI_UPDATE_REQUIRE_SIGNING=1 npm run release:update-verify
+```
+
+The verifier rejects unsigned manifests when signing is required, unsafe relative paths, duplicate artifacts, wrong sizes, checksum mismatches, invalid signatures, and artifacts outside the release root. The update key must be separate from the checksum-evidence key so either key can be rotated independently.
+
+## State Backup And Restore
+
+Stop DystopAI before backing up or restoring OpenClaw state. Every backup carries a manifest with relative paths, file sizes, and SHA-256 hashes. Restore verifies the complete archive before staging files and keeps the previous target state as rollback evidence when `--force` is used.
+
+```bash
+npm run state:backup -- --source "$HOME/.openclaw" --output "backups/openclaw-state"
+npm run state:verify -- --archive "backups/openclaw-state"
+npm run state:restore -- --archive "backups/openclaw-state" --target "$HOME/.openclaw" --force
+```
+
+Keep backups encrypted at rest because they can contain provider credentials, agent doctrine, messages, and operational logs.
 
 ## Release Evidence
 

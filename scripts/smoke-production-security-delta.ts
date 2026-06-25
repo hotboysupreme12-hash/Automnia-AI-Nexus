@@ -1,0 +1,31 @@
+import assert from 'node:assert/strict'
+import { readFileSync } from 'node:fs'
+
+const read = (path: string) => readFileSync(path, 'utf8')
+const authRoutes = read('server/routes/authRoutes.ts')
+const controlPlane = read('server/controlPlane.ts')
+const tokenStorage = read('src/api/authTokenStore.ts')
+const authContext = read('src/context/AuthContext.tsx')
+const client = read('src/api/client.ts')
+const electronMain = read('electron/main.cjs')
+const runtimeDownloadSecurity = read('electron/runtime-download-security.cjs')
+const packageJson = JSON.parse(read('package.json')) as { scripts?: Record<string, string> }
+
+assert.match(authRoutes, /rate_limited/, 'login must emit a bounded rate-limit response')
+assert.match(authRoutes, /Retry-After/, 'rate-limited login responses must include Retry-After')
+assert.match(controlPlane, /createLoginAttemptLimiter/, 'control plane must create the auth limiter')
+assert.match(tokenStorage, /window\.sessionStorage/, 'renderer auth tokens must be session-scoped')
+assert.match(tokenStorage, /storageRemove\(local\)/, 'legacy localStorage tokens must be removed')
+assert.doesNotMatch(authContext, /localStorage\.(?:getItem|setItem)\(['"]control-center-token/, 'AuthContext must not persist bearer tokens directly')
+assert.match(authContext, /bootstrapControlCenterSession/, 'desktop auth must receive only a server-issued session token')
+assert.doesNotMatch(electronMain, /get-control-center-token|getControlCenterToken/, 'Electron must not expose the long-lived launch token to the renderer')
+assert.match(electronMain, /bootstrap-control-center-session/, 'Electron must expose a narrow session bootstrap bridge')
+assert.match(controlPlane, /server\.listen\(1455, '127\.0\.0\.1'/, 'OAuth callback listeners must remain loopback-only')
+assert.match(client, /readAuthToken/, 'canonical API client must use shared session-scoped token storage')
+assert.match(electronMain, /SHASUMS256\.txt/, 'managed Node fallback must fetch Node checksums')
+assert.match(electronMain, /sha256File\(zipPath\)/, 'managed Node fallback must hash the downloaded archive')
+assert.match(runtimeDownloadSecurity, /parsed\.protocol !== 'https:'/, 'runtime download helper must enforce HTTPS')
+assert.match(runtimeDownloadSecurity, /untrusted host/, 'runtime download helper must enforce a hostname allowlist')
+assert.match(packageJson.scripts?.['test:ci'] || '', /test:unit/, 'CI must execute behavioral unit tests')
+assert.match(packageJson.scripts?.['test:ci'] || '', /smoke:production-security-delta/, 'CI must retain the production security delta')
+console.log('production security delta contract ok')

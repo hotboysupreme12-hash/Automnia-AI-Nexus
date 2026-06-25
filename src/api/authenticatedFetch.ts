@@ -1,15 +1,8 @@
 import { apiUrl } from '../utils/apiUrl'
+import { readAuthToken } from './authTokenStore'
 
-const CONTROL_CENTER_TOKEN_KEY = 'control-center-token'
 let installed = false
 
-function readStoredAuthToken(): string | null {
-  try {
-    return localStorage.getItem(CONTROL_CENTER_TOKEN_KEY)
-  } catch {
-    return null
-  }
-}
 
 function requestUrl(input: RequestInfo | URL): string {
   if (input instanceof Request) return input.url
@@ -32,7 +25,7 @@ function isControlCenterApiRequest(input: RequestInfo | URL): boolean {
 function headersWithBearer(input: RequestInfo | URL, init?: RequestInit): Headers {
   const headers = new Headers(init?.headers || (input instanceof Request ? input.headers : undefined))
   if (!headers.has('Authorization')) {
-    const token = readStoredAuthToken()
+    const token = readAuthToken()
     if (token) headers.set('Authorization', `Bearer ${token}`)
   }
   return headers

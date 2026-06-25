@@ -1,0 +1,66 @@
+name: Server Composition Architecture
+
+on:
+  push:
+    branches:
+      - main
+      - 'codex/**'
+      - 'production/**'
+    paths:
+      - 'server/**'
+      - 'scripts/report-server-index-architecture.mjs'
+      - 'scripts/smoke-server-entrypoint-boundary.ts'
+      - 'scripts/smoke-route-inventory.ts'
+      - 'package.json'
+      - '.github/workflows/server-architecture.yml'
+  pull_request:
+    branches:
+      - main
+    paths:
+      - 'server/**'
+      - 'scripts/report-server-index-architecture.mjs'
+      - 'scripts/smoke-server-entrypoint-boundary.ts'
+      - 'scripts/smoke-route-inventory.ts'
+      - 'package.json'
+      - '.github/workflows/server-architecture.yml'
+
+concurrency:
+  group: server-architecture-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  architecture:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
+
+      - name: Set up Node.js
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: '24'
+          cache: npm
+
+      - name: Install locked dependencies
+        run: npm ci
+
+      - name: Verify composition boundary
+        run: npm run smoke:server-architecture
+
+      - name: Verify route inventory
+        run: npm run smoke:route-inventory
+
+      - name: Generate architecture report
+        run: node scripts/report-server-index-architecture.mjs
+
+      - name: Upload architecture evidence
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: server-composition-architecture
+          path: docs/generated/server-index-architecture.md
+          if-no-files-found: error
+          retention-days: 14

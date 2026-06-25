@@ -1,35 +1,12 @@
 import { useEffect, useState } from 'react'
 import type { ReactNode } from 'react'
 import { apiErrorMessage, apiRequest } from '../api/client'
+import { clearAuthToken, readAuthToken, writeAuthToken } from '../api/authTokenStore'
 import { AuthContext } from './authContextValue'
 
 type DesktopAuthBridge = {
   dystopaiDesktop?: {
-    getControlCenterToken?: () => Promise<string | null> | string | null
-  }
-}
-
-function readStoredToken(): string | null {
-  try {
-    return localStorage.getItem('control-center-token')
-  } catch {
-    return null
-  }
-}
-
-function writeStoredToken(token: string): void {
-  try {
-    localStorage.setItem('control-center-token', token)
-  } catch {
-    // Authentication still works for this session even if storage is blocked.
-  }
-}
-
-function removeStoredToken(): void {
-  try {
-    localStorage.removeItem('control-center-token')
-  } catch {
-    // Ignore blocked storage during cleanup.
+    bootstrapControlCenterSession?: () => Promise<string | null> | string | null
   }
 }
 
@@ -38,17 +15,17 @@ function desktopAuthBridge(): DesktopAuthBridge['dystopaiDesktop'] {
   return (window as Window & DesktopAuthBridge).dystopaiDesktop
 }
 
-function hasDesktopLaunchTokenProvider(): boolean {
-  return typeof desktopAuthBridge()?.getControlCenterToken === 'function'
+function hasDesktopSessionBootstrap(): boolean {
+  return typeof desktopAuthBridge()?.bootstrapControlCenterSession === 'function'
 }
 
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [isAuthenticated, setIsAuthenticated] = useState(false)
-  const [token, setToken] = useState<string | null>(() => readStoredToken())
-  const [checking, setChecking] = useState(() => Boolean(readStoredToken()) || hasDesktopLaunchTokenProvider())
+  const [token, setToken] = useState<string | null>(() => readAuthToken())
+  const [checking, setChecking] = useState(() => Boolean(readAuthToken()) || hasDesktopSessionBootstrap())
 
   const completeLogin = (sessionToken: string) => {
-    writeStoredToken(sessionToken)
+    writeAuthToken(sessionToken)
     setToken(sessionToken)
     setIsAuthenticated(true)
     setChecking(false)
@@ -56,7 +33,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     if (!token) {
-      const provider = desktopAuthBridge()?.getControlCenterToken
+      const provider = desktopAuthBridge()?.bootstrapControlCenterSession
       if (!provider) {
         return
       }
@@ -64,21 +41,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       Promise.resolve()
         .then(async () => {
           if (!cancelled) setChecking(true)
-          const launchToken = await Promise.resolve(provider())
-          if (!launchToken || cancelled) return false
-          const result = await apiRequest<{ ok?: boolean; token?: string }>('/api/auth/login', {
-            method: 'POST',
-            timeoutMs: 10_000,
-            authToken: '',
-            body: { token: launchToken },
-          })
-          if (!result.ok || !result.data.token) throw new Error(result.ok ? 'Login response did not include a session token' : apiErrorMessage(result.error))
-          if (!cancelled) completeLogin(result.data.token)
+          const sessionToken = await Promise.resolve(provider())
+          if (!sessionToken || cancelled) return false
+          if (!cancelled) completeLogin(sessionToken)
           return true
         })
         .catch(() => {
           if (!cancelled) {
-            removeStoredToken()
+            clearAuthToken()
             setToken(null)
             setIsAuthenticated(false)
           }
@@ -102,14 +72,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         const authenticated = result.ok && result.data.authenticated
         setIsAuthenticated(authenticated)
         if (!authenticated) {
-          removeStoredToken()
+          clearAuthToken()
           setToken(null)
         }
       })
       .catch((error: unknown) => {
         if (error instanceof DOMException && error.name === 'AbortError') return
         setIsAuthenticated(false)
-        removeStoredToken()
+        clearAuthToken()
         setToken(null)
       })
       .finally(() => {
@@ -138,7 +108,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const logout = () => {
     const activeToken = token
-    removeStoredToken()
+    clearAuthToken()
     setToken(null)
     setIsAuthenticated(false)
     setChecking(false)

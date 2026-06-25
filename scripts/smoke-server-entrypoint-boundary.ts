@@ -24,7 +24,7 @@ const inlineRoutes = [...controlPlane.matchAll(/\bapp\.(?:get|post|put|patch|del
 assert.ok(entryLines <= 20, `server/index.ts must remain a tiny executable facade, found ${entryLines} lines`)
 assert.match(entry, /import ['"]\.\/controlPlane['"]/, 'entrypoint should import the control-plane composition root')
 assert.doesNotMatch(entry, /\bexpress\b|process\.env|\bapp\.(?:get|post|use)\(|['"]\/api\//, 'entrypoint must not own runtime or route policy')
-assert.ok(controlPlaneLines <= 27_200, `controlPlane.ts exceeded the current extraction budget: ${controlPlaneLines} lines`)
+assert.ok(controlPlaneLines <= 27_180, `controlPlane.ts exceeded the current extraction budget: ${controlPlaneLines} lines`)
 assert.equal(inlineRoutes.length, 0, `controlPlane.ts must not own inline API routes: ${inlineRoutes.length}`)
 assert.match(controlPlane, /prepareSourceOpenClawVendorIfMissing/, 'controlPlane.ts should self-heal source OpenClaw vendor artifacts before runtime resolution')
 

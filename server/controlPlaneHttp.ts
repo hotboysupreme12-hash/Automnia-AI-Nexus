@@ -67,6 +67,7 @@ export type ApiErrorCode =
   | 'runtime_action_failed'
   | 'runtime_summary_failed'
   | 'resource_not_found'
+  | 'rate_limited'
   | 'recruit_failed'
   | 'shift_command_failed'
   | 'shift_operation_failed'
