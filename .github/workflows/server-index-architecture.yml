@@ -5,21 +5,27 @@ on:
     branches:
       - production-readiness-2026-06-25
     paths:
+      - server/index.ts
+      - scripts/report-server-index-architecture.mjs
+      - .github/workflows/server-index-architecture.yml
+  pull_request:
+    branches:
+      - main
+    paths:
+      - server/index.ts
       - scripts/report-server-index-architecture.mjs
       - .github/workflows/server-index-architecture.yml
 
 permissions:
-  contents: write
+  contents: read
 
 jobs:
   report:
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
-      - name: Check out branch
+      - name: Check out proposed revision
         uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
 
       - name: Set up Node
         uses: actions/setup-node@v4
@@ -33,15 +39,12 @@ jobs:
       - name: Generate architecture report
         run: node scripts/report-server-index-architecture.mjs
 
-      - name: Commit report when changed
-        shell: bash
-        run: |
-          if git diff --quiet -- docs/generated/server-index-architecture.md; then
-            echo "Architecture report is already current."
-            exit 0
-          fi
-          git config user.name "dystopai-architecture-bot"
-          git config user.email "actions@users.noreply.github.com"
-          git add docs/generated/server-index-architecture.md
-          git commit -m "docs: generate server index architecture report [skip ci]"
-          git push origin HEAD:production-readiness-2026-06-25
+      - name: Upload architecture evidence
+        uses: actions/upload-artifact@v4
+        with:
+          name: server-index-architecture
+          if-no-files-found: error
+          retention-days: 7
+          path: |
+            docs/generated/server-index-architecture.md
+            server/index.ts
