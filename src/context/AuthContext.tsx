@@ -137,10 +137,18 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }
 
   const logout = () => {
+    const activeToken = token
     removeStoredToken()
     setToken(null)
     setIsAuthenticated(false)
     setChecking(false)
+    if (activeToken) {
+      void apiRequest('/api/auth/logout', {
+        method: 'POST',
+        authToken: activeToken,
+        timeoutMs: 5_000,
+      })
+    }
   }
 
   return (

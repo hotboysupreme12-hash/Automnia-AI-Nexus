@@ -5,6 +5,7 @@ on:
     branches:
       - main
       - 'codex/**'
+      - 'production/**'
     tags:
       - 'v*'
   pull_request:
@@ -69,6 +70,9 @@ jobs:
 
       - name: Build client bundle
         run: npm run build:client
+
+      - name: Enforce renderer bundle budgets
+        run: npm run check:bundle-budgets
 
       - name: Run Electron end-to-end smoke
         run: npm run smoke:electron-e2e

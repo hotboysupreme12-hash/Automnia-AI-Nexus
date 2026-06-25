@@ -18,7 +18,7 @@ function routeBlock(source: string, marker: string): string {
   return source.slice(start, next >= 0 ? next : source.length)
 }
 
-const server = readWorkspaceFile('server/index.ts')
+const server = readWorkspaceFile('server/controlPlane.ts')
 const partyCoordinationRoutes = readWorkspaceFile('server/routes/partyCoordinationRoutes.ts')
 const controlPlaneHttp = readWorkspaceFile('server/controlPlaneHttp.ts')
 const packageJson = JSON.parse(readWorkspaceFile('package.json')) as { scripts?: Record<string, string> }

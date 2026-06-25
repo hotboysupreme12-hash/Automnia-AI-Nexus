@@ -28,11 +28,11 @@ const AGENT_REGISTRY_MIN_WIDTH = 640
 const AGENT_SPLIT_HANDLE_WIDTH = 18
 type ShellNotice = { tone: 'success' | 'warning' | 'error' | 'neutral'; message: string }
 
-const TABS: { id: AppTab; label: string; meta: string; railMeta: string; iconSrc: string; tone: string }[] = [
-  { id: 'agents', label: 'Agents', meta: 'registry', railMeta: 'Roster', iconSrc: '/icons/nav-agents-flat.png', tone: 'agents' },
-  { id: 'missions', label: 'Missions', meta: 'orchestration', railMeta: 'Launch', iconSrc: '/icons/nav-missions-flat.png', tone: 'missions' },
-  { id: 'monitor', label: 'Monitor', meta: 'logs', railMeta: 'Live ops', iconSrc: '/icons/nav-monitor-flat.png', tone: 'monitor' },
-  { id: 'plugins', label: 'Plugins', meta: 'runtime', railMeta: 'Runtime', iconSrc: '/icons/nav-plugins-flat.png', tone: 'plugins' },
+const TABS: { id: AppTab; label: string; railMeta: string; description: string; iconSrc: string; tone: string }[] = [
+  { id: 'agents', label: 'Agents', railMeta: 'Roster', description: 'Build your active party, configure specialists, and send live commands.', iconSrc: '/icons/nav-agents-flat.png', tone: 'agents' },
+  { id: 'missions', label: 'Missions', railMeta: 'Launch', description: 'Turn objectives into coordinated, scheduled, and verifiable agent work.', iconSrc: '/icons/nav-missions-flat.png', tone: 'missions' },
+  { id: 'monitor', label: 'Monitor', railMeta: 'Live ops', description: 'Inspect runtime health, active calls, sessions, cron jobs, and recovery evidence.', iconSrc: '/icons/nav-monitor-flat.png', tone: 'monitor' },
+  { id: 'plugins', label: 'Plugins', railMeta: 'Runtime', description: 'Manage providers, communication channels, tools, and reusable skills.', iconSrc: '/icons/nav-plugins-flat.png', tone: 'plugins' },
 ]
 
 function navIconStyle(src: string): CSSProperties {
@@ -59,7 +59,7 @@ function clampAgentConsoleWidth(value: number, workspace: HTMLElement): number {
 
 function PanelLoader() {
   return (
-    <div className="rounded-2xl border border-white/[0.06] bg-white/[0.02] p-6">
+    <div className="rounded-2xl border border-white/[0.06] bg-white/[0.02] p-6" role="status" aria-live="polite" aria-label="Loading workspace">
       <div className="h-3 w-32 animate-pulse rounded-full bg-white/[0.08]" />
       <div className="mt-4 grid gap-3">
         <div className="h-24 animate-pulse rounded-xl bg-white/[0.04]" />
@@ -81,10 +81,39 @@ export function NexusShell() {
   const activeMission = useNexusStore((s) => s.activeMission)
   const isEditorOpen = useNexusStore((s) => s.isEditorOpen)
   const missionRunning = activeMission?.status === 'running'
+  const activeTab = TABS.find((item) => item.id === tab) || TABS[0]
   const { status: runtimeStatus, refresh: refreshRuntimeStatus } = useRuntimeSummaryStatus(8000)
   const gatewayOnline = Boolean(runtimeStatus?.gateway.healthy || runtimeStatus?.gateway.processRunning)
   const cronJobs = runtimeStatus?.shifts?.active || []
   const activeCronCount = runtimeStatus?.shifts?.activeCount ?? cronJobs.length
+  const workspaceState = tab === 'agents'
+    ? busyAgentCount
+      ? `${busyAgentCount} agent${busyAgentCount === 1 ? '' : 's'} active`
+      : gatewayOnline
+        ? 'Ready for commands'
+        : runtimeStatus
+          ? 'Runtime offline'
+          : 'Connecting to runtime'
+    : tab === 'missions'
+      ? missionRunning
+        ? 'Mission in progress'
+        : gatewayOnline
+          ? 'Ready to deploy'
+          : runtimeStatus
+            ? 'Runtime offline'
+            : 'Connecting to runtime'
+      : tab === 'monitor'
+        ? gatewayOnline ? 'Runtime connected' : runtimeStatus ? 'Runtime offline' : 'Connecting to runtime'
+        : gatewayOnline ? 'Gateway extensions online' : runtimeStatus ? 'Gateway extensions offline' : 'Checking extensions'
+  const workspaceStateTone = tab === 'agents'
+    ? busyAgentCount ? 'active' : gatewayOnline ? 'healthy' : runtimeStatus ? 'offline' : 'loading'
+    : tab === 'missions'
+      ? missionRunning ? 'active' : gatewayOnline ? 'healthy' : runtimeStatus ? 'offline' : 'loading'
+      : gatewayOnline
+        ? 'healthy'
+        : runtimeStatus
+          ? 'offline'
+          : 'loading'
   const cronJobSummary = cronJobs.slice(0, 4).map((job) => `${job.name} (${job.agent})`).join(', ')
   const cronChipTitle = runtimeStatus
     ? activeCronCount
@@ -318,13 +347,14 @@ export function NexusShell() {
   return (
     <div className={`app-bg relative min-h-screen text-[var(--text-1)] ${tab === 'monitor' ? 'dy-monitor-focus' : ''} ${isEditorOpen ? 'dy-editor-open' : ''}`}>
       <div className="pointer-events-none fixed inset-0 grid-overlay" />
+      <a className="dy-skip-link" href="#dystopai-main">Skip to workspace</a>
 
-      <aside className="dy-human-rail fixed z-40 flex flex-col overflow-hidden">
+      <aside className="dy-human-rail fixed z-40 flex flex-col overflow-hidden" aria-label="DystopAI navigation">
         <div className="dy-human-rail-head dy-human-rail-head--icon-only flex items-center justify-center" aria-label="DystopAI">
           <img src={DYSTOPAI_MARK_SRC} alt="DystopAI" />
         </div>
 
-        <nav className="dy-human-nav flex flex-col">
+        <nav className="dy-human-nav flex flex-col" aria-label="Primary navigation">
           <button
             type="button"
             className="dy-human-nav-action flex items-center gap-3 text-left"
@@ -347,6 +377,7 @@ export function NexusShell() {
               onClick={() => selectTab(t.id)}
               aria-label={`${t.label} ${t.railMeta}`}
               aria-current={tab === t.id ? 'page' : undefined}
+              aria-controls="dystopai-main"
               data-tone={t.tone}
               className={`flex items-center gap-3 text-left ${tab === t.id ? 'is-active' : ''}`}
             >
@@ -363,7 +394,7 @@ export function NexusShell() {
 
       </aside>
 
-      <div className="dy-app-main mx-auto max-w-[1680px] px-4 py-6 sm:px-6 sm:py-8">
+      <main id="dystopai-main" tabIndex={-1} className="dy-app-main mx-auto max-w-[1680px] px-4 py-6 sm:px-6 sm:py-8">
         {/* ── HEADER ── */}
         <motion.header
           initial={{ opacity: 0, y: -8 }}
@@ -409,9 +440,15 @@ export function NexusShell() {
               className={activeCronCount ? 'badge badge--live dy-status-chip' : 'badge dy-status-chip'}
               data-tone={activeCronCount ? 'live' : 'neutral'}
               title={cronChipTitle}
-              aria-label={cronChipTitle}
+              aria-label={`${cronChipTitle} Activate to open Monitor${activeCronCount ? '; press Delete to review clearing.' : '.'}`}
+              aria-keyshortcuts={activeCronCount ? 'Delete' : undefined}
               disabled={cronClearBusy || !runtimeStatus}
               onClick={() => selectTab('monitor')}
+              onKeyDown={(event) => {
+                if (event.key !== 'Delete' || !activeCronCount) return
+                event.preventDefault()
+                void requestClearCronJobs()
+              }}
               onContextMenu={(event) => {
                 event.preventDefault()
                 void requestClearCronJobs()
@@ -458,45 +495,23 @@ export function NexusShell() {
           </div>
         </motion.header>
 
-        {/* ── TAB BAR ── */}
-        <div
-          className="dy-top-tabs mb-6 grid gap-2 rounded-3xl border border-white/[0.06] bg-white/[0.025] p-1.5 shadow-[inset_0_1px_0_rgba(255,255,255,0.04)] sm:grid-cols-4"
-          role="tablist"
-          aria-label="DystopAI workspaces"
-        >
-          {TABS.map((t) => (
-            <button
-              key={t.id}
-              id={`nexus-tab-${t.id}`}
-              type="button"
-              role="tab"
-              aria-selected={tab === t.id}
-              aria-controls={`nexus-panel-${t.id}`}
-              onClick={() => selectTab(t.id)}
-              className={`tab-underline rounded-2xl px-5 py-3 text-left transition-all duration-300 ${
-                tab === t.id ? 'active' : ''
-              }`}
-              style={tab === t.id ? {
-                color: 'var(--text-0)',
-                background: 'linear-gradient(135deg, rgba(185,199,204,0.10), rgba(100,114,120,0.055))',
-                boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.08), 0 12px 28px -24px rgba(165,182,190,0.42)',
-              } : {
-                color: 'var(--text-4)',
-              }}
-              onMouseEnter={(e) => { if (tab !== t.id) e.currentTarget.style.color = 'var(--text-2)' }}
-              onMouseLeave={(e) => { if (tab !== t.id) e.currentTarget.style.color = 'var(--text-4)' }}
-            >
-              <span className="block text-[13px] font-black tracking-normal">{t.label}</span>
-              <span className="mt-0.5 block text-[9px] font-bold uppercase tracking-[0.18em] opacity-55">{t.meta}</span>
-            </button>
-          ))}
-        </div>
+        <section className="dy-workspace-context" data-workspace={tab} aria-labelledby="dystopai-workspace-title">
+          <div className="dy-workspace-context__copy">
+            <span className="dy-workspace-context__eyebrow">Operator workspace</span>
+            <h1 id="dystopai-workspace-title">{activeTab.label}</h1>
+            <p>{activeTab.description}</p>
+          </div>
+          <div className="dy-workspace-context__state" data-state={workspaceStateTone} role="status" aria-live="polite">
+            <span aria-hidden="true" />
+            {workspaceState}
+          </div>
+        </section>
 
         {/* ── TAB CONTENT ── */}
         <motion.div
           id={`nexus-panel-${tab}`}
-          role="tabpanel"
-          aria-labelledby={`nexus-tab-${tab}`}
+          role="region"
+          aria-label={`${activeTab.label} workspace`}
           initial={{ opacity: 0, y: 4 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.12 }}
@@ -592,7 +607,7 @@ export function NexusShell() {
           )}
 
         </motion.div>
-      </div>
+      </main>
 
       <Suspense fallback={null}>
         {isEditorOpen && <AgentEditorModal />}

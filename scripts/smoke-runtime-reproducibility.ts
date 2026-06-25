@@ -11,6 +11,7 @@ const packageJson = JSON.parse(read('package.json')) as {
 const prepareRuntimeBundles = read('scripts/prepare-runtime-bundles.cjs')
 const prepareOpenClawVendor = read('scripts/prepare-openclaw-vendor.cjs')
 const serverIndex = read('server/index.ts')
+const serverControlPlane = read('server/controlPlane.ts')
 
 assert.match(
   prepareRuntimeBundles,
@@ -169,16 +170,21 @@ assert.match(
 )
 assert.match(
   serverIndex,
+  /import ['"]\.\/controlPlane['"]/,
+  'server entrypoint must load the control-plane composition module',
+)
+assert.match(
+  serverControlPlane,
   /prepareSourceOpenClawVendorIfMissing/,
   'server startup must self-heal a source checkout missing ignored OpenClaw package artifacts',
 )
 assert.match(
-  serverIndex,
+  serverControlPlane,
   /hasOpenClawEntryArtifact/,
   'server startup must explicitly check for OpenClaw dist entry artifacts',
 )
 assert.match(
-  serverIndex,
+  serverControlPlane,
   /DYSTOPAI_OPENCLAW_VENDOR_ROOT/,
   'server startup self-heal must run the vendor prep script against the detected vendor root',
 )

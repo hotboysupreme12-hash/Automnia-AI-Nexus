@@ -6,10 +6,11 @@ import { fileURLToPath } from 'node:url'
 const rootDir = fileURLToPath(new URL('..', import.meta.url))
 const read = (relativePath: string) => readFileSync(join(rootDir, relativePath), 'utf8')
 
-const server = read('server/index.ts')
+const server = read('server/controlPlane.ts')
 const controlPlaneHttp = read('server/controlPlaneHttp.ts')
 const authRoutes = read('server/routes/authRoutes.ts')
 const missionRoutes = read('server/routes/missionRoutes.ts')
+const agentConfigRoutes = read('server/routes/agentConfigRoutes.ts')
 const apiClient = read('src/api/client.ts')
 const editor = read('src/components/editor/AgentEditorModal.tsx')
 const packageJson = JSON.parse(read('package.json')) as { scripts?: Record<string, string> }
@@ -58,6 +59,8 @@ assert.match(server, /registerMissionRoutes\(app, \{/, 'server index must regist
 assert.doesNotMatch(server, /app\.get\('\/api\/missions'/, 'server index must not inline mission read routes')
 assert.doesNotMatch(server, /app\.post\('\/api\/missions\/start'/, 'server index must not inline mission start route')
 assert.doesNotMatch(server, /app\.post\('\/api\/missions\/stop'/, 'server index must not inline mission stop route')
+assert.match(server, /registerAgentConfigRoutes\(app, agentConfigRoutesContext\)/, 'control plane must register extracted agent config routes')
+assert.doesNotMatch(server, /app\.(?:get|post)\('\/api\/party\/agent\/:agentId\/(?:config|model)'/, 'control plane must not inline agent config or model routes')
 const missionSlice = sliceFrom(missionRoutes, "app.get('/api/missions'")
 assertCanonicalRouteSlice('mission control-plane routes', missionSlice)
 assert.match(missionSlice, /apiFailure\(res, 400, 'invalid_payload'/, 'mission routes must expose invalid-payload codes')
@@ -65,11 +68,11 @@ assert.match(missionSlice, /apiFailure\(res, 404, 'mission_not_found'/, 'mission
 assert.match(missionSlice, /apiFailure\(res, 400, 'mission_invalid_state'/, 'mission stop must expose state-conflict codes')
 assert.match(missionSlice, /apiFailure\(res, 500, 'mission_scheduler_failed'/, 'mission scheduler failures must be typed')
 
-const configGetSlice = sliceBetween(server, "app.get('/api/party/agent/:agentId/config'", "app.post('/api/party/configs/sync'")
+const configGetSlice = sliceBetween(agentConfigRoutes, "app.get('/api/party/agent/:agentId/config'", "app.post('/api/party/configs/sync'")
 assertCanonicalRouteSlice('agent config read route', configGetSlice)
 assert.match(configGetSlice, /apiFailure\(res, 404, 'agent_not_found'/, 'agent config read must expose not-found codes')
 
-const configPostSlice = sliceBetween(server, "app.post('/api/party/agent/:agentId/config'", "app.get('/api/party/agent/:agentId/model'")
+const configPostSlice = sliceBetween(agentConfigRoutes, "app.post('/api/party/agent/:agentId/config'", "app.get('/api/party/agent/:agentId/model'")
 assertCanonicalRouteSlice('agent config mutation route', configPostSlice)
 assert.match(configPostSlice, /apiFailure\(res, 400, 'invalid_payload'/, 'agent config mutation must expose invalid-payload codes')
 assert.match(configPostSlice, /apiFailure\(res, 400, 'workspace_unwritable'/, 'agent config mutation must type workspace validation failures')

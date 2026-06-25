@@ -111,7 +111,7 @@ export function IncomeStreamAnalyzer() {
         </div>
         <div className="flex gap-1">
           {(['All', 'Low', 'Medium', 'High'] as const).map((f) => (
-            <button
+            <button type="button"
               key={f}
               onClick={() => setFilter(f)}
               className="rounded-lg px-2.5 py-1 text-[11px] font-semibold transition-all duration-200"

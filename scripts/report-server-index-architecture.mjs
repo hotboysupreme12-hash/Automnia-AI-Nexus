@@ -3,8 +3,10 @@ import path from 'node:path'
 import ts from 'typescript'
 
 const repoRoot = process.cwd()
-const sourcePath = path.join(repoRoot, 'server', 'index.ts')
+const entryPath = path.join(repoRoot, 'server', 'index.ts')
+const sourcePath = path.join(repoRoot, 'server', 'controlPlane.ts')
 const outputPath = path.join(repoRoot, 'docs', 'generated', 'server-index-architecture.md')
+const entryText = fs.readFileSync(entryPath, 'utf8')
 const sourceText = fs.readFileSync(sourcePath, 'utf8')
 const sourceFile = ts.createSourceFile(sourcePath, sourceText, ts.ScriptTarget.Latest, true, ts.ScriptKind.TS)
 const lineOf = (position) => sourceFile.getLineAndCharacterOfPosition(position).line + 1
@@ -26,12 +28,8 @@ function collectBindingNames(name, names = []) {
 
 function declarationRecord(statement) {
   const span = spanOf(statement)
-  if (ts.isFunctionDeclaration(statement)) {
-    return { kind: 'function', name: statement.name?.text || '(anonymous)', ...span }
-  }
-  if (ts.isClassDeclaration(statement)) {
-    return { kind: 'class', name: statement.name?.text || '(anonymous)', ...span }
-  }
+  if (ts.isFunctionDeclaration(statement)) return { kind: 'function', name: statement.name?.text || '(anonymous)', ...span }
+  if (ts.isClassDeclaration(statement)) return { kind: 'class', name: statement.name?.text || '(anonymous)', ...span }
   if (ts.isInterfaceDeclaration(statement)) return { kind: 'interface', name: statement.name.text, ...span }
   if (ts.isTypeAliasDeclaration(statement)) return { kind: 'type', name: statement.name.text, ...span }
   if (ts.isEnumDeclaration(statement)) return { kind: 'enum', name: statement.name.text, ...span }
@@ -67,11 +65,7 @@ for (const statement of sourceFile.statements) {
     const span = spanOf(statement)
     if (/^app\.(get|post|put|patch|delete|use|options|head)$/.test(callee)) {
       const firstArg = call.arguments[0]
-      routeCalls.push({
-        method: callee.slice(4).toUpperCase(),
-        route: firstArg ? firstArg.getText(sourceFile).slice(0, 160) : '(none)',
-        ...span,
-      })
+      routeCalls.push({ method: callee.slice(4).toUpperCase(), route: firstArg ? firstArg.getText(sourceFile).slice(0, 160) : '(none)', ...span })
     }
     if (/^register[A-Z].*Routes$/.test(callee)) registrations.push({ name: callee, ...span })
   }
@@ -81,30 +75,57 @@ const largestDeclarations = [...declarations].sort((a, b) => b.lines - a.lines |
 const functions = declarations.filter((entry) => entry.kind === 'function').sort((a, b) => b.lines - a.lines || a.start - b.start)
 const variables = declarations.filter((entry) => entry.kind === 'variable').sort((a, b) => b.lines - a.lines || a.start - b.start)
 const extractedRouteModules = imports.filter((specifier) => specifier.startsWith('./routes/')).sort()
-const lineCount = sourceText.split(/\r?\n/).length
+const controlPlaneLineCount = sourceText.split(/\r?\n/).length
+const entryLineCount = entryText.split(/\r?\n/).length
 const byteCount = Buffer.byteLength(sourceText)
+const routeInventoryPath = path.join(repoRoot, 'server', 'routes', 'controlPlaneRouteInventory.json')
+const routeInventory = JSON.parse(fs.readFileSync(routeInventoryPath, 'utf8'))
+const routePattern = /\bapp\.(get|post|put|patch|delete|options|head)\(\s*(['"])(\/api\/[^'"]+)\2/g
+const routeOwnership = fs.readdirSync(path.join(repoRoot, 'server', 'routes'))
+  .filter((name) => name.endsWith('.ts'))
+  .map((name) => {
+    const text = fs.readFileSync(path.join(repoRoot, 'server', 'routes', name), 'utf8')
+    return { module: `server/routes/${name}`, routes: [...text.matchAll(routePattern)].length }
+  })
+  .filter((entry) => entry.routes > 0)
+  .sort((a, b) => b.routes - a.routes || a.module.localeCompare(b.module))
 
 const rows = (entries, columns) => entries.map((entry) => `| ${columns.map((column) => String(entry[column] ?? '')).join(' | ')} |`).join('\n')
-const report = `# Server Index Architecture Report
+const report = `# Server Composition Architecture Report
 
-Generated from \`server/index.ts\` by \`scripts/report-server-index-architecture.mjs\`.
+Generated from \`server/index.ts\` and \`server/controlPlane.ts\` by \`scripts/report-server-index-architecture.mjs\`.
 
 ## Snapshot
 
 | Metric | Value |
 | --- | ---: |
-| Lines | ${lineCount.toLocaleString()} |
-| Bytes | ${byteCount.toLocaleString()} |
+| Executable entrypoint lines | ${entryLineCount.toLocaleString()} |
+| Control-plane composition lines | ${controlPlaneLineCount.toLocaleString()} |
+| Control-plane bytes | ${byteCount.toLocaleString()} |
 | Top-level imports | ${imports.length} |
 | Top-level declarations | ${declarations.length} |
 | Top-level functions | ${functions.length} |
 | Inline Express route calls | ${routeCalls.length} |
 | Extracted route registrations | ${registrations.length} |
 | Imported route modules | ${extractedRouteModules.length} |
+| Tracked API route contracts | ${routeInventory.length} |
+| Route modules with API endpoints | ${routeOwnership.length} |
+
+## Composition Boundary
+
+The executable \`server/index.ts\` is intentionally a small facade. Server startup, dependency wiring, and remaining legacy ownership live in \`server/controlPlane.ts\`; extracted HTTP domains live in \`server/routes/*\`; static catalog and integration assets live outside the executable module.
 
 ## Imported Route Modules
 
 ${extractedRouteModules.length ? extractedRouteModules.map((specifier) => `- \`${specifier}\``).join('\n') : '_None detected._'}
+
+## API Route Ownership
+
+| Route module | API routes |
+| --- | ---: |
+${rows(routeOwnership, ['module', 'routes']) || '| _None_ | |'}
+
+The canonical method-and-path inventory lives in \`server/routes/controlPlaneRouteInventory.json\` and is enforced by \`npm run smoke:route-inventory\`.
 
 ## Route Registration Calls
 
@@ -112,7 +133,7 @@ ${extractedRouteModules.length ? extractedRouteModules.map((specifier) => `- \`$
 | --- | ---: | ---: |
 ${rows(registrations, ['name', 'start', 'lines']) || '| _None_ | | |'}
 
-## Inline Express Routes Still In The Monolith
+## Inline Express Routes In The Composition Module
 
 | Method | Route expression | Line | Span |
 | --- | --- | ---: | ---: |
@@ -143,10 +164,10 @@ Prioritize seams that satisfy all of the following:
 1. The declaration has a narrow dependency surface.
 2. The behavior already has smoke or integration coverage.
 3. Moving it removes a coherent responsibility, not merely a random line range.
-4. The new module can expose a typed service or route dependency contract.
-5. The entrypoint becomes composition-focused and does not regain domain logic.
+4. The new module exposes a typed service or route dependency contract.
+5. The executable entrypoint stays composition-only and the control-plane route budget continues to fall.
 `
 
 fs.mkdirSync(path.dirname(outputPath), { recursive: true })
 fs.writeFileSync(outputPath, report)
-console.log(`Wrote ${path.relative(repoRoot, outputPath)} (${lineCount} source lines analyzed).`)
+console.log(`Wrote ${path.relative(repoRoot, outputPath)} (${entryLineCount} entrypoint lines, ${controlPlaneLineCount} composition lines analyzed).`)

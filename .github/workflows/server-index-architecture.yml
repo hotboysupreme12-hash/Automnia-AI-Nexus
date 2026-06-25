@@ -1,15 +1,17 @@
-name: Server Index Architecture Report
+name: Server Composition Architecture Report
 
 on:
   push:
     branches:
-      - production-readiness-2026-06-25
+      - main
+      - 'codex/**'
+      - 'production/**'
     paths:
       - server/**
-      - scripts/**
-      - src/components/layout/NexusShell.tsx
-      - src/dystopai-app-theme.css
-      - src/styles/dystopai-theme/**
+      - scripts/report-server-index-architecture.mjs
+      - scripts/smoke-server-entrypoint-boundary.ts
+      - scripts/smoke-route-inventory.ts
+      - server/routes/controlPlaneRouteInventory.json
       - package.json
       - .github/workflows/server-index-architecture.yml
   pull_request:
@@ -17,12 +19,16 @@ on:
       - main
     paths:
       - server/**
-      - scripts/**
-      - src/components/layout/NexusShell.tsx
-      - src/dystopai-app-theme.css
-      - src/styles/dystopai-theme/**
+      - scripts/report-server-index-architecture.mjs
+      - scripts/smoke-server-entrypoint-boundary.ts
+      - scripts/smoke-route-inventory.ts
+      - server/routes/controlPlaneRouteInventory.json
       - package.json
       - .github/workflows/server-index-architecture.yml
+
+concurrency:
+  group: server-architecture-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
 
 permissions:
   contents: read
@@ -44,20 +50,19 @@ jobs:
       - name: Install locked dependencies
         run: npm ci
 
+      - name: Verify composition boundary
+        run: npm run smoke:server-architecture
+
+      - name: Verify route inventory
+        run: npm run smoke:route-inventory
+
       - name: Generate architecture report
         run: node scripts/report-server-index-architecture.mjs
 
       - name: Upload architecture evidence
         uses: actions/upload-artifact@v4
         with:
-          name: production-readiness-source-map
+          name: server-composition-architecture
           if-no-files-found: error
           retention-days: 7
-          path: |
-            docs/generated/server-index-architecture.md
-            package.json
-            server/**
-            scripts/**
-            src/components/layout/NexusShell.tsx
-            src/dystopai-app-theme.css
-            src/styles/dystopai-theme/**
+          path: docs/generated/server-index-architecture.md

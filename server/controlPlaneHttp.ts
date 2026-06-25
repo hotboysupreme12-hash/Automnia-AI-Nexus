@@ -2,6 +2,7 @@ import cors from 'cors'
 import express, { type ErrorRequestHandler, type Express, type Request, type Response } from 'express'
 import { randomUUID } from 'node:crypto'
 import path from 'node:path'
+import { secureTokenEqual, type SessionTokenStore } from './sessionTokenStore'
 import { applyDiagnosticRedactions } from '../src/utils/diagnosticRedaction'
 
 export const CONTROL_CENTER_CONTENT_SECURITY_POLICY = [
@@ -42,6 +43,7 @@ export type ApiErrorCode =
   | 'invalid_json'
   | 'invalid_payload'
   | 'invalid_token'
+  | 'internal_error'
   | 'mission_invalid_state'
   | 'mission_not_found'
   | 'mission_report_not_found'
@@ -78,7 +80,7 @@ type ControlPlaneHttpOptions = {
   authToken: string
   frontendPort: number
   port: number
-  sessionTokens: Set<string>
+  sessionTokens: Pick<SessionTokenStore, 'has'>
 }
 
 const PUBLIC_API_PATHS = new Set(['/api/ready', '/api/health', '/api/auth/login', '/api/auth/status'])
@@ -249,11 +251,37 @@ export function installControlPlaneHttp(app: Express, options: ControlPlaneHttpO
     }
     if (isPublicApiRequest(req)) return next()
     const token = bearerToken(req)
-    if (!token || (!options.sessionTokens.has(token) && token !== options.authToken)) {
+    if (!token || (!options.sessionTokens.has(token) && !secureTokenEqual(token, options.authToken))) {
       return apiFailure(res, 401, 'auth_required', 'Authentication required')
     }
     return next()
   })
+}
+
+
+export function installControlPlaneErrorHandler(app: Express) {
+  const handler: ErrorRequestHandler = (error, req, res, next) => {
+    if (res.headersSent) {
+      next(error)
+      return
+    }
+
+    const safeDiagnostic = applyDiagnosticRedactions(
+      error instanceof Error ? error.stack || error.message : String(error),
+    )
+    console.error(`[control-plane] unhandled request failure ${req.method} ${req.originalUrl}: ${safeDiagnostic}`)
+
+    const requestPath = (req.originalUrl.split('?')[0] || req.path).replace(/\/+$/, '') || '/'
+    if (requestPath === '/api' || requestPath.startsWith('/api/')) {
+      apiFailure(res, 500, 'internal_error', 'Internal server error')
+      return
+    }
+
+    res.setHeader('Cache-Control', 'no-store')
+    setStaticSecurityHeaders(res, 'index.html')
+    res.status(500).type('text/plain').send('Internal server error')
+  }
+  app.use(handler)
 }
 
 const jsonParseErrorHandler: ErrorRequestHandler = (error, _req, res, next) => {

@@ -4,7 +4,7 @@ import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 
 const rootDir = fileURLToPath(new URL('..', import.meta.url))
-const serverSource = readFileSync(path.join(rootDir, 'server/index.ts'), 'utf8')
+const serverSource = readFileSync(path.join(rootDir, 'server/controlPlane.ts'), 'utf8')
 const missionRoutesSource = readFileSync(path.join(rootDir, 'server/routes/missionRoutes.ts'), 'utf8')
 const storeSource = readFileSync(path.join(rootDir, 'src/store/nexusStore.ts'), 'utf8')
 const shellSource = readFileSync(path.join(rootDir, 'src/components/layout/NexusShell.tsx'), 'utf8')

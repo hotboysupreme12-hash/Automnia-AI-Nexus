@@ -129,10 +129,13 @@ function controlCenterOrigin() {
 }
 
 function isTrustedRendererSender(event) {
-  const frameUrl = event?.senderFrame?.url || event?.sender?.getURL?.() || ''
+  if (!event?.sender || !mainWindow || mainWindow.isDestroyed()) return false
+  if (event.sender !== mainWindow.webContents) return false
+  if (event.senderFrame && event.senderFrame !== event.sender.mainFrame) return false
+  const frameUrl = event.senderFrame?.url || event.sender.getURL?.() || ''
   try {
     const parsed = new URL(frameUrl)
-    return parsed.origin === controlCenterOrigin() || parsed.origin === `http://localhost:${APP_PORT}`
+    return parsed.origin === controlCenterOrigin() || (isDev && parsed.origin === `http://localhost:${DEV_FRONTEND_PORT}`)
   } catch {
     return false
   }
@@ -1197,6 +1200,15 @@ async function performQuitCleanup() {
   return quitCleanupInFlight
 }
 
+function configureRendererPermissionPolicy(win) {
+  const rendererSession = win.webContents.session
+  rendererSession.setPermissionCheckHandler(() => false)
+  rendererSession.setPermissionRequestHandler((_webContents, _permission, callback) => callback(false))
+  if (typeof rendererSession.setDevicePermissionHandler === 'function') {
+    rendererSession.setDevicePermissionHandler(() => false)
+  }
+}
+
 function configureTextAssistance(win) {
   try {
     win.webContents.session.setSpellCheckerLanguages(['en-US'])
@@ -1277,12 +1289,16 @@ function createMainWindow() {
       contextIsolation: true,
       nodeIntegration: false,
       sandbox: true,
+      webSecurity: true,
+      allowRunningInsecureContent: false,
+      navigateOnDragDrop: false,
       backgroundThrottling: false,
       spellcheck: true,
     },
   })
 
   mainWindow = win
+  configureRendererPermissionPolicy(win)
   configureTextAssistance(win)
   let e2eRendererLoadCount = 0
   let e2eRendererGone = false
@@ -1367,6 +1383,7 @@ function createMainWindow() {
   })
   win.webContents.setWindowOpenHandler(handleWindowOpen)
   win.webContents.on('will-navigate', handleWillNavigate)
+  win.webContents.on('will-redirect', handleWillNavigate)
 
   win.on('close', (event) => {
     if (isQuitting) return
@@ -1480,11 +1497,13 @@ function createTray() {
 function isInternalAppUrl(targetUrl) {
   try {
     const parsed = new URL(targetUrl)
+    if (parsed.protocol !== 'http:' || parsed.username || parsed.password) return false
     const host = parsed.hostname.toLowerCase()
-    const port = Number(parsed.port || (parsed.protocol === 'https:' ? 443 : 80))
+    const port = Number(parsed.port || 80)
+    const allowedPort = port === APP_PORT || (isDev && port === DEV_FRONTEND_PORT)
     return (
       (host === '127.0.0.1' || host === 'localhost' || host === '[::1]' || host === '::1') &&
-      (port === APP_PORT || port === DEV_FRONTEND_PORT)
+      allowedPort
     )
   } catch {
     return false
@@ -1494,7 +1513,7 @@ function isInternalAppUrl(targetUrl) {
 function shouldOpenExternally(targetUrl) {
   try {
     const parsed = new URL(targetUrl)
-    return parsed.protocol === 'https:' && !isInternalAppUrl(targetUrl)
+    return parsed.protocol === 'https:' && !parsed.username && !parsed.password && !isInternalAppUrl(targetUrl)
   } catch {
     return false
   }

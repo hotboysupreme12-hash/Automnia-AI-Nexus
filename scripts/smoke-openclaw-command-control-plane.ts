@@ -27,7 +27,7 @@ function assertCanonicalRoute(name: string, source: string) {
   assert(!/\breturn\s+res\.status\s*\([^)]*\)\.json\s*\(/.test(source), `${name} should not return raw status JSON errors`)
 }
 
-const server = readWorkspaceFile('server/index.ts')
+const server = readWorkspaceFile('server/controlPlane.ts')
 const partyCoordinationRoutes = readWorkspaceFile('server/routes/partyCoordinationRoutes.ts')
 const controlPlaneHttp = readWorkspaceFile('server/controlPlaneHttp.ts')
 const openclawCommandRoutes = readWorkspaceFile('server/routes/openclawCommandRoutes.ts')

@@ -20,7 +20,7 @@ function routeBlock(source: string, marker: string): string {
   return source.slice(start, next >= 0 ? next : source.length)
 }
 
-const server = readWorkspaceFile('server/index.ts')
+const server = readWorkspaceFile('server/controlPlane.ts')
 const controlPlaneHttp = readWorkspaceFile('server/controlPlaneHttp.ts')
 const diagnosticsRoutes = readWorkspaceFile('server/routes/diagnosticsRoutes.ts')
 const providerAuthRoutes = readWorkspaceFile('server/routes/providerAuthRoutes.ts')
