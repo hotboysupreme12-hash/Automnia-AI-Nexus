@@ -5,15 +5,23 @@ on:
     branches:
       - production-readiness-2026-06-25
     paths:
-      - server/index.ts
-      - scripts/report-server-index-architecture.mjs
+      - server/**
+      - scripts/**
+      - src/components/layout/NexusShell.tsx
+      - src/dystopai-app-theme.css
+      - src/styles/dystopai-theme/**
+      - package.json
       - .github/workflows/server-index-architecture.yml
   pull_request:
     branches:
       - main
     paths:
-      - server/index.ts
-      - scripts/report-server-index-architecture.mjs
+      - server/**
+      - scripts/**
+      - src/components/layout/NexusShell.tsx
+      - src/dystopai-app-theme.css
+      - src/styles/dystopai-theme/**
+      - package.json
       - .github/workflows/server-index-architecture.yml
 
 permissions:
@@ -42,9 +50,14 @@ jobs:
       - name: Upload architecture evidence
         uses: actions/upload-artifact@v4
         with:
-          name: server-index-architecture
+          name: production-readiness-source-map
           if-no-files-found: error
           retention-days: 7
           path: |
             docs/generated/server-index-architecture.md
-            server/index.ts
+            package.json
+            server/**
+            scripts/**
+            src/components/layout/NexusShell.tsx
+            src/dystopai-app-theme.css
+            src/styles/dystopai-theme/**
