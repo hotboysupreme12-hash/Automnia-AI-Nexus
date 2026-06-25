@@ -19,12 +19,20 @@ function routeBlock(source: string, marker: string): string {
 }
 
 const server = readWorkspaceFile('server/index.ts')
+const partyCoordinationRoutes = readWorkspaceFile('server/routes/partyCoordinationRoutes.ts')
 const controlPlaneHttp = readWorkspaceFile('server/controlPlaneHttp.ts')
 const packageJson = JSON.parse(readWorkspaceFile('package.json')) as { scripts?: Record<string, string> }
 
 assert(controlPlaneHttp.includes("| 'team_sync_failed'"), 'ApiErrorCode is missing team_sync_failed')
 
-const teamSyncBlock = routeBlock(server, "app.post('/api/team-sync/append'")
+const teamSyncBlock = routeBlock(partyCoordinationRoutes, "app.post('/api/team-sync/append'")
+
+assert(
+  server.includes("import { registerPartyCoordinationRoutes } from './routes/partyCoordinationRoutes'"),
+  'server should import party coordination routes',
+)
+assert(server.includes('registerPartyCoordinationRoutes(app, {'), 'server should register party coordination routes')
+assert(!server.includes("app.post('/api/team-sync/append'"), 'server should not inline team-sync append route')
 
 assert(teamSyncBlock.includes('apiSuccess(res'), 'team-sync append should return canonical success envelopes')
 assert(teamSyncBlock.includes('apiFailure(res'), 'team-sync append should return canonical error envelopes')
