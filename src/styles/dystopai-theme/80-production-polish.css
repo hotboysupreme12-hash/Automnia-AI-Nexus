@@ -1,0 +1,266 @@
+/* Production shell polish. Keep this file last in the theme cascade. */
+
+html.dui-pro-overhaul.dui-cohesive-ui {
+  --dui-focus-inner: #dffaff;
+  --dui-focus-outer: rgba(3, 10, 16, .96);
+  --dui-mobile-dock-height: 72px;
+}
+
+html.dui-pro-overhaul.dui-cohesive-ui :where(
+  button,
+  a,
+  input,
+  textarea,
+  select,
+  [role="button"],
+  [role="tab"],
+  [role="separator"],
+  [tabindex]:not([tabindex="-1"])
+):focus-visible {
+  outline: 2px solid var(--dui-focus-inner) !important;
+  outline-offset: 2px !important;
+  box-shadow:
+    0 0 0 4px var(--dui-focus-outer),
+    0 0 0 6px rgba(99, 217, 232, .28) !important;
+}
+
+html.dui-pro-overhaul.dui-cohesive-ui .dy-status-grid {
+  scroll-snap-type: x proximity;
+  scrollbar-width: none;
+}
+
+html.dui-pro-overhaul.dui-cohesive-ui .dy-status-grid::-webkit-scrollbar {
+  display: none;
+}
+
+html.dui-pro-overhaul.dui-cohesive-ui .dy-status-chip {
+  scroll-snap-align: start;
+  font-variant-numeric: tabular-nums;
+}
+
+html.dui-pro-overhaul.dui-cohesive-ui button.dy-status-chip {
+  cursor: pointer;
+  transition:
+    border-color 150ms ease,
+    background-color 150ms ease,
+    color 150ms ease,
+    transform 150ms ease;
+}
+
+html.dui-pro-overhaul.dui-cohesive-ui button.dy-status-chip:hover:not(:disabled) {
+  border-color: rgba(134, 236, 248, .34) !important;
+  background:
+    linear-gradient(180deg, rgba(99, 217, 232, .09), rgba(255, 255, 255, .012)),
+    rgba(14, 21, 31, .92) !important;
+  transform: translateY(-1px);
+}
+
+html.dui-pro-overhaul.dui-cohesive-ui button.dy-status-chip:disabled {
+  cursor: default;
+  opacity: .68;
+}
+
+html.dui-pro-overhaul.dui-cohesive-ui .dy-tab-content {
+  min-width: 0;
+}
+
+html.dui-pro-overhaul.dui-cohesive-ui :where(
+  [data-dui-panel],
+  [data-chat-panel="true"],
+  .dy-monitor-stream-box,
+  .dy-monitor-log-box,
+  [data-agent-registry-scroll]
+) {
+  scrollbar-gutter: stable;
+}
+
+@media (max-width: 1180px) {
+  html.dui-pro-overhaul.dui-cohesive-ui .dy-command-header-inner {
+    grid-template-columns: minmax(0, 1fr) !important;
+    gap: 10px !important;
+  }
+
+  html.dui-pro-overhaul.dui-cohesive-ui .brand-lockup.dy-logo-fixed {
+    max-width: 410px !important;
+  }
+
+  html.dui-pro-overhaul.dui-cohesive-ui .brand-lockup.dy-logo-fixed .dy-logo-lockup {
+    height: 50px !important;
+  }
+
+  html.dui-pro-overhaul.dui-cohesive-ui .dy-status-grid {
+    width: 100% !important;
+    flex-wrap: nowrap !important;
+    justify-content: flex-start !important;
+    overflow-x: auto !important;
+    padding-bottom: 2px;
+  }
+}
+
+@media (max-width: 900px) {
+  html.dui-pro-overhaul.dui-cohesive-ui {
+    --dui-shell-gutter: 8px;
+  }
+
+  html.dui-pro-overhaul.dui-cohesive-ui .app-bg > .dy-app-main {
+    padding:
+      var(--dui-shell-gutter)
+      var(--dui-shell-gutter)
+      calc(var(--dui-mobile-dock-height) + env(safe-area-inset-bottom, 0px) + 18px)
+      var(--dui-shell-gutter) !important;
+  }
+
+  html.dui-pro-overhaul.dui-cohesive-ui .dy-human-rail {
+    top: auto !important;
+    right: var(--dui-shell-gutter) !important;
+    bottom: calc(var(--dui-shell-gutter) + env(safe-area-inset-bottom, 0px)) !important;
+    left: var(--dui-shell-gutter) !important;
+    width: auto !important;
+    height: var(--dui-mobile-dock-height) !important;
+    overflow: hidden !important;
+    border-radius: 14px !important;
+    background:
+      linear-gradient(180deg, rgba(255, 255, 255, .055), rgba(255, 255, 255, .014)),
+      rgba(7, 13, 21, .96) !important;
+    box-shadow:
+      0 20px 50px rgba(0, 0, 0, .48),
+      inset 0 1px 0 rgba(255, 255, 255, .07) !important;
+    backdrop-filter: blur(22px) saturate(1.12) !important;
+    -webkit-backdrop-filter: blur(22px) saturate(1.12) !important;
+  }
+
+  html.dui-pro-overhaul.dui-cohesive-ui .dy-human-rail-head {
+    display: none !important;
+  }
+
+  html.dui-pro-overhaul.dui-cohesive-ui .dy-human-nav {
+    display: grid !important;
+    height: 100% !important;
+    grid-template-columns: repeat(5, minmax(0, 1fr)) !important;
+    align-items: stretch !important;
+    gap: 4px !important;
+    padding: 6px !important;
+  }
+
+  html.dui-pro-overhaul.dui-cohesive-ui .dy-human-nav button,
+  html.dui-pro-overhaul.dui-cohesive-ui .dy-human-nav-action {
+    min-width: 0 !important;
+    min-height: 0 !important;
+    flex-direction: column !important;
+    justify-content: center !important;
+    gap: 2px !important;
+    padding: 4px 3px !important;
+    border-radius: 10px !important;
+    text-align: center !important;
+  }
+
+  html.dui-pro-overhaul.dui-cohesive-ui .dy-human-nav-icon {
+    width: 27px !important;
+    height: 27px !important;
+    min-width: 27px !important;
+  }
+
+  html.dui-pro-overhaul.dui-cohesive-ui .dy-human-nav-icon-img {
+    width: 18px !important;
+    height: 18px !important;
+  }
+
+  html.dui-pro-overhaul.dui-cohesive-ui .dy-human-nav-copy {
+    min-width: 0 !important;
+    line-height: 1 !important;
+  }
+
+  html.dui-pro-overhaul.dui-cohesive-ui .dy-human-nav-copy strong {
+    overflow: hidden !important;
+    font-size: 9px !important;
+    line-height: 1.05 !important;
+    text-overflow: ellipsis !important;
+    white-space: nowrap !important;
+  }
+
+  html.dui-pro-overhaul.dui-cohesive-ui .dy-human-nav-copy span {
+    display: none !important;
+  }
+
+  html.dui-pro-overhaul.dui-cohesive-ui .dy-command-header.relative.mb-7,
+  html.dui-pro-overhaul.dui-cohesive-ui header.relative.mb-7 {
+    min-height: 0 !important;
+    padding: 10px 12px !important;
+  }
+
+  html.dui-pro-overhaul.dui-cohesive-ui .brand-lockup.dy-logo-fixed .dy-logo-lockup {
+    width: min(100%, 330px) !important;
+    height: 44px !important;
+  }
+}
+
+@media (max-width: 520px) {
+  html.dui-pro-overhaul.dui-cohesive-ui {
+    --dui-mobile-dock-height: 66px;
+  }
+
+  html.dui-pro-overhaul.dui-cohesive-ui .dy-human-nav {
+    gap: 2px !important;
+    padding: 5px !important;
+  }
+
+  html.dui-pro-overhaul.dui-cohesive-ui .dy-human-nav-icon {
+    width: 25px !important;
+    height: 25px !important;
+    min-width: 25px !important;
+  }
+
+  html.dui-pro-overhaul.dui-cohesive-ui .dy-human-nav-copy strong {
+    font-size: 8px !important;
+  }
+
+  html.dui-pro-overhaul.dui-cohesive-ui .dy-status-chip {
+    min-height: 28px !important;
+    padding: 4px 8px !important;
+  }
+}
+
+@media (pointer: coarse) {
+  html.dui-pro-overhaul.dui-cohesive-ui :where(
+    button,
+    a,
+    [role="button"],
+    [role="tab"]
+  ) {
+    min-height: 44px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  html.dui-pro-overhaul.dui-cohesive-ui,
+  html.dui-pro-overhaul.dui-cohesive-ui * {
+    scroll-behavior: auto !important;
+  }
+
+  html.dui-pro-overhaul.dui-cohesive-ui *,
+  html.dui-pro-overhaul.dui-cohesive-ui *::before,
+  html.dui-pro-overhaul.dui-cohesive-ui *::after {
+    animation-delay: 0ms !important;
+    animation-duration: .01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-delay: 0ms !important;
+    transition-duration: .01ms !important;
+  }
+}
+
+@media (forced-colors: active) {
+  html.dui-pro-overhaul.dui-cohesive-ui :where(
+    button,
+    a,
+    input,
+    textarea,
+    select,
+    [role="button"],
+    [role="tab"],
+    [role="separator"],
+    [tabindex]:not([tabindex="-1"])
+  ):focus-visible {
+    outline: 2px solid CanvasText !important;
+    box-shadow: none !important;
+  }
+}
