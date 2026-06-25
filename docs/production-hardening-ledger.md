@@ -10,9 +10,9 @@ next planned extraction.
 
 - Branch: `codex/party-coordination-route-modules`
 - Base: `origin/main`
-- Status: party coordination and TEAM_SYNC route extraction implemented locally
-  with full local CI and packaged launch smoke green; awaiting commit, push, PR,
-  and remote release-evidence CI.
+- Status: party coordination and TEAM_SYNC route extraction pushed as PR #10
+  with full local verification and a green remote Control Plane CI run on the
+  implementation commit.
 - Policy: keep work on `codex/` branches and avoid direct pushes to `main`.
 
 ## Open Production-Hardening PR Stack
@@ -65,6 +65,13 @@ Evidence so far:
 - `npm test`: passed, including the full production hardening smoke suite,
   release signing, release validation, security, and CI workflow checks.
 - `npm run smoke:packaged-electron-launch`: passed.
+- GitHub Control Plane CI run `28138564542` for commit
+  `b6c3d361e7de74bb8aed26b556281745c1804c97`: passed.
+- Release evidence artifact `dystopai-release-evidence`:
+  - Artifact ID: `7865920855`
+  - Digest:
+    `sha256:778be74c1cba9052bf7ebacb87cd49803564b5f4ca1301d824156949c0908433`
+  - Expires: 2026-09-23.
 
 Notes:
 
@@ -87,8 +94,8 @@ Subagent coordination:
 
 ## In Progress
 
-- Commit, push, open a PR, and capture remote Control Plane CI release-evidence
-  artifact metadata.
+- PR #10 remains open and mergeable. A ledger-only evidence commit may cause a
+  new CI run; the PR must remain green before merge.
 
 ## Remaining High-Impact Work
 
