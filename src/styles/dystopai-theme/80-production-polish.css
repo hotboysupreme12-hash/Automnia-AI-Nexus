@@ -287,6 +287,78 @@ html.dui-pro-overhaul.dui-cohesive-ui .dy-workspace-context__state[data-state="o
   box-shadow: 0 0 0 3px rgba(239, 139, 130, .1);
 }
 
+html.dui-pro-overhaul.dui-cohesive-ui .dy-human-rail-head--lockup {
+  min-height: 84px !important;
+  justify-content: flex-start !important;
+  padding: 15px 14px 13px !important;
+}
+
+html.dui-pro-overhaul.dui-cohesive-ui .dy-human-rail-head--lockup .dy-human-rail-lockup {
+  display: block !important;
+  width: min(100%, 168px) !important;
+  height: 42px !important;
+  max-width: none !important;
+  max-height: none !important;
+  border: 0 !important;
+  border-radius: 0 !important;
+  background: transparent !important;
+  object-fit: contain !important;
+  object-position: left center !important;
+  box-shadow: none !important;
+  filter: saturate(1.06) brightness(1.04) contrast(1.02) !important;
+}
+
+html.dui-pro-overhaul.dui-cohesive-ui .dy-workspace-context {
+  flex-wrap: wrap;
+}
+
+html.dui-pro-overhaul.dui-cohesive-ui .dy-workspace-context__copy {
+  flex: 1 1 420px;
+}
+
+html.dui-pro-overhaul.dui-cohesive-ui .dy-workspace-context__meta {
+  display: flex;
+  flex: 0 1 min(720px, 58vw);
+  min-width: min(100%, 320px);
+  flex-direction: column;
+  align-items: flex-end;
+  justify-content: center;
+  gap: 8px;
+}
+
+html.dui-pro-overhaul.dui-cohesive-ui .dy-workspace-context__meta .dy-status-grid {
+  max-width: 100%;
+  justify-content: flex-end !important;
+}
+
+html.dui-pro-overhaul.dui-cohesive-ui .dy-workspace-context__meta .badge.dy-status-chip {
+  min-height: 30px !important;
+  padding: 5px 10px !important;
+  border-color: rgba(161, 187, 199, .14) !important;
+  border-radius: 10px !important;
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, .04), rgba(255, 255, 255, .012)),
+    rgba(10, 17, 27, .78) !important;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, .035) !important;
+}
+
+html.dui-pro-overhaul.dui-cohesive-ui .dy-workspace-context__meta .dy-status-value {
+  font-size: 11px !important;
+  line-height: 1 !important;
+}
+
+html.dui-pro-overhaul.dui-cohesive-ui .dy-workspace-context__meta .dy-status-label {
+  font-size: 8px !important;
+  line-height: 1 !important;
+  letter-spacing: .11em !important;
+  opacity: .72 !important;
+}
+
+html.dui-pro-overhaul.dui-cohesive-ui .dy-workspace-context__notice {
+  flex: 1 0 100%;
+  margin-top: 2px;
+}
+
 @media (min-width: 901px) {
   html.dui-pro-overhaul.dui-cohesive-ui .dy-human-nav button,
   html.dui-pro-overhaul.dui-cohesive-ui .dy-human-nav-action {
@@ -325,6 +397,15 @@ html.dui-pro-overhaul.dui-cohesive-ui .dy-workspace-context__state[data-state="o
     justify-content: flex-start !important;
     overflow-x: auto !important;
     padding-bottom: 2px;
+  }
+
+  html.dui-pro-overhaul.dui-cohesive-ui .dy-workspace-context__meta {
+    flex: 1 1 100%;
+    align-items: flex-start;
+  }
+
+  html.dui-pro-overhaul.dui-cohesive-ui .dy-workspace-context__meta .dy-status-grid {
+    justify-content: flex-start !important;
   }
 }
 
@@ -428,6 +509,11 @@ html.dui-pro-overhaul.dui-cohesive-ui .dy-workspace-context__state[data-state="o
     align-items: flex-start;
     gap: 12px;
     padding: 12px 14px 13px 17px;
+  }
+
+  html.dui-pro-overhaul.dui-cohesive-ui .dy-workspace-context__meta {
+    width: 100%;
+    min-width: 0;
   }
 
   html.dui-pro-overhaul.dui-cohesive-ui .dy-workspace-context p {

@@ -17,7 +17,6 @@ const PluginsPanel = lazy(() => import('../plugins/PluginsPanel').then((module) 
 const AgentEditorModal = lazy(() => import('../editor/AgentEditorModal').then((module) => ({ default: module.AgentEditorModal })))
 const RecruitAgentModal = lazy(() => import('../recruit/RecruitAgentModal').then((module) => ({ default: module.RecruitAgentModal })))
 
-const DYSTOPAI_MARK_SRC = '/brand/dystopai-app-icon.png'
 const DYSTOPAI_LOCKUP_SRC = '/brand/dystopai-logo-multi-model-transparent-v2.png'
 const RECRUIT_ICON_SRC = '/icons/nav-recruit-flat.png'
 const AGENT_CONSOLE_PREF_KEY = 'dystopai-agent-console-visibility'
@@ -350,8 +349,13 @@ export function NexusShell() {
       <a className="dy-skip-link" href="#dystopai-main">Skip to workspace</a>
 
       <aside className="dy-human-rail fixed z-40 flex flex-col overflow-hidden" aria-label="DystopAI navigation">
-        <div className="dy-human-rail-head dy-human-rail-head--icon-only flex items-center justify-center" aria-label="DystopAI">
-          <img src={DYSTOPAI_MARK_SRC} alt="DystopAI" />
+        <div className="dy-human-rail-head dy-human-rail-head--lockup flex items-center" aria-label="DystopAI Multi Model Nexus">
+          <img
+            className="dy-human-rail-lockup"
+            src={DYSTOPAI_LOCKUP_SRC}
+            alt="DystopAI Multi Model Nexus"
+            draggable={false}
+          />
         </div>
 
         <nav className="dy-human-nav flex flex-col" aria-label="Primary navigation">
@@ -373,11 +377,13 @@ export function NexusShell() {
           {TABS.map((t) => (
             <button
               key={t.id}
+              id={`nexus-tab-${t.id}`}
               type="button"
+              role="tab"
               onClick={() => selectTab(t.id)}
               aria-label={`${t.label} ${t.railMeta}`}
-              aria-current={tab === t.id ? 'page' : undefined}
-              aria-controls="dystopai-main"
+              aria-selected={tab === t.id}
+              aria-controls={`nexus-panel-${t.id}`}
               data-tone={t.tone}
               className={`flex items-center gap-3 text-left ${tab === t.id ? 'is-active' : ''}`}
             >
@@ -395,82 +401,78 @@ export function NexusShell() {
       </aside>
 
       <main id="dystopai-main" tabIndex={-1} className="dy-app-main mx-auto max-w-[1680px] px-4 py-6 sm:px-6 sm:py-8">
-        {/* ── HEADER ── */}
-        <motion.header
-          initial={{ opacity: 0, y: -8 }}
-          animate={{ opacity: 1, y: 0 }}
-          className="dy-command-header relative mb-7 overflow-hidden rounded-3xl border border-white/[0.07] bg-[linear-gradient(135deg,rgba(15,23,42,0.92),rgba(8,13,25,0.84)_46%,rgba(6,12,19,0.94))] px-5 py-5 shadow-[0_28px_90px_-54px_rgba(243,189,62,0.45)] backdrop-blur-xl sm:px-7"
-        >
-          <div className="pointer-events-none absolute inset-0 opacity-[0.04]" style={{ backgroundImage: 'linear-gradient(90deg, rgba(255,255,255,0.7) 1px, transparent 1px), linear-gradient(rgba(255,255,255,0.7) 1px, transparent 1px)', backgroundSize: '56px 56px' }} />
-          <div className="dy-command-header-inner relative flex flex-wrap items-center justify-between gap-5">
-          <div className="brand-lockup dy-logo-fixed flex min-w-[280px] items-center gap-4" aria-label="DystopAI Multi Model Nexus">
-            <img
-              src={DYSTOPAI_LOCKUP_SRC}
-              alt="DystopAI Multi Model Nexus"
-              className="dy-logo-lockup object-contain"
-              draggable={false}
-            />
+        {/* Workspace header */}
+        <section className="dy-workspace-context" data-workspace={tab} aria-labelledby="dystopai-workspace-title">
+          <div className="dy-workspace-context__copy">
+            <span className="dy-workspace-context__eyebrow">Operator workspace</span>
+            <h1 id="dystopai-workspace-title">{activeTab.label}</h1>
+            <p>{activeTab.description}</p>
           </div>
-
-          <div className="dy-status-grid flex flex-wrap items-center justify-end gap-2">
-            <span className="badge dy-status-chip" data-tone="neutral">
-              <span className="dy-status-value">{agentCount}</span>
-              <span className="dy-status-label">Agents</span>
-            </span>
-            <span className="badge badge--live dy-status-chip" data-tone="live">
-              <span className="dy-status-value">{activePartyCount}</span>
-              <span className="dy-status-label">In Party</span>
-            </span>
-            <span
-              className={busyAgentCount ? 'badge badge--warn dy-status-chip' : 'badge dy-status-chip'}
-              data-status-kind="running-agents"
-              data-state={busyAgentCount ? 'active' : 'idle'}
-              data-tone={busyAgentCount ? 'warn' : 'neutral'}
-              title={busyAgentCount ? `${busyAgentCount} agent${busyAgentCount === 1 ? '' : 's'} running` : 'No agents running'}
-            >
-              <span className="dy-status-value">{busyAgentCount}</span>
-              <span className="dy-status-label">Running</span>
-            </span>
-            <span className={gatewayOnline ? 'badge badge--success dy-status-chip' : 'badge dy-status-chip'} data-tone={gatewayOnline ? 'success' : 'neutral'}>
-              <span className="dy-status-value">{gatewayOnline ? 'ON' : runtimeStatus ? 'OFF' : '...'}</span>
-              <span className="dy-status-label">Gateway</span>
-            </span>
-            <button
-              type="button"
-              className={activeCronCount ? 'badge badge--live dy-status-chip' : 'badge dy-status-chip'}
-              data-tone={activeCronCount ? 'live' : 'neutral'}
-              title={cronChipTitle}
-              aria-label={`${cronChipTitle} Activate to open Monitor${activeCronCount ? '; press Delete to review clearing.' : '.'}`}
-              aria-keyshortcuts={activeCronCount ? 'Delete' : undefined}
-              disabled={cronClearBusy || !runtimeStatus}
-              onClick={() => selectTab('monitor')}
-              onKeyDown={(event) => {
-                if (event.key !== 'Delete' || !activeCronCount) return
-                event.preventDefault()
-                void requestClearCronJobs()
-              }}
-              onContextMenu={(event) => {
-                event.preventDefault()
-                void requestClearCronJobs()
-              }}
-            >
-              <span className="dy-status-value">{cronClearBusy ? '...' : runtimeStatus ? activeCronCount : '-'}</span>
-              <span className="dy-status-label">Cron</span>
-            </button>
-            <span className="badge badge--success dy-status-chip" data-tone="success">
-              <span className="dy-status-value">{responseCount}</span>
-              <span className="dy-status-label">Results</span>
-            </span>
-            {activeMission && (
-              <span className={`badge dy-status-chip ${missionRunning ? 'badge--warn' : 'badge--success'}`} data-tone={missionRunning ? 'warn' : 'success'}>
-                <span className="dy-status-value">{activeMission.status}</span>
-                <span className="dy-status-label">Mission</span>
+          <div className="dy-workspace-context__meta">
+            <div className="dy-status-grid flex flex-wrap items-center justify-end gap-2" aria-label="Workspace status summary">
+              <span className="badge dy-status-chip" data-tone="neutral">
+                <span className="dy-status-value">{agentCount}</span>
+                <span className="dy-status-label">Agents</span>
               </span>
-            )}
+              <span className="badge badge--live dy-status-chip" data-tone="live">
+                <span className="dy-status-value">{activePartyCount}</span>
+                <span className="dy-status-label">In Party</span>
+              </span>
+              <span
+                className={busyAgentCount ? 'badge badge--warn dy-status-chip' : 'badge dy-status-chip'}
+                data-status-kind="running-agents"
+                data-state={busyAgentCount ? 'active' : 'idle'}
+                data-tone={busyAgentCount ? 'warn' : 'neutral'}
+                title={busyAgentCount ? `${busyAgentCount} agent${busyAgentCount === 1 ? '' : 's'} running` : 'No agents running'}
+              >
+                <span className="dy-status-value">{busyAgentCount}</span>
+                <span className="dy-status-label">Running</span>
+              </span>
+              <span className={gatewayOnline ? 'badge badge--success dy-status-chip' : 'badge dy-status-chip'} data-tone={gatewayOnline ? 'success' : 'neutral'}>
+                <span className="dy-status-value">{gatewayOnline ? 'ON' : runtimeStatus ? 'OFF' : '...'}</span>
+                <span className="dy-status-label">Gateway</span>
+              </span>
+              <button
+                type="button"
+                className={activeCronCount ? 'badge badge--live dy-status-chip' : 'badge dy-status-chip'}
+                data-tone={activeCronCount ? 'live' : 'neutral'}
+                title={cronChipTitle}
+                aria-label={`${cronChipTitle} Activate to open Monitor${activeCronCount ? '; press Delete to review clearing.' : '.'}`}
+                aria-keyshortcuts={activeCronCount ? 'Delete' : undefined}
+                disabled={cronClearBusy || !runtimeStatus}
+                onClick={() => selectTab('monitor')}
+                onKeyDown={(event) => {
+                  if (event.key !== 'Delete' || !activeCronCount) return
+                  event.preventDefault()
+                  void requestClearCronJobs()
+                }}
+                onContextMenu={(event) => {
+                  event.preventDefault()
+                  void requestClearCronJobs()
+                }}
+              >
+                <span className="dy-status-value">{cronClearBusy ? '...' : runtimeStatus ? activeCronCount : '-'}</span>
+                <span className="dy-status-label">Cron</span>
+              </button>
+              <span className="badge badge--success dy-status-chip" data-tone="success">
+                <span className="dy-status-value">{responseCount}</span>
+                <span className="dy-status-label">Results</span>
+              </span>
+              {activeMission && (
+                <span className={`badge dy-status-chip ${missionRunning ? 'badge--warn' : 'badge--success'}`} data-tone={missionRunning ? 'warn' : 'success'}>
+                  <span className="dy-status-value">{activeMission.status}</span>
+                  <span className="dy-status-label">Mission</span>
+                </span>
+              )}
+            </div>
+            <div className="dy-workspace-context__state" data-state={workspaceStateTone} role="status" aria-live="polite">
+              <span aria-hidden="true" />
+              {workspaceState}
+            </div>
           </div>
           {(cronNotice || cronClearTargets.length > 0) && (
             <ActionStatusBanner
-              className="relative mt-4 w-full basis-full px-4 text-[11px] leading-relaxed"
+              className="dy-workspace-context__notice relative w-full px-4 text-[11px] leading-relaxed"
               rounded="2xl"
               buttonRounded="none"
               actionTextClassName="text-[8px]"
@@ -492,22 +494,9 @@ export function NexusShell() {
               onCancel={cronClearTargets.length > 0 ? cancelClearCronJobs : undefined}
             />
           )}
-          </div>
-        </motion.header>
-
-        <section className="dy-workspace-context" data-workspace={tab} aria-labelledby="dystopai-workspace-title">
-          <div className="dy-workspace-context__copy">
-            <span className="dy-workspace-context__eyebrow">Operator workspace</span>
-            <h1 id="dystopai-workspace-title">{activeTab.label}</h1>
-            <p>{activeTab.description}</p>
-          </div>
-          <div className="dy-workspace-context__state" data-state={workspaceStateTone} role="status" aria-live="polite">
-            <span aria-hidden="true" />
-            {workspaceState}
-          </div>
         </section>
 
-        {/* ── TAB CONTENT ── */}
+        {/* Tab content */}
         <motion.div
           id={`nexus-panel-${tab}`}
           role="region"
