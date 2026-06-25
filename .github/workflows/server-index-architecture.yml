@@ -60,7 +60,7 @@ jobs:
         run: node scripts/report-server-index-architecture.mjs
 
       - name: Upload architecture evidence
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: server-composition-architecture
           if-no-files-found: error
