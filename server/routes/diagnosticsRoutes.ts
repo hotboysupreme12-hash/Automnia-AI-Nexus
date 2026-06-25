@@ -22,6 +22,10 @@ type DiagnosticsRoutesOptions = {
 }
 
 export function registerDiagnosticsRoutes(app: Express, options: DiagnosticsRoutesOptions) {
+  app.get('/api/ready', (_req, res) => {
+    return apiSuccess(res, { ok: true, ready: true })
+  })
+
   app.get('/api/health', async (_req, res) => {
     const disk = await options.diskFreeSpaceCheck()
     return apiSuccess(res, {

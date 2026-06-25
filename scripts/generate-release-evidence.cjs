@@ -8,6 +8,7 @@ const evidenceDir = path.resolve(process.env.DYSTOPAI_RELEASE_EVIDENCE_DIR || pa
 const artifactRoot = path.resolve(process.env.DYSTOPAI_RELEASE_ARTIFACT_ROOT || path.join(root, 'release'))
 const runtimeBundleRoot = path.resolve(process.env.DYSTOPAI_RUNTIME_BUNDLE_ROOT || path.join(root, '.cache', 'runtime-bundles'))
 const runtimeMetadataFileName = '.dystopai-runtime-bundle.json'
+const distributionSigningPath = path.join(evidenceDir, 'distribution-signing.json')
 
 function readJson(filePath) {
   return JSON.parse(fs.readFileSync(filePath, 'utf8'))
@@ -207,6 +208,7 @@ function checksumInputFiles(runtimeMetadata) {
   ].map((entry) => path.join(root, entry))
   return [...new Set([
     ...candidates.filter(fileExists),
+    ...(fileExists(distributionSigningPath) ? [distributionSigningPath] : []),
     ...runtimeMetadata,
     ...releaseArtifactFiles(),
   ])].sort((a, b) => relativePath(a).localeCompare(relativePath(b)))

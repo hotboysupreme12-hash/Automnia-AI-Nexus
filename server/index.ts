@@ -29873,7 +29873,11 @@ controlServer = app.listen(PORT, '127.0.0.1', () => {
       console.error('[agent-config-sync] startup sync failed:', error)
     })
   if (AUTO_START_GATEWAY) {
-    void ensureGatewayRunning()
+    const gatewayAutostartTimer = setTimeout(() => {
+      if (shuttingDown) return
+      void ensureGatewayRunning()
+    }, 1000)
+    gatewayAutostartTimer.unref?.()
     startGatewayHealthMonitor()
     if (CONTROL_CENTER_GATEWAY_PREWARM_ON_STARTUP) {
       scheduleControlCenterGatewayAgentRuntimePrewarm('startup')

@@ -4,10 +4,16 @@
   "version": "0.0.6",
   "description": "Standalone DystopAI OpenClaw control center desktop app.",
   "author": {
-    "name": "DystopAI",
-    "email": "support@dystopai.local"
+    "name": "DystopAI"
   },
-  "homepage": "https://dystopai.local",
+  "homepage": "https://github.com/hotboysupreme12-hash/DystopAI-Core",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/hotboysupreme12-hash/DystopAI-Core.git"
+  },
+  "bugs": {
+    "url": "https://github.com/hotboysupreme12-hash/DystopAI-Core/issues"
+  },
   "type": "module",
   "main": "electron/main.cjs",
   "scripts": {
@@ -45,6 +51,7 @@
     "smoke:mission-lifecycle-projection": "tsx scripts/smoke-mission-lifecycle-projection.ts",
     "smoke:mission-backend-owned": "tsx scripts/smoke-mission-backend-owned.ts",
     "smoke:api-envelope": "tsx scripts/smoke-api-envelope.ts",
+    "smoke:api-error-redaction": "tsx scripts/smoke-api-error-redaction.ts",
     "smoke:api-integration": "tsx scripts/smoke-api-integration.ts",
     "smoke:error-boundary": "tsx scripts/smoke-error-boundary.ts",
     "smoke:skills-control-plane": "tsx scripts/smoke-skills-control-plane.ts",
@@ -62,7 +69,7 @@
     "smoke:misc-control-plane": "tsx scripts/smoke-misc-control-plane.ts",
     "smoke:ui": "node scripts/smoke-ui-render.mjs",
     "test": "npm run test:ci",
-    "test:ci": "npm run lint && npm run typecheck && npm run smoke:ledger && npm run smoke:mission-verification && npm run smoke:mission-report && npm run smoke:mission-durable-state && npm run smoke:mission-idempotency && npm run smoke:mission-cron-reconciliation && npm run smoke:mission-cancellation && npm run smoke:mission-runtime-references && npm run smoke:mission-gateway-reconciliation && npm run smoke:mission-lifecycle-projection && npm run smoke:mission-backend-owned && npm run smoke:api-envelope && npm run smoke:api-integration && npm run smoke:error-boundary && npm run smoke:skills-control-plane && npm run smoke:plugins-control-plane && npm run smoke:openclaw-command-control-plane && npm run smoke:openclaw && npm run smoke:party-coordination-control-plane && npm run smoke:team-sync-control-plane && npm run smoke:agent-turn-control-plane && npm run smoke:runtime-status-control-plane && npm run smoke:runtime-actions-control-plane && npm run smoke:shifts-control-plane && npm run smoke:filesystem-control-plane && npm run smoke:command-console-files && npm run smoke:nexus-control-plane && npm run smoke:misc-control-plane && npm run smoke:config-save && npm run smoke:auth && npm run smoke:auth-provider-model && npm run smoke:security && npm run secret:scan && npm run smoke:runtime-reproducibility && npm run smoke:release-evidence && npm run smoke:release-signing && npm run smoke:release-validation && npm run smoke:ci-workflow",
+    "test:ci": "npm run lint && npm run typecheck && npm run smoke:ledger && npm run smoke:mission-verification && npm run smoke:mission-report && npm run smoke:mission-durable-state && npm run smoke:mission-idempotency && npm run smoke:mission-cron-reconciliation && npm run smoke:mission-cancellation && npm run smoke:mission-runtime-references && npm run smoke:mission-gateway-reconciliation && npm run smoke:mission-lifecycle-projection && npm run smoke:mission-backend-owned && npm run smoke:api-envelope && npm run smoke:api-error-redaction && npm run smoke:api-integration && npm run smoke:error-boundary && npm run smoke:skills-control-plane && npm run smoke:plugins-control-plane && npm run smoke:openclaw-command-control-plane && npm run smoke:openclaw && npm run smoke:party-coordination-control-plane && npm run smoke:team-sync-control-plane && npm run smoke:agent-turn-control-plane && npm run smoke:runtime-status-control-plane && npm run smoke:runtime-actions-control-plane && npm run smoke:shifts-control-plane && npm run smoke:filesystem-control-plane && npm run smoke:command-console-files && npm run smoke:nexus-control-plane && npm run smoke:misc-control-plane && npm run smoke:config-save && npm run smoke:auth && npm run smoke:auth-provider-model && npm run smoke:security && npm run secret:scan && npm run smoke:runtime-reproducibility && npm run smoke:release-evidence && npm run smoke:release-signing && npm run smoke:release-validation && npm run smoke:ci-workflow",
     "desktop": "npm run build:standalone && electron .",
     "prepare:runtime-bundles": "node scripts/prepare-runtime-bundles.cjs",
     "prepare:openclaw-vendor": "node scripts/prepare-openclaw-vendor.cjs",
@@ -71,7 +78,8 @@
     "release:validate": "node scripts/validate-release-artifacts.cjs",
     "package:desktop": "npm run build:standalone && npm run prepare:runtime-bundles && npm run prepare:openclaw-vendor && node scripts/package-desktop.cjs --dir",
     "dist:desktop": "npm run package:desktop",
-    "dist:win": "npm run build:standalone && npm run prepare:runtime-bundles && npm run prepare:openclaw-vendor && node scripts/package-desktop.cjs --dir --win --x64",
+    "dist:win": "npm run build:standalone && npm run prepare:runtime-bundles && npm run prepare:openclaw-vendor && node scripts/package-desktop.cjs --win --x64",
+    "dist:win:dir": "npm run build:standalone && npm run prepare:runtime-bundles && npm run prepare:openclaw-vendor && node scripts/package-desktop.cjs --dir --win --x64",
     "docs:openclaw:sync": "node scripts/sync-openclaw-docs.mjs",
     "setup:gateway-auth": "node scripts/setup-openclaw-gateway-auth.mjs",
     "typecheck": "tsc -p tsconfig.app.json --noEmit && npm run typecheck:server && npm run typecheck:electron",
@@ -125,7 +133,7 @@
         "deb"
       ],
       "category": "Development",
-      "maintainer": "DystopAI <support@dystopai.local>"
+      "maintainer": "DystopAI"
     },
     "mac": {
       "target": [
@@ -135,8 +143,14 @@
     },
     "win": {
       "target": [
-        "dir"
+        "nsis"
       ]
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true,
+      "perMachine": false,
+      "deleteAppDataOnUninstall": false
     }
   },
   "dependencies": {

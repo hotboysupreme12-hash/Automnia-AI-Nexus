@@ -1313,18 +1313,49 @@ Verification:
 - `git diff --check` passed before commit.
 - `npm run lint` passed.
 
+### 2026-06-25 - Consumer Release Chain And Error Redaction Gate
+
+Scope:
+
+- Removed the stale root-level `main.cjs` Electron entrypoint. The only active Electron entry remains `electron/main.cjs`, and `smoke:security` now fails if a root copy returns.
+- Changed Windows consumer distribution metadata from directory-only output to an NSIS installer target; kept `package:desktop` and `dist:win:dir` for unpacked CI/local launch smoke checks.
+- Removed stale `.local` support/homepage metadata from `package.json` and pointed package metadata at the GitHub project.
+- Added recursive, depth-limited API error-detail redaction in `server/controlPlaneHttp.ts`, including nested array/object traversal, circular-reference handling, sensitive-key redaction for token/authorization/apiKey/secret/cookie/code/verifier/password/credential fields, and truncation for very large details.
+- Added `scripts/smoke-api-error-redaction.ts` and wired it into `npm run test:ci`.
+- Strengthened public release validation:
+  - `release/evidence/distribution-signing.json` is now included in release checksums when present before `npm run release:evidence`.
+  - Public release validation with `DYSTOPAI_RELEASE_REQUIRE_SIGNING=1` now requires the Ed25519 checksum signature plus distribution evidence for a signed Windows installer, signed update channel, rollback proof, and fresh-install/upgrade/uninstall/corrupted-update tests.
+  - GitHub Actions now expects `distribution-signing.json` in public release evidence bundles.
+- Updated `README.md` and `docs/RELEASE_GOVERNANCE.md` to distinguish Ed25519 checksum signing from OS trust requirements such as Authenticode, macOS notarization, signed updates, rollback, and installer lifecycle tests.
+- Hardened `scripts/secret-scan.cjs` so the scanner skips tracked paths deleted in the current working tree instead of crashing before a deletion is committed.
+
+Verification:
+
+- `npm run smoke:api-error-redaction` passed.
+- `npm run smoke:security` passed.
+- `npm run smoke:release-evidence` passed.
+- `npm run smoke:release-validation` passed, including the fail-closed public-release path without distribution evidence and the passing path after distribution evidence is included in signed checksums.
+- `npm run smoke:ci-workflow` passed.
+- `npm run smoke:api-envelope` passed.
+- `npm run secret:scan` passed.
+- `npm run typecheck` passed.
+- `npm run lint` passed.
+- `node --check scripts/validate-release-artifacts.cjs`, `node --check scripts/generate-release-evidence.cjs`, `node --check electron/main.cjs`, and `node --check electron/preload.cjs` passed.
+- `npm test` passed after all changes.
+
+Notes:
+
+- This completes repository enforcement for consumer-distribution evidence, but actual public release readiness still requires real signing infrastructure: Windows Authenticode certificate/timestamping, macOS Developer ID signing/notarization on macOS runners, signed update-channel implementation, rollback automation, and installer lifecycle test artifacts produced by CI.
+
 ## In Progress
 
-- No merge integration is currently in progress; today's hardening stack is on `main` with clean post-merge CI.
+- Consumer release-chain hardening is in progress on branch `codex/release-security-hardening`.
 
 Next action:
 
-- Continue breaking up remaining `server/index.ts` route clusters after integration settles. Highest-value candidates are Nexus/misc, shift/cron scheduler, and remaining browser/preflight areas because the major OpenClaw, mission, party, provider, filesystem, runtime, plugin, diagnostics, command-console, agent-turn, and ClawTalk surfaces now have route-module seams.
-- Add release governance documentation and/or enforcement slices after the next route extraction:
-  - Main branch protection requirements: green CI, no direct pushes, PR review, and signed commits where repository support allows.
-  - Mandatory public release signing and validation failure when signing evidence is absent.
-  - Full CI evidence artifacts on clean release SHAs.
-  - Local-only desktop threat model: localhost API only, no LAN binding, no cloud exposure unless authentication is redesigned.
+- Publish the release-chain/security-redaction slice through PR/CI, then either:
+  - wire real Authenticode/macOS signing and update-channel evidence generation when certificates/secrets are available, or
+  - resume extraction of remaining `server/index.ts` route clusters, with Nexus/misc, shift/cron scheduler, and browser/preflight areas as high-value candidates.
 
 ## Backlog
 

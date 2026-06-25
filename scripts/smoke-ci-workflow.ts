@@ -49,6 +49,7 @@ assert.match(workflow, /\bnpm run release:validate\b/, 'workflow must validate r
 assert.match(workflow, /release\/evidence\/dystopai-sbom\.cdx\.json/, 'workflow must verify the generated SBOM')
 assert.match(workflow, /release\/evidence\/checksums\.sha256/, 'workflow must verify the checksum manifest')
 assert.match(workflow, /release\/evidence\/release-evidence\.json/, 'workflow must verify the evidence summary')
+assert.match(workflow, /release\/evidence\/distribution-signing\.json/, 'workflow must require distribution signing evidence for public release runs')
 assert.match(workflow, /actions\/upload-artifact@v4/, 'workflow must upload release evidence')
 assert.match(workflow, /if-no-files-found:\s*error/, 'workflow must fail when release evidence is missing')
 assert.match(workflow, /permissions:\s*\n\s*contents:\s*read/, 'workflow must use read-only repository permissions')

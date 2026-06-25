@@ -26,10 +26,56 @@ The required evidence files are:
 - `release/evidence/checksums.sha256.sig`
 - `release/evidence/signing-public-key.pem`
 - `release/evidence/release-signing.json`
+- `release/evidence/distribution-signing.json`
+
+The Ed25519 signature signs the checksum manifest. It is necessary release evidence, but it does not replace operating-system distribution trust. Public consumer builds must also include platform distribution evidence:
+
+- Windows: an NSIS/MSI/MSIX/AppX installer signed with Authenticode, verified with a timestamped signature.
+- macOS: Developer ID signing, notarization, and stapling for macOS artifacts before publication.
+- Updates: a signed update manifest/channel plus rollback evidence.
+- Lifecycle tests: fresh install, upgrade, uninstall, and corrupted-update rollback tests.
+
+Create `release/evidence/distribution-signing.json` after platform signing and lifecycle tests, before `npm run release:evidence`. Release evidence generation includes that file in `checksums.sha256`, and `npm run release:validate` rejects public builds when it is missing or not covered by the signed checksum manifest.
+
+Minimum Windows public-release manifest:
+
+```json
+{
+  "schema": 1,
+  "generatedAt": "2026-06-25T00:00:00.000Z",
+  "artifacts": [
+    {
+      "platform": "windows",
+      "artifact": "release/DystopAI Setup 0.0.6.exe",
+      "signing": {
+        "type": "authenticode",
+        "status": "verified",
+        "signer": "DystopAI",
+        "thumbprint": "certificate-thumbprint",
+        "timestamp": "2026-06-25T00:00:00.000Z",
+        "verificationCommand": "signtool verify /pa /tw \"release/DystopAI Setup 0.0.6.exe\""
+      }
+    }
+  ],
+  "updateChannel": {
+    "signed": true,
+    "rollbackTested": true,
+    "verificationCommand": "verify signed update manifest and rollback path"
+  },
+  "installTests": {
+    "freshInstall": { "status": "passed", "evidence": "fresh-install log or artifact reference" },
+    "upgrade": { "status": "passed", "evidence": "upgrade log or artifact reference" },
+    "uninstall": { "status": "passed", "evidence": "uninstall log or artifact reference" },
+    "corruptedUpdate": { "status": "passed", "evidence": "corrupted-update rollback log or artifact reference" }
+  }
+}
+```
 
 Local release validation can enforce the same policy:
 
 ```bash
+npm run dist:win
+# Write release/evidence/distribution-signing.json from Authenticode/update/install evidence.
 npm run release:evidence
 DYSTOPAI_RELEASE_SIGNING_PRIVATE_KEY_FILE="C:/secure/dystopai-release-ed25519.pem" npm run release:sign
 DYSTOPAI_RELEASE_REQUIRE_SIGNING=1 npm run release:validate

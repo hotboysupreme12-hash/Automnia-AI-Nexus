@@ -107,7 +107,8 @@ jobs:
             $required += @(
               'release/evidence/checksums.sha256.sig',
               'release/evidence/signing-public-key.pem',
-              'release/evidence/release-signing.json'
+              'release/evidence/release-signing.json',
+              'release/evidence/distribution-signing.json'
             )
           }
           foreach ($path in $required) {

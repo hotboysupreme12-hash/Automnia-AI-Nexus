@@ -6,6 +6,7 @@ import { useNexusStore } from '../../store/nexusStore'
 import type { AgentActivityEvent, AgentResponse, AgentTurnAttachment, OpenClawAgent } from '../../types/nexus'
 import { apiUrl } from '../../utils/apiUrl'
 import { redactDiagnosticText } from '../../utils/diagnosticRedaction'
+import { createSseFrameParser } from '../../utils/sseStream'
 
 const RARITY_RING: Record<string, string> = {
   legendary: 'ring-[#f2cc62]/55',
@@ -899,33 +900,30 @@ export function AgentResponseConsole() {
   useEffect(() => {
     let disposed = false
     let lastStreamEventAt = 0
-    const source = new EventSource(apiUrl('/api/openclaw/clawtalk-console/stream'))
-    const eventNames = ['start', 'status', 'progress', 'delta', 'error', 'final']
-    source.onopen = () => {
-      if (disposed) return
-      setClawTalkStreamHealth({
-        state: 'live',
-        detail: 'ClawTalk console stream connected.',
-        retries: 0,
-      })
+    let retryTimer: number | null = null
+    let resolveRetry: (() => void) | null = null
+    const controller = new AbortController()
+
+    const finishRetryWait = () => {
+      if (retryTimer !== null) {
+        window.clearTimeout(retryTimer)
+        retryTimer = null
+      }
+      const resolve = resolveRetry
+      resolveRetry = null
+      resolve?.()
     }
-    source.onerror = () => {
-      if (disposed) return
-      const closed = source.readyState === EventSource.CLOSED
-      setClawTalkStreamHealth((current) => {
-        const lastSeen = lastStreamEventAt ? formatShortElapsed(Date.now() - lastStreamEventAt) : ''
-        return {
-          state: closed ? 'offline' : 'reconnecting',
-          detail: closed
-            ? 'ClawTalk console stream closed. Reopen or refresh the Command Console to reconnect.'
-            : lastSeen
-              ? `ClawTalk console stream interrupted; last event ${lastSeen} ago. Reconnecting automatically.`
-              : 'ClawTalk console stream interrupted before the first event. Reconnecting automatically.',
-          retries: current.retries + 1,
-        }
-      })
-    }
-    const handleFrame = (event: MessageEvent<string>) => {
+
+    const waitForRetry = (delayMs: number) => new Promise<void>((resolve) => {
+      resolveRetry = resolve
+      retryTimer = window.setTimeout(() => {
+        retryTimer = null
+        resolveRetry = null
+        resolve()
+      }, delayMs)
+    })
+
+    const handleFrame = (data: string) => {
       lastStreamEventAt = Date.now()
       setClawTalkStreamHealth((current) => (
         current.state === 'live'
@@ -937,20 +935,80 @@ export function AgentResponseConsole() {
             }
       ))
       try {
-        ingestClawTalkConsoleEvent(JSON.parse(event.data))
+        ingestClawTalkConsoleEvent(JSON.parse(data))
       } catch {
         // The console stream is best-effort; malformed frames should not break chat.
       }
     }
-    for (const eventName of eventNames) {
-      source.addEventListener(eventName, handleFrame as EventListener)
+
+    const connect = async () => {
+      let retries = 0
+      while (!disposed) {
+        const streamController = new AbortController()
+        const abortStream = () => streamController.abort(controller.signal.reason)
+        controller.signal.addEventListener('abort', abortStream, { once: true })
+        try {
+          const response = await fetch(apiUrl('/api/openclaw/clawtalk-console/stream'), {
+            cache: 'no-store',
+            headers: { Accept: 'text/event-stream' },
+            signal: streamController.signal,
+          })
+          if (!response.ok) throw new Error(`HTTP ${response.status}`)
+          if (!response.body) throw new Error('Stream response did not include a readable body.')
+
+          retries = 0
+          setClawTalkStreamHealth({
+            state: 'live',
+            detail: 'ClawTalk console stream connected.',
+            retries,
+          })
+
+          const reader = response.body.getReader()
+          const decoder = new TextDecoder()
+          const parser = createSseFrameParser()
+          const processFrames = (chunk: string) => {
+            for (const frame of parser.push(chunk)) handleFrame(frame.data)
+          }
+
+          try {
+            while (!disposed) {
+              const { done, value } = await reader.read()
+              if (done) break
+              processFrames(decoder.decode(value, { stream: true }))
+            }
+            processFrames(decoder.decode())
+            for (const frame of parser.flush()) handleFrame(frame.data)
+          } finally {
+            await reader.cancel().catch(() => undefined)
+          }
+
+          if (!disposed) throw new Error('ClawTalk console stream ended.')
+        } catch (error) {
+          if (disposed || controller.signal.aborted || streamController.signal.aborted) return
+          retries += 1
+          const lastSeen = lastStreamEventAt ? formatShortElapsed(Date.now() - lastStreamEventAt) : ''
+          const detail = error instanceof Error ? redactDiagnosticText(error.message, 120) : redactDiagnosticText(String(error), 120)
+          setClawTalkStreamHealth({
+            state: retries >= 5 ? 'offline' : 'reconnecting',
+            detail: lastSeen
+              ? `ClawTalk console stream interrupted (${detail}); last event ${lastSeen} ago. Reconnecting automatically.`
+              : `ClawTalk console stream interrupted before the first event (${detail}). Reconnecting automatically.`,
+            retries,
+          })
+          await waitForRetry(Math.min(30_000, 1000 * retries))
+        } finally {
+          controller.signal.removeEventListener('abort', abortStream)
+          streamController.abort()
+        }
+      }
     }
+
+    void connect()
+
     return () => {
       disposed = true
-      for (const eventName of eventNames) {
-        source.removeEventListener(eventName, handleFrame as EventListener)
-      }
-      source.close()
+      controller.abort()
+      finishRetryWait()
     }
   }, [ingestClawTalkConsoleEvent])
 

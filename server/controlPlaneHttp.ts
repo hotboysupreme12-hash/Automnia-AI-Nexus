@@ -81,7 +81,7 @@ type ControlPlaneHttpOptions = {
   sessionTokens: Set<string>
 }
 
-const PUBLIC_API_PATHS = new Set(['/api/health', '/api/auth/login', '/api/auth/status'])
+const PUBLIC_API_PATHS = new Set(['/api/ready', '/api/health', '/api/auth/login', '/api/auth/status'])
 
 export function controlCenterAllowedOrigins(port: number, frontendPort: number) {
   return new Set([
@@ -134,6 +134,26 @@ function responseRequestId(res: Response): string {
   return String(res.getHeader('X-Request-Id') || randomUUID())
 }
 
+const API_ERROR_DETAIL_MAX_DEPTH = 6
+const API_ERROR_DETAIL_MAX_ARRAY_LENGTH = 50
+const API_ERROR_DETAIL_MAX_OBJECT_KEYS = 80
+const API_ERROR_REDACTED_VALUE = '[redacted]'
+const API_ERROR_DETAIL_CIRCULAR = '[circular]'
+const API_ERROR_DETAIL_DEPTH_EXCEEDED = '[depth-exceeded]'
+
+function isSensitiveApiErrorKey(key: string) {
+  const normalized = key.replace(/[^a-z0-9]/gi, '').toLowerCase()
+  return normalized === 'code' ||
+    normalized.includes('token') ||
+    normalized === 'authorization' ||
+    normalized.includes('apikey') ||
+    normalized.includes('secret') ||
+    normalized.includes('cookie') ||
+    normalized.includes('verifier') ||
+    normalized.includes('password') ||
+    normalized.includes('credential')
+}
+
 export function apiSuccess<T>(res: Response, data: T, status = 200) {
   return res.status(status).json({
     ok: true,
@@ -142,11 +162,49 @@ export function apiSuccess<T>(res: Response, data: T, status = 200) {
   })
 }
 
-function sanitizeApiErrorDetail(detail: unknown): unknown {
+export function sanitizeApiErrorDetail(detail: unknown, depth = 0, seen: WeakSet<object> = new WeakSet()): unknown {
   if (detail === undefined || detail === null) return undefined
   if (typeof detail === 'string') return applyDiagnosticRedactions(detail)
   if (detail instanceof Error) return applyDiagnosticRedactions(detail.message)
-  return detail
+  if (typeof detail === 'number' || typeof detail === 'boolean') return detail
+  if (typeof detail === 'bigint') return detail.toString()
+  if (typeof detail === 'symbol' || typeof detail === 'function') return applyDiagnosticRedactions(String(detail))
+  if (typeof detail !== 'object') return undefined
+
+  if (seen.has(detail)) return API_ERROR_DETAIL_CIRCULAR
+  if (depth >= API_ERROR_DETAIL_MAX_DEPTH) return API_ERROR_DETAIL_DEPTH_EXCEEDED
+
+  seen.add(detail)
+  try {
+    if (detail instanceof Date) return detail.toISOString()
+    if (detail instanceof URL) return applyDiagnosticRedactions(detail.toString())
+    if (Array.isArray(detail)) {
+      const cleanItems = detail
+        .slice(0, API_ERROR_DETAIL_MAX_ARRAY_LENGTH)
+        .map((item) => sanitizeApiErrorDetail(item, depth + 1, seen))
+      if (detail.length > API_ERROR_DETAIL_MAX_ARRAY_LENGTH) {
+        cleanItems.push(`[${detail.length - API_ERROR_DETAIL_MAX_ARRAY_LENGTH} item(s) omitted]`)
+      }
+      return cleanItems
+    }
+
+    const cleanObject: Record<string, unknown> = {}
+    const entries = Object.entries(detail as Record<string, unknown>)
+    for (const [key, value] of entries.slice(0, API_ERROR_DETAIL_MAX_OBJECT_KEYS)) {
+      if (isSensitiveApiErrorKey(key)) {
+        cleanObject[key] = API_ERROR_REDACTED_VALUE
+        continue
+      }
+      const cleanValue = sanitizeApiErrorDetail(value, depth + 1, seen)
+      if (cleanValue !== undefined) cleanObject[key] = cleanValue
+    }
+    if (entries.length > API_ERROR_DETAIL_MAX_OBJECT_KEYS) {
+      cleanObject.__omittedKeys = entries.length - API_ERROR_DETAIL_MAX_OBJECT_KEYS
+    }
+    return cleanObject
+  } finally {
+    seen.delete(detail)
+  }
 }
 
 export function apiFailure(res: Response, status: number, code: ApiErrorCode, message: string, detail?: unknown) {

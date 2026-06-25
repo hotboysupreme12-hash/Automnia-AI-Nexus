@@ -14,6 +14,8 @@ const evidenceSummaryPath = path.join(evidenceDir, 'release-evidence.json')
 const signaturePath = path.join(evidenceDir, 'checksums.sha256.sig')
 const publicKeyPath = path.join(evidenceDir, 'signing-public-key.pem')
 const signingSummaryPath = path.join(evidenceDir, 'release-signing.json')
+const distributionSigningPath = path.join(evidenceDir, 'distribution-signing.json')
+const requiredDistributionTests = ['freshInstall', 'upgrade', 'uninstall', 'corruptedUpdate']
 
 function relativePath(filePath) {
   return path.relative(root, filePath).replace(/\\/g, '/')
@@ -108,7 +110,7 @@ function validateChecksums() {
     throw new Error('[release-validate] No packaged artifacts were found in the checksum manifest. Run packaging before release validation.')
   }
 
-  return { checksumCount: rows.length, artifactCount }
+  return { checksumCount: rows.length, artifactCount, rows }
 }
 
 function validateSbom() {
@@ -168,11 +170,129 @@ function validateSignatureIfPresent() {
   return { signed: true, keyId: summary.keyId || null }
 }
 
+function objectRecord(value) {
+  return value && typeof value === 'object' && !Array.isArray(value) ? value : null
+}
+
+function requireString(value, label) {
+  if (typeof value !== 'string' || !value.trim()) {
+    throw new Error(`[release-validate] Distribution signing evidence must include ${label}`)
+  }
+  return value.trim()
+}
+
+function requireStatus(value, label, expected) {
+  if (value !== expected) {
+    throw new Error(`[release-validate] Distribution signing evidence ${label} must be ${expected}`)
+  }
+}
+
+function normalizedManifestPath(value) {
+  return String(value || '').replace(/\\/g, '/')
+}
+
+function isWindowsInstallerManifestPath(manifestPath) {
+  const normalized = normalizedManifestPath(manifestPath).toLowerCase()
+  if (normalized.includes('/win-unpacked/')) return false
+  return normalized.endsWith('.exe') || normalized.endsWith('.msi') || normalized.endsWith('.msix') || normalized.endsWith('.appx')
+}
+
+function validateDistributionArtifactEntry(entry, checksumPaths) {
+  const artifact = objectRecord(entry)
+  if (!artifact) throw new Error('[release-validate] Distribution signing artifact entries must be objects')
+
+  const platform = requireString(artifact.platform, 'artifact platform')
+  const artifactPath = normalizedManifestPath(requireString(artifact.artifact, 'artifact path'))
+  if (!checksumPaths.has(artifactPath)) {
+    throw new Error(`[release-validate] Distribution signing artifact is not present in the signed checksum manifest: ${artifactPath}`)
+  }
+
+  const resolvedArtifact = resolveManifestPath(artifactPath)
+  if (!isWithin(artifactRoot, resolvedArtifact) || isEvidencePath(resolvedArtifact)) {
+    throw new Error(`[release-validate] Distribution signing artifact must be a packaged artifact under ${relativePath(artifactRoot)}: ${artifactPath}`)
+  }
+
+  const signing = objectRecord(artifact.signing)
+  if (!signing) throw new Error(`[release-validate] Distribution signing artifact is missing signing details: ${artifactPath}`)
+  requireStatus(signing.status, `for ${artifactPath}`, 'verified')
+  requireString(signing.verificationCommand, `verification command for ${artifactPath}`)
+
+  if (platform === 'windows') {
+    if (!isWindowsInstallerManifestPath(artifactPath)) {
+      throw new Error(`[release-validate] Windows public artifacts must be signed installer files, not unpacked directories: ${artifactPath}`)
+    }
+    requireStatus(signing.type, `type for ${artifactPath}`, 'authenticode')
+    requireString(signing.signer, `Authenticode signer for ${artifactPath}`)
+    requireString(signing.thumbprint, `Authenticode certificate thumbprint for ${artifactPath}`)
+    requireString(signing.timestamp, `Authenticode timestamp for ${artifactPath}`)
+  }
+
+  if (platform === 'macos') {
+    requireStatus(signing.type, `type for ${artifactPath}`, 'apple-developer-id')
+    requireStatus(signing.notarizationStatus, `notarization status for ${artifactPath}`, 'verified')
+    requireStatus(signing.stapled, `notarization stapling for ${artifactPath}`, true)
+  }
+
+  return {
+    platform,
+    artifactPath,
+    signingType: signing.type,
+  }
+}
+
+function validateDistributionSigningIfRequired(checksumRows) {
+  if (!fs.existsSync(distributionSigningPath)) {
+    if (requireSigning) {
+      throw new Error('[release-validate] Distribution signing evidence is required for public release builds. Record Windows Authenticode signing, signed update channel, rollback, and install/upgrade/uninstall/corrupted-update test evidence in release/evidence/distribution-signing.json before running release:evidence and release:sign.')
+    }
+    return { present: false, windowsInstallerSigned: false }
+  }
+
+  const checksumPaths = new Set(checksumRows.map((row) => normalizedManifestPath(row.manifestPath)))
+  const distributionManifestPath = normalizedManifestPath(relativePath(distributionSigningPath))
+  if (!checksumPaths.has(distributionManifestPath)) {
+    throw new Error('[release-validate] Distribution signing evidence must be included in the signed checksum manifest. Create release/evidence/distribution-signing.json before running npm run release:evidence.')
+  }
+
+  const evidence = readRequiredJson(distributionSigningPath, 'distribution signing evidence')
+  if (evidence.schema !== 1) throw new Error('[release-validate] Distribution signing evidence schema must be 1')
+
+  const artifacts = Array.isArray(evidence.artifacts) ? evidence.artifacts : []
+  if (!artifacts.length) throw new Error('[release-validate] Distribution signing evidence must include at least one artifact')
+  const artifactSummaries = artifacts.map((artifact) => validateDistributionArtifactEntry(artifact, checksumPaths))
+  const windowsInstallerSigned = artifactSummaries.some((artifact) =>
+    artifact.platform === 'windows' &&
+    artifact.signingType === 'authenticode' &&
+    isWindowsInstallerManifestPath(artifact.artifactPath))
+
+  const updateChannel = objectRecord(evidence.updateChannel)
+  if (!updateChannel) throw new Error('[release-validate] Distribution signing evidence must include updateChannel')
+  requireStatus(updateChannel.signed, 'updateChannel.signed', true)
+  requireStatus(updateChannel.rollbackTested, 'updateChannel.rollbackTested', true)
+  requireString(updateChannel.verificationCommand, 'update channel verification command')
+
+  const installTests = objectRecord(evidence.installTests)
+  if (!installTests) throw new Error('[release-validate] Distribution signing evidence must include installTests')
+  for (const testName of requiredDistributionTests) {
+    const testResult = objectRecord(installTests[testName])
+    if (!testResult) throw new Error(`[release-validate] Distribution signing evidence must include installTests.${testName}`)
+    requireStatus(testResult.status, `installTests.${testName}.status`, 'passed')
+    requireString(testResult.evidence, `installTests.${testName}.evidence`)
+  }
+
+  if (requireSigning && !windowsInstallerSigned) {
+    throw new Error('[release-validate] Public release validation requires at least one signed Windows installer artifact with verified Authenticode evidence.')
+  }
+
+  return { present: true, windowsInstallerSigned, artifactCount: artifactSummaries.length }
+}
+
 function main() {
-  const { checksumCount, artifactCount } = validateChecksums()
+  const { checksumCount, artifactCount, rows } = validateChecksums()
   const { componentCount } = validateSbom()
   validateEvidenceSummary(checksumCount, componentCount)
   const signature = validateSignatureIfPresent()
+  const distribution = validateDistributionSigningIfRequired(rows)
 
   console.log(`[release-validate] verified ${checksumCount} checksum(s)`)
   console.log(`[release-validate] verified ${artifactCount} packaged artifact file(s) under ${relativePath(artifactRoot)}`)
@@ -180,6 +300,9 @@ function main() {
   console.log(signature.signed
     ? `[release-validate] verified Ed25519 checksum signature${signature.keyId ? ` (${signature.keyId})` : ''}`
     : '[release-validate] no signing evidence present; checksum signature verification skipped')
+  console.log(distribution.present
+    ? `[release-validate] verified distribution signing evidence for ${distribution.artifactCount} artifact(s)`
+    : '[release-validate] no distribution signing evidence present; consumer-distribution validation skipped')
 }
 
 try {
