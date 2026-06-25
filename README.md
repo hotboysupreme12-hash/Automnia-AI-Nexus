@@ -1,382 +1,257 @@
+<div align="center">
+
+<img src="public/brand/dystopai-logo-multi-model-transparent-v2.png" alt="DystopAI Multi Model Nexus" width="760" />
+
 # DystopAI Core
 
-![DystopAI](public/brand/dystopai-logo-multi-model-transparent-v2.png)
+### A local-first command center for OpenClaw agent teams
 
-**DystopAI Core is a local-first desktop command center for recruiting, configuring, deploying, and supervising OpenClaw AI agents.** It turns a single chat surface into an operator console for agent rosters, multi-agent parties, structured missions, runtime monitoring, provider auth, skills, and Gateway plugins.
+Recruit specialized agents, connect multiple model providers, coordinate multi-agent missions, schedule recurring work, and supervise every run from one desktop control plane.
 
-The app is built as a React + TypeScript control surface, an Express API server, and an Electron desktop shell around a vendored OpenClaw runtime.
+**Multi Model Nexus** · **Local-first** · **Desktop** · **OpenClaw-native**
 
-## Production Hardening Snapshot
+</div>
 
-DystopAI Core is being moved from advanced prototype toward production-grade local desktop software. The current production posture is:
+> [!IMPORTANT]
+> DystopAI Core is in active development. It is designed for a trusted local operator environment and is not an internet-facing, multi-tenant service.
 
-- Local-first desktop control plane with a localhost-only API boundary.
-- Authenticated renderer-to-server calls using a local bearer token and exact local-origin validation.
-- Electron context isolation, sandboxing, a narrow preload bridge, denied popup creation, and restrictive production security headers.
-- Backend route extraction in progress: critical Control Plane domains now live in `server/routes/*` instead of one unreviewable server file.
-- Durable mission, runtime, JSONL recovery, configuration-save, auth, release, and OpenClaw integration smoke coverage wired into `npm test`.
-- Reproducible desktop runtime bundle preparation with exact Node/Codex runtime versions and checksum/integrity verification.
-- Release evidence generation for SBOMs, checksum manifests, release summaries, public-release signing, and consumer distribution evidence.
+## Overview
 
-The remaining high-priority engineering work is tracked in `docs/PRODUCTION_HARDENING_LEDGER.md`. Release governance, branch-protection expectations, signing policy, CI evidence, and threat model are documented in `docs/RELEASE_GOVERNANCE.md`.
+DystopAI Core is a desktop control plane for building and operating teams of OpenClaw agents. It brings agent configuration, model authentication, team coordination, scheduled missions, runtime monitoring, plugins, skills, and recovery controls into one coherent interface.
 
-## What It Is
+Instead of managing separate terminals, configuration files, sessions, cron jobs, and provider credentials, an operator can use DystopAI to:
 
-DystopAI Core is not just a chatbot wrapper. It is an agent operations layer:
+- Recruit agents with distinct identities, roles, models, tools, workspaces, and operating doctrine.
+- Assemble agents into an active party for direct work or coordinated missions.
+- Send commands to one agent, selected agents, or the full confirmed party.
+- Launch structured missions with ownership, acceptance gates, verification commands, and timing rules.
+- Schedule repeated work through OpenClaw-backed cron missions.
+- Watch live responses, active calls, sessions, logs, channels, plugin state, and Gateway health.
+- Stop, restart, clean up, and recover the runtime without dropping back into the terminal for every operation.
 
-- Recruit agents with profiles, capabilities, models, workspace policy, tool policy, and bootstrap markdown.
-- Build an active party of agents and send direct, selected, or party-wide Command Console turns.
-- Launch missions with collaboration modes, acceptance gates, verification commands, timing, and cron-backed follow-up.
-- Monitor active runtime calls, Gateway health, open sessions, logs, channels, plugin state, and stale locks.
-- Manage provider auth for API-key and OAuth-backed model lanes.
-- Install and inspect OpenClaw plugins and skills, including ClawHub-based workflows.
-- Package a standalone desktop build with bundled UI, server, OpenClaw runtime, and required resources.
+DystopAI is not another model-specific chat wrapper. It is an operations layer for turning OpenClaw agents into an observable, configurable, and recoverable local system.
 
-## Screenshots
+## Product Tour
 
-Fresh screenshots below were captured from a full browser test against the current Vite app and Control Center backend on June 23, 2026.
-
-| Agents + Command Console | Mission Board |
+| Agents and Command Console | Mission Board |
 | --- | --- |
-| ![Current Agents and Command Console browser capture](docs/assets/readme/current/agents-console-current.png) | ![Current Mission Board browser capture](docs/assets/readme/current/missions-current.png) |
+| ![DystopAI Agents and Command Console](docs/assets/readme/current/agents-console-current.png) | ![DystopAI Mission Board](docs/assets/readme/current/missions-current.png) |
 
 | Runtime Monitor | Plugins |
 | --- | --- |
-| ![Current Runtime Monitor browser capture](docs/assets/readme/current/monitor-current.png) | ![Current Plugins browser capture](docs/assets/readme/current/plugins-current.png) |
+| ![DystopAI Runtime Monitor](docs/assets/readme/current/monitor-current.png) | ![DystopAI Plugins](docs/assets/readme/current/plugins-current.png) |
 
 | Agent Editor |
 | --- |
-| ![Current Agent Editor browser capture](docs/assets/readme/current/agent-editor-current.png) |
+| ![DystopAI Agent Editor](docs/assets/readme/current/agent-editor-current.png) |
+
+## What DystopAI Brings Together
+
+| Operational need | DystopAI surface |
+| --- | --- |
+| Agent identity and configuration | Searchable roster, recruitment flow, editor, doctrine files, workspace and tool policy |
+| Direct and team communication | Command Console for one agent, selected agents, or the confirmed party |
+| Multi-agent orchestration | Mission types, collaboration modes, ownership, acceptance gates, and verification |
+| Scheduled autonomous work | Strike, Shift, Loop, and Watch missions backed by OpenClaw cron state |
+| Runtime visibility | Live calls, sessions, logs, channel activity, Gateway health, and failure evidence |
+| Recovery and control | Stop, abort, restart, session cleanup, stale-lock handling, and Clean Slate controls |
+| Model and provider access | API-key and OAuth lanes across cloud and local providers |
+| Extensibility | OpenClaw plugins, channels, skills, learned skills, and ClawHub workflows |
 
 ## Core Capabilities
 
-### Agent Roster
+### Agent Roster and Configuration
 
-The Agents tab is the everyday command surface. It supports a searchable roster, active party slots, direct selection, party confirmation, layout modes, and an always-available Command Console.
+Every agent can be configured as a distinct worker instead of a generic chatbot profile.
 
-Agents are typed with:
-
-- Identity: name, class, role, rarity, portrait, and behavior profile.
-- Capabilities: code, planning, research, orchestration, and memory.
-- Model policy: primary model, fallbacks, thinking level, timeouts, and provider auth.
-- Runtime policy: sandbox, workspace, tools, heartbeat cadence, and recovery mode.
-- Doctrine files: `IDENTITY.md`, `SOUL.md`, `BOOTSTRAP.md`, `AGENTS.md`, `USER.md`, `HEARTBEAT.md`, `MEMORY.md`, `TOOLS.md`, and `MISSION_PROMPT.md`.
+- Identity, portrait, class, role, rarity, level, and behavior profile.
+- Capability lanes for code, planning, research, orchestration, and memory.
+- Primary model, fallback models, thinking level, timeout, and provider authentication.
+- Workspace, sandbox, tool allow and deny policy, heartbeat cadence, and recovery mode.
+- Editable doctrine files including `IDENTITY.md`, `SOUL.md`, `BOOTSTRAP.md`, `AGENTS.md`, `USER.md`, `HEARTBEAT.md`, `MEMORY.md`, `TOOLS.md`, and `MISSION_PROMPT.md`.
 
 ### Command Console
 
-The Command Console sends user turns to one agent, selected agents, or the confirmed party. Normal console turns prefer the OpenClaw Gateway chat path so the app behaves like a first-class OpenClaw client:
+The Command Console is the everyday operating surface for live work.
 
-- Stable session keys such as `agent:<agentId>:control-center:console`.
-- Gateway `chat.send` dispatch.
-- Live `chat` delta events streamed back through SSE.
-- Durable final text read from `chat.history` or `chat.message.get`.
-- `chat.abort` support when the user stops an active run.
-- CLI and embedded local fallback when Gateway transport is unavailable.
+- Send a turn to one agent, multiple selected agents, or the confirmed party.
+- Attach context and keep agent lanes visually separated.
+- Stream live response deltas through the OpenClaw Gateway path.
+- Preserve stable session keys and retrieve durable final responses from Gateway history.
+- Stop an active turn with abort handling.
+- Fall back to CLI or embedded local execution when Gateway transport is unavailable.
 
-### Missions
+### Mission Orchestration
 
-Missions convert an objective into coordinated work. The mission builder includes templates, mission type, collaboration style, acceptance evidence, verification commands, and timing.
+Missions convert a broad objective into coordinated, verifiable work.
 
-Supported collaboration modes:
+**Mission types**
 
-- `Command`: slot 1 delegates and synthesizes.
-- `Parallel`: every selected agent starts immediately.
-- `Specialist`: only agents with the right capability run.
-- `Relay`: agents work in order and hand off context.
-- `Swarm`: broad research or ideation across many lanes.
+- `Build`: implementation, file ownership, testing, and exact change reporting.
+- `Plan`: scope, dependencies, risks, milestones, and ownership.
+- `Research`: evidence gathering, uncertainty mapping, and source-backed findings.
+- `Command`: delegation, handoffs, blocker resolution, and synthesis.
+- `Memory`: durable notes, learned skills, and continuity updates.
 
-Supported timing modes:
+**Collaboration modes**
 
-- `Strike`: one leader-worker-review cycle.
-- `Shift`: cron cycles until a configured time ends.
-- `Loop`: cron cycles until stopped.
-- `Watch`: persistent background monitoring.
+- `Command`: slot 1 delegates work and synthesizes the final result.
+- `Parallel`: agents start immediately on separate lanes.
+- `Specialist`: only agents with the matching capability run.
+- `Relay`: agents work in order and pass context forward.
+- `Swarm`: many agents explore a problem from different angles.
+
+**Timing modes**
+
+- `Strike`: one leader, worker, and review cycle.
+- `Shift`: repeat cron cycles until the configured time ends.
+- `Loop`: continue cron cycles until stopped.
+- `Watch`: maintain a persistent background mission.
+
+Mission definitions can include acceptance gates, verification commands, complexity, risk tolerance, heartbeat cadence, and explicit success evidence.
 
 ### Runtime Monitor
 
-The Monitor tab is the control room for live operations:
+The Monitor answers the most important operational question: what is the system doing right now?
 
-- Gateway lifecycle: health, PID, uptime, readiness, restart, stop, and start.
-- Runtime runs: active calls, recent calls, failure kinds, and timing.
-- Sessions: open agent sessions, session files, locks, stale locks, and cleanup actions.
-- Logs: Gateway log tail, lifecycle entries, channel activity, and diagnostic summaries.
-- Cron missions: scheduled jobs, next run, owner agent, cadence, and stop/update controls.
-- Clean Slate: UI/runtime monitor cleanup without blindly killing active Gateway work.
+- Gateway health, PID, uptime, readiness, start, stop, and restart controls.
+- Active and recent runtime calls with timing and failure classification.
+- Open sessions, session files, locks, stale locks, and cleanup actions.
+- Mission events, Gateway logs, channel activity, and diagnostic summaries.
+- Scheduled cron jobs with owner, cadence, next run, and stop controls.
+- Clean Slate recovery for stale UI and runtime state without blindly terminating healthy work.
 
-### Plugins And Skills
+### Plugins, Channels, and Skills
 
-DystopAI Core exposes OpenClaw's plugin and skill ecosystem inside the app:
+DystopAI exposes the OpenClaw extension ecosystem inside the desktop app.
 
-- List installed, enabled, disabled, and setup-required plugins.
-- Inspect plugin commands, providers, channels, dependencies, config fields, and runtime status.
-- Install and update plugins through OpenClaw/ClawHub flows.
-- Configure ClawTalk and restart Gateway-backed plugin surfaces.
-- List bundled, learned, shared, and ClawHub skills.
-- Let agents learn reusable skills from successful work.
+- Inspect installed, enabled, disabled, loaded, and setup-required plugins.
+- Enable, disable, install, update, and configure plugin surfaces.
+- Inspect plugin commands, providers, channels, dependencies, and runtime state.
+- Browse bundled, learned, shared, and ClawHub skills.
+- Let agents preserve reusable skills learned from successful work.
+- Configure communication plugins such as ClawTalk for SMS, voice, and walkie-style agent routing when available.
 
-### Provider Auth
+### Model Providers and Authentication
 
-The backend catalogs many provider lanes and their expected credentials. Common paths include:
+Provider credentials remain local and are managed per model lane. Supported paths depend on the active OpenClaw configuration and include providers such as:
 
-- OpenAI API keys and OpenAI Codex OAuth.
-- Anthropic, Google Gemini, Google Vertex, DeepSeek, OpenRouter, xAI, Groq, Mistral, Qwen/DashScope, Kimi/Moonshot, Cerebras, DeepInfra, Fireworks, Together, Hugging Face, NVIDIA, and more.
-- Local or optional-auth providers such as Ollama, LM Studio, vLLM, SGLang, Comfy, DuckDuckGo, and SearXNG where supported by the active OpenClaw config.
+- OpenAI API and OpenAI Codex OAuth.
+- Anthropic, Google Gemini, Google Vertex, DeepSeek, OpenRouter, xAI, Groq, Mistral, Qwen, Kimi, Cerebras, NVIDIA, and other compatible providers.
+- Local or optional-auth runtimes such as Ollama, LM Studio, vLLM, SGLang, Comfy, DuckDuckGo, and SearXNG where supported.
 
-Provider credentials are local environment/config concerns. Do not commit secrets. The repo ignores `.env`, `client_secret.json`, `*secret*.json`, and `*credentials*.json`.
+Never commit provider keys, OAuth secrets, or credential files.
+
+## Operator Workflow
+
+1. **Recruit or open an agent.** Define its role, capabilities, model, workspace, tools, and doctrine.
+2. **Connect model access.** Add an API key or complete the supported OAuth flow.
+3. **Assemble a party.** Deploy agents into ordered slots and confirm the team.
+4. **Choose the work surface.** Send a direct Command Console turn or build a structured mission.
+5. **Define proof.** Add acceptance gates and verification commands before launching important work.
+6. **Observe the run.** Use the console and Monitor to inspect live output, sessions, logs, cron jobs, and Gateway state.
+7. **Recover deliberately.** Stop the turn, close stale sessions, restart Gateway, or use Clean Slate when evidence shows cleanup is needed.
 
 ## Architecture
 
 ```mermaid
 flowchart LR
   Operator["Operator"]
-  Electron["Electron shell"]
+  Electron["Electron desktop shell"]
   UI["React control surface"]
-  API["Express API server"]
-  Store["Zustand app state"]
+  API["Express control plane"]
   Gateway["OpenClaw Gateway"]
   Runtime["OpenClaw agent runtime"]
-  Plugins["Plugins and channels"]
-  Ledgers["Runtime and event ledgers"]
-  Files["Agent doctrine and workspace files"]
   Providers["Model providers"]
+  Plugins["Plugins and channels"]
+  State["Local ledgers and configuration"]
+  Files["Agent doctrine and workspaces"]
 
   Operator --> Electron
   Electron --> UI
-  UI --> Store
   UI --> API
   API --> Gateway
   Gateway --> Runtime
   Runtime --> Providers
   Gateway --> Plugins
-  API --> Ledgers
+  API --> State
   API --> Files
   API --> Runtime
 ```
 
-### Frontend
+### Technology Stack
 
-- React 19, TypeScript, Vite, Tailwind CSS, Framer Motion, and Zustand.
-- Main shell: `src/components/layout/NexusShell.tsx`.
-- Agent console: `src/components/monitor/AgentResponseConsole.tsx`.
-- Mission builder: `src/components/mission/MissionDeploymentPanel.tsx`.
-- Runtime monitor: `src/components/monitor/LiveOperationMonitor.tsx`.
-- Plugin manager: `src/components/plugins/PluginsPanel.tsx`.
-- Recruit flow: `src/components/recruit/RecruitAgentModal.tsx`.
-
-### Backend
-
-- Express 5 API composed from `server/index.ts`, shared HTTP helpers in `server/controlPlaneHttp.ts`, and extracted route modules in `server/routes/*`.
-- Runtime ledgers in `server/runtimeLedger.ts`.
-- Static production UI served from `dist`.
-- OpenClaw state rooted at `OPENCLAW_STATE_DIR` / `OPENCLAW_HOME`, defaulting to the user's OpenClaw state directory.
-- Local Control Center ledgers under `control-center-ledger`.
-- Gateway-backed command execution with SSE bridging for live console output.
-
-`server/index.ts` is still being reduced, but the major Control Plane surfaces now have reviewable module boundaries:
-
-| Module | Responsibility |
+| Layer | Technology |
 | --- | --- |
-| `server/routes/authRoutes.ts` | Local login/status/session-token endpoints. |
-| `server/routes/diagnosticsRoutes.ts` | Health, diagnostics, and redaction-aware operational checks. |
-| `server/routes/commandConsoleFileRoutes.ts` | Command Console control-file operations. |
-| `server/routes/openclawCommandRoutes.ts` | OpenClaw command summaries, run evidence, and command-control helpers. |
-| `server/routes/runtimeRoutes.ts` | Runtime status, Gateway lifecycle, sessions, logs, cleanup, and action endpoints. |
-| `server/routes/pluginRoutes.ts` | Plugin inventory, setup, install, update, enable/disable, Gateway plugin state, and ClawHub surfaces. |
-| `server/routes/filesystemRoutes.ts` | Workspace filesystem reads/writes through containment-aware API boundaries. |
-| `server/routes/partyCoordinationRoutes.ts` | Party coordination, parallel health, selected-agent turns, and team sync surfaces. |
-| `server/routes/missionRoutes.ts` | Mission lifecycle, backend-owned durable mission state, cancellation, projection, and reconciliation endpoints. |
-| `server/routes/agentTurnRoutes.ts` | Agent turn dispatch, streaming, final responses, stop handling, and run evidence. |
-| `server/routes/clawTalkConsoleRoutes.ts` | ClawTalk console stream/final message endpoints. |
-| `server/routes/providerAuthRoutes.ts` | Provider catalog, model catalog, provider auth, OAuth helpers, and credential status. |
-| `server/routes/skillRoutes.ts` | Skills, learned skills, shared skills, and ClawHub skill workflows. |
+| Desktop | Electron and electron-builder |
+| Frontend | React, TypeScript, Vite, Tailwind CSS, Framer Motion, and Zustand |
+| Backend | Express, TypeScript, Zod, server-side route modules, and SSE |
+| Runtime | Vendored OpenClaw runtime, Gateway sessions, cron, plugins, and skills |
+| Local state | OpenClaw configuration, agent doctrine, workspaces, JSONL ledgers, and desktop user data |
+| Quality gates | ESLint, TypeScript checks, control-plane smoke tests, Electron tests, packaging checks, and release evidence validation |
 
-New backend behavior should follow this pattern: put domain logic behind a small route-registration function, use shared request IDs/error envelopes, validate inputs at the route boundary, keep OpenClaw/Gateway protocol behavior aligned with the local docs snapshot, and add a focused smoke or integration test for the extracted contract.
-
-### Desktop Shell
-
-- Electron entry: `electron/main.cjs`.
-- Default desktop API port: `4050`.
-- Default Vite dev port: `5173`.
-- Default OpenClaw Gateway port: `18789`.
-- Default browser relay port: `18792`.
-- User data defaults to `~/.dystopai-control-center`.
-- Packaged builds include `dist`, `dist-server`, `vendor/openclaw`, agent resources, and desktop icons.
-
-## Quick Start
+## Getting Started
 
 ### Prerequisites
 
-- Node.js `22.19+` recommended. Node `24` also works.
+- Node.js `22.19+` recommended. Node.js `24` is also supported by the current project configuration.
 - npm.
 - Git.
-- Provider credentials or OAuth setup for whichever models you want to run.
+- Provider credentials or OAuth access for the models you plan to use.
 
 ### Install
 
 ```bash
-npm install
-```
-
-For reproducible verification or release work, prefer the checked-in lockfile:
-
-```bash
+git clone https://github.com/hotboysupreme12-hash/DystopAI-Core.git
+cd DystopAI-Core
 npm ci
 ```
 
-### Run In Development
+### Run in Development
 
 ```bash
 npm run dev
 ```
 
-Open the Vite UI:
+The development surfaces run locally:
 
-```text
-http://127.0.0.1:5173/
-```
+- Frontend: `http://127.0.0.1:5173/`
+- Control Plane API: `http://127.0.0.1:4050/`
 
-The backend API runs on:
+When `CONTROL_CENTER_TOKEN` is not set, the server generates a local token and prints it in the startup log. Packaged desktop sessions authenticate through the Electron shell.
 
-```text
-http://127.0.0.1:4050/
-```
-
-If prompted for a local token, use the token configured for this Control Center. When `CONTROL_CENTER_TOKEN` is not set, the server generates a one-time local token and prints it in the startup log. Set a stable token before sharing access:
+### Run the Desktop App
 
 ```bash
-CONTROL_CENTER_TOKEN="your-local-token" npm run dev
-```
-
-### Run The Desktop App Locally
-
-```bash
-npm run build:standalone
 npm run desktop
 ```
 
-### Package For Windows
+This builds the frontend and server, then launches the Electron shell.
+
+### Build a Windows Installer
 
 ```bash
 npm run dist:win
 ```
 
-The Windows distribution script builds the client/server, prepares runtime bundles, and targets a consumer NSIS installer under ignored output folders such as `release/` and `artifacts/`. For unpacked CI or local launch checks, use `npm run package:desktop` or `npm run dist:win:dir`.
-Runtime bundle prep is pinned: Node archives are verified against Node's published `SHASUMS256.txt`, and the bundled Codex plugin installs an exact package version with a checked npm integrity value.
-Before generating public release evidence, produce platform distribution evidence in `release/evidence/distribution-signing.json`. Public Windows builds must record verified Authenticode signing for the installer, signed update-channel verification, update rollback proof, and fresh-install, upgrade, uninstall, and corrupted-update test evidence.
-After generating release output and distribution evidence, run `npm run release:evidence` to write `release/evidence/dystopai-sbom.cdx.json`, `release/evidence/checksums.sha256`, and `release/evidence/release-evidence.json`. Publish those files with the installer output so operators can verify the shipped dependency graph and artifact hashes.
-For release candidates with a signing key, sign the checksum manifest after evidence generation:
+Generated desktop output is written to ignored build folders such as `release/` and `artifacts/`.
 
-```bash
-DYSTOPAI_RELEASE_SIGNING_PRIVATE_KEY_FILE="C:/secure/dystopai-release-ed25519.pem" npm run release:sign
-```
-
-This writes `release/evidence/checksums.sha256.sig`, `release/evidence/signing-public-key.pem`, and `release/evidence/release-signing.json`. Publish those files with the SBOM and checksum manifest; the private key must never live in the repository.
-Before publishing, run `npm run release:validate`. It verifies the checksum manifest against packaged files, checks SBOM and summary consistency, requires packaged artifacts to be present, verifies the detached signature when signing evidence exists, and requires consumer distribution evidence for public release builds.
-For public release builds, validation must require signing evidence:
-
-```bash
-DYSTOPAI_RELEASE_REQUIRE_SIGNING=1 npm run release:validate
-```
-
-The CI workflow enforces the same requirement for version tags, manual `public_release` workflow runs, or runs where `DYSTOPAI_RELEASE_REQUIRE_SIGNING=true`. Branch protection, release evidence retention, and the local-only desktop threat model are documented in `docs/RELEASE_GOVERNANCE.md`.
-
-## Common Commands
+## Essential Commands
 
 | Command | Purpose |
 | --- | --- |
-| `npm run dev` | Start backend and Vite frontend together. |
-| `npm run dev:server` | Start the Express backend with `tsx watch`. |
-| `npm run dev:client` | Start Vite on `127.0.0.1:5173`. |
-| `npm run build` | Type-check and build the frontend. |
-| `npm run build:server` | Bundle the Express server to `dist-server/index.cjs`. |
-| `npm run build:standalone` | Build both frontend and server. |
-| `npm run desktop` | Build standalone output and launch Electron. |
-| `npm run typecheck` | Type-check app, server, Electron, and preload surfaces. |
-| `npm run lint` | Run ESLint across the repo. |
-| `npm test` | Run the full local production-hardening test gate. |
-| `npm run smoke:openclaw` | Run OpenClaw contract, redaction, SSE, and stream smoke tests. |
-| `npm run smoke:electron-e2e` | Launch Electron against built server/client artifacts on throwaway ports and verify startup, tray hide/restore behavior, renderer navigation policy, renderer crash recovery, failure exit, and quit cleanup. |
-| `npm run smoke:packaged-electron-launch` | Launch the packaged desktop directory output on throwaway ports and verify the bundled app reaches startup and quit cleanup. |
-| `npm run smoke:ui` | Run Electron UI smoke checks against the built frontend. |
+| `npm run dev` | Start the backend and Vite frontend together. |
+| `npm run desktop` | Build the standalone app and launch Electron. |
+| `npm run build:standalone` | Build the production frontend and server bundle. |
+| `npm run lint` | Run ESLint across the repository. |
+| `npm run typecheck` | Type-check frontend, server, Electron, and preload surfaces. |
+| `npm test` | Run the complete local control-plane quality gate. |
+| `npm run smoke:electron-e2e` | Validate Electron startup, navigation policy, crash recovery, tray behavior, and cleanup. |
+| `npm run package:desktop` | Create an unpacked desktop package for launch validation. |
+| `npm run dist:win` | Create the Windows NSIS installer output. |
 | `npm run docs:openclaw:sync` | Refresh the local OpenClaw documentation snapshot. |
-| `npm run setup:gateway-auth` | Prepare local Gateway auth config. |
-| `npm run dist:win` | Create the Windows NSIS installer distribution output. |
-| `npm run dist:win:dir` | Create an unpacked Windows directory build for launch smoke/debugging. |
-| `npm run release:evidence` | Generate the release SBOM, checksum manifest, and evidence summary. |
-| `npm run release:sign` | Sign the release checksum manifest with an Ed25519 release key. |
-| `npm run release:validate` | Verify release checksums, evidence consistency, packaged artifacts, required public-release checksum signature evidence, and public consumer distribution evidence when `DYSTOPAI_RELEASE_REQUIRE_SIGNING=1`. |
 
-## Configuration
-
-The app is local-first and mostly controlled by environment variables plus the OpenClaw config it manages.
-
-| Variable | Default | Use |
-| --- | --- | --- |
-| `CONTROL_CENTER_PORT` | `4050` | Backend/API and packaged app port. |
-| `CONTROL_CENTER_FRONTEND_PORT` | `5173` | Vite development frontend port. |
-| `CONTROL_CENTER_TOKEN` | generated per launch | Local app login token. |
-| `CONTROL_CENTER_WORKSPACE_ROOT` | current repo or OpenClaw workspace | Workspace root exposed to agents. |
-| `CONTROL_CENTER_AUTOSTART_GATEWAY` | `1` when Gateway sessions are enabled | Start Gateway automatically for agent runs. |
-| `CONTROL_CENTER_GATEWAY_AGENT_SESSIONS` | `1` | Prefer Gateway-backed console sessions. |
-| `CONTROL_CENTER_GATEWAY_CHAT_CLIENT` | `1` | Keep a persistent lightweight Gateway chat client. |
-| `CONTROL_CENTER_FORCE_LOCAL_AGENT_RUNTIME` | unset | Force embedded local execution instead of Gateway chat. |
-| `OPENCLAW_GATEWAY_PORT` | `18789` | OpenClaw Gateway port. |
-| `OPENCLAW_BROWSER_RELAY_PORT` | `18792` | Browser relay port. |
-| `OPENCLAW_STATE_DIR` / `OPENCLAW_HOME` | user OpenClaw state dir | Runtime state, config, agents, skills, ledgers. |
-| `OPENCLAW_CONFIG_PATH` | `<state>/openclaw.json` | Active OpenClaw config file. |
-| `OPENCLAW_GATEWAY_LOG_PATH` | `<state>/gateway.log` | Gateway log file. |
-| `OPENCLAW_BIN` | auto-detected | Explicit OpenClaw runtime binary/script. |
-| `DYSTOPAI_USER_DATA_DIR` | `~/.dystopai-control-center` | Electron user data directory. |
-| `DYSTOPAI_DEFAULT_AGENT_MODEL` | DeepSeek default | Seed/default model override. |
-| `DYSTOPAI_BUNDLED_NODE_VERSION` | `v24.16.0` | Exact Node runtime version packaged with desktop builds. |
-| `DYSTOPAI_BUNDLED_CODEX_SPEC` | `@openclaw/codex@2026.6.10` | Exact Codex plugin package bundled for OpenClaw. |
-| `DYSTOPAI_BUNDLED_CODEX_INTEGRITY` | pinned sha512 | Required npm integrity when overriding the bundled Codex spec. |
-| `DYSTOPAI_BUNDLED_CODEX_TARBALL` | pinned npm tarball | Optional tarball assertion for the bundled Codex package. |
-
-## Repository Layout
-
-```text
-.
-|-- electron/                 # Electron shell, process management, desktop integration
-|-- server/                   # Express API, OpenClaw bridge, ledgers
-|-- src/                      # React app, store, UI components, engine helpers
-|-- public/                   # Brand assets, agent portraits, mission/card art
-|-- docs/                     # User guide, OpenClaw docs snapshot, architecture notes
-|-- scripts/                  # Build, package, smoke, auth, docs sync utilities
-|-- vendor/openclaw/          # Vendored OpenClaw runtime snapshot
-|-- build/                    # Source desktop icon assets kept for packaging
-|-- dist/                     # Generated frontend build, ignored
-|-- dist-server/              # Generated server bundle, ignored
-|-- release/                  # Generated Electron output, ignored
-`-- artifacts/                # Generated zips/reports, ignored
-```
-
-## OpenClaw Integration Notes
-
-This repo includes a local OpenClaw docs snapshot at:
-
-```text
-docs/openclaw-latest
-docs/openclaw-latest/pages
-```
-
-When changing Gateway, Command Console, ClawTalk, runtime, tool routing, sessions, plugins, or Control Center behavior, read the local OpenClaw docs first. Useful starting points:
-
-- `docs/openclaw-latest/pages/gateway/protocol.md`
-- `docs/openclaw-latest/pages/web/webchat.md`
-- `docs/openclaw-latest/pages/web/control-ui.md`
-- `docs/openclaw-latest/pages/cli/agent.md`
-- `docs/OPENCLAW_GATEWAY_COMMAND_CONSOLE_GUIDE.md`
-
-Refresh the snapshot when upstream behavior matters:
-
-```bash
-npm run docs:openclaw:sync
-```
-
-## Validation And CI
-
-Run these before pushing changes:
+Before pushing significant changes, run:
 
 ```bash
 npm run lint
@@ -384,92 +259,70 @@ npm run typecheck
 npm test
 ```
 
-For desktop packaging and launch validation:
+Public release work, signing policy, SBOM generation, checksum validation, installer evidence, and release governance are documented separately in [`docs/RELEASE_GOVERNANCE.md`](docs/RELEASE_GOVERNANCE.md).
 
-```bash
-npm run package:desktop
-npm run smoke:packaged-electron-launch
+## Configuration
+
+DystopAI is primarily configured through environment variables and the OpenClaw configuration it manages.
+
+| Variable | Default | Purpose |
+| --- | --- | --- |
+| `CONTROL_CENTER_PORT` | `4050` | Local Control Plane API and packaged app port. |
+| `CONTROL_CENTER_FRONTEND_PORT` | `5173` | Vite development frontend port. |
+| `CONTROL_CENTER_TOKEN` | Generated when unset | Local browser session token. |
+| `CONTROL_CENTER_WORKSPACE_ROOT` | Project or OpenClaw workspace | Root workspace exposed through the control plane. |
+| `OPENCLAW_GATEWAY_PORT` | `18789` | OpenClaw Gateway port. |
+| `OPENCLAW_BROWSER_RELAY_PORT` | `18792` | Browser relay port. |
+| `OPENCLAW_STATE_DIR` / `OPENCLAW_HOME` | User OpenClaw state directory | Runtime state, agents, skills, sessions, and configuration. |
+| `OPENCLAW_CONFIG_PATH` | `<state>/openclaw.json` | Active OpenClaw configuration file. |
+| `DYSTOPAI_USER_DATA_DIR` | `~/.dystopai-control-center` | Electron user data directory. |
+
+Advanced runtime and packaging variables live close to the scripts that consume them. Keep environment-specific values outside version control.
+
+## Security Model
+
+DystopAI controls a privileged local agent runtime. Treat it like an administrator console.
+
+- The Control Plane API is intended to bind only to loopback addresses.
+- Browser access requires the local bearer token and exact local-origin validation.
+- The Electron renderer uses context isolation, sandboxing, a narrow preload bridge, restricted navigation, and denied popup creation.
+- OpenClaw agents may receive shell, filesystem, browser, communication, or provider tools based on operator policy.
+- Broad tool or workspace access should be granted deliberately and reviewed in each agent's policy and doctrine.
+- Provider secrets, OAuth credentials, local sessions, generated runtime data, and release output must remain outside Git.
+- Exposing the Control Plane to a LAN or the public internet is outside the current threat model and requires a separate authentication, authorization, transport, and audit design.
+
+The detailed threat model, branch protections, signing policy, and release requirements are documented in [`docs/RELEASE_GOVERNANCE.md`](docs/RELEASE_GOVERNANCE.md).
+
+## Repository Layout
+
+```text
+.
+|-- electron/                 # Electron shell and desktop process management
+|-- server/                   # Express control plane, OpenClaw bridge, and ledgers
+|-- src/                      # React application, store, hooks, and UI components
+|-- public/                   # Brand assets, portraits, icons, and mission artwork
+|-- docs/                     # User guides, architecture notes, and OpenClaw snapshot
+|-- scripts/                  # Build, test, packaging, auth, and release utilities
+|-- vendor/openclaw/          # Vendored OpenClaw runtime snapshot
+|-- build/                    # Tracked source icons used by desktop packaging
+|-- dist/                     # Generated frontend build, ignored
+|-- dist-server/              # Generated server bundle, ignored
+|-- release/                  # Generated desktop output, ignored
+`-- artifacts/                # Generated archives and reports, ignored
 ```
 
-For release evidence and public-release validation:
+## Documentation
 
-```bash
-npm run release:evidence
-npm run release:validate
-```
-
-Public releases must also provide signing evidence and run validation with `DYSTOPAI_RELEASE_REQUIRE_SIGNING=1`.
-
-GitHub Actions runs `Control Plane CI / Hardened control plane`. The workflow performs locked install, production dependency audit, secret scan, lint, semantic type-checking, production hardening smokes, server/client builds, Electron e2e smoke, reproducible runtime prep, vendored OpenClaw prep, desktop packaging, packaged launch smoke, SBOM/checksum generation, release validation, evidence verification, and evidence upload. `main` should be protected so this check is green before merge.
-
-## Security And Local Data
-
-DystopAI Core is designed as a local operator app. Treat it like an admin console.
-
-Threat model:
-
-- The privileged Control Plane API is localhost-only and should bind only to loopback addresses.
-- The app must not expose privileged APIs to LAN interfaces.
-- There is no cloud exposure unless authentication, transport security, authorization, auditing, and operator identity are redesigned for a multi-user networked service.
-- The desktop renderer is trusted only through the packaged app origin and narrow preload bridge.
-- The local bearer token is a desktop session capability, not an internet-facing account credential.
-- OpenClaw/Gateway integrations can operate tools and shell commands inside the local operator boundary; exposing that boundary to a network changes the security model.
-
-Operator rules:
-
-- Keep `CONTROL_CENTER_TOKEN` private.
-- Keep provider API keys and OAuth client secrets out of Git.
-- Review generated agent doctrine before giving agents broad workspace/tool access.
-- Use the Monitor tab to inspect active runs, sessions, Gateway logs, and stale locks.
-- Use plugin setup flows carefully because plugins may add providers, channels, commands, and external integrations.
-- Publish public builds only with release evidence, checksums, and signing material required by `docs/RELEASE_GOVERNANCE.md`.
-
-Ignored local/generated data includes:
-
-- `node_modules/`
-- `.openclaw/`, `.runtime/`, `.cache/`, `.tmp/`
-- `dist/`, `dist-server/`, `release/`, `artifacts/`, `output/`, `reports/`
-- `.env`, `client_secret.json`, `*secret*.json`, `*credentials*.json`
-- local memory/session/runtime folders
-
-## Troubleshooting
-
-### The UI asks for a token
-
-Use the local token configured for this Control Center. If no token was configured, check the server startup log for the generated one-time token. For a stable local token, set:
-
-```bash
-CONTROL_CENTER_TOKEN="your-local-token"
-```
-
-### Gateway is offline
-
-Use the Monitor tab to start or restart Gateway. From the terminal, confirm the configured port:
-
-```bash
-echo $OPENCLAW_GATEWAY_PORT
-```
-
-On Windows PowerShell:
-
-```powershell
-$env:OPENCLAW_GATEWAY_PORT
-```
-
-### A model cannot run
-
-Check the agent's Model tab first. Most failures are missing auth, expired OAuth, unsupported provider model IDs, stale Gateway config, or a provider quota issue.
-
-### Command Console hangs or needs a reset
-
-Use the stop control in the Command Console, then check Monitor for active runs and sessions. If stale UI/runtime state remains, use Clean Slate from Monitor.
-
-### Desktop packaging cannot find icons
-
-The desktop packager expects icons under `build/`. This repo keeps only `build/icon*.png` and `build/icon*.svg` tracked; generated build outputs remain ignored.
+- [`docs/USER_GUIDE.md`](docs/USER_GUIDE.md): operator-focused walkthrough of agents, missions, monitoring, plugins, and model authentication.
+- [`docs/OPENCLAW_GATEWAY_COMMAND_CONSOLE_GUIDE.md`](docs/OPENCLAW_GATEWAY_COMMAND_CONSOLE_GUIDE.md): Gateway protocol and Command Console integration guidance.
+- [`docs/PRODUCTION_HARDENING_LEDGER.md`](docs/PRODUCTION_HARDENING_LEDGER.md): prioritized engineering and production-readiness work.
+- [`docs/RELEASE_GOVERNANCE.md`](docs/RELEASE_GOVERNANCE.md): CI, signing, evidence, release, and threat-model policy.
+- [`docs/openclaw-latest/`](docs/openclaw-latest/): local snapshot of the OpenClaw documentation used by the project.
 
 ## Project Status
 
 Current package version: `0.0.6`.
 
-This is an active local-first desktop app around a fast-moving OpenClaw runtime. The most important development rule is simple: keep the operator experience responsive, observable, and recoverable while staying aligned with OpenClaw Gateway protocol behavior.
+DystopAI Core is an active local-first desktop project around a fast-moving OpenClaw runtime. The main product surfaces are implemented, while runtime durability, security hardening, packaging, release evidence, and operator experience continue to evolve.
+
+The production-readiness backlog belongs in the hardening ledger, not in the README. The README is the product's front door: what DystopAI is, what it does, how it works, and how to run it.
