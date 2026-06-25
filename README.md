@@ -6,6 +6,20 @@
 
 The app is built as a React + TypeScript control surface, an Express API server, and an Electron desktop shell around a vendored OpenClaw runtime.
 
+## Production Hardening Snapshot
+
+DystopAI Core is being moved from advanced prototype toward production-grade local desktop software. The current production posture is:
+
+- Local-first desktop control plane with a localhost-only API boundary.
+- Authenticated renderer-to-server calls using a local bearer token and exact local-origin validation.
+- Electron context isolation, sandboxing, a narrow preload bridge, denied popup creation, and restrictive production security headers.
+- Backend route extraction in progress: critical Control Plane domains now live in `server/routes/*` instead of one unreviewable server file.
+- Durable mission, runtime, JSONL recovery, configuration-save, auth, release, and OpenClaw integration smoke coverage wired into `npm test`.
+- Reproducible desktop runtime bundle preparation with exact Node/Codex runtime versions and checksum/integrity verification.
+- Release evidence generation for SBOMs, checksum manifests, release summaries, and optional mandatory public-release signing.
+
+The remaining high-priority engineering work is tracked in `docs/PRODUCTION_HARDENING_LEDGER.md`. Release governance, branch-protection expectations, signing policy, CI evidence, and threat model are documented in `docs/RELEASE_GOVERNANCE.md`.
+
 ## What It Is
 
 DystopAI Core is not just a chatbot wrapper. It is an agent operations layer:
@@ -151,12 +165,32 @@ flowchart LR
 
 ### Backend
 
-- Express 5 API in `server/index.ts`.
+- Express 5 API composed from `server/index.ts`, shared HTTP helpers in `server/controlPlaneHttp.ts`, and extracted route modules in `server/routes/*`.
 - Runtime ledgers in `server/runtimeLedger.ts`.
 - Static production UI served from `dist`.
 - OpenClaw state rooted at `OPENCLAW_STATE_DIR` / `OPENCLAW_HOME`, defaulting to the user's OpenClaw state directory.
 - Local Control Center ledgers under `control-center-ledger`.
 - Gateway-backed command execution with SSE bridging for live console output.
+
+`server/index.ts` is still being reduced, but the major Control Plane surfaces now have reviewable module boundaries:
+
+| Module | Responsibility |
+| --- | --- |
+| `server/routes/authRoutes.ts` | Local login/status/session-token endpoints. |
+| `server/routes/diagnosticsRoutes.ts` | Health, diagnostics, and redaction-aware operational checks. |
+| `server/routes/commandConsoleFileRoutes.ts` | Command Console control-file operations. |
+| `server/routes/openclawCommandRoutes.ts` | OpenClaw command summaries, run evidence, and command-control helpers. |
+| `server/routes/runtimeRoutes.ts` | Runtime status, Gateway lifecycle, sessions, logs, cleanup, and action endpoints. |
+| `server/routes/pluginRoutes.ts` | Plugin inventory, setup, install, update, enable/disable, Gateway plugin state, and ClawHub surfaces. |
+| `server/routes/filesystemRoutes.ts` | Workspace filesystem reads/writes through containment-aware API boundaries. |
+| `server/routes/partyCoordinationRoutes.ts` | Party coordination, parallel health, selected-agent turns, and team sync surfaces. |
+| `server/routes/missionRoutes.ts` | Mission lifecycle, backend-owned durable mission state, cancellation, projection, and reconciliation endpoints. |
+| `server/routes/agentTurnRoutes.ts` | Agent turn dispatch, streaming, final responses, stop handling, and run evidence. |
+| `server/routes/clawTalkConsoleRoutes.ts` | ClawTalk console stream/final message endpoints. |
+| `server/routes/providerAuthRoutes.ts` | Provider catalog, model catalog, provider auth, OAuth helpers, and credential status. |
+| `server/routes/skillRoutes.ts` | Skills, learned skills, shared skills, and ClawHub skill workflows. |
+
+New backend behavior should follow this pattern: put domain logic behind a small route-registration function, use shared request IDs/error envelopes, validate inputs at the route boundary, keep OpenClaw/Gateway protocol behavior aligned with the local docs snapshot, and add a focused smoke or integration test for the extracted contract.
 
 ### Desktop Shell
 
@@ -256,7 +290,9 @@ The CI workflow enforces the same requirement for version tags, manual `public_r
 | `npm run build:server` | Bundle the Express server to `dist-server/index.cjs`. |
 | `npm run build:standalone` | Build both frontend and server. |
 | `npm run desktop` | Build standalone output and launch Electron. |
+| `npm run typecheck` | Type-check app, server, Electron, and preload surfaces. |
 | `npm run lint` | Run ESLint across the repo. |
+| `npm test` | Run the full local production-hardening test gate. |
 | `npm run smoke:openclaw` | Run OpenClaw contract, redaction, SSE, and stream smoke tests. |
 | `npm run smoke:electron-e2e` | Launch Electron against built server/client artifacts on throwaway ports and verify startup, tray hide/restore behavior, renderer navigation policy, renderer crash recovery, failure exit, and quit cleanup. |
 | `npm run smoke:packaged-electron-launch` | Launch the packaged desktop directory output on throwaway ports and verify the bundled app reaches startup and quit cleanup. |
@@ -336,38 +372,55 @@ Refresh the snapshot when upstream behavior matters:
 npm run docs:openclaw:sync
 ```
 
-## Validation
+## Validation And CI
 
 Run these before pushing changes:
 
 ```bash
 npm run lint
-npm run build
-npm run smoke:openclaw
+npm run typecheck
+npm test
 ```
 
-For UI smoke checks, build first:
+For desktop packaging and launch validation:
 
 ```bash
-npm run build
-npm run smoke:ui
+npm run package:desktop
+npm run smoke:packaged-electron-launch
 ```
 
-For server bundle validation:
+For release evidence and public-release validation:
 
 ```bash
-npm run build:standalone
+npm run release:evidence
+npm run release:validate
 ```
+
+Public releases must also provide signing evidence and run validation with `DYSTOPAI_RELEASE_REQUIRE_SIGNING=1`.
+
+GitHub Actions runs `Control Plane CI / Hardened control plane`. The workflow performs locked install, production dependency audit, secret scan, lint, semantic type-checking, production hardening smokes, server/client builds, Electron e2e smoke, reproducible runtime prep, vendored OpenClaw prep, desktop packaging, packaged launch smoke, SBOM/checksum generation, release validation, evidence verification, and evidence upload. `main` should be protected so this check is green before merge.
 
 ## Security And Local Data
 
-DystopAI Core is designed as a local operator app. Treat it like an admin console:
+DystopAI Core is designed as a local operator app. Treat it like an admin console.
+
+Threat model:
+
+- The privileged Control Plane API is localhost-only and should bind only to loopback addresses.
+- The app must not expose privileged APIs to LAN interfaces.
+- There is no cloud exposure unless authentication, transport security, authorization, auditing, and operator identity are redesigned for a multi-user networked service.
+- The desktop renderer is trusted only through the packaged app origin and narrow preload bridge.
+- The local bearer token is a desktop session capability, not an internet-facing account credential.
+- OpenClaw/Gateway integrations can operate tools and shell commands inside the local operator boundary; exposing that boundary to a network changes the security model.
+
+Operator rules:
 
 - Keep `CONTROL_CENTER_TOKEN` private.
 - Keep provider API keys and OAuth client secrets out of Git.
 - Review generated agent doctrine before giving agents broad workspace/tool access.
 - Use the Monitor tab to inspect active runs, sessions, Gateway logs, and stale locks.
 - Use plugin setup flows carefully because plugins may add providers, channels, commands, and external integrations.
+- Publish public builds only with release evidence, checksums, and signing material required by `docs/RELEASE_GOVERNANCE.md`.
 
 Ignored local/generated data includes:
 
