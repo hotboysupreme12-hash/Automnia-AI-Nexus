@@ -14,12 +14,15 @@ function assert(condition: unknown, message: string): asserts condition {
 function routeBlock(source: string, marker: string): string {
   const start = source.indexOf(marker)
   assert(start >= 0, `Missing route marker: ${marker}`)
-  const next = source.indexOf('\napp.', start + marker.length)
+  const remaining = source.slice(start + marker.length)
+  const nextMatch = /\n\s+app\./.exec(remaining)
+  const next = nextMatch ? start + marker.length + nextMatch.index : -1
   return source.slice(start, next >= 0 ? next : source.length)
 }
 
 const server = readWorkspaceFile('server/index.ts')
 const controlPlaneHttp = readWorkspaceFile('server/controlPlaneHttp.ts')
+const runtimeRoutes = readWorkspaceFile('server/routes/runtimeRoutes.ts')
 const runtimeHook = readWorkspaceFile('src/hooks/useRuntimeStatus.ts')
 const packageJson = JSON.parse(readWorkspaceFile('package.json')) as { scripts?: Record<string, string> }
 
@@ -31,12 +34,17 @@ for (const marker of [
   "app.get('/api/openclaw/runtime/status'",
   "app.get('/api/openclaw/runtime/summary'",
 ]) {
-  const block = routeBlock(server, marker)
+  const block = routeBlock(runtimeRoutes, marker)
   assert(block.includes('apiSuccess(res'), `${marker} should return canonical success envelopes`)
   assert(block.includes('apiFailure(res'), `${marker} should return canonical error envelopes`)
   assert(!/\breturn\s+res\.json\s*\(/.test(block), `${marker} should not return raw res.json payloads`)
   assert(!/\breturn\s+res\.status\s*\([^)]*\)\.json\s*\(/.test(block), `${marker} should not return raw status JSON errors`)
+  assert(!server.includes(marker), `${marker} should be owned by server/routes/runtimeRoutes.ts, not server/index.ts`)
 }
+
+assert(server.includes('registerRuntimeRoutes(app, {'), 'server/index.ts should register extracted runtime routes')
+assert(server.includes('getRuntimeStatusPayload'), 'server/index.ts should inject the runtime status payload builder')
+assert(server.includes('getRuntimeSummaryPayload'), 'server/index.ts should inject the runtime summary payload builder')
 
 assert(
   runtimeHook.includes("import { apiErrorMessage, apiRequest, type ApiErrorEnvelope"),

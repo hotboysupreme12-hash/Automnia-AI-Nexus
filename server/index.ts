@@ -31,6 +31,7 @@ import { registerAuthRoutes } from './routes/authRoutes'
 import { registerCommandConsoleFileRoutes } from './routes/commandConsoleFileRoutes'
 import { registerDiagnosticsRoutes } from './routes/diagnosticsRoutes'
 import { registerPluginRoutes } from './routes/pluginRoutes'
+import { registerRuntimeRoutes } from './routes/runtimeRoutes'
 import { createControlFilesService } from './services/controlFilesService'
 import { applyDiagnosticRedactions } from '../src/utils/diagnosticRedaction'
 
@@ -26159,72 +26160,6 @@ app.get('/api/openclaw/summary', async (_req, res) => {
   }
 })
 
-const RuntimeSessionCloseSchema = z.object({
-  agentId: z.string().trim().min(1).max(120).optional(),
-  sessionId: z.string().trim().min(1).max(240).optional(),
-  sessionKey: z.string().trim().min(1).max(512).optional(),
-  all: z.boolean().optional().default(false),
-}).refine((value) => value.all || Boolean(value.agentId || value.sessionId || value.sessionKey), {
-  message: 'Provide agentId, sessionId, sessionKey, or all=true.',
-})
-
-const RuntimeGatewayChatAbortStaleSchema = z.object({
-  minAgeMs: z.number().int().min(30_000).max(24 * 60 * 60_000).optional().default(5 * 60_000),
-})
-
-app.post('/api/openclaw/runtime/session/close', async (req, res) => {
-  const parsed = RuntimeSessionCloseSchema.safeParse(req.body)
-  if (!parsed.success) return apiFailure(res, 400, 'invalid_payload', 'Invalid payload', parsed.error.flatten())
-  const { agentId, sessionId, sessionKey, all } = parsed.data
-  if (agentId && !isValidAgentId(agentId)) {
-    return apiFailure(res, 400, 'invalid_payload', 'Invalid agent id.')
-  }
-
-  try {
-    const result = closeRuntimeSessions({ agentId, sessionId, sessionKey, all })
-    const gatewayAborts = await abortGatewayRuntimeSessionsForClose({ agentId, sessionId, sessionKey, all })
-    const lockCleanup = await cleanupOpenClawSessionLocks({
-      agentId,
-      sessionId,
-      all,
-      minAgeMs: 0,
-      reason: 'runtime session close',
-    })
-    scheduleOpenClawSessionLockSweep('runtime session close follow-up')
-    const [externalGatewayLogs, externalChannelActivityLogs] = await Promise.all([
-      readExternalGatewayLogEntries(),
-      readExternalChannelActivityEntries(),
-    ])
-    const activity = summarizeGatewayActivity([...externalGatewayLogs, ...externalChannelActivityLogs])
-    return apiSuccess(res, {
-      ok: true,
-      ...result,
-      gatewayAborts,
-      sessionLockCleanup: {
-        scanned: lockCleanup.scanned,
-        removed: lockCleanup.removed.length,
-        errors: lockCleanup.errors.length,
-      },
-      sessions: await openAgentSessionSnapshots(activity),
-    })
-  } catch (error) {
-    return apiFailure(res, 500, 'runtime_action_failed', 'Failed to close runtime session', String(error))
-  }
-})
-
-app.post('/api/openclaw/runtime/chat/abort-stale', async (req, res) => {
-  const parsed = RuntimeGatewayChatAbortStaleSchema.safeParse(req.body || {})
-  if (!parsed.success) return apiFailure(res, 400, 'invalid_payload', 'Invalid payload', parsed.error.flatten())
-
-  try {
-    const result = abortStaleGatewayChatWaiters(parsed.data.minAgeMs, 'operator stale-turn recovery')
-    invalidateRuntimeStatusCache()
-    return apiSuccess(res, { ok: true, ...result })
-  } catch (error) {
-    return apiFailure(res, 500, 'runtime_action_failed', 'Failed to abort stale gateway chat turns', String(error))
-  }
-})
-
 function clearRuntimeMonitorHistory(clearedAt = new Date()) {
   const cleared = {
     gatewayLogs: gatewayLogs.length,
@@ -26246,88 +26181,32 @@ function clearRuntimeMonitorHistory(clearedAt = new Date()) {
   }
 }
 
-app.post('/api/openclaw/runtime/monitor/clear', async (_req, res) => {
-  try {
-    const lockCleanup = await sweepOpenClawSessionLocks('monitor clear', { minIntervalMs: 0, minAgeMs: 0 })
-    const clearedAt = new Date()
-    const cleared = clearRuntimeMonitorHistory(clearedAt)
-    await writeRuntimeMonitorClearMarker(clearedAt)
-    return apiSuccess(res, {
-      ok: true,
-      ...cleared,
-      sessionLockCleanup: {
-        scanned: lockCleanup.scanned,
-        removed: lockCleanup.removed.length,
-        errors: lockCleanup.errors.length,
-      },
-    })
-  } catch (error) {
-    return apiFailure(res, 500, 'runtime_action_failed', 'Failed to clear runtime monitor', String(error))
-  }
-})
-
-app.post('/api/openclaw/runtime/shutdown', async (_req, res) => {
-  try {
-    const shutdown = await shutdownControlCenterRuntime('desktop quit')
-    return apiSuccess(res, { ok: true, shutdown })
-  } catch (error) {
-    return apiFailure(res, 500, 'runtime_action_failed', 'Failed to shut down runtime processes', String(error))
-  }
-})
-
-app.post('/api/openclaw/runtime/gateway/stop', async (_req, res) => {
-  try {
-    const stop = await stopGatewayRuntime('manual stop requested from monitor')
-    invalidateRuntimeStatusCache()
-    const gatewayHealthy = await isGatewayHealthy()
-    const listenerPid = gatewayHealthy ? await gatewayListenerPidForPort(GATEWAY_HTTP_PORT) : null
-    const gateway = gatewayStatusSnapshot(gatewayHealthy, listenerPid)
-    return apiSuccess(res, {
-      ok: true,
-      stop,
-      gateway,
-    })
-  } catch (error) {
-    return apiFailure(res, 500, 'runtime_action_failed', 'Failed to stop gateway', String(error))
-  }
-})
-
-app.post('/api/openclaw/runtime/gateway/start', async (_req, res) => {
-  try {
-    await ensureGatewayRunning()
-    startGatewayHealthMonitor()
-    invalidateRuntimeStatusCache()
-    const gatewayHealthy = await isGatewayHealthy()
-    const listenerPid = await gatewayListenerPidForPort(GATEWAY_HTTP_PORT)
-    const gateway = gatewayStatusSnapshot(gatewayHealthy, listenerPid)
-    return apiSuccess(res, {
-      ok: true,
-      start: {
-        started: gateway.healthy || gateway.processRunning,
-        detail: gateway.healthy ? 'gateway healthy' : gateway.processRunning ? 'gateway process running' : 'gateway start requested',
-      },
-      gateway,
-    })
-  } catch (error) {
-    return apiFailure(res, 500, 'runtime_action_failed', 'Failed to start gateway', String(error))
-  }
-})
-
-app.post('/api/openclaw/runtime/gateway/restart', async (_req, res) => {
-  try {
-    const restart = await tryRestartGatewayService({ force: true, allowExternalTakeover: true })
-    invalidateRuntimeStatusCache()
-    const gatewayHealthy = await isGatewayHealthy()
-    const listenerPid = gatewayHealthy ? await gatewayListenerPidForPort(GATEWAY_HTTP_PORT) : null
-    const gateway = gatewayStatusSnapshot(gatewayHealthy, listenerPid)
-    return apiSuccess(res, {
-      ok: true,
-      restart,
-      gateway,
-    })
-  } catch (error) {
-    return apiFailure(res, 500, 'runtime_action_failed', 'Failed to restart gateway', String(error))
-  }
+registerRuntimeRoutes(app, {
+  abortGatewayRuntimeSessionsForClose,
+  abortStaleGatewayChatWaiters,
+  cleanupOpenClawSessionLocks,
+  clearRuntimeMonitorHistory,
+  closeRuntimeSessions,
+  ensureGatewayRunning,
+  gatewayHttpPort: GATEWAY_HTTP_PORT,
+  gatewayListenerPidForPort,
+  gatewayStatusSnapshot,
+  getRuntimeStatusPayload,
+  getRuntimeSummaryPayload,
+  invalidateRuntimeStatusCache,
+  isGatewayHealthy,
+  isValidAgentId,
+  openAgentSessionSnapshots,
+  readExternalChannelActivityEntries,
+  readExternalGatewayLogEntries,
+  scheduleOpenClawSessionLockSweep,
+  shutdownControlCenterRuntime,
+  startGatewayHealthMonitor,
+  stopGatewayRuntime,
+  summarizeGatewayActivity,
+  sweepOpenClawSessionLocks,
+  tryRestartGatewayService,
+  writeRuntimeMonitorClearMarker,
 })
 
 app.post('/api/openclaw/command', async (req, res) => {
@@ -26915,24 +26794,6 @@ async function getRuntimeSummaryPayload(forceRefresh: boolean): Promise<Record<s
     throw error
   }
 }
-
-app.get('/api/openclaw/runtime/status', async (req, res) => {
-  try {
-    const forcePluginRefresh = req.query.refresh === '1' || req.query.refresh === 'true'
-    return apiSuccess(res, await getRuntimeStatusPayload(forcePluginRefresh))
-  } catch (error) {
-    return apiFailure(res, 500, 'runtime_status_failed', 'Failed to fetch runtime status', String(error))
-  }
-})
-
-app.get('/api/openclaw/runtime/summary', async (req, res) => {
-  try {
-    const forceRefresh = req.query.refresh === '1' || req.query.refresh === 'true'
-    return apiSuccess(res, await getRuntimeSummaryPayload(forceRefresh))
-  } catch (error) {
-    return apiFailure(res, 500, 'runtime_summary_failed', 'Failed to fetch runtime summary', String(error))
-  }
-})
 
 registerPluginRoutes(app, {
   clawTalkPluginId: CLAWTALK_PLUGIN_ID,
