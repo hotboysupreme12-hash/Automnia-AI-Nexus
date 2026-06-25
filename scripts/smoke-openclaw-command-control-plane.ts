@@ -11,14 +11,6 @@ function assert(condition: unknown, message: string): asserts condition {
   if (!condition) throw new Error(message)
 }
 
-function sliceBetween(source: string, startMarker: string, endMarker: string): string {
-  const start = source.indexOf(startMarker)
-  assert(start >= 0, `Missing start marker: ${startMarker}`)
-  const end = source.indexOf(endMarker, start + startMarker.length)
-  assert(end >= 0, `Missing end marker after ${startMarker}: ${endMarker}`)
-  return source.slice(start, end)
-}
-
 function routeBlock(source: string, marker: string): string {
   const start = source.indexOf(marker)
   assert(start >= 0, `Missing route marker: ${marker}`)
