@@ -29,6 +29,7 @@ import {
 import { apiFailure, apiSuccess, installControlPlaneHttp, setStaticSecurityHeaders } from './controlPlaneHttp'
 import { registerAuthRoutes } from './routes/authRoutes'
 import { registerCommandConsoleFileRoutes } from './routes/commandConsoleFileRoutes'
+import { registerClawTalkConsoleRoutes } from './routes/clawTalkConsoleRoutes'
 import { registerDiagnosticsRoutes } from './routes/diagnosticsRoutes'
 import { registerPluginRoutes } from './routes/pluginRoutes'
 import { createControlFilesService } from './services/controlFilesService'
@@ -30034,68 +30035,29 @@ app.post('/api/openclaw/agent-turn/sessions/clear', async (req, res) => {
   }
 })
 
-app.get('/api/openclaw/clawtalk-console/stream', (_req, res) => {
-  initializeSseResponse(res)
-  const clientId = randomUUID()
-  const client = { write: (chunk: string) => res.write(chunk), closed: false }
-  clawTalkConsoleClients.set(clientId, client)
-
-  for (const event of [...clawTalkConsoleEvents].reverse()) {
-    const eventName = typeof event.event === 'string' && event.event.trim() ? event.event.trim() : 'message'
-    writeSseEvent(res, eventName, event)
-  }
-
-  const heartbeat = setInterval(() => {
-    if (client.closed) return
-    writeSseEvent(res, 'heartbeat', { at: new Date().toISOString() })
-  }, 20_000)
-  heartbeat.unref?.()
-
-  res.on('close', () => {
-    client.closed = true
-    clearInterval(heartbeat)
-    clawTalkConsoleClients.delete(clientId)
-  })
-})
-
-app.post('/api/openclaw/clawtalk-console/final', (req, res) => {
-  const schema = z.object({
-    source: z.literal('clawtalk').optional(),
-    agent: z.string().min(1),
-    sessionKey: z.string().min(1).optional(),
-    prompt: z.string().optional(),
-    reply: z.string().optional(),
-    text: z.string().optional(),
-    ok: z.boolean().optional(),
-    transport: z.string().optional(),
-    buffered: z.boolean().optional(),
-    liveTokens: z.boolean().optional(),
-  })
-  const parsed = schema.safeParse(req.body)
-  if (!parsed.success) return apiFailure(res, 400, 'invalid_payload', 'Invalid payload', parsed.error.flatten())
-
-  try {
-    const agentId = parsed.data.agent.trim()
-    if (!isValidAgentId(agentId) || isRetiredAgentId(agentId)) {
-      return apiFailure(res, 400, 'invalid_payload', 'Invalid or retired agent id.')
-    }
-    const sessionKey = parsed.data.sessionKey?.trim() || `clawtalk:${agentId}`
-    const prompt = parsed.data.prompt?.trim() || 'ClawTalk message'
-    const reply = (parsed.data.reply || parsed.data.text || '').trim()
-    const context = resolveClawTalkConsoleMirrorContext({ agentId, sessionKey, prompt })
+registerClawTalkConsoleRoutes(app, {
+  clawTalkConsoleClients,
+  clawTalkConsoleEvents,
+  initializeSseResponse,
+  isRetiredAgentId,
+  isValidAgentId,
+  recordClawTalkConsoleFinal(input) {
+    const context = resolveClawTalkConsoleMirrorContext({
+      agentId: input.agentId,
+      sessionKey: input.sessionKey,
+      prompt: input.prompt,
+    })
     const emitted = emitClawTalkConsoleFrame('final', context, {
-      ok: parsed.data.ok !== false,
-      reply: reply || 'No response returned.',
-      transport: parsed.data.transport?.trim() || 'clawtalk-control-center',
-      buffered: parsed.data.buffered ?? true,
-      liveTokens: parsed.data.liveTokens ?? false,
+      ok: input.ok,
+      reply: input.reply || 'No response returned.',
+      transport: input.transport,
+      buffered: input.buffered,
+      liveTokens: input.liveTokens,
       consoleBridgeFinal: true,
     })
-
-    return apiSuccess(res, { ok: true, deduped: !emitted, clawTalkRunId: context.clawTalkRunId })
-  } catch (error) {
-    return apiFailure(res, 500, 'clawtalk_console_failed', 'Failed to record ClawTalk final event', String(error))
-  }
+    return { emitted, clawTalkRunId: context.clawTalkRunId }
+  },
+  writeSseEvent,
 })
 
 app.post('/api/openclaw/agent-turn/stream', async (req, res) => {
