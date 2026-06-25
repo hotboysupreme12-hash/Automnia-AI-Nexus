@@ -1286,20 +1286,25 @@ Verification:
 - GitHub PR #12 initially failed Control Plane CI in the packaged desktop launch smoke before app launch because the integration branch carried two `removeTempRootWithWindowsRetries` declarations in `scripts/smoke-packaged-electron-launch.ts`.
 - Removed the stale duplicate cleanup helper and kept the stronger Windows-safe process-kill/retry cleanup helper.
 - `npm run smoke:packaged-electron-launch` passed after the duplicate cleanup helper was removed.
+- PR #12 was merged to `main` as merge commit `9f2cad1d1a86e6f47c148f56333007d4cb25e6be`.
+- Superseded individual PRs #3 through #11 were closed with notes after their code-bearing changes landed through PR #12.
+- Clean `main` Control Plane CI passed after the merge:
+  - Run: `28142306325`
+  - Commit: `9f2cad1d1a86e6f47c148f56333007d4cb25e6be`
+  - Result: `Hardened control plane` passed in `8m19s`.
+  - Evidence: locked install, dependency audit, secret scan, lint, app/server/Electron typecheck, production hardening smoke suite, server/client builds, Electron e2e smoke, reproducible runtime prep, vendored OpenClaw prep, desktop packaging, packaged launch smoke, SBOM/checksum generation, release validation, release evidence verification, and evidence upload all passed.
 
 Notes:
 
 - Evidence-only PR commits were not cherry-picked individually; their evidence is consolidated here to avoid stale ledger conflicts.
-- The integration branch requires one fresh remote GitHub Actions pass on PR #12 after the packaged launch smoke fix before merging to `main`.
-- Superseded source PRs should be closed after the integration PR lands, since their code changes are included in this branch.
+- The `Sign release evidence` CI step was skipped for this non-release merge because public release signing is intentionally enforced for release contexts; mandatory signing remains covered by release validation/smoke checks.
 
 ## In Progress
 
-- Production hardening integration on protective branch `codex/integrate-today-hardening`; PR #12 is open and awaiting the refreshed Control Plane CI run after the packaged launch smoke duplicate-declaration fix.
+- No merge integration is currently in progress; today's hardening stack is on `main` with clean post-merge CI.
 
 Next action:
 
-- Push the packaged launch smoke fix to PR #12, verify remote Control Plane CI, merge it to `main`, then close superseded open PRs #3 through #11 after confirming their code is present on `main`.
 - Continue breaking up remaining `server/index.ts` route clusters after integration settles. Highest-value candidates are Nexus/misc, shift/cron scheduler, and remaining browser/preflight areas because the major OpenClaw, mission, party, provider, filesystem, runtime, plugin, diagnostics, command-console, agent-turn, and ClawTalk surfaces now have route-module seams.
 - Add release governance documentation and/or enforcement slices after the next route extraction:
   - Main branch protection requirements: green CI, no direct pushes, PR review, and signed commits where repository support allows.
