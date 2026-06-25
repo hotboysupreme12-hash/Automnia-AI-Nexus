@@ -564,6 +564,58 @@ function currentModuleDir() {
   }
 }
 
+function sourceRootCandidates() {
+  return uniqueStrings(
+    process.env.CONTROL_CENTER_APP_ROOT || '',
+    path.resolve(process.cwd()),
+    path.resolve(currentModuleDir(), '..'),
+    path.resolve(currentModuleDir(), '..', '..'),
+  ).filter(Boolean)
+}
+
+function sourceOpenClawVendorCandidate() {
+  for (const root of sourceRootCandidates()) {
+    const vendorRoot = path.join(root, 'vendor', 'openclaw')
+    const prepScript = path.join(root, 'scripts', 'prepare-openclaw-vendor.cjs')
+    if (
+      existsSync(path.join(vendorRoot, 'openclaw.mjs')) &&
+      existsSync(path.join(vendorRoot, 'package.json')) &&
+      existsSync(prepScript)
+    ) {
+      return { root, vendorRoot, prepScript }
+    }
+  }
+  return null
+}
+
+function hasOpenClawEntryArtifact(vendorRoot: string) {
+  return existsSync(path.join(vendorRoot, 'dist', 'entry.js')) ||
+    existsSync(path.join(vendorRoot, 'dist', 'entry.mjs'))
+}
+
+function prepareSourceOpenClawVendorIfMissing() {
+  if (/^(1|true|yes)$/i.test(process.env.CONTROL_CENTER_SKIP_OPENCLAW_VENDOR_PREP || '')) return
+  const vendor = sourceOpenClawVendorCandidate()
+  if (!vendor || hasOpenClawEntryArtifact(vendor.vendorRoot)) return
+
+  console.warn(`[openclaw] missing vendored dist/entry artifact; preparing OpenClaw vendor payload at ${vendor.vendorRoot}`)
+  const result = spawnSync(process.execPath, [vendor.prepScript], {
+    cwd: vendor.root,
+    env: {
+      ...process.env,
+      DYSTOPAI_OPENCLAW_VENDOR_ROOT: vendor.vendorRoot,
+    },
+    shell: false,
+    stdio: 'inherit',
+    timeout: 600_000,
+    ...(process.platform === 'win32' ? { windowsHide: true } : {}),
+  })
+  if (result.status !== 0 || result.error) {
+    const detail = result.error ? String(result.error) : `exit ${result.status ?? 'unknown'}`
+    console.warn(`[openclaw] OpenClaw vendor preparation failed; Gateway startup may fail: ${detail}`)
+  }
+}
+
 function openClawExecutableCandidatesForDir(dir: string) {
   return process.platform === 'win32'
     ? [path.join(dir, 'openclaw.cmd'), path.join(dir, 'openclaw.mjs')]
@@ -693,6 +745,7 @@ function resolveOpenClawBin() {
   return existingEmbedded || cliCandidates.find(openClawBinExists) || 'openclaw'
 }
 
+prepareSourceOpenClawVendorIfMissing()
 const openclawBin = resolveOpenClawBin()
 if (openclawBin && openclawBin !== 'openclaw') process.env.OPENCLAW_BIN = openclawBin
 

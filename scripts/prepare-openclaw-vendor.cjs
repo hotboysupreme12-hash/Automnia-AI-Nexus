@@ -36,6 +36,7 @@ const requiredRuntimePackages = [
 ]
 
 const requiredPackageArtifacts = [
+  path.join('dist', 'entry.js'),
   path.join('dist', 'index.js'),
   path.join('dist', 'plugin-sdk', 'index.js'),
   path.join('dist', 'extensions', 'browser', 'index.js'),
