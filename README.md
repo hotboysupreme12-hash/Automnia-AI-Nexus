@@ -2,7 +2,7 @@
 
 <img src="public/brand/dystopai-logo-multi-model-transparent-v2.png" alt="DystopAI Multi Model Nexus" width="720" />
 
-# DystopAI Core
+# DystopAI
 
 ### Production-ready local command center for OpenClaw agent teams
 
