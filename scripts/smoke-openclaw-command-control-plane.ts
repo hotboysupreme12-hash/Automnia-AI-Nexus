@@ -36,6 +36,7 @@ function assertCanonicalRoute(name: string, source: string) {
 }
 
 const server = readWorkspaceFile('server/index.ts')
+const partyCoordinationRoutes = readWorkspaceFile('server/routes/partyCoordinationRoutes.ts')
 const controlPlaneHttp = readWorkspaceFile('server/controlPlaneHttp.ts')
 const openclawCommandRoutes = readWorkspaceFile('server/routes/openclawCommandRoutes.ts')
 const pluginsPanel = readWorkspaceFile('src/components/plugins/PluginsPanel.tsx')
@@ -51,7 +52,7 @@ for (const code of [
 
 const summaryBlock = routeBlock(openclawCommandRoutes, "app.get('/api/openclaw/summary'")
 const commandBlock = routeBlock(openclawCommandRoutes, "app.post('/api/openclaw/command'")
-const parallelHealthBlock = sliceBetween(server, "app.post('/api/party/parallel-health'", 'registerMissionRoutes(app, {')
+const parallelHealthBlock = routeBlock(partyCoordinationRoutes, "app.post('/api/party/parallel-health'")
 
 assertCanonicalRoute('/api/openclaw/summary', summaryBlock)
 assertCanonicalRoute('/api/openclaw/command', commandBlock)
@@ -61,6 +62,12 @@ assert(!server.includes("app.get('/api/openclaw/summary'"), 'OpenClaw summary ro
 assert(!server.includes("app.post('/api/openclaw/command'"), 'OpenClaw command route should be owned by server/routes/openclawCommandRoutes.ts')
 assert(server.includes('registerOpenClawCommandRoutes(app, {'), 'server/index.ts should register extracted OpenClaw command routes')
 assert(server.includes('openclawConfigPath: OPENCLAW_CONFIG_PATH'), 'server/index.ts should inject the OpenClaw config path')
+assert(
+  server.includes("import { registerPartyCoordinationRoutes } from './routes/partyCoordinationRoutes'"),
+  'server should import party coordination routes',
+)
+assert(server.includes('registerPartyCoordinationRoutes(app, {'), 'server should register party coordination routes')
+assert(!server.includes("app.post('/api/party/parallel-health'"), 'server should not inline parallel-health route')
 
 assert(commandBlock.includes('pluginCommandResult(args, result)'), 'OpenClaw command route should preserve command result evidence')
 assert(commandBlock.includes('ok: result.code === 0'), 'OpenClaw command route should preserve command success data')
