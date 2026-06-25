@@ -72,7 +72,7 @@ for (const marker of [
 assert(/import \{ registerProviderAuthRoutes \} from '\.\/routes\/providerAuthRoutes'/.test(server), 'server index must import the extracted provider auth route module')
 assert(/registerProviderAuthRoutes\(app, \{/.test(server), 'server index must register extracted provider auth routes')
 assert(
-  server.indexOf('registerProviderAuthRoutes(app, {') < server.indexOf("app.get('/api/skills/check'"),
+  server.indexOf('registerProviderAuthRoutes(app, {') < server.indexOf('registerSkillRoutes(app, {'),
   'provider auth routes should stay registered before skills routes',
 )
 for (const inlineMarker of [
