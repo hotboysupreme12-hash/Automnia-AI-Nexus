@@ -14,7 +14,10 @@ function assert(condition: unknown, message: string): asserts condition {
 function routeBlock(source: string, marker: string): string {
   const start = source.indexOf(marker)
   assert(start >= 0, `Missing route marker: ${marker}`)
-  const next = source.indexOf('\napp.', start + marker.length)
+  const nextCandidates = ['\napp.', '\n  app.']
+    .map((needle) => source.indexOf(needle, start + marker.length))
+    .filter((index) => index >= 0)
+  const next = nextCandidates.length ? Math.min(...nextCandidates) : -1
   return source.slice(start, next >= 0 ? next : source.length)
 }
 
@@ -38,6 +41,8 @@ function assertCanonicalRoute(name: string, source: string) {
 }
 
 const server = readWorkspaceFile('server/index.ts')
+const agentTurnRoutes = readWorkspaceFile('server/routes/agentTurnRoutes.ts')
+const clawTalkConsoleRoutes = readWorkspaceFile('server/routes/clawTalkConsoleRoutes.ts')
 const controlPlaneHttp = readWorkspaceFile('server/controlPlaneHttp.ts')
 const store = readWorkspaceFile('src/store/nexusStore.ts')
 const packageJson = JSON.parse(readWorkspaceFile('package.json')) as { scripts?: Record<string, string> }
@@ -46,13 +51,19 @@ for (const code of ['agent_turn_failed', 'clawtalk_console_failed', 'party_hando
   assert(controlPlaneHttp.includes(`| '${code}'`), `ApiErrorCode is missing ${code}`)
 }
 
-const clawTalkFinalBlock = routeBlock(server, "app.post('/api/openclaw/clawtalk-console/final'")
-const streamBlock = sliceBetween(
+const clawTalkStreamConsoleBlock = routeBlock(clawTalkConsoleRoutes, "app.get('/api/openclaw/clawtalk-console/stream'")
+const clawTalkFinalBlock = routeBlock(clawTalkConsoleRoutes, "app.post('/api/openclaw/clawtalk-console/final'")
+const clawTalkRegistrationBlock = sliceBetween(
   server,
+  'registerClawTalkConsoleRoutes(app, {',
+  "app.get('/api/browser/preflight'",
+)
+const streamBlock = sliceBetween(
+  agentTurnRoutes,
   "app.post('/api/openclaw/agent-turn/stream'",
   "app.post('/api/openclaw/agent-turn'",
 )
-const agentTurnBlock = routeBlock(server, "app.post('/api/openclaw/agent-turn'")
+const agentTurnBlock = routeBlock(agentTurnRoutes, "app.post('/api/openclaw/agent-turn'")
 const browserPreflightBlock = sliceBetween(
   server,
   "app.get('/api/browser/preflight'",
@@ -64,11 +75,25 @@ const runBufferedBlock = sliceBetween(
   'async function runGatewayAgentTurnForStream',
 )
 
+assert(server.includes("import { registerAgentTurnRoutes } from './routes/agentTurnRoutes'"), 'server should import agent-turn route module')
+assert(server.includes('registerAgentTurnRoutes(app, {'), 'server should register agent-turn routes')
+assert(!server.includes("app.post('/api/openclaw/agent-turn/stream'"), 'server should not inline the agent-turn stream route')
+assert(!server.includes("app.post('/api/openclaw/agent-turn'"), 'server should not inline the buffered agent-turn route')
+assert(server.includes("import { registerClawTalkConsoleRoutes } from './routes/clawTalkConsoleRoutes'"), 'server should import the extracted ClawTalk console route module')
+assert(clawTalkRegistrationBlock.includes('clawTalkConsoleClients'), 'ClawTalk route registration should preserve live SSE clients')
+assert(clawTalkRegistrationBlock.includes('clawTalkConsoleEvents'), 'ClawTalk route registration should preserve replayed SSE events')
+assert(clawTalkRegistrationBlock.includes('resolveClawTalkConsoleMirrorContext'), 'ClawTalk route registration should preserve mirror context resolution')
+assert(clawTalkRegistrationBlock.includes("emitClawTalkConsoleFrame('final'"), 'ClawTalk route registration should preserve final frame emission')
+
+assert(clawTalkStreamConsoleBlock.includes('options.initializeSseResponse(res)'), 'ClawTalk console stream should remain an SSE endpoint')
+assert(clawTalkStreamConsoleBlock.includes('[...options.clawTalkConsoleEvents].reverse()'), 'ClawTalk console stream should replay buffered events')
+assert(clawTalkStreamConsoleBlock.includes("options.writeSseEvent(res, 'heartbeat'"), 'ClawTalk console stream should emit heartbeat events')
+
 assertCanonicalRoute('/api/openclaw/clawtalk-console/final', clawTalkFinalBlock)
 assert(clawTalkFinalBlock.includes('isValidAgentId(agentId)'), 'ClawTalk final should validate agent ids')
 assert(clawTalkFinalBlock.includes('isRetiredAgentId(agentId)'), 'ClawTalk final should reject retired agents')
 assert(clawTalkFinalBlock.includes("'clawtalk_console_failed'"), 'ClawTalk final should use typed infrastructure errors')
-assert(clawTalkFinalBlock.includes('deduped: !emitted'), 'ClawTalk final should preserve dedupe evidence')
+assert(clawTalkFinalBlock.includes('deduped: !result.emitted'), 'ClawTalk final should preserve dedupe evidence')
 
 assert(streamBlock.includes('initializeSseResponse(res)'), 'agent-turn stream route should remain an SSE endpoint')
 assert(streamBlock.includes("emit('final'"), 'agent-turn stream route should still emit final SSE frames')

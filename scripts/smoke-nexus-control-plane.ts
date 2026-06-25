@@ -14,11 +14,15 @@ function assert(condition: unknown, message: string): asserts condition {
 function routeBlock(source: string, marker: string): string {
   const start = source.indexOf(marker)
   assert(start >= 0, `Missing route marker: ${marker}`)
-  const next = source.indexOf('\napp.', start + marker.length)
+  const nextCandidates = ['\napp.', '\n  app.']
+    .map((needle) => source.indexOf(needle, start + marker.length))
+    .filter((index) => index >= 0)
+  const next = nextCandidates.length ? Math.min(...nextCandidates) : -1
   return source.slice(start, next >= 0 ? next : source.length)
 }
 
 const server = readWorkspaceFile('server/index.ts')
+const agentTurnRoutes = readWorkspaceFile('server/routes/agentTurnRoutes.ts')
 const controlPlaneHttp = readWorkspaceFile('server/controlPlaneHttp.ts')
 const store = readWorkspaceFile('src/store/nexusStore.ts')
 const packageJson = JSON.parse(readWorkspaceFile('package.json')) as { scripts?: Record<string, string> }
@@ -37,8 +41,6 @@ for (const marker of [
   "app.get('/api/party/overview'",
   "app.post('/api/party/recruit'",
   "app.delete('/api/party/agent/:agentId'",
-  "app.post('/api/openclaw/agent-preflight'",
-  "app.post('/api/openclaw/agent-turn/sessions/clear'",
 ]) {
   const block = routeBlock(server, marker)
   assert(/apiSuccess\s*\(\s*res/.test(block), `${marker} should return canonical success envelopes`)
@@ -46,6 +48,20 @@ for (const marker of [
   assert(!/\breturn\s+res\.json\s*\(/.test(block), `${marker} should not return raw res.json payloads`)
   assert(!/\breturn\s+res\.status\s*\([^)]*\)\.json\s*\(/.test(block), `${marker} should not return raw status JSON errors`)
 }
+
+for (const marker of [
+  "app.post('/api/openclaw/agent-preflight'",
+  "app.post('/api/openclaw/agent-turn/sessions/clear'",
+]) {
+  const block = routeBlock(agentTurnRoutes, marker)
+  assert(/apiSuccess\s*\(\s*res/.test(block), `${marker} should return canonical success envelopes`)
+  assert(/apiFailure\s*\(\s*res/.test(block), `${marker} should return canonical error envelopes`)
+  assert(!/\breturn\s+res\.json\s*\(/.test(block), `${marker} should not return raw res.json payloads`)
+  assert(!/\breturn\s+res\.status\s*\([^)]*\)\.json\s*\(/.test(block), `${marker} should not return raw status JSON errors`)
+}
+
+assert(server.includes("import { registerAgentTurnRoutes } from './routes/agentTurnRoutes'"), 'server should import agent-turn route module')
+assert(server.includes('registerAgentTurnRoutes(app, {'), 'server should register agent-turn routes')
 
 assert(store.includes("apiRequest<AgentRuntimePreflightPayload>('/api/openclaw/agent-preflight'"), 'preflight should use apiRequest')
 assert(store.includes("apiRequest<AT>('/api/openclaw/agent-turn'"), 'buffered agent-turn fallback should use apiRequest')

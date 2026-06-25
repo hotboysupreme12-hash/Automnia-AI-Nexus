@@ -7,15 +7,23 @@ const rootDir = fileURLToPath(new URL('..', import.meta.url))
 const read = (relativePath: string) => readFileSync(join(rootDir, relativePath), 'utf8')
 
 const server = read('server/index.ts')
+const skillRoutesModule = read('server/routes/skillRoutes.ts')
 const skillsPanel = read('src/components/monitor/SkillsPanel.tsx')
 const editor = read('src/components/editor/AgentEditorModal.tsx')
 const packageJson = JSON.parse(read('package.json')) as { scripts?: Record<string, string> }
 
-const skillsRouteStart = server.indexOf("app.get('/api/skills/check'")
-const skillsRouteEnd = server.indexOf("app.get('/api/party/agent/:agentId/config'", skillsRouteStart)
-assert.notEqual(skillsRouteStart, -1, 'skills route block must exist')
-assert.notEqual(skillsRouteEnd, -1, 'skills route block must end before agent config routes')
-const skillsRoutes = server.slice(skillsRouteStart, skillsRouteEnd)
+assert.match(server, /import \{ registerSkillRoutes \} from '\.\/routes\/skillRoutes'/, 'server index must import the extracted skills route module')
+assert.match(server, /registerSkillRoutes\(app, \{/, 'server index must register extracted skills routes')
+assert.ok(
+  server.indexOf('registerSkillRoutes(app, {') < server.indexOf("app.get('/api/party/agent/:agentId/config'"),
+  'skills routes must remain registered before agent config routes',
+)
+assert.doesNotMatch(server, /app\.get\('\/api\/skills\/check'/, 'server index must not inline skills check route')
+assert.doesNotMatch(server, /app\.get\('\/api\/skills\/list'/, 'server index must not inline skills list route')
+assert.doesNotMatch(server, /app\.get\('\/api\/skills\/clawhub\/search'/, 'server index must not inline ClawHub search route')
+assert.doesNotMatch(server, /app\.post\('\/api\/skills\/clawhub\/install'/, 'server index must not inline ClawHub install route')
+assert.doesNotMatch(server, /app\.post\('\/api\/skills\/clawhub\/update'/, 'server index must not inline ClawHub update route')
+assert.match(skillRoutesModule, /type SkillRoutesOptions = \{/, 'skills route module must own an explicit dependency-injection surface')
 
 for (const route of [
   "app.get('/api/skills/check'",
@@ -28,24 +36,24 @@ for (const route of [
   "app.post('/api/skills/clawhub/install'",
   "app.post('/api/skills/clawhub/update'",
 ]) {
-  assert.ok(skillsRoutes.includes(route), `skills control plane must expose ${route}`)
+  assert.ok(skillRoutesModule.includes(route), `skills control plane must expose ${route}`)
 }
 
-assert.match(server, /'skill_command_failed'/, 'server API error codes must include skill command failures')
-assert.match(server, /'skill_operation_failed'/, 'server API error codes must include skill operation failures')
-assert.match(server, /'skill_not_found'/, 'server API error codes must include missing skill failures')
-assert.match(skillsRoutes, /apiSuccess\(res/, 'skills routes must use canonical success envelopes')
-assert.match(skillsRoutes, /apiFailure\(res/, 'skills routes must use canonical error envelopes')
-assert.doesNotMatch(skillsRoutes, /res\.json\(\{\s*ok:/, 'skills routes must not return legacy ok payloads directly')
-assert.doesNotMatch(skillsRoutes, /res\.status\([^)]*\)\.json\(\{\s*ok:/, 'skills route failures must not return legacy ok:false payloads')
-assert.match(skillsRoutes, /apiFailure\([\s\S]*?502,[\s\S]*?'skill_command_failed',[\s\S]*?'ClawHub search failed'/, 'ClawHub search command failures must be typed')
-assert.match(skillsRoutes, /apiFailure\([\s\S]*?500,[\s\S]*?'skill_command_failed',[\s\S]*?'ClawHub skill install failed'/, 'ClawHub install command failures must be typed')
-assert.match(skillsRoutes, /apiFailure\([\s\S]*?500,[\s\S]*?'skill_command_failed',[\s\S]*?'ClawHub skill update failed'/, 'ClawHub update command failures must be typed')
+assert.match(skillRoutesModule, /'skill_command_failed'/, 'skills routes must include skill command failures')
+assert.match(skillRoutesModule, /'skill_operation_failed'/, 'skills routes must include skill operation failures')
+assert.match(skillRoutesModule, /'skill_not_found'/, 'skills routes must include missing skill failures')
+assert.match(skillRoutesModule, /apiSuccess\(res/, 'skills routes must use canonical success envelopes')
+assert.match(skillRoutesModule, /apiFailure\(res/, 'skills routes must use canonical error envelopes')
+assert.doesNotMatch(skillRoutesModule, /res\.json\(\{\s*ok:/, 'skills routes must not return legacy ok payloads directly')
+assert.doesNotMatch(skillRoutesModule, /res\.status\([^)]*\)\.json\(\{\s*ok:/, 'skills route failures must not return legacy ok:false payloads')
+assert.match(skillRoutesModule, /apiFailure\([\s\S]*?502,[\s\S]*?'skill_command_failed',[\s\S]*?'ClawHub search failed'/, 'ClawHub search command failures must be typed')
+assert.match(skillRoutesModule, /apiFailure\([\s\S]*?500,[\s\S]*?'skill_command_failed',[\s\S]*?'ClawHub skill install failed'/, 'ClawHub install command failures must be typed')
+assert.match(skillRoutesModule, /apiFailure\([\s\S]*?500,[\s\S]*?'skill_command_failed',[\s\S]*?'ClawHub skill update failed'/, 'ClawHub update command failures must be typed')
 
 const avatarUploadStart = server.indexOf("app.post('/api/party/avatar-upload/:agentId'")
-const avatarUploadEnd = server.indexOf("app.get('/api/party/folders'", avatarUploadStart)
+const avatarUploadEnd = server.indexOf('registerFilesystemRoutes(app, {', avatarUploadStart)
 assert.notEqual(avatarUploadStart, -1, 'avatar upload route must exist')
-assert.notEqual(avatarUploadEnd, -1, 'avatar upload route block must end before folder routes')
+assert.notEqual(avatarUploadEnd, -1, 'avatar upload route block must end before extracted filesystem routes')
 const avatarUploadRoute = server.slice(avatarUploadStart, avatarUploadEnd)
 assert.match(avatarUploadRoute, /apiSuccess\(res/, 'avatar uploads must use canonical success envelopes')
 assert.match(avatarUploadRoute, /apiFailure\([\s\S]*?400,[\s\S]*?'avatar_upload_failed'/, 'avatar upload failures must use canonical typed errors')

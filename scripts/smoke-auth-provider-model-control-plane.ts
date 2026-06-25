@@ -14,12 +14,15 @@ function assert(condition: unknown, message: string): asserts condition {
 function routeBlock(source: string, marker: string): string {
   const start = source.indexOf(marker)
   assert(start >= 0, `Missing route marker: ${marker}`)
-  const next = source.indexOf('\napp.', start + marker.length)
+  const remaining = source.slice(start + marker.length)
+  const nextMatch = /\n\s+app\./.exec(remaining)
+  const next = nextMatch ? start + marker.length + nextMatch.index : -1
   return source.slice(start, next >= 0 ? next : source.length)
 }
 
 const server = readWorkspaceFile('server/index.ts')
 const controlPlaneHttp = readWorkspaceFile('server/controlPlaneHttp.ts')
+const providerAuthRoutes = readWorkspaceFile('server/routes/providerAuthRoutes.ts')
 const providerModal = readWorkspaceFile('src/components/auth/ProviderAuthModal.tsx')
 const editor = readWorkspaceFile('src/components/editor/AgentEditorModal.tsx')
 const recruit = readWorkspaceFile('src/components/recruit/RecruitAgentModal.tsx')
@@ -29,6 +32,7 @@ const packageJson = JSON.parse(readWorkspaceFile('package.json')) as { scripts?:
 for (const code of [
   'auth_provider_failed',
   'model_auth_required',
+  'model_catalog_failed',
   'model_operation_failed',
   'oauth_operation_failed',
 ]) {
@@ -42,15 +46,45 @@ for (const marker of [
   "app.post('/api/auth/providers/:provider/oauth/start'",
   "app.get('/api/auth/providers/:provider/oauth/session/:sessionId'",
   "app.post('/api/auth/providers/:provider/oauth/session/:sessionId/manual'",
-  "app.get('/api/party/agent/:agentId/model'",
-  "app.post('/api/party/agent/:agentId/model'",
 ]) {
-  const block = routeBlock(server, marker)
+  const block = routeBlock(providerAuthRoutes, marker)
   assert(/apiSuccess\s*\(\s*res/.test(block), `${marker} should return canonical success envelopes`)
   assert(/apiFailure\s*\(\s*res/.test(block), `${marker} should return canonical error envelopes`)
   assert(!/\breturn\s+res\.json\s*\(/.test(block), `${marker} should not return raw res.json payloads`)
   assert(!/\bres\.json\s*\(/.test(block), `${marker} should not return unwrapped JSON payloads`)
   assert(!/\breturn\s+res\.status\s*\([^)]*\)\.json\s*\(/.test(block), `${marker} should not return raw status JSON errors`)
+}
+
+for (const marker of [
+  "app.get('/api/models/available'",
+  "app.get('/api/party/agent/:agentId/model'",
+  "app.post('/api/party/agent/:agentId/model'",
+]) {
+  const source = marker.includes('/api/party/') ? server : providerAuthRoutes
+  const block = routeBlock(source, marker)
+  assert(/apiSuccess\s*\(\s*res/.test(block), `${marker} should return canonical success envelopes`)
+  assert(/apiFailure\s*\(\s*res/.test(block), `${marker} should return canonical error envelopes`)
+  assert(!/\breturn\s+res\.json\s*\(/.test(block), `${marker} should not return raw res.json payloads`)
+  assert(!/\bres\.json\s*\(/.test(block), `${marker} should not return unwrapped JSON payloads`)
+  assert(!/\breturn\s+res\.status\s*\([^)]*\)\.json\s*\(/.test(block), `${marker} should not return raw status JSON errors`)
+}
+
+assert(/import \{ registerProviderAuthRoutes \} from '\.\/routes\/providerAuthRoutes'/.test(server), 'server index must import the extracted provider auth route module')
+assert(/registerProviderAuthRoutes\(app, \{/.test(server), 'server index must register extracted provider auth routes')
+assert(
+  server.indexOf('registerProviderAuthRoutes(app, {') < server.indexOf('registerSkillRoutes(app, {'),
+  'provider auth routes should stay registered before skills routes',
+)
+for (const inlineMarker of [
+  "app.get('/api/auth/providers'",
+  "app.post('/api/auth/providers/:provider'",
+  "app.delete('/api/auth/providers/:provider'",
+  "app.post('/api/auth/providers/:provider/oauth/start'",
+  "app.get('/api/auth/providers/:provider/oauth/session/:sessionId'",
+  "app.post('/api/auth/providers/:provider/oauth/session/:sessionId/manual'",
+  "app.get('/api/models/available'",
+]) {
+  assert(!server.includes(inlineMarker), `server index should not inline ${inlineMarker}`)
 }
 
 assert(providerModal.includes("apiRequest<{ providers?: AuthProviderStatus[] }>('/api/auth/providers?refresh=1'"), 'ProviderAuthModal should refresh provider status through apiRequest')

@@ -1,6 +1,6 @@
 # DystopAI Core Production Hardening Ledger
 
-Last updated: 2026-06-24
+Last updated: 2026-06-25
 
 Automation: `dystopai-production-hardening`
 
@@ -1252,13 +1252,55 @@ Verification:
   - Evidence: lint, app/server/Electron typecheck, production hardening smoke suite, server build, client build, Electron end-to-end smoke, reproducible runtime bundle prep, vendored OpenClaw dependency prep, desktop packaging, packaged desktop launch smoke, SBOM/checksum generation, release artifact validation, release evidence verification, and release evidence upload all passed.
   - Note: the `Sign release evidence` CI step was skipped for this non-release push run; public release signing remains tracked as a mandatory release-governance item.
 
+### 2026-06-24/25 - Integrated Today's Hardening Stack For Main
+
+Scope:
+
+- Created integration branch `codex/integrate-today-hardening` from `origin/main` to combine the remaining open production-hardening PRs without direct pushes to `main`.
+- Integrated the code-bearing fixes from today's open PR stack:
+  - PR #3 filesystem route extraction.
+  - PR #4 OpenClaw command route extraction and packaged Electron launch cleanup.
+  - PR #5 public release signing governance and validation enforcement.
+  - PR #6 Skills/ClawHub route extraction.
+  - PR #7 provider-auth/model route extraction.
+  - PR #8 mission route extraction.
+  - PR #9 agent-turn route extraction.
+  - PR #10 party coordination and TEAM_SYNC route extraction.
+  - PR #11 ClawTalk console stream/final route extraction.
+- Preserved the already-merged runtime/plugin/diagnostics route extractions from `main`.
+- Normalized the hardening ledger back to this single canonical file and removed the duplicate lowercase `docs/production-hardening-ledger.md` introduced by later independent PR branches.
+- Resolved route-registration and smoke-test conflicts so contract tests now assert the composed extracted-route architecture instead of stale inline route locations.
+
+Verification:
+
+- `npm run typecheck:server` passed.
+- `npm run smoke:openclaw-command-control-plane` passed.
+- `npm run smoke:agent-turn-control-plane` passed.
+- `npm run smoke:party-coordination-control-plane` passed.
+- `npm run smoke:openclaw` passed.
+- `npm run smoke:runtime-actions-control-plane` passed.
+- `npm run smoke:auth-provider-model` passed after updating the provider-before-skills order guard for extracted skills routes.
+- `npm run lint` passed.
+- `npm test` passed after integration conflict resolution. This included lint, app/server/Electron typecheck, all production hardening smoke suites, secret scan, runtime reproducibility, release evidence, release signing, release validation, and CI workflow checks.
+- Observed during `npm test`: `smoke:ledger` again reported one skipped malformed historical JSONL row while reading `runtime-runs`; the smoke passed and preserved valid rows.
+- GitHub PR #12 initially failed Control Plane CI in the packaged desktop launch smoke before app launch because the integration branch carried two `removeTempRootWithWindowsRetries` declarations in `scripts/smoke-packaged-electron-launch.ts`.
+- Removed the stale duplicate cleanup helper and kept the stronger Windows-safe process-kill/retry cleanup helper.
+- `npm run smoke:packaged-electron-launch` passed after the duplicate cleanup helper was removed.
+
+Notes:
+
+- Evidence-only PR commits were not cherry-picked individually; their evidence is consolidated here to avoid stale ledger conflicts.
+- The integration branch requires one fresh remote GitHub Actions pass on PR #12 after the packaged launch smoke fix before merging to `main`.
+- Superseded source PRs should be closed after the integration PR lands, since their code changes are included in this branch.
+
 ## In Progress
 
-- Production hardening on protective branch `codex/runtime-route-modules`.
+- Production hardening integration on protective branch `codex/integrate-today-hardening`; PR #12 is open and awaiting the refreshed Control Plane CI run after the packaged launch smoke duplicate-declaration fix.
 
 Next action:
 
-- Continue breaking up `server/index.ts` by extracting one coherent domain route cluster next. Highest-value candidates are filesystem routes or OpenClaw command/summary routes because they already have focused smoke coverage.
+- Push the packaged launch smoke fix to PR #12, verify remote Control Plane CI, merge it to `main`, then close superseded open PRs #3 through #11 after confirming their code is present on `main`.
+- Continue breaking up remaining `server/index.ts` route clusters after integration settles. Highest-value candidates are Nexus/misc, shift/cron scheduler, and remaining browser/preflight areas because the major OpenClaw, mission, party, provider, filesystem, runtime, plugin, diagnostics, command-console, agent-turn, and ClawTalk surfaces now have route-module seams.
 - Add release governance documentation and/or enforcement slices after the next route extraction:
   - Main branch protection requirements: green CI, no direct pushes, PR review, and signed commits where repository support allows.
   - Mandatory public release signing and validation failure when signing evidence is absent.
