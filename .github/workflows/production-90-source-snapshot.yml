@@ -12,6 +12,7 @@ permissions:
 
 jobs:
   snapshot:
+    name: Export current authored source
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
