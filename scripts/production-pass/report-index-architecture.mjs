@@ -5,6 +5,7 @@ import ts from 'typescript'
 const targetPath = path.resolve(process.argv[2] || 'server/index.ts')
 const sourceText = fs.readFileSync(targetPath, 'utf8')
 const source = ts.createSourceFile(targetPath, sourceText, ts.ScriptTarget.Latest, true, ts.ScriptKind.TS)
+const maxLines = Number(process.env.DYSTOPAI_SERVER_INDEX_MAX_LINES || 30_000)
 
 const lineOf = (position) => source.getLineAndCharacterOfPosition(position).line + 1
 const statementName = (statement) => {
@@ -44,24 +45,20 @@ const registerCalls = [...sourceText.matchAll(/\b(register[A-Z][A-Za-z0-9]+Route
   .filter((name, index, values) => values.indexOf(name) === index)
   .sort()
 
-const namedFunctions = statements
-  .filter((entry) => entry.kind === 'FunctionDeclaration')
-  .map(({ name, start, end, lines }) => ({ name, start, end, lines }))
-
 const largestStatements = [...statements]
   .sort((left, right) => right.lines - left.lines)
   .slice(0, 150)
 
-const oversizedStatements = statements.filter((entry) => entry.lines >= 100)
-
+const lines = source.getLineAndCharacterOfPosition(sourceText.length).line + 1
 const report = {
   target: path.relative(process.cwd(), targetPath),
   bytes: Buffer.byteLength(sourceText),
-  lines: source.getLineAndCharacterOfPosition(sourceText.length).line + 1,
+  lines,
+  maxLines,
   imports: source.statements.filter(ts.isImportDeclaration).length,
   topLevelStatements: statements.length,
-  namedFunctions: namedFunctions.length,
-  oversizedStatements: oversizedStatements.length,
+  namedFunctions: statements.filter((entry) => entry.kind === 'FunctionDeclaration').length,
+  oversizedStatements: statements.filter((entry) => entry.lines >= 100).length,
   routeCounts,
   registerCalls,
   largestStatements,
@@ -70,3 +67,11 @@ const report = {
 console.log('PRODUCTION_PASS_INDEX_REPORT_START')
 console.log(JSON.stringify(report, null, 2))
 console.log('PRODUCTION_PASS_INDEX_REPORT_END')
+
+if (!Number.isFinite(maxLines) || maxLines < 1) {
+  console.error('DYSTOPAI_SERVER_INDEX_MAX_LINES must be a positive finite number.')
+  process.exitCode = 1
+} else if (lines > maxLines) {
+  console.error(`server/index.ts is ${lines} lines, exceeding the architecture ceiling of ${maxLines}. Extract a domain module instead of growing the monolith.`)
+  process.exitCode = 1
+}
