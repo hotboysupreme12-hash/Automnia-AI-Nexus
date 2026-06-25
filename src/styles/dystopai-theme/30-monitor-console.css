@@ -3231,39 +3231,6 @@ html.dui-pro-overhaul .dy-command-message-chip.is-transport {
   text-transform: uppercase;
 }
 
-html.dui-pro-overhaul .dy-command-message-chip.is-trace {
-  border-color: rgba(148, 163, 184, .18);
-  background: rgba(148, 163, 184, .045);
-  color: #b7c1cb;
-  cursor: pointer;
-  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace;
-  font-size: 8px;
-}
-
-html.dui-pro-overhaul button.dy-command-message-chip.is-trace {
-  appearance: none;
-}
-
-html.dui-pro-overhaul button.dy-command-message-chip.is-trace:hover,
-html.dui-pro-overhaul button.dy-command-message-chip.is-trace:focus-visible {
-  border-color: rgba(148, 230, 255, .34);
-  background: rgba(120, 231, 245, .070);
-  color: #d9fbff;
-  outline: none;
-}
-
-html.dui-pro-overhaul button.dy-command-message-chip.is-trace[data-copy-state="copied"] {
-  border-color: rgba(82, 211, 138, .26);
-  background: rgba(82, 211, 138, .070);
-  color: #b8f4cf;
-}
-
-html.dui-pro-overhaul button.dy-command-message-chip.is-trace[data-copy-state="failed"] {
-  border-color: rgba(248, 113, 113, .28);
-  background: rgba(248, 113, 113, .070);
-  color: #ffc7c7;
-}
-
 html.dui-pro-overhaul .dy-command-message-chip.is-warning {
   border-color: rgba(214, 169, 74, .25);
   background: rgba(214, 169, 74, .065);

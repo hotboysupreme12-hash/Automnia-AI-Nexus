@@ -3,7 +3,7 @@ import { apiErrorMessage, apiRequest } from '../../api/client'
 import { restartGatewayRuntime, useRuntimeSummaryStatus } from '../../hooks/useRuntimeStatus'
 import type { GatewayStabilityStatus } from '../../hooks/useRuntimeStatus'
 import { useNexusStore } from '../../store/nexusStore'
-import type { AgentActivityEvent, AgentResponse, AgentTurnAttachment, OpenClawAgent } from '../../types/nexus'
+import type { AgentResponse, AgentTurnAttachment, OpenClawAgent } from '../../types/nexus'
 import { apiUrl } from '../../utils/apiUrl'
 import { redactDiagnosticText } from '../../utils/diagnosticRedaction'
 import { createSseFrameParser } from '../../utils/sseStream'
@@ -289,130 +289,10 @@ function latestRunStatus(entry?: AgentResponse) {
   return latestActivity?.label.trim() || latestProgress?.trim() || entry.progressLabel?.trim() || 'Agent started working.'
 }
 
-type CommandConsoleRunTrace = {
-  runId: string
-  sessionKey: string
-  status: string
-  transport: string
-  progressLabel: string
-  latestProgress: string
-  buttonText: string
-  title: string
-  ariaLabel: string
-  copyText: string
-  evidenceRows: CommandConsoleEvidenceRow[]
-}
-
-type CommandConsoleEvidenceRow = {
-  key: 'agent' | 'state' | 'run' | 'session' | 'transport' | 'progress' | 'latest' | 'content'
-  label: string
-  value: string
-}
-
-function activityStringValue(event: AgentActivityEvent, key: string) {
-  const direct = event[key as keyof AgentActivityEvent]
-  if (typeof direct === 'string' && direct.trim()) return direct.trim()
-  const payloadValue = event.payload?.[key]
-  if (typeof payloadValue === 'string' && payloadValue.trim()) return payloadValue.trim()
-  return ''
-}
-
-function latestActivityString(entry: AgentResponse, key: string) {
-  for (const event of [...(entry.activity || [])].reverse()) {
-    const value = activityStringValue(event, key)
-    if (value) return value
-  }
-  return ''
-}
-
-function latestRunProgress(entry: AgentResponse) {
-  const latestActivity = [...(entry.activity || [])].reverse().find((event) => {
-    const label = event.label.trim()
-    return label && event.type !== 'message.final' && event.type !== 'run.finished' && !/final response received/i.test(label)
-  })
-  const latestProgress = [...(entry.progressLines || [])].reverse().find((line) => line.trim())
-  return latestActivity?.label.trim() || latestProgress?.trim() || entry.progressLabel?.trim() || ''
-}
-
-function shortTraceId(value: string) {
-  if (!value) return ''
-  if (value.length <= 24) return value
-  return `${value.slice(0, 10)}...${value.slice(-8)}`
-}
-
-function buildLatestRunTrace(entry: AgentResponse, transport: string, status: string): CommandConsoleRunTrace | null {
-  const runId = latestActivityString(entry, 'runId')
-  const sessionKey = latestActivityString(entry, 'sessionKey')
-  const progressLabel = entry.progressLabel?.trim() || ''
-  const latestProgress = redactDiagnosticText(latestRunProgress(entry), 500)
-  if (!runId && !sessionKey && !progressLabel && !latestProgress) return null
-
-  const rawTransport = entry.transport?.trim() || ''
-  const contentEvidence = ['Content', 'omitted'] as const
-  const evidenceRows = ([
-    { key: 'agent', label: 'Agent', value: entry.agentId },
-    { key: 'state', label: 'State', value: status },
-    { key: 'run', label: 'Run', value: runId || 'pending' },
-    { key: 'session', label: 'Session', value: sessionKey || 'pending' },
-    { key: 'transport', label: 'Transport', value: transport || rawTransport || 'unknown' },
-    { key: 'progress', label: 'Progress', value: progressLabel || 'pending' },
-    { key: 'latest', label: 'Latest', value: latestProgress || 'pending' },
-    { key: 'content', label: contentEvidence[0], value: contentEvidence[1] },
-  ] satisfies CommandConsoleEvidenceRow[]).map((row): CommandConsoleEvidenceRow => ({
-    ...row,
-    value: redactDiagnosticText(row.value, 500),
-  }))
-  const copyText = redactDiagnosticText([
-    `runId=${runId || 'pending'}`,
-    `agentId=${entry.agentId}`,
-    `status=${status}`,
-    `sessionKey=${sessionKey || 'pending'}`,
-    `transport=${rawTransport || 'unknown'}`,
-    `progressLabel=${progressLabel || 'pending'}`,
-    `latestProgress=${latestProgress || 'pending'}`,
-    'content=omitted',
-  ].join('\n'), 2000)
-
-  return {
-    runId,
-    sessionKey,
-    status,
-    transport,
-    progressLabel,
-    latestProgress,
-    buttonText: runId ? `run ${shortTraceId(runId)}` : 'trace',
-    title: `Run: ${runId || 'pending'} / Session key: ${sessionKey || 'pending'}`,
-    ariaLabel: `Copy Command Console trace for ${entry.agentId}`,
-    copyText,
-    evidenceRows,
-  }
-}
-
-async function writeClipboardText(value: string) {
-  if (typeof navigator !== 'undefined' && navigator.clipboard?.writeText) {
-    await navigator.clipboard.writeText(value)
-    return
-  }
-  if (typeof document === 'undefined') return
-  const textarea = document.createElement('textarea')
-  textarea.value = value
-  textarea.setAttribute('readonly', 'true')
-  textarea.style.position = 'fixed'
-  textarea.style.opacity = '0'
-  document.body.appendChild(textarea)
-  textarea.select()
-  try {
-    document.execCommand('copy')
-  } finally {
-    textarea.remove()
-  }
-}
-
 type ResponseCta = {
   label: string
   detail?: string
   action?: 'restart-gateway' | 'cancel-queued'
-  thinking?: boolean
 }
 
 function responseCta(entry: AgentResponse): ResponseCta | null {
@@ -426,12 +306,7 @@ function responseCta(entry: AgentResponse): ResponseCta | null {
       action: 'cancel-queued',
     }
   }
-  if (entry.streaming && (entry.runtimeNoticeActive || isRuntimeNoticeTransport(entry.transport))) {
-    return {
-      label: 'Thinking',
-      thinking: true,
-    }
-  }
+  if (entry.streaming && (entry.runtimeNoticeActive || isRuntimeNoticeTransport(entry.transport))) return null
   if (entry.streaming) return null
 
   switch (entry.failureKind) {
@@ -514,31 +389,10 @@ const ResponseMessage = memo(function ResponseMessage({
   ].filter(Boolean).join(' / ')
   const clockTitle = `${messageTimestampTitle(entry.timestamp)} / ${timeAgo(entry.timestamp)}`
   const bodyText = hasContent ? replyText : entry.streaming ? '' : entry.ok ? 'No output' : 'Request failed'
-  const progressText = entry.streaming && !hasContent ? latestRunStatus(entry) : ''
+  const showInlineThinking = entry.streaming && !hasContent && runtimeNoticeActive
+  const progressText = entry.streaming && !hasContent && !showInlineThinking ? latestRunStatus(entry) : ''
   const displayText = bodyText || progressText
-  const bodyState = hasContent ? 'response' : progressText ? 'progress' : entry.ok ? 'empty' : 'blocked'
-  const latestRunTrace = useMemo(() => buildLatestRunTrace(entry, transport, status), [entry, transport, status])
-  const [traceCopyState, setTraceCopyState] = useState<'idle' | 'copied' | 'failed'>('idle')
-  const traceCopyStatusText = traceCopyState === 'copied'
-    ? 'Command Console trace copied.'
-    : traceCopyState === 'failed'
-    ? 'Command Console trace copy failed.'
-    : ''
-  const handleCopyTrace = useCallback(async () => {
-    if (!latestRunTrace) return
-    try {
-      await writeClipboardText(latestRunTrace.copyText)
-      setTraceCopyState('copied')
-    } catch {
-      setTraceCopyState('failed')
-    }
-  }, [latestRunTrace])
-
-  useEffect(() => {
-    if (traceCopyState === 'idle') return undefined
-    const timer = window.setTimeout(() => setTraceCopyState('idle'), 2400)
-    return () => window.clearTimeout(timer)
-  }, [traceCopyState])
+  const bodyState = showInlineThinking ? 'thinking' : hasContent ? 'response' : progressText ? 'progress' : entry.ok ? 'empty' : 'blocked'
 
   return (
     <div
@@ -611,23 +465,6 @@ const ResponseMessage = memo(function ResponseMessage({
               {transport}
             </span>
           )}
-          {latestRunTrace && (
-            <>
-              <button
-                type="button"
-                className="dy-command-message-chip is-trace"
-                data-copy-state={traceCopyState}
-                title={latestRunTrace.title}
-                aria-label={latestRunTrace.ariaLabel}
-                onClick={handleCopyTrace}
-              >
-                {latestRunTrace.buttonText}
-              </button>
-              <span className="dy-command-trace-copy-status sr-only" role="status" aria-live="polite">
-                {traceCopyStatusText}
-              </span>
-            </>
-          )}
           {queuePositionLabel && (
             <span
               className="dy-command-message-chip is-queue"
@@ -644,29 +481,28 @@ const ResponseMessage = memo(function ResponseMessage({
         </div>
       </div>
 
-      {latestRunTrace && (
-        <details className="dy-command-evidence-preview" aria-label="Command Console run evidence">
-          <summary>Evidence</summary>
-          <dl>
-            {latestRunTrace.evidenceRows.map((row) => (
-              <div key={row.key} data-evidence-key={row.key}>
-                <dt>{row.label}</dt>
-                <dd>{row.value}</dd>
-              </div>
-            ))}
-          </dl>
-        </details>
-      )}
-
-      {displayText ? (
+      {displayText || showInlineThinking ? (
         <div className="dy-command-message-body-wrap relative">
           <p
             className="dy-command-message-body whitespace-pre-wrap break-words border border-white/[0.04] bg-slate-950/30 px-3 py-2.5 text-[12px] leading-relaxed text-slate-300/95"
             data-body-state={bodyState}
             aria-live={entry.streaming ? 'polite' : undefined}
           >
-            {displayText}
-            {entry.streaming && <span className="ml-0.5 inline-block h-3 w-1 animate-pulse rounded-sm bg-cyan-300/70 align-[-2px]" />}
+            {showInlineThinking ? (
+              <span className="dy-command-thinking-label">
+                Thinking
+                <span className="dy-command-thinking-dots" aria-hidden="true">
+                  <span />
+                  <span />
+                  <span />
+                </span>
+              </span>
+            ) : (
+              <>
+                {displayText}
+                {entry.streaming && <span className="ml-0.5 inline-block h-3 w-1 animate-pulse rounded-sm bg-cyan-300/70 align-[-2px]" />}
+              </>
+            )}
           </p>
         </div>
       ) : !entry.streaming && (
@@ -677,18 +513,9 @@ const ResponseMessage = memo(function ResponseMessage({
       )}
 
       {cta && (
-        <div className="dy-command-response-cta" data-state={cta.thinking ? 'thinking' : undefined}>
+        <div className="dy-command-response-cta">
           <div className="min-w-0">
-            <p className={cta.thinking ? 'dy-command-thinking-label' : undefined}>
-              {cta.label}
-              {cta.thinking && (
-                <span className="dy-command-thinking-dots" aria-hidden="true">
-                  <span />
-                  <span />
-                  <span />
-                </span>
-              )}
-            </p>
+            <p>{cta.label}</p>
             {cta.detail && <span>{cta.detail}</span>}
           </div>
           {cta.action === 'restart-gateway' && (

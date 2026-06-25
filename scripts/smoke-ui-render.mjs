@@ -421,10 +421,10 @@ async function inspectWorkspaceTabs(window) {
     "    const busyStatus = commandConsole ? commandConsole.querySelector('.dy-command-busy-status') : null",
     "    const traceChip = commandConsole ? commandConsole.querySelector('button.dy-command-message-chip.is-trace') : null",
     "    const evidencePreview = commandConsole ? commandConsole.querySelector('.dy-command-evidence-preview') : null",
-    "    const evidenceRows = evidencePreview ? Array.from(evidencePreview.querySelectorAll('[data-evidence-key]')).map((row) => ({",
-    "      key: row.getAttribute('data-evidence-key') || '',",
-    "      text: row.textContent.replace(/\\s+/g, ' ').trim(),",
-    "    })) : []",
+    "    const thinkingBody = commandConsole ? commandConsole.querySelector('.dy-command-message-body[data-body-state=\"thinking\"]') : null",
+    "    const thinkingDots = thinkingBody ? thinkingBody.querySelector('.dy-command-thinking-dots') : null",
+    "    const thinkingCta = commandConsole ? commandConsole.querySelector('.dy-command-response-cta[data-state=\"thinking\"]') : null",
+    "    const visibleText = commandConsole ? commandConsole.innerText.replace(/\\s+/g, ' ').trim() : ''",
     "    const messages = commandConsole ? commandConsole.querySelector('.dy-command-messages') : null",
     "    const messagesRect = messages ? messages.getBoundingClientRect() : null",
     "    const stopRect = stopButton ? stopButton.getBoundingClientRect() : null",
@@ -454,7 +454,13 @@ async function inspectWorkspaceTabs(window) {
     "      evidencePreviewOpen: evidencePreview ? Boolean(evidencePreview.open) : false,",
     "      evidencePreviewAriaLabel: evidencePreview ? evidencePreview.getAttribute('aria-label') || '' : '',",
     "      evidenceSummaryText: evidencePreview ? evidencePreview.querySelector('summary')?.textContent.replace(/\\s+/g, ' ').trim() || '' : '',",
-    "      evidenceRows,",
+    "      thinkingBodyPresent: Boolean(thinkingBody),",
+    "      thinkingBodyText: thinkingBody ? thinkingBody.textContent.replace(/\\s+/g, ' ').trim() : '',",
+    "      thinkingDotsPresent: Boolean(thinkingDots),",
+    "      thinkingDotsCount: thinkingDots ? thinkingDots.querySelectorAll('span').length : 0,",
+    "      thinkingCtaPresent: Boolean(thinkingCta),",
+    "      gatewayAcceptedVisible: /Gateway accepted the live chat run\\./.test(visibleText),",
+    "      runTraceVisible: /\\brun\\s+ui-smoke-run\\b/i.test(visibleText),",
       "      messagesRole: messages ? messages.getAttribute('role') || '' : '',",
     "      messagesAriaLive: messages ? messages.getAttribute('aria-live') || '' : '',",
     "      messagesAriaRelevant: messages ? messages.getAttribute('aria-relevant') || '' : '',",
@@ -612,53 +618,6 @@ async function stopRunningCommandConsole(window) {
   return window.webContents.executeJavaScript(stopScript)
 }
 
-async function copyCommandConsoleTrace(window) {
-  const copyScript = [
-    "(() => {",
-    "  const wait = (ms) => new Promise((resolve) => setTimeout(resolve, ms))",
-    "  const waitFor = async (predicate, timeout = 5000) => {",
-    "    const started = Date.now()",
-    "    while (Date.now() - started < timeout) {",
-    "      const value = predicate()",
-    "      if (value) return value",
-    "      await wait(100)",
-    "    }",
-    "    return null",
-    "  }",
-    "  return (async () => {",
-    "    const commandConsole = document.querySelector('[data-dui-panel=\"command-console\"]')",
-    "    const traceButton = commandConsole ? commandConsole.querySelector('button.dy-command-message-chip.is-trace') : null",
-    "    const status = commandConsole ? commandConsole.querySelector('.dy-command-trace-copy-status') : null",
-    "    if (!commandConsole || !traceButton) return { attempted: false, reason: 'trace-button-missing' }",
-    "    try {",
-    "      Object.defineProperty(window.navigator, 'clipboard', {",
-    "        configurable: true,",
-    "        value: {",
-    "          writeText: async (text) => {",
-    "            window.__dyCopiedTraceText = String(text)",
-    "          },",
-    "        },",
-    "      })",
-    "    } catch {",
-    "      window.__dyCopiedTraceText = ''",
-    "    }",
-    "    traceButton.click()",
-    "    const copiedText = await waitFor(() => window.__dyCopiedTraceText || '', 1500)",
-    "    await waitFor(() => traceButton.getAttribute('data-copy-state') === 'copied', 1500)",
-    "    return {",
-    "      attempted: true,",
-    "      clicked: true,",
-    "      copiedText: copiedText || '',",
-    "      traceButtonTextAfterClick: traceButton.textContent.replace(/\\s+/g, ' ').trim(),",
-    "      traceButtonCopyState: traceButton.getAttribute('data-copy-state') || '',",
-    "      traceStatusText: status ? status.textContent.replace(/\\s+/g, ' ').trim() : '',",
-    "    }",
-    "  })()",
-    "})()",
-  ].join('\n')
-  return window.webContents.executeJavaScript(copyScript)
-}
-
 async function cleanSlateMonitor(window, mode = 'success') {
   const cleanSlateScript = [
     "(() => {",
@@ -781,7 +740,6 @@ async function inspectViewport(viewport) {
   ].join('\n')
   const dom = await window.webContents.executeJavaScript(inspectScript)
   const workspaceTabs = await inspectWorkspaceTabs(window)
-  const commandConsoleTraceCopy = await copyCommandConsoleTrace(window)
 
   const image = await window.webContents.capturePage()
   const screenshotPath = path.join(outputDir, 'ui-smoke-' + viewport.label + '.png')
@@ -819,27 +777,22 @@ async function inspectViewport(viewport) {
     && agentsTab.commandConsole.busyStatusRole === 'status'
     && agentsTab.commandConsole.busyStatusAriaLive === 'polite'
     && /^\d+ Command Console runs? running$/.test(agentsTab.commandConsole.busyStatusAriaLabel)
-    && agentsTab.commandConsole.traceChipPresent
-    && agentsTab.commandConsole.traceChipTagName === 'BUTTON'
-    && /run ui-smoke-run/.test(agentsTab.commandConsole.traceChipText)
-    && /Session key: agent:hn-commander:control-center:ui-smoke/.test(agentsTab.commandConsole.traceChipTitle)
-    && agentsTab.commandConsole.traceChipAriaLabel.startsWith('Copy Command Console trace')
-    && agentsTab.commandConsole.evidencePreviewPresent
+    && !agentsTab.commandConsole.traceChipPresent
+    && agentsTab.commandConsole.traceChipTagName === ''
+    && agentsTab.commandConsole.traceChipText === ''
+    && agentsTab.commandConsole.traceChipTitle === ''
+    && agentsTab.commandConsole.traceChipAriaLabel === ''
+    && !agentsTab.commandConsole.evidencePreviewPresent
     && !agentsTab.commandConsole.evidencePreviewOpen
-    && agentsTab.commandConsole.evidencePreviewAriaLabel === 'Command Console run evidence'
-    && agentsTab.commandConsole.evidenceSummaryText === 'Evidence'
-    && agentsTab.commandConsole.evidenceRows.some((row) => row.key === 'agent' && /hn-commander/.test(row.text))
-    && agentsTab.commandConsole.evidenceRows.some((row) => row.key === 'state' && /streaming/.test(row.text))
-    && agentsTab.commandConsole.evidenceRows.some((row) => row.key === 'run' && /ui-smoke-run/.test(row.text))
-    && agentsTab.commandConsole.evidenceRows.some((row) => row.key === 'session' && /ui-smoke/.test(row.text))
-    && agentsTab.commandConsole.evidenceRows.some((row) => row.key === 'transport' && /Gateway Chat/.test(row.text))
-    && agentsTab.commandConsole.evidenceRows.some((row) => row.key === 'progress' && /OpenClaw session/.test(row.text))
-    && agentsTab.commandConsole.evidenceRows.some((row) => row.key === 'latest' && /UI smoke keeps this run active/.test(row.text))
-    && agentsTab.commandConsole.evidenceRows.some((row) => row.key === 'latest' && /api_key=\[redacted\]/.test(row.text))
-    && agentsTab.commandConsole.evidenceRows.some((row) => row.key === 'latest' && /\[redacted-phone\]/.test(row.text))
-    && agentsTab.commandConsole.evidenceRows.some((row) => row.key === 'latest' && /\[redacted-email\]/.test(row.text))
-    && !agentsTab.commandConsole.evidenceRows.some((row) => /sk-ui-smoke-secret|\+15555550123|user@example\.com/.test(row.text))
-    && agentsTab.commandConsole.evidenceRows.some((row) => row.key === 'content' && /omitted/.test(row.text))
+    && agentsTab.commandConsole.evidencePreviewAriaLabel === ''
+    && agentsTab.commandConsole.evidenceSummaryText === ''
+    && agentsTab.commandConsole.thinkingBodyPresent
+    && /^Thinking$/.test(agentsTab.commandConsole.thinkingBodyText)
+    && agentsTab.commandConsole.thinkingDotsPresent
+    && agentsTab.commandConsole.thinkingDotsCount === 3
+    && !agentsTab.commandConsole.thinkingCtaPresent
+    && !agentsTab.commandConsole.gatewayAcceptedVisible
+    && !agentsTab.commandConsole.runTraceVisible
     && agentsTab.commandConsole.messagesRole === 'log'
     && agentsTab.commandConsole.messagesAriaLive === 'polite'
     && agentsTab.commandConsole.messagesAriaRelevant === 'additions text'
@@ -866,24 +819,6 @@ async function inspectViewport(viewport) {
     && dom.tabs.length >= 4
     && workspaceTabsOk
     && commandConsoleOk
-    && commandConsoleTraceCopy.attempted
-    && commandConsoleTraceCopy.clicked
-    && /runId=ui-smoke-run/.test(commandConsoleTraceCopy.copiedText)
-    && /agentId=hn-commander/.test(commandConsoleTraceCopy.copiedText)
-    && /status=streaming/.test(commandConsoleTraceCopy.copiedText)
-    && /sessionKey=agent:hn-commander:control-center:ui-smoke/.test(commandConsoleTraceCopy.copiedText)
-    && /transport=gateway-chat/.test(commandConsoleTraceCopy.copiedText)
-    && /progressLabel=OpenClaw session/.test(commandConsoleTraceCopy.copiedText)
-    && /latestProgress=UI smoke keeps this run active/.test(commandConsoleTraceCopy.copiedText)
-    && /api_key=\[redacted\]/.test(commandConsoleTraceCopy.copiedText)
-    && /\[redacted-phone\]/.test(commandConsoleTraceCopy.copiedText)
-    && /\[redacted-email\]/.test(commandConsoleTraceCopy.copiedText)
-    && !/sk-ui-smoke-secret/.test(commandConsoleTraceCopy.copiedText)
-    && !/\+15555550123/.test(commandConsoleTraceCopy.copiedText)
-    && !/user@example\.com/.test(commandConsoleTraceCopy.copiedText)
-    && /content=omitted/.test(commandConsoleTraceCopy.copiedText)
-    && commandConsoleTraceCopy.traceButtonCopyState === 'copied'
-    && commandConsoleTraceCopy.traceStatusText === 'Command Console trace copied.'
     && commandConsoleStopClick.attempted
     && commandConsoleStopClick.clicked
     && commandConsoleStopClick.streamClosed
@@ -926,7 +861,6 @@ async function inspectViewport(viewport) {
     shellFillsViewport,
     dom,
     commandConsoleStopSeed,
-    commandConsoleTraceCopy,
     commandConsoleStopClick,
     monitorCleanSlate,
     monitorCleanSlateFailure,
