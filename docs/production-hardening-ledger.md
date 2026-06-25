@@ -10,9 +10,9 @@ next planned extraction.
 
 - Branch: `codex/agent-turn-route-modules`
 - Base: `origin/main`
-- Status: agent-turn route extraction implemented locally with full local CI and
-  packaged launch smoke green; awaiting commit, push, PR, and remote CI
-  evidence.
+- Status: agent-turn route extraction pushed as PR #9 with full local
+  verification and a green remote Control Plane CI run on the implementation
+  commit.
 - Policy: keep work on `codex/` branches and avoid direct pushes to `main`.
 
 ## Open Production-Hardening PR Stack
@@ -66,6 +66,13 @@ Evidence so far:
 - `npm test`: passed, including the full production hardening smoke suite,
   release signing, release validation, security, and CI workflow checks.
 - `npm run smoke:packaged-electron-launch`: passed.
+- GitHub Control Plane CI run `28137473870` for commit
+  `8fd97e59b6704f788c016fc868c642b116274ecc`: passed.
+- Release evidence artifact `dystopai-release-evidence`:
+  - Artifact ID: `7865542661`
+  - Digest:
+    `sha256:cdc776ac60600a8f603dfddd04c1a97c21886e5ce8f3a35b3e061a76d5743616`
+  - Expires: 2026-09-22.
 
 Notes:
 
@@ -88,8 +95,8 @@ Subagent coordination:
 
 ## In Progress
 
-- Commit, push, open a PR, run GitHub CI, and attach release-evidence artifact
-  metadata to the PR.
+- PR #9 remains open and mergeable. A ledger-only evidence commit may cause a
+  new CI run; the PR must remain green before merge.
 
 ## Remaining High-Impact Work
 
