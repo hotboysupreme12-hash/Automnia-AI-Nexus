@@ -1379,14 +1379,15 @@ Verification:
 - Strengthened `scripts/smoke-ci-workflow.ts` to enforce that `npm run prepare:openclaw-vendor` runs before `npm test` and before packaging.
 - `npm run smoke:ci-workflow` passed after the workflow ordering fix.
 - `npm test` passed after the workflow ordering fix.
+- GitHub Control Plane CI run `28151928387` passed on `main` commit `37320da` in `9m10s`. Evidence: locked install, vendored OpenClaw preparation before smoke tests, dependency audit, secret scan, lint, app/server/Electron typecheck, full production hardening smoke suite, server/client builds, Electron E2E smoke, runtime bundle prep, desktop packaging, packaged desktop launch smoke, release SBOM/checksum generation, release validation, evidence existence verification, and evidence upload all passed.
 
 ## In Progress
 
-- Fresh GitHub source startup repair has been pushed to GitHub `main`; the follow-up CI-ordering fix is queued for publication to GitHub `main`.
+- Fresh GitHub source startup repair and CI ordering fix have been pushed to GitHub `main` and verified by a passing clean Control Plane CI run.
 
 Next action:
 
-- Push the verified CI-ordering fix to GitHub `main`, watch Control Plane CI, then either:
+- Continue release-hardening work by either:
   - wire real Authenticode/macOS signing and update-channel evidence generation when certificates/secrets are available, or
   - resume extraction of remaining `server/index.ts` route clusters, with Nexus/misc, shift/cron scheduler, and browser/preflight areas as high-value candidates.
 
