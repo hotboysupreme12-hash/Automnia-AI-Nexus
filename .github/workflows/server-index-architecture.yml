@@ -1,0 +1,63 @@
+name: Server Index Architecture Report
+
+on:
+  push:
+    branches:
+      - production-readiness-2026-06-25
+    paths:
+      - server/**
+      - scripts/**
+      - src/components/layout/NexusShell.tsx
+      - src/dystopai-app-theme.css
+      - src/styles/dystopai-theme/**
+      - package.json
+      - .github/workflows/server-index-architecture.yml
+  pull_request:
+    branches:
+      - main
+    paths:
+      - server/**
+      - scripts/**
+      - src/components/layout/NexusShell.tsx
+      - src/dystopai-app-theme.css
+      - src/styles/dystopai-theme/**
+      - package.json
+      - .github/workflows/server-index-architecture.yml
+
+permissions:
+  contents: read
+
+jobs:
+  report:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Check out proposed revision
+        uses: actions/checkout@v4
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+
+      - name: Install locked dependencies
+        run: npm ci
+
+      - name: Generate architecture report
+        run: node scripts/report-server-index-architecture.mjs
+
+      - name: Upload architecture evidence
+        uses: actions/upload-artifact@v4
+        with:
+          name: production-readiness-source-map
+          if-no-files-found: error
+          retention-days: 7
+          path: |
+            docs/generated/server-index-architecture.md
+            package.json
+            server/**
+            scripts/**
+            src/components/layout/NexusShell.tsx
+            src/dystopai-app-theme.css
+            src/styles/dystopai-theme/**
