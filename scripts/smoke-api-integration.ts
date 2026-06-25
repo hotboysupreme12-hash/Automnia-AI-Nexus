@@ -203,13 +203,14 @@ async function main() {
     assert.equal(badLogin.response.status, 401)
     assertError(badLogin.payload, 'invalid_token', 401)
 
-    const login = await request<{ token: string }>(port, 'POST', '/api/auth/login', {
+    const login = await request<{ token: string; expiresAt: string }>(port, 'POST', '/api/auth/login', {
       body: { token: CONTROL_TOKEN },
       requestId: 'integration-login',
     })
     assert.equal(login.response.status, 200)
-    const { token: sessionToken } = assertSuccess(login.payload)
-    assert.match(sessionToken, /^[0-9a-f-]{36}$/i)
+    const { token: sessionToken, expiresAt } = assertSuccess(login.payload)
+    assert.match(sessionToken, /^[A-Za-z0-9_-]{40,}$/)
+    assert.ok(Date.parse(expiresAt) > Date.now(), 'session expiry must be a future timestamp')
 
     const status = await request<{ authenticated: boolean }>(port, 'GET', '/api/auth/status', {
       token: sessionToken,
@@ -309,6 +310,27 @@ async function main() {
     const missionRecordLedger = path.join(stateDir, 'control-center-ledger', 'mission-records.jsonl')
     assert.ok(existsSync(missionRecordLedger), 'mission record ledger should be written under the temp OpenClaw state root')
     assert.match(readFileSync(missionRecordLedger, 'utf-8'), new RegExp(launchData.mission.id))
+
+    const logout = await request<{ revoked: boolean }>(port, 'POST', '/api/auth/logout', {
+      token: sessionToken,
+      requestId: 'integration-logout',
+    })
+    assert.equal(logout.response.status, 200)
+    assert.equal(assertSuccess(logout.payload).revoked, true)
+
+    const loggedOutStatus = await request<{ authenticated: boolean }>(port, 'GET', '/api/auth/status', {
+      token: sessionToken,
+      requestId: 'integration-status-after-logout',
+    })
+    assert.equal(loggedOutStatus.response.status, 200)
+    assert.equal(assertSuccess(loggedOutStatus.payload).authenticated, false)
+
+    const revokedSessionRequest = await request(port, 'GET', '/api/missions/projection', {
+      token: sessionToken,
+      requestId: 'integration-revoked-session',
+    })
+    assert.equal(revokedSessionRequest.response.status, 401)
+    assertError(revokedSessionRequest.payload, 'auth_required', 401)
   } finally {
     child.kill('SIGTERM')
     await new Promise((resolve) => {

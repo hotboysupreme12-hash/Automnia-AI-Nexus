@@ -20,9 +20,11 @@ function routeBlock(source: string, marker: string): string {
   return source.slice(start, next >= 0 ? next : source.length)
 }
 
-const server = readWorkspaceFile('server/index.ts')
+const server = readWorkspaceFile('server/controlPlane.ts')
 const controlPlaneHttp = readWorkspaceFile('server/controlPlaneHttp.ts')
 const providerAuthRoutes = readWorkspaceFile('server/routes/providerAuthRoutes.ts')
+const agentConfigRoutes = readWorkspaceFile('server/routes/agentConfigRoutes.ts')
+const providerCatalog = readWorkspaceFile('server/catalogs/providerCatalog.ts')
 const providerModal = readWorkspaceFile('src/components/auth/ProviderAuthModal.tsx')
 const editor = readWorkspaceFile('src/components/editor/AgentEditorModal.tsx')
 const recruit = readWorkspaceFile('src/components/recruit/RecruitAgentModal.tsx')
@@ -60,7 +62,7 @@ for (const marker of [
   "app.get('/api/party/agent/:agentId/model'",
   "app.post('/api/party/agent/:agentId/model'",
 ]) {
-  const source = marker.includes('/api/party/') ? server : providerAuthRoutes
+  const source = marker.includes('/api/party/') ? agentConfigRoutes : providerAuthRoutes
   const block = routeBlock(source, marker)
   assert(/apiSuccess\s*\(\s*res/.test(block), `${marker} should return canonical success envelopes`)
   assert(/apiFailure\s*\(\s*res/.test(block), `${marker} should return canonical error envelopes`)
@@ -71,6 +73,11 @@ for (const marker of [
 
 assert(/import \{ registerProviderAuthRoutes \} from '\.\/routes\/providerAuthRoutes'/.test(server), 'server index must import the extracted provider auth route module')
 assert(/registerProviderAuthRoutes\(app, \{/.test(server), 'server index must register extracted provider auth routes')
+assert(/registerAgentConfigRoutes\(app, agentConfigRoutesContext\)/.test(server), 'control plane must register extracted agent config routes')
+assert(server.includes("from './catalogs/providerCatalog'"), 'control plane must import the extracted provider catalog')
+assert(!server.includes('const AUTH_PROVIDER_CATALOG:'), 'provider catalog data should not remain inline in the control plane')
+assert(providerCatalog.includes('export const AUTH_PROVIDER_CATALOG'), 'provider catalog module should own provider metadata')
+assert(providerCatalog.includes('export const AUTH_ENV_MAP'), 'provider catalog module should derive the provider environment map')
 assert(
   server.indexOf('registerProviderAuthRoutes(app, {') < server.indexOf('registerSkillRoutes(app, {'),
   'provider auth routes should stay registered before skills routes',

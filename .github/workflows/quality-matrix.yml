@@ -1,0 +1,63 @@
+name: Cross-Platform Quality
+
+on:
+  push:
+    branches:
+      - main
+      - 'codex/**'
+      - 'production/**'
+  pull_request:
+    branches:
+      - main
+
+concurrency:
+  group: cross-platform-quality-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  linux:
+    name: Linux source and build validation
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: npm
+
+      - name: Install locked dependencies
+        run: npm ci
+
+      - name: Audit production dependencies
+        run: npm run audit:dependencies
+
+      - name: Scan for checked-in secrets
+        run: npm run secret:scan
+
+      - name: Lint and type-check
+        run: |
+          npm run lint
+          npm run typecheck
+
+      - name: Verify architecture and security contracts
+        run: |
+          npm run smoke:server-architecture
+          npm run smoke:route-inventory
+          npm run smoke:shell-production-ui
+          npm run smoke:interactive-controls
+          npm run smoke:security
+          npm run smoke:session-tokens
+          npm run smoke:gateway-auth-hardening
+
+      - name: Build standalone application
+        run: npm run build:standalone
+
+      - name: Enforce renderer bundle budgets
+        run: npm run check:bundle-budgets

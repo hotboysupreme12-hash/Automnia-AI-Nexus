@@ -4,7 +4,7 @@ import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 
 const rootDir = fileURLToPath(new URL('..', import.meta.url))
-const serverSource = readFileSync(path.join(rootDir, 'server/index.ts'), 'utf8')
+const serverSource = readFileSync(path.join(rootDir, 'server/controlPlane.ts'), 'utf8')
 const packageJson = JSON.parse(readFileSync(path.join(rootDir, 'package.json'), 'utf8')) as { scripts?: Record<string, string> }
 
 assert.match(serverSource, /type MissionCronReconciliationSnapshot/)

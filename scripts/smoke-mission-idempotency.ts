@@ -4,7 +4,7 @@ import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 
 const rootDir = fileURLToPath(new URL('..', import.meta.url))
-const serverSource = readFileSync(join(rootDir, 'server/index.ts'), 'utf8')
+const serverSource = readFileSync(join(rootDir, 'server/controlPlane.ts'), 'utf8')
 const missionRoutesSource = readFileSync(join(rootDir, 'server/routes/missionRoutes.ts'), 'utf8')
 const storeSource = readFileSync(join(rootDir, 'src/store/nexusStore.ts'), 'utf8')
 const packageJson = JSON.parse(readFileSync(join(rootDir, 'package.json'), 'utf8')) as { scripts?: Record<string, string> }

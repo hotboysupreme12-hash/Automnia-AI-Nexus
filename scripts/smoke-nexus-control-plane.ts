@@ -21,8 +21,9 @@ function routeBlock(source: string, marker: string): string {
   return source.slice(start, next >= 0 ? next : source.length)
 }
 
-const server = readWorkspaceFile('server/index.ts')
+const server = readWorkspaceFile('server/controlPlane.ts')
 const agentTurnRoutes = readWorkspaceFile('server/routes/agentTurnRoutes.ts')
+const partyManagementRoutes = readWorkspaceFile('server/routes/partyManagementRoutes.ts')
 const controlPlaneHttp = readWorkspaceFile('server/controlPlaneHttp.ts')
 const store = readWorkspaceFile('src/store/nexusStore.ts')
 const packageJson = JSON.parse(readWorkspaceFile('package.json')) as { scripts?: Record<string, string> }
@@ -42,7 +43,7 @@ for (const marker of [
   "app.post('/api/party/recruit'",
   "app.delete('/api/party/agent/:agentId'",
 ]) {
-  const block = routeBlock(server, marker)
+  const block = routeBlock(partyManagementRoutes, marker)
   assert(/apiSuccess\s*\(\s*res/.test(block), `${marker} should return canonical success envelopes`)
   assert(/apiFailure\s*\(\s*res/.test(block), `${marker} should return canonical error envelopes`)
   assert(!/\breturn\s+res\.json\s*\(/.test(block), `${marker} should not return raw res.json payloads`)
@@ -60,6 +61,8 @@ for (const marker of [
   assert(!/\breturn\s+res\.status\s*\([^)]*\)\.json\s*\(/.test(block), `${marker} should not return raw status JSON errors`)
 }
 
+assert(server.includes("import { registerPartyManagementRoutes } from './routes/partyManagementRoutes'"), 'server should import party management route module')
+assert(server.includes('registerPartyManagementRoutes(app, partyManagementRoutesContext)'), 'server should register party management routes')
 assert(server.includes("import { registerAgentTurnRoutes } from './routes/agentTurnRoutes'"), 'server should import agent-turn route module')
 assert(server.includes('registerAgentTurnRoutes(app, {'), 'server should register agent-turn routes')
 

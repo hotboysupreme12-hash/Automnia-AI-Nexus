@@ -14,11 +14,14 @@ function assert(condition: unknown, message: string): asserts condition {
 function routeBlock(source: string, marker: string): string {
   const start = source.indexOf(marker)
   assert(start >= 0, `Missing route marker: ${marker}`)
-  const next = source.indexOf('\napp.', start + marker.length)
+  const remaining = source.slice(start + marker.length)
+  const nextMatch = /\n\s+app\./.exec(remaining)
+  const next = nextMatch ? start + marker.length + nextMatch.index : -1
   return source.slice(start, next >= 0 ? next : source.length)
 }
 
-const server = readWorkspaceFile('server/index.ts')
+const server = readWorkspaceFile('server/controlPlane.ts')
+const shiftRoutes = readWorkspaceFile('server/routes/shiftRoutes.ts')
 const controlPlaneHttp = readWorkspaceFile('server/controlPlaneHttp.ts')
 const runtimeHook = readWorkspaceFile('src/hooks/useRuntimeStatus.ts')
 const schedulerPanel = readWorkspaceFile('src/components/monitor/HeartbeatSchedulerPanel.tsx')
@@ -41,17 +44,26 @@ const shiftRouteMarkers = [
 ]
 
 for (const marker of shiftRouteMarkers) {
-  const block = routeBlock(server, marker)
+  const block = routeBlock(shiftRoutes, marker)
   assert(block.includes('apiSuccess(res'), `${marker} should return canonical success envelopes`)
   assert(block.includes('apiFailure(res'), `${marker} should return canonical error envelopes`)
   assert(!/\breturn\s+res\.json\s*\(/.test(block), `${marker} should not return raw res.json payloads`)
   assert(!/\breturn\s+res\.status\s*\([^)]*\)\.json\s*\(/.test(block), `${marker} should not return raw status JSON errors`)
 }
 
-const batchBlock = routeBlock(server, "app.post('/api/shifts/start-batch'")
+const batchBlock = routeBlock(shiftRoutes, "app.post('/api/shifts/start-batch'")
 assert(batchBlock.includes('if (!shifts.length)'), 'start-batch should explicitly fail when no cron jobs start')
 assert(batchBlock.includes("'Failed to start team workflow'"), 'start-batch should surface all-failed launch errors')
 assert(!batchBlock.includes('ok: shifts.length > 0'), 'start-batch should not encode all-failed state as a successful payload')
+assert(batchBlock.includes('const leadAgent = requestedLeadAgent || uniqueAgents[0]'), 'start-batch should honor an explicitly selected lead agent')
+assert(batchBlock.includes("'Lead agent must be included in agentIds'"), 'start-batch should reject a lead agent outside the selected team')
+assert(batchBlock.includes('const invalidAgent = uniqueAgents.find'), 'start-batch should validate every selected agent id')
+
+assert(server.includes("import { registerShiftRoutes } from './routes/shiftRoutes'"), 'control plane should import extracted shift routes')
+assert(server.includes('registerShiftRoutes(app, {'), 'control plane should register extracted shift routes')
+for (const marker of shiftRouteMarkers) {
+  assert(!server.includes(marker), `${marker} should be owned by server/routes/shiftRoutes.ts`)
+}
 
 assert(
   runtimeHook.includes("apiRequest<{ shiftId: string; cronId: string }>('/api/shifts/stop'"),

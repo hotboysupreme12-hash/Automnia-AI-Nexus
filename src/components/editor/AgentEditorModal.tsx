@@ -1170,11 +1170,11 @@ export function AgentEditorModal() {
                     <p className="text-[9px] font-medium text-slate-500">{agent.id} · Lv.{agent.level} · <span className="capitalize">{agent.rarity}</span></p>
                   </div>
                 </div>
-                <button data-editor-action="done" onClick={()=>void closeWithHeartbeatFlush()} title="Save pending changes and close agent settings" aria-label="Close agent settings" className="rounded-lg border border-white/[0.08] bg-white/[0.03] px-3 py-1.5 text-[9px] font-bold uppercase tracking-[0.14em] text-slate-400 transition hover:border-white/20 hover:text-white">Done</button>
+                <button type="button" data-editor-action="done" onClick={()=>void closeWithHeartbeatFlush()} title="Save pending changes and close agent settings" aria-label="Close agent settings" className="rounded-lg border border-white/[0.08] bg-white/[0.03] px-3 py-1.5 text-[9px] font-bold uppercase tracking-[0.14em] text-slate-400 transition hover:border-white/20 hover:text-white">Done</button>
               </div>
               <div data-editor-tabs className="mt-3 flex gap-0.5 rounded-lg border border-white/[0.06] bg-white/[0.02] p-0.5">
                 {EDITOR_TABS.map((t)=>(
-                  <button key={t} data-editor-tab data-active={tab===t?'true':'false'} onClick={()=>setTab(t)} title={EDITOR_TAB_HELP[t]} aria-label={EDITOR_TAB_LABEL[t]} className={`flex-1 rounded-md px-1.5 py-2 text-[9px] font-bold uppercase tracking-[0.1em] transition-all ${tab===t?'bg-gradient-to-r from-cyan-500/20 to-blue-500/15 text-cyan-200 shadow-[inset_0_1px_0_rgba(255,255,255,0.05)] border border-cyan-400/20':'text-slate-600 hover:text-slate-400'}`}>
+                  <button type="button" key={t} data-editor-tab data-active={tab===t?'true':'false'} onClick={()=>setTab(t)} title={EDITOR_TAB_HELP[t]} aria-label={EDITOR_TAB_LABEL[t]} className={`flex-1 rounded-md px-1.5 py-2 text-[9px] font-bold uppercase tracking-[0.1em] transition-all ${tab===t?'bg-gradient-to-r from-cyan-500/20 to-blue-500/15 text-cyan-200 shadow-[inset_0_1px_0_rgba(255,255,255,0.05)] border border-cyan-400/20':'text-slate-600 hover:text-slate-400'}`}>
                     <span className="mr-0.5">{ICON[t]}</span>{t}
                   </button>
                 ))}
@@ -1246,7 +1246,7 @@ export function AgentEditorModal() {
                         <div className={`mt-2 rounded-lg border px-3 py-2 text-[9px] ${primaryAuth.configured?'border-emerald-400/20 bg-emerald-400/[0.05] text-emerald-300':'border-amber-400/25 bg-amber-400/[0.06] text-amber-200'}`}>
                           <div className="flex items-center justify-between gap-2">
                             <span>{primaryAuth.configured?`${primaryAuthLabel} ${primaryAuthKind} connected.`:`${primaryAuthLabel} ${primaryAuthKind} required.`}</span>
-                            <button onClick={()=>setAuthModalProvider(primaryAuth)} className="rounded-md border border-white/10 bg-white/[0.04] px-2 py-1 text-[8px] font-bold uppercase tracking-[0.12em] text-slate-200 hover:border-cyan-300/30 hover:text-cyan-200">
+                            <button type="button" onClick={()=>setAuthModalProvider(primaryAuth)} className="rounded-md border border-white/10 bg-white/[0.04] px-2 py-1 text-[8px] font-bold uppercase tracking-[0.12em] text-slate-200 hover:border-cyan-300/30 hover:text-cyan-200">
                               {primaryAuth.configured?'Update Auth':'Connect'}
                             </button>
                           </div>
@@ -1259,7 +1259,7 @@ export function AgentEditorModal() {
                           <p className="text-[11px] font-extrabold text-cyan-100">DeepSeek V4 Stack</p>
                           <p className="mt-0.5 text-[9px] text-slate-500">Pro primary, Flash fallback.</p>
                         </div>
-                        <button onClick={()=>{markConfigDirty(agent.id,'model');setPrimary(deepSeekStackPrimary);setFallbacks((p)=>[deepSeekStackFallback,...p.filter((id)=>id!==DEEPSEEK_PRO_MODEL&&id!==DEEPSEEK_FLASH_MODEL&&id!==OPENROUTER_DEEPSEEK_PRO_MODEL&&id!==OPENROUTER_DEEPSEEK_FLASH_MODEL)]);maybePromptProviderAuth(deepSeekStackPrimary)}} title="Apply DeepSeek Pro as primary with Flash fallback" className="rounded-lg border border-cyan-400/25 bg-cyan-400/[0.08] px-3 py-1.5 text-[9px] font-bold uppercase tracking-[0.12em] text-cyan-200 hover:bg-cyan-400/[0.14]">
+                        <button type="button" onClick={()=>{markConfigDirty(agent.id,'model');setPrimary(deepSeekStackPrimary);setFallbacks((p)=>[deepSeekStackFallback,...p.filter((id)=>id!==DEEPSEEK_PRO_MODEL&&id!==DEEPSEEK_FLASH_MODEL&&id!==OPENROUTER_DEEPSEEK_PRO_MODEL&&id!==OPENROUTER_DEEPSEEK_FLASH_MODEL)]);maybePromptProviderAuth(deepSeekStackPrimary)}} title="Apply DeepSeek Pro as primary with Flash fallback" className="rounded-lg border border-cyan-400/25 bg-cyan-400/[0.08] px-3 py-1.5 text-[9px] font-bold uppercase tracking-[0.12em] text-cyan-200 hover:bg-cyan-400/[0.14]">
                           Apply
                         </button>
                       </div>
@@ -1344,7 +1344,7 @@ export function AgentEditorModal() {
                       </div>
                     </div>
                     <div className="flex items-center gap-2">
-                      <button onClick={()=>void SvM()} disabled={ms} className="rounded-lg border border-cyan-400/30 bg-cyan-400/[0.06] px-4 py-2 text-[9px] font-bold uppercase tracking-[0.12em] text-cyan-300 hover:bg-cyan-400/[0.12] disabled:opacity-40">{ms?'Saving...':'Save'}</button>
+                      <button type="button" onClick={()=>void SvM()} disabled={ms} className="rounded-lg border border-cyan-400/30 bg-cyan-400/[0.06] px-4 py-2 text-[9px] font-bold uppercase tracking-[0.12em] text-cyan-300 hover:bg-cyan-400/[0.12] disabled:opacity-40">{ms?'Saving...':'Save'}</button>
                       {(msStatus||runtimeStoreStatusText)&&<span className={`text-[9px] font-semibold ${(msStatus||runtimeStoreStatusText).includes('Failed')?'text-red-400':'text-emerald-400'}`} role={(msStatus||runtimeStoreStatusText).includes('Failed')?'alert':'status'} aria-live={(msStatus||runtimeStoreStatusText).includes('Failed')?'assertive':'polite'}>{msStatus||runtimeStoreStatusText}</span>}
                     </div>
                   </div>
@@ -1494,7 +1494,7 @@ export function AgentEditorModal() {
                       </div>
                     </div>
                     <div className="flex items-center gap-2">
-                      <button onClick={()=>void SvP()} disabled={ps} title="Save sandbox and tool policy" className="rounded-lg border border-cyan-400/30 bg-cyan-400/[0.06] px-4 py-2 text-[9px] font-bold uppercase tracking-[0.12em] text-cyan-300 hover:bg-cyan-400/[0.12] disabled:opacity-40">{ps?'Saving...':'Save'}</button>
+                      <button type="button" onClick={()=>void SvP()} disabled={ps} title="Save sandbox and tool policy" className="rounded-lg border border-cyan-400/30 bg-cyan-400/[0.06] px-4 py-2 text-[9px] font-bold uppercase tracking-[0.12em] text-cyan-300 hover:bg-cyan-400/[0.12] disabled:opacity-40">{ps?'Saving...':'Save'}</button>
                       {psStatus&&<span className={`text-[9px] font-semibold ${psStatus.includes('Failed')?'text-red-400':'text-emerald-400'}`}>{psStatus}</span>}
                     </div>
                   </div>
@@ -1517,18 +1517,18 @@ export function AgentEditorModal() {
                       />
                       <div className="flex gap-1.5 mb-2">
                         <input type="text" value={wsPath} onChange={(e)=>setWsPath(e.target.value)} placeholder="/home/.../project" className="flex-1 rounded-lg border border-white/[0.08] bg-white/[0.03] px-3 py-2 text-[11px] font-mono text-slate-200 placeholder:text-slate-600 focus:outline-none focus:border-cyan-400/40"/>
-                      <button onClick={()=>void Pk()} disabled={wsLoading} className="rounded-lg border border-cyan-400/20 bg-cyan-400/[0.05] px-3 py-2 text-[9px] font-bold text-cyan-300 hover:bg-cyan-400/[0.1] disabled:opacity-40">{wsLoading?'Working...':'Browse'}</button>
+                      <button type="button" onClick={()=>void Pk()} disabled={wsLoading} className="rounded-lg border border-cyan-400/20 bg-cyan-400/[0.05] px-3 py-2 text-[9px] font-bold text-cyan-300 hover:bg-cyan-400/[0.1] disabled:opacity-40">{wsLoading?'Working...':'Browse'}</button>
                       </div>
                       {wsFolders.length>0&&(
                         <div className="max-h-40 overflow-auto rounded-lg border border-white/[0.06] bg-white/[0.02] p-1 space-y-0.5">
                           {wsFolders.map((f)=>(
-                            <button key={f} onClick={()=>{setWsPath(f);void Br(f)}} className="w-full text-left rounded-md px-2.5 py-1.5 text-[11px] text-cyan-300 font-mono truncate hover:bg-cyan-400/[0.06]">📁 {f}</button>
+                            <button type="button" key={f} onClick={()=>{setWsPath(f);void Br(f)}} className="w-full text-left rounded-md px-2.5 py-1.5 text-[11px] text-cyan-300 font-mono truncate hover:bg-cyan-400/[0.06]">📁 {f}</button>
                           ))}
                         </div>
                       )}
                     </div>
                     <div className="flex items-center gap-2">
-                      <button onClick={()=>void SvW()} disabled={wsSaving||!wsPath.trim()} title="Assign this workspace to the agent" className="rounded-lg border border-cyan-400/30 bg-cyan-400/[0.06] px-4 py-2 text-[9px] font-bold uppercase tracking-[0.12em] text-cyan-300 hover:bg-cyan-400/[0.12] disabled:opacity-40">{wsSaving?'Setting...':'Set'}</button>
+                      <button type="button" onClick={()=>void SvW()} disabled={wsSaving||!wsPath.trim()} title="Assign this workspace to the agent" className="rounded-lg border border-cyan-400/30 bg-cyan-400/[0.06] px-4 py-2 text-[9px] font-bold uppercase tracking-[0.12em] text-cyan-300 hover:bg-cyan-400/[0.12] disabled:opacity-40">{wsSaving?'Setting...':'Set'}</button>
                       {wsStatus&&<span className={`min-w-0 max-w-[520px] break-words text-[9px] font-semibold leading-relaxed ${workspaceStatusIsError(wsStatus)?'text-red-400':'text-emerald-400'}`}>{wsStatus}</span>}
                     </div>
                   </div>
@@ -1544,7 +1544,7 @@ export function AgentEditorModal() {
                       </div>
                       <div className="flex gap-0.5">
                         {(['all','enabled','disabled'] as const).map((f)=>(
-                          <button key={f} onClick={()=>setSkFilter(f)} title={`Show ${f} skills`} className={`rounded-md px-2.5 py-1.5 text-[9px] font-bold uppercase tracking-[0.08em] transition ${skFilter===f?'bg-cyan-400/[0.1] text-cyan-200 border border-cyan-400/20':'text-slate-600 hover:text-slate-400 border border-transparent'}`}>{f}</button>
+                          <button type="button" key={f} onClick={()=>setSkFilter(f)} title={`Show ${f} skills`} className={`rounded-md px-2.5 py-1.5 text-[9px] font-bold uppercase tracking-[0.08em] transition ${skFilter===f?'bg-cyan-400/[0.1] text-cyan-200 border border-cyan-400/20':'text-slate-600 hover:text-slate-400 border border-transparent'}`}>{f}</button>
                         ))}
                       </div>
                     </div>
@@ -1620,13 +1620,13 @@ export function AgentEditorModal() {
                       {rloading&&rfiles.length===0&&<span className="rounded-md border border-white/[0.05] bg-white/[0.02] px-2.5 py-1.5 text-[9px] font-bold uppercase tracking-[0.08em] text-slate-500">Loading files...</span>}
                       {!rloading&&rfiles.length===0&&<span className="rounded-md border border-white/[0.05] bg-white/[0.02] px-2.5 py-1.5 text-[9px] font-bold uppercase tracking-[0.08em] text-slate-500">No files loaded</span>}
                       {rfiles.map((f)=>(
-                        <button key={f} onClick={()=>setRfile(f)} className={`rounded-md px-2.5 py-1.5 text-[9px] font-bold uppercase tracking-[0.08em] transition ${f===rfile?'bg-cyan-400/[0.08] text-cyan-200 border border-cyan-400/20':'bg-white/[0.02] text-slate-500 hover:text-slate-300 border border-white/[0.05]'}`}>{f}</button>
+                        <button type="button" key={f} onClick={()=>setRfile(f)} className={`rounded-md px-2.5 py-1.5 text-[9px] font-bold uppercase tracking-[0.08em] transition ${f===rfile?'bg-cyan-400/[0.08] text-cyan-200 border border-cyan-400/20':'bg-white/[0.02] text-slate-500 hover:text-slate-300 border border-white/[0.05]'}`}>{f}</button>
                       ))}
                     </div>
                     <textarea value={rcontent} onChange={(e)=>setRcontent(e.target.value)} spellCheck readOnly={rloading||rcontentLoading} placeholder={rcontentLoading?`Loading ${rfile}...`:rloading?'Loading agent files...':'Select a markdown file.'} className="h-64 w-full rounded-lg border border-white/[0.08] bg-white/[0.02] p-3 font-mono text-[11px] text-slate-300 leading-relaxed resize-y placeholder:text-slate-600 focus:outline-none focus:border-cyan-400/30"/>
                     <div className="flex flex-wrap items-center gap-2">
-                      <button onClick={()=>void SvF()} disabled={rsaving||rloading||rcontentLoading||!rfile} title={`Save ${rfile || 'selected file'}`} className="rounded-lg border border-emerald-400/30 bg-emerald-400/[0.06] px-4 py-2 text-[9px] font-bold uppercase tracking-[0.12em] text-emerald-300 hover:bg-emerald-400/[0.12] disabled:opacity-40">{rsaving?'Saving...':'Save'}</button>
-                      <button onClick={()=>void LdFC(rfile)} disabled={rloading||rcontentLoading||!rfile} title={`Reload ${rfile || 'selected file'}`} className="rounded-lg border border-white/[0.08] bg-white/[0.03] px-3 py-2 text-[9px] font-bold uppercase tracking-[0.12em] text-slate-400 hover:border-white/20 disabled:opacity-40">{rcontentLoading?'Loading...':'Reload'}</button>
+                      <button type="button" onClick={()=>void SvF()} disabled={rsaving||rloading||rcontentLoading||!rfile} title={`Save ${rfile || 'selected file'}`} className="rounded-lg border border-emerald-400/30 bg-emerald-400/[0.06] px-4 py-2 text-[9px] font-bold uppercase tracking-[0.12em] text-emerald-300 hover:bg-emerald-400/[0.12] disabled:opacity-40">{rsaving?'Saving...':'Save'}</button>
+                      <button type="button" onClick={()=>void LdFC(rfile)} disabled={rloading||rcontentLoading||!rfile} title={`Reload ${rfile || 'selected file'}`} className="rounded-lg border border-white/[0.08] bg-white/[0.03] px-3 py-2 text-[9px] font-bold uppercase tracking-[0.12em] text-slate-400 hover:border-white/20 disabled:opacity-40">{rcontentLoading?'Loading...':'Reload'}</button>
                       {(rstatus||rloading||rcontentLoading)&&<span className="text-[9px] font-semibold text-cyan-400">{rstatus||(rcontentLoading?`Loading ${rfile}...`:'Loading files...')}</span>}
                       <button type="button" onClick={()=>setRetireConfirmOpen(true)} disabled={retiring} title={`Retire ${agent.name}`} className="ml-auto rounded-lg border border-red-400/40 bg-red-500/[0.10] px-4 py-2 text-[9px] font-bold uppercase tracking-[0.12em] text-red-200 transition hover:border-red-300/70 hover:bg-red-500/[0.18] disabled:opacity-40">{retiring?'Retiring...':'Retire'}</button>
                     </div>

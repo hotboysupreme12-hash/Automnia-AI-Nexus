@@ -40,8 +40,9 @@ function assertCanonicalRoute(name: string, source: string) {
   assertNoRawJsonResponse(name, source)
 }
 
-const server = readWorkspaceFile('server/index.ts')
+const server = readWorkspaceFile('server/controlPlane.ts')
 const agentTurnRoutes = readWorkspaceFile('server/routes/agentTurnRoutes.ts')
+const browserRoutes = readWorkspaceFile('server/routes/browserRoutes.ts')
 const clawTalkConsoleRoutes = readWorkspaceFile('server/routes/clawTalkConsoleRoutes.ts')
 const controlPlaneHttp = readWorkspaceFile('server/controlPlaneHttp.ts')
 const store = readWorkspaceFile('src/store/nexusStore.ts')
@@ -57,7 +58,7 @@ const clawTalkFinalBlock = routeBlock(clawTalkConsoleRoutes, "app.post('/api/ope
 const clawTalkRegistrationBlock = sliceBetween(
   server,
   'registerClawTalkConsoleRoutes(app, {',
-  "app.get('/api/browser/preflight'",
+  'registerBrowserRoutes(app, {',
 )
 const streamBlock = sliceBetween(
   agentTurnRoutes,
@@ -65,11 +66,7 @@ const streamBlock = sliceBetween(
   "app.post('/api/openclaw/agent-turn'",
 )
 const agentTurnBlock = routeBlock(agentTurnRoutes, "app.post('/api/openclaw/agent-turn'")
-const browserPreflightBlock = sliceBetween(
-  server,
-  "app.get('/api/browser/preflight'",
-  'type StartShiftPayload',
-)
+const browserPreflightBlock = routeBlock(browserRoutes, "app.get('/api/browser/preflight'")
 const runBufferedBlock = sliceBetween(
   server,
   'async function runBufferedAgentTurnForStream',
@@ -81,6 +78,9 @@ assert(server.includes('registerAgentTurnRoutes(app, {'), 'server should registe
 assert(!server.includes("app.post('/api/openclaw/agent-turn/stream'"), 'server should not inline the agent-turn stream route')
 assert(!server.includes("app.post('/api/openclaw/agent-turn'"), 'server should not inline the buffered agent-turn route')
 assert(server.includes("import { registerClawTalkConsoleRoutes } from './routes/clawTalkConsoleRoutes'"), 'server should import the extracted ClawTalk console route module')
+assert(server.includes("import { registerBrowserRoutes } from './routes/browserRoutes'"), 'control plane should import the browser route module')
+assert(server.includes('registerBrowserRoutes(app, { checkBrowserPreflight })'), 'control plane should register browser preflight routes')
+assert(!server.includes("app.get('/api/browser/preflight'"), 'control plane should not inline browser preflight')
 assert(clawTalkRegistrationBlock.includes('clawTalkConsoleClients'), 'ClawTalk route registration should preserve live SSE clients')
 assert(clawTalkRegistrationBlock.includes('clawTalkConsoleEvents'), 'ClawTalk route registration should preserve replayed SSE events')
 assert(clawTalkRegistrationBlock.includes('resolveClawTalkConsoleMirrorContext'), 'ClawTalk route registration should preserve mirror context resolution')

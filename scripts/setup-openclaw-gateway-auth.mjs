@@ -4,8 +4,6 @@ import fs from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
 
-const DEFAULT_PASSWORD = 'default'
-
 function usage() {
   return `
 Usage: node scripts/setup-openclaw-gateway-auth.mjs [options]
@@ -16,8 +14,8 @@ Options:
   --home <path>       OpenClaw home directory (default: OPENCLAW_HOME or ~/.openclaw)
   --config <path>     Config path (default: <home>/openclaw.json)
   --token <token>     Use this gateway token instead of existing/generated token
-  --password <value>  Password fallback to store (default: ${DEFAULT_PASSWORD})
-  --no-password       Do not add gateway.auth.password / gateway.remote.password
+  --password <value>  Also store an explicit password fallback (token-only by default)
+  --no-password       Do not add or update a password fallback (default)
   --no-env            Do not write <home>/.env
   --dry-run           Print planned changes without writing
   --help              Show this help
@@ -26,8 +24,8 @@ Options:
 
 function parseArgs(argv) {
   const args = {
-    password: DEFAULT_PASSWORD,
-    writePassword: true,
+    password: undefined,
+    writePassword: false,
     writeEnv: true,
     dryRun: false,
   }
@@ -56,6 +54,7 @@ function parseArgs(argv) {
         args.writePassword = true
         break
       case '--no-password':
+        args.password = undefined
         args.writePassword = false
         break
       case '--no-env':

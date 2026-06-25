@@ -45,8 +45,9 @@ function assertOrderedIncludes(text, needles, label) {
   }
 }
 
-const server = read('server/index.ts')
+const server = read('server/controlPlane.ts')
 const runtimeRoutes = read('server/routes/runtimeRoutes.ts')
+const routingHelpers = read('server/integrations/agentRoutingHelpers.ts')
 const agentTurnRoutes = read('server/routes/agentTurnRoutes.ts')
 const runtimeLedger = read('server/runtimeLedger.ts')
 const runtimeHook = read('src/hooks/useRuntimeStatus.ts')
@@ -279,6 +280,9 @@ assertIncludes(server, "const ok = finalState !== 'error' && finalState !== 'abo
 assertIncludes(server, "gatewayChatRunWaiters.delete(runId)", 'Gateway terminal waiter cleanup')
 
 assertIncludes(server, 'CLAWTALK_ROUTING_PATCH_VERSION = 11', 'ClawTalk routing patch version')
+assertIncludes(server, "from './integrations/agentRoutingHelpers'", 'control plane imports isolated agent routing patch assets')
+assertIncludes(routingHelpers, 'export const CLAWTALK_CORE_BRIDGE_ROUTING_HELPER', 'ClawTalk routing patch asset')
+assertIncludes(routingHelpers, 'export const TELEGRAM_AGENT_ROUTING_HELPER', 'Telegram routing patch asset')
 assertIncludes(server, "CLAWTALK_REPAIR_SIGNATURE_VERSION = 'clawtalk-repair:v12'", 'ClawTalk repair signature version')
 assertIncludes(server, 'CoreBridge patch skipped: unsupported bridge shape', 'ClawTalk bridge shape guard')
 assertIncludes(server, 'delete nextConfig.apiKeyRef', 'ClawTalk unsupported apiKeyRef scrubber')

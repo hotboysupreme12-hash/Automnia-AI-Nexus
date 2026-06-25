@@ -150,7 +150,7 @@ try {
   assert.match(runtimeLedgerSource, /appendMissionEventLedger/)
   assert.match(runtimeLedgerSource, /readMissionReportLedgerTail/)
 
-  const serverSource = readFileSync(path.join(rootDir, 'server/index.ts'), 'utf8')
+  const serverSource = readFileSync(path.join(rootDir, 'server/controlPlane.ts'), 'utf8')
   assert.match(serverSource, /type MissionLifecycleState/)
   assert.match(serverSource, /missionRecordSnapshot/)
   assert.match(serverSource, /persistMissionRecord/)

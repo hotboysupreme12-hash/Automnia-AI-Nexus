@@ -398,7 +398,7 @@ export function PartySelector() {
               className="w-full rounded-lg border border-white/[0.06] bg-white/[0.025] py-2 pl-9 pr-8 text-[11px] font-medium text-slate-200 placeholder:text-slate-500 outline-none transition focus:border-cyan-400/25 focus:bg-white/[0.04]"
             />
             {searchQuery && (
-              <button
+              <button type="button"
                 onClick={() => setSearchQuery('')}
                 className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-500 hover:text-slate-300 text-xs leading-none"
                 aria-label="Clear search"

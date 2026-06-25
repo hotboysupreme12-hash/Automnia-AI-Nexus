@@ -230,7 +230,7 @@ export function IncomeStrategies({ onNavigate }: { onNavigate: (page: string) =>
         className="text-center pt-4"
       >
         <p className="text-sm text-slate-500 mb-4">Want to see what these strategies could earn you?</p>
-        <button
+        <button type="button"
           onClick={() => onNavigate('calculator')}
           className="btn btn--primary px-8 py-3 text-sm"
         >

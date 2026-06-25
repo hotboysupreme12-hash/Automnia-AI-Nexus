@@ -6,8 +6,9 @@ import { fileURLToPath } from 'node:url'
 const rootDir = fileURLToPath(new URL('..', import.meta.url))
 const read = (relativePath: string) => readFileSync(join(rootDir, relativePath), 'utf8')
 
-const server = read('server/index.ts')
+const server = read('server/controlPlane.ts')
 const skillRoutesModule = read('server/routes/skillRoutes.ts')
+const partyManagementRoutes = read('server/routes/partyManagementRoutes.ts')
 const skillsPanel = read('src/components/monitor/SkillsPanel.tsx')
 const editor = read('src/components/editor/AgentEditorModal.tsx')
 const packageJson = JSON.parse(read('package.json')) as { scripts?: Record<string, string> }
@@ -15,7 +16,7 @@ const packageJson = JSON.parse(read('package.json')) as { scripts?: Record<strin
 assert.match(server, /import \{ registerSkillRoutes \} from '\.\/routes\/skillRoutes'/, 'server index must import the extracted skills route module')
 assert.match(server, /registerSkillRoutes\(app, \{/, 'server index must register extracted skills routes')
 assert.ok(
-  server.indexOf('registerSkillRoutes(app, {') < server.indexOf("app.get('/api/party/agent/:agentId/config'"),
+  server.indexOf('registerSkillRoutes(app, {') < server.indexOf('registerAgentConfigRoutes(app, agentConfigRoutesContext)'),
   'skills routes must remain registered before agent config routes',
 )
 assert.doesNotMatch(server, /app\.get\('\/api\/skills\/check'/, 'server index must not inline skills check route')
@@ -50,11 +51,11 @@ assert.match(skillRoutesModule, /apiFailure\([\s\S]*?502,[\s\S]*?'skill_command_
 assert.match(skillRoutesModule, /apiFailure\([\s\S]*?500,[\s\S]*?'skill_command_failed',[\s\S]*?'ClawHub skill install failed'/, 'ClawHub install command failures must be typed')
 assert.match(skillRoutesModule, /apiFailure\([\s\S]*?500,[\s\S]*?'skill_command_failed',[\s\S]*?'ClawHub skill update failed'/, 'ClawHub update command failures must be typed')
 
-const avatarUploadStart = server.indexOf("app.post('/api/party/avatar-upload/:agentId'")
-const avatarUploadEnd = server.indexOf('registerFilesystemRoutes(app, {', avatarUploadStart)
+const avatarUploadStart = partyManagementRoutes.indexOf("app.post('/api/party/avatar-upload/:agentId'")
+const avatarUploadEnd = partyManagementRoutes.indexOf('\n}', avatarUploadStart)
 assert.notEqual(avatarUploadStart, -1, 'avatar upload route must exist')
-assert.notEqual(avatarUploadEnd, -1, 'avatar upload route block must end before extracted filesystem routes')
-const avatarUploadRoute = server.slice(avatarUploadStart, avatarUploadEnd)
+assert.notEqual(avatarUploadEnd, -1, 'avatar upload route block must have a module boundary')
+const avatarUploadRoute = partyManagementRoutes.slice(avatarUploadStart, avatarUploadEnd)
 assert.match(avatarUploadRoute, /apiSuccess\(res/, 'avatar uploads must use canonical success envelopes')
 assert.match(avatarUploadRoute, /apiFailure\([\s\S]*?400,[\s\S]*?'avatar_upload_failed'/, 'avatar upload failures must use canonical typed errors')
 
