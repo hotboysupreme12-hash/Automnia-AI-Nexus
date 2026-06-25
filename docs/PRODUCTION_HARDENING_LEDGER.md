@@ -1374,14 +1374,19 @@ Verification:
 - After rebasing onto the latest `origin/main`, `npm run smoke:release-signing` passed once the README release-signing command contract was restored.
 - After rebasing onto the latest `origin/main`, `npm run smoke:release-validation` passed once the README consumer distribution evidence contract named `release/evidence/distribution-signing.json`.
 - After rebasing onto the latest `origin/main`, `npm test` passed. This included lint, app/server/Electron typecheck, server architecture, mission durability, API/security/auth, OpenClaw, runtime reproducibility, release evidence, release signing, release validation, and CI workflow smoke checks.
+- GitHub Control Plane CI run `28151657196` initially failed in `smoke:api-integration` because clean CI started the integration server before `Prepare vendored OpenClaw dependencies`; first startup then spent the smoke timeout hydrating `vendor/openclaw/dist` and installing OpenClaw production dependencies.
+- Moved `npm run prepare:openclaw-vendor` immediately after `npm ci` in `.github/workflows/control-plane-ci.yml`, before audit/lint/typecheck/tests, so clean CI has the vendored OpenClaw runtime ready before any server-starting smoke test.
+- Strengthened `scripts/smoke-ci-workflow.ts` to enforce that `npm run prepare:openclaw-vendor` runs before `npm test` and before packaging.
+- `npm run smoke:ci-workflow` passed after the workflow ordering fix.
+- `npm test` passed after the workflow ordering fix.
 
 ## In Progress
 
-- Fresh GitHub source startup repair is complete locally and queued for publication to GitHub `main`.
+- Fresh GitHub source startup repair has been pushed to GitHub `main`; the follow-up CI-ordering fix is queued for publication to GitHub `main`.
 
 Next action:
 
-- Push the verified fresh-source startup repair to GitHub `main`, then either:
+- Push the verified CI-ordering fix to GitHub `main`, watch Control Plane CI, then either:
   - wire real Authenticode/macOS signing and update-channel evidence generation when certificates/secrets are available, or
   - resume extraction of remaining `server/index.ts` route clusters, with Nexus/misc, shift/cron scheduler, and browser/preflight areas as high-value candidates.
 
