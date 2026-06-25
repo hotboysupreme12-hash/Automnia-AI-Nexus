@@ -1299,6 +1299,20 @@ Notes:
 - Evidence-only PR commits were not cherry-picked individually; their evidence is consolidated here to avoid stale ledger conflicts.
 - The `Sign release evidence` CI step was skipped for this non-release merge because public release signing is intentionally enforced for release contexts; mandatory signing remains covered by release validation/smoke checks.
 
+### 2026-06-25 - README Production Architecture Refresh
+
+Scope:
+
+- Updated `README.md` with the current production-hardening posture.
+- Added the extracted backend route-module architecture and responsibilities so GitHub readers can understand the new `server/routes/*` layout.
+- Documented the local-only desktop threat model, release evidence expectations, CI gate, and public-release signing requirement from `docs/RELEASE_GOVERNANCE.md`.
+- Added `npm run typecheck`, `npm test`, package-launch validation, and release evidence commands to the validation/readiness path.
+
+Verification:
+
+- `git diff --check` passed before commit.
+- `npm run lint` passed.
+
 ## In Progress
 
 - No merge integration is currently in progress; today's hardening stack is on `main` with clean post-merge CI.
