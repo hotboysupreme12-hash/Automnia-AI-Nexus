@@ -19,6 +19,13 @@ function sliceBetween(source: string, startMarker: string, endMarker: string): s
   return source.slice(start, end)
 }
 
+function routeBlock(source: string, marker: string): string {
+  const start = source.indexOf(marker)
+  assert(start >= 0, `Missing route marker: ${marker}`)
+  const next = source.indexOf('\napp.', start + marker.length)
+  return source.slice(start, next >= 0 ? next : source.length)
+}
+
 function assertCanonicalRoute(name: string, source: string) {
   assert(/apiSuccess\s*\(\s*res/.test(source), `${name} should return canonical success envelopes`)
   assert(/apiFailure\s*\(\s*res/.test(source), `${name} should return canonical error envelopes`)
@@ -27,6 +34,7 @@ function assertCanonicalRoute(name: string, source: string) {
 }
 
 const server = readWorkspaceFile('server/index.ts')
+const partyCoordinationRoutes = readWorkspaceFile('server/routes/partyCoordinationRoutes.ts')
 const controlPlaneHttp = readWorkspaceFile('server/controlPlaneHttp.ts')
 const pluginsPanel = readWorkspaceFile('src/components/plugins/PluginsPanel.tsx')
 const packageJson = JSON.parse(readWorkspaceFile('package.json')) as { scripts?: Record<string, string> }
@@ -41,11 +49,18 @@ for (const code of [
 
 const summaryBlock = sliceBetween(server, "app.get('/api/openclaw/summary'", "const RuntimeSessionCloseSchema")
 const commandBlock = sliceBetween(server, "app.post('/api/openclaw/command'", 'async function buildRuntimeStatusPayload')
-const parallelHealthBlock = sliceBetween(server, "app.post('/api/party/parallel-health'", "app.get('/api/missions'")
+const parallelHealthBlock = routeBlock(partyCoordinationRoutes, "app.post('/api/party/parallel-health'")
 
 assertCanonicalRoute('/api/openclaw/summary', summaryBlock)
 assertCanonicalRoute('/api/openclaw/command', commandBlock)
 assertCanonicalRoute('/api/party/parallel-health', parallelHealthBlock)
+
+assert(
+  server.includes("import { registerPartyCoordinationRoutes } from './routes/partyCoordinationRoutes'"),
+  'server should import party coordination routes',
+)
+assert(server.includes('registerPartyCoordinationRoutes(app, {'), 'server should register party coordination routes')
+assert(!server.includes("app.post('/api/party/parallel-health'"), 'server should not inline parallel-health route')
 
 assert(commandBlock.includes('pluginCommandResult(args, result)'), 'OpenClaw command route should preserve command result evidence')
 assert(commandBlock.includes('ok: result.code === 0'), 'OpenClaw command route should preserve command success data')

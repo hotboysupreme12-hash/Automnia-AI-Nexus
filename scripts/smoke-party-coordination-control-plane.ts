@@ -34,6 +34,7 @@ function assertCanonicalRoute(name: string, source: string) {
 }
 
 const server = readWorkspaceFile('server/index.ts')
+const partyCoordinationRoutes = readWorkspaceFile('server/routes/partyCoordinationRoutes.ts')
 const controlPlaneHttp = readWorkspaceFile('server/controlPlaneHttp.ts')
 const packageJson = JSON.parse(readWorkspaceFile('package.json')) as { scripts?: Record<string, string> }
 
@@ -41,13 +42,21 @@ for (const code of ['party_dispatch_failed', 'party_handoff_failed', 'party_coor
   assert(controlPlaneHttp.includes(`| '${code}'`), `ApiErrorCode is missing ${code}`)
 }
 
-const dispatchBlock = routeBlock(server, "app.post('/api/party/dispatch'")
-const handoffBlock = routeBlock(server, "app.post('/api/party/agent-to-agent'")
+const dispatchBlock = routeBlock(partyCoordinationRoutes, "app.post('/api/party/dispatch'")
+const handoffBlock = routeBlock(partyCoordinationRoutes, "app.post('/api/party/agent-to-agent'")
 const delegationCompatibilityBlock = sliceBetween(
   server,
   "const handoffResponse: { ok: boolean; status: number; json: () => Promise<unknown> } = await fetch(`http://127.0.0.1:${PORT}/api/party/agent-to-agent`",
   'const context = await resolveAgentRunContext(agent)',
 )
+
+assert(
+  server.includes("import { registerPartyCoordinationRoutes } from './routes/partyCoordinationRoutes'"),
+  'server should import party coordination routes',
+)
+assert(server.includes('registerPartyCoordinationRoutes(app, {'), 'server should register party coordination routes')
+assert(!server.includes("app.post('/api/party/dispatch'"), 'server should not inline party dispatch route')
+assert(!server.includes("app.post('/api/party/agent-to-agent'"), 'server should not inline party handoff route')
 
 assertCanonicalRoute('/api/party/dispatch', dispatchBlock)
 assertCanonicalRoute('/api/party/agent-to-agent', handoffBlock)
