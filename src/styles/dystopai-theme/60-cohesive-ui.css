@@ -984,6 +984,18 @@ html.dui-pro-overhaul.dui-cohesive-ui .dy-command-message-chip {
   box-shadow: inset 0 1px 0 rgba(255, 255, 255, .035) !important;
 }
 
+html.dui-pro-overhaul.dui-cohesive-ui .dy-command-target-chip.is-selected {
+  border-color: rgba(96, 165, 250, .42) !important;
+  background:
+    linear-gradient(180deg, rgba(96, 165, 250, .145), rgba(255, 255, 255, .018)),
+    #101824 !important;
+  color: #dbeafe !important;
+}
+
+html.dui-pro-overhaul.dui-cohesive-ui .dy-command-target-chip.is-selected .dy-command-target-avatar img {
+  filter: none !important;
+}
+
 html.dui-pro-overhaul.dui-cohesive-ui .dy-command-messages {
   padding: 12px !important;
   background:
