@@ -255,6 +255,9 @@ This closed loop is the central design idea: **intent, execution, observation, c
 | Plugins |
 | --- |
 | ![DystopAI Plugin Runtime](docs/assets/readme/dystopai-plugins.png) |
+| Agent Settings |
+| --- |
+| ![DystopAI Agent Settings](docs/assets/readme/dystopai-agent-settings.png) |
 
 ## Core Product Surfaces
 
