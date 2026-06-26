@@ -292,24 +292,26 @@ html.dui-pro-overhaul.dui-cohesive-ui .dy-workspace-context__state[data-state="o
 }
 
 html.dui-pro-overhaul.dui-cohesive-ui .dy-human-rail-head--lockup {
-  min-height: 84px !important;
-  justify-content: flex-start !important;
+  min-height: 98px !important;
+  justify-content: center !important;
   padding: 15px 14px 13px !important;
 }
 
 html.dui-pro-overhaul.dui-cohesive-ui .dy-human-rail-head--lockup .dy-human-rail-lockup {
   display: block !important;
-  width: min(100%, 168px) !important;
-  height: 42px !important;
+  width: min(100%, 196px) !important;
+  height: auto !important;
+  max-height: 82px !important;
   max-width: none !important;
   max-height: none !important;
   border: 0 !important;
   border-radius: 0 !important;
   background: transparent !important;
   object-fit: contain !important;
-  object-position: left center !important;
+  object-position: center center !important;
   box-shadow: none !important;
   filter: saturate(1.06) brightness(1.04) contrast(1.02) !important;
+  margin: 0 auto !important;
 }
 
 html.dui-pro-overhaul.dui-cohesive-ui .dy-workspace-context {

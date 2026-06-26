@@ -1,17 +1,21 @@
 :root {
   color-scheme: dark;
-  --dui-bg: #050506;
-  --dui-canvas: #08090a;
-  --dui-panel: #101112;
-  --dui-panel-2: #151617;
-  --dui-panel-3: #1a1b1d;
-  --dui-line: rgba(184, 188, 190, 0.14);
-  --dui-line-strong: rgba(184, 188, 190, 0.24);
-  --dui-text: #f1f2f2;
-  --dui-text-2: #c8cbcc;
-  --dui-muted: #8e9396;
-  --dui-faint: #62676a;
-  --dui-accent: #9aa0a3;
+  --dui-gray-0: #050607;
+  --dui-gray-1: #101316;
+  --dui-gray-2: #181d21;
+  --dui-gray-accent: #9ca3aa;
+  --dui-bg: var(--dui-gray-0);
+  --dui-canvas: var(--dui-gray-1);
+  --dui-panel: var(--dui-gray-1);
+  --dui-panel-2: var(--dui-gray-2);
+  --dui-panel-3: var(--dui-gray-2);
+  --dui-line: color-mix(in srgb, var(--dui-gray-accent) 16%, transparent);
+  --dui-line-strong: color-mix(in srgb, var(--dui-gray-accent) 28%, transparent);
+  --dui-text: #f3f5f6;
+  --dui-text-2: #cfd4d8;
+  --dui-muted: #9aa0a7;
+  --dui-faint: #62686f;
+  --dui-accent: var(--dui-gray-accent);
   --dui-amber: #e7bd54;
   --dui-rail: 224px;
   --dui-r: 8px;
@@ -84,12 +88,12 @@ html.dui-pro-overhaul .dui-login-logo-lockup {
 }
 
 html.dui-pro-overhaul .app-bg.dy-monitor-focus {
-  --dui-gateway-bg: #030405;
-  --dui-gateway-panel: #07090b;
-  --dui-gateway-panel-2: #090c0f;
-  --dui-gateway-line: rgba(142, 155, 166, .13);
+  --dui-gateway-bg: color-mix(in srgb, var(--dui-bg) 88%, black);
+  --dui-gateway-panel: color-mix(in srgb, var(--dui-canvas) 82%, black);
+  --dui-gateway-panel-2: color-mix(in srgb, var(--dui-panel-2) 72%, black);
+  --dui-gateway-line: color-mix(in srgb, var(--dui-accent) 20%, transparent);
   background:
-    linear-gradient(180deg, rgba(7, 10, 12, .98), rgba(2, 3, 4, 1)) !important;
+    linear-gradient(180deg, color-mix(in srgb, var(--dui-bg) 90%, transparent), color-mix(in srgb, var(--dui-bg) 96%, black)) !important;
 }
 
 html.dui-pro-overhaul .app-bg.dy-monitor-focus > .dy-app-main {
@@ -99,7 +103,7 @@ html.dui-pro-overhaul .app-bg.dy-monitor-focus > .dy-app-main {
 
 html.dui-pro-overhaul .app-bg.dy-monitor-focus [data-dui-panel="monitor"].dy-monitor-shell {
   min-height: calc(100dvh - 36px) !important;
-  background: linear-gradient(180deg, #070809, #020303) !important;
+  background: linear-gradient(180deg, var(--dui-canvas), var(--dui-bg)) !important;
   border-color: var(--dui-gateway-line) !important;
   box-shadow: 0 20px 70px rgba(0, 0, 0, .46) !important;
 }
@@ -125,19 +129,19 @@ html.dui-pro-overhaul .app-bg.dy-monitor-focus .dy-monitor-tab-list {
   display: grid !important;
   grid-template-columns: repeat(4, minmax(118px, 1fr)) !important;
   min-width: 0 !important;
-  background: #050607 !important;
+  background: var(--dui-bg) !important;
   border-color: var(--dui-gateway-line) !important;
 }
 
 html.dui-pro-overhaul .app-bg.dy-monitor-focus .dy-monitor-tab-list button {
   min-width: 0 !important;
   justify-content: center !important;
-  background: #07090b !important;
+  background: var(--dui-canvas) !important;
   border-color: transparent !important;
 }
 
 html.dui-pro-overhaul .app-bg.dy-monitor-focus .dy-monitor-tab-list button[data-active="true"] {
-  background: #11161a !important;
+  background: color-mix(in srgb, var(--dui-panel-2) 84%, transparent) !important;
   color: #f3f7f9 !important;
   box-shadow: inset 0 -2px 0 rgba(72, 224, 255, .46) !important;
 }
@@ -239,7 +243,7 @@ html.dui-pro-overhaul .app-bg.dy-monitor-focus .dy-cron-job-card {
   padding: 12px !important;
   font-size: 11px !important;
   line-height: 1.36 !important;
-  background: #080b0d !important;
+  background: color-mix(in srgb, var(--dui-panel-2) 72%, transparent) !important;
 }
 
 html.dui-pro-overhaul .app-bg.dy-monitor-focus .dy-cron-job-card p:first-child {
@@ -265,7 +269,7 @@ html.dui-pro-overhaul .app-bg.dy-monitor-focus .dy-cron-jobs-card .dy-session-me
   gap: 8px !important;
   padding: 6px 8px !important;
   overflow: hidden !important;
-  background: #050607 !important;
+  background: var(--dui-bg) !important;
   white-space: nowrap !important;
 }
 
@@ -295,7 +299,7 @@ html.dui-pro-overhaul .app-bg.dy-monitor-focus .dy-channel-activity-card .dy-gat
 
 html.dui-pro-overhaul .app-bg.dy-monitor-focus .dy-gateway-log-card .dy-monitor-log-box {
   min-height: clamp(220px, 28vh, 440px) !important;
-  background: #030405 !important;
+  background: var(--dui-bg) !important;
 }
 
 html.dui-pro-overhaul .dy-plugins-panel {
@@ -334,20 +338,20 @@ html.dui-pro-overhaul .dy-plugins-panel .dy-plugin-row-actions {
 
 /* True final UI polish: this must stay after the terminal monitor overrides. */
 html.dui-pro-overhaul .app-bg.dy-monitor-focus {
-  --dy-final-glass-bg: rgba(17, 19, 22, .66);
-  --dy-final-glass-bg-strong: rgba(12, 14, 16, .80);
-  --dy-final-glass-line: rgba(226, 232, 238, .14);
-  --dy-final-glass-line-strong: rgba(226, 232, 238, .22);
-  --dy-final-glass-text: #f1f4f6;
-  --dy-final-glass-copy: #c8d0d6;
-  --dy-final-glass-muted: #8f9aa3;
+  --dy-final-glass-bg: color-mix(in srgb, var(--dui-bg) 84%, transparent);
+  --dy-final-glass-bg-strong: color-mix(in srgb, var(--dui-bg) 92%, transparent);
+  --dy-final-glass-line: color-mix(in srgb, var(--dui-accent) 16%, transparent);
+  --dy-final-glass-line-strong: color-mix(in srgb, var(--dui-accent) 24%, transparent);
+  --dy-final-glass-text: var(--dui-text);
+  --dy-final-glass-copy: var(--dui-text-2);
+  --dy-final-glass-muted: var(--dui-muted);
   --dy-final-cyan: #9ed8ec;
   --dy-final-green: #a9e6bf;
   --dy-final-amber: #f0d58b;
   --dy-final-rose: #efa6a4;
   background:
-    linear-gradient(180deg, rgba(23, 25, 28, .96), rgba(10, 11, 13, .98) 54%, #070809 100%),
-    #0b0c0e !important;
+    linear-gradient(180deg, color-mix(in srgb, var(--dui-gray-2) 94%, transparent), color-mix(in srgb, var(--dui-bg) 96%, black) 54%, var(--dui-bg) 100%),
+    var(--dui-bg) !important;
 }
 
 html.dui-pro-overhaul .app-bg.dy-monitor-focus [data-dui-panel="monitor"].dy-monitor-shell {
@@ -679,25 +683,25 @@ html.dui-pro-overhaul .app-bg.dy-monitor-focus [data-dui-panel="monitor"] .dy-ga
 /* Final monitor and chat glass pass. Keeps the dense information, but matches
    the calmer graphite glass treatment used by the plugin workspace. */
 html.dui-pro-overhaul .app-bg.dy-monitor-focus {
-  --dui-gateway-bg: rgba(11, 12, 14, .68);
-  --dui-gateway-panel: rgba(18, 20, 23, .62);
-  --dui-gateway-line: rgba(226, 232, 238, .135);
-  --dy-monitor-glass: rgba(18, 20, 23, .62);
-  --dy-monitor-glass-strong: rgba(14, 16, 18, .78);
-  --dy-monitor-glass-soft: rgba(255, 255, 255, .030);
-  --dy-monitor-glass-line: rgba(226, 232, 238, .135);
-  --dy-monitor-glass-line-strong: rgba(226, 232, 238, .205);
-  --dy-monitor-text: #f0f3f5;
-  --dy-monitor-copy: #c8d0d6;
-  --dy-monitor-muted: #8f9aa3;
-  --dy-monitor-faint: #626d76;
+  --dui-gateway-bg: color-mix(in srgb, var(--dui-bg) 90%, transparent);
+  --dui-gateway-panel: color-mix(in srgb, var(--dui-canvas) 82%, transparent);
+  --dui-gateway-line: color-mix(in srgb, var(--dui-accent) 14%, transparent);
+  --dy-monitor-glass: color-mix(in srgb, var(--dui-canvas) 86%, transparent);
+  --dy-monitor-glass-strong: color-mix(in srgb, var(--dui-bg) 88%, black);
+  --dy-monitor-glass-soft: color-mix(in srgb, var(--dui-accent) 18%, transparent);
+  --dy-monitor-glass-line: color-mix(in srgb, var(--dui-accent) 14%, transparent);
+  --dy-monitor-glass-line-strong: color-mix(in srgb, var(--dui-accent) 22%, transparent);
+  --dy-monitor-text: var(--dui-text);
+  --dy-monitor-copy: var(--dui-text-2);
+  --dy-monitor-muted: var(--dui-muted);
+  --dy-monitor-faint: var(--dui-faint);
   --dy-monitor-cyan: #9ed8ec;
   --dy-monitor-emerald: #a9e6bf;
   --dy-monitor-amber: #f0d58b;
   --dy-monitor-rose: #efa6a4;
   background:
-    linear-gradient(180deg, rgba(23, 25, 28, .96), rgba(10, 11, 13, .98) 54%, #070809 100%),
-    #0b0c0e !important;
+    linear-gradient(180deg, color-mix(in srgb, var(--dui-gray-2) 94%, transparent), color-mix(in srgb, var(--dui-bg) 96%, black) 54%, var(--dui-bg) 100%),
+    var(--dui-bg) !important;
 }
 
 html.dui-pro-overhaul .app-bg.dy-monitor-focus .grid-overlay {
@@ -2654,18 +2658,18 @@ html.dui-pro-overhaul ::-webkit-scrollbar-thumb {
 
 /* Pro Max polish layer: sharper hierarchy, calmer contrast, better card readability. */
 html.dui-pro-overhaul {
-  --dui-bg: #040506;
-  --dui-canvas: #08090b;
-  --dui-panel: #101113;
-  --dui-panel-2: #151719;
-  --dui-panel-3: #1d2023;
-  --dui-line: rgba(214, 219, 224, .13);
-  --dui-line-strong: rgba(224, 228, 232, .22);
+  --dui-bg: var(--dui-gray-0);
+  --dui-canvas: color-mix(in srgb, var(--dui-gray-0) 64%, var(--dui-gray-1));
+  --dui-panel: var(--dui-gray-1);
+  --dui-panel-2: var(--dui-gray-2);
+  --dui-panel-3: var(--dui-gray-2);
+  --dui-line: color-mix(in srgb, var(--dui-gray-accent) 14%, transparent);
+  --dui-line-strong: color-mix(in srgb, var(--dui-gray-accent) 23%, transparent);
   --dui-text: #f5f7f8;
   --dui-text-2: #d4d8dc;
-  --dui-muted: #9aa2aa;
-  --dui-faint: #687079;
-  --dui-accent: #aeb6bc;
+  --dui-muted: #9ba0a7;
+  --dui-faint: #636a72;
+  --dui-accent: var(--dui-gray-accent);
   --dui-cyan: #78e7f5;
   --dui-violet: #b5a7ff;
   --dui-green: #89e6b3;
@@ -2678,7 +2682,7 @@ html.dui-pro-overhaul .app-bg {
     radial-gradient(ellipse 64% 42% at 16% -8%, rgba(120, 231, 245, .075), transparent 62%),
     radial-gradient(ellipse 58% 48% at 96% 18%, rgba(181, 167, 255, .055), transparent 64%),
     linear-gradient(180deg, rgba(255, 255, 255, .018), transparent 230px),
-    linear-gradient(135deg, #070809 0%, #111315 42%, #0e1114 74%, #07090c 100%) !important;
+    linear-gradient(135deg, var(--dui-bg) 0%, var(--dui-bg) 42%, color-mix(in srgb, var(--dui-gray-2) 80%, transparent) 74%, color-mix(in srgb, var(--dui-bg) 86%, black) 100%) !important;
 }
 
 html.dui-pro-overhaul .grid-overlay {
@@ -2977,11 +2981,9 @@ html.dui-pro-overhaul [data-dui-panel="agent-registry"] > div:first-child h2 {
 
 html.dui-pro-overhaul [data-dui-panel="agent-registry"] > div:nth-child(2) {
   margin-bottom: 16px !important;
-  border-color: rgba(214, 219, 224, .12) !important;
-  background:
-    linear-gradient(180deg, rgba(255, 255, 255, .024), rgba(255, 255, 255, .008)),
-    rgba(255, 255, 255, .018) !important;
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, .04) !important;
+  border-color: var(--dui-line) !important;
+  background: transparent !important;
+  box-shadow: none !important;
 }
 
 html.dui-pro-overhaul [data-dui-panel="agent-registry"] input {
@@ -3179,7 +3181,7 @@ html.dui-pro-overhaul .agent-card-shell {
   background:
     radial-gradient(circle at 16% 0%, rgba(255, 255, 255, .035), transparent 38%),
     linear-gradient(180deg, rgba(255, 255, 255, .026), transparent 52px),
-    #111315 !important;
+    var(--dui-panel) !important;
   border-color: rgba(214, 219, 224, .15) !important;
   box-shadow:
     0 12px 34px rgba(0, 0, 0, .22),
@@ -3244,7 +3246,7 @@ html.dui-pro-overhaul [data-agent-card="true"] [class*="grid-cols-[58px_1fr_24px
 
 html.dui-pro-overhaul [data-agent-card="true"] [class*="h-1.5"] {
   height: 7px !important;
-  background: #090b0d !important;
+  background: var(--dui-bg) !important;
 }
 
 html.dui-pro-overhaul [data-agent-card="true"] [class*="from-cyan"],
@@ -3260,7 +3262,7 @@ html.dui-pro-overhaul .agent-card-shell button {
   border-radius: 8px !important;
   background:
     linear-gradient(180deg, rgba(255, 255, 255, .028), transparent),
-    #171a1d !important;
+    var(--dui-panel-2) !important;
   color: #d8dde1 !important;
 }
 
@@ -3270,7 +3272,7 @@ html.dui-pro-overhaul .agent-card-shell button:hover {
   color: #f3fbfd !important;
   background:
     linear-gradient(180deg, rgba(120, 231, 245, .055), transparent),
-    #1a1d20 !important;
+    var(--dui-panel-3) !important;
 }
 
 html.dui-pro-overhaul [data-chat-panel="true"] {
@@ -3293,7 +3295,7 @@ html.dui-pro-overhaul [data-chat-panel="true"] [class*="border-dashed"] {
   background:
     radial-gradient(circle at 50% 42%, rgba(120, 231, 245, .022), transparent 36%),
     repeating-linear-gradient(0deg, transparent, transparent 27px, rgba(214, 219, 224, .012) 28px),
-    #111315 !important;
+    var(--dui-panel) !important;
 }
 
 html.dui-pro-overhaul :where(button, a, input, textarea, select, [tabindex]):focus-visible {
@@ -3332,7 +3334,7 @@ html.dui-pro-overhaul .agent-card-pro {
   background:
     radial-gradient(circle at 18% -4%, var(--agent-accent-soft), transparent 34%),
     linear-gradient(180deg, rgba(255, 255, 255, .035), rgba(255, 255, 255, .012) 42%, rgba(255, 255, 255, .006)),
-    #111315 !important;
+    var(--dui-panel) !important;
   border-color: rgba(214, 219, 224, .16) !important;
   box-shadow:
     0 16px 42px rgba(0, 0, 0, .28),
@@ -3427,7 +3429,7 @@ html.dui-pro-overhaul .agent-card-pro .agent-card-media {
   border-color: color-mix(in srgb, var(--agent-accent) 24%, rgba(255, 255, 255, .08)) !important;
   background:
     radial-gradient(circle at 50% 0%, color-mix(in srgb, var(--agent-accent) 10%, transparent), transparent 44%),
-    #090b0d !important;
+    var(--dui-bg) !important;
   box-shadow:
     inset 0 1px 0 rgba(255, 255, 255, .07),
     0 18px 46px -36px rgba(0, 0, 0, .95),
@@ -3663,14 +3665,14 @@ html.dui-pro-overhaul .agent-card-pro .agent-card-action-primary {
   border-color: color-mix(in srgb, var(--agent-accent) 44%, rgba(255, 255, 255, .10)) !important;
   background:
     linear-gradient(180deg, color-mix(in srgb, var(--agent-accent) 12%, transparent), transparent),
-    #171a1d !important;
+    var(--dui-panel-2) !important;
   color: color-mix(in srgb, var(--agent-accent) 54%, #f4f7f8) !important;
 }
 
 html.dui-pro-overhaul .agent-card-pro .agent-card-action-primary:hover {
   background:
     linear-gradient(180deg, color-mix(in srgb, var(--agent-accent) 18%, transparent), transparent),
-    #1c2024 !important;
+    var(--dui-panel-3) !important;
 }
 
 html.dui-pro-overhaul .agent-card-pro[data-agent-in-party="true"] .agent-card-action-primary {
@@ -3678,7 +3680,7 @@ html.dui-pro-overhaul .agent-card-pro[data-agent-in-party="true"] .agent-card-ac
   color: #ffd4d4 !important;
   background:
     linear-gradient(180deg, rgba(248, 113, 113, .085), transparent),
-    #171a1d !important;
+    var(--dui-panel-2) !important;
 }
 
 html.dui-pro-overhaul .agent-card-pro[data-agent-in-party="true"] .agent-card-action-primary:hover {
@@ -3695,7 +3697,7 @@ html.dui-pro-overhaul .agent-card-pro .agent-card-action-secondary {
   color: #b9c0c6 !important;
   background:
     linear-gradient(180deg, rgba(255, 255, 255, .030), transparent),
-    #171a1d !important;
+    var(--dui-panel-2) !important;
 }
 
 html.dui-pro-overhaul .agent-card-pro .agent-card-action-secondary:hover {
@@ -3731,7 +3733,7 @@ html.dui-pro-overhaul .agent-card-pro {
   border-radius: 8px !important;
   background:
     linear-gradient(180deg, rgba(255, 255, 255, .026), rgba(255, 255, 255, .010) 46%, rgba(0, 0, 0, .10)),
-    #101214 !important;
+    var(--dui-panel) !important;
   border-color: rgba(214, 219, 224, .12) !important;
   box-shadow:
     0 14px 36px rgba(0, 0, 0, .24),

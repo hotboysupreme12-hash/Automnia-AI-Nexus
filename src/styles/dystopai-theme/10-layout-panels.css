@@ -3000,9 +3000,9 @@ html.dui-pro-overhaul [data-dui-panel="active-party"] .dy-party-slot.is-filled::
   height: auto !important;
   align-items: center !important;
   justify-content: center !important;
-  top: 8px !important;
+  top: auto !important;
   right: 10px !important;
-  bottom: auto !important;
+  bottom: 8px !important;
   left: auto !important;
   z-index: 5 !important;
   padding: 3px 7px !important;

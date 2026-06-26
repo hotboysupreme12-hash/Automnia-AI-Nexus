@@ -1933,12 +1933,29 @@ html.dui-pro-overhaul .dy-top-tabs .tab-underline span:last-child {
   overflow: hidden;
 }
 
+.dui-hero-stats,
+.dui-readiness-card {
+  background: transparent;
+}
+
 .dui-hero-stats div {
   display: grid;
   place-content: center;
   min-height: 88px;
   border-right: 1px solid rgba(157, 172, 185, .10);
   text-align: center;
+}
+
+.dui-hero-stat--eligible span {
+  color: #7ec9ff;
+}
+
+.dui-hero-stat--fit span {
+  color: #90e8c8;
+}
+
+.dui-hero-stat--risk span {
+  color: #ffb48c;
 }
 
 .dui-hero-stats div:last-child {
@@ -1988,13 +2005,39 @@ html.dui-pro-overhaul .dy-top-tabs .tab-underline span:last-child {
   line-height: 1;
 }
 
-.dui-progress-track {
+.dui-readiness-card[data-tone="strong"] .dui-readiness-head strong,
+.dui-readiness-card[data-tone="cool"] .dui-readiness-head strong {
+  color: #8cf3ec;
+}
+
+.dui-readiness-card[data-tone="warn"] .dui-readiness-head strong {
+  color: #f0c75f;
+}
+
+.dui-readiness-card[data-tone="danger"] .dui-readiness-head strong {
+  color: #ff9984;
+}
+
+.dui-readiness-card .dui-progress-track {
   overflow: hidden;
   height: 7px;
   margin-top: 12px;
   border: 1px solid rgba(255, 255, 255, .035);
   border-radius: 999px;
-  background: rgba(0, 0, 0, .36);
+  background: rgba(255, 255, 255, .08);
+}
+
+.dui-readiness-card[data-tone="strong"] .dui-progress-track,
+.dui-readiness-card[data-tone="cool"] .dui-progress-track {
+  background: rgba(67, 208, 204, .22);
+}
+
+.dui-readiness-card[data-tone="warn"] .dui-progress-track {
+  background: rgba(243, 199, 96, .24);
+}
+
+.dui-readiness-card[data-tone="danger"] .dui-progress-track {
+  background: rgba(255, 140, 120, .24);
 }
 
 .dui-progress-fill {
@@ -2931,6 +2974,22 @@ html.dui-pro-overhaul .dy-top-tabs .tab-underline span:last-child {
   box-shadow: 0 16px 36px rgba(36, 214, 205, .12);
 }
 
+.dui-mission-deploy-button {
+  border-color: rgba(97, 222, 172, .30);
+  background:
+    linear-gradient(180deg, rgba(97, 222, 172, .22), rgba(44, 160, 123, .36)),
+    #0f2520;
+  color: #eaffef;
+  box-shadow: 0 16px 36px rgba(72, 224, 218, .16);
+}
+
+.dui-mission-deploy-button:not(:disabled):hover {
+  border-color: rgba(97, 222, 172, .48);
+  background:
+    linear-gradient(180deg, rgba(97, 222, 172, .30), rgba(44, 160, 123, .48)),
+    #123329;
+}
+
 .dui-primary-button:not(:disabled):hover {
   border-color: rgba(72, 224, 218, .48);
   background:
@@ -2943,6 +3002,15 @@ html.dui-pro-overhaul .dy-top-tabs .tab-underline span:last-child {
   background: rgba(255, 112, 112, .09);
   color: #ffd6d6;
   box-shadow: none;
+}
+
+.dui-mission-deploy-button.is-stop {
+  border-color: rgba(255, 112, 112, .40);
+  background:
+    linear-gradient(180deg, rgba(255, 112, 112, .20), rgba(168, 37, 37, .38)),
+    #2a1012;
+  color: #ffe0e0;
+  box-shadow: 0 10px 24px rgba(255, 112, 112, .15);
 }
 
 .dui-timing-panel {

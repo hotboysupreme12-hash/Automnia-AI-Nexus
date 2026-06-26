@@ -1180,9 +1180,10 @@ export function AgentResponseConsole() {
                   tabIndex={0}
                   title={`${laneDiagnostic ? `${laneDiagnostic.title} ` : ''}${queuedForAgent ? `${queuedForAgent} queued Command Console follow-up${queuedForAgent === 1 ? '' : 's'}. ` : ''}Remove ${agent.name} from chat`}
                   data-lane-diagnostic={laneDiagnostic?.severity || undefined}
-                  className={`dy-command-target-chip group/chip inline-flex items-center gap-1.5 ${
+                  style={selectedTargets.length ? { color: '#8de6ff' } : undefined}
+                className={`dy-command-target-chip group/chip inline-flex items-center gap-1.5 ${
                     selectedTargets.length
-                      ? 'is-selected border-cyan-400/20 bg-cyan-400/[0.04] text-cyan-100/90 hover:border-cyan-300/40 hover:bg-cyan-300/[0.09]'
+                      ? 'is-selected border-cyan-400/20 bg-cyan-400/[0.04] text-white/95 hover:border-cyan-300/40 hover:bg-cyan-300/[0.09]'
                       : inParty
                       ? 'is-party border-slate-400/20 bg-white/[0.04] text-slate-200/90 hover:border-slate-300/35 hover:bg-white/[0.07]'
                       : 'is-armed border-cyan-400/20 bg-cyan-400/[0.04] text-cyan-200/90 hover:border-cyan-400/40 hover:bg-cyan-400/[0.10]'

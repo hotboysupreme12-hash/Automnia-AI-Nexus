@@ -835,7 +835,7 @@ function shouldUseAdHocCoordinationForPrompt(prompt: string, laneAgents: OpenCla
 /*  Store interface                                                   */
 /* ------------------------------------------------------------------ */
 
-export type AppTab = 'agents' | 'missions' | 'monitor' | 'plugins'
+export type AppTab = 'agents' | 'missions' | 'monitor' | 'plugins' | 'settings'
 
 export type RecruitAgentInput = {
   agentId: string

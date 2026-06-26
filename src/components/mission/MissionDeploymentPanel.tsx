@@ -440,15 +440,15 @@ export function MissionDeploymentPanel() {
           </div>
 
           <div className="dui-hero-stats">
-            <div>
+            <div className="dui-hero-stat dui-hero-stat--eligible">
               <span>{effectiveAgents.length}</span>
               <p>Eligible</p>
             </div>
-            <div>
+            <div className="dui-hero-stat dui-hero-stat--fit">
               <span>{capabilityCoverage}%</span>
               <p>Fit</p>
             </div>
-            <div>
+            <div className="dui-hero-stat dui-hero-stat--risk">
               <span>{missionDraft.riskTolerance}%</span>
               <p>Risk</p>
             </div>
@@ -759,7 +759,12 @@ export function MissionDeploymentPanel() {
                 <button type="button" onClick={() => setShowTiming((v) => !v)} className="dui-secondary-button">
                   Timing <span>{missionDraft.durationMode}</span>
                 </button>
-                <button type="button" onClick={missionRunning ? stopMission : deployMission} disabled={!missionRunning && !canDeploy} className={`dui-primary-button ${missionRunning ? 'is-stop' : ''}`}>
+                <button
+                  type="button"
+                  onClick={missionRunning ? stopMission : deployMission}
+                  disabled={!missionRunning && !canDeploy}
+                  className={`dui-primary-button dui-mission-deploy-button ${missionRunning ? 'is-stop' : ''}`}
+                >
                   {missionRunning ? 'Stop Mission' : 'Deploy Mission'}
                 </button>
               </div>
