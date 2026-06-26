@@ -9,33 +9,33 @@ const RARITY_SLOT: Record<string, { border: string; glow: string; ring: string; 
     border: 'border-amber-400/40',
     glow: 'shadow-[0_0_30px_-6px_rgba(251,191,36,0.30)]',
     ring: 'ring-amber-400/70 ring-offset-1 ring-offset-slate-950',
-    bg: 'bg-gradient-to-b from-amber-950/50 via-amber-900/25 to-amber-950/60',
+    bg: 'bg-gradient-to-b from-[#161616] via-[#111111] to-[#0d0d0d]',
   },
   epic: {
     border: 'border-[#9475ae]/34',
     glow: 'shadow-[0_0_24px_-6px_rgba(148,117,174,0.24)]',
     ring: 'ring-[#9475ae]/45 ring-offset-1 ring-offset-slate-950',
-    bg: 'bg-gradient-to-b from-[#201827]/42 via-neutral-900/20 to-neutral-950/55',
+    bg: 'bg-gradient-to-b from-[#161616] via-[#111111] to-[#0d0d0d]',
   },
   rare: {
     border: 'border-[#7097aa]/30',
     glow: 'shadow-[0_0_18px_-4px_rgba(112,151,170,0.20)]',
     ring: 'ring-[#7097aa]/38 ring-offset-1 ring-offset-slate-950',
-    bg: 'bg-gradient-to-b from-[#142028]/38 via-neutral-900/18 to-neutral-950/50',
+    bg: 'bg-gradient-to-b from-[#161616] via-[#111111] to-[#0d0d0d]',
   },
   common: {
     border: 'border-white/10',
     glow: '',
     ring: 'ring-white/15 ring-offset-1 ring-offset-slate-950',
-    bg: 'bg-white/[0.02]',
+    bg: 'bg-gradient-to-b from-[#161616] via-[#111111] to-[#0d0d0d]',
   },
 }
 
 const RARITY_BADGE: Record<string, string> = {
-  legendary: 'border-amber-300/45 bg-amber-300/[0.13] text-amber-100',
-  epic: 'border-[#9475ae]/36 bg-[#9475ae]/[0.10] text-[#eadcff]',
-  rare: 'border-[#7097aa]/32 bg-[#7097aa]/[0.09] text-[#dbeaf0]',
-  common: 'border-white/15 bg-white/[0.05] text-slate-300',
+  legendary: 'border-white/12 bg-[#171717] text-slate-300',
+  epic: 'border-white/12 bg-[#171717] text-slate-300',
+  rare: 'border-white/12 bg-[#171717] text-slate-300',
+  common: 'border-white/12 bg-[#171717] text-slate-300',
 }
 
 function initials(name: string) {
@@ -194,7 +194,7 @@ export function ActivePartyStrip({ toolbar }: ActivePartyStripProps) {
 
               {agent ? (
                 <div
-                  className="party-slot-content pointer-events-auto flex w-full items-center gap-3 rounded-lg bg-white/[0.03] px-3 py-2.5 ring-1 ring-white/[0.06]"
+                  className="party-slot-content pointer-events-auto flex w-full items-center gap-3 rounded-lg bg-[#121212] px-3 py-2.5 ring-1 ring-white/[0.06]"
                   draggable={!missionRunning}
                   onDragStart={(event) => {
                     event.dataTransfer.setData('text/party-index', String(slot))

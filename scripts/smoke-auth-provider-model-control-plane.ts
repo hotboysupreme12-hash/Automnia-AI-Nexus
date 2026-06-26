@@ -30,6 +30,15 @@ const editor = readWorkspaceFile('src/components/editor/AgentEditorModal.tsx')
 const recruit = readWorkspaceFile('src/components/recruit/RecruitAgentModal.tsx')
 const modelSelector = readWorkspaceFile('src/components/party/ModelSelectorModal.tsx')
 const packageJson = JSON.parse(readWorkspaceFile('package.json')) as { scripts?: Record<string, string> }
+const staleCodexSparkId = `codex-${3}-spark`
+const unavailableModelsBlock = server.slice(
+  server.indexOf('const KNOWN_UNAVAILABLE_MODEL_IDS'),
+  server.indexOf('const OPENCLAW_CONFIG_SUPPRESSED_MODEL_IDS'),
+)
+const suppressedModelsBlock = server.slice(
+  server.indexOf('const OPENCLAW_CONFIG_SUPPRESSED_MODEL_IDS'),
+  server.indexOf('const PINNED_MODEL_IDS'),
+)
 
 for (const code of [
   'auth_provider_failed',
@@ -108,6 +117,20 @@ assert(modelSelector.includes("apiRequest<{ providers: AuthProviderStatus[] }>('
 assert(modelSelector.includes('apiRequest(`/api/auth/providers/${encodeURIComponent(authModalProvider.provider)}`'), 'ModelSelectorModal provider key save should use apiRequest')
 assert(editor.includes('apiRequest(`/api/auth/providers/${encodeURIComponent(authModalProvider.provider)}`'), 'AgentEditorModal provider key save should use apiRequest')
 assert(recruit.includes('apiRequest(`/api/auth/providers/${encodeURIComponent(authModalProvider.provider)}`'), 'RecruitAgentModal provider key save should use apiRequest')
+assert(editor.includes("const CODEX_5_3_SPARK_MODEL_ID = 'openai/gpt-5.3-codex-spark'"), 'AgentEditorModal should seed the canonical Codex 5.3 Spark model id')
+assert(editor.includes("name: 'Codex 5.3 Spark'"), 'AgentEditorModal should label the seeded Codex model as 5.3 Spark')
+assert(!editor.includes(staleCodexSparkId), 'AgentEditorModal should not expose the stale pre-5.3 Spark id')
+assert(server.includes("{ id: 'openai/gpt-5.3-codex-spark', alias: 'gpt-5.3-codex-spark' }"), 'Fallback model catalog should expose Codex 5.3 Spark for save/reload consistency')
+assert(modelSelector.includes("const CODEX_5_3_SPARK_MODEL_ID = 'openai/gpt-5.3-codex-spark'"), 'ModelSelectorModal should seed the canonical Codex 5.3 Spark model id')
+assert(modelSelector.includes("name: 'Codex 5.3 Spark'"), 'ModelSelectorModal should label the seeded Codex model as 5.3 Spark')
+assert(modelSelector.includes('const seededCatalog = catalog.some((model) => model.id === CODEX_5_3_SPARK_MODEL_ID)'), 'ModelSelectorModal should keep Codex 5.3 Spark in the selectable catalog')
+assert(editor.includes('const effectiveAuthStatusForProvider = (providers: AuthProviderStatus[], provider: string) =>'), 'AgentEditorModal should use effective provider auth status for Codex subscription models')
+assert(editor.includes("const openAiStatus = authStatusForProvider(providers, 'openai')"), 'AgentEditorModal should accept the canonical OpenAI auth route for OpenAI Codex model saves')
+assert(editor.includes('configLoadSeqRef.current += 1'), 'AgentEditorModal model save should invalidate stale config loads before applying the save result')
+assert(modelSelector.includes('const effectiveAuthStatusForProvider = (providers: AuthProviderStatus[], provider: string) =>'), 'ModelSelectorModal should use effective provider auth status for Codex subscription models')
+assert(modelSelector.includes('const providerStatus = effectiveAuthStatusForProvider(authProviders, primaryProvider)'), 'ModelSelectorModal save should use effective provider auth status')
+assert(!unavailableModelsBlock.includes('openai/gpt-5.3-codex-spark'), 'Codex 5.3 Spark should not be classified as unavailable')
+assert(!suppressedModelsBlock.includes('openai/gpt-5.3-codex-spark'), 'Codex 5.3 Spark should be allowed through saved OpenClaw config normalization')
 
 assert(
   packageJson.scripts?.['smoke:auth-provider-model'] === 'tsx scripts/smoke-auth-provider-model-control-plane.ts',

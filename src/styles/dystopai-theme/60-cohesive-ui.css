@@ -438,6 +438,13 @@ html.dui-pro-overhaul.dui-cohesive-ui .dui-recruit-footer {
   box-shadow: none !important;
 }
 
+html.dui-pro-overhaul.dui-cohesive-ui [data-dui-panel="agent-registry"] > div:first-child,
+html.dui-pro-overhaul.dui-cohesive-ui [data-dui-panel="agent-registry"] > div:nth-child(2) {
+  background: transparent !important;
+  background-image: none !important;
+  box-shadow: none !important;
+}
+
 html.dui-pro-overhaul.dui-cohesive-ui [data-dui-panel] h2,
 html.dui-pro-overhaul.dui-cohesive-ui .dy-command-console__title,
 html.dui-pro-overhaul.dui-cohesive-ui .dy-monitor-card p:first-child,
@@ -3027,6 +3034,13 @@ html.dui-pro-overhaul.dui-cohesive-ui .dui-recruit-footer {
   border-color: var(--dui-line-soft) !important;
   background: #101010 !important;
   background-image: none !important;
+  box-shadow: none !important;
+}
+
+html.dui-pro-overhaul.dui-cohesive-ui [data-dui-panel="agent-registry"] > div:first-child {
+  background: transparent !important;
+  background-image: none !important;
+  border-color: transparent !important;
   box-shadow: none !important;
 }
 

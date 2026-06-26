@@ -52,6 +52,17 @@ const OAUTH_PROVIDER_FALLBACKS: Record<string, AuthProviderStatus> = {
 const authStatusForProvider = (providers: AuthProviderStatus[], provider: string) =>
   providers.find((entry) => entry.provider === provider) || OAUTH_PROVIDER_FALLBACKS[provider]
 
+const effectiveAuthStatusForProvider = (providers: AuthProviderStatus[], provider: string) => {
+  const status = authStatusForProvider(providers, provider)
+  if (provider !== 'openai-codex' || status?.configured) return status
+  const openAiStatus = authStatusForProvider(providers, 'openai')
+  if (!openAiStatus?.configured) return status
+  return {
+    ...(status || OAUTH_PROVIDER_FALLBACKS['openai-codex']),
+    configured: true,
+  }
+}
+
 const isOpenAiCodexSubscriptionModel = (modelId: string) => {
   const [, model = ''] = modelId.trim().split('/')
   return /^gpt-5(?:\.\d+)?(?:-[a-z0-9][a-z0-9.-]*)?$/i.test(model)
@@ -77,6 +88,13 @@ const DEEPSEEK_PRO_MODEL = 'deepseek/deepseek-v4-pro'
 const DEEPSEEK_FLASH_MODEL = 'deepseek/deepseek-v4-flash'
 const OPENROUTER_DEEPSEEK_PRO_MODEL = 'openrouter/deepseek/deepseek-v4-pro'
 const OPENROUTER_DEEPSEEK_FLASH_MODEL = 'openrouter/deepseek/deepseek-v4-flash'
+const CODEX_5_3_SPARK_MODEL_ID = 'openai/gpt-5.3-codex-spark'
+const CODEX_5_3_SPARK_MODEL: AvailableModel = {
+  id: CODEX_5_3_SPARK_MODEL_ID,
+  alias: 'gpt-5.3-codex-spark',
+  provider: 'openai-codex',
+  name: 'Codex 5.3 Spark',
+}
 const REASONING_EFFORT_LEVELS = ['off', 'minimal', 'low', 'medium', 'high'] as const satisfies readonly ThinkingLevel[]
 const MODEL_SELECTOR_CACHE_MS = 5 * 60 * 1000
 const MODEL_SELECTOR_FETCH_TIMEOUT_MS = 8000
@@ -104,7 +122,8 @@ const modelOptionFromId = (modelId: string): AvailableModel | null => {
 
 const mergeSelectedModelOptions = (catalog: AvailableModel[], selectedIds: string[]) => {
   const merged = new Map<string, AvailableModel>()
-  for (const model of catalog) {
+  const seededCatalog = catalog.some((model) => model.id === CODEX_5_3_SPARK_MODEL_ID) ? catalog : [CODEX_5_3_SPARK_MODEL, ...catalog]
+  for (const model of seededCatalog) {
     if (model.id.trim()) merged.set(model.id, model)
   }
   for (const selectedId of selectedIds) {
@@ -210,7 +229,7 @@ export function ModelSelectorModal({
       return
     }
     const primaryProvider = providerForModel(selectedPrimary)
-    const providerStatus = authStatusForProvider(authProviders, primaryProvider)
+    const providerStatus = effectiveAuthStatusForProvider(authProviders, primaryProvider)
     if (providerStatus && !providerStatus.configured) {
       setStatus(`Missing ${authLabelForProvider(primaryProvider, providerStatus)} ${authKindForProvider(providerStatus)}. Connect this provider before saving.`)
       setAuthModalProvider(providerStatus)
@@ -239,7 +258,7 @@ export function ModelSelectorModal({
 
   const primaryProvider = selectedPrimary ? providerForModel(selectedPrimary) : ''
   const primaryProviderStatus = primaryProvider
-    ? authStatusForProvider(authProviders, primaryProvider)
+    ? effectiveAuthStatusForProvider(authProviders, primaryProvider)
     : undefined
   const primaryProviderLabel = authLabelForProvider(primaryProvider, primaryProviderStatus)
   const primaryProviderAuthKind = authKindForProvider(primaryProviderStatus)
@@ -389,7 +408,7 @@ export function ModelSelectorModal({
                       const next = event.target.value
                       setSelectedPrimary(next)
                       const provider = next ? providerForModel(next) : ''
-                      const providerStatus = provider ? authStatusForProvider(authProviders, provider) : undefined
+                      const providerStatus = provider ? effectiveAuthStatusForProvider(authProviders, provider) : undefined
                       if (providerStatus && !providerStatus.configured) setAuthModalProvider(providerStatus)
                     }}
                     className="w-full rounded-lg border border-cyan-200/20 bg-slate-950/70 px-3 py-2 text-sm text-slate-100"

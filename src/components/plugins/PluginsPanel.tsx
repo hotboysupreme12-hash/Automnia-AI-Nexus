@@ -1217,29 +1217,6 @@ export function PluginsPanel() {
     setUninstallConfirmPlugin(null)
   }, [uninstallConfirmPlugin])
 
-  const updateAllPlugins = useCallback(async () => {
-    setBusyPluginAction({ id: '__all__', action: 'update' })
-    setError('')
-    setNotice('')
-    try {
-      const payload = await pluginApiData<PluginApiPayload>(
-        '/api/plugins/update-all',
-        {
-          method: 'POST',
-          body: { restart: true },
-          timeoutMs: 340_000,
-        },
-        'Plugin update failed.',
-      )
-      applyPayload(payload)
-      setNotice(commandNotice(payload, `All tracked plugins updated; ${restartNotice(payload.restart)}`))
-    } catch (err) {
-      setError(pluginRequestError(err))
-    } finally {
-      setBusyPluginAction(null)
-    }
-  }, [applyPayload])
-
   const visiblePlugins = useMemo(() => {
     const trimmed = query.trim()
     const term = /^\/clawhub(?:\s|$)/i.test(trimmed) ? '' : trimmed.toLowerCase()
@@ -1274,35 +1251,25 @@ export function PluginsPanel() {
           </div>
           <div className="flex flex-wrap items-center gap-2">
             {browser && (
-              <span className={`rounded-full border px-2.5 py-1 text-[9px] font-semibold ${statusClass(browser)}`}>
+              <span
+                className={`rounded-full border px-2.5 py-1 text-[9px] font-semibold ${
+                  browser.enabled
+                    ? 'border-cyan-300/30 bg-cyan-300/[0.10] text-cyan-100'
+                    : 'border-slate-400/25 bg-slate-500/[0.08] text-slate-300'
+                }`}
+              >
                 Browser {browser.enabled ? 'on' : 'off'}
               </span>
             )}
-            <span className="rounded-full border border-emerald-400/20 bg-emerald-400/[0.05] px-2.5 py-1 text-[9px] font-semibold text-emerald-200">
+            <span className="rounded-full border border-emerald-300/30 bg-emerald-300/[0.10] px-2.5 py-1 text-[9px] font-semibold text-emerald-100">
               {enabledCount} enabled
             </span>
-            <span className="rounded-full border border-amber-400/20 bg-amber-400/[0.05] px-2.5 py-1 text-[9px] font-semibold text-amber-100">
-              {setupCount} setup
+            <span className="rounded-full border border-amber-300/30 bg-amber-300/[0.10] px-2.5 py-1 text-[9px] font-semibold text-amber-100">
+              {setupCount} setups
             </span>
-            <span className="rounded-full border border-white/[0.08] bg-white/[0.03] px-2.5 py-1 text-[9px] font-semibold text-slate-400">
+            <span className="rounded-full border border-slate-500/25 bg-slate-500/[0.08] px-2.5 py-1 text-[9px] font-semibold text-slate-300">
               {disabledCount} disabled
             </span>
-            <button
-              type="button"
-              onClick={() => void updateAllPlugins()}
-              disabled={busyPluginAction?.id === '__all__'}
-              className="rounded-md border border-white/[0.07] bg-white/[0.025] px-3 py-1.5 text-[9px] font-semibold uppercase text-slate-300 transition hover:border-emerald-300/25 hover:text-emerald-100 disabled:cursor-wait disabled:opacity-50"
-            >
-              {busyPluginAction?.id === '__all__' ? 'Updating' : 'Update All'}
-            </button>
-            <button
-              type="button"
-              onClick={() => void loadPlugins({ force: true })}
-              disabled={loading}
-              className="rounded-md border border-white/[0.07] bg-white/[0.025] px-3 py-1.5 text-[9px] font-semibold uppercase text-slate-300 transition hover:border-white/[0.13] hover:bg-white/[0.04] disabled:cursor-wait disabled:opacity-50"
-            >
-              Refresh
-            </button>
           </div>
         </div>
 

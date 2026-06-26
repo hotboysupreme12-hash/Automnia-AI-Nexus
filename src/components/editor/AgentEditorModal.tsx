@@ -81,6 +81,13 @@ const DEEPSEEK_PRO_MODEL = 'deepseek/deepseek-v4-pro'
 const DEEPSEEK_FLASH_MODEL = 'deepseek/deepseek-v4-flash'
 const OPENROUTER_DEEPSEEK_PRO_MODEL = 'openrouter/deepseek/deepseek-v4-pro'
 const OPENROUTER_DEEPSEEK_FLASH_MODEL = 'openrouter/deepseek/deepseek-v4-flash'
+const CODEX_5_3_SPARK_MODEL_ID = 'openai/gpt-5.3-codex-spark'
+const CODEX_5_3_SPARK_MODEL: AvailableModel = {
+  id: CODEX_5_3_SPARK_MODEL_ID,
+  alias: 'gpt-5.3-codex-spark',
+  provider: 'openai-codex',
+  name: 'Codex 5.3 Spark',
+}
 let modelsCache: TimedEditorCache<AvailableModel[]> | null = null
 let modelsRequest: Promise<AvailableModel[]> | null = null
 let authProvidersCache: TimedEditorCache<AuthProviderStatus[]> | null = null
@@ -105,6 +112,18 @@ const OAUTH_PROVIDER_FALLBACKS: Record<string, AuthProviderStatus> = {
 
 const authStatusForProvider = (providers: AuthProviderStatus[], provider: string) =>
   providers.find((entry) => entry.provider === provider) || OAUTH_PROVIDER_FALLBACKS[provider]
+
+const effectiveAuthStatusForProvider = (providers: AuthProviderStatus[], provider: string) => {
+  const status = authStatusForProvider(providers, provider)
+  if (provider !== 'openai-codex' || status?.configured) return status
+  const openAiStatus = authStatusForProvider(providers, 'openai')
+  if (!openAiStatus?.configured) return status
+  return {
+    ...(status || OAUTH_PROVIDER_FALLBACKS['openai-codex']),
+    configured: true,
+    stored: status?.stored || openAiStatus.stored,
+  }
+}
 
 const isOpenAiCodexSubscriptionModel = (modelId: string) => {
   const [, model = ''] = modelId.trim().split('/')
@@ -136,7 +155,10 @@ const modelOptionFromId = (modelId: string): AvailableModel | null => {
 
 const mergeSelectedModelOptions = (catalog: AvailableModel[], selectedIds: string[]) => {
   const merged = new Map<string, AvailableModel>()
-  for (const model of catalog) {
+  const seededCatalog = catalog.some((model) => model.id === CODEX_5_3_SPARK_MODEL_ID)
+    ? catalog
+    : [CODEX_5_3_SPARK_MODEL, ...catalog]
+  for (const model of seededCatalog) {
     if (model.id.trim()) merged.set(model.id, model)
   }
   for (const selectedId of selectedIds) {
@@ -616,7 +638,7 @@ export function AgentEditorModal() {
   const selectedModelIds = useMemo(() => [primary, ...fallbacks].filter(Boolean), [primary, fallbacks])
   const selectableModels = useMemo(() => mergeSelectedModelOptions(models, selectedModelIds), [models, selectedModelIds])
   const providerForModel = (modelId:string)=>selectableModels.find((model)=>model.id===modelId)?.provider || (isOpenAiCodexSubscriptionModel(modelId) ? 'openai-codex' : modelId.split('/')[0]||'')
-  const authForProvider = (provider:string)=>authStatusForProvider(authProviders, provider)
+  const authForProvider = (provider:string)=>effectiveAuthStatusForProvider(authProviders, provider)
   const maybePromptProviderAuth = (modelId:string)=>{const status=authForProvider(providerForModel(modelId));if(status&&!status.configured)setAuthModalProvider(status)}
   const modelGroups = useMemo(() => groupAvailableModels(selectableModels), [selectableModels])
   const fallbackModelGroups = useMemo(() => groupAvailableModels(selectableModels.filter((m) => m.id !== primary)), [selectableModels, primary])
@@ -633,6 +655,7 @@ export function AgentEditorModal() {
     }
     setMs(true)
     setMsStatus('')
+    configLoadSeqRef.current += 1
     const thinkingDefault: ThinkingLevel = thinkingOn ? thinkingLevel : 'off'
     const timeoutSeconds = Math.max(30, Math.min(7200, Math.round(runtimeTimeoutSeconds)))
     try {

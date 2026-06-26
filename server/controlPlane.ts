@@ -1403,6 +1403,7 @@ const FALLBACK_MODELS: Array<{ id: string; alias?: string }> = [
   { id: 'openai/gpt-5.4-pro', alias: 'gpt-5.4-pro' },
   { id: 'openai/gpt-5.4-mini', alias: 'gpt-5.4-mini' },
   { id: 'openai/gpt-5.4-nano', alias: 'gpt-5.4-nano' },
+  { id: 'openai/gpt-5.3-codex-spark', alias: 'gpt-5.3-codex-spark' },
   { id: 'openai/gpt-5.3-chat-latest', alias: 'gpt-5.3-chat-latest' },
   { id: 'openai/o4-mini', alias: 'o4-mini' },
   { id: 'openai/o4-mini-deep-research', alias: 'o4-mini-deep-research' },
@@ -1447,12 +1448,10 @@ const FALLBACK_MODELS: Array<{ id: string; alias?: string }> = [
 ]
 const KNOWN_UNAVAILABLE_MODEL_IDS = new Set<string>([
   'openai/gpt-5.3-chat-latest',
-  'openai/gpt-5.3-codex-spark',
   'google/gemini-3.1-pro-preview-customtools',
 ])
 const OPENCLAW_CONFIG_SUPPRESSED_MODEL_IDS = new Set([
   'openai/gpt-5.3-chat-latest',
-  'openai/gpt-5.3-codex-spark',
   'google/gemini-3.1-pro-preview-customtools',
 ])
 const PINNED_MODEL_IDS = ['google-vertex/gemini-3.5-flash']
