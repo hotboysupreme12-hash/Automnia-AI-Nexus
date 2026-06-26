@@ -7,6 +7,7 @@ import { listCronShifts, stopCronShift, useRuntimeSummaryStatus } from '../../ho
 import type { RuntimeCronJob } from '../../hooks/useRuntimeStatus'
 import { ActionStatusBanner } from '../common/ActionStatusBanner'
 import { preloadMissionIconAssets } from '../mission/missionIconAssets'
+import { applyStoredUiSettings } from '../settings/uiSettings'
 
 const PartySelector = lazy(() => import('../party/PartySelector').then((module) => ({ default: module.PartySelector })))
 const ActivePartyStrip = lazy(() => import('../party/ActivePartyStrip').then((module) => ({ default: module.ActivePartyStrip })))
@@ -14,6 +15,7 @@ const MissionDeploymentPanel = lazy(() => import('../mission/MissionDeploymentPa
 const AgentResponseConsole = lazy(() => import('../monitor/AgentResponseConsole').then((module) => ({ default: module.AgentResponseConsole })))
 const LiveOperationMonitor = lazy(() => import('../monitor/LiveOperationMonitor').then((module) => ({ default: module.LiveOperationMonitor })))
 const PluginsPanel = lazy(() => import('../plugins/PluginsPanel').then((module) => ({ default: module.PluginsPanel })))
+const SettingsPanel = lazy(() => import('../settings/SettingsPanel').then((module) => ({ default: module.SettingsPanel })))
 const AgentEditorModal = lazy(() => import('../editor/AgentEditorModal').then((module) => ({ default: module.AgentEditorModal })))
 const RecruitAgentModal = lazy(() => import('../recruit/RecruitAgentModal').then((module) => ({ default: module.RecruitAgentModal })))
 
@@ -27,8 +29,18 @@ const AGENT_REGISTRY_MIN_WIDTH = 640
 const AGENT_SPLIT_HANDLE_WIDTH = 18
 type ShellNotice = { tone: 'success' | 'warning' | 'error' | 'neutral'; message: string }
 
-const TABS: { id: AppTab; label: string; railMeta: string; description: string; iconSrc: string; tone: string }[] = [
-  { id: 'agents', label: 'Agents', railMeta: 'Roster', description: 'Build your active party, configure specialists, and send live commands.', iconSrc: '/icons/nav-agents-flat.png', tone: 'agents' },
+type PrimaryAppTab = Exclude<AppTab, 'settings'>
+
+const WORKSPACE_META: Record<AppTab, { label: string; railMeta: string; description: string; iconSrc: string; tone: string }> = {
+  agents: { label: 'Agents', railMeta: 'Roster', description: 'Assemble elite specialists, deploy on missions, and command with precision.', iconSrc: '/icons/nav-agents-flat.png', tone: 'agents' },
+  missions: { label: 'Missions', railMeta: 'Launch', description: 'Turn objectives into coordinated, scheduled, and verifiable agent work.', iconSrc: '/icons/nav-missions-flat.png', tone: 'missions' },
+  monitor: { label: 'Monitor', railMeta: 'Live ops', description: 'Inspect runtime health, active calls, sessions, cron jobs, and recovery evidence.', iconSrc: '/icons/nav-monitor-flat.png', tone: 'monitor' },
+  plugins: { label: 'Plugins', railMeta: 'Runtime', description: 'Manage providers, communication channels, tools, and reusable skills.', iconSrc: '/icons/nav-plugins-flat.png', tone: 'plugins' },
+  settings: { label: 'Settings', railMeta: 'System', description: 'Tune interface chrome, mission defaults, active-party runtime policy, and maintenance controls.', iconSrc: '/icons/nav-monitor-flat.png', tone: 'settings' },
+}
+
+const TABS: { id: PrimaryAppTab; label: string; railMeta: string; description: string; iconSrc: string; tone: string }[] = [
+  { id: 'agents', label: 'Agents', railMeta: 'Roster', description: 'Assemble elite specialists, deploy on missions, and command with precision.', iconSrc: '/icons/nav-agents-flat.png', tone: 'agents' },
   { id: 'missions', label: 'Missions', railMeta: 'Launch', description: 'Turn objectives into coordinated, scheduled, and verifiable agent work.', iconSrc: '/icons/nav-missions-flat.png', tone: 'missions' },
   { id: 'monitor', label: 'Monitor', railMeta: 'Live ops', description: 'Inspect runtime health, active calls, sessions, cron jobs, and recovery evidence.', iconSrc: '/icons/nav-monitor-flat.png', tone: 'monitor' },
   { id: 'plugins', label: 'Plugins', railMeta: 'Runtime', description: 'Manage providers, communication channels, tools, and reusable skills.', iconSrc: '/icons/nav-plugins-flat.png', tone: 'plugins' },
@@ -80,7 +92,7 @@ export function NexusShell() {
   const activeMission = useNexusStore((s) => s.activeMission)
   const isEditorOpen = useNexusStore((s) => s.isEditorOpen)
   const missionRunning = activeMission?.status === 'running'
-  const activeTab = TABS.find((item) => item.id === tab) || TABS[0]
+  const activeTab = WORKSPACE_META[tab] || WORKSPACE_META.agents
   const { status: runtimeStatus, refresh: refreshRuntimeStatus } = useRuntimeSummaryStatus(8000)
   const gatewayOnline = Boolean(runtimeStatus?.gateway.healthy || runtimeStatus?.gateway.processRunning)
   const cronJobs = runtimeStatus?.shifts?.active || []
@@ -103,12 +115,16 @@ export function NexusShell() {
             : 'Connecting to runtime'
       : tab === 'monitor'
         ? gatewayOnline ? 'Runtime connected' : runtimeStatus ? 'Runtime offline' : 'Connecting to runtime'
-        : gatewayOnline ? 'Gateway extensions online' : runtimeStatus ? 'Gateway extensions offline' : 'Checking extensions'
+        : tab === 'settings'
+          ? 'Settings ready'
+          : gatewayOnline ? 'Gateway extensions online' : runtimeStatus ? 'Gateway extensions offline' : 'Checking extensions'
   const workspaceStateTone = tab === 'agents'
     ? busyAgentCount ? 'active' : gatewayOnline ? 'healthy' : runtimeStatus ? 'offline' : 'loading'
     : tab === 'missions'
       ? missionRunning ? 'active' : gatewayOnline ? 'healthy' : runtimeStatus ? 'offline' : 'loading'
-      : gatewayOnline
+      : tab === 'settings'
+        ? 'healthy'
+        : gatewayOnline
         ? 'healthy'
         : runtimeStatus
           ? 'offline'
@@ -268,6 +284,7 @@ export function NexusShell() {
   useEffect(() => { void syncPartyOverview() }, [syncPartyOverview])
   useEffect(() => { void syncMissionProjection() }, [syncMissionProjection])
   useEffect(() => { void preloadMissionIconAssets() }, [])
+  useEffect(() => { applyStoredUiSettings() }, [])
   useEffect(() => {
     if (tab === 'missions') setHasMountedMissionPanel(true)
   }, [tab])
@@ -371,7 +388,7 @@ export function NexusShell() {
             </span>
             <span className="dy-human-nav-copy">
               <strong className="block">Recruit</strong>
-              <span className="block">Create</span>
+              <span className="block">Discover</span>
             </span>
           </button>
           {TABS.map((t) => (
@@ -398,6 +415,68 @@ export function NexusShell() {
           ))}
         </nav>
 
+        <div className="dy-human-rail-bottom">
+          <nav className="dy-human-nav dy-human-nav--utility flex flex-col" aria-label="Utility navigation">
+            <button
+              type="button"
+              className={`dy-human-nav-utility flex items-center gap-3 text-left ${tab === 'settings' ? 'is-active' : ''}`}
+              aria-label="Open runtime settings"
+              aria-pressed={tab === 'settings'}
+              onClick={() => selectTab('settings')}
+            >
+              <span className="dy-human-nav-icon dy-human-nav-icon--settings" aria-hidden="true">
+                <svg viewBox="0 0 24 24">
+                  <path d="M12 8.25a3.75 3.75 0 1 0 0 7.5 3.75 3.75 0 0 0 0-7.5Z" />
+                  <path d="M19.5 13.5v-3l-2.35-.42a7.72 7.72 0 0 0-.72-1.73l1.36-1.96-2.12-2.12-1.96 1.36c-.55-.31-1.13-.55-1.73-.72L11.55 2.5h-3l-.42 2.35c-.6.17-1.18.41-1.73.72L4.44 4.21 2.32 6.33l1.36 1.96c-.31.55-.55 1.13-.72 1.73L.61 10.45v3l2.35.42c.17.6.41 1.18.72 1.73l-1.36 1.96 2.12 2.12 1.96-1.36c.55.31 1.13.55 1.73.72l.42 2.35h3l.42-2.35c.6-.17 1.18-.41 1.73-.72l1.96 1.36 2.12-2.12-1.36-1.96c.31-.55.55-1.13.72-1.73l2.35-.42Z" />
+                </svg>
+              </span>
+              <span className="dy-human-nav-copy">
+                <strong className="block">Settings</strong>
+                <span className="block">System</span>
+              </span>
+            </button>
+            <button
+              type="button"
+              className="dy-human-nav-utility flex items-center gap-3 text-left"
+              aria-label="Open DystopAI documentation"
+              onClick={() => window.open('https://github.com/hotboysupreme12-hash/DystopAI-Core', '_blank', 'noopener,noreferrer')}
+            >
+              <span className="dy-human-nav-icon dy-human-nav-icon--help" aria-hidden="true">
+                <svg viewBox="0 0 24 24">
+                  <circle cx="12" cy="12" r="9" />
+                  <path d="M9.75 9.5a2.35 2.35 0 0 1 4.5 1c0 1.7-2.25 1.85-2.25 3.5" />
+                  <path d="M12 17.25h.01" />
+                </svg>
+              </span>
+              <span className="dy-human-nav-copy">
+                <strong className="block">Help</strong>
+                <span className="block">Documentation</span>
+              </span>
+            </button>
+          </nav>
+
+          <button
+            type="button"
+            className="dy-operator-card"
+            aria-label="Return to agent roster as Operator Prime"
+            onClick={() => selectTab('agents')}
+          >
+            <span className="dy-operator-orb" aria-hidden="true">
+              <svg viewBox="0 0 24 24">
+                <path d="M12 3 4.5 7.25v8.5L12 20l7.5-4.25v-8.5L12 3Z" />
+                <path d="M12 7.25 8.25 9.4v4.2L12 15.75l3.75-2.15V9.4L12 7.25Z" />
+                <path d="M12 3v4.25M4.5 7.25l3.75 2.15M19.5 7.25 15.75 9.4" />
+              </svg>
+            </span>
+            <span className="dy-operator-copy">
+              <strong>Operator Prime</strong>
+              <span>Level 47</span>
+              <i aria-hidden="true" />
+            </span>
+            <span className="dy-operator-menu" aria-hidden="true">v</span>
+          </button>
+        </div>
+
       </aside>
 
       <main id="dystopai-main" tabIndex={-1} className="dy-app-main mx-auto max-w-[1680px] px-4 py-6 sm:px-6 sm:py-8">
@@ -410,31 +489,47 @@ export function NexusShell() {
           </div>
           <div className="dy-workspace-context__meta">
             <div className="dy-status-grid flex flex-wrap items-center justify-end gap-2" aria-label="Workspace status summary">
-              <span className="badge dy-status-chip" data-tone="neutral">
-                <span className="dy-status-value">{agentCount}</span>
+              <span className="badge dy-status-chip" data-tone="neutral" data-indicator="agents">
+                <span className="dy-status-value">
+                  {agentCount}
+                </span>
                 <span className="dy-status-label">Agents</span>
               </span>
-              <span className="badge badge--live dy-status-chip" data-tone="live">
-                <span className="dy-status-value">{activePartyCount}</span>
+              <span className="badge badge--live dy-status-chip" data-tone="live" data-indicator="party">
+                <span className="dy-status-value">
+                  {activePartyCount}
+                </span>
                 <span className="dy-status-label">In Party</span>
               </span>
               <span
                 className={busyAgentCount ? 'badge badge--warn dy-status-chip' : 'badge dy-status-chip'}
+                data-indicator="running"
                 data-status-kind="running-agents"
                 data-state={busyAgentCount ? 'active' : 'idle'}
                 data-tone={busyAgentCount ? 'warn' : 'neutral'}
                 title={busyAgentCount ? `${busyAgentCount} agent${busyAgentCount === 1 ? '' : 's'} running` : 'No agents running'}
               >
-                <span className="dy-status-value">{busyAgentCount}</span>
+                <span className="dy-status-value">
+                  {busyAgentCount}
+                </span>
                 <span className="dy-status-label">Running</span>
               </span>
-              <span className={gatewayOnline ? 'badge badge--success dy-status-chip' : 'badge dy-status-chip'} data-tone={gatewayOnline ? 'success' : 'neutral'}>
-                <span className="dy-status-value">{gatewayOnline ? 'ON' : runtimeStatus ? 'OFF' : '...'}</span>
+              <span
+                className={gatewayOnline ? 'badge badge--success dy-status-chip' : 'badge dy-status-chip'}
+                data-indicator="gateway"
+                data-state={gatewayOnline ? 'online' : runtimeStatus ? 'offline' : 'loading'}
+                data-tone={gatewayOnline ? 'success' : 'neutral'}
+              >
+                <span className="dy-status-value">
+                  {gatewayOnline ? 'ON' : runtimeStatus ? 'OFF' : '...'}
+                </span>
                 <span className="dy-status-label">Gateway</span>
               </span>
               <button
                 type="button"
                 className={activeCronCount ? 'badge badge--live dy-status-chip' : 'badge dy-status-chip'}
+                data-indicator="cron"
+                data-state={cronClearBusy ? 'busy' : runtimeStatus ? activeCronCount ? 'active' : 'idle' : 'loading'}
                 data-tone={activeCronCount ? 'live' : 'neutral'}
                 title={cronChipTitle}
                 aria-label={`${cronChipTitle} Activate to open Monitor${activeCronCount ? '; press Delete to review clearing.' : '.'}`}
@@ -451,11 +546,15 @@ export function NexusShell() {
                   void requestClearCronJobs()
                 }}
               >
-                <span className="dy-status-value">{cronClearBusy ? '...' : runtimeStatus ? activeCronCount : '-'}</span>
+                <span className="dy-status-value">
+                  {cronClearBusy ? '...' : runtimeStatus ? activeCronCount : '-'}
+                </span>
                 <span className="dy-status-label">Cron</span>
               </button>
-              <span className="badge badge--success dy-status-chip" data-tone="success">
-                <span className="dy-status-value">{responseCount}</span>
+              <span className="badge badge--success dy-status-chip" data-tone="success" data-indicator="results">
+                <span className="dy-status-value">
+                  {responseCount}
+                </span>
                 <span className="dy-status-label">Results</span>
               </span>
               {activeMission && (
@@ -592,6 +691,12 @@ export function NexusShell() {
           {tab === 'plugins' && (
             <Suspense fallback={<PanelLoader />}>
               <PluginsPanel />
+            </Suspense>
+          )}
+
+          {tab === 'settings' && (
+            <Suspense fallback={<PanelLoader />}>
+              <SettingsPanel />
             </Suspense>
           )}
 
