@@ -1,47 +1,49 @@
-<div align="center">
+<div align='center'>
 
-<img src="public/brand/dystopai-logo-multi-model-transparent-v2.png" alt="DystopAI Multi Model Nexus" width="720" />
+<img src='public/brand/dystopai-logo-multi-model-transparent-v2.png' alt='DystopAI Multi Model Nexus' width='720' />
 
 # DystopAI
 
 ### A local-first command center for AI agents that can work, watch, message, schedule, and report
 
-DystopAI turns one instruction into coordinated work across specialized agents, missions, plugins, tools, channels, schedules, and live runtime controls.
+DystopAI turns one instruction into coordinated work across specialized agents, missions, plugins, tools, channels, schedules, approvals, and live runtime controls.
 
 **Multi Model Nexus** · **Local-first** · **Agent teams** · **Mission automation** · **Plugin-powered helpers** · **Human approval**
 
 </div>
 
-<p align="center">
-  <img src="docs/assets/readme/dystopai-agents.png" alt="DystopAI Agents workspace with an active party, agent registry, and command console" width="1200" />
+<p align='center'>
+  <img src='docs/assets/readme/dystopai-agents.png' alt='DystopAI Agents workspace with an active party, agent registry, and command console' width='1200' />
 </p>
 
 > [!IMPORTANT]
-> DystopAI Core is a privileged local operator console. It can coordinate agents with access to files, tools, models, browsers, communication channels, plugins, and runtime state. Keep the Control Plane bound to the local machine. Remote operation should flow through authenticated OpenClaw channels or plugins, not by exposing the local API directly to the public internet.
+> DystopAI Core is a powerful local operator console. It can coordinate agents with access to files, tools, models, browsers, communication channels, plugins, and runtime state. Keep the Control Plane bound to the local machine. Remote operation should flow through authenticated OpenClaw channels or plugins, not by exposing the local API directly to the public internet.
 
 ## What Is DystopAI?
 
 **DystopAI is the operating desk between your intent and a workforce of AI agents.**
 
-A normal AI chat gives you one assistant in one box. DystopAI gives you a roster: builders, researchers, reviewers, analysts, operators, assistants, coordinators, support agents, and automation agents. Each one can have its own model, personality, workspace, tools, memory, policies, schedule, and job lane.
+A normal AI chat gives you one assistant in one box. DystopAI gives you a roster: builders, researchers, reviewers, analysts, operators, assistants, coordinators, support agents, automation agents, and any custom role your workflow needs.
 
-Then DystopAI wraps that roster in a real control system:
+Each agent can have its own model, personality, memory, workspace, tools, policies, schedule, and job lane. You can talk to one specialist, deploy a small team, or launch a mission where agents divide the work and return proof.
 
-- **Agents** with identity, doctrine, models, tools, workspaces, memory, and permissions.
-- **Missions** that turn goals into structured work with roles, timing, risk, proof, and reports.
-- **Plugins** that add channels, providers, browser automation, memory, skills, tools, and service integrations.
-- **Scheduling** for one-shot, timed, looping, watch-style, cron-backed, and recurring work.
-- **Monitoring** for Gateway health, active calls, sessions, cron jobs, channel traffic, failures, and recovery.
-- **Approval gates** so important actions can be prepared by agents but confirmed by the operator.
+DystopAI brings the whole loop into one desktop system:
 
-The result is a local-first AI operations system that feels less like “open a chatbot” and more like “run a small digital command room.” 🛰️
+- **Agents** for role-specific helpers with models, tools, workspaces, memory, and doctrine.
+- **Missions** for structured goals with timing, roles, risk settings, proof, and reports.
+- **Plugins** for channels, model providers, browser automation, memory, skills, tools, and service integrations.
+- **Schedules** for one-time, recurring, looped, and watch-style work.
+- **Monitor** for live runtime health, active calls, sessions, cron jobs, channel traffic, failures, and recovery.
+- **Approval gates** so agents can prepare important actions while you keep final authority.
 
-## The Simple Idea
+The result feels less like opening a chatbot and more like running a small digital command room. 🛰️
+
+## The 60-Second Version
 
 Tell DystopAI what you want:
 
 ```text
-Every Friday morning, prepare next week's grocery list from my meal plan and send it to me for approval.
+Every Friday morning, prepare next week’s grocery list from my meal plan and send it to me for approval.
 ```
 
 DystopAI can route that intent through the pieces that matter:
@@ -61,26 +63,38 @@ That same pattern works for code review, research, release checks, customer resp
 
 ## Why It Exists
 
-Useful AI agents need more than a prompt window. They need structure, visibility, recovery, and boundaries.
+Useful AI agents need more than a prompt window. They need clear roles, real tools, safe boundaries, visibility, scheduling, and a way to recover when something stalls.
 
-| What agent systems need | What DystopAI provides |
+| What users need | What DystopAI gives them |
 | --- | --- |
-| **Identity** | Specialized agents with roles, personalities, models, tools, doctrine, workspaces, memory, and policies. |
-| **Coordination** | Active parties, command slots, direct turns, selected-agent turns, and multi-agent mission dispatch. |
-| **Work structure** | Missions with objectives, modes, timing, risk, acceptance gates, verification, and completion reports. |
-| **Time** | Immediate, timed, looping, watch-style, cron-backed, and recurring operations. |
-| **Tools** | OpenClaw plugins, providers, browser capabilities, files, skills, communication channels, and external services. |
-| **Communication** | Desktop and local web control plus compatible OpenClaw channel and plugin surfaces. |
-| **Control** | Stop controls, runtime logs, approval boundaries, session cleanup, Gateway recovery, and diagnostics. |
-| **Continuity** | Agent doctrine, local state, workspaces, sessions, learned skills, mission ledgers, and runtime evidence. |
+| **Specialists** | Agents with roles, personalities, models, tools, workspaces, memory, and policies. |
+| **Coordination** | Active parties, lead agents, direct commands, selected-agent turns, and multi-agent missions. |
+| **Repeatable work** | Missions with objectives, modes, timing, risk, acceptance gates, verification, and reports. |
+| **Time awareness** | Immediate, timed, looping, watch-style, cron-backed, and recurring operations. |
+| **Expandable powers** | Plugins for providers, channels, browser automation, files, skills, memory, and external services. |
+| **Remote reach** | Desktop and local web control plus compatible OpenClaw channel and plugin surfaces. |
+| **Trust and control** | Stop controls, logs, approvals, session cleanup, Gateway recovery, diagnostics, and release evidence. |
+| **Continuity** | Agent doctrine, local state, workspaces, sessions, learned skills, mission ledgers, and runtime history. |
 
-DystopAI is designed so the exciting part stays usable and the dangerous part stays visible.
+DystopAI is built so the exciting part stays usable and the powerful part stays observable.
+
+## What You Can Build With It
+
+| Use case | What it can look like |
+| --- | --- |
+| **Personal AI operator** | A helper that prepares reminders, plans groceries, checks messages, drafts replies, and waits for approval before acting. |
+| **Software command team** | Architect, builder, reviewer, testing, and security agents working against a real repository with verification steps. |
+| **Research desk** | Multiple agents gathering facts, separating assumptions, comparing options, and returning a clear decision brief. |
+| **Business watcher** | Watch missions that monitor products, competitors, prices, inventory, launches, system health, or support queues. |
+| **Content studio** | Agents for outlines, scripts, graphics briefs, publishing plans, repurposing, and scheduled follow-ups. |
+| **Support assistant** | A channel-connected helper that drafts customer responses and pauses before sending. |
+| **Local automation hub** | A desktop-first control layer that can use tools, plugins, schedules, and approvals without requiring a DystopAI cloud service. |
 
 ## What Makes It Different
 
 ### 1. It is an agent roster, not one renamed assistant
 
-Create agents with real lanes: architect, builder, reviewer, tester, analyst, researcher, operator, marketer, assistant, support, coordinator, or anything your workflow needs.
+Create agents with real lanes: architect, builder, reviewer, tester, analyst, researcher, operator, marketer, assistant, support, coordinator, or any role your workflow needs.
 
 Each agent can carry:
 
@@ -114,7 +128,7 @@ Mission types include `Build`, `Plan`, `Research`, `Command`, and `Memory`.
 
 Dispatch modes include `Command`, `Parallel`, `Specialist`, `Relay`, and `Swarm`.
 
-Timing modes include `Strike`, `Timed`, `Loop`, and `Watch`. Repeating work is backed by OpenClaw cron state instead of a decorative frontend timer.
+Timing modes include `Strike`, `Timed`, `Loop`, and `Watch`. Repeating work is backed by OpenClaw cron state instead of a cosmetic frontend timer.
 
 Mission reports can preserve participation, runtime references, retries, failures, verification results, session identifiers, elapsed time, and unavailable metrics instead of pretending everything worked.
 
@@ -137,9 +151,23 @@ That is how a generic assistant becomes a custom helper: an agent gets a job, a 
 > [!NOTE]
 > Channel, plugin, approval, and automation availability depends on the installed OpenClaw runtime, operating system, plugin version, credentials, and tool configuration. DystopAI is intentionally channel-agnostic. ClawTalk is bundled, useful, and important, but it is not the boundary of the platform.
 
-### 4. Monitor shows what the system is doing
+### 4. Channels let agents meet you where you already are
 
-The Monitor answers the operator's most important question:
+The desktop app and local web surface are first-class control surfaces. Compatible plugins can also make agents reachable through messages, voice, team chat, webhooks, and future channels.
+
+Examples:
+
+```text
+@Diana summarize the overnight alerts
+@hn-builder inspect the failed build and report the first blocker
+@Commander stop the active mission and return current evidence
+```
+
+A remote command can enter through a configured channel, route to the correct agent, become a mission, use local or networked tools, pause at an approval boundary, and return evidence through the same communication path.
+
+### 5. Monitor shows what the system is doing
+
+The Monitor answers the operator’s most important question:
 
 > **What is running right now, and can I trust it?**
 
@@ -157,7 +185,7 @@ Inspect:
 
 Live activity is not decoration. It is the evidence trail that lets you interrupt, verify, redirect, and recover agent work.
 
-### 5. Human authority stays in the loop
+### 6. Human authority stays in the loop
 
 Agents can prepare important actions, but the operator should keep final authority over high-impact work.
 
@@ -172,38 +200,6 @@ Use approval gates before:
 - Any workflow where a wrong action costs more than a wrong draft.
 
 DystopAI is powerful because it can connect agents to real tools. It is safer because the system is built around policy, visibility, and stop controls.
-
-## Channel-Agnostic Command Layer
-
-DystopAI should not be defined as “ClawTalk plus one chat app.” The durable abstraction is a **compatible communication channel**.
-
-The desktop app and local web surface are first-class control surfaces. ClawTalk adds SMS, voice, and walkie-style routing in the current app. OpenClaw and its plugin ecosystem can add other channels, with availability determined by the operator's runtime and configuration.
-
-```mermaid
-flowchart LR
-  Operator["Operator"]
-  Desktop["DystopAI desktop / local web"]
-  Channels["Compatible channels<br/>SMS · voice · chat apps · webhooks"]
-  Gateway["OpenClaw Gateway<br/>routing · sessions · plugins"]
-  Control["DystopAI Control Plane<br/>missions · policy · state · recovery"]
-  Agents["Specialized agent workforce"]
-  Tools["Files · browser · skills · providers · services"]
-  Evidence["Live activity · approvals · reports · alerts"]
-
-  Operator --> Desktop
-  Operator --> Channels
-  Desktop <--> Control
-  Channels <--> Gateway
-  Control <--> Gateway
-  Gateway <--> Agents
-  Control <--> Agents
-  Agents <--> Tools
-  Agents --> Evidence
-  Control --> Evidence
-  Evidence --> Operator
-```
-
-A remote command can enter through a channel, route to the correct agent, become a mission, use local or networked tools, pause at an approval boundary, and return evidence through the same communication path.
 
 ## Product Tour
 
@@ -239,97 +235,114 @@ A remote command can enter through a channel, route to the correct agent, become
 | **Codebase health** | “Check my app, summarize the failures, and do not modify anything.” | Read-only policy, direct agent command, live activity, final evidence. |
 | **Research map** | “Compare these products, separate facts from assumptions, and return unresolved questions.” | Research mission, parallel specialists, source requirements, synthesis. |
 | **Business monitoring** | “Watch these product pages and alert me only when price, inventory, or release status changes.” | Watch mission, browser/plugin tools, scheduler, preferred channel. |
-| **Personal operations** | “Every Friday, prepare next week's grocery list from my meal plan and send it for approval.” | Recurring schedule, memory, communication plugin, approval boundary. |
+| **Personal operations** | “Every Friday, prepare next week’s grocery list from my meal plan and send it for approval.” | Recurring schedule, memory, communication plugin, approval boundary. |
 | **Customer response** | “Draft the customer reply, wait for approval, then send through the connected channel.” | Specialist agent, tool policy, approval event, channel routing. |
 | **Release review** | “Run a release-readiness mission, collect test evidence, list blockers, and never push to GitHub.” | Mission risk settings, command restrictions, verification report. |
 | **Emergency control** | “Stop all active runs and tell me what was interrupted.” | Gateway controls, cron stop actions, session inspection, runtime summary. |
 
 These are operating patterns, not hardcoded demos. Exact behavior depends on the models, tools, plugins, credentials, workspaces, and permissions configured by the operator.
 
+## How The Pieces Work Together
+
+DystopAI is reliable because the major responsibilities are separated instead of tangled together.
+
+Think of the app as a set of clear rooms:
+
+1. **Desktop shell** opens the local app and keeps the browser boundary tight.
+2. **Control Plane** owns the local API, mission state, policies, and recovery actions.
+3. **OpenClaw Gateway** handles sessions, routing, plugins, channels, cron, and runtime work.
+4. **Agents** carry the role, model, workspace, tools, skills, and memory needed for a job.
+5. **Plugins** add new powers without turning the core app into a knot of one-off integrations.
+6. **Monitor** shows what is running, what failed, what needs setup, and what can be stopped or recovered.
+7. **Local state** keeps doctrine, workspaces, ledgers, sessions, and release evidence on the operator’s machine unless a configured provider or plugin sends data elsewhere.
+
+The sweet part: every serious action has a path in, a runtime owner, a place to record evidence, and a way for the operator to stop or recover it.
+
+```mermaid
+flowchart LR
+  Operator[Operator]
+  App[DystopAI desktop and local web]
+  Control[Local Control Plane]
+  Gateway[OpenClaw Gateway]
+  Agents[Agent workforce]
+  Plugins[Plugins and channels]
+  Workspaces[Files, workspaces, memory, skills]
+  Monitor[Monitor, approvals, reports]
+
+  Operator --> App
+  App <--> Control
+  Control <--> Gateway
+  Gateway <--> Agents
+  Gateway <--> Plugins
+  Agents <--> Workspaces
+  Control <--> Workspaces
+  Control --> Monitor
+  Gateway --> Monitor
+  Agents --> Monitor
+  Monitor --> Operator
+```
+
+## Why The Architecture Is Dependable
+
+DystopAI is designed for real operator use, not just a shiny demo screen.
+
+| Reliability choice | Why it matters to users |
+| --- | --- |
+| **Local-first control** | Your main app state, agent files, workspaces, ledgers, and runtime data stay on your machine by default. |
+| **Separated layers** | The UI, local API, Gateway, agents, plugins, and state each have a clear job, which makes the system easier to inspect and repair. |
+| **Real runtime ownership** | Missions, sessions, plugin activity, cron jobs, and channel events are backed by the runtime instead of only living as frontend animation. |
+| **Observable work** | Monitor gives you health, active calls, logs, channel activity, cron state, failures, and recovery actions. |
+| **Approval boundaries** | Agents can draft, prepare, and explain high-impact actions before the operator confirms execution. |
+| **Route inventory checks** | The Control Plane tracks 107 unique API routes so important app paths cannot silently disappear or duplicate. |
+| **Recovery controls** | Gateway restart, session cleanup, Clean Slate, stale lock cleanup, and stop controls give operators a way out when work gets stuck. |
+| **Release evidence** | Build, test, package, signing, and release checks can produce evidence tied to the exact artifacts being distributed. |
+
+In plain English: DystopAI has bones. The app is not just a pretty dashboard painted over chaos. It has a local control layer, a runtime layer, plugin boundaries, health checks, and evidence trails.
+
 ## How A Command Becomes Work
 
 ```mermaid
 flowchart TD
-  Intent["1. Intent arrives<br/>desktop, local web, or channel"]
-  Route["2. Gateway resolves<br/>channel, sender, session, and agent"]
-  Plan["3. DystopAI forms<br/>a direct turn or structured mission"]
-  Dispatch["4. Agents receive<br/>roles, context, tools, and boundaries"]
-  Execute["5. Runtime executes<br/>models, files, browser, skills, services"]
-  Observe["6. Monitor records<br/>activity, errors, sessions, and evidence"]
-  Approval{"7. Consequential action<br/>requires approval?"}
-  Human["Operator approves, denies,<br/>edits, stops, or redirects"]
-  Report["8. Result returns<br/>with evidence and next actions"]
-  Memory["9. Approved continuity<br/>updates sessions, doctrine, or skills"]
+  Intent[1. Intent arrives from desktop, local web, or channel]
+  Route[2. Gateway resolves channel, session, and target agent]
+  Plan[3. DystopAI creates a direct turn or mission]
+  Dispatch[4. Agents receive roles, context, tools, and limits]
+  Execute[5. Runtime executes with models, files, browser, skills, or services]
+  Observe[6. Monitor records activity, errors, sessions, and evidence]
+  Approval{7. High-impact action?}
+  Human[Operator approves, edits, denies, stops, or redirects]
+  Report[8. Result returns with evidence and next actions]
+  Memory[9. Approved continuity updates sessions, doctrine, or skills]
 
   Intent --> Route --> Plan --> Dispatch --> Execute --> Observe --> Approval
-  Approval -->|Yes| Human --> Execute
-  Approval -->|No| Report
+  Approval -->|Needs approval| Human --> Execute
+  Approval -->|No approval needed| Report
   Human -->|Stop| Report
   Report --> Memory
 ```
 
-This closed loop is the central design idea: **intent, execution, observation, control, evidence, continuity**.
-
-## Architecture
-
-DystopAI separates the desktop shell, UI, Control Plane, OpenClaw Gateway, agent runtime, plugins, providers, and local state so each layer can be inspected and hardened independently.
-
-```mermaid
-flowchart LR
-  Operator["Operator"]
-  Electron["Electron desktop shell"]
-  UI["React control surface"]
-  API["Express Control Plane"]
-  Gateway["OpenClaw Gateway"]
-  Runtime["OpenClaw agent runtime"]
-  Providers["Model providers"]
-  Plugins["Plugins and channels"]
-  State["Local state and ledgers"]
-  Files["Agent doctrine and workspaces"]
-
-  Operator --> Electron
-  Electron --> UI
-  UI <--> API
-  API <--> Gateway
-  Gateway <--> Runtime
-  Runtime <--> Providers
-  Gateway <--> Plugins
-  API <--> State
-  API <--> Files
-  API <--> Runtime
-```
-
-| Layer | Technology and responsibility |
-| --- | --- |
-| **Desktop** | Electron and electron-builder, with a hardened renderer boundary and narrow preload bridge. |
-| **Frontend** | React, TypeScript, Vite, Tailwind CSS, Framer Motion, Zustand, lazy-loaded workspaces, and accessible controls. |
-| **Control Plane** | Express, typed route modules, Zod validation, API envelopes, redacted errors, session authentication, and SSE streaming. |
-| **Runtime** | Vendored OpenClaw Gateway, agent sessions, cron, plugins, skills, provider routing, and channel events. |
-| **State** | OpenClaw configuration, DystopAI desktop state, agent doctrine, workspaces, mission state, JSONL ledgers, and release evidence. |
-| **Quality** | ESLint, TypeScript, unit tests, API integration tests, smoke gates, Electron checks, bundle budgets, packaging checks, and release validation. |
-
-The Control Plane currently maintains an explicit inventory of **107 unique API routes**. Route ownership is regression-tested so endpoints cannot silently disappear, duplicate, or drift back into the executable entrypoint.
+This closed loop is the core idea: **intent, execution, observation, control, evidence, continuity**.
 
 ## Repository Structure
 
 ```text
 .
-|-- electron/                 # Electron main process, preload bridge, and desktop lifecycle
-|-- server/                   # Control Plane composition, runtime integration, services, and ledgers
-|   `-- routes/               # Focused API owners plus the checked route inventory
+|-- electron/                 # Desktop shell, preload bridge, and app lifecycle
+|-- server/                   # Local Control Plane, runtime integration, services, and ledgers
+|   `-- routes/               # Focused API route owners plus route inventory checks
 |-- src/                      # React application
 |   |-- components/           # Agents, missions, monitor, plugins, editor, recruit, auth, and layout
 |   |-- engine/               # Coordination, runtime composition, validation, and mission reporting
 |   |-- hooks/                # Runtime status, API-backed state, and UI orchestration
-|   |-- store/                # Zustand command and mission state
+|   |-- store/                # Command and mission state
 |   |-- types/                # Agent, mission, runtime, activity, and coordination contracts
 |   `-- utils/                # Streaming, diagnostics, URLs, and shared helpers
 |-- public/                   # Brand assets, agent portraits, icons, and mission artwork
-|-- docs/                     # Operator guides, architecture notes, release policy, and OpenClaw snapshot
+|-- docs/                     # User guide, architecture notes, release policy, and OpenClaw snapshot
 |-- scripts/                  # Build, test, security, packaging, backup, and release automation
 |-- tests/                    # Unit and focused behavior tests
 |-- vendor/openclaw/          # Prepared OpenClaw runtime snapshot
-|-- build/                    # Tracked desktop packaging assets
+|-- build/                    # Desktop packaging assets
 |-- dist/                     # Generated frontend build, ignored
 |-- dist-server/              # Generated server bundle, ignored
 |-- release/                  # Generated desktop artifacts, ignored
@@ -360,7 +373,7 @@ npm ci
 npm run desktop
 ```
 
-This builds the production frontend and server bundle, prepares the vendored OpenClaw runtime, and launches Electron.
+This builds the app, prepares the bundled OpenClaw runtime, and launches the Electron desktop shell.
 
 ### Launch Development Mode
 
@@ -389,16 +402,23 @@ When `CONTROL_CENTER_TOKEN` is not configured, the server generates a local sess
 
 ## Essential Commands
 
+Most users start with just these:
+
 | Command | Purpose |
 | --- | --- |
-| `npm run dev` | Start the backend and Vite frontend together. |
-| `npm run desktop` | Build and launch the Electron desktop shell. |
+| `npm run dev` | Start the backend and Vite frontend together for development. |
+| `npm run desktop` | Build and launch the desktop app. |
 | `npm run build:standalone` | Build the production frontend and server bundle. |
+| `npm test` | Run the full local quality gate. |
+
+For deeper validation, packaging, and release work:
+
+| Command | Purpose |
+| --- | --- |
 | `npm run lint` | Run ESLint across source, server, scripts, and tests. |
 | `npm run typecheck` | Type-check frontend, server, Electron, and preload surfaces. |
-| `npm test` | Run the full local quality gate. |
 | `npm run smoke:ui` | Verify the production UI render path. |
-| `npm run smoke:openclaw` | Verify Gateway, diagnostics, SSE, and agent-turn contracts. |
+| `npm run smoke:openclaw` | Verify Gateway, diagnostics, streaming, and agent-turn contracts. |
 | `npm run check:bundle-budgets` | Enforce production renderer bundle budgets. |
 | `npm run package:desktop` | Create an unpacked desktop package for launch validation. |
 | `npm run dist:win` | Create a Windows installer. |
@@ -411,6 +431,8 @@ When `CONTROL_CENTER_TOKEN` is not configured, the server generates a local sess
 | `npm run docs:openclaw:sync` | Refresh the local OpenClaw documentation snapshot. |
 
 ## Configuration
+
+Most users need two things first: model access and plugin credentials. Advanced local settings are available when you need to change ports, state folders, or runtime paths.
 
 | Variable | Default | Purpose |
 | --- | --- | --- |
@@ -428,19 +450,25 @@ Keep provider keys, OAuth credentials, channel credentials, local sessions, gene
 
 ## Local-First Data Model
 
-DystopAI stores application configuration, agent doctrine, workspaces, ledgers, local authentication material, and runtime state on the operator's machine unless a configured provider, plugin, channel, browser action, or agent tool sends data elsewhere.
+DystopAI is built around local control.
 
-- DystopAI desktop state defaults to `~/.dystopai-control-center`.
-- OpenClaw state defaults to `~/.openclaw`.
+By default:
+
+- DystopAI desktop state lives in `~/.dystopai-control-center`.
+- OpenClaw state lives in `~/.openclaw`.
 - Agent workspaces remain in operator-selected folders.
+- Agent doctrine, mission ledgers, local auth material, and runtime state stay on the operator’s machine.
 - DystopAI does not require a DystopAI cloud telemetry service.
-- External providers and plugins retain their own data, privacy, and network boundaries.
+
+Data can still leave the machine when you configure a model provider, plugin, channel, browser action, or tool that sends it elsewhere. Those external services keep their own privacy, auth, logging, and network boundaries.
 
 See [`DATA_HANDLING.md`](DATA_HANDLING.md) before enabling networked tools or sharing diagnostics.
 
-## Security Model
+## Security And Control Model
 
-Treat DystopAI like an administrator console for an agent runtime.
+Treat DystopAI like an administrator console for an agent runtime. It is powerful because it can connect agents to real files, tools, models, channels, and plugins.
+
+The current safety model focuses on local operation, bounded access, and visible control:
 
 - The Control Plane is intended to bind only to loopback addresses.
 - Browser access requires a local bearer session plus exact local-origin validation.
@@ -454,7 +482,9 @@ Treat DystopAI like an administrator console for an agent runtime.
 
 See [`docs/RELEASE_GOVERNANCE.md`](docs/RELEASE_GOVERNANCE.md) and [`DATA_HANDLING.md`](DATA_HANDLING.md) for the detailed trust boundary.
 
-## Release Integrity
+## Release Confidence
+
+DystopAI treats release work as evidence, not vibes.
 
 Public release candidates should be qualified from the exact bytes that will be distributed.
 
@@ -465,7 +495,7 @@ npm run release:update-manifest
 npm run release:update-verify
 npm run release:lifecycle:windows
 npm run release:evidence
-DYSTOPAI_RELEASE_SIGNING_PRIVATE_KEY_FILE="C:/secure/dystopai-release-ed25519.pem" npm run release:sign
+DYSTOPAI_RELEASE_SIGNING_PRIVATE_KEY_FILE=C:/secure/dystopai-release-ed25519.pem npm run release:sign
 DYSTOPAI_RELEASE_REQUIRE_SIGNING=1 npm run release:validate
 ```
 
