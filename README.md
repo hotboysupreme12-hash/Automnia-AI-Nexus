@@ -95,7 +95,7 @@ Examples:
 | **Software delivery** | Launch a Build mission with an architect, builder, and reviewer. Require lint, typecheck, and a changed-file report. |
 | **Research** | Compare these products, separate facts from assumptions, and return the best option with open questions. |
 | **Business monitoring** | Watch these product pages and alert me only when price, inventory, or release status changes. |
-| **Personal routine** | Every Friday, prepare next week’s grocery list from my meal plan and send it for approval. |
+| **Personal routine** | Every Friday, prepare next week's grocery list from my meal plan and send it for approval. |
 | **Customer response** | Draft the customer reply, wait for approval, then send through the connected channel if configured. |
 | **Emergency stop** | Stop all active runs and tell me what was interrupted. |
 
@@ -150,72 +150,84 @@ Use Monitor to see:
 
 Live activity is not decoration. It is the dashboard that helps you trust, interrupt, verify, and recover agent work.
 
-## Why It Feels Reliable Without Drowning You In Tech
+## Why It Feels Simple
 
-DystopAI has a practical structure under the hood, but the user-facing idea is simple:
+DystopAI keeps the mental model small. You do not have to think in backend parts. You think in plain questions:
 
-- **Your app stays local by default.** Agent files, workspaces, mission history, and runtime state live on your machine unless a configured provider or plugin sends data elsewhere.
-- **Agents have lanes.** Each agent can have a role, model, workspace, tools, rules, and schedule instead of everything sharing one messy chat history.
-- **Work is visible.** The Monitor shows running agents, channel activity, scheduled jobs, logs, failures, and recovery actions.
-- **Schedules are real work paths.** Recurring and watch-style jobs are tracked by the runtime, not just animated on the screen.
-- **Big actions can wait for approval.** Agents can draft, prepare, and explain before you allow the final step.
-- **There is a way out when something gets stuck.** Stop controls, session cleanup, Gateway restart, and Clean Slate recovery help you regain control.
-
-That is the architecture story in human terms: DystopAI gives agents useful powers, keeps their work visible, and gives you the steering wheel.
-
-## Product Tour
-
-| Agents | Missions |
+| Plain question | DystopAI answer |
 | --- | --- |
-| ![DystopAI Agents workspace](docs/assets/readme/dystopai-agents.png) | ![DystopAI Mission Board](docs/assets/readme/dystopai-missions.png) |
+| **Who should do this?** | Pick one agent or a team. |
+| **What should they do?** | Send a command or launch a mission. |
+| **When should it happen?** | Run it now, schedule it, loop it, or watch for changes. |
+| **What powers can they use?** | Choose tools, plugins, channels, models, memory, and workspaces. |
+| **Can I trust the result?** | Watch the work, require approval, and read the final report. |
 
-| Runtime Monitor | Plugins |
-| --- | --- |
-| ![DystopAI Runtime Monitor](docs/assets/readme/dystopai-monitor.png) | ![DystopAI Plugin Runtime](docs/assets/readme/dystopai-plugins.png) |
+That is the English version of the system: agents do jobs, plugins give them powers, missions give them structure, schedules give them timing, and Monitor keeps the whole thing visible.
 
-| Agent Settings |
-| --- |
-| ![DystopAI Agent Settings](docs/assets/readme/dystopai-agent-settings.png) |
+## Why It Feels Robust
 
-## Core Product Surfaces
+Simple does not mean shallow. DystopAI is built to make agent work easier to trust:
 
-| Surface | What users do there |
-| --- | --- |
-| **Recruit** | Create a new agent profile, role, model lane, workspace, and starter behavior files. |
-| **Agents** | Browse the roster, deploy the active party, edit specialists, and issue live commands. |
-| **Command Console** | Talk to one agent, selected agents, or the confirmed party, attach files, stream output, and stop active work. |
-| **Missions** | Define goals, timing, agents, risk level, approval needs, verification, and reports. |
-| **Monitor** | Watch running work, sessions, schedules, channel traffic, plugin state, failures, and recovery controls. |
-| **Plugins** | Manage providers, tools, communication channels, setup flows, skills, memory, and integrations. |
-| **Agent Editor** | Configure models, authentication, workspaces, runtime policy, tools, skills, schedule, and behavior files. |
+- **Local by default:** your app state, agent files, workspaces, mission history, and runtime state stay on your machine unless you connect an outside provider or plugin.
+- **Separate agent lanes:** each helper can have its own job, model, workspace, tools, schedule, and rules, so work does not collapse into one tangled chat thread.
+- **Visible work:** Monitor shows running agents, scheduled jobs, channel activity, plugin status, failures, and recovery actions.
+- **Real schedules:** recurring and watch-style jobs are tracked as real runs, not just a timer painted on the screen.
+- **Approval before impact:** agents can draft, prepare, and explain before you let them send, change, delete, purchase, publish, or push.
+- **Recovery controls:** stop controls, session cleanup, Gateway restart, and Clean Slate recovery give you a way back when something gets stuck.
+- **Proof-oriented reports:** important missions can return what happened, what failed, what changed, and what still needs attention.
 
-## How The Pieces Fit Together
+In plain terms: DystopAI is simple because you operate it through agents, missions, plugins, schedules, and Monitor. It is robust because each of those pieces has a clear job, and you stay in charge of the risky parts.
 
-The full system has several parts, but each one has a plain job:
+## The Main Screens
 
-```mermaid
-flowchart LR
-  User[You]
-  App[DystopAI desktop]
-  Agents[Your agents]
-  Missions[Missions and schedules]
-  Plugins[Plugins and channels]
-  Workspaces[Files, memory, skills]
-  Monitor[Monitor and approvals]
+- **Recruit:** create a new agent with a role, model lane, workspace, and starter behavior.
+- **Agents:** browse your roster, deploy an active party, edit specialists, and send live commands.
+- **Command Console:** talk to one agent, selected agents, or the active party while keeping the conversation readable.
+- **Missions:** turn goals into structured work with agents, timing, rules, approval needs, and reports.
+- **Plugins:** add channels, model providers, tools, memory, skills, and service integrations.
+- **Monitor:** see running work, schedules, sessions, channel traffic, failures, and recovery controls.
+- **Agent Editor:** tune each agent's model, authentication, workspace, tools, skills, schedule, and behavior files.
 
-  User --> App
-  App --> Agents
-  App --> Missions
-  Missions --> Agents
-  Agents --> Workspaces
-  Agents --> Plugins
-  Plugins --> Agents
-  Agents --> Monitor
-  Missions --> Monitor
-  Monitor --> User
+<details>
+<summary>View screenshots</summary>
+
+### Agents
+
+![DystopAI Agents workspace](docs/assets/readme/dystopai-agents.png)
+
+### Missions
+
+![DystopAI Mission Board](docs/assets/readme/dystopai-missions.png)
+
+### Runtime Monitor
+
+![DystopAI Runtime Monitor](docs/assets/readme/dystopai-monitor.png)
+
+### Plugins
+
+![DystopAI Plugin Runtime](docs/assets/readme/dystopai-plugins.png)
+
+### Agent Settings
+
+![DystopAI Agent Settings](docs/assets/readme/dystopai-agent-settings.png)
+
+</details>
+
+## How A Request Moves Through DystopAI
+
+A request follows a plain path:
+
+```text
+You ask for something.
+DystopAI sends it to the right agent or team.
+The agent uses the allowed tools, files, memory, and plugins.
+The mission or schedule keeps the work organized.
+Monitor shows what is happening.
+The agent returns a result with evidence.
+You approve anything important before it happens.
 ```
 
-The desktop app is the control surface. Agents do the work. Plugins expand what they can touch. Missions and schedules give them timing. Monitor shows what happened. Approval gates keep important decisions with you.
+That is the whole loop: **ask, assign, work, watch, report, approve.**
 
 ## Start Here
 
@@ -243,7 +255,37 @@ npm run desktop
 
 This builds the app, prepares the bundled OpenClaw runtime, and launches DystopAI.
 
-### Launch Development Mode
+### First Five Minutes
+
+1. Open DystopAI.
+2. Connect a model provider or OAuth account.
+3. Recruit an agent or select an existing specialist.
+4. Deploy agents to the active party and confirm it.
+5. Send a direct command or launch a mission.
+6. Open Monitor to watch runtime, sessions, schedules, channels, and evidence.
+7. Add plugins after the basic agent path works.
+8. Put approval gates in front of high-impact workflows.
+
+## Local Data And Safety
+
+DystopAI is built around local control.
+
+By default:
+
+- DystopAI desktop state lives in `~/.dystopai-control-center`.
+- OpenClaw state lives in `~/.openclaw`.
+- Agent workspaces remain in folders you choose.
+- Agent behavior files, mission history, local auth material, and runtime state stay on your machine.
+- DystopAI does not require a DystopAI cloud telemetry service.
+
+Data can still leave your machine when you configure a model provider, plugin, channel, browser action, or tool that sends it elsewhere. Those external services keep their own privacy, auth, logging, and network boundaries.
+
+See [`DATA_HANDLING.md`](DATA_HANDLING.md) before enabling networked tools or sharing diagnostics.
+
+<details>
+<summary>Developer, configuration, and release details</summary>
+
+## Development Mode
 
 ```bash
 npm run dev
@@ -256,17 +298,6 @@ Development defaults:
 - OpenClaw Gateway: `127.0.0.1:18789`
 
 When `CONTROL_CENTER_TOKEN` is not configured, the server generates a local session token and reports it in the startup log.
-
-### First Five Minutes
-
-1. Open DystopAI.
-2. Connect a model provider or OAuth account.
-3. Recruit an agent or select an existing specialist.
-4. Deploy agents to the active party and confirm it.
-5. Send a direct command or launch a mission.
-6. Open Monitor to watch runtime, sessions, schedules, channels, and evidence.
-7. Add plugins after the basic agent path works.
-8. Put approval gates in front of high-impact workflows.
 
 ## Essential Commands
 
@@ -316,22 +347,6 @@ Most users need two things first: model access and plugin credentials. Advanced 
 
 Keep provider keys, OAuth credentials, channel credentials, local sessions, generated runtime data, signing keys, and release output outside version control.
 
-## Local Data And Safety
-
-DystopAI is built around local control.
-
-By default:
-
-- DystopAI desktop state lives in `~/.dystopai-control-center`.
-- OpenClaw state lives in `~/.openclaw`.
-- Agent workspaces remain in folders you choose.
-- Agent behavior files, mission history, local auth material, and runtime state stay on your machine.
-- DystopAI does not require a DystopAI cloud telemetry service.
-
-Data can still leave your machine when you configure a model provider, plugin, channel, browser action, or tool that sends it elsewhere. Those external services keep their own privacy, auth, logging, and network boundaries.
-
-See [`DATA_HANDLING.md`](DATA_HANDLING.md) before enabling networked tools or sharing diagnostics.
-
 ## Security And Control Notes
 
 DystopAI is powerful because it can connect agents to real files, tools, models, channels, and plugins. Treat it like an admin console for your agent workspace.
@@ -366,6 +381,8 @@ DYSTOPAI_RELEASE_REQUIRE_SIGNING=1 npm run release:validate
 ```
 
 The release flow can record artifact size, SHA-256 digest, update metadata, signing evidence, install and uninstall validation, rollback continuity, and distribution evidence. Private signing keys must never be committed.
+
+</details>
 
 ## Documentation
 
