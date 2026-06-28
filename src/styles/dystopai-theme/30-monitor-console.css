@@ -356,17 +356,17 @@ html.dui-pro-overhaul [data-dui-panel="active-party"] .dy-party-slot.is-filled::
   right: 12px !important;
   bottom: 12px !important;
   z-index: 6 !important;
-  border-color: rgba(103, 232, 249, .42) !important;
+  border-color: rgba(164, 188, 202, .38) !important;
   background:
-    linear-gradient(180deg, rgba(103, 232, 249, .135), rgba(103, 232, 249, .040)),
+    linear-gradient(180deg, rgba(164, 188, 202, .13), rgba(164, 188, 202, .035)),
     rgba(6, 8, 9, .66) !important;
-  color: rgba(222, 252, 255, .94) !important;
+  color: rgba(191, 209, 221, .94) !important;
   box-shadow:
     inset 0 1px 0 rgba(255, 255, 255, .115),
-    0 0 0 1px rgba(103, 232, 249, .080),
-    0 0 14px -4px rgba(34, 211, 238, .78),
-    0 8px 18px -17px rgba(34, 211, 238, .72) !important;
-  text-shadow: 0 0 8px rgba(103, 232, 249, .55) !important;
+    0 0 0 1px rgba(164, 188, 202, .080),
+    0 0 14px -4px rgba(164, 188, 202, .68),
+    0 8px 18px -17px rgba(164, 188, 202, .60) !important;
+  text-shadow: 0 0 8px rgba(164, 188, 202, .55) !important;
   backdrop-filter: blur(14px) saturate(1.08) !important;
   -webkit-backdrop-filter: blur(14px) saturate(1.08) !important;
 }
@@ -2994,11 +2994,25 @@ html.dui-pro-overhaul .dy-mission-history-item {
   contain-intrinsic-size: 72px;
 }
 
+html.dui-pro-overhaul [data-dui-panel="agent-registry"] .agent-registry-pager,
+html.dui-pro-overhaul [data-dui-panel="agent-registry"] .agent-registry-pager-btn,
+html.dui-pro-overhaul [data-dui-panel="agent-registry"] .agent-registry-pager-count {
+  background-color: #08090c !important;
+  border-color: rgba(184, 188, 190, .24) !important;
+}
+
+html.dui-pro-overhaul [data-dui-panel="agent-registry"] .agent-registry-pager-btn:hover,
+html.dui-pro-overhaul [data-dui-panel="agent-registry"] .agent-registry-pager-btn:focus,
+html.dui-pro-overhaul [data-dui-panel="agent-registry"] .agent-registry-pager-btn:focus-visible {
+  background-color: #08090c !important;
+  border-color: rgba(184, 188, 190, .34) !important;
+}
+
 /* Agent registry final flat pass. Header arrows/count stay on their existing pill style. */
 html.dui-pro-overhaul [data-dui-panel="agent-registry"] [data-agent-toolbar] {
   border-radius: 3px !important;
   border-color: rgba(184, 188, 190, .12) !important;
-  background: #0a0b0c !important;
+  background: #08090c !important;
   box-shadow: none !important;
 }
 
@@ -3006,7 +3020,7 @@ html.dui-pro-overhaul [data-dui-panel="agent-registry"] [data-agent-search] inpu
 html.dui-pro-overhaul [data-dui-panel="agent-registry"] [data-agent-control] {
   border-radius: 3px !important;
   border-color: rgba(184, 188, 190, .14) !important;
-  background-color: #070808 !important;
+  background-color: #08090c !important;
   background-image: none !important;
   box-shadow: none !important;
 }
@@ -3014,21 +3028,21 @@ html.dui-pro-overhaul [data-dui-panel="agent-registry"] [data-agent-control] {
 html.dui-pro-overhaul [data-dui-panel="agent-registry"] [data-agent-search] input:hover,
 html.dui-pro-overhaul [data-dui-panel="agent-registry"] [data-agent-control]:hover {
   border-color: rgba(213, 216, 217, .20) !important;
-  background-color: #0d0e0f !important;
+  background-color: #08090c !important;
   box-shadow: none !important;
 }
 
 html.dui-pro-overhaul [data-dui-panel="agent-registry"] [data-agent-search] input:focus,
 html.dui-pro-overhaul [data-dui-panel="agent-registry"] [data-agent-control]:focus {
   border-color: rgba(213, 216, 217, .26) !important;
-  background-color: #101112 !important;
+  background-color: #08090c !important;
   box-shadow: none !important;
 }
 
 html.dui-pro-overhaul [data-dui-panel="agent-registry"] [data-agent-view-toggle] {
   border-radius: 3px !important;
   border: 1px solid rgba(184, 188, 190, .12) !important;
-  background: #070808 !important;
+  background: #08090c !important;
   box-shadow: none !important;
 }
 
@@ -3873,4 +3887,260 @@ html.dui-pro-overhaul .dy-gateway-plugin-row[data-state="enabled"] {
   background:
     linear-gradient(180deg, rgba(52, 211, 153, .055), rgba(255, 255, 255, .010)),
     rgba(4, 5, 6, .30) !important;
+}
+
+/* Command composer obsidian lock: keep the strip and controls in #08090c. */
+html.dui-pro-overhaul .dy-command-console,
+html.dui-pro-overhaul [data-chat-panel="true"].dy-command-console,
+html.dui-pro-overhaul .dy-command-console .dy-command-composer,
+html.dui-pro-overhaul .dy-command-console .dy-command-composer__row {
+  background: #08090c !important;
+  background-image: none !important;
+  border-color: rgba(184, 188, 190, .20) !important;
+}
+
+html.dui-pro-overhaul .dy-command-console .dy-command-composer {
+  backdrop-filter: none !important;
+  -webkit-backdrop-filter: none !important;
+}
+
+html.dui-pro-overhaul .dy-command-console .dy-command-composer__row {
+  min-height: 52px !important;
+  padding: 8px !important;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, .05),
+    0 16px 30px -24px rgba(0, 0, 0, .78) !important;
+}
+
+html.dui-pro-overhaul .dy-command-console .dy-command-composer__field,
+html.dui-pro-overhaul .dy-command-console textarea.dy-command-textarea,
+html.dui-pro-overhaul textarea.dy-command-textarea {
+  background: #08090c !important;
+  border-color: transparent !important;
+  box-shadow: none !important;
+  color: #eaf0f3 !important;
+}
+
+html.dui-pro-overhaul .dy-command-console .dy-command-icon-button,
+html.dui-pro-overhaul .dy-command-console .dy-command-send,
+html.dui-pro-overhaul [data-chat-panel="true"] button[aria-label="Send message"] {
+  border-color: rgba(184, 188, 190, .24) !important;
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, .055), rgba(255, 255, 255, .010)),
+    rgba(8, 9, 12, .45) !important;
+  color: #d5dde3 !important;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, .06) !important;
+  backdrop-filter: blur(10px) saturate(1.06) !important;
+}
+
+html.dui-pro-overhaul .dy-command-console .dy-command-icon-button:hover,
+html.dui-pro-overhaul .dy-command-console .dy-command-send:hover,
+html.dui-pro-overhaul [data-chat-panel="true"] button[aria-label="Send message"]:hover {
+  border-color: rgba(184, 188, 190, .42) !important;
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, .085), rgba(255, 255, 255, .018)),
+    #08090c !important;
+  color: #f3f8fc !important;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, .1),
+    0 16px 26px -18px rgba(0, 0, 0, .7) !important;
+}
+
+/* Registry control bar and toolbar surfaces: force full obsidian treatment. */
+html.dui-pro-overhaul [data-dui-panel="agent-registry"],
+html.dui-pro-overhaul [data-dui-panel="agent-registry"] [data-agent-toolbar],
+html.dui-pro-overhaul [data-dui-panel="agent-registry"] > div:first-child,
+html.dui-pro-overhaul [data-dui-panel="agent-registry"] > div:first-child :is(button, span),
+html.dui-pro-overhaul [data-dui-panel="agent-registry"] [data-agent-toolbar] *,
+html.dui-pro-overhaul [data-dui-panel="agent-registry"] [data-agent-search],
+html.dui-pro-overhaul [data-dui-panel="agent-registry"] [data-agent-search] *,
+html.dui-pro-overhaul [data-dui-panel="agent-registry"] [data-agent-controls],
+html.dui-pro-overhaul [data-dui-panel="agent-registry"] [data-agent-controls] *,
+html.dui-pro-overhaul [data-dui-panel="agent-registry"] [data-agent-control],
+html.dui-pro-overhaul [data-dui-panel="agent-registry"] [data-agent-overlay-control],
+html.dui-pro-overhaul [data-dui-panel="agent-registry"] [data-agent-view-toggle],
+html.dui-pro-overhaul [data-dui-panel="agent-registry"] [data-agent-view-option],
+html.dui-pro-overhaul [data-dui-panel="agent-registry"] [data-agent-view-option][data-active="true"],
+html.dui-pro-overhaul [data-dui-panel="agent-registry"] [data-agent-view-option][aria-pressed="true"],
+html.dui-pro-overhaul [data-dui-panel="agent-registry"] .agent-registry-pager,
+html.dui-pro-overhaul [data-dui-panel="agent-registry"] .agent-registry-pager-btn,
+html.dui-pro-overhaul [data-dui-panel="agent-registry"] .agent-registry-pager-count,
+html.dui-pro-overhaul [data-dui-panel="agent-registry"] [data-agent-registry-scroll],
+html.dui-pro-overhaul [data-dui-panel="agent-registry"] [data-agent-status],
+html.dui-pro-overhaul [data-dui-panel="agent-registry"] [data-agent-grid-mode] > * {
+  background: #08090c !important;
+  background-image: none !important;
+  border-color: rgba(184, 188, 190, .20) !important;
+  color: #d9e6f1 !important;
+}
+
+/* Final hard lock: enforce obsidian backgrounds regardless of variant mode or state. */
+html.dui-pro-overhaul [data-dui-panel="agent-registry"],
+html.dui-cohesive-ui [data-dui-panel="agent-registry"],
+html.dui-pro-overhaul [data-dui-panel="agent-registry"] > div:first-child,
+html.dui-cohesive-ui [data-dui-panel="agent-registry"] > div:first-child,
+html.dui-pro-overhaul [data-dui-panel="agent-registry"] > div:first-child :is(button, span),
+html.dui-cohesive-ui [data-dui-panel="agent-registry"] > div:first-child :is(button, span),
+html.dui-pro-overhaul [data-dui-panel="agent-registry"] [data-agent-toolbar],
+html.dui-cohesive-ui [data-dui-panel="agent-registry"] [data-agent-toolbar],
+html.dui-pro-overhaul [data-dui-panel="agent-registry"] [data-agent-toolbar] *,
+html.dui-cohesive-ui [data-dui-panel="agent-registry"] [data-agent-toolbar] *,
+html.dui-pro-overhaul [data-dui-panel="agent-registry"] [data-agent-search],
+html.dui-cohesive-ui [data-dui-panel="agent-registry"] [data-agent-search],
+html.dui-pro-overhaul [data-dui-panel="agent-registry"] [data-agent-search] *,
+html.dui-cohesive-ui [data-dui-panel="agent-registry"] [data-agent-search] *,
+html.dui-pro-overhaul [data-dui-panel="agent-registry"] [data-agent-controls],
+html.dui-cohesive-ui [data-dui-panel="agent-registry"] [data-agent-controls],
+html.dui-pro-overhaul [data-dui-panel="agent-registry"] [data-agent-controls] *,
+html.dui-cohesive-ui [data-dui-panel="agent-registry"] [data-agent-controls] *,
+html.dui-pro-overhaul [data-dui-panel="agent-registry"] [data-agent-control],
+html.dui-cohesive-ui [data-dui-panel="agent-registry"] [data-agent-control],
+html.dui-pro-overhaul [data-dui-panel="agent-registry"] [data-agent-overlay-control],
+html.dui-cohesive-ui [data-dui-panel="agent-registry"] [data-agent-overlay-control],
+html.dui-pro-overhaul [data-dui-panel="agent-registry"] [data-agent-view-toggle],
+html.dui-cohesive-ui [data-dui-panel="agent-registry"] [data-agent-view-toggle],
+html.dui-pro-overhaul [data-dui-panel="agent-registry"] [data-agent-view-option],
+html.dui-cohesive-ui [data-dui-panel="agent-registry"] [data-agent-view-option],
+html.dui-pro-overhaul [data-dui-panel="agent-registry"] .agent-registry-pager,
+html.dui-cohesive-ui [data-dui-panel="agent-registry"] .agent-registry-pager,
+html.dui-pro-overhaul [data-dui-panel="agent-registry"] .agent-registry-pager-btn,
+html.dui-cohesive-ui [data-dui-panel="agent-registry"] .agent-registry-pager-btn,
+html.dui-pro-overhaul [data-dui-panel="agent-registry"] .agent-registry-pager-count,
+html.dui-cohesive-ui [data-dui-panel="agent-registry"] .agent-registry-pager-count,
+html.dui-pro-overhaul [data-dui-panel="agent-registry"] [data-agent-registry-scroll],
+html.dui-cohesive-ui [data-dui-panel="agent-registry"] [data-agent-registry-scroll],
+html.dui-pro-overhaul [data-dui-panel="agent-registry"] [data-agent-status],
+html.dui-cohesive-ui [data-dui-panel="agent-registry"] [data-agent-status],
+html.dui-pro-overhaul [data-dui-panel="agent-registry"] [data-agent-grid-mode] > *,
+html.dui-cohesive-ui [data-dui-panel="agent-registry"] [data-agent-grid-mode] > * {
+  background: #08090c !important;
+  background-color: #08090c !important;
+  background-image: none !important;
+  color: #d9e6f1 !important;
+}
+
+html.dui-pro-overhaul [data-dui-panel="agent-registry"] [data-agent-search] input,
+html.dui-cohesive-ui [data-dui-panel="agent-registry"] [data-agent-search] input,
+html.dui-pro-overhaul [data-dui-panel="agent-registry"] [data-agent-control],
+html.dui-cohesive-ui [data-dui-panel="agent-registry"] [data-agent-control],
+html.dui-pro-overhaul [data-dui-panel="agent-registry"] [data-agent-overlay-control],
+html.dui-cohesive-ui [data-dui-panel="agent-registry"] [data-agent-overlay-control],
+html.dui-pro-overhaul [data-dui-panel="agent-registry"] [data-agent-view-option],
+html.dui-cohesive-ui [data-dui-panel="agent-registry"] [data-agent-view-option],
+html.dui-pro-overhaul [data-dui-panel="agent-registry"] .agent-registry-pager-btn,
+html.dui-cohesive-ui [data-dui-panel="agent-registry"] .agent-registry-pager-btn,
+html.dui-pro-overhaul [data-dui-panel="agent-registry"] [data-agent-search] button {
+  background: #08090c !important;
+  background-color: #08090c !important;
+  background-image: none !important;
+}
+
+html.dui-pro-overhaul [data-dui-panel="agent-registry"] [data-agent-search] input:hover,
+html.dui-cohesive-ui [data-dui-panel="agent-registry"] [data-agent-search] input:hover,
+html.dui-pro-overhaul [data-dui-panel="agent-registry"] [data-agent-search] input:focus,
+html.dui-cohesive-ui [data-dui-panel="agent-registry"] [data-agent-search] input:focus,
+html.dui-pro-overhaul [data-dui-panel="agent-registry"] [data-agent-control]:hover,
+html.dui-cohesive-ui [data-dui-panel="agent-registry"] [data-agent-control]:hover,
+html.dui-pro-overhaul [data-dui-panel="agent-registry"] [data-agent-overlay-control]:hover,
+html.dui-cohesive-ui [data-dui-panel="agent-registry"] [data-agent-overlay-control]:hover,
+html.dui-pro-overhaul [data-dui-panel="agent-registry"] [data-agent-control]:focus,
+html.dui-cohesive-ui [data-dui-panel="agent-registry"] [data-agent-control]:focus,
+html.dui-pro-overhaul [data-dui-panel="agent-registry"] [data-agent-overlay-control]:focus,
+html.dui-cohesive-ui [data-dui-panel="agent-registry"] [data-agent-overlay-control]:focus,
+html.dui-pro-overhaul [data-dui-panel="agent-registry"] [data-agent-view-option]:hover,
+html.dui-cohesive-ui [data-dui-panel="agent-registry"] [data-agent-view-option]:hover,
+html.dui-pro-overhaul [data-dui-panel="agent-registry"] [data-agent-search] button:hover,
+html.dui-cohesive-ui [data-dui-panel="agent-registry"] [data-agent-search] button:hover,
+html.dui-pro-overhaul [data-dui-panel="agent-registry"] .agent-registry-pager-btn:hover,
+html.dui-cohesive-ui [data-dui-panel="agent-registry"] .agent-registry-pager-btn:hover,
+html.dui-pro-overhaul [data-dui-panel="agent-registry"] .agent-registry-pager-btn:focus,
+html.dui-cohesive-ui [data-dui-panel="agent-registry"] .agent-registry-pager-btn:focus,
+html.dui-pro-overhaul [data-dui-panel="agent-registry"] .agent-registry-pager-btn:focus-visible,
+html.dui-cohesive-ui [data-dui-panel="agent-registry"] .agent-registry-pager-btn:focus-visible {
+  background: #08090c !important;
+  background-color: #08090c !important;
+  background-image: none !important;
+  box-shadow: none !important;
+}
+
+
+/* Registry border/outline hardening: darker obsidian-cyan stroke for all registry controls. */
+html.dui-pro-overhaul [data-dui-panel="agent-registry"],
+html.dui-cohesive-ui [data-dui-panel="agent-registry"] {
+  --dui-agent-toolbar-cyan: #4cb5d1 !important;
+  --dui-agent-toolbar-cyan-soft: rgba(76, 181, 209, .72) !important;
+  --dui-agent-toolbar-border: rgba(76, 181, 209, .16) !important;
+  --dui-agent-toolbar-border-strong: rgba(76, 181, 209, .28) !important;
+}
+
+html.dui-pro-overhaul [data-dui-panel="agent-registry"] :is(
+  [data-agent-toolbar],
+  [data-agent-search],
+  [data-agent-search] input,
+  [data-agent-search] button,
+  [data-agent-control],
+  [data-agent-overlay-control],
+  [data-agent-view-toggle],
+  [data-agent-view-option],
+  .agent-registry-pager,
+  .agent-registry-pager-btn,
+  .agent-registry-pager-count
+),
+html.dui-cohesive-ui [data-dui-panel="agent-registry"] :is(
+  [data-agent-toolbar],
+  [data-agent-search],
+  [data-agent-search] input,
+  [data-agent-search] button,
+  [data-agent-control],
+  [data-agent-overlay-control],
+  [data-agent-view-toggle],
+  [data-agent-view-option],
+  .agent-registry-pager,
+  .agent-registry-pager-btn,
+  .agent-registry-pager-count
+) {
+  border-color: var(--dui-agent-toolbar-border) !important;
+}
+
+html.dui-pro-overhaul [data-dui-panel="agent-registry"] :is(
+  [data-agent-search] input:hover,
+  [data-agent-search] input:focus,
+  [data-agent-search] input:focus-visible,
+  [data-agent-control]:hover,
+  [data-agent-overlay-control]:hover,
+  [data-agent-control]:focus,
+  [data-agent-overlay-control]:focus,
+  [data-agent-search] button:hover,
+  [data-agent-search] button:focus-visible,
+  [data-agent-view-option]:hover,
+  [data-agent-toolbar] button[data-agent-view-option]:hover,
+  .agent-registry-pager-btn:hover,
+  .agent-registry-pager-btn:focus,
+  .agent-registry-pager-btn:focus-visible
+),
+html.dui-cohesive-ui [data-dui-panel="agent-registry"] :is(
+  [data-agent-search] input:hover,
+  [data-agent-search] input:focus,
+  [data-agent-search] input:focus-visible,
+  [data-agent-control]:hover,
+  [data-agent-overlay-control]:hover,
+  [data-agent-control]:focus,
+  [data-agent-overlay-control]:focus,
+  [data-agent-search] button:hover,
+  [data-agent-search] button:focus-visible,
+  [data-agent-view-option]:hover,
+  [data-agent-toolbar] button[data-agent-view-option]:hover,
+  .agent-registry-pager-btn:hover,
+  .agent-registry-pager-btn:focus,
+  .agent-registry-pager-btn:focus-visible
+) {
+  border-color: var(--dui-agent-toolbar-border-strong) !important;
+  outline-color: rgba(76, 181, 209, .14) !important;
+}
+
+html.dui-pro-overhaul [data-dui-panel="agent-registry"] [data-agent-control],
+html.dui-pro-overhaul [data-dui-panel="agent-registry"] [data-agent-overlay-control],
+html.dui-cohesive-ui [data-dui-panel="agent-registry"] [data-agent-control],
+html.dui-cohesive-ui [data-dui-panel="agent-registry"] [data-agent-overlay-control] {
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='8' height='8' viewBox='0 0 24 24' fill='none' stroke='%234cb5d1' stroke-width='3' stroke-linecap='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E") !important;
 }

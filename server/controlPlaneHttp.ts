@@ -55,6 +55,7 @@ export type ApiErrorCode =
   | 'oauth_operation_failed'
   | 'openclaw_command_failed'
   | 'openclaw_summary_failed'
+  | 'optimization_scorecard_failed'
   | 'party_dispatch_failed'
   | 'party_handoff_failed'
   | 'party_operation_failed'

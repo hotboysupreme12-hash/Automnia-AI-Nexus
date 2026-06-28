@@ -45,6 +45,11 @@ const gridClassByMode: Record<AgentDisplayMode, string> = {
 const FLOW_GRID_MODES = new Set<AgentDisplayMode>(['showcase', 'grid6', 'grid8', 'grid10'])
 const REGISTRY_PREFS_KEY = 'dystopai-agent-registry-prefs'
 const REGISTRY_PREFS_VERSION = 4
+const CYAN_SELECT_CHEVRON_STYLE = {
+  backgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='8' height='8' viewBox='0 0 24 24' fill='none' stroke='%2367e8f9' stroke-width='3' stroke-linecap='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E")`,
+  backgroundRepeat: 'no-repeat',
+  backgroundPosition: 'right 8px center',
+} as const
 
 function loadRegistryPrefs(): PersistedRegistryPrefs {
   try {
@@ -348,17 +353,17 @@ export function PartySelector() {
         title="Agent Registry"
         className="flex min-h-0 flex-col"
         action={
-          <div className="flex translate-y-2 items-center gap-1.5">
+          <div className="agent-registry-pager flex translate-y-2 items-center gap-1.5">
             <button
               type="button"
               aria-label="Previous page"
               disabled={safePage <= 0}
               onClick={() => setPageIndex((p) => Math.max(0, p - 1))}
-              className="inline-flex size-7 items-center justify-center rounded-lg border border-cyan-400/20 bg-cyan-400/[0.06] text-xs text-cyan-200 transition hover:border-cyan-400/40 hover:bg-cyan-400/[0.12] disabled:cursor-not-allowed disabled:opacity-25"
+              className="agent-registry-pager-btn inline-flex size-7 items-center justify-center rounded-lg border border-[#4cb5d1]/28 bg-[#08090c] text-xs text-cyan-200 transition hover:border-[#4cb5d1]/55 hover:bg-[#08090c] disabled:cursor-not-allowed disabled:opacity-25"
             >
               ◂
             </button>
-            <span className="rounded-lg border border-cyan-400/20 bg-cyan-400/[0.06] px-3 py-1.5 text-[10px] font-bold uppercase tracking-[0.12em] text-cyan-100 tabular-nums">
+            <span className="agent-registry-pager-count rounded-lg border border-[#4cb5d1]/28 bg-[#08090c] px-3 py-1.5 text-[10px] font-bold uppercase tracking-[0.12em] text-cyan-100 tabular-nums">
               {agentCountLabel}
             </span>
             <button
@@ -366,7 +371,7 @@ export function PartySelector() {
               aria-label="Next page"
               disabled={safePage >= totalPages - 1}
               onClick={() => setPageIndex((p) => Math.min(totalPages - 1, p + 1))}
-              className="inline-flex size-7 items-center justify-center rounded-lg border border-cyan-400/20 bg-cyan-400/[0.06] text-xs text-cyan-200 transition hover:border-cyan-400/40 hover:bg-cyan-400/[0.12] disabled:cursor-not-allowed disabled:opacity-25"
+              className="agent-registry-pager-btn inline-flex size-7 items-center justify-center rounded-lg border border-[#4cb5d1]/28 bg-[#08090c] text-xs text-cyan-200 transition hover:border-[#4cb5d1]/55 hover:bg-[#08090c] disabled:cursor-not-allowed disabled:opacity-25"
             >
               ▸
             </button>
@@ -374,11 +379,11 @@ export function PartySelector() {
         }
       >
         {/* ── Search + Sort + Filter toolbar ── */}
-        <div data-agent-toolbar className="mb-4 rounded-2xl border border-white/[0.05] bg-white/[0.018] p-3 shadow-inner">
+        <div data-agent-toolbar className="mb-4 rounded-2xl border border-[#4cb5d1]/34 bg-[#08090c] p-3 text-cyan-300 shadow-inner">
           {/* Transparent search bar */}
           <div data-agent-search className="relative">
             <svg
-              className="pointer-events-none absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-slate-500"
+              className="pointer-events-none absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-cyan-300"
               viewBox="0 0 24 24"
               fill="none"
               stroke="currentColor"
@@ -395,12 +400,12 @@ export function PartySelector() {
               onChange={(e) => setSearchQuery(e.target.value)}
               placeholder="Search by name, role, keyword…"
               spellCheck={false}
-              className="w-full rounded-lg border border-white/[0.06] bg-white/[0.025] py-2 pl-9 pr-8 text-[11px] font-medium text-slate-200 placeholder:text-slate-500 outline-none transition focus:border-cyan-400/25 focus:bg-white/[0.04]"
+              className="w-full rounded-lg border border-[#4cb5d1]/28 bg-[#08090c] py-2 pl-9 pr-8 text-[11px] font-medium text-cyan-100 placeholder:text-cyan-300/80 outline-none transition focus:border-[#4cb5d1]/60 focus:bg-[#08090c]"
             />
             {searchQuery && (
               <button type="button"
                 onClick={() => setSearchQuery('')}
-                className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-500 hover:text-slate-300 text-xs leading-none"
+                className="absolute right-2.5 top-1/2 -translate-y-1/2 text-cyan-300 hover:text-cyan-100 text-xs leading-none"
                 aria-label="Clear search"
               >
                 ✕
@@ -415,12 +420,8 @@ export function PartySelector() {
               aria-label="Sort agents"
               value={sortKey}
               onChange={(e) => setSortKey(e.target.value as SortKey)}
-              className="rounded-lg border border-white/[0.10] bg-white/[0.06] px-2.5 py-1.5 pr-7 text-[10px] font-semibold text-white/85 outline-none transition focus:border-cyan-400/40 cursor-pointer appearance-none"
-              style={{
-                backgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='8' height='8' viewBox='0 0 24 24' fill='none' stroke='%2394a3b8' stroke-width='3' stroke-linecap='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E")`,
-                backgroundRepeat: 'no-repeat',
-                backgroundPosition: 'right 8px center',
-              }}
+              className="rounded-lg border border-[#4cb5d1]/30 bg-[#08090c] px-2.5 py-1.5 pr-7 text-[10px] font-semibold text-cyan-100 outline-none transition focus:border-[#4cb5d1]/60 cursor-pointer appearance-none"
+              style={CYAN_SELECT_CHEVRON_STYLE}
             >
               <option value="party">Party First</option>
               <option value="level">Level ↓</option>
@@ -433,12 +434,8 @@ export function PartySelector() {
               aria-label="Filter agents by rarity"
               value={rarityFilter}
               onChange={(e) => setRarityFilter(e.target.value as AgentRarity | 'all')}
-              className="rounded-lg border border-white/[0.10] bg-white/[0.06] px-2.5 py-1.5 pr-7 text-[10px] font-semibold text-white/85 outline-none transition focus:border-cyan-400/40 cursor-pointer appearance-none"
-              style={{
-                backgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='8' height='8' viewBox='0 0 24 24' fill='none' stroke='%2394a3b8' stroke-width='3' stroke-linecap='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E")`,
-                backgroundRepeat: 'no-repeat',
-                backgroundPosition: 'right 8px center',
-              }}
+              className="rounded-lg border border-[#4cb5d1]/30 bg-[#08090c] px-2.5 py-1.5 pr-7 text-[10px] font-semibold text-cyan-100 outline-none transition focus:border-[#4cb5d1]/60 cursor-pointer appearance-none"
+              style={CYAN_SELECT_CHEVRON_STYLE}
             >
               <option value="all">All rarities</option>
               <option value="legendary">Legendary</option>
@@ -447,7 +444,7 @@ export function PartySelector() {
               <option value="common">Common</option>
             </select>
 
-            <div data-agent-view-toggle className="flex rounded-lg border border-white/[0.07] bg-slate-950/45 p-0.5">
+            <div data-agent-view-toggle className="flex rounded-lg border border-[#4cb5d1]/34 bg-[#08090c] p-0.5">
               {DISPLAY_MODES.map((mode) => (
                 <button
                   key={mode.id}
@@ -458,8 +455,8 @@ export function PartySelector() {
                   onClick={() => setDisplayMode(mode.id)}
                   className={`rounded-md px-2.5 py-1.5 text-[9px] font-black uppercase tracking-[0.10em] transition ${
                     displayMode === mode.id
-                      ? 'bg-cyan-400/[0.13] text-cyan-100 shadow-[inset_0_1px_0_rgba(255,255,255,0.08)]'
-                      : 'text-slate-500 hover:bg-white/[0.04] hover:text-slate-300'
+                      ? 'bg-[#08090c] text-cyan-100 shadow-[inset_0_1px_0_rgba(255,255,255,0.08)]'
+                      : 'text-cyan-300/85 hover:bg-[#08090c] hover:text-cyan-100'
                   }`}
                 >
                   {mode.label}
@@ -472,12 +469,8 @@ export function PartySelector() {
               aria-label="Card overlay style"
               value={overlayPreset}
               onChange={(e) => setOverlayPreset(e.target.value as AgentOverlayPreset)}
-              className="rounded-lg border border-white/[0.10] bg-white/[0.06] px-2.5 py-1.5 pr-7 text-[10px] font-semibold text-white/85 outline-none transition focus:border-cyan-400/40 cursor-pointer appearance-none"
-              style={{
-                backgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='8' height='8' viewBox='0 0 24 24' fill='none' stroke='%2394a3b8' stroke-width='3' stroke-linecap='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E")`,
-                backgroundRepeat: 'no-repeat',
-                backgroundPosition: 'right 8px center',
-              }}
+              className="rounded-lg border border-[#4cb5d1]/30 bg-[#08090c] px-2.5 py-1.5 pr-7 text-[10px] font-semibold text-cyan-100 outline-none transition focus:border-[#4cb5d1]/60 cursor-pointer appearance-none"
+              style={CYAN_SELECT_CHEVRON_STYLE}
             >
               {OVERLAY_PRESETS.map((preset) => (
                 <option key={preset.id} value={preset.id}>
@@ -490,16 +483,14 @@ export function PartySelector() {
         </div>
 
         {/* Status line */}
-        <p data-agent-status className="mb-3 text-[10px] font-medium text-slate-500/80 tracking-[0.02em]">
+        <p data-agent-status className="mb-3 text-[10px] font-medium text-cyan-300/80 tracking-[0.02em]">
           {searchQuery ? (
             <>
               {filtered.length} match{filtered.length !== 1 ? 'es' : ''} for "{searchQuery}"
-              {totalPages > 1 && <> · Page {safePage + 1}/{totalPages} · {visibleAgents.length} shown</>}
             </>
           ) : (
             <>
               {rarityFilter !== 'all' && <>{filtered.length}/{agents.length} shown · </>}
-              Page {safePage + 1}/{totalPages} · {visibleAgents.length} shown
             </>
           )}
         </p>
@@ -552,3 +543,4 @@ export function PartySelector() {
     </div>
   )
 }
+

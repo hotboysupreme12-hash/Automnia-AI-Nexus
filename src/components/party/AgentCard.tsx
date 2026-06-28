@@ -1,7 +1,7 @@
 import { memo, useMemo, useState } from 'react'
 import type { OpenClawAgent } from '../../types/nexus'
 import { useNexusStore } from '../../store/nexusStore'
-import { clampAgentStat, deriveLevelScaledAttributes, levelStatCeiling } from '../../engine/AgentStatScaling'
+import { clampAgentStat, deriveLevelScaledAttributes } from '../../engine/AgentStatScaling'
 
 const RARITY: Record<string, {
   cardBg: string; cardBorder: string; cardGlow: string
@@ -157,31 +157,6 @@ function initials(name: string) {
   return `${parts[0][0]}${parts[parts.length - 1][0]}`.toUpperCase()
 }
 
-function successRate(agent: OpenClawAgent, attributes: OpenClawAgent['attributes']) {
-  const completed = agent.performance.completedMissions || 0
-  const failed = agent.performance.failedMissions || 0
-  const total = completed + failed
-  const historicalRate = total ? (completed / total) * 100 : 58
-  const historyWeight = Math.min(0.78, total / 70)
-  const readiness = (attributes.intelligence + attributes.precision + attributes.stability) / 3
-  const blendedRate = historicalRate * historyWeight + readiness * (1 - historyWeight)
-  return clampAgentStat(Math.min(levelStatCeiling(agent.level), blendedRate), 50)
-}
-
-function cardSerial(agent: OpenClawAgent) {
-  const rarity = (agent.rarity || 'common').slice(0, 3).toUpperCase()
-  const code = agent.id
-    .replace(/^hn-/, '')
-    .split(/[-_]+/g)
-    .filter(Boolean)
-    .map((part) => part[0])
-    .join('')
-    .slice(0, 4)
-    .toUpperCase() || 'AGT'
-
-  return `${rarity}-${code}-${String(agent.level).padStart(2, '0')}`
-}
-
 function portraitSrcForAgent(agent: OpenClawAgent) {
   if (agent.id === 'hn-netanyahu') return `${import.meta.env.BASE_URL}agents/generated/benjamin-netanyahu.jpg`
   if (agent.portrait) return agent.portrait
@@ -263,9 +238,7 @@ export const AgentCard = memo(function AgentCard({ agent, isSelected, slotNumber
       .slice(0, 4),
     [agent.mds.capabilities],
   )
-  const success = successRate(agent, a)
   const statCells = topStats.slice(0, 3)
-  const serial = cardSerial(agent)
   const visibleCapabilities = (denseMode || listMode || compactMode ? capabilities.slice(0, 1) : capabilities.slice(0, 2))
 
   return (
@@ -353,10 +326,6 @@ export const AgentCard = memo(function AgentCard({ agent, isSelected, slotNumber
                 Live
               </span>
             )}
-          </div>
-          <div className="agent-card-media-bottom absolute bottom-3 left-3 right-3 z-20 flex items-end justify-between gap-2">
-            <span className="agent-card-serial">{serial}</span>
-            <span className="agent-card-winrate">{success}% SR</span>
           </div>
         </div>
       </div>

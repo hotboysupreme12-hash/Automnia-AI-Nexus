@@ -11,6 +11,7 @@ type DiagnosticsRoutesOptions = {
   gatewayChatReady: () => boolean
   gatewayChatRuntimeSnapshot: () => Record<string, unknown>
   openClawAgentRunDefaultsReady: () => boolean
+  openClawOptimizationScorecard: () => unknown
   readDoctorDiagnosticsSummary: (forceRefresh: boolean) => Promise<unknown>
   recommendedOpenClawVersion: string
   redactSensitiveText: (value: string) => string
@@ -53,6 +54,20 @@ export function registerDiagnosticsRoutes(app: Express, options: DiagnosticsRout
 
   app.get('/api/runtime/version-check', (_req, res) => {
     return apiSuccess(res, options.runtimeVersionCheckPayload())
+  })
+
+  app.get('/api/openclaw/optimization-scorecard', (_req, res) => {
+    try {
+      return apiSuccess(res, options.openClawOptimizationScorecard())
+    } catch (error) {
+      return apiFailure(
+        res,
+        500,
+        'optimization_scorecard_failed',
+        'OpenClaw optimization scorecard failed',
+        options.redactSensitiveText(String(error)),
+      )
+    }
   })
 
   app.post('/api/doctor/run', async (_req, res) => {

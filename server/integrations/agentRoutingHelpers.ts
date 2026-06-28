@@ -520,7 +520,7 @@ async function runClawTalkControlCenterOrEmbeddedAgentTurn(options) {
 `.trim()
 
 export const TELEGRAM_AGENT_ROUTING_HELPER = String.raw`
-var TELEGRAM_AGENT_ROUTING_PATCH_VERSION = 2;
+var TELEGRAM_AGENT_ROUTING_PATCH_VERSION = 3;
 var TELEGRAM_AGENT_ROUTE_MEMORY_KEY = '__openclawTelegramAgentRoutes';
 function resolveTelegramAgentRouteMemory() {
     var root = globalThis;
@@ -612,6 +612,24 @@ function buildTelegramAgentAliases(config, fallbackAgentId) {
         agentIds: agentIds
     };
 }
+function normalizeTelegramAgentModelRef(value) {
+    var text = String(value == null ? '' : value).trim();
+    if (!text) return '';
+    if (text.indexOf('/') === -1 && /^gpt-5(?:\.\d+)?(?:-[a-z0-9][a-z0-9.-]*)?$/i.test(text)) return 'openai/' + text;
+    return text;
+}
+function modelRefFromTelegramAgentModelSelection(selection) {
+    if (typeof selection === 'string') return normalizeTelegramAgentModelRef(selection);
+    if (!selection || typeof selection !== 'object') return '';
+    return normalizeTelegramAgentModelRef(selection.primary || selection.model || selection.id || '');
+}
+function resolveTelegramAgentModelRef(config, agentId) {
+    var agent = resolveAgentConfig(config || {}, agentId) || {};
+    var agentModel = modelRefFromTelegramAgentModelSelection(agent && agent.model);
+    if (agentModel) return agentModel;
+    var defaults = config && config.agents && config.agents.defaults ? config.agents.defaults.model : null;
+    return modelRefFromTelegramAgentModelSelection(defaults);
+}
 function escapeTelegramAgentRegExp(value) {
     var text = String(value);
     var out = '';
@@ -701,10 +719,12 @@ function buildTelegramAgentRouteContext(params) {
     var agentId = String(params && params.agentId || '').trim();
     if (!agentId) return '';
     var profile = resolveTelegramAgentRouteProfile(params.config || {}, agentId);
+    var modelRef = resolveTelegramAgentModelRef(params.config || {}, agentId);
     return [
         'Telegram route context (system facts for this turn):',
         '- Active agent id: ' + agentId,
         profile.name ? '- Active agent name: ' + profile.name : '',
+        modelRef ? '- Active configured model: ' + modelRef : '',
         profile.workspace ? '- Active execution workspace: ' + profile.workspace : '',
         params.sessionKey ? '- Active Telegram session key: ' + String(params.sessionKey) : '',
         '- If prior chat history names another agent or workspace, ignore that stale context.',
@@ -740,6 +760,7 @@ function buildTelegramRouteForAgent(params, agentId) {
     var baseRoute = {
         ...params.route,
         agentId: targetAgentId,
+        modelRef: resolveTelegramAgentModelRef(params.cfg || {}, targetAgentId),
         sessionKey: normalizeLowercaseStringOrEmpty(buildAgentSessionKey({
             agentId: targetAgentId,
             channel: 'telegram',

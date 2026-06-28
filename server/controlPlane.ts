@@ -62,6 +62,7 @@ import {
 import { registerBrowserRoutes } from './routes/browserRoutes'
 import { registerShiftRoutes } from './routes/shiftRoutes'
 import { registerStaticUi } from './staticUi'
+import { buildOpenClawOptimizationScorecard } from './openclawOptimizationScorecard'
 import { computeShiftDurationMinutes } from './shiftContracts'
 import type {
   HeartbeatRuntimeDefaults,
@@ -16443,7 +16444,7 @@ function patchedClawTalkRuntimeSource(source: string) {
 
 
 const CLAWTALK_REPAIR_SIGNATURE_VERSION = 'clawtalk-repair:v12'
-const TELEGRAM_REPAIR_SIGNATURE_VERSION = 'telegram-routing-repair:v2'
+const TELEGRAM_REPAIR_SIGNATURE_VERSION = 'telegram-routing-repair:v3'
 const clawTalkRepairSignatureCache = new Map<string, string>()
 const telegramRepairSignatureCache = new Map<string, string>()
 
@@ -16609,7 +16610,7 @@ function patchedClawTalkSmsHandlerSource(source: string) {
 
 function patchedTelegramBotRuntimeSource(source: string) {
   let next = source
-  const routingPatchVersion = 'var TELEGRAM_AGENT_ROUTING_PATCH_VERSION = 2;'
+  const routingPatchVersion = 'var TELEGRAM_AGENT_ROUTING_PATCH_VERSION = 3;'
   const routingHelperPattern = /var TELEGRAM_AGENT_ROUTING_PATCH_VERSION = \d+;[\s\S]*?\/\/#endregion telegram-agent-routing-patch/
   if (routingHelperPattern.test(next)) {
     next = next.replace(routingHelperPattern, TELEGRAM_AGENT_ROUTING_HELPER)
@@ -16626,13 +16627,10 @@ function patchedTelegramBotRuntimeSource(source: string) {
       'const wasMentioned = options?.forceWasMentioned === true ? true : computedWasMentioned || telegramAgentRouteMentioned;',
     ].join('\n\t'),
   )
-  next = next.replace(
-    [
-      'if (!bodyResult) return null;',
-      'if (!await ensureConfiguredBindingReady()) return null;',
-    ].join('\n\t'),
-    [
-      'if (!bodyResult) return null;',
+  const routeApplicationMarker = 'const telegramAgentRoute = resolveTelegramAgentRouteForMessage({'
+  if (!next.includes(routeApplicationMarker)) {
+    const bodyResultMarker = 'if (!bodyResult) return null;'
+    const routeApplicationBlock = [
       'const telegramAgentRoute = resolveTelegramAgentRouteForMessage({',
       'cfg: freshCfg,',
       'route,',
@@ -16650,7 +16648,8 @@ function patchedTelegramBotRuntimeSource(source: string) {
       'route = telegramAgentRoute.route;',
       'bodyResult.rawBody = telegramAgentRoute.rawBody;',
       'bodyResult.bodyText = telegramAgentRoute.bodyText;',
-      'logVerbose(`telegram: agent route ${telegramAgentRoute.reason || "selected"} -> ${route.agentId} session=${route.sessionKey}`);',
+      'const telegramAgentModelRef = route.modelRef || resolveTelegramAgentModelRef(freshCfg, route.agentId);',
+      'logVerbose(`telegram: agent route ${telegramAgentRoute.reason || "selected"} -> ${route.agentId} session=${route.sessionKey} model=${telegramAgentModelRef || "configured-default"}`);',
       '}',
       'bodyResult.bodyText = withTelegramAgentRouteContext({',
       'config: freshCfg,',
@@ -16658,9 +16657,17 @@ function patchedTelegramBotRuntimeSource(source: string) {
       'sessionKey: route.sessionKey,',
       'prompt: bodyResult.bodyText',
       '});',
-      'if (!await ensureConfiguredBindingReady()) return null;',
-    ].join('\n\t'),
-  )
+    ].join('\n\t')
+    if (next.includes(bodyResultMarker)) {
+      next = next.replace(bodyResultMarker, `${bodyResultMarker}\n\t${routeApplicationBlock}`)
+    } else {
+      console.warn('[plugins/telegram] agent route patch skipped: inbound body marker not found')
+    }
+  }
+  if (next !== source && !next.includes(routeApplicationMarker)) {
+    console.warn('[plugins/telegram] agent route patch skipped: route application marker was not inserted')
+    return source
+  }
   return next
 }
 
@@ -25082,6 +25089,7 @@ registerDiagnosticsRoutes(app, {
   gatewayChatReady: () => gatewayClientState?.ready === true,
   gatewayChatRuntimeSnapshot,
   openClawAgentRunDefaultsReady: () => openclawAgentRunDefaultsReady,
+  openClawOptimizationScorecard: buildOpenClawOptimizationScorecard,
   readDoctorDiagnosticsSummary,
   recommendedOpenClawVersion: RECOMMENDED_OPENCLAW_VERSION,
   redactSensitiveText,

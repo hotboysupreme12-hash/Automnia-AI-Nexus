@@ -381,6 +381,7 @@ export function NexusShell() {
             className="dy-human-nav-action flex items-center gap-3 text-left"
             data-tone="recruit"
             aria-label="Recruit a new agent"
+            aria-current={undefined}
             onClick={() => setRecruitOpen(true)}
           >
             <span className="dy-human-nav-icon" style={navIconStyle(RECRUIT_ICON_SRC)}>
@@ -399,6 +400,7 @@ export function NexusShell() {
               role="tab"
               onClick={() => selectTab(t.id)}
               aria-label={`${t.label} ${t.railMeta}`}
+              aria-current={tab === t.id ? 'page' : undefined}
               aria-selected={tab === t.id}
               aria-controls={`nexus-panel-${t.id}`}
               data-tone={t.tone}
@@ -422,6 +424,7 @@ export function NexusShell() {
               className={`dy-human-nav-utility flex items-center gap-3 text-left ${tab === 'settings' ? 'is-active' : ''}`}
               aria-label="Open runtime settings"
               aria-pressed={tab === 'settings'}
+              aria-current={tab === 'settings' ? 'page' : undefined}
               onClick={() => selectTab('settings')}
             >
               <span className="dy-human-nav-icon dy-human-nav-icon--settings" aria-hidden="true">
@@ -455,26 +458,6 @@ export function NexusShell() {
             </button>
           </nav>
 
-          <button
-            type="button"
-            className="dy-operator-card"
-            aria-label="Return to agent roster as Operator Prime"
-            onClick={() => selectTab('agents')}
-          >
-            <span className="dy-operator-orb" aria-hidden="true">
-              <svg viewBox="0 0 24 24">
-                <path d="M12 3 4.5 7.25v8.5L12 20l7.5-4.25v-8.5L12 3Z" />
-                <path d="M12 7.25 8.25 9.4v4.2L12 15.75l3.75-2.15V9.4L12 7.25Z" />
-                <path d="M12 3v4.25M4.5 7.25l3.75 2.15M19.5 7.25 15.75 9.4" />
-              </svg>
-            </span>
-            <span className="dy-operator-copy">
-              <strong>Operator Prime</strong>
-              <span>Level 47</span>
-              <i aria-hidden="true" />
-            </span>
-            <span className="dy-operator-menu" aria-hidden="true">v</span>
-          </button>
         </div>
 
       </aside>
@@ -483,14 +466,7 @@ export function NexusShell() {
         {/* Workspace header */}
         <section className="dy-workspace-context" data-workspace={tab} aria-labelledby="dystopai-workspace-title">
           <div className="dy-workspace-context__copy">
-            <span
-              className="dy-workspace-context__eyebrow"
-              style={tab === 'monitor' ? ({ '--dui-cyan': 'var(--dui-green)' } as CSSProperties) : undefined}
-            >
-              Operator workspace
-            </span>
             <h1 id="dystopai-workspace-title">{activeTab.label}</h1>
-            <p>{activeTab.description}</p>
           </div>
           <div className="dy-workspace-context__meta">
             <div className="dy-status-grid flex flex-wrap items-center justify-end gap-2" aria-label="Workspace status summary">

@@ -225,11 +225,13 @@ html.dui-pro-overhaul .dy-human-nav :is(button, .dy-human-nav-action, .dy-human-
   position: relative;
   width: 100%;
   min-height: 58px !important;
-  border: 1px solid transparent !important;
+  border: 1px solid rgba(120, 170, 205, .24) !important;
   border-radius: 11px !important;
   padding: 0 12px !important;
   background: transparent !important;
   color: var(--dui-text-2) !important;
+  outline: 1px solid rgba(120, 170, 205, .12) !important;
+  outline-offset: -1px;
   overflow: hidden;
   transition: border-color .18s ease, background .18s ease, box-shadow .18s ease, transform .18s ease, color .18s ease !important;
 }
@@ -240,6 +242,7 @@ html.dui-pro-overhaul .dy-human-nav :is(button, .dy-human-nav-action, .dy-human-
   inset: 0;
   border-radius: inherit;
   background:
+    radial-gradient(circle at 8% 50%, rgba(0, 234, 255, .15) 18%, transparent 44%),
     radial-gradient(circle at 8% 50%, color-mix(in srgb, var(--nav-tone, var(--dui-cyan)) 18%, transparent), transparent 44%),
     linear-gradient(90deg, color-mix(in srgb, var(--nav-tone, var(--dui-cyan)) 8%, transparent), transparent 60%);
   opacity: 0;
@@ -253,18 +256,54 @@ html.dui-pro-overhaul .dy-human-nav :is(button, .dy-human-nav-action, .dy-human-
 }
 
 html.dui-pro-overhaul .dy-human-nav :is(button, .dy-human-nav-action, .dy-human-nav-utility):hover::before,
-html.dui-pro-overhaul .dy-human-nav button.is-active::before {
+html.dui-pro-overhaul .dy-human-nav :is(button, .dy-human-nav-action, .dy-human-nav-utility).is-active::before {
   opacity: 1;
 }
 
-html.dui-pro-overhaul .dy-human-nav button.is-active {
+html.dui-pro-overhaul .dy-human-nav :is(button, .dy-human-nav-action, .dy-human-nav-utility)::after {
+  content: "";
+  position: absolute;
+  left: 0;
+  top: 12px;
+  bottom: 12px;
+  width: 0;
+  border-radius: 0 999px 999px 0;
+  background: linear-gradient(
+    180deg,
+    rgba(0, 217, 255, .78),
+    rgba(143, 109, 255, .74)
+  );
+  background: linear-gradient(
+    180deg,
+    color-mix(in srgb, var(--nav-tone, var(--dui-cyan)) 62%, transparent),
+    color-mix(in srgb, var(--nav-tone, var(--dui-cyan)) 38%, transparent)
+  );
+  box-shadow: 0 0 14px rgba(0, 217, 255, .26);
+  box-shadow: 0 0 14px color-mix(in srgb, var(--nav-tone, var(--dui-cyan)) 38%, transparent);
+  opacity: 0;
+  transition: width .18s ease, opacity .18s ease !important;
+  pointer-events: none;
+}
+
+html.dui-pro-overhaul .dy-human-nav :is(button, .dy-human-nav-action, .dy-human-nav-utility).is-active::after {
+  width: 4px;
+  opacity: 1;
+  background: linear-gradient(180deg, #00d9ff, #8f6dff) !important;
+}
+
+html.dui-pro-overhaul .dy-human-nav :is(button, .dy-human-nav-action, .dy-human-nav-utility).is-active {
+  border-color: rgba(127, 225, 255, .68) !important;
   border-color: color-mix(in srgb, var(--nav-tone, var(--dui-cyan)) 50%, rgba(255,255,255,.12)) !important;
+  outline: 1px solid rgba(127, 225, 255, .44) !important;
+  outline: 1px solid color-mix(in srgb, var(--nav-tone, var(--dui-cyan)) 56%, rgba(255,255,255,.24)) !important;
   background:
     linear-gradient(90deg, color-mix(in srgb, var(--nav-tone, var(--dui-cyan)) 19%, transparent), rgba(255,255,255,.018) 70%),
     rgba(9, 22, 36, .88) !important;
   box-shadow:
+    inset 3px 0 0 rgba(0, 234, 255, .9),
     inset 3px 0 0 var(--nav-tone, var(--dui-cyan)),
     inset 0 1px 0 rgba(255,255,255,.055),
+    0 0 24px rgba(0, 217, 255, .22),
     0 0 24px color-mix(in srgb, var(--nav-tone, var(--dui-cyan)) 20%, transparent) !important;
 }
 
@@ -828,8 +867,9 @@ html.dui-pro-overhaul [data-slot-card] .active-party-avatar {
 }
 
 html.dui-pro-overhaul [data-slot-card] .party-slot-empty p:first-child {
-  color: #d6e4f4 !important;
+  color: rgba(164, 189, 204, .92) !important;
   font-size: 10px !important;
+  text-shadow: 0 0 10px rgba(164, 189, 204, .34) !important;
 }
 
 html.dui-pro-overhaul [data-slot-card] .party-slot-empty p:last-child {
@@ -837,13 +877,15 @@ html.dui-pro-overhaul [data-slot-card] .party-slot-empty p:last-child {
 }
 
 html.dui-pro-overhaul [data-dui-panel="active-party"] .dy-party-slot.is-filled::before {
-  border-color: rgba(232, 234, 238, .14) !important;
+  border-color: rgba(164, 189, 204, .24) !important;
   background:
-    linear-gradient(180deg, rgba(255,255,255,.050), rgba(255,255,255,.015)),
+    linear-gradient(180deg, rgba(164, 189, 204, .10), rgba(164, 189, 204, .025)),
     rgba(19, 19, 21, .96) !important;
-  color: rgba(224, 227, 229, .78) !important;
-  box-shadow: inset 0 1px 0 rgba(255,255,255,.060) !important;
-  text-shadow: none !important;
+  color: rgba(188, 209, 221, .92) !important;
+  box-shadow:
+    inset 0 1px 0 rgba(255,255,255,.06),
+    0 0 12px -2px rgba(164, 189, 204, .62) !important;
+  text-shadow: 0 0 10px rgba(164, 189, 204, .65) !important;
 }
 
 html.dui-pro-overhaul .party-rarity-badge {
@@ -1018,10 +1060,11 @@ html.dui-pro-overhaul .agent-card-media-shade {
 html.dui-pro-overhaul .agent-card-badge,
 html.dui-pro-overhaul .agent-card-status-pill {
   border-radius: 5px !important;
-  border-color: color-mix(in srgb, var(--agent-accent, var(--dui-cyan)) 38%, rgba(255,255,255,.12)) !important;
-  background: color-mix(in srgb, var(--agent-accent, var(--dui-cyan)) 15%, rgba(3,10,19,.72)) !important;
-  color: color-mix(in srgb, var(--agent-accent, var(--dui-cyan)) 48%, #ffffff) !important;
-  box-shadow: 0 0 12px color-mix(in srgb, var(--agent-accent, var(--dui-cyan)) 18%, transparent) !important;
+  border-color: color-mix(in srgb, var(--agent-accent, var(--dui-cyan)) 42%, rgba(255,255,255,.12)) !important;
+  background:
+    linear-gradient(180deg, color-mix(in srgb, var(--agent-accent, var(--dui-cyan)) 35%, transparent), color-mix(in srgb, var(--agent-accent, var(--dui-cyan)) 20%, rgba(3, 10, 19, .58))) !important;
+  color: color-mix(in srgb, var(--agent-accent, var(--dui-cyan)) 52%, #ffffff) !important;
+  box-shadow: 0 0 14px color-mix(in srgb, var(--agent-accent, var(--dui-cyan)) 22%, transparent) !important;
 }
 
 html.dui-pro-overhaul .agent-card-level-pill {
@@ -1202,6 +1245,87 @@ html.dui-pro-overhaul [data-chat-panel="true"] button[aria-label="Send message"]
     linear-gradient(135deg, rgba(0, 234, 255, .18), rgba(22, 141, 255, .22)) !important;
   color: #9ffaff !important;
   box-shadow: 0 0 24px rgba(0, 234, 255, .20), inset 0 1px 0 rgba(255,255,255,.08) !important;
+}
+
+html.dui-pro-overhaul .dy-command-console .dy-command-composer {
+  background: transparent !important;
+  border-top-color: rgba(82, 132, 168, .18) !important;
+}
+
+html.dui-pro-overhaul .dy-command-console .dy-command-composer__row {
+  position: relative !important;
+  display: flex !important;
+  align-items: center !important;
+  gap: 8px !important;
+  min-height: 52px !important;
+  border: 1px solid rgba(82, 132, 168, .22) !important;
+  border-radius: 10px !important;
+  padding: 8px 8px !important;
+  background:
+    linear-gradient(180deg, rgba(255,255,255,.028), rgba(255,255,255,.006)),
+    rgba(8, 15, 27, .68) !important;
+  backdrop-filter: blur(16px) saturate(1.1) !important;
+  -webkit-backdrop-filter: blur(16px) saturate(1.1) !important;
+  box-shadow:
+    inset 0 1px 0 rgba(255,255,255,.05),
+    0 16px 30px -24px rgba(0, 0, 0, .85) !important;
+}
+
+html.dui-pro-overhaul .dy-command-console .dy-command-composer__row::before {
+  opacity: 0 !important;
+}
+
+html.dui-pro-overhaul .dy-command-console .dy-command-composer__row > * {
+  position: relative !important;
+  z-index: 1 !important;
+}
+
+html.dui-pro-overhaul .dy-command-console .dy-command-icon-button,
+html.dui-pro-overhaul .dy-command-console .dy-command-send,
+html.dui-pro-overhaul [data-chat-panel="true"] .dy-command-console .dy-command-send,
+html.dui-pro-overhaul [data-chat-panel="true"] button[aria-label="Send message"] {
+  width: 38px !important;
+  height: 38px !important;
+  border-radius: 9px !important;
+  border-color: rgba(120, 173, 212, .22) !important;
+  background:
+    linear-gradient(180deg, rgba(255,255,255,.055), rgba(255,255,255,.010)),
+    rgba(6, 18, 30, .42) !important;
+  backdrop-filter: blur(10px) saturate(1.15) !important;
+  -webkit-backdrop-filter: blur(10px) saturate(1.15) !important;
+  color: #c3e8ff !important;
+  box-shadow: inset 0 1px 0 rgba(255,255,255,.06), 0 10px 18px -16px rgba(0,0,0,.8) !important;
+}
+
+html.dui-pro-overhaul .dy-command-console .dy-command-icon-button:hover,
+html.dui-pro-overhaul .dy-command-console .dy-command-send:hover,
+html.dui-pro-overhaul [data-chat-panel="true"] button[aria-label="Send message"]:hover {
+  border-color: rgba(170, 228, 255, .42) !important;
+  color: #f7fdff !important;
+  background:
+    linear-gradient(180deg, rgba(255,255,255,.085), rgba(255,255,255,.018)),
+    rgba(12, 29, 43, .58) !important;
+  box-shadow:
+    inset 0 1px 0 rgba(255,255,255,.1),
+    0 16px 26px -18px rgba(0,0,0,.7),
+    0 0 14px rgba(0, 234, 255, .16) !important;
+}
+
+html.dui-pro-overhaul .dy-command-console .dy-command-composer__field {
+  min-height: 42px !important;
+  border: 0 !important;
+  border-radius: 8px !important;
+  background: transparent !important;
+}
+
+html.dui-pro-overhaul .dy-command-console textarea.dy-command-textarea {
+  min-height: 42px !important;
+  border: 0 !important;
+  border-radius: 8px !important;
+  padding: 10px 7px 9px !important;
+  background: transparent !important;
+  color: #eff4fb !important;
+  box-shadow: none !important;
 }
 
 /* ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
@@ -1966,6 +2090,12 @@ html.dui-pro-overhaul .dy-command-console :is(input, select, textarea) {
     rgba(7, 9, 12, .86) !important;
   color: #dbe3ee !important;
   box-shadow: inset 0 1px 0 rgba(255,255,255,.035) !important;
+}
+
+html.dui-pro-overhaul .dy-command-console textarea.dy-command-textarea {
+  background: transparent !important;
+  border-color: transparent !important;
+  box-shadow: none !important;
 }
 
 html.dui-pro-overhaul :is(input, select, textarea)::placeholder,
@@ -2935,7 +3065,7 @@ html.dui-pro-overhaul [data-agent-view-option],
 html.dui-pro-overhaul [data-dui-panel="agent-registry"] > div:first-child :is(button, span),
 html.dui-pro-overhaul .active-party-actions :is(button, .dy-console-toggle) {
   background:
-    linear-gradient(180deg, rgba(8, 9, 11, .98), rgba(5, 6, 8, .99)) !important;
+    linear-gradient(180deg, #08090c, #08090c) !important;
   border-color: rgba(128, 140, 154, .14) !important;
   color: #d7dce2 !important;
   box-shadow: inset 0 1px 0 rgba(255, 255, 255, .024) !important;
@@ -2958,7 +3088,7 @@ html.dui-pro-overhaul [data-agent-control]:hover,
 html.dui-pro-overhaul [data-agent-search] input:hover,
 html.dui-pro-overhaul .active-party-actions :is(button, .dy-console-toggle):hover {
   background:
-    linear-gradient(180deg, rgba(10, 11, 13, .99), rgba(5, 6, 8, 1)) !important;
+    linear-gradient(180deg, #08090c, #08090c) !important;
   border-color: rgba(164, 174, 187, .17) !important;
 }
 
@@ -3097,4 +3227,1052 @@ html.dui-pro-overhaul .dui-mission-wrap {
 
 html.dui-pro-overhaul .dy-tab-content {
   background: #030406 !important;
+}
+
+/* Agent registry control tint: keep this screenshot toolbar off the grey pass. */
+html.dui-pro-overhaul {
+  --dui-agent-toolbar-bg: #08090c;
+  --dui-agent-toolbar-cyan: #67e8f9;
+  --dui-agent-toolbar-cyan-soft: rgba(103, 232, 249, .72);
+  --dui-agent-toolbar-border: rgba(103, 232, 249, .16);
+  --dui-agent-toolbar-border-strong: rgba(103, 232, 249, .28);
+}
+
+html.dui-pro-overhaul [data-dui-panel="agent-registry"] .agent-registry-pager,
+html.dui-pro-overhaul [data-dui-panel="agent-registry"] .agent-registry-pager-btn,
+html.dui-pro-overhaul [data-dui-panel="agent-registry"] .agent-registry-pager-count {
+  background-color: var(--dui-agent-toolbar-bg) !important;
+  border-color: rgba(103, 232, 249, .12) !important;
+  color: var(--dui-agent-toolbar-cyan) !important;
+}
+
+html.dui-pro-overhaul [data-dui-panel="agent-registry"] .agent-registry-pager-btn:hover,
+html.dui-pro-overhaul [data-dui-panel="agent-registry"] .agent-registry-pager-btn:focus,
+html.dui-pro-overhaul [data-dui-panel="agent-registry"] .agent-registry-pager-btn:focus-visible {
+  background-color: var(--dui-agent-toolbar-bg) !important;
+  border-color: rgba(103, 232, 249, .20) !important;
+  color: var(--dui-agent-toolbar-cyan) !important;
+}
+
+html.dui-pro-overhaul [data-dui-panel="agent-registry"] [data-agent-toolbar],
+html.dui-pro-overhaul [data-dui-panel="agent-registry"] [data-agent-search],
+html.dui-pro-overhaul [data-dui-panel="agent-registry"] [data-agent-view-toggle] {
+  background: var(--dui-agent-toolbar-bg) !important;
+  border-color: var(--dui-agent-toolbar-border) !important;
+  box-shadow:
+    inset 0 1px 0 rgba(103, 232, 249, .08),
+    0 0 0 1px rgba(103, 232, 249, .035) !important;
+}
+
+html.dui-pro-overhaul [data-dui-panel="agent-registry"] [data-agent-search] input,
+html.dui-pro-overhaul [data-dui-panel="agent-registry"] [data-agent-control],
+html.dui-pro-overhaul [data-dui-panel="agent-registry"] [data-agent-overlay-control],
+html.dui-pro-overhaul.dui-no-blue-forms [data-dui-panel="agent-registry"] [data-agent-search] input,
+html.dui-pro-overhaul.dui-no-blue-forms [data-dui-panel="agent-registry"] [data-agent-control],
+html.dui-pro-overhaul.dui-no-blue-forms [data-dui-panel="agent-registry"] [data-agent-overlay-control] {
+  background-color: var(--dui-agent-toolbar-bg) !important;
+  background-image: none !important;
+  border-color: var(--dui-agent-toolbar-border) !important;
+  color: var(--dui-agent-toolbar-cyan) !important;
+  caret-color: var(--dui-agent-toolbar-cyan) !important;
+  text-shadow: 0 0 10px rgba(103, 232, 249, .12) !important;
+  box-shadow:
+    inset 0 1px 0 rgba(103, 232, 249, .08),
+    0 0 0 1px rgba(103, 232, 249, .025) !important;
+}
+
+html.dui-pro-overhaul [data-dui-panel="agent-registry"] [data-agent-control],
+html.dui-pro-overhaul [data-dui-panel="agent-registry"] [data-agent-overlay-control],
+html.dui-pro-overhaul.dui-no-blue-forms [data-dui-panel="agent-registry"] [data-agent-control],
+html.dui-pro-overhaul.dui-no-blue-forms [data-dui-panel="agent-registry"] [data-agent-overlay-control] {
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='8' height='8' viewBox='0 0 24 24' fill='none' stroke='%2367e8f9' stroke-width='3' stroke-linecap='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E") !important;
+  background-repeat: no-repeat !important;
+  background-position: right 8px center !important;
+}
+
+html.dui-pro-overhaul [data-dui-panel="agent-registry"] [data-agent-search] input::placeholder,
+html.dui-pro-overhaul.dui-no-blue-forms [data-dui-panel="agent-registry"] [data-agent-search] input::placeholder {
+  color: var(--dui-agent-toolbar-cyan-soft) !important;
+}
+
+html.dui-pro-overhaul [data-dui-panel="agent-registry"] [data-agent-search] svg,
+html.dui-pro-overhaul [data-dui-panel="agent-registry"] [data-agent-search] button,
+html.dui-pro-overhaul.dui-no-blue-forms [data-dui-panel="agent-registry"] [data-agent-search] button {
+  color: var(--dui-agent-toolbar-cyan) !important;
+}
+
+html.dui-pro-overhaul [data-dui-panel="agent-registry"] [data-agent-search] input:hover,
+html.dui-pro-overhaul [data-dui-panel="agent-registry"] [data-agent-control]:hover,
+html.dui-pro-overhaul [data-dui-panel="agent-registry"] [data-agent-overlay-control]:hover,
+html.dui-pro-overhaul [data-dui-panel="agent-registry"] [data-agent-search] input:focus,
+html.dui-pro-overhaul [data-dui-panel="agent-registry"] [data-agent-control]:focus,
+html.dui-pro-overhaul [data-dui-panel="agent-registry"] [data-agent-overlay-control]:focus,
+html.dui-pro-overhaul.dui-no-blue-forms [data-dui-panel="agent-registry"] [data-agent-search] input:is(:hover, :focus, :focus-visible),
+html.dui-pro-overhaul.dui-no-blue-forms [data-dui-panel="agent-registry"] [data-agent-control]:is(:hover, :focus, :focus-visible),
+html.dui-pro-overhaul.dui-no-blue-forms [data-dui-panel="agent-registry"] [data-agent-overlay-control]:is(:hover, :focus, :focus-visible) {
+  background-color: var(--dui-agent-toolbar-bg) !important;
+  border-color: var(--dui-agent-toolbar-border-strong) !important;
+  color: var(--dui-agent-toolbar-cyan) !important;
+  outline-color: rgba(103, 232, 249, .16) !important;
+  box-shadow:
+    0 0 0 2px rgba(103, 232, 249, .04),
+    inset 0 1px 0 rgba(103, 232, 249, .06) !important;
+}
+
+html.dui-pro-overhaul [data-dui-panel="agent-registry"] [data-agent-control] option,
+html.dui-pro-overhaul [data-dui-panel="agent-registry"] [data-agent-overlay-control] option {
+  background-color: var(--dui-agent-toolbar-bg) !important;
+  color: var(--dui-agent-toolbar-cyan) !important;
+}
+
+html.dui-pro-overhaul [data-dui-panel="agent-registry"] [data-agent-view-option],
+html.dui-pro-overhaul.dui-no-blue-forms [data-dui-panel="agent-registry"] [data-agent-view-option] {
+  background: var(--dui-agent-toolbar-bg) !important;
+  border-color: transparent !important;
+  color: var(--dui-agent-toolbar-cyan) !important;
+  text-shadow: 0 0 10px rgba(103, 232, 249, .12) !important;
+  box-shadow: none !important;
+}
+
+html.dui-pro-overhaul [data-dui-panel="agent-registry"] [data-agent-view-option]:hover,
+html.dui-pro-overhaul [data-dui-panel="agent-registry"] [data-agent-view-option][data-active="true"],
+html.dui-pro-overhaul [data-dui-panel="agent-registry"] [data-agent-view-option][aria-pressed="true"],
+html.dui-pro-overhaul.dui-no-blue-forms [data-dui-panel="agent-registry"] [data-agent-view-option]:hover,
+html.dui-pro-overhaul.dui-no-blue-forms [data-dui-panel="agent-registry"] [data-agent-view-option][data-active="true"],
+html.dui-pro-overhaul.dui-no-blue-forms [data-dui-panel="agent-registry"] [data-agent-view-option][aria-pressed="true"] {
+  background: var(--dui-agent-toolbar-bg) !important;
+  border-color: var(--dui-agent-toolbar-border-strong) !important;
+  color: var(--dui-agent-toolbar-cyan) !important;
+  box-shadow:
+    inset 0 0 0 1px rgba(103, 232, 249, .12),
+    0 0 10px rgba(103, 232, 249, .05) !important;
+}
+
+/* Extra specificity for the compact toolbar: every visible label/icon stays cyan. */
+html.dui-pro-overhaul [data-dui-panel="agent-registry"] [data-agent-toolbar],
+html.dui-pro-overhaul.dui-no-blue-forms [data-dui-panel="agent-registry"] [data-agent-toolbar] {
+  --dui-agent-toolbar-cyan-bright: #a5f3fc;
+  color: var(--dui-agent-toolbar-cyan) !important;
+}
+
+html.dui-pro-overhaul [data-dui-panel="agent-registry"] [data-agent-toolbar] :is(input, select, button, svg),
+html.dui-pro-overhaul.dui-no-blue-forms [data-dui-panel="agent-registry"] [data-agent-toolbar] :is(input, select, button, svg) {
+  color: var(--dui-agent-toolbar-cyan) !important;
+  text-shadow: 0 0 10px rgba(103, 232, 249, .14) !important;
+}
+
+html.dui-pro-overhaul [data-dui-panel="agent-registry"] [data-agent-toolbar] input::placeholder,
+html.dui-pro-overhaul.dui-no-blue-forms [data-dui-panel="agent-registry"] [data-agent-toolbar] input::placeholder {
+  color: var(--dui-agent-toolbar-cyan) !important;
+  opacity: .86 !important;
+}
+
+html.dui-pro-overhaul [data-dui-panel="agent-registry"] [data-agent-toolbar] :is(select[data-agent-control], select[data-agent-overlay-control]),
+html.dui-pro-overhaul.dui-no-blue-forms [data-dui-panel="agent-registry"] [data-agent-toolbar] :is(select[data-agent-control], select[data-agent-overlay-control]) {
+  color: var(--dui-agent-toolbar-cyan) !important;
+  -webkit-text-fill-color: var(--dui-agent-toolbar-cyan) !important;
+}
+
+html.dui-pro-overhaul [data-dui-panel="agent-registry"] [data-agent-toolbar] :is(select[data-agent-control], select[data-agent-overlay-control]) option,
+html.dui-pro-overhaul.dui-no-blue-forms [data-dui-panel="agent-registry"] [data-agent-toolbar] :is(select[data-agent-control], select[data-agent-overlay-control]) option {
+  background-color: var(--dui-agent-toolbar-bg) !important;
+  color: var(--dui-agent-toolbar-cyan) !important;
+}
+
+html.dui-pro-overhaul [data-dui-panel="agent-registry"] [data-agent-toolbar] [data-agent-view-option][data-active="true"],
+html.dui-pro-overhaul [data-dui-panel="agent-registry"] [data-agent-toolbar] [data-agent-view-option][aria-pressed="true"],
+html.dui-pro-overhaul.dui-no-blue-forms [data-dui-panel="agent-registry"] [data-agent-toolbar] [data-agent-view-option][data-active="true"],
+html.dui-pro-overhaul.dui-no-blue-forms [data-dui-panel="agent-registry"] [data-agent-toolbar] [data-agent-view-option][aria-pressed="true"] {
+  background:
+    linear-gradient(180deg, rgba(103, 232, 249, .16), rgba(103, 232, 249, .06)),
+    var(--dui-agent-toolbar-bg) !important;
+  border-color: rgba(165, 243, 252, .34) !important;
+  color: var(--dui-agent-toolbar-cyan-bright) !important;
+  -webkit-text-fill-color: var(--dui-agent-toolbar-cyan-bright) !important;
+  text-shadow:
+    0 0 10px rgba(103, 232, 249, .16),
+    0 0 12px rgba(103, 232, 249, .10) !important;
+  box-shadow:
+    inset 0 0 0 1px rgba(165, 243, 252, .34),
+    0 0 10px rgba(103, 232, 249, .08) !important;
+}
+
+html.dui-pro-overhaul [data-dui-panel="agent-registry"] [data-agent-toolbar] [data-agent-view-option]:not([data-active="true"]):hover,
+html.dui-pro-overhaul.dui-no-blue-forms [data-dui-panel="agent-registry"] [data-agent-toolbar] [data-agent-view-option]:not([data-active="true"]):hover {
+  background:
+    linear-gradient(180deg, rgba(103, 232, 249, .10), rgba(103, 232, 249, .035)),
+    var(--dui-agent-toolbar-bg) !important;
+  border-color: rgba(103, 232, 249, .20) !important;
+  color: var(--dui-agent-toolbar-cyan-bright) !important;
+  -webkit-text-fill-color: var(--dui-agent-toolbar-cyan-bright) !important;
+}
+
+html.dui-pro-overhaul [data-dui-panel="agent-registry"] [data-agent-toolbar],
+html.dui-pro-overhaul [data-dui-panel="agent-registry"] [data-agent-toolbar] *,
+html.dui-pro-overhaul [data-dui-panel="agent-registry"] [data-agent-toolbar] ::before,
+html.dui-pro-overhaul [data-dui-panel="agent-registry"] [data-agent-toolbar] ::after,
+html.dui-pro-overhaul.dui-no-blue-forms [data-dui-panel="agent-registry"] [data-agent-toolbar],
+html.dui-pro-overhaul.dui-no-blue-forms [data-dui-panel="agent-registry"] [data-agent-toolbar] *,
+html.dui-pro-overhaul.dui-no-blue-forms [data-dui-panel="agent-registry"] [data-agent-toolbar] ::before,
+html.dui-pro-overhaul.dui-no-blue-forms [data-dui-panel="agent-registry"] [data-agent-toolbar] ::after {
+  filter: none !important;
+  opacity: 1 !important;
+}
+
+html.dui-pro-overhaul.dui-no-blue-forms [data-dui-panel="agent-registry"] [data-agent-toolbar] [class*="cyan"],
+html.dui-pro-overhaul.dui-no-blue-forms [data-dui-panel="agent-registry"] [data-agent-toolbar] [class*="blue"],
+html.dui-pro-overhaul.dui-no-blue-forms [data-dui-panel="agent-registry"] [data-agent-toolbar] [class*="sky"] {
+  color: var(--dui-agent-toolbar-cyan) !important;
+  -webkit-text-fill-color: var(--dui-agent-toolbar-cyan) !important;
+  filter: none !important;
+}
+
+html.dui-pro-overhaul.dui-no-blue-forms [data-dui-panel="agent-registry"] [data-agent-toolbar] [class*="cyan"][data-active="true"],
+html.dui-pro-overhaul.dui-no-blue-forms [data-dui-panel="agent-registry"] [data-agent-toolbar] [class*="blue"][data-active="true"],
+html.dui-pro-overhaul.dui-no-blue-forms [data-dui-panel="agent-registry"] [data-agent-toolbar] [class*="sky"][data-active="true"] {
+  color: var(--dui-agent-toolbar-cyan-bright) !important;
+  -webkit-text-fill-color: var(--dui-agent-toolbar-cyan-bright) !important;
+}
+
+html.dui-pro-overhaul [data-dui-panel="agent-registry"] [data-agent-search] svg,
+html.dui-pro-overhaul [data-dui-panel="agent-registry"] [data-agent-search] svg *,
+html.dui-pro-overhaul.dui-no-blue-forms [data-dui-panel="agent-registry"] [data-agent-search] svg,
+html.dui-pro-overhaul.dui-no-blue-forms [data-dui-panel="agent-registry"] [data-agent-search] svg * {
+  color: var(--dui-agent-toolbar-cyan) !important;
+  stroke: currentColor !important;
+  filter: none !important;
+}
+
+html.dui-pro-overhaul [data-dui-panel="agent-registry"] [data-agent-search] input,
+html.dui-pro-overhaul.dui-no-blue-forms [data-dui-panel="agent-registry"] [data-agent-search] input {
+  -webkit-text-fill-color: var(--dui-agent-toolbar-cyan) !important;
+}
+
+html.dui-pro-overhaul [data-dui-panel="agent-registry"] [data-agent-search] input::placeholder,
+html.dui-pro-overhaul.dui-no-blue-forms [data-dui-panel="agent-registry"] [data-agent-search] input::placeholder {
+  color: var(--dui-agent-toolbar-cyan) !important;
+  -webkit-text-fill-color: var(--dui-agent-toolbar-cyan) !important;
+  opacity: 1 !important;
+}
+
+/* Last-mile registry toolbar lock: do not let reference/no-blue grey passes recolor it. */
+html.dui-pro-overhaul [data-agent-toolbar] {
+  --dy-toolbar-bg: #08090c;
+  --dy-toolbar-cyan: #67e8f9;
+  --dy-toolbar-cyan-hot: #a5f3fc;
+  background: var(--dy-toolbar-bg) !important;
+  border-color: rgba(103, 232, 249, .14) !important;
+  color: var(--dy-toolbar-cyan) !important;
+  filter: none !important;
+}
+
+html.dui-pro-overhaul [data-agent-toolbar] *,
+html.dui-pro-overhaul [data-agent-toolbar] *::before,
+html.dui-pro-overhaul [data-agent-toolbar] *::after {
+  filter: none !important;
+}
+
+html.dui-pro-overhaul [data-agent-toolbar] :is(input, select, button),
+html.dui-pro-overhaul [data-agent-toolbar] :is(input, select, button):is(:hover, :focus, :focus-visible) {
+  background-color: var(--dy-toolbar-bg) !important;
+  color: var(--dy-toolbar-cyan) !important;
+  -webkit-text-fill-color: var(--dy-toolbar-cyan) !important;
+  border-color: rgba(103, 232, 249, .16) !important;
+  outline-color: rgba(103, 232, 249, .16) !important;
+  opacity: 1 !important;
+}
+
+html.dui-pro-overhaul [data-agent-toolbar] input::placeholder {
+  color: var(--dy-toolbar-cyan) !important;
+  -webkit-text-fill-color: var(--dy-toolbar-cyan) !important;
+  opacity: 1 !important;
+}
+
+html.dui-pro-overhaul [data-agent-toolbar] [data-agent-search] svg,
+html.dui-pro-overhaul [data-agent-toolbar] [data-agent-search] svg *,
+html.dui-pro-overhaul [data-agent-toolbar] svg,
+html.dui-pro-overhaul [data-agent-toolbar] svg * {
+  color: var(--dy-toolbar-cyan) !important;
+  stroke: currentColor !important;
+  opacity: 1 !important;
+  filter: none !important;
+}
+
+html.dui-pro-overhaul [data-agent-toolbar] [data-agent-control],
+html.dui-pro-overhaul [data-agent-toolbar] [data-agent-overlay-control] {
+  background-color: var(--dy-toolbar-bg) !important;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='8' height='8' viewBox='0 0 24 24' fill='none' stroke='%2367e8f9' stroke-width='3' stroke-linecap='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E") !important;
+  background-repeat: no-repeat !important;
+  background-position: right 8px center !important;
+}
+
+html.dui-pro-overhaul [data-agent-toolbar] [data-agent-view-toggle] {
+  background: var(--dy-toolbar-bg) !important;
+  border-color: rgba(103, 232, 249, .14) !important;
+  box-shadow: inset 0 0 0 1px rgba(103, 232, 249, .06) !important;
+}
+
+html.dui-pro-overhaul [data-agent-toolbar] [data-agent-view-option],
+html.dui-pro-overhaul [data-agent-toolbar] [data-agent-view-option]:not([data-active="true"]):hover {
+  background: var(--dy-toolbar-bg) !important;
+  color: var(--dy-toolbar-cyan) !important;
+  -webkit-text-fill-color: var(--dy-toolbar-cyan) !important;
+  border-color: transparent !important;
+  box-shadow: none !important;
+  text-shadow: 0 0 10px rgba(103, 232, 249, .18) !important;
+}
+
+html.dui-pro-overhaul [data-agent-toolbar] [data-agent-view-option][data-active="true"],
+html.dui-pro-overhaul [data-agent-toolbar] [data-agent-view-option][aria-pressed="true"] {
+  background: var(--dy-toolbar-bg) !important;
+  color: var(--dy-toolbar-cyan-hot) !important;
+  -webkit-text-fill-color: var(--dy-toolbar-cyan-hot) !important;
+  border-color: rgba(165, 243, 252, .34) !important;
+  box-shadow:
+    inset 0 0 0 1px rgba(165, 243, 252, .24),
+    0 0 12px rgba(103, 232, 249, .09) !important;
+  text-shadow:
+    0 0 10px rgba(103, 232, 249, .24),
+    0 0 14px rgba(103, 232, 249, .16) !important;
+}
+
+/* Final agent registry cyan lock: outrank the cohesive/obsidian grey form passes. */
+html.dui-pro-overhaul.dui-cohesive-ui body section[data-dui-panel="agent-registry"] {
+  --dy-toolbar-bg: #08090c;
+  --dy-toolbar-cyan: #67e8f9;
+  --dy-toolbar-cyan-hot: #a5f3fc;
+}
+
+html.dui-pro-overhaul.dui-cohesive-ui body section[data-dui-panel="agent-registry"] [data-agent-toolbar] {
+  background:
+    linear-gradient(180deg, rgba(103, 232, 249, .035), rgba(103, 232, 249, .010)),
+    var(--dy-toolbar-bg) !important;
+  border-color: rgba(103, 232, 249, .14) !important;
+  color: var(--dy-toolbar-cyan) !important;
+  box-shadow:
+    inset 0 1px 0 rgba(103, 232, 249, .04),
+    0 0 0 1px rgba(103, 232, 249, .02) !important;
+  filter: none !important;
+}
+
+html.dui-pro-overhaul.dui-cohesive-ui body section[data-dui-panel="agent-registry"] [data-agent-toolbar] *,
+html.dui-pro-overhaul.dui-cohesive-ui body section[data-dui-panel="agent-registry"] [data-agent-toolbar] *::before,
+html.dui-pro-overhaul.dui-cohesive-ui body section[data-dui-panel="agent-registry"] [data-agent-toolbar] *::after {
+  filter: none !important;
+  opacity: 1 !important;
+}
+
+html.dui-pro-overhaul.dui-cohesive-ui body section[data-dui-panel="agent-registry"] [data-agent-search],
+html.dui-pro-overhaul.dui-cohesive-ui body section[data-dui-panel="agent-registry"] [data-agent-view-toggle] {
+  background: var(--dy-toolbar-bg) !important;
+  border-color: rgba(103, 232, 249, .14) !important;
+  box-shadow: inset 0 0 0 1px rgba(103, 232, 249, .05) !important;
+}
+
+html.dui-pro-overhaul.dui-cohesive-ui body section[data-dui-panel="agent-registry"] [data-agent-search] input,
+html.dui-pro-overhaul.dui-cohesive-ui body section[data-dui-panel="agent-registry"] [data-agent-control],
+html.dui-pro-overhaul.dui-cohesive-ui body section[data-dui-panel="agent-registry"] [data-agent-overlay-control],
+html.dui-pro-overhaul.dui-cohesive-ui body section[data-dui-panel="agent-registry"] [data-agent-view-option] {
+  background-color: var(--dy-toolbar-bg) !important;
+  border-color: rgba(103, 232, 249, .16) !important;
+  color: var(--dy-toolbar-cyan) !important;
+  -webkit-text-fill-color: var(--dy-toolbar-cyan) !important;
+  caret-color: var(--dy-toolbar-cyan) !important;
+  text-shadow: 0 0 8px rgba(103, 232, 249, .12) !important;
+  box-shadow: inset 0 1px 0 rgba(103, 232, 249, .08) !important;
+}
+
+html.dui-pro-overhaul.dui-cohesive-ui body section[data-dui-panel="agent-registry"] [data-agent-search] input {
+  background-image:
+    linear-gradient(180deg, rgba(103, 232, 249, .035), rgba(103, 232, 249, .006)) !important;
+}
+
+html.dui-pro-overhaul.dui-cohesive-ui body section[data-dui-panel="agent-registry"] [data-agent-search] input::placeholder {
+  color: var(--dy-toolbar-cyan) !important;
+  -webkit-text-fill-color: var(--dy-toolbar-cyan) !important;
+  opacity: .90 !important;
+}
+
+html.dui-pro-overhaul.dui-cohesive-ui body section[data-dui-panel="agent-registry"] [data-agent-control],
+html.dui-pro-overhaul.dui-cohesive-ui body section[data-dui-panel="agent-registry"] [data-agent-overlay-control] {
+  background-image:
+    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='8' height='8' viewBox='0 0 24 24' fill='none' stroke='%2367e8f9' stroke-width='3' stroke-linecap='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E"),
+    linear-gradient(180deg, rgba(103, 232, 249, .040), rgba(103, 232, 249, .008)) !important;
+  background-repeat: no-repeat, repeat !important;
+  background-position: right 8px center, 0 0 !important;
+  background-size: 8px 8px, auto !important;
+}
+
+html.dui-pro-overhaul.dui-cohesive-ui body section[data-dui-panel="agent-registry"] [data-agent-control] option,
+html.dui-pro-overhaul.dui-cohesive-ui body section[data-dui-panel="agent-registry"] [data-agent-overlay-control] option,
+html.dui-pro-overhaul.dui-cohesive-ui body section[data-dui-panel="agent-registry"] [data-agent-control] option:checked,
+html.dui-pro-overhaul.dui-cohesive-ui body section[data-dui-panel="agent-registry"] [data-agent-overlay-control] option:checked {
+  background-color: var(--dy-toolbar-bg) !important;
+  color: var(--dy-toolbar-cyan) !important;
+  -webkit-text-fill-color: var(--dy-toolbar-cyan) !important;
+}
+
+html.dui-pro-overhaul.dui-cohesive-ui body section[data-dui-panel="agent-registry"] [data-agent-search] svg,
+html.dui-pro-overhaul.dui-cohesive-ui body section[data-dui-panel="agent-registry"] [data-agent-search] svg *,
+html.dui-pro-overhaul.dui-cohesive-ui body section[data-dui-panel="agent-registry"] [data-agent-search] button,
+html.dui-pro-overhaul.dui-cohesive-ui body section[data-dui-panel="agent-registry"] [data-agent-toolbar] svg,
+html.dui-pro-overhaul.dui-cohesive-ui body section[data-dui-panel="agent-registry"] [data-agent-toolbar] svg * {
+  color: var(--dy-toolbar-cyan) !important;
+  stroke: currentColor !important;
+  -webkit-text-fill-color: var(--dy-toolbar-cyan) !important;
+  opacity: 1 !important;
+}
+
+html.dui-pro-overhaul.dui-cohesive-ui body section[data-dui-panel="agent-registry"] [data-agent-view-option],
+html.dui-pro-overhaul.dui-cohesive-ui body section[data-dui-panel="agent-registry"] [data-agent-view-option]:not([data-active="true"]):hover {
+  background:
+    linear-gradient(180deg, rgba(103, 232, 249, .055), rgba(103, 232, 249, .010)),
+    var(--dy-toolbar-bg) !important;
+  border-color: transparent !important;
+  color: var(--dy-toolbar-cyan) !important;
+  -webkit-text-fill-color: var(--dy-toolbar-cyan) !important;
+}
+
+html.dui-pro-overhaul.dui-cohesive-ui body section[data-dui-panel="agent-registry"] [data-agent-view-option][data-active="true"],
+html.dui-pro-overhaul.dui-cohesive-ui body section[data-dui-panel="agent-registry"] [data-agent-view-option][aria-pressed="true"],
+html.dui-pro-overhaul.dui-cohesive-ui body section[data-dui-panel="agent-registry"] [data-agent-toolbar] button[data-agent-view-option][data-active="true"],
+html.dui-pro-overhaul.dui-cohesive-ui body section[data-dui-panel="agent-registry"] [data-agent-toolbar] button[data-agent-view-option][aria-pressed="true"] {
+  background:
+    linear-gradient(180deg, rgba(103, 232, 249, .16), rgba(103, 232, 249, .045)),
+    var(--dy-toolbar-bg) !important;
+  border-color: rgba(165, 243, 252, .34) !important;
+  color: var(--dy-toolbar-cyan-hot) !important;
+  -webkit-text-fill-color: var(--dy-toolbar-cyan-hot) !important;
+  box-shadow:
+    inset 0 0 0 1px rgba(165, 243, 252, .22),
+    0 0 12px rgba(103, 232, 249, .10) !important;
+}
+
+html.dui-pro-overhaul.dui-cohesive-ui body section[data-dui-panel="agent-registry"] [data-agent-status] {
+  color: var(--dy-toolbar-cyan) !important;
+  -webkit-text-fill-color: var(--dy-toolbar-cyan) !important;
+  opacity: .86 !important;
+}
+
+/* Registry controls final obsidian lock: force agent toolbar/search/pager controls to darker fill. */
+html.dui-pro-overhaul [data-dui-panel="agent-registry"] {
+  --dui-agent-toolbar-bg: #08090c !important;
+  --dui-agent-toolbar-border: rgba(184, 188, 190, .14) !important;
+  --dui-agent-toolbar-border-strong: rgba(184, 188, 190, .22) !important;
+}
+
+html.dui-pro-overhaul [data-dui-panel="agent-registry"] [data-agent-toolbar],
+html.dui-pro-overhaul [data-dui-panel="agent-registry"] [data-agent-search],
+html.dui-pro-overhaul [data-dui-panel="agent-registry"] [data-agent-search] input,
+html.dui-pro-overhaul [data-dui-panel="agent-registry"] [data-agent-search] input::placeholder,
+html.dui-pro-overhaul [data-dui-panel="agent-registry"] [data-agent-search] svg,
+html.dui-pro-overhaul [data-dui-panel="agent-registry"] [data-agent-control],
+html.dui-pro-overhaul [data-dui-panel="agent-registry"] [data-agent-overlay-control],
+html.dui-pro-overhaul [data-dui-panel="agent-registry"] [data-agent-view-toggle],
+html.dui-pro-overhaul [data-dui-panel="agent-registry"] [data-agent-view-option],
+html.dui-pro-overhaul [data-dui-panel="agent-registry"] .agent-registry-pager,
+html.dui-pro-overhaul [data-dui-panel="agent-registry"] .agent-registry-pager-btn,
+html.dui-pro-overhaul [data-dui-panel="agent-registry"] .agent-registry-pager-count,
+html.dui-pro-overhaul [data-dui-panel="agent-registry"] > div:first-child :is(button, span) {
+  background-color: #08090c !important;
+  background-image: none !important;
+  border-color: rgba(184, 188, 190, .14) !important;
+}
+
+html.dui-pro-overhaul [data-dui-panel="agent-registry"] .agent-registry-pager-btn,
+html.dui-pro-overhaul [data-dui-panel="agent-registry"] [data-agent-toolbar] :is(input, select, button, svg),
+html.dui-pro-overhaul [data-dui-panel="agent-registry"] [data-agent-view-option],
+html.dui-pro-overhaul [data-dui-panel="agent-registry"] [data-agent-search] button {
+  color: var(--dui-agent-toolbar-cyan) !important;
+  background-color: #08090c !important;
+  background-image: none !important;
+}
+
+html.dui-pro-overhaul [data-dui-panel="agent-registry"] [data-agent-toolbar] button[data-agent-view-option][data-active="true"],
+html.dui-pro-overhaul [data-dui-panel="agent-registry"] [data-agent-toolbar] button[data-agent-view-option][aria-pressed="true"],
+html.dui-pro-overhaul [data-dui-panel="agent-registry"] [data-agent-view-option]:hover,
+html.dui-pro-overhaul [data-dui-panel="agent-registry"] [data-agent-control]:hover,
+html.dui-pro-overhaul [data-dui-panel="agent-registry"] [data-agent-overlay-control]:hover,
+html.dui-pro-overhaul [data-dui-panel="agent-registry"] [data-agent-search] input:hover,
+html.dui-pro-overhaul [data-dui-panel="agent-registry"] [data-agent-control]:focus,
+html.dui-pro-overhaul [data-dui-panel="agent-registry"] [data-agent-overlay-control]:focus,
+html.dui-pro-overhaul [data-dui-panel="agent-registry"] [data-agent-search] input:focus,
+html.dui-pro-overhaul [data-dui-panel="agent-registry"] .agent-registry-pager-btn:hover,
+html.dui-pro-overhaul [data-dui-panel="agent-registry"] .agent-registry-pager-btn:focus,
+html.dui-pro-overhaul [data-dui-panel="agent-registry"] .agent-registry-pager-btn:focus-visible {
+  background-color: #08090c !important;
+  background-image: none !important;
+  border-color: rgba(184, 188, 190, .16) !important;
+  outline-color: rgba(103, 232, 249, .16) !important;
+}
+
+
+/* Agent Registry obsidian fill hard lock: absolute solid coverage, no partial tints. */
+html.dui-pro-overhaul [data-dui-panel="agent-registry"] > div:first-child,
+html.dui-pro-overhaul [data-dui-panel="agent-registry"] .agent-registry-pager,
+html.dui-pro-overhaul [data-dui-panel="agent-registry"] .agent-registry-pager-btn,
+html.dui-pro-overhaul [data-dui-panel="agent-registry"] .agent-registry-pager-count,
+html.dui-pro-overhaul [data-dui-panel="agent-registry"] [data-agent-toolbar],
+html.dui-pro-overhaul [data-dui-panel="agent-registry"] [data-agent-search],
+html.dui-pro-overhaul [data-dui-panel="agent-registry"] [data-agent-search] svg,
+html.dui-pro-overhaul [data-dui-panel="agent-registry"] [data-agent-search] input,
+html.dui-pro-overhaul [data-dui-panel="agent-registry"] [data-agent-search] button,
+html.dui-pro-overhaul [data-dui-panel="agent-registry"] [data-agent-controls],
+html.dui-pro-overhaul [data-dui-panel="agent-registry"] [data-agent-control],
+html.dui-pro-overhaul [data-dui-panel="agent-registry"] [data-agent-overlay-control],
+html.dui-pro-overhaul [data-dui-panel="agent-registry"] [data-agent-view-toggle],
+html.dui-pro-overhaul [data-dui-panel="agent-registry"] [data-agent-view-option] {
+  background: #08090c !important;
+  background-image: none !important;
+  box-shadow: none !important;
+}
+
+html.dui-pro-overhaul [data-dui-panel="agent-registry"] [data-agent-search] input:hover,
+html.dui-pro-overhaul [data-dui-panel="agent-registry"] [data-agent-search] input:focus,
+html.dui-pro-overhaul [data-dui-panel="agent-registry"] [data-agent-control]:hover,
+html.dui-pro-overhaul [data-dui-panel="agent-registry"] [data-agent-overlay-control]:hover,
+html.dui-pro-overhaul [data-dui-panel="agent-registry"] [data-agent-control]:focus,
+html.dui-pro-overhaul [data-dui-panel="agent-registry"] [data-agent-overlay-control]:focus,
+html.dui-pro-overhaul [data-dui-panel="agent-registry"] [data-agent-search] button:hover,
+html.dui-pro-overhaul [data-dui-panel="agent-registry"] [data-agent-view-option]:hover,
+html.dui-pro-overhaul [data-dui-panel="agent-registry"] .agent-registry-pager-btn:hover,
+html.dui-pro-overhaul [data-dui-panel="agent-registry"] .agent-registry-pager-btn:focus-visible {
+  background: #08090c !important;
+  background-image: none !important;
+  box-shadow: none !important;
+}
+
+html.dui-pro-overhaul [data-dui-panel="agent-registry"] [data-agent-view-option][data-active="true"],
+html.dui-pro-overhaul [data-dui-panel="agent-registry"] [data-agent-view-option][aria-pressed="true"],
+html.dui-pro-overhaul [data-dui-panel="agent-registry"] [data-agent-toolbar] button[data-agent-view-option][data-active="true"],
+html.dui-pro-overhaul [data-dui-panel="agent-registry"] [data-agent-toolbar] button[data-agent-view-option][aria-pressed="true"] {
+  background: #08090c !important;
+  background-image: none !important;
+  box-shadow: none !important;
+}
+
+html.dui-pro-overhaul [data-dui-panel="agent-registry"] [data-agent-control] option,
+html.dui-pro-overhaul [data-dui-panel="agent-registry"] [data-agent-overlay-control] option,
+html.dui-pro-overhaul [data-dui-panel="agent-registry"] [data-agent-control] option:hover,
+html.dui-pro-overhaul [data-dui-panel="agent-registry"] [data-agent-overlay-control] option:hover,
+html.dui-pro-overhaul [data-dui-panel="agent-registry"] [data-agent-control] option:focus,
+html.dui-pro-overhaul [data-dui-panel="agent-registry"] [data-agent-overlay-control] option:focus,
+html.dui-pro-overhaul [data-dui-panel="agent-registry"] [data-agent-control] option:checked,
+html.dui-pro-overhaul [data-dui-panel="agent-registry"] [data-agent-overlay-control] option:checked {
+  background: #08090c !important;
+  background-color: #08090c !important;
+  color: #67e8f9 !important;
+}
+
+
+
+/* Command composer obsidian lock: keep composer strip, field, and actions cohesive. */
+html.dui-pro-overhaul .dy-command-console,
+html.dui-pro-overhaul [data-chat-panel="true"].dy-command-console,
+html.dui-pro-overhaul .dy-command-console .dy-command-composer,
+html.dui-pro-overhaul .dy-command-console .dy-command-composer__row {
+  background: #08090c !important;
+  background-image: none !important;
+  border-color: rgba(184, 188, 190, .20) !important;
+}
+
+html.dui-pro-overhaul .dy-command-console .dy-command-composer {
+  backdrop-filter: none !important;
+  -webkit-backdrop-filter: none !important;
+}
+
+html.dui-pro-overhaul .dy-command-console .dy-command-composer__row {
+  border-color: rgba(184, 188, 190, .20) !important;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, .05),
+    0 16px 30px -24px rgba(0, 0, 0, .78) !important;
+}
+
+html.dui-pro-overhaul .dy-command-console .dy-command-composer__field,
+html.dui-pro-overhaul .dy-command-console textarea.dy-command-textarea,
+html.dui-pro-overhaul textarea.dy-command-textarea {
+  background: #08090c !important;
+  border-color: transparent !important;
+  box-shadow: none !important;
+  color: #eff4fb !important;
+}
+
+html.dui-pro-overhaul .dy-command-console .dy-command-icon-button,
+html.dui-pro-overhaul .dy-command-console .dy-command-send,
+html.dui-pro-overhaul [data-chat-panel="true"] button[aria-label="Send message"] {
+  border-color: rgba(184, 188, 190, .24) !important;
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, .055), rgba(255, 255, 255, .010)),
+    rgba(8, 9, 12, .45) !important;
+  color: #d5dde3 !important;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, .06) !important;
+  backdrop-filter: blur(10px) saturate(1.06) !important;
+}
+
+html.dui-pro-overhaul .dy-command-console .dy-command-icon-button:hover,
+html.dui-pro-overhaul .dy-command-console .dy-command-send:hover,
+html.dui-pro-overhaul [data-chat-panel="true"] button[aria-label="Send message"]:hover {
+  border-color: rgba(184, 188, 190, .42) !important;
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, .085), rgba(255, 255, 255, .018)),
+    #08090c !important;
+  color: #f3f8fc !important;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, .1),
+    0 16px 26px -18px rgba(0, 0, 0, .7) !important;
+}
+
+/* Agent Registry shell + controls: force obsidian tone end-to-end. */
+html.dui-pro-overhaul [data-dui-panel="agent-registry"],
+html.dui-pro-overhaul [data-dui-panel="agent-registry"] > div:first-child,
+html.dui-pro-overhaul [data-dui-panel="agent-registry"] > div:first-child :is(button, span),
+html.dui-pro-overhaul [data-dui-panel="agent-registry"] [data-agent-toolbar],
+html.dui-pro-overhaul [data-dui-panel="agent-registry"] [data-agent-toolbar] *,
+html.dui-pro-overhaul [data-dui-panel="agent-registry"] [data-agent-search],
+html.dui-pro-overhaul [data-dui-panel="agent-registry"] [data-agent-search] *,
+html.dui-pro-overhaul [data-dui-panel="agent-registry"] [data-agent-search] input,
+html.dui-pro-overhaul [data-dui-panel="agent-registry"] [data-agent-controls],
+html.dui-pro-overhaul [data-dui-panel="agent-registry"] [data-agent-control],
+html.dui-pro-overhaul [data-dui-panel="agent-registry"] [data-agent-overlay-control],
+html.dui-pro-overhaul [data-dui-panel="agent-registry"] [data-agent-view-toggle],
+html.dui-pro-overhaul [data-dui-panel="agent-registry"] [data-agent-view-option],
+html.dui-pro-overhaul [data-dui-panel="agent-registry"] .agent-registry-pager,
+html.dui-pro-overhaul [data-dui-panel="agent-registry"] .agent-registry-pager-btn,
+html.dui-pro-overhaul [data-dui-panel="agent-registry"] .agent-registry-pager-count,
+html.dui-pro-overhaul [data-dui-panel="agent-registry"] [data-agent-registry-scroll],
+html.dui-pro-overhaul [data-dui-panel="agent-registry"] [data-agent-status],
+html.dui-pro-overhaul [data-dui-panel="agent-registry"] [data-agent-grid-mode] > * {
+  background: #08090c !important;
+  background-image: none !important;
+  border-color: rgba(184, 188, 190, .14) !important;
+  color: var(--dui-agent-toolbar-cyan-soft) !important;
+}
+
+html.dui-pro-overhaul [data-dui-panel="agent-registry"] [data-agent-search] input:hover,
+html.dui-pro-overhaul [data-dui-panel="agent-registry"] [data-agent-control]:hover,
+html.dui-pro-overhaul [data-dui-panel="agent-registry"] [data-agent-overlay-control]:hover,
+html.dui-pro-overhaul [data-dui-panel="agent-registry"] [data-agent-search] button:hover,
+html.dui-pro-overhaul [data-dui-panel="agent-registry"] [data-agent-view-option]:hover,
+html.dui-pro-overhaul [data-dui-panel="agent-registry"] .agent-registry-pager-btn:hover,
+html.dui-pro-overhaul [data-dui-panel="agent-registry"] .agent-registry-pager-btn:focus,
+html.dui-pro-overhaul [data-dui-panel="agent-registry"] .agent-registry-pager-btn:focus-visible,
+html.dui-pro-overhaul [data-dui-panel="agent-registry"] [data-agent-control]:focus,
+html.dui-pro-overhaul [data-dui-panel="agent-registry"] [data-agent-overlay-control]:focus,
+html.dui-pro-overhaul [data-dui-panel="agent-registry"] [data-agent-search] input:focus {
+  background: #08090c !important;
+  background-image: none !important;
+  border-color: rgba(184, 188, 190, .20) !important;
+  color: var(--dui-agent-toolbar-cyan-soft) !important;
+  box-shadow: none !important;
+}
+
+html.dui-pro-overhaul [data-dui-panel="agent-registry"] [data-agent-view-option][data-active="true"],
+html.dui-pro-overhaul [data-dui-panel="agent-registry"] [data-agent-view-option][aria-pressed="true"] {
+  background: #08090c !important;
+  background-image: none !important;
+  border-color: rgba(184, 188, 190, .24) !important;
+}
+
+/* Final hard lock: enforce obsidian backgrounds regardless of variant mode or state. */
+html.dui-pro-overhaul [data-dui-panel="agent-registry"],
+html.dui-cohesive-ui [data-dui-panel="agent-registry"],
+html.dui-pro-overhaul [data-dui-panel="agent-registry"] > div:first-child,
+html.dui-cohesive-ui [data-dui-panel="agent-registry"] > div:first-child,
+html.dui-pro-overhaul [data-dui-panel="agent-registry"] > div:first-child :is(button, span),
+html.dui-cohesive-ui [data-dui-panel="agent-registry"] > div:first-child :is(button, span),
+html.dui-pro-overhaul [data-dui-panel="agent-registry"] [data-agent-toolbar],
+html.dui-cohesive-ui [data-dui-panel="agent-registry"] [data-agent-toolbar],
+html.dui-pro-overhaul [data-dui-panel="agent-registry"] [data-agent-toolbar] *,
+html.dui-cohesive-ui [data-dui-panel="agent-registry"] [data-agent-toolbar] *,
+html.dui-pro-overhaul [data-dui-panel="agent-registry"] [data-agent-search],
+html.dui-cohesive-ui [data-dui-panel="agent-registry"] [data-agent-search],
+html.dui-pro-overhaul [data-dui-panel="agent-registry"] [data-agent-search] *,
+html.dui-cohesive-ui [data-dui-panel="agent-registry"] [data-agent-search] *,
+html.dui-pro-overhaul [data-dui-panel="agent-registry"] [data-agent-controls],
+html.dui-cohesive-ui [data-dui-panel="agent-registry"] [data-agent-controls],
+html.dui-pro-overhaul [data-dui-panel="agent-registry"] [data-agent-controls] *,
+html.dui-cohesive-ui [data-dui-panel="agent-registry"] [data-agent-controls] *,
+html.dui-pro-overhaul [data-dui-panel="agent-registry"] [data-agent-control],
+html.dui-cohesive-ui [data-dui-panel="agent-registry"] [data-agent-control],
+html.dui-pro-overhaul [data-dui-panel="agent-registry"] [data-agent-overlay-control],
+html.dui-cohesive-ui [data-dui-panel="agent-registry"] [data-agent-overlay-control],
+html.dui-pro-overhaul [data-dui-panel="agent-registry"] [data-agent-view-toggle],
+html.dui-cohesive-ui [data-dui-panel="agent-registry"] [data-agent-view-toggle],
+html.dui-pro-overhaul [data-dui-panel="agent-registry"] [data-agent-view-option],
+html.dui-cohesive-ui [data-dui-panel="agent-registry"] [data-agent-view-option],
+html.dui-pro-overhaul [data-dui-panel="agent-registry"] .agent-registry-pager,
+html.dui-cohesive-ui [data-dui-panel="agent-registry"] .agent-registry-pager,
+html.dui-pro-overhaul [data-dui-panel="agent-registry"] .agent-registry-pager-btn,
+html.dui-cohesive-ui [data-dui-panel="agent-registry"] .agent-registry-pager-btn,
+html.dui-pro-overhaul [data-dui-panel="agent-registry"] .agent-registry-pager-count,
+html.dui-cohesive-ui [data-dui-panel="agent-registry"] .agent-registry-pager-count,
+html.dui-pro-overhaul [data-dui-panel="agent-registry"] [data-agent-registry-scroll],
+html.dui-cohesive-ui [data-dui-panel="agent-registry"] [data-agent-registry-scroll],
+html.dui-pro-overhaul [data-dui-panel="agent-registry"] [data-agent-status],
+html.dui-cohesive-ui [data-dui-panel="agent-registry"] [data-agent-status],
+html.dui-pro-overhaul [data-dui-panel="agent-registry"] [data-agent-grid-mode] > *,
+html.dui-cohesive-ui [data-dui-panel="agent-registry"] [data-agent-grid-mode] > * {
+  background: #08090c !important;
+  background-color: #08090c !important;
+  background-image: none !important;
+  color: var(--dui-agent-toolbar-cyan-soft) !important;
+}
+
+html.dui-pro-overhaul [data-dui-panel="agent-registry"] [data-agent-search] input,
+html.dui-cohesive-ui [data-dui-panel="agent-registry"] [data-agent-search] input,
+html.dui-pro-overhaul [data-dui-panel="agent-registry"] [data-agent-control],
+html.dui-cohesive-ui [data-dui-panel="agent-registry"] [data-agent-control],
+html.dui-pro-overhaul [data-dui-panel="agent-registry"] [data-agent-overlay-control],
+html.dui-cohesive-ui [data-dui-panel="agent-registry"] [data-agent-overlay-control],
+html.dui-pro-overhaul [data-dui-panel="agent-registry"] [data-agent-view-option],
+html.dui-cohesive-ui [data-dui-panel="agent-registry"] [data-agent-view-option],
+html.dui-pro-overhaul [data-dui-panel="agent-registry"] .agent-registry-pager-btn,
+html.dui-cohesive-ui [data-dui-panel="agent-registry"] .agent-registry-pager-btn,
+html.dui-pro-overhaul [data-dui-panel="agent-registry"] [data-agent-search] button {
+  background: #08090c !important;
+  background-color: #08090c !important;
+  background-image: none !important;
+}
+
+html.dui-pro-overhaul [data-dui-panel="agent-registry"] [data-agent-search] input:hover,
+html.dui-cohesive-ui [data-dui-panel="agent-registry"] [data-agent-search] input:hover,
+html.dui-pro-overhaul [data-dui-panel="agent-registry"] [data-agent-search] input:focus,
+html.dui-cohesive-ui [data-dui-panel="agent-registry"] [data-agent-search] input:focus,
+html.dui-pro-overhaul [data-dui-panel="agent-registry"] [data-agent-control]:hover,
+html.dui-cohesive-ui [data-dui-panel="agent-registry"] [data-agent-control]:hover,
+html.dui-pro-overhaul [data-dui-panel="agent-registry"] [data-agent-overlay-control]:hover,
+html.dui-cohesive-ui [data-dui-panel="agent-registry"] [data-agent-overlay-control]:hover,
+html.dui-pro-overhaul [data-dui-panel="agent-registry"] [data-agent-control]:focus,
+html.dui-cohesive-ui [data-dui-panel="agent-registry"] [data-agent-control]:focus,
+html.dui-pro-overhaul [data-dui-panel="agent-registry"] [data-agent-overlay-control]:focus,
+html.dui-cohesive-ui [data-dui-panel="agent-registry"] [data-agent-overlay-control]:focus,
+html.dui-pro-overhaul [data-dui-panel="agent-registry"] [data-agent-view-option]:hover,
+html.dui-cohesive-ui [data-dui-panel="agent-registry"] [data-agent-view-option]:hover,
+html.dui-pro-overhaul [data-dui-panel="agent-registry"] [data-agent-search] button:hover,
+html.dui-cohesive-ui [data-dui-panel="agent-registry"] [data-agent-search] button:hover,
+html.dui-pro-overhaul [data-dui-panel="agent-registry"] .agent-registry-pager-btn:hover,
+html.dui-cohesive-ui [data-dui-panel="agent-registry"] .agent-registry-pager-btn:hover,
+html.dui-pro-overhaul [data-dui-panel="agent-registry"] .agent-registry-pager-btn:focus,
+html.dui-cohesive-ui [data-dui-panel="agent-registry"] .agent-registry-pager-btn:focus,
+html.dui-pro-overhaul [data-dui-panel="agent-registry"] .agent-registry-pager-btn:focus-visible,
+html.dui-cohesive-ui [data-dui-panel="agent-registry"] .agent-registry-pager-btn:focus-visible {
+  background: #08090c !important;
+  background-color: #08090c !important;
+  background-image: none !important;
+  box-shadow: none !important;
+}
+
+/* Registry border/outline hardening: darker obsidian-cyan stroke for all registry controls. */
+html.dui-pro-overhaul [data-dui-panel="agent-registry"],
+html.dui-cohesive-ui [data-dui-panel="agent-registry"] {
+  --dui-agent-toolbar-cyan: #9fb5c2 !important;
+  --dui-agent-toolbar-cyan-soft: rgba(159, 181, 194, .86) !important;
+  --dui-agent-toolbar-border: rgba(76, 181, 209, .16) !important;
+  --dui-agent-toolbar-border-strong: rgba(76, 181, 209, .34) !important;
+}
+
+html.dui-pro-overhaul [data-dui-panel="agent-registry"] :is(
+  [data-agent-toolbar],
+  [data-agent-search],
+  [data-agent-search] input,
+  [data-agent-search] button,
+  [data-agent-control],
+  [data-agent-overlay-control],
+  [data-agent-view-toggle],
+  [data-agent-view-option],
+  .agent-registry-pager,
+  .agent-registry-pager-btn,
+  .agent-registry-pager-count
+),
+html.dui-cohesive-ui [data-dui-panel="agent-registry"] :is(
+  [data-agent-toolbar],
+  [data-agent-search],
+  [data-agent-search] input,
+  [data-agent-search] button,
+  [data-agent-control],
+  [data-agent-overlay-control],
+  [data-agent-view-toggle],
+  [data-agent-view-option],
+  .agent-registry-pager,
+  .agent-registry-pager-btn,
+  .agent-registry-pager-count
+) {
+  border-color: var(--dui-agent-toolbar-border) !important;
+}
+
+html.dui-pro-overhaul [data-dui-panel="agent-registry"] :is(
+  [data-agent-search] input:hover,
+  [data-agent-search] input:focus,
+  [data-agent-search] input:focus-visible,
+  [data-agent-control]:hover,
+  [data-agent-overlay-control]:hover,
+  [data-agent-control]:focus,
+  [data-agent-overlay-control]:focus,
+  [data-agent-search] button:hover,
+  [data-agent-search] button:focus-visible,
+  [data-agent-view-option]:hover,
+  [data-agent-toolbar] button[data-agent-view-option]:hover,
+  .agent-registry-pager-btn:hover,
+  .agent-registry-pager-btn:focus,
+  .agent-registry-pager-btn:focus-visible
+),
+html.dui-cohesive-ui [data-dui-panel="agent-registry"] :is(
+  [data-agent-search] input:hover,
+  [data-agent-search] input:focus,
+  [data-agent-search] input:focus-visible,
+  [data-agent-control]:hover,
+  [data-agent-overlay-control]:hover,
+  [data-agent-control]:focus,
+  [data-agent-overlay-control]:focus,
+  [data-agent-search] button:hover,
+  [data-agent-search] button:focus-visible,
+  [data-agent-view-option]:hover,
+  [data-agent-toolbar] button[data-agent-view-option]:hover,
+  .agent-registry-pager-btn:hover,
+  .agent-registry-pager-btn:focus,
+  .agent-registry-pager-btn:focus-visible
+) {
+  border-color: var(--dui-agent-toolbar-border-strong) !important;
+  outline-color: rgba(76, 181, 209, .16) !important;
+}
+
+html.dui-pro-overhaul [data-dui-panel="agent-registry"] [data-agent-control],
+html.dui-pro-overhaul [data-dui-panel="agent-registry"] [data-agent-overlay-control],
+html.dui-cohesive-ui [data-dui-panel="agent-registry"] [data-agent-control],
+html.dui-cohesive-ui [data-dui-panel="agent-registry"] [data-agent-overlay-control] {
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='8' height='8' viewBox='0 0 24 24' fill='none' stroke='%234cb5d1' stroke-width='3' stroke-linecap='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E") !important;
+}
+
+html.dui-pro-overhaul [data-dui-panel="agent-registry"] [data-agent-search] input::placeholder,
+html.dui-pro-overhaul [data-dui-panel="agent-registry"] [data-agent-toolbar] input::placeholder,
+html.dui-pro-overhaul [data-agent-search] input::placeholder,
+html.dui-pro-overhaul [data-agent-toolbar] input::placeholder,
+html.dui-pro-overhaul.dui-cohesive-ui [data-dui-panel="agent-registry"] [data-agent-search] input::placeholder,
+html.dui-pro-overhaul.dui-cohesive-ui body section[data-dui-panel="agent-registry"] [data-agent-search] input::placeholder,
+html.dui-pro-overhaul.dui-no-blue-forms [data-dui-panel="agent-registry"] [data-agent-search] input::placeholder {
+  color: var(--dui-agent-toolbar-cyan-soft) !important;
+  -webkit-text-fill-color: var(--dui-agent-toolbar-cyan-soft) !important;
+  opacity: 1 !important;
+}
+
+html.dui-pro-overhaul [data-dui-panel="active-party"] [data-slot-card][data-rarity="legendary"],
+html.dui-pro-overhaul.dui-cohesive-ui [data-dui-panel="active-party"] [data-slot-card][data-rarity="legendary"] {
+  --slot-accent: #caa25a !important;
+  --dy-party-rgb: 202, 162, 90 !important;
+}
+
+html.dui-pro-overhaul [data-dui-panel="active-party"] [data-slot-card][data-rarity="epic"],
+html.dui-pro-overhaul.dui-cohesive-ui [data-dui-panel="active-party"] [data-slot-card][data-rarity="epic"] {
+  --slot-accent: #9475ae !important;
+  --dy-party-rgb: 148, 117, 174 !important;
+}
+
+html.dui-pro-overhaul [data-dui-panel="active-party"] [data-slot-card][data-rarity="rare"],
+html.dui-pro-overhaul.dui-cohesive-ui [data-dui-panel="active-party"] [data-slot-card][data-rarity="rare"] {
+  --slot-accent: #7097aa !important;
+  --dy-party-rgb: 112, 151, 170 !important;
+}
+
+html.dui-pro-overhaul [data-dui-panel="active-party"] [data-slot-card][data-rarity="common"],
+html.dui-pro-overhaul.dui-cohesive-ui [data-dui-panel="active-party"] [data-slot-card][data-rarity="common"] {
+  --slot-accent: #c4c8ca !important;
+  --dy-party-rgb: 196, 200, 202 !important;
+}
+
+html.dui-pro-overhaul [data-dui-panel="active-party"] [data-slot-card][data-slot-state="empty"],
+html.dui-pro-overhaul.dui-cohesive-ui [data-dui-panel="active-party"] [data-slot-card][data-slot-state="empty"] {
+  border-style: dashed !important;
+  border-color: rgba(188, 215, 224, 0.38) !important;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, .05),
+    0 0 0 1px rgba(188, 215, 224, .18),
+    0 0 14px -5px rgba(188, 215, 224, .32) !important;
+  background:
+    repeating-linear-gradient(135deg, rgba(188, 215, 224, 0.02) 0 2px, transparent 2px 10px),
+    linear-gradient(180deg, rgba(15, 15, 17, .96), rgba(11, 11, 13, .98)) !important;
+}
+
+html.dui-pro-overhaul [data-dui-panel="active-party"] [data-slot-card].is-empty,
+html.dui-pro-overhaul.dui-cohesive-ui [data-dui-panel="active-party"] [data-slot-card].is-empty {
+  border-style: dashed !important;
+  border-color: rgba(188, 215, 224, 0.42) !important;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, .05),
+    0 0 0 1px rgba(188, 215, 224, .20),
+    0 0 16px -4px rgba(188, 215, 224, .36) !important;
+  background:
+    repeating-linear-gradient(135deg, rgba(188, 215, 224, 0.025) 0 1px, transparent 1px 9px),
+    linear-gradient(180deg, rgba(15, 15, 17, .98), rgba(11, 11, 13, .98)) !important;
+}
+
+html.dui-pro-overhaul [data-dui-panel="active-party"] .dy-party-slot.is-empty,
+html.dui-pro-overhaul.dui-cohesive-ui [data-dui-panel="active-party"] .dy-party-slot.is-empty {
+  border-color: rgba(188, 215, 224, 0.42) !important;
+}
+
+html.dui-pro-overhaul [data-dui-panel="active-party"] .dy-party-slot.is-filled::before,
+html.dui-pro-overhaul.dui-cohesive-ui [data-dui-panel="active-party"] .dy-party-slot.is-filled::before,
+html.dui-pro-overhaul [data-dui-panel="active-party"] .dy-party-slot.is-empty .party-slot-number,
+html.dui-pro-overhaul.dui-cohesive-ui [data-dui-panel="active-party"] .dy-party-slot.is-empty .party-slot-number {
+  color: rgba(188, 215, 224, 0.92) !important;
+  border-color: rgba(188, 215, 224, 0.4) !important;
+  text-shadow: 0 0 8px rgba(188, 215, 224, 0.45) !important;
+  box-shadow: 0 0 0 1px rgba(188, 215, 224, 0.2), 0 0 14px -4px rgba(188, 215, 224, 0.35) !important;
+}
+
+html.dui-pro-overhaul [data-dui-panel="active-party"] [data-slot-card] .party-slot-empty p:first-child,
+html.dui-pro-overhaul.dui-cohesive-ui [data-dui-panel="active-party"] [data-slot-card] .party-slot-empty p:first-child,
+html.dui-pro-overhaul [data-dui-panel="active-party"] .dy-party-slot.is-empty p:first-of-type,
+html.dui-pro-overhaul.dui-cohesive-ui [data-dui-panel="active-party"] .dy-party-slot.is-empty p:first-of-type {
+  color: rgba(188, 215, 224, 0.95) !important;
+  text-shadow: 0 0 10px rgba(188, 215, 224, 0.45) !important;
+}
+
+html.dui-pro-overhaul [data-dui-panel="active-party"] [data-slot-card] .party-slot-empty p:last-child,
+html.dui-pro-overhaul.dui-cohesive-ui [data-dui-panel="active-party"] [data-slot-card] .party-slot-empty p:last-child,
+html.dui-pro-overhaul [data-dui-panel="active-party"] .dy-party-slot.is-empty p:last-of-type,
+html.dui-pro-overhaul.dui-cohesive-ui [data-dui-panel="active-party"] .dy-party-slot.is-empty p:last-of-type {
+  color: rgba(172, 201, 214, 0.86) !important;
+  text-shadow: 0 0 8px rgba(188, 215, 224, 0.35) !important;
+}
+
+html.dui-pro-overhaul [data-dui-panel="active-party"] .dy-party-slot.is-filled::before,
+html.dui-pro-overhaul.dui-cohesive-ui [data-dui-panel="active-party"] .dy-party-slot.is-filled::before,
+html.dui-pro-overhaul [data-dui-panel="active-party"] .dy-party-slot.is-filled .party-slot-number {
+  color: rgba(var(--dy-party-rgb), 0.96) !important;
+  text-shadow: 0 0 10px rgba(var(--dy-party-rgb), 0.5) !important;
+}
+
+html.dui-pro-overhaul [data-dui-panel="active-party"] .dy-party-slot.is-filled[data-rarity="legendary"] .party-slot-number,
+html.dui-pro-overhaul.dui-cohesive-ui [data-dui-panel="active-party"] .dy-party-slot.is-filled[data-rarity="legendary"] .party-slot-number {
+  color: #fff0d0 !important;
+  text-shadow: 0 0 10px rgba(202, 162, 90, 0.55) !important;
+}
+
+html.dui-pro-overhaul [data-dui-panel="active-party"] .dy-party-slot.is-filled[data-rarity="epic"] .party-slot-number,
+html.dui-pro-overhaul.dui-cohesive-ui [data-dui-panel="active-party"] .dy-party-slot.is-filled[data-rarity="epic"] .party-slot-number {
+  color: #ecdfff !important;
+  text-shadow: 0 0 10px rgba(148, 117, 174, 0.55) !important;
+}
+
+html.dui-pro-overhaul [data-dui-panel="active-party"] .dy-party-slot.is-filled[data-rarity="rare"] .party-slot-number,
+html.dui-pro-overhaul.dui-cohesive-ui [data-dui-panel="active-party"] .dy-party-slot.is-filled[data-rarity="rare"] .party-slot-number {
+  color: #d6e6ee !important;
+  text-shadow: 0 0 10px rgba(112, 151, 170, 0.55) !important;
+}
+
+html.dui-pro-overhaul [data-dui-panel="active-party"] .dy-party-slot.is-filled[data-rarity="common"] .party-slot-number,
+html.dui-pro-overhaul.dui-cohesive-ui [data-dui-panel="active-party"] .dy-party-slot.is-filled[data-rarity="common"] .party-slot-number {
+  color: #e2e9ed !important;
+  text-shadow: 0 0 10px rgba(196, 200, 202, 0.55) !important;
+}
+
+html.dui-pro-overhaul [data-dui-panel="active-party"] .dy-party-slot.is-filled[data-dy-rarity="legendary"] .party-slot-number,
+html.dui-pro-overhaul.dui-cohesive-ui [data-dui-panel="active-party"] .dy-party-slot.is-filled[data-dy-rarity="legendary"] .party-slot-number {
+  color: #fff0d0 !important;
+  text-shadow: 0 0 10px rgba(202, 162, 90, 0.55) !important;
+}
+
+html.dui-pro-overhaul [data-dui-panel="active-party"] .dy-party-slot.is-filled[data-dy-rarity="epic"] .party-slot-number,
+html.dui-pro-overhaul.dui-cohesive-ui [data-dui-panel="active-party"] .dy-party-slot.is-filled[data-dy-rarity="epic"] .party-slot-number {
+  color: #ecdfff !important;
+  text-shadow: 0 0 10px rgba(148, 117, 174, 0.55) !important;
+}
+
+html.dui-pro-overhaul [data-dui-panel="active-party"] .dy-party-slot.is-filled[data-dy-rarity="rare"] .party-slot-number,
+html.dui-pro-overhaul.dui-cohesive-ui [data-dui-panel="active-party"] .dy-party-slot.is-filled[data-dy-rarity="rare"] .party-slot-number {
+  color: #d6e6ee !important;
+  text-shadow: 0 0 10px rgba(112, 151, 170, 0.55) !important;
+}
+
+html.dui-pro-overhaul [data-dui-panel="active-party"] .dy-party-slot.is-filled[data-dy-rarity="common"] .party-slot-number,
+html.dui-pro-overhaul.dui-cohesive-ui [data-dui-panel="active-party"] .dy-party-slot.is-filled[data-dy-rarity="common"] .party-slot-number {
+  color: #e2e9ed !important;
+  text-shadow: 0 0 10px rgba(196, 200, 202, 0.55) !important;
+}
+
+html.dui-pro-overhaul [data-dui-panel="active-party"] [data-slot-card][data-rarity="legendary"] .party-rarity-badge,
+html.dui-pro-overhaul.dui-cohesive-ui [data-dui-panel="active-party"] [data-slot-card][data-rarity="legendary"] .party-rarity-badge {
+  border-color: rgba(202, 162, 90, 0.42) !important;
+  background:
+    linear-gradient(180deg, rgba(202, 162, 90, 0.21), rgba(202, 162, 90, 0.06)),
+    rgba(12, 18, 22, 0.96) !important;
+  color: rgba(255, 236, 204, 0.94) !important;
+  box-shadow: 0 7px 18px -16px rgba(202, 162, 90, 0.55) !important;
+}
+
+html.dui-pro-overhaul [data-dui-panel="active-party"] [data-slot-card][data-rarity="epic"] .party-rarity-badge,
+html.dui-pro-overhaul.dui-cohesive-ui [data-dui-panel="active-party"] [data-slot-card][data-rarity="epic"] .party-rarity-badge {
+  border-color: rgba(148, 117, 174, 0.42) !important;
+  background:
+    linear-gradient(180deg, rgba(148, 117, 174, 0.21), rgba(148, 117, 174, 0.06)),
+    rgba(12, 18, 22, 0.96) !important;
+  color: rgba(231, 223, 240, 0.94) !important;
+  box-shadow: 0 7px 18px -16px rgba(148, 117, 174, 0.55) !important;
+}
+
+html.dui-pro-overhaul [data-dui-panel="active-party"] [data-slot-card][data-rarity="rare"] .party-rarity-badge,
+html.dui-pro-overhaul.dui-cohesive-ui [data-dui-panel="active-party"] [data-slot-card][data-rarity="rare"] .party-rarity-badge {
+  border-color: rgba(112, 151, 170, 0.42) !important;
+  background:
+    linear-gradient(180deg, rgba(112, 151, 170, 0.21), rgba(112, 151, 170, 0.06)),
+    rgba(12, 18, 22, 0.96) !important;
+  color: rgba(214, 229, 241, 0.94) !important;
+  box-shadow: 0 7px 18px -16px rgba(112, 151, 170, 0.55) !important;
+}
+
+html.dui-pro-overhaul [data-dui-panel="active-party"] [data-slot-card][data-rarity="common"] .party-rarity-badge,
+html.dui-pro-overhaul.dui-cohesive-ui [data-dui-panel="active-party"] [data-slot-card][data-rarity="common"] .party-rarity-badge {
+  border-color: rgba(196, 200, 202, 0.42) !important;
+  background:
+    linear-gradient(180deg, rgba(196, 200, 202, 0.21), rgba(196, 200, 202, 0.06)),
+    rgba(12, 18, 22, 0.96) !important;
+  color: rgba(226, 233, 237, 0.94) !important;
+  box-shadow: 0 7px 18px -16px rgba(196, 200, 202, 0.55) !important;
+}
+
+html.dui-pro-overhaul [data-dui-panel="active-party"] [data-slot-card][data-dy-rarity="legendary"] .party-rarity-badge,
+html.dui-pro-overhaul.dui-cohesive-ui [data-dui-panel="active-party"] [data-slot-card][data-dy-rarity="legendary"] .party-rarity-badge {
+  border-color: rgba(202, 162, 90, 0.42) !important;
+  background:
+    linear-gradient(180deg, rgba(202, 162, 90, 0.21), rgba(202, 162, 90, 0.06)),
+    rgba(12, 18, 22, 0.96) !important;
+  color: rgba(255, 236, 204, 0.94) !important;
+  box-shadow: 0 7px 18px -16px rgba(202, 162, 90, 0.55) !important;
+}
+
+html.dui-pro-overhaul [data-dui-panel="active-party"] [data-slot-card][data-dy-rarity="epic"] .party-rarity-badge,
+html.dui-pro-overhaul.dui-cohesive-ui [data-dui-panel="active-party"] [data-slot-card][data-dy-rarity="epic"] .party-rarity-badge {
+  border-color: rgba(148, 117, 174, 0.42) !important;
+  background:
+    linear-gradient(180deg, rgba(148, 117, 174, 0.21), rgba(148, 117, 174, 0.06)),
+    rgba(12, 18, 22, 0.96) !important;
+  color: rgba(231, 223, 240, 0.94) !important;
+  box-shadow: 0 7px 18px -16px rgba(148, 117, 174, 0.55) !important;
+}
+
+html.dui-pro-overhaul [data-dui-panel="active-party"] [data-slot-card][data-dy-rarity="rare"] .party-rarity-badge,
+html.dui-pro-overhaul.dui-cohesive-ui [data-dui-panel="active-party"] [data-slot-card][data-dy-rarity="rare"] .party-rarity-badge {
+  border-color: rgba(112, 151, 170, 0.42) !important;
+  background:
+    linear-gradient(180deg, rgba(112, 151, 170, 0.21), rgba(112, 151, 170, 0.06)),
+    rgba(12, 18, 22, 0.96) !important;
+  color: rgba(214, 229, 241, 0.94) !important;
+  box-shadow: 0 7px 18px -16px rgba(112, 151, 170, 0.55) !important;
+}
+
+html.dui-pro-overhaul [data-dui-panel="active-party"] [data-slot-card][data-dy-rarity="common"] .party-rarity-badge,
+html.dui-pro-overhaul.dui-cohesive-ui [data-dui-panel="active-party"] [data-slot-card][data-dy-rarity="common"] .party-rarity-badge {
+  border-color: rgba(196, 200, 202, 0.42) !important;
+  background:
+    linear-gradient(180deg, rgba(196, 200, 202, 0.21), rgba(196, 200, 202, 0.06)),
+    rgba(12, 18, 22, 0.96) !important;
+  color: rgba(226, 233, 237, 0.94) !important;
+  box-shadow: 0 7px 18px -16px rgba(196, 200, 202, 0.55) !important;
+}
+
+html.dui-pro-overhaul [data-dui-panel="active-party"] .dy-party-slot.is-filled p:first-child,
+html.dui-pro-overhaul [data-dui-panel="active-party"] .dy-party-slot.is-filled p:nth-child(2) {
+  color: rgba(216, 227, 234, 0.95) !important;
+  text-shadow: 0 0 10px rgba(188, 215, 224, 0.34) !important;
 }

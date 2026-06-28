@@ -17,6 +17,7 @@
   "GET /api/missions/projection",
   "GET /api/models/available",
   "GET /api/openclaw/clawtalk-console/stream",
+  "GET /api/openclaw/optimization-scorecard",
   "GET /api/openclaw/runtime/status",
   "GET /api/openclaw/runtime/summary",
   "GET /api/openclaw/summary",
