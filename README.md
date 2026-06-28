@@ -33,7 +33,7 @@ Useful agent systems need more than a prompt window. They need an operating mode
 
 | Operational layer | What DystopAI provides |
 | --- | --- |
-| **Identity** | Specialized agents with distinct roles, models, tools, policies, skills, workspaces, and doctrine. |
+| **Identity** | Specialized agents with distinct personalities, roles, models, tools, policies, skills, workspaces, and doctrine. |
 | **Work** | Structured missions with ownership, dispatch modes, risk settings, acceptance gates, verification, and reports. |
 | **Time** | One-shot, timed, looping, watch-style, cron-backed, and recurring operations. |
 | **Tools** | OpenClaw plugins, providers, browser capabilities, file access, skills, communication surfaces, and external services. |
