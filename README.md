@@ -13,7 +13,7 @@ Turn intent into coordinated work. Build agents, assign missions, schedule recur
 </div>
 
 <p align="center">
-  <img src="docs/assets/user-guide/agents.png" alt="DystopAI Agents workspace with an active party, agent registry, and command console" width="1200" />
+  <img src="docs/assets/readme/dystopai-agents.png" alt="DystopAI Agents workspace with an active party, agent registry, and command console" width="1200" />
 </p>
 
 > [!IMPORTANT]
@@ -33,7 +33,7 @@ Useful agent systems need more than a prompt window. They need an operating mode
 
 | Operational layer | What DystopAI provides |
 | --- | --- |
-| **People** | Specialized agents with distinct roles, models, tools, policies, skills, workspaces, and doctrine. |
+| **Identity** | Specialized agents with distinct roles, models, tools, policies, skills, workspaces, and doctrine. |
 | **Work** | Structured missions with ownership, dispatch modes, risk settings, acceptance gates, verification, and reports. |
 | **Time** | One-shot, timed, looping, watch-style, cron-backed, and recurring operations. |
 | **Tools** | OpenClaw plugins, providers, browser capabilities, file access, skills, communication surfaces, and external services. |
@@ -250,7 +250,7 @@ This closed loop is the central design idea: **intent, execution, observation, c
 
 | Missions | Runtime Monitor |
 | --- | --- |
-| ![DystopAI Mission Board](docs/assets/user-guide/missions.png) | ![DystopAI Runtime Monitor](docs/assets/user-guide/monitor.png) |
+| ![DystopAI Mission Board](docs/assets/readme/dystopai-missions.png) | ![DystopAI Runtime Monitor](docs/assets/readme/dystopai-monitor.png) |
 
 | Plugins |
 | --- |
