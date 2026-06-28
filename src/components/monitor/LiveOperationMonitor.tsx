@@ -1,9 +1,9 @@
-import { memo, useEffect, useId, useMemo, useRef, useState } from 'react'
+import { memo, useId, useMemo, useState } from 'react'
 import { motion } from 'framer-motion'
 import { useNexusStore } from '../../store/nexusStore'
 import type { AgentOperationState, AgentResponse, MissionEvent, OpenClawAgent } from '../../types/nexus'
 import { abortStaleGatewayChatTurns, clearRuntimeMonitor, restartGatewayRuntime, runRuntimeDoctor, startGatewayRuntime, stopCronShift, stopGatewayRuntime, updateCronShift, useRuntimeStatus } from '../../hooks/useRuntimeStatus'
-import type { DoctorRun, GatewayChannelActivity, GatewayLogEntry, RuntimeCronJob, RuntimeMonitorClearResult, RuntimeRun, RuntimeStatus } from '../../hooks/useRuntimeStatus'
+import type { DoctorRun, GatewayChannelActivity, GatewayLogEntry, RuntimeCronJob, RuntimeMonitorClearResult, RuntimeStatus } from '../../hooks/useRuntimeStatus'
 import { ActionStatusBanner } from '../common/ActionStatusBanner'
 
 const CONTROL_CENTER_LOGO_SRC = '/brand/dystopai-app-icon.png'
@@ -181,401 +181,12 @@ function cronEditableScheduleValue(job: RuntimeCronJob): string {
   return normalizeEveryScheduleForInput(job.every || job.scheduleLabel || '')
 }
 
-function avg(values: number[]) {
-  if (!values.length) return 0
-  return Math.round(values.reduce((sum, value) => sum + value, 0) / values.length)
-}
-
 function clampMetric(value: number) {
   if (!Number.isFinite(value)) return 0
   return Math.max(0, Math.min(100, Math.round(value)))
 }
 
 type MonitorTone = 'cyan' | 'emerald' | 'amber' | 'rose'
-
-type MonitorIcon = 'runtime' | 'stability' | 'efficiency' | 'failed'
-
-const HEALTH_HISTORY_LIMIT = 40
-const HEALTH_SAMPLE_INTERVAL_MS = 1000
-const SPARKLINE_LEFT = 6
-const SPARKLINE_RIGHT = 166
-const SPARKLINE_TOP = 7
-const SPARKLINE_BOTTOM = 42
-
-type HealthSnapshotInput = {
-  runtime: number
-  stability: number
-  efficiency: number
-  failedTurns: number
-  runtimePulse?: number
-  stabilityPulse?: number
-  efficiencyPulse?: number
-  failurePulse?: number
-}
-
-type HealthSnapshot = HealthSnapshotInput & {
-  timestamp: number
-  runtimePulse: number
-  stabilityPulse: number
-  efficiencyPulse: number
-  failurePulse: number
-}
-
-function normalizeHealthSnapshot(health: HealthSnapshotInput, timestamp = Date.now()): HealthSnapshot {
-  return {
-    timestamp,
-    runtime: clampMetric(health.runtime),
-    stability: clampMetric(health.stability),
-    efficiency: clampMetric(health.efficiency),
-    failedTurns: Math.max(0, Math.round(Number.isFinite(health.failedTurns) ? health.failedTurns : 0)),
-    runtimePulse: clampMetric(health.runtimePulse ?? 0),
-    stabilityPulse: clampMetric(health.stabilityPulse ?? 0),
-    efficiencyPulse: clampMetric(health.efficiencyPulse ?? 0),
-    failurePulse: clampMetric(health.failurePulse ?? 0),
-  }
-}
-
-function appendHealthSnapshot(history: HealthSnapshot[], snapshot: HealthSnapshot): HealthSnapshot[] {
-  return [...history, snapshot].slice(-HEALTH_HISTORY_LIMIT)
-}
-
-function seedHealthHistory(health: HealthSnapshotInput): HealthSnapshot[] {
-  const latest = normalizeHealthSnapshot(health)
-  const start = latest.timestamp - ((HEALTH_HISTORY_LIMIT - 1) * HEALTH_SAMPLE_INTERVAL_MS)
-  return Array.from({ length: HEALTH_HISTORY_LIMIT }, (_, index) => ({
-    ...latest,
-    timestamp: start + (index * HEALTH_SAMPLE_INTERVAL_MS),
-  }))
-}
-
-function useHealthHistory(health: HealthSnapshotInput): HealthSnapshot[] {
-  const latestRef = useRef(normalizeHealthSnapshot(health))
-  const [history, setHistory] = useState<HealthSnapshot[]>(() => seedHealthHistory(health))
-
-  useEffect(() => {
-    const latest = normalizeHealthSnapshot(health)
-    latestRef.current = latest
-    const resetTimer = window.setTimeout(() => setHistory((previous) => {
-      const prior = previous[previous.length - 1]
-      const priorHasSignal = Boolean(prior && (prior.runtime || prior.stability || prior.efficiency || prior.failedTurns))
-      const latestHasSignal = Boolean(latest.runtime || latest.stability || latest.efficiency || latest.failedTurns)
-      return !priorHasSignal && latestHasSignal ? seedHealthHistory(latest) : previous
-    }), 0)
-    return () => window.clearTimeout(resetTimer)
-  }, [health])
-
-  useEffect(() => {
-    const timer = window.setInterval(() => {
-      setHistory((previous) => appendHealthSnapshot(previous, {
-        ...latestRef.current,
-        timestamp: Date.now(),
-      }))
-    }, HEALTH_SAMPLE_INTERVAL_MS)
-
-    return () => window.clearInterval(timer)
-  }, [])
-
-  return history
-}
-
-type SparklinePoint = {
-  x: number
-  y: number
-  value: number
-  pulse: number
-}
-
-type SparklineShape = {
-  linePath: string
-  areaPath: string
-  markers: SparklinePoint[]
-}
-
-function isFailedRuntimeRun(run: RuntimeRun): boolean {
-  return run.status === 'failed' || run.status === 'timeout' || run.status === 'aborted' || run.status === 'interrupted'
-}
-
-function mean(values: number[]): number {
-  return values.length ? values.reduce((sum, value) => sum + value, 0) / values.length : 0
-}
-
-function runtimeStatusHealth(status: RuntimeStatus | null): HealthSnapshotInput {
-  if (!status) return { runtime: 0, stability: 0, efficiency: 0, failedTurns: 0 }
-
-  const recentRuns = status.recentRuns || []
-  const activeRuns = status.activeRuns || []
-  const completedRuns = recentRuns.filter((run) => run.status === 'completed')
-  const failedRuns = recentRuns.filter(isFailedRuntimeRun)
-  const finishedRuns = recentRuns.filter((run) => run.status !== 'running')
-  const activeSessions = (status.sessions || []).filter((session) => session.active || session.gatewayActive).length
-  const gatewayOnline = Boolean(status.gateway?.healthy || status.gateway?.processRunning)
-  const gatewayChat = status.gateway?.chat
-  const gatewayChatActive = (gatewayChat?.activeRuns || 0) + (gatewayChat?.activeObservers || 0)
-  const gatewayChatOldestAgeMs = Math.max(gatewayChat?.oldestRunAgeMs || 0, gatewayChat?.oldestObserverAgeMs || 0)
-  const gatewayChatStalePenalty = gatewayChatOldestAgeMs > GATEWAY_CHAT_STALE_TURN_MS * 2
-    ? 18
-    : gatewayChatOldestAgeMs > GATEWAY_CHAT_STALE_TURN_MS
-      ? 8
-      : 0
-  const runtimeSeverity = status.runtime?.severity || 'info'
-  const activity = status.gateway?.activity
-  const activityCount = (activity?.inboundCount || 0) + (activity?.outboundCount || 0) + (activity?.systemCount || 0)
-  const activeRunCount = activeRuns.length + gatewayChatActive
-  const failureCount = failedRuns.length + activeRuns.filter(isFailedRuntimeRun).length
-  const successRate = finishedRuns.length ? ((finishedRuns.length - failedRuns.length) / finishedRuns.length) * 100 : (gatewayOnline ? 92 : 0)
-  const avgElapsed = mean(completedRuns.map((run) => run.elapsedMs || 0).filter((value) => value > 0))
-  const avgTimeout = mean(completedRuns.map((run) => run.timeoutMs || 0).filter((value) => value > 0)) || 90_000
-  const speedScore = avgElapsed
-    ? clampMetric(100 - ((avgElapsed / Math.max(1, avgTimeout)) * 70))
-    : activeRunCount
-      ? 74
-      : gatewayOnline
-        ? 66
-        : 0
-  const runtimeBase = Math.max(
-    gatewayOnline ? 58 : 0,
-    activeRunCount ? 84 : 0,
-    activeSessions ? 72 : 0,
-    completedRuns.length ? speedScore : 0,
-  )
-  const stabilityBase = runtimeSeverity === 'error'
-    ? 28
-    : runtimeSeverity === 'warning'
-      ? 66
-      : gatewayOnline
-        ? 90
-        : 0
-  const throughputScore = clampMetric(Math.min(100, (activityCount * 5) + (activeRunCount * 24) + (activeSessions * 9) + (activity?.active ? 18 : 0)))
-
-  return {
-    runtime: clampMetric(runtimeBase),
-    stability: clampMetric((finishedRuns.length ? ((successRate * 0.76) + (stabilityBase * 0.24)) : stabilityBase) - gatewayChatStalePenalty),
-    efficiency: clampMetric(finishedRuns.length ? ((successRate * 0.58) + (speedScore * 0.34) + (throughputScore * 0.08)) : (gatewayOnline ? Math.max(throughputScore, 52) : 0)),
-    failedTurns: failureCount,
-    runtimePulse: clampMetric((gatewayOnline ? 18 : 0) + (activeRunCount * 32) + (activeSessions * 12) + (activity?.active ? 24 : 0) + (gatewayChatActive * 20)),
-    stabilityPulse: clampMetric((gatewayOnline ? 14 : 0) + (runtimeSeverity === 'warning' ? 18 : 0) + (runtimeSeverity === 'error' ? 36 : 0) + (failureCount * 16)),
-    efficiencyPulse: clampMetric(throughputScore + (completedRuns.length * 7)),
-    failurePulse: clampMetric(failureCount * 28),
-  }
-}
-
-function pulseOffset(index: number, pulse: number, scaleMax: number): number {
-  if (pulse <= 0) return 0
-  const phase = index % 12
-  const wave = phase === 3 ? 1 : phase === 4 ? -0.58 : phase === 5 ? 0.32 : phase === 6 ? -0.12 : 0
-  if (!wave) return 0
-  const amplitude = scaleMax * (0.04 + ((Math.min(100, pulse) / 100) * 0.105))
-  return wave * amplitude
-}
-
-function angularPath(points: SparklinePoint[]): string {
-  if (!points.length) return ''
-  return points.slice(1).reduce((path, point, index) => {
-    const previous = points[index]
-    if (Math.abs(previous.y - point.y) < 0.15) return `${path} H ${point.x.toFixed(1)}`
-    return `${path} L ${point.x.toFixed(1)} ${point.y.toFixed(1)}`
-  }, `M ${points[0].x.toFixed(1)} ${points[0].y.toFixed(1)}`)
-}
-
-function buildSparklineShape(values: number[], maxValue: number, pulseValues: number[] = []): SparklineShape {
-  const samples = values.length > 1 ? values : [values[0] || 0, values[0] || 0]
-  const xRange = SPARKLINE_RIGHT - SPARKLINE_LEFT
-  const yRange = SPARKLINE_BOTTOM - SPARKLINE_TOP
-  const scaleMax = Math.max(1, maxValue)
-  const displayValues = samples.map((rawValue, index) => {
-    const value = Math.max(0, Math.min(scaleMax, Number.isFinite(rawValue) ? rawValue : 0))
-    const rawPulse = Math.max(0, Math.min(100, Number.isFinite(pulseValues[index]) ? pulseValues[index] : 0))
-    const pulse = Math.max(rawPulse, value > 0 ? 32 : 0)
-    return Math.max(0, Math.min(scaleMax, value + pulseOffset(index, pulse, scaleMax)))
-  })
-  const low = Math.min(...displayValues)
-  const high = Math.max(...displayValues)
-  const domainPadding = scaleMax * 0.045
-  const minDomainSpan = scaleMax <= 10 ? Math.max(1.75, scaleMax * 0.45) : Math.max(18, scaleMax * 0.16)
-  let domainMin = low - domainPadding
-  let domainMax = high + domainPadding
-  if (domainMax - domainMin < minDomainSpan) {
-    const center = (domainMin + domainMax) / 2
-    domainMin = center - (minDomainSpan / 2)
-    domainMax = center + (minDomainSpan / 2)
-  }
-  if (domainMin < 0) {
-    domainMax = Math.min(scaleMax, domainMax - domainMin)
-    domainMin = 0
-  }
-  if (domainMax > scaleMax) {
-    domainMin = Math.max(0, domainMin - (domainMax - scaleMax))
-    domainMax = scaleMax
-  }
-  const domainSpan = Math.max(1, domainMax - domainMin)
-  const points = samples.map((rawValue, index) => {
-    const value = Math.max(0, Math.min(scaleMax, Number.isFinite(rawValue) ? rawValue : 0))
-    const rawPulse = Math.max(0, Math.min(100, Number.isFinite(pulseValues[index]) ? pulseValues[index] : 0))
-    const pulse = Math.max(rawPulse, value > 0 ? 32 : 0)
-    const displayValue = displayValues[index]
-    const x = SPARKLINE_LEFT + ((index / (samples.length - 1)) * xRange)
-    const y = SPARKLINE_BOTTOM - (((displayValue - domainMin) / domainSpan) * yRange)
-    return { x, y, value, pulse }
-  })
-  const linePath = angularPath(points)
-  const first = points[0]
-  const last = points[points.length - 1]
-  const areaPath = `${linePath} L ${last.x.toFixed(1)} ${SPARKLINE_BOTTOM} L ${first.x.toFixed(1)} ${SPARKLINE_BOTTOM} Z`
-  const markerIndexes = new Set<number>([points.length - 1])
-  points.forEach((point, index) => {
-    const previous = points[index - 1]
-    if (point.pulse >= 65 && index % 12 === 3) markerIndexes.add(index)
-    if (previous && Math.abs(point.value - previous.value) >= scaleMax * 0.11) markerIndexes.add(index)
-  })
-  const markers = Array.from(markerIndexes).sort((a, b) => a - b).slice(-5).map((index) => points[index])
-  return { linePath, areaPath, markers }
-}
-
-function failedSparklineMax(values: number[]): number {
-  const high = Math.max(0, ...values)
-  return Math.max(5, Math.ceil(high / 5) * 5)
-}
-
-function MetricIcon({ type }: { type: MonitorIcon }) {
-  if (type === 'runtime') {
-    return (
-      <svg viewBox="0 0 24 24" aria-hidden="true">
-        <circle cx="12" cy="12" r="8.25" />
-        <path d="M12 7.5v5l3.4 2.1" />
-      </svg>
-    )
-  }
-  if (type === 'stability') {
-    return (
-      <svg viewBox="0 0 24 24" aria-hidden="true">
-        <path d="M12 3.8 19 7v5.1c0 4.25-2.75 7.1-7 8.1-4.25-1-7-3.85-7-8.1V7l7-3.2Z" />
-        <path d="m8.8 12 2.1 2.1 4.5-4.7" />
-      </svg>
-    )
-  }
-  if (type === 'efficiency') {
-    return (
-      <svg viewBox="0 0 24 24" aria-hidden="true">
-        <path d="M4.2 15.8a8.4 8.4 0 1 1 15.6 0" />
-        <path d="M12 13.2 16.4 8" />
-        <path d="M7.2 15.8h9.6" />
-        <path d="M6.7 10.6h.1M17.2 10.6h.1M12 6.9h.1" />
-      </svg>
-    )
-  }
-  return (
-    <svg viewBox="0 0 24 24" aria-hidden="true">
-      <path d="M12 4.1 21 19H3l9-14.9Z" />
-      <path d="M12 9v4.8" />
-      <path d="M12 17.1h.1" />
-    </svg>
-  )
-}
-
-function Sparkline({ values, pulseValues, maxValue = 100 }: { values: number[]; pulseValues?: number[]; maxValue?: number }) {
-  const gradientId = useId().replace(/:/g, '')
-  const shape = useMemo(() => buildSparklineShape(values, maxValue, pulseValues), [maxValue, pulseValues, values])
-  return (
-    <svg className="dy-health-sparkline" viewBox="0 0 172 48" preserveAspectRatio="none" aria-hidden="true">
-      <defs>
-        <linearGradient id={`${gradientId}-fill`} x1="0" x2="0" y1="0" y2="1">
-          <stop offset="0%" stopColor="currentColor" stopOpacity="0.34" />
-          <stop offset="100%" stopColor="currentColor" stopOpacity="0.02" />
-        </linearGradient>
-      </defs>
-      <path className="dy-health-sparkline-grid" d="M6 24.5H166" />
-      <path className="dy-health-sparkline-area" d={shape.areaPath} fill={`url(#${gradientId}-fill)`} />
-      <path className="dy-health-sparkline-glow" d={shape.linePath} />
-      <path className="dy-health-sparkline-line" d={shape.linePath} />
-      {shape.markers.map((point, index) => (
-        <circle key={`${point.x.toFixed(1)}-${index}`} className="dy-health-sparkline-dot" cx={point.x} cy={point.y} r={point.pulse >= 55 ? 1.8 : 1.25} />
-      ))}
-    </svg>
-  )
-}
-
-function HealthCard({
-  icon,
-  label,
-  value,
-  suffix = '',
-  tone,
-  series,
-  pulseSeries,
-  scaleMax = 100,
-}: {
-  icon: MonitorIcon
-  label: string
-  value: number
-  suffix?: string
-  tone: MonitorTone
-  series: number[]
-  pulseSeries?: number[]
-  scaleMax?: number
-}) {
-  return (
-    <div className="dy-health-card rounded-none border border-white/[0.04] bg-white/[0.015] p-3.5" data-tone={tone}>
-      <span className="dy-health-icon" aria-hidden="true">
-        <MetricIcon type={icon} />
-      </span>
-      <span className="dy-health-copy">
-        <p className="dy-health-label text-[9px] font-semibold uppercase tracking-[0.14em]">{label}</p>
-        <p className="dy-health-value mt-1 text-xl font-bold">{value}{suffix}</p>
-      </span>
-      <Sparkline values={series} pulseValues={pulseSeries} maxValue={scaleMax} />
-    </div>
-  )
-}
-
-function MonitorHealthGrid({ health }: { health: HealthSnapshotInput }) {
-  const history = useHealthHistory(health)
-  const latest = normalizeHealthSnapshot(health)
-  const runtimeSeries = history.map((snapshot) => snapshot.runtime)
-  const stabilitySeries = history.map((snapshot) => snapshot.stability)
-  const efficiencySeries = history.map((snapshot) => snapshot.efficiency)
-  const failedSeries = history.map((snapshot) => snapshot.failedTurns)
-
-  return (
-    <div className="dy-monitor-health-grid grid gap-3 md:grid-cols-2 xl:grid-cols-4">
-      <HealthCard
-        icon="runtime"
-        label="Runtime"
-        value={latest.runtime}
-        suffix="%"
-        tone="cyan"
-        series={runtimeSeries}
-        pulseSeries={history.map((snapshot) => snapshot.runtimePulse)}
-      />
-      <HealthCard
-        icon="stability"
-        label="Stability"
-        value={latest.stability}
-        suffix="%"
-        tone="emerald"
-        series={stabilitySeries}
-        pulseSeries={history.map((snapshot) => snapshot.stabilityPulse)}
-      />
-      <HealthCard
-        icon="efficiency"
-        label="Efficiency"
-        value={latest.efficiency}
-        suffix="%"
-        tone="amber"
-        series={efficiencySeries}
-        pulseSeries={history.map((snapshot) => snapshot.efficiencyPulse)}
-      />
-      <HealthCard
-        icon="failed"
-        label="Failed Turns"
-        value={latest.failedTurns}
-        tone="rose"
-        series={failedSeries}
-        pulseSeries={history.map((snapshot) => snapshot.failurePulse)}
-        scaleMax={failedSparklineMax(failedSeries)}
-      />
-    </div>
-  )
-}
 
 function statusClass(status: AgentOperationState['heartbeatStatus'] | undefined) {
   if (status === 'active') return 'dy-monitor-status-pill is-active'
@@ -1686,7 +1297,6 @@ export function LiveOperationMonitor() {
   const [cleanSlateBusy, setCleanSlateBusy] = useState(false)
   const [cleanSlateError, setCleanSlateError] = useState('')
   const [cleanSlateResult, setCleanSlateResult] = useState<RuntimeMonitorClearResult | null>(null)
-  const [healthResetKey, setHealthResetKey] = useState(0)
 
   const visibleAgents = useMemo(() => agents.filter((agent) => activePartyIds.includes(agent.id)), [agents, activePartyIds])
   const visibleAgentIds = useMemo(() => new Set(visibleAgents.map((agent) => agent.id)), [visibleAgents])
@@ -1711,28 +1321,6 @@ export function LiveOperationMonitor() {
     }
     return metrics
   }, [busyAgentIds, operationStates, recentResponsesByAgent, visibleAgents])
-  const runtimeHealth = useMemo(() => runtimeStatusHealth(runtimeStatus), [runtimeStatus])
-  const health = useMemo(() => {
-    const active = visibleAgents.filter((agent) => operationStates[agent.id]?.heartbeatStatus === 'active').length
-    const metrics = visibleAgents.map((agent) => liveMetricsByAgent.get(agent.id)).filter((entry): entry is AgentLiveMetrics => Boolean(entry))
-    const metricsHaveSignal = metrics.some((entry) => entry.turns > 0 || entry.failures > 0 || entry.runtime > 0 || entry.stability > 0 || entry.efficiency > 0)
-    const runtime = metricsHaveSignal ? avg(metrics.map((entry) => entry.runtime)) : runtimeHealth.runtime
-    const stability = metricsHaveSignal ? avg(metrics.map((entry) => entry.stability)) : runtimeHealth.stability
-    const efficiency = metricsHaveSignal ? avg(metrics.map((entry) => entry.efficiency)) : runtimeHealth.efficiency
-    const failedTurns = Math.max(agentResponses.slice(0, 40).filter((response) => !response.ok).length, runtimeHealth.failedTurns)
-    const busyPulse = busyAgentIds.length * 24
-    return {
-      active,
-      runtime,
-      stability,
-      efficiency,
-      failedTurns,
-      runtimePulse: clampMetric(Math.max(runtimeHealth.runtimePulse || 0, (active * 18) + busyPulse)),
-      stabilityPulse: clampMetric(Math.max(runtimeHealth.stabilityPulse || 0, active * 10)),
-      efficiencyPulse: clampMetric(Math.max(runtimeHealth.efficiencyPulse || 0, busyPulse + (metricsHaveSignal ? efficiency : 0))),
-      failurePulse: clampMetric(Math.max(runtimeHealth.failurePulse || 0, failedTurns * 22)),
-    }
-  }, [agentResponses, busyAgentIds, liveMetricsByAgent, operationStates, runtimeHealth, visibleAgents])
   const persistedDoctorRun = runtimeStatus?.diagnostics?.doctor?.lastRun || null
   const rawDisplayedDoctorRun = doctorRun || (doctorError ? null : persistedDoctorRun)
   const rawDisplayedDoctorRunKey = doctorRunDismissKey(rawDisplayedDoctorRun)
@@ -1770,7 +1358,6 @@ export function LiveOperationMonitor() {
     setDoctorError('')
     setDismissedDoctorRunKey('')
     rememberDismissedDoctorRunKey('')
-    setHealthResetKey((value) => value + 1)
     try {
       const result = await clearRuntimeMonitor()
       setCleanSlateResult(result)
@@ -1794,11 +1381,6 @@ export function LiveOperationMonitor() {
 
   return (
     <section data-dui-panel="monitor" className="dy-monitor-shell overflow-hidden rounded-none border border-white/[0.06] bg-[linear-gradient(180deg,#101112,#080909)] shadow-2xl shadow-black/40">
-      {/* Header */}
-      <div className="dy-monitor-header relative overflow-hidden border-b border-white/[0.05] bg-[linear-gradient(135deg,rgba(255,255,255,0.035),rgba(184,188,190,0.018)_38%,rgba(255,255,255,0.01))] px-5 py-4">
-        <MonitorHealthGrid key={healthResetKey} health={health} />
-      </div>
-
       <DoctorPanel run={displayedDoctorRun} error={doctorError} persisted={displayedDoctorRunPersisted} onDismiss={dismissDoctorPanel} />
       {cleanSlateResult && !cleanSlateError && (
         <div className="border-b border-white/[0.04] bg-black/20 px-5 py-3">

@@ -13,7 +13,7 @@ Turn intent into coordinated work. Build agents, assign missions, schedule recur
 </div>
 
 <p align="center">
-  <img src="docs/assets/readme/dystopai-agents.png" alt="DystopAI Agents workspace with an active party, agent registry, and command console" width="1200" />
+  <img src="docs/assets/user-guide/agents.png" alt="DystopAI Agents workspace with an active party, agent registry, and command console" width="1200" />
 </p>
 
 > [!IMPORTANT]
@@ -250,7 +250,7 @@ This closed loop is the central design idea: **intent, execution, observation, c
 
 | Missions | Runtime Monitor |
 | --- | --- |
-| ![DystopAI Mission Board](docs/assets/readme/dystopai-missions.png) | ![DystopAI Runtime Monitor](docs/assets/readme/dystopai-monitor.png) |
+| ![DystopAI Mission Board](docs/assets/user-guide/missions.png) | ![DystopAI Runtime Monitor](docs/assets/user-guide/monitor.png) |
 
 | Plugins |
 | --- |

@@ -2423,59 +2423,61 @@ html.dui-pro-overhaul .dy-command-send:disabled {
 html.dui-pro-overhaul .agent-card-shell.agent-card-pro[data-agent-card="true"] {
   --agent-card-texture: url("/card-templates/agent-card-texture-common.png") !important;
   --agent-card-template: var(--agent-card-texture) !important;
-  --agent-accent: #a8a49a !important;
-  --agent-accent-rgb: 168, 164, 154;
+  --agent-accent: #c3c7ca !important;
+  --agent-accent-rgb: 195, 199, 202;
   --agent-rarity: var(--agent-accent) !important;
   background-color: #070808 !important;
   background-image:
+    radial-gradient(ellipse 92% 68% at 12% -10%, rgba(var(--agent-accent-rgb), .24), transparent 50%),
+    radial-gradient(ellipse 58% 46% at 0% 18%, rgba(var(--agent-accent-rgb), .14), transparent 58%),
     linear-gradient(180deg, rgba(2, 4, 7, .08), rgba(2, 4, 7, .34) 56%, rgba(0, 0, 0, .78)),
-    radial-gradient(circle at 24% 0%, rgba(var(--agent-accent-rgb), .13), transparent 36%),
-    radial-gradient(circle at 80% 78%, rgba(var(--agent-accent-rgb), .09), transparent 44%),
+    radial-gradient(circle at 80% 78%, rgba(var(--agent-accent-rgb), .10), transparent 44%),
     var(--agent-card-texture) !important;
-  background-size: cover, cover, cover, cover !important;
+  background-blend-mode: screen, screen, normal, screen, normal !important;
+  background-size: cover, cover, cover, cover, cover !important;
   background-position: center !important;
   background-repeat: no-repeat !important;
-  border-color: rgba(var(--agent-accent-rgb), .18) !important;
+  border-color: rgba(var(--agent-accent-rgb), .24) !important;
   box-shadow:
     0 24px 58px -44px rgba(0, 0, 0, .96),
-    0 0 28px -26px rgba(var(--agent-accent-rgb), .40),
+    0 0 32px -25px rgba(var(--agent-accent-rgb), .48),
     inset 0 1px 0 rgba(255, 255, 255, .070) !important;
 }
 
 html.dui-pro-overhaul .agent-card-shell.agent-card-pro[data-agent-card="true"][data-agent-rarity="legendary"] {
   --agent-card-texture: url("/card-templates/agent-card-texture-legendary.png") !important;
   --agent-card-template: var(--agent-card-texture) !important;
-  --agent-accent: #be974c !important;
-  --agent-accent-rgb: 190, 151, 76;
-  border-color: rgba(var(--agent-accent-rgb), .34) !important;
+  --agent-accent: #f0bd58 !important;
+  --agent-accent-rgb: 240, 189, 88;
+  border-color: rgba(var(--agent-accent-rgb), .44) !important;
   box-shadow:
     0 24px 58px -44px rgba(0, 0, 0, .96),
-    0 0 32px -25px rgba(var(--agent-accent-rgb), .58),
+    0 0 38px -23px rgba(var(--agent-accent-rgb), .72),
     inset 0 1px 0 rgba(255, 255, 255, .080) !important;
 }
 
 html.dui-pro-overhaul .agent-card-shell.agent-card-pro[data-agent-card="true"][data-agent-rarity="epic"] {
   --agent-card-texture: url("/card-templates/agent-card-texture-epic.png") !important;
   --agent-card-template: var(--agent-card-texture) !important;
-  --agent-accent: #9475ae !important;
-  --agent-accent-rgb: 148, 117, 174;
-  border-color: rgba(var(--agent-accent-rgb), .28) !important;
+  --agent-accent: #b88cff !important;
+  --agent-accent-rgb: 184, 140, 255;
+  border-color: rgba(var(--agent-accent-rgb), .36) !important;
 }
 
 html.dui-pro-overhaul .agent-card-shell.agent-card-pro[data-agent-card="true"][data-agent-rarity="rare"] {
   --agent-card-texture: url("/card-templates/agent-card-texture-rare.png") !important;
   --agent-card-template: var(--agent-card-texture) !important;
-  --agent-accent: #7097aa !important;
-  --agent-accent-rgb: 112, 151, 170;
-  border-color: rgba(var(--agent-accent-rgb), .26) !important;
+  --agent-accent: #5bd7ff !important;
+  --agent-accent-rgb: 91, 215, 255;
+  border-color: rgba(var(--agent-accent-rgb), .34) !important;
 }
 
 html.dui-pro-overhaul .agent-card-shell.agent-card-pro[data-agent-card="true"][data-agent-rarity="common"],
 html.dui-pro-overhaul .agent-card-shell.agent-card-pro[data-agent-card="true"]:not([data-agent-rarity]) {
   --agent-card-texture: url("/card-templates/agent-card-texture-common.png") !important;
   --agent-card-template: var(--agent-card-texture) !important;
-  --agent-accent: #a8a49a !important;
-  --agent-accent-rgb: 168, 164, 154;
+  --agent-accent: #c3c7ca !important;
+  --agent-accent-rgb: 195, 199, 202;
 }
 
 html.dui-pro-overhaul .agent-card-shell.agent-card-pro[data-agent-card="true"]:hover {
@@ -2486,21 +2488,40 @@ html.dui-pro-overhaul .agent-card-shell.agent-card-pro[data-agent-card="true"]:h
     inset 0 1px 0 rgba(255, 255, 255, .065) !important;
 }
 
-html.dui-pro-overhaul .agent-card-pro .agent-card-accent-line {
-  opacity: .58 !important;
+html.dui-pro-overhaul .agent-card-shell.agent-card-pro[data-agent-card="true"] .agent-card-accent-line {
+  height: 4px !important;
+  opacity: .86 !important;
   background:
-    linear-gradient(90deg, transparent, rgba(var(--agent-accent-rgb), .72), color-mix(in srgb, var(--agent-accent) 64%, white), transparent) !important;
+    linear-gradient(90deg, rgba(var(--agent-accent-rgb), .15), rgba(var(--agent-accent-rgb), .92) 18%, color-mix(in srgb, var(--agent-accent) 66%, white) 48%, rgba(var(--agent-accent-rgb), .34) 76%, transparent) !important;
+  box-shadow: 0 0 18px rgba(var(--agent-accent-rgb), .24) !important;
 }
 
 html.dui-pro-overhaul .agent-card-pro .agent-card-rarity-wash,
 html.dui-pro-overhaul .agent-card-pro::after {
-  opacity: .46 !important;
+  opacity: .66 !important;
 }
 
-html.dui-pro-overhaul .agent-card-pro .agent-card-rarity-wash {
+html.dui-pro-overhaul .agent-card-shell.agent-card-pro[data-agent-card="true"] .agent-card-rarity-wash {
   background:
-    radial-gradient(circle at 22% 0%, rgba(var(--agent-accent-rgb), .16), transparent 36%),
-    linear-gradient(145deg, rgba(var(--agent-accent-rgb), .070), transparent 54%) !important;
+    radial-gradient(ellipse 78% 52% at 12% -4%, rgba(var(--agent-accent-rgb), .34), transparent 50%),
+    radial-gradient(ellipse 48% 42% at 0% 18%, rgba(var(--agent-accent-rgb), .20), transparent 58%),
+    linear-gradient(145deg, rgba(var(--agent-accent-rgb), .11), transparent 56%) !important;
+  mix-blend-mode: screen !important;
+}
+
+html.dui-pro-overhaul .agent-card-shell.agent-card-pro[data-agent-card="true"] .agent-card-grid {
+  opacity: .42 !important;
+  background-image:
+    linear-gradient(rgba(var(--agent-accent-rgb), .044) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(var(--agent-accent-rgb), .034) 1px, transparent 1px),
+    radial-gradient(ellipse 70% 48% at 18% 0%, rgba(var(--agent-accent-rgb), .18), transparent 54%) !important;
+}
+
+html.dui-pro-overhaul .agent-card-shell.agent-card-pro[data-agent-card="true"] .agent-card-media-shade {
+  background:
+    radial-gradient(ellipse 72% 58% at 0% 0%, rgba(var(--agent-accent-rgb), .24), transparent 58%),
+    radial-gradient(circle at 82% 18%, rgba(var(--agent-accent-rgb), .13), transparent 42%),
+    linear-gradient(180deg, rgba(0, 0, 0, .26), transparent 32%, transparent 64%, rgba(0, 0, 0, .50)) !important;
 }
 
 html.dui-pro-overhaul .agent-card-pro .agent-card-media {

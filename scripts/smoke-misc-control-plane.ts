@@ -1,5 +1,9 @@
 import { readFileSync } from 'node:fs'
 import path from 'node:path'
+import {
+  OPENCLAW_OPTIMIZATION_ITEM_COUNT,
+  buildOpenClawOptimizationScorecard,
+} from '../server/openclawOptimizationScorecard'
 
 const root = process.cwd()
 
@@ -48,6 +52,7 @@ const packageJson = JSON.parse(readWorkspaceFile('package.json')) as { scripts?:
 for (const code of [
   'agent_config_sync_failed',
   'avatar_preview_failed',
+  'optimization_scorecard_failed',
   'plugin_terminal_failed',
   'party_operation_failed',
   'recruit_failed',
@@ -60,6 +65,7 @@ assert(server.includes('registerPartyManagementRoutes(app, partyManagementRoutes
 assert(server.includes('registerAgentConfigRoutes(app, agentConfigRoutesContext)'), 'control plane should register agent config routes')
 assert(!server.includes("app.get('/api/health'"), 'server index should not inline the health route')
 assert(!server.includes("app.get('/api/runtime/version-check'"), 'server index should not inline the runtime version-check route')
+assert(!server.includes("app.get('/api/openclaw/optimization-scorecard'"), 'server index should not inline the optimization scorecard route')
 assert(!server.includes("app.post('/api/doctor/run'"), 'server index should not inline the doctor run route')
 
 for (const marker of [
@@ -70,11 +76,36 @@ for (const marker of [
 }
 
 for (const marker of [
+  "app.get('/api/openclaw/optimization-scorecard'",
   "app.post('/api/doctor/run'",
   "app.get('/api/doctor/recent'",
 ]) {
   assertCanonicalRoute(marker, routeBlock(diagnosticsRoutes, marker))
 }
+
+const openClawScorecard = buildOpenClawOptimizationScorecard()
+assert(OPENCLAW_OPTIMIZATION_ITEM_COUNT >= 100, 'OpenClaw optimization scorecard should track at least 100 optimization items')
+assert(
+  openClawScorecard.itemCount === OPENCLAW_OPTIMIZATION_ITEM_COUNT,
+  'OpenClaw optimization scorecard item count should match the exported registry count',
+)
+assert(
+  openClawScorecard.source.guide === 'docs/OPENCLAW_BETA_OPTIMIZATION_GUIDE.md',
+  'OpenClaw optimization scorecard should cite the beta optimization guide',
+)
+assert(
+  openClawScorecard.source.targetOpenClawVersion === '2026.6.10',
+  'OpenClaw optimization scorecard should target the documented stable OpenClaw version',
+)
+assert(openClawScorecard.categories.length >= 10, 'OpenClaw optimization scorecard should cover the major guide themes')
+assert(
+  new Set(openClawScorecard.items.map((item) => item.id)).size === openClawScorecard.itemCount,
+  'OpenClaw optimization scorecard item ids should be unique',
+)
+assert(
+  openClawScorecard.items.every((item) => item.title && item.evidence && item.nextAction),
+  'OpenClaw optimization scorecard items should include title, evidence, and next action',
+)
 
 for (const marker of [
   "app.put('/api/party/profile/:agentId'",
