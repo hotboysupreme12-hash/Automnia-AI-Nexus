@@ -4,11 +4,11 @@
 
 # DystopAI
 
-### A local-first AI operations system for specialized OpenClaw agent teams
+### A local-first command center for AI agents that can work, watch, message, schedule, and report
 
-Turn intent into coordinated work. Build agents, assign missions, schedule recurring operations, connect communication channels, inspect live runtime activity, and keep consequential actions under human control.
+DystopAI turns one instruction into coordinated work across specialized agents, missions, plugins, tools, channels, schedules, and live runtime controls.
 
-**Multi Model Nexus** · **Local-first** · **Mission-driven** · **Channel-agnostic** · **Human-controlled**
+**Multi Model Nexus** · **Local-first** · **Agent teams** · **Mission automation** · **Plugin-powered helpers** · **Human approval**
 
 </div>
 
@@ -19,55 +19,163 @@ Turn intent into coordinated work. Build agents, assign missions, schedule recur
 > [!IMPORTANT]
 > DystopAI Core is a privileged local operator console. It can coordinate agents with access to files, tools, models, browsers, communication channels, plugins, and runtime state. Keep the Control Plane bound to the local machine. Remote operation should flow through authenticated OpenClaw channels or plugins, not by exposing the local API directly to the public internet.
 
-## DystopAI In One Sentence
+## What Is DystopAI?
 
-**DystopAI is the command network between your intent and a workforce of AI agents.**
+**DystopAI is the operating desk between your intent and a workforce of AI agents.**
 
-It brings agents, missions, schedules, memory, plugins, channels, approvals, workspaces, live activity, and recovery controls into one desktop system.
+A normal AI chat gives you one assistant in one box. DystopAI gives you a roster: builders, researchers, reviewers, analysts, operators, assistants, coordinators, support agents, and automation agents. Each one can have its own model, personality, workspace, tools, memory, policies, schedule, and job lane.
 
-A normal assistant waits inside one chat box. DystopAI is designed for work that must continue across people-like roles, tools, files, time, and communication surfaces.
+Then DystopAI wraps that roster in a real control system:
+
+- **Agents** with identity, doctrine, models, tools, workspaces, memory, and permissions.
+- **Missions** that turn goals into structured work with roles, timing, risk, proof, and reports.
+- **Plugins** that add channels, providers, browser automation, memory, skills, tools, and service integrations.
+- **Scheduling** for one-shot, timed, looping, watch-style, cron-backed, and recurring work.
+- **Monitoring** for Gateway health, active calls, sessions, cron jobs, channel traffic, failures, and recovery.
+- **Approval gates** so important actions can be prepared by agents but confirmed by the operator.
+
+The result is a local-first AI operations system that feels less like “open a chatbot” and more like “run a small digital command room.” 🛰️
+
+## The Simple Idea
+
+Tell DystopAI what you want:
+
+```text
+Every Friday morning, prepare next week's grocery list from my meal plan and send it to me for approval.
+```
+
+DystopAI can route that intent through the pieces that matter:
+
+```text
+Goal
++ the right agent or active party
++ workspace and memory
++ plugin capabilities
++ schedule or watch mode
++ approval boundary
++ runtime evidence
+= controlled AI work
+```
+
+That same pattern works for code review, research, release checks, customer responses, market or product alerts, household routines, content planning, browser-assisted tasks, and custom workflows built from plugins.
 
 ## Why It Exists
 
-Useful agent systems need more than a prompt window. They need an operating model.
+Useful AI agents need more than a prompt window. They need structure, visibility, recovery, and boundaries.
 
-| Operational layer | What DystopAI provides |
+| What agent systems need | What DystopAI provides |
 | --- | --- |
-| **Identity** | Specialized agents with distinct personalities, roles, models, tools, policies, skills, workspaces, and doctrine. |
-| **Work** | Structured missions with ownership, dispatch modes, risk settings, acceptance gates, verification, and reports. |
-| **Time** | One-shot, timed, looping, watch-style, cron-backed, and recurring operations. |
-| **Tools** | OpenClaw plugins, providers, browser capabilities, file access, skills, communication surfaces, and external services. |
-| **Communication** | Desktop and local web control plus compatible OpenClaw channels and plugin-defined channels. |
-| **Control** | Live monitoring, stop controls, approval boundaries, tool policy, sandbox policy, session cleanup, and Gateway recovery. |
-| **Continuity** | Agent doctrine, workspaces, sessions, learned skills, local state, mission events, and runtime ledgers. |
+| **Identity** | Specialized agents with roles, personalities, models, tools, doctrine, workspaces, memory, and policies. |
+| **Coordination** | Active parties, command slots, direct turns, selected-agent turns, and multi-agent mission dispatch. |
+| **Work structure** | Missions with objectives, modes, timing, risk, acceptance gates, verification, and completion reports. |
+| **Time** | Immediate, timed, looping, watch-style, cron-backed, and recurring operations. |
+| **Tools** | OpenClaw plugins, providers, browser capabilities, files, skills, communication channels, and external services. |
+| **Communication** | Desktop and local web control plus compatible OpenClaw channel and plugin surfaces. |
+| **Control** | Stop controls, runtime logs, approval boundaries, session cleanup, Gateway recovery, and diagnostics. |
+| **Continuity** | Agent doctrine, local state, workspaces, sessions, learned skills, mission ledgers, and runtime evidence. |
 
-The interface stays approachable, while the machinery underneath remains explicit, observable, and recoverable.
+DystopAI is designed so the exciting part stays usable and the dangerous part stays visible.
 
-## DystopAI Capability Vision
+## What Makes It Different
 
-DystopAI is a local-first AI operations system where specialized agents, missions, memory, plugins, runtime monitoring, scheduling, approvals, and communication channels operate as one command network.
+### 1. It is an agent roster, not one renamed assistant
 
-| Capability | What it means |
+Create agents with real lanes: architect, builder, reviewer, tester, analyst, researcher, operator, marketer, assistant, support, coordinator, or anything your workflow needs.
+
+Each agent can carry:
+
+- A name, portrait, role, class, level, rarity, tags, and description.
+- A primary model, fallback models, reasoning level, timeout, and provider authentication.
+- A dedicated workspace with sandbox and read/write policy.
+- Tool allowlists, tool denylists, and runtime boundaries.
+- Heartbeat cadence, loop/watch behavior, idle timeout, and recovery mode.
+- Skills from the local library, learned skills, shared skills, and ClawHub.
+- Doctrine files such as `IDENTITY.md`, `SOUL.md`, `BOOTSTRAP.md`, `AGENTS.md`, `USER.md`, `HEARTBEAT.md`, `MEMORY.md`, `TOOLS.md`, and `MISSION_PROMPT.md`.
+
+A coding agent can live in a repository. A research agent can live in a documents folder. A support agent can have a communication channel. A household assistant can run scheduled routines. They do not need to share one crowded brainpan.
+
+### 2. Missions turn ideas into controlled work
+
+A mission is a goal with an operating frame around it.
+
+```text
+Objective
++ selected agents
++ collaboration mode
++ timing
++ risk tolerance
++ acceptance gates
++ verification commands
++ stop conditions
+= controlled agent work
+```
+
+Mission types include `Build`, `Plan`, `Research`, `Command`, and `Memory`.
+
+Dispatch modes include `Command`, `Parallel`, `Specialist`, `Relay`, and `Swarm`.
+
+Timing modes include `Strike`, `Timed`, `Loop`, and `Watch`. Repeating work is backed by OpenClaw cron state instead of a decorative frontend timer.
+
+Mission reports can preserve participation, runtime references, retries, failures, verification results, session identifiers, elapsed time, and unavailable metrics instead of pretending everything worked.
+
+### 3. Plugins turn agents into hyper-custom helpers
+
+ClawTalk is only one communication surface. The bigger power is the plugin layer.
+
+Plugins are how DystopAI agents gain new senses, hands, memories, and doorways. A plugin can make an agent reachable through a channel, give it access to a model provider, let it use browser automation, expose memory or skills, connect an external service, or add a custom workflow surface.
+
+| Plugin category | What it can unlock |
 | --- | --- |
-| **Omnichannel AI command layer** | Control agents through any compatible surface, including desktop, local web chat, SMS, voice, walkie-style chat, Discord, Google Chat, iMessage, Matrix, Microsoft Teams, Signal, Slack, Telegram, WhatsApp, WebChat, webhooks, or future plugin channels. |
-| **Specialized agent workforce** | Run agents as architects, builders, reviewers, testers, analysts, coordinators, marketers, researchers, assistants, operators, support agents, and automation agents. |
-| **Mission-based automation** | Convert a goal into a structured operation with assigned agents, timing, risk, evidence requirements, acceptance gates, verification, and a completion report. |
-| **Real-time analyst alerts** | Watch products, inventory, prices, news, competitors, launches, system health, or other business signals and deliver useful alerts through a preferred channel. |
-| **Everyday life automation** | Schedule recurring work such as grocery planning, shopping lists, bill reminders, appointment preparation, meal planning, travel checks, and household follow-ups. |
-| **Human approval gates** | Let agents prepare actions while pausing before purchases, messages, deployments, deletion, GitHub pushes, account changes, or other high-impact decisions. |
-| **Remote operations from anywhere** | Send commands such as “check my app,” “summarize today,” “launch a review mission,” or “stop all active runs” through a configured channel while the local runtime remains the control center. |
-| **Project-aware workflows** | Operate on real folders, repositories, documents, stores, media projects, dashboards, overlays, resumes, websites, and business assets. |
-| **Plugin-powered expansion** | Add communication, providers, browser automation, memory, search, files, scheduling, alerts, skills, and service integrations without redefining the core product. |
-| **Continuous scheduled missions** | Run hourly, daily, weekly, cron-based, or event-driven work such as health checks, reports, content plans, release checks, reminders, and watch missions. |
-| **Live runtime visibility** | See what is running, what failed, which channel initiated work, which agent responded, which tool is active, which plugin needs setup, and what requires approval. |
-| **Personal AI operating layer** | Give intent once, let agents divide the work, let plugins provide capabilities, let schedules keep it moving, and retain human authority over consequential actions. |
+| **Communication channels** | Route work through compatible SMS, voice, walkie-style chat, Discord, Google Chat, iMessage, Matrix, Microsoft Teams, Signal, Slack, Telegram, WhatsApp, WebChat, webhooks, or future plugin channels. |
+| **Model providers** | Give different agents different models, fallback models, auth methods, and provider lanes. |
+| **Browser and tool plugins** | Let agents inspect pages, use browser flows, gather context, operate inside approved workspaces, or run tool-assisted tasks. |
+| **Memory and skills** | Add continuity, reusable playbooks, learned procedures, role-specific abilities, and shared skill libraries. |
+| **Service integrations** | Connect agents to the systems your workflow depends on, as long as the plugin, credentials, and tool policy support it. |
+
+That is how a generic assistant becomes a custom helper: an agent gets a job, a workspace, a memory, a schedule, a channel, and the right tools. Tiny digital locksmith, giant keyring. 🗝️
 
 > [!NOTE]
-> Channel and approval availability depends on the installed OpenClaw runtime, operating system, plugin version, credentials, and tool configuration. DystopAI is intentionally channel-agnostic. ClawTalk is one bundled communication surface, not the boundary of the platform.
+> Channel, plugin, approval, and automation availability depends on the installed OpenClaw runtime, operating system, plugin version, credentials, and tool configuration. DystopAI is intentionally channel-agnostic. ClawTalk is bundled, useful, and important, but it is not the boundary of the platform.
 
-## Channel-Agnostic By Design
+### 4. Monitor shows what the system is doing
 
-DystopAI should not be defined as “Telegram plus ClawTalk” or by any other fixed pair of services. The durable abstraction is a **compatible communication channel**.
+The Monitor answers the operator's most important question:
+
+> **What is running right now, and can I trust it?**
+
+Inspect:
+
+- Gateway health, process state, port, PID, uptime, readiness, start, stop, and restart actions.
+- Active and recent agent calls.
+- Open sessions, session files, locks, stale locks, and cleanup controls.
+- Cron jobs, scheduled shifts, next-run timing, retries, and stop actions.
+- Plugin status and setup requirements.
+- Inbound, outbound, and system channel activity.
+- Runtime logs, diagnostic summaries, failures, and recovery evidence.
+- Agent phases, tool activity, browser activity, file activity, partial output, final output, and approval events when supplied by the runtime.
+- Clean Slate recovery when UI or runtime evidence becomes stale.
+
+Live activity is not decoration. It is the evidence trail that lets you interrupt, verify, redirect, and recover agent work.
+
+### 5. Human authority stays in the loop
+
+Agents can prepare important actions, but the operator should keep final authority over high-impact work.
+
+Use approval gates before:
+
+- Purchases or checkout flows.
+- Outbound messages to other people.
+- Account changes.
+- File deletion or destructive edits.
+- Deployments, releases, or GitHub pushes.
+- Trades, payments, or other financial actions.
+- Any workflow where a wrong action costs more than a wrong draft.
+
+DystopAI is powerful because it can connect agents to real tools. It is safer because the system is built around policy, visibility, and stop controls.
+
+## Channel-Agnostic Command Layer
+
+DystopAI should not be defined as “ClawTalk plus one chat app.” The durable abstraction is a **compatible communication channel**.
 
 The desktop app and local web surface are first-class control surfaces. ClawTalk adds SMS, voice, and walkie-style routing in the current app. OpenClaw and its plugin ecosystem can add other channels, with availability determined by the operator's runtime and configuration.
 
@@ -97,130 +205,46 @@ flowchart LR
 
 A remote command can enter through a channel, route to the correct agent, become a mission, use local or networked tools, pause at an approval boundary, and return evidence through the same communication path.
 
-## What You Can Do Today
+## Product Tour
 
-### Build A Real Agent Roster
+| Agents | Missions |
+| --- | --- |
+| ![DystopAI Agents workspace](docs/assets/readme/dystopai-agents.png) | ![DystopAI Mission Board](docs/assets/readme/dystopai-missions.png) |
 
-Recruit and configure agents with:
+| Runtime Monitor | Plugins |
+| --- | --- |
+| ![DystopAI Runtime Monitor](docs/assets/readme/dystopai-monitor.png) | ![DystopAI Plugin Runtime](docs/assets/readme/dystopai-plugins.png) |
 
-- A name, portrait, role, class, level, rarity, and behavior profile.
-- A primary model, fallback models, reasoning level, timeout, and provider authentication.
-- A dedicated workspace plus sandbox and read/write policy.
-- Tool allowlists and denylists.
-- Heartbeat cadence, idle timeout, looping behavior, and recovery mode.
-- Skills from the local library, learned skills, and ClawHub.
-- Editable doctrine files such as `IDENTITY.md`, `SOUL.md`, `BOOTSTRAP.md`, `AGENTS.md`, `USER.md`, `HEARTBEAT.md`, `MEMORY.md`, `TOOLS.md`, and `MISSION_PROMPT.md`.
+| Agent Settings |
+| --- |
+| ![DystopAI Agent Settings](docs/assets/readme/dystopai-agent-settings.png) |
 
-Agents are not merely renamed chats. Each agent can have a separate operating identity, capability lane, context boundary, and workspace.
+## Core Product Surfaces
 
-### Assemble An Active Party
-
-Deploy agents into an active party and direct work to:
-
-- One specialist.
-- A selected set of agents.
-- The confirmed party.
-- A lead agent that delegates and synthesizes.
-- Parallel, sequential, specialist, relay, or swarm-style execution lanes.
-
-Slot order can express command structure. The first slot can operate as commander, reviewer, or final synthesizer while other agents work in focused lanes.
-
-### Run A Live Command Console
-
-Use the Command Console to:
-
-- Send direct or party-wide instructions.
-- Attach files and working context.
-- Stream partial and final responses.
-- Keep each agent's lane readable.
-- Reuse stable Gateway sessions when continuity matters.
-- Abort active turns or clear stale session state when a run goes wrong.
-- Receive channel-routed messages in the same operating environment.
-
-### Launch Verifiable Missions
-
-A mission combines:
-
-```text
-Objective
-+ selected agents
-+ collaboration mode
-+ timing
-+ risk tolerance
-+ acceptance gates
-+ verification commands
-+ stop conditions
-= controlled agent work
-```
-
-Mission types include `Build`, `Plan`, `Research`, `Command`, and `Memory`.
-
-Dispatch modes include `Command`, `Parallel`, `Specialist`, `Relay`, and `Swarm`.
-
-Timing modes include `Strike`, `Timed`, `Loop`, and `Watch`. Repeating work is backed by OpenClaw cron state rather than a cosmetic frontend timer.
-
-Mission reports can preserve participation, runtime references, retries, failures, verification results, session identifiers, elapsed time, and unavailable metrics instead of inventing success.
-
-### Observe The Runtime While It Works
-
-The Monitor answers the operator's most important question:
-
-> **What is the system doing right now?**
-
-Inspect:
-
-- Gateway health, process state, port, PID, uptime, readiness, start, stop, and restart actions.
-- Active and recent agent calls.
-- Open sessions, session files, locks, stale locks, and cleanup controls.
-- Cron jobs, scheduled shifts, next-run timing, retries, and stop actions.
-- Plugin status and setup requirements.
-- Inbound, outbound, and system channel activity.
-- Runtime logs, diagnostic summaries, failures, and recovery evidence.
-- Agent phases, tool activity, browser activity, file activity, partial output, final output, and approval events when supplied by the runtime.
-- Clean Slate recovery when UI or runtime evidence becomes stale.
-
-Live activity is not decorative animation. It is the evidence trail that lets an operator understand, interrupt, verify, and recover agent work.
-
-### Expand Through Plugins And Skills
-
-The Plugins workspace can:
-
-- Inspect installed, enabled, disabled, loaded, running, or setup-required plugins.
-- Enable, disable, install, uninstall, update, refresh, and configure plugin surfaces.
-- Open interactive setup terminals for plugins that require guided configuration.
-- Manage communication channels, model providers, browser automation, memory systems, tools, and external services.
-- Search, inspect, install, update, and assign skills through the local library and ClawHub.
-
-Every compatible plugin can become another capability available to the same agent and mission system.
-
-### Operate Through ClawTalk
-
-The bundled ClawTalk integration adds SMS, voice, and walkie-style communication.
-
-Messages can target a specific agent with aliases such as:
-
-```text
-@Diana summarize the overnight alerts
-@hn-builder inspect the failed build and report the first blocker
-@Commander stop the active mission and return current evidence
-```
-
-Agent routing refreshes from the current OpenClaw configuration, so model, workspace, timeout, and agent-list changes can be reflected in later routed turns without maintaining a separate hardcoded directory.
+| Surface | What users do there |
+| --- | --- |
+| **Recruit** | Create a new agent profile, role, model lane, workspace, and starter doctrine in one guided flow. |
+| **Agents** | Browse the roster, deploy the active party, edit specialists, and issue live commands. |
+| **Command Console** | Talk to one agent, selected agents, or the confirmed party, attach files, stream output, and stop active work. |
+| **Missions** | Define structured objectives, dispatch modes, cadence, risk, acceptance gates, verification, and reports. |
+| **Monitor** | Watch Gateway health, calls, sessions, cron jobs, channels, logs, failures, and recovery actions. |
+| **Plugins** | Manage providers, tools, communication channels, setup flows, skills, memory, and extension state. |
+| **Agent Editor** | Configure models, authentication, workspaces, runtime policy, sandboxing, tools, skills, schedule, and doctrine. |
 
 ## Example Workflows
 
-| Goal | Example operator request | Useful controls |
+| Goal | Example operator request | DystopAI controls involved |
 | --- | --- | --- |
-| **Software delivery** | “Launch a Build mission with an architect, builder, and reviewer. Change no release files. Require lint, typecheck, and an exact changed-file report.” | Agent roles, workspace isolation, acceptance gates, verification, stop controls. |
+| **Software delivery** | “Launch a Build mission with an architect, builder, and reviewer. Require lint, typecheck, and an exact changed-file report.” | Agent roles, workspace isolation, acceptance gates, verification, stop controls. |
 | **Codebase health** | “Check my app, summarize the failures, and do not modify anything.” | Read-only policy, direct agent command, live activity, final evidence. |
-| **Research** | “Map the competing products, separate facts from assumptions, and return unresolved questions.” | Research mission, parallel specialists, source requirements, synthesis. |
+| **Research map** | “Compare these products, separate facts from assumptions, and return unresolved questions.” | Research mission, parallel specialists, source requirements, synthesis. |
 | **Business monitoring** | “Watch these product pages and alert me only when price, inventory, or release status changes.” | Watch mission, browser/plugin tools, scheduler, preferred channel. |
 | **Personal operations** | “Every Friday, prepare next week's grocery list from my meal plan and send it for approval.” | Recurring schedule, memory, communication plugin, approval boundary. |
-| **Communication** | “Draft the customer response, wait for approval, then send through the connected channel.” | Specialist agent, tool policy, approval event, channel routing. |
+| **Customer response** | “Draft the customer reply, wait for approval, then send through the connected channel.” | Specialist agent, tool policy, approval event, channel routing. |
 | **Release review** | “Run a release-readiness mission, collect test evidence, list blockers, and never push to GitHub.” | Mission risk settings, command restrictions, verification report. |
 | **Emergency control** | “Stop all active runs and tell me what was interrupted.” | Gateway controls, cron stop actions, session inspection, runtime summary. |
 
-These are operating patterns, not hardcoded demos. The exact action depends on the models, tools, plugins, credentials, workspaces, and permissions configured by the operator.
+These are operating patterns, not hardcoded demos. Exact behavior depends on the models, tools, plugins, credentials, workspaces, and permissions configured by the operator.
 
 ## How A Command Becomes Work
 
@@ -245,31 +269,6 @@ flowchart TD
 ```
 
 This closed loop is the central design idea: **intent, execution, observation, control, evidence, continuity**.
-
-## Product Tour
-
-| Missions | Runtime Monitor |
-| --- | --- |
-| ![DystopAI Mission Board](docs/assets/readme/dystopai-missions.png) | ![DystopAI Runtime Monitor](docs/assets/readme/dystopai-monitor.png) |
-
-| Plugins |
-| --- |
-| ![DystopAI Plugin Runtime](docs/assets/readme/dystopai-plugins.png) |
-| Agent Settings |
-| --- |
-| ![DystopAI Agent Settings](docs/assets/readme/dystopai-agent-settings.png) |
-
-## Core Product Surfaces
-
-| Surface | Purpose |
-| --- | --- |
-| **Recruit** | Create an agent and its operating markdown in one guided flow. |
-| **Agents** | Search the roster, deploy the active party, edit specialists, and issue live commands. |
-| **Command Console** | Send direct or coordinated turns, attach files, stream output, and stop work. |
-| **Missions** | Define objectives, roles, modes, timing, risk, gates, verification, and reports. |
-| **Monitor** | Inspect Gateway health, calls, sessions, cron, channels, logs, failures, and recovery actions. |
-| **Plugins** | Manage providers, communication channels, tools, setup flows, skills, and extension state. |
-| **Agent Editor** | Configure models, authentication, workspaces, runtime policy, sandboxing, tools, skills, and doctrine. |
 
 ## Architecture
 
@@ -384,7 +383,9 @@ When `CONTROL_CENTER_TOKEN` is not configured, the server generates a local sess
 3. Recruit an agent or select an existing specialist.
 4. Deploy agents to the active party and confirm it.
 5. Send a direct command or launch a mission.
-6. Open Monitor to watch the runtime, sessions, cron jobs, channels, and evidence.
+6. Open Monitor to watch runtime, sessions, cron jobs, channels, and evidence.
+7. Add plugins only after the basic agent path works.
+8. Put approval gates in front of high-impact workflows.
 
 ## Essential Commands
 
@@ -487,6 +488,6 @@ Current package version: `0.0.6`.
 
 DystopAI Core is an active local-first desktop project built around the OpenClaw runtime. The principal product surfaces are implemented: agent recruitment and configuration, active-party control, live chat, structured missions, cron-backed recurring work, runtime monitoring, plugin and skill management, provider authentication, channel activity, recovery controls, packaging, and release evidence.
 
-The product direction is larger than any single chat surface:
+The product direction is bigger than any single chat surface:
 
-> **Give intent. Assemble the right agents. Let the system work across time and tools. Stay connected through any compatible channel. Keep the final authority.**
+> **Give intent. Assemble the right agents. Let plugins provide the powers. Let schedules keep the work moving. Watch the runtime. Approve what matters.**
