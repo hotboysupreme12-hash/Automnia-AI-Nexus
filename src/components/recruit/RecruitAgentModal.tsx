@@ -102,7 +102,9 @@ async function loadRecruitAuthProviders(force = false) {
   if (cached) return cached
   if (!force && recruitAuthProvidersRequest) return recruitAuthProvidersRequest
 
-  recruitAuthProvidersRequest = apiRequest<{ providers?: unknown }>('/api/auth/providers', { timeoutMs: 10_000 })
+  recruitAuthProvidersRequest = (force
+    ? apiRequest<{ providers?: unknown }>('/api/auth/providers?refresh=1', { timeoutMs: 30_000, cache: 'no-store' })
+    : apiRequest<{ providers?: unknown }>('/api/auth/providers', { timeoutMs: 10_000 }))
     .then((result) => {
       if (!result.ok) throw new Error(apiErrorMessage(result.error))
       const data = result.data
@@ -570,6 +572,7 @@ export function RecruitAgentModal({ isOpen, onClose }: { isOpen: boolean; onClos
   const editorPreviewRef = useRef<HTMLPreElement | null>(null)
   const editorGutterRef = useRef<HTMLDivElement | null>(null)
   const textDraftTimerRef = useRef<number | null>(null)
+  const authRefreshKeyRef = useRef('')
 
   const [name, setName] = useState('')
   const [agentId, setAgentId] = useState('')
@@ -711,6 +714,7 @@ export function RecruitAgentModal({ isOpen, onClose }: { isOpen: boolean; onClos
     setShowMarkdownEditor(false)
     setCursorStatus({ line: 1, column: 1, selectionLength: 0 })
     setAutoForging(false)
+    authRefreshKeyRef.current = ''
     setResourceFiles(markdownDefaults({
       name: '',
       agentId: '',
@@ -758,13 +762,43 @@ export function RecruitAgentModal({ isOpen, onClose }: { isOpen: boolean; onClos
     }
   }, [isOpen])
 
+  const upsertAuthProviderStatus = useCallback((next?: AuthProviderStatus | null) => {
+    if (!next) return
+    setAuthModalProvider((current) => current?.provider === next.provider ? next : current)
+    setAuthProviders((current) => {
+      const merged = current.some((entry) => entry.provider === next.provider)
+        ? current.map((entry) => entry.provider === next.provider ? next : entry)
+        : [next, ...current]
+      recruitAuthProvidersCache = { value: merged, expiresAt: Date.now() + RECRUIT_LOOKUP_CACHE_MS }
+      return merged
+    })
+  }, [])
+
   const fetchAuthProviders = useCallback(async (force = false) => {
     try {
-      setAuthProviders(await loadRecruitAuthProviders(force))
+      const next = await loadRecruitAuthProviders(force)
+      setAuthProviders(next)
+      setAuthModalProvider((current) => current ? next.find((entry) => entry.provider === current.provider) || current : current)
     } catch {
       setAuthProviders([])
     }
   }, [])
+
+  useEffect(() => {
+    if (!isOpen || !primaryModel || !selectedProvider) return
+    if (!selectedProviderAuth?.oauth?.supported || selectedProviderAuth.configured) return
+    const key = `${selectedProvider}:${primaryModel}`
+    if (authRefreshKeyRef.current === key) return
+    authRefreshKeyRef.current = key
+    void fetchAuthProviders(true)
+  }, [
+    isOpen,
+    primaryModel,
+    selectedProvider,
+    selectedProviderAuth?.configured,
+    selectedProviderAuth?.oauth?.supported,
+    fetchAuthProviders,
+  ])
 
   useEffect(() => {
     if (!isOpen) return
@@ -1458,7 +1492,10 @@ export function RecruitAgentModal({ isOpen, onClose }: { isOpen: boolean; onClos
             if (!result.ok) throw new Error(apiErrorMessage(result.error))
             await fetchAuthProviders(true)
           }}
-          onConnected={() => fetchAuthProviders(true)}
+          onConnected={async (nextStatus) => {
+            upsertAuthProviderStatus(nextStatus)
+            await fetchAuthProviders(true)
+          }}
         />
       )}
     </>

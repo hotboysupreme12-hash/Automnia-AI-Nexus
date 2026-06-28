@@ -30,6 +30,7 @@ import type {
   DelegationRequest,
   DurationMode,
   DurationUnit,
+  FastModeDefault,
   HeartbeatConfig,
   MissionDraft,
   MissionEvent,
@@ -72,6 +73,7 @@ const LEGACY_DEFAULT_PARTY_IDS = [
   'hn-reviewer',
 ]
 const FAST_THINKING: ThinkingLevel = 'off'
+const FAST_MODE_DEFAULT: FastModeDefault = 'auto'
 const MISSION_THINKING: ThinkingLevel = 'minimal'
 const FAST_TIMEOUT_SECONDS = 90
 const MISSION_DEFAULT_TIMEOUT_SECONDS = 12 * 60
@@ -307,6 +309,7 @@ function persistRuntimePolicy(agentId: string, runtimePolicy: AgentRuntimePolicy
           thinkingDefault: runtimePolicy?.thinkingDefault,
           timeoutSeconds: runtimePolicy?.timeoutSeconds,
           parallelPreferred: runtimePolicy?.parallelPreferred,
+          fastModeDefault: runtimePolicy?.fastModeDefault,
         },
       },
     }).then((result) => {
@@ -1136,7 +1139,7 @@ function makeRecruitAgentDraft(input: RecruitAgentInput): OpenClawAgent {
     workspace: input.workspace?.trim() || '',
     sandbox: { mode: 'off', scope: 'agent', workspaceAccess: 'rw' },
     model: input.primaryModel?.trim() ? { primary: input.primaryModel.trim(), fallbacks: [] } : template.model,
-    runtimePolicy: { thinkingDefault: FAST_THINKING, timeoutSeconds: FAST_TIMEOUT_SECONDS, parallelPreferred: true },
+    runtimePolicy: { thinkingDefault: FAST_THINKING, timeoutSeconds: FAST_TIMEOUT_SECONDS, parallelPreferred: true, fastModeDefault: FAST_MODE_DEFAULT },
     toolsPolicy: { profile: 'full', allow: tools, deny: [] },
     rarity: recruitRarity(level),
     className: input.className.trim() || 'Operator',
@@ -1224,6 +1227,7 @@ function runtimePolicyFromOverview(entry: PartyOverviewAgent, existing: OpenClaw
     thinkingDefault: incoming.thinkingDefault ?? current.thinkingDefault ?? FAST_THINKING,
     timeoutSeconds: incoming.timeoutSeconds ?? current.timeoutSeconds ?? FAST_TIMEOUT_SECONDS,
     parallelPreferred: incoming.parallelPreferred ?? current.parallelPreferred ?? true,
+    fastModeDefault: incoming.fastModeDefault ?? current.fastModeDefault ?? FAST_MODE_DEFAULT,
   }
 }
 
@@ -1451,11 +1455,11 @@ export const useNexusStore = create<NexusState>()(
       /* ---- inner types ---- */
       type AT = {
         ok: boolean
-        reply?: string
+        reply?: unknown
         stdout?: string
         stderr?: string
         code?: number
-        error?: string
+        error?: unknown
         detail?: unknown
         model?: string
         modelId?: string
@@ -1493,6 +1497,7 @@ export const useNexusStore = create<NexusState>()(
         freshSession?: boolean
         heartbeatTurn?: boolean
         thinking?: ThinkingLevel
+        fastMode?: FastModeDefault
         timeoutSeconds?: number
         attachments?: AgentTurnAttachment[]
         sessionKey?: string
@@ -1572,8 +1577,29 @@ export const useNexusStore = create<NexusState>()(
       }
 
       const extractOutput = (p: AT) => {
-        if (p.reply?.trim()) return strip(p.reply.trim())
-        if (p.error?.trim()) return strip(`${p.error}${p.detail ? `\n${typeof p.detail === 'string' ? p.detail : JSON.stringify(p.detail)}` : ''}`)
+        const textFromUnknown = (value: unknown): string => {
+          if (typeof value === 'string') return value.trim()
+          if (!value) return ''
+          if (value instanceof Error) return value.message.trim()
+          if (typeof value !== 'object') return String(value).trim()
+          const record = value as Record<string, unknown>
+          const parts = [
+            record.message,
+            record.error,
+            record.code,
+            record.detail,
+          ]
+            .map((entry) => typeof entry === 'string' ? entry.trim() : entry && typeof entry === 'object' && !Array.isArray(entry) ? JSON.stringify(safeDiagnosticPayload(entry as Record<string, unknown>)) : entry ? String(entry).trim() : '')
+            .filter(Boolean)
+          return parts.length ? parts.join(': ') : JSON.stringify(safeDiagnosticPayload(record))
+        }
+        const replyText = textFromUnknown(p.reply)
+        if (replyText) return strip(replyText)
+        const errorText = textFromUnknown(p.error)
+        if (errorText) {
+          const detailText = textFromUnknown(p.detail)
+          return strip(`${errorText}${detailText ? `\n${detailText}` : ''}`)
+        }
         const raw = strip(p.stdout || p.stderr || ''); if (!raw) return 'No response.'
         const s = summarizeFail(raw); if (s) return s
         const parseNested = (v: unknown): string => {
@@ -1966,11 +1992,13 @@ export const useNexusStore = create<NexusState>()(
       const resolveRunPolicy = (aid: string, options: PromptRunOptions, promptText = '') => {
         const policy = get().agents.find((agent) => agent.id === aid)?.runtimePolicy
         const thinking = options.thinking ?? policy?.thinkingDefault ?? FAST_THINKING
+        const fastMode = options.fastMode ?? policy?.fastModeDefault ?? FAST_MODE_DEFAULT
         const configuredTimeout = options.timeoutSeconds
           ?? (isLongWorkPrompt(promptText) ? Math.max(policy?.timeoutSeconds ?? 0, MISSION_DEFAULT_TIMEOUT_SECONDS) : policy?.timeoutSeconds)
           ?? FAST_TIMEOUT_SECONDS
         return {
           thinking,
+          fastMode,
           timeoutSeconds: configuredTimeout,
         }
       }
@@ -2586,6 +2614,7 @@ export const useNexusStore = create<NexusState>()(
                 message: msg,
                 intentMessage,
                 thinking: runPolicy.thinking,
+                fastMode: runPolicy.fastMode,
                 timeoutSeconds: runPolicy.timeoutSeconds,
                 promptProfile: 'fast',
                 attachments: options.attachments || [],
@@ -2627,6 +2656,7 @@ export const useNexusStore = create<NexusState>()(
                 message: msg,
                 intentMessage,
                 thinking: runPolicy.thinking,
+                fastMode: runPolicy.fastMode,
                 timeoutSeconds: runPolicy.timeoutSeconds,
                 promptProfile: 'fast',
                 attachments: options.attachments || [],

@@ -15,7 +15,7 @@ export type DystopAIUiSettings = {
 export const UI_SETTINGS_STORAGE_KEY = 'dystopai-ui-settings-v1'
 
 export const DEFAULT_UI_SETTINGS: DystopAIUiSettings = {
-  accentMode: 'no-blue',
+  accentMode: 'reference',
   formChrome: 'graphite',
   density: 'comfortable',
   motion: 'standard',

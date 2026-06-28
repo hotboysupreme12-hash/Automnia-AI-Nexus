@@ -15,7 +15,7 @@ OpenAPI: `/api/v1/openapi.json`.
 
 ## Public catalog reuse
 
-Third-party directories may use the public read endpoints to list or search ClawHub skills. Please cache results, honor `429`/`Retry-After`, link users back to the canonical ClawHub listing (`https://clawhub.ai/<owner>/<slug>`), and avoid implying ClawHub endorsement of the third-party site. Do not attempt to mirror hidden, private, or moderation-blocked content outside the public API surface.
+Third-party directories may use the public read endpoints to list or search ClawHub skills. Please cache results, honor `429`/`Retry-After`, link users back to the canonical ClawHub listing (`https://clawhub.ai/<owner>/skills/<slug>`), and avoid implying ClawHub endorsement of the third-party site. Do not attempt to mirror hidden, private, or moderation-blocked content outside the public API surface.
 
 Web slug shortcuts resolve across registry families, but API clients should use
 the canonical URLs returned by read endpoints instead of reconstructing route
@@ -39,14 +39,17 @@ Enforcement model:
 
 Headers:
 
-- Legacy compatibility: `X-RateLimit-Limit`, `X-RateLimit-Remaining`, `X-RateLimit-Reset`
-- Standardized: `RateLimit-Limit`, `RateLimit-Remaining`, `RateLimit-Reset`
+- Legacy compatibility: `X-RateLimit-Limit`, `X-RateLimit-Reset`
+- Standardized: `RateLimit-Limit`, `RateLimit-Reset`
+- On `429`: `X-RateLimit-Remaining: 0` and `RateLimit-Remaining: 0`
 - On `429`: `Retry-After`
 
 Header semantics:
 
 - `X-RateLimit-Reset`: absolute Unix epoch seconds
 - `RateLimit-Reset`: seconds until reset (delay)
+- `X-RateLimit-Remaining` / `RateLimit-Remaining`: exact remaining budget when present.
+  Sharded successful requests omit this header instead of returning an approximate global value.
 - `Retry-After`: seconds to wait before retry (delay) on `429`
 
 Example `429` response:
@@ -73,9 +76,13 @@ Client guidance:
 
 IP source:
 
-- Uses `cf-connecting-ip` (Cloudflare) for client IP by default.
+- Uses trusted client IP headers, including `cf-connecting-ip`, only when the
+  deployment explicitly enables trusted forwarded headers.
 - ClawHub uses trusted forwarding headers to identify client IPs at the edge.
-- If no trusted client IP is available, anonymous download requests use an endpoint-scoped fallback bucket instead of one global `ip:unknown` bucket. Anonymous read/write requests still use the shared unknown bucket so missing-IP routing remains visible and conservative.
+- If no trusted client IP is available, anonymous requests use fallback buckets
+  scoped only by rate-limit kind. These fallback buckets do not include
+  caller-supplied paths, slugs, package names, versions, query strings, or other
+  artifact parameters.
 
 ## Error responses
 
@@ -142,7 +149,7 @@ Query params:
 
 - `limit` (optional): integer (1–200)
 - `cursor` (optional): pagination cursor for any non-`trending` sort
-- `sort` (optional): `updated` (default), `recommended` (alias: `default`), `createdAt` (alias: `newest`), `stars` (alias: `rating`), `installsCurrent` (alias: `installs`), `installsAllTime`, `trending`
+- `sort` (optional): `updated` (default), `recommended` (alias: `default`), `createdAt` (alias: `newest`), `downloads`, `stars` (alias: `rating`), legacy install aliases `installsCurrent`/`installs`/`installsAllTime` map to `downloads`, `trending`
 - `nonSuspiciousOnly` (optional): `true` to hide suspicious (`flagged.suspicious`) skills
 - `nonSuspicious` (optional): legacy alias for `nonSuspiciousOnly`
 
@@ -165,6 +172,7 @@ Response:
       "slug": "gifgrep",
       "displayName": "GifGrep",
       "summary": "…",
+      "topics": ["Productivity"],
       "tags": { "latest": "1.2.3" },
       "stats": {},
       "createdAt": 0,
@@ -187,6 +195,7 @@ Response:
     "slug": "gifgrep",
     "displayName": "GifGrep",
     "summary": "…",
+    "topics": ["Productivity"],
     "tags": { "latest": "1.2.3" },
     "stats": {},
     "createdAt": 0,
@@ -483,8 +492,8 @@ Response:
       "version": "1.2.3",
       "createdAt": 0,
       "checkedAt": 0,
-      "skillUrl": "https://clawhub.ai/steipete/gifgrep",
-      "securityAuditUrl": "https://clawhub.ai/steipete/gifgrep/security-audit?version=1.2.3",
+      "skillUrl": "https://clawhub.ai/steipete/skills/gifgrep",
+      "securityAuditUrl": "https://clawhub.ai/steipete/skills/gifgrep/security-audit?version=1.2.3",
       "security": {
         "status": "clean",
         "passed": true,
@@ -539,7 +548,7 @@ Query params:
 - `family` (optional): `skill`, `code-plugin`, or `bundle-plugin`
 - `channel` (optional): `official`, `community`, or `private`
 - `isOfficial` (optional): `true` or `false`
-- `sort` (optional): `updated` (default), `recommended`, `installs`
+- `sort` (optional): `updated` (default), `recommended`, `trending`, `downloads`, legacy alias `installs`
 - `category` (optional): plugin category filter. Supported only when the
   request is scoped to plugin packages (`/api/v1/plugins`,
   `/api/v1/code-plugins`, `/api/v1/bundle-plugins`, or package endpoints with
@@ -589,7 +598,7 @@ Query params:
 - `limit` (optional): integer (1-100)
 - `cursor` (optional): pagination cursor
 - `isOfficial` (optional): `true` or `false`
-- `sort` (optional): `recommended` (default), `installs`, `updated`
+- `sort` (optional): `recommended` (default), `trending`, `downloads`, `updated`, legacy alias `installs`
 - `category` (optional): plugin category filter. Current values:
   `channels`, `models`, `memory`, `context`, `voice`, `media`, `web`,
   `tools`, `runtime`, `gateway`, `security`, `other`.
@@ -600,7 +609,48 @@ Legacy v1 filter aliases remain accepted on read endpoints:
 - `observability` and `deployment` resolve to `gateway`.
 - `dev-tools` resolves to `runtime`.
 
+`trending` is a seven-day install/download leaderboard and does not use all-time totals.
+On the unified `/api/v1/packages` endpoint it is plugin-only; use
+`/api/v1/skills?sort=trending` for the skill catalog.
+
 Legacy aliases are not accepted as stored or author-declared category values.
+
+### `GET /api/v1/skills/export`
+
+Bulk export of latest public skills for offline analysis.
+
+Auth:
+
+- API token required.
+
+Query params:
+
+- `startDate` (required): Unix milliseconds lower bound for skill `updatedAt`.
+- `endDate` (required): Unix milliseconds upper bound for skill `updatedAt`.
+- `limit` (optional): integer (1-250), default `250`.
+- `cursor` (optional): pagination cursor from the previous response.
+
+Response:
+
+- Body: ZIP archive.
+- Each exported skill is rooted at `{publisher}/{slug}/`.
+- Hosted skills include the latest stored version files and are listed in
+  `_manifest.json` with `sourceRef: "public-clawhub"`.
+- Current GitHub-backed skills with a `clean` or `suspicious` scan include
+  `_source_handoff.json` with `sourceRef: "public-github"`, repo, commit, path,
+  content hash, and archive URL. They do not include ClawHub-hosted source files.
+- Each skill includes `_export_skill_meta.json`.
+- `_manifest.json` is always included at the ZIP root.
+- `_errors.json` is included when individual skills or files could not be
+  exported.
+
+Headers:
+
+- `X-Next-Cursor`
+- `X-Has-More`
+- `X-Total-Returned`
+- `X-Date-Range`
+- `X-Export-Errors`
 
 ### `GET /api/v1/plugins/export`
 
@@ -1226,7 +1276,9 @@ Response:
 
 ### `GET /api/v1/download`
 
-Downloads a zip of a skill version.
+Downloads a hosted skill version ZIP, or returns a GitHub source handoff for a
+current GitHub-backed skill with a `clean` or `suspicious` scan and no hosted
+version.
 
 Query params:
 
@@ -1238,7 +1290,11 @@ Notes:
 
 - If neither `version` nor `tag` is provided, the latest version is used.
 - Soft-deleted versions return `410`.
-- Download stats are counted as unique identities per hour (`userId` when API token is valid, otherwise IP).
+- GitHub-backed skill handoffs do not proxy or mirror bytes. The JSON response
+  includes `sourceRef: "public-github"`, `repo`, `commit`, `path`, `contentHash`,
+  and `archiveUrl`; scan/current state is a gate and is not included as success
+  payload metadata.
+- Download stats are counted as unique identities per UTC day (`userId` when API token is valid, otherwise IP).
 
 ## Auth endpoints (Bearer token)
 

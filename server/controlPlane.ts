@@ -175,7 +175,10 @@ const MISSION_RECORD_LEDGER_PATH = path.join(CONTROL_CENTER_LEDGER_DIR, 'mission
 const MISSION_EVENT_LEDGER_PATH = path.join(CONTROL_CENTER_LEDGER_DIR, 'mission-events.jsonl')
 const MISSION_REPORT_LEDGER_PATH = path.join(CONTROL_CENTER_LEDGER_DIR, 'mission-reports.jsonl')
 const RUNTIME_MONITOR_CLEAR_MARKER_PATH = path.join(CONTROL_CENTER_LEDGER_DIR, 'runtime-monitor-clear.json')
-const RECOMMENDED_OPENCLAW_VERSION = '2026.6.6'
+const RECOMMENDED_OPENCLAW_VERSION = '2026.6.10'
+const DEFAULT_OPENCLAW_FAST_MODE = 'auto'
+const DEFAULT_OPENCLAW_FAST_AUTO_ON_SECONDS = 60
+const FAST_MODE_MODEL_PARAM_PROVIDERS = new Set(['openai', 'openai-codex', 'anthropic', 'xai', 'minimax'])
 const MAX_RUNTIME_OUTPUT_CHARS = 1_200_000
 const MAX_LOCAL_JSON_RESPONSE_CHARS = 1_200_000
 const UPSTREAM_SSE_BUFFER_LIMIT_CHARS = 1_000_000
@@ -366,6 +369,9 @@ const DISABLE_BROWSER_RUNTIME_DEFAULTS = /^(1|true|yes)$/i.test(
 )
 
 type ThinkingLevel = 'off' | 'minimal' | 'low' | 'medium' | 'high'
+type FastModePreference = 'auto' | 'on' | 'off'
+type OpenClawFastModeDefault = 'auto' | boolean
+type OpenClawChatFastMode = 'auto' | true
 const AGENT_BEHAVIOR_PROFILES = ['executor', 'architect', 'auditor', 'researcher', 'hybrid'] as const
 type AgentBehaviorProfile = (typeof AGENT_BEHAVIOR_PROFILES)[number]
 type FailureKind =
@@ -917,6 +923,7 @@ type AgentConfigEntry = {
   tools?: AgentToolsConfig
   skills?: string[]
   systemPromptOverride?: string
+  fastModeDefault?: OpenClawFastModeDefault
   identity?: AgentIdentity
   name?: string
   model?: {
@@ -927,6 +934,11 @@ type AgentConfigEntry = {
 
 type OpenClawModelAllowlistEntry = {
   alias?: string
+  params?: {
+    fastMode?: OpenClawFastModeDefault
+    fastAutoOnSeconds?: number
+    [key: string]: unknown
+  }
   [key: string]: unknown
 }
 
@@ -1125,6 +1137,7 @@ type OpenClawConfigFile = {
     defaults?: {
       workspace?: string
       timeoutSeconds?: number
+      fastModeDefault?: OpenClawFastModeDefault
       model?: { primary?: string; fallbacks?: string[] }
       models?: Record<string, OpenClawModelAllowlistEntry>
       sandbox?: AgentSandboxConfig
@@ -1280,6 +1293,7 @@ type AgentLocalConfig = {
     thinkingDefault: 'off' | 'minimal' | 'low' | 'medium' | 'high'
     timeoutSeconds: number
     parallelPreferred: boolean
+    fastModeDefault: FastModePreference
   }
   auth: {
     providers: Record<string, { mode: 'oauth' | 'apiKey'; apiKey?: string }>
@@ -1384,6 +1398,9 @@ const GOOGLE_VERTEX_ACCESS_TOKEN_KEYS = ['GOOGLE_VERTEX_ACCESS_TOKEN', 'GCLOUD_A
 const GOOGLE_CLOUD_CLI_INSTALL_URL = 'https://cloud.google.com/sdk/docs/install'
 const GOOGLE_VERTEX_GLOBAL_LOCATION = 'global'
 const GOOGLE_VERTEX_DEFAULT_LOCATION = GOOGLE_VERTEX_GLOBAL_LOCATION
+const GOOGLE_VERTEX_GLOBAL_BASE_URL = 'https://aiplatform.googleapis.com'
+const GOOGLE_VERTEX_REGION_HOST_SUFFIX = '-aiplatform.googleapis.com'
+const GOOGLE_VERTEX_MULTI_REGION_HOSTS = new Set(['aiplatform.eu.rep.googleapis.com', 'aiplatform.us.rep.googleapis.com'])
 const GOOGLE_VERTEX_MODEL_AVAILABILITY_CACHE_MS = 10 * 60 * 1000
 const GOOGLE_VERTEX_ACCESS_TOKEN_CACHE_MS = 45 * 60 * 1000
 const OPENCLAW_STALE_LOCK_MIN_AGE_MS = 15_000
@@ -1503,6 +1520,7 @@ const MODEL_RESILIENCE_FALLBACKS: Record<string, string[]> = {
 const OPENROUTER_PROVIDER_WILDCARD_MODEL_ID = 'openrouter/*'
 const OPENROUTER_DEEPSEEK_V4_PRO_MODEL_ID = 'openrouter/deepseek/deepseek-v4-pro'
 const OPENROUTER_DEEPSEEK_V4_FLASH_MODEL_ID = 'openrouter/deepseek/deepseek-v4-flash'
+const OPENAI_DEFAULT_MODEL_ID = 'openai/gpt-5.5'
 const DEEPSEEK_DEFAULT_MODEL_ID = 'deepseek/deepseek-v4-flash'
 const DEEPSEEK_DEFAULT_FALLBACKS = MODEL_RESILIENCE_FALLBACKS[DEEPSEEK_DEFAULT_MODEL_ID] || [
   'deepseek/deepseek-chat',
@@ -1510,7 +1528,19 @@ const DEEPSEEK_DEFAULT_FALLBACKS = MODEL_RESILIENCE_FALLBACKS[DEEPSEEK_DEFAULT_M
   'deepseek/deepseek-v4-pro',
 ]
 const DEEPSEEK_ONLY_DEFAULTS = /^(1|true|yes)$/i.test(process.env.DYSTOPAI_DEEPSEEK_ONLY_DEFAULTS || '')
-const DEFAULT_AGENT_MODEL_ID = process.env.DYSTOPAI_DEFAULT_AGENT_MODEL?.trim() || DEEPSEEK_DEFAULT_MODEL_ID
+const DEFAULT_AGENT_MODEL_ID = process.env.DYSTOPAI_DEFAULT_AGENT_MODEL?.trim() || OPENAI_DEFAULT_MODEL_ID
+const GENERATED_DEEPSEEK_DEFAULT_MODEL_IDS = new Set([
+  DEEPSEEK_DEFAULT_MODEL_ID,
+  ...DEEPSEEK_DEFAULT_FALLBACKS,
+])
+const GENERATED_OPENROUTER_DEEPSEEK_DEFAULT_MODEL_IDS = new Set([
+  OPENROUTER_DEEPSEEK_V4_PRO_MODEL_ID,
+  OPENROUTER_DEEPSEEK_V4_FLASH_MODEL_ID,
+])
+const GENERATED_DEEPSEEK_ROUTE_MODEL_IDS = new Set([
+  ...GENERATED_DEEPSEEK_DEFAULT_MODEL_IDS,
+  ...GENERATED_OPENROUTER_DEEPSEEK_DEFAULT_MODEL_IDS,
+])
 const OPENAI_DEFAULT_MODEL_IDS = new Set(
   FALLBACK_MODELS
     .map((entry) => entry.id)
@@ -1626,6 +1656,48 @@ function modelSelectionForOpenClawConfig(model: { primary?: string; fallbacks?: 
     if (fallback && fallback !== primary) fallbackSet.add(fallback)
   }
   return { primary, fallbacks: Array.from(fallbackSet) }
+}
+
+function shouldMigrateGeneratedDeepSeekDefaults() {
+  return !DEEPSEEK_ONLY_DEFAULTS && canonicalAgentModelId(DEFAULT_AGENT_MODEL_ID) !== DEEPSEEK_DEFAULT_MODEL_ID
+}
+
+function modelSelectionLooksLikeGeneratedDeepSeekDefault(selection: { primary?: string; fallbacks?: string[] } | undefined) {
+  if (!selection || !shouldMigrateGeneratedDeepSeekDefaults()) return false
+  const primary = canonicalAgentModelId(selection.primary)
+  if (!primary) return false
+  const modelIds = [primary, ...(selection.fallbacks || []).map((modelId) => canonicalAgentModelId(modelId)).filter(Boolean)]
+  return GENERATED_DEEPSEEK_ROUTE_MODEL_IDS.has(primary) &&
+    modelIds.every((modelId) => GENERATED_DEEPSEEK_ROUTE_MODEL_IDS.has(modelId))
+}
+
+function applyGeneratedDeepSeekDefaultMigration(selection: { primary?: string; fallbacks?: string[] } | undefined) {
+  if (!modelSelectionLooksLikeGeneratedDeepSeekDefault(selection)) return false
+  if (!selection) return false
+  const next = defaultAgentModelSelection()
+  selection.primary = next.primary
+  if (next.fallbacks?.length) selection.fallbacks = [...next.fallbacks]
+  else delete selection.fallbacks
+  return true
+}
+
+function migrateGeneratedDeepSeekDefaultsInOpenClawConfig(config: OpenClawConfigFile) {
+  if (!shouldMigrateGeneratedDeepSeekDefaults()) return false
+  let changed = false
+  if (config.agents?.defaults?.model) {
+    changed = applyGeneratedDeepSeekDefaultMigration(config.agents.defaults.model) || changed
+  }
+  for (const entry of config.agents?.list || []) {
+    changed = applyGeneratedDeepSeekDefaultMigration(entry.model) || changed
+  }
+  return changed
+}
+
+function migrateGeneratedDeepSeekDefaultPrimary(modelId: string | undefined) {
+  const selection = { primary: modelId }
+  return applyGeneratedDeepSeekDefaultMigration(selection)
+    ? selection.primary
+    : modelId
 }
 
 function displayProviderForAvailableModel(model: AvailableModelInput, id: string) {
@@ -1751,6 +1823,7 @@ function ensureConfiguredModelAllowlist(config: OpenClawConfigFile, modelIds: st
       ...(fallback?.alias && !existing.alias ? { alias: fallback.alias } : {}),
       ...existing,
     }
+    ensureFastModeModelParams(config, modelId)
     ensureConfiguredProviderModel(config, modelId)
   }
 }
@@ -1771,6 +1844,7 @@ function ensureModelAllowlistEntry(config: OpenClawConfigFile, modelId: string, 
     ...(alias && !existingRecord.alias ? { alias } : {}),
     ...existingRecord,
   }
+  ensureFastModeModelParams(config, canonicalModelId)
 }
 
 function configHasOpenRouterPluginEnabled(config: OpenClawConfigFile) {
@@ -3034,12 +3108,7 @@ async function isGoogleVertexConfiguredForCronModel(modelName: string) {
   if (isGoogleVertexConfigured()) return true
   try {
     const config = await readOpenclawConfig()
-    const env = config.env && typeof config.env === 'object' && !Array.isArray(config.env)
-      ? config.env as Record<string, unknown>
-      : {}
-    const envVars = env.vars && typeof env.vars === 'object' && !Array.isArray(env.vars)
-      ? env.vars as Record<string, unknown>
-      : {}
+    const envVars = openClawConfigEnvValues(config)
     const hasProject = GOOGLE_VERTEX_PROJECT_ID_KEYS.some((key) => typeof envVars[key] === 'string' && Boolean((envVars[key] as string).trim()))
     const hasLocation = GOOGLE_VERTEX_LOCATION_KEYS.some((key) => typeof envVars[key] === 'string' && Boolean((envVars[key] as string).trim()))
     const providerConfig = config.models?.providers?.['google-vertex']
@@ -6620,6 +6689,7 @@ function recruitRuntimeDefaults(): AgentLocalConfig['runtime'] {
     thinkingDefault: 'off',
     timeoutSeconds: 90,
     parallelPreferred: true,
+    fastModeDefault: DEFAULT_OPENCLAW_FAST_MODE,
   }
 }
 
@@ -6705,6 +6775,7 @@ function isLegacyGenericRecruitRuntime(value?: Partial<AgentLocalConfig['runtime
   return value.thinkingDefault === 'medium'
     && value.timeoutSeconds === 900
     && (value.parallelPreferred === undefined || value.parallelPreferred === true)
+    && (value.fastModeDefault === undefined || value.fastModeDefault === DEFAULT_OPENCLAW_FAST_MODE)
 }
 
 function isLegacyGenericRecruitHeartbeat(value?: Partial<AgentLocalConfig['heartbeat']>) {
@@ -8139,8 +8210,7 @@ function resolveGoogleVertexProjectIdFast(env: Record<string, string> = {}) {
 function resolveGoogleVertexLocation(env: Record<string, string> = {}) {
   const fromEnv = resolveEnvValue(env, GOOGLE_VERTEX_LOCATION_KEYS)
   if (fromEnv) return fromEnv
-  const result = runGcloud(['config', 'get-value', 'ai/region', '--quiet'], 5000)
-  return (result.code === 0 && cleanGcloudConfigValue(result.stdout)) || GOOGLE_VERTEX_DEFAULT_LOCATION
+  return GOOGLE_VERTEX_DEFAULT_LOCATION
 }
 
 function resolveGoogleVertexLocationFast(env: Record<string, string> = {}) {
@@ -8291,6 +8361,16 @@ function isGoogleVertexLocalOAuthConfigured(env: Record<string, string> = {}, op
 
 function isGoogleVertexConfigured(options: { probeGcloud?: boolean } = {}) {
   return googleVertexGcloudStatus(options).configured || isGoogleVertexLocalOAuthConfigured({}, options)
+}
+
+function openClawConfigEnvValues(config: OpenClawConfigFile) {
+  const env = config.env && typeof config.env === 'object' && !Array.isArray(config.env)
+    ? config.env as Record<string, unknown>
+    : {}
+  const vars = env.vars && typeof env.vars === 'object' && !Array.isArray(env.vars)
+    ? env.vars as Record<string, unknown>
+    : {}
+  return { ...env, ...vars }
 }
 
 async function resolveGoogleVertexGcloudAuth(env: Record<string, string>): Promise<ProviderRequestAuth | null> {
@@ -14646,7 +14726,20 @@ function openClawOptimizationStatus(config: OpenClawConfigFile) {
   const pruning = normalized.agents?.defaults?.contextPruning
   const session = normalized.session
   const memory = normalized.memory
+  const agents = normalized.agents?.list || []
+  const modelEntries = Object.values(normalized.agents?.defaults?.models || {})
+  const fastAgentDefaults = agents.filter((entry) => normalizeFastModePreference(entry.fastModeDefault) === 'auto').length
+  const fastModelDefaults = modelEntries.filter((entry) => {
+    const params = entry?.params
+    return params && typeof params === 'object' && !Array.isArray(params) && params.fastMode === 'auto'
+  }).length
   return {
+    fastMode: {
+      default: normalizeFastModePreference(normalized.agents?.defaults?.fastModeDefault),
+      autoCutoffSeconds: DEFAULT_OPENCLAW_FAST_AUTO_ON_SECONDS,
+      agentAutoDefaults: fastAgentDefaults,
+      modelAutoDefaults: fastModelDefaults,
+    },
     contextPruning: {
       enabled: pruning?.mode === 'cache-ttl',
       mode: pruning?.mode || 'off',
@@ -14712,6 +14805,7 @@ function createInitialOpenclawConfig() {
         identity: { name: agent.name, emoji: '@', theme: 'adventurer' },
         workspace: WORKSPACE_ROOT,
         model: defaultAgentModelSelection(),
+        fastModeDefault: openClawFastModeDefault(DEFAULT_OPENCLAW_FAST_MODE),
         sandbox: { mode: 'off' as const, scope: 'agent' as const, workspaceAccess: 'rw' as const },
       })),
     },
@@ -14780,7 +14874,7 @@ async function readOpenclawConfig() {
       (text) => JSON.parse(text) as OpenClawConfigFile,
       (entry) => { openclawConfigCache = entry },
     )
-    if (sanitizeOpenClawConfigAgentAvatars(cached)) {
+    if (sanitizeOpenClawConfigAgentAvatars(cached) || migrateGeneratedDeepSeekDefaultsInOpenClawConfig(cached)) {
       await writeOpenclawConfig(cached).catch(() => undefined)
     }
     return cached
@@ -14799,7 +14893,7 @@ async function readOpenclawConfig() {
   for (let attempt = 0; attempt < 2; attempt += 1) {
     try {
       const parsed = JSON.parse(raw.replace(/^\uFEFF/, '')) as OpenClawConfigFile
-      if (sanitizeOpenClawConfigAgentAvatars(parsed)) {
+      if (sanitizeOpenClawConfigAgentAvatars(parsed) || migrateGeneratedDeepSeekDefaultsInOpenClawConfig(parsed)) {
         await writeOpenclawConfig(parsed).catch(() => undefined)
       }
       await rememberJsonFileCache(OPENCLAW_CONFIG_PATH, parsed, (entry) => { openclawConfigCache = entry })
@@ -14816,7 +14910,7 @@ async function readOpenclawConfig() {
   try {
     const fallbackRaw = await fs.readFile(`${OPENCLAW_CONFIG_PATH}.last-good`, 'utf-8')
     const parsed = JSON.parse(fallbackRaw.replace(/^\uFEFF/, '')) as OpenClawConfigFile
-    if (sanitizeOpenClawConfigAgentAvatars(parsed)) {
+    if (sanitizeOpenClawConfigAgentAvatars(parsed) || migrateGeneratedDeepSeekDefaultsInOpenClawConfig(parsed)) {
       await writeOpenclawConfig(parsed).catch(() => undefined)
     }
     await rememberJsonFileCache(OPENCLAW_CONFIG_PATH, parsed, (entry) => { openclawConfigCache = entry })
@@ -15073,13 +15167,59 @@ function applyDeepSeekOnlyRuntimeDefaults(config: OpenClawConfigFile) {
 
 function pruneOpenClawLegacyConfigKeys(config: OpenClawConfigFile) {
   const defaults = config.agents?.defaults as Record<string, unknown> | undefined
-  if (defaults) delete defaults.systemPromptOverride
+  if (defaults) {
+    delete defaults.systemPromptOverride
+    delete defaults.fastModeDefault
+    const memorySearch = defaults.memorySearch
+    if (memorySearch && typeof memorySearch === 'object' && !Array.isArray(memorySearch)) {
+      delete (memorySearch as Record<string, unknown>).store
+    }
+  }
   for (const entry of config.agents?.list || []) {
     delete (entry as Record<string, unknown>).systemPromptOverride
   }
   if (Array.isArray(config.plugins?.allow) && config.plugins.allow.length && config.plugins.bundledDiscovery === undefined) {
     config.plugins.bundledDiscovery = 'compat'
   }
+}
+
+function isGoogleVertexAiplatformBaseUrl(baseUrl: unknown) {
+  if (typeof baseUrl !== 'string' || !baseUrl.trim()) return false
+  try {
+    const hostname = new URL(baseUrl.trim()).hostname.toLowerCase()
+    return hostname === 'aiplatform.googleapis.com'
+      || hostname.endsWith(GOOGLE_VERTEX_REGION_HOST_SUFFIX)
+      || GOOGLE_VERTEX_MULTI_REGION_HOSTS.has(hostname)
+  } catch {
+    return false
+  }
+}
+
+function ensureGoogleVertexGlobalRouting(config: OpenClawConfigFile) {
+  if (!configUsesProviderModel(config, 'google-vertex') && !config.models?.providers?.['google-vertex']) return
+
+  if (!config.models) config.models = {}
+  if (!config.models.providers) config.models.providers = {}
+  const providerConfig = config.models.providers['google-vertex'] ||= {}
+  providerConfig.api = 'google-vertex'
+  providerConfig.apiKey ||= 'gcp-vertex-credentials'
+  if (!providerConfig.baseUrl || isGoogleVertexAiplatformBaseUrl(providerConfig.baseUrl)) {
+    providerConfig.baseUrl = GOOGLE_VERTEX_GLOBAL_BASE_URL
+  }
+
+  if (!config.env || typeof config.env !== 'object' || Array.isArray(config.env)) config.env = {}
+  const env = config.env as Record<string, unknown>
+  const vars = env.vars && typeof env.vars === 'object' && !Array.isArray(env.vars)
+    ? env.vars as Record<string, unknown>
+    : {}
+
+  env.GOOGLE_CLOUD_LOCATION = GOOGLE_VERTEX_GLOBAL_LOCATION
+  vars.GOOGLE_CLOUD_LOCATION = GOOGLE_VERTEX_GLOBAL_LOCATION
+  for (const key of GOOGLE_VERTEX_LOCATION_KEYS) {
+    if (typeof env[key] === 'string' && (env[key] as string).trim()) env[key] = GOOGLE_VERTEX_GLOBAL_LOCATION
+    if (typeof vars[key] === 'string' && (vars[key] as string).trim()) vars[key] = GOOGLE_VERTEX_GLOBAL_LOCATION
+  }
+  env.vars = vars
 }
 
 function normalizeOpenClawConfigModelRefs(config: OpenClawConfigFile) {
@@ -15125,6 +15265,7 @@ function normalizeOpenClawConfigModelRefs(config: OpenClawConfigFile) {
   migrateLegacyOpenAiCodexProviderConfig(config)
   pruneTopLevelCodexProviderConfig(config)
   pruneOpenClawConfigProviderModels(config)
+  ensureGoogleVertexGlobalRouting(config)
 }
 
 function ensureOpenclawRuntimeDefaults(config: OpenClawConfigFile) {
@@ -15158,6 +15299,7 @@ function ensureOpenclawRuntimeDefaults(config: OpenClawConfigFile) {
   if (!config.agents) config.agents = {}
   if (!config.agents.defaults) config.agents.defaults = {}
   normalizeOpenClawConfigModelRefs(config)
+  migrateGeneratedDeepSeekDefaultsInOpenClawConfig(config)
   if (configHasOpenRouterPluginEnabled(config) || isProviderConfigured('openrouter')) {
     ensureOpenRouterModelCatalogAllowlist(config)
   }
@@ -15210,21 +15352,21 @@ function ensureOpenclawRuntimeDefaults(config: OpenClawConfigFile) {
   ensureContextPruningDefaults(defaults)
 
   for (const entry of config.agents.list || []) {
+    entry.fastModeDefault ??= openClawFastModeDefault(DEFAULT_OPENCLAW_FAST_MODE)
     applyNoBootstrapAgentConfig(entry)
   }
 
   if (!defaults.memorySearch) defaults.memorySearch = {}
   if (!defaults.memorySearch.sync) defaults.memorySearch.sync = {}
   if (!defaults.memorySearch.cache) defaults.memorySearch.cache = {}
-  if (!defaults.memorySearch.store) defaults.memorySearch.store = {}
   if (!defaults.memorySearch.query) defaults.memorySearch.query = {}
   if (!defaults.memorySearch.query.hybrid) defaults.memorySearch.query.hybrid = {}
+  delete defaults.memorySearch.store
 
   defaults.memorySearch.enabled ??= true
   defaults.memorySearch.sync.watch ??= true
   defaults.memorySearch.cache.enabled ??= true
   defaults.memorySearch.cache.maxEntries ??= 50000
-  defaults.memorySearch.store.path ??= path.join(OPENCLAW_STATE_ROOT, 'memory', '{agentId}.sqlite')
 
   defaults.memorySearch.query.hybrid.enabled ??= true
   defaults.memorySearch.query.hybrid.vectorWeight ??= 0.7
@@ -15239,12 +15381,60 @@ function ensureOpenclawRuntimeDefaults(config: OpenClawConfigFile) {
   const merged = new Set(existingAllow.filter((agentId) => allowedAgents.has(agentId)))
   for (const agentId of allowedAgents) merged.add(agentId)
   config.tools.agentToAgent.allow = Array.from(merged)
+  ensureFastModeDefaults(config)
 }
 
 function normalizeWorkTimeoutSeconds(value: unknown) {
   const numeric = Number(value)
   if (!Number.isFinite(numeric)) return null
   return Math.max(30, Math.min(86400, Math.round(numeric)))
+}
+
+function normalizeFastModePreference(value: unknown, fallback: FastModePreference = DEFAULT_OPENCLAW_FAST_MODE): FastModePreference {
+  if (value === 'auto') return 'auto'
+  if (value === true || value === 'on' || value === 'true' || value === 'enabled') return 'on'
+  if (value === false || value === 'off' || value === 'false' || value === 'disabled') return 'off'
+  return fallback
+}
+
+function openClawFastModeDefault(value: unknown, fallback: FastModePreference = DEFAULT_OPENCLAW_FAST_MODE): OpenClawFastModeDefault {
+  const normalized = normalizeFastModePreference(value, fallback)
+  return normalized === 'auto' ? 'auto' : normalized === 'on'
+}
+
+function openClawChatFastMode(value: unknown): OpenClawChatFastMode | null {
+  const normalized = normalizeFastModePreference(value, 'off')
+  if (normalized === 'auto') return 'auto'
+  if (normalized === 'on') return true
+  return null
+}
+
+function shouldApplyFastModeModelParams(modelId: string) {
+  const provider = splitModelId(modelId).provider
+  return FAST_MODE_MODEL_PARAM_PROVIDERS.has(provider)
+}
+
+function ensureFastModeModelParams(config: OpenClawConfigFile, modelId: string) {
+  if (!shouldApplyFastModeModelParams(modelId)) return
+  const entry = config.agents?.defaults?.models?.[modelId]
+  if (!entry || typeof entry !== 'object' || Array.isArray(entry)) return
+  const params = entry.params && typeof entry.params === 'object' && !Array.isArray(entry.params)
+    ? entry.params
+    : {}
+  params.fastMode ??= 'auto'
+  params.fastAutoOnSeconds ??= DEFAULT_OPENCLAW_FAST_AUTO_ON_SECONDS
+  entry.params = params
+}
+
+function ensureFastModeDefaults(config: OpenClawConfigFile) {
+  if (!config.agents) config.agents = {}
+  if (!config.agents.defaults) config.agents.defaults = {}
+  for (const entry of config.agents.list || []) {
+    entry.fastModeDefault ??= openClawFastModeDefault(DEFAULT_OPENCLAW_FAST_MODE)
+  }
+  for (const modelId of Object.keys(config.agents.defaults.models || {})) {
+    ensureFastModeModelParams(config, modelId)
+  }
 }
 
 const OPENCLAW_AGENT_RUNTIME_WRAPPER_GRACE_MS = 10_000
@@ -15263,6 +15453,12 @@ async function resolveEffectiveAgentWorkTimeoutSeconds(agentId: string, requeste
   const localTimeout = normalizeWorkTimeoutSeconds(local?.runtime?.timeoutSeconds)
   const defaultTimeout = normalizeWorkTimeoutSeconds(config?.agents?.defaults?.timeoutSeconds)
   return Math.max(requestedTimeout, localTimeout ?? defaultTimeout ?? 0)
+}
+
+async function resolveEffectiveAgentFastMode(agentId: string, requested: unknown) {
+  if (requested !== undefined && requested !== null) return normalizeFastModePreference(requested, DEFAULT_OPENCLAW_FAST_MODE)
+  const local = await readAgentLocalConfigIfPresent(agentId).catch(() => null)
+  return normalizeFastModePreference(local?.runtime?.fastModeDefault, DEFAULT_OPENCLAW_FAST_MODE)
 }
 
 async function syncModelProviderTimeoutsFromAgentSettings(config: OpenClawConfigFile) {
@@ -15329,8 +15525,11 @@ async function readHeartbeatRuntimeDefaults(): Promise<HeartbeatRuntimeDefaults>
     // use defaults
   }
 
+  const model = migrateGeneratedDeepSeekDefaultPrimary((raw.model || DEFAULT_HEARTBEAT_RUNTIME.model).trim())
+    || DEFAULT_HEARTBEAT_RUNTIME.model
+
   return {
-    model: (raw.model || DEFAULT_HEARTBEAT_RUNTIME.model).trim(),
+    model: model.trim(),
     thinking: raw.thinking || DEFAULT_HEARTBEAT_RUNTIME.thinking,
     timeoutSeconds: Number.isFinite(raw.timeoutSeconds)
       ? Math.max(30, Math.min(7200, Math.round(raw.timeoutSeconds as number)))
@@ -15368,8 +15567,10 @@ function mergeHeartbeatRuntimeDefaults(
   base: HeartbeatRuntimeDefaults,
   patch?: Partial<HeartbeatRuntimeDefaults>,
 ): HeartbeatRuntimeDefaults {
+  const model = migrateGeneratedDeepSeekDefaultPrimary((patch?.model ?? base.model).trim()) || base.model
+
   return {
-    model: (patch?.model ?? base.model).trim(),
+    model: model.trim(),
     thinking: patch?.thinking ?? base.thinking,
     timeoutSeconds: Number.isFinite(patch?.timeoutSeconds)
       ? Math.max(30, Math.min(7200, Math.round(patch?.timeoutSeconds as number)))
@@ -20336,6 +20537,7 @@ function agentEntryFromBootstrapAgent(agentId: string, defaultsWorkspace?: strin
     agentDir: path.resolve(openclawAgentFolder(agentId)),
     identity: { name: displayName, emoji: '@', theme: 'adventurer' },
     model: defaultAgentModelSelection(),
+    fastModeDefault: openClawFastModeDefault(DEFAULT_OPENCLAW_FAST_MODE),
     sandbox: { mode: 'off', scope: 'agent', workspaceAccess: 'rw' },
   })
 }
@@ -20360,6 +20562,7 @@ function agentEntryFromLocalConfig(agentId: string, local: AgentLocalConfig, def
       ...(avatar ? { avatar } : {}),
     },
     model: local.model,
+    fastModeDefault: openClawFastModeDefault(local.runtime.fastModeDefault),
     sandbox: normalizeSandboxConfig(local.sandbox),
     tools: normalizeAgentToolsConfig(local.tools),
     skills: resolveOpenClawAgentSkillFilter(local),
@@ -20684,6 +20887,7 @@ async function appendAgentPromptDump(params: {
   agent: string
   sessionId: string
   thinking: string
+  fastMode?: FastModePreference
   timeoutSeconds: number
   cwd: string
   requestMessage: string
@@ -20701,6 +20905,7 @@ async function appendAgentPromptDump(params: {
     `Agent: ${params.agent}`,
     `Session: ${params.sessionId}`,
     `Thinking: ${params.thinking}`,
+    `Fast mode: ${params.fastMode || 'default'}`,
     `Timeout seconds: ${params.timeoutSeconds}`,
     `Run cwd: ${params.cwd}`,
     params.note ? `Note: ${params.note}` : '',
@@ -20969,10 +21174,14 @@ function buildDefaultAgentLocalConfig(params: {
       journalDir: path.join(workspace, 'memory'),
       retentionDays: params.existing?.memory?.retentionDays ?? 180,
     },
-    runtime: params.existing?.runtime || {
-      thinkingDefault: 'medium',
-      timeoutSeconds: 900,
-      parallelPreferred: true,
+    runtime: {
+      thinkingDefault: params.existing?.runtime?.thinkingDefault || 'medium',
+      timeoutSeconds: normalizeWorkTimeoutSeconds(params.existing?.runtime?.timeoutSeconds) ?? 900,
+      parallelPreferred: params.existing?.runtime?.parallelPreferred ?? true,
+      fastModeDefault: normalizeFastModePreference(
+        params.existing?.runtime?.fastModeDefault ?? params.entry?.fastModeDefault,
+        DEFAULT_OPENCLAW_FAST_MODE,
+      ),
     },
     auth: params.existing?.auth || {
       providers: {},
@@ -21051,6 +21260,7 @@ function applyLocalConfigToGlobal(
     primary: projectedModel.primary,
     ...(projectedModel.fallbacks.length ? { fallbacks: projectedModel.fallbacks } : {}),
   }
+  target.fastModeDefault = openClawFastModeDefault(local.runtime.fastModeDefault)
   target.skills = resolveOpenClawAgentSkillFilter(local)
   target.sandbox = normalizeSandboxConfig({
     ...local.sandbox,
@@ -22980,6 +23190,7 @@ async function runControlCenterGatewayChatTurn(params: {
   sessionId: string
   requestedSessionKey?: string
   thinking: ThinkingLevel
+  fastMode?: FastModePreference
   timeoutMs: number
   cwd: string
   streamObserverId?: string
@@ -23017,6 +23228,7 @@ async function runControlCenterGatewayChatTurn(params: {
   // Observe early rejection so request aborts do not become unhandled rejections.
   void finalPromise.catch(() => undefined)
   let ack: unknown
+  const fastMode = openClawChatFastMode(params.fastMode)
   try {
     ack = await state.client.request('chat.send', {
       sessionKey,
@@ -23025,6 +23237,10 @@ async function runControlCenterGatewayChatTurn(params: {
       message: params.message,
       ...(attachments.length ? { attachments } : {}),
       thinking: params.thinking,
+      ...(fastMode ? {
+        fastMode,
+        ...(fastMode === 'auto' ? { fastAutoOnSeconds: DEFAULT_OPENCLAW_FAST_AUTO_ON_SECONDS } : {}),
+      } : {}),
       timeoutMs: params.timeoutMs,
       idempotencyKey: runId,
     }, {
@@ -23143,6 +23359,7 @@ async function runControlCenterAgentRuntimeTurn(params: {
     sessionId: string
     requestedSessionKey?: string
     thinking: ThinkingLevel
+    fastMode?: FastModePreference
     message: string
     attachments?: unknown[]
     streamObserverId?: string
@@ -23185,6 +23402,7 @@ async function runControlCenterAgentRuntimeTurn(params: {
             sessionId: params.gatewayChat.sessionId,
             requestedSessionKey: params.gatewayChat.requestedSessionKey,
             thinking: params.gatewayChat.thinking,
+            fastMode: params.gatewayChat.fastMode,
             timeoutMs: params.timeoutMs,
             cwd: params.cwd,
             streamObserverId: params.gatewayChat.streamObserverId,
@@ -26308,6 +26526,7 @@ async function runGatewayAgentTurnForStream(
   const requestedSessionKey = typeof body.sessionKey === 'string' ? body.sessionKey.trim() : undefined
   const requestedThinking = typeof body.thinking === 'string' ? body.thinking as ThinkingLevel : 'low'
   const requestedTimeoutSeconds = typeof body.timeoutSeconds === 'number' ? body.timeoutSeconds : undefined
+  const requestedFastMode = body.fastMode
   const requestedAttachments = Array.isArray(body.attachments) ? body.attachments : undefined
 
   if (!isValidAgentId(agent) || isRetiredAgentId(agent)) throw new Error('Invalid or retired agent id.')
@@ -26348,6 +26567,7 @@ async function runGatewayAgentTurnForStream(
   const agentPrimaryModelId = readAgentPrimaryModelIdSync(agent)
   const vertexCompactMode = isGoogleGeminiModelId(agentPrimaryModelId)
   const effectiveThinking = clawTalkIntent ? 'off' : thinkingForOpenClawRuntimeModel(agentPrimaryModelId, requestedThinking)
+  const effectiveFastMode = await resolveEffectiveAgentFastMode(agent, requestedFastMode)
   const policyTimeoutSeconds = Math.max(
     await resolveEffectiveAgentWorkTimeoutSeconds(agent, requestedTimeoutSeconds),
     OPENCLAW_AGENT_TURN_TIMEOUT_FLOOR_SECONDS,
@@ -26388,6 +26608,7 @@ async function runGatewayAgentTurnForStream(
     agent,
     sessionId,
     thinking: effectiveThinking,
+    fastMode: effectiveFastMode,
     timeoutSeconds: effectiveTimeoutSeconds,
     cwd: runCwd,
     requestMessage: rawMessage,
@@ -26404,6 +26625,7 @@ async function runGatewayAgentTurnForStream(
     sessionId,
     requestedSessionKey,
     thinking: effectiveThinking,
+    fastMode: effectiveFastMode,
     timeoutMs: openClawTimeoutMs,
     cwd: runCwd,
     streamObserverId,

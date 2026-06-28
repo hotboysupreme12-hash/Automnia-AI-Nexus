@@ -666,6 +666,7 @@
   <url><loc>https://docs.openclaw.ai/channels/pairing</loc></url>
   <url><loc>https://docs.openclaw.ai/channels/qa-channel</loc></url>
   <url><loc>https://docs.openclaw.ai/channels/qqbot</loc></url>
+  <url><loc>https://docs.openclaw.ai/channels/raft</loc></url>
   <url><loc>https://docs.openclaw.ai/channels/signal</loc></url>
   <url><loc>https://docs.openclaw.ai/channels/slack</loc></url>
   <url><loc>https://docs.openclaw.ai/channels/sms</loc></url>
@@ -678,6 +679,7 @@
   <url><loc>https://docs.openclaw.ai/channels/whatsapp</loc></url>
   <url><loc>https://docs.openclaw.ai/channels/yuanbao</loc></url>
   <url><loc>https://docs.openclaw.ai/channels/zalo</loc></url>
+  <url><loc>https://docs.openclaw.ai/channels/zaloclawbot</loc></url>
   <url><loc>https://docs.openclaw.ai/channels/zalouser</loc></url>
   <url><loc>https://docs.openclaw.ai/ci</loc></url>
   <url><loc>https://docs.openclaw.ai/CLAUDE</loc></url>
@@ -1432,6 +1434,7 @@
   <url><loc>https://docs.openclaw.ai/debug/node-issue</loc></url>
   <url><loc>https://docs.openclaw.ai/diagnostics/flags</loc></url>
   <url><loc>https://docs.openclaw.ai/es</loc></url>
+  <url><loc>https://docs.openclaw.ai/es/agent-runtime-architecture</loc></url>
   <url><loc>https://docs.openclaw.ai/es/announcements/bluebubbles-imessage</loc></url>
   <url><loc>https://docs.openclaw.ai/es/auth-credential-semantics</loc></url>
   <url><loc>https://docs.openclaw.ai/es/automation</loc></url>
@@ -1450,6 +1453,8 @@
   <url><loc>https://docs.openclaw.ai/es/brave-search</loc></url>
   <url><loc>https://docs.openclaw.ai/es/channels</loc></url>
   <url><loc>https://docs.openclaw.ai/es/channels/access-groups</loc></url>
+  <url><loc>https://docs.openclaw.ai/es/channels/ambient-room-events</loc></url>
+  <url><loc>https://docs.openclaw.ai/es/channels/bot-loop-protection</loc></url>
   <url><loc>https://docs.openclaw.ai/es/channels/broadcast-groups</loc></url>
   <url><loc>https://docs.openclaw.ai/es/channels/channel-routing</loc></url>
   <url><loc>https://docs.openclaw.ai/es/channels/clickclack</loc></url>
@@ -1474,8 +1479,10 @@
   <url><loc>https://docs.openclaw.ai/es/channels/pairing</loc></url>
   <url><loc>https://docs.openclaw.ai/es/channels/qa-channel</loc></url>
   <url><loc>https://docs.openclaw.ai/es/channels/qqbot</loc></url>
+  <url><loc>https://docs.openclaw.ai/es/channels/raft</loc></url>
   <url><loc>https://docs.openclaw.ai/es/channels/signal</loc></url>
   <url><loc>https://docs.openclaw.ai/es/channels/slack</loc></url>
+  <url><loc>https://docs.openclaw.ai/es/channels/sms</loc></url>
   <url><loc>https://docs.openclaw.ai/es/channels/synology-chat</loc></url>
   <url><loc>https://docs.openclaw.ai/es/channels/telegram</loc></url>
   <url><loc>https://docs.openclaw.ai/es/channels/tlon</loc></url>
@@ -1485,8 +1492,10 @@
   <url><loc>https://docs.openclaw.ai/es/channels/whatsapp</loc></url>
   <url><loc>https://docs.openclaw.ai/es/channels/yuanbao</loc></url>
   <url><loc>https://docs.openclaw.ai/es/channels/zalo</loc></url>
+  <url><loc>https://docs.openclaw.ai/es/channels/zaloclawbot</loc></url>
   <url><loc>https://docs.openclaw.ai/es/channels/zalouser</loc></url>
   <url><loc>https://docs.openclaw.ai/es/ci</loc></url>
+  <url><loc>https://docs.openclaw.ai/es/clawhub/cli</loc></url>
   <url><loc>https://docs.openclaw.ai/es/clawhub/publishing</loc></url>
   <url><loc>https://docs.openclaw.ai/es/cli</loc></url>
   <url><loc>https://docs.openclaw.ai/es/cli/acp</loc></url>
@@ -1527,6 +1536,7 @@
   <url><loc>https://docs.openclaw.ai/es/cli/pairing</loc></url>
   <url><loc>https://docs.openclaw.ai/es/cli/path</loc></url>
   <url><loc>https://docs.openclaw.ai/es/cli/plugins</loc></url>
+  <url><loc>https://docs.openclaw.ai/es/cli/policy</loc></url>
   <url><loc>https://docs.openclaw.ai/es/cli/proxy</loc></url>
   <url><loc>https://docs.openclaw.ai/es/cli/qr</loc></url>
   <url><loc>https://docs.openclaw.ai/es/cli/reset</loc></url>
@@ -1539,12 +1549,14 @@
   <url><loc>https://docs.openclaw.ai/es/cli/status</loc></url>
   <url><loc>https://docs.openclaw.ai/es/cli/system</loc></url>
   <url><loc>https://docs.openclaw.ai/es/cli/tasks</loc></url>
+  <url><loc>https://docs.openclaw.ai/es/cli/transcripts</loc></url>
   <url><loc>https://docs.openclaw.ai/es/cli/tui</loc></url>
   <url><loc>https://docs.openclaw.ai/es/cli/uninstall</loc></url>
   <url><loc>https://docs.openclaw.ai/es/cli/update</loc></url>
   <url><loc>https://docs.openclaw.ai/es/cli/voicecall</loc></url>
   <url><loc>https://docs.openclaw.ai/es/cli/webhooks</loc></url>
   <url><loc>https://docs.openclaw.ai/es/cli/wiki</loc></url>
+  <url><loc>https://docs.openclaw.ai/es/cli/workboard</loc></url>
   <url><loc>https://docs.openclaw.ai/es/concepts/active-memory</loc></url>
   <url><loc>https://docs.openclaw.ai/es/concepts/agent</loc></url>
   <url><loc>https://docs.openclaw.ai/es/concepts/agent-loop</loc></url>
@@ -1576,6 +1588,7 @@
   <url><loc>https://docs.openclaw.ai/es/concepts/multi-agent</loc></url>
   <url><loc>https://docs.openclaw.ai/es/concepts/oauth</loc></url>
   <url><loc>https://docs.openclaw.ai/es/concepts/parallel-specialist-lanes</loc></url>
+  <url><loc>https://docs.openclaw.ai/es/concepts/personal-agent-benchmark-pack</loc></url>
   <url><loc>https://docs.openclaw.ai/es/concepts/presence</loc></url>
   <url><loc>https://docs.openclaw.ai/es/concepts/progress-drafts</loc></url>
   <url><loc>https://docs.openclaw.ai/es/concepts/qa-e2e-automation</loc></url>
@@ -1611,6 +1624,7 @@
   <url><loc>https://docs.openclaw.ai/es/gateway/diagnostics</loc></url>
   <url><loc>https://docs.openclaw.ai/es/gateway/discovery</loc></url>
   <url><loc>https://docs.openclaw.ai/es/gateway/doctor</loc></url>
+  <url><loc>https://docs.openclaw.ai/es/gateway/external-apps</loc></url>
   <url><loc>https://docs.openclaw.ai/es/gateway/gateway-lock</loc></url>
   <url><loc>https://docs.openclaw.ai/es/gateway/health</loc></url>
   <url><loc>https://docs.openclaw.ai/es/gateway/heartbeat</loc></url>
@@ -1635,7 +1649,9 @@
   <url><loc>https://docs.openclaw.ai/es/gateway/secrets-plan-contract</loc></url>
   <url><loc>https://docs.openclaw.ai/es/gateway/security</loc></url>
   <url><loc>https://docs.openclaw.ai/es/gateway/security/audit-checks</loc></url>
+  <url><loc>https://docs.openclaw.ai/es/gateway/security/exposure-runbook</loc></url>
   <url><loc>https://docs.openclaw.ai/es/gateway/security/secure-file-operations</loc></url>
+  <url><loc>https://docs.openclaw.ai/es/gateway/security/shrinkwrap</loc></url>
   <url><loc>https://docs.openclaw.ai/es/gateway/tailscale</loc></url>
   <url><loc>https://docs.openclaw.ai/es/gateway/tools-invoke-http-api</loc></url>
   <url><loc>https://docs.openclaw.ai/es/gateway/troubleshooting</loc></url>
@@ -1681,7 +1697,10 @@
   <url><loc>https://docs.openclaw.ai/es/install/render</loc></url>
   <url><loc>https://docs.openclaw.ai/es/install/uninstall</loc></url>
   <url><loc>https://docs.openclaw.ai/es/install/updating</loc></url>
+  <url><loc>https://docs.openclaw.ai/es/install/upstash</loc></url>
   <url><loc>https://docs.openclaw.ai/es/logging</loc></url>
+  <url><loc>https://docs.openclaw.ai/es/maturity/scorecard</loc></url>
+  <url><loc>https://docs.openclaw.ai/es/maturity/taxonomy</loc></url>
   <url><loc>https://docs.openclaw.ai/es/network</loc></url>
   <url><loc>https://docs.openclaw.ai/es/nodes</loc></url>
   <url><loc>https://docs.openclaw.ai/es/nodes/audio</loc></url>
@@ -1692,12 +1711,14 @@
   <url><loc>https://docs.openclaw.ai/es/nodes/talk</loc></url>
   <url><loc>https://docs.openclaw.ai/es/nodes/troubleshooting</loc></url>
   <url><loc>https://docs.openclaw.ai/es/nodes/voicewake</loc></url>
+  <url><loc>https://docs.openclaw.ai/es/openclaw-agent-runtime</loc></url>
   <url><loc>https://docs.openclaw.ai/es/perplexity</loc></url>
   <url><loc>https://docs.openclaw.ai/es/plan/codex-context-engine-harness</loc></url>
   <url><loc>https://docs.openclaw.ai/es/plan/ui-channels</loc></url>
   <url><loc>https://docs.openclaw.ai/es/platforms</loc></url>
   <url><loc>https://docs.openclaw.ai/es/platforms/android</loc></url>
   <url><loc>https://docs.openclaw.ai/es/platforms/digitalocean</loc></url>
+  <url><loc>https://docs.openclaw.ai/es/platforms/easyrunner</loc></url>
   <url><loc>https://docs.openclaw.ai/es/platforms/ios</loc></url>
   <url><loc>https://docs.openclaw.ai/es/platforms/linux</loc></url>
   <url><loc>https://docs.openclaw.ai/es/platforms/mac/bundled-gateway</loc></url>
@@ -1722,6 +1743,7 @@
   <url><loc>https://docs.openclaw.ai/es/platforms/raspberry-pi</loc></url>
   <url><loc>https://docs.openclaw.ai/es/platforms/windows</loc></url>
   <url><loc>https://docs.openclaw.ai/es/plugins/adding-capabilities</loc></url>
+  <url><loc>https://docs.openclaw.ai/es/plugins/admin-http-rpc</loc></url>
   <url><loc>https://docs.openclaw.ai/es/plugins/agent-tools</loc></url>
   <url><loc>https://docs.openclaw.ai/es/plugins/architecture</loc></url>
   <url><loc>https://docs.openclaw.ai/es/plugins/architecture-internals</loc></url>
@@ -1736,10 +1758,12 @@
   <url><loc>https://docs.openclaw.ai/es/plugins/codex-native-plugins</loc></url>
   <url><loc>https://docs.openclaw.ai/es/plugins/community</loc></url>
   <url><loc>https://docs.openclaw.ai/es/plugins/compatibility</loc></url>
+  <url><loc>https://docs.openclaw.ai/es/plugins/copilot</loc></url>
   <url><loc>https://docs.openclaw.ai/es/plugins/dependency-resolution</loc></url>
   <url><loc>https://docs.openclaw.ai/es/plugins/google-meet</loc></url>
   <url><loc>https://docs.openclaw.ai/es/plugins/hooks</loc></url>
   <url><loc>https://docs.openclaw.ai/es/plugins/install-overrides</loc></url>
+  <url><loc>https://docs.openclaw.ai/es/plugins/llama-cpp</loc></url>
   <url><loc>https://docs.openclaw.ai/es/plugins/manage-plugins</loc></url>
   <url><loc>https://docs.openclaw.ai/es/plugins/manifest</loc></url>
   <url><loc>https://docs.openclaw.ai/es/plugins/memory-lancedb</loc></url>
@@ -1747,8 +1771,10 @@
   <url><loc>https://docs.openclaw.ai/es/plugins/message-presentation</loc></url>
   <url><loc>https://docs.openclaw.ai/es/plugins/oc-path</loc></url>
   <url><loc>https://docs.openclaw.ai/es/plugins/plugin-inventory</loc></url>
+  <url><loc>https://docs.openclaw.ai/es/plugins/plugin-permission-requests</loc></url>
   <url><loc>https://docs.openclaw.ai/es/plugins/reference</loc></url>
   <url><loc>https://docs.openclaw.ai/es/plugins/reference/acpx</loc></url>
+  <url><loc>https://docs.openclaw.ai/es/plugins/reference/admin-http-rpc</loc></url>
   <url><loc>https://docs.openclaw.ai/es/plugins/reference/alibaba</loc></url>
   <url><loc>https://docs.openclaw.ai/es/plugins/reference/amazon-bedrock</loc></url>
   <url><loc>https://docs.openclaw.ai/es/plugins/reference/amazon-bedrock-mantle</loc></url>
@@ -1766,7 +1792,10 @@
   <url><loc>https://docs.openclaw.ai/es/plugins/reference/clickclack</loc></url>
   <url><loc>https://docs.openclaw.ai/es/plugins/reference/cloudflare-ai-gateway</loc></url>
   <url><loc>https://docs.openclaw.ai/es/plugins/reference/codex</loc></url>
+  <url><loc>https://docs.openclaw.ai/es/plugins/reference/codex-supervisor</loc></url>
+  <url><loc>https://docs.openclaw.ai/es/plugins/reference/cohere</loc></url>
   <url><loc>https://docs.openclaw.ai/es/plugins/reference/comfy</loc></url>
+  <url><loc>https://docs.openclaw.ai/es/plugins/reference/copilot</loc></url>
   <url><loc>https://docs.openclaw.ai/es/plugins/reference/copilot-proxy</loc></url>
   <url><loc>https://docs.openclaw.ai/es/plugins/reference/deepgram</loc></url>
   <url><loc>https://docs.openclaw.ai/es/plugins/reference/deepinfra</loc></url>
@@ -1774,6 +1803,7 @@
   <url><loc>https://docs.openclaw.ai/es/plugins/reference/diagnostics-otel</loc></url>
   <url><loc>https://docs.openclaw.ai/es/plugins/reference/diagnostics-prometheus</loc></url>
   <url><loc>https://docs.openclaw.ai/es/plugins/reference/diffs</loc></url>
+  <url><loc>https://docs.openclaw.ai/es/plugins/reference/diffs-language-pack</loc></url>
   <url><loc>https://docs.openclaw.ai/es/plugins/reference/discord</loc></url>
   <url><loc>https://docs.openclaw.ai/es/plugins/reference/document-extract</loc></url>
   <url><loc>https://docs.openclaw.ai/es/plugins/reference/duckduckgo</loc></url>
@@ -1785,6 +1815,7 @@
   <url><loc>https://docs.openclaw.ai/es/plugins/reference/firecrawl</loc></url>
   <url><loc>https://docs.openclaw.ai/es/plugins/reference/fireworks</loc></url>
   <url><loc>https://docs.openclaw.ai/es/plugins/reference/github-copilot</loc></url>
+  <url><loc>https://docs.openclaw.ai/es/plugins/reference/gmi</loc></url>
   <url><loc>https://docs.openclaw.ai/es/plugins/reference/google</loc></url>
   <url><loc>https://docs.openclaw.ai/es/plugins/reference/google-meet</loc></url>
   <url><loc>https://docs.openclaw.ai/es/plugins/reference/googlechat</loc></url>
@@ -1798,6 +1829,7 @@
   <url><loc>https://docs.openclaw.ai/es/plugins/reference/kimi</loc></url>
   <url><loc>https://docs.openclaw.ai/es/plugins/reference/line</loc></url>
   <url><loc>https://docs.openclaw.ai/es/plugins/reference/litellm</loc></url>
+  <url><loc>https://docs.openclaw.ai/es/plugins/reference/llama-cpp</loc></url>
   <url><loc>https://docs.openclaw.ai/es/plugins/reference/llm-task</loc></url>
   <url><loc>https://docs.openclaw.ai/es/plugins/reference/lmstudio</loc></url>
   <url><loc>https://docs.openclaw.ai/es/plugins/reference/lobster</loc></url>
@@ -1816,6 +1848,7 @@
   <url><loc>https://docs.openclaw.ai/es/plugins/reference/msteams</loc></url>
   <url><loc>https://docs.openclaw.ai/es/plugins/reference/nextcloud-talk</loc></url>
   <url><loc>https://docs.openclaw.ai/es/plugins/reference/nostr</loc></url>
+  <url><loc>https://docs.openclaw.ai/es/plugins/reference/novita</loc></url>
   <url><loc>https://docs.openclaw.ai/es/plugins/reference/nvidia</loc></url>
   <url><loc>https://docs.openclaw.ai/es/plugins/reference/oc-path</loc></url>
   <url><loc>https://docs.openclaw.ai/es/plugins/reference/ollama</loc></url>
@@ -1826,18 +1859,22 @@
   <url><loc>https://docs.openclaw.ai/es/plugins/reference/openrouter</loc></url>
   <url><loc>https://docs.openclaw.ai/es/plugins/reference/openshell</loc></url>
   <url><loc>https://docs.openclaw.ai/es/plugins/reference/perplexity</loc></url>
+  <url><loc>https://docs.openclaw.ai/es/plugins/reference/pixverse</loc></url>
+  <url><loc>https://docs.openclaw.ai/es/plugins/reference/policy</loc></url>
   <url><loc>https://docs.openclaw.ai/es/plugins/reference/qa-channel</loc></url>
   <url><loc>https://docs.openclaw.ai/es/plugins/reference/qa-lab</loc></url>
   <url><loc>https://docs.openclaw.ai/es/plugins/reference/qa-matrix</loc></url>
   <url><loc>https://docs.openclaw.ai/es/plugins/reference/qianfan</loc></url>
   <url><loc>https://docs.openclaw.ai/es/plugins/reference/qqbot</loc></url>
   <url><loc>https://docs.openclaw.ai/es/plugins/reference/qwen</loc></url>
+  <url><loc>https://docs.openclaw.ai/es/plugins/reference/raft</loc></url>
   <url><loc>https://docs.openclaw.ai/es/plugins/reference/runway</loc></url>
   <url><loc>https://docs.openclaw.ai/es/plugins/reference/searxng</loc></url>
   <url><loc>https://docs.openclaw.ai/es/plugins/reference/senseaudio</loc></url>
   <url><loc>https://docs.openclaw.ai/es/plugins/reference/sglang</loc></url>
   <url><loc>https://docs.openclaw.ai/es/plugins/reference/signal</loc></url>
   <url><loc>https://docs.openclaw.ai/es/plugins/reference/slack</loc></url>
+  <url><loc>https://docs.openclaw.ai/es/plugins/reference/sms</loc></url>
   <url><loc>https://docs.openclaw.ai/es/plugins/reference/stepfun</loc></url>
   <url><loc>https://docs.openclaw.ai/es/plugins/reference/synology-chat</loc></url>
   <url><loc>https://docs.openclaw.ai/es/plugins/reference/synthetic</loc></url>
@@ -1859,14 +1896,17 @@
   <url><loc>https://docs.openclaw.ai/es/plugins/reference/web-readability</loc></url>
   <url><loc>https://docs.openclaw.ai/es/plugins/reference/webhooks</loc></url>
   <url><loc>https://docs.openclaw.ai/es/plugins/reference/whatsapp</loc></url>
+  <url><loc>https://docs.openclaw.ai/es/plugins/reference/workboard</loc></url>
   <url><loc>https://docs.openclaw.ai/es/plugins/reference/xai</loc></url>
   <url><loc>https://docs.openclaw.ai/es/plugins/reference/xiaomi</loc></url>
   <url><loc>https://docs.openclaw.ai/es/plugins/reference/zai</loc></url>
   <url><loc>https://docs.openclaw.ai/es/plugins/reference/zalo</loc></url>
   <url><loc>https://docs.openclaw.ai/es/plugins/reference/zalouser</loc></url>
   <url><loc>https://docs.openclaw.ai/es/plugins/sdk-agent-harness</loc></url>
+  <url><loc>https://docs.openclaw.ai/es/plugins/sdk-channel-inbound</loc></url>
   <url><loc>https://docs.openclaw.ai/es/plugins/sdk-channel-ingress</loc></url>
   <url><loc>https://docs.openclaw.ai/es/plugins/sdk-channel-message</loc></url>
+  <url><loc>https://docs.openclaw.ai/es/plugins/sdk-channel-outbound</loc></url>
   <url><loc>https://docs.openclaw.ai/es/plugins/sdk-channel-plugins</loc></url>
   <url><loc>https://docs.openclaw.ai/es/plugins/sdk-channel-turn</loc></url>
   <url><loc>https://docs.openclaw.ai/es/plugins/sdk-entrypoints</loc></url>
@@ -1877,8 +1917,10 @@
   <url><loc>https://docs.openclaw.ai/es/plugins/sdk-setup</loc></url>
   <url><loc>https://docs.openclaw.ai/es/plugins/sdk-subpaths</loc></url>
   <url><loc>https://docs.openclaw.ai/es/plugins/sdk-testing</loc></url>
+  <url><loc>https://docs.openclaw.ai/es/plugins/tool-plugins</loc></url>
   <url><loc>https://docs.openclaw.ai/es/plugins/voice-call</loc></url>
   <url><loc>https://docs.openclaw.ai/es/plugins/webhooks</loc></url>
+  <url><loc>https://docs.openclaw.ai/es/plugins/workboard</loc></url>
   <url><loc>https://docs.openclaw.ai/es/plugins/zalouser</loc></url>
   <url><loc>https://docs.openclaw.ai/es/prose</loc></url>
   <url><loc>https://docs.openclaw.ai/es/providers</loc></url>
@@ -1892,14 +1934,17 @@
   <url><loc>https://docs.openclaw.ai/es/providers/chutes</loc></url>
   <url><loc>https://docs.openclaw.ai/es/providers/claude-max-api-proxy</loc></url>
   <url><loc>https://docs.openclaw.ai/es/providers/cloudflare-ai-gateway</loc></url>
+  <url><loc>https://docs.openclaw.ai/es/providers/cohere</loc></url>
   <url><loc>https://docs.openclaw.ai/es/providers/comfy</loc></url>
   <url><loc>https://docs.openclaw.ai/es/providers/deepgram</loc></url>
   <url><loc>https://docs.openclaw.ai/es/providers/deepinfra</loc></url>
   <url><loc>https://docs.openclaw.ai/es/providers/deepseek</loc></url>
+  <url><loc>https://docs.openclaw.ai/es/providers/ds4</loc></url>
   <url><loc>https://docs.openclaw.ai/es/providers/elevenlabs</loc></url>
   <url><loc>https://docs.openclaw.ai/es/providers/fal</loc></url>
   <url><loc>https://docs.openclaw.ai/es/providers/fireworks</loc></url>
   <url><loc>https://docs.openclaw.ai/es/providers/github-copilot</loc></url>
+  <url><loc>https://docs.openclaw.ai/es/providers/gmi</loc></url>
   <url><loc>https://docs.openclaw.ai/es/providers/google</loc></url>
   <url><loc>https://docs.openclaw.ai/es/providers/gradium</loc></url>
   <url><loc>https://docs.openclaw.ai/es/providers/groq</loc></url>
@@ -1913,15 +1958,19 @@
   <url><loc>https://docs.openclaw.ai/es/providers/mistral</loc></url>
   <url><loc>https://docs.openclaw.ai/es/providers/models</loc></url>
   <url><loc>https://docs.openclaw.ai/es/providers/moonshot</loc></url>
+  <url><loc>https://docs.openclaw.ai/es/providers/novita</loc></url>
   <url><loc>https://docs.openclaw.ai/es/providers/nvidia</loc></url>
   <url><loc>https://docs.openclaw.ai/es/providers/ollama</loc></url>
+  <url><loc>https://docs.openclaw.ai/es/providers/ollama-cloud</loc></url>
   <url><loc>https://docs.openclaw.ai/es/providers/openai</loc></url>
   <url><loc>https://docs.openclaw.ai/es/providers/opencode</loc></url>
   <url><loc>https://docs.openclaw.ai/es/providers/opencode-go</loc></url>
   <url><loc>https://docs.openclaw.ai/es/providers/openrouter</loc></url>
   <url><loc>https://docs.openclaw.ai/es/providers/perplexity-provider</loc></url>
+  <url><loc>https://docs.openclaw.ai/es/providers/pixverse</loc></url>
   <url><loc>https://docs.openclaw.ai/es/providers/qianfan</loc></url>
   <url><loc>https://docs.openclaw.ai/es/providers/qwen</loc></url>
+  <url><loc>https://docs.openclaw.ai/es/providers/qwen-oauth</loc></url>
   <url><loc>https://docs.openclaw.ai/es/providers/runway</loc></url>
   <url><loc>https://docs.openclaw.ai/es/providers/senseaudio</loc></url>
   <url><loc>https://docs.openclaw.ai/es/providers/sglang</loc></url>
@@ -1940,18 +1989,22 @@
   <url><loc>https://docs.openclaw.ai/es/refactor/access</loc></url>
   <url><loc>https://docs.openclaw.ai/es/refactor/acp</loc></url>
   <url><loc>https://docs.openclaw.ai/es/refactor/canvas</loc></url>
+  <url><loc>https://docs.openclaw.ai/es/refactor/database-first</loc></url>
   <url><loc>https://docs.openclaw.ai/es/refactor/ingress-core</loc></url>
   <url><loc>https://docs.openclaw.ai/es/reference/AGENTS.default</loc></url>
   <url><loc>https://docs.openclaw.ai/es/reference/api-usage-costs</loc></url>
   <url><loc>https://docs.openclaw.ai/es/reference/application-modernization-plan</loc></url>
+  <url><loc>https://docs.openclaw.ai/es/reference/code-mode</loc></url>
   <url><loc>https://docs.openclaw.ai/es/reference/credits</loc></url>
   <url><loc>https://docs.openclaw.ai/es/reference/device-models</loc></url>
   <url><loc>https://docs.openclaw.ai/es/reference/full-release-validation</loc></url>
   <url><loc>https://docs.openclaw.ai/es/reference/memory-config</loc></url>
   <url><loc>https://docs.openclaw.ai/es/reference/prompt-caching</loc></url>
+  <url><loc>https://docs.openclaw.ai/es/reference/release-performance-sweep</loc></url>
   <url><loc>https://docs.openclaw.ai/es/reference/RELEASING</loc></url>
   <url><loc>https://docs.openclaw.ai/es/reference/rich-output-protocol</loc></url>
   <url><loc>https://docs.openclaw.ai/es/reference/rpc</loc></url>
+  <url><loc>https://docs.openclaw.ai/es/reference/secret-placeholder-conventions</loc></url>
   <url><loc>https://docs.openclaw.ai/es/reference/secretref-credential-surface</loc></url>
   <url><loc>https://docs.openclaw.ai/es/reference/session-management-compaction</loc></url>
   <url><loc>https://docs.openclaw.ai/es/reference/templates/AGENTS.dev</loc></url>
@@ -1975,6 +2028,7 @@
   <url><loc>https://docs.openclaw.ai/es/security/incident-response</loc></url>
   <url><loc>https://docs.openclaw.ai/es/security/network-proxy</loc></url>
   <url><loc>https://docs.openclaw.ai/es/security/THREAT-MODEL-ATLAS</loc></url>
+  <url><loc>https://docs.openclaw.ai/es/specs/claw-supervisor</loc></url>
   <url><loc>https://docs.openclaw.ai/es/start/bootstrapping</loc></url>
   <url><loc>https://docs.openclaw.ai/es/start/docs-directory</loc></url>
   <url><loc>https://docs.openclaw.ai/es/start/getting-started</loc></url>
@@ -2014,6 +2068,7 @@
   <url><loc>https://docs.openclaw.ai/es/tools/exec-approvals-advanced</loc></url>
   <url><loc>https://docs.openclaw.ai/es/tools/firecrawl</loc></url>
   <url><loc>https://docs.openclaw.ai/es/tools/gemini-search</loc></url>
+  <url><loc>https://docs.openclaw.ai/es/tools/goal</loc></url>
   <url><loc>https://docs.openclaw.ai/es/tools/grok-search</loc></url>
   <url><loc>https://docs.openclaw.ai/es/tools/image-generation</loc></url>
   <url><loc>https://docs.openclaw.ai/es/tools/kimi-search</loc></url>
@@ -2025,11 +2080,14 @@
   <url><loc>https://docs.openclaw.ai/es/tools/multi-agent-sandbox-tools</loc></url>
   <url><loc>https://docs.openclaw.ai/es/tools/music-generation</loc></url>
   <url><loc>https://docs.openclaw.ai/es/tools/ollama-search</loc></url>
+  <url><loc>https://docs.openclaw.ai/es/tools/parallel-search</loc></url>
   <url><loc>https://docs.openclaw.ai/es/tools/pdf</loc></url>
+  <url><loc>https://docs.openclaw.ai/es/tools/permission-modes</loc></url>
   <url><loc>https://docs.openclaw.ai/es/tools/perplexity-search</loc></url>
   <url><loc>https://docs.openclaw.ai/es/tools/plugin</loc></url>
   <url><loc>https://docs.openclaw.ai/es/tools/reactions</loc></url>
   <url><loc>https://docs.openclaw.ai/es/tools/searxng-search</loc></url>
+  <url><loc>https://docs.openclaw.ai/es/tools/skill-workshop</loc></url>
   <url><loc>https://docs.openclaw.ai/es/tools/skills</loc></url>
   <url><loc>https://docs.openclaw.ai/es/tools/skills-config</loc></url>
   <url><loc>https://docs.openclaw.ai/es/tools/slash-commands</loc></url>
@@ -4623,6 +4681,7 @@
   <url><loc>https://docs.openclaw.ai/it/web/tui</loc></url>
   <url><loc>https://docs.openclaw.ai/it/web/webchat</loc></url>
   <url><loc>https://docs.openclaw.ai/ja-JP</loc></url>
+  <url><loc>https://docs.openclaw.ai/ja-JP/agent-runtime-architecture</loc></url>
   <url><loc>https://docs.openclaw.ai/ja-JP/announcements/bluebubbles-imessage</loc></url>
   <url><loc>https://docs.openclaw.ai/ja-JP/auth-credential-semantics</loc></url>
   <url><loc>https://docs.openclaw.ai/ja-JP/automation</loc></url>
@@ -4641,6 +4700,8 @@
   <url><loc>https://docs.openclaw.ai/ja-JP/brave-search</loc></url>
   <url><loc>https://docs.openclaw.ai/ja-JP/channels</loc></url>
   <url><loc>https://docs.openclaw.ai/ja-JP/channels/access-groups</loc></url>
+  <url><loc>https://docs.openclaw.ai/ja-JP/channels/ambient-room-events</loc></url>
+  <url><loc>https://docs.openclaw.ai/ja-JP/channels/bot-loop-protection</loc></url>
   <url><loc>https://docs.openclaw.ai/ja-JP/channels/broadcast-groups</loc></url>
   <url><loc>https://docs.openclaw.ai/ja-JP/channels/channel-routing</loc></url>
   <url><loc>https://docs.openclaw.ai/ja-JP/channels/clickclack</loc></url>
@@ -4665,8 +4726,10 @@
   <url><loc>https://docs.openclaw.ai/ja-JP/channels/pairing</loc></url>
   <url><loc>https://docs.openclaw.ai/ja-JP/channels/qa-channel</loc></url>
   <url><loc>https://docs.openclaw.ai/ja-JP/channels/qqbot</loc></url>
+  <url><loc>https://docs.openclaw.ai/ja-JP/channels/raft</loc></url>
   <url><loc>https://docs.openclaw.ai/ja-JP/channels/signal</loc></url>
   <url><loc>https://docs.openclaw.ai/ja-JP/channels/slack</loc></url>
+  <url><loc>https://docs.openclaw.ai/ja-JP/channels/sms</loc></url>
   <url><loc>https://docs.openclaw.ai/ja-JP/channels/synology-chat</loc></url>
   <url><loc>https://docs.openclaw.ai/ja-JP/channels/telegram</loc></url>
   <url><loc>https://docs.openclaw.ai/ja-JP/channels/tlon</loc></url>
@@ -4676,8 +4739,10 @@
   <url><loc>https://docs.openclaw.ai/ja-JP/channels/whatsapp</loc></url>
   <url><loc>https://docs.openclaw.ai/ja-JP/channels/yuanbao</loc></url>
   <url><loc>https://docs.openclaw.ai/ja-JP/channels/zalo</loc></url>
+  <url><loc>https://docs.openclaw.ai/ja-JP/channels/zaloclawbot</loc></url>
   <url><loc>https://docs.openclaw.ai/ja-JP/channels/zalouser</loc></url>
   <url><loc>https://docs.openclaw.ai/ja-JP/ci</loc></url>
+  <url><loc>https://docs.openclaw.ai/ja-JP/clawhub/cli</loc></url>
   <url><loc>https://docs.openclaw.ai/ja-JP/clawhub/publishing</loc></url>
   <url><loc>https://docs.openclaw.ai/ja-JP/cli</loc></url>
   <url><loc>https://docs.openclaw.ai/ja-JP/cli/acp</loc></url>
@@ -4718,6 +4783,7 @@
   <url><loc>https://docs.openclaw.ai/ja-JP/cli/pairing</loc></url>
   <url><loc>https://docs.openclaw.ai/ja-JP/cli/path</loc></url>
   <url><loc>https://docs.openclaw.ai/ja-JP/cli/plugins</loc></url>
+  <url><loc>https://docs.openclaw.ai/ja-JP/cli/policy</loc></url>
   <url><loc>https://docs.openclaw.ai/ja-JP/cli/proxy</loc></url>
   <url><loc>https://docs.openclaw.ai/ja-JP/cli/qr</loc></url>
   <url><loc>https://docs.openclaw.ai/ja-JP/cli/reset</loc></url>
@@ -4730,12 +4796,14 @@
   <url><loc>https://docs.openclaw.ai/ja-JP/cli/status</loc></url>
   <url><loc>https://docs.openclaw.ai/ja-JP/cli/system</loc></url>
   <url><loc>https://docs.openclaw.ai/ja-JP/cli/tasks</loc></url>
+  <url><loc>https://docs.openclaw.ai/ja-JP/cli/transcripts</loc></url>
   <url><loc>https://docs.openclaw.ai/ja-JP/cli/tui</loc></url>
   <url><loc>https://docs.openclaw.ai/ja-JP/cli/uninstall</loc></url>
   <url><loc>https://docs.openclaw.ai/ja-JP/cli/update</loc></url>
   <url><loc>https://docs.openclaw.ai/ja-JP/cli/voicecall</loc></url>
   <url><loc>https://docs.openclaw.ai/ja-JP/cli/webhooks</loc></url>
   <url><loc>https://docs.openclaw.ai/ja-JP/cli/wiki</loc></url>
+  <url><loc>https://docs.openclaw.ai/ja-JP/cli/workboard</loc></url>
   <url><loc>https://docs.openclaw.ai/ja-JP/concepts/active-memory</loc></url>
   <url><loc>https://docs.openclaw.ai/ja-JP/concepts/agent</loc></url>
   <url><loc>https://docs.openclaw.ai/ja-JP/concepts/agent-loop</loc></url>
@@ -4767,6 +4835,7 @@
   <url><loc>https://docs.openclaw.ai/ja-JP/concepts/multi-agent</loc></url>
   <url><loc>https://docs.openclaw.ai/ja-JP/concepts/oauth</loc></url>
   <url><loc>https://docs.openclaw.ai/ja-JP/concepts/parallel-specialist-lanes</loc></url>
+  <url><loc>https://docs.openclaw.ai/ja-JP/concepts/personal-agent-benchmark-pack</loc></url>
   <url><loc>https://docs.openclaw.ai/ja-JP/concepts/presence</loc></url>
   <url><loc>https://docs.openclaw.ai/ja-JP/concepts/progress-drafts</loc></url>
   <url><loc>https://docs.openclaw.ai/ja-JP/concepts/qa-e2e-automation</loc></url>
@@ -4802,6 +4871,7 @@
   <url><loc>https://docs.openclaw.ai/ja-JP/gateway/diagnostics</loc></url>
   <url><loc>https://docs.openclaw.ai/ja-JP/gateway/discovery</loc></url>
   <url><loc>https://docs.openclaw.ai/ja-JP/gateway/doctor</loc></url>
+  <url><loc>https://docs.openclaw.ai/ja-JP/gateway/external-apps</loc></url>
   <url><loc>https://docs.openclaw.ai/ja-JP/gateway/gateway-lock</loc></url>
   <url><loc>https://docs.openclaw.ai/ja-JP/gateway/health</loc></url>
   <url><loc>https://docs.openclaw.ai/ja-JP/gateway/heartbeat</loc></url>
@@ -4826,7 +4896,9 @@
   <url><loc>https://docs.openclaw.ai/ja-JP/gateway/secrets-plan-contract</loc></url>
   <url><loc>https://docs.openclaw.ai/ja-JP/gateway/security</loc></url>
   <url><loc>https://docs.openclaw.ai/ja-JP/gateway/security/audit-checks</loc></url>
+  <url><loc>https://docs.openclaw.ai/ja-JP/gateway/security/exposure-runbook</loc></url>
   <url><loc>https://docs.openclaw.ai/ja-JP/gateway/security/secure-file-operations</loc></url>
+  <url><loc>https://docs.openclaw.ai/ja-JP/gateway/security/shrinkwrap</loc></url>
   <url><loc>https://docs.openclaw.ai/ja-JP/gateway/tailscale</loc></url>
   <url><loc>https://docs.openclaw.ai/ja-JP/gateway/tools-invoke-http-api</loc></url>
   <url><loc>https://docs.openclaw.ai/ja-JP/gateway/troubleshooting</loc></url>
@@ -4872,7 +4944,10 @@
   <url><loc>https://docs.openclaw.ai/ja-JP/install/render</loc></url>
   <url><loc>https://docs.openclaw.ai/ja-JP/install/uninstall</loc></url>
   <url><loc>https://docs.openclaw.ai/ja-JP/install/updating</loc></url>
+  <url><loc>https://docs.openclaw.ai/ja-JP/install/upstash</loc></url>
   <url><loc>https://docs.openclaw.ai/ja-JP/logging</loc></url>
+  <url><loc>https://docs.openclaw.ai/ja-JP/maturity/scorecard</loc></url>
+  <url><loc>https://docs.openclaw.ai/ja-JP/maturity/taxonomy</loc></url>
   <url><loc>https://docs.openclaw.ai/ja-JP/network</loc></url>
   <url><loc>https://docs.openclaw.ai/ja-JP/nodes</loc></url>
   <url><loc>https://docs.openclaw.ai/ja-JP/nodes/audio</loc></url>
@@ -4883,12 +4958,14 @@
   <url><loc>https://docs.openclaw.ai/ja-JP/nodes/talk</loc></url>
   <url><loc>https://docs.openclaw.ai/ja-JP/nodes/troubleshooting</loc></url>
   <url><loc>https://docs.openclaw.ai/ja-JP/nodes/voicewake</loc></url>
+  <url><loc>https://docs.openclaw.ai/ja-JP/openclaw-agent-runtime</loc></url>
   <url><loc>https://docs.openclaw.ai/ja-JP/perplexity</loc></url>
   <url><loc>https://docs.openclaw.ai/ja-JP/plan/codex-context-engine-harness</loc></url>
   <url><loc>https://docs.openclaw.ai/ja-JP/plan/ui-channels</loc></url>
   <url><loc>https://docs.openclaw.ai/ja-JP/platforms</loc></url>
   <url><loc>https://docs.openclaw.ai/ja-JP/platforms/android</loc></url>
   <url><loc>https://docs.openclaw.ai/ja-JP/platforms/digitalocean</loc></url>
+  <url><loc>https://docs.openclaw.ai/ja-JP/platforms/easyrunner</loc></url>
   <url><loc>https://docs.openclaw.ai/ja-JP/platforms/ios</loc></url>
   <url><loc>https://docs.openclaw.ai/ja-JP/platforms/linux</loc></url>
   <url><loc>https://docs.openclaw.ai/ja-JP/platforms/mac/bundled-gateway</loc></url>
@@ -4913,6 +4990,7 @@
   <url><loc>https://docs.openclaw.ai/ja-JP/platforms/raspberry-pi</loc></url>
   <url><loc>https://docs.openclaw.ai/ja-JP/platforms/windows</loc></url>
   <url><loc>https://docs.openclaw.ai/ja-JP/plugins/adding-capabilities</loc></url>
+  <url><loc>https://docs.openclaw.ai/ja-JP/plugins/admin-http-rpc</loc></url>
   <url><loc>https://docs.openclaw.ai/ja-JP/plugins/agent-tools</loc></url>
   <url><loc>https://docs.openclaw.ai/ja-JP/plugins/architecture</loc></url>
   <url><loc>https://docs.openclaw.ai/ja-JP/plugins/architecture-internals</loc></url>
@@ -4927,10 +5005,12 @@
   <url><loc>https://docs.openclaw.ai/ja-JP/plugins/codex-native-plugins</loc></url>
   <url><loc>https://docs.openclaw.ai/ja-JP/plugins/community</loc></url>
   <url><loc>https://docs.openclaw.ai/ja-JP/plugins/compatibility</loc></url>
+  <url><loc>https://docs.openclaw.ai/ja-JP/plugins/copilot</loc></url>
   <url><loc>https://docs.openclaw.ai/ja-JP/plugins/dependency-resolution</loc></url>
   <url><loc>https://docs.openclaw.ai/ja-JP/plugins/google-meet</loc></url>
   <url><loc>https://docs.openclaw.ai/ja-JP/plugins/hooks</loc></url>
   <url><loc>https://docs.openclaw.ai/ja-JP/plugins/install-overrides</loc></url>
+  <url><loc>https://docs.openclaw.ai/ja-JP/plugins/llama-cpp</loc></url>
   <url><loc>https://docs.openclaw.ai/ja-JP/plugins/manage-plugins</loc></url>
   <url><loc>https://docs.openclaw.ai/ja-JP/plugins/manifest</loc></url>
   <url><loc>https://docs.openclaw.ai/ja-JP/plugins/memory-lancedb</loc></url>
@@ -4938,8 +5018,10 @@
   <url><loc>https://docs.openclaw.ai/ja-JP/plugins/message-presentation</loc></url>
   <url><loc>https://docs.openclaw.ai/ja-JP/plugins/oc-path</loc></url>
   <url><loc>https://docs.openclaw.ai/ja-JP/plugins/plugin-inventory</loc></url>
+  <url><loc>https://docs.openclaw.ai/ja-JP/plugins/plugin-permission-requests</loc></url>
   <url><loc>https://docs.openclaw.ai/ja-JP/plugins/reference</loc></url>
   <url><loc>https://docs.openclaw.ai/ja-JP/plugins/reference/acpx</loc></url>
+  <url><loc>https://docs.openclaw.ai/ja-JP/plugins/reference/admin-http-rpc</loc></url>
   <url><loc>https://docs.openclaw.ai/ja-JP/plugins/reference/alibaba</loc></url>
   <url><loc>https://docs.openclaw.ai/ja-JP/plugins/reference/amazon-bedrock</loc></url>
   <url><loc>https://docs.openclaw.ai/ja-JP/plugins/reference/amazon-bedrock-mantle</loc></url>
@@ -4957,7 +5039,10 @@
   <url><loc>https://docs.openclaw.ai/ja-JP/plugins/reference/clickclack</loc></url>
   <url><loc>https://docs.openclaw.ai/ja-JP/plugins/reference/cloudflare-ai-gateway</loc></url>
   <url><loc>https://docs.openclaw.ai/ja-JP/plugins/reference/codex</loc></url>
+  <url><loc>https://docs.openclaw.ai/ja-JP/plugins/reference/codex-supervisor</loc></url>
+  <url><loc>https://docs.openclaw.ai/ja-JP/plugins/reference/cohere</loc></url>
   <url><loc>https://docs.openclaw.ai/ja-JP/plugins/reference/comfy</loc></url>
+  <url><loc>https://docs.openclaw.ai/ja-JP/plugins/reference/copilot</loc></url>
   <url><loc>https://docs.openclaw.ai/ja-JP/plugins/reference/copilot-proxy</loc></url>
   <url><loc>https://docs.openclaw.ai/ja-JP/plugins/reference/deepgram</loc></url>
   <url><loc>https://docs.openclaw.ai/ja-JP/plugins/reference/deepinfra</loc></url>
@@ -4965,6 +5050,7 @@
   <url><loc>https://docs.openclaw.ai/ja-JP/plugins/reference/diagnostics-otel</loc></url>
   <url><loc>https://docs.openclaw.ai/ja-JP/plugins/reference/diagnostics-prometheus</loc></url>
   <url><loc>https://docs.openclaw.ai/ja-JP/plugins/reference/diffs</loc></url>
+  <url><loc>https://docs.openclaw.ai/ja-JP/plugins/reference/diffs-language-pack</loc></url>
   <url><loc>https://docs.openclaw.ai/ja-JP/plugins/reference/discord</loc></url>
   <url><loc>https://docs.openclaw.ai/ja-JP/plugins/reference/document-extract</loc></url>
   <url><loc>https://docs.openclaw.ai/ja-JP/plugins/reference/duckduckgo</loc></url>
@@ -4976,6 +5062,7 @@
   <url><loc>https://docs.openclaw.ai/ja-JP/plugins/reference/firecrawl</loc></url>
   <url><loc>https://docs.openclaw.ai/ja-JP/plugins/reference/fireworks</loc></url>
   <url><loc>https://docs.openclaw.ai/ja-JP/plugins/reference/github-copilot</loc></url>
+  <url><loc>https://docs.openclaw.ai/ja-JP/plugins/reference/gmi</loc></url>
   <url><loc>https://docs.openclaw.ai/ja-JP/plugins/reference/google</loc></url>
   <url><loc>https://docs.openclaw.ai/ja-JP/plugins/reference/google-meet</loc></url>
   <url><loc>https://docs.openclaw.ai/ja-JP/plugins/reference/googlechat</loc></url>
@@ -4989,6 +5076,7 @@
   <url><loc>https://docs.openclaw.ai/ja-JP/plugins/reference/kimi</loc></url>
   <url><loc>https://docs.openclaw.ai/ja-JP/plugins/reference/line</loc></url>
   <url><loc>https://docs.openclaw.ai/ja-JP/plugins/reference/litellm</loc></url>
+  <url><loc>https://docs.openclaw.ai/ja-JP/plugins/reference/llama-cpp</loc></url>
   <url><loc>https://docs.openclaw.ai/ja-JP/plugins/reference/llm-task</loc></url>
   <url><loc>https://docs.openclaw.ai/ja-JP/plugins/reference/lmstudio</loc></url>
   <url><loc>https://docs.openclaw.ai/ja-JP/plugins/reference/lobster</loc></url>
@@ -5007,6 +5095,7 @@
   <url><loc>https://docs.openclaw.ai/ja-JP/plugins/reference/msteams</loc></url>
   <url><loc>https://docs.openclaw.ai/ja-JP/plugins/reference/nextcloud-talk</loc></url>
   <url><loc>https://docs.openclaw.ai/ja-JP/plugins/reference/nostr</loc></url>
+  <url><loc>https://docs.openclaw.ai/ja-JP/plugins/reference/novita</loc></url>
   <url><loc>https://docs.openclaw.ai/ja-JP/plugins/reference/nvidia</loc></url>
   <url><loc>https://docs.openclaw.ai/ja-JP/plugins/reference/oc-path</loc></url>
   <url><loc>https://docs.openclaw.ai/ja-JP/plugins/reference/ollama</loc></url>
@@ -5017,18 +5106,22 @@
   <url><loc>https://docs.openclaw.ai/ja-JP/plugins/reference/openrouter</loc></url>
   <url><loc>https://docs.openclaw.ai/ja-JP/plugins/reference/openshell</loc></url>
   <url><loc>https://docs.openclaw.ai/ja-JP/plugins/reference/perplexity</loc></url>
+  <url><loc>https://docs.openclaw.ai/ja-JP/plugins/reference/pixverse</loc></url>
+  <url><loc>https://docs.openclaw.ai/ja-JP/plugins/reference/policy</loc></url>
   <url><loc>https://docs.openclaw.ai/ja-JP/plugins/reference/qa-channel</loc></url>
   <url><loc>https://docs.openclaw.ai/ja-JP/plugins/reference/qa-lab</loc></url>
   <url><loc>https://docs.openclaw.ai/ja-JP/plugins/reference/qa-matrix</loc></url>
   <url><loc>https://docs.openclaw.ai/ja-JP/plugins/reference/qianfan</loc></url>
   <url><loc>https://docs.openclaw.ai/ja-JP/plugins/reference/qqbot</loc></url>
   <url><loc>https://docs.openclaw.ai/ja-JP/plugins/reference/qwen</loc></url>
+  <url><loc>https://docs.openclaw.ai/ja-JP/plugins/reference/raft</loc></url>
   <url><loc>https://docs.openclaw.ai/ja-JP/plugins/reference/runway</loc></url>
   <url><loc>https://docs.openclaw.ai/ja-JP/plugins/reference/searxng</loc></url>
   <url><loc>https://docs.openclaw.ai/ja-JP/plugins/reference/senseaudio</loc></url>
   <url><loc>https://docs.openclaw.ai/ja-JP/plugins/reference/sglang</loc></url>
   <url><loc>https://docs.openclaw.ai/ja-JP/plugins/reference/signal</loc></url>
   <url><loc>https://docs.openclaw.ai/ja-JP/plugins/reference/slack</loc></url>
+  <url><loc>https://docs.openclaw.ai/ja-JP/plugins/reference/sms</loc></url>
   <url><loc>https://docs.openclaw.ai/ja-JP/plugins/reference/stepfun</loc></url>
   <url><loc>https://docs.openclaw.ai/ja-JP/plugins/reference/synology-chat</loc></url>
   <url><loc>https://docs.openclaw.ai/ja-JP/plugins/reference/synthetic</loc></url>
@@ -5050,14 +5143,17 @@
   <url><loc>https://docs.openclaw.ai/ja-JP/plugins/reference/web-readability</loc></url>
   <url><loc>https://docs.openclaw.ai/ja-JP/plugins/reference/webhooks</loc></url>
   <url><loc>https://docs.openclaw.ai/ja-JP/plugins/reference/whatsapp</loc></url>
+  <url><loc>https://docs.openclaw.ai/ja-JP/plugins/reference/workboard</loc></url>
   <url><loc>https://docs.openclaw.ai/ja-JP/plugins/reference/xai</loc></url>
   <url><loc>https://docs.openclaw.ai/ja-JP/plugins/reference/xiaomi</loc></url>
   <url><loc>https://docs.openclaw.ai/ja-JP/plugins/reference/zai</loc></url>
   <url><loc>https://docs.openclaw.ai/ja-JP/plugins/reference/zalo</loc></url>
   <url><loc>https://docs.openclaw.ai/ja-JP/plugins/reference/zalouser</loc></url>
   <url><loc>https://docs.openclaw.ai/ja-JP/plugins/sdk-agent-harness</loc></url>
+  <url><loc>https://docs.openclaw.ai/ja-JP/plugins/sdk-channel-inbound</loc></url>
   <url><loc>https://docs.openclaw.ai/ja-JP/plugins/sdk-channel-ingress</loc></url>
   <url><loc>https://docs.openclaw.ai/ja-JP/plugins/sdk-channel-message</loc></url>
+  <url><loc>https://docs.openclaw.ai/ja-JP/plugins/sdk-channel-outbound</loc></url>
   <url><loc>https://docs.openclaw.ai/ja-JP/plugins/sdk-channel-plugins</loc></url>
   <url><loc>https://docs.openclaw.ai/ja-JP/plugins/sdk-channel-turn</loc></url>
   <url><loc>https://docs.openclaw.ai/ja-JP/plugins/sdk-entrypoints</loc></url>
@@ -5068,8 +5164,10 @@
   <url><loc>https://docs.openclaw.ai/ja-JP/plugins/sdk-setup</loc></url>
   <url><loc>https://docs.openclaw.ai/ja-JP/plugins/sdk-subpaths</loc></url>
   <url><loc>https://docs.openclaw.ai/ja-JP/plugins/sdk-testing</loc></url>
+  <url><loc>https://docs.openclaw.ai/ja-JP/plugins/tool-plugins</loc></url>
   <url><loc>https://docs.openclaw.ai/ja-JP/plugins/voice-call</loc></url>
   <url><loc>https://docs.openclaw.ai/ja-JP/plugins/webhooks</loc></url>
+  <url><loc>https://docs.openclaw.ai/ja-JP/plugins/workboard</loc></url>
   <url><loc>https://docs.openclaw.ai/ja-JP/plugins/zalouser</loc></url>
   <url><loc>https://docs.openclaw.ai/ja-JP/prose</loc></url>
   <url><loc>https://docs.openclaw.ai/ja-JP/providers</loc></url>
@@ -5083,14 +5181,17 @@
   <url><loc>https://docs.openclaw.ai/ja-JP/providers/chutes</loc></url>
   <url><loc>https://docs.openclaw.ai/ja-JP/providers/claude-max-api-proxy</loc></url>
   <url><loc>https://docs.openclaw.ai/ja-JP/providers/cloudflare-ai-gateway</loc></url>
+  <url><loc>https://docs.openclaw.ai/ja-JP/providers/cohere</loc></url>
   <url><loc>https://docs.openclaw.ai/ja-JP/providers/comfy</loc></url>
   <url><loc>https://docs.openclaw.ai/ja-JP/providers/deepgram</loc></url>
   <url><loc>https://docs.openclaw.ai/ja-JP/providers/deepinfra</loc></url>
   <url><loc>https://docs.openclaw.ai/ja-JP/providers/deepseek</loc></url>
+  <url><loc>https://docs.openclaw.ai/ja-JP/providers/ds4</loc></url>
   <url><loc>https://docs.openclaw.ai/ja-JP/providers/elevenlabs</loc></url>
   <url><loc>https://docs.openclaw.ai/ja-JP/providers/fal</loc></url>
   <url><loc>https://docs.openclaw.ai/ja-JP/providers/fireworks</loc></url>
   <url><loc>https://docs.openclaw.ai/ja-JP/providers/github-copilot</loc></url>
+  <url><loc>https://docs.openclaw.ai/ja-JP/providers/gmi</loc></url>
   <url><loc>https://docs.openclaw.ai/ja-JP/providers/google</loc></url>
   <url><loc>https://docs.openclaw.ai/ja-JP/providers/gradium</loc></url>
   <url><loc>https://docs.openclaw.ai/ja-JP/providers/groq</loc></url>
@@ -5104,15 +5205,19 @@
   <url><loc>https://docs.openclaw.ai/ja-JP/providers/mistral</loc></url>
   <url><loc>https://docs.openclaw.ai/ja-JP/providers/models</loc></url>
   <url><loc>https://docs.openclaw.ai/ja-JP/providers/moonshot</loc></url>
+  <url><loc>https://docs.openclaw.ai/ja-JP/providers/novita</loc></url>
   <url><loc>https://docs.openclaw.ai/ja-JP/providers/nvidia</loc></url>
   <url><loc>https://docs.openclaw.ai/ja-JP/providers/ollama</loc></url>
+  <url><loc>https://docs.openclaw.ai/ja-JP/providers/ollama-cloud</loc></url>
   <url><loc>https://docs.openclaw.ai/ja-JP/providers/openai</loc></url>
   <url><loc>https://docs.openclaw.ai/ja-JP/providers/opencode</loc></url>
   <url><loc>https://docs.openclaw.ai/ja-JP/providers/opencode-go</loc></url>
   <url><loc>https://docs.openclaw.ai/ja-JP/providers/openrouter</loc></url>
   <url><loc>https://docs.openclaw.ai/ja-JP/providers/perplexity-provider</loc></url>
+  <url><loc>https://docs.openclaw.ai/ja-JP/providers/pixverse</loc></url>
   <url><loc>https://docs.openclaw.ai/ja-JP/providers/qianfan</loc></url>
   <url><loc>https://docs.openclaw.ai/ja-JP/providers/qwen</loc></url>
+  <url><loc>https://docs.openclaw.ai/ja-JP/providers/qwen-oauth</loc></url>
   <url><loc>https://docs.openclaw.ai/ja-JP/providers/runway</loc></url>
   <url><loc>https://docs.openclaw.ai/ja-JP/providers/senseaudio</loc></url>
   <url><loc>https://docs.openclaw.ai/ja-JP/providers/sglang</loc></url>
@@ -5131,18 +5236,22 @@
   <url><loc>https://docs.openclaw.ai/ja-JP/refactor/access</loc></url>
   <url><loc>https://docs.openclaw.ai/ja-JP/refactor/acp</loc></url>
   <url><loc>https://docs.openclaw.ai/ja-JP/refactor/canvas</loc></url>
+  <url><loc>https://docs.openclaw.ai/ja-JP/refactor/database-first</loc></url>
   <url><loc>https://docs.openclaw.ai/ja-JP/refactor/ingress-core</loc></url>
   <url><loc>https://docs.openclaw.ai/ja-JP/reference/AGENTS.default</loc></url>
   <url><loc>https://docs.openclaw.ai/ja-JP/reference/api-usage-costs</loc></url>
   <url><loc>https://docs.openclaw.ai/ja-JP/reference/application-modernization-plan</loc></url>
+  <url><loc>https://docs.openclaw.ai/ja-JP/reference/code-mode</loc></url>
   <url><loc>https://docs.openclaw.ai/ja-JP/reference/credits</loc></url>
   <url><loc>https://docs.openclaw.ai/ja-JP/reference/device-models</loc></url>
   <url><loc>https://docs.openclaw.ai/ja-JP/reference/full-release-validation</loc></url>
   <url><loc>https://docs.openclaw.ai/ja-JP/reference/memory-config</loc></url>
   <url><loc>https://docs.openclaw.ai/ja-JP/reference/prompt-caching</loc></url>
+  <url><loc>https://docs.openclaw.ai/ja-JP/reference/release-performance-sweep</loc></url>
   <url><loc>https://docs.openclaw.ai/ja-JP/reference/RELEASING</loc></url>
   <url><loc>https://docs.openclaw.ai/ja-JP/reference/rich-output-protocol</loc></url>
   <url><loc>https://docs.openclaw.ai/ja-JP/reference/rpc</loc></url>
+  <url><loc>https://docs.openclaw.ai/ja-JP/reference/secret-placeholder-conventions</loc></url>
   <url><loc>https://docs.openclaw.ai/ja-JP/reference/secretref-credential-surface</loc></url>
   <url><loc>https://docs.openclaw.ai/ja-JP/reference/session-management-compaction</loc></url>
   <url><loc>https://docs.openclaw.ai/ja-JP/reference/templates/AGENTS.dev</loc></url>
@@ -5166,6 +5275,7 @@
   <url><loc>https://docs.openclaw.ai/ja-JP/security/incident-response</loc></url>
   <url><loc>https://docs.openclaw.ai/ja-JP/security/network-proxy</loc></url>
   <url><loc>https://docs.openclaw.ai/ja-JP/security/THREAT-MODEL-ATLAS</loc></url>
+  <url><loc>https://docs.openclaw.ai/ja-JP/specs/claw-supervisor</loc></url>
   <url><loc>https://docs.openclaw.ai/ja-JP/start/bootstrapping</loc></url>
   <url><loc>https://docs.openclaw.ai/ja-JP/start/docs-directory</loc></url>
   <url><loc>https://docs.openclaw.ai/ja-JP/start/getting-started</loc></url>
@@ -5205,6 +5315,7 @@
   <url><loc>https://docs.openclaw.ai/ja-JP/tools/exec-approvals-advanced</loc></url>
   <url><loc>https://docs.openclaw.ai/ja-JP/tools/firecrawl</loc></url>
   <url><loc>https://docs.openclaw.ai/ja-JP/tools/gemini-search</loc></url>
+  <url><loc>https://docs.openclaw.ai/ja-JP/tools/goal</loc></url>
   <url><loc>https://docs.openclaw.ai/ja-JP/tools/grok-search</loc></url>
   <url><loc>https://docs.openclaw.ai/ja-JP/tools/image-generation</loc></url>
   <url><loc>https://docs.openclaw.ai/ja-JP/tools/kimi-search</loc></url>
@@ -5216,11 +5327,14 @@
   <url><loc>https://docs.openclaw.ai/ja-JP/tools/multi-agent-sandbox-tools</loc></url>
   <url><loc>https://docs.openclaw.ai/ja-JP/tools/music-generation</loc></url>
   <url><loc>https://docs.openclaw.ai/ja-JP/tools/ollama-search</loc></url>
+  <url><loc>https://docs.openclaw.ai/ja-JP/tools/parallel-search</loc></url>
   <url><loc>https://docs.openclaw.ai/ja-JP/tools/pdf</loc></url>
+  <url><loc>https://docs.openclaw.ai/ja-JP/tools/permission-modes</loc></url>
   <url><loc>https://docs.openclaw.ai/ja-JP/tools/perplexity-search</loc></url>
   <url><loc>https://docs.openclaw.ai/ja-JP/tools/plugin</loc></url>
   <url><loc>https://docs.openclaw.ai/ja-JP/tools/reactions</loc></url>
   <url><loc>https://docs.openclaw.ai/ja-JP/tools/searxng-search</loc></url>
+  <url><loc>https://docs.openclaw.ai/ja-JP/tools/skill-workshop</loc></url>
   <url><loc>https://docs.openclaw.ai/ja-JP/tools/skills</loc></url>
   <url><loc>https://docs.openclaw.ai/ja-JP/tools/skills-config</loc></url>
   <url><loc>https://docs.openclaw.ai/ja-JP/tools/slash-commands</loc></url>
@@ -5863,6 +5977,8 @@
   <url><loc>https://docs.openclaw.ai/ko/web/tui</loc></url>
   <url><loc>https://docs.openclaw.ai/ko/web/webchat</loc></url>
   <url><loc>https://docs.openclaw.ai/logging</loc></url>
+  <url><loc>https://docs.openclaw.ai/maturity/scorecard</loc></url>
+  <url><loc>https://docs.openclaw.ai/maturity/taxonomy</loc></url>
   <url><loc>https://docs.openclaw.ai/network</loc></url>
   <url><loc>https://docs.openclaw.ai/nl</loc></url>
   <url><loc>https://docs.openclaw.ai/nl/announcements/bluebubbles-imessage</loc></url>
@@ -7270,6 +7386,7 @@
   <url><loc>https://docs.openclaw.ai/plugins/reference/qianfan</loc></url>
   <url><loc>https://docs.openclaw.ai/plugins/reference/qqbot</loc></url>
   <url><loc>https://docs.openclaw.ai/plugins/reference/qwen</loc></url>
+  <url><loc>https://docs.openclaw.ai/plugins/reference/raft</loc></url>
   <url><loc>https://docs.openclaw.ai/plugins/reference/runway</loc></url>
   <url><loc>https://docs.openclaw.ai/plugins/reference/searxng</loc></url>
   <url><loc>https://docs.openclaw.ai/plugins/reference/senseaudio</loc></url>
@@ -10614,6 +10731,7 @@
   <url><loc>https://docs.openclaw.ai/web/tui</loc></url>
   <url><loc>https://docs.openclaw.ai/web/webchat</loc></url>
   <url><loc>https://docs.openclaw.ai/zh-CN</loc></url>
+  <url><loc>https://docs.openclaw.ai/zh-CN/agent-runtime-architecture</loc></url>
   <url><loc>https://docs.openclaw.ai/zh-CN/announcements/bluebubbles-imessage</loc></url>
   <url><loc>https://docs.openclaw.ai/zh-CN/auth-credential-semantics</loc></url>
   <url><loc>https://docs.openclaw.ai/zh-CN/automation</loc></url>
@@ -10632,6 +10750,8 @@
   <url><loc>https://docs.openclaw.ai/zh-CN/brave-search</loc></url>
   <url><loc>https://docs.openclaw.ai/zh-CN/channels</loc></url>
   <url><loc>https://docs.openclaw.ai/zh-CN/channels/access-groups</loc></url>
+  <url><loc>https://docs.openclaw.ai/zh-CN/channels/ambient-room-events</loc></url>
+  <url><loc>https://docs.openclaw.ai/zh-CN/channels/bot-loop-protection</loc></url>
   <url><loc>https://docs.openclaw.ai/zh-CN/channels/broadcast-groups</loc></url>
   <url><loc>https://docs.openclaw.ai/zh-CN/channels/channel-routing</loc></url>
   <url><loc>https://docs.openclaw.ai/zh-CN/channels/clickclack</loc></url>
@@ -10656,8 +10776,10 @@
   <url><loc>https://docs.openclaw.ai/zh-CN/channels/pairing</loc></url>
   <url><loc>https://docs.openclaw.ai/zh-CN/channels/qa-channel</loc></url>
   <url><loc>https://docs.openclaw.ai/zh-CN/channels/qqbot</loc></url>
+  <url><loc>https://docs.openclaw.ai/zh-CN/channels/raft</loc></url>
   <url><loc>https://docs.openclaw.ai/zh-CN/channels/signal</loc></url>
   <url><loc>https://docs.openclaw.ai/zh-CN/channels/slack</loc></url>
+  <url><loc>https://docs.openclaw.ai/zh-CN/channels/sms</loc></url>
   <url><loc>https://docs.openclaw.ai/zh-CN/channels/synology-chat</loc></url>
   <url><loc>https://docs.openclaw.ai/zh-CN/channels/telegram</loc></url>
   <url><loc>https://docs.openclaw.ai/zh-CN/channels/tlon</loc></url>
@@ -10667,8 +10789,10 @@
   <url><loc>https://docs.openclaw.ai/zh-CN/channels/whatsapp</loc></url>
   <url><loc>https://docs.openclaw.ai/zh-CN/channels/yuanbao</loc></url>
   <url><loc>https://docs.openclaw.ai/zh-CN/channels/zalo</loc></url>
+  <url><loc>https://docs.openclaw.ai/zh-CN/channels/zaloclawbot</loc></url>
   <url><loc>https://docs.openclaw.ai/zh-CN/channels/zalouser</loc></url>
   <url><loc>https://docs.openclaw.ai/zh-CN/ci</loc></url>
+  <url><loc>https://docs.openclaw.ai/zh-CN/clawhub/cli</loc></url>
   <url><loc>https://docs.openclaw.ai/zh-CN/clawhub/publishing</loc></url>
   <url><loc>https://docs.openclaw.ai/zh-CN/cli</loc></url>
   <url><loc>https://docs.openclaw.ai/zh-CN/cli/acp</loc></url>
@@ -10709,6 +10833,7 @@
   <url><loc>https://docs.openclaw.ai/zh-CN/cli/pairing</loc></url>
   <url><loc>https://docs.openclaw.ai/zh-CN/cli/path</loc></url>
   <url><loc>https://docs.openclaw.ai/zh-CN/cli/plugins</loc></url>
+  <url><loc>https://docs.openclaw.ai/zh-CN/cli/policy</loc></url>
   <url><loc>https://docs.openclaw.ai/zh-CN/cli/proxy</loc></url>
   <url><loc>https://docs.openclaw.ai/zh-CN/cli/qr</loc></url>
   <url><loc>https://docs.openclaw.ai/zh-CN/cli/reset</loc></url>
@@ -10721,12 +10846,14 @@
   <url><loc>https://docs.openclaw.ai/zh-CN/cli/status</loc></url>
   <url><loc>https://docs.openclaw.ai/zh-CN/cli/system</loc></url>
   <url><loc>https://docs.openclaw.ai/zh-CN/cli/tasks</loc></url>
+  <url><loc>https://docs.openclaw.ai/zh-CN/cli/transcripts</loc></url>
   <url><loc>https://docs.openclaw.ai/zh-CN/cli/tui</loc></url>
   <url><loc>https://docs.openclaw.ai/zh-CN/cli/uninstall</loc></url>
   <url><loc>https://docs.openclaw.ai/zh-CN/cli/update</loc></url>
   <url><loc>https://docs.openclaw.ai/zh-CN/cli/voicecall</loc></url>
   <url><loc>https://docs.openclaw.ai/zh-CN/cli/webhooks</loc></url>
   <url><loc>https://docs.openclaw.ai/zh-CN/cli/wiki</loc></url>
+  <url><loc>https://docs.openclaw.ai/zh-CN/cli/workboard</loc></url>
   <url><loc>https://docs.openclaw.ai/zh-CN/concepts/active-memory</loc></url>
   <url><loc>https://docs.openclaw.ai/zh-CN/concepts/agent</loc></url>
   <url><loc>https://docs.openclaw.ai/zh-CN/concepts/agent-loop</loc></url>
@@ -10758,6 +10885,7 @@
   <url><loc>https://docs.openclaw.ai/zh-CN/concepts/multi-agent</loc></url>
   <url><loc>https://docs.openclaw.ai/zh-CN/concepts/oauth</loc></url>
   <url><loc>https://docs.openclaw.ai/zh-CN/concepts/parallel-specialist-lanes</loc></url>
+  <url><loc>https://docs.openclaw.ai/zh-CN/concepts/personal-agent-benchmark-pack</loc></url>
   <url><loc>https://docs.openclaw.ai/zh-CN/concepts/presence</loc></url>
   <url><loc>https://docs.openclaw.ai/zh-CN/concepts/progress-drafts</loc></url>
   <url><loc>https://docs.openclaw.ai/zh-CN/concepts/qa-e2e-automation</loc></url>
@@ -10793,6 +10921,7 @@
   <url><loc>https://docs.openclaw.ai/zh-CN/gateway/diagnostics</loc></url>
   <url><loc>https://docs.openclaw.ai/zh-CN/gateway/discovery</loc></url>
   <url><loc>https://docs.openclaw.ai/zh-CN/gateway/doctor</loc></url>
+  <url><loc>https://docs.openclaw.ai/zh-CN/gateway/external-apps</loc></url>
   <url><loc>https://docs.openclaw.ai/zh-CN/gateway/gateway-lock</loc></url>
   <url><loc>https://docs.openclaw.ai/zh-CN/gateway/health</loc></url>
   <url><loc>https://docs.openclaw.ai/zh-CN/gateway/heartbeat</loc></url>
@@ -10817,7 +10946,9 @@
   <url><loc>https://docs.openclaw.ai/zh-CN/gateway/secrets-plan-contract</loc></url>
   <url><loc>https://docs.openclaw.ai/zh-CN/gateway/security</loc></url>
   <url><loc>https://docs.openclaw.ai/zh-CN/gateway/security/audit-checks</loc></url>
+  <url><loc>https://docs.openclaw.ai/zh-CN/gateway/security/exposure-runbook</loc></url>
   <url><loc>https://docs.openclaw.ai/zh-CN/gateway/security/secure-file-operations</loc></url>
+  <url><loc>https://docs.openclaw.ai/zh-CN/gateway/security/shrinkwrap</loc></url>
   <url><loc>https://docs.openclaw.ai/zh-CN/gateway/tailscale</loc></url>
   <url><loc>https://docs.openclaw.ai/zh-CN/gateway/tools-invoke-http-api</loc></url>
   <url><loc>https://docs.openclaw.ai/zh-CN/gateway/troubleshooting</loc></url>
@@ -10863,7 +10994,10 @@
   <url><loc>https://docs.openclaw.ai/zh-CN/install/render</loc></url>
   <url><loc>https://docs.openclaw.ai/zh-CN/install/uninstall</loc></url>
   <url><loc>https://docs.openclaw.ai/zh-CN/install/updating</loc></url>
+  <url><loc>https://docs.openclaw.ai/zh-CN/install/upstash</loc></url>
   <url><loc>https://docs.openclaw.ai/zh-CN/logging</loc></url>
+  <url><loc>https://docs.openclaw.ai/zh-CN/maturity/scorecard</loc></url>
+  <url><loc>https://docs.openclaw.ai/zh-CN/maturity/taxonomy</loc></url>
   <url><loc>https://docs.openclaw.ai/zh-CN/network</loc></url>
   <url><loc>https://docs.openclaw.ai/zh-CN/nodes</loc></url>
   <url><loc>https://docs.openclaw.ai/zh-CN/nodes/audio</loc></url>
@@ -10874,12 +11008,14 @@
   <url><loc>https://docs.openclaw.ai/zh-CN/nodes/talk</loc></url>
   <url><loc>https://docs.openclaw.ai/zh-CN/nodes/troubleshooting</loc></url>
   <url><loc>https://docs.openclaw.ai/zh-CN/nodes/voicewake</loc></url>
+  <url><loc>https://docs.openclaw.ai/zh-CN/openclaw-agent-runtime</loc></url>
   <url><loc>https://docs.openclaw.ai/zh-CN/perplexity</loc></url>
   <url><loc>https://docs.openclaw.ai/zh-CN/plan/codex-context-engine-harness</loc></url>
   <url><loc>https://docs.openclaw.ai/zh-CN/plan/ui-channels</loc></url>
   <url><loc>https://docs.openclaw.ai/zh-CN/platforms</loc></url>
   <url><loc>https://docs.openclaw.ai/zh-CN/platforms/android</loc></url>
   <url><loc>https://docs.openclaw.ai/zh-CN/platforms/digitalocean</loc></url>
+  <url><loc>https://docs.openclaw.ai/zh-CN/platforms/easyrunner</loc></url>
   <url><loc>https://docs.openclaw.ai/zh-CN/platforms/ios</loc></url>
   <url><loc>https://docs.openclaw.ai/zh-CN/platforms/linux</loc></url>
   <url><loc>https://docs.openclaw.ai/zh-CN/platforms/mac/bundled-gateway</loc></url>
@@ -10904,6 +11040,7 @@
   <url><loc>https://docs.openclaw.ai/zh-CN/platforms/raspberry-pi</loc></url>
   <url><loc>https://docs.openclaw.ai/zh-CN/platforms/windows</loc></url>
   <url><loc>https://docs.openclaw.ai/zh-CN/plugins/adding-capabilities</loc></url>
+  <url><loc>https://docs.openclaw.ai/zh-CN/plugins/admin-http-rpc</loc></url>
   <url><loc>https://docs.openclaw.ai/zh-CN/plugins/agent-tools</loc></url>
   <url><loc>https://docs.openclaw.ai/zh-CN/plugins/architecture</loc></url>
   <url><loc>https://docs.openclaw.ai/zh-CN/plugins/architecture-internals</loc></url>
@@ -10918,10 +11055,12 @@
   <url><loc>https://docs.openclaw.ai/zh-CN/plugins/codex-native-plugins</loc></url>
   <url><loc>https://docs.openclaw.ai/zh-CN/plugins/community</loc></url>
   <url><loc>https://docs.openclaw.ai/zh-CN/plugins/compatibility</loc></url>
+  <url><loc>https://docs.openclaw.ai/zh-CN/plugins/copilot</loc></url>
   <url><loc>https://docs.openclaw.ai/zh-CN/plugins/dependency-resolution</loc></url>
   <url><loc>https://docs.openclaw.ai/zh-CN/plugins/google-meet</loc></url>
   <url><loc>https://docs.openclaw.ai/zh-CN/plugins/hooks</loc></url>
   <url><loc>https://docs.openclaw.ai/zh-CN/plugins/install-overrides</loc></url>
+  <url><loc>https://docs.openclaw.ai/zh-CN/plugins/llama-cpp</loc></url>
   <url><loc>https://docs.openclaw.ai/zh-CN/plugins/manage-plugins</loc></url>
   <url><loc>https://docs.openclaw.ai/zh-CN/plugins/manifest</loc></url>
   <url><loc>https://docs.openclaw.ai/zh-CN/plugins/memory-lancedb</loc></url>
@@ -10929,8 +11068,10 @@
   <url><loc>https://docs.openclaw.ai/zh-CN/plugins/message-presentation</loc></url>
   <url><loc>https://docs.openclaw.ai/zh-CN/plugins/oc-path</loc></url>
   <url><loc>https://docs.openclaw.ai/zh-CN/plugins/plugin-inventory</loc></url>
+  <url><loc>https://docs.openclaw.ai/zh-CN/plugins/plugin-permission-requests</loc></url>
   <url><loc>https://docs.openclaw.ai/zh-CN/plugins/reference</loc></url>
   <url><loc>https://docs.openclaw.ai/zh-CN/plugins/reference/acpx</loc></url>
+  <url><loc>https://docs.openclaw.ai/zh-CN/plugins/reference/admin-http-rpc</loc></url>
   <url><loc>https://docs.openclaw.ai/zh-CN/plugins/reference/alibaba</loc></url>
   <url><loc>https://docs.openclaw.ai/zh-CN/plugins/reference/amazon-bedrock</loc></url>
   <url><loc>https://docs.openclaw.ai/zh-CN/plugins/reference/amazon-bedrock-mantle</loc></url>
@@ -10948,7 +11089,10 @@
   <url><loc>https://docs.openclaw.ai/zh-CN/plugins/reference/clickclack</loc></url>
   <url><loc>https://docs.openclaw.ai/zh-CN/plugins/reference/cloudflare-ai-gateway</loc></url>
   <url><loc>https://docs.openclaw.ai/zh-CN/plugins/reference/codex</loc></url>
+  <url><loc>https://docs.openclaw.ai/zh-CN/plugins/reference/codex-supervisor</loc></url>
+  <url><loc>https://docs.openclaw.ai/zh-CN/plugins/reference/cohere</loc></url>
   <url><loc>https://docs.openclaw.ai/zh-CN/plugins/reference/comfy</loc></url>
+  <url><loc>https://docs.openclaw.ai/zh-CN/plugins/reference/copilot</loc></url>
   <url><loc>https://docs.openclaw.ai/zh-CN/plugins/reference/copilot-proxy</loc></url>
   <url><loc>https://docs.openclaw.ai/zh-CN/plugins/reference/deepgram</loc></url>
   <url><loc>https://docs.openclaw.ai/zh-CN/plugins/reference/deepinfra</loc></url>
@@ -10956,6 +11100,7 @@
   <url><loc>https://docs.openclaw.ai/zh-CN/plugins/reference/diagnostics-otel</loc></url>
   <url><loc>https://docs.openclaw.ai/zh-CN/plugins/reference/diagnostics-prometheus</loc></url>
   <url><loc>https://docs.openclaw.ai/zh-CN/plugins/reference/diffs</loc></url>
+  <url><loc>https://docs.openclaw.ai/zh-CN/plugins/reference/diffs-language-pack</loc></url>
   <url><loc>https://docs.openclaw.ai/zh-CN/plugins/reference/discord</loc></url>
   <url><loc>https://docs.openclaw.ai/zh-CN/plugins/reference/document-extract</loc></url>
   <url><loc>https://docs.openclaw.ai/zh-CN/plugins/reference/duckduckgo</loc></url>
@@ -10967,6 +11112,7 @@
   <url><loc>https://docs.openclaw.ai/zh-CN/plugins/reference/firecrawl</loc></url>
   <url><loc>https://docs.openclaw.ai/zh-CN/plugins/reference/fireworks</loc></url>
   <url><loc>https://docs.openclaw.ai/zh-CN/plugins/reference/github-copilot</loc></url>
+  <url><loc>https://docs.openclaw.ai/zh-CN/plugins/reference/gmi</loc></url>
   <url><loc>https://docs.openclaw.ai/zh-CN/plugins/reference/google</loc></url>
   <url><loc>https://docs.openclaw.ai/zh-CN/plugins/reference/google-meet</loc></url>
   <url><loc>https://docs.openclaw.ai/zh-CN/plugins/reference/googlechat</loc></url>
@@ -10980,6 +11126,7 @@
   <url><loc>https://docs.openclaw.ai/zh-CN/plugins/reference/kimi</loc></url>
   <url><loc>https://docs.openclaw.ai/zh-CN/plugins/reference/line</loc></url>
   <url><loc>https://docs.openclaw.ai/zh-CN/plugins/reference/litellm</loc></url>
+  <url><loc>https://docs.openclaw.ai/zh-CN/plugins/reference/llama-cpp</loc></url>
   <url><loc>https://docs.openclaw.ai/zh-CN/plugins/reference/llm-task</loc></url>
   <url><loc>https://docs.openclaw.ai/zh-CN/plugins/reference/lmstudio</loc></url>
   <url><loc>https://docs.openclaw.ai/zh-CN/plugins/reference/lobster</loc></url>
@@ -10998,6 +11145,7 @@
   <url><loc>https://docs.openclaw.ai/zh-CN/plugins/reference/msteams</loc></url>
   <url><loc>https://docs.openclaw.ai/zh-CN/plugins/reference/nextcloud-talk</loc></url>
   <url><loc>https://docs.openclaw.ai/zh-CN/plugins/reference/nostr</loc></url>
+  <url><loc>https://docs.openclaw.ai/zh-CN/plugins/reference/novita</loc></url>
   <url><loc>https://docs.openclaw.ai/zh-CN/plugins/reference/nvidia</loc></url>
   <url><loc>https://docs.openclaw.ai/zh-CN/plugins/reference/oc-path</loc></url>
   <url><loc>https://docs.openclaw.ai/zh-CN/plugins/reference/ollama</loc></url>
@@ -11008,18 +11156,22 @@
   <url><loc>https://docs.openclaw.ai/zh-CN/plugins/reference/openrouter</loc></url>
   <url><loc>https://docs.openclaw.ai/zh-CN/plugins/reference/openshell</loc></url>
   <url><loc>https://docs.openclaw.ai/zh-CN/plugins/reference/perplexity</loc></url>
+  <url><loc>https://docs.openclaw.ai/zh-CN/plugins/reference/pixverse</loc></url>
+  <url><loc>https://docs.openclaw.ai/zh-CN/plugins/reference/policy</loc></url>
   <url><loc>https://docs.openclaw.ai/zh-CN/plugins/reference/qa-channel</loc></url>
   <url><loc>https://docs.openclaw.ai/zh-CN/plugins/reference/qa-lab</loc></url>
   <url><loc>https://docs.openclaw.ai/zh-CN/plugins/reference/qa-matrix</loc></url>
   <url><loc>https://docs.openclaw.ai/zh-CN/plugins/reference/qianfan</loc></url>
   <url><loc>https://docs.openclaw.ai/zh-CN/plugins/reference/qqbot</loc></url>
   <url><loc>https://docs.openclaw.ai/zh-CN/plugins/reference/qwen</loc></url>
+  <url><loc>https://docs.openclaw.ai/zh-CN/plugins/reference/raft</loc></url>
   <url><loc>https://docs.openclaw.ai/zh-CN/plugins/reference/runway</loc></url>
   <url><loc>https://docs.openclaw.ai/zh-CN/plugins/reference/searxng</loc></url>
   <url><loc>https://docs.openclaw.ai/zh-CN/plugins/reference/senseaudio</loc></url>
   <url><loc>https://docs.openclaw.ai/zh-CN/plugins/reference/sglang</loc></url>
   <url><loc>https://docs.openclaw.ai/zh-CN/plugins/reference/signal</loc></url>
   <url><loc>https://docs.openclaw.ai/zh-CN/plugins/reference/slack</loc></url>
+  <url><loc>https://docs.openclaw.ai/zh-CN/plugins/reference/sms</loc></url>
   <url><loc>https://docs.openclaw.ai/zh-CN/plugins/reference/stepfun</loc></url>
   <url><loc>https://docs.openclaw.ai/zh-CN/plugins/reference/synology-chat</loc></url>
   <url><loc>https://docs.openclaw.ai/zh-CN/plugins/reference/synthetic</loc></url>
@@ -11041,14 +11193,17 @@
   <url><loc>https://docs.openclaw.ai/zh-CN/plugins/reference/web-readability</loc></url>
   <url><loc>https://docs.openclaw.ai/zh-CN/plugins/reference/webhooks</loc></url>
   <url><loc>https://docs.openclaw.ai/zh-CN/plugins/reference/whatsapp</loc></url>
+  <url><loc>https://docs.openclaw.ai/zh-CN/plugins/reference/workboard</loc></url>
   <url><loc>https://docs.openclaw.ai/zh-CN/plugins/reference/xai</loc></url>
   <url><loc>https://docs.openclaw.ai/zh-CN/plugins/reference/xiaomi</loc></url>
   <url><loc>https://docs.openclaw.ai/zh-CN/plugins/reference/zai</loc></url>
   <url><loc>https://docs.openclaw.ai/zh-CN/plugins/reference/zalo</loc></url>
   <url><loc>https://docs.openclaw.ai/zh-CN/plugins/reference/zalouser</loc></url>
   <url><loc>https://docs.openclaw.ai/zh-CN/plugins/sdk-agent-harness</loc></url>
+  <url><loc>https://docs.openclaw.ai/zh-CN/plugins/sdk-channel-inbound</loc></url>
   <url><loc>https://docs.openclaw.ai/zh-CN/plugins/sdk-channel-ingress</loc></url>
   <url><loc>https://docs.openclaw.ai/zh-CN/plugins/sdk-channel-message</loc></url>
+  <url><loc>https://docs.openclaw.ai/zh-CN/plugins/sdk-channel-outbound</loc></url>
   <url><loc>https://docs.openclaw.ai/zh-CN/plugins/sdk-channel-plugins</loc></url>
   <url><loc>https://docs.openclaw.ai/zh-CN/plugins/sdk-channel-turn</loc></url>
   <url><loc>https://docs.openclaw.ai/zh-CN/plugins/sdk-entrypoints</loc></url>
@@ -11059,8 +11214,10 @@
   <url><loc>https://docs.openclaw.ai/zh-CN/plugins/sdk-setup</loc></url>
   <url><loc>https://docs.openclaw.ai/zh-CN/plugins/sdk-subpaths</loc></url>
   <url><loc>https://docs.openclaw.ai/zh-CN/plugins/sdk-testing</loc></url>
+  <url><loc>https://docs.openclaw.ai/zh-CN/plugins/tool-plugins</loc></url>
   <url><loc>https://docs.openclaw.ai/zh-CN/plugins/voice-call</loc></url>
   <url><loc>https://docs.openclaw.ai/zh-CN/plugins/webhooks</loc></url>
+  <url><loc>https://docs.openclaw.ai/zh-CN/plugins/workboard</loc></url>
   <url><loc>https://docs.openclaw.ai/zh-CN/plugins/zalouser</loc></url>
   <url><loc>https://docs.openclaw.ai/zh-CN/prose</loc></url>
   <url><loc>https://docs.openclaw.ai/zh-CN/providers</loc></url>
@@ -11074,14 +11231,17 @@
   <url><loc>https://docs.openclaw.ai/zh-CN/providers/chutes</loc></url>
   <url><loc>https://docs.openclaw.ai/zh-CN/providers/claude-max-api-proxy</loc></url>
   <url><loc>https://docs.openclaw.ai/zh-CN/providers/cloudflare-ai-gateway</loc></url>
+  <url><loc>https://docs.openclaw.ai/zh-CN/providers/cohere</loc></url>
   <url><loc>https://docs.openclaw.ai/zh-CN/providers/comfy</loc></url>
   <url><loc>https://docs.openclaw.ai/zh-CN/providers/deepgram</loc></url>
   <url><loc>https://docs.openclaw.ai/zh-CN/providers/deepinfra</loc></url>
   <url><loc>https://docs.openclaw.ai/zh-CN/providers/deepseek</loc></url>
+  <url><loc>https://docs.openclaw.ai/zh-CN/providers/ds4</loc></url>
   <url><loc>https://docs.openclaw.ai/zh-CN/providers/elevenlabs</loc></url>
   <url><loc>https://docs.openclaw.ai/zh-CN/providers/fal</loc></url>
   <url><loc>https://docs.openclaw.ai/zh-CN/providers/fireworks</loc></url>
   <url><loc>https://docs.openclaw.ai/zh-CN/providers/github-copilot</loc></url>
+  <url><loc>https://docs.openclaw.ai/zh-CN/providers/gmi</loc></url>
   <url><loc>https://docs.openclaw.ai/zh-CN/providers/google</loc></url>
   <url><loc>https://docs.openclaw.ai/zh-CN/providers/gradium</loc></url>
   <url><loc>https://docs.openclaw.ai/zh-CN/providers/groq</loc></url>
@@ -11095,15 +11255,19 @@
   <url><loc>https://docs.openclaw.ai/zh-CN/providers/mistral</loc></url>
   <url><loc>https://docs.openclaw.ai/zh-CN/providers/models</loc></url>
   <url><loc>https://docs.openclaw.ai/zh-CN/providers/moonshot</loc></url>
+  <url><loc>https://docs.openclaw.ai/zh-CN/providers/novita</loc></url>
   <url><loc>https://docs.openclaw.ai/zh-CN/providers/nvidia</loc></url>
   <url><loc>https://docs.openclaw.ai/zh-CN/providers/ollama</loc></url>
+  <url><loc>https://docs.openclaw.ai/zh-CN/providers/ollama-cloud</loc></url>
   <url><loc>https://docs.openclaw.ai/zh-CN/providers/openai</loc></url>
   <url><loc>https://docs.openclaw.ai/zh-CN/providers/opencode</loc></url>
   <url><loc>https://docs.openclaw.ai/zh-CN/providers/opencode-go</loc></url>
   <url><loc>https://docs.openclaw.ai/zh-CN/providers/openrouter</loc></url>
   <url><loc>https://docs.openclaw.ai/zh-CN/providers/perplexity-provider</loc></url>
+  <url><loc>https://docs.openclaw.ai/zh-CN/providers/pixverse</loc></url>
   <url><loc>https://docs.openclaw.ai/zh-CN/providers/qianfan</loc></url>
   <url><loc>https://docs.openclaw.ai/zh-CN/providers/qwen</loc></url>
+  <url><loc>https://docs.openclaw.ai/zh-CN/providers/qwen-oauth</loc></url>
   <url><loc>https://docs.openclaw.ai/zh-CN/providers/runway</loc></url>
   <url><loc>https://docs.openclaw.ai/zh-CN/providers/senseaudio</loc></url>
   <url><loc>https://docs.openclaw.ai/zh-CN/providers/sglang</loc></url>
@@ -11122,18 +11286,22 @@
   <url><loc>https://docs.openclaw.ai/zh-CN/refactor/access</loc></url>
   <url><loc>https://docs.openclaw.ai/zh-CN/refactor/acp</loc></url>
   <url><loc>https://docs.openclaw.ai/zh-CN/refactor/canvas</loc></url>
+  <url><loc>https://docs.openclaw.ai/zh-CN/refactor/database-first</loc></url>
   <url><loc>https://docs.openclaw.ai/zh-CN/refactor/ingress-core</loc></url>
   <url><loc>https://docs.openclaw.ai/zh-CN/reference/AGENTS.default</loc></url>
   <url><loc>https://docs.openclaw.ai/zh-CN/reference/api-usage-costs</loc></url>
   <url><loc>https://docs.openclaw.ai/zh-CN/reference/application-modernization-plan</loc></url>
+  <url><loc>https://docs.openclaw.ai/zh-CN/reference/code-mode</loc></url>
   <url><loc>https://docs.openclaw.ai/zh-CN/reference/credits</loc></url>
   <url><loc>https://docs.openclaw.ai/zh-CN/reference/device-models</loc></url>
   <url><loc>https://docs.openclaw.ai/zh-CN/reference/full-release-validation</loc></url>
   <url><loc>https://docs.openclaw.ai/zh-CN/reference/memory-config</loc></url>
   <url><loc>https://docs.openclaw.ai/zh-CN/reference/prompt-caching</loc></url>
+  <url><loc>https://docs.openclaw.ai/zh-CN/reference/release-performance-sweep</loc></url>
   <url><loc>https://docs.openclaw.ai/zh-CN/reference/RELEASING</loc></url>
   <url><loc>https://docs.openclaw.ai/zh-CN/reference/rich-output-protocol</loc></url>
   <url><loc>https://docs.openclaw.ai/zh-CN/reference/rpc</loc></url>
+  <url><loc>https://docs.openclaw.ai/zh-CN/reference/secret-placeholder-conventions</loc></url>
   <url><loc>https://docs.openclaw.ai/zh-CN/reference/secretref-credential-surface</loc></url>
   <url><loc>https://docs.openclaw.ai/zh-CN/reference/session-management-compaction</loc></url>
   <url><loc>https://docs.openclaw.ai/zh-CN/reference/templates/AGENTS.dev</loc></url>
@@ -11158,6 +11326,7 @@
   <url><loc>https://docs.openclaw.ai/zh-CN/security/incident-response</loc></url>
   <url><loc>https://docs.openclaw.ai/zh-CN/security/network-proxy</loc></url>
   <url><loc>https://docs.openclaw.ai/zh-CN/security/THREAT-MODEL-ATLAS</loc></url>
+  <url><loc>https://docs.openclaw.ai/zh-CN/specs/claw-supervisor</loc></url>
   <url><loc>https://docs.openclaw.ai/zh-CN/start/bootstrapping</loc></url>
   <url><loc>https://docs.openclaw.ai/zh-CN/start/docs-directory</loc></url>
   <url><loc>https://docs.openclaw.ai/zh-CN/start/getting-started</loc></url>
@@ -11197,6 +11366,7 @@
   <url><loc>https://docs.openclaw.ai/zh-CN/tools/exec-approvals-advanced</loc></url>
   <url><loc>https://docs.openclaw.ai/zh-CN/tools/firecrawl</loc></url>
   <url><loc>https://docs.openclaw.ai/zh-CN/tools/gemini-search</loc></url>
+  <url><loc>https://docs.openclaw.ai/zh-CN/tools/goal</loc></url>
   <url><loc>https://docs.openclaw.ai/zh-CN/tools/grok-search</loc></url>
   <url><loc>https://docs.openclaw.ai/zh-CN/tools/image-generation</loc></url>
   <url><loc>https://docs.openclaw.ai/zh-CN/tools/kimi-search</loc></url>
@@ -11208,11 +11378,14 @@
   <url><loc>https://docs.openclaw.ai/zh-CN/tools/multi-agent-sandbox-tools</loc></url>
   <url><loc>https://docs.openclaw.ai/zh-CN/tools/music-generation</loc></url>
   <url><loc>https://docs.openclaw.ai/zh-CN/tools/ollama-search</loc></url>
+  <url><loc>https://docs.openclaw.ai/zh-CN/tools/parallel-search</loc></url>
   <url><loc>https://docs.openclaw.ai/zh-CN/tools/pdf</loc></url>
+  <url><loc>https://docs.openclaw.ai/zh-CN/tools/permission-modes</loc></url>
   <url><loc>https://docs.openclaw.ai/zh-CN/tools/perplexity-search</loc></url>
   <url><loc>https://docs.openclaw.ai/zh-CN/tools/plugin</loc></url>
   <url><loc>https://docs.openclaw.ai/zh-CN/tools/reactions</loc></url>
   <url><loc>https://docs.openclaw.ai/zh-CN/tools/searxng-search</loc></url>
+  <url><loc>https://docs.openclaw.ai/zh-CN/tools/skill-workshop</loc></url>
   <url><loc>https://docs.openclaw.ai/zh-CN/tools/skills</loc></url>
   <url><loc>https://docs.openclaw.ai/zh-CN/tools/skills-config</loc></url>
   <url><loc>https://docs.openclaw.ai/zh-CN/tools/slash-commands</loc></url>

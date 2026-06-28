@@ -1,7 +1,7 @@
 import { useMemo, useState } from 'react'
 import type { ReactNode } from 'react'
 import { useNexusStore } from '../../store/nexusStore'
-import type { DurationMode, DurationUnit, ThinkingLevel } from '../../types/nexus'
+import type { DurationMode, DurationUnit, FastModeDefault, ThinkingLevel } from '../../types/nexus'
 import {
   DEFAULT_UI_SETTINGS,
   UI_SETTINGS_STORAGE_KEY,
@@ -90,6 +90,7 @@ export function SettingsPanel() {
   const [heartbeatSeconds, setHeartbeatSeconds] = useState(() => Math.max(5, Math.round(((firstTarget?.heartbeat.tickIntervalMs || 30_000) / 1000))))
   const [timeoutMinutes, setTimeoutMinutes] = useState(() => Math.max(1, Math.round(((firstTarget?.runtimePolicy?.timeoutSeconds || 720) / 60))))
   const [thinkingDefault, setThinkingDefault] = useState<ThinkingLevel>(() => firstTarget?.runtimePolicy?.thinkingDefault || 'minimal')
+  const [fastModeDefault, setFastModeDefault] = useState<FastModeDefault>(() => firstTarget?.runtimePolicy?.fastModeDefault || 'auto')
   const [parallelPreferred, setParallelPreferred] = useState(() => Boolean(firstTarget?.runtimePolicy?.parallelPreferred))
   const [notice, setNotice] = useState<{ tone: NoticeTone; text: string }>({ tone: 'neutral', text: 'Settings are wired to local UI preferences, mission defaults, and active party runtime policies.' })
 
@@ -107,7 +108,7 @@ export function SettingsPanel() {
     saveUiSettings(DEFAULT_UI_SETTINGS)
     applyUiSettings(DEFAULT_UI_SETTINGS)
     setUiSettings(DEFAULT_UI_SETTINGS)
-    setNotice({ tone: 'success', text: 'UI settings reset to the no-blue graphite default.' })
+    setNotice({ tone: 'success', text: 'UI settings reset to the reference cyan default.' })
   }
 
   const clearLocalUiPrefs = () => {
@@ -131,7 +132,7 @@ export function SettingsPanel() {
     const timeoutSeconds = Math.max(1, Math.round(timeoutMinutes)) * 60
     for (const id of targetIds) {
       updateHeartbeat(id, { tickIntervalMs })
-      updateAgentRuntimePolicy(id, { timeoutSeconds, thinkingDefault, parallelPreferred })
+      updateAgentRuntimePolicy(id, { timeoutSeconds, thinkingDefault, fastModeDefault, parallelPreferred })
     }
     setNotice({ tone: 'success', text: `Runtime defaults applied to ${targetIds.length} agent${targetIds.length === 1 ? '' : 's'}.` })
   }
@@ -151,13 +152,13 @@ export function SettingsPanel() {
       </div>
 
       <div className="dui-settings-grid">
-        <SettingsCard eyebrow="Appearance" title="No-blue UI chrome">
-          <Field label="Accent mode" hint="No-blue is the default and purges blue form chrome.">
+        <SettingsCard eyebrow="Appearance" title="Theme chrome">
+          <Field label="Accent mode" hint="Reference cyan keeps the shell and party surfaces in the blue theme.">
             <select value={uiSettings.accentMode} onChange={(event) => updateUiSetting('accentMode', event.target.value as UiAccentMode)}>
+              <option value="reference">Reference cyan</option>
               <option value="no-blue">No blue graphite</option>
               <option value="ember">Amber operations</option>
               <option value="green">Green terminal</option>
-              <option value="reference">Reference cyan</option>
             </select>
           </Field>
           <Field label="Form chrome" hint="Controls inputs, selects, search bars, and composers.">
@@ -237,6 +238,13 @@ export function SettingsPanel() {
               <option value="low">Low</option>
               <option value="medium">Medium</option>
               <option value="high">High</option>
+            </select>
+          </Field>
+          <Field label="Fast mode">
+            <select value={fastModeDefault} onChange={(event) => setFastModeDefault(event.target.value as FastModeDefault)}>
+              <option value="auto">Auto</option>
+              <option value="on">On</option>
+              <option value="off">Off</option>
             </select>
           </Field>
           <ToggleField label="Parallel preferred" hint="Hints agents toward parallel execution where supported." checked={parallelPreferred} onChange={setParallelPreferred} />

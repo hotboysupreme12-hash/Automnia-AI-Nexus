@@ -1,6 +1,6 @@
 # DystopAI Core Production Hardening Ledger
 
-Last updated: 2026-06-25
+Last updated: 2026-06-27
 
 Automation: `dystopai-production-hardening`
 
@@ -23,6 +23,24 @@ Automation: `dystopai-production-hardening`
 - No existing production-hardening ledger was found.
 
 ## Completed
+
+### 2026-06-27
+
+- Upgraded the vendored OpenClaw runtime baseline from `openclaw@2026.6.6` to `openclaw@2026.6.10`.
+- Verified the current npm stable package metadata:
+  - Tarball: `https://registry.npmjs.org/openclaw/-/openclaw-2026.6.10.tgz`
+  - Integrity: `sha512-LcooND2tBQw8A+kc1Ujltu3lg30bJ0w7XaeRy7eYzobb8BBdcW6DOGbwJL4vpj1vl9+gjRceOtlh5nh9OARcug==`
+- Re-synced the local OpenClaw documentation mirror from `https://docs.openclaw.ai`; the snapshot now contains 693 pages and deletes stale local pages before each refresh.
+- Updated `scripts/prepare-openclaw-vendor.cjs` to pin the 2026.6.10 tarball/integrity and tolerate the published package's production-scoped shrinkwrap mismatch by falling back to an install that preserves `npm-shrinkwrap.json`, then validates required runtime package versions.
+- Updated the runtime recommendation constant to `2026.6.10`.
+- Wired OpenClaw 2026.6.10 auto-fast support end to end:
+  - `runtime.fastModeDefault` is persisted in local agent config.
+  - Agent projection writes `agents.list[].fastModeDefault`.
+  - Gateway `chat.send` receives one-turn `fastMode` for auto/on modes.
+  - Fast-capable model allowlist entries get `params.fastMode: "auto"` and `params.fastAutoOnSeconds: 60` unless already customized.
+  - Settings can apply Auto/On/Off fast-mode defaults to active agents.
+  - Runtime optimization status reports fast-mode coverage.
+- Updated `docs/OPENCLAW_BETA_OPTIMIZATION_GUIDE.md` with the 2026.6.10 delta, docs sync evidence, and DystopAI wiring notes.
 
 ### 2026-06-24
 

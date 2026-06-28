@@ -1,15 +1,39 @@
-# OpenClaw 2026.6.6 Stable Upgrade Notes
+# OpenClaw 2026.6.10 Stable Upgrade Notes
 
 Date prepared: 2026-06-04
-Last updated for stable: 2026-06-12
+Last updated for stable: 2026-06-27
 
-Baseline: this guide now tracks the app's stable upgrade from the previous vendored OpenClaw `2026.6.5` runtime to OpenClaw `2026.6.6`. Older beta optimization notes remain below where they still describe durable runtime, Gateway, cron, plugin, and recovery work that is relevant to the stable release.
+Baseline: this guide now tracks the app's stable upgrade from the previous vendored OpenClaw `2026.6.6` runtime to OpenClaw `2026.6.10`. Older optimization notes remain below where they still describe durable runtime, Gateway, cron, plugin, and recovery work that is relevant to the stable release.
 
 Source release notes:
 
-- Stable release reviewed: https://github.com/openclaw/openclaw/releases/tag/v2026.6.6
+- Stable release reviewed: https://github.com/openclaw/openclaw/releases/tag/v2026.6.10
 - GitHub releases page: https://github.com/openclaw/openclaw/releases/
-- npm package verified: https://www.npmjs.com/package/openclaw/v/2026.6.6
+- npm package verified: https://www.npmjs.com/package/openclaw/v/2026.6.10
+- Registry tarball: https://registry.npmjs.org/openclaw/-/openclaw-2026.6.10.tgz
+- npm integrity: `sha512-LcooND2tBQw8A+kc1Ujltu3lg30bJ0w7XaeRy7eYzobb8BBdcW6DOGbwJL4vpj1vl9+gjRceOtlh5nh9OARcug==`
+- Docs mirror: `docs/openclaw-latest` synced from https://docs.openclaw.ai on 2026-06-27, 693 pages.
+
+## 2026.6.10 Stable Runtime Delta
+
+OpenClaw `2026.6.10` is a stability and policy release on top of the 2026.6 runtime line. The changes that matter most to DystopAI are:
+
+- Automatic fast mode: `/fast auto`, `chat.send.fastMode: "auto"`, per-agent `fastModeDefault`, and per-model `params.fastMode` can start short calls in fast mode, then return retry/fallback/tool-continuation work to normal mode after the cutoff.
+- Provider routing and reasoning: Zhipu/GLM overloads now fail over for the right reason; Z.ai GLM-5 models stay on Z.AI instead of falling through to OpenAI; GLM-5.2 exposes richer thinking levels; Kimi K2.7 Code and GLM-5.2 are refreshed in catalogs.
+- Provider onboarding: selected provider plugins should continue credential setup instead of falling back to OpenAI after install.
+- Sessions and transcripts: plugins get a durable transcript SDK contract, and cross-channel direct-message sessions reset identity correctly after channel switches.
+- Gateway trust and package safety: trusted tool policy is re-applied when extension sets change, and trusted package redirects avoid forwarding bearer tokens across origins.
+- Ops hardening: Docker/Podman setup timeouts, Codex service-tier clearing, StepFun discovery, and doctor check ordering were tightened.
+
+## DystopAI 2026.6.10 Wiring
+
+- Vendored runtime is now `openclaw@2026.6.10`, with the registry tarball and npm integrity pinned in `scripts/prepare-openclaw-vendor.cjs`.
+- The vendor preparer handles the published package's production-scoped shrinkwrap mismatch by trying `npm ci --omit=dev` first, then falling back to an install that preserves `npm-shrinkwrap.json` and validates required runtime package versions.
+- Runtime version checks now recommend `2026.6.10`.
+- OpenClaw docs are fully re-synced from `docs.openclaw.ai`; stale mirrored pages are removed before sync so deleted upstream docs do not linger locally.
+- Control Center agents now persist `runtime.fastModeDefault`, project it into OpenClaw `agents.list[].fastModeDefault`, and send one-turn Gateway `chat.send.fastMode` for auto/on modes.
+- Fast-capable model allowlist entries for OpenAI, OpenAI Codex, Anthropic, xAI, and MiniMax receive `params.fastMode: "auto"` and `params.fastAutoOnSeconds: 60` unless already customized.
+- Runtime Monitor optimization status now reports fast-mode defaults alongside context pruning, session, and memory status.
 
 ## 2026.6.6 Stable Chat Compatibility Notes
 

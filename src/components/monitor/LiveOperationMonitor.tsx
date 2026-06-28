@@ -253,7 +253,15 @@ function useHealthHistory(health: HealthSnapshotInput): HealthSnapshot[] {
   const [history, setHistory] = useState<HealthSnapshot[]>(() => seedHealthHistory(health))
 
   useEffect(() => {
-    latestRef.current = normalizeHealthSnapshot(health)
+    const latest = normalizeHealthSnapshot(health)
+    latestRef.current = latest
+    const resetTimer = window.setTimeout(() => setHistory((previous) => {
+      const prior = previous[previous.length - 1]
+      const priorHasSignal = Boolean(prior && (prior.runtime || prior.stability || prior.efficiency || prior.failedTurns))
+      const latestHasSignal = Boolean(latest.runtime || latest.stability || latest.efficiency || latest.failedTurns)
+      return !priorHasSignal && latestHasSignal ? seedHealthHistory(latest) : previous
+    }), 0)
+    return () => window.clearTimeout(resetTimer)
   }, [health])
 
   useEffect(() => {
@@ -351,22 +359,21 @@ function runtimeStatusHealth(status: RuntimeStatus | null): HealthSnapshotInput 
   }
 }
 
-function pulseOffset(index: number, pulse: number, scaleMax: number, value: number): number {
+function pulseOffset(index: number, pulse: number, scaleMax: number): number {
   if (pulse <= 0) return 0
-  const phase = index % 8
-  const wave = phase === 2 ? 1 : phase === 3 ? -0.32 : phase === 4 ? 0.62 : phase === 5 ? -0.18 : 0
+  const phase = index % 12
+  const wave = phase === 3 ? 1 : phase === 4 ? -0.58 : phase === 5 ? 0.32 : phase === 6 ? -0.12 : 0
   if (!wave) return 0
-  const amplitude = scaleMax * (0.055 + ((Math.min(100, pulse) / 100) * 0.19))
-  const direction = value > scaleMax * 0.8 ? -1 : 1
-  return wave * amplitude * direction
+  const amplitude = scaleMax * (0.04 + ((Math.min(100, pulse) / 100) * 0.105))
+  return wave * amplitude
 }
 
-function smoothPath(points: SparklinePoint[]): string {
+function angularPath(points: SparklinePoint[]): string {
   if (!points.length) return ''
   return points.slice(1).reduce((path, point, index) => {
     const previous = points[index]
-    const midX = (previous.x + point.x) / 2
-    return `${path} C ${midX.toFixed(1)} ${previous.y.toFixed(1)}, ${midX.toFixed(1)} ${point.y.toFixed(1)}, ${point.x.toFixed(1)} ${point.y.toFixed(1)}`
+    if (Math.abs(previous.y - point.y) < 0.15) return `${path} H ${point.x.toFixed(1)}`
+    return `${path} L ${point.x.toFixed(1)} ${point.y.toFixed(1)}`
   }, `M ${points[0].x.toFixed(1)} ${points[0].y.toFixed(1)}`)
 }
 
@@ -375,25 +382,52 @@ function buildSparklineShape(values: number[], maxValue: number, pulseValues: nu
   const xRange = SPARKLINE_RIGHT - SPARKLINE_LEFT
   const yRange = SPARKLINE_BOTTOM - SPARKLINE_TOP
   const scaleMax = Math.max(1, maxValue)
+  const displayValues = samples.map((rawValue, index) => {
+    const value = Math.max(0, Math.min(scaleMax, Number.isFinite(rawValue) ? rawValue : 0))
+    const rawPulse = Math.max(0, Math.min(100, Number.isFinite(pulseValues[index]) ? pulseValues[index] : 0))
+    const pulse = Math.max(rawPulse, value > 0 ? 32 : 0)
+    return Math.max(0, Math.min(scaleMax, value + pulseOffset(index, pulse, scaleMax)))
+  })
+  const low = Math.min(...displayValues)
+  const high = Math.max(...displayValues)
+  const domainPadding = scaleMax * 0.045
+  const minDomainSpan = scaleMax <= 10 ? Math.max(1.75, scaleMax * 0.45) : Math.max(18, scaleMax * 0.16)
+  let domainMin = low - domainPadding
+  let domainMax = high + domainPadding
+  if (domainMax - domainMin < minDomainSpan) {
+    const center = (domainMin + domainMax) / 2
+    domainMin = center - (minDomainSpan / 2)
+    domainMax = center + (minDomainSpan / 2)
+  }
+  if (domainMin < 0) {
+    domainMax = Math.min(scaleMax, domainMax - domainMin)
+    domainMin = 0
+  }
+  if (domainMax > scaleMax) {
+    domainMin = Math.max(0, domainMin - (domainMax - scaleMax))
+    domainMax = scaleMax
+  }
+  const domainSpan = Math.max(1, domainMax - domainMin)
   const points = samples.map((rawValue, index) => {
     const value = Math.max(0, Math.min(scaleMax, Number.isFinite(rawValue) ? rawValue : 0))
-    const pulse = Math.max(0, Math.min(100, Number.isFinite(pulseValues[index]) ? pulseValues[index] : 0))
-    const displayValue = Math.max(0, Math.min(scaleMax, value + pulseOffset(index, pulse, scaleMax, value)))
+    const rawPulse = Math.max(0, Math.min(100, Number.isFinite(pulseValues[index]) ? pulseValues[index] : 0))
+    const pulse = Math.max(rawPulse, value > 0 ? 32 : 0)
+    const displayValue = displayValues[index]
     const x = SPARKLINE_LEFT + ((index / (samples.length - 1)) * xRange)
-    const y = SPARKLINE_BOTTOM - ((displayValue / scaleMax) * yRange)
+    const y = SPARKLINE_BOTTOM - (((displayValue - domainMin) / domainSpan) * yRange)
     return { x, y, value, pulse }
   })
-  const linePath = smoothPath(points)
+  const linePath = angularPath(points)
   const first = points[0]
   const last = points[points.length - 1]
   const areaPath = `${linePath} L ${last.x.toFixed(1)} ${SPARKLINE_BOTTOM} L ${first.x.toFixed(1)} ${SPARKLINE_BOTTOM} Z`
   const markerIndexes = new Set<number>([points.length - 1])
   points.forEach((point, index) => {
     const previous = points[index - 1]
-    if (point.pulse >= 55 && index % 2 === 0) markerIndexes.add(index)
-    if (previous && Math.abs(point.value - previous.value) >= scaleMax * 0.08) markerIndexes.add(index)
+    if (point.pulse >= 65 && index % 12 === 3) markerIndexes.add(index)
+    if (previous && Math.abs(point.value - previous.value) >= scaleMax * 0.11) markerIndexes.add(index)
   })
-  const markers = Array.from(markerIndexes).sort((a, b) => a - b).slice(-9).map((index) => points[index])
+  const markers = Array.from(markerIndexes).sort((a, b) => a - b).slice(-5).map((index) => points[index])
   return { linePath, areaPath, markers }
 }
 
@@ -449,8 +483,9 @@ function Sparkline({ values, pulseValues, maxValue = 100 }: { values: number[]; 
           <stop offset="100%" stopColor="currentColor" stopOpacity="0.02" />
         </linearGradient>
       </defs>
-      <path className="dy-health-sparkline-grid" d="M6 12.5H166M6 24.5H166M6 36.5H166" />
+      <path className="dy-health-sparkline-grid" d="M6 24.5H166" />
       <path className="dy-health-sparkline-area" d={shape.areaPath} fill={`url(#${gradientId}-fill)`} />
+      <path className="dy-health-sparkline-glow" d={shape.linePath} />
       <path className="dy-health-sparkline-line" d={shape.linePath} />
       {shape.markers.map((point, index) => (
         <circle key={`${point.x.toFixed(1)}-${index}`} className="dy-health-sparkline-dot" cx={point.x} cy={point.y} r={point.pulse >= 55 ? 1.8 : 1.25} />
@@ -493,25 +528,51 @@ function HealthCard({
 }
 
 function MonitorHealthGrid({ health }: { health: HealthSnapshotInput }) {
-  const healthHistory = useHealthHistory(health)
-  const healthSeries = useMemo(() => ({
-    runtime: healthHistory.map((snapshot) => snapshot.runtime),
-    stability: healthHistory.map((snapshot) => snapshot.stability),
-    efficiency: healthHistory.map((snapshot) => snapshot.efficiency),
-    failedTurns: healthHistory.map((snapshot) => snapshot.failedTurns),
-    runtimePulse: healthHistory.map((snapshot) => snapshot.runtimePulse),
-    stabilityPulse: healthHistory.map((snapshot) => snapshot.stabilityPulse),
-    efficiencyPulse: healthHistory.map((snapshot) => snapshot.efficiencyPulse),
-    failurePulse: healthHistory.map((snapshot) => snapshot.failurePulse),
-  }), [healthHistory])
-  const failedScaleMax = failedSparklineMax(healthSeries.failedTurns)
+  const history = useHealthHistory(health)
+  const latest = normalizeHealthSnapshot(health)
+  const runtimeSeries = history.map((snapshot) => snapshot.runtime)
+  const stabilitySeries = history.map((snapshot) => snapshot.stability)
+  const efficiencySeries = history.map((snapshot) => snapshot.efficiency)
+  const failedSeries = history.map((snapshot) => snapshot.failedTurns)
 
   return (
-    <div className="dy-monitor-health-grid mt-4 grid gap-3 sm:grid-cols-4">
-      <HealthCard icon="runtime" label="Runtime" value={health.runtime} tone="cyan" series={healthSeries.runtime} pulseSeries={healthSeries.runtimePulse} />
-      <HealthCard icon="stability" label="Stability" value={health.stability} tone="emerald" series={healthSeries.stability} pulseSeries={healthSeries.stabilityPulse} />
-      <HealthCard icon="efficiency" label="Efficiency" value={health.efficiency} suffix="%" tone="cyan" series={healthSeries.efficiency} pulseSeries={healthSeries.efficiencyPulse} />
-      <HealthCard icon="failed" label="Failed" value={health.failedTurns} tone="rose" series={healthSeries.failedTurns} pulseSeries={healthSeries.failurePulse} scaleMax={failedScaleMax} />
+    <div className="dy-monitor-health-grid grid gap-3 md:grid-cols-2 xl:grid-cols-4">
+      <HealthCard
+        icon="runtime"
+        label="Runtime"
+        value={latest.runtime}
+        suffix="%"
+        tone="cyan"
+        series={runtimeSeries}
+        pulseSeries={history.map((snapshot) => snapshot.runtimePulse)}
+      />
+      <HealthCard
+        icon="stability"
+        label="Stability"
+        value={latest.stability}
+        suffix="%"
+        tone="emerald"
+        series={stabilitySeries}
+        pulseSeries={history.map((snapshot) => snapshot.stabilityPulse)}
+      />
+      <HealthCard
+        icon="efficiency"
+        label="Efficiency"
+        value={latest.efficiency}
+        suffix="%"
+        tone="amber"
+        series={efficiencySeries}
+        pulseSeries={history.map((snapshot) => snapshot.efficiencyPulse)}
+      />
+      <HealthCard
+        icon="failed"
+        label="Failed Turns"
+        value={latest.failedTurns}
+        tone="rose"
+        series={failedSeries}
+        pulseSeries={history.map((snapshot) => snapshot.failurePulse)}
+        scaleMax={failedSparklineMax(failedSeries)}
+      />
     </div>
   )
 }
@@ -1850,8 +1911,8 @@ export function LiveOperationMonitor() {
                 </div>
                 <div className="grid gap-3 md:grid-cols-4">
                   <MetricBar label="Efficiency" value={liveMetricsByAgent.get(agent.id)?.efficiency || 0} />
-                  <MetricBar label="Runtime" value={liveMetricsByAgent.get(agent.id)?.runtime || 0} tone="emerald" />
-                  <MetricBar label="Stability" value={liveMetricsByAgent.get(agent.id)?.stability || 0} tone="amber" />
+                  <MetricBar label="Runtime" value={liveMetricsByAgent.get(agent.id)?.runtime || 0} />
+                  <MetricBar label="Stability" value={liveMetricsByAgent.get(agent.id)?.stability || 0} />
                   <MetricBar label="Success" value={liveMetricsByAgent.get(agent.id)?.successRate || 0} />
                 </div>
               </div>

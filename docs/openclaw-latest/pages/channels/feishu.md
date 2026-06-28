@@ -25,7 +25,7 @@ Requires OpenClaw 2026.5.29 or above. Run `openclaw --version` to check. Upgrade
   ```
   Choose manual setup to paste an App ID and App Secret from Feishu Open Platform, or choose QR setup to create a bot automatically. If the domestic Feishu mobile app does not react to the QR code, rerun setup and choose manual setup.
   </Step>
-  
+
   <Step title="After setup completes, restart the gateway to apply the changes">
   ```bash
   openclaw gateway restart

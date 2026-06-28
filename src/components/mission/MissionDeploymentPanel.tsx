@@ -242,7 +242,7 @@ const MISSION_TYPES: Array<{ id: CapabilityKey; label: string; hint: string; det
   { id: 'codeGeneration', label: 'Build', hint: 'Patch code', detail: 'Implementation lanes claim files, edit, verify, and report exact changes.', icon: 'build', accent: 'code' },
   { id: 'planning', label: 'Plan', hint: 'Scope work', detail: 'Commander turns objectives into owned lanes, dependencies, risks, and success checks.', icon: 'plan', accent: 'plan' },
   { id: 'research', label: 'Research', hint: 'Find truth', detail: 'Researchers gather facts, cite constraints, name unknowns, and feed decisions.', icon: 'research', accent: 'research' },
-  { id: 'orchestration', label: 'Command', hint: 'Delegate', detail: 'Slot 1 drives task routing, handoffs, blocker resolution, and final synthesis.', icon: 'command', accent: 'command' },
+  { id: 'orchestration', label: 'Command', hint: 'Delegate', detail: '', icon: 'command', accent: 'command' },
   { id: 'memoryManagement', label: 'Memory', hint: 'Learn', detail: 'Agents update durable notes, skill libraries, and continuity files.', icon: 'memory', accent: 'memory' },
 ]
 
@@ -597,8 +597,8 @@ export function MissionDeploymentPanel() {
                   </div>
                 </div>
 
-                <p className="dui-inline-note dui-mission-config-note">{currentType.detail}</p>
-              </div>
+              {currentType.detail ? <p className="dui-inline-note dui-mission-config-note">{currentType.detail}</p> : null}
+            </div>
             </div>
 
             <div className="dui-card dui-objective-card">

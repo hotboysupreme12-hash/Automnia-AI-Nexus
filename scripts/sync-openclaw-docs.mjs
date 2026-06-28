@@ -45,6 +45,10 @@ async function writeText(filePath, content) {
   await fs.writeFile(filePath, content, 'utf8')
 }
 
+function normalizeMarkdownText(text) {
+  return text.replace(/[ \t]+$/gmu, '')
+}
+
 function extractOpenClawDocUrls(text) {
   const urls = []
   const pattern = /https:\/\/docs\.openclaw\.ai\/[^\s)>\]]+/gu
@@ -63,12 +67,13 @@ function extractOpenClawDocUrls(text) {
 async function main() {
   const startedAt = new Date().toISOString()
   await fs.mkdir(OUT_DIR, { recursive: true })
+  await fs.rm(PAGES_DIR, { recursive: true, force: true })
   await fs.mkdir(PAGES_DIR, { recursive: true })
 
-  const indexText = await fetchText(`${DOCS_ROOT}/llms.txt`)
+  const indexText = normalizeMarkdownText(await fetchText(`${DOCS_ROOT}/llms.txt`))
   await writeText(path.join(OUT_DIR, 'llms.txt'), indexText)
 
-  const fullText = await fetchText(`${DOCS_ROOT}/llms-full.txt`)
+  const fullText = normalizeMarkdownText(await fetchText(`${DOCS_ROOT}/llms-full.txt`))
   await writeText(path.join(OUT_DIR, 'llms-full.txt'), fullText)
 
   const sitemapText = await fetchText(`${DOCS_ROOT}/sitemap.xml`)
@@ -92,7 +97,7 @@ async function main() {
       const markdownUrl = markdownUrlFor(sourceUrl)
       const outPath = pageUrlToOutputPath(sourceUrl)
       try {
-        const text = await fetchText(markdownUrl)
+        const text = normalizeMarkdownText(await fetchText(markdownUrl))
         await writeText(outPath, text)
         pages.push({
           sourceUrl,

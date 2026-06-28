@@ -1161,7 +1161,13 @@ export function AgentResponseConsole() {
             {armedTargets.map((agent) => {
               const inParty = activePartyIds.includes(agent.id)
               const rarity = agent.rarity ?? 'common'
-              const ringColor = rarity === 'legendary' ? 'ring-amber-400/60' : rarity === 'epic' ? 'ring-yellow-200/35' : 'ring-white/10'
+              const ringColor = rarity === 'legendary'
+                ? 'ring-amber-400/60'
+                : rarity === 'epic'
+                  ? 'ring-[#9475ae]/50'
+                  : rarity === 'rare'
+                    ? 'ring-[#7097aa]/45'
+                    : 'ring-white/15'
               const portraitSrc = portraitSrcForAgent(agent)
               const portraitFailed = portraitSrc ? failedPortraitKeys.has(portraitFailureKey(agent.id, portraitSrc)) : false
               const queuedForAgent = queuedResponsesByAgent.get(agent.id) || 0
@@ -1180,8 +1186,9 @@ export function AgentResponseConsole() {
                   tabIndex={0}
                   title={`${laneDiagnostic ? `${laneDiagnostic.title} ` : ''}${queuedForAgent ? `${queuedForAgent} queued Command Console follow-up${queuedForAgent === 1 ? '' : 's'}. ` : ''}Remove ${agent.name} from chat`}
                   data-lane-diagnostic={laneDiagnostic?.severity || undefined}
-                  style={selectedTargets.length ? { color: '#8de6ff' } : undefined}
-                className={`dy-command-target-chip group/chip inline-flex items-center gap-1.5 ${
+                  data-agent-rarity={rarity}
+                  data-target-mode={selectedTargets.length ? 'selected' : inParty ? 'party' : 'armed'}
+                  className={`dy-command-target-chip group/chip inline-flex items-center gap-1.5 ${
                     selectedTargets.length
                       ? 'is-selected border-cyan-400/20 bg-cyan-400/[0.04] text-white/95 hover:border-cyan-300/40 hover:bg-cyan-300/[0.09]'
                       : inParty
@@ -1249,7 +1256,8 @@ export function AgentResponseConsole() {
                   aria-label={busyRunLabel}
                 >
                   <span className="dy-command-busy-dot h-1.5 w-1.5 rounded-full bg-amber-400 animate-pulse" aria-hidden="true" />
-                  <span aria-hidden="true">{busyAgents.length} running</span>
+                  <span className="dy-command-busy-count" aria-hidden="true">{busyAgents.length}</span>
+                  <span className="dy-command-busy-label" aria-hidden="true">running</span>
                 </span>
                 {laneDiagnostics.length > 0 && (
                   <span

@@ -336,6 +336,7 @@ export function registerPartyManagementRoutes(app: Express, options: PartyManage
           thinkingDefault: z.enum(['off', 'minimal', 'low', 'medium', 'high']).optional(),
           timeoutSeconds: z.number().int().min(30).max(86400).optional(),
           parallelPreferred: z.boolean().optional(),
+          fastModeDefault: z.enum(['auto', 'on', 'off']).optional(),
         })
         .optional(),
       attributes: z
