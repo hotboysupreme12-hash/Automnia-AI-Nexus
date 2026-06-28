@@ -113,7 +113,7 @@ Stores your API token + cached registry URL.
 - Lists newest skills via `/api/v1/skills?limit=...&sort=createdAt` (sorted by `createdAt` desc).
 - Flags:
   - `--limit <n>` (1-200, default: 25)
-  - `--sort newest|updated|rating|installs|installsAllTime|trending` (default: newest)
+  - `--sort newest|updated|rating|downloads|trending` (default: newest). Legacy install sort aliases still work for compatibility.
   - `--json` (machine-readable output)
 - Output: `<slug>  v<version>  <age>  <summary>` (summary truncated to 50 chars).
 
@@ -210,6 +210,31 @@ same automatic patch-version behavior.
 Set `dry_run: true` to preview without a token. Real publishes require the
 `clawhub_token` secret.
 
+### `sync`
+
+- Scans the current workdir, the configured skills directory, and any
+  `--root <dir>` folders for local skill folders containing `SKILL.md` or
+  `skill.md`.
+- Compares each local skill fingerprint with ClawHub and publishes only new or
+  changed skills.
+- New skills publish as `1.0.0`; changed skills publish the next patch version
+  by default. Use `--bump minor|major` for update batches that should move by a
+  larger semver step.
+- `--dry-run` shows the publish plan without uploading; `--json` prints a
+  machine-readable plan.
+- `--all` publishes every new or changed skill without prompting. Without
+  `--all`, interactive terminals let you select the skills to publish.
+- `--owner <handle>` publishes under an org/user publisher handle when the
+  actor has publisher access.
+- `sync` is one-way publish only. It does not install, update, download, or
+  report install/download telemetry.
+
+```bash
+clawhub sync --all --dry-run
+clawhub sync --all
+clawhub sync --root ./skills --owner openclaw --bump minor
+```
+
 ### `scan --slug <slug>`
 
 - Requires `clawhub login`.
@@ -244,7 +269,7 @@ clawhub scan download @scope/demo --version 2.0.0 --kind plugin --output report.
 #### GitHub Actions
 
 ClawHub ships an official reusable workflow at
-[`/.github/workflows/skill-publish.yml`](https://github.com/openclaw/clawhub/blob/f6a2c875d6034c9224a6a0b354d370324b271230/.github/workflows/skill-publish.yml)
+[`/.github/workflows/skill-publish.yml`](https://github.com/openclaw/clawhub/blob/bdb23c3a9ffe77cb4184fdd13897ce535fb2d703/.github/workflows/skill-publish.yml)
 for skill repos and catalog repos.
 
 Typical catalog setup:
@@ -686,7 +711,7 @@ Notes:
 #### GitHub Actions
 
 ClawHub also ships an official reusable workflow at
-[`/.github/workflows/package-publish.yml`](https://github.com/openclaw/clawhub/blob/f6a2c875d6034c9224a6a0b354d370324b271230/.github/workflows/package-publish.yml)
+[`/.github/workflows/package-publish.yml`](https://github.com/openclaw/clawhub/blob/bdb23c3a9ffe77cb4184fdd13897ce535fb2d703/.github/workflows/package-publish.yml)
 for plugin repos.
 
 Typical caller setup:

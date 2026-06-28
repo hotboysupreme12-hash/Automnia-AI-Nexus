@@ -57,8 +57,9 @@ Self-hosted gateway that connects Discord, Google Chat, iMessage, Matrix, Micros
 - [Pairing](https://docs.openclaw.ai/channels/pairing): Pairing overview: approve who can DM you + which nodes can join
 - [QA channel](https://docs.openclaw.ai/channels/qa-channel): Synthetic Slack-class channel plugin for deterministic OpenClaw QA scenarios
 - [QQ bot](https://docs.openclaw.ai/channels/qqbot): QQ Bot setup, config, and usage
+- [Raft](https://docs.openclaw.ai/channels/raft): Raft External Agent support through the Raft CLI wake bridge
 - [Signal](https://docs.openclaw.ai/channels/signal): Signal support via signal-cli (native daemon or bbernhard container), setup paths, and number model
-- [Slack](https://docs.openclaw.ai/channels/slack): Slack setup and runtime behavior (Socket Mode + HTTP Request URLs)
+- [Slack](https://docs.openclaw.ai/channels/slack): Slack setup and runtime behavior (Socket Mode, HTTP Request URLs, and relay mode)
 - [SMS](https://docs.openclaw.ai/channels/sms): Twilio SMS channel setup, access controls, and webhook configuration
 - [Synology Chat](https://docs.openclaw.ai/channels/synology-chat): Synology Chat webhook setup and OpenClaw config
 - [Telegram](https://docs.openclaw.ai/channels/telegram): Telegram bot support status, capabilities, and configuration
@@ -69,6 +70,7 @@ Self-hosted gateway that connects Discord, Google Chat, iMessage, Matrix, Micros
 - [WhatsApp](https://docs.openclaw.ai/channels/whatsapp): WhatsApp channel support, access controls, delivery behavior, and operations
 - [Yuanbao](https://docs.openclaw.ai/channels/yuanbao): Yuanbao bot overview, features, and configuration
 - [Zalo](https://docs.openclaw.ai/channels/zalo): Zalo bot support status, capabilities, and configuration
+- [Zalo ClawBot](https://docs.openclaw.ai/channels/zaloclawbot): Zalo ClawBot channel setup through the external openclaw-zaloclawbot plugin
 - [Zalo personal](https://docs.openclaw.ai/channels/zalouser): Zalo personal account support via native zca-js (QR login), capabilities, and configuration
 - [CI pipeline](https://docs.openclaw.ai/ci): CI job graph, scope gates, release umbrellas, and local command equivalents
 - [Docs Guide](https://docs.openclaw.ai/CLAUDE)
@@ -229,7 +231,7 @@ Self-hosted gateway that connects Discord, Google Chat, iMessage, Matrix, Micros
 - [OpenAI chat completions](https://docs.openclaw.ai/gateway/openai-http-api): Expose an OpenAI-compatible /v1/chat/completions HTTP endpoint from the Gateway
 - [OpenResponses API](https://docs.openclaw.ai/gateway/openresponses-http-api): Expose an OpenResponses-compatible /v1/responses HTTP endpoint from the Gateway
 - [OpenShell](https://docs.openclaw.ai/gateway/openshell): Use OpenShell as a managed sandbox backend for OpenClaw agents
-- [OpenTelemetry export](https://docs.openclaw.ai/gateway/opentelemetry): Export OpenClaw diagnostics to any OpenTelemetry collector via the diagnostics-otel plugin (OTLP/HTTP)
+- [OpenTelemetry export](https://docs.openclaw.ai/gateway/opentelemetry): Export OpenClaw diagnostics to OpenTelemetry collectors or stdout JSONL via the diagnostics-otel plugin
 - [Operator scopes](https://docs.openclaw.ai/gateway/operator-scopes): Operator roles, scopes, and approval-time checks for Gateway clients
 - [Gateway-owned pairing](https://docs.openclaw.ai/gateway/pairing): Gateway-owned node pairing (Option B) for iOS and other remote nodes
 - [Prometheus metrics](https://docs.openclaw.ai/gateway/prometheus): Expose OpenClaw diagnostics as Prometheus text metrics through the diagnostics-prometheus plugin
@@ -293,6 +295,8 @@ Self-hosted gateway that connects Discord, Google Chat, iMessage, Matrix, Micros
 - [Updating](https://docs.openclaw.ai/install/updating): Updating OpenClaw safely (global install or source), plus rollback strategy
 - [Upstash Box](https://docs.openclaw.ai/install/upstash): Host OpenClaw on Upstash Box with keep-alive and SSH tunnel access
 - [Logging](https://docs.openclaw.ai/logging): File logs, console output, CLI tailing, and the Control UI Logs tab
+- [Maturity scorecard](https://docs.openclaw.ai/maturity/scorecard): OpenClaw release readiness scores for product areas, integrations, and supported workflows.
+- [Maturity taxonomy](https://docs.openclaw.ai/maturity/taxonomy): Detailed reference for the product areas and checks behind the OpenClaw maturity scorecard.
 - [Network](https://docs.openclaw.ai/network): Network hub: gateway surfaces, pairing, discovery, and security
 - [Nodes](https://docs.openclaw.ai/nodes): Nodes: pairing, capabilities, permissions, and CLI helpers for canvas/camera/screen/device/notifications/system
 - [Audio and voice notes](https://docs.openclaw.ai/nodes/audio): How inbound audio/voice notes are downloaded, transcribed, and injected into replies
@@ -385,14 +389,14 @@ Self-hosted gateway that connects Discord, Google Chat, iMessage, Matrix, Micros
 - [Cloudflare AI Gateway plugin](https://docs.openclaw.ai/plugins/reference/cloudflare-ai-gateway): Adds Cloudflare AI Gateway model provider support to OpenClaw.
 - [Codex plugin](https://docs.openclaw.ai/plugins/reference/codex): OpenClaw Codex app-server harness and model provider plugin with a Codex-managed GPT catalog.
 - [Codex Supervisor plugin](https://docs.openclaw.ai/plugins/reference/codex-supervisor): Supervise Codex app-server sessions from OpenClaw.
-- [Cohere plugin](https://docs.openclaw.ai/plugins/reference/cohere): Adds Cohere model provider support to OpenClaw.
+- [Cohere plugin](https://docs.openclaw.ai/plugins/reference/cohere): OpenClaw Cohere provider plugin.
 - [ComfyUI plugin](https://docs.openclaw.ai/plugins/reference/comfy): Adds ComfyUI model provider support to OpenClaw.
 - [Copilot plugin](https://docs.openclaw.ai/plugins/reference/copilot): Registers the GitHub Copilot agent runtime.
 - [Copilot Proxy plugin](https://docs.openclaw.ai/plugins/reference/copilot-proxy): Adds Copilot Proxy model provider support to OpenClaw.
 - [Deepgram plugin](https://docs.openclaw.ai/plugins/reference/deepgram): Adds media understanding provider support. Adds realtime transcription provider support.
 - [DeepInfra plugin](https://docs.openclaw.ai/plugins/reference/deepinfra): Adds DeepInfra model provider support to OpenClaw.
 - [DeepSeek plugin](https://docs.openclaw.ai/plugins/reference/deepseek): Adds DeepSeek model provider support to OpenClaw.
-- [Diagnostics OpenTelemetry plugin](https://docs.openclaw.ai/plugins/reference/diagnostics-otel): OpenClaw diagnostics OpenTelemetry exporter for metrics and traces.
+- [Diagnostics OpenTelemetry plugin](https://docs.openclaw.ai/plugins/reference/diagnostics-otel): OpenClaw diagnostics OpenTelemetry exporter for metrics, traces, and logs.
 - [Diagnostics Prometheus plugin](https://docs.openclaw.ai/plugins/reference/diagnostics-prometheus): OpenClaw diagnostics Prometheus exporter for runtime metrics.
 - [Diffs plugin](https://docs.openclaw.ai/plugins/reference/diffs): OpenClaw read-only diff viewer plugin and file renderer for agents.
 - [Diffs Language Pack plugin](https://docs.openclaw.ai/plugins/reference/diffs-language-pack): Adds syntax highlighting for languages outside the default diffs viewer set.
@@ -407,7 +411,7 @@ Self-hosted gateway that connects Discord, Google Chat, iMessage, Matrix, Micros
 - [Firecrawl plugin](https://docs.openclaw.ai/plugins/reference/firecrawl): Adds agent-callable tools. Adds web fetch provider support. Adds web search provider support.
 - [Fireworks plugin](https://docs.openclaw.ai/plugins/reference/fireworks): Adds Fireworks model provider support to OpenClaw.
 - [GitHub Copilot plugin](https://docs.openclaw.ai/plugins/reference/github-copilot): Adds GitHub Copilot model provider support to OpenClaw.
-- [Gmi plugin](https://docs.openclaw.ai/plugins/reference/gmi): Adds Gmi, Gmi Cloud, Gmicloud model provider support to OpenClaw.
+- [Gmi plugin](https://docs.openclaw.ai/plugins/reference/gmi): OpenClaw GMI Cloud provider plugin.
 - [Google plugin](https://docs.openclaw.ai/plugins/reference/google): Adds Google, Google Gemini CLI, Google Vertex model provider support to OpenClaw.
 - [Google Meet plugin](https://docs.openclaw.ai/plugins/reference/google-meet): OpenClaw Google Meet participant plugin for joining calls through Chrome or Twilio transports.
 - [Google Chat plugin](https://docs.openclaw.ai/plugins/reference/googlechat): OpenClaw Google Chat channel plugin for spaces and direct messages.
@@ -459,6 +463,7 @@ Self-hosted gateway that connects Discord, Google Chat, iMessage, Matrix, Micros
 - [Qianfan plugin](https://docs.openclaw.ai/plugins/reference/qianfan): Adds Qianfan model provider support to OpenClaw.
 - [QQ Bot plugin](https://docs.openclaw.ai/plugins/reference/qqbot): OpenClaw QQ Bot channel plugin for group and direct-message workflows.
 - [Qwen plugin](https://docs.openclaw.ai/plugins/reference/qwen): Adds Qwen, Qwen Cloud, Model Studio, DashScope, Qwen Oauth, Qwen Portal, Qwen CLI model provider support to OpenClaw.
+- [Raft plugin](https://docs.openclaw.ai/plugins/reference/raft): OpenClaw Raft channel plugin for secure CLI wake bridges.
 - [Runway plugin](https://docs.openclaw.ai/plugins/reference/runway): Adds video generation provider support.
 - [SearXNG plugin](https://docs.openclaw.ai/plugins/reference/searxng): Adds web search provider support.
 - [Senseaudio plugin](https://docs.openclaw.ai/plugins/reference/senseaudio): Adds media understanding provider support.
@@ -560,7 +565,7 @@ Self-hosted gateway that connects Discord, Google Chat, iMessage, Matrix, Micros
 - [Perplexity](https://docs.openclaw.ai/providers/perplexity-provider): Perplexity web search provider setup (API key, search modes, filtering)
 - [PixVerse](https://docs.openclaw.ai/providers/pixverse): PixVerse video generation setup in OpenClaw
 - [Qianfan](https://docs.openclaw.ai/providers/qianfan): Use Qianfan's unified API to access many models in OpenClaw
-- [Qwen](https://docs.openclaw.ai/providers/qwen): Use Qwen Cloud via OpenClaw's bundled qwen provider
+- [Qwen](https://docs.openclaw.ai/providers/qwen): Use Qwen Cloud through its OpenClaw plugin
 - [Qwen OAuth / Portal](https://docs.openclaw.ai/providers/qwen-oauth): Use the Qwen Portal provider id with OpenClaw
 - [Runway](https://docs.openclaw.ai/providers/runway): Runway video generation setup in OpenClaw
 - [SenseAudio](https://docs.openclaw.ai/providers/senseaudio): SenseAudio batch speech-to-text for inbound voice notes
@@ -620,7 +625,7 @@ Self-hosted gateway that connects Discord, Google Chat, iMessage, Matrix, Micros
 - [Incident response](https://docs.openclaw.ai/security/incident-response): How OpenClaw triages, responds to, and follows up on security incidents
 - [Network proxy](https://docs.openclaw.ai/security/network-proxy): How to route OpenClaw runtime HTTP and WebSocket traffic through an operator-managed filtering proxy
 - [Threat model (MITRE ATLAS)](https://docs.openclaw.ai/security/THREAT-MODEL-ATLAS): OpenClaw threat model mapped to the MITRE ATLAS framework
-- [Claw Supervisor](https://docs.openclaw.ai/specs/claw-supervisor)
+- [Claw Supervisor](https://docs.openclaw.ai/specs/claw-supervisor): Fleet supervision plan for Codex app-server sessions controlled by OpenClaw.
 - [Agent bootstrapping](https://docs.openclaw.ai/start/bootstrapping): Agent bootstrapping ritual that seeds the workspace and identity files
 - [Docs directory](https://docs.openclaw.ai/start/docs-directory): Curated links to the most used OpenClaw docs.
 - [Getting started](https://docs.openclaw.ai/start/getting-started): Get OpenClaw installed and run your first chat in minutes.

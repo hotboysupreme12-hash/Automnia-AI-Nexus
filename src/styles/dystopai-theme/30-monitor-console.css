@@ -2240,8 +2240,8 @@ html.dui-pro-overhaul [data-dui-panel="missions"] select {
   border-color: rgba(184, 188, 190, .15) !important;
   border-radius: 0 !important;
   background:
-    linear-gradient(180deg, rgba(255, 255, 255, .018), rgba(255, 255, 255, .008)),
-    #0b0c0d !important;
+    linear-gradient(180deg, rgba(255, 255, 255, .03), rgba(255, 255, 255, .010)),
+    #0f1824 !important;
   color: #d5d8d9 !important;
   box-shadow: none !important;
 }
@@ -2251,8 +2251,12 @@ html.dui-pro-overhaul [data-dui-panel="missions"] input:focus,
 html.dui-pro-overhaul [data-dui-panel="missions"] textarea:focus,
 html.dui-pro-overhaul [data-dui-panel="missions"] select:focus {
   border-color: rgba(213, 216, 217, .34) !important;
-  background: #111315 !important;
-  box-shadow: 0 0 0 2px rgba(184, 188, 190, .08) !important;
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, .044), rgba(255, 255, 255, .012)),
+    #15233a !important;
+  box-shadow:
+    0 0 0 1px rgba(0, 234, 255, .24) !important,
+    0 0 0 3px rgba(0, 234, 255, .16) !important;
 }
 
 html.dui-pro-overhaul .dy-mission-templates .dy-template-rail {

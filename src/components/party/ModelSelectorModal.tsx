@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { ProviderAuthModal } from '../auth/ProviderAuthModal'
 import type { ThinkingLevel } from '../../types/nexus'
@@ -177,6 +177,7 @@ export function ModelSelectorModal({
   )
   const [authProviders, setAuthProviders] = useState<AuthProviderStatus[]>([])
   const [authModalProvider, setAuthModalProvider] = useState<AuthProviderStatus | null>(null)
+  const authRefreshKeyRef = useRef('')
 
   const fetchModels = useCallback(async () => {
     const cached = modelSelectorModelsCache && modelSelectorModelsCache.expiresAt > Date.now() ? modelSelectorModelsCache.value : null
@@ -196,10 +197,22 @@ export function ModelSelectorModal({
     }
   }, [currentModel])
 
-  const fetchAuthProviders = useCallback(async () => {
+  const upsertAuthProviderStatus = useCallback((next?: AuthProviderStatus | null) => {
+    if (!next) return
+    setAuthModalProvider((current) => current?.provider === next.provider ? next : current)
+    setAuthProviders((current) => current.some((entry) => entry.provider === next.provider)
+      ? current.map((entry) => entry.provider === next.provider ? next : entry)
+      : [next, ...current])
+  }, [])
+
+  const fetchAuthProviders = useCallback(async (force = false) => {
     try {
-      const result = await apiRequest<{ providers: AuthProviderStatus[] }>('/api/auth/providers', { timeoutMs: 8000 })
-      setAuthProviders(result.ok ? result.data.providers || [] : [])
+      const result = force
+        ? await apiRequest<{ providers: AuthProviderStatus[] }>('/api/auth/providers?refresh=1', { timeoutMs: 30_000, cache: 'no-store' })
+        : await apiRequest<{ providers: AuthProviderStatus[] }>('/api/auth/providers', { timeoutMs: 8000 })
+      const next = result.ok ? result.data.providers || [] : []
+      setAuthProviders(next)
+      setAuthModalProvider((current) => current ? next.find((entry) => entry.provider === current.provider) || current : current)
     } catch {
       setAuthProviders([])
     }
@@ -211,6 +224,7 @@ export function ModelSelectorModal({
     setSelectedFallbacks(currentFallbacks)
     setThinkingEnabled(currentThinking !== 'off')
     setThinkingLevel(currentThinking === 'off' ? 'minimal' : currentThinking)
+    authRefreshKeyRef.current = ''
     void fetchModels()
     void fetchAuthProviders()
   }, [isOpen, currentModel, currentFallbacks, currentThinking, fetchModels, fetchAuthProviders])
@@ -278,6 +292,21 @@ export function ModelSelectorModal({
     () => groupAvailableModels(selectableModels.filter((model) => model.id !== selectedPrimary)),
     [selectableModels, selectedPrimary],
   )
+  useEffect(() => {
+    if (!isOpen || !selectedPrimary || !primaryProvider) return
+    if (!primaryProviderStatus?.oauth?.supported || primaryProviderStatus.configured) return
+    const key = `${primaryProvider}:${selectedPrimary}`
+    if (authRefreshKeyRef.current === key) return
+    authRefreshKeyRef.current = key
+    void fetchAuthProviders(true)
+  }, [
+    isOpen,
+    selectedPrimary,
+    primaryProvider,
+    primaryProviderStatus?.configured,
+    primaryProviderStatus?.oauth?.supported,
+    fetchAuthProviders,
+  ])
   const deepSeekReady = openRouterReady || deepSeekProviderStatus?.configured === true
   const selectedThinking: ThinkingLevel = thinkingEnabled ? thinkingLevel : 'off'
 
@@ -532,9 +561,12 @@ export function ModelSelectorModal({
               body: { apiKey },
             })
             if (!result.ok) throw new Error(apiErrorMessage(result.error))
-            await fetchAuthProviders()
+            await fetchAuthProviders(true)
           }}
-          onConnected={fetchAuthProviders}
+          onConnected={async (nextStatus) => {
+            upsertAuthProviderStatus(nextStatus)
+            await fetchAuthProviders(true)
+          }}
         />
       )}
     </AnimatePresence>

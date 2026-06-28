@@ -47,7 +47,7 @@ interface ProviderAuthModalProps {
   providerStatus?: AuthProviderStatus | null
   onClose: () => void
   onSave: (apiKey: string) => Promise<void>
-  onConnected?: () => Promise<void> | void
+  onConnected?: (providerStatus?: AuthProviderStatus) => Promise<void> | void
 }
 
 const providerLabels: Record<string, string> = {
@@ -70,6 +70,7 @@ type OAuthSessionPayload = {
   manualInputRequired?: boolean
   manualPrompt?: string
   result?: { email?: string; projectId?: string }
+  providerStatus?: AuthProviderStatus
 }
 
 type OAuthStartPayload = {
@@ -133,7 +134,7 @@ export function ProviderAuthModal({ isOpen, provider, envKeys, providerStatus, o
             const project = next.gcloud?.projectId ? ` on ${next.gcloud.projectId}` : ''
             setStatus(`${readyLabel} is ready${account}${project}.`)
           }
-          await onConnected?.()
+          await onConnected?.(next)
         } else if (provider === 'google-vertex') {
           setStatus(next.gcloud?.missing?.filter(Boolean)[0] || '')
         }
@@ -202,7 +203,14 @@ export function ProviderAuthModal({ isOpen, provider, envKeys, providerStatus, o
         setManualPrompt(data.manualPrompt || 'Paste the authorization code or full redirect URL.')
       }
       if (data.status === 'complete') {
-        await onConnected?.()
+        if (data.providerStatus?.provider === provider) {
+          setLiveProviderStatus(data.providerStatus)
+        }
+        if (data.providerStatus?.configured) {
+          await onConnected?.(data.providerStatus)
+        } else {
+          await refreshProviderStatus(false)
+        }
         const connectedAs = data.result?.email ? ` as ${data.result.email}` : ''
         setStatus(`OAuth connected${connectedAs}. You can close this window.`)
         setManualSessionId('')

@@ -483,7 +483,12 @@ export function NexusShell() {
         {/* Workspace header */}
         <section className="dy-workspace-context" data-workspace={tab} aria-labelledby="dystopai-workspace-title">
           <div className="dy-workspace-context__copy">
-            <span className="dy-workspace-context__eyebrow">Operator workspace</span>
+            <span
+              className="dy-workspace-context__eyebrow"
+              style={tab === 'monitor' ? ({ '--dui-cyan': 'var(--dui-green)' } as CSSProperties) : undefined}
+            >
+              Operator workspace
+            </span>
             <h1 id="dystopai-workspace-title">{activeTab.label}</h1>
             <p>{activeTab.description}</p>
           </div>

@@ -128,7 +128,7 @@ export function HeartbeatSchedulerPanel() {
   const [agentId, setAgentId] = useState('')
 
   const [defaults, setDefaults] = useState<HeartbeatDefaults>({
-    model: 'deepseek/deepseek-v4-flash',
+    model: 'openai/gpt-5.5',
     thinking: 'minimal',
     timeoutSeconds: 120,
     wake: 'next-heartbeat',

@@ -1,7 +1,7 @@
 {
   "source": "https://docs.openclaw.ai",
-  "syncedAt": "2026-06-18T04:47:14.566Z",
-  "pageCount": 688,
+  "syncedAt": "2026-06-27T20:51:58.742Z",
+  "pageCount": 693,
   "failureCount": 0,
   "pages": [
     {
@@ -44,7 +44,7 @@
       "sourceUrl": "https://docs.openclaw.ai/automation/cron-jobs",
       "markdownUrl": "https://docs.openclaw.ai/automation/cron-jobs.md",
       "path": "pages/automation/cron-jobs.md",
-      "bytes": 32987
+      "bytes": 33649
     },
     {
       "sourceUrl": "https://docs.openclaw.ai/automation/cron-vs-heartbeat",
@@ -110,7 +110,7 @@
       "sourceUrl": "https://docs.openclaw.ai/channels",
       "markdownUrl": "https://docs.openclaw.ai/channels.md",
       "path": "pages/channels.md",
-      "bytes": 4314
+      "bytes": 4527
     },
     {
       "sourceUrl": "https://docs.openclaw.ai/channels/access-groups",
@@ -146,7 +146,7 @@
       "sourceUrl": "https://docs.openclaw.ai/channels/clickclack",
       "markdownUrl": "https://docs.openclaw.ai/channels/clickclack.md",
       "path": "pages/channels/clickclack.md",
-      "bytes": 4358
+      "bytes": 4368
     },
     {
       "sourceUrl": "https://docs.openclaw.ai/channels/discord",
@@ -158,7 +158,7 @@
       "sourceUrl": "https://docs.openclaw.ai/channels/feishu",
       "markdownUrl": "https://docs.openclaw.ai/channels/feishu.md",
       "path": "pages/channels/feishu.md",
-      "bytes": 25455
+      "bytes": 25453
     },
     {
       "sourceUrl": "https://docs.openclaw.ai/channels/googlechat",
@@ -182,19 +182,19 @@
       "sourceUrl": "https://docs.openclaw.ai/channels/imessage",
       "markdownUrl": "https://docs.openclaw.ai/channels/imessage.md",
       "path": "pages/channels/imessage.md",
-      "bytes": 44004
+      "bytes": 44465
     },
     {
       "sourceUrl": "https://docs.openclaw.ai/channels/imessage-from-bluebubbles",
       "markdownUrl": "https://docs.openclaw.ai/channels/imessage-from-bluebubbles.md",
       "path": "pages/channels/imessage-from-bluebubbles.md",
-      "bytes": 26173
+      "bytes": 27053
     },
     {
       "sourceUrl": "https://docs.openclaw.ai/channels/irc",
       "markdownUrl": "https://docs.openclaw.ai/channels/irc.md",
       "path": "pages/channels/irc.md",
-      "bytes": 6925
+      "bytes": 6981
     },
     {
       "sourceUrl": "https://docs.openclaw.ai/channels/line",
@@ -212,7 +212,7 @@
       "sourceUrl": "https://docs.openclaw.ai/channels/matrix",
       "markdownUrl": "https://docs.openclaw.ai/channels/matrix.md",
       "path": "pages/channels/matrix.md",
-      "bytes": 45961
+      "bytes": 46048
     },
     {
       "sourceUrl": "https://docs.openclaw.ai/channels/matrix-migration",
@@ -236,7 +236,7 @@
       "sourceUrl": "https://docs.openclaw.ai/channels/mattermost",
       "markdownUrl": "https://docs.openclaw.ai/channels/mattermost.md",
       "path": "pages/channels/mattermost.md",
-      "bytes": 22049
+      "bytes": 22475
     },
     {
       "sourceUrl": "https://docs.openclaw.ai/channels/msteams",
@@ -272,25 +272,31 @@
       "sourceUrl": "https://docs.openclaw.ai/channels/qqbot",
       "markdownUrl": "https://docs.openclaw.ai/channels/qqbot.md",
       "path": "pages/channels/qqbot.md",
-      "bytes": 11602
+      "bytes": 12386
+    },
+    {
+      "sourceUrl": "https://docs.openclaw.ai/channels/raft",
+      "markdownUrl": "https://docs.openclaw.ai/channels/raft.md",
+      "path": "pages/channels/raft.md",
+      "bytes": 4310
     },
     {
       "sourceUrl": "https://docs.openclaw.ai/channels/signal",
       "markdownUrl": "https://docs.openclaw.ai/channels/signal.md",
       "path": "pages/channels/signal.md",
-      "bytes": 18334
+      "bytes": 18422
     },
     {
       "sourceUrl": "https://docs.openclaw.ai/channels/slack",
       "markdownUrl": "https://docs.openclaw.ai/channels/slack.md",
       "path": "pages/channels/slack.md",
-      "bytes": 66115
+      "bytes": 68077
     },
     {
       "sourceUrl": "https://docs.openclaw.ai/channels/sms",
       "markdownUrl": "https://docs.openclaw.ai/channels/sms.md",
       "path": "pages/channels/sms.md",
-      "bytes": 12027
+      "bytes": 12219
     },
     {
       "sourceUrl": "https://docs.openclaw.ai/channels/synology-chat",
@@ -302,7 +308,7 @@
       "sourceUrl": "https://docs.openclaw.ai/channels/telegram",
       "markdownUrl": "https://docs.openclaw.ai/channels/telegram.md",
       "path": "pages/channels/telegram.md",
-      "bytes": 50830
+      "bytes": 51029
     },
     {
       "sourceUrl": "https://docs.openclaw.ai/channels/tlon",
@@ -347,6 +353,12 @@
       "bytes": 11801
     },
     {
+      "sourceUrl": "https://docs.openclaw.ai/channels/zaloclawbot",
+      "markdownUrl": "https://docs.openclaw.ai/channels/zaloclawbot.md",
+      "path": "pages/channels/zaloclawbot.md",
+      "bytes": 3766
+    },
+    {
       "sourceUrl": "https://docs.openclaw.ai/channels/zalouser",
       "markdownUrl": "https://docs.openclaw.ai/channels/zalouser.md",
       "path": "pages/channels/zalouser.md",
@@ -356,19 +368,19 @@
       "sourceUrl": "https://docs.openclaw.ai/ci",
       "markdownUrl": "https://docs.openclaw.ai/ci.md",
       "path": "pages/ci.md",
-      "bytes": 71584
+      "bytes": 74798
     },
     {
       "sourceUrl": "https://docs.openclaw.ai/CLAUDE",
       "markdownUrl": "https://docs.openclaw.ai/CLAUDE.md",
       "path": "pages/CLAUDE.md",
-      "bytes": 2545
+      "bytes": 3386
     },
     {
       "sourceUrl": "https://docs.openclaw.ai/clawhub",
       "markdownUrl": "https://docs.openclaw.ai/clawhub.md",
       "path": "pages/clawhub.md",
-      "bytes": 6226
+      "bytes": 6227
     },
     {
       "sourceUrl": "https://docs.openclaw.ai/clawhub/acceptable-usage",
@@ -380,7 +392,7 @@
       "sourceUrl": "https://docs.openclaw.ai/clawhub/api",
       "markdownUrl": "https://docs.openclaw.ai/clawhub/api.md",
       "path": "pages/clawhub/api.md",
-      "bytes": 5046
+      "bytes": 5854
     },
     {
       "sourceUrl": "https://docs.openclaw.ai/clawhub/auth",
@@ -392,13 +404,13 @@
       "sourceUrl": "https://docs.openclaw.ai/clawhub/cli",
       "markdownUrl": "https://docs.openclaw.ai/clawhub/cli.md",
       "path": "pages/clawhub/cli.md",
-      "bytes": 29301
+      "bytes": 30376
     },
     {
       "sourceUrl": "https://docs.openclaw.ai/clawhub/content-rights",
       "markdownUrl": "https://docs.openclaw.ai/clawhub/content-rights.md",
       "path": "pages/clawhub/content-rights.md",
-      "bytes": 1159
+      "bytes": 1166
     },
     {
       "sourceUrl": "https://docs.openclaw.ai/clawhub/how-it-works",
@@ -410,13 +422,13 @@
       "sourceUrl": "https://docs.openclaw.ai/clawhub/http-api",
       "markdownUrl": "https://docs.openclaw.ai/clawhub/http-api.md",
       "path": "pages/clawhub/http-api.md",
-      "bytes": 51479
+      "bytes": 53718
     },
     {
       "sourceUrl": "https://docs.openclaw.ai/clawhub/moderation",
       "markdownUrl": "https://docs.openclaw.ai/clawhub/moderation.md",
       "path": "pages/clawhub/moderation.md",
-      "bytes": 4816
+      "bytes": 5207
     },
     {
       "sourceUrl": "https://docs.openclaw.ai/clawhub/namespace-claims",
@@ -434,7 +446,7 @@
       "sourceUrl": "https://docs.openclaw.ai/clawhub/publishing",
       "markdownUrl": "https://docs.openclaw.ai/clawhub/publishing.md",
       "path": "pages/clawhub/publishing.md",
-      "bytes": 6577
+      "bytes": 6679
     },
     {
       "sourceUrl": "https://docs.openclaw.ai/clawhub/quickstart",
@@ -452,7 +464,7 @@
       "sourceUrl": "https://docs.openclaw.ai/clawhub/security-audits",
       "markdownUrl": "https://docs.openclaw.ai/clawhub/security-audits.md",
       "path": "pages/clawhub/security-audits.md",
-      "bytes": 6269
+      "bytes": 6277
     },
     {
       "sourceUrl": "https://docs.openclaw.ai/clawhub/skill-format",
@@ -470,7 +482,7 @@
       "sourceUrl": "https://docs.openclaw.ai/clawhub/troubleshooting",
       "markdownUrl": "https://docs.openclaw.ai/clawhub/troubleshooting.md",
       "path": "pages/clawhub/troubleshooting.md",
-      "bytes": 4981
+      "bytes": 5071
     },
     {
       "sourceUrl": "https://docs.openclaw.ai/cli",
@@ -488,13 +500,13 @@
       "sourceUrl": "https://docs.openclaw.ai/cli/agent",
       "markdownUrl": "https://docs.openclaw.ai/cli/agent.md",
       "path": "pages/cli/agent.md",
-      "bytes": 7820
+      "bytes": 8117
     },
     {
       "sourceUrl": "https://docs.openclaw.ai/cli/agents",
       "markdownUrl": "https://docs.openclaw.ai/cli/agents.md",
       "path": "pages/cli/agents.md",
-      "bytes": 7658
+      "bytes": 7803
     },
     {
       "sourceUrl": "https://docs.openclaw.ai/cli/approvals",
@@ -512,7 +524,7 @@
       "sourceUrl": "https://docs.openclaw.ai/cli/browser",
       "markdownUrl": "https://docs.openclaw.ai/cli/browser.md",
       "path": "pages/cli/browser.md",
-      "bytes": 13155
+      "bytes": 13222
     },
     {
       "sourceUrl": "https://docs.openclaw.ai/cli/channels",
@@ -560,7 +572,7 @@
       "sourceUrl": "https://docs.openclaw.ai/cli/cron",
       "markdownUrl": "https://docs.openclaw.ai/cli/cron.md",
       "path": "pages/cli/cron.md",
-      "bytes": 16992
+      "bytes": 17408
     },
     {
       "sourceUrl": "https://docs.openclaw.ai/cli/daemon",
@@ -602,7 +614,7 @@
       "sourceUrl": "https://docs.openclaw.ai/cli/doctor",
       "markdownUrl": "https://docs.openclaw.ai/cli/doctor.md",
       "path": "pages/cli/doctor.md",
-      "bytes": 17673
+      "bytes": 18489
     },
     {
       "sourceUrl": "https://docs.openclaw.ai/cli/flows",
@@ -614,7 +626,7 @@
       "sourceUrl": "https://docs.openclaw.ai/cli/gateway",
       "markdownUrl": "https://docs.openclaw.ai/cli/gateway.md",
       "path": "pages/cli/gateway.md",
-      "bytes": 29263
+      "bytes": 30176
     },
     {
       "sourceUrl": "https://docs.openclaw.ai/cli/health",
@@ -632,7 +644,7 @@
       "sourceUrl": "https://docs.openclaw.ai/cli/infer",
       "markdownUrl": "https://docs.openclaw.ai/cli/infer.md",
       "path": "pages/cli/infer.md",
-      "bytes": 18015
+      "bytes": 18353
     },
     {
       "sourceUrl": "https://docs.openclaw.ai/cli/logs",
@@ -680,7 +692,7 @@
       "sourceUrl": "https://docs.openclaw.ai/cli/nodes",
       "markdownUrl": "https://docs.openclaw.ai/cli/nodes.md",
       "path": "pages/cli/nodes.md",
-      "bytes": 2680
+      "bytes": 3112
     },
     {
       "sourceUrl": "https://docs.openclaw.ai/cli/onboard",
@@ -704,7 +716,7 @@
       "sourceUrl": "https://docs.openclaw.ai/cli/plugins",
       "markdownUrl": "https://docs.openclaw.ai/cli/plugins.md",
       "path": "pages/cli/plugins.md",
-      "bytes": 31488
+      "bytes": 35460
     },
     {
       "sourceUrl": "https://docs.openclaw.ai/cli/policy",
@@ -752,7 +764,7 @@
       "sourceUrl": "https://docs.openclaw.ai/cli/sessions",
       "markdownUrl": "https://docs.openclaw.ai/cli/sessions.md",
       "path": "pages/cli/sessions.md",
-      "bytes": 7832
+      "bytes": 10518
     },
     {
       "sourceUrl": "https://docs.openclaw.ai/cli/setup",
@@ -764,7 +776,7 @@
       "sourceUrl": "https://docs.openclaw.ai/cli/skills",
       "markdownUrl": "https://docs.openclaw.ai/cli/skills.md",
       "path": "pages/cli/skills.md",
-      "bytes": 7350
+      "bytes": 8338
     },
     {
       "sourceUrl": "https://docs.openclaw.ai/cli/status",
@@ -806,7 +818,7 @@
       "sourceUrl": "https://docs.openclaw.ai/cli/update",
       "markdownUrl": "https://docs.openclaw.ai/cli/update.md",
       "path": "pages/cli/update.md",
-      "bytes": 15216
+      "bytes": 15946
     },
     {
       "sourceUrl": "https://docs.openclaw.ai/cli/voicecall",
@@ -830,7 +842,7 @@
       "sourceUrl": "https://docs.openclaw.ai/cli/workboard",
       "markdownUrl": "https://docs.openclaw.ai/cli/workboard.md",
       "path": "pages/cli/workboard.md",
-      "bytes": 8175
+      "bytes": 8531
     },
     {
       "sourceUrl": "https://docs.openclaw.ai/concepts/active-memory",
@@ -848,13 +860,13 @@
       "sourceUrl": "https://docs.openclaw.ai/concepts/agent-loop",
       "markdownUrl": "https://docs.openclaw.ai/concepts/agent-loop.md",
       "path": "pages/concepts/agent-loop.md",
-      "bytes": 12281
+      "bytes": 12697
     },
     {
       "sourceUrl": "https://docs.openclaw.ai/concepts/agent-runtimes",
       "markdownUrl": "https://docs.openclaw.ai/concepts/agent-runtimes.md",
       "path": "pages/concepts/agent-runtimes.md",
-      "bytes": 15907
+      "bytes": 15914
     },
     {
       "sourceUrl": "https://docs.openclaw.ai/concepts/agent-workspace",
@@ -884,7 +896,7 @@
       "sourceUrl": "https://docs.openclaw.ai/concepts/compaction",
       "markdownUrl": "https://docs.openclaw.ai/concepts/compaction.md",
       "path": "pages/concepts/compaction.md",
-      "bytes": 8559
+      "bytes": 8879
     },
     {
       "sourceUrl": "https://docs.openclaw.ai/concepts/context",
@@ -950,7 +962,7 @@
       "sourceUrl": "https://docs.openclaw.ai/concepts/memory-builtin",
       "markdownUrl": "https://docs.openclaw.ai/concepts/memory-builtin.md",
       "path": "pages/concepts/memory-builtin.md",
-      "bytes": 5377
+      "bytes": 5429
     },
     {
       "sourceUrl": "https://docs.openclaw.ai/concepts/memory-honcho",
@@ -992,7 +1004,7 @@
       "sourceUrl": "https://docs.openclaw.ai/concepts/model-providers",
       "markdownUrl": "https://docs.openclaw.ai/concepts/model-providers.md",
       "path": "pages/concepts/model-providers.md",
-      "bytes": 38177
+      "bytes": 35036
     },
     {
       "sourceUrl": "https://docs.openclaw.ai/concepts/models",
@@ -1004,7 +1016,7 @@
       "sourceUrl": "https://docs.openclaw.ai/concepts/multi-agent",
       "markdownUrl": "https://docs.openclaw.ai/concepts/multi-agent.md",
       "path": "pages/concepts/multi-agent.md",
-      "bytes": 21675
+      "bytes": 21669
     },
     {
       "sourceUrl": "https://docs.openclaw.ai/concepts/oauth",
@@ -1040,7 +1052,7 @@
       "sourceUrl": "https://docs.openclaw.ai/concepts/qa-e2e-automation",
       "markdownUrl": "https://docs.openclaw.ai/concepts/qa-e2e-automation.md",
       "path": "pages/concepts/qa-e2e-automation.md",
-      "bytes": 56609
+      "bytes": 57920
     },
     {
       "sourceUrl": "https://docs.openclaw.ai/concepts/qa-matrix",
@@ -1070,7 +1082,7 @@
       "sourceUrl": "https://docs.openclaw.ai/concepts/session",
       "markdownUrl": "https://docs.openclaw.ai/concepts/session.md",
       "path": "pages/concepts/session.md",
-      "bytes": 6400
+      "bytes": 6900
     },
     {
       "sourceUrl": "https://docs.openclaw.ai/concepts/session-pruning",
@@ -1094,13 +1106,13 @@
       "sourceUrl": "https://docs.openclaw.ai/concepts/streaming",
       "markdownUrl": "https://docs.openclaw.ai/concepts/streaming.md",
       "path": "pages/concepts/streaming.md",
-      "bytes": 14629
+      "bytes": 14898
     },
     {
       "sourceUrl": "https://docs.openclaw.ai/concepts/system-prompt",
       "markdownUrl": "https://docs.openclaw.ai/concepts/system-prompt.md",
       "path": "pages/concepts/system-prompt.md",
-      "bytes": 17341
+      "bytes": 17831
     },
     {
       "sourceUrl": "https://docs.openclaw.ai/concepts/timezone",
@@ -1118,13 +1130,13 @@
       "sourceUrl": "https://docs.openclaw.ai/concepts/typing-indicators",
       "markdownUrl": "https://docs.openclaw.ai/concepts/typing-indicators.md",
       "path": "pages/concepts/typing-indicators.md",
-      "bytes": 2921
+      "bytes": 3059
     },
     {
       "sourceUrl": "https://docs.openclaw.ai/concepts/usage-tracking",
       "markdownUrl": "https://docs.openclaw.ai/concepts/usage-tracking.md",
       "path": "pages/concepts/usage-tracking.md",
-      "bytes": 12034
+      "bytes": 14833
     },
     {
       "sourceUrl": "https://docs.openclaw.ai/date-time",
@@ -1148,7 +1160,7 @@
       "sourceUrl": "https://docs.openclaw.ai/gateway",
       "markdownUrl": "https://docs.openclaw.ai/gateway.md",
       "path": "pages/gateway.md",
-      "bytes": 13512
+      "bytes": 13531
     },
     {
       "sourceUrl": "https://docs.openclaw.ai/gateway/authentication",
@@ -1178,31 +1190,31 @@
       "sourceUrl": "https://docs.openclaw.ai/gateway/cli-backends",
       "markdownUrl": "https://docs.openclaw.ai/gateway/cli-backends.md",
       "path": "pages/gateway/cli-backends.md",
-      "bytes": 19450
+      "bytes": 19649
     },
     {
       "sourceUrl": "https://docs.openclaw.ai/gateway/config-agents",
       "markdownUrl": "https://docs.openclaw.ai/gateway/config-agents.md",
       "path": "pages/gateway/config-agents.md",
-      "bytes": 70068
+      "bytes": 70976
     },
     {
       "sourceUrl": "https://docs.openclaw.ai/gateway/config-channels",
       "markdownUrl": "https://docs.openclaw.ai/gateway/config-channels.md",
       "path": "pages/gateway/config-channels.md",
-      "bytes": 47262
+      "bytes": 48473
     },
     {
       "sourceUrl": "https://docs.openclaw.ai/gateway/config-tools",
       "markdownUrl": "https://docs.openclaw.ai/gateway/config-tools.md",
       "path": "pages/gateway/config-tools.md",
-      "bytes": 35953
+      "bytes": 35963
     },
     {
       "sourceUrl": "https://docs.openclaw.ai/gateway/configuration",
       "markdownUrl": "https://docs.openclaw.ai/gateway/configuration.md",
       "path": "pages/gateway/configuration.md",
-      "bytes": 30076
+      "bytes": 30301
     },
     {
       "sourceUrl": "https://docs.openclaw.ai/gateway/configuration-examples",
@@ -1214,7 +1226,7 @@
       "sourceUrl": "https://docs.openclaw.ai/gateway/configuration-reference",
       "markdownUrl": "https://docs.openclaw.ai/gateway/configuration-reference.md",
       "path": "pages/gateway/configuration-reference.md",
-      "bytes": 70993
+      "bytes": 71740
     },
     {
       "sourceUrl": "https://docs.openclaw.ai/gateway/diagnostics",
@@ -1232,7 +1244,7 @@
       "sourceUrl": "https://docs.openclaw.ai/gateway/doctor",
       "markdownUrl": "https://docs.openclaw.ai/gateway/doctor.md",
       "path": "pages/gateway/doctor.md",
-      "bytes": 45966
+      "bytes": 46410
     },
     {
       "sourceUrl": "https://docs.openclaw.ai/gateway/external-apps",
@@ -1310,7 +1322,7 @@
       "sourceUrl": "https://docs.openclaw.ai/gateway/opentelemetry",
       "markdownUrl": "https://docs.openclaw.ai/gateway/opentelemetry.md",
       "path": "pages/gateway/opentelemetry.md",
-      "bytes": 26837
+      "bytes": 27521
     },
     {
       "sourceUrl": "https://docs.openclaw.ai/gateway/operator-scopes",
@@ -1322,7 +1334,7 @@
       "sourceUrl": "https://docs.openclaw.ai/gateway/pairing",
       "markdownUrl": "https://docs.openclaw.ai/gateway/pairing.md",
       "path": "pages/gateway/pairing.md",
-      "bytes": 8616
+      "bytes": 9160
     },
     {
       "sourceUrl": "https://docs.openclaw.ai/gateway/prometheus",
@@ -1334,7 +1346,7 @@
       "sourceUrl": "https://docs.openclaw.ai/gateway/protocol",
       "markdownUrl": "https://docs.openclaw.ai/gateway/protocol.md",
       "path": "pages/gateway/protocol.md",
-      "bytes": 51819
+      "bytes": 52270
     },
     {
       "sourceUrl": "https://docs.openclaw.ai/gateway/remote",
@@ -1358,7 +1370,7 @@
       "sourceUrl": "https://docs.openclaw.ai/gateway/sandboxing",
       "markdownUrl": "https://docs.openclaw.ai/gateway/sandboxing.md",
       "path": "pages/gateway/sandboxing.md",
-      "bytes": 27870
+      "bytes": 27879
     },
     {
       "sourceUrl": "https://docs.openclaw.ai/gateway/secrets",
@@ -1418,7 +1430,7 @@
       "sourceUrl": "https://docs.openclaw.ai/gateway/troubleshooting",
       "markdownUrl": "https://docs.openclaw.ai/gateway/troubleshooting.md",
       "path": "pages/gateway/troubleshooting.md",
-      "bytes": 45326
+      "bytes": 45324
     },
     {
       "sourceUrl": "https://docs.openclaw.ai/gateway/trusted-proxy-auth",
@@ -1448,7 +1460,7 @@
       "sourceUrl": "https://docs.openclaw.ai/help/faq",
       "markdownUrl": "https://docs.openclaw.ai/help/faq.md",
       "path": "pages/help/faq.md",
-      "bytes": 90317
+      "bytes": 90378
     },
     {
       "sourceUrl": "https://docs.openclaw.ai/help/faq-first-run",
@@ -1460,7 +1472,7 @@
       "sourceUrl": "https://docs.openclaw.ai/help/faq-models",
       "markdownUrl": "https://docs.openclaw.ai/help/faq-models.md",
       "path": "pages/help/faq-models.md",
-      "bytes": 23480
+      "bytes": 24014
     },
     {
       "sourceUrl": "https://docs.openclaw.ai/help/scripts",
@@ -1472,7 +1484,7 @@
       "sourceUrl": "https://docs.openclaw.ai/help/testing",
       "markdownUrl": "https://docs.openclaw.ai/help/testing.md",
       "path": "pages/help/testing.md",
-      "bytes": 73529
+      "bytes": 74129
     },
     {
       "sourceUrl": "https://docs.openclaw.ai/help/testing-live",
@@ -1538,7 +1550,7 @@
       "sourceUrl": "https://docs.openclaw.ai/install/docker",
       "markdownUrl": "https://docs.openclaw.ai/install/docker.md",
       "path": "pages/install/docker.md",
-      "bytes": 24982
+      "bytes": 28552
     },
     {
       "sourceUrl": "https://docs.openclaw.ai/install/docker-vm-runtime",
@@ -1568,7 +1580,7 @@
       "sourceUrl": "https://docs.openclaw.ai/install/hetzner",
       "markdownUrl": "https://docs.openclaw.ai/install/hetzner.md",
       "path": "pages/install/hetzner.md",
-      "bytes": 9007
+      "bytes": 9005
     },
     {
       "sourceUrl": "https://docs.openclaw.ai/install/hostinger",
@@ -1664,7 +1676,7 @@
       "sourceUrl": "https://docs.openclaw.ai/install/uninstall",
       "markdownUrl": "https://docs.openclaw.ai/install/uninstall.md",
       "path": "pages/install/uninstall.md",
-      "bytes": 3846
+      "bytes": 4154
     },
     {
       "sourceUrl": "https://docs.openclaw.ai/install/updating",
@@ -1682,7 +1694,19 @@
       "sourceUrl": "https://docs.openclaw.ai/logging",
       "markdownUrl": "https://docs.openclaw.ai/logging.md",
       "path": "pages/logging.md",
-      "bytes": 12618
+      "bytes": 13023
+    },
+    {
+      "sourceUrl": "https://docs.openclaw.ai/maturity/scorecard",
+      "markdownUrl": "https://docs.openclaw.ai/maturity/scorecard.md",
+      "path": "pages/maturity/scorecard.md",
+      "bytes": 324519
+    },
+    {
+      "sourceUrl": "https://docs.openclaw.ai/maturity/taxonomy",
+      "markdownUrl": "https://docs.openclaw.ai/maturity/taxonomy.md",
+      "path": "pages/maturity/taxonomy.md",
+      "bytes": 442257
     },
     {
       "sourceUrl": "https://docs.openclaw.ai/network",
@@ -1694,13 +1718,13 @@
       "sourceUrl": "https://docs.openclaw.ai/nodes",
       "markdownUrl": "https://docs.openclaw.ai/nodes.md",
       "path": "pages/nodes.md",
-      "bytes": 19702
+      "bytes": 20158
     },
     {
       "sourceUrl": "https://docs.openclaw.ai/nodes/audio",
       "markdownUrl": "https://docs.openclaw.ai/nodes/audio.md",
       "path": "pages/nodes/audio.md",
-      "bytes": 8358
+      "bytes": 8359
     },
     {
       "sourceUrl": "https://docs.openclaw.ai/nodes/camera",
@@ -1742,7 +1766,7 @@
       "sourceUrl": "https://docs.openclaw.ai/nodes/voicewake",
       "markdownUrl": "https://docs.openclaw.ai/nodes/voicewake.md",
       "path": "pages/nodes/voicewake.md",
-      "bytes": 2820
+      "bytes": 3000
     },
     {
       "sourceUrl": "https://docs.openclaw.ai/openclaw-agent-runtime",
@@ -1796,13 +1820,13 @@
       "sourceUrl": "https://docs.openclaw.ai/platforms/ios",
       "markdownUrl": "https://docs.openclaw.ai/platforms/ios.md",
       "path": "pages/platforms/ios.md",
-      "bytes": 11935
+      "bytes": 12150
     },
     {
       "sourceUrl": "https://docs.openclaw.ai/platforms/linux",
       "markdownUrl": "https://docs.openclaw.ai/platforms/linux.md",
       "path": "pages/platforms/linux.md",
-      "bytes": 3979
+      "bytes": 4299
     },
     {
       "sourceUrl": "https://docs.openclaw.ai/platforms/mac/bundled-gateway",
@@ -1928,7 +1952,7 @@
       "sourceUrl": "https://docs.openclaw.ai/platforms/windows",
       "markdownUrl": "https://docs.openclaw.ai/platforms/windows.md",
       "path": "pages/platforms/windows.md",
-      "bytes": 10530
+      "bytes": 10745
     },
     {
       "sourceUrl": "https://docs.openclaw.ai/plugins/adding-capabilities",
@@ -1958,7 +1982,7 @@
       "sourceUrl": "https://docs.openclaw.ai/plugins/architecture-internals",
       "markdownUrl": "https://docs.openclaw.ai/plugins/architecture-internals.md",
       "path": "pages/plugins/architecture-internals.md",
-      "bytes": 61627
+      "bytes": 61876
     },
     {
       "sourceUrl": "https://docs.openclaw.ai/plugins/building-extensions",
@@ -1988,19 +2012,19 @@
       "sourceUrl": "https://docs.openclaw.ai/plugins/codex-computer-use",
       "markdownUrl": "https://docs.openclaw.ai/plugins/codex-computer-use.md",
       "path": "pages/plugins/codex-computer-use.md",
-      "bytes": 14822
+      "bytes": 15789
     },
     {
       "sourceUrl": "https://docs.openclaw.ai/plugins/codex-harness",
       "markdownUrl": "https://docs.openclaw.ai/plugins/codex-harness.md",
       "path": "pages/plugins/codex-harness.md",
-      "bytes": 48639
+      "bytes": 49094
     },
     {
       "sourceUrl": "https://docs.openclaw.ai/plugins/codex-harness-reference",
       "markdownUrl": "https://docs.openclaw.ai/plugins/codex-harness-reference.md",
       "path": "pages/plugins/codex-harness-reference.md",
-      "bytes": 31394
+      "bytes": 32031
     },
     {
       "sourceUrl": "https://docs.openclaw.ai/plugins/codex-harness-runtime",
@@ -2012,7 +2036,7 @@
       "sourceUrl": "https://docs.openclaw.ai/plugins/codex-native-plugins",
       "markdownUrl": "https://docs.openclaw.ai/plugins/codex-native-plugins.md",
       "path": "pages/plugins/codex-native-plugins.md",
-      "bytes": 12536
+      "bytes": 12855
     },
     {
       "sourceUrl": "https://docs.openclaw.ai/plugins/community",
@@ -2030,7 +2054,7 @@
       "sourceUrl": "https://docs.openclaw.ai/plugins/copilot",
       "markdownUrl": "https://docs.openclaw.ai/plugins/copilot.md",
       "path": "pages/plugins/copilot.md",
-      "bytes": 17261
+      "bytes": 19019
     },
     {
       "sourceUrl": "https://docs.openclaw.ai/plugins/dependency-resolution",
@@ -2048,7 +2072,7 @@
       "sourceUrl": "https://docs.openclaw.ai/plugins/hooks",
       "markdownUrl": "https://docs.openclaw.ai/plugins/hooks.md",
       "path": "pages/plugins/hooks.md",
-      "bytes": 25783
+      "bytes": 27989
     },
     {
       "sourceUrl": "https://docs.openclaw.ai/plugins/install-overrides",
@@ -2066,13 +2090,13 @@
       "sourceUrl": "https://docs.openclaw.ai/plugins/manage-plugins",
       "markdownUrl": "https://docs.openclaw.ai/plugins/manage-plugins.md",
       "path": "pages/plugins/manage-plugins.md",
-      "bytes": 8340
+      "bytes": 8809
     },
     {
       "sourceUrl": "https://docs.openclaw.ai/plugins/manifest",
       "markdownUrl": "https://docs.openclaw.ai/plugins/manifest.md",
       "path": "pages/plugins/manifest.md",
-      "bytes": 97105
+      "bytes": 97434
     },
     {
       "sourceUrl": "https://docs.openclaw.ai/plugins/memory-lancedb",
@@ -2102,7 +2126,7 @@
       "sourceUrl": "https://docs.openclaw.ai/plugins/plugin-inventory",
       "markdownUrl": "https://docs.openclaw.ai/plugins/plugin-inventory.md",
       "path": "pages/plugins/plugin-inventory.md",
-      "bytes": 23242
+      "bytes": 24295
     },
     {
       "sourceUrl": "https://docs.openclaw.ai/plugins/plugin-permission-requests",
@@ -2162,7 +2186,7 @@
       "sourceUrl": "https://docs.openclaw.ai/plugins/reference/arcee",
       "markdownUrl": "https://docs.openclaw.ai/plugins/reference/arcee.md",
       "path": "pages/plugins/reference/arcee.md",
-      "bytes": 399
+      "bytes": 427
     },
     {
       "sourceUrl": "https://docs.openclaw.ai/plugins/reference/azure-speech",
@@ -2198,31 +2222,31 @@
       "sourceUrl": "https://docs.openclaw.ai/plugins/reference/canvas",
       "markdownUrl": "https://docs.openclaw.ai/plugins/reference/canvas.md",
       "path": "pages/plugins/reference/canvas.md",
-      "bytes": 409
+      "bytes": 417
     },
     {
       "sourceUrl": "https://docs.openclaw.ai/plugins/reference/cerebras",
       "markdownUrl": "https://docs.openclaw.ai/plugins/reference/cerebras.md",
       "path": "pages/plugins/reference/cerebras.md",
-      "bytes": 426
+      "bytes": 457
     },
     {
       "sourceUrl": "https://docs.openclaw.ai/plugins/reference/chutes",
       "markdownUrl": "https://docs.openclaw.ai/plugins/reference/chutes.md",
       "path": "pages/plugins/reference/chutes.md",
-      "bytes": 408
+      "bytes": 437
     },
     {
       "sourceUrl": "https://docs.openclaw.ai/plugins/reference/clickclack",
       "markdownUrl": "https://docs.openclaw.ai/plugins/reference/clickclack.md",
       "path": "pages/plugins/reference/clickclack.md",
-      "bytes": 491
+      "bytes": 515
     },
     {
       "sourceUrl": "https://docs.openclaw.ai/plugins/reference/cloudflare-ai-gateway",
       "markdownUrl": "https://docs.openclaw.ai/plugins/reference/cloudflare-ai-gateway.md",
       "path": "pages/plugins/reference/cloudflare-ai-gateway.md",
-      "bytes": 543
+      "bytes": 587
     },
     {
       "sourceUrl": "https://docs.openclaw.ai/plugins/reference/codex",
@@ -2240,7 +2264,7 @@
       "sourceUrl": "https://docs.openclaw.ai/plugins/reference/cohere",
       "markdownUrl": "https://docs.openclaw.ai/plugins/reference/cohere.md",
       "path": "pages/plugins/reference/cohere.md",
-      "bytes": 408
+      "bytes": 429
     },
     {
       "sourceUrl": "https://docs.openclaw.ai/plugins/reference/comfy",
@@ -2270,19 +2294,19 @@
       "sourceUrl": "https://docs.openclaw.ai/plugins/reference/deepinfra",
       "markdownUrl": "https://docs.openclaw.ai/plugins/reference/deepinfra.md",
       "path": "pages/plugins/reference/deepinfra.md",
-      "bytes": 570
+      "bytes": 602
     },
     {
       "sourceUrl": "https://docs.openclaw.ai/plugins/reference/deepseek",
       "markdownUrl": "https://docs.openclaw.ai/plugins/reference/deepseek.md",
       "path": "pages/plugins/reference/deepseek.md",
-      "bytes": 426
+      "bytes": 457
     },
     {
       "sourceUrl": "https://docs.openclaw.ai/plugins/reference/diagnostics-otel",
       "markdownUrl": "https://docs.openclaw.ai/plugins/reference/diagnostics-otel.md",
       "path": "pages/plugins/reference/diagnostics-otel.md",
-      "bytes": 468
+      "bytes": 482
     },
     {
       "sourceUrl": "https://docs.openclaw.ai/plugins/reference/diagnostics-prometheus",
@@ -2306,7 +2330,7 @@
       "sourceUrl": "https://docs.openclaw.ai/plugins/reference/discord",
       "markdownUrl": "https://docs.openclaw.ai/plugins/reference/discord.md",
       "path": "pages/plugins/reference/discord.md",
-      "bytes": 492
+      "bytes": 500
     },
     {
       "sourceUrl": "https://docs.openclaw.ai/plugins/reference/document-extract",
@@ -2330,7 +2354,7 @@
       "sourceUrl": "https://docs.openclaw.ai/plugins/reference/exa",
       "markdownUrl": "https://docs.openclaw.ai/plugins/reference/exa.md",
       "path": "pages/plugins/reference/exa.md",
-      "bytes": 375
+      "bytes": 399
     },
     {
       "sourceUrl": "https://docs.openclaw.ai/plugins/reference/fal",
@@ -2354,13 +2378,13 @@
       "sourceUrl": "https://docs.openclaw.ai/plugins/reference/firecrawl",
       "markdownUrl": "https://docs.openclaw.ai/plugins/reference/firecrawl.md",
       "path": "pages/plugins/reference/firecrawl.md",
-      "bytes": 550
+      "bytes": 580
     },
     {
       "sourceUrl": "https://docs.openclaw.ai/plugins/reference/fireworks",
       "markdownUrl": "https://docs.openclaw.ai/plugins/reference/fireworks.md",
       "path": "pages/plugins/reference/fireworks.md",
-      "bytes": 435
+      "bytes": 467
     },
     {
       "sourceUrl": "https://docs.openclaw.ai/plugins/reference/github-copilot",
@@ -2372,7 +2396,7 @@
       "sourceUrl": "https://docs.openclaw.ai/plugins/reference/gmi",
       "markdownUrl": "https://docs.openclaw.ai/plugins/reference/gmi.md",
       "path": "pages/plugins/reference/gmi.md",
-      "bytes": 444
+      "bytes": 410
     },
     {
       "sourceUrl": "https://docs.openclaw.ai/plugins/reference/google",
@@ -2396,13 +2420,13 @@
       "sourceUrl": "https://docs.openclaw.ai/plugins/reference/gradium",
       "markdownUrl": "https://docs.openclaw.ai/plugins/reference/gradium.md",
       "path": "pages/plugins/reference/gradium.md",
-      "bytes": 401
+      "bytes": 429
     },
     {
       "sourceUrl": "https://docs.openclaw.ai/plugins/reference/groq",
       "markdownUrl": "https://docs.openclaw.ai/plugins/reference/groq.md",
       "path": "pages/plugins/reference/groq.md",
-      "bytes": 430
+      "bytes": 457
     },
     {
       "sourceUrl": "https://docs.openclaw.ai/plugins/reference/huggingface",
@@ -2420,25 +2444,25 @@
       "sourceUrl": "https://docs.openclaw.ai/plugins/reference/inworld",
       "markdownUrl": "https://docs.openclaw.ai/plugins/reference/inworld.md",
       "path": "pages/plugins/reference/inworld.md",
-      "bytes": 455
+      "bytes": 483
     },
     {
       "sourceUrl": "https://docs.openclaw.ai/plugins/reference/irc",
       "markdownUrl": "https://docs.openclaw.ai/plugins/reference/irc.md",
       "path": "pages/plugins/reference/irc.md",
-      "bytes": 428
+      "bytes": 445
     },
     {
       "sourceUrl": "https://docs.openclaw.ai/plugins/reference/kilocode",
       "markdownUrl": "https://docs.openclaw.ai/plugins/reference/kilocode.md",
       "path": "pages/plugins/reference/kilocode.md",
-      "bytes": 426
+      "bytes": 457
     },
     {
       "sourceUrl": "https://docs.openclaw.ai/plugins/reference/kimi",
       "markdownUrl": "https://docs.openclaw.ai/plugins/reference/kimi.md",
       "path": "pages/plugins/reference/kimi.md",
-      "bytes": 433
+      "bytes": 460
     },
     {
       "sourceUrl": "https://docs.openclaw.ai/plugins/reference/line",
@@ -2486,7 +2510,7 @@
       "sourceUrl": "https://docs.openclaw.ai/plugins/reference/mattermost",
       "markdownUrl": "https://docs.openclaw.ai/plugins/reference/mattermost.md",
       "path": "pages/plugins/reference/mattermost.md",
-      "bytes": 491
+      "bytes": 515
     },
     {
       "sourceUrl": "https://docs.openclaw.ai/plugins/reference/memory-core",
@@ -2546,7 +2570,7 @@
       "sourceUrl": "https://docs.openclaw.ai/plugins/reference/moonshot",
       "markdownUrl": "https://docs.openclaw.ai/plugins/reference/moonshot.md",
       "path": "pages/plugins/reference/moonshot.md",
-      "bytes": 486
+      "bytes": 517
     },
     {
       "sourceUrl": "https://docs.openclaw.ai/plugins/reference/msteams",
@@ -2630,7 +2654,7 @@
       "sourceUrl": "https://docs.openclaw.ai/plugins/reference/perplexity",
       "markdownUrl": "https://docs.openclaw.ai/plugins/reference/perplexity.md",
       "path": "pages/plugins/reference/perplexity.md",
-      "bytes": 417
+      "bytes": 448
     },
     {
       "sourceUrl": "https://docs.openclaw.ai/plugins/reference/pixverse",
@@ -2654,7 +2678,7 @@
       "sourceUrl": "https://docs.openclaw.ai/plugins/reference/qa-lab",
       "markdownUrl": "https://docs.openclaw.ai/plugins/reference/qa-lab.md",
       "path": "pages/plugins/reference/qa-lab.md",
-      "bytes": 382
+      "bytes": 405
     },
     {
       "sourceUrl": "https://docs.openclaw.ai/plugins/reference/qa-matrix",
@@ -2666,7 +2690,7 @@
       "sourceUrl": "https://docs.openclaw.ai/plugins/reference/qianfan",
       "markdownUrl": "https://docs.openclaw.ai/plugins/reference/qianfan.md",
       "path": "pages/plugins/reference/qianfan.md",
-      "bytes": 417
+      "bytes": 447
     },
     {
       "sourceUrl": "https://docs.openclaw.ai/plugins/reference/qqbot",
@@ -2678,7 +2702,13 @@
       "sourceUrl": "https://docs.openclaw.ai/plugins/reference/qwen",
       "markdownUrl": "https://docs.openclaw.ai/plugins/reference/qwen.md",
       "path": "pages/plugins/reference/qwen.md",
-      "bytes": 708
+      "bytes": 735
+    },
+    {
+      "sourceUrl": "https://docs.openclaw.ai/plugins/reference/raft",
+      "markdownUrl": "https://docs.openclaw.ai/plugins/reference/raft.md",
+      "path": "pages/plugins/reference/raft.md",
+      "bytes": 395
     },
     {
       "sourceUrl": "https://docs.openclaw.ai/plugins/reference/runway",
@@ -2690,7 +2720,7 @@
       "sourceUrl": "https://docs.openclaw.ai/plugins/reference/searxng",
       "markdownUrl": "https://docs.openclaw.ai/plugins/reference/searxng.md",
       "path": "pages/plugins/reference/searxng.md",
-      "bytes": 346
+      "bytes": 374
     },
     {
       "sourceUrl": "https://docs.openclaw.ai/plugins/reference/senseaudio",
@@ -2708,25 +2738,25 @@
       "sourceUrl": "https://docs.openclaw.ai/plugins/reference/signal",
       "markdownUrl": "https://docs.openclaw.ai/plugins/reference/signal.md",
       "path": "pages/plugins/reference/signal.md",
-      "bytes": 455
+      "bytes": 475
     },
     {
       "sourceUrl": "https://docs.openclaw.ai/plugins/reference/slack",
       "markdownUrl": "https://docs.openclaw.ai/plugins/reference/slack.md",
       "path": "pages/plugins/reference/slack.md",
-      "bytes": 436
+      "bytes": 444
     },
     {
       "sourceUrl": "https://docs.openclaw.ai/plugins/reference/sms",
       "markdownUrl": "https://docs.openclaw.ai/plugins/reference/sms.md",
       "path": "pages/plugins/reference/sms.md",
-      "bytes": 388
+      "bytes": 405
     },
     {
       "sourceUrl": "https://docs.openclaw.ai/plugins/reference/stepfun",
       "markdownUrl": "https://docs.openclaw.ai/plugins/reference/stepfun.md",
       "path": "pages/plugins/reference/stepfun.md",
-      "bytes": 459
+      "bytes": 489
     },
     {
       "sourceUrl": "https://docs.openclaw.ai/plugins/reference/synology-chat",
@@ -2744,7 +2774,7 @@
       "sourceUrl": "https://docs.openclaw.ai/plugins/reference/tavily",
       "markdownUrl": "https://docs.openclaw.ai/plugins/reference/tavily.md",
       "path": "pages/plugins/reference/tavily.md",
-      "bytes": 455
+      "bytes": 482
     },
     {
       "sourceUrl": "https://docs.openclaw.ai/plugins/reference/telegram",
@@ -2756,7 +2786,7 @@
       "sourceUrl": "https://docs.openclaw.ai/plugins/reference/tencent",
       "markdownUrl": "https://docs.openclaw.ai/plugins/reference/tencent.md",
       "path": "pages/plugins/reference/tencent.md",
-      "bytes": 444
+      "bytes": 474
     },
     {
       "sourceUrl": "https://docs.openclaw.ai/plugins/reference/tlon",
@@ -2792,13 +2822,13 @@
       "sourceUrl": "https://docs.openclaw.ai/plugins/reference/venice",
       "markdownUrl": "https://docs.openclaw.ai/plugins/reference/venice.md",
       "path": "pages/plugins/reference/venice.md",
-      "bytes": 408
+      "bytes": 437
     },
     {
       "sourceUrl": "https://docs.openclaw.ai/plugins/reference/vercel-ai-gateway",
       "markdownUrl": "https://docs.openclaw.ai/plugins/reference/vercel-ai-gateway.md",
       "path": "pages/plugins/reference/vercel-ai-gateway.md",
-      "bytes": 507
+      "bytes": 547
     },
     {
       "sourceUrl": "https://docs.openclaw.ai/plugins/reference/vllm",
@@ -2810,7 +2840,7 @@
       "sourceUrl": "https://docs.openclaw.ai/plugins/reference/voice-call",
       "markdownUrl": "https://docs.openclaw.ai/plugins/reference/voice-call.md",
       "path": "pages/plugins/reference/voice-call.md",
-      "bytes": 456
+      "bytes": 464
     },
     {
       "sourceUrl": "https://docs.openclaw.ai/plugins/reference/volcengine",
@@ -2846,7 +2876,7 @@
       "sourceUrl": "https://docs.openclaw.ai/plugins/reference/whatsapp",
       "markdownUrl": "https://docs.openclaw.ai/plugins/reference/whatsapp.md",
       "path": "pages/plugins/reference/whatsapp.md",
-      "bytes": 451
+      "bytes": 459
     },
     {
       "sourceUrl": "https://docs.openclaw.ai/plugins/reference/workboard",
@@ -2870,7 +2900,7 @@
       "sourceUrl": "https://docs.openclaw.ai/plugins/reference/zai",
       "markdownUrl": "https://docs.openclaw.ai/plugins/reference/zai.md",
       "path": "pages/plugins/reference/zai.md",
-      "bytes": 425
+      "bytes": 451
     },
     {
       "sourceUrl": "https://docs.openclaw.ai/plugins/reference/zalo",
@@ -2888,13 +2918,13 @@
       "sourceUrl": "https://docs.openclaw.ai/plugins/sdk-agent-harness",
       "markdownUrl": "https://docs.openclaw.ai/plugins/sdk-agent-harness.md",
       "path": "pages/plugins/sdk-agent-harness.md",
-      "bytes": 12912
+      "bytes": 14389
     },
     {
       "sourceUrl": "https://docs.openclaw.ai/plugins/sdk-channel-inbound",
       "markdownUrl": "https://docs.openclaw.ai/plugins/sdk-channel-inbound.md",
       "path": "pages/plugins/sdk-channel-inbound.md",
-      "bytes": 2592
+      "bytes": 2829
     },
     {
       "sourceUrl": "https://docs.openclaw.ai/plugins/sdk-channel-ingress",
@@ -2918,7 +2948,7 @@
       "sourceUrl": "https://docs.openclaw.ai/plugins/sdk-channel-plugins",
       "markdownUrl": "https://docs.openclaw.ai/plugins/sdk-channel-plugins.md",
       "path": "pages/plugins/sdk-channel-plugins.md",
-      "bytes": 37286
+      "bytes": 37304
     },
     {
       "sourceUrl": "https://docs.openclaw.ai/plugins/sdk-channel-turn",
@@ -2948,13 +2978,13 @@
       "sourceUrl": "https://docs.openclaw.ai/plugins/sdk-provider-plugins",
       "markdownUrl": "https://docs.openclaw.ai/plugins/sdk-provider-plugins.md",
       "path": "pages/plugins/sdk-provider-plugins.md",
-      "bytes": 43366
+      "bytes": 43452
     },
     {
       "sourceUrl": "https://docs.openclaw.ai/plugins/sdk-runtime",
       "markdownUrl": "https://docs.openclaw.ai/plugins/sdk-runtime.md",
       "path": "pages/plugins/sdk-runtime.md",
-      "bytes": 28299
+      "bytes": 29208
     },
     {
       "sourceUrl": "https://docs.openclaw.ai/plugins/sdk-setup",
@@ -2966,7 +2996,7 @@
       "sourceUrl": "https://docs.openclaw.ai/plugins/sdk-subpaths",
       "markdownUrl": "https://docs.openclaw.ai/plugins/sdk-subpaths.md",
       "path": "pages/plugins/sdk-subpaths.md",
-      "bytes": 42725
+      "bytes": 43316
     },
     {
       "sourceUrl": "https://docs.openclaw.ai/plugins/sdk-testing",
@@ -2984,7 +3014,7 @@
       "sourceUrl": "https://docs.openclaw.ai/plugins/voice-call",
       "markdownUrl": "https://docs.openclaw.ai/plugins/voice-call.md",
       "path": "pages/plugins/voice-call.md",
-      "bytes": 33855
+      "bytes": 34645
     },
     {
       "sourceUrl": "https://docs.openclaw.ai/plugins/webhooks",
@@ -3008,7 +3038,7 @@
       "sourceUrl": "https://docs.openclaw.ai/prose",
       "markdownUrl": "https://docs.openclaw.ai/prose.md",
       "path": "pages/prose.md",
-      "bytes": 5345
+      "bytes": 5811
     },
     {
       "sourceUrl": "https://docs.openclaw.ai/providers",
@@ -3026,13 +3056,13 @@
       "sourceUrl": "https://docs.openclaw.ai/providers/anthropic",
       "markdownUrl": "https://docs.openclaw.ai/providers/anthropic.md",
       "path": "pages/providers/anthropic.md",
-      "bytes": 13304
+      "bytes": 13482
     },
     {
       "sourceUrl": "https://docs.openclaw.ai/providers/arcee",
       "markdownUrl": "https://docs.openclaw.ai/providers/arcee.md",
       "path": "pages/providers/arcee.md",
-      "bytes": 5291
+      "bytes": 5449
     },
     {
       "sourceUrl": "https://docs.openclaw.ai/providers/azure-speech",
@@ -3056,13 +3086,13 @@
       "sourceUrl": "https://docs.openclaw.ai/providers/cerebras",
       "markdownUrl": "https://docs.openclaw.ai/providers/cerebras.md",
       "path": "pages/providers/cerebras.md",
-      "bytes": 4909
+      "bytes": 5042
     },
     {
       "sourceUrl": "https://docs.openclaw.ai/providers/chutes",
       "markdownUrl": "https://docs.openclaw.ai/providers/chutes.md",
       "path": "pages/providers/chutes.md",
-      "bytes": 5251
+      "bytes": 5382
     },
     {
       "sourceUrl": "https://docs.openclaw.ai/providers/claude-max-api-proxy",
@@ -3074,13 +3104,13 @@
       "sourceUrl": "https://docs.openclaw.ai/providers/cloudflare-ai-gateway",
       "markdownUrl": "https://docs.openclaw.ai/providers/cloudflare-ai-gateway.md",
       "path": "pages/providers/cloudflare-ai-gateway.md",
-      "bytes": 4102
+      "bytes": 4277
     },
     {
       "sourceUrl": "https://docs.openclaw.ai/providers/cohere",
       "markdownUrl": "https://docs.openclaw.ai/providers/cohere.md",
       "path": "pages/providers/cohere.md",
-      "bytes": 1905
+      "bytes": 2317
     },
     {
       "sourceUrl": "https://docs.openclaw.ai/providers/comfy",
@@ -3098,13 +3128,13 @@
       "sourceUrl": "https://docs.openclaw.ai/providers/deepinfra",
       "markdownUrl": "https://docs.openclaw.ai/providers/deepinfra.md",
       "path": "pages/providers/deepinfra.md",
-      "bytes": 4337
+      "bytes": 4492
     },
     {
       "sourceUrl": "https://docs.openclaw.ai/providers/deepseek",
       "markdownUrl": "https://docs.openclaw.ai/providers/deepseek.md",
       "path": "pages/providers/deepseek.md",
-      "bytes": 5081
+      "bytes": 5244
     },
     {
       "sourceUrl": "https://docs.openclaw.ai/providers/ds4",
@@ -3128,7 +3158,7 @@
       "sourceUrl": "https://docs.openclaw.ai/providers/fireworks",
       "markdownUrl": "https://docs.openclaw.ai/providers/fireworks.md",
       "path": "pages/providers/fireworks.md",
-      "bytes": 6529
+      "bytes": 6630
     },
     {
       "sourceUrl": "https://docs.openclaw.ai/providers/github-copilot",
@@ -3140,7 +3170,7 @@
       "sourceUrl": "https://docs.openclaw.ai/providers/gmi",
       "markdownUrl": "https://docs.openclaw.ai/providers/gmi.md",
       "path": "pages/providers/gmi.md",
-      "bytes": 3258
+      "bytes": 3415
     },
     {
       "sourceUrl": "https://docs.openclaw.ai/providers/google",
@@ -3152,13 +3182,13 @@
       "sourceUrl": "https://docs.openclaw.ai/providers/gradium",
       "markdownUrl": "https://docs.openclaw.ai/providers/gradium.md",
       "path": "pages/providers/gradium.md",
-      "bytes": 4254
+      "bytes": 4405
     },
     {
       "sourceUrl": "https://docs.openclaw.ai/providers/groq",
       "markdownUrl": "https://docs.openclaw.ai/providers/groq.md",
       "path": "pages/providers/groq.md",
-      "bytes": 7103
+      "bytes": 7043
     },
     {
       "sourceUrl": "https://docs.openclaw.ai/providers/huggingface",
@@ -3176,13 +3206,13 @@
       "sourceUrl": "https://docs.openclaw.ai/providers/inworld",
       "markdownUrl": "https://docs.openclaw.ai/providers/inworld.md",
       "path": "pages/providers/inworld.md",
-      "bytes": 5269
+      "bytes": 5430
     },
     {
       "sourceUrl": "https://docs.openclaw.ai/providers/kilocode",
       "markdownUrl": "https://docs.openclaw.ai/providers/kilocode.md",
       "path": "pages/providers/kilocode.md",
-      "bytes": 5007
+      "bytes": 5160
     },
     {
       "sourceUrl": "https://docs.openclaw.ai/providers/litellm",
@@ -3218,7 +3248,7 @@
       "sourceUrl": "https://docs.openclaw.ai/providers/moonshot",
       "markdownUrl": "https://docs.openclaw.ai/providers/moonshot.md",
       "path": "pages/providers/moonshot.md",
-      "bytes": 15365
+      "bytes": 15677
     },
     {
       "sourceUrl": "https://docs.openclaw.ai/providers/novita",
@@ -3248,7 +3278,7 @@
       "sourceUrl": "https://docs.openclaw.ai/providers/openai",
       "markdownUrl": "https://docs.openclaw.ai/providers/openai.md",
       "path": "pages/providers/openai.md",
-      "bytes": 48201
+      "bytes": 48716
     },
     {
       "sourceUrl": "https://docs.openclaw.ai/providers/opencode",
@@ -3260,7 +3290,7 @@
       "sourceUrl": "https://docs.openclaw.ai/providers/opencode-go",
       "markdownUrl": "https://docs.openclaw.ai/providers/opencode-go.md",
       "path": "pages/providers/opencode-go.md",
-      "bytes": 4059
+      "bytes": 4258
     },
     {
       "sourceUrl": "https://docs.openclaw.ai/providers/openrouter",
@@ -3272,7 +3302,7 @@
       "sourceUrl": "https://docs.openclaw.ai/providers/perplexity-provider",
       "markdownUrl": "https://docs.openclaw.ai/providers/perplexity-provider.md",
       "path": "pages/providers/perplexity-provider.md",
-      "bytes": 4853
+      "bytes": 5015
     },
     {
       "sourceUrl": "https://docs.openclaw.ai/providers/pixverse",
@@ -3284,19 +3314,19 @@
       "sourceUrl": "https://docs.openclaw.ai/providers/qianfan",
       "markdownUrl": "https://docs.openclaw.ai/providers/qianfan.md",
       "path": "pages/providers/qianfan.md",
-      "bytes": 4705
+      "bytes": 4857
     },
     {
       "sourceUrl": "https://docs.openclaw.ai/providers/qwen",
       "markdownUrl": "https://docs.openclaw.ai/providers/qwen.md",
       "path": "pages/providers/qwen.md",
-      "bytes": 13929
+      "bytes": 14100
     },
     {
       "sourceUrl": "https://docs.openclaw.ai/providers/qwen-oauth",
       "markdownUrl": "https://docs.openclaw.ai/providers/qwen-oauth.md",
       "path": "pages/providers/qwen-oauth.md",
-      "bytes": 4173
+      "bytes": 4176
     },
     {
       "sourceUrl": "https://docs.openclaw.ai/providers/runway",
@@ -3320,7 +3350,7 @@
       "sourceUrl": "https://docs.openclaw.ai/providers/stepfun",
       "markdownUrl": "https://docs.openclaw.ai/providers/stepfun.md",
       "path": "pages/providers/stepfun.md",
-      "bytes": 7628
+      "bytes": 7756
     },
     {
       "sourceUrl": "https://docs.openclaw.ai/providers/synthetic",
@@ -3332,7 +3362,7 @@
       "sourceUrl": "https://docs.openclaw.ai/providers/tencent",
       "markdownUrl": "https://docs.openclaw.ai/providers/tencent.md",
       "path": "pages/providers/tencent.md",
-      "bytes": 5307
+      "bytes": 5410
     },
     {
       "sourceUrl": "https://docs.openclaw.ai/providers/together",
@@ -3344,13 +3374,13 @@
       "sourceUrl": "https://docs.openclaw.ai/providers/venice",
       "markdownUrl": "https://docs.openclaw.ai/providers/venice.md",
       "path": "pages/providers/venice.md",
-      "bytes": 15512
+      "bytes": 15633
     },
     {
       "sourceUrl": "https://docs.openclaw.ai/providers/vercel-ai-gateway",
       "markdownUrl": "https://docs.openclaw.ai/providers/vercel-ai-gateway.md",
       "path": "pages/providers/vercel-ai-gateway.md",
-      "bytes": 4245
+      "bytes": 4472
     },
     {
       "sourceUrl": "https://docs.openclaw.ai/providers/vllm",
@@ -3374,19 +3404,19 @@
       "sourceUrl": "https://docs.openclaw.ai/providers/xai",
       "markdownUrl": "https://docs.openclaw.ai/providers/xai.md",
       "path": "pages/providers/xai.md",
-      "bytes": 22343
+      "bytes": 22476
     },
     {
       "sourceUrl": "https://docs.openclaw.ai/providers/xiaomi",
       "markdownUrl": "https://docs.openclaw.ai/providers/xiaomi.md",
       "path": "pages/providers/xiaomi.md",
-      "bytes": 11556
+      "bytes": 11558
     },
     {
       "sourceUrl": "https://docs.openclaw.ai/providers/zai",
       "markdownUrl": "https://docs.openclaw.ai/providers/zai.md",
       "path": "pages/providers/zai.md",
-      "bytes": 7227
+      "bytes": 7529
     },
     {
       "sourceUrl": "https://docs.openclaw.ai/refactor/access",
@@ -3410,7 +3440,7 @@
       "sourceUrl": "https://docs.openclaw.ai/refactor/database-first",
       "markdownUrl": "https://docs.openclaw.ai/refactor/database-first.md",
       "path": "pages/refactor/database-first.md",
-      "bytes": 141499
+      "bytes": 141666
     },
     {
       "sourceUrl": "https://docs.openclaw.ai/refactor/ingress-core",
@@ -3422,13 +3452,13 @@
       "sourceUrl": "https://docs.openclaw.ai/reference/AGENTS.default",
       "markdownUrl": "https://docs.openclaw.ai/reference/AGENTS.default.md",
       "path": "pages/reference/AGENTS.default.md",
-      "bytes": 5974
+      "bytes": 6580
     },
     {
       "sourceUrl": "https://docs.openclaw.ai/reference/api-usage-costs",
       "markdownUrl": "https://docs.openclaw.ai/reference/api-usage-costs.md",
       "path": "pages/reference/api-usage-costs.md",
-      "bytes": 9588
+      "bytes": 9623
     },
     {
       "sourceUrl": "https://docs.openclaw.ai/reference/application-modernization-plan",
@@ -3458,13 +3488,13 @@
       "sourceUrl": "https://docs.openclaw.ai/reference/full-release-validation",
       "markdownUrl": "https://docs.openclaw.ai/reference/full-release-validation.md",
       "path": "pages/reference/full-release-validation.md",
-      "bytes": 23339
+      "bytes": 22753
     },
     {
       "sourceUrl": "https://docs.openclaw.ai/reference/memory-config",
       "markdownUrl": "https://docs.openclaw.ai/reference/memory-config.md",
       "path": "pages/reference/memory-config.md",
-      "bytes": 33401
+      "bytes": 33316
     },
     {
       "sourceUrl": "https://docs.openclaw.ai/reference/prompt-caching",
@@ -3482,7 +3512,7 @@
       "sourceUrl": "https://docs.openclaw.ai/reference/RELEASING",
       "markdownUrl": "https://docs.openclaw.ai/reference/RELEASING.md",
       "path": "pages/reference/RELEASING.md",
-      "bytes": 54168
+      "bytes": 53974
     },
     {
       "sourceUrl": "https://docs.openclaw.ai/reference/rich-output-protocol",
@@ -3506,19 +3536,19 @@
       "sourceUrl": "https://docs.openclaw.ai/reference/secretref-credential-surface",
       "markdownUrl": "https://docs.openclaw.ai/reference/secretref-credential-surface.md",
       "path": "pages/reference/secretref-credential-surface.md",
-      "bytes": 7279
+      "bytes": 7466
     },
     {
       "sourceUrl": "https://docs.openclaw.ai/reference/session-management-compaction",
       "markdownUrl": "https://docs.openclaw.ai/reference/session-management-compaction.md",
       "path": "pages/reference/session-management-compaction.md",
-      "bytes": 23359
+      "bytes": 24324
     },
     {
       "sourceUrl": "https://docs.openclaw.ai/reference/templates/AGENTS.dev",
       "markdownUrl": "https://docs.openclaw.ai/reference/templates/AGENTS.dev.md",
       "path": "pages/reference/templates/AGENTS.dev.md",
-      "bytes": 2918
+      "bytes": 3524
     },
     {
       "sourceUrl": "https://docs.openclaw.ai/reference/templates/BOOT",
@@ -3536,7 +3566,7 @@
       "sourceUrl": "https://docs.openclaw.ai/reference/templates/CLAUDE",
       "markdownUrl": "https://docs.openclaw.ai/reference/templates/CLAUDE.md",
       "path": "pages/reference/templates/CLAUDE.md",
-      "bytes": 8240
+      "bytes": 8846
     },
     {
       "sourceUrl": "https://docs.openclaw.ai/reference/templates/HEARTBEAT",
@@ -3602,7 +3632,7 @@
       "sourceUrl": "https://docs.openclaw.ai/reference/token-use",
       "markdownUrl": "https://docs.openclaw.ai/reference/token-use.md",
       "path": "pages/reference/token-use.md",
-      "bytes": 12128
+      "bytes": 12304
     },
     {
       "sourceUrl": "https://docs.openclaw.ai/reference/transcript-hygiene",
@@ -3650,7 +3680,7 @@
       "sourceUrl": "https://docs.openclaw.ai/specs/claw-supervisor",
       "markdownUrl": "https://docs.openclaw.ai/specs/claw-supervisor.md",
       "path": "pages/specs/claw-supervisor.md",
-      "bytes": 9720
+      "bytes": 9719
     },
     {
       "sourceUrl": "https://docs.openclaw.ai/start/bootstrapping",
@@ -3716,7 +3746,7 @@
       "sourceUrl": "https://docs.openclaw.ai/start/showcase",
       "markdownUrl": "https://docs.openclaw.ai/start/showcase.md",
       "path": "pages/start/showcase.md",
-      "bytes": 14762
+      "bytes": 14833
     },
     {
       "sourceUrl": "https://docs.openclaw.ai/start/wizard",
@@ -3758,7 +3788,7 @@
       "sourceUrl": "https://docs.openclaw.ai/tools/agent-send",
       "markdownUrl": "https://docs.openclaw.ai/tools/agent-send.md",
       "path": "pages/tools/agent-send.md",
-      "bytes": 5628
+      "bytes": 6147
     },
     {
       "sourceUrl": "https://docs.openclaw.ai/tools/apply-patch",
@@ -3776,13 +3806,13 @@
       "sourceUrl": "https://docs.openclaw.ai/tools/browser",
       "markdownUrl": "https://docs.openclaw.ai/tools/browser.md",
       "path": "pages/tools/browser.md",
-      "bytes": 38866
+      "bytes": 38945
     },
     {
       "sourceUrl": "https://docs.openclaw.ai/tools/browser-control",
       "markdownUrl": "https://docs.openclaw.ai/tools/browser-control.md",
       "path": "pages/tools/browser-control.md",
-      "bytes": 18795
+      "bytes": 18983
     },
     {
       "sourceUrl": "https://docs.openclaw.ai/tools/browser-linux-troubleshooting",
@@ -3824,13 +3854,13 @@
       "sourceUrl": "https://docs.openclaw.ai/tools/code-execution",
       "markdownUrl": "https://docs.openclaw.ai/tools/code-execution.md",
       "path": "pages/tools/code-execution.md",
-      "bytes": 5955
+      "bytes": 5952
     },
     {
       "sourceUrl": "https://docs.openclaw.ai/tools/creating-skills",
       "markdownUrl": "https://docs.openclaw.ai/tools/creating-skills.md",
       "path": "pages/tools/creating-skills.md",
-      "bytes": 8665
+      "bytes": 8675
     },
     {
       "sourceUrl": "https://docs.openclaw.ai/tools/diffs",
@@ -3854,13 +3884,13 @@
       "sourceUrl": "https://docs.openclaw.ai/tools/exa-search",
       "markdownUrl": "https://docs.openclaw.ai/tools/exa-search.md",
       "path": "pages/tools/exa-search.md",
-      "bytes": 4754
+      "bytes": 4909
     },
     {
       "sourceUrl": "https://docs.openclaw.ai/tools/exec",
       "markdownUrl": "https://docs.openclaw.ai/tools/exec.md",
       "path": "pages/tools/exec.md",
-      "bytes": 17247
+      "bytes": 17408
     },
     {
       "sourceUrl": "https://docs.openclaw.ai/tools/exec-approvals",
@@ -3878,13 +3908,13 @@
       "sourceUrl": "https://docs.openclaw.ai/tools/firecrawl",
       "markdownUrl": "https://docs.openclaw.ai/tools/firecrawl.md",
       "path": "pages/tools/firecrawl.md",
-      "bytes": 4913
+      "bytes": 5713
     },
     {
       "sourceUrl": "https://docs.openclaw.ai/tools/gemini-search",
       "markdownUrl": "https://docs.openclaw.ai/tools/gemini-search.md",
       "path": "pages/tools/gemini-search.md",
-      "bytes": 3835
+      "bytes": 3916
     },
     {
       "sourceUrl": "https://docs.openclaw.ai/tools/goal",
@@ -3902,7 +3932,7 @@
       "sourceUrl": "https://docs.openclaw.ai/tools/image-generation",
       "markdownUrl": "https://docs.openclaw.ai/tools/image-generation.md",
       "path": "pages/tools/image-generation.md",
-      "bytes": 25119
+      "bytes": 25602
     },
     {
       "sourceUrl": "https://docs.openclaw.ai/tools/kimi-search",
@@ -3962,7 +3992,7 @@
       "sourceUrl": "https://docs.openclaw.ai/tools/parallel-search",
       "markdownUrl": "https://docs.openclaw.ai/tools/parallel-search.md",
       "path": "pages/tools/parallel-search.md",
-      "bytes": 5812
+      "bytes": 5984
     },
     {
       "sourceUrl": "https://docs.openclaw.ai/tools/pdf",
@@ -3980,13 +4010,13 @@
       "sourceUrl": "https://docs.openclaw.ai/tools/perplexity-search",
       "markdownUrl": "https://docs.openclaw.ai/tools/perplexity-search.md",
       "path": "pages/tools/perplexity-search.md",
-      "bytes": 6464
+      "bytes": 6626
     },
     {
       "sourceUrl": "https://docs.openclaw.ai/tools/plugin",
       "markdownUrl": "https://docs.openclaw.ai/tools/plugin.md",
       "path": "pages/tools/plugin.md",
-      "bytes": 19388
+      "bytes": 20162
     },
     {
       "sourceUrl": "https://docs.openclaw.ai/tools/reactions",
@@ -3998,7 +4028,7 @@
       "sourceUrl": "https://docs.openclaw.ai/tools/searxng-search",
       "markdownUrl": "https://docs.openclaw.ai/tools/searxng-search.md",
       "path": "pages/tools/searxng-search.md",
-      "bytes": 4434
+      "bytes": 4554
     },
     {
       "sourceUrl": "https://docs.openclaw.ai/tools/skill-workshop",
@@ -4010,7 +4040,7 @@
       "sourceUrl": "https://docs.openclaw.ai/tools/skills",
       "markdownUrl": "https://docs.openclaw.ai/tools/skills.md",
       "path": "pages/tools/skills.md",
-      "bytes": 22802
+      "bytes": 22949
     },
     {
       "sourceUrl": "https://docs.openclaw.ai/tools/skills-config",
@@ -4022,7 +4052,7 @@
       "sourceUrl": "https://docs.openclaw.ai/tools/slash-commands",
       "markdownUrl": "https://docs.openclaw.ai/tools/slash-commands.md",
       "path": "pages/tools/slash-commands.md",
-      "bytes": 23180
+      "bytes": 23419
     },
     {
       "sourceUrl": "https://docs.openclaw.ai/tools/steer",
@@ -4040,13 +4070,13 @@
       "sourceUrl": "https://docs.openclaw.ai/tools/tavily",
       "markdownUrl": "https://docs.openclaw.ai/tools/tavily.md",
       "path": "pages/tools/tavily.md",
-      "bytes": 7282
+      "bytes": 7441
     },
     {
       "sourceUrl": "https://docs.openclaw.ai/tools/thinking",
       "markdownUrl": "https://docs.openclaw.ai/tools/thinking.md",
       "path": "pages/tools/thinking.md",
-      "bytes": 14885
+      "bytes": 15627
     },
     {
       "sourceUrl": "https://docs.openclaw.ai/tools/tokenjuice",
@@ -4082,13 +4112,13 @@
       "sourceUrl": "https://docs.openclaw.ai/tools/web",
       "markdownUrl": "https://docs.openclaw.ai/tools/web.md",
       "path": "pages/tools/web.md",
-      "bytes": 25985
+      "bytes": 26096
     },
     {
       "sourceUrl": "https://docs.openclaw.ai/tools/web-fetch",
       "markdownUrl": "https://docs.openclaw.ai/tools/web-fetch.md",
       "path": "pages/tools/web-fetch.md",
-      "bytes": 6852
+      "bytes": 7074
     },
     {
       "sourceUrl": "https://docs.openclaw.ai/tts",
@@ -4124,7 +4154,7 @@
       "sourceUrl": "https://docs.openclaw.ai/web/tui",
       "markdownUrl": "https://docs.openclaw.ai/web/tui.md",
       "path": "pages/web/tui.md",
-      "bytes": 9473
+      "bytes": 9545
     },
     {
       "sourceUrl": "https://docs.openclaw.ai/web/webchat",

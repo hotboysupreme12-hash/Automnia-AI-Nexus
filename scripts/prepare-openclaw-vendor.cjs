@@ -14,9 +14,9 @@ const metadataPath = path.join(nodeModulesRoot, '.dystopai-openclaw-vendor-deps.
 const cacheRoot = path.join(root, '.cache', 'openclaw-vendor')
 const refresh = /^(1|true|yes)$/i.test(process.env.DYSTOPAI_REFRESH_OPENCLAW_VENDOR_DEPS || '')
 
-const DEFAULT_OPENCLAW_PACKAGE_VERSION = '2026.6.6'
-const DEFAULT_OPENCLAW_PACKAGE_TARBALL = 'https://registry.npmjs.org/openclaw/-/openclaw-2026.6.6.tgz'
-const DEFAULT_OPENCLAW_PACKAGE_INTEGRITY = 'sha512-oMYoQ8a7zummw1tD+AX98yYLzqoq0tQmYWHG65AA0ZivgzmOb2oD0cVdhcWP9IT3opkHdJ5vBdWywUe6xWQXtw=='
+const DEFAULT_OPENCLAW_PACKAGE_VERSION = '2026.6.10'
+const DEFAULT_OPENCLAW_PACKAGE_TARBALL = 'https://registry.npmjs.org/openclaw/-/openclaw-2026.6.10.tgz'
+const DEFAULT_OPENCLAW_PACKAGE_INTEGRITY = 'sha512-LcooND2tBQw8A+kc1Ujltu3lg30bJ0w7XaeRy7eYzobb8BBdcW6DOGbwJL4vpj1vl9+gjRceOtlh5nh9OARcug=='
 
 const installArgs = [
   'ci',
@@ -24,6 +24,15 @@ const installArgs = [
   '--ignore-scripts',
   '--no-audit',
   '--no-fund',
+]
+
+const fallbackInstallArgs = [
+  'install',
+  '--omit=dev',
+  '--ignore-scripts',
+  '--no-audit',
+  '--no-fund',
+  '--package-lock=false',
 ]
 
 const requiredRuntimePackages = [
@@ -128,6 +137,47 @@ function runNpm(args) {
   })
   if (result.status !== 0) {
     throw new Error(`[openclaw-vendor] npm ${args.join(' ')} failed with exit code ${result.status}`)
+  }
+}
+
+function lockHasPackage(lock, packageName) {
+  return Boolean(lock?.packages?.[`node_modules/${packageName}`])
+}
+
+function needsProductionOnlyPackageManifest(packageJson, lock) {
+  const devDependencies = Object.keys(packageJson.devDependencies || {})
+  return devDependencies.some((packageName) => !lockHasPackage(lock, packageName))
+}
+
+function runNpmCiWithFallback(primaryMode) {
+  try {
+    runNpm(installArgs)
+    return primaryMode
+  } catch (error) {
+    console.warn(
+      `[openclaw-vendor] npm ci rejected the published shrinkwrap (${error.message}); retrying without rewriting npm-shrinkwrap.json`,
+    )
+    fs.rmSync(nodeModulesRoot, { recursive: true, force: true })
+    runNpm(fallbackInstallArgs)
+    return `${primaryMode}-fallback-unlocked-install`
+  }
+}
+
+function runNpmInstall(packageJson, lock) {
+  if (!needsProductionOnlyPackageManifest(packageJson, lock)) {
+    return runNpmCiWithFallback('npm-ci-omit-dev')
+  }
+
+  const originalPackageJson = fs.readFileSync(packageJsonPath, 'utf8')
+  const productionPackageJson = { ...packageJson }
+  delete productionPackageJson.devDependencies
+
+  console.log('[openclaw-vendor] published shrinkwrap is production-scoped; using temporary production-only package manifest')
+  fs.writeFileSync(packageJsonPath, `${JSON.stringify(productionPackageJson, null, 2)}\n`)
+  try {
+    return runNpmCiWithFallback('npm-ci-omit-dev-production-manifest')
+  } finally {
+    fs.writeFileSync(packageJsonPath, originalPackageJson)
   }
 }
 
@@ -272,6 +322,7 @@ function metadataMatches(metadata, packageJson, shrinkwrapSha256) {
 }
 
 function writeMetadata(packageJson, shrinkwrapSha256, mode, packageArtifacts) {
+  const args = mode.includes('fallback-unlocked-install') ? fallbackInstallArgs : installArgs
   fs.mkdirSync(nodeModulesRoot, { recursive: true })
   fs.writeFileSync(metadataPath, `${JSON.stringify({
     schema: 1,
@@ -286,9 +337,10 @@ function writeMetadata(packageJson, shrinkwrapSha256, mode, packageArtifacts) {
     },
     install: {
       command: 'npm',
-      args: installArgs,
+      args,
       ignoreScripts: true,
       omitDev: true,
+      shrinkwrapPreserved: true,
     },
     requiredRuntimePackages,
   }, null, 2)}\n`)
@@ -324,12 +376,12 @@ async function main() {
   }
 
   console.log(`[openclaw-vendor] installing OpenClaw ${packageJson.version} production dependencies from npm-shrinkwrap.json`)
-  runNpm(installArgs)
+  const installMode = runNpmInstall(packageJson, lock)
   const missing = validateInstalledPackages(lock)
   if (missing.length) {
     throw new Error(`[openclaw-vendor] npm ci completed but runtime dependencies are still missing: ${missing.join(', ')}`)
   }
-  writeMetadata(packageJson, shrinkwrapSha256, 'npm-ci-omit-dev', packageArtifacts)
+  writeMetadata(packageJson, shrinkwrapSha256, installMode, packageArtifacts)
   console.log(`[openclaw-vendor] prepared OpenClaw ${packageJson.version} production dependencies`)
 }
 

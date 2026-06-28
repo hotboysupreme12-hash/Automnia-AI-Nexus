@@ -62,11 +62,13 @@ export interface RuntimeConfig {
 }
 
 export type ThinkingLevel = 'off' | 'minimal' | 'low' | 'medium' | 'high'
+export type FastModeDefault = 'auto' | 'on' | 'off'
 
 export interface AgentRuntimePolicy {
   thinkingDefault?: ThinkingLevel
   timeoutSeconds?: number
   parallelPreferred?: boolean
+  fastModeDefault?: FastModeDefault
 }
 
 export interface RuntimePreview extends RuntimeConfig {

@@ -3,7 +3,7 @@ import type { CSSProperties } from 'react'
 import { AnimatePresence, motion } from 'framer-motion'
 import { apiErrorMessage, apiRequest } from '../../api/client'
 import { useNexusStore } from '../../store/nexusStore'
-import type { AgentSkillEntry, BehaviorProfile, HeartbeatConfig, OpenClawAgent, ThinkingLevel } from '../../types/nexus'
+import type { AgentSkillEntry, BehaviorProfile, FastModeDefault, HeartbeatConfig, OpenClawAgent, ThinkingLevel } from '../../types/nexus'
 import { apiUrl } from '../../utils/apiUrl'
 import { formatModelChoiceLabel, formatModelGroupLabel, groupAvailableModels } from '../../utils/modelGrouping'
 import { ProviderAuthModal } from '../auth/ProviderAuthModal'
@@ -43,13 +43,13 @@ type AgentConfigPayload = {
   tools?:{allow?:string[];deny?:string[]}
   model?:OpenClawAgent['model']
   heartbeat?:HeartbeatConfig
-  runtime?:{thinkingDefault?:ThinkingLevel;timeoutSeconds?:number;parallelPreferred?:boolean}
+  runtime?:{thinkingDefault?:ThinkingLevel;timeoutSeconds?:number;parallelPreferred?:boolean;fastModeDefault?:FastModeDefault}
 }
 
 type AgentConfigPatch = {
   identity?:{name?:string;avatar?:string}
   profile?:{className?:string;role?:string;level?:number;behaviorProfile?:BehaviorProfile}
-  runtime?:{thinkingDefault?:ThinkingLevel;timeoutSeconds?:number;parallelPreferred?:boolean}
+  runtime?:{thinkingDefault?:ThinkingLevel;timeoutSeconds?:number;parallelPreferred?:boolean;fastModeDefault?:FastModeDefault}
 }
 type AgentConfigDirtySection = 'profile'|'model'|'runtime'|'heartbeat'|'policy'
 type ApplyAgentConfigOptions = { skipDirty?: boolean }
@@ -423,6 +423,7 @@ export function AgentEditorModal() {
   const configPatchTimerRef = useRef<ReturnType<typeof window.setTimeout>|null>(null)
   const configLoadSeqRef = useRef(0)
   const dirtyConfigSectionsRef = useRef<Set<AgentConfigDirtySection>>(new Set())
+  const authRefreshKeyRef = useRef('')
   const fileListSeqRef = useRef(0)
   const fileContentSeqRef = useRef(0)
 
@@ -588,13 +589,15 @@ export function AgentEditorModal() {
       thinkingDefault:(thinkingOn?thinkingLevel:'off') as ThinkingLevel,
       timeoutSeconds:Math.max(30,Math.min(7200,Math.round(runtimeTimeoutSeconds))),
       parallelPreferred:agent.runtimePolicy?.parallelPreferred??true,
+      fastModeDefault:agent.runtimePolicy?.fastModeDefault??'auto',
       ...p,
     }
     const previous=runtimeCommitRef.current||agent.runtimePolicy
     if(
       previous?.thinkingDefault===runtime.thinkingDefault&&
       previous?.timeoutSeconds===runtime.timeoutSeconds&&
-      previous?.parallelPreferred===runtime.parallelPreferred
+      previous?.parallelPreferred===runtime.parallelPreferred&&
+      previous?.fastModeDefault===runtime.fastModeDefault
     ) return
     runtimeCommitRef.current=runtime
     updateAgentRuntimePolicy(agent.id,runtime,{persist:false})
@@ -619,6 +622,17 @@ export function AgentEditorModal() {
       setModelsLoading(false)
     }
   },[])
+  const upsertAuthProviderStatus = useCallback((next?: AuthProviderStatus|null)=>{
+    if(!next)return
+    setAuthModalProvider((current)=>current?.provider===next.provider?next:current)
+    setAuthProviders((current)=>{
+      const merged = current.some((entry)=>entry.provider===next.provider)
+        ? current.map((entry)=>entry.provider===next.provider?next:entry)
+        : [next,...current]
+      authProvidersCache={expiresAt:Date.now()+EDITOR_AUTH_CACHE_MS,value:merged}
+      return merged
+    })
+  },[])
   const LdAuth = useCallback(async (force=false)=>{
     const now=Date.now()
     if(!force&&authProvidersCache&&authProvidersCache.expiresAt>now){
@@ -626,11 +640,14 @@ export function AgentEditorModal() {
       return
     }
     try{
-      const result=await apiRequest<{providers:AuthProviderStatus[]}>('/api/auth/providers',{timeoutMs:8000})
+      const result=force
+        ? await apiRequest<{providers:AuthProviderStatus[]}>('/api/auth/providers?refresh=1',{timeoutMs:30000,cache:'no-store'})
+        : await apiRequest<{providers:AuthProviderStatus[]}>('/api/auth/providers',{timeoutMs:8000})
       if(!result.ok)throw new Error(apiErrorMessage(result.error))
       const next=result.data.providers||[]
       authProvidersCache={expiresAt:Date.now()+EDITOR_AUTH_CACHE_MS,value:next}
       setAuthProviders(next)
+      setAuthModalProvider((current)=>current?next.find((entry)=>entry.provider===current.provider)||current:current)
     }catch{
       setAuthProviders(authProvidersCache?.value||[])
     }
@@ -640,6 +657,8 @@ export function AgentEditorModal() {
   const providerForModel = (modelId:string)=>selectableModels.find((model)=>model.id===modelId)?.provider || (isOpenAiCodexSubscriptionModel(modelId) ? 'openai-codex' : modelId.split('/')[0]||'')
   const authForProvider = (provider:string)=>effectiveAuthStatusForProvider(authProviders, provider)
   const maybePromptProviderAuth = (modelId:string)=>{const status=authForProvider(providerForModel(modelId));if(status&&!status.configured)setAuthModalProvider(status)}
+  const selectedPrimaryProviderForAuthRefresh = primary ? providerForModel(primary) : ''
+  const selectedPrimaryAuthForRefresh = selectedPrimaryProviderForAuthRefresh ? authForProvider(selectedPrimaryProviderForAuthRefresh) : undefined
   const modelGroups = useMemo(() => groupAvailableModels(selectableModels), [selectableModels])
   const fallbackModelGroups = useMemo(() => groupAvailableModels(selectableModels.filter((m) => m.id !== primary)), [selectableModels, primary])
   const openRouterReady = authForProvider('openrouter')?.configured === true
@@ -668,6 +687,7 @@ export function AgentEditorModal() {
             thinkingDefault?: ThinkingLevel
             timeoutSeconds?: number
             parallelPreferred?: boolean
+            fastModeDefault?: FastModeDefault
           }
         }
       }>(`/api/party/agent/${encodeURIComponent(agent.id)}/config`, {
@@ -675,7 +695,7 @@ export function AgentEditorModal() {
         timeoutMs: 18_000,
         body: {
           model: { primary, fallbacks },
-          runtime: { thinkingDefault, timeoutSeconds, parallelPreferred: true },
+          runtime: { thinkingDefault, timeoutSeconds, parallelPreferred: true, fastModeDefault: agent.runtimePolicy?.fastModeDefault ?? 'auto' },
         },
       })
       if (!result.ok) {
@@ -684,7 +704,7 @@ export function AgentEditorModal() {
       }
       const data = result.data
       const savedModel = data.config?.model || { primary, fallbacks }
-      const savedRuntime = data.config?.runtime || { thinkingDefault, timeoutSeconds, parallelPreferred: true }
+      const savedRuntime = data.config?.runtime || { thinkingDefault, timeoutSeconds, parallelPreferred: true, fastModeDefault: agent.runtimePolicy?.fastModeDefault ?? 'auto' }
       updateAgentModel(agent.id, savedModel)
       setPrimary(savedModel.primary || primary)
       setFallbacks(savedModel.fallbacks || [])
@@ -692,6 +712,7 @@ export function AgentEditorModal() {
         thinkingDefault: savedRuntime.thinkingDefault || thinkingDefault,
         timeoutSeconds: savedRuntime.timeoutSeconds || timeoutSeconds,
         parallelPreferred: savedRuntime.parallelPreferred ?? true,
+        fastModeDefault: savedRuntime.fastModeDefault || agent.runtimePolicy?.fastModeDefault || 'auto',
       }, { persist: false })
       setRuntimeTimeoutSeconds(savedRuntime.timeoutSeconds || timeoutSeconds)
       agentConfigCache.delete(agent.id)
@@ -733,7 +754,7 @@ export function AgentEditorModal() {
       setThinkingOn(rt!=='off')
       setThinkingLevel(rt==='off'?'minimal':rt)
       const timeoutSeconds=Number.isFinite(config.runtime.timeoutSeconds)?Math.max(30,Math.min(7200,Math.round(config.runtime.timeoutSeconds||720))):720
-      const runtime={thinkingDefault:rt,timeoutSeconds,parallelPreferred:config.runtime.parallelPreferred??true}
+      const runtime={thinkingDefault:rt,timeoutSeconds,parallelPreferred:config.runtime.parallelPreferred??true,fastModeDefault:config.runtime.fastModeDefault||'auto'}
       setRuntimeTimeoutSeconds(timeoutSeconds)
       runtimeCommitRef.current=runtime
       updateAgentRuntimePolicy(agentId,runtime,{persist:false})
@@ -1123,7 +1144,7 @@ export function AgentEditorModal() {
     setThinkingOn(think!=='off')
     setThinkingLevel(think==='off'?'minimal':think)
     setRuntimeTimeoutSeconds(timeoutSeconds)
-    runtimeCommitRef.current=runtimePolicy||{thinkingDefault:think,timeoutSeconds,parallelPreferred:true}
+    runtimeCommitRef.current=runtimePolicy||{thinkingDefault:think,timeoutSeconds,parallelPreferred:true,fastModeDefault:'auto'}
     setMsStatus('')
     setWsPath(currentAgent.workspace||'')
     setWsStatus('')
@@ -1145,9 +1166,18 @@ export function AgentEditorModal() {
     setClawHubResults([])
     dirtyConfigSectionsRef.current.clear()
     configLoadSeqRef.current += 1
+    authRefreshKeyRef.current = ''
   },[isOpen,editingAgentId])
   useEffect(()=>{if(isOpen&&agent?.id&&(tab==='model'||tab==='heartbeat'||tab==='policy'))void LdP()},[isOpen,agent?.id,tab,LdP])
   useEffect(()=>{if(isOpen&&tab==='model'){void LdM();void LdAuth()}},[isOpen,tab,LdM,LdAuth])
+  useEffect(()=>{
+    if(!isOpen||tab!=='model'||!primary||!selectedPrimaryProviderForAuthRefresh)return
+    if(!selectedPrimaryAuthForRefresh?.oauth?.supported||selectedPrimaryAuthForRefresh.configured)return
+    const key=`${selectedPrimaryProviderForAuthRefresh}:${primary}`
+    if(authRefreshKeyRef.current===key)return
+    authRefreshKeyRef.current=key
+    void LdAuth(true)
+  },[isOpen,tab,primary,selectedPrimaryProviderForAuthRefresh,selectedPrimaryAuthForRefresh?.configured,selectedPrimaryAuthForRefresh?.oauth?.supported,LdAuth])
   useEffect(()=>{if(isOpen&&agent?.id&&tab==='workspace')void LdW()},[isOpen,agent?.id,tab,LdW])
   useEffect(()=>{if(isOpen&&agent?.id&&tab==='files')void LdF()},[isOpen,agent?.id,tab,LdF])
   useEffect(()=>{if(isOpen&&editingAgentId&&tab==='files'&&rfile)void LdFC(rfile)},[isOpen,editingAgentId,tab,rfile,LdFC])
@@ -1673,7 +1703,10 @@ export function AgentEditorModal() {
             await LdAuth(true)
             setMsStatus(`${authModalProvider.provider} key saved.`)
           }}
-          onConnected={()=>LdAuth(true)}
+          onConnected={async(nextStatus)=>{
+            upsertAuthProviderStatus(nextStatus)
+            await LdAuth(true)
+          }}
         />
       )}
       {retireConfirmOpen&&(
