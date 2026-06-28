@@ -176,7 +176,24 @@ Simple does not mean shallow. DystopAI is built to make agent work easier to tru
 - **Recovery controls:** stop controls, session cleanup, Gateway restart, and Clean Slate recovery give you a way back when something gets stuck.
 - **Proof-oriented reports:** important missions can return what happened, what failed, what changed, and what still needs attention.
 
-In plain terms: DystopAI is simple because you operate it through agents, missions, plugins, schedules, and Monitor. It is robust because each of those pieces has a clear job, and you stay in charge of the risky parts.
+In plain terms: DystopAI is simple because you operate it through agents, missions, plugins, schedules, and Monitor. It is robust because each of those pieces has a clear job, and you stay in charge of the important parts.
+
+## Showcase
+
+| Agents | Missions |
+| --- | --- |
+| ![DystopAI Agents workspace](docs/assets/readme/dystopai-agents.png) | ![DystopAI Mission Board](docs/assets/readme/dystopai-missions.png) |
+
+| Runtime Monitor | Plugins |
+| --- | --- |
+| ![DystopAI Runtime Monitor](docs/assets/readme/dystopai-monitor.png) | ![DystopAI Plugin Runtime](docs/assets/readme/dystopai-plugins.png) |
+
+<details>
+<summary>View agent settings screenshot</summary>
+
+![DystopAI Agent Settings](docs/assets/readme/dystopai-agent-settings.png)
+
+</details>
 
 ## The Main Screens
 
@@ -188,30 +205,25 @@ In plain terms: DystopAI is simple because you operate it through agents, missio
 - **Monitor:** see running work, schedules, sessions, channel traffic, failures, and recovery controls.
 - **Agent Editor:** tune each agent's model, authentication, workspace, tools, skills, schedule, and behavior files.
 
-<details>
-<summary>View screenshots</summary>
+## How The Pieces Fit Together
 
-### Agents
+The graph below is the simple version. You give the order, DystopAI routes it to agents, plugins and workspaces supply the powers, Monitor shows the run, and approvals keep important steps with you.
 
-![DystopAI Agents workspace](docs/assets/readme/dystopai-agents.png)
-
-### Missions
-
-![DystopAI Mission Board](docs/assets/readme/dystopai-missions.png)
-
-### Runtime Monitor
-
-![DystopAI Runtime Monitor](docs/assets/readme/dystopai-monitor.png)
-
-### Plugins
-
-![DystopAI Plugin Runtime](docs/assets/readme/dystopai-plugins.png)
-
-### Agent Settings
-
-![DystopAI Agent Settings](docs/assets/readme/dystopai-agent-settings.png)
-
-</details>
+```mermaid
+flowchart LR
+  You[You] --> Desktop[DystopAI Desktop]
+  Desktop --> Mission[Missions and Schedules]
+  Desktop --> Agent[Agent or Team]
+  Mission --> Agent
+  Agent --> Powers[Tools, Plugins, Files, Memory]
+  Powers --> Agent
+  Agent --> Monitor[Monitor and Reports]
+  Mission --> Monitor
+  Monitor --> You
+  Monitor --> Approval{Approval Needed?}
+  Approval -->|Yes| You
+  Approval -->|No| Monitor
+```
 
 ## How A Request Moves Through DystopAI
 
