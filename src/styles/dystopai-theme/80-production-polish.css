@@ -1,4 +1,4 @@
-/* Production shell polish. Keep this file last in the theme cascade. */
+/* Production shell polish. Keep this after responsive polish and before reference screenshot overrides. */
 
 html.dui-pro-overhaul.dui-cohesive-ui {
   --dui-focus-inner: #dffaff;
