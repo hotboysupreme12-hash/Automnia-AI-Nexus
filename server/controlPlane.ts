@@ -17,6 +17,7 @@ import {
   appendRuntimeRunLedger,
   closeRuntimeLedger,
   configureRuntimeLedger,
+  readControlCenterState,
   readDiagnosticRunLedgerTail,
   readGatewayEventLedgerTail,
   readMissionEventLedgerTail,
@@ -24,6 +25,7 @@ import {
   readMissionReportLedgerTail,
   readRuntimeRunLedgerTail,
   runtimeLedgerStatus,
+  writeControlCenterState,
 } from './runtimeLedger'
 import { installControlPlaneErrorHandler, installControlPlaneHttp } from './controlPlaneHttp'
 import { registerAuthRoutes } from './routes/authRoutes'
@@ -176,6 +178,17 @@ const MISSION_RECORD_LEDGER_PATH = path.join(CONTROL_CENTER_LEDGER_DIR, 'mission
 const MISSION_EVENT_LEDGER_PATH = path.join(CONTROL_CENTER_LEDGER_DIR, 'mission-events.jsonl')
 const MISSION_REPORT_LEDGER_PATH = path.join(CONTROL_CENTER_LEDGER_DIR, 'mission-reports.jsonl')
 const RUNTIME_MONITOR_CLEAR_MARKER_PATH = path.join(CONTROL_CENTER_LEDGER_DIR, 'runtime-monitor-clear.json')
+const CONTROL_CENTER_STATE_NAMESPACE = 'control-center'
+const CONTROL_CENTER_STATE_KEYS = {
+  heartbeatDefaults: 'runtime:heartbeat-defaults',
+  heartbeatPerAgent: 'runtime:heartbeat-per-agent',
+  localAuth: 'auth:local',
+  partyProfiles: 'agents:party-profiles',
+  pluginListCache: 'plugins:list-cache',
+  pluginRuntimeState: 'plugins:runtime-state',
+  retiredAgentIds: 'agents:retired-ids',
+  runtimeMonitorClear: 'runtime:monitor-clear',
+} as const
 const RECOMMENDED_OPENCLAW_VERSION = '2026.6.10'
 const DEFAULT_OPENCLAW_FAST_MODE = 'auto'
 const DEFAULT_OPENCLAW_FAST_AUTO_ON_SECONDS = 60
@@ -275,6 +288,37 @@ configureRuntimeLedger({
   missionEventsJsonl: MISSION_EVENT_LEDGER_PATH,
   missionReportsJsonl: MISSION_REPORT_LEDGER_PATH,
 })
+
+function readControlCenterStateRecord<T>(stateKey: string): T | null {
+  return readControlCenterState<T>(CONTROL_CENTER_STATE_NAMESPACE, stateKey)
+}
+
+function writeControlCenterStateRecord(stateKey: string, value: unknown, sourcePath?: string) {
+  return writeControlCenterState(CONTROL_CENTER_STATE_NAMESPACE, stateKey, value, { sourcePath })
+}
+
+async function readLegacyJsonState<T>(
+  filePath: string,
+  normalize: (value: unknown) => T | null,
+): Promise<T | null> {
+  try {
+    const raw = await fs.readFile(filePath, 'utf-8')
+    return normalize(JSON.parse(raw.replace(/^\uFEFF/, '')))
+  } catch {
+    return null
+  }
+}
+
+function readLegacyJsonStateSync<T>(
+  filePath: string,
+  normalize: (value: unknown) => T | null,
+): T | null {
+  try {
+    return normalize(JSON.parse(readFileSync(filePath, 'utf-8').replace(/^\uFEFF/, '')))
+  } catch {
+    return null
+  }
+}
 
 const controlFilesService = createControlFilesService(WORKSPACE_ROOT)
 const OPENCLAW_BOOTSTRAP_FILES = ['AGENTS.md', 'SOUL.md', 'TOOLS.md', 'IDENTITY.md', 'USER.md', 'HEARTBEAT.md', 'BOOTSTRAP.md'] as const
@@ -2089,20 +2133,28 @@ const DEFAULT_BOOTSTRAP_AGENT_BY_ID = new Map(DEFAULT_BOOTSTRAP_AGENTS.map((agen
 
 const localAuthStore: LocalAuthStore = { providers: {} }
 
+function normalizeLocalAuthStore(value: unknown): LocalAuthStore | null {
+  if (!isLooseRecord(value) || !isLooseRecord(value.providers)) return null
+  return { providers: value.providers as Record<string, LocalProviderAuth> }
+}
+
 async function loadLocalAuthStore(): Promise<LocalAuthStore> {
-  try {
-    const raw = await fs.readFile(LOCAL_AUTH_PATH, 'utf-8')
-    const parsed = JSON.parse(raw) as LocalAuthStore
-    if (parsed && typeof parsed === 'object' && parsed.providers && typeof parsed.providers === 'object') {
-      return parsed
-    }
-  } catch {
-    // Missing auth store is fine on first launch.
+  const sqliteStore = normalizeLocalAuthStore(
+    readControlCenterStateRecord<LocalAuthStore>(CONTROL_CENTER_STATE_KEYS.localAuth),
+  )
+  if (sqliteStore) return sqliteStore
+
+  const legacyStore = await readLegacyJsonState(LOCAL_AUTH_PATH, normalizeLocalAuthStore)
+  if (legacyStore) {
+    writeControlCenterStateRecord(CONTROL_CENTER_STATE_KEYS.localAuth, legacyStore, LOCAL_AUTH_PATH)
+    return legacyStore
   }
+
   return { providers: {} }
 }
 
 async function saveLocalAuthStore(next: LocalAuthStore) {
+  if (writeControlCenterStateRecord(CONTROL_CENTER_STATE_KEYS.localAuth, next, LOCAL_AUTH_PATH)) return
   await writePrivateJsonFileAtomically(LOCAL_AUTH_PATH, next)
 }
 
@@ -3544,7 +3596,7 @@ function openClawRunLedgerPayload(record: OpenClawRunRecord) {
 }
 
 async function persistOpenClawRunLedgerSnapshot(record: OpenClawRunRecord) {
-  await appendRuntimeRunLedger(openClawRunLedgerPayload(record), { sqlite: false })
+  await appendRuntimeRunLedger(openClawRunLedgerPayload(record), { mirrorJsonl: false })
 }
 
 function persistOpenClawRunLedgerSnapshotSoon(record: OpenClawRunRecord) {
@@ -3577,24 +3629,36 @@ function interruptedOpenClawRunFromLedger(record: OpenClawRunRecord): OpenClawRu
 }
 
 async function readRuntimeMonitorClearedAtMs() {
-  try {
-    const raw = await fs.readFile(RUNTIME_MONITOR_CLEAR_MARKER_PATH, 'utf-8')
-    const parsed = JSON.parse(raw) as { clearedAt?: unknown; clearedAtMs?: unknown }
+  const markerFromValue = (value: unknown) => {
+    if (!isLooseRecord(value)) return 0
+    const parsed = value as { clearedAt?: unknown; clearedAtMs?: unknown }
     const fromIso = typeof parsed.clearedAt === 'string' ? Date.parse(parsed.clearedAt) : NaN
     const fromMs = typeof parsed.clearedAtMs === 'number' ? parsed.clearedAtMs : NaN
-    const value = Number.isFinite(fromIso) ? fromIso : fromMs
-    return Number.isFinite(value) && value > 0 ? value : 0
-  } catch {
-    return 0
+    const resolved = Number.isFinite(fromIso) ? fromIso : fromMs
+    return Number.isFinite(resolved) && resolved > 0 ? resolved : 0
   }
+  const sqliteMarker = readControlCenterStateRecord(CONTROL_CENTER_STATE_KEYS.runtimeMonitorClear)
+  const sqliteValue = markerFromValue(sqliteMarker)
+  if (sqliteValue > 0) return sqliteValue
+
+  const legacyMarker = await readLegacyJsonState(RUNTIME_MONITOR_CLEAR_MARKER_PATH, (value) => {
+    const markerValue = markerFromValue(value)
+    return markerValue > 0 ? value : null
+  })
+  const legacyValue = markerFromValue(legacyMarker)
+  if (legacyValue > 0) {
+    writeControlCenterStateRecord(CONTROL_CENTER_STATE_KEYS.runtimeMonitorClear, legacyMarker, RUNTIME_MONITOR_CLEAR_MARKER_PATH)
+  }
+  return legacyValue
 }
 
 async function writeRuntimeMonitorClearMarker(clearedAt: Date) {
-  await fs.mkdir(path.dirname(RUNTIME_MONITOR_CLEAR_MARKER_PATH), { recursive: true })
   const payload = {
     clearedAt: clearedAt.toISOString(),
     clearedAtMs: clearedAt.getTime(),
   }
+  if (writeControlCenterStateRecord(CONTROL_CENTER_STATE_KEYS.runtimeMonitorClear, payload, RUNTIME_MONITOR_CLEAR_MARKER_PATH)) return
+  await fs.mkdir(path.dirname(RUNTIME_MONITOR_CLEAR_MARKER_PATH), { recursive: true })
   await fs.writeFile(RUNTIME_MONITOR_CLEAR_MARKER_PATH, `${JSON.stringify(payload, null, 2)}\n`, 'utf-8')
 }
 
@@ -4554,9 +4618,15 @@ function isGatewaySessionLivenessDiagnostic(value: string) {
     || (/\bclassification=(?:long_running|stalled_agent_run|blocked_tool_call|stale_session_state)\b/iu.test(text) && /\bsession(?:Id|Key)=/u.test(text))
 }
 
+function isGatewayFailoverDecisionNoise(value: string) {
+  const text = stripAnsi(value || '').replace(/\s+/g, ' ').trim()
+  return /^(?:warn\s+)?(?:model fallback decision|embedded run failover decision)$/iu.test(text)
+}
+
 function isGatewayInternalDiagnosticMessage(value: string) {
   const text = stripAnsi(value || '').replace(/\s+/g, ' ').trim()
   return isGatewaySessionLivenessDiagnostic(text)
+    || isGatewayFailoverDecisionNoise(text)
     || /^tool policy removed \d+ tool\(s\) via tools\.profile\b/iu.test(text)
     || /^incomplete turn detected:\s+runId=/iu.test(text)
     || /^\[clawtalk\]\s+CoreBridge:\s+Control Center stream unavailable,\s+falling back to embedded agent:/iu.test(text)
@@ -4599,6 +4669,19 @@ function summarizeCronProcessedError(value: string): { message: string; level: '
   }
 }
 
+function summarizeGatewayAuthRefreshFailure(value: string): { message: string; level: 'warning' | 'error' } | null {
+  const text = stripAnsi(value || '').replace(/\s+/g, ' ').trim()
+  if (!/\bauth refresh request timed out after 10s\b/iu.test(text)) return null
+  const provider = gatewayLogTokenValue(text, 'provider') || gatewayLogTokenValue(text, 'modelProvider')
+  const model = gatewayLogTokenValue(text, 'model') || gatewayLogTokenValue(text, 'modelId')
+  const detail = [provider, model].filter(Boolean).join(' / ')
+  const finalFailure = /errorCode=UNAVAILABLE|FailoverError|\blane task error\b/iu.test(text)
+  return {
+    message: `Model auth refresh timed out after 10s${detail ? ` (${detail})` : ''}. Reconnect the selected provider, then retry.`,
+    level: finalFailure ? 'error' : 'warning',
+  }
+}
+
 function normalizeGatewayLogDisplayMessage(value: string): { message: string; level?: string } {
   const compact = compactGatewayLogMessage(value)
   const withoutTimestamp = compact
@@ -4607,6 +4690,9 @@ function normalizeGatewayLogDisplayMessage(value: string): { message: string; le
     .replace(/^\d{4}-\d{2}-\d{2}T\S+\s+\[[^\]]+\]\s+/iu, '')
     .replace(/^\[memory\]\s+/iu, 'memory ')
     .trim()
+
+  const authRefreshFailure = summarizeGatewayAuthRefreshFailure(withoutTimestamp)
+  if (authRefreshFailure) return authRefreshFailure
 
   const fragmentSummary = summarizeGatewayLogFragment(withoutTimestamp)
   if (fragmentSummary) return fragmentSummary
@@ -5026,6 +5112,12 @@ function gatewayLogPayloadMessage(value: string) {
   }
 }
 
+function isNodeDeprecationWarningLine(value: string) {
+  const text = stripAnsi(value || '').replace(/\s+/g, ' ').trim()
+  return /^\(node:\d+\)\s+\[DEP\d+\]\s+DeprecationWarning:/iu.test(text)
+    || /^\(Use\s+`?(?:electron|node)(?:\.exe)?\s+--trace-deprecation\b.*warning was created\.?\)$/iu.test(text)
+}
+
 function isGatewayToolFailureLine(value: string) {
   return /^\[tools\]\s+[\w/-]+\s+failed:/iu.test(gatewayLogPayloadMessage(value).replace(/\s+/g, ' ').trim())
 }
@@ -5041,6 +5133,7 @@ function isGatewayLogRecordStart(value: string) {
 function isGatewayMonitorNoise(value: string) {
   const message = normalizeGatewayLogDisplayMessage(gatewayLogPayloadMessage(value)).message.replace(/\s+/g, ' ').trim()
   if (!message) return true
+  if (isNodeDeprecationWarningLine(message)) return true
   if (isGatewayInternalDiagnosticMessage(message)) return true
   if (/^\[clawtalk\]\s+\[MissionObserver\]\s+(?:No running missions found\.?|Started\b.*|Stopped\.?)$/iu.test(message)) return true
   if (isGatewayToolFailureLine(message)) return true
@@ -5194,9 +5287,15 @@ function gatewayActivityAgentId(message: string) {
   return match?.[1] || undefined
 }
 
+function isGatewayPollingIngressLifecycle(message: string) {
+  const text = stripAnsi(message || '').replace(/\s+/g, ' ').trim()
+  return /\b(?:isolated\s+)?polling ingress (?:started|stopped)\b/iu.test(text)
+}
+
 function gatewayActivityDirection(message: string): GatewayChannelDirection {
   const text = stripAnsi(message || '').replace(/\s+/g, ' ').trim()
-  if (/\b(?:SMS|message|call|update)\s+received\b|\breceived\s+from\b|\binbound\b|\bincoming\b|\bwebhook\b|\bpolling ingress\b|\bgetUpdates\b|\bCoreBridge:\s+running agent turn\b/i.test(text)) return 'inbound'
+  if (isGatewayPollingIngressLifecycle(text)) return 'system'
+  if (/\b(?:SMS|message|call|update)\s+received\b|\breceived\s+from\b|\binbound\b|\bincoming\b|\bwebhook\b|\bgetUpdates\b|\bCoreBridge:\s+running agent turn\b/i.test(text)) return 'inbound'
   if (/\bSMS\s+(?:reply|sent)\b|\breply (?:sent|delivered|failed)\b|\bSending SMS\b|\bInitiating call\b|\boutbound\b|\bsent to\b|\bsend ok\b|\boutbound send ok\b|\bsendMessage\b|\bmessage sent\b|\bcall initiated\b/i.test(text)) return 'outbound'
   if (/^message processed:\s+channel=(?!cron\b|agent\b|chat\b)[a-z0-9_-]+\b/i.test(text)) return 'inbound'
   return 'system'
@@ -5324,8 +5423,9 @@ async function readClawTalkChannelActivityEntries(limit = 80): Promise<GatewayLo
 
 function gatewayActivityLooksLikeChannelMessage(message: string) {
   const text = stripAnsi(message || '').replace(/\s+/g, ' ').trim()
+  if (isGatewayPollingIngressLifecycle(text)) return false
   return /^message processed:\s+channel=(?!cron\b|agent\b|chat\b)[a-z0-9_-]+\b/iu.test(text)
-    || /\b(?:SMS|MMS|message|call|update)\s+received\b|\breceived\s+from\b|\binbound\b|\bincoming\b|\bwebhook\b|\bpolling ingress\b|\bgetUpdates\b|\bCoreBridge:\s+running agent turn\b/iu.test(text)
+    || /\b(?:SMS|MMS|message|call|update)\s+received\b|\breceived\s+from\b|\binbound\b|\bincoming\b|\bwebhook\b|\bgetUpdates\b|\bCoreBridge:\s+running agent turn\b/iu.test(text)
     || /\bSMS\s+(?:reply|sent)\b|\breply (?:sent|delivered|failed)\b|\bSending SMS\b|\bInitiating call\b|\boutbound\b|\bsent to\b|\bsend ok\b|\boutbound send ok\b|\bsendMessage\b|\bmessage sent\b|\bcall initiated\b/iu.test(text)
     || /\b(?:telegram|clawtalk|sms|imessage|whatsapp|signal|discord|slack|matrix|mattermost|msteams|googlechat|line|wechat)\b.*\b(?:received|sent|reply|incoming|outbound|inbound|send|delivered)\b/iu.test(text)
     || /\b(?:received|sent|reply|incoming|outbound|inbound|send|delivered)\b.*\b(?:telegram|clawtalk|sms|message|call|discord|slack|whatsapp)\b/iu.test(text)
@@ -15517,16 +15617,25 @@ const DEFAULT_HEARTBEAT_RUNTIME: HeartbeatRuntimeDefaults = {
   leadAgent: 'auto-highest-level',
 }
 
+function normalizeHeartbeatRuntimeDefaultsState(value: unknown): Partial<HeartbeatRuntimeDefaults> | null {
+  return isLooseRecord(value) ? value as Partial<HeartbeatRuntimeDefaults> : null
+}
+
 async function readHeartbeatRuntimeDefaults(): Promise<HeartbeatRuntimeDefaults> {
-  let raw: Partial<HeartbeatRuntimeDefaults> = {}
-  try {
-    const text = await fs.readFile(HEARTBEAT_DEFAULTS_PATH, 'utf-8')
-    raw = JSON.parse(text) as Partial<HeartbeatRuntimeDefaults>
-  } catch {
-    // use defaults
+  let raw =
+    normalizeHeartbeatRuntimeDefaultsState(
+      readControlCenterStateRecord(CONTROL_CENTER_STATE_KEYS.heartbeatDefaults),
+    ) || {}
+  if (!Object.keys(raw).length) {
+    const legacy = await readLegacyJsonState(HEARTBEAT_DEFAULTS_PATH, normalizeHeartbeatRuntimeDefaultsState)
+    if (legacy) {
+      writeControlCenterStateRecord(CONTROL_CENTER_STATE_KEYS.heartbeatDefaults, legacy, HEARTBEAT_DEFAULTS_PATH)
+      raw = legacy
+    }
   }
 
-  const model = migrateGeneratedDeepSeekDefaultPrimary((raw.model || DEFAULT_HEARTBEAT_RUNTIME.model).trim())
+  const rawModel = typeof raw.model === 'string' ? raw.model : DEFAULT_HEARTBEAT_RUNTIME.model
+  const model = migrateGeneratedDeepSeekDefaultPrimary(rawModel.trim())
     || DEFAULT_HEARTBEAT_RUNTIME.model
 
   return {
@@ -15543,23 +15652,33 @@ async function readHeartbeatRuntimeDefaults(): Promise<HeartbeatRuntimeDefaults>
 }
 
 async function writeHeartbeatRuntimeDefaults(defaults: HeartbeatRuntimeDefaults) {
+  if (writeControlCenterStateRecord(CONTROL_CENTER_STATE_KEYS.heartbeatDefaults, defaults, HEARTBEAT_DEFAULTS_PATH)) return
   await fs.mkdir(path.dirname(HEARTBEAT_DEFAULTS_PATH), { recursive: true })
   await fs.writeFile(HEARTBEAT_DEFAULTS_PATH, `${JSON.stringify(defaults, null, 2)}\n`, 'utf-8')
 }
 
 type HeartbeatRuntimePerAgentStore = Record<string, Partial<HeartbeatRuntimeDefaults>>
 
+function normalizeHeartbeatRuntimePerAgentState(value: unknown): HeartbeatRuntimePerAgentStore | null {
+  return isLooseRecord(value) ? value as HeartbeatRuntimePerAgentStore : null
+}
+
 async function readHeartbeatRuntimePerAgent(): Promise<HeartbeatRuntimePerAgentStore> {
-  try {
-    const text = await fs.readFile(HEARTBEAT_AGENT_DEFAULTS_PATH, 'utf-8')
-    const parsed = JSON.parse(text) as HeartbeatRuntimePerAgentStore
-    return parsed && typeof parsed === 'object' ? parsed : {}
-  } catch {
-    return {}
+  const sqliteStore = normalizeHeartbeatRuntimePerAgentState(
+    readControlCenterStateRecord(CONTROL_CENTER_STATE_KEYS.heartbeatPerAgent),
+  )
+  if (sqliteStore) return sqliteStore
+
+  const legacyStore = await readLegacyJsonState(HEARTBEAT_AGENT_DEFAULTS_PATH, normalizeHeartbeatRuntimePerAgentState)
+  if (legacyStore) {
+    writeControlCenterStateRecord(CONTROL_CENTER_STATE_KEYS.heartbeatPerAgent, legacyStore, HEARTBEAT_AGENT_DEFAULTS_PATH)
+    return legacyStore
   }
+  return {}
 }
 
 async function writeHeartbeatRuntimePerAgent(store: HeartbeatRuntimePerAgentStore) {
+  if (writeControlCenterStateRecord(CONTROL_CENTER_STATE_KEYS.heartbeatPerAgent, store, HEARTBEAT_AGENT_DEFAULTS_PATH)) return
   await fs.mkdir(path.dirname(HEARTBEAT_AGENT_DEFAULTS_PATH), { recursive: true })
   await fs.writeFile(HEARTBEAT_AGENT_DEFAULTS_PATH, `${JSON.stringify(store, null, 2)}\n`, 'utf-8')
 }
@@ -15857,17 +15976,31 @@ type PluginRuntimeState = {
   }>
 }
 
+function normalizePluginRuntimeState(value: unknown): PluginRuntimeState | null {
+  return isLooseRecord(value) ? value as PluginRuntimeState : null
+}
+
 async function readPluginRuntimeState(): Promise<PluginRuntimeState> {
-  try {
-    const raw = await fs.readFile(PLUGIN_RUNTIME_STATE_PATH, 'utf-8')
-    const parsed = JSON.parse(raw) as unknown
-    return isLooseRecord(parsed) ? parsed as PluginRuntimeState : {}
-  } catch {
-    return {}
+  const sqliteState = normalizePluginRuntimeState(
+    readControlCenterStateRecord(CONTROL_CENTER_STATE_KEYS.pluginRuntimeState),
+  )
+  if (sqliteState) return sqliteState
+
+  const legacyState = await readLegacyJsonState(PLUGIN_RUNTIME_STATE_PATH, normalizePluginRuntimeState)
+  if (legacyState) {
+    writeControlCenterStateRecord(CONTROL_CENTER_STATE_KEYS.pluginRuntimeState, legacyState, PLUGIN_RUNTIME_STATE_PATH)
+    return legacyState
   }
+  return {}
 }
 
 async function writePluginRuntimeState(state: PluginRuntimeState) {
+  writeControlCenterStateRecord(
+    CONTROL_CENTER_STATE_KEYS.pluginRuntimeState,
+    state,
+    PLUGIN_RUNTIME_STATE_PATH,
+  )
+  // OpenClaw's configured controlcenter secret provider still reads this generated JSON mirror.
   await fs.mkdir(path.dirname(PLUGIN_RUNTIME_STATE_PATH), { recursive: true })
   await writeTextFileWithLockRetry(PLUGIN_RUNTIME_STATE_PATH, `${JSON.stringify(state, null, 2)}\n`)
 }
@@ -17105,9 +17238,8 @@ async function loadBundledPluginManifestList(): Promise<Record<string, unknown>[
 }
 
 async function readPluginListDiskCache(): Promise<PluginListCacheEntry | null> {
-  try {
-    const raw = await fs.readFile(PLUGIN_LIST_CACHE_PATH, 'utf-8')
-    const parsed = JSON.parse(raw.replace(/^\uFEFF/, '')) as unknown
+  const cacheFromValue = (value: unknown): PluginListCacheEntry | null => {
+    const parsed = value
     if (!isLooseRecord(parsed) || parsed.version !== 1 || !Array.isArray(parsed.rawPlugins)) return null
 
     const rawPlugins = parsed.rawPlugins.filter(isLooseRecord)
@@ -17123,30 +17255,37 @@ async function readPluginListDiskCache(): Promise<PluginListCacheEntry | null> {
       expiresAt: refreshedAt + PLUGIN_LIST_CACHE_MS,
       source,
     }
-  } catch {
-    return null
   }
+
+  const sqliteCache = cacheFromValue(readControlCenterStateRecord(CONTROL_CENTER_STATE_KEYS.pluginListCache))
+  if (sqliteCache) return sqliteCache
+
+  const legacyCache = await readLegacyJsonState(PLUGIN_LIST_CACHE_PATH, cacheFromValue)
+  if (legacyCache) {
+    writeControlCenterStateRecord(CONTROL_CENTER_STATE_KEYS.pluginListCache, {
+      version: 1,
+      source: legacyCache.source,
+      refreshedAt: legacyCache.refreshedAt,
+      rawPlugins: legacyCache.rawPlugins,
+      ...(legacyCache.cliError ? { cliError: legacyCache.cliError } : {}),
+    }, PLUGIN_LIST_CACHE_PATH)
+  }
+  return legacyCache
 }
 
 async function writePluginListDiskCache(cache: PluginListCacheEntry) {
   if (!cache.rawPlugins.length) return
   const cliError = sanitizePluginCliError(cache.cliError)
+  const payload = {
+    version: 1,
+    source: cache.source,
+    refreshedAt: cache.refreshedAt,
+    rawPlugins: cache.rawPlugins,
+    ...(cliError ? { cliError } : {}),
+  }
+  if (writeControlCenterStateRecord(CONTROL_CENTER_STATE_KEYS.pluginListCache, payload, PLUGIN_LIST_CACHE_PATH)) return
   await fs.mkdir(path.dirname(PLUGIN_LIST_CACHE_PATH), { recursive: true })
-  await fs.writeFile(
-    PLUGIN_LIST_CACHE_PATH,
-    `${JSON.stringify(
-      {
-        version: 1,
-        source: cache.source,
-        refreshedAt: cache.refreshedAt,
-        rawPlugins: cache.rawPlugins,
-        ...(cliError ? { cliError } : {}),
-      },
-      null,
-      2,
-    )}\n`,
-    'utf-8',
-  )
+  await fs.writeFile(PLUGIN_LIST_CACHE_PATH, `${JSON.stringify(payload, null, 2)}\n`, 'utf-8')
 }
 
 async function refreshPluginListCache(): Promise<PluginListCacheEntry> {
@@ -19432,20 +19571,32 @@ async function setupClawTalkPlugin(params: {
 }
 
 async function readPartyProfiles(): Promise<PartyProfiles> {
+  const normalizePartyProfiles = (value: unknown): PartyProfiles | null => {
+    if (!isLooseRecord(value) || !isLooseRecord(value.agents)) return null
+    return { agents: value.agents as Record<string, AgentProfile> }
+  }
+
+  const sqliteProfiles = normalizePartyProfiles(
+    readControlCenterStateRecord(CONTROL_CENTER_STATE_KEYS.partyProfiles),
+  )
+  if (sqliteProfiles) return sqliteProfiles
+
   try {
     const parsed = await readCachedJsonFile(
       PARTY_PROFILE_PATH,
       partyProfilesCache,
-      (text) => JSON.parse(text) as PartyProfiles,
+      (text) => normalizePartyProfiles(JSON.parse(text)) || { agents: {} },
       (entry) => { partyProfilesCache = entry },
     )
-    return { agents: parsed.agents || {} }
+    writeControlCenterStateRecord(CONTROL_CENTER_STATE_KEYS.partyProfiles, parsed, PARTY_PROFILE_PATH)
+    return parsed
   } catch {
     return { agents: {} }
   }
 }
 
 async function writePartyProfiles(profiles: PartyProfiles) {
+  if (writeControlCenterStateRecord(CONTROL_CENTER_STATE_KEYS.partyProfiles, profiles, PARTY_PROFILE_PATH)) return
   await fs.mkdir(path.dirname(PARTY_PROFILE_PATH), { recursive: true })
   const serialized = `${JSON.stringify(profiles, null, 2)}\n`
   const tempPath = path.join(path.dirname(PARTY_PROFILE_PATH), `.party-profiles.${process.pid}.${randomUUID()}.tmp`)
@@ -20181,21 +20332,32 @@ function normalizeRetiredAgentId(agentId: string | undefined) {
   return agentId?.trim().toLowerCase() || ''
 }
 
+function retiredAgentIdsFromUnknown(value: unknown) {
+  const ids = Array.isArray(value)
+    ? value
+    : isLooseRecord(value) && Array.isArray(value.ids)
+      ? value.ids
+      : []
+  return ids
+    .map((rawId) => typeof rawId === 'string' ? normalizeRetiredAgentId(rawId) : '')
+    .filter((agentId) => isValidAgentId(agentId))
+}
+
 function loadRetiredAgentIdsFromDisk() {
-  try {
-    const parsed = JSON.parse(readFileSync(RETIRED_AGENT_IDS_PATH, 'utf-8').replace(/^\uFEFF/, '')) as unknown
-    const ids = Array.isArray(parsed)
-      ? parsed
-      : parsed && typeof parsed === 'object' && Array.isArray((parsed as { ids?: unknown }).ids)
-        ? (parsed as { ids: unknown[] }).ids
-        : []
-    for (const rawId of ids) {
-      if (typeof rawId !== 'string') continue
-      const agentId = normalizeRetiredAgentId(rawId)
-      if (isValidAgentId(agentId)) RETIRED_AGENT_IDS.add(agentId)
-    }
-  } catch {
-    // The tombstone file is optional; built-in retired IDs still apply.
+  const sqliteState = readControlCenterStateRecord(CONTROL_CENTER_STATE_KEYS.retiredAgentIds)
+  if (sqliteState !== null) {
+    const sqliteIds = retiredAgentIdsFromUnknown(sqliteState)
+    sqliteIds.forEach((agentId) => RETIRED_AGENT_IDS.add(agentId))
+    return
+  }
+
+  const legacyIds = readLegacyJsonStateSync(RETIRED_AGENT_IDS_PATH, (value) => {
+    const ids = retiredAgentIdsFromUnknown(value)
+    return ids.length ? ids : null
+  })
+  if (legacyIds) {
+    legacyIds.forEach((agentId) => RETIRED_AGENT_IDS.add(agentId))
+    writeControlCenterStateRecord(CONTROL_CENTER_STATE_KEYS.retiredAgentIds, { ids: legacyIds }, RETIRED_AGENT_IDS_PATH)
   }
 }
 
@@ -20206,6 +20368,7 @@ async function rememberRetiredAgentId(agentId: string) {
   const ids = [...RETIRED_AGENT_IDS]
     .filter((id) => !BUILTIN_RETIRED_AGENT_IDS.has(id))
     .sort((a, b) => a.localeCompare(b))
+  if (writeControlCenterStateRecord(CONTROL_CENTER_STATE_KEYS.retiredAgentIds, { ids }, RETIRED_AGENT_IDS_PATH)) return true
   await fs.mkdir(path.dirname(RETIRED_AGENT_IDS_PATH), { recursive: true })
   await writeTextFileWithLockRetry(RETIRED_AGENT_IDS_PATH, `${JSON.stringify({ ids }, null, 2)}\n`)
   return true
