@@ -1907,14 +1907,14 @@ html.dui-pro-overhaul.dui-cohesive-ui .app-bg.dy-monitor-focus [data-dui-panel="
     "summary summary"
     "activity jobs"
     "log log" !important;
-  grid-template-rows: max-content minmax(360px, 1fr) max-content !important;
+  grid-template-rows: max-content minmax(295px, .82fr) minmax(58px, .18fr) !important;
 }
 
 @media (min-width: 1680px) {
   html.dui-pro-overhaul .app-bg.dy-monitor-focus [data-dui-panel="monitor"] .dy-gateway-layout,
   html.dui-pro-overhaul.dui-cohesive-ui .app-bg.dy-monitor-focus [data-dui-panel="monitor"] .dy-gateway-layout {
     grid-template-columns: minmax(0, 1.18fr) minmax(560px, .92fr) !important;
-    grid-template-rows: max-content minmax(420px, 1fr) max-content !important;
+    grid-template-rows: max-content minmax(345px, .82fr) minmax(58px, .18fr) !important;
   }
 }
 
