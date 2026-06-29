@@ -467,6 +467,7 @@ export function NexusShell() {
         <section className="dy-workspace-context" data-workspace={tab} aria-labelledby="dystopai-workspace-title">
           <div className="dy-workspace-context__copy">
             <h1 id="dystopai-workspace-title">{activeTab.label}</h1>
+            <p>{activeTab.description}</p>
           </div>
           <div className="dy-workspace-context__meta">
             <div className="dy-status-grid flex flex-wrap items-center justify-end gap-2" aria-label="Workspace status summary">

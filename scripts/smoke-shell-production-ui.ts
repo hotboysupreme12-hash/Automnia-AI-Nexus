@@ -9,6 +9,8 @@ const shell = read('src/components/layout/NexusShell.tsx')
 const polish = read('src/styles/dystopai-theme/80-production-polish.css')
 const theme = read('src/dystopai-app-theme.css')
 const packageJson = JSON.parse(read('package.json')) as { scripts?: Record<string, string> }
+const productionPolishImport = "@import './styles/dystopai-theme/80-production-polish.css';"
+const referenceScreenshotImport = "@import './styles/dystopai-theme/90-reference-screenshot.css';"
 
 assert.match(shell, /className="dy-skip-link" href="#dystopai-main"/, 'shell should expose a keyboard skip link')
 assert.match(shell, /<main id="dystopai-main" tabIndex=\{-1\}/, 'workspace should use a focusable main landmark')
@@ -42,9 +44,15 @@ assert.match(polish, /\.dy-workspace-context\[data-workspace="missions"\]/, 'mis
 assert.match(polish, /\.dy-workspace-context__state\[data-state="offline"\]/, 'offline runtime state should remain visually distinct')
 assert.match(polish, /\.app-bg > \.dy-app-main[\s\S]*width: 100vw !important/, 'desktop shell should fill the available viewport width')
 assert.doesNotMatch(polish, /\.app-bg > \.dy-app-main[\s\S]*width: min\(100%, 1780px\)/, 'desktop shell should not cap wide windows')
-assert.match(polish, /\.dy-human-rail-head--lockup[\s\S]*min-height: 84px/, 'sidebar lockup should reserve space for the full logo')
+assert.match(polish, /\.dy-human-rail-head--lockup[\s\S]*min-height: 98px/, 'sidebar lockup should reserve space for the full logo')
 assert.match(polish, /\.dy-workspace-context__meta[\s\S]*flex-direction: column/, 'workspace status controls should live in the tab header')
-assert.ok(theme.trimEnd().endsWith("@import './styles/dystopai-theme/80-production-polish.css';"), 'production polish must load last in the theme cascade')
+assert.ok(theme.includes(productionPolishImport), 'production polish must remain in the theme cascade')
+assert.ok(theme.includes(referenceScreenshotImport), 'reference screenshot polish must remain in the theme cascade')
+assert.ok(
+  theme.indexOf(productionPolishImport) < theme.indexOf(referenceScreenshotImport),
+  'production polish must load before the final reference screenshot layer',
+)
+assert.ok(theme.trimEnd().endsWith(referenceScreenshotImport), 'reference screenshot polish must load last in the theme cascade')
 
 assert.equal(packageJson.scripts?.['smoke:shell-production-ui'], 'tsx scripts/smoke-shell-production-ui.ts')
 assert.ok(packageJson.scripts?.['test:ci']?.includes('npm run smoke:shell-production-ui'))

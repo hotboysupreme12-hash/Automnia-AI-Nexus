@@ -53,6 +53,12 @@ const WINDOWS_DIAGNOSTIC_SINGLE_PROCESS = process.platform === 'win32' &&
   process.env.DYSTOPAI_ACK_UNSAFE_ELECTRON_SANDBOX_DIAGNOSTIC === '1'
 const ELECTRON_E2E = process.env.DYSTOPAI_ELECTRON_E2E === '1'
 const ELECTRON_E2E_AUTO_QUIT_MS = Math.max(0, Number(process.env.DYSTOPAI_ELECTRON_E2E_AUTO_QUIT_MS || 0) || 0)
+const WSLG_RUNTIME = process.platform === 'linux' && (
+  Boolean(process.env.WSL_DISTRO_NAME || process.env.WSL_INTEROP) ||
+  fs.existsSync('/mnt/wslg')
+)
+const TRAY_ENABLED = process.env.DYSTOPAI_DISABLE_TRAY !== '1' &&
+  (!WSLG_RUNTIME || process.env.DYSTOPAI_ENABLE_WSLG_TRAY === '1')
 process.env.OPENCLAW_SUPPRESS_EXTENSION_API_WARNING = process.env.OPENCLAW_SUPPRESS_EXTENSION_API_WARNING || '1'
 if (WINDOWS_DISABLE_GPU) {
   app.disableHardwareAcceleration()
@@ -228,6 +234,89 @@ function openClawRuntimeCandidatesForDir(dir) {
     : [path.join(dir, 'openclaw.mjs')]
 }
 
+function safeRuntimeSegment(value) {
+  return String(value || 'unknown')
+    .replace(/[^A-Za-z0-9._-]+/g, '-')
+    .replace(/^-+|-+$/g, '')
+    .slice(0, 80) || 'unknown'
+}
+
+function packagedOpenClawRuntimeStamp(root) {
+  const packageJson = path.join(root, 'package.json')
+  try {
+    const parsed = JSON.parse(fs.readFileSync(packageJson, 'utf8'))
+    const stat = fs.statSync(packageJson)
+    return [
+      safeRuntimeSegment(parsed?.name || 'openclaw'),
+      safeRuntimeSegment(parsed?.version || 'unknown'),
+      `${Math.trunc(stat.mtimeMs)}-${stat.size}`,
+    ].join('-')
+  } catch {
+    try {
+      const stat = fs.statSync(root)
+      return `openclaw-unknown-${Math.trunc(stat.mtimeMs)}-${stat.size}`
+    } catch {
+      return 'openclaw-unknown'
+    }
+  }
+}
+
+function ensureWritablePackagedOpenClawRuntime(bundledRuntime) {
+  if (
+    isDev ||
+    !bundledRuntime ||
+    process.platform === 'win32' ||
+    process.env.DYSTOPAI_ENABLE_WRITABLE_OPENCLAW_RUNTIME !== '1'
+  ) return bundledRuntime
+  const bundledRoot = path.dirname(path.resolve(bundledRuntime))
+  const required = [
+    bundledRuntime,
+    path.join(bundledRoot, 'package.json'),
+    path.join(bundledRoot, 'dist'),
+  ]
+  if (!required.every((candidate) => fs.existsSync(candidate))) return bundledRuntime
+
+  const stamp = packagedOpenClawRuntimeStamp(bundledRoot)
+  const targetRoot = path.join(DYSTOPAI_USER_DATA_DIR, 'runtimes', 'openclaw', stamp)
+  const targetRuntime = path.join(targetRoot, path.basename(bundledRuntime))
+  const readyMarker = path.join(targetRoot, '.dystopai-runtime-ready')
+  if (fs.existsSync(targetRuntime) && fs.existsSync(readyMarker)) return targetRuntime
+
+  const parent = path.dirname(targetRoot)
+  const tempRoot = path.join(parent, `.${path.basename(targetRoot)}.tmp-${process.pid}-${Date.now()}`)
+  try {
+    fs.rmSync(tempRoot, { recursive: true, force: true })
+    fs.mkdirSync(parent, { recursive: true })
+    fs.mkdirSync(tempRoot, { recursive: true })
+    for (const entry of fs.readdirSync(bundledRoot, { withFileTypes: true })) {
+      const source = path.join(bundledRoot, entry.name)
+      const target = path.join(tempRoot, entry.name)
+      if (entry.name === 'dist') {
+        fs.cpSync(source, target, { recursive: true, force: true })
+      } else {
+        fs.symlinkSync(source, target, entry.isDirectory() ? 'dir' : 'file')
+      }
+    }
+    for (const candidate of openClawRuntimeCandidatesForDir(tempRoot)) {
+      if (!fs.existsSync(candidate)) continue
+      try {
+        fs.chmodSync(candidate, 0o755)
+      } catch {}
+    }
+    fs.writeFileSync(path.join(tempRoot, '.dystopai-runtime-ready'), `${new Date().toISOString()}\n`, 'utf8')
+    fs.rmSync(targetRoot, { recursive: true, force: true })
+    fs.renameSync(tempRoot, targetRoot)
+    console.log(`[dystopai] hydrated writable OpenClaw runtime -> ${targetRoot}`)
+    return targetRuntime
+  } catch (error) {
+    try {
+      fs.rmSync(tempRoot, { recursive: true, force: true })
+    } catch {}
+    console.warn('[dystopai] writable OpenClaw runtime hydration failed:', error?.message || error)
+    return bundledRuntime
+  }
+}
+
 function releaseOpenClawRuntimeCandidates(root) {
   const releaseRoot = path.join(root, 'release')
   const candidates = [
@@ -259,8 +348,8 @@ function resolveOpenClawRuntime() {
         path.join(root, 'vendor', 'openclaw', 'openclaw.mjs'),
         ...releaseOpenClawRuntimeCandidates(root),
       ]
-  return candidates
-    .find((c) => fs.existsSync(c)) || ''
+  const found = candidates.find((c) => fs.existsSync(c)) || ''
+  return ensureWritablePackagedOpenClawRuntime(found)
 }
 
 function resolveAppIcon() {
@@ -1512,6 +1601,7 @@ function createMainWindow() {
   win.webContents.on('will-redirect', handleWillNavigate)
 
   win.on('close', (event) => {
+    if (!TRAY_ENABLED) return
     if (isQuitting) return
     event.preventDefault()
     win.hide()
@@ -1549,6 +1639,7 @@ function openFrontend() {
 
 function hideFrontend() {
   if (!mainWindow || mainWindow.isDestroyed()) return
+  if (!TRAY_ENABLED) return
   mainWindow.hide()
   mainWindow.setSkipTaskbar(true)
   updateTrayMenu()
@@ -1611,6 +1702,7 @@ function updateTrayMenu() {
 }
 
 function createTray() {
+  if (!TRAY_ENABLED) return null
   if (tray) return tray
   tray = new Tray(createTrayIcon())
   tray.setToolTip('DystopAI - gateway running in background')
@@ -1905,4 +1997,5 @@ app.on('before-quit', (event) => {
 
 app.on('window-all-closed', () => {
   // Keep the desktop process alive so the tray can restore the UI or stop the gateway.
+  if (!TRAY_ENABLED) app.quit()
 })

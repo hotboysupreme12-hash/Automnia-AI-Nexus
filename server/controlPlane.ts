@@ -16829,12 +16829,25 @@ async function telegramBotRuntimeFileCandidates() {
   return uniqueStrings(files)
 }
 
+async function runtimeRepairFileWritable(filePath: string) {
+  try {
+    await fs.access(filePath, fs.constants.W_OK)
+    return true
+  } catch {
+    return false
+  }
+}
+
 async function repairTelegramAgentRoutingRuntime() {
   const candidates = await telegramBotRuntimeFileCandidates()
   const repaired: string[] = []
   for (const entryPath of candidates) {
     const beforeSignature = await telegramRepairSignature(entryPath)
     if (telegramRepairSignatureCache.get(entryPath) === beforeSignature) continue
+    if (!await runtimeRepairFileWritable(entryPath)) {
+      telegramRepairSignatureCache.set(entryPath, beforeSignature)
+      continue
+    }
     const source = await fs.readFile(entryPath, 'utf-8').catch(() => '')
     if (!source.includes('const buildTelegramMessageContext = async') || !source.includes('function resolveTelegramInboundBody')) {
       telegramRepairSignatureCache.set(entryPath, beforeSignature)
