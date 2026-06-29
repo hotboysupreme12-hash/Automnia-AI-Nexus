@@ -1722,14 +1722,23 @@ html.dui-pro-overhaul .dui-option {
 
 html.dui-pro-overhaul .dui-template-tile:hover,
 html.dui-pro-overhaul .dui-option:hover,
-html.dui-pro-overhaul .dui-template-tile.is-active,
-html.dui-pro-overhaul .dui-option[aria-pressed="true"] {
+html.dui-pro-overhaul .dui-template-tile.is-active {
   border-color: rgba(var(--dui-option-rgb, 0, 234, 255), .58) !important;
   background:
     radial-gradient(circle at 20% 10%, rgba(var(--dui-option-rgb, 0, 234, 255), .20), transparent 55%),
     linear-gradient(180deg, rgba(255,255,255,.044), rgba(255,255,255,.010)),
     rgba(8, 22, 38, .90) !important;
   box-shadow: 0 0 24px rgba(var(--dui-option-rgb, 0, 234, 255), .16), inset 0 1px 0 rgba(255,255,255,.070) !important;
+}
+
+html.dui-pro-overhaul [data-dui-panel="missions"] .dui-option[aria-pressed="true"],
+html.dui-pro-overhaul [data-dui-panel="missions"] .dui-option[aria-pressed="true"]:hover {
+  border-color: rgba(80, 132, 168, .18) !important;
+  background:
+    radial-gradient(circle at 24% 16%, rgba(var(--dui-option-rgb, 0, 234, 255), .10), transparent 50%),
+    linear-gradient(180deg, rgba(255,255,255,.030), rgba(255,255,255,.006)),
+    rgba(7, 18, 31, .74) !important;
+  box-shadow: inset 0 1px 0 rgba(255,255,255,.045) !important;
 }
 
 html.dui-pro-overhaul .dui-template-tile.is-active::after,
@@ -1743,8 +1752,8 @@ html.dui-pro-overhaul .dui-option[aria-pressed="true"]::after {
   border-radius: 999px;
   background:
     radial-gradient(circle at 50% 50%, #001921 0 31%, transparent 32%),
-    var(--dui-cyan);
-  box-shadow: 0 0 16px rgba(0, 234, 255, .44);
+    var(--dui-option-color, var(--dui-cyan));
+  box-shadow: 0 0 16px rgba(var(--dui-option-rgb, 0, 234, 255), .44);
 }
 
 html.dui-pro-overhaul .dui-option-copy strong,
