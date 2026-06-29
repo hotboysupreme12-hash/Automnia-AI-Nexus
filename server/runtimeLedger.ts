@@ -1,6 +1,6 @@
 import { createRequire } from 'node:module'
 import path from 'node:path'
-import { existsSync, mkdirSync, readFileSync, statSync } from 'node:fs'
+import { chmodSync, existsSync, mkdirSync, readFileSync, statSync } from 'node:fs'
 import { promises as fs } from 'node:fs'
 import { createHash, randomUUID } from 'node:crypto'
 
@@ -39,6 +39,11 @@ type LedgerAppendOptions = {
 }
 
 type LedgerReadOptions = {
+  sqlite?: boolean
+}
+
+type ControlCenterStateWriteOptions = {
+  sourcePath?: string
   sqlite?: boolean
 }
 
@@ -182,10 +187,21 @@ function openDatabase() {
     }
 
     mkdirSync(path.dirname(currentPaths.sqlite), { recursive: true })
+    try {
+      chmodSync(path.dirname(currentPaths.sqlite), 0o700)
+    } catch {
+      // Best effort on platforms/filesystems that do not honor POSIX modes.
+    }
     database = new sqlite.DatabaseSync(currentPaths.sqlite)
+    try {
+      chmodSync(currentPaths.sqlite, 0o600)
+    } catch {
+      // Best effort on platforms/filesystems that do not honor POSIX modes.
+    }
     database.exec(`
       PRAGMA journal_mode = WAL;
       PRAGMA synchronous = NORMAL;
+      PRAGMA busy_timeout = 5000;
 
       CREATE TABLE IF NOT EXISTS runtime_runs (
         id TEXT PRIMARY KEY,
@@ -273,6 +289,18 @@ function openDatabase() {
         source_size INTEGER NOT NULL,
         source_mtime_ms INTEGER NOT NULL
       );
+
+      CREATE TABLE IF NOT EXISTS control_center_state (
+        namespace TEXT NOT NULL,
+        state_key TEXT NOT NULL,
+        updated_at TEXT NOT NULL,
+        updated_at_ms INTEGER NOT NULL,
+        source_path TEXT,
+        payload_json TEXT NOT NULL,
+        PRIMARY KEY (namespace, state_key)
+      );
+      CREATE INDEX IF NOT EXISTS idx_control_center_state_recent
+        ON control_center_state(namespace, updated_at_ms);
     `)
     try {
       database.exec('ALTER TABLE gateway_events ADD COLUMN source_key TEXT;')
@@ -523,6 +551,99 @@ function parsePayloadRows<T>(rows: Array<Record<string, unknown>>) {
       }
     })
     .filter((value): value is T => Boolean(value))
+}
+
+function normalizedStateCoordinate(value: string, label: string) {
+  const normalized = value.trim()
+  if (!/^[a-z0-9][a-z0-9._:-]{0,127}$/i.test(normalized)) {
+    throw new Error(`Invalid control center state ${label}: ${value}`)
+  }
+  return normalized
+}
+
+export function readControlCenterState<T>(
+  namespace: string,
+  stateKey: string,
+  options: LedgerReadOptions = {},
+): T | null {
+  const db = options.sqlite === false ? null : openDatabase()
+  if (!db) return null
+  try {
+    const row = db.prepare(`
+      SELECT payload_json
+      FROM control_center_state
+      WHERE namespace = ? AND state_key = ?
+    `).get?.(
+      normalizedStateCoordinate(namespace, 'namespace'),
+      normalizedStateCoordinate(stateKey, 'key'),
+    )
+    const payload = row && typeof row.payload_json === 'string' ? row.payload_json : ''
+    if (!payload) return null
+    return JSON.parse(payload) as T
+  } catch {
+    return null
+  }
+}
+
+export function writeControlCenterState(
+  namespace: string,
+  stateKey: string,
+  value: unknown,
+  options: ControlCenterStateWriteOptions = {},
+) {
+  const db = options.sqlite === false ? null : openDatabase()
+  if (!db) return false
+  let payload = ''
+  try {
+    payload = JSON.stringify(value)
+  } catch {
+    return false
+  }
+  if (!payload) return false
+  try {
+    const now = new Date()
+    db.prepare(`
+      INSERT INTO control_center_state
+        (namespace, state_key, updated_at, updated_at_ms, source_path, payload_json)
+      VALUES (?, ?, ?, ?, ?, ?)
+      ON CONFLICT(namespace, state_key) DO UPDATE SET
+        updated_at = excluded.updated_at,
+        updated_at_ms = excluded.updated_at_ms,
+        source_path = excluded.source_path,
+        payload_json = excluded.payload_json
+    `).run(
+      normalizedStateCoordinate(namespace, 'namespace'),
+      normalizedStateCoordinate(stateKey, 'key'),
+      now.toISOString(),
+      now.getTime(),
+      options.sourcePath || null,
+      payload,
+    )
+    return true
+  } catch {
+    return false
+  }
+}
+
+export function deleteControlCenterState(
+  namespace: string,
+  stateKey: string,
+  options: LedgerReadOptions = {},
+) {
+  const db = options.sqlite === false ? null : openDatabase()
+  if (!db) return false
+  try {
+    db.prepare(`
+      DELETE FROM control_center_state
+      WHERE namespace = ? AND state_key = ?
+    `).run(
+      normalizedStateCoordinate(namespace, 'namespace'),
+      normalizedStateCoordinate(stateKey, 'key'),
+    )
+    return true
+  } catch {
+    return false
+  }
 }
 
 async function appendLedger(kind: LedgerKind, value: Record<string, unknown>, jsonlPath: string, options: LedgerAppendOptions = {}) {

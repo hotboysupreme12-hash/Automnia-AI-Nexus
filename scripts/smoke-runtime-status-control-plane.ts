@@ -45,6 +45,15 @@ for (const marker of [
 assert(server.includes('registerRuntimeRoutes(app, {'), 'server/index.ts should register extracted runtime routes')
 assert(server.includes('getRuntimeStatusPayload'), 'server/index.ts should inject the runtime status payload builder')
 assert(server.includes('getRuntimeSummaryPayload'), 'server/index.ts should inject the runtime summary payload builder')
+assert(server.includes('function isGatewayPollingIngressLifecycle'), 'gateway activity should classify polling ingress lifecycle separately')
+assert(
+  server.includes("if (isGatewayPollingIngressLifecycle(text)) return 'system'"),
+  'polling ingress startup/shutdown logs should not count as inbound channel traffic',
+)
+assert(
+  server.includes('if (isGatewayPollingIngressLifecycle(text)) return false'),
+  'polling ingress startup/shutdown logs should be excluded from Channel Activity message rows',
+)
 
 assert(
   runtimeHook.includes("import { apiErrorMessage, apiRequest, type ApiErrorEnvelope"),

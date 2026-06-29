@@ -495,8 +495,12 @@ export async function updateCronShift(payload: {
   return result.data
 }
 
-export async function listCronShifts(): Promise<RuntimeCronJob[]> {
-  const result = await apiRequest<{ shifts?: RuntimeCronJob[] }>('/api/shifts', { cache: 'no-store', timeoutMs: 20_000 })
+export async function listCronShifts(options: ApiRequestOptions = {}): Promise<RuntimeCronJob[]> {
+  const result = await apiRequest<{ shifts?: RuntimeCronJob[] }>('/api/shifts', {
+    ...options,
+    cache: options.cache ?? 'no-store',
+    timeoutMs: options.timeoutMs ?? 20_000,
+  })
   if (!result.ok) throw new Error(apiErrorMessage(result.error))
   if (!Array.isArray(result.data.shifts)) throw new Error('Cron list response missing shifts.')
   return result.data.shifts
@@ -539,6 +543,22 @@ function errorMessage(error: unknown) {
 
 function isRuntimeStatusPayload(value: unknown): value is RuntimeStatus {
   return Boolean(value && typeof value === 'object' && 'gateway' in value)
+}
+
+async function hydrateRuntimeStatusCronJobs(status: RuntimeStatus, signal?: AbortSignal): Promise<RuntimeStatus> {
+  try {
+    const shifts = await listCronShifts({ signal, timeoutMs: 20_000 })
+    return {
+      ...status,
+      shifts: {
+        ...status.shifts,
+        activeCount: shifts.length,
+        active: shifts,
+      },
+    }
+  } catch {
+    return status
+  }
 }
 
 function runtimeApiRequestError(error: ApiErrorEnvelope) {
@@ -807,7 +827,7 @@ async function loadRuntimeStatus(intervalMs: number, forceRefresh = false) {
     if (!isRuntimeStatusPayload(result.data)) {
       throw new Error('Runtime status response missing gateway data.')
     }
-    cachedRuntimeStatus = result.data
+    cachedRuntimeStatus = await hydrateRuntimeStatusCronJobs(result.data, controller.signal)
     cachedRuntimeError = ''
   } catch (loadError) {
     const idleAbort = runtimeStatusRequestAbortReason === 'idle' && controller.signal.aborted
@@ -868,7 +888,7 @@ async function loadRuntimeSummaryStatus(intervalMs: number, forceRefresh = false
     if (!isRuntimeStatusPayload(result.data)) {
       throw new Error('Runtime summary response missing gateway data.')
     }
-    cachedRuntimeSummaryStatus = result.data
+    cachedRuntimeSummaryStatus = await hydrateRuntimeStatusCronJobs(result.data, controller.signal)
     cachedRuntimeSummaryError = ''
   } catch (loadError) {
     const idleAbort = runtimeSummaryRequestAbortReason === 'idle' && controller.signal.aborted
