@@ -503,6 +503,66 @@ test('plugin routes preserve disabled plugin state and enable known disabled plu
   assert.ok(calls.list >= 2)
 })
 
+test('plugin routes preserve unavailable channel plugin state', async () => {
+  const { app, calls } = createPluginRoutesHarness([
+    pluginEntry('channel-unavailable', {
+      name: 'Channel Unavailable',
+      status: 'unavailable',
+      enabled: true,
+      configuredEnabled: true,
+      category: 'communications',
+      channels: ['voice', 'sms', 'clawtalk.websocket'],
+      guidance: ['Channel unavailable until Gateway reports websocket readiness.'],
+      restartRequired: true,
+    }),
+  ])
+
+  await withRouteServer(app, async (baseUrl) => {
+    const listResult = await requestJson(baseUrl, 'GET', '/api/plugins')
+    assert.equal(listResult.status, 200)
+    const listed = JSON.parse(listResult.text) as {
+      ok: boolean
+      data: {
+        plugins: Array<{
+          id: string
+          category: string
+          channels: string[]
+          configuredEnabled: boolean | null
+          enabled: boolean
+          guidance: string[]
+          restartRequired: boolean
+          status: string
+        }>
+      }
+    }
+    const plugin = listed.data.plugins[0]
+    assert.equal(listed.ok, true)
+    assert.equal(plugin?.id, 'channel-unavailable')
+    assert.equal(plugin?.enabled, true)
+    assert.equal(plugin?.configuredEnabled, true)
+    assert.equal(plugin?.status, 'unavailable')
+    assert.equal(plugin?.category, 'communications')
+    assert.deepEqual(plugin?.channels, ['voice', 'sms', 'clawtalk.websocket'])
+    assert.deepEqual(plugin?.guidance, ['Channel unavailable until Gateway reports websocket readiness.'])
+    assert.equal(plugin?.restartRequired, true)
+
+    const inspectResult = await requestJson(baseUrl, 'POST', '/api/plugins/channel-unavailable/inspect')
+    assert.equal(inspectResult.status, 200)
+    const inspected = JSON.parse(inspectResult.text) as {
+      ok: boolean
+      data: { plugin?: { id?: string; status?: string; channels?: string[] }; inspect?: { pluginId?: string } }
+    }
+    assert.equal(inspected.ok, true)
+    assert.equal(inspected.data.inspect?.pluginId, 'channel-unavailable')
+    assert.equal(inspected.data.plugin?.id, 'channel-unavailable')
+    assert.equal(inspected.data.plugin?.status, 'unavailable')
+    assert.deepEqual(inspected.data.plugin?.channels, ['voice', 'sms', 'clawtalk.websocket'])
+  })
+
+  assert.equal(calls.inspect, 1)
+  assert.ok(calls.list >= 2)
+})
+
 test('plugin routes still run known plugin mutations after the not-found guard', async () => {
   const { app, calls } = createPluginRoutesHarness(['known'])
 

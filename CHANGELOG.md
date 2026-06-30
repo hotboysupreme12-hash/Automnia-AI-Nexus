@@ -13,6 +13,9 @@
 
 ### Reliability and recovery
 
+- Upgraded the vendored OpenCLAW runtime and bundled Codex plugin to `2026.6.11`.
+- Preserved OpenCLAW 2026.6.11 official external plugin/provider/channel catalogs in fallback plugin discovery.
+- Surfaced plugin icon, package, install spec, and channel image metadata through runtime status and the Plugins panel.
 - Added checksummed OpenClaw state backup, verification, atomic restore, and rollback retention.
 - Added API soak qualification and behavioral unit tests.
 - Preserved installer lifecycle logs inside signed release evidence.

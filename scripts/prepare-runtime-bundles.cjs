@@ -13,10 +13,10 @@ const installWorkRoot = path.join(bundleRoot, '.work')
 
 const RUNTIME_BUNDLE_METADATA_FILE = '.dystopai-runtime-bundle.json'
 const DEFAULT_BUNDLED_NODE_VERSION = 'v24.16.0'
-const DEFAULT_BUNDLED_CODEX_VERSION = '2026.6.10'
+const DEFAULT_BUNDLED_CODEX_VERSION = '2026.6.11'
 const DEFAULT_BUNDLED_CODEX_SPEC = `@openclaw/codex@${DEFAULT_BUNDLED_CODEX_VERSION}`
-const DEFAULT_BUNDLED_CODEX_INTEGRITY = 'sha512-0M5FsRb3IxsJ/xb2U1eMOZL/7w9W27tnzhSANY7JbbCRhz1+v7WUE6uS3YRWoTKv/9sNx9MAJXFntCK8MpWKYQ=='
-const DEFAULT_BUNDLED_CODEX_TARBALL = 'https://registry.npmjs.org/@openclaw/codex/-/codex-2026.6.10.tgz'
+const DEFAULT_BUNDLED_CODEX_INTEGRITY = 'sha512-L9rO95x0DW7rpVJisPv2kkgwr04nKYAA1xbgDXVAm2oh801BCJFIJFo021bvhPmwo7MTAXNcuchO3laGa30QRQ=='
+const DEFAULT_BUNDLED_CODEX_TARBALL = 'https://registry.npmjs.org/@openclaw/codex/-/codex-2026.6.11.tgz'
 
 function normalizeExactNodeVersion(value) {
   const raw = String(value || '').trim().replace(/^node-/, '')

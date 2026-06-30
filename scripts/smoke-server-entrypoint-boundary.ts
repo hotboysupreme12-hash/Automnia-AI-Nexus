@@ -39,6 +39,11 @@ const missionReportService = read('server/services/missions/missionReportService
 const missionRecoveryService = read('server/services/missions/missionRecoveryService.ts')
 const missionTeamSyncService = read('server/services/missions/missionTeamSyncService.ts')
 const runtimeLedgerStore = read('server/state/runtimeLedgerStore.ts')
+const controlFilesService = read('server/services/controlFilesService.ts')
+const avatarFileService = read('server/services/filesystem/avatarFileService.ts')
+const safePathService = read('server/services/filesystem/safePathService.ts')
+const commandConsoleUploadService = read('server/services/filesystem/commandConsoleUploadService.ts')
+const pickerSessionService = read('server/services/filesystem/pickerSessionService.ts')
 const reporter = read('scripts/report-server-index-architecture.mjs')
 const packageJson = JSON.parse(read('package.json')) as { scripts?: Record<string, string> }
 const CONTROL_PLANE_MAX_LINES = 29_000
@@ -85,6 +90,11 @@ for (const contract of [
   ["from './services/plugins/pluginInstallService'", 'plugin install service import'],
   ["from './services/plugins/pluginDiagnosticsService'", 'plugin diagnostics service import'],
   ["from './services/plugins/pluginRuntimeService'", 'plugin runtime service import'],
+  ["from './services/controlFilesService'", 'control-files service import'],
+  ["from './services/filesystem/avatarFileService'", 'avatar file service import'],
+  ["from './services/filesystem/safePathService'", 'safe path service import'],
+  ["from './services/filesystem/commandConsoleUploadService'", 'command-console upload service import'],
+  ["from './services/filesystem/pickerSessionService'", 'picker session service import'],
   ["from './state/runtimeLedgerStore'", 'runtime ledger store import'],
   ["from './catalogs/providerCatalog'", 'provider catalog import'],
   ["from './integrations/agentRoutingHelpers'", 'routing patch import'],
@@ -113,6 +123,9 @@ for (const contract of [
   ['createPluginInstallService({', 'plugin install service composition'],
   ['createPluginDiagnosticsService({', 'plugin diagnostics service composition'],
   ['createPluginRuntimeService({', 'plugin runtime service composition'],
+  ['createSafePathService()', 'safe path service composition'],
+  ['createCommandConsoleUploadService({', 'command-console upload service composition'],
+  ['createPickerSessionService({', 'picker session service composition'],
   ['createRuntimeLedgerStore(', 'runtime ledger store composition'],
   ['missionStateService,', 'mission route state service injection'],
   ['registerStaticUi(app, {', 'static UI registration'],
@@ -149,6 +162,11 @@ assert.doesNotMatch(controlPlane, /\basync function\s+installOpenClawPlugin\b|\b
 assert.doesNotMatch(controlPlane, /\basync function\s+recordPluginInstallRuntimeState\b|\basync function\s+touchPluginManagedRuntimeState\b|\basync function\s+forgetPluginRuntimeState\b/, 'plugin install runtime-state writes must stay in pluginInstallService.ts')
 assert.doesNotMatch(controlPlane, /\bfunction\s+parsePluginInstallInput\b|\bfunction\s+repairPluginInstallRenameFailure\b|\bfunction\s+parsePluginInstallRenameFailure\b/, 'plugin install parsing and repair logic must stay in pluginInstallService.ts')
 assert.doesNotMatch(controlPlane, /\bfunction\s+normalizeClawTalkApiKeyInput\b|\bfunction\s+normalizeClawTalkServerInput\b|\bfunction\s+parseClawTalkDoctorSummary\b|\basync function\s+waitForClawTalkDoctor\b|\basync function\s+setupClawTalkPlugin\b/, 'plugin doctor/setup output must stay in pluginDiagnosticsService.ts')
+assert.doesNotMatch(controlPlane, /\bfunction\s+isPathUnder\b|\bfunction\s+isInsidePath\b|\bfunction\s+samePath\b/, 'safe path containment and comparison helpers must stay in safePathService.ts')
+assert.doesNotMatch(controlPlane, /\bfunction\s+commandConsoleUploadFileName\b|\bfunction\s+normalizeCommandConsoleAttachment\b|\btype\s+CommandConsoleUploadAttachment\b/, 'command-console upload naming and attachment normalization must stay in commandConsoleUploadService.ts')
+assert.doesNotMatch(controlPlane, /\bfunction\s+avatarUploadFileName\b|\bfunction\s+managedAvatarFileName\b|\bfunction\s+isSupportedAvatarImagePath\b/, 'avatar upload naming and image allowlist helpers must stay in avatarFileService.ts')
+assert.doesNotMatch(controlPlane, /\bfunction\s+startFolderPickerSession\b|\bfunction\s+startImagePickerSession\b|\bfunction\s+serializeFolderPickerSession\b|\bfunction\s+serializeImagePickerSession\b/, 'folder/image picker session state must stay in pickerSessionService.ts')
+assert.doesNotMatch(controlPlane, /\bfunction\s+launchWindowsFolderPickerSession\b|\bfunction\s+launchWindowsImagePickerSession\b|\bfunction\s+runPickerCommand\b|\bfunction\s+normalizePickerStartPath\b|\bfunction\s+pickFolderWithOsDialog\b|\bfunction\s+pickImageWithOsDialog\b/, 'native picker command handling must stay in pickerSessionService.ts')
 assert.doesNotMatch(controlPlane, /app\.(?:get|post)\(['"]\/api\/shifts/, 'shift endpoints must remain outside controlPlane.ts')
 assert.doesNotMatch(controlPlane, /app\.get\(['"]\/api\/browser\/preflight/, 'browser preflight must remain outside controlPlane.ts')
 assert.match(runtimeRoutes, /runtimeActions: RuntimeActionService/, 'runtime routes should receive runtime actions through a service option')
@@ -288,6 +306,39 @@ assert.match(pluginRuntimeService, /\bfunction\s+resizePluginSetupTerminalSessio
 assert.match(pluginRuntimeService, /\bfunction\s+stopAllPluginSetupTerminalSessions\b/, 'plugin runtime service should own terminal shutdown cleanup')
 assert.match(pluginRuntimeService, /options\.runOpenClaw\(args, 120_000\)/, 'plugin runtime inspect should execute bounded OpenClaw commands')
 assert.match(pluginRuntimeService, /options\.redactSensitiveText/, 'plugin runtime service should redact command output and errors')
+assert.match(safePathService, /export function createSafePathService/, 'safe path service should expose a service factory')
+assert.match(safePathService, /\bfunction\s+resolvedComparisonPath\b/, 'safe path service should own path normalization for comparison')
+assert.match(safePathService, /export function isPathUnder/, 'safe path service should own containment checks')
+assert.match(safePathService, /export function samePath/, 'safe path service should own path equality checks')
+assert.match(controlPlane, /const isPathUnder = safePathService\.isPathUnder/, 'controlPlane.ts should delegate path containment through the safe path service')
+assert.match(controlPlane, /const samePath = safePathService\.samePath/, 'controlPlane.ts should delegate path equality through the safe path service')
+assert.match(controlFilesService, /export function createControlFilesService/, 'control-files service should expose a service factory')
+assert.match(controlFilesService, /\bfunction\s+resolveControlFilePath\b/, 'control-files service should own control-file path resolution')
+assert.match(controlFilesService, /isPathUnder\(resolvedWorkspaceRoot, targetPath\)/, 'control-files service should enforce workspace containment')
+assert.match(controlFilesService, /\basync\s+readFile\b/, 'control-files service should own control-file reads')
+assert.match(controlFilesService, /\basync\s+writeFile\b/, 'control-files service should own control-file writes')
+assert.match(controlPlane, /createControlFilesService\(WORKSPACE_ROOT,\s*\{\s*isPathUnder\s*\}\)/, 'controlPlane.ts should compose control-files service with safe path containment')
+assert.match(avatarFileService, /export const AVATAR_UPLOAD_LIMIT_BYTES/, 'avatar file service should own avatar upload size limits')
+assert.match(avatarFileService, /export function avatarUploadFileName/, 'avatar file service should own avatar upload file naming')
+assert.match(avatarFileService, /export function managedAvatarFileName/, 'avatar file service should own managed avatar file naming')
+assert.match(avatarFileService, /export function isSupportedAvatarImagePath/, 'avatar file service should own avatar image allowlist checks')
+assert.match(avatarFileService, /extFromName && !AVATAR_IMAGE_EXTENSIONS\.has\(extFromName\)/, 'avatar file service should reject unsupported explicit extensions before MIME fallback')
+assert.match(commandConsoleUploadService, /export function createCommandConsoleUploadService/, 'command-console upload service should expose a service factory')
+assert.match(commandConsoleUploadService, /\bfunction\s+commandConsoleUploadFileName\b/, 'command-console upload service should own file naming')
+assert.match(commandConsoleUploadService, /\basync function\s+persistUpload\b/, 'command-console upload service should own upload persistence')
+assert.match(commandConsoleUploadService, /\bfunction\s+normalizeAttachment\b/, 'command-console upload service should own attachment normalization')
+assert.match(commandConsoleUploadService, /\basync function\s+gatewayAttachmentsFromTurnAttachments\b/, 'command-console upload service should own Gateway attachment conversion')
+assert.match(controlPlane, /return commandConsoleUploadService\.persistUpload\(\s*bytes,\s*sourceName,\s*rawMimeType\s*\)/, 'controlPlane.ts should keep only a thin upload persistence delegate')
+assert.match(controlPlane, /return commandConsoleUploadService\.gatewayAttachmentsFromTurnAttachments\(attachments\)/, 'controlPlane.ts should keep only a thin Gateway attachment delegate')
+assert.match(pickerSessionService, /export function createPickerSessionService/, 'picker session service should expose a service factory')
+assert.match(pickerSessionService, /\bfunction\s+startFolderPickerSession\b/, 'picker session service should own folder session starts')
+assert.match(pickerSessionService, /\bfunction\s+startImagePickerSession\b/, 'picker session service should own image session starts')
+assert.match(pickerSessionService, /\bfunction\s+launchWindowsFolderPickerSession\b/, 'picker session service should own Windows folder picker launchers')
+assert.match(pickerSessionService, /\bfunction\s+launchWindowsImagePickerSession\b/, 'picker session service should own Windows image picker launchers')
+assert.match(pickerSessionService, /\bfunction\s+runPickerCommand\b/, 'picker session service should own native picker command execution')
+assert.match(pickerSessionService, /\bfunction\s+normalizePickerStartPath\b/, 'picker session service should own picker start-path normalization')
+assert.match(controlPlane, /const pickerSessionService = createPickerSessionService\(\{/, 'controlPlane.ts should compose picker session service')
+assert.match(controlPlane, /pickerSessions: pickerSessionService/, 'controlPlane.ts should inject picker sessions into filesystem routes')
 assert.match(controlPlane, /missionSchedulerService\.scheduleNextMissionRound/, 'mission state composition should delegate scheduling through the scheduler service')
 assert.match(controlPlane, /const recordMissionReport = missionReportService\.recordMissionReport/, 'controlPlane.ts should delegate report recording through the mission report service')
 assert.match(controlPlane, /const buildMissionLifecycleProjection = missionReportService\.buildMissionLifecycleProjection/, 'controlPlane.ts should delegate mission projection through the mission report service')

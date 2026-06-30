@@ -14,9 +14,9 @@ const metadataPath = path.join(nodeModulesRoot, '.dystopai-openclaw-vendor-deps.
 const cacheRoot = path.join(root, '.cache', 'openclaw-vendor')
 const refresh = /^(1|true|yes)$/i.test(process.env.DYSTOPAI_REFRESH_OPENCLAW_VENDOR_DEPS || '')
 
-const DEFAULT_OPENCLAW_PACKAGE_VERSION = '2026.6.10'
-const DEFAULT_OPENCLAW_PACKAGE_TARBALL = 'https://registry.npmjs.org/openclaw/-/openclaw-2026.6.10.tgz'
-const DEFAULT_OPENCLAW_PACKAGE_INTEGRITY = 'sha512-LcooND2tBQw8A+kc1Ujltu3lg30bJ0w7XaeRy7eYzobb8BBdcW6DOGbwJL4vpj1vl9+gjRceOtlh5nh9OARcug=='
+const DEFAULT_OPENCLAW_PACKAGE_VERSION = '2026.6.11'
+const DEFAULT_OPENCLAW_PACKAGE_TARBALL = 'https://registry.npmjs.org/openclaw/-/openclaw-2026.6.11.tgz'
+const DEFAULT_OPENCLAW_PACKAGE_INTEGRITY = 'sha512-T+P/g19IheeT1ckXMoPN61dYuE8vBF4MderI+kWkvpuFYxPkJxn8AXLpu9IXCnN9g36Acpm9+mMD/V+lsvOkyA=='
 
 const installArgs = [
   'ci',
@@ -51,7 +51,9 @@ const requiredPackageArtifacts = [
   path.join('dist', 'extensions', 'browser', 'index.js'),
   path.join('dist', 'extensions', 'memory-wiki', 'skills', 'wiki-maintainer', 'SKILL.md'),
   path.join('dist', 'extensions', 'open-prose', 'skills', 'prose', 'SKILL.md'),
-  path.join('dist', 'extensions', 'tavily', 'skills', 'tavily', 'SKILL.md'),
+  path.join('scripts', 'lib', 'official-external-plugin-catalog.json'),
+  path.join('scripts', 'lib', 'official-external-provider-catalog.json'),
+  path.join('scripts', 'lib', 'official-external-channel-catalog.json'),
 ]
 
 function readJson(filePath) {

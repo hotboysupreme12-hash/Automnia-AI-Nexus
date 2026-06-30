@@ -65,7 +65,7 @@ export type OpenClawOptimizationScorecard = {
 }
 
 const OPENCLAW_OPTIMIZATION_GUIDE = 'docs/OPENCLAW_BETA_OPTIMIZATION_GUIDE.md'
-const OPENCLAW_TARGET_VERSION = '2026.6.10'
+const OPENCLAW_TARGET_VERSION = '2026.6.11'
 
 export const OPENCLAW_OPTIMIZATION_CATEGORIES: OpenClawOptimizationSourceCategory[] = [
   {
