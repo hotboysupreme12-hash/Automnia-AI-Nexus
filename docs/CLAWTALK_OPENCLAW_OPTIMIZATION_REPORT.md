@@ -427,13 +427,20 @@ Files likely involved:
 
 ## Suggested Implementation Order
 
+This order now follows `docs/BETA_CODEBASE_SPLIT_PLAN.md`. ClawTalk and Gateway
+optimizations should land through the Gateway/runtime service split instead of
+adding more logic to the control-plane composition module.
+
 ### Phase 1: Low-risk Performance Wins
 
-1. Add the lightweight runtime summary endpoint.
-2. Point shell/header status chips at the summary endpoint.
-3. Add SQLite readers for Gateway and diagnostic event ledgers.
-4. Use the SQLite Gateway event reader in runtime status.
-5. Add basic timing counters around runtime status build steps.
+1. Extract or prepare the Gateway diagnostics/log service boundary first.
+2. Add the lightweight runtime summary endpoint through the runtime status
+   service boundary.
+3. Point shell/header status chips at the summary endpoint.
+4. Add SQLite readers for Gateway and diagnostic event ledgers behind the
+   runtime ledger service/store boundary.
+5. Use the SQLite Gateway event reader in runtime status.
+6. Add basic timing counters around runtime status build steps.
 
 This phase should reduce background work without changing user-facing workflows.
 
@@ -468,6 +475,8 @@ This phase should make future OpenClaw and ClawTalk upgrades safer.
   replacements.
 - Extract the shared agent-turn service so SSE and JSON routes do not call each
   other through local HTTP.
+- Record each extraction and validation result in
+  `docs/PRODUCTION_HARDENING_LEDGER.md` so the beta split plan stays resumable.
 
 ## Risks and Notes
 

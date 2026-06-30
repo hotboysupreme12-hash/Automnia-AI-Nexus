@@ -14,6 +14,30 @@ Source release notes:
 - npm integrity: `sha512-LcooND2tBQw8A+kc1Ujltu3lg30bJ0w7XaeRy7eYzobb8BBdcW6DOGbwJL4vpj1vl9+gjRceOtlh5nh9OARcug==`
 - Docs mirror: `docs/openclaw-latest` synced from https://docs.openclaw.ai on 2026-06-27, 693 pages.
 
+## Current Beta Split Plan Alignment
+
+Current optimization source ledger: `docs/BETA_CODEBASE_SPLIT_PLAN.md`.
+That file is an exact copy of the GitHub plan from
+`origin/docs/150-point-release-plan` with blob SHA
+`78bada3e29085e2726769b86b6c3720b69feab9f`.
+
+All optimization work below remains useful, but future implementation should now
+be sequenced through the split plan:
+
+1. Freeze new `server/controlPlane.ts` domain growth and keep architecture smoke
+   checks active.
+2. Extract Gateway lifecycle, diagnostics, log, and chat orchestration services.
+3. Extract runtime status, action, ledger, and recovery services.
+4. Extract mission state, scheduler, report, recovery, and Team Sync services.
+5. Extract provider/auth, plugin, filesystem/upload, release, state, and shared
+   contract modules before adding broader workflow features.
+6. Split renderer API calls and projection state out of the growing store.
+7. Treat public signing and paid release work as later-stage work until the
+   private beta readiness gates are proven.
+
+Implementation rule: every optimization slice should name its target service or
+state/contract module and record evidence in `docs/PRODUCTION_HARDENING_LEDGER.md`.
+
 ## 2026.6.10 Stable Runtime Delta
 
 OpenClaw `2026.6.10` is a stability and policy release on top of the 2026.6 runtime line. The changes that matter most to DystopAI are:
@@ -381,6 +405,11 @@ Recommended upgrade:
 
 ## Prioritized Roadmap
 
+Split-plan priority override: the roadmap below should no longer be treated as
+a free-standing feature list. Apply it through the phase order in
+`docs/BETA_CODEBASE_SPLIT_PLAN.md`, with Gateway, runtime, mission, and store
+boundaries ahead of new centers or marketplace-style surfaces.
+
 ### Priority 0: Stability And Recovery
 
 Build these first. They reduce stuck runs, mystery failures, and bad upgrade experiences.
@@ -437,6 +466,11 @@ Acceptance criteria:
 - Channel plugins can be tested and repaired from one screen.
 
 ## Concrete App-Specific Optimization Targets
+
+The targets below should be implemented by extracting focused services, not by
+adding more domain logic to `server/controlPlane.ts`. If a target needs backend
+work, start by mapping it to the service folder named in
+`docs/BETA_CODEBASE_SPLIT_PLAN.md`.
 
 ### Backend: `server/index.ts`
 
@@ -674,20 +708,27 @@ Estimated scope: 2-4 focused days.
 - Deferred markdown rendering.
 - Status poll tuning and UI performance measurements.
 
-## Build Order I Would Use
+## Build Order I Would Use After The Split Plan
 
-1. `boundedOperation()` and process-tree cleanup.
-2. SQLite event ledger for runtime/gateway/doctor.
-3. Doctor endpoint and simple Doctor UI.
-4. Runtime status caching.
-5. Response latency and failure-kind fields.
-6. Skill Workshop proposal flow.
-7. Workboard task cards.
-8. Provider/model capability matrix.
-9. Plugin installer/repair.
-10. Channel Center.
+1. Freeze control-plane growth and enforce the architecture threshold.
+2. Extract Gateway lifecycle, diagnostics, log tailing, and chat orchestration.
+3. Extract runtime status, action, ledger, and recovery services.
+4. Extract mission state, scheduler, report, recovery, and Team Sync services.
+5. Move bounded operations and process-tree cleanup behind the extracted runtime
+   and Gateway services.
+6. Move SQLite runtime/gateway/doctor ledger access behind the runtime ledger
+   store/service boundary.
+7. Add Doctor and runtime summary surfaces on top of the extracted services.
+8. Split renderer API calls and projection state out of the growing store.
+9. Add response latency, failure-kind, and transport fields once service events
+   are structured.
+10. Build Skill Workshop and Workboard after mission/runtime evidence is durable.
+11. Build provider/model, plugin, and channel centers after their service
+   boundaries exist.
+12. Run the private beta gates and manual beta script before returning to public
+   signing or paid-release tasks.
 
-This order makes the app more reliable before adding more moving parts.
+This keeps reliability and maintainability work ahead of new moving parts.
 
 ## Implementation Notes And Risks
 

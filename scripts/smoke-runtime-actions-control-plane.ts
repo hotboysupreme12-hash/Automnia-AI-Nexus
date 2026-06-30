@@ -25,6 +25,10 @@ const controlPlaneHttp = readWorkspaceFile('server/controlPlaneHttp.ts')
 const diagnosticsRoutes = readWorkspaceFile('server/routes/diagnosticsRoutes.ts')
 const providerAuthRoutes = readWorkspaceFile('server/routes/providerAuthRoutes.ts')
 const runtimeRoutes = readWorkspaceFile('server/routes/runtimeRoutes.ts')
+const gatewayLifecycleService = readWorkspaceFile('server/services/gateway/gatewayLifecycleService.ts')
+const gatewayChatService = readWorkspaceFile('server/services/gateway/gatewayChatService.ts')
+const runtimeActionService = readWorkspaceFile('server/services/runtime/runtimeActionService.ts')
+const runtimeRecoveryService = readWorkspaceFile('server/services/runtime/runtimeRecoveryService.ts')
 const runtimeHook = readWorkspaceFile('src/hooks/useRuntimeStatus.ts')
 const liveMonitor = readWorkspaceFile('src/components/monitor/LiveOperationMonitor.tsx')
 const editor = readWorkspaceFile('src/components/editor/AgentEditorModal.tsx')
@@ -78,6 +82,61 @@ for (const marker of [
 }
 assert(server.includes('registerRuntimeRoutes(app, {'), 'server/index.ts should register extracted runtime routes')
 assert(server.includes('registerProviderAuthRoutes(app, {'), 'server/index.ts should register extracted provider auth routes')
+assert(server.includes("from './services/runtime/runtimeActionService'"), 'server/index.ts should import the runtime action service')
+assert(server.includes("from './services/runtime/runtimeRecoveryService'"), 'server/index.ts should import the runtime recovery service')
+assert(server.includes('createRuntimeRecoveryService({'), 'server/index.ts should compose the runtime recovery service')
+assert(server.includes('createRuntimeActionService({'), 'server/index.ts should compose the runtime action service')
+assert(server.includes('runtimeActions: runtimeActionService'), 'server/index.ts should inject runtime actions through route options')
+assert(server.includes('runtimeRecovery: runtimeRecoveryService'), 'server/index.ts should inject runtime recovery through runtime actions')
+assert(runtimeRoutes.includes('runtimeActions: RuntimeActionService'), 'runtime routes should receive the runtime action service through options')
+for (const fragment of [
+  'options.runtimeActions.closeRuntimeSession',
+  'options.runtimeActions.abortStaleGatewayChat',
+  'options.runtimeActions.clearRuntimeMonitor',
+  'options.runtimeActions.shutdownRuntime',
+  'options.runtimeActions.stopGateway',
+  'options.runtimeActions.startGateway',
+  'options.runtimeActions.restartGateway',
+]) {
+  assert(runtimeRoutes.includes(fragment), `runtime routes should delegate to ${fragment}`)
+}
+for (const fragment of [
+  'abortGatewayRuntimeSessionsForClose',
+  'cleanupOpenClawSessionLocks',
+  'readExternalGatewayLogEntries',
+  'shutdownControlCenterRuntime',
+  'tryRestartGatewayService',
+]) {
+  assert(!runtimeRoutes.includes(fragment), `runtime routes should not orchestrate ${fragment} directly`)
+}
+assert(runtimeActionService.includes('export function createRuntimeActionService'), 'runtime action service should expose a service factory')
+assert(runtimeActionService.includes('async function closeRuntimeSession'), 'runtime action service should own session close orchestration')
+assert(runtimeActionService.includes('function abortStaleGatewayChat'), 'runtime action service should own stale Gateway chat aborts')
+assert(runtimeActionService.includes("runtimeRecovery: Pick<RuntimeRecoveryService, 'clearRuntimeMonitor' | 'shutdownRuntime'>"), 'runtime action service should receive runtime recovery through options')
+assert(runtimeActionService.includes('async function clearRuntimeMonitor'), 'runtime action service should expose the monitor clear action')
+assert(runtimeActionService.includes('return options.runtimeRecovery.clearRuntimeMonitor()'), 'runtime action service should delegate clean-slate recovery to the recovery service')
+assert(runtimeActionService.includes('async function shutdownRuntime'), 'runtime action service should expose runtime shutdown')
+assert(runtimeActionService.includes("return options.runtimeRecovery.shutdownRuntime('desktop quit')"), 'runtime action service should delegate shutdown cleanup to the recovery service')
+assert(runtimeActionService.includes('async function stopGateway'), 'runtime action service should own Gateway stop orchestration')
+assert(runtimeActionService.includes('async function startGateway'), 'runtime action service should own Gateway start orchestration')
+assert(runtimeActionService.includes('async function restartGateway'), 'runtime action service should own Gateway restart orchestration')
+assert(runtimeActionService.includes("reason: 'manual restart requested from monitor'"), 'manual Monitor restarts should pass a structured restart reason')
+assert(runtimeActionService.includes('allowExternalTakeover: true'), 'manual Monitor restarts should explicitly opt into external listener takeover')
+assert(runtimeActionService.includes("'operator stale-turn recovery'"), 'stale Gateway chat recovery should keep the operator evidence reason')
+assert(runtimeActionService.includes("'runtime session close follow-up'"), 'session close should schedule a follow-up lock sweep')
+assert(runtimeRecoveryService.includes('export function createRuntimeRecoveryService'), 'runtime recovery service should expose a service factory')
+assert(runtimeRecoveryService.includes('async function clearRuntimeMonitor'), 'runtime recovery service should own clean-slate monitor recovery')
+assert(runtimeRecoveryService.includes("sweepOpenClawSessionLocks('monitor clear'"), 'clean-slate recovery should sweep stale session locks')
+assert(runtimeRecoveryService.includes('writeRuntimeMonitorClearMarker(clearedAt)'), 'clean-slate recovery should persist the clear marker')
+assert(runtimeRecoveryService.includes('getActiveOpenClawRunCount()'), 'clean-slate recovery should report active runs without stopping them')
+assert(runtimeRecoveryService.includes('let shutdownInFlight'), 'runtime recovery service should dedupe concurrent shutdown cleanup')
+assert(runtimeRecoveryService.includes('async function shutdownControlCenterRuntime'), 'runtime recovery service should own runtime shutdown cleanup')
+assert(runtimeRecoveryService.includes('stopControlCenterGatewayClient(reason)'), 'runtime recovery shutdown should stop the Control Center Gateway websocket client')
+assert(runtimeRecoveryService.includes('stopAllPluginSetupTerminalSessions(reason)'), 'runtime recovery shutdown should stop plugin setup terminal child processes')
+assert(runtimeRecoveryService.includes('closeOAuthCallbackServersForShutdown(reason)'), 'runtime recovery shutdown should close fixed-port OAuth callback servers')
+assert(runtimeRecoveryService.includes('oauthCallbackServers,'), 'runtime recovery shutdown result should report OAuth callback cleanup')
+assert(runtimeRecoveryService.includes('function processExitCleanup'), 'runtime recovery service should own process-exit cleanup')
+assert(runtimeRecoveryService.includes('closeOAuthCallbackServersForProcessExit(reason)'), 'process-exit cleanup should close OAuth callback listeners synchronously')
 
 assert(
   runtimeHook.includes("import { apiErrorMessage, apiRequest, type ApiErrorEnvelope, type ApiRequestOptions } from '../api/client'"),
@@ -104,15 +163,13 @@ for (const fragment of [
 
 assert(diagnosticsRoutes.includes('runDoctorRepair: () => Promise<unknown>'), 'diagnostics routes should accept an injected Doctor repair action')
 assert(server.includes('function stopControlCenterGatewayClient'), 'shutdown should explicitly stop the Control Center Gateway websocket client')
-assert(server.includes('abortAndRejectGatewayChatWaiters(reason)'), 'Gateway client shutdown should abort pending Gateway chat waiters')
+assert(gatewayChatService.includes('abortAndRejectGatewayChatWaiters(reason)'), 'Gateway client shutdown should abort pending Gateway chat waiters')
 assert(server.includes('function stopAllPluginSetupTerminalSessions'), 'shutdown should stop plugin setup terminal child processes')
 assert(server.includes('function closeOAuthCallbackServersForShutdown'), 'shutdown should close fixed-port OAuth callback servers')
 assert(server.includes('failPendingOAuthSessionsForShutdown(reason)'), 'shutdown should fail pending OAuth sessions instead of leaving listeners active')
-assert(server.includes('oauthCallbackServers: Awaited<ReturnType<typeof closeOAuthCallbackServersForShutdown>>'), 'shutdown result should report OAuth callback cleanup')
-assert(server.includes('closeOAuthCallbackServersForProcessExit(`${signalName} shutdown`)'), 'process-exit cleanup should close OAuth callback listeners synchronously')
-assert(server.includes('controlCenterGatewayPrewarmTimer'), 'Gateway prewarm timer should be tracked for shutdown cleanup')
+assert(gatewayChatService.includes('if (prewarmTimer) {'), 'Gateway prewarm timer should be tracked for shutdown cleanup')
 assert(server.includes('gatewayAutostartTimer'), 'Gateway autostart timer should be tracked for shutdown cleanup')
-assert(server.includes('stopControlCenterGatewayClient(`${reason}: gateway runtime stop`)'), 'manual gateway runtime stop should stop the Gateway client too')
+assert(gatewayLifecycleService.includes('stopControlCenterGatewayClient(`${reason}: gateway runtime stop`)'), 'manual gateway runtime stop should stop the Gateway client too')
 assert(server.includes('async function openClawDoctorLintCheck()'), 'Doctor checks should include the upstream OpenClaw lint integration')
 assert(server.includes("const args = ['doctor', '--lint', '--json', '--severity-min', 'warning']"), 'Doctor lint should use the documented structured OpenClaw automation posture')
 assert(server.includes('type DoctorFindingCategory'), 'Doctor checks should expose structured finding categories')

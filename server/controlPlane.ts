@@ -1,3 +1,6 @@
+// No new domain logic goes here. Keep this file to dependency wiring and
+// temporary composition glue; new backend behavior must declare and use its
+// target service folder from docs/BETA_CODEBASE_SPLIT_PLAN.md.
 import express from 'express'
 import { createHash, randomBytes, randomUUID } from 'node:crypto'
 import { chmodSync, existsSync, mkdirSync, readdirSync, readFileSync, statSync, writeFileSync, promises as fs } from 'node:fs'
@@ -6,27 +9,13 @@ import path from 'node:path'
 import { spawn, spawnSync } from 'node:child_process'
 import { createConnection } from 'node:net'
 import { createRequire } from 'node:module'
-import { tmpdir } from 'node:os'
 import { fileURLToPath, pathToFileURL } from 'node:url'
 import {
-  appendDiagnosticRunLedger,
-  appendGatewayEventLedger,
-  appendMissionEventLedger,
-  appendMissionRecordLedger,
-  appendMissionReportLedger,
-  appendRuntimeRunLedger,
-  closeRuntimeLedger,
-  configureRuntimeLedger,
-  readControlCenterState,
-  readDiagnosticRunLedgerTail,
-  readGatewayEventLedgerTail,
-  readMissionEventLedgerTail,
-  readMissionRecordLedgerTail,
-  readMissionReportLedgerTail,
-  readRuntimeRunLedgerTail,
-  runtimeLedgerStatus,
-  writeControlCenterState,
-} from './runtimeLedger'
+  CONTROL_CENTER_STATE_KEYS,
+  createRuntimeLedgerStore,
+  runtimeLedgerPathsForStateRoot,
+  runtimeMonitorClearMarkerPath,
+} from './state/runtimeLedgerStore'
 import { installControlPlaneErrorHandler, installControlPlaneHttp } from './controlPlaneHttp'
 import { registerAuthRoutes } from './routes/authRoutes'
 import { registerCommandConsoleFileRoutes } from './routes/commandConsoleFileRoutes'
@@ -44,6 +33,24 @@ import { registerProviderAuthRoutes } from './routes/providerAuthRoutes'
 import { registerRuntimeRoutes } from './routes/runtimeRoutes'
 import { registerSkillRoutes } from './routes/skillRoutes'
 import { createControlFilesService } from './services/controlFilesService'
+import {
+  createMissionStateService,
+  missionRecordSnapshot,
+  type Mission,
+  type MissionFeedEvent,
+  type MissionLifecycleEvent,
+} from './services/missions/missionStateService'
+import {
+  createMissionSchedulerService,
+  type MissionCronRuntimeDefaults,
+  type MissionSchedulerService,
+} from './services/missions/missionSchedulerService'
+import { createMissionReportService } from './services/missions/missionReportService'
+import {
+  createMissionRecoveryService,
+  type MissionCronReconciliationSnapshot,
+} from './services/missions/missionRecoveryService'
+import { createMissionTeamSyncService } from './services/missions/missionTeamSyncService'
 import { createLoginAttemptLimiter } from './loginAttemptLimiter'
 import { createSessionTokenStore } from './sessionTokenStore'
 import {
@@ -65,6 +72,28 @@ import { registerBrowserRoutes } from './routes/browserRoutes'
 import { registerShiftRoutes } from './routes/shiftRoutes'
 import { registerStaticUi } from './staticUi'
 import { buildOpenClawOptimizationScorecard } from './openclawOptimizationScorecard'
+import { createGatewayLifecycleService, type GatewayLifecycleService } from './services/gateway/gatewayLifecycleService'
+import {
+  createGatewayDiagnosticsService,
+  type GatewayDiagnosticsClient,
+  type GatewayStabilityStatus,
+} from './services/gateway/gatewayDiagnosticsService'
+import {
+  createGatewayLogService,
+  type GatewayActivitySummary,
+  type GatewayChannelActivity,
+  type GatewayLogEntry,
+} from './services/gateway/gatewayLogService'
+import {
+  createGatewayChatService,
+  gatewayChatAbortError,
+} from './services/gateway/gatewayChatService'
+import {
+  createRuntimeStatusService,
+  type RuntimeStatusService,
+} from './services/runtime/runtimeStatusService'
+import { createRuntimeActionService } from './services/runtime/runtimeActionService'
+import { createRuntimeRecoveryService } from './services/runtime/runtimeRecoveryService'
 import { computeShiftDurationMinutes } from './shiftContracts'
 import type {
   HeartbeatRuntimeDefaults,
@@ -169,26 +198,8 @@ const SHARED_SKILLS_ROOT = path.join(OPENCLAW_STATE_ROOT, 'skills')
 const CODEX_AGENT_PROFILES_ROOT = path.join(HOME_DIR, '.codex', 'agent-profiles')
 const CODEX_LEGACY_AGENT_PROFILE_ROOT = path.join(HOME_DIR, '.codex', 'agent-profile')
 const LOCAL_AUTH_PATH = path.join(OPENCLAW_STATE_ROOT, 'local-auth.json')
-const CONTROL_CENTER_LEDGER_DIR = path.join(OPENCLAW_STATE_ROOT, 'control-center-ledger')
-const CONTROL_CENTER_SQLITE_LEDGER_PATH = path.join(CONTROL_CENTER_LEDGER_DIR, 'control-center.sqlite')
-const RUNTIME_RUN_LEDGER_PATH = path.join(CONTROL_CENTER_LEDGER_DIR, 'runtime-runs.jsonl')
-const GATEWAY_EVENT_LEDGER_PATH = path.join(CONTROL_CENTER_LEDGER_DIR, 'gateway-events.jsonl')
-const DIAGNOSTIC_RUN_LEDGER_PATH = path.join(CONTROL_CENTER_LEDGER_DIR, 'diagnostic-runs.jsonl')
-const MISSION_RECORD_LEDGER_PATH = path.join(CONTROL_CENTER_LEDGER_DIR, 'mission-records.jsonl')
-const MISSION_EVENT_LEDGER_PATH = path.join(CONTROL_CENTER_LEDGER_DIR, 'mission-events.jsonl')
-const MISSION_REPORT_LEDGER_PATH = path.join(CONTROL_CENTER_LEDGER_DIR, 'mission-reports.jsonl')
-const RUNTIME_MONITOR_CLEAR_MARKER_PATH = path.join(CONTROL_CENTER_LEDGER_DIR, 'runtime-monitor-clear.json')
-const CONTROL_CENTER_STATE_NAMESPACE = 'control-center'
-const CONTROL_CENTER_STATE_KEYS = {
-  heartbeatDefaults: 'runtime:heartbeat-defaults',
-  heartbeatPerAgent: 'runtime:heartbeat-per-agent',
-  localAuth: 'auth:local',
-  partyProfiles: 'agents:party-profiles',
-  pluginListCache: 'plugins:list-cache',
-  pluginRuntimeState: 'plugins:runtime-state',
-  retiredAgentIds: 'agents:retired-ids',
-  runtimeMonitorClear: 'runtime:monitor-clear',
-} as const
+const CONTROL_CENTER_LEDGER_PATHS = runtimeLedgerPathsForStateRoot(OPENCLAW_STATE_ROOT)
+const RUNTIME_MONITOR_CLEAR_MARKER_PATH = runtimeMonitorClearMarkerPath(CONTROL_CENTER_LEDGER_PATHS)
 const RECOMMENDED_OPENCLAW_VERSION = '2026.6.10'
 const DEFAULT_OPENCLAW_FAST_MODE = 'auto'
 const DEFAULT_OPENCLAW_FAST_AUTO_ON_SECONDS = 60
@@ -196,13 +207,6 @@ const FAST_MODE_MODEL_PARAM_PROVIDERS = new Set(['openai', 'openai-codex', 'anth
 const MAX_RUNTIME_OUTPUT_CHARS = 1_200_000
 const MAX_LOCAL_JSON_RESPONSE_CHARS = 1_200_000
 const UPSTREAM_SSE_BUFFER_LIMIT_CHARS = 1_000_000
-const GATEWAY_LOG_TAIL_MAX_BYTES = 600_000
-const GATEWAY_LOG_FINGERPRINT_BYTES = 2048
-const GATEWAY_LOG_PATH_DISCOVERY_CACHE_MS = Math.max(
-  2_000,
-  Math.min(60_000, Number(process.env.CONTROL_CENTER_GATEWAY_LOG_PATH_CACHE_MS || 30_000)),
-)
-const INCLUDE_SHARED_OPENCLAW_TEMP_LOGS = process.env.CONTROL_CENTER_INCLUDE_SHARED_OPENCLAW_TEMP_LOGS !== '0'
 const FOLDER_PICKER_TIMEOUT_MS = (() => {
   const configured = Number(process.env.CONTROL_CENTER_FOLDER_PICKER_TIMEOUT_MS || 60000)
   return Number.isFinite(configured) && configured >= 5000 ? configured : 60000
@@ -278,23 +282,14 @@ const JSON_DISK_CACHE_STAT_MS = 750
 const SKILL_LIBRARY_CACHE_MS = 15_000
 const CONTROL_CENTER_STARTED_AT_MS = Date.now()
 
-configureRuntimeLedger({
-  directory: CONTROL_CENTER_LEDGER_DIR,
-  sqlite: CONTROL_CENTER_SQLITE_LEDGER_PATH,
-  runtimeRunsJsonl: RUNTIME_RUN_LEDGER_PATH,
-  gatewayEventsJsonl: GATEWAY_EVENT_LEDGER_PATH,
-  diagnosticRunsJsonl: DIAGNOSTIC_RUN_LEDGER_PATH,
-  missionRecordsJsonl: MISSION_RECORD_LEDGER_PATH,
-  missionEventsJsonl: MISSION_EVENT_LEDGER_PATH,
-  missionReportsJsonl: MISSION_REPORT_LEDGER_PATH,
-})
+const runtimeLedgerStore = createRuntimeLedgerStore(CONTROL_CENTER_LEDGER_PATHS)
 
 function readControlCenterStateRecord<T>(stateKey: string): T | null {
-  return readControlCenterState<T>(CONTROL_CENTER_STATE_NAMESPACE, stateKey)
+  return runtimeLedgerStore.readControlCenterState<T>(stateKey)
 }
 
 function writeControlCenterStateRecord(stateKey: string, value: unknown, sourcePath?: string) {
-  return writeControlCenterState(CONTROL_CENTER_STATE_NAMESPACE, stateKey, value, { sourcePath })
+  return runtimeLedgerStore.writeControlCenterState(stateKey, value, sourcePath)
 }
 
 async function readLegacyJsonState<T>(
@@ -558,24 +553,6 @@ async function boundedOperation<T>(
   } finally {
     clearTimeout(timeout)
   }
-}
-
-function timeoutError(label: string, timeoutMs: number) {
-  const error = new Error(`${label} timed out after ${timeoutMs}ms`)
-  error.name = 'TimeoutError'
-  return error
-}
-
-function withResponseDeadline<T>(promise: Promise<T>, label: string, timeoutMs: number): Promise<T> {
-  if (timeoutMs <= 0) return promise
-  let timeout: NodeJS.Timeout | null = null
-  return new Promise((resolve, reject) => {
-    timeout = setTimeout(() => reject(timeoutError(label, timeoutMs)), timeoutMs)
-    timeout.unref?.()
-    promise.then(resolve, reject).finally(() => {
-      if (timeout) clearTimeout(timeout)
-    })
-  })
 }
 
 function isNodeScriptBin(bin: string) {
@@ -1352,14 +1329,6 @@ type SharedTeamFile = (typeof SHARED_TEAM_FILES)[number]
 const EDITOR_RESOURCE_FILES = AGENT_RESOURCE_FILES.filter(
   (file): file is AgentResourceFile => file.toLowerCase().endsWith('.md'),
 )
-
-type TeamSyncAssignment = {
-  agentId: string
-  task: string
-  status: 'queued' | 'running' | 'completed' | 'failed' | 'cancelled'
-  updatedAt: string
-  note?: string
-}
 
 type AgentStats = {
   execution: number
@@ -3251,6 +3220,33 @@ async function resolveMissionCronModelForAgent(agentId: string, fallbacks: strin
   return ''
 }
 
+async function resolveMissionCronRuntimeDefaultsForAgent(agentId: string): Promise<MissionCronRuntimeDefaults> {
+  const [heartbeatDefaults, configuredPrimary, localConfig, modelStack] = await Promise.all([
+    resolveHeartbeatRuntimeDefaultsForAgent(agentId).catch(() => DEFAULT_HEARTBEAT_RUNTIME),
+    resolveAgentPrimaryModelId(agentId).catch(() => ''),
+    readAgentLocalConfigIfPresent(agentId).catch(() => null),
+    resolveAgentConfiguredModelStack(agentId).catch(() => null),
+  ])
+  const localThinking = localConfig?.runtime?.thinkingDefault
+  const localTimeout = normalizeWorkTimeoutSeconds(localConfig?.runtime?.timeoutSeconds)
+  const heartbeatTimeout = normalizeWorkTimeoutSeconds(heartbeatDefaults.timeoutSeconds)
+  const timeoutSeconds = Math.min(
+    7200,
+    Math.max(TIMED_MISSION_AGENT_TIMEOUT_SECONDS, localTimeout ?? 0, heartbeatTimeout ?? 0),
+  )
+  const model = await resolveMissionCronModelForAgent(agentId, [
+    configuredPrimary,
+    primaryModelFromLocalConfig(localConfig),
+    modelStack?.primary || '',
+  ])
+
+  return {
+    model,
+    thinking: localThinking || heartbeatDefaults.thinking || 'medium',
+    timeoutSeconds,
+  }
+}
+
 function providerAuthStatus(provider: string, options: { probeGcloud?: boolean } = {}) {
   const catalog = AUTH_PROVIDER_CATALOG[provider]
   const envKeys = AUTH_ENV_MAP[provider] || []
@@ -3339,74 +3335,6 @@ function modelAuthProblem(modelId: string | undefined) {
   }
 }
 
-type MissionMode = 'instant' | 'hours' | 'days' | 'weeks' | 'continuous' | 'indefinite'
-type MissionStatus = 'active' | 'completed' | 'cancelled'
-type MissionLifecycleState =
-  | 'draft'
-  | 'validating'
-  | 'scheduled'
-  | 'dispatching'
-  | 'running'
-  | 'verifying'
-  | 'completed'
-  | 'failed'
-  | 'cancelled'
-
-type MissionCronRole = 'leader' | 'worker' | 'reviewer'
-type MissionCronJobStatus = 'created' | 'running' | 'completed' | 'failed' | 'disabled' | 'removed'
-
-type MissionCronJob = {
-  id: string
-  cronId: string
-  missionId: string
-  agentId: string
-  role: MissionCronRole
-  round: number
-  name: string
-  status: MissionCronJobStatus
-  createdAt: string
-  startedAt: string | null
-  endedAt: string | null
-  summary: string | null
-  runtimeRunId: string | null
-  cronRunId: string | null
-  sessionId: string | null
-  sessionKey: string | null
-}
-
-type MissionCronRunReference = {
-  cronRunId: string | null
-  sessionId: string | null
-  sessionKey: string | null
-}
-
-type MissionCronCleanupResult = {
-  jobId: string
-  cronId: string
-  agentId: string
-  previousStatus: MissionCronJobStatus
-  status: MissionCronJobStatus
-  ok: boolean
-  action: 'removed' | 'disabled' | 'unchanged'
-  detail: string | null
-}
-
-type MissionCronCleanupSummary = {
-  attempted: number
-  removed: number
-  disabled: number
-  failed: number
-  results: MissionCronCleanupResult[]
-}
-
-type MissionCronReconciliationSnapshot = {
-  available: boolean
-  activeCronIds: Set<string>
-  disabledCronIds: Set<string>
-  knownCronIds: Set<string>
-  error?: string
-}
-
 type ControlCenterCronExpiryKind = 'mission' | 'shift'
 
 type ControlCenterCronExpiryInfo = {
@@ -3415,154 +3343,6 @@ type ControlCenterCronExpiryInfo = {
   controlCenterId: string | null
   expiresAt: string
   expiresMs: number
-}
-
-type MissionGatewaySessionReconciliationStatus = 'verified' | 'missing' | 'unavailable' | 'not-checked'
-type MissionRuntimeReconciliationStatus = OpenClawRunStatus | 'unknown'
-
-type MissionGatewaySessionReconciliationDetail = {
-  jobId: string
-  cronId: string
-  agentId: string
-  runtimeRunId: string | null
-  cronRunId: string | null
-  sessionId: string | null
-  sessionKey: string | null
-  gatewayStatus: MissionGatewaySessionReconciliationStatus
-  runtimeStatus: MissionRuntimeReconciliationStatus
-  detail?: string
-}
-
-type MissionGatewaySessionReconciliationResult = {
-  available: boolean
-  checked: number
-  sessionChecked: number
-  verified: number
-  missing: number
-  unavailable: number
-  notChecked: number
-  runtimeRunning: number
-  runtimeCompleted: number
-  runtimeFailed: number
-  runtimeTimedOut: number
-  runtimeAborted: number
-  runtimeInterrupted: number
-  runtimeUnknown: number
-  details: MissionGatewaySessionReconciliationDetail[]
-  error?: string
-}
-
-type MissionSchedulerState = {
-  engine: 'openclaw-cron'
-  policy: 'leader-first'
-  status: 'idle' | 'running' | 'waiting' | 'completed' | 'failed' | 'stopping' | 'stopped'
-  round: number
-  cycleIntervalMs: number
-  nextRoundAt: string | null
-  maxCycles: number | null
-  leaderAgentId: string | null
-  activeJobId: string | null
-  jobs: MissionCronJob[]
-  lastError: string | null
-}
-
-type Mission = {
-  id: string
-  idempotencyKey?: string
-  title: string
-  brief: string
-  mode: MissionMode
-  amount: number | null
-  missionType?: string
-  collaborationMode?: string
-  complexity?: number
-  riskTolerance?: number
-  cadenceSeconds?: number
-  startAt: string
-  endAt: string | null
-  status: MissionStatus
-  lifecycleState: MissionLifecycleState
-  party: string[]
-  createdAt: string
-  completedAt: string | null
-  scheduler: MissionSchedulerState
-}
-
-type MissionFeedEvent = {
-  id: string
-  missionId: string
-  at: string
-  type: 'mission_started' | 'agent_assigned' | 'agent_update' | 'mission_completed' | 'mission_cancelled'
-  message: string
-  agentId?: string
-  actor?: string
-  previousState?: MissionLifecycleState
-  nextState?: MissionLifecycleState
-  idempotencyKey?: string
-  evidence?: Record<string, unknown>
-}
-
-type MissionLifecycleEvent = {
-  id: string
-  missionId: string
-  timestamp: string
-  at: string
-  type: MissionFeedEvent['type']
-  message: string
-  actor: string
-  previousState: MissionLifecycleState | null
-  nextState: MissionLifecycleState | null
-  idempotencyKey: string
-  agentId?: string
-  evidence?: Record<string, unknown>
-}
-
-type BackendMissionReportEvidence = {
-  source: 'runtime-responses' | 'mission-feed' | 'mixed' | 'none'
-  acceptedRuns: number
-  startedRuns: number
-  completedRuns: number
-  failedRuns: number
-  cancelledRuns: number
-  timedOutRuns: number
-  retryCount: number
-  fallbackCount: number
-  verificationFailures: number
-  toolFailures: number
-  commandFailures: number
-  humanInterventions: number
-  agentParticipation: string[]
-  queueDelayMs: number | null
-  timeToFirstTokenMs: number | null
-  totalExecutionDurationMs: number | null
-  missionWallTimeMs: number | null
-  tokenUsageEstimate: number | null
-  runtimeRunIds: string[]
-  cronRunIds: string[]
-  sessionIds: string[]
-  sessionKeys: string[]
-  unavailableMetrics: string[]
-}
-
-type BackendMissionReport = {
-  id: string
-  missionId: string
-  generatedAt: string
-  efficiencyRating: number | null
-  soulDrift: number | null
-  heartbeatStabilityScore: number | null
-  runtimeEfficiency: number | null
-  errors: number | null
-  xpGained: number | null
-  skillUnlocks: string[]
-  evidence: BackendMissionReportEvidence
-}
-
-type MissionRecordSnapshot = Mission & {
-  missionId: string
-  updatedAt: string
-  persistedAt: string
-  persistReason: string
 }
 
 function unwrapCanonicalApiPayload(payload: unknown): unknown {
@@ -3584,12 +3364,97 @@ const missionLoopTimers = new Map<string, NodeJS.Timeout>()
 const missionRunControllers = new Map<string, AbortController>()
 const missions = new Map<string, Mission>()
 const missionFeed: MissionFeedEvent[] = []
-const missionReports = new Map<string, BackendMissionReport>()
 const TIMED_MISSION_AGENT_TIMEOUT_SECONDS = 900
 const MISSION_CRON_EXPIRY_SWEEP_MS = 30_000
 let missionCronExpirySweepTimer: NodeJS.Timeout | null = null
 let missionCronExpirySweepInFlight: Promise<void> | null = null
 const agentTurnSessions = new Map<string, string>()
+
+const missionReportService = createMissionReportService({
+  appendMissionReport: (report) => runtimeLedgerStore.appendMissionReport(report),
+  missionFeed,
+  missions,
+  readMissionEvents: (limit) => runtimeLedgerStore.readMissionEvents(limit),
+  readMissionRecords: (limit) => runtimeLedgerStore.readMissionRecords(limit),
+  readMissionReports: (limit) => runtimeLedgerStore.readMissionReports(limit),
+})
+const buildMissionLifecycleProjection = missionReportService.buildMissionLifecycleProjection
+const listMissionReports = missionReportService.listMissionReports
+const recordMissionReport = missionReportService.recordMissionReport
+const missionTeamSyncService = createMissionTeamSyncService({
+  canonicalDoctrineOnly: CANONICAL_DOCTRINE_ONLY,
+  canonicalDoctrineRoot,
+  defaultAgentWorkspace,
+  fileExists,
+  resolveAgentWorkspace,
+  resolveAgentWorkspaces,
+  resolveDoctrineWorkspaceForRun,
+  resolveSharedTeamSyncPath,
+  trimTask,
+  workspaceRoot: WORKSPACE_ROOT,
+})
+const ensureTeamSyncFile = missionTeamSyncService.ensureTeamSyncFile
+const writeTeamSyncSnapshot = missionTeamSyncService.writeTeamSyncSnapshot
+
+const missionStateService = createMissionStateService({
+  appendMissionEvent: (event) => runtimeLedgerStore.appendMissionEvent(event),
+  appendMissionRecord: (record) => runtimeLedgerStore.appendMissionRecord(record),
+  cleanupMissionCronJobs: (mission) => missionSchedulerService.cleanupMissionCronJobs(mission),
+  clearMissionController: (missionId) => missionSchedulerService.clearMissionController(missionId),
+  completeCronMission: (mission, status, note, assignments, activity) =>
+    missionSchedulerService.completeCronMission(mission, status, note, assignments, activity),
+  controlCenterMissionSchedulerDryRun: CONTROL_CENTER_MISSION_SCHEDULER_DRY_RUN,
+  missionCronCleanupFailureSummary: (error) => missionSchedulerService.missionCronCleanupFailureSummary(error),
+  missionCronJobNeedsRecovery: (job) => missionSchedulerService.missionCronJobNeedsRecovery(job),
+  missionFeed,
+  missions,
+  missionTimers,
+  recordMissionReport,
+  scheduleNextMissionRound: (mission, assignments, activity, delayMs) =>
+    missionSchedulerService.scheduleNextMissionRound(mission, assignments, activity, delayMs),
+  startRecurringMissionCronJobs: (mission, assignments, activity) =>
+    missionSchedulerService.startRecurringMissionCronJobs(mission, assignments, activity),
+  writeTeamSyncSnapshot,
+})
+
+const listMissions = missionStateService.listMissions
+const missionView = missionStateService.missionView
+const persistMissionRecord = missionStateService.persistMissionRecord
+const pushMissionEvent = missionStateService.pushMissionEvent
+const transitionMissionState = missionStateService.transitionMissionState
+
+const missionSchedulerService: MissionSchedulerService = createMissionSchedulerService({
+  appendAgentDailyMemory,
+  clearDisallowedAutoModelOverridesForAgent,
+  clearShiftRuntimeStateForCronId,
+  composeAgentDoctrinePrompt,
+  ensureGatewayReadyForCronMission,
+  ensureTeamSyncFile,
+  extractAgentReply,
+  getAgentAuthEnv,
+  missionAgentTimeoutSeconds: TIMED_MISSION_AGENT_TIMEOUT_SECONDS,
+  missionLoopTimers,
+  missionRunControllers,
+  missionTimers,
+  missions,
+  openClawAgentsRoot: OPENCLAW_AGENTS_ROOT,
+  openClawErrorResult,
+  persistMissionRecord,
+  port: PORT,
+  pushMissionEvent,
+  recordMissionReport,
+  redactSensitiveText,
+  resolveAgentRunContext,
+  resolveMissionCronRuntimeDefaultsForAgent,
+  resolveSharedTeamSyncPath,
+  runCwdForContext,
+  runOpenClaw,
+  setActiveShift: (id, shift) => activeShifts.set(id, shift as Shift),
+  stripAnsi,
+  transitionMissionState,
+  trimTask,
+  writeTeamSyncSnapshot,
+})
 
 function agentTurnSessionScope(agentId: string, sessionKey?: string | null) {
   const cleanSessionKey = typeof sessionKey === 'string' ? sessionKey.trim() : ''
@@ -3629,6 +3494,33 @@ const OPENCLAW_RECENT_RUN_LIMIT = 80
 const activeOpenClawRuns = new Map<string, OpenClawRunRecord>()
 const recentOpenClawRuns: OpenClawRunRecord[] = []
 
+const missionRecoveryService = createMissionRecoveryService({
+  clearMissionController: (missionId) => missionSchedulerService.clearMissionController(missionId),
+  clearShiftRuntimeStateForCronId,
+  controlCenterStartedAtMs: CONTROL_CENTER_STARTED_AT_MS,
+  ensureGatewayClient: ensureControlCenterGatewayClient,
+  getRuntimeRunStatus: (id) => {
+    const cleanId = typeof id === 'string' ? id.trim() : ''
+    if (!cleanId) return 'unknown'
+    return activeOpenClawRuns.get(cleanId)?.status || recentOpenClawRuns.find((run) => run.id === cleanId)?.status || 'unknown'
+  },
+  listMissionCronReconciliationSnapshot: listMissionCronReconciliationSnapshotFromStateDb,
+  missionCronJobNeedsRecovery: (job) => missionSchedulerService.missionCronJobNeedsRecovery(job),
+  missions,
+  persistMissionRecord,
+  pushGatewayLog,
+  pushMissionEvent,
+  readMissionRecords: (limit) => runtimeLedgerStore.readMissionRecords(limit),
+  recordMissionReport,
+  redactSensitiveText,
+  rehydrateRecurringMissionShifts: (mission, cronState) => missionSchedulerService.rehydrateRecurringMissionShifts(mission, cronState),
+  armRehydratedMissionTimer: (mission, assignments, activity) =>
+    missionSchedulerService.armRehydratedMissionTimer(mission, assignments, activity),
+  transitionMissionState,
+  trimTask,
+})
+const hydrateMissionRecordsFromLedger = missionRecoveryService.hydrateMissionRecordsFromLedger
+
 function openClawRunLedgerPayload(record: OpenClawRunRecord) {
   return {
     ...record,
@@ -3638,7 +3530,7 @@ function openClawRunLedgerPayload(record: OpenClawRunRecord) {
 }
 
 async function persistOpenClawRunLedgerSnapshot(record: OpenClawRunRecord) {
-  await appendRuntimeRunLedger(openClawRunLedgerPayload(record), { mirrorJsonl: false })
+  await runtimeLedgerStore.appendRuntimeRun(openClawRunLedgerPayload(record), { mirrorJsonl: false })
 }
 
 function persistOpenClawRunLedgerSnapshotSoon(record: OpenClawRunRecord) {
@@ -3706,7 +3598,7 @@ async function writeRuntimeMonitorClearMarker(clearedAt: Date) {
 
 async function hydrateRecentOpenClawRunsFromLedger() {
   runtimeMonitorClearedAtMs = Math.max(runtimeMonitorClearedAtMs, await readRuntimeMonitorClearedAtMs())
-  const records = await readRuntimeRunLedgerTail<OpenClawRunRecord>(OPENCLAW_RECENT_RUN_LIMIT * 3)
+  const records = await runtimeLedgerStore.readRuntimeRuns<OpenClawRunRecord>(OPENCLAW_RECENT_RUN_LIMIT * 3)
   if (!records.length) return
   recentOpenClawRuns.length = 0
   const recovered: OpenClawRunRecord[] = []
@@ -3836,9 +3728,7 @@ function resetAgentTurnSessionsForModelChange(agentId: string) {
 
 function abortGatewayChatOpenClawRun(run: OpenClawRunRecord, reason = 'runtime session close') {
   if (!run.sessionKey) return false
-  const client = gatewayClientState?.client
-  if (!client) return false
-  void client.request('chat.abort', { sessionKey: run.sessionKey, runId: run.id }, { timeoutMs: 2_000 }).catch(() => undefined)
+  if (!gatewayChatService.requestAbortIfClient(run.sessionKey, run.id, reason)) return false
   finishOpenClawRun(run, 'aborted', { code: 1, failureKind: 'aborted', stderr: reason })
   return true
 }
@@ -3916,11 +3806,9 @@ function gatewayAbortCandidatesForRuntimeClose(input: RuntimeSessionCloseInput) 
 }
 
 async function requestGatewaySessionAbort(candidate: { sessionKey: string; runId?: string; agentId?: string; sessionId?: string }): Promise<GatewayRuntimeSessionAbortResult> {
-  let state: GatewayClientState
+  let state: Awaited<ReturnType<typeof ensureControlCenterGatewayClient>>
   try {
-    state = gatewayClientState?.ready
-      ? gatewayClientState
-      : await ensureControlCenterGatewayClient(AbortSignal.timeout(5_000))
+    state = await ensureControlCenterGatewayClient(AbortSignal.timeout(5_000))
   } catch (error) {
     return {
       ...candidate,
@@ -4463,106 +4351,10 @@ type GatewayLedgerSnapshot = {
   recentRestarts: GatewayRestartLifecycleSnapshot[]
 }
 
-type GatewayRestartDiagnostics = {
-  severity: 'info' | 'warning'
-  needsAttention: boolean
-  summary: string
-  recentAttempts: number
-  recentFailures: number
-  failureStreak: number
-  latestOutcome: GatewayRestartOutcome | null
-  latestReason: string | null
-  latestAt: string | null
-  activeWork: number
-  queuedWork: number
-  repairAction?: string
-}
-
 const GATEWAY_HTTP_PORT = Number(process.env.OPENCLAW_GATEWAY_PORT || 18789)
-let gatewayProcess: ReturnType<typeof spawn> | null = null
-let gatewayRestartTimer: NodeJS.Timeout | null = null
 let gatewayAutostartTimer: NodeJS.Timeout | null = null
-let gatewayRestartCount = 0
-let gatewayEnsureInFlight: Promise<void> | null = null
-let gatewayProcessOwnedByControlCenter = false
-let lastGatewayPortReleaseAt = 0
 let shuttingDown = false
-let gatewayAutoRestartPaused = false
-let gatewayLastStartedAt: string | null = null
-let gatewayLastHealthyAt: string | null = null
-let gatewayLastExitAt: string | null = null
-let gatewayLastExitCode: number | null = null
-let gatewayLastRestartAt: string | null = null
-let gatewayLastRestartReason: string | null = null
-let gatewayLastRestartOutcome: GatewayRestartOutcome | null = null
-let gatewayStartupGraceUntilMs = 0
-let gatewayListenerPidCache: { checkedAt: number; pid: number | null } | null = null
 
-type GatewayLogEntry = {
-  id: number
-  timestamp: string
-  stream: 'stdout' | 'stderr' | 'lifecycle' | 'gateway' | 'channel'
-  message: string
-  level?: string
-  source?: string
-  channel?: string
-  direction?: GatewayChannelDirection
-}
-
-type GatewayStartupPhase =
-  | 'requested'
-  | 'config'
-  | 'registry'
-  | 'spawned'
-  | 'http'
-  | 'ready'
-  | 'prewarm'
-  | 'healthy'
-  | 'exit'
-  | 'failed'
-  | 'warning'
-
-type GatewayStartupStatus = 'started' | 'completed' | 'warning' | 'failed'
-
-type GatewayStartupTimelineEvent = {
-  id: number
-  timestamp: string
-  phase: GatewayStartupPhase
-  status: GatewayStartupStatus
-  message: string
-  elapsedMs: number
-  durationMs?: number
-  pid?: number | null
-}
-
-type GatewayChannelDirection = 'inbound' | 'outbound' | 'system'
-
-type GatewayChannelActivity = {
-  id: number
-  timestamp: string
-  channel: string
-  direction: GatewayChannelDirection
-  message: string
-  level?: string
-  source?: string
-  agentId?: string
-}
-
-type GatewayActivitySummary = {
-  active: boolean
-  lastEventAt: string | null
-  sourcePath: string | null
-  inboundCount: number
-  outboundCount: number
-  systemCount: number
-  events: GatewayChannelActivity[]
-}
-
-const GATEWAY_LOG_LIMIT = 180
-const EXTERNAL_GATEWAY_LOG_CACHE_MS = Math.max(
-  500,
-  Math.min(10_000, Number(process.env.CONTROL_CENTER_GATEWAY_LOG_CACHE_MS || 2_000)),
-)
 const RUNTIME_STATUS_CACHE_MS = Math.max(
   500,
   Math.min(10_000, Number(process.env.CONTROL_CENTER_RUNTIME_STATUS_CACHE_MS || 1_500)),
@@ -4597,29 +4389,15 @@ const GATEWAY_STARTUP_HEALTH_POLL_MS = (() => {
 })()
 const GATEWAY_CONFIG_VALIDATE_TIMEOUT_MS = 60_000
 const GATEWAY_CONFIG_DOCTOR_TIMEOUT_MS = 120_000
-const GATEWAY_STARTUP_TIMELINE_LIMIT = 18
 const GATEWAY_RESTART_TIMELINE_LIMIT = 5
-let gatewayLogSeq = 0
-let gatewayStartupTimelineSeq = 0
-let gatewayStartupTimelineStartedAtMs = 0
-const gatewayLogs: GatewayLogEntry[] = []
-const gatewayStartupTimeline: GatewayStartupTimelineEvent[] = []
-const gatewayStartupPhaseStartedAtMs = new Map<GatewayStartupPhase, number>()
 let runtimeMonitorClearedAtMs = 0
 let gatewayConfigPreflightInFlight: Promise<boolean> | null = null
-let externalGatewayLogCache: { expiresAt: number; entries: GatewayLogEntry[] } | null = null
-let externalChannelActivityCache: { expiresAt: number; entries: GatewayLogEntry[] } | null = null
-let gatewayLogPathDiscoveryCache: { expiresAt: number; paths: string[] } | null = null
-let runtimeStatusPayloadCache: { builtAt: number; payload: Record<string, unknown> } | null = null
-let runtimeStatusPayloadInFlight: Promise<Record<string, unknown>> | null = null
-let runtimeSummaryPayloadCache: { builtAt: number; payload: Record<string, unknown> } | null = null
-let runtimeSummaryPayloadInFlight: Promise<Record<string, unknown>> | null = null
 let gatewayLedgerSnapshotCache: { builtAt: number; limit: number; snapshot: GatewayLedgerSnapshot } | null = null
 let gatewayLedgerSnapshotInFlight: { limit: number; promise: Promise<GatewayLedgerSnapshot> } | null = null
+const runtimeStatusServiceRef: { current?: RuntimeStatusService } = {}
 
 function invalidateRuntimeStatusCache() {
-  runtimeStatusPayloadCache = null
-  runtimeSummaryPayloadCache = null
+  runtimeStatusServiceRef.current?.invalidateCache()
 }
 
 function invalidateGatewayLedgerSnapshotCache() {
@@ -4630,1003 +4408,151 @@ function sanitizeGatewayStartupMessage(message: string, max = 220) {
   return compactGatewayLogMessage(redactSensitiveText(stripAnsi(message || '')), max)
 }
 
-function gatewayRestartOutcomeLevel(outcome: GatewayRestartOutcome) {
-  return outcome === 'failed' ? 'warning' : 'info'
-}
-
-function recordGatewayRestartLifecycleLedger(
-  at: string,
-  reason: string,
-  outcome: GatewayRestartOutcome,
-): void {
-  const sanitizedReason = sanitizeGatewayStartupMessage(reason || 'unspecified gateway restart', 180)
-  invalidateGatewayLedgerSnapshotCache()
-  void appendGatewayEventLedger({
-    event: 'gateway.restart.lifecycle',
-    timestamp: new Date().toISOString(),
-    stream: 'lifecycle',
-    level: gatewayRestartOutcomeLevel(outcome),
-    source: 'control-center',
-    direction: 'system',
-    lifecycle: 'restart',
-    restartRequestedAt: at,
-    restartReason: sanitizedReason,
-    restartOutcome: outcome,
-    message: `Gateway restart ${outcome}: ${sanitizedReason}`,
-  }).catch(() => undefined)
-}
-
-function gatewayRestartLifecycleSnapshotFromMemory(): GatewayRestartLifecycleSnapshot | null {
-  if (!gatewayLastRestartAt || !gatewayLastRestartReason || !gatewayLastRestartOutcome) return null
-  return {
-    at: gatewayLastRestartAt,
-    reason: gatewayLastRestartReason,
-    outcome: gatewayLastRestartOutcome,
-    eventAt: gatewayLastRestartAt,
-  }
-}
-
-function recordGatewayRestartRequest(
-  reason: string,
-  outcome: GatewayRestartOutcome,
-): void {
-  gatewayLastRestartAt = new Date().toISOString()
-  gatewayLastRestartReason = sanitizeGatewayStartupMessage(reason || 'unspecified gateway restart', 180)
-  gatewayLastRestartOutcome = outcome
-  recordGatewayRestartLifecycleLedger(gatewayLastRestartAt, gatewayLastRestartReason, outcome)
-  invalidateRuntimeStatusCache()
-}
-
-function markGatewayRestartOutcome(outcome: GatewayRestartOutcome): void {
-  if (!gatewayLastRestartAt) return
-  if (gatewayLastRestartOutcome === outcome) return
-  gatewayLastRestartOutcome = outcome
-  recordGatewayRestartLifecycleLedger(
-    gatewayLastRestartAt,
-    gatewayLastRestartReason || 'unspecified gateway restart',
-    outcome,
-  )
-  invalidateRuntimeStatusCache()
-}
-
-function resetGatewayStartupTimeline(message: string): void {
-  gatewayStartupTimeline.length = 0
-  gatewayStartupPhaseStartedAtMs.clear()
-  gatewayStartupTimelineStartedAtMs = Date.now()
-  recordGatewayStartupEvent('requested', 'started', message)
-}
-
-function recordGatewayStartupEvent(
-  phase: GatewayStartupPhase,
-  status: GatewayStartupStatus,
-  message: string,
-  options: { pid?: number | null; durationMs?: number } = {},
-): void {
-  const now = Date.now()
-  if (!gatewayStartupTimelineStartedAtMs) gatewayStartupTimelineStartedAtMs = now
-
-  let durationMs = options.durationMs
-  if (status === 'started') {
-    gatewayStartupPhaseStartedAtMs.set(phase, now)
-  } else {
-    const startedAt = gatewayStartupPhaseStartedAtMs.get(phase)
-    if (durationMs === undefined && startedAt) durationMs = Math.max(0, now - startedAt)
-    gatewayStartupPhaseStartedAtMs.delete(phase)
-  }
-
-  gatewayStartupTimeline.push({
-    id: ++gatewayStartupTimelineSeq,
-    timestamp: new Date(now).toISOString(),
-    phase,
-    status,
-    message: sanitizeGatewayStartupMessage(message),
-    elapsedMs: Math.max(0, now - gatewayStartupTimelineStartedAtMs),
-    ...(durationMs !== undefined ? { durationMs } : {}),
-    ...(options.pid !== undefined ? { pid: options.pid } : {}),
-  })
-
-  if (gatewayStartupTimeline.length > GATEWAY_STARTUP_TIMELINE_LIMIT) {
-    gatewayStartupTimeline.splice(0, gatewayStartupTimeline.length - GATEWAY_STARTUP_TIMELINE_LIMIT)
-  }
-  invalidateRuntimeStatusCache()
-}
-
 function isRuntimeMonitorEntryVisible(timestamp: string | null | undefined) {
   if (!runtimeMonitorClearedAtMs) return true
   const entryMs = timestamp ? Date.parse(timestamp) : NaN
   return Number.isFinite(entryMs) && entryMs >= runtimeMonitorClearedAtMs
 }
 
-function gatewayProviderLabel(value: string) {
-  const match = value.match(/\b(openai|google|anthropic|deepseek|gemini|vertex)\s+embeddings\s+failed\b/i)
-  if (!match) return 'Provider'
-  const raw = match[1].toLowerCase()
-  if (raw === 'openai') return 'OpenAI'
-  if (raw === 'gemini') return 'Gemini'
-  if (raw === 'vertex') return 'Vertex'
-  return raw.charAt(0).toUpperCase() + raw.slice(1)
-}
+const gatewayLifecycleRef: { current?: GatewayLifecycleService } = {}
+let getGatewayDiagnosticsClient: () => GatewayDiagnosticsClient | null = () => null
 
-function summarizeEmbeddingProviderFailure(value: string) {
-  const code = value.match(/\bembeddings\s+failed:\s*(\d{3})\b/i)?.[1] || 'error'
-  const errorCode = value.match(/"code"\s*:\s*"([^"]+)"/i)?.[1]
-  const errorType = value.match(/"type"\s*:\s*"([^"]+)"/i)?.[1]
-  const suffix = errorCode && errorCode !== 'null'
-    ? errorCode
-    : errorType && errorType !== 'null'
-      ? errorType
-      : ''
-  return `${gatewayProviderLabel(value)} embeddings returned ${code}${suffix ? ` ${suffix}` : ''}`
-}
+const gatewayLogService = createGatewayLogService({
+  openClawGatewayLogPath: OPENCLAW_GATEWAY_LOG_PATH,
+  openClawStateRoot: OPENCLAW_STATE_ROOT,
+  nativeOpenClawStateRoot: NATIVE_OPENCLAW_STATE_ROOT,
+  controlCenterStartedAtMs: CONTROL_CENTER_STARTED_AT_MS,
+  readOpenclawConfig,
+  getGatewayClient: () => getGatewayDiagnosticsClient(),
+  appendGatewayLogEntry: (entry) => runtimeLedgerStore.appendGatewayEvent(entry, { sqlite: false }),
+  getGatewayLastStartedAt: () => gatewayLifecycleRef.current?.lifecycleSnapshot().lastStartedAt || null,
+  getRuntimeMonitorClearedAtMs: () => runtimeMonitorClearedAtMs,
+  applyDiagnosticRedactions,
+  redactSensitiveText,
+  stripAnsi,
+})
 
-function isGatewaySessionLivenessDiagnostic(value: string) {
-  const text = value.replace(/\s+/g, ' ').trim()
-  return /^(?:long-running|stalled|stuck) session:\s+sessionId=/iu.test(text)
-    || (/\bsession\.(?:long_running|stalled|stuck)\b/iu.test(text) && /\bqueueDepth=\d+\b/iu.test(text))
-    || (/\bclassification=(?:long_running|stalled_agent_run|blocked_tool_call|stale_session_state)\b/iu.test(text) && /\bsession(?:Id|Key)=/u.test(text))
-}
-
-function isGatewayFailoverDecisionNoise(value: string) {
-  const text = stripAnsi(value || '').replace(/\s+/g, ' ').trim()
-  return /^(?:warn\s+)?(?:model fallback decision|embedded run failover decision)$/iu.test(text)
-}
-
-function isGatewayInternalDiagnosticMessage(value: string) {
-  const text = stripAnsi(value || '').replace(/\s+/g, ' ').trim()
-  return isGatewaySessionLivenessDiagnostic(text)
-    || isGatewayFailoverDecisionNoise(text)
-    || /^tool policy removed \d+ tool\(s\) via tools\.profile\b/iu.test(text)
-    || /^incomplete turn detected:\s+runId=/iu.test(text)
-    || /^\[clawtalk\]\s+CoreBridge:\s+Control Center stream unavailable,\s+falling back to embedded agent:/iu.test(text)
-    || /^CoreBridge:\s+Control Center stream unavailable,\s+falling back to embedded agent:/iu.test(text)
-    || /^(?:⇄|â‡„)?\s*res\s*(?:✓|âœ“)?\s*chat\.(?:history|message\.get)\b/iu.test(text)
-}
-
-function displayDurationMs(ms: number) {
-  if (!Number.isFinite(ms) || ms < 0) return ''
-  const seconds = Math.round(ms / 1000)
-  if (seconds < 90) return `${seconds}s`
-  const minutes = Math.floor(seconds / 60)
-  const remainder = seconds % 60
-  return remainder ? `${minutes}m ${remainder}s` : `${minutes}m`
-}
-
-function gatewayLogTokenValue(text: string, key: string) {
-  const match = text.match(new RegExp(`\\b${key}=("[^"]*"|\\S+)`, 'iu'))
-  if (!match) return ''
-  return match[1].replace(/^"|"$/g, '').trim()
-}
-
-function summarizeCronProcessedError(value: string): { message: string; level: 'error' } | null {
-  const text = stripAnsi(value || '').replace(/\s+/g, ' ').trim()
-  if (!/^message processed:\s+channel=cron\b/iu.test(text) || !/\boutcome=error\b/iu.test(text)) return null
-  const sessionKey = gatewayLogTokenValue(text, 'sessionKey')
-  const agent = sessionKey.match(/^agent:([^:\s]+):cron:/iu)?.[1] || gatewayLogTokenValue(text, 'agent') || 'scheduled agent'
-  const durationToken = gatewayLogTokenValue(text, 'duration')
-  const duration = Number(durationToken.match(/\d+(?:\.\d+)?/u)?.[0] || NaN)
-  const durationText = displayDurationMs(duration)
-  const errorText = gatewayLogTokenValue(text, 'error')
-  const commandType = /powershell|\.ps1\b/iu.test(errorText)
-    ? 'PowerShell script'
-    : /python\b|python\s+-/iu.test(errorText)
-      ? 'Python helper'
-      : 'scheduled command'
-  return {
-    message: `Cron run failed for ${agent}${durationText ? ` after ${durationText}` : ''}: ${commandType} exited with an error.`,
-    level: 'error',
-  }
-}
-
-function summarizeGatewayAuthRefreshFailure(value: string): { message: string; level: 'warning' | 'error' } | null {
-  const text = stripAnsi(value || '').replace(/\s+/g, ' ').trim()
-  if (!/\bauth refresh request timed out after 10s\b/iu.test(text)) return null
-  const provider = gatewayLogTokenValue(text, 'provider') || gatewayLogTokenValue(text, 'modelProvider')
-  const model = gatewayLogTokenValue(text, 'model') || gatewayLogTokenValue(text, 'modelId')
-  const detail = [provider, model].filter(Boolean).join(' / ')
-  const finalFailure = /errorCode=UNAVAILABLE|FailoverError|\blane task error\b/iu.test(text)
-  return {
-    message: `Model auth refresh timed out after 10s${detail ? ` (${detail})` : ''}. Reconnect the selected provider, then retry.`,
-    level: finalFailure ? 'error' : 'warning',
-  }
-}
-
-function normalizeGatewayLogDisplayMessage(value: string): { message: string; level?: string } {
-  const compact = compactGatewayLogMessage(value)
-  const withoutTimestamp = compact
-    .replace(/^\[[^\]]+\]\s+\[(?:stdout|stderr|lifecycle|gateway|channel)\]\s+/iu, '')
-    .replace(/^\d{4}-\d{2}-\d{2}T\S+\s+\[memory\]\s+/iu, 'memory ')
-    .replace(/^\d{4}-\d{2}-\d{2}T\S+\s+\[[^\]]+\]\s+/iu, '')
-    .replace(/^\[memory\]\s+/iu, 'memory ')
-    .trim()
-
-  const authRefreshFailure = summarizeGatewayAuthRefreshFailure(withoutTimestamp)
-  if (authRefreshFailure) return authRefreshFailure
-
-  const fragmentSummary = summarizeGatewayLogFragment(withoutTimestamp)
-  if (fragmentSummary) return fragmentSummary
-
-  const validationHeader = withoutTimestamp.match(/^(OpenClaw config validation failed(?:[^:]*)):\s*\{?$/iu)
-  if (validationHeader) {
-    return { message: `${validationHeader[1]}.`, level: 'warning' }
-  }
-
-  const cronError = summarizeCronProcessedError(withoutTimestamp)
-  if (cronError) return cronError
-
-  if (isGatewaySessionLivenessDiagnostic(withoutTimestamp)) {
-    return { message: withoutTimestamp || compact, level: 'warning' }
-  }
-
-  if (/\bmemory\s+embeddings retryable error;\s*retrying in \d+ms\b/i.test(withoutTimestamp)
-    || /\bembeddings retryable error;\s*retrying in \d+ms\b/i.test(withoutTimestamp)) {
-    return { message: 'OpenClaw memory embeddings retrying after provider error.', level: 'warning' }
-  }
-
-  const indexFailure = withoutTimestamp.match(/\bMemory index failed \(([^)]+)\):\s*(?:Error:\s*)?(.+)$/i)
-  if (indexFailure && /\bembeddings\s+failed:\s*\d{3}\b/i.test(indexFailure[2])) {
-    return {
-      message: `OpenClaw memory index failed (${indexFailure[1]}): ${summarizeEmbeddingProviderFailure(indexFailure[2])}.`,
-      level: 'warning',
-    }
-  }
-
-  const syncFailure = withoutTimestamp.match(/\bmemory sync failed \(watch\):\s*(?:Error:\s*)?(.+)$/i)
-  if (syncFailure && /\bembeddings\s+failed:\s*\d{3}\b/i.test(syncFailure[1])) {
-    return {
-      message: `OpenClaw memory sync watch failed: ${summarizeEmbeddingProviderFailure(syncFailure[1])}.`,
-      level: 'warning',
-    }
-  }
-
-  if (/\bembeddings\s+failed:\s*\d{3}\b/i.test(withoutTimestamp)) {
-    return { message: `OpenClaw memory embedding provider issue: ${summarizeEmbeddingProviderFailure(withoutTimestamp)}.`, level: 'warning' }
-  }
-
-  return { message: withoutTimestamp || compact }
-}
-
-function visibleGatewayLogSegments(message: string) {
-  const lines = stripAnsi(message)
-    .replace(/\r/g, '')
-    .split('\n')
-    .map((line) => line.trim())
-    .filter(Boolean)
-  const visibleLines = lines.length ? lines : [message.trim()].filter(Boolean)
-  const segments: Array<{ line: string; display: { message: string; level?: string } }> = []
-  let suppressToolFailureContinuation = false
-  for (const line of visibleLines) {
-    if (suppressToolFailureContinuation) {
-      if (!isGatewayLogRecordStart(line)) continue
-      suppressToolFailureContinuation = false
-    }
-    if (isGatewayMonitorNoise(line)) {
-      if (isGatewayToolFailureLine(line)) suppressToolFailureContinuation = true
-      continue
-    }
-    const display = normalizeGatewayLogDisplayMessage(line)
-    segments.push({ line, display })
-  }
-  return segments
+function compactGatewayLogMessage(value: string, max = 640) {
+  return gatewayLogService.compactGatewayLogMessage(value, max)
 }
 
 function formatGatewayProcessOutput(prefix: string, message: string) {
-  const segments = visibleGatewayLogSegments(message)
-  if (!segments.length) return ''
-  return `${segments.map((segment) => `${prefix} ${segment.line}`).join('\n')}\n`
+  return gatewayLogService.formatGatewayProcessOutput(prefix, message)
 }
 
 function pushGatewayLog(stream: GatewayLogEntry['stream'], message: string, level?: string) {
-  for (const { display } of visibleGatewayLogSegments(message)) {
-    const channel = gatewayChannelFromMessage(display.message)
-    const direction = channel ? gatewayActivityDirection(display.message) : undefined
-    const entry = {
-      id: ++gatewayLogSeq,
-      timestamp: new Date().toISOString(),
-      stream: channel ? 'channel' as const : stream,
-      message: display.message.length > 600 ? `${display.message.slice(0, 599).trim()}...` : display.message,
-      ...(level || display.level ? { level: level || display.level } : {}),
-      ...(channel ? { channel, direction } : {}),
-    } satisfies GatewayLogEntry
-    gatewayLogs.unshift(entry)
-    void appendGatewayEventLedger({
-      ...entry,
-      message: redactSensitiveText(entry.message),
-    }, { sqlite: false }).catch(() => undefined)
-  }
-  if (gatewayLogs.length > GATEWAY_LOG_LIMIT) gatewayLogs.length = GATEWAY_LOG_LIMIT
-}
-
-function localDateKey(date = new Date()) {
-  const year = date.getFullYear()
-  const month = String(date.getMonth() + 1).padStart(2, '0')
-  const day = String(date.getDate()).padStart(2, '0')
-  return `${year}-${month}-${day}`
-}
-
-function gatewayLogEntryId(source: string, line: string) {
-  const digest = createHash('sha1').update(`${source}\n${line}`).digest('hex').slice(0, 7)
-  return -Number.parseInt(digest, 16)
-}
-
-function normalizedGatewayLogMessageForDedupe(message: string) {
-  return stripAnsi(message || '')
-    .trim()
-    .replace(/^\[[^\]]+\]\s+\[(?:stdout|stderr|lifecycle|gateway|channel)\]\s+/iu, '')
-    .replace(/^\d{4}-\d{2}-\d{2}T\S+\s+\[memory\]\s+/iu, 'memory ')
-    .replace(/^\d{4}-\d{2}-\d{2}T\S+\s+\[[^\]]+\]\s+/iu, '')
-    .replace(/\bretrying in \d+ms\b/giu, 'retrying')
-    .replace(/\bOpenClaw memory index failed \([^)]+\):/iu, 'OpenClaw memory index failed:')
-    .replace(/\s+/g, ' ')
-    .toLowerCase()
+  gatewayLogService.pushGatewayLog(stream, message, level)
 }
 
 function dedupeGatewayLogEntries(entries: GatewayLogEntry[], limit = 80) {
-  const deduped = new Map<string, GatewayLogEntry>()
-  for (const entry of [...entries].sort((a, b) => Date.parse(b.timestamp) - Date.parse(a.timestamp))) {
-    const timestampMs = Date.parse(entry.timestamp)
-    const normalized = normalizedGatewayLogMessageForDedupe(entry.message)
-    const noisyMemoryBucketMs = gatewayMemoryLogBucketMs(normalized)
-    const bucketMs = noisyMemoryBucketMs || 5000
-    const bucket = Number.isFinite(timestampMs) ? Math.floor(timestampMs / bucketMs) : 0
-    const key = `${bucketMs}:${bucket}|${normalized}`
-    if (!deduped.has(key)) deduped.set(key, entry)
-  }
-  return Array.from(deduped.values()).slice(0, limit)
+  return gatewayLogService.dedupeGatewayLogEntries(entries, limit)
 }
 
-function gatewayMemoryLogBucketMs(normalizedMessage: string) {
-  if (/openclaw memory embeddings retrying after provider error/u.test(normalizedMessage)) return 60_000
-  if (/openclaw memory index failed: .*embeddings returned 500/u.test(normalizedMessage)) return 60_000
-  if (/openclaw memory sync watch failed: .*embeddings returned 500/u.test(normalizedMessage)) return 60_000
-  return 0
+async function readExternalGatewayLogEntries(limit = 80): Promise<GatewayLogEntry[]> {
+  return gatewayLogService.readExternalGatewayLogEntries(limit)
 }
 
-function configuredGatewayLogCandidatesFromConfig(config: OpenClawConfigFile): string[] {
-  const logging = (config as { logging?: { file?: unknown } }).logging
-  return typeof logging?.file === 'string' && logging.file.trim() ? [path.resolve(logging.file.trim())] : []
+async function readExternalChannelActivityEntries(limit = 80): Promise<GatewayLogEntry[]> {
+  return gatewayLogService.readExternalChannelActivityEntries(limit)
 }
 
-async function discoverGatewayFileLogPaths(limit = 5) {
-  const now = Date.now()
-  if (gatewayLogPathDiscoveryCache && gatewayLogPathDiscoveryCache.expiresAt > now) {
-    return gatewayLogPathDiscoveryCache.paths.slice()
-  }
-
-  const candidates = new Set<string>([OPENCLAW_GATEWAY_LOG_PATH])
-  const config = await readOpenclawConfig().catch(() => null)
-  if (config) {
-    for (const candidate of configuredGatewayLogCandidatesFromConfig(config)) candidates.add(candidate)
-  }
-
-  if (INCLUDE_SHARED_OPENCLAW_TEMP_LOGS) {
-    const tempDirs = new Set<string>([path.join(tmpdir(), 'openclaw')])
-    if (process.env.TEMP) tempDirs.add(path.join(process.env.TEMP, 'openclaw'))
-    if (process.env.TMP) tempDirs.add(path.join(process.env.TMP, 'openclaw'))
-    if (process.env.LOCALAPPDATA) tempDirs.add(path.join(process.env.LOCALAPPDATA, 'Temp', 'openclaw'))
-
-    const todayFileName = `openclaw-${localDateKey()}.log`
-    for (const dir of tempDirs) {
-      candidates.add(path.join(dir, todayFileName))
-      const files = await fs.readdir(dir, { withFileTypes: true }).catch(() => [])
-      const logFiles = await Promise.all(files
-        .filter((entry) => entry.isFile() && /^openclaw-\d{4}-\d{2}-\d{2}\.log$/i.test(entry.name))
-        .map(async (entry) => {
-          const filePath = path.join(dir, entry.name)
-          const stat = await fs.stat(filePath).catch(() => null)
-          return stat ? { filePath, mtimeMs: stat.mtimeMs } : null
-        }))
-      for (const file of logFiles
-        .filter((entry): entry is { filePath: string; mtimeMs: number } => Boolean(entry))
-        .sort((a, b) => b.mtimeMs - a.mtimeMs)
-        .slice(0, limit)) {
-        candidates.add(file.filePath)
-      }
-    }
-  }
-
-  const output: string[] = []
-  const seen = new Set<string>()
-  for (const candidate of candidates) {
-    const normalized = process.platform === 'win32' ? candidate.toLowerCase() : candidate
-    if (seen.has(normalized)) continue
-    seen.add(normalized)
-    const stat = await fs.stat(candidate).catch(() => null)
-    if (stat?.isFile()) output.push(candidate)
-  }
-  gatewayLogPathDiscoveryCache = {
-    expiresAt: now + GATEWAY_LOG_PATH_DISCOVERY_CACHE_MS,
-    paths: output,
-  }
-  return output
+function normalizeGatewayLedgerEntry(value: unknown, index: number): GatewayLogEntry | null {
+  return gatewayLogService.normalizeGatewayLedgerEntry(value, index)
 }
 
-type GatewayLogTailSnapshot = {
-  statKey: string
-  signature: string
-  entries: GatewayLogEntry[]
-}
-
-const gatewayLogTailSnapshots = new Map<string, GatewayLogTailSnapshot>()
-
-function gatewayLogFileStatKey(stat: { size: number; mtimeMs: number; birthtimeMs: number }) {
-  return `${stat.size}:${Math.round(stat.mtimeMs)}:${Math.round(stat.birthtimeMs)}`
-}
-
-async function gatewayLogFileSignature(filePath: string, stat: { size: number; mtimeMs: number; birthtimeMs: number }) {
-  const length = Math.min(GATEWAY_LOG_FINGERPRINT_BYTES, stat.size)
-  const statKey = gatewayLogFileStatKey(stat)
-  if (length <= 0) return `${statKey}:empty`
-  const handle = await fs.open(filePath, 'r')
-  try {
-    const buffer = Buffer.alloc(length)
-    await handle.read(buffer, 0, length, 0)
-    const digest = createHash('sha1').update(buffer).digest('hex').slice(0, 14)
-    return `${statKey}:${digest}`
-  } finally {
-    await handle.close().catch(() => undefined)
-  }
-}
-
-async function readTailText(filePath: string, maxBytes = GATEWAY_LOG_TAIL_MAX_BYTES) {
-  const stat = await fs.stat(filePath).catch(() => null)
-  if (!stat?.isFile() || stat.size <= 0) return ''
-  const length = Math.min(maxBytes, stat.size)
-  const start = Math.max(0, stat.size - length)
-  const handle = await fs.open(filePath, 'r')
-  try {
-    const buffer = Buffer.alloc(length)
-    await handle.read(buffer, 0, length, start)
-    return buffer.toString('utf-8')
-  } finally {
-    await handle.close().catch(() => undefined)
-  }
-}
-
-async function readTailTextWithSignature(filePath: string, maxBytes = GATEWAY_LOG_TAIL_MAX_BYTES) {
-  const stat = await fs.stat(filePath).catch(() => null)
-  if (!stat?.isFile() || stat.size <= 0) return null
-  const statKey = gatewayLogFileStatKey(stat)
-  const cached = gatewayLogTailSnapshots.get(filePath)
-  if (cached?.statKey === statKey) {
-    return { raw: '', statKey, signature: cached.signature, cacheHit: true }
-  }
-  const signature = await gatewayLogFileSignature(filePath, stat)
-  if (cached?.signature === signature) {
-    if (cached.statKey !== statKey) {
-      gatewayLogTailSnapshots.set(filePath, { ...cached, statKey, signature })
-    }
-    return { raw: '', statKey, signature, cacheHit: true }
-  }
-  const raw = await readTailText(filePath, maxBytes)
-  return { raw, statKey, signature, cacheHit: false }
-}
-
-function compactGatewayLogMessage(value: string, max = 640) {
-  const warningSign = String.fromCodePoint(0x26a0)
-  const variationSelector = String.fromCodePoint(0xfe0f)
-  const hammerAndWrench = String.fromCodePoint(0x1f6e0)
-  const emDash = String.fromCodePoint(0x2014)
-  const ellipsis = String.fromCodePoint(0x2026)
-  const normalized = stripAnsi(value || '')
-    .replace(/\r/g, '')
-    .replaceAll(`${warningSign}${variationSelector}`, '')
-    .replaceAll(warningSign, '')
-    .replaceAll(`${hammerAndWrench}${variationSelector}`, '')
-    .replaceAll(hammerAndWrench, '')
-    .replaceAll(emDash, '-')
-    .replaceAll(ellipsis, '...')
-  const masked = applyDiagnosticRedactions(normalized)
-    .replace(/\n{3,}/g, '\n\n')
-    .trim()
-  return masked.length > max ? `${masked.slice(0, max - 1).trim()}...` : masked
-}
-
-function cleanGatewayLogFragmentValue(value: string) {
-  const trimmed = stripAnsi(value || '').trim().replace(/,$/u, '').trim()
-  if (!trimmed) return ''
-  try {
-    const parsed = JSON.parse(trimmed) as unknown
-    if (typeof parsed === 'string') return compactGatewayLogMessage(parsed)
-    if (typeof parsed === 'number' || typeof parsed === 'boolean') return String(parsed)
-  } catch {
-    // Log fragments are often JSON fields without their surrounding object.
-  }
-  return compactGatewayLogMessage(trimmed.replace(/^"|"$/gu, '').replace(/\\"/g, '"'))
-}
-
-function summarizeGatewayLogFragment(value: string): { message: string; level?: string } | null {
-  const text = stripAnsi(value || '').trim()
-  if (!text) return { message: '' }
-  if (/^[{}[\],]+$/u.test(text)) return { message: '' }
-  if (/^"?(?:issues|details|errors)"?\s*:\s*[[{]?\s*,?$/iu.test(text)) return { message: '' }
-  if (/^"?(?:valid|ok)"?\s*:\s*(?:true|false|null)\s*,?$/iu.test(text)) return { message: '' }
-
-  const field = text.match(/^"?(message|path|error|detail|reason)"?\s*:\s*(.+?)\s*,?$/iu)
-  if (!field) return null
-
-  const key = field[1].toLowerCase()
-  const cleaned = cleanGatewayLogFragmentValue(field[2])
-  if (!cleaned) return { message: '' }
-
-  if (key === 'message') {
-    const unsupportedKeys = Array.from(cleaned.matchAll(/"([^"]+)"/gu))
-      .map((match) => match[1])
-      .filter(Boolean)
-    if (/invalid config\b/iu.test(cleaned) && unsupportedKeys.length) {
-      return {
-        message: `Invalid config: remove unsupported keys ${unsupportedKeys.join(', ')}.`,
-        level: 'warning',
-      }
-    }
-    return {
-      message: cleaned.replace(/^invalid config:\s*/iu, 'Invalid config: '),
-      level: /\b(?:invalid|failed|error|rejected)\b/iu.test(cleaned) ? 'warning' : undefined,
-    }
-  }
-
-  if (key === 'path') {
-    const label = /\.json\b/iu.test(cleaned)
-      ? 'Config file'
-      : /plugins\.entries\./iu.test(cleaned)
-        ? 'Config path'
-        : 'Path'
-    return { message: `${label}: ${cleaned}` }
-  }
-
-  return {
-    message: `${key[0].toUpperCase()}${key.slice(1)}: ${cleaned}`,
-    level: key === 'error' ? 'error' : /\b(?:invalid|failed|error|rejected)\b/iu.test(cleaned) ? 'warning' : undefined,
-  }
-}
-
-function objectStringField(value: Record<string, unknown>, key: string) {
-  const raw = value[key]
-  return typeof raw === 'string' ? raw : ''
-}
-
-function nestedMetaStringField(value: Record<string, unknown>, key: string) {
-  const meta = value._meta
-  if (!meta || typeof meta !== 'object' || Array.isArray(meta)) return ''
-  const raw = (meta as Record<string, unknown>)[key]
-  return typeof raw === 'string' ? raw : ''
-}
-
-function normalizeGatewayChannelName(value: string) {
-  const cleaned = value.trim().toLowerCase().replace(/^channels?\//u, '')
-  if (!/^[a-z0-9][a-z0-9_-]{1,80}$/u.test(cleaned)) return ''
-  return cleaned
-}
-
-function gatewayChannelFromSubsystem(value: string) {
-  const cleaned = value.trim().toLowerCase()
-  if (!cleaned) return ''
-  const channelSubsystem = cleaned.match(/^channels?\/([a-z0-9_-]+)/u)
-  if (channelSubsystem) return normalizeGatewayChannelName(channelSubsystem[1])
-  const directSubsystem = cleaned.match(/^(telegram|clawtalk|sms|imessage|whatsapp|signal|discord|slack|matrix|mattermost|msteams|googlechat|feishu|line|irc|twitch|wechat|zalo|zalouser|qqbot|nextcloud-talk|synology-chat|nostr|tlon|yuanbao)(?:\/|$)/u)
-  return directSubsystem ? normalizeGatewayChannelName(directSubsystem[1]) : ''
-}
-
-function gatewayChannelFromMessage(message: string) {
-  const text = stripAnsi(message || '').replace(/\s+/g, ' ').trim()
-  const bracket = text.match(/\[(clawtalk|telegram|sms|imessage|whatsapp|signal|discord|slack|matrix|mattermost|msteams|googlechat|feishu|line|irc|twitch|wechat|zalo|zalouser|qqbot|nextcloud-talk|synology-chat|nostr|tlon|yuanbao)\]/iu)
-  if (bracket) return normalizeGatewayChannelName(bracket[1])
-  const processed = text.match(/^message processed:\s+channel=([a-z0-9_-]+)/iu)
-  if (processed) return normalizeGatewayChannelName(processed[1])
-  const spoken = text.match(/\b(telegram|clawtalk|sms|imessage|whatsapp|signal|discord|slack|matrix|mattermost|teams|google chat|feishu|line|irc|twitch|wechat|zalo|qqbot|nextcloud talk|synology chat|nostr|tlon|yuanbao)\b/iu)
-  if (!spoken) return ''
-  const normalized = spoken[1].toLowerCase().replace(/\s+/gu, '-')
-  return normalized === 'teams' ? 'msteams' : normalizeGatewayChannelName(normalized)
-}
-
-function gatewayChannelFromLogObject(value: Record<string, unknown>, message: string, subsystem: string) {
-  for (const key of ['channel', 'channelId', 'provider', 'platform', 'surface', 'pluginId']) {
-    const field = objectStringField(value, key)
-    const normalized = field ? normalizeGatewayChannelName(field) : ''
-    if (normalized) return normalized
-  }
-  const metaChannel = nestedMetaStringField(value, 'channel') || nestedMetaStringField(value, 'subsystem')
-  return gatewayChannelFromSubsystem(subsystem) || gatewayChannelFromSubsystem(metaChannel) || gatewayChannelFromMessage(message)
-}
-
-function subsystemFromLogObject(value: Record<string, unknown>) {
-  const direct = objectStringField(value, 'subsystem')
-  if (direct) return direct
-  const prefixed = objectStringField(value, '0')
-  if (!prefixed) return ''
-  try {
-    const parsed = JSON.parse(prefixed) as { subsystem?: unknown }
-    return typeof parsed?.subsystem === 'string' ? parsed.subsystem : ''
-  } catch {
-    return ''
-  }
-}
-
-function gatewayLogPayloadMessage(value: string) {
-  const trimmed = stripAnsi(value || '').trim()
-  if (!trimmed) return ''
-  try {
-    const parsed = JSON.parse(trimmed) as unknown
-    if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) return trimmed
-    const record = parsed as Record<string, unknown>
-    return (
-      objectStringField(record, 'message')
-      || objectStringField(record, '1')
-      || objectStringField(record, 'msg')
-      || objectStringField(record, '0')
-      || trimmed
-    ).replace(/^\{"subsystem":"[^"]+"\}\s*/u, '')
-  } catch {
-    return trimmed
-  }
-}
-
-function isNodeDeprecationWarningLine(value: string) {
-  const text = stripAnsi(value || '').replace(/\s+/g, ' ').trim()
-  return /^\(node:\d+\)\s+\[DEP\d+\]\s+DeprecationWarning:/iu.test(text)
-    || /^\(Use\s+`?(?:electron|node)(?:\.exe)?\s+--trace-deprecation\b.*warning was created\.?\)$/iu.test(text)
-}
-
-function isGatewayToolFailureLine(value: string) {
-  return /^\[tools\]\s+[\w/-]+\s+failed:/iu.test(gatewayLogPayloadMessage(value).replace(/\s+/g, ' ').trim())
-}
-
-function isGatewayLogRecordStart(value: string) {
-  const text = stripAnsi(value || '').trim()
-  return /^\{/u.test(text)
-    || /^\[[^\]]+\]\s+\[(?:stdout|stderr|lifecycle|gateway|channel)\]\s+/iu.test(text)
-    || /^\d{4}-\d{2}-\d{2}T\S+\s+\[[^\]]+\]\s+/iu.test(text)
-    || /^\[(?:plugins?|clawtalk|gateway(?:-err)?|agent\/embedded|agents\/[^\]]+|openclaw(?:\/[^\]]+)?|runtime(?:\/[^\]]+)?|tools)\]\s+/iu.test(text)
-}
-
-function isGatewayMonitorNoise(value: string) {
-  const message = normalizeGatewayLogDisplayMessage(gatewayLogPayloadMessage(value)).message.replace(/\s+/g, ' ').trim()
-  if (!message) return true
-  if (isNodeDeprecationWarningLine(message)) return true
-  if (isGatewayInternalDiagnosticMessage(message)) return true
-  if (/^\[clawtalk\]\s+\[MissionObserver\]\s+(?:No running missions found\.?|Started\b.*|Stopped\.?)$/iu.test(message)) return true
-  if (isGatewayToolFailureLine(message)) return true
-  if (/^\[tools\]\b/iu.test(message) && /\braw_params=|\bCurrent file contents:/iu.test(message)) return true
-  return false
-}
-
-function parseGatewayFileLogLine(line: string, source: string, index: number): GatewayLogEntry | null {
-  const trimmed = line.trim()
-  if (!trimmed) return null
-  if (isGatewayMonitorNoise(trimmed)) return null
-
-  const bracket = trimmed.match(/^\[([^\]]+)]\s+\[(stdout|stderr|lifecycle)]\s+(.*)$/i)
-  if (bracket) {
-    if (isGatewayMonitorNoise(bracket[3])) return null
-    const timestamp = !Number.isNaN(new Date(bracket[1]).getTime()) ? new Date(bracket[1]).toISOString() : new Date().toISOString()
-    const display = normalizeGatewayLogDisplayMessage(bracket[3])
-    const channel = gatewayChannelFromMessage(display.message)
-    return {
-      id: gatewayLogEntryId(source, `${index}:${trimmed}`),
-      timestamp,
-      stream: channel ? 'channel' : bracket[2].toLowerCase() as GatewayLogEntry['stream'],
-      message: display.message,
-      ...(display.level ? { level: display.level } : {}),
-      ...(channel ? { channel, direction: gatewayActivityDirection(display.message) } : {}),
-      source,
-    }
-  }
-
-  try {
-    const parsed = JSON.parse(trimmed) as unknown
-    if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) return null
-    const record = parsed as Record<string, unknown>
-    const rawMessage = (
-      objectStringField(record, 'message')
-      || objectStringField(record, '1')
-      || objectStringField(record, 'msg')
-      || trimmed
-    ).replace(/^\{"subsystem":"[^"]+"\}\s*/u, '')
-    if (isGatewayMonitorNoise(rawMessage)) return null
-    const display = normalizeGatewayLogDisplayMessage(rawMessage)
-    const message = display.message
-    const time = objectStringField(record, 'time') || nestedMetaStringField(record, 'date')
-    const timestamp = time && !Number.isNaN(new Date(time).getTime()) ? new Date(time).toISOString() : new Date().toISOString()
-    const level = display.level || (objectStringField(record, 'level') || nestedMetaStringField(record, 'logLevelName')).toLowerCase() || undefined
-    const subsystem = subsystemFromLogObject(record)
-    const channel = gatewayChannelFromLogObject(record, message, subsystem)
-    const direction = gatewayActivityDirectionFromRecord(record, message)
-    return {
-      id: gatewayLogEntryId(source, `${index}:${trimmed}`),
-      timestamp,
-      stream: channel || /channel/i.test(subsystem) ? 'channel' : 'gateway',
-      level,
-      channel,
-      direction,
-      source,
-      message,
-    }
-  } catch {
-    if (isGatewayMonitorNoise(trimmed)) return null
-    const display = normalizeGatewayLogDisplayMessage(trimmed)
-    const channel = gatewayChannelFromMessage(display.message)
-    return {
-      id: gatewayLogEntryId(source, `${index}:${trimmed}`),
-      timestamp: new Date().toISOString(),
-      stream: channel ? 'channel' : 'gateway',
-      source,
-      message: display.message,
-      ...(channel ? { channel, direction: gatewayActivityDirection(display.message) } : {}),
-      ...(display.level ? { level: display.level } : {}),
-    }
-  }
-}
-
-async function readGatewayFileLogEntries(limit = 120): Promise<GatewayLogEntry[]> {
-  const paths = await discoverGatewayFileLogPaths()
-  const activePaths = new Set(paths)
-  const entries: GatewayLogEntry[] = []
-  for (const filePath of paths) {
-    const snapshot = await readTailTextWithSignature(filePath).catch(() => null)
-    const cached = gatewayLogTailSnapshots.get(filePath)
-    if (cached && snapshot?.cacheHit && cached.signature === snapshot.signature) {
-      entries.push(...cached.entries)
-      continue
-    }
-    if (!snapshot?.raw.trim()) {
-      gatewayLogTailSnapshots.delete(filePath)
-      continue
-    }
-
-    const parsedEntries: GatewayLogEntry[] = []
-    const lines = snapshot.raw.replace(/\r/g, '').split('\n').filter((line) => line.trim())
-    lines.slice(-Math.max(limit * 4, limit)).forEach((line, index) => {
-      const entry = parseGatewayFileLogLine(line, filePath, index)
-      if (entry) parsedEntries.push(entry)
-    })
-    gatewayLogTailSnapshots.set(filePath, {
-      statKey: snapshot.statKey,
-      signature: snapshot.signature,
-      entries: parsedEntries,
-    })
-    entries.push(...parsedEntries)
-  }
-  for (const cachedPath of gatewayLogTailSnapshots.keys()) {
-    if (!activePaths.has(cachedPath)) gatewayLogTailSnapshots.delete(cachedPath)
-  }
-
-  const byKey = new Map<string, GatewayLogEntry>()
-  for (const entry of entries) {
-    const key = `${entry.timestamp}|${entry.stream}|${entry.message}`
-    if (!byKey.has(key)) byKey.set(key, entry)
-  }
-  return Array.from(byKey.values())
-    .sort((a, b) => Date.parse(b.timestamp) - Date.parse(a.timestamp))
-    .slice(0, limit)
-}
-
-async function readGatewayRpcLogEntries(limit = 120): Promise<GatewayLogEntry[] | null> {
-  const client = gatewayClientState?.ready ? gatewayClientState.client : null
-  if (!client) return null
-
-  try {
-    const payload = await client.request('logs.tail', {
-      limit: Math.max(limit * 4, limit),
-      maxBytes: Math.min(GATEWAY_LOG_TAIL_MAX_BYTES, 250_000),
-    }, { timeoutMs: 2_500 })
-    if (!isLooseRecord(payload) || !Array.isArray(payload.lines)) return null
-    const source = typeof payload.file === 'string' && payload.file.trim()
-      ? payload.file.trim()
-      : 'gateway:logs.tail'
-    const entries = payload.lines
-      .filter((line): line is string => typeof line === 'string' && line.trim().length > 0)
-      .slice(-Math.max(limit * 4, limit))
-      .map((line, index) => parseGatewayFileLogLine(line, source, index))
-      .filter((entry): entry is GatewayLogEntry => Boolean(entry))
-      .sort((a, b) => Date.parse(b.timestamp) - Date.parse(a.timestamp))
-      .slice(0, limit)
-    return entries
-  } catch (error) {
-    const now = Date.now()
-    if (now - gatewayRpcLogFailureNotifiedAt > GATEWAY_RPC_LOG_FAILURE_NOTICE_MS) {
-      gatewayRpcLogFailureNotifiedAt = now
-      pushGatewayLog('gateway', `logs.tail unavailable; using local file tail fallback: ${redactSensitiveText(String(error))}`, 'warning')
-    }
-    return null
-  }
-}
-
-function gatewayActivityAgentId(message: string) {
-  const match = message.match(/^([a-z0-9][a-z0-9-]{1,80})\s+\/\s+[^/]+?\s+(?:heartbeat|mission|unit)\b/i)
-  return match?.[1] || undefined
-}
-
-function isGatewayPollingIngressLifecycle(message: string) {
-  const text = stripAnsi(message || '').replace(/\s+/g, ' ').trim()
-  return /\b(?:isolated\s+)?polling ingress (?:started|stopped)\b/iu.test(text)
-}
-
-function gatewayActivityDirection(message: string): GatewayChannelDirection {
-  const text = stripAnsi(message || '').replace(/\s+/g, ' ').trim()
-  if (isGatewayPollingIngressLifecycle(text)) return 'system'
-  if (/\b(?:SMS|message|call|update)\s+received\b|\breceived\s+from\b|\binbound\b|\bincoming\b|\bwebhook\b|\bgetUpdates\b|\bCoreBridge:\s+running agent turn\b/i.test(text)) return 'inbound'
-  if (/\bSMS\s+(?:reply|sent)\b|\breply (?:sent|delivered|failed)\b|\bSending SMS\b|\bInitiating call\b|\boutbound\b|\bsent to\b|\bsend ok\b|\boutbound send ok\b|\bsendMessage\b|\bmessage sent\b|\bcall initiated\b/i.test(text)) return 'outbound'
-  if (/^message processed:\s+channel=(?!cron\b|agent\b|chat\b)[a-z0-9_-]+\b/i.test(text)) return 'inbound'
-  return 'system'
-}
-
-function gatewayActivityDirectionFromRecord(record: Record<string, unknown>, message: string): GatewayChannelDirection {
-  const direct = objectStringField(record, 'direction') || objectStringField(record, 'dir')
-  const normalized = direct.toLowerCase()
-  if (normalized === 'inbound' || normalized === 'incoming' || normalized === 'receive' || normalized === 'received') return 'inbound'
-  if (normalized === 'outbound' || normalized === 'outgoing' || normalized === 'send' || normalized === 'sent') return 'outbound'
-  if (normalized === 'system' || normalized === 'status' || normalized === 'lifecycle') return 'system'
-  const event = [
-    objectStringField(record, 'event'),
-    objectStringField(record, 'type'),
-    objectStringField(record, 'operation'),
-    objectStringField(record, 'messageType'),
-    objectStringField(record, 'kind'),
-  ].filter(Boolean).join(' ')
-  return gatewayActivityDirection(`${event} ${message}`)
-}
-
-function objectActivityTextField(record: Record<string, unknown>, keys: string[]) {
-  for (const key of keys) {
-    const raw = record[key]
-    if (typeof raw === 'string' && raw.trim()) return raw.trim()
-    if ((typeof raw === 'number' || typeof raw === 'boolean') && String(raw).trim()) return String(raw)
-  }
-  return ''
-}
-
-function clawTalkWsLogCandidates() {
-  const candidates = new Set<string>([
-    path.join(OPENCLAW_STATE_ROOT, 'plugins', 'clawtalk', 'ws.log'),
-    path.join(NATIVE_OPENCLAW_STATE_ROOT, 'plugins', 'clawtalk', 'ws.log'),
-  ])
-  const configured = process.env.CLAWTALK_WS_LOG_PATH || process.env.OPENCLAW_CLAWTALK_WS_LOG_PATH || ''
-  if (configured.trim()) candidates.add(path.resolve(configured.trim()))
-  return Array.from(candidates)
-}
-
-function channelActivityLabel(channel: string, event: string, direction: GatewayChannelDirection) {
-  const text = `${channel} ${event}`.replace(/[._-]+/gu, ' ').replace(/\s+/g, ' ').trim().toLowerCase()
-  if (/\bsms\b/u.test(text) && direction === 'inbound') return 'SMS received'
-  if (/\bsms\b/u.test(text) && direction === 'outbound') return 'SMS sent'
-  if (/\bcall\b/u.test(text) && direction === 'inbound') return 'Call received'
-  if (/\bcall\b/u.test(text) && direction === 'outbound') return 'Call placed'
-  if (/\btelegram\b/u.test(text) && direction === 'inbound') return 'Telegram message received'
-  if (/\btelegram\b/u.test(text) && direction === 'outbound') return 'Telegram message sent'
-  return direction === 'inbound' ? 'Message received' : 'Message sent'
-}
-
-function parseClawTalkWsLogLine(line: string, source: string, index: number): GatewayLogEntry | null {
-  const trimmed = stripAnsi(line || '').trim()
-  const match = trimmed.match(/^(\d{4}-\d{2}-\d{2}T\S+)\s+(<<<|>>>|---)\s*(.*)$/u)
-  if (!match) return null
-
-  const marker = match[2]
-  if (marker === '---') return null
-
-  const rawPayload = match[3].trim()
-  let record: Record<string, unknown> | null = null
-  try {
-    const parsed = JSON.parse(rawPayload) as unknown
-    if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) record = parsed as Record<string, unknown>
-  } catch {
-    record = null
-  }
-
-  const event = record
-    ? objectActivityTextField(record, ['event', 'type', 'kind', 'operation', 'messageType'])
-    : rawPayload
-  const probe = `${event} ${rawPayload}`
-  let direction = gatewayActivityDirection(probe)
-  if (direction === 'system') {
-    if (marker === '>>>' && /\b(?:send|sent|reply|outbound|message|sms|call)\b/iu.test(probe)) direction = 'outbound'
-    if (marker === '<<<' && /\b(?:received|incoming|inbound|message|sms|call|webhook)\b/iu.test(probe)) direction = 'inbound'
-  }
-  if (direction === 'system') return null
-
-  const eventLower = event.toLowerCase()
-  if (/\b(?:auth|hello|ping|pong|connected|heartbeat|ready|registered)\b/iu.test(eventLower)
-    && !/\b(?:sms|message|call|received|sent|reply|incoming|outbound)\b/iu.test(eventLower)) {
-    return null
-  }
-
-  const body = record
-    ? objectActivityTextField(record, ['body', 'text', 'message', 'content', 'transcript', 'reply'])
-    : ''
-  const mediaCount = record && Array.isArray(record.media_urls) ? record.media_urls.length : 0
-  const label = channelActivityLabel('clawtalk', event, direction)
-  const detail = body
-    ? compactGatewayLogMessage(body, 360)
-    : mediaCount
-      ? `${mediaCount} media attachment${mediaCount === 1 ? '' : 's'}`
-      : ''
-  const timestamp = !Number.isNaN(Date.parse(match[1])) ? new Date(match[1]).toISOString() : new Date().toISOString()
-
-  return {
-    id: gatewayLogEntryId(source, `${index}:${trimmed}`),
-    timestamp,
-    stream: 'channel',
-    channel: 'clawtalk',
-    direction,
-    source,
-    message: detail ? `${label}: ${detail}` : label,
-  }
-}
-
-async function readClawTalkChannelActivityEntries(limit = 80): Promise<GatewayLogEntry[]> {
-  const entries: GatewayLogEntry[] = []
-  for (const filePath of clawTalkWsLogCandidates()) {
-    const stat = await fs.stat(filePath).catch(() => null)
-    if (!stat?.isFile() || stat.size <= 0) continue
-    const raw = await readTailText(filePath, Math.min(GATEWAY_LOG_TAIL_MAX_BYTES, 360_000)).catch(() => '')
-    const lines = raw.replace(/\r/g, '').split('\n').filter((line) => line.trim())
-    lines.slice(-Math.max(limit * 3, limit)).forEach((line, index) => {
-      const entry = parseClawTalkWsLogLine(line, filePath, index)
-      if (entry) entries.push(entry)
-    })
-  }
-  return entries
-    .sort((a, b) => Date.parse(b.timestamp) - Date.parse(a.timestamp))
-    .slice(0, limit)
-}
-
-function gatewayActivityLooksLikeChannelMessage(message: string) {
-  const text = stripAnsi(message || '').replace(/\s+/g, ' ').trim()
-  if (isGatewayPollingIngressLifecycle(text)) return false
-  return /^message processed:\s+channel=(?!cron\b|agent\b|chat\b)[a-z0-9_-]+\b/iu.test(text)
-    || /\b(?:SMS|MMS|message|call|update)\s+received\b|\breceived\s+from\b|\binbound\b|\bincoming\b|\bwebhook\b|\bgetUpdates\b|\bCoreBridge:\s+running agent turn\b/iu.test(text)
-    || /\bSMS\s+(?:reply|sent)\b|\breply (?:sent|delivered|failed)\b|\bSending SMS\b|\bInitiating call\b|\boutbound\b|\bsent to\b|\bsend ok\b|\boutbound send ok\b|\bsendMessage\b|\bmessage sent\b|\bcall initiated\b/iu.test(text)
-    || /\b(?:telegram|clawtalk|sms|imessage|whatsapp|signal|discord|slack|matrix|mattermost|msteams|googlechat|line|wechat)\b.*\b(?:received|sent|reply|incoming|outbound|inbound|send|delivered)\b/iu.test(text)
-    || /\b(?:received|sent|reply|incoming|outbound|inbound|send|delivered)\b.*\b(?:telegram|clawtalk|sms|message|call|discord|slack|whatsapp)\b/iu.test(text)
-}
-
-function isGatewayChannelActivity(entry: GatewayLogEntry) {
-  const direction = entry.direction || gatewayActivityDirection(entry.message)
-  if (direction !== 'inbound' && direction !== 'outbound') return false
-  return Boolean(entry.channel || gatewayChannelFromMessage(entry.message) || entry.stream === 'channel')
-    && gatewayActivityLooksLikeChannelMessage(entry.message)
+function gatewayLogEntriesSinceCurrentStart(entries: GatewayLogEntry[]) {
+  return gatewayLogService.gatewayLogEntriesSinceCurrentStart(entries)
 }
 
 function summarizeGatewayActivity(entries: GatewayLogEntry[], activeWindowMs = 10 * 60 * 1000): GatewayActivitySummary {
-  const events = entries
-    .filter(isGatewayChannelActivity)
-    .map((entry): GatewayChannelActivity => ({
-      id: entry.id,
-      timestamp: entry.timestamp,
-      channel: entry.channel || entry.message.match(/\[([a-z0-9_-]+)]/i)?.[1]?.toLowerCase() || 'gateway',
-      direction: entry.direction || gatewayActivityDirection(entry.message),
-      message: entry.message,
-      level: entry.level,
-      source: entry.source,
-      agentId: gatewayActivityAgentId(entry.message),
-    }))
-    .sort((a, b) => Date.parse(b.timestamp) - Date.parse(a.timestamp))
-    .slice(0, 60)
-
-  const lastEventAt = events[0]?.timestamp || null
-  const lastMs = lastEventAt ? Date.parse(lastEventAt) : NaN
-  return {
-    active: Number.isFinite(lastMs) ? Date.now() - lastMs <= activeWindowMs : false,
-    lastEventAt,
-    sourcePath: events[0]?.source || entries[0]?.source || null,
-    inboundCount: events.filter((event) => event.direction === 'inbound').length,
-    outboundCount: events.filter((event) => event.direction === 'outbound').length,
-    systemCount: events.filter((event) => event.direction === 'system').length,
-    events,
-  }
+  return gatewayLogService.summarizeGatewayActivity(entries, activeWindowMs)
 }
 
 function runtimeLoadedPluginIdsFromGatewayLogs(entries: GatewayLogEntry[]) {
-  const ids = new Set<string>()
-  for (const entry of entries) {
-    const match = entry.message.match(/\bhttp server listening\s+\(\d+\s+plugins?:\s*([^;)]+)/i)
-    if (!match) continue
-    for (const id of match[1].split(',')) {
-      const normalized = id.trim().toLowerCase()
-      if (PLUGIN_ID_PATTERN.test(normalized)) ids.add(normalized)
-    }
-    if (ids.size) break
-  }
-  return ids
+  return gatewayLogService.runtimeLoadedPluginIdsFromGatewayLogs(entries)
+}
+
+function summarizeCronProcessedError(value: string) {
+  return gatewayLogService.summarizeCronProcessedError(value)
+}
+
+function isGatewayInternalDiagnosticMessage(value: string) {
+  return gatewayLogService.isGatewayInternalDiagnosticMessage(value)
+}
+
+const gatewayChatService = createGatewayChatService({
+  gatewayHttpPort: GATEWAY_HTTP_PORT,
+  clientVersion: '0.0.6',
+  gatewayAgentSessionsEnabled: CONTROL_CENTER_GATEWAY_AGENT_SESSIONS,
+  gatewayChatClientEnabled: CONTROL_CENTER_GATEWAY_CHAT_CLIENT,
+  forceLocalAgentRuntime: FORCE_LOCAL_AGENT_RUNTIME,
+  toolsEffectiveDiagnostic: CONTROL_CENTER_GATEWAY_TOOLS_EFFECTIVE_DIAGNOSTIC,
+  fastAutoOnSeconds: DEFAULT_OPENCLAW_FAST_AUTO_ON_SECONDS,
+  getGatewayAuthEnv,
+  isShuttingDown: () => shuttingDown,
+  ensureGatewayRunning,
+  startGatewayHealthMonitor,
+  isGatewayHealthy,
+  getOpenClawAgentRunDefaultsReady: () => openclawAgentRunDefaultsReady,
+  ensureOpenclawAgentRunConfigDefaults,
+  gatewayChatAttachmentsFromTurnAttachments,
+  normalizeFastMode: openClawChatFastMode,
+  beginGatewayChatRun: beginGatewayChatOpenClawRun,
+  finishGatewayChatRun: finishOpenClawRun,
+  classifyFailureKind,
+  sanitizeUserVisibleRuntimeText,
+  redactHiddenReasoningAndSecrets,
+  redactSensitiveText,
+  pushGatewayLog,
+})
+getGatewayDiagnosticsClient = () => gatewayChatService.getReadyClient()
+
+function gatewayChatRuntimeSnapshot(now = Date.now()) {
+  return gatewayChatService.runtimeSnapshot(now)
+}
+
+function abortStaleGatewayChatWaiters(minAgeMs: number, reason: string) {
+  return gatewayChatService.abortStaleWaiters(minAgeMs, reason)
+}
+
+function registerGatewayChatStreamObserver(emit: StreamEmitter, signal?: AbortSignal) {
+  return gatewayChatService.registerStreamObserver(emit, signal)
+}
+
+function gatewayChatStreamObserver(id?: string) {
+  return gatewayChatService.streamObserver(id)
+}
+
+function stopControlCenterGatewayClient(reason = 'control center shutdown') {
+  gatewayChatService.stopClient(reason)
+}
+
+function ensureControlCenterGatewayClient(signal?: AbortSignal) {
+  return gatewayChatService.ensureClient(signal)
+}
+
+function prewarmControlCenterGatewayAgentRuntime(reason = 'startup') {
+  return gatewayChatService.prewarm(reason)
+}
+
+function scheduleControlCenterGatewayAgentRuntimePrewarm(reason = 'startup', delayMs = 1500) {
+  gatewayChatService.schedulePrewarm(reason, delayMs)
+}
+
+function runControlCenterGatewayChatTurn(params: {
+  agentId: string
+  message: string
+  attachments?: unknown[]
+  sessionId: string
+  requestedSessionKey?: string
+  thinking: ThinkingLevel
+  fastMode?: FastModePreference
+  timeoutMs: number
+  cwd: string
+  streamObserverId?: string
+  signal?: AbortSignal
+}) {
+  return gatewayChatService.runTurn(params)
 }
 
 function spawnText(
@@ -5670,33 +4596,6 @@ function spawnText(
       resolve({ stdout, stderr, code, timedOut: false })
     })
   })
-}
-
-async function gatewayListenerPidForPort(port: number) {
-  const now = Date.now()
-  if (gatewayListenerPidCache && now - gatewayListenerPidCache.checkedAt < 7_500) return gatewayListenerPidCache.pid
-  let pid: number | null = null
-  if (process.platform === 'win32') {
-    const result = await spawnText('powershell.exe', [
-      '-NoProfile',
-      '-NonInteractive',
-      '-Command',
-      `(Get-NetTCPConnection -LocalPort ${port} -State Listen -ErrorAction SilentlyContinue | Select-Object -First 1 -ExpandProperty OwningProcess)`,
-    ], {
-      windowsHide: true,
-      timeoutMs: 2500,
-    })
-    const parsed = Number((result.stdout || '').trim().split(/\s+/)[0])
-    if (Number.isFinite(parsed) && parsed > 0) pid = parsed
-  } else {
-    const result = await spawnText('sh', ['-c', `command -v lsof >/dev/null 2>&1 && lsof -tiTCP:${port} -sTCP:LISTEN | head -n 1 || true`], {
-      timeoutMs: 2500,
-    })
-    const parsed = Number((result.stdout || '').trim().split(/\s+/)[0])
-    if (Number.isFinite(parsed) && parsed > 0) pid = parsed
-  }
-  gatewayListenerPidCache = { checkedAt: now, pid }
-  return pid
 }
 
 function openClawCommandOutput(result: OpenClawResult) {
@@ -5750,25 +4649,11 @@ async function validateOpenClawConfigForGateway(reason: string) {
 }
 
 function pauseGatewayAutoRestartForInvalidConfig(detail: string) {
-  gatewayAutoRestartPaused = true
-  if (gatewayRestartTimer) {
-    clearTimeout(gatewayRestartTimer)
-    gatewayRestartTimer = null
-  }
-  const message = `Gateway auto-restart paused: OpenClaw config is still invalid after repair. ${detail}`
-  console.warn(`[gateway] ${message}`)
-  pushGatewayLog('lifecycle', message)
+  gatewayLifecycle.pauseAutoRestartForInvalidConfig(detail)
 }
 
 function pauseGatewayAutoRestartForRuntimeUnavailable(detail: string) {
-  gatewayAutoRestartPaused = true
-  if (gatewayRestartTimer) {
-    clearTimeout(gatewayRestartTimer)
-    gatewayRestartTimer = null
-  }
-  const message = `Gateway auto-restart paused: OpenClaw runtime is unavailable. ${detail}`
-  console.warn(`[gateway] ${message}`)
-  pushGatewayLog('lifecycle', message)
+  gatewayLifecycle.pauseAutoRestartForRuntimeUnavailable(detail)
 }
 
 async function repairOpenClawConfigForGateway(reason: string) {
@@ -5810,9 +4695,7 @@ async function prepareOpenClawConfigForGatewayStartup(reason: string) {
       if (repairedConfig) await writeOpenclawConfig(repairedConfig)
       validation = await validateOpenClawConfigForGateway(`${reason}; after doctor repair`)
       if (validation.valid) {
-        gatewayAutoRestartPaused = false
-        gatewayRestartCount = 0
-        pushGatewayLog('lifecycle', 'OpenClaw config repaired and validated; gateway startup may continue')
+        gatewayLifecycle.resumeAutoRestartAfterConfigRepair()
         return true
       }
 
@@ -5829,558 +4712,108 @@ async function prepareOpenClawConfigForGatewayStartup(reason: string) {
   return gatewayConfigPreflightInFlight
 }
 
-function spawnGateway(): Promise<{ pid: number }> {
-  return new Promise((resolve, reject) => {
-    if (!isOpenClawRuntimeAvailable()) {
-      reject(new Error(openClawRuntimeUnavailableMessage()))
-      return
-    }
-    const spec = openClawSpawnSpec(['gateway', 'run', '--port', String(GATEWAY_HTTP_PORT), '--allow-unconfigured'])
-    const env = openClawProcessEnv({
-      CONTROL_CENTER_AGENT_TURN_STREAM_URL: `http://127.0.0.1:${PORT}/api/openclaw/agent-turn/stream`,
-      CLAWTALK_CONTROL_CENTER_AGENT_TURN_STREAM_URL: `http://127.0.0.1:${PORT}/api/openclaw/agent-turn/stream`,
-      CLAWTALK_CONTROL_CENTER_CONSOLE_FINAL_URL: `http://127.0.0.1:${PORT}/api/openclaw/clawtalk-console/final`,
-    })
-    const child = spawn(spec.command, spec.args, {
-      cwd: openClawRuntimeCwd(),
-      env,
-      shell: spec.shell,
-      stdio: 'pipe',
-      ...(process.platform === 'win32' ? { windowsHide: true } : {}),
-    })
-    let settled = false
-    let stdout = ''
-    let stderr = ''
-    let sawInvalidConfig = false
-    let sawHttpListening = false
-    let sawReady = false
-    let sawAgentRuntimePrewarm = false
-    let sawProviderAuthPrewarm = false
-    let readyFallbackTimer: NodeJS.Timeout | null = null
-    const settle = (callback: () => void) => {
-      if (settled) return
-      settled = true
-      if (readyFallbackTimer) {
-        clearTimeout(readyFallbackTimer)
-        readyFallbackTimer = null
-      }
-      callback()
-    }
-    gatewayLastStartedAt = new Date().toISOString()
-    gatewayLastExitAt = null
-    gatewayLastExitCode = null
-    pushGatewayLog(
-      'lifecycle',
-      `starting OpenClaw gateway on port ${GATEWAY_HTTP_PORT} (pid=${child.pid ?? 'n/a'}, config=${OPENCLAW_CONFIG_PATH}, state=${OPENCLAW_STATE_ROOT})`,
-    )
-    child.stdout.on('data', (chunk) => {
-      const text = chunk.toString()
-      stdout = appendBoundedRuntimeOutput(stdout, text)
-      if (isInvalidOpenClawConfigText(text)) sawInvalidConfig = true
-      const visibleOutput = formatGatewayProcessOutput('[gateway]', text)
-      if (visibleOutput) process.stdout.write(visibleOutput)
-      pushGatewayLog('stdout', text)
-      const lowerText = text.toLowerCase()
-      if (!sawHttpListening && lowerText.includes('http server listening')) {
-        sawHttpListening = true
-        recordGatewayStartupEvent('http', 'completed', 'Gateway HTTP server is listening', { pid: child.pid ?? null })
-      }
-      if (!sawReady && lowerText.includes('ready')) {
-        sawReady = true
-        recordGatewayStartupEvent('ready', 'completed', 'Gateway reported ready', { pid: child.pid ?? null })
-      }
-      if (!sawAgentRuntimePrewarm && lowerText.includes('agent runtime plugins pre-warmed')) {
-        sawAgentRuntimePrewarm = true
-        recordGatewayStartupEvent('prewarm', 'completed', 'Agent runtime plugins pre-warmed', { pid: child.pid ?? null })
-      }
-      if (!sawProviderAuthPrewarm && lowerText.includes('provider auth state pre-warmed')) {
-        sawProviderAuthPrewarm = true
-        recordGatewayStartupEvent('prewarm', 'completed', 'Provider auth state pre-warmed', { pid: child.pid ?? null })
-      }
-      if (lowerText.includes('ready') || lowerText.includes('http server listening')) {
-        settle(() => resolve({ pid: child.pid ?? 0 }))
-      }
-    })
-    child.stderr.on('data', (chunk) => {
-      const text = chunk.toString()
-      stderr = appendBoundedRuntimeOutput(stderr, text)
-      if (isInvalidOpenClawConfigText(text)) sawInvalidConfig = true
-      const visibleOutput = formatGatewayProcessOutput('[gateway-err]', text)
-      if (visibleOutput) process.stderr.write(visibleOutput)
-      pushGatewayLog('stderr', text)
-    })
-    child.on('error', (err) => {
-      pushGatewayLog('lifecycle', `gateway process error: ${err.message}`)
-      recordGatewayStartupEvent('failed', 'failed', `Gateway process error: ${err.message}`, { pid: child.pid ?? null })
-      settle(() => reject(err))
-    })
-    child.on('close', (code) => {
-      console.log(`[gateway] process exited (code=${code})`)
-      gatewayLastExitAt = new Date().toISOString()
-      gatewayLastExitCode = code ?? null
-      pushGatewayLog('lifecycle', `process exited (code=${code ?? 'unknown'})`)
-      recordGatewayStartupEvent(
-        'exit',
-        code === 0 || shuttingDown ? 'completed' : 'failed',
-        `Gateway process exited with code ${code ?? 'unknown'}`,
-        { pid: child.pid ?? null },
-      )
-      if (gatewayProcess === child) {
-        gatewayProcess = null
-        gatewayProcessOwnedByControlCenter = false
-        gatewayStartupGraceUntilMs = 0
-      }
-      scheduleOpenClawSessionLockSweep('gateway process exit')
-      const detail = compactGatewayLogMessage(redactSensitiveText(stripAnsi(`${stderr}\n${stdout}`)).trim(), 1200)
-      settle(() => reject(new Error(`Gateway exited prematurely with code ${code}${detail ? `: ${detail}` : ''}`)))
-      if (!shuttingDown && !gatewayAutoRestartPaused) {
-        if (sawInvalidConfig) {
-          pushGatewayLog('lifecycle', 'gateway exited after invalid config; startup repair will handle retry')
-          return
-        }
-        void isGatewayHealthy().then((healthy) => {
-          if (healthy) {
-            gatewayRestartCount = 0
-            return
-          }
-          scheduleGatewayRestart('gateway process exited while health probe was unhealthy')
-        })
-      }
-    })
-    gatewayProcess = child
-    gatewayProcessOwnedByControlCenter = true
-    // Resolve after a grace period even without the "ready" line
-    readyFallbackTimer = setTimeout(() => {
-      settle(() => resolve({ pid: child.pid ?? 0 }))
-    }, 10000)
-    readyFallbackTimer.unref?.()
-  })
+const gatewayDiagnostics = createGatewayDiagnosticsService({
+  gatewayHttpPort: GATEWAY_HTTP_PORT,
+  getGatewayClient: () => getGatewayDiagnosticsClient(),
+  sanitizeGatewayMessage: sanitizeGatewayStartupMessage,
+  redactSensitiveText,
+  onHealthy: () => gatewayLifecycleRef.current?.markGatewayHealthy(),
+})
+
+function fetchGatewayHealthPayload() {
+  return gatewayDiagnostics.fetchGatewayHealthPayload()
 }
 
-function scheduleGatewayRestart(reason = 'gateway health recovery'): void {
-  if (shuttingDown || gatewayAutoRestartPaused) return
-  if (gatewayRestartTimer || gatewayEnsureInFlight) return
-  const backoffMs = Math.min(1000 * Math.pow(2, gatewayRestartCount), 30000)
-  gatewayRestartCount += 1
-  console.log(`[gateway] scheduling restart in ${backoffMs}ms (attempt #${gatewayRestartCount})`)
-  recordGatewayRestartRequest(reason, 'scheduled')
-  pushGatewayLog('lifecycle', `restart scheduled in ${backoffMs}ms (attempt #${gatewayRestartCount})`)
-  if (gatewayRestartTimer) clearTimeout(gatewayRestartTimer)
-  gatewayRestartTimer = setTimeout(() => {
-    gatewayRestartTimer = null
-    markGatewayRestartOutcome('started')
-    void ensureGatewayRunning()
-  }, backoffMs)
+function fetchGatewayReadinessPayload() {
+  return gatewayDiagnostics.fetchGatewayReadinessPayload()
 }
 
-type GatewayHealthPayload = {
-  ok?: boolean
-  status?: string
-  plugins?: {
-    loaded?: unknown[]
-    errors?: unknown[]
-  }
-  [key: string]: unknown
+function gatewayReadinessUnavailable(error?: string) {
+  return gatewayDiagnostics.gatewayReadinessUnavailable(error)
 }
 
-type GatewayReadinessEventLoop = {
-  degraded: boolean
-  reasons: string[]
-  intervalMs?: number
-  delayP99Ms?: number
-  delayMaxMs?: number
-  utilization?: number
-  cpuCoreRatio?: number
+function gatewayStabilityUnavailable(source: GatewayStabilityStatus['source'], error?: string) {
+  return gatewayDiagnostics.gatewayStabilityUnavailable(source, error)
 }
 
-type GatewayReadinessPayload = {
-  ready?: boolean
-  ok?: boolean
-  status?: string
-  failing?: unknown[]
-  uptimeMs?: unknown
-  eventLoop?: unknown
-  [key: string]: unknown
+function readGatewayStabilitySnapshot(limit = 12) {
+  return gatewayDiagnostics.readGatewayStabilitySnapshot(limit)
 }
 
-type GatewayReadinessSummary = {
-  reachable: boolean
-  ready: boolean
-  degraded: boolean
-  checkedAt: string | null
-  httpStatus?: number
-  status?: string
-  failing: string[]
-  uptimeMs: number | null
-  eventLoop: GatewayReadinessEventLoop | null
-  error?: string
-}
+const gatewayLifecycle = createGatewayLifecycleService({
+  gatewayHttpPort: GATEWAY_HTTP_PORT,
+  controlCenterPort: PORT,
+  openClawConfigPath: OPENCLAW_CONFIG_PATH,
+  openClawStateRoot: OPENCLAW_STATE_ROOT,
+  startupHealthGraceMs: GATEWAY_STARTUP_HEALTH_GRACE_MS,
+  startupHealthConfirmTimeoutMs: GATEWAY_STARTUP_HEALTH_CONFIRM_TIMEOUT_MS,
+  startupHealthPollMs: GATEWAY_STARTUP_HEALTH_POLL_MS,
+  isShuttingDown: () => shuttingDown,
+  isOpenClawRuntimeAvailable,
+  openClawRuntimeUnavailableMessage,
+  openClawSpawnSpec,
+  openClawProcessEnv,
+  openClawRuntimeCwd,
+  spawnText,
+  terminateProcessTree,
+  checkTcpPort,
+  tryReleaseGatewayPort,
+  isPidAlive,
+  delayMs,
+  appendBoundedRuntimeOutput,
+  compactGatewayLogMessage,
+  redactSensitiveText,
+  stripAnsi,
+  sanitizeGatewayStartupMessage,
+  formatGatewayProcessOutput,
+  pushGatewayLog,
+  appendGatewayLifecycleEvent: (entry) => {
+    invalidateGatewayLedgerSnapshotCache()
+    return runtimeLedgerStore.appendGatewayEvent(entry, { sqlite: false })
+  },
+  getGatewayLogs: () => gatewayLogService.getGatewayLogs(),
+  isRuntimeMonitorEntryVisible,
+  invalidateRuntimeStatusCache,
+  gatewayStabilityUnavailable,
+  fetchGatewayHealthPayload,
+  repairClawTalkPluginManifestContracts,
+  repairTelegramAgentRoutingRuntime,
+  refreshOpenClawPluginRegistry,
+  ensureGatewayStartupPluginDefaults,
+  prepareOpenClawConfigForGatewayStartup,
+  isInvalidOpenClawConfigText,
+  scheduleOpenClawSessionLockSweep,
+  sweepOpenClawSessionLocks,
+  stopControlCenterGatewayClient,
+})
+gatewayLifecycleRef.current = gatewayLifecycle
 
-async function fetchGatewayHealthPayload(): Promise<{ healthy: boolean; payload: GatewayHealthPayload | null }> {
-  try {
-    const res = await fetch(`http://127.0.0.1:${GATEWAY_HTTP_PORT}/health`, {
-      signal: AbortSignal.timeout(3000),
-    })
-    if (!res.ok) return { healthy: false, payload: null }
-    const text = await res.text()
-    try {
-      const body = JSON.parse(text) as GatewayHealthPayload
-      const healthy = body.ok === true || /^ok$/i.test(String(body.status || ''))
-      if (healthy) gatewayLastHealthyAt = new Date().toISOString()
-      return { healthy, payload: body }
-    } catch {
-      const healthy = /\bok\b/i.test(text)
-      if (healthy) gatewayLastHealthyAt = new Date().toISOString()
-      return { healthy, payload: null }
-    }
-  } catch {
-    // not reachable
-  }
-  return { healthy: false, payload: null }
-}
-
-function numberFromRecord(record: Record<string, unknown>, key: string): number | undefined {
-  const value = record[key]
-  return typeof value === 'number' && Number.isFinite(value) ? value : undefined
-}
-
-function gatewayReadinessEventLoop(payload: GatewayReadinessPayload | null): GatewayReadinessEventLoop | null {
-  const eventLoop = isLooseRecord(payload?.eventLoop) ? payload.eventLoop as Record<string, unknown> : null
-  if (!eventLoop) return null
-  const reasons = Array.isArray(eventLoop.reasons)
-    ? eventLoop.reasons.map((reason) => sanitizeGatewayStartupMessage(String(reason), 120)).filter(Boolean).slice(0, 6)
-    : []
-  return {
-    degraded: eventLoop.degraded === true,
-    reasons,
-    ...(numberFromRecord(eventLoop, 'intervalMs') !== undefined ? { intervalMs: numberFromRecord(eventLoop, 'intervalMs') } : {}),
-    ...(numberFromRecord(eventLoop, 'delayP99Ms') !== undefined ? { delayP99Ms: numberFromRecord(eventLoop, 'delayP99Ms') } : {}),
-    ...(numberFromRecord(eventLoop, 'delayMaxMs') !== undefined ? { delayMaxMs: numberFromRecord(eventLoop, 'delayMaxMs') } : {}),
-    ...(numberFromRecord(eventLoop, 'utilization') !== undefined ? { utilization: numberFromRecord(eventLoop, 'utilization') } : {}),
-    ...(numberFromRecord(eventLoop, 'cpuCoreRatio') !== undefined ? { cpuCoreRatio: numberFromRecord(eventLoop, 'cpuCoreRatio') } : {}),
-  }
-}
-
-function gatewayReadinessFailures(payload: GatewayReadinessPayload | null): string[] {
-  const failing = Array.isArray(payload?.failing) ? payload.failing : []
-  return failing.map((entry) => sanitizeGatewayStartupMessage(
-    typeof entry === 'string' ? entry : JSON.stringify(entry),
-    160,
-  )).filter(Boolean).slice(0, 8)
-}
-
-function gatewayReadinessUnavailable(error?: string): GatewayReadinessSummary {
-  return {
-    reachable: false,
-    ready: false,
-    degraded: false,
-    checkedAt: null,
-    failing: [],
-    uptimeMs: null,
-    eventLoop: null,
-    ...(error ? { error: sanitizeGatewayStartupMessage(error, 180) } : {}),
-  }
-}
-
-async function fetchGatewayReadinessPayload(): Promise<GatewayReadinessSummary> {
-  const checkedAt = new Date().toISOString()
-  try {
-    const res = await fetch(`http://127.0.0.1:${GATEWAY_HTTP_PORT}/readyz`, {
-      signal: AbortSignal.timeout(3000),
-    })
-    const text = await res.text()
-    let payload: GatewayReadinessPayload | null = null
-    try {
-      payload = JSON.parse(text) as GatewayReadinessPayload
-    } catch {
-      payload = null
-    }
-    const status = typeof payload?.status === 'string' ? payload.status : undefined
-    const eventLoop = gatewayReadinessEventLoop(payload)
-    const failing = gatewayReadinessFailures(payload)
-    const uptimeMs = typeof payload?.uptimeMs === 'number' && Number.isFinite(payload.uptimeMs) ? payload.uptimeMs : null
-    const bodyReady = payload?.ready === true || payload?.ok === true || /^(ready|ok)$/iu.test(String(status || ''))
-    const ready = res.ok && bodyReady
-    return {
-      reachable: true,
-      ready,
-      degraded: Boolean(eventLoop?.degraded) || failing.length > 0,
-      checkedAt,
-      httpStatus: res.status,
-      ...(status ? { status } : {}),
-      failing,
-      uptimeMs,
-      eventLoop,
-    }
-  } catch (error) {
-    return gatewayReadinessUnavailable(String(error))
-  }
+async function gatewayListenerPidForPort(port: number) {
+  return gatewayLifecycle.gatewayListenerPidForPort(port)
 }
 
 async function isGatewayHealthy(): Promise<boolean> {
-  const health = await fetchGatewayHealthPayload()
-  return health.healthy
+  return gatewayLifecycle.isGatewayHealthy()
 }
-
-function gatewayStartupGraceRemainingMs(now = Date.now()): number {
-  return Math.max(0, gatewayStartupGraceUntilMs - now)
-}
-
-function markGatewayStartupGrace(): void {
-  gatewayStartupGraceUntilMs = Math.max(gatewayStartupGraceUntilMs, Date.now() + GATEWAY_STARTUP_HEALTH_GRACE_MS)
-}
-
-async function waitForGatewayStartupHealth(timeoutMs = GATEWAY_STARTUP_HEALTH_CONFIRM_TIMEOUT_MS): Promise<boolean> {
-  const deadline = Date.now() + timeoutMs
-  while (Date.now() <= deadline) {
-    if (await isGatewayHealthy()) return true
-    if (gatewayProcess?.pid && !isPidAlive(gatewayProcess.pid)) return false
-    await delayMs(GATEWAY_STARTUP_HEALTH_POLL_MS)
-  }
-  return false
-}
-
-// Periodic health check + auto-restart
-let gatewayHealthCheckInterval: NodeJS.Timeout | null = null
 
 function startGatewayHealthMonitor(): void {
-  if (gatewayHealthCheckInterval) return
-  gatewayHealthCheckInterval = setInterval(async () => {
-    if (shuttingDown) return
-    if (gatewayAutoRestartPaused) return
-    if (gatewayEnsureInFlight || gatewayStartupGraceRemainingMs() > 0) return
-    const healthy = await isGatewayHealthy()
-    if (!healthy && !gatewayProcess) {
-      console.log('[gateway] health check failed — attempting restart')
-      scheduleGatewayRestart('health monitor detected an unhealthy gateway')
-    } else if (healthy && gatewayRestartCount > 0) {
-      // Reset restart backoff on sustained health
-      gatewayRestartCount = 0
-    }
-  }, 15000)
+  gatewayLifecycle.startGatewayHealthMonitor()
 }
 
 function stopGatewayHealthMonitor(): void {
-  if (gatewayHealthCheckInterval) {
-    clearInterval(gatewayHealthCheckInterval)
-    gatewayHealthCheckInterval = null
-  }
+  gatewayLifecycle.stopGatewayHealthMonitor()
 }
 
 async function ensureGatewayRunning(): Promise<void> {
-  if (gatewayEnsureInFlight) return gatewayEnsureInFlight
-  gatewayEnsureInFlight = ensureGatewayRunningInner().finally(() => {
-    gatewayEnsureInFlight = null
-  })
-  return gatewayEnsureInFlight
-}
-
-async function ensureGatewayRunningInner(): Promise<void> {
-  gatewayAutoRestartPaused = false
-  if (await isGatewayHealthy()) {
-    gatewayStartupGraceUntilMs = 0
-    if (gatewayLastRestartOutcome === 'scheduled' || gatewayLastRestartOutcome === 'started') {
-      markGatewayRestartOutcome('succeeded')
-    }
-    return
-  }
-
-  const repairedClawTalkManifests = await repairClawTalkPluginManifestContracts().catch((error) => {
-    console.warn('[plugins/clawtalk] startup repair failed:', error)
-    return [] as string[]
-  })
-  const repairedTelegramRuntimes = await repairTelegramAgentRoutingRuntime().catch((error) => {
-    console.warn('[plugins/telegram] startup agent-routing repair failed:', error)
-    return [] as string[]
-  })
-  if (repairedClawTalkManifests.length) {
-    console.info(`[plugins/clawtalk] repaired package contracts/runtime in ${repairedClawTalkManifests.length} install(s)`)
-    await refreshOpenClawPluginRegistry('clawtalk-startup-repair').catch((error) => {
-      console.warn('[plugins/clawtalk] registry refresh after startup repair failed:', error)
-    })
-  }
-  if (repairedTelegramRuntimes.length) {
-    console.info(`[plugins/telegram] repaired agent-routing runtime in ${repairedTelegramRuntimes.length} install(s)`)
-  }
-  const healthy = await isGatewayHealthy()
-  if (healthy) {
-    const repairedRuntimeLabels = [
-      repairedClawTalkManifests.length ? 'ClawTalk' : '',
-      repairedTelegramRuntimes.length ? 'Telegram' : '',
-    ].filter(Boolean)
-    if (repairedRuntimeLabels.length) {
-      if (!gatewayProcessOwnedByControlCenter || !gatewayProcess) {
-        const detail = `external gateway is healthy; restart it to load repaired ${repairedRuntimeLabels.join(' and ')} runtime`
-        console.info(`[gateway] ${detail}`)
-        pushGatewayLog('lifecycle', detail)
-        gatewayRestartCount = 0
-        gatewayStartupGraceUntilMs = 0
-        return
-      }
-      console.info(`[gateway] restarting owned healthy gateway to load repaired ${repairedRuntimeLabels.join(' and ')} runtime`)
-      pushGatewayLog('lifecycle', `restarting owned gateway to load repaired ${repairedRuntimeLabels.join(' and ')} runtime`)
-      await terminateProcessTree(gatewayProcess.pid, 'gateway repaired runtime restart', true).catch(() => ({ ok: false, detail: 'terminate failed' }))
-      gatewayProcess = null
-      gatewayProcessOwnedByControlCenter = false
-      await delayMs(750)
-    } else {
-      console.log(`[gateway] already healthy on port ${GATEWAY_HTTP_PORT}`)
-      gatewayRestartCount = 0
-      gatewayStartupGraceUntilMs = 0
-      return
-    }
-  }
-
-  const portBusy = await checkTcpPort('127.0.0.1', GATEWAY_HTTP_PORT, 700)
-  if (portBusy) {
-    const now = Date.now()
-    if (now - lastGatewayPortReleaseAt < 5000) {
-      console.warn(`[gateway] port ${GATEWAY_HTTP_PORT} is busy but unhealthy; waiting before another recovery attempt`)
-      return
-    }
-    lastGatewayPortReleaseAt = now
-    console.warn(`[gateway] port ${GATEWAY_HTTP_PORT} accepts TCP but did not answer /health; releasing stale listener`)
-    const released = await tryReleaseGatewayPort()
-    console.warn(`[gateway] stale listener release ${released.released ? 'ok' : 'failed'}: ${released.detail}`)
-    if (!released.released && (await checkTcpPort('127.0.0.1', GATEWAY_HTTP_PORT, 700))) {
-      return
-    }
-  }
-
-  console.log(`[gateway] starting OpenClaw gateway on port ${GATEWAY_HTTP_PORT}...`)
-  markGatewayStartupGrace()
-  resetGatewayStartupTimeline(`Gateway startup requested on port ${GATEWAY_HTTP_PORT}`)
-  pushGatewayLog('lifecycle', `starting requested on port ${GATEWAY_HTTP_PORT}`)
-  try {
-    await sweepOpenClawSessionLocks('gateway startup', { minIntervalMs: 0, minAgeMs: 0 })
-    await ensureGatewayStartupPluginDefaults()
-    recordGatewayStartupEvent('config', 'started', 'Validating OpenClaw config')
-    const configReady = await prepareOpenClawConfigForGatewayStartup('gateway startup')
-    if (!configReady) {
-      gatewayStartupGraceUntilMs = 0
-      if (gatewayLastRestartOutcome === 'scheduled' || gatewayLastRestartOutcome === 'started') {
-        markGatewayRestartOutcome('failed')
-      }
-      recordGatewayStartupEvent('config', 'failed', 'OpenClaw config validation blocked Gateway startup')
-      return
-    }
-    recordGatewayStartupEvent('config', 'completed', 'OpenClaw config is valid')
-    recordGatewayStartupEvent('registry', 'started', 'Refreshing plugin registry before startup')
-    await refreshOpenClawPluginRegistry('gateway-startup').then((result) => {
-      if (result.code === 0) {
-        recordGatewayStartupEvent('registry', 'completed', 'Plugin registry refresh completed')
-      } else {
-        recordGatewayStartupEvent('registry', 'warning', `Plugin registry refresh exited ${result.code}`)
-      }
-    }).catch((error) => {
-      console.warn('[plugins] registry refresh before gateway startup failed:', error)
-      recordGatewayStartupEvent('registry', 'warning', `Plugin registry refresh failed: ${String(error)}`)
-    })
-    recordGatewayStartupEvent('spawned', 'started', 'Spawning Gateway process')
-    const { pid } = await spawnGateway()
-    recordGatewayStartupEvent('spawned', 'completed', `Gateway process spawned with pid ${pid}`, { pid })
-    console.log(`[gateway] started with pid ${pid}`)
-    pushGatewayLog('lifecycle', `started with pid ${pid}`)
-    if (await waitForGatewayStartupHealth()) {
-      gatewayStartupGraceUntilMs = 0
-      recordGatewayStartupEvent('healthy', 'completed', 'Gateway health confirmed', { pid })
-      console.log(`[gateway] healthy on http://127.0.0.1:${GATEWAY_HTTP_PORT}`)
-      gatewayRestartCount = 0
-      if (gatewayLastRestartOutcome === 'scheduled' || gatewayLastRestartOutcome === 'started') {
-        markGatewayRestartOutcome('succeeded')
-      }
-      pushGatewayLog('lifecycle', `healthy on http://127.0.0.1:${GATEWAY_HTTP_PORT}`)
-      return
-    }
-    const detail = `health check did not confirm within ${GATEWAY_STARTUP_HEALTH_CONFIRM_TIMEOUT_MS}ms, but process is running`
-    console.warn(`[gateway] ${detail}`)
-    pushGatewayLog('lifecycle', detail)
-    recordGatewayStartupEvent('warning', 'warning', detail, { pid })
-  } catch (err) {
-    console.error('[gateway] failed to start:', err)
-    pushGatewayLog('lifecycle', `failed to start: ${String(err)}`)
-    recordGatewayStartupEvent('failed', 'failed', `Gateway startup failed: ${String(err)}`)
-    if (isInvalidOpenClawConfigText(String(err))) {
-      const repaired = await prepareOpenClawConfigForGatewayStartup('gateway invalid-config recovery')
-      if (repaired && !shuttingDown) {
-        pushGatewayLog('lifecycle', 'retrying gateway startup after config repair')
-        setTimeout(() => {
-          void ensureGatewayRunning()
-        }, 500).unref?.()
-      }
-    }
-    if (!gatewayProcess) gatewayStartupGraceUntilMs = 0
-    if (gatewayLastRestartOutcome === 'scheduled' || gatewayLastRestartOutcome === 'started') {
-      markGatewayRestartOutcome('failed')
-    }
-  }
+  return gatewayLifecycle.ensureGatewayRunning()
 }
 
 function stopGateway(): void {
-  if (!gatewayProcess) return
-  console.log('[gateway] stopping...')
-  pushGatewayLog('lifecycle', 'stopping gateway process')
-  try {
-    void terminateProcessTree(gatewayProcess.pid, 'gateway stop')
-  } catch {
-    // already dead
-  }
-  const exitTimer = setTimeout(() => {
-    if (gatewayProcess) {
-      try {
-        void terminateProcessTree(gatewayProcess.pid, 'gateway stop escalation', true)
-      } catch {
-        // already dead
-      }
-    }
-  }, 5000)
-  gatewayProcess.on('close', () => {
-    clearTimeout(exitTimer)
-    console.log('[gateway] stopped')
-    pushGatewayLog('lifecycle', 'gateway stopped')
-    gatewayProcess = null
-    gatewayProcessOwnedByControlCenter = false
-  })
+  gatewayLifecycle.stopGateway()
 }
 
-async function stopGatewayRuntime(reason = 'manual stop'): Promise<{ stopped: boolean; detail: string; port: number; pid: number | null }> {
-  gatewayAutoRestartPaused = true
-  gatewayStartupGraceUntilMs = 0
-  if (gatewayRestartTimer) {
-    clearTimeout(gatewayRestartTimer)
-    gatewayRestartTimer = null
-  }
-  stopGatewayHealthMonitor()
-  stopControlCenterGatewayClient(`${reason}: gateway runtime stop`)
-
-  const pid = gatewayProcess?.pid || await gatewayListenerPidForPort(GATEWAY_HTTP_PORT)
-  if (gatewayProcess?.pid) {
-    try {
-      await terminateProcessTree(gatewayProcess.pid, 'manual gateway stop')
-    } catch {
-      // Process may already be gone; the port release path below is authoritative.
-    }
-  }
-
-  await new Promise((resolve) => setTimeout(resolve, 500))
-  const release = await tryReleaseGatewayPort()
-  gatewayProcess = null
-  gatewayProcessOwnedByControlCenter = false
-  gatewayRestartCount = 0
-  gatewayLastExitAt = new Date().toISOString()
-  gatewayLastExitCode = null
-  gatewayListenerPidCache = null
-
-  const stillBusy = await checkTcpPort('127.0.0.1', GATEWAY_HTTP_PORT, 700)
-  const stopped = !stillBusy
-  await sweepOpenClawSessionLocks('gateway stop', { minIntervalMs: 0, minAgeMs: 0 })
-  pushGatewayLog('lifecycle', `${reason}: gateway ${stopped ? 'stopped' : 'still listening'} on port ${GATEWAY_HTTP_PORT}${pid ? ` pid=${pid}` : ''}`)
-  return {
-    stopped,
-    port: GATEWAY_HTTP_PORT,
-    pid: pid || null,
-    detail: release.detail,
-  }
+async function stopGatewayRuntime(reason = 'manual stop') {
+  return gatewayLifecycle.stopGatewayRuntime(reason)
 }
 
 function gatewayStatusSnapshot(
@@ -6390,129 +4823,66 @@ function gatewayStatusSnapshot(
   restartTimeline: GatewayRestartLifecycleSnapshot[] = [],
   stability: GatewayStabilityStatus = gatewayStabilityUnavailable('gateway-client-not-ready'),
 ) {
-  const managedPid = gatewayProcess?.pid && isPidAlive(gatewayProcess.pid) ? gatewayProcess.pid : null
-  const pid = managedPid || listenerPid
-  const processRunning = healthy || Boolean(pid && isPidAlive(pid))
-  const startupGraceRemainingMs = gatewayStartupGraceRemainingMs()
-  const startupTimeline = gatewayStartupTimeline.slice()
-  const latestStartupEvent = startupTimeline.length ? startupTimeline[startupTimeline.length - 1] : null
-  const startedMs = gatewayLastStartedAt ? new Date(gatewayLastStartedAt).getTime() : NaN
-  const recentRestarts = gatewayRestartLifecycleTimelineWithMemory(restartSnapshot, restartTimeline)
-  const lastRestart = recentRestarts[0] || restartSnapshot || null
-  const lastRestartAt = gatewayLastRestartAt || lastRestart?.at || null
-  const lastRestartReason = gatewayLastRestartReason || lastRestart?.reason || null
-  const lastRestartOutcome = gatewayLastRestartOutcome || lastRestart?.outcome || null
-  const restartDiagnostics = gatewayRestartDiagnostics(healthy, recentRestarts, stability)
-  const state = healthy
-    ? 'healthy'
-    : gatewayRestartTimer
-      ? 'restarting'
-      : gatewayEnsureInFlight
-        ? 'starting'
-        : processRunning
-          ? 'starting'
-          : startupGraceRemainingMs > 0
-            ? 'starting'
-            : 'offline'
-  return {
-    state,
-    healthy,
-    processRunning,
-    pid,
-    ownedByControlCenter: Boolean(managedPid && gatewayProcessOwnedByControlCenter),
-    port: GATEWAY_HTTP_PORT,
-    restartCount: gatewayRestartCount,
-    restartScheduled: Boolean(gatewayRestartTimer),
-    ensureInFlight: Boolean(gatewayEnsureInFlight),
-    startupGraceRemainingMs,
-    startup: {
-      graceRemainingMs: startupGraceRemainingMs,
-      startedAt: startupTimeline[0]?.timestamp || gatewayLastStartedAt,
-      lastPhase: latestStartupEvent?.phase || null,
-      lastStatus: latestStartupEvent?.status || null,
-      timeline: startupTimeline,
-    },
-    autoRestartPaused: gatewayAutoRestartPaused,
-    lastStartedAt: gatewayLastStartedAt,
-    lastHealthyAt: gatewayLastHealthyAt,
-    lastExitAt: gatewayLastExitAt,
-    lastExitCode: gatewayLastExitCode,
-    lastRestartAt,
-    lastRestartReason,
-    lastRestartOutcome,
-    recentRestarts,
-    restartDiagnostics,
-    uptimeMs: Number.isFinite(startedMs) && (healthy || processRunning) ? Date.now() - startedMs : 0,
-    logs: gatewayLogs.filter((entry) => isRuntimeMonitorEntryVisible(entry.timestamp)).slice(0, 80),
-  }
+  return gatewayLifecycle.gatewayStatusSnapshot(healthy, listenerPid, restartSnapshot, restartTimeline, stability)
 }
 
 function gatewayRestartDiagnostics(
   healthy: boolean,
   recentRestarts: GatewayRestartLifecycleSnapshot[],
   stability: GatewayStabilityStatus,
-): GatewayRestartDiagnostics {
-  const now = Date.now()
-  const recentWindowMs = 15 * 60 * 1000
-  const windowedRestarts = recentRestarts.filter((entry) => {
-    const at = Date.parse(entry.eventAt || entry.at)
-    return Number.isFinite(at) && now - at <= recentWindowMs
-  })
-  const timeline = windowedRestarts.length ? windowedRestarts : recentRestarts
-  const latest = recentRestarts[0] || null
-  const recentFailures = timeline.filter((entry) => entry.outcome === 'failed').length
-  let failureStreak = 0
-  for (const entry of recentRestarts) {
-    if (entry.outcome !== 'failed') break
-    failureStreak += 1
-  }
-  const activeWork = Math.max(0, stability.summary.active ?? 0, stability.summary.waiting ?? 0)
-  const queuedWork = Math.max(0, stability.summary.queued ?? 0, stability.summary.maxQueueDepth ?? 0)
-  const recentWarning = stability.summary.recentWarnings[0]
-  const restartChurn = timeline.length >= 3 && !healthy
-  const needsAttention = !healthy && (
-    failureStreak > 0
-    || recentFailures > 0
-    || restartChurn
-    || latest?.outcome === 'started'
-    || latest?.outcome === 'scheduled'
-  )
-  const repairAction = needsAttention
-    ? activeWork > 0 || queuedWork > 0
-      ? 'Inspect active Gateway work before forcing a restart; use Doctor if the queue does not drain.'
-      : failureStreak > 0 || recentFailures > 1
-        ? 'Run Doctor, inspect Gateway logs, then restart the Gateway from Monitor.'
-        : 'Restart Gateway from Monitor and rerun Doctor if health does not recover.'
-    : undefined
-  const summary = needsAttention
-    ? [
-        failureStreak > 0 ? `${failureStreak} restart failure${failureStreak === 1 ? '' : 's'} in a row` : '',
-        restartChurn ? `${timeline.length} restart attempts in the last 15m` : '',
-        activeWork || queuedWork ? `active work ${activeWork}, queued ${queuedWork}` : '',
-        recentWarning ? `latest stability warning: ${recentWarning}` : '',
-      ].filter(Boolean).join('; ') || 'Gateway restart recovery needs attention.'
-    : latest
-      ? `Restart ${latest.outcome}${latest.at ? ` at ${latest.at}` : ''}; ${healthy ? 'Gateway is healthy.' : 'waiting for health recovery.'}`
-      : healthy
-        ? 'No restart recovery needed; Gateway is healthy.'
-        : 'No restart attempts recorded; Gateway is not healthy.'
-
-  return {
-    severity: needsAttention ? 'warning' : 'info',
-    needsAttention,
-    summary: sanitizeGatewayStartupMessage(summary, 260),
-    recentAttempts: timeline.length,
-    recentFailures,
-    failureStreak,
-    latestOutcome: latest?.outcome || null,
-    latestReason: latest?.reason || null,
-    latestAt: latest?.at || null,
-    activeWork,
-    queuedWork,
-    ...(repairAction ? { repairAction } : {}),
-  }
+) {
+  return gatewayLifecycle.restartDiagnostics(healthy, recentRestarts, stability)
 }
 
+const runtimeStatusService = createRuntimeStatusService({
+  openClawConfigPath: OPENCLAW_CONFIG_PATH,
+  statusCacheMs: RUNTIME_STATUS_CACHE_MS,
+  summaryCacheMs: RUNTIME_SUMMARY_CACHE_MS,
+  statusResponseTimeoutMs: RUNTIME_STATUS_RESPONSE_TIMEOUT_MS,
+  summaryResponseTimeoutMs: RUNTIME_SUMMARY_RESPONSE_TIMEOUT_MS,
+  fetchGatewayHealthPayload,
+  fetchGatewayReadinessPayload,
+  readRuntimeGatewayLedgerSnapshot,
+  readExternalGatewayLogEntries,
+  readExternalChannelActivityEntries,
+  listPluginControls,
+  readOpenclawConfig,
+  createInitialOpenclawConfig,
+  openClawOptimizationStatus: (config) => openClawOptimizationStatus(config as OpenClawConfigFile),
+  readGatewayStabilitySnapshot,
+  readDoctorDiagnosticsSummary,
+  gatewayStatusSnapshot,
+  gatewayLogEntriesSinceCurrentStart,
+  dedupeGatewayLogEntries,
+  runtimeLoadedPluginIdsFromGatewayLogs,
+  summarizeGatewayActivity,
+  openAgentSessionSnapshots,
+  listMissions,
+  missionView: (mission) => missionView(mission as Mission),
+  listActiveCronJobViews,
+  activeRunSnapshots: () => Array.from(activeOpenClawRuns.values()).map(openClawRunSnapshot),
+  recentRunSnapshots: (limit) => recentOpenClawRuns
+    .filter((run) => isRuntimeMonitorEntryVisible(run.endedAt || run.startedAt))
+    .slice(0, limit),
+  runtimeVersionCheckPayload,
+  runtimeLedgerStatus: runtimeLedgerStore.status,
+  gatewayChatRuntimeSnapshot,
+  gatewayReadinessUnavailable,
+  gatewayStabilityUnavailable,
+  cachedDoctorDiagnosticsSummary,
+  sweepOpenClawSessionLocks,
+  sweepExpiredMissionCronJobs,
+  redactSensitiveText,
+})
+runtimeStatusServiceRef.current = runtimeStatusService
+
+function getRuntimeStatusPayload(forcePluginRefresh: boolean): Promise<Record<string, unknown>> {
+  return runtimeStatusService.getRuntimeStatusPayload(forcePluginRefresh)
+}
+
+function getRuntimeSummaryPayload(forceRefresh: boolean): Promise<Record<string, unknown>> {
+  return runtimeStatusService.getRuntimeSummaryPayload(forceRefresh)
+}
 async function agentSessionFileSnapshot(agentId: string, sessionId: string) {
   const sessionFile = path.join(OPENCLAW_AGENTS_ROOT, agentId, 'sessions', `${sessionId}.jsonl`)
   const stat = await fs.stat(sessionFile).catch(() => null)
@@ -6606,66 +4976,6 @@ async function openAgentSessionSnapshots(gatewayActivity?: GatewayActivitySummar
   return [...snapshots, ...lockOnlySessions]
 }
 
-async function readExternalGatewayLogEntries(limit = 80): Promise<GatewayLogEntry[]> {
-  const now = Date.now()
-  if (externalGatewayLogCache && externalGatewayLogCache.expiresAt > now) {
-    return externalGatewayLogCache.entries.slice(0, limit)
-  }
-  const rpcEntries = await readGatewayRpcLogEntries(limit)
-  const entries = rpcEntries?.length ? rpcEntries : await readGatewayFileLogEntries(limit)
-  externalGatewayLogCache = {
-    expiresAt: now + EXTERNAL_GATEWAY_LOG_CACHE_MS,
-    entries,
-  }
-  return entries
-}
-
-async function readExternalChannelActivityEntries(limit = 80): Promise<GatewayLogEntry[]> {
-  const now = Date.now()
-  if (externalChannelActivityCache && externalChannelActivityCache.expiresAt > now) {
-    return externalChannelActivityCache.entries.slice(0, limit)
-  }
-  const entries = await readClawTalkChannelActivityEntries(limit)
-  externalChannelActivityCache = {
-    expiresAt: now + EXTERNAL_GATEWAY_LOG_CACHE_MS,
-    entries,
-  }
-  return entries
-}
-
-function normalizeGatewayLedgerEntry(value: unknown, index: number): GatewayLogEntry | null {
-  if (!value || typeof value !== 'object' || Array.isArray(value)) return null
-  const record = value as Record<string, unknown>
-  const timestamp = typeof record.timestamp === 'string' && !Number.isNaN(Date.parse(record.timestamp))
-    ? new Date(record.timestamp).toISOString()
-    : ''
-  const message = typeof record.message === 'string' ? record.message.trim() : ''
-  const stream = typeof record.stream === 'string' ? record.stream.trim().toLowerCase() : ''
-  if (!timestamp || !message) return null
-  if (stream !== 'stdout' && stream !== 'stderr' && stream !== 'lifecycle' && stream !== 'gateway' && stream !== 'channel') {
-    return null
-  }
-  const id = typeof record.id === 'number' && Number.isFinite(record.id)
-    ? record.id
-    : gatewayLogEntryId('ledger', `${index}:${timestamp}:${stream}:${message}`)
-  const level = typeof record.level === 'string' && record.level.trim() ? record.level.trim() : undefined
-  const source = typeof record.source === 'string' && record.source.trim() ? record.source.trim() : undefined
-  const channel = typeof record.channel === 'string' && record.channel.trim() ? record.channel.trim() : undefined
-  const direction = record.direction === 'inbound' || record.direction === 'outbound' || record.direction === 'system'
-    ? record.direction
-    : undefined
-  return {
-    id,
-    timestamp,
-    stream,
-    message: redactSensitiveText(message),
-    ...(level ? { level } : {}),
-    ...(source ? { source } : {}),
-    ...(channel ? { channel } : {}),
-    ...(direction ? { direction } : {}),
-  }
-}
-
 function isGatewayRestartOutcome(value: unknown): value is GatewayRestartOutcome {
   return value === 'scheduled'
     || value === 'started'
@@ -6720,16 +5030,7 @@ function gatewayRestartLifecycleTimelineWithMemory(
   restartSnapshot: GatewayRestartLifecycleSnapshot | null,
   restartTimeline: GatewayRestartLifecycleSnapshot[],
 ): GatewayRestartLifecycleSnapshot[] {
-  const byRequestedAt = new Map<string, GatewayRestartLifecycleSnapshot>()
-  for (const snapshot of restartTimeline) {
-    byRequestedAt.set(snapshot.at, snapshot)
-  }
-  if (restartSnapshot) byRequestedAt.set(restartSnapshot.at, restartSnapshot)
-  const memorySnapshot = gatewayRestartLifecycleSnapshotFromMemory()
-  if (memorySnapshot) byRequestedAt.set(memorySnapshot.at, memorySnapshot)
-  return Array.from(byRequestedAt.values())
-    .sort((a, b) => Date.parse(b.eventAt || b.at) - Date.parse(a.eventAt || a.at))
-    .slice(0, GATEWAY_RESTART_TIMELINE_LIMIT)
+  return gatewayLifecycle.restartLifecycleTimelineWithMemory(restartSnapshot, restartTimeline)
 }
 
 async function readGatewayLedgerSnapshot(limit = 120, options: { sqlite?: boolean } = {}): Promise<{
@@ -6737,7 +5038,7 @@ async function readGatewayLedgerSnapshot(limit = 120, options: { sqlite?: boolea
   restart: GatewayRestartLifecycleSnapshot | null
   recentRestarts: GatewayRestartLifecycleSnapshot[]
 }> {
-  const records = await readGatewayEventLedgerTail<unknown>(limit, options).catch(() => [])
+  const records = await runtimeLedgerStore.readGatewayEvents<unknown>(limit, options).catch(() => [])
   const entries = records
     .map((record, index) => normalizeGatewayLedgerEntry(record, index))
     .filter((entry): entry is GatewayLogEntry => Boolean(entry))
@@ -6792,24 +5093,6 @@ async function readRuntimeGatewayLedgerSnapshot(limit = 120): Promise<GatewayLed
   return limitGatewayLedgerSnapshot(await promise, normalizedLimit)
 }
 
-function gatewayLogEntriesSinceCurrentStart(entries: GatewayLogEntry[]) {
-  const startedAtMs = gatewayLastStartedAt ? Date.parse(gatewayLastStartedAt) : NaN
-  const startCutoffMs = Number.isFinite(startedAtMs) ? startedAtMs - 5000 : CONTROL_CENTER_STARTED_AT_MS - 5000
-  const cutoffMs = Math.max(startCutoffMs, runtimeMonitorClearedAtMs)
-  return entries.filter((entry) => {
-    const entryMs = Date.parse(entry.timestamp)
-    return Number.isFinite(entryMs) && entryMs >= cutoffMs
-  })
-}
-
-let controlCenterShutdownInFlight: Promise<{
-  sessions: ReturnType<typeof clearAgentTurnSessions>
-  terminatedRuns: Awaited<ReturnType<typeof terminateAllOpenClawRunsNow>>
-  pluginSetupTerminals: number
-  oauthCallbackServers: Awaited<ReturnType<typeof closeOAuthCallbackServersForShutdown>>
-  gateway: Awaited<ReturnType<typeof stopGatewayRuntime>> | null
-  sessionLockCleanup: { scanned: number; removed: number; errors: number } | null
-}> | null = null
 let signalShutdownInFlight = false
 let controlServerClosing = false
 
@@ -6822,10 +5105,7 @@ function clearShutdownPinnedTimers(): void {
     clearTimeout(gatewayAutostartTimer)
     gatewayAutostartTimer = null
   }
-  if (gatewayRestartTimer) {
-    clearTimeout(gatewayRestartTimer)
-    gatewayRestartTimer = null
-  }
+  gatewayLifecycle.clearRestartTimer()
   if (pluginGatewayRestartTimer) {
     clearTimeout(pluginGatewayRestartTimer)
     pluginGatewayRestartTimer = null
@@ -6833,10 +5113,6 @@ function clearShutdownPinnedTimers(): void {
   if (pluginRegistryRefreshTimer) {
     clearTimeout(pluginRegistryRefreshTimer)
     pluginRegistryRefreshTimer = null
-  }
-  if (controlCenterGatewayPrewarmTimer) {
-    clearTimeout(controlCenterGatewayPrewarmTimer)
-    controlCenterGatewayPrewarmTimer = null
   }
   for (const timer of shiftTimers.values()) clearTimeout(timer)
   shiftTimers.clear()
@@ -6884,46 +5160,6 @@ async function closeControlServerForShutdown(reason: string): Promise<void> {
   })
 }
 
-async function shutdownControlCenterRuntime(reason = 'control center shutdown') {
-  if (controlCenterShutdownInFlight) return controlCenterShutdownInFlight
-  controlCenterShutdownInFlight = (async () => {
-    shuttingDown = true
-    gatewayAutoRestartPaused = true
-    clearShutdownPinnedTimers()
-    stopGatewayHealthMonitor()
-    stopMissionCronExpirySweep()
-    await persistAllMissionRecords(`${reason}:snapshot-before-shutdown`)
-    const sessions = clearAgentTurnSessions()
-    const terminatedRuns = await terminateAllOpenClawRunsNow(reason)
-    stopControlCenterGatewayClient(reason)
-    const pluginSetupTerminals = stopAllPluginSetupTerminalSessions(reason)
-    const oauthCallbackServers = await closeOAuthCallbackServersForShutdown(reason)
-    const gateway = await stopGatewayRuntime(reason).catch((error) => {
-      pushGatewayLog('lifecycle', `${reason}: gateway shutdown warning: ${String(error)}`)
-      return null
-    })
-    const lockCleanup = await sweepOpenClawSessionLocks(reason, { minIntervalMs: 0, minAgeMs: 0 }).catch((error) => {
-      pushGatewayLog('lifecycle', `${reason}: session lock cleanup warning: ${String(error)}`)
-      return null
-    })
-    browserProbeCache.clear()
-    closeRuntimeLedger()
-    return {
-      sessions,
-      terminatedRuns,
-      pluginSetupTerminals,
-      oauthCallbackServers,
-      gateway,
-      sessionLockCleanup: lockCleanup
-        ? { scanned: lockCleanup.scanned, removed: lockCleanup.removed.length, errors: lockCleanup.errors.length }
-        : null,
-    }
-  })().finally(() => {
-    controlCenterShutdownInFlight = null
-  })
-  return controlCenterShutdownInFlight
-}
-
 function handleControlCenterShutdown(signalName: 'SIGTERM' | 'SIGINT' | 'SIGHUP' | 'process exit') {
   if (shuttingDown && signalName !== 'process exit') {
     if (!signalShutdownInFlight) return
@@ -6941,7 +5177,7 @@ function handleControlCenterShutdown(signalName: 'SIGTERM' | 'SIGINT' | 'SIGHUP'
 
     void (async () => {
       await closeControlServerForShutdown(`${signalName} shutdown`)
-      await shutdownControlCenterRuntime(`${signalName} shutdown`)
+      await runtimeRecoveryService.shutdownControlCenterRuntime(`${signalName} shutdown`)
     })()
       .catch((error) => {
         console.warn(`[control-center] ${signalName} shutdown cleanup failed:`, error)
@@ -6953,14 +5189,7 @@ function handleControlCenterShutdown(signalName: 'SIGTERM' | 'SIGINT' | 'SIGHUP'
       })
     return
   }
-  shuttingDown = true
-  clearShutdownPinnedTimers()
-  closeOAuthCallbackServersForProcessExit(`${signalName} shutdown`)
-  terminateAllOpenClawRuns(`${signalName} shutdown`)
-  stopGateway()
-  stopGatewayHealthMonitor()
-  stopMissionCronExpirySweep()
-  closeRuntimeLedger()
+  runtimeRecoveryService.processExitCleanup(`${signalName} shutdown`)
 }
 
 process.on('SIGTERM', () => handleControlCenterShutdown('SIGTERM'))
@@ -12511,253 +10740,6 @@ function stripAnsi(text: string): string {
   return (text || '').replace(new RegExp(`${escape}\\[[0-9;]*m`, 'g'), '')
 }
 
-function meaningfulAgentDiagnostic(value: unknown): string {
-  if (typeof value !== 'string') return ''
-  const text = stripAnsi(value).trim()
-  if (!text || /^(?:ok|true|false|error|failed|null|undefined)$/i.test(text)) return ''
-  if (text.startsWith('{') && text.endsWith('}')) return ''
-  return text
-}
-
-function diagnosticTextFromValue(value: unknown): string {
-  const direct = meaningfulAgentDiagnostic(value)
-  if (direct) return direct
-  if (Array.isArray(value)) {
-    return value.map((entry) => diagnosticTextFromValue(entry)).find(Boolean) || ''
-  }
-  if (!isLooseRecord(value)) return ''
-  for (const key of ['lastDiagnosticSummary', 'diagnosticSummary', 'lastError', 'errorMessage', 'message', 'detail', 'reason', 'summary']) {
-    const nested = diagnosticTextFromValue(value[key])
-    if (nested) return nested
-  }
-  return ''
-}
-
-function valueAtPath(value: unknown, pathSegments: string[]): unknown {
-  let current = value
-  for (const segment of pathSegments) {
-    if (!isLooseRecord(current)) return undefined
-    current = current[segment]
-  }
-  return current
-}
-
-function collectParsedAgentRunOutputs(stdout: string, stderr: string): unknown[] {
-  const parsed: unknown[] = []
-  for (const text of [stdout, stderr]) {
-    const trimmed = stripAnsi(text).trim()
-    if (!trimmed) continue
-    try {
-      parsed.push(JSON.parse(trimmed))
-      continue
-    } catch {
-      // fall through to extracting an embedded JSON object
-    }
-    const start = trimmed.indexOf('{')
-    const end = trimmed.lastIndexOf('}')
-    if (start >= 0 && end > start) {
-      try {
-        parsed.push(JSON.parse(trimmed.slice(start, end + 1)))
-      } catch {
-        // non-JSON log output
-      }
-    }
-  }
-  return parsed
-}
-
-function extractAgentRunDiagnostic(stdout: string, stderr: string): string {
-  const directPaths = [
-    ['run', 'state', 'lastDiagnosticSummary'],
-    ['run', 'state', 'lastError'],
-    ['run', 'state', 'error'],
-    ['run', 'error'],
-    ['result', 'state', 'lastDiagnosticSummary'],
-    ['result', 'error'],
-    ['state', 'lastDiagnosticSummary'],
-    ['lastDiagnosticSummary'],
-    ['error'],
-    ['message'],
-    ['detail'],
-  ]
-  for (const parsed of collectParsedAgentRunOutputs(stdout, stderr)) {
-    for (const pathSegments of directPaths) {
-      const text = diagnosticTextFromValue(valueAtPath(parsed, pathSegments))
-      if (text) return text
-    }
-    const recursive = diagnosticTextFromValue(parsed)
-    if (recursive) return recursive
-  }
-  return ''
-}
-
-function isCredibleMissionCronFinalReply(reply: string): boolean {
-  const text = stripAnsi(reply || '').trim()
-  if (!text || /^(?:error|failed|null|undefined)$/i.test(text)) return false
-  if (
-    /(?:FailoverError|GatewayTransportError|No credentials found|subscription usage limit|You've reached your Codex subscription usage limit|command .* failed|Start-Process\s*:|Write-ErrorException)/i.test(text)
-  ) {
-    return false
-  }
-  return /(?:round\s+\d+\s+complete|changed files?:|verification:|blockers?:|next step:|evidence:|ran `|completed?:)/i.test(text)
-}
-
-function isRecoverableMissionCronProviderRateLimit(stdout: string, stderr: string): boolean {
-  const text = stripAnsi(`${stderr || ''}\n${stdout || ''}`)
-  return /(?:RESOURCE_EXHAUSTED|API rate limit reached|rate_limit|Google Vertex AI API error \(429\)|\b429\b)/i.test(text)
-}
-
-function stringAtAnyPath(value: unknown, paths: string[][]): string {
-  for (const pathSegments of paths) {
-    const candidate = valueAtPath(value, pathSegments)
-    if (typeof candidate === 'string' && candidate.trim()) return candidate.trim()
-  }
-  return ''
-}
-
-function extractCronRunReference(stdout: string, stderr: string): MissionCronRunReference {
-  const text = `${stdout || ''}\n${stderr || ''}`
-  const parsed = collectParsedAgentRunOutputs(stdout, stderr)
-  const cronRunIdFromJson = parsed.map((entry) => stringAtAnyPath(entry, [
-    ['runId'],
-    ['run', 'id'],
-    ['run', 'runId'],
-    ['cronRunId'],
-    ['result', 'runId'],
-    ['result', 'run', 'id'],
-    ['task', 'runId'],
-  ])).find(Boolean) || ''
-  const sessionIdFromJson = parsed.map((entry) => stringAtAnyPath(entry, [
-    ['sessionId'],
-    ['session', 'id'],
-    ['run', 'sessionId'],
-    ['run', 'session', 'id'],
-    ['result', 'sessionId'],
-    ['result', 'session', 'id'],
-    ['task', 'sessionId'],
-  ])).find(Boolean) || ''
-  const sessionKeyFromJson = parsed.map((entry) => stringAtAnyPath(entry, [
-    ['sessionKey'],
-    ['session', 'key'],
-    ['run', 'sessionKey'],
-    ['run', 'session', 'key'],
-    ['result', 'sessionKey'],
-    ['result', 'session', 'key'],
-    ['task', 'sessionKey'],
-  ])).find(Boolean) || ''
-  const sessionIdMatch =
-    /sessionId["'\s:=]+([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})/i.exec(text) ||
-    /session\s+id["'\s:=]+([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})/i.exec(text)
-  const runIdMatch =
-    /(?:cronRunId|runId)["'\s:=]+([a-z0-9][a-z0-9._:-]{5,160})/i.exec(text) ||
-    /(?:cron\s+run|run)\s+id["'\s:=]+([a-z0-9][a-z0-9._:-]{5,160})/i.exec(text)
-  const sessionKeyMatch =
-    /sessionKey["'\s:=]+([a-z0-9][a-z0-9._:/-]{5,240})/i.exec(text) ||
-    /session\s+key["'\s:=]+([a-z0-9][a-z0-9._:/-]{5,240})/i.exec(text)
-  return {
-    cronRunId: cronRunIdFromJson || runIdMatch?.[1] || null,
-    sessionId: sessionIdFromJson || sessionIdMatch?.[1] || null,
-    sessionKey: sessionKeyFromJson || sessionKeyMatch?.[1] || null,
-  }
-}
-
-async function agentSessionCandidateFiles(agentId: string, sessionId: string, startedAt?: string | null): Promise<string[]> {
-  const sessionDir = path.join(OPENCLAW_AGENTS_ROOT, agentId, 'sessions')
-  const candidates: string[] = []
-  if (sessionId) candidates.push(path.join(sessionDir, `${sessionId}.jsonl`))
-  if (!candidates.length) {
-    const startedMs = startedAt ? Date.parse(startedAt) : 0
-    const entries = await fs.readdir(sessionDir, { withFileTypes: true }).catch(() => [])
-    const recent = await Promise.all(entries
-      .filter((entry) => entry.isFile() && /^[0-9a-f-]+\.jsonl$/i.test(entry.name))
-      .map(async (entry) => {
-        const file = path.join(sessionDir, entry.name)
-        const stat = await fs.stat(file).catch(() => null)
-        return stat ? { file, mtimeMs: stat.mtimeMs } : null
-      }))
-    candidates.push(...recent
-      .filter((entry): entry is { file: string; mtimeMs: number } => Boolean(entry && (!startedMs || entry.mtimeMs >= startedMs - 30000)))
-      .sort((left, right) => right.mtimeMs - left.mtimeMs)
-      .slice(0, 4)
-      .map((entry) => entry.file))
-  }
-  return uniqueStrings(...candidates)
-}
-
-function textFromAgentSessionContent(content: unknown): string {
-  if (typeof content === 'string') return content.trim()
-  if (!Array.isArray(content)) return ''
-  return content
-    .map((item) => {
-      if (!item || typeof item !== 'object') return ''
-      const record = item as { type?: unknown; text?: unknown; output_text?: unknown }
-      if (record.type === 'text' || record.type === 'output_text') {
-        return typeof record.text === 'string'
-          ? record.text
-          : typeof record.output_text === 'string'
-            ? record.output_text
-            : ''
-      }
-      return ''
-    })
-    .filter(Boolean)
-    .join('\n\n')
-    .trim()
-}
-
-async function readLatestAgentSessionFinalReply(agentId: string, sessionId: string, startedAt?: string | null): Promise<string> {
-  for (const file of await agentSessionCandidateFiles(agentId, sessionId, startedAt)) {
-    const raw = await fs.readFile(file, 'utf-8').catch(() => '')
-    if (!raw.trim()) continue
-    const lines = raw.trim().split(/\r?\n/)
-    for (let index = lines.length - 1; index >= 0; index -= 1) {
-      try {
-        const parsed = JSON.parse(lines[index]) as { type?: unknown; message?: { role?: unknown; content?: unknown }; payload?: unknown }
-        const message = parsed.message
-        if (parsed.type !== 'message' || message?.role !== 'assistant') continue
-        const text = textFromAgentSessionContent(message.content)
-        if (isCredibleMissionCronFinalReply(text)) return text
-      } catch {
-        // Keep scanning older session lines.
-      }
-    }
-  }
-  return ''
-}
-
-function missionCronProgressEvidenceSummary(text: string): string {
-  const cleaned = stripAnsi(text || '').replace(/\s+/g, ' ').trim()
-  if (!cleaned) return ''
-  if (/TEAM_SYNC\.md/i.test(cleaned) && /(?:ok\s*:\s*True|Successfully|updated|append|replaced)/i.test(cleaned)) {
-    return 'durable progress saved to TEAM_SYNC.md before provider rate limit'
-  }
-  if (/Successfully\s+(?:replaced|created|updated|wrote|edited)/i.test(cleaned)) {
-    return trimTask(`durable file change completed before provider rate limit: ${cleaned}`, 180)
-  }
-  if (isCredibleMissionCronFinalReply(cleaned)) return cleaned
-  return ''
-}
-
-async function readLatestAgentSessionProgressEvidence(agentId: string, sessionId: string, startedAt?: string | null): Promise<string> {
-  for (const file of await agentSessionCandidateFiles(agentId, sessionId, startedAt)) {
-    const raw = await fs.readFile(file, 'utf-8').catch(() => '')
-    if (!raw.trim()) continue
-    const lines = raw.trim().split(/\r?\n/)
-    for (let index = lines.length - 1; index >= 0; index -= 1) {
-      try {
-        const parsed = JSON.parse(lines[index]) as { type?: unknown; message?: { role?: unknown; content?: unknown; isError?: unknown } }
-        const message = parsed.message
-        if (parsed.type !== 'message' || message?.role !== 'toolResult' || message.isError === true) continue
-        const summary = missionCronProgressEvidenceSummary(textFromAgentSessionContent(message.content))
-        if (summary) return summary
-      } catch {
-        // Keep scanning older session lines.
-      }
-    }
-  }
-  return ''
-}
-
 function extractDevicePairingRequestId(text: string): string | null {
   const match = /requestId:\s*([0-9a-f-]{24,})/i.exec(text || '') || /requestId["'\s:]+([0-9a-f-]{24,})/i.exec(text || '')
   return match?.[1] || null
@@ -13128,51 +11110,7 @@ async function tryReleaseTcpPortUnix(port: number): Promise<{ released: boolean;
 }
 
 async function tryRestartGatewayService(options: { force?: boolean; allowExternalTakeover?: boolean; reason?: string } = {}): Promise<{ restarted: boolean; detail: string }> {
-  try {
-    const logs: string[] = []
-    const restartReason = options.reason || (options.force ? 'forced gateway restart' : 'gateway restart recovery')
-    if (!options.force && await isGatewayHealthy()) {
-      startGatewayHealthMonitor()
-      recordGatewayRestartRequest(restartReason, 'skipped')
-      return { restarted: true, detail: 'gateway already healthy' }
-    }
-    recordGatewayRestartRequest(restartReason, 'started')
-
-    if (gatewayProcess) {
-      try {
-        await terminateProcessTree(gatewayProcess.pid, 'gateway restart', true)
-      } catch {
-        // Process may already be gone; the port release path below is authoritative.
-      }
-      gatewayProcess = null
-      gatewayProcessOwnedByControlCenter = false
-    } else {
-      const listenerPid = await gatewayListenerPidForPort(GATEWAY_HTTP_PORT).catch(() => null)
-      if (listenerPid && !options.allowExternalTakeover) {
-        const externalDetail = `external gateway listener pid=${listenerPid} left running; manual restart can take over if needed`
-        logs.push(`[gateway-external] ${externalDetail}`)
-        startGatewayHealthMonitor()
-        markGatewayRestartOutcome('skipped')
-        return { restarted: false, detail: logs.join('\n') }
-      }
-    }
-
-    const released = await tryReleaseGatewayPort()
-    logs.push(`[gateway-port-release] ${released.released ? 'ok' : 'failed'} | ${released.detail}`)
-    gatewayRestartCount = 0
-    await ensureGatewayRunning()
-    const restarted = await isGatewayHealthy()
-    if (restarted) startGatewayHealthMonitor()
-    markGatewayRestartOutcome(restarted ? 'succeeded' : 'failed')
-    logs.push(`[gateway-health-after-restart] ${restarted ? 'ok' : 'failed'}`)
-    return {
-      restarted,
-      detail: logs.filter(Boolean).join('\n').trim(),
-    }
-  } catch (error) {
-    markGatewayRestartOutcome('failed')
-    return { restarted: false, detail: String(error) }
-  }
+  return gatewayLifecycle.tryRestartGatewayService(options)
 }
 
 async function ensureGatewayReadyForCronMission(): Promise<void> {
@@ -13402,1753 +11340,8 @@ async function checkBrowserPreflight(agentId?: string): Promise<{
   }
 }
 
-function listMissions(): Mission[] {
-  return Array.from(missions.values()).sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
-}
-
-function missionDurationMs(mode: MissionMode, amount: number | null) {
-  if (mode === 'indefinite' || mode === 'continuous' || mode === 'instant') return 0
-  const safeAmount = Math.max(1, amount || 1)
-  if (mode === 'hours') return safeAmount * 60 * 60 * 1000
-  if (mode === 'days') return safeAmount * 24 * 60 * 60 * 1000
-  return safeAmount * 7 * 24 * 60 * 60 * 1000
-}
-
-function missionProgress(mission: Mission) {
-  if (mission.status === 'completed') return 100
-  if (mission.status === 'cancelled') return 0
-  if (mission.mode === 'indefinite' || mission.mode === 'continuous') return null
-  if (mission.mode === 'instant') return 100
-  if (!mission.endAt) return null
-
-  const total = new Date(mission.endAt).getTime() - new Date(mission.startAt).getTime()
-  if (total <= 0) return 100
-  const elapsed = Date.now() - new Date(mission.startAt).getTime()
-  return Math.max(0, Math.min(100, Math.round((elapsed / total) * 100)))
-}
-
-function missionView(mission: Mission) {
-  return {
-    ...mission,
-    progress: missionProgress(mission),
-  }
-}
-
-type MissionView = ReturnType<typeof missionView>
-
-type MissionLifecycleProjection = {
-  generatedAt: string
-  missions: MissionView[]
-  feed: MissionFeedEvent[]
-  events: MissionLifecycleEvent[]
-  reports: BackendMissionReport[]
-  projection: {
-    source: 'memory+ledger'
-    missionCount: number
-    activeMissionCount: number
-    feedCount: number
-    eventCount: number
-    reportCount: number
-    durableRecordCount: number
-    memoryRecordCount: number
-  }
-}
-
-function missionSortMs(mission: Pick<Mission, 'createdAt' | 'startAt' | 'completedAt'>) {
-  const candidates = [mission.completedAt, mission.createdAt, mission.startAt]
-  for (const value of candidates) {
-    const parsed = value ? Date.parse(value) : NaN
-    if (Number.isFinite(parsed)) return parsed
-  }
-  return 0
-}
-
-function missionFeedEventFromLifecycleEvent(event: MissionLifecycleEvent): MissionFeedEvent | null {
-  if (!event?.id || !event.missionId || !event.message) return null
-  const type = event.type
-  if (type !== 'mission_started' && type !== 'agent_assigned' && type !== 'agent_update' && type !== 'mission_completed' && type !== 'mission_cancelled') return null
-  return {
-    id: event.id,
-    missionId: event.missionId,
-    at: event.at || event.timestamp || new Date().toISOString(),
-    type,
-    message: event.message,
-    ...(event.agentId ? { agentId: event.agentId } : {}),
-    ...(event.actor ? { actor: event.actor } : {}),
-    ...(event.previousState ? { previousState: event.previousState } : {}),
-    ...(event.nextState ? { nextState: event.nextState } : {}),
-    ...(event.idempotencyKey ? { idempotencyKey: event.idempotencyKey } : {}),
-    ...(event.evidence ? { evidence: event.evidence } : {}),
-  }
-}
-
-function mergeMissionFeedEvents(lifecycleEvents: MissionLifecycleEvent[], limit: number, missionId?: string | null) {
-  const byId = new Map<string, MissionFeedEvent>()
-  const matchesMission = (id: string) => !missionId || id === missionId
-  for (const event of missionFeed) {
-    if (!matchesMission(event.missionId)) continue
-    byId.set(event.id, event)
-  }
-  for (const event of lifecycleEvents) {
-    if (!matchesMission(event.missionId)) continue
-    const feedEvent = missionFeedEventFromLifecycleEvent(event)
-    if (feedEvent) byId.set(feedEvent.id, feedEvent)
-  }
-  return Array.from(byId.values())
-    .sort((a, b) => Date.parse(b.at) - Date.parse(a.at))
-    .slice(0, Math.max(1, Math.min(300, Math.round(limit))))
-}
-
-async function listMissionRecordsForProjection(limit = 500) {
-  const records = await readMissionRecordLedgerTail<MissionRecordSnapshot>(limit).catch(() => [])
-  const latestByMission = new Map<string, Mission>()
-  let durableRecordCount = 0
-  for (const record of records) {
-    const mission = normalizeMissionRecordSnapshot(record)
-    if (!mission) continue
-    latestByMission.set(mission.id, mission)
-    durableRecordCount += 1
-  }
-  for (const mission of missions.values()) {
-    latestByMission.set(mission.id, mission)
-  }
-  return {
-    missions: Array.from(latestByMission.values())
-      .sort((a, b) => missionSortMs(b) - missionSortMs(a)),
-    durableRecordCount,
-    memoryRecordCount: missions.size,
-  }
-}
-
-async function buildMissionLifecycleProjection(options: {
-  missionId?: string | null
-  missionLimit?: number
-  eventLimit?: number
-  feedLimit?: number
-  reportLimit?: number
-} = {}): Promise<MissionLifecycleProjection> {
-  const missionId = options.missionId?.trim() || null
-  const [recordProjection, events, reports] = await Promise.all([
-    listMissionRecordsForProjection(options.missionLimit || 500),
-    readMissionEventLedgerTail<MissionLifecycleEvent>(options.eventLimit || 1000).catch(() => []),
-    listMissionReports(options.reportLimit || 100),
-  ])
-  const projectedMissions = missionId
-    ? recordProjection.missions.filter((mission) => mission.id === missionId)
-    : recordProjection.missions
-  const projectedEvents = (missionId ? events.filter((event) => event.missionId === missionId) : events)
-    .slice(-Math.max(1, Math.min(1000, Math.round(options.eventLimit || 300))))
-  const projectedReports = missionId
-    ? reports.filter((report) => report.missionId === missionId)
-    : reports
-  const feed = mergeMissionFeedEvents(projectedEvents, options.feedLimit || 120, missionId)
-  return {
-    generatedAt: new Date().toISOString(),
-    missions: projectedMissions.map((mission) => missionView(mission)),
-    feed,
-    events: projectedEvents,
-    reports: projectedReports,
-    projection: {
-      source: 'memory+ledger',
-      missionCount: projectedMissions.length,
-      activeMissionCount: projectedMissions.filter((mission) => mission.status === 'active').length,
-      feedCount: feed.length,
-      eventCount: projectedEvents.length,
-      reportCount: projectedReports.length,
-      durableRecordCount: recordProjection.durableRecordCount,
-      memoryRecordCount: recordProjection.memoryRecordCount,
-    },
-  }
-}
-
-function pushMissionEvent(event: Omit<MissionFeedEvent, 'id' | 'at'>) {
-  const fullEvent: MissionFeedEvent = {
-    id: randomUUID(),
-    at: new Date().toISOString(),
-    ...event,
-  }
-  missionFeed.unshift(fullEvent)
-  if (missionFeed.length > 300) {
-    missionFeed.length = 300
-  }
-  const ledgerEvent: MissionLifecycleEvent = {
-    id: fullEvent.id,
-    missionId: fullEvent.missionId,
-    timestamp: fullEvent.at,
-    at: fullEvent.at,
-    type: fullEvent.type,
-    message: fullEvent.message,
-    actor: fullEvent.actor || fullEvent.agentId || 'control-center',
-    previousState: fullEvent.previousState || null,
-    nextState: fullEvent.nextState || null,
-    idempotencyKey: fullEvent.idempotencyKey || `${fullEvent.missionId}:${fullEvent.type}:${fullEvent.id}`,
-    ...(fullEvent.agentId ? { agentId: fullEvent.agentId } : {}),
-    ...(fullEvent.evidence ? { evidence: fullEvent.evidence } : {}),
-  }
-  void appendMissionEventLedger(ledgerEvent).catch((error) => {
-    console.warn('[missions] failed to append mission event ledger:', error)
-  })
-}
-
-function missionRecordSnapshot(mission: Mission, reason: string): MissionRecordSnapshot {
-  const updatedAt = new Date().toISOString()
-  return {
-    ...mission,
-    missionId: mission.id,
-    updatedAt,
-    persistedAt: updatedAt,
-    persistReason: reason,
-    scheduler: {
-      ...mission.scheduler,
-      jobs: mission.scheduler.jobs.map((job) => ({ ...job })),
-    },
-    party: [...mission.party],
-  }
-}
-
-function persistMissionRecord(mission: Mission, reason: string) {
-  void appendMissionRecordLedger(missionRecordSnapshot(mission, reason)).catch((error) => {
-    console.warn('[missions] failed to append mission record ledger:', error)
-  })
-}
-
 async function persistAllMissionRecords(reason: string) {
-  await Promise.allSettled(Array.from(missions.values()).map((mission) => appendMissionRecordLedger(missionRecordSnapshot(mission, reason))))
-}
-
-function transitionMissionState(
-  mission: Mission,
-  nextState: MissionLifecycleState,
-  type: MissionFeedEvent['type'],
-  message: string,
-  options: {
-    actor?: string
-    idempotencyKey?: string
-    evidence?: Record<string, unknown>
-  } = {},
-) {
-  const previousState = mission.lifecycleState
-  mission.lifecycleState = nextState
-  pushMissionEvent({
-    missionId: mission.id,
-    type,
-    message,
-    actor: options.actor || 'control-center',
-    previousState,
-    nextState,
-    idempotencyKey: options.idempotencyKey || `${mission.id}:${previousState}->${nextState}:${type}`,
-    ...(options.evidence ? { evidence: options.evidence } : {}),
-  })
-  persistMissionRecord(mission, `transition:${previousState}->${nextState}`)
-}
-
-function stringValue(value: unknown): string | null {
-  return typeof value === 'string' && value.trim() ? value.trim() : null
-}
-
-function numberValue(value: unknown): number | null {
-  return typeof value === 'number' && Number.isFinite(value) ? value : null
-}
-
-function arrayValue(value: unknown): unknown[] {
-  return Array.isArray(value) ? value : []
-}
-
-function normalizeMissionMode(value: unknown): MissionMode {
-  return value === 'instant' || value === 'hours' || value === 'days' || value === 'weeks' || value === 'continuous' || value === 'indefinite'
-    ? value
-    : 'instant'
-}
-
-function normalizeMissionStatus(value: unknown): MissionStatus {
-  return value === 'completed' || value === 'cancelled' ? value : 'active'
-}
-
-function lifecycleStateFromStatus(status: MissionStatus): MissionLifecycleState {
-  if (status === 'completed') return 'completed'
-  if (status === 'cancelled') return 'cancelled'
-  return 'running'
-}
-
-function normalizeMissionLifecycleState(value: unknown, status: MissionStatus): MissionLifecycleState {
-  return value === 'draft' ||
-    value === 'validating' ||
-    value === 'scheduled' ||
-    value === 'dispatching' ||
-    value === 'running' ||
-    value === 'verifying' ||
-    value === 'completed' ||
-    value === 'failed' ||
-    value === 'cancelled'
-    ? value
-    : lifecycleStateFromStatus(status)
-}
-
-function normalizeMissionCronRole(value: unknown): MissionCronRole {
-  return value === 'leader' || value === 'reviewer' ? value : 'worker'
-}
-
-function normalizeMissionCronJobStatus(value: unknown): MissionCronJobStatus {
-  return value === 'created' || value === 'running' || value === 'completed' || value === 'failed' || value === 'disabled' || value === 'removed'
-    ? value
-    : 'created'
-}
-
-function normalizeMissionCronJob(value: unknown, missionId: string): MissionCronJob | null {
-  if (!value || typeof value !== 'object' || Array.isArray(value)) return null
-  const record = value as Record<string, unknown>
-  const id = stringValue(record.id)
-  const cronId = stringValue(record.cronId)
-  const agentId = stringValue(record.agentId)
-  if (!id || !cronId || !agentId) return null
-  return {
-    id,
-    cronId,
-    missionId: stringValue(record.missionId) || missionId,
-    agentId,
-    role: normalizeMissionCronRole(record.role),
-    round: Math.max(0, Math.round(numberValue(record.round) || 0)),
-    name: stringValue(record.name) || `mission-${missionId}-${agentId}`,
-    status: normalizeMissionCronJobStatus(record.status),
-    createdAt: stringValue(record.createdAt) || new Date().toISOString(),
-    startedAt: stringValue(record.startedAt),
-    endedAt: stringValue(record.endedAt),
-    summary: stringValue(record.summary),
-    runtimeRunId: stringValue(record.runtimeRunId),
-    cronRunId: stringValue(record.cronRunId) || stringValue(record.runId),
-    sessionId: stringValue(record.sessionId),
-    sessionKey: stringValue(record.sessionKey),
-  }
-}
-
-function normalizeMissionSchedulerState(value: unknown, missionId: string, party: string[], cadenceSeconds?: number | null): MissionSchedulerState {
-  const record = value && typeof value === 'object' && !Array.isArray(value) ? value as Record<string, unknown> : {}
-  const fallback = missionSchedulerInitialState({ party, cadenceSeconds })
-  const status = record.status
-  const schedulerStatus: MissionSchedulerState['status'] =
-    status === 'idle' ||
-    status === 'running' ||
-    status === 'waiting' ||
-    status === 'completed' ||
-    status === 'failed' ||
-    status === 'stopping' ||
-    status === 'stopped'
-      ? status
-      : fallback.status
-  return {
-    engine: 'openclaw-cron',
-    policy: 'leader-first',
-    status: schedulerStatus,
-    round: Math.max(0, Math.round(numberValue(record.round) || fallback.round)),
-    cycleIntervalMs: Math.max(15_000, Math.round(numberValue(record.cycleIntervalMs) || fallback.cycleIntervalMs)),
-    nextRoundAt: stringValue(record.nextRoundAt),
-    maxCycles: numberValue(record.maxCycles),
-    leaderAgentId: stringValue(record.leaderAgentId) || fallback.leaderAgentId,
-    activeJobId: stringValue(record.activeJobId),
-    jobs: arrayValue(record.jobs)
-      .map((job) => normalizeMissionCronJob(job, missionId))
-      .filter((job): job is MissionCronJob => Boolean(job)),
-    lastError: stringValue(record.lastError),
-  }
-}
-
-function normalizeMissionRecordSnapshot(value: unknown): Mission | null {
-  if (!value || typeof value !== 'object' || Array.isArray(value)) return null
-  const record = value as Record<string, unknown>
-  const id = stringValue(record.id) || stringValue(record.missionId)
-  const title = stringValue(record.title)
-  const brief = stringValue(record.brief)
-  if (!id || !title || !brief) return null
-  const party = arrayValue(record.party).map((agentId) => stringValue(agentId)).filter((agentId): agentId is string => Boolean(agentId))
-  if (!party.length) return null
-  const status = normalizeMissionStatus(record.status)
-  const mode = normalizeMissionMode(record.mode)
-  const cadenceSeconds = numberValue(record.cadenceSeconds)
-  return {
-    id,
-    ...(stringValue(record.idempotencyKey) ? { idempotencyKey: stringValue(record.idempotencyKey) || undefined } : {}),
-    title,
-    brief,
-    mode,
-    amount: numberValue(record.amount),
-    ...(stringValue(record.missionType) ? { missionType: stringValue(record.missionType) || undefined } : {}),
-    ...(stringValue(record.collaborationMode) ? { collaborationMode: stringValue(record.collaborationMode) || undefined } : {}),
-    ...(numberValue(record.complexity) !== null ? { complexity: numberValue(record.complexity) || 0 } : {}),
-    ...(numberValue(record.riskTolerance) !== null ? { riskTolerance: numberValue(record.riskTolerance) || 0 } : {}),
-    ...(cadenceSeconds !== null ? { cadenceSeconds } : {}),
-    startAt: stringValue(record.startAt) || stringValue(record.createdAt) || new Date().toISOString(),
-    endAt: stringValue(record.endAt),
-    status,
-    lifecycleState: normalizeMissionLifecycleState(record.lifecycleState, status),
-    party,
-    createdAt: stringValue(record.createdAt) || stringValue(record.startAt) || new Date().toISOString(),
-    completedAt: stringValue(record.completedAt),
-    scheduler: normalizeMissionSchedulerState(record.scheduler, id, party, cadenceSeconds),
-  }
-}
-
-function normalizeMissionLaunchIdempotencyKey(value: unknown): string | null {
-  if (typeof value !== 'string') return null
-  const trimmed = value.trim()
-  return trimmed.length >= 8 && trimmed.length <= 160 ? trimmed : null
-}
-
-function findMissionByIdempotencyKey(idempotencyKey: string | null): Mission | null {
-  if (!idempotencyKey) return null
-  return Array.from(missions.values())
-    .filter((mission) => mission.idempotencyKey === idempotencyKey)
-    .sort((a, b) => Date.parse(b.createdAt) - Date.parse(a.createdAt))[0] || null
-}
-
-function missionAssignmentsFromRecord(mission: Mission): TeamSyncAssignment[] {
-  const terminalStatus = mission.status === 'completed' ? 'completed' : mission.status === 'cancelled' ? 'cancelled' : 'queued'
-  return mission.party.map((agentId) => ({
-    agentId,
-    task: mission.brief,
-    status: terminalStatus,
-    updatedAt: new Date().toISOString(),
-    note: `rehydrated mission record (${mission.lifecycleState})`,
-  }))
-}
-
-function missionCronJobNeedsRecovery(job: MissionCronJob) {
-  return job.status === 'created' || job.status === 'running'
-}
-
-function failRehydratedMissionScheduler(
-  mission: Mission,
-  reason: string,
-  evidence: {
-    missingCronIds: string[]
-    disabledCronIds: string[]
-    affectedJobIds: string[]
-  },
-) {
-  const completedAt = new Date().toISOString()
-  mission.status = 'cancelled'
-  mission.completedAt = completedAt
-  mission.endAt ||= completedAt
-  mission.scheduler.status = 'failed'
-  mission.scheduler.nextRoundAt = null
-  mission.scheduler.activeJobId = null
-  mission.scheduler.lastError = reason
-  clearMissionController(mission.id)
-  transitionMissionState(mission, 'failed', 'mission_cancelled', `Mission scheduler reconciliation failed: ${reason}`, {
-    actor: 'recovery',
-    idempotencyKey: `${mission.id}:cron-reconciliation-failed:${CONTROL_CENTER_STARTED_AT_MS}`,
-    evidence,
-  })
-  recordMissionReport(mission)
-}
-
-function reconcileRehydratedMissionCronJobs(mission: Mission, cronState: MissionCronReconciliationSnapshot) {
-  const pendingJobs = mission.scheduler.jobs.filter(missionCronJobNeedsRecovery)
-  if (!pendingJobs.length) return true
-
-  if (!cronState.available) {
-    pushGatewayLog('lifecycle', `mission cron reconciliation skipped for ${mission.id}: ${cronState.error || 'OpenClaw cron state unavailable'}`)
-    return true
-  }
-
-  const missingCronIds: string[] = []
-  const disabledCronIds: string[] = []
-  const affectedJobIds: string[] = []
-  const endedAt = new Date().toISOString()
-
-  for (const job of pendingJobs) {
-    if (cronState.activeCronIds.has(job.cronId)) continue
-    affectedJobIds.push(job.id)
-    if (cronState.disabledCronIds.has(job.cronId)) {
-      disabledCronIds.push(job.cronId)
-      job.status = 'disabled'
-      job.summary = 'OpenClaw cron job was disabled during startup reconciliation.'
-    } else {
-      missingCronIds.push(job.cronId)
-      job.status = 'removed'
-      job.summary = 'OpenClaw cron job was missing during startup reconciliation.'
-    }
-    job.endedAt ||= endedAt
-    clearShiftRuntimeStateForCronId(job.cronId)
-  }
-
-  if (!affectedJobIds.length) return true
-
-  const reason = [
-    missingCronIds.length ? `${missingCronIds.length} missing cron job(s)` : '',
-    disabledCronIds.length ? `${disabledCronIds.length} disabled cron job(s)` : '',
-  ].filter(Boolean).join('; ')
-  failRehydratedMissionScheduler(mission, reason || 'mission cron jobs are no longer active', {
-    missingCronIds,
-    disabledCronIds,
-    affectedJobIds,
-  })
-  return false
-}
-
-function runtimeRunRecordById(id: string | null | undefined): OpenClawRunRecord | null {
-  const cleanId = typeof id === 'string' ? id.trim() : ''
-  if (!cleanId) return null
-  return activeOpenClawRuns.get(cleanId) || recentOpenClawRuns.find((run) => run.id === cleanId) || null
-}
-
-function missionGatewaySessionReconciliationCandidates(mission: Mission) {
-  return mission.scheduler.jobs
-    .filter(missionCronJobNeedsRecovery)
-    .filter((job) => Boolean(job.runtimeRunId || job.cronRunId || job.sessionId || job.sessionKey))
-    .slice(0, 80)
-}
-
-function gatewayErrorLooksNotFound(error: unknown) {
-  const record = isLooseRecord(error) ? error : {}
-  const code = typeof record.gatewayCode === 'string' ? record.gatewayCode : typeof record.code === 'string' ? record.code : ''
-  const message = error instanceof Error ? error.message : String(error || '')
-  return /not[_-]?found|missing|unknown/i.test(code) || /\b(not\s*found|missing|unknown)\b/i.test(message)
-}
-
-function missionGatewaySessionDetail(
-  job: MissionCronJob,
-  gatewayStatus: MissionGatewaySessionReconciliationStatus,
-  runtimeStatus: MissionRuntimeReconciliationStatus,
-  detail?: string,
-): MissionGatewaySessionReconciliationDetail {
-  return {
-    jobId: job.id,
-    cronId: job.cronId,
-    agentId: job.agentId,
-    runtimeRunId: job.runtimeRunId,
-    cronRunId: job.cronRunId,
-    sessionId: job.sessionId,
-    sessionKey: job.sessionKey,
-    gatewayStatus,
-    runtimeStatus,
-    ...(detail ? { detail: redactSensitiveText(trimTask(detail, 500)) } : {}),
-  }
-}
-
-function summarizeMissionGatewaySessionReconciliation(details: MissionGatewaySessionReconciliationDetail[], gatewayAvailable: boolean, error?: string): MissionGatewaySessionReconciliationResult {
-  const result: MissionGatewaySessionReconciliationResult = {
-    available: gatewayAvailable,
-    checked: details.length,
-    sessionChecked: details.filter((detail) => Boolean(detail.sessionKey)).length,
-    verified: details.filter((detail) => detail.gatewayStatus === 'verified').length,
-    missing: details.filter((detail) => detail.gatewayStatus === 'missing').length,
-    unavailable: details.filter((detail) => detail.gatewayStatus === 'unavailable').length,
-    notChecked: details.filter((detail) => detail.gatewayStatus === 'not-checked').length,
-    runtimeRunning: details.filter((detail) => detail.runtimeStatus === 'running').length,
-    runtimeCompleted: details.filter((detail) => detail.runtimeStatus === 'completed').length,
-    runtimeFailed: details.filter((detail) => detail.runtimeStatus === 'failed').length,
-    runtimeTimedOut: details.filter((detail) => detail.runtimeStatus === 'timeout').length,
-    runtimeAborted: details.filter((detail) => detail.runtimeStatus === 'aborted').length,
-    runtimeInterrupted: details.filter((detail) => detail.runtimeStatus === 'interrupted').length,
-    runtimeUnknown: details.filter((detail) => detail.runtimeStatus === 'unknown').length,
-    details,
-  }
-  if (error) result.error = redactSensitiveText(trimTask(error, 500))
-  return result
-}
-
-function missionGatewaySessionReconciliationMessage(mission: Mission, result: MissionGatewaySessionReconciliationResult) {
-  if (!result.checked) return ''
-  if (!result.available) {
-    return `Mission Gateway session reconciliation deferred for ${mission.title}: Gateway unavailable for ${result.sessionChecked} session reference(s)`
-  }
-  const parts = [
-    `${result.checked} referenced job(s) checked`,
-    result.verified ? `${result.verified} session(s) verified` : '',
-    result.missing ? `${result.missing} session(s) missing` : '',
-    result.notChecked ? `${result.notChecked} job(s) without session key` : '',
-    result.runtimeInterrupted ? `${result.runtimeInterrupted} runtime run(s) interrupted` : '',
-    result.runtimeTimedOut ? `${result.runtimeTimedOut} runtime run(s) timed out` : '',
-    result.runtimeFailed ? `${result.runtimeFailed} runtime run(s) failed` : '',
-  ].filter(Boolean)
-  return `Mission Gateway session reconciliation for ${mission.title}: ${parts.join('; ')}`
-}
-
-function shouldRecordMissionGatewaySessionReconciliation(result: MissionGatewaySessionReconciliationResult) {
-  return result.checked > 0 || !result.available || Boolean(result.error)
-}
-
-async function reconcileMissionGatewaySessions(mission: Mission): Promise<MissionGatewaySessionReconciliationResult> {
-  const candidates = missionGatewaySessionReconciliationCandidates(mission)
-  if (!candidates.length) return summarizeMissionGatewaySessionReconciliation([], true)
-
-  const runtimeStatuses = new Map<string, MissionRuntimeReconciliationStatus>()
-  for (const job of candidates) {
-    runtimeStatuses.set(job.id, runtimeRunRecordById(job.runtimeRunId)?.status || 'unknown')
-  }
-
-  const jobsWithSessionKeys = candidates.filter((job) => Boolean(job.sessionKey))
-  if (!jobsWithSessionKeys.length) {
-    return summarizeMissionGatewaySessionReconciliation(
-      candidates.map((job) => missionGatewaySessionDetail(job, 'not-checked', runtimeStatuses.get(job.id) || 'unknown', 'No durable Gateway session key was recorded for this job.')),
-      true,
-    )
-  }
-
-  let state: GatewayClientState
-  try {
-    state = gatewayClientState?.ready
-      ? gatewayClientState
-      : await ensureControlCenterGatewayClient(AbortSignal.timeout(5_000))
-  } catch (error) {
-    const detail = redactSensitiveText(String(error))
-    return summarizeMissionGatewaySessionReconciliation(
-      candidates.map((job) => missionGatewaySessionDetail(
-        job,
-        job.sessionKey ? 'unavailable' : 'not-checked',
-        runtimeStatuses.get(job.id) || 'unknown',
-        job.sessionKey ? detail : 'No durable Gateway session key was recorded for this job.',
-      )),
-      false,
-      detail,
-    )
-  }
-
-  const details: MissionGatewaySessionReconciliationDetail[] = []
-  for (const job of candidates) {
-    const runtimeStatus = runtimeStatuses.get(job.id) || 'unknown'
-    if (!job.sessionKey) {
-      details.push(missionGatewaySessionDetail(job, 'not-checked', runtimeStatus, 'No durable Gateway session key was recorded for this job.'))
-      continue
-    }
-    try {
-      const payload = await state.client.request('sessions.describe', { key: job.sessionKey }, { timeoutMs: 3_000 })
-      if (isLooseRecord(payload) && payload.ok === false) {
-        const errorText = typeof payload.error === 'string' ? payload.error : 'sessions.describe returned ok=false'
-        details.push(missionGatewaySessionDetail(job, gatewayErrorLooksNotFound(errorText) ? 'missing' : 'unavailable', runtimeStatus, errorText))
-        continue
-      }
-      details.push(missionGatewaySessionDetail(job, 'verified', runtimeStatus))
-    } catch (error) {
-      details.push(missionGatewaySessionDetail(
-        job,
-        gatewayErrorLooksNotFound(error) ? 'missing' : 'unavailable',
-        runtimeStatus,
-        String(error),
-      ))
-    }
-  }
-
-  return summarizeMissionGatewaySessionReconciliation(details, details.every((detail) => detail.gatewayStatus !== 'unavailable'))
-}
-
-function rehydrateRecurringMissionShifts(mission: Mission, cronState: MissionCronReconciliationSnapshot) {
-  const every = missionCronEvery(mission.cadenceSeconds)
-  for (const job of mission.scheduler.jobs) {
-    if (!missionCronJobNeedsRecovery(job)) continue
-    if (cronState.available && !cronState.activeCronIds.has(job.cronId)) continue
-    activeShifts.set(`mission:${job.id}`, {
-      id: `mission:${job.id}`,
-      name: job.name,
-      agent: job.agentId,
-      every,
-      durationMinutes: missionRemainingDurationMinutes(mission),
-      message: `Rehydrated mission cron pulse for ${mission.title}`,
-      model: undefined,
-      thinking: 'medium',
-      timeoutSeconds: TIMED_MISSION_AGENT_TIMEOUT_SECONDS,
-      wake: 'now',
-      session: 'isolated',
-      announce: false,
-      cronId: job.cronId,
-      startedAt: job.createdAt,
-      endsAt: mission.endAt,
-    })
-  }
-}
-
-function armRehydratedMissionTimer(mission: Mission, assignments: TeamSyncAssignment[], activity: string[]) {
-  if (mission.status !== 'active') return
-  if (mission.endAt) {
-    const remainingMs = Date.parse(mission.endAt) - Date.now()
-    if (Number.isFinite(remainingMs) && remainingMs > 0) {
-      const timer = setTimeout(() => {
-        const target = missions.get(mission.id)
-        if (!target || target.status !== 'active') return
-        missionTimers.delete(mission.id)
-        void completeCronMission(target, 'completed', `Mission completed by rehydrated cron timer: ${target.title}`, assignments, activity)
-      }, remainingMs)
-      missionTimers.set(mission.id, timer)
-    } else {
-      void completeCronMission(mission, 'completed', `Mission completed during restart recovery: ${mission.title}`, assignments, activity)
-    }
-  }
-
-  if (mission.mode === 'instant') {
-    const nextRoundAtMs = mission.scheduler.nextRoundAt ? Date.parse(mission.scheduler.nextRoundAt) : NaN
-    const delayMs = Number.isFinite(nextRoundAtMs) ? Math.max(0, nextRoundAtMs - Date.now()) : 0
-    scheduleNextMissionRound(mission, assignments, activity, delayMs)
-  }
-}
-
-async function hydrateMissionRecordsFromLedger() {
-  const records = await readMissionRecordLedgerTail<MissionRecordSnapshot>(500)
-  if (!records.length) return
-  const latestByMission = new Map<string, Mission>()
-  for (const record of records) {
-    const mission = normalizeMissionRecordSnapshot(record)
-    if (!mission) continue
-    latestByMission.set(mission.id, mission)
-  }
-  let restored = 0
-  let activeRestored = 0
-  const cronState = listMissionCronReconciliationSnapshotFromStateDb()
-  for (const mission of latestByMission.values()) {
-    missions.set(mission.id, mission)
-    restored += 1
-    if (mission.status === 'active') {
-      activeRestored += 1
-      const assignments = missionAssignmentsFromRecord(mission)
-      const activity = [`${new Date().toISOString()} | mission rehydrated from durable record`]
-      const schedulerRecovered = reconcileRehydratedMissionCronJobs(mission, cronState)
-      if (!schedulerRecovered) continue
-      const gatewaySessionReconciliation = await reconcileMissionGatewaySessions(mission)
-      if (shouldRecordMissionGatewaySessionReconciliation(gatewaySessionReconciliation)) {
-        pushMissionEvent({
-          missionId: mission.id,
-          type: 'agent_update',
-          message: missionGatewaySessionReconciliationMessage(mission, gatewaySessionReconciliation),
-          actor: 'recovery',
-          previousState: mission.lifecycleState,
-          nextState: mission.lifecycleState,
-          idempotencyKey: `${mission.id}:gateway-session-reconciled:${CONTROL_CENTER_STARTED_AT_MS}`,
-          evidence: {
-            gatewaySessionReconciliation,
-          },
-        })
-        persistMissionRecord(mission, 'gateway-session-reconciled')
-      }
-      rehydrateRecurringMissionShifts(mission, cronState)
-      armRehydratedMissionTimer(mission, assignments, activity)
-      pushMissionEvent({
-        missionId: mission.id,
-        type: 'agent_update',
-        message: `Mission rehydrated from durable record: ${mission.title}`,
-        actor: 'recovery',
-        previousState: mission.lifecycleState,
-        nextState: mission.lifecycleState,
-        idempotencyKey: `${mission.id}:rehydrated:${CONTROL_CENTER_STARTED_AT_MS}`,
-        evidence: {
-          schedulerStatus: mission.scheduler.status,
-          jobs: mission.scheduler.jobs.length,
-          cronReconciliation: cronState.available ? 'verified' : 'unavailable',
-          ...(cronState.error ? { cronReconciliationError: cronState.error } : {}),
-        },
-      })
-    }
-  }
-  if (restored) {
-    pushGatewayLog('lifecycle', `rehydrated ${restored} mission record(s) from the ledger after restart (${activeRestored} active)`)
-  }
-}
-
-function numberOrNull(value: number | null | undefined) {
-  return typeof value === 'number' && Number.isFinite(value) ? value : null
-}
-
-function clampMissionScore(value: number) {
-  if (!Number.isFinite(value)) return null
-  return Math.max(0, Math.min(100, Math.round(value)))
-}
-
-function missionWallTimeMs(mission: Mission) {
-  const started = Date.parse(mission.startAt)
-  const ended = Date.parse(mission.completedAt || mission.endAt || '')
-  if (!Number.isFinite(started) || !Number.isFinite(ended)) return null
-  return Math.max(0, ended - started)
-}
-
-function missionReportUnavailableMetrics(report: Pick<BackendMissionReport, 'efficiencyRating' | 'soulDrift' | 'heartbeatStabilityScore' | 'runtimeEfficiency' | 'errors' | 'xpGained'>) {
-  return ([
-    ['efficiencyRating', report.efficiencyRating],
-    ['soulDrift', report.soulDrift],
-    ['heartbeatStabilityScore', report.heartbeatStabilityScore],
-    ['runtimeEfficiency', report.runtimeEfficiency],
-    ['errors', report.errors],
-    ['xpGained', report.xpGained],
-  ] as const)
-    .filter(([, value]) => value === null)
-    .map(([key]) => key)
-}
-
-function buildBackendMissionReport(mission: Mission, events: MissionFeedEvent[] = missionFeed): BackendMissionReport {
-  const missionEvents = events.filter((event) => event.missionId === mission.id)
-  const jobs = mission.scheduler.jobs
-  const terminalJobs = jobs.filter((job) => job.status === 'completed' || job.status === 'failed')
-  const completedRuns = terminalJobs.filter((job) => job.status === 'completed').length
-  const failedRuns = terminalJobs.filter((job) => job.status === 'failed').length
-  const terminalRuns = completedRuns + failedRuns
-  const runtimeRunIds = Array.from(new Set(jobs.map((job) => job.runtimeRunId).filter((value): value is string => Boolean(value))))
-  const cronRunIds = Array.from(new Set(jobs.map((job) => job.cronRunId).filter((value): value is string => Boolean(value))))
-  const sessionIds = Array.from(new Set(jobs.map((job) => job.sessionId).filter((value): value is string => Boolean(value))))
-  const sessionKeys = Array.from(new Set(jobs.map((job) => job.sessionKey).filter((value): value is string => Boolean(value))))
-  const hasRuntimeEvidence = runtimeRunIds.length > 0 || cronRunIds.length > 0 || sessionIds.length > 0 || sessionKeys.length > 0
-  const verificationFailures = missionEvents.filter((event) => /\b(verification|acceptance|test|build)\b.*\b(fail|failed|failure|error)\b/i.test(event.message)).length
-  const commandFailures = missionEvents.filter((event) => /\b(command|cron|openclaw)\b.*\b(fail|failed|error)\b/i.test(event.message)).length
-  const retryCount = missionEvents.filter((event) => /\bretry(?:ing| attempts?)?\b/i.test(event.message)).length
-  const fallbackCount = missionEvents.filter((event) => /\bfallback|fall back\b/i.test(event.message)).length
-  const cancelledRuns = mission.lifecycleState === 'cancelled' ? Math.max(1, mission.party.length) : 0
-  const acceptedRuns = Math.max(
-    mission.party.length,
-    missionEvents.filter((event) => event.type === 'agent_assigned').length,
-  )
-  const startedRuns = Math.max(
-    jobs.filter((job) => job.startedAt).length,
-    missionEvents.filter((event) => /\b(round|started|running)\b/i.test(event.message)).length,
-  )
-  const startedTimes = jobs
-    .map((job) => (job.startedAt ? Date.parse(job.startedAt) : null))
-    .filter((value): value is number => typeof value === 'number' && Number.isFinite(value))
-  const totalExecutionDurationMs = terminalJobs.length
-    ? terminalJobs.reduce((total, job) => {
-        const started = job.startedAt ? Date.parse(job.startedAt) : NaN
-        const ended = job.endedAt ? Date.parse(job.endedAt) : NaN
-        return total + (Number.isFinite(started) && Number.isFinite(ended) ? Math.max(0, ended - started) : 0)
-      }, 0)
-    : null
-  const queueDelayMs = startedTimes.length
-    ? Math.round(startedTimes.reduce((total, value) => total + Math.max(0, value - Date.parse(mission.createdAt)), 0) / startedTimes.length)
-    : null
-  const runtimeEfficiency = terminalRuns ? clampMissionScore((completedRuns / terminalRuns) * 100 - retryCount * 3 - commandFailures * 5) : null
-  const efficiencyRating = terminalRuns ? clampMissionScore((completedRuns / terminalRuns) * 100 - retryCount * 3 - verificationFailures * 10 - commandFailures * 4) : null
-  const heartbeatStabilityScore = clampMissionScore(100 - failedRuns * 8 - cancelledRuns * 8 - retryCount * 3 - fallbackCount * 4)
-  const errors = missionEvents.length || terminalRuns ? failedRuns + verificationFailures + commandFailures : null
-  const baseReport = {
-    efficiencyRating,
-    soulDrift: null,
-    heartbeatStabilityScore,
-    runtimeEfficiency,
-    errors,
-    xpGained: null,
-  }
-  return {
-    id: `mission-report:${mission.id}`,
-    missionId: mission.id,
-    generatedAt: new Date().toISOString(),
-    ...baseReport,
-    skillUnlocks: [],
-    evidence: {
-      source: hasRuntimeEvidence && missionEvents.length ? 'mixed' : hasRuntimeEvidence ? 'runtime-responses' : missionEvents.length || jobs.length ? 'mission-feed' : 'none',
-      acceptedRuns,
-      startedRuns,
-      completedRuns,
-      failedRuns,
-      cancelledRuns,
-      timedOutRuns: 0,
-      retryCount,
-      fallbackCount,
-      verificationFailures,
-      toolFailures: 0,
-      commandFailures,
-      humanInterventions: missionEvents.filter((event) => event.actor === 'operator').length,
-      agentParticipation: Array.from(new Set([
-        ...jobs.map((job) => job.agentId),
-        ...missionEvents.map((event) => event.agentId).filter((agentId): agentId is string => Boolean(agentId)),
-      ])).filter((agentId) => mission.party.includes(agentId)),
-      queueDelayMs: numberOrNull(queueDelayMs),
-      timeToFirstTokenMs: null,
-      totalExecutionDurationMs: numberOrNull(totalExecutionDurationMs),
-      missionWallTimeMs: missionWallTimeMs(mission),
-      tokenUsageEstimate: null,
-      runtimeRunIds,
-      cronRunIds,
-      sessionIds,
-      sessionKeys,
-      unavailableMetrics: missionReportUnavailableMetrics(baseReport),
-    },
-  }
-}
-
-function recordMissionReport(mission: Mission) {
-  const report = buildBackendMissionReport(mission)
-  missionReports.set(mission.id, report)
-  void appendMissionReportLedger(report).catch((error) => {
-    console.warn('[missions] failed to append mission report ledger:', error)
-  })
-  return report
-}
-
-async function listMissionReports(limit = 80): Promise<BackendMissionReport[]> {
-  const persisted = await readMissionReportLedgerTail<BackendMissionReport>(limit).catch(() => [])
-  const byMission = new Map<string, BackendMissionReport>()
-  for (const report of persisted) byMission.set(report.missionId, report)
-  for (const report of missionReports.values()) byMission.set(report.missionId, report)
-  return Array.from(byMission.values())
-    .sort((a, b) => Date.parse(b.generatedAt) - Date.parse(a.generatedAt))
-    .slice(0, limit)
-}
-
-function parseCronIdFromOutput(stdout: string) {
-  try {
-    const raw = JSON.parse(stdout)
-    const id = raw?.id || raw?.job?.id
-    if (typeof id === 'string' && id.trim()) return id.trim()
-  } catch {
-    // Fall through to loose text parsing below.
-  }
-  const possible = stdout.match(/[a-f0-9-]{12,}/i)
-  return possible?.[0] || ''
-}
-
-function missionCycleIntervalMs(cadenceSeconds?: number | null) {
-  const seconds = Number(cadenceSeconds || 0)
-  if (!Number.isFinite(seconds) || seconds <= 0) return 5 * 60 * 1000
-  return Math.max(15, Math.min(24 * 60 * 60, Math.round(seconds))) * 1000
-}
-
-function missionCronEvery(cadenceSeconds?: number | null) {
-  const seconds = Math.max(15, Math.min(24 * 60 * 60, Math.round(Number(cadenceSeconds || 0) || 300)))
-  const units: Array<[number, string]> = [
-    [7 * 24 * 60 * 60, 'w'],
-    [24 * 60 * 60, 'd'],
-    [60 * 60, 'h'],
-    [60, 'm'],
-    [1, 's'],
-  ]
-  for (const [unitSeconds, suffix] of units) {
-    if (seconds >= unitSeconds && seconds % unitSeconds === 0) return `${seconds / unitSeconds}${suffix}`
-  }
-  return `${seconds}s`
-}
-
-function missionRemainingDurationMinutes(mission: Pick<Mission, 'endAt'>) {
-  if (!mission.endAt) return 0
-  const remainingMs = new Date(mission.endAt).getTime() - Date.now()
-  if (!Number.isFinite(remainingMs) || remainingMs <= 0) return 1
-  return Math.max(1, Math.ceil(remainingMs / 60000))
-}
-
-function missionSchedulerInitialState(args: {
-  party: string[]
-  cadenceSeconds?: number | null
-  maxCycles?: number | null
-}): MissionSchedulerState {
-  return {
-    engine: 'openclaw-cron',
-    policy: 'leader-first',
-    status: 'idle',
-    round: 0,
-    cycleIntervalMs: missionCycleIntervalMs(args.cadenceSeconds),
-    nextRoundAt: null,
-    maxCycles: args.maxCycles ?? null,
-    leaderAgentId: args.party[0] || null,
-    activeJobId: null,
-    jobs: [],
-    lastError: null,
-  }
-}
-
-function missionCronName(mission: Mission, role: MissionCronRole, agentId: string, round: number) {
-  const title = mission.title.replace(/[^a-z0-9-]+/gi, '-').replace(/^-+|-+$/g, '').slice(0, 28) || 'mission'
-  return `mission-${title}-r${round}-${role}-${agentId}`.slice(0, 80)
-}
-
-function missionRecurringCronName(mission: Mission, role: MissionCronRole, agentId: string) {
-  const title = mission.title.replace(/[^a-z0-9-]+/gi, '-').replace(/^-+|-+$/g, '').slice(0, 34) || 'mission'
-  return `mission-${title}-${role}-${agentId}`.slice(0, 80)
-}
-
-function missionRemainingText(mission: Mission) {
-  if (!mission.endAt) return 'No fixed mission end time; stop is manual.'
-  const remainingMs = new Date(mission.endAt).getTime() - Date.now()
-  if (!Number.isFinite(remainingMs) || remainingMs <= 0) return 'Mission time has expired.'
-  const minutes = Math.max(1, Math.round(remainingMs / 60000))
-  return `Remaining mission time: about ${minutes} minute(s).`
-}
-
-function missionEvidenceBlock() {
-  return [
-    'Mission evidence:',
-    '- Satisfy the mission objective with concrete evidence.',
-    '- Report changed files, checks run, manual proof, blockers, and residual risks where relevant.',
-  ].join('\n\n')
-}
-
-type MissionCronRuntimeDefaults = {
-  model: string
-  thinking: HeartbeatRuntimeDefaults['thinking']
-  timeoutSeconds: number
-}
-
-async function resolveMissionCronRuntimeDefaultsForAgent(agentId: string): Promise<MissionCronRuntimeDefaults> {
-  const [heartbeatDefaults, configuredPrimary, localConfig, modelStack] = await Promise.all([
-    resolveHeartbeatRuntimeDefaultsForAgent(agentId).catch(() => DEFAULT_HEARTBEAT_RUNTIME),
-    resolveAgentPrimaryModelId(agentId).catch(() => ''),
-    readAgentLocalConfigIfPresent(agentId).catch(() => null),
-    resolveAgentConfiguredModelStack(agentId).catch(() => null),
-  ])
-  const localThinking = localConfig?.runtime?.thinkingDefault
-  const localTimeout = normalizeWorkTimeoutSeconds(localConfig?.runtime?.timeoutSeconds)
-  const heartbeatTimeout = normalizeWorkTimeoutSeconds(heartbeatDefaults.timeoutSeconds)
-  const timeoutSeconds = Math.min(
-    7200,
-    Math.max(TIMED_MISSION_AGENT_TIMEOUT_SECONDS, localTimeout ?? 0, heartbeatTimeout ?? 0),
-  )
-  const model = await resolveMissionCronModelForAgent(agentId, [
-    configuredPrimary,
-    primaryModelFromLocalConfig(localConfig),
-    modelStack?.primary || '',
-  ])
-
-  return {
-    model,
-    thinking: localThinking || heartbeatDefaults.thinking || 'medium',
-    timeoutSeconds,
-  }
-}
-
-function missionRolePrompt(params: {
-  mission: Mission
-  agentId: string
-  role: MissionCronRole
-  round: number
-  sharedTeamSyncPath: string
-  executionWorkspace: string
-  doctrineWorkspace: string
-}) {
-  const { mission, agentId, role, round, sharedTeamSyncPath, executionWorkspace, doctrineWorkspace } = params
-  const team = mission.party.join(', ')
-  const roleDirective = (() => {
-    if (role === 'leader') {
-      return [
-        'You are the slot-1 mission leader for this cron-controlled round.',
-        'Read TEAM_SYNC.md and current project state, then append clear assignments for every teammate.',
-        'Use named agent ids, concrete files/checks when possible, blockers, and expected evidence.',
-        'Do not declare the whole mission complete unless this is an instant mission and evidence is already sufficient.',
-      ].join('\n')
-    }
-    if (role === 'reviewer') {
-      return [
-        'You are the mission review leader for this cron-controlled round.',
-        'Read TEAM_SYNC.md and summarize what each lane proved, what remains blocked, and what the next round should do.',
-        mission.mode === 'instant'
-          ? 'For instant missions, write FINAL_VERDICT: PASS only when evidence satisfies the mission objective; otherwise write FINAL_VERDICT: FAIL with blockers.'
-          : 'For timed, loop, and watch missions, write CYCLE_REVIEW with next assignments. Do not end the mission; the scheduler controls continuation.',
-      ].join('\n')
-    }
-    return [
-      `You are worker agent ${agentId} in this cron-controlled mission round.`,
-      'Read TEAM_SYNC.md first and execute the newest assignment for your agent id.',
-      'If no assignment is present, claim one useful non-overlapping task that advances the mission and append your claim.',
-      'Return concrete evidence: files changed, checks run, source facts gathered, blockers, and the next handoff.',
-    ].join('\n')
-  })()
-
-  return composeAgentDoctrinePrompt(
-    agentId,
-    [
-      `/new Mission cron run: "${mission.title}"`,
-      `Mission ID: ${mission.id}`,
-      `Round: ${round}`,
-      `Role: ${role}`,
-      `Mode: ${mission.mode}`,
-      `Collaboration: ${mission.collaborationMode || 'leader-first'}`,
-      `Type: ${mission.missionType || 'orchestration'}`,
-      `Team: ${team}`,
-      missionRemainingText(mission),
-      '',
-      roleDirective,
-      '',
-      'Mission objective:',
-      mission.brief,
-      '',
-      missionEvidenceBlock(),
-      '',
-      'TEAM_SYNC logging contract:',
-      '- Do not overwrite TEAM_SYNC.md.',
-      '- Use append-only updates for claims, status, evidence, blockers, and handoffs.',
-      `- Preferred method: POST http://127.0.0.1:${PORT}/api/team-sync/append with Content-Type application/json and body JSON.stringify({ agentId, role, runId, note, filePath }).`,
-      `- Required TEAM_SYNC filePath: ${sharedTeamSyncPath}`,
-      `- If HTTP append is unavailable, append directly to ${sharedTeamSyncPath} (append-only, no overwrite).`,
-      '',
-      'Cron execution rule:',
-      `- This is a scheduled mission wakeup, not a generic heartbeat. Execute the role now.`,
-      '- Do not return HEARTBEAT_OK unless execution is impossible after trying.',
-      '- If blocked, report the exact blocker and the command/tool attempt that failed.',
-      `- For project files, write in execution workspace: ${executionWorkspace}`,
-    ].join('\n'),
-    executionWorkspace,
-    doctrineWorkspace,
-  )
-}
-
-function missionPulseRolePrompt(params: {
-  mission: Mission
-  agentId: string
-  role: MissionCronRole
-  sharedTeamSyncPath: string
-  executionWorkspace: string
-  doctrineWorkspace: string
-}) {
-  const { mission, agentId, role, sharedTeamSyncPath, executionWorkspace, doctrineWorkspace } = params
-  const team = mission.party.join(', ')
-  const solo = mission.party.length === 1
-  const roleDirective = role === 'leader' && !solo
-    ? [
-        'You are the slot-1 mission leader for this recurring cron pulse.',
-        'Read TEAM_SYNC.md and current project state, then refresh clear assignments for every teammate.',
-        'Also execute one leader-owned slice when that advances the mission; do not only plan if useful work is available.',
-      ].join('\n')
-    : [
-        `You are ${solo ? 'the mission agent' : `worker agent ${agentId}`} for this recurring cron pulse.`,
-        'Execute one concrete, useful slice of the mission objective now.',
-        'For generative objectives, create a brand-new output each pulse rather than repeating prior work.',
-        'Return concrete evidence: files changed, checks run, source facts gathered, blockers, and the next handoff.',
-      ].join('\n')
-
-  return composeAgentDoctrinePrompt(
-    agentId,
-    [
-      `/new Mission cron pulse: "${mission.title}"`,
-      `Mission ID: ${mission.id}`,
-      `Role: ${role}`,
-      `Mode: ${mission.mode}`,
-      `Cadence: every ${missionCronEvery(mission.cadenceSeconds)}`,
-      ...(mission.endAt ? [`Mission expires at: ${mission.endAt}`] : []),
-      `Collaboration: ${mission.collaborationMode || 'leader-first'}`,
-      `Type: ${mission.missionType || 'orchestration'}`,
-      `Team: ${team}`,
-      missionRemainingText(mission),
-      '',
-      roleDirective,
-      '',
-      'Mission objective:',
-      mission.brief,
-      '',
-      missionEvidenceBlock(),
-      '',
-      'TEAM_SYNC logging contract:',
-      '- Do not overwrite TEAM_SYNC.md.',
-      '- Use append-only updates for claims, status, evidence, blockers, and handoffs.',
-      `- Preferred method: POST http://127.0.0.1:${PORT}/api/team-sync/append with Content-Type application/json and body JSON.stringify({ agentId, role, runId, note, filePath }).`,
-      `- Required TEAM_SYNC filePath: ${sharedTeamSyncPath}`,
-      `- If HTTP append is unavailable, append directly to ${sharedTeamSyncPath} (append-only, no overwrite).`,
-      '',
-      'Cron execution rule:',
-      '- This is a recurring scheduled mission pulse. Execute now; do not wait for another scheduler.',
-      '- Do not return HEARTBEAT_OK unless execution is impossible after trying.',
-      '- If blocked, report the exact blocker and the command/tool attempt that failed.',
-      `- For project files, write in execution workspace: ${executionWorkspace}`,
-    ].join('\n'),
-    executionWorkspace,
-    doctrineWorkspace,
-  )
-}
-
-async function createMissionCronJob(params: {
-  mission: Mission
-  agentId: string
-  role: MissionCronRole
-  round: number
-  signal?: AbortSignal
-}): Promise<MissionCronJob> {
-  const { mission, agentId, role, round } = params
-  const runtime = await resolveMissionCronRuntimeDefaultsForAgent(agentId)
-  const context = await resolveAgentRunContext(agentId)
-  const sharedTeamSyncPath = await resolveSharedTeamSyncPath(agentId)
-  await ensureTeamSyncFile(sharedTeamSyncPath)
-  await clearDisallowedAutoModelOverridesForAgent(agentId).catch(() => undefined)
-  console.log(`[mission/cron] create agent=${agentId} role=${role} round=${round} model=${runtime.model || '(gateway-default)'} thinking=${runtime.thinking} timeout=${runtime.timeoutSeconds}s`)
-  const prompt = missionRolePrompt({
-    mission,
-    agentId,
-    role,
-    round,
-    sharedTeamSyncPath,
-    executionWorkspace: context.executionWorkspace,
-    doctrineWorkspace: context.doctrineWorkspace,
-  })
-  const name = missionCronName(mission, role, agentId, round)
-  const cronArgs = [
-    'cron',
-    'add',
-    '--agent',
-    agentId,
-    '--name',
-    name,
-    '--description',
-    `control-center mission=${mission.id} role=${role} round=${round}`,
-    '--at',
-    '+365d',
-    '--delete-after-run',
-    '--message',
-    prompt,
-    '--thinking',
-    runtime.thinking,
-    '--timeout-seconds',
-    String(runtime.timeoutSeconds),
-    '--wake',
-    'now',
-    '--session',
-    'isolated',
-    ...(runtime.model ? ['--model', runtime.model] : []),
-    '--no-deliver',
-    '--json',
-  ]
-  await ensureGatewayReadyForCronMission()
-  const created = await runOpenClaw(cronArgs, 90000, { cwd: runCwdForContext(context), envOverrides: await getAgentAuthEnv(agentId), signal: params.signal })
-  if (created.code !== 0) throw new Error(created.stderr || created.stdout || 'Failed to create mission cron job')
-  const cronId = parseCronIdFromOutput(created.stdout)
-  if (!cronId) throw new Error(`Mission cron job created but id was not parsed: ${created.stdout}`)
-  const job: MissionCronJob = {
-    id: randomUUID(),
-    cronId,
-    missionId: mission.id,
-    agentId,
-    role,
-    round,
-    name,
-    status: 'created',
-    createdAt: new Date().toISOString(),
-    startedAt: null,
-    endedAt: null,
-    summary: null,
-    runtimeRunId: null,
-    cronRunId: null,
-    sessionId: null,
-    sessionKey: null,
-  }
-  mission.scheduler.jobs.unshift(job)
-  if (mission.scheduler.jobs.length > 160) mission.scheduler.jobs.length = 160
-  persistMissionRecord(mission, `cron-job-created:${job.id}`)
-  pushMissionEvent({
-    missionId: mission.id,
-    type: role === 'worker' ? 'agent_assigned' : 'agent_update',
-    agentId,
-    message: `Cron job created: ${role} round ${round} (${cronId}) model=${runtime.model || 'gateway-default'}`,
-  })
-  return job
-}
-
-async function createRecurringMissionCronJob(params: {
-  mission: Mission
-  agentId: string
-  role: MissionCronRole
-  signal?: AbortSignal
-}): Promise<MissionCronJob> {
-  const { mission, agentId, role } = params
-  const runtime = await resolveMissionCronRuntimeDefaultsForAgent(agentId)
-  const context = await resolveAgentRunContext(agentId)
-  const sharedTeamSyncPath = await resolveSharedTeamSyncPath(agentId)
-  await ensureTeamSyncFile(sharedTeamSyncPath)
-  await clearDisallowedAutoModelOverridesForAgent(agentId).catch(() => undefined)
-  const every = missionCronEvery(mission.cadenceSeconds)
-  console.log(`[mission/cron] schedule recurring agent=${agentId} role=${role} every=${every} model=${runtime.model || '(gateway-default)'} thinking=${runtime.thinking} timeout=${runtime.timeoutSeconds}s`)
-  const prompt = missionPulseRolePrompt({
-    mission,
-    agentId,
-    role,
-    sharedTeamSyncPath,
-    executionWorkspace: context.executionWorkspace,
-    doctrineWorkspace: context.doctrineWorkspace,
-  })
-  const name = missionRecurringCronName(mission, role, agentId)
-  const description = [
-    `control-center mission=${mission.id}`,
-    `role=${role}`,
-    `recurring every=${every}`,
-    mission.endAt ? `expiresAt=${mission.endAt}` : '',
-  ].filter(Boolean).join(' ')
-  const cronArgs = [
-    'cron',
-    'add',
-    '--agent',
-    agentId,
-    '--name',
-    name,
-    '--description',
-    description,
-    '--every',
-    every,
-    '--message',
-    prompt,
-    '--thinking',
-    runtime.thinking,
-    '--timeout-seconds',
-    String(runtime.timeoutSeconds),
-    '--wake',
-    'now',
-    '--session',
-    'isolated',
-    ...(runtime.model ? ['--model', runtime.model] : []),
-    '--no-deliver',
-    '--json',
-  ]
-  await ensureGatewayReadyForCronMission()
-  const created = await runOpenClaw(cronArgs, 90000, { cwd: runCwdForContext(context), envOverrides: await getAgentAuthEnv(agentId), signal: params.signal })
-  if (created.code !== 0) throw new Error(created.stderr || created.stdout || 'Failed to create recurring mission cron job')
-  const cronId = parseCronIdFromOutput(created.stdout)
-  if (!cronId) throw new Error(`Recurring mission cron job created but id was not parsed: ${created.stdout}`)
-  const createdAt = new Date().toISOString()
-  const job: MissionCronJob = {
-    id: randomUUID(),
-    cronId,
-    missionId: mission.id,
-    agentId,
-    role,
-    round: 0,
-    name,
-    status: 'created',
-    createdAt,
-    startedAt: null,
-    endedAt: null,
-    summary: null,
-    runtimeRunId: null,
-    cronRunId: null,
-    sessionId: null,
-    sessionKey: null,
-  }
-  mission.scheduler.jobs.unshift(job)
-  if (mission.scheduler.jobs.length > 160) mission.scheduler.jobs.length = 160
-  persistMissionRecord(mission, `recurring-cron-job-created:${job.id}`)
-  activeShifts.set(`mission:${job.id}`, {
-    id: `mission:${job.id}`,
-    name,
-    agent: agentId,
-    every,
-    durationMinutes: missionRemainingDurationMinutes(mission),
-    message: prompt,
-    model: runtime.model || undefined,
-    thinking: runtime.thinking,
-    timeoutSeconds: runtime.timeoutSeconds,
-    wake: 'now',
-    session: 'isolated',
-    announce: false,
-    cronId,
-    startedAt: createdAt,
-    endsAt: mission.endAt,
-  })
-  pushMissionEvent({
-    missionId: mission.id,
-    type: role === 'worker' ? 'agent_assigned' : 'agent_update',
-    agentId,
-    message: `Recurring cron pulse armed: ${role} every ${every} (${cronId}) model=${runtime.model || 'gateway-default'}`,
-  })
-  return job
-}
-
-function missionCronCleanupResult(
-  job: MissionCronJob,
-  previousStatus: MissionCronJobStatus,
-  ok: boolean,
-  action: MissionCronCleanupResult['action'],
-  detail: string | null = null,
-): MissionCronCleanupResult {
-  return {
-    jobId: job.id,
-    cronId: job.cronId,
-    agentId: job.agentId,
-    previousStatus,
-    status: job.status,
-    ok,
-    action,
-    detail,
-  }
-}
-
-function summarizeMissionCronCleanupResults(results: MissionCronCleanupResult[]): MissionCronCleanupSummary {
-  return {
-    attempted: results.length,
-    removed: results.filter((result) => result.action === 'removed').length,
-    disabled: results.filter((result) => result.action === 'disabled').length,
-    failed: results.filter((result) => !result.ok).length,
-    results,
-  }
-}
-
-async function removeMissionCronJob(job: MissionCronJob, signal?: AbortSignal): Promise<MissionCronCleanupResult> {
-  const previousStatus = job.status
-  const remove = await runOpenClaw(['cron', 'rm', job.cronId, '--json'], 45000, { signal }).catch((error) => ({
-    stdout: '',
-    stderr: String(error),
-    code: 1,
-  }))
-  if (remove.code === 0 || /not\s*found|missing|unknown/i.test(`${remove.stdout}\n${remove.stderr}`)) {
-    job.status = job.status === 'completed' || job.status === 'failed' ? job.status : 'removed'
-    clearShiftRuntimeStateForCronId(job.cronId)
-    return missionCronCleanupResult(job, previousStatus, true, 'removed')
-  }
-  const disable = await runOpenClaw(['cron', 'disable', job.cronId], 45000, { signal }).catch((error) => ({
-    stdout: '',
-    stderr: String(error),
-    code: 1,
-  }))
-  if (disable.code === 0) {
-    job.status = 'disabled'
-    clearShiftRuntimeStateForCronId(job.cronId)
-    return missionCronCleanupResult(job, previousStatus, true, 'disabled')
-  }
-  const detail = redactSensitiveText(trimTask(`${remove.stderr || remove.stdout || ''}\n${disable.stderr || disable.stdout || ''}`.trim() || 'OpenClaw cron cleanup failed', 500))
-  if (job.status !== 'completed' && job.status !== 'failed') job.status = 'failed'
-  job.endedAt ||= new Date().toISOString()
-  job.summary = detail
-  return missionCronCleanupResult(job, previousStatus, false, 'unchanged', detail)
-}
-
-async function runMissionCronJob(job: MissionCronJob, signal?: AbortSignal) {
-  const mission = missions.get(job.missionId)
-  if (!mission || mission.status !== 'active') return { ok: false, summary: 'mission is not active' }
-  const runtime = await resolveMissionCronRuntimeDefaultsForAgent(job.agentId)
-  const context = await resolveAgentRunContext(job.agentId)
-  const envOverrides = await getAgentAuthEnv(job.agentId)
-  const waitTimeout = `${Math.max(60, runtime.timeoutSeconds + 60)}s`
-  await ensureGatewayReadyForCronMission()
-  job.status = 'running'
-  job.startedAt = new Date().toISOString()
-  mission.scheduler.activeJobId = job.id
-  persistMissionRecord(mission, `cron-job-running:${job.id}`)
-  pushMissionEvent({
-    missionId: mission.id,
-    type: 'agent_update',
-    agentId: job.agentId,
-    message: `Cron ${job.role} round ${job.round} started`,
-  })
-
-  const result = await runOpenClaw(
-    ['cron', 'run', job.cronId, '--wait', '--expect-final', '--wait-timeout', waitTimeout, '--timeout', String((runtime.timeoutSeconds + 90) * 1000)],
-    (runtime.timeoutSeconds + 120) * 1000,
-    { cwd: runCwdForContext(context), envOverrides, signal },
-  ).catch(openClawErrorResult)
-  await clearDisallowedAutoModelOverridesForAgent(job.agentId).catch(() => undefined)
-  const exitOk = result.code === 0
-  const rawExtractedReply = extractAgentReply(result.stdout, result.stderr)
-  const rawCredibleReply = isCredibleMissionCronFinalReply(rawExtractedReply)
-  const cronRunReference = extractCronRunReference(result.stdout, result.stderr)
-  job.runtimeRunId = result.controlCenterRunId || null
-  job.cronRunId = cronRunReference.cronRunId
-  job.sessionId = cronRunReference.sessionId
-  job.sessionKey = cronRunReference.sessionKey
-  const cronRunSessionId = cronRunReference.sessionId || ''
-  const recoveredReply = exitOk || rawCredibleReply
-    ? ''
-    : await readLatestAgentSessionFinalReply(job.agentId, cronRunSessionId, job.startedAt)
-  const progressEvidence = exitOk || rawCredibleReply || recoveredReply || !isRecoverableMissionCronProviderRateLimit(result.stdout, result.stderr)
-    ? ''
-    : await readLatestAgentSessionProgressEvidence(job.agentId, cronRunSessionId, job.startedAt)
-  const extractedReply = recoveredReply || rawExtractedReply
-  const ok = exitOk || rawCredibleReply || Boolean(recoveredReply) || Boolean(progressEvidence)
-  const combinedOutput = stripAnsi(`${result.stderr || ''}\n${result.stdout || ''}`).trim()
-  const lowSignalReply = /^(error|failed)$/i.test((extractedReply || '').trim())
-  const diagnosticSummary = extractAgentRunDiagnostic(result.stdout, result.stderr)
-  const summary = trimTask(progressEvidence || (extractedReply && !lowSignalReply ? extractedReply : diagnosticSummary || combinedOutput) || extractedReply || (ok ? 'completed' : 'failed'), 220)
-  job.status = ok ? 'completed' : 'failed'
-  job.endedAt = new Date().toISOString()
-  job.summary = summary
-  if (mission.scheduler.activeJobId === job.id) mission.scheduler.activeJobId = null
-  persistMissionRecord(mission, `cron-job-${job.status}:${job.id}`)
-  pushMissionEvent({
-    missionId: mission.id,
-    type: 'agent_update',
-    agentId: job.agentId,
-    message: ok ? `${job.agentId} cron ${job.role} round ${job.round} completed: ${summary}` : `${job.agentId} cron ${job.role} round ${job.round} failed: ${summary}`,
-    evidence: {
-      cronId: job.cronId,
-      runtimeRunId: job.runtimeRunId,
-      cronRunId: job.cronRunId,
-      sessionId: job.sessionId,
-      sessionKey: job.sessionKey,
-    },
-  })
-  await appendAgentDailyMemory(job.agentId, `[mission:${mission.id}] cron ${job.role} round ${job.round} ${ok ? 'completed' : 'failed'} | ${trimTask(summary, 200)}`)
-  await removeMissionCronJob(job, signal).catch(() => undefined)
-  return { ok, summary, stdout: result.stdout, stderr: result.stderr, code: result.code }
-}
-
-function clearMissionController(missionId: string) {
-  const timer = missionLoopTimers.get(missionId)
-  if (timer) {
-    clearTimeout(timer)
-    missionLoopTimers.delete(missionId)
-  }
-  const controller = missionRunControllers.get(missionId)
-  if (controller) {
-    controller.abort()
-    missionRunControllers.delete(missionId)
-  }
-}
-
-async function cleanupMissionCronJobs(mission: Mission) {
-  const jobs = mission.scheduler.jobs.filter((job) => job.status === 'created' || job.status === 'running')
-  const settled = await Promise.allSettled(jobs.map((job) => removeMissionCronJob(job)))
-  const results = settled.map((result, index) => {
-    if (result.status === 'fulfilled') return result.value
-    const job = jobs[index]
-    const detail = redactSensitiveText(trimTask(String(result.reason), 500))
-    if (job) {
-      const previousStatus = job.status
-      if (job.status !== 'completed' && job.status !== 'failed') job.status = 'failed'
-      job.endedAt ||= new Date().toISOString()
-      job.summary = detail
-      return missionCronCleanupResult(job, previousStatus, false, 'unchanged', detail)
-    }
-    return {
-      jobId: 'unknown',
-      cronId: 'unknown',
-      agentId: 'unknown',
-      previousStatus: 'failed',
-      status: 'failed',
-      ok: false,
-      action: 'unchanged',
-      detail,
-    } satisfies MissionCronCleanupResult
-  })
-  return summarizeMissionCronCleanupResults(results)
-}
-
-function missionCronCleanupFailureSummary(error: unknown): MissionCronCleanupSummary {
-  const detail = redactSensitiveText(trimTask(String(error), 500))
-  return {
-    attempted: 0,
-    removed: 0,
-    disabled: 0,
-    failed: 1,
-    results: [{
-      jobId: 'unknown',
-      cronId: 'unknown',
-      agentId: 'unknown',
-      previousStatus: 'failed',
-      status: 'failed',
-      ok: false,
-      action: 'unchanged',
-      detail,
-    }],
-  }
-}
-
-async function startRecurringMissionCronJobs(mission: Mission, assignments: TeamSyncAssignment[], activity: string[]) {
-  const every = missionCronEvery(mission.cadenceSeconds)
-  mission.scheduler.status = 'waiting'
-  mission.scheduler.nextRoundAt = new Date(Date.now() + mission.scheduler.cycleIntervalMs).toISOString()
-  mission.scheduler.lastError = null
-
-  try {
-    for (const agentId of mission.party) {
-      const role: MissionCronRole = mission.party.length === 1 ? 'worker' : agentId === mission.party[0] ? 'leader' : 'worker'
-      await createRecurringMissionCronJob({ mission, agentId, role })
-      const state = assignments.find((entry) => entry.agentId === agentId)
-      if (state) {
-        state.status = 'queued'
-        state.updatedAt = new Date().toISOString()
-        state.note = `recurring cron pulse armed every ${every}`
-      }
-    }
-  } catch (error) {
-    mission.scheduler.status = 'failed'
-    mission.scheduler.lastError = String(error)
-    persistMissionRecord(mission, 'recurring-cron-setup-failed')
-    await cleanupMissionCronJobs(mission).catch(() => undefined)
-    throw error
-  }
-
-  activity.unshift(`${new Date().toISOString()} | scheduler | recurring cron pulses armed every ${every}`)
-  if (activity.length > 80) activity.length = 80
-  await writeTeamSyncSnapshot({
-    missionId: mission.id,
-    title: mission.title,
-    mode: mission.mode,
-    status: mission.status,
-    assignments,
-    activity,
-  })
-  persistMissionRecord(mission, 'recurring-cron-armed')
-}
-
-async function completeCronMission(mission: Mission, status: MissionStatus, note: string, assignments: TeamSyncAssignment[], activity: string[]) {
-  clearMissionController(mission.id)
-  mission.status = status
-  mission.completedAt = new Date().toISOString()
-  mission.endAt ||= mission.completedAt
-  mission.scheduler.status = status === 'completed' ? 'completed' : 'stopped'
-  mission.scheduler.nextRoundAt = null
-  mission.scheduler.activeJobId = null
-  const cleanup = await cleanupMissionCronJobs(mission).catch(missionCronCleanupFailureSummary)
-  if (cleanup.failed > 0) {
-    mission.scheduler.status = 'failed'
-    mission.scheduler.lastError = `Mission cron cleanup failed for ${cleanup.failed} job(s).`
-    pushMissionEvent({
-      missionId: mission.id,
-      type: 'agent_update',
-      message: `Mission cron cleanup failed for ${cleanup.failed} job(s).`,
-      actor: 'scheduler',
-      evidence: { cleanup },
-    })
-  }
-  transitionMissionState(mission, status === 'completed' ? 'completed' : 'cancelled', status === 'completed' ? 'mission_completed' : 'mission_cancelled', note, {
-    idempotencyKey: `${mission.id}:${status}:${mission.completedAt}`,
-    evidence: {
-      round: mission.scheduler.round,
-      jobs: mission.scheduler.jobs.length,
-      failedJobs: mission.scheduler.jobs.filter((job) => job.status === 'failed').length,
-      cleanup,
-    },
-  })
-  recordMissionReport(mission)
-  await writeTeamSyncSnapshot({
-    missionId: mission.id,
-    title: mission.title,
-    mode: mission.mode,
-    status: mission.status,
-    assignments: assignments.map((entry) => ({
-      ...entry,
-      status: status === 'completed' ? (entry.status === 'failed' ? 'failed' : 'completed') : 'cancelled',
-      updatedAt: new Date().toISOString(),
-      note: entry.note || note,
-    })),
-    activity: [`${new Date().toISOString()} | ${note}`, ...activity].slice(0, 80),
-  })
-}
-
-function scheduleNextMissionRound(mission: Mission, assignments: TeamSyncAssignment[], activity: string[], delayMs: number) {
-  const existing = missionLoopTimers.get(mission.id)
-  if (existing) clearTimeout(existing)
-  const nextAt = new Date(Date.now() + delayMs).toISOString()
-  mission.scheduler.status = 'waiting'
-  mission.scheduler.nextRoundAt = nextAt
-  const timer = setTimeout(() => {
-    missionLoopTimers.delete(mission.id)
-    void runMissionCronRound(mission.id, assignments, activity)
-  }, delayMs)
-  missionLoopTimers.set(mission.id, timer)
-  persistMissionRecord(mission, 'next-round-scheduled')
-}
-
-async function runMissionCronRound(missionId: string, assignments: TeamSyncAssignment[], activity: string[]) {
-  const mission = missions.get(missionId)
-  if (!mission || mission.status !== 'active') return
-  if (mission.endAt && Date.now() >= new Date(mission.endAt).getTime()) {
-    await completeCronMission(mission, 'completed', `Mission completed: ${mission.title}`, assignments, activity)
-    return
-  }
-  if (mission.scheduler.status === 'running') return
-  if (mission.scheduler.maxCycles !== null && mission.scheduler.round >= mission.scheduler.maxCycles) {
-    await completeCronMission(mission, 'completed', `Mission completed after ${mission.scheduler.round} cron cycle(s): ${mission.title}`, assignments, activity)
-    return
-  }
-
-  const controller = new AbortController()
-  missionRunControllers.set(mission.id, controller)
-  mission.scheduler.status = 'running'
-  mission.scheduler.round += 1
-  mission.scheduler.nextRoundAt = null
-  mission.scheduler.lastError = null
-  const round = mission.scheduler.round
-  const leaderAgentId = mission.party[0]
-  const workers = mission.party.length > 1 ? mission.party.slice(1) : mission.party.slice(0, 1)
-  transitionMissionState(mission, 'dispatching', 'agent_update', `Cron mission round ${round} dispatching.`, {
-    actor: 'scheduler',
-    idempotencyKey: `${mission.id}:round-${round}:dispatching`,
-    evidence: { round, policy: mission.scheduler.policy },
-  })
-  transitionMissionState(mission, 'running', 'agent_update', `Cron mission round ${round} running.`, {
-    actor: 'scheduler',
-    idempotencyKey: `${mission.id}:round-${round}:running`,
-    evidence: { round, partySize: mission.party.length },
-  })
-  const roundTask = [
-    mission.brief,
-    '',
-    `Cron-controlled mission round ${round}.`,
-    `Scheduler policy: leader-first; workers run only after the leader cron pass finishes.`,
-    mission.mode === 'instant'
-      ? 'This is a Strike mission. Complete one full leader -> worker -> review cycle, then close with a final verdict.'
-      : 'Keep moving until the mission scheduler stops the run. If prior work is done, assign or execute the next useful slice.',
-  ].join('\n')
-
-  try {
-    for (const state of assignments) {
-      state.status = 'running'
-      state.task = roundTask
-      state.updatedAt = new Date().toISOString()
-      state.note = `cron round ${round} running`
-    }
-    activity.unshift(`${new Date().toISOString()} | scheduler | cron round ${round} started`)
-    if (activity.length > 80) activity.length = 80
-    await writeTeamSyncSnapshot({
-      missionId: mission.id,
-      title: mission.title,
-      mode: mission.mode,
-      status: mission.status,
-      assignments,
-      activity,
-    })
-
-    if (leaderAgentId) {
-      const leadJob = await createMissionCronJob({ mission, agentId: leaderAgentId, role: 'leader', round, signal: controller.signal })
-      const leadResult = await runMissionCronJob(leadJob, controller.signal)
-      const leadState = assignments.find((entry) => entry.agentId === leaderAgentId)
-      if (leadState) {
-        leadState.status = leadResult.ok ? 'running' : 'failed'
-        leadState.updatedAt = new Date().toISOString()
-        leadState.note = leadResult.ok ? `cron round ${round} assignments refreshed` : trimTask(leadResult.summary, 120)
-      }
-      activity.unshift(`${new Date().toISOString()} | ${leaderAgentId} | leader cron ${leadResult.ok ? 'completed' : 'failed'} round ${round} | ${trimTask(leadResult.summary, 160)}`)
-    }
-
-    const latestAfterLead = missions.get(mission.id)
-    if (!latestAfterLead || latestAfterLead.status !== 'active') return
-
-    const workerResults: Array<{ agentId: string; result: Awaited<ReturnType<typeof runMissionCronJob>> }> = []
-    for (const agentId of workers) {
-      if (controller.signal.aborted || missions.get(mission.id)?.status !== 'active') break
-      const job = await createMissionCronJob({ mission, agentId, role: 'worker', round, signal: controller.signal })
-      workerResults.push({ agentId, result: await runMissionCronJob(job, controller.signal) })
-    }
-    for (const { agentId, result } of workerResults) {
-      const state = assignments.find((entry) => entry.agentId === agentId)
-      if (state) {
-        state.status = result.ok ? 'completed' : 'failed'
-        state.updatedAt = new Date().toISOString()
-        state.note = result.ok ? `cron round ${round} step complete` : trimTask(result.summary, 120)
-      }
-      activity.unshift(`${new Date().toISOString()} | ${agentId} | worker cron ${result.ok ? 'completed' : 'failed'} round ${round} | ${trimTask(result.summary, 160)}`)
-      if (activity.length > 80) activity.length = 80
-    }
-
-    if (leaderAgentId && missions.get(mission.id)?.status === 'active') {
-      const reviewJob = await createMissionCronJob({ mission, agentId: leaderAgentId, role: 'reviewer', round, signal: controller.signal })
-      const reviewResult = await runMissionCronJob(reviewJob, controller.signal)
-      const leadState = assignments.find((entry) => entry.agentId === leaderAgentId)
-      if (leadState) {
-        leadState.status = reviewResult.ok ? 'completed' : 'failed'
-        leadState.updatedAt = new Date().toISOString()
-        leadState.note = reviewResult.ok ? `cron round ${round} reviewed` : trimTask(reviewResult.summary, 120)
-      }
-      activity.unshift(`${new Date().toISOString()} | ${leaderAgentId} | review cron ${reviewResult.ok ? 'completed' : 'failed'} round ${round} | ${trimTask(reviewResult.summary, 160)}`)
-    }
-
-    await writeTeamSyncSnapshot({
-      missionId: mission.id,
-      title: mission.title,
-      mode: mission.mode,
-      status: mission.status,
-      assignments,
-      activity,
-    })
-  } catch (error) {
-    const latest = missions.get(mission.id)
-    if (latest) {
-      latest.scheduler.status = 'failed'
-      latest.scheduler.lastError = String(error)
-    }
-    pushMissionEvent({
-      missionId: mission.id,
-      type: 'agent_update',
-      message: `Cron mission round ${round} failed: ${trimTask(String(error), 180)}`,
-    })
-  } finally {
-    missionRunControllers.delete(mission.id)
-    const latest = missions.get(mission.id)
-    if (latest && latest.status === 'active') {
-      const remainingMs = latest.endAt ? new Date(latest.endAt).getTime() - Date.now() : Number.POSITIVE_INFINITY
-      if (latest.mode === 'instant') {
-        await completeCronMission(latest, 'completed', `Mission completed by cron Strike cycle: ${latest.title}`, assignments, activity)
-      } else if (remainingMs <= 0) {
-        await completeCronMission(latest, 'completed', `Mission completed by cron timer: ${latest.title}`, assignments, activity)
-      } else {
-        scheduleNextMissionRound(latest, assignments, activity, latest.scheduler.cycleIntervalMs)
-      }
-    }
-  }
+  await Promise.allSettled(Array.from(missions.values()).map((mission) => runtimeLedgerStore.appendMissionRecord(missionRecordSnapshot(mission, reason))))
 }
 
 const DEFAULT_CONTEXT_PRUNING_TOOL_DENY = ['browser', 'canvas']
@@ -16265,12 +12458,6 @@ async function appendAgentDailyMemory(agentId: string, entry: string) {
   await fs.appendFile(memoryPath, `- ${new Date().toISOString()} | ${entry.trim()}\n`, 'utf-8')
 }
 
-async function ensureTeamSyncFile(filePath: string) {
-  if (await fileExists(filePath)) return
-  await fs.mkdir(path.dirname(filePath), { recursive: true })
-  await fs.writeFile(filePath, '# TEAM_SYNC\n\n## Activity Log\n', 'utf-8')
-}
-
 let openclawConfigWriteChain: Promise<void> = Promise.resolve()
 let openclawAgentRunDefaultsReady = false
 let openclawAgentRunDefaultsPending: Promise<void> | null = null
@@ -17121,7 +13308,7 @@ function patchedClawTalkRuntimeSource(source: string) {
 
 
 const CLAWTALK_REPAIR_SIGNATURE_VERSION = 'clawtalk-repair:v12'
-const TELEGRAM_REPAIR_SIGNATURE_VERSION = 'telegram-routing-repair:v3'
+const TELEGRAM_REPAIR_SIGNATURE_VERSION = 'telegram-routing-repair:v5'
 const clawTalkRepairSignatureCache = new Map<string, string>()
 const telegramRepairSignatureCache = new Map<string, string>()
 
@@ -17287,7 +13474,7 @@ function patchedClawTalkSmsHandlerSource(source: string) {
 
 function patchedTelegramBotRuntimeSource(source: string) {
   let next = source
-  const routingPatchVersion = 'var TELEGRAM_AGENT_ROUTING_PATCH_VERSION = 3;'
+  const routingPatchVersion = 'var TELEGRAM_AGENT_ROUTING_PATCH_VERSION = 5;'
   const routingHelperPattern = /var TELEGRAM_AGENT_ROUTING_PATCH_VERSION = \d+;[\s\S]*?\/\/#endregion telegram-agent-routing-patch/
   if (routingHelperPattern.test(next)) {
     next = next.replace(routingHelperPattern, TELEGRAM_AGENT_ROUTING_HELPER)
@@ -18889,28 +15076,11 @@ async function quarantinePluginInstallPath(targetPath: string, label: string, ac
 }
 
 async function pauseGatewayForPluginInstallRepair(actions: string[]) {
-  gatewayAutoRestartPaused = true
-  if (gatewayRestartTimer) {
-    clearTimeout(gatewayRestartTimer)
-    gatewayRestartTimer = null
-  }
-  stopGatewayHealthMonitor()
-  const pid = gatewayProcess?.pid || await gatewayListenerPidForPort(GATEWAY_HTTP_PORT).catch(() => null)
-  if (gatewayProcess?.pid) {
-    await terminateProcessTree(gatewayProcess.pid, 'plugin install repair', true).catch((error) => {
-      actions.push(`gateway process stop warning: ${String(error)}`)
-    })
-  }
-  const released = await tryReleaseGatewayPort().catch((error) => ({ released: false, detail: String(error) }))
-  gatewayProcess = null
-  gatewayRestartCount = 0
-  gatewayListenerPidCache = null
-  actions.push(`paused gateway during plugin install repair${pid ? ` pid=${pid}` : ''}; ${released.detail}`)
+  await gatewayLifecycle.pauseForPluginInstallRepair(actions)
 }
 
 function resumeGatewayAfterPluginInstallRepair(actions: string[]) {
-  gatewayAutoRestartPaused = false
-  actions.push('resumed gateway auto-start after plugin install repair')
+  gatewayLifecycle.resumeAfterPluginInstallRepair(actions)
 }
 
 async function quarantineStalePluginInstallStages(actions: string[]) {
@@ -22687,1475 +18857,6 @@ function shouldFallbackGatewayAgentRun(result: OpenClawResult) {
   return (result.failureKind || classifyFailureKind(combined, 'failed')) === 'gateway_disconnect'
 }
 
-type GatewayClientLike = {
-  start: () => void
-  stop: () => void
-  request: (method: string, params?: unknown, options?: { timeoutMs?: number | null; signal?: AbortSignal }) => Promise<unknown>
-}
-
-type LightweightGatewayClientOptions = {
-  url: string
-  token?: string
-  password?: string
-  clientName: string
-  clientDisplayName: string
-  clientVersion: string
-  platform: string
-  mode: string
-  role: string
-  scopes: string[]
-  caps: string[]
-  deviceIdentity?: null | Record<string, unknown>
-  instanceId: string
-  minProtocol: number
-  maxProtocol: number
-  requestTimeoutMs: number
-  preauthHandshakeTimeoutMs?: number
-  onHelloOk?: (hello: unknown) => void
-  onEvent?: (evt: { event?: unknown; payload?: unknown; seq?: unknown; stateVersion?: unknown }) => void
-  onConnectError?: (error: Error & { gatewayCode?: string; details?: unknown; retryable?: boolean; retryAfterMs?: number }) => void
-  onClose?: (code: number, reason: string) => void
-  onReconnectPaused?: (info: unknown) => void
-  onGap?: (info: { expected: number; received: number }) => void
-}
-
-type LightweightGatewayPendingRequest = {
-  method: string
-  resolve: (payload: unknown) => void
-  reject: (error: Error) => void
-  timer: NodeJS.Timeout
-  signal?: AbortSignal
-  onAbort?: () => void
-}
-
-type GatewayClientState = {
-  client: GatewayClientLike
-  ready: boolean
-  readyPromise: Promise<void>
-  resolveReady?: () => void
-  rejectReady?: (error: Error) => void
-  lastHello?: unknown
-  generation: number
-}
-
-type GatewayChatRunWaiter = {
-  runId: string
-  sessionKey: string
-  startedAt: number
-  toolEvents: unknown[]
-  streamObserverId?: string
-  streamedText: string
-  resolve: (payload: Record<string, unknown>) => void
-  reject: (error: Error) => void
-  timer: NodeJS.Timeout
-}
-
-type GatewayChatStreamObserver = {
-  id: string
-  emit: StreamEmitter
-  createdAt: number
-  textStreamed: boolean
-  closed: boolean
-}
-
-type GatewayChatRecoveryEvent = {
-  id: string
-  timestamp: string
-  reason: string
-  minAgeMs: number
-  abortedCount: number
-  skippedCount: number
-  aborted: Array<{ runId: string; ageMs: number; hadStreamObserver: boolean }>
-}
-
-const GATEWAY_CLIENT_CONNECT_TIMEOUT_MS = 20_000
-const GATEWAY_CLIENT_READY_TIMEOUT_ENV_MS = Number(process.env.CONTROL_CENTER_GATEWAY_CLIENT_READY_TIMEOUT_MS)
-const GATEWAY_CLIENT_READY_TIMEOUT_MS = Math.max(
-  GATEWAY_CLIENT_CONNECT_TIMEOUT_MS,
-  Math.min(120_000, Number.isFinite(GATEWAY_CLIENT_READY_TIMEOUT_ENV_MS) ? GATEWAY_CLIENT_READY_TIMEOUT_ENV_MS : 45_000),
-)
-const GATEWAY_CLIENT_REQUEST_TIMEOUT_MS = 30_000
-const GATEWAY_CHAT_FINAL_EXTRA_TIMEOUT_MS = 20_000
-const GATEWAY_CHAT_HISTORY_LIMIT = 8
-const GATEWAY_CHAT_HISTORY_MAX_CHARS = 48_000
-const GATEWAY_CHAT_MESSAGE_GET_MAX_CHARS = 1_000_000
-const GATEWAY_RPC_LOG_FAILURE_NOTICE_MS = 60_000
-const GATEWAY_STABILITY_REQUEST_TIMEOUT_MS = 2_500
-let gatewayClientState: GatewayClientState | null = null
-let gatewayClientConnectPromise: Promise<GatewayClientState> | null = null
-let gatewayClientGeneration = 0
-let controlCenterGatewayPrewarmPromise: Promise<void> | null = null
-let controlCenterGatewayPrewarmTimer: NodeJS.Timeout | null = null
-let controlCenterGatewayPrewarmedAt = ''
-let gatewayRpcLogFailureNotifiedAt = 0
-const gatewayChatRunWaiters = new Map<string, GatewayChatRunWaiter>()
-const gatewayChatStreamObservers = new Map<string, GatewayChatStreamObserver>()
-const gatewayChatRecoveryEvents: GatewayChatRecoveryEvent[] = []
-
-function recordGatewayChatRecoveryEvent(event: Omit<GatewayChatRecoveryEvent, 'id' | 'timestamp'>) {
-  gatewayChatRecoveryEvents.unshift({
-    id: randomUUID(),
-    timestamp: new Date().toISOString(),
-    ...event,
-  })
-  gatewayChatRecoveryEvents.splice(8)
-}
-
-function gatewayChatRuntimeSnapshot(now = Date.now()) {
-  let oldestRunAgeMs = 0
-  for (const waiter of gatewayChatRunWaiters.values()) {
-    oldestRunAgeMs = Math.max(oldestRunAgeMs, Math.max(0, now - waiter.startedAt))
-  }
-
-  let activeObservers = 0
-  let oldestObserverAgeMs = 0
-  for (const observer of gatewayChatStreamObservers.values()) {
-    if (observer.closed) continue
-    activeObservers += 1
-    oldestObserverAgeMs = Math.max(oldestObserverAgeMs, Math.max(0, now - observer.createdAt))
-  }
-
-  return {
-    activeRuns: gatewayChatRunWaiters.size,
-    activeObservers,
-    oldestRunAgeMs,
-    oldestObserverAgeMs,
-    recentRecoveries: gatewayChatRecoveryEvents.slice(0, 5),
-  }
-}
-
-function abortStaleGatewayChatWaiters(minAgeMs: number, reason: string) {
-  const now = Date.now()
-  const minAge = Math.max(30_000, Math.min(24 * 60 * 60_000, Math.round(minAgeMs)))
-  const client = gatewayClientState?.client
-  const aborted: Array<{ runId: string; ageMs: number; hadStreamObserver: boolean }> = []
-
-  for (const waiter of Array.from(gatewayChatRunWaiters.values())) {
-    const ageMs = Math.max(0, now - waiter.startedAt)
-    if (ageMs < minAge) continue
-
-    gatewayChatRunWaiters.delete(waiter.runId)
-    clearTimeout(waiter.timer)
-    if (client) {
-      requestGatewayChatAbort(client, waiter.sessionKey, waiter.runId, reason)
-    } else {
-      pushGatewayLog('stderr', `Gateway chat abort requested for run ${waiter.runId}, but the gateway client is unavailable.`)
-    }
-    const observer = gatewayChatStreamObserver(waiter.streamObserverId)
-    observer?.emit('status', {
-      type: 'aborted',
-      runId: waiter.runId,
-      message: `Gateway chat run aborted after ${Math.round(ageMs / 1000)}s.`,
-    })
-    waiter.reject(Object.assign(new Error(`gateway chat run aborted by operator after ${ageMs}ms`), { name: 'AbortError' }))
-    aborted.push({
-      runId: waiter.runId,
-      ageMs,
-      hadStreamObserver: Boolean(waiter.streamObserverId),
-    })
-  }
-
-  if (aborted.length) {
-    pushGatewayLog('lifecycle', `aborted ${aborted.length} stale gateway chat run(s) older than ${minAge}ms`)
-  }
-  recordGatewayChatRecoveryEvent({
-    reason,
-    minAgeMs: minAge,
-    abortedCount: aborted.length,
-    skippedCount: gatewayChatRunWaiters.size,
-    aborted,
-  })
-
-  return {
-    minAgeMs: minAge,
-    aborted,
-    skipped: gatewayChatRunWaiters.size,
-    chat: gatewayChatRuntimeSnapshot(),
-  }
-}
-
-type GatewayStabilityEventSnapshot = {
-  seq?: number
-  ts?: string
-  type: string
-  level?: string
-  source?: string
-  reason?: string
-  outcome?: string
-  action?: string
-  phase?: string
-  toolName?: string
-  activeWorkKind?: string
-  active?: number
-  waiting?: number
-  queued?: number
-  queueDepth?: number
-  queueSize?: number
-  waitMs?: number
-  ageMs?: number
-  durationMs?: number
-  eventLoopDelayP99Ms?: number
-  eventLoopDelayMaxMs?: number
-  eventLoopUtilization?: number
-  cpuCoreRatio?: number
-}
-
-type GatewayStabilityStatus = {
-  available: boolean
-  source: 'diagnostics.stability' | 'gateway-client-not-ready'
-  generatedAt: string | null
-  count: number
-  dropped: number
-  lastSeq: number | null
-  summary: {
-    byType: Record<string, number>
-    active: number | null
-    waiting: number | null
-    queued: number | null
-    maxQueueDepth: number | null
-    warningCount: number
-    latestEventType: string | null
-    latestEventAt: string | null
-    recentWarnings: string[]
-  }
-  events: GatewayStabilityEventSnapshot[]
-  error?: string
-}
-
-function registerGatewayChatStreamObserver(emit: StreamEmitter, signal?: AbortSignal) {
-  const observer: GatewayChatStreamObserver = {
-    id: randomUUID(),
-    emit,
-    createdAt: Date.now(),
-    textStreamed: false,
-    closed: false,
-  }
-  gatewayChatStreamObservers.set(observer.id, observer)
-  const dispose = () => {
-    observer.closed = true
-    gatewayChatStreamObservers.delete(observer.id)
-    signal?.removeEventListener('abort', dispose)
-  }
-  signal?.addEventListener('abort', dispose, { once: true })
-  return { observer, dispose }
-}
-
-function gatewayChatStreamObserver(id?: string) {
-  if (!id) return null
-  const observer = gatewayChatStreamObservers.get(id)
-  return observer && !observer.closed ? observer : null
-}
-
-function requestGatewayChatAbort(
-  client: GatewayClientLike,
-  sessionKey: string,
-  runId: string,
-  reason: string,
-) {
-  const cleanReason = reason.trim() || 'unknown'
-  pushGatewayLog('lifecycle', `Gateway chat abort requested for run ${runId} (${cleanReason}).`)
-  void client
-    .request('chat.abort', { sessionKey, runId }, { timeoutMs: 2_000 })
-    .catch((error) =>
-      pushGatewayLog(
-        'stderr',
-        `Gateway chat abort failed for run ${runId}: ${error instanceof Error ? error.message : String(error)}`,
-      ),
-    )
-}
-
-function gatewayStabilityUnavailable(source: GatewayStabilityStatus['source'], error?: string): GatewayStabilityStatus {
-  return {
-    available: false,
-    source,
-    generatedAt: null,
-    count: 0,
-    dropped: 0,
-    lastSeq: null,
-    summary: {
-      byType: {},
-      active: null,
-      waiting: null,
-      queued: null,
-      maxQueueDepth: null,
-      warningCount: 0,
-      latestEventType: null,
-      latestEventAt: null,
-      recentWarnings: [],
-    },
-    events: [],
-    ...(error ? { error } : {}),
-  }
-}
-
-function finiteGatewayStabilityNumber(value: unknown): number | undefined {
-  if (typeof value !== 'number' || !Number.isFinite(value)) return undefined
-  return value
-}
-
-function safeGatewayStabilityText(value: unknown, max = 140): string | undefined {
-  if (typeof value !== 'string') return undefined
-  const clean = redactSensitiveText(value).replace(/\s+/g, ' ').trim()
-  return clean ? trimTask(clean, max) : undefined
-}
-
-function gatewayStabilityTimestamp(value: unknown): string | undefined {
-  const parsed = typeof value === 'number'
-    ? value
-    : typeof value === 'string'
-      ? Date.parse(value)
-      : NaN
-  return Number.isFinite(parsed) ? new Date(parsed).toISOString() : undefined
-}
-
-function gatewayStabilityEventSnapshot(value: unknown): GatewayStabilityEventSnapshot | null {
-  if (!isLooseRecord(value)) return null
-  const type = safeGatewayStabilityText(value.type, 120)
-  if (!type) return null
-  const event: GatewayStabilityEventSnapshot = { type }
-  const ts = gatewayStabilityTimestamp(value.ts)
-  const assignNumber = (key: keyof GatewayStabilityEventSnapshot) => {
-    const next = finiteGatewayStabilityNumber(value[key])
-    if (next !== undefined) event[key] = next as never
-  }
-  const assignText = (key: keyof GatewayStabilityEventSnapshot) => {
-    const next = safeGatewayStabilityText(value[key])
-    if (next) event[key] = next as never
-  }
-
-  assignNumber('seq')
-  if (ts) event.ts = ts
-  assignText('level')
-  assignText('source')
-  assignText('reason')
-  assignText('outcome')
-  assignText('action')
-  assignText('phase')
-  assignText('toolName')
-  assignText('activeWorkKind')
-  assignNumber('active')
-  assignNumber('waiting')
-  assignNumber('queued')
-  assignNumber('queueDepth')
-  assignNumber('queueSize')
-  assignNumber('waitMs')
-  assignNumber('ageMs')
-  assignNumber('durationMs')
-  assignNumber('eventLoopDelayP99Ms')
-  assignNumber('eventLoopDelayMaxMs')
-  assignNumber('eventLoopUtilization')
-  assignNumber('cpuCoreRatio')
-  return event
-}
-
-function gatewayStabilityEventWarning(event: GatewayStabilityEventSnapshot) {
-  const warningType = /(?:stalled|stuck|liveness|memory\.pressure|payload\.large|recovery|dropped)/iu.test(event.type)
-  return event.level === 'warning' || warningType
-}
-
-function gatewayStabilityWarningLabel(event: GatewayStabilityEventSnapshot) {
-  return [
-    event.type,
-    event.reason ? `reason ${event.reason}` : '',
-    event.queueDepth !== undefined ? `queue ${event.queueDepth}` : '',
-    event.queued !== undefined ? `queued ${event.queued}` : '',
-  ].filter(Boolean).join(' / ')
-}
-
-function normalizeGatewayStabilityPayload(payload: unknown, limit: number): GatewayStabilityStatus {
-  if (!isLooseRecord(payload)) return gatewayStabilityUnavailable('diagnostics.stability', 'empty diagnostics response')
-  const rawEvents = Array.isArray(payload.events) ? payload.events : []
-  const events = rawEvents
-    .map(gatewayStabilityEventSnapshot)
-    .filter((event): event is GatewayStabilityEventSnapshot => Boolean(event))
-    .slice(-Math.max(1, limit))
-  const summary = isLooseRecord(payload.summary) ? payload.summary : {}
-  const rawByType = isLooseRecord(summary.byType) ? summary.byType : {}
-  const byType: Record<string, number> = {}
-  for (const [key, value] of Object.entries(rawByType)) {
-    const count = finiteGatewayStabilityNumber(value)
-    if (count !== undefined) byType[key] = count
-  }
-  for (const event of events) {
-    byType[event.type] ??= 0
-  }
-
-  const workloadEvent = [...events].reverse().find((event) => (
-    event.active !== undefined || event.waiting !== undefined || event.queued !== undefined
-  ))
-  const latestEvent = events.at(-1)
-  const warningEvents = events.filter(gatewayStabilityEventWarning)
-  const queueDepths = events
-    .flatMap((event) => [event.queueDepth, event.queueSize, event.queued])
-    .filter((value): value is number => value !== undefined && Number.isFinite(value))
-  const generatedAt = typeof payload.generatedAt === 'string' && Date.parse(payload.generatedAt)
-    ? new Date(payload.generatedAt).toISOString()
-    : null
-
-  return {
-    available: true,
-    source: 'diagnostics.stability',
-    generatedAt,
-    count: finiteGatewayStabilityNumber(payload.count) ?? events.length,
-    dropped: finiteGatewayStabilityNumber(payload.dropped) ?? 0,
-    lastSeq: finiteGatewayStabilityNumber(payload.lastSeq) ?? latestEvent?.seq ?? null,
-    summary: {
-      byType,
-      active: workloadEvent?.active ?? null,
-      waiting: workloadEvent?.waiting ?? null,
-      queued: workloadEvent?.queued ?? null,
-      maxQueueDepth: queueDepths.length ? Math.max(...queueDepths) : null,
-      warningCount: warningEvents.length,
-      latestEventType: latestEvent?.type ?? null,
-      latestEventAt: latestEvent?.ts ?? null,
-      recentWarnings: warningEvents.slice(-3).map(gatewayStabilityWarningLabel),
-    },
-    events,
-  }
-}
-
-async function readGatewayStabilitySnapshot(limit = 12): Promise<GatewayStabilityStatus> {
-  const client = gatewayClientState?.ready ? gatewayClientState.client : null
-  if (!client) return gatewayStabilityUnavailable('gateway-client-not-ready')
-
-  try {
-    const payload = await client.request('diagnostics.stability', { limit }, { timeoutMs: GATEWAY_STABILITY_REQUEST_TIMEOUT_MS })
-    return normalizeGatewayStabilityPayload(payload, limit)
-  } catch (error) {
-    return gatewayStabilityUnavailable('diagnostics.stability', redactSensitiveText(String(error)))
-  }
-}
-
-function gatewayStreamPayload(waiter: GatewayChatRunWaiter, eventName: string, payload: Record<string, unknown>) {
-  const state = typeof payload.state === 'string' ? payload.state.trim() : ''
-  const phase = typeof payload.phase === 'string' ? payload.phase.trim() : ''
-  const status = typeof payload.status === 'string' ? payload.status.trim() : ''
-  const stream = typeof payload.stream === 'string' ? payload.stream.trim() : ''
-  const toolName = typeof payload.toolName === 'string'
-    ? payload.toolName.trim()
-    : typeof payload.tool === 'string'
-      ? payload.tool.trim()
-      : typeof payload.name === 'string'
-        ? payload.name.trim()
-        : ''
-  return {
-    transport: 'gateway-chat',
-    liveTokens: true,
-    runId: waiter.runId,
-    sessionKey: waiter.sessionKey,
-    gatewayEvent: eventName,
-    ...(state ? { state } : {}),
-    ...(phase ? { phase } : {}),
-    ...(status ? { status } : {}),
-    ...(stream ? { stream } : {}),
-    ...(toolName ? { toolName } : {}),
-  }
-}
-
-function gatewayEventProgressText(eventName: string, payload: Record<string, unknown>) {
-  const pick = (...keys: string[]) => {
-    for (const key of keys) {
-      const value = payload[key]
-      if (typeof value === 'string' && value.trim()) return value.trim()
-    }
-    return ''
-  }
-  const state = pick('state', 'phase', 'status')
-  if (eventName === 'session.tool') {
-    const toolName = pick('toolName', 'tool', 'name', 'displayName')
-    if (toolName && state) return `Tool ${toolName} ${state}.`
-    if (toolName) return `Tool ${toolName} activity.`
-    return state ? `Tool activity: ${state}.` : 'Tool activity received.'
-  }
-  if (eventName === 'agent') {
-    const stream = pick('stream', 'phase', 'type')
-    if (['assistant', 'item', 'command_output'].includes(stream.toLowerCase())) return ''
-    const message = pick('message', 'summary', 'title')
-    if (message) return trimTask(message, 180)
-    if (stream.toLowerCase() === 'tool' && !state) return ''
-    return stream || state ? `Gateway agent event: ${stream || state}.` : ''
-  }
-  return ''
-}
-
-function emitGatewayProgress(waiter: GatewayChatRunWaiter, eventName: string, payload: Record<string, unknown>) {
-  const observer = gatewayChatStreamObserver(waiter.streamObserverId)
-  if (!observer) return
-  const text = gatewayEventProgressText(eventName, payload)
-  if (!text) return
-  observer.emit('progress', {
-    ...gatewayStreamPayload(waiter, eventName, payload),
-    text,
-  })
-}
-
-function gatewayChatDeltaFromPayload(waiter: GatewayChatRunWaiter, payload: Record<string, unknown>) {
-  const replace = payload.replace === true
-  const deltaText = typeof payload.deltaText === 'string' ? payload.deltaText : ''
-  if (deltaText) {
-    const text = redactHiddenReasoningAndSecrets(deltaText)
-    waiter.streamedText = replace ? text : `${waiter.streamedText}${text}`
-    return { text, replace }
-  }
-
-  const snapshot = redactHiddenReasoningAndSecrets(gatewayChatMessageText(payload.message))
-  if (!snapshot) return { text: '', replace: false }
-  const previous = waiter.streamedText
-  if (snapshot.startsWith(previous)) {
-    const text = snapshot.slice(previous.length)
-    waiter.streamedText = snapshot
-    return { text, replace: false }
-  }
-  if (snapshot !== previous) {
-    waiter.streamedText = snapshot
-    return { text: snapshot, replace: true }
-  }
-  return { text: '', replace: false }
-}
-
-function emitGatewayChatDelta(waiter: GatewayChatRunWaiter, payload: Record<string, unknown>) {
-  const observer = gatewayChatStreamObserver(waiter.streamObserverId)
-  if (!observer) return
-  const delta = gatewayChatDeltaFromPayload(waiter, payload)
-  if (!delta.text) return
-  observer.textStreamed = true
-  observer.emit('delta', {
-    ...gatewayStreamPayload(waiter, 'chat', payload),
-    text: delta.text,
-    ...(delta.replace ? { replace: true } : {}),
-  })
-}
-
-function emitGatewayChatStart(waiter: GatewayChatRunWaiter) {
-  const observer = gatewayChatStreamObserver(waiter.streamObserverId)
-  if (!observer) return
-  observer.emit('start', {
-    transport: 'gateway-chat',
-    liveTokens: true,
-    runId: waiter.runId,
-    sessionKey: waiter.sessionKey,
-    label: 'Gateway chat',
-  })
-  observer.emit('status', {
-    transport: 'gateway-chat',
-    liveTokens: true,
-    runId: waiter.runId,
-    sessionKey: waiter.sessionKey,
-    label: 'Gateway chat',
-    mode: 'progress',
-    message: 'Gateway accepted the live chat run.',
-  })
-}
-
-function resetGatewayReadyPromise(state: GatewayClientState) {
-  state.ready = false
-  state.readyPromise = new Promise((resolve, reject) => {
-    state.resolveReady = resolve
-    state.rejectReady = reject
-  })
-}
-
-function resetGatewayReadyPromiseAfterFailure(state: GatewayClientState, error: Error) {
-  const rejectReady = state.rejectReady
-  resetGatewayReadyPromise(state)
-  rejectReady?.(error)
-}
-
-function gatewayRequestError(error: unknown): Error & { gatewayCode?: string; details?: unknown; retryable?: boolean; retryAfterMs?: number } {
-  const record = isLooseRecord(error) ? error : {}
-  const message = typeof record.message === 'string' && record.message.trim()
-    ? record.message.trim()
-    : typeof error === 'string'
-      ? error
-      : 'Gateway request failed'
-  const next = new Error(message) as Error & { gatewayCode?: string; details?: unknown; retryable?: boolean; retryAfterMs?: number }
-  if (typeof record.code === 'string') next.gatewayCode = record.code
-  if (record.details !== undefined) next.details = record.details
-  if (typeof record.retryable === 'boolean') next.retryable = record.retryable
-  if (typeof record.retryAfterMs === 'number') next.retryAfterMs = record.retryAfterMs
-  return next
-}
-
-function gatewayFrameText(data: unknown): string {
-  if (typeof data === 'string') return data
-  if (data instanceof ArrayBuffer) return Buffer.from(data).toString('utf-8')
-  if (ArrayBuffer.isView(data)) return Buffer.from(data.buffer, data.byteOffset, data.byteLength).toString('utf-8')
-  if (Buffer.isBuffer(data)) return data.toString('utf-8')
-  return String(data || '')
-}
-
-type LightweightWebSocket = {
-  readyState: number
-  addEventListener(type: 'open', listener: () => void): void
-  addEventListener(type: 'message', listener: (event: { data?: unknown }) => void): void
-  addEventListener(type: 'error', listener: (event: unknown) => void): void
-  addEventListener(type: 'close', listener: (event: { code?: number; reason?: string }) => void): void
-  send(data: string): void
-  close(): void
-}
-
-type LightweightWebSocketConstructor = new (url: string) => LightweightWebSocket
-
-class LightweightGatewayClient implements GatewayClientLike {
-  private ws: LightweightWebSocket | null = null
-  private closed = false
-  private pending = new Map<string, LightweightGatewayPendingRequest>()
-  private lastSeq: number | null = null
-  private connectRetryTimer: NodeJS.Timeout | null = null
-  private readonly options: LightweightGatewayClientOptions
-
-  constructor(options: LightweightGatewayClientOptions) {
-    this.options = options
-  }
-
-  start(): void {
-    const WebSocketCtor = (globalThis as unknown as { WebSocket?: LightweightWebSocketConstructor }).WebSocket
-    if (!WebSocketCtor) {
-      this.options.onConnectError?.(new Error('global WebSocket is not available in this Node runtime'))
-      return
-    }
-    this.closed = false
-    const ws = new WebSocketCtor(this.options.url)
-    this.ws = ws
-    ws.addEventListener('open', () => {
-      this.sendConnect()
-    })
-    ws.addEventListener('message', (event: { data?: unknown }) => {
-      this.handleFrameData(event.data)
-    })
-    ws.addEventListener('error', (event: unknown) => {
-      this.options.onConnectError?.(new Error(`gateway websocket error: ${redactSensitiveText(String(event))}`))
-    })
-    ws.addEventListener('close', (event: { code?: number; reason?: string }) => {
-      const code = typeof event.code === 'number' ? event.code : 0
-      const reason = typeof event.reason === 'string' ? event.reason : ''
-      this.rejectAll(new Error(`gateway client disconnected: ${reason || `code ${code}`}`))
-      if (!this.closed) this.options.onClose?.(code, reason)
-    })
-  }
-
-  stop(): void {
-    this.closed = true
-    if (this.connectRetryTimer) {
-      clearTimeout(this.connectRetryTimer)
-      this.connectRetryTimer = null
-    }
-    this.rejectAll(gatewayChatAbortError('gateway client stopped'))
-    try {
-      this.ws?.close?.()
-    } catch {
-      // Best-effort shutdown.
-    }
-    this.ws = null
-  }
-
-  request(method: string, params?: unknown, options: { timeoutMs?: number | null; signal?: AbortSignal } = {}): Promise<unknown> {
-    if (options.signal?.aborted) return Promise.reject(gatewayChatAbortError('gateway request aborted'))
-    const id = randomUUID()
-    const timeoutMs = options.timeoutMs === null ? this.options.requestTimeoutMs : options.timeoutMs || this.options.requestTimeoutMs
-    return new Promise((resolve, reject) => {
-      const timer = setTimeout(() => {
-        this.pending.delete(id)
-        reject(Object.assign(new Error(`gateway request timed out: ${method}`), { name: 'TimeoutError' }))
-      }, timeoutMs)
-      timer.unref?.()
-      const pending: LightweightGatewayPendingRequest = { method, resolve, reject, timer, signal: options.signal }
-      if (options.signal) {
-        pending.onAbort = () => {
-          this.pending.delete(id)
-          clearTimeout(timer)
-          reject(gatewayChatAbortError(`gateway request aborted: ${method}`))
-        }
-        options.signal.addEventListener('abort', pending.onAbort, { once: true })
-      }
-      this.pending.set(id, pending)
-      try {
-        this.sendFrame({ type: 'req', id, method, ...(params === undefined ? {} : { params }) })
-      } catch (error) {
-        this.pending.delete(id)
-        this.clearPendingRequest(pending)
-        reject(error instanceof Error ? error : new Error(String(error)))
-      }
-    })
-  }
-
-  private sendConnect() {
-    if (this.closed) return
-    this.request('connect', {
-      minProtocol: this.options.minProtocol,
-      maxProtocol: this.options.maxProtocol,
-      client: {
-        id: this.options.clientName,
-        displayName: this.options.clientDisplayName,
-        version: this.options.clientVersion,
-        platform: this.options.platform,
-        mode: this.options.mode,
-        instanceId: this.options.instanceId,
-      },
-      role: this.options.role,
-      scopes: this.options.scopes,
-      caps: this.options.caps,
-      commands: [],
-      permissions: {},
-      auth: {
-        ...(this.options.token ? { token: this.options.token } : {}),
-        ...(this.options.password ? { password: this.options.password } : {}),
-      },
-      locale: 'en-US',
-      userAgent: `openclaw-control-center/${this.options.clientVersion}`,
-    }, { timeoutMs: this.options.requestTimeoutMs }).catch((error) => {
-      const retryAfterMs = typeof (error as Error & { retryAfterMs?: unknown }).retryAfterMs === 'number'
-        ? Math.max(250, Math.min(10_000, Number((error as Error & { retryAfterMs?: number }).retryAfterMs)))
-        : 0
-      if (this.closed) return
-      if ((error as Error & { retryable?: boolean }).retryable && retryAfterMs > 0) {
-        if (this.connectRetryTimer) clearTimeout(this.connectRetryTimer)
-        this.connectRetryTimer = setTimeout(() => {
-          this.connectRetryTimer = null
-          this.sendConnect()
-        }, retryAfterMs)
-        this.connectRetryTimer.unref?.()
-        return
-      }
-      this.options.onConnectError?.(error as Error)
-    })
-  }
-
-  private handleFrameData(data: unknown) {
-    const text = gatewayFrameText(data)
-    if (!text.trim()) return
-    let frame: unknown
-    try {
-      frame = JSON.parse(text)
-    } catch {
-      this.options.onConnectError?.(new Error('Gateway sent a non-JSON frame'))
-      return
-    }
-    if (!isLooseRecord(frame)) return
-    if (frame.type === 'event') {
-      this.handleEventFrame(frame)
-      return
-    }
-    if (frame.type === 'res') {
-      this.handleResponseFrame(frame)
-    }
-  }
-
-  private handleEventFrame(frame: Record<string, unknown>) {
-    const seq = typeof frame.seq === 'number' ? frame.seq : null
-    if (seq !== null) {
-      if (this.lastSeq !== null && seq !== this.lastSeq + 1) this.options.onGap?.({ expected: this.lastSeq + 1, received: seq })
-      this.lastSeq = seq
-    }
-    this.options.onEvent?.({
-      event: frame.event,
-      payload: frame.payload,
-      seq: frame.seq,
-      stateVersion: frame.stateVersion,
-    })
-  }
-
-  private handleResponseFrame(frame: Record<string, unknown>) {
-    const id = typeof frame.id === 'string' ? frame.id : ''
-    const pending = id ? this.pending.get(id) : null
-    if (!pending) return
-    this.pending.delete(id)
-    this.clearPendingRequest(pending)
-    if (frame.ok === true) {
-      if (pending.method === 'connect') {
-        this.options.onHelloOk?.(frame.payload)
-      }
-      pending.resolve(frame.payload)
-      return
-    }
-    const error = gatewayRequestError(frame.error)
-    pending.reject(error)
-  }
-
-  private sendFrame(frame: Record<string, unknown>) {
-    if (this.closed) throw gatewayChatAbortError('gateway client is closed')
-    if (!this.ws || this.ws.readyState !== 1) throw new Error('gateway websocket is not open')
-    this.ws.send(JSON.stringify(frame))
-  }
-
-  private clearPendingRequest(pending: LightweightGatewayPendingRequest) {
-    clearTimeout(pending.timer)
-    if (pending.signal && pending.onAbort) pending.signal.removeEventListener('abort', pending.onAbort)
-  }
-
-  private rejectAll(error: Error) {
-    for (const pending of this.pending.values()) {
-      this.clearPendingRequest(pending)
-      pending.reject(error)
-    }
-    this.pending.clear()
-  }
-}
-
-function isRetryableGatewayStartupUnavailableError(error: unknown) {
-  if (!isLooseRecord(error)) return false
-  const code = typeof error.gatewayCode === 'string' ? error.gatewayCode : error.code
-  const details = isLooseRecord(error.details) ? error.details : null
-  return code === 'UNAVAILABLE' && error.retryable === true && details?.reason === 'startup-sidecars'
-}
-
-function controlCenterGatewayUrl() {
-  return `ws://127.0.0.1:${GATEWAY_HTTP_PORT}`
-}
-
-function rejectGatewayChatWaiters(error: Error) {
-  for (const waiter of gatewayChatRunWaiters.values()) {
-    clearTimeout(waiter.timer)
-    waiter.reject(error)
-  }
-  gatewayChatRunWaiters.clear()
-}
-
-function rejectGatewayChatWaiter(runId: string, error: Error) {
-  const waiter = gatewayChatRunWaiters.get(runId)
-  if (!waiter) return
-  gatewayChatRunWaiters.delete(runId)
-  clearTimeout(waiter.timer)
-  waiter.reject(error)
-}
-
-function abortAndRejectGatewayChatWaiters(reason: string) {
-  const error = gatewayChatAbortError(reason)
-  const client = gatewayClientState?.client
-  for (const waiter of Array.from(gatewayChatRunWaiters.values())) {
-    gatewayChatRunWaiters.delete(waiter.runId)
-    clearTimeout(waiter.timer)
-    if (client) requestGatewayChatAbort(client, waiter.sessionKey, waiter.runId, reason)
-    const observer = gatewayChatStreamObserver(waiter.streamObserverId)
-    try {
-      observer?.emit('status', {
-        type: 'aborted',
-        runId: waiter.runId,
-        message: 'Gateway chat run stopped during runtime shutdown.',
-      })
-    } catch {
-      // The renderer may already have disconnected during shutdown.
-    }
-    waiter.reject(error)
-  }
-}
-
-function closeGatewayChatStreamObservers(reason: string) {
-  for (const observer of Array.from(gatewayChatStreamObservers.values())) {
-    if (!observer.closed) {
-      try {
-        observer.emit('status', {
-          type: 'aborted',
-          message: reason,
-        })
-      } catch {
-        // The response stream may already be closed.
-      }
-    }
-    observer.closed = true
-    gatewayChatStreamObservers.delete(observer.id)
-  }
-}
-
-function gatewayPayloadRunId(payload: unknown): string {
-  if (!isLooseRecord(payload)) return ''
-  const runId = payload.runId
-  if (typeof runId === 'string' && runId.trim()) return runId.trim()
-  const clientRunId = payload.clientRunId
-  return typeof clientRunId === 'string' && clientRunId.trim() ? clientRunId.trim() : ''
-}
-
-function gatewayPayloadChatState(payload: Record<string, unknown>): 'delta' | 'final' | 'error' | 'aborted' | '' {
-  const candidates = [
-    payload.state,
-    payload.status,
-    payload.type,
-    payload.phase,
-    payload.event,
-  ]
-    .filter((value): value is string => typeof value === 'string' && value.trim().length > 0)
-    .map((value) => value.trim().toLowerCase())
-  for (const value of candidates) {
-    if (value === 'delta' || value.endsWith('.delta')) return 'delta'
-    if (value === 'final' || value === 'done' || value === 'complete' || value === 'completed' || value === 'finished' || value === 'success' || value === 'ok' || value.endsWith('.final')) return 'final'
-    if (value === 'error' || value === 'failed' || value === 'failure' || value.endsWith('.error') || value.endsWith('.failed')) return 'error'
-    if (value === 'aborted' || value === 'abort' || value === 'cancelled' || value === 'canceled' || value.endsWith('.aborted')) return 'aborted'
-  }
-  if (payload.done === true || payload.completed === true) return 'final'
-  if (payload.aborted === true || payload.cancelled === true || payload.canceled === true) return 'aborted'
-  if (payload.error || payload.errorMessage) return 'error'
-  return ''
-}
-
-function handleGatewayClientEvent(evt: { event?: unknown; payload?: unknown }) {
-  const eventName = typeof evt.event === 'string' ? evt.event : ''
-  const payload = isLooseRecord(evt.payload) ? evt.payload : null
-  if (!eventName || !payload) return
-  const runId = gatewayPayloadRunId(payload)
-  if (!runId) return
-  const waiter = gatewayChatRunWaiters.get(runId)
-  if (!waiter) return
-  if (eventName === 'session.tool' || eventName === 'agent') {
-    waiter.toolEvents.push(payload)
-    emitGatewayProgress(waiter, eventName, payload)
-    return
-  }
-  if (eventName !== 'chat') return
-  const state = gatewayPayloadChatState(payload)
-  if (state === 'delta') {
-    emitGatewayChatDelta(waiter, payload)
-    return
-  }
-  if (!state) return
-  if (state === 'final') emitGatewayChatDelta(waiter, payload)
-  gatewayChatRunWaiters.delete(runId)
-  clearTimeout(waiter.timer)
-  waiter.resolve(payload)
-}
-
-function waitForGatewayReady(state: GatewayClientState, timeoutMs: number, signal?: AbortSignal) {
-  if (state.ready) return Promise.resolve()
-  if (signal?.aborted) return Promise.reject(Object.assign(new Error('gateway client connection aborted'), { name: 'AbortError' }))
-  return new Promise<void>((resolve, reject) => {
-    const timer = setTimeout(() => {
-      cleanup()
-      reject(new Error(`gateway client connection timed out after ${timeoutMs}ms`))
-    }, timeoutMs)
-    timer.unref?.()
-    const onAbort = () => {
-      cleanup()
-      reject(Object.assign(new Error('gateway client connection aborted'), { name: 'AbortError' }))
-    }
-    const cleanup = () => {
-      clearTimeout(timer)
-      signal?.removeEventListener('abort', onAbort)
-    }
-    signal?.addEventListener('abort', onAbort, { once: true })
-    state.readyPromise.then(
-      () => {
-        cleanup()
-        resolve()
-      },
-      (error) => {
-        cleanup()
-        reject(error)
-      },
-    )
-  })
-}
-
-function gatewayChatAbortError(message = 'gateway chat run aborted') {
-  return Object.assign(new Error(message), { name: 'AbortError' })
-}
-
-function stopStaleControlCenterGatewayClient() {
-  if (!gatewayClientState || gatewayClientState.ready) return
-  try {
-    gatewayClientState.client.stop()
-  } catch {
-    // Best-effort cleanup before replacing a poisoned startup client.
-  }
-  gatewayClientState = null
-}
-
-function stopControlCenterGatewayClient(reason = 'control center shutdown') {
-  const error = gatewayChatAbortError(reason)
-  abortAndRejectGatewayChatWaiters(reason)
-  closeGatewayChatStreamObservers(reason)
-  const state = gatewayClientState
-  gatewayClientState = null
-  gatewayClientConnectPromise = null
-  controlCenterGatewayPrewarmPromise = null
-  if (!state) return
-  try {
-    state.rejectReady?.(error)
-  } catch {
-    // Ready waiters may already have settled.
-  }
-  try {
-    state.client.stop()
-  } catch {
-    // Best-effort shutdown.
-  }
-}
-
-function waitForGatewayClientConnect(promise: Promise<GatewayClientState>, signal?: AbortSignal) {
-  if (!signal) return promise
-  if (signal.aborted) {
-    return Promise.reject(Object.assign(new Error('gateway client connection aborted'), { name: 'AbortError' }))
-  }
-  return new Promise<GatewayClientState>((resolve, reject) => {
-    const onAbort = () => {
-      cleanup()
-      reject(Object.assign(new Error('gateway client connection aborted'), { name: 'AbortError' }))
-    }
-    const cleanup = () => signal.removeEventListener('abort', onAbort)
-    signal.addEventListener('abort', onAbort, { once: true })
-    promise.then(
-      (state) => {
-        cleanup()
-        resolve(state)
-      },
-      (error) => {
-        cleanup()
-        reject(error)
-      },
-    )
-  })
-}
-
-async function startControlCenterGatewayClient(): Promise<GatewayClientState> {
-  if (shuttingDown) throw gatewayChatAbortError('control center is shutting down')
-  startGatewayHealthMonitor()
-  if (!(await isGatewayHealthy())) {
-    await ensureGatewayRunning()
-    if (!(await isGatewayHealthy())) {
-      throw new Error(`gateway not healthy on port ${GATEWAY_HTTP_PORT}`)
-    }
-  }
-
-  stopStaleControlCenterGatewayClient()
-  if (shuttingDown) throw gatewayChatAbortError('control center is shutting down')
-
-  const gatewayAuth = getGatewayAuthEnv()
-  const state = {} as GatewayClientState
-  state.generation = ++gatewayClientGeneration
-  resetGatewayReadyPromise(state)
-  const client = new LightweightGatewayClient({
-    url: controlCenterGatewayUrl(),
-    token: gatewayAuth.OPENCLAW_GATEWAY_TOKEN,
-    password: gatewayAuth.OPENCLAW_GATEWAY_PASSWORD,
-    clientName: 'gateway-client',
-    clientDisplayName: 'DystopAI Control Center',
-    clientVersion: '0.0.6',
-    platform: process.platform,
-    mode: 'backend',
-    role: 'operator',
-    scopes: ['operator.admin', 'operator.read', 'operator.write', 'operator.talk.secrets'],
-    caps: ['tool-events'],
-    deviceIdentity: null,
-    instanceId: randomUUID(),
-    minProtocol: 4,
-    maxProtocol: 4,
-    requestTimeoutMs: GATEWAY_CLIENT_REQUEST_TIMEOUT_MS,
-    preauthHandshakeTimeoutMs: GATEWAY_CLIENT_CONNECT_TIMEOUT_MS,
-    onHelloOk: (hello: unknown) => {
-      if (gatewayClientState?.generation !== state.generation) return
-      state.lastHello = hello
-      state.ready = true
-      state.resolveReady?.()
-    },
-    onEvent: handleGatewayClientEvent,
-    onConnectError: (error: Error) => {
-      if (gatewayClientState?.generation !== state.generation) return
-      if (isRetryableGatewayStartupUnavailableError(error)) {
-        const retryAfterMs = typeof (error as Error & { retryAfterMs?: unknown }).retryAfterMs === 'number'
-          ? (error as Error & { retryAfterMs?: number }).retryAfterMs
-          : 0
-        pushGatewayLog(
-          'gateway',
-          `control center gateway client waiting for startup sidecars${retryAfterMs ? `; retrying in ${retryAfterMs}ms` : ''}`,
-          'warning',
-        )
-        return
-      }
-      if (!state.ready) resetGatewayReadyPromiseAfterFailure(state, error)
-      pushGatewayLog('gateway', `control center gateway client connect error: ${redactSensitiveText(String(error))}`, 'warning')
-    },
-    onClose: (_code: number, reason: string) => {
-      if (gatewayClientState?.generation !== state.generation) return
-      const error = new Error(`gateway client disconnected: ${reason || 'no reason'}`)
-      resetGatewayReadyPromiseAfterFailure(state, error)
-      rejectGatewayChatWaiters(error)
-    },
-    onReconnectPaused: (info: unknown) => {
-      if (gatewayClientState?.generation !== state.generation) return
-      pushGatewayLog('gateway', `control center gateway client reconnect paused: ${redactSensitiveText(JSON.stringify(info))}`, 'warning')
-    },
-    onGap: (info: unknown) => {
-      if (gatewayClientState?.generation !== state.generation) return
-      pushGatewayLog('gateway', `control center gateway event gap: ${redactSensitiveText(JSON.stringify(info))}`, 'warning')
-    },
-  })
-  state.client = client
-  gatewayClientState = state
-
-  client.start()
-  if (shuttingDown) {
-    state.client.stop()
-    gatewayClientState = null
-    throw gatewayChatAbortError('control center is shutting down')
-  }
-
-  try {
-    await waitForGatewayReady(state, GATEWAY_CLIENT_READY_TIMEOUT_MS)
-    return state
-  } catch (error) {
-    if (gatewayClientState?.generation === state.generation && !state.ready) {
-      try {
-        state.client.stop()
-      } catch {
-        // Best-effort cleanup after a failed startup attempt.
-      }
-      gatewayClientState = null
-    }
-    throw error
-  }
-}
-
-async function ensureControlCenterGatewayClient(signal?: AbortSignal): Promise<GatewayClientState> {
-  if (gatewayClientState?.ready) return gatewayClientState
-  if (!gatewayClientConnectPromise) {
-    gatewayClientConnectPromise = startControlCenterGatewayClient().finally(() => {
-      gatewayClientConnectPromise = null
-    })
-  }
-  return waitForGatewayClientConnect(gatewayClientConnectPromise, signal)
-}
-
-function prewarmControlCenterGatewayAgentRuntime(reason = 'startup') {
-  if (shuttingDown) return Promise.resolve()
-  if (!CONTROL_CENTER_GATEWAY_AGENT_SESSIONS || FORCE_LOCAL_AGENT_RUNTIME || !CONTROL_CENTER_GATEWAY_CHAT_CLIENT) {
-    return Promise.resolve()
-  }
-  if (gatewayClientState?.ready && openclawAgentRunDefaultsReady) return Promise.resolve()
-  if (controlCenterGatewayPrewarmPromise) return controlCenterGatewayPrewarmPromise
-
-  controlCenterGatewayPrewarmPromise = (async () => {
-    const startedAt = Date.now()
-    await ensureOpenclawAgentRunConfigDefaults()
-    if (shuttingDown) return
-    await ensureGatewayRunning()
-    if (shuttingDown) return
-    startGatewayHealthMonitor()
-    if (!(await isGatewayHealthy())) {
-      throw new Error('gateway health check failed during prewarm')
-    }
-    await ensureControlCenterGatewayClient()
-    controlCenterGatewayPrewarmedAt = new Date().toISOString()
-    const elapsedMs = Date.now() - startedAt
-    console.log(`[gateway] control center chat prewarmed (${reason}) in ${elapsedMs}ms`)
-    pushGatewayLog('gateway', `control center chat prewarmed (${reason}) in ${elapsedMs}ms`)
-  })().catch((error) => {
-    console.warn(`[gateway] control center chat prewarm skipped (${reason}): ${redactSensitiveText(String(error))}`)
-  }).finally(() => {
-    controlCenterGatewayPrewarmPromise = null
-  })
-
-  return controlCenterGatewayPrewarmPromise
-}
-
-function scheduleControlCenterGatewayAgentRuntimePrewarm(reason = 'startup', delayMs = 1500) {
-  if (controlCenterGatewayPrewarmTimer) clearTimeout(controlCenterGatewayPrewarmTimer)
-  controlCenterGatewayPrewarmTimer = setTimeout(() => {
-    controlCenterGatewayPrewarmTimer = null
-    if (shuttingDown) return
-    void prewarmControlCenterGatewayAgentRuntime(reason)
-  }, Math.max(0, delayMs))
-  controlCenterGatewayPrewarmTimer.unref?.()
-}
-
-function gatewayChatMessageText(message: unknown): string {
-  if (typeof message === 'string') return message.trim()
-  if (!isLooseRecord(message)) return ''
-  const directText = typeof message.text === 'string' ? message.text.trim() : ''
-  if (directText) return directText
-  const content = message.content
-  if (typeof content === 'string') return content.trim()
-  if (!Array.isArray(content)) return ''
-  return content
-    .map((block) => {
-      if (typeof block === 'string') return block
-      if (!isLooseRecord(block)) return ''
-      if (typeof block.text === 'string') return block.text
-      return ''
-    })
-    .map((part) => part.trim())
-    .filter(Boolean)
-    .join('\n\n')
-    .trim()
-}
-
-function gatewayChatMessageId(message: unknown): string {
-  if (!isLooseRecord(message)) return ''
-  const metadata = isLooseRecord(message.__openclaw) ? message.__openclaw : null
-  const id = metadata?.id
-  return typeof id === 'string' && id.trim() ? id.trim() : ''
-}
-
-function isGatewayHistoryPlaceholder(text: string) {
-  return /\[(?:chat\.history|sessions_history) omitted: message too large\]/i.test(text.trim())
-}
-
-type GatewayHistoryReply = {
-  text: string
-  messageId: string
-  placeholder: boolean
-}
-
-function isVisibleGatewayAssistantText(text: string) {
-  const clean = text.trim()
-  return Boolean(clean) && !/^(?:NO_REPLY|no_reply|HEARTBEAT_OK)$/u.test(clean)
-}
-
-function isGatewayProtocolStatusText(text: string) {
-  return /^(?:ok|started|in_flight|done|complete|completed|success|finished)$/iu.test(text.trim())
-}
-
-function gatewayChatHistoryReply(history: unknown): GatewayHistoryReply {
-  if (!isLooseRecord(history) || !Array.isArray(history.messages)) return { text: '', messageId: '', placeholder: false }
-  for (const message of [...history.messages].reverse()) {
-    if (!isLooseRecord(message)) continue
-    const role = typeof message.role === 'string' ? message.role.trim().toLowerCase() : ''
-    if (role !== 'assistant') continue
-    const text = gatewayChatMessageText(message)
-    if (isVisibleGatewayAssistantText(text)) {
-      const sanitized = sanitizeUserVisibleRuntimeText(text)
-      return {
-        text: sanitized,
-        messageId: gatewayChatMessageId(message),
-        placeholder: isGatewayHistoryPlaceholder(sanitized),
-      }
-    }
-  }
-  return { text: '', messageId: '', placeholder: false }
-}
-
-function gatewayChatSessionKey(agentId: string, sessionId: string, requestedSessionKey?: string | null) {
-  const requested = requestedSessionKey?.trim()
-  if (requested) return requested.startsWith('agent:') ? requested : `agent:${agentId}:${requested}`
-  return `agent:${agentId}:control-center:${sessionId}`
-}
-
-async function readGatewayChatMessageText(params: {
-  client: GatewayClientLike
-  sessionKey: string
-  agentId: string
-  messageId: string
-  signal?: AbortSignal
-}) {
-  if (!params.messageId) return ''
-  const response = await params.client.request('chat.message.get', {
-    sessionKey: params.sessionKey,
-    agentId: params.agentId,
-    messageId: params.messageId,
-    maxChars: GATEWAY_CHAT_MESSAGE_GET_MAX_CHARS,
-  }, { timeoutMs: 10_000, signal: params.signal }).catch(() => null)
-  if (!isLooseRecord(response) || response.ok !== true) return ''
-  const text = sanitizeUserVisibleRuntimeText(gatewayChatMessageText(response.message))
-  return isVisibleGatewayAssistantText(text) && !isGatewayHistoryPlaceholder(text) ? text : ''
-}
-
-function waitForGatewayChatRun(params: {
-  client: GatewayClientLike
-  runId: string
-  sessionKey: string
-  timeoutMs: number
-  streamObserverId?: string
-  signal?: AbortSignal
-}): Promise<{ payload: Record<string, unknown>; toolEvents: unknown[] }> {
-  if (params.signal?.aborted) {
-    return Promise.reject(Object.assign(new Error('gateway chat run aborted'), { name: 'AbortError' }))
-  }
-  return new Promise((resolve, reject) => {
-    const timer = setTimeout(() => {
-      gatewayChatRunWaiters.delete(params.runId)
-      requestGatewayChatAbort(params.client, params.sessionKey, params.runId, 'waiter timeout')
-      waiter.reject(new Error(`gateway chat run timed out after ${params.timeoutMs}ms`))
-    }, params.timeoutMs)
-    timer.unref?.()
-    const waiter: GatewayChatRunWaiter = {
-      runId: params.runId,
-      sessionKey: params.sessionKey,
-      startedAt: Date.now(),
-      toolEvents: [],
-      streamObserverId: params.streamObserverId,
-      streamedText: '',
-      timer,
-      resolve: (payload) => {
-        cleanup()
-        resolve({ payload, toolEvents: waiter.toolEvents })
-      },
-      reject: (error) => {
-        cleanup()
-        reject(error)
-      },
-    }
-    const onAbort = () => {
-      gatewayChatRunWaiters.delete(params.runId)
-      requestGatewayChatAbort(params.client, params.sessionKey, params.runId, 'request cancellation')
-      waiter.reject(Object.assign(new Error('gateway chat run aborted'), { name: 'AbortError' }))
-    }
-    const cleanup = () => {
-      clearTimeout(timer)
-      params.signal?.removeEventListener('abort', onAbort)
-    }
-    params.signal?.addEventListener('abort', onAbort, { once: true })
-    gatewayChatRunWaiters.set(params.runId, waiter)
-  })
-}
-
-async function runControlCenterGatewayChatTurn(params: {
-  agentId: string
-  message: string
-  attachments?: unknown[]
-  sessionId: string
-  requestedSessionKey?: string
-  thinking: ThinkingLevel
-  fastMode?: FastModePreference
-  timeoutMs: number
-  cwd: string
-  streamObserverId?: string
-  signal?: AbortSignal
-}) {
-  const state = await ensureControlCenterGatewayClient(params.signal)
-  const runId = randomUUID()
-  const sessionKey = gatewayChatSessionKey(params.agentId, params.sessionId, params.requestedSessionKey)
-  const attachments = await gatewayChatAttachmentsFromTurnAttachments(params.attachments)
-  gatewayChatStreamObserver(params.streamObserverId)?.emit('progress', {
-    transport: 'gateway-chat',
-    liveTokens: true,
-    text: attachments.length ? 'Sending message and image attachment through Gateway chat.' : 'Sending message through Gateway chat.',
-    agent: params.agentId,
-    sessionKey,
-    runId,
-  })
-  const runRecord = beginGatewayChatOpenClawRun({
-    runId,
-    agentId: params.agentId,
-    sessionId: params.sessionId,
-    sessionKey,
-    cwd: params.cwd,
-    timeoutMs: params.timeoutMs,
-  })
-  const finalPromise = waitForGatewayChatRun({
-    client: state.client,
-    runId,
-    sessionKey,
-    timeoutMs: params.timeoutMs + GATEWAY_CHAT_FINAL_EXTRA_TIMEOUT_MS,
-    streamObserverId: params.streamObserverId,
-    signal: params.signal,
-  })
-  // chat.send can fail before this function reaches the normal final await.
-  // Observe early rejection so request aborts do not become unhandled rejections.
-  void finalPromise.catch(() => undefined)
-  let ack: unknown
-  const fastMode = openClawChatFastMode(params.fastMode)
-  try {
-    ack = await state.client.request('chat.send', {
-      sessionKey,
-      sessionId: params.sessionId,
-      agentId: params.agentId,
-      message: params.message,
-      ...(attachments.length ? { attachments } : {}),
-      thinking: params.thinking,
-      ...(fastMode ? {
-        fastMode,
-        ...(fastMode === 'auto' ? { fastAutoOnSeconds: DEFAULT_OPENCLAW_FAST_AUTO_ON_SECONDS } : {}),
-      } : {}),
-      timeoutMs: params.timeoutMs,
-      idempotencyKey: runId,
-    }, {
-      timeoutMs: GATEWAY_CLIENT_REQUEST_TIMEOUT_MS,
-      signal: params.signal,
-    })
-    const waiter = gatewayChatRunWaiters.get(runId)
-    if (waiter) emitGatewayChatStart(waiter)
-  } catch (error) {
-    rejectGatewayChatWaiter(runId, error instanceof Error ? error : new Error(String(error)))
-    finishOpenClawRun(runRecord, params.signal?.aborted ? 'aborted' : 'failed', {
-      stderr: String(error),
-      code: 1,
-      failureKind: params.signal?.aborted ? 'aborted' : classifyFailureKind(String(error), 'failed'),
-    })
-    throw error
-  }
-
-  if (CONTROL_CENTER_GATEWAY_TOOLS_EFFECTIVE_DIAGNOSTIC) {
-    void state.client.request('tools.effective', {
-      sessionKey,
-      agentId: params.agentId,
-    }, { timeoutMs: 5_000 }).catch((error) => ({ error: String(error) }))
-  }
-
-  try {
-    const final = await finalPromise
-    const finalPayload = final.payload
-    const finalState = gatewayPayloadChatState(finalPayload) || 'final'
-    const finalText = gatewayChatMessageText(finalPayload.message)
-    const shouldReadHistory = finalState !== 'error' || !finalText
-    const history = shouldReadHistory
-      ? await state.client.request('chat.history', {
-          sessionKey,
-          agentId: params.agentId,
-          limit: GATEWAY_CHAT_HISTORY_LIMIT,
-          maxChars: GATEWAY_CHAT_HISTORY_MAX_CHARS,
-        }, { timeoutMs: 10_000 }).catch(() => null)
-      : null
-    const historyReply = gatewayChatHistoryReply(history)
-    const fullHistoryText = historyReply.placeholder || !historyReply.text
-      ? await readGatewayChatMessageText({
-          client: state.client,
-          sessionKey,
-          agentId: params.agentId,
-          messageId: historyReply.messageId,
-          signal: params.signal,
-        })
-      : ''
-    const historyText = fullHistoryText || historyReply.text
-    const finalTextLooksLikeStatus = !historyText && isGatewayProtocolStatusText(finalText)
-    const finalReplyText = finalTextLooksLikeStatus ? '' : finalText
-    const errorMessage = typeof finalPayload.errorMessage === 'string' ? finalPayload.errorMessage : ''
-    const reply = sanitizeUserVisibleRuntimeText(historyText || finalReplyText || (finalState === 'error' ? errorMessage : ''))
-    const completedWithoutAssistant = finalState === 'final' && !reply
-    const ok = finalState !== 'error' && finalState !== 'aborted' && !completedWithoutAssistant
-    const stderr = ok
-      ? ''
-      : completedWithoutAssistant
-        ? `Gateway completed run ${runId} without a visible assistant transcript.`
-        : errorMessage || JSON.stringify(finalPayload)
-    const runStatus: OpenClawRunStatus = ok ? 'completed' : finalState === 'aborted' ? 'aborted' : 'failed'
-    finishOpenClawRun(runRecord, runStatus, {
-      stdout: reply,
-      stderr,
-      code: ok ? 0 : 1,
-      failureKind: ok ? undefined : finalState === 'aborted' ? 'aborted' : classifyFailureKind(stderr || reply, 'failed'),
-    })
-
-    return {
-      stdout: JSON.stringify({
-        status: ok ? 'ok' : finalState === 'aborted' ? 'aborted' : 'error',
-        text: reply,
-        transport: 'gateway-chat',
-        runId,
-        sessionKey,
-        sessionId: params.sessionId,
-        ack,
-        final: finalPayload,
-        toolEventCount: final.toolEvents.length,
-        toolsEffective: { status: CONTROL_CENTER_GATEWAY_TOOLS_EFFECTIVE_DIAGNOSTIC ? 'deferred' : 'skipped' },
-      }),
-      stderr,
-      code: ok ? 0 : 1,
-      runtimeTransport: 'gateway-chat' as const,
-    }
-  } catch (error) {
-    const text = String(error)
-    const wasAborted = params.signal?.aborted || (error instanceof Error && error.name === 'AbortError')
-    const status: OpenClawRunStatus = wasAborted
-      ? 'aborted'
-      : /timed out|timeout/i.test(text)
-        ? 'timeout'
-        : 'failed'
-    finishOpenClawRun(runRecord, status, {
-      stderr: text,
-      code: 1,
-      failureKind: status === 'aborted' ? 'aborted' : status === 'timeout' ? 'timeout' : classifyFailureKind(text, 'failed'),
-    })
-    throw error
-  }
-}
-
 async function runControlCenterAgentRuntimeTurn(params: {
   agentId: string
   message: string
@@ -24806,47 +19507,6 @@ async function workspaceAccessFailurePayload(error: unknown, workspace: string) 
   }
 }
 
-function teamSyncMarkdown(params: {
-  missionId: string
-  title: string
-  mode: string
-  status: string
-  assignments: TeamSyncAssignment[]
-  activity: string[]
-}) {
-  const now = new Date().toISOString()
-  const rows = params.assignments
-    .map(
-      (entry) =>
-        `- ${entry.agentId} | ${entry.status} | ${trimTask(entry.task, 120)} | updated ${entry.updatedAt}${entry.note ? ` | ${trimTask(entry.note, 120)}` : ''}`,
-    )
-    .join('\n')
-  const activity = params.activity.length ? params.activity.map((line) => `- ${line}`).join('\n') : '- no activity yet'
-  return [
-    '# TEAM_SYNC.md',
-    '',
-    'Shared agent coordination ledger. This file is mirrored to active agent workspaces.',
-    '',
-    `Updated: ${now}`,
-    `Mission ID: ${params.missionId}`,
-    `Title: ${params.title}`,
-    `Mode: ${params.mode}`,
-    `Status: ${params.status}`,
-    '',
-    '## Active Assignments',
-    rows || '- none',
-    '',
-    '## Activity Log',
-    activity,
-    '',
-    '## Coordination Rules',
-    '- Read this file before starting any new task slice.',
-    '- Do not edit files owned by another active agent unless reassigned here.',
-    '- Record conflicts/blockers immediately in this log.',
-    '',
-  ].join('\n')
-}
-
 function computePeakConcurrency(spans: Array<{ startedAt: string; endedAt: string }>) {
   const points: Array<{ at: number; delta: number }> = []
   for (const span of spans) {
@@ -24864,40 +19524,6 @@ function computePeakConcurrency(spans: Array<{ startedAt: string; endedAt: strin
     if (current > peak) peak = current
   }
   return peak
-}
-
-async function writeTeamSyncSnapshot(params: {
-  missionId: string
-  title: string
-  mode: string
-  status: string
-  assignments: TeamSyncAssignment[]
-  activity: string[]
-}) {
-  const agentIds = Array.from(new Set(params.assignments.map((entry) => entry.agentId)))
-  const markdown = teamSyncMarkdown(params)
-  const targets = new Set<string>()
-
-  if (CANONICAL_DOCTRINE_ONLY) {
-    for (const agentId of agentIds) {
-      const workspace = (await resolveAgentWorkspace(agentId)) || defaultAgentWorkspace(agentId)
-      targets.add(path.join(resolveDoctrineWorkspaceForRun(agentId, workspace, canonicalDoctrineRoot(agentId)), 'TEAM_SYNC.md'))
-    }
-    if (agentIds[0]) {
-      targets.add(await resolveSharedTeamSyncPath(agentIds[0]))
-    }
-  } else {
-    const workspaces = await resolveAgentWorkspaces(agentIds)
-    targets.add(path.join(WORKSPACE_ROOT, 'TEAM_SYNC.md'))
-    for (const workspace of workspaces.values()) {
-      targets.add(path.join(workspace, 'TEAM_SYNC.md'))
-    }
-  }
-
-  for (const filePath of targets) {
-    await fs.mkdir(path.dirname(filePath), { recursive: true })
-    await fs.writeFile(filePath, markdown, 'utf-8')
-  }
 }
 
 async function disableShift(shift: Shift) {
@@ -26116,7 +20742,7 @@ async function readDoctorDiagnosticsSummary(
   if (!forceRefresh && doctorDiagnosticsSummaryInFlight) return doctorDiagnosticsSummaryInFlight
 
   doctorDiagnosticsSummaryInFlight = (async () => {
-    const raw = await readDiagnosticRunLedgerTail<unknown>(
+    const raw = await runtimeLedgerStore.readDiagnosticRuns<unknown>(
       DOCTOR_DIAGNOSTIC_HISTORY_LIMIT * 3,
       options,
     ).catch(() => [])
@@ -26418,10 +21044,11 @@ async function runDoctorChecks(): Promise<{ id: string; startedAt: string; ended
     gatewayDoctorRestartTimeline,
     gatewayStabilityCheck.value || gatewayStabilityUnavailable('diagnostics.stability', gatewayStabilityCheck.error),
   )
+  const gatewayLifecycleState = gatewayLifecycle.lifecycleSnapshot()
   const gatewayDoctorLastRestart = gatewayDoctorRestartTimeline[0] || gatewayDoctorRestartSnapshot || null
-  const gatewayDoctorLastRestartAt = gatewayLastRestartAt || gatewayDoctorLastRestart?.at || null
-  const gatewayDoctorLastRestartReason = gatewayLastRestartReason || gatewayDoctorLastRestart?.reason || null
-  const gatewayDoctorLastRestartOutcome = gatewayLastRestartOutcome || gatewayDoctorLastRestart?.outcome || null
+  const gatewayDoctorLastRestartAt = gatewayLifecycleState.lastRestartAt || gatewayDoctorLastRestart?.at || null
+  const gatewayDoctorLastRestartReason = gatewayLifecycleState.lastRestartReason || gatewayDoctorLastRestart?.reason || null
+  const gatewayDoctorLastRestartOutcome = gatewayLifecycleState.lastRestartOutcome || gatewayDoctorLastRestart?.outcome || null
   const gatewayDoctorRestartEvidence = gatewayDoctorRestartTimeline.length > 1
     ? `Recent restarts: ${gatewayDoctorRestartTimeline
       .slice(0, 3)
@@ -26431,7 +21058,7 @@ async function runDoctorChecks(): Promise<{ id: string; startedAt: string; ended
       ? `Last restart ${gatewayDoctorLastRestartOutcome || 'requested'}${gatewayDoctorLastRestartAt ? ` at ${gatewayDoctorLastRestartAt}` : ''}: ${gatewayDoctorLastRestartReason}.`
       : ''
   const gatewayLifecycleEvidence = [
-    gatewayLastHealthyAt ? `Last healthy at ${gatewayLastHealthyAt}.` : '',
+    gatewayLifecycleState.lastHealthyAt ? `Last healthy at ${gatewayLifecycleState.lastHealthyAt}.` : '',
     gatewayDoctorRestartEvidence,
     `Restart diagnostics: ${gatewayDoctorRestartDiagnostics.summary}`,
   ].filter(Boolean).join(' ')
@@ -26507,7 +21134,7 @@ async function runDoctorChecks(): Promise<{ id: string; startedAt: string; ended
     : `Doctor found ${checks.filter((check) => check.severity === 'error').length} error(s).`
   const endedAt = new Date().toISOString()
   const result = { id, startedAt, endedAt, ok, checks, summary }
-  void appendDiagnosticRunLedger(result).catch(() => undefined)
+  void runtimeLedgerStore.appendDiagnosticRun(result).catch(() => undefined)
   doctorDiagnosticsSummaryCache = {
     builtAt: Date.now(),
     summary: buildDoctorDiagnosticsSummary([result, ...(doctorDiagnosticsSummaryCache?.summary.recent || [])], 'sqlite-ledger'),
@@ -26553,10 +21180,10 @@ registerDiagnosticsRoutes(app, {
   cachedDoctorDiagnosticsSummary,
   diskFreeSpaceCheck,
   gatewayChatEnabled: () => CONTROL_CENTER_GATEWAY_AGENT_SESSIONS && CONTROL_CENTER_GATEWAY_CHAT_CLIENT && !FORCE_LOCAL_AGENT_RUNTIME,
-  gatewayChatPrewarmedAt: () => controlCenterGatewayPrewarmedAt || null,
-  gatewayChatPrewarming: () => Boolean(controlCenterGatewayPrewarmPromise),
+  gatewayChatPrewarmedAt: () => gatewayChatService.prewarmedAt(),
+  gatewayChatPrewarming: () => gatewayChatService.prewarming(),
   gatewayChatPrewarmOnStartup: CONTROL_CENTER_GATEWAY_PREWARM_ON_STARTUP,
-  gatewayChatReady: () => gatewayClientState?.ready === true,
+  gatewayChatReady: () => gatewayChatService.ready(),
   gatewayChatRuntimeSnapshot,
   openClawAgentRunDefaultsReady: () => openclawAgentRunDefaultsReady,
   openClawOptimizationScorecard: buildOpenClawOptimizationScorecard,
@@ -26566,7 +21193,7 @@ registerDiagnosticsRoutes(app, {
   resolvedOpenClawRuntimeInfo,
   runDoctorChecks,
   runDoctorRepair,
-  runtimeLedgerStatus,
+  runtimeLedgerStatus: runtimeLedgerStore.status,
   runtimeVersionCheckPayload,
   workspaceRoot: WORKSPACE_ROOT,
 })
@@ -26593,591 +21220,70 @@ registerOpenClawCommandRoutes(app, {
   runOpenClaw,
 })
 
-function clearRuntimeMonitorHistory(clearedAt = new Date()) {
-  const cleared = {
-    gatewayLogs: gatewayLogs.length,
-    gatewayLogTailSnapshots: gatewayLogTailSnapshots.size,
-    recentRuns: recentOpenClawRuns.length,
-  }
-  runtimeMonitorClearedAtMs = clearedAt.getTime()
-  gatewayLogs.length = 0
-  gatewayLogTailSnapshots.clear()
-  externalGatewayLogCache = null
-  externalChannelActivityCache = null
-  invalidateGatewayLedgerSnapshotCache()
-  gatewayLogPathDiscoveryCache = null
-  invalidateRuntimeStatusCache()
-  recentOpenClawRuns.length = 0
-  return {
-    clearedAt: clearedAt.toISOString(),
-    cleared,
-    activeRuns: activeOpenClawRuns.size,
-  }
-}
+const runtimeRecoveryService = createRuntimeRecoveryService({
+  clearAgentTurnSessions,
+  clearBrowserProbeCache: () => browserProbeCache.clear(),
+  clearGatewayRuntimeMonitorHistory: () => gatewayLogService.clearRuntimeMonitorHistory(),
+  clearRecentOpenClawRuns: () => {
+    recentOpenClawRuns.length = 0
+  },
+  clearShutdownPinnedTimers,
+  closeOAuthCallbackServersForProcessExit,
+  closeOAuthCallbackServersForShutdown,
+  closeRuntimeLedger: runtimeLedgerStore.close,
+  getActiveOpenClawRunCount: () => activeOpenClawRuns.size,
+  getRecentOpenClawRunCount: () => recentOpenClawRuns.length,
+  invalidateGatewayLedgerSnapshotCache,
+  invalidateRuntimeStatusCache,
+  markShuttingDown: () => {
+    shuttingDown = true
+  },
+  pauseGatewayAutoRestart: () => gatewayLifecycle.pauseAutoRestart(),
+  persistAllMissionRecords,
+  pushGatewayLog,
+  setRuntimeMonitorClearedAtMs: (value) => {
+    runtimeMonitorClearedAtMs = value
+  },
+  stopAllPluginSetupTerminalSessions,
+  stopControlCenterGatewayClient,
+  stopGateway,
+  stopGatewayHealthMonitor,
+  stopGatewayRuntime,
+  stopMissionCronExpirySweep,
+  sweepOpenClawSessionLocks,
+  terminateAllOpenClawRuns,
+  terminateAllOpenClawRunsNow,
+  writeRuntimeMonitorClearMarker,
+})
 
-registerRuntimeRoutes(app, {
+const runtimeActionService = createRuntimeActionService({
   abortGatewayRuntimeSessionsForClose,
   abortStaleGatewayChatWaiters,
   cleanupOpenClawSessionLocks,
-  clearRuntimeMonitorHistory,
   closeRuntimeSessions,
   ensureGatewayRunning,
   gatewayHttpPort: GATEWAY_HTTP_PORT,
   gatewayListenerPidForPort,
   gatewayStatusSnapshot,
-  getRuntimeStatusPayload,
-  getRuntimeSummaryPayload,
   invalidateRuntimeStatusCache,
   isGatewayHealthy,
-  isValidAgentId,
   openAgentSessionSnapshots,
   readExternalChannelActivityEntries,
   readExternalGatewayLogEntries,
+  runtimeRecovery: runtimeRecoveryService,
   scheduleOpenClawSessionLockSweep,
-  shutdownControlCenterRuntime,
   startGatewayHealthMonitor,
   stopGatewayRuntime,
   summarizeGatewayActivity,
-  sweepOpenClawSessionLocks,
   tryRestartGatewayService,
-  writeRuntimeMonitorClearMarker,
 })
 
-async function buildRuntimeStatusPayload(forcePluginRefresh: boolean): Promise<Record<string, unknown>> {
-  const builtStartedAt = Date.now()
-  void sweepOpenClawSessionLocks('runtime status', { quiet: true }).catch(() => undefined)
-  void sweepExpiredMissionCronJobs('runtime status mission cron expiry sweep').catch(() => undefined)
-  const [gatewayHealth, gatewayReadiness, gatewayLedgerSnapshot, externalGatewayLogs, externalChannelActivityLogs, pluginControls, config, gatewayStability, doctorDiagnostics] = await Promise.all([
-    fetchGatewayHealthPayload(),
-    fetchGatewayReadinessPayload(),
-    readRuntimeGatewayLedgerSnapshot(160),
-    readExternalGatewayLogEntries(160),
-    readExternalChannelActivityEntries(160),
-    listPluginControls({ forceRefresh: forcePluginRefresh }).catch((error) => ({
-      plugins: [],
-      configPath: OPENCLAW_CONFIG_PATH,
-      cache: { source: 'unavailable', refreshedAt: 0, refreshing: false },
-      cliError: String(error),
-    })),
-    readOpenclawConfig().catch(() => createInitialOpenclawConfig()),
-    readGatewayStabilitySnapshot(18),
-    readDoctorDiagnosticsSummary(false, { sqlite: false }),
-  ])
-  const probesMs = Date.now() - builtStartedAt
-  const gateway = gatewayStatusSnapshot(gatewayHealth.healthy, null, gatewayLedgerSnapshot.restart, gatewayLedgerSnapshot.recentRestarts, gatewayStability)
-  const ledgerGatewayLogs = gatewayLedgerSnapshot.entries
-  const currentLedgerGatewayLogs = gatewayLogEntriesSinceCurrentStart(ledgerGatewayLogs)
-  const currentExternalGatewayLogs = gatewayLogEntriesSinceCurrentStart(externalGatewayLogs)
-  const currentChannelActivityLogs = gatewayLogEntriesSinceCurrentStart(externalChannelActivityLogs)
-  const currentGatewayLogs = dedupeGatewayLogEntries([...currentLedgerGatewayLogs, ...currentExternalGatewayLogs], 120)
-  const runtimeLoadedPluginIds = new Set(
-    [
-      ...(gatewayHealth.payload?.plugins?.loaded || []),
-      ...runtimeLoadedPluginIdsFromGatewayLogs([...gateway.logs, ...currentGatewayLogs]),
-    ]
-      .map((value) => String(value || '').trim().toLowerCase())
-      .filter(Boolean),
-  )
-  const activity = summarizeGatewayActivity([...currentGatewayLogs, ...currentChannelActivityLogs])
-  const sessionsStartedAt = Date.now()
-  const sessions = await openAgentSessionSnapshots(activity)
-  const sessionsMs = Date.now() - sessionsStartedAt
-  const isPluginRuntimeLoaded = (plugin: PluginControlEntry) => {
-    const status = plugin.status.trim().toLowerCase()
-    return runtimeLoadedPluginIds.has(plugin.id) || plugin.runtimeLoaded || status === 'loaded'
-  }
-  const enabledPlugins = pluginControls.plugins.filter((plugin) => plugin.enabled || isPluginRuntimeLoaded(plugin))
-  const communicationPlugins = enabledPlugins.filter((plugin) => plugin.category === 'communications' || plugin.channels.length)
-  const activeMissions = listMissions().filter((mission) => mission.status === 'active')
-  const cronJobs = listActiveCronJobViews({ sqlite: false })
-  gateway.logs = dedupeGatewayLogEntries([...gateway.logs, ...currentGatewayLogs], 80)
-  const pluginSummary = (plugin: PluginControlEntry) => {
-    const runtimeLoaded = isPluginRuntimeLoaded(plugin)
-    return {
-      id: plugin.id,
-      name: plugin.name,
-      description: plugin.description,
-      origin: plugin.origin,
-      category: plugin.category,
-      status: plugin.status,
-      enabled: plugin.enabled || runtimeLoaded,
-      configuredEnabled: plugin.configuredEnabled,
-      runtimeLoaded,
-      managed: plugin.managed,
-      channels: plugin.channels,
-      providers: plugin.providers,
-      commands: plugin.commands,
-      missingDependencies: plugin.missingDependencies,
-      restartRequired: plugin.restartRequired,
-    }
-  }
-
-  return {
-    ok: true,
-    generatedAt: new Date().toISOString(),
-    monitor: {
-      cached: false,
-      cacheAgeMs: 0,
-      cacheTtlMs: RUNTIME_STATUS_CACHE_MS,
-      buildMs: Date.now() - builtStartedAt,
-      forceRefresh: forcePluginRefresh,
-      timings: {
-        probesMs,
-        sessionsMs,
-        totalMs: Date.now() - builtStartedAt,
-      },
-      sources: {
-        gatewayLedgerLogs: currentLedgerGatewayLogs.length,
-        gatewayExternalLogs: currentExternalGatewayLogs.length,
-        channelExternalLogs: currentChannelActivityLogs.length,
-        doctorRuns: doctorDiagnostics.recent.length,
-        plugins: pluginControls.cache?.source || 'unknown',
-      },
-    },
-    runtime: runtimeVersionCheckPayload(),
-    persistence: runtimeLedgerStatus({ sqlite: false }),
-    optimization: openClawOptimizationStatus(config),
-    gateway: {
-      ...gateway,
-      readiness: gatewayReadiness,
-      chat: gatewayChatRuntimeSnapshot(),
-      activity,
-      stability: gatewayStability,
-    },
-    sessions,
-    activeRuns: Array.from(activeOpenClawRuns.values()).map(openClawRunSnapshot),
-    recentRuns: recentOpenClawRuns
-      .filter((run) => isRuntimeMonitorEntryVisible(run.endedAt || run.startedAt))
-      .slice(0, 20),
-    plugins: {
-      enabledCount: enabledPlugins.length,
-      totalCount: pluginControls.plugins.length,
-      all: pluginControls.plugins.map(pluginSummary),
-      enabled: enabledPlugins.slice(0, 24).map(pluginSummary),
-      communication: communicationPlugins.slice(0, 12).map(pluginSummary),
-      cache: pluginControls.cache,
-      ...(pluginControls.cliError ? { cliError: pluginControls.cliError } : {}),
-    },
-    shifts: {
-      activeCount: cronJobs.active.length,
-      active: cronJobs.active.slice(0, 12),
-      ...(cronJobs.error ? { error: cronJobs.error } : {}),
-    },
-    missions: {
-      activeCount: activeMissions.length,
-      active: activeMissions.map((mission) => missionView(mission)).slice(0, 12),
-    },
-    diagnostics: {
-      doctor: doctorDiagnostics,
-    },
-  }
-}
-
-async function buildRuntimeSummaryPayload(): Promise<Record<string, unknown>> {
-  const builtStartedAt = Date.now()
-  const [gatewayHealth, gatewayReadiness, gatewayLedgerSnapshot, externalGatewayLogs, externalChannelActivityLogs, gatewayStability, doctorDiagnostics] = await Promise.all([
-    fetchGatewayHealthPayload(),
-    fetchGatewayReadinessPayload(),
-    readRuntimeGatewayLedgerSnapshot(48),
-    readExternalGatewayLogEntries(48),
-    readExternalChannelActivityEntries(48),
-    readGatewayStabilitySnapshot(8),
-    readDoctorDiagnosticsSummary(false, { sqlite: false }),
-  ])
-  const probesMs = Date.now() - builtStartedAt
-  const gateway = gatewayStatusSnapshot(gatewayHealth.healthy, null, gatewayLedgerSnapshot.restart, gatewayLedgerSnapshot.recentRestarts, gatewayStability)
-  const ledgerGatewayLogs = gatewayLedgerSnapshot.entries
-  const currentGatewayLogs = dedupeGatewayLogEntries([
-    ...gatewayLogEntriesSinceCurrentStart(ledgerGatewayLogs),
-    ...gatewayLogEntriesSinceCurrentStart(externalGatewayLogs),
-  ], 48)
-  const currentChannelActivityLogs = gatewayLogEntriesSinceCurrentStart(externalChannelActivityLogs)
-  const activity = summarizeGatewayActivity([...currentGatewayLogs, ...currentChannelActivityLogs])
-  const cronJobs = listActiveCronJobViews({ sqlite: false })
-  const activeMissions = listMissions().filter((mission) => mission.status === 'active')
-  const cachedPlugins = isLooseRecord(runtimeStatusPayloadCache?.payload?.plugins)
-    ? runtimeStatusPayloadCache?.payload.plugins as Record<string, unknown>
-    : null
-  const pluginEnabledCount = typeof cachedPlugins?.enabledCount === 'number' ? cachedPlugins.enabledCount : 0
-  const pluginTotalCount = typeof cachedPlugins?.totalCount === 'number' ? cachedPlugins.totalCount : 0
-  const pluginCommunication = Array.isArray(cachedPlugins?.communication) ? cachedPlugins.communication.slice(0, 4) : []
-  gateway.logs = dedupeGatewayLogEntries([...gateway.logs, ...currentGatewayLogs], 12)
-
-  return {
-    ok: true,
-    generatedAt: new Date().toISOString(),
-    monitor: {
-      cached: false,
-      summary: true,
-      cacheAgeMs: 0,
-      cacheTtlMs: RUNTIME_SUMMARY_CACHE_MS,
-      buildMs: Date.now() - builtStartedAt,
-      forceRefresh: false,
-      timings: {
-        probesMs,
-        totalMs: Date.now() - builtStartedAt,
-      },
-      sources: {
-        gatewayLedgerLogs: ledgerGatewayLogs.length,
-        gatewayExternalLogs: externalGatewayLogs.length,
-        channelExternalLogs: externalChannelActivityLogs.length,
-        doctorRuns: doctorDiagnostics.recent.length,
-      },
-    },
-    gateway: {
-      ...gateway,
-      readiness: gatewayReadiness,
-      chat: gatewayChatRuntimeSnapshot(),
-      stability: gatewayStability,
-      activity: {
-        ...activity,
-        events: activity.events.slice(0, 8),
-      },
-    },
-    sessions: [],
-    activeRuns: Array.from(activeOpenClawRuns.values()).map(openClawRunSnapshot),
-    recentRuns: [],
-    plugins: {
-      enabledCount: pluginEnabledCount,
-      totalCount: pluginTotalCount,
-      enabled: [],
-      communication: pluginCommunication,
-      ...(cachedPlugins?.cache ? { cache: cachedPlugins.cache } : {}),
-      ...(cachedPlugins?.cliError ? { cliError: cachedPlugins.cliError } : {}),
-    },
-    shifts: {
-      activeCount: cronJobs.active.length,
-      active: cronJobs.active.slice(0, 4),
-      ...(cronJobs.error ? { error: cronJobs.error } : {}),
-    },
-    missions: {
-      activeCount: activeMissions.length,
-      active: activeMissions.map((mission) => missionView(mission)).slice(0, 4),
-    },
-    diagnostics: {
-      doctor: {
-        ...doctorDiagnostics,
-        recent: doctorDiagnostics.recent.slice(0, 2),
-      },
-    },
-  }
-}
-
-function runtimeSummaryPayloadFromStatusPayload(
-  payload: Record<string, unknown>,
-  builtAt: number,
-  options: { cached: boolean } = { cached: false },
-): Record<string, unknown> {
-  const monitor = isLooseRecord(payload.monitor) ? payload.monitor : {}
-  const gateway = isLooseRecord(payload.gateway) ? payload.gateway : {}
-  const activity = isLooseRecord(gateway.activity) ? gateway.activity : {}
-  const plugins = isLooseRecord(payload.plugins) ? payload.plugins : {}
-  const shifts = isLooseRecord(payload.shifts) ? payload.shifts : {}
-  const missions = isLooseRecord(payload.missions) ? payload.missions : {}
-  const diagnostics = isLooseRecord(payload.diagnostics) ? payload.diagnostics : {}
-  const generatedAt = typeof payload.generatedAt === 'string' ? payload.generatedAt : new Date().toISOString()
-  const communicationPlugins = Array.isArray(plugins.communication) ? plugins.communication.slice(0, 4) : []
-  const activeShifts = Array.isArray(shifts.active) ? shifts.active.slice(0, 4) : []
-  const activeMissions = Array.isArray(missions.active) ? missions.active.slice(0, 4) : []
-
-  return {
-    ok: true,
-    generatedAt,
-    monitor: {
-      ...monitor,
-      cached: options.cached,
-      summary: true,
-      cacheAgeMs: options.cached ? Math.max(0, Date.now() - builtAt) : 0,
-      cacheTtlMs: RUNTIME_SUMMARY_CACHE_MS,
-      derivedFrom: 'runtime-status',
-    },
-    gateway: {
-      ...gateway,
-      logs: Array.isArray(gateway.logs) ? gateway.logs.slice(0, 12) : [],
-      activity: {
-        ...activity,
-        events: Array.isArray(activity.events) ? activity.events.slice(0, 8) : [],
-      },
-    },
-    sessions: [],
-    activeRuns: Array.isArray(payload.activeRuns) ? payload.activeRuns : [],
-    recentRuns: [],
-    plugins: {
-      enabledCount: typeof plugins.enabledCount === 'number' ? plugins.enabledCount : 0,
-      totalCount: typeof plugins.totalCount === 'number' ? plugins.totalCount : 0,
-      enabled: [],
-      communication: communicationPlugins,
-      ...(plugins.cache ? { cache: plugins.cache } : {}),
-      ...(plugins.cliError ? { cliError: plugins.cliError } : {}),
-    },
-    shifts: {
-      activeCount: typeof shifts.activeCount === 'number' ? shifts.activeCount : activeShifts.length,
-      active: activeShifts,
-      ...(shifts.error ? { error: shifts.error } : {}),
-    },
-    missions: {
-      activeCount: typeof missions.activeCount === 'number' ? missions.activeCount : activeMissions.length,
-      active: activeMissions,
-    },
-    diagnostics,
-  }
-}
-
-function runtimeStatusFromCache(payload: Record<string, unknown>, builtAt: number): Record<string, unknown> {
-  const monitor = isLooseRecord(payload.monitor) ? payload.monitor : {}
-  return {
-    ...payload,
-    monitor: {
-      ...monitor,
-      cached: true,
-      cacheAgeMs: Math.max(0, Date.now() - builtAt),
-      cacheTtlMs: RUNTIME_STATUS_CACHE_MS,
-    },
-  }
-}
-
-function runtimeSummaryFromCache(payload: Record<string, unknown>, builtAt: number): Record<string, unknown> {
-  const monitor = isLooseRecord(payload.monitor) ? payload.monitor : {}
-  return {
-    ...payload,
-    monitor: {
-      ...monitor,
-      cached: true,
-      cacheAgeMs: Math.max(0, Date.now() - builtAt),
-      cacheTtlMs: RUNTIME_SUMMARY_CACHE_MS,
-    },
-  }
-}
-
-function runtimeFallbackReason(error: unknown) {
-  const message = error instanceof Error && error.message ? `${error.name}: ${error.message}` : String(error)
-  return redactSensitiveText(message)
-}
-
-function isRuntimeResponseTimeout(error: unknown) {
-  return error instanceof Error && error.name === 'TimeoutError'
-}
-
-function withRuntimeFallbackMonitor(
-  payload: Record<string, unknown>,
-  reason: string,
-  responseTimeoutMs: number,
-  options: { builtAt?: number; summary?: boolean } = {},
-): Record<string, unknown> {
-  const monitor = isLooseRecord(payload.monitor) ? payload.monitor : {}
-  const builtAt = options.builtAt
-  return {
-    ...payload,
-    monitor: {
-      ...monitor,
-      ...(options.summary ? { summary: true } : {}),
-      cached: builtAt ? true : monitor.cached === true,
-      cacheAgeMs: builtAt
-        ? Math.max(0, Date.now() - builtAt)
-        : typeof monitor.cacheAgeMs === 'number'
-          ? monitor.cacheAgeMs
-          : 0,
-      degraded: true,
-      fallback: true,
-      fallbackReason: reason,
-      responseTimeoutMs,
-    },
-  }
-}
-
-function minimalRuntimeStatusPayload(reason: string, responseTimeoutMs: number): Record<string, unknown> {
-  const gateway = gatewayStatusSnapshot(false)
-  const activeMissions = listMissions().filter((mission) => mission.status === 'active')
-  const cronJobs = listActiveCronJobViews({ sqlite: false })
-  return {
-    ok: true,
-    generatedAt: new Date().toISOString(),
-    monitor: {
-      cached: false,
-      cacheAgeMs: 0,
-      cacheTtlMs: RUNTIME_STATUS_CACHE_MS,
-      degraded: true,
-      fallback: true,
-      fallbackReason: reason,
-      responseTimeoutMs,
-      forceRefresh: false,
-    },
-    runtime: runtimeVersionCheckPayload(),
-    persistence: runtimeLedgerStatus({ sqlite: false }),
-    optimization: openClawOptimizationStatus(createInitialOpenclawConfig()),
-    gateway: {
-      ...gateway,
-      readiness: gatewayReadinessUnavailable('skipped during runtime status fallback'),
-      chat: gatewayChatRuntimeSnapshot(),
-      activity: summarizeGatewayActivity([]),
-      stability: gatewayStabilityUnavailable('diagnostics.stability', 'skipped during runtime status fallback'),
-    },
-    sessions: [],
-    activeRuns: Array.from(activeOpenClawRuns.values()).map(openClawRunSnapshot),
-    recentRuns: recentOpenClawRuns
-      .filter((run) => isRuntimeMonitorEntryVisible(run.endedAt || run.startedAt))
-      .slice(0, 8),
-    plugins: {
-      enabledCount: 0,
-      totalCount: 0,
-      all: [],
-      enabled: [],
-      communication: [],
-      cache: { source: 'fallback', refreshedAt: Date.now(), refreshing: true },
-    },
-    shifts: {
-      activeCount: cronJobs.active.length,
-      active: cronJobs.active.slice(0, 4),
-      ...(cronJobs.error ? { error: cronJobs.error } : {}),
-    },
-    missions: {
-      activeCount: activeMissions.length,
-      active: activeMissions.map((mission) => missionView(mission)).slice(0, 4),
-    },
-    diagnostics: {
-      doctor: cachedDoctorDiagnosticsSummary(),
-    },
-  }
-}
-
-function fallbackRuntimeStatusPayload(error: unknown, responseTimeoutMs: number): Record<string, unknown> {
-  const reason = runtimeFallbackReason(error)
-  if (runtimeStatusPayloadCache) {
-    return withRuntimeFallbackMonitor(
-      runtimeStatusFromCache(runtimeStatusPayloadCache.payload, runtimeStatusPayloadCache.builtAt),
-      reason,
-      responseTimeoutMs,
-      { builtAt: runtimeStatusPayloadCache.builtAt },
-    )
-  }
-  return minimalRuntimeStatusPayload(reason, responseTimeoutMs)
-}
-
-function fallbackRuntimeSummaryPayload(error: unknown, responseTimeoutMs: number): Record<string, unknown> {
-  const reason = runtimeFallbackReason(error)
-  if (runtimeSummaryPayloadCache) {
-    return withRuntimeFallbackMonitor(
-      runtimeSummaryFromCache(runtimeSummaryPayloadCache.payload, runtimeSummaryPayloadCache.builtAt),
-      reason,
-      responseTimeoutMs,
-      { builtAt: runtimeSummaryPayloadCache.builtAt, summary: true },
-    )
-  }
-  if (runtimeStatusPayloadCache) {
-    return withRuntimeFallbackMonitor(
-      runtimeSummaryPayloadFromStatusPayload(runtimeStatusPayloadCache.payload, runtimeStatusPayloadCache.builtAt, { cached: true }),
-      reason,
-      responseTimeoutMs,
-      { builtAt: runtimeStatusPayloadCache.builtAt, summary: true },
-    )
-  }
-  const builtAt = Date.now()
-  const minimal = minimalRuntimeStatusPayload(reason, responseTimeoutMs)
-  return withRuntimeFallbackMonitor(
-    runtimeSummaryPayloadFromStatusPayload(minimal, builtAt, { cached: false }),
-    reason,
-    responseTimeoutMs,
-    { summary: true },
-  )
-}
-
-async function getRuntimeStatusPayload(forcePluginRefresh: boolean): Promise<Record<string, unknown>> {
-  const now = Date.now()
-  if (!forcePluginRefresh && runtimeStatusPayloadCache && now - runtimeStatusPayloadCache.builtAt <= RUNTIME_STATUS_CACHE_MS) {
-    return runtimeStatusFromCache(runtimeStatusPayloadCache.payload, runtimeStatusPayloadCache.builtAt)
-  }
-  if (!forcePluginRefresh && runtimeStatusPayloadInFlight) {
-    try {
-      const payload = await withResponseDeadline(runtimeStatusPayloadInFlight, 'runtime status refresh', RUNTIME_STATUS_RESPONSE_TIMEOUT_MS)
-      return runtimeStatusFromCache(payload, runtimeStatusPayloadCache?.builtAt || Date.now())
-    } catch (error) {
-      if (isRuntimeResponseTimeout(error)) {
-        runtimeStatusPayloadInFlight = null
-        return fallbackRuntimeStatusPayload(error, RUNTIME_STATUS_RESPONSE_TIMEOUT_MS)
-      }
-      throw error
-    }
-  }
-
-  const promise = buildRuntimeStatusPayload(forcePluginRefresh).then((payload) => {
-    if (!forcePluginRefresh) {
-      const builtAt = Date.now()
-      runtimeStatusPayloadCache = { builtAt, payload }
-      runtimeSummaryPayloadCache = { builtAt, payload: runtimeSummaryPayloadFromStatusPayload(payload, builtAt, { cached: false }) }
-    }
-    return payload
-  }).finally(() => {
-    if (runtimeStatusPayloadInFlight === promise) runtimeStatusPayloadInFlight = null
-  })
-  if (!forcePluginRefresh) runtimeStatusPayloadInFlight = promise
-  try {
-    const payload = await withResponseDeadline(promise, 'runtime status refresh', RUNTIME_STATUS_RESPONSE_TIMEOUT_MS)
-    return payload
-  } catch (error) {
-    if (isRuntimeResponseTimeout(error)) {
-      if (runtimeStatusPayloadInFlight === promise) runtimeStatusPayloadInFlight = null
-      return fallbackRuntimeStatusPayload(error, RUNTIME_STATUS_RESPONSE_TIMEOUT_MS)
-    }
-    throw error
-  }
-}
-
-async function getRuntimeSummaryPayload(forceRefresh: boolean): Promise<Record<string, unknown>> {
-  const now = Date.now()
-  if (!forceRefresh && runtimeSummaryPayloadCache && now - runtimeSummaryPayloadCache.builtAt <= RUNTIME_SUMMARY_CACHE_MS) {
-    return runtimeSummaryFromCache(runtimeSummaryPayloadCache.payload, runtimeSummaryPayloadCache.builtAt)
-  }
-  if (!forceRefresh && runtimeStatusPayloadCache && now - runtimeStatusPayloadCache.builtAt <= Math.min(RUNTIME_STATUS_CACHE_MS, RUNTIME_SUMMARY_CACHE_MS)) {
-    return runtimeSummaryPayloadFromStatusPayload(runtimeStatusPayloadCache.payload, runtimeStatusPayloadCache.builtAt, { cached: true })
-  }
-  if (!forceRefresh && runtimeStatusPayloadInFlight) {
-    try {
-      const payload = await withResponseDeadline(runtimeStatusPayloadInFlight, 'runtime status refresh for summary', RUNTIME_SUMMARY_RESPONSE_TIMEOUT_MS)
-      const builtAt = runtimeStatusPayloadCache?.builtAt || Date.now()
-      const summary = runtimeSummaryPayloadFromStatusPayload(payload, builtAt, { cached: true })
-      runtimeSummaryPayloadCache = { builtAt, payload: runtimeSummaryPayloadFromStatusPayload(payload, builtAt, { cached: false }) }
-      return summary
-    } catch (error) {
-      if (isRuntimeResponseTimeout(error)) {
-        runtimeStatusPayloadInFlight = null
-        return fallbackRuntimeSummaryPayload(error, RUNTIME_SUMMARY_RESPONSE_TIMEOUT_MS)
-      }
-      throw error
-    }
-  }
-  if (!forceRefresh && runtimeSummaryPayloadInFlight) {
-    try {
-      const payload = await withResponseDeadline(runtimeSummaryPayloadInFlight, 'runtime summary refresh', RUNTIME_SUMMARY_RESPONSE_TIMEOUT_MS)
-      return runtimeSummaryFromCache(payload, runtimeSummaryPayloadCache?.builtAt || Date.now())
-    } catch (error) {
-      if (isRuntimeResponseTimeout(error)) {
-        runtimeSummaryPayloadInFlight = null
-        return fallbackRuntimeSummaryPayload(error, RUNTIME_SUMMARY_RESPONSE_TIMEOUT_MS)
-      }
-      throw error
-    }
-  }
-
-  const promise = buildRuntimeSummaryPayload().then((payload) => {
-    if (!forceRefresh) {
-      runtimeSummaryPayloadCache = { builtAt: Date.now(), payload }
-    }
-    return payload
-  }).finally(() => {
-    if (runtimeSummaryPayloadInFlight === promise) runtimeSummaryPayloadInFlight = null
-  })
-  if (!forceRefresh) runtimeSummaryPayloadInFlight = promise
-  try {
-    const payload = await withResponseDeadline(promise, 'runtime summary refresh', RUNTIME_SUMMARY_RESPONSE_TIMEOUT_MS)
-    return payload
-  } catch (error) {
-    if (isRuntimeResponseTimeout(error)) {
-      if (runtimeSummaryPayloadInFlight === promise) runtimeSummaryPayloadInFlight = null
-      return fallbackRuntimeSummaryPayload(error, RUNTIME_SUMMARY_RESPONSE_TIMEOUT_MS)
-    }
-    throw error
-  }
-}
+registerRuntimeRoutes(app, {
+  getRuntimeStatusPayload,
+  getRuntimeSummaryPayload,
+  isValidAgentId,
+  runtimeActions: runtimeActionService,
+})
 
 registerPluginRoutes(app, {
   clawTalkPluginId: CLAWTALK_PLUGIN_ID,
@@ -27775,28 +21881,9 @@ registerPartyCoordinationRoutes(app, {
 
 registerMissionRoutes(app, {
   buildMissionLifecycleProjection,
-  cleanupMissionCronJobs,
-  clearMissionController,
-  completeCronMission,
-  controlCenterMissionSchedulerDryRun: CONTROL_CENTER_MISSION_SCHEDULER_DRY_RUN,
-  findMissionByIdempotencyKey,
   listMissionReports,
-  missionCronCleanupFailureSummary,
-  missionCronJobNeedsRecovery,
-  missionDurationMs,
-  missionSchedulerInitialState,
-  missionTimers,
-  missionView,
-  missions,
-  normalizeMissionLaunchIdempotencyKey,
-  persistMissionRecord,
-  pushMissionEvent,
-  readMissionEvents: (limit) => readMissionEventLedgerTail<MissionLifecycleEvent>(limit).catch(() => []),
-  recordMissionReport,
-  scheduleNextMissionRound,
-  startRecurringMissionCronJobs,
-  transitionMissionState,
-  writeTeamSyncSnapshot,
+  missionStateService,
+  readMissionEvents: (limit) => runtimeLedgerStore.readMissionEvents<MissionLifecycleEvent>(limit).catch(() => []),
 })
 
 async function runBufferedAgentTurnForStream(

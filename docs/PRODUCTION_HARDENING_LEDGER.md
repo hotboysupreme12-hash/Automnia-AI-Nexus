@@ -1,6 +1,6 @@
 # DystopAI Core Production Hardening Ledger
 
-Last updated: 2026-06-27
+Last updated: 2026-06-30
 
 Automation: `dystopai-production-hardening`
 
@@ -11,6 +11,7 @@ Automation: `dystopai-production-hardening`
 - Protect user work. Do not revert unrelated local changes.
 - For risky or broad changes, create or use a protective `codex/` branch or worktree before editing.
 - Read the local OpenClaw documentation snapshot before changing OpenClaw, Gateway, Command Console, ClawTalk, runtime, tool routing, agent sessions, plugins, or related Control Center behavior.
+- For optimization work, treat `docs/BETA_CODEBASE_SPLIT_PLAN.md` as the current source ledger and `docs/OPTIMIZATION_MEMORY.md` as the handoff note for future optimization runs.
 - Complete one coherent hardening slice per run when possible.
 - Record verification evidence, blockers, and the next planned task before stopping.
 
@@ -23,6 +24,424 @@ Automation: `dystopai-production-hardening`
 - No existing production-hardening ledger was found.
 
 ## Completed
+
+### 2026-06-30 - Beta Split Plan Ledger Alignment
+
+Scope:
+
+- Downloaded the GitHub beta codebase split plan from `origin/docs/150-point-release-plan`.
+- Added `docs/BETA_CODEBASE_SPLIT_PLAN.md` as an exact copy of the remote plan.
+- Verified the local plan blob matches the GitHub branch blob SHA: `78bada3e29085e2726769b86b6c3720b69feab9f`.
+- Updated `docs/OPENCLAW_BETA_OPTIMIZATION_GUIDE.md` so optimization work follows the beta split plan phase order instead of expanding the old roadmap as a standalone feature list.
+- Updated `docs/CLAWTALK_OPENCLAW_OPTIMIZATION_REPORT.md` so ClawTalk/Gateway optimizations route through Gateway/runtime services.
+- Added `docs/OPTIMIZATION_MEMORY.md` as the durable handoff note for future optimization passes.
+
+Verification:
+
+- Confirmed the imported plan file hash matches `origin/docs/150-point-release-plan:docs/BETA_CODEBASE_SPLIT_PLAN.md`.
+- Documentation-only change; no runtime tests were required.
+
+### 2026-06-30 - Phase A Control-Plane Growth Guard
+
+Scope:
+
+- Added the Phase A no-new-domain-logic guard at the top of `server/controlPlane.ts`.
+- Updated `scripts/smoke-server-entrypoint-boundary.ts` so `npm run smoke:server-architecture` now enforces:
+  - the guard comment remains at the top of `controlPlane.ts`;
+  - new backend behavior is directed to a target service folder in `docs/BETA_CODEBASE_SPLIT_PLAN.md`;
+  - the control-plane line budget remains at or below `29,000` lines;
+  - inline `/api` route handlers stay out of `controlPlane.ts`;
+  - the generated architecture reporter continues publishing control-plane line-count evidence.
+- Regenerated `docs/generated/server-index-architecture.md`; it now records `28,879` control-plane composition lines.
+- Added an automation progress section to `docs/BETA_CODEBASE_SPLIT_PLAN.md` marking verified Phase A items `1`, `2`, `4`, `5`, `6`, `8`, and `10`.
+- Updated `docs/OPTIMIZATION_MEMORY.md` so the next pass starts Phase B Gateway service extraction.
+
+Verification:
+
+- `node scripts/report-server-index-architecture.mjs` passed and wrote `docs/generated/server-index-architecture.md` with `28,879` composition lines.
+- `npm run smoke:server-architecture` passed: `9` entry lines, `28,879/29,000` control-plane composition lines, `0` inline routes, guard present.
+- `npm run smoke:route-inventory` passed: `109` unique API routes.
+- `npm run lint` passed.
+
+Risks and notes:
+
+- The run started with existing uncommitted beta-plan alignment and Telegram routing changes; this slice preserved them and only layered the Phase A guard/evidence on top.
+- Phase A items `3`, `7`, and `9` remain partially policy-driven until Gateway/service extractions create concrete temporary-exception and extracted-function tracking cases.
+
+Next action:
+
+- Start Phase B by extracting Gateway lifecycle behavior into `server/services/gateway/gatewayLifecycleService.ts`, with focused tests for process command construction and unavailable/restart behavior.
+
+### 2026-06-30 - Phase B Gateway Lifecycle Service Extraction
+
+Scope:
+
+- Extracted Gateway process lifecycle ownership from `server/controlPlane.ts` into `server/services/gateway/gatewayLifecycleService.ts`.
+- Moved Gateway start/stop/restart state, startup timeline events, health monitor timers, listener PID lookup, restart lifecycle memory, restart diagnostics, manual runtime stop, and plugin-install pause/resume handling behind the lifecycle service.
+- Kept `server/controlPlane.ts` as dependency wiring for Gateway lifecycle behavior, including redaction, ledger append, OpenClaw runtime/config repair helpers, health probes, port release, and plugin repair dependencies.
+- Added `tests/gatewayLifecycleService.test.ts` for process command construction, unavailable runtime behavior, external-listener restart refusal, forced restart command/env construction, and restart lifecycle outcome tracking.
+- Preserved and fixed the wired `scripts/smoke-gateway-lifecycle-service.ts` so `npm run smoke:gateway-lifecycle` exits cleanly after the external-listener restart case, then added it to `npm run test:ci` after Gateway auth hardening.
+- Updated related runtime/OpenClaw contract smokes to inspect the extracted service instead of forcing lifecycle internals to stay in `server/controlPlane.ts`.
+- Regenerated `docs/generated/server-index-architecture.md`; `server/controlPlane.ts` is now `28,155` composition lines, down from the Phase A `28,879` line baseline.
+- Updated `docs/BETA_CODEBASE_SPLIT_PLAN.md` automation progress for completed Phase B items `11`, `15`, and `16`.
+
+Verification:
+
+- `npm run typecheck:server` passed.
+- `npm run typecheck` passed.
+- `npm run test:unit` passed, including `20` unit tests and the new Gateway lifecycle coverage.
+- `npm run smoke:gateway-lifecycle` passed.
+- `npm run smoke:server-architecture` passed: `9` entry lines, `28,155/29,000` control-plane composition lines, `0` inline routes, guard present.
+- `npm run smoke:route-inventory` passed: `109` unique API routes.
+- `npm run smoke:runtime-status-control-plane` passed.
+- `npm run smoke:runtime-actions-control-plane` passed.
+- `npm run smoke:openclaw` passed.
+- `npm run lint` passed.
+- `node scripts/report-server-index-architecture.mjs` passed and wrote `docs/generated/server-index-architecture.md`.
+- `npm test` reached the late release-validation gate after the Gateway lifecycle smoke passed, then failed in `npm run smoke:release-validation` with `AssertionError [ERR_ASSERTION]: README must document consumer distribution signing evidence` at `scripts/smoke-release-validation.ts:45:8`, expected `/distribution-signing\.json/`.
+
+Risks and notes:
+
+- The worktree already contained uncommitted beta-plan alignment, Telegram routing repair, and partial Gateway lifecycle extraction edits; this slice completed and verified the lifecycle extraction without reverting that work.
+- The `npm test` failure is a pre-existing release documentation contract mismatch in `README.md`; this slice did not modify `README.md`, and focused Gateway lifecycle, architecture, OpenClaw, runtime, lint, and typecheck gates all passed.
+- The full-suite run also reported the known `smoke:ledger` recovery warning for one malformed historical `runtime-runs` JSONL row; the ledger smoke continued and passed.
+- Gateway diagnostics, log tailing/redaction, and chat orchestration still live outside dedicated Gateway services and remain Phase B follow-up work.
+
+Next action:
+
+- Continue Phase B with `gatewayDiagnosticsService.ts` and `gatewayLogService.ts`, starting with health/readiness/stability probing and log tail/redaction helpers that can be tested without Express.
+
+### 2026-06-30 - Phase B Gateway Diagnostics Service Extraction
+
+Scope:
+
+- Extracted Gateway health/readiness/stability probing from `server/controlPlane.ts` into `server/services/gateway/gatewayDiagnosticsService.ts`.
+- Moved `/health`, `/readyz`, and `diagnostics.stability` response normalization, unavailable-state shaping, warning summarization, and redacted stability error handling behind a testable service factory with injected fetch/client dependencies.
+- Kept `server/controlPlane.ts` as composition glue for Gateway diagnostics by wiring `createGatewayDiagnosticsService(...)` and preserving the existing runtime status and Doctor call-site wrappers.
+- Added `tests/gatewayDiagnosticsService.test.ts` for healthy payloads, degraded readiness summaries, missing Gateway client behavior, redacted stability warning details, and redacted stability request failures.
+- Added `scripts/smoke-gateway-diagnostics-service.ts`, exposed it as `npm run smoke:gateway-diagnostics`, and wired it into `npm run test:ci`.
+- Regenerated `docs/generated/server-index-architecture.md`; `server/controlPlane.ts` is now `27,838` composition lines, down from the Gateway lifecycle extraction baseline of `28,155`.
+- Updated `docs/BETA_CODEBASE_SPLIT_PLAN.md` automation progress for completed Phase B item `12`.
+- Updated `docs/OPTIMIZATION_MEMORY.md` so the next optimization pass starts Gateway log tailing/redaction extraction.
+
+Verification:
+
+- `npm run typecheck:server` passed.
+- `npm run typecheck` passed.
+- `npm run test:unit` passed with `24` tests, including the new Gateway diagnostics coverage.
+- `npm run smoke:gateway-diagnostics` passed.
+- `npm run smoke:gateway-lifecycle` passed.
+- `npm run smoke:runtime-status-control-plane` passed.
+- `npm run smoke:runtime-actions-control-plane` passed.
+- `npm run smoke:server-architecture` passed: `9` entry lines, `27,838/29,000` control-plane composition lines, `0` inline routes, guard present.
+- `npm run smoke:route-inventory` passed: `109` unique API routes.
+- `npm run smoke:openclaw` passed.
+- `npm run lint` passed.
+- `node scripts/report-server-index-architecture.mjs` passed and wrote `docs/generated/server-index-architecture.md`.
+- `npm test` reached and passed `npm run smoke:gateway-diagnostics`, then failed at the pre-existing `npm run smoke:release-validation` gate with `AssertionError [ERR_ASSERTION]: README must document consumer distribution signing evidence` at `scripts/smoke-release-validation.ts:45:8`, expected `/distribution-signing\.json/`.
+
+Risks and notes:
+
+- The full-suite blocker is unrelated to this Gateway diagnostics extraction and matches the previously recorded release documentation contract mismatch in `README.md`.
+- The full-suite run again reported the known malformed historical `runtime-runs` JSONL recovery warning; the ledger smoke continued and passed before the later release-validation failure.
+- Gateway log tailing/redaction and chat orchestration still require dedicated services before Phase B is complete.
+
+Next action:
+
+- Continue Phase B by extracting Gateway log discovery, file tailing, `logs.tail` RPC fallback, channel activity parsing, redaction, dedupe, and log snapshot cache behavior into `server/services/gateway/gatewayLogService.ts`.
+
+### 2026-06-30 - Phase B Gateway Log Service Extraction
+
+Scope:
+
+- Extracted Gateway log ownership from `server/controlPlane.ts` into `server/services/gateway/gatewayLogService.ts`.
+- Moved Gateway log compaction/redaction, in-memory log mirroring, file-log discovery, tail snapshots, `logs.tail` RPC fallback, ClawTalk websocket channel activity parsing, channel direction classification, current-start filtering, dedupe, runtime loaded-plugin extraction, and Monitor activity summaries behind a testable service factory with injected filesystem/client/redaction dependencies.
+- Kept `server/controlPlane.ts` as composition glue by wiring `createGatewayLogService(...)` and preserving wrappers for existing runtime status, Doctor, Gateway lifecycle, and Monitor call sites.
+- Added `tests/gatewayLogService.test.ts` for redacted ledger writes, `logs.tail` RPC parsing, local file-tail fallback after redacted RPC failure, ClawTalk websocket channel activity parsing, current-start filtering, dedupe, activity summaries, and plugin id extraction.
+- Added `scripts/smoke-gateway-log-service.ts`, exposed it as `npm run smoke:gateway-logs`, and wired it into `npm run test:ci`.
+- Updated `scripts/smoke-openclaw-contracts.mjs` and `scripts/smoke-runtime-status-control-plane.ts` so log internals are asserted in `gatewayLogService.ts`, not in the composition root.
+- Regenerated `docs/generated/server-index-architecture.md`; `server/controlPlane.ts` is now `26,883` composition lines, down from the Gateway diagnostics extraction baseline of `27,838`.
+- Updated `docs/BETA_CODEBASE_SPLIT_PLAN.md` automation progress for completed Phase B item `13`.
+- Updated `docs/OPTIMIZATION_MEMORY.md` so the next optimization pass starts Gateway chat orchestration extraction.
+
+Verification:
+
+- `npm run typecheck:server` passed.
+- `npm run typecheck` passed.
+- `npm run test:unit` passed with `29` tests, including the new Gateway log coverage.
+- `npm run smoke:gateway-logs` passed.
+- `npm run smoke:gateway-diagnostics` passed.
+- `npm run smoke:gateway-lifecycle` passed.
+- `npm run smoke:runtime-status-control-plane` passed.
+- `npm run smoke:runtime-actions-control-plane` passed.
+- `npm run smoke:server-architecture` passed: `9` entry lines, `26,883/29,000` control-plane composition lines, `0` inline routes, guard present.
+- `npm run smoke:route-inventory` passed: `109` unique API routes.
+- `npm run smoke:openclaw` passed.
+- `npm run lint` passed.
+- `node scripts/report-server-index-architecture.mjs` passed and wrote `docs/generated/server-index-architecture.md`.
+- `git diff --check` passed.
+- `npm test` reached and passed `npm run smoke:gateway-logs`, then failed at the pre-existing `npm run smoke:release-validation` gate with `AssertionError [ERR_ASSERTION]: README must document consumer distribution signing evidence` at `scripts/smoke-release-validation.ts:45:8`, expected `/distribution-signing\.json/`.
+
+Risks and notes:
+
+- The full-suite blocker is unrelated to this Gateway log extraction and matches the previously recorded release documentation contract mismatch in `README.md`.
+- The full-suite run again reported the known malformed historical `runtime-runs` JSONL recovery warning; the ledger smoke continued and passed before the later release-validation failure.
+- Gateway chat orchestration remains in `server/controlPlane.ts` and is the next Phase B extraction.
+
+Next action:
+
+- Continue Phase B by extracting Gateway chat client startup, stream observer/waiter management, `chat.send`, `chat.history`, `chat.message.get`, `chat.abort`, recovery events, and redacted Gateway chat fallback/error shaping into `server/services/gateway/gatewayChatService.ts`.
+
+### 2026-06-30 - Phase B Gateway Chat Service Extraction
+
+Scope:
+
+- Extracted Gateway chat orchestration from `server/controlPlane.ts` into `server/services/gateway/gatewayChatService.ts`.
+- Moved the persistent loopback `gateway-client`, connect/startup readiness, stream observer and waiter state, `chat.send`, `chat.history`, `chat.message.get`, `chat.abort`, prewarm state, recovery snapshots, Gateway event projection, and final reply shaping behind a testable service factory with injected lifecycle, logging, redaction, attachment, runtime-run ledger, and failure-classification dependencies.
+- Kept `server/controlPlane.ts` as composition glue by wiring `createGatewayChatService(...)` and preserving thin wrappers for runtime session close, mission Gateway-session reconciliation, plugin config patching, diagnostics health metadata, stream routes, and shutdown cleanup.
+- Added `tests/gatewayChatService.test.ts` for Gateway chat payload construction, durable history final replies, oversized-history `chat.message.get` fallback, request cancellation issuing `chat.abort`, redacted Gateway send failures, redacted terminal error payloads, stale waiter recovery, and Gateway chat state normalization.
+- Added `scripts/smoke-gateway-chat-service.ts`, exposed it as `npm run smoke:gateway-chat`, wired it into `npm run test:ci`, and extended it to guard the chat-service redaction boundary.
+- Updated `scripts/smoke-openclaw-contracts.mjs` and `scripts/smoke-runtime-actions-control-plane.ts` so Gateway chat internals are asserted in `gatewayChatService.ts`, not in the composition root.
+- Regenerated `docs/generated/server-index-architecture.md`; `server/controlPlane.ts` is now `25,696` composition lines, down from the Gateway log extraction baseline of `26,883`.
+- Updated `docs/BETA_CODEBASE_SPLIT_PLAN.md` automation progress for completed Phase B items `14` and `17`.
+- Updated `docs/OPTIMIZATION_MEMORY.md` so the next optimization pass starts the remaining Phase B validation sweep instead of repeating chat extraction.
+
+Verification:
+
+- `npm run typecheck:server` passed.
+- `npm run typecheck` passed.
+- `npm run test:unit` passed with `36` tests, including the new Gateway chat/redaction/stale-waiter coverage.
+- `npm run smoke:gateway-chat` passed.
+- `npm run smoke:gateway-lifecycle` passed.
+- `npm run smoke:gateway-diagnostics` passed.
+- `npm run smoke:gateway-logs` passed.
+- `npm run smoke:openclaw` passed.
+- `npm run smoke:runtime-status-control-plane` passed.
+- `npm run smoke:runtime-actions-control-plane` passed.
+- `npm run smoke:server-architecture` passed: `9` entry lines, `25,696/29,000` control-plane composition lines, `0` inline routes, guard present.
+- `npm run smoke:route-inventory` passed: `109` unique API routes.
+- `npm run lint` passed.
+- `node scripts/report-server-index-architecture.mjs` passed and wrote `docs/generated/server-index-architecture.md`.
+- `git diff --check` passed.
+- `npm test` reached and passed `npm run smoke:gateway-chat`, then failed at the pre-existing `npm run smoke:release-validation` gate with `AssertionError [ERR_ASSERTION]: README must document consumer distribution signing evidence` at `scripts/smoke-release-validation.ts:45:8`, expected `/distribution-signing\.json/`.
+
+Risks and notes:
+
+- The full-suite blocker is unrelated to this Gateway chat extraction and matches the previously recorded release documentation contract mismatch in `README.md`.
+- The full-suite run again reported the known malformed historical `runtime-runs` JSONL recovery warning and expected control-plane error-handler redaction smoke logs; those earlier gates passed before the later release-validation failure.
+- Runtime session close and mission reconciliation still call Gateway `sessions.abort`, `chat.abort`, and `sessions.describe` through the service-owned ready client; deeper runtime ownership belongs to the Phase C runtime service extraction.
+
+Next action:
+
+- Finish the remaining Phase B validation sweep: add stale process cleanup decision coverage if any lifecycle gap remains, route-option/service seam checks where applicable, and Monitor Gateway online/offline/restarting confirmation now that lifecycle, diagnostics, log, and chat services are extracted.
+
+### 2026-06-30 - Phase B Gateway Validation Sweep
+
+Scope:
+
+- Completed the remaining Phase B validation items after the Gateway lifecycle, diagnostics, log, and chat services were extracted.
+- Extended `tests/gatewayLifecycleService.test.ts` to cover stale unhealthy listener cleanup decisions:
+  - release an unhealthy listener before spawning a replacement Gateway;
+  - refuse to spawn when listener release fails and the port remains busy;
+  - project Monitor-facing `healthy`, `offline`, and `restarting` Gateway states after an unhealthy process exit schedules recovery.
+- Extended `scripts/smoke-gateway-lifecycle-service.ts` with the same stale-listener and Monitor state checks so `npm run smoke:gateway-lifecycle` carries service-level evidence without Express or a real Gateway.
+- Strengthened `scripts/smoke-server-entrypoint-boundary.ts` so `npm run smoke:server-architecture` now enforces:
+  - Gateway process lifecycle helpers remain in `server/services/gateway/gatewayLifecycleService.ts`;
+  - Gateway health/readiness/stability probing remains in `gatewayDiagnosticsService.ts`;
+  - Gateway `logs.tail` RPC and file-tail behavior remains in `gatewayLogService.ts`;
+  - Gateway WebSocket chat orchestration remains in `gatewayChatService.ts`;
+  - runtime, diagnostics, and agent-turn routes receive Gateway behavior through explicit option seams.
+- Regenerated `docs/generated/server-index-architecture.md`; `server/controlPlane.ts` remains at `25,696` composition lines with `0` inline API routes.
+- Updated `docs/BETA_CODEBASE_SPLIT_PLAN.md` automation progress to mark Phase B items `18`, `19`, and `20` complete; Phase B items `11-20` are now complete and verified.
+- Updated `docs/OPTIMIZATION_MEMORY.md` so the next optimization run starts Phase C runtime status extraction.
+
+Verification:
+
+- `npm run test:unit` passed with `39` tests, including the new Gateway lifecycle stale-listener and Monitor state coverage.
+- `npm run smoke:gateway-lifecycle` passed.
+- `npm run smoke:gateway-diagnostics` passed.
+- `npm run smoke:gateway-logs` passed.
+- `npm run smoke:gateway-chat` passed.
+- `npm run typecheck` passed.
+- `npm run smoke:runtime-status-control-plane` passed.
+- `npm run smoke:runtime-actions-control-plane` passed.
+- `npm run smoke:openclaw` passed.
+- `npm run smoke:route-inventory` passed: `109` unique API routes.
+- `npm run smoke:server-architecture` passed: `9` entry lines, `25,696/29,000` control-plane composition lines, `0` inline routes, guard present.
+- `node scripts/report-server-index-architecture.mjs` passed and wrote `docs/generated/server-index-architecture.md`.
+- `npm run lint` passed.
+- `git diff --check` passed; Git reported only LF-to-CRLF working-copy warnings on already touched files.
+
+Risks and notes:
+
+- Full `npm test` was not rerun in this pass because the previously recorded unrelated blocker remains: `smoke:release-validation` expects `README.md` to document `distribution-signing.json`.
+- The working tree already contained uncommitted Phase A and Phase B Gateway extraction changes at the start of this run; this slice preserved them and layered only validation/smoke/doc evidence on top.
+
+Next action:
+
+- Start Phase C by extracting runtime summary/status building into `server/services/runtime/runtimeStatusService.ts`, preserving the existing API shape consumed by `src/hooks/useRuntimeStatus.ts`.
+
+### 2026-06-30 - Phase C Runtime Status Service Extraction
+
+Scope:
+
+- Extracted runtime status and summary payload construction into `server/services/runtime/runtimeStatusService.ts`.
+- Moved status/summary caches, response-deadline fallback, cached fallback shaping, Gateway ledger/log/activity projections, plugin summary projection, active mission/shift projection, and Monitor fallback payloads behind a testable service factory.
+- Kept `server/controlPlane.ts` as dependency wiring for the runtime status service and thin wrappers for existing runtime route call sites.
+- Added `tests/runtimeStatusService.test.ts` coverage for healthy Gateway summaries, missing Gateway summaries that still use Gateway ledger evidence, stale session evidence passthrough, and timeout fallback to cached redacted runtime status.
+- Updated runtime/OpenClaw/server architecture smokes to assert status ownership in `server/services/runtime/runtimeStatusService.ts`.
+- Regenerated `docs/generated/server-index-architecture.md`; `server/controlPlane.ts` reached `25,192` composition lines after this status extraction.
+
+Verification:
+
+- `npm run test:unit` passed with the runtime status service tests included.
+- `npm run smoke:runtime-status-control-plane` passed.
+- `npm run smoke:server-architecture` passed with `25,192/29,000` composition lines and `0` inline routes.
+- `npm run smoke:route-inventory` passed with `109` unique API routes.
+- `npm run smoke:runtime-actions-control-plane` passed.
+- `npm run smoke:openclaw` passed.
+- `npm run typecheck` passed.
+- `npm run lint` passed.
+- `node scripts/report-server-index-architecture.mjs` passed and wrote `docs/generated/server-index-architecture.md`.
+- `git diff --check` passed.
+
+Risks and notes:
+
+- Full `npm test` remained blocked at the unrelated late `smoke:release-validation` README contract for `distribution-signing.json`.
+- Runtime actions, runtime recovery, and runtime ledger store ownership remained Phase C follow-up work after this slice.
+
+Next action:
+
+- Continue Phase C by extracting runtime actions into `server/services/runtime/runtimeActionService.ts`.
+
+### 2026-06-30 - Phase C Runtime Action Service Extraction
+
+Scope:
+
+- Extracted runtime action orchestration into `server/services/runtime/runtimeActionService.ts`.
+- Moved session close coordination, Gateway runtime-session aborts, session-lock cleanup, stale Gateway chat waiter aborts, runtime monitor clear marker writes, desktop runtime shutdown, and Gateway stop/start/restart response shaping behind a testable service factory.
+- Kept `server/routes/runtimeRoutes.ts` as HTTP validation and canonical success/error envelope handling; the route module now delegates actions through the injected `RuntimeActionService`.
+- Kept `server/controlPlane.ts` as dependency wiring by composing `createRuntimeActionService(...)` with existing Gateway lifecycle/chat/log, session cleanup, monitor, and shutdown helpers.
+- Added `tests/runtimeActionService.test.ts` coverage for session close cleanup and activity snapshots, stale waiter abort cache invalidation, monitor clear marker writes and cleanup counts, Gateway stop/start/restart status snapshots, and desktop shutdown reason propagation.
+- Updated `scripts/smoke-runtime-actions-control-plane.ts`, `scripts/smoke-server-entrypoint-boundary.ts`, `scripts/smoke-runtime-status-control-plane.ts`, and `scripts/smoke-openclaw-contracts.mjs` so action ownership is asserted in `server/services/runtime/runtimeActionService.ts`.
+- Regenerated `docs/generated/server-index-architecture.md`; `server/controlPlane.ts` is now `25,197` composition lines with `0` inline API routes.
+- Updated `docs/BETA_CODEBASE_SPLIT_PLAN.md` automation progress for completed Phase C item `22`.
+- Updated `docs/OPTIMIZATION_MEMORY.md` so the next optimization run starts runtime recovery extraction instead of repeating runtime actions.
+
+Verification:
+
+- `npm run typecheck:server` passed.
+- `npm run typecheck` passed.
+- `npm run test:unit` passed with `48` tests, including the new runtime action service coverage.
+- `npm run smoke:runtime-actions-control-plane` passed.
+- `npm run smoke:runtime-status-control-plane` passed.
+- `npm run smoke:server-architecture` passed: `9` entry lines, `25,197/29,000` control-plane composition lines, `0` inline routes, guard present.
+- `npm run smoke:route-inventory` passed: `109` unique API routes.
+- `npm run smoke:openclaw` passed.
+- `npm run lint` passed.
+- `node scripts/report-server-index-architecture.mjs` passed and wrote `docs/generated/server-index-architecture.md`.
+- `git diff --check` passed; Git reported only LF-to-CRLF working-copy warnings on already touched files.
+- `npm test` passed all gates through `smoke:release-signing`, including the new runtime action tests and updated runtime/OpenClaw smokes, then failed at `npm run smoke:release-validation` with `AssertionError [ERR_ASSERTION]: README must document consumer distribution signing evidence` at `scripts/smoke-release-validation.ts:45:8`, expected `/distribution-signing\.json/`.
+
+Risks and notes:
+
+- The full-suite blocker is unrelated to this runtime action extraction and matches the previously recorded release documentation contract mismatch in `README.md`.
+- Runtime shutdown/clean-slate recovery and runtime ledger store ownership remain Phase C follow-up work.
+
+Next action:
+
+- Continue Phase C with `server/services/runtime/runtimeRecoveryService.ts`, preserving current shutdown and clean-slate safety behavior and adding focused clean-slate safety tests for Phase C item `28`.
+
+### 2026-06-30 - Phase C Runtime Recovery Service Extraction
+
+Scope:
+
+- Extracted runtime shutdown and Monitor Clean Slate recovery into `server/services/runtime/runtimeRecoveryService.ts`.
+- Moved shutdown in-flight dedupe, process-exit best-effort cleanup, Gateway client/runtime shutdown, active OpenClaw run termination, plugin setup terminal cleanup, OAuth callback cleanup, mission pre-shutdown snapshots, session lock cleanup, runtime ledger close, Monitor clear marker persistence, and clean-slate cache invalidation behind a testable service factory.
+- Kept `server/controlPlane.ts` as dependency wiring by composing `createRuntimeRecoveryService(...)` with existing Gateway lifecycle/chat/log, OAuth, mission, runtime ledger, and session cleanup dependencies.
+- Updated `server/services/runtime/runtimeActionService.ts` so runtime routes keep the same action methods and response shapes while delegating clean-slate and shutdown behavior through the recovery service.
+- Added `tests/runtimeRecoveryService.test.ts` coverage for Clean Slate safety without stopping active runtime/Gateway work, concurrent shutdown dedupe, structured shutdown cleanup evidence, warning-tolerant cleanup continuation, and synchronous process-exit cleanup.
+- Updated `tests/runtimeActionService.test.ts` so action-level tests verify recovery delegation instead of duplicating recovery internals.
+- Updated `scripts/smoke-runtime-actions-control-plane.ts` and `scripts/smoke-server-entrypoint-boundary.ts` so shutdown and Clean Slate ownership is asserted in `server/services/runtime/runtimeRecoveryService.ts` and cannot drift back into `controlPlane.ts`.
+- Regenerated `docs/generated/server-index-architecture.md`; `server/controlPlane.ts` is now `25,160` composition lines with `0` inline API routes.
+- Updated `docs/BETA_CODEBASE_SPLIT_PLAN.md` automation progress for completed Phase C items `23` and `28`.
+- Updated `docs/OPTIMIZATION_MEMORY.md` so the next optimization run starts runtime ledger store ownership instead of repeating runtime recovery.
+
+Verification:
+
+- `npm run typecheck:server` passed.
+- `npm run test:unit` passed with `52` tests, including the new runtime recovery coverage.
+- `npm run smoke:runtime-actions-control-plane` passed.
+- `npm run smoke:server-architecture` passed: `9` entry lines, `25,160/29,000` control-plane composition lines, `0` inline routes, guard present.
+- `npm run typecheck` passed.
+- `npm run smoke:runtime-status-control-plane` passed.
+- `npm run smoke:route-inventory` passed with `109` unique API routes.
+- `npm run smoke:openclaw` passed.
+- `npm run lint` passed.
+- `node scripts/report-server-index-architecture.mjs` passed and wrote `docs/generated/server-index-architecture.md`.
+- `git diff --check` passed; Git reported only LF-to-CRLF working-copy warnings on already touched files.
+- `npm test` passed all gates through `smoke:release-signing`, including the new runtime recovery tests and updated runtime/architecture smokes, then failed at `npm run smoke:release-validation` with `AssertionError [ERR_ASSERTION]: README must document consumer distribution signing evidence` at `scripts/smoke-release-validation.ts:45:8`, expected `/distribution-signing\.json/`.
+
+Risks and notes:
+
+- The full-suite blocker is unrelated to runtime recovery and matches the previously recorded release documentation contract mismatch in `README.md`.
+- The full-suite run again reported the known malformed historical `runtime-runs` JSONL recovery warning; the ledger smoke continued and passed before the later release-validation failure.
+- Runtime ledger store ownership remains the last open Phase C extraction item.
+
+Next action:
+
+- Continue Phase C with runtime ledger store extraction for item `24`, preserving JSONL/SQLite fallback behavior and runtime status API shape.
+
+### 2026-06-30 - Phase C Runtime Ledger Store Extraction
+
+Scope:
+
+- Added `server/state/runtimeLedgerStore.ts` as the runtime ledger state boundary for Phase C item `24`.
+- Kept `server/runtimeLedger.ts` as the low-level SQLite/JSONL helper implementation while moving application composition, canonical ledger paths, control-center state namespace keys, append/read wrappers, non-blocking status reads, and close wiring behind `createRuntimeLedgerStore(...)`.
+- Rewired `server/controlPlane.ts` so runtime run snapshots, Gateway event mirroring, Doctor diagnostic runs, mission record/event/report reads and writes, control-center state reads and writes, runtime status persistence checks, and runtime recovery ledger close all go through the store instead of direct raw helper imports.
+- Added `tests/runtimeLedgerStore.test.ts` for malformed JSONL fallback diagnostics, JSONL append/read fallback across runtime/Gateway/diagnostic/mission ledgers, and namespaced control-center state ownership.
+- Updated ledger-related smokes to pin the store boundary:
+  - `scripts/smoke-server-entrypoint-boundary.ts`
+  - `scripts/smoke-openclaw-contracts.mjs`
+  - `scripts/smoke-runtime-ledger-jsonl-tail.ts`
+  - `scripts/smoke-control-center-sqlite-state.ts`
+  - `scripts/smoke-mission-durable-state.ts`
+  - `scripts/smoke-mission-lifecycle-projection.ts`
+  - `scripts/smoke-gateway-log-service.ts`
+- Regenerated `docs/generated/server-index-architecture.md`; `server/controlPlane.ts` is now `25,120` composition lines with `0` inline API routes.
+- Updated `README.md` to document `release/evidence/distribution-signing.json`, clearing the previously recorded `smoke:release-validation` README contract blocker.
+- Updated `docs/BETA_CODEBASE_SPLIT_PLAN.md` automation progress for completed Phase C item `24`; Phase C items `21-30` are now complete and verified.
+
+Verification:
+
+- `npm run typecheck:server` passed.
+- `npm run test:unit` passed with `55` tests, including the new runtime ledger store coverage.
+- `npm run typecheck` passed.
+- `npm run smoke:runtime-status-control-plane` passed.
+- `npm run smoke:runtime-actions-control-plane` passed.
+- `npm run smoke:route-inventory` passed with `109` unique API routes.
+- `npm run smoke:server-architecture` passed with `9` entry lines, `25,120/29,000` control-plane composition lines, `0` inline routes, and the Phase A guard intact.
+- `npm run smoke:ledger` passed and preserved malformed-row diagnostic evidence through the store boundary.
+- `npm run smoke:control-center-state` passed.
+- `npm run smoke:mission-durable-state` passed.
+- `npm run smoke:mission-lifecycle-projection` passed.
+- `npm run smoke:gateway-logs` passed.
+- `npm run smoke:openclaw` passed.
+- `npm run smoke:release-validation` passed after the README contract fix.
+- `npm run lint` passed.
+- `node scripts/report-server-index-architecture.mjs` passed and wrote `docs/generated/server-index-architecture.md`.
+- `git diff --check` passed; Git reported only LF-to-CRLF working-copy warnings on already touched files.
+- `npm test` passed end to end, including release validation, release lifecycle, and CI workflow smokes.
+
+Risks and notes:
+
+- `server/runtimeLedger.ts` still owns raw SQLite schema creation and JSONL parsing; this is intentional for Phase C item `24`, which allowed keeping those helpers while moving app ownership behind `runtimeLedgerStore.ts`.
+- `npm test` still logs the expected malformed historical `runtime-runs` JSONL recovery warning and expected control-plane error-handler smoke exceptions; those checks pass.
+- The worktree already contained uncommitted Phase A, Phase B, and earlier Phase C extraction changes at the start of this run; this slice preserved them and layered the runtime ledger store boundary, tests, smokes, README contract fix, and ledger evidence on top.
+
+Next action:
+
+- Start Phase D by extracting mission creation/idempotency and transition rules into `server/services/missions/missionStateService.ts`, preserving duplicate idempotency-key behavior, mission ledger appends, and backend-owned recovered mission projection state.
 
 ### 2026-06-27
 
@@ -1399,15 +1818,276 @@ Verification:
 - `npm test` passed after the workflow ordering fix.
 - GitHub Control Plane CI run `28151928387` passed on `main` commit `37320da` in `9m10s`. Evidence: locked install, vendored OpenClaw preparation before smoke tests, dependency audit, secret scan, lint, app/server/Electron typecheck, full production hardening smoke suite, server/client builds, Electron E2E smoke, runtime bundle prep, desktop packaging, packaged desktop launch smoke, release SBOM/checksum generation, release validation, evidence existence verification, and evidence upload all passed.
 
-## In Progress
+### 2026-06-30 - Phase D Mission State Service Extraction
 
-- Fresh GitHub source startup repair and CI ordering fix have been pushed to GitHub `main` and verified by a passing clean Control Plane CI run.
+Scope:
+
+- Extracted mission creation, launch idempotency, lifecycle transition eventing, mission record persistence, timer arming, mission view/progress shaping, scheduler initial state, scheduler setup rollback, and operator cancellation state changes from `server/routes/missionRoutes.ts`/`server/controlPlane.ts` into `server/services/missions/missionStateService.ts`.
+- Kept `server/routes/missionRoutes.ts` as HTTP payload validation plus canonical API success/error envelopes for mission start/stop while delegating domain behavior through `missionStateService`.
+- Wired `server/controlPlane.ts` to compose `createMissionStateService(...)` with explicit runtime ledger, scheduler, report, Team Sync, timer, cleanup, and in-memory mission dependencies.
+- Reused the service-owned mission state methods from existing mission cron execution, recovery, projection, runtime status, agent config, and report call sites without moving later scheduler/report/recovery responsibilities in this slice.
+- Added `tests/missionStateService.test.ts` for duplicate idempotency-key launches, ledger-backed launch transitions, scheduler setup rollback, operator cancellation cleanup evidence, Team Sync snapshot writes, and missing/terminal mission stop rejection.
+- Updated mission and architecture smokes so they assert mission state ownership in `server/services/missions/missionStateService.ts` instead of requiring route-level orchestration.
+- Regenerated `docs/generated/server-index-architecture.md`; `server/controlPlane.ts` is now `24,862` composition lines with `0` inline routes.
+- Updated `docs/BETA_CODEBASE_SPLIT_PLAN.md` progress for completed Phase D items `31`, `32`, and `38`.
+
+Verification:
+
+- `node --import tsx --test tests/missionStateService.test.ts` passed.
+- `npm run typecheck:server` passed.
+- `npm run smoke:mission-idempotency` passed.
+- `npm run smoke:mission-cancellation` passed.
+- `npm run smoke:mission-durable-state` passed.
+- `npm run smoke:server-architecture` passed: `9` entry lines, `24,862/29,000` composition lines, `0` inline routes.
+- `npm run smoke:mission-lifecycle-projection` passed.
+- `npm run smoke:mission-backend-owned` passed.
+- `npm run smoke:mission-cron-reconciliation` passed.
+- `npm run smoke:mission-report` passed.
+- `npm run smoke:mission-gateway-reconciliation` passed.
+- `npm run test:unit` passed with `59` tests.
+- `npm run typecheck` passed.
+- `npm run lint` passed.
+- `node scripts/report-server-index-architecture.mjs` passed and wrote `docs/generated/server-index-architecture.md`.
+- `npm run smoke:route-inventory` passed with `109` unique API routes.
+- `npm run smoke:api-envelope` passed after updating stale route-owned mission error-code assertions to the new service boundary.
+- `git diff --check` passed with only LF-to-CRLF working-copy warnings on already touched files.
+- `npm test` passed end to end, including mission, API, runtime, Gateway, release validation, release lifecycle, and CI workflow smokes.
+
+Risks and notes:
+
+- The first full `npm test` run failed at `smoke:api-envelope` because the smoke still expected `mission_invalid_state` and `mission_scheduler_failed` to be hard-coded in `server/routes/missionRoutes.ts`. The smoke was corrected to assert those codes in `missionStateService`, and the rerun passed end to end.
+- This slice intentionally did not extract mission cron execution, report generation, recovery, or TEAM_SYNC snapshot writing; those remain Phase D follow-up services.
+- `git diff --check` still reports LF-to-CRLF working-copy warnings for previously touched files, but no whitespace errors.
 
 Next action:
 
-- Continue release-hardening work by either:
-  - wire real Authenticode/macOS signing and update-channel evidence generation when certificates/secrets are available, or
-  - resume extraction of remaining `server/index.ts` route clusters, with Nexus/misc, shift/cron scheduler, and browser/preflight areas as high-value candidates.
+- Continue Phase D by extracting mission cron scheduling into `server/services/missions/missionSchedulerService.ts`, preserving cron reconciliation, recurring/instant scheduling, cancellation cleanup, Gateway session references, and backend-owned mission projection behavior.
+
+### 2026-06-30 - Phase D Mission Scheduler Service Extraction
+
+Scope:
+
+- Extracted mission cron scheduling ownership from `server/controlPlane.ts` into `server/services/missions/missionSchedulerService.ts`.
+- Moved one-shot and recurring cron job creation, OpenClaw cron add/run/rm/disable command orchestration, cron prompt construction, instant round timers, mission run controllers, recurring cron arming, scheduler-driven mission completion, cancellation cleanup, rehydrated mission timer arming, recurring shift rehydration, cron runtime/session reference capture, agent memory handoff writes, and Team Sync scheduler evidence behind a testable service factory with injected dependencies.
+- Kept `server/controlPlane.ts` as composition glue by composing `createMissionSchedulerService(...)`, forwarding `missionStateService` scheduler callbacks through the service, and delegating durable mission hydration's recurring shift rehydration and timer arming to the service.
+- Added `tests/missionSchedulerService.test.ts` for recurring leader/worker cron arming, cleanup fallback from failed removal to disable, max-cycle completion without launching extra work, and instant mission scheduling through cron run completion.
+- Added `scripts/smoke-mission-scheduler-service.ts`, exposed it as `npm run smoke:mission-scheduler`, and wired it into `npm run test:ci`.
+- Updated mission cancellation, cron reconciliation, durable state, runtime reference, Gateway reconciliation, and architecture smokes so scheduler internals are asserted in `server/services/missions/missionSchedulerService.ts`, not in `server/controlPlane.ts`.
+- Regenerated `docs/generated/server-index-architecture.md`; `server/controlPlane.ts` is now `23,775` composition lines with `0` inline routes.
+- Updated `docs/BETA_CODEBASE_SPLIT_PLAN.md` progress for completed Phase D item `33`.
+
+Verification:
+
+- `node --import tsx --test tests/missionSchedulerService.test.ts` passed.
+- `npm run typecheck:server` passed.
+- `npm run test:unit` passed with `63` tests.
+- `npm run smoke:mission-scheduler` passed.
+- `npm run smoke:mission-cron-reconciliation` passed.
+- `npm run smoke:mission-cancellation` passed.
+- `npm run smoke:mission-runtime-references` passed.
+- `npm run smoke:mission-durable-state` passed.
+- `npm run smoke:mission-gateway-reconciliation` passed.
+- `npm run smoke:mission-idempotency` passed.
+- `npm run smoke:mission-lifecycle-projection` passed.
+- `npm run smoke:mission-backend-owned` passed.
+- `npm run smoke:mission-report` passed.
+- `npm run smoke:mission-verification` passed.
+- `npm run smoke:api-envelope` passed.
+- `npm run smoke:route-inventory` passed with `109` unique API routes.
+- `npm run smoke:server-architecture` passed with `9` entry lines, `23,775/29,000` composition lines, and `0` inline routes.
+- `npm run smoke:runtime-status-control-plane` passed.
+- `npm run smoke:runtime-actions-control-plane` passed.
+- `npm run smoke:openclaw` passed.
+- `npm run typecheck` passed.
+- `npm run lint` passed.
+- `node scripts/report-server-index-architecture.mjs` passed and wrote `docs/generated/server-index-architecture.md`.
+- `git diff --check` passed with only LF-to-CRLF working-copy warnings on already touched files.
+- `npm test` passed end to end, including the new `smoke:mission-scheduler` CI gate, release validation, release lifecycle, and CI workflow smokes.
+
+Risks and notes:
+
+- Mission report generation, restart/recovery, and TEAM_SYNC snapshot writing are still intentionally delegated through injected callbacks; those remain Phase D follow-up service extractions.
+- The full-suite run again reported one skipped malformed historical `runtime-runs` JSONL row and expected control-plane error-handler redaction smoke logs; the affected smokes passed.
+
+Next action:
+
+- Continue Phase D by extracting mission report generation into `server/services/missions/missionReportService.ts`, preserving backend report evidence, runtime/cron/session references, Mission report API shape, and renderer report projection behavior.
+
+### 2026-06-30 - Phase D Mission Report Service Extraction
+
+Scope:
+
+- Extracted backend mission report generation from `server/controlPlane.ts` into `server/services/missions/missionReportService.ts`.
+- Moved backend mission report contracts, evidence scoring, unavailable metric shaping, runtime/cron/session reference accounting, durable report listing, mission record normalization for projection, lifecycle event/feed merging, and report-backed lifecycle projection behind a testable service factory.
+- Kept `server/controlPlane.ts` as composition glue by composing `createMissionReportService(...)` with runtime ledger store functions, the in-memory mission map, and the in-memory mission feed, then delegating `recordMissionReport`, `listMissionReports`, and `buildMissionLifecycleProjection` through the service.
+- Updated `server/routes/missionRoutes.ts` to use `BackendMissionReport` and `MissionLifecycleProjection` contracts from the report service while preserving the existing Mission API response shape and canonical envelopes.
+- Added `tests/missionReportService.test.ts` for runtime-backed cron/session evidence, mission-feed-only fallback reports, failed cron-job score lowering, explicit no-evidence reports with unavailable metrics, and durable-plus-memory report/projection merging.
+- Added `scripts/smoke-mission-report-service.ts`, exposed it as `npm run smoke:mission-report-service`, and wired it into `npm run test:ci`.
+- Updated mission durable-state, lifecycle-projection, runtime-reference, and server architecture smokes so report/projection internals are asserted in `server/services/missions/missionReportService.ts`, not in `server/controlPlane.ts`.
+- Regenerated `docs/generated/server-index-architecture.md`; `server/controlPlane.ts` is now `23,334` composition lines with `0` inline routes.
+- Updated `docs/BETA_CODEBASE_SPLIT_PLAN.md` progress for completed Phase D items `34` and `42`.
+
+Verification:
+
+- `node --import tsx --test tests/missionReportService.test.ts` passed.
+- `npm run smoke:mission-report-service` passed.
+- `npm run typecheck:server` passed.
+- `npm run smoke:server-architecture` passed with `9` entry lines, `23,334/29,000` composition lines, and `0` inline routes.
+- `npm run smoke:mission-report` passed.
+- `npm run smoke:mission-durable-state` passed.
+- `npm run smoke:mission-lifecycle-projection` passed.
+- `npm run smoke:mission-runtime-references` passed after moving stale report-reference assertions from `controlPlane.ts` to `missionReportService.ts`.
+- `npm run smoke:mission-gateway-reconciliation` passed.
+- `npm run smoke:mission-cancellation` passed.
+- `npm run smoke:mission-cron-reconciliation` passed.
+- `npm run smoke:mission-idempotency` passed.
+- `npm run smoke:mission-scheduler` passed.
+- `npm run smoke:mission-backend-owned` passed.
+- `npm run smoke:api-envelope` passed.
+- `npm run test:unit` passed with `68` tests.
+- `npm run typecheck` passed.
+- `npm run lint` passed.
+- `node scripts/report-server-index-architecture.mjs` passed and wrote `docs/generated/server-index-architecture.md`.
+- `npm run smoke:route-inventory` passed with `109` unique API routes.
+- `npm run smoke:openclaw` passed.
+- `git diff --check` passed with only LF-to-CRLF working-copy warnings on already touched files.
+- `npm test` passed end to end, including the new `smoke:mission-report-service` CI gate, release validation, release lifecycle, and CI workflow smokes.
+
+Risks and notes:
+
+- Mission restart/recovery and TEAM_SYNC snapshot writing are still intentionally delegated through injected callbacks; those remain Phase D follow-up service extractions.
+- The full-suite run again reported one skipped malformed historical `runtime-runs` JSONL row and expected control-plane error-handler redaction smoke logs; the affected smokes passed.
+
+Next action:
+
+- Continue Phase D by extracting mission restart/recovery into `server/services/missions/missionRecoveryService.ts`, preserving durable hydration, cron reconciliation, Gateway session reconciliation, recovered timers/shifts, and recovered mission projection behavior.
+
+### 2026-06-30 - Phase D Mission Recovery Service Extraction
+
+Scope:
+
+- Extracted mission restart/recovery ownership from `server/controlPlane.ts` into `server/services/missions/missionRecoveryService.ts`.
+- Moved durable mission record hydration, recovered cron reconciliation, missing/disabled cron failure transitions, Gateway session reconciliation, redacted Gateway-session evidence, and recovered mission rearm orchestration behind a testable service factory.
+- Kept `server/controlPlane.ts` as composition glue by composing `createMissionRecoveryService(...)` with explicit dependencies for runtime-run status lookup, OpenClaw cron-state snapshots, Gateway client access, mission state/report callbacks, scheduler rehydration hooks, and ledger reads.
+- Added `tests/missionRecoveryService.test.ts` for active mission hydration, missing and disabled cron jobs, unavailable Gateway session reconciliation with redaction, missing Gateway session classification, and recovered shift/timer delegation.
+- Added `scripts/smoke-mission-recovery-service.ts`, exposed it as `npm run smoke:mission-recovery`, and wired it into `npm run test:ci`.
+- Updated mission durable-state, cron reconciliation, Gateway reconciliation, and architecture smokes so restart/recovery internals are asserted in `server/services/missions/missionRecoveryService.ts`, not in `server/controlPlane.ts`.
+- Regenerated `docs/generated/server-index-architecture.md`; `server/controlPlane.ts` is now `23,030` composition lines with `0` inline routes.
+- Updated `docs/BETA_CODEBASE_SPLIT_PLAN.md` progress for completed Phase D item `35`.
+
+Verification:
+
+- `node --import tsx --test tests/missionRecoveryService.test.ts` passed.
+- `npm run smoke:mission-recovery` passed.
+- `npm run typecheck:server` passed.
+- `npm run smoke:mission-cron-reconciliation` passed.
+- `npm run smoke:mission-gateway-reconciliation` passed.
+- `npm run smoke:mission-durable-state` passed.
+- `npm run smoke:server-architecture` passed with `9` entry lines, `23,030/29,000` composition lines, and `0` inline routes.
+- `npm run test:unit` passed with `72` tests.
+- `npm run typecheck` passed.
+- `npm run lint` passed.
+- `npm run smoke:mission-report-service`, `npm run smoke:mission-scheduler`, `npm run smoke:mission-cancellation`, `npm run smoke:mission-runtime-references`, `npm run smoke:mission-lifecycle-projection`, `npm run smoke:mission-backend-owned`, `npm run smoke:mission-idempotency`, `npm run smoke:mission-report`, and `npm run smoke:mission-verification` passed.
+- `npm run smoke:route-inventory`, `npm run smoke:api-envelope`, `npm run smoke:runtime-status-control-plane`, `npm run smoke:runtime-actions-control-plane`, and `npm run smoke:openclaw` passed.
+- `node scripts/report-server-index-architecture.mjs` passed and wrote `docs/generated/server-index-architecture.md`.
+- `git diff --check` passed with only LF-to-CRLF working-copy warnings on already touched files.
+- `npm test` passed end to end, including the new `smoke:mission-recovery` CI gate, runtime recovery soak, release validation, release lifecycle, and CI workflow smokes.
+
+Risks and notes:
+
+- The full-suite run again reported one skipped malformed historical `runtime-runs` JSONL row and expected control-plane error-handler redaction smoke logs; the affected smokes passed.
+- TEAM_SYNC snapshot writing is still intentionally delegated through injected callbacks; it remains the next Phase D service extraction.
+
+Next action:
+
+- Continue Phase D by extracting TEAM_SYNC snapshot writing into `server/services/missions/missionTeamSyncService.ts`, preserving append-only handoff files, snapshot evidence, scheduler/state/recovery call sites, and existing Team Sync route behavior.
+
+### 2026-06-30 - Phase D Mission Team Sync Service Extraction
+
+Scope:
+
+- Extracted Team Sync snapshot ownership from `server/controlPlane.ts` into `server/services/missions/missionTeamSyncService.ts`.
+- Moved Team Sync snapshot markdown generation, missing `TEAM_SYNC.md` repair, canonical doctrine target selection, shared Team Sync path mirroring, legacy workspace-root mirroring, snapshot writes, assignment metadata rendering, and the `80` entry activity cap behind a testable service factory.
+- Kept `server/controlPlane.ts` as composition glue by composing `createMissionTeamSyncService(...)` with explicit workspace, doctrine, path, file-existence, and trimming dependencies, then delegating `ensureTeamSyncFile` and `writeTeamSyncSnapshot` through the service.
+- Preserved the existing Team Sync append route behavior in `server/routes/partyCoordinationRoutes.ts`; the route still validates payload/path policy and uses append-only `fs.appendFile(...)`, while snapshot writes are service-owned.
+- Added `tests/missionTeamSyncService.test.ts` for snapshot content, activity truncation, missing-file repair without overwriting existing append logs, canonical doctrine/shared-path mirroring, and legacy workspace-root mirroring.
+- Added `scripts/smoke-mission-team-sync-service.ts`, exposed it as `npm run smoke:mission-team-sync`, and wired it into `npm run test:ci`.
+- Updated `scripts/smoke-server-entrypoint-boundary.ts` and `scripts/smoke-team-sync-control-plane.ts` so Team Sync snapshot internals are asserted in `server/services/missions/missionTeamSyncService.ts`, not in `server/controlPlane.ts`.
+- Regenerated `docs/generated/server-index-architecture.md`; `server/controlPlane.ts` is now `22,963` composition lines with `0` inline routes.
+- Updated `docs/BETA_CODEBASE_SPLIT_PLAN.md` progress for completed Phase D item `36`.
+
+Verification:
+
+- `node --import tsx --test tests/missionTeamSyncService.test.ts` passed.
+- `npm run smoke:mission-team-sync` passed.
+- `npm run smoke:team-sync-control-plane` passed.
+- `npm run typecheck:server` passed.
+- `node scripts/report-server-index-architecture.mjs` passed and wrote `docs/generated/server-index-architecture.md`.
+- `npm run smoke:server-architecture` passed with `9` entry lines, `22,963/29,000` composition lines, and `0` inline routes.
+- `npm run smoke:mission-durable-state`, `npm run smoke:mission-cron-reconciliation`, `npm run smoke:mission-gateway-reconciliation`, `npm run smoke:mission-lifecycle-projection`, `npm run smoke:mission-backend-owned`, `npm run smoke:mission-report-service`, `npm run smoke:mission-recovery`, `npm run smoke:mission-scheduler`, `npm run smoke:mission-cancellation`, `npm run smoke:mission-idempotency`, `npm run smoke:mission-runtime-references`, and `npm run smoke:mission-report` passed.
+- `npm run smoke:api-envelope`, `npm run smoke:route-inventory`, `npm run smoke:runtime-status-control-plane`, `npm run smoke:runtime-actions-control-plane`, and `npm run smoke:openclaw` passed.
+- `npm run typecheck` passed.
+- `npm run test:unit` passed with `76` tests.
+- `npm run lint` passed.
+- `git diff --check` passed with only LF-to-CRLF working-copy warnings on already touched files.
+- `npm test` passed end to end, including the new `smoke:mission-team-sync` CI gate, runtime recovery soak, release validation, release lifecycle, and CI workflow smokes.
+
+Risks and notes:
+
+- The full-suite run again reported one skipped malformed historical `runtime-runs` JSONL row and expected control-plane error-handler redaction smoke logs; the affected smokes passed.
+- Phase D service extraction items `31-36` are now complete; remaining Phase D work is broader transition/cancellation/recovery coverage and restart/crash recovery smokes.
+
+Next action:
+
+- Continue Phase D with item `37`: broaden tests for every mission transition in `tests/missionStateService.test.ts`, preserving ledger-backed transition evidence and idempotency behavior.
+
+### 2026-06-30 - Phase D Mission Transition Coverage
+
+Scope:
+
+- Broadened `tests/missionStateService.test.ts` for Phase D transition coverage without adding backend domain logic to `server/controlPlane.ts`.
+- Added mission state tests for invalid launch rejection before state mutation, instant scheduler-round delegation when dry-run is disabled, recurring scheduler/timer arming, and cleanup-failure cancellation finalization.
+- Added direct `transitionMissionState(...)` coverage for the lifecycle edges used by mission state, scheduler, and recovery flows: `draft->validating`, `validating->scheduled`, `scheduled->running`, `scheduled->failed`, `running->dispatching`, `dispatching->running`, `running->verifying`, `verifying->completed`, `running->failed`, and `running->cancelled`.
+- Verified each direct transition writes mission feed events, lifecycle ledger events, actor/idempotency/evidence fields, and mission record persist reasons.
+- Regenerated `docs/generated/server-index-architecture.md`; `server/controlPlane.ts` remains at `22,963` composition lines with `0` inline routes.
+- Updated `docs/BETA_CODEBASE_SPLIT_PLAN.md` progress for completed Phase D items `37` and `39`.
+- Updated `docs/OPTIMIZATION_MEMORY.md` so the next optimization pass starts Phase D item `40`.
+
+Verification:
+
+- `node --import tsx --test tests/missionStateService.test.ts` passed with `9` tests.
+- `npm run typecheck:server` passed.
+- `npm run smoke:mission-cancellation` passed.
+- `npm run smoke:mission-idempotency` passed.
+- `npm run smoke:mission-scheduler` passed.
+- `npm run smoke:mission-recovery` passed.
+- `npm run smoke:mission-durable-state` passed.
+- `npm run smoke:mission-lifecycle-projection` passed.
+- `npm run smoke:mission-report-service` passed.
+- `npm run smoke:server-architecture` passed with `9` entry lines, `22,963/29,000` composition lines, and `0` inline routes.
+- `npm run test:unit` passed with `81` tests.
+- `npm run typecheck` passed.
+- `npm run lint` passed.
+- `node scripts/report-server-index-architecture.mjs` passed and wrote `docs/generated/server-index-architecture.md`.
+- `git diff --check` passed with only LF-to-CRLF working-copy warnings on already touched files.
+- `npm test` passed end to end, including notices, all mission smokes, Gateway service smokes, runtime smokes, security smokes, secret scanning, release validation/lifecycle, and CI workflow checks.
+
+Risks and notes:
+
+- The full-suite run again reported one skipped malformed historical `runtime-runs` JSONL row and expected control-plane error-handler redaction smoke logs; the affected smokes passed.
+- This slice does not yet prove cancellation after backend restart or renderer-crash recovery; those remain Phase D follow-up items.
+
+Next action:
+
+- Continue Phase D with item `40`: add tests for cancelling after backend restart, preserving durable mission hydration, recovered scheduler state, cancellation cleanup evidence, and backend-owned mission projection.
+
+## In Progress
+
+- Optimization work now resumes from `docs/BETA_CODEBASE_SPLIT_PLAN.md`, with Phase A, Phase B, Phase C, and Phase D items `31-39` plus `42` complete and verified for the private beta service-split milestone.
+
+Next action:
+
+- Continue Phase D with item `40`: add tests for cancelling after backend restart, then proceed to cron reconciliation and restart/crash recovery smokes.
 
 ## Backlog
 
@@ -1438,7 +2118,8 @@ Next action:
 
 ### Phase 5: Extract Monoliths
 
-- Continue extracting server routes by domain using `server/controlPlaneHttp.ts` and `server/routes/*` as the first pattern.
+- Continue extracting server routes by domain using `server/controlPlaneHttp.ts` and `server/routes/*` as the first pattern, following the service order in `docs/BETA_CODEBASE_SPLIT_PLAN.md`.
+- Shrink `server/controlPlane.ts` toward a composition root only; do not add new domain logic there unless it is temporary glue with an extraction target.
 - Split the Zustand store.
 - Move network operations out of state actions.
 - Split large agent console, recruit, and editor dialogs.

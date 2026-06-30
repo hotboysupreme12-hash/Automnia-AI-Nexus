@@ -520,7 +520,7 @@ async function runClawTalkControlCenterOrEmbeddedAgentTurn(options) {
 `.trim()
 
 export const TELEGRAM_AGENT_ROUTING_HELPER = String.raw`
-var TELEGRAM_AGENT_ROUTING_PATCH_VERSION = 3;
+var TELEGRAM_AGENT_ROUTING_PATCH_VERSION = 5;
 var TELEGRAM_AGENT_ROUTE_MEMORY_KEY = '__openclawTelegramAgentRoutes';
 function resolveTelegramAgentRouteMemory() {
     var root = globalThis;
@@ -672,6 +672,26 @@ function parseTelegramAgentRoutePrefix(prompt, aliases) {
     }
     return null;
 }
+function parseTelegramAgentRouteAutoStart(prompt, aliases) {
+    var trimmed = String(prompt == null ? '' : prompt).replace(/^\s+/, '');
+    if (!trimmed || trimmed.charAt(0) === '@' || trimmed.charAt(0) === '/') return null;
+    var sorted = aliases.slice().sort(function(a, b) {
+        return b.display.length - a.display.length;
+    });
+    for(var i = 0; i < sorted.length; i++){
+        var alias = sorted[i];
+        if (!alias.display) continue;
+        var match = new RegExp('^' + escapeTelegramAgentRegExp(alias.display) + '(?:\\s+|\\s*[:;,]\\s*|$)', 'i').exec(trimmed);
+        if (!match) continue;
+        return {
+            mode: 'auto',
+            alias: alias.display,
+            agentId: alias.agentId,
+            prompt: trimmed.slice(match[0].length).replace(/^\s+/, '')
+        };
+    }
+    return null;
+}
 function resolveTelegramAgentRouteIntent(prompt, config, fallbackAgentId) {
     var built = buildTelegramAgentAliases(config, fallbackAgentId);
     var reset = parseTelegramAgentRouteReset(prompt);
@@ -683,6 +703,11 @@ function resolveTelegramAgentRouteIntent(prompt, config, fallbackAgentId) {
     if (parsed && built.agentIds.has(parsed.agentId)) return {
         kind: 'route',
         parsed: parsed
+    };
+    var autoParsed = parseTelegramAgentRouteAutoStart(prompt, built.aliases);
+    if (autoParsed && built.agentIds.has(autoParsed.agentId)) return {
+        kind: 'route',
+        parsed: autoParsed
     };
     return {
         kind: 'none'
@@ -748,7 +773,11 @@ function applyTelegramAgentRoutedText(original, rawPrompt, prompt) {
     if (index >= 0) return (text.slice(0, index) + next + text.slice(index + raw.length)).trim();
     return next || text;
 }
-function buildTelegramRouteForAgent(params, agentId) {
+function buildTelegramAgentFreshSessionKey(sessionKey) {
+    var entropy = Date.now().toString(36) + '-' + Math.random().toString(36).slice(2, 10);
+    return String(sessionKey || '').replace(/:+$/g, '') + ':fresh:' + entropy;
+}
+function buildTelegramRouteForAgent(params, agentId, options) {
     var targetAgentId = sanitizeAgentId(agentId);
     var peerId = params.isGroup ? buildTelegramGroupPeerId(params.chatId, params.resolvedThreadId) : resolveTelegramDirectPeerId({
         chatId: params.chatId,
@@ -789,6 +818,7 @@ function buildTelegramRouteForAgent(params, agentId) {
         baseSessionKey: baseSessionKey,
         threadId: String(params.chatId) + ':' + String(params.dmThreadId)
     }) : null)?.sessionKey ?? baseSessionKey;
+    if (options && options.freshSession === true) sessionKey = buildTelegramAgentFreshSessionKey(sessionKey);
     return {
         ...baseRoute,
         sessionKey: sessionKey,
@@ -825,8 +855,10 @@ function resolveTelegramAgentRouteForMessage(params) {
         var prompt = buildTelegramAgentRoutingPrompt(parsed);
         return {
             changed: true,
-            reason: parsed.mode === '/' ? 'sticky' : 'one-shot',
-            route: buildTelegramRouteForAgent(params, parsed.agentId),
+            reason: parsed.mode === '/' ? 'sticky' : parsed.mode === 'auto' ? 'auto-fresh' : 'one-shot-fresh',
+            route: buildTelegramRouteForAgent(params, parsed.agentId, {
+                freshSession: parsed.mode !== '/'
+            }),
             rawBody: prompt,
             bodyText: applyTelegramAgentRoutedText(params.bodyText, rawPrompt, prompt)
         };
