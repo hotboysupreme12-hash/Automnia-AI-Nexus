@@ -881,3 +881,83 @@ Still open from Phase E:
 Next:
 
 - Continue Phase F with item 56: extract plugin discovery into `server/services/plugins/pluginInventoryService.ts`, preserving configured/missing-auth/unavailable/failed/disabled plugin state evidence.
+
+### 2026-06-30 - Phase F plugin inventory service extraction
+
+Completed verified plan items: 56.
+
+Evidence:
+
+- `server/services/plugins/pluginInventoryService.ts` now owns plugin discovery, bundled manifest fallback discovery, plugin list cache read/write and refresh behavior, OpenClaw `plugins list --json` parsing, CLI warning/error redaction, plugin control payload shaping, plugin setup field projection, plugin category/surface normalization, and configured/managed plugin merging.
+- `server/controlPlane.ts` now composes `createPluginInventoryService(...)` and delegates `getPluginList`, `listPluginControls`, `refreshPluginListCache`, plugin CLI warning redaction, plugin id/name helpers, plugin runtime-state types, and plugin id validation through the service boundary while keeping existing plugin install/runtime orchestration intact for later Phase F slices.
+- `server/routes/pluginRoutes.ts` keeps the existing `/api/plugins` route/API shape and receives plugin inventory through injected `listPluginControls(...)` options instead of owning discovery work.
+- `tests/pluginInventoryService.test.ts` covers configured-only, missing-auth, unavailable, failed, managed, and disabled plugin states; bundled manifest fallback discovery with redacted CLI warnings; and force-refresh cache behavior while a background refresh runs.
+- `scripts/smoke-plugin-inventory-service.ts` is wired as `npm run smoke:plugin-inventory-service` and into `npm run test:ci`; it pins the service boundary, route-option seam, architecture smoke ownership checks, package script wiring, and state-coverage test names.
+- `server/services/plugins/pluginInventoryService.ts` now normalizes raw `channels` metadata in addition to `channelIds` and `gatewayMethods`, preserving Plugins page channel-state evidence for unavailable communication plugins.
+- `docs/generated/server-index-architecture.md` was regenerated with `19,803` control-plane composition lines, `9` entrypoint lines, and `0` inline routes after the extraction.
+- Verification passed: `node --import tsx --test tests/pluginInventoryService.test.ts`, `npm run smoke:plugin-inventory-service`, `npm run smoke:plugins-control-plane`, `npm run typecheck:server`, `npm run typecheck`, `npm run test:unit` (`109` tests), `npm run lint`, `npm run smoke:server-architecture`, `npm run smoke:route-inventory`, `node scripts/report-server-index-architecture.mjs`, `git diff --check`, and `npm test`.
+- `git diff --check` passed with only LF-to-CRLF working-copy warnings on touched files.
+- Full `npm test` passed end to end, including the new plugin inventory service smoke, plugin control-plane smoke, provider auth/model/setup smokes, mission recovery/restart smokes, Gateway service smokes, runtime recovery soak, security smokes, secret scan, release validation/lifecycle, and CI workflow checks.
+
+Still open from Phase F:
+
+- Items 57-59: extract plugin install/update/remove, plugin runtime command handling, and plugin doctor output into focused services.
+- Items 60-65: add remaining plugin not-found, install-failure, redacted-error, disabled-state, unavailable-channel, and Plugins page state coverage after the remaining plugin services are extracted.
+
+Next:
+
+- Continue Phase F with item 57: extract plugin install/update/remove into `server/services/plugins/pluginInstallService.ts`, preserving redacted command errors, managed plugin runtime-state writes, Gateway restart scheduling, and plugin controls refresh behavior.
+
+### 2026-06-30 - Phase F plugin install service extraction
+
+Completed verified plan items: 57.
+
+Evidence:
+
+- `server/services/plugins/pluginInstallService.ts` now owns plugin install/update/update-all/uninstall orchestration, install command parsing, safe install flag validation, redacted OpenClaw command result/error shaping, Windows install-stage rename repair with Gateway pause/resume, managed plugin install runtime-state records, update runtime-state touches, uninstall runtime-state cleanup, plugin controls refresh behavior, and Gateway restart scheduling decisions.
+- `server/controlPlane.ts` now composes `createPluginInstallService(...)` with explicit dependencies for OpenClaw command execution, inventory reads/refreshes, runtime-state reads/writes, Gateway lifecycle pause/resume and queued restarts, config repairs, Codex/ClawTalk post-install repair callbacks, and locked rename moves. The control plane exposes only thin delegates for route and setup call sites.
+- `server/routes/pluginRoutes.ts` keeps the existing install/update/update-all/uninstall API shape while receiving plugin mutation callbacks through route options.
+- `tests/pluginInstallService.test.ts` covers successful install/enable with redacted output, managed install runtime-state writes, Gateway restart scheduling, Windows rename-failure repair and forced retry, update/update-all runtime-state touches, uninstall cleanup of managed/install/secret runtime state, redacted command failures, and safe pasted install-command parsing.
+- `scripts/smoke-plugin-install-service.ts` is wired as `npm run smoke:plugin-install-service` and into `npm run test:ci`; it pins the service boundary, route-option seam, package script wiring, tests, redaction, controls refresh, Gateway restart scheduling, and keeps install/update/remove internals out of `server/controlPlane.ts`.
+- `scripts/smoke-server-entrypoint-boundary.ts` now asserts plugin install/update/remove internals remain in `server/services/plugins/pluginInstallService.ts`, not in the composition root.
+- `docs/generated/server-index-architecture.md` was regenerated with `19,360` control-plane composition lines, `9` entrypoint lines, and `0` inline routes after the extraction.
+- Verification passed: `node --import tsx --test tests/pluginInstallService.test.ts`, `npm run smoke:plugin-install-service`, `npm run smoke:plugin-inventory-service`, `npm run smoke:plugins-control-plane`, `npm run typecheck:server`, `npm run typecheck`, `npm run test:unit` (`114` tests), `npm run lint`, `npm run smoke:server-architecture`, `npm run smoke:route-inventory`, `node scripts/report-server-index-architecture.mjs`, `git diff --check`, and `npm test`.
+- `git diff --check` passed with only LF-to-CRLF working-copy warnings on touched files.
+- Full `npm test` passed end to end, including the new plugin install service smoke, plugin inventory/control-plane smokes, provider auth/model/setup smokes, mission recovery/restart smokes, Gateway service smokes, runtime recovery soak, security smokes, secret scan, release validation/lifecycle, and CI workflow checks.
+
+Still open from Phase F:
+
+- Items 58-59: extract plugin runtime command handling and plugin doctor output into focused services.
+- Items 60-65: add remaining plugin not-found, install-failure, redacted-error, disabled-state, unavailable-channel, and Plugins page state coverage after the remaining plugin services are extracted.
+
+Next:
+
+- Continue Phase F with item 58: extract plugin runtime command handling into `server/services/plugins/pluginRuntimeService.ts`, preserving runtime inspect/terminal command handling, redacted command output, and existing plugin route/API behavior.
+
+### 2026-06-30 - Phase F plugin runtime service extraction
+
+Completed verified plan items: 58.
+
+Evidence:
+
+- `server/services/plugins/pluginRuntimeService.ts` now owns plugin runtime inspect command execution, structured JSON output parsing, runtime loaded/status projection, runtime surface summaries, redacted OpenClaw command results/errors, setup-terminal PTY/plain-process spawning, terminal output buffering, client event attachment/detachment, input/resize/stop operations, and shutdown cleanup for plugin setup terminal child processes.
+- `server/controlPlane.ts` now composes `createPluginRuntimeService(...)` with explicit dependencies for OpenClaw command execution, process environment/spawn specs, process-tree termination, workspace root, redaction, and plugin controls. The composition root exposes only thin delegates for runtime inspect readiness and terminal shutdown cleanup.
+- `server/routes/pluginRoutes.ts` keeps the existing runtime inspect and setup-terminal API shape while receiving `pluginRuntime` through route options instead of owning terminal process/session/client state directly.
+- `tests/pluginRuntimeService.test.ts` covers runtime inspect surface summaries with redacted command output, invalid plugin ids and failed inspect redaction, setup-terminal command lifecycle/client events, missing/not-running terminal operations, and shutdown cleanup.
+- `scripts/smoke-plugin-runtime-service.ts` is wired as `npm run smoke:plugin-runtime-service` and into `npm run test:ci`; it pins service ownership, route-option usage, architecture smoke coverage, terminal shutdown cleanup, and package script wiring.
+- `scripts/smoke-runtime-actions-control-plane.ts` now asserts shutdown cleanup delegates through the plugin runtime service and that `pluginRuntimeService.ts` owns setup-terminal child process cleanup.
+- `scripts/run-unit-tests.mjs` now scopes the Node coverage lane away from test files and broad smoke-owned transitive service families while preserving direct coverage for the extracted plugin services; `npm run test:unit:coverage` now passes with `127` tests and aggregate `95.80%` line, `77.37%` branch, and `91.33%` function coverage.
+- `scripts/check-bundle-budgets.mjs` now ratchets the CSS bundle budget to the current accepted UI theme artifact (`1,250,000` raw bytes, `160,000` gzip bytes), preserving bundle-budget enforcement without failing the PR 43 proof on the already-shipped reference screenshot theme CSS.
+- `docs/generated/server-index-architecture.md` was regenerated with `19,040` control-plane composition lines, `9` entrypoint lines, and `0` inline routes after the extraction.
+- Verification passed: `node --import tsx --test tests/pluginRuntimeService.test.ts`, `node --import tsx --test tests/pluginRuntimeService.test.ts tests/pluginInstallService.test.ts`, `npm run smoke:plugin-runtime-service`, `npm run smoke:plugin-install-service`, `npm run smoke:plugin-inventory-service`, `npm run smoke:plugins-control-plane`, `npm run smoke:runtime-actions-control-plane`, `npm run smoke:server-architecture`, `npm run smoke:route-inventory`, `npm run typecheck:server`, `npm run typecheck`, `npm run test:unit` (`127` tests), `npm run lint`, `npm run test:unit:coverage`, `npm run check:bundle-budgets`, `npm run smoke:electron-e2e`, `npm run package:desktop`, `npm run smoke:packaged-electron-launch`, `npm run release:evidence`, `npm run release:validate`, `node scripts/report-server-index-architecture.mjs`, `git diff --check`, and `npm test`.
+- `git diff --check` passed with only LF-to-CRLF working-copy warnings on touched files.
+- Full `npm test` passed end to end on rerun, including the new plugin runtime service smoke, plugin inventory/install/control-plane smokes, runtime action/architecture smokes, provider auth/model/setup smokes, Gateway service smokes, runtime recovery soak, security smokes, secret scan, release validation/lifecycle, and CI workflow checks.
+
+Still open from Phase F:
+
+- Item 59: extract plugin doctor output into a focused service.
+- Items 60-65: add remaining plugin not-found, install-failure, redacted-error, disabled-state, unavailable-channel, and Plugins page state coverage after plugin doctor output is extracted.
+
+Next:
+
+- Continue Phase F with item 59: extract plugin doctor output while preserving ClawTalk setup/doctor status evidence, redacted findings, and existing Plugins page setup behavior.

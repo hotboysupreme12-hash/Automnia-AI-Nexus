@@ -118,6 +118,25 @@ import {
 } from './services/runtime/runtimeStatusService'
 import { createRuntimeActionService } from './services/runtime/runtimeActionService'
 import { createRuntimeRecoveryService } from './services/runtime/runtimeRecoveryService'
+import {
+  createPluginInventoryService,
+  displayPluginName,
+  pluginCliWarningFromOutput as pluginInventoryCliWarningFromOutput,
+  pluginIdFromPackageName,
+  PLUGIN_ID_PATTERN,
+  sanitizePluginCliError as sanitizePluginInventoryCliError,
+  type PluginControlEntry,
+  type PluginInventoryService,
+  type PluginRuntimeState,
+} from './services/plugins/pluginInventoryService'
+import {
+  createPluginInstallService,
+  type PluginInstallService,
+} from './services/plugins/pluginInstallService'
+import {
+  createPluginRuntimeService,
+  type PluginRuntimeService,
+} from './services/plugins/pluginRuntimeService'
 import { computeShiftDurationMinutes } from './shiftContracts'
 import type {
   HeartbeatRuntimeDefaults,
@@ -488,33 +507,69 @@ function openClawErrorResult(error: unknown): OpenClawResult {
   }
 }
 
-type PtyDisposable = { dispose: () => void }
-type PtyProcess = {
-  pid: number
-  write: (data: string) => void
-  resize: (cols: number, rows: number) => void
-  kill: () => void
-  onData: (callback: (data: string) => void) => PtyDisposable
-  onExit: (callback: (event: { exitCode: number; signal?: number }) => void) => PtyDisposable
-}
-type PtyModule = {
-  spawn: (
-    command: string,
-    args: string[],
-    options: {
-      name?: string
-      cols?: number
-      rows?: number
-      cwd?: string
-      env?: Record<string, string>
-      useConpty?: boolean
-    },
-  ) => PtyProcess
-}
-
 function redactSensitiveText(value: string) {
   return applyDiagnosticRedactions(stripAnsi(value || ''))
 }
+
+function sanitizePluginCliError(value: unknown) {
+  return sanitizePluginInventoryCliError(value, redactSensitiveText)
+}
+
+function pluginCliWarningFromOutput(result: OpenClawResult, command: string) {
+  return pluginInventoryCliWarningFromOutput(result, command, redactSensitiveText)
+}
+
+let pluginInventoryService: PluginInventoryService | null = null
+let pluginInstallService: PluginInstallService | null = null
+let pluginRuntimeService: PluginRuntimeService | null = null
+
+function activePluginInventoryService() {
+  if (!pluginInventoryService) throw new Error('Plugin inventory service is not initialized.')
+  return pluginInventoryService
+}
+
+function getPluginList(options?: { forceRefresh?: boolean }) {
+  return activePluginInventoryService().getPluginList(options)
+}
+
+function listPluginControls(options?: { forceRefresh?: boolean }) {
+  return activePluginInventoryService().listPluginControls(options)
+}
+
+function refreshPluginListCache() {
+  return activePluginInventoryService().refreshPluginListCache()
+}
+
+function activePluginInstallService() {
+  if (!pluginInstallService) throw new Error('Plugin install service is not initialized.')
+  return pluginInstallService
+}
+
+const installOpenClawPlugin: PluginInstallService['installOpenClawPlugin'] = (params) =>
+  activePluginInstallService().installOpenClawPlugin(params)
+
+const updateOpenClawPlugin: PluginInstallService['updateOpenClawPlugin'] = (pluginId, restartRequested) =>
+  activePluginInstallService().updateOpenClawPlugin(pluginId, restartRequested)
+
+const updateAllOpenClawPlugins: PluginInstallService['updateAllOpenClawPlugins'] = (restartRequested) =>
+  activePluginInstallService().updateAllOpenClawPlugins(restartRequested)
+
+const uninstallOpenClawPlugin: PluginInstallService['uninstallOpenClawPlugin'] = (pluginId, options) =>
+  activePluginInstallService().uninstallOpenClawPlugin(pluginId, options)
+
+function activePluginRuntimeService() {
+  if (!pluginRuntimeService) throw new Error('Plugin runtime service is not initialized.')
+  return pluginRuntimeService
+}
+
+const inspectOpenClawPluginRuntime: PluginRuntimeService['inspectOpenClawPluginRuntime'] = (pluginId) =>
+  activePluginRuntimeService().inspectOpenClawPluginRuntime(pluginId)
+
+const pluginRuntimeInspectReady: PluginRuntimeService['pluginRuntimeInspectReady'] = (inspect) =>
+  activePluginRuntimeService().pluginRuntimeInspectReady(inspect)
+
+const stopAllPluginSetupTerminalSessions: PluginRuntimeService['stopAllPluginSetupTerminalSessions'] = (reason) =>
+  activePluginRuntimeService().stopAllPluginSetupTerminalSessions(reason)
 
 function classifyFailureKind(text: string, status?: OpenClawRunStatus | null): FailureKind | undefined {
   const clean = stripAnsi(text || '').toLowerCase()
@@ -5265,233 +5320,6 @@ function schedulePluginRegistryRefresh(reason: string): PluginRegistryRefreshReq
   }
 }
 
-type PluginSetupTerminalCommand = 'plugins' | 'model' | 'full' | 'doctor' | 'registry'
-type PluginSetupTerminalStatus = 'running' | 'completed' | 'failed' | 'stopped'
-type PluginSetupTerminalEvent = 'data' | 'status'
-type PluginSetupTerminalClient = (event: PluginSetupTerminalEvent, payload: unknown) => void
-type PluginSetupTerminalSession = {
-  id: string
-  command: PluginSetupTerminalCommand
-  commandLine: string
-  title: string
-  pluginId?: string
-  createdAt: string
-  updatedAt: string
-  status: PluginSetupTerminalStatus
-  exitCode?: number
-  pid?: number
-  output: string
-  process: PtyProcess
-  dataDisposable?: PtyDisposable
-  exitDisposable?: PtyDisposable
-  clients: Set<PluginSetupTerminalClient>
-}
-
-const PLUGIN_SETUP_TERMINAL_COMMANDS: Record<PluginSetupTerminalCommand, { label: string; args: string[] }> = {
-  plugins: { label: 'Plugin fields', args: ['configure', '--section', 'plugins'] },
-  model: { label: 'Model/auth', args: ['configure', '--section', 'model'] },
-  full: { label: 'Full configure', args: ['configure'] },
-  doctor: { label: 'Plugin doctor', args: ['plugins', 'doctor'] },
-  registry: { label: 'Registry refresh', args: ['plugins', 'registry', '--refresh'] },
-}
-const PLUGIN_SETUP_TERMINAL_MAX_BUFFER_CHARS = 250_000
-const PLUGIN_SETUP_TERMINAL_RETAIN_MS = 10 * 60 * 1000
-const pluginSetupTerminalSessions = new Map<string, PluginSetupTerminalSession>()
-let cachedPtyModule: PtyModule | null = null
-let warnedPlainTerminalFallback = false
-
-function createPlainProcessTerminalModule(reason: unknown): PtyModule {
-  if (!warnedPlainTerminalFallback) {
-    warnedPlainTerminalFallback = true
-    console.warn(`[plugins/setup-terminal] PTY runtime unavailable; using plain process fallback: ${String(reason)}`)
-  }
-  return {
-    spawn(command, args, options) {
-      const child = spawn(command, args, {
-        cwd: options.cwd,
-        env: options.env,
-        shell: false,
-        stdio: 'pipe',
-        ...(process.platform === 'win32' ? { windowsHide: true } : {}),
-      })
-      return {
-        pid: child.pid ?? 0,
-        write(data: string) {
-          child.stdin?.write(data)
-        },
-        resize() {
-          // Plain process fallback has no PTY viewport to resize.
-        },
-        kill() {
-          child.kill()
-        },
-        onData(callback: (data: string) => void) {
-          const onStdout = (chunk: Buffer) => callback(chunk.toString())
-          const onStderr = (chunk: Buffer) => callback(chunk.toString())
-          child.stdout?.on('data', onStdout)
-          child.stderr?.on('data', onStderr)
-          return {
-            dispose: () => {
-              child.stdout?.off('data', onStdout)
-              child.stderr?.off('data', onStderr)
-            },
-          }
-        },
-        onExit(callback: (event: { exitCode: number; signal?: number }) => void) {
-          const onClose = (code: number | null, signal: NodeJS.Signals | null) => {
-            callback({ exitCode: code ?? (signal ? 1 : 0), signal: signal ? 1 : undefined })
-          }
-          child.once('close', onClose)
-          return {
-            dispose: () => {
-              child.off('close', onClose)
-            },
-          }
-        },
-      }
-    },
-  }
-}
-
-function loadPtyModule(): PtyModule {
-  if (cachedPtyModule) return cachedPtyModule
-  try {
-    cachedPtyModule = optionalRequire('node-pty') as PtyModule
-    return cachedPtyModule
-  } catch (error) {
-    cachedPtyModule = createPlainProcessTerminalModule(error)
-    return cachedPtyModule
-  }
-}
-
-function compactTerminalOutput(current: string, chunk: string) {
-  const next = `${current}${chunk}`
-  if (next.length <= PLUGIN_SETUP_TERMINAL_MAX_BUFFER_CHARS) return next
-  return next.slice(next.length - PLUGIN_SETUP_TERMINAL_MAX_BUFFER_CHARS)
-}
-
-function terminalSpawnEnv(): Record<string, string> {
-  const env = openClawProcessEnv({
-    TERM: 'xterm-256color',
-    COLORTERM: 'truecolor',
-    FORCE_COLOR: '1',
-  })
-  return Object.fromEntries(
-    Object.entries(env).filter((entry): entry is [string, string] => typeof entry[1] === 'string'),
-  )
-}
-
-function terminalCommandLine(args: string[]) {
-  return ['openclaw', ...args].join(' ')
-}
-
-function pluginSetupTerminalSnapshot(session: PluginSetupTerminalSession) {
-  return {
-    id: session.id,
-    command: session.command,
-    commandLine: session.commandLine,
-    title: session.title,
-    pluginId: session.pluginId,
-    createdAt: session.createdAt,
-    updatedAt: session.updatedAt,
-    status: session.status,
-    exitCode: session.exitCode,
-    pid: session.pid,
-  }
-}
-
-function emitPluginSetupTerminal(session: PluginSetupTerminalSession, event: PluginSetupTerminalEvent, payload: unknown) {
-  for (const client of session.clients) client(event, payload)
-}
-
-function schedulePluginSetupTerminalCleanup(sessionId: string) {
-  const timeout = setTimeout(() => {
-    const session = pluginSetupTerminalSessions.get(sessionId)
-    if (!session || session.status === 'running') return
-    session.dataDisposable?.dispose()
-    session.exitDisposable?.dispose()
-    pluginSetupTerminalSessions.delete(sessionId)
-  }, PLUGIN_SETUP_TERMINAL_RETAIN_MS)
-  timeout.unref?.()
-}
-
-function startPluginSetupTerminalSession(params: {
-  command: PluginSetupTerminalCommand
-  pluginId?: string
-  cols?: number
-  rows?: number
-}): PluginSetupTerminalSession {
-  const commandInfo = PLUGIN_SETUP_TERMINAL_COMMANDS[params.command]
-  const args = commandInfo.args
-  const spec = openClawSpawnSpec(args)
-  const pty = loadPtyModule()
-  const now = new Date().toISOString()
-  const processHandle = pty.spawn(spec.command, [...spec.args], {
-    name: 'xterm-256color',
-    cols: Math.max(40, Math.min(180, Math.floor(params.cols || 96))),
-    rows: Math.max(10, Math.min(60, Math.floor(params.rows || 20))),
-    cwd: WORKSPACE_ROOT,
-    env: terminalSpawnEnv(),
-    useConpty: process.platform === 'win32',
-  })
-  const session: PluginSetupTerminalSession = {
-    id: randomUUID(),
-    command: params.command,
-    commandLine: terminalCommandLine(args),
-    title: params.pluginId ? `${commandInfo.label}: ${params.pluginId}` : commandInfo.label,
-    pluginId: params.pluginId,
-    createdAt: now,
-    updatedAt: now,
-    status: 'running',
-    pid: processHandle.pid,
-    output: '',
-    process: processHandle,
-    clients: new Set(),
-  }
-  session.dataDisposable = processHandle.onData((data) => {
-    session.updatedAt = new Date().toISOString()
-    session.output = compactTerminalOutput(session.output, data)
-    emitPluginSetupTerminal(session, 'data', { data })
-  })
-  session.exitDisposable = processHandle.onExit((event) => {
-    session.updatedAt = new Date().toISOString()
-    session.exitCode = event.exitCode
-    session.status = event.exitCode === 0 ? 'completed' : 'failed'
-    emitPluginSetupTerminal(session, 'status', { session: pluginSetupTerminalSnapshot(session) })
-    schedulePluginSetupTerminalCleanup(session.id)
-  })
-  pluginSetupTerminalSessions.set(session.id, session)
-  return session
-}
-
-function stopPluginSetupTerminalSession(session: PluginSetupTerminalSession, reason = 'plugin setup terminal stop') {
-  if (session.status === 'running') {
-    session.status = 'stopped'
-    session.updatedAt = new Date().toISOString()
-    try {
-      session.process.kill()
-    } catch {
-      // Process may already be gone.
-    }
-    void terminateProcessTree(session.pid, reason, true)
-  }
-  session.dataDisposable?.dispose()
-  session.exitDisposable?.dispose()
-  emitPluginSetupTerminal(session, 'status', { session: pluginSetupTerminalSnapshot(session) })
-  schedulePluginSetupTerminalCleanup(session.id)
-}
-
-function stopAllPluginSetupTerminalSessions(reason = 'control center shutdown') {
-  let stopped = 0
-  for (const session of Array.from(pluginSetupTerminalSessions.values())) {
-    if (session.status === 'running') stopped += 1
-    stopPluginSetupTerminalSession(session, `${reason}: plugin setup terminal cleanup`)
-    session.clients.clear()
-    pluginSetupTerminalSessions.delete(session.id)
-  }
-  return stopped
-}
-
 type StreamingProviderKind =
   | 'openai-compatible'
   | 'openai-responses'
@@ -10184,40 +10012,6 @@ async function ensureGatewayStartupPluginDefaults() {
   }
 }
 
-type PluginControlEntry = {
-  id: string
-  name: string
-  description: string
-  origin: string
-  status: string
-  enabled: boolean
-  configuredEnabled: boolean | null
-  runtimeLoaded?: boolean
-  managed?: boolean
-  category: string
-  commands: string[]
-  providers: string[]
-  channels: string[]
-  missingDependencies: string[]
-  configFields: PluginConfigField[]
-  guidance: string[]
-  needsSetup: boolean
-  restartRequired: boolean
-}
-
-type PluginConfigField = {
-  key: string
-  label: string
-  path?: string
-  envVar?: string
-  providerId?: string
-  secret: boolean
-  required: boolean
-  present: boolean
-  acceptsDirectSave: boolean
-  help?: string
-}
-
 type PluginSearchResult = {
   id: string
   name: string
@@ -10241,13 +10035,6 @@ type PluginCommandResult = {
   elapsedMs?: number
 }
 
-type PluginInstallRepairSummary = {
-  applied: boolean
-  reason: string
-  actions: string[]
-  retryArgs?: string[]
-}
-
 type PluginPostInstallRepairSummary = {
   applied: boolean
   reason: string
@@ -10255,11 +10042,6 @@ type PluginPostInstallRepairSummary = {
   warnings?: string[]
   bundledSource?: string
   commands?: PluginCommandResult[]
-}
-
-type PluginRuntimeSurfaceSummary = {
-  label: string
-  values: string[]
 }
 
 type ClawTalkDoctorSummary = {
@@ -10280,47 +10062,12 @@ type ClawTalkSetupSummary = {
   actions: string[]
 }
 
-const PLUGIN_ID_PATTERN = /^[a-z0-9][a-z0-9._-]{0,79}$/
 const PLUGIN_LIST_CACHE_MS = 12 * 60 * 60 * 1000
 const PLUGIN_LIST_CACHE_PATH = path.join(OPENCLAW_STATE_ROOT, 'plugin-list-cache.json')
 const PLUGIN_RUNTIME_STATE_PATH = path.join(OPENCLAW_STATE_ROOT, 'control-center-plugin-state.json')
 const OPENCLAW_PLUGIN_EXTENSIONS_DIR = path.join(OPENCLAW_STATE_ROOT, 'extensions')
 const PLUGIN_INSTALL_REPAIR_DIR = path.join(OPENCLAW_STATE_ROOT, 'tmp', 'plugin-install-repair')
 const CONTROL_CENTER_SECRET_PROVIDER_ID = 'controlcenter'
-
-type PluginListCacheEntry = {
-  rawPlugins: Record<string, unknown>[]
-  cliError?: string
-  refreshedAt: number
-  expiresAt: number
-  source: 'openclaw' | 'bundled'
-}
-
-type PluginListResult = PluginListCacheEntry & {
-  refreshing: boolean
-}
-
-let pluginListCache: PluginListCacheEntry | null = null
-let pluginListRefreshPromise: Promise<PluginListCacheEntry> | null = null
-
-type PluginRuntimeState = {
-  secrets?: Record<string, Record<string, string>>
-  managed?: Record<string, { enabled: boolean; updatedAt: string }>
-  installs?: Record<string, {
-    pluginId: string
-    spec: string
-    source: string
-    packageName?: string
-    version?: string
-    enabled: boolean
-    installedAt: string
-    updatedAt: string
-    stateRoot: string
-    configPath: string
-    openclawBin: string
-    installedBy: 'control-center'
-  }>
-}
 
 function normalizePluginRuntimeState(value: unknown): PluginRuntimeState | null {
   return isLooseRecord(value) ? value as PluginRuntimeState : null
@@ -10366,6 +10113,63 @@ async function readPluginSecret(pluginId: string, key: string) {
   const value = plugin?.[key]
   return typeof value === 'string' && value.trim() ? value : null
 }
+
+pluginInventoryService = createPluginInventoryService({
+  cacheMs: PLUGIN_LIST_CACHE_MS,
+  configPath: OPENCLAW_CONFIG_PATH,
+  listCachePath: PLUGIN_LIST_CACHE_PATH,
+  openclawBin,
+  pluginListCacheStateKey: CONTROL_CENTER_STATE_KEYS.pluginListCache,
+  providerAuthStatus,
+  readControlCenterStateRecord,
+  readOpenclawConfig,
+  readPluginRuntimeState,
+  redactSensitiveText,
+  runOpenClaw,
+  warn: (message, error) => console.warn(message, error),
+  workspaceRoot: WORKSPACE_ROOT,
+  writeControlCenterStateRecord,
+})
+
+pluginInstallService = createPluginInstallService({
+  clawTalkPluginId: CLAWTALK_PLUGIN_ID,
+  configPath: OPENCLAW_CONFIG_PATH,
+  installRepairDir: PLUGIN_INSTALL_REPAIR_DIR,
+  openclawBin,
+  pluginExtensionsDir: OPENCLAW_PLUGIN_EXTENSIONS_DIR,
+  stateRoot: OPENCLAW_STATE_ROOT,
+  delayMs,
+  listPluginControls,
+  openClawConfigNeedsCodexPlugin,
+  pauseGatewayForPluginInstallRepair: (actions) => gatewayLifecycle.pauseForPluginInstallRepair(actions),
+  persistTrustedPluginAllowlist,
+  readOpenclawConfig,
+  readPluginRuntimeState,
+  redactSensitiveText,
+  refreshOpenClawPluginRegistry,
+  refreshPluginListCache,
+  renamePath: renameWithLockRetry,
+  repairClawTalkPluginManifestContracts,
+  repairCodexPluginPostInstallState,
+  resolveBundledCodexPluginRoot,
+  resumeGatewayAfterPluginInstallRepair: (actions) => gatewayLifecycle.resumeAfterPluginInstallRepair(actions),
+  runOpenClaw,
+  schedulePluginGatewayRestart,
+  setOpenClawPluginEnabled,
+  warn: (message, error) => console.warn(message, error),
+  writePluginRuntimeState,
+})
+
+pluginRuntimeService = createPluginRuntimeService({
+  listPluginControls,
+  openClawProcessEnv,
+  openClawSpawnSpec,
+  redactSensitiveText,
+  runOpenClaw,
+  terminateProcessTree,
+  warn: (message, error) => console.warn(message, error),
+  workspaceRoot: WORKSPACE_ROOT,
+})
 
 function ensureControlCenterSecretProvider(config: OpenClawConfigFile) {
   config.secrets = isLooseRecord(config.secrets) ? config.secrets : {}
@@ -10462,39 +10266,6 @@ async function markPluginManaged(pluginId: string, enabled: boolean) {
   await writePluginRuntimeState(state)
 }
 
-async function touchPluginManagedRuntimeState(pluginId: string, enabled?: boolean) {
-  const id = pluginId.trim().toLowerCase()
-  if (!PLUGIN_ID_PATTERN.test(id)) throw new Error('Invalid plugin id.')
-  const state = await readPluginRuntimeState()
-  const now = new Date().toISOString()
-  state.managed = isLooseRecord(state.managed) ? state.managed as PluginRuntimeState['managed'] : {}
-  const previousManaged = state.managed![id]
-  const nextEnabled = typeof enabled === 'boolean' ? enabled : previousManaged?.enabled !== false
-  state.managed![id] = { enabled: nextEnabled, updatedAt: now }
-  if (isLooseRecord(state.installs?.[id])) {
-    state.installs![id].enabled = nextEnabled
-    state.installs![id].updatedAt = now
-  }
-  await writePluginRuntimeState(state)
-}
-
-async function forgetPluginRuntimeState(pluginId: string) {
-  const id = pluginId.trim().toLowerCase()
-  if (!PLUGIN_ID_PATTERN.test(id)) throw new Error('Invalid plugin id.')
-  const state = await readPluginRuntimeState()
-  if (isLooseRecord(state.managed)) delete state.managed[id]
-  if (isLooseRecord(state.installs)) delete state.installs[id]
-  if (isLooseRecord(state.secrets)) delete state.secrets[id]
-  await writePluginRuntimeState(state)
-}
-
-function pluginInstallSourceFromSpec(spec: string) {
-  const prefix = spec.trim().match(/^([a-z][a-z0-9-]*):/i)?.[1]?.toLowerCase()
-  if (prefix) return prefix
-  if (/^(?:\.|~|\/|[A-Za-z]:[\\/])/.test(spec.trim())) return 'path'
-  return 'auto'
-}
-
 function packageNameFromInstallSpec(spec: string) {
   const trimmed = spec.trim()
   const prefix = trimmed.match(/^([a-z][a-z0-9-]*):/i)?.[1]?.toLowerCase()
@@ -10506,49 +10277,6 @@ function packageNameFromInstallSpec(spec: string) {
     return value.slice(0, atIndex).trim()
   }
   return value
-}
-
-function versionFromInstallSpec(spec: string) {
-  const value = spec.trim().replace(/^(?:clawhub|npm):/i, '')
-  const atIndex = value.lastIndexOf('@')
-  if (atIndex <= 0 || atIndex >= value.length - 1) return ''
-  if (value.startsWith('@') && value.indexOf('/', 1) > atIndex) return ''
-  return value.slice(atIndex + 1).trim()
-}
-
-async function recordPluginInstallRuntimeState(params: {
-  pluginId: string
-  spec: string
-  enabled: boolean
-  packageName?: string
-  version?: string
-}) {
-  const id = params.pluginId.trim().toLowerCase()
-  if (!PLUGIN_ID_PATTERN.test(id)) throw new Error('Invalid plugin id.')
-  const now = new Date().toISOString()
-  const state = await readPluginRuntimeState()
-  state.managed = isLooseRecord(state.managed) ? state.managed as PluginRuntimeState['managed'] : {}
-  state.installs = isLooseRecord(state.installs) ? state.installs as PluginRuntimeState['installs'] : {}
-  const previous = isLooseRecord(state.installs?.[id]) ? state.installs?.[id] : null
-  const packageName = params.packageName?.trim() || packageNameFromInstallSpec(params.spec)
-  const version = params.version?.trim() || versionFromInstallSpec(params.spec)
-  state.managed![id] = { enabled: params.enabled, updatedAt: now }
-  state.installs![id] = {
-    ...(previous || {}),
-    pluginId: id,
-    spec: params.spec,
-    source: pluginInstallSourceFromSpec(params.spec),
-    ...(packageName ? { packageName } : {}),
-    ...(version ? { version } : {}),
-    enabled: params.enabled,
-    installedAt: typeof previous?.installedAt === 'string' && previous.installedAt ? previous.installedAt : now,
-    updatedAt: now,
-    stateRoot: OPENCLAW_STATE_ROOT,
-    configPath: OPENCLAW_CONFIG_PATH,
-    openclawBin,
-    installedBy: 'control-center',
-  }
-  await writePluginRuntimeState(state)
 }
 
 function normalizedPluginId(value: unknown): string {
@@ -11379,56 +11107,9 @@ function ensureClawTalkBundledPluginDefaults(config: OpenClawConfigFile) {
   ensureToolPolicyGrant(config, CLAWTALK_PLUGIN_ID)
 }
 
-const PLUGIN_CATALOG: Record<string, { name: string; description: string; category: string }> = {
-  browser: {
-    name: 'Browser Control',
-    description: 'Chrome and browser automation relay for web tasks.',
-    category: 'automation',
-  },
-  codex: {
-    name: 'Codex',
-    description: 'OpenClaw Codex app-server harness and Codex-managed model provider.',
-    category: 'providers',
-  },
-  [CLAWTALK_PLUGIN_ID]: {
-    name: 'ClawTalk',
-    description: 'Voice, SMS, missions, and approval integrations.',
-    category: 'communications',
-  },
-  'memory-core': {
-    name: 'Memory Core',
-    description: 'Local memory indexing and recall for agents.',
-    category: 'memory',
-  },
-  openai: {
-    name: 'OpenAI Provider',
-    description: 'OpenAI and Codex model provider integration.',
-    category: 'providers',
-  },
-  deepseek: {
-    name: 'DeepSeek Provider',
-    description: 'DeepSeek model provider integration.',
-    category: 'providers',
-  },
-  google: {
-    name: 'Google Provider',
-    description: 'Google Gemini, Vertex, media, and search provider integration.',
-    category: 'providers',
-  },
-}
-
 function pluginStringArray(value: unknown): string[] {
   if (!Array.isArray(value)) return []
   return value.filter((item): item is string => typeof item === 'string' && item.trim().length > 0)
-}
-
-function pluginIdFromPackageName(value: unknown): string {
-  if (typeof value !== 'string') return ''
-  return value
-    .trim()
-    .toLowerCase()
-    .replace(/^@openclaw\//, '')
-    .replace(/-(?:plugin|provider)$/, '')
 }
 
 function pluginArrayFromRecord(record: Record<string, unknown> | null, key: string): string[] {
@@ -11514,555 +11195,6 @@ async function ensureWebSearchProviderSelectionFromRuntimeState(config: OpenClaw
   return false
 }
 
-function pluginRawFromManifest(
-  manifest: Record<string, unknown>,
-  packageJson: Record<string, unknown>,
-): Record<string, unknown> | null {
-  const id = (typeof manifest.id === 'string' ? manifest.id : pluginIdFromPackageName(packageJson.name)).trim().toLowerCase()
-  if (!PLUGIN_ID_PATTERN.test(id)) return null
-
-  const contracts = isLooseRecord(manifest.contracts) ? manifest.contracts : null
-  const commandAliases = Array.isArray(manifest.commandAliases)
-    ? manifest.commandAliases
-        .filter(isLooseRecord)
-        .map((entry) => (typeof entry.name === 'string' ? entry.name : ''))
-        .filter(Boolean)
-    : []
-
-  const enabledByDefault = manifest.enabledByDefault !== false
-
-  return {
-    id,
-    name: typeof packageJson.name === 'string' ? packageJson.name : id,
-    packageName: typeof packageJson.name === 'string' ? packageJson.name : undefined,
-    version: typeof packageJson.version === 'string' ? packageJson.version : undefined,
-    description: typeof packageJson.description === 'string' ? packageJson.description : PLUGIN_CATALOG[id]?.description,
-    origin: 'bundled',
-    enabled: enabledByDefault,
-    status: enabledByDefault ? 'enabled' : 'disabled',
-    activation: isLooseRecord(manifest.activation) ? manifest.activation : undefined,
-    setup: isLooseRecord(manifest.setup) ? manifest.setup : undefined,
-    configSchema: isLooseRecord(manifest.configSchema) ? manifest.configSchema : undefined,
-    uiHints: isLooseRecord(manifest.uiHints) ? manifest.uiHints : undefined,
-    providerAuthChoices: Array.isArray(manifest.providerAuthChoices) ? manifest.providerAuthChoices.filter(isLooseRecord) : undefined,
-    commands: uniqueStrings(commandAliases, pluginArrayFromRecord(contracts, 'tools')),
-    cliBackendIds: pluginStringArray(manifest.cliBackends),
-    providerIds: pluginStringArray(manifest.providers),
-    speechProviderIds: pluginArrayFromRecord(contracts, 'speechProviders'),
-    webSearchProviderIds: pluginArrayFromRecord(contracts, 'webSearchProviders'),
-    imageGenerationProviderIds: pluginArrayFromRecord(contracts, 'imageGenerationProviders'),
-    memoryEmbeddingProviderIds: pluginArrayFromRecord(contracts, 'memoryEmbeddingProviders'),
-    channelIds: pluginStringArray(manifest.channels),
-  }
-}
-
-async function readJsonRecord(filePath: string): Promise<Record<string, unknown>> {
-  try {
-    const raw = await fs.readFile(filePath, 'utf-8')
-    const parsed = JSON.parse(raw.replace(/^\uFEFF/, '')) as unknown
-    return isLooseRecord(parsed) ? parsed : {}
-  } catch {
-    return {}
-  }
-}
-
-async function loadBundledPluginManifestList(): Promise<Record<string, unknown>[]> {
-  const extensionRoots = uniqueStrings(
-    path.join(path.dirname(openclawBin), 'dist', 'extensions'),
-    path.resolve(process.cwd(), 'vendor', 'openclaw', 'dist', 'extensions'),
-    path.resolve(process.cwd(), 'resources', 'openclaw', 'dist', 'extensions'),
-  )
-
-  for (const root of extensionRoots) {
-    const entries = await fs.readdir(root, { withFileTypes: true }).catch(() => [])
-    if (!entries.length) continue
-
-    const plugins = await Promise.all(
-      entries
-        .filter((entry) => entry.isDirectory())
-        .map(async (entry) => {
-          const pluginDir = path.join(root, entry.name)
-          const [manifest, packageJson] = await Promise.all([
-            readJsonRecord(path.join(pluginDir, 'openclaw.plugin.json')),
-            readJsonRecord(path.join(pluginDir, 'package.json')),
-          ])
-          return pluginRawFromManifest(manifest, packageJson)
-        }),
-    )
-
-    return plugins.filter((plugin): plugin is Record<string, unknown> => Boolean(plugin))
-  }
-
-  return []
-}
-
-async function readPluginListDiskCache(): Promise<PluginListCacheEntry | null> {
-  const cacheFromValue = (value: unknown): PluginListCacheEntry | null => {
-    const parsed = value
-    if (!isLooseRecord(parsed) || parsed.version !== 1 || !Array.isArray(parsed.rawPlugins)) return null
-
-    const rawPlugins = parsed.rawPlugins.filter(isLooseRecord)
-    if (!rawPlugins.length) return null
-
-    const refreshedAt = typeof parsed.refreshedAt === 'number' ? parsed.refreshedAt : Date.now()
-    const source = parsed.source === 'bundled' ? 'bundled' : 'openclaw'
-    const cliError = sanitizePluginCliError(parsed.cliError)
-    return {
-      rawPlugins,
-      ...(cliError ? { cliError } : {}),
-      refreshedAt,
-      expiresAt: refreshedAt + PLUGIN_LIST_CACHE_MS,
-      source,
-    }
-  }
-
-  const sqliteCache = cacheFromValue(readControlCenterStateRecord(CONTROL_CENTER_STATE_KEYS.pluginListCache))
-  if (sqliteCache) return sqliteCache
-
-  const legacyCache = await readLegacyJsonState(PLUGIN_LIST_CACHE_PATH, cacheFromValue)
-  if (legacyCache) {
-    writeControlCenterStateRecord(CONTROL_CENTER_STATE_KEYS.pluginListCache, {
-      version: 1,
-      source: legacyCache.source,
-      refreshedAt: legacyCache.refreshedAt,
-      rawPlugins: legacyCache.rawPlugins,
-      ...(legacyCache.cliError ? { cliError: legacyCache.cliError } : {}),
-    }, PLUGIN_LIST_CACHE_PATH)
-  }
-  return legacyCache
-}
-
-async function writePluginListDiskCache(cache: PluginListCacheEntry) {
-  if (!cache.rawPlugins.length) return
-  const cliError = sanitizePluginCliError(cache.cliError)
-  const payload = {
-    version: 1,
-    source: cache.source,
-    refreshedAt: cache.refreshedAt,
-    rawPlugins: cache.rawPlugins,
-    ...(cliError ? { cliError } : {}),
-  }
-  if (writeControlCenterStateRecord(CONTROL_CENTER_STATE_KEYS.pluginListCache, payload, PLUGIN_LIST_CACHE_PATH)) return
-  await fs.mkdir(path.dirname(PLUGIN_LIST_CACHE_PATH), { recursive: true })
-  await fs.writeFile(PLUGIN_LIST_CACHE_PATH, `${JSON.stringify(payload, null, 2)}\n`, 'utf-8')
-}
-
-async function refreshPluginListCache(): Promise<PluginListCacheEntry> {
-  if (pluginListRefreshPromise) return pluginListRefreshPromise
-
-  pluginListRefreshPromise = (async () => {
-    let rawPlugins: Record<string, unknown>[] = []
-    let cliError = ''
-    let source: PluginListCacheEntry['source'] = 'openclaw'
-
-    try {
-      const result = await runOpenClaw(['plugins', 'list', '--json'], 90_000)
-      try {
-        rawPlugins = parsePluginList(result.stdout)
-      } catch (error) {
-        cliError = sanitizePluginCliError(String(error))
-      }
-      const warning = pluginCliWarningFromOutput(result, 'openclaw plugins list')
-      if (warning) {
-        cliError = uniqueStrings(cliError, warning).join(' ')
-      } else {
-        cliError = sanitizePluginCliError(cliError)
-      }
-    } catch (error) {
-      cliError = sanitizePluginCliError(String(error))
-    }
-
-    if (!rawPlugins.length) {
-      const bundledPlugins = await loadBundledPluginManifestList()
-      if (bundledPlugins.length) {
-        rawPlugins = bundledPlugins
-        source = 'bundled'
-      }
-    }
-
-    const now = Date.now()
-    const cache: PluginListCacheEntry = {
-      rawPlugins,
-      ...(cliError ? { cliError } : {}),
-      refreshedAt: now,
-      expiresAt: now + PLUGIN_LIST_CACHE_MS,
-      source,
-    }
-
-    pluginListCache = cache
-    await writePluginListDiskCache(cache).catch((error) => {
-      console.warn('Failed to write plugin list cache:', error)
-    })
-    return cache
-  })().finally(() => {
-    pluginListRefreshPromise = null
-  })
-
-  return pluginListRefreshPromise
-}
-
-function refreshPluginListCacheInBackground() {
-  void refreshPluginListCache().catch((error) => {
-    console.warn('Background plugin list refresh failed:', error)
-  })
-}
-
-async function getPluginList(options: { forceRefresh?: boolean } = {}): Promise<PluginListResult> {
-  if (options.forceRefresh) {
-    const now = Date.now()
-    if (pluginListCache?.rawPlugins.length) {
-      refreshPluginListCacheInBackground()
-      return { ...pluginListCache, refreshing: true }
-    }
-
-    const diskCache = await readPluginListDiskCache()
-    if (diskCache?.rawPlugins.length) {
-      pluginListCache = diskCache
-      refreshPluginListCacheInBackground()
-      return { ...diskCache, refreshing: true }
-    }
-
-    const bundledPlugins = await loadBundledPluginManifestList()
-    const cache: PluginListCacheEntry = {
-      rawPlugins: bundledPlugins,
-      refreshedAt: now,
-      expiresAt: now + PLUGIN_LIST_CACHE_MS,
-      source: 'bundled',
-      cliError: 'OpenClaw plugin refresh is running in the background.',
-    }
-    pluginListCache = cache
-    await writePluginListDiskCache(cache).catch((error) => {
-      console.warn('Failed to write bundled plugin list cache:', error)
-    })
-    refreshPluginListCacheInBackground()
-    return { ...cache, refreshing: true }
-  }
-
-  const now = Date.now()
-  if (pluginListCache?.rawPlugins.length) {
-    if (pluginListCache.expiresAt <= now) refreshPluginListCacheInBackground()
-    return { ...pluginListCache, refreshing: Boolean(pluginListRefreshPromise) }
-  }
-
-  const diskCache = await readPluginListDiskCache()
-  if (diskCache?.rawPlugins.length) {
-    pluginListCache = diskCache
-    if (diskCache.expiresAt <= now) refreshPluginListCacheInBackground()
-    return { ...diskCache, refreshing: Boolean(pluginListRefreshPromise) }
-  }
-
-  const bundledPlugins = await loadBundledPluginManifestList()
-  const cache: PluginListCacheEntry = {
-    rawPlugins: bundledPlugins,
-    refreshedAt: now,
-    expiresAt: now + PLUGIN_LIST_CACHE_MS,
-    source: 'bundled',
-  }
-  pluginListCache = cache
-  await writePluginListDiskCache(cache).catch((error) => {
-    console.warn('Failed to write bundled plugin list cache:', error)
-  })
-  refreshPluginListCacheInBackground()
-  return { ...cache, refreshing: true }
-}
-
-function pluginConfiguredEnabled(config: OpenClawConfigFile, pluginId: string): boolean | null {
-  const configured = config.plugins?.entries?.[pluginId]?.enabled
-  return typeof configured === 'boolean' ? configured : null
-}
-
-function displayPluginName(pluginId: string, rawName: unknown): string {
-  const catalog = PLUGIN_CATALOG[pluginId]
-  if (catalog) return catalog.name
-  const name = typeof rawName === 'string' && rawName.trim() ? rawName.trim() : pluginId
-  return name
-    .replace(/^@openclaw\//, '')
-    .replace(/-provider$/, ' provider')
-    .replace(/-plugin$/, ' plugin')
-    .replace(/\b\w/g, (match) => match.toUpperCase())
-}
-
-function pluginCategory(pluginId: string, raw: Record<string, unknown>): string {
-  if (PLUGIN_CATALOG[pluginId]) return PLUGIN_CATALOG[pluginId].category
-  if (typeof raw.kind === 'string' && raw.kind.trim()) return raw.kind.trim()
-  if (pluginStringArray(raw.providerIds).length || pluginStringArray(raw.cliBackendIds).length) return 'providers'
-  if (pluginStringArray(raw.channelIds).length || /(?:chat|talk|sms|voice|discord|slack|telegram|whatsapp|teams)/i.test(pluginId)) {
-    return 'communications'
-  }
-  if (/memory/i.test(pluginId) || pluginStringArray(raw.memoryEmbeddingProviderIds).length) return 'memory'
-  if (pluginStringArray(raw.commands).length || pluginStringArray(raw.services).length) return 'automation'
-  if (/(?:web|search|readability|browser|brave|duckduckgo|firecrawl|perplexity|tavily|exa|searxng)/i.test(pluginId)) return 'web'
-  return 'runtime'
-}
-
-function pluginMissingDependencies(raw: Record<string, unknown>): string[] {
-  const dependencyStatus = isLooseRecord(raw.dependencyStatus) ? raw.dependencyStatus : {}
-  return pluginStringArray(dependencyStatus.missing)
-    .concat(
-      Array.isArray(dependencyStatus.missing)
-        ? dependencyStatus.missing
-            .filter(isLooseRecord)
-            .map((entry) => (typeof entry.name === 'string' ? entry.name : ''))
-            .filter(Boolean)
-        : [],
-    )
-    .slice(0, 12)
-}
-
-function readNestedRecordValue(root: unknown, dottedPath: string): unknown {
-  let current: unknown = root
-  for (const segment of dottedPath.split('.').filter(Boolean)) {
-    if (!isLooseRecord(current)) return undefined
-    current = current[segment]
-  }
-  return current
-}
-
-function hasUsableConfigValue(value: unknown) {
-  if (typeof value === 'string') return value.trim().length > 0
-  if (typeof value === 'number' || typeof value === 'boolean') return true
-  if (Array.isArray(value)) return value.length > 0
-  return Boolean(value && typeof value === 'object')
-}
-
-function configFieldFromPluginConfig(params: {
-  key: string
-  label: string
-  path: string
-  value: unknown
-  secret?: boolean
-  required?: boolean
-  help?: string
-}): PluginConfigField {
-  return {
-    key: params.key,
-    label: params.label,
-    path: params.path,
-    secret: params.secret !== false,
-    required: params.required !== false,
-    present: hasUsableConfigValue(params.value),
-    acceptsDirectSave: true,
-    ...(params.help ? { help: params.help } : {}),
-  }
-}
-
-function providerLabel(providerId: string) {
-  return AUTH_PROVIDER_CATALOG[providerId]?.label || providerId
-}
-
-function providerConfigFieldsFromSetup(raw: Record<string, unknown>): PluginConfigField[] {
-  const setup = isLooseRecord(raw.setup) ? raw.setup : null
-  const providers = Array.isArray(setup?.providers) ? setup.providers.filter(isLooseRecord) : []
-  const fields: PluginConfigField[] = []
-
-  for (const providerSetup of providers) {
-    const providerId = typeof providerSetup.id === 'string' ? providerSetup.id.trim() : ''
-    if (!providerId || !AUTH_ENV_MAP[providerId]) continue
-    const status = providerAuthStatus(providerId)
-    const envVars = pluginStringArray(providerSetup.envVars)
-    const primaryEnvVar = envVars[0] || AUTH_ENV_MAP[providerId]?.[0] || ''
-    const choice = Array.isArray(raw.providerAuthChoices)
-      ? raw.providerAuthChoices
-          .filter(isLooseRecord)
-          .find((entry) => entry.provider === providerId && entry.method === 'api-key')
-      : null
-    const label = typeof choice?.choiceLabel === 'string' && choice.choiceLabel.trim()
-      ? choice.choiceLabel.trim()
-      : `${providerLabel(providerId)} API key`
-    fields.push({
-      key: `provider:${providerId}`,
-      label,
-      ...(primaryEnvVar ? { envVar: primaryEnvVar } : {}),
-      providerId,
-      secret: true,
-      required: true,
-      present: Boolean(status.configured),
-      acceptsDirectSave: true,
-      help: status.configured
-        ? `${providerLabel(providerId)} auth is already configured.`
-        : primaryEnvVar
-          ? `Paste ${primaryEnvVar} or use Model/Auth setup.`
-          : `Paste a ${providerLabel(providerId)} API key or use Model/Auth setup.`,
-    })
-  }
-
-  return fields
-}
-
-function schemaConfigFieldsFromRaw(
-  raw: Record<string, unknown>,
-  entryConfig: OpenClawPluginEntryConfig | undefined,
-): PluginConfigField[] {
-  const schema = isLooseRecord(raw.configSchema) ? raw.configSchema : null
-  const properties = isLooseRecord(schema?.properties) ? schema.properties : {}
-  const required = new Set(pluginStringArray(schema?.required))
-  const uiHints = isLooseRecord(raw.uiHints) ? raw.uiHints : {}
-  const fields: PluginConfigField[] = []
-
-  for (const [key, property] of Object.entries(properties)) {
-    if (!PLUGIN_ID_PATTERN.test(key.replace(/\./g, '-'))) continue
-    const hint = isLooseRecord(uiHints[key]) ? uiHints[key] : {}
-    const lowerKey = key.toLowerCase()
-    const sensitive =
-      hint.sensitive === true ||
-      /(?:api[-_]?key|token|secret|password|credential)/i.test(lowerKey)
-    const requiredField = required.has(key)
-    if (!requiredField && !sensitive) continue
-    const propRecord = isLooseRecord(property) ? property : {}
-    const label = typeof hint.label === 'string' && hint.label.trim()
-      ? hint.label.trim()
-      : key
-          .replace(/([a-z])([A-Z])/g, '$1 $2')
-          .replace(/[-_.]+/g, ' ')
-          .replace(/\b\w/g, (match) => match.toUpperCase())
-    const help =
-      typeof hint.help === 'string' && hint.help.trim()
-        ? hint.help.trim()
-        : typeof propRecord.description === 'string' && propRecord.description.trim()
-          ? propRecord.description.trim()
-          : undefined
-    fields.push(configFieldFromPluginConfig({
-      key,
-      label,
-      path: `plugins.entries.${String(raw.id)}.config.${key}`,
-      value: readNestedRecordValue(entryConfig?.config, key),
-      secret: sensitive,
-      required: requiredField || sensitive,
-      help,
-    }))
-  }
-
-  return fields
-}
-
-function knownPluginConfigFields(
-  id: string,
-  raw: Record<string, unknown>,
-  config: OpenClawConfigFile,
-  pluginState: PluginRuntimeState,
-): PluginConfigField[] {
-  const entryConfig = config.plugins?.entries?.[id]
-  const fields = [...schemaConfigFieldsFromRaw(raw, entryConfig), ...providerConfigFieldsFromSetup(raw)]
-
-  if (id === 'clawtalk') {
-    const existing = fields.find((field) => field.key === 'apiKey')
-    const apiKey =
-      readNestedRecordValue(entryConfig?.config, 'apiKey') ||
-      entryConfig?.apiKey ||
-      pluginState.secrets?.[id]?.apiKey
-    if (existing) {
-      existing.present = hasUsableConfigValue(apiKey)
-      existing.required = true
-      existing.acceptsDirectSave = true
-      existing.path = `plugins.entries.${id}.config.apiKey`
-    } else {
-      fields.unshift(configFieldFromPluginConfig({
-        key: 'apiKey',
-        label: 'ClawTalk API key',
-        path: `plugins.entries.${id}.config.apiKey`,
-        value: apiKey,
-        secret: true,
-        required: true,
-        help: 'Paste the ClawTalk API key to connect and verify WebSocket auth.',
-      }))
-    }
-  }
-
-  const seen = new Set<string>()
-  return fields.filter((field) => {
-    const key = field.providerId ? `provider:${field.providerId}` : field.key
-    if (seen.has(key)) return false
-    seen.add(key)
-    return true
-  })
-}
-
-function pluginGuidance(
-  entry: Omit<PluginControlEntry, 'configFields' | 'guidance' | 'needsSetup'>,
-  configFields: PluginConfigField[],
-) {
-  const guidance: string[] = []
-  const missingFields = configFields.filter((field) => field.required && !field.present)
-
-  if (entry.missingDependencies.length) {
-    guidance.push(`Missing dependencies: ${entry.missingDependencies.slice(0, 4).join(', ')}.`)
-  }
-  if (entry.enabled && missingFields.length) {
-    guidance.push(`Paste ${missingFields.map((field) => field.label).join(', ')} and refresh.`)
-  }
-  if (entry.enabled && !entry.missingDependencies.length && !missingFields.length) {
-    guidance.push('Ready. Runtime inspect verifies loaded plugin surfaces after install or config changes.')
-  }
-  if (!entry.enabled && missingFields.length) {
-    guidance.push(`Enable after adding ${missingFields.map((field) => field.label).join(', ')}.`)
-  }
-
-  return guidance
-}
-
-function buildPluginControlEntry(
-  raw: Record<string, unknown>,
-  config: OpenClawConfigFile,
-  pluginState: PluginRuntimeState,
-): PluginControlEntry | null {
-  const id = typeof raw.id === 'string' ? raw.id.trim().toLowerCase() : ''
-  if (!PLUGIN_ID_PATTERN.test(id)) return null
-
-  const configuredEnabled = pluginConfiguredEnabled(config, id)
-  const globalDisabled = config.plugins?.enabled === false
-  const allow = Array.isArray(config.plugins?.allow) ? config.plugins?.allow : []
-  const deny = Array.isArray(config.plugins?.deny) ? config.plugins?.deny : []
-  const excludedByAllow = Boolean(allow?.length && !allow.includes(id))
-  const denied = Boolean(deny?.includes(id))
-  const rawEnabled = configuredEnabled === true ? true : typeof raw.enabled === 'boolean' ? raw.enabled : configuredEnabled !== false
-  const enabled = !globalDisabled && !excludedByAllow && !denied && configuredEnabled !== false && rawEnabled
-  const catalog = PLUGIN_CATALOG[id]
-  const rawStatus = typeof raw.status === 'string' && raw.status.trim() ? raw.status.trim() : ''
-  const status =
-    globalDisabled || configuredEnabled === false || excludedByAllow || denied
-      ? 'disabled'
-      : enabled
-        ? (/^disabled$/i.test(rawStatus) ? 'enabled' : rawStatus || 'enabled')
-        : rawStatus || 'disabled'
-
-  const base = {
-    id,
-    name: displayPluginName(id, raw.name),
-    description:
-      catalog?.description ||
-      (typeof raw.description === 'string' && raw.description.trim()
-        ? raw.description.trim()
-        : `OpenClaw plugin ${id}.`),
-    origin: typeof raw.origin === 'string' && raw.origin.trim() ? raw.origin.trim() : configuredEnabled !== null ? 'config' : 'bundled',
-    status,
-    enabled,
-    configuredEnabled,
-    category: pluginCategory(id, raw),
-    commands: uniqueStrings(...pluginStringArray(raw.commands), ...pluginStringArray(raw.cliCommands)).slice(0, 12),
-    providers: uniqueStrings(
-      ...pluginStringArray(raw.providerIds),
-      ...pluginStringArray(raw.speechProviderIds),
-      ...pluginStringArray(raw.webSearchProviderIds),
-      ...pluginStringArray(raw.imageGenerationProviderIds),
-      ...pluginStringArray(raw.memoryEmbeddingProviderIds),
-    ).slice(0, 12),
-    channels: uniqueStrings(...pluginStringArray(raw.channelIds), ...pluginStringArray(raw.gatewayMethods)).slice(0, 12),
-    missingDependencies: uniqueStrings(...pluginMissingDependencies(raw)),
-    restartRequired: typeof raw.restartRequired === 'boolean' ? raw.restartRequired : false,
-  }
-  const configFields = knownPluginConfigFields(id, raw, config, pluginState)
-  const guidance = pluginGuidance(base, configFields)
-  return {
-    ...base,
-    configFields,
-    guidance,
-    needsSetup: Boolean(
-      base.missingDependencies.length ||
-      (base.enabled && configFields.some((field) => field.required && !field.present)),
-    ),
-  }
-}
-
 function firstJsonSliceFromText(value: string) {
   const text = stripAnsi(value || '').trim()
   const firstObject = text.indexOf('{')
@@ -12117,107 +11249,12 @@ function parseOpenClawJsonOutput(stdout: string): unknown {
   }
 }
 
-function parsePluginList(stdout: string): Record<string, unknown>[] {
-  const parsed = parseOpenClawJsonOutput(stdout)
-  if (!isLooseRecord(parsed) || !Array.isArray(parsed.plugins)) return []
-  return parsed.plugins.filter(isLooseRecord)
-}
-
-function pluginDiagnosticMessagesFromJson(value: unknown): string[] {
-  const messages: string[] = []
-  const addDiagnostic = (entry: unknown) => {
-    if (!isLooseRecord(entry)) return
-    const level = stringField(entry, ['level', 'severity', 'type']).toLowerCase()
-    if (level && !/\b(?:warn|warning|error|fail|failed)\b/i.test(level)) return
-    const message = stringField(entry, ['message', 'detail', 'reason', 'summary', 'error'])
-    if (!message) return
-    const code = stringField(entry, ['code'])
-    messages.push(code ? `${message} (${code})` : message)
-  }
-
-  if (Array.isArray(value)) {
-    value.forEach(addDiagnostic)
-  } else if (isLooseRecord(value)) {
-    for (const key of ['diagnostics', 'warnings', 'errors']) {
-      const nested = value[key]
-      if (Array.isArray(nested)) nested.forEach(addDiagnostic)
-    }
-    for (const key of ['registry', 'pluginRegistry', 'meta']) {
-      const nested = value[key]
-      if (isLooseRecord(nested)) {
-        for (const nestedKey of ['diagnostics', 'warnings', 'errors']) {
-          const entries = nested[nestedKey]
-          if (Array.isArray(entries)) entries.forEach(addDiagnostic)
-        }
-      }
-    }
-    addDiagnostic(value)
-  }
-
-  return uniqueStrings(messages)
-}
-
-function compactPluginCliText(value: string, maxLength = 360) {
-  const compact = redactSensitiveText(stripAnsi(value || ''))
-    .replace(/\r/g, '\n')
-    .split('\n')
-    .map((line) => line.trim())
-    .filter(Boolean)
-    .join(' ')
-    .replace(/\s+/g, ' ')
-    .trim()
-  if (!compact) return ''
-  return compact.length > maxLength ? `${compact.slice(0, maxLength - 3).trim()}...` : compact
-}
-
-function pluginCliWarningMessagesFromText(value: string): string[] {
-  const text = stripAnsi(value || '').trim()
-  if (!text) return []
-
-  try {
-    const parsed = parseOpenClawJsonOutput(text)
-    const messages = pluginDiagnosticMessagesFromJson(parsed)
-    if (messages.length) return messages
-    if (isLooseRecord(parsed) && Array.isArray(parsed.plugins)) return []
-  } catch {
-    // Fall back to compacting plain CLI text below.
-  }
-
-  if (/^\s*[[{]/.test(text)) return []
-  const compact = compactPluginCliText(text)
-  return compact ? [compact] : []
-}
-
-function sanitizePluginCliError(value: unknown) {
-  if (typeof value !== 'string' || !value.trim()) return ''
-  const messages = pluginCliWarningMessagesFromText(value)
-  return compactPluginCliText((messages.length ? messages : [value]).slice(0, 2).join(' '))
-}
-
-function pluginCliWarningFromOutput(result: OpenClawResult, command: string) {
-  const messages = uniqueStrings(
-    pluginCliWarningMessagesFromText(result.stderr),
-    pluginCliWarningMessagesFromText(result.stdout),
-  )
-  if (messages.length) return compactPluginCliText(messages.slice(0, 2).join(' '))
-  return result.code === 0 ? '' : `${command} exited ${result.code}.`
-}
-
 function stringField(record: Record<string, unknown>, keys: string[]) {
   for (const key of keys) {
     const value = record[key]
     if (typeof value === 'string' && value.trim()) return value.trim()
   }
   return ''
-}
-
-function pluginIdFromInstallSpec(value: string) {
-  const trimmed = value.trim()
-  const withoutPrefix = trimmed.replace(/^(?:clawhub|npm|file|path):/i, '')
-  const packageLike = withoutPrefix.includes('\\') || withoutPrefix.includes('/')
-    ? path.basename(withoutPrefix)
-    : withoutPrefix
-  return pluginIdFromPackageName(packageLike)
 }
 
 function normalizePluginInstallSpec(raw: Record<string, unknown>, fallbackId: string) {
@@ -12294,12 +11331,6 @@ function parsePluginSearchResults(stdout: string, installedIds: Set<string>): Pl
     .slice(0, 50)
 }
 
-type ParsedPluginInstallInput = {
-  spec: string
-  fromCommand: boolean
-  installArgs: string[]
-}
-
 function splitPluginCommandLine(input: string) {
   const tokens: string[] = []
   let current = ''
@@ -12347,76 +11378,6 @@ function isOpenClawCommandToken(token: string) {
   return normalized === 'openclaw'
 }
 
-function validatePluginInstallCommandArgs(args: string[]) {
-  const installArgs: string[] = []
-  const booleanFlags = new Set(['--pin', '--force', '--dangerously-force-unsafe-install', '--link', '--local', '-l'])
-  const valueFlags = new Set(['--marketplace', '-m'])
-  let spec = ''
-  for (let index = 0; index < args.length; index += 1) {
-    const token = args[index]
-    if (!token) continue
-    if (token.startsWith('-')) {
-      const flagName = token.includes('=') ? token.slice(0, token.indexOf('=')) : token
-      if (valueFlags.has(flagName)) {
-        installArgs.push(token)
-        if (!token.includes('=')) {
-          const value = args[index + 1]
-          if (!value || value.startsWith('-')) throw new Error(`Install command flag ${token} needs a value.`)
-          installArgs.push(value)
-          index += 1
-        }
-        continue
-      }
-      if (booleanFlags.has(token)) {
-        installArgs.push(token)
-        continue
-      }
-      throw new Error(`Unsupported plugin install flag: ${token}`)
-    }
-    if (!spec) {
-      spec = token
-      continue
-    }
-    throw new Error(`Unexpected extra plugin install argument: ${token}`)
-  }
-  return { spec, installArgs }
-}
-
-function validatePluginInstallSpec(spec: string) {
-  const trimmed = spec.trim()
-  if (!trimmed) throw new Error('Install spec is required.')
-  if (trimmed.length > 320) throw new Error('Install spec is too long.')
-  if (Array.from(trimmed).some((char) => {
-    const code = char.charCodeAt(0)
-    return code <= 31 || code === 127
-  })) throw new Error('Install spec contains unsupported control characters.')
-  return trimmed
-}
-
-function parsePluginInstallInput(input: string): ParsedPluginInstallInput {
-  const trimmed = validatePluginInstallSpec(input)
-  if (!/\bplugins\s+install\b/i.test(trimmed)) {
-    return { spec: trimmed, fromCommand: false, installArgs: [] }
-  }
-
-  const tokens = splitPluginCommandLine(trimmed)
-  if (
-    tokens.length >= 4 &&
-    isOpenClawCommandToken(tokens[0]) &&
-    tokens[1]?.toLowerCase() === 'plugins' &&
-    tokens[2]?.toLowerCase() === 'install'
-  ) {
-    const parsed = validatePluginInstallCommandArgs(tokens.slice(3))
-    return {
-      spec: validatePluginInstallSpec(parsed.spec),
-      fromCommand: true,
-      installArgs: parsed.installArgs,
-    }
-  }
-
-  throw new Error('Paste an OpenClaw plugin install command like: openclaw plugins install clawhub:@scope/package')
-}
-
 function parseOpenClawCommandInput(input: string) {
   const trimmed = input.trim()
   if (!trimmed) throw new Error('OpenClaw command is required.')
@@ -12435,23 +11396,6 @@ function parseOpenClawCommandInput(input: string) {
     throw new Error('OpenClaw command contains unsupported control characters.')
   }
   return args
-}
-
-function pluginInstallSpecIsLocalPath(spec: string) {
-  const trimmed = spec.trim()
-  if (!trimmed) return false
-  if (/^(?:\.|~|\/|[A-Za-z]:[\\/])/.test(trimmed)) return true
-  if (/\.(?:tgz|tar\.gz|tar|zip|mjs|cjs|js|ts)$/i.test(trimmed)) return true
-  return existsSync(path.resolve(trimmed))
-}
-
-function isCodexPluginInstallRequest(params: { spec: string; pluginId?: string }, parsed: ParsedPluginInstallInput) {
-  const pluginId = params.pluginId?.trim().toLowerCase()
-  if (pluginId === 'codex') return true
-  const spec = parsed.spec.trim().toLowerCase()
-  if (spec === 'codex' || spec === '@openclaw/codex') return true
-  if (/^(?:npm|clawhub):@openclaw\/codex(?:@|$)/i.test(parsed.spec.trim())) return true
-  return pluginIdFromInstallSpec(parsed.spec) === 'codex'
 }
 
 function bundledCodexPluginRootCandidates() {
@@ -12552,15 +11496,6 @@ async function installedCodexPluginRootCandidates(extraRoot?: string) {
   ).filter(isCodexPluginRoot)
 }
 
-function packageVersionFromPluginRoot(root: string) {
-  try {
-    const parsed = JSON.parse(readFileSync(path.join(root, 'package.json'), 'utf-8')) as { version?: unknown }
-    return typeof parsed.version === 'string' ? parsed.version.trim() : ''
-  } catch {
-    return ''
-  }
-}
-
 function safeConfigPathSegments(key: string) {
   const segments = key.split('.').map((segment) => segment.trim()).filter(Boolean)
   if (!segments.length || segments.length > 5) throw new Error(`Invalid config key: ${key}`)
@@ -12647,92 +11582,6 @@ async function savePluginDirectConfig(
   if (id === CLAWTALK_PLUGIN_ID) {
     const repairedManifests = await repairClawTalkPluginManifestContracts()
     if (repairedManifests.length) await refreshOpenClawPluginRegistry('clawtalk-direct-config-repair')
-  }
-}
-
-function pluginInstallOutputText(result: OpenClawResult) {
-  return stripAnsi(`${result.stdout || ''}\n${result.stderr || ''}`).trim()
-}
-
-function parsePluginInstallRenameFailure(result: OpenClawResult): { sourcePath: string; targetPath: string; pluginId: string } | null {
-  const text = pluginInstallOutputText(result)
-  if (!/(?:failed to copy plugin|EPERM|EBUSY|EACCES|operation not permitted|resource busy|access denied)/i.test(text)) return null
-  const match =
-    /\brename\s+['"]([^'"]*\.openclaw-install-stage-[^'"]*)['"]\s*->\s*['"]([^'"]+)['"]/i.exec(text) ||
-    /\brename\s+([^\r\n]+?\.openclaw-install-stage-\S+)\s*->\s*([^\r\n]+)/i.exec(text)
-  if (!match) return null
-
-  const sourcePath = path.resolve(match[1].trim())
-  const targetPath = path.resolve(match[2].trim())
-  const extensionsDir = path.resolve(OPENCLAW_PLUGIN_EXTENSIONS_DIR)
-  if (!isPathInsideOrSame(extensionsDir, sourcePath) || !isPathInsideOrSame(extensionsDir, targetPath)) return null
-  if (path.dirname(sourcePath).toLowerCase() !== extensionsDir.toLowerCase()) return null
-  if (path.dirname(targetPath).toLowerCase() !== extensionsDir.toLowerCase()) return null
-  if (!path.basename(sourcePath).startsWith('.openclaw-install-stage-')) return null
-  const pluginId = path.basename(targetPath).trim().toLowerCase()
-  if (!PLUGIN_ID_PATTERN.test(pluginId)) return null
-  return { sourcePath, targetPath, pluginId }
-}
-
-function pluginInstallRepairStamp() {
-  return new Date().toISOString().replace(/[:.]/g, '-')
-}
-
-async function quarantinePluginInstallPath(targetPath: string, label: string, actions: string[]) {
-  if (!existsSync(targetPath)) return false
-  await fs.mkdir(PLUGIN_INSTALL_REPAIR_DIR, { recursive: true })
-  const destination = path.join(
-    PLUGIN_INSTALL_REPAIR_DIR,
-    `${label}-${path.basename(targetPath)}-${pluginInstallRepairStamp()}`,
-  )
-  await renameWithLockRetry(targetPath, destination)
-  actions.push(`moved ${targetPath} to ${destination}`)
-  return true
-}
-
-async function pauseGatewayForPluginInstallRepair(actions: string[]) {
-  await gatewayLifecycle.pauseForPluginInstallRepair(actions)
-}
-
-function resumeGatewayAfterPluginInstallRepair(actions: string[]) {
-  gatewayLifecycle.resumeAfterPluginInstallRepair(actions)
-}
-
-async function quarantineStalePluginInstallStages(actions: string[]) {
-  const entries = await fs.readdir(OPENCLAW_PLUGIN_EXTENSIONS_DIR, { withFileTypes: true }).catch(() => [])
-  for (const entry of entries) {
-    if (!entry.isDirectory() || !entry.name.startsWith('.openclaw-install-stage-')) continue
-    await quarantinePluginInstallPath(path.join(OPENCLAW_PLUGIN_EXTENSIONS_DIR, entry.name), 'stale-stage', actions)
-  }
-}
-
-async function repairPluginInstallRenameFailure(result: OpenClawResult, retryArgs: string[]): Promise<PluginInstallRepairSummary & { pausedGateway: boolean }> {
-  const failure = parsePluginInstallRenameFailure(result)
-  if (!failure) {
-    return { applied: false, reason: '', actions: [], retryArgs, pausedGateway: false }
-  }
-
-  const actions: string[] = []
-  await fs.mkdir(OPENCLAW_PLUGIN_EXTENSIONS_DIR, { recursive: true })
-  await pauseGatewayForPluginInstallRepair(actions)
-  let pausedGateway = true
-  try {
-    await quarantinePluginInstallPath(failure.targetPath, `previous-${failure.pluginId}`, actions)
-    await quarantinePluginInstallPath(failure.sourcePath, `failed-stage-${failure.pluginId}`, actions)
-    await quarantineStalePluginInstallStages(actions)
-  } catch (error) {
-    resumeGatewayAfterPluginInstallRepair(actions)
-    pausedGateway = false
-    actions.push(`repair cleanup failed: ${String(error)}`)
-    throw error
-  }
-
-  return {
-    applied: true,
-    reason: `Windows blocked the OpenClaw installer stage rename for ${failure.pluginId}; cleaned stale install folders and retrying with --force.`,
-    actions,
-    retryArgs,
-    pausedGateway,
   }
 }
 
@@ -12862,159 +11711,6 @@ async function repairCodexPluginPostInstallState(options: {
     ...(warnings.length ? { warnings } : {}),
     ...(options.bundledSource ? { bundledSource: options.bundledSource } : {}),
     commands,
-  }
-}
-
-async function installOpenClawPlugin(params: {
-  spec: string
-  pluginId?: string
-  pin: boolean
-  enable: boolean
-  force: boolean
-  restart: boolean
-}) {
-  const requestedInput = parsePluginInstallInput(params.spec)
-  const bundledCodexSource = isCodexPluginInstallRequest(params, requestedInput)
-    ? resolveBundledCodexPluginRoot()
-    : ''
-  const input = bundledCodexSource
-    ? {
-        ...requestedInput,
-        spec: bundledCodexSource,
-        installArgs: requestedInput.installArgs.filter((arg) => arg !== '--pin'),
-      }
-    : requestedInput
-  const spec = input.spec
-  const installUsesLocalPath = pluginInstallSpecIsLocalPath(spec)
-  const before = await listPluginControls().catch(() => null)
-  const beforeIds = new Set((before?.plugins || []).map((plugin) => plugin.id))
-  const buildInstallArgs = (forceRetry = false) => {
-    const args = ['plugins', 'install', spec, ...input.installArgs]
-    if (!input.fromCommand && params.pin && !installUsesLocalPath) args.push('--pin')
-    const hasForce = args.includes('--force')
-    if ((!input.fromCommand && params.force) || (forceRetry && !hasForce)) args.push('--force')
-    return args
-  }
-  let args = buildInstallArgs(false)
-  let install = await runOpenClaw(args, 240_000)
-  let repair: PluginInstallRepairSummary | undefined
-  if (install.code !== 0) {
-    const retryArgs = buildInstallArgs(true)
-    let repairAttempt: (PluginInstallRepairSummary & { pausedGateway?: boolean }) | undefined
-    try {
-      repairAttempt = await repairPluginInstallRenameFailure(install, retryArgs)
-      if (repairAttempt.applied) {
-        repair = {
-          applied: true,
-          reason: repairAttempt.reason,
-          actions: [...repairAttempt.actions],
-          retryArgs: repairAttempt.retryArgs,
-        }
-        await delayMs(450)
-        args = retryArgs
-        install = await runOpenClaw(args, 240_000)
-      }
-    } finally {
-      if (repairAttempt?.pausedGateway) {
-        resumeGatewayAfterPluginInstallRepair(repairAttempt.actions)
-        if (repair) repair.actions = [...repairAttempt.actions]
-      }
-    }
-  }
-  if (install.code !== 0) {
-    const detail = redactSensitiveText(stripAnsi(`${install.stdout}\n${install.stderr}`).trim() || `openclaw plugins install exited ${install.code}`)
-    const repairDetail = repair?.applied
-      ? `\n\nAuto-repair attempted:\n${repair.actions.map((action) => `- ${action}`).join('\n')}`
-      : ''
-    const error = new Error(`${detail}${repairDetail}`)
-    ;(error as Error & { code?: number }).code = install.code
-    throw error
-  }
-
-  await refreshPluginListCache().catch((error) => {
-    console.warn('[plugins] refresh after install failed:', error)
-  })
-  let controls = await listPluginControls()
-  const explicitId = params.pluginId?.trim().toLowerCase() || ''
-  const inferredId = PLUGIN_ID_PATTERN.test(explicitId)
-    ? explicitId
-    : pluginIdFromInstallSpec(bundledCodexSource ? requestedInput.spec : spec)
-  const installedPlugin =
-    controls.plugins.find((plugin) => plugin.id === inferredId) ||
-    controls.plugins.find((plugin) => !beforeIds.has(plugin.id)) ||
-    null
-
-  let restart: GatewayRestartRequest = { restarted: false, scheduled: false, detail: 'gateway restart skipped' }
-  const activationId = installedPlugin?.id || (PLUGIN_ID_PATTERN.test(inferredId) ? inferredId : '')
-  let activation: OpenClawResult | null = null
-  if (params.enable && activationId) {
-    activation = await runOpenClaw(['plugins', 'enable', activationId], 120_000)
-    if (activation.code !== 0) {
-      const detail = redactSensitiveText(stripAnsi(`${activation.stdout}\n${activation.stderr}`).trim() || `openclaw plugins enable exited ${activation.code}`)
-      const error = new Error(`Plugin installed, but activation failed for ${activationId}: ${detail}`)
-      ;(error as Error & { code?: number }).code = activation.code
-      throw error
-    }
-    await setOpenClawPluginEnabled(activationId, true)
-    restart = params.restart ? schedulePluginGatewayRestart() : restart
-    controls = await listPluginControls()
-  }
-  let postInstallRepair: PluginPostInstallRepairSummary | undefined
-  if (activationId === 'codex') {
-    const config = await readOpenclawConfig()
-    const routesNeedCodex = openClawConfigNeedsCodexPlugin(config)
-    if (params.enable) {
-      postInstallRepair = await repairCodexPluginPostInstallState({
-        runCliEnable: !params.enable,
-        verifyRoutes: routesNeedCodex,
-        ...(bundledCodexSource ? { bundledSource: bundledCodexSource } : {}),
-      })
-      controls = await listPluginControls({ forceRefresh: true })
-    }
-  }
-  if (activationId === CLAWTALK_PLUGIN_ID) {
-    const repairedManifests = await repairClawTalkPluginManifestContracts()
-    if (repairedManifests.length) {
-      await refreshOpenClawPluginRegistry('clawtalk-post-install-repair')
-      controls = await listPluginControls({ forceRefresh: true })
-    }
-  }
-  if (activationId) {
-    const activatedPlugin = controls.plugins.find((plugin) => plugin.id === activationId) || installedPlugin
-    const enabledAfterInstall = params.enable ? true : activatedPlugin?.enabled === true
-    await recordPluginInstallRuntimeState({
-      pluginId: activationId,
-      spec: bundledCodexSource ? requestedInput.spec : spec,
-      enabled: enabledAfterInstall,
-      packageName: bundledCodexSource ? '@openclaw/codex' : packageNameFromInstallSpec(spec),
-      version: bundledCodexSource ? packageVersionFromPluginRoot(bundledCodexSource) : versionFromInstallSpec(spec),
-    })
-    if (enabledAfterInstall) {
-      await persistTrustedPluginAllowlist(activationId)
-    }
-    controls = await listPluginControls()
-  }
-
-  return {
-    install: {
-      code: install.code,
-      stdout: redactSensitiveText(install.stdout).slice(0, 12_000),
-      stderr: redactSensitiveText(install.stderr).slice(0, 12_000),
-    },
-    ...(repair?.applied ? { repair } : {}),
-    ...(postInstallRepair?.applied ? { postInstallRepair } : {}),
-    ...(activation ? {
-      activation: {
-        code: activation.code,
-        stdout: redactSensitiveText(activation.stdout).slice(0, 12_000),
-        stderr: redactSensitiveText(activation.stderr).slice(0, 12_000),
-      },
-    } : {}),
-    plugin: activationId
-      ? controls.plugins.find((plugin) => plugin.id === activationId) || installedPlugin
-      : installedPlugin,
-    restart,
-    controls,
   }
 }
 
@@ -13297,20 +11993,6 @@ async function applyPluginToggleViaLocalConfigWrite(
   }
 }
 
-function throwPluginCommandError(args: string[], result: OpenClawResult): never {
-  const detail = redactSensitiveText(stripAnsi(`${result.stdout || ''}\n${result.stderr || ''}`).trim() || `${pluginCommandString(args)} exited ${result.code}`)
-  const error = new Error(detail)
-  ;(error as Error & { code?: number }).code = result.code
-  throw error
-}
-
-async function refreshPluginControlsAfterMutation() {
-  await refreshPluginListCache().catch((error) => {
-    console.warn('[plugins] refresh after plugin command failed:', error)
-  })
-  return listPluginControls()
-}
-
 async function setOpenClawPluginEnabledForControlCenter(pluginId: string, enabled: boolean, options: { restart: boolean; immediateRestart: boolean }) {
   const id = pluginId.trim().toLowerCase()
   if (!PLUGIN_ID_PATTERN.test(id)) throw new Error('Invalid plugin id.')
@@ -13340,138 +12022,6 @@ async function setOpenClawPluginEnabledForControlCenter(pluginId: string, enable
   }
 }
 
-async function updateOpenClawPlugin(pluginId: string, restartRequested: boolean) {
-  const id = pluginId.trim().toLowerCase()
-  if (!PLUGIN_ID_PATTERN.test(id)) throw new Error('Invalid plugin id.')
-  const args = ['plugins', 'update', id]
-  const command = await runOpenClaw(args, 240_000)
-  if (command.code !== 0) throwPluginCommandError(args, command)
-
-  const controls = await refreshPluginControlsAfterMutation()
-  const plugin = controls.plugins.find((entry) => entry.id === id) || null
-  await touchPluginManagedRuntimeState(id, plugin?.enabled)
-  const restart = restartRequested ? schedulePluginGatewayRestart() : { restarted: false, scheduled: false, detail: 'gateway restart skipped' }
-  const refreshedControls = await listPluginControls()
-  return {
-    command: pluginCommandResult(args, command),
-    plugin: refreshedControls.plugins.find((entry) => entry.id === id) || plugin,
-    restart,
-    controls: refreshedControls,
-  }
-}
-
-async function updateAllOpenClawPlugins(restartRequested: boolean) {
-  const args = ['plugins', 'update', '--all']
-  const command = await runOpenClaw(args, 300_000)
-  if (command.code !== 0) throwPluginCommandError(args, command)
-
-  const controls = await refreshPluginControlsAfterMutation()
-  await Promise.all(controls.plugins.map((plugin) => touchPluginManagedRuntimeState(plugin.id, plugin.enabled).catch(() => undefined)))
-  const restart = restartRequested ? schedulePluginGatewayRestart() : { restarted: false, scheduled: false, detail: 'gateway restart skipped' }
-  return {
-    command: pluginCommandResult(args, command),
-    restart,
-    controls,
-  }
-}
-
-async function uninstallOpenClawPlugin(pluginId: string, options: { keepFiles: boolean; force: boolean; restart: boolean }) {
-  const id = pluginId.trim().toLowerCase()
-  if (!PLUGIN_ID_PATTERN.test(id)) throw new Error('Invalid plugin id.')
-  const args = ['plugins', 'uninstall', id]
-  if (options.keepFiles) args.push('--keep-files')
-  if (options.force) args.push('--force')
-  const command = await runOpenClaw(args, 240_000)
-  if (command.code !== 0) throwPluginCommandError(args, command)
-
-  await forgetPluginRuntimeState(id)
-  const controls = await refreshPluginControlsAfterMutation()
-  const restart = options.restart ? schedulePluginGatewayRestart() : { restarted: false, scheduled: false, detail: 'gateway restart skipped' }
-  return {
-    command: pluginCommandResult(args, command),
-    restart,
-    controls,
-  }
-}
-
-function pluginInspectSurfaceValues(value: unknown): string[] {
-  if (!Array.isArray(value)) return []
-  const values = value
-    .map((entry) => {
-      if (typeof entry === 'string') return entry
-      if (!isLooseRecord(entry)) return ''
-      return stringField(entry, ['id', 'name', 'method', 'path', 'route', 'command', 'service', 'type'])
-    })
-    .filter((entry) => entry.trim().length > 0)
-  return uniqueStrings(...values).slice(0, 12)
-}
-
-function pluginInspectNestedRecord(raw: unknown, key: string): unknown {
-  if (!isLooseRecord(raw)) return undefined
-  if (raw[key] !== undefined) return raw[key]
-  for (const nestedKey of ['runtime', 'plugin', 'inspect', 'registrations', 'surfaces']) {
-    const nested = raw[nestedKey]
-    if (isLooseRecord(nested) && nested[key] !== undefined) return nested[key]
-  }
-  return undefined
-}
-
-function summarizePluginRuntimeInspect(raw: unknown): {
-  status: string
-  runtimeLoaded: boolean | null
-  surfaces: PluginRuntimeSurfaceSummary[]
-} {
-  const status = isLooseRecord(raw)
-    ? stringField(raw, ['status', 'state', 'runtimeStatus']) ||
-      (isLooseRecord(raw.runtime) ? stringField(raw.runtime, ['status', 'state', 'runtimeStatus']) : '')
-    : ''
-  const runtimeLoaded = isLooseRecord(raw)
-    ? typeof raw.runtimeLoaded === 'boolean'
-      ? raw.runtimeLoaded
-      : isLooseRecord(raw.runtime) && typeof raw.runtime.loaded === 'boolean'
-        ? raw.runtime.loaded
-        : null
-    : null
-  const surfaceKeys: Array<[string, string[]]> = [
-    ['Tools', ['tools', 'toolIds']],
-    ['Hooks', ['hooks', 'hookIds']],
-    ['Services', ['services', 'serviceIds']],
-    ['Gateway', ['gatewayMethods', 'methods']],
-    ['HTTP', ['httpRoutes', 'routes']],
-    ['Commands', ['commands', 'cliCommands', 'commandAliases']],
-    ['Providers', ['providers', 'providerIds']],
-    ['Channels', ['channels', 'channelIds']],
-  ]
-  const surfaces = surfaceKeys
-    .map(([label, keys]) => ({
-      label,
-      values: uniqueStrings(...keys.flatMap((key) => pluginInspectSurfaceValues(pluginInspectNestedRecord(raw, key)))).slice(0, 12),
-    }))
-    .filter((entry) => entry.values.length > 0)
-
-  return {
-    status: status || (runtimeLoaded === true ? 'loaded' : runtimeLoaded === false ? 'not loaded' : 'checked'),
-    runtimeLoaded,
-    surfaces,
-  }
-}
-
-async function inspectOpenClawPluginRuntime(pluginId: string) {
-  const id = pluginId.trim().toLowerCase()
-  if (!PLUGIN_ID_PATTERN.test(id)) throw new Error('Invalid plugin id.')
-  const args = ['plugins', 'inspect', id, '--runtime', '--json']
-  const command = await runOpenClaw(args, 120_000)
-  if (command.code !== 0) throwPluginCommandError(args, command)
-  const raw = parseOpenClawJsonOutput(command.stdout)
-  const summary = summarizePluginRuntimeInspect(raw)
-  return {
-    pluginId: id,
-    command: pluginCommandResult(args, command),
-    raw,
-    ...summary,
-  }
-}
-
 async function getOpenClawPluginEnabled(pluginId: string): Promise<{ enabled: boolean; detail: string }> {
   const id = pluginId.trim().toLowerCase()
   try {
@@ -13487,85 +12037,6 @@ async function getOpenClawPluginEnabled(pluginId: string): Promise<{ enabled: bo
     return { enabled: true, detail: `${id} plugin enabled by config` }
   } catch (error) {
     return { enabled: true, detail: `could not read plugin config; assuming enabled: ${String(error)}` }
-  }
-}
-
-async function listPluginControls(options: { forceRefresh?: boolean } = {}): Promise<{
-  plugins: PluginControlEntry[]
-  configPath: string
-  cache: {
-    source: PluginListResult['source']
-    refreshedAt: number
-    refreshing: boolean
-  }
-  cliError?: string
-}> {
-  const config = await readOpenclawConfig()
-  const pluginState = await readPluginRuntimeState()
-  const pluginList = await getPluginList(options)
-
-  const byId = new Map<string, Record<string, unknown>>()
-  for (const raw of pluginList.rawPlugins) {
-    const id = typeof raw.id === 'string' ? raw.id.trim().toLowerCase() : ''
-    if (PLUGIN_ID_PATTERN.test(id)) byId.set(id, raw)
-  }
-
-  for (const [id, entry] of Object.entries(config.plugins?.entries || {})) {
-    if (!PLUGIN_ID_PATTERN.test(id) || byId.has(id)) continue
-    byId.set(id, {
-      id,
-      name: PLUGIN_CATALOG[id]?.name || id,
-      description: PLUGIN_CATALOG[id]?.description,
-      origin: 'config',
-      enabled: entry.enabled !== false,
-      status: entry.enabled === false ? 'disabled' : 'configured',
-    })
-  }
-
-  for (const [id, state] of Object.entries(pluginState.managed || {})) {
-    if (!PLUGIN_ID_PATTERN.test(id) || byId.has(id)) continue
-    byId.set(id, {
-      id,
-      name: PLUGIN_CATALOG[id]?.name || id,
-      description: PLUGIN_CATALOG[id]?.description,
-      origin: 'managed',
-      enabled: state.enabled,
-      status: state.enabled ? 'managed' : 'disabled',
-    })
-  }
-
-  const priority = new Map([
-    ['browser', 0],
-    ['codex', 1],
-    ['clawtalk', 2],
-    ['memory-core', 3],
-    ['openai', 4],
-    ['deepseek', 5],
-    ['google', 6],
-  ])
-  const plugins = Array.from(byId.values())
-    .map((raw) => buildPluginControlEntry(raw, config, pluginState))
-    .filter((entry): entry is PluginControlEntry => Boolean(entry))
-    .map((entry) => ({
-      ...entry,
-      managed: Boolean(pluginState.managed?.[entry.id]),
-    }))
-    .sort((a, b) => {
-      const rank = (priority.get(a.id) ?? 1000) - (priority.get(b.id) ?? 1000)
-      if (rank !== 0) return rank
-      if (a.enabled !== b.enabled) return a.enabled ? -1 : 1
-      return a.name.localeCompare(b.name)
-    })
-
-  return {
-    plugins,
-    configPath: OPENCLAW_CONFIG_PATH,
-    cache: {
-      source: pluginList.source,
-      refreshedAt: pluginList.refreshedAt,
-      refreshing: pluginList.refreshing,
-    },
-    ...(pluginList.cliError ? { cliError: pluginList.cliError } : {}),
   }
 }
 
@@ -13717,11 +12188,6 @@ function normalizeClawTalkServerInput(value: unknown) {
   } catch {
     throw new Error('ClawTalk server must be an http or https URL.')
   }
-}
-
-function pluginRuntimeInspectReady(inspect: Awaited<ReturnType<typeof inspectOpenClawPluginRuntime>>) {
-  const status = inspect.status.trim().toLowerCase()
-  return inspect.runtimeLoaded !== false && !/\b(?:failed|error|not loaded|missing)\b/.test(status)
 }
 
 const CLAWTALK_DOCTOR_CHECK_RE =
@@ -18903,23 +17369,19 @@ registerRuntimeRoutes(app, {
 registerPluginRoutes(app, {
   clawTalkPluginId: CLAWTALK_PLUGIN_ID,
   invalidateRuntimeStatusCache,
-  inspectOpenClawPluginRuntime,
   installOpenClawPlugin,
   listPluginControls,
   pluginErrorDetail,
   pluginErrorStatus,
   pluginIdPattern: PLUGIN_ID_PATTERN,
+  pluginRuntime: activePluginRuntimeService(),
   pluginRuntimeStatePath: PLUGIN_RUNTIME_STATE_PATH,
-  pluginSetupTerminalSessions,
-  pluginSetupTerminalSnapshot,
   redactSensitiveText,
   savePluginDirectConfig,
   schedulePluginGatewayRestart,
   searchOpenClawPlugins,
   setOpenClawPluginEnabledForControlCenter,
   setupClawTalkPlugin,
-  startPluginSetupTerminalSession,
-  stopPluginSetupTerminalSession,
   tryRestartGatewayService,
   uninstallOpenClawPlugin,
   updateAllOpenClawPlugins,

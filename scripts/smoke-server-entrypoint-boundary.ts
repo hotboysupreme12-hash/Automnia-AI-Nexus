@@ -21,6 +21,9 @@ const modelCatalogService = read('server/services/providers/modelCatalogService.
 const providerAuthService = read('server/services/providers/providerAuthService.ts')
 const oauthCallbackService = read('server/services/providers/oauthCallbackService.ts')
 const providerSetupService = read('server/services/providers/providerSetupService.ts')
+const pluginInventoryService = read('server/services/plugins/pluginInventoryService.ts')
+const pluginInstallService = read('server/services/plugins/pluginInstallService.ts')
+const pluginRuntimeService = read('server/services/plugins/pluginRuntimeService.ts')
 const routingHelpers = read('server/integrations/agentRoutingHelpers.ts')
 const gatewayLifecycleService = read('server/services/gateway/gatewayLifecycleService.ts')
 const gatewayDiagnosticsService = read('server/services/gateway/gatewayDiagnosticsService.ts')
@@ -77,6 +80,9 @@ for (const contract of [
   ["from './services/providers/providerAuthService'", 'provider auth service import'],
   ["from './services/providers/oauthCallbackService'", 'OAuth callback service import'],
   ["from './services/providers/providerSetupService'", 'provider setup service import'],
+  ["from './services/plugins/pluginInventoryService'", 'plugin inventory service import'],
+  ["from './services/plugins/pluginInstallService'", 'plugin install service import'],
+  ["from './services/plugins/pluginRuntimeService'", 'plugin runtime service import'],
   ["from './state/runtimeLedgerStore'", 'runtime ledger store import'],
   ["from './catalogs/providerCatalog'", 'provider catalog import'],
   ["from './integrations/agentRoutingHelpers'", 'routing patch import'],
@@ -101,6 +107,9 @@ for (const contract of [
   ['createProviderAuthService({', 'provider auth service composition'],
   ['createOAuthCallbackService({', 'OAuth callback service composition'],
   ['createProviderSetupService({', 'provider setup service composition'],
+  ['createPluginInventoryService({', 'plugin inventory service composition'],
+  ['createPluginInstallService({', 'plugin install service composition'],
+  ['createPluginRuntimeService({', 'plugin runtime service composition'],
   ['createRuntimeLedgerStore(', 'runtime ledger store composition'],
   ['missionStateService,', 'mission route state service injection'],
   ['registerStaticUi(app, {', 'static UI registration'],
@@ -131,6 +140,11 @@ assert.doesNotMatch(controlPlane, /\basync function\s+startGoogleOAuthSession\b|
 assert.doesNotMatch(controlPlane, /\bfunction\s+parseOpenAICodexAuthorizationInput\b|\bfunction\s+failPendingOAuthSessionsForShutdown\b|server\.listen\(1455, '127\.0\.0\.1'/, 'OAuth callback parsing/listeners must stay in oauthCallbackService.ts')
 assert.doesNotMatch(controlPlane, /\bfunction\s+googleVertexGcloudStatus\b|\bfunction\s+resolveGoogleOAuthClientConfig\b|\basync function\s+resolveProviderRequestAuth\b/, 'provider setup checks must stay in providerSetupService.ts')
 assert.doesNotMatch(controlPlane, /\basync function\s+importOpenAICodexOAuthModule\b|\bfunction\s+openAICodexOAuthTesting\b|\bfunction\s+runGcloud\b/, 'provider runtime setup/probing helpers must stay in providerSetupService.ts')
+assert.doesNotMatch(controlPlane, /\bfunction\s+loadBundledPluginManifestList\b|\basync function\s+getPluginList\b|\basync function\s+listPluginControls\b/, 'plugin inventory listing and cache reads must stay in pluginInventoryService.ts')
+assert.doesNotMatch(controlPlane, /\bfunction\s+buildPluginControlEntry\b|\bfunction\s+knownPluginConfigFields\b|\bfunction\s+pluginGuidance\b|\bfunction\s+parsePluginList\b/, 'plugin inventory normalization must stay in pluginInventoryService.ts')
+assert.doesNotMatch(controlPlane, /\basync function\s+installOpenClawPlugin\b|\basync function\s+updateOpenClawPlugin\b|\basync function\s+updateAllOpenClawPlugins\b|\basync function\s+uninstallOpenClawPlugin\b/, 'plugin install/update/remove mutations must stay in pluginInstallService.ts')
+assert.doesNotMatch(controlPlane, /\basync function\s+recordPluginInstallRuntimeState\b|\basync function\s+touchPluginManagedRuntimeState\b|\basync function\s+forgetPluginRuntimeState\b/, 'plugin install runtime-state writes must stay in pluginInstallService.ts')
+assert.doesNotMatch(controlPlane, /\bfunction\s+parsePluginInstallInput\b|\bfunction\s+repairPluginInstallRenameFailure\b|\bfunction\s+parsePluginInstallRenameFailure\b/, 'plugin install parsing and repair logic must stay in pluginInstallService.ts')
 assert.doesNotMatch(controlPlane, /app\.(?:get|post)\(['"]\/api\/shifts/, 'shift endpoints must remain outside controlPlane.ts')
 assert.doesNotMatch(controlPlane, /app\.get\(['"]\/api\/browser\/preflight/, 'browser preflight must remain outside controlPlane.ts')
 assert.match(runtimeRoutes, /runtimeActions: RuntimeActionService/, 'runtime routes should receive runtime actions through a service option')
@@ -231,6 +245,35 @@ assert.match(providerSetupService, /\bfunction\s+googleVertexGcloudStatus\b/, 'p
 assert.match(providerSetupService, /\bfunction\s+resolveGoogleOAuthClientConfig\b/, 'provider setup service should own Google OAuth client setup checks')
 assert.match(providerSetupService, /\basync function\s+resolveProviderRequestAuth\b/, 'provider setup service should own provider request auth checks')
 assert.match(providerSetupService, /\basync function\s+importOpenAICodexOAuthModule\b/, 'provider setup service should own OpenAI Codex OAuth runtime loading')
+assert.match(pluginInventoryService, /export function createPluginInventoryService/, 'plugin inventory service should expose a service factory')
+assert.match(pluginInventoryService, /\bfunction\s+loadBundledPluginManifestList\b/, 'plugin inventory service should own bundled manifest discovery')
+assert.match(pluginInventoryService, /\basync function\s+refreshPluginListCache\b/, 'plugin inventory service should own plugin list cache refresh')
+assert.match(pluginInventoryService, /\basync function\s+getPluginList\b/, 'plugin inventory service should own plugin list cache reads')
+assert.match(pluginInventoryService, /\basync function\s+listPluginControls\b/, 'plugin inventory service should own plugin control payload shaping')
+assert.match(pluginInventoryService, /\bfunction\s+buildPluginControlEntry\b/, 'plugin inventory service should own plugin control entry normalization')
+assert.match(pluginInventoryService, /\bfunction\s+knownPluginConfigFields\b/, 'plugin inventory service should own plugin setup field projection')
+assert.match(pluginInstallService, /export function createPluginInstallService/, 'plugin install service should expose a service factory')
+assert.match(pluginInstallService, /\basync function\s+installOpenClawPlugin\b/, 'plugin install service should own plugin install orchestration')
+assert.match(pluginInstallService, /\basync function\s+updateOpenClawPlugin\b/, 'plugin install service should own plugin update orchestration')
+assert.match(pluginInstallService, /\basync function\s+updateAllOpenClawPlugins\b/, 'plugin install service should own plugin update-all orchestration')
+assert.match(pluginInstallService, /\basync function\s+uninstallOpenClawPlugin\b/, 'plugin install service should own plugin uninstall orchestration')
+assert.match(pluginInstallService, /\bfunction\s+recordPluginInstallRuntimeState\b/, 'plugin install service should own install runtime-state records')
+assert.match(pluginInstallService, /\bfunction\s+touchPluginManagedRuntimeState\b/, 'plugin install service should own update runtime-state touches')
+assert.match(pluginInstallService, /\bfunction\s+forgetPluginRuntimeState\b/, 'plugin install service should own uninstall runtime-state cleanup')
+assert.match(pluginInstallService, /\bfunction\s+repairPluginInstallRenameFailure\b/, 'plugin install service should own install rename-failure repair')
+assert.match(pluginInstallService, /options\.schedulePluginGatewayRestart\(\)/, 'plugin install service should schedule Gateway restarts after plugin mutations')
+assert.match(pluginInstallService, /options\.refreshPluginListCache\(\)/, 'plugin install service should refresh plugin controls after plugin mutations')
+assert.match(pluginInstallService, /options\.redactSensitiveText/, 'plugin install service should redact command output and errors')
+assert.match(pluginRuntimeService, /export function createPluginRuntimeService/, 'plugin runtime service should expose a service factory')
+assert.match(pluginRuntimeService, /\basync function\s+inspectOpenClawPluginRuntime\b/, 'plugin runtime service should own plugin runtime inspect')
+assert.match(pluginRuntimeService, /\bfunction\s+summarizePluginRuntimeInspect\b/, 'plugin runtime service should own runtime inspect summaries')
+assert.match(pluginRuntimeService, /\bfunction\s+startPluginSetupTerminalSession\b/, 'plugin runtime service should own setup terminal starts')
+assert.match(pluginRuntimeService, /\bfunction\s+attachPluginSetupTerminalClient\b/, 'plugin runtime service should own setup terminal client attachments')
+assert.match(pluginRuntimeService, /\bfunction\s+writePluginSetupTerminalInput\b/, 'plugin runtime service should own terminal input writes')
+assert.match(pluginRuntimeService, /\bfunction\s+resizePluginSetupTerminalSession\b/, 'plugin runtime service should own terminal resize commands')
+assert.match(pluginRuntimeService, /\bfunction\s+stopAllPluginSetupTerminalSessions\b/, 'plugin runtime service should own terminal shutdown cleanup')
+assert.match(pluginRuntimeService, /options\.runOpenClaw\(args, 120_000\)/, 'plugin runtime inspect should execute bounded OpenClaw commands')
+assert.match(pluginRuntimeService, /options\.redactSensitiveText/, 'plugin runtime service should redact command output and errors')
 assert.match(controlPlane, /missionSchedulerService\.scheduleNextMissionRound/, 'mission state composition should delegate scheduling through the scheduler service')
 assert.match(controlPlane, /const recordMissionReport = missionReportService\.recordMissionReport/, 'controlPlane.ts should delegate report recording through the mission report service')
 assert.match(controlPlane, /const buildMissionLifecycleProjection = missionReportService\.buildMissionLifecycleProjection/, 'controlPlane.ts should delegate mission projection through the mission report service')
@@ -244,6 +287,13 @@ assert.match(controlPlane, /const startGoogleOAuthSession = oauthCallbackService
 assert.match(controlPlane, /const closeOAuthCallbackServersForShutdown = oauthCallbackService\.closeOAuthCallbackServersForShutdown/, 'controlPlane.ts should delegate OAuth listener shutdown through the OAuth callback service')
 assert.match(controlPlane, /const googleVertexGcloudStatus = providerSetupService\.googleVertexGcloudStatus/, 'controlPlane.ts should delegate Google Vertex readiness through the provider setup service')
 assert.match(controlPlane, /const resolveProviderRequestAuth = providerSetupService\.resolveProviderRequestAuth/, 'controlPlane.ts should delegate provider request auth through the provider setup service')
+assert.match(controlPlane, /function listPluginControls\(options\?: \{ forceRefresh\?: boolean \}\)/, 'controlPlane.ts should expose only a thin plugin inventory payload wrapper')
+assert.match(controlPlane, /activePluginInventoryService\(\)\.listPluginControls\(options\)/, 'controlPlane.ts should delegate plugin inventory payloads through the plugin inventory service')
+assert.match(controlPlane, /const installOpenClawPlugin: PluginInstallService\['installOpenClawPlugin'\]/, 'controlPlane.ts should expose only a thin plugin install wrapper')
+assert.match(controlPlane, /activePluginInstallService\(\)\.installOpenClawPlugin\(params\)/, 'controlPlane.ts should delegate plugin install through the plugin install service')
+assert.match(controlPlane, /activePluginInventoryService\(\)\.refreshPluginListCache\(\)/, 'controlPlane.ts should delegate plugin inventory cache refresh through the plugin inventory service')
+assert.match(controlPlane, /const inspectOpenClawPluginRuntime: PluginRuntimeService\['inspectOpenClawPluginRuntime'\]/, 'controlPlane.ts should expose only a thin plugin runtime inspect wrapper')
+assert.match(controlPlane, /activePluginRuntimeService\(\)\.stopAllPluginSetupTerminalSessions\(reason\)/, 'controlPlane.ts should delegate plugin terminal shutdown through the plugin runtime service')
 assert.match(runtimeLedgerStore, /export function createRuntimeLedgerStore/, 'runtime ledger store should expose a state boundary factory')
 assert.match(runtimeLedgerStore, /configureRuntimeLedger\(normalizedPaths\)/, 'runtime ledger store should own raw ledger configuration')
 assert.match(runtimeLedgerStore, /appendRuntimeRunLedger\(value, options\)/, 'runtime ledger store should wrap runtime run appends')
