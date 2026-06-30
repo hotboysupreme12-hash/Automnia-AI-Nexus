@@ -45,6 +45,42 @@ function assertBuildExists() {
 
 function uiSmokeRuntimeStatus() {
   const now = new Date().toISOString()
+  const earlier = new Date(Date.now() - 60000).toISOString()
+  const doctorRun = {
+    id: 'ui-smoke-doctor-run',
+    startedAt: earlier,
+    endedAt: now,
+    ok: false,
+    summary: 'Doctor completed with 1 warning.',
+    checks: [
+      {
+        id: 'openclaw-doctor-lint',
+        label: 'OpenClaw Doctor lint',
+        ok: false,
+        severity: 'warning',
+        evidence: '1 warning/error finding: warning plugin core/doctor/plugin-config (plugins.entries.sms.config): stale plugin config remains.',
+        repairAction: 'Run OpenClaw Doctor repair or inspect plugin config.',
+        findings: [
+          {
+            checkId: 'core/doctor/plugin-config',
+            category: 'plugin',
+            severity: 'warning',
+            message: 'stale plugin config remains.',
+            path: 'plugins.entries.sms.config',
+            fixHint: 'Run openclaw doctor --fix to quarantine invalid plugin config.',
+            guidedAction: {
+              kind: 'plugin_inspect',
+              label: 'Inspect sms plugin',
+              detail: 'Use manifest/dependency diagnostics before changing plugin config; run Doctor repair only for stale config or dependency recovery findings.',
+              command: ['openclaw', 'plugins', 'inspect', 'sms', '--json'],
+              surface: 'plugins',
+              allowsDoctorRepair: true,
+            },
+          },
+        ],
+      },
+    ],
+  }
   return {
     ok: true,
     generatedAt: now,
@@ -71,6 +107,27 @@ function uiSmokeRuntimeStatus() {
       lastHealthyAt: now,
       lastExitAt: null,
       lastExitCode: null,
+      lastRestartAt: now,
+      lastRestartReason: 'ui smoke gateway restart',
+      lastRestartOutcome: 'succeeded',
+      recentRestarts: [
+        { at: now, eventAt: now, reason: 'ui smoke gateway restart', outcome: 'succeeded' },
+        { at: earlier, eventAt: earlier, reason: 'ui smoke gateway failed restart', outcome: 'failed' },
+      ],
+      restartDiagnostics: {
+        severity: 'warning',
+        needsAttention: true,
+        summary: '1 recent restart failure; active work 2, queued 1; latest stability warning: ui smoke queue pressure',
+        recentAttempts: 2,
+        recentFailures: 1,
+        failureStreak: 0,
+        latestOutcome: 'succeeded',
+        latestReason: 'ui smoke gateway restart',
+        latestAt: now,
+        activeWork: 2,
+        queuedWork: 1,
+        repairAction: 'Inspect active Gateway work before forcing a restart.',
+      },
       uptimeMs: 120000,
       logs: [
         { id: 1, timestamp: now, stream: 'gateway', message: 'UI smoke gateway ready.', level: 'info', source: 'ui-smoke' },
@@ -132,11 +189,11 @@ function uiSmokeRuntimeStatus() {
     },
     diagnostics: {
       doctor: {
-        lastRun: null,
-        recent: [],
-        warningCount: 0,
+        lastRun: doctorRun,
+        recent: [doctorRun],
+        warningCount: 1,
         errorCount: 0,
-        lastRunAt: null,
+        lastRunAt: now,
       },
     },
   }
@@ -482,23 +539,28 @@ async function inspectWorkspaceTabs(window) {
     "        controls,",
     "        selected: monitorTab.getAttribute('aria-selected') === 'true',",
     "        ...summarizePanel(panel),",
-    "      })",
+    "        doctorRepairButtonPresent: Boolean(document.querySelector('.dy-monitor-doctor-repair-button')),",
+    "        doctorRepairButtonDisabled: document.querySelector('.dy-monitor-doctor-repair-button')?.disabled === true,",
+    "        doctorRepairButtonTitle: document.querySelector('.dy-monitor-doctor-repair-button')?.getAttribute('title') || '',",
+    "        doctorFindingListPresent: Boolean(document.querySelector('.dy-doctor-finding-list')),",
+    "        doctorFindingText: document.querySelector('.dy-doctor-finding-list')?.textContent.replace(/\\s+/g, ' ').trim() || '',",
+      "      })",
     "    }",
     "    return monitorResults",
     "  }",
     "  return (async () => {",
-    "    const tabs = Array.from(document.querySelectorAll('[role=\"tab\"][id^=\"nexus-tab-\"]'))",
+    "    const tabs = Array.from(document.querySelectorAll('button[id^=\"nexus-tab-\"]'))",
     "    const results = []",
     "    for (const tab of tabs) {",
     "      tab.click()",
     "      await wait(1200)",
-    "      const controls = tab.getAttribute('aria-controls')",
-    "      const panel = controls ? document.getElementById(controls) : null",
+    "      const controls = 'nexus-panel-' + tab.id.replace('nexus-tab-', '')",
+    "      const panel = document.getElementById(controls)",
     "      const result = {",
     "        id: tab.id,",
     "        label: tab.textContent.replace(/\\s+/g, ' ').trim(),",
     "        controls,",
-    "        selected: tab.getAttribute('aria-selected') === 'true',",
+    "        selected: tab.getAttribute('aria-current') === 'page',",
     "        ...summarizePanel(panel),",
     "      }",
     "      if (tab.id === 'nexus-tab-agents') result.commandConsole = inspectCommandConsole(panel)",
@@ -716,7 +778,7 @@ async function inspectViewport(viewport) {
     "  const mainRect = main ? main.getBoundingClientRect() : null",
     "  const workspaceContextRect = workspaceContext ? workspaceContext.getBoundingClientRect() : null",
     "  const text = document.body.innerText.replace(/\\s+/g, ' ').trim()",
-    "  const tabs = Array.from(document.querySelectorAll('[role=\"tab\"]')).map((element) => element.textContent.replace(/\\s+/g, ' ').trim()).filter(Boolean)",
+    "  const tabs = Array.from(document.querySelectorAll('button[id^=\"nexus-tab-\"]')).map((element) => element.textContent.replace(/\\s+/g, ' ').trim()).filter(Boolean)",
     "  const buttons = Array.from(document.querySelectorAll('button')).filter((button) => {",
     "    const rect = button.getBoundingClientRect()",
     "    return rect.width > 0 && rect.height > 0",
@@ -800,6 +862,9 @@ async function inspectViewport(viewport) {
     && agentsTab.commandConsole.messagesRect?.width > 0
     && agentsTab.commandConsole.messagesRect?.height > 0
   const monitorTab = workspaceTabs.find((workspaceTab) => workspaceTab.id === 'nexus-tab-monitor')
+  const gatewayMonitorTab = Array.isArray(monitorTab?.monitorTabs)
+    ? monitorTab.monitorTabs.find((innerTab) => innerTab.id === 'monitor-tab-gateway')
+    : null
   const monitorTabsOk = Array.isArray(monitorTab?.monitorTabs)
     && monitorTab.monitorTabs.length >= 4
     && monitorTab.monitorTabs.every((innerTab) => (
@@ -811,6 +876,16 @@ async function inspectViewport(viewport) {
         && innerTab.panelRect?.width > 0
         && innerTab.panelRect?.height > 0
     ))
+  const doctorRepairButtonOk = Boolean(gatewayMonitorTab?.doctorRepairButtonPresent)
+    && gatewayMonitorTab.doctorRepairButtonDisabled === false
+    && /Doctor safe non-interactive repair/.test(gatewayMonitorTab.doctorRepairButtonTitle)
+  const doctorStructuredFindingsOk = Boolean(gatewayMonitorTab?.doctorFindingListPresent)
+    && /plugin/i.test(gatewayMonitorTab.doctorFindingText)
+    && /core\/doctor\/plugin-config/.test(gatewayMonitorTab.doctorFindingText)
+    && /stale plugin config remains/i.test(gatewayMonitorTab.doctorFindingText)
+    && /Inspect sms plugin/.test(gatewayMonitorTab.doctorFindingText)
+    && /openclaw plugins inspect sms --json/.test(gatewayMonitorTab.doctorFindingText)
+    && /openclaw doctor --fix/i.test(gatewayMonitorTab.doctorFindingText)
   const ok = failures.length === 0
     && dom.textLength > 120
     && dom.rootRect?.width > 0
@@ -849,6 +924,8 @@ async function inspectViewport(viewport) {
     && /simulated Clean Slate failure/.test(monitorCleanSlateFailure.statusText)
     && !monitorCleanSlateFailure.successTextStillPresent
     && monitorTabsOk
+    && doctorRepairButtonOk
+    && doctorStructuredFindingsOk
     && bitmap.nonBlankRatio > 0.02
 
   return {

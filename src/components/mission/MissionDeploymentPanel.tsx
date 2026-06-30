@@ -368,12 +368,12 @@ export function MissionDeploymentPanel() {
   const activePreset = PRESETS.find(
     (preset) => preset.title === missionDraft.title && preset.missionType === missionDraft.missionType,
   )
+  const missionDisplayName = missionDraft.title.trim() || 'Custom setup'
   const objectiveCue = !objectiveLength
     ? 'Needs objective'
     : objectiveIsCustom
       ? 'Custom objective preserved'
       : 'Preset objective'
-  const activeLaneLabel = missionRunning ? `${runningLaneCount} lanes live` : `${effectiveAgents.length} lanes ready`
 
   const applyPreset = (preset: (typeof PRESETS)[number]) => {
     const currentObjective = missionDraft.description.trim()
@@ -421,65 +421,13 @@ export function MissionDeploymentPanel() {
   return (
     <div className="dui-mission-wrap">
       <section data-dui-panel="missions" className="dui-mission-screen">
-        <div className="dui-mission-hero">
-          <div className="dui-hero-copy">
-            <div className="dui-kicker-row">
-              <span className="dui-kicker">Mission Board</span>
-              {activePreset && <span className="dui-pill dui-pill-warm">Active: {activePreset.label}</span>}
-            </div>
-            <h2>{missionDraft.title.trim() || 'Untitled Mission'}</h2>
-            <p>Choose type, mode, objective, and cron cadence from one dispatch board.</p>
-            <div className="dui-chip-row">
-              <span className={`dui-pill ${missionRunning ? 'is-live' : ''}`}>
-                <i />{activeLaneLabel}
-              </span>
-              <span className="dui-pill">{currentType.label}</span>
-              <span className="dui-pill">{currentMode.label}</span>
-              <span className={`dui-pill ${objectiveIsCustom ? 'is-cool' : ''}`}>{objectiveCue}</span>
-            </div>
-          </div>
-
-          <div className="dui-hero-stats">
-            <div className="dui-hero-stat dui-hero-stat--eligible">
-              <span>{effectiveAgents.length}</span>
-              <p>Eligible</p>
-            </div>
-            <div className="dui-hero-stat dui-hero-stat--fit">
-              <span>{capabilityCoverage}%</span>
-              <p>Fit</p>
-            </div>
-            <div className="dui-hero-stat dui-hero-stat--risk">
-              <span>{missionDraft.riskTolerance}%</span>
-              <p>Risk</p>
-            </div>
-          </div>
-
-          <div className="dui-readiness-card" data-tone={readinessState}>
-            <div className="dui-readiness-head">
-              <div>
-                <p>Readiness</p>
-                <span>Launch status</span>
-              </div>
-              <strong>{readinessScore}%</strong>
-            </div>
-            <div className="dui-progress-track">
-              <motion.div className="dui-progress-fill" initial={false} animate={{ width: `${readinessScore}%` }} transition={{ duration: 0.28 }} />
-            </div>
-            <div className="dui-readiness-checks">
-              {checks.map((check) => (
-                <span key={check.label} className={check.ready ? 'is-ready' : 'is-missing'}>{check.label}</span>
-              ))}
-            </div>
-          </div>
-        </div>
-
         <div className="dui-mission-stage">
           <main className="dui-mission-main dui-mission-main--organized">
             <div className="dui-card dui-template-card dui-template-card--organized">
               <div className="dui-section-head">
                 <div>
                   <span>Mission Presets</span>
-                  <strong>{activePreset?.label || 'Custom setup'}</strong>
+                  <strong>{activePreset?.label || missionDisplayName}</strong>
                 </div>
                 <p>Preset shapes</p>
               </div>
@@ -601,22 +549,6 @@ export function MissionDeploymentPanel() {
             </div>
             </div>
 
-            <div className="dui-card dui-objective-card">
-              <div className="dui-section-head">
-                <div>
-                  <span>Objective</span>
-                  <strong>{objectiveCue}</strong>
-                </div>
-                <p>{objectiveLength}/20</p>
-              </div>
-              <textarea
-                value={missionDraft.description}
-                rows={6}
-                onChange={(e) => updateMissionDraft({ description: e.target.value })}
-                placeholder="What should the active party accomplish?"
-                className="dui-control dui-textarea"
-              />
-            </div>
           </main>
 
           <aside className="dui-mission-sidebar">
@@ -673,24 +605,26 @@ export function MissionDeploymentPanel() {
                 {!selectedAgents.length && <div className="dui-empty-state">Add agents from the registry first.</div>}
               </div>
             </div>
+          </aside>
 
-            <div className="dui-card dui-dispatch-card">
+          <div className="dui-card dui-mission-bottom-card">
+            <section className="dui-mission-bottom-objective">
               <div className="dui-section-head">
                 <div>
-                  <span>Dispatch Mode</span>
-                  <strong>{currentMode.label}</strong>
+                  <span>Objective</span>
+                  <strong>{objectiveCue}</strong>
                 </div>
-                <p>{capabilityCoverage}% fit</p>
               </div>
-              <p className="dui-dispatch-copy">{currentMode.detail}</p>
-              <div className="dui-stat-grid">
-                <div><span>Eligible</span><strong>{effectiveAgents.length}</strong></div>
-                <div><span>Standby</span><strong>{excludedAgents.length}</strong></div>
-                <div><span>Type</span><strong>{currentType.label}</strong></div>
-              </div>
+              <textarea
+                value={missionDraft.description}
+                rows={4}
+                onChange={(e) => updateMissionDraft({ description: e.target.value })}
+                placeholder="What should the active party accomplish?"
+                className="dui-control dui-textarea"
+              />
+            </section>
 
-              <div className="dui-divider" />
-
+            <section className="dui-mission-bottom-cron">
               <div className="dui-section-head compact">
                 <div>
                   <span>Mission Cron</span>
@@ -709,8 +643,6 @@ export function MissionDeploymentPanel() {
                   Apply Cadence
                 </button>
               </div>
-
-              <div className="dui-divider" />
 
               <div className="dui-loadout-head">
                 <span>Active Loadout</span>
@@ -733,6 +665,35 @@ export function MissionDeploymentPanel() {
                     <div className="dui-progress-track"><div className="dui-progress-fill" style={{ width: `${value}%` }} /></div>
                   </div>
                 ))}
+              </div>
+            </section>
+
+            <section className="dui-mission-bottom-tuning">
+              <div className="dui-section-head dui-section-head--dispatch">
+                <div>
+                  <span>Dispatch Mode</span>
+                  <strong>{currentMode.label}</strong>
+                </div>
+                <div className="dui-readiness-mini" data-tone={readinessState} aria-label={`Launch readiness ${readinessScore}%`}>
+                  <div className="dui-readiness-mini-head">
+                    <span>Launch readiness</span>
+                    <strong>{readinessScore}%</strong>
+                  </div>
+                  <div className="dui-progress-track">
+                    <motion.div className="dui-progress-fill" initial={false} animate={{ width: `${readinessScore}%` }} transition={{ duration: 0.28 }} />
+                  </div>
+                  <div className="dui-readiness-mini-checks" aria-hidden="true">
+                    {checks.map((check) => (
+                      <i key={check.label} className={check.ready ? 'is-ready' : 'is-missing'} title={check.label} />
+                    ))}
+                  </div>
+                </div>
+              </div>
+              <p className="dui-dispatch-copy">{currentMode.detail}</p>
+              <div className="dui-stat-grid">
+                <div><span>Eligible</span><strong>{effectiveAgents.length}</strong></div>
+                <div><span>Fit</span><strong>{capabilityCoverage}%</strong></div>
+                <div><span>Type</span><strong>{currentType.label}</strong></div>
               </div>
 
               <div className="dui-slider-grid">
@@ -810,8 +771,8 @@ export function MissionDeploymentPanel() {
                   Steer Mission
                 </button>
               )}
-            </div>
-          </aside>
+            </section>
+          </div>
         </div>
       </section>
 

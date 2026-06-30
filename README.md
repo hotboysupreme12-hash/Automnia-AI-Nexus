@@ -180,13 +180,22 @@ In plain terms: DystopAI is simple because you operate it through agents, missio
 
 ## Showcase
 
+The screenshots below reflect the refreshed dark control-center UI captured on June 29, 2026.
+
 | Agents | Missions |
 | --- | --- |
 | ![DystopAI Agents workspace](docs/assets/readme/dystopai-agents.png) | ![DystopAI Mission Board](docs/assets/readme/dystopai-missions.png) |
 
-| Runtime Monitor | Plugins |
+| Runtime Monitor | Quiet Monitor |
 | --- | --- |
-| ![DystopAI Runtime Monitor](docs/assets/readme/dystopai-monitor.png) | ![DystopAI Plugin Runtime](docs/assets/readme/dystopai-plugins.png) |
+| ![DystopAI Runtime Monitor with channel activity](docs/assets/readme/dystopai-monitor.png) | ![DystopAI Runtime Monitor quiet state](docs/assets/readme/dystopai-monitor-quiet.png) |
+
+<details>
+<summary>View plugin runtime screenshot</summary>
+
+![DystopAI Plugin Runtime](docs/assets/readme/dystopai-plugins.png)
+
+</details>
 
 <details>
 <summary>View agent settings screenshot</summary>

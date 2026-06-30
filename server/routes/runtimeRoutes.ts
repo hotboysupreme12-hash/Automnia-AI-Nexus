@@ -89,7 +89,7 @@ type RuntimeRoutesOptions = {
     reason: string,
     options: { minIntervalMs?: number; minAgeMs?: number; quiet?: boolean },
   ) => Promise<SessionLockCleanupResult>
-  tryRestartGatewayService: (options: { force?: boolean; allowExternalTakeover?: boolean }) => Promise<unknown>
+  tryRestartGatewayService: (options: { force?: boolean; allowExternalTakeover?: boolean; reason?: string }) => Promise<unknown>
   writeRuntimeMonitorClearMarker: (clearedAt: Date) => Promise<void>
 }
 
@@ -229,7 +229,11 @@ export function registerRuntimeRoutes(app: Express, options: RuntimeRoutesOption
 
   app.post('/api/openclaw/runtime/gateway/restart', async (_req, res) => {
     try {
-      const restart = await options.tryRestartGatewayService({ force: true, allowExternalTakeover: true })
+      const restart = await options.tryRestartGatewayService({
+        force: true,
+        allowExternalTakeover: true,
+        reason: 'manual restart requested from monitor',
+      })
       options.invalidateRuntimeStatusCache()
       const gatewayHealthy = await options.isGatewayHealthy()
       const listenerPid = gatewayHealthy ? await options.gatewayListenerPidForPort(options.gatewayHttpPort) : null

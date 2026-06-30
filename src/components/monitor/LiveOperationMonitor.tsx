@@ -2,12 +2,11 @@ import { memo, useId, useMemo, useState } from 'react'
 import { motion } from 'framer-motion'
 import { useNexusStore } from '../../store/nexusStore'
 import type { AgentOperationState, AgentResponse, MissionEvent, OpenClawAgent } from '../../types/nexus'
-import { abortStaleGatewayChatTurns, clearRuntimeMonitor, restartGatewayRuntime, runRuntimeDoctor, startGatewayRuntime, stopCronShift, stopGatewayRuntime, updateCronShift, useRuntimeStatus } from '../../hooks/useRuntimeStatus'
-import type { DoctorRun, GatewayChannelActivity, GatewayLogEntry, RuntimeCronJob, RuntimeMonitorClearResult, RuntimeStatus } from '../../hooks/useRuntimeStatus'
+import { clearRuntimeMonitor, runRuntimeDoctor, runRuntimeDoctorRepair, stopCronShift, updateCronShift, useRuntimeStatus } from '../../hooks/useRuntimeStatus'
+import type { DoctorFinding, DoctorRun, GatewayChannelActivity, GatewayLogEntry, RuntimeCronJob, RuntimeMonitorClearResult, RuntimeStatus } from '../../hooks/useRuntimeStatus'
 import { ActionStatusBanner } from '../common/ActionStatusBanner'
 
 const CONTROL_CENTER_LOGO_SRC = '/brand/dystopai-app-icon.png'
-const GATEWAY_CHAT_STALE_TURN_MS = 5 * 60_000
 const DOCTOR_PANEL_DISMISSED_RUN_KEY = 'dystopai-monitor-doctor-dismissed-run'
 
 function doctorRunDismissKey(run: DoctorRun | null): string {
@@ -38,17 +37,6 @@ function formatCadence(ms: number): string {
   if (ms >= 60 * 60 * 1000 && ms % (60 * 60 * 1000) === 0) return `${ms / (60 * 60 * 1000)} hr`
   if (ms >= 60 * 1000 && ms % (60 * 1000) === 0) return `${ms / (60 * 1000)} min`
   return `${Math.max(1, Math.round(ms / 1000))} sec`
-}
-
-function formatRuntimeDuration(ms: number | null | undefined): string {
-  if (!ms || ms < 0) return '0s'
-  const totalSec = Math.floor(ms / 1000)
-  const hours = Math.floor(totalSec / 3600)
-  const minutes = Math.floor((totalSec % 3600) / 60)
-  const seconds = totalSec % 60
-  if (hours) return `${hours}h ${minutes}m`
-  if (minutes) return `${minutes}m ${seconds.toString().padStart(2, '0')}s`
-  return `${seconds}s`
 }
 
 function formatReportMetric(value: number | null): string {
@@ -378,6 +366,26 @@ function DoctorDismissButton({ onDismiss }: { onDismiss?: () => void }) {
   )
 }
 
+function doctorFindingToneClass(finding: DoctorFinding): string {
+  if (finding.severity === 'error') return 'border-rose-400/20 text-rose-100'
+  if (finding.severity === 'warning') return 'border-amber-400/20 text-amber-100'
+  return 'border-emerald-400/16 text-emerald-100'
+}
+
+function doctorFindingAction(finding: DoctorFinding): string {
+  const guidedAction = finding.guidedAction
+  const command = guidedAction?.command?.length ? `Run: ${guidedAction.command.join(' ')}` : ''
+  const doctorRepairHint = finding.fixHint
+    || finding.repairAction
+    || (guidedAction?.allowsDoctorRepair ? 'Run openclaw doctor --fix to quarantine invalid plugin config.' : '')
+  return [
+    guidedAction?.label,
+    command,
+    doctorRepairHint,
+    guidedAction?.detail,
+  ].filter(Boolean).join(' | ')
+}
+
 function DoctorPanel({ run, error, persisted = false, onDismiss }: { run: DoctorRun | null; error: string; persisted?: boolean; onDismiss?: () => void }) {
   if (!run && !error) return null
   const checks = run?.checks || []
@@ -411,22 +419,50 @@ function DoctorPanel({ run, error, persisted = false, onDismiss }: { run: Doctor
             </div>
           </div>
           <div className="grid gap-2 md:grid-cols-2 xl:grid-cols-4">
-            {checks.map((check) => (
-              <div key={check.id} className={`rounded-lg border px-2.5 py-2 text-[10px] ${check.severity === 'error' ? 'border-rose-400/18 bg-rose-400/[0.04]' : check.severity === 'warning' ? 'border-amber-400/18 bg-amber-400/[0.04]' : 'border-emerald-400/12 bg-emerald-400/[0.025]'}`}>
-                <div className="flex items-center justify-between gap-2">
-                  <p className="truncate font-bold text-slate-100">{check.label}</p>
-                  <span className={`shrink-0 rounded-full px-1.5 py-0.5 text-[7px] font-bold uppercase ${check.severity === 'error' ? 'text-rose-200' : check.severity === 'warning' ? 'text-amber-200' : 'text-emerald-200'}`}>
-                    {check.severity}
-                  </span>
+            {checks.map((check) => {
+              const findings = (check.findings || []).slice(0, 2)
+              const extraFindings = Math.max(0, (check.findings?.length || 0) - findings.length)
+              return (
+                <div key={check.id} className={`rounded-lg border px-2.5 py-2 text-[10px] ${check.severity === 'error' ? 'border-rose-400/18 bg-rose-400/[0.04]' : check.severity === 'warning' ? 'border-amber-400/18 bg-amber-400/[0.04]' : 'border-emerald-400/12 bg-emerald-400/[0.025]'}`}>
+                  <div className="flex items-center justify-between gap-2">
+                    <p className="truncate font-bold text-slate-100">{check.label}</p>
+                    <span className={`shrink-0 rounded-full px-1.5 py-0.5 text-[7px] font-bold uppercase ${check.severity === 'error' ? 'text-rose-200' : check.severity === 'warning' ? 'text-amber-200' : 'text-emerald-200'}`}>
+                      {check.severity}
+                    </span>
+                  </div>
+                  <p className="mt-1 line-clamp-2 text-slate-400" title={check.evidence}>{check.evidence}</p>
+                  {(check.failureKind || check.repairAction) && (
+                    <p className="mt-1 line-clamp-2 text-[9px] text-cyan-200/75" title={check.repairAction || check.failureKind}>
+                      {check.failureKind ? check.failureKind.replace(/_/g, ' ') : check.repairAction}
+                    </p>
+                  )}
+                  {findings.length > 0 && (
+                    <ul className="dy-doctor-finding-list mt-2 space-y-1 border-t border-white/[0.05] pt-1.5">
+                      {findings.map((finding) => {
+                        const action = doctorFindingAction(finding)
+                        const location = finding.ocPath || finding.path || ''
+                        return (
+                          <li key={`${finding.checkId}-${finding.path || finding.ocPath || finding.message}`} className={`dy-doctor-finding border-l-2 pl-2 text-[9px] leading-snug ${doctorFindingToneClass(finding)}`}>
+                            <div className="flex min-w-0 items-center gap-1.5">
+                              <span className="shrink-0 font-bold uppercase tracking-[0.10em]">{finding.category}</span>
+                              <span className="min-w-0 truncate text-slate-500" title={finding.checkId}>{finding.checkId}</span>
+                            </div>
+                            <p className="mt-0.5 line-clamp-2 text-slate-300" title={finding.message}>{finding.message}</p>
+                            {location && <p className="mt-0.5 truncate text-slate-500" title={location}>{location}</p>}
+                            {action && <p className="mt-0.5 line-clamp-2 text-cyan-200/75" title={action}>{compactRuntimeText(action, 260)}</p>}
+                          </li>
+                        )
+                      })}
+                      {extraFindings > 0 && (
+                        <li className="text-[8px] font-semibold uppercase tracking-[0.10em] text-slate-500">
+                          +{extraFindings} more finding{extraFindings === 1 ? '' : 's'}
+                        </li>
+                      )}
+                    </ul>
+                  )}
                 </div>
-                <p className="mt-1 line-clamp-2 text-slate-400" title={check.evidence}>{check.evidence}</p>
-                {(check.failureKind || check.repairAction) && (
-                  <p className="mt-1 line-clamp-2 text-[9px] text-cyan-200/75" title={check.repairAction || check.failureKind}>
-                    {check.failureKind ? check.failureKind.replace(/_/g, ' ') : check.repairAction}
-                  </p>
-                )}
-              </div>
-            ))}
+              )
+            })}
           </div>
         </div>
       )}
@@ -933,30 +969,12 @@ function RuntimeGatewayPanel({
   const cronCadences = useMemo(() => Array.from(new Set(activeCronJobs.map((job) => job.every).filter(Boolean))), [activeCronJobs])
   const logs = gateway?.logs || []
   const activity = gateway?.activity
-  const gatewayChat = gateway?.chat
-  const gatewayChatActiveRuns = gatewayChat?.activeRuns || 0
-  const gatewayChatOldestAgeMs = Math.max(gatewayChat?.oldestRunAgeMs || 0, gatewayChat?.oldestObserverAgeMs || 0)
-  const gatewayChatHasStaleTurns = gatewayChatOldestAgeMs >= GATEWAY_CHAT_STALE_TURN_MS && gatewayChatActiveRuns > 0
-  const [runtimeAction, setRuntimeAction] = useState('')
   const [cronCancelKey, setCronCancelKey] = useState('')
   const [cronCancelConfirm, setCronCancelConfirm] = useState(false)
   const [cronEditJob, setCronEditJob] = useState<RuntimeCronJob | null>(null)
   const [cronEditKey, setCronEditKey] = useState('')
   const [actionError, setActionError] = useState('')
   const [runtimeNotice, setRuntimeNotice] = useState('')
-  const gatewayFullyStopped = Boolean(gateway && !gateway.healthy && !gateway.processRunning && !gateway.ensureInFlight && !gateway.restartScheduled)
-  const gatewayPrimaryAction = gatewayFullyStopped ? 'start-gateway' : 'restart-gateway'
-  const gatewayPrimaryBusy = runtimeAction === 'start-gateway' || runtimeAction === 'restart-gateway'
-  const gatewayPrimaryLabel = runtimeAction === 'start-gateway'
-    ? 'Starting'
-    : runtimeAction === 'restart-gateway'
-      ? 'Resetting'
-      : gatewayFullyStopped
-        ? 'Start gateway'
-        : 'Reset gateway'
-  const gatewayPrimaryTitle = gatewayFullyStopped
-    ? 'Start the OpenClaw gateway process and recheck health.'
-    : 'Force stop any stale gateway listener, start OpenClaw again, and recheck health.'
   const cronCancelPreview = useMemo(() => {
     return activeCronJobs.slice(0, 3).map((job) => `${job.name} (${job.agent})`).join(', ')
   }, [activeCronJobs])
@@ -1034,77 +1052,6 @@ function RuntimeGatewayPanel({
       setCronEditKey('')
     }
   }
-  const stopGateway = async () => {
-    setCronCancelConfirm(false)
-    setRuntimeAction('stop-gateway')
-    setActionError('')
-    setRuntimeNotice('')
-    try {
-      await stopGatewayRuntime()
-      setRuntimeNotice('Gateway stop requested. Once shutdown is confirmed, the reset action becomes Start gateway.')
-      onRefresh()
-      window.setTimeout(onRefresh, 1500)
-    } catch (error) {
-      setActionError(error instanceof Error ? error.message : String(error))
-    } finally {
-      setRuntimeAction('')
-    }
-  }
-  const startGateway = async () => {
-    setCronCancelConfirm(false)
-    setRuntimeAction('start-gateway')
-    setActionError('')
-    setRuntimeNotice('')
-    try {
-      await startGatewayRuntime()
-      setRuntimeNotice('Gateway start requested. Runtime status will refresh after the health check completes.')
-      onRefresh()
-      window.setTimeout(onRefresh, 1500)
-    } catch (error) {
-      setActionError(error instanceof Error ? error.message : String(error))
-    } finally {
-      setRuntimeAction('')
-    }
-  }
-  const restartGateway = async () => {
-    setCronCancelConfirm(false)
-    setRuntimeAction('restart-gateway')
-    setActionError('')
-    setRuntimeNotice('')
-    try {
-      await restartGatewayRuntime()
-      setRuntimeNotice('Gateway reset requested. Runtime status will refresh after the health check completes.')
-      onRefresh()
-      window.setTimeout(onRefresh, 1500)
-    } catch (error) {
-      setActionError(error instanceof Error ? error.message : String(error))
-    } finally {
-      setRuntimeAction('')
-    }
-  }
-  const runGatewayPrimaryAction = () => {
-    void (gatewayPrimaryAction === 'start-gateway' ? startGateway() : restartGateway())
-  }
-  const abortStaleGatewayTurns = async () => {
-    if (!gatewayChatHasStaleTurns || runtimeAction === 'abort-stale-chat') return
-    setCronCancelConfirm(false)
-    setRuntimeAction('abort-stale-chat')
-    setActionError('')
-    setRuntimeNotice('')
-    try {
-      const result = await abortStaleGatewayChatTurns(GATEWAY_CHAT_STALE_TURN_MS)
-      const aborted = result.aborted.length
-      setRuntimeNotice(aborted
-        ? `Aborted ${aborted} stale Gateway agent turn${aborted === 1 ? '' : 's'}.`
-        : `No Gateway agent turns were older than ${formatRuntimeDuration(result.minAgeMs)}.`)
-      onRefresh()
-      window.setTimeout(onRefresh, 1200)
-    } catch (error) {
-      setActionError(error instanceof Error ? error.message : String(error))
-    } finally {
-      setRuntimeAction('')
-    }
-  }
   return (
     <div className="dy-gateway-panel grid gap-3">
       {error && (
@@ -1170,53 +1117,6 @@ function RuntimeGatewayPanel({
       )}
 
       <div className="dy-gateway-layout">
-        <div className="dy-monitor-card dy-gateway-summary-card flex flex-col rounded-none border border-white/[0.04] bg-white/[0.015] p-3.5">
-            <div className="flex flex-wrap items-start justify-between gap-3">
-              <div>
-                <p className="text-[13px] font-bold text-slate-100">Gateway Runtime</p>
-                <p className="mt-0.5 text-[10px] text-slate-500">OpenClaw gateway health, process, and restart state</p>
-              </div>
-              <div className="dy-gateway-control-group flex flex-wrap items-center justify-end gap-2">
-                <span className={`dy-gateway-status-pill inline-flex items-center gap-1.5 rounded-none border px-2.5 py-1 text-[8px] font-semibold uppercase tracking-[0.10em] ${gateway?.healthy ? 'border-emerald-400/20 bg-emerald-400/[0.06] text-emerald-200' : gateway?.processRunning ? 'border-amber-400/20 bg-amber-400/[0.06] text-amber-200' : 'border-rose-400/20 bg-rose-400/[0.06] text-rose-200'}`} data-tone={gateway?.healthy ? 'emerald' : gateway?.processRunning ? 'amber' : 'rose'}>
-                  <span className={`h-1.5 w-1.5 rounded-none ${gateway?.healthy ? 'bg-emerald-400' : gateway?.processRunning ? 'bg-amber-400 animate-pulse' : 'bg-rose-400'}`} />
-                  {gateway?.state || 'checking'}
-                </span>
-                <button
-                  type="button"
-                  disabled={gatewayPrimaryBusy || runtimeAction === 'stop-gateway'}
-                  onClick={runGatewayPrimaryAction}
-                  className="dy-gateway-action-button rounded-none border border-cyan-300/15 bg-cyan-300/[0.035] px-2.5 py-1.5 text-[8px] font-semibold uppercase tracking-[0.10em] text-cyan-100/85 transition hover:border-cyan-300/30 hover:bg-cyan-300/[0.07] disabled:cursor-not-allowed disabled:opacity-50"
-                  data-tone="cyan"
-                  title={gatewayPrimaryTitle}
-                >
-                  {gatewayPrimaryLabel}
-                </button>
-                <button
-                  type="button"
-                  disabled={runtimeAction === 'stop-gateway' || gatewayPrimaryBusy || (!gateway?.healthy && !gateway?.processRunning)}
-                  onClick={stopGateway}
-                  className="dy-gateway-action-button rounded-none border border-rose-300/15 bg-rose-300/[0.035] px-2.5 py-1.5 text-[8px] font-semibold uppercase tracking-[0.10em] text-rose-200/85 transition hover:border-rose-300/30 hover:bg-rose-300/[0.07] disabled:cursor-not-allowed disabled:opacity-50"
-                  data-tone="rose"
-                  title="Stop the OpenClaw gateway process. Gateway-backed actions can start it again later."
-                >
-                  {runtimeAction === 'stop-gateway' ? 'Stopping' : 'Stop gateway'}
-                </button>
-                {gatewayChatHasStaleTurns && (
-                  <button
-                    type="button"
-                    disabled={runtimeAction === 'abort-stale-chat'}
-                    onClick={() => void abortStaleGatewayTurns()}
-                    className="dy-gateway-action-button rounded-none border border-amber-300/15 bg-amber-300/[0.035] px-2.5 py-1.5 text-[8px] font-semibold uppercase tracking-[0.10em] text-amber-100/85 transition hover:border-amber-300/30 hover:bg-amber-300/[0.07] disabled:cursor-not-allowed disabled:opacity-50"
-                    data-tone="amber"
-                    title={`Abort Gateway agent turns older than ${formatRuntimeDuration(GATEWAY_CHAT_STALE_TURN_MS)}. Partial output remains visible when the Gateway has buffered it.`}
-                  >
-                    {runtimeAction === 'abort-stale-chat' ? 'Aborting turns' : 'Abort stale turns'}
-                  </button>
-                )}
-              </div>
-            </div>
-          </div>
-
         <GatewayActivityCard activity={activity} />
 
           <div className="dy-monitor-card dy-cron-jobs-card flex min-h-0 flex-col self-stretch rounded-none border border-white/[0.04] bg-white/[0.015] p-3">
@@ -1258,7 +1158,7 @@ function RuntimeGatewayPanel({
               ))}
               {!activeCronJobs.length && (
                 <div className="dy-monitor-empty dy-session-empty-state dy-cron-empty-state py-6 text-center text-[11px] font-medium text-slate-600">
-                  <span className="dy-session-empty-icon dy-cron-empty-icon" aria-hidden="true">
+                  <span className="dy-cron-empty-icon" aria-hidden="true">
                     <svg viewBox="0 0 24 24">
                       <path d="M6 4.7v2.8M18 4.7v2.8M4.8 9.7h14.4" />
                       <path d="M5.7 6.4h12.6A1.7 1.7 0 0 1 20 8.1v10.2a1.7 1.7 0 0 1-1.7 1.7H5.7A1.7 1.7 0 0 1 4 18.3V8.1a1.7 1.7 0 0 1 1.7-1.7Z" />
@@ -1293,6 +1193,7 @@ export function LiveOperationMonitor() {
   const [doctorRun, setDoctorRun] = useState<DoctorRun | null>(null)
   const [doctorError, setDoctorError] = useState('')
   const [doctorBusy, setDoctorBusy] = useState(false)
+  const [doctorRepairBusy, setDoctorRepairBusy] = useState(false)
   const [dismissedDoctorRunKey, setDismissedDoctorRunKey] = useState(readDismissedDoctorRunKey)
   const [cleanSlateBusy, setCleanSlateBusy] = useState(false)
   const [cleanSlateError, setCleanSlateError] = useState('')
@@ -1327,6 +1228,17 @@ export function LiveOperationMonitor() {
   const doctorPanelDismissed = !doctorError && Boolean(rawDisplayedDoctorRunKey) && rawDisplayedDoctorRunKey === dismissedDoctorRunKey
   const displayedDoctorRun = doctorPanelDismissed ? null : rawDisplayedDoctorRun
   const displayedDoctorRunPersisted = !doctorRun && !doctorError && Boolean(persistedDoctorRun) && !doctorPanelDismissed
+  const doctorRepairAvailable = Boolean(
+    runtimeStatus?.gateway?.restartDiagnostics?.needsAttention
+      || rawDisplayedDoctorRun?.checks.some((check) => {
+        const actionableCheck = check.repairAction && (check.severity === 'warning' || check.severity === 'error')
+        const actionableFinding = check.findings?.some((finding) => (
+          (finding.severity === 'warning' || finding.severity === 'error')
+          && Boolean(finding.guidedAction?.allowsDoctorRepair || finding.fixHint || finding.repairAction)
+        ))
+        return Boolean(actionableCheck || actionableFinding)
+      }),
+  )
   const activity = useMemo(
     () => [...agentResponses.slice(0, 18).map(makeResponseActivity), ...missionFeed.slice(0, 18).map(makeEventActivity)]
       .sort((a, b) => Date.parse(b.timestamp) - Date.parse(a.timestamp)).slice(0, 18),
@@ -1346,6 +1258,22 @@ export function LiveOperationMonitor() {
       setDoctorError(error instanceof Error ? error.message : String(error))
     } finally {
       setDoctorBusy(false)
+    }
+  }
+
+  const repairWithDoctor = async () => {
+    setDoctorRepairBusy(true)
+    setDoctorError('')
+    try {
+      const result = await runRuntimeDoctorRepair()
+      setDismissedDoctorRunKey('')
+      rememberDismissedDoctorRunKey('')
+      setDoctorRun(result.doctor)
+      refreshRuntimeStatus()
+    } catch (error) {
+      setDoctorError(error instanceof Error ? error.message : String(error))
+    } finally {
+      setDoctorRepairBusy(false)
     }
   }
 
@@ -1425,6 +1353,15 @@ export function LiveOperationMonitor() {
           <div className="dy-monitor-tools">
             <button type="button" disabled={doctorBusy} onClick={runDoctor} className="dy-monitor-tool-button" title="Run runtime doctor">
               {doctorBusy ? 'Doctor running' : 'Doctor'}
+            </button>
+            <button
+              type="button"
+              disabled={doctorRepairBusy || doctorBusy || !doctorRepairAvailable}
+              onClick={() => void repairWithDoctor()}
+              className="dy-monitor-tool-button dy-monitor-doctor-repair-button"
+              title="Run OpenClaw Doctor safe non-interactive repair, then rerun diagnostics."
+            >
+              {doctorRepairBusy ? 'Repairing' : 'Doctor repair'}
             </button>
             <button
               type="button"

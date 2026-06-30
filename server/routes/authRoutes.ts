@@ -61,7 +61,7 @@ export function registerAuthRoutes(app: Express, options: AuthRouteOptions) {
 
   app.get('/api/auth/status', (req, res) => {
     const token = /^Bearer\s+(.+)$/i.exec(req.headers.authorization || '')?.[1]?.trim()
-    if (token && options.sessionTokens.has(token)) {
+    if (token && (options.sessionTokens.has(token) || secureTokenEqual(token, options.authToken))) {
       return apiSuccess(res, { authenticated: true })
     }
     return apiSuccess(res, { authenticated: false })

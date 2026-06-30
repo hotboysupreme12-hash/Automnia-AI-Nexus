@@ -134,7 +134,7 @@ type PluginRoutesOptions = {
     rows?: number
   }) => PluginSetupTerminalSession
   stopPluginSetupTerminalSession: (session: PluginSetupTerminalSession) => void
-  tryRestartGatewayService: (options: { force?: boolean; allowExternalTakeover?: boolean }) => Promise<GatewayRestartResult>
+  tryRestartGatewayService: (options: { force?: boolean; allowExternalTakeover?: boolean; reason?: string }) => Promise<GatewayRestartResult>
   uninstallOpenClawPlugin: (pluginId: string, options: { keepFiles: boolean; force: boolean; restart: boolean }) => Promise<PluginCommandResult>
   updateAllOpenClawPlugins: (restartRequested: boolean) => Promise<PluginCommandResult>
   updateOpenClawPlugin: (pluginId: string, restartRequested: boolean) => Promise<PluginCommandResult>
@@ -227,7 +227,7 @@ export function registerPluginRoutes(app: Express, options: PluginRoutesOptions)
   app.post('/api/plugins/gateway/restart', async (_req, res) => {
     try {
       const restart = {
-        ...(await options.tryRestartGatewayService({ force: true })),
+        ...(await options.tryRestartGatewayService({ force: true, reason: 'plugin workspace requested gateway restart' })),
         scheduled: false,
       }
       options.invalidateRuntimeStatusCache()

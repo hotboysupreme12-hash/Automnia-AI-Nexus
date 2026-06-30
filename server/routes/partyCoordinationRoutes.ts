@@ -125,7 +125,7 @@ export type PartyCoordinationRoutesOptions = {
   splitTextForAppend: (value: string, maxChars: number) => string[]
   trimTask: (value: string, max?: number) => string
   tryReleaseBrowserRelayPort: () => Promise<{ released: boolean; detail: string }>
-  tryRestartGatewayService: (options?: { force?: boolean; allowExternalTakeover?: boolean }) => Promise<{ restarted: boolean; detail: string }>
+  tryRestartGatewayService: (options?: { force?: boolean; allowExternalTakeover?: boolean; reason?: string }) => Promise<{ restarted: boolean; detail: string }>
   withAgentRuntimeFlags: (args: string[]) => string[]
   writeTeamSyncSnapshot: (params: {
     missionId: string
@@ -489,7 +489,7 @@ app.post('/api/party/dispatch', async (req, res) => {
     }
 
     if (result.code === 0 && assignmentBrowserIntent && hasBrowserRelayDisconnected(result.stderr || '')) {
-      const gateway = await tryRestartGatewayService()
+      const gateway = await tryRestartGatewayService({ reason: 'party coordination browser relay recovery' })
       if (gateway.restarted) {
         const gatewayRecoveryPrompt = composeAgentDoctrinePrompt(
           assignment.agent,

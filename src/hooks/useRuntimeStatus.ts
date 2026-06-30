@@ -73,6 +73,28 @@ export type GatewayChannelActivity = {
   agentId?: string
 }
 
+export type GatewayRestartLifecycleEntry = {
+  at: string
+  reason: string
+  outcome: 'scheduled' | 'started' | 'succeeded' | 'failed' | 'skipped'
+  eventAt?: string | null
+}
+
+export type GatewayRestartDiagnostics = {
+  severity: 'info' | 'warning'
+  needsAttention: boolean
+  summary: string
+  recentAttempts: number
+  recentFailures: number
+  failureStreak: number
+  latestOutcome: GatewayRestartLifecycleEntry['outcome'] | null
+  latestReason: string | null
+  latestAt: string | null
+  activeWork: number
+  queuedWork: number
+  repairAction?: string
+}
+
 export type GatewayActivitySummary = {
   active: boolean
   lastEventAt: string | null
@@ -339,6 +361,11 @@ export type RuntimeStatus = {
     lastHealthyAt: string | null
     lastExitAt: string | null
     lastExitCode: number | null
+    lastRestartAt?: string | null
+    lastRestartReason?: string | null
+    lastRestartOutcome?: 'scheduled' | 'started' | 'succeeded' | 'failed' | 'skipped' | null
+    recentRestarts?: GatewayRestartLifecycleEntry[]
+    restartDiagnostics?: GatewayRestartDiagnostics
     uptimeMs: number
     logs: GatewayLogEntry[]
     activity: GatewayActivitySummary
@@ -382,6 +409,59 @@ export type RuntimeStatus = {
   }
 }
 
+export type DoctorFindingCategory =
+  | 'gateway'
+  | 'plugin'
+  | 'auth'
+  | 'secret'
+  | 'session'
+  | 'cron'
+  | 'skills'
+  | 'config'
+  | 'sandbox'
+  | 'memory'
+  | 'provider'
+  | 'channel'
+  | 'runtime'
+  | 'unknown'
+
+export type DoctorGuidedActionKind =
+  | 'doctor_repair'
+  | 'plugin_inspect'
+  | 'provider_auth'
+  | 'secret_audit'
+  | 'session_cleanup_preview'
+  | 'cron_diagnostics'
+  | 'gateway_status'
+  | 'skills_check'
+  | 'config_lint'
+  | 'sandbox_lint'
+  | 'memory_status'
+  | 'model_status'
+  | 'channel_status'
+  | 'operator_review'
+
+export type DoctorGuidedAction = {
+  kind: DoctorGuidedActionKind
+  label: string
+  detail: string
+  command?: string[]
+  surface?: 'monitor' | 'plugins' | 'provider-auth' | 'missions' | 'skills' | 'terminal'
+  allowsDoctorRepair?: boolean
+}
+
+export type DoctorFinding = {
+  checkId: string
+  category: DoctorFindingCategory
+  severity: 'info' | 'warning' | 'error'
+  message: string
+  path?: string
+  ocPath?: string
+  fixHint?: string
+  repairAction?: string
+  guidedAction?: DoctorGuidedAction
+}
+
 export type DoctorCheck = {
   id: string
   label: string
@@ -391,6 +471,7 @@ export type DoctorCheck = {
   evidence: string
   elapsedMs?: number
   repairAction?: string
+  findings?: DoctorFinding[]
 }
 
 export type DoctorRun = {
@@ -400,6 +481,22 @@ export type DoctorRun = {
   ok: boolean
   checks: DoctorCheck[]
   summary: string
+}
+
+export type DoctorRepairRun = {
+  id: string
+  startedAt: string
+  endedAt: string
+  ok: boolean
+  command: {
+    args: string[]
+    code: number
+    elapsedMs: number
+    detail: string
+    failureKind?: string
+    timedOut?: boolean
+  }
+  doctor: DoctorRun
 }
 
 export type RuntimeMonitorClearResult = {
@@ -706,6 +803,16 @@ export async function runRuntimeDoctor(): Promise<DoctorRun> {
     method: 'POST',
   }, RUNTIME_DOCTOR_TIMEOUT_MS)
   if (!data || !('checks' in data)) throw new Error('Doctor returned an invalid response.')
+  return data
+}
+
+export async function runRuntimeDoctorRepair(): Promise<DoctorRepairRun> {
+  const data = await runtimeActionRequest<DoctorRepairRun>('/api/doctor/repair', {
+    method: 'POST',
+  }, RUNTIME_DOCTOR_TIMEOUT_MS + 90_000)
+  if (!data || !('doctor' in data) || !data.doctor || !('checks' in data.doctor)) {
+    throw new Error('Doctor repair returned an invalid response.')
+  }
   return data
 }
 

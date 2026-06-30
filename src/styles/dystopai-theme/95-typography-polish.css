@@ -1,0 +1,1037 @@
+/*
+  Typography polish.
+  Imported last so the product font stack and readable scale win over older
+  screenshot-matching microtype rules.
+*/
+
+html.dui-pro-overhaul,
+html.dui-cohesive-ui,
+html.dy-human-ui {
+  --font-body: 'Geist Variable', Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  --font-display: 'Sora Variable', 'Geist Variable', Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  --font-heading: var(--font-display);
+  --font-mono: 'Geist Mono Variable', 'Cascadia Mono', Consolas, 'SFMono-Regular', ui-monospace, monospace;
+  --dui-font-body: var(--font-body);
+  --dui-font-display: var(--font-display);
+  --dui-font-mono: var(--font-mono);
+  --dui-rail: 224px;
+  --dy-type-micro: 10.5px;
+  --dy-type-caption: 11px;
+  --dy-type-small: 12.25px;
+  --dy-type-ui: 14px;
+  --dy-type-control: 13px;
+  --dy-type-copy: 14.5px;
+  --dy-type-title: 18px;
+  --dy-type-page: 34px;
+  --dy-leading-tight: 1.16;
+  --dy-leading-ui: 1.38;
+  --dy-leading-copy: 1.52;
+}
+
+html.dui-pro-overhaul,
+html.dui-pro-overhaul body,
+html.dui-pro-overhaul .app-bg,
+html.dui-pro-overhaul #root {
+  font-family: var(--font-body) !important;
+  text-rendering: optimizeLegibility !important;
+  -webkit-font-smoothing: antialiased !important;
+  -moz-osx-font-smoothing: grayscale !important;
+  font-optical-sizing: auto;
+  font-synthesis-weight: none;
+  font-feature-settings: 'rlig' 1, 'calt' 1, 'ss01' 1;
+}
+
+html.dui-pro-overhaul {
+  font-size: 16px !important;
+}
+
+html.dui-pro-overhaul body,
+html.dui-pro-overhaul .app-bg,
+html.dui-pro-overhaul #root {
+  font-size: var(--dy-type-ui) !important;
+  line-height: var(--dy-leading-ui) !important;
+}
+
+html.dui-pro-overhaul :where(
+  h1,
+  h2,
+  h3,
+  h4,
+  h5,
+  h6,
+  p,
+  span,
+  strong,
+  small,
+  label,
+  button,
+  a,
+  li,
+  dt,
+  dd,
+  input,
+  textarea,
+  select,
+  option,
+  th,
+  td,
+  pre,
+  code,
+  kbd,
+  samp
+) {
+  letter-spacing: 0 !important;
+}
+
+html.dui-pro-overhaul :where(h1, h2, h3, h4, h5, h6) {
+  color: var(--text-0) !important;
+  font-family: var(--font-display) !important;
+  font-weight: 760 !important;
+  line-height: var(--dy-leading-tight) !important;
+  text-transform: none !important;
+  text-wrap: balance;
+}
+
+html.dui-pro-overhaul :where(p, li, dd, td, th) {
+  line-height: var(--dy-leading-copy) !important;
+}
+
+html.dui-pro-overhaul :where(
+  [class*="text-[6px]"],
+  [class*="text-[6.5px]"],
+  [class*="text-[6.8px]"],
+  [class*="text-[7px]"],
+  [class*="text-[7.25px]"],
+  [class*="text-[7.5px]"],
+  [class*="text-[7.75px]"],
+  [class*="text-[8px]"],
+  [class*="text-[8.5px]"]
+) {
+  font-size: var(--dy-type-micro) !important;
+  line-height: 1.28 !important;
+}
+
+html.dui-pro-overhaul :where([class*="text-[9px]"], [class*="text-[10px]"]) {
+  font-size: var(--dy-type-caption) !important;
+  line-height: 1.32 !important;
+}
+
+html.dui-pro-overhaul :where([class*="text-[11px]"]) {
+  font-size: var(--dy-type-small) !important;
+  line-height: 1.38 !important;
+}
+
+html.dui-pro-overhaul :where([class*="text-[12px]"]) {
+  font-size: var(--dy-type-control) !important;
+  line-height: 1.42 !important;
+}
+
+html.dui-pro-overhaul :where(
+  input,
+  textarea,
+  select,
+  .input,
+  .dui-control
+) {
+  font-family: var(--font-body) !important;
+  font-size: var(--dy-type-ui) !important;
+  font-weight: 520 !important;
+  line-height: 1.45 !important;
+}
+
+html.dui-pro-overhaul [data-dui-panel="missions"] .dui-agent-row {
+  grid-template-columns: 42px minmax(0, 1fr) minmax(136px, 148px) !important;
+  overflow: hidden;
+}
+
+html.dui-pro-overhaul [data-dui-panel="missions"] .dui-agent-cadence {
+  width: 100%;
+  min-width: 0 !important;
+  grid-template-columns: minmax(48px, .76fr) minmax(76px, 1fr) !important;
+  gap: 6px !important;
+}
+
+html.dui-pro-overhaul [data-dui-panel="missions"] .dui-agent-cadence .dui-control {
+  width: 100%;
+  min-width: 0 !important;
+  min-height: 34px !important;
+  padding: 7px 8px !important;
+  font-size: var(--dy-type-caption) !important;
+  line-height: 1.2 !important;
+}
+
+html.dui-pro-overhaul [data-dui-panel="missions"] .dui-agent-cadence input[type="number"].dui-control {
+  padding-left: 8px !important;
+  padding-right: 18px !important;
+  text-align: right !important;
+  font-variant-numeric: tabular-nums !important;
+}
+
+html.dui-pro-overhaul [data-dui-panel="missions"] .dui-agent-cadence select.dui-control {
+  padding-left: 8px !important;
+  padding-right: 20px !important;
+}
+
+@media (max-width: 520px) {
+  html.dui-pro-overhaul [data-dui-panel="missions"] .dui-agent-row {
+    grid-template-columns: 42px minmax(0, 1fr) !important;
+  }
+
+  html.dui-pro-overhaul [data-dui-panel="missions"] .dui-agent-cadence {
+    grid-column: 2 / -1;
+    grid-template-columns: minmax(54px, .7fr) minmax(82px, 1fr) !important;
+  }
+}
+
+html.dui-pro-overhaul :where(
+  button,
+  .btn,
+  [role="button"],
+  [role="tab"],
+  .dui-primary-button,
+  .dui-steer-button,
+  .dui-recruit-primary,
+  .dui-recruit-secondary,
+  .dui-recruit-auto-button,
+  .agent-card-action-primary,
+  .agent-card-action-secondary,
+  .dy-console-toggle,
+  .dy-monitor-tool-button,
+  .dy-gateway-action-button,
+  .dy-cron-cancel-button,
+  .dy-plugin-row-action,
+  .dui-settings-actions button
+) {
+  font-family: var(--font-body) !important;
+  font-size: var(--dy-type-control) !important;
+  font-weight: 700 !important;
+  line-height: 1.18 !important;
+  text-transform: none !important;
+}
+
+html.dui-pro-overhaul :where(
+  .badge,
+  .status-chip,
+  .lane-chip,
+  .dy-status-chip,
+  .dy-gateway-status-pill,
+  .dy-cron-status-badge,
+  .dy-cron-cadence-badge,
+  .dy-activity-status,
+  .party-rarity-badge,
+  .agent-card-tags span,
+  [class*="badge"],
+  [class*="chip"],
+  [class*="pill"]
+) {
+  font-family: var(--font-body) !important;
+  font-size: var(--dy-type-caption) !important;
+  font-weight: 700 !important;
+  line-height: 1.22 !important;
+  text-transform: none !important;
+}
+
+html.dui-pro-overhaul .dy-command-console .dy-command-busy {
+  align-items: stretch !important;
+  gap: 0 !important;
+  min-height: 28px !important;
+  overflow: hidden !important;
+  border: 1px solid rgba(196, 200, 202, .18) !important;
+  border-radius: 999px !important;
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, .055), rgba(255, 255, 255, .014)),
+    rgba(7, 9, 10, .96) !important;
+  color: #dce5e8 !important;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, .075),
+    0 10px 24px rgba(0, 0, 0, .22) !important;
+}
+
+html.dui-pro-overhaul .dy-command-console .dy-command-busy-status {
+  min-height: 26px !important;
+  padding: 0 9px 0 10px !important;
+  border-right: 1px solid rgba(196, 200, 202, .14) !important;
+  background: rgba(196, 200, 202, .055) !important;
+  color: #dfe7e9 !important;
+}
+
+html.dui-pro-overhaul .dy-command-console .dy-command-busy-dot {
+  width: 5px !important;
+  height: 5px !important;
+  border: 0 !important;
+  background: #7fd8b6 !important;
+  box-shadow: 0 0 8px rgba(127, 216, 182, .55) !important;
+}
+
+html.dui-pro-overhaul .dy-command-console .dy-command-busy-count,
+html.dui-pro-overhaul .dy-command-console .dy-command-busy-label {
+  background: transparent !important;
+  box-shadow: none !important;
+  color: inherit !important;
+  font-size: var(--dy-type-caption) !important;
+  font-weight: 760 !important;
+  line-height: 1 !important;
+  text-transform: none !important;
+}
+
+html.dui-pro-overhaul .dy-command-console .dy-command-busy-warning {
+  align-self: center !important;
+  margin-left: 6px !important;
+  margin-right: 5px !important;
+}
+
+html.dui-pro-overhaul .dy-command-console .dy-command-stop-run {
+  display: inline-flex !important;
+  min-width: 48px !important;
+  min-height: 26px !important;
+  align-items: center !important;
+  gap: 6px !important;
+  justify-content: center !important;
+  margin-left: 0 !important;
+  padding: 0 11px !important;
+  border: 0 !important;
+  border-radius: 0 999px 999px 0 !important;
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, .07), rgba(255, 255, 255, .018)),
+    rgba(93, 22, 24, .82) !important;
+  color: #ffe4e4 !important;
+  font-size: var(--dy-type-caption) !important;
+  font-weight: 780 !important;
+  line-height: 1 !important;
+  box-shadow: inset 1px 0 0 rgba(255, 255, 255, .075) !important;
+}
+
+html.dui-pro-overhaul .dy-command-console .dy-command-stop-run::before {
+  content: '' !important;
+  width: 6px !important;
+  height: 6px !important;
+  border-radius: 1.5px !important;
+  background: currentColor !important;
+  box-shadow: 0 0 8px rgba(255, 228, 228, .38) !important;
+}
+
+html.dui-pro-overhaul .dy-command-console .dy-command-stop-run:hover {
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, .09), rgba(255, 255, 255, .024)),
+    rgba(124, 29, 31, .92) !important;
+  color: #fff7f7 !important;
+}
+
+html.dui-pro-overhaul .dy-command-console .dy-command-stop-run:focus-visible {
+  outline: 2px solid rgba(255, 196, 196, .72) !important;
+  outline-offset: -2px !important;
+}
+
+html.dui-pro-overhaul :where(
+  code,
+  pre,
+  kbd,
+  samp,
+  .font-mono,
+  [class*="font-mono"],
+  .dy-monitor-log-box,
+  .dy-monitor-stream-box,
+  .dy-command-output,
+  .dy-gateway-log-card
+) {
+  font-family: var(--font-mono) !important;
+  font-size: var(--dy-type-small) !important;
+  line-height: 1.48 !important;
+  font-variant-ligatures: none;
+  font-feature-settings: 'tnum' 1, 'zero' 1;
+}
+
+html.dui-pro-overhaul .dy-human-nav :is(button, .dy-human-nav-action, .dy-human-nav-utility) {
+  min-height: 60px !important;
+  padding: 0 13px !important;
+}
+
+html.dui-pro-overhaul .dy-human-nav-copy strong {
+  color: #f2f8ff !important;
+  font-family: var(--font-body) !important;
+  font-size: 14px !important;
+  font-weight: 780 !important;
+  line-height: 1.12 !important;
+}
+
+html.dui-pro-overhaul .dy-human-nav-copy span,
+html.dui-pro-overhaul .dy-operator-copy span {
+  color: #9aabc0 !important;
+  font-size: var(--dy-type-caption) !important;
+  font-weight: 640 !important;
+  line-height: 1.2 !important;
+  text-transform: none !important;
+}
+
+html.dui-pro-overhaul .dy-operator-copy strong {
+  font-size: var(--dy-type-control) !important;
+  line-height: 1.18 !important;
+}
+
+html.dui-pro-overhaul .dy-workspace-context h1 {
+  margin-top: 2px !important;
+  font-size: var(--dy-type-page) !important;
+  font-weight: 820 !important;
+  line-height: 1.04 !important;
+  text-shadow: 0 14px 34px rgba(0, 0, 0, .42), 0 0 22px rgba(0, 234, 255, .13) !important;
+}
+
+html.dui-pro-overhaul .dy-workspace-context p {
+  max-width: 760px !important;
+  color: #aab8c8 !important;
+  font-size: var(--dy-type-copy) !important;
+  font-weight: 520 !important;
+  line-height: var(--dy-leading-copy) !important;
+}
+
+html.dui-pro-overhaul .dy-workspace-context__eyebrow,
+html.dui-pro-overhaul .dui-kicker,
+html.dui-pro-overhaul .dui-section-head span,
+html.dui-pro-overhaul .dui-choice-head span,
+html.dui-pro-overhaul .dy-workspace-context__state,
+html.dui-pro-overhaul .dy-status-label {
+  font-size: var(--dy-type-caption) !important;
+  font-weight: 680 !important;
+  line-height: 1.22 !important;
+  text-transform: none !important;
+}
+
+html.dui-pro-overhaul .dy-status-grid {
+  min-height: 64px !important;
+}
+
+html.dui-pro-overhaul .dy-status-chip {
+  min-height: 60px !important;
+  height: auto !important;
+  padding: 8px 14px !important;
+  justify-content: center !important;
+}
+
+html.dui-pro-overhaul .dy-status-value {
+  font-size: var(--dy-type-title) !important;
+  font-weight: 820 !important;
+  line-height: 1.05 !important;
+}
+
+html.dui-pro-overhaul :where(
+  .active-party-head h3,
+  .dui-section-head strong,
+  .dui-choice-head strong,
+  [data-dui-panel] h2,
+  [data-dui-panel] h3,
+  .dy-monitor-card h3,
+  .dy-plugin-card h3,
+  .agent-card-heading
+) {
+  font-family: var(--font-display) !important;
+  font-size: var(--dy-type-title) !important;
+  font-weight: 760 !important;
+  line-height: 1.16 !important;
+  text-transform: none !important;
+}
+
+html.dui-pro-overhaul :where(
+  .dui-section-head p,
+  .dui-choice-head p,
+  .active-party-head p,
+  .dy-monitor-card p,
+  .dy-plugin-card p,
+  .dy-monitor-alert,
+  .dy-workspace-context__notice
+) {
+  font-size: var(--dy-type-control) !important;
+  line-height: 1.48 !important;
+}
+
+html.dui-pro-overhaul :where(
+  .dy-monitor-tab-list button,
+  [data-editor-tab],
+  .dy-agent-editor-preset,
+  .dy-plugin-row-actions .dy-plugin-row-action
+) {
+  min-height: 34px !important;
+  padding-inline: 10px !important;
+  white-space: normal !important;
+}
+
+html.dui-pro-overhaul :where(
+  .dy-human-nav-copy,
+  .dy-status-chip,
+  .dy-workspace-context__state,
+  .badge,
+  .status-chip,
+  .lane-chip,
+  button
+) {
+  overflow-wrap: anywhere;
+}
+
+html.dui-pro-overhaul.dui-cohesive-ui [data-dui-panel="plugins"].dy-plugins-panel .dy-plugin-summary-chip {
+  display: inline-flex !important;
+  min-height: 26px !important;
+  align-items: center !important;
+  border-radius: 6px !important;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, .08) !important;
+}
+
+html.dui-pro-overhaul.dui-cohesive-ui [data-dui-panel="plugins"].dy-plugins-panel .dy-plugin-summary-chip[data-tone="browser-on"] {
+  border-color: rgba(34, 211, 238, .42) !important;
+  background: rgba(34, 211, 238, .12) !important;
+  color: #c5f7ff !important;
+}
+
+html.dui-pro-overhaul.dui-cohesive-ui [data-dui-panel="plugins"].dy-plugins-panel .dy-plugin-summary-chip[data-tone="browser-off"] {
+  border-color: rgba(148, 163, 184, .34) !important;
+  background: rgba(148, 163, 184, .10) !important;
+  color: #d4dde8 !important;
+}
+
+html.dui-pro-overhaul.dui-cohesive-ui [data-dui-panel="plugins"].dy-plugins-panel .dy-plugin-summary-chip[data-tone="success"] {
+  border-color: rgba(52, 211, 153, .44) !important;
+  background: rgba(52, 211, 153, .12) !important;
+  color: #c8fadc !important;
+}
+
+html.dui-pro-overhaul.dui-cohesive-ui [data-dui-panel="plugins"].dy-plugins-panel .dy-plugin-summary-chip[data-tone="warning"] {
+  border-color: rgba(251, 191, 36, .46) !important;
+  background: rgba(251, 191, 36, .13) !important;
+  color: #ffefba !important;
+}
+
+html.dui-pro-overhaul.dui-cohesive-ui [data-dui-panel="plugins"].dy-plugins-panel .dy-plugin-summary-chip[data-tone="disabled"] {
+  border-color: rgba(251, 113, 133, .40) !important;
+  background: rgba(251, 113, 133, .11) !important;
+  color: #ffd2d9 !important;
+}
+
+@media (max-width: 900px) {
+  html.dui-pro-overhaul,
+  html.dui-cohesive-ui,
+  html.dy-human-ui {
+    --dui-rail: 0px;
+    --dy-type-page: 28px;
+    --dy-type-copy: 14px;
+    --dy-type-ui: 14px;
+    --dy-type-control: 12.5px;
+  }
+
+  html.dui-pro-overhaul .dy-human-nav-copy strong {
+    font-size: 10.5px !important;
+    line-height: 1.12 !important;
+  }
+
+  html.dui-pro-overhaul .dy-human-nav-copy span {
+    display: none !important;
+  }
+
+  html.dui-pro-overhaul .dy-workspace-context p {
+    font-size: var(--dy-type-copy) !important;
+  }
+
+  html.dui-pro-overhaul .dy-workspace-context__state {
+    font-size: var(--dy-type-caption) !important;
+  }
+}
+
+@media (max-width: 520px) {
+  html.dui-pro-overhaul,
+  html.dui-cohesive-ui,
+  html.dy-human-ui {
+    --dy-type-page: 24px;
+    --dy-type-micro: 10px;
+    --dy-type-caption: 10.5px;
+  }
+
+  html.dui-pro-overhaul .dy-status-chip {
+    min-height: 40px !important;
+    padding: 6px 10px !important;
+  }
+
+  html.dui-pro-overhaul .dy-status-value {
+    font-size: 16px !important;
+  }
+}
+
+/* Compact workspace chrome: status chips carry the context, not oversized page mastheads. */
+html.dui-pro-overhaul .dy-workspace-context,
+html.dui-pro-overhaul.dui-cohesive-ui .dy-workspace-context {
+  display: grid !important;
+  width: fit-content !important;
+  max-width: 100% !important;
+  min-height: 0 !important;
+  grid-template-columns: minmax(0, 1fr) !important;
+  align-items: center !important;
+  justify-content: start !important;
+  gap: 6px !important;
+  margin: 0 0 12px auto !important;
+  padding: 7px 9px !important;
+  overflow: visible !important;
+  border-color: rgba(232, 234, 238, .11) !important;
+  border-radius: 10px !important;
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, .024), rgba(255, 255, 255, .006)),
+    rgba(4, 5, 7, .88) !important;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, .035), 0 12px 30px rgba(0, 0, 0, .24) !important;
+}
+
+html.dui-pro-overhaul .dy-workspace-context::before,
+html.dui-pro-overhaul .dy-workspace-context::after,
+html.dui-pro-overhaul.dui-cohesive-ui .dy-workspace-context::before,
+html.dui-pro-overhaul.dui-cohesive-ui .dy-workspace-context::after {
+  display: none !important;
+  content: none !important;
+}
+
+html.dui-pro-overhaul .dy-workspace-context__copy,
+html.dui-pro-overhaul.dui-cohesive-ui .dy-workspace-context__copy {
+  position: absolute !important;
+  width: 1px !important;
+  height: 1px !important;
+  min-width: 0 !important;
+  margin: -1px !important;
+  padding: 0 !important;
+  overflow: hidden !important;
+  clip: rect(0 0 0 0) !important;
+  clip-path: inset(50%) !important;
+  white-space: nowrap !important;
+  border: 0 !important;
+}
+
+html.dui-pro-overhaul .dy-workspace-context h1,
+html.dui-pro-overhaul .dy-workspace-context p,
+html.dui-pro-overhaul.dui-cohesive-ui .dy-workspace-context h1,
+html.dui-pro-overhaul.dui-cohesive-ui .dy-workspace-context p {
+  margin: 0 !important;
+  text-shadow: none !important;
+}
+
+html.dui-pro-overhaul .dy-workspace-context__meta,
+html.dui-pro-overhaul.dui-cohesive-ui .dy-workspace-context__meta {
+  display: grid !important;
+  width: max-content !important;
+  max-width: 100% !important;
+  min-width: 0 !important;
+  flex: none !important;
+  justify-items: end !important;
+  align-items: center !important;
+  gap: 5px !important;
+}
+
+html.dui-pro-overhaul .dy-workspace-context__meta .dy-status-grid,
+html.dui-pro-overhaul.dui-cohesive-ui .dy-workspace-context__meta .dy-status-grid {
+  display: flex !important;
+  flex-wrap: wrap !important;
+  width: max-content !important;
+  max-width: 100% !important;
+  min-height: 0 !important;
+  justify-content: flex-start !important;
+  gap: 6px !important;
+}
+
+html.dui-pro-overhaul .dy-workspace-context__state,
+html.dui-pro-overhaul.dui-cohesive-ui .dy-workspace-context__state {
+  min-height: 24px !important;
+  padding: 4px 9px !important;
+  border-radius: 7px !important;
+  font-size: var(--dy-type-micro) !important;
+  line-height: 1 !important;
+}
+
+html.dui-pro-overhaul .dy-workspace-context__notice,
+html.dui-pro-overhaul.dui-cohesive-ui .dy-workspace-context__notice {
+  width: 100% !important;
+  margin-top: 3px !important;
+}
+
+@media (max-width: 900px) {
+  html.dui-pro-overhaul .dy-workspace-context,
+  html.dui-pro-overhaul.dui-cohesive-ui .dy-workspace-context {
+    display: block !important;
+    width: 100% !important;
+    padding: 7px !important;
+  }
+
+  html.dui-pro-overhaul .dy-workspace-context__meta,
+  html.dui-pro-overhaul.dui-cohesive-ui .dy-workspace-context__meta {
+    width: 100% !important;
+    justify-items: stretch !important;
+  }
+
+  html.dui-pro-overhaul .dy-workspace-context__meta .dy-status-grid,
+  html.dui-pro-overhaul.dui-cohesive-ui .dy-workspace-context__meta .dy-status-grid {
+    width: 100% !important;
+  }
+
+  html.dui-pro-overhaul .dy-workspace-context__state,
+  html.dui-pro-overhaul.dui-cohesive-ui .dy-workspace-context__state {
+    justify-self: end !important;
+    margin-top: 5px !important;
+  }
+}
+
+/* Mission bottom setup: combine Objective and Mission Cron into one full-width bar. */
+html.dui-pro-overhaul [data-dui-panel="missions"] .dui-mission-stage {
+  grid-template-columns: minmax(0, 1fr) minmax(360px, 430px) !important;
+  align-items: start !important;
+  container-name: dui-mission-stage !important;
+  container-type: inline-size !important;
+}
+
+html.dui-pro-overhaul [data-dui-panel="missions"] .dui-mission-main--organized {
+  grid-template-rows: auto auto !important;
+  align-content: start !important;
+}
+
+html.dui-pro-overhaul.dui-cohesive-ui [data-dui-panel="missions"] .dui-mission-main--organized {
+  grid-template-rows: auto auto !important;
+  align-content: start !important;
+}
+
+html.dui-pro-overhaul [data-dui-panel="missions"] .dui-mission-sidebar {
+  grid-template-rows: auto !important;
+  align-self: stretch !important;
+  align-content: stretch !important;
+  height: 100% !important;
+  min-height: 0 !important;
+  overflow: hidden !important;
+}
+
+html.dui-pro-overhaul [data-dui-panel="missions"] .dui-mission-config-card {
+  height: auto !important;
+  min-height: 0 !important;
+}
+
+html.dui-pro-overhaul [data-dui-panel="missions"] .dui-agents-card {
+  height: 100% !important;
+  max-height: none !important;
+  min-height: 0 !important;
+  overflow: hidden !important;
+}
+
+html.dui-pro-overhaul [data-dui-panel="missions"] .dui-agents-card .dui-agent-list {
+  flex: 1 1 auto !important;
+  min-height: 0 !important;
+  max-height: none !important;
+  overflow: auto !important;
+}
+
+html.dui-pro-overhaul [data-dui-panel="missions"] .dui-mission-bottom-card {
+  grid-column: 1 / -1 !important;
+  display: grid !important;
+  width: 100% !important;
+  grid-template-columns: minmax(360px, 1.25fr) minmax(300px, .9fr) minmax(320px, 1fr) !important;
+  gap: 10px !important;
+  align-items: stretch !important;
+  padding: 12px !important;
+}
+
+html.dui-pro-overhaul [data-dui-panel="missions"] .dui-mission-bottom-card > section {
+  display: flex !important;
+  min-width: 0 !important;
+  min-height: 0 !important;
+  flex-direction: column !important;
+  border: 1px solid rgba(80, 132, 168, .14) !important;
+  border-radius: 8px !important;
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, .024), rgba(255, 255, 255, .004)),
+    rgba(4, 12, 20, .44) !important;
+  padding: 10px !important;
+}
+
+html.dui-pro-overhaul [data-dui-panel="missions"] .dui-mission-bottom-objective .dui-textarea {
+  flex: 1 1 auto !important;
+  min-height: 104px !important;
+  max-height: none !important;
+  resize: vertical !important;
+}
+
+html.dui-pro-overhaul [data-dui-panel="missions"] .dui-mission-bottom-cron {
+  justify-content: space-between !important;
+}
+
+html.dui-pro-overhaul [data-dui-panel="missions"] .dui-mission-bottom-tuning {
+  align-self: stretch !important;
+}
+
+html.dui-pro-overhaul [data-dui-panel="missions"] .dui-section-head--dispatch {
+  align-items: flex-start !important;
+  gap: 12px !important;
+}
+
+html.dui-pro-overhaul [data-dui-panel="missions"] .dui-readiness-mini {
+  display: grid !important;
+  flex: 0 0 min(172px, 48%) !important;
+  min-width: 142px !important;
+  gap: 5px !important;
+  padding: 7px 8px !important;
+  border: 1px solid rgba(185, 198, 204, .13) !important;
+  border-radius: 7px !important;
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, .030), rgba(255, 255, 255, .006)),
+    rgba(0, 0, 0, .26) !important;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, .040),
+    0 10px 22px rgba(0, 0, 0, .22) !important;
+}
+
+html.dui-pro-overhaul [data-dui-panel="missions"] .dui-readiness-mini-head {
+  display: flex !important;
+  align-items: baseline !important;
+  justify-content: space-between !important;
+  gap: 8px !important;
+  min-width: 0 !important;
+}
+
+html.dui-pro-overhaul [data-dui-panel="missions"] .dui-readiness-mini-head span {
+  overflow: hidden !important;
+  color: #7f8a93 !important;
+  font-size: 7.5px !important;
+  font-weight: 860 !important;
+  letter-spacing: .11em !important;
+  line-height: 1 !important;
+  text-overflow: ellipsis !important;
+  text-transform: uppercase !important;
+  white-space: nowrap !important;
+}
+
+html.dui-pro-overhaul [data-dui-panel="missions"] .dui-readiness-mini-head strong {
+  flex: 0 0 auto !important;
+  color: #e7eaee !important;
+  font-size: 16px !important;
+  font-weight: 900 !important;
+  line-height: 1 !important;
+}
+
+html.dui-pro-overhaul [data-dui-panel="missions"] .dui-readiness-mini .dui-progress-track {
+  overflow: hidden !important;
+  height: 4px !important;
+  margin: 0 !important;
+  border: 0 !important;
+  border-radius: 999px !important;
+  background: rgba(255, 255, 255, .090) !important;
+  box-shadow: none !important;
+}
+
+html.dui-pro-overhaul [data-dui-panel="missions"] .dui-readiness-mini .dui-progress-fill {
+  background: linear-gradient(90deg, #7e838c, #e4e7eb) !important;
+  box-shadow: 0 0 10px rgba(255, 255, 255, .14) !important;
+}
+
+html.dui-pro-overhaul [data-dui-panel="missions"] .dui-readiness-mini-checks {
+  display: grid !important;
+  grid-template-columns: repeat(3, minmax(0, 1fr)) !important;
+  gap: 4px !important;
+}
+
+html.dui-pro-overhaul [data-dui-panel="missions"] .dui-readiness-mini-checks i {
+  display: block !important;
+  height: 3px !important;
+  border-radius: 999px !important;
+  background: rgba(255, 255, 255, .12) !important;
+}
+
+html.dui-pro-overhaul [data-dui-panel="missions"] .dui-readiness-mini-checks i.is-ready {
+  background: #95d8b1 !important;
+  box-shadow: 0 0 8px rgba(149, 216, 177, .26) !important;
+}
+
+html.dui-pro-overhaul [data-dui-panel="missions"] .dui-readiness-mini[data-tone="strong"] {
+  border-color: rgba(149, 216, 177, .24) !important;
+}
+
+html.dui-pro-overhaul [data-dui-panel="missions"] .dui-readiness-mini[data-tone="strong"] .dui-readiness-mini-head strong,
+html.dui-pro-overhaul [data-dui-panel="missions"] .dui-readiness-mini[data-tone="cool"] .dui-readiness-mini-head strong {
+  color: #9fe8c0 !important;
+}
+
+html.dui-pro-overhaul [data-dui-panel="missions"] .dui-readiness-mini[data-tone="warn"] {
+  border-color: rgba(243, 199, 96, .24) !important;
+}
+
+html.dui-pro-overhaul [data-dui-panel="missions"] .dui-readiness-mini[data-tone="warn"] .dui-readiness-mini-head strong {
+  color: #f0c75f !important;
+}
+
+html.dui-pro-overhaul [data-dui-panel="missions"] .dui-readiness-mini[data-tone="warn"] .dui-progress-fill {
+  background: linear-gradient(90deg, #d8991d, #f3c760) !important;
+  box-shadow: 0 0 10px rgba(243, 199, 96, .22) !important;
+}
+
+html.dui-pro-overhaul [data-dui-panel="missions"] .dui-readiness-mini[data-tone="danger"] {
+  border-color: rgba(255, 140, 120, .25) !important;
+}
+
+html.dui-pro-overhaul [data-dui-panel="missions"] .dui-readiness-mini[data-tone="danger"] .dui-readiness-mini-head strong {
+  color: #ff9984 !important;
+}
+
+html.dui-pro-overhaul [data-dui-panel="missions"] .dui-readiness-mini[data-tone="danger"] .dui-progress-fill {
+  background: linear-gradient(90deg, #e35d5d, #ff8c78) !important;
+  box-shadow: 0 0 10px rgba(255, 140, 120, .22) !important;
+}
+
+html.dui-pro-overhaul [data-dui-panel="missions"] .dui-mission-bottom-cron .dui-cadence-grid {
+  grid-template-columns: minmax(82px, .62fr) minmax(118px, .88fr) minmax(138px, 1fr) !important;
+}
+
+html.dui-pro-overhaul [data-dui-panel="missions"] .dui-mission-bottom-cron .dui-loadout-head {
+  display: flex !important;
+  align-items: center !important;
+  justify-content: space-between !important;
+  gap: 10px !important;
+  margin: 0 0 10px !important;
+}
+
+html.dui-pro-overhaul [data-dui-panel="missions"] .dui-mission-bottom-cron .dui-avatar-stack {
+  flex: 0 0 auto !important;
+  flex-direction: row-reverse !important;
+  gap: 0 !important;
+  width: max-content !important;
+  max-width: 100% !important;
+  padding: 4px !important;
+  overflow: hidden !important;
+  border: 1px solid rgba(80, 132, 168, .18) !important;
+  border-radius: 7px !important;
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, .04), rgba(255, 255, 255, .008)),
+    rgba(0, 0, 0, .24) !important;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, .05) !important;
+}
+
+html.dui-pro-overhaul [data-dui-panel="missions"] .dui-mission-bottom-cron .dui-avatar-stack div {
+  flex: 0 0 34px !important;
+  width: 34px !important;
+  height: 34px !important;
+  margin-left: -8px !important;
+  border: 2px solid rgba(4, 10, 18, .96) !important;
+  border-radius: 6px !important;
+  background: #07111a !important;
+  box-shadow:
+    0 0 0 1px rgba(80, 132, 168, .24),
+    0 6px 14px rgba(0, 0, 0, .36) !important;
+}
+
+html.dui-pro-overhaul [data-dui-panel="missions"] .dui-mission-bottom-cron .dui-avatar-stack div:first-child {
+  margin-left: 0 !important;
+}
+
+html.dui-pro-overhaul [data-dui-panel="missions"] .dui-mission-bottom-cron .dui-avatar-stack img {
+  width: 100% !important;
+  height: 100% !important;
+  object-fit: cover !important;
+  filter: saturate(1.08) contrast(1.04) !important;
+}
+
+html.dui-pro-overhaul [data-dui-panel="missions"] .dui-mission-bottom-cron .dui-meter-grid,
+html.dui-pro-overhaul [data-dui-panel="missions"] .dui-mission-bottom-tuning .dui-stat-grid {
+  margin-top: 0 !important;
+}
+
+html.dui-pro-overhaul [data-dui-panel="missions"] .dui-mission-bottom-tuning .dui-slider-grid {
+  margin-top: 12px !important;
+}
+
+html.dui-pro-overhaul [data-dui-panel="missions"] .dui-mission-bottom-tuning .dui-action-grid {
+  margin-top: auto !important;
+  padding-top: 14px !important;
+}
+
+html.dui-pro-overhaul [data-dui-panel="missions"] .dui-mission-bottom-card .dui-timing-panel {
+  margin-top: 12px !important;
+}
+
+@container dui-mission-stage (max-width: 1240px) {
+  html.dui-pro-overhaul [data-dui-panel="missions"] .dui-mission-bottom-card {
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) !important;
+  }
+
+  html.dui-pro-overhaul [data-dui-panel="missions"] .dui-mission-bottom-objective {
+    grid-column: 1 / -1 !important;
+  }
+
+  html.dui-pro-overhaul [data-dui-panel="missions"] .dui-mission-bottom-cron .dui-cadence-grid {
+    grid-template-columns: minmax(72px, .78fr) minmax(104px, 1fr) !important;
+  }
+
+  html.dui-pro-overhaul [data-dui-panel="missions"] .dui-mission-bottom-cron .dui-cadence-grid .dui-secondary-button {
+    grid-column: 1 / -1 !important;
+    width: 100% !important;
+    min-width: 0 !important;
+  }
+}
+
+@media (max-width: 1500px) {
+  html.dui-pro-overhaul [data-dui-panel="missions"] .dui-mission-bottom-card {
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) !important;
+  }
+
+  html.dui-pro-overhaul [data-dui-panel="missions"] .dui-mission-bottom-objective {
+    grid-column: 1 / -1 !important;
+  }
+}
+
+@media (max-width: 1180px) {
+  html.dui-pro-overhaul [data-dui-panel="missions"] .dui-mission-stage {
+    grid-template-columns: minmax(0, 1fr) !important;
+  }
+}
+
+@container dui-mission-stage (max-width: 1080px) {
+  html.dui-pro-overhaul [data-dui-panel="missions"] .dui-mission-bottom-card,
+  html.dui-pro-overhaul [data-dui-panel="missions"] .dui-mission-bottom-cron .dui-cadence-grid,
+  html.dui-pro-overhaul [data-dui-panel="missions"] .dui-mission-bottom-card .dui-meter-grid,
+  html.dui-pro-overhaul [data-dui-panel="missions"] .dui-mission-bottom-card .dui-stat-grid,
+  html.dui-pro-overhaul [data-dui-panel="missions"] .dui-mission-bottom-card .dui-action-grid {
+    grid-template-columns: minmax(0, 1fr) !important;
+  }
+
+  html.dui-pro-overhaul [data-dui-panel="missions"] .dui-section-head--dispatch {
+    align-items: stretch !important;
+    flex-direction: column !important;
+  }
+
+  html.dui-pro-overhaul [data-dui-panel="missions"] .dui-readiness-mini {
+    flex-basis: auto !important;
+    width: 100% !important;
+  }
+}
+
+@media (max-width: 1320px) {
+  html.dui-pro-overhaul [data-dui-panel="missions"] .dui-mission-bottom-card,
+  html.dui-pro-overhaul [data-dui-panel="missions"] .dui-mission-bottom-cron .dui-cadence-grid,
+  html.dui-pro-overhaul [data-dui-panel="missions"] .dui-mission-bottom-card .dui-meter-grid,
+  html.dui-pro-overhaul [data-dui-panel="missions"] .dui-mission-bottom-card .dui-stat-grid,
+  html.dui-pro-overhaul [data-dui-panel="missions"] .dui-mission-bottom-card .dui-action-grid {
+    grid-template-columns: minmax(0, 1fr) !important;
+  }
+
+  html.dui-pro-overhaul [data-dui-panel="missions"] .dui-section-head--dispatch {
+    align-items: stretch !important;
+    flex-direction: column !important;
+  }
+
+  html.dui-pro-overhaul [data-dui-panel="missions"] .dui-readiness-mini {
+    flex-basis: auto !important;
+    width: 100% !important;
+  }
+}
+
+@media (max-width: 760px) {
+  html.dui-pro-overhaul [data-dui-panel="missions"] .dui-section-head--dispatch {
+    align-items: stretch !important;
+    flex-direction: column !important;
+  }
+
+  html.dui-pro-overhaul [data-dui-panel="missions"] .dui-readiness-mini {
+    flex-basis: auto !important;
+    width: 100% !important;
+  }
+
+  html.dui-pro-overhaul [data-dui-panel="missions"] .dui-mission-bottom-card,
+  html.dui-pro-overhaul [data-dui-panel="missions"] .dui-mission-bottom-cron .dui-cadence-grid,
+  html.dui-pro-overhaul [data-dui-panel="missions"] .dui-mission-bottom-card .dui-meter-grid,
+  html.dui-pro-overhaul [data-dui-panel="missions"] .dui-mission-bottom-card .dui-stat-grid,
+  html.dui-pro-overhaul [data-dui-panel="missions"] .dui-mission-bottom-card .dui-action-grid {
+    grid-template-columns: minmax(0, 1fr) !important;
+  }
+}

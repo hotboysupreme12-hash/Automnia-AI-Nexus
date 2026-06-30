@@ -61,6 +61,12 @@ assert(batchBlock.includes('const invalidAgent = uniqueAgents.find'), 'start-bat
 
 assert(server.includes("import { registerShiftRoutes } from './routes/shiftRoutes'"), 'control plane should import extracted shift routes')
 assert(server.includes('registerShiftRoutes(app, {'), 'control plane should register extracted shift routes')
+assert(server.includes('controlCenterCronExpiryInfo'), 'control plane should parse durable Control Center cron expiry metadata')
+assert(server.includes('listActiveControlCenterCronExpiryRowsFromStateDb'), 'control plane should sweep expired Control Center-owned cron jobs from SQLite')
+assert(server.includes('rehydrateControlCenterShiftRuntimeStateFromCronDb'), 'control plane should rehydrate scheduled shifts from OpenClaw cron state after restart')
+assert(server.includes('armShiftExpiryTimer(shift)'), 'created and recovered shifts should have app-owned expiry timers')
+assert(server.includes('control-center shift=${shiftId} expiresAt=${endsAt} durationMinutes=${durationMinutes}'), 'shift cron creation should write durable ownership and expiry metadata')
+assert(server.includes('failed disabling scheduled shift'), 'expired shift disable failures should remain observable for retry')
 for (const marker of shiftRouteMarkers) {
   assert(!server.includes(marker), `${marker} should be owned by server/routes/shiftRoutes.ts`)
 }
@@ -101,6 +107,15 @@ for (const endpoint of [
 }
 
 assert(schedulerPanel.includes('Autosave'), 'HeartbeatSchedulerPanel should surface silent defaults save failures')
+assert(schedulerPanel.includes('function isControlCenterShift'), 'HeartbeatSchedulerPanel should centralize Control Center cron ownership checks')
+assert(
+  schedulerPanel.includes('const controlCenterShifts = shifts.filter(isControlCenterShift)'),
+  'bulk Stop Cron should only consider Control Center-owned cron shifts',
+)
+assert(
+  !schedulerPanel.includes('const targetShifts = scopedAgent ? shifts.filter((shift) => shift.agent === scopedAgent) : shifts'),
+  'bulk Stop Cron should not disable every OpenClaw cron job in the active list',
+)
 
 assert(
   packageJson.scripts?.['smoke:shifts-control-plane'] === 'tsx scripts/smoke-shifts-control-plane.ts',

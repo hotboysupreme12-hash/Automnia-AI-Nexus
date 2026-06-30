@@ -45,6 +45,7 @@ type AvailableModelsCache = {
 type ProviderAuthRoutesOptions = {
   authEnvMap: Record<string, string[]>
   authProviderCatalog: Record<string, unknown>
+  ensureProviderAuthReady?: () => Promise<unknown>
   fallbackAvailableModels: () => unknown
   getFastAvailableModelsCatalog: (options?: { refreshStale?: boolean }) => unknown
   googleOAuthRedirectUri: string
@@ -65,9 +66,14 @@ type ProviderAuthRoutesOptions = {
   startOpenAICodexOAuthSession: () => Promise<OAuthStartResult>
 }
 
+async function ensureProviderAuthReady(options: ProviderAuthRoutesOptions) {
+  if (options.ensureProviderAuthReady) await options.ensureProviderAuthReady()
+}
+
 export function registerProviderAuthRoutes(app: Express, options: ProviderAuthRoutesOptions) {
-  app.get('/api/auth/providers', (req, res) => {
+  app.get('/api/auth/providers', async (req, res) => {
     try {
+      await ensureProviderAuthReady(options)
       const probeGcloud = req.query.refresh === '1' || req.query.probe === '1'
       const statusOptions = probeGcloud ? { probeGcloud: true } : {}
       const providers = Object.keys(options.authProviderCatalog).map((provider) =>
@@ -89,6 +95,7 @@ export function registerProviderAuthRoutes(app: Express, options: ProviderAuthRo
     if (!parsed.success) return apiFailure(res, 400, 'invalid_payload', 'Invalid payload', parsed.error.flatten())
 
     try {
+      await ensureProviderAuthReady(options)
       await options.persistProviderAuth(provider, parsed.data.apiKey.trim())
       return apiSuccess(res, { ok: true, provider, persisted: true, persistencePath: options.localAuthPath })
     } catch (error) {
@@ -103,6 +110,7 @@ export function registerProviderAuthRoutes(app: Express, options: ProviderAuthRo
     }
 
     try {
+      await ensureProviderAuthReady(options)
       await options.removeProviderAuth(provider)
       return apiSuccess(res, { ok: true, provider, persisted: true, persistencePath: options.localAuthPath })
     } catch (error) {
@@ -123,6 +131,7 @@ export function registerProviderAuthRoutes(app: Express, options: ProviderAuthRo
     if (!parsed.success) return apiFailure(res, 400, 'invalid_payload', 'Invalid payload', parsed.error.flatten())
 
     try {
+      await ensureProviderAuthReady(options)
       const { session, launched } = provider === 'google'
         ? await options.startGoogleOAuthSession(parsed.data?.projectId)
         : await options.startOpenAICodexOAuthSession()
@@ -141,27 +150,32 @@ export function registerProviderAuthRoutes(app: Express, options: ProviderAuthRo
     }
   })
 
-  app.get('/api/auth/providers/:provider/oauth/session/:sessionId', (req, res) => {
+  app.get('/api/auth/providers/:provider/oauth/session/:sessionId', async (req, res) => {
     const { provider, sessionId } = req.params
     if (provider !== 'google' && provider !== 'openai-codex') {
       return apiFailure(res, 400, 'oauth_operation_failed', 'OAuth is not supported for this provider.', { provider })
     }
-    const session = options.oauthSessions.get(sessionId)
-    if (!session) return apiFailure(res, 404, 'oauth_operation_failed', 'OAuth session not found', { provider, sessionId })
-    if (session.provider !== provider) return apiFailure(res, 404, 'oauth_operation_failed', 'OAuth session not found for this provider', { provider, sessionId })
-    return apiSuccess(res, {
-      ok: true,
-      provider,
-      sessionId,
-      status: session.status,
-      error: session.error,
-      authorizationUrl: session.authorizationUrl,
-      manualInputRequired: Boolean(session.manualInputRequired),
-      manualInputSubmittedAt: session.manualInputSubmittedAt,
-      manualPrompt: session.manualPrompt,
-      result: session.result,
-      providerStatus: options.providerAuthStatus(provider),
-    })
+    try {
+      await ensureProviderAuthReady(options)
+      const session = options.oauthSessions.get(sessionId)
+      if (!session) return apiFailure(res, 404, 'oauth_operation_failed', 'OAuth session not found', { provider, sessionId })
+      if (session.provider !== provider) return apiFailure(res, 404, 'oauth_operation_failed', 'OAuth session not found for this provider', { provider, sessionId })
+      return apiSuccess(res, {
+        ok: true,
+        provider,
+        sessionId,
+        status: session.status,
+        error: session.error,
+        authorizationUrl: session.authorizationUrl,
+        manualInputRequired: Boolean(session.manualInputRequired),
+        manualInputSubmittedAt: session.manualInputSubmittedAt,
+        manualPrompt: session.manualPrompt,
+        result: session.result,
+        providerStatus: options.providerAuthStatus(provider),
+      })
+    } catch (error) {
+      return apiFailure(res, 500, 'oauth_operation_failed', 'Failed to read OAuth session', { provider, detail: String(error) })
+    }
   })
 
   app.post('/api/auth/providers/:provider/oauth/session/:sessionId/manual', async (req, res) => {
@@ -185,6 +199,7 @@ export function registerProviderAuthRoutes(app: Express, options: ProviderAuthRo
     if (!parsed.success) return apiFailure(res, 400, 'invalid_payload', 'Invalid payload', parsed.error.flatten())
 
     try {
+      await ensureProviderAuthReady(options)
       const { code, state } = options.parseOpenAICodexAuthorizationInput(parsed.data.input)
       await options.completeOpenAICodexOAuthSession(session, code, state)
       return apiSuccess(res, {
@@ -205,6 +220,7 @@ export function registerProviderAuthRoutes(app: Express, options: ProviderAuthRo
 
   app.get('/api/models/available', async (req, res) => {
     try {
+      await ensureProviderAuthReady(options)
       if (req.query.refresh === '1') {
         const cache = await options.refreshAvailableModelsCache()
         return apiSuccess(res, {

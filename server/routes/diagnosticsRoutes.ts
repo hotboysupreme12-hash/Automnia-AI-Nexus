@@ -17,6 +17,7 @@ type DiagnosticsRoutesOptions = {
   redactSensitiveText: (value: string) => string
   resolvedOpenClawRuntimeInfo: () => unknown
   runDoctorChecks: () => Promise<unknown>
+  runDoctorRepair: () => Promise<unknown>
   runtimeLedgerStatus: (options?: { sqlite?: boolean }) => unknown
   runtimeVersionCheckPayload: () => unknown
   workspaceRoot: string
@@ -75,6 +76,14 @@ export function registerDiagnosticsRoutes(app: Express, options: DiagnosticsRout
       return apiSuccess(res, await options.runDoctorChecks())
     } catch (error) {
       return apiFailure(res, 500, 'doctor_operation_failed', 'Doctor run failed', options.redactSensitiveText(String(error)))
+    }
+  })
+
+  app.post('/api/doctor/repair', async (_req, res) => {
+    try {
+      return apiSuccess(res, await options.runDoctorRepair())
+    } catch (error) {
+      return apiFailure(res, 500, 'doctor_operation_failed', 'Doctor repair failed', options.redactSensitiveText(String(error)))
     }
   })
 

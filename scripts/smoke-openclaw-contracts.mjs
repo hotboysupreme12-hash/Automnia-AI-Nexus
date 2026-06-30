@@ -68,7 +68,7 @@ assertIncludes(runtimeLedger, 'readDiagnosticRunLedgerTail', 'diagnostic run led
 assertIncludes(runtimeRoutes, "app.get('/api/openclaw/runtime/summary'", 'runtime summary endpoint')
 assertIncludes(server, 'registerRuntimeRoutes(app, {', 'runtime routes are extracted from server/index.ts')
 assertIncludes(runtimeHook, 'useRuntimeSummaryStatus', 'runtime summary hook')
-assertIncludes(server, 'readGatewayLedgerLogEntries', 'ledger-backed gateway log status path')
+assertIncludes(server, 'readGatewayLedgerSnapshot', 'ledger-backed gateway log status path')
 
 assertIncludes(server, "clientName: 'gateway-client'", 'Gateway backend client id')
 assertIncludes(server, "mode: 'backend'", 'Gateway backend client mode')
@@ -107,7 +107,7 @@ assertIncludes(server, 'model fallback decision', 'Gateway monitor suppresses mo
 assertIncludes(server, 'embedded run failover decision', 'Gateway monitor suppresses embedded failover decision chatter')
 assertIncludes(server, 'function summarizeGatewayAuthRefreshFailure', 'Gateway monitor summarizes auth refresh timeout failures')
 assertIncludes(server, 'Model auth refresh timed out after 10s', 'Gateway monitor shows actionable auth refresh timeout copy')
-assertIncludes(server, 'readGatewayLedgerLogEntries(48, { sqlite: false })', 'Runtime summary avoids synchronous Gateway log SQLite reads')
+assertIncludes(server, 'readRuntimeGatewayLedgerSnapshot(48)', 'Runtime summary avoids synchronous Gateway log SQLite reads')
 assertIncludes(server, 'readDoctorDiagnosticsSummary(false, { sqlite: false })', 'Runtime summary avoids synchronous diagnostic SQLite reads')
 assertIncludes(server, 'runtimeLedgerStatus({ sqlite: false })', 'Runtime health/status avoids synchronous ledger SQLite opens')
 assertIncludes(server, 'listActiveCronJobViews({ sqlite: false })', 'Runtime status summaries avoid synchronous cron SQLite reads')
@@ -303,7 +303,7 @@ assertIncludes(server, 'allowExternalTakeover', 'Gateway restart ownership guard
 
 assertRegex(
   runtimeRoutes,
-  /tryRestartGatewayService\(\{ force: true, allowExternalTakeover: true \}\)/,
+  /tryRestartGatewayService\(\{\s*force: true,\s*allowExternalTakeover: true,\s*reason: 'manual restart requested from monitor',\s*\}\)/,
   'manual restart takeover flag',
 )
 

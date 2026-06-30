@@ -1444,6 +1444,31 @@ html.dui-pro-overhaul.dui-cohesive-ui .app-bg.dy-monitor-focus [data-dui-panel="
   box-shadow: none !important;
 }
 
+html.dui-pro-overhaul .app-bg.dy-monitor-focus [data-dui-panel="monitor"] .dy-cron-jobs-card .dy-cron-empty-icon,
+html.dui-pro-overhaul.dui-cohesive-ui .app-bg.dy-monitor-focus [data-dui-panel="monitor"] .dy-cron-jobs-card .dy-cron-empty-icon {
+  display: grid !important;
+  width: 28px !important;
+  height: 28px !important;
+  margin-bottom: 8px !important;
+  place-items: center !important;
+  border: 0 !important;
+  background: transparent !important;
+  background-image: none !important;
+  box-shadow: none !important;
+  color: #c5ced5 !important;
+}
+
+html.dui-pro-overhaul .app-bg.dy-monitor-focus [data-dui-panel="monitor"] .dy-cron-jobs-card .dy-cron-empty-icon svg,
+html.dui-pro-overhaul.dui-cohesive-ui .app-bg.dy-monitor-focus [data-dui-panel="monitor"] .dy-cron-jobs-card .dy-cron-empty-icon svg {
+  width: 24px !important;
+  height: 24px !important;
+  fill: none !important;
+  stroke: currentColor !important;
+  stroke-width: 1.8 !important;
+  stroke-linecap: round !important;
+  stroke-linejoin: round !important;
+}
+
 html.dui-pro-overhaul .app-bg.dy-monitor-focus [data-dui-panel="monitor"] .dy-cron-job-card,
 html.dui-pro-overhaul.dui-cohesive-ui .app-bg.dy-monitor-focus [data-dui-panel="monitor"] .dy-cron-job-card {
   min-height: 150px !important;
@@ -1902,19 +1927,26 @@ html.dui-pro-overhaul.dui-cohesive-ui .dy-command-console textarea.dy-command-te
 /* Keep the gateway monitor grid stable across desktop widths. */
 html.dui-pro-overhaul .app-bg.dy-monitor-focus [data-dui-panel="monitor"] .dy-gateway-layout,
 html.dui-pro-overhaul.dui-cohesive-ui .app-bg.dy-monitor-focus [data-dui-panel="monitor"] .dy-gateway-layout {
+  --dy-gateway-feed-height: clamp(430px, calc(100dvh - 360px), 820px);
+  --dy-gateway-feed-scroll-height: clamp(300px, calc(var(--dy-gateway-feed-height) - 104px), 720px);
   grid-template-columns: minmax(0, 1.15fr) minmax(420px, .85fr) !important;
   grid-template-areas:
     "summary summary"
     "activity jobs"
     "log log" !important;
-  grid-template-rows: max-content minmax(295px, .82fr) minmax(58px, .18fr) !important;
+  grid-template-rows: max-content minmax(var(--dy-gateway-feed-height), 1fr) max-content !important;
+  min-height: auto !important;
+  align-content: stretch !important;
+  gap: 12px !important;
 }
 
 @media (min-width: 1680px) {
   html.dui-pro-overhaul .app-bg.dy-monitor-focus [data-dui-panel="monitor"] .dy-gateway-layout,
   html.dui-pro-overhaul.dui-cohesive-ui .app-bg.dy-monitor-focus [data-dui-panel="monitor"] .dy-gateway-layout {
+    --dy-gateway-feed-height: clamp(460px, calc(100dvh - 370px), 880px);
+    --dy-gateway-feed-scroll-height: clamp(330px, calc(var(--dy-gateway-feed-height) - 108px), 780px);
     grid-template-columns: minmax(0, 1.18fr) minmax(560px, .92fr) !important;
-    grid-template-rows: max-content minmax(345px, .82fr) minmax(58px, .18fr) !important;
+    grid-template-rows: max-content minmax(var(--dy-gateway-feed-height), 1fr) max-content !important;
   }
 }
 
@@ -1928,6 +1960,213 @@ html.dui-pro-overhaul.dui-cohesive-ui .app-bg.dy-monitor-focus [data-dui-panel="
       "jobs"
       "log" !important;
     grid-template-rows: auto auto auto auto !important;
+  }
+}
+
+@media (min-width: 1221px) {
+  html.dui-pro-overhaul .app-bg.dy-monitor-focus [data-dui-panel="monitor"] .dy-channel-activity-card,
+  html.dui-pro-overhaul .app-bg.dy-monitor-focus [data-dui-panel="monitor"] .dy-cron-jobs-card,
+  html.dui-pro-overhaul.dui-cohesive-ui .app-bg.dy-monitor-focus [data-dui-panel="monitor"] .dy-channel-activity-card,
+  html.dui-pro-overhaul.dui-cohesive-ui .app-bg.dy-monitor-focus [data-dui-panel="monitor"] .dy-cron-jobs-card {
+    height: auto !important;
+    min-height: var(--dy-gateway-feed-height) !important;
+    max-height: none !important;
+    align-self: stretch !important;
+  }
+
+  html.dui-pro-overhaul .app-bg.dy-monitor-focus [data-dui-panel="monitor"] .dy-channel-activity-card .dy-gateway-event-list,
+  html.dui-pro-overhaul .app-bg.dy-monitor-focus [data-dui-panel="monitor"] .dy-cron-jobs-card .dy-monitor-stream-box,
+  html.dui-pro-overhaul.dui-cohesive-ui .app-bg.dy-monitor-focus [data-dui-panel="monitor"] .dy-channel-activity-card .dy-gateway-event-list,
+  html.dui-pro-overhaul.dui-cohesive-ui .app-bg.dy-monitor-focus [data-dui-panel="monitor"] .dy-cron-jobs-card .dy-monitor-stream-box {
+    flex: 1 1 auto !important;
+    min-height: var(--dy-gateway-feed-scroll-height) !important;
+    max-height: none !important;
+  }
+
+  html.dui-pro-overhaul .app-bg.dy-monitor-focus [data-dui-panel="monitor"] .dy-channel-activity-card .dy-monitor-empty,
+  html.dui-pro-overhaul .app-bg.dy-monitor-focus [data-dui-panel="monitor"] .dy-cron-jobs-card .dy-monitor-empty,
+  html.dui-pro-overhaul.dui-cohesive-ui .app-bg.dy-monitor-focus [data-dui-panel="monitor"] .dy-channel-activity-card .dy-monitor-empty,
+  html.dui-pro-overhaul.dui-cohesive-ui .app-bg.dy-monitor-focus [data-dui-panel="monitor"] .dy-cron-jobs-card .dy-monitor-empty {
+    padding-block: 0 !important;
+  }
+
+  html.dui-pro-overhaul .app-bg.dy-monitor-focus [data-dui-panel="monitor"] .dy-cron-empty-icon,
+  html.dui-pro-overhaul.dui-cohesive-ui .app-bg.dy-monitor-focus [data-dui-panel="monitor"] .dy-cron-empty-icon {
+    width: 28px !important;
+    height: 28px !important;
+    margin-bottom: 8px !important;
+  }
+
+  html.dui-pro-overhaul .app-bg.dy-monitor-focus [data-dui-panel="monitor"] .dy-gateway-log-card,
+  html.dui-pro-overhaul.dui-cohesive-ui .app-bg.dy-monitor-focus [data-dui-panel="monitor"] .dy-gateway-log-card {
+    align-self: start !important;
+    margin-top: 0 !important;
+  }
+
+  html.dui-pro-overhaul .app-bg.dy-monitor-focus [data-dui-panel="monitor"] .dy-gateway-layout:has(> .dy-gateway-log-card:not([data-collapsed="true"])),
+  html.dui-pro-overhaul.dui-cohesive-ui .app-bg.dy-monitor-focus [data-dui-panel="monitor"] .dy-gateway-layout:has(> .dy-gateway-log-card:not([data-collapsed="true"])) {
+    grid-template-rows: max-content minmax(var(--dy-gateway-feed-height), auto) minmax(clamp(220px, 28vh, 430px), 1fr) !important;
+  }
+
+  html.dui-pro-overhaul .app-bg.dy-monitor-focus [data-dui-panel="monitor"] .dy-gateway-layout:has(> .dy-gateway-log-card:not([data-collapsed="true"])) > .dy-gateway-log-card,
+  html.dui-pro-overhaul.dui-cohesive-ui .app-bg.dy-monitor-focus [data-dui-panel="monitor"] .dy-gateway-layout:has(> .dy-gateway-log-card:not([data-collapsed="true"])) > .dy-gateway-log-card {
+    height: 100% !important;
+    min-height: 0 !important;
+    align-self: stretch !important;
+  }
+
+  html.dui-pro-overhaul .app-bg.dy-monitor-focus [data-dui-panel="monitor"] .dy-gateway-layout:has(> .dy-gateway-log-card:not([data-collapsed="true"])) .dy-gateway-log-card .dy-monitor-log-box,
+  html.dui-pro-overhaul.dui-cohesive-ui .app-bg.dy-monitor-focus [data-dui-panel="monitor"] .dy-gateway-layout:has(> .dy-gateway-log-card:not([data-collapsed="true"])) .dy-gateway-log-card .dy-monitor-log-box {
+    min-height: 0 !important;
+    flex: 1 1 0 !important;
+  }
+}
+
+@media (max-width: 1220px) {
+  html.dui-pro-overhaul .app-bg.dy-monitor-focus [data-dui-panel="monitor"] .dy-gateway-layout:has(> .dy-gateway-log-card:not([data-collapsed="true"])),
+  html.dui-pro-overhaul.dui-cohesive-ui .app-bg.dy-monitor-focus [data-dui-panel="monitor"] .dy-gateway-layout:has(> .dy-gateway-log-card:not([data-collapsed="true"])) {
+    grid-template-rows: auto auto auto minmax(clamp(220px, 36vh, 520px), 1fr) !important;
+  }
+
+  html.dui-pro-overhaul .app-bg.dy-monitor-focus [data-dui-panel="monitor"] .dy-gateway-layout:has(> .dy-gateway-log-card:not([data-collapsed="true"])) > .dy-gateway-log-card,
+  html.dui-pro-overhaul.dui-cohesive-ui .app-bg.dy-monitor-focus [data-dui-panel="monitor"] .dy-gateway-layout:has(> .dy-gateway-log-card:not([data-collapsed="true"])) > .dy-gateway-log-card {
+    min-height: 0 !important;
+    align-self: stretch !important;
+  }
+
+  html.dui-pro-overhaul .app-bg.dy-monitor-focus [data-dui-panel="monitor"] .dy-gateway-layout:has(> .dy-gateway-log-card:not([data-collapsed="true"])) .dy-gateway-log-card .dy-monitor-log-box,
+  html.dui-pro-overhaul.dui-cohesive-ui .app-bg.dy-monitor-focus [data-dui-panel="monitor"] .dy-gateway-layout:has(> .dy-gateway-log-card:not([data-collapsed="true"])) .dy-gateway-log-card .dy-monitor-log-box {
+    min-height: 0 !important;
+    flex: 1 1 0 !important;
+  }
+}
+
+/* Match the Channel Activity and Cron empty wells so the row reads as one surface. */
+html.dui-pro-overhaul .app-bg.dy-monitor-focus [data-dui-panel="monitor"] .dy-channel-activity-card,
+html.dui-pro-overhaul .app-bg.dy-monitor-focus [data-dui-panel="monitor"] .dy-cron-jobs-card,
+html.dui-pro-overhaul.dui-cohesive-ui .app-bg.dy-monitor-focus [data-dui-panel="monitor"] .dy-channel-activity-card,
+html.dui-pro-overhaul.dui-cohesive-ui .app-bg.dy-monitor-focus [data-dui-panel="monitor"] .dy-cron-jobs-card {
+  overflow: hidden !important;
+}
+
+html.dui-pro-overhaul .app-bg.dy-monitor-focus [data-dui-panel="monitor"] .dy-channel-activity-card > div:first-child,
+html.dui-pro-overhaul .app-bg.dy-monitor-focus [data-dui-panel="monitor"] .dy-cron-jobs-card > div:first-child,
+html.dui-pro-overhaul.dui-cohesive-ui .app-bg.dy-monitor-focus [data-dui-panel="monitor"] .dy-channel-activity-card > div:first-child,
+html.dui-pro-overhaul.dui-cohesive-ui .app-bg.dy-monitor-focus [data-dui-panel="monitor"] .dy-cron-jobs-card > div:first-child {
+  min-height: 42px !important;
+  align-items: start !important;
+  margin-bottom: 10px !important;
+  padding-bottom: 10px !important;
+  border-bottom: 1px solid rgba(142, 154, 164, .16) !important;
+}
+
+html.dui-pro-overhaul .app-bg.dy-monitor-focus [data-dui-panel="monitor"] .dy-channel-activity-card .dy-gateway-event-list:has(> .dy-monitor-empty:only-child),
+html.dui-pro-overhaul .app-bg.dy-monitor-focus [data-dui-panel="monitor"] .dy-cron-jobs-card .dy-monitor-stream-box.dy-cron-stream-empty,
+html.dui-pro-overhaul.dui-cohesive-ui .app-bg.dy-monitor-focus [data-dui-panel="monitor"] .dy-channel-activity-card .dy-gateway-event-list:has(> .dy-monitor-empty:only-child),
+html.dui-pro-overhaul.dui-cohesive-ui .app-bg.dy-monitor-focus [data-dui-panel="monitor"] .dy-cron-jobs-card .dy-monitor-stream-box.dy-cron-stream-empty {
+  display: grid !important;
+  align-content: center !important;
+  justify-content: stretch !important;
+  padding: 0 !important;
+  border-color: rgba(142, 154, 164, .16) !important;
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, .014), rgba(255, 255, 255, .004)),
+    rgba(6, 7, 8, .72) !important;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, .018) !important;
+}
+
+html.dui-pro-overhaul .app-bg.dy-monitor-focus [data-dui-panel="monitor"] .dy-channel-activity-card .dy-gateway-event-list > .dy-monitor-empty,
+html.dui-pro-overhaul .app-bg.dy-monitor-focus [data-dui-panel="monitor"] .dy-cron-jobs-card .dy-cron-empty-state,
+html.dui-pro-overhaul.dui-cohesive-ui .app-bg.dy-monitor-focus [data-dui-panel="monitor"] .dy-channel-activity-card .dy-gateway-event-list > .dy-monitor-empty,
+html.dui-pro-overhaul.dui-cohesive-ui .app-bg.dy-monitor-focus [data-dui-panel="monitor"] .dy-cron-jobs-card .dy-cron-empty-state {
+  display: grid !important;
+  min-height: var(--dy-gateway-feed-scroll-height) !important;
+  height: 100% !important;
+  place-items: center !important;
+  align-content: center !important;
+  gap: 8px !important;
+  border: 0 !important;
+  background: transparent !important;
+  background-image: none !important;
+  padding: 0 18px !important;
+  color: #8f9aa3 !important;
+  box-shadow: none !important;
+}
+
+html.dui-pro-overhaul .app-bg.dy-monitor-focus [data-dui-panel="monitor"] .dy-channel-activity-card .dy-gateway-event-list > .dy-monitor-empty {
+  font-size: 11px !important;
+  font-weight: 720 !important;
+}
+
+/* Monitor control strip: keep the view tabs and Doctor actions as a slim toolbar. */
+html.dui-pro-overhaul .app-bg.dy-monitor-focus [data-dui-panel="monitor"].dy-monitor-shell .dy-monitor-tabs,
+html.dui-pro-overhaul.dui-cohesive-ui .app-bg.dy-monitor-focus [data-dui-panel="monitor"].dy-monitor-shell .dy-monitor-tabs {
+  padding: 6px 8px !important;
+}
+
+html.dui-pro-overhaul .app-bg.dy-monitor-focus [data-dui-panel="monitor"].dy-monitor-shell .dy-monitor-tabbar,
+html.dui-pro-overhaul.dui-cohesive-ui .app-bg.dy-monitor-focus [data-dui-panel="monitor"].dy-monitor-shell .dy-monitor-tabbar {
+  display: grid !important;
+  grid-template-columns: minmax(0, 1fr) minmax(330px, 390px) !important;
+  align-items: stretch !important;
+  gap: 8px !important;
+}
+
+html.dui-pro-overhaul .app-bg.dy-monitor-focus [data-dui-panel="monitor"].dy-monitor-shell .dy-monitor-tab-list,
+html.dui-pro-overhaul.dui-cohesive-ui .app-bg.dy-monitor-focus [data-dui-panel="monitor"].dy-monitor-shell .dy-monitor-tab-list {
+  display: grid !important;
+  grid-template-columns: repeat(4, minmax(0, 1fr)) !important;
+  gap: 0 !important;
+  min-height: 34px !important;
+  padding: 0 !important;
+  overflow: hidden !important;
+}
+
+html.dui-pro-overhaul .app-bg.dy-monitor-focus [data-dui-panel="monitor"].dy-monitor-shell .dy-monitor-tools,
+html.dui-pro-overhaul.dui-cohesive-ui .app-bg.dy-monitor-focus [data-dui-panel="monitor"].dy-monitor-shell .dy-monitor-tools {
+  display: grid !important;
+  grid-template-columns: repeat(3, minmax(0, 1fr)) !important;
+  gap: 0 !important;
+  min-width: 0 !important;
+  min-height: 34px !important;
+  overflow: hidden !important;
+}
+
+html.dui-pro-overhaul .app-bg.dy-monitor-focus [data-dui-panel="monitor"].dy-monitor-shell .dy-monitor-tab-list button,
+html.dui-pro-overhaul .app-bg.dy-monitor-focus [data-dui-panel="monitor"].dy-monitor-shell .dy-monitor-tool-button,
+html.dui-pro-overhaul.dui-cohesive-ui .app-bg.dy-monitor-focus [data-dui-panel="monitor"].dy-monitor-shell .dy-monitor-tab-list button,
+html.dui-pro-overhaul.dui-cohesive-ui .app-bg.dy-monitor-focus [data-dui-panel="monitor"].dy-monitor-shell .dy-monitor-tool-button {
+  min-height: 34px !important;
+  height: 34px !important;
+  justify-content: center !important;
+  gap: 6px !important;
+  border-radius: 0 !important;
+  padding: 0 10px !important;
+  font-size: 9px !important;
+  line-height: 1 !important;
+  letter-spacing: 0 !important;
+}
+
+html.dui-pro-overhaul .app-bg.dy-monitor-focus [data-dui-panel="monitor"].dy-monitor-shell .dy-monitor-tab-list button svg,
+html.dui-pro-overhaul.dui-cohesive-ui .app-bg.dy-monitor-focus [data-dui-panel="monitor"].dy-monitor-shell .dy-monitor-tab-list button svg {
+  width: 13px !important;
+  height: 13px !important;
+}
+
+html.dui-pro-overhaul .app-bg.dy-monitor-focus [data-dui-panel="monitor"].dy-monitor-shell .dy-monitor-tool-button + .dy-monitor-tool-button,
+html.dui-pro-overhaul.dui-cohesive-ui .app-bg.dy-monitor-focus [data-dui-panel="monitor"].dy-monitor-shell .dy-monitor-tool-button + .dy-monitor-tool-button {
+  border-left: 0 !important;
+}
+
+@media (max-width: 1220px) {
+  html.dui-pro-overhaul .app-bg.dy-monitor-focus [data-dui-panel="monitor"].dy-monitor-shell .dy-monitor-tabbar,
+  html.dui-pro-overhaul.dui-cohesive-ui .app-bg.dy-monitor-focus [data-dui-panel="monitor"].dy-monitor-shell .dy-monitor-tabbar {
+    grid-template-columns: minmax(0, 1fr) !important;
+  }
+
+  html.dui-pro-overhaul .app-bg.dy-monitor-focus [data-dui-panel="monitor"].dy-monitor-shell .dy-monitor-tools,
+  html.dui-pro-overhaul.dui-cohesive-ui .app-bg.dy-monitor-focus [data-dui-panel="monitor"].dy-monitor-shell .dy-monitor-tools {
+    grid-template-columns: repeat(3, minmax(0, 1fr)) !important;
   }
 }
 

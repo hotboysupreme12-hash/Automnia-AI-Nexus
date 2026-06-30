@@ -221,6 +221,8 @@ Use scheduling when work should recur or stay active:
 
 Monitor is the source of truth for runtime state. Open it whenever you need to know what is running, what is stuck, what channel sent traffic, or what needs recovery.
 
+![Monitor quiet state](assets/user-guide/monitor-quiet.png)
+
 ### Top Metrics
 
 The top cards summarize runtime health:
