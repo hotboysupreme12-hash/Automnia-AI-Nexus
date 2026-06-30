@@ -112,6 +112,10 @@ function shiftTimingValue(shift: ShiftSummary) {
   return shift.source === 'control-center' ? shift.endsAt || shift.nextRunAt : shift.nextRunAt || shift.endsAt
 }
 
+function isControlCenterShift(shift: ShiftSummary) {
+  return shift.source === 'control-center'
+}
+
 export function HeartbeatSchedulerPanel() {
   const agents = useNexusStore((state) => state.agents)
   const activePartyIds = useNexusStore((state) => state.activePartyIds)
@@ -406,11 +410,14 @@ export function HeartbeatSchedulerPanel() {
   const stopHeartbeatScope = async () => {
     if (busy) return
     const scopedAgent = resolveScopeAgent()
-    const targetShifts = scopedAgent ? shifts.filter((shift) => shift.agent === scopedAgent) : shifts
+    const controlCenterShifts = shifts.filter(isControlCenterShift)
+    const targetShifts = scopedAgent
+      ? controlCenterShifts.filter((shift) => shift.agent === scopedAgent)
+      : controlCenterShifts
 
     if (!targetShifts.length) {
       setStopConfirmShifts([])
-      setStatus(scopedAgent ? `No active cron shifts for ${scopedAgent}.` : 'No active cron shifts to stop.')
+      setStatus(scopedAgent ? `No Control Center cron shifts for ${scopedAgent}.` : 'No Control Center cron shifts to stop.')
       return
     }
 

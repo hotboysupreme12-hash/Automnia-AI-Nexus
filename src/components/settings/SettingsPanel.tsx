@@ -92,7 +92,7 @@ export function SettingsPanel() {
   const [thinkingDefault, setThinkingDefault] = useState<ThinkingLevel>(() => firstTarget?.runtimePolicy?.thinkingDefault || 'minimal')
   const [fastModeDefault, setFastModeDefault] = useState<FastModeDefault>(() => firstTarget?.runtimePolicy?.fastModeDefault || 'auto')
   const [parallelPreferred, setParallelPreferred] = useState(() => Boolean(firstTarget?.runtimePolicy?.parallelPreferred))
-  const [notice, setNotice] = useState<{ tone: NoticeTone; text: string }>({ tone: 'neutral', text: 'Settings are wired to local UI preferences, mission defaults, and active party runtime policies.' })
+  const [notice, setNotice] = useState<{ tone: NoticeTone; text: string }>({ tone: 'neutral', text: 'Changes save locally and apply immediately where possible.' })
 
   const updateUiSetting = <Key extends keyof DystopAIUiSettings>(key: Key, value: DystopAIUiSettings[Key]) => {
     setUiSettings((current) => {
@@ -108,7 +108,7 @@ export function SettingsPanel() {
     saveUiSettings(DEFAULT_UI_SETTINGS)
     applyUiSettings(DEFAULT_UI_SETTINGS)
     setUiSettings(DEFAULT_UI_SETTINGS)
-    setNotice({ tone: 'success', text: 'UI settings reset to the reference cyan default.' })
+    setNotice({ tone: 'success', text: 'UI settings reset to defaults.' })
   }
 
   const clearLocalUiPrefs = () => {
@@ -143,7 +143,7 @@ export function SettingsPanel() {
         <div>
           <span>System Settings</span>
           <h2>Control Center Preferences</h2>
-          <p>Wire appearance, mission defaults, active-party runtime policy, and reset tools from one real settings workspace.</p>
+          <p>Manage appearance, mission defaults, runtime behavior, and cleanup tools from one place.</p>
         </div>
         <div className="dui-settings-status" data-tone={notice.tone}>
           <strong>{notice.tone}</strong>

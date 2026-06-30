@@ -5,7 +5,7 @@ This product includes third-party software. The applicable license files
 shipped with those packages remain controlling. This inventory is generated
 from package-lock.json and is intended to make review easier.
 
-Generated package count: 631
+Generated package count: 632
 
 @electron/get@3.1.0
   License: MIT
@@ -67,9 +67,9 @@ balanced-match@4.0.4
   License: MIT
 brace-expansion@2.1.0
   License: MIT
-brace-expansion@2.1.1
-  License: MIT
 brace-expansion@5.0.6
+  License: MIT
+brace-expansion@5.0.7
   License: MIT
 ci-info@4.3.1
   License: MIT
@@ -83,7 +83,7 @@ esbuild@0.27.7
   License: MIT
 eslint-visitor-keys@3.4.3
   License: Apache-2.0
-eslint-visitor-keys@5.0.0
+eslint-visitor-keys@5.0.1
   License: Apache-2.0
 fs-extra@11.3.5
   License: MIT
@@ -145,7 +145,7 @@ node_modules/@babel/helper-module-imports@7.28.6
   License: MIT
 node_modules/@babel/helper-module-transforms@7.28.6
   License: MIT
-node_modules/@babel/helper-plugin-utils@7.28.6
+node_modules/@babel/helper-plugin-utils@7.29.7
   License: MIT
 node_modules/@babel/helper-string-parser@7.27.1
   License: MIT
@@ -157,9 +157,9 @@ node_modules/@babel/helpers@7.28.6
   License: MIT
 node_modules/@babel/parser@7.29.0
   License: MIT
-node_modules/@babel/plugin-transform-react-jsx-self@7.27.1
+node_modules/@babel/plugin-transform-react-jsx-self@7.29.7
   License: MIT
-node_modules/@babel/plugin-transform-react-jsx-source@7.27.1
+node_modules/@babel/plugin-transform-react-jsx-source@7.29.7
   License: MIT
 node_modules/@babel/template@7.28.6
   License: MIT
@@ -419,27 +419,27 @@ node_modules/@types/verror@1.10.11
   License: MIT
 node_modules/@types/yauzl@2.10.3
   License: MIT
-node_modules/@typescript-eslint/eslint-plugin@8.56.0
+node_modules/@typescript-eslint/eslint-plugin@8.62.1
   License: MIT
-node_modules/@typescript-eslint/parser@8.56.0
+node_modules/@typescript-eslint/parser@8.62.1
   License: MIT
-node_modules/@typescript-eslint/project-service@8.56.0
+node_modules/@typescript-eslint/project-service@8.62.1
   License: MIT
-node_modules/@typescript-eslint/scope-manager@8.56.0
+node_modules/@typescript-eslint/scope-manager@8.62.1
   License: MIT
-node_modules/@typescript-eslint/tsconfig-utils@8.56.0
+node_modules/@typescript-eslint/tsconfig-utils@8.62.1
   License: MIT
-node_modules/@typescript-eslint/type-utils@8.56.0
+node_modules/@typescript-eslint/type-utils@8.62.1
   License: MIT
-node_modules/@typescript-eslint/types@8.56.0
+node_modules/@typescript-eslint/types@8.62.1
   License: MIT
-node_modules/@typescript-eslint/typescript-estree@8.56.0
+node_modules/@typescript-eslint/typescript-estree@8.62.1
   License: MIT
-node_modules/@typescript-eslint/utils@8.56.0
+node_modules/@typescript-eslint/utils@8.62.1
   License: MIT
-node_modules/@typescript-eslint/visitor-keys@8.56.0
+node_modules/@typescript-eslint/visitor-keys@8.62.1
   License: MIT
-node_modules/@vitejs/plugin-react@5.1.4
+node_modules/@vitejs/plugin-react@5.2.0
   License: MIT
 node_modules/@xmldom/xmldom@0.8.13
   License: MIT
@@ -1171,7 +1171,7 @@ node_modules/tree-kill@1.2.2
   License: MIT
 node_modules/truncate-utf8-bytes@1.0.2
   License: WTFPL
-node_modules/ts-api-utils@2.4.0
+node_modules/ts-api-utils@2.5.0
   License: MIT
 node_modules/ts-interface-checker@0.1.13
   License: Apache-2.0
@@ -1185,7 +1185,7 @@ node_modules/type-fest@0.13.1
   License: (MIT OR CC0-1.0)
 node_modules/type-is@2.0.1
   License: MIT
-node_modules/typescript-eslint@8.56.0
+node_modules/typescript-eslint@8.62.1
   License: MIT
 node_modules/typescript@5.9.3
   License: Apache-2.0
@@ -1254,6 +1254,8 @@ semver@6.3.1
 semver@7.7.4
   License: ISC
 semver@7.8.0
+  License: ISC
+semver@7.8.5
   License: ISC
 supports-color@7.2.0
   License: MIT

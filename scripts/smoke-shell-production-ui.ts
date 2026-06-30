@@ -11,6 +11,7 @@ const theme = read('src/dystopai-app-theme.css')
 const packageJson = JSON.parse(read('package.json')) as { scripts?: Record<string, string> }
 const productionPolishImport = "@import './styles/dystopai-theme/80-production-polish.css';"
 const referenceScreenshotImport = "@import './styles/dystopai-theme/90-reference-screenshot.css';"
+const typographyPolishImport = "@import './styles/dystopai-theme/95-typography-polish.css';"
 
 assert.match(shell, /className="dy-skip-link" href="#dystopai-main"/, 'shell should expose a keyboard skip link')
 assert.match(shell, /<main id="dystopai-main" tabIndex=\{-1\}/, 'workspace should use a focusable main landmark')
@@ -18,8 +19,14 @@ assert.match(shell, /<nav className="dy-human-nav flex flex-col" aria-label="Pri
 assert.match(shell, /dy-human-rail-head--lockup/, 'sidebar should host the full DystopAI logo lockup')
 assert.match(shell, /className="dy-human-rail-lockup"/, 'sidebar logo should use the full lockup image')
 assert.match(shell, /id=\{`nexus-tab-\$\{t\.id\}`\}/, 'workspace tabs should expose stable ids for automation')
-assert.match(shell, /role="tab"[\s\S]*aria-selected=\{tab === t\.id\}/, 'workspace tabs should expose selected state')
-assert.match(shell, /aria-controls=\{`nexus-panel-\$\{t\.id\}`\}/, 'workspace tabs should identify their active panel')
+const primaryRailBlock = shell.slice(
+  shell.indexOf('<nav className="dy-human-nav flex flex-col" aria-label="Primary navigation">'),
+  shell.indexOf('<div className="dy-human-rail-bottom">'),
+)
+assert.doesNotMatch(primaryRailBlock, /role="tab"/, 'rail navigation should not advertise a tab role')
+assert.doesNotMatch(primaryRailBlock, /aria-selected=/, 'rail navigation should not advertise tab selection state')
+assert.doesNotMatch(primaryRailBlock, /aria-controls=/, 'rail navigation should not advertise tab panel controls')
+assert.match(primaryRailBlock, /aria-current=\{tab === t\.id \? 'page' : undefined\}/, 'active rail destination should use aria-current page')
 assert.match(shell, /role="region"[\s\S]*aria-label=\{`\$\{activeTab\.label\} workspace`\}/, 'active workspace should be a named region')
 assert.doesNotMatch(shell, /dy-command-header/, 'shell should not render the retired top command header')
 assert.doesNotMatch(shell, /className="dy-top-tabs/, 'shell should not render a duplicate hidden tab bar')
@@ -48,11 +55,16 @@ assert.match(polish, /\.dy-human-rail-head--lockup[\s\S]*min-height: 98px/, 'sid
 assert.match(polish, /\.dy-workspace-context__meta[\s\S]*flex-direction: column/, 'workspace status controls should live in the tab header')
 assert.ok(theme.includes(productionPolishImport), 'production polish must remain in the theme cascade')
 assert.ok(theme.includes(referenceScreenshotImport), 'reference screenshot polish must remain in the theme cascade')
+assert.ok(theme.includes(typographyPolishImport), 'typography polish must remain in the theme cascade')
 assert.ok(
   theme.indexOf(productionPolishImport) < theme.indexOf(referenceScreenshotImport),
   'production polish must load before the final reference screenshot layer',
 )
-assert.ok(theme.trimEnd().endsWith(referenceScreenshotImport), 'reference screenshot polish must load last in the theme cascade')
+assert.ok(
+  theme.indexOf(referenceScreenshotImport) < theme.indexOf(typographyPolishImport),
+  'reference screenshot polish must load before the final typography layer',
+)
+assert.ok(theme.trimEnd().endsWith(typographyPolishImport), 'typography polish must load last in the theme cascade')
 
 assert.equal(packageJson.scripts?.['smoke:shell-production-ui'], 'tsx scripts/smoke-shell-production-ui.ts')
 assert.ok(packageJson.scripts?.['test:ci']?.includes('npm run smoke:shell-production-ui'))

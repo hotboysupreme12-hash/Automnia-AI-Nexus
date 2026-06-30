@@ -125,10 +125,10 @@ export function NexusShell() {
       : tab === 'settings'
         ? 'healthy'
         : gatewayOnline
-        ? 'healthy'
-        : runtimeStatus
-          ? 'offline'
-          : 'loading'
+          ? 'healthy'
+          : runtimeStatus
+            ? 'offline'
+            : 'loading'
   const cronJobSummary = cronJobs.slice(0, 4).map((job) => `${job.name} (${job.agent})`).join(', ')
   const cronChipTitle = runtimeStatus
     ? activeCronCount
@@ -152,10 +152,10 @@ export function NexusShell() {
   const [agentsWorkspaceNode, setAgentsWorkspaceNode] = useState<HTMLDivElement | null>(null)
   const [agentRegistryPaneNode, setAgentRegistryPaneNode] = useState<HTMLDivElement | null>(null)
   const [, startTabTransition] = useTransition()
-  const selectTab = (nextTab: AppTab) => {
+  const selectTab = useCallback((nextTab: AppTab) => {
     if (nextTab === 'missions') setHasMountedMissionPanel(true)
     startTabTransition(() => setTab(nextTab))
-  }
+  }, [setTab, startTabTransition])
   const requestClearCronJobs = async () => {
     if ((!activeCronCount && !cronJobs.length) || cronClearBusy) return
     setCronClearTargets([])
@@ -286,6 +286,35 @@ export function NexusShell() {
   useEffect(() => { void preloadMissionIconAssets() }, [])
   useEffect(() => { applyStoredUiSettings() }, [])
   useEffect(() => {
+    const handleWorkspaceShortcut = (event: globalThis.KeyboardEvent) => {
+      if (!event.altKey || event.ctrlKey || event.metaKey || event.shiftKey || event.defaultPrevented) return
+      const target = event.target as HTMLElement | null
+      const tagName = target?.tagName
+      if (target?.isContentEditable || tagName === 'INPUT' || tagName === 'TEXTAREA' || tagName === 'SELECT') return
+
+      const shortcuts: Record<string, AppTab | 'recruit'> = {
+        '1': 'agents',
+        '2': 'missions',
+        '3': 'monitor',
+        '4': 'plugins',
+        '5': 'settings',
+        n: 'recruit',
+      }
+      const action = shortcuts[event.key.toLowerCase()]
+      if (!action) return
+
+      event.preventDefault()
+      if (action === 'recruit') {
+        setRecruitOpen(true)
+      } else {
+        selectTab(action)
+      }
+    }
+
+    window.addEventListener('keydown', handleWorkspaceShortcut)
+    return () => window.removeEventListener('keydown', handleWorkspaceShortcut)
+  }, [selectTab])
+  useEffect(() => {
     if (tab === 'missions') setHasMountedMissionPanel(true)
   }, [tab])
   useEffect(() => {
@@ -381,7 +410,6 @@ export function NexusShell() {
             className="dy-human-nav-action flex items-center gap-3 text-left"
             data-tone="recruit"
             aria-label="Recruit a new agent"
-            aria-current={undefined}
             onClick={() => setRecruitOpen(true)}
           >
             <span className="dy-human-nav-icon" style={navIconStyle(RECRUIT_ICON_SRC)}>
@@ -397,12 +425,9 @@ export function NexusShell() {
               key={t.id}
               id={`nexus-tab-${t.id}`}
               type="button"
-              role="tab"
               onClick={() => selectTab(t.id)}
               aria-label={`${t.label} ${t.railMeta}`}
               aria-current={tab === t.id ? 'page' : undefined}
-              aria-selected={tab === t.id}
-              aria-controls={`nexus-panel-${t.id}`}
               data-tone={t.tone}
               className={`flex items-center gap-3 text-left ${tab === t.id ? 'is-active' : ''}`}
             >
@@ -423,7 +448,6 @@ export function NexusShell() {
               type="button"
               className={`dy-human-nav-utility flex items-center gap-3 text-left ${tab === 'settings' ? 'is-active' : ''}`}
               aria-label="Open runtime settings"
-              aria-pressed={tab === 'settings'}
               aria-current={tab === 'settings' ? 'page' : undefined}
               onClick={() => selectTab('settings')}
             >

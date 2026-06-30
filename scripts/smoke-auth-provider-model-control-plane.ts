@@ -82,11 +82,16 @@ for (const marker of [
 
 assert(/import \{ registerProviderAuthRoutes \} from '\.\/routes\/providerAuthRoutes'/.test(server), 'server index must import the extracted provider auth route module')
 assert(/registerProviderAuthRoutes\(app, \{/.test(server), 'server index must register extracted provider auth routes')
+assert(server.includes('ensureProviderAuthReady: ensureLocalAuthStoreLoaded'), 'provider auth routes must wait for local auth store hydration')
+assert(server.includes('function invalidateAvailableModelsForAuthChange()'), 'provider auth changes must invalidate the model catalog cache')
+assert(server.includes('invalidateAvailableModelsForAuthChange()'), 'provider auth saves/removals must schedule model catalog refresh')
+assert(server.includes('await ensureLocalAuthStoreLoaded()'), 'provider auth mutations must wait for local auth store hydration')
 assert(/registerAgentConfigRoutes\(app, agentConfigRoutesContext\)/.test(server), 'control plane must register extracted agent config routes')
 assert(server.includes("from './catalogs/providerCatalog'"), 'control plane must import the extracted provider catalog')
 assert(!server.includes('const AUTH_PROVIDER_CATALOG:'), 'provider catalog data should not remain inline in the control plane')
 assert(providerCatalog.includes('export const AUTH_PROVIDER_CATALOG'), 'provider catalog module should own provider metadata')
 assert(providerCatalog.includes('export const AUTH_ENV_MAP'), 'provider catalog module should derive the provider environment map')
+assert(providerAuthRoutes.includes('ensureProviderAuthReady'), 'provider auth routes must await credential-store readiness before reads and writes')
 assert(
   server.indexOf('registerProviderAuthRoutes(app, {') < server.indexOf('registerSkillRoutes(app, {'),
   'provider auth routes should stay registered before skills routes',
@@ -104,6 +109,8 @@ for (const inlineMarker of [
 }
 
 assert(providerModal.includes("apiRequest<{ providers?: AuthProviderStatus[] }>('/api/auth/providers?refresh=1'"), 'ProviderAuthModal should refresh provider status through apiRequest')
+assert(providerModal.includes("setStatus('Saved. Verifying provider readiness...')"), 'ProviderAuthModal should verify readiness immediately after saving a key')
+assert(providerModal.includes("setApiKey('')"), 'ProviderAuthModal should clear pasted key material after save')
 assert(providerModal.includes('apiRequest<OAuthStartPayload>(`/api/auth/providers/${provider}/oauth/start`'), 'ProviderAuthModal should start OAuth through apiRequest')
 assert(providerModal.includes('apiRequest<OAuthSessionPayload>(`/api/auth/providers/${provider}/oauth/session/${sessionId}`'), 'ProviderAuthModal should poll OAuth through apiRequest')
 assert(providerModal.includes('apiRequest(`/api/auth/providers/${provider}/oauth/session/${manualSessionId}/manual`'), 'ProviderAuthModal should submit manual OAuth codes through apiRequest')

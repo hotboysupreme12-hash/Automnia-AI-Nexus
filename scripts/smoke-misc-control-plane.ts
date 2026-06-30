@@ -67,6 +67,7 @@ assert(!server.includes("app.get('/api/health'"), 'server index should not inlin
 assert(!server.includes("app.get('/api/runtime/version-check'"), 'server index should not inline the runtime version-check route')
 assert(!server.includes("app.get('/api/openclaw/optimization-scorecard'"), 'server index should not inline the optimization scorecard route')
 assert(!server.includes("app.post('/api/doctor/run'"), 'server index should not inline the doctor run route')
+assert(!server.includes("app.post('/api/doctor/repair'"), 'server index should not inline the doctor repair route')
 
 for (const marker of [
   "app.get('/api/health'",
@@ -77,6 +78,7 @@ for (const marker of [
 
 for (const marker of [
   "app.get('/api/openclaw/optimization-scorecard'",
+  "app.post('/api/doctor/repair'",
   "app.post('/api/doctor/run'",
   "app.get('/api/doctor/recent'",
 ]) {

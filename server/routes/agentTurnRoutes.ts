@@ -227,7 +227,7 @@ type AgentTurnRoutesOptions = {
   trimTask(value: string, maxChars: number): string
   tryGoogleGeminiDirectArtifactWriteFallback(params: GoogleGeminiArtifactFallbackParams): Promise<GoogleGeminiArtifactFallback | null>
   tryReleaseBrowserRelayPort(): Promise<{ released: boolean }>
-  tryRestartGatewayService(): Promise<{ restarted: boolean }>
+  tryRestartGatewayService(options?: { reason?: string }): Promise<{ restarted: boolean }>
   unwrapCanonicalApiPayload(payload: unknown): unknown
   withRuntimeTimeoutResumeAdvice(reply: string, agent: string, sessionId: string): string
   writeSseEvent(res: Response, event: string, data: Record<string, unknown>): void
@@ -1092,7 +1092,7 @@ export function registerAgentTurnRoutes(app: Express, options: AgentTurnRoutesOp
     }
 
     if (result.code === 0 && browserIntent && hasBrowserRelayDisconnected(result.stderr || '')) {
-      const gateway = await tryRestartGatewayService()
+      const gateway = await tryRestartGatewayService({ reason: 'agent turn browser relay recovery' })
       if (gateway.restarted) {
         const retrySessionId = randomUUID()
         const recoveryPrompt = composeAgentDoctrinePrompt(

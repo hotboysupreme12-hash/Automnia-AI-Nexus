@@ -436,6 +436,7 @@ function PluginRow({
           type="button"
           onClick={() => onManage(plugin)}
           disabled={busy}
+          aria-expanded={expanded}
           className={`dy-plugin-row-action dy-plugin-row-manage h-8 rounded-md border px-3 text-[10px] font-semibold transition disabled:cursor-not-allowed disabled:opacity-50 ${
             expanded
               ? 'border-cyan-300/25 bg-cyan-300/[0.07] text-cyan-100'
@@ -1005,6 +1006,7 @@ export function PluginsPanel() {
   const [loading, setLoading] = useState(() => !pluginsPanelCache)
   const [error, setError] = useState('')
   const [notice, setNotice] = useState(() => (pluginsPanelCache ? responseNotice(pluginsPanelCache) : ''))
+  const [updatingAll, setUpdatingAll] = useState(false)
   const [updatingId, setUpdatingId] = useState<string | null>(null)
   const [refreshingId, setRefreshingId] = useState<string | null>(null)
   const [setupPlugin, setSetupPlugin] = useState<PluginEntry | null>(null)
@@ -1140,6 +1142,30 @@ export function PluginsPanel() {
     }
   }, [applyPayload])
 
+  const updateAllPlugins = useCallback(async () => {
+    if (updatingAll) return
+    setUpdatingAll(true)
+    setError('')
+    setNotice('')
+    try {
+      const payload = await pluginApiData<PluginApiPayload>(
+        '/api/plugins/update-all',
+        {
+          method: 'POST',
+          body: { restart: true },
+          timeoutMs: 320_000,
+        },
+        'Plugin update failed.',
+      )
+      applyPayload(payload)
+      setNotice(commandNotice(payload, `Plugin update-all finished; ${restartNotice(payload.restart)}`))
+    } catch (err) {
+      setError(pluginRequestError(err))
+    } finally {
+      setUpdatingAll(false)
+    }
+  }, [applyPayload, updatingAll])
+
   const inspectPlugin = useCallback(async (plugin: PluginEntry) => {
     setBusyPluginAction({ id: plugin.id, action: 'inspect' })
     setError('')
@@ -1252,24 +1278,34 @@ export function PluginsPanel() {
           <div className="flex flex-wrap items-center gap-2">
             {browser && (
               <span
-                className={`rounded-full border px-2.5 py-1 text-[9px] font-semibold ${
+                className={`dy-plugin-summary-chip rounded-full border px-2.5 py-1 text-[9px] font-semibold ${
                   browser.enabled
                     ? 'border-cyan-300/30 bg-cyan-300/[0.10] text-cyan-100'
                     : 'border-slate-400/25 bg-slate-500/[0.08] text-slate-300'
                 }`}
+                data-tone={browser.enabled ? 'browser-on' : 'browser-off'}
               >
                 Browser {browser.enabled ? 'on' : 'off'}
               </span>
             )}
-            <span className="rounded-full border border-emerald-300/30 bg-emerald-300/[0.10] px-2.5 py-1 text-[9px] font-semibold text-emerald-100">
+            <span className="dy-plugin-summary-chip rounded-full border border-emerald-300/30 bg-emerald-300/[0.10] px-2.5 py-1 text-[9px] font-semibold text-emerald-100" data-tone="success">
               {enabledCount} enabled
             </span>
-            <span className="rounded-full border border-amber-300/30 bg-amber-300/[0.10] px-2.5 py-1 text-[9px] font-semibold text-amber-100">
+            <span className="dy-plugin-summary-chip rounded-full border border-amber-300/30 bg-amber-300/[0.10] px-2.5 py-1 text-[9px] font-semibold text-amber-100" data-tone="warning">
               {setupCount} setups
             </span>
-            <span className="rounded-full border border-slate-500/25 bg-slate-500/[0.08] px-2.5 py-1 text-[9px] font-semibold text-slate-300">
+            <span className="dy-plugin-summary-chip rounded-full border border-slate-500/25 bg-slate-500/[0.08] px-2.5 py-1 text-[9px] font-semibold text-slate-300" data-tone="disabled">
               {disabledCount} disabled
             </span>
+            <button
+              type="button"
+              onClick={() => void updateAllPlugins()}
+              disabled={updatingAll || loading}
+              className="h-7 rounded-md border border-cyan-300/20 bg-cyan-300/[0.07] px-3 text-[9px] font-semibold uppercase text-cyan-100 transition hover:bg-cyan-300/[0.12] disabled:cursor-wait disabled:opacity-50"
+              title="Run openclaw plugins update-all and restart the embedded gateway"
+            >
+              {updatingAll ? 'Updating All' : 'Update All'}
+            </button>
           </div>
         </div>
 
@@ -1376,8 +1412,35 @@ export function PluginsPanel() {
                 />
               ))
             ) : (
-              <div className="rounded-lg border border-white/[0.06] bg-white/[0.018] px-4 py-8 text-center text-[12px] text-slate-500">
-                No plugins match.
+              <div className="dy-plugin-empty-state rounded-lg border border-white/[0.06] bg-white/[0.018] px-4 py-8 text-center text-[12px] text-slate-500">
+                <strong className="block text-[13px] text-slate-200">
+                  {plugins.length ? 'No plugins match these filters.' : 'No plugins loaded yet.'}
+                </strong>
+                <span className="mt-1 block">
+                  {plugins.length ? 'Broaden the search or switch back to all plugins.' : 'Refresh the registry or run an OpenClaw command to discover installed surfaces.'}
+                </span>
+                <div className="mt-4 flex flex-wrap justify-center gap-2">
+                  {(query || filter !== 'all') && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setQuery('')
+                        setFilter('all')
+                      }}
+                      className="h-8 rounded-md border border-white/[0.08] bg-white/[0.025] px-3 text-[10px] font-semibold text-slate-300 transition hover:border-white/[0.14] hover:text-slate-100"
+                    >
+                      Clear filters
+                    </button>
+                  )}
+                  <button
+                    type="button"
+                    onClick={() => void loadPlugins({ force: true })}
+                    disabled={loading}
+                    className="h-8 rounded-md border border-cyan-300/20 bg-cyan-300/[0.07] px-3 text-[10px] font-semibold text-cyan-100 transition hover:bg-cyan-300/[0.12] disabled:cursor-wait disabled:opacity-50"
+                  >
+                    Refresh plugins
+                  </button>
+                </div>
               </div>
             )}
           </div>

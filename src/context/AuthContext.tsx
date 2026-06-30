@@ -10,6 +10,12 @@ type DesktopAuthBridge = {
   }
 }
 
+type DesktopSessionBootstrap = NonNullable<NonNullable<DesktopAuthBridge['dystopaiDesktop']>['bootstrapControlCenterSession']>
+
+const DESKTOP_BOOTSTRAP_ATTEMPTS = 4
+const DESKTOP_BOOTSTRAP_TIMEOUT_MS = 6500
+const DESKTOP_BOOTSTRAP_RETRY_MS = 450
+
 function desktopAuthBridge(): DesktopAuthBridge['dystopaiDesktop'] {
   if (typeof window === 'undefined') return undefined
   return (window as Window & DesktopAuthBridge).dystopaiDesktop
@@ -17,6 +23,37 @@ function desktopAuthBridge(): DesktopAuthBridge['dystopaiDesktop'] {
 
 function hasDesktopSessionBootstrap(): boolean {
   return typeof desktopAuthBridge()?.bootstrapControlCenterSession === 'function'
+}
+
+function sleep(ms: number) {
+  return new Promise((resolve) => window.setTimeout(resolve, ms))
+}
+
+async function callDesktopSessionBootstrap(provider: DesktopSessionBootstrap, timeoutMs: number): Promise<string | null> {
+  let timer: ReturnType<typeof window.setTimeout> | undefined
+  try {
+    return await Promise.race([
+      Promise.resolve(provider()).then((value) => {
+        const token = typeof value === 'string' ? value.trim() : ''
+        return token || null
+      }),
+      new Promise<null>((resolve) => {
+        timer = window.setTimeout(() => resolve(null), timeoutMs)
+      }),
+    ])
+  } finally {
+    if (timer !== undefined) window.clearTimeout(timer)
+  }
+}
+
+async function bootstrapDesktopSession(provider: DesktopSessionBootstrap, isCancelled: () => boolean): Promise<string | null> {
+  for (let attempt = 0; attempt < DESKTOP_BOOTSTRAP_ATTEMPTS; attempt += 1) {
+    if (isCancelled()) return null
+    const sessionToken = await callDesktopSessionBootstrap(provider, DESKTOP_BOOTSTRAP_TIMEOUT_MS).catch(() => null)
+    if (sessionToken || isCancelled()) return sessionToken
+    await sleep(DESKTOP_BOOTSTRAP_RETRY_MS * (attempt + 1))
+  }
+  return null
 }
 
 export function AuthProvider({ children }: { children: ReactNode }) {
@@ -41,7 +78,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       Promise.resolve()
         .then(async () => {
           if (!cancelled) setChecking(true)
-          const sessionToken = await Promise.resolve(provider())
+          const sessionToken = await bootstrapDesktopSession(provider, () => cancelled)
           if (!sessionToken || cancelled) return false
           if (!cancelled) completeLogin(sessionToken)
           return true

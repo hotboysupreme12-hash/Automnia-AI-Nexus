@@ -49,6 +49,7 @@
   "POST /api/auth/providers/:provider",
   "POST /api/auth/providers/:provider/oauth/session/:sessionId/manual",
   "POST /api/auth/providers/:provider/oauth/start",
+  "POST /api/doctor/repair",
   "POST /api/doctor/run",
   "POST /api/files/upload",
   "POST /api/missions/start",

@@ -125,6 +125,10 @@ export function ProviderAuthModal({ isOpen, provider, envKeys, providerStatus, o
       })
       if (!result.ok) throw new Error(apiErrorMessage(result.error))
       const next = result.data.providers?.find((entry) => entry.provider === provider) || null
+      if (!next) {
+        if (announceReady) setStatus('Saved locally. Provider status will refresh on the next check.')
+        return
+      }
       if (next) {
         setLiveProviderStatus(next)
         if (next.configured) {
@@ -137,6 +141,9 @@ export function ProviderAuthModal({ isOpen, provider, envKeys, providerStatus, o
           await onConnected?.(next)
         } else if (provider === 'google-vertex') {
           setStatus(next.gcloud?.missing?.filter(Boolean)[0] || '')
+        } else if (announceReady) {
+          const readyLabel = next.label || providerLabels[provider] || provider
+          setStatus(`${readyLabel} key was saved, but the provider is not reporting ready yet.`)
         }
       }
     } catch (error) {
@@ -179,8 +186,9 @@ export function ProviderAuthModal({ isOpen, provider, envKeys, providerStatus, o
     setStatus('')
     try {
       await onSave(apiKey.trim())
-      await onConnected?.()
-      setStatus('Saved. You can close this window.')
+      setApiKey('')
+      setStatus('Saved. Verifying provider readiness...')
+      await refreshProviderStatus(true)
     } catch (error) {
       setStatus(`Failed to save: ${error}`)
     } finally {
