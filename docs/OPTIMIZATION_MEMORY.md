@@ -681,15 +681,78 @@ split plan before implementation:
   `17,953/29,000` control-plane composition lines, `9` entry lines, and `0`
   inline routes. Full `npm test` passes with `168` unit tests and the full smoke
   suite.
-- Phase G items `66`, `67`, `68`, `69`, `70`, `71`, and `72` are complete and verified.
+- Phase G attachment size-limit coverage is complete:
+  `server/services/filesystem/commandConsoleUploadService.ts` now skips Gateway
+  inline attachments whose declared metadata size exceeds the configured file or
+  image inline limit before resolving or reading the file, while still checking
+  actual bytes after read. `tests/commandConsoleUploadService.test.ts` covers
+  upload persistence exactly at the configured limit, rejection one byte over the
+  upload limit without writing a second file, file/image Gateway inline boundary
+  behavior, declared-oversized metadata, and actual oversized file bytes.
+  `scripts/smoke-command-console-files-control-plane.ts` pins the pre-read size
+  guard and the new test names. Full `npm test` passes with `170` unit tests and
+  the full smoke suite.
+- Phase G avatar upload-limit coverage is complete:
+  `server/services/filesystem/avatarFileService.ts` owns
+  `assertAvatarUploadBytes`, `assertAvatarUploadSize`, and the shared upload
+  limit error message. `server/controlPlane.ts` uses those validators for both
+  byte uploads and selected-path avatar persistence. `server/routes/partyManagementRoutes.ts`
+  receives `avatarUploadLimitBytes` through composition, uses it for
+  `express.raw`, and returns canonical `413` `avatar_upload_failed` envelopes
+  for parser-level oversized bodies before persistence runs.
+  `tests/avatarFileService.test.ts` and `tests/partyAvatarUploadRoutes.test.ts`
+  cover exact-boundary and oversized avatar upload behavior. Current
+  architecture evidence is `17,959/29,000` control-plane composition lines, `9`
+  entry lines, and `0` inline routes. Full `npm test` passes with `172` unit
+  tests and the full smoke suite.
+- Phase G upload-root escape confirmation is complete:
+  `server/services/filesystem/commandConsoleUploadService.ts` accepts
+  `approvedRootDir`, realpath-checks the upload write root before persistence,
+  writes uploaded files with exclusive `wx` creation, and re-checks the real
+  uploaded file path after creation. `server/controlPlane.ts` composes the
+  service with `approvedRootDir: WORKSPACE_ROOT`. `tests/commandConsoleUploadService.test.ts`
+  covers symlinked upload directories outside the approved root, preexisting
+  symlink upload targets, sibling-root metadata escapes, and inline Gateway
+  symlink escape reads. The command-console and architecture smokes pin the
+  approved-root composition, write-root validation, exclusive creation, and
+  tests. Current architecture evidence is `17,960/29,000` control-plane
+  composition lines, `9` entry lines, and `0` inline routes. Full `npm test`
+  passes with `174` unit tests and the full smoke suite.
+- Phase G items `66`, `67`, `68`, `69`, `70`, `71`, `72`, `73`, `74`, and `75` are complete and verified.
+- Phase H renderer store growth guard is complete:
+  `scripts/smoke-renderer-store-boundary.ts` pins `src/store/nexusStore.ts` at
+  the item `76` baseline of `4,408` logical lines, `18` store-owned
+  `apiRequest` call lines, `20` store-owned `/api/` path literal lines, and
+  exactly one direct `fetch` for the `/api/openclaw/agent-turn/stream` SSE
+  route. `package.json` exposes `npm run smoke:renderer-store-boundary` and
+  runs it in `npm run test:ci` before `smoke:nexus-control-plane`. Full
+  `npm test` passes with `174` unit tests and the renderer-store boundary smoke
+  in the CI chain.
+- Phase H renderer API extraction has started with item `77` complete:
+  `src/api/party.ts` owns party overview, avatar URL, agent config save,
+  recruit, recruit-resource save, and retire API request helpers plus party wire
+  payload types that previously lived in `src/store/nexusStore.ts`.
+  `src/api/agentTurns.ts` owns agent runtime preflight, buffered agent-turn,
+  party prewarm turn, and agent-turn session-clear request helpers plus
+  agent-turn wire payload types. `src/store/nexusStore.ts` now delegates those
+  request families through the extracted API helpers while keeping mission
+  projection and UI-state behavior unchanged.
+- The renderer store boundary was ratcheted after item `77`:
+  `scripts/smoke-renderer-store-boundary.ts` now pins `nexusStore` at `4,274`
+  logical lines, `3` store-owned `apiRequest` call lines, `4` store-owned
+  `/api/` path literal lines, and exactly one direct SSE `fetch` for
+  `/api/openclaw/agent-turn/stream`. The remaining store-owned JSON API calls
+  are mission projection/start/stop, which are the next Phase H extraction
+  target.
+- Phase H items `76` and `77` are complete and verified.
 
 ## Next Optimization Slice
 
-Continue Phase G:
+Continue Phase H:
 
-- Continue with item `73`: add attachment size-limit coverage across
-  command-console upload persistence and Gateway inline attachment conversion.
-- Rerun focused filesystem coverage plus `npm run smoke:filesystem-control-plane`,
-  `npm run smoke:command-console-files`, `npm run smoke:server-architecture`,
-  `npm run typecheck`, `npm run test:unit`, `npm run lint`, `git diff --check`,
-  and full `npm test` after the next Phase G item.
+- Continue with item `78`: move mission projection syncing into
+  `src/api/missions.ts` or `src/services/missionProjectionClient.ts`.
+- Inspect the remaining mission API calls in `src/store/nexusStore.ts`, the
+  mission projection smokes, and the item `77` renderer-store boundary before
+  editing. Keep backend mission truth unchanged; this should be a renderer API
+  boundary extraction, not a mission-state rewrite.

@@ -2,6 +2,10 @@ import assert from 'node:assert/strict'
 import test from 'node:test'
 
 import {
+  AVATAR_UPLOAD_LIMIT_BYTES,
+  assertAvatarUploadBytes,
+  assertAvatarUploadSize,
+  avatarUploadLimitErrorMessage,
   avatarUploadFileName,
   isSupportedAvatarImagePath,
   managedAvatarFileName,
@@ -34,4 +38,14 @@ test('avatar file service builds managed avatar names with sanitized stems', () 
     }),
     'agent-1-my-portrait-ya-deadbeef.webp',
   )
+})
+
+test('avatar file service enforces avatar upload byte limits for persistence helpers', () => {
+  assert.equal(AVATAR_UPLOAD_LIMIT_BYTES, 15 * 1024 * 1024)
+  assert.equal(avatarUploadLimitErrorMessage(4), 'Choose an image smaller than 4 bytes.')
+  assert.doesNotThrow(() => assertAvatarUploadBytes(Buffer.from('1234'), 4))
+  assert.doesNotThrow(() => assertAvatarUploadSize(4, 4))
+  assert.throws(() => assertAvatarUploadBytes(Buffer.from('12345'), 4), /Choose an image smaller than 4 bytes/)
+  assert.throws(() => assertAvatarUploadSize(5, 4), /Choose an image smaller than 4 bytes/)
+  assert.throws(() => assertAvatarUploadBytes(Buffer.alloc(0), 4), /Choose an image file to upload/)
 })

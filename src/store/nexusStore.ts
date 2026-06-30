@@ -6,6 +6,23 @@ import { RuntimeComposer } from '../engine/RuntimeComposer'
 import { MDSValidator } from '../engine/MDSValidator'
 import { DEFAULT_MISSION_DRAFT, SKILL_TREE, makeDormantState, makeSeedAgents } from '../data/seeds'
 import { apiErrorMessage, apiRequest } from '../api/client'
+import {
+  clearAgentTurnSessions,
+  preflightAgentRuntime as requestAgentRuntimePreflight,
+  prewarmAgentTurn,
+  sendBufferedAgentTurn,
+  type AgentTurnPayload as AT,
+} from '../api/agentTurns'
+import {
+  fetchPartyOverview,
+  partyAvatarUrl,
+  recruitPartyAgent,
+  retirePartyAgent,
+  saveAgentConfig,
+  saveAgentResource,
+  type PartyOverviewAgent,
+  type RecruitAgentRequest,
+} from '../api/party'
 import { apiUrl } from '../utils/apiUrl'
 import { redactDiagnosticText, safeDiagnosticPayload } from '../utils/diagnosticRedaction'
 import { createSseFrameParser } from '../utils/sseStream'
@@ -20,7 +37,6 @@ import type {
   AgentRarity,
   AgentRuntimePolicy,
   AgentSkillEntry,
-  BehaviorProfile,
   CapabilityKey,
   AgentMDS,
   AgentOperationState,
@@ -234,11 +250,7 @@ function persistAgentConfigPatch(
   agentConfigPatchSaveSeq.set(key, nextSeq)
   report(agentId, scope, configSaveEntry('saving', messages.saving, nextSeq))
 
-  void apiRequest<{ ok?: boolean; error?: string; detail?: unknown }>(`/api/party/agent/${encodeURIComponent(agentId)}/config`, {
-    method: 'POST',
-    timeoutMs: 18_000,
-    body,
-  }).then((result) => {
+  void saveAgentConfig(agentId, body).then((result) => {
     if (agentConfigPatchSaveSeq.get(key) !== nextSeq) return
     report(
       agentId,
@@ -262,17 +274,13 @@ function persistHeartbeatConfig(agentId: string, heartbeat: HeartbeatConfig, rep
     heartbeatConfigSaveTimers.delete(agentId)
     const seq = heartbeatConfigSaveSeq.get(agentId)
     if (seq !== nextSeq) return
-    void apiRequest<{ ok?: boolean; error?: string; detail?: unknown }>(`/api/party/agent/${encodeURIComponent(agentId)}/config`, {
-      method: 'POST',
-      timeoutMs: 18_000,
-      body: {
-        heartbeat: {
-          tickIntervalMs: heartbeat.tickIntervalMs,
-          maxExecutionTimeMs: heartbeat.maxExecutionTimeMs,
-          idleTimeoutMs: heartbeat.idleTimeoutMs,
-          continuous: heartbeat.continuous,
-          recoveryMode: heartbeat.recoveryMode,
-        },
+    void saveAgentConfig(agentId, {
+      heartbeat: {
+        tickIntervalMs: heartbeat.tickIntervalMs,
+        maxExecutionTimeMs: heartbeat.maxExecutionTimeMs,
+        idleTimeoutMs: heartbeat.idleTimeoutMs,
+        continuous: heartbeat.continuous,
+        recoveryMode: heartbeat.recoveryMode,
       },
     }).then((result) => {
       if (heartbeatConfigSaveSeq.get(agentId) !== nextSeq) return
@@ -301,16 +309,12 @@ function persistRuntimePolicy(agentId: string, runtimePolicy: AgentRuntimePolicy
     runtimePolicySaveTimers.delete(agentId)
     const seq = runtimePolicySaveSeq.get(agentId)
     if (seq !== nextSeq) return
-    void apiRequest<{ ok?: boolean; error?: string; detail?: unknown }>(`/api/party/agent/${encodeURIComponent(agentId)}/config`, {
-      method: 'POST',
-      timeoutMs: 18_000,
-      body: {
-        runtime: {
-          thinkingDefault: runtimePolicy?.thinkingDefault,
-          timeoutSeconds: runtimePolicy?.timeoutSeconds,
-          parallelPreferred: runtimePolicy?.parallelPreferred,
-          fastModeDefault: runtimePolicy?.fastModeDefault,
-        },
+    void saveAgentConfig(agentId, {
+      runtime: {
+        thinkingDefault: runtimePolicy?.thinkingDefault,
+        timeoutSeconds: runtimePolicy?.timeoutSeconds,
+        parallelPreferred: runtimePolicy?.parallelPreferred,
+        fastModeDefault: runtimePolicy?.fastModeDefault,
       },
     }).then((result) => {
       if (runtimePolicySaveSeq.get(agentId) !== nextSeq) return
@@ -673,7 +677,7 @@ function portraitFromOverview(entry: PartyOverviewAgent, existing: OpenClawAgent
     } else if (candidate.startsWith('data:') && isUsablePortrait(candidate)) {
       return candidate
     } else {
-      return apiUrl(`/api/party/avatar/${entry.id}`)
+      return partyAvatarUrl(entry.id)
     }
   }
   if (existing && isUsablePortrait(existing.portrait) && !isDefaultAgentPortrait(existing.id, existing.portrait)) return existing.portrait
@@ -968,77 +972,6 @@ interface NexusState {
 
   resetMission: () => void
   resetSimulation: () => void
-}
-
-/* ------------------------------------------------------------------ */
-/*  Party-Overview types (backend wire format)                        */
-/* ------------------------------------------------------------------ */
-
-type PartyOverviewAgent = {
-  id: string
-  name?: string
-  workspace?: string
-  avatar?: string
-  skills?: string[]
-  abilities?: string[]
-  tools?: string[]
-  className?: string
-  role?: string
-  behaviorProfile?: BehaviorProfile
-  level?: number
-  stats?: {
-    execution?: number
-    reliability?: number
-    speed?: number
-    analysis?: number
-    communication?: number
-  }
-  sandbox?: {
-    mode?: 'off' | 'all' | 'non-main'
-    scope?: 'session' | 'agent' | 'shared'
-    workspaceRoot?: string
-    workspaceAccess?: 'rw' | 'ro' | 'none'
-  }
-  model?: {
-    primary?: string
-    fallbacks?: string[]
-  }
-  heartbeat?: Partial<HeartbeatConfig>
-  mds?: Partial<AgentMDS>
-  runtime?: AgentRuntimePolicy
-  toolsPolicy?: {
-    profile?: string
-    allow?: string[]
-    deny?: string[]
-  }
-}
-
-type PartyOverviewPayload = {
-  party?: PartyOverviewAgent[]
-}
-
-type RecruitAgentPayload = {
-  agentId?: string
-}
-
-type AgentRuntimePreflightPayload = {
-  agent?: string
-  message?: string
-  checks?: Array<{ ok?: boolean; message?: string; severity?: string }>
-  sandbox?: {
-    mode?: string
-    autoDisabled?: boolean
-  }
-}
-
-type AgentTurnSessionClearPayload = {
-  cleared?: number
-  scope?: 'agent' | 'all'
-  sessionLockCleanup?: {
-    scanned?: number
-    removed?: number
-    errors?: number
-  }
 }
 
 /* ------------------------------------------------------------------ */
@@ -1453,33 +1386,6 @@ export const useNexusStore = create<NexusState>()(
   persist(
     (set, get) => {
       /* ---- inner types ---- */
-      type AT = {
-        ok: boolean
-        reply?: unknown
-        stdout?: string
-        stderr?: string
-        code?: number
-        error?: unknown
-        detail?: unknown
-        model?: string
-        modelId?: string
-        provider?: string
-        failureKind?: string
-        runtimeTransport?: 'gateway-chat' | 'gateway' | 'local'
-        gatewayFallbackDetail?: string
-        streaming?: {
-          model?: string
-          modelId?: string
-          provider?: string
-          transport?: string
-          liveTokens?: boolean
-          buffered?: boolean
-        }
-        learnedSkills?: AgentSkillEntry[]
-        incompleteRun?: boolean
-        runtimeBlockerPath?: string | null
-        teamSyncEvidence?: string[]
-      }
       type ApiRead<T> = { payload?: T; text: string }
       type NestedRuntimePayload = {
         payloads?: Array<{ text?: string }>
@@ -1927,11 +1833,7 @@ export const useNexusStore = create<NexusState>()(
 
       const preflightAgentRuntime = async (aid: string): Promise<{ ok: boolean; message?: string }> => {
         try {
-          const result = await apiRequest<AgentRuntimePreflightPayload>('/api/openclaw/agent-preflight', {
-            method: 'POST',
-            timeoutMs: 30_000,
-            body: { agent: aid },
-          })
+          const result = await requestAgentRuntimePreflight(aid)
           if (!result.ok) {
             if (result.status === 404) return { ok: true }
             return { ok: false, message: apiErrorMessage(result.error) || `Runtime preflight failed for ${aid}` }
@@ -2611,11 +2513,8 @@ export const useNexusStore = create<NexusState>()(
           const intentMessage = options.displayPrompt || normalized
           const sessionKey = options.sessionKey?.trim()
           try {
-            const result = await apiRequest<AT>('/api/openclaw/agent-turn', {
-              method: 'POST',
-              signal: controller.signal,
-              timeoutMs: requestTimeoutMs,
-              body: {
+            const result = await sendBufferedAgentTurn(
+              {
                 agent: aid,
                 message: msg,
                 intentMessage,
@@ -2627,7 +2526,8 @@ export const useNexusStore = create<NexusState>()(
                 ...(sessionKey ? { sessionKey } : {}),
                 ...(forceOpenClawRuntime ? { forceOpenClawRuntime: true } : {}),
               },
-            })
+              { signal: controller.signal, timeoutMs: requestTimeoutMs },
+            )
             if (result.ok) return { payload: result.data, responseOk: true, streamed: liveResponseCreated }
             const message = apiErrorMessage(result.error)
             return {
@@ -2703,11 +2603,7 @@ export const useNexusStore = create<NexusState>()(
           } else {
           let preflight = await preflightAgentRuntime(aid)
           if (!preflight.ok && /docker|sandbox/i.test(preflight.message || '')) {
-            await apiRequest(`/api/party/agent/${encodeURIComponent(aid)}/config`, {
-              method: 'POST',
-              timeoutMs: 20_000,
-              body: { sandbox: { mode: 'off', scope: 'agent', workspaceAccess: 'rw' } },
-            })
+            await saveAgentConfig(aid, { sandbox: { mode: 'off', scope: 'agent', workspaceAccess: 'rw' } }, { timeoutMs: 20_000 })
             preflight = await preflightAgentRuntime(aid)
           }
           if (!preflight.ok) {
@@ -2745,11 +2641,7 @@ export const useNexusStore = create<NexusState>()(
           }
           const dockerTxt = `${payload.stderr || ''}\n${payload.stdout || ''}`
           if (!payload.ok && hasDockerFail(dockerTxt)) {
-            await apiRequest(`/api/party/agent/${encodeURIComponent(aid)}/config`, {
-              method: 'POST',
-              timeoutMs: 20_000,
-              body: { sandbox: { mode: 'off', scope: 'agent', workspaceAccess: 'rw' } },
-            })
+            await saveAgentConfig(aid, { sandbox: { mode: 'off', scope: 'agent', workspaceAccess: 'rw' } }, { timeoutMs: 20_000 })
             turn = await post(outboundMessage, preferOpenClawRuntime)
             payload = turn.payload
           }
@@ -3231,7 +3123,7 @@ export const useNexusStore = create<NexusState>()(
 
         syncPartyOverview: async () => {
           try {
-            const result = await apiRequest<PartyOverviewPayload>('/api/party/overview', { timeoutMs: 20_000 })
+            const result = await fetchPartyOverview()
             if (!result.ok || !Array.isArray(result.data.party)) return
             const party = result.data.party
             set((s) => {
@@ -3254,11 +3146,7 @@ export const useNexusStore = create<NexusState>()(
               .slice(0, PARTY_PREWARM_LIMIT)
             if (fresh.length) {
               set((s) => ({ sessionWarmAgentIds: [...new Set([...s.sessionWarmAgentIds, ...fresh.map((f) => f.id)])] }))
-              void Promise.allSettled(fresh.map((e) => apiRequest('/api/openclaw/agent-turn', {
-                method: 'POST',
-                timeoutMs: 60_000,
-                body: { agent: e.id, message: 'Confirm readiness in one word: ready.', thinking: 'off', promptProfile: 'fast' },
-              })))
+              void Promise.allSettled(fresh.map((e) => prewarmAgentTurn(e.id)))
             }
           } catch { /* seed fallback */ }
         },
@@ -3291,27 +3179,24 @@ export const useNexusStore = create<NexusState>()(
             tools: draft.mds.toolAccess,
             stats: profileStats,
           }
-          const recruitResult = await apiRequest<RecruitAgentPayload>('/api/party/recruit', {
-            method: 'POST',
-            timeoutMs: 120_000,
-            body: {
-              agentId,
-              name: draft.name,
-              workspace: draft.workspace || undefined,
-              emoji: '@',
-              theme: draft.behaviorProfile,
-              avatar: draft.portrait || undefined,
-              profile: recruitProfile,
-              model: draft.model?.primary ? draft.model : undefined,
-              runtime: draft.runtimePolicy,
-              attributes: draft.attributes,
-              mds: draft.mds,
-              heartbeat: draft.heartbeat,
-              soul: draft.soul,
-              sandbox: draft.sandbox,
-              tools: draft.toolsPolicy,
-            },
-          })
+          const recruitRequest: RecruitAgentRequest = {
+            agentId,
+            name: draft.name,
+            workspace: draft.workspace || undefined,
+            emoji: '@',
+            theme: draft.behaviorProfile,
+            avatar: draft.portrait || undefined,
+            profile: recruitProfile,
+            model: draft.model?.primary ? draft.model : undefined,
+            runtime: draft.runtimePolicy,
+            attributes: draft.attributes,
+            mds: draft.mds,
+            heartbeat: draft.heartbeat,
+            soul: draft.soul,
+            sandbox: draft.sandbox,
+            tools: draft.toolsPolicy,
+          }
+          const recruitResult = await recruitPartyAgent(recruitRequest)
           if (!recruitResult.ok) {
             throw new Error(apiErrorMessage(recruitResult.error))
           }
@@ -3342,21 +3227,17 @@ export const useNexusStore = create<NexusState>()(
             }
           })
 
-          const configResult = await apiRequest(`/api/party/agent/${encodeURIComponent(agentId)}/config`, {
-            method: 'POST',
-            timeoutMs: 30_000,
-            body: {
-              model: draft.model?.primary ? draft.model : undefined,
-              runtime: draft.runtimePolicy,
-              profile: recruitProfile,
-              attributes: draft.attributes,
-              mds: draft.mds,
-              heartbeat: draft.heartbeat,
-              soul: draft.soul,
-              sandbox: draft.sandbox,
-              tools: draft.toolsPolicy,
-            },
-          })
+          const configResult = await saveAgentConfig(agentId, {
+            model: draft.model?.primary ? draft.model : undefined,
+            runtime: draft.runtimePolicy,
+            profile: recruitProfile,
+            attributes: draft.attributes,
+            mds: draft.mds,
+            heartbeat: draft.heartbeat,
+            soul: draft.soul,
+            sandbox: draft.sandbox,
+            tools: draft.toolsPolicy,
+          }, { timeoutMs: 30_000 })
           if (!configResult.ok) {
             warnings.push(`Agent was created, but post-create config did not fully save: ${apiErrorMessage(configResult.error)}`)
           }
@@ -3366,11 +3247,7 @@ export const useNexusStore = create<NexusState>()(
             .filter((entry) => /^[^\\/]+\.md$/i.test(entry.file))
           if (resourceFiles.length) {
             const saved = await Promise.allSettled(resourceFiles.map(async (entry) => {
-              const result = await apiRequest<{ file?: string; resourcePath?: string }>(`/api/party/resources/${encodeURIComponent(agentId)}/${encodeURIComponent(entry.file)}`, {
-                method: 'PUT',
-                timeoutMs: 20_000,
-                body: { content: entry.content.endsWith('\n') ? entry.content : `${entry.content}\n` },
-              })
+              const result = await saveAgentResource(agentId, entry.file, entry.content.endsWith('\n') ? entry.content : `${entry.content}\n`)
               if (!result.ok) {
                 throw new Error(`${entry.file}: ${apiErrorMessage(result.error)}`)
               }
@@ -3400,10 +3277,7 @@ export const useNexusStore = create<NexusState>()(
           if (!normalized) throw new Error('Agent ID is required.')
           if (normalized === 'main') throw new Error('The main agent cannot be retired.')
 
-          const retireResult = await apiRequest(`/api/party/agent/${encodeURIComponent(normalized)}`, {
-            method: 'DELETE',
-            timeoutMs: RETIRE_AGENT_TIMEOUT_MS,
-          })
+          const retireResult = await retirePartyAgent(normalized, RETIRE_AGENT_TIMEOUT_MS)
           if (!retireResult.ok) {
             if (retireResult.error.code === 'timeout') {
               throw new Error('Retire request timed out. Refresh the party list; if the agent disappeared, retirement finished in the background.')
@@ -4044,11 +3918,7 @@ export const useNexusStore = create<NexusState>()(
         clearAgentResponses: () => {
           clearQueuedCommandConsoleFollowups()
           resetCommandConsoleRuntimeState()
-          void apiRequest<AgentTurnSessionClearPayload>('/api/openclaw/agent-turn/sessions/clear', {
-            method: 'POST',
-            timeoutMs: 20_000,
-            body: {},
-          }).then((result) => {
+          void clearAgentTurnSessions().then((result) => {
             if (!result.ok) console.warn('Failed to clear Command Console sessions:', apiErrorMessage(result.error))
           })
           set({ agentResponses: [], busyAgentIds: [] })
@@ -4056,11 +3926,7 @@ export const useNexusStore = create<NexusState>()(
         clearAll: () => {
           clearQueuedCommandConsoleFollowups()
           resetCommandConsoleRuntimeState()
-          void apiRequest<AgentTurnSessionClearPayload>('/api/openclaw/agent-turn/sessions/clear', {
-            method: 'POST',
-            timeoutMs: 20_000,
-            body: {},
-          }).then((result) => {
+          void clearAgentTurnSessions().then((result) => {
             if (!result.ok) console.warn('Failed to clear Command Console sessions:', apiErrorMessage(result.error))
           })
           set({ activePartyIds: [], confirmedPartyIds: [], selectedAgentId: null, selectedAgentIds: [], agentResponses: [], busyAgentIds: [] })

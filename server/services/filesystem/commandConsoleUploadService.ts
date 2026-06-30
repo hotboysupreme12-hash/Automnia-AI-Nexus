@@ -70,6 +70,7 @@ export type CommandConsoleUploadAttachment = {
 
 export type CommandConsoleUploadServiceOptions = {
   uploadsDir: string
+  approvedRootDir?: string
   uploadLimitBytes?: number
   imageInlineLimitBytes?: number
   fileInlineLimitBytes?: number
@@ -160,12 +161,44 @@ export function commandConsoleUploadFileName(rawName: string | undefined, mimeTy
 
 export function createCommandConsoleUploadService(options: CommandConsoleUploadServiceOptions) {
   const uploadsDir = options.uploadsDir
+  const approvedRootDir = options.approvedRootDir ?? path.dirname(uploadsDir)
   const uploadLimitBytes = options.uploadLimitBytes ?? COMMAND_CONSOLE_UPLOAD_LIMIT_BYTES
   const imageInlineLimitBytes = options.imageInlineLimitBytes ?? COMMAND_CONSOLE_GATEWAY_IMAGE_LIMIT_BYTES
   const fileInlineLimitBytes = options.fileInlineLimitBytes ?? COMMAND_CONSOLE_GATEWAY_ATTACHMENT_LIMIT_BYTES
   const isPathUnder = options.isPathUnder ?? defaultIsPathUnder
   const now = options.now ?? Date.now
   const randomId = options.randomId ?? randomUUID
+
+  async function assertUploadWriteRoot(resolvedUploadDir: string) {
+    const resolvedApprovedRoot = path.resolve(approvedRootDir)
+    const [realApprovedRoot, realUploadDir] = await Promise.all([
+      fs.realpath(resolvedApprovedRoot),
+      fs.realpath(resolvedUploadDir),
+    ])
+    if (!isPathUnder(realApprovedRoot, realUploadDir)) {
+      throw new Error('Upload directory resolved outside the approved root.')
+    }
+    return realUploadDir
+  }
+
+  async function writeUploadFile(resolvedUploadPath: string, bytes: Buffer) {
+    const resolvedUploadDir = path.resolve(uploadsDir)
+    await fs.mkdir(resolvedUploadDir, { recursive: true })
+    const realUploadDir = await assertUploadWriteRoot(resolvedUploadDir)
+    try {
+      await fs.writeFile(resolvedUploadPath, bytes, { flag: 'wx', mode: 0o600 })
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code === 'EEXIST') {
+        throw new Error('Upload path already exists inside the upload directory.')
+      }
+      throw error
+    }
+    const realUploadPath = await fs.realpath(resolvedUploadPath)
+    if (!isPathUnder(realUploadDir, realUploadPath)) {
+      await fs.rm(resolvedUploadPath, { force: true })
+      throw new Error('Upload file resolved outside the upload directory.')
+    }
+  }
 
   async function persistUpload(bytes: Buffer, sourceName: string | undefined, rawMimeType: string | undefined): Promise<CommandConsoleUploadAttachment> {
     const mimeType = normalizeCommandConsoleMimeType(rawMimeType) || 'application/octet-stream'
@@ -182,8 +215,7 @@ export function createCommandConsoleUploadService(options: CommandConsoleUploadS
     const resolvedUploadDir = path.resolve(uploadsDir)
     const resolvedUploadPath = path.resolve(uploadPath)
     if (!isPathUnder(resolvedUploadDir, resolvedUploadPath)) throw new Error('Upload path resolved outside the upload directory.')
-    await fs.mkdir(resolvedUploadDir, { recursive: true })
-    await fs.writeFile(resolvedUploadPath, bytes)
+    await writeUploadFile(resolvedUploadPath, bytes)
     return {
       id: uploadId,
       name: safeName,
@@ -228,10 +260,11 @@ export function createCommandConsoleUploadService(options: CommandConsoleUploadS
     const normalized = (attachments || []).map(normalizeAttachment).filter((entry): entry is CommandConsoleUploadAttachment => Boolean(entry))
     const gatewayAttachments: Record<string, unknown>[] = []
     for (const attachment of normalized) {
+      const inlineLimit = attachment.kind === 'image' ? imageInlineLimitBytes : fileInlineLimitBytes
+      if (attachment.size > inlineLimit) continue
       const readPath = await resolveAttachmentReadPath(attachment)
       if (!readPath) continue
       const bytes = await fs.readFile(readPath)
-      const inlineLimit = attachment.kind === 'image' ? imageInlineLimitBytes : fileInlineLimitBytes
       if (bytes.length > inlineLimit) continue
       gatewayAttachments.push({
         type: attachment.kind === 'image' ? 'image' : 'file',

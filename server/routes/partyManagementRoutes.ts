@@ -1,4 +1,4 @@
-import express from 'express'
+import express, { type ErrorRequestHandler, type Request, type Response } from 'express'
 import { promises as fs } from 'node:fs'
 import path from 'node:path'
 import type { Express } from 'express'
@@ -19,6 +19,8 @@ export function registerPartyManagementRoutes(app: Express, options: PartyManage
     agentLocalConfigPath,
     applyExecutionWorkspaceToLocalConfig,
     applyLocalConfigToGlobal,
+    avatarUploadLimitBytes,
+    avatarUploadLimitErrorMessage,
     avatarUploadFileName,
     canonicalAgentModelId,
     canonicalDoctrineRoot,
@@ -815,7 +817,24 @@ export function registerPartyManagementRoutes(app: Express, options: PartyManage
     }
   })
 
-  app.post('/api/party/avatar-upload/:agentId', express.raw({ type: ['image/*', 'application/octet-stream'], limit: '15mb' }), async (req, res) => {
+  const avatarUploadBodyErrorHandler: ErrorRequestHandler = (error, _req, res, next) => {
+    const typed = error as { status?: unknown; statusCode?: unknown; type?: unknown }
+    if (typed?.type === 'entity.too.large' || typed?.status === 413 || typed?.statusCode === 413) {
+      return apiFailure(
+        res,
+        413,
+        'avatar_upload_failed',
+        'Avatar upload failed',
+        avatarUploadLimitErrorMessage(avatarUploadLimitBytes),
+      )
+    }
+    return next(error)
+  }
+
+  app.post('/api/party/avatar-upload/:agentId', express.raw({
+    type: ['image/*', 'application/octet-stream'],
+    limit: avatarUploadLimitBytes,
+  }), avatarUploadBodyErrorHandler, async (req: Request, res: Response) => {
     const agentId = String(req.params.agentId || '')
     if (!isValidAgentId(agentId)) return apiFailure(res, 400, 'invalid_payload', 'Invalid agent id.')
 
