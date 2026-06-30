@@ -1,4 +1,4 @@
-import type { Express } from 'express'
+import type { Express, Response } from 'express'
 import { z } from 'zod'
 import { apiFailure, apiSuccess } from '../controlPlaneHttp'
 import type { PluginRuntimeService, PluginSetupTerminalClient } from '../services/plugins/pluginRuntimeService'
@@ -102,6 +102,21 @@ function pluginResponseDetails(controls: PluginControlsPayload) {
 }
 
 export function registerPluginRoutes(app: Express, options: PluginRoutesOptions) {
+  async function requirePluginControl(pluginId: string, res: Response): Promise<PluginControlsPayload | null> {
+    try {
+      const controls = await options.listPluginControls()
+      const plugin = controls.plugins.find((entry) => entry.id === pluginId)
+      if (!plugin) {
+        apiFailure(res, 404, 'plugin_not_found', 'Plugin not found', { pluginId })
+        return null
+      }
+      return controls
+    } catch (error) {
+      apiFailure(res, 500, 'plugin_operation_failed', 'Failed to verify plugin', options.pluginErrorDetail(error))
+      return null
+    }
+  }
+
   app.get('/api/plugins', async (req, res) => {
     try {
       const forceRefresh = req.query.refresh === '1' || req.query.refresh === 'true'
@@ -247,6 +262,7 @@ export function registerPluginRoutes(app: Express, options: PluginRoutesOptions)
     if (!parsed.success) return apiFailure(res, 400, 'invalid_payload', 'Invalid payload', parsed.error.flatten())
 
     try {
+      if (!await requirePluginControl(pluginId, res)) return
       const result = await options.updateOpenClawPlugin(pluginId, parsed.data.restart)
       options.invalidateRuntimeStatusCache()
       return apiSuccess(res, {
@@ -275,6 +291,7 @@ export function registerPluginRoutes(app: Express, options: PluginRoutesOptions)
     if (!parsed.success) return apiFailure(res, 400, 'invalid_payload', 'Invalid payload', parsed.error.flatten())
 
     try {
+      if (!await requirePluginControl(pluginId, res)) return
       const result = await options.uninstallOpenClawPlugin(pluginId, parsed.data)
       options.invalidateRuntimeStatusCache()
       return apiSuccess(res, {
@@ -296,6 +313,7 @@ export function registerPluginRoutes(app: Express, options: PluginRoutesOptions)
     }
 
     try {
+      if (!await requirePluginControl(pluginId, res)) return
       const inspect = await options.pluginRuntime.inspectOpenClawPluginRuntime(pluginId)
       const controls = await options.listPluginControls()
       return apiSuccess(res, {
@@ -323,6 +341,7 @@ export function registerPluginRoutes(app: Express, options: PluginRoutesOptions)
     if (!parsed.success) return apiFailure(res, 400, 'invalid_payload', 'Invalid payload', parsed.error.flatten())
 
     try {
+      if (!await requirePluginControl(pluginId, res)) return
       await options.savePluginDirectConfig(pluginId, parsed.data.values, parsed.data.providerAuth)
       options.invalidateRuntimeStatusCache()
       const restart = parsed.data.restart ? options.schedulePluginGatewayRestart() : { restarted: false, scheduled: false, detail: 'gateway restart skipped' }
@@ -348,6 +367,7 @@ export function registerPluginRoutes(app: Express, options: PluginRoutesOptions)
     if (!parsed.success) return apiFailure(res, 400, 'invalid_payload', 'Invalid payload', parsed.error.flatten())
 
     try {
+      if (parsed.data.pluginId && !await requirePluginControl(parsed.data.pluginId, res)) return
       const session = options.pluginRuntime.startPluginSetupTerminalSession(parsed.data)
       return apiSuccess(res, { session })
     } catch (error) {
@@ -443,6 +463,7 @@ export function registerPluginRoutes(app: Express, options: PluginRoutesOptions)
     if (!parsed.success) return apiFailure(res, 400, 'invalid_payload', 'Invalid payload', parsed.error.flatten())
 
     try {
+      if (!await requirePluginControl(pluginId, res)) return
       const result = await options.setOpenClawPluginEnabledForControlCenter(pluginId, parsed.data.enabled, {
         restart: parsed.data.restart,
         immediateRestart: parsed.data.immediateRestart,

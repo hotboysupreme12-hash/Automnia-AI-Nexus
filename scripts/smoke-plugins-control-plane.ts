@@ -25,6 +25,7 @@ function routeBlock(source: string, marker: string): string {
 const server = readWorkspaceFile('server/controlPlane.ts')
 const controlPlaneHttp = readWorkspaceFile('server/controlPlaneHttp.ts')
 const pluginRoutes = readWorkspaceFile('server/routes/pluginRoutes.ts')
+const pluginRouteTests = readWorkspaceFile('tests/pluginRoutes.test.ts')
 const pluginsPanel = readWorkspaceFile('src/components/plugins/PluginsPanel.tsx')
 const packageJson = JSON.parse(readWorkspaceFile('package.json')) as { scripts?: Record<string, string> }
 
@@ -100,6 +101,55 @@ for (const fragment of [
   '}/uninstall`',
 ]) {
   assert(pluginsPanel.includes(fragment), `PluginsPanel is missing dynamic plugin endpoint fragment ${fragment}`)
+}
+
+assert(
+  pluginRouteTests.includes('plugin routes redact command and operation errors across remaining plugin APIs'),
+  'pluginRoutes.test.ts should cover redacted plugin errors across remaining plugin APIs',
+)
+for (const route of [
+  '/api/plugins/search?q=known',
+  '/api/plugins/update-all',
+  '/api/plugins/gateway/restart',
+  '/api/plugins/clawtalk/setup',
+  '/api/plugins/known/update',
+  '/api/plugins/known/uninstall',
+  '/api/plugins/known/inspect',
+  '/api/plugins/known/config',
+  '/api/plugins/setup-terminal',
+  '/api/plugins/known',
+]) {
+  assert(pluginRouteTests.includes(route), `pluginRoutes.test.ts should pin redacted error coverage for ${route}`)
+}
+for (const secretMarker of [
+  'sk-route-redaction-secret',
+  'route-secret-token',
+  'cc_test_',
+]) {
+  assert(pluginRouteTests.includes(secretMarker), `pluginRoutes.test.ts should assert redaction for ${secretMarker}`)
+}
+
+assert(
+  pluginRouteTests.includes('plugin routes preserve disabled plugin state and enable known disabled plugins'),
+  'pluginRoutes.test.ts should cover disabled plugin state through the route boundary',
+)
+for (const disabledStateFragment of [
+  'disabled-one',
+  "status: 'disabled'",
+  '/api/plugins/disabled-one',
+  'Disabled by operator policy.',
+]) {
+  assert(pluginRouteTests.includes(disabledStateFragment), `pluginRoutes.test.ts should pin disabled plugin coverage for ${disabledStateFragment}`)
+}
+
+for (const disabledUiFragment of [
+  "{ id: 'disabled', label: 'Disabled' }",
+  "if (filter === 'disabled' && plugin.enabled) return false",
+  'const disabledCount = Math.max(0, plugins.length - enabledCount)',
+  "{disabledCount} disabled",
+  "plugin.enabled ? 'Stop' : 'Start'",
+]) {
+  assert(pluginsPanel.includes(disabledUiFragment), `PluginsPanel should preserve disabled plugin UI state: ${disabledUiFragment}`)
 }
 
 assert(

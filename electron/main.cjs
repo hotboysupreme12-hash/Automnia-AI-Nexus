@@ -38,6 +38,10 @@ const isDev = !detectPackagedRuntime()
 const HOME_DIR = process.env.USERPROFILE || process.env.HOME || app.getPath('home')
 const DYSTOPAI_USER_DATA_DIR = path.resolve(process.env.DYSTOPAI_USER_DATA_DIR || path.join(HOME_DIR, '.dystopai-control-center'))
 app.setPath('userData', DYSTOPAI_USER_DATA_DIR)
+const CONTROL_CENTER_TOKEN_FILE = path.resolve(
+  process.env.DYSTOPAI_CONTROL_CENTER_TOKEN_FILE || path.join(DYSTOPAI_USER_DATA_DIR, 'auth', 'control-center-token.json'),
+)
+const CONTROL_CENTER_TOKEN_HELP_FILE = path.join(path.dirname(CONTROL_CENTER_TOKEN_FILE), 'README.txt')
 const NPM_TOOLCHAIN_ROOT = path.join(DYSTOPAI_USER_DATA_DIR, 'toolchains', 'node')
 const BUNDLED_NPM_TOOLCHAIN_ROOT = path.join(process.resourcesPath || '', 'toolchains', 'node')
 const MIN_NPM_NODE_MAJOR = 22
@@ -148,9 +152,103 @@ function isTrustedRendererSender(event) {
   }
 }
 
+function normalizePersistedControlCenterToken(value) {
+  if (typeof value !== 'string') return ''
+  const token = value.trim()
+  if (!token || token.length < 16 || token.length > 512) return ''
+  if (/[\0\r\n]/.test(token)) return ''
+  return token
+}
+
+function readControlCenterTokenFile() {
+  try {
+    if (!fs.existsSync(CONTROL_CENTER_TOKEN_FILE)) return ''
+    const raw = fs.readFileSync(CONTROL_CENTER_TOKEN_FILE, 'utf8')
+    const trimmed = raw.trim()
+    if (!trimmed) {
+      quarantineInvalidControlCenterTokenFile('empty token file')
+      return ''
+    }
+    const candidate = trimmed.startsWith('{') ? JSON.parse(trimmed)?.token : trimmed
+    const token = normalizePersistedControlCenterToken(candidate)
+    if (token) return token
+    quarantineInvalidControlCenterTokenFile('token must be 16-512 characters with no line breaks')
+  } catch (error) {
+    quarantineInvalidControlCenterTokenFile(error?.message || String(error))
+  }
+  return ''
+}
+
+function quarantineInvalidControlCenterTokenFile(reason) {
+  try {
+    if (!fs.existsSync(CONTROL_CENTER_TOKEN_FILE)) return
+    const suffix = new Date().toISOString().replace(/[:.]/g, '-')
+    const invalidPath = `${CONTROL_CENTER_TOKEN_FILE}.invalid-${suffix}`
+    fs.renameSync(CONTROL_CENTER_TOKEN_FILE, invalidPath)
+    console.warn(`[dystopai] Ignored invalid saved Control Center token (${reason}). Moved it to: ${invalidPath}`)
+  } catch (error) {
+    console.warn(`[dystopai] Ignored invalid saved Control Center token (${reason}); could not move it aside: ${error?.message || error}`)
+  }
+}
+
+function writeControlCenterTokenHelpFile() {
+  const body = [
+    'DystopAI Control Center local token',
+    '',
+    'This folder stores the desktop launch token for the local Control Center API on 127.0.0.1.',
+    'Electron keeps this long-lived token in the main process and uses it to mint short session tokens for the app window.',
+    'The preload layer and web page do not receive the long-lived token.',
+    '',
+    'To choose your own token, close DystopAI and edit the "token" field in control-center-token.json.',
+    'Use a long random value with no line breaks. If the token file is deleted or invalid, DystopAI creates a fresh local token on the next start.',
+    '',
+  ].join('\n')
+  try {
+    fs.mkdirSync(path.dirname(CONTROL_CENTER_TOKEN_HELP_FILE), { recursive: true })
+    fs.writeFileSync(CONTROL_CENTER_TOKEN_HELP_FILE, body, { encoding: 'utf8', mode: 0o600 })
+    try { fs.chmodSync(CONTROL_CENTER_TOKEN_HELP_FILE, 0o600) } catch {}
+  } catch (error) {
+    console.warn('[dystopai] could not write Control Center token help file:', error?.message || error)
+  }
+}
+
+function writeControlCenterTokenFile(token, source = 'generated') {
+  const payload = JSON.stringify({
+    token,
+    source,
+    createdAt: new Date().toISOString(),
+    scope: 'local-control-center',
+  }, null, 2) + '\n'
+  const dir = path.dirname(CONTROL_CENTER_TOKEN_FILE)
+  const tempPath = path.join(dir, `.control-center-token-${process.pid}-${Date.now()}.tmp`)
+  try {
+    fs.mkdirSync(dir, { recursive: true })
+    fs.writeFileSync(tempPath, payload, { encoding: 'utf8', mode: 0o600 })
+    try { fs.chmodSync(tempPath, 0o600) } catch {}
+    fs.renameSync(tempPath, CONTROL_CENTER_TOKEN_FILE)
+    try { fs.chmodSync(CONTROL_CENTER_TOKEN_FILE, 0o600) } catch {}
+    writeControlCenterTokenHelpFile()
+  } catch (error) {
+    try { fs.rmSync(tempPath, { force: true }) } catch {}
+    console.warn('[dystopai] could not persist Control Center token; this run will continue with an in-memory token:', error?.message || error)
+  }
+}
+
 function ensureControlCenterLaunchToken() {
   if (!controlCenterLaunchToken) {
-    controlCenterLaunchToken = process.env.CONTROL_CENTER_TOKEN || randomBytes(32).toString('base64url')
+    const configuredToken = typeof process.env.CONTROL_CENTER_TOKEN === 'string' ? process.env.CONTROL_CENTER_TOKEN.trim() : ''
+    if (configuredToken) {
+      controlCenterLaunchToken = configuredToken
+    } else {
+      controlCenterLaunchToken = readControlCenterTokenFile()
+    }
+    if (controlCenterLaunchToken && !configuredToken) {
+      writeControlCenterTokenHelpFile()
+    }
+    if (!controlCenterLaunchToken) {
+      controlCenterLaunchToken = randomBytes(32).toString('base64url')
+      writeControlCenterTokenFile(controlCenterLaunchToken)
+    }
   }
   process.env.CONTROL_CENTER_TOKEN = controlCenterLaunchToken
   return controlCenterLaunchToken

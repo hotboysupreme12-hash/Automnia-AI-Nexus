@@ -77,10 +77,6 @@ const EDITOR_AUTH_CACHE_MS = 15 * 1000
 const EDITOR_MODEL_FETCH_TIMEOUT_MS = 8000
 const EDITOR_PATCH_DEBOUNCE_MS = 500
 const IS_WINDOWS_CLIENT = typeof navigator !== 'undefined' && /Windows/i.test(navigator.userAgent)
-const DEEPSEEK_PRO_MODEL = 'deepseek/deepseek-v4-pro'
-const DEEPSEEK_FLASH_MODEL = 'deepseek/deepseek-v4-flash'
-const OPENROUTER_DEEPSEEK_PRO_MODEL = 'openrouter/deepseek/deepseek-v4-pro'
-const OPENROUTER_DEEPSEEK_FLASH_MODEL = 'openrouter/deepseek/deepseek-v4-flash'
 const CODEX_5_3_SPARK_MODEL_ID = 'openai/gpt-5.3-codex-spark'
 const CODEX_5_3_SPARK_MODEL: AvailableModel = {
   id: CODEX_5_3_SPARK_MODEL_ID,
@@ -661,9 +657,6 @@ export function AgentEditorModal() {
   const selectedPrimaryAuthForRefresh = selectedPrimaryProviderForAuthRefresh ? authForProvider(selectedPrimaryProviderForAuthRefresh) : undefined
   const modelGroups = useMemo(() => groupAvailableModels(selectableModels), [selectableModels])
   const fallbackModelGroups = useMemo(() => groupAvailableModels(selectableModels.filter((m) => m.id !== primary)), [selectableModels, primary])
-  const openRouterReady = authForProvider('openrouter')?.configured === true
-  const deepSeekStackPrimary = openRouterReady ? OPENROUTER_DEEPSEEK_PRO_MODEL : DEEPSEEK_PRO_MODEL
-  const deepSeekStackFallback = openRouterReady ? OPENROUTER_DEEPSEEK_FLASH_MODEL : DEEPSEEK_FLASH_MODEL
   const SvM = async () => {
     if (!agent) return
     const providerStatus = authForProvider(providerForModel(primary))
@@ -1306,17 +1299,6 @@ export function AgentEditorModal() {
                         </div>
                       )}
                     </div>
-                    <div className="rounded-xl border border-cyan-400/15 bg-cyan-400/[0.04] p-3">
-                      <div className="flex items-center justify-between gap-3">
-                        <div>
-                          <p className="text-[11px] font-extrabold text-cyan-100">DeepSeek V4 Stack</p>
-                          <p className="mt-0.5 text-[9px] text-slate-500">Pro primary, Flash fallback.</p>
-                        </div>
-                        <button type="button" onClick={()=>{markConfigDirty(agent.id,'model');setPrimary(deepSeekStackPrimary);setFallbacks((p)=>[deepSeekStackFallback,...p.filter((id)=>id!==DEEPSEEK_PRO_MODEL&&id!==DEEPSEEK_FLASH_MODEL&&id!==OPENROUTER_DEEPSEEK_PRO_MODEL&&id!==OPENROUTER_DEEPSEEK_FLASH_MODEL)]);maybePromptProviderAuth(deepSeekStackPrimary)}} title="Apply DeepSeek Pro as primary with Flash fallback" className="rounded-lg border border-cyan-400/25 bg-cyan-400/[0.08] px-3 py-1.5 text-[9px] font-bold uppercase tracking-[0.12em] text-cyan-200 hover:bg-cyan-400/[0.14]">
-                          Apply
-                        </button>
-                      </div>
-                    </div>
                     <div>
                       <h3 className="text-xs font-extrabold text-slate-200 mb-1">Fallbacks</h3>
                       <div className="max-h-44 space-y-0.5 overflow-auto rounded-lg border border-white/[0.06] bg-white/[0.02] p-1.5">
@@ -1412,17 +1394,12 @@ export function AgentEditorModal() {
                         <p className="text-[10px] font-extrabold uppercase tracking-[0.14em] text-amber-200">★ Party Leader — Spot 1</p>
                         <p className="mt-0.5 text-[9px] text-amber-300/70">Auto-detected. Heartbeat runs first; orchestrates team.</p>
                       </div>
-                    ):partySlotIndex>0?(
-                      <div className="rounded-xl border border-cyan-400/20 bg-cyan-400/[0.04] px-4 py-3">
-                        <p className="text-[10px] font-extrabold uppercase tracking-[0.14em] text-cyan-200">Party Slot {partySlotIndex+1}</p>
-                        <p className="mt-0.5 text-[9px] text-cyan-300/70">Receives directives from leader. Configure independently.</p>
-                      </div>
-                    ):(
+                    ):partySlotIndex<=0?(
                       <div className="rounded-xl border border-white/[0.08] bg-white/[0.02] px-4 py-3">
                         <p className="text-[10px] font-extrabold uppercase tracking-[0.14em] text-slate-400">Not in party</p>
                         <p className="mt-0.5 text-[9px] text-slate-500">Add to party to activate heartbeat.</p>
                       </div>
-                    )}
+                    ): null}
 
                     {/* Tick interval — auto-saving slider */}
                     <div className="rounded-xl border border-white/[0.06] bg-white/[0.02] p-4">

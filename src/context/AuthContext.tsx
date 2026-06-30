@@ -15,6 +15,7 @@ type DesktopSessionBootstrap = NonNullable<NonNullable<DesktopAuthBridge['dystop
 const DESKTOP_BOOTSTRAP_ATTEMPTS = 4
 const DESKTOP_BOOTSTRAP_TIMEOUT_MS = 6500
 const DESKTOP_BOOTSTRAP_RETRY_MS = 450
+const AUTH_STATUS_TIMEOUT_MS = 4_500
 
 function desktopAuthBridge(): DesktopAuthBridge['dystopaiDesktop'] {
   if (typeof window === 'undefined') return undefined
@@ -57,9 +58,9 @@ async function bootstrapDesktopSession(provider: DesktopSessionBootstrap, isCanc
 }
 
 export function AuthProvider({ children }: { children: ReactNode }) {
-  const [isAuthenticated, setIsAuthenticated] = useState(false)
   const [token, setToken] = useState<string | null>(() => readAuthToken())
-  const [checking, setChecking] = useState(() => Boolean(readAuthToken()) || hasDesktopSessionBootstrap())
+  const [isAuthenticated, setIsAuthenticated] = useState(() => Boolean(readAuthToken()))
+  const [checking, setChecking] = useState(() => !readAuthToken() && hasDesktopSessionBootstrap())
 
   const completeLogin = (sessionToken: string) => {
     writeAuthToken(sessionToken)
@@ -103,7 +104,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     void apiRequest<{ authenticated: boolean }>('/api/auth/status', {
       authToken: token,
       signal: controller.signal,
-      timeoutMs: 10_000,
+      timeoutMs: AUTH_STATUS_TIMEOUT_MS,
     })
       .then((result) => {
         const authenticated = result.ok && result.data.authenticated

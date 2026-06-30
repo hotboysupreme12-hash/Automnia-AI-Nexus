@@ -26,10 +26,16 @@ export function LoginModal() {
 
   if (checking) {
     return (
-      <div className="fixed inset-0 z-50 grid place-items-center bg-[radial-gradient(circle_at_18%_10%,rgba(160,176,184,0.10),transparent_28%),radial-gradient(circle_at_82%_4%,rgba(255,255,255,0.035),transparent_30%),linear-gradient(160deg,#030303_0%,#101214_48%,#050505_100%)]">
-        <div className="text-center">
-          <div className="mb-4 inline-block h-12 w-12 animate-spin rounded-full border-4 border-slate-300/80 border-t-transparent" />
-          <p className="text-lg text-slate-100">Checking authentication...</p>
+      <div className="fixed inset-0 z-50 grid place-items-center bg-[linear-gradient(180deg,rgba(255,255,255,0.018),rgba(255,255,255,0)_220px),linear-gradient(135deg,#050607_0%,#090b0f_44%,#0c1015_72%,#050607_100%)] px-4">
+        <div className="w-full max-w-sm rounded-lg border border-slate-200/15 bg-[linear-gradient(180deg,rgba(18,22,25,0.96),rgba(8,10,11,0.96))] p-6 shadow-[inset_0_1px_0_rgba(255,255,255,0.06),0_18px_44px_-34px_rgba(180,200,190,0.34)]">
+          <div className="dui-login-brand mx-auto flex w-full max-w-[260px] items-center justify-center" aria-label="DystopAI Multi Model Nexus">
+            <img src={DYSTOPAI_LOCKUP_SRC} alt="DystopAI Multi Model Nexus" className="dui-login-logo-lockup" draggable={false} />
+          </div>
+          <div className="mt-6 h-1.5 overflow-hidden rounded-full bg-white/10" aria-hidden="true">
+            <div className="h-full w-1/2 animate-[shimmer_1.4s_linear_infinite] rounded-full bg-slate-200/70" />
+          </div>
+          <p className="mt-4 text-center text-sm font-semibold text-slate-100">Opening secure session</p>
+          <p className="mt-1 text-center text-xs text-slate-400">Verifying the local Control Center connection.</p>
         </div>
       </div>
     )

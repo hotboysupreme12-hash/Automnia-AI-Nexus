@@ -4,9 +4,8 @@ import { AuthProvider } from './context/AuthContext'
 import { useAuth } from './context/useAuth'
 
 function AuthenticatedShell() {
-  const { isAuthenticated, checking } = useAuth()
-  if (checking || !isAuthenticated) return <LoginModal />
-  return <NexusShell />
+  const { isAuthenticated } = useAuth()
+  return isAuthenticated ? <NexusShell /> : <LoginModal />
 }
 
 function App() {

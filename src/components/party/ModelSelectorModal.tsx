@@ -84,10 +84,6 @@ interface ModelSelectorModalProps {
   onSave: (primary: string, fallbacks: string[], thinking: ThinkingLevel) => Promise<void>
 }
 
-const DEEPSEEK_PRO_MODEL = 'deepseek/deepseek-v4-pro'
-const DEEPSEEK_FLASH_MODEL = 'deepseek/deepseek-v4-flash'
-const OPENROUTER_DEEPSEEK_PRO_MODEL = 'openrouter/deepseek/deepseek-v4-pro'
-const OPENROUTER_DEEPSEEK_FLASH_MODEL = 'openrouter/deepseek/deepseek-v4-flash'
 const CODEX_5_3_SPARK_MODEL_ID = 'openai/gpt-5.3-codex-spark'
 const CODEX_5_3_SPARK_MODEL: AvailableModel = {
   id: CODEX_5_3_SPARK_MODEL_ID,
@@ -276,17 +272,6 @@ export function ModelSelectorModal({
     : undefined
   const primaryProviderLabel = authLabelForProvider(primaryProvider, primaryProviderStatus)
   const primaryProviderAuthKind = authKindForProvider(primaryProviderStatus)
-  const deepSeekProviderStatus = authProviders.find((entry) => entry.provider === 'deepseek')
-  const openRouterProviderStatus = authProviders.find((entry) => entry.provider === 'openrouter')
-  const openRouterReady = openRouterProviderStatus?.configured === true
-  const preferredDeepSeekProModel = openRouterReady ? OPENROUTER_DEEPSEEK_PRO_MODEL : DEEPSEEK_PRO_MODEL
-  const preferredDeepSeekFlashModel = openRouterReady ? OPENROUTER_DEEPSEEK_FLASH_MODEL : DEEPSEEK_FLASH_MODEL
-  const preferredDeepSeekProviderStatus = openRouterReady ? openRouterProviderStatus : deepSeekProviderStatus
-  const deepSeekModels = models.filter((model) =>
-    model.id === DEEPSEEK_PRO_MODEL ||
-    model.id === DEEPSEEK_FLASH_MODEL ||
-    model.id === OPENROUTER_DEEPSEEK_PRO_MODEL ||
-    model.id === OPENROUTER_DEEPSEEK_FLASH_MODEL)
   const modelGroups = useMemo(() => groupAvailableModels(selectableModels), [selectableModels])
   const fallbackModelGroups = useMemo(
     () => groupAvailableModels(selectableModels.filter((model) => model.id !== selectedPrimary)),
@@ -307,22 +292,7 @@ export function ModelSelectorModal({
     primaryProviderStatus?.oauth?.supported,
     fetchAuthProviders,
   ])
-  const deepSeekReady = openRouterReady || deepSeekProviderStatus?.configured === true
   const selectedThinking: ThinkingLevel = thinkingEnabled ? thinkingLevel : 'off'
-
-  const applyDeepSeekStack = () => {
-    setSelectedPrimary(preferredDeepSeekProModel)
-    setSelectedFallbacks((current) => {
-      const next = current.filter((id) =>
-        id !== DEEPSEEK_PRO_MODEL &&
-        id !== DEEPSEEK_FLASH_MODEL &&
-        id !== OPENROUTER_DEEPSEEK_PRO_MODEL &&
-        id !== OPENROUTER_DEEPSEEK_FLASH_MODEL)
-      return [preferredDeepSeekFlashModel, ...next]
-    })
-    setStatus(deepSeekReady ? 'DeepSeek V4 stack selected.' : 'DeepSeek V4 selected. Add a key before saving.')
-    if (preferredDeepSeekProviderStatus && !deepSeekReady) setAuthModalProvider(preferredDeepSeekProviderStatus)
-  }
 
   if (!isOpen) return null
 
@@ -364,61 +334,6 @@ export function ModelSelectorModal({
                 <div className="space-y-2">
                   <h4 className="text-lg font-semibold text-slate-100">Primary Model</h4>
                   <p className="text-xs text-slate-300">Select the primary model for this agent.</p>
-                  <div className="rounded-xl border border-cyan-300/20 bg-slate-950/55 p-3">
-                    <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
-                      <div>
-                        <p className="text-xs font-semibold uppercase tracking-[0.18em] text-cyan-100">DeepSeek V4</p>
-                        <p className="mt-0.5 text-xs text-slate-300">Use Pro as primary and Flash as fallback.</p>
-                      </div>
-                      <span
-                        className={`rounded-full border px-2 py-0.5 text-[10px] uppercase tracking-[0.14em] ${
-                          deepSeekReady
-                            ? 'border-emerald-300/45 bg-emerald-900/30 text-emerald-100'
-                            : 'border-amber-300/45 bg-amber-900/30 text-amber-100'
-                        }`}
-                      >
-                        {openRouterReady ? 'OpenRouter Ready' : deepSeekReady ? 'Key Connected' : 'Key Needed'}
-                      </span>
-                    </div>
-                    <div className="grid gap-2 sm:grid-cols-2">
-                      {deepSeekModels.map((model) => (
-                        <button
-                          key={model.id}
-                          type="button"
-                          onClick={() => {
-                            setSelectedPrimary(model.id)
-                            setStatus(`${model.alias} selected as primary.`)
-                          }}
-                          className={`rounded-lg border px-3 py-2 text-left transition ${
-                            selectedPrimary === model.id
-                              ? 'border-cyan-200/70 bg-cyan-900/35 text-cyan-100'
-                              : 'border-white/10 bg-slate-900/55 text-slate-200 hover:border-cyan-300/40'
-                          }`}
-                        >
-                          <span className="block text-sm font-semibold">{model.alias}</span>
-                          <span className="block text-[11px] text-slate-400">{model.id}</span>
-                        </button>
-                      ))}
-                    </div>
-                    <div className="mt-2 flex flex-wrap gap-2">
-                      <button
-                        type="button"
-                        onClick={applyDeepSeekStack}
-                        className="rounded-lg border border-cyan-300/45 bg-cyan-900/30 px-3 py-1.5 text-xs font-semibold text-cyan-100"
-                      >
-                        Use Pro + Flash
-                      </button>
-                      {preferredDeepSeekProviderStatus && !deepSeekReady && (
-                        <button
-                          type="button"
-                          onClick={() => setAuthModalProvider(preferredDeepSeekProviderStatus)}
-                          className="rounded-lg border border-amber-300/40 bg-amber-900/25 px-3 py-1.5 text-xs text-amber-100"
-                        >
-                          Connect {authLabelForProvider(preferredDeepSeekProviderStatus.provider, preferredDeepSeekProviderStatus)}
-                        </button>
-                      )}
-                    </div>
-                  </div>
                   {primaryProviderStatus && !primaryProviderStatus.configured && (
                     <div className="rounded-lg border border-amber-400/30 bg-amber-900/30 px-3 py-2 text-xs text-amber-100">
                       Missing {primaryProviderLabel} {primaryProviderAuthKind}. Connect it before using this model.
