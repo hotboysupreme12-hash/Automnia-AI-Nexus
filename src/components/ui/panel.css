@@ -1,0 +1,92 @@
+.dui-panel {
+  --dui-panel-accent: var(--accent-cyan);
+
+  position: relative;
+  display: grid;
+  gap: var(--density-section-gap);
+  padding: var(--density-panel-padding);
+  border: 1px solid var(--border-soft);
+  border-radius: var(--radius-md);
+  background:
+    linear-gradient(
+      180deg,
+      color-mix(in srgb, var(--surface-2) 72%, transparent),
+      color-mix(in srgb, var(--surface-1) 88%, transparent)
+    );
+  color: var(--text-secondary);
+  box-shadow: var(--shadow-panel-soft);
+}
+
+.dui-panel::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  border-top: 1px solid color-mix(in srgb, var(--dui-panel-accent) 24%, transparent);
+  opacity: var(--glow-opacity);
+  pointer-events: none;
+}
+
+.dui-panel[data-tone="accent"] {
+  --dui-panel-accent: var(--accent-cyan);
+}
+
+.dui-panel[data-tone="warning"] {
+  --dui-panel-accent: var(--accent-yellow);
+}
+
+.dui-panel[data-tone="danger"] {
+  --dui-panel-accent: var(--accent-red);
+}
+
+.dui-panel--compact {
+  gap: var(--space-3);
+  padding: var(--space-3);
+}
+
+.dui-panel__header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--space-4);
+  min-width: 0;
+}
+
+.dui-panel__title-group {
+  display: grid;
+  gap: var(--space-1);
+  min-width: 0;
+}
+
+.dui-panel__eyebrow {
+  color: var(--text-muted);
+  font-size: var(--font-size-xs);
+  font-weight: 700;
+  line-height: var(--line-tight);
+  letter-spacing: 0;
+  text-transform: uppercase;
+}
+
+.dui-panel__title {
+  margin: 0;
+  color: var(--text-primary);
+  font-size: var(--dy-type-title, var(--font-size-lg));
+  font-weight: 800;
+  line-height: var(--line-title);
+  letter-spacing: 0;
+}
+
+.dui-panel__action {
+  display: inline-flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: var(--space-2);
+  flex: 0 0 auto;
+}
+
+.dui-panel__body {
+  min-width: 0;
+  color: var(--text-secondary);
+  font-size: var(--dy-type-copy, var(--font-size-md));
+  line-height: var(--line-body);
+}

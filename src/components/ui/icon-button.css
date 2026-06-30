@@ -1,0 +1,80 @@
+.dui-icon-button {
+  --dui-icon-button-accent: var(--accent-cyan);
+  --dui-icon-button-bg: color-mix(in srgb, var(--surface-2) 82%, transparent);
+  --dui-icon-button-border: var(--border-default);
+  --dui-icon-button-text: var(--text-secondary);
+
+  display: inline-grid;
+  width: var(--icon-button-size);
+  height: var(--icon-button-size);
+  min-width: var(--icon-button-size);
+  min-height: var(--icon-button-size);
+  place-items: center;
+  border: 1px solid var(--dui-icon-button-border);
+  border-radius: var(--control-radius);
+  background: var(--dui-icon-button-bg);
+  color: var(--dui-icon-button-text);
+  cursor: pointer;
+  letter-spacing: 0;
+  transition:
+    border-color 160ms ease,
+    background-color 160ms ease,
+    color 160ms ease,
+    transform 160ms ease;
+}
+
+.dui-icon-button:hover:not(:disabled) {
+  border-color: color-mix(in srgb, var(--dui-icon-button-accent) 56%, var(--border-default));
+  background: color-mix(in srgb, var(--surface-3) 82%, var(--dui-icon-button-accent) 18%);
+  color: var(--text-primary);
+}
+
+.dui-icon-button:active:not(:disabled) {
+  transform: translateY(1px);
+}
+
+.dui-icon-button:focus-visible {
+  outline: 2px solid var(--focus-ring);
+  outline-offset: 2px;
+  box-shadow:
+    0 0 0 4px var(--focus-ring-shadow),
+    0 0 0 1px var(--focus-ring-fill) inset;
+}
+
+.dui-icon-button:disabled {
+  color: var(--text-disabled);
+  cursor: not-allowed;
+  opacity: 0.68;
+}
+
+.dui-icon-button--size-compact {
+  width: var(--control-height-compact);
+  height: var(--control-height-compact);
+  min-width: var(--control-height-compact);
+  min-height: var(--control-height-compact);
+}
+
+.dui-icon-button--variant-quiet {
+  --dui-icon-button-bg: transparent;
+  --dui-icon-button-border: transparent;
+  --dui-icon-button-text: var(--text-muted);
+}
+
+.dui-icon-button--variant-danger {
+  --dui-icon-button-accent: var(--accent-red);
+  --dui-icon-button-bg: color-mix(in srgb, var(--accent-red) 10%, var(--surface-2));
+  --dui-icon-button-border: color-mix(in srgb, var(--accent-red) 42%, var(--border-default));
+}
+
+.dui-icon-button__glyph {
+  display: inline-grid;
+  width: 1.15em;
+  height: 1.15em;
+  place-items: center;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .dui-icon-button {
+    transition-duration: 0.001ms;
+  }
+}

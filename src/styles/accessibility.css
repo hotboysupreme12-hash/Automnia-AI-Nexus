@@ -1,0 +1,70 @@
+:root {
+  --focus-ring: #7dd3fc;
+  --focus-ring-shadow: rgba(125, 211, 252, 0.22);
+  --focus-ring-fill: rgba(125, 211, 252, 0.10);
+}
+
+html.dui-pro-overhaul.dui-cohesive-ui :where(button, a, input, textarea, select, summary, [role="button"], [role="link"], [tabindex]):focus-visible {
+  outline: 2px solid var(--focus-ring) !important;
+  outline-offset: 2px !important;
+  box-shadow:
+    0 0 0 4px var(--focus-ring-shadow),
+    0 0 0 1px var(--focus-ring-fill) inset !important;
+}
+
+html.dui-pro-overhaul.dui-cohesive-ui .dui-settings-toggle input:focus-visible + i {
+  outline: 2px solid var(--focus-ring) !important;
+  outline-offset: 3px !important;
+  box-shadow: 0 0 0 4px var(--focus-ring-shadow) !important;
+}
+
+html.dui-pro-overhaul.dui-cohesive-ui .dy-skip-link:focus-visible {
+  outline: 2px solid var(--focus-ring) !important;
+  outline-offset: 4px !important;
+}
+
+html.dui-pro-overhaul.dui-cohesive-ui :where(input, textarea)::placeholder {
+  color: var(--text-subtle);
+  opacity: 1;
+}
+
+html.dui-pro-overhaul[data-dui-high-contrast="true"] :where(input, textarea)::placeholder {
+  color: var(--text-muted) !important;
+  opacity: 1 !important;
+}
+
+html.dui-pro-overhaul[data-dui-motion="reduced"] *,
+html.dui-pro-overhaul[data-dui-motion="reduced"] *::before,
+html.dui-pro-overhaul[data-dui-motion="reduced"] *::after {
+  animation-duration: 0.001ms !important;
+  animation-iteration-count: 1 !important;
+  scroll-behavior: auto !important;
+  transition-duration: 0.001ms !important;
+}
+
+html.dui-pro-overhaul[data-dui-reduced-glow="true"] :where([data-dui-panel], .glass-card, .agent-card-pro, .dy-human-rail, button, input, textarea, select) {
+  text-shadow: none !important;
+}
+
+html.dui-pro-overhaul[data-dui-reduced-glow="true"] :where(.grid-overlay, .agent-card-grid, .agent-card-foil, .portrait-corners) {
+  opacity: min(var(--glow-opacity), 0.12) !important;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  html.dui-pro-overhaul *,
+  html.dui-pro-overhaul *::before,
+  html.dui-pro-overhaul *::after {
+    animation-duration: 0.001ms !important;
+    animation-iteration-count: 1 !important;
+    scroll-behavior: auto !important;
+    transition-duration: 0.001ms !important;
+  }
+}
+
+@media (forced-colors: active) {
+  html.dui-pro-overhaul.dui-cohesive-ui :where(button, a, input, textarea, select, summary, [role="button"], [role="link"], [tabindex]):focus-visible {
+    outline: 2px solid Highlight !important;
+    outline-offset: 2px !important;
+    box-shadow: none !important;
+  }
+}

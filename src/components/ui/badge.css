@@ -1,0 +1,102 @@
+.dui-badge,
+.dui-status-chip {
+  --dui-badge-accent: var(--accent-blue);
+  --dui-badge-bg: color-mix(in srgb, var(--surface-2) 78%, transparent);
+  --dui-badge-border: var(--border-soft);
+  --dui-badge-text: var(--text-secondary);
+
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-2);
+  min-height: calc(var(--control-height-compact) - var(--space-1));
+  max-width: 100%;
+  padding: 0 var(--space-3);
+  border: 1px solid var(--dui-badge-border);
+  border-radius: var(--radius-md);
+  background: var(--dui-badge-bg);
+  color: var(--dui-badge-text);
+  font-size: var(--font-size-xs);
+  font-weight: 700;
+  line-height: var(--line-tight);
+  letter-spacing: 0;
+  text-shadow: none;
+}
+
+.dui-badge--micro {
+  min-height: calc(var(--control-height-compact) - var(--space-2));
+  padding-inline: var(--space-2);
+  font-size: var(--font-size-2xs);
+}
+
+.dui-badge--neutral {
+  --dui-badge-accent: var(--text-muted);
+}
+
+.dui-badge--info {
+  --dui-badge-accent: var(--accent-cyan);
+  --dui-badge-bg: color-mix(in srgb, var(--accent-cyan) 10%, var(--surface-2));
+  --dui-badge-border: color-mix(in srgb, var(--accent-cyan) 34%, var(--border-soft));
+  --dui-badge-text: var(--text-primary);
+}
+
+.dui-badge--success {
+  --dui-badge-accent: var(--accent-green);
+  --dui-badge-bg: color-mix(in srgb, var(--accent-green) 10%, var(--surface-2));
+  --dui-badge-border: color-mix(in srgb, var(--accent-green) 34%, var(--border-soft));
+  --dui-badge-text: var(--text-primary);
+}
+
+.dui-badge--warning {
+  --dui-badge-accent: var(--accent-yellow);
+  --dui-badge-bg: color-mix(in srgb, var(--accent-yellow) 12%, var(--surface-2));
+  --dui-badge-border: color-mix(in srgb, var(--accent-yellow) 40%, var(--border-soft));
+  --dui-badge-text: var(--text-primary);
+}
+
+.dui-badge--error {
+  --dui-badge-accent: var(--accent-red);
+  --dui-badge-bg: color-mix(in srgb, var(--accent-red) 12%, var(--surface-2));
+  --dui-badge-border: color-mix(in srgb, var(--accent-red) 40%, var(--border-soft));
+  --dui-badge-text: var(--text-primary);
+}
+
+.dui-badge__icon,
+.dui-status-chip__icon {
+  display: inline-grid;
+  width: 1em;
+  height: 1em;
+  place-items: center;
+  flex: 0 0 auto;
+}
+
+.dui-badge__label,
+.dui-status-chip__label,
+.dui-status-chip__value {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.dui-status-chip {
+  justify-content: flex-start;
+}
+
+.dui-status-chip__dot {
+  width: var(--space-2);
+  height: var(--space-2);
+  border-radius: 50%;
+  background: var(--dui-badge-accent);
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--dui-badge-accent) 20%, transparent);
+  flex: 0 0 auto;
+}
+
+.dui-status-chip__label {
+  color: var(--text-muted);
+  font-size: var(--font-size-2xs);
+  text-transform: uppercase;
+}
+
+.dui-status-chip__value {
+  color: var(--dui-badge-text);
+}

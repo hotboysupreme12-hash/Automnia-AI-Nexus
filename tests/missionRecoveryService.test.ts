@@ -65,6 +65,16 @@ function availableCronState(activeCronIds: string[] = [], disabledCronIds: strin
   }
 }
 
+function unavailableCronState(error = 'OpenClaw cron state unavailable with secret-token'): MissionCronReconciliationSnapshot {
+  return {
+    available: false,
+    activeCronIds: new Set(),
+    disabledCronIds: new Set(),
+    knownCronIds: new Set(),
+    error,
+  }
+}
+
 function createHarness(overrides: Partial<{
   cronState: MissionCronReconciliationSnapshot
   ensureGatewayClient: () => Promise<{ client: { request: (method: string, params?: Record<string, unknown>, options?: { timeoutMs?: number }) => Promise<unknown> } }>
@@ -181,6 +191,36 @@ test('hydrateMissionRecordsFromLedger restores active missions and delegates rec
   assert.equal(state.logs[0]?.message, 'rehydrated 1 mission record(s) from the ledger after restart (1 active)')
 })
 
+test('reconcileRehydratedMissionCronJobs preserves recovered missions when cron jobs remain active', () => {
+  const { service, state } = createHarness()
+  const mission = makeMission({
+    id: 'mission-active-cron',
+    scheduler: {
+      ...missionSchedulerInitialState({ party: ['agent-a', 'agent-b'] }),
+      status: 'running',
+      activeJobId: 'job-active-a',
+      jobs: [
+        makeJob({ id: 'job-active-a', cronId: 'cron-active-a', missionId: 'mission-active-cron', status: 'created' }),
+        makeJob({ id: 'job-active-b', cronId: 'cron-active-b', missionId: 'mission-active-cron', agentId: 'agent-b', role: 'worker', status: 'running' }),
+      ],
+    },
+  })
+
+  const recovered = service.reconcileRehydratedMissionCronJobs(mission, availableCronState(['cron-active-a', 'cron-active-b']))
+
+  assert.equal(recovered, true)
+  assert.equal(mission.status, 'active')
+  assert.equal(mission.lifecycleState, 'running')
+  assert.equal(mission.scheduler.status, 'running')
+  assert.equal(mission.scheduler.activeJobId, 'job-active-a')
+  assert.deepEqual(mission.scheduler.jobs.map((job) => job.status), ['created', 'running'])
+  assert.deepEqual(state.clearedCronIds, [])
+  assert.deepEqual(state.clearedControllers, [])
+  assert.deepEqual(state.transitions, [])
+  assert.deepEqual(state.reports, [])
+  assert.deepEqual(state.logs, [])
+})
+
 test('reconcileRehydratedMissionCronJobs fails recovered missions when cron jobs disappeared', () => {
   const { service, state } = createHarness()
   const mission = makeMission({
@@ -206,6 +246,68 @@ test('reconcileRehydratedMissionCronJobs fails recovered missions when cron jobs
   assert.deepEqual(state.clearedControllers, ['mission-missing-cron'])
   assert.equal(state.reports.length, 1)
   assert.equal(state.transitions[0]?.message, 'Mission scheduler reconciliation failed: 1 missing cron job(s); 1 disabled cron job(s)')
+  assert.deepEqual((state.transitions[0]?.options as { evidence?: unknown } | undefined)?.evidence, {
+    missingCronIds: ['cron-missing'],
+    disabledCronIds: ['cron-disabled'],
+    affectedJobIds: ['job-missing', 'job-disabled'],
+  })
+})
+
+test('reconcileRehydratedMissionCronJobs defers unavailable cron state with redacted evidence', () => {
+  const { service, state } = createHarness()
+  const mission = makeMission({
+    id: 'mission-cron-unavailable',
+    scheduler: {
+      ...missionSchedulerInitialState({ party: ['agent-a'] }),
+      status: 'running',
+      jobs: [
+        makeJob({ id: 'job-unavailable', cronId: 'cron-unavailable', missionId: 'mission-cron-unavailable', status: 'running' }),
+      ],
+    },
+  })
+
+  const recovered = service.reconcileRehydratedMissionCronJobs(mission, unavailableCronState())
+
+  assert.equal(recovered, true)
+  assert.equal(mission.status, 'active')
+  assert.equal(mission.lifecycleState, 'running')
+  assert.equal(mission.scheduler.status, 'running')
+  assert.equal(mission.scheduler.jobs[0]?.status, 'running')
+  assert.deepEqual(state.clearedCronIds, [])
+  assert.deepEqual(state.transitions, [])
+  assert.deepEqual(state.reports, [])
+  assert.match(state.logs[0]?.message || '', /\[REDACTED\]/)
+  assert.doesNotMatch(state.logs[0]?.message || '', /secret-token/i)
+})
+
+test('hydrateMissionRecordsFromLedger records redacted unavailable cron reconciliation evidence', async () => {
+  const { missions, service, state } = createHarness({
+    cronState: unavailableCronState('cron sqlite open failed with secret-token'),
+  })
+  const mission = makeMission({
+    id: 'mission-unavailable-cron-hydrate',
+    scheduler: {
+      ...missionSchedulerInitialState({ party: ['agent-a'] }),
+      status: 'running',
+      jobs: [
+        makeJob({ id: 'job-unavailable-hydrate', cronId: 'cron-unavailable-hydrate', missionId: 'mission-unavailable-cron-hydrate', status: 'running' }),
+      ],
+    },
+  })
+  state.readRecords.push(missionRecordSnapshot(mission, 'test-unavailable-cron'))
+
+  await service.hydrateMissionRecordsFromLedger()
+
+  const rehydratedEvent = state.events.find((event) => event.idempotencyKey === 'mission-unavailable-cron-hydrate:rehydrated:1782820800000')
+  const evidence = rehydratedEvent?.evidence as Record<string, unknown> | undefined
+  assert.equal(missions.get('mission-unavailable-cron-hydrate')?.status, 'active')
+  assert.equal(state.shifts.length, 1)
+  assert.equal(state.armedTimers.length, 1)
+  assert.equal(evidence?.cronReconciliation, 'unavailable')
+  assert.match(String(evidence?.cronReconciliationError || ''), /\[REDACTED\]/)
+  assert.doesNotMatch(String(evidence?.cronReconciliationError || ''), /secret-token/i)
+  assert.match(state.logs[0]?.message || '', /\[REDACTED\]/)
+  assert.doesNotMatch(state.logs[0]?.message || '', /secret-token/i)
 })
 
 test('reconcileMissionGatewaySessions returns redacted unavailable evidence when Gateway cannot be reached', async () => {

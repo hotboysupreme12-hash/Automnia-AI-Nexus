@@ -1,30 +1,7 @@
 import type { Express } from 'express'
 import { z } from 'zod'
 import { apiFailure, apiSuccess } from '../controlPlaneHttp'
-
-type ProviderOAuthSession = {
-  id: string
-  provider: 'google' | 'openai-codex'
-  state?: string
-  verifier?: string
-  challenge?: string
-  projectId?: string
-  redirectUri?: string
-  authorizationUrl: string
-  status: 'pending' | 'complete' | 'error'
-  createdAt: string
-  completedAt?: string
-  error?: string
-  manualInputRequired?: boolean
-  manualInputSubmittedAt?: string
-  manualPrompt?: string
-  result?: {
-    email?: string
-    accountId?: string
-    projectId?: string
-    expiresAt?: number
-  }
-}
+import type { ProviderOAuthSession } from '../services/providers/oauthCallbackService'
 
 type OAuthLaunchResult = {
   ok: boolean

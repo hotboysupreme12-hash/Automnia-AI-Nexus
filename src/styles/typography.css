@@ -1,0 +1,76 @@
+:root {
+  --font-size-2xs: 11px;
+  --font-size-xs: 12px;
+  --font-size-sm: 13px;
+  --font-size-md: 14px;
+  --font-size-lg: 16px;
+  --font-size-xl: 20px;
+  --font-size-2xl: 24px;
+  --font-size-3xl: 32px;
+
+  --line-tight: 1.15;
+  --line-title: 1.25;
+  --line-body: 1.5;
+  --line-relaxed: 1.65;
+}
+
+html.dui-pro-overhaul,
+html.dui-cohesive-ui,
+html.dy-human-ui {
+  --dy-type-micro: var(--font-size-2xs);
+  --dy-type-caption: var(--font-size-xs);
+  --dy-type-small: var(--font-size-sm);
+  --dy-type-ui: var(--font-size-md);
+  --dy-type-control: var(--font-size-sm);
+  --dy-type-copy: var(--font-size-md);
+  --dy-type-title: 18px;
+  --dy-type-page: var(--font-size-3xl);
+  --dy-leading-tight: var(--line-tight);
+  --dy-leading-ui: 1.38;
+  --dy-leading-copy: var(--line-body);
+}
+
+html.dui-pro-overhaul body,
+html.dui-pro-overhaul .app-bg,
+html.dui-pro-overhaul #root {
+  font-size: var(--font-size-md);
+  line-height: var(--line-body);
+}
+
+html.dui-pro-overhaul :where(input, textarea, select, button) {
+  font-size: var(--font-size-sm);
+}
+
+html.dui-pro-overhaul :where(input, textarea, select) {
+  min-height: var(--control-height-default);
+  line-height: 1.45;
+}
+
+html.dui-pro-overhaul :where(button, [role="button"]) {
+  min-height: var(--control-height-compact);
+  line-height: 1.2;
+}
+
+html.dui-pro-overhaul :where(pre, code, kbd, samp, .font-mono, [class*="font-mono"], .dy-monitor-log-box, .dy-monitor-stream-box) {
+  font-size: var(--font-size-sm);
+  line-height: 1.48;
+}
+
+html.dui-pro-overhaul :where(.badge, .status-chip, .lane-chip, .dy-status-chip, [class*="badge"], [class*="chip"], [class*="pill"]) {
+  font-size: var(--font-size-xs);
+  line-height: 1.22;
+}
+
+html.dui-pro-overhaul :where(p, li, dd, td, th) {
+  line-height: var(--line-body);
+}
+
+@media (max-width: 520px) {
+  html.dui-pro-overhaul,
+  html.dui-cohesive-ui,
+  html.dy-human-ui {
+    --dy-type-micro: var(--font-size-2xs);
+    --dy-type-caption: var(--font-size-xs);
+    --dy-type-ui: var(--font-size-md);
+  }
+}

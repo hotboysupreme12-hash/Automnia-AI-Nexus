@@ -125,6 +125,10 @@ export function createMissionRecoveryService(options: MissionRecoveryServiceOpti
     }))
   }
 
+  function redactedRecoveryDetail(value: unknown, maxLength = 500) {
+    return options.redactSensitiveText(options.trimTask(String(value || ''), maxLength))
+  }
+
   function failRehydratedMissionScheduler(
     mission: Mission,
     reason: string,
@@ -156,7 +160,8 @@ export function createMissionRecoveryService(options: MissionRecoveryServiceOpti
     if (!pendingJobs.length) return true
 
     if (!cronState.available) {
-      options.pushGatewayLog('lifecycle', `mission cron reconciliation skipped for ${mission.id}: ${cronState.error || 'OpenClaw cron state unavailable'}`)
+      const detail = redactedRecoveryDetail(cronState.error || 'OpenClaw cron state unavailable')
+      options.pushGatewayLog('lifecycle', `mission cron reconciliation skipped for ${mission.id}: ${detail}`)
       return true
     }
 
@@ -225,7 +230,7 @@ export function createMissionRecoveryService(options: MissionRecoveryServiceOpti
       sessionKey: job.sessionKey,
       gatewayStatus,
       runtimeStatus,
-      ...(detail ? { detail: options.redactSensitiveText(options.trimTask(detail, 500)) } : {}),
+      ...(detail ? { detail: redactedRecoveryDetail(detail, 500) } : {}),
     }
   }
 
@@ -254,7 +259,7 @@ export function createMissionRecoveryService(options: MissionRecoveryServiceOpti
     for (const detail of details) {
       result[statusCounterName(detail.runtimeStatus)] += 1
     }
-    if (error) result.error = options.redactSensitiveText(options.trimTask(error, 500))
+    if (error) result.error = redactedRecoveryDetail(error, 500)
     return result
   }
 
@@ -300,7 +305,7 @@ export function createMissionRecoveryService(options: MissionRecoveryServiceOpti
     try {
       state = await options.ensureGatewayClient(AbortSignal.timeout(5_000))
     } catch (error) {
-      const detail = options.redactSensitiveText(String(error))
+      const detail = redactedRecoveryDetail(error)
       return summarizeMissionGatewaySessionReconciliation(
         candidates.map((job) => missionGatewaySessionDetail(
           job,
@@ -392,7 +397,7 @@ export function createMissionRecoveryService(options: MissionRecoveryServiceOpti
             schedulerStatus: mission.scheduler.status,
             jobs: mission.scheduler.jobs.length,
             cronReconciliation: cronState.available ? 'verified' : 'unavailable',
-            ...(cronState.error ? { cronReconciliationError: cronState.error } : {}),
+            ...(cronState.error ? { cronReconciliationError: redactedRecoveryDetail(cronState.error) } : {}),
           },
         })
       }

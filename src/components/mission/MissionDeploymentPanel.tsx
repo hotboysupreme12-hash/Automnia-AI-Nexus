@@ -471,6 +471,15 @@ export function MissionDeploymentPanel() {
                 </div>
                 <p>{currentMode.hint}</p>
               </div>
+              {activeMission && (
+                <div className="dui-active-mission-strip" data-mission-projection-state={activeMission.status} data-mission-id={activeMission.id} aria-live="polite">
+                  <span>Mission</span>
+                  <strong>{activeMission.title}</strong>
+                  <small>
+                    {activeMission.status} / {activeMission.scheduler?.status || 'scheduler'} / round {activeMission.scheduler?.round ?? 0}
+                  </small>
+                </div>
+              )}
               <div className="dui-mission-config-grid">
                 <div className="dui-field dui-mission-title-field">
                   <label>Mission title</label>

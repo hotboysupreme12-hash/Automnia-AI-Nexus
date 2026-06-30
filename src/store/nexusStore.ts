@@ -1787,6 +1787,12 @@ export const useNexusStore = create<NexusState>()(
           memoryRecordCount?: number
         }
       }
+      const backendMissionStatusToRunStatus = (mission: BackendMission): MissionRun['status'] => {
+        if (mission.lifecycleState === 'failed') return 'failed'
+        if (mission.status === 'active') return 'running'
+        if (mission.status === 'completed') return 'completed'
+        return 'cancelled'
+      }
       const backendMissionToRun = (mission: BackendMission, fallback: MissionDraft): MissionRun => {
         const durationMode: DurationMode =
           mission.mode === 'instant'
@@ -1812,7 +1818,7 @@ export const useNexusStore = create<NexusState>()(
           selectedAgents: mission.party,
           startedAt: mission.startAt,
           endedAt: mission.completedAt,
-          status: mission.status === 'active' ? 'running' : mission.status === 'completed' ? 'completed' : 'cancelled',
+          status: backendMissionStatusToRunStatus(mission),
           heartbeatLifecycle: 'cron scheduler controlled',
           schedulerLifecycle: `OpenClaw cron ${mission.scheduler?.policy || 'leader-first'}${mission.scheduler ? `, round ${mission.scheduler.round}` : ''}`,
           scheduler: mission.scheduler,

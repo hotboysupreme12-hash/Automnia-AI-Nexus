@@ -454,7 +454,7 @@ function bitmapStats(image) {
   return { sampled, nonBlank, nonBlankRatio: sampled ? nonBlank / sampled : 0 }
 }
 
-async function inspectWorkspaceTabs(window) {
+async function inspectWorkspaceNavigation(window) {
   const tabScript = [
     "(() => {",
     "  const wait = (ms) => new Promise((resolve) => setTimeout(resolve, ms))",
@@ -549,26 +549,26 @@ async function inspectWorkspaceTabs(window) {
     "    return monitorResults",
     "  }",
     "  return (async () => {",
-    "    const tabs = Array.from(document.querySelectorAll('button[id^=\"nexus-tab-\"]'))",
+    "    const navItems = Array.from(document.querySelectorAll('button[id^=\"nexus-nav-\"]'))",
     "    const results = []",
-    "    for (const tab of tabs) {",
-    "      tab.click()",
+    "    for (const navItem of navItems) {",
+    "      navItem.click()",
     "      await wait(1200)",
-    "      const controls = 'nexus-panel-' + tab.id.replace('nexus-tab-', '')",
-    "      const panel = document.getElementById(controls)",
+    "      const workspaceId = 'nexus-workspace-' + navItem.id.replace('nexus-nav-', '')",
+    "      const panel = document.getElementById(workspaceId)",
     "      const result = {",
-    "        id: tab.id,",
-    "        label: tab.textContent.replace(/\\s+/g, ' ').trim(),",
-    "        controls,",
-    "        selected: tab.getAttribute('aria-current') === 'page',",
+    "        id: navItem.id,",
+    "        label: navItem.textContent.replace(/\\s+/g, ' ').trim(),",
+    "        workspaceId,",
+    "        selected: navItem.getAttribute('aria-current') === 'page',",
     "        ...summarizePanel(panel),",
     "      }",
-    "      if (tab.id === 'nexus-tab-agents') result.commandConsole = inspectCommandConsole(panel)",
-    "      if (tab.id === 'nexus-tab-monitor') result.monitorTabs = await inspectMonitorTabs()",
+    "      if (navItem.id === 'nexus-nav-agents') result.commandConsole = inspectCommandConsole(panel)",
+    "      if (navItem.id === 'nexus-nav-monitor') result.monitorTabs = await inspectMonitorTabs()",
     "      results.push(result)",
     "    }",
-    "    if (tabs[0]) {",
-    "      tabs[0].click()",
+    "    if (navItems[0]) {",
+    "      navItems[0].click()",
     "      await wait(500)",
     "    }",
     "    return results",
@@ -592,9 +592,9 @@ async function seedRunningCommandConsole(window) {
     "    return null",
     "  }",
     "  return (async () => {",
-    "    const agentsTab = document.querySelector('#nexus-tab-agents')",
-    "    if (agentsTab) {",
-    "      agentsTab.click()",
+    "    const agentsNavItem = document.querySelector('#nexus-nav-agents')",
+    "    if (agentsNavItem) {",
+    "      agentsNavItem.click()",
     "      await wait(700)",
     "    }",
     "    const commandConsole = document.querySelector('[data-dui-panel=\"command-console\"]')",
@@ -703,9 +703,9 @@ async function cleanSlateMonitor(window, mode = 'success') {
     "    return null",
     "  }",
     "  return (async () => {",
-    "    const monitorTab = document.querySelector('#nexus-tab-monitor')",
-    "    if (!monitorTab) return { attempted: false, reason: 'monitor-tab-missing' }",
-    "    monitorTab.click()",
+    "    const monitorNavItem = document.querySelector('#nexus-nav-monitor')",
+    "    if (!monitorNavItem) return { attempted: false, reason: 'monitor-nav-missing' }",
+    "    monitorNavItem.click()",
     "    await wait(700)",
     "    const monitorPanel = document.querySelector('[data-dui-panel=\"monitor\"]')",
     "    const cleanButton = Array.from(document.querySelectorAll('button.dy-monitor-tool-button')).find((button) => /Clean Slate|Cleaning/i.test(button.textContent || ''))",
@@ -778,7 +778,7 @@ async function inspectViewport(viewport) {
     "  const mainRect = main ? main.getBoundingClientRect() : null",
     "  const workspaceContextRect = workspaceContext ? workspaceContext.getBoundingClientRect() : null",
     "  const text = document.body.innerText.replace(/\\s+/g, ' ').trim()",
-    "  const tabs = Array.from(document.querySelectorAll('button[id^=\"nexus-tab-\"]')).map((element) => element.textContent.replace(/\\s+/g, ' ').trim()).filter(Boolean)",
+    "  const workspaceNavItems = Array.from(document.querySelectorAll('button[id^=\"nexus-nav-\"]')).map((element) => element.textContent.replace(/\\s+/g, ' ').trim()).filter(Boolean)",
     "  const buttons = Array.from(document.querySelectorAll('button')).filter((button) => {",
     "    const rect = button.getBoundingClientRect()",
     "    return rect.width > 0 && rect.height > 0",
@@ -792,7 +792,7 @@ async function inspectViewport(viewport) {
     "    rootRect: rootRect ? { width: Math.round(rootRect.width), height: Math.round(rootRect.height) } : null,",
     "    mainRect: mainRect ? { left: Math.round(mainRect.left), right: Math.round(mainRect.right), width: Math.round(mainRect.width), height: Math.round(mainRect.height) } : null,",
     "    workspaceContextRect: workspaceContextRect ? { left: Math.round(workspaceContextRect.left), right: Math.round(workspaceContextRect.right), width: Math.round(workspaceContextRect.width), height: Math.round(workspaceContextRect.height) } : null,",
-    "    tabs,",
+    "    workspaceNavItems,",
     "    visibleButtonCount: buttons,",
     "    brokenImages,",
     "    viewport: { width: window.innerWidth, height: window.innerHeight },",
@@ -801,7 +801,7 @@ async function inspectViewport(viewport) {
     "})()",
   ].join('\n')
   const dom = await window.webContents.executeJavaScript(inspectScript)
-  const workspaceTabs = await inspectWorkspaceTabs(window)
+  const workspaceNavigation = await inspectWorkspaceNavigation(window)
 
   const image = await window.webContents.capturePage()
   const screenshotPath = path.join(outputDir, 'ui-smoke-' + viewport.label + '.png')
@@ -817,57 +817,57 @@ async function inspectViewport(viewport) {
       dom.mainRect?.right >= dom.viewport.width - 2
       && dom.workspaceContextRect?.right >= dom.viewport.width - 24
     )
-  const workspaceTabsOk = workspaceTabs.length >= 4 && workspaceTabs.every((workspaceTab) => (
-    workspaceTab.selected
-      && workspaceTab.panelTextLength > 80
-      && workspaceTab.panelRect?.width > 0
-      && workspaceTab.panelRect?.height > 0
+  const workspaceNavigationOk = workspaceNavigation.length >= 4 && workspaceNavigation.every((workspaceNavItem) => (
+    workspaceNavItem.selected
+      && workspaceNavItem.panelTextLength > 80
+      && workspaceNavItem.panelRect?.width > 0
+      && workspaceNavItem.panelRect?.height > 0
   ))
-  const agentsTab = workspaceTabs.find((workspaceTab) => workspaceTab.id === 'nexus-tab-agents')
-  const commandConsoleOk = Boolean(agentsTab?.commandConsole?.present)
-    && agentsTab.commandConsole.hasTextarea
-    && agentsTab.commandConsole.textareaAriaLabel === 'Command console message'
-    && agentsTab.commandConsole.sendButtonPresent
-    && agentsTab.commandConsole.sendDisabledWhenEmpty
-    && agentsTab.commandConsole.attachButtonPresent
-    && agentsTab.commandConsole.stopButtonPresent
-    && agentsTab.commandConsole.stopButtonAriaLabel.startsWith('Stop ')
-    && agentsTab.commandConsole.stopButtonText === 'Stop'
-    && agentsTab.commandConsole.stopButtonRect?.width > 0
-    && agentsTab.commandConsole.stopButtonRect?.height > 0
-    && /running/.test(agentsTab.commandConsole.busyIndicatorText)
-    && agentsTab.commandConsole.busyStatusRole === 'status'
-    && agentsTab.commandConsole.busyStatusAriaLive === 'polite'
-    && /^\d+ Command Console runs? running$/.test(agentsTab.commandConsole.busyStatusAriaLabel)
-    && !agentsTab.commandConsole.traceChipPresent
-    && agentsTab.commandConsole.traceChipTagName === ''
-    && agentsTab.commandConsole.traceChipText === ''
-    && agentsTab.commandConsole.traceChipTitle === ''
-    && agentsTab.commandConsole.traceChipAriaLabel === ''
-    && !agentsTab.commandConsole.evidencePreviewPresent
-    && !agentsTab.commandConsole.evidencePreviewOpen
-    && agentsTab.commandConsole.evidencePreviewAriaLabel === ''
-    && agentsTab.commandConsole.evidenceSummaryText === ''
-    && agentsTab.commandConsole.thinkingBodyPresent
-    && /^Thinking$/.test(agentsTab.commandConsole.thinkingBodyText)
-    && agentsTab.commandConsole.thinkingDotsPresent
-    && agentsTab.commandConsole.thinkingDotsCount === 3
-    && !agentsTab.commandConsole.thinkingCtaPresent
-    && !agentsTab.commandConsole.gatewayAcceptedVisible
-    && !agentsTab.commandConsole.runTraceVisible
-    && agentsTab.commandConsole.messagesRole === 'log'
-    && agentsTab.commandConsole.messagesAriaLive === 'polite'
-    && agentsTab.commandConsole.messagesAriaRelevant === 'additions text'
-    && agentsTab.commandConsole.messagesAriaLabel === 'Command console responses'
-    && agentsTab.commandConsole.messagesRect?.width > 0
-    && agentsTab.commandConsole.messagesRect?.height > 0
-  const monitorTab = workspaceTabs.find((workspaceTab) => workspaceTab.id === 'nexus-tab-monitor')
-  const gatewayMonitorTab = Array.isArray(monitorTab?.monitorTabs)
-    ? monitorTab.monitorTabs.find((innerTab) => innerTab.id === 'monitor-tab-gateway')
+  const agentsNavItem = workspaceNavigation.find((workspaceNavItem) => workspaceNavItem.id === 'nexus-nav-agents')
+  const commandConsoleOk = Boolean(agentsNavItem?.commandConsole?.present)
+    && agentsNavItem.commandConsole.hasTextarea
+    && agentsNavItem.commandConsole.textareaAriaLabel === 'Command console message'
+    && agentsNavItem.commandConsole.sendButtonPresent
+    && agentsNavItem.commandConsole.sendDisabledWhenEmpty
+    && agentsNavItem.commandConsole.attachButtonPresent
+    && agentsNavItem.commandConsole.stopButtonPresent
+    && agentsNavItem.commandConsole.stopButtonAriaLabel.startsWith('Stop ')
+    && agentsNavItem.commandConsole.stopButtonText === 'Stop'
+    && agentsNavItem.commandConsole.stopButtonRect?.width > 0
+    && agentsNavItem.commandConsole.stopButtonRect?.height > 0
+    && /running/.test(agentsNavItem.commandConsole.busyIndicatorText)
+    && agentsNavItem.commandConsole.busyStatusRole === 'status'
+    && agentsNavItem.commandConsole.busyStatusAriaLive === 'polite'
+    && /^\d+ Command Console runs? running$/.test(agentsNavItem.commandConsole.busyStatusAriaLabel)
+    && !agentsNavItem.commandConsole.traceChipPresent
+    && agentsNavItem.commandConsole.traceChipTagName === ''
+    && agentsNavItem.commandConsole.traceChipText === ''
+    && agentsNavItem.commandConsole.traceChipTitle === ''
+    && agentsNavItem.commandConsole.traceChipAriaLabel === ''
+    && !agentsNavItem.commandConsole.evidencePreviewPresent
+    && !agentsNavItem.commandConsole.evidencePreviewOpen
+    && agentsNavItem.commandConsole.evidencePreviewAriaLabel === ''
+    && agentsNavItem.commandConsole.evidenceSummaryText === ''
+    && agentsNavItem.commandConsole.thinkingBodyPresent
+    && /^Thinking$/.test(agentsNavItem.commandConsole.thinkingBodyText)
+    && agentsNavItem.commandConsole.thinkingDotsPresent
+    && agentsNavItem.commandConsole.thinkingDotsCount === 3
+    && !agentsNavItem.commandConsole.thinkingCtaPresent
+    && !agentsNavItem.commandConsole.gatewayAcceptedVisible
+    && !agentsNavItem.commandConsole.runTraceVisible
+    && agentsNavItem.commandConsole.messagesRole === 'log'
+    && agentsNavItem.commandConsole.messagesAriaLive === 'polite'
+    && agentsNavItem.commandConsole.messagesAriaRelevant === 'additions text'
+    && agentsNavItem.commandConsole.messagesAriaLabel === 'Command console responses'
+    && agentsNavItem.commandConsole.messagesRect?.width > 0
+    && agentsNavItem.commandConsole.messagesRect?.height > 0
+  const monitorNavItem = workspaceNavigation.find((workspaceNavItem) => workspaceNavItem.id === 'nexus-nav-monitor')
+  const gatewayMonitorTab = Array.isArray(monitorNavItem?.monitorTabs)
+    ? monitorNavItem.monitorTabs.find((innerTab) => innerTab.id === 'monitor-tab-gateway')
     : null
-  const monitorTabsOk = Array.isArray(monitorTab?.monitorTabs)
-    && monitorTab.monitorTabs.length >= 4
-    && monitorTab.monitorTabs.every((innerTab) => (
+  const monitorTabsOk = Array.isArray(monitorNavItem?.monitorTabs)
+    && monitorNavItem.monitorTabs.length >= 4
+    && monitorNavItem.monitorTabs.every((innerTab) => (
       innerTab.selected
         && (
           innerTab.panelTextLength > 60
@@ -891,8 +891,8 @@ async function inspectViewport(viewport) {
     && dom.rootRect?.width > 0
     && dom.rootRect?.height > 0
     && shellFillsViewport
-    && dom.tabs.length >= 4
-    && workspaceTabsOk
+    && dom.workspaceNavItems.length >= 4
+    && workspaceNavigationOk
     && commandConsoleOk
     && commandConsoleStopClick.attempted
     && commandConsoleStopClick.clicked
@@ -941,7 +941,7 @@ async function inspectViewport(viewport) {
     commandConsoleStopClick,
     monitorCleanSlate,
     monitorCleanSlateFailure,
-    workspaceTabs,
+    workspaceNavigation,
   }
 }
 

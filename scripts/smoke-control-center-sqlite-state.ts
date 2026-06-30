@@ -57,8 +57,12 @@ try {
   assert.match(runtimeLedgerStoreSource, /appendRuntimeRunLedger/)
 
   const serverSource = readFileSync(path.join(rootDir, 'server/controlPlane.ts'), 'utf8')
+  const providerAuthServiceSource = readFileSync(path.join(rootDir, 'server/services/providers/providerAuthService.ts'), 'utf8')
   assert.match(serverSource, /CONTROL_CENTER_STATE_KEYS/)
-  assert.match(serverSource, /readControlCenterStateRecord<LocalAuthStore>/)
+  assert.match(serverSource, /localAuthStateKey: CONTROL_CENTER_STATE_KEYS\.localAuth/)
+  assert.match(providerAuthServiceSource, /readControlCenterStateRecord<LocalAuthStore>\(options\.localAuthStateKey\)/)
+  assert.match(providerAuthServiceSource, /writeControlCenterStateRecord\(options\.localAuthStateKey, legacyStore, options\.localAuthPath\)/)
+  assert.match(providerAuthServiceSource, /writeControlCenterStateRecord\(options\.localAuthStateKey, next, options\.localAuthPath\)/)
   assert.match(serverSource, /CONTROL_CENTER_STATE_KEYS\.heartbeatDefaults/)
   assert.match(serverSource, /CONTROL_CENTER_STATE_KEYS\.heartbeatPerAgent/)
   assert.match(serverSource, /CONTROL_CENTER_STATE_KEYS\.partyProfiles/)

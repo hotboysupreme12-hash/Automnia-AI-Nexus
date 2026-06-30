@@ -1205,7 +1205,7 @@ export function AgentResponseConsole() {
                         onError={() => markPortraitFailed(agent.id, portraitSrc)}
                       />
                     ) : (
-                      <span className="flex h-full w-full items-center justify-center bg-slate-800 text-[8px] font-bold text-slate-400">
+                      <span className="flex h-full w-full items-center justify-center bg-slate-800 text-[11px] font-bold text-slate-300">
                         {initials(agent.name)}
                       </span>
                     )}
@@ -1338,7 +1338,7 @@ export function AgentResponseConsole() {
                 </span>
                 <span className="min-w-0">
                   <span className="block truncate text-[11px] font-semibold text-slate-200">{uploadedAttachment.file.name}</span>
-                  <span className="block text-[10px] font-bold uppercase tracking-[0.08em] text-slate-500">
+                  <span className="block text-[11px] font-bold uppercase tracking-[0.08em] text-slate-400">
                     {attachmentKindLabel(uploadedAttachment.kind, uploadedAttachment.file)}
                   </span>
                 </span>
@@ -1354,7 +1354,7 @@ export function AgentResponseConsole() {
               x
             </button>
           </div>
-          <span className="ml-3 align-middle text-[10px] font-medium text-slate-500">
+          <span className="ml-3 align-middle text-[12px] font-medium text-slate-400">
             {formatFileSize(uploadedAttachment.file.size)}
           </span>
         </div>

@@ -4,7 +4,7 @@
 import express from 'express'
 import { createHash, randomBytes, randomUUID } from 'node:crypto'
 import { chmodSync, existsSync, mkdirSync, readdirSync, readFileSync, statSync, writeFileSync, promises as fs } from 'node:fs'
-import { createServer, request as httpRequest, type Server } from 'node:http'
+import { request as httpRequest, type Server } from 'node:http'
 import path from 'node:path'
 import { spawn, spawnSync } from 'node:child_process'
 import { createConnection } from 'node:net'
@@ -56,14 +56,38 @@ import { createSessionTokenStore } from './sessionTokenStore'
 import {
   AUTH_ENV_MAP,
   AUTH_PROVIDER_CATALOG,
-  GOOGLE_OAUTH_CLIENT_ID_KEYS,
-  GOOGLE_OAUTH_CLIENT_SECRET_KEYS,
   GOOGLE_OAUTH_REDIRECT_URI,
   GOOGLE_OAUTH_SCOPES,
-  GOOGLE_PROJECT_ID_KEYS,
   OPENAI_CODEX_OAUTH_REDIRECT_URI,
   OPENAI_CODEX_OAUTH_SCOPES,
 } from './catalogs/providerCatalog'
+import {
+  FALLBACK_MODELS,
+  KNOWN_UNAVAILABLE_MODEL_IDS,
+  canonicalAgentModelId,
+  createModelCatalogService,
+  isModelSafeForOpenClawConfig,
+  isOpenAiCodexSubscriptionModel,
+  splitModelId,
+  type ModelCatalogOpenClawConfig,
+  type ModelProviderConfig,
+} from './services/providers/modelCatalogService'
+import {
+  createProviderAuthService,
+  isOAuthCredentialUsable,
+  type ProviderAuthOpenClawConfig,
+  type ProviderAuthService,
+} from './services/providers/providerAuthService'
+import {
+  createProviderSetupService,
+  GOOGLE_VERTEX_ACCESS_TOKEN_KEYS,
+  GOOGLE_VERTEX_DEFAULT_LOCATION,
+  GOOGLE_VERTEX_GLOBAL_LOCATION,
+  GOOGLE_VERTEX_LOCATION_KEYS,
+  GOOGLE_VERTEX_PROJECT_ID_KEYS,
+  type ProviderRequestAuth,
+} from './services/providers/providerSetupService'
+import { createOAuthCallbackService, type OAuthCallbackService } from './services/providers/oauthCallbackService'
 import {
   CLAWTALK_CORE_BRIDGE_ROUTING_HELPER,
   TELEGRAM_AGENT_ROUTING_HELPER,
@@ -1030,13 +1054,6 @@ type OpenClawPluginsConfig = {
   [key: string]: unknown
 }
 
-type ModelProviderConfig = {
-  baseUrl?: unknown
-  models?: unknown
-  timeoutSeconds?: number
-  [key: string]: unknown
-}
-
 type OpenClawContextPruningConfig = {
   mode?: 'off' | 'cache-ttl'
   ttl?: string
@@ -1373,50 +1390,10 @@ type TimedValueCache<T> = {
   value: T
 }
 
-type AuthMode = 'oauth' | 'apiKey'
-
-type LocalOAuthCredential = {
-  accessToken?: string
-  refreshToken?: string
-  expiresAt?: number
-  tokenType?: string
-  scope?: string[]
-  email?: string
-  accountId?: string
-  idToken?: string
-  projectId?: string
-  createdAt?: string
-  updatedAt?: string
-}
-
-type LocalProviderAuth = {
-  mode?: AuthMode
-  apiKey?: string
-  oauth?: LocalOAuthCredential
-}
-
-type LocalAuthStore = {
-  providers: Record<string, LocalProviderAuth>
-}
-
-
-const GOOGLE_VERTEX_PROJECT_ID_KEYS = ['GOOGLE_VERTEX_PROJECT_ID', ...GOOGLE_PROJECT_ID_KEYS]
-const GOOGLE_VERTEX_LOCATION_KEYS = [
-  'GOOGLE_VERTEX_LOCATION',
-  'GOOGLE_CLOUD_LOCATION',
-  'GOOGLE_CLOUD_REGION',
-  'GCLOUD_LOCATION',
-  'CLOUD_ML_REGION',
-]
-const GOOGLE_VERTEX_ACCESS_TOKEN_KEYS = ['GOOGLE_VERTEX_ACCESS_TOKEN', 'GCLOUD_ACCESS_TOKEN']
-const GOOGLE_CLOUD_CLI_INSTALL_URL = 'https://cloud.google.com/sdk/docs/install'
-const GOOGLE_VERTEX_GLOBAL_LOCATION = 'global'
-const GOOGLE_VERTEX_DEFAULT_LOCATION = GOOGLE_VERTEX_GLOBAL_LOCATION
 const GOOGLE_VERTEX_GLOBAL_BASE_URL = 'https://aiplatform.googleapis.com'
 const GOOGLE_VERTEX_REGION_HOST_SUFFIX = '-aiplatform.googleapis.com'
 const GOOGLE_VERTEX_MULTI_REGION_HOSTS = new Set(['aiplatform.eu.rep.googleapis.com', 'aiplatform.us.rep.googleapis.com'])
 const GOOGLE_VERTEX_MODEL_AVAILABILITY_CACHE_MS = 10 * 60 * 1000
-const GOOGLE_VERTEX_ACCESS_TOKEN_CACHE_MS = 45 * 60 * 1000
 const OPENCLAW_STALE_LOCK_MIN_AGE_MS = 15_000
 const OPENCLAW_SESSION_LOCK_ORPHAN_GRACE_MS = 30_000
 const OPENCLAW_SESSION_LOCK_SWEEP_INTERVAL_MS = 20_000
@@ -1427,65 +1404,6 @@ const OPENCLAW_SESSION_LOCK_REPORT_ONLY_REASONS = new Set(['too-old', 'hold-exce
 const CODEX_PROVIDER_BASE_URL = 'https://chatgpt.com/backend-api'
 const CODEX_APP_SERVER_AUTH_MARKER = 'codex-app-server'
 
-const FALLBACK_MODELS: Array<{ id: string; alias?: string }> = [
-  { id: 'openai/gpt-5.5', alias: 'gpt-5.5' },
-  { id: 'openai/gpt-5.5-pro', alias: 'gpt-5.5-pro' },
-  { id: 'openai/gpt-5.4', alias: 'gpt-5.4' },
-  { id: 'openai/gpt-5.4-pro', alias: 'gpt-5.4-pro' },
-  { id: 'openai/gpt-5.4-mini', alias: 'gpt-5.4-mini' },
-  { id: 'openai/gpt-5.4-nano', alias: 'gpt-5.4-nano' },
-  { id: 'openai/gpt-5.3-codex-spark', alias: 'gpt-5.3-codex-spark' },
-  { id: 'openai/gpt-5.3-chat-latest', alias: 'gpt-5.3-chat-latest' },
-  { id: 'openai/o4-mini', alias: 'o4-mini' },
-  { id: 'openai/o4-mini-deep-research', alias: 'o4-mini-deep-research' },
-  { id: 'openai/o3', alias: 'o3' },
-  { id: 'openai/o3-pro', alias: 'o3-pro' },
-  { id: 'openai/o3-mini', alias: 'o3-mini' },
-  { id: 'openai/o3-deep-research', alias: 'o3-deep-research' },
-  { id: 'openai/o1', alias: 'o1' },
-  { id: 'openai/o1-pro', alias: 'o1-pro' },
-  { id: 'openai/gpt-4.1-mini', alias: 'gpt-4.1-mini' },
-  { id: 'openai/gpt-5.2', alias: 'gpt-5.2' },
-  { id: 'openai/gpt-5.1', alias: 'gpt-5.1' },
-  { id: 'anthropic/claude-opus-4-6', alias: 'opus' },
-  { id: 'anthropic/claude-sonnet-4-6', alias: 'sonnet' },
-  { id: 'anthropic/claude-sonnet-4-5', alias: 'sonnet-4-5' },
-  { id: 'opencode/claude-opus-4-6', alias: 'opencode-opus' },
-  { id: 'google/gemini-3.1-pro-preview', alias: 'gemini-3.1-pro' },
-  { id: 'google/gemini-3.1-pro-preview-customtools', alias: 'gemini-3.1-pro-tools' },
-  { id: 'google/gemini-3.5-flash', alias: 'gemini-3.5-flash' },
-  { id: 'google/gemini-3-flash-preview', alias: 'gemini-3-flash' },
-  { id: 'google/gemini-3.1-flash-lite', alias: 'gemini-3.1-flash-lite' },
-  { id: 'google/gemini-3.1-flash-lite-preview', alias: 'gemini-3.1-flash-lite-preview' },
-  { id: 'google/gemini-3-pro-preview', alias: 'gemini-3-pro' },
-  { id: 'google/gemini-2.5-pro', alias: 'gemini-2.5-pro' },
-  { id: 'google/gemini-2.5-flash', alias: 'flash' },
-  { id: 'google/gemini-2.5-flash-lite', alias: 'flash-lite' },
-  { id: 'google-vertex/gemini-2.5-pro', alias: 'vertex-gemini-2.5-pro' },
-  { id: 'google-vertex/gemini-2.5-flash', alias: 'vertex-flash' },
-  { id: 'google-vertex/gemini-2.5-flash-lite', alias: 'vertex-flash-lite' },
-  { id: 'google-vertex/gemini-3.5-flash', alias: 'vertex-gemini-3.5-flash' },
-  { id: 'google-vertex/gemini-3.1-pro-preview', alias: 'vertex-gemini-3.1-pro' },
-  { id: 'google-vertex/gemini-3-flash-preview', alias: 'vertex-gemini-3-flash' },
-  { id: 'google-vertex/gemini-3.1-flash-lite', alias: 'vertex-gemini-3.1-flash-lite' },
-  { id: 'google-vertex/gemini-3.1-flash-lite-preview', alias: 'vertex-gemini-3.1-flash-lite' },
-  { id: 'google-vertex/gemini-3-pro-preview', alias: 'vertex-gemini-3-pro' },
-  { id: 'deepseek/deepseek-v4-pro', alias: 'deepseek-v4-pro' },
-  { id: 'deepseek/deepseek-v4-flash', alias: 'deepseek-v4-flash' },
-  { id: 'deepseek/deepseek-chat', alias: 'deepseek-chat' },
-  { id: 'deepseek/deepseek-reasoner', alias: 'deepseek-r1' },
-  { id: 'openrouter/deepseek/deepseek-v4-pro', alias: 'openrouter-deepseek-v4-pro' },
-  { id: 'openrouter/deepseek/deepseek-v4-flash', alias: 'openrouter-deepseek-v4-flash' },
-]
-const KNOWN_UNAVAILABLE_MODEL_IDS = new Set<string>([
-  'openai/gpt-5.3-chat-latest',
-  'google/gemini-3.1-pro-preview-customtools',
-])
-const OPENCLAW_CONFIG_SUPPRESSED_MODEL_IDS = new Set([
-  'openai/gpt-5.3-chat-latest',
-  'google/gemini-3.1-pro-preview-customtools',
-])
-const PINNED_MODEL_IDS = ['google-vertex/gemini-3.5-flash']
 const OPENCLAW_AGENT_TURN_TIMEOUT_FLOOR_SECONDS = 10 * 60
 const OPENCLAW_TIMEOUT_RECOVERY_SECONDS = 15 * 60
 const MODEL_RESILIENCE_FALLBACKS: Record<string, string[]> = {
@@ -1531,7 +1449,6 @@ const MODEL_RESILIENCE_FALLBACKS: Record<string, string[]> = {
     'openrouter/deepseek/deepseek-v4-flash',
   ],
 }
-const OPENROUTER_PROVIDER_WILDCARD_MODEL_ID = 'openrouter/*'
 const OPENROUTER_DEEPSEEK_V4_PRO_MODEL_ID = 'openrouter/deepseek/deepseek-v4-pro'
 const OPENROUTER_DEEPSEEK_V4_FLASH_MODEL_ID = 'openrouter/deepseek/deepseek-v4-flash'
 const OPENAI_DEFAULT_MODEL_ID = 'openai/gpt-5.5'
@@ -1570,81 +1487,13 @@ function defaultAgentModelSelection() {
   }
 }
 
-type AvailableModelInput = {
-  id?: string
-  key?: string
-  alias?: string
-  provider?: string
-  name?: string
-  available?: boolean
-  missing?: boolean
-}
-
-type AvailableModelOutput = {
-  id: string
-  alias: string
-  provider: string
-  name: string
-  streaming: ReturnType<typeof streamingCapabilityForModel>
-}
-
-type AvailableModelCatalogCache = {
-  models: AvailableModelOutput[]
-  source: 'fallback' | 'config' | 'openclaw'
-  expiresAt: number
-  refreshedAt: number
-}
-
-const AVAILABLE_MODELS_CACHE_MS = 5 * 60 * 1000
-
-let availableModelsCache: AvailableModelCatalogCache | null = null
-let availableModelsRefreshPromise: Promise<AvailableModelCatalogCache> | null = null
-let availableModelsRefreshTimer: ReturnType<typeof setTimeout> | null = null
 let openclawConfigCache: JsonFileCacheEntry<OpenClawConfigFile> | null = null
 let partyProfilesCache: JsonFileCacheEntry<PartyProfiles> | null = null
 const agentLocalConfigCache = new Map<string, JsonFileCacheEntry<AgentLocalConfig>>()
 const skillRootCache = new Map<string, TimedValueCache<AgentSkillEntry[]>>()
 
-function isOpenAiCodexSubscriptionModelName(model: string) {
-  return /^gpt-5(?:\.\d+)?(?:-[a-z0-9][a-z0-9.-]*)?$/i.test(model.trim())
-}
-
-function modelIdFor(model: AvailableModelInput) {
-  return typeof model.id === 'string' && model.id.trim()
-    ? model.id.trim()
-    : typeof model.key === 'string' && model.key.trim()
-      ? model.key.trim()
-      : ''
-}
-
-function canonicalAgentModelId(modelId: string | undefined) {
-  const trimmed = modelId?.trim() || ''
-  if (!trimmed.includes('/') && isOpenAiCodexSubscriptionModelName(trimmed)) return `openai/${trimmed}`
-  const parsed = trimmed.match(/^([^/]+)\/(.+)$/)
-  if (parsed && /^(?:openai|openai-codex|codex)$/i.test(parsed[1]) && isOpenAiCodexSubscriptionModelName(parsed[2])) {
-    return `openai/${parsed[2]}`
-  }
-  return trimmed
-}
-
-function isOpenAiCodexSubscriptionModel(modelId: string) {
-  const { provider, model } = splitModelId(canonicalAgentModelId(modelId))
-  if (!['openai', 'openai-codex', 'codex'].includes(provider.toLowerCase())) return false
-  return isOpenAiCodexSubscriptionModelName(model)
-}
-
 function thinkingForOpenClawRuntimeModel(modelId: string, thinking: ThinkingLevel): ThinkingLevel {
   return isOpenAiCodexSubscriptionModel(modelId) ? 'off' : thinking
-}
-
-function isModelSafeForOpenClawConfig(modelId: string) {
-  const canonicalModelId = canonicalAgentModelId(modelId)
-  return Boolean(
-    canonicalModelId &&
-      canonicalModelId.includes('/') &&
-      !KNOWN_UNAVAILABLE_MODEL_IDS.has(canonicalModelId) &&
-      !OPENCLAW_CONFIG_SUPPRESSED_MODEL_IDS.has(canonicalModelId),
-  )
 }
 
 function primaryModelForOpenClawConfig(modelId: string | undefined) {
@@ -1712,23 +1561,6 @@ function migrateGeneratedDeepSeekDefaultPrimary(modelId: string | undefined) {
   return applyGeneratedDeepSeekDefaultMigration(selection)
     ? selection.primary
     : modelId
-}
-
-function displayProviderForAvailableModel(model: AvailableModelInput, id: string) {
-  if (isOpenAiCodexSubscriptionModel(id)) return 'openai-codex'
-  return model.provider || id.split('/')[0]
-}
-
-function fallbackAvailableModels(): AvailableModelOutput[] {
-  return FALLBACK_MODELS
-    .filter((model) => !KNOWN_UNAVAILABLE_MODEL_IDS.has(model.id))
-    .map((model) => ({
-      id: model.id,
-      alias: model.alias || model.id.split('/').pop() || model.id,
-      provider: displayProviderForAvailableModel(model, model.id),
-      name: model.id.split('/').pop() || model.id,
-      streaming: streamingCapabilityForModel(model.id),
-    }))
 }
 
 function agentRuntimeModelIdsForConfig(config: OpenClawConfigFile) {
@@ -1816,66 +1648,6 @@ function ensureCodexPluginExplicitEnablement(config: OpenClawConfigFile) {
   ensureTrustedPluginAllowlist(config, 'codex')
 }
 
-function ensureConfiguredModelAllowlist(config: OpenClawConfigFile, modelIds: string[]) {
-  const canonicalIds = Array.from(
-    new Set(
-      modelIds
-        .map((modelId) => canonicalAgentModelId(modelId))
-        .filter(isModelSafeForOpenClawConfig),
-    ),
-  )
-  if (!canonicalIds.length) return
-
-  if (!config.agents) config.agents = {}
-  if (!config.agents.defaults) config.agents.defaults = {}
-  if (!config.agents.defaults.models) config.agents.defaults.models = {}
-
-  for (const modelId of canonicalIds) {
-    const existing = config.agents.defaults.models[modelId] || {}
-    const fallback = FALLBACK_MODELS.find((entry) => entry.id === modelId)
-    config.agents.defaults.models[modelId] = {
-      ...(fallback?.alias && !existing.alias ? { alias: fallback.alias } : {}),
-      ...existing,
-    }
-    ensureFastModeModelParams(config, modelId)
-    ensureConfiguredProviderModel(config, modelId)
-  }
-}
-
-function ensureModelAllowlistEntry(config: OpenClawConfigFile, modelId: string, alias?: string) {
-  const canonicalModelId = canonicalAgentModelId(modelId)
-  if (!isModelSafeForOpenClawConfig(canonicalModelId)) return
-
-  if (!config.agents) config.agents = {}
-  if (!config.agents.defaults) config.agents.defaults = {}
-  if (!config.agents.defaults.models) config.agents.defaults.models = {}
-
-  const existing = config.agents.defaults.models[canonicalModelId]
-  const existingRecord = existing && typeof existing === 'object' && !Array.isArray(existing)
-    ? existing as Record<string, unknown>
-    : {}
-  config.agents.defaults.models[canonicalModelId] = {
-    ...(alias && !existingRecord.alias ? { alias } : {}),
-    ...existingRecord,
-  }
-  ensureFastModeModelParams(config, canonicalModelId)
-}
-
-function configHasOpenRouterPluginEnabled(config: OpenClawConfigFile) {
-  const entry = config.plugins?.entries?.openrouter
-  if (entry && entry.enabled !== false) return true
-  const allow = Array.isArray(config.plugins?.allow) ? config.plugins.allow : []
-  return allow.some((id) => typeof id === 'string' && id.trim().toLowerCase() === 'openrouter')
-}
-
-function ensureOpenRouterModelCatalogAllowlist(config: OpenClawConfigFile) {
-  ensureModelAllowlistEntry(config, OPENROUTER_PROVIDER_WILDCARD_MODEL_ID, 'OpenRouter catalog')
-  ensureConfiguredModelAllowlist(config, [
-    OPENROUTER_DEEPSEEK_V4_PRO_MODEL_ID,
-    OPENROUTER_DEEPSEEK_V4_FLASH_MODEL_ID,
-  ])
-}
-
 function ensureOpenRouterPluginEnabledForProviderAuth(config: OpenClawConfigFile) {
   if (!config.plugins) config.plugins = {}
   if (!config.plugins.entries) config.plugins.entries = {}
@@ -1890,198 +1662,127 @@ function ensureOpenRouterPluginEnabledForProviderAuth(config: OpenClawConfigFile
   ensureTrustedPluginAllowlist(config, 'openrouter')
 }
 
-function ensureConfiguredProviderModel(config: OpenClawConfigFile, modelId: string) {
-  if (!isModelSafeForOpenClawConfig(modelId)) return
-  const { provider, model } = splitModelId(canonicalAgentModelId(modelId))
-  if (!provider || !model) return
-  if (!['openai', 'google', 'google-vertex', 'deepseek'].includes(provider)) return
+const providerAuthServiceRef: { current?: ProviderAuthService } = {}
+const oauthCallbackServiceRef: { current?: OAuthCallbackService } = {}
+const modelCatalogService = createModelCatalogService({
+  ensureFastModeModelParams: (config: ModelCatalogOpenClawConfig, modelId: string) => {
+    ensureFastModeModelParams(config as OpenClawConfigFile, modelId)
+  },
+  filterGoogleVertexCatalogModels,
+  isProviderConfigured: (provider) => providerAuthServiceRef.current?.isProviderConfigured(provider) ?? false,
+  readOpenclawConfig,
+  runOpenClaw,
+  streamingCapabilityForModel,
+  writeOpenclawConfig,
+})
+const configHasOpenRouterPluginEnabled = modelCatalogService.configHasOpenRouterPluginEnabled
+const ensureConfiguredModelAllowlist = (config: OpenClawConfigFile, modelIds: string[]) =>
+  modelCatalogService.ensureConfiguredModelAllowlist(config, modelIds)
+const ensureOpenRouterModelCatalogAllowlist = (config: OpenClawConfigFile) =>
+  modelCatalogService.ensureOpenRouterModelCatalogAllowlist(config)
+const fallbackAvailableModels = modelCatalogService.fallbackAvailableModels
+const getFastAvailableModelsCatalog = modelCatalogService.getFastAvailableModelsCatalog
+const invalidateAvailableModelsForAuthChange = modelCatalogService.invalidateAvailableModelsForAuthChange
+const refreshAvailableModelsCache = modelCatalogService.refreshAvailableModelsCache
 
-  if (!config.models) config.models = {}
-  if (!config.models.providers) config.models.providers = {}
-  if (!config.models.providers[provider]) config.models.providers[provider] = {}
+const providerSetupService = createProviderSetupService({
+  electronResourcesPath: getElectronResourcesPath,
+  ensureLocalAuthStoreLoaded: async () => await providerAuthServiceRef.current?.ensureLocalAuthStoreLoaded(),
+  getLocalProviderMode: (provider) => providerAuthServiceRef.current?.getLocalProviderMode(provider),
+  getLocalProviderOAuth: (provider) => providerAuthServiceRef.current?.getLocalProviderOAuth(provider),
+  googleOAuthClientIdKeys: AUTH_PROVIDER_CATALOG.google.oauth?.clientIdEnvKeys || [],
+  googleOAuthClientSecretKeys: AUTH_PROVIDER_CATALOG.google.oauth?.clientSecretEnvKeys || [],
+  googleProjectIdKeys: AUTH_PROVIDER_CATALOG.google.oauth?.projectIdEnvKeys || [],
+  localOAuthFromMainAuthProfile: (provider) => providerAuthServiceRef.current?.localOAuthFromMainAuthProfile(provider) || null,
+  openClawBin: openclawBin,
+  openClawStateRoot: OPENCLAW_STATE_ROOT,
+  persistProviderOAuth: async (provider, oauth) => await providerAuthServiceRef.current?.persistProviderOAuth(provider, oauth),
+  refreshGoogleOAuthCredential: async (oauth) => {
+    const service = oauthCallbackServiceRef.current
+    if (!service) throw new Error('OAuth callback service is not initialized.')
+    return service.refreshGoogleOAuthCredential(oauth)
+  },
+  refreshOpenAICodexOAuthCredential: async (oauth) => {
+    const service = oauthCallbackServiceRef.current
+    if (!service) throw new Error('OAuth callback service is not initialized.')
+    return service.refreshOpenAICodexOAuthCredential(oauth)
+  },
+  workspaceRoot: WORKSPACE_ROOT,
+})
+const getGoogleVertexProcessEnv = providerSetupService.getGoogleVertexProcessEnv
+const googleOAuthClientConfigStatus = providerSetupService.googleOAuthClientConfigStatus
+const googleVertexGcloudStatus = providerSetupService.googleVertexGcloudStatus
+const isGoogleVertexConfigured = providerSetupService.isGoogleVertexConfigured
+const isGoogleVertexLocalOAuthConfigured = providerSetupService.isGoogleVertexLocalOAuthConfigured
+const resolveGoogleProjectId = providerSetupService.resolveGoogleProjectId
+const resolveGoogleVertexRequestAuth = providerSetupService.resolveGoogleVertexRequestAuth
+const resolveProviderRequestAuth = providerSetupService.resolveProviderRequestAuth
+const resolveOpenAICodexOAuthForRequest = providerSetupService.resolveOpenAICodexOAuthForRequest
 
-  const providerConfig = config.models.providers[provider]
-  if (provider === 'openai' && isOpenAiCodexSubscriptionModel(modelId)) {
-    providerConfig.agentRuntime ??= { id: 'openclaw' }
-  }
-  if (provider === 'google') {
-    if (!providerConfig.baseUrl) providerConfig.baseUrl = 'https://generativelanguage.googleapis.com/v1beta'
-    providerConfig.api = 'google-generative-ai'
-  }
-  if (provider === 'google-vertex') {
-    providerConfig.api = 'google-vertex'
-    if (!providerConfig.apiKey) providerConfig.apiKey = 'gcp-vertex-credentials'
-  }
-  if (provider === 'deepseek') {
-    if (!providerConfig.baseUrl) providerConfig.baseUrl = 'https://api.deepseek.com'
-    providerConfig.api = 'openai-completions'
-    if (!providerConfig.apiKey) providerConfig.apiKey = 'DEEPSEEK_API_KEY'
-  }
-  if (!Array.isArray(providerConfig.models)) {
-    if (providerConfig.models && typeof providerConfig.models === 'object') return
-    providerConfig.models = []
-  }
-
-  const models = providerConfig.models as Array<string | { id?: unknown; model?: unknown; name?: unknown; api?: unknown }>
-  const providerApi = provider === 'google'
-    ? 'google-generative-ai'
-    : provider === 'google-vertex'
-      ? 'google-vertex'
-      : provider === 'deepseek'
-        ? 'openai-completions'
-        : undefined
-  for (const [index, entry] of models.entries()) {
-    if (typeof entry === 'string') {
-      if (entry === model) {
-        if (providerApi) models[index] = { id: model, name: model, api: providerApi }
-        return
-      }
-      continue
-    }
-    if (entry?.id === model || entry?.model === model || entry?.name === model) {
-      if (!entry.name) entry.name = model
-      if (providerApi) entry.api = providerApi
-      return
-    }
-  }
-  models.push(providerApi ? { id: model, name: model, api: providerApi } : { id: model, name: model })
-}
-
-function mergeAvailableModels(available: AvailableModelInput[]): AvailableModelOutput[] {
-  const deduped = new Map<string, AvailableModelOutput>()
-  const addModel = (model: AvailableModelInput) => {
-    const id = canonicalAgentModelId(modelIdFor(model))
-    if (!id) return
-    if (KNOWN_UNAVAILABLE_MODEL_IDS.has(id)) return
-    const provider = displayProviderForAvailableModel(model, id)
-    const name = model.name || id.split('/').pop() || id
-    const alias = model.alias || name
-    if (!deduped.has(id)) {
-      deduped.set(id, { id, alias, provider, name, streaming: streamingCapabilityForModel(id) })
-    }
-  }
-  for (const model of available) addModel(model)
-  for (const model of fallbackAvailableModels()) addModel(model)
-  return orderAvailableModels(Array.from(deduped.values()))
-}
-
-function orderAvailableModels(models: AvailableModelOutput[]) {
-  return [...models].sort((left, right) => {
-    const leftPinned = PINNED_MODEL_IDS.indexOf(left.id)
-    const rightPinned = PINNED_MODEL_IDS.indexOf(right.id)
-    if (leftPinned !== -1 || rightPinned !== -1) {
-      if (leftPinned === -1) return 1
-      if (rightPinned === -1) return -1
-      return leftPinned - rightPinned
-    }
-    return 0
-  })
-}
-
-async function loadAvailableModelsFromOpenClaw(): Promise<{ models: AvailableModelOutput[]; source: AvailableModelCatalogCache['source'] }> {
-  try {
-    const config = await readOpenclawConfig()
-    if (configHasOpenRouterPluginEnabled(config) || isProviderConfigured('openrouter')) {
-      const before = JSON.stringify(config.agents?.defaults?.models || {})
-      ensureOpenRouterModelCatalogAllowlist(config)
-      const after = JSON.stringify(config.agents?.defaults?.models || {})
-      if (after !== before) await writeOpenclawConfig(config)
-    }
-  } catch (error) {
-    console.warn('OpenRouter model catalog allowlist normalization failed:', error)
-  }
-
-  try {
-    const listResult = await runOpenClaw(['models', 'list', '--json'], 30000)
-    if (listResult.code === 0 && listResult.stdout) {
-      const parsed = JSON.parse(listResult.stdout) as {
-        models?: AvailableModelInput[]
-      } | AvailableModelInput[]
-
-      const entries = Array.isArray(parsed) ? parsed : parsed.models || []
-      const available = entries
-        .filter((model) => modelIdFor(model).includes('/'))
-        .map((model) => ({
-          id: modelIdFor(model),
-          alias: model.alias || model.name || modelIdFor(model).split('/').pop(),
-          provider: model.provider || modelIdFor(model).split('/')[0],
-          name: model.name || modelIdFor(model).split('/').pop(),
-          available: model.available,
-          missing: model.missing,
-        }))
-      if (available.length) return { models: await filterGoogleVertexCatalogModels(mergeAvailableModels(available)), source: 'openclaw' }
-    }
-  } catch (error) {
-    console.warn('OpenClaw model listing unavailable; using local model catalog fallback:', error)
-  }
-
-  try {
-    const config = await readOpenclawConfig()
-    const models = config.agents?.defaults?.models || {}
-    const available = Object.entries(models).map(([id, data]) => ({
-      id,
-      alias: (data as { alias?: string }).alias || id.split('/').pop(),
-      provider: id.split('/')[0],
-      name: id.split('/').pop(),
-    }))
-    if (available.length) return { models: await filterGoogleVertexCatalogModels(mergeAvailableModels(available)), source: 'config' }
-  } catch (error) {
-    console.warn('OpenClaw config unavailable; using local model catalog fallback:', error)
-  }
-
-  return { models: await filterGoogleVertexCatalogModels(fallbackAvailableModels()), source: 'fallback' }
-}
-
-async function refreshAvailableModelsCache() {
-  if (availableModelsRefreshPromise) return availableModelsRefreshPromise
-
-  availableModelsRefreshPromise = (async () => {
-    const loaded = await loadAvailableModelsFromOpenClaw()
-    const cache: AvailableModelCatalogCache = {
-      ...loaded,
-      refreshedAt: Date.now(),
-      expiresAt: Date.now() + AVAILABLE_MODELS_CACHE_MS,
-    }
-    availableModelsCache = cache
-    return cache
-  })().finally(() => {
-    availableModelsRefreshPromise = null
-  })
-
-  return availableModelsRefreshPromise
-}
-
-function scheduleAvailableModelsCacheRefresh() {
-  if (availableModelsRefreshPromise || availableModelsRefreshTimer) return
-  availableModelsRefreshTimer = setTimeout(() => {
-    availableModelsRefreshTimer = null
-    void refreshAvailableModelsCache().catch((error) => {
-      console.warn('Background model catalog refresh failed:', error)
-    })
-  }, 0)
-  availableModelsRefreshTimer.unref?.()
-}
-
-function invalidateAvailableModelsForAuthChange() {
-  availableModelsCache = null
-  scheduleAvailableModelsCacheRefresh()
-}
-
-function getFastAvailableModelsCatalog(options: { refreshStale?: boolean } = {}) {
-  const now = Date.now()
-  const cache = availableModelsCache
-  const stale = !cache || cache.expiresAt <= now
-  const refreshStale = options.refreshStale !== false
-  if (stale && refreshStale) {
-    scheduleAvailableModelsCacheRefresh()
-  }
-  return {
-    models: cache?.models?.length ? cache.models : fallbackAvailableModels(),
-    source: cache?.source || 'fallback',
-    refreshing: Boolean(availableModelsRefreshPromise || availableModelsRefreshTimer) || (stale && refreshStale),
-    stale,
-  }
-}
+const providerAuthService = createProviderAuthService({
+  authEnvMap: AUTH_ENV_MAP,
+  authProviderCatalog: AUTH_PROVIDER_CATALOG,
+  canonicalAgentModelId,
+  configuredProviderApiKeyMarker,
+  createInitialOpenclawConfig: () => createInitialOpenclawConfig() as ProviderAuthOpenClawConfig,
+  ensureOpenRouterModelCatalogAllowlist: (config) =>
+    modelCatalogService.ensureOpenRouterModelCatalogAllowlist(config as OpenClawConfigFile),
+  ensureOpenRouterPluginEnabledForProviderAuth: (config) =>
+    ensureOpenRouterPluginEnabledForProviderAuth(config as OpenClawConfigFile),
+  googleOAuthClientConfigStatus,
+  googleVertexGcloudStatus,
+  homeDir: HOME_DIR,
+  invalidateAvailableModelsForAuthChange,
+  isGoogleVertexConfigured,
+  isGoogleVertexLocalOAuthConfigured,
+  isOpenAiCodexSubscriptionModel,
+  isValidAgentId: (agentId) => Boolean(agentId && isValidAgentId(agentId)),
+  localAuthPath: LOCAL_AUTH_PATH,
+  localAuthStateKey: CONTROL_CENTER_STATE_KEYS.localAuth,
+  openclawAgentFolder,
+  readAgentLocalConfigIfPresent,
+  readControlCenterStateRecord,
+  readOpenclawConfig: async () => await readOpenclawConfig() as ProviderAuthOpenClawConfig,
+  resolveGoogleProjectId,
+  writeControlCenterStateRecord,
+  writeOpenclawConfig,
+  writePrivateJsonFileAtomically,
+  writePrivateTextFileAtomically,
+})
+providerAuthServiceRef.current = providerAuthService
+const ensureLocalAuthStoreLoaded = providerAuthService.ensureLocalAuthStoreLoaded
+const getAgentAuthEnv = providerAuthService.getAgentAuthEnv
+const getLocalAuthEnv = providerAuthService.getLocalAuthEnv
+const isProviderConfigured = providerAuthService.isProviderConfigured
+const modelAuthProblem = providerAuthService.modelAuthProblem
+const persistProviderAuth = providerAuthService.persistProviderAuth
+const persistProviderOAuth = providerAuthService.persistProviderOAuth
+const providerAuthStatus = providerAuthService.providerAuthStatus
+const removeProviderAuth = providerAuthService.removeProviderAuth
+const syncStoredProviderAuthProfiles = providerAuthService.syncStoredProviderAuthProfiles
+const oauthCallbackService = createOAuthCallbackService({
+  createOpenAICodexAuthorizationFlow: providerSetupService.createOpenAICodexAuthorizationFlow,
+  exchangeOpenAICodexAuthorizationCode: providerSetupService.exchangeOpenAICodexAuthorizationCode,
+  googleOAuthRedirectUri: GOOGLE_OAUTH_REDIRECT_URI,
+  googleOAuthScopes: GOOGLE_OAUTH_SCOPES,
+  isShuttingDown: () => shuttingDown,
+  openAiCodexOAuthRedirectUri: OPENAI_CODEX_OAUTH_REDIRECT_URI,
+  openAiCodexOAuthScopes: OPENAI_CODEX_OAUTH_SCOPES,
+  openExternalAuthUrl,
+  persistProviderOAuth,
+  redactSensitiveText,
+  refreshOpenAICodexToken: providerSetupService.refreshOpenAICodexToken,
+  resolveGoogleOAuthClientConfig: providerSetupService.resolveGoogleOAuthClientConfig,
+  resolveGoogleProjectId,
+})
+oauthCallbackServiceRef.current = oauthCallbackService
+const oauthSessions = oauthCallbackService.oauthSessions
+const parseOpenAICodexAuthorizationInput = oauthCallbackService.parseOpenAICodexAuthorizationInput
+const completeOpenAICodexOAuthSession = oauthCallbackService.completeOpenAICodexOAuthSession
+const closeOAuthCallbackServersForProcessExit = oauthCallbackService.closeOAuthCallbackServersForProcessExit
+const closeOAuthCallbackServersForShutdown = oauthCallbackService.closeOAuthCallbackServersForShutdown
+const startGoogleOAuthSession = oauthCallbackService.startGoogleOAuthSession
+const startOpenAICodexOAuthSession = oauthCallbackService.startOpenAICodexOAuthSession
 
 const DEFAULT_BOOTSTRAP_AGENTS: Array<{ id: string; name: string }> = [
   { id: 'hn-commander', name: 'Donald J. Trump' },
@@ -2105,55 +1806,6 @@ const DEFAULT_BOOTSTRAP_AGENTS: Array<{ id: string; name: string }> = [
 ]
 const DEFAULT_BOOTSTRAP_AGENT_BY_ID = new Map(DEFAULT_BOOTSTRAP_AGENTS.map((agent) => [agent.id, agent]))
 
-const localAuthStore: LocalAuthStore = { providers: {} }
-let localAuthStoreHydrated = false
-let localAuthStoreLoadPromise: Promise<LocalAuthStore> | null = null
-
-function normalizeLocalAuthStore(value: unknown): LocalAuthStore | null {
-  if (!isLooseRecord(value) || !isLooseRecord(value.providers)) return null
-  return { providers: value.providers as Record<string, LocalProviderAuth> }
-}
-
-async function loadLocalAuthStore(): Promise<LocalAuthStore> {
-  const sqliteStore = normalizeLocalAuthStore(
-    readControlCenterStateRecord<LocalAuthStore>(CONTROL_CENTER_STATE_KEYS.localAuth),
-  )
-  if (sqliteStore) return sqliteStore
-
-  const legacyStore = await readLegacyJsonState(LOCAL_AUTH_PATH, normalizeLocalAuthStore)
-  if (legacyStore) {
-    writeControlCenterStateRecord(CONTROL_CENTER_STATE_KEYS.localAuth, legacyStore, LOCAL_AUTH_PATH)
-    return legacyStore
-  }
-
-  return { providers: {} }
-}
-
-async function saveLocalAuthStore(next: LocalAuthStore) {
-  if (writeControlCenterStateRecord(CONTROL_CENTER_STATE_KEYS.localAuth, next, LOCAL_AUTH_PATH)) return
-  await writePrivateJsonFileAtomically(LOCAL_AUTH_PATH, next)
-}
-
-async function ensureLocalAuthStoreLoaded(): Promise<LocalAuthStore> {
-  if (localAuthStoreHydrated) return localAuthStore
-  if (!localAuthStoreLoadPromise) {
-    localAuthStoreLoadPromise = loadLocalAuthStore()
-      .then((store) => {
-        localAuthStore.providers = {
-          ...(store.providers || {}),
-          ...(localAuthStore.providers || {}),
-        }
-        localAuthStoreHydrated = true
-        return localAuthStore
-      })
-      .catch((error) => {
-        localAuthStoreLoadPromise = null
-        throw error
-      })
-  }
-  return localAuthStoreLoadPromise
-}
-
 async function writePrivateTextFileAtomically(filePath: string, content: string) {
   await fs.mkdir(path.dirname(filePath), { recursive: true })
   const tempPath = path.join(path.dirname(filePath), `.${path.basename(filePath)}.${process.pid}.${randomUUID()}.tmp`)
@@ -2172,736 +1824,6 @@ async function writePrivateTextFileAtomically(filePath: string, content: string)
 
 async function writePrivateJsonFileAtomically(filePath: string, value: unknown) {
   await writePrivateTextFileAtomically(filePath, `${JSON.stringify(value, null, 2)}\n`)
-}
-
-type AuthProfileApiKeyCredential = {
-  type: 'api_key'
-  provider: string
-  key: string
-}
-
-type AuthProfileOAuthCredential = {
-  type: 'oauth'
-  provider: string
-  copyToAgents?: boolean
-  access?: string
-  refresh?: string
-  expires?: number
-  email?: string
-  accountId?: string
-  idToken?: string
-  displayName?: string
-  projectId?: string
-}
-
-type AuthProfileCredential = AuthProfileApiKeyCredential | AuthProfileOAuthCredential
-
-type AuthProfileStore = {
-  version: number
-  profiles: Record<string, AuthProfileCredential>
-  order?: Record<string, string[]>
-  lastGood?: Record<string, string>
-}
-
-type AuthProfileStateStore = {
-  version: number
-  order?: Record<string, string[]>
-  lastGood?: Record<string, string>
-  usageStats?: Record<string, Record<string, unknown>>
-  [key: string]: unknown
-}
-
-function inferOpenClawAgentIdFromAgentDir(agentDir: string) {
-  const normalized = path.normalize(agentDir)
-  if (path.basename(normalized).toLowerCase() === 'agent') {
-    const parent = path.basename(path.dirname(normalized))
-    if (parent) return parent
-  }
-  return 'main'
-}
-
-function authProfileSqlitePath(agentDir: string) {
-  return path.join(agentDir, 'openclaw-agent.sqlite')
-}
-
-function normalizeAuthProfileStore(value: Partial<AuthProfileStore> | null | undefined): AuthProfileStore | null {
-  if (!value || typeof value !== 'object' || Array.isArray(value)) return null
-  if (!value.profiles || typeof value.profiles !== 'object' || Array.isArray(value.profiles)) return null
-  return {
-    version: Number(value.version || 1),
-    profiles: value.profiles as Record<string, AuthProfileCredential>,
-    ...(value.order && typeof value.order === 'object' && !Array.isArray(value.order) ? { order: value.order } : {}),
-    ...(value.lastGood && typeof value.lastGood === 'object' && !Array.isArray(value.lastGood) ? { lastGood: value.lastGood } : {}),
-  }
-}
-
-function normalizeAuthProfileState(value: Partial<AuthProfileStateStore> | null | undefined): AuthProfileStateStore | null {
-  if (!value || typeof value !== 'object' || Array.isArray(value)) return null
-  return {
-    ...value,
-    version: Number(value.version || 1),
-  } as AuthProfileStateStore
-}
-
-function mergeAuthProfileStores(...stores: Array<AuthProfileStore | null | undefined>): AuthProfileStore {
-  const merged: AuthProfileStore = { version: 1, profiles: {} }
-  for (const store of stores) {
-    if (!store) continue
-    merged.version = Math.max(merged.version, Number(store.version || 1))
-    merged.profiles = {
-      ...merged.profiles,
-      ...(store.profiles || {}),
-    }
-    if (store.order) {
-      merged.order = merged.order || {}
-      for (const [provider, order] of Object.entries(store.order)) {
-        merged.order[provider] = Array.from(new Set([...(merged.order[provider] || []), ...(order || [])]))
-      }
-    }
-    if (store.lastGood) {
-      merged.lastGood = {
-        ...(merged.lastGood || {}),
-        ...store.lastGood,
-      }
-    }
-  }
-  return merged
-}
-
-function mergeAuthProfileStates(...states: Array<AuthProfileStateStore | null | undefined>): AuthProfileStateStore {
-  const merged: AuthProfileStateStore = { version: 1 }
-  for (const state of states) {
-    if (!state) continue
-    merged.version = Math.max(merged.version, Number(state.version || 1))
-    const { order, lastGood, usageStats, ...rest } = state
-    delete (rest as Partial<AuthProfileStateStore>).version
-    Object.assign(merged, rest)
-    if (order) {
-      merged.order = merged.order || {}
-      for (const [provider, providerOrder] of Object.entries(order)) {
-        merged.order[provider] = Array.from(new Set([...(merged.order[provider] || []), ...(providerOrder || [])]))
-      }
-    }
-    if (lastGood) {
-      merged.lastGood = {
-        ...(merged.lastGood || {}),
-        ...lastGood,
-      }
-    }
-    if (usageStats) {
-      merged.usageStats = {
-        ...(merged.usageStats || {}),
-        ...usageStats,
-      }
-    }
-  }
-  return merged
-}
-
-function readAuthProfileSqliteJson(agentDir: string, table: 'auth_profile_store' | 'auth_profile_state', keyColumn: 'store_key' | 'state_key', jsonColumn: 'store_json' | 'state_json') {
-  let db: SqliteDatabase | null = null
-  try {
-    const sqlite = optionalRequire('node:sqlite') as SqliteModule
-    if (!sqlite?.DatabaseSync) return null
-    const sqlitePath = authProfileSqlitePath(agentDir)
-    if (!existsSync(sqlitePath)) return null
-    db = new sqlite.DatabaseSync(sqlitePath, { readOnly: true })
-    const row = db.prepare(`SELECT ${jsonColumn} AS json FROM ${table} WHERE ${keyColumn} = ?`).get?.('primary')
-    const raw = typeof row?.json === 'string' ? row.json : ''
-    return raw ? parseLooseJsonObject(raw) : null
-  } catch {
-    return null
-  } finally {
-    db?.close?.()
-  }
-}
-
-function readAuthProfileSqliteStore(agentDir: string): AuthProfileStore | null {
-  return normalizeAuthProfileStore(readAuthProfileSqliteJson(agentDir, 'auth_profile_store', 'store_key', 'store_json') as Partial<AuthProfileStore> | null)
-}
-
-function readAuthProfileSqliteState(agentDir: string): AuthProfileStateStore | null {
-  return normalizeAuthProfileState(readAuthProfileSqliteJson(agentDir, 'auth_profile_state', 'state_key', 'state_json') as Partial<AuthProfileStateStore> | null)
-}
-
-function authProfileStateFromStore(store: AuthProfileStore): AuthProfileStateStore | null {
-  const state: AuthProfileStateStore = { version: 1 }
-  if (store.order && Object.keys(store.order).length) state.order = store.order
-  if (store.lastGood && Object.keys(store.lastGood).length) state.lastGood = store.lastGood
-  return state.order || state.lastGood ? state : null
-}
-
-async function writeAuthProfileSqlite(agentDir: string, store: AuthProfileStore, state = authProfileStateFromStore(store)) {
-  let db: SqliteDatabase | null = null
-  try {
-    const sqlite = optionalRequire('node:sqlite') as SqliteModule
-    if (!sqlite?.DatabaseSync) return
-    await fs.mkdir(agentDir, { recursive: true })
-    db = new sqlite.DatabaseSync(authProfileSqlitePath(agentDir))
-    db.exec?.('PRAGMA busy_timeout = 5000;')
-    db.exec?.(`
-      CREATE TABLE IF NOT EXISTS schema_meta (
-        meta_key TEXT NOT NULL PRIMARY KEY,
-        role TEXT NOT NULL,
-        schema_version INTEGER NOT NULL,
-        agent_id TEXT,
-        app_version TEXT,
-        created_at INTEGER NOT NULL,
-        updated_at INTEGER NOT NULL
-      );
-      CREATE TABLE IF NOT EXISTS auth_profile_store (
-        store_key TEXT NOT NULL PRIMARY KEY,
-        store_json TEXT NOT NULL,
-        updated_at INTEGER NOT NULL
-      );
-      CREATE TABLE IF NOT EXISTS auth_profile_state (
-        state_key TEXT NOT NULL PRIMARY KEY,
-        state_json TEXT NOT NULL,
-        updated_at INTEGER NOT NULL
-      );
-    `)
-    const now = Date.now()
-    const agentId = inferOpenClawAgentIdFromAgentDir(agentDir)
-    db.exec?.('BEGIN IMMEDIATE;')
-    try {
-      db.prepare(`
-        INSERT INTO schema_meta (meta_key, role, schema_version, agent_id, app_version, created_at, updated_at)
-        VALUES ('primary', 'agent', 1, ?, NULL, ?, ?)
-        ON CONFLICT(meta_key) DO UPDATE SET
-          role = 'agent',
-          schema_version = 1,
-          agent_id = excluded.agent_id,
-          updated_at = excluded.updated_at
-      `).run?.(agentId, now, now)
-      db.prepare(`
-        INSERT INTO auth_profile_store (store_key, store_json, updated_at)
-        VALUES ('primary', ?, ?)
-        ON CONFLICT(store_key) DO UPDATE SET
-          store_json = excluded.store_json,
-          updated_at = excluded.updated_at
-      `).run?.(JSON.stringify({ version: 1, profiles: store.profiles }), now)
-      if (state) {
-        db.prepare(`
-          INSERT INTO auth_profile_state (state_key, state_json, updated_at)
-          VALUES ('primary', ?, ?)
-          ON CONFLICT(state_key) DO UPDATE SET
-            state_json = excluded.state_json,
-            updated_at = excluded.updated_at
-        `).run?.(JSON.stringify(state), now)
-      } else {
-        db.prepare(`DELETE FROM auth_profile_state WHERE state_key = 'primary'`).run?.()
-      }
-      db.exec?.('COMMIT;')
-    } catch (error) {
-      db.exec?.('ROLLBACK;')
-      throw error
-    }
-  } catch (error) {
-    console.warn(`[auth] failed to write OpenClaw SQLite auth profile store for ${agentDir}:`, error)
-  } finally {
-    db?.close?.()
-  }
-}
-
-async function writeAuthProfileStateSqlite(agentDir: string, state: AuthProfileStateStore | null) {
-  const store = await readAuthProfileStore(agentDir)
-  const storeState = authProfileStateFromStore(store)
-  const mergedState = state
-    ? {
-        version: 1,
-        order: {
-          ...(storeState?.order || {}),
-          ...(state.order || {}),
-        },
-        lastGood: {
-          ...(storeState?.lastGood || {}),
-          ...(state.lastGood || {}),
-        },
-        ...(state.usageStats ? { usageStats: state.usageStats } : {}),
-      }
-    : storeState
-  await writeAuthProfileSqlite(agentDir, store, mergedState)
-}
-
-const AUTH_PROVIDER_PROFILE_ALIASES: Record<string, string[]> = {
-  opencode: ['opencode', 'opencode-go'],
-  'opencode-go': ['opencode', 'opencode-go'],
-  qwen: ['qwen', 'qwencloud', 'dashscope', 'modelstudio', 'qwen-cli', 'qwen-oauth', 'qwen-portal'],
-  qwencloud: ['qwen', 'qwencloud', 'dashscope', 'modelstudio', 'qwen-cli', 'qwen-oauth', 'qwen-portal'],
-  dashscope: ['qwen', 'qwencloud', 'dashscope', 'modelstudio', 'qwen-cli', 'qwen-oauth', 'qwen-portal'],
-  modelstudio: ['qwen', 'qwencloud', 'dashscope', 'modelstudio', 'qwen-cli', 'qwen-oauth', 'qwen-portal'],
-  'qwen-cli': ['qwen', 'qwencloud', 'dashscope', 'modelstudio', 'qwen-cli', 'qwen-oauth', 'qwen-portal'],
-  'qwen-oauth': ['qwen', 'qwencloud', 'dashscope', 'modelstudio', 'qwen-cli', 'qwen-oauth', 'qwen-portal'],
-  'qwen-portal': ['qwen', 'qwencloud', 'dashscope', 'modelstudio', 'qwen-cli', 'qwen-oauth', 'qwen-portal'],
-  kimi: ['kimi', 'kimi-coding', 'moonshot'],
-  'kimi-coding': ['kimi', 'kimi-coding', 'moonshot'],
-  moonshot: ['kimi', 'kimi-coding', 'moonshot'],
-  novita: ['novita', 'novita-ai', 'novitaai'],
-  'novita-ai': ['novita', 'novita-ai', 'novitaai'],
-  novitaai: ['novita', 'novita-ai', 'novitaai'],
-  gmi: ['gmi', 'gmi-cloud', 'gmicloud'],
-  'gmi-cloud': ['gmi', 'gmi-cloud', 'gmicloud'],
-  gmicloud: ['gmi', 'gmi-cloud', 'gmicloud'],
-  byteplus: ['byteplus', 'byteplus-plan'],
-  'byteplus-plan': ['byteplus', 'byteplus-plan'],
-  volcengine: ['volcengine', 'volcengine-plan'],
-  'volcengine-plan': ['volcengine', 'volcengine-plan'],
-  stepfun: ['stepfun', 'stepfun-plan'],
-  'stepfun-plan': ['stepfun', 'stepfun-plan'],
-  xiaomi: ['xiaomi', 'xiaomi-token-plan'],
-  'xiaomi-token-plan': ['xiaomi', 'xiaomi-token-plan'],
-  parallel: ['parallel', 'parallel-free'],
-  'parallel-free': ['parallel', 'parallel-free'],
-  azure: ['azure', 'azure-speech'],
-  'azure-speech': ['azure', 'azure-speech'],
-  openai: ['openai'],
-}
-
-function authProfileProvidersFor(provider: string) {
-  return AUTH_PROVIDER_PROFILE_ALIASES[provider] || [provider]
-}
-
-function authProfileIdFor(provider: string, mode: AuthMode) {
-  if (provider === 'openai-codex' && mode === 'oauth') return 'openai:chatgpt-default'
-  if (provider === 'openai' && mode === 'oauth') return `${provider}:default`
-  return mode === 'oauth' ? `${provider}:oauth-default` : `${provider}:default`
-}
-
-function authProfileOAuthTargetsFor(provider: string) {
-  if (provider === 'openai-codex') {
-    return [
-      { provider: 'openai', profileId: authProfileIdFor('openai-codex', 'oauth') },
-    ]
-  }
-  return authProfileProvidersFor(provider).map((authProvider) => ({
-    provider: authProvider,
-    profileId: authProfileIdFor(authProvider, 'oauth'),
-  }))
-}
-
-function prependAuthProfileForProvider(store: AuthProfileStore, provider: string, profileId: string) {
-  store.order = {
-    ...(store.order || {}),
-    [provider]: Array.from(new Set([profileId, ...(store.order?.[provider] || [])])),
-  }
-  store.lastGood = {
-    ...(store.lastGood || {}),
-    [provider]: profileId,
-  }
-}
-
-function preferredOpenAiCodexOrder(existing: string[] | undefined) {
-  const preferred = authProfileIdFor('openai-codex', 'oauth')
-  return Array.from(
-    new Set([
-      preferred,
-      ...(existing || []).filter((profileId) => !profileId.toLowerCase().startsWith('openai-codex:') && profileId !== preferred),
-    ]),
-  )
-}
-
-function preferOpenAiCodexOAuthProfile(store: AuthProfileStore) {
-  const profileId = authProfileIdFor('openai-codex', 'oauth')
-  if (!store.profiles[profileId]) return
-  store.order = {
-    ...(store.order || {}),
-    openai: preferredOpenAiCodexOrder(store.order?.openai),
-  }
-  store.lastGood = {
-    ...(store.lastGood || {}),
-    openai: profileId,
-  }
-}
-
-function removeLegacyOpenAiCodexAuthProfiles(store: AuthProfileStore) {
-  const removedProfileIds = new Set<string>()
-  for (const [profileId, credential] of Object.entries(store.profiles)) {
-    if (profileId.toLowerCase().startsWith('openai-codex:') || credential.provider === 'openai-codex') {
-      delete store.profiles[profileId]
-      removedProfileIds.add(profileId)
-    }
-  }
-  if (store.order?.['openai-codex']) {
-    for (const profileId of store.order['openai-codex']) removedProfileIds.add(profileId)
-    delete store.order['openai-codex']
-  }
-  if (store.lastGood?.['openai-codex']) {
-    removedProfileIds.add(store.lastGood['openai-codex'])
-    delete store.lastGood['openai-codex']
-  }
-  for (const provider of Object.keys(store.order || {})) {
-    store.order![provider] = store.order![provider].filter((profileId) => !removedProfileIds.has(profileId))
-    if (!store.order![provider].length) delete store.order![provider]
-  }
-  for (const [provider, profileId] of Object.entries(store.lastGood || {})) {
-    if (removedProfileIds.has(profileId)) delete store.lastGood![provider]
-  }
-}
-
-async function readAuthProfileState(agentDir: string): Promise<AuthProfileStateStore> {
-  const statePath = path.join(agentDir, 'auth-state.json')
-  let jsonState: AuthProfileStateStore | null = null
-  try {
-    const raw = await fs.readFile(statePath, 'utf-8')
-    const parsed = JSON.parse(raw) as Partial<AuthProfileStateStore>
-    jsonState = normalizeAuthProfileState(parsed)
-  } catch {
-    // Missing auth-state.json is fine; OpenClaw creates it lazily.
-  }
-  return mergeAuthProfileStates(jsonState, readAuthProfileSqliteState(agentDir))
-}
-
-function preferOpenAiCodexOAuthInState(state: AuthProfileStateStore) {
-  const profileId = authProfileIdFor('openai-codex', 'oauth')
-  state.order = {
-    ...(state.order || {}),
-    openai: preferredOpenAiCodexOrder(state.order?.openai),
-  }
-  delete state.order['openai-codex']
-  state.lastGood = {
-    ...(state.lastGood || {}),
-    openai: profileId,
-  }
-  delete state.lastGood['openai-codex']
-  if (state.usageStats) {
-    delete state.usageStats['openai-codex:default']
-    const apiKeyStats = state.usageStats['openai:default']
-    if (apiKeyStats?.cooldownReason === 'rate_limit') {
-      delete apiKeyStats.cooldownUntil
-      delete apiKeyStats.cooldownReason
-      delete apiKeyStats.cooldownModel
-    }
-  }
-}
-
-async function writeOpenAiCodexAuthStatePreference(agentDir: string) {
-  const statePath = path.join(agentDir, 'auth-state.json')
-  const state = await readAuthProfileState(agentDir)
-  preferOpenAiCodexOAuthInState(state)
-  await writePrivateJsonFileAtomically(statePath, state)
-  await writeAuthProfileStateSqlite(agentDir, state)
-}
-
-async function readAuthProfileStore(agentDir: string): Promise<AuthProfileStore> {
-  const authPath = path.join(agentDir, 'auth-profiles.json')
-  let jsonStore: AuthProfileStore | null = null
-  try {
-    const raw = await fs.readFile(authPath, 'utf-8')
-    const parsed = JSON.parse(raw) as Partial<AuthProfileStore>
-    jsonStore = normalizeAuthProfileStore(parsed)
-  } catch {
-    // Missing auth-profiles.json is created when saving a key.
-  }
-  return mergeAuthProfileStores(jsonStore, readAuthProfileSqliteStore(agentDir))
-}
-
-async function writeProviderApiKeyAuthProfiles(agentDir: string, provider: string, apiKey: string) {
-  const key = apiKey.trim()
-  if (!key) return
-
-  const authPath = path.join(agentDir, 'auth-profiles.json')
-  const store = await readAuthProfileStore(agentDir)
-  const providers = authProfileProvidersFor(provider)
-
-  for (const authProvider of providers) {
-    const profileId = authProfileIdFor(authProvider, 'apiKey')
-    store.profiles[profileId] = {
-      type: 'api_key',
-      provider: authProvider,
-      key,
-    }
-    prependAuthProfileForProvider(store, authProvider, profileId)
-  }
-  if (provider === 'openai') preferOpenAiCodexOAuthProfile(store)
-
-  await writePrivateJsonFileAtomically(authPath, store)
-  await writeAuthProfileSqlite(agentDir, store)
-  if (provider === 'openai') await writeOpenAiCodexAuthStatePreference(agentDir).catch(() => undefined)
-}
-
-async function writeProviderOAuthAuthProfiles(agentDir: string, provider: string, oauth: LocalOAuthCredential) {
-  const access = oauth.accessToken?.trim()
-  const refresh = oauth.refreshToken?.trim()
-  if (!access && !refresh) return
-
-  const authPath = path.join(agentDir, 'auth-profiles.json')
-  const store = await readAuthProfileStore(agentDir)
-  if (provider === 'openai-codex') removeLegacyOpenAiCodexAuthProfiles(store)
-  for (const { provider: authProvider, profileId } of authProfileOAuthTargetsFor(provider)) {
-    store.profiles[profileId] = {
-      type: 'oauth',
-      provider: authProvider,
-      copyToAgents: true,
-      ...(access ? { access } : {}),
-      ...(refresh ? { refresh } : {}),
-      ...(Number.isFinite(oauth.expiresAt) ? { expires: oauth.expiresAt } : {}),
-      ...(oauth.email ? { email: oauth.email } : {}),
-      ...(oauth.accountId ? { accountId: oauth.accountId } : {}),
-      ...(oauth.idToken ? { idToken: oauth.idToken } : {}),
-      ...(oauth.projectId ? { projectId: oauth.projectId } : {}),
-    }
-    prependAuthProfileForProvider(store, authProvider, profileId)
-  }
-  if (provider === 'openai-codex') preferOpenAiCodexOAuthProfile(store)
-
-  await writePrivateJsonFileAtomically(authPath, store)
-  await writeAuthProfileSqlite(agentDir, store)
-  if (provider === 'openai-codex') await writeOpenAiCodexAuthStatePreference(agentDir).catch(() => undefined)
-}
-
-async function persistProviderAuth(provider: string, apiKey: string) {
-  await ensureLocalAuthStoreLoaded()
-  localAuthStore.providers[provider] = {
-    ...(localAuthStore.providers[provider] || {}),
-    mode: 'apiKey',
-    apiKey,
-  }
-  await saveLocalAuthStore(localAuthStore)
-
-  await writeProviderApiKeyAuthProfiles(openclawAgentFolder('main'), provider, apiKey)
-  const config = await readOpenclawConfig().catch(() => null)
-  for (const entry of config?.agents?.list || []) {
-    if (!isValidAgentId(entry.id)) continue
-    await writeProviderApiKeyAuthProfiles(openclawAgentFolder(entry.id), provider, apiKey)
-  }
-  if (provider === 'openrouter') {
-    const nextConfig = config || createInitialOpenclawConfig()
-    ensureOpenRouterPluginEnabledForProviderAuth(nextConfig)
-    ensureOpenRouterModelCatalogAllowlist(nextConfig)
-    await writeOpenclawConfig(nextConfig)
-  }
-  invalidateAvailableModelsForAuthChange()
-}
-
-async function persistProviderOAuth(provider: string, oauth: LocalOAuthCredential) {
-  await ensureLocalAuthStoreLoaded()
-  const now = new Date().toISOString()
-  const previous = localAuthStore.providers[provider] || {}
-  localAuthStore.providers[provider] = {
-    ...previous,
-    mode: 'oauth',
-    oauth: {
-      ...(previous.oauth || {}),
-      ...oauth,
-      createdAt: previous.oauth?.createdAt || oauth.createdAt || now,
-      updatedAt: now,
-    },
-  }
-  await saveLocalAuthStore(localAuthStore)
-
-  const persisted = localAuthStore.providers[provider].oauth
-  if (!persisted) return
-
-  await writeProviderOAuthAuthProfiles(openclawAgentFolder('main'), provider, persisted)
-  const config = await readOpenclawConfig().catch(() => null)
-  for (const entry of config?.agents?.list || []) {
-    if (!isValidAgentId(entry.id)) continue
-    await writeProviderOAuthAuthProfiles(openclawAgentFolder(entry.id), provider, persisted)
-  }
-  invalidateAvailableModelsForAuthChange()
-}
-
-async function syncStoredProviderAuthProfiles(provider: string, config: LocalProviderAuth) {
-  if (config.apiKey?.trim()) {
-    await writeProviderApiKeyAuthProfiles(openclawAgentFolder('main'), provider, config.apiKey.trim())
-  }
-  if (config.oauth) {
-    await writeProviderOAuthAuthProfiles(openclawAgentFolder('main'), provider, config.oauth)
-  }
-
-  const openclawConfig = await readOpenclawConfig().catch(() => null)
-  for (const entry of openclawConfig?.agents?.list || []) {
-    if (!isValidAgentId(entry.id)) continue
-    if (config.apiKey?.trim()) {
-      await writeProviderApiKeyAuthProfiles(openclawAgentFolder(entry.id), provider, config.apiKey.trim())
-    }
-    if (config.oauth) {
-      await writeProviderOAuthAuthProfiles(openclawAgentFolder(entry.id), provider, config.oauth)
-    }
-  }
-  if (provider === 'openai-codex') {
-    await syncUserCodexAuthToAgentHome(openclawAgentFolder('main')).catch(() => undefined)
-    for (const entry of openclawConfig?.agents?.list || []) {
-      if (!isValidAgentId(entry.id)) continue
-      await syncUserCodexAuthToAgentHome(openclawAgentFolder(entry.id)).catch(() => undefined)
-    }
-  }
-}
-
-async function removeProviderAuthProfiles(agentDir: string, provider: string) {
-  const authPath = path.join(agentDir, 'auth-profiles.json')
-  const store = await readAuthProfileStore(agentDir)
-  const removedProfileIds = new Set<string>()
-  for (const authProvider of authProfileProvidersFor(provider)) {
-    const managedProfileIds = new Set([
-      authProfileIdFor(authProvider, 'apiKey'),
-      authProfileIdFor(authProvider, 'oauth'),
-    ])
-    if (provider === 'openai-codex') {
-      managedProfileIds.add(authProfileIdFor('openai-codex', 'oauth'))
-      for (const profileId of Object.keys(store.profiles)) {
-        if (profileId.toLowerCase().startsWith('openai-codex:')) managedProfileIds.add(profileId)
-      }
-    }
-    for (const [profileId, credential] of Object.entries(store.profiles)) {
-      if (managedProfileIds.has(profileId) || credential.provider === authProvider) {
-        delete store.profiles[profileId]
-        managedProfileIds.add(profileId)
-        removedProfileIds.add(profileId)
-      }
-    }
-    if (store.order?.[authProvider]) store.order[authProvider] = store.order[authProvider].filter((id) => !managedProfileIds.has(id))
-    if (store.lastGood?.[authProvider] && managedProfileIds.has(store.lastGood[authProvider])) delete store.lastGood[authProvider]
-  }
-  if (provider === 'openai-codex') {
-    if (store.order?.['openai-codex']) {
-      for (const profileId of store.order['openai-codex']) removedProfileIds.add(profileId)
-      delete store.order['openai-codex']
-    }
-    if (store.lastGood?.['openai-codex']) {
-      removedProfileIds.add(store.lastGood['openai-codex'])
-      delete store.lastGood['openai-codex']
-    }
-    for (const providerKey of Object.keys(store.order || {})) {
-      store.order![providerKey] = store.order![providerKey].filter((id) => !removedProfileIds.has(id))
-      if (!store.order![providerKey].length) delete store.order![providerKey]
-    }
-    for (const [providerKey, profileId] of Object.entries(store.lastGood || {})) {
-      if (removedProfileIds.has(profileId)) delete store.lastGood![providerKey]
-    }
-  }
-  await writePrivateJsonFileAtomically(authPath, store)
-  await writeAuthProfileSqlite(agentDir, store)
-}
-
-async function removeProviderAuth(provider: string) {
-  await ensureLocalAuthStoreLoaded()
-  delete localAuthStore.providers[provider]
-  await saveLocalAuthStore(localAuthStore)
-
-  await removeProviderAuthProfiles(openclawAgentFolder('main'), provider)
-  const config = await readOpenclawConfig().catch(() => null)
-  for (const entry of config?.agents?.list || []) {
-    if (!isValidAgentId(entry.id)) continue
-    await removeProviderAuthProfiles(openclawAgentFolder(entry.id), provider)
-  }
-  invalidateAvailableModelsForAuthChange()
-}
-
-function isChatGptCodexAuthJson(value: unknown): boolean {
-  if (!value || typeof value !== 'object' || Array.isArray(value)) return false
-  const record = value as Record<string, unknown>
-  const tokens = record.tokens && typeof record.tokens === 'object' && !Array.isArray(record.tokens)
-    ? record.tokens as Record<string, unknown>
-    : {}
-  return (
-    String(record.auth_mode || '').toLowerCase() === 'chatgpt' &&
-    typeof tokens.access_token === 'string' &&
-    typeof tokens.refresh_token === 'string'
-  )
-}
-
-async function syncUserCodexAuthToAgentHome(agentDir: string): Promise<boolean> {
-  const sourcePath = path.join(HOME_DIR, '.codex', 'auth.json')
-  let sourceRaw = ''
-  try {
-    sourceRaw = await fs.readFile(sourcePath, 'utf-8')
-    if (!isChatGptCodexAuthJson(JSON.parse(sourceRaw))) return false
-  } catch {
-    return false
-  }
-
-  const targetPath = path.join(agentDir, 'codex-home', 'auth.json')
-  const existingRaw = await fs.readFile(targetPath, 'utf-8').catch(() => '')
-  if (existingRaw === sourceRaw) return true
-  await writePrivateTextFileAtomically(targetPath, sourceRaw.endsWith('\n') ? sourceRaw : `${sourceRaw}\n`)
-  return true
-}
-
-function authProfileCredentialUsable(credential: AuthProfileCredential | undefined) {
-  if (!credential) return false
-  if (credential.type === 'api_key') return Boolean(credential.key?.trim())
-  return Boolean(credential.access?.trim() || credential.refresh?.trim())
-}
-
-function authProfileProviderIdsFor(provider: string) {
-  if (provider === 'openai-codex') return ['openai']
-  return authProfileProvidersFor(provider)
-}
-
-function authProfileCredentialsForProvider(store: AuthProfileStore | null | undefined, provider: string) {
-  if (!store) return []
-  const providerIds = new Set(authProfileProviderIdsFor(provider))
-  const credentials = Object.entries(store.profiles || {}).filter(([profileId, credential]) => {
-    if (provider === 'openai-codex') {
-      return (
-        profileId === authProfileIdFor('openai-codex', 'oauth') ||
-        profileId.toLowerCase().startsWith('openai-codex:') ||
-        credential.provider === 'openai-codex'
-      )
-    }
-    return providerIds.has(credential.provider)
-  })
-  return credentials.map(([, credential]) => credential)
-}
-
-function authProfileStoreHasProvider(store: AuthProfileStore | null | undefined, provider: string, mode?: AuthMode) {
-  return authProfileCredentialsForProvider(store, provider).some((credential) => (
-    authProfileCredentialUsable(credential) &&
-    (!mode || (mode === 'apiKey' ? credential.type === 'api_key' : credential.type === 'oauth'))
-  ))
-}
-
-function mainAuthProfileSqliteStore() {
-  return readAuthProfileSqliteStore(openclawAgentFolder('main'))
-}
-
-function localOAuthFromAuthProfileCredential(credential: AuthProfileCredential | undefined): LocalOAuthCredential | null {
-  if (!credential || credential.type !== 'oauth') return null
-  if (!credential.access?.trim() && !credential.refresh?.trim()) return null
-  return {
-    ...(credential.access ? { accessToken: credential.access } : {}),
-    ...(credential.refresh ? { refreshToken: credential.refresh } : {}),
-    ...(Number.isFinite(credential.expires) ? { expiresAt: credential.expires } : {}),
-    ...(credential.email ? { email: credential.email } : {}),
-    ...(credential.accountId ? { accountId: credential.accountId } : {}),
-    ...(credential.idToken ? { idToken: credential.idToken } : {}),
-    ...(credential.projectId ? { projectId: credential.projectId } : {}),
-  }
-}
-
-function localOAuthFromMainAuthProfile(provider: string): LocalOAuthCredential | null {
-  const store = mainAuthProfileSqliteStore()
-  const oauthCredential = authProfileCredentialsForProvider(store, provider)
-    .find((credential) => credential.type === 'oauth' && authProfileCredentialUsable(credential))
-  return localOAuthFromAuthProfileCredential(oauthCredential)
-}
-
-function mainAuthProfileEnv(): Record<string, string> {
-  const env: Record<string, string> = {}
-  const store = mainAuthProfileSqliteStore()
-  if (!store) return env
-  for (const credential of Object.values(store.profiles || {})) {
-    if (credential.type !== 'api_key') continue
-    const key = credential.key?.trim()
-    if (!key) continue
-    const envKeys = AUTH_ENV_MAP[credential.provider] || []
-    for (const envKey of envKeys) env[envKey] ||= key
-  }
-  return env
-}
-
-function getLocalAuthEnv(): Record<string, string> {
-  const env: Record<string, string> = mainAuthProfileEnv()
-  for (const [provider, config] of Object.entries(localAuthStore.providers)) {
-    const apiKey = config.apiKey?.trim()
-    if (!apiKey) continue
-    const envKeys = AUTH_ENV_MAP[provider] || []
-    for (const envKey of envKeys) {
-      env[envKey] = apiKey
-    }
-  }
-  return env
 }
 
 function isLooseRecord(value: unknown): value is Record<string, unknown> {
@@ -3105,17 +2027,6 @@ function getGatewayAuthEnv(): Record<string, string> {
   }
 }
 
-function authEnvFromProviders(providers: Record<string, { mode: 'oauth' | 'apiKey'; apiKey?: string }> | undefined) {
-  const env: Record<string, string> = {}
-  for (const [provider, settings] of Object.entries(providers || {})) {
-    const apiKey = settings.apiKey?.trim()
-    if (!apiKey) continue
-    const envKeys = AUTH_ENV_MAP[provider] || []
-    for (const envKey of envKeys) env[envKey] = apiKey
-  }
-  return env
-}
-
 function configuredProviderApiKeyMarker(provider: string) {
   const config = readJsonFileSyncLoose(OPENCLAW_CONFIG_PATH)
   if (!config) return ''
@@ -3124,38 +2035,6 @@ function configuredProviderApiKeyMarker(provider: string) {
     nestedString(config, ['plugins', 'entries', provider, 'apiKey']) ||
     nestedString(config, ['plugins', 'entries', provider, 'config', 'apiKey'])
   )
-}
-
-async function getAgentAuthEnv(agentId?: string) {
-  await ensureLocalAuthStoreLoaded().catch(() => undefined)
-  const globalEnv = getLocalAuthEnv()
-  if (!agentId) return {}
-  try {
-    await syncUserCodexAuthToAgentHome(openclawAgentFolder(agentId)).catch(() => undefined)
-    const parsed = await readAgentLocalConfigIfPresent(agentId)
-    return {
-      ...globalEnv,
-      ...authEnvFromProviders(parsed?.auth?.providers),
-    }
-  } catch {
-    return globalEnv
-  }
-}
-
-function isProviderConfigured(provider: string): boolean {
-  if (provider === 'google-vertex') return isGoogleVertexConfigured()
-  const envKeys = AUTH_ENV_MAP[provider] || []
-  for (const envKey of envKeys) {
-    if (process.env[envKey]) return true
-  }
-  if (configuredProviderApiKeyMarker(provider)) return true
-  const stored = authProfileProvidersFor(provider)
-    .map((authProvider) => localAuthStore.providers[authProvider]?.apiKey)
-    .find((apiKey) => apiKey?.trim())
-  if (stored?.trim()) return true
-  if (AUTH_PROVIDER_CATALOG[provider]?.oauth && isOAuthCredentialUsable(localAuthStore.providers[provider]?.oauth)) return true
-  if (authProfileStoreHasProvider(mainAuthProfileSqliteStore(), provider)) return true
-  return false
 }
 
 async function isGoogleVertexConfiguredForCronModel(modelName: string) {
@@ -3244,94 +2123,6 @@ async function resolveMissionCronRuntimeDefaultsForAgent(agentId: string): Promi
     model,
     thinking: localThinking || heartbeatDefaults.thinking || 'medium',
     timeoutSeconds,
-  }
-}
-
-function providerAuthStatus(provider: string, options: { probeGcloud?: boolean } = {}) {
-  const catalog = AUTH_PROVIDER_CATALOG[provider]
-  const envKeys = AUTH_ENV_MAP[provider] || []
-  const gcloud = provider === 'google-vertex' ? googleVertexGcloudStatus(options) : undefined
-  const vertexOAuthConfigured = provider === 'google-vertex' ? isGoogleVertexLocalOAuthConfigured({}, options) : false
-  const envConfigured = envKeys.some((envKey) => Boolean(process.env[envKey]?.trim()))
-  const configApiKeyConfigured = Boolean(configuredProviderApiKeyMarker(provider))
-  const sqliteStore = mainAuthProfileSqliteStore()
-  const sqliteApiKeyConfigured = authProfileStoreHasProvider(sqliteStore, provider, 'apiKey')
-  const sqliteOAuthConfigured = authProfileStoreHasProvider(sqliteStore, provider, 'oauth')
-  const storedApiKey = authProfileProvidersFor(provider).some((authProvider) =>
-    Boolean(localAuthStore.providers[authProvider]?.apiKey?.trim()),
-  )
-  const local = localAuthStore.providers[provider] || {}
-  const sqliteOAuth = localOAuthFromMainAuthProfile(provider)
-  const oauthConfigured = Boolean(catalog?.oauth && (isOAuthCredentialUsable(local.oauth) || sqliteOAuthConfigured))
-  const oauthAvailability = provider === 'google'
-    ? googleOAuthClientConfigStatus()
-      : provider === 'openai-codex'
-        ? { available: true, missing: [] as string[] }
-        : { available: false, missing: [] as string[] }
-  const configured = envConfigured || configApiKeyConfigured || storedApiKey || sqliteApiKeyConfigured || oauthConfigured || vertexOAuthConfigured || Boolean(gcloud?.configured)
-  const defaultMode: AuthMode = catalog?.oauth && !envKeys.length ? 'oauth' : oauthConfigured ? 'oauth' : 'apiKey'
-
-  return {
-    provider,
-    label: catalog?.label || provider,
-    configured,
-    mode: local.mode || defaultMode,
-    envKeys,
-    docs: catalog?.docs,
-    apiKeyUrl: catalog?.apiKeyUrl,
-    optionalAuth: Boolean(catalog?.optionalAuth),
-    stored: storedApiKey || sqliteApiKeyConfigured || oauthConfigured || vertexOAuthConfigured || Boolean(gcloud?.configured),
-    apiKey: {
-      configured: envConfigured || configApiKeyConfigured || storedApiKey || sqliteApiKeyConfigured,
-      stored: configApiKeyConfigured || storedApiKey || sqliteApiKeyConfigured,
-      envConfigured,
-      configConfigured: configApiKeyConfigured,
-      envKeys,
-    },
-    ...(gcloud ? { gcloud } : {}),
-    oauth: catalog?.oauth
-      ? {
-          supported: true,
-          configured: oauthConfigured,
-          available: oauthAvailability.available,
-          missing: oauthAvailability.missing,
-          docs: catalog.oauth.docs,
-          redirectUri: catalog.oauth.redirectUri,
-          projectId: provider === 'google' ? local.oauth?.projectId || sqliteOAuth?.projectId || resolveGoogleProjectId() || undefined : undefined,
-          accountId: local.oauth?.accountId || sqliteOAuth?.accountId || undefined,
-          email: local.oauth?.email || sqliteOAuth?.email || undefined,
-          expiresAt: local.oauth?.expiresAt || sqliteOAuth?.expiresAt || undefined,
-          refreshAvailable: Boolean(local.oauth?.refreshToken?.trim() || sqliteOAuth?.refreshToken?.trim()),
-          clientIdEnvKeys: catalog.oauth.clientIdEnvKeys,
-          projectIdEnvKeys: catalog.oauth.projectIdEnvKeys,
-        }
-      : {
-          supported: false,
-          configured: false,
-          available: false,
-          missing: [] as string[],
-        },
-  }
-}
-
-function modelAuthProblem(modelId: string | undefined) {
-  const canonicalModelId = canonicalAgentModelId(modelId)
-  if (isOpenAiCodexSubscriptionModel(canonicalModelId)) {
-    if (isOAuthCredentialUsable(localAuthStore.providers['openai-codex']?.oauth)) return null
-    if (authProfileStoreHasProvider(mainAuthProfileSqliteStore(), 'openai-codex')) return null
-    if (isProviderConfigured('openai')) return null
-    return {
-      provider: 'openai-codex',
-      providerStatus: providerAuthStatus('openai-codex'),
-    }
-  }
-  const provider = canonicalModelId.split('/')[0] || ''
-  if (!provider || !AUTH_PROVIDER_CATALOG[provider]) return null
-  if (AUTH_PROVIDER_CATALOG[provider]?.optionalAuth) return null
-  if (isProviderConfigured(provider)) return null
-  return {
-    provider,
-    providerStatus: providerAuthStatus(provider),
   }
 }
 
@@ -4663,7 +3454,7 @@ async function repairOpenClawConfigForGateway(reason: string) {
     GATEWAY_CONFIG_DOCTOR_TIMEOUT_MS,
   )
   openclawConfigCache = null
-  availableModelsCache = null
+  modelCatalogService.invalidateAvailableModels()
   const detail = compactOpenClawCommandOutput(result, `openclaw doctor --fix exited ${result.code}`)
   if (result.code === 0) {
     pushGatewayLog('lifecycle', `OpenClaw doctor repair completed (${reason})`)
@@ -5097,10 +3888,7 @@ let signalShutdownInFlight = false
 let controlServerClosing = false
 
 function clearShutdownPinnedTimers(): void {
-  if (availableModelsRefreshTimer) {
-    clearTimeout(availableModelsRefreshTimer)
-    availableModelsRefreshTimer = null
-  }
+  modelCatalogService.clearRefreshTimer()
   if (gatewayAutostartTimer) {
     clearTimeout(gatewayAutostartTimer)
     gatewayAutostartTimer = null
@@ -6761,19 +5549,11 @@ const STREAMING_PROVIDER_CONFIG: Record<string, StreamingProviderConfig> = {
   },
 }
 
-function splitModelId(modelId: string) {
-  const [provider = '', ...modelParts] = modelId.split('/')
-  return {
-    provider: provider.trim(),
-    model: (modelParts.join('/') || modelId).trim(),
-  }
-}
-
 function streamingCapabilityForModel(modelId: string) {
   const canonicalModelId = canonicalAgentModelId(modelId)
   if (isOpenAiCodexSubscriptionModel(canonicalModelId)) {
     const codexAuth = AUTH_PROVIDER_CATALOG['openai-codex']
-    const oauthConfigured = isOAuthCredentialUsable(localAuthStore.providers['openai-codex']?.oauth)
+    const oauthConfigured = isOAuthCredentialUsable(providerAuthService.getLocalProviderOAuth('openai-codex'))
     const openAiApiConfigured = isProviderConfigured('openai')
     return {
       supported: true,
@@ -6795,301 +5575,6 @@ function streamingCapabilityForModel(modelId: string) {
   }
 }
 
-function resolveEnvValue(env: Record<string, string>, keys: string[]) {
-  for (const key of keys) {
-    const value = env[key]?.trim() || process.env[key]?.trim()
-    if (value) return value
-  }
-  return ''
-}
-
-type GoogleVertexGcloudStatus = {
-  supported: true
-  installed: boolean
-  authenticated: boolean
-  configured: boolean
-  projectId?: string
-  location: string
-  account?: string
-  missing: string[]
-  installUrl: string
-  commands: string[]
-  source?: 'probe' | 'cache' | 'fast'
-}
-
-let googleVertexGcloudStatusCache: { value: GoogleVertexGcloudStatus; expiresAt: number } | null = null
-let googleVertexAccessTokenCache: { value: string; expiresAt: number } | null = null
-let googleVertexGcloudCommandCache: string | null = null
-
-function googleCloudSdkRootCandidates() {
-  const localAppData = resolveEnvValue({}, ['LOCALAPPDATA', 'LocalAppData'])
-  const appData = resolveEnvValue({}, ['APPDATA', 'AppData'])
-  const programFiles = resolveEnvValue({}, ['ProgramFiles', 'PROGRAMFILES'])
-  const programFilesX86 = process.env['ProgramFiles(x86)']?.trim() || process.env.PROGRAMFILES_X86?.trim() || ''
-  return uniqueStrings(
-    resolveEnvValue({}, ['CLOUDSDK_ROOT_DIR', 'GCLOUD_SDK_ROOT', 'GOOGLE_CLOUD_SDK_HOME']),
-    localAppData ? path.join(localAppData, 'Google', 'Cloud SDK', 'google-cloud-sdk') : '',
-    localAppData ? path.join(localAppData, 'Programs', 'Google', 'Cloud SDK', 'google-cloud-sdk') : '',
-    appData ? path.join(appData, 'gcloud', 'google-cloud-sdk') : '',
-    programFiles ? path.join(programFiles, 'Google', 'Cloud SDK', 'google-cloud-sdk') : '',
-    programFilesX86 ? path.join(programFilesX86, 'Google', 'Cloud SDK', 'google-cloud-sdk') : '',
-  )
-}
-
-function googleCloudSdkBinForRoot(root: string) {
-  return path.basename(root).toLowerCase() === 'bin' ? root : path.join(root, 'bin')
-}
-
-function googleVertexGcloudCommandCandidates() {
-  const commandNames = process.platform === 'win32'
-    ? ['gcloud.cmd', 'gcloud.bat', 'gcloud.exe']
-    : ['gcloud']
-  return uniqueStrings(
-    ...googleCloudSdkRootCandidates().flatMap((root) => {
-      const binDir = googleCloudSdkBinForRoot(root)
-      return commandNames.map((name) => path.join(binDir, name))
-    }),
-  ).filter((candidate) => existsSync(candidate))
-}
-
-function prependPathEntry(value: string | undefined, entry: string) {
-  const current = value || ''
-  const delimiter = process.platform === 'win32' ? ';' : ':'
-  const parts = current.split(delimiter).filter(Boolean)
-  if (parts.some((part) => path.resolve(part).toLowerCase() === path.resolve(entry).toLowerCase())) return current
-  return [entry, ...parts].join(delimiter)
-}
-
-function spawnGcloud(command: string, args: string[], timeoutMs: number) {
-  const env = { ...process.env }
-  if (path.isAbsolute(command)) {
-    const binDir = path.dirname(command)
-    env.PATH = prependPathEntry(env.PATH, binDir)
-    env.Path = prependPathEntry(env.Path, binDir)
-  }
-  const spec = shelllessSpawnSpecForCommand(command, args, { wrapWindowsPathLookup: true })
-  const result = spawnSync(
-    spec.command,
-    spec.args,
-    {
-    encoding: 'utf-8',
-    timeout: timeoutMs,
-    shell: spec.shell,
-    env,
-    ...(process.platform === 'win32' ? { windowsHide: true } : {}),
-    },
-  )
-  const errorText = result.error ? String(result.error) : ''
-  return {
-    stdout: String(result.stdout || '').trim(),
-    stderr: [String(result.stderr || '').trim(), errorText].filter(Boolean).join('\n'),
-    code: typeof result.status === 'number' ? result.status : result.error ? 1 : 0,
-  }
-}
-
-function isMissingGcloudCommand(result: { stderr: string; code: number }) {
-  const stderr = result.stderr.toLowerCase()
-  return Boolean(
-    stderr.includes('enoent') ||
-    stderr.includes('not recognized as an internal or external command') ||
-    stderr.includes('command not found') ||
-    stderr.includes('no such file or directory'),
-  )
-}
-
-function runGcloud(args: string[], timeoutMs = 8000): { stdout: string; stderr: string; code: number } {
-  const commands = uniqueStrings(googleVertexGcloudCommandCache, 'gcloud', ...googleVertexGcloudCommandCandidates())
-  let missingResult: { stdout: string; stderr: string; code: number } | null = null
-  for (const command of commands) {
-    const result = spawnGcloud(command, args, timeoutMs)
-    if (!isMissingGcloudCommand(result)) {
-      googleVertexGcloudCommandCache = command
-      return result
-    }
-    missingResult ||= result
-    if (googleVertexGcloudCommandCache === command) googleVertexGcloudCommandCache = null
-  }
-  return missingResult || { stdout: '', stderr: 'gcloud was not found.', code: 1 }
-}
-
-function cleanGcloudConfigValue(value: string) {
-  const line = value.split(/\r?\n/).map((entry) => entry.trim()).find(Boolean) || ''
-  if (!line || line === '(unset)' || /^unset$/i.test(line)) return ''
-  return line
-}
-
-function resolveGoogleVertexProjectId(env: Record<string, string> = {}) {
-  const fromEnv = resolveEnvValue(env, GOOGLE_VERTEX_PROJECT_ID_KEYS)
-  if (fromEnv) return fromEnv
-  const result = runGcloud(['config', 'get-value', 'project', '--quiet'], 5000)
-  return result.code === 0 ? cleanGcloudConfigValue(result.stdout) : ''
-}
-
-function resolveGoogleVertexProjectIdFast(env: Record<string, string> = {}) {
-  return (
-    resolveEnvValue(env, GOOGLE_VERTEX_PROJECT_ID_KEYS) ||
-    localAuthStore.providers.google?.oauth?.projectId?.trim() ||
-    resolveGoogleProjectId() ||
-    ''
-  )
-}
-
-function resolveGoogleVertexLocation(env: Record<string, string> = {}) {
-  const fromEnv = resolveEnvValue(env, GOOGLE_VERTEX_LOCATION_KEYS)
-  if (fromEnv) return fromEnv
-  return GOOGLE_VERTEX_DEFAULT_LOCATION
-}
-
-function resolveGoogleVertexLocationFast(env: Record<string, string> = {}) {
-  return resolveEnvValue(env, GOOGLE_VERTEX_LOCATION_KEYS) || GOOGLE_VERTEX_DEFAULT_LOCATION
-}
-
-function resolveGoogleVertexAccessTokenForProcessEnv(env: Record<string, string> = {}) {
-  const fromEnv = resolveEnvValue(env, GOOGLE_VERTEX_ACCESS_TOKEN_KEYS)
-  if (fromEnv) return fromEnv
-
-  const localGoogleOAuth = localAuthStore.providers.google?.oauth
-  const localAccessToken = localGoogleOAuth?.accessToken?.trim()
-  if (localAccessToken && (!localGoogleOAuth?.expiresAt || localGoogleOAuth.expiresAt > Date.now() + 60_000)) {
-    return localAccessToken
-  }
-
-  if (googleVertexAccessTokenCache && googleVertexAccessTokenCache.expiresAt > Date.now()) {
-    return googleVertexAccessTokenCache.value
-  }
-
-  const token = runGcloud(['auth', 'print-access-token', '--quiet'], 10000)
-  const accessToken = token.code === 0 ? token.stdout.trim() : ''
-  if (!accessToken) return ''
-  googleVertexAccessTokenCache = {
-    value: accessToken,
-    expiresAt: Date.now() + GOOGLE_VERTEX_ACCESS_TOKEN_CACHE_MS,
-  }
-  return accessToken
-}
-
-function getGoogleVertexProcessEnv(baseEnv: Record<string, string | undefined> = process.env): Record<string, string> {
-  const env = Object.fromEntries(
-    Object.entries(baseEnv).filter((entry): entry is [string, string] => typeof entry[1] === 'string'),
-  )
-  const projectId = resolveGoogleVertexProjectId(env)
-  if (!projectId) return {}
-  const location = resolveGoogleVertexLocation(env)
-  const next: Record<string, string> = {}
-  if (!env.GOOGLE_CLOUD_PROJECT?.trim()) next.GOOGLE_CLOUD_PROJECT = projectId
-  if (!env.GCLOUD_PROJECT?.trim()) next.GCLOUD_PROJECT = projectId
-  if (!env.GOOGLE_CLOUD_LOCATION?.trim()) next.GOOGLE_CLOUD_LOCATION = location
-  const accessToken = resolveGoogleVertexAccessTokenForProcessEnv(env)
-  if (accessToken) {
-    if (!env.GOOGLE_VERTEX_ACCESS_TOKEN?.trim()) next.GOOGLE_VERTEX_ACCESS_TOKEN = accessToken
-    if (!env.GCLOUD_ACCESS_TOKEN?.trim()) next.GCLOUD_ACCESS_TOKEN = accessToken
-  }
-  return next
-}
-
-function googleVertexGcloudStatus(options: { probeGcloud?: boolean } = {}): GoogleVertexGcloudStatus {
-  const now = Date.now()
-  const forceProbe = options.probeGcloud === true
-  if (!forceProbe && googleVertexGcloudStatusCache && googleVertexGcloudStatusCache.expiresAt > now) {
-    return { ...googleVertexGcloudStatusCache.value, source: 'cache' }
-  }
-
-  if (options.probeGcloud === false) {
-    const projectId = resolveGoogleVertexProjectIdFast()
-    const location = resolveGoogleVertexLocationFast()
-    const tokenFromEnv = resolveEnvValue({}, GOOGLE_VERTEX_ACCESS_TOKEN_KEYS)
-    const localGoogleOAuth = localAuthStore.providers.google?.oauth
-    const localOAuthUsable = isOAuthCredentialUsable(localGoogleOAuth)
-    const authenticated = Boolean(tokenFromEnv || localOAuthUsable)
-    const configured = Boolean(projectId && authenticated)
-    const missing: string[] = []
-    if (!authenticated) missing.push('Connect Google OAuth, set GOOGLE_VERTEX_ACCESS_TOKEN, or refresh gcloud status.')
-    if (!projectId) missing.push('Set a Google Cloud project.')
-    if (configured) missing.length = 0
-    return {
-      supported: true,
-      installed: googleVertexGcloudStatusCache?.value.installed ?? false,
-      authenticated,
-      configured,
-      ...(projectId ? { projectId } : {}),
-      location,
-      ...(localGoogleOAuth?.email ? { account: localGoogleOAuth.email } : {}),
-      missing,
-      installUrl: GOOGLE_CLOUD_CLI_INSTALL_URL,
-      commands: [
-        'gcloud auth login',
-        'gcloud config set project YOUR_PROJECT_ID',
-        `gcloud services enable aiplatform.googleapis.com --project ${projectId || 'YOUR_PROJECT_ID'}`,
-      ],
-      source: 'fast',
-    }
-  }
-
-  const projectId = resolveGoogleVertexProjectId()
-  const location = resolveGoogleVertexLocation()
-  const tokenFromEnv = resolveEnvValue({}, GOOGLE_VERTEX_ACCESS_TOKEN_KEYS)
-  const version = runGcloud(['--version'], 5000)
-  const installed = version.code === 0
-  const account = installed
-    ? cleanGcloudConfigValue(runGcloud(['auth', 'list', '--filter=status:ACTIVE', '--format=value(account)', '--quiet'], 7000).stdout)
-    : ''
-  const tokenProbe = installed && !tokenFromEnv
-    ? runGcloud(['auth', 'print-access-token', '--quiet'], 10000)
-    : { stdout: '', stderr: '', code: tokenFromEnv ? 0 : 1 }
-  const authenticated = Boolean(tokenFromEnv || (tokenProbe.code === 0 && tokenProbe.stdout.trim()))
-  const configured = Boolean(projectId && authenticated)
-  const missing: string[] = []
-  if (!installed && !tokenFromEnv) {
-    missing.push(`Install Google Cloud CLI: ${GOOGLE_CLOUD_CLI_INSTALL_URL}`)
-  }
-  if (installed && !authenticated) {
-    missing.push('Run gcloud auth login, then retry.')
-  }
-  if (!projectId) {
-    missing.push('Set a Google Cloud project with gcloud config set project YOUR_PROJECT_ID.')
-  }
-  if (configured) {
-    missing.length = 0
-  }
-
-  const value: GoogleVertexGcloudStatus = {
-    supported: true,
-    installed,
-    authenticated,
-    configured,
-    ...(projectId ? { projectId } : {}),
-    location,
-    ...(account ? { account } : {}),
-    missing,
-    installUrl: GOOGLE_CLOUD_CLI_INSTALL_URL,
-    commands: [
-      'gcloud auth login',
-      'gcloud config set project YOUR_PROJECT_ID',
-      `gcloud services enable aiplatform.googleapis.com --project ${projectId || 'YOUR_PROJECT_ID'}`,
-    ],
-    source: 'probe',
-  }
-  googleVertexGcloudStatusCache = { value, expiresAt: now + 15000 }
-  return value
-}
-
-function googleVertexLocalOAuthProjectId(env: Record<string, string> = {}, options: { probeGcloud?: boolean } = {}) {
-  return (
-    (options.probeGcloud === false ? resolveGoogleVertexProjectIdFast(env) : resolveGoogleVertexProjectId(env)) ||
-    localAuthStore.providers.google?.oauth?.projectId?.trim() ||
-    resolveGoogleProjectId() ||
-    ''
-  )
-}
-
-function isGoogleVertexLocalOAuthConfigured(env: Record<string, string> = {}, options: { probeGcloud?: boolean } = {}) {
-  return Boolean(isOAuthCredentialUsable(localAuthStore.providers.google?.oauth) && googleVertexLocalOAuthProjectId(env, options))
-}
-
-function isGoogleVertexConfigured(options: { probeGcloud?: boolean } = {}) {
-  return googleVertexGcloudStatus(options).configured || isGoogleVertexLocalOAuthConfigured({}, options)
-}
-
 function openClawConfigEnvValues(config: OpenClawConfigFile) {
   const env = config.env && typeof config.env === 'object' && !Array.isArray(config.env)
     ? config.env as Record<string, unknown>
@@ -7098,174 +5583,6 @@ function openClawConfigEnvValues(config: OpenClawConfigFile) {
     ? env.vars as Record<string, unknown>
     : {}
   return { ...env, ...vars }
-}
-
-async function resolveGoogleVertexGcloudAuth(env: Record<string, string>): Promise<ProviderRequestAuth | null> {
-  const envToken = resolveEnvValue(env, GOOGLE_VERTEX_ACCESS_TOKEN_KEYS)
-  const projectId = resolveGoogleVertexProjectId(env)
-  const location = resolveGoogleVertexLocation(env)
-  if (envToken && projectId) {
-    return { type: 'oauth', accessToken: envToken, projectId, location, source: 'env-token' }
-  }
-
-  const version = runGcloud(['--version'], 5000)
-  if (version.code !== 0) return null
-  const token = runGcloud(['auth', 'print-access-token', '--quiet'], 10000)
-  const accessToken = token.stdout.trim()
-  if (token.code !== 0 || !accessToken || !projectId) return null
-  return { type: 'oauth', accessToken, projectId, location, source: 'gcloud' }
-}
-
-async function resolveGoogleVertexRequestAuth(env: Record<string, string>): Promise<ProviderRequestAuth | null> {
-  const gcloudAuth = await resolveGoogleVertexGcloudAuth(env)
-  if (gcloudAuth) return gcloudAuth
-
-  const oauth = await resolveGoogleOAuthForRequest().catch(() => null)
-  const projectId = googleVertexLocalOAuthProjectId(env)
-  const location = resolveGoogleVertexLocation(env)
-  if (oauth?.accessToken && projectId) {
-    return { type: 'oauth', accessToken: oauth.accessToken, projectId, location, source: 'local-google-oauth' }
-  }
-
-  return null
-}
-
-type ProviderRequestAuth =
-  | { type: 'apiKey'; value: string; source: string }
-  | { type: 'oauth'; accessToken: string; projectId?: string; location?: string; source: string }
-
-type GoogleOAuthClientConfig = {
-  clientId: string
-  clientSecret?: string
-}
-
-type OAuthSessionStatus = 'pending' | 'complete' | 'error'
-
-type OAuthSession = {
-  id: string
-  provider: 'google' | 'openai-codex'
-  state?: string
-  verifier?: string
-  challenge?: string
-  projectId?: string
-  redirectUri?: string
-  authorizationUrl: string
-  status: OAuthSessionStatus
-  createdAt: string
-  completedAt?: string
-  error?: string
-  manualInputRequired?: boolean
-  manualInputSubmittedAt?: string
-  manualPrompt?: string
-  result?: {
-    email?: string
-    accountId?: string
-    projectId?: string
-    expiresAt?: number
-  }
-}
-
-type OpenAICodexAuthorizationFlow = {
-  verifier: string
-  redirectUri: string
-  state: string
-  url: string
-}
-
-type OpenAICodexTokenExchangeResult =
-  | {
-      type: 'success'
-      access: string
-      refresh: string
-      expires: number
-    }
-  | {
-      type: 'failed'
-      status?: number
-      message: string
-    }
-
-type OpenAICodexOAuthTesting = {
-  createAuthorizationFlow: (originator?: string) => Promise<OpenAICodexAuthorizationFlow>
-  exchangeAuthorizationCode: (
-    code: string,
-    verifier: string,
-    redirectUri?: string,
-  ) => Promise<OpenAICodexTokenExchangeResult>
-}
-
-type OpenAICodexOAuthModule = {
-  loginOpenAICodex: (options: {
-    originator?: string
-    onAuth: (auth: { url: string; instructions?: string }) => void
-    onProgress?: (message: string) => void
-    onPrompt: (prompt: { message: string }) => Promise<string>
-  }) => Promise<{
-    access: string
-    refresh: string
-    expires: number
-    accountId?: string
-    idToken?: string
-  }>
-}
-
-type OpenAICodexRefreshModule = {
-  refreshOpenAICodexToken: (refreshToken: string) => Promise<{
-    access: string
-    refresh: string
-    expires: number
-    accountId?: string
-    idToken?: string
-  }>
-}
-
-type OpenAICodexRuntimeModule = OpenAICodexOAuthModule & OpenAICodexRefreshModule & {
-  testing?: OpenAICodexOAuthTesting
-}
-
-function openAICodexOAuthModulePath() {
-  return openClawDistModulePath('openai-chatgpt-oauth-flow.runtime.js')
-}
-
-async function importOpenAICodexOAuthModule() {
-  const modulePath = openAICodexOAuthModulePath()
-  const oauthModule = await import(pathToFileURL(modulePath).href) as Record<string, unknown>
-  const loginOpenAICodex = oauthModule.loginOpenAICodex ?? oauthModule.t
-  const refreshOpenAICodexToken = oauthModule.refreshOpenAICodexToken ?? oauthModule.r
-  const testing = oauthModule.testing ?? oauthModule.i
-
-  if (typeof loginOpenAICodex !== 'function') {
-    throw new Error(`OpenAI Codex OAuth runtime at ${modulePath} does not export loginOpenAICodex.`)
-  }
-  if (typeof refreshOpenAICodexToken !== 'function') {
-    throw new Error(`OpenAI Codex OAuth runtime at ${modulePath} does not export refreshOpenAICodexToken.`)
-  }
-
-  return {
-    ...oauthModule,
-    loginOpenAICodex,
-    refreshOpenAICodexToken,
-    ...(testing ? { testing } : {}),
-  } as OpenAICodexRuntimeModule
-}
-
-function openAICodexOAuthTesting(oauthModule: OpenAICodexRuntimeModule): OpenAICodexOAuthTesting {
-  if (
-    !oauthModule.testing ||
-    typeof oauthModule.testing.createAuthorizationFlow !== 'function' ||
-    typeof oauthModule.testing.exchangeAuthorizationCode !== 'function'
-  ) {
-    throw new Error('OpenAI Codex OAuth runtime does not expose the callback flow helpers.')
-  }
-  return oauthModule.testing
-}
-
-function openClawDistModulePath(fileName: string) {
-  for (const distDir of openClawDistDirCandidates()) {
-    const candidate = path.join(distDir, fileName)
-    if (existsSync(candidate)) return candidate
-  }
-  return path.join(openClawDistDirCandidates()[0] || path.join(WORKSPACE_ROOT, 'vendor', 'openclaw', 'dist'), fileName)
 }
 
 function openClawDistModulePathByPrefix(prefix: string) {
@@ -7293,428 +5610,6 @@ function openClawDistDirCandidates() {
   ).filter(Boolean)
 }
 
-const oauthSessions = new Map<string, OAuthSession>()
-let googleOAuthCallbackServer: Server | null = null
-let googleOAuthCallbackServerStarting: Promise<void> | null = null
-let openAICodexOAuthCallbackServer: Server | null = null
-let openAICodexOAuthCallbackServerStarting: Promise<void> | null = null
-
-function failPendingOAuthSessionsForShutdown(reason: string): number {
-  let failed = 0
-  const completedAt = new Date().toISOString()
-  for (const session of oauthSessions.values()) {
-    if (session.status !== 'pending') continue
-    session.status = 'error'
-    session.error = `OAuth cancelled during ${reason}.`
-    session.completedAt = completedAt
-    failed += 1
-  }
-  return failed
-}
-
-async function closeLifecycleHttpServer(
-  server: Server | null,
-  label: string,
-  reason: string,
-  timeoutMs = 1000,
-): Promise<boolean> {
-  if (!server) return false
-  const closable = server as Server & {
-    closeAllConnections?: () => void
-    closeIdleConnections?: () => void
-  }
-  if (!closable.listening) {
-    try {
-      closable.closeAllConnections?.()
-      closable.closeIdleConnections?.()
-    } catch {
-      // Best-effort cleanup for a server that is already closing.
-    }
-    return false
-  }
-
-  return new Promise<boolean>((resolve) => {
-    let settled = false
-    const finish = (closed: boolean, error?: Error & { code?: string }) => {
-      if (settled) return
-      settled = true
-      clearTimeout(forceCloseTimer)
-      if (error && error.code !== 'ERR_SERVER_NOT_RUNNING') {
-        console.warn(`[control-center] ${reason}: ${label} close warning:`, error)
-      }
-      resolve(closed)
-    }
-    const forceCloseTimer = setTimeout(() => {
-      try {
-        closable.closeIdleConnections?.()
-        closable.closeAllConnections?.()
-      } catch {
-        // The server may already be closing.
-      }
-      finish(true)
-    }, timeoutMs)
-    forceCloseTimer.unref?.()
-
-    try {
-      closable.close((error?: Error & { code?: string }) => finish(true, error))
-    } catch (error) {
-      finish(false, error instanceof Error ? error : new Error(String(error)))
-    }
-  })
-}
-
-async function closeOAuthCallbackServersForShutdown(reason: string): Promise<{ closed: number; failedPendingSessions: number }> {
-  const failedPendingSessions = failPendingOAuthSessionsForShutdown(reason)
-  const starting = [googleOAuthCallbackServerStarting, openAICodexOAuthCallbackServerStarting].filter(Boolean) as Promise<void>[]
-  if (starting.length) {
-    await Promise.race([
-      Promise.allSettled(starting),
-      new Promise((resolve) => setTimeout(resolve, 250)),
-    ])
-  }
-  googleOAuthCallbackServerStarting = null
-  openAICodexOAuthCallbackServerStarting = null
-  const [googleClosed, codexClosed] = await Promise.all([
-    closeLifecycleHttpServer(googleOAuthCallbackServer, 'Google OAuth callback server', reason),
-    closeLifecycleHttpServer(openAICodexOAuthCallbackServer, 'OpenAI Codex OAuth callback server', reason),
-  ])
-  googleOAuthCallbackServer = null
-  openAICodexOAuthCallbackServer = null
-  return {
-    closed: Number(googleClosed) + Number(codexClosed),
-    failedPendingSessions,
-  }
-}
-
-function closeOAuthCallbackServersForProcessExit(reason: string): void {
-  failPendingOAuthSessionsForShutdown(reason)
-  for (const server of [googleOAuthCallbackServer, openAICodexOAuthCallbackServer]) {
-    try {
-      const closable = server as (Server & {
-        closeAllConnections?: () => void
-        closeIdleConnections?: () => void
-      }) | null
-      closable?.closeIdleConnections?.()
-      closable?.closeAllConnections?.()
-      closable?.close()
-    } catch {
-      // The process is already exiting.
-    }
-  }
-  googleOAuthCallbackServer = null
-  openAICodexOAuthCallbackServer = null
-  googleOAuthCallbackServerStarting = null
-  openAICodexOAuthCallbackServerStarting = null
-}
-
-function resolveFirstEnv(keys: string[]) {
-  for (const key of keys) {
-    const value = process.env[key]?.trim()
-    if (value) return value
-  }
-  return ''
-}
-
-function googleOAuthClientConfigFileCandidates() {
-  const candidates = [
-    path.join(OPENCLAW_STATE_ROOT, 'google-oauth-client.json'),
-    path.join(WORKSPACE_ROOT, 'google-oauth-client.json'),
-    path.join(WORKSPACE_ROOT, 'client_secret.json'),
-  ]
-
-  try {
-    const downloadedClientFiles = readdirSync(WORKSPACE_ROOT, { withFileTypes: true })
-      .filter(
-        (entry) =>
-          entry.isFile() &&
-          /^client_secret_.+\.apps\.googleusercontent\.com\.json$/i.test(entry.name),
-      )
-      .map((entry) => path.join(WORKSPACE_ROOT, entry.name))
-      .sort()
-
-    candidates.push(...downloadedClientFiles)
-  } catch {
-    // Optional convenience scan.
-  }
-
-  return candidates
-}
-
-function readGoogleOAuthClientConfigFile(): GoogleOAuthClientConfig | null {
-  const candidates = googleOAuthClientConfigFileCandidates()
-
-  for (const filePath of candidates) {
-    try {
-      const parsed = JSON.parse(readFileSync(filePath, 'utf-8')) as {
-        installed?: { client_id?: string; client_secret?: string }
-        web?: { client_id?: string; client_secret?: string }
-        client_id?: string
-        client_secret?: string
-      }
-      const source = parsed.installed || parsed.web || parsed
-      const clientId = source.client_id?.trim()
-      if (!clientId) continue
-      return {
-        clientId,
-        ...(source.client_secret?.trim() ? { clientSecret: source.client_secret.trim() } : {}),
-      }
-    } catch {
-      // Optional convenience file.
-    }
-  }
-
-  return null
-}
-
-function resolveGoogleOAuthClientConfig(): GoogleOAuthClientConfig {
-  const clientId = resolveFirstEnv(GOOGLE_OAUTH_CLIENT_ID_KEYS)
-  if (clientId) {
-    const clientSecret = resolveFirstEnv(GOOGLE_OAUTH_CLIENT_SECRET_KEYS)
-    return {
-      clientId,
-      ...(clientSecret ? { clientSecret } : {}),
-    }
-  }
-
-  const fileConfig = readGoogleOAuthClientConfigFile()
-  if (fileConfig) return fileConfig
-
-  throw new Error(
-    `Google OAuth needs a desktop OAuth client. Set ${GOOGLE_OAUTH_CLIENT_ID_KEYS[0]} or place client_secret.json in ${WORKSPACE_ROOT}.`,
-  )
-}
-
-function googleOAuthClientConfigStatus() {
-  try {
-    resolveGoogleOAuthClientConfig()
-    return { available: true, missing: [] as string[] }
-  } catch (error) {
-    return {
-      available: false,
-      missing: [String(error)],
-    }
-  }
-}
-
-function resolveGoogleProjectId(input?: string) {
-  const fromInput = input?.trim()
-  if (fromInput) return fromInput
-  return resolveFirstEnv(GOOGLE_PROJECT_ID_KEYS)
-}
-
-function generatePkcePair() {
-  const verifier = randomBytes(32).toString('base64url')
-  const challenge = createHash('sha256').update(verifier).digest('base64url')
-  return { verifier, challenge }
-}
-
-function buildGoogleOAuthAuthorizationUrl(challenge: string, state: string) {
-  const { clientId } = resolveGoogleOAuthClientConfig()
-  return `https://accounts.google.com/o/oauth2/v2/auth?${new URLSearchParams({
-    client_id: clientId,
-    response_type: 'code',
-    redirect_uri: GOOGLE_OAUTH_REDIRECT_URI,
-    scope: GOOGLE_OAUTH_SCOPES.join(' '),
-    code_challenge: challenge,
-    code_challenge_method: 'S256',
-    state,
-    access_type: 'offline',
-    prompt: 'consent select_account',
-  }).toString()}`
-}
-
-async function fetchGoogleUserInfo(accessToken: string): Promise<{ email?: string }> {
-  const response = await fetch('https://www.googleapis.com/oauth2/v1/userinfo?alt=json', {
-    headers: { Authorization: `Bearer ${accessToken}` },
-  })
-  if (!response.ok) return {}
-  const data = await response.json().catch(() => ({})) as { email?: string }
-  return { ...(data.email ? { email: data.email } : {}) }
-}
-
-async function exchangeGoogleOAuthCodeForTokens(code: string, verifier: string, projectId?: string): Promise<LocalOAuthCredential> {
-  const { clientId, clientSecret } = resolveGoogleOAuthClientConfig()
-  const body = new URLSearchParams({
-    client_id: clientId,
-    code,
-    grant_type: 'authorization_code',
-    redirect_uri: GOOGLE_OAUTH_REDIRECT_URI,
-    code_verifier: verifier,
-  })
-  if (clientSecret) body.set('client_secret', clientSecret)
-
-  const response = await fetch('https://oauth2.googleapis.com/token', {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/x-www-form-urlencoded;charset=UTF-8',
-      Accept: 'application/json',
-    },
-    body,
-  })
-  const data = await response.json().catch(() => ({})) as {
-    access_token?: string
-    refresh_token?: string
-    expires_in?: number
-    token_type?: string
-    scope?: string
-    error?: string
-    error_description?: string
-  }
-  if (!response.ok || !data.access_token) {
-    throw new Error(data.error_description || data.error || `Google token exchange failed (${response.status})`)
-  }
-
-  const user = await fetchGoogleUserInfo(data.access_token).catch((): { email?: string } => ({}))
-  const expiresAt = Date.now() + Math.max(60, Number(data.expires_in || 3600)) * 1000 - 300000
-  return {
-    accessToken: data.access_token,
-    ...(data.refresh_token ? { refreshToken: data.refresh_token } : {}),
-    expiresAt,
-    tokenType: data.token_type || 'Bearer',
-    scope: data.scope?.split(/\s+/).filter(Boolean) || GOOGLE_OAUTH_SCOPES,
-    ...(user.email ? { email: user.email } : {}),
-    ...(projectId ? { projectId } : {}),
-  }
-}
-
-async function refreshGoogleOAuthCredential(oauth: LocalOAuthCredential): Promise<LocalOAuthCredential> {
-  const refreshToken = oauth.refreshToken?.trim()
-  if (!refreshToken) throw new Error('Google OAuth refresh token is missing. Reconnect Google.')
-
-  const { clientId, clientSecret } = resolveGoogleOAuthClientConfig()
-  const body = new URLSearchParams({
-    client_id: clientId,
-    refresh_token: refreshToken,
-    grant_type: 'refresh_token',
-  })
-  if (clientSecret) body.set('client_secret', clientSecret)
-
-  const response = await fetch('https://oauth2.googleapis.com/token', {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/x-www-form-urlencoded;charset=UTF-8',
-      Accept: 'application/json',
-    },
-    body,
-  })
-  const data = await response.json().catch(() => ({})) as {
-    access_token?: string
-    expires_in?: number
-    token_type?: string
-    scope?: string
-    error?: string
-    error_description?: string
-  }
-  if (!response.ok || !data.access_token) {
-    throw new Error(data.error_description || data.error || `Google token refresh failed (${response.status})`)
-  }
-
-  return {
-    ...oauth,
-    accessToken: data.access_token,
-    expiresAt: Date.now() + Math.max(60, Number(data.expires_in || 3600)) * 1000 - 300000,
-    tokenType: data.token_type || oauth.tokenType || 'Bearer',
-    scope: data.scope?.split(/\s+/).filter(Boolean) || oauth.scope || GOOGLE_OAUTH_SCOPES,
-  }
-}
-
-function isOAuthCredentialUsable(oauth: LocalOAuthCredential | undefined): oauth is LocalOAuthCredential {
-  return Boolean(oauth?.accessToken?.trim() || oauth?.refreshToken?.trim())
-}
-
-async function resolveGoogleOAuthForRequest(): Promise<{ accessToken: string; projectId?: string } | null> {
-  const stored = localAuthStore.providers.google?.oauth || localOAuthFromMainAuthProfile('google') || undefined
-  if (!isOAuthCredentialUsable(stored)) return null
-
-  const expiresAt = stored.expiresAt || 0
-  if (stored.accessToken?.trim() && expiresAt > Date.now() + 60000) {
-    return {
-      accessToken: stored.accessToken.trim(),
-      ...(stored.projectId ? { projectId: stored.projectId } : {}),
-    }
-  }
-
-  const refreshed = await refreshGoogleOAuthCredential(stored)
-  await persistProviderOAuth('google', refreshed)
-  const next = localAuthStore.providers.google?.oauth || refreshed
-  return {
-    accessToken: next.accessToken?.trim() || refreshed.accessToken?.trim() || '',
-    ...(next.projectId ? { projectId: next.projectId } : {}),
-  }
-}
-
-async function refreshOpenAICodexOAuthCredential(oauth: LocalOAuthCredential): Promise<LocalOAuthCredential> {
-  const refreshToken = oauth.refreshToken?.trim()
-  if (!refreshToken) throw new Error('OpenAI Codex OAuth refresh token is missing. Reconnect OpenAI Codex.')
-
-  const oauthModule = await importOpenAICodexOAuthModule()
-  const refreshed = await oauthModule.refreshOpenAICodexToken(refreshToken)
-  return {
-    ...oauth,
-    accessToken: refreshed.access,
-    refreshToken: refreshed.refresh || oauth.refreshToken,
-    expiresAt: refreshed.expires,
-    tokenType: 'Bearer',
-    scope: oauth.scope || OPENAI_CODEX_OAUTH_SCOPES,
-    ...(refreshed.accountId ? { accountId: refreshed.accountId } : {}),
-    ...(refreshed.idToken ? { idToken: refreshed.idToken } : {}),
-  }
-}
-
-async function resolveOpenAICodexOAuthForRequest(): Promise<{ accessToken: string } | null> {
-  const stored = localAuthStore.providers['openai-codex']?.oauth || localOAuthFromMainAuthProfile('openai-codex') || undefined
-  if (!isOAuthCredentialUsable(stored)) return null
-
-  const accessToken = stored.accessToken?.trim()
-  const expiresAt = stored.expiresAt || 0
-  if (accessToken && (!expiresAt || expiresAt > Date.now() + 60000)) {
-    return { accessToken }
-  }
-
-  const refreshed = await refreshOpenAICodexOAuthCredential(stored)
-  await persistProviderOAuth('openai-codex', refreshed)
-  const next = localAuthStore.providers['openai-codex']?.oauth || refreshed
-  const nextAccessToken = next.accessToken?.trim() || refreshed.accessToken?.trim()
-  return nextAccessToken ? { accessToken: nextAccessToken } : null
-}
-
-async function resolveProviderRequestAuth(
-  provider: string,
-  env: Record<string, string>,
-  envKeys: string[],
-): Promise<ProviderRequestAuth | null> {
-  await ensureLocalAuthStoreLoaded().catch(() => undefined)
-  if (provider === 'google-vertex') {
-    return resolveGoogleVertexRequestAuth(env)
-  }
-
-  const localMode = localAuthStore.providers[provider]?.mode
-  if (provider === 'google' && localMode === 'oauth') {
-    const oauth = await resolveGoogleOAuthForRequest().catch(() => null)
-    if (oauth?.accessToken) {
-      return { type: 'oauth', accessToken: oauth.accessToken, ...(oauth.projectId ? { projectId: oauth.projectId } : {}), source: 'local-oauth' }
-    }
-  }
-
-  if (provider === 'openai-codex') {
-    const oauth = await resolveOpenAICodexOAuthForRequest().catch(() => null)
-    if (oauth?.accessToken) return { type: 'oauth', accessToken: oauth.accessToken, source: 'local-oauth' }
-    return null
-  }
-
-  const apiKey = resolveEnvValue(env, envKeys)
-  if (apiKey) return { type: 'apiKey', value: apiKey, source: 'api-key' }
-
-  if (provider === 'google') {
-    const oauth = await resolveGoogleOAuthForRequest().catch(() => null)
-    if (oauth?.accessToken) {
-      return { type: 'oauth', accessToken: oauth.accessToken, ...(oauth.projectId ? { projectId: oauth.projectId } : {}), source: 'local-oauth' }
-    }
-  }
-
-  return null
-}
-
 async function resolveOpenAiSubscriptionRequestAuth(env: Record<string, string>) {
   const codexOAuth = await resolveOpenAICodexOAuthForRequest().catch(() => null)
   if (codexOAuth?.accessToken) {
@@ -7738,284 +5633,6 @@ async function openExternalAuthUrl(url: string) {
   if (process.platform === 'win32') return spawnDetached('rundll32.exe', ['url.dll,FileProtocolHandler', url])
   if (process.platform === 'darwin') return spawnDetached('open', [url])
   return spawnDetached('xdg-open', [url])
-}
-
-async function ensureGoogleOAuthCallbackServer() {
-  if (shuttingDown) throw new Error('Control Center is shutting down.')
-  if (googleOAuthCallbackServer?.listening) return
-  if (googleOAuthCallbackServerStarting) return googleOAuthCallbackServerStarting
-
-  googleOAuthCallbackServerStarting = new Promise((resolve, reject) => {
-    const server = createServer(async (req, res) => {
-      try {
-        const requestUrl = new URL(req.url || '/', GOOGLE_OAUTH_REDIRECT_URI)
-        if (requestUrl.pathname !== '/oauth2callback') {
-          res.writeHead(404, { 'Content-Type': 'text/plain; charset=utf-8' })
-          res.end('Not found')
-          return
-        }
-
-        const state = requestUrl.searchParams.get('state') || ''
-        const code = requestUrl.searchParams.get('code') || ''
-        const error = requestUrl.searchParams.get('error') || ''
-        const session = Array.from(oauthSessions.values()).find((entry) => entry.state === state)
-        if (!session) {
-          res.writeHead(400, { 'Content-Type': 'text/html; charset=utf-8' })
-          res.end('<h1>OAuth session not found</h1><p>Return to DystopAI and start the connection again.</p>')
-          return
-        }
-
-        if (error) throw new Error(error)
-        if (!code) throw new Error('Google did not return an authorization code.')
-
-        if (!session.verifier) throw new Error('Google OAuth verifier missing. Restart the connection.')
-        const credential = await exchangeGoogleOAuthCodeForTokens(code, session.verifier, session.projectId)
-        await persistProviderOAuth('google', credential)
-        session.status = 'complete'
-        session.completedAt = new Date().toISOString()
-        session.result = {
-          ...(credential.email ? { email: credential.email } : {}),
-          ...(credential.projectId ? { projectId: credential.projectId } : {}),
-          ...(credential.expiresAt ? { expiresAt: credential.expiresAt } : {}),
-        }
-
-        res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' })
-        res.end('<h1>Google connected</h1><p>You can close this window and return to DystopAI.</p>')
-      } catch (err) {
-        const message = String(err)
-        const state = new URL(req.url || '/', GOOGLE_OAUTH_REDIRECT_URI).searchParams.get('state') || ''
-        const session = Array.from(oauthSessions.values()).find((entry) => entry.state === state)
-        if (session) {
-          session.status = 'error'
-          session.error = message
-          session.completedAt = new Date().toISOString()
-        }
-        res.writeHead(500, { 'Content-Type': 'text/html; charset=utf-8' })
-        res.end(`<h1>Google connection failed</h1><p>${message.replace(/[<>&]/g, (char) => ({ '<': '&lt;', '>': '&gt;', '&': '&amp;' })[char] || char)}</p>`)
-      }
-    })
-
-    server.once('close', () => {
-      if (googleOAuthCallbackServer === server) googleOAuthCallbackServer = null
-    })
-    server.once('error', (error) => {
-      if (googleOAuthCallbackServer === server) googleOAuthCallbackServer = null
-      googleOAuthCallbackServerStarting = null
-      reject(error)
-    })
-    server.listen(8085, '127.0.0.1', () => {
-      googleOAuthCallbackServerStarting = null
-      if (shuttingDown) {
-        server.close(() => resolve())
-        return
-      }
-      googleOAuthCallbackServer = server
-      resolve()
-    })
-  })
-
-  return googleOAuthCallbackServerStarting
-}
-
-async function startGoogleOAuthSession(projectId?: string) {
-  if (shuttingDown) throw new Error('Control Center is shutting down.')
-  const id = randomUUID()
-  const state = randomBytes(24).toString('base64url')
-  const { verifier, challenge } = generatePkcePair()
-  const authorizationUrl = buildGoogleOAuthAuthorizationUrl(challenge, state)
-  const session: OAuthSession = {
-    id,
-    provider: 'google',
-    state,
-    verifier,
-    challenge,
-    authorizationUrl,
-    status: 'pending',
-    createdAt: new Date().toISOString(),
-    ...(resolveGoogleProjectId(projectId) ? { projectId: resolveGoogleProjectId(projectId) } : {}),
-  }
-  oauthSessions.set(id, session)
-  await ensureGoogleOAuthCallbackServer()
-  if (shuttingDown) {
-    session.status = 'error'
-    session.error = 'OAuth cancelled during Control Center shutdown.'
-    session.completedAt = new Date().toISOString()
-    throw new Error('Control Center is shutting down.')
-  }
-  const launched = await openExternalAuthUrl(authorizationUrl).catch((error) => ({ ok: false, detail: String(error) }))
-  return { session, launched }
-}
-
-function escapeHtml(value: string) {
-  return value.replace(/[<>&]/g, (char) => ({ '<': '&lt;', '>': '&gt;', '&': '&amp;' })[char] || char)
-}
-
-function parseOpenAICodexAuthorizationInput(input: string): { code: string; state?: string } {
-  const trimmed = input.trim()
-  if (!trimmed) throw new Error('Authorization code is empty.')
-
-  const fromSearchParams = (params: URLSearchParams) => {
-    const code = params.get('code')?.trim()
-    const state = params.get('state')?.trim()
-    return code ? { code, ...(state ? { state } : {}) } : null
-  }
-
-  try {
-    const parsed = fromSearchParams(new URL(trimmed).searchParams)
-    if (parsed) return parsed
-  } catch {
-    // Plain codes and query-string fragments are handled below.
-  }
-
-  if (trimmed.includes('code=') || trimmed.includes('state=')) {
-    const parsed = fromSearchParams(new URLSearchParams(trimmed.replace(/^\?/, '')))
-    if (parsed) return parsed
-  }
-
-  return { code: trimmed }
-}
-
-function resolveOpenAICodexAccountIdFromAccessToken(accessToken: string) {
-  const parts = accessToken.split('.')
-  if (parts.length !== 3) return undefined
-  try {
-    const payload = JSON.parse(Buffer.from(parts[1], 'base64url').toString('utf-8')) as Record<string, unknown>
-    const auth = payload['https://api.openai.com/auth'] as Record<string, unknown> | undefined
-    const accountId = auth?.chatgpt_account_id
-    return typeof accountId === 'string' && accountId.trim() ? accountId.trim() : undefined
-  } catch {
-    return undefined
-  }
-}
-
-async function completeOpenAICodexOAuthSession(session: OAuthSession, code: string, state?: string) {
-  if (session.status !== 'pending') throw new Error(`OAuth session is already ${session.status}.`)
-  if (!session.verifier) throw new Error('OpenAI Codex OAuth verifier missing. Restart the connection.')
-  if (state && session.state && state !== session.state) throw new Error('State mismatch')
-
-  const oauthModule = await importOpenAICodexOAuthModule()
-  const testing = openAICodexOAuthTesting(oauthModule)
-  const result = await testing.exchangeAuthorizationCode(code, session.verifier, session.redirectUri || OPENAI_CODEX_OAUTH_REDIRECT_URI)
-  if (result.type !== 'success') throw new Error(result.message || 'OpenAI Codex token exchange failed.')
-
-  const accountId = resolveOpenAICodexAccountIdFromAccessToken(result.access)
-  const credential: LocalOAuthCredential = {
-    accessToken: result.access,
-    refreshToken: result.refresh,
-    expiresAt: result.expires,
-    tokenType: 'Bearer',
-    scope: OPENAI_CODEX_OAUTH_SCOPES,
-    ...(accountId ? { accountId } : {}),
-  }
-  await persistProviderOAuth('openai-codex', credential)
-  session.status = 'complete'
-  session.manualInputRequired = false
-  session.completedAt = new Date().toISOString()
-  session.result = {
-    ...(credential.accountId ? { accountId: credential.accountId } : {}),
-    ...(credential.expiresAt ? { expiresAt: credential.expiresAt } : {}),
-  }
-  return credential
-}
-
-async function ensureOpenAICodexOAuthCallbackServer() {
-  if (shuttingDown) throw new Error('Control Center is shutting down.')
-  if (openAICodexOAuthCallbackServer?.listening) return
-  if (openAICodexOAuthCallbackServerStarting) return openAICodexOAuthCallbackServerStarting
-
-  openAICodexOAuthCallbackServerStarting = new Promise((resolve, reject) => {
-    const server = createServer(async (req, res) => {
-      try {
-        const requestUrl = new URL(req.url || '/', OPENAI_CODEX_OAUTH_REDIRECT_URI)
-        if (requestUrl.pathname !== '/auth/callback') {
-          res.writeHead(404, { 'Content-Type': 'text/plain; charset=utf-8' })
-          res.end('Not found')
-          return
-        }
-
-        const state = requestUrl.searchParams.get('state') || ''
-        const code = requestUrl.searchParams.get('code') || ''
-        const error = requestUrl.searchParams.get('error') || ''
-        const session = Array.from(oauthSessions.values()).find(
-          (entry) => entry.provider === 'openai-codex' && entry.state === state,
-        )
-        if (!session) {
-          res.writeHead(400, { 'Content-Type': 'text/html; charset=utf-8' })
-          res.end('<h1>OAuth session not found</h1><p>Return to DystopAI and start the connection again.</p>')
-          return
-        }
-
-        if (error) throw new Error(error)
-        if (!code) throw new Error('OpenAI did not return an authorization code.')
-
-        await completeOpenAICodexOAuthSession(session, code, state)
-        res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' })
-        res.end('<h1>OpenAI Codex connected</h1><p>You can close this window and return to DystopAI.</p>')
-      } catch (err) {
-        const message = String(err)
-        const state = new URL(req.url || '/', OPENAI_CODEX_OAUTH_REDIRECT_URI).searchParams.get('state') || ''
-        const session = Array.from(oauthSessions.values()).find(
-          (entry) => entry.provider === 'openai-codex' && entry.state === state,
-        )
-        if (session) {
-          session.status = 'error'
-          session.error = message
-          session.completedAt = new Date().toISOString()
-        }
-        res.writeHead(500, { 'Content-Type': 'text/html; charset=utf-8' })
-        res.end(`<h1>OpenAI Codex connection failed</h1><p>${escapeHtml(message)}</p>`)
-      }
-    })
-
-    server.once('close', () => {
-      if (openAICodexOAuthCallbackServer === server) openAICodexOAuthCallbackServer = null
-    })
-    server.once('error', (error) => {
-      if (openAICodexOAuthCallbackServer === server) openAICodexOAuthCallbackServer = null
-      openAICodexOAuthCallbackServerStarting = null
-      reject(error)
-    })
-    server.listen(1455, '127.0.0.1', () => {
-      openAICodexOAuthCallbackServerStarting = null
-      if (shuttingDown) {
-        server.close(() => resolve())
-        return
-      }
-      openAICodexOAuthCallbackServer = server
-      resolve()
-    })
-  })
-
-  return openAICodexOAuthCallbackServerStarting
-}
-
-async function startOpenAICodexOAuthSession() {
-  if (shuttingDown) throw new Error('Control Center is shutting down.')
-  const id = randomUUID()
-  const oauthModule = await importOpenAICodexOAuthModule()
-  const flow = await openAICodexOAuthTesting(oauthModule).createAuthorizationFlow('dystopai')
-  const session: OAuthSession = {
-    id,
-    provider: 'openai-codex',
-    state: flow.state,
-    verifier: flow.verifier,
-    redirectUri: flow.redirectUri,
-    authorizationUrl: flow.url,
-    status: 'pending',
-    manualInputRequired: true,
-    manualPrompt: 'Complete sign-in in the browser. If OpenAI shows a code or localhost redirect URL, paste it here.',
-    createdAt: new Date().toISOString(),
-  }
-  oauthSessions.set(id, session)
-  await ensureOpenAICodexOAuthCallbackServer()
-  if (shuttingDown) {
-    session.status = 'error'
-    session.error = 'OAuth cancelled during Control Center shutdown.'
-    session.completedAt = new Date().toISOString()
-    throw new Error('Control Center is shutting down.')
-  }
-  const launched = await openExternalAuthUrl(flow.url).catch((error) => ({ ok: false, detail: String(error) }))
-  return { session, launched }
 }
 
 function writeSseEvent(res: { write: (chunk: string) => unknown }, event: string, data: Record<string, unknown>) {
@@ -12095,9 +9712,7 @@ function normalizeOpenClawConfigModelRefs(config: OpenClawConfigFile) {
       }
     }
     defaults.models = normalizedModels
-    for (const modelId of Object.keys(normalizedModels)) {
-      ensureConfiguredProviderModel(config, modelId)
-    }
+    ensureConfiguredModelAllowlist(config, Object.keys(normalizedModels))
   }
 
   migrateLegacyOpenAiCodexProviderConfig(config)
@@ -12516,7 +10131,7 @@ async function writeOpenclawConfig(config: unknown) {
 
   openclawConfigWriteChain = openclawConfigWriteChain.then(write, write)
   return openclawConfigWriteChain.then(async () => {
-    availableModelsCache = null
+    modelCatalogService.invalidateAvailableModels()
     await rememberJsonFileCache(OPENCLAW_CONFIG_PATH, next as OpenClawConfigFile, (entry) => { openclawConfigCache = entry })
   })
 }
@@ -21149,7 +18764,7 @@ async function runDoctorRepair(): Promise<DoctorRepairRunRecord> {
   pushGatewayLog('lifecycle', 'operator requested OpenClaw Doctor repair from Runtime Monitor')
   const result = await runOpenClaw(args, GATEWAY_CONFIG_DOCTOR_TIMEOUT_MS)
   openclawConfigCache = null
-  availableModelsCache = null
+  modelCatalogService.invalidateAvailableModels()
   invalidateRuntimeStatusCache()
   const detail = compactOpenClawCommandOutput(result, `openclaw ${args.join(' ')} exited ${result.code}`)
   if (result.code === 0) {
