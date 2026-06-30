@@ -1,40 +1,17 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { apiErrorMessage, apiRequest, type ApiRequestOptions } from '../../api/client'
 import { ActionStatusBanner } from '../common/ActionStatusBanner'
+import {
+  PLUGIN_FILTERS,
+  pluginMatchesFilter,
+  pluginPageState,
+  pluginStatusClass,
+  summarizePluginPageStates,
+  type PluginFilter,
+  type PluginPageEntry,
+} from './pluginStateProjection'
 
-type PluginConfigField = {
-  key: string
-  label: string
-  path?: string
-  envVar?: string
-  providerId?: string
-  secret: boolean
-  required: boolean
-  present: boolean
-  acceptsDirectSave: boolean
-  help?: string
-}
-
-type PluginEntry = {
-  id: string
-  name: string
-  description: string
-  origin: string
-  status: string
-  enabled: boolean
-  configuredEnabled: boolean | null
-  runtimeLoaded?: boolean
-  managed?: boolean
-  category: string
-  commands: string[]
-  providers: string[]
-  channels: string[]
-  missingDependencies: string[]
-  configFields: PluginConfigField[]
-  guidance: string[]
-  needsSetup: boolean
-  restartRequired: boolean
-}
+type PluginEntry = PluginPageEntry
 
 type PluginsResponse = {
   plugins: PluginEntry[]
@@ -134,15 +111,6 @@ type OpenClawCommandState = {
 }
 
 let pluginsPanelCache: PluginsResponse | null = null
-
-const FILTERS = [
-  { id: 'all', label: 'All' },
-  { id: 'enabled', label: 'Enabled' },
-  { id: 'needs', label: 'Needs Setup' },
-  { id: 'disabled', label: 'Disabled' },
-] as const
-
-type PluginFilter = (typeof FILTERS)[number]['id']
 
 const PLUGIN_NOTICE_MAX_CHARS = 360
 
@@ -247,16 +215,23 @@ function pluginRequestError(error: unknown) {
   return error instanceof Error ? error.message : String(error)
 }
 
-function statusClass(plugin: PluginEntry) {
-  if (plugin.needsSetup) return 'border-amber-400/25 bg-amber-400/[0.07] text-amber-100'
-  if (plugin.enabled) return 'border-emerald-400/20 bg-emerald-400/[0.06] text-emerald-200'
-  return 'border-white/[0.08] bg-white/[0.03] text-slate-400'
-}
-
 function compactList(values: string[], fallback: string) {
   if (!values.length) return fallback
   const visible = values.slice(0, 3).join(', ')
   return values.length > 3 ? `${visible} +${values.length - 3}` : visible
+}
+
+function pluginInitials(plugin: PluginEntry) {
+  const source = plugin.name || plugin.id
+  const letters = source
+    .replace(/^@openclaw\//, '')
+    .split(/[\s._/-]+/)
+    .map((part) => part[0])
+    .filter(Boolean)
+    .slice(0, 2)
+    .join('')
+    .toUpperCase()
+  return letters || plugin.id.slice(0, 2).toUpperCase()
 }
 
 function pluginsWithToggle(plugins: PluginEntry[], pluginId: string, enabled: boolean) {
@@ -367,22 +342,32 @@ function PluginRow({
   const busy = Boolean(busyAction)
   const toggleLabel = plugin.enabled ? 'Stop' : 'Start'
   const toggleBusyLabel = plugin.enabled ? 'Stopping' : 'Starting'
+  const statusState = pluginPageState(plugin)
   return (
     <article
       className="dy-plugin-row grid gap-3 rounded-lg border border-white/[0.06] bg-white/[0.018] px-3 py-3 transition hover:border-white/[0.10] hover:bg-white/[0.026] md:grid-cols-[minmax(0,1.4fr)_minmax(100px,0.55fr)_minmax(120px,0.6fr)_auto]"
     >
-      <div className="min-w-0">
-        <div className="flex min-w-0 flex-wrap items-center gap-2">
-          <h3 className="truncate text-[13px] font-bold text-slate-100">{plugin.name}</h3>
-          <span className={`rounded-full border px-2 py-0.5 text-[8px] font-semibold uppercase ${statusClass(plugin)}`}>
-            {plugin.needsSetup ? 'setup' : plugin.enabled ? 'enabled' : plugin.status}
-          </span>
-          <span className="rounded-full border border-white/[0.06] bg-white/[0.02] px-2 py-0.5 text-[8px] font-semibold uppercase text-slate-500">
-            {plugin.category}
-          </span>
+      <div className="flex min-w-0 gap-3">
+        <div className="flex h-8 w-8 shrink-0 items-center justify-center overflow-hidden rounded-md border border-white/[0.08] bg-white/[0.035] text-[10px] font-bold text-cyan-100">
+          {plugin.icon ? (
+            <img src={plugin.icon} alt="" className="h-5 w-5 object-contain" loading="lazy" />
+          ) : (
+            <span>{pluginInitials(plugin)}</span>
+          )}
         </div>
-        <p className="mt-1 truncate text-[11px] text-slate-500">{plugin.id} / {plugin.origin}</p>
-        <p className="mt-1 line-clamp-1 text-[12px] text-slate-400">{plugin.description}</p>
+        <div className="min-w-0">
+          <div className="flex min-w-0 flex-wrap items-center gap-2">
+            <h3 className="truncate text-[13px] font-bold text-slate-100">{plugin.name}</h3>
+            <span className={`rounded-full border px-2 py-0.5 text-[8px] font-semibold uppercase ${pluginStatusClass(plugin)}`}>
+              {statusState.label}
+            </span>
+            <span className="rounded-full border border-white/[0.06] bg-white/[0.02] px-2 py-0.5 text-[8px] font-semibold uppercase text-slate-500">
+              {plugin.category}
+            </span>
+          </div>
+          <p className="mt-1 truncate text-[11px] text-slate-500">{plugin.id} / {plugin.origin}</p>
+          <p className="mt-1 line-clamp-1 text-[12px] text-slate-400">{plugin.description}</p>
+        </div>
       </div>
 
       <div className="min-w-0 text-[11px]">
@@ -947,7 +932,7 @@ function PluginDiscoveryPanel({
           />
           Pin installs
         </label>
-        {FILTERS.map((option) => (
+        {PLUGIN_FILTERS.map((option) => (
           <button
             key={option.id}
             type="button"
@@ -1247,20 +1232,28 @@ export function PluginsPanel() {
     const trimmed = query.trim()
     const term = /^\/clawhub(?:\s|$)/i.test(trimmed) ? '' : trimmed.toLowerCase()
     return plugins.filter((plugin) => {
-      if (filter === 'enabled' && !plugin.enabled) return false
-      if (filter === 'needs' && !plugin.needsSetup) return false
-      if (filter === 'disabled' && plugin.enabled) return false
+      if (!pluginMatchesFilter(plugin, filter)) return false
       if (!term) return true
-      return [plugin.id, plugin.name, plugin.description, plugin.category, plugin.origin, plugin.status, ...plugin.guidance]
+      return [
+        plugin.id,
+        plugin.name,
+        plugin.description,
+        plugin.category,
+        plugin.origin,
+        plugin.status,
+        plugin.packageName || '',
+        plugin.installSpec || '',
+        plugin.systemImage || '',
+        pluginPageState(plugin).label,
+        ...plugin.guidance,
+      ]
         .join(' ')
         .toLowerCase()
         .includes(term)
     })
   }, [filter, plugins, query])
 
-  const enabledCount = plugins.filter((plugin) => plugin.enabled).length
-  const setupCount = plugins.filter((plugin) => plugin.needsSetup).length
-  const disabledCount = Math.max(0, plugins.length - enabledCount)
+  const stateSummary = summarizePluginPageStates(plugins)
   const browser = plugins.find((plugin) => plugin.id === 'browser')
   const statusMessage = compactPluginNoticeText(error || notice)
 
@@ -1289,13 +1282,22 @@ export function PluginsPanel() {
               </span>
             )}
             <span className="dy-plugin-summary-chip rounded-full border border-emerald-300/30 bg-emerald-300/[0.10] px-2.5 py-1 text-[9px] font-semibold text-emerald-100" data-tone="success">
-              {enabledCount} enabled
+              {stateSummary.enabled} enabled
+            </span>
+            <span className="dy-plugin-summary-chip rounded-full border border-cyan-300/25 bg-cyan-300/[0.08] px-2.5 py-1 text-[9px] font-semibold text-cyan-100" data-tone="configured">
+              {stateSummary.configured} configured
             </span>
             <span className="dy-plugin-summary-chip rounded-full border border-amber-300/30 bg-amber-300/[0.10] px-2.5 py-1 text-[9px] font-semibold text-amber-100" data-tone="warning">
-              {setupCount} setups
+              {stateSummary.missingAuth} missing auth
+            </span>
+            <span className="dy-plugin-summary-chip rounded-full border border-amber-300/25 bg-amber-300/[0.07] px-2.5 py-1 text-[9px] font-semibold text-amber-100" data-tone="unavailable">
+              {stateSummary.unavailable} unavailable
+            </span>
+            <span className="dy-plugin-summary-chip rounded-full border border-rose-300/25 bg-rose-400/[0.07] px-2.5 py-1 text-[9px] font-semibold text-rose-100" data-tone="failed">
+              {stateSummary.failed} failed
             </span>
             <span className="dy-plugin-summary-chip rounded-full border border-slate-500/25 bg-slate-500/[0.08] px-2.5 py-1 text-[9px] font-semibold text-slate-300" data-tone="disabled">
-              {disabledCount} disabled
+              {stateSummary.disabled} disabled
             </span>
             <button
               type="button"

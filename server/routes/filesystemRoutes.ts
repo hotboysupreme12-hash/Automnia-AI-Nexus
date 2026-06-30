@@ -3,6 +3,7 @@ import { promises as fs } from 'node:fs'
 import path from 'node:path'
 import { z } from 'zod'
 import { apiFailure, apiSuccess } from '../controlPlaneHttp'
+import type { PickerSessionService } from '../services/filesystem/pickerSessionService'
 
 type AgentIdentity = {
   name?: string
@@ -68,23 +69,6 @@ type AgentResourceContext = {
   doctrineWorkspace: string
 }
 
-type FolderPickerSession = {
-  id: string
-  status: 'pending' | 'selected' | 'cancelled' | 'error'
-  path?: string | null
-  detail?: string
-  startedAt: number
-  updatedAt: number
-  expiresAt: number
-}
-
-type ImagePickerSession = FolderPickerSession & {
-  agentId?: string
-  sourcePath?: string | null
-  avatar?: string | null
-  previewUrl?: string | null
-}
-
 type FilesystemRoutesOptions = {
   agentLocalConfigPath: (agentId: string) => string
   applyLocalConfigToGlobal: (agentId: string, local: AgentLocalConfig, config: OpenClawConfigFile) => void
@@ -98,17 +82,10 @@ type FilesystemRoutesOptions = {
   }) => Promise<AgentLocalConfig>
   extractIdentityNameFromMarkdown: (markdown: string) => string | null
   getAgentById: (agentId: string) => Promise<{ config: OpenClawConfigFile; target?: AgentConfigEntry }>
-  getFolderPickerSession: (sessionId: string) => FolderPickerSession | undefined
-  getImagePickerSession: (sessionId: string) => ImagePickerSession | undefined
   isMarkdownResourceFile: (file: string) => boolean
   isValidAgentId: (agentId: string) => boolean
   mirrorSharedTeamFile: (file: string, content: string) => Promise<void>
-  normalizePickerStartPath: (startPath?: string, fallbackPath?: string) => string
-  pickFolderWithOsDialog: (
-    startPath?: string,
-    abortSignal?: AbortSignal,
-  ) => Promise<{ ok: boolean; path?: string; cancelled?: boolean; detail?: string }>
-  pruneFolderPickerSessions: () => void
+  pickerSessions: PickerSessionService
   propagateDisplayNameAcrossAgentFiles: (agentId: string, previousName: string | null, local: AgentLocalConfig) => Promise<void>
   readAgentLocalConfigIfPresent: (agentId: string) => Promise<AgentLocalConfig | null | undefined>
   rememberAgentLocalConfigCache: (filePath: string, local: AgentLocalConfig) => Promise<void>
@@ -116,11 +93,7 @@ type FilesystemRoutesOptions = {
   resolveWorkspaceForAgent: (target: AgentConfigEntry | undefined, agentId: string, defaultsWorkspace?: string) => string
   samePath: (left: string, right: string) => boolean
   saveAgentFileToCodexProfile: (agentId: string, file: string, content: string) => Promise<void>
-  serializeFolderPickerSession: (session: FolderPickerSession) => Record<string, unknown>
-  serializeImagePickerSession: (session: ImagePickerSession) => Record<string, unknown>
   sharedTeamFiles: readonly string[]
-  startFolderPickerSession: (startPath: string) => FolderPickerSession
-  startImagePickerSession: (agentId: string | undefined, startPath: string) => ImagePickerSession
   syncDoctrineToWorkspace: (agentId: string, workspace: string) => Promise<void>
   workspaceRoot: string
   writeOpenclawConfig: (config: OpenClawConfigFile) => Promise<void>
@@ -296,10 +269,10 @@ export function registerFilesystemRoutes(app: Express, options: FilesystemRoutes
     const parsed = schema.safeParse(req.body ?? {})
     if (!parsed.success) return apiFailure(res, 400, 'invalid_payload', 'Invalid payload', parsed.error.flatten())
 
-    const startPath = options.normalizePickerStartPath(parsed.data.startPath)
+    const startPath = options.pickerSessions.normalizePickerStartPath(parsed.data.startPath)
     const controller = new AbortController()
     req.once('aborted', () => controller.abort())
-    const picked = await options.pickFolderWithOsDialog(startPath, controller.signal)
+    const picked = await options.pickerSessions.pickFolderWithOsDialog(startPath, controller.signal)
     if (res.writableEnded) return
 
     if (picked.ok && picked.path) {
@@ -324,14 +297,14 @@ export function registerFilesystemRoutes(app: Express, options: FilesystemRoutes
     const parsed = schema.safeParse(req.body ?? {})
     if (!parsed.success) return apiFailure(res, 400, 'invalid_payload', 'Invalid payload', parsed.error.flatten())
 
-    const startPath = options.normalizePickerStartPath(parsed.data.startPath)
-    const session = options.startFolderPickerSession(startPath)
-    return apiSuccess(res, options.serializeFolderPickerSession(session))
+    const startPath = options.pickerSessions.normalizePickerStartPath(parsed.data.startPath)
+    const session = options.pickerSessions.startFolderPickerSession(startPath)
+    return apiSuccess(res, options.pickerSessions.serializeFolderPickerSession(session))
   })
 
   app.get('/api/party/folder-picker/:sessionId', (req, res) => {
-    options.pruneFolderPickerSessions()
-    const session = options.getFolderPickerSession(String(req.params.sessionId || ''))
+    options.pickerSessions.pruneFolderPickerSessions()
+    const session = options.pickerSessions.getFolderPickerSession(String(req.params.sessionId || ''))
     if (!session) {
       return apiFailure(
         res,
@@ -341,7 +314,7 @@ export function registerFilesystemRoutes(app: Express, options: FilesystemRoutes
         'The folder picker session expired. Press Browse again.',
       )
     }
-    return apiSuccess(res, options.serializeFolderPickerSession(session))
+    return apiSuccess(res, options.pickerSessions.serializeFolderPickerSession(session))
   })
 
   app.post('/api/party/avatar-picker/start', async (req, res) => {
@@ -358,17 +331,17 @@ export function registerFilesystemRoutes(app: Express, options: FilesystemRoutes
       if (!target) return apiFailure(res, 404, 'agent_not_found', `Agent not found: ${parsed.data.agentId}`)
 
       const fallbackStart = path.resolve(options.resolveWorkspaceForAgent(target, target.id, config.agents?.defaults?.workspace))
-      const startPath = options.normalizePickerStartPath(parsed.data.startPath, fallbackStart)
-      const session = options.startImagePickerSession(target.id, startPath)
-      return apiSuccess(res, options.serializeImagePickerSession(session))
+      const startPath = options.pickerSessions.normalizePickerStartPath(parsed.data.startPath, fallbackStart)
+      const session = options.pickerSessions.startImagePickerSession(target.id, startPath)
+      return apiSuccess(res, options.pickerSessions.serializeImagePickerSession(session))
     } catch (error) {
       return apiFailure(res, 500, 'image_picker_failed', 'Failed to start image picker', String(error))
     }
   })
 
   app.get('/api/party/avatar-picker/:sessionId', (req, res) => {
-    options.pruneFolderPickerSessions()
-    const session = options.getImagePickerSession(String(req.params.sessionId || ''))
+    options.pickerSessions.pruneFolderPickerSessions()
+    const session = options.pickerSessions.getImagePickerSession(String(req.params.sessionId || ''))
     if (!session) {
       return apiFailure(
         res,
@@ -378,6 +351,6 @@ export function registerFilesystemRoutes(app: Express, options: FilesystemRoutes
         'The image picker session expired. Press Browse again.',
       )
     }
-    return apiSuccess(res, options.serializeImagePickerSession(session))
+    return apiSuccess(res, options.pickerSessions.serializeImagePickerSession(session))
   })
 }

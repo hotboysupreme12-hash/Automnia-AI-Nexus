@@ -21,6 +21,10 @@ export type PluginControlEntry = {
   id: string
   name: string
   description: string
+  icon?: string
+  systemImage?: string
+  packageName?: string
+  installSpec?: string
   origin: string
   status: string
   enabled: boolean
@@ -166,6 +170,11 @@ export const PLUGIN_CATALOG: Record<string, { name: string; description: string;
 }
 
 const DEFAULT_PLUGIN_LIST_CACHE_MS = 12 * 60 * 60 * 1000
+const OFFICIAL_EXTERNAL_CATALOG_FILES = [
+  'official-external-plugin-catalog.json',
+  'official-external-provider-catalog.json',
+  'official-external-channel-catalog.json',
+]
 const ANSI_ESCAPE = String.fromCharCode(27)
 const ANSI_BEL = String.fromCharCode(7)
 const ANSI_CSI_PATTERN = new RegExp(`${ANSI_ESCAPE}\\[[0-9;?]*[ -/]*[@-~]`, 'g')
@@ -212,6 +221,18 @@ export function pluginIdFromPackageName(value: unknown): string {
 
 function pluginArrayFromRecord(record: Record<string, unknown> | null, key: string): string[] {
   return record ? pluginStringArray(record[key]) : []
+}
+
+function pluginIdsFromRecordArray(value: unknown): string[] {
+  if (!Array.isArray(value)) return []
+  return value
+    .filter(isLooseRecord)
+    .map((entry) => stringField(entry, ['id']))
+    .filter(Boolean)
+}
+
+function recordArray(value: unknown): Record<string, unknown>[] {
+  return Array.isArray(value) ? value.filter(isLooseRecord) : []
 }
 
 export function displayPluginName(pluginId: string, rawName: unknown): string {
@@ -400,6 +421,8 @@ function pluginRawFromManifest(
     packageName: typeof packageJson.name === 'string' ? packageJson.name : undefined,
     version: typeof packageJson.version === 'string' ? packageJson.version : undefined,
     description: typeof packageJson.description === 'string' ? packageJson.description : PLUGIN_CATALOG[id]?.description,
+    icon: typeof manifest.icon === 'string' && manifest.icon.trim() ? manifest.icon.trim() : undefined,
+    systemImage: typeof manifest.systemImage === 'string' && manifest.systemImage.trim() ? manifest.systemImage.trim() : undefined,
     origin: 'bundled',
     enabled: enabledByDefault,
     status: enabledByDefault ? 'enabled' : 'disabled',
@@ -414,8 +437,100 @@ function pluginRawFromManifest(
     speechProviderIds: pluginArrayFromRecord(contracts, 'speechProviders'),
     webSearchProviderIds: pluginArrayFromRecord(contracts, 'webSearchProviders'),
     imageGenerationProviderIds: pluginArrayFromRecord(contracts, 'imageGenerationProviders'),
+    mediaUnderstandingProviderIds: pluginArrayFromRecord(contracts, 'mediaUnderstandingProviders'),
     memoryEmbeddingProviderIds: pluginArrayFromRecord(contracts, 'memoryEmbeddingProviders'),
+    videoGenerationProviderIds: pluginArrayFromRecord(contracts, 'videoGenerationProviders'),
     channelIds: pluginStringArray(manifest.channels),
+  }
+}
+
+function setupProvidersFromCatalog(openclaw: Record<string, unknown>): Record<string, unknown>[] {
+  const byId = new Map<string, Record<string, unknown>>()
+  const add = (provider: Record<string, unknown>) => {
+    const id = stringField(provider, ['id'])
+    if (!id) return
+    const existing = byId.get(id) || { id }
+    byId.set(id, {
+      ...existing,
+      envVars: uniqueStrings(existing.envVars, provider.envVars),
+    })
+  }
+  for (const key of ['providers', 'webSearchProviders', 'speechProviders', 'imageGenerationProviders', 'memoryEmbeddingProviders']) {
+    for (const provider of recordArray(openclaw[key])) add(provider)
+  }
+  return [...byId.values()].filter((provider) => pluginStringArray(provider.envVars).length || AUTH_ENV_MAP[String(provider.id)]?.length)
+}
+
+function providerAuthChoicesFromCatalog(openclaw: Record<string, unknown>): Record<string, unknown>[] {
+  const choices: Record<string, unknown>[] = []
+  const add = (provider: Record<string, unknown>) => {
+    const providerId = stringField(provider, ['id'])
+    if (!providerId) return
+    for (const choice of recordArray(provider.authChoices)) {
+      choices.push({
+        ...choice,
+        provider: typeof choice.provider === 'string' && choice.provider.trim() ? choice.provider.trim() : providerId,
+      })
+    }
+    const credentialLabel = stringField(provider, ['credentialLabel'])
+    if (credentialLabel) {
+      choices.push({
+        provider: providerId,
+        method: 'api-key',
+        choiceLabel: credentialLabel,
+      })
+    }
+  }
+  for (const key of ['providers', 'webSearchProviders', 'speechProviders', 'imageGenerationProviders', 'memoryEmbeddingProviders']) {
+    for (const provider of recordArray(openclaw[key])) add(provider)
+  }
+  return choices
+}
+
+function pluginRawFromExternalCatalogEntry(entry: Record<string, unknown>): Record<string, unknown> | null {
+  const openclaw = isLooseRecord(entry.openclaw) ? entry.openclaw : {}
+  const plugin = isLooseRecord(openclaw.plugin) ? openclaw.plugin : {}
+  const channel = isLooseRecord(openclaw.channel) ? openclaw.channel : {}
+  const install = isLooseRecord(openclaw.install) ? openclaw.install : {}
+  const contracts = isLooseRecord(openclaw.contracts) ? openclaw.contracts : null
+  const packageName = stringField(entry, ['name'])
+  const id = (stringField(plugin, ['id']) || stringField(channel, ['id']) || pluginIdFromPackageName(packageName)).trim().toLowerCase()
+  if (!PLUGIN_ID_PATTERN.test(id)) return null
+
+  const setupProviders = setupProvidersFromCatalog(openclaw)
+  const providerAuthChoices = providerAuthChoicesFromCatalog(openclaw)
+  const channelIds = uniqueStrings(
+    stringField(channel, ['id']),
+    pluginIdsFromRecordArray(openclaw.channels),
+    Object.keys(isLooseRecord(openclaw.channelConfigs) ? openclaw.channelConfigs : {}),
+    pluginArrayFromRecord(contracts, 'channels'),
+  )
+
+  return {
+    id,
+    name: stringField(plugin, ['label']) || stringField(channel, ['label', 'detailLabel', 'selectionLabel']) || packageName || id,
+    packageName: packageName || undefined,
+    description: stringField(entry, ['description']) || stringField(channel, ['blurb']) || PLUGIN_CATALOG[id]?.description,
+    icon: stringField(plugin, ['icon']) || undefined,
+    systemImage: stringField(channel, ['systemImage']) || undefined,
+    installSpec: stringField(install, ['npmSpec', 'clawhubSpec']) || undefined,
+    minHostVersion: stringField(install, ['minHostVersion']) || undefined,
+    origin: 'official-catalog',
+    kind: stringField(entry, ['kind']) || 'plugin',
+    source: stringField(entry, ['source']) || 'official',
+    enabled: false,
+    status: 'disabled',
+    setup: setupProviders.length ? { providers: setupProviders } : undefined,
+    providerAuthChoices: providerAuthChoices.length ? providerAuthChoices : undefined,
+    commands: pluginArrayFromRecord(contracts, 'tools'),
+    providerIds: pluginIdsFromRecordArray(openclaw.providers),
+    speechProviderIds: uniqueStrings(pluginIdsFromRecordArray(openclaw.speechProviders), pluginArrayFromRecord(contracts, 'speechProviders')),
+    webSearchProviderIds: uniqueStrings(pluginIdsFromRecordArray(openclaw.webSearchProviders), pluginArrayFromRecord(contracts, 'webSearchProviders')),
+    imageGenerationProviderIds: uniqueStrings(pluginIdsFromRecordArray(openclaw.imageGenerationProviders), pluginArrayFromRecord(contracts, 'imageGenerationProviders')),
+    mediaUnderstandingProviderIds: pluginArrayFromRecord(contracts, 'mediaUnderstandingProviders'),
+    memoryEmbeddingProviderIds: uniqueStrings(pluginIdsFromRecordArray(openclaw.memoryEmbeddingProviders), pluginArrayFromRecord(contracts, 'memoryEmbeddingProviders')),
+    videoGenerationProviderIds: pluginArrayFromRecord(contracts, 'videoGenerationProviders'),
+    channelIds,
   }
 }
 
@@ -516,10 +631,12 @@ function providerConfigFieldsFromSetup(
 
   for (const providerSetup of providers) {
     const providerId = typeof providerSetup.id === 'string' ? providerSetup.id.trim() : ''
-    if (!providerId || !AUTH_ENV_MAP[providerId]) continue
+    if (!providerId) continue
     const status = providerAuthStatus(providerId)
     const envVars = pluginStringArray(providerSetup.envVars)
-    const primaryEnvVar = envVars[0] || AUTH_ENV_MAP[providerId]?.[0] || ''
+    const knownEnvVars = AUTH_ENV_MAP[providerId] || []
+    if (!providerId || (!knownEnvVars.length && !envVars.length)) continue
+    const primaryEnvVar = envVars[0] || knownEnvVars[0] || ''
     const choice = Array.isArray(raw.providerAuthChoices)
       ? raw.providerAuthChoices
           .filter(isLooseRecord)
@@ -694,6 +811,10 @@ function buildPluginControlEntry(
       (typeof raw.description === 'string' && raw.description.trim()
         ? raw.description.trim()
         : `OpenClaw plugin ${id}.`),
+    ...(typeof raw.icon === 'string' && raw.icon.trim() ? { icon: raw.icon.trim() } : {}),
+    ...(typeof raw.systemImage === 'string' && raw.systemImage.trim() ? { systemImage: raw.systemImage.trim() } : {}),
+    ...(typeof raw.packageName === 'string' && raw.packageName.trim() ? { packageName: raw.packageName.trim() } : {}),
+    ...(typeof raw.installSpec === 'string' && raw.installSpec.trim() ? { installSpec: raw.installSpec.trim() } : {}),
     origin: typeof raw.origin === 'string' && raw.origin.trim() ? raw.origin.trim() : configuredEnabled !== null ? 'config' : 'bundled',
     status,
     enabled,
@@ -705,7 +826,9 @@ function buildPluginControlEntry(
       ...pluginStringArray(raw.speechProviderIds),
       ...pluginStringArray(raw.webSearchProviderIds),
       ...pluginStringArray(raw.imageGenerationProviderIds),
+      ...pluginStringArray(raw.mediaUnderstandingProviderIds),
       ...pluginStringArray(raw.memoryEmbeddingProviderIds),
+      ...pluginStringArray(raw.videoGenerationProviderIds),
     ).slice(0, 12),
     channels: uniqueStrings(
       ...pluginStringArray(raw.channelIds),
@@ -734,35 +857,64 @@ export function createPluginInventoryService(options: PluginInventoryServiceOpti
   let pluginListRefreshPromise: Promise<PluginListCacheEntry> | null = null
   const warn = options.warn || ((message, error) => console.warn(message, error))
 
+  async function loadBundledPluginManifestsFromRoot(openclawRoot: string): Promise<Record<string, unknown>[]> {
+    const root = path.join(openclawRoot, 'dist', 'extensions')
+    const entries = await fs.readdir(root, { withFileTypes: true }).catch(() => [])
+    if (!entries.length) return []
+
+    const plugins = await Promise.all(
+      entries
+        .filter((entry) => entry.isDirectory())
+        .map(async (entry) => {
+          const pluginDir = path.join(root, entry.name)
+          const [manifest, packageJson] = await Promise.all([
+            readJsonRecord(path.join(pluginDir, 'openclaw.plugin.json')),
+            readJsonRecord(path.join(pluginDir, 'package.json')),
+          ])
+          return pluginRawFromManifest(manifest, packageJson)
+        }),
+    )
+
+    return plugins.filter((plugin): plugin is Record<string, unknown> => Boolean(plugin))
+  }
+
+  async function loadOfficialExternalCatalogPluginsFromRoot(openclawRoot: string): Promise<Record<string, unknown>[]> {
+    const plugins: Record<string, unknown>[] = []
+    for (const fileName of OFFICIAL_EXTERNAL_CATALOG_FILES) {
+      const catalog = await readJsonRecord(path.join(openclawRoot, 'scripts', 'lib', fileName))
+      const entries = Array.isArray(catalog.entries) ? catalog.entries.filter(isLooseRecord) : []
+      plugins.push(...entries.map(pluginRawFromExternalCatalogEntry).filter((plugin): plugin is Record<string, unknown> => Boolean(plugin)))
+    }
+    return plugins
+  }
+
+  function mergePluginRawEntries(...groups: Record<string, unknown>[][]): Record<string, unknown>[] {
+    const byId = new Map<string, Record<string, unknown>>()
+    for (const raw of groups.flat()) {
+      const id = typeof raw.id === 'string' ? raw.id.trim().toLowerCase() : ''
+      if (!PLUGIN_ID_PATTERN.test(id) || byId.has(id)) continue
+      byId.set(id, raw)
+    }
+    return [...byId.values()]
+  }
+
   async function loadBundledPluginManifestList(): Promise<Record<string, unknown>[]> {
     const openclawDir = options.openclawBin && options.openclawBin !== 'openclaw'
       ? path.dirname(path.resolve(options.openclawBin))
       : ''
-    const extensionRoots = uniqueStrings(
-      openclawDir ? path.join(openclawDir, 'dist', 'extensions') : '',
-      path.resolve(options.workspaceRoot, 'vendor', 'openclaw', 'dist', 'extensions'),
-      path.resolve(process.cwd(), 'vendor', 'openclaw', 'dist', 'extensions'),
-      path.resolve(process.cwd(), 'resources', 'openclaw', 'dist', 'extensions'),
+    const openclawRoots = uniqueStrings(
+      openclawDir,
+      openclawDir ? path.resolve(openclawDir, '..') : '',
+      path.resolve(options.workspaceRoot, 'vendor', 'openclaw'),
+      path.resolve(process.cwd(), 'vendor', 'openclaw'),
+      path.resolve(process.cwd(), 'resources', 'openclaw'),
     )
 
-    for (const root of extensionRoots) {
-      const entries = await fs.readdir(root, { withFileTypes: true }).catch(() => [])
-      if (!entries.length) continue
-
-      const plugins = await Promise.all(
-        entries
-          .filter((entry) => entry.isDirectory())
-          .map(async (entry) => {
-            const pluginDir = path.join(root, entry.name)
-            const [manifest, packageJson] = await Promise.all([
-              readJsonRecord(path.join(pluginDir, 'openclaw.plugin.json')),
-              readJsonRecord(path.join(pluginDir, 'package.json')),
-            ])
-            return pluginRawFromManifest(manifest, packageJson)
-          }),
-      )
-
-      return plugins.filter((plugin): plugin is Record<string, unknown> => Boolean(plugin))
+    for (const root of openclawRoots) {
+      const bundled = await loadBundledPluginManifestsFromRoot(root)
+      const external = await loadOfficialExternalCatalogPluginsFromRoot(root)
+      const plugins = mergePluginRawEntries(bundled, external)
+      if (plugins.length) return plugins
     }
 
     return []

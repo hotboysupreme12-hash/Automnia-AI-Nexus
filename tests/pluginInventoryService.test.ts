@@ -166,6 +166,7 @@ test('plugin inventory falls back to bundled manifests and redacts CLI warnings'
       path.join(pluginRoot, 'openclaw.plugin.json'),
       `${JSON.stringify({
         id: 'browser',
+        icon: 'https://cdn.simpleicons.org/chrome',
         channels: ['browser'],
         commandAliases: [{ name: 'browser.open' }],
         contracts: { tools: ['browser.open'] },
@@ -178,6 +179,85 @@ test('plugin inventory falls back to bundled manifests and redacts CLI warnings'
         name: '@openclaw/browser-plugin',
         version: '1.0.0',
         description: 'Browser automation',
+      }, null, 2)}\n`,
+      'utf-8',
+    )
+    const catalogRoot = path.join(workspaceRoot, 'vendor', 'openclaw', 'scripts', 'lib')
+    await mkdir(catalogRoot, { recursive: true })
+    await writeFile(
+      path.join(catalogRoot, 'official-external-plugin-catalog.json'),
+      `${JSON.stringify({
+        entries: [{
+          name: '@openclaw/brave-plugin',
+          description: 'OpenClaw Brave plugin',
+          source: 'official',
+          kind: 'plugin',
+          openclaw: {
+            plugin: { id: 'brave', label: 'Brave' },
+            webSearchProviders: [{
+              id: 'brave',
+              credentialLabel: 'Brave API key',
+              envVars: ['BRAVE_API_KEY'],
+            }],
+            install: {
+              npmSpec: '@openclaw/brave-plugin',
+              defaultChoice: 'npm',
+              minHostVersion: '>=2026.6.11',
+            },
+          },
+        }],
+      }, null, 2)}\n`,
+      'utf-8',
+    )
+    await writeFile(
+      path.join(catalogRoot, 'official-external-provider-catalog.json'),
+      `${JSON.stringify({
+        entries: [{
+          name: '@openclaw/zai-provider',
+          description: 'OpenClaw Z.ai provider plugin',
+          source: 'official',
+          kind: 'provider',
+          openclaw: {
+            plugin: { id: 'zai', label: 'Z.ai' },
+            providers: [{
+              id: 'zai',
+              name: 'Z.ai',
+              envVars: ['ZAI_API_KEY'],
+              authChoices: [{ method: 'api-key', choiceLabel: 'Z.ai API key' }],
+            }],
+            contracts: {
+              mediaUnderstandingProviders: ['zai'],
+              videoGenerationProviders: ['zai'],
+            },
+            install: { npmSpec: '@openclaw/zai-provider' },
+          },
+        }],
+      }, null, 2)}\n`,
+      'utf-8',
+    )
+    await writeFile(
+      path.join(catalogRoot, 'official-external-channel-catalog.json'),
+      `${JSON.stringify({
+        entries: [{
+          name: '@openclaw/mattermost-plugin',
+          description: 'OpenClaw Mattermost channel plugin',
+          source: 'official',
+          kind: 'channel',
+          openclaw: {
+            plugin: { id: 'mattermost', label: 'Mattermost' },
+            contracts: { tools: ['mattermost.post'] },
+            channel: {
+              id: 'mattermost',
+              label: 'Mattermost',
+              systemImage: 'bubble.left.and.bubble.right',
+              blurb: 'Mattermost workspace messaging.',
+            },
+            channelConfigs: {
+              mattermost: { label: 'Mattermost' },
+            },
+            install: { npmSpec: '@openclaw/mattermost-plugin' },
+          },
+        }],
       }, null, 2)}\n`,
       'utf-8',
     )
@@ -194,13 +274,33 @@ test('plugin inventory falls back to bundled manifests and redacts CLI warnings'
     const cache = await service.refreshPluginListCache()
     assert.equal(cache.source, 'bundled')
     assert.equal(cache.rawPlugins[0]?.id, 'browser')
+    assert.equal(cache.rawPlugins.some((plugin) => plugin.id === 'brave'), true)
+    assert.equal(cache.rawPlugins.some((plugin) => plugin.id === 'zai'), true)
+    assert.equal(cache.rawPlugins.some((plugin) => plugin.id === 'mattermost'), true)
     assert.match(cache.cliError || '', /\[REDACTED\]/)
     assert.doesNotMatch(cache.cliError || '', /sk-secret-token/)
 
     const controls = await service.listPluginControls()
+    const byId = new Map(controls.plugins.map((plugin) => [plugin.id, plugin]))
+    const browser = byId.get('browser')
+    const brave = byId.get('brave')
+    const zai = byId.get('zai')
+    const mattermost = byId.get('mattermost')
+
     assert.equal(controls.cache.source, 'bundled')
-    assert.equal(controls.plugins[0]?.id, 'browser')
-    assert.equal(controls.plugins[0]?.category, 'automation')
+    assert.equal(browser?.category, 'automation')
+    assert.equal(browser?.icon, 'https://cdn.simpleicons.org/chrome')
+    assert.equal(brave?.origin, 'official-catalog')
+    assert.equal(brave?.enabled, false)
+    assert.equal(brave?.packageName, '@openclaw/brave-plugin')
+    assert.equal(brave?.installSpec, '@openclaw/brave-plugin')
+    assert.deepEqual(brave?.providers, ['brave'])
+    assert.equal(brave?.configFields[0]?.label, 'Brave API key')
+    assert.equal(zai?.providers.includes('zai'), true)
+    assert.equal(zai?.configFields[0]?.envVar, 'ZAI_API_KEY')
+    assert.deepEqual(mattermost?.channels, ['mattermost'])
+    assert.equal(mattermost?.commands.includes('mattermost.post'), true)
+    assert.equal(mattermost?.systemImage, 'bubble.left.and.bubble.right')
     assert.equal(state.writes.length >= 1, true)
   } finally {
     await rm(workspaceRoot, { recursive: true, force: true })

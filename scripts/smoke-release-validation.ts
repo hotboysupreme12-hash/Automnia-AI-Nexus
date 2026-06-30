@@ -87,10 +87,10 @@ writeFileSync(path.join(codexRuntimeDir, '.dystopai-runtime-bundle.json'), `${JS
   generatedAt: '2026-06-24T00:00:00.000Z',
   codex: {
     package: '@openclaw/codex',
-    spec: '@openclaw/codex@2026.6.10',
-    version: '2026.6.10',
-    integrity: 'sha512-0M5FsRb3IxsJ/xb2U1eMOZL/7w9W27tnzhSANY7JbbCRhz1+v7WUE6uS3YRWoTKv/9sNx9MAJXFntCK8MpWKYQ==',
-    tarball: 'https://registry.npmjs.org/@openclaw/codex/-/codex-2026.6.10.tgz',
+    spec: '@openclaw/codex@2026.6.11',
+    version: '2026.6.11',
+    integrity: 'sha512-L9rO95x0DW7rpVJisPv2kkgwr04nKYAA1xbgDXVAm2oh801BCJFIJFo021bvhPmwo7MTAXNcuchO3laGa30QRQ==',
+    tarball: 'https://registry.npmjs.org/@openclaw/codex/-/codex-2026.6.11.tgz',
     lockfile: '.dystopai-runtime-package-lock.json',
     dependencies: {
       '@openai/codex': {

@@ -26,7 +26,11 @@ const server = readWorkspaceFile('server/controlPlane.ts')
 const controlPlaneHttp = readWorkspaceFile('server/controlPlaneHttp.ts')
 const pluginRoutes = readWorkspaceFile('server/routes/pluginRoutes.ts')
 const pluginRouteTests = readWorkspaceFile('tests/pluginRoutes.test.ts')
+const pluginInventoryTests = readWorkspaceFile('tests/pluginInventoryService.test.ts')
+const pluginPanelStateTests = readWorkspaceFile('tests/pluginsPanelStateProjection.test.ts')
 const pluginsPanel = readWorkspaceFile('src/components/plugins/PluginsPanel.tsx')
+const pluginStateProjection = readWorkspaceFile('src/components/plugins/pluginStateProjection.ts')
+const pluginInventoryService = readWorkspaceFile('server/services/plugins/pluginInventoryService.ts')
 const packageJson = JSON.parse(readWorkspaceFile('package.json')) as { scripts?: Record<string, string> }
 
 const pluginRouteMarkers = [
@@ -143,13 +147,100 @@ for (const disabledStateFragment of [
 }
 
 for (const disabledUiFragment of [
-  "{ id: 'disabled', label: 'Disabled' }",
-  "if (filter === 'disabled' && plugin.enabled) return false",
-  'const disabledCount = Math.max(0, plugins.length - enabledCount)',
-  "{disabledCount} disabled",
+  'PLUGIN_FILTERS',
+  "pluginMatchesFilter(plugin, filter)",
+  'summarizePluginPageStates(plugins)',
+  "{stateSummary.disabled} disabled",
   "plugin.enabled ? 'Stop' : 'Start'",
+  'plugin.icon',
+  'plugin.packageName',
+  'plugin.installSpec',
 ]) {
   assert(pluginsPanel.includes(disabledUiFragment), `PluginsPanel should preserve disabled plugin UI state: ${disabledUiFragment}`)
+}
+
+assert(
+  pluginRouteTests.includes('plugin routes preserve unavailable channel plugin state'),
+  'pluginRoutes.test.ts should cover unavailable channel plugin state through the route boundary',
+)
+for (const unavailableRouteFragment of [
+  'channel-unavailable',
+  "status: 'unavailable'",
+  "category: 'communications'",
+  "channels: ['voice', 'sms', 'clawtalk.websocket']",
+  'Channel unavailable until Gateway reports websocket readiness.',
+  '/api/plugins/channel-unavailable/inspect',
+]) {
+  assert(
+    pluginRouteTests.includes(unavailableRouteFragment),
+    `pluginRoutes.test.ts should pin unavailable channel plugin coverage for ${unavailableRouteFragment}`,
+  )
+}
+
+for (const unavailableUiFragment of [
+  'pluginPageState(plugin)',
+  "status === 'unavailable'",
+  '{stateSummary.unavailable} unavailable',
+  'systemImage',
+]) {
+  assert(
+    (pluginsPanel + pluginStateProjection).includes(unavailableUiFragment),
+    `PluginsPanel should preserve unavailable plugin UI state: ${unavailableUiFragment}`,
+  )
+}
+
+for (const catalogFragment of [
+  'official-external-plugin-catalog.json',
+  'official-external-provider-catalog.json',
+  'official-external-channel-catalog.json',
+  'pluginRawFromExternalCatalogEntry',
+  "origin: 'official-catalog'",
+  'mediaUnderstandingProviderIds',
+  'videoGenerationProviderIds',
+]) {
+  assert(pluginInventoryService.includes(catalogFragment), `Plugin inventory should preserve OpenClaw 2026.6.11 catalog support: ${catalogFragment}`)
+}
+
+for (const catalogTestFragment of [
+  '@openclaw/brave-plugin',
+  '@openclaw/zai-provider',
+  '@openclaw/mattermost-plugin',
+  'https://cdn.simpleicons.org/chrome',
+  'bubble.left.and.bubble.right',
+]) {
+  assert(pluginInventoryTests.includes(catalogTestFragment), `Plugin tests should pin OpenClaw catalog metadata: ${catalogTestFragment}`)
+}
+
+assert(
+  pluginPanelStateTests.includes('plugins page projection distinguishes beta plugin states'),
+  'pluginsPanelStateProjection.test.ts should cover Plugins page beta state projection',
+)
+for (const stateFragment of [
+  "'configured'",
+  "'missing-auth'",
+  "'unavailable'",
+  "'failed'",
+  "'disabled'",
+]) {
+  assert(pluginStateProjection.includes(stateFragment), `pluginStateProjection.ts should model state ${stateFragment}`)
+  assert(pluginPanelStateTests.includes(stateFragment), `pluginsPanelStateProjection.test.ts should assert state ${stateFragment}`)
+}
+
+for (const pageStateFragment of [
+  "{ id: 'configured', label: 'Configured' }",
+  "{ id: 'missing-auth', label: 'Missing Auth' }",
+  "{ id: 'unavailable', label: 'Unavailable' }",
+  "{ id: 'failed', label: 'Failed' }",
+  "{ id: 'disabled', label: 'Disabled' }",
+  '{stateSummary.configured} configured',
+  '{stateSummary.missingAuth} missing auth',
+  '{stateSummary.failed} failed',
+  'pluginPageState(plugin).label',
+]) {
+  assert(
+    (pluginsPanel + pluginStateProjection).includes(pageStateFragment),
+    `Plugins page should distinguish beta state fragment ${pageStateFragment}`,
+  )
 }
 
 assert(

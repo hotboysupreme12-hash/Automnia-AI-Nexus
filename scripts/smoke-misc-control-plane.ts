@@ -96,7 +96,7 @@ assert(
   'OpenClaw optimization scorecard should cite the beta optimization guide',
 )
 assert(
-  openClawScorecard.source.targetOpenClawVersion === '2026.6.10',
+  openClawScorecard.source.targetOpenClawVersion === '2026.6.11',
   'OpenClaw optimization scorecard should target the documented stable OpenClaw version',
 )
 assert(openClawScorecard.categories.length >= 10, 'OpenClaw optimization scorecard should cover the major guide themes')

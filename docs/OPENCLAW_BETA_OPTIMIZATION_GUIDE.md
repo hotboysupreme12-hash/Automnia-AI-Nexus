@@ -1,18 +1,20 @@
-# OpenClaw 2026.6.10 Stable Upgrade Notes
+# OpenClaw 2026.6.11 Stable Upgrade Notes
 
 Date prepared: 2026-06-04
-Last updated for stable: 2026-06-27
+Last updated for stable: 2026-06-30
 
-Baseline: this guide now tracks the app's stable upgrade from the previous vendored OpenClaw `2026.6.6` runtime to OpenClaw `2026.6.10`. Older optimization notes remain below where they still describe durable runtime, Gateway, cron, plugin, and recovery work that is relevant to the stable release.
+Baseline: this guide now tracks the app's stable upgrade from the previous vendored OpenClaw `2026.6.10` runtime to OpenClaw `2026.6.11`. Older optimization notes remain below where they still describe durable runtime, Gateway, cron, plugin, and recovery work that is relevant to the stable release.
 
 Source release notes:
 
-- Stable release reviewed: https://github.com/openclaw/openclaw/releases/tag/v2026.6.10
+- Stable release reviewed: https://github.com/openclaw/openclaw/releases/tag/v2026.6.11
 - GitHub releases page: https://github.com/openclaw/openclaw/releases/
-- npm package verified: https://www.npmjs.com/package/openclaw/v/2026.6.10
-- Registry tarball: https://registry.npmjs.org/openclaw/-/openclaw-2026.6.10.tgz
-- npm integrity: `sha512-LcooND2tBQw8A+kc1Ujltu3lg30bJ0w7XaeRy7eYzobb8BBdcW6DOGbwJL4vpj1vl9+gjRceOtlh5nh9OARcug==`
-- Docs mirror: `docs/openclaw-latest` synced from https://docs.openclaw.ai on 2026-06-27, 693 pages.
+- npm package verified: https://www.npmjs.com/package/openclaw/v/2026.6.11
+- Registry tarball: https://registry.npmjs.org/openclaw/-/openclaw-2026.6.11.tgz
+- npm integrity: `sha512-T+P/g19IheeT1ckXMoPN61dYuE8vBF4MderI+kWkvpuFYxPkJxn8AXLpu9IXCnN9g36Acpm9+mMD/V+lsvOkyA==`
+- Bundled Codex plugin verified: https://www.npmjs.com/package/@openclaw/codex/v/2026.6.11
+- Bundled Codex integrity: `sha512-L9rO95x0DW7rpVJisPv2kkgwr04nKYAA1xbgDXVAm2oh801BCJFIJFo021bvhPmwo7MTAXNcuchO3laGa30QRQ==`
+- Docs mirror: `docs/openclaw-latest` synced from https://docs.openclaw.ai on 2026-06-30, 2,051 pages.
 
 ## Current Beta Split Plan Alignment
 
@@ -37,6 +39,27 @@ be sequenced through the split plan:
 
 Implementation rule: every optimization slice should name its target service or
 state/contract module and record evidence in `docs/PRODUCTION_HARDENING_LEDGER.md`.
+
+## 2026.6.11 Stable Runtime Delta
+
+OpenClaw `2026.6.11` is a channel, plugin-distribution, provider-routing, and agent-turn reliability release on top of the 2026.6 runtime line. The changes that matter most to DystopAI are:
+
+- Channel operations: Slack relay mode, native Mattermost `/oc_queue`, per-DM model overrides, Telegram delivery/rendering fixes, WhatsApp durable reply targets, and stronger draining-state reporting all make long-lived operator channels less brittle.
+- Operator workflows: `openclaw agent --message-file` and the RAFT CLI wake bridge improve large prompt handoff and wake-up automation for scripted runs.
+- Plugin distribution: several official plugins/providers/channels now live in official external catalogs instead of only under `dist/extensions`; bundled plugin manifests also carry icon metadata.
+- Provider/model routing: provider model resolution, catalog parsing, reasoning controls, encrypted reasoning support, OpenRouter/Ollama/Gemini edge cases, and provider usage-cost reporting were tightened.
+- Agent turns: Codex partial deltas, harness activation, abort cleanup, bounded provider responses, Claude CLI credit fallback, usage-limit classification, and long-context prompt-cache stability improve streaming and failure classification.
+- Safety and config: non-interactive configure now fails closed, empty TLS paths are rejected, memory artifacts are sanitized, DOMPurify is patched, and cron/delivery validation is stricter.
+
+## DystopAI 2026.6.11 Wiring
+
+- Vendored runtime is now `openclaw@2026.6.11`, with the registry tarball and npm integrity pinned in `scripts/prepare-openclaw-vendor.cjs`.
+- Bundled Codex now defaults to exact `@openclaw/codex@2026.6.11`, matching the package's `openclaw.compat.pluginApi >=2026.6.11` peer expectation.
+- Runtime version checks and the optimization scorecard now recommend `2026.6.11`.
+- Plugin inventory fallback now reads OpenClaw's `official-external-plugin-catalog.json`, `official-external-provider-catalog.json`, and `official-external-channel-catalog.json` when the CLI list is unavailable, then merges those entries with bundled manifests.
+- Plugin records now carry `icon`, `systemImage`, `packageName`, and `installSpec`, and the Plugins panel displays available icon metadata while search can match package and install specs.
+- Catalog-derived provider setup now uses OpenClaw-provided env vars and auth labels, so newly externalized providers can still surface setup fields before DystopAI has a local provider catalog entry.
+- Media-understanding and video-generation provider contract ids are folded into the runtime provider summary so richer 2026.6.11 provider capabilities are visible in Monitor and plugin controls.
 
 ## 2026.6.10 Stable Runtime Delta
 

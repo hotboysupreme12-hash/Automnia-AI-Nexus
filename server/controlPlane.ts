@@ -34,6 +34,12 @@ import { registerRuntimeRoutes } from './routes/runtimeRoutes'
 import { registerSkillRoutes } from './routes/skillRoutes'
 import { createControlFilesService } from './services/controlFilesService'
 import {
+  AVATAR_UPLOAD_LIMIT_BYTES,
+  avatarUploadFileName,
+  isSupportedAvatarImagePath,
+  managedAvatarFileName,
+} from './services/filesystem/avatarFileService'
+import {
   createMissionStateService,
   missionRecordSnapshot,
   type Mission,
@@ -96,6 +102,12 @@ import { registerBrowserRoutes } from './routes/browserRoutes'
 import { registerShiftRoutes } from './routes/shiftRoutes'
 import { registerStaticUi } from './staticUi'
 import { buildOpenClawOptimizationScorecard } from './openclawOptimizationScorecard'
+import { createSafePathService } from './services/filesystem/safePathService'
+import {
+  COMMAND_CONSOLE_UPLOAD_LIMIT_BYTES,
+  createCommandConsoleUploadService,
+} from './services/filesystem/commandConsoleUploadService'
+import { createPickerSessionService } from './services/filesystem/pickerSessionService'
 import { createGatewayLifecycleService, type GatewayLifecycleService } from './services/gateway/gatewayLifecycleService'
 import {
   createGatewayDiagnosticsService,
@@ -247,7 +259,7 @@ const CODEX_LEGACY_AGENT_PROFILE_ROOT = path.join(HOME_DIR, '.codex', 'agent-pro
 const LOCAL_AUTH_PATH = path.join(OPENCLAW_STATE_ROOT, 'local-auth.json')
 const CONTROL_CENTER_LEDGER_PATHS = runtimeLedgerPathsForStateRoot(OPENCLAW_STATE_ROOT)
 const RUNTIME_MONITOR_CLEAR_MARKER_PATH = runtimeMonitorClearMarkerPath(CONTROL_CENTER_LEDGER_PATHS)
-const RECOMMENDED_OPENCLAW_VERSION = '2026.6.10'
+const RECOMMENDED_OPENCLAW_VERSION = '2026.6.11'
 const DEFAULT_OPENCLAW_FAST_MODE = 'auto'
 const DEFAULT_OPENCLAW_FAST_AUTO_ON_SECONDS = 60
 const FAST_MODE_MODEL_PARAM_PROVIDERS = new Set(['openai', 'openai-codex', 'anthropic', 'xai', 'minimax'])
@@ -258,73 +270,7 @@ const FOLDER_PICKER_TIMEOUT_MS = (() => {
   const configured = Number(process.env.CONTROL_CENTER_FOLDER_PICKER_TIMEOUT_MS || 60000)
   return Number.isFinite(configured) && configured >= 5000 ? configured : 60000
 })()
-const COMMAND_CONSOLE_UPLOAD_LIMIT_BYTES = 25 * 1024 * 1024
-const COMMAND_CONSOLE_GATEWAY_IMAGE_LIMIT_BYTES = 6 * 1024 * 1024
-const COMMAND_CONSOLE_GATEWAY_ATTACHMENT_LIMIT_BYTES = 8 * 1024 * 1024
 const COMMAND_CONSOLE_UPLOADS_DIR = path.join(WORKSPACE_ROOT, '.openclaw', 'command-console-uploads')
-const COMMAND_CONSOLE_UPLOAD_EXTENSIONS = new Set([
-  '.png', '.jpg', '.jpeg', '.webp', '.gif',
-  '.pdf', '.doc', '.docx', '.rtf', '.ppt', '.pptx', '.xls', '.xlsx',
-  '.txt', '.md', '.markdown', '.json', '.jsonl', '.csv', '.tsv', '.log', '.xml', '.yaml', '.yml',
-  '.html', '.htm', '.css', '.js', '.jsx', '.ts', '.tsx', '.mjs', '.cjs',
-  '.py', '.ipynb', '.java', '.go', '.rs', '.c', '.cc', '.cpp', '.h', '.hpp', '.cs',
-  '.php', '.rb', '.sh', '.bash', '.zsh', '.ps1', '.sql', '.toml', '.ini', '.env',
-  '.mp3', '.wav', '.m4a', '.aac', '.ogg', '.oga', '.flac', '.opus',
-])
-const COMMAND_CONSOLE_IMAGE_ATTACHMENT_MIME_TYPES = new Set(['image/png', 'image/jpeg', 'image/jpg', 'image/webp', 'image/gif'])
-const COMMAND_CONSOLE_UPLOAD_MIME_EXTENSIONS: Record<string, string> = {
-  'image/png': '.png',
-  'image/jpeg': '.jpg',
-  'image/jpg': '.jpg',
-  'image/webp': '.webp',
-  'image/gif': '.gif',
-  'application/pdf': '.pdf',
-  'application/msword': '.doc',
-  'application/vnd.openxmlformats-officedocument.wordprocessingml.document': '.docx',
-  'application/rtf': '.rtf',
-  'text/rtf': '.rtf',
-  'application/vnd.ms-powerpoint': '.ppt',
-  'application/vnd.openxmlformats-officedocument.presentationml.presentation': '.pptx',
-  'application/vnd.ms-excel': '.xls',
-  'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet': '.xlsx',
-  'application/json': '.json',
-  'application/x-ndjson': '.jsonl',
-  'text/csv': '.csv',
-  'text/tab-separated-values': '.tsv',
-  'text/markdown': '.md',
-  'text/html': '.html',
-  'text/css': '.css',
-  'text/javascript': '.js',
-  'application/javascript': '.js',
-  'application/xml': '.xml',
-  'text/xml': '.xml',
-  'application/yaml': '.yaml',
-  'application/x-yaml': '.yaml',
-  'text/yaml': '.yaml',
-  'text/plain': '.txt',
-  'audio/mpeg': '.mp3',
-  'audio/mp3': '.mp3',
-  'audio/wav': '.wav',
-  'audio/x-wav': '.wav',
-  'audio/mp4': '.m4a',
-  'audio/aac': '.aac',
-  'audio/ogg': '.ogg',
-  'audio/flac': '.flac',
-  'audio/opus': '.opus',
-}
-const AVATAR_UPLOAD_LIMIT_BYTES = 15 * 1024 * 1024
-const AVATAR_IMAGE_EXTENSIONS = new Set(['.png', '.jpg', '.jpeg', '.webp', '.gif', '.bmp', '.ico', '.svg'])
-const AVATAR_IMAGE_MIME_EXTENSIONS: Record<string, string> = {
-  'image/png': '.png',
-  'image/jpeg': '.jpg',
-  'image/jpg': '.jpg',
-  'image/webp': '.webp',
-  'image/gif': '.gif',
-  'image/bmp': '.bmp',
-  'image/x-icon': '.ico',
-  'image/vnd.microsoft.icon': '.ico',
-  'image/svg+xml': '.svg',
-}
 const JSON_DISK_CACHE_STAT_MS = 750
 const SKILL_LIBRARY_CACHE_MS = 15_000
 const CONTROL_CENTER_STARTED_AT_MS = Date.now()
@@ -362,7 +308,21 @@ function readLegacyJsonStateSync<T>(
   }
 }
 
-const controlFilesService = createControlFilesService(WORKSPACE_ROOT)
+const safePathService = createSafePathService()
+const isInsidePath = safePathService.isInsidePath
+const isPathUnder = safePathService.isPathUnder
+const samePath = safePathService.samePath
+const controlFilesService = createControlFilesService(WORKSPACE_ROOT, { isPathUnder })
+const commandConsoleUploadService = createCommandConsoleUploadService({
+  uploadsDir: COMMAND_CONSOLE_UPLOADS_DIR,
+  isPathUnder,
+})
+const pickerSessionService = createPickerSessionService({
+  stateRoot: OPENCLAW_STATE_ROOT,
+  workspaceRoot: WORKSPACE_ROOT,
+  timeoutMs: FOLDER_PICKER_TIMEOUT_MS,
+  persistAgentAvatarFromPath,
+})
 const OPENCLAW_BOOTSTRAP_FILES = ['AGENTS.md', 'SOUL.md', 'TOOLS.md', 'IDENTITY.md', 'USER.md', 'HEARTBEAT.md', 'BOOTSTRAP.md'] as const
 const OPENCLAW_OPTIONAL_BOOTSTRAP_FILES = ['SOUL.md', 'USER.md', 'HEARTBEAT.md', 'IDENTITY.md'] as const
 const AGENT_RESOURCE_FILES = [
@@ -693,16 +653,6 @@ function openClawSpawnSpecForBin(bin: string, args: string[]) {
     return { command: bin, args, shell: false }
   }
   return { command: bin, args, shell: false }
-}
-
-function isInsidePath(parent: string, candidate: string) {
-  const normalize = (value: string) => {
-    const resolved = path.resolve(value)
-    return process.platform === 'win32' ? resolved.toLowerCase() : resolved
-  }
-  const parentPath = normalize(parent)
-  const candidatePath = normalize(candidate)
-  return candidatePath === parentPath || candidatePath.startsWith(`${parentPath}${path.sep}`)
 }
 
 function currentModuleDir() {
@@ -4102,98 +4052,12 @@ function contentTypeFromExt(filePath: string) {
   return 'application/octet-stream'
 }
 
-type CommandConsoleUploadAttachment = {
-  id: string
-  name: string
-  path: string
-  mimeType: string
-  size: number
-  kind: 'image' | 'file'
+function persistCommandConsoleUpload(bytes: Buffer, sourceName: string | undefined, rawMimeType: string | undefined) {
+  return commandConsoleUploadService.persistUpload(bytes, sourceName, rawMimeType)
 }
 
-function normalizeMimeType(value: string | undefined) {
-  return (value || '').split(';', 1)[0].trim().toLowerCase()
-}
-
-function commandConsoleUploadFileName(rawName: string | undefined, mimeType: string) {
-  const cleanName = path.basename((rawName || 'attachment').trim() || 'attachment')
-    .replace(/[\r\n]/g, ' ')
-    .slice(0, 180)
-  const extFromName = path.extname(cleanName).toLowerCase()
-  const ext = COMMAND_CONSOLE_UPLOAD_EXTENSIONS.has(extFromName)
-    ? extFromName
-    : COMMAND_CONSOLE_UPLOAD_MIME_EXTENSIONS[mimeType] || ''
-  if (!ext) {
-    throw new Error('Choose a supported image, audio, PDF, Office document, spreadsheet, presentation, text, code, or data file.')
-  }
-  const stem = path.basename(cleanName, extFromName || ext)
-    .trim()
-    .toLowerCase()
-    .replace(/[^a-z0-9_-]+/g, '-')
-    .replace(/^-+|-+$/g, '')
-    .slice(0, 72) || 'attachment'
-  return `${stem}${ext}`
-}
-
-async function persistCommandConsoleUpload(bytes: Buffer, sourceName: string | undefined, rawMimeType: string | undefined): Promise<CommandConsoleUploadAttachment> {
-  const mimeType = normalizeMimeType(rawMimeType) || 'application/octet-stream'
-  if (!Buffer.isBuffer(bytes) || bytes.length === 0) throw new Error('Choose a file to upload.')
-  if (bytes.length > COMMAND_CONSOLE_UPLOAD_LIMIT_BYTES) throw new Error('Choose a file smaller than 25 MB.')
-  const safeName = commandConsoleUploadFileName(sourceName, mimeType)
-  const ext = path.extname(safeName).toLowerCase()
-  const resolvedMimeType = mimeType === 'application/octet-stream' ? normalizeMimeType(contentTypeFromExt(safeName)) : mimeType
-  const kind = COMMAND_CONSOLE_IMAGE_ATTACHMENT_MIME_TYPES.has(resolvedMimeType) ? 'image' : 'file'
-  const digest = createHash('sha256').update(bytes).digest('hex').slice(0, 16)
-  const uploadId = randomUUID()
-  const uploadPath = path.join(COMMAND_CONSOLE_UPLOADS_DIR, `${Date.now().toString(36)}-${digest}-${safeName}`)
-  const resolvedUploadDir = path.resolve(COMMAND_CONSOLE_UPLOADS_DIR)
-  const resolvedUploadPath = path.resolve(uploadPath)
-  if (!isPathUnder(resolvedUploadDir, resolvedUploadPath)) throw new Error('Upload path resolved outside the upload directory.')
-  await fs.mkdir(resolvedUploadDir, { recursive: true })
-  await fs.writeFile(resolvedUploadPath, bytes)
-  return {
-    id: uploadId,
-    name: safeName,
-    path: resolvedUploadPath,
-    mimeType: resolvedMimeType || COMMAND_CONSOLE_UPLOAD_MIME_EXTENSIONS[ext] || 'application/octet-stream',
-    size: bytes.length,
-    kind,
-  }
-}
-
-function normalizeCommandConsoleAttachment(value: unknown): CommandConsoleUploadAttachment | null {
-  if (!isLooseRecord(value)) return null
-  const id = typeof value.id === 'string' ? value.id.trim() : ''
-  const name = typeof value.name === 'string' ? value.name.trim() : ''
-  const filePath = typeof value.path === 'string' ? value.path.trim() : ''
-  const mimeType = normalizeMimeType(typeof value.mimeType === 'string' ? value.mimeType : '')
-  const size = typeof value.size === 'number' && Number.isFinite(value.size) ? Math.max(0, Math.floor(value.size)) : 0
-  const kind = value.kind === 'image' ? 'image' : 'file'
-  if (!id || !name || !filePath || !mimeType || size <= 0) return null
-  const resolvedUploadDir = path.resolve(COMMAND_CONSOLE_UPLOADS_DIR)
-  const resolvedPath = path.resolve(filePath)
-  if (!isPathUnder(resolvedUploadDir, resolvedPath)) return null
-  return { id, name, path: resolvedPath, mimeType, size, kind }
-}
-
-async function gatewayChatAttachmentsFromTurnAttachments(attachments: unknown[] | undefined) {
-  const normalized = (attachments || []).map(normalizeCommandConsoleAttachment).filter((entry): entry is CommandConsoleUploadAttachment => Boolean(entry))
-  const gatewayAttachments: Record<string, unknown>[] = []
-  for (const attachment of normalized) {
-    const bytes = await fs.readFile(attachment.path)
-    const inlineLimit = attachment.kind === 'image'
-      ? COMMAND_CONSOLE_GATEWAY_IMAGE_LIMIT_BYTES
-      : COMMAND_CONSOLE_GATEWAY_ATTACHMENT_LIMIT_BYTES
-    if (bytes.length > inlineLimit) continue
-    gatewayAttachments.push({
-      type: attachment.kind === 'image' ? 'image' : 'file',
-      mimeType: attachment.mimeType,
-      fileName: attachment.name,
-      content: bytes.toString('base64'),
-      name: attachment.name,
-    })
-  }
-  return gatewayAttachments
+function gatewayChatAttachmentsFromTurnAttachments(attachments: unknown[] | undefined) {
+  return commandConsoleUploadService.gatewayAttachmentsFromTurnAttachments(attachments)
 }
 
 function clampStat(value: number | undefined) {
@@ -6947,343 +6811,6 @@ function spawnDetached(command: string, args: string[]): Promise<{ ok: boolean; 
   })
 }
 
-interface PickerCommandOptions {
-  timeoutMs?: number
-  windowsHide?: boolean
-  abortSignal?: AbortSignal
-  label?: string
-}
-
-function quoteWindowsBatchArg(value: string) {
-  return `"${value.replace(/%/g, '%%').replace(/"/g, '""')}"`
-}
-
-async function writeWindowsPickerLauncher(
-  launcherPath: string,
-  title: string,
-  scriptPath: string,
-  outputPath: string,
-  startPath: string,
-) {
-  const launcher = [
-    '@echo off',
-    [
-      'start',
-      quoteWindowsBatchArg(title),
-      'powershell.exe',
-      '-NoLogo',
-      '-NoProfile',
-      '-STA',
-      '-ExecutionPolicy',
-      'Bypass',
-      '-WindowStyle',
-      'Normal',
-      '-File',
-      quoteWindowsBatchArg(scriptPath),
-      '-OutPath',
-      quoteWindowsBatchArg(outputPath),
-      '-StartPath',
-      quoteWindowsBatchArg(startPath),
-    ].join(' '),
-    '',
-  ].join('\r\n')
-  await fs.writeFile(launcherPath, launcher, 'utf-8')
-}
-
-type FolderPickerSessionStatus = 'pending' | 'selected' | 'cancelled' | 'error'
-interface FolderPickerSession {
-  id: string
-  status: FolderPickerSessionStatus
-  path?: string | null
-  detail?: string
-  startedAt: number
-  updatedAt: number
-  expiresAt: number
-}
-interface ImagePickerSession extends FolderPickerSession {
-  agentId?: string
-  sourcePath?: string | null
-  avatar?: string | null
-  previewUrl?: string | null
-}
-
-const FOLDER_PICKER_SESSION_TTL_MS = 5 * 60 * 1000
-const folderPickerSessions = new Map<string, FolderPickerSession>()
-const imagePickerSessions = new Map<string, ImagePickerSession>()
-
-function pruneFolderPickerSessions() {
-  const now = Date.now()
-  for (const [id, session] of folderPickerSessions) {
-    if (session.expiresAt <= now) folderPickerSessions.delete(id)
-  }
-  for (const [id, session] of imagePickerSessions) {
-    if (session.expiresAt <= now) imagePickerSessions.delete(id)
-  }
-}
-
-function serializeFolderPickerSession(session: FolderPickerSession) {
-  return {
-    sessionId: session.id,
-    status: session.status,
-    path: session.path ?? null,
-    cancelled: session.status === 'cancelled',
-    detail: session.detail,
-  }
-}
-
-function serializeImagePickerSession(session: ImagePickerSession) {
-  return {
-    ...serializeFolderPickerSession(session),
-    agentId: session.agentId,
-    sourcePath: session.sourcePath ?? null,
-    avatar: session.avatar ?? null,
-    previewUrl: session.previewUrl ?? null,
-  }
-}
-
-function startFolderPickerSession(startPath: string) {
-  pruneFolderPickerSessions()
-  const now = Date.now()
-  const session: FolderPickerSession = {
-    id: randomUUID(),
-    status: 'pending',
-    path: null,
-    detail: 'Folder picker is open.',
-    startedAt: now,
-    updatedAt: now,
-    expiresAt: now + FOLDER_PICKER_SESSION_TTL_MS,
-  }
-  folderPickerSessions.set(session.id, session)
-  if (process.platform === 'win32') {
-    void launchWindowsFolderPickerSession(session, startPath)
-    return session
-  }
-  void pickFolderWithOsDialog(startPath)
-    .then((picked) => {
-      if (picked.ok && picked.path) {
-        session.status = 'selected'
-        session.path = path.resolve(picked.path)
-        session.detail = 'Folder selected.'
-      } else if (picked.cancelled) {
-        session.status = 'cancelled'
-        session.path = null
-        session.detail = 'No folder selected.'
-      } else {
-        session.status = 'error'
-        session.path = null
-        session.detail = picked.detail || 'No supported native folder picker is available in this environment.'
-      }
-    })
-    .catch((error) => {
-      session.status = 'error'
-      session.path = null
-      session.detail = String(error)
-    })
-    .finally(() => {
-      session.updatedAt = Date.now()
-      session.expiresAt = Date.now() + FOLDER_PICKER_SESSION_TTL_MS
-    })
-  return session
-}
-
-function startImagePickerSession(agentId: string | undefined, startPath: string) {
-  pruneFolderPickerSessions()
-  const now = Date.now()
-  const session: ImagePickerSession = {
-    id: randomUUID(),
-    status: 'pending',
-    path: null,
-    sourcePath: null,
-    avatar: null,
-    previewUrl: null,
-    agentId,
-    detail: 'Image picker is open.',
-    startedAt: now,
-    updatedAt: now,
-    expiresAt: now + FOLDER_PICKER_SESSION_TTL_MS,
-  }
-  imagePickerSessions.set(session.id, session)
-  if (process.platform === 'win32') {
-    void launchWindowsImagePickerSession(session, startPath)
-    return session
-  }
-  void pickImageWithOsDialog(startPath)
-    .then((picked) => finishImagePickerSession(session, picked))
-    .catch((error) => {
-      session.status = 'error'
-      session.path = null
-      session.detail = String(error)
-    })
-    .finally(() => {
-      session.updatedAt = Date.now()
-      session.expiresAt = Date.now() + FOLDER_PICKER_SESSION_TTL_MS
-    })
-  return session
-}
-
-async function launchWindowsFolderPickerSession(session: FolderPickerSession, startPath: string) {
-  const pickerDir = path.join(OPENCLAW_STATE_ROOT, 'tmp', 'folder-picker')
-  const scriptPath = path.join(pickerDir, `${session.id}.ps1`)
-  const launcherPath = path.join(pickerDir, `${session.id}.cmd`)
-  const outputPath = path.join(pickerDir, `${session.id}.json`)
-  let finished = false
-  let pollTimer: ReturnType<typeof setInterval> | null = null
-  let timeoutTimer: ReturnType<typeof setTimeout> | null = null
-
-  const finish = async (status: FolderPickerSessionStatus, detail?: string, selectedPath?: string | null) => {
-    if (finished) return
-    finished = true
-    if (pollTimer) clearInterval(pollTimer)
-    if (timeoutTimer) clearTimeout(timeoutTimer)
-    session.status = status
-    session.path = selectedPath ? path.resolve(selectedPath) : null
-    session.detail = detail
-    session.updatedAt = Date.now()
-    session.expiresAt = Date.now() + FOLDER_PICKER_SESSION_TTL_MS
-    setTimeout(() => {
-      void fs.unlink(scriptPath).catch(() => {})
-      void fs.unlink(launcherPath).catch(() => {})
-      void fs.unlink(outputPath).catch(() => {})
-    }, FOLDER_PICKER_SESSION_TTL_MS)
-  }
-
-  const parseOutput = (raw: string): { status?: string; path?: string | null; detail?: string } => {
-    const text = raw.replace(/^\uFEFF/, '')
-    try {
-      return JSON.parse(text) as { status?: string; path?: string | null; detail?: string }
-    } catch {
-      const parsed: { status?: string; path?: string | null; detail?: string } = {}
-      for (const line of text.split(/\r?\n/)) {
-        const separator = line.indexOf('=')
-        if (separator <= 0) continue
-        const key = line.slice(0, separator).trim()
-        const value = line.slice(separator + 1).trim()
-        if (key === 'status') parsed.status = value
-        else if (key === 'path') parsed.path = value
-        else if (key === 'detail') parsed.detail = value
-      }
-      return parsed
-    }
-  }
-
-  const readOutput = async () => {
-    try {
-      const raw = await fs.readFile(outputPath, 'utf-8')
-      const parsed = parseOutput(raw)
-      if (parsed.status === 'selected' && parsed.path?.trim()) {
-        await finish('selected', 'Folder selected.', parsed.path.trim())
-      } else if (parsed.status === 'cancelled') {
-        await finish('cancelled', parsed.detail || 'No folder selected.')
-      } else {
-        await finish('error', parsed.detail || 'Folder picker failed.')
-      }
-    } catch {
-      // The helper has not written its result yet.
-    }
-  }
-
-  try {
-    await fs.mkdir(pickerDir, { recursive: true })
-    const pickerStart = await resolvePickerStartPath(startPath)
-    const script = [
-      'param(',
-      '  [Parameter(Mandatory=$true)][string]$OutPath,',
-      '  [Parameter(Mandatory=$true)][string]$StartPath',
-      ')',
-      '$ErrorActionPreference = "Stop"',
-      'function Write-PickerResult($value) {',
-      '  $json = $value | ConvertTo-Json -Compress',
-      '  $json | Set-Content -LiteralPath $OutPath -Encoding UTF8',
-      '}',
-      'try {',
-      '  Add-Type -AssemblyName System.Windows.Forms',
-      '  Add-Type -AssemblyName System.Drawing',
-      '  [System.Windows.Forms.Application]::EnableVisualStyles()',
-      '  $initialDirectory = $StartPath',
-      '  if (-not [string]::IsNullOrWhiteSpace($initialDirectory) -and (Test-Path -LiteralPath $initialDirectory -PathType Leaf)) {',
-      '    $initialDirectory = Split-Path -LiteralPath $initialDirectory -Parent',
-      '  }',
-      '  if ([string]::IsNullOrWhiteSpace($initialDirectory) -or -not (Test-Path -LiteralPath $initialDirectory -PathType Container)) {',
-      '    $initialDirectory = [System.Environment]::GetFolderPath("DesktopDirectory")',
-      '  }',
-      '  $owner = New-Object System.Windows.Forms.Form',
-      '  $owner.Text = "Select Agent Workspace"',
-      '  $owner.StartPosition = "CenterScreen"',
-      '  $owner.Size = New-Object System.Drawing.Size(320, 80)',
-      '  $owner.TopMost = $true',
-      '  $owner.ShowInTaskbar = $true',
-      '  $owner.FormBorderStyle = [System.Windows.Forms.FormBorderStyle]::FixedToolWindow',
-      '  $owner.Show()',
-      '  $owner.BringToFront()',
-      '  $owner.Activate()',
-      '  [System.Windows.Forms.Application]::DoEvents()',
-      '  $dialog = New-Object System.Windows.Forms.FolderBrowserDialog',
-      '  $dialog.Description = "Select Agent Workspace"',
-      '  $dialog.SelectedPath = $initialDirectory',
-      '  $dialog.ShowNewFolderButton = $true',
-      '  $result = $dialog.ShowDialog($owner)',
-      '  $owner.Dispose()',
-      '  if ($result -eq [System.Windows.Forms.DialogResult]::OK -and -not [string]::IsNullOrWhiteSpace($dialog.SelectedPath)) {',
-      '    Write-PickerResult @{ status = "selected"; path = $dialog.SelectedPath }',
-      '    exit 0',
-      '  }',
-      '  Write-PickerResult @{ status = "cancelled"; detail = "No folder selected." }',
-      '  exit 0',
-      '} catch {',
-      '  Write-PickerResult @{ status = "error"; detail = $_.Exception.Message }',
-      '  exit 1',
-      '}',
-      '',
-    ].join('\n')
-    await fs.writeFile(scriptPath, script, 'utf-8')
-    await writeWindowsPickerLauncher(launcherPath, 'Select Agent Workspace', scriptPath, outputPath, pickerStart)
-    const launcher = spawn('cmd.exe', ['/d', '/s', '/c', launcherPath], {
-      detached: true,
-      stdio: 'ignore',
-      windowsHide: false,
-    })
-    launcher.unref()
-    launcher.once('error', (error) => {
-      void finish('error', String(error))
-    })
-    pollTimer = setInterval(() => {
-      void readOutput()
-    }, 500)
-    timeoutTimer = setTimeout(() => {
-      void finish('error', `Folder picker timed out after ${Math.round(FOLDER_PICKER_TIMEOUT_MS / 1000)} seconds. Paste a directory path manually and press Set, or try Browse again.`)
-    }, FOLDER_PICKER_TIMEOUT_MS)
-  } catch (error) {
-    await finish('error', String(error))
-  }
-}
-
-function isSupportedAvatarImagePath(filePath: string) {
-  return AVATAR_IMAGE_EXTENSIONS.has(path.extname(filePath).toLowerCase())
-}
-
-function avatarUploadFileName(rawName: string | undefined, contentType: string | undefined) {
-  const cleanName = path.basename((rawName || 'avatar').trim() || 'avatar')
-    .replace(/[\r\n]/g, ' ')
-    .slice(0, 180)
-  const extFromName = path.extname(cleanName).toLowerCase()
-  const ext = AVATAR_IMAGE_EXTENSIONS.has(extFromName)
-    ? extFromName
-    : AVATAR_IMAGE_MIME_EXTENSIONS[(contentType || '').split(';')[0].trim().toLowerCase()] || ''
-  if (!ext) throw new Error('Choose a PNG, JPG, WEBP, GIF, BMP, ICO, or SVG image.')
-  const stem = path.basename(cleanName, extFromName || ext).trim() || 'avatar'
-  return `${stem}${ext}`
-}
-
-function managedAvatarFileName(agentId: string, sourcePath: string) {
-  const ext = path.extname(sourcePath).toLowerCase() || '.png'
-  const stem = path.basename(sourcePath, path.extname(sourcePath))
-    .toLowerCase()
-    .replace(/[^a-z0-9_-]+/g, '-')
-    .replace(/^-+|-+$/g, '')
-    .slice(0, 42) || 'avatar'
-  return `${agentId}-${stem}-${Date.now().toString(36)}-${randomBytes(4).toString('hex')}${ext}`
-}
-
 async function persistAgentAvatarBytes(agentId: string, bytes: Buffer, sourceName: string) {
   if (!isValidAgentId(agentId)) throw new Error('Invalid agent id.')
   if (!Buffer.isBuffer(bytes) || bytes.length === 0) throw new Error('Choose an image file to upload.')
@@ -7363,441 +6890,6 @@ async function persistAgentAvatarFromPath(agentId: string, sourcePath: string) {
     avatarPath,
     previewUrl: `/api/party/avatar/${encodeURIComponent(target.id)}?v=${Date.now()}`,
   }
-}
-
-async function finishImagePickerSession(
-  session: ImagePickerSession,
-  picked: { ok: boolean; path?: string; cancelled?: boolean; detail?: string },
-) {
-  if (picked.ok && picked.path) {
-    const selectedPath = path.resolve(picked.path)
-    session.sourcePath = selectedPath
-    if (session.agentId) {
-      const persisted = await persistAgentAvatarFromPath(session.agentId, selectedPath)
-      session.path = persisted.avatarPath
-      session.avatar = persisted.avatar
-      session.previewUrl = persisted.previewUrl
-      session.detail = 'Profile picture selected.'
-    } else {
-      session.path = selectedPath
-      session.detail = 'Image selected.'
-    }
-    session.status = 'selected'
-  } else if (picked.cancelled) {
-    session.status = 'cancelled'
-    session.path = null
-    session.detail = 'No image selected.'
-  } else {
-    session.status = 'error'
-    session.path = null
-    session.detail = picked.detail || 'No supported native image picker is available in this environment.'
-  }
-  session.updatedAt = Date.now()
-  session.expiresAt = Date.now() + FOLDER_PICKER_SESSION_TTL_MS
-}
-
-async function launchWindowsImagePickerSession(session: ImagePickerSession, startPath: string) {
-  const pickerDir = path.join(OPENCLAW_STATE_ROOT, 'tmp', 'image-picker')
-  const scriptPath = path.join(pickerDir, `${session.id}.ps1`)
-  const launcherPath = path.join(pickerDir, `${session.id}.cmd`)
-  const outputPath = path.join(pickerDir, `${session.id}.json`)
-  let finished = false
-  let pollTimer: ReturnType<typeof setInterval> | null = null
-  let timeoutTimer: ReturnType<typeof setTimeout> | null = null
-
-  const finish = async (status: FolderPickerSessionStatus, detail?: string, selectedPath?: string | null) => {
-    if (finished) return
-    finished = true
-    if (pollTimer) clearInterval(pollTimer)
-    if (timeoutTimer) clearTimeout(timeoutTimer)
-    try {
-      if (status === 'selected' && selectedPath) {
-        await finishImagePickerSession(session, { ok: true, path: selectedPath })
-      } else {
-        await finishImagePickerSession(session, { ok: false, cancelled: status === 'cancelled', detail })
-      }
-    } catch (error) {
-      session.status = 'error'
-      session.path = null
-      session.detail = error instanceof Error && error.message ? error.message : String(error)
-      session.updatedAt = Date.now()
-      session.expiresAt = Date.now() + FOLDER_PICKER_SESSION_TTL_MS
-    }
-    setTimeout(() => {
-      void fs.unlink(scriptPath).catch(() => {})
-      void fs.unlink(launcherPath).catch(() => {})
-      void fs.unlink(outputPath).catch(() => {})
-    }, FOLDER_PICKER_SESSION_TTL_MS)
-  }
-
-  const readOutput = async () => {
-    try {
-      const raw = await fs.readFile(outputPath, 'utf-8')
-      const parsed = JSON.parse(raw.replace(/^\uFEFF/, '')) as { status?: string; path?: string | null; detail?: string }
-      if (parsed.status === 'selected' && parsed.path?.trim()) {
-        await finish('selected', 'Image selected.', parsed.path.trim())
-      } else if (parsed.status === 'cancelled') {
-        await finish('cancelled', parsed.detail || 'No image selected.')
-      } else {
-        await finish('error', parsed.detail || 'Image picker failed.')
-      }
-    } catch {
-      // The helper has not written its result yet.
-    }
-  }
-
-  try {
-    await fs.mkdir(pickerDir, { recursive: true })
-    const pickerStart = await resolvePickerStartPath(startPath)
-    const script = [
-      'param(',
-      '  [Parameter(Mandatory=$true)][string]$OutPath,',
-      '  [Parameter(Mandatory=$true)][string]$StartPath',
-      ')',
-      '$ErrorActionPreference = "Stop"',
-      'function Write-PickerResult($value) {',
-      '  $json = $value | ConvertTo-Json -Compress',
-      '  $json | Set-Content -LiteralPath $OutPath -Encoding UTF8',
-      '}',
-      'try {',
-      '  Add-Type -AssemblyName System.Windows.Forms',
-      '  Add-Type -AssemblyName System.Drawing',
-      '  [System.Windows.Forms.Application]::EnableVisualStyles()',
-      '  $initialDirectory = $StartPath',
-      '  if (-not [string]::IsNullOrWhiteSpace($initialDirectory) -and (Test-Path -LiteralPath $initialDirectory -PathType Leaf)) {',
-      '    $initialDirectory = Split-Path -LiteralPath $initialDirectory -Parent',
-      '  }',
-      '  if ([string]::IsNullOrWhiteSpace($initialDirectory) -or -not (Test-Path -LiteralPath $initialDirectory -PathType Container)) {',
-      '    $initialDirectory = [System.Environment]::GetFolderPath("Pictures")',
-      '  }',
-      '  if ([string]::IsNullOrWhiteSpace($initialDirectory) -or -not (Test-Path -LiteralPath $initialDirectory -PathType Container)) {',
-      '    $initialDirectory = [System.Environment]::GetFolderPath("DesktopDirectory")',
-      '  }',
-      '  $owner = New-Object System.Windows.Forms.Form',
-      '  $owner.Text = "DystopAI Profile Picture"',
-      '  $owner.StartPosition = "CenterScreen"',
-      '  $owner.Size = New-Object System.Drawing.Size(320, 80)',
-      '  $owner.TopMost = $true',
-      '  $owner.ShowInTaskbar = $true',
-      '  $owner.FormBorderStyle = [System.Windows.Forms.FormBorderStyle]::FixedToolWindow',
-      '  $owner.Show()',
-      '  $owner.BringToFront()',
-      '  $owner.Activate()',
-      '  [System.Windows.Forms.Application]::DoEvents()',
-      '  $dialog = New-Object System.Windows.Forms.OpenFileDialog',
-      '  $dialog.Title = "Choose agent profile picture"',
-      '  $dialog.InitialDirectory = $initialDirectory',
-      '  $dialog.CheckFileExists = $true',
-      '  $dialog.Multiselect = $false',
-      '  $dialog.Filter = "Image files (*.png;*.jpg;*.jpeg;*.webp;*.gif;*.bmp;*.ico;*.svg)|*.png;*.jpg;*.jpeg;*.webp;*.gif;*.bmp;*.ico;*.svg|All files (*.*)|*.*"',
-      '  $result = $dialog.ShowDialog($owner)',
-      '  $owner.Dispose()',
-      '  if ($result -eq [System.Windows.Forms.DialogResult]::OK -and -not [string]::IsNullOrWhiteSpace($dialog.FileName)) {',
-      '    Write-PickerResult @{ status = "selected"; path = $dialog.FileName }',
-      '    exit 0',
-      '  }',
-      '  Write-PickerResult @{ status = "cancelled"; detail = "No image selected." }',
-      '  exit 0',
-      '} catch {',
-      '  Write-PickerResult @{ status = "error"; detail = $_.Exception.Message }',
-      '  exit 1',
-      '}',
-      '',
-    ].join('\n')
-    await fs.writeFile(scriptPath, script, 'utf-8')
-    await writeWindowsPickerLauncher(launcherPath, 'DystopAI Profile Picture', scriptPath, outputPath, pickerStart)
-    const launcher = spawn('cmd.exe', ['/d', '/s', '/c', launcherPath], {
-      detached: true,
-      stdio: 'ignore',
-      windowsHide: false,
-    })
-    launcher.unref()
-    launcher.once('error', (error) => {
-      void finish('error', String(error))
-    })
-    pollTimer = setInterval(() => {
-      void readOutput()
-    }, 500)
-    timeoutTimer = setTimeout(() => {
-      void finish('error', `Image picker timed out after ${Math.round(FOLDER_PICKER_TIMEOUT_MS / 1000)} seconds. Try Browse again.`)
-    }, FOLDER_PICKER_TIMEOUT_MS)
-  } catch (error) {
-    await finish('error', String(error))
-  }
-}
-
-function runPickerCommand(command: string, args: string[], options: PickerCommandOptions = {}): Promise<{ ok: boolean; path?: string; detail?: string }> {
-  return new Promise((resolve) => {
-    const timeoutMs = options.timeoutMs ?? FOLDER_PICKER_TIMEOUT_MS
-    const label = options.label || 'Folder picker'
-    let settled = false
-    let timeout: ReturnType<typeof setTimeout> | null = null
-    const finish = (result: { ok: boolean; path?: string; detail?: string }) => {
-      if (settled) return
-      settled = true
-      if (timeout) clearTimeout(timeout)
-      options.abortSignal?.removeEventListener('abort', onAbort)
-      resolve(result)
-    }
-    const child = spawn(command, args, { shell: false, windowsHide: options.windowsHide ?? true })
-    let stdout = ''
-    let stderr = ''
-    const onAbort = () => {
-      try {
-        child.kill()
-      } catch {
-        // The process may already have exited.
-      }
-      finish({ ok: false, detail: `${label} request was cancelled before it completed.` })
-    }
-    if (options.abortSignal?.aborted) {
-      onAbort()
-      return
-    }
-    options.abortSignal?.addEventListener('abort', onAbort, { once: true })
-    child.stdout.on('data', (chunk) => {
-      stdout += chunk.toString()
-    })
-    child.stderr.on('data', (chunk) => {
-      stderr += chunk.toString()
-    })
-    child.once('error', (error) => {
-      finish({ ok: false, detail: String(error) })
-    })
-    child.once('close', (code) => {
-      const selected = stdout.trim().split(/\r?\n/).find(Boolean)?.trim()
-      if (code === 0 && selected) finish({ ok: true, path: selected })
-      else finish({ ok: false, detail: stderr.trim() || stdout.trim() || `exit:${code ?? 1}` })
-    })
-    if (timeoutMs > 0) {
-      timeout = setTimeout(() => {
-        try {
-          child.kill()
-        } catch {
-          // The process may already have exited.
-        }
-        finish({
-          ok: false,
-          detail: `${label} timed out after ${Math.round(timeoutMs / 1000)} seconds. Try Browse again.`,
-        })
-      }, timeoutMs)
-    }
-  })
-}
-
-async function resolvePickerStartPath(startPath?: string) {
-  let current = normalizePickerStartPath(startPath)
-  for (let depth = 0; depth < 32; depth += 1) {
-    try {
-      const stat = await fs.stat(current)
-      if (stat.isDirectory()) return current
-      if (stat.isFile()) current = path.dirname(current)
-    } catch {
-      const parent = path.dirname(current)
-      if (parent === current) break
-      current = parent
-    }
-  }
-  return WORKSPACE_ROOT
-}
-
-function normalizePickerStartPath(startPath?: string, fallbackPath = WORKSPACE_ROOT) {
-  const fallback = path.resolve(fallbackPath || WORKSPACE_ROOT)
-  const raw = startPath?.trim() || ''
-  if (!raw || raw.includes('\0')) return fallback
-  if (/^(?:https?|data|blob):/i.test(raw)) return fallback
-  if (/^[\\/](?:api|agents)[\\/]/i.test(raw)) return fallback
-  if (/^file:/i.test(raw)) {
-    try {
-      return path.resolve(fileURLToPath(raw))
-    } catch {
-      return fallback
-    }
-  }
-  return path.resolve(raw)
-}
-
-async function pickFolderWithElectron(startPath?: string): Promise<{ ok: boolean; path?: string; cancelled?: boolean; detail?: string }> {
-  try {
-    const defaultPath = await resolvePickerStartPath(startPath)
-    const electron = optionalRequire('electron') as {
-      dialog?: {
-        showOpenDialog?: (options: {
-          title?: string
-          defaultPath?: string
-          properties?: Array<'openDirectory' | 'createDirectory'>
-        }) => Promise<{ canceled: boolean; filePaths: string[] }>
-      }
-    }
-    const result = await electron.dialog?.showOpenDialog?.({
-      title: 'Select Agent Workspace',
-      defaultPath,
-      properties: ['openDirectory', 'createDirectory'],
-    })
-    if (!result) return { ok: false, detail: 'Electron dialog is unavailable.' }
-    if (result.canceled) return { ok: false, cancelled: true }
-    const selected = result.filePaths[0]
-    return selected ? { ok: true, path: selected } : { ok: false, cancelled: true }
-  } catch (error) {
-    return { ok: false, detail: String(error) }
-  }
-}
-
-async function pickFolderWithOsDialog(startPath?: string, abortSignal?: AbortSignal): Promise<{ ok: boolean; path?: string; cancelled?: boolean; detail?: string }> {
-  const pickerStart = await resolvePickerStartPath(startPath)
-  const electronResult = await pickFolderWithElectron(pickerStart)
-  if (electronResult.ok || electronResult.cancelled) return electronResult
-
-  if (process.platform === 'win32') {
-    const script = [
-      '[Console]::OutputEncoding = [System.Text.Encoding]::UTF8',
-      'Add-Type -AssemblyName System.Windows.Forms',
-      'Add-Type -AssemblyName System.Drawing',
-      '[System.Windows.Forms.Application]::EnableVisualStyles()',
-      `$initialDirectory = ${JSON.stringify(pickerStart)}`,
-      'if (-not [string]::IsNullOrWhiteSpace($initialDirectory) -and (Test-Path -LiteralPath $initialDirectory -PathType Leaf)) { $initialDirectory = Split-Path -LiteralPath $initialDirectory -Parent }',
-      'if ([string]::IsNullOrWhiteSpace($initialDirectory) -or -not (Test-Path -LiteralPath $initialDirectory -PathType Container)) { $initialDirectory = [System.Environment]::GetFolderPath("DesktopDirectory") }',
-      '$owner = New-Object System.Windows.Forms.Form',
-      '$owner.Text = "Select Agent Workspace"',
-      '$owner.StartPosition = "CenterScreen"',
-      '$owner.Size = New-Object System.Drawing.Size(1, 1)',
-      '$owner.TopMost = $true',
-      '$owner.ShowInTaskbar = $false',
-      '$owner.FormBorderStyle = [System.Windows.Forms.FormBorderStyle]::FixedToolWindow',
-      '$owner.Show()',
-      '$owner.BringToFront()',
-      '$owner.Activate()',
-      '[System.Windows.Forms.Application]::DoEvents()',
-      '$dialog = New-Object System.Windows.Forms.FolderBrowserDialog',
-      '$dialog.Description = "Select Agent Workspace"',
-      '$dialog.SelectedPath = $initialDirectory',
-      '$dialog.ShowNewFolderButton = $true',
-      '$result = $dialog.ShowDialog($owner)',
-      '$owner.Dispose()',
-      'if ($result -eq [System.Windows.Forms.DialogResult]::OK -and -not [string]::IsNullOrWhiteSpace($dialog.SelectedPath)) { Write-Output $dialog.SelectedPath; exit 0 }',
-      'exit 1',
-    ].filter(Boolean).join('; ')
-    return runPickerCommand('powershell.exe', ['-NoProfile', '-STA', '-Command', script], {
-      abortSignal,
-      windowsHide: true,
-    })
-  }
-
-  if (process.platform === 'darwin') {
-    const script = `POSIX path of (choose folder with prompt "Select Agent Workspace" default location POSIX file ${JSON.stringify(pickerStart)})`
-    return runPickerCommand('osascript', ['-e', script], { abortSignal })
-  }
-
-  const zenity = await runPickerCommand('zenity', [
-    '--file-selection',
-    '--directory',
-    '--title=Select Agent Workspace',
-    `--filename=${pickerStart.endsWith(path.sep) ? pickerStart : `${pickerStart}${path.sep}`}`,
-  ], { abortSignal })
-  if (zenity.ok || !/ENOENT|not found/i.test(zenity.detail || '')) return zenity
-
-  return runPickerCommand('kdialog', [
-    '--getexistingdirectory',
-    pickerStart,
-    '--title',
-    'Select Agent Workspace',
-  ], { abortSignal })
-}
-
-async function pickImageWithElectron(startPath?: string): Promise<{ ok: boolean; path?: string; cancelled?: boolean; detail?: string }> {
-  try {
-    const defaultPath = await resolvePickerStartPath(startPath)
-    const electron = optionalRequire('electron') as {
-      dialog?: {
-        showOpenDialog?: (options: {
-          title?: string
-          defaultPath?: string
-          properties?: Array<'openFile'>
-          filters?: Array<{ name: string; extensions: string[] }>
-        }) => Promise<{ canceled: boolean; filePaths: string[] }>
-      }
-    }
-    const result = await electron.dialog?.showOpenDialog?.({
-      title: 'Choose agent profile picture',
-      defaultPath,
-      properties: ['openFile'],
-      filters: [
-        { name: 'Images', extensions: ['png', 'jpg', 'jpeg', 'webp', 'gif', 'bmp', 'ico', 'svg'] },
-      ],
-    })
-    if (!result) return { ok: false, detail: 'Electron dialog is unavailable.' }
-    if (result.canceled) return { ok: false, cancelled: true }
-    const selected = result.filePaths[0]
-    return selected ? { ok: true, path: selected } : { ok: false, cancelled: true }
-  } catch (error) {
-    return { ok: false, detail: String(error) }
-  }
-}
-
-async function pickImageWithOsDialog(startPath?: string, abortSignal?: AbortSignal): Promise<{ ok: boolean; path?: string; cancelled?: boolean; detail?: string }> {
-  const pickerStart = await resolvePickerStartPath(startPath)
-  const electronResult = await pickImageWithElectron(pickerStart)
-  if (electronResult.ok || electronResult.cancelled) return electronResult
-
-  if (process.platform === 'win32') {
-    const script = [
-      'Add-Type -AssemblyName System.Windows.Forms',
-      'Add-Type -AssemblyName System.Drawing',
-      '[System.Windows.Forms.Application]::EnableVisualStyles()',
-      `$initialDirectory = ${JSON.stringify(pickerStart)}`,
-      'if (-not [string]::IsNullOrWhiteSpace($initialDirectory) -and (Test-Path -LiteralPath $initialDirectory -PathType Leaf)) { $initialDirectory = Split-Path -LiteralPath $initialDirectory -Parent }',
-      'if ([string]::IsNullOrWhiteSpace($initialDirectory) -or -not (Test-Path -LiteralPath $initialDirectory -PathType Container)) { $initialDirectory = [System.Environment]::GetFolderPath("Pictures") }',
-      'if ([string]::IsNullOrWhiteSpace($initialDirectory) -or -not (Test-Path -LiteralPath $initialDirectory -PathType Container)) { $initialDirectory = [System.Environment]::GetFolderPath("DesktopDirectory") }',
-      '$owner = New-Object System.Windows.Forms.Form',
-      '$owner.Text = "DystopAI Profile Picture"',
-      '$owner.StartPosition = "CenterScreen"',
-      '$owner.Size = New-Object System.Drawing.Size(1, 1)',
-      '$owner.TopMost = $true',
-      '$owner.ShowInTaskbar = $false',
-      '$owner.FormBorderStyle = [System.Windows.Forms.FormBorderStyle]::FixedToolWindow',
-      '$owner.Show()',
-      '$owner.BringToFront()',
-      '$owner.Activate()',
-      '[System.Windows.Forms.Application]::DoEvents()',
-      '$dialog = New-Object System.Windows.Forms.OpenFileDialog',
-      '$dialog.Title = "Choose agent profile picture"',
-      '$dialog.InitialDirectory = $initialDirectory',
-      '$dialog.CheckFileExists = $true',
-      '$dialog.Multiselect = $false',
-      '$dialog.Filter = "Image files (*.png;*.jpg;*.jpeg;*.webp;*.gif;*.bmp;*.ico;*.svg)|*.png;*.jpg;*.jpeg;*.webp;*.gif;*.bmp;*.ico;*.svg|All files (*.*)|*.*"',
-      '$result = $dialog.ShowDialog($owner)',
-      '$owner.Dispose()',
-      'if ($result -eq [System.Windows.Forms.DialogResult]::OK -and $dialog.FileName) { Write-Output $dialog.FileName; exit 0 }',
-      'exit 1',
-    ].join('; ')
-    return runPickerCommand('powershell.exe', ['-NoProfile', '-STA', '-Command', script], {
-      abortSignal,
-      windowsHide: true,
-      label: 'Image picker',
-    })
-  }
-
-  if (process.platform === 'darwin') {
-    const script = `POSIX path of (choose file with prompt "Choose agent profile picture" default location POSIX file ${JSON.stringify(pickerStart)} of type {"public.image"})`
-    return runPickerCommand('osascript', ['-e', script], { abortSignal, label: 'Image picker' })
-  }
-
-  const zenity = await runPickerCommand('zenity', [
-    '--file-selection',
-    '--title=Choose agent profile picture',
-    '--file-filter=Images | *.png *.jpg *.jpeg *.webp *.gif *.bmp *.ico *.svg',
-    '--file-filter=All files | *',
-    `--filename=${pickerStart.endsWith(path.sep) ? pickerStart : `${pickerStart}${path.sep}`}`,
-  ], { abortSignal, label: 'Image picker' })
-  if (zenity.ok || !/ENOENT|not found/i.test(zenity.detail || '')) return zenity
-
-  return runPickerCommand('kdialog', [
-    '--getopenfilename',
-    pickerStart,
-    'Images (*.png *.jpg *.jpeg *.webp *.gif *.bmp *.ico *.svg)',
-    '--title',
-    'Choose agent profile picture',
-  ], { abortSignal, label: 'Image picker' })
 }
 
 async function launchChromeHost(url?: string): Promise<{ ok: boolean; detail: string; command: string }> {
@@ -15049,13 +14141,6 @@ async function sha256File(filePath: string) {
   return createHash('sha256').update(data).digest('hex')
 }
 
-function isPathUnder(baseDir: string, targetPath: string) {
-  const base = path.resolve(baseDir)
-  const target = path.resolve(targetPath)
-  if (samePath(base, target)) return true
-  return target.startsWith(`${base}${path.sep}`)
-}
-
 function looksLikeGeneratedWorkspaceDoctrineContent(file: string, content: string) {
   const normalizedFile = file.toUpperCase()
   const text = content.replace(/\r\n/g, '\n').trimStart()
@@ -15356,12 +14441,6 @@ async function resolveFilenameHintsForMessage(message: string, executionWorkspac
     ].join('\n'),
     notes,
   }
-}
-
-function samePath(a: string, b: string) {
-  const left = path.resolve(a)
-  const right = path.resolve(b)
-  return process.platform === 'win32' ? left.toLowerCase() === right.toLowerCase() : left === right
 }
 
 async function validateWorkspaceAccess(workspace: string) {
@@ -17727,14 +16806,10 @@ registerFilesystemRoutes(app, {
   ensureAgentLocalConfig: (params) => ensureAgentLocalConfig(params),
   extractIdentityNameFromMarkdown,
   getAgentById,
-  getFolderPickerSession: (sessionId) => folderPickerSessions.get(sessionId),
-  getImagePickerSession: (sessionId) => imagePickerSessions.get(sessionId),
   isMarkdownResourceFile,
   isValidAgentId,
   mirrorSharedTeamFile: (file, content) => mirrorSharedTeamFile(file as SharedTeamFile, content),
-  normalizePickerStartPath,
-  pickFolderWithOsDialog,
-  pruneFolderPickerSessions,
+  pickerSessions: pickerSessionService,
   propagateDisplayNameAcrossAgentFiles: (agentId, previousName, local) => propagateDisplayNameAcrossAgentFiles(agentId, previousName, local as AgentLocalConfig),
   readAgentLocalConfigIfPresent,
   rememberAgentLocalConfigCache: (filePath, local) => rememberAgentLocalConfigCache(filePath, local as AgentLocalConfig),
@@ -17742,11 +16817,7 @@ registerFilesystemRoutes(app, {
   resolveWorkspaceForAgent,
   samePath,
   saveAgentFileToCodexProfile,
-  serializeFolderPickerSession,
-  serializeImagePickerSession,
   sharedTeamFiles: SHARED_TEAM_FILES,
-  startFolderPickerSession,
-  startImagePickerSession,
   syncDoctrineToWorkspace,
   workspaceRoot: WORKSPACE_ROOT,
   writeOpenclawConfig: (config) => writeOpenclawConfig(config),

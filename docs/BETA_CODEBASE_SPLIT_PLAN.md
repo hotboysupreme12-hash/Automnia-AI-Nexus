@@ -1078,3 +1078,244 @@ Still open from Phase F:
 Next:
 
 - Continue Phase F with item 64: add tests for channel plugin unavailable state, preserving raw channel metadata projection and route/UI status distinctions.
+
+### 2026-06-30 - Phase F plugin channel-unavailable coverage
+
+Completed verified plan items: 64.
+
+Evidence:
+
+- `tests/pluginRoutes.test.ts` now covers an unavailable communications plugin with channel metadata through the extracted plugin route boundary. `/api/plugins` preserves `enabled: true`, `configuredEnabled: true`, `status: "unavailable"`, `category: "communications"`, channel ids, restart-required state, and operator guidance.
+- The unavailable-channel route test also proves `/api/plugins/:pluginId/inspect` treats the unavailable channel plugin as a known plugin, not as missing, and returns the same unavailable status/channel metadata with the runtime inspect payload.
+- `src/components/plugins/PluginsPanel.tsx` now uses a dedicated plugin status label before rendering row badges, so special backend statuses such as `unavailable`, `failed`, `configured`, and `managed` are not masked as generic `enabled` when the plugin is enabled.
+- `scripts/smoke-plugins-control-plane.ts` now pins the unavailable-channel route fixture and the Plugins page status-label contract alongside the existing disabled, redacted-error, install-failure, and not-found coverage.
+- `docs/generated/server-index-architecture.md` remains at `18,882` control-plane composition lines, `9` entrypoint lines, and `0` inline routes; no plugin unavailable-state logic was added to `server/controlPlane.ts`.
+- Verification passed: `node --import tsx --test tests/pluginRoutes.test.ts`, `node --import tsx --test tests/pluginInstallService.test.ts tests/pluginRuntimeService.test.ts tests/pluginDiagnosticsService.test.ts tests/pluginInventoryService.test.ts tests/pluginRoutes.test.ts`, `npm run smoke:plugins-control-plane`, `npm run smoke:plugin-inventory-service`, `npm run smoke:plugin-install-service`, `npm run smoke:plugin-runtime-service`, `npm run smoke:plugin-diagnostics-service`, `npm run smoke:openclaw-command-control-plane`, `npm run smoke:server-architecture`, `npm run smoke:route-inventory`, `npm run typecheck`, `npm run test:unit` (`137` tests), `npm run lint`, `npm run smoke:shell-production-ui`, `git diff --check`, and `npm test`.
+- Full `npm test` passed end to end, including the new unavailable-channel route coverage in `npm run test:unit`, plugin control-plane/service smokes, OpenClaw command smoke, all mission/runtime/provider/Gateway smokes, secret scan, release validation/lifecycle, and CI workflow checks.
+- `git diff --check` passed with only LF-to-CRLF working-copy warnings on touched files.
+
+### 2026-06-30 - Phase F Plugins page state distinction coverage
+
+Completed verified plan items: 65.
+
+Evidence:
+
+- `src/components/plugins/pluginStateProjection.ts` now owns the Plugins page state classifier, state filters, row-badge tones, and summary counts for `configured`, `missing-auth`, `unavailable`, `failed`, and `disabled` plugin states.
+- `src/components/plugins/PluginsPanel.tsx` now uses that classifier for row badges, search text, state filters, and summary chips so failed or unavailable plugins are not masked as generic enabled/setup states.
+- `tests/pluginsPanelStateProjection.test.ts` proves the Plugins page classifier distinguishes configured, missing-auth, unavailable, failed, and disabled fixtures, with expected labels, tones, filter matches, and state summary counts.
+- `scripts/smoke-plugins-control-plane.ts` now pins the state-projection helper, state filters, summary chips, and page-state test so the Plugins page contract cannot silently drop the beta state distinctions.
+- Verification passed: `node --import tsx --test tests/pluginsPanelStateProjection.test.ts`, `node --import tsx --test tests/pluginRoutes.test.ts`, `node --import tsx --test tests/pluginInstallService.test.ts tests/pluginRuntimeService.test.ts tests/pluginDiagnosticsService.test.ts tests/pluginInventoryService.test.ts tests/pluginRoutes.test.ts tests/pluginsPanelStateProjection.test.ts`, `npm run smoke:plugins-control-plane`, `npm run smoke:openclaw-command-control-plane`, `npm run smoke:server-architecture`, `npm run smoke:route-inventory`, `npm run smoke:shell-production-ui`, `npm run smoke:ui-font-sizes`, `npm run typecheck`, `npm run test:unit`, `npm run lint`, `git diff --check`, and `npm test`.
+- Full `npm test` passed end to end after this slice and the subsequent Phase G cleanup, with `147` unit tests and all plugin, command-console, filesystem, Gateway, runtime, mission, provider, release, security, and CI smokes passing.
+
+Phase F status:
+
+- Items 56-65 are complete and verified.
+
+Next:
+
+- Continue Phase G with item 66 if not already complete in the current worktree, otherwise continue item 68.
+
+### 2026-06-30 - Phase G safe path service extraction
+
+Completed verified plan items: 66.
+
+Evidence:
+
+- `server/services/filesystem/safePathService.ts` now owns safe path equality and containment helpers through `createSafePathService()`, `samePath`, `isPathUnder`, `isInsidePath`, and `assertPathUnder`.
+- `server/controlPlane.ts` now composes `createSafePathService()` and delegates the existing static UI, command-console upload, Team Sync append, cleanup, and direct artifact-write path checks through the service-owned helpers instead of local helper functions.
+- `tests/safePathService.test.ts` covers exact paths, descendants, traversal attempts, sibling-prefix escapes, root containment, Windows case-insensitive comparison, and assertion failures.
+- `scripts/smoke-server-entrypoint-boundary.ts` now pins the safe-path service boundary and prevents `isPathUnder`, `isInsidePath`, or `samePath` helper definitions from returning to `server/controlPlane.ts`.
+- `docs/generated/server-index-architecture.md` was regenerated with `18,733` control-plane composition lines, `9` entrypoint lines, and `0` inline routes in the current Phase G working tree.
+- Verification passed: `node --import tsx --test tests/safePathService.test.ts`, `npm run typecheck:server`, `npm run smoke:command-console-files`, `npm run smoke:filesystem-control-plane`, `npm run smoke:team-sync-control-plane`, `npm run smoke:server-architecture`, `npm run smoke:route-inventory`, `npm run typecheck`, `npm run test:unit` (`143` tests), `npm run lint`, `node scripts/report-server-index-architecture.mjs`, `git diff --check`, and `npm test`.
+- Full `npm test` passed end to end, including the new safe-path unit coverage, command-console/filesystem/team-sync smokes, all plugin/Gateway/runtime/mission/provider smokes, secret scan, release validation/lifecycle, and CI workflow checks.
+- `git diff --check` passed with only LF-to-CRLF working-copy warnings on touched and pre-existing modified files.
+
+Phase F status:
+
+- Items 56-65 are complete and verified.
+
+Still open from Phase G:
+
+- Items 67-75: extract command-console upload handling, finish control-file/picker service boundaries, and add traversal, symlink, type allowlist, size-limit, avatar-limit, and upload-root escape coverage.
+
+Next:
+
+- Continue Phase G with item 67: extract command-console upload handling into `server/services/filesystem/commandConsoleUploadService.ts`, preserving upload type allowlist, size limits, safe root containment, and existing `/api/files/upload` behavior.
+
+### 2026-06-30 - Phase G command-console upload service extraction
+
+Completed verified plan items: 67.
+
+Evidence:
+
+- `server/services/filesystem/commandConsoleUploadService.ts` now owns command-console upload file naming, MIME fallback, type allowlist, size-limit enforcement, upload-root containment, attachment metadata normalization, and Gateway inline attachment conversion.
+- `server/controlPlane.ts` now composes `createCommandConsoleUploadService(...)` with the service-owned safe path containment helper and keeps only thin delegates for `persistCommandConsoleUpload` and `gatewayChatAttachmentsFromTurnAttachments`.
+- `tests/commandConsoleUploadService.test.ts` covers sanitized supported upload persistence, unsupported file rejection, size-limit rejection, sibling-root escape rejection, attachment metadata normalization, Gateway payload creation, and oversized inline attachment skipping.
+- `scripts/smoke-command-console-files-control-plane.ts` and `scripts/smoke-server-entrypoint-boundary.ts` now pin the command-console upload service boundary and prevent file naming or attachment normalization from returning to `server/controlPlane.ts`.
+- `docs/generated/server-index-architecture.md` was regenerated with `18,733` control-plane composition lines, `9` entrypoint lines, and `0` inline routes in the current Phase G working tree.
+- Verification passed: `node --import tsx --test tests/commandConsoleUploadService.test.ts`, `node --import tsx --test tests/commandConsoleUploadService.test.ts tests/safePathService.test.ts`, `npm run smoke:command-console-files`, `npm run typecheck:server`, `npm run smoke:server-architecture`, `npm run typecheck`, `npm run test:unit` (`147` tests), `npm run lint`, `node scripts/report-server-index-architecture.mjs`, `git diff --check`, and `npm test`.
+- Full `npm test` passed end to end after the upload service extraction, including command-console/filesystem smokes, plugin state coverage, all Gateway/runtime/mission/provider smokes, secret scan, release validation/lifecycle, and CI workflow checks.
+
+Phase F status:
+
+- Items 56-65 are complete and verified.
+
+Still open from Phase G:
+
+- Items 68-75: finish control-file/picker service boundaries and add traversal, symlink, type allowlist, size-limit, avatar-limit, and upload-root escape coverage.
+
+Next:
+
+- Continue Phase G with item 68: verify or finish control file read/write helper extraction into `server/services/controlFilesService.ts`, then continue path traversal and upload-root escape coverage in items 70 and 75.
+
+### 2026-06-30 - OpenClaw 2026.6.11 runtime and catalog upgrade
+
+Evidence:
+
+- Vendored OpenClaw was refreshed to `openclaw@2026.6.11`, and the bundled Codex runtime was refreshed to exact `@openclaw/codex@2026.6.11`.
+- Plugin inventory fallback now preserves OpenClaw 2026.6.11's official external plugin/provider/channel catalogs instead of assuming every official plugin is still bundled under `dist/extensions`.
+- Plugin controls and runtime status now carry icon, channel system image, package name, and install spec metadata; the Plugins page renders plugin icons and searches package/install metadata.
+- The local OpenClaw docs mirror was re-synced from `https://docs.openclaw.ai` and now contains `2,051` pages.
+- Verification passed: `npm run prepare:openclaw-vendor`, `npm run prepare:runtime-bundles`, `npm run docs:openclaw:sync`, `node --import tsx --test tests/pluginInventoryService.test.ts`, `npm run smoke:plugins-control-plane`, `npm run smoke:plugin-inventory-service`, `npm run smoke:openclaw`, `npm run smoke:runtime-reproducibility`, `npm run typecheck`, `npm run test:unit`, `npm run lint`, `npm run smoke:release-evidence`, `npm run smoke:release-validation`, `npm run smoke:misc-control-plane`, `npm run notices:check`, `npm run build:standalone`, `git diff --check`, and full `npm test`.
+
+### 2026-06-30 - Phase G control-file service boundary hardening
+
+Completed verified plan items: 68.
+
+Evidence:
+
+- `server/services/controlFilesService.ts` now owns command-console control-file read/write path resolution, validates the `CONTROL_FILES` allowlist inside the service boundary, and verifies resolved workspace containment before every read or write.
+- `server/controlPlane.ts` composes `createControlFilesService(WORKSPACE_ROOT, { isPathUnder })` so the service uses the shared safe-path containment implementation while the composition root stays as wiring.
+- `tests/controlFilesService.test.ts` covers allowed control-file read/write behavior, traversal and non-control-file rejection, and containment failures before disk access.
+- `scripts/smoke-command-console-files-control-plane.ts` and `scripts/smoke-server-entrypoint-boundary.ts` now pin the control-file service boundary, containment check, focused tests, and composition wiring.
+- `docs/generated/server-index-architecture.md` was regenerated and still reports `18,733/29,000` control-plane composition lines, `9` entrypoint lines, and `0` inline routes.
+- Verification passed: `node --import tsx --test tests/controlFilesService.test.ts`, `node --import tsx --test tests/controlFilesService.test.ts tests/commandConsoleUploadService.test.ts tests/safePathService.test.ts`, `npm run smoke:command-console-files`, `npm run smoke:filesystem-control-plane`, `npm run smoke:server-architecture`, `npm run smoke:route-inventory`, `npm run typecheck:server`, `npm run typecheck`, `npm run test:unit` (`150` tests), `npm run lint`, `node scripts/report-server-index-architecture.mjs`, `git diff --check`, and `npm test`.
+- Full `npm test` passed end to end with `150` unit tests and the full command-console, filesystem, plugin, Gateway, runtime, mission, provider, release, security, and CI smoke suite.
+
+Phase G status:
+
+- Items 66, 67, and 68 are complete and verified.
+
+Still open from Phase G:
+
+- Items 69-75: extract picker session handling and finish traversal, symlink, type allowlist, size-limit, avatar-limit, and upload-root escape coverage.
+
+Next:
+
+- Continue Phase G with item 69: extract Windows folder/image picker sessions into `pickerSessionService.ts`.
+
+### 2026-06-30 - Phase G picker session service extraction
+
+Completed verified plan items: 69.
+
+Evidence:
+
+- `server/services/filesystem/pickerSessionService.ts` now owns folder/image picker session maps, TTL pruning, session serialization, picker start-path normalization, native picker command execution, Electron dialog fallback, Windows PowerShell launcher generation, Windows result polling, and image-picker avatar persistence through an injected dependency.
+- `server/controlPlane.ts` now composes `createPickerSessionService(...)` and passes `pickerSessions: pickerSessionService` to `server/routes/filesystemRoutes.ts`; picker session and native dialog logic no longer lives in the composition root.
+- `server/routes/filesystemRoutes.ts` now receives picker behavior through the `PickerSessionService` boundary while preserving the existing `/api/party/folder-picker`, `/api/party/folder-picker/start`, `/api/party/folder-picker/:sessionId`, `/api/party/avatar-picker/start`, and `/api/party/avatar-picker/:sessionId` API envelopes.
+- `tests/pickerSessionService.test.ts` covers start-path normalization, cancellation serialization, expired session pruning, injected avatar persistence for selected image sessions, Windows picker output parsing, launcher quoting, and Windows folder/image session finalization without opening real dialogs.
+- `scripts/smoke-filesystem-control-plane.ts` and `scripts/smoke-server-entrypoint-boundary.ts` now pin the picker service boundary and prevent picker session/native dialog helpers from returning to `server/controlPlane.ts`.
+- `docs/generated/server-index-architecture.md` was regenerated with `17,987` control-plane composition lines, `9` entrypoint lines, and `0` inline routes.
+- Verification passed: `node --import tsx --test tests/pickerSessionService.test.ts`, `node --import tsx --test tests/pickerSessionService.test.ts tests/controlFilesService.test.ts tests/commandConsoleUploadService.test.ts tests/safePathService.test.ts`, `npm run smoke:filesystem-control-plane`, `npm run smoke:command-console-files`, `npm run smoke:server-architecture`, `npm run typecheck:server`, `npm run typecheck`, `npm run test:unit` (`154` tests), `npm run lint`, `node scripts/report-server-index-architecture.mjs`, `git diff --check`, and `npm test`.
+- Full `npm test` passed end to end with `154` unit tests and the full command-console, filesystem, plugin, Gateway, runtime, mission, provider, release, security, and CI smoke suite.
+- `git diff --check` passed with only LF-to-CRLF working-copy warnings on touched and pre-existing modified files.
+
+Phase G status:
+
+- Items 66, 67, 68, and 69 are complete and verified.
+
+Still open from Phase G:
+
+- Items 70-75: add path traversal, symlink escape, upload type allowlist, attachment size-limit, avatar upload-limit, and upload-root escape coverage.
+
+Next:
+
+- Continue Phase G with item 70: add broader path traversal attempt coverage across the extracted filesystem/picker/upload boundaries.
+
+### 2026-06-30 - Phase G path traversal coverage
+
+Completed verified plan items: 70.
+
+Evidence:
+
+- `tests/safePathService.test.ts` now covers multi-segment traversal attempts across POSIX and Windows paths, including safe normalized descendants, escapes above the approved root, root-target traversal, and cross-drive Windows escapes.
+- `tests/controlFilesService.test.ts` now covers separator-mixed and encoded traversal-shaped control-file names before disk access, proving the service rejects them through the allowlist boundary.
+- `tests/commandConsoleUploadService.test.ts` now proves upload source names strip traversal segments before writing, upload-root metadata escapes are ignored, and upload persistence fails before directory creation when the containment guard rejects the resolved write path.
+- `server/services/filesystem/pickerSessionService.ts` now resolves relative picker start paths under the provided fallback root and rejects relative traversal starts that would escape that fallback, while preserving absolute path and file-URL behavior.
+- `tests/pickerSessionService.test.ts` covers relative picker start paths under fallback, normalized safe dot segments, and traversal starts that fall back instead of escaping.
+- `scripts/smoke-filesystem-control-plane.ts` and `scripts/smoke-command-console-files-control-plane.ts` now pin the new traversal coverage and picker start-path containment contract.
+- `docs/generated/server-index-architecture.md` remains at `17,987` control-plane composition lines, `9` entrypoint lines, and `0` inline routes; no filesystem traversal logic was added back to `server/controlPlane.ts`.
+- Verification passed: `node --import tsx --test tests/safePathService.test.ts tests/controlFilesService.test.ts tests/commandConsoleUploadService.test.ts tests/pickerSessionService.test.ts`, `npm run smoke:filesystem-control-plane`, `npm run smoke:command-console-files`, `npm run smoke:server-architecture`, `npm run typecheck`, `npm run test:unit` (`159` tests), `npm run lint`, `git diff --check`, and `npm test`.
+- Full `npm test` passed end to end with `159` unit tests and the full command-console, filesystem, plugin, Gateway, runtime, mission, provider, release, security, and CI smoke suite.
+- `git diff --check` passed with only LF-to-CRLF working-copy warnings on touched and pre-existing modified files.
+
+Phase G status:
+
+- Items 66, 67, 68, 69, and 70 are complete and verified.
+
+Still open from Phase G:
+
+- Items 71-75: add symlink escape coverage where possible, file type allowlist coverage, attachment size-limit coverage, avatar upload-limit coverage, and upload-root escape confirmation.
+
+Next:
+
+- Continue Phase G with item 71: add symlink escape coverage where locally possible across the extracted filesystem/upload boundaries.
+
+### 2026-06-30 - Phase G symlink escape coverage
+
+Completed verified plan items: 71.
+
+Evidence:
+
+- `server/services/controlFilesService.ts` now checks existing command-console control-file paths with `lstat` and `realpath` before reads or writes, so a control file such as `AGENTS.md` cannot follow a symlink outside the workspace root.
+- `server/services/filesystem/commandConsoleUploadService.ts` now resolves the upload root and attachment file with `realpath` before inline Gateway attachment reads, so a saved upload attachment path that is a symlink escape is skipped instead of read.
+- `tests/controlFilesService.test.ts` covers a real filesystem symlink from `AGENTS.md` to an outside file and proves both read and write reject it without changing the outside file.
+- `tests/commandConsoleUploadService.test.ts` covers a real upload-root symlink to an outside file and proves Gateway inline attachment conversion returns no payload for the escaped target.
+- `scripts/smoke-command-console-files-control-plane.ts` now pins the control-file realpath check, upload attachment read realpath check, and symlink escape tests.
+- `docs/generated/server-index-architecture.md` remains at `17,987` control-plane composition lines, `9` entrypoint lines, and `0` inline routes; no filesystem symlink logic was added to `server/controlPlane.ts`.
+- Verification passed: `node --import tsx --test tests/safePathService.test.ts tests/controlFilesService.test.ts tests/commandConsoleUploadService.test.ts tests/pickerSessionService.test.ts` (`23` tests), `npm run smoke:filesystem-control-plane`, `npm run smoke:command-console-files`, `npm run typecheck:server`, `npm run smoke:server-architecture`, `npm run typecheck`, `npm run test:unit` (`161` tests), `npm run lint`, `git diff --check`, and `npm test`.
+- Full `npm test` passed end to end with `161` unit tests and the full command-console, filesystem, plugin, Gateway, runtime, mission, provider, release, security, and CI smoke suite.
+- `git diff --check` passed with only LF-to-CRLF working-copy warnings on touched and pre-existing modified files.
+
+Phase G status:
+
+- Items 66, 67, 68, 69, 70, and 71 are complete and verified.
+
+Still open from Phase G:
+
+- Items 72-75: add file type allowlist coverage, attachment size-limit coverage, avatar upload-limit coverage, and upload-root escape confirmation.
+
+Next:
+
+- Continue Phase G with item 72: add tests for file type allowlist behavior across command-console uploads and avatar/image picker boundaries.
+
+### 2026-06-30 - Phase G file type allowlist coverage
+
+Completed verified plan items: 72.
+
+Evidence:
+
+- `server/services/filesystem/avatarFileService.ts` now owns avatar upload file naming, allowed avatar image extensions, MIME fallback mapping for extensionless image uploads, the avatar upload size constant, and managed avatar filename generation.
+- `server/controlPlane.ts` imports the avatar file helpers and keeps only persistence orchestration for `persistAgentAvatarBytes` and `persistAgentAvatarFromPath`; avatar filename and allowlist helper definitions no longer live in the composition root.
+- `server/services/filesystem/commandConsoleUploadService.ts` now rejects unsupported explicit file extensions before applying MIME fallback, while preserving MIME fallback for extensionless supported uploads.
+- `server/services/filesystem/pickerSessionService.ts` now checks selected image paths with the avatar image allowlist before invoking injected avatar persistence, so native picker "All files" selections cannot bypass the service boundary.
+- `tests/avatarFileService.test.ts` covers supported avatar extensions, MIME fallback for extensionless uploads, unsupported explicit extension rejection before MIME fallback, and deterministic managed avatar naming.
+- `tests/commandConsoleUploadService.test.ts` now covers supported extension uploads, supported MIME fallback uploads, and unsupported explicit extension rejection even when the MIME header is image-like.
+- `tests/pickerSessionService.test.ts` now proves unsupported picked image files become an error session before `persistAgentAvatarFromPath` runs.
+- `tests/partyAvatarUploadRoutes.test.ts` proves `/api/party/avatar-upload/:agentId` returns a canonical `avatar_upload_failed` envelope for unsupported file types before persistence, while extensionless supported image MIME uploads still persist.
+- `scripts/smoke-filesystem-control-plane.ts`, `scripts/smoke-command-console-files-control-plane.ts`, and `scripts/smoke-server-entrypoint-boundary.ts` now pin the avatar file service boundary, upload explicit-extension allowlist behavior, picker allowlist enforcement, and the new test coverage.
+- `docs/generated/server-index-architecture.md` was regenerated with `17,953` control-plane composition lines, `9` entrypoint lines, and `0` inline routes.
+- Verification passed: `node --import tsx --test tests/avatarFileService.test.ts tests/commandConsoleUploadService.test.ts tests/pickerSessionService.test.ts tests/partyAvatarUploadRoutes.test.ts`, `node --import tsx --test tests/safePathService.test.ts tests/controlFilesService.test.ts tests/avatarFileService.test.ts tests/commandConsoleUploadService.test.ts tests/pickerSessionService.test.ts tests/partyAvatarUploadRoutes.test.ts`, `npm run smoke:filesystem-control-plane`, `npm run smoke:command-console-files`, `npm run smoke:server-architecture`, `npm run smoke:skills-control-plane`, `node scripts/report-server-index-architecture.mjs`, `npm run typecheck`, `npm run test:unit` (`168` tests), `npm run lint`, and `npm test`.
+- Full `npm test` passed end to end with `168` unit tests and the full command-console, filesystem, plugin, Gateway, runtime, mission, provider, release, security, secret-scan, and CI smoke suite.
+
+Phase G status:
+
+- Items 66, 67, 68, 69, 70, 71, and 72 are complete and verified.
+
+Still open from Phase G:
+
+- Items 73-75: add attachment size-limit coverage, avatar upload-limit coverage, and upload-root escape confirmation.
+
+Next:
+
+- Continue Phase G with item 73: add tests for attachment size limits across command-console upload persistence and Gateway inline attachment conversion.

@@ -21,6 +21,10 @@ type RuntimeStatusPluginControlEntry = {
   id: string
   name: string
   description: string
+  icon?: string
+  systemImage?: string
+  packageName?: string
+  installSpec?: string
   origin: string
   status: string
   enabled: boolean
@@ -143,6 +147,10 @@ function pluginSummary(plugin: RuntimeStatusPluginControlEntry, runtimeLoaded: b
     id: plugin.id,
     name: plugin.name,
     description: plugin.description,
+    icon: plugin.icon,
+    systemImage: plugin.systemImage,
+    packageName: plugin.packageName,
+    installSpec: plugin.installSpec,
     origin: plugin.origin,
     category: plugin.category,
     status: plugin.status,
