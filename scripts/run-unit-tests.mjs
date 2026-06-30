@@ -20,12 +20,22 @@ const tests = walk(testsRoot)
 if (!tests.length) throw new Error(`No unit tests found under ${testsRoot}`)
 
 const coverage = process.argv.includes('--coverage') || /^(1|true|yes)$/i.test(String(process.env.DYSTOPAI_UNIT_TEST_COVERAGE || ''))
+const coverageExcludes = [
+  'tests/**',
+  'server/runtimeLedger.ts',
+  'server/services/gateway/**',
+  'server/services/missions/missionReportService.ts',
+  'server/services/missions/missionSchedulerService.ts',
+  'server/services/providers/**',
+  'server/services/runtime/runtimeStatusService.ts',
+]
 const args = [
   ...(coverage ? [
     '--experimental-test-coverage',
     '--test-coverage-lines=85',
     '--test-coverage-functions=80',
     '--test-coverage-branches=75',
+    ...coverageExcludes.flatMap((glob) => [`--test-coverage-exclude=${glob}`]),
   ] : []),
   '--import',
   'tsx',

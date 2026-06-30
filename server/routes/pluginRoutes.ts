@@ -1,6 +1,7 @@
 import type { Express } from 'express'
 import { z } from 'zod'
 import { apiFailure, apiSuccess } from '../controlPlaneHttp'
+import type { PluginRuntimeService, PluginSetupTerminalClient } from '../services/plugins/pluginRuntimeService'
 
 type PluginControlEntryLike = {
   id: string
@@ -52,51 +53,9 @@ type ClawTalkSetupResult = {
   controls: PluginControlsPayload
 }
 
-type PluginSetupTerminalCommand = 'plugins' | 'model' | 'full' | 'doctor' | 'registry'
-type PluginSetupTerminalStatus = 'running' | 'completed' | 'failed' | 'stopped'
-type PluginSetupTerminalEvent = 'data' | 'status'
-type PluginSetupTerminalClient = (event: PluginSetupTerminalEvent, payload: unknown) => void
-
-type PluginSetupTerminalSession = {
-  id: string
-  command: PluginSetupTerminalCommand
-  commandLine: string
-  title: string
-  pluginId?: string
-  createdAt: string
-  output: string
-  status: PluginSetupTerminalStatus
-  exitCode?: number
-  pid?: number
-  updatedAt: string
-  process: {
-    pid: number
-    write: (data: string) => void
-    resize: (cols: number, rows: number) => void
-    kill: () => void
-    onData: (callback: (data: string) => void) => { dispose: () => void }
-    onExit: (callback: (event: { exitCode: number; signal?: number }) => void) => { dispose: () => void }
-  }
-  clients: Set<PluginSetupTerminalClient>
-}
-
-type PluginSetupTerminalSnapshot = {
-  id: string
-  command: PluginSetupTerminalCommand
-  commandLine: string
-  title: string
-  pluginId?: string
-  createdAt: string
-  updatedAt: string
-  status: PluginSetupTerminalStatus
-  exitCode?: number
-  pid?: number
-}
-
 type PluginRoutesOptions = {
   clawTalkPluginId: string
   invalidateRuntimeStatusCache: () => void
-  inspectOpenClawPluginRuntime: (pluginId: string) => Promise<unknown>
   installOpenClawPlugin: (params: {
     spec: string
     pluginId?: string
@@ -109,9 +68,8 @@ type PluginRoutesOptions = {
   pluginErrorDetail: (error: unknown) => string
   pluginErrorStatus: (error: unknown) => number
   pluginIdPattern: RegExp
+  pluginRuntime: PluginRuntimeService
   pluginRuntimeStatePath: string
-  pluginSetupTerminalSessions: Map<string, PluginSetupTerminalSession>
-  pluginSetupTerminalSnapshot: (session: PluginSetupTerminalSession) => PluginSetupTerminalSnapshot
   redactSensitiveText: (value: string) => string
   savePluginDirectConfig: (pluginId: string, values: Record<string, string>, providerAuth: Record<string, string>) => Promise<void>
   schedulePluginGatewayRestart: () => GatewayRestartRequest
@@ -127,13 +85,6 @@ type PluginRoutesOptions = {
     install: boolean
     restart: boolean
   }) => Promise<ClawTalkSetupResult>
-  startPluginSetupTerminalSession: (params: {
-    command: PluginSetupTerminalCommand
-    pluginId?: string
-    cols?: number
-    rows?: number
-  }) => PluginSetupTerminalSession
-  stopPluginSetupTerminalSession: (session: PluginSetupTerminalSession) => void
   tryRestartGatewayService: (options: { force?: boolean; allowExternalTakeover?: boolean; reason?: string }) => Promise<GatewayRestartResult>
   uninstallOpenClawPlugin: (pluginId: string, options: { keepFiles: boolean; force: boolean; restart: boolean }) => Promise<PluginCommandResult>
   updateAllOpenClawPlugins: (restartRequested: boolean) => Promise<PluginCommandResult>
@@ -345,7 +296,7 @@ export function registerPluginRoutes(app: Express, options: PluginRoutesOptions)
     }
 
     try {
-      const inspect = await options.inspectOpenClawPluginRuntime(pluginId)
+      const inspect = await options.pluginRuntime.inspectOpenClawPluginRuntime(pluginId)
       const controls = await options.listPluginControls()
       return apiSuccess(res, {
         inspect,
@@ -397,16 +348,19 @@ export function registerPluginRoutes(app: Express, options: PluginRoutesOptions)
     if (!parsed.success) return apiFailure(res, 400, 'invalid_payload', 'Invalid payload', parsed.error.flatten())
 
     try {
-      const session = options.startPluginSetupTerminalSession(parsed.data)
-      return apiSuccess(res, { session: options.pluginSetupTerminalSnapshot(session) })
+      const session = options.pluginRuntime.startPluginSetupTerminalSession(parsed.data)
+      return apiSuccess(res, { session })
     } catch (error) {
       return apiFailure(res, 500, 'plugin_terminal_failed', 'Failed to start setup terminal', options.pluginErrorDetail(error))
     }
   })
 
   app.get('/api/plugins/setup-terminal/:sessionId/stream', (req, res) => {
-    const session = options.pluginSetupTerminalSessions.get(req.params.sessionId)
-    if (!session) return apiFailure(res, 404, 'plugin_not_found', 'Setup terminal session not found.')
+    const client: PluginSetupTerminalClient = (event, payload) => {
+      options.writeSseEvent(res, event, payload && typeof payload === 'object' ? payload as Record<string, unknown> : { value: payload })
+    }
+    const attachment = options.pluginRuntime.attachPluginSetupTerminalClient(req.params.sessionId, client)
+    if (!attachment) return apiFailure(res, 404, 'plugin_not_found', 'Setup terminal session not found.')
 
     res.writeHead(200, {
       'Content-Type': 'text/event-stream; charset=utf-8',
@@ -414,25 +368,20 @@ export function registerPluginRoutes(app: Express, options: PluginRoutesOptions)
       Connection: 'keep-alive',
     })
     options.writeSseEvent(res, 'snapshot', {
-      session: options.pluginSetupTerminalSnapshot(session),
-      output: session.output,
+      session: attachment.session,
+      output: attachment.output,
     })
-
-    const client: PluginSetupTerminalClient = (event, payload) => {
-      options.writeSseEvent(res, event, payload && typeof payload === 'object' ? payload as Record<string, unknown> : { value: payload })
-    }
-    session.clients.add(client)
 
     const heartbeat = setInterval(() => options.writeSseEvent(res, 'heartbeat', { at: new Date().toISOString() }), 20_000)
     heartbeat.unref?.()
     req.on('close', () => {
       clearInterval(heartbeat)
-      session.clients.delete(client)
+      attachment.detach()
     })
   })
 
   app.post('/api/plugins/setup-terminal/:sessionId/input', (req, res) => {
-    const session = options.pluginSetupTerminalSessions.get(req.params.sessionId)
+    const session = options.pluginRuntime.getPluginSetupTerminalSnapshot(req.params.sessionId)
     if (!session) return apiFailure(res, 404, 'plugin_not_found', 'Setup terminal session not found.')
     if (session.status !== 'running') return apiFailure(res, 409, 'plugin_terminal_failed', 'Setup terminal is not running.')
 
@@ -441,16 +390,18 @@ export function registerPluginRoutes(app: Express, options: PluginRoutesOptions)
     if (!parsed.success) return apiFailure(res, 400, 'invalid_payload', 'Invalid payload', parsed.error.flatten())
 
     try {
-      session.process.write(parsed.data.data)
-      session.updatedAt = new Date().toISOString()
-      return apiSuccess(res, { session: options.pluginSetupTerminalSnapshot(session) })
+      const result = options.pluginRuntime.writePluginSetupTerminalInput(req.params.sessionId, parsed.data.data)
+      if (!result.ok) {
+        return apiFailure(res, result.reason === 'not_found' ? 404 : 409, result.reason === 'not_found' ? 'plugin_not_found' : 'plugin_terminal_failed', result.message)
+      }
+      return apiSuccess(res, { session: result.session })
     } catch (error) {
       return apiFailure(res, 500, 'plugin_terminal_failed', 'Failed to write terminal input', options.pluginErrorDetail(error))
     }
   })
 
   app.post('/api/plugins/setup-terminal/:sessionId/resize', (req, res) => {
-    const session = options.pluginSetupTerminalSessions.get(req.params.sessionId)
+    const session = options.pluginRuntime.getPluginSetupTerminalSnapshot(req.params.sessionId)
     if (!session) return apiFailure(res, 404, 'plugin_not_found', 'Setup terminal session not found.')
 
     const schema = z.object({
@@ -461,19 +412,20 @@ export function registerPluginRoutes(app: Express, options: PluginRoutesOptions)
     if (!parsed.success) return apiFailure(res, 400, 'invalid_payload', 'Invalid payload', parsed.error.flatten())
 
     try {
-      session.process.resize(parsed.data.cols, parsed.data.rows)
-      session.updatedAt = new Date().toISOString()
-      return apiSuccess(res, { session: options.pluginSetupTerminalSnapshot(session) })
+      const result = options.pluginRuntime.resizePluginSetupTerminalSession(req.params.sessionId, parsed.data.cols, parsed.data.rows)
+      if (!result.ok) {
+        return apiFailure(res, result.reason === 'not_found' ? 404 : 409, result.reason === 'not_found' ? 'plugin_not_found' : 'plugin_terminal_failed', result.message)
+      }
+      return apiSuccess(res, { session: result.session })
     } catch (error) {
       return apiFailure(res, 500, 'plugin_terminal_failed', 'Failed to resize setup terminal', options.pluginErrorDetail(error))
     }
   })
 
   app.delete('/api/plugins/setup-terminal/:sessionId', (req, res) => {
-    const session = options.pluginSetupTerminalSessions.get(req.params.sessionId)
-    if (!session) return apiFailure(res, 404, 'plugin_not_found', 'Setup terminal session not found.')
-    options.stopPluginSetupTerminalSession(session)
-    return apiSuccess(res, { session: options.pluginSetupTerminalSnapshot(session) })
+    const result = options.pluginRuntime.stopPluginSetupTerminalSession(req.params.sessionId)
+    if (!result.ok) return apiFailure(res, 404, 'plugin_not_found', result.message)
+    return apiSuccess(res, { session: result.session })
   })
 
   app.post('/api/plugins/:pluginId', async (req, res) => {

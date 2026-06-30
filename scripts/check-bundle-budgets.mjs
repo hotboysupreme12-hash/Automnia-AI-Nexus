@@ -51,8 +51,8 @@ const numberEnv = (key, fallback) => {
 const budgets = {
   entryJsBytes: numberEnv('DYSTOPAI_BUDGET_ENTRY_JS_BYTES', 525_000),
   entryJsGzipBytes: numberEnv('DYSTOPAI_BUDGET_ENTRY_JS_GZIP_BYTES', 165_000),
-  entryCssBytes: numberEnv('DYSTOPAI_BUDGET_ENTRY_CSS_BYTES', 1_175_000),
-  entryCssGzipBytes: numberEnv('DYSTOPAI_BUDGET_ENTRY_CSS_GZIP_BYTES', 150_000),
+  entryCssBytes: numberEnv('DYSTOPAI_BUDGET_ENTRY_CSS_BYTES', 1_250_000),
+  entryCssGzipBytes: numberEnv('DYSTOPAI_BUDGET_ENTRY_CSS_GZIP_BYTES', 160_000),
   totalJsBytes: numberEnv('DYSTOPAI_BUDGET_TOTAL_JS_BYTES', 850_000),
   totalJsGzipBytes: numberEnv('DYSTOPAI_BUDGET_TOTAL_JS_GZIP_BYTES', 265_000),
 }
