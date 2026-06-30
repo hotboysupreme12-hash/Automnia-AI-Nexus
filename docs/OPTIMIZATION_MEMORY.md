@@ -123,7 +123,8 @@ split plan before implementation:
   idempotency-key launches, instant scheduler-round delegation, recurring
   scheduler/timer arming, scheduler setup rollback, lifecycle edge persistence,
   successful running-mission cancellation, cleanup-failure cancellation evidence,
-  Team Sync snapshot writes, and missing/terminal mission stop rejection.
+  cancellation after backend restart, Team Sync snapshot writes, and
+  missing/terminal mission stop rejection.
 - Phase D mission scheduler extraction is complete:
   `server/services/missions/missionSchedulerService.ts` owns mission cron
   scheduling, one-shot and recurring cron job creation, OpenClaw cron
@@ -161,10 +162,11 @@ split plan before implementation:
   `missionRecoveryService.hydrateMissionRecordsFromLedger`.
 - Mission recovery service coverage now lives in
   `tests/missionRecoveryService.test.ts` and covers active mission hydration,
-  missing and disabled cron jobs, unavailable Gateway session reconciliation
-  with redaction, missing Gateway session classification, and recovered
-  shift/timer delegation. `npm run smoke:mission-recovery` is wired into
-  `npm run test:ci`.
+  recovered active cron jobs, missing and disabled cron jobs, unavailable
+  cron-state deferral with redacted recovery evidence, unavailable Gateway
+  session reconciliation with redaction, missing Gateway session
+  classification, and recovered shift/timer delegation.
+  `npm run smoke:mission-recovery` is wired into `npm run test:ci`.
 - Phase D mission Team Sync extraction is complete:
   `server/services/missions/missionTeamSyncService.ts` owns Team Sync snapshot
   markdown generation, missing `TEAM_SYNC.md` repair, canonical doctrine
@@ -189,11 +191,183 @@ split plan before implementation:
 - Running-mission cancellation coverage is complete through
   `tests/missionStateService.test.ts` and `npm run smoke:mission-cancellation`,
   including both successful cleanup and cleanup-failure finalization evidence.
+- Cancellation-after-backend-restart coverage is complete through
+  `tests/missionStateService.test.ts` and `npm run smoke:mission-cancellation`.
+  The restart-cancellation test hydrates an active durable mission through
+  `createMissionRecoveryService(...)`, verifies recovered Gateway/session,
+  scheduler, shift, and timer state, then cancels it through
+  `createMissionStateService(...).stopMission(...)` with cleanup evidence,
+  Team Sync snapshot writes, backend report recording, and
+  `transition:running->cancelled` mission record persistence.
+- Cron reconciliation coverage is complete through
+  `tests/missionRecoveryService.test.ts` and
+  `npm run smoke:mission-cron-reconciliation`. The recovery service now
+  directly proves active cron jobs are preserved, missing and disabled cron jobs
+  fail recovered missions with exact evidence, and unavailable cron-state errors
+  are redacted before lifecycle logs or recovery evidence are written.
+- Restart/crash recovery smoke coverage is complete through
+  `scripts/smoke-mission-restart-recovery.ts` and
+  `npm run smoke:mission-restart-recovery`. The smoke hydrates a durable active
+  mission through `createMissionRecoveryService(...)` in a fresh post-restart
+  mission map, verifies active cron/session reconciliation and recovered
+  shift/timer hooks, then imports the actual renderer store with stale
+  persisted mission history and confirms `syncMissionProjection()` replaces it
+  from `/api/missions/projection`.
+- Mission page recovered-state projection is complete: `src/store/nexusStore.ts`
+  preserves `lifecycleState: 'failed'` as a failed Mission page state, and
+  `src/components/mission/MissionDeploymentPanel.tsx` renders the
+  backend-projected mission id/title/status/scheduler round in a compact status
+  strip. `src/utils/apiUrl.ts` and `src/data/seeds.ts` now guard Vite
+  `import.meta.env` reads so renderer projection smokes can import the store
+  under Node.
+- Phase E model catalog extraction is complete:
+  `server/services/providers/modelCatalogService.ts` owns fallback model
+  metadata, unavailable/suppressed model rules, Codex subscription
+  canonicalization, provider display normalization, OpenRouter catalog
+  allowlist normalization, configured provider model normalization,
+  OpenClaw/config/fallback catalog loading, Google Vertex catalog filtering
+  delegation, and available-model cache/refresh timers. `server/controlPlane.ts`
+  composes `createModelCatalogService(...)` and delegates provider route,
+  agent config route, party management route, Doctor, OpenClaw config write,
+  Gateway repair, and shutdown cleanup model-catalog call sites through the
+  service.
+- Model catalog service coverage now lives in `tests/modelCatalogService.test.ts`
+  and covers fallback catalog shaping, Codex subscription canonicalization,
+  unavailable model suppression, OpenRouter allowlist normalization, OpenClaw
+  model list loading, config fallback loading, stale fast-cache behavior, and
+  provider model config normalization. `npm run smoke:model-catalog-service` is
+  wired into `npm run test:ci`, and the auth/provider plus architecture smokes
+  assert model catalog ownership in `server/services/providers/modelCatalogService.ts`.
+- Phase E provider auth storage extraction is complete:
+  `server/services/providers/providerAuthService.ts` owns local auth store
+  hydration and migration, provider API-key/OAuth persistence, OpenClaw
+  auth-profile JSON/SQLite synchronization, Codex OAuth preference repair,
+  user Codex auth mirroring, provider auth removal, provider status shaping,
+  missing-auth model checks, agent auth env projection, and OpenRouter
+  auth-triggered plugin/model-catalog repair. `server/controlPlane.ts`
+  composes `createProviderAuthService(...)` and delegates provider auth
+  readiness, saves, removals, status, model-auth checks, and OAuth credential
+  writes through the service.
+- Provider auth service coverage now lives in `tests/providerAuthService.test.ts`
+  and covers API-key persistence to local auth and agent auth profiles,
+  redacted status output, OpenAI Codex OAuth profile propagation/removal of
+  legacy profiles, provider credential removal, OpenRouter plugin/catalog
+  repair, and missing-auth Codex model status. `npm run smoke:provider-auth-service`
+  is wired into `npm run test:ci`, and the auth/provider, architecture, and
+  control-center-state smokes assert provider auth ownership in
+  `server/services/providers/providerAuthService.ts`.
+- Phase E OAuth callback extraction is complete:
+  `server/services/providers/oauthCallbackService.ts` owns Google and OpenAI
+  Codex OAuth callback listener startup, loopback-only binding, session storage,
+  pending-session timeout cleanup, manual Codex authorization-code parsing,
+  callback completion, redacted callback errors, provider OAuth credential
+  persistence through `providerAuthService`, Google/OpenAI Codex token refresh
+  helpers, and shutdown/process-exit listener cleanup. `server/controlPlane.ts`
+  composes `createOAuthCallbackService(...)` and delegates OAuth session starts,
+  session map reads, manual completion, refresh helpers, and runtime shutdown
+  cleanup through the service.
+- OAuth callback service coverage now lives in `tests/oauthCallbackService.test.ts`
+  and covers Google loopback callback completion, OpenAI Codex manual OAuth
+  input completion, pending-session timeout behavior, redacted callback exchange
+  failures, and shutdown closing listeners while failing pending sessions.
+  `npm run smoke:oauth-callback-service` is wired into `npm run test:ci`, and
+  the auth/provider, runtime-actions, production-security, and architecture
+  smokes assert OAuth callback ownership in
+  `server/services/providers/oauthCallbackService.ts`.
+- Phase E provider setup extraction is complete:
+  `server/services/providers/providerSetupService.ts` owns Google OAuth client
+  config discovery/status, Google project resolution, Google Vertex gcloud and
+  local OAuth readiness checks, Vertex process-env projection, provider request
+  auth resolution, and OpenAI Codex OAuth runtime helper loading/validation.
+  `server/controlPlane.ts` composes `createProviderSetupService(...)` and
+  delegates provider setup/auth helper calls through the service while
+  remaining composition glue.
+- Provider setup service coverage now lives in `tests/providerSetupService.test.ts`
+  and covers Google OAuth setup from env and `client_secret.json`, fast Google
+  Vertex readiness from local OAuth, probed gcloud project/account/access-token
+  readiness, provider request auth through env keys and refreshed OAuth
+  credentials, and OpenAI Codex runtime helper exports. `npm run
+  smoke:provider-setup-service` is wired into `npm run test:ci`, and the
+  auth/provider plus architecture smokes assert provider setup ownership in
+  `server/services/providers/providerSetupService.ts`.
+- Phase E provider/auth beta coverage is complete:
+  `tests/providerAuthService.test.ts` now covers missing API-key, Google OAuth
+  setup, and Google Vertex credential states with SecretRef/key-marker
+  redaction, plus missing-auth model selection for required, optional-auth,
+  configured, and OpenAI Codex subscription model paths.
+- OAuth callback beta coverage now includes OpenAI Codex browser-callback
+  completion through a loopback-only `127.0.0.1` listener in addition to Google
+  loopback completion, pending-session timeout cleanup, manual Codex
+  completion, shutdown cleanup, and redacted callback failures.
+- `scripts/smoke-provider-auth-beta-coverage.ts` is wired as `npm run
+  smoke:provider-auth-beta` and into `npm run test:ci`. It pins the Phase E
+  item `50-55` coverage map across provider/OAuth tests, loopback listener
+  bindings, missing-auth model decisions, Monitor's `Connect provider` CTA,
+  and Agent Editor / Model Selector / Recruit connect-provider prompts.
+- PR43 UI font-size smoke coverage is complete as a standalone direct-run
+  script: `scripts/smoke-ui-font-sizes.ts` verifies the typography token scale,
+  final typography-layer cascade position, legacy `text-[6px]` through
+  `text-[10px]` compatibility selectors, and no explicit sub-11px
+  `font-size` values in `src/styles/dystopai-theme/95-typography-polish.css`.
+  The final typography layer now uses `--dy-type-caption` for the mobile rail
+  title and `--dy-type-micro` for the mission readiness mini label. Direct
+  verification passed with `node --import tsx scripts/smoke-ui-font-sizes.ts`,
+  contrast smoke, `npm run typecheck`, `npm run lint`, `npm run build:client`,
+  and `git diff --check`; package-script wiring was deferred during that pass
+  and is now handled by the later PR43 primitive foundation slice.
+- PR43 UI primitive foundation is complete for Phase 4 items `31-36`:
+  `src/components/ui` now contains local token-backed `Button`, `IconButton`,
+  `Panel`, `Badge`, `StatusChip`, `Field`, `Input`, `Select`, and `Textarea`
+  primitives with component-owned CSS for focus-visible rings, semantic status
+  tones, minimum 32px/36px/40px control sizing, reduced-motion handling,
+  accessible icon-button names, loading state, and field label/error wiring.
+  `scripts/smoke-ui-primitives.ts` verifies these contracts. `package.json`
+  now exposes `smoke:ui-contrast`, `smoke:ui-font-sizes`, and
+  `smoke:ui-primitives`; `test:ci` was left untouched to avoid colliding with
+  active beta split CI edits. Verification passed with all three UI smokes,
+  `npm run typecheck`, `npm run lint`, `npm run build:client`, and
+  `git diff --check` before later concurrent backend OAuth extraction edits
+  appeared. The later Phase E OAuth callback extraction resolved the duplicate
+  callback declaration issue; current `npm run typecheck` and `npm test` pass
+  end to end. No packages were installed. Next UI work is PR43 Phase 4 item
+  `37` Dialog/Radix when package churn is safe, or a Monitor/command-console
+  readability slice if shared package changes remain risky.
+- PR43 shell navigation semantics are complete for Phase 5 items `41-43`,
+  mapped to release-plan Phase 9 items `131-133`: `src/components/layout/NexusShell.tsx`
+  now exposes workspace rail destinations as `nexus-nav-*` buttons and active
+  workspace regions as `nexus-workspace-*`, while keeping rail state on
+  `aria-current="page"` and avoiding tab/panel terminology in the public shell
+  DOM contract. `scripts/smoke-shell-production-ui.ts` now asserts both primary
+  and utility rail navigation have no `role="tab"`, `role="tablist"`,
+  `aria-selected`, or `aria-controls`; `scripts/smoke-ui-render.mjs` now drives
+  the production render smoke through the new nav/workspace ids. Verification
+  passed with `npm run smoke:shell-production-ui`, `npm run build:client`,
+  `npm run smoke:ui` across desktop/wide/mobile screenshots, `npm run
+  typecheck`, `npm run lint`, and `git diff --check` with only LF-to-CRLF
+  warnings. No packages were installed and no backend/provider/runtime files
+  were edited.
+- PR43 Monitor source typography cleanup is complete as a focused Pass 4
+  readability slice mapped to release-plan Phase 9 items `124`, `125`, and
+  `136`: `src/components/monitor/LiveOperationMonitor.tsx` and
+  `src/components/monitor/AgentResponseConsole.tsx` no longer contain
+  source-level `text-[7px]`, `text-[8px]`, `text-[9px]`, or `text-[10px]`
+  utilities for important Monitor/command-console text. Monitor labels, tabs,
+  Doctor findings, cron metadata, gateway activity rows, log-tail text,
+  heartbeat labels, activity chips, and command attachment metadata now use
+  11px-13px source sizes with stronger muted colors where labels carry meaning.
+  `scripts/smoke-ui-font-sizes.ts` now fails if those two files reintroduce
+  sub-11px text utilities. Verification passed with `npm run
+  smoke:ui-font-sizes`, `npm run smoke:ui-contrast`, `npm run typecheck`,
+  `npm run lint`, `npm run build:client`, `npm run smoke:ui` across
+  desktop/wide/mobile screenshots, and `git diff --check` with only
+  LF-to-CRLF warnings. No packages were installed; Dialog/Radix item `37`
+  remains deferred while package churn is risky.
 - The prior full-suite blocker is resolved: `README.md` now documents
   `release/evidence/distribution-signing.json`, and `npm test` passes end to
   end including release validation.
-- Current architecture evidence after the Phase D mission Team Sync extraction
-  and transition coverage:
+- Current architecture evidence after the Phase D mission Team Sync extraction,
+  transition coverage, restart-cancellation coverage, cron reconciliation
+  coverage, and restart/renderer recovery smoke coverage:
   `npm run smoke:server-architecture` reports `25,192/29,000` control-plane
   composition lines after runtime status extraction and `25,197/29,000`
   composition lines after runtime action extraction, then `25,160/29,000`
@@ -204,7 +378,29 @@ split plan before implementation:
   `23,334/29,000` composition lines after mission report extraction, then
   `23,030/29,000` composition lines after mission recovery extraction, then
   `22,963/29,000` composition lines after mission Team Sync extraction, with
-  `9` entry lines and `0` inline routes.
+  `9` entry lines and `0` inline routes; restart-cancellation coverage,
+  cron reconciliation coverage, and restart/renderer recovery smoke coverage
+  kept the same `22,963/29,000` architecture count.
+- Current architecture evidence after Phase E item `46`:
+  `npm run smoke:server-architecture` reports `22,577/29,000` control-plane
+  composition lines, `9` entry lines, and `0` inline routes after model catalog
+  extraction.
+- Current architecture evidence after Phase E item `47`:
+  `npm run smoke:server-architecture` reports `21,687/29,000` control-plane
+  composition lines, `9` entry lines, and `0` inline routes after provider auth
+  storage extraction.
+- Current architecture evidence after Phase E item `48`:
+  `npm run smoke:server-architecture` reports `21,166/29,000` control-plane
+  composition lines, `9` entry lines, and `0` inline routes after OAuth callback
+  service extraction.
+- Current architecture evidence after Phase E item `49`:
+  `npm run smoke:server-architecture` reports `20,578/29,000` control-plane
+  composition lines, `9` entry lines, and `0` inline routes after provider setup
+  service extraction.
+- Current architecture evidence after Phase E items `50-55`:
+  `npm run smoke:server-architecture` still reports `20,578/29,000`
+  control-plane composition lines, `9` entry lines, and `0` inline routes after
+  the provider/auth beta coverage sweep.
 - Runtime, mission, Gateway, plugin, auth, and diagnostic state should become
   structured evidence or ledger events instead of ad hoc strings.
 - Renderer state should project backend truth and avoid inventing runtime truth.
@@ -212,20 +408,20 @@ split plan before implementation:
   and silent auto-update wait until private beta recovery and validation are
   proven.
 - Phase C items `21-30` are complete and verified.
-- Phase D items `31`, `32`, `33`, `34`, `35`, `36`, `37`, `38`, `39`, and `42` are complete and verified.
+- Phase D items `31`, `32`, `33`, `34`, `35`, `36`, `37`, `38`, `39`, `40`, `41`, `42`, `43`, `44`, and `45` are complete and verified.
+- Phase E items `46`, `47`, `48`, `49`, `50`, `51`, `52`, `53`, `54`, and `55` are complete and verified.
 
 ## Next Optimization Slice
 
-Continue Phase D:
+Continue Phase F:
 
-- Add tests for cancelling after backend restart for Phase D item `40`, starting
-  from mission recovery hydration and the state-service cancellation path.
-- Preserve durable mission hydration, recovered scheduler state, cancellation
-  cleanup evidence, Team Sync snapshot writes, and backend-owned lifecycle
-  projection behavior.
-- Keep `server/controlPlane.ts` as dependency wiring only and keep mission routes
-  as HTTP validation/envelope handlers.
-- Run focused mission state/recovery tests, mission cancellation/recovery/durable
-  smokes, `npm run smoke:server-architecture`, `npm run typecheck`, `npm run
-  test:unit`, `npm run lint`, `git diff --check`, and `npm test` after the
-  slice.
+- Start item `56`: extract plugin discovery into
+  `server/services/plugins/pluginInventoryService.ts`.
+- Preserve the Plugins page distinctions for configured, missing-auth,
+  unavailable, failed, and disabled plugin states.
+- Keep `server/controlPlane.ts` as dependency wiring only; add focused plugin
+  inventory tests and smokes instead of returning plugin discovery logic to the
+  composition root.
+- Run the focused plugin inventory tests/smokes plus `npm run
+  smoke:server-architecture`, `npm run typecheck`, `npm run test:unit`,
+  `npm run lint`, `git diff --check`, and `npm test` after the slice.

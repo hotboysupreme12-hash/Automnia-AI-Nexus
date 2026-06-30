@@ -226,7 +226,7 @@ function LiveText({ text }: { text: string }) {
 const MetricBar = memo(function MetricBar({ label, value, tone = 'cyan' }: { label: string; value: number; tone?: MonitorTone }) {
   return (
     <div className="dy-monitor-gauge" data-tone={tone}>
-      <div className="mb-1 flex items-center justify-between gap-2 text-[9px] font-semibold uppercase tracking-[0.10em]">
+      <div className="mb-1 flex items-center justify-between gap-2 text-[12px] font-semibold uppercase tracking-[0.10em]">
         <span className="dy-monitor-gauge-label">{label}</span>
         <span className="dy-monitor-gauge-value tabular-nums">{value}</span>
       </div>
@@ -357,7 +357,7 @@ function DoctorDismissButton({ onDismiss }: { onDismiss?: () => void }) {
     <button
       type="button"
       onClick={onDismiss}
-      className="shrink-0 rounded-lg border border-white/[0.08] bg-white/[0.025] px-2.5 py-1 text-[8px] font-semibold uppercase text-slate-400 transition hover:border-white/20 hover:bg-white/[0.055] hover:text-slate-100 focus-visible:outline focus-visible:outline-2 focus-visible:outline-cyan-300/40"
+      className="shrink-0 rounded-lg border border-white/[0.08] bg-white/[0.025] px-2.5 py-1 text-[12px] font-semibold uppercase text-slate-300 transition hover:border-white/20 hover:bg-white/[0.055] hover:text-slate-100 focus-visible:outline focus-visible:outline-2 focus-visible:outline-cyan-300/40"
       title="Hide this Doctor summary"
       aria-label="Hide Doctor summary"
     >
@@ -408,11 +408,11 @@ function DoctorPanel({ run, error, persisted = false, onDismiss }: { run: Doctor
             <div className="min-w-0">
               <p className="truncate text-[12px] font-bold text-slate-100">{title}</p>
               {persisted && run?.summary && (
-                <p className="mt-0.5 truncate text-[10px] text-slate-500" title={run.summary}>{run.summary}</p>
+                <p className="mt-0.5 truncate text-[12px] text-slate-400" title={run.summary}>{run.summary}</p>
               )}
             </div>
             <div className="flex shrink-0 items-center gap-2">
-              <span className={`rounded-full border px-2.5 py-1 text-[8px] font-semibold uppercase tracking-[0.10em] ${run?.ok ? 'border-emerald-400/20 bg-emerald-400/[0.06] text-emerald-200' : 'border-rose-400/20 bg-rose-400/[0.06] text-rose-200'}`}>
+              <span className={`rounded-full border px-2.5 py-1 text-[11px] font-semibold uppercase tracking-[0.10em] ${run?.ok ? 'border-emerald-400/20 bg-emerald-400/[0.06] text-emerald-200' : 'border-rose-400/20 bg-rose-400/[0.06] text-rose-200'}`}>
                 {run?.ok ? 'doctor ok' : 'action needed'}
               </span>
               <DoctorDismissButton onDismiss={onDismiss} />
@@ -423,16 +423,16 @@ function DoctorPanel({ run, error, persisted = false, onDismiss }: { run: Doctor
               const findings = (check.findings || []).slice(0, 2)
               const extraFindings = Math.max(0, (check.findings?.length || 0) - findings.length)
               return (
-                <div key={check.id} className={`rounded-lg border px-2.5 py-2 text-[10px] ${check.severity === 'error' ? 'border-rose-400/18 bg-rose-400/[0.04]' : check.severity === 'warning' ? 'border-amber-400/18 bg-amber-400/[0.04]' : 'border-emerald-400/12 bg-emerald-400/[0.025]'}`}>
+                <div key={check.id} className={`rounded-lg border px-2.5 py-2 text-[12px] ${check.severity === 'error' ? 'border-rose-400/18 bg-rose-400/[0.04]' : check.severity === 'warning' ? 'border-amber-400/18 bg-amber-400/[0.04]' : 'border-emerald-400/12 bg-emerald-400/[0.025]'}`}>
                   <div className="flex items-center justify-between gap-2">
                     <p className="truncate font-bold text-slate-100">{check.label}</p>
-                    <span className={`shrink-0 rounded-full px-1.5 py-0.5 text-[7px] font-bold uppercase ${check.severity === 'error' ? 'text-rose-200' : check.severity === 'warning' ? 'text-amber-200' : 'text-emerald-200'}`}>
+                    <span className={`shrink-0 rounded-full px-1.5 py-0.5 text-[11px] font-bold uppercase ${check.severity === 'error' ? 'text-rose-200' : check.severity === 'warning' ? 'text-amber-200' : 'text-emerald-200'}`}>
                       {check.severity}
                     </span>
                   </div>
                   <p className="mt-1 line-clamp-2 text-slate-400" title={check.evidence}>{check.evidence}</p>
                   {(check.failureKind || check.repairAction) && (
-                    <p className="mt-1 line-clamp-2 text-[9px] text-cyan-200/75" title={check.repairAction || check.failureKind}>
+                    <p className="mt-1 line-clamp-2 text-[12px] text-cyan-100/85" title={check.repairAction || check.failureKind}>
                       {check.failureKind ? check.failureKind.replace(/_/g, ' ') : check.repairAction}
                     </p>
                   )}
@@ -442,19 +442,19 @@ function DoctorPanel({ run, error, persisted = false, onDismiss }: { run: Doctor
                         const action = doctorFindingAction(finding)
                         const location = finding.ocPath || finding.path || ''
                         return (
-                          <li key={`${finding.checkId}-${finding.path || finding.ocPath || finding.message}`} className={`dy-doctor-finding border-l-2 pl-2 text-[9px] leading-snug ${doctorFindingToneClass(finding)}`}>
+                          <li key={`${finding.checkId}-${finding.path || finding.ocPath || finding.message}`} className={`dy-doctor-finding border-l-2 pl-2 text-[12px] leading-snug ${doctorFindingToneClass(finding)}`}>
                             <div className="flex min-w-0 items-center gap-1.5">
                               <span className="shrink-0 font-bold uppercase tracking-[0.10em]">{finding.category}</span>
-                              <span className="min-w-0 truncate text-slate-500" title={finding.checkId}>{finding.checkId}</span>
+                              <span className="min-w-0 truncate text-slate-400" title={finding.checkId}>{finding.checkId}</span>
                             </div>
                             <p className="mt-0.5 line-clamp-2 text-slate-300" title={finding.message}>{finding.message}</p>
-                            {location && <p className="mt-0.5 truncate text-slate-500" title={location}>{location}</p>}
-                            {action && <p className="mt-0.5 line-clamp-2 text-cyan-200/75" title={action}>{compactRuntimeText(action, 260)}</p>}
+                            {location && <p className="mt-0.5 truncate text-slate-400" title={location}>{location}</p>}
+                            {action && <p className="mt-0.5 line-clamp-2 text-cyan-100/85" title={action}>{compactRuntimeText(action, 260)}</p>}
                           </li>
                         )
                       })}
                       {extraFindings > 0 && (
-                        <li className="text-[8px] font-semibold uppercase tracking-[0.10em] text-slate-500">
+                        <li className="text-[11px] font-semibold uppercase tracking-[0.10em] text-slate-400">
                           +{extraFindings} more finding{extraFindings === 1 ? '' : 's'}
                         </li>
                       )}
@@ -493,7 +493,7 @@ function CronJobCard({
   const missionInfo = cronMissionInfo(job, agentName, timingLabel, timing, timingValue)
   return (
     <div
-      className="dy-cron-job-card relative flex min-h-16 flex-col gap-2 px-3 py-2.5 text-[10px] leading-tight transition hover:bg-white/[0.025]"
+      className="dy-cron-job-card relative flex min-h-16 flex-col gap-2 px-3 py-2.5 text-[12px] leading-tight transition hover:bg-white/[0.025]"
       data-state={status}
       title={`OpenClaw cron ${job.cronId}`}
     >
@@ -527,7 +527,7 @@ function CronJobCard({
       <div className="dy-cron-job-header min-w-0 pr-16">
         <div className="dy-cron-job-title-block min-w-0">
           <div className="dy-cron-job-meta-row flex min-w-0 flex-wrap items-center gap-1.5">
-            <span className="dy-cron-status-badge rounded-none border border-white/10 bg-white/[0.03] px-2 py-0.5 text-[7px] font-semibold uppercase text-slate-300" data-state={status}>
+            <span className="dy-cron-status-badge rounded-none border border-white/10 bg-white/[0.03] px-2 py-0.5 text-[11px] font-semibold uppercase text-slate-300" data-state={status}>
               {status}
             </span>
             <span className="dy-cron-job-source">{job.source || 'openclaw'}</span>
@@ -535,10 +535,10 @@ function CronJobCard({
           <div className="dy-cron-job-title-row flex min-w-0 flex-wrap items-center gap-1.5">
             <p className="truncate text-[12px] font-bold text-slate-100">{missionInfo.title}</p>
           </div>
-          <p className="dy-cron-job-subtitle mt-0.5 truncate font-mono text-[9px] text-slate-600">{job.name} / {shortSessionId(job.cronId)}</p>
+          <p className="dy-cron-job-subtitle mt-0.5 truncate font-mono text-[12px] text-slate-400">{job.name} / {shortSessionId(job.cronId)}</p>
         </div>
       </div>
-      <div className="dy-cron-job-details grid min-w-0 grid-cols-2 gap-1.5 text-[9px] text-slate-500 sm:grid-cols-4">
+      <div className="dy-cron-job-details grid min-w-0 grid-cols-2 gap-1.5 text-[12px] text-slate-400 sm:grid-cols-4">
         <span className="dy-session-meta-chip" title={agentName}><span>Agent</span><strong>{agentName}</strong></span>
         <span className="dy-session-meta-chip"><span>Cadence</span><strong>{job.every}</strong></span>
         <span className="dy-session-meta-chip"><span>{timingLabel}</span><strong>{timingValue}</strong></span>
@@ -617,7 +617,7 @@ function CronJobEditDialog({
         <div className="flex items-start justify-between gap-3 border-b border-white/10 px-4 py-3">
           <div className="min-w-0">
             <h2 id={titleId} className="truncate text-[13px] font-bold text-white">Edit cron job</h2>
-            <p className="mt-1 truncate text-[10px] text-slate-400">{agentName} / {shortSessionId(job.cronId)}</p>
+            <p className="mt-1 truncate text-[12px] text-slate-400">{agentName} / {shortSessionId(job.cronId)}</p>
           </div>
           <button
             type="button"
@@ -634,7 +634,7 @@ function CronJobEditDialog({
         </div>
 
         <div className="grid min-h-0 gap-3 overflow-auto p-4">
-          <label className="grid gap-1.5 text-[10px] font-semibold uppercase tracking-[0.08em] text-slate-400">
+          <label className="grid gap-1.5 text-[12px] font-semibold uppercase tracking-[0.08em] text-slate-300">
             Name
             <input
               value={name}
@@ -645,7 +645,7 @@ function CronJobEditDialog({
           </label>
 
           <div className="grid gap-2 sm:grid-cols-[150px_minmax(0,1fr)]">
-            <label className="grid gap-1.5 text-[10px] font-semibold uppercase tracking-[0.08em] text-slate-400">
+            <label className="grid gap-1.5 text-[12px] font-semibold uppercase tracking-[0.08em] text-slate-300">
               Schedule
               <select
                 value={scheduleKind}
@@ -657,7 +657,7 @@ function CronJobEditDialog({
                 <option value="at">At</option>
               </select>
             </label>
-            <label className="grid gap-1.5 text-[10px] font-semibold uppercase tracking-[0.08em] text-slate-400">
+            <label className="grid gap-1.5 text-[12px] font-semibold uppercase tracking-[0.08em] text-slate-300">
               Frequency
               <input
                 value={schedule}
@@ -665,11 +665,11 @@ function CronJobEditDialog({
                 className="border border-white/10 bg-black px-3 py-2 font-mono text-[12px] normal-case tracking-normal text-white outline-none transition focus:border-cyan-300/50"
                 placeholder={scheduleKind === 'cron' ? '0 12 * * 5' : scheduleKind === 'at' ? '2026-06-22T12:00:00-04:00' : '1h'}
               />
-              <span className="text-[9px] normal-case tracking-normal text-slate-500">{scheduleHelp}</span>
+              <span className="text-[12px] normal-case tracking-normal text-slate-400">{scheduleHelp}</span>
             </label>
           </div>
 
-          <label className="grid gap-1.5 text-[10px] font-semibold uppercase tracking-[0.08em] text-slate-400">
+          <label className="grid gap-1.5 text-[12px] font-semibold uppercase tracking-[0.08em] text-slate-300">
             Text
             <textarea
               value={message}
@@ -693,14 +693,14 @@ function CronJobEditDialog({
             type="button"
             onClick={onClose}
             disabled={saving}
-            className="border border-white/10 bg-white/[0.03] px-3 py-2 text-[10px] font-semibold uppercase tracking-[0.08em] text-slate-300 transition hover:border-white/20 hover:text-white disabled:cursor-not-allowed disabled:opacity-50"
+            className="border border-white/10 bg-white/[0.03] px-3 py-2 text-[12px] font-semibold uppercase tracking-[0.08em] text-slate-300 transition hover:border-white/20 hover:text-white disabled:cursor-not-allowed disabled:opacity-50"
           >
             Cancel
           </button>
           <button
             type="submit"
             disabled={!canSave}
-            className="border border-cyan-300/25 bg-cyan-300/[0.08] px-3 py-2 text-[10px] font-semibold uppercase tracking-[0.08em] text-cyan-100 transition hover:border-cyan-300/45 hover:bg-cyan-300/[0.12] disabled:cursor-not-allowed disabled:opacity-50"
+            className="border border-cyan-300/25 bg-cyan-300/[0.08] px-3 py-2 text-[12px] font-semibold uppercase tracking-[0.08em] text-cyan-100 transition hover:border-cyan-300/45 hover:bg-cyan-300/[0.12] disabled:cursor-not-allowed disabled:opacity-50"
           >
             {saving ? 'Saving' : 'Save changes'}
           </button>
@@ -870,17 +870,17 @@ function GatewayActivityLine({ event }: { event: GatewayChannelActivity }) {
   const display = gatewayActivityDisplay(event)
   const channelLabel = event.agentId ? `${event.channel} / ${event.agentId}` : event.channel
   return (
-    <div className="dy-gateway-activity-line dy-gateway-event-card grid grid-cols-[9px_minmax(0,1fr)] items-start gap-3 border-b border-white/[0.08] px-3 py-2.5 text-[10px] leading-tight transition hover:bg-white/[0.025]" data-direction={event.direction} title={display.raw}>
+    <div className="dy-gateway-activity-line dy-gateway-event-card grid grid-cols-[9px_minmax(0,1fr)] items-start gap-3 border-b border-white/[0.08] px-3 py-2.5 text-[12px] leading-tight transition hover:bg-white/[0.025]" data-direction={event.direction} title={display.raw}>
       <span className="dy-gateway-direction-marker mt-1 h-2 w-2 shrink-0 rounded-none" data-direction={event.direction} aria-hidden="true" />
       <div className="dy-gateway-activity-copy min-w-0">
         <div className="dy-gateway-event-meta flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1">
-          <span className="dy-gateway-direction-label text-[7px] font-bold uppercase tracking-[0.08em]">{display.label}</span>
-          <span className="dy-gateway-event-time font-mono text-[8px] tabular-nums text-slate-500">{formatRuntimeTime(event.timestamp)}</span>
-          <span className="dy-gateway-event-source max-w-full truncate font-mono text-[8px] font-semibold text-slate-400" title={channelLabel}>{channelLabel}</span>
+          <span className="dy-gateway-direction-label text-[11px] font-bold uppercase tracking-[0.08em]">{display.label}</span>
+          <span className="dy-gateway-event-time font-mono text-[12px] tabular-nums text-slate-400">{formatRuntimeTime(event.timestamp)}</span>
+          <span className="dy-gateway-event-source max-w-full truncate font-mono text-[12px] font-semibold text-slate-300" title={channelLabel}>{channelLabel}</span>
         </div>
         <p className="dy-gateway-event-message mt-1.5 min-w-0 font-medium text-slate-100">{display.summary}</p>
         {display.detail && display.detail !== display.summary && (
-          <p className="dy-gateway-event-detail mt-1 min-w-0 text-[9px] leading-snug text-slate-500">{compactRuntimeText(display.detail, 420)}</p>
+          <p className="dy-gateway-event-detail mt-1 min-w-0 text-[12px] leading-snug text-slate-400">{compactRuntimeText(display.detail, 420)}</p>
         )}
       </div>
     </div>
@@ -894,22 +894,22 @@ function GatewayActivityCard({ activity }: { activity: RuntimeStatus['gateway'][
       <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
         <div>
           <p className="text-[13px] font-bold text-slate-100">Channel Activity</p>
-          <p className="mt-0.5 text-[10px] text-slate-500">Recent Telegram, SMS, and plugin traffic</p>
+          <p className="mt-0.5 text-[12px] text-slate-400">Recent Telegram, SMS, and plugin traffic</p>
         </div>
         <div className="dy-channel-activity-stats flex flex-wrap items-center gap-1.5">
-          <span className="dy-channel-activity-stat border border-white/[0.08] px-2 py-1 text-[8px] font-semibold uppercase tracking-[0.08em] text-slate-400" data-state={activity?.active ? 'active' : 'quiet'}>
+          <span className="dy-channel-activity-stat border border-white/[0.08] px-2 py-1 text-[11px] font-semibold uppercase tracking-[0.08em] text-slate-300" data-state={activity?.active ? 'active' : 'quiet'}>
             {activity?.active ? 'active' : 'quiet'}
           </span>
-          <span className="dy-channel-activity-stat border px-2 py-1 text-[8px] font-semibold uppercase tracking-[0.08em] text-slate-300" data-direction="inbound">{activity?.inboundCount || 0} incoming</span>
-          <span className="dy-channel-activity-stat border px-2 py-1 text-[8px] font-semibold uppercase tracking-[0.08em] text-slate-300" data-direction="outbound">{activity?.outboundCount || 0} sent</span>
+          <span className="dy-channel-activity-stat border px-2 py-1 text-[11px] font-semibold uppercase tracking-[0.08em] text-slate-300" data-direction="inbound">{activity?.inboundCount || 0} incoming</span>
+          <span className="dy-channel-activity-stat border px-2 py-1 text-[11px] font-semibold uppercase tracking-[0.08em] text-slate-300" data-direction="outbound">{activity?.outboundCount || 0} sent</span>
           {Boolean(activity?.systemCount) && (
-            <span className="dy-channel-activity-stat border px-2 py-1 text-[8px] font-semibold uppercase tracking-[0.08em] text-slate-300" data-direction="system" title={`${activity?.systemCount || 0} system event${(activity?.systemCount || 0) === 1 ? '' : 's'} captured`}>{activity?.systemCount || 0} system</span>
+            <span className="dy-channel-activity-stat border px-2 py-1 text-[11px] font-semibold uppercase tracking-[0.08em] text-slate-300" data-direction="system" title={`${activity?.systemCount || 0} system event${(activity?.systemCount || 0) === 1 ? '' : 's'} captured`}>{activity?.systemCount || 0} system</span>
           )}
         </div>
       </div>
       <div className="dy-monitor-stream-box dy-gateway-event-list min-h-0 flex-1 overflow-auto rounded-none border border-white/[0.04] bg-black/25 shadow-inner shadow-black/20">
         {events.slice(0, 28).map((event) => <GatewayActivityLine key={event.id} event={event} />)}
-        {!events.length && <div className="dy-monitor-empty py-6 text-center text-[11px] font-medium text-slate-600">No channel activity captured yet.</div>}
+        {!events.length && <div className="dy-monitor-empty py-6 text-center text-[12px] font-medium text-slate-400">No channel activity captured yet.</div>}
       </div>
     </div>
   )
@@ -926,10 +926,10 @@ function GatewayLogTailCard({ logs }: { logs: GatewayLogEntry[] }) {
       <div className={`dy-gateway-log-header flex shrink-0 items-center justify-between gap-3 ${expanded ? 'mb-3' : ''}`}>
         <div className="dy-gateway-log-title text-[13px] font-bold text-slate-100">Gateway Log Tail</div>
         <div className="dy-gateway-log-controls flex items-center gap-2">
-          <span className="text-[9px] font-semibold uppercase tracking-[0.10em] text-slate-500">{logs.length} entries</span>
+          <span className="text-[12px] font-semibold uppercase tracking-[0.10em] text-slate-400">{logs.length} entries</span>
           <button
             type="button"
-            className="dy-gateway-log-toggle rounded-none border border-white/[0.10] bg-black/30 px-2.5 py-1 text-[8px] font-semibold uppercase tracking-[0.10em] text-slate-300 transition hover:border-white/30 hover:bg-white/[0.06]"
+            className="dy-gateway-log-toggle rounded-none border border-white/[0.10] bg-black/30 px-2.5 py-1 text-[12px] font-semibold uppercase tracking-[0.10em] text-slate-300 transition hover:border-white/30 hover:bg-white/[0.06]"
             aria-controls={logTailId}
             aria-expanded={expanded}
             onClick={() => setExpanded((value) => !value)}
@@ -939,10 +939,10 @@ function GatewayLogTailCard({ logs }: { logs: GatewayLogEntry[] }) {
         </div>
       </div>
       {expanded && (
-        <div id={logTailId} className="dy-monitor-log-box min-h-0 flex-1 overflow-auto rounded-none border border-white/[0.04] bg-black/30 p-3 font-mono text-[9px] leading-[1.45]" role="list" aria-label="Gateway log tail">
-          {visibleLogs.length ? visibleLogs.map((entry) => <GatewayLogLine key={entry.id} entry={entry} />) : <div className="dy-gateway-log-empty text-slate-600">No gateway log entries captured yet.</div>}
+        <div id={logTailId} className="dy-monitor-log-box min-h-0 flex-1 overflow-auto rounded-none border border-white/[0.04] bg-black/30 p-3 font-mono text-[13px] leading-[1.45]" role="list" aria-label="Gateway log tail">
+          {visibleLogs.length ? visibleLogs.map((entry) => <GatewayLogLine key={entry.id} entry={entry} />) : <div className="dy-gateway-log-empty text-slate-400">No gateway log entries captured yet.</div>}
           {hiddenLogCount > 0 && (
-            <div className="dy-gateway-log-hidden mt-3 border-t border-white/[0.05] pt-3 text-[9px] uppercase tracking-[0.10em] text-slate-600">
+            <div className="dy-gateway-log-hidden mt-3 border-t border-white/[0.05] pt-3 text-[12px] uppercase tracking-[0.10em] text-slate-400">
               {hiddenLogCount} older entr{hiddenLogCount === 1 ? 'y' : 'ies'} hidden
             </div>
           )}
@@ -1087,7 +1087,7 @@ function RuntimeGatewayPanel({
           className="dy-monitor-alert px-4 text-[11px] leading-relaxed"
           rounded="none"
           buttonRounded="none"
-          actionTextClassName="text-[8px]"
+          actionTextClassName="text-[12px]"
           message={`Pause all ${activeCronJobs.length} active cron job${activeCronJobs.length === 1 ? '' : 's'}?`}
           detail={cronCancelPreview ? (
             <>
@@ -1123,12 +1123,12 @@ function RuntimeGatewayPanel({
             <div className="mb-2 flex items-center justify-between gap-3">
               <div>
                 <p className="text-[13px] font-bold text-slate-100">Active Cron Jobs</p>
-                <p className="mt-0.5 text-[10px] text-slate-500">Enabled OpenClaw cron jobs currently scheduled</p>
+                <p className="mt-0.5 text-[12px] text-slate-400">Enabled OpenClaw cron jobs currently scheduled</p>
               </div>
               <div className="flex items-center gap-2">
-                <span className="text-[9px] font-semibold uppercase tracking-[0.10em] text-slate-500">{activeCronCount} active</span>
+                <span className="text-[12px] font-semibold uppercase tracking-[0.10em] text-slate-400">{activeCronCount} active</span>
                 {cronCadences.length > 0 && (
-                  <span className="dy-cron-cadence-badge hidden rounded-none border border-white/[0.06] bg-white/[0.025] px-2 py-0.5 text-[8px] font-semibold text-slate-400 sm:inline-flex" title={cronCadences.join(', ')}>
+                  <span className="dy-cron-cadence-badge hidden rounded-none border border-white/[0.06] bg-white/[0.025] px-2 py-0.5 text-[11px] font-semibold text-slate-300 sm:inline-flex" title={cronCadences.join(', ')}>
                     {cronCadences.slice(0, 2).join(' / ')}
                   </span>
                 )}
@@ -1138,7 +1138,7 @@ function RuntimeGatewayPanel({
                     disabled={cronCancelKey === '__all__'}
                     onClick={requestCancelAllCronJobs}
                     title={`Pause all ${activeCronJobs.length} active cron jobs`}
-                    className="dy-cron-cancel-button rounded-none border border-rose-300/15 bg-rose-300/[0.035] px-2 py-1 text-[8px] font-semibold uppercase tracking-[0.10em] text-rose-200/80 transition hover:border-rose-300/30 hover:bg-rose-300/[0.07] disabled:cursor-not-allowed disabled:opacity-50"
+                    className="dy-cron-cancel-button rounded-none border border-rose-300/15 bg-rose-300/[0.035] px-2 py-1 text-[12px] font-semibold uppercase tracking-[0.10em] text-rose-100 transition hover:border-rose-300/30 hover:bg-rose-300/[0.07] disabled:cursor-not-allowed disabled:opacity-50"
                   >
                     {cronCancelKey === '__all__' ? 'Pausing' : 'Pause all'}
                   </button>
@@ -1157,7 +1157,7 @@ function RuntimeGatewayPanel({
                 />
               ))}
               {!activeCronJobs.length && (
-                <div className="dy-monitor-empty dy-session-empty-state dy-cron-empty-state py-6 text-center text-[11px] font-medium text-slate-600">
+                <div className="dy-monitor-empty dy-session-empty-state dy-cron-empty-state py-6 text-center text-[12px] font-medium text-slate-400">
                   <span className="dy-cron-empty-icon" aria-hidden="true">
                     <svg viewBox="0 0 24 24">
                       <path d="M6 4.7v2.8M18 4.7v2.8M4.8 9.7h14.4" />
@@ -1344,7 +1344,7 @@ export function LiveOperationMonitor() {
           >
           {(['gateway', 'heartbeat', 'performance', 'logs'] as MonitorTab[]).map((item) => (
             <button key={item} id={`monitor-tab-${item}`} type="button" role="tab" onClick={() => setTab(item)} data-active={tab === item ? 'true' : 'false'} aria-selected={tab === item} aria-controls={`monitor-panel-${item}`} title={MONITOR_TAB_TITLE[item]}
-              className={`flex-1 rounded-none px-3 py-2 text-[10px] font-semibold uppercase tracking-[0.14em] transition-all ${tab === item ? 'bg-white/[0.065] text-slate-100 shadow-[inset_0_1px_0_rgba(255,255,255,0.06)]' : 'text-slate-500 hover:text-slate-300 hover:bg-white/[0.02]'}`}>
+              className={`flex-1 rounded-none px-3 py-2 text-[12px] font-semibold uppercase tracking-[0.14em] transition-all ${tab === item ? 'bg-white/[0.065] text-slate-100 shadow-[inset_0_1px_0_rgba(255,255,255,0.06)]' : 'text-slate-400 hover:text-slate-200 hover:bg-white/[0.02]'}`}>
               <MonitorTabIcon tab={item} />
               {item === 'heartbeat' ? 'scheduler' : item}
             </button>
@@ -1390,25 +1390,25 @@ export function LiveOperationMonitor() {
                 <div key={agent.id} className="rounded-xl border border-white/[0.04] bg-white/[0.015] p-4">
                   <div className="flex items-center justify-between gap-3">
                     <p className="text-[13px] font-bold text-slate-100">{agent.name}</p>
-                    <span className={`rounded-full border px-2.5 py-1 text-[8px] font-semibold uppercase tracking-[0.10em] ${statusClass(op?.heartbeatStatus)}`}>
+                    <span className={`rounded-full border px-2.5 py-1 text-[11px] font-semibold uppercase tracking-[0.10em] ${statusClass(op?.heartbeatStatus)}`}>
                       {op?.heartbeatStatus ?? 'dormant'}
                     </span>
                   </div>
                   <div className="mt-3.5 grid gap-2 sm:grid-cols-2">
                     <div className="rounded-md border border-white/[0.04] bg-white/[0.015] px-2.5 py-1.5">
-                      <span className="text-[9px] text-slate-500">Cron Cadence</span>
+                      <span className="text-[12px] text-slate-400">Cron Cadence</span>
                       <p className="font-semibold text-slate-200 text-[11px]">{formatCadence(agent.heartbeat.tickIntervalMs)}</p>
                     </div>
                     <div className="rounded-md border border-white/[0.04] bg-white/[0.015] px-2.5 py-1.5">
-                      <span className="text-[9px] text-slate-500">Retry</span>
+                      <span className="text-[12px] text-slate-400">Retry</span>
                       <p className="font-semibold text-slate-200 text-[11px]">{op?.retryCount ?? 0} / interval {formatCadence(agent.heartbeat.idleTimeoutMs)}</p>
                     </div>
                     <div className="rounded-md border border-white/[0.04] bg-white/[0.015] px-2.5 py-1.5">
-                      <span className="text-[9px] text-slate-500">Loop Flag</span>
+                      <span className="text-[12px] text-slate-400">Loop Flag</span>
                       <p className="font-semibold text-slate-200 text-[11px]">{agent.heartbeat.continuous ? 'on' : 'off'}</p>
                     </div>
                     <div className="rounded-md border border-white/[0.04] bg-white/[0.015] px-2.5 py-1.5">
-                      <span className="text-[9px] text-slate-500">Recovery</span>
+                      <span className="text-[12px] text-slate-400">Recovery</span>
                       <p className="font-semibold text-slate-200 text-[11px]">{agent.heartbeat.recoveryMode ? 'on' : 'off'}</p>
                     </div>
                   </div>
@@ -1424,7 +1424,7 @@ export function LiveOperationMonitor() {
               <div key={agent.id} className="rounded-xl border border-white/[0.04] bg-white/[0.015] p-4">
                 <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
                   <p className="text-[13px] font-bold text-slate-100">{agent.name}</p>
-                  <span className="rounded-full border border-cyan-400/15 bg-cyan-400/[0.04] px-2.5 py-1 text-[9px] font-semibold text-cyan-300/80">
+                  <span className="rounded-full border border-cyan-400/15 bg-cyan-400/[0.04] px-2.5 py-1 text-[12px] font-semibold text-cyan-100/90">
                     {(liveMetricsByAgent.get(agent.id)?.turns || 0)} turns · {liveMetricsByAgent.get(agent.id)?.lastTurnAt ? new Date(liveMetricsByAgent.get(agent.id)!.lastTurnAt!).toLocaleTimeString() : 'no runs'}
                   </span>
                 </div>
@@ -1477,18 +1477,18 @@ export function LiveOperationMonitor() {
                     <div className="min-w-0 flex-1">
                       <div className="flex flex-wrap items-center gap-2">
                         <p className={`truncate text-[12px] font-bold ${isControlCenter ? 'text-slate-300' : 'text-slate-100'}`}>{agent?.name || item.agentId || 'Control Center'}</p>
-                        <span className="dy-activity-status rounded-full border px-2 py-0.5 text-[7px] font-semibold uppercase tracking-[0.08em]" data-status={isControlCenter ? 'control' : item.ok ? 'ok' : 'blocked'}>{item.ok ? item.title : 'Blocked'}</span>
+                        <span className="dy-activity-status rounded-full border px-2 py-0.5 text-[11px] font-semibold uppercase tracking-[0.08em]" data-status={isControlCenter ? 'control' : item.ok ? 'ok' : 'blocked'}>{item.ok ? item.title : 'Blocked'}</span>
                         {item.failureKind && (
-                          <span className="rounded-full border border-amber-300/15 bg-amber-300/[0.04] px-2 py-0.5 text-[7px] font-semibold uppercase tracking-[0.08em] text-amber-200/80">
+                          <span className="rounded-full border border-amber-300/15 bg-amber-300/[0.04] px-2 py-0.5 text-[11px] font-semibold uppercase tracking-[0.08em] text-amber-100">
                             {item.failureKind.replace(/_/g, ' ')}
                           </span>
                         )}
-                        <span className="font-mono text-[9px] text-slate-600">{new Date(item.timestamp).toLocaleTimeString()}</span>
+                        <span className="font-mono text-[12px] text-slate-400">{new Date(item.timestamp).toLocaleTimeString()}</span>
                       </div>
-                      <p className={`mt-1.5 text-[11px] leading-relaxed ${isControlCenter ? 'text-slate-500' : 'text-slate-300/90'}`}><LiveText text={item.detail} /></p>
+                      <p className={`mt-1.5 text-[12px] leading-relaxed ${isControlCenter ? 'text-slate-400' : 'text-slate-300/90'}`}><LiveText text={item.detail} /></p>
                       {item.files.length > 0 && (
                         <div className="mt-2 flex flex-wrap gap-1.5">
-                          {item.files.map((file) => <span key={file} className="max-w-[240px] truncate rounded-md border border-amber-300/15 bg-amber-300/[0.04] px-2 py-1 font-mono text-[9px] text-amber-200/80">{file}</span>)}
+                          {item.files.map((file) => <span key={file} className="max-w-[240px] truncate rounded-md border border-amber-300/15 bg-amber-300/[0.04] px-2 py-1 font-mono text-[12px] text-amber-100">{file}</span>)}
                         </div>
                       )}
                     </div>
@@ -1496,7 +1496,7 @@ export function LiveOperationMonitor() {
                 </motion.div>
               )
             })}
-            {!activity.length && <div className="rounded-xl border border-dashed border-white/[0.06] py-10 text-center text-[12px] font-medium text-slate-600">No activity recorded.</div>}
+            {!activity.length && <div className="rounded-xl border border-dashed border-white/[0.06] py-10 text-center text-[12px] font-medium text-slate-400">No activity recorded.</div>}
           </div>
         )}
 

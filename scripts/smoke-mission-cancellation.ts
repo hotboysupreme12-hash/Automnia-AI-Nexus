@@ -8,6 +8,7 @@ const serverSource = readFileSync(path.join(rootDir, 'server/controlPlane.ts'), 
 const missionRoutesSource = readFileSync(path.join(rootDir, 'server/routes/missionRoutes.ts'), 'utf8')
 const missionStateServiceSource = readFileSync(path.join(rootDir, 'server/services/missions/missionStateService.ts'), 'utf8')
 const missionSchedulerServiceSource = readFileSync(path.join(rootDir, 'server/services/missions/missionSchedulerService.ts'), 'utf8')
+const missionStateTestsSource = readFileSync(path.join(rootDir, 'tests/missionStateService.test.ts'), 'utf8')
 const storeSource = readFileSync(path.join(rootDir, 'src/store/nexusStore.ts'), 'utf8')
 const packageJson = JSON.parse(readFileSync(path.join(rootDir, 'package.json'), 'utf8')) as { scripts?: Record<string, string> }
 
@@ -33,6 +34,9 @@ assert.match(missionStateServiceSource, /evidence:\s*\{[\s\S]*cleanup,[\s\S]*\}/
 assert.match(missionStateServiceSource, /options\.recordMissionReport\(mission\)/)
 assert.match(missionRoutesSource, /return apiSuccess\(res, \{\s*mission:\s*result\.mission,\s*cleanup:\s*result\.cleanup\s*\}\)/)
 assert.doesNotMatch(missionRoutesSource, /void options\.cleanupMissionCronJobs\(mission\)\.then\(\(\) => \{\s*mission\.scheduler\.status = 'stopped'\s*\}\)/)
+assert.match(missionStateTestsSource, /stopMission cancels recovered active work after backend restart/, 'unit tests should cover cancelling a recovered mission after backend restart')
+assert.match(missionStateTestsSource, /hydrateMissionRecordsFromLedger\(\)/, 'restart cancellation coverage should hydrate from durable mission records first')
+assert.match(missionStateTestsSource, /operator cancelled after backend restart/, 'restart cancellation coverage should preserve operator cancellation evidence')
 
 assert.match(storeSource, /\/api\/missions\/stop/)
 assert.match(storeSource, /timeoutMs: 120_000/)

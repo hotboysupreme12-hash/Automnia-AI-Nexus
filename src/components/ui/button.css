@@ -1,0 +1,142 @@
+.dui-button {
+  --dui-button-accent: var(--accent-cyan);
+  --dui-button-bg: color-mix(in srgb, var(--surface-2) 88%, transparent);
+  --dui-button-bg-hover: color-mix(in srgb, var(--surface-3) 84%, var(--dui-button-accent) 16%);
+  --dui-button-border: var(--border-default);
+  --dui-button-text: var(--text-secondary);
+
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-2);
+  min-height: var(--control-height-default);
+  min-width: var(--control-height-default);
+  padding: 0 var(--control-padding-x);
+  border: 1px solid var(--dui-button-border);
+  border-radius: var(--control-radius);
+  background: var(--dui-button-bg);
+  color: var(--dui-button-text);
+  font: inherit;
+  font-size: var(--dy-type-control, var(--font-size-sm));
+  font-weight: 700;
+  letter-spacing: 0;
+  line-height: var(--line-tight);
+  text-decoration: none;
+  text-shadow: none;
+  cursor: pointer;
+  transition:
+    border-color 160ms ease,
+    background-color 160ms ease,
+    color 160ms ease,
+    transform 160ms ease;
+}
+
+.dui-button:hover:not(:disabled) {
+  border-color: color-mix(in srgb, var(--dui-button-accent) 58%, var(--border-default));
+  background: var(--dui-button-bg-hover);
+  color: var(--text-primary);
+}
+
+.dui-button:active:not(:disabled) {
+  transform: translateY(1px);
+}
+
+.dui-button:focus-visible {
+  outline: 2px solid var(--focus-ring);
+  outline-offset: 2px;
+  box-shadow:
+    0 0 0 4px var(--focus-ring-shadow),
+    0 0 0 1px var(--focus-ring-fill) inset;
+}
+
+.dui-button:disabled,
+.dui-button[aria-disabled="true"] {
+  color: var(--text-disabled);
+  cursor: not-allowed;
+  opacity: 0.68;
+}
+
+.dui-button--size-compact {
+  min-height: var(--control-height-compact);
+  padding-inline: var(--space-3);
+  font-size: var(--font-size-xs);
+}
+
+.dui-button--size-default {
+  min-height: var(--control-height-default);
+}
+
+.dui-button--size-primary {
+  min-height: var(--control-height-primary);
+}
+
+.dui-button--full {
+  width: 100%;
+}
+
+.dui-button--variant-primary {
+  --dui-button-bg: linear-gradient(
+    180deg,
+    color-mix(in srgb, var(--accent-cyan) 24%, var(--surface-3)),
+    color-mix(in srgb, var(--accent-blue) 16%, var(--surface-2))
+  );
+  --dui-button-border: color-mix(in srgb, var(--accent-cyan) 68%, var(--border-default));
+  --dui-button-text: var(--text-primary);
+}
+
+.dui-button--variant-secondary {
+  --dui-button-accent: var(--accent-blue);
+}
+
+.dui-button--variant-quiet {
+  --dui-button-bg: transparent;
+  --dui-button-bg-hover: color-mix(in srgb, var(--surface-2) 72%, transparent);
+  --dui-button-border: transparent;
+  --dui-button-text: var(--text-muted);
+}
+
+.dui-button--variant-danger {
+  --dui-button-accent: var(--accent-red);
+  --dui-button-bg: color-mix(in srgb, var(--accent-red) 10%, var(--surface-2));
+  --dui-button-border: color-mix(in srgb, var(--accent-red) 42%, var(--border-default));
+  --dui-button-text: var(--text-primary);
+}
+
+.dui-button__icon {
+  display: inline-grid;
+  width: 1.1em;
+  height: 1.1em;
+  place-items: center;
+  flex: 0 0 auto;
+}
+
+.dui-button__label {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.dui-button__spinner {
+  width: 1em;
+  height: 1em;
+  border: 2px solid color-mix(in srgb, currentColor 28%, transparent);
+  border-top-color: currentColor;
+  border-radius: 50%;
+  animation: dui-button-spin 800ms linear infinite;
+}
+
+@keyframes dui-button-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .dui-button {
+    transition-duration: 0.001ms;
+  }
+
+  .dui-button__spinner {
+    animation-duration: 0.001ms;
+  }
+}

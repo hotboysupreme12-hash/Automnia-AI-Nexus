@@ -17,6 +17,10 @@ const agentConfigRoutes = read('server/routes/agentConfigRoutes.ts')
 const browserRoutes = read('server/routes/browserRoutes.ts')
 const staticUi = read('server/staticUi.ts')
 const providerCatalog = read('server/catalogs/providerCatalog.ts')
+const modelCatalogService = read('server/services/providers/modelCatalogService.ts')
+const providerAuthService = read('server/services/providers/providerAuthService.ts')
+const oauthCallbackService = read('server/services/providers/oauthCallbackService.ts')
+const providerSetupService = read('server/services/providers/providerSetupService.ts')
 const routingHelpers = read('server/integrations/agentRoutingHelpers.ts')
 const gatewayLifecycleService = read('server/services/gateway/gatewayLifecycleService.ts')
 const gatewayDiagnosticsService = read('server/services/gateway/gatewayDiagnosticsService.ts')
@@ -69,6 +73,10 @@ for (const contract of [
   ["from './services/missions/missionReportService'", 'mission report service import'],
   ["from './services/missions/missionRecoveryService'", 'mission recovery service import'],
   ["from './services/missions/missionTeamSyncService'", 'mission Team Sync service import'],
+  ["from './services/providers/modelCatalogService'", 'model catalog service import'],
+  ["from './services/providers/providerAuthService'", 'provider auth service import'],
+  ["from './services/providers/oauthCallbackService'", 'OAuth callback service import'],
+  ["from './services/providers/providerSetupService'", 'provider setup service import'],
   ["from './state/runtimeLedgerStore'", 'runtime ledger store import'],
   ["from './catalogs/providerCatalog'", 'provider catalog import'],
   ["from './integrations/agentRoutingHelpers'", 'routing patch import'],
@@ -89,6 +97,10 @@ for (const contract of [
   ['createMissionReportService({', 'mission report service composition'],
   ['createMissionRecoveryService({', 'mission recovery service composition'],
   ['createMissionTeamSyncService({', 'mission Team Sync service composition'],
+  ['createModelCatalogService({', 'model catalog service composition'],
+  ['createProviderAuthService({', 'provider auth service composition'],
+  ['createOAuthCallbackService({', 'OAuth callback service composition'],
+  ['createProviderSetupService({', 'provider setup service composition'],
   ['createRuntimeLedgerStore(', 'runtime ledger store composition'],
   ['missionStateService,', 'mission route state service injection'],
   ['registerStaticUi(app, {', 'static UI registration'],
@@ -112,6 +124,13 @@ assert.doesNotMatch(controlPlane, /type MissionGatewaySessionReconciliationResul
 assert.doesNotMatch(controlPlane, /\bfunction\s+teamSyncMarkdown\b|\basync function\s+writeTeamSyncSnapshot\b|\basync function\s+ensureTeamSyncFile\b/, 'mission Team Sync snapshot logic must stay in missionTeamSyncService.ts')
 assert.doesNotMatch(controlPlane, /\bclass\s+LightweightGatewayClient\b/, 'Gateway websocket chat client must stay in gatewayChatService.ts')
 assert.doesNotMatch(controlPlane, /\bfunction\s+discoverGatewayLogPaths\b|\bfunction\s+readGatewayLogTailEntries\b/, 'Gateway log discovery/tailing must stay in gatewayLogService.ts')
+assert.doesNotMatch(controlPlane, /\bfunction\s+loadAvailableModelsFromOpenClaw\b|\bfunction\s+fallbackAvailableModels\b|\bfunction\s+mergeAvailableModels\b|\bfunction\s+ensureConfiguredProviderModel\b/, 'provider model catalog loading and normalization must stay in modelCatalogService.ts')
+assert.doesNotMatch(controlPlane, /\basync function\s+ensureLocalAuthStoreLoaded\b|\basync function\s+persistProviderAuth\b|\basync function\s+persistProviderOAuth\b|\basync function\s+removeProviderAuth\b/, 'provider auth storage mutations must stay in providerAuthService.ts')
+assert.doesNotMatch(controlPlane, /\bfunction\s+providerAuthStatus\b|\bfunction\s+modelAuthProblem\b|\bfunction\s+authProfileProvidersFor\b|\basync function\s+writeProviderApiKeyAuthProfiles\b/, 'provider auth status/profile logic must stay in providerAuthService.ts')
+assert.doesNotMatch(controlPlane, /\basync function\s+startGoogleOAuthSession\b|\basync function\s+startOpenAICodexOAuthSession\b|\basync function\s+closeOAuthCallbackServersForShutdown\b/, 'OAuth callback lifecycle must stay in oauthCallbackService.ts')
+assert.doesNotMatch(controlPlane, /\bfunction\s+parseOpenAICodexAuthorizationInput\b|\bfunction\s+failPendingOAuthSessionsForShutdown\b|server\.listen\(1455, '127\.0\.0\.1'/, 'OAuth callback parsing/listeners must stay in oauthCallbackService.ts')
+assert.doesNotMatch(controlPlane, /\bfunction\s+googleVertexGcloudStatus\b|\bfunction\s+resolveGoogleOAuthClientConfig\b|\basync function\s+resolveProviderRequestAuth\b/, 'provider setup checks must stay in providerSetupService.ts')
+assert.doesNotMatch(controlPlane, /\basync function\s+importOpenAICodexOAuthModule\b|\bfunction\s+openAICodexOAuthTesting\b|\bfunction\s+runGcloud\b/, 'provider runtime setup/probing helpers must stay in providerSetupService.ts')
 assert.doesNotMatch(controlPlane, /app\.(?:get|post)\(['"]\/api\/shifts/, 'shift endpoints must remain outside controlPlane.ts')
 assert.doesNotMatch(controlPlane, /app\.get\(['"]\/api\/browser\/preflight/, 'browser preflight must remain outside controlPlane.ts')
 assert.match(runtimeRoutes, /runtimeActions: RuntimeActionService/, 'runtime routes should receive runtime actions through a service option')
@@ -185,11 +204,46 @@ assert.match(missionTeamSyncService, /export function createMissionTeamSyncServi
 assert.match(missionTeamSyncService, /\bfunction\s+teamSyncMarkdown\b/, 'mission Team Sync service should own snapshot markdown')
 assert.match(missionTeamSyncService, /\basync function\s+writeTeamSyncSnapshot\b/, 'mission Team Sync service should own snapshot writes')
 assert.match(missionTeamSyncService, /\basync function\s+ensureTeamSyncFile\b/, 'mission Team Sync service should own missing-file repair')
+assert.match(modelCatalogService, /export function createModelCatalogService/, 'model catalog service should expose a service factory')
+assert.match(modelCatalogService, /export const FALLBACK_MODELS/, 'model catalog service should own fallback model metadata')
+assert.match(modelCatalogService, /export const KNOWN_UNAVAILABLE_MODEL_IDS/, 'model catalog service should own unavailable model metadata')
+assert.match(modelCatalogService, /\bfunction\s+ensureConfiguredModelAllowlist\b/, 'model catalog service should own configured model allowlist normalization')
+assert.match(modelCatalogService, /\bfunction\s+ensureOpenRouterModelCatalogAllowlist\b/, 'model catalog service should own OpenRouter allowlist normalization')
+assert.match(modelCatalogService, /\basync function\s+loadAvailableModelsFromOpenClaw\b/, 'model catalog service should own model catalog loading')
+assert.match(providerAuthService, /export function createProviderAuthService/, 'provider auth service should expose a service factory')
+assert.match(providerAuthService, /\basync function\s+ensureLocalAuthStoreLoaded\b/, 'provider auth service should own credential-store hydration')
+assert.match(providerAuthService, /\basync function\s+persistProviderAuth\b/, 'provider auth service should own API-key persistence')
+assert.match(providerAuthService, /\basync function\s+persistProviderOAuth\b/, 'provider auth service should own OAuth persistence')
+assert.match(providerAuthService, /\basync function\s+removeProviderAuth\b/, 'provider auth service should own auth removal')
+assert.match(providerAuthService, /\bfunction\s+providerAuthStatus\b/, 'provider auth service should own provider status shaping')
+assert.match(providerAuthService, /\bfunction\s+modelAuthProblem\b/, 'provider auth service should own missing-auth model checks')
+assert.match(providerAuthService, /\basync function\s+writeProviderApiKeyAuthProfiles\b/, 'provider auth service should own OpenClaw API-key profile writes')
+assert.match(providerAuthService, /\basync function\s+writeProviderOAuthAuthProfiles\b/, 'provider auth service should own OpenClaw OAuth profile writes')
+assert.match(oauthCallbackService, /export function createOAuthCallbackService/, 'OAuth callback service should expose a service factory')
+assert.match(oauthCallbackService, /const oauthSessions = new Map<string, ProviderOAuthSession>\(\)/, 'OAuth callback service should own session storage')
+assert.match(oauthCallbackService, /\basync function\s+startGoogleOAuthSession\b/, 'OAuth callback service should own Google OAuth start lifecycle')
+assert.match(oauthCallbackService, /\basync function\s+startOpenAICodexOAuthSession\b/, 'OAuth callback service should own OpenAI Codex OAuth start lifecycle')
+assert.match(oauthCallbackService, /\basync function\s+closeOAuthCallbackServersForShutdown\b/, 'OAuth callback service should own listener shutdown cleanup')
+assert.match(oauthCallbackService, /\bfunction\s+parseOpenAICodexAuthorizationInput\b/, 'OAuth callback service should own manual code parsing')
+assert.match(oauthCallbackService, /server\.listen\(openAiCodexCallbackPort, '127\.0\.0\.1'/, 'OpenAI Codex callback listener should stay loopback-only')
+assert.match(providerSetupService, /export function createProviderSetupService/, 'provider setup service should expose a service factory')
+assert.match(providerSetupService, /\bfunction\s+googleVertexGcloudStatus\b/, 'provider setup service should own Google Vertex readiness checks')
+assert.match(providerSetupService, /\bfunction\s+resolveGoogleOAuthClientConfig\b/, 'provider setup service should own Google OAuth client setup checks')
+assert.match(providerSetupService, /\basync function\s+resolveProviderRequestAuth\b/, 'provider setup service should own provider request auth checks')
+assert.match(providerSetupService, /\basync function\s+importOpenAICodexOAuthModule\b/, 'provider setup service should own OpenAI Codex OAuth runtime loading')
 assert.match(controlPlane, /missionSchedulerService\.scheduleNextMissionRound/, 'mission state composition should delegate scheduling through the scheduler service')
 assert.match(controlPlane, /const recordMissionReport = missionReportService\.recordMissionReport/, 'controlPlane.ts should delegate report recording through the mission report service')
 assert.match(controlPlane, /const buildMissionLifecycleProjection = missionReportService\.buildMissionLifecycleProjection/, 'controlPlane.ts should delegate mission projection through the mission report service')
 assert.match(controlPlane, /const hydrateMissionRecordsFromLedger = missionRecoveryService\.hydrateMissionRecordsFromLedger/, 'controlPlane.ts should delegate mission restart hydration through the mission recovery service')
 assert.match(controlPlane, /const writeTeamSyncSnapshot = missionTeamSyncService\.writeTeamSyncSnapshot/, 'controlPlane.ts should delegate Team Sync snapshot writes through the Team Sync service')
+assert.match(controlPlane, /const fallbackAvailableModels = modelCatalogService\.fallbackAvailableModels/, 'controlPlane.ts should delegate fallback model catalog reads through the model catalog service')
+assert.match(controlPlane, /const refreshAvailableModelsCache = modelCatalogService\.refreshAvailableModelsCache/, 'controlPlane.ts should delegate model catalog refresh through the model catalog service')
+assert.match(controlPlane, /const persistProviderAuth = providerAuthService\.persistProviderAuth/, 'controlPlane.ts should delegate provider auth saves through the provider auth service')
+assert.match(controlPlane, /const providerAuthStatus = providerAuthService\.providerAuthStatus/, 'controlPlane.ts should delegate provider auth status through the provider auth service')
+assert.match(controlPlane, /const startGoogleOAuthSession = oauthCallbackService\.startGoogleOAuthSession/, 'controlPlane.ts should delegate Google OAuth starts through the OAuth callback service')
+assert.match(controlPlane, /const closeOAuthCallbackServersForShutdown = oauthCallbackService\.closeOAuthCallbackServersForShutdown/, 'controlPlane.ts should delegate OAuth listener shutdown through the OAuth callback service')
+assert.match(controlPlane, /const googleVertexGcloudStatus = providerSetupService\.googleVertexGcloudStatus/, 'controlPlane.ts should delegate Google Vertex readiness through the provider setup service')
+assert.match(controlPlane, /const resolveProviderRequestAuth = providerSetupService\.resolveProviderRequestAuth/, 'controlPlane.ts should delegate provider request auth through the provider setup service')
 assert.match(runtimeLedgerStore, /export function createRuntimeLedgerStore/, 'runtime ledger store should expose a state boundary factory')
 assert.match(runtimeLedgerStore, /configureRuntimeLedger\(normalizedPaths\)/, 'runtime ledger store should own raw ledger configuration')
 assert.match(runtimeLedgerStore, /appendRuntimeRunLedger\(value, options\)/, 'runtime ledger store should wrap runtime run appends')

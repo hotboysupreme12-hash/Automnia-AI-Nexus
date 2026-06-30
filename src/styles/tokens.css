@@ -1,0 +1,157 @@
+:root {
+  color-scheme: dark;
+
+  --surface-0: #030913;
+  --surface-1: #07111e;
+  --surface-2: #0b1828;
+  --surface-3: #102238;
+  --surface-overlay: rgba(4, 10, 18, 0.94);
+
+  --text-primary: #f4f8ff;
+  --text-secondary: #cbd7e8;
+  --text-muted: #a7b5c8;
+  --text-subtle: #8494aa;
+  --text-disabled: #5f6d7f;
+
+  --accent-cyan: #48e8ff;
+  --accent-blue: #58aaff;
+  --accent-purple: #c084fc;
+  --accent-green: #4ade80;
+  --accent-yellow: #facc15;
+  --accent-red: #fb7185;
+
+  --border-soft: rgba(180, 210, 235, 0.12);
+  --border-default: rgba(180, 210, 235, 0.20);
+  --border-strong: rgba(72, 232, 255, 0.38);
+  --focus-ring: #7dd3fc;
+
+  --radius-xs: 4px;
+  --radius-sm: 6px;
+  --radius-md: 8px;
+  --radius-lg: 10px;
+  --radius-xl: 12px;
+
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-5: 20px;
+  --space-6: 24px;
+
+  --control-height-compact: 32px;
+  --control-height-default: 36px;
+  --control-height-primary: 40px;
+  --control-radius: var(--radius-lg);
+  --control-padding-x: 14px;
+  --icon-button-size: 36px;
+
+  --shadow-panel: 0 18px 54px rgba(0, 0, 0, 0.34), inset 0 1px 0 rgba(255, 255, 255, 0.045);
+  --shadow-panel-soft: 0 10px 32px rgba(0, 0, 0, 0.22), inset 0 1px 0 rgba(255, 255, 255, 0.035);
+  --shadow-glow: 0 0 24px rgba(72, 232, 255, 0.16);
+  --glow-opacity: 0.18;
+
+  --density-panel-padding: 16px;
+  --density-section-gap: 14px;
+  --density-control-gap: 10px;
+}
+
+html.dui-pro-overhaul,
+html.dui-cohesive-ui,
+html.dy-human-ui {
+  --dui-bg: var(--surface-0);
+  --dui-canvas: var(--surface-1);
+  --dui-panel: var(--surface-1);
+  --dui-panel-2: var(--surface-2);
+  --dui-panel-3: var(--surface-3);
+  --dui-line: var(--border-soft);
+  --dui-line-strong: var(--border-default);
+  --dui-text: var(--text-primary);
+  --dui-text-2: var(--text-secondary);
+  --dui-muted: var(--text-muted);
+  --dui-faint: var(--text-subtle);
+  --dui-cyan: var(--accent-cyan);
+  --dui-violet: var(--accent-purple);
+  --dui-amber: var(--accent-yellow);
+  --dui-rose: var(--accent-red);
+  --dui-green: var(--accent-green);
+  --dui-radius-sm: var(--radius-sm);
+  --dui-radius: var(--radius-md);
+  --dui-shadow: var(--shadow-panel);
+  --dui-shadow-soft: var(--shadow-panel-soft);
+  --ink-0: var(--surface-0);
+  --ink-1: var(--surface-1);
+  --ink-2: var(--surface-2);
+  --text-0: var(--text-primary);
+  --text-1: var(--text-secondary);
+  --text-2: var(--text-muted);
+  --text-3: var(--text-subtle);
+  --text-4: var(--text-disabled);
+  --accent-cy: var(--accent-cyan);
+  --accent-bl: var(--accent-blue);
+  --accent-vl: var(--accent-purple);
+  --accent-em: var(--accent-green);
+  --accent-am: var(--accent-yellow);
+}
+
+html.dui-pro-overhaul[data-dui-density="compact"] {
+  --density-panel-padding: 12px;
+  --density-section-gap: 10px;
+  --density-control-gap: 8px;
+}
+
+html.dui-pro-overhaul[data-dui-density="comfortable"],
+html.dui-pro-overhaul:not([data-dui-density]) {
+  --density-panel-padding: 16px;
+  --density-section-gap: 14px;
+  --density-control-gap: 10px;
+}
+
+html.dui-pro-overhaul[data-dui-density="spacious"] {
+  --density-panel-padding: 20px;
+  --density-section-gap: 18px;
+  --density-control-gap: 12px;
+}
+
+html.dui-pro-overhaul.dui-cohesive-ui[data-dui-high-contrast="true"],
+html.dui-pro-overhaul[data-dui-high-contrast="true"] {
+  --surface-0: #010409;
+  --surface-1: #050b14;
+  --surface-2: #0a1320;
+  --surface-3: #102033;
+  --text-primary: #ffffff;
+  --text-secondary: #e2ebf7;
+  --text-muted: #c5d4e6;
+  --text-subtle: #adbed3;
+  --text-disabled: #8291a5;
+  --border-soft: rgba(220, 235, 255, 0.22);
+  --border-default: rgba(220, 235, 255, 0.34);
+  --border-strong: rgba(125, 211, 252, 0.74);
+  --focus-ring: #bae6fd;
+  --dui-bg: var(--surface-0);
+  --dui-canvas: var(--surface-1);
+  --dui-panel: var(--surface-1);
+  --dui-panel-2: var(--surface-2);
+  --dui-panel-3: var(--surface-3);
+  --dui-line: var(--border-soft);
+  --dui-line-strong: var(--border-default);
+  --dui-text: var(--text-primary);
+  --dui-text-2: var(--text-secondary);
+  --dui-muted: var(--text-muted);
+  --dui-faint: var(--text-subtle);
+  --ink-0: var(--surface-0);
+  --ink-1: var(--surface-1);
+  --ink-2: var(--surface-2);
+  --text-0: var(--text-primary);
+  --text-1: var(--text-secondary);
+  --text-2: var(--text-muted);
+  --text-3: var(--text-subtle);
+  --text-4: var(--text-disabled);
+}
+
+html.dui-pro-overhaul[data-dui-reduced-glow="true"],
+html.dui-pro-overhaul:not([data-dui-control-glow="true"]) {
+  --shadow-glow: none;
+  --glow-opacity: 0.04;
+  --dui-shadow: 0 14px 36px rgba(0, 0, 0, 0.30), inset 0 1px 0 rgba(255, 255, 255, 0.035);
+  --dui-shadow-soft: 0 8px 24px rgba(0, 0, 0, 0.22), inset 0 1px 0 rgba(255, 255, 255, 0.030);
+}

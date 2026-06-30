@@ -2958,6 +2958,51 @@ html.dui-pro-overhaul .dy-top-tabs .tab-underline span:last-child {
   margin-top: 16px;
 }
 
+.dui-active-mission-strip {
+  display: grid;
+  grid-template-columns: minmax(70px, .35fr) minmax(0, 1fr) minmax(0, .9fr);
+  align-items: center;
+  gap: 10px;
+  margin: 0 0 14px;
+  padding: 10px 0;
+  border-block: 1px solid rgba(157, 172, 185, .14);
+  color: #d8e9e6;
+}
+
+.dui-active-mission-strip span {
+  color: #61deac;
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 0;
+  text-transform: uppercase;
+}
+
+.dui-active-mission-strip strong,
+.dui-active-mission-strip small {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.dui-active-mission-strip strong {
+  color: #f4fffd;
+  font-size: 13px;
+  font-weight: 850;
+}
+
+.dui-active-mission-strip small {
+  color: #9db6b2;
+  font-size: 11px;
+  font-weight: 700;
+  justify-self: end;
+}
+
+.dui-active-mission-strip[data-mission-projection-state="failed"] span,
+.dui-active-mission-strip[data-mission-projection-state="cancelled"] span {
+  color: #ffb6a6;
+}
+
 .dui-secondary-button span {
   margin-left: 8px;
   color: #8d9aa3;

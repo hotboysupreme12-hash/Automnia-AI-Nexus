@@ -18,16 +18,29 @@ assert.match(shell, /<main id="dystopai-main" tabIndex=\{-1\}/, 'workspace shoul
 assert.match(shell, /<nav className="dy-human-nav flex flex-col" aria-label="Primary navigation">/, 'primary navigation should be named')
 assert.match(shell, /dy-human-rail-head--lockup/, 'sidebar should host the full DystopAI logo lockup')
 assert.match(shell, /className="dy-human-rail-lockup"/, 'sidebar logo should use the full lockup image')
-assert.match(shell, /id=\{`nexus-tab-\$\{t\.id\}`\}/, 'workspace tabs should expose stable ids for automation')
+assert.match(shell, /id=\{`nexus-nav-\$\{t\.id\}`\}/, 'workspace navigation should expose stable ids for automation')
 const primaryRailBlock = shell.slice(
   shell.indexOf('<nav className="dy-human-nav flex flex-col" aria-label="Primary navigation">'),
   shell.indexOf('<div className="dy-human-rail-bottom">'),
 )
+const utilityRailBlock = shell.slice(
+  shell.indexOf('<nav className="dy-human-nav dy-human-nav--utility flex flex-col" aria-label="Utility navigation">'),
+  shell.indexOf('</nav>', shell.indexOf('<nav className="dy-human-nav dy-human-nav--utility flex flex-col" aria-label="Utility navigation">')),
+)
 assert.doesNotMatch(primaryRailBlock, /role="tab"/, 'rail navigation should not advertise a tab role')
+assert.doesNotMatch(primaryRailBlock, /role="tablist"/, 'primary rail should not advertise a tablist role')
 assert.doesNotMatch(primaryRailBlock, /aria-selected=/, 'rail navigation should not advertise tab selection state')
 assert.doesNotMatch(primaryRailBlock, /aria-controls=/, 'rail navigation should not advertise tab panel controls')
 assert.match(primaryRailBlock, /aria-current=\{tab === t\.id \? 'page' : undefined\}/, 'active rail destination should use aria-current page')
+assert.doesNotMatch(utilityRailBlock, /role="tab"/, 'utility rail should not advertise a tab role')
+assert.doesNotMatch(utilityRailBlock, /role="tablist"/, 'utility rail should not advertise a tablist role')
+assert.doesNotMatch(utilityRailBlock, /aria-selected=/, 'utility rail should not advertise tab selection state')
+assert.doesNotMatch(utilityRailBlock, /aria-controls=/, 'utility rail should not advertise tab panel controls')
+assert.match(utilityRailBlock, /aria-current=\{tab === 'settings' \? 'page' : undefined\}/, 'settings navigation should use aria-current page when active')
 assert.match(shell, /role="region"[\s\S]*aria-label=\{`\$\{activeTab\.label\} workspace`\}/, 'active workspace should be a named region')
+assert.match(shell, /id=\{`nexus-workspace-\$\{tab\}`\}/, 'workspace region should use a workspace id, not a tab id')
+assert.doesNotMatch(shell, /nexus-tab-/, 'shell should not expose tab-oriented workspace navigation ids')
+assert.doesNotMatch(shell, /nexus-panel-/, 'shell should not expose tab-panel-oriented workspace ids')
 assert.doesNotMatch(shell, /dy-command-header/, 'shell should not render the retired top command header')
 assert.doesNotMatch(shell, /className="dy-top-tabs/, 'shell should not render a duplicate hidden tab bar')
 assert.match(shell, /aria-keyshortcuts=\{activeCronCount \? 'Delete'/, 'cron cleanup review should be keyboard discoverable')

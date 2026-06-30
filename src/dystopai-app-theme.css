@@ -1,4 +1,7 @@
 /* DystopAI app theme split into ordered chunks. Keep imports in cascade order. */
+@import './styles/tokens.css';
+@import './styles/typography.css';
+@import './styles/accessibility.css';
 @import './styles/dystopai-theme/00-foundation.css';
 @import './styles/dystopai-theme/10-layout-panels.css';
 @import './styles/dystopai-theme/20-agents-missions.css';

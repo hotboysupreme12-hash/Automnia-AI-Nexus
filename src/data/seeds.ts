@@ -68,6 +68,18 @@ export const DEFAULT_MISSION_DRAFT: MissionDraft = {
   ],
 }
 
+type ViteImportMeta = ImportMeta & {
+  env?: {
+    BASE_URL?: string
+  }
+}
+
+const assetBaseUrl = ((import.meta as ViteImportMeta).env?.BASE_URL || '/').replace(/\/?$/, '/')
+
+function assetPath(path: string): string {
+  return `${assetBaseUrl}${path.replace(/^\/+/, '')}`
+}
+
 export function makeSeedAgents(): OpenClawAgent[] {
   return [
     // ================== BENJAMIN NETANYAHU ==================
@@ -79,7 +91,7 @@ export function makeSeedAgents(): OpenClawAgent[] {
       behaviorProfile: 'architect',
       level: 46,
       rarity: 'legendary',
-      portrait: `${import.meta.env.BASE_URL}agents/generated/benjamin-netanyahu.jpg`,
+      portrait: assetPath('agents/generated/benjamin-netanyahu.jpg'),
       attributes: {
         intelligence: 94,
         speed: 72,
@@ -145,7 +157,7 @@ export function makeSeedAgents(): OpenClawAgent[] {
       behaviorProfile: 'hybrid',
       level: 47,
       rarity: 'legendary',
-      portrait: `${import.meta.env.BASE_URL}agents/generated/donald-trump.jpg`,
+      portrait: assetPath('agents/generated/donald-trump.jpg'),
       attributes: {
         intelligence: 78,
         speed: 82,
@@ -211,7 +223,7 @@ export function makeSeedAgents(): OpenClawAgent[] {
       behaviorProfile: 'architect',
       level: 31,
       rarity: 'epic',
-      portrait: `${import.meta.env.BASE_URL}agents/generated/sarah-cooper.jpg`,
+      portrait: assetPath('agents/generated/sarah-cooper.jpg'),
       attributes: {
         intelligence: 88,
         speed: 62,
@@ -277,7 +289,7 @@ export function makeSeedAgents(): OpenClawAgent[] {
       behaviorProfile: 'executor',
       level: 33,
       rarity: 'epic',
-      portrait: `${import.meta.env.BASE_URL}agents/generated/james-roberts.jpg`,
+      portrait: assetPath('agents/generated/james-roberts.jpg'),
       attributes: {
         intelligence: 79,
         speed: 87,
@@ -343,7 +355,7 @@ export function makeSeedAgents(): OpenClawAgent[] {
       behaviorProfile: 'auditor',
       level: 30,
       rarity: 'epic',
-      portrait: `${import.meta.env.BASE_URL}agents/generated/brandon-riley.jpg`,
+      portrait: assetPath('agents/generated/brandon-riley.jpg'),
       attributes: {
         intelligence: 83,
         speed: 58,
@@ -409,7 +421,7 @@ export function makeSeedAgents(): OpenClawAgent[] {
       behaviorProfile: 'architect',
       level: 22,
       rarity: 'rare',
-      portrait: `${import.meta.env.BASE_URL}agents/generated/marcus-chen.jpg`,
+      portrait: assetPath('agents/generated/marcus-chen.jpg'),
       attributes: {
         intelligence: 82,
         speed: 78,
@@ -475,7 +487,7 @@ export function makeSeedAgents(): OpenClawAgent[] {
       behaviorProfile: 'researcher',
       level: 14,
       rarity: 'rare',
-      portrait: `${import.meta.env.BASE_URL}agents/generated/diana-reyes.jpg`,
+      portrait: assetPath('agents/generated/diana-reyes.jpg'),
       attributes: {
         intelligence: 71,
         speed: 82,
@@ -541,7 +553,7 @@ export function makeSeedAgents(): OpenClawAgent[] {
       behaviorProfile: 'auditor',
       level: 19,
       rarity: 'rare',
-      portrait: `${import.meta.env.BASE_URL}agents/generated/viktor-volkov.jpg`,
+      portrait: assetPath('agents/generated/viktor-volkov.jpg'),
       attributes: {
         intelligence: 84,
         speed: 62,
@@ -607,7 +619,7 @@ export function makeSeedAgents(): OpenClawAgent[] {
       behaviorProfile: 'executor',
       level: 15,
       rarity: 'common',
-      portrait: `${import.meta.env.BASE_URL}agents/generated/aisha-patel.jpg`,
+      portrait: assetPath('agents/generated/aisha-patel.jpg'),
       attributes: {
         intelligence: 86,
         speed: 74,
@@ -673,7 +685,7 @@ export function makeSeedAgents(): OpenClawAgent[] {
       behaviorProfile: 'researcher',
       level: 12,
       rarity: 'common',
-      portrait: `${import.meta.env.BASE_URL}agents/generated/zoe-kim.jpg`,
+      portrait: assetPath('agents/generated/zoe-kim.jpg'),
       attributes: {
         intelligence: 68,
         speed: 86,
@@ -739,7 +751,7 @@ export function makeSeedAgents(): OpenClawAgent[] {
       behaviorProfile: 'architect',
       level: 50,
       rarity: 'legendary',
-      portrait: `${import.meta.env.BASE_URL}agents/generated/warren-buffett.jpg`,
+      portrait: assetPath('agents/generated/warren-buffett.jpg'),
       attributes: {
         intelligence: 96,
         speed: 54,
@@ -808,7 +820,7 @@ export function makeSeedAgents(): OpenClawAgent[] {
       behaviorProfile: 'architect',
       level: 44,
       rarity: 'legendary',
-      portrait: `${import.meta.env.BASE_URL}agents/generated/elena-vasquez.jpg`,
+      portrait: assetPath('agents/generated/elena-vasquez.jpg'),
       attributes: {
         intelligence: 96,
         speed: 58,
@@ -875,7 +887,7 @@ export function makeSeedAgents(): OpenClawAgent[] {
       behaviorProfile: 'executor',
       level: 36,
       rarity: 'epic',
-      portrait: `${import.meta.env.BASE_URL}agents/generated/marcus-thorne.jpg`,
+      portrait: assetPath('agents/generated/marcus-thorne.jpg'),
       attributes: {
         intelligence: 82,
         speed: 90,
@@ -942,7 +954,7 @@ export function makeSeedAgents(): OpenClawAgent[] {
       behaviorProfile: 'executor',
       level: 32,
       rarity: 'epic',
-      portrait: `${import.meta.env.BASE_URL}agents/generated/priya-sharma.jpg`,
+      portrait: assetPath('agents/generated/priya-sharma.jpg'),
       attributes: {
         intelligence: 84,
         speed: 86,
@@ -1009,7 +1021,7 @@ export function makeSeedAgents(): OpenClawAgent[] {
       behaviorProfile: 'auditor',
       level: 28,
       rarity: 'epic',
-      portrait: `${import.meta.env.BASE_URL}agents/generated/thomas-blackwood.jpg`,
+      portrait: assetPath('agents/generated/thomas-blackwood.jpg'),
       attributes: {
         intelligence: 86,
         speed: 54,
@@ -1076,7 +1088,7 @@ export function makeSeedAgents(): OpenClawAgent[] {
       behaviorProfile: 'auditor',
       level: 24,
       rarity: 'rare',
-      portrait: `${import.meta.env.BASE_URL}agents/generated/yuki-tanaka.jpg`,
+      portrait: assetPath('agents/generated/yuki-tanaka.jpg'),
       attributes: {
         intelligence: 76,
         speed: 68,
@@ -1143,7 +1155,7 @@ export function makeSeedAgents(): OpenClawAgent[] {
       behaviorProfile: 'researcher',
       level: 20,
       rarity: 'rare',
-      portrait: `${import.meta.env.BASE_URL}agents/generated/olivia-chen.jpg`,
+      portrait: assetPath('agents/generated/olivia-chen.jpg'),
       attributes: {
         intelligence: 72,
         speed: 80,

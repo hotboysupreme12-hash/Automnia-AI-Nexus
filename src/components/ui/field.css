@@ -1,0 +1,109 @@
+.dui-field {
+  display: grid;
+  gap: var(--space-2);
+  min-width: 0;
+}
+
+.dui-field__label {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+  color: var(--text-secondary);
+  font-size: var(--font-size-sm);
+  font-weight: 700;
+  line-height: var(--line-title);
+  letter-spacing: 0;
+}
+
+.dui-field__required {
+  color: var(--accent-yellow);
+  font-size: var(--font-size-2xs);
+  font-weight: 800;
+  text-transform: uppercase;
+}
+
+.dui-input,
+.dui-select,
+.dui-textarea {
+  width: 100%;
+  min-width: 0;
+  min-height: var(--control-height-default);
+  padding: 0 var(--control-padding-x);
+  border: 1px solid var(--border-default);
+  border-radius: var(--control-radius);
+  background: color-mix(in srgb, var(--surface-1) 82%, transparent);
+  color: var(--text-primary);
+  font: inherit;
+  font-size: var(--font-size-sm);
+  line-height: var(--line-body);
+  letter-spacing: 0;
+  outline: none;
+  text-shadow: none;
+  transition:
+    border-color 160ms ease,
+    background-color 160ms ease,
+    box-shadow 160ms ease;
+}
+
+.dui-textarea {
+  min-height: calc(var(--control-height-primary) * 3);
+  padding-block: var(--space-3);
+  resize: vertical;
+}
+
+.dui-input:hover:not(:disabled),
+.dui-select:hover:not(:disabled),
+.dui-textarea:hover:not(:disabled) {
+  border-color: color-mix(in srgb, var(--accent-cyan) 44%, var(--border-default));
+}
+
+.dui-input:focus-visible,
+.dui-select:focus-visible,
+.dui-textarea:focus-visible {
+  border-color: var(--focus-ring);
+  outline: 2px solid var(--focus-ring);
+  outline-offset: 2px;
+  box-shadow:
+    0 0 0 4px var(--focus-ring-shadow),
+    0 0 0 1px var(--focus-ring-fill) inset;
+}
+
+.dui-input:disabled,
+.dui-select:disabled,
+.dui-textarea:disabled {
+  color: var(--text-disabled);
+  cursor: not-allowed;
+  opacity: 0.68;
+}
+
+.dui-input--invalid,
+.dui-select--invalid,
+.dui-textarea--invalid,
+.dui-field--invalid :where(.dui-input, .dui-select, .dui-textarea) {
+  border-color: color-mix(in srgb, var(--accent-red) 58%, var(--border-default));
+}
+
+.dui-field__hint,
+.dui-field__error {
+  margin: 0;
+  font-size: var(--font-size-xs);
+  line-height: var(--line-body);
+}
+
+.dui-field__hint {
+  color: var(--text-muted);
+}
+
+.dui-field__error {
+  color: var(--accent-red);
+  font-weight: 700;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .dui-input,
+  .dui-select,
+  .dui-textarea {
+    transition-duration: 0.001ms;
+  }
+}

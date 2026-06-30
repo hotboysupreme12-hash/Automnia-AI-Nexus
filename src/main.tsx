@@ -5,6 +5,7 @@ import './dystopai-app-theme.css'
 import App from './App.tsx'
 import { installAuthenticatedFetch } from './api/authenticatedFetch'
 import { preloadMissionIconAssets } from './components/mission/missionIconAssets'
+import { applyStoredUiSettings } from './components/settings/uiSettings'
 import { AppErrorBoundary, installGlobalRendererErrorHandlers } from './components/system/AppErrorBoundary'
 
 const userAgent = navigator.userAgent || ''
@@ -16,6 +17,7 @@ if (isWindowsClient) document.documentElement.classList.add('dy-windows-client')
 if (isDesktopClient) document.documentElement.classList.add('dy-desktop-client')
 if (isWindowsClient && isDesktopClient) document.documentElement.classList.add('dy-desktop-safe-renderer')
 document.documentElement.dataset.dyTheme = 'dark'
+applyStoredUiSettings()
 installAuthenticatedFetch()
 installGlobalRendererErrorHandlers()
 void preloadMissionIconAssets()

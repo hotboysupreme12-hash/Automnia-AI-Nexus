@@ -29,7 +29,7 @@ const AGENT_REGISTRY_MIN_WIDTH = 640
 const AGENT_SPLIT_HANDLE_WIDTH = 18
 type ShellNotice = { tone: 'success' | 'warning' | 'error' | 'neutral'; message: string }
 
-type PrimaryAppTab = Exclude<AppTab, 'settings'>
+type PrimaryWorkspace = Exclude<AppTab, 'settings'>
 
 const WORKSPACE_META: Record<AppTab, { label: string; railMeta: string; description: string; iconSrc: string; tone: string }> = {
   agents: { label: 'Agents', railMeta: 'Roster', description: 'Assemble elite specialists, deploy on missions, and command with precision.', iconSrc: '/icons/nav-agents-flat.png', tone: 'agents' },
@@ -39,7 +39,7 @@ const WORKSPACE_META: Record<AppTab, { label: string; railMeta: string; descript
   settings: { label: 'Settings', railMeta: 'System', description: 'Tune interface chrome, mission defaults, active-party runtime policy, and maintenance controls.', iconSrc: '/icons/nav-monitor-flat.png', tone: 'settings' },
 }
 
-const TABS: { id: PrimaryAppTab; label: string; railMeta: string; description: string; iconSrc: string; tone: string }[] = [
+const PRIMARY_WORKSPACES: { id: PrimaryWorkspace; label: string; railMeta: string; description: string; iconSrc: string; tone: string }[] = [
   { id: 'agents', label: 'Agents', railMeta: 'Roster', description: 'Assemble elite specialists, deploy on missions, and command with precision.', iconSrc: '/icons/nav-agents-flat.png', tone: 'agents' },
   { id: 'missions', label: 'Missions', railMeta: 'Launch', description: 'Turn objectives into coordinated, scheduled, and verifiable agent work.', iconSrc: '/icons/nav-missions-flat.png', tone: 'missions' },
   { id: 'monitor', label: 'Monitor', railMeta: 'Live ops', description: 'Inspect runtime health, active calls, sessions, cron jobs, and recovery evidence.', iconSrc: '/icons/nav-monitor-flat.png', tone: 'monitor' },
@@ -420,10 +420,10 @@ export function NexusShell() {
               <span className="block">Discover</span>
             </span>
           </button>
-          {TABS.map((t) => (
+          {PRIMARY_WORKSPACES.map((t) => (
             <button
               key={t.id}
-              id={`nexus-tab-${t.id}`}
+              id={`nexus-nav-${t.id}`}
               type="button"
               onClick={() => selectTab(t.id)}
               aria-label={`${t.label} ${t.railMeta}`}
@@ -601,9 +601,9 @@ export function NexusShell() {
           )}
         </section>
 
-        {/* Tab content */}
+        {/* Workspace content */}
         <motion.div
-          id={`nexus-panel-${tab}`}
+          id={`nexus-workspace-${tab}`}
           role="region"
           aria-label={`${activeTab.label} workspace`}
           initial={{ opacity: 0, y: 4 }}

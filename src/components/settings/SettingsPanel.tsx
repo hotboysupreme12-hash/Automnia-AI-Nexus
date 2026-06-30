@@ -23,6 +23,7 @@ type NoticeTone = 'neutral' | 'success' | 'warning'
 
 function settingLabel(value: string): string {
   return value
+    .replace(/([a-z])([A-Z])/g, '$1-$2')
     .split('-')
     .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
     .join(' ')
@@ -94,14 +95,18 @@ export function SettingsPanel() {
   const [parallelPreferred, setParallelPreferred] = useState(() => Boolean(firstTarget?.runtimePolicy?.parallelPreferred))
   const [notice, setNotice] = useState<{ tone: NoticeTone; text: string }>({ tone: 'neutral', text: 'Changes save locally and apply immediately where possible.' })
 
-  const updateUiSetting = <Key extends keyof DystopAIUiSettings>(key: Key, value: DystopAIUiSettings[Key]) => {
+  const updateUiSettings = (patch: Partial<DystopAIUiSettings>, label: string) => {
     setUiSettings((current) => {
-      const next = { ...current, [key]: value }
+      const next = { ...current, ...patch }
       saveUiSettings(next)
       applyUiSettings(next)
-      setNotice({ tone: 'success', text: `${settingLabel(String(key))} updated.` })
+      setNotice({ tone: 'success', text: `${label} updated.` })
       return next
     })
+  }
+
+  const updateUiSetting = <Key extends keyof DystopAIUiSettings>(key: Key, value: DystopAIUiSettings[Key]) => {
+    updateUiSettings({ [key]: value } as Partial<DystopAIUiSettings>, settingLabel(String(key)))
   }
 
   const resetUiSettings = () => {
@@ -181,8 +186,9 @@ export function SettingsPanel() {
               <option value="reduced">Reduced</option>
             </select>
           </Field>
+          <ToggleField label="High contrast" hint="Raises muted text, placeholders, borders, and focus rings." checked={uiSettings.highContrast} onChange={(value) => updateUiSetting('highContrast', value)} />
+          <ToggleField label="Reduced glow" hint="Keeps state and readability from depending on bloom or halos." checked={uiSettings.reducedGlow} onChange={(value) => updateUiSettings({ reducedGlow: value, controlGlow: !value }, 'Reduced Glow')} />
           <ToggleField label="Neutral scrollbars" hint="Removes blue scrollbar thumbs." checked={uiSettings.neutralScrollbars} onChange={(value) => updateUiSetting('neutralScrollbars', value)} />
-          <ToggleField label="Control glow" hint="Keep off for a flatter graphite interface." checked={uiSettings.controlGlow} onChange={(value) => updateUiSetting('controlGlow', value)} />
           <div className="dui-settings-actions">
             <button type="button" onClick={resetUiSettings}>Reset UI</button>
             <button type="button" onClick={() => void exportUiSettings()}>Copy UI JSON</button>

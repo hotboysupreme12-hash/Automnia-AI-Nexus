@@ -691,3 +691,193 @@ Still open from Phase D:
 Next:
 
 - Continue Phase D with item 40: cancellation after backend restart, preserving durable mission hydration, recovered scheduler state, cancellation cleanup evidence, and backend-owned projection behavior.
+
+### 2026-06-30 - Phase D cancellation after backend restart
+
+Completed verified plan items: 40.
+
+Evidence:
+
+- `tests/missionStateService.test.ts` now covers cancellation after backend restart by hydrating an active durable mission through `createMissionRecoveryService(...)`, then cancelling the recovered mission through `createMissionStateService(...).stopMission(...)`.
+- The restart-cancellation test verifies durable mission hydration, Gateway session reconciliation, recovered scheduler round/job state, recurring shift rehydration, recovered timer arming, operator cancellation evidence, cron cleanup summary, Team Sync cancellation snapshot, backend mission report recording, and `transition:running->cancelled` mission record persistence.
+- `scripts/smoke-mission-cancellation.ts` now asserts that the mission state test suite includes the restart-cancellation coverage, durable hydration call, and operator cancellation evidence.
+- `docs/generated/server-index-architecture.md` was regenerated with `22,963` control-plane composition lines, `9` entrypoint lines, and `0` inline routes.
+- Verification passed: `node --import tsx --test tests/missionStateService.test.ts`, `npm run smoke:mission-cancellation`, `npm run smoke:mission-recovery`, `npm run smoke:mission-durable-state`, `npm run smoke:mission-cron-reconciliation`, `npm run smoke:mission-gateway-reconciliation`, `npm run smoke:mission-lifecycle-projection`, `npm run smoke:mission-backend-owned`, `npm run smoke:server-architecture`, `node scripts/report-server-index-architecture.mjs`, `npm run typecheck`, `npm run test:unit` (`82` tests), `npm run lint`, `git diff --check`, and `npm test`.
+- `git diff --check` passed with only LF-to-CRLF working-copy warnings on touched files.
+- Full `npm test` passed end to end, including mission recovery, durable state, cron reconciliation, cancellation, runtime recovery soak, Gateway service smokes, release validation, release lifecycle, secret scan, and CI workflow checks.
+
+Still open from Phase D:
+
+- Item 41: broaden cron reconciliation test coverage if gaps remain after the restart-cancellation slice.
+- Items 43-45: add restart/crash recovery smokes and confirm the Mission page shows recovered backend state rather than stale renderer state.
+
+Next:
+
+- Continue Phase D with item 41: review cron reconciliation coverage and add any missing tests around recovered active, missing, disabled, and unavailable cron-state paths.
+
+### 2026-06-30 - Phase D cron reconciliation coverage
+
+Completed verified plan items: 41.
+
+Evidence:
+
+- `server/services/missions/missionRecoveryService.ts` now redacts unavailable OpenClaw cron-state errors before writing lifecycle logs or recovered mission evidence.
+- `tests/missionRecoveryService.test.ts` now directly covers recovered active cron jobs, missing and disabled cron jobs with exact transition evidence, unavailable cron-state deferral, and redacted unavailable cron reconciliation evidence during durable mission hydration.
+- `scripts/smoke-mission-cron-reconciliation.ts` now asserts the active/missing/disabled/unavailable cron coverage and the redaction boundary for unavailable cron-state errors.
+- `docs/generated/server-index-architecture.md` was regenerated with `22,963` control-plane composition lines, `9` entrypoint lines, and `0` inline routes.
+- Verification passed: `node --import tsx --test tests/missionRecoveryService.test.ts`, `npm run smoke:mission-cron-reconciliation`, `npm run smoke:mission-recovery`, `npm run smoke:mission-durable-state`, `npm run smoke:mission-gateway-reconciliation`, `npm run smoke:server-architecture`, `node scripts/report-server-index-architecture.mjs`, `npm run typecheck`, `npm run test:unit` (`85` tests), `npm run lint`, `git diff --check`, and `npm test`.
+- Full `npm test` passed end to end, including mission recovery, cron reconciliation, durable state, Gateway reconciliation, runtime recovery soak, Gateway service smokes, release validation, release lifecycle, secret scan, and CI workflow checks.
+
+Still open from Phase D:
+
+- Items 43-45: add restart/crash recovery smokes and confirm the Mission page shows recovered backend state rather than stale renderer state.
+
+Next:
+
+- Continue Phase D with items 43-45: add backend restart/renderer crash recovery smoke coverage and verify the Mission page projects recovered backend-owned mission state.
+
+### 2026-06-30 - Phase D restart and renderer recovery smoke
+
+Completed verified plan items: 43, 44, 45.
+
+Evidence:
+
+- `scripts/smoke-mission-restart-recovery.ts` now performs a service-level backend restart recovery check by hydrating a durable active mission into a fresh mission map through `createMissionRecoveryService(...)`, verifying active cron preservation, Gateway `sessions.describe` reconciliation, recovered shift/timer delegation, mission rehydration events, and lifecycle log evidence.
+- The same smoke simulates renderer crash/reload behavior by importing the actual `src/store/nexusStore.ts` under mocked browser APIs with stale persisted mission history, then calling `syncMissionProjection()` against a mocked `/api/missions/projection` backend response.
+- `src/store/nexusStore.ts` now maps backend mission projection state through `backendMissionStatusToRunStatus(...)`, preserving `lifecycleState: 'failed'` as a failed Mission page state instead of collapsing recovered failures into `cancelled`.
+- `src/components/mission/MissionDeploymentPanel.tsx` now renders a compact backend-projected mission status strip with `data-mission-projection-state`, mission id, title, scheduler status, and round, so recovered mission state is visible on the Mission page after reload.
+- `src/styles/dystopai-theme/40-plugins-runtime.css` styles the mission status strip with stable grid tracks and truncation so recovered titles/status labels do not resize or overlap the mission controls.
+- `src/utils/apiUrl.ts` and `src/data/seeds.ts` now tolerate Node smoke imports by reading Vite `import.meta.env` values through guarded helpers with local fallbacks.
+- `package.json` now exposes `npm run smoke:mission-restart-recovery` and wires it into `npm run test:ci` immediately after `smoke:mission-recovery`.
+- `docs/generated/server-index-architecture.md` was regenerated with unchanged `22,963` control-plane composition lines, `9` entrypoint lines, and `0` inline routes.
+- Verification passed: `npm run smoke:mission-restart-recovery`, `npm run smoke:mission-recovery`, `npm run smoke:mission-durable-state`, `npm run smoke:mission-lifecycle-projection`, `npm run smoke:mission-backend-owned`, `npm run smoke:server-architecture`, `npm run typecheck`, `npm run test:unit` (`85` tests), `npm run lint`, `node scripts/report-server-index-architecture.mjs`, and `npm test`.
+- Full `npm test` passed end to end, including the new `smoke:mission-restart-recovery` CI gate, notices, mission smokes, Gateway service smokes, runtime recovery soak, release validation/lifecycle, secret scan, and CI workflow checks.
+
+Still open from Phase D:
+
+- No Phase D items remain open from the beta split plan.
+
+Next:
+
+- Continue Phase E with item 46: extract provider catalog/model normalization into `server/services/providers/modelCatalogService.ts`, preserving provider auth redaction and missing-auth UI behavior.
+
+### 2026-06-30 - Phase E model catalog service extraction
+
+Completed verified plan items: 46.
+
+Evidence:
+
+- `server/services/providers/modelCatalogService.ts` now owns fallback model metadata, unavailable/suppressed model rules, Codex subscription model canonicalization, provider display normalization, OpenRouter catalog allowlist normalization, provider model config normalization, OpenClaw model listing fallback, config fallback, Google Vertex catalog filtering delegation, and available-model cache/refresh timers.
+- `server/controlPlane.ts` now composes `createModelCatalogService(...)` and delegates `fallbackAvailableModels`, `getFastAvailableModelsCatalog`, `refreshAvailableModelsCache`, `invalidateAvailableModelsForAuthChange`, `ensureConfiguredModelAllowlist`, `ensureOpenRouterModelCatalogAllowlist`, cache invalidation, and shutdown timer cleanup through the service.
+- `server/routes/providerAuthRoutes.ts`, `server/routes/agentConfigRoutes.ts`, and `server/routes/partyManagementRoutes.ts` keep their existing API/route shapes while receiving the same model catalog helpers through composition options.
+- `tests/modelCatalogService.test.ts` covers fallback catalog shaping, Codex subscription canonicalization, unavailable model suppression, OpenRouter allowlist normalization, OpenClaw model list loading, config fallback loading, fast cache stale behavior, and provider model config normalization.
+- `scripts/smoke-model-catalog-service.ts` is wired as `npm run smoke:model-catalog-service` and into `npm run test:ci`; `scripts/smoke-auth-provider-model-control-plane.ts` and `scripts/smoke-server-entrypoint-boundary.ts` now assert model catalog ownership in the service instead of `controlPlane.ts`.
+- `docs/generated/server-index-architecture.md` was regenerated with `22,577` control-plane composition lines, `9` entrypoint lines, and `0` inline routes after the extraction.
+- Verification passed: `node --import tsx --test tests/modelCatalogService.test.ts`, `npm run smoke:model-catalog-service`, `npm run smoke:auth-provider-model`, `npm run smoke:server-architecture`, `npm run typecheck:server`, `npm run typecheck`, `npm run test:unit` (`89` tests), `npm run lint`, `npm run smoke:route-inventory`, `node scripts/report-server-index-architecture.mjs`, `git diff --check`, and `npm test`.
+- `git diff --check` passed with only LF-to-CRLF working-copy warnings on touched files.
+- Full `npm test` passed end to end, including the new model catalog service smoke, mission recovery/restart smokes, Gateway service smokes, runtime recovery soak, security smokes, secret scan, release validation/lifecycle, and CI workflow checks.
+
+Still open from Phase E:
+
+- Items 47-49: extract provider authentication storage, OAuth callback server handling, and provider-specific setup checks into focused services.
+- Items 50-55: add missing-credential, provider-auth redaction, OAuth timeout, loopback binding, missing-auth model selection, and UI missing-auth behavior coverage after the remaining provider/auth extractions.
+
+Next:
+
+- Continue Phase E with item 47: extract provider authentication storage into `server/services/providers/providerAuthService.ts`, preserving SecretRef/local-auth redaction, auth profile synchronization, provider status API shape, and model catalog invalidation on auth changes.
+
+### 2026-06-30 - Phase E provider auth service extraction
+
+Completed verified plan items: 47.
+
+Evidence:
+
+- `server/services/providers/providerAuthService.ts` now owns local auth store hydration/migration, provider API-key and OAuth persistence, OpenClaw auth-profile JSON/SQLite synchronization, Codex OAuth profile preference repair, user Codex auth mirroring, provider auth removal, provider status shaping, missing-auth model checks, agent auth env projection, and OpenRouter auth-triggered plugin/model-catalog repair.
+- `server/controlPlane.ts` now composes `createProviderAuthService(...)` with explicit dependencies for control-center state, OpenClaw config reads/writes, model catalog invalidation, Google OAuth/Vertex status probes, agent-local config reads, and private atomic writers. The composition root delegates provider auth readiness, saves, removals, status, model-auth checks, and OAuth credential writes through the service.
+- `server/routes/providerAuthRoutes.ts` keeps the same route/API surface while receiving service-backed auth readiness/status/save/remove callbacks through options.
+- `tests/providerAuthService.test.ts` covers API-key persistence to local auth and agent auth profiles, redacted provider status output, OpenAI Codex OAuth profile propagation/removal of legacy profiles, credential removal, OpenRouter plugin/catalog repair, and missing-auth Codex model status.
+- `scripts/smoke-provider-auth-service.ts` is wired as `npm run smoke:provider-auth-service` and into `npm run test:ci`; `scripts/smoke-auth-provider-model-control-plane.ts`, `scripts/smoke-server-entrypoint-boundary.ts`, and `scripts/smoke-control-center-sqlite-state.ts` now assert provider-auth ownership in the service instead of `controlPlane.ts`.
+- `docs/generated/server-index-architecture.md` was regenerated with `21,687` control-plane composition lines, `9` entrypoint lines, and `0` inline routes after the extraction.
+- Verification passed: `node --import tsx --test tests/providerAuthService.test.ts`, `npm run smoke:provider-auth-service`, `npm run smoke:auth-provider-model`, `npm run smoke:model-catalog-service`, `npm run smoke:server-architecture`, `npm run smoke:route-inventory`, `npm run smoke:control-center-state`, `npm run typecheck:server`, `npm run typecheck`, `npm run test:unit` (`93` tests), `npm run lint`, `node scripts/report-server-index-architecture.mjs`, `git diff --check`, and `npm test`.
+- `git diff --check` passed with only LF-to-CRLF working-copy warnings on touched files.
+- Full `npm test` passed end to end, including the new provider-auth service smoke, model catalog smoke, mission recovery/restart smokes, Gateway service smokes, runtime recovery soak, security smokes, secret scan, release validation/lifecycle, and CI workflow checks.
+
+Still open from Phase E:
+
+- Items 48-49: extract OAuth callback server handling and provider-specific setup checks into focused services.
+- Items 50-55: add missing-credential, provider-auth redaction, OAuth timeout, loopback binding, missing-auth model selection, and UI missing-auth behavior coverage after the remaining provider/auth extractions.
+
+Next:
+
+- Continue Phase E with item 48: extract OAuth callback server handling into `server/services/providers/oauthCallbackService.ts`, preserving loopback-only binding, session lifecycle, timeout/cleanup behavior, redacted callback errors, and runtime shutdown cleanup.
+
+### 2026-06-30 - Phase E OAuth callback service extraction
+
+Completed verified plan items: 48.
+
+Evidence:
+
+- `server/services/providers/oauthCallbackService.ts` now owns Google and OpenAI Codex OAuth callback listener startup, loopback-only binding, session storage, pending-session timeout cleanup, manual OpenAI Codex code parsing, callback completion, redacted callback error storage/rendering, provider OAuth credential persistence, token refresh helpers, and shutdown/process-exit listener cleanup.
+- `server/controlPlane.ts` now composes `createOAuthCallbackService(...)` and delegates OAuth session storage, Google/OpenAI Codex session starts, manual Codex completion, code parsing, refresh helpers, and runtime shutdown cleanup through the service.
+- `server/routes/providerAuthRoutes.ts` keeps the same OAuth route/API surface while sharing the service-owned `ProviderOAuthSession` contract and receiving OAuth behavior through route options.
+- `tests/oauthCallbackService.test.ts` covers Google loopback callback completion, OpenAI Codex manual completion, pending-session timeout behavior, redacted callback exchange failures, and shutdown closing listeners while failing pending sessions.
+- `scripts/smoke-oauth-callback-service.ts` is wired as `npm run smoke:oauth-callback-service` and into `npm run test:ci`; provider/auth, runtime-actions, production-security, and server-architecture smokes now assert OAuth callback ownership in the service instead of `controlPlane.ts`.
+- `docs/generated/server-index-architecture.md` was regenerated with `21,166` control-plane composition lines, `9` entrypoint lines, and `0` inline routes after the extraction.
+- Verification passed: `node --import tsx --test tests/oauthCallbackService.test.ts`, `npm run smoke:oauth-callback-service`, `npm run typecheck:server`, `npm run smoke:auth-provider-model`, `npm run smoke:runtime-actions-control-plane`, `npm run smoke:server-architecture`, `npm run smoke:production-security-delta`, `node scripts/report-server-index-architecture.mjs`, `npm run test:unit` (`98` tests), `npm run typecheck`, `npm run lint`, `git diff --check`, and `npm test`.
+- `git diff --check` passed with only LF-to-CRLF working-copy warnings on touched files.
+- Full `npm test` passed end to end, including the new OAuth callback service smoke, provider auth/model/catalog smokes, mission recovery/restart smokes, Gateway service smokes, runtime recovery soak, security smokes, secret scan, release validation/lifecycle, and CI workflow checks.
+
+Still open from Phase E:
+
+- Item 49: extract provider-specific setup checks into focused helpers.
+- Items 50-55: add missing-credential, provider-auth redaction, OAuth timeout, loopback binding, missing-auth model selection, and UI missing-auth behavior coverage after the remaining provider/auth extraction.
+
+Next:
+
+- Continue Phase E with item 49: extract provider-specific setup checks, starting with Google/Google Vertex/OpenAI Codex readiness helpers that still live in `server/controlPlane.ts`.
+
+### 2026-06-30 - Phase E provider setup service extraction
+
+Completed verified plan items: 49.
+
+Evidence:
+
+- `server/services/providers/providerSetupService.ts` now owns Google OAuth client config discovery/status, Google project resolution, Google Vertex gcloud/local OAuth readiness, Vertex process-env projection, provider request-auth resolution, and OpenAI Codex OAuth runtime helper loading/validation.
+- `server/controlPlane.ts` now composes `createProviderSetupService(...)` and delegates provider setup/readiness behavior through service methods while preserving provider auth route/API shapes and existing provider auth/OAuth callback service wiring.
+- `tests/providerSetupService.test.ts` covers Google OAuth config from env and `client_secret.json`, fast Google Vertex readiness from local OAuth, probed gcloud project/account/token readiness, provider request auth through env and refreshed OAuth credentials, and OpenAI Codex OAuth runtime helper loading from explicit/minified exports.
+- `scripts/smoke-provider-setup-service.ts` is wired as `npm run smoke:provider-setup-service` and into `npm run test:ci`; auth/provider and architecture smokes now assert provider setup ownership in `server/services/providers/providerSetupService.ts`.
+- `scripts/smoke-openclaw-contracts.mjs` was aligned with the already-migrated `scripts/smoke-ui-render.mjs` workspace navigation variable names so the full suite recognizes the existing `agentsNavItem` Command Console assertions.
+- `docs/generated/server-index-architecture.md` was regenerated with `20,578` control-plane composition lines, `9` entrypoint lines, and `0` inline routes after the extraction.
+- Verification passed: `node --import tsx --test tests/providerSetupService.test.ts`, `npm run smoke:provider-setup-service`, `npm run smoke:provider-auth-service`, `npm run smoke:oauth-callback-service`, `npm run smoke:model-catalog-service`, `npm run smoke:auth-provider-model`, `npm run smoke:server-architecture`, `npm run smoke:production-security-delta`, `npm run smoke:route-inventory`, `node scripts/report-server-index-architecture.mjs`, `npm run typecheck:server`, `npm run typecheck`, `npm run test:unit` (`103` tests), `npm run lint`, `git diff --check`, `npm run smoke:openclaw`, and `npm test`.
+- `git diff --check` passed with only LF-to-CRLF working-copy warnings on touched files.
+- Full `npm test` passed end to end, including the new provider setup service smoke, provider auth/model/catalog/OAuth smokes, mission recovery/restart smokes, Gateway service smokes, runtime recovery soak, security smokes, secret scan, release validation/lifecycle, and CI workflow checks.
+
+Still open from Phase E:
+
+- Items 50-55: audit and extend coverage for missing credential states, provider-auth redaction, OAuth timeout, loopback binding, missing-auth model selection, and UI missing-auth behavior now that provider setup, auth storage, model catalog, and OAuth callback services are extracted.
+
+Next:
+
+- Continue Phase E with items 50-55, starting by mapping existing provider/OAuth/model-auth coverage to the plan and filling any gaps before marking those items complete.
+
+### 2026-06-30 - Phase E provider/auth beta coverage
+
+Completed verified plan items: 50, 51, 52, 53, 54, 55.
+
+Evidence:
+
+- `tests/providerAuthService.test.ts` now covers missing API-key, Google OAuth client setup, and Google Vertex credential states, while proving SecretRef/key markers are not exposed in provider auth status payloads.
+- `tests/providerAuthService.test.ts` also covers model-auth selection decisions for unconfigured provider models, optional-auth local models, OpenAI Codex subscription models, and configured provider fallbacks.
+- `tests/oauthCallbackService.test.ts` now covers OpenAI Codex browser-callback completion through a `127.0.0.1` listener in addition to Google loopback callback completion, pending-session timeout cleanup, manual completion, shutdown cleanup, and redacted callback failures.
+- `scripts/smoke-provider-auth-beta-coverage.ts` is wired as `npm run smoke:provider-auth-beta` and into `npm run test:ci`; it pins the Phase E item 50-55 coverage map across provider tests, OAuth tests, loopback listener bindings, missing-auth model decisions, Monitor's `Connect provider` CTA, and Agent Editor / Model Selector / Recruit connect-provider prompts.
+- Existing provider UI paths continue to use `apiRequest`, clear pasted key material after local save, refresh provider readiness after save/OAuth, and stop model save/recruit/Auto Forge flows before runtime work when provider auth is missing.
+- `docs/generated/server-index-architecture.md` remains at `20,578` control-plane composition lines, `9` entrypoint lines, and `0` inline routes; no provider/auth domain logic was added back to `server/controlPlane.ts`.
+- Verification passed: `node --import tsx --test tests/providerAuthService.test.ts`, `node --import tsx --test tests/oauthCallbackService.test.ts`, `npm run smoke:provider-auth-beta`, `npm run smoke:auth-provider-model`, `npm run smoke:model-catalog-service`, `npm run smoke:provider-auth-service`, `npm run smoke:oauth-callback-service`, `npm run smoke:provider-setup-service`, `npm run typecheck`, `npm run test:unit` (`106` tests), `npm run lint`, `npm run smoke:server-architecture`, `npm run smoke:route-inventory`, `npm run smoke:production-security-delta`, `git diff --check`, `npm run secret:scan`, and `npm test`.
+
+Still open from Phase E:
+
+- No Phase E items remain open from the beta split plan.
+
+Next:
+
+- Continue Phase F with item 56: extract plugin discovery into `server/services/plugins/pluginInventoryService.ts`, preserving configured/missing-auth/unavailable/failed/disabled plugin state evidence.

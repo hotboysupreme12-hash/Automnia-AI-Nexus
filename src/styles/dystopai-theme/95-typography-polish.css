@@ -15,17 +15,17 @@ html.dy-human-ui {
   --dui-font-display: var(--font-display);
   --dui-font-mono: var(--font-mono);
   --dui-rail: 224px;
-  --dy-type-micro: 10.5px;
-  --dy-type-caption: 11px;
-  --dy-type-small: 12.25px;
-  --dy-type-ui: 14px;
-  --dy-type-control: 13px;
+  --dy-type-micro: var(--font-size-2xs, 11px);
+  --dy-type-caption: var(--font-size-xs, 12px);
+  --dy-type-small: var(--font-size-sm, 13px);
+  --dy-type-ui: var(--font-size-md, 14px);
+  --dy-type-control: var(--font-size-sm, 13px);
   --dy-type-copy: 14.5px;
   --dy-type-title: 18px;
-  --dy-type-page: 34px;
-  --dy-leading-tight: 1.16;
+  --dy-type-page: 32px;
+  --dy-leading-tight: var(--line-tight, 1.16);
   --dy-leading-ui: 1.38;
-  --dy-leading-copy: 1.52;
+  --dy-leading-copy: var(--line-body, 1.52);
 }
 
 html.dui-pro-overhaul,
@@ -516,7 +516,7 @@ html.dui-pro-overhaul.dui-cohesive-ui [data-dui-panel="plugins"].dy-plugins-pane
   }
 
   html.dui-pro-overhaul .dy-human-nav-copy strong {
-    font-size: 10.5px !important;
+    font-size: var(--dy-type-caption) !important;
     line-height: 1.12 !important;
   }
 
@@ -538,8 +538,8 @@ html.dui-pro-overhaul.dui-cohesive-ui [data-dui-panel="plugins"].dy-plugins-pane
   html.dui-cohesive-ui,
   html.dy-human-ui {
     --dy-type-page: 24px;
-    --dy-type-micro: 10px;
-    --dy-type-caption: 10.5px;
+    --dy-type-micro: var(--font-size-2xs, 11px);
+    --dy-type-caption: var(--font-size-xs, 12px);
   }
 
   html.dui-pro-overhaul .dy-status-chip {
@@ -785,7 +785,7 @@ html.dui-pro-overhaul [data-dui-panel="missions"] .dui-readiness-mini-head {
 html.dui-pro-overhaul [data-dui-panel="missions"] .dui-readiness-mini-head span {
   overflow: hidden !important;
   color: #7f8a93 !important;
-  font-size: 7.5px !important;
+  font-size: var(--dy-type-micro) !important;
   font-weight: 860 !important;
   letter-spacing: .11em !important;
   line-height: 1 !important;
