@@ -454,6 +454,26 @@ split plan before implementation:
   `npm run smoke:server-architecture` reports `19,040/29,000` control-plane
   composition lines, `9` entry lines, and `0` inline routes after plugin
   runtime command handling extraction.
+- Current architecture evidence after Phase F item `59`:
+  `npm run smoke:server-architecture` reports `18,882/29,000` control-plane
+  composition lines, `9` entry lines, and `0` inline routes after plugin
+  diagnostics extraction.
+- Current architecture evidence after Phase F item `60`:
+  `npm run smoke:server-architecture` still reports `18,882/29,000`
+  control-plane composition lines, `9` entry lines, and `0` inline routes after
+  plugin not-found route coverage.
+- Current architecture evidence after Phase F item `61`:
+  `npm run smoke:server-architecture` still reports `18,882/29,000`
+  control-plane composition lines, `9` entry lines, and `0` inline routes after
+  plugin install-failure route coverage.
+- Current architecture evidence after Phase F item `62`:
+  `npm run smoke:server-architecture` still reports `18,882/29,000`
+  control-plane composition lines, `9` entry lines, and `0` inline routes after
+  plugin redacted-error route coverage.
+- Current architecture evidence after Phase F item `63`:
+  `npm run smoke:server-architecture` still reports `18,882/29,000`
+  control-plane composition lines, `9` entry lines, and `0` inline routes after
+  plugin disabled-state route coverage.
 - Phase F plugin runtime extraction is complete:
   `server/services/plugins/pluginRuntimeService.ts` owns runtime inspect command
   execution, structured JSON parsing, runtime surface summaries, redacted command
@@ -461,6 +481,57 @@ split plan before implementation:
   attachment/detachment, input/resize/stop operations, and shutdown cleanup.
   `server/controlPlane.ts` now composes the service and `server/routes/pluginRoutes.ts`
   receives it through the `pluginRuntime` route option.
+- Phase F plugin diagnostics extraction is complete:
+  `server/services/plugins/pluginDiagnosticsService.ts` owns ClawTalk setup input
+  validation, doctor output parsing, redacted command summaries, doctor/runtime
+  inspect polling, optional install fallback, manifest repair registry refresh,
+  Gateway restart handling, and final plugin controls refresh.
+  `server/controlPlane.ts` composes the service and keeps only a thin
+  `setupClawTalkPlugin` delegate for `server/routes/pluginRoutes.ts`.
+- Phase F plugin not-found coverage is complete:
+  `server/routes/pluginRoutes.ts` checks valid dynamic plugin ids against
+  `listPluginControls()` before update, uninstall, runtime inspect, direct
+  config save, enable/disable toggle, or plugin-specific setup-terminal startup.
+  Missing plugins return canonical `404` `plugin_not_found` envelopes before any
+  OpenClaw command, config write, runtime inspect, terminal spawn, or toggle
+  mutation runs. `tests/pluginRoutes.test.ts` covers the not-found API envelope,
+  prevents request secret echo, and confirms known plugins still mutate.
+- Phase F plugin install-failure coverage is complete:
+  `tests/pluginRoutes.test.ts` now covers `/api/plugins/install` command
+  failure through the extracted route boundary, proving numeric plugin command
+  errors return canonical `502` `plugin_command_failed` envelopes, raw
+  install-error secrets are redacted by the route/API envelope path, and the
+  submitted install spec is not echoed. `scripts/smoke-plugin-install-service.ts`
+  pins this route coverage plus service-level install/activation failure
+  redaction. Full `npm test` passes after preserving the local
+  `99-mission-quiet-redesign.css` stylesheet before `95-typography-polish.css`
+  in `src/dystopai-app-theme.css`.
+- Phase F plugin redacted-error coverage is complete:
+  `tests/pluginRoutes.test.ts` now covers redacted plugin errors across plugin
+  list, search, update-all, Gateway restart, ClawTalk setup, plugin update,
+  uninstall, runtime inspect, direct config save, setup-terminal start, and
+  enable/disable toggle failures. The route harness simulates per-surface
+  dependency failures and proves raw `sk-...`, `apiKey=...`, token fields, and
+  ClawTalk `cc_test_...` keys are not echoed in canonical API envelopes.
+  `scripts/smoke-plugins-control-plane.ts` pins the test name, endpoint set, and
+  secret-marker assertions. Full `npm test` passes with `135` unit tests and the
+  full plugin/service/control-plane smoke suite.
+- Phase F plugin disabled-state coverage is complete:
+  `tests/pluginRoutes.test.ts` now covers a known disabled plugin returned by
+  `listPluginControls()`, proves `/api/plugins` preserves `enabled: false`,
+  `status: "disabled"`, and disabled-state guidance, and proves
+  `/api/plugins/:pluginId` can enable that plugin without treating it as missing
+  or invoking runtime inspect. `scripts/smoke-plugins-control-plane.ts` pins the
+  route test, disabled fixture, toggle endpoint, and existing Plugins page
+  disabled filter/count/start-state affordances. Full `npm test` passes with
+  `136` unit tests and the full plugin/service/control-plane smoke suite.
+- The previous plugin UI smoke blocker is resolved:
+  `src/components/plugins/PluginsPanel.tsx` again exposes the shared
+  `apiRequest`/`pluginApiData` caller for `/api/openclaw/command`; `npm run
+  smoke:plugins-control-plane` and `npm run smoke:openclaw-command-control-plane`
+  pass. The local untracked mission quiet-redesign stylesheet is preserved but
+  imported before `95-typography-polish.css` so the typography-polish-last shell
+  and font-size smokes pass.
 - The unit coverage lane was repaired for CI proof: `scripts/run-unit-tests.mjs`
   excludes test files and broad smoke-owned transitive service families while
   preserving direct plugin service coverage. `npm run test:unit:coverage` passes
@@ -480,20 +551,19 @@ split plan before implementation:
 - Phase C items `21-30` are complete and verified.
 - Phase D items `31`, `32`, `33`, `34`, `35`, `36`, `37`, `38`, `39`, `40`, `41`, `42`, `43`, `44`, and `45` are complete and verified.
 - Phase E items `46`, `47`, `48`, `49`, `50`, `51`, `52`, `53`, `54`, and `55` are complete and verified.
-- Phase F items `56`, `57`, and `58` are complete and verified.
+- Phase F items `56`, `57`, `58`, `59`, `60`, `61`, `62`, and `63` are complete and verified.
 
 ## Next Optimization Slice
 
 Continue Phase F:
 
-- Start item `59`: extract plugin doctor output into a focused plugin doctor
-  service while preserving ClawTalk setup/doctor evidence, redacted findings,
-  and existing Plugins page setup behavior.
-- Keep `server/controlPlane.ts` as dependency wiring only; add focused plugin
-  doctor tests and smokes before marking the item complete.
-- Rerun focused plugin doctor tests/smokes plus `npm run
-  smoke:plugin-runtime-service`, `npm run
-  smoke:plugin-install-service`, `npm run smoke:plugin-inventory-service`,
-  `npm run smoke:server-architecture`, `npm run typecheck`, `npm run
-  test:unit`, `npm run lint`, `git diff --check`, and `npm test` after the
-  slice.
+- Start item `64`: add tests for channel plugin unavailable state now that
+  disabled plugin state is pinned.
+- Preserve the current dirty-worktree context: `src/components/editor/AgentEditorModal.tsx`,
+  `src/components/party/ModelSelectorModal.tsx`, and the untracked
+  `src/styles/dystopai-theme/99-mission-quiet-redesign.css` were already local
+  UI edits; do not overwrite them while adding channel-unavailable coverage.
+- Rerun focused plugin coverage plus `npm run smoke:plugins-control-plane`,
+  `npm run smoke:openclaw-command-control-plane`, `npm run
+  smoke:server-architecture`, `npm run typecheck`, `npm run test:unit`, `npm
+  run lint`, `git diff --check`, and full `npm test` after item `64`.

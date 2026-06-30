@@ -551,7 +551,7 @@ function OpenClawCommandPanel({
           void runCommand()
         }}
       >
-        <div className="flex h-9 shrink-0 items-center rounded-md border border-white/[0.07] bg-black/25 px-2 font-mono text-[10px] text-slate-500">
+        <div className="flex h-9 shrink-0 items-center rounded-md border border-white/[0.07] bg-black/25 px-2 font-mono text-[11px] text-slate-500">
           $
         </div>
         <input
@@ -564,7 +564,7 @@ function OpenClawCommandPanel({
         <button
           type="submit"
           disabled={running || !command.trim()}
-          className="h-9 rounded-md border border-cyan-300/20 bg-cyan-300/[0.07] px-3 text-[10px] font-semibold uppercase text-cyan-100 transition hover:bg-cyan-300/[0.12] disabled:cursor-wait disabled:opacity-50"
+          className="h-9 rounded-md border border-cyan-300/20 bg-cyan-300/[0.07] px-3 text-[11px] font-semibold uppercase text-cyan-100 transition hover:bg-cyan-300/[0.12] disabled:cursor-wait disabled:opacity-50"
         >
           {running ? 'Running' : 'Run'}
         </button>
@@ -573,12 +573,12 @@ function OpenClawCommandPanel({
       {lastRun && (
         <div className={`mt-3 rounded-md border px-3 py-2 ${lastRun.ok ? 'border-white/[0.06] bg-white/[0.018]' : 'border-rose-400/20 bg-rose-400/[0.04]'}`}>
           <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
-            <p className="truncate font-mono text-[10px] text-slate-500">{lastRun.result.command}</p>
-            <span className={`rounded-full border px-2 py-0.5 text-[8px] font-semibold uppercase ${lastRun.ok ? 'border-emerald-400/20 bg-emerald-400/[0.05] text-emerald-200' : 'border-rose-400/20 bg-rose-400/[0.06] text-rose-200'}`}>
+            <p className="truncate font-mono text-[11px] text-slate-500">{lastRun.result.command}</p>
+            <span className={`rounded-full border px-2 py-0.5 text-[11px] font-semibold uppercase ${lastRun.ok ? 'border-emerald-400/20 bg-emerald-400/[0.05] text-emerald-200' : 'border-rose-400/20 bg-rose-400/[0.06] text-rose-200'}`}>
               exit {lastRun.result.code}
             </span>
           </div>
-          <pre className="max-h-32 overflow-auto whitespace-pre-wrap break-words font-mono text-[10px] leading-relaxed text-slate-300">
+          <pre className="max-h-32 overflow-auto whitespace-pre-wrap break-words font-mono text-[11px] leading-relaxed text-slate-300">
             {output}
           </pre>
         </div>
@@ -1309,14 +1309,6 @@ export function PluginsPanel() {
           </div>
         </div>
 
-        <div className="mt-4">
-          <OpenClawCommandPanel
-            onPayload={applyPayload}
-            setNotice={setNotice}
-            setError={setError}
-          />
-        </div>
-
         <div className="mt-3">
           <PluginDiscoveryPanel
             onInstalled={applyInstalledPayload}
@@ -1325,6 +1317,14 @@ export function PluginsPanel() {
             filter={filter}
             setFilter={setFilter}
             visibleCount={visiblePlugins.length}
+            setNotice={setNotice}
+            setError={setError}
+          />
+        </div>
+
+        <div className="mt-3">
+          <OpenClawCommandPanel
+            onPayload={applyPayload}
             setNotice={setNotice}
             setError={setError}
           />

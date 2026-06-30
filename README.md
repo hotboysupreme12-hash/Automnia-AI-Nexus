@@ -318,7 +318,7 @@ Development defaults:
 - Local API: `http://127.0.0.1:4050/`
 - OpenClaw Gateway: `127.0.0.1:18789`
 
-When `CONTROL_CENTER_TOKEN` is not configured, the server generates a local session token and reports it in the startup log.
+When `CONTROL_CENTER_TOKEN` is not configured, the development server generates a local session token and reports it in the startup log. The desktop app keeps its launch token in a local user token file instead, so packaged Windows sessions can survive restarts without exposing the long-lived token to the web page.
 
 ## Essential Commands
 
@@ -358,15 +358,18 @@ Most users need two things first: model access and plugin credentials. Advanced 
 | --- | --- | --- |
 | `CONTROL_CENTER_PORT` | `4050` | Local API and packaged app port. |
 | `CONTROL_CENTER_FRONTEND_PORT` | `5173` | Development frontend port. |
-| `CONTROL_CENTER_TOKEN` | Generated when unset | Local browser session bootstrap token. |
+| `CONTROL_CENTER_TOKEN` | Generated or loaded locally when unset | Local browser/session bootstrap token. |
 | `CONTROL_CENTER_WORKSPACE_ROOT` | Project or OpenClaw workspace | Root workspace exposed through the local app. |
 | `OPENCLAW_GATEWAY_PORT` | `18789` | OpenClaw Gateway port. |
 | `OPENCLAW_BROWSER_RELAY_PORT` | `18792` | Browser relay port. |
 | `OPENCLAW_STATE_DIR` / `OPENCLAW_HOME` | User OpenClaw state directory | Runtime state, agents, skills, sessions, and configuration. |
 | `OPENCLAW_CONFIG_PATH` | `<state>/openclaw.json` | Active OpenClaw configuration file. |
 | `DYSTOPAI_USER_DATA_DIR` | `~/.dystopai-control-center` | Desktop app user data directory. |
+| `DYSTOPAI_CONTROL_CENTER_TOKEN_FILE` | `<user data>/auth/control-center-token.json` | Advanced override for the desktop token file path. |
 
 Keep provider keys, OAuth credentials, channel credentials, local sessions, generated runtime data, signing keys, and release output outside version control.
+
+On Windows first run, the desktop app creates `%USERPROFILE%\.dystopai-control-center\auth\control-center-token.json`. To set your own persistent local token, close DystopAI, edit the `token` field to a long random value with no line breaks, then reopen the app. If the file is deleted, blank, or malformed, DystopAI moves the bad file aside when possible and creates a fresh local token so the desktop app does not lock you out.
 
 ## Security And Control Notes
 

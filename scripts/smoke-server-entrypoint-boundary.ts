@@ -23,6 +23,7 @@ const oauthCallbackService = read('server/services/providers/oauthCallbackServic
 const providerSetupService = read('server/services/providers/providerSetupService.ts')
 const pluginInventoryService = read('server/services/plugins/pluginInventoryService.ts')
 const pluginInstallService = read('server/services/plugins/pluginInstallService.ts')
+const pluginDiagnosticsService = read('server/services/plugins/pluginDiagnosticsService.ts')
 const pluginRuntimeService = read('server/services/plugins/pluginRuntimeService.ts')
 const routingHelpers = read('server/integrations/agentRoutingHelpers.ts')
 const gatewayLifecycleService = read('server/services/gateway/gatewayLifecycleService.ts')
@@ -82,6 +83,7 @@ for (const contract of [
   ["from './services/providers/providerSetupService'", 'provider setup service import'],
   ["from './services/plugins/pluginInventoryService'", 'plugin inventory service import'],
   ["from './services/plugins/pluginInstallService'", 'plugin install service import'],
+  ["from './services/plugins/pluginDiagnosticsService'", 'plugin diagnostics service import'],
   ["from './services/plugins/pluginRuntimeService'", 'plugin runtime service import'],
   ["from './state/runtimeLedgerStore'", 'runtime ledger store import'],
   ["from './catalogs/providerCatalog'", 'provider catalog import'],
@@ -109,6 +111,7 @@ for (const contract of [
   ['createProviderSetupService({', 'provider setup service composition'],
   ['createPluginInventoryService({', 'plugin inventory service composition'],
   ['createPluginInstallService({', 'plugin install service composition'],
+  ['createPluginDiagnosticsService({', 'plugin diagnostics service composition'],
   ['createPluginRuntimeService({', 'plugin runtime service composition'],
   ['createRuntimeLedgerStore(', 'runtime ledger store composition'],
   ['missionStateService,', 'mission route state service injection'],
@@ -145,6 +148,7 @@ assert.doesNotMatch(controlPlane, /\bfunction\s+buildPluginControlEntry\b|\bfunc
 assert.doesNotMatch(controlPlane, /\basync function\s+installOpenClawPlugin\b|\basync function\s+updateOpenClawPlugin\b|\basync function\s+updateAllOpenClawPlugins\b|\basync function\s+uninstallOpenClawPlugin\b/, 'plugin install/update/remove mutations must stay in pluginInstallService.ts')
 assert.doesNotMatch(controlPlane, /\basync function\s+recordPluginInstallRuntimeState\b|\basync function\s+touchPluginManagedRuntimeState\b|\basync function\s+forgetPluginRuntimeState\b/, 'plugin install runtime-state writes must stay in pluginInstallService.ts')
 assert.doesNotMatch(controlPlane, /\bfunction\s+parsePluginInstallInput\b|\bfunction\s+repairPluginInstallRenameFailure\b|\bfunction\s+parsePluginInstallRenameFailure\b/, 'plugin install parsing and repair logic must stay in pluginInstallService.ts')
+assert.doesNotMatch(controlPlane, /\bfunction\s+normalizeClawTalkApiKeyInput\b|\bfunction\s+normalizeClawTalkServerInput\b|\bfunction\s+parseClawTalkDoctorSummary\b|\basync function\s+waitForClawTalkDoctor\b|\basync function\s+setupClawTalkPlugin\b/, 'plugin doctor/setup output must stay in pluginDiagnosticsService.ts')
 assert.doesNotMatch(controlPlane, /app\.(?:get|post)\(['"]\/api\/shifts/, 'shift endpoints must remain outside controlPlane.ts')
 assert.doesNotMatch(controlPlane, /app\.get\(['"]\/api\/browser\/preflight/, 'browser preflight must remain outside controlPlane.ts')
 assert.match(runtimeRoutes, /runtimeActions: RuntimeActionService/, 'runtime routes should receive runtime actions through a service option')
@@ -264,6 +268,16 @@ assert.match(pluginInstallService, /\bfunction\s+repairPluginInstallRenameFailur
 assert.match(pluginInstallService, /options\.schedulePluginGatewayRestart\(\)/, 'plugin install service should schedule Gateway restarts after plugin mutations')
 assert.match(pluginInstallService, /options\.refreshPluginListCache\(\)/, 'plugin install service should refresh plugin controls after plugin mutations')
 assert.match(pluginInstallService, /options\.redactSensitiveText/, 'plugin install service should redact command output and errors')
+assert.match(pluginDiagnosticsService, /export function createPluginDiagnosticsService/, 'plugin diagnostics service should expose a service factory')
+assert.match(pluginDiagnosticsService, /\bfunction\s+normalizeClawTalkApiKeyInput\b/, 'plugin diagnostics service should own ClawTalk API key normalization')
+assert.match(pluginDiagnosticsService, /\bfunction\s+normalizeClawTalkServerInput\b/, 'plugin diagnostics service should own ClawTalk server normalization')
+assert.match(pluginDiagnosticsService, /\bfunction\s+parseClawTalkDoctorSummary\b/, 'plugin diagnostics service should own ClawTalk doctor output parsing')
+assert.match(pluginDiagnosticsService, /\basync function\s+waitForClawTalkDoctor\b/, 'plugin diagnostics service should own ClawTalk doctor polling')
+assert.match(pluginDiagnosticsService, /\basync function\s+waitForClawTalkRuntimeInspect\b/, 'plugin diagnostics service should own ClawTalk runtime inspect polling')
+assert.match(pluginDiagnosticsService, /\basync function\s+setupClawTalkPlugin\b/, 'plugin diagnostics service should own ClawTalk setup orchestration')
+assert.match(pluginDiagnosticsService, /options\.redactSensitiveText/, 'plugin diagnostics service should redact ClawTalk doctor command output')
+assert.match(controlPlane, /const setupClawTalkPlugin: PluginDiagnosticsService\['setupClawTalkPlugin'\]/, 'controlPlane.ts should expose only a thin plugin diagnostics wrapper')
+assert.match(controlPlane, /activePluginDiagnosticsService\(\)\.setupClawTalkPlugin\(params\)/, 'controlPlane.ts should delegate ClawTalk setup through the plugin diagnostics service')
 assert.match(pluginRuntimeService, /export function createPluginRuntimeService/, 'plugin runtime service should expose a service factory')
 assert.match(pluginRuntimeService, /\basync function\s+inspectOpenClawPluginRuntime\b/, 'plugin runtime service should own plugin runtime inspect')
 assert.match(pluginRuntimeService, /\bfunction\s+summarizePluginRuntimeInspect\b/, 'plugin runtime service should own runtime inspect summaries')

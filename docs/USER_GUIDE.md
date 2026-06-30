@@ -390,6 +390,9 @@ If a model works in direct console chat but fails from a channel, check the plug
 Check the token and session type.
 
 - Desktop sessions should authenticate through the packaged app.
+- On Windows first run, the packaged app creates `%USERPROFILE%\.dystopai-control-center\auth\control-center-token.json` and reuses that local token on later starts.
+- To set your own persistent local desktop token, close DystopAI, edit the `token` field in that file to a long random value with no line breaks, then reopen the app.
+- If that file is deleted, blank, or malformed, DystopAI moves it aside when possible and creates a fresh local token so the desktop app can still open.
 - Browser sessions need `CONTROL_CENTER_TOKEN` or the generated local token printed in the server log.
 - If the token changed, clear the saved browser token and log in again.
 

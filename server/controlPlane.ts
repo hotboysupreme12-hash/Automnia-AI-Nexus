@@ -134,6 +134,10 @@ import {
   type PluginInstallService,
 } from './services/plugins/pluginInstallService'
 import {
+  createPluginDiagnosticsService,
+  type PluginDiagnosticsService,
+} from './services/plugins/pluginDiagnosticsService'
+import {
   createPluginRuntimeService,
   type PluginRuntimeService,
 } from './services/plugins/pluginRuntimeService'
@@ -521,6 +525,7 @@ function pluginCliWarningFromOutput(result: OpenClawResult, command: string) {
 
 let pluginInventoryService: PluginInventoryService | null = null
 let pluginInstallService: PluginInstallService | null = null
+let pluginDiagnosticsService: PluginDiagnosticsService | null = null
 let pluginRuntimeService: PluginRuntimeService | null = null
 
 function activePluginInventoryService() {
@@ -556,6 +561,14 @@ const updateAllOpenClawPlugins: PluginInstallService['updateAllOpenClawPlugins']
 
 const uninstallOpenClawPlugin: PluginInstallService['uninstallOpenClawPlugin'] = (pluginId, options) =>
   activePluginInstallService().uninstallOpenClawPlugin(pluginId, options)
+
+function activePluginDiagnosticsService() {
+  if (!pluginDiagnosticsService) throw new Error('Plugin diagnostics service is not initialized.')
+  return pluginDiagnosticsService
+}
+
+const setupClawTalkPlugin: PluginDiagnosticsService['setupClawTalkPlugin'] = (params) =>
+  activePluginDiagnosticsService().setupClawTalkPlugin(params)
 
 function activePluginRuntimeService() {
   if (!pluginRuntimeService) throw new Error('Plugin runtime service is not initialized.')
@@ -10044,24 +10057,6 @@ type PluginPostInstallRepairSummary = {
   commands?: PluginCommandResult[]
 }
 
-type ClawTalkDoctorSummary = {
-  ok: boolean
-  botConnected: boolean
-  websocketServer: boolean
-  checks: Record<string, 'pass' | 'warn' | 'fail' | 'unknown'>
-  command: PluginCommandResult
-}
-
-type ClawTalkSetupSummary = {
-  installed: boolean
-  configured: boolean
-  enabled: boolean
-  ready: boolean
-  botConnected: boolean
-  websocketServer: boolean
-  actions: string[]
-}
-
 const PLUGIN_LIST_CACHE_MS = 12 * 60 * 60 * 1000
 const PLUGIN_LIST_CACHE_PATH = path.join(OPENCLAW_STATE_ROOT, 'plugin-list-cache.json')
 const PLUGIN_RUNTIME_STATE_PATH = path.join(OPENCLAW_STATE_ROOT, 'control-center-plugin-state.json')
@@ -10169,6 +10164,23 @@ pluginRuntimeService = createPluginRuntimeService({
   terminateProcessTree,
   warn: (message, error) => console.warn(message, error),
   workspaceRoot: WORKSPACE_ROOT,
+})
+
+pluginDiagnosticsService = createPluginDiagnosticsService({
+  clawTalkPluginId: CLAWTALK_PLUGIN_ID,
+  defaultServer: CLAWTALK_DEFAULT_SERVER,
+  delayMs,
+  inspectOpenClawPluginRuntime,
+  installOpenClawPlugin,
+  isRealInstalledPluginEntry,
+  listPluginControls,
+  pluginRuntimeInspectReady,
+  redactSensitiveText,
+  refreshOpenClawPluginRegistry,
+  repairClawTalkPluginManifestContracts,
+  runOpenClaw,
+  saveClawTalkSetupConfig,
+  tryRestartGatewayService,
 })
 
 function ensureControlCenterSecretProvider(config: OpenClawConfigFile) {
@@ -12171,98 +12183,6 @@ function schedulePluginGatewayRestart(): GatewayRestartRequest {
   }
 }
 
-function normalizeClawTalkApiKeyInput(value: string) {
-  const apiKey = value.trim()
-  if (!/^cc_(?:live|test)_[A-Za-z0-9_-]{20,160}$/.test(apiKey)) {
-    throw new Error('Paste a valid ClawTalk API key.')
-  }
-  return apiKey
-}
-
-function normalizeClawTalkServerInput(value: unknown) {
-  const raw = typeof value === 'string' && value.trim() ? value.trim() : CLAWTALK_DEFAULT_SERVER
-  try {
-    const url = new URL(raw)
-    if (url.protocol !== 'https:' && url.protocol !== 'http:') throw new Error('unsupported protocol')
-    return url.toString().replace(/\/+$/, '')
-  } catch {
-    throw new Error('ClawTalk server must be an http or https URL.')
-  }
-}
-
-const CLAWTALK_DOCTOR_CHECK_RE =
-  /\b(api_key|phone_linked|phone_verified|voice_ai|bot_connected|pin|dedicated_number|paranoid_mode|2fa|voice_preference|server_health|telnyx_api|websocket_server)\b/i
-
-function clawTalkDoctorStatusFromLine(line: string): 'pass' | 'warn' | 'fail' | 'unknown' {
-  if (/[✓√]/.test(line) || /^\s*(?:pass|ok)\b/i.test(line)) return 'pass'
-  if (/[⚠!]/.test(line) || /^\s*(?:warn|warning)\b/i.test(line)) return 'warn'
-  if (/[✗×]/.test(line) || /\b(?:fail|failed|error)\b/i.test(line)) return 'fail'
-  return 'unknown'
-}
-
-function parseClawTalkDoctorSummary(args: string[], result: OpenClawResult): ClawTalkDoctorSummary {
-  const checks: ClawTalkDoctorSummary['checks'] = {}
-  const text = stripAnsi(`${result.stdout || ''}\n${result.stderr || ''}`)
-  for (const rawLine of text.split(/\r?\n/)) {
-    const match = CLAWTALK_DOCTOR_CHECK_RE.exec(rawLine)
-    if (!match) continue
-    checks[match[1].toLowerCase()] = clawTalkDoctorStatusFromLine(rawLine)
-  }
-  const botConnected = checks.bot_connected === 'pass'
-  const websocketServer = checks.websocket_server === 'pass'
-  const command = pluginCommandResult(args, result)
-  command.stdout = ''
-  command.stderr = ''
-  command.output = `bot_connected=${botConnected ? 'pass' : checks.bot_connected || 'unknown'}; websocket_server=${websocketServer ? 'pass' : checks.websocket_server || 'unknown'}`
-  return {
-    ok: result.code === 0 && botConnected && websocketServer,
-    botConnected,
-    websocketServer,
-    checks,
-    command,
-  }
-}
-
-async function runClawTalkDoctorOnce() {
-  const args = ['clawtalk', 'doctor']
-  const result = await runOpenClaw(args, 75_000)
-  return parseClawTalkDoctorSummary(args, result)
-}
-
-async function waitForClawTalkDoctor(timeoutMs: number) {
-  const deadline = Date.now() + Math.max(0, timeoutMs)
-  let last: ClawTalkDoctorSummary | null = null
-  let lastError: unknown
-  do {
-    try {
-      last = await runClawTalkDoctorOnce()
-      if (last.ok) return last
-    } catch (error) {
-      lastError = error
-    }
-    if (Date.now() < deadline) await delayMs(2500)
-  } while (Date.now() < deadline)
-  if (last) return last
-  throw lastError || new Error('ClawTalk doctor did not return a result.')
-}
-
-async function waitForClawTalkRuntimeInspect(timeoutMs: number) {
-  const deadline = Date.now() + Math.max(0, timeoutMs)
-  let last: Awaited<ReturnType<typeof inspectOpenClawPluginRuntime>> | null = null
-  let lastError: unknown
-  do {
-    try {
-      last = await inspectOpenClawPluginRuntime(CLAWTALK_PLUGIN_ID)
-      if (pluginRuntimeInspectReady(last)) return last
-    } catch (error) {
-      lastError = error
-    }
-    if (Date.now() < deadline) await delayMs(2500)
-  } while (Date.now() < deadline)
-  if (last) return last
-  throw lastError || new Error('ClawTalk runtime inspect did not return a result.')
-}
-
 async function saveClawTalkSetupConfig(apiKey: string, server: string) {
   const config = await readOpenclawConfig()
   if (!config.plugins) config.plugins = {}
@@ -12298,84 +12218,6 @@ async function saveClawTalkSetupConfig(apiKey: string, server: string) {
 
   await writeOpenclawConfig(config)
   await markPluginManaged(CLAWTALK_PLUGIN_ID, true)
-}
-
-async function setupClawTalkPlugin(params: {
-  apiKey: string
-  server?: string
-  install: boolean
-  restart: boolean
-}) {
-  const apiKey = normalizeClawTalkApiKeyInput(params.apiKey)
-  const server = normalizeClawTalkServerInput(params.server)
-  const actions: string[] = []
-
-  let controls = await listPluginControls({ forceRefresh: true })
-  const existing = controls.plugins.find((plugin) => plugin.id === CLAWTALK_PLUGIN_ID)
-  let installResult: Awaited<ReturnType<typeof installOpenClawPlugin>> | null = null
-  if (!isRealInstalledPluginEntry(existing)) {
-    if (!params.install) {
-      throw new Error('ClawTalk is not installed. Install it or enable automatic install for setup.')
-    }
-    installResult = await installOpenClawPlugin({
-      spec: CLAWTALK_PLUGIN_ID,
-      pluginId: CLAWTALK_PLUGIN_ID,
-      pin: true,
-      enable: true,
-      force: false,
-      restart: false,
-    })
-    controls = installResult.controls
-    actions.push('installed ClawTalk plugin')
-  }
-
-  await saveClawTalkSetupConfig(apiKey, server)
-  actions.push('saved ClawTalk API key and enabled auto-connect')
-  const repairedManifests = await repairClawTalkPluginManifestContracts()
-  if (repairedManifests.length) {
-    await refreshOpenClawPluginRegistry('clawtalk-setup-repair')
-    actions.push('repaired ClawTalk plugin manifest contracts')
-  }
-
-  const restart = params.restart
-    ? {
-        ...(await tryRestartGatewayService({ force: true, reason: 'ClawTalk setup requested gateway restart' })),
-        scheduled: false,
-      }
-    : { restarted: false, scheduled: false, detail: 'gateway restart skipped' }
-  if (params.restart) actions.push(restart.restarted ? 'restarted OpenClaw gateway' : 'checked OpenClaw gateway')
-  await delayMs(params.restart ? 4000 : 750)
-
-  const inspect = await waitForClawTalkRuntimeInspect(30_000)
-  const doctor = await waitForClawTalkDoctor(45_000)
-  const runtimeReady = pluginRuntimeInspectReady(inspect)
-  if (!runtimeReady || !doctor.ok) {
-    const missing = [
-      runtimeReady ? '' : 'runtime load',
-      doctor.botConnected ? '' : 'bot connection',
-      doctor.websocketServer ? '' : 'websocket server',
-    ].filter(Boolean)
-    throw new Error(`ClawTalk setup saved, but verification did not pass: ${missing.join(', ') || 'unknown check'}.`)
-  }
-
-  actions.push('verified ClawTalk bot and WebSocket connection')
-  controls = await listPluginControls({ forceRefresh: true })
-  return {
-    installResult,
-    inspect,
-    doctor,
-    setup: {
-      installed: Boolean(installResult),
-      configured: true,
-      enabled: true,
-      ready: true,
-      botConnected: doctor.botConnected,
-      websocketServer: doctor.websocketServer,
-      actions,
-    } satisfies ClawTalkSetupSummary,
-    restart,
-    controls,
-  }
 }
 
 async function readPartyProfiles(): Promise<PartyProfiles> {

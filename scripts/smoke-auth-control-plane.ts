@@ -48,7 +48,10 @@ assert.match(recruitModal, /apiRequest<AutoForgeApiResponse>\('\/api\/party\/rec
 assert.match(recruitModal, /apiRequest\(`\/api\/auth\/providers\/\$\{encodeURIComponent\(authModalProvider\.provider\)\}`/, 'Recruit provider key save must use canonical API client')
 assert.doesNotMatch(recruitModal, /fetch\(/, 'Recruit modal must not bypass canonical API client')
 
-assert.match(electronMain, /randomBytes\(32\)\.toString\('base64url'\)/, 'Electron must generate a strong per-launch control token')
+assert.match(electronMain, /CONTROL_CENTER_TOKEN_FILE/, 'Electron must keep the desktop launch token in a local token file')
+assert.match(electronMain, /readControlCenterTokenFile/, 'Electron must reuse the saved local launch token across desktop restarts')
+assert.match(electronMain, /quarantineInvalidControlCenterTokenFile/, 'Electron must recover when the saved launch token file is invalid')
+assert.match(electronMain, /randomBytes\(32\)\.toString\('base64url'\)/, 'Electron must generate a strong local control token when no saved token exists')
 assert.match(electronMain, /process\.env\.CONTROL_CENTER_TOKEN = controlCenterLaunchToken/, 'Electron must pass the launch token to the child API server')
 assert.match(electronMain, /path: '\/api\/ready'/, 'Electron startup readiness probe must use the lightweight ready endpoint')
 assert.match(electronMain, /CONTROL_SERVER_STARTUP_TIMEOUT_MS[\s\S]*180_000/, 'Electron startup readiness must allow slow packaged Windows runtime preflight')

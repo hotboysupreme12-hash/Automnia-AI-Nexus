@@ -9,6 +9,7 @@ const controlPlane = read('server/controlPlane.ts')
 const pluginRoutes = read('server/routes/pluginRoutes.ts')
 const pluginInstallService = read('server/services/plugins/pluginInstallService.ts')
 const pluginInstallTests = read('tests/pluginInstallService.test.ts')
+const pluginRouteTests = read('tests/pluginRoutes.test.ts')
 const architectureSmoke = read('scripts/smoke-server-entrypoint-boundary.ts')
 const packageJson = JSON.parse(read('package.json')) as { scripts?: Record<string, string> }
 
@@ -91,10 +92,16 @@ for (const coverage of [
   'plugin install service repairs Windows stage rename failure and retries with force',
   'plugin install service updates, update-all touches, and uninstall forgets managed runtime state',
   'plugin install service redacts plugin command failures',
+  'plugin install service redacts install and activation failures',
   'plugin install input parser accepts pasted OpenClaw install commands only with safe flags',
 ]) {
   assert.ok(pluginInstallTests.includes(coverage), `pluginInstallService.test.ts is missing coverage: ${coverage}`)
 }
+
+assert.ok(
+  pluginRouteTests.includes('plugin routes return redacted canonical envelope for plugin install failure'),
+  'pluginRoutes.test.ts is missing route-level plugin install failure coverage',
+)
 
 assert.ok(architectureSmoke.includes("read('server/services/plugins/pluginInstallService.ts')"), 'architecture smoke should load plugin install service')
 assert.equal(
