@@ -58,6 +58,10 @@ assert(
   server.includes('createCommandConsoleUploadService({'),
   'server index should compose the command-console upload service',
 )
+assert(
+  server.includes('approvedRootDir: WORKSPACE_ROOT'),
+  'server index should compose command-console uploads with the approved workspace root',
+)
 assert(!server.includes("app.get('/api/files'"), 'server index should not inline the command-console files list route')
 assert(!server.includes("app.post('/api/files/upload'"), 'server index should not inline the command-console upload route')
 assert(!/\bfunction\s+commandConsoleUploadFileName\b/.test(server), 'server index should not own command-console upload file naming')
@@ -79,19 +83,27 @@ assert(commandConsoleUploadService.includes('function contentTypeFromUploadName'
 assert(commandConsoleUploadService.includes('function commandConsoleUploadFileName'), 'upload service should own upload file naming')
 assert(commandConsoleUploadService.includes('if (extFromName && !COMMAND_CONSOLE_UPLOAD_EXTENSIONS.has(extFromName))'), 'upload service should reject unsupported explicit extensions before MIME fallback')
 assert(commandConsoleUploadService.includes('async function persistUpload'), 'upload service should own upload persistence')
+assert(commandConsoleUploadService.includes('approvedRootDir?: string'), 'upload service should accept an approved root boundary')
+assert(commandConsoleUploadService.includes('async function assertUploadWriteRoot'), 'upload service should realpath-check upload write roots')
+assert(commandConsoleUploadService.includes("flag: 'wx'"), 'upload service should create upload files without following existing targets')
 assert(commandConsoleUploadService.includes('function normalizeAttachment'), 'upload service should own attachment normalization')
 assert(commandConsoleUploadService.includes('async function resolveAttachmentReadPath'), 'upload service should own realpath validation before attachment reads')
 assert(commandConsoleUploadService.includes('async function gatewayAttachmentsFromTurnAttachments'), 'upload service should own Gateway attachment conversion')
 assert(commandConsoleUploadService.includes('isPathUnder(resolvedUploadDir, resolvedUploadPath)'), 'upload service should enforce upload-root containment before writes')
 assert(commandConsoleUploadService.includes('isPathUnder(resolvedUploadDir, resolvedPath)'), 'upload service should enforce upload-root containment when normalizing attachments')
 assert(commandConsoleUploadService.includes('fs.realpath(resolvedUploadDir)'), 'upload service should realpath-check attachment reads')
+assert(commandConsoleUploadService.includes('attachment.size > inlineLimit'), 'upload service should skip declared oversized Gateway attachments before disk reads')
 assert(commandConsoleUploadTests.includes('command console upload service persists sanitized supported uploads inside the upload root'), 'commandConsoleUploadService.test.ts should cover upload persistence')
 assert(commandConsoleUploadTests.includes('strips traversal segments from upload source names'), 'commandConsoleUploadService.test.ts should cover traversal source names')
 assert(commandConsoleUploadTests.includes('accepts supported extension and MIME fallback upload types'), 'commandConsoleUploadService.test.ts should cover supported upload allowlist paths')
 assert(commandConsoleUploadTests.includes('unsupported file types and oversized uploads'), 'commandConsoleUploadService.test.ts should cover upload allowlist and size failures')
+assert(commandConsoleUploadTests.includes('upload persistence size limits at the exact boundary'), 'commandConsoleUploadService.test.ts should cover exact and oversized upload persistence limits')
 assert(commandConsoleUploadTests.includes('without allowing root escapes'), 'commandConsoleUploadService.test.ts should cover upload-root escapes')
+assert(commandConsoleUploadTests.includes('rejects symlinked upload roots outside the approved root'), 'commandConsoleUploadService.test.ts should cover symlinked upload roots')
+assert(commandConsoleUploadTests.includes('refuses preexisting symlink upload targets before write'), 'commandConsoleUploadService.test.ts should cover symlinked upload targets')
 assert(commandConsoleUploadTests.includes('containment guard rejects writes'), 'commandConsoleUploadService.test.ts should cover containment guard upload failures')
 assert(commandConsoleUploadTests.includes('Gateway attachment payloads'), 'commandConsoleUploadService.test.ts should cover Gateway attachment shaping')
+assert(commandConsoleUploadTests.includes('Gateway inline attachment size limits for files and images'), 'commandConsoleUploadService.test.ts should cover file and image Gateway inline size limits')
 assert(commandConsoleUploadTests.includes('skips symlinked attachment escapes before inline Gateway reads'), 'commandConsoleUploadService.test.ts should cover symlink escape attachment reads')
 
 for (const marker of [

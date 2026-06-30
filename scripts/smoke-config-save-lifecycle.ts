@@ -7,6 +7,7 @@ const rootDir = fileURLToPath(new URL('..', import.meta.url))
 const read = (relativePath: string) => readFileSync(join(rootDir, relativePath), 'utf8')
 
 const apiClient = read('src/api/client.ts')
+const partyApi = read('src/api/party.ts')
 const store = read('src/store/nexusStore.ts')
 const editor = read('src/components/editor/AgentEditorModal.tsx')
 const modelSelector = read('src/components/party/ModelSelectorModal.tsx')
@@ -19,6 +20,8 @@ assert.match(apiClient, /Authorization/, 'API client must attach bearer authenti
 assert.match(apiClient, /timeoutMs/, 'API client must support request timeouts')
 assert.match(apiClient, /redactDiagnosticText/, 'API client diagnostics must use shared redaction')
 assert.match(apiClient, /apiUrl\(path\)/, 'API client must resolve dev/prod API base URLs through apiUrl')
+assert.match(partyApi, /export function saveAgentConfig/, 'party API module must expose the extracted config save helper')
+assert.match(partyApi, /apiRequest<AgentConfigSavePayload>\(`\/api\/party\/agent\/\$\{encodeURIComponent\(agentId\)\}\/config`/, 'agent config saves must use the canonical API client in src/api/party.ts')
 
 const heartbeatPersist = store.slice(
   store.indexOf('function persistHeartbeatConfig'),
@@ -36,8 +39,8 @@ const storeConfigActions = store.slice(storeConfigActionStart, storeConfigAction
 
 assert.match(store, /agentConfigSaveStatus/, 'store must expose agent config save lifecycle state')
 assert.match(store, /type AgentConfigSaveScope = 'heartbeat' \| 'runtime' \| 'profile' \| 'policy' \| 'mds' \| 'skills'/, 'save lifecycle must cover profile, policy, MDS, and skills scopes')
-assert.match(heartbeatPersist, /apiRequest/, 'heartbeat persistence must use the canonical API client')
-assert.match(runtimePersist, /apiRequest/, 'runtime policy persistence must use the canonical API client')
+assert.match(heartbeatPersist, /saveAgentConfig/, 'heartbeat persistence must use the extracted config API helper')
+assert.match(runtimePersist, /saveAgentConfig/, 'runtime policy persistence must use the extracted config API helper')
 assert.match(store, /function persistAgentConfigPatch/, 'store must have a canonical config patch persistence helper')
 assert.doesNotMatch(heartbeatPersist, /catch\(\(\)\s*=>\s*\{\}\)/, 'heartbeat persistence must not swallow save failures')
 assert.doesNotMatch(runtimePersist, /catch\(\(\)\s*=>\s*\{\}\)/, 'runtime policy persistence must not swallow save failures')

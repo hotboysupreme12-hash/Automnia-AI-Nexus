@@ -25,6 +25,28 @@ function normalizeAvatarContentType(contentType: string | undefined) {
   return (contentType || '').split(';', 1)[0].trim().toLowerCase()
 }
 
+function avatarUploadLimitLabel(limitBytes: number) {
+  const mib = limitBytes / (1024 * 1024)
+  if (Number.isInteger(mib) && mib >= 1) return `${mib} MB`
+  return `${limitBytes} bytes`
+}
+
+export function avatarUploadLimitErrorMessage(limitBytes = AVATAR_UPLOAD_LIMIT_BYTES) {
+  return `Choose an image smaller than ${avatarUploadLimitLabel(limitBytes)}.`
+}
+
+export function assertAvatarUploadSize(sizeBytes: number, limitBytes = AVATAR_UPLOAD_LIMIT_BYTES) {
+  if (!Number.isFinite(sizeBytes) || sizeBytes < 0) {
+    throw new Error('Choose an image file to upload.')
+  }
+  if (sizeBytes > limitBytes) throw new Error(avatarUploadLimitErrorMessage(limitBytes))
+}
+
+export function assertAvatarUploadBytes(bytes: unknown, limitBytes = AVATAR_UPLOAD_LIMIT_BYTES) {
+  if (!Buffer.isBuffer(bytes) || bytes.length === 0) throw new Error('Choose an image file to upload.')
+  assertAvatarUploadSize(bytes.length, limitBytes)
+}
+
 export function isSupportedAvatarImagePath(filePath: string) {
   return AVATAR_IMAGE_EXTENSIONS.has(path.extname(filePath).toLowerCase())
 }

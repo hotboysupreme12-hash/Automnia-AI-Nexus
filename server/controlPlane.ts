@@ -35,6 +35,9 @@ import { registerSkillRoutes } from './routes/skillRoutes'
 import { createControlFilesService } from './services/controlFilesService'
 import {
   AVATAR_UPLOAD_LIMIT_BYTES,
+  assertAvatarUploadBytes,
+  assertAvatarUploadSize,
+  avatarUploadLimitErrorMessage,
   avatarUploadFileName,
   isSupportedAvatarImagePath,
   managedAvatarFileName,
@@ -315,6 +318,7 @@ const samePath = safePathService.samePath
 const controlFilesService = createControlFilesService(WORKSPACE_ROOT, { isPathUnder })
 const commandConsoleUploadService = createCommandConsoleUploadService({
   uploadsDir: COMMAND_CONSOLE_UPLOADS_DIR,
+  approvedRootDir: WORKSPACE_ROOT,
   isPathUnder,
 })
 const pickerSessionService = createPickerSessionService({
@@ -6813,8 +6817,7 @@ function spawnDetached(command: string, args: string[]): Promise<{ ok: boolean; 
 
 async function persistAgentAvatarBytes(agentId: string, bytes: Buffer, sourceName: string) {
   if (!isValidAgentId(agentId)) throw new Error('Invalid agent id.')
-  if (!Buffer.isBuffer(bytes) || bytes.length === 0) throw new Error('Choose an image file to upload.')
-  if (bytes.length > AVATAR_UPLOAD_LIMIT_BYTES) throw new Error('Choose an image smaller than 15 MB.')
+  assertAvatarUploadBytes(bytes, AVATAR_UPLOAD_LIMIT_BYTES)
   if (!isSupportedAvatarImagePath(sourceName)) {
     throw new Error('Choose a PNG, JPG, WEBP, GIF, BMP, ICO, or SVG image.')
   }
@@ -6858,7 +6861,7 @@ async function persistAgentAvatarFromPath(agentId: string, sourcePath: string) {
   }
   const stat = await fs.stat(selectedPath)
   if (!stat.isFile()) throw new Error('Selected avatar is not a file.')
-  if (stat.size > 15 * 1024 * 1024) throw new Error('Choose an image smaller than 15 MB.')
+  assertAvatarUploadSize(stat.size, AVATAR_UPLOAD_LIMIT_BYTES)
 
   const { config, target } = await getAgentById(agentId)
   if (!target) throw new Error(`Agent not found: ${agentId}`)
@@ -16668,6 +16671,8 @@ export type PartyManagementRoutesContext = {
   agentLocalConfigPath: typeof agentLocalConfigPath
   applyExecutionWorkspaceToLocalConfig: typeof applyExecutionWorkspaceToLocalConfig
   applyLocalConfigToGlobal: typeof applyLocalConfigToGlobal
+  avatarUploadLimitBytes: typeof AVATAR_UPLOAD_LIMIT_BYTES
+  avatarUploadLimitErrorMessage: typeof avatarUploadLimitErrorMessage
   avatarUploadFileName: typeof avatarUploadFileName
   canonicalAgentModelId: typeof canonicalAgentModelId
   canonicalDoctrineRoot: typeof canonicalDoctrineRoot
@@ -16735,6 +16740,8 @@ const partyManagementRoutesContext: PartyManagementRoutesContext = {
   agentLocalConfigPath,
   applyExecutionWorkspaceToLocalConfig,
   applyLocalConfigToGlobal,
+  avatarUploadLimitBytes: AVATAR_UPLOAD_LIMIT_BYTES,
+  avatarUploadLimitErrorMessage,
   avatarUploadFileName,
   canonicalAgentModelId,
   canonicalDoctrineRoot,

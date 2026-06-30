@@ -31,6 +31,7 @@ const safePathTests = readWorkspaceFile('tests/safePathService.test.ts')
 const pickerSessionTests = readWorkspaceFile('tests/pickerSessionService.test.ts')
 const editorModal = readWorkspaceFile('src/components/editor/AgentEditorModal.tsx')
 const nexusStore = readWorkspaceFile('src/store/nexusStore.ts')
+const partyApi = readWorkspaceFile('src/api/party.ts')
 const packageJson = JSON.parse(readWorkspaceFile('package.json')) as { scripts?: Record<string, string> }
 
 for (const code of [
@@ -73,10 +74,15 @@ assert(server.includes('createPickerSessionService({'), 'server/index.ts should 
 assert(server.includes('pickerSessions: pickerSessionService'), 'server/index.ts should inject picker sessions through a service option')
 assert(filesystemRoutes.includes('pickerSessions: PickerSessionService'), 'filesystem routes should receive picker sessions through a service boundary')
 assert(avatarFileService.includes('export const AVATAR_UPLOAD_LIMIT_BYTES'), 'avatar file service should own avatar upload size limits')
+assert(avatarFileService.includes('export function assertAvatarUploadBytes'), 'avatar file service should own avatar upload byte validation')
+assert(avatarFileService.includes('export function assertAvatarUploadSize'), 'avatar file service should own avatar upload stat-size validation')
 assert(avatarFileService.includes('export function avatarUploadFileName'), 'avatar file service should own avatar upload file naming')
 assert(avatarFileService.includes('export function isSupportedAvatarImagePath'), 'avatar file service should own avatar image extension checks')
 assert(avatarFileService.includes('if (extFromName && !AVATAR_IMAGE_EXTENSIONS.has(extFromName))'), 'avatar file service should reject unsupported explicit extensions before MIME fallback')
 assert(pickerSessionService.includes('isSupportedAvatarImagePath(selectedPath)'), 'picker service should enforce image type allowlist before avatar persistence')
+assert(server.includes('assertAvatarUploadBytes(bytes, AVATAR_UPLOAD_LIMIT_BYTES)'), 'avatar byte persistence should use the service-owned upload size validator')
+assert(server.includes('assertAvatarUploadSize(stat.size, AVATAR_UPLOAD_LIMIT_BYTES)'), 'avatar path persistence should use the service-owned upload size validator')
+assert(server.includes('avatarUploadLimitBytes: AVATAR_UPLOAD_LIMIT_BYTES'), 'party management routes should receive the avatar upload byte limit from composition')
 
 const serializerStart = pickerSessionService.indexOf('function serializeFolderPickerSession')
 const serializerEnd = pickerSessionService.indexOf('function serializeImagePickerSession', serializerStart)
@@ -96,8 +102,10 @@ assert(!/\bfunction\s+pickFolderWithOsDialog\b/.test(server), 'native picker com
 assert(safePathTests.includes('multi-segment traversal attempts across POSIX and Windows paths'), 'safePathService.test.ts should cover cross-platform traversal attempts')
 assert(pickerSessionTests.includes('relative start paths under fallback and rejects traversal starts'), 'pickerSessionService.test.ts should cover traversal start paths')
 assert(avatarFileTests.includes('avatar file service rejects unsupported explicit extensions before MIME fallback'), 'avatarFileService.test.ts should cover avatar allowlist rejection')
+assert(avatarFileTests.includes('avatar file service enforces avatar upload byte limits for persistence helpers'), 'avatarFileService.test.ts should cover avatar upload size-limit helpers')
 assert(pickerSessionTests.includes('unsupported image picker file types before avatar persistence'), 'pickerSessionService.test.ts should cover image picker allowlist rejection')
 assert(partyAvatarUploadTests.includes('avatar upload route rejects unsupported file types before persistence'), 'partyAvatarUploadRoutes.test.ts should cover avatar upload allowlist rejection')
+assert(partyAvatarUploadTests.includes('avatar upload route enforces byte limits before avatar persistence'), 'partyAvatarUploadRoutes.test.ts should cover avatar upload raw-body size limits')
 
 const directPickerBlock = routeBlock(filesystemRoutes, "app.post('/api/party/folder-picker'")
 assert(directPickerBlock.includes("status: 'cancelled'"), 'Immediate folder picker should model cancellation as a state')
@@ -130,8 +138,12 @@ for (const legacyFragment of [
 }
 
 assert(
-  nexusStore.includes('apiRequest<{ file?: string; resourcePath?: string }>(`/api/party/resources/${encodeURIComponent(agentId)}/${encodeURIComponent(entry.file)}`'),
-  'Recruit resource bootstrap should use apiRequest',
+  partyApi.includes('apiRequest<AgentResourceSavePayload>(`/api/party/resources/${encodeURIComponent(agentId)}/${encodeURIComponent(file)}`'),
+  'Recruit resource bootstrap endpoint should use apiRequest in src/api/party.ts',
+)
+assert(
+  nexusStore.includes('saveAgentResource(agentId, entry.file'),
+  'Recruit resource bootstrap should delegate through the party API helper',
 )
 assert(
   !nexusStore.includes('fetch(`/api/party/resources/${agentId}/${encodeURIComponent(entry.file)}`'),

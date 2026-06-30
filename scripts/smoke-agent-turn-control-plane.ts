@@ -46,6 +46,7 @@ const browserRoutes = readWorkspaceFile('server/routes/browserRoutes.ts')
 const clawTalkConsoleRoutes = readWorkspaceFile('server/routes/clawTalkConsoleRoutes.ts')
 const controlPlaneHttp = readWorkspaceFile('server/controlPlaneHttp.ts')
 const store = readWorkspaceFile('src/store/nexusStore.ts')
+const agentTurnsApi = readWorkspaceFile('src/api/agentTurns.ts')
 const consolePanel = readWorkspaceFile('src/components/monitor/AgentResponseConsole.tsx')
 const packageJson = JSON.parse(readWorkspaceFile('package.json')) as { scripts?: Record<string, string> }
 
@@ -125,8 +126,12 @@ assert(runBufferedBlock.includes("typeof parsedPayload === 'object'"), 'stream f
 assert(runBufferedBlock.includes('!Array.isArray(parsedPayload)'), 'stream fallback should reject array payloads as agent-turn data')
 
 assert(
-  store.includes("apiRequest<AT>('/api/openclaw/agent-turn'"),
-  'renderer should continue calling non-SSE agent-turn through the canonical API client',
+  agentTurnsApi.includes("apiRequest<AgentTurnPayload>('/api/openclaw/agent-turn'"),
+  'renderer should call non-SSE agent-turn through the extracted agent-turn API helper',
+)
+assert(
+  store.includes('sendBufferedAgentTurn('),
+  'nexusStore should delegate non-SSE agent-turn requests to src/api/agentTurns.ts',
 )
 assert(
   store.includes("fetch(apiUrl('/api/openclaw/agent-turn/stream')"),

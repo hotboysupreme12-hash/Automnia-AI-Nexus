@@ -26,6 +26,8 @@ const agentTurnRoutes = readWorkspaceFile('server/routes/agentTurnRoutes.ts')
 const partyManagementRoutes = readWorkspaceFile('server/routes/partyManagementRoutes.ts')
 const controlPlaneHttp = readWorkspaceFile('server/controlPlaneHttp.ts')
 const store = readWorkspaceFile('src/store/nexusStore.ts')
+const partyApi = readWorkspaceFile('src/api/party.ts')
+const agentTurnsApi = readWorkspaceFile('src/api/agentTurns.ts')
 const packageJson = JSON.parse(readWorkspaceFile('package.json')) as { scripts?: Record<string, string> }
 
 for (const code of [
@@ -66,13 +68,25 @@ assert(server.includes('registerPartyManagementRoutes(app, partyManagementRoutes
 assert(server.includes("import { registerAgentTurnRoutes } from './routes/agentTurnRoutes'"), 'server should import agent-turn route module')
 assert(server.includes('registerAgentTurnRoutes(app, {'), 'server should register agent-turn routes')
 
-assert(store.includes("apiRequest<AgentRuntimePreflightPayload>('/api/openclaw/agent-preflight'"), 'preflight should use apiRequest')
-assert(store.includes("apiRequest<AT>('/api/openclaw/agent-turn'"), 'buffered agent-turn fallback should use apiRequest')
-assert(store.includes("apiRequest<PartyOverviewPayload>('/api/party/overview'"), 'party overview should use apiRequest')
-assert(store.includes("apiRequest<RecruitAgentPayload>('/api/party/recruit'"), 'recruit should use apiRequest')
-assert(store.includes('apiRequest(`/api/party/agent/${encodeURIComponent(agentId)}/config`'), 'post-recruit config save should use apiRequest')
-assert(store.includes('apiRequest(`/api/party/agent/${encodeURIComponent(normalized)}`'), 'retire should use apiRequest')
-assert(store.includes("apiRequest<AgentTurnSessionClearPayload>('/api/openclaw/agent-turn/sessions/clear'"), 'session clear should use apiRequest')
+assert(partyApi.includes("apiRequest<PartyOverviewPayload>('/api/party/overview'"), 'party overview should use apiRequest in src/api/party.ts')
+assert(partyApi.includes('apiRequest<AgentConfigSavePayload>(`/api/party/agent/${encodeURIComponent(agentId)}/config`'), 'agent config saves should use apiRequest in src/api/party.ts')
+assert(partyApi.includes("apiRequest<RecruitAgentPayload>('/api/party/recruit'"), 'recruit should use apiRequest in src/api/party.ts')
+assert(partyApi.includes('apiRequest(`/api/party/agent/${encodeURIComponent(agentId)}`'), 'retire should use apiRequest in src/api/party.ts')
+assert(agentTurnsApi.includes("apiRequest<AgentRuntimePreflightPayload>('/api/openclaw/agent-preflight'"), 'preflight should use apiRequest in src/api/agentTurns.ts')
+assert(agentTurnsApi.includes("apiRequest<AgentTurnPayload>('/api/openclaw/agent-turn'"), 'buffered agent-turn fallback should use apiRequest in src/api/agentTurns.ts')
+assert(agentTurnsApi.includes("apiRequest<AgentTurnSessionClearPayload>('/api/openclaw/agent-turn/sessions/clear'"), 'session clear should use apiRequest in src/api/agentTurns.ts')
+
+for (const fragment of [
+  'requestAgentRuntimePreflight(aid)',
+  'sendBufferedAgentTurn(',
+  'fetchPartyOverview()',
+  'recruitPartyAgent(recruitRequest)',
+  'saveAgentConfig(agentId,',
+  'retirePartyAgent(normalized, RETIRE_AGENT_TIMEOUT_MS)',
+  'clearAgentTurnSessions().then',
+]) {
+  assert(store.includes(fragment), `nexusStore should use extracted API helper ${fragment}`)
+}
 
 for (const legacyFragment of [
   "fetch(apiUrl('/api/openclaw/agent-preflight')",

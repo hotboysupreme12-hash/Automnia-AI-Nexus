@@ -6,13 +6,19 @@ import express, { type Express } from 'express'
 
 import type { PartyManagementRoutesContext } from '../server/controlPlane'
 import { registerPartyManagementRoutes } from '../server/routes/partyManagementRoutes'
-import { avatarUploadFileName } from '../server/services/filesystem/avatarFileService'
+import {
+  AVATAR_UPLOAD_LIMIT_BYTES,
+  avatarUploadLimitErrorMessage,
+  avatarUploadFileName,
+} from '../server/services/filesystem/avatarFileService'
 
-function createAvatarUploadHarness() {
+function createAvatarUploadHarness(options: { uploadLimitBytes?: number } = {}) {
   const calls: Array<{ agentId: string; sourceName: string; size: number }> = []
   const app = express()
   registerPartyManagementRoutes(app, {
     WORKSPACE_ROOT: process.cwd(),
+    avatarUploadLimitBytes: options.uploadLimitBytes ?? AVATAR_UPLOAD_LIMIT_BYTES,
+    avatarUploadLimitErrorMessage,
     avatarUploadFileName,
     isValidAgentId: (agentId: string) => /^[a-z0-9-]{3,60}$/.test(agentId),
     persistAgentAvatarBytes: async (agentId: string, bytes: Buffer, sourceName: string) => {
@@ -86,4 +92,31 @@ test('avatar upload route accepts supported MIME fallback for extensionless imag
   })
 
   assert.deepEqual(calls, [{ agentId: 'agent-1', sourceName: 'portrait.webp', size: 'avatar-bytes'.length }])
+})
+
+test('avatar upload route enforces byte limits before avatar persistence', async () => {
+  const { app, calls } = createAvatarUploadHarness({ uploadLimitBytes: 4 })
+
+  await withRouteServer(app, async (baseUrl) => {
+    const exactLimit = await fetch(`${baseUrl}/api/party/avatar-upload/agent-1?filename=limit.png`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'image/png' },
+      body: Buffer.from('1234', 'utf-8'),
+    })
+    assert.equal(exactLimit.status, 200)
+
+    const tooLarge = await fetch(`${baseUrl}/api/party/avatar-upload/agent-1?filename=too-large.png`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'image/png' },
+      body: Buffer.from('12345', 'utf-8'),
+    })
+    const payload = await tooLarge.json() as { ok: boolean; error: { code: string; detail?: string } }
+
+    assert.equal(tooLarge.status, 413)
+    assert.equal(payload.ok, false)
+    assert.equal(payload.error.code, 'avatar_upload_failed')
+    assert.match(payload.error.detail || '', /Choose an image smaller than 4 bytes/)
+  })
+
+  assert.deepEqual(calls, [{ agentId: 'agent-1', sourceName: 'limit.png', size: 4 }])
 })

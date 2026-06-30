@@ -3354,13 +3354,232 @@ Next action:
 
 - Continue Phase G with item `73`: add tests for attachment size limits across command-console upload persistence and Gateway inline attachment conversion.
 
-## In Progress
+### 2026-06-30 - Phase G Attachment Size-Limit Coverage
 
-- Optimization work now resumes from `docs/BETA_CODEBASE_SPLIT_PLAN.md`, with Phase A, Phase B, Phase C, Phase D items `31-45`, Phase E items `46-55`, Phase F items `56-65`, and Phase G items `66-72` complete and verified for the private beta service-split milestone.
+Scope:
+
+- Completed Phase G item `73` by hardening and covering command-console attachment size limits across upload persistence and Gateway inline attachment conversion.
+- Updated `server/services/filesystem/commandConsoleUploadService.ts` so declared oversized Gateway attachments are skipped before realpath resolution or file reads, while the existing post-read byte-length guard still rejects files whose actual bytes exceed the inline limit.
+- Extended `tests/commandConsoleUploadService.test.ts` with exact-boundary upload persistence coverage, one-byte-over upload rejection without writing an extra file, file Gateway inline limit coverage, image Gateway inline limit coverage, declared-oversized metadata coverage, and actual oversized file-byte coverage.
+- Updated `scripts/smoke-command-console-files-control-plane.ts` to pin the pre-read size guard and the new command-console upload size-limit tests.
+
+Files changed:
+
+- `server/services/filesystem/commandConsoleUploadService.ts`
+- `tests/commandConsoleUploadService.test.ts`
+- `scripts/smoke-command-console-files-control-plane.ts`
+- `docs/BETA_CODEBASE_SPLIT_PLAN.md`
+- `docs/OPTIMIZATION_MEMORY.md`
+- `docs/PRODUCTION_HARDENING_LEDGER.md`
+
+Verification:
+
+- `node --import tsx --test tests/commandConsoleUploadService.test.ts` passed with `10` command-console upload tests.
+- `node --import tsx --test tests/safePathService.test.ts tests/controlFilesService.test.ts tests/avatarFileService.test.ts tests/commandConsoleUploadService.test.ts tests/pickerSessionService.test.ts tests/partyAvatarUploadRoutes.test.ts` passed with `32` focused filesystem service tests.
+- `npm run smoke:command-console-files` passed.
+- `npm run smoke:filesystem-control-plane` passed.
+- `npm run smoke:server-architecture` passed with `9` entry lines, `17,953/29,000` composition lines, and `0` inline routes.
+- `npm run typecheck` passed.
+- `npm run test:unit` passed with `170` tests.
+- `npm run lint` passed.
+- `npm test` passed end to end with `170` unit tests and the full command-console, filesystem, plugin, Gateway, runtime, mission, provider, release, security, secret-scan, and CI smoke suite.
+
+Risks and notes:
+
+- This slice keeps the existing public `/api/files/upload` shape unchanged; it only tightens service-owned size-limit behavior and coverage.
+- Full-suite output still logs the known Babel deoptimization warning for `server/controlPlane.ts`, one skipped malformed historical `runtime-runs` JSONL row, and expected control-plane error-handler redaction smoke logs; the affected checks passed.
 
 Next action:
 
-- Continue Phase G with item `73`: add attachment size-limit coverage across command-console upload persistence and Gateway inline attachment conversion.
+- Continue Phase G with item `74`: add avatar upload-limit coverage across `/api/party/avatar-upload/:agentId` and avatar file persistence.
+
+### 2026-06-30 - Phase G Avatar Upload-Limit Coverage
+
+Scope:
+
+- Completed Phase G item `74` by hardening and covering avatar upload byte limits across the HTTP route and avatar persistence helpers.
+- Updated `server/services/filesystem/avatarFileService.ts` so the avatar file service owns byte/stat-size validators and the shared upload-limit error message alongside the `AVATAR_UPLOAD_LIMIT_BYTES` constant.
+- Updated `server/controlPlane.ts` so both `persistAgentAvatarBytes` and `persistAgentAvatarFromPath` use the service-owned validators before writing files or state.
+- Updated `server/routes/partyManagementRoutes.ts` so `/api/party/avatar-upload/:agentId` receives `avatarUploadLimitBytes` through composition, uses that exact value for `express.raw`, and returns canonical `413` `avatar_upload_failed` envelopes for oversized parser errors before persistence runs.
+- Extended `tests/avatarFileService.test.ts` and `tests/partyAvatarUploadRoutes.test.ts` with exact-boundary, oversized, empty-upload, and no-persistence-on-oversize coverage.
+- Updated `scripts/smoke-filesystem-control-plane.ts` and `scripts/smoke-server-entrypoint-boundary.ts` to pin the shared avatar size validators, route limit injection, and persistence helper usage.
+- Regenerated `docs/generated/server-index-architecture.md`; the composition root is now `17,959/29,000` lines, with `9` entry lines and `0` inline routes.
+
+Files changed:
+
+- `server/services/filesystem/avatarFileService.ts`
+- `server/controlPlane.ts`
+- `server/routes/partyManagementRoutes.ts`
+- `tests/avatarFileService.test.ts`
+- `tests/partyAvatarUploadRoutes.test.ts`
+- `scripts/smoke-filesystem-control-plane.ts`
+- `scripts/smoke-server-entrypoint-boundary.ts`
+- `docs/generated/server-index-architecture.md`
+- `docs/BETA_CODEBASE_SPLIT_PLAN.md`
+- `docs/OPTIMIZATION_MEMORY.md`
+- `docs/PRODUCTION_HARDENING_LEDGER.md`
+
+Verification:
+
+- `node --import tsx --test tests/avatarFileService.test.ts tests/partyAvatarUploadRoutes.test.ts` passed with `7` focused avatar tests.
+- `node --import tsx --test tests/safePathService.test.ts tests/controlFilesService.test.ts tests/avatarFileService.test.ts tests/commandConsoleUploadService.test.ts tests/pickerSessionService.test.ts tests/partyAvatarUploadRoutes.test.ts` passed with `34` focused filesystem service tests.
+- `npm run smoke:filesystem-control-plane` passed.
+- `npm run smoke:command-console-files` passed.
+- `npm run smoke:server-architecture` passed with `9` entry lines, `17,959/29,000` composition lines, and `0` inline routes.
+- `npm run typecheck:server` passed.
+- `npm run typecheck` passed.
+- `npm run test:unit` passed with `172` tests.
+- `npm run lint` passed.
+- `node scripts/report-server-index-architecture.mjs` regenerated the architecture report.
+- `git diff --check` passed with only LF-to-CRLF working-copy warnings on touched and pre-existing modified files.
+- `npm test` passed end to end with `172` unit tests and the full command-console, filesystem, plugin, Gateway, runtime, mission, provider, release, security, secret-scan, and CI smoke suite.
+
+Risks and notes:
+
+- The route now returns a canonical API envelope for oversized raw avatar bodies instead of relying on the global error handler.
+- This slice does not change the public success payload for avatar uploads or picker sessions.
+- Full-suite output still logs the known Babel deoptimization warning for `server/controlPlane.ts`, one skipped malformed historical `runtime-runs` JSONL row, and expected control-plane error-handler redaction smoke logs; the affected checks passed.
+
+Next action:
+
+- Continue Phase G with item `75`: confirm uploaded command-console files never escape the approved upload root.
+
+### 2026-06-30 - Phase G Upload-Root Escape Confirmation
+
+Scope:
+
+- Completed Phase G item `75` by hardening and proving command-console upload persistence cannot escape the approved upload root.
+- Updated `server/services/filesystem/commandConsoleUploadService.ts` so the service accepts `approvedRootDir`, realpath-checks the upload write root before persistence, creates uploaded files with exclusive `wx` semantics, and re-checks the real uploaded file path after creation.
+- Updated `server/controlPlane.ts` so command-console uploads are composed with `approvedRootDir: WORKSPACE_ROOT`, keeping workspace containment in the extracted service boundary while the composition root stays as wiring.
+- Extended `tests/commandConsoleUploadService.test.ts` with symlinked upload-root rejection and preexisting symlink upload-target rejection, in addition to existing sibling-root metadata, inline Gateway symlink read, allowlist, and size-limit coverage.
+- Updated `scripts/smoke-command-console-files-control-plane.ts` and `scripts/smoke-server-entrypoint-boundary.ts` to pin approved-root composition, upload write-root realpath validation, exclusive file creation, and the new upload-root escape tests.
+- Regenerated `docs/generated/server-index-architecture.md`; the composition root is now `17,960/29,000` lines, with `9` entry lines and `0` inline routes.
+
+Files changed:
+
+- `server/services/filesystem/commandConsoleUploadService.ts`
+- `server/controlPlane.ts`
+- `tests/commandConsoleUploadService.test.ts`
+- `scripts/smoke-command-console-files-control-plane.ts`
+- `scripts/smoke-server-entrypoint-boundary.ts`
+- `docs/generated/server-index-architecture.md`
+- `docs/BETA_CODEBASE_SPLIT_PLAN.md`
+- `docs/OPTIMIZATION_MEMORY.md`
+- `docs/PRODUCTION_HARDENING_LEDGER.md`
+
+Verification:
+
+- `node --import tsx --test tests/commandConsoleUploadService.test.ts` passed with `12` command-console upload tests.
+- `node --import tsx --test tests/safePathService.test.ts tests/controlFilesService.test.ts tests/avatarFileService.test.ts tests/commandConsoleUploadService.test.ts tests/pickerSessionService.test.ts tests/partyAvatarUploadRoutes.test.ts` passed with `36` focused filesystem service tests.
+- `npm run smoke:command-console-files` passed.
+- `npm run smoke:filesystem-control-plane` passed.
+- `npm run smoke:server-architecture` passed with `9` entry lines, `17,960/29,000` composition lines, and `0` inline routes.
+- `npm run typecheck` passed.
+- `npm run test:unit` passed with `174` tests.
+- `npm run lint` passed.
+- `node scripts/report-server-index-architecture.mjs` regenerated the architecture report.
+- `git diff --check` passed with only LF-to-CRLF working-copy warnings on touched and pre-existing modified files.
+- `npm test` passed end to end with `174` unit tests and the full command-console, filesystem, plugin, Gateway, runtime, mission, provider, release, security, secret-scan, and CI smoke suite.
+
+Risks and notes:
+
+- Existing uploaded files are not migrated; this slice hardens new upload persistence and inline read conversion.
+- The upload service now refuses a preexisting predicted upload target instead of following it. That is intentional for safety and should only affect suspicious or collision-prone paths.
+- Full-suite output still logs the known Babel deoptimization warning for `server/controlPlane.ts`, one skipped malformed historical `runtime-runs` JSONL row, and expected control-plane error-handler redaction smoke logs; the affected checks passed.
+
+Next action:
+
+- Continue Phase H with item `76`: keep `src/store/nexusStore.ts` from growing further before moving renderer API calls into `src/api/*` modules.
+
+### 2026-06-30 - Phase H Renderer Store Growth Guard
+
+Scope:
+
+- Completed Phase H item `76` by adding a repeatable guard that keeps `src/store/nexusStore.ts` from growing before renderer API calls are extracted into `src/api/*` modules.
+- Added `scripts/smoke-renderer-store-boundary.ts` to pin the current store baseline at `4,408` logical lines, `18` store-owned `apiRequest` call lines, `20` store-owned `/api/` path literal lines, and exactly one direct `fetch` for the `/api/openclaw/agent-turn/stream` SSE path.
+- Wired `npm run smoke:renderer-store-boundary` into `package.json` and `npm run test:ci` immediately before the existing `smoke:nexus-control-plane` check, so CI fails if future work adds store API surface instead of extracting it.
+- Left `src/store/nexusStore.ts` unchanged for this slice; the item is a boundary guard before item `77` extraction work starts.
+
+Files changed:
+
+- `scripts/smoke-renderer-store-boundary.ts`
+- `package.json`
+- `docs/BETA_CODEBASE_SPLIT_PLAN.md`
+- `docs/OPTIMIZATION_MEMORY.md`
+- `docs/PRODUCTION_HARDENING_LEDGER.md`
+
+Verification:
+
+- `npm run smoke:renderer-store-boundary` passed with `4408/4408` `nexusStore` lines, `18/18` `apiRequest` calls, and `1` direct SSE fetch.
+- `npm run smoke:nexus-control-plane` passed.
+- `npm run smoke:runtime-actions-control-plane` passed.
+- `npm run typecheck` passed.
+- `npm run lint` passed.
+- `npm test` passed end to end with `174` unit tests and the full command-console, filesystem, plugin, Gateway, runtime, mission, provider, release, security, secret-scan, renderer-store-boundary, and CI smoke suite.
+
+Risks and notes:
+
+- The guard intentionally allows the existing SSE stream `fetch` in `nexusStore.ts`; moving that stream into a focused API/SSE client can tighten the budget in a later Phase H slice.
+- Full-suite output still logs the known Babel deoptimization warning for `server/controlPlane.ts`, one skipped malformed historical `runtime-runs` JSONL row, and expected control-plane error-handler redaction smoke logs; the affected checks passed.
+
+Next action:
+
+- Continue Phase H with item `77`: move renderer API calls into `src/api/*` modules, starting with a focused API family that can be extracted without backend behavior changes while keeping `npm run smoke:renderer-store-boundary` green.
+
+### 2026-06-30 - Phase H Renderer API Extraction, Party And Agent-Turn Helpers
+
+Scope:
+
+- Completed Phase H item `77` by moving a focused batch of renderer API calls out of `src/store/nexusStore.ts` and into `src/api/*` modules without changing backend behavior.
+- Added `src/api/party.ts` for party overview, avatar URL generation, agent config saves, recruitment, recruit-resource saves, and retire requests, along with party wire payload types that were previously embedded in the store.
+- Added `src/api/agentTurns.ts` for runtime preflight, buffered agent turns, party prewarm turns, and session clear requests, along with agent-turn wire payload types that were previously embedded in the store.
+- Updated `src/store/nexusStore.ts` to delegate those request families through the extracted API modules while leaving mission projection/start/stop and the existing SSE stream parser in place for later Phase H items.
+- Ratcheted `scripts/smoke-renderer-store-boundary.ts` from the item `76` baseline to `4,274` logical store lines, `3` store-owned `apiRequest` call lines, `4` store-owned `/api/` path literal lines, and exactly one direct SSE fetch.
+- Updated `scripts/smoke-nexus-control-plane.ts`, `scripts/smoke-agent-turn-control-plane.ts`, `scripts/smoke-filesystem-control-plane.ts`, and `scripts/smoke-config-save-lifecycle.ts` so renderer checks assert the new API helper ownership instead of requiring direct `apiRequest` calls in the store.
+
+Files changed:
+
+- `src/api/party.ts`
+- `src/api/agentTurns.ts`
+- `src/store/nexusStore.ts`
+- `scripts/smoke-renderer-store-boundary.ts`
+- `scripts/smoke-nexus-control-plane.ts`
+- `scripts/smoke-agent-turn-control-plane.ts`
+- `scripts/smoke-filesystem-control-plane.ts`
+- `scripts/smoke-config-save-lifecycle.ts`
+- `docs/BETA_CODEBASE_SPLIT_PLAN.md`
+- `docs/OPTIMIZATION_MEMORY.md`
+- `docs/PRODUCTION_HARDENING_LEDGER.md`
+
+Verification:
+
+- `npm run smoke:renderer-store-boundary` passed with `4274/4274` `nexusStore` lines, `3/3` store-owned `apiRequest` calls, and `1` direct SSE fetch.
+- `npm run smoke:nexus-control-plane` passed.
+- `npm run smoke:agent-turn-control-plane` passed.
+- `npm run smoke:filesystem-control-plane` passed.
+- `npm run smoke:config-save` passed.
+- `npm run typecheck` passed.
+- `npm run lint` passed with the existing Babel deoptimization note for `server/controlPlane.ts`.
+- `npm run test:unit` passed with `174` tests.
+- `npm test` passed end to end with `174` unit tests and the full command-console, filesystem, renderer-store-boundary, plugin, Gateway, runtime, mission, provider, release, security, secret-scan, and CI smoke suite.
+
+Risks and notes:
+
+- The remaining JSON API calls in `src/store/nexusStore.ts` are mission projection/start/stop and are intentionally left for Phase H item `78` so mission projection behavior can be extracted and verified as its own slice.
+- The direct `/api/openclaw/agent-turn/stream` fetch remains in the store for the existing SSE parser; moving that should be a later focused API/SSE client extraction.
+- Full-suite output still logs the known Babel deoptimization warning for `server/controlPlane.ts`, one skipped malformed historical `runtime-runs` JSONL row, and expected control-plane error-handler redaction smoke logs; the affected checks passed.
+
+Next action:
+
+- Continue Phase H with item `78`: move mission projection syncing into `src/api/missions.ts` or `src/services/missionProjectionClient.ts` while preserving backend mission truth.
+
+## In Progress
+
+- Optimization work now resumes from `docs/BETA_CODEBASE_SPLIT_PLAN.md`, with Phase A, Phase B, Phase C, Phase D items `31-45`, Phase E items `46-55`, Phase F items `56-65`, Phase G items `66-75`, and Phase H items `76-77` complete and verified for the private beta service-split milestone.
+
+Next action:
+
+- Continue Phase H with item `78`: move mission projection syncing into `src/api/missions.ts` or `src/services/missionProjectionClient.ts`.
 
 ## Backlog
 
