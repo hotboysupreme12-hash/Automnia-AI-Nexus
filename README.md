@@ -401,7 +401,7 @@ DYSTOPAI_RELEASE_SIGNING_PRIVATE_KEY_FILE=C:/secure/dystopai-release-ed25519.pem
 DYSTOPAI_RELEASE_REQUIRE_SIGNING=1 npm run release:validate
 ```
 
-The release flow can record artifact size, SHA-256 digest, update metadata, signing evidence, install and uninstall validation, rollback continuity, and distribution evidence. Private signing keys must never be committed.
+The release flow can record artifact size, SHA-256 digest, update metadata, signing evidence, install and uninstall validation, rollback continuity, and distribution evidence. Public release validation expects consumer distribution signing evidence in `release/evidence/distribution-signing.json` before `npm run release:evidence`. Private signing keys must never be committed.
 
 </details>
 

@@ -7,11 +7,11 @@ Generated from `server/index.ts` and `server/controlPlane.ts` by `scripts/report
 | Metric | Value |
 | --- | ---: |
 | Executable entrypoint lines | 9 |
-| Control-plane composition lines | 28,876 |
-| Control-plane bytes | 1,157,117 |
-| Top-level imports | 39 |
-| Top-level declarations | 1784 |
-| Top-level functions | 1263 |
+| Control-plane composition lines | 22,963 |
+| Control-plane bytes | 915,788 |
+| Top-level imports | 50 |
+| Top-level declarations | 1481 |
+| Top-level functions | 1053 |
 | Inline Express route calls | 0 |
 | Extracted route registrations | 17 |
 | Imported route modules | 17 |
@@ -70,23 +70,23 @@ The canonical method-and-path inventory lives in `server/routes/controlPlaneRout
 
 | Registration | Line | Span |
 | --- | ---: | ---: |
-| registerDiagnosticsRoutes | 26552 | 21 |
-| registerCommandConsoleFileRoutes | 26574 | 5 |
-| registerOpenClawCommandRoutes | 26580 | 15 |
-| registerRuntimeRoutes | 26618 | 27 |
-| registerPluginRoutes | 27182 | 26 |
-| registerPartyManagementRoutes | 27694 | 1 |
-| registerFilesystemRoutes | 27696 | 34 |
-| registerPartyCoordinationRoutes | 27731 | 44 |
-| registerMissionRoutes | 27776 | 25 |
-| registerAgentTurnRoutes | 28417 | 85 |
-| registerClawTalkConsoleRoutes | 28503 | 24 |
-| registerBrowserRoutes | 28529 | 1 |
-| registerShiftRoutes | 28652 | 16 |
-| registerProviderAuthRoutes | 28669 | 19 |
-| registerSkillRoutes | 28689 | 14 |
-| registerAgentConfigRoutes | 28784 | 1 |
-| registerAuthRoutes | 28786 | 1 |
+| registerDiagnosticsRoutes | 21179 | 21 |
+| registerCommandConsoleFileRoutes | 21201 | 5 |
+| registerOpenClawCommandRoutes | 21207 | 15 |
+| registerRuntimeRoutes | 21281 | 6 |
+| registerPluginRoutes | 21288 | 26 |
+| registerPartyManagementRoutes | 21800 | 1 |
+| registerFilesystemRoutes | 21802 | 34 |
+| registerPartyCoordinationRoutes | 21837 | 44 |
+| registerMissionRoutes | 21882 | 6 |
+| registerAgentTurnRoutes | 22504 | 85 |
+| registerClawTalkConsoleRoutes | 22590 | 24 |
+| registerBrowserRoutes | 22616 | 1 |
+| registerShiftRoutes | 22739 | 16 |
+| registerProviderAuthRoutes | 22756 | 19 |
+| registerSkillRoutes | 22776 | 14 |
+| registerAgentConfigRoutes | 22871 | 1 |
+| registerAuthRoutes | 22873 | 1 |
 
 ## Inline Express Routes In The Composition Module
 
@@ -98,336 +98,336 @@ The canonical method-and-path inventory lives in `server/routes/controlPlaneRout
 
 | Kind | Name | Start | End | Lines |
 | --- | --- | ---: | ---: | ---: |
-| function | streamProviderAgentTurn | 28133 | 28415 | 283 |
-| function | runBufferedAgentTurnForStream | 27802 | 27998 | 197 |
-| class | LightweightGatewayClient | 23299 | 23493 | 195 |
-| function | runDoctorChecks | 26351 | 26516 | 166 |
-| function | runControlCenterGatewayChatTurn | 23998 | 24157 | 160 |
-| function | installOpenClawPlugin | 19083 | 19234 | 152 |
-| function | doctorGuidedActionForFinding | 25854 | 26000 | 147 |
-| function | ensureGatewayRunningInner | 6178 | 6317 | 140 |
-| type | OpenClawConfigFile | 1118 | 1255 | 138 |
-| function | runMissionCronRound | 15015 | 15152 | 138 |
-| function | launchWindowsFolderPickerSession | 11437 | 11571 | 135 |
-| function | runGatewayAgentTurnForStream | 28000 | 28131 | 132 |
-| function | launchWindowsImagePickerSession | 11712 | 11840 | 129 |
-| function | buildRuntimeStatusPayload | 26646 | 26774 | 129 |
-| function | generateRecruitAutoForgeMarkdown | 27416 | 27544 | 129 |
-| function | buildDefaultAgentLocalConfig | 21792 | 21919 | 128 |
-| function | spawnGateway | 5832 | 5958 | 127 |
-| function | checkBrowserPreflight | 13278 | 13403 | 126 |
-| function | createShiftFromPayload | 28532 | 28650 | 119 |
-| function | ensureOpenclawRuntimeDefaults | 15916 | 16030 | 115 |
-| function | runControlCenterAgentRuntimeTurn | 24159 | 24270 | 112 |
-| function | patchedClawTalkCoreBridgeSource | 17161 | 17270 | 110 |
-| function | runOpenClaw | 8059 | 8164 | 106 |
-| function | createRecurringMissionCronJob | 14623 | 14728 | 106 |
-| function | startControlCenterGatewayClient | 23707 | 23804 | 98 |
-| function | buildRuntimeSummaryPayload | 26776 | 26864 | 89 |
-| function | buildBackendMissionReport | 14174 | 14260 | 87 |
-| function | googleVertexGcloudStatus | 8761 | 8845 | 85 |
-| function | streamOpenAiResponsesCompletion | 10309 | 10392 | 84 |
-| function | createMissionCronJob | 14538 | 14621 | 84 |
-| function | cleanupAgentWorkspaceDoctrineFiles | 24478 | 24560 | 83 |
-| function | openAgentSessionSnapshots | 6526 | 6607 | 82 |
-| function | defaultAgentResourceContent | 21084 | 21164 | 81 |
-| function | listPluginControls | 19708 | 19785 | 78 |
-| function | setupClawTalkPlugin | 20052 | 20128 | 77 |
-| function | generateGoogleVertexArtifactContent | 24314 | 24390 | 77 |
-| function | ensureGoogleOAuthCallbackServer | 9514 | 9589 | 76 |
-| function | startManagedTeamSyncOrchestrator | 25465 | 25539 | 75 |
-| type | AgentLocalConfig | 1275 | 1348 | 74 |
-| function | missionRolePrompt | 14400 | 14473 | 74 |
-| function | purgeAgentState | 20972 | 21043 | 72 |
-| function | writeAuthProfileSqlite | 2365 | 2435 | 71 |
-| function | writeGoogleGeminiMinimalOpenClawConfig | 22573 | 22643 | 71 |
-| function | ensureOpenAICodexOAuthCallbackServer | 9692 | 9761 | 70 |
-| function | approveLocalDevicePairingRequest | 12806 | 12874 | 69 |
-| function | inferWorkspaceRuntimeIntent | 11050 | 11117 | 68 |
-| function | runMissionCronJob | 14788 | 14855 | 68 |
-| function | inspectOpenClawSessionLock | 7650 | 7716 | 67 |
-| function | streamGoogleVertexContent | 10838 | 10904 | 67 |
-| function | applyOpenClawPluginEnabledToConfig | 19787 | 19853 | 67 |
-| function | providerAuthStatus | 3254 | 3319 | 66 |
-| function | parseGatewayFileLogLine | 5292 | 5357 | 66 |
-| function | repairCodexPluginPostInstallState | 19016 | 19081 | 66 |
-| type | PartyManagementRoutesContext | 27560 | 27625 | 66 |
-| variable | partyManagementRoutesContext | 27627 | 27692 | 66 |
-| function | gatewayRestartDiagnostics | 6450 | 6514 | 65 |
-| function | pickImageWithOsDialog | 12050 | 12114 | 65 |
-| function | seedAgentWorkspace | 22149 | 22213 | 65 |
-| function | repairGatewayTokenConfigSync | 3064 | 3127 | 64 |
-| function | cleanupOpenClawSessionLocks | 7798 | 7861 | 64 |
-| function | extractAgentReply | 12204 | 12267 | 64 |
-| function | tryReleaseTcpPortUnix | 13065 | 13128 | 64 |
-| function | applyPluginToggleViaGatewayConfigPatch | 19429 | 19492 | 64 |
-| function | clearDisallowedAutoModelOverrideFromEntry | 4344 | 4406 | 63 |
-| function | gatewayStatusSnapshot | 6386 | 6448 | 63 |
-| function | reconcileMissionGatewaySessions | 13971 | 14033 | 63 |
-| function | resolveSharedTeamSyncPath | 22252 | 22314 | 63 |
-| function | applyGoogleGeminiPluginPolicy | 22509 | 22571 | 63 |
-| function | missionPulseRolePrompt | 14475 | 14536 | 62 |
-| function | patchedTelegramBotRuntimeSource | 17288 | 17349 | 62 |
-| function | buildPluginControlEntry | 18201 | 18262 | 62 |
-| function | pickFolderWithOsDialog | 11959 | 12018 | 60 |
-| function | hydrateMissionRecordsFromLedger | 14084 | 14143 | 60 |
-| function | getPartyMembers | 25541 | 25600 | 60 |
-| function | recruitAutoForgePrompt | 27323 | 27382 | 60 |
-| function | buildMissionPrompt | 22089 | 22147 | 59 |
-| function | runtimeSummaryPayloadFromStatusPayload | 26866 | 26924 | 59 |
-| function | streamGeminiContent | 10605 | 10662 | 58 |
-| function | runPickerCommand | 11842 | 11899 | 58 |
-| function | getPluginList | 17908 | 17965 | 58 |
-| function | runBrowserToolProbe | 13220 | 13276 | 57 |
-| function | ensureConfiguredProviderModel | 1924 | 1979 | 56 |
-| function | parseClawTalkWsLogLine | 5498 | 5553 | 56 |
-| function | writeOpenclawConfig | 16280 | 16335 | 56 |
-| function | getRuntimeSummaryPayload | 27125 | 27180 | 56 |
-| function | postLocalJsonNoHeaderTimeout | 10942 | 10996 | 55 |
-| function | tryReleaseGatewayPort | 13009 | 13063 | 55 |
-| function | requestGatewaySessionAbort | 3918 | 3971 | 54 |
-| function | normalizeGatewayLogDisplayMessage | 4833 | 4886 | 54 |
-| function | tryReleaseBrowserRelayPort | 12954 | 13007 | 54 |
-| function | readOpenclawConfig | 15513 | 15566 | 54 |
-| function | ensureCodexPluginInstalledForOpenAiRuntime | 19248 | 19301 | 54 |
-| function | minimalRuntimeStatusPayload | 26988 | 27041 | 54 |
-| function | loadAvailableModelsFromOpenClaw | 2012 | 2064 | 53 |
-| function | discoverGatewayFileLogPaths | 4989 | 5041 | 53 |
-| function | refreshPluginListCache | 17848 | 17900 | 53 |
-| function | createPlainProcessTerminalModule | 8286 | 8337 | 52 |
-| function | ensureClawTalkBundledPluginDefaults | 17527 | 17578 | 52 |
-| function | streamOpenAICodexResponsesCompletion | 10508 | 10558 | 51 |
-| function | normalizeGatewayStabilityPayload | 23065 | 23115 | 51 |
-| function | resolveFilenameHintsForMessage | 24685 | 24735 | 51 |
-| function | listActiveCronJobsFromStateDb | 25252 | 25302 | 51 |
-| function | recruitPersonalityDepthGuidance | 27246 | 27296 | 51 |
-| variable | FALLBACK_MODELS | 1461 | 1510 | 50 |
-| function | inspectOpenClawSessionLocks | 7747 | 7796 | 50 |
-| function | closeLifecycleHttpServer | 9086 | 9135 | 50 |
-| function | savePluginDirectConfig | 18800 | 18849 | 50 |
-| function | syncAgentDerivedFiles | 21494 | 21543 | 50 |
-| function | composeAgentDoctrinePrompt | 21545 | 21594 | 50 |
-| function | abortStaleGatewayChatWaiters | 22827 | 22875 | 49 |
-| function | listRehydratableControlCenterShiftsFromStateDb | 25348 | 25396 | 49 |
-| function | startPluginSetupTerminalSession | 8401 | 8448 | 48 |
-| function | readSkillEntryFromDir | 20287 | 20334 | 48 |
-| function | appendAgentPromptDump | 21612 | 21659 | 48 |
-| function | waitForGatewayChatRun | 23949 | 23996 | 48 |
-| function | tryRestartGatewayService | 13130 | 13176 | 47 |
-| function | createInitialOpenclawConfig | 15415 | 15461 | 47 |
-| function | ensureClawTalkManifestContracts | 17050 | 17096 | 47 |
-| function | normalizeModelWithFallback | 21331 | 21377 | 47 |
-| function | listMissionCronReconciliationSnapshotFromStateDb | 25075 | 25121 | 47 |
+| function | streamProviderAgentTurn | 22220 | 22502 | 283 |
+| function | runBufferedAgentTurnForStream | 21889 | 22085 | 197 |
+| function | runDoctorChecks | 20977 | 21143 | 167 |
+| function | installOpenClawPlugin | 15253 | 15404 | 152 |
+| function | doctorGuidedActionForFinding | 20480 | 20626 | 147 |
+| type | OpenClawConfigFile | 1095 | 1232 | 138 |
+| function | launchWindowsFolderPickerSession | 9666 | 9800 | 135 |
+| function | runGatewayAgentTurnForStream | 22087 | 22218 | 132 |
+| function | launchWindowsImagePickerSession | 9941 | 10069 | 129 |
+| function | generateRecruitAutoForgeMarkdown | 21522 | 21650 | 129 |
+| function | buildDefaultAgentLocalConfig | 17962 | 18089 | 128 |
+| function | checkBrowserPreflight | 11216 | 11341 | 126 |
+| function | createShiftFromPayload | 22619 | 22737 | 119 |
+| function | ensureOpenclawRuntimeDefaults | 12109 | 12223 | 115 |
+| function | runControlCenterAgentRuntimeTurn | 18860 | 18971 | 112 |
+| function | patchedClawTalkCoreBridgeSource | 13348 | 13457 | 110 |
+| function | runOpenClaw | 6288 | 6393 | 106 |
+| function | googleVertexGcloudStatus | 6990 | 7074 | 85 |
+| function | streamOpenAiResponsesCompletion | 8538 | 8621 | 84 |
+| function | cleanupAgentWorkspaceDoctrineFiles | 19179 | 19261 | 83 |
+| function | openAgentSessionSnapshots | 4896 | 4977 | 82 |
+| function | defaultAgentResourceContent | 17254 | 17334 | 81 |
+| function | listPluginControls | 15878 | 15955 | 78 |
+| function | setupClawTalkPlugin | 16222 | 16298 | 77 |
+| function | generateGoogleVertexArtifactContent | 19015 | 19091 | 77 |
+| function | ensureGoogleOAuthCallbackServer | 7743 | 7818 | 76 |
+| function | startManagedTeamSyncOrchestrator | 20091 | 20165 | 75 |
+| type | AgentLocalConfig | 1252 | 1325 | 74 |
+| function | purgeAgentState | 17142 | 17213 | 72 |
+| function | writeAuthProfileSqlite | 2334 | 2404 | 71 |
+| function | writeGoogleGeminiMinimalOpenClawConfig | 18743 | 18813 | 71 |
+| function | ensureOpenAICodexOAuthCallbackServer | 7921 | 7990 | 70 |
+| function | approveLocalDevicePairingRequest | 10788 | 10856 | 69 |
+| function | inferWorkspaceRuntimeIntent | 9279 | 9346 | 68 |
+| function | inspectOpenClawSessionLock | 5879 | 5945 | 67 |
+| function | streamGoogleVertexContent | 9067 | 9133 | 67 |
+| function | applyOpenClawPluginEnabledToConfig | 15957 | 16023 | 67 |
+| function | providerAuthStatus | 3250 | 3315 | 66 |
+| function | repairCodexPluginPostInstallState | 15186 | 15251 | 66 |
+| type | PartyManagementRoutesContext | 21666 | 21731 | 66 |
+| variable | partyManagementRoutesContext | 21733 | 21798 | 66 |
+| function | pickImageWithOsDialog | 10279 | 10343 | 65 |
+| function | seedAgentWorkspace | 18319 | 18383 | 65 |
+| function | repairGatewayTokenConfigSync | 3033 | 3096 | 64 |
+| function | cleanupOpenClawSessionLocks | 6027 | 6090 | 64 |
+| function | extractAgentReply | 10433 | 10496 | 64 |
+| function | tryReleaseTcpPortUnix | 11047 | 11110 | 64 |
+| function | applyPluginToggleViaGatewayConfigPatch | 15599 | 15662 | 64 |
+| function | clearDisallowedAutoModelOverrideFromEntry | 4232 | 4294 | 63 |
+| function | resolveSharedTeamSyncPath | 18422 | 18484 | 63 |
+| function | applyGoogleGeminiPluginPolicy | 18679 | 18741 | 63 |
+| function | patchedTelegramBotRuntimeSource | 13475 | 13536 | 62 |
+| function | buildPluginControlEntry | 14388 | 14449 | 62 |
+| function | pickFolderWithOsDialog | 10188 | 10247 | 60 |
+| function | getPartyMembers | 20167 | 20226 | 60 |
+| function | recruitAutoForgePrompt | 21429 | 21488 | 60 |
+| function | buildMissionPrompt | 18259 | 18317 | 59 |
+| function | streamGeminiContent | 8834 | 8891 | 58 |
+| function | runPickerCommand | 10071 | 10128 | 58 |
+| function | getPluginList | 14095 | 14152 | 58 |
+| function | runBrowserToolProbe | 11158 | 11214 | 57 |
+| function | ensureConfiguredProviderModel | 1893 | 1948 | 56 |
+| function | writeOpenclawConfig | 12467 | 12522 | 56 |
+| function | postLocalJsonNoHeaderTimeout | 9171 | 9225 | 55 |
+| function | tryReleaseGatewayPort | 10991 | 11045 | 55 |
+| function | tryReleaseBrowserRelayPort | 10936 | 10989 | 54 |
+| function | readOpenclawConfig | 11706 | 11759 | 54 |
+| function | ensureCodexPluginInstalledForOpenAiRuntime | 15418 | 15471 | 54 |
+| function | loadAvailableModelsFromOpenClaw | 1981 | 2033 | 53 |
+| function | refreshPluginListCache | 14035 | 14087 | 53 |
+| function | requestGatewaySessionAbort | 3808 | 3859 | 52 |
+| function | createPlainProcessTerminalModule | 6515 | 6566 | 52 |
+| function | ensureClawTalkBundledPluginDefaults | 13714 | 13765 | 52 |
+| function | streamOpenAICodexResponsesCompletion | 8737 | 8787 | 51 |
+| function | resolveFilenameHintsForMessage | 19386 | 19436 | 51 |
+| function | listActiveCronJobsFromStateDb | 19878 | 19928 | 51 |
+| function | recruitPersonalityDepthGuidance | 21352 | 21402 | 51 |
+| variable | FALLBACK_MODELS | 1430 | 1479 | 50 |
+| function | inspectOpenClawSessionLocks | 5976 | 6025 | 50 |
+| function | closeLifecycleHttpServer | 7315 | 7364 | 50 |
+| function | savePluginDirectConfig | 14987 | 15036 | 50 |
+| function | syncAgentDerivedFiles | 17664 | 17713 | 50 |
+| function | composeAgentDoctrinePrompt | 17715 | 17764 | 50 |
+| function | listRehydratableControlCenterShiftsFromStateDb | 19974 | 20022 | 49 |
+| function | startPluginSetupTerminalSession | 6630 | 6677 | 48 |
+| function | readSkillEntryFromDir | 16457 | 16504 | 48 |
+| function | appendAgentPromptDump | 17782 | 17829 | 48 |
+| function | createInitialOpenclawConfig | 11608 | 11654 | 47 |
+| function | ensureClawTalkManifestContracts | 13237 | 13283 | 47 |
+| function | normalizeModelWithFallback | 17501 | 17547 | 47 |
+| function | listMissionCronReconciliationSnapshotFromStateDb | 19701 | 19747 | 47 |
+| variable | gatewayLifecycle | 4743 | 4788 | 46 |
+| function | streamOpenAiCompatibleCompletion | 8491 | 8536 | 46 |
+| function | tryStartBrowserRelay | 10889 | 10934 | 46 |
+| function | openClawOptimizationStatus | 11561 | 11606 | 46 |
+| function | openClawDoctorLintCheck | 20930 | 20975 | 46 |
+| function | terminateProcessTree | 886 | 930 | 45 |
+| function | removeProviderAuthProfiles | 2731 | 2775 | 45 |
+| function | checkGoogleVertexModelAvailability | 8946 | 8990 | 45 |
+| function | normalizeOpenClawConfigModelRefs | 12063 | 12107 | 45 |
+| function | schemaConfigFieldsFromRaw | 14277 | 14321 | 45 |
+| function | syncDoctrineToWorkspace | 18529 | 18573 | 45 |
+| function | exchangeGoogleOAuthCodeForTokens | 7535 | 7578 | 44 |
+| function | streamAnthropicMessage | 8789 | 8832 | 44 |
+| function | startFolderPickerSession | 9586 | 9629 | 44 |
+| function | syncModelProviderTimeoutsFromAgentSettings | 12302 | 12345 | 44 |
+| variable | MODEL_RESILIENCE_FALLBACKS | 1491 | 1533 | 43 |
+| function | runOpenClawWithManagedSkillsWorkspace | 16636 | 16678 | 43 |
+| function | applyLocalConfigToGlobal | 18126 | 18168 | 43 |
+| function | spawnText | 4558 | 4599 | 42 |
+| function | contentTypeFromExt | 5206 | 5247 | 42 |
+| function | toOpenAICodexContext | 8675 | 8716 | 42 |
+| function | firstJsonSliceFromText | 14451 | 14492 | 42 |
+| function | seedCanonicalResourceIfMissing | 16871 | 16912 | 42 |
+| function | buildDoctrineSyncReport | 19274 | 19315 | 42 |
+| function | persistAgentAvatarFromPath | 9868 | 9908 | 41 |
+| function | launchChromeHost | 10345 | 10385 | 41 |
+| function | pluginRawFromManifest | 13902 | 13942 | 41 |
+| function | knownPluginConfigFields | 14323 | 14363 | 41 |
+| function | splitPluginCommandLine | 14688 | 14728 | 41 |
 
 ## Largest Functions
 
 | Function | Start | End | Lines |
 | --- | ---: | ---: | ---: |
-| streamProviderAgentTurn | 28133 | 28415 | 283 |
-| runBufferedAgentTurnForStream | 27802 | 27998 | 197 |
-| runDoctorChecks | 26351 | 26516 | 166 |
-| runControlCenterGatewayChatTurn | 23998 | 24157 | 160 |
-| installOpenClawPlugin | 19083 | 19234 | 152 |
-| doctorGuidedActionForFinding | 25854 | 26000 | 147 |
-| ensureGatewayRunningInner | 6178 | 6317 | 140 |
-| runMissionCronRound | 15015 | 15152 | 138 |
-| launchWindowsFolderPickerSession | 11437 | 11571 | 135 |
-| runGatewayAgentTurnForStream | 28000 | 28131 | 132 |
-| launchWindowsImagePickerSession | 11712 | 11840 | 129 |
-| buildRuntimeStatusPayload | 26646 | 26774 | 129 |
-| generateRecruitAutoForgeMarkdown | 27416 | 27544 | 129 |
-| buildDefaultAgentLocalConfig | 21792 | 21919 | 128 |
-| spawnGateway | 5832 | 5958 | 127 |
-| checkBrowserPreflight | 13278 | 13403 | 126 |
-| createShiftFromPayload | 28532 | 28650 | 119 |
-| ensureOpenclawRuntimeDefaults | 15916 | 16030 | 115 |
-| runControlCenterAgentRuntimeTurn | 24159 | 24270 | 112 |
-| patchedClawTalkCoreBridgeSource | 17161 | 17270 | 110 |
-| runOpenClaw | 8059 | 8164 | 106 |
-| createRecurringMissionCronJob | 14623 | 14728 | 106 |
-| startControlCenterGatewayClient | 23707 | 23804 | 98 |
-| buildRuntimeSummaryPayload | 26776 | 26864 | 89 |
-| buildBackendMissionReport | 14174 | 14260 | 87 |
-| googleVertexGcloudStatus | 8761 | 8845 | 85 |
-| streamOpenAiResponsesCompletion | 10309 | 10392 | 84 |
-| createMissionCronJob | 14538 | 14621 | 84 |
-| cleanupAgentWorkspaceDoctrineFiles | 24478 | 24560 | 83 |
-| openAgentSessionSnapshots | 6526 | 6607 | 82 |
-| defaultAgentResourceContent | 21084 | 21164 | 81 |
-| listPluginControls | 19708 | 19785 | 78 |
-| setupClawTalkPlugin | 20052 | 20128 | 77 |
-| generateGoogleVertexArtifactContent | 24314 | 24390 | 77 |
-| ensureGoogleOAuthCallbackServer | 9514 | 9589 | 76 |
-| startManagedTeamSyncOrchestrator | 25465 | 25539 | 75 |
-| missionRolePrompt | 14400 | 14473 | 74 |
-| purgeAgentState | 20972 | 21043 | 72 |
-| writeAuthProfileSqlite | 2365 | 2435 | 71 |
-| writeGoogleGeminiMinimalOpenClawConfig | 22573 | 22643 | 71 |
-| ensureOpenAICodexOAuthCallbackServer | 9692 | 9761 | 70 |
-| approveLocalDevicePairingRequest | 12806 | 12874 | 69 |
-| inferWorkspaceRuntimeIntent | 11050 | 11117 | 68 |
-| runMissionCronJob | 14788 | 14855 | 68 |
-| inspectOpenClawSessionLock | 7650 | 7716 | 67 |
-| streamGoogleVertexContent | 10838 | 10904 | 67 |
-| applyOpenClawPluginEnabledToConfig | 19787 | 19853 | 67 |
-| providerAuthStatus | 3254 | 3319 | 66 |
-| parseGatewayFileLogLine | 5292 | 5357 | 66 |
-| repairCodexPluginPostInstallState | 19016 | 19081 | 66 |
-| gatewayRestartDiagnostics | 6450 | 6514 | 65 |
-| pickImageWithOsDialog | 12050 | 12114 | 65 |
-| seedAgentWorkspace | 22149 | 22213 | 65 |
-| repairGatewayTokenConfigSync | 3064 | 3127 | 64 |
-| cleanupOpenClawSessionLocks | 7798 | 7861 | 64 |
-| extractAgentReply | 12204 | 12267 | 64 |
-| tryReleaseTcpPortUnix | 13065 | 13128 | 64 |
-| applyPluginToggleViaGatewayConfigPatch | 19429 | 19492 | 64 |
-| clearDisallowedAutoModelOverrideFromEntry | 4344 | 4406 | 63 |
-| gatewayStatusSnapshot | 6386 | 6448 | 63 |
-| reconcileMissionGatewaySessions | 13971 | 14033 | 63 |
-| resolveSharedTeamSyncPath | 22252 | 22314 | 63 |
-| applyGoogleGeminiPluginPolicy | 22509 | 22571 | 63 |
-| missionPulseRolePrompt | 14475 | 14536 | 62 |
-| patchedTelegramBotRuntimeSource | 17288 | 17349 | 62 |
-| buildPluginControlEntry | 18201 | 18262 | 62 |
-| pickFolderWithOsDialog | 11959 | 12018 | 60 |
-| hydrateMissionRecordsFromLedger | 14084 | 14143 | 60 |
-| getPartyMembers | 25541 | 25600 | 60 |
-| recruitAutoForgePrompt | 27323 | 27382 | 60 |
-| buildMissionPrompt | 22089 | 22147 | 59 |
-| runtimeSummaryPayloadFromStatusPayload | 26866 | 26924 | 59 |
-| streamGeminiContent | 10605 | 10662 | 58 |
-| runPickerCommand | 11842 | 11899 | 58 |
-| getPluginList | 17908 | 17965 | 58 |
-| runBrowserToolProbe | 13220 | 13276 | 57 |
-| ensureConfiguredProviderModel | 1924 | 1979 | 56 |
-| parseClawTalkWsLogLine | 5498 | 5553 | 56 |
-| writeOpenclawConfig | 16280 | 16335 | 56 |
-| getRuntimeSummaryPayload | 27125 | 27180 | 56 |
-| postLocalJsonNoHeaderTimeout | 10942 | 10996 | 55 |
-| tryReleaseGatewayPort | 13009 | 13063 | 55 |
-| requestGatewaySessionAbort | 3918 | 3971 | 54 |
-| normalizeGatewayLogDisplayMessage | 4833 | 4886 | 54 |
-| tryReleaseBrowserRelayPort | 12954 | 13007 | 54 |
-| readOpenclawConfig | 15513 | 15566 | 54 |
-| ensureCodexPluginInstalledForOpenAiRuntime | 19248 | 19301 | 54 |
-| minimalRuntimeStatusPayload | 26988 | 27041 | 54 |
-| loadAvailableModelsFromOpenClaw | 2012 | 2064 | 53 |
-| discoverGatewayFileLogPaths | 4989 | 5041 | 53 |
-| refreshPluginListCache | 17848 | 17900 | 53 |
-| createPlainProcessTerminalModule | 8286 | 8337 | 52 |
-| ensureClawTalkBundledPluginDefaults | 17527 | 17578 | 52 |
-| streamOpenAICodexResponsesCompletion | 10508 | 10558 | 51 |
-| normalizeGatewayStabilityPayload | 23065 | 23115 | 51 |
-| resolveFilenameHintsForMessage | 24685 | 24735 | 51 |
-| listActiveCronJobsFromStateDb | 25252 | 25302 | 51 |
-| recruitPersonalityDepthGuidance | 27246 | 27296 | 51 |
-| inspectOpenClawSessionLocks | 7747 | 7796 | 50 |
-| closeLifecycleHttpServer | 9086 | 9135 | 50 |
-| savePluginDirectConfig | 18800 | 18849 | 50 |
-| syncAgentDerivedFiles | 21494 | 21543 | 50 |
-| composeAgentDoctrinePrompt | 21545 | 21594 | 50 |
-| abortStaleGatewayChatWaiters | 22827 | 22875 | 49 |
-| listRehydratableControlCenterShiftsFromStateDb | 25348 | 25396 | 49 |
-| startPluginSetupTerminalSession | 8401 | 8448 | 48 |
-| readSkillEntryFromDir | 20287 | 20334 | 48 |
-| appendAgentPromptDump | 21612 | 21659 | 48 |
-| waitForGatewayChatRun | 23949 | 23996 | 48 |
-| tryRestartGatewayService | 13130 | 13176 | 47 |
-| createInitialOpenclawConfig | 15415 | 15461 | 47 |
-| ensureClawTalkManifestContracts | 17050 | 17096 | 47 |
-| normalizeModelWithFallback | 21331 | 21377 | 47 |
-| listMissionCronReconciliationSnapshotFromStateDb | 25075 | 25121 | 47 |
-| streamOpenAiCompatibleCompletion | 10262 | 10307 | 46 |
-| tryStartBrowserRelay | 12907 | 12952 | 46 |
-| openClawOptimizationStatus | 15368 | 15413 | 46 |
-| openClawDoctorLintCheck | 26304 | 26349 | 46 |
-| terminateProcessTree | 909 | 953 | 45 |
-| removeProviderAuthProfiles | 2762 | 2806 | 45 |
+| streamProviderAgentTurn | 22220 | 22502 | 283 |
+| runBufferedAgentTurnForStream | 21889 | 22085 | 197 |
+| runDoctorChecks | 20977 | 21143 | 167 |
+| installOpenClawPlugin | 15253 | 15404 | 152 |
+| doctorGuidedActionForFinding | 20480 | 20626 | 147 |
+| launchWindowsFolderPickerSession | 9666 | 9800 | 135 |
+| runGatewayAgentTurnForStream | 22087 | 22218 | 132 |
+| launchWindowsImagePickerSession | 9941 | 10069 | 129 |
+| generateRecruitAutoForgeMarkdown | 21522 | 21650 | 129 |
+| buildDefaultAgentLocalConfig | 17962 | 18089 | 128 |
+| checkBrowserPreflight | 11216 | 11341 | 126 |
+| createShiftFromPayload | 22619 | 22737 | 119 |
+| ensureOpenclawRuntimeDefaults | 12109 | 12223 | 115 |
+| runControlCenterAgentRuntimeTurn | 18860 | 18971 | 112 |
+| patchedClawTalkCoreBridgeSource | 13348 | 13457 | 110 |
+| runOpenClaw | 6288 | 6393 | 106 |
+| googleVertexGcloudStatus | 6990 | 7074 | 85 |
+| streamOpenAiResponsesCompletion | 8538 | 8621 | 84 |
+| cleanupAgentWorkspaceDoctrineFiles | 19179 | 19261 | 83 |
+| openAgentSessionSnapshots | 4896 | 4977 | 82 |
+| defaultAgentResourceContent | 17254 | 17334 | 81 |
+| listPluginControls | 15878 | 15955 | 78 |
+| setupClawTalkPlugin | 16222 | 16298 | 77 |
+| generateGoogleVertexArtifactContent | 19015 | 19091 | 77 |
+| ensureGoogleOAuthCallbackServer | 7743 | 7818 | 76 |
+| startManagedTeamSyncOrchestrator | 20091 | 20165 | 75 |
+| purgeAgentState | 17142 | 17213 | 72 |
+| writeAuthProfileSqlite | 2334 | 2404 | 71 |
+| writeGoogleGeminiMinimalOpenClawConfig | 18743 | 18813 | 71 |
+| ensureOpenAICodexOAuthCallbackServer | 7921 | 7990 | 70 |
+| approveLocalDevicePairingRequest | 10788 | 10856 | 69 |
+| inferWorkspaceRuntimeIntent | 9279 | 9346 | 68 |
+| inspectOpenClawSessionLock | 5879 | 5945 | 67 |
+| streamGoogleVertexContent | 9067 | 9133 | 67 |
+| applyOpenClawPluginEnabledToConfig | 15957 | 16023 | 67 |
+| providerAuthStatus | 3250 | 3315 | 66 |
+| repairCodexPluginPostInstallState | 15186 | 15251 | 66 |
+| pickImageWithOsDialog | 10279 | 10343 | 65 |
+| seedAgentWorkspace | 18319 | 18383 | 65 |
+| repairGatewayTokenConfigSync | 3033 | 3096 | 64 |
+| cleanupOpenClawSessionLocks | 6027 | 6090 | 64 |
+| extractAgentReply | 10433 | 10496 | 64 |
+| tryReleaseTcpPortUnix | 11047 | 11110 | 64 |
+| applyPluginToggleViaGatewayConfigPatch | 15599 | 15662 | 64 |
+| clearDisallowedAutoModelOverrideFromEntry | 4232 | 4294 | 63 |
+| resolveSharedTeamSyncPath | 18422 | 18484 | 63 |
+| applyGoogleGeminiPluginPolicy | 18679 | 18741 | 63 |
+| patchedTelegramBotRuntimeSource | 13475 | 13536 | 62 |
+| buildPluginControlEntry | 14388 | 14449 | 62 |
+| pickFolderWithOsDialog | 10188 | 10247 | 60 |
+| getPartyMembers | 20167 | 20226 | 60 |
+| recruitAutoForgePrompt | 21429 | 21488 | 60 |
+| buildMissionPrompt | 18259 | 18317 | 59 |
+| streamGeminiContent | 8834 | 8891 | 58 |
+| runPickerCommand | 10071 | 10128 | 58 |
+| getPluginList | 14095 | 14152 | 58 |
+| runBrowserToolProbe | 11158 | 11214 | 57 |
+| ensureConfiguredProviderModel | 1893 | 1948 | 56 |
+| writeOpenclawConfig | 12467 | 12522 | 56 |
+| postLocalJsonNoHeaderTimeout | 9171 | 9225 | 55 |
+| tryReleaseGatewayPort | 10991 | 11045 | 55 |
+| tryReleaseBrowserRelayPort | 10936 | 10989 | 54 |
+| readOpenclawConfig | 11706 | 11759 | 54 |
+| ensureCodexPluginInstalledForOpenAiRuntime | 15418 | 15471 | 54 |
+| loadAvailableModelsFromOpenClaw | 1981 | 2033 | 53 |
+| refreshPluginListCache | 14035 | 14087 | 53 |
+| requestGatewaySessionAbort | 3808 | 3859 | 52 |
+| createPlainProcessTerminalModule | 6515 | 6566 | 52 |
+| ensureClawTalkBundledPluginDefaults | 13714 | 13765 | 52 |
+| streamOpenAICodexResponsesCompletion | 8737 | 8787 | 51 |
+| resolveFilenameHintsForMessage | 19386 | 19436 | 51 |
+| listActiveCronJobsFromStateDb | 19878 | 19928 | 51 |
+| recruitPersonalityDepthGuidance | 21352 | 21402 | 51 |
+| inspectOpenClawSessionLocks | 5976 | 6025 | 50 |
+| closeLifecycleHttpServer | 7315 | 7364 | 50 |
+| savePluginDirectConfig | 14987 | 15036 | 50 |
+| syncAgentDerivedFiles | 17664 | 17713 | 50 |
+| composeAgentDoctrinePrompt | 17715 | 17764 | 50 |
+| listRehydratableControlCenterShiftsFromStateDb | 19974 | 20022 | 49 |
+| startPluginSetupTerminalSession | 6630 | 6677 | 48 |
+| readSkillEntryFromDir | 16457 | 16504 | 48 |
+| appendAgentPromptDump | 17782 | 17829 | 48 |
+| createInitialOpenclawConfig | 11608 | 11654 | 47 |
+| ensureClawTalkManifestContracts | 13237 | 13283 | 47 |
+| normalizeModelWithFallback | 17501 | 17547 | 47 |
+| listMissionCronReconciliationSnapshotFromStateDb | 19701 | 19747 | 47 |
+| streamOpenAiCompatibleCompletion | 8491 | 8536 | 46 |
+| tryStartBrowserRelay | 10889 | 10934 | 46 |
+| openClawOptimizationStatus | 11561 | 11606 | 46 |
+| openClawDoctorLintCheck | 20930 | 20975 | 46 |
+| terminateProcessTree | 886 | 930 | 45 |
+| removeProviderAuthProfiles | 2731 | 2775 | 45 |
+| checkGoogleVertexModelAvailability | 8946 | 8990 | 45 |
+| normalizeOpenClawConfigModelRefs | 12063 | 12107 | 45 |
+| schemaConfigFieldsFromRaw | 14277 | 14321 | 45 |
+| syncDoctrineToWorkspace | 18529 | 18573 | 45 |
+| exchangeGoogleOAuthCodeForTokens | 7535 | 7578 | 44 |
+| streamAnthropicMessage | 8789 | 8832 | 44 |
+| startFolderPickerSession | 9586 | 9629 | 44 |
+| syncModelProviderTimeoutsFromAgentSettings | 12302 | 12345 | 44 |
+| runOpenClawWithManagedSkillsWorkspace | 16636 | 16678 | 43 |
+| applyLocalConfigToGlobal | 18126 | 18168 | 43 |
+| spawnText | 4558 | 4599 | 42 |
+| contentTypeFromExt | 5206 | 5247 | 42 |
+| toOpenAICodexContext | 8675 | 8716 | 42 |
+| firstJsonSliceFromText | 14451 | 14492 | 42 |
+| seedCanonicalResourceIfMissing | 16871 | 16912 | 42 |
+| buildDoctrineSyncReport | 19274 | 19315 | 42 |
+| persistAgentAvatarFromPath | 9868 | 9908 | 41 |
+| launchChromeHost | 10345 | 10385 | 41 |
+| pluginRawFromManifest | 13902 | 13942 | 41 |
+| knownPluginConfigFields | 14323 | 14363 | 41 |
+| splitPluginCommandLine | 14688 | 14728 | 41 |
+| refreshGoogleOAuthCredential | 7580 | 7619 | 40 |
+| summarizePluginRuntimeInspect | 15804 | 15842 | 39 |
+| appendGoogleVertexPayloadDump | 17831 | 17869 | 39 |
+| prepareOpenClawConfigForGatewayStartup | 4676 | 4713 | 38 |
+| bufferedAgentRuntimeReason | 9348 | 9385 | 38 |
+| persistAgentAvatarBytes | 9829 | 9866 | 38 |
+| providerConfigFieldsFromSetup | 14238 | 14275 | 38 |
 
 ## Largest Variable Blocks
 
 | Binding | Start | End | Lines |
 | --- | ---: | ---: | ---: |
-| partyManagementRoutesContext | 27627 | 27692 | 66 |
-| FALLBACK_MODELS | 1461 | 1510 | 50 |
-| MODEL_RESILIENCE_FALLBACKS | 1522 | 1564 | 43 |
-| COMMAND_CONSOLE_UPLOAD_MIME_EXTENSIONS | 224 | 263 | 40 |
-| agentConfigRoutesContext | 28744 | 28782 | 39 |
-| PLUGIN_CATALOG | 17580 | 17616 | 37 |
-| STREAMING_PROVIDER_CONFIG | 8498 | 8533 | 36 |
-| AUTH_PROVIDER_PROFILE_ALIASES | 2457 | 2489 | 33 |
-| CLAWTALK_AGENT_TOOL_NAMES | 388 | 410 | 23 |
-| DEFAULT_BOOTSTRAP_AGENTS | 2117 | 2136 | 20 |
-| ROUTER_TYPO_REPLACEMENTS | 10998 | 11017 | 20 |
-| AGENT_RESOURCE_FILES | 326 | 340 | 15 |
-| RESOURCE_SEED_FILES | 341 | 352 | 12 |
-| AVATAR_IMAGE_MIME_EXTENSIONS | 266 | 276 | 11 |
-| RECRUIT_AUTO_MARKDOWN_DEFAULT_FILES | 27215 | 27225 | 11 |
-| CONTROL_CENTER_STATE_KEYS | 182 | 191 | 10 |
-| GOOGLE_GEMINI_TOOL_WRITE_ALLOWLIST | 22448 | 22457 | 10 |
-| COMMAND_CONSOLE_UPLOAD_EXTENSIONS | 214 | 222 | 9 |
-| DEFAULT_HEARTBEAT_RUNTIME | 16154 | 16162 | 9 |
-| controlCenterShutdownInFlight | 6805 | 6812 | 8 |
-| GOOGLE_VERTEX_LOCATION_KEYS | 1435 | 1441 | 7 |
-| PLUGIN_SETUP_TERMINAL_COMMANDS | 8273 | 8279 | 7 |
-| BUILTIN_RETIRED_AGENT_IDS | 20879 | 20885 | 7 |
-| loginAttempts | 87 | 92 | 6 |
-| WEBSITE_CONTRIBUTION_LANES | 21734 | 21739 | 6 |
-| OPENCLAW_STATE_ROOT | 142 | 146 | 5 |
-| OPENCLAW_CONFIG_PATH | 148 | 152 | 5 |
-| OPENCLAW_GATEWAY_LOG_PATH | 153 | 157 | 5 |
-| DEEPSEEK_DEFAULT_FALLBACKS | 1570 | 1574 | 5 |
-| OPENAI_DEFAULT_MODEL_IDS | 1589 | 1593 | 5 |
-| STATIC_ROOT | 28788 | 28792 | 5 |
-| sessionTokens | 83 | 86 | 4 |
-| GATEWAY_LOG_PATH_DISCOVERY_CACHE_MS | 201 | 204 | 4 |
-| FOLDER_PICKER_TIMEOUT_MS | 206 | 209 | 4 |
-| KNOWN_UNAVAILABLE_MODEL_IDS | 1511 | 1514 | 4 |
-| OPENCLAW_CONFIG_SUPPRESSED_MODEL_IDS | 1515 | 1518 | 4 |
-| GENERATED_DEEPSEEK_DEFAULT_MODEL_IDS | 1577 | 1580 | 4 |
-| GENERATED_OPENROUTER_DEEPSEEK_DEFAULT_MODEL_IDS | 1581 | 1584 | 4 |
-| GENERATED_DEEPSEEK_ROUTE_MODEL_IDS | 1585 | 1588 | 4 |
-| EXTERNAL_GATEWAY_LOG_CACHE_MS | 4562 | 4565 | 4 |
-| RUNTIME_STATUS_CACHE_MS | 4566 | 4569 | 4 |
-| RUNTIME_SUMMARY_CACHE_MS | 4570 | 4573 | 4 |
-| GATEWAY_LEDGER_SNAPSHOT_CACHE_MS | 4574 | 4577 | 4 |
-| RUNTIME_STATUS_RESPONSE_TIMEOUT_MS | 4578 | 4581 | 4 |
-| RUNTIME_SUMMARY_RESPONSE_TIMEOUT_MS | 4582 | 4585 | 4 |
-| GATEWAY_STARTUP_HEALTH_GRACE_MS | 4586 | 4589 | 4 |
-| GATEWAY_STARTUP_HEALTH_CONFIRM_TIMEOUT_MS | 4590 | 4593 | 4 |
-| GATEWAY_STARTUP_HEALTH_POLL_MS | 4594 | 4597 | 4 |
-| GATEWAY_CLIENT_READY_TIMEOUT_MS | 22773 | 22776 | 4 |
-| DOCTOR_DIAGNOSTIC_CACHE_MS | 25737 | 25740 | 4 |
-| CONTROL_CENTER_GATEWAY_AGENT_SESSIONS | 359 | 361 | 3 |
-| CONTROL_CENTER_GATEWAY_CHAT_CLIENT | 362 | 364 | 3 |
-| CONTROL_CENTER_GATEWAY_PREWARM_ON_STARTUP | 365 | 367 | 3 |
-| CONTROL_CENTER_GATEWAY_TOOLS_EFFECTIVE_DIAGNOSTIC | 368 | 370 | 3 |
-| CONTROL_CENTER_AGENT_TURN_STREAM_SMOKE_MOCK | 372 | 374 | 3 |
-| CONTROL_CENTER_MISSION_SCHEDULER_DRY_RUN | 375 | 377 | 3 |
-| AUTO_START_GATEWAY | 378 | 380 | 3 |
-| DISABLE_BROWSER_RUNTIME_DEFAULTS | 412 | 414 | 3 |
-| LEGACY_TOOL_PROFILE_ALIASES | 1024 | 1026 | 3 |
-| EDITOR_RESOURCE_FILES | 1352 | 1354 | 3 |
-| VISIBLE_RUNTIME_LOG_PREFIX_RE | 12158 | 12159 | 2 |
-| VISIBLE_RUNTIME_LOG_SPLIT_RE | 12161 | 12162 | 2 |
-| CLAWTALK_DOCTOR_CHECK_RE | 19942 | 19943 | 2 |
-| app | 77 | 77 | 1 |
-| PORT | 79 | 79 | 1 |
-| CONFIGURED_AUTH_TOKEN | 80 | 80 | 1 |
-| AUTH_TOKEN | 81 | 81 | 1 |
-| AUTH_TOKEN_SOURCE | 82 | 82 | 1 |
-| CONTROL_CENTER_FRONTEND_PORT | 93 | 93 | 1 |
-| controlServer | 109 | 109 | 1 |
-| optionalRequire | 110 | 110 | 1 |
-| WORKSPACE_ROOT | 124 | 124 | 1 |
-| HOME_DIR | 125 | 125 | 1 |
-| NATIVE_OPENCLAW_STATE_ROOT | 126 | 126 | 1 |
-| CONFIGURED_OPENCLAW_STATE_ROOT | 141 | 141 | 1 |
-| OPENCLAW_PROFILE | 147 | 147 | 1 |
-| OPENCLAW_ENV_PATH | 158 | 158 | 1 |
-| HEARTBEAT_DEFAULTS_PATH | 163 | 163 | 1 |
-| HEARTBEAT_AGENT_DEFAULTS_PATH | 164 | 164 | 1 |
-| RETIRED_AGENT_IDS_PATH | 165 | 165 | 1 |
+| partyManagementRoutesContext | 21733 | 21798 | 66 |
+| FALLBACK_MODELS | 1430 | 1479 | 50 |
+| gatewayLifecycle | 4743 | 4788 | 46 |
+| MODEL_RESILIENCE_FALLBACKS | 1491 | 1533 | 43 |
+| COMMAND_CONSOLE_UPLOAD_MIME_EXTENSIONS | 228 | 267 | 40 |
+| runtimeStatusService | 4837 | 4876 | 40 |
+| agentConfigRoutesContext | 22831 | 22869 | 39 |
+| PLUGIN_CATALOG | 13767 | 13803 | 37 |
+| STREAMING_PROVIDER_CONFIG | 6727 | 6762 | 36 |
+| runtimeRecoveryService | 21223 | 21257 | 35 |
+| AUTH_PROVIDER_PROFILE_ALIASES | 2426 | 2458 | 33 |
+| missionSchedulerService | 3426 | 3457 | 32 |
+| missionRecoveryService | 3497 | 3521 | 25 |
+| gatewayChatService | 4483 | 4507 | 25 |
+| CLAWTALK_AGENT_TOOL_NAMES | 383 | 405 | 23 |
+| runtimeActionService | 21259 | 21279 | 21 |
+| DEFAULT_BOOTSTRAP_AGENTS | 2086 | 2105 | 20 |
+| missionStateService | 3399 | 3418 | 20 |
+| ROUTER_TYPO_REPLACEMENTS | 9227 | 9246 | 20 |
+| AGENT_RESOURCE_FILES | 321 | 335 | 15 |
+| gatewayLogService | 4420 | 4433 | 14 |
+| RESOURCE_SEED_FILES | 336 | 347 | 12 |
+| missionTeamSyncService | 3384 | 3395 | 12 |
+| AVATAR_IMAGE_MIME_EXTENSIONS | 270 | 280 | 11 |
+| RECRUIT_AUTO_MARKDOWN_DEFAULT_FILES | 21321 | 21331 | 11 |
+| GOOGLE_GEMINI_TOOL_WRITE_ALLOWLIST | 18618 | 18627 | 10 |
+| COMMAND_CONSOLE_UPLOAD_EXTENSIONS | 218 | 226 | 9 |
+| DEFAULT_HEARTBEAT_RUNTIME | 12347 | 12355 | 9 |
+| missionReportService | 3373 | 3380 | 8 |
+| GOOGLE_VERTEX_LOCATION_KEYS | 1404 | 1410 | 7 |
+| gatewayDiagnostics | 4715 | 4721 | 7 |
+| PLUGIN_SETUP_TERMINAL_COMMANDS | 6502 | 6508 | 7 |
+| BUILTIN_RETIRED_AGENT_IDS | 17049 | 17055 | 7 |
+| loginAttempts | 116 | 121 | 6 |
+| WEBSITE_CONTRIBUTION_LANES | 17904 | 17909 | 6 |
+| OPENCLAW_STATE_ROOT | 171 | 175 | 5 |
+| OPENCLAW_CONFIG_PATH | 177 | 181 | 5 |
+| OPENCLAW_GATEWAY_LOG_PATH | 182 | 186 | 5 |
+| DEEPSEEK_DEFAULT_FALLBACKS | 1539 | 1543 | 5 |
+| OPENAI_DEFAULT_MODEL_IDS | 1558 | 1562 | 5 |
+| STATIC_ROOT | 22875 | 22879 | 5 |
+| sessionTokens | 112 | 115 | 4 |
+| FOLDER_PICKER_TIMEOUT_MS | 210 | 213 | 4 |
+| KNOWN_UNAVAILABLE_MODEL_IDS | 1480 | 1483 | 4 |
+| OPENCLAW_CONFIG_SUPPRESSED_MODEL_IDS | 1484 | 1487 | 4 |
+| GENERATED_DEEPSEEK_DEFAULT_MODEL_IDS | 1546 | 1549 | 4 |
+| GENERATED_OPENROUTER_DEEPSEEK_DEFAULT_MODEL_IDS | 1550 | 1553 | 4 |
+| GENERATED_DEEPSEEK_ROUTE_MODEL_IDS | 1554 | 1557 | 4 |
+| RUNTIME_STATUS_CACHE_MS | 4358 | 4361 | 4 |
+| RUNTIME_SUMMARY_CACHE_MS | 4362 | 4365 | 4 |
+| GATEWAY_LEDGER_SNAPSHOT_CACHE_MS | 4366 | 4369 | 4 |
+| RUNTIME_STATUS_RESPONSE_TIMEOUT_MS | 4370 | 4373 | 4 |
+| RUNTIME_SUMMARY_RESPONSE_TIMEOUT_MS | 4374 | 4377 | 4 |
+| GATEWAY_STARTUP_HEALTH_GRACE_MS | 4378 | 4381 | 4 |
+| GATEWAY_STARTUP_HEALTH_CONFIRM_TIMEOUT_MS | 4382 | 4385 | 4 |
+| GATEWAY_STARTUP_HEALTH_POLL_MS | 4386 | 4389 | 4 |
+| DOCTOR_DIAGNOSTIC_CACHE_MS | 20363 | 20366 | 4 |
+| CONTROL_CENTER_GATEWAY_AGENT_SESSIONS | 354 | 356 | 3 |
+| CONTROL_CENTER_GATEWAY_CHAT_CLIENT | 357 | 359 | 3 |
+| CONTROL_CENTER_GATEWAY_PREWARM_ON_STARTUP | 360 | 362 | 3 |
+| CONTROL_CENTER_GATEWAY_TOOLS_EFFECTIVE_DIAGNOSTIC | 363 | 365 | 3 |
+| CONTROL_CENTER_AGENT_TURN_STREAM_SMOKE_MOCK | 367 | 369 | 3 |
+| CONTROL_CENTER_MISSION_SCHEDULER_DRY_RUN | 370 | 372 | 3 |
+| AUTO_START_GATEWAY | 373 | 375 | 3 |
+| DISABLE_BROWSER_RUNTIME_DEFAULTS | 407 | 409 | 3 |
+| LEGACY_TOOL_PROFILE_ALIASES | 1001 | 1003 | 3 |
+| EDITOR_RESOURCE_FILES | 1329 | 1331 | 3 |
+| VISIBLE_RUNTIME_LOG_PREFIX_RE | 10387 | 10388 | 2 |
+| VISIBLE_RUNTIME_LOG_SPLIT_RE | 10390 | 10391 | 2 |
+| CLAWTALK_DOCTOR_CHECK_RE | 16112 | 16113 | 2 |
+| app | 106 | 106 | 1 |
+| PORT | 108 | 108 | 1 |
+| CONFIGURED_AUTH_TOKEN | 109 | 109 | 1 |
+| AUTH_TOKEN | 110 | 110 | 1 |
+| AUTH_TOKEN_SOURCE | 111 | 111 | 1 |
+| CONTROL_CENTER_FRONTEND_PORT | 122 | 122 | 1 |
+| controlServer | 138 | 138 | 1 |
+| optionalRequire | 139 | 139 | 1 |
+| WORKSPACE_ROOT | 153 | 153 | 1 |
+| HOME_DIR | 154 | 154 | 1 |
 
 ## Extraction Guidance
 

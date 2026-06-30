@@ -6,15 +6,8 @@ import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 
 import {
-  appendMissionRecordLedger,
-  appendMissionEventLedger,
-  appendMissionReportLedger,
-  closeRuntimeLedger,
-  configureRuntimeLedger,
-  readMissionRecordLedgerTail,
-  readMissionEventLedgerTail,
-  readMissionReportLedgerTail,
-} from '../server/runtimeLedger.ts'
+  createRuntimeLedgerStore,
+} from '../server/state/runtimeLedgerStore.ts'
 
 const rootDir = fileURLToPath(new URL('..', import.meta.url))
 const tempDir = await mkdtemp(path.join(os.tmpdir(), 'dystopai-mission-ledger-'))
@@ -23,7 +16,7 @@ try {
   const missionRecordsJsonl = path.join(tempDir, 'mission-records.jsonl')
   const missionEventsJsonl = path.join(tempDir, 'mission-events.jsonl')
   const missionReportsJsonl = path.join(tempDir, 'mission-reports.jsonl')
-  configureRuntimeLedger({
+  const runtimeLedgerStore = createRuntimeLedgerStore({
     directory: tempDir,
     runtimeRunsJsonl: path.join(tempDir, 'runtime-runs.jsonl'),
     gatewayEventsJsonl: path.join(tempDir, 'gateway-events.jsonl'),
@@ -112,23 +105,23 @@ try {
     },
   }
 
-  await appendMissionRecordLedger(record, { sqlite: false })
-  await appendMissionEventLedger(event, { sqlite: false })
-  await appendMissionReportLedger(report, { sqlite: false })
+  await runtimeLedgerStore.appendMissionRecord(record, { sqlite: false })
+  await runtimeLedgerStore.appendMissionEvent(event, { sqlite: false })
+  await runtimeLedgerStore.appendMissionReport(report, { sqlite: false })
 
-  const records = await readMissionRecordLedgerTail<typeof record>(10, { sqlite: false })
+  const records = await runtimeLedgerStore.readMissionRecords<typeof record>(10, { sqlite: false })
   assert.equal(records.length, 1)
   assert.equal(records[0]?.missionId, 'mission-1')
   assert.equal(records[0]?.lifecycleState, 'running')
   assert.equal(records[0]?.scheduler.status, 'waiting')
 
-  const events = await readMissionEventLedgerTail<typeof event>(10, { sqlite: false })
+  const events = await runtimeLedgerStore.readMissionEvents<typeof event>(10, { sqlite: false })
   assert.equal(events.length, 1)
   assert.equal(events[0]?.previousState, 'draft')
   assert.equal(events[0]?.nextState, 'validating')
   assert.equal(events[0]?.idempotencyKey, 'mission-1:draft->validating')
 
-  const reports = await readMissionReportLedgerTail<typeof report>(10, { sqlite: false })
+  const reports = await runtimeLedgerStore.readMissionReports<typeof report>(10, { sqlite: false })
   assert.equal(reports.length, 1)
   assert.equal(reports[0]?.missionId, 'mission-1')
   assert.equal(reports[0]?.evidence.acceptedRuns, 2)
@@ -149,19 +142,34 @@ try {
   assert.match(runtimeLedgerSource, /readMissionRecordLedgerTail/)
   assert.match(runtimeLedgerSource, /appendMissionEventLedger/)
   assert.match(runtimeLedgerSource, /readMissionReportLedgerTail/)
+  const runtimeLedgerStoreSource = readFileSync(path.join(rootDir, 'server/state/runtimeLedgerStore.ts'), 'utf8')
+  assert.match(runtimeLedgerStoreSource, /appendMissionRecord/)
+  assert.match(runtimeLedgerStoreSource, /readMissionRecords/)
+  assert.match(runtimeLedgerStoreSource, /appendMissionEvent/)
+  assert.match(runtimeLedgerStoreSource, /readMissionReports/)
 
   const serverSource = readFileSync(path.join(rootDir, 'server/controlPlane.ts'), 'utf8')
-  assert.match(serverSource, /type MissionLifecycleState/)
-  assert.match(serverSource, /missionRecordSnapshot/)
-  assert.match(serverSource, /persistMissionRecord/)
-  assert.match(serverSource, /hydrateMissionRecordsFromLedger/)
-  assert.match(serverSource, /armRehydratedMissionTimer/)
-  assert.match(serverSource, /transitionMissionState/)
+  const missionSchedulerServiceSource = readFileSync(path.join(rootDir, 'server/services/missions/missionSchedulerService.ts'), 'utf8')
+  const missionStateServiceSource = readFileSync(path.join(rootDir, 'server/services/missions/missionStateService.ts'), 'utf8')
+  const missionReportServiceSource = readFileSync(path.join(rootDir, 'server/services/missions/missionReportService.ts'), 'utf8')
+  const missionRecoveryServiceSource = readFileSync(path.join(rootDir, 'server/services/missions/missionRecoveryService.ts'), 'utf8')
+  assert.match(missionStateServiceSource, /type MissionLifecycleState/)
+  assert.match(missionStateServiceSource, /missionRecordSnapshot/)
+  assert.match(missionStateServiceSource, /function persistMissionRecord/)
+  assert.match(missionStateServiceSource, /function transitionMissionState/)
+  assert.match(missionReportServiceSource, /type MissionLifecycleProjection =/)
+  assert.match(missionReportServiceSource, /reports: BackendMissionReport\[\]/, 'mission lifecycle projection must return backend reports')
+  assert.match(missionReportServiceSource, /function buildMissionReport/, 'mission report generation must live in the report service')
+  assert.match(missionReportServiceSource, /async function listMissionReports/, 'mission report listing must live in the report service')
+  assert.match(missionRecoveryServiceSource, /async function hydrateMissionRecordsFromLedger/)
+  assert.match(missionRecoveryServiceSource, /options\.armRehydratedMissionTimer\(mission, assignments, activity\)/)
+  assert.match(missionSchedulerServiceSource, /function armRehydratedMissionTimer/)
+  assert.match(serverSource, /const hydrateMissionRecordsFromLedger = missionRecoveryService\.hydrateMissionRecordsFromLedger/)
   assert.match(serverSource, /recordMissionReport/)
   assert.match(serverSource, /registerMissionRoutes\(app, \{/)
+  assert.match(serverSource, /missionStateService,/)
   assert.doesNotMatch(serverSource, /app\.get\('\/api\/missions\/:missionId\/events'/)
-  assert.match(serverSource, /type MissionLifecycleProjection =/)
-  assert.match(serverSource, /reports: BackendMissionReport\[\]/, 'mission lifecycle projection must return backend reports')
+  assert.doesNotMatch(serverSource, /type MissionLifecycleProjection =/)
   const missionRoutesSource = readFileSync(path.join(rootDir, 'server/routes/missionRoutes.ts'), 'utf8')
   assert.match(missionRoutesSource, /app\.get\('\/api\/missions\/:missionId\/events'/)
   assert.match(missionRoutesSource, /app\.get\('\/api\/missions\/:missionId\/report'/)
@@ -181,6 +189,14 @@ try {
 
   console.log('mission durable state contract ok')
 } finally {
-  closeRuntimeLedger()
+  createRuntimeLedgerStore({
+    directory: tempDir,
+    runtimeRunsJsonl: path.join(tempDir, 'runtime-runs.jsonl'),
+    gatewayEventsJsonl: path.join(tempDir, 'gateway-events.jsonl'),
+    diagnosticRunsJsonl: path.join(tempDir, 'diagnostic-runs.jsonl'),
+    missionRecordsJsonl: path.join(tempDir, 'mission-records.jsonl'),
+    missionEventsJsonl: path.join(tempDir, 'mission-events.jsonl'),
+    missionReportsJsonl: path.join(tempDir, 'mission-reports.jsonl'),
+  }).close()
   await rm(tempDir, { recursive: true, force: true })
 }

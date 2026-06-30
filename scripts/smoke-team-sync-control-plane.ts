@@ -21,6 +21,7 @@ function routeBlock(source: string, marker: string): string {
 const server = readWorkspaceFile('server/controlPlane.ts')
 const partyCoordinationRoutes = readWorkspaceFile('server/routes/partyCoordinationRoutes.ts')
 const controlPlaneHttp = readWorkspaceFile('server/controlPlaneHttp.ts')
+const missionTeamSyncService = readWorkspaceFile('server/services/missions/missionTeamSyncService.ts')
 const packageJson = JSON.parse(readWorkspaceFile('package.json')) as { scripts?: Record<string, string> }
 
 assert(controlPlaneHttp.includes("| 'team_sync_failed'"), 'ApiErrorCode is missing team_sync_failed')
@@ -33,6 +34,13 @@ assert(
 )
 assert(server.includes('registerPartyCoordinationRoutes(app, {'), 'server should register party coordination routes')
 assert(!server.includes("app.post('/api/team-sync/append'"), 'server should not inline team-sync append route')
+assert(server.includes("from './services/missions/missionTeamSyncService'"), 'server should import the Team Sync service')
+assert(server.includes('const ensureTeamSyncFile = missionTeamSyncService.ensureTeamSyncFile'), 'server should inject Team Sync file repair from the service')
+assert(server.includes('const writeTeamSyncSnapshot = missionTeamSyncService.writeTeamSyncSnapshot'), 'server should inject Team Sync snapshot writes from the service')
+assert(!/\bfunction\s+teamSyncMarkdown\b/.test(server), 'server should not own Team Sync snapshot markdown')
+assert(!/\basync function\s+writeTeamSyncSnapshot\b/.test(server), 'server should not own Team Sync snapshot writes')
+assert(missionTeamSyncService.includes('function teamSyncMarkdown'), 'Team Sync service should own snapshot markdown')
+assert(missionTeamSyncService.includes('async function writeTeamSyncSnapshot'), 'Team Sync service should own snapshot writes')
 
 assert(teamSyncBlock.includes('apiSuccess(res'), 'team-sync append should return canonical success envelopes')
 assert(teamSyncBlock.includes('apiFailure(res'), 'team-sync append should return canonical error envelopes')

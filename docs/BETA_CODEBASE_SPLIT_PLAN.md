@@ -1,0 +1,693 @@
+# DystopAI Beta Readiness And Codebase Split Plan
+
+This plan intentionally avoids public-release signing as the immediate goal. The target is to make DystopAI safe, maintainable, testable, and beta-ready before paid/public distribution work.
+
+## Current priority
+
+The next milestone is not a signed public installer. The next milestone is:
+
+```text
+Stable private beta
++ cleaner backend boundaries
++ proven mission/runtime recovery
++ safer UI architecture
++ clear operator docs
++ repeatable local validation
+```
+
+## Release posture for this phase
+
+- Treat the next milestone as **Private Beta / Early Access Candidate**.
+- Do not block this phase on Authenticode, notarization, or public update signing.
+- Keep release-signing workflows documented for later, but do not treat signing as the current blocker.
+- Prioritize architecture splits, runtime truth, recovery evidence, and user trust.
+- Keep the app local-first and loopback-only.
+
+## Primary engineering goal
+
+Shrink `server/controlPlane.ts` from a giant composition-and-service module into a thin composition root. Routes are already extracted. The remaining work is to move implementation logic into focused services.
+
+## Target server shape
+
+```text
+server/
+  index.ts                         # executable facade only
+  controlPlane.ts                  # composition root only
+  controlPlaneHttp.ts              # HTTP middleware, API envelope, auth guard
+
+  routes/                          # already mostly extracted
+    authRoutes.ts
+    diagnosticsRoutes.ts
+    runtimeRoutes.ts
+    missionRoutes.ts
+    providerAuthRoutes.ts
+    pluginRoutes.ts
+    ...
+
+  services/
+    gateway/
+      gatewayLifecycleService.ts
+      gatewayChatService.ts
+      gatewayDiagnosticsService.ts
+      gatewayLogService.ts
+
+    runtime/
+      runtimeStatusService.ts
+      runtimeActionService.ts
+      runtimeLedgerService.ts
+      runtimeRecoveryService.ts
+
+    missions/
+      missionStateService.ts
+      missionSchedulerService.ts
+      missionReportService.ts
+      missionRecoveryService.ts
+      missionTeamSyncService.ts
+
+    agents/
+      agentConfigService.ts
+      agentTurnService.ts
+      agentRoutingService.ts
+      agentWorkspaceService.ts
+
+    providers/
+      providerCatalogService.ts
+      providerAuthService.ts
+      oauthCallbackService.ts
+      modelCatalogService.ts
+
+    plugins/
+      pluginInventoryService.ts
+      pluginInstallService.ts
+      pluginRuntimeService.ts
+      pluginDiagnosticsService.ts
+
+    filesystem/
+      safePathService.ts
+      commandConsoleUploadService.ts
+      controlFilesService.ts
+      pickerSessionService.ts
+
+    release/
+      releaseEvidenceService.ts
+      updateManifestService.ts
+      stateBackupService.ts
+
+  state/
+    controlCenterStateStore.ts
+    openClawStatePaths.ts
+    runtimeLedgerStore.ts
+
+  contracts/
+    apiEnvelope.ts
+    missionContracts.ts
+    runtimeContracts.ts
+    agentContracts.ts
+    pluginContracts.ts
+```
+
+## Split rules
+
+1. `server/controlPlane.ts` may wire dependencies but should not own business logic.
+2. A route module may validate HTTP payloads and call services, but should not perform long-running work directly.
+3. A service module should be testable without starting Express.
+4. A service should receive its dependencies through parameters or a factory, not import the whole app.
+5. Any filesystem service must enforce path containment at its boundary.
+6. Any provider/auth service must return redacted errors.
+7. Any runtime service must produce event/evidence objects, not only strings.
+8. Mission state transitions must be idempotent and ledger-backed.
+9. Renderer state should project backend truth, not invent runtime truth.
+10. New code should not be added to `controlPlane.ts` unless it is composition glue.
+
+## Phase A: Freeze new control-plane growth
+
+1. Add a comment at the top of `controlPlane.ts`: no new domain logic goes here.
+2. Add an architecture smoke threshold for maximum allowed `controlPlane.ts` line growth.
+3. Allow temporary exceptions only with a TODO and extraction target.
+4. Keep route inventory checks active.
+5. Keep generated architecture reports in docs for visibility.
+6. Stop adding new route handlers to the composition module.
+7. Stop adding new large helper functions to the composition module.
+8. Require every new backend feature to declare its target service folder.
+9. Track extracted functions in `docs/PRODUCTION_HARDENING_LEDGER.md`.
+10. Run architecture smoke after every extraction.
+
+## Phase B: Extract Gateway services first
+
+Gateway logic is high-risk because it controls process lifecycle and runtime recovery.
+
+11. Extract Gateway process start/stop/restart into `gatewayLifecycleService.ts`.
+12. Extract Gateway health probing into `gatewayDiagnosticsService.ts`.
+13. Extract Gateway log tailing and redaction into `gatewayLogService.ts`.
+14. Extract Gateway chat turn orchestration into `gatewayChatService.ts`.
+15. Add unit tests for Gateway process command construction.
+16. Add tests for Gateway unavailable behavior.
+17. Add tests for redacted Gateway errors.
+18. Add tests for stale process cleanup decisions.
+19. Update route modules to receive Gateway services through options.
+20. Confirm Monitor still shows Gateway online/offline/restarting states.
+
+## Phase C: Extract runtime services
+
+21. Extract runtime summary building into `runtimeStatusService.ts`.
+22. Extract runtime actions into `runtimeActionService.ts`.
+23. Extract runtime shutdown/clean-slate recovery into `runtimeRecoveryService.ts`.
+24. Keep SQLite/JSONL helpers in `runtimeLedger.ts` or move behind `runtimeLedgerStore.ts`.
+25. Add tests for runtime summary with healthy Gateway.
+26. Add tests for runtime summary with missing Gateway.
+27. Add tests for stale sessions.
+28. Add tests for clean slate safety.
+29. Add tests for ledger fallback.
+30. Confirm `useRuntimeStatus` receives the same API shape after extraction.
+
+## Phase D: Extract mission services
+
+31. Extract mission creation and idempotency into `missionStateService.ts`.
+32. Extract mission transition rules into `missionStateService.ts`.
+33. Extract mission cron scheduling into `missionSchedulerService.ts`.
+34. Extract mission report generation into `missionReportService.ts`.
+35. Extract mission restart/recovery into `missionRecoveryService.ts`.
+36. Extract TEAM_SYNC snapshot writing into `missionTeamSyncService.ts`.
+37. Add tests for every mission transition.
+38. Add tests for duplicate idempotency keys.
+39. Add tests for cancelling a running mission.
+40. Add tests for cancelling after backend restart.
+41. Add tests for cron reconciliation.
+42. Add tests for mission report evidence confidence.
+43. Add smoke for mission restart after backend kill.
+44. Add smoke for mission recovery after renderer crash.
+45. Confirm the Mission page shows recovered mission state, not stale local UI state.
+
+## Phase E: Extract provider and auth services
+
+46. Extract provider catalog normalization into `modelCatalogService.ts`.
+47. Extract provider authentication storage into `providerAuthService.ts`.
+48. Extract OAuth callback server handling into `oauthCallbackService.ts`.
+49. Extract provider-specific setup checks into focused helpers.
+50. Add tests for missing credential states.
+51. Add tests for provider auth status redaction.
+52. Add tests for OAuth callback timeout.
+53. Add tests for loopback-only OAuth callback binding.
+54. Add tests for model selection when provider auth is missing.
+55. Confirm UI shows “connect provider” instead of failing at run time.
+
+## Phase F: Extract plugin services
+
+56. Extract plugin discovery into `pluginInventoryService.ts`.
+57. Extract plugin install/update/remove into `pluginInstallService.ts`.
+58. Extract plugin runtime command handling into `pluginRuntimeService.ts`.
+59. Extract plugin doctor output into `pluginDiagnosticsService.ts`.
+60. Add tests for plugin not found.
+61. Add tests for plugin install failure.
+62. Add tests for redacted plugin errors.
+63. Add tests for disabled plugin state.
+64. Add tests for channel plugin unavailable state.
+65. Confirm Plugins page distinguishes configured, missing-auth, unavailable, failed, and disabled.
+
+## Phase G: Extract filesystem and upload services
+
+66. Extract safe path containment into `safePathService.ts`.
+67. Extract command-console upload handling into `commandConsoleUploadService.ts`.
+68. Extract control file read/write helpers into `controlFilesService.ts`.
+69. Extract Windows folder/image picker sessions into `pickerSessionService.ts`.
+70. Add tests for path traversal attempts.
+71. Add tests for symlink escapes where possible.
+72. Add tests for file type allowlist.
+73. Add tests for attachment size limits.
+74. Add tests for avatar upload limits.
+75. Confirm uploaded command-console files never escape the approved upload root.
+
+## Phase H: Renderer/store split
+
+76. Keep `src/store/nexusStore.ts` from growing further.
+77. Move API calls into `src/api/*` modules.
+78. Move mission projection syncing into `src/api/missions.ts` or `src/services/missionProjectionClient.ts`.
+79. Move agent turn calls into `src/api/agentTurns.ts`.
+80. Move provider auth calls into `src/api/providerAuth.ts`.
+81. Move plugin calls into `src/api/plugins.ts`.
+82. Split UI-only state from runtime projection state.
+83. Split agent config state from mission state.
+84. Split command-console draft state from runtime response state.
+85. Add tests for store migrations and persisted state shape.
+
+## Phase I: UI cleanup without public-release signing
+
+86. Freeze new global CSS layers after `95-typography-polish.css`.
+87. Create design-token docs for colors, spacing, typography, radii, and motion.
+88. Start replacing late overrides with component-owned CSS one area at a time.
+89. Clean side rail semantics: use navigation semantics instead of mixed tab semantics.
+90. Keep `aria-current="page"` for active workspace.
+91. Keep the skip link working.
+92. Verify focus rings on dark surfaces.
+93. Verify reduced motion settings.
+94. Verify small-text contrast.
+95. Capture fresh beta screenshots from packaged production mode.
+
+## Phase J: Beta readiness gates without signing
+
+96. Run `npm ci`.
+97. Run `npm run prepare:openclaw-vendor`.
+98. Run `npm test`.
+99. Run `npm run test:unit:coverage`.
+100. Run `npm run build:standalone`.
+101. Run `npm run check:bundle-budgets`.
+102. Run `npm run smoke:electron-e2e`.
+103. Run `npm run package:desktop`.
+104. Run `npm run smoke:packaged-electron-launch`.
+105. Run `npm run state:backup` against a realistic local state sample.
+106. Run `npm run state:verify` on the backup.
+107. Run `npm run release:evidence` even for beta, without requiring public signing.
+108. Run `npm run release:validate` in non-public mode.
+109. Upload beta evidence artifacts to the PR or release draft.
+110. Record beta known issues.
+
+## Phase K: Manual beta test script
+
+111. Fresh install or fresh checkout.
+112. Launch desktop app.
+113. Confirm automatic desktop session bootstrap works.
+114. Connect or configure one model provider.
+115. Recruit one new test agent.
+116. Edit the agent workspace.
+117. Send one simple command.
+118. Send one command with attachment.
+119. Launch one instant mission.
+120. Launch one timed mission.
+121. Cancel one running mission.
+122. Open Monitor and confirm runtime evidence is visible.
+123. Restart Gateway from UI.
+124. Stop Gateway from tray/menu and recover it.
+125. Restart the app and confirm state rehydrates.
+126. Run a plugin status check.
+127. Trigger a missing-provider-auth path and confirm UI explains it.
+128. Trigger a failed command and confirm the error is redacted.
+129. Export or inspect a mission report.
+130. Use Settings to change UI density or motion and confirm persistence.
+
+## Phase L: Beta docs and support
+
+131. Add a beta disclaimer to release notes.
+132. Add a known issues section.
+133. Add a “how to recover Gateway” section.
+134. Add a “how to reset local state” section.
+135. Add a “how to send safe logs” section.
+136. Add a “what data stays local” section.
+137. Add a “what can leave your machine” section.
+138. Add a “supported OS for beta” section.
+139. Add a “do not expose local API to network” warning.
+140. Add a feedback collection link or issue template.
+
+## Phase M: Exit criteria for this non-signing milestone
+
+141. `controlPlane.ts` has stopped growing.
+142. At least Gateway services are extracted.
+143. At least Mission services are extracted.
+144. At least Runtime summary/recovery services are extracted.
+145. Store/API boundaries are cleaner.
+146. Packaged desktop launch smoke passes.
+147. Mission restart recovery is proven.
+148. Beta docs are complete.
+149. No missing packaged resources remain.
+150. Current production score reaches at least 7.5.
+
+## What waits until later
+
+These are important, but they are not the immediate goal for the current branch:
+
+- Authenticode signing.
+- Apple notarization.
+- Public update-channel signing.
+- Paid public distribution.
+- Storefront/payment integration.
+- Multi-user cloud authentication.
+- LAN or internet-exposed control plane.
+- Silent auto-update.
+
+## Immediate next pull requests after this doc
+
+1. `refactor/server-gateway-services`: extract Gateway lifecycle, diagnostics, and logs.
+2. `refactor/server-runtime-services`: extract runtime status, actions, and recovery.
+3. `refactor/server-mission-services`: extract mission state, scheduler, report, and recovery services.
+4. `refactor/provider-auth-services`: extract provider catalog/auth/OAuth modules.
+5. `refactor/ui-navigation-semantics`: clean rail nav semantics and focus behavior.
+6. `refactor/theme-consolidation-pass-1`: freeze override layers and start component CSS consolidation.
+
+## Success statement
+
+This phase is complete when DystopAI can be handed to a small trusted beta group with confidence that core work paths, recovery paths, state paths, and operator docs are real, even if public signing and paid distribution are postponed.
+
+## Automation Progress
+
+### 2026-06-30 - Phase A control-plane growth guard
+
+Completed verified plan items: 1, 2, 4, 5, 6, 8, 10.
+
+Evidence:
+
+- `server/controlPlane.ts` now starts with a no-new-domain-logic guard that directs new backend behavior to the target service folder from this plan.
+- `scripts/smoke-server-entrypoint-boundary.ts` enforces the guard comment, a non-loosened `29,000` line budget, zero inline `/api` routes in `controlPlane.ts`, route registration boundaries, and generated architecture report coverage.
+- `docs/generated/server-index-architecture.md` was regenerated with `28,879` control-plane composition lines.
+- `npm run smoke:server-architecture` passed with `28,879/29,000` composition lines and `0` inline routes.
+- `npm run smoke:route-inventory` passed with `109` unique API routes.
+- `npm run lint` passed after the smoke-script guard update.
+
+Still open from Phase A:
+
+- Item 3: temporary-exception policy needs a future extraction-target-specific check if exceptions are introduced.
+- Item 7: large-helper prevention remains covered by the line budget for now, but should become stricter as service extraction proceeds.
+- Item 9: extracted-function tracking continues in `docs/PRODUCTION_HARDENING_LEDGER.md` during Phase B and later extractions.
+
+### 2026-06-30 - Phase B Gateway lifecycle service extraction
+
+Completed verified plan items: 11, 15, 16.
+
+Evidence:
+
+- `server/services/gateway/gatewayLifecycleService.ts` now owns Gateway process start/stop/restart state, startup timeline, health monitor timers, listener PID lookup, restart lifecycle memory, restart diagnostics, manual stop handling, and plugin-install pause/resume handling.
+- `server/controlPlane.ts` now delegates Gateway lifecycle behavior to `createGatewayLifecycleService(...)` and keeps the composition root responsible for dependency wiring only.
+- `tests/gatewayLifecycleService.test.ts` covers Gateway command construction, unavailable runtime behavior, external-listener restart refusal, forced restart command/env construction, and restart lifecycle outcome tracking.
+- `scripts/smoke-gateway-lifecycle-service.ts` is wired as `npm run smoke:gateway-lifecycle` and verifies the extracted service without starting Express or a real Gateway.
+- `docs/generated/server-index-architecture.md` was regenerated with `28,155` control-plane composition lines after the extraction.
+- Verification passed: `npm run typecheck`, `npm run test:unit`, `npm run smoke:gateway-lifecycle`, `npm run smoke:server-architecture`, `npm run smoke:route-inventory`, `npm run smoke:runtime-status-control-plane`, `npm run smoke:runtime-actions-control-plane`, `npm run smoke:openclaw`, and `npm run lint`.
+
+Still open from Phase B:
+
+- Items 12-14: extract Gateway diagnostics, log tailing/redaction, and chat turn orchestration into focused services.
+- Items 17-20: add redacted-error and stale-cleanup coverage, inject the remaining Gateway services through route options, and confirm Monitor state behavior after the remaining service extractions.
+- Full `npm test` is not a Phase B lifecycle blocker but currently fails at `smoke:release-validation` because `README.md` does not document `distribution-signing.json` as expected by `scripts/smoke-release-validation.ts`.
+
+### 2026-06-30 - Phase B Gateway diagnostics service extraction
+
+Completed verified plan items: 12.
+
+Evidence:
+
+- `server/services/gateway/gatewayDiagnosticsService.ts` now owns Gateway `/health`, `/readyz`, and `diagnostics.stability` probing and normalization.
+- `server/controlPlane.ts` delegates Gateway health/readiness/stability behavior to `createGatewayDiagnosticsService(...)` and keeps only composition wrappers for existing runtime and Doctor call sites.
+- `tests/gatewayDiagnosticsService.test.ts` covers healthy Gateway payloads, degraded readiness summaries, missing Gateway client behavior, redacted stability warnings, and redacted stability request failures.
+- `scripts/smoke-gateway-diagnostics-service.ts` is wired as `npm run smoke:gateway-diagnostics` and into `npm run test:ci`.
+- `docs/generated/server-index-architecture.md` was regenerated with `27,838` control-plane composition lines after the diagnostics extraction.
+- Verification passed: `npm run typecheck:server`, `npm run typecheck`, `npm run test:unit`, `npm run smoke:gateway-diagnostics`, `npm run smoke:gateway-lifecycle`, `npm run smoke:runtime-status-control-plane`, `npm run smoke:runtime-actions-control-plane`, `npm run smoke:server-architecture`, `npm run smoke:route-inventory`, `npm run smoke:openclaw`, and `npm run lint`.
+- `npm test` reached and passed `npm run smoke:gateway-diagnostics`, then failed at the pre-existing late `smoke:release-validation` gate because `README.md` does not document `distribution-signing.json`.
+
+Still open from Phase B:
+
+- Items 13-14: extract Gateway log tailing/redaction and chat turn orchestration into focused services.
+- Items 17-20: add remaining redacted-error and stale-cleanup coverage, inject remaining Gateway services through route options, and confirm Monitor Gateway state behavior after the remaining service extractions.
+
+### 2026-06-30 - Phase B Gateway log service extraction
+
+Completed verified plan items: 13.
+
+Evidence:
+
+- `server/services/gateway/gatewayLogService.ts` now owns Gateway log compaction/redaction, in-memory log mirroring, `logs.tail` RPC reads, file-log discovery and tail snapshots, channel activity parsing, dedupe, current-start filtering, and loaded-plugin extraction from logs.
+- `server/controlPlane.ts` delegates Gateway log behavior to `createGatewayLogService(...)` and keeps only composition wrappers for existing runtime status, Doctor, and Monitor call sites.
+- `tests/gatewayLogService.test.ts` covers redacted ledger writes, `logs.tail` RPC parsing, local file-tail fallback after redacted RPC failure, ClawTalk websocket channel activity parsing, current-start filtering, dedupe, activity summaries, and plugin id extraction.
+- `scripts/smoke-gateway-log-service.ts` is wired as `npm run smoke:gateway-logs` and into `npm run test:ci`.
+- `scripts/smoke-openclaw-contracts.mjs` and `scripts/smoke-runtime-status-control-plane.ts` now assert Gateway log internals in the service instead of forcing them back into `controlPlane.ts`.
+- `docs/generated/server-index-architecture.md` was regenerated with `26,883` control-plane composition lines after the log extraction.
+- Verification passed: `npm run typecheck:server`, `npm run typecheck`, `npm run test:unit`, `npm run smoke:gateway-logs`, `npm run smoke:gateway-diagnostics`, `npm run smoke:gateway-lifecycle`, `npm run smoke:runtime-status-control-plane`, `npm run smoke:runtime-actions-control-plane`, `npm run smoke:server-architecture`, `npm run smoke:route-inventory`, `npm run smoke:openclaw`, `npm run lint`, `node scripts/report-server-index-architecture.mjs`, and `git diff --check`.
+- `npm test` reached and passed `npm run smoke:gateway-logs`, then failed at the pre-existing late `smoke:release-validation` gate because `README.md` does not document `distribution-signing.json`.
+
+Still open from Phase B:
+
+- Item 14: extract Gateway chat turn orchestration into `gatewayChatService.ts`.
+- Items 17-20: add remaining redacted-error and stale-cleanup coverage, inject any remaining Gateway services through route options, and confirm Monitor Gateway state behavior after chat extraction.
+
+### 2026-06-30 - Phase B Gateway chat service extraction
+
+Completed verified plan items: 14, 17.
+
+Evidence:
+
+- `server/services/gateway/gatewayChatService.ts` now owns the persistent loopback Gateway `gateway-client`, connect/startup readiness, stream observer/waiter state, `chat.send`, `chat.history`, `chat.message.get`, `chat.abort`, recovery snapshots, prewarm state, Gateway event projection, and final reply shaping.
+- `server/controlPlane.ts` now composes `createGatewayChatService(...)` and delegates Gateway chat turns, stream observers, stale waiter aborts, prewarm state, ready-client access, and shutdown cleanup through the service.
+- `tests/gatewayChatService.test.ts` covers Gateway chat payload construction, durable `chat.history` final replies, oversized-history `chat.message.get` fallback, request cancellation issuing `chat.abort`, redacted Gateway send failures, redacted terminal error payloads, stale waiter recovery, and Gateway chat state normalization.
+- `scripts/smoke-gateway-chat-service.ts` is wired as `npm run smoke:gateway-chat` and into `npm run test:ci`.
+- `scripts/smoke-openclaw-contracts.mjs` and `scripts/smoke-runtime-actions-control-plane.ts` now assert Gateway chat internals in the service instead of forcing them back into `controlPlane.ts`.
+- `docs/generated/server-index-architecture.md` was regenerated with `25,696` control-plane composition lines after the chat extraction.
+- Verification passed: `npm run typecheck:server`, `npm run typecheck`, `npm run test:unit` (`36` tests), `npm run smoke:gateway-chat`, `npm run smoke:gateway-lifecycle`, `npm run smoke:gateway-diagnostics`, `npm run smoke:gateway-logs`, `npm run smoke:openclaw`, `npm run smoke:runtime-status-control-plane`, `npm run smoke:runtime-actions-control-plane`, `npm run smoke:server-architecture`, `npm run smoke:route-inventory`, `npm run lint`, `node scripts/report-server-index-architecture.mjs`, and `git diff --check`.
+- `npm test` reached and passed `npm run smoke:gateway-chat`, then failed at the pre-existing late `smoke:release-validation` gate because `README.md` does not document `distribution-signing.json`.
+
+Still open from Phase B:
+
+- Items 18-20: add stale process cleanup decision coverage if any lifecycle gap remains, inject any remaining Gateway service seams through route options where applicable, and confirm Monitor Gateway online/offline/restarting states after the Gateway service split.
+
+### 2026-06-30 - Phase B Gateway validation sweep
+
+Completed verified plan items: 18, 19, 20.
+
+Evidence:
+
+- `tests/gatewayLifecycleService.test.ts` now covers stale unhealthy listener release before replacement spawn, no-spawn behavior when listener release fails and the port remains busy, and Monitor-facing Gateway `healthy`, `offline`, and `restarting` status snapshots after an unhealthy process exit.
+- `scripts/smoke-gateway-lifecycle-service.ts` now verifies the same stale-listener cleanup decisions and Monitor state projection in the standalone Gateway lifecycle smoke without starting Express or a real Gateway.
+- `scripts/smoke-server-entrypoint-boundary.ts` now enforces the Gateway service split and route-option seams: lifecycle process helpers, diagnostics probing, log tailing/RPC reads, and chat WebSocket orchestration must stay in `server/services/gateway/*`, with runtime/diagnostics/agent-turn routes receiving Gateway behavior through options.
+- `docs/generated/server-index-architecture.md` was regenerated with `25,696` control-plane composition lines; the architecture smoke still reports `0` inline routes and the Phase A guard intact.
+- Verification passed: `npm run test:unit` (`39` tests), `npm run smoke:gateway-lifecycle`, `npm run smoke:gateway-diagnostics`, `npm run smoke:gateway-logs`, `npm run smoke:gateway-chat`, `npm run typecheck`, `npm run smoke:runtime-status-control-plane`, `npm run smoke:runtime-actions-control-plane`, `npm run smoke:openclaw`, `npm run smoke:route-inventory`, `npm run smoke:server-architecture`, `node scripts/report-server-index-architecture.mjs`, `npm run lint`, and `git diff --check`.
+
+Phase B status:
+
+- Phase B items 11-20 are complete and verified.
+
+Next:
+
+- Start Phase C with runtime summary/status extraction into `server/services/runtime/runtimeStatusService.ts`, keeping the existing runtime API shape consumed by `useRuntimeStatus`.
+
+### 2026-06-30 - Phase C runtime status service extraction
+
+Completed verified plan items: 21, 25, 26, 27, 29, 30.
+
+Evidence:
+
+- `server/services/runtime/runtimeStatusService.ts` now owns runtime status and summary payload construction, status/summary caches, response-deadline fallback, cached fallback shaping, Gateway ledger/log/activity projections, plugin summary projection, active mission/shift projection, and Monitor fallback payloads.
+- `server/controlPlane.ts` now composes `createRuntimeStatusService(...)` and keeps only dependency wiring plus thin `getRuntimeStatusPayload(...)`, `getRuntimeSummaryPayload(...)`, and `invalidateRuntimeStatusCache()` wrappers for existing route/service call sites.
+- `tests/runtimeStatusService.test.ts` covers healthy Gateway runtime summaries, missing Gateway summaries that still use Gateway ledger evidence, stale session evidence passthrough, and timeout fallback to cached redacted runtime status.
+- `scripts/smoke-runtime-status-control-plane.ts`, `scripts/smoke-server-entrypoint-boundary.ts`, and `scripts/smoke-openclaw-contracts.mjs` now assert runtime status ownership in `server/services/runtime/runtimeStatusService.ts` instead of forcing status logic back into `controlPlane.ts`.
+- `docs/generated/server-index-architecture.md` was regenerated with `25,192` control-plane composition lines and `0` inline routes after the extraction.
+- Verification passed: `npm run test:unit` (`43` tests), `npm run smoke:runtime-status-control-plane`, `npm run smoke:server-architecture`, `npm run smoke:route-inventory`, `npm run smoke:runtime-actions-control-plane`, `npm run smoke:openclaw`, `npm run typecheck`, `npm run lint`, `node scripts/report-server-index-architecture.mjs`, and `git diff --check`.
+- `npm test` passed all gates through `smoke:release-signing`, including the new runtime status tests and updated OpenClaw/runtime status smokes, then failed at the pre-existing late `smoke:release-validation` gate because `README.md` does not document `distribution-signing.json`.
+
+Still open after the runtime status slice:
+
+- Items 22-24: extract runtime actions, runtime shutdown/clean-slate recovery, and runtime ledger store ownership.
+- Item 28: add focused clean-slate safety tests during runtime recovery extraction.
+
+Next after the runtime status slice:
+
+- Continue Phase C with runtime actions extraction into `server/services/runtime/runtimeActionService.ts`, preserving route behavior in `server/routes/runtimeRoutes.ts`.
+
+### 2026-06-30 - Phase C runtime action service extraction
+
+Completed verified plan items: 22.
+
+Evidence:
+
+- `server/services/runtime/runtimeActionService.ts` now owns runtime action orchestration for session close, stale Gateway chat aborts, runtime monitor clear, desktop runtime shutdown, and Gateway stop/start/restart actions.
+- `server/routes/runtimeRoutes.ts` now keeps HTTP payload validation and canonical success/error envelopes, then delegates action behavior through the injected `RuntimeActionService`.
+- `server/controlPlane.ts` composes `createRuntimeActionService(...)` with existing Gateway lifecycle/chat/log, session cleanup, monitor, and shutdown dependencies and injects it into `registerRuntimeRoutes(...)`.
+- `tests/runtimeActionService.test.ts` covers session close cleanup and activity snapshots, stale waiter abort cache invalidation, monitor clear marker writes and cleanup counts, Gateway stop/start/restart status snapshots, and desktop shutdown reason propagation.
+- `scripts/smoke-runtime-actions-control-plane.ts`, `scripts/smoke-server-entrypoint-boundary.ts`, `scripts/smoke-runtime-status-control-plane.ts`, and `scripts/smoke-openclaw-contracts.mjs` now assert runtime action ownership in `server/services/runtime/runtimeActionService.ts` instead of route-level orchestration.
+- `docs/generated/server-index-architecture.md` was regenerated with `25,197` control-plane composition lines and `0` inline routes.
+- Verification passed: `npm run typecheck:server`, `npm run typecheck`, `npm run test:unit` (`48` tests), `npm run smoke:runtime-actions-control-plane`, `npm run smoke:runtime-status-control-plane`, `npm run smoke:server-architecture`, `npm run smoke:route-inventory`, `npm run smoke:openclaw`, `npm run lint`, `node scripts/report-server-index-architecture.mjs`, and `git diff --check`.
+- `npm test` passed all gates through `smoke:release-signing`, including the new runtime action tests and updated runtime/OpenClaw smokes, then failed at the pre-existing late `smoke:release-validation` gate because `README.md` does not document `distribution-signing.json`.
+
+Still open from Phase C:
+
+- Items 23-24: extract runtime shutdown/clean-slate recovery and runtime ledger store ownership.
+- Item 28: add focused clean-slate safety tests during runtime recovery extraction.
+
+Next:
+
+- Continue Phase C with runtime recovery extraction into `server/services/runtime/runtimeRecoveryService.ts`, preserving clean-slate safety and shutdown behavior.
+
+### 2026-06-30 - Phase C runtime recovery service extraction
+
+Completed verified plan items: 23, 28.
+
+Evidence:
+
+- `server/services/runtime/runtimeRecoveryService.ts` now owns runtime shutdown cleanup, concurrent shutdown dedupe, process-exit best-effort cleanup, and Monitor Clean Slate recovery.
+- `server/controlPlane.ts` now composes `createRuntimeRecoveryService(...)` with explicit dependencies for mission snapshots, session cleanup, active runtime termination, Gateway client/runtime shutdown, OAuth callback cleanup, plugin setup terminal cleanup, session-lock sweeping, marker persistence, cache invalidation, and runtime ledger close.
+- `server/services/runtime/runtimeActionService.ts` keeps the runtime HTTP action surface stable while delegating `clearRuntimeMonitor()` and `shutdownRuntime()` to the recovery service.
+- `tests/runtimeRecoveryService.test.ts` covers Clean Slate safety without stopping active runtime/Gateway work, shutdown in-flight dedupe, structured shutdown evidence, warning-tolerant cleanup continuation, and synchronous process-exit cleanup.
+- `tests/runtimeActionService.test.ts` now verifies action-level delegation to the recovery service while preserving response shape.
+- `scripts/smoke-runtime-actions-control-plane.ts` and `scripts/smoke-server-entrypoint-boundary.ts` now assert recovery ownership in `server/services/runtime/runtimeRecoveryService.ts` and prevent shutdown/Clean Slate logic from returning to `controlPlane.ts`.
+- `docs/generated/server-index-architecture.md` was regenerated with `25,160` control-plane composition lines and `0` inline routes.
+- Verification passed: `npm run typecheck:server`, `npm run test:unit` (`52` tests), `npm run smoke:runtime-actions-control-plane`, `npm run smoke:server-architecture`, `npm run typecheck`, `npm run smoke:runtime-status-control-plane`, `npm run smoke:route-inventory`, `npm run smoke:openclaw`, `npm run lint`, `node scripts/report-server-index-architecture.mjs`, and `git diff --check`.
+- `npm test` passed all gates through `smoke:release-signing`, including the new runtime recovery tests and updated runtime/architecture smokes, then failed at the pre-existing late `smoke:release-validation` gate because `README.md` does not document `distribution-signing.json`.
+
+Still open from Phase C:
+
+- Item 24: move runtime ledger ownership behind `runtimeLedgerStore.ts` or equivalent state boundary.
+
+Next:
+
+- Continue Phase C with runtime ledger store extraction, preserving JSONL/SQLite fallback evidence and existing runtime status API shape.
+
+### 2026-06-30 - Phase C runtime ledger store extraction
+
+Completed verified plan items: 24.
+
+Evidence:
+
+- `server/state/runtimeLedgerStore.ts` now owns the runtime ledger state boundary, canonical ledger paths, control-center state namespace keys, runtime/gateway/diagnostic/mission append/read methods, non-blocking status reads, and ledger close wiring.
+- `server/runtimeLedger.ts` remains the low-level SQLite/JSONL helper implementation; `server/controlPlane.ts` now composes `createRuntimeLedgerStore(...)` and routes runtime, Gateway, diagnostic, mission, control-center state, and recovery ledger access through the store.
+- `tests/runtimeLedgerStore.test.ts` covers JSONL fallback diagnostics with malformed-row evidence, JSONL append/read fallback across runtime/Gateway/diagnostic/mission ledgers, and namespaced control-center state ownership.
+- `scripts/smoke-server-entrypoint-boundary.ts`, `scripts/smoke-openclaw-contracts.mjs`, `scripts/smoke-runtime-ledger-jsonl-tail.ts`, `scripts/smoke-control-center-sqlite-state.ts`, `scripts/smoke-mission-durable-state.ts`, `scripts/smoke-mission-lifecycle-projection.ts`, and `scripts/smoke-gateway-log-service.ts` now assert the store boundary instead of forcing direct runtime ledger helper calls back into `controlPlane.ts`.
+- `README.md` now documents `release/evidence/distribution-signing.json`, clearing the previously recorded `smoke:release-validation` README contract blocker.
+- `docs/generated/server-index-architecture.md` was regenerated with `25,120` control-plane composition lines and `0` inline routes.
+- Verification passed: `npm run typecheck:server`, `npm run test:unit` (`55` tests), `npm run typecheck`, `npm run smoke:runtime-status-control-plane`, `npm run smoke:runtime-actions-control-plane`, `npm run smoke:route-inventory`, `npm run smoke:server-architecture`, `npm run smoke:ledger`, `npm run smoke:control-center-state`, `npm run smoke:mission-durable-state`, `npm run smoke:mission-lifecycle-projection`, `npm run smoke:gateway-logs`, `npm run smoke:openclaw`, `npm run smoke:release-validation`, `npm run lint`, `node scripts/report-server-index-architecture.mjs`, `git diff --check`, and `npm test`.
+- Full `npm test` now passes end to end, including release validation, release lifecycle, and CI workflow smokes.
+
+Phase C status:
+
+- Phase C items 21-30 are complete and verified.
+
+Next:
+
+- Start Phase D with mission creation/idempotency and transition extraction into `server/services/missions/missionStateService.ts`, preserving ledger-backed mission projection behavior.
+
+### 2026-06-30 - Phase D mission state service extraction
+
+Completed verified plan items: 31, 32, 38.
+
+Evidence:
+
+- `server/services/missions/missionStateService.ts` now owns mission launch idempotency, mission record creation, mission duration/timer arming, mission view/progress projection, scheduler initial state, lifecycle event appends, mission record persistence, mission start rollback, and operator cancellation transitions.
+- `server/routes/missionRoutes.ts` now keeps HTTP payload validation and canonical success/error envelopes, then delegates mission start/stop state behavior through the injected `missionStateService`.
+- `server/controlPlane.ts` now composes `createMissionStateService(...)` with explicit runtime ledger, scheduler, report, Team Sync, timer, and cleanup dependencies. Existing mission cron execution, report generation, recovery, and projection call sites use the service-owned state methods.
+- `tests/missionStateService.test.ts` covers duplicate idempotency-key launches, ledger-backed launch transitions, scheduler setup rollback, operator cancellation cleanup evidence, Team Sync snapshot writes, and missing/terminal mission stop rejection.
+- `scripts/smoke-server-entrypoint-boundary.ts`, `scripts/smoke-mission-idempotency.ts`, `scripts/smoke-mission-cancellation.ts`, `scripts/smoke-mission-durable-state.ts`, and `scripts/smoke-api-envelope.ts` now assert mission state ownership in `server/services/missions/missionStateService.ts` instead of route-level orchestration.
+- `docs/generated/server-index-architecture.md` was regenerated with `24,862` control-plane composition lines and `0` inline routes.
+- Verification passed: `node --import tsx --test tests/missionStateService.test.ts`, `npm run typecheck:server`, `npm run smoke:mission-idempotency`, `npm run smoke:mission-cancellation`, `npm run smoke:mission-durable-state`, `npm run smoke:server-architecture`, `npm run smoke:mission-lifecycle-projection`, `npm run smoke:mission-backend-owned`, `npm run smoke:mission-cron-reconciliation`, `npm run smoke:mission-report`, `npm run smoke:mission-gateway-reconciliation`, `npm run test:unit` (`59` tests), `npm run typecheck`, `npm run lint`, `node scripts/report-server-index-architecture.mjs`, `npm run smoke:route-inventory`, `npm run smoke:api-envelope`, `git diff --check`, and `npm test`.
+- `git diff --check` passed with only LF-to-CRLF working-copy warnings on already touched files.
+
+Still open from Phase D:
+
+- Items 33-36: extract mission cron scheduling, report generation, restart/recovery, and TEAM_SYNC snapshot writing into focused mission services.
+- Items 37 and 39-45: broaden mission transition/cancellation/recovery tests and manual restart/crash recovery smokes after the remaining service extractions.
+
+Next:
+
+- Continue Phase D with mission scheduler extraction into `server/services/missions/missionSchedulerService.ts`, preserving cron reconciliation, recurring/instant scheduling, cancellation cleanup, and backend-owned mission projection behavior.
+
+### 2026-06-30 - Phase D mission scheduler service extraction
+
+Completed verified plan items: 33.
+
+Evidence:
+
+- `server/services/missions/missionSchedulerService.ts` now owns mission cron scheduling behavior: one-shot and recurring cron job creation, OpenClaw cron add/run/rm/disable command orchestration, cron prompt construction, instant round timers, mission run controllers, recurring cron arming, scheduler-driven mission completion, cancellation cleanup, rehydrated mission timers, recurring shift rehydration, cron runtime/session reference capture, agent memory handoff writes, and Team Sync scheduler evidence through injected dependencies.
+- `server/controlPlane.ts` now composes `createMissionSchedulerService(...)`; `missionStateService` receives scheduler behavior through service callbacks, and durable mission hydration delegates recurring shift rehydration and timer arming to the scheduler service.
+- `tests/missionSchedulerService.test.ts` covers recurring leader/worker cron arming, cleanup fallback from failed removal to disable, max-cycle completion without launching extra work, and instant mission scheduling through cron run completion.
+- `scripts/smoke-mission-scheduler-service.ts` is wired as `npm run smoke:mission-scheduler` and into `npm run test:ci`; mission cancellation, cron reconciliation, durable state, runtime reference, Gateway reconciliation, and architecture smokes were updated to assert the new service boundary.
+- `docs/generated/server-index-architecture.md` was regenerated with `23,775` control-plane composition lines, `9` entrypoint lines, and `0` inline routes after the scheduler extraction.
+- Verification passed: `node --import tsx --test tests/missionSchedulerService.test.ts`, `npm run typecheck:server`, `npm run test:unit` (`63` tests), `npm run smoke:mission-scheduler`, `npm run smoke:mission-cron-reconciliation`, `npm run smoke:mission-cancellation`, `npm run smoke:mission-runtime-references`, `npm run smoke:mission-durable-state`, `npm run smoke:mission-gateway-reconciliation`, `npm run smoke:mission-idempotency`, `npm run smoke:mission-lifecycle-projection`, `npm run smoke:mission-backend-owned`, `npm run smoke:mission-report`, `npm run smoke:mission-verification`, `npm run smoke:api-envelope`, `npm run smoke:route-inventory`, `npm run smoke:server-architecture`, `npm run smoke:runtime-status-control-plane`, `npm run smoke:runtime-actions-control-plane`, `npm run smoke:openclaw`, `npm run typecheck`, `npm run lint`, `node scripts/report-server-index-architecture.mjs`, `git diff --check`, and `npm test`.
+- `git diff --check` passed with only LF-to-CRLF working-copy warnings on already touched files.
+
+Still open from Phase D:
+
+- Items 34-36: extract mission report generation, restart/recovery, and TEAM_SYNC snapshot writing into focused mission services.
+- Items 37 and 39-45: broaden mission transition/cancellation/recovery tests and restart/crash recovery smokes after the remaining service extractions.
+
+Next:
+
+- Continue Phase D with mission report generation extraction into `server/services/missions/missionReportService.ts`, preserving backend report evidence and existing Mission report API shape.
+
+### 2026-06-30 - Phase D mission report service extraction
+
+Completed verified plan items: 34, 42.
+
+Evidence:
+
+- `server/services/missions/missionReportService.ts` now owns backend mission report contracts, report evidence scoring, unavailable metric shaping, runtime/cron/session reference accounting, durable report listing, mission record normalization for projection, feed/event merging, and report-backed mission lifecycle projection.
+- `server/controlPlane.ts` now composes `createMissionReportService(...)` and delegates `recordMissionReport`, `listMissionReports`, and `buildMissionLifecycleProjection` through the service while retaining only dependency wiring and recovery call-site glue.
+- `server/routes/missionRoutes.ts` now consumes `BackendMissionReport` and `MissionLifecycleProjection` contracts from the mission report service while keeping HTTP validation/envelope behavior unchanged.
+- `tests/missionReportService.test.ts` covers runtime-backed cron/session report evidence, mission-feed-only fallback reports, failed cron-job score lowering, explicit no-evidence reports with unavailable metrics, and durable-plus-memory report/projection merging.
+- `scripts/smoke-mission-report-service.ts` is wired as `npm run smoke:mission-report-service` and into `npm run test:ci`; mission durable-state, lifecycle-projection, runtime-reference, and architecture smokes now assert report/projection ownership in the service instead of `controlPlane.ts`.
+- `docs/generated/server-index-architecture.md` was regenerated with `23,334` control-plane composition lines, `9` entrypoint lines, and `0` inline routes after the extraction.
+- Verification passed: `node --import tsx --test tests/missionReportService.test.ts`, `npm run smoke:mission-report-service`, `npm run typecheck:server`, `npm run smoke:server-architecture`, `npm run smoke:mission-report`, `npm run smoke:mission-durable-state`, `npm run smoke:mission-lifecycle-projection`, `npm run smoke:mission-runtime-references`, `npm run smoke:mission-gateway-reconciliation`, `npm run smoke:mission-cancellation`, `npm run smoke:mission-cron-reconciliation`, `npm run smoke:mission-idempotency`, `npm run smoke:mission-scheduler`, `npm run smoke:mission-backend-owned`, `npm run smoke:api-envelope`, `npm run test:unit` (`68` tests), `npm run typecheck`, `npm run lint`, `node scripts/report-server-index-architecture.mjs`, `npm run smoke:route-inventory`, `npm run smoke:openclaw`, `git diff --check`, and `npm test`.
+- `git diff --check` passed with only LF-to-CRLF working-copy warnings on already touched files.
+- Full `npm test` passed end to end, including the new mission report service smoke, release validation, release lifecycle, and CI workflow smokes.
+
+Still open from Phase D:
+
+- Items 35-36: extract mission restart/recovery and TEAM_SYNC snapshot writing into focused mission services.
+- Items 37 and 39-45: broaden mission transition/cancellation/recovery tests and restart/crash recovery smokes after the remaining service extractions.
+
+Next:
+
+- Continue Phase D with mission restart/recovery extraction into `server/services/missions/missionRecoveryService.ts`, preserving durable hydration, cron reconciliation, Gateway session reconciliation, and recovered mission projection behavior.
+
+### 2026-06-30 - Phase D mission recovery service extraction
+
+Completed verified plan items: 35.
+
+Evidence:
+
+- `server/services/missions/missionRecoveryService.ts` now owns durable mission restart hydration, recovered cron reconciliation, missing/disabled cron failure transitions, Gateway session reconciliation, redacted Gateway-session evidence, and recovered mission rearm orchestration.
+- `server/controlPlane.ts` now composes `createMissionRecoveryService(...)` with explicit dependencies for runtime-run status lookup, OpenClaw cron-state snapshots, Gateway client access, mission state/report callbacks, scheduler rehydration hooks, and ledger reads. It keeps only `const hydrateMissionRecordsFromLedger = missionRecoveryService.hydrateMissionRecordsFromLedger` for startup wiring.
+- `tests/missionRecoveryService.test.ts` covers active mission hydration, missing and disabled cron jobs, unavailable Gateway session reconciliation with redaction, missing Gateway session classification, and recovered shift/timer delegation.
+- `scripts/smoke-mission-recovery-service.ts` is wired as `npm run smoke:mission-recovery` and into `npm run test:ci`; mission durable-state, cron reconciliation, Gateway reconciliation, and architecture smokes now assert recovery ownership in the service instead of `controlPlane.ts`.
+- `docs/generated/server-index-architecture.md` was regenerated with `23,030` control-plane composition lines and `0` inline routes after the extraction.
+- Verification passed: `node --import tsx --test tests/missionRecoveryService.test.ts`, `npm run smoke:mission-recovery`, `npm run typecheck:server`, `npm run smoke:mission-cron-reconciliation`, `npm run smoke:mission-gateway-reconciliation`, `npm run smoke:mission-durable-state`, `npm run smoke:server-architecture`, `npm run test:unit` (`72` tests), `npm run typecheck`, `npm run lint`, `npm run smoke:mission-report-service`, `npm run smoke:mission-scheduler`, `npm run smoke:mission-cancellation`, `npm run smoke:mission-runtime-references`, `npm run smoke:mission-lifecycle-projection`, `npm run smoke:mission-backend-owned`, `npm run smoke:mission-idempotency`, `npm run smoke:mission-report`, `npm run smoke:mission-verification`, `npm run smoke:route-inventory`, `npm run smoke:api-envelope`, `npm run smoke:runtime-status-control-plane`, `npm run smoke:runtime-actions-control-plane`, `npm run smoke:openclaw`, `node scripts/report-server-index-architecture.mjs`, `git diff --check`, and `npm test`.
+- `git diff --check` passed with only LF-to-CRLF working-copy warnings on already touched files.
+- Full `npm test` passed end to end, including the new mission recovery service smoke, runtime recovery soak, release validation, release lifecycle, and CI workflow smokes.
+
+Still open from Phase D:
+
+- Item 36: extract TEAM_SYNC snapshot writing into `server/services/missions/missionTeamSyncService.ts`.
+- Items 37 and 39-45: broaden mission transition/cancellation/recovery tests and restart/crash recovery smokes after the remaining service extraction.
+
+Next:
+
+- Continue Phase D with TEAM_SYNC snapshot extraction into `server/services/missions/missionTeamSyncService.ts`, preserving append-only handoff files, snapshot evidence, mission scheduler/state call sites, and existing Team Sync route behavior.
+
+### 2026-06-30 - Phase D mission Team Sync service extraction
+
+Completed verified plan items: 36.
+
+Evidence:
+
+- `server/services/missions/missionTeamSyncService.ts` now owns Team Sync snapshot markdown generation, missing `TEAM_SYNC.md` repair, canonical doctrine snapshot target selection, legacy workspace-root mirroring, shared Team Sync path mirroring, snapshot writes, assignment metadata rendering, and the established `80` entry activity cap.
+- `server/controlPlane.ts` now composes `createMissionTeamSyncService(...)` and delegates `ensureTeamSyncFile` and `writeTeamSyncSnapshot` through the service for mission state, mission scheduler, managed Team Sync orchestration, and party coordination routes.
+- `tests/missionTeamSyncService.test.ts` covers snapshot content, activity truncation, missing-file repair without overwriting existing append logs, canonical doctrine/shared-path mirroring, and legacy workspace-root mirroring.
+- `scripts/smoke-mission-team-sync-service.ts` is wired as `npm run smoke:mission-team-sync` and into `npm run test:ci`; `scripts/smoke-server-entrypoint-boundary.ts` and `scripts/smoke-team-sync-control-plane.ts` now assert Team Sync snapshot ownership in the service instead of `controlPlane.ts`.
+- `docs/generated/server-index-architecture.md` was regenerated with `22,963` control-plane composition lines and `0` inline routes after the extraction.
+- Verification passed: `node --import tsx --test tests/missionTeamSyncService.test.ts`, `npm run smoke:mission-team-sync`, `npm run smoke:team-sync-control-plane`, `npm run typecheck:server`, `node scripts/report-server-index-architecture.mjs`, `npm run smoke:server-architecture`, `npm run smoke:mission-durable-state`, `npm run smoke:mission-cron-reconciliation`, `npm run smoke:mission-gateway-reconciliation`, `npm run smoke:mission-lifecycle-projection`, `npm run smoke:mission-backend-owned`, `npm run smoke:mission-report-service`, `npm run smoke:mission-recovery`, `npm run smoke:mission-scheduler`, `npm run smoke:mission-cancellation`, `npm run smoke:mission-idempotency`, `npm run smoke:mission-runtime-references`, `npm run smoke:mission-report`, `npm run smoke:api-envelope`, `npm run smoke:route-inventory`, `npm run typecheck`, `npm run test:unit` (`76` tests), `npm run lint`, `npm run smoke:runtime-status-control-plane`, `npm run smoke:runtime-actions-control-plane`, `npm run smoke:openclaw`, `git diff --check`, and `npm test`.
+- `git diff --check` passed with only LF-to-CRLF working-copy warnings on already touched files.
+- Full `npm test` passed end to end, including the new `smoke:mission-team-sync` CI gate, runtime recovery soak, release validation, release lifecycle, and CI workflow smokes.
+
+Still open from Phase D:
+
+- Item 37: broaden tests for every mission transition.
+- Items 39-45: broaden cancellation/recovery tests and restart/crash recovery smokes.
+
+Next:
+
+- Continue Phase D with mission transition coverage for item 37, starting in `tests/missionStateService.test.ts` and preserving ledger-backed transition evidence.
+
+### 2026-06-30 - Phase D mission transition coverage
+
+Completed verified plan items: 37, 39.
+
+Evidence:
+
+- `tests/missionStateService.test.ts` now covers invalid launch rejection before state mutation, duplicate idempotency-key launches, instant scheduler-round delegation, recurring scheduler/timer arming, scheduler setup rollback, successful running-mission cancellation, cleanup-failure cancellation evidence, and missing/terminal mission stop rejection.
+- `tests/missionStateService.test.ts` now directly verifies `transitionMissionState(...)` persistence for the mission state, scheduler, and recovery lifecycle edges: `draft->validating`, `validating->scheduled`, `scheduled->running`, `scheduled->failed`, `running->dispatching`, `dispatching->running`, `running->verifying`, `verifying->completed`, `running->failed`, and `running->cancelled`.
+- The lifecycle transition coverage asserts mission feed events, ledger lifecycle events, actor/idempotency/evidence fields, and mission record persist reasons for each edge.
+- `docs/generated/server-index-architecture.md` was regenerated with `22,963` control-plane composition lines, `9` entrypoint lines, and `0` inline routes.
+- Verification passed: `node --import tsx --test tests/missionStateService.test.ts`, `npm run typecheck:server`, `npm run smoke:mission-cancellation`, `npm run smoke:mission-idempotency`, `npm run smoke:mission-scheduler`, `npm run smoke:mission-recovery`, `npm run smoke:mission-durable-state`, `npm run smoke:mission-lifecycle-projection`, `npm run smoke:mission-report-service`, `npm run smoke:server-architecture`, `npm run test:unit` (`81` tests), `npm run typecheck`, `npm run lint`, `node scripts/report-server-index-architecture.mjs`, `git diff --check`, and `npm test`.
+- `git diff --check` passed with only LF-to-CRLF working-copy warnings on already touched files.
+- Full `npm test` passed end to end, including mission recovery, Team Sync, durable state, idempotency, cron reconciliation, scheduler, cancellation, runtime references, Gateway reconciliation, lifecycle projection, backend-owned mission lifecycle, Gateway service, runtime, release, security, secret-scan, and CI workflow smokes.
+
+Still open from Phase D:
+
+- Item 40: add tests for cancelling after backend restart.
+- Item 41: broaden cron reconciliation test coverage if gaps remain after the restart-cancellation slice.
+- Items 43-45: add restart/crash recovery smokes and confirm the Mission page shows recovered backend state rather than stale renderer state.
+
+Next:
+
+- Continue Phase D with item 40: cancellation after backend restart, preserving durable mission hydration, recovered scheduler state, cancellation cleanup evidence, and backend-owned projection behavior.
