@@ -2,15 +2,15 @@ import { create } from 'zustand'
 import { createJSONStorage, persist } from 'zustand/middleware'
 import type { StateStorage } from 'zustand/middleware'
 import { CoordinationBus } from '../engine/CoordinationBus'
-import { RuntimeComposer } from '../engine/RuntimeComposer'
 import { MDSValidator } from '../engine/MDSValidator'
-import { DEFAULT_MISSION_DRAFT, SKILL_TREE, makeDormantState, makeSeedAgents } from '../data/seeds'
-import { apiErrorMessage, apiRequest } from '../api/client'
+import { DEFAULT_MISSION_DRAFT, SKILL_TREE, makeDormantState } from '../data/seeds'
+import { apiErrorMessage } from '../api/client'
 import {
   clearAgentTurnSessions,
   preflightAgentRuntime as requestAgentRuntimePreflight,
   prewarmAgentTurn,
   sendBufferedAgentTurn,
+  sendStreamingAgentTurn,
   type AgentTurnPayload as AT,
 } from '../api/agentTurns'
 import {
@@ -23,9 +23,64 @@ import {
   type PartyOverviewAgent,
   type RecruitAgentRequest,
 } from '../api/party'
-import { apiUrl } from '../utils/apiUrl'
+import {
+  fetchMissionProjection,
+  startMission as requestMissionStart,
+  stopMission as requestMissionStop,
+  type BackendMission,
+  type BackendMissionEvent,
+} from '../api/missions'
+import {
+  makeNexusUiState,
+  normalizeNexusSelection,
+  type AppTab,
+  type NexusUiState,
+} from './nexusUiState'
+import {
+  MAX_PARTY_SIZE,
+  getDefaultTemplateAgent,
+  getSeedAgents,
+  isDefaultAgentPortrait,
+  isRetiredAgentId,
+  isUsablePortrait,
+  makeAgentConfigState,
+  rememberRetiredAgentId,
+  sanitizePartyIds,
+  updateAgentInList,
+  withComputedRuntime,
+  type NexusAgentConfigState,
+} from './agentConfigState'
+import {
+  MAX_HISTORY,
+  MAX_REPORTS,
+  makeMissionState,
+  type NexusMissionState,
+} from './missionState'
+import {
+  configSaveEntry,
+  makeRuntimeProjectionState,
+  updateAgentConfigSaveStatus,
+  type AgentConfigSaveReporter,
+  type AgentConfigSaveScope,
+  type NexusRuntimeProjectionState,
+} from './runtimeProjectionState'
+import {
+  MAX_COMMAND_CONSOLE_RESPONSES,
+  applyQueuedCommandConsoleResponsePatch,
+  commandConsoleSessionKey,
+  createQueuedCommandConsoleResponse,
+  makeCommandConsoleResponseState,
+  queueProgressLines,
+  removeCommandConsoleDraftsForAgent,
+  type CommandConsoleQueuedFollowup,
+  type NexusCommandConsoleResponseState,
+} from './commandConsoleState'
+import {
+  NEXUS_STORAGE_KEY,
+  mergeNexusPersistedState,
+  partializeNexusPersistedState,
+} from './nexusPersistence'
 import { redactDiagnosticText, safeDiagnosticPayload } from '../utils/diagnosticRedaction'
-import { createSseFrameParser } from '../utils/sseStream'
 import type {
   AgentMessage,
   AgentMessageKind,
@@ -39,7 +94,6 @@ import type {
   AgentSkillEntry,
   CapabilityKey,
   AgentMDS,
-  AgentOperationState,
   AgentTurnAttachment,
   CollaborationMode,
   CoreAttributes,
@@ -50,7 +104,6 @@ import type {
   HeartbeatConfig,
   MissionDraft,
   MissionEvent,
-  MissionReport,
   MissionRun,
   OpenClawAgent,
   SoulConfig,
@@ -58,36 +111,17 @@ import type {
   WorkspaceClaim,
 } from '../types/nexus'
 
+export type { AppTab } from './nexusUiState'
+
 /* ------------------------------------------------------------------ */
 /*  Constants                                                         */
 /* ------------------------------------------------------------------ */
 
-const MAX_PARTY_SIZE = 6
 const PARTY_PREWARM_LIMIT = 0
-const MAX_RESPONSES = 80
 const MAX_FEED_EVENTS = 120
-const MAX_REPORTS = 30
-const MAX_HISTORY = 40
 const MAX_ACTIVITY_EVENTS = 80
 const PROGRESS_DRAFT_MAX_LINES = 4
 const PROGRESS_DRAFT_MAX_LINE_CHARS = 120
-const NEXUS_STORAGE_KEY = 'nexus-v10'
-const DEFAULT_TEMPLATE_AGENT_ID = 'hn-commander'
-const DEFAULT_ACTIVE_PARTY_IDS = [
-  'hn-commander',
-  'hn-coordinator',
-  'hn-builder',
-  'hn-reviewer',
-  'hn-architect',
-  'hn-fullstack',
-]
-const LEGACY_DEFAULT_PARTY_IDS = [
-  'hn-netanyahu',
-  'hn-commander',
-  'hn-coordinator',
-  'hn-builder',
-  'hn-reviewer',
-]
 const FAST_THINKING: ThinkingLevel = 'off'
 const FAST_MODE_DEFAULT: FastModeDefault = 'auto'
 const MISSION_THINKING: ThinkingLevel = 'minimal'
@@ -101,7 +135,6 @@ const HEARTBEAT_CONFIG_SAVE_DEBOUNCE_MS = 350
 const RUNTIME_POLICY_SAVE_DEBOUNCE_MS = 450
 const STORAGE_WRITE_DEBOUNCE_MS = 120
 const STORAGE_QUOTA_WARNING_COOLDOWN_MS = 60 * 1000
-const MAX_PERSISTED_PORTRAIT_LENGTH = 2048
 const RETIRE_AGENT_TIMEOUT_MS = 45 * 1000
 const heartbeatConfigSaveTimers = new Map<string, ReturnType<typeof setTimeout>>()
 const heartbeatConfigSaveSeq = new Map<string, number>()
@@ -116,11 +149,6 @@ let storageFlushListenerInstalled = false
 /* ------------------------------------------------------------------ */
 /*  Helpers                                                           */
 /* ------------------------------------------------------------------ */
-
-function withComputedRuntime(agent: OpenClawAgent): OpenClawAgent {
-  const preview = RuntimeComposer.compose(agent)
-  return { ...agent, runtime: { ...preview, ...agent.runtime } }
-}
 
 function isQuotaExceededError(error: unknown): boolean {
   return error instanceof DOMException
@@ -194,44 +222,6 @@ function makeQuotaSafeLocalStorage(): StateStorage {
     },
     setItem: scheduleStorageWrite,
   }
-}
-
-function updateAgentInList(agents: OpenClawAgent[], agentId: string, updater: (a: OpenClawAgent) => OpenClawAgent): OpenClawAgent[] {
-  return agents.map((a) => (a.id === agentId ? withComputedRuntime(updater(a)) : a))
-}
-
-type AgentConfigSaveScope = 'heartbeat' | 'runtime' | 'profile' | 'policy' | 'mds' | 'skills'
-type AgentConfigSavePhase = 'saving' | 'saved' | 'failed'
-
-type AgentConfigSaveEntry = {
-  phase: AgentConfigSavePhase
-  message: string
-  revision: number
-  updatedAt: string
-  requestId?: string
-}
-
-type AgentConfigSaveStatus = Partial<Record<AgentConfigSaveScope, AgentConfigSaveEntry>>
-
-type AgentConfigSaveReporter = (agentId: string, scope: AgentConfigSaveScope, entry: AgentConfigSaveEntry) => void
-
-function updateAgentConfigSaveStatus(
-  current: Record<string, AgentConfigSaveStatus>,
-  agentId: string,
-  scope: AgentConfigSaveScope,
-  entry: AgentConfigSaveEntry,
-): Record<string, AgentConfigSaveStatus> {
-  return {
-    ...current,
-    [agentId]: {
-      ...(current[agentId] || {}),
-      [scope]: entry,
-    },
-  }
-}
-
-function configSaveEntry(phase: AgentConfigSavePhase, message: string, revision: number, requestId?: string): AgentConfigSaveEntry {
-  return { phase, message, revision, requestId, updatedAt: new Date().toISOString() }
 }
 
 function agentConfigPatchKey(agentId: string, scope: AgentConfigSaveScope): string {
@@ -528,142 +518,6 @@ function escapeRegExp(value: string): string {
   return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
 }
 
-const BUILTIN_RETIRED_AGENT_IDS = new Set([
-  'recruit-check-mps3678p',
-  'no-such-agent',
-  'hn-builder',
-  'hn-franklin',
-  'hn-trump',
-])
-const RETIRED_AGENT_IDS = new Set(BUILTIN_RETIRED_AGENT_IDS)
-
-function normalizeRetiredAgentId(agentId: string | undefined): string {
-  return agentId?.trim().toLowerCase() || ''
-}
-
-function rememberRetiredAgentIds(ids: unknown): string[] {
-  const input = Array.isArray(ids) ? ids : []
-  for (const rawId of input) {
-    if (typeof rawId !== 'string') continue
-    const id = normalizeRetiredAgentId(rawId)
-    if (/^[a-z0-9-]+$/.test(id)) RETIRED_AGENT_IDS.add(id)
-  }
-  return retiredAgentIdsForStore()
-}
-
-function rememberRetiredAgentId(agentId: string): string[] {
-  const id = normalizeRetiredAgentId(agentId)
-  if (/^[a-z0-9-]+$/.test(id)) RETIRED_AGENT_IDS.add(id)
-  return retiredAgentIdsForStore()
-}
-
-function retiredAgentIdsForStore(): string[] {
-  return [...RETIRED_AGENT_IDS]
-    .filter((id) => !BUILTIN_RETIRED_AGENT_IDS.has(id))
-    .sort((a, b) => a.localeCompare(b))
-}
-
-function isRetiredAgentId(agentId: string | undefined): boolean {
-  const id = normalizeRetiredAgentId(agentId)
-  return Boolean(id && RETIRED_AGENT_IDS.has(id))
-}
-
-/* ---- memoized seed agents (called frequently, avoid recompute) ---- */
-let _seedCache: OpenClawAgent[] | null = null
-function getSeedAgents(): OpenClawAgent[] {
-  if (!_seedCache) _seedCache = makeSeedAgents()
-  return _seedCache
-}
-
-function resolveDefaultTemplateAgentId(agents: OpenClawAgent[]): string | null {
-  const selectableAgents = agents.filter((agent) => !isRetiredAgentId(agent.id))
-  if (selectableAgents.some((agent) => agent.id === DEFAULT_TEMPLATE_AGENT_ID)) return DEFAULT_TEMPLATE_AGENT_ID
-  return selectableAgents.find((agent) => agent.id !== 'hn-netanyahu')?.id ?? selectableAgents[0]?.id ?? null
-}
-
-function getDefaultTemplateAgent(): OpenClawAgent {
-  const agents = getSeedAgents()
-  const defaultId = resolveDefaultTemplateAgentId(agents)
-  return agents.find((agent) => agent.id === defaultId) ?? agents[0]!
-}
-
-function makeDefaultParty(agents: OpenClawAgent[]): string[] {
-  const validIds = new Set(agents.map((agent) => agent.id).filter((id) => !isRetiredAgentId(id)))
-  const preferred = DEFAULT_ACTIVE_PARTY_IDS.filter((id) => validIds.has(id))
-  const preferredIds = new Set(preferred)
-  const fillers = agents
-    .map((agent) => agent.id)
-    .filter((id) => validIds.has(id) && !preferredIds.has(id) && id !== 'hn-netanyahu')
-  const fallback = agents
-    .map((agent) => agent.id)
-    .filter((id) => validIds.has(id) && !preferredIds.has(id) && !fillers.includes(id))
-  return [...preferred, ...fillers, ...fallback].slice(0, MAX_PARTY_SIZE)
-}
-
-function sameOrderedIds(left: unknown, right: string[]): boolean {
-  return Array.isArray(left) && left.length === right.length && left.every((id, index) => id === right[index])
-}
-
-function sanitizePartyIds(ids: unknown, agents: OpenClawAgent[]): string[] {
-  if (!Array.isArray(ids)) return makeDefaultParty(agents)
-  const validIds = new Set(agents.map((agent) => agent.id).filter((id) => !isRetiredAgentId(id)))
-  const next: string[] = []
-  for (const id of ids) {
-    if (typeof id !== 'string' || !validIds.has(id) || next.includes(id)) continue
-    next.push(id)
-    if (next.length >= MAX_PARTY_SIZE) break
-  }
-  return next
-}
-
-function normalizeInitialSelection(agents: OpenClawAgent[], selectedAgentId?: unknown, selectedAgentIds?: unknown): Pick<NexusState, 'selectedAgentId' | 'selectedAgentIds'> {
-  const validIds = new Set(agents.map((agent) => agent.id).filter((id) => !isRetiredAgentId(id)))
-  const ids = Array.isArray(selectedAgentIds)
-    ? selectedAgentIds.filter((id, index): id is string => typeof id === 'string' && validIds.has(id) && selectedAgentIds.indexOf(id) === index)
-    : []
-  const id: string | null = typeof selectedAgentId === 'string' && validIds.has(selectedAgentId)
-    ? selectedAgentId
-    : ids[0] ?? null
-
-  if (id && !ids.includes(id)) {
-    return { selectedAgentId: id, selectedAgentIds: [id, ...ids] }
-  }
-
-  return { selectedAgentId: id, selectedAgentIds: ids }
-}
-
-const DEFAULT_AGENT_PORTRAIT_SUFFIXES: Record<string, string[]> = {
-  'hn-netanyahu': ['agents/benjamin-netanyahu.jpg', 'agents/generated/benjamin-netanyahu.jpg'],
-  'hn-commander': ['agents/donald-trump.jpg', 'agents/generated/donald-trump.jpg'],
-  'hn-coordinator': ['agents/sarah-cooper.jpg', 'agents/generated/sarah-cooper.jpg'],
-  'hn-builder': ['agents/james-roberts.jpg', 'agents/generated/james-roberts.jpg'],
-  'hn-reviewer': ['agents/brandon-riley.jpg', 'agents/generated/brandon-riley.jpg'],
-  'hn-crypto-lead': ['agents/marcus-chen.jpg', 'agents/generated/marcus-chen.jpg'],
-  'hn-crypto-technical': ['agents/diana-reyes.jpg', 'agents/generated/diana-reyes.jpg'],
-  'hn-crypto-onchain': ['agents/viktor-volkov.jpg', 'agents/generated/viktor-volkov.jpg'],
-  'hn-crypto-quant': ['agents/aisha-patel.jpg', 'agents/generated/aisha-patel.jpg'],
-  'hn-crypto-sentiment': ['agents/zoe-kim.jpg', 'agents/generated/zoe-kim.jpg'],
-  'hn-buffett': ['agents/warren-buffett.jpg', 'agents/generated/warren-buffett.jpg'],
-  'hn-architect': ['agents/elena-vasquez.svg', 'agents/generated/elena-vasquez.jpg'],
-  'hn-devops': ['agents/marcus-thorne.svg', 'agents/generated/marcus-thorne.jpg'],
-  'hn-fullstack': ['agents/priya-sharma.svg', 'agents/generated/priya-sharma.jpg'],
-  'hn-security': ['agents/thomas-blackwood.svg', 'agents/generated/thomas-blackwood.jpg'],
-  'hn-testing': ['agents/yuki-tanaka.svg', 'agents/generated/yuki-tanaka.jpg'],
-  'hn-ux': ['agents/olivia-chen.svg', 'agents/generated/olivia-chen.jpg'],
-}
-
-function isDefaultAgentPortrait(agentId: string, portrait: string | undefined): boolean {
-  if (!portrait?.trim()) return false
-  const normalized = portrait.trim().replace(/\\/g, '/').replace(/^https?:\/\/[^/]+/i, '')
-  return Boolean(DEFAULT_AGENT_PORTRAIT_SUFFIXES[agentId]?.some((suffix) => normalized.endsWith(suffix)))
-}
-
-function isUsablePortrait(value: string | undefined): value is string {
-  if (!value?.trim()) return false
-  if (value.startsWith('data:')) return /^data:image\/[a-z0-9.+-]+;base64,[a-z0-9+/]+=*$/i.test(value)
-  return true
-}
-
 function portraitFromOverview(entry: PartyOverviewAgent, existing: OpenClawAgent | undefined, seed: OpenClawAgent | undefined): string {
   const candidate = entry.avatar?.trim()
   if (candidate) {
@@ -842,8 +696,6 @@ function shouldUseAdHocCoordinationForPrompt(prompt: string, laneAgents: OpenCla
 /*  Store interface                                                   */
 /* ------------------------------------------------------------------ */
 
-export type AppTab = 'agents' | 'missions' | 'monitor' | 'plugins' | 'settings'
-
 export type RecruitAgentInput = {
   agentId: string
   name: string
@@ -892,35 +744,14 @@ type ClawTalkConsoleEvent = {
   consoleBridgeFinal?: boolean
 }
 
-interface NexusState {
-  /* --- persisted -------------------------------------------------- */
-  agents: OpenClawAgent[]
-  retiredAgentIds: string[]
-  activePartyIds: string[]
-  confirmedPartyIds: string[]
-  missionDraft: MissionDraft
-  missionHistory: MissionRun[]
-  missionReports: MissionReport[]
-
-  /* --- volatile --------------------------------------------------- */
-  tab: AppTab
-  selectedAgentId: string | null
-  selectedAgentIds: string[]
-  isEditorOpen: boolean
-  editingAgentId: string | null
-  activeMission: MissionRun | null
-  missionFeed: MissionEvent[]
-  agentResponses: AgentResponse[]
-  busyAgentIds: string[]
-  operationStates: Record<string, AgentOperationState>
-  sessionWarmAgentIds: string[]
-  agentConfigSaveStatus: Record<string, AgentConfigSaveStatus>
-
+interface NexusCoordinationState {
   /* --- coordination state (volatile) ------------------------------ */
   coordinationMessages: AgentMessage[]
   coordinationDelegations: DelegationRequest[]
   coordinationWorkspace: WorkspaceClaim[]
+}
 
+interface NexusState extends NexusAgentConfigState, NexusMissionState, NexusUiState, NexusRuntimeProjectionState, NexusCommandConsoleResponseState, NexusCoordinationState {
   /* --- actions ---------------------------------------------------- */
   setTab: (tab: AppTab) => void
   syncPartyOverview: () => Promise<void>
@@ -1238,49 +1069,6 @@ function applyLevelGrowth(a: OpenClawAgent, xp: number): OpenClawAgent {
   return { ...a, level: newLv, attributes: { intelligence: g(a.attributes.intelligence, gain), speed: g(a.attributes.speed, gain), precision: g(a.attributes.precision, gain), creativity: g(a.attributes.creativity, gain), stability: g(a.attributes.stability, gain), compute: g(a.attributes.compute, gain), parallelism: g(a.attributes.parallelism, gain) }, performance: { ...a.performance, xp } }
 }
 
-function sanitizeAgentForStore(agent: OpenClawAgent): OpenClawAgent {
-  const pct = (value: number, fallback: number) => clampPercent(value, fallback)
-  const seedPortrait = getSeedAgents().find((s) => s.id === agent.id)?.portrait || ''
-  return withComputedRuntime({
-    ...agent,
-    portrait: isUsablePortrait(agent.portrait)
-      ? agent.portrait
-      : isUsablePortrait(seedPortrait)
-        ? seedPortrait
-        : '',
-    performance: {
-      ...agent.performance,
-      xp: Math.max(0, Math.round(agent.performance.xp || 0)),
-      completedMissions: Math.max(0, Math.round(agent.performance.completedMissions || 0)),
-      failedMissions: Math.max(0, Math.round(agent.performance.failedMissions || 0)),
-      efficiencyAverage: pct(agent.performance.efficiencyAverage, 70),
-      heartbeatStability: pct(agent.performance.heartbeatStability, 70),
-      runtimeEfficiency: pct(agent.performance.runtimeEfficiency, 70),
-      errors: Math.min(99, Math.max(0, Math.round(agent.performance.errors || 0))),
-    },
-  })
-}
-
-function isPersistablePortrait(value: string | undefined): value is string {
-  if (!isUsablePortrait(value)) return false
-  const portrait = value.trim()
-  if (/^(data|blob):/i.test(portrait)) return false
-  return portrait.length <= MAX_PERSISTED_PORTRAIT_LENGTH
-}
-
-function sanitizeAgentForPersistentStore(agent: OpenClawAgent): OpenClawAgent {
-  const sanitized = sanitizeAgentForStore(agent)
-  const seedPortrait = getSeedAgents().find((s) => s.id === agent.id)?.portrait || ''
-  return {
-    ...sanitized,
-    portrait: isPersistablePortrait(sanitized.portrait)
-      ? sanitized.portrait
-      : isPersistablePortrait(seedPortrait)
-        ? seedPortrait
-        : '',
-  }
-}
-
 /* ------------------------------------------------------------------ */
 /*  Initial state factory                                             */
 /* ------------------------------------------------------------------ */
@@ -1345,31 +1133,14 @@ function abortActiveAgentTurns(agentIds: string[]): number {
 }
 
 function makeInitialState() {
-  const agents = getSeedAgents().filter((agent) => !isRetiredAgentId(agent.id)).map(withComputedRuntime)
-  const party = makeDefaultParty(agents)
-  const selection = normalizeInitialSelection(agents)
-  const ops: Record<string, AgentOperationState> = {}
-  for (const a of agents) ops[a.id] = makeDormantState(a.id, a.heartbeat.tickIntervalMs)
+  const agentConfig = makeAgentConfigState()
+  const agents = agentConfig.agents
   return {
-    agents,
-    retiredAgentIds: retiredAgentIdsForStore(),
-    activePartyIds: party,
-    confirmedPartyIds: party,
-    tab: 'agents' as AppTab,
-    selectedAgentId: selection.selectedAgentId,
-    selectedAgentIds: selection.selectedAgentIds,
-    isEditorOpen: false,
-    editingAgentId: null,
-    missionDraft: { ...DEFAULT_MISSION_DRAFT },
-    activeMission: null,
-    missionHistory: [] as MissionRun[],
-    missionFeed: [] as MissionEvent[],
-    missionReports: [] as MissionReport[],
-    agentResponses: [] as AgentResponse[],
-    busyAgentIds: [] as string[],
-    operationStates: ops,
-    sessionWarmAgentIds: [] as string[],
-    agentConfigSaveStatus: {} as Record<string, AgentConfigSaveStatus>,
+    ...agentConfig,
+    ...makeNexusUiState(agents),
+    ...makeMissionState(),
+    ...makeRuntimeProjectionState(agents),
+    ...makeCommandConsoleResponseState(),
     coordinationMessages: [] as AgentMessage[],
     coordinationDelegations: [] as DelegationRequest[],
     coordinationWorkspace: [] as WorkspaceClaim[],
@@ -1386,7 +1157,6 @@ export const useNexusStore = create<NexusState>()(
   persist(
     (set, get) => {
       /* ---- inner types ---- */
-      type ApiRead<T> = { payload?: T; text: string }
       type NestedRuntimePayload = {
         payloads?: Array<{ text?: string }>
         result?: { payloads?: Array<{ text?: string }> }
@@ -1411,15 +1181,7 @@ export const useNexusStore = create<NexusState>()(
         trackMissionCycle?: boolean
         contextAgentIds?: string[]
       }
-      type QueuedCommandConsoleFollowup = {
-        id: string
-        agentId: string
-        prompt: string
-        visiblePrompt: string
-        options: PromptRunOptions
-        queuedAt: string
-        createdAt: number
-      }
+      type QueuedCommandConsoleFollowup = CommandConsoleQueuedFollowup<PromptRunOptions>
       const reportAgentConfigSave: AgentConfigSaveReporter = (agentId, scope, entry) => {
         set((s) => ({
           agentConfigSaveStatus: updateAgentConfigSaveStatus(s.agentConfigSaveStatus, agentId, scope, entry),
@@ -1456,11 +1218,6 @@ export const useNexusStore = create<NexusState>()(
         return null
       }
 
-      const readApi = async <T>(r: Response): Promise<ApiRead<T>> => {
-        const text = await r.text().catch(() => '')
-        if (!text.trim()) return { text }
-        try { return { text, payload: JSON.parse(text) as T } } catch { return { text } }
-      }
       const fallback = (r: Response, text = ''): AT => {
         const lower = text.toLowerCase()
         if (lower.includes('econnrefused') || lower.includes('connect refused') || lower.includes('socket hang up')) {
@@ -1582,8 +1339,6 @@ export const useNexusStore = create<NexusState>()(
           /\b(?:tools?|filesystem|file system|terminal|shell|browser|app-control|app control|runtime|workspace|local files?)\b/.test(value)
         return deniedCapability && toolSurface
       }
-      const commandConsoleSessionKey = (aid: string) => `agent:${aid}:control-center:console`
-
       const recordResponse = (
         aid: string,
         prompt: string,
@@ -1629,7 +1384,7 @@ export const useNexusStore = create<NexusState>()(
               completedAt: meta.completedAt || ts,
               ...(meta.firstTokenAt ? { firstTokenAt: meta.firstTokenAt } : {}),
               tokenCountEstimate: meta.tokenCountEstimate || estimateTokenCount(response),
-            }, ...s.agentResponses].slice(0, MAX_RESPONSES),
+            }, ...s.agentResponses].slice(0, MAX_COMMAND_CONSOLE_RESPONSES),
             missionFeed: [fe, ...s.missionFeed].slice(0, MAX_FEED_EVENTS),
             operationStates: { ...s.operationStates, [aid]: { ...prev, heartbeatStatus: ok ? 'active' as const : prev.heartbeatStatus, currentPhase: ok ? 'Responded' : 'Error', logStream: [`${ok ? 'OK' : 'ERR'} ${new Date(ts).toLocaleTimeString()} ${response.slice(0, 180)}`, ...prev.logStream].slice(0, 28), uptimeMs: prev.uptimeMs + 1000 } },
           }
@@ -1647,51 +1402,6 @@ export const useNexusStore = create<NexusState>()(
             message,
           }, ...s.missionFeed].slice(0, MAX_FEED_EVENTS),
         }))
-      }
-      type BackendMissionStatus = 'active' | 'completed' | 'cancelled'
-      type BackendMission = {
-        id: string
-        idempotencyKey?: string
-        title: string
-        brief: string
-        mode: 'instant' | 'hours' | 'days' | 'weeks' | 'continuous' | 'indefinite'
-        amount: number | null
-        missionType?: string
-        collaborationMode?: string
-        complexity?: number
-        riskTolerance?: number
-        cadenceSeconds?: number
-        startAt: string
-        endAt: string | null
-        status: BackendMissionStatus
-        party: string[]
-        createdAt: string
-        completedAt: string | null
-        progress?: number | null
-        scheduler?: MissionRun['scheduler']
-        lifecycleState?: string
-      }
-      type BackendMissionEvent = {
-        id: string
-        missionId: string
-        at: string
-        type: 'mission_started' | 'agent_assigned' | 'agent_update' | 'mission_completed' | 'mission_cancelled'
-        message: string
-        agentId?: string
-      }
-      type BackendMissionsPayload = {
-        generatedAt?: string
-        missions?: BackendMission[]
-        feed?: BackendMissionEvent[]
-        events?: unknown[]
-        reports?: MissionReport[]
-        projection?: {
-          source?: string
-          missionCount?: number
-          activeMissionCount?: number
-          durableRecordCount?: number
-          memoryRecordCount?: number
-        }
       }
       const backendMissionStatusToRunStatus = (mission: BackendMission): MissionRun['status'] => {
         if (mission.lifecycleState === 'failed') return 'failed'
@@ -1747,7 +1457,7 @@ export const useNexusStore = create<NexusState>()(
         }
       }
       const syncBackendMissions = async () => {
-        const result = await apiRequest<BackendMissionsPayload>('/api/missions/projection')
+        const result = await fetchMissionProjection()
         if (!result.ok) throw new Error(apiErrorMessage(result.error))
         const payload = result.data || {}
         const backendMissions = payload.missions || []
@@ -2212,7 +1922,7 @@ export const useNexusStore = create<NexusState>()(
             return {
               agentResponses: existing
                 ? s.agentResponses.map((entry) => (entry.id === liveResponseId ? next : entry))
-                : [next, ...s.agentResponses].slice(0, MAX_RESPONSES),
+                : [next, ...s.agentResponses].slice(0, MAX_COMMAND_CONSOLE_RESPONSES),
             }
           })
         }
@@ -2315,7 +2025,7 @@ export const useNexusStore = create<NexusState>()(
             return {
               agentResponses: existing
                 ? s.agentResponses.map((entry) => (entry.id === liveResponseId ? next : entry))
-                : [next, ...s.agentResponses].slice(0, MAX_RESPONSES),
+                : [next, ...s.agentResponses].slice(0, MAX_COMMAND_CONSOLE_RESPONSES),
               missionFeed: [fe, ...s.missionFeed].slice(0, MAX_FEED_EVENTS),
               operationStates: {
                 ...s.operationStates,
@@ -2330,14 +2040,7 @@ export const useNexusStore = create<NexusState>()(
             }
           })
         }
-        const parseControlStream = async (res: Response): Promise<{ payload: AT; responseOk: boolean; streamed: boolean }> => {
-          if (!res.body) {
-            const read = await readApi<AT>(res)
-            return { payload: read.payload || fallback(res, read.text), responseOk: res.ok, streamed: false }
-          }
-          const reader = res.body.getReader()
-          const decoder = new TextDecoder()
-          const sseParser = createSseFrameParser()
+        const createControlStreamProjector = () => {
           let accumulated = ''
           let finalPayload: AT | null = null
           let liveStarted = false
@@ -2490,21 +2193,20 @@ export const useNexusStore = create<NexusState>()(
               }
             }
           }
-          while (true) {
-            const { done, value } = await reader.read()
-            if (done) break
-            for (const frame of sseParser.push(decoder.decode(value, { stream: true }))) consumeFrame(frame.event, frame.data)
+          const complete = (res: Response): { payload: AT; responseOk: boolean; streamed: boolean } => {
+            const payload: AT = finalPayload || { ok: false, reply: accumulated || 'Streaming response ended without a final payload.', code: 1 }
+            const finalText = accumulated || extractOutput(payload)
+            liveResponseModelId = modelIdFromTurnPayload(payload) || liveResponseModelId
+            liveTransport = transportFromTurnPayload(payload) || liveTransport
+            liveBuffered = bufferedFromTurnPayload(payload) || liveBuffered
+            const failureKind = typeof payload.failureKind === 'string' ? payload.failureKind : (!payload.ok ? inferFailureKind(finalText) : undefined)
+            if (liveStarted) upsertLiveResponse(finalText, !!payload.ok, Date.now() - start, false, liveResponseModelId, failureKind)
+            return { payload: { ...payload, reply: finalText }, responseOk: res.ok, streamed: liveStarted }
           }
-          for (const frame of sseParser.push(decoder.decode())) consumeFrame(frame.event, frame.data)
-          for (const frame of sseParser.flush()) consumeFrame(frame.event, frame.data)
-          const payload: AT = finalPayload || { ok: false, reply: accumulated || 'Streaming response ended without a final payload.', code: 1 }
-          const finalText = accumulated || extractOutput(payload)
-          liveResponseModelId = modelIdFromTurnPayload(payload) || liveResponseModelId
-          liveTransport = transportFromTurnPayload(payload) || liveTransport
-          liveBuffered = bufferedFromTurnPayload(payload) || liveBuffered
-          const failureKind = typeof payload.failureKind === 'string' ? payload.failureKind : (!payload.ok ? inferFailureKind(finalText) : undefined)
-          if (liveStarted) upsertLiveResponse(finalText, !!payload.ok, Date.now() - start, false, liveResponseModelId, failureKind)
-          return { payload: { ...payload, reply: finalText }, responseOk: res.ok, streamed: liveStarted }
+          return {
+            onFrame: consumeFrame,
+            complete,
+          }
         }
         const postJson = async (msg: string, forceOpenClawRuntime = false): Promise<{ payload: AT; responseOk: boolean; streamed: boolean }> => {
           const controller = new AbortController()
@@ -2553,11 +2255,9 @@ export const useNexusStore = create<NexusState>()(
           const requestTimeoutMs = 6 * 60 * 60 * 1000
           const timer = window.setTimeout(() => controller.abort(), requestTimeoutMs)
           try {
-            const res = await fetch(apiUrl('/api/openclaw/agent-turn/stream'), {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              signal: controller.signal,
-              body: JSON.stringify({
+            const streamProjector = createControlStreamProjector()
+            return await sendStreamingAgentTurn(
+              {
                 agent: aid,
                 message: msg,
                 intentMessage,
@@ -2568,12 +2268,14 @@ export const useNexusStore = create<NexusState>()(
                 attachments: options.attachments || [],
                 ...(sessionKey ? { sessionKey } : {}),
                 ...(forceOpenClawRuntime ? { forceOpenClawRuntime: true } : {}),
-              }),
-            })
-            const contentType = res.headers.get('content-type') || ''
-            if (res.body && contentType.includes('text/event-stream')) return await parseControlStream(res)
-            const read = await readApi<AT>(res)
-            return { payload: read.payload || fallback(res, read.text), responseOk: res.ok, streamed: false }
+              },
+              {
+               signal: controller.signal,
+                onFrame: (frame) => streamProjector.onFrame(frame.event, frame.data),
+                onStreamComplete: streamProjector.complete,
+                fallbackPayload: fallback,
+              },
+            )
           } catch (streamError) {
             if (controller.signal.aborted) throw streamError
             try {
@@ -2816,24 +2518,9 @@ export const useNexusStore = create<NexusState>()(
         set((s) => ({
           agentResponses: s.agentResponses.map((entry) => {
             if (entry.id !== queuedId) return entry
-            const queuedAtMs = new Date(entry.queuedAt || entry.timestamp).getTime()
-            const durationMs = Number.isFinite(queuedAtMs) ? Math.max(0, Date.now() - queuedAtMs) : entry.durationMs
-            return { ...entry, durationMs, ...patch }
+            return applyQueuedCommandConsoleResponsePatch(entry, patch)
           }),
         }))
-      }
-
-      const queueProgressLines = (position: number, depth: number): string[] => {
-        if (position <= 1) {
-          return [
-            `Queue position 1 of ${depth}.`,
-            'This turn is next; it will start when the active lane is free.',
-          ]
-        }
-        return [
-          `Queue position ${position} of ${depth}.`,
-          `${position - 1} queued turn${position === 2 ? '' : 's'} ahead.`,
-        ]
       }
 
       const refreshQueuedCommandConsolePositions = (agentId: string) => {
@@ -2965,7 +2652,6 @@ export const useNexusStore = create<NexusState>()(
           const options = optionsForAgent(agent, index)
           const runPrompt = promptForAgent?.(agent, index) || normalizedPrompt
           const visiblePrompt = promptWithAttachmentNames(options.displayPrompt || normalizedPrompt, attachments)
-          const response = `Queued behind ${agent.name}'s active Command Console turn. This follow-up will start automatically when the lane is free.`
           const queued: QueuedCommandConsoleFollowup = {
             id: crypto.randomUUID(),
             agentId: agent.id,
@@ -2975,45 +2661,22 @@ export const useNexusStore = create<NexusState>()(
             queuedAt,
             createdAt: Date.now(),
           }
-          const activity: AgentActivityEvent = {
-            id: crypto.randomUUID(),
-            type: 'run.queued',
-            label: 'Queued behind active Command Console turn.',
-            rawSource: `control-center.command-console.${sourceLabel}.queue`,
-            timestamp: queuedAt,
-            severity: 'info',
-            surface: 'activity',
-            collapsed: false,
-            dedupeKey: `run.queued:${queued.id}`,
-          }
           const queue = queuedCommandConsoleFollowups.get(agent.id) || []
           const queuePosition = queue.length + 1
           const missionId = get().activeMission?.id
-          const entry: AgentResponse = {
-            id: queued.id,
-            ...(missionId ? { missionId } : {}),
+          const entry = createQueuedCommandConsoleResponse({
+            queuedId: queued.id,
             agentId: agent.id,
-            prompt: visiblePrompt,
-            response,
-            ok: true,
-            timestamp: queuedAt,
-            durationMs: 0,
-            streaming: true,
-            transport: 'command-console-queue',
+            agentName: agent.name,
+            visiblePrompt,
+            missionId,
             queuedAt,
-            startedAt: queuedAt,
             queuePosition,
-            queueDepth: queuePosition,
-            progressLabel: queuePosition === 1 ? 'Queued next' : `Queued ${queuePosition}/${queuePosition}`,
-            progressMode: 'progress',
-            progressLines: queueProgressLines(queuePosition, queuePosition),
-            progressUpdatedAt: queuedAt,
-            tokenCountEstimate: estimateTokenCount(response),
-            activity: [activity],
-          }
+            sourceLabel,
+          })
           queue.push(queued)
           queuedCommandConsoleFollowups.set(agent.id, queue)
-          set((s) => ({ agentResponses: [entry, ...s.agentResponses].slice(0, MAX_RESPONSES) }))
+          set((s) => ({ agentResponses: [entry, ...s.agentResponses].slice(0, MAX_COMMAND_CONSOLE_RESPONSES) }))
           refreshQueuedCommandConsolePositions(agent.id)
           drainQueuedCommandConsoleFollowups(agent.id)
         }
@@ -3299,18 +2962,7 @@ export const useNexusStore = create<NexusState>()(
             if (key.startsWith(`${normalized}:`)) agentConfigPatchSaveSeq.delete(key)
           }
 
-          if (typeof window !== 'undefined') {
-            try {
-              for (let i = localStorage.length - 1; i >= 0; i -= 1) {
-                const key = localStorage.key(i)
-                if (key?.startsWith('dystopai:command-draft:') && key.includes(normalized)) {
-                  localStorage.removeItem(key)
-                }
-              }
-            } catch {
-              // Draft cleanup is best-effort; retirement state is already persisted by the API.
-            }
-          }
+          removeCommandConsoleDraftsForAgent(normalized)
 
           const activeMissionUsesAgent = get().activeMission?.selectedAgents.includes(normalized)
           if (activeMissionUsesAgent) {
@@ -3330,7 +2982,7 @@ export const useNexusStore = create<NexusState>()(
             delete operationStates[normalized]
             const agentConfigSaveStatus = { ...s.agentConfigSaveStatus }
             delete agentConfigSaveStatus[normalized]
-            const selected = normalizeInitialSelection(
+            const selected = normalizeNexusSelection(
               agents,
               s.selectedAgentId === normalized ? undefined : s.selectedAgentId,
               s.selectedAgentIds.filter((id) => id !== normalized),
@@ -3501,21 +3153,18 @@ export const useNexusStore = create<NexusState>()(
 
             void (async () => {
               try {
-                const result = await apiRequest<{ ok?: boolean; deduped?: boolean; idempotencyKey?: string | null; mission?: BackendMission; error?: string; detail?: unknown }>('/api/missions/start', {
-                  method: 'POST',
-                  body: {
-                    idempotencyKey: requestId,
-                    title: draft.title,
-                    brief: draft.description,
-                    party: candidateAgents.map((agent) => agent.id),
-                    mode: backendMode,
-                    amount: backendMode === 'hours' || backendMode === 'days' || backendMode === 'weeks' ? draft.durationValue : null,
-                    missionType: draft.missionType,
-                    collaborationMode: draft.collaborationMode,
-                    complexity: draft.complexity,
-                    riskTolerance: draft.riskTolerance,
-                    cadenceSeconds,
-                  },
+                const result = await requestMissionStart({
+                  idempotencyKey: requestId,
+                  title: draft.title,
+                  brief: draft.description,
+                  party: candidateAgents.map((agent) => agent.id),
+                  mode: backendMode,
+                  amount: backendMode === 'hours' || backendMode === 'days' || backendMode === 'weeks' ? draft.durationValue : null,
+                  missionType: draft.missionType,
+                  collaborationMode: draft.collaborationMode,
+                  complexity: draft.complexity,
+                  riskTolerance: draft.riskTolerance,
+                  cadenceSeconds,
                 })
                 if (!result.ok) throw new Error(apiErrorMessage(result.error))
                 const out = result.data
@@ -3574,11 +3223,7 @@ export const useNexusStore = create<NexusState>()(
           if (!current) return
           void (async () => {
             try {
-              const result = await apiRequest('/api/missions/stop', {
-                method: 'POST',
-                body: { missionId: current.id },
-                timeoutMs: 120_000,
-              })
+              const result = await requestMissionStop(current.id)
               if (!result.ok) throw new Error(apiErrorMessage(result.error))
               await syncBackendMissions().catch(() => undefined)
             } catch (error) {
@@ -3897,7 +3542,7 @@ export const useNexusStore = create<NexusState>()(
             return {
               agentResponses: existing
                 ? s.agentResponses.map((entry) => (entry.id === responseId ? next : entry))
-                : [next, ...s.agentResponses].slice(0, MAX_RESPONSES),
+                : [next, ...s.agentResponses].slice(0, MAX_COMMAND_CONSOLE_RESPONSES),
               ...(missionEvent ? { missionFeed: [missionEvent, ...s.missionFeed].slice(0, MAX_FEED_EVENTS) } : {}),
               operationStates: {
                 ...s.operationStates,
@@ -4202,9 +3847,8 @@ export const useNexusStore = create<NexusState>()(
           dispatchNextWorkerCycleFn = null
           refreshLoopDelegationsFn = null
           set((s) => {
-            const ops: Record<string, AgentOperationState> = {}; for (const a of s.agents) ops[a.id] = makeDormantState(a.id, a.heartbeat.tickIntervalMs)
-            const selected = normalizeInitialSelection(s.agents, s.selectedAgentId, s.selectedAgentIds)
-            return { activeMission: null, missionHistory: [], missionFeed: [], missionReports: [], agentResponses: [], busyAgentIds: [], operationStates: ops, coordinationMessages: [], coordinationDelegations: [], coordinationWorkspace: [], ...selected }
+            const selected = normalizeNexusSelection(s.agents, s.selectedAgentId, s.selectedAgentIds)
+            return { ...makeRuntimeProjectionState(s.agents), ...makeCommandConsoleResponseState(), missionHistory: [], missionReports: [], coordinationMessages: [], coordinationDelegations: [], coordinationWorkspace: [], ...selected }
           })
         },
       }
@@ -4212,62 +3856,9 @@ export const useNexusStore = create<NexusState>()(
     {
       name: NEXUS_STORAGE_KEY,
       storage: createJSONStorage(makeQuotaSafeLocalStorage),
-      merge: (persisted, current) => {
-        const data = persisted as Partial<NexusState> & { _version?: number }
-        rememberRetiredAgentIds(data.retiredAgentIds)
-        const seedAgents = getSeedAgents()
-        // Discard persisted data without version stamp or from older versions
-        if (!data._version || data._version < 3) {
-          return current
-        }
-        // Merge persisted agents with seeds: keep custom portraits, but refresh known seed defaults.
-        const seedIds = new Set(seedAgents.map((seed) => seed.id))
-        const persistedAgents = (data.agents || []).filter((agent) => !isRetiredAgentId(agent.id))
-        const merged = { ...current, ...data, agents: [
-          ...seedAgents.map((seed) => {
-            const existing = persistedAgents.find((a: OpenClawAgent) => a.id === seed.id)
-            if (!existing) return seed
-            const keepSeedPortrait = isDefaultAgentPortrait(seed.id, existing.portrait)
-            return sanitizeAgentForStore({ ...seed, ...existing, portrait: keepSeedPortrait ? seed.portrait : existing.portrait })
-          }),
-          ...persistedAgents.filter((agent: OpenClawAgent) => !seedIds.has(agent.id)).map(sanitizeAgentForStore),
-        ]}
-        const agents = merged.agents.map(sanitizeAgentForStore).filter((agent) => !isRetiredAgentId(agent.id))
-        const activePartyIds = sameOrderedIds(merged.activePartyIds, LEGACY_DEFAULT_PARTY_IDS)
-          ? makeDefaultParty(agents)
-          : sanitizePartyIds(merged.activePartyIds, agents)
-        const confirmedPartyIds = sameOrderedIds(merged.confirmedPartyIds, LEGACY_DEFAULT_PARTY_IDS)
-          ? makeDefaultParty(agents)
-          : sanitizePartyIds(merged.confirmedPartyIds, agents)
-        const selection = normalizeInitialSelection(agents)
-        return {
-          ...merged,
-          agents,
-          retiredAgentIds: retiredAgentIdsForStore(),
-          activePartyIds,
-          confirmedPartyIds,
-          ...selection,
-          missionHistory: (merged.missionHistory || []).slice(0, MAX_HISTORY),
-          missionReports: (merged.missionReports || []).slice(0, MAX_REPORTS),
-          agentResponses: current.agentResponses,
-          missionFeed: current.missionFeed,
-          busyAgentIds: current.busyAgentIds,
-          operationStates: current.operationStates,
-          sessionWarmAgentIds: [],
-          agentConfigSaveStatus: {},
-        }
-      },
+      merge: mergeNexusPersistedState,
       // Persist operator configuration and completed mission summaries; keep active runtime state volatile.
-      partialize: (s) => ({
-        _version: 5,
-        retiredAgentIds: s.retiredAgentIds,
-        agents: s.agents.filter((agent) => !isRetiredAgentId(agent.id)).map(sanitizeAgentForPersistentStore),
-        activePartyIds: s.activePartyIds.filter((id) => !isRetiredAgentId(id)),
-        confirmedPartyIds: s.confirmedPartyIds.filter((id) => !isRetiredAgentId(id)),
-        missionDraft: s.missionDraft,
-        missionHistory: s.missionHistory.slice(0, MAX_HISTORY),
-        missionReports: s.missionReports.slice(0, MAX_REPORTS),
-      }),
+      partialize: partializeNexusPersistedState,
     },
   ),
 )

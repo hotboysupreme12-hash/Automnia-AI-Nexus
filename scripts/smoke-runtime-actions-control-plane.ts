@@ -35,6 +35,7 @@ const runtimeHook = readWorkspaceFile('src/hooks/useRuntimeStatus.ts')
 const liveMonitor = readWorkspaceFile('src/components/monitor/LiveOperationMonitor.tsx')
 const editor = readWorkspaceFile('src/components/editor/AgentEditorModal.tsx')
 const store = readWorkspaceFile('src/store/nexusStore.ts')
+const agentTurnsApi = readWorkspaceFile('src/api/agentTurns.ts')
 const packageJson = JSON.parse(readWorkspaceFile('package.json')) as { scripts?: Record<string, string> }
 
 for (const code of [
@@ -202,11 +203,12 @@ assert(!editor.includes('readJsonResponse'), 'AgentEditorModal should not keep a
 assert(!editor.includes('fetch(apiUrl(path)'), 'AgentEditorModal should not use direct fetch for models')
 
 const storeFetchMatches = [...store.matchAll(/\bfetch\s*\(/g)]
-assert(storeFetchMatches.length === 1, `nexusStore should keep exactly one direct fetch for SSE, found ${storeFetchMatches.length}`)
+assert(storeFetchMatches.length === 0, `nexusStore should not own direct fetch calls after renderer API extraction, found ${storeFetchMatches.length}`)
 assert(
-  store.includes("fetch(apiUrl('/api/openclaw/agent-turn/stream')"),
-  'the remaining nexusStore direct fetch should be the SSE agent-turn stream',
+  agentTurnsApi.includes("fetch(apiUrl('/api/openclaw/agent-turn/stream')"),
+  'SSE agent-turn endpoint should live in src/api/agentTurns.ts',
 )
+assert(store.includes('sendStreamingAgentTurn('), 'nexusStore should delegate SSE agent-turn transport to src/api/agentTurns.ts')
 
 assert(
   packageJson.scripts?.['smoke:runtime-actions-control-plane'] === 'tsx scripts/smoke-runtime-actions-control-plane.ts',

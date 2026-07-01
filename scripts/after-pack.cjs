@@ -48,6 +48,34 @@ function installWindowsElectronLauncher(root, context) {
   console.log(`[afterPack] built Windows launcher -> ${launcherTarget}`)
 }
 
+function copyDirectorySync(source, target, label) {
+  fs.rmSync(target, { recursive: true, force: true })
+  fs.mkdirSync(path.dirname(target), { recursive: true })
+
+  if (process.platform === 'win32') {
+    const result = spawnSync('robocopy', [
+      source,
+      target,
+      '/E',
+      '/NFL',
+      '/NDL',
+      '/NJH',
+      '/NJS',
+      '/NP',
+      '/R:2',
+      '/W:1',
+    ], {
+      encoding: 'utf8',
+      windowsHide: true,
+    })
+    const status = result.status ?? 16
+    if (status < 8) return
+    throw new Error(`[afterPack] ${label} copy failed via robocopy (${status}):\n${result.stdout || ''}\n${result.stderr || ''}`)
+  }
+
+  fs.cpSync(source, target, { recursive: true })
+}
+
 function copyBundledExtensionSkills(root, resourcesDir) {
   const extensionsSource = path.join(root, 'vendor', 'openclaw', 'dist', 'extensions')
   const extensionsTarget = path.join(resourcesDir, 'openclaw', 'dist', 'extensions')
@@ -61,9 +89,7 @@ function copyBundledExtensionSkills(root, resourcesDir) {
     const skillSource = path.join(extensionsSource, entry.name, 'skills')
     if (!fs.existsSync(skillSource)) continue
     const skillTarget = path.join(extensionsTarget, entry.name, 'skills')
-    fs.rmSync(skillTarget, { recursive: true, force: true })
-    fs.mkdirSync(path.dirname(skillTarget), { recursive: true })
-    fs.cpSync(skillSource, skillTarget, { recursive: true })
+    copyDirectorySync(skillSource, skillTarget, `${entry.name} extension skills`)
     copied.push(entry.name)
   }
 
@@ -79,9 +105,7 @@ function copyBundledNodeToolchain(root, resourcesDir) {
     throw new Error(`[afterPack] Missing bundled Node/npm toolchain at ${source}; run npm run prepare:runtime-bundles first.`)
   }
 
-  fs.rmSync(target, { recursive: true, force: true })
-  fs.mkdirSync(path.dirname(target), { recursive: true })
-  fs.cpSync(source, target, { recursive: true })
+  copyDirectorySync(source, target, 'Node/npm toolchain')
   console.log(`[afterPack] bundled Node/npm toolchain -> ${target}`)
 }
 
@@ -99,9 +123,7 @@ function copyBundledCodexPlugin(root, resourcesDir) {
     throw new Error(`[afterPack] Missing bundled Codex plugin artifact at ${missing}; run npm run prepare:runtime-bundles first.`)
   }
 
-  fs.rmSync(target, { recursive: true, force: true })
-  fs.mkdirSync(path.dirname(target), { recursive: true })
-  fs.cpSync(source, target, { recursive: true })
+  copyDirectorySync(source, target, 'Codex plugin')
   console.log(`[afterPack] bundled Codex plugin -> ${target}`)
 }
 
@@ -124,12 +146,8 @@ module.exports = async function afterPack(context) {
     throw new Error(`[afterPack] Missing vendored OpenClaw docs templates at ${docsSource}`)
   }
 
-  fs.rmSync(target, { recursive: true, force: true })
-  fs.rmSync(docsTarget, { recursive: true, force: true })
-  fs.mkdirSync(path.dirname(target), { recursive: true })
-  fs.mkdirSync(path.dirname(docsTarget), { recursive: true })
-  fs.cpSync(source, target, { recursive: true })
-  fs.cpSync(docsSource, docsTarget, { recursive: true })
+  copyDirectorySync(source, target, 'OpenClaw node_modules')
+  copyDirectorySync(docsSource, docsTarget, 'OpenClaw docs templates')
   copyBundledExtensionSkills(root, resourcesDir)
   copyBundledNodeToolchain(root, resourcesDir)
   copyBundledCodexPlugin(root, resourcesDir)

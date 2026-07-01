@@ -1,40 +1,7 @@
-export type PluginConfigField = {
-  key: string
-  label: string
-  path?: string
-  envVar?: string
-  providerId?: string
-  secret: boolean
-  required: boolean
-  present: boolean
-  acceptsDirectSave: boolean
-  help?: string
-}
+import type { PluginEntry } from '../../api/plugins'
 
-export type PluginPageEntry = {
-  id: string
-  name: string
-  description: string
-  icon?: string
-  systemImage?: string
-  packageName?: string
-  installSpec?: string
-  origin: string
-  status: string
-  enabled: boolean
-  configuredEnabled: boolean | null
-  runtimeLoaded?: boolean
-  managed?: boolean
-  category: string
-  commands: string[]
-  providers: string[]
-  channels: string[]
-  missingDependencies: string[]
-  configFields: PluginConfigField[]
-  guidance: string[]
-  needsSetup: boolean
-  restartRequired: boolean
-}
+export type { PluginConfigField } from '../../api/plugins'
+export type PluginPageEntry = PluginEntry
 
 export type PluginPageStateKey =
   | 'configured'

@@ -123,11 +123,15 @@ const reportPanelSource = readFileSync(join(rootDir, 'src/components/monitor/Mis
 assert.match(reportPanelSource, /Unavailable/, 'mission report UI must display unavailable metrics explicitly')
 
 const storeSource = readFileSync(join(rootDir, 'src/store/nexusStore.ts'), 'utf8')
+const missionStateSource = readFileSync(join(rootDir, 'src/store/missionState.ts'), 'utf8')
+const nexusPersistenceSource = readFileSync(join(rootDir, 'src/store/nexusPersistence.ts'), 'utf8')
 assert.match(storeSource, /backendMissionIds = new Set\(backendMissions\.map/, 'backend mission ids must be tracked when merging backend reports')
 assert.doesNotMatch(storeSource, /generatedReports/, 'backend-controlled missions must not synthesize renderer-generated reports')
 assert.doesNotMatch(storeSource, /buildMissionReport\(\{ mission, responses: s\.agentResponses, feed: missionFeed \}\)/, 'backend projection sync must not generate reports from local renderer feed')
 assert.doesNotMatch(storeSource, /MissionOrchestrator|orchestrator/, 'renderer store must not own mission lifecycle through MissionOrchestrator')
-assert.match(storeSource, /missionReports:\s*s\.missionReports\.slice\(0,\s*MAX_REPORTS\)/, 'completed mission reports must persist across restarts')
+assert.match(storeSource, /partialize: partializeNexusPersistedState/, 'renderer store must delegate persisted mission reports through the nexus persistence helper')
+assert.match(nexusPersistenceSource, /partializeMissionState\(state\)/, 'nexus persistence must persist completed mission reports through the mission state helper')
+assert.match(missionStateSource, /missionReports:\s*state\.missionReports\.slice\(0,\s*MAX_REPORTS\)/, 'completed mission reports must persist across restarts')
 assert.doesNotMatch(storeSource, /fetch\(apiUrl\('\/api\/missions(?:\/start|\/stop)?'/, 'mission lifecycle calls must use the authenticated API client')
 
 const packageJson = JSON.parse(readFileSync(join(rootDir, 'package.json'), 'utf8')) as { scripts?: Record<string, string> }

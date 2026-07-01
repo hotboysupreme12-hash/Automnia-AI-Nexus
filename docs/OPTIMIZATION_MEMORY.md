@@ -1,6 +1,6 @@
 # DystopAI Optimization Memory
 
-Last updated: 2026-06-30
+Last updated: 2026-07-01
 
 ## Source Of Truth
 
@@ -744,15 +744,255 @@ split plan before implementation:
   `/api/openclaw/agent-turn/stream`. The remaining store-owned JSON API calls
   are mission projection/start/stop, which are the next Phase H extraction
   target.
-- Phase H items `76` and `77` are complete and verified.
+- Phase H mission API extraction is complete with item `78`:
+  `src/api/missions.ts` owns the mission projection, start, and stop renderer
+  API helpers plus the backend mission wire payload types. `src/store/nexusStore.ts`
+  delegates mission requests through that module while preserving backend
+  projection merge semantics, recovered failed lifecycle projection, report
+  retention, and mission polling. Mission source smokes now assert API
+  ownership in `src/api/missions.ts` and renderer projection behavior in the
+  store.
+- The renderer store boundary was ratcheted after item `78`:
+  `scripts/smoke-renderer-store-boundary.ts` now pins `nexusStore` at `4,229`
+  logical lines, `0` store-owned `apiRequest` call lines, `1` store-owned
+  `/api/` path literal line, and exactly one direct SSE `fetch` for
+  `/api/openclaw/agent-turn/stream`. The remaining direct backend call in the
+  store is the agent-turn SSE stream.
+- Phase H agent-turn stream API extraction is complete with item `79`:
+  `src/api/agentTurns.ts` owns `sendStreamingAgentTurn(...)` for the
+  `/api/openclaw/agent-turn/stream` renderer SSE request, event-stream
+  detection, shared `createSseFrameParser()` frame iteration, and non-SSE
+  JSON/text fallback handling. `src/store/nexusStore.ts` delegates streaming
+  transport through that helper and keeps only the live UI projection callbacks
+  for `start`, `status`, `progress`, `delta`, `error`, and `final` frames.
+- The renderer store boundary was ratcheted after item `79`:
+  `scripts/smoke-renderer-store-boundary.ts` now pins `nexusStore` at `4,214`
+  logical lines, `0` store-owned `apiRequest` call lines, `0` store-owned
+  `/api/` path literal lines, and `0` direct fetches.
+- Phase H provider auth API extraction is complete with item `80`:
+  `src/api/providerAuth.ts` owns renderer provider-auth status reads, API-key
+  saves, OAuth session start/poll/manual completion helpers, safe provider
+  status filtering, provider auth labels, auth kind labels, and OpenAI Codex
+  effective-auth fallback behavior. `ProviderAuthModal`, `AgentEditorModal`,
+  `ModelSelectorModal`, and `RecruitAgentModal` now call those helpers instead
+  of owning `/api/auth/providers` endpoint literals.
+- The provider/auth source smokes were updated after item `80`:
+  `smoke:auth-provider-model`, `smoke:auth`, `smoke:config-save`, and
+  `smoke:renderer-store-boundary` now assert `src/api/providerAuth.ts` as the
+  renderer provider-auth API boundary and prove the components no longer own
+  provider-auth endpoint literals. Full `npm test` passes with `174` unit tests
+  and the complete CI smoke chain.
+- Phase H plugin API extraction is complete with item `81`:
+  `src/api/plugins.ts` owns renderer plugin wire contracts and helpers for
+  plugin list/refresh, ClawHub search, install, enable/disable, update,
+  update-all, runtime inspect, Gateway restart, uninstall, direct plugin setup
+  saves, ClawTalk setup, and the plugin-panel OpenClaw command runner.
+  `PluginsPanel` now delegates plugin transport through those helpers while
+  preserving plugin cache updates, beta-state filters, setup modal behavior,
+  install/update/remove notices, runtime inspect projection, Gateway restart
+  notices, and OpenClaw command output handling.
+- The plugin source smokes were updated after item `81`:
+  `smoke:plugins-control-plane`, `smoke:openclaw-command-control-plane`, and
+  `smoke:renderer-store-boundary` now assert `src/api/plugins.ts` as the
+  renderer plugin API boundary and prove `PluginsPanel` no longer owns plugin
+  endpoint literals or direct JSON API calls. Full `npm test` passes with `174`
+  unit tests and the complete CI smoke chain.
+- Phase H UI/runtime projection state split is complete with item `82`:
+  `src/store/nexusUiState.ts` owns `AppTab`, selected-agent state, tab state,
+  editor-open state, and selection normalization. `src/store/runtimeProjectionState.ts`
+  owns active mission projection, mission feed, agent responses, busy agents,
+  operation states, session warm state, and agent config save-status projection
+  helpers. `src/store/nexusStore.ts` now composes persisted, UI-only, runtime
+  projection, and coordination interfaces while preserving the existing
+  persisted local-storage shape.
+- The renderer store boundary was ratcheted after item `82`:
+  `scripts/smoke-renderer-store-boundary.ts` now pins `nexusStore` at `4,149`
+  logical lines, `0` store-owned `apiRequest` call lines, `0` store-owned
+  `/api/` path literal lines, and `0` direct fetches. It also asserts the UI
+  module does not own runtime projection fields, the runtime projection module
+  does not own UI fields, and `tests/nexusStoreStateSplit.test.ts` covers the
+  split. `smoke:config-save` now follows the moved config save-status types to
+  `src/store/runtimeProjectionState.ts`. Full `npm test` passes with `177`
+  unit tests and the complete CI smoke chain.
+- Phase H agent config and mission state split is complete with item `83`:
+  `src/store/agentConfigState.ts` owns renderer agent roster, retired-agent
+  state, active/confirmed party state, seed/default-party helpers, party
+  sanitization, portrait persistence sanitization, and agent-config
+  merge/partialize helpers. `src/store/missionState.ts` owns persisted mission
+  draft, mission history, mission reports, trim limits, and mission
+  merge/partialize helpers. `src/store/nexusStore.ts` now composes
+  `NexusAgentConfigState` and `NexusMissionState` separately from UI-only,
+  runtime projection, and coordination state while preserving the existing
+  local-storage payload shape.
+- The renderer store boundary was ratcheted after item `83`:
+  `scripts/smoke-renderer-store-boundary.ts` now pins `nexusStore` at `3,936`
+  logical lines, `0` store-owned `apiRequest` call lines, `0` store-owned
+  `/api/` path literal lines, and `0` direct fetches. It asserts
+  `src/store/agentConfigState.ts` and `src/store/missionState.ts` own separate
+  state boundaries, and `tests/nexusStoreStateSplit.test.ts` now covers
+  agent-config construction/hydration and mission-state construction/trimming.
+  Full `npm test` passes with `180` unit tests and the complete CI smoke chain.
+- Phase H command-console draft and response state split is complete with item
+  `84`: `src/store/commandConsoleState.ts` owns command-console draft storage
+  keys, draft read/write/remove helpers, retired-agent draft cleanup,
+  command-console response/busy-lane state, session keys, queue progress labels,
+  queued response projection, and queued response duration patching.
+  `src/store/runtimeProjectionState.ts` no longer owns `agentResponses` or
+  `busyAgentIds`, and `src/components/monitor/AgentResponseConsole.tsx` no
+  longer owns command draft localStorage access.
+- The renderer store boundary was ratcheted after item `84`:
+  `scripts/smoke-renderer-store-boundary.ts` now pins `nexusStore` at `3,889`
+  logical lines, `0` store-owned `apiRequest` call lines, `0` store-owned
+  `/api/` path literal lines, and `0` direct fetches. It asserts
+  `commandConsoleState.ts` owns draft/response helpers and
+  `tests/nexusStoreStateSplit.test.ts` covers command-console draft and queued
+  response behavior. Full `npm test` passes with `184` unit tests and the
+  complete CI smoke chain.
+- Phase H persisted-state migration coverage is complete with item `85`:
+  `src/store/nexusPersistence.ts` owns the `nexus-v10` storage key, current
+  persisted payload version `5`, minimum accepted version `3`, persisted-state
+  merge, and persisted payload partialization. `src/store/nexusStore.ts`
+  delegates Zustand `merge` and `partialize` through that module, keeping
+  persistence behavior testable without mounting the store.
+- The renderer store boundary was pinned after item `85`:
+  `scripts/smoke-renderer-store-boundary.ts` now asserts
+  `nexusPersistence.ts` owns version gates, split-module hydration,
+  runtime/command-console volatile preservation, and compact partialization.
+  `tests/nexusStoreStateSplit.test.ts` covers missing/stale persisted version
+  rejection, legacy default-party migration, mission history/report trimming,
+  volatile runtime and command-console preservation, and compact `nexus-v10`
+  payload keys. Full `npm test` passes with `187` unit tests and the complete
+  CI smoke chain.
+- Phase H items `76`, `77`, `78`, `79`, `80`, `81`, `82`, `83`, `84`, and `85` are complete and verified.
+- Phase I UI cleanup is complete with items `86-95`:
+  `src/dystopai-app-theme.css` now stops at
+  `95-typography-polish.css`, the former late
+  `99-mission-quiet-redesign.css` global layer was moved into
+  `src/components/mission/MissionDeploymentPanel.css`, and
+  `scripts/smoke-shell-production-ui.ts` rejects future global
+  `dystopai-theme` layers above `95`.
+- Phase I token and accessibility coverage is complete:
+  `docs/DESIGN_TOKENS.md` documents colors, spacing, typography, radii,
+  motion, and accessibility notes; `src/styles/tokens.css` exposes
+  motion-duration and reduced-motion tokens; `src/styles/accessibility.css`
+  owns token-backed focus rings, dark-surface halos, explicit reduced-motion
+  mode, and OS reduced-motion collapse.
+- Phase I semantic/navigation and small-text coverage is complete:
+  `smoke:shell-production-ui` verifies skip-link/main-landmark behavior,
+  navigation semantics, `aria-current="page"`, focus rings, reduced motion,
+  and component-owned mission CSS; `smoke:ui-font-sizes` and
+  `smoke:ui-contrast` verify the 11px floor, token contrast pairs, mission
+  text contrast pairs, motion tokens, and design-token docs.
+- Phase I packaged beta screenshots are complete:
+  `package:desktop:unsigned` builds the unsigned packaged directory without
+  public signing credentials, and `capture:packaged-beta-screenshots` captured
+  `12` packaged production screenshots plus a manifest under
+  `output/packaged-beta-screenshots/2026-07-01T00-15-52-033Z`.
+- Latest Phase I verification passed:
+  `npm run smoke:shell-production-ui`, `npm run smoke:ui-font-sizes`,
+  `npm run smoke:ui-contrast`, `npm run typecheck`, `npm run lint`,
+  `npm run test:unit` (`187` tests), `npm run build:client`,
+  `npm run smoke:ui`, `npm run package:desktop:unsigned`,
+  `npm run capture:packaged-beta-screenshots`, and full `npm test`.
+- Phase I items `86`, `87`, `88`, `89`, `90`, `91`, `92`, `93`, `94`, and `95` are complete and verified.
+- Phase K fresh-checkout setup is complete with item `111`:
+  `scripts/smoke-fresh-checkout-setup.ts` snapshots the current tracked plus
+  unignored untracked source files into an isolated workspace, excludes
+  generated/install artifacts, and runs the first fresh-install gates there.
+  `package.json` exposes this as `npm run smoke:fresh-checkout`.
+- Latest Phase K item `111` verification passed:
+  `npm run smoke:fresh-checkout` copied `3,414` source files
+  (`118,115,195` bytes), then passed `npm ci`,
+  `npm run prepare:openclaw-vendor`, `npm run build:standalone`, and
+  `npm run smoke:server-architecture` inside the isolated copy. Evidence logs
+  and manifests are under
+  `release/evidence/phase-k-manual-beta-2026-07-01/`. Additional local guards
+  passed: `npm run lint`, `npm run smoke:ci-workflow`, and
+  `git diff --check` with only existing LF-to-CRLF warnings.
+- Phase K desktop launch and automatic session bootstrap are complete with
+  items `112` and `113`: `electron/main.cjs` has an E2E-only packaged-renderer
+  assertion that invokes the narrow
+  `window.dystopaiDesktop.bootstrapControlCenterSession()` preload bridge,
+  verifies the returned session token against `/api/auth/status`, and logs only
+  token length.
+- `scripts/smoke-phase-k-desktop-launch.ts` launches
+  `release/win-unpacked/DystopAI.exe` from the packaged production directory
+  with isolated `user-data`, OpenClaw state, workspace root, and loopback-only
+  ports. `package.json` exposes it as `npm run smoke:phase-k-desktop-launch`,
+  and `scripts/smoke-auth-control-plane.ts` pins the E2E hook/package script.
+- Latest Phase K item `112-113` verification passed:
+  `npm run typecheck:electron`, `npm run smoke:auth`,
+  `npm run package:desktop`, `npm run smoke:phase-k-desktop-launch`,
+  `npm run smoke:packaged-electron-launch`, `npm run smoke:electron-e2e`,
+  `npm run typecheck`, `npm run lint`, full `npm test`, and
+  `git diff --check`. The Phase K desktop evidence lives under
+  `release/evidence/phase-k-manual-beta-2026-07-01/` as
+  `05-desktop-launch-bootstrap.log`, `desktop-launch-bootstrap.json`, and
+  `DESKTOP_LAUNCH_BOOTSTRAP.md`; the JSON records `completedItems: [112, 113]`
+  and a redacted token-length-only bootstrap result.
+- Phase K provider configuration, test-agent recruitment, and workspace edit
+  are complete with items `114`, `115`, and `116`:
+  `scripts/smoke-phase-k-provider-agent.ts` starts the control plane with
+  isolated `HOME`, `OPENCLAW_STATE_DIR`, `OPENCLAW_HOME`,
+  `OPENCLAW_CONFIG_PATH`, and workspace roots, signs in through
+  `/api/auth/login`, captures redacted provider status through
+  `/api/auth/providers`, recruits `phase-k-beta-agent` through
+  `/api/party/recruit`, edits its workspace through `/api/party/workspace`,
+  and verifies persistence through both `/api/party/agent/:agentId/config` and
+  `/api/party/overview`.
+- Latest Phase K item `114-116` verification passed:
+  `npm run smoke:phase-k-provider-agent`, `npm run smoke:auth-provider-model`,
+  `npm run typecheck`, and `npm run lint`. Evidence lives under
+  `release/evidence/phase-k-manual-beta-2026-07-01/` as
+  `provider-agent-smoke.json`, `PROVIDER_AGENT_SMOKE.md`, and
+  `06-provider-agent-smoke.log`; the JSON records `completedItems: [114, 115,
+  116]`, no blocked items, configured model provider `google-vertex`, redacted
+  provider readiness booleans only, and workspace persistence for
+  `phase-k-beta-agent`.
 
 ## Next Optimization Slice
 
-Continue Phase H:
+Continue Phase K:
 
-- Continue with item `78`: move mission projection syncing into
-  `src/api/missions.ts` or `src/services/missionProjectionClient.ts`.
-- Inspect the remaining mission API calls in `src/store/nexusStore.ts`, the
-  mission projection smokes, and the item `77` renderer-store boundary before
-  editing. Keep backend mission truth unchanged; this should be a renderer API
-  boundary extraction, not a mission-state rewrite.
+- Phase J items `96-110` are complete and verified.
+- Latest Phase J gate evidence:
+  `npm run smoke:electron-e2e`, `npm run package:desktop`,
+  `npm run smoke:packaged-electron-launch`, `npm run state:backup`,
+  `npm run state:verify`, `npm run release:evidence`, and
+  `npm run release:validate` all passed.
+- The real local-state backup gate initially failed on
+  `plugin-skills/browser-automation` because state backups refused all
+  symlinks. `scripts/lib/runtime-state-backup.cjs` now skips symlink entries
+  without following targets, records them in `backup-manifest.json`, and verifies
+  skipped-entry manifest safety. Focused coverage passed with
+  `node --test tests/runtime-state-backup.test.cjs`, and
+  `npm run smoke:release-lifecycle` passed.
+- The verified real-state backup is
+  `C:\Users\hotbo\DystopAI Backups\dystopai-state-2026-07-01_00-44-32-388`
+  with `33,475` regular files, `2,793,015,447` bytes, and `4` skipped symlink
+  entries.
+- `npm run release:validate` passed in non-public mode with `35,683`
+  checksums, `35,665` packaged artifact files, and `635` SBOM components; update
+  manifest, checksum signature, and distribution signing checks were correctly
+  skipped for the private beta milestone.
+- Phase J item `109` is complete: created the draft prerelease
+  `Phase J Beta Readiness Evidence (2026-06-30)` with tag
+  `phase-j-beta-readiness-2026-06-30`, uploaded
+  `release/phase-j-beta-readiness-2026-06-30-evidence.zip`, and verified the
+  GitHub asset digest
+  `sha256:5da8bbc10e611eb737b5e3a0f3a9be15a5f93ffc9a73b01cfc79e5abf17cae5b`.
+  Current draft URL:
+  `https://github.com/hotboysupreme12-hash/DystopAI-Core/releases/tag/untagged-ff25989c71a0efedb4d4`.
+- Carry forward the dependency risk note from `npm ci`: `8` audit warnings
+  remain (`2` low, `2` moderate, `2` high, `2` critical), plus deprecated
+  transitive packages. Do not run `npm audit fix` as part of a gate pass unless
+  explicitly selecting a dependency remediation slice.
+- Phase K items `111`, `112`, `113`, `114`, `115`, and `116` are complete and
+  verified through `npm run smoke:fresh-checkout`,
+  `npm run smoke:phase-k-desktop-launch`, and
+  `npm run smoke:phase-k-provider-agent`.
+- Continue with Phase K item `117`: send one simple command in isolated beta
+  state, then item `118` for a command with attachment.
+- Preserve unrelated uncommitted design/docs/image changes; the worktree still
+  contains completed but uncommitted Phase H, Phase I, Phase J, Phase K, and
+  Phase L changes plus unrelated untracked images.

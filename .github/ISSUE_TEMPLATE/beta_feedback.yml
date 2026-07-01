@@ -1,0 +1,75 @@
+name: Beta feedback
+description: Report a private beta issue, recovery problem, or confusing workflow.
+title: "[Beta]: "
+labels:
+  - beta-feedback
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for testing DystopAI Core. Before sharing logs, remove API keys, OAuth tokens, bearer tokens, cookies, passwords, private prompts, personal messages, and sensitive file paths.
+  - type: input
+    id: version
+    attributes:
+      label: Version or commit
+      description: Include the app version, release tag, or commit SHA.
+      placeholder: "0.0.6 / commit SHA / beta build name"
+    validations:
+      required: true
+  - type: dropdown
+    id: os
+    attributes:
+      label: Operating system
+      options:
+        - Windows 11 x64
+        - Windows 10 22H2 x64
+        - macOS source/dev validation
+        - Linux source/dev validation
+        - Other
+    validations:
+      required: true
+  - type: dropdown
+    id: install_type
+    attributes:
+      label: Install type
+      options:
+        - Packaged desktop app
+        - Source checkout
+        - Other
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: What happened?
+      description: Describe what you did, what you expected, and what happened instead.
+      placeholder: |
+        1. Opened...
+        2. Clicked...
+        Expected...
+        Actual...
+    validations:
+      required: true
+  - type: textarea
+    id: gateway
+    attributes:
+      label: Gateway, provider, or plugin state
+      description: Include Monitor Gateway state, provider auth state, plugin/channel names, and whether Reset gateway or Clean Slate helped.
+      placeholder: "Gateway: unhealthy/checking/offline. Provider/plugin/channel: ..."
+    validations:
+      required: false
+  - type: textarea
+    id: safe_logs
+    attributes:
+      label: Safe log excerpt
+      description: Paste only reviewed, redacted log lines. Do not attach full state directories or secrets.
+      render: text
+    validations:
+      required: false
+  - type: checkboxes
+    id: safety
+    attributes:
+      label: Safety check
+      options:
+        - label: I reviewed logs for tokens, secrets, private prompts, personal data, and sensitive paths before sharing.
+          required: true

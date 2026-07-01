@@ -2,6 +2,13 @@ import { memo, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useStat
 import { apiErrorMessage, apiRequest } from '../../api/client'
 import { restartGatewayRuntime, useRuntimeSummaryStatus } from '../../hooks/useRuntimeStatus'
 import type { GatewayStabilityStatus } from '../../hooks/useRuntimeStatus'
+import {
+  makeCommandConsoleDraftStorageKey,
+  readCommandConsoleDraft,
+  removeCommandConsoleDraft,
+  writeCommandConsoleDraft,
+  type CommandConsoleDraft,
+} from '../../store/commandConsoleState'
 import { useNexusStore } from '../../store/nexusStore'
 import type { AgentResponse, AgentTurnAttachment, OpenClawAgent } from '../../types/nexus'
 import { apiUrl } from '../../utils/apiUrl'
@@ -40,11 +47,6 @@ type PendingAttachment = {
 
 type CommandConsoleUploadPayload = {
   attachment?: AgentTurnAttachment
-}
-
-type CommandConsoleDraft = {
-  storageKey: string
-  value: string
 }
 
 type AgentMessageMeta = {
@@ -146,34 +148,6 @@ function attachmentKindLabel(kind: PendingAttachmentKind, file: File) {
   const ext = fileExtension(file.name)
   if (ext) return ext.toUpperCase()
   return kind.toUpperCase()
-}
-
-function readCommandConsoleDraft(storageKey: string): string {
-  if (typeof window === 'undefined') return ''
-  try {
-    return window.localStorage.getItem(storageKey) || ''
-  } catch {
-    return ''
-  }
-}
-
-function writeCommandConsoleDraft(storageKey: string, value: string): void {
-  if (typeof window === 'undefined') return
-  try {
-    if (value.trim()) window.localStorage.setItem(storageKey, value)
-    else window.localStorage.removeItem(storageKey)
-  } catch {
-    // Draft persistence is best-effort; chat sending must not depend on browser storage.
-  }
-}
-
-function removeCommandConsoleDraft(storageKey: string): void {
-  if (typeof window === 'undefined') return
-  try {
-    window.localStorage.removeItem(storageKey)
-  } catch {
-    // ignore localStorage failures
-  }
 }
 
 function timestampDeltaMs(start?: string, end?: string) {
@@ -607,7 +581,7 @@ export function AgentResponseConsole() {
     if (selectedAgentIds.length > 1) return `selected:${[...selectedAgentIds].sort().join(',')}`
     return `party:${[...partyTargetIds].sort().join(',')}`
   }, [partyTargetIds, selectedAgentIds])
-  const draftStorageKey = `dystopai:command-draft:${draftRouteKey}`
+  const draftStorageKey = makeCommandConsoleDraftStorageKey(draftRouteKey)
   const [promptDraft, setPromptDraft] = useState<CommandConsoleDraft>(() => ({
     storageKey: draftStorageKey,
     value: readCommandConsoleDraft(draftStorageKey),

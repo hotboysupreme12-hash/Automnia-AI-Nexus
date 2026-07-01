@@ -30,7 +30,8 @@ assert.match(lifecycle, /rollback-existing-version/, 'corrupted update rejection
 assert.match(lifecycle, /distribution-signing\.json/, 'Windows lifecycle validation must emit release-consumable evidence')
 
 assert.match(backupLibrary, /backup-manifest\.json/, 'state backups must carry a verification manifest')
-assert.match(backupLibrary, /State backup refuses symbolic links/, 'state backups must reject symlink traversal')
+assert.match(backupLibrary, /symbolic_link_not_followed/, 'state backups must skip symlink traversal without following targets')
+assert.match(backupLibrary, /skippedEntries/, 'state backups must record skipped symlink entries in the manifest')
 assert.match(backupLibrary, /Backup file checksum mismatch/, 'state backups must fail verification after tampering')
 assert.match(backupLibrary, /pre-restore/, 'forced restores must preserve the previous state directory')
 

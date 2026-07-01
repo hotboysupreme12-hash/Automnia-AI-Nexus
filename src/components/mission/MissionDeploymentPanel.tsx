@@ -5,6 +5,7 @@ import { useNexusStore } from '../../store/nexusStore'
 import type { CapabilityKey, CollaborationMode, DurationMode, DurationUnit } from '../../types/nexus'
 import { MISSION_GLYPH_ASSETS, MISSION_PRESET_ASSETS, preloadMissionIconAssets } from './missionIconAssets'
 import type { MissionGlyph } from './missionIconAssets'
+import './MissionDeploymentPanel.css'
 
 type HeartbeatUnit = 'seconds' | 'minutes' | 'hours'
 type MissionAccent = 'code' | 'plan' | 'research' | 'command' | 'memory' | 'relay'

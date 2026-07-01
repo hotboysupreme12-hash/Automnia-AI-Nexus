@@ -16,13 +16,16 @@ import {
 } from '../server/services/missions/missionStateService.ts'
 
 const rootDir = fileURLToPath(new URL('..', import.meta.url))
+const missionApiSource = readFileSync(path.join(rootDir, 'src/api/missions.ts'), 'utf8')
 const storeSource = readFileSync(path.join(rootDir, 'src/store/nexusStore.ts'), 'utf8')
 const missionPanelSource = readFileSync(path.join(rootDir, 'src/components/mission/MissionDeploymentPanel.tsx'), 'utf8')
 const shellSource = readFileSync(path.join(rootDir, 'src/components/layout/NexusShell.tsx'), 'utf8')
 const apiUrlSource = readFileSync(path.join(rootDir, 'src/utils/apiUrl.ts'), 'utf8')
 const packageJson = JSON.parse(readFileSync(path.join(rootDir, 'package.json'), 'utf8')) as { scripts?: Record<string, string> }
 
-assert.match(storeSource, /apiRequest<BackendMissionsPayload>\('\/api\/missions\/projection'\)/, 'renderer mission projection must come from the backend projection API')
+assert.match(missionApiSource, /apiRequest<BackendMissionsPayload>\('\/api\/missions\/projection'\)/, 'renderer mission projection request must come from the backend projection API')
+assert.match(storeSource, /from '..\/api\/missions'/, 'renderer mission projection should be requested through src/api/missions.ts')
+assert.doesNotMatch(storeSource, /apiRequest<BackendMissionsPayload>\('\/api\/missions\/projection'\)/, 'nexusStore should not own the mission projection API request')
 assert.match(storeSource, /const backendMissionStatusToRunStatus = \(mission: BackendMission\): MissionRun\['status'\] => \{/, 'renderer should centralize backend mission status projection')
 assert.match(storeSource, /mission\.lifecycleState === 'failed'\) return 'failed'/, 'renderer should preserve recovered failed lifecycle state')
 assert.match(storeSource, /missionHistory: historyRuns\.length \? historyRuns : s\.missionHistory/, 'backend mission history should replace stale local history when recovered records exist')

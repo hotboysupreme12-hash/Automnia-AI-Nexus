@@ -1,4 +1,4 @@
-/* Quiet mission workspace pass: flatter hierarchy, calmer accents, denser controls. */
+/* Component-owned mission pass: flatter hierarchy, calmer accents, denser controls. */
 html.dui-pro-overhaul.dui-cohesive-ui .app-bg:has(.dy-workspace-context[data-workspace="missions"]) {
   --mission-canvas: #090a0b;
   --mission-surface: #101316;
@@ -9,7 +9,7 @@ html.dui-pro-overhaul.dui-cohesive-ui .app-bg:has(.dy-workspace-context[data-wor
   --mission-text: #f2f4f1;
   --mission-text-2: #cdd4ce;
   --mission-muted: #96a19a;
-  --mission-faint: #69736f;
+  --mission-faint: #83908a;
   --mission-accent: #8bd4aa;
   --mission-accent-rgb: 139, 212, 170;
   --mission-amber: #d7b66f;
@@ -83,7 +83,7 @@ html.dui-pro-overhaul.dui-cohesive-ui .dy-workspace-context[data-workspace="miss
   margin: 0 !important;
   color: var(--mission-text) !important;
   font-family: var(--font-body, system-ui, sans-serif) !important;
-  font-size: 18px !important;
+  font-size: var(--dy-type-title, 18px) !important;
   font-weight: 760 !important;
   letter-spacing: 0 !important;
   line-height: 1.1 !important;
@@ -95,7 +95,7 @@ html.dui-pro-overhaul.dui-cohesive-ui .dy-workspace-context[data-workspace="miss
   max-width: 520px !important;
   margin: 2px 0 0 !important;
   color: var(--mission-muted) !important;
-  font-size: 12px !important;
+  font-size: var(--dy-type-caption, 12px) !important;
   font-weight: 520 !important;
   line-height: 1.35 !important;
 }
@@ -137,7 +137,7 @@ html.dui-pro-overhaul.dui-cohesive-ui .dy-workspace-context[data-workspace="miss
 
 html.dui-pro-overhaul.dui-cohesive-ui .dy-workspace-context[data-workspace="missions"] .dy-status-chip .dy-status-value {
   color: var(--mission-text-2) !important;
-  font-size: 12px !important;
+  font-size: var(--dy-type-caption, 12px) !important;
   font-weight: 760 !important;
   letter-spacing: 0 !important;
   text-shadow: none !important;
@@ -151,7 +151,7 @@ html.dui-pro-overhaul.dui-cohesive-ui .dy-workspace-context[data-workspace="miss
 
 html.dui-pro-overhaul.dui-cohesive-ui .dy-workspace-context[data-workspace="missions"] .dy-status-chip .dy-status-label {
   color: var(--mission-faint) !important;
-  font-size: 10px !important;
+  font-size: var(--dy-type-micro, 11px) !important;
   font-weight: 620 !important;
   letter-spacing: 0 !important;
   text-transform: none !important;
@@ -165,7 +165,7 @@ html.dui-pro-overhaul.dui-cohesive-ui .dy-workspace-context[data-workspace="miss
   background: rgba(255, 255, 255, .030) !important;
   color: var(--mission-text-2) !important;
   padding: 0 10px !important;
-  font-size: 11px !important;
+  font-size: var(--dy-type-micro, 11px) !important;
   font-weight: 650 !important;
   letter-spacing: 0 !important;
   box-shadow: none !important;
@@ -237,7 +237,7 @@ html.dui-pro-overhaul.dui-cohesive-ui [data-dui-panel="missions"] .dui-section-h
 
 html.dui-pro-overhaul.dui-cohesive-ui [data-dui-panel="missions"] :is(.dui-section-head span, .dui-choice-head span, .dui-field label, .dui-loadout-head > span, .dui-range-field > span) {
   color: var(--mission-muted) !important;
-  font-size: 10px !important;
+  font-size: var(--dy-type-micro, 11px) !important;
   font-weight: 720 !important;
   letter-spacing: .075em !important;
   text-shadow: none !important;
@@ -247,7 +247,7 @@ html.dui-pro-overhaul.dui-cohesive-ui [data-dui-panel="missions"] :is(.dui-secti
 html.dui-pro-overhaul.dui-cohesive-ui [data-dui-panel="missions"] :is(.dui-section-head strong, .dui-choice-head strong) {
   margin-top: 3px !important;
   color: var(--mission-text) !important;
-  font-size: 16px !important;
+  font-size: var(--font-size-lg, 16px) !important;
   font-weight: 760 !important;
   letter-spacing: 0 !important;
   line-height: 1.16 !important;
@@ -257,7 +257,7 @@ html.dui-pro-overhaul.dui-cohesive-ui [data-dui-panel="missions"] :is(.dui-secti
 
 html.dui-pro-overhaul.dui-cohesive-ui [data-dui-panel="missions"] :is(.dui-section-head p, .dui-choice-head p) {
   color: var(--mission-faint) !important;
-  font-size: 11px !important;
+  font-size: var(--dy-type-micro, 11px) !important;
   font-weight: 600 !important;
 }
 
@@ -339,7 +339,7 @@ html.dui-pro-overhaul.dui-cohesive-ui [data-dui-panel="missions"] :is(.dui-templ
 
 html.dui-pro-overhaul.dui-cohesive-ui [data-dui-panel="missions"] :is(.dui-template-copy strong, .dui-option-copy strong, .dui-option strong) {
   color: var(--mission-text) !important;
-  font-size: 12px !important;
+  font-size: var(--dy-type-caption, 12px) !important;
   font-weight: 740 !important;
   letter-spacing: 0 !important;
   text-shadow: none !important;
@@ -347,7 +347,7 @@ html.dui-pro-overhaul.dui-cohesive-ui [data-dui-panel="missions"] :is(.dui-templ
 
 html.dui-pro-overhaul.dui-cohesive-ui [data-dui-panel="missions"] :is(.dui-template-copy small, .dui-option-copy > span) {
   color: var(--mission-muted) !important;
-  font-size: 10px !important;
+  font-size: var(--dy-type-micro, 11px) !important;
   font-weight: 560 !important;
 }
 
@@ -492,13 +492,13 @@ html.dui-pro-overhaul.dui-cohesive-ui [data-dui-panel="missions"] .dui-agent-row
 
 html.dui-pro-overhaul.dui-cohesive-ui [data-dui-panel="missions"] .dui-agent-main strong {
   color: var(--mission-text) !important;
-  font-size: 12px !important;
+  font-size: var(--dy-type-caption, 12px) !important;
   font-weight: 740 !important;
 }
 
 html.dui-pro-overhaul.dui-cohesive-ui [data-dui-panel="missions"] .dui-agent-main p {
   color: var(--mission-muted) !important;
-  font-size: 10px !important;
+  font-size: var(--dy-type-micro, 11px) !important;
   font-weight: 560 !important;
 }
 
@@ -516,7 +516,7 @@ html.dui-pro-overhaul.dui-cohesive-ui [data-dui-panel="missions"] .dui-agent-mai
 
 html.dui-pro-overhaul.dui-cohesive-ui [data-dui-panel="missions"] .dui-agent-cadence .dui-control {
   min-height: 34px !important;
-  font-size: 11px !important;
+  font-size: var(--dy-type-micro, 11px) !important;
 }
 
 html.dui-pro-overhaul.dui-cohesive-ui [data-dui-panel="missions"] .dui-agent-cadence {
@@ -577,7 +577,7 @@ html.dui-pro-overhaul.dui-cohesive-ui [data-dui-panel="missions"] :is(.dui-stat-
 html.dui-pro-overhaul.dui-cohesive-ui [data-dui-panel="missions"] .dui-stat-grid span,
 html.dui-pro-overhaul.dui-cohesive-ui [data-dui-panel="missions"] .dui-meter span {
   color: var(--mission-faint) !important;
-  font-size: 10px !important;
+  font-size: var(--dy-type-micro, 11px) !important;
   letter-spacing: .04em !important;
 }
 
@@ -620,14 +620,14 @@ html.dui-pro-overhaul.dui-cohesive-ui [data-dui-panel="missions"] .dui-readiness
 
 html.dui-pro-overhaul.dui-cohesive-ui [data-dui-panel="missions"] .dui-readiness-mini-head span {
   color: var(--mission-faint) !important;
-  font-size: 10px !important;
+  font-size: var(--dy-type-micro, 11px) !important;
   letter-spacing: .04em !important;
   text-transform: uppercase !important;
 }
 
 html.dui-pro-overhaul.dui-cohesive-ui [data-dui-panel="missions"] .dui-readiness-mini-head strong {
   color: var(--mission-accent) !important;
-  font-size: 18px !important;
+  font-size: var(--dy-type-title, 18px) !important;
   text-shadow: none !important;
 }
 
@@ -651,7 +651,7 @@ html.dui-pro-overhaul.dui-cohesive-ui [data-dui-panel="missions"] .dui-avatar-st
 
 html.dui-pro-overhaul.dui-cohesive-ui [data-dui-panel="missions"] .dui-dispatch-copy {
   color: var(--mission-muted) !important;
-  font-size: 12px !important;
+  font-size: var(--dy-type-caption, 12px) !important;
   line-height: 1.45 !important;
 }
 
@@ -689,7 +689,7 @@ html.dui-pro-overhaul.dui-cohesive-ui [data-dui-panel="missions"] .dui-primary-b
     linear-gradient(180deg, rgba(255, 255, 255, .18), rgba(255, 255, 255, 0)),
     linear-gradient(135deg, #5b9f76, #83c89f) !important;
   color: #07110c !important;
-  font-size: 13px !important;
+  font-size: var(--dy-type-control, 13px) !important;
   font-weight: 800 !important;
   letter-spacing: .02em !important;
   text-transform: uppercase !important;

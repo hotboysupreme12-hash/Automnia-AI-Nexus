@@ -5,14 +5,18 @@ import { fileURLToPath } from 'node:url'
 
 const rootDir = fileURLToPath(new URL('..', import.meta.url))
 const storeSource = readFileSync(path.join(rootDir, 'src/store/nexusStore.ts'), 'utf8')
+const missionApiSource = readFileSync(path.join(rootDir, 'src/api/missions.ts'), 'utf8')
 const engineIndexSource = readFileSync(path.join(rootDir, 'src/engine/index.ts'), 'utf8')
 const packageJson = JSON.parse(readFileSync(path.join(rootDir, 'package.json'), 'utf8')) as { scripts?: Record<string, string> }
 
-const missionStartCalls = storeSource.match(/apiRequest<[^>]+>\('\/api\/missions\/start'/g) || []
-const missionStopCalls = storeSource.match(/apiRequest\('\/api\/missions\/stop'/g) || []
+const missionStartCalls = missionApiSource.match(/apiRequest<[^>]+>\('\/api\/missions\/start'/g) || []
+const missionStopCalls = missionApiSource.match(/apiRequest\('\/api\/missions\/stop'/g) || []
 
 assert.equal(missionStartCalls.length, 1, 'mission deployment must have exactly one backend start path')
 assert.equal(missionStopCalls.length, 1, 'mission stop must have exactly one backend stop path')
+assert.match(storeSource, /requestMissionStart\(\{/, 'renderer store should launch missions through src/api/missions.ts')
+assert.match(storeSource, /requestMissionStop\(current\.id\)/, 'renderer store should stop missions through src/api/missions.ts')
+assert.doesNotMatch(storeSource, /['"`]\/api\/missions\//, 'mission endpoint literals should stay out of the renderer store')
 assert.doesNotMatch(engineIndexSource, /MissionOrchestrator/)
 assert.doesNotMatch(storeSource, /MissionOrchestrator/)
 assert.doesNotMatch(storeSource, /\borchestrator\b/)

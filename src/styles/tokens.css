@@ -50,6 +50,13 @@
   --shadow-glow: 0 0 24px rgba(72, 232, 255, 0.16);
   --glow-opacity: 0.18;
 
+  --motion-duration-instant: 0.001ms;
+  --motion-duration-fast: 120ms;
+  --motion-duration-base: 160ms;
+  --motion-duration-slow: 220ms;
+  --motion-ease-standard: cubic-bezier(0.2, 0.8, 0.2, 1);
+  --motion-ease-out: cubic-bezier(0, 0, 0.2, 1);
+
   --density-panel-padding: 16px;
   --density-section-gap: 14px;
   --density-control-gap: 10px;
@@ -110,6 +117,12 @@ html.dui-pro-overhaul[data-dui-density="spacious"] {
   --density-panel-padding: 20px;
   --density-section-gap: 18px;
   --density-control-gap: 12px;
+}
+
+html.dui-pro-overhaul[data-dui-motion="reduced"] {
+  --motion-duration-fast: var(--motion-duration-instant);
+  --motion-duration-base: var(--motion-duration-instant);
+  --motion-duration-slow: var(--motion-duration-instant);
 }
 
 html.dui-pro-overhaul.dui-cohesive-ui[data-dui-high-contrast="true"],
