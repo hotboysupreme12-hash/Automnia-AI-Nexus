@@ -29,6 +29,7 @@ const pluginRouteTests = readWorkspaceFile('tests/pluginRoutes.test.ts')
 const pluginInventoryTests = readWorkspaceFile('tests/pluginInventoryService.test.ts')
 const pluginPanelStateTests = readWorkspaceFile('tests/pluginsPanelStateProjection.test.ts')
 const pluginsPanel = readWorkspaceFile('src/components/plugins/PluginsPanel.tsx')
+const pluginsApi = readWorkspaceFile('src/api/plugins.ts')
 const pluginStateProjection = readWorkspaceFile('src/components/plugins/pluginStateProjection.ts')
 const pluginInventoryService = readWorkspaceFile('server/services/plugins/pluginInventoryService.ts')
 const packageJson = JSON.parse(readWorkspaceFile('package.json')) as { scripts?: Record<string, string> }
@@ -73,15 +74,34 @@ const streamBlock = routeBlock(pluginRoutes, "app.get('/api/plugins/setup-termin
 assert(streamBlock.includes("'text/event-stream; charset=utf-8'"), 'Plugin setup terminal stream must remain SSE')
 assert(streamBlock.includes('writeSseEvent'), 'Plugin setup terminal stream must emit SSE events')
 
-assert(
-  pluginsPanel.includes("import { apiErrorMessage, apiRequest, type ApiRequestOptions } from '../../api/client'"),
-  'PluginsPanel should use the shared API client',
-)
-assert(pluginsPanel.includes('async function pluginApiData'), 'PluginsPanel should centralize API-client response handling')
+assert(pluginsApi.includes("import { apiErrorMessage, apiRequest, type ApiRequestOptions } from './client'"), 'plugin API module should use the shared API client')
+assert(pluginsApi.includes('async function pluginApiData'), 'plugin API module should centralize API-client response handling')
+assert(pluginsPanel.includes("from '../../api/plugins'"), 'PluginsPanel should consume plugin API helpers')
+assert(!pluginsPanel.includes("from '../../api/client'"), 'PluginsPanel should not import the shared API client directly')
+assert(!/\bapiRequest(?:<|\s*\()/.test(pluginsPanel), 'PluginsPanel should not own JSON API request calls')
+assert(!pluginsPanel.includes('async function pluginApiData'), 'PluginsPanel should not own plugin API response handling')
 assert(!pluginsPanel.includes('fetchJsonWithTimeout'), 'PluginsPanel should not keep a local timeout fetch helper')
 assert(!/\bfetch\s*\(/.test(pluginsPanel), 'PluginsPanel should not call fetch directly')
 assert(!pluginsPanel.includes('body: JSON.stringify'), 'PluginsPanel should pass structured JSON bodies to apiRequest')
 assert(!pluginsPanel.includes("'Content-Type': 'application/json'"), 'PluginsPanel should let apiRequest set JSON headers')
+
+for (const helper of [
+  'runOpenClawPluginCommand',
+  'setupClawTalkPlugin',
+  'savePluginSetup',
+  'searchOpenClawPlugins',
+  'installOpenClawPlugin',
+  'fetchPlugins',
+  'setPluginEnabled',
+  'updateOpenClawPlugin',
+  'updateAllOpenClawPlugins',
+  'inspectOpenClawPluginRuntime',
+  'restartPluginGateway',
+  'uninstallOpenClawPlugin',
+]) {
+  assert(pluginsPanel.includes(helper), `PluginsPanel should call plugin API helper ${helper}`)
+  assert(pluginsApi.includes(`function ${helper}`), `src/api/plugins.ts should export ${helper}`)
+}
 
 const expectedClientEndpoints = [
   '/api/openclaw/command',
@@ -94,17 +114,19 @@ const expectedClientEndpoints = [
 ]
 
 for (const endpoint of expectedClientEndpoints) {
-  assert(pluginsPanel.includes(endpoint), `PluginsPanel is missing API-client endpoint ${endpoint}`)
+  assert(pluginsApi.includes(endpoint), `src/api/plugins.ts is missing API-client endpoint ${endpoint}`)
+  assert(!pluginsPanel.includes(endpoint), `PluginsPanel should not own API-client endpoint ${endpoint}`)
 }
 
 for (const fragment of [
-  '}/config`',
-  '`/api/plugins/${encodeURIComponent(plugin.id)}`',
-  '}/update`',
-  '}/inspect`',
-  '}/uninstall`',
+  '`/api/plugins/${encodeURIComponent(pluginId)}/config`',
+  '`/api/plugins/${encodeURIComponent(pluginId)}`',
+  '`/api/plugins/${encodeURIComponent(pluginId)}/update`',
+  '`/api/plugins/${encodeURIComponent(pluginId)}/inspect`',
+  '`/api/plugins/${encodeURIComponent(pluginId)}/uninstall`',
 ]) {
-  assert(pluginsPanel.includes(fragment), `PluginsPanel is missing dynamic plugin endpoint fragment ${fragment}`)
+  assert(pluginsApi.includes(fragment), `src/api/plugins.ts is missing dynamic plugin endpoint fragment ${fragment}`)
+  assert(!pluginsPanel.includes(fragment), `PluginsPanel should not own dynamic plugin endpoint fragment ${fragment}`)
 }
 
 assert(

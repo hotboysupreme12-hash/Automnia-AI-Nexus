@@ -32,7 +32,7 @@ internal static class Program
                 FileName = electronPath,
                 WorkingDirectory = appDir,
                 UseShellExecute = false,
-                Arguments = BuildArguments(args),
+                Arguments = BuildArguments(appPath, args),
             };
             Process.Start(startInfo);
             return 0;
@@ -44,9 +44,10 @@ internal static class Program
         }
     }
 
-    private static string BuildArguments(string[] args)
+    private static string BuildArguments(string appPath, string[] args)
     {
         StringBuilder builder = new StringBuilder();
+        builder.Append(Quote(appPath));
         foreach (string arg in args)
         {
             if (builder.Length > 0) builder.Append(' ');

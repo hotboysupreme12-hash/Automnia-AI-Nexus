@@ -58,6 +58,7 @@ const runtimeLedger = read('server/runtimeLedger.ts')
 const runtimeLedgerStore = read('server/state/runtimeLedgerStore.ts')
 const runtimeHook = read('src/hooks/useRuntimeStatus.ts')
 const nexusStore = read('src/store/nexusStore.ts')
+const agentTurnsApi = read('src/api/agentTurns.ts')
 const commandConsole = read('src/components/monitor/AgentResponseConsole.tsx')
 const liveOperationMonitor = read('src/components/monitor/LiveOperationMonitor.tsx')
 const diagnosticRedaction = read('src/utils/diagnosticRedaction.ts')
@@ -154,7 +155,8 @@ assertIncludes(nexusStore, 'activeAgentTurnControllers', 'Command Console active
 assertIncludes(nexusStore, 'operatorCancelledAgentTurns', 'Command Console operator cancellation marker')
 assertIncludes(diagnosticRedaction, "'sessionKey'", 'Command Console preserves Gateway session key in activity payloads')
 assertIncludes(nexusStore, 'if (controller.signal.aborted) throw streamError', 'Command Console stream abort does not retry fallback')
-assertIncludes(nexusStore, 'return await parseControlStream(res)', 'Command Console keeps stream controller active until SSE drains')
+assertIncludes(nexusStore, 'return await sendStreamingAgentTurn', 'Command Console keeps stream controller active until SSE drains')
+assertIncludes(agentTurnsApi, "fetch(apiUrl('/api/openclaw/agent-turn/stream')", 'Command Console stream transport lives in renderer API helper')
 assertIncludes(nexusStore, 'stopActiveAgentRuns', 'Command Console stop active runs action')
 assertIncludes(nexusStore, 'cancelled: cancelledByOperator', 'Command Console returns operator cancellation state')
 assertIncludes(nexusStore, 'if (result?.cancelled) break', 'Command Console stops queued sequential lanes after cancel')
@@ -262,20 +264,25 @@ assertOrderedIncludes(sseStream, [
   "flush: () => push('\\n\\n')",
 ], 'Command Console shared SSE parser')
 
-assertOrderedIncludes(nexusStore, [
-  "import { createSseFrameParser } from '../utils/sseStream'",
-  'const parseControlStream = async',
+assertOrderedIncludes(agentTurnsApi, [
+  "import { createSseFrameParser, type SseFrame } from '../utils/sseStream'",
+  'async function readAgentTurnSseFrames',
   'const sseParser = createSseFrameParser()',
+  'for (const frame of sseParser.push(decoder.decode(value, { stream: true }))) onFrame(frame)',
+  'for (const frame of sseParser.push(decoder.decode())) onFrame(frame)',
+  'for (const frame of sseParser.flush()) onFrame(frame)',
+], 'Command Console renderer API SSE parser')
+
+assertOrderedIncludes(nexusStore, [
+  'const createControlStreamProjector = () =>',
   "if (event === 'status')",
   "if (event === 'progress')",
   "if (event === 'delta')",
   'accumulated = data.replace === true ? text : `${accumulated}${text}`',
   "if (event === 'error')",
   "if (event === 'final')",
-  'for (const frame of sseParser.push(decoder.decode(value, { stream: true }))) consumeFrame(frame.event, frame.data)',
-  'for (const frame of sseParser.push(decoder.decode())) consumeFrame(frame.event, frame.data)',
-  'for (const frame of sseParser.flush()) consumeFrame(frame.event, frame.data)',
-], 'Command Console frontend SSE parser')
+  'onStreamComplete: streamProjector.complete',
+], 'Command Console frontend SSE projection')
 
 assertIncludes(gatewayProtocolDocs, 'Side-effecting methods require **idempotency keys**', 'Gateway protocol idempotency requirement')
 assertIncludes(gatewayProtocolDocs, '`chat.history`, `chat.send`, `chat.abort`, and `chat.inject`', 'Gateway protocol chat execution methods')

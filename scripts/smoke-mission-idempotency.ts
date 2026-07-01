@@ -7,6 +7,7 @@ const rootDir = fileURLToPath(new URL('..', import.meta.url))
 const serverSource = readFileSync(join(rootDir, 'server/controlPlane.ts'), 'utf8')
 const missionRoutesSource = readFileSync(join(rootDir, 'server/routes/missionRoutes.ts'), 'utf8')
 const missionStateServiceSource = readFileSync(join(rootDir, 'server/services/missions/missionStateService.ts'), 'utf8')
+const missionApiSource = readFileSync(join(rootDir, 'src/api/missions.ts'), 'utf8')
 const storeSource = readFileSync(join(rootDir, 'src/store/nexusStore.ts'), 'utf8')
 const packageJson = JSON.parse(readFileSync(join(rootDir, 'package.json'), 'utf8')) as { scripts?: Record<string, string> }
 const scripts = packageJson.scripts || {}
@@ -34,9 +35,10 @@ assert.match(
   'Fresh mission launch responses should expose the launch idempotency result',
 )
 
-assert.match(storeSource, /idempotencyKey\?: string/, 'Renderer backend mission type must include idempotencyKey')
+assert.match(missionApiSource, /idempotencyKey\?: string/, 'Renderer backend mission type must include idempotencyKey')
 assert.match(storeSource, /idempotencyKey:\s*requestId/, 'Renderer must send the stable launch request id as the mission idempotency key')
-assert.match(storeSource, /deduped\?: boolean/, 'Renderer must understand backend dedupe responses')
+assert.match(missionApiSource, /deduped\?: boolean/, 'Renderer must understand backend dedupe responses')
+assert.match(missionApiSource, /apiRequest<MissionStartPayload>\('\/api\/missions\/start'/, 'Renderer mission start request must live in src/api/missions.ts')
 assert.match(storeSource, /Cron mission launch deduplicated/, 'Renderer mission feed should surface deduped launches')
 
 assert.equal(typeof scripts['smoke:mission-idempotency'], 'string')

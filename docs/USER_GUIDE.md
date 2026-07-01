@@ -406,6 +406,8 @@ Open Monitor.
 4. Use `Reset gateway` for restart-style recovery.
 5. Restart the app if Gateway cannot recover.
 
+For deeper beta recovery, local state reset, and safe-log sharing steps, use [Beta Support](BETA_SUPPORT.md).
+
 ### An Agent Does Not Respond
 
 Check:
@@ -462,11 +464,16 @@ Open Plugins, search for the plugin, complete required setup fields, save, refre
 
 Check the file path, file size, workspace access, and agent tool policy. Attachment-heavy prompts may require the Gateway/OpenClaw runtime path so workspace and tool permissions can be applied.
 
+### I Need To Reset Local State Or Share Logs
+
+Use [Beta Support](BETA_SUPPORT.md) for the full reset sequence and safe-log checklist. Start with `Clean Slate` and `Reset gateway` before renaming local state folders.
+
 ## Documentation References
 
 Local project docs:
 
 - [README.md](../README.md)
+- [Beta Support](BETA_SUPPORT.md)
 - [OpenClaw Gateway Command Console Guide](OPENCLAW_GATEWAY_COMMAND_CONSOLE_GUIDE.md)
 - [Production Release Runbook](PRODUCTION_RELEASE_RUNBOOK.md)
 - [Release Governance](RELEASE_GOVERNANCE.md)

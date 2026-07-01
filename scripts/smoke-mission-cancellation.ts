@@ -9,6 +9,7 @@ const missionRoutesSource = readFileSync(path.join(rootDir, 'server/routes/missi
 const missionStateServiceSource = readFileSync(path.join(rootDir, 'server/services/missions/missionStateService.ts'), 'utf8')
 const missionSchedulerServiceSource = readFileSync(path.join(rootDir, 'server/services/missions/missionSchedulerService.ts'), 'utf8')
 const missionStateTestsSource = readFileSync(path.join(rootDir, 'tests/missionStateService.test.ts'), 'utf8')
+const missionApiSource = readFileSync(path.join(rootDir, 'src/api/missions.ts'), 'utf8')
 const storeSource = readFileSync(path.join(rootDir, 'src/store/nexusStore.ts'), 'utf8')
 const packageJson = JSON.parse(readFileSync(path.join(rootDir, 'package.json'), 'utf8')) as { scripts?: Record<string, string> }
 
@@ -38,8 +39,10 @@ assert.match(missionStateTestsSource, /stopMission cancels recovered active work
 assert.match(missionStateTestsSource, /hydrateMissionRecordsFromLedger\(\)/, 'restart cancellation coverage should hydrate from durable mission records first')
 assert.match(missionStateTestsSource, /operator cancelled after backend restart/, 'restart cancellation coverage should preserve operator cancellation evidence')
 
-assert.match(storeSource, /\/api\/missions\/stop/)
-assert.match(storeSource, /timeoutMs: 120_000/)
+assert.match(missionApiSource, /\/api\/missions\/stop/)
+assert.match(missionApiSource, /timeoutMs: 120_000/)
+assert.match(storeSource, /requestMissionStop\(current\.id\)/)
+assert.doesNotMatch(storeSource, /\/api\/missions\/stop/)
 
 const scripts = packageJson.scripts || {}
 assert.equal(typeof scripts['smoke:mission-cancellation'], 'string')

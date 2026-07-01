@@ -2,6 +2,14 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type { CSSProperties } from 'react'
 import { AnimatePresence, motion } from 'framer-motion'
 import { apiErrorMessage, apiRequest } from '../../api/client'
+import {
+  authKindForProvider,
+  authLabelForProvider,
+  effectiveAuthStatusForProvider,
+  fetchProviderAuthStatuses,
+  saveProviderApiKey,
+  type AuthProviderStatus,
+} from '../../api/providerAuth'
 import { useNexusStore } from '../../store/nexusStore'
 import type { AgentSkillEntry, BehaviorProfile, FastModeDefault, HeartbeatConfig, OpenClawAgent, ThinkingLevel } from '../../types/nexus'
 import { apiUrl } from '../../utils/apiUrl'
@@ -16,28 +24,6 @@ type SandboxScope = NonNullable<NonNullable<OpenClawAgent['sandbox']>['scope']>
 type SandboxAccess = NonNullable<NonNullable<OpenClawAgent['sandbox']>['workspaceAccess']>
 
 interface AvailableModel { id:string; alias:string; provider:string; name:string }
-interface AuthProviderStatus {
-  provider:string
-  configured:boolean
-  envKeys:string[]
-  stored?:boolean
-  label?:string
-  oauth?:{
-    supported:boolean
-    configured:boolean
-    available:boolean
-    missing?:string[]
-    docs?:string
-    redirectUri?:string
-    projectId?:string
-    accountId?:string
-    email?:string
-    expiresAt?:number
-    clientIdEnvKeys?:string[]
-    projectIdEnvKeys?:string[]
-  }
-}
-
 type AgentConfigPayload = {
   sandbox?:OpenClawAgent['sandbox']
   tools?:{allow?:string[];deny?:string[]}
@@ -90,46 +76,10 @@ let authProvidersCache: TimedEditorCache<AuthProviderStatus[]> | null = null
 const agentConfigCache = new Map<string, TimedEditorCache<AgentConfigPayload>>()
 const skillsCache = new Map<string, TimedEditorCache<AgentSkillEntry[]>>()
 
-const OAUTH_PROVIDER_FALLBACKS: Record<string, AuthProviderStatus> = {
-  'openai-codex': {
-    provider: 'openai-codex',
-    configured: false,
-    envKeys: [],
-    label: 'OpenAI Codex',
-    oauth: {
-      supported: true,
-      configured: false,
-      available: true,
-      missing: [],
-      redirectUri: 'http://localhost:1455/auth/callback',
-    },
-  },
-}
-
-const authStatusForProvider = (providers: AuthProviderStatus[], provider: string) =>
-  providers.find((entry) => entry.provider === provider) || OAUTH_PROVIDER_FALLBACKS[provider]
-
-const effectiveAuthStatusForProvider = (providers: AuthProviderStatus[], provider: string) => {
-  const status = authStatusForProvider(providers, provider)
-  if (provider !== 'openai-codex' || status?.configured) return status
-  const openAiStatus = authStatusForProvider(providers, 'openai')
-  if (!openAiStatus?.configured) return status
-  return {
-    ...(status || OAUTH_PROVIDER_FALLBACKS['openai-codex']),
-    configured: true,
-    stored: status?.stored || openAiStatus.stored,
-  }
-}
-
 const isOpenAiCodexSubscriptionModel = (modelId: string) => {
   const [, model = ''] = modelId.trim().split('/')
   return /^gpt-5(?:\.\d+)?(?:-[a-z0-9][a-z0-9.-]*)?$/i.test(model)
 }
-
-const authLabelForProvider = (provider: string, status?: AuthProviderStatus) =>
-  status?.label || (provider === 'openai-codex' ? 'OpenAI Codex' : provider)
-
-const authKindForProvider = (status?: AuthProviderStatus) => (status?.oauth?.supported ? 'OAuth' : 'auth')
 
 const isAvailableModel = (value: unknown): value is AvailableModel => {
   if (!value || typeof value !== 'object') return false
@@ -636,9 +586,7 @@ export function AgentEditorModal() {
       return
     }
     try{
-      const result=force
-        ? await apiRequest<{providers:AuthProviderStatus[]}>('/api/auth/providers?refresh=1',{timeoutMs:30000,cache:'no-store'})
-        : await apiRequest<{providers:AuthProviderStatus[]}>('/api/auth/providers',{timeoutMs:8000})
+      const result = await fetchProviderAuthStatuses({ refresh: force, timeoutMs: force ? 30_000 : 8_000 })
       if(!result.ok)throw new Error(apiErrorMessage(result.error))
       const next=result.data.providers||[]
       authProvidersCache={expiresAt:Date.now()+EDITOR_AUTH_CACHE_MS,value:next}
@@ -1675,7 +1623,7 @@ export function AgentEditorModal() {
           providerStatus={authModalProvider}
           onClose={()=>setAuthModalProvider(null)}
           onSave={async(apiKey)=>{
-            const result=await apiRequest(`/api/auth/providers/${encodeURIComponent(authModalProvider.provider)}`,{method:'POST',timeoutMs:20000,body:{apiKey}})
+            const result=await saveProviderApiKey(authModalProvider.provider, apiKey)
             if(!result.ok)throw new Error(apiErrorMessage(result.error))
             await LdAuth(true)
             setMsStatus(`${authModalProvider.provider} key saved.`)

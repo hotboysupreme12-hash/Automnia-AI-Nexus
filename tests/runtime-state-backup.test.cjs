@@ -72,7 +72,7 @@ test('force restore preserves the prior state and non-force restore refuses data
   }
 })
 
-test('backup validation rejects missing sources, symlinks, duplicate and unsafe manifest paths', () => {
+test('backup validation rejects missing sources, duplicate and unsafe manifest paths', () => {
   const root = tempRoot('dystopai-backup-invalid-')
   try {
     assert.throws(() => collectSourceFiles(path.join(root, 'missing')), /does not exist/)
@@ -80,7 +80,24 @@ test('backup validation rejects missing sources, symlinks, duplicate and unsafe 
     const symlinkPath = path.join(state, 'unsafe-link')
     try {
       fs.symlinkSync(path.join(state, 'openclaw.json'), symlinkPath)
-      assert.throws(() => collectSourceFiles(state), /refuses symbolic links/)
+      const skipped = []
+      const files = collectSourceFiles(state, { onSkippedEntry: (entry) => skipped.push(entry) })
+      assert.equal(files.some((file) => file.relative === 'unsafe-link'), false)
+      assert.deepEqual(skipped, [{
+        path: 'unsafe-link',
+        kind: 'symbolic-link',
+        reason: 'symbolic_link_not_followed',
+      }])
+
+      const symlinkBackup = createStateBackup({
+        sourceRoot: state,
+        backupParent: path.join(root, 'symlink-backups'),
+        backupName: 'snapshot',
+      })
+      assert.equal(symlinkBackup.manifest.fileCount, 3)
+      assert.equal(symlinkBackup.manifest.skippedEntryCount, 1)
+      assert.equal(fs.existsSync(path.join(symlinkBackup.backupRoot, 'unsafe-link')), false)
+      assert.equal(verifyStateBackup(symlinkBackup.backupRoot).skippedEntryCount, 1)
       fs.unlinkSync(symlinkPath)
     } catch (error) {
       if (error.code !== 'EPERM' && error.code !== 'EACCES') throw error
@@ -97,9 +114,18 @@ test('backup validation rejects missing sources, symlinks, duplicate and unsafe 
     fs.writeFileSync(manifestPath, JSON.stringify(manifest))
     assert.throws(() => verifyStateBackup(backup.backupRoot), /Duplicate backup path/)
 
+    manifest.files.pop()
+    manifest.fileCount = manifest.files.length
+    manifest.totalBytes -= manifest.files[0].size
     manifest.files[1].path = '../escape'
     fs.writeFileSync(manifestPath, JSON.stringify(manifest))
     assert.throws(() => verifyStateBackup(backup.backupRoot), /Unsafe backup path/)
+
+    manifest.files[1].path = 'control-center-ledger/mission-records.jsonl'
+    manifest.skippedEntryCount = 1
+    manifest.skippedEntries = [{ path: '../escaped-link', kind: 'symbolic-link', reason: 'symbolic_link_not_followed' }]
+    fs.writeFileSync(manifestPath, JSON.stringify(manifest))
+    assert.throws(() => verifyStateBackup(backup.backupRoot), /Unsafe skipped backup path/)
   } finally {
     fs.rmSync(root, { recursive: true, force: true })
   }

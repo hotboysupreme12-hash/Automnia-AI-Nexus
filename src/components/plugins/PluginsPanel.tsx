@@ -1,5 +1,26 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
-import { apiErrorMessage, apiRequest, type ApiRequestOptions } from '../../api/client'
+import {
+  fetchPlugins,
+  inspectOpenClawPluginRuntime,
+  installOpenClawPlugin,
+  pluginRequestError,
+  restartPluginGateway,
+  runOpenClawPluginCommand,
+  savePluginSetup,
+  searchOpenClawPlugins,
+  setPluginEnabled,
+  setupClawTalkPlugin,
+  uninstallOpenClawPlugin,
+  updateAllOpenClawPlugins,
+  updateOpenClawPlugin,
+  type PluginApiPayload,
+  type PluginCommandResult,
+  type PluginEntry,
+  type PluginRestartResponse,
+  type PluginRuntimeInspect,
+  type PluginSearchResult,
+  type PluginsResponse,
+} from '../../api/plugins'
 import { ActionStatusBanner } from '../common/ActionStatusBanner'
 import {
   PLUGIN_FILTERS,
@@ -8,94 +29,7 @@ import {
   pluginStatusClass,
   summarizePluginPageStates,
   type PluginFilter,
-  type PluginPageEntry,
 } from './pluginStateProjection'
-
-type PluginEntry = PluginPageEntry
-
-type PluginsResponse = {
-  plugins: PluginEntry[]
-  configPath?: string
-  cliError?: string
-  cache?: {
-    source: 'openclaw' | 'bundled'
-    refreshedAt: number
-    refreshing: boolean
-  }
-}
-
-type PluginSearchResult = {
-  id: string
-  name: string
-  description: string
-  version?: string
-  source: string
-  installSpec: string
-  packageName?: string
-  publisher?: string
-  installed?: boolean
-  verified?: boolean
-  score?: number
-}
-
-type PluginCommandResult = {
-  command: string
-  code: number
-  stdout: string
-  stderr: string
-  output: string
-  elapsedMs?: number
-}
-
-type PluginInstallRepair = {
-  applied: boolean
-  reason: string
-  actions: string[]
-  retryArgs?: string[]
-}
-
-type PluginRuntimeInspect = {
-  pluginId: string
-  status: string
-  runtimeLoaded: boolean | null
-  surfaces: Array<{ label: string; values: string[] }>
-  command: PluginCommandResult
-}
-
-type PluginRestartResponse = {
-  restarted: boolean
-  scheduled?: boolean
-  detail: string
-}
-
-type PluginRegistryRefreshResponse = {
-  scheduled: boolean
-  detail: string
-}
-
-type ClawTalkSetupPayload = {
-  installed: boolean
-  configured: boolean
-  enabled: boolean
-  ready: boolean
-  botConnected: boolean
-  websocketServer: boolean
-  actions: string[]
-}
-
-type PluginApiPayload = PluginsResponse & {
-  ok?: boolean
-  error?: string
-  detail?: string
-  command?: PluginCommandResult
-  doctor?: PluginCommandResult
-  clawTalkSetup?: ClawTalkSetupPayload
-  repair?: PluginInstallRepair
-  inspect?: PluginRuntimeInspect
-  restart?: PluginRestartResponse
-  registryRefresh?: PluginRegistryRefreshResponse
-  plugin?: PluginEntry | null
-}
 
 type PluginBusyAction = 'toggle' | 'refresh' | 'update' | 'inspect' | 'uninstall' | 'restart'
 
@@ -200,19 +134,6 @@ function formatPluginCliWarning(value?: string) {
 function responseNotice(payload: PluginsResponse) {
   const warning = formatPluginCliWarning(payload.cliError)
   return warning ? `Plugin list loaded with CLI warning: ${warning}` : ''
-}
-
-async function pluginApiData<T>(path: string, options: ApiRequestOptions | undefined, fallbackMessage: string): Promise<T> {
-  const result = await apiRequest<T>(path, { cache: 'no-store', ...(options || {}) })
-  if (!result.ok) throw new Error(apiErrorMessage(result.error) || fallbackMessage)
-  return result.data
-}
-
-function pluginRequestError(error: unknown) {
-  if (error instanceof DOMException && error.name === 'AbortError') {
-    return 'Plugin request timed out. Refresh again after the backend finishes.'
-  }
-  return error instanceof Error ? error.message : String(error)
 }
 
 function compactList(values: string[], fallback: string) {
@@ -501,19 +422,7 @@ function OpenClawCommandPanel({
     setError('')
     setNotice('')
     try {
-      const payload = await pluginApiData<PluginApiPayload>(
-        '/api/openclaw/command',
-        {
-          method: 'POST',
-          body: {
-            command: trimmed,
-            timeoutSeconds: 600,
-            refreshPlugins: true,
-          },
-          timeoutMs: 620_000,
-        },
-        'OpenClaw command failed.',
-      )
+      const payload = await runOpenClawPluginCommand(trimmed)
       if (!payload.command) throw new Error('OpenClaw command failed.')
       onPayload(payload)
       setLastRun({ command: trimmed, result: payload.command, ok: payload.ok !== false })
@@ -618,25 +527,9 @@ function PluginSetupModal({
     setLocalError('')
     setError('')
     try {
-      const payload = await pluginApiData<PluginApiPayload>(
-        isClawTalk ? '/api/plugins/clawtalk/setup' : `/api/plugins/${encodeURIComponent(plugin.id)}/config`,
-        {
-          method: 'POST',
-          body: isClawTalk
-            ? {
-                apiKey: configValues.apiKey,
-                install: true,
-                restart: true,
-              }
-            : {
-                values: configValues,
-                providerAuth,
-                restart: true,
-              },
-          timeoutMs: isClawTalk ? 190_000 : 30_000,
-        },
-        'Plugin setup failed.',
-      )
+      const payload = isClawTalk
+        ? await setupClawTalkPlugin(configValues.apiKey)
+        : await savePluginSetup(plugin.id, configValues, providerAuth)
       onSaved(payload)
       setNotice(isClawTalk
         ? `${plugin.name} connected; bot and WebSocket verified.`
@@ -851,11 +744,7 @@ function PluginDiscoveryPanel({
     setLocalError('')
     setError('')
     try {
-      const payload = await pluginApiData<{ results?: PluginSearchResult[]; cliError?: string }>(
-        `/api/plugins/search?q=${encodeURIComponent(q)}&limit=20`,
-        { timeoutMs: 130_000 },
-        'Plugin search failed.',
-      )
+      const payload = await searchOpenClawPlugins(q, 20)
       setResults(payload.results || [])
       const warning = formatPluginCliWarning(payload.cliError)
       setNotice(warning ? `Search warning: ${warning}` : `${payload.results?.length || 0} search results.`)
@@ -873,21 +762,7 @@ function PluginDiscoveryPanel({
     setLocalError('')
     setError('')
     try {
-      const payload = await pluginApiData<PluginApiPayload>(
-        '/api/plugins/install',
-        {
-          method: 'POST',
-          body: {
-            spec: installSpec,
-            pluginId,
-            pin,
-            enable: true,
-            restart: true,
-          },
-          timeoutMs: 260_000,
-        },
-        'Plugin install failed.',
-      )
+      const payload = await installOpenClawPlugin({ spec: installSpec, pluginId, pin, enable: true, restart: true })
       onInstalled(payload)
       const repairSuffix = payload.repair?.applied ? ' Auto-repaired installer staging lock.' : ''
       setNotice(`${payload.plugin?.name || installSpec} installed and enabled; ${restartNotice(payload.restart)}.${repairSuffix}`)
@@ -1028,11 +903,7 @@ export function PluginsPanel() {
     if (!options.silent) setLoading(true)
     setError('')
     try {
-      const payload = await pluginApiData<PluginApiPayload>(
-        options.force ? '/api/plugins?refresh=1' : '/api/plugins',
-        { timeoutMs: options.force ? 30_000 : 10_000 },
-        'Plugin list failed.',
-      )
+      const payload = await fetchPlugins({ force: options.force })
       setPlugins(payload.plugins || [])
       pluginsPanelCache = {
         plugins: payload.plugins || [],
@@ -1066,11 +937,7 @@ export function PluginsPanel() {
       return next
     })
     try {
-      const payload = await pluginApiData<PluginApiPayload>(`/api/plugins/${encodeURIComponent(plugin.id)}`, {
-        method: 'POST',
-        body: { enabled: nextEnabled, restart: false },
-        timeoutMs: 45_000,
-      }, 'Plugin update failed.')
+      const payload = await setPluginEnabled(plugin.id, nextEnabled)
       applyPayload(payload)
       const updated = payload.plugins?.find((entry) => entry.id === plugin.id)
       const setupSuffix = nextEnabled && updated?.needsSetup ? ' Setup required.' : ''
@@ -1109,15 +976,7 @@ export function PluginsPanel() {
     setError('')
     setNotice('')
     try {
-      const payload = await pluginApiData<PluginApiPayload>(
-        `/api/plugins/${encodeURIComponent(plugin.id)}/update`,
-        {
-          method: 'POST',
-          body: { restart: true },
-          timeoutMs: 280_000,
-        },
-        'Plugin update failed.',
-      )
+      const payload = await updateOpenClawPlugin(plugin.id)
       applyPayload(payload)
       setNotice(commandNotice(payload, `${payload.plugin?.name || plugin.name} updated; ${restartNotice(payload.restart)}`))
     } catch (err) {
@@ -1133,15 +992,7 @@ export function PluginsPanel() {
     setError('')
     setNotice('')
     try {
-      const payload = await pluginApiData<PluginApiPayload>(
-        '/api/plugins/update-all',
-        {
-          method: 'POST',
-          body: { restart: true },
-          timeoutMs: 320_000,
-        },
-        'Plugin update failed.',
-      )
+      const payload = await updateAllOpenClawPlugins()
       applyPayload(payload)
       setNotice(commandNotice(payload, `Plugin update-all finished; ${restartNotice(payload.restart)}`))
     } catch (err) {
@@ -1156,11 +1007,7 @@ export function PluginsPanel() {
     setError('')
     setNotice('')
     try {
-      const payload = await pluginApiData<PluginApiPayload>(
-        `/api/plugins/${encodeURIComponent(plugin.id)}/inspect`,
-        { method: 'POST', timeoutMs: 140_000 },
-        'Plugin runtime inspect failed.',
-      )
+      const payload = await inspectOpenClawPluginRuntime(plugin.id)
       if (!payload.inspect) throw new Error('Plugin runtime inspect failed.')
       applyPayload(payload)
       setInspectState({ plugin: payload.plugin || plugin, inspect: payload.inspect })
@@ -1177,11 +1024,7 @@ export function PluginsPanel() {
     setError('')
     setNotice('')
     try {
-      const payload = await pluginApiData<PluginApiPayload>(
-        '/api/plugins/gateway/restart',
-        { method: 'POST', timeoutMs: 90_000 },
-        'Gateway restart failed.',
-      )
+      const payload = await restartPluginGateway()
       applyPayload(payload)
       setNotice(`${plugin.name} gateway restart finished; ${restartNotice(payload.restart)}.`)
     } catch (err) {
@@ -1197,15 +1040,7 @@ export function PluginsPanel() {
     setError('')
     setNotice('')
     try {
-      const payload = await pluginApiData<PluginApiPayload>(
-        `/api/plugins/${encodeURIComponent(plugin.id)}/uninstall`,
-        {
-          method: 'POST',
-          body: { keepFiles: false, force: true, restart: true },
-          timeoutMs: 280_000,
-        },
-        'Plugin uninstall failed.',
-      )
+      const payload = await uninstallOpenClawPlugin(plugin.id)
       applyPayload(payload)
       setExpandedPluginId(null)
       setNotice(commandNotice(payload, `${plugin.name} uninstalled; ${restartNotice(payload.restart)}`))

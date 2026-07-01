@@ -1601,6 +1601,8 @@ function createMainWindow() {
   let e2eRendererCrashRequested = false
   let e2eTrayAssertionsStarted = false
   let e2eRendererJourneyStarted = false
+  let e2eScreenshotCaptureStarted = false
+  let e2eDesktopBootstrapStarted = false
 
   win.on('unresponsive', () => {
     console.warn('[dystopai] renderer became unresponsive')
@@ -1637,6 +1639,23 @@ function createMainWindow() {
     }
 
     if (
+      process.env.DYSTOPAI_ELECTRON_E2E_ASSERT_DESKTOP_BOOTSTRAP === '1' &&
+      !e2eDesktopBootstrapStarted
+    ) {
+      e2eDesktopBootstrapStarted = true
+      setTimeout(() => {
+        void runElectronE2eDesktopSessionBootstrap(win).then(() => {
+          logE2e('desktop-session-bootstrap-ok')
+          if (process.env.DYSTOPAI_ELECTRON_E2E_QUIT_AFTER_DESKTOP_BOOTSTRAP === '1') app.quit()
+        }).catch((error) => {
+          logE2e(`desktop-session-bootstrap-failed:${error?.message || error}`)
+          process.exit(8)
+        })
+      }, 250)
+      return
+    }
+
+    if (
       process.env.DYSTOPAI_ELECTRON_E2E_ASSERT_TRAY_BEHAVIOR === '1' &&
       !e2eTrayAssertionsStarted
     ) {
@@ -1647,6 +1666,19 @@ function createMainWindow() {
           process.exit(5)
         })
       }, 250)
+      return
+    }
+
+    if (process.env.DYSTOPAI_ELECTRON_E2E_SCREENSHOT_DIR && !e2eScreenshotCaptureStarted) {
+      e2eScreenshotCaptureStarted = true
+      setTimeout(() => {
+        void runElectronE2eScreenshotCapture(win).then(() => {
+          if (process.env.DYSTOPAI_ELECTRON_E2E_QUIT_AFTER_SCREENSHOTS === '1') app.quit()
+        }).catch((error) => {
+          logE2e(`screenshots-failed:${error?.message || error}`)
+          process.exit(7)
+        })
+      }, 500)
       return
     }
 
@@ -1879,6 +1911,116 @@ async function waitForElectronE2e(condition, label, timeoutMs = 5000) {
   throw new Error(`Electron E2E timed out waiting for ${label}`)
 }
 
+function safeE2eFileSegment(value) {
+  return String(value || 'unknown')
+    .replace(/[^a-z0-9._-]+/gi, '-')
+    .replace(/^-+|-+$/g, '')
+    .toLowerCase() || 'unknown'
+}
+
+async function runElectronE2eScreenshotCapture(win) {
+  if (!ELECTRON_E2E) return
+  const outputDir = process.env.DYSTOPAI_ELECTRON_E2E_SCREENSHOT_DIR
+  if (!outputDir) return
+
+  fs.mkdirSync(outputDir, { recursive: true })
+  const viewports = [
+    { label: 'desktop', width: 1440, height: 960 },
+    { label: 'compact', width: 900, height: 760 },
+    { label: 'mobile', width: 390, height: 844 },
+  ]
+  const workspaces = [
+    { id: 'agents', label: 'Agents' },
+    { id: 'missions', label: 'Missions' },
+    { id: 'monitor', label: 'Monitor' },
+    { id: 'plugins', label: 'Plugins' },
+  ]
+  const captured = []
+
+  if (!win.isDestroyed() && !win.isVisible()) {
+    win.setSkipTaskbar(false)
+    win.show()
+    win.focus()
+  }
+  await waitForElectronE2e(() => !win.isDestroyed() && !win.webContents.isLoading(), 'renderer screenshot readiness', 15000)
+  await sleep(500)
+  await win.webContents.setZoomFactor(1)
+
+  for (const viewport of viewports) {
+    if (win.isDestroyed()) break
+    win.setMinimumSize(Math.min(viewport.width, 320), Math.min(viewport.height, 560))
+    win.setSize(viewport.width, viewport.height)
+    win.center()
+    await sleep(450)
+
+    for (const workspace of workspaces) {
+      if (win.isDestroyed()) break
+      const state = await win.webContents.executeJavaScript(`
+        (async () => {
+          const wait = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+          const waitFor = async (predicate, label, timeoutMs = 15000) => {
+            const startedAt = Date.now();
+            while (Date.now() - startedAt < timeoutMs) {
+              const value = predicate();
+              if (value) return value;
+              await wait(60);
+            }
+            throw new Error('Timed out waiting for ' + label);
+          };
+          const navItem = document.querySelector(${JSON.stringify(`#nexus-nav-${workspace.id}`)});
+          if (!navItem) throw new Error('Missing nav item for ${workspace.id}');
+          navItem.click();
+          await waitFor(
+            () => navItem.getAttribute('aria-current') === 'page',
+            '${workspace.id} aria-current'
+          );
+          await waitFor(
+            () => document.querySelector('#dystopai-workspace-title')?.textContent?.trim() === ${JSON.stringify(workspace.label)},
+            '${workspace.id} title'
+          );
+          await waitFor(
+            () => document.querySelector('[role="region"][aria-label="${workspace.label} workspace"]'),
+            '${workspace.id} region'
+          );
+          await wait(500);
+          const bodyText = document.body.innerText.replace(/\\s+/g, ' ').trim();
+          return {
+            workspace: ${JSON.stringify(workspace.id)},
+            title: document.querySelector('#dystopai-workspace-title')?.textContent?.trim() || '',
+            ariaCurrent: navItem.getAttribute('aria-current') || '',
+            bodyTextLength: bodyText.length,
+            focusRing: getComputedStyle(document.documentElement).getPropertyValue('--focus-ring').trim(),
+            reducedMotionTransition: (() => {
+              document.documentElement.dataset.duiMotion = 'reduced';
+              const probe = document.createElement('button');
+              probe.textContent = 'probe';
+              probe.style.transitionDuration = '120ms';
+              document.body.appendChild(probe);
+              const value = getComputedStyle(probe).transitionDuration;
+              probe.remove();
+              document.documentElement.dataset.duiMotion = 'standard';
+              return value;
+            })(),
+          };
+        })()
+      `, true)
+
+      assertElectronE2e(state?.ariaCurrent === 'page', `${workspace.id} screenshot navigation must use aria-current`)
+      assertElectronE2e(state?.bodyTextLength > 120, `${workspace.id} screenshot must render page text`)
+      assertElectronE2e(Boolean(state?.focusRing), `${workspace.id} screenshot should resolve focus ring token`)
+
+      const image = await win.webContents.capturePage()
+      const fileName = `packaged-beta-${safeE2eFileSegment(viewport.label)}-${safeE2eFileSegment(workspace.id)}.png`
+      const filePath = path.join(outputDir, fileName)
+      fs.writeFileSync(filePath, image.toPNG())
+      captured.push(filePath)
+      logE2e(`screenshot:${viewport.label}:${workspace.id}:${filePath}`)
+    }
+  }
+
+  logE2e(`screenshots-ok:${captured.length}`)
+}
+
 function runElectronE2ePolicySelfTest() {
   if (!ELECTRON_E2E || process.env.DYSTOPAI_ELECTRON_E2E_ASSERT_NAVIGATION !== '1') return
 
@@ -1947,6 +2089,46 @@ async function runElectronE2eRendererJourney(win) {
   `, true)
   assertElectronE2e(Boolean(result?.ok), 'renderer journey must finish successfully')
   assertElectronE2e(Array.isArray(result?.visited) && result.visited.join(',') === 'Missions,Monitor,Plugins,Agents', 'renderer journey must visit every primary workspace')
+}
+
+async function runElectronE2eDesktopSessionBootstrap(win) {
+  if (!ELECTRON_E2E || process.env.DYSTOPAI_ELECTRON_E2E_ASSERT_DESKTOP_BOOTSTRAP !== '1') return
+  const result = await win.webContents.executeJavaScript(`
+    (async () => {
+      const bridge = window.dystopaiDesktop;
+      if (!bridge || typeof bridge.bootstrapControlCenterSession !== 'function') {
+        throw new Error('desktop bootstrap bridge unavailable');
+      }
+      const token = await bridge.bootstrapControlCenterSession();
+      if (typeof token !== 'string' || token.trim().length < 16) {
+        throw new Error('desktop bootstrap did not return a session token');
+      }
+      const response = await fetch('/api/auth/status', {
+        headers: { Authorization: 'Bearer ' + token.trim() },
+      });
+      let payload;
+      try {
+        payload = await response.json();
+      } catch (error) {
+        throw new Error('desktop bootstrap auth status returned invalid JSON: ' + (error?.message || error));
+      }
+      if (!response.ok || payload?.ok !== true || payload?.data?.authenticated !== true) {
+        throw new Error('desktop bootstrap token was not accepted by auth status');
+      }
+      return {
+        authenticated: true,
+        bridgeKeys: Object.keys(bridge).sort(),
+        tokenLength: token.trim().length,
+      };
+    })()
+  `, true)
+  assertElectronE2e(result?.authenticated === true, 'desktop bootstrap token must authenticate')
+  assertElectronE2e(Number(result?.tokenLength) >= 16, 'desktop bootstrap token should be non-empty')
+  assertElectronE2e(
+    Array.isArray(result?.bridgeKeys) && result.bridgeKeys.includes('bootstrapControlCenterSession'),
+    'preload bridge must expose desktop session bootstrap',
+  )
+  logE2e(`desktop-session-bootstrap-token-length:${result.tokenLength}`)
 }
 
 async function runElectronE2eTraySelfTest(win) {

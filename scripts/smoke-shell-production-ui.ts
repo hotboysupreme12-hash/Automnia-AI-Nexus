@@ -6,6 +6,9 @@ const root = process.cwd()
 const read = (relativePath: string) => readFileSync(path.join(root, relativePath), 'utf8')
 
 const shell = read('src/components/layout/NexusShell.tsx')
+const missionPanel = read('src/components/mission/MissionDeploymentPanel.tsx')
+const missionPanelCss = read('src/components/mission/MissionDeploymentPanel.css')
+const accessibility = read('src/styles/accessibility.css')
 const polish = read('src/styles/dystopai-theme/80-production-polish.css')
 const theme = read('src/dystopai-app-theme.css')
 const packageJson = JSON.parse(read('package.json')) as { scripts?: Record<string, string> }
@@ -69,6 +72,12 @@ assert.match(polish, /\.dy-workspace-context__meta[\s\S]*flex-direction: column/
 assert.ok(theme.includes(productionPolishImport), 'production polish must remain in the theme cascade')
 assert.ok(theme.includes(referenceScreenshotImport), 'reference screenshot polish must remain in the theme cascade')
 assert.ok(theme.includes(typographyPolishImport), 'typography polish must remain in the theme cascade')
+const themeLayerImports = [...theme.matchAll(/@import '\.\/styles\/dystopai-theme\/(\d+)-([^']+)\.css';/g)]
+const layersAfterTypography = themeLayerImports
+  .map((match) => ({ order: Number(match[1]), name: match[2] }))
+  .filter((layer) => layer.order > 95)
+assert.deepEqual(layersAfterTypography, [], 'global dystopai theme layers must stop at 95-typography-polish.css')
+assert.doesNotMatch(theme, /99-mission-quiet-redesign/, 'mission quiet redesign should no longer be a global late layer')
 assert.ok(
   theme.indexOf(productionPolishImport) < theme.indexOf(referenceScreenshotImport),
   'production polish must load before the final reference screenshot layer',
@@ -78,6 +87,13 @@ assert.ok(
   'reference screenshot polish must load before the final typography layer',
 )
 assert.ok(theme.trimEnd().endsWith(typographyPolishImport), 'typography polish must load last in the theme cascade')
+assert.match(missionPanel, /import '\.\/MissionDeploymentPanel\.css'/, 'mission late overrides should be owned by the mission component')
+assert.match(missionPanelCss, /Component-owned mission pass/, 'mission component CSS should explain its ownership')
+assert.doesNotMatch(missionPanelCss, /font-size:\s*(?:[0-9]|10(?:\.\d+)?)px\b/, 'mission component CSS should not reintroduce sub-11px text')
+assert.match(accessibility, /:focus-visible[\s\S]*outline: 2px solid var\(--focus-ring\)/, 'token-backed focus rings should stay visible on dark surfaces')
+assert.match(accessibility, /:focus-visible[\s\S]*var\(--focus-ring-shadow\)/, 'focus rings should include a dark-surface halo')
+assert.match(accessibility, /data-dui-motion="reduced"[\s\S]*transition-duration: 0\.001ms/, 'explicit reduced-motion mode should collapse transitions')
+assert.match(accessibility, /@media \(prefers-reduced-motion: reduce\)[\s\S]*animation-duration: 0\.001ms/, 'OS reduced-motion preference should collapse animations')
 
 assert.equal(packageJson.scripts?.['smoke:shell-production-ui'], 'tsx scripts/smoke-shell-production-ui.ts')
 assert.ok(packageJson.scripts?.['test:ci']?.includes('npm run smoke:shell-production-ui'))

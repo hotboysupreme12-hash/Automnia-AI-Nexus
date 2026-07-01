@@ -301,7 +301,7 @@ By default:
 
 Data can still leave your machine when you configure a model provider, plugin, channel, browser action, or tool that sends it elsewhere. Those external services keep their own privacy, auth, logging, and network boundaries.
 
-See [`DATA_HANDLING.md`](DATA_HANDLING.md) before enabling networked tools or sharing diagnostics.
+See [`DATA_HANDLING.md`](DATA_HANDLING.md) before enabling networked tools or sharing diagnostics. During beta, also keep [`docs/BETA_SUPPORT.md`](docs/BETA_SUPPORT.md) handy for Gateway recovery, local state reset, safe-log sharing, supported OS notes, and feedback.
 
 <details>
 <summary>Developer, configuration, and release details</summary>
@@ -385,7 +385,7 @@ The current safety model focuses on local operation, bounded access, and visible
 - High-impact actions should use approval boundaries and least-privilege tools.
 - Exposing the local API to a LAN or the public internet is outside the current threat model.
 
-See [`docs/RELEASE_GOVERNANCE.md`](docs/RELEASE_GOVERNANCE.md) and [`DATA_HANDLING.md`](DATA_HANDLING.md) for the detailed trust boundary.
+Do not bind the local API or Gateway to `0.0.0.0`, port-forward them, or tunnel them to another machine. See [`docs/RELEASE_GOVERNANCE.md`](docs/RELEASE_GOVERNANCE.md), [`DATA_HANDLING.md`](DATA_HANDLING.md), and [`docs/BETA_SUPPORT.md`](docs/BETA_SUPPORT.md) for the detailed trust boundary.
 
 ## Release Confidence
 
@@ -411,6 +411,7 @@ The release flow can record artifact size, SHA-256 digest, update metadata, sign
 ## Documentation
 
 - [`docs/USER_GUIDE.md`](docs/USER_GUIDE.md): walkthrough for agents, missions, monitoring, plugins, ClawTalk, and model authentication.
+- [`docs/BETA_SUPPORT.md`](docs/BETA_SUPPORT.md): private beta disclaimer, known issues, Gateway recovery, local state reset, safe logs, data boundaries, supported OS, and feedback link.
 - [`docs/OPENCLAW_GATEWAY_COMMAND_CONSOLE_GUIDE.md`](docs/OPENCLAW_GATEWAY_COMMAND_CONSOLE_GUIDE.md): Gateway protocol and Command Console integration.
 - [`docs/PRODUCTION_RELEASE_RUNBOOK.md`](docs/PRODUCTION_RELEASE_RUNBOOK.md): signed Windows qualification and publication sequence.
 - [`docs/RELEASE_GOVERNANCE.md`](docs/RELEASE_GOVERNANCE.md): CI, signing, evidence, release, and threat-model policy.

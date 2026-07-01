@@ -17,11 +17,17 @@ try {
     const result = createStateBackup({ sourceRoot, backupParent })
     console.log(`[state-backup] created ${result.backupRoot}`)
     console.log(`[state-backup] verified ${result.manifest.fileCount} file(s), ${result.manifest.totalBytes} byte(s)`)
+    if (result.manifest.skippedEntryCount) {
+      console.log(`[state-backup] skipped ${result.manifest.skippedEntryCount} symlink entr${result.manifest.skippedEntryCount === 1 ? 'y' : 'ies'}`)
+    }
   } else if (command === 'verify') {
     const backupRoot = process.env.DYSTOPAI_STATE_BACKUP_PATH || process.argv[3]
     if (!backupRoot) throw new Error('Set DYSTOPAI_STATE_BACKUP_PATH or provide the backup path as the third argument')
     const manifest = verifyStateBackup(backupRoot)
     console.log(`[state-backup] verified ${manifest.fileCount} file(s), ${manifest.totalBytes} byte(s)`)
+    if (manifest.skippedEntryCount) {
+      console.log(`[state-backup] verified ${manifest.skippedEntryCount} skipped symlink entr${manifest.skippedEntryCount === 1 ? 'y' : 'ies'}`)
+    }
   } else if (command === 'restore') {
     const backupRoot = process.env.DYSTOPAI_STATE_BACKUP_PATH || process.argv[3]
     const targetRoot = process.env.DYSTOPAI_STATE_RESTORE_TARGET || process.argv[4]

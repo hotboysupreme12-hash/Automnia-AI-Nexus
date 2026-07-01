@@ -175,11 +175,14 @@ try {
   assert.match(missionRoutesSource, /app\.get\('\/api\/missions\/:missionId\/report'/)
   assert.match(missionRoutesSource, /app\.get\('\/api\/missions\/projection'/, '/api/missions/projection must expose durable mission state')
 
+  const missionApiSource = readFileSync(path.join(rootDir, 'src/api/missions.ts'), 'utf8')
   const storeSource = readFileSync(path.join(rootDir, 'src/store/nexusStore.ts'), 'utf8')
-  assert.match(storeSource, /reports\?: MissionReport\[\]/)
+  assert.match(missionApiSource, /reports\?: MissionReport\[\]/)
+  assert.match(missionApiSource, /apiRequest<BackendMissionsPayload>\('\/api\/missions\/projection'\)/)
   assert.match(storeSource, /backendReports/)
   assert.match(storeSource, /backendMissionIds = new Set\(backendMissions\.map/)
   assert.match(storeSource, /\.\.\.backendReports,\s*\.\.\.retainedReports/)
+  assert.doesNotMatch(storeSource, /apiRequest<BackendMissionsPayload>\('\/api\/missions\/projection'\)/)
   assert.doesNotMatch(storeSource, /generatedReports/, 'backend mission projections must not synthesize renderer-generated reports')
 
   const packageJson = JSON.parse(readFileSync(path.join(rootDir, 'package.json'), 'utf8')) as { scripts?: Record<string, string> }

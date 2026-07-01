@@ -8,6 +8,7 @@ const read = (relativePath: string) => readFileSync(path.join(root, relativePath
 const theme = read('src/dystopai-app-theme.css')
 const typography = read('src/styles/typography.css')
 const finalTypography = read('src/styles/dystopai-theme/95-typography-polish.css')
+const missionPanelCss = read('src/components/mission/MissionDeploymentPanel.css')
 const monitorTypographySources: [string, string][] = [
   ['src/components/monitor/LiveOperationMonitor.tsx', read('src/components/monitor/LiveOperationMonitor.tsx')],
   ['src/components/monitor/AgentResponseConsole.tsx', read('src/components/monitor/AgentResponseConsole.tsx')],
@@ -102,18 +103,23 @@ assert.match(
 )
 
 const explicitFinalMicrotype: string[] = []
-for (const match of finalTypography.matchAll(/font-size:\s*([0-9]+(?:\.[0-9]+)?)px\b/g)) {
-  const value = Number.parseFloat(match[1])
-  if (value < 11) {
-    const line = finalTypography.slice(0, match.index).split(/\r?\n/).length
-    explicitFinalMicrotype.push(`src/styles/dystopai-theme/95-typography-polish.css:${line} uses ${value}px`)
+for (const [relativePath, source] of [
+  ['src/styles/dystopai-theme/95-typography-polish.css', finalTypography],
+  ['src/components/mission/MissionDeploymentPanel.css', missionPanelCss],
+] as const) {
+  for (const match of source.matchAll(/font-size:\s*([0-9]+(?:\.[0-9]+)?)px\b/g)) {
+    const value = Number.parseFloat(match[1])
+    if (value < 11) {
+      const line = source.slice(0, match.index).split(/\r?\n/).length
+      explicitFinalMicrotype.push(`${relativePath}:${line} uses ${value}px`)
+    }
   }
 }
 
 assert.deepEqual(
   explicitFinalMicrotype,
   [],
-  `final typography layer must not reintroduce explicit font-size values below 11px:\n${explicitFinalMicrotype.join('\n')}`,
+  `final typography and component-owned mission CSS must not reintroduce explicit font-size values below 11px:\n${explicitFinalMicrotype.join('\n')}`,
 )
 
 const monitorSourceMicrotype: string[] = []

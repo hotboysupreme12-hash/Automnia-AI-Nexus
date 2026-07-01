@@ -88,6 +88,57 @@ const pathEntries = [
 const electronBuilderCli = path.join(root, 'node_modules', 'electron-builder', 'cli.js')
 const openClawVendorPrep = path.join(root, 'scripts', 'prepare-openclaw-vendor.cjs')
 const command = process.execPath
+const requestedArgs = process.argv.slice(2)
+const unsignedDirectoryPackage = requestedArgs.includes('--unsigned') || process.env.DYSTOPAI_SKIP_PLATFORM_SIGNING === '1'
+const forwardedArgs = requestedArgs.filter((arg) => arg !== '--unsigned')
+const signingOverrideArgs = unsignedDirectoryPackage
+  ? [
+      '--config.win.signAndEditExecutable=false',
+    ]
+  : []
+
+function cleanGeneratedWindowsDirPackage() {
+  if (process.platform !== 'win32' || !forwardedArgs.includes('--dir')) return
+
+  const target = path.resolve(root, 'release', 'win-unpacked')
+  const rootWithSeparator = root.endsWith(path.sep) ? root : `${root}${path.sep}`
+  if (target === root || !target.startsWith(rootWithSeparator)) {
+    throw new Error(`Refusing to clean package output outside the project: ${target}`)
+  }
+  if (!fs.existsSync(target)) return
+
+  try {
+    fs.rmSync(target, {
+      recursive: true,
+      force: true,
+      maxRetries: 5,
+      retryDelay: 250,
+    })
+    return
+  } catch (error) {
+    const empty = path.join(cacheRoot, `empty-${Date.now()}-${process.pid}`)
+    fs.mkdirSync(empty, { recursive: true })
+    const result = spawnSync('robocopy', [
+      empty,
+      target,
+      '/MIR',
+      '/NFL',
+      '/NDL',
+      '/NJH',
+      '/NJS',
+      '/NP',
+      '/R:2',
+      '/W:1',
+    ], {
+      windowsHide: true,
+    })
+    fs.rmSync(empty, { recursive: true, force: true })
+    if ((result.status ?? 16) >= 8) {
+      throw error
+    }
+    fs.rmSync(target, { recursive: true, force: true })
+  }
+}
 
 const vendorPrep = spawnSync(command, [openClawVendorPrep], {
   cwd: root,
@@ -99,12 +150,21 @@ if (vendorPrep.status !== 0) {
   process.exit(vendorPrep.status ?? 1)
 }
 
-const child = spawn(command, [electronBuilderCli, ...process.argv.slice(2)], {
+cleanGeneratedWindowsDirPackage()
+
+const child = spawn(command, [electronBuilderCli, ...forwardedArgs, ...signingOverrideArgs], {
   cwd: root,
   stdio: 'inherit',
   shell: false,
   env: {
     ...process.env,
+    ...(unsignedDirectoryPackage
+      ? {
+          CSC_IDENTITY_AUTO_DISCOVERY: 'false',
+          WIN_CSC_LINK: '',
+          WIN_CSC_KEY_PASSWORD: '',
+        }
+      : {}),
     ...(pathEntries.length
       ? {
           PATH: pathEntries.join(pathDelimiter),

@@ -41,6 +41,14 @@ function shouldExclude(relative, patterns = DEFAULT_EXCLUDES) {
   return patterns.some((pattern) => pattern.test(normalized))
 }
 
+function skippedSymlinkEntry(relative) {
+  return {
+    path: normalizeRelative(relative),
+    kind: 'symbolic-link',
+    reason: 'symbolic_link_not_followed',
+  }
+}
+
 function collectSourceFiles(sourceRoot, options = {}) {
   const root = path.resolve(sourceRoot)
   if (!fs.existsSync(root) || !fs.statSync(root).isDirectory()) throw new Error(`State source directory does not exist: ${root}`)
@@ -52,7 +60,10 @@ function collectSourceFiles(sourceRoot, options = {}) {
       const fullPath = path.join(current, entry.name)
       const relative = normalizeRelative(path.relative(root, fullPath))
       if (shouldExclude(relative, options.excludePatterns || DEFAULT_EXCLUDES)) continue
-      if (entry.isSymbolicLink()) throw new Error(`State backup refuses symbolic links: ${relative}`)
+      if (entry.isSymbolicLink()) {
+        if (typeof options.onSkippedEntry === 'function') options.onSkippedEntry(skippedSymlinkEntry(relative))
+        continue
+      }
       if (entry.isDirectory()) stack.push(fullPath)
       else if (entry.isFile()) files.push({ fullPath, relative })
     }
@@ -75,7 +86,14 @@ function createStateBackup(options) {
   if (!isWithin(backupParent, backupRoot)) throw new Error('Backup destination escapes backup parent')
   if (fs.existsSync(backupRoot)) throw new Error(`Backup destination already exists: ${backupRoot}`)
 
-  const files = collectSourceFiles(sourceRoot, options)
+  const skippedEntries = []
+  const files = collectSourceFiles(sourceRoot, {
+    ...options,
+    onSkippedEntry(entry) {
+      skippedEntries.push(entry)
+      if (typeof options.onSkippedEntry === 'function') options.onSkippedEntry(entry)
+    },
+  })
   ensureDirectory(backupRoot)
   const manifestFiles = []
   try {
@@ -92,6 +110,8 @@ function createStateBackup(options) {
       sourceName: path.basename(sourceRoot),
       fileCount: manifestFiles.length,
       totalBytes: manifestFiles.reduce((total, entry) => total + entry.size, 0),
+      skippedEntryCount: skippedEntries.length,
+      skippedEntries: skippedEntries.sort((left, right) => left.path.localeCompare(right.path)),
       files: manifestFiles,
     }
     fs.writeFileSync(path.join(backupRoot, 'backup-manifest.json'), `${JSON.stringify(manifest, null, 2)}\n`, { mode: 0o600 })
@@ -109,6 +129,10 @@ function verifyStateBackup(backupRoot) {
   const manifest = JSON.parse(fs.readFileSync(manifestPath, 'utf8'))
   if (!manifest || manifest.schema !== 1 || !Array.isArray(manifest.files)) throw new Error('Backup manifest schema is invalid')
   if (manifest.fileCount !== manifest.files.length) throw new Error('Backup manifest fileCount does not match files')
+  const skippedEntries = Array.isArray(manifest.skippedEntries) ? manifest.skippedEntries : []
+  if (manifest.skippedEntryCount !== undefined && manifest.skippedEntryCount !== skippedEntries.length) {
+    throw new Error('Backup manifest skippedEntryCount does not match skipped entries')
+  }
   let totalBytes = 0
   const seen = new Set()
   for (const entry of manifest.files) {
@@ -123,6 +147,15 @@ function verifyStateBackup(backupRoot) {
     if (stat.size !== entry.size) throw new Error(`Backup file size mismatch: ${relative}`)
     if (sha256File(filePath) !== entry.sha256) throw new Error(`Backup file checksum mismatch: ${relative}`)
     totalBytes += stat.size
+  }
+  for (const entry of skippedEntries) {
+    const relative = normalizeRelative(entry.path)
+    if (!relative || relative.startsWith('../') || path.isAbsolute(relative)) throw new Error(`Unsafe skipped backup path: ${relative}`)
+    if (seen.has(relative)) throw new Error(`Duplicate backup path: ${relative}`)
+    seen.add(relative)
+    if (entry.kind !== 'symbolic-link' || entry.reason !== 'symbolic_link_not_followed') {
+      throw new Error(`Unknown skipped backup entry: ${relative}`)
+    }
   }
   if (totalBytes !== manifest.totalBytes) throw new Error('Backup manifest totalBytes does not match files')
   return manifest

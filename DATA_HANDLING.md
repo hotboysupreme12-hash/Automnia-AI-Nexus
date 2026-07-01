@@ -10,9 +10,17 @@ DystopAI Core is designed as a local-first desktop operator console. Application
 - Provider keys and OAuth credentials remain in local OpenClaw state.
 - Release diagnostics and logs may contain operational metadata and must be reviewed before sharing.
 
-## External processing
+## What data stays local
+
+By default, DystopAI stores operator configuration, agent doctrine, runtime ledgers, mission history, provider authentication material, plugin configuration, local sessions, and selected workspaces on the operator's machine. DystopAI Core does not require a DystopAI cloud telemetry service for local operation.
+
+Local-first does not mean every enabled workflow is offline. Agent tools, model providers, plugins, channels, browser actions, and diagnostics can cross the local boundary when the operator configures them to do so.
+
+## What can leave your machine
 
 Prompts, attachments, tool inputs, messages, or other content may be transmitted to model providers and connected services selected by the operator. Those services have their own terms, retention rules, and privacy practices. DystopAI does not make a local workflow private after the operator grants an agent a networked provider, browser, messaging, email, voice, or other external tool.
+
+Examples of data that can leave the machine include model prompts and responses, attachment excerpts, tool results, channel messages, webhook payloads, browser requests, provider usage metadata, feedback reports, and any reviewed logs or diagnostics the operator submits.
 
 ## Telemetry
 

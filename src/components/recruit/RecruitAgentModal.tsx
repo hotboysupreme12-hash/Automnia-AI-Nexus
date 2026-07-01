@@ -1,6 +1,13 @@
 import { useCallback, useDeferredValue, useEffect, useMemo, useRef, useState } from 'react'
 import type { CSSProperties, FormEvent, KeyboardEvent, ReactNode } from 'react'
 import { apiErrorMessage, apiRequest } from '../../api/client'
+import {
+  authStatusForProvider,
+  fetchProviderAuthStatuses,
+  saveProviderApiKey,
+  safeAuthProviders,
+  type AuthProviderStatus,
+} from '../../api/providerAuth'
 import { useNexusStore } from '../../store/nexusStore'
 import type { RecruitAgentInput } from '../../store/nexusStore'
 import type { BehaviorProfile, CapabilityKey } from '../../types/nexus'
@@ -12,27 +19,6 @@ type AvailableModel = {
   alias: string
   provider: string
   name: string
-}
-
-type AuthProviderStatus = {
-  provider: string
-  configured: boolean
-  envKeys: string[]
-  label?: string
-  oauth?: {
-    supported: boolean
-    configured: boolean
-    available: boolean
-    missing?: string[]
-    docs?: string
-    redirectUri?: string
-    projectId?: string
-    accountId?: string
-    email?: string
-    expiresAt?: number
-    clientIdEnvKeys?: string[]
-    projectIdEnvKeys?: string[]
-  }
 }
 
 type AutoForgeApiResponse = {
@@ -62,15 +48,6 @@ const isAvailableModel = (value: unknown): value is AvailableModel => {
 
 const safeAvailableModels = (value: unknown): AvailableModel[] =>
   Array.isArray(value) ? value.filter(isAvailableModel) : []
-
-const isAuthProviderStatus = (value: unknown): value is AuthProviderStatus => {
-  if (!value || typeof value !== 'object') return false
-  const entry = value as Partial<AuthProviderStatus>
-  return typeof entry.provider === 'string' && typeof entry.configured === 'boolean'
-}
-
-const safeAuthProviders = (value: unknown): AuthProviderStatus[] =>
-  Array.isArray(value) ? value.filter(isAuthProviderStatus) : []
 
 const cachedRecruitModels = () =>
   recruitModelsCache && recruitModelsCache.expiresAt > Date.now() ? recruitModelsCache.value : null
@@ -102,9 +79,10 @@ async function loadRecruitAuthProviders(force = false) {
   if (cached) return cached
   if (!force && recruitAuthProvidersRequest) return recruitAuthProvidersRequest
 
-  recruitAuthProvidersRequest = (force
-    ? apiRequest<{ providers?: unknown }>('/api/auth/providers?refresh=1', { timeoutMs: 30_000, cache: 'no-store' })
-    : apiRequest<{ providers?: unknown }>('/api/auth/providers', { timeoutMs: 10_000 }))
+  recruitAuthProvidersRequest = fetchProviderAuthStatuses({
+    refresh: force,
+    timeoutMs: force ? 30_000 : 10_000,
+  })
     .then((result) => {
       if (!result.ok) throw new Error(apiErrorMessage(result.error))
       const data = result.data
@@ -117,25 +95,6 @@ async function loadRecruitAuthProviders(force = false) {
     })
   return recruitAuthProvidersRequest
 }
-
-const OAUTH_PROVIDER_FALLBACKS: Record<string, AuthProviderStatus> = {
-  'openai-codex': {
-    provider: 'openai-codex',
-    configured: false,
-    envKeys: [],
-    label: 'OpenAI Codex',
-    oauth: {
-      supported: true,
-      configured: false,
-      available: true,
-      missing: [],
-      redirectUri: 'http://localhost:1455/auth/callback',
-    },
-  },
-}
-
-const authStatusForProvider = (providers: AuthProviderStatus[], provider: string) =>
-  providers.find((entry) => entry.provider === provider) || OAUTH_PROVIDER_FALLBACKS[provider]
 
 const isOpenAiCodexSubscriptionModel = (modelId: string) => {
   const [provider = '', ...modelParts] = modelId.trim().split('/')
@@ -1484,11 +1443,7 @@ export function RecruitAgentModal({ isOpen, onClose }: { isOpen: boolean; onClos
           providerStatus={authModalProvider}
           onClose={() => setAuthModalProvider(null)}
           onSave={async (apiKey) => {
-            const result = await apiRequest(`/api/auth/providers/${encodeURIComponent(authModalProvider.provider)}`, {
-              method: 'POST',
-              timeoutMs: 20_000,
-              body: { apiKey },
-            })
+            const result = await saveProviderApiKey(authModalProvider.provider, apiKey)
             if (!result.ok) throw new Error(apiErrorMessage(result.error))
             await fetchAuthProviders(true)
           }}

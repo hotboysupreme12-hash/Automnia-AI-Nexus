@@ -29,10 +29,12 @@ const modelCatalogService = readWorkspaceFile('server/services/providers/modelCa
 const providerAuthService = readWorkspaceFile('server/services/providers/providerAuthService.ts')
 const oauthCallbackService = readWorkspaceFile('server/services/providers/oauthCallbackService.ts')
 const providerSetupService = readWorkspaceFile('server/services/providers/providerSetupService.ts')
+const providerAuthApi = readWorkspaceFile('src/api/providerAuth.ts')
 const providerModal = readWorkspaceFile('src/components/auth/ProviderAuthModal.tsx')
 const editor = readWorkspaceFile('src/components/editor/AgentEditorModal.tsx')
 const recruit = readWorkspaceFile('src/components/recruit/RecruitAgentModal.tsx')
 const modelSelector = readWorkspaceFile('src/components/party/ModelSelectorModal.tsx')
+const phaseKProviderAgentSmoke = readWorkspaceFile('scripts/smoke-phase-k-provider-agent.ts')
 const packageJson = JSON.parse(readWorkspaceFile('package.json')) as { scripts?: Record<string, string> }
 const staleCodexSparkId = `codex-${3}-spark`
 const unavailableModelsBlock = modelCatalogService.slice(
@@ -167,22 +169,40 @@ for (const inlineMarker of [
   assert(!server.includes(inlineMarker), `server index should not inline ${inlineMarker}`)
 }
 
-assert(providerModal.includes("apiRequest<{ providers?: AuthProviderStatus[] }>('/api/auth/providers?refresh=1'"), 'ProviderAuthModal should refresh provider status through apiRequest')
+assert(providerAuthApi.includes('export function fetchProviderAuthStatuses'), 'renderer provider auth API should expose provider status loading')
+assert(providerAuthApi.includes("apiRequest<ProviderAuthStatusesPayload>(options.refresh ? '/api/auth/providers?refresh=1' : '/api/auth/providers'"), 'renderer provider auth API should own provider status endpoints')
+assert(providerAuthApi.includes('export function saveProviderApiKey'), 'renderer provider auth API should expose API-key saves')
+assert(providerAuthApi.includes('apiRequest(`/api/auth/providers/${encodeURIComponent(provider)}`'), 'renderer provider auth API should own provider API-key endpoint')
+assert(providerAuthApi.includes('export function startProviderOAuthSession'), 'renderer provider auth API should expose OAuth start')
+assert(providerAuthApi.includes('apiRequest<OAuthStartPayload>(`/api/auth/providers/${encodeURIComponent(provider)}/oauth/start`'), 'renderer provider auth API should own OAuth start endpoint')
+assert(providerAuthApi.includes('export function fetchProviderOAuthSession'), 'renderer provider auth API should expose OAuth polling')
+assert(providerAuthApi.includes('apiRequest<OAuthSessionPayload>('), 'renderer provider auth API should poll OAuth through apiRequest')
+assert(providerAuthApi.includes('export function submitProviderOAuthManual'), 'renderer provider auth API should expose manual OAuth completion')
+assert(providerAuthApi.includes('`/api/auth/providers/${encodeURIComponent(provider)}/oauth/session/${encodeURIComponent(sessionId)}/manual`'), 'renderer provider auth API should own manual OAuth endpoint')
+assert(providerModal.includes('fetchProviderAuthStatuses({ refresh: true, timeoutMs: 30_000 })'), 'ProviderAuthModal should refresh provider status through the provider auth API module')
 assert(providerModal.includes("setStatus('Saved. Verifying provider readiness...')"), 'ProviderAuthModal should verify readiness immediately after saving a key')
 assert(providerModal.includes("setApiKey('')"), 'ProviderAuthModal should clear pasted key material after save')
-assert(providerModal.includes('apiRequest<OAuthStartPayload>(`/api/auth/providers/${provider}/oauth/start`'), 'ProviderAuthModal should start OAuth through apiRequest')
-assert(providerModal.includes('apiRequest<OAuthSessionPayload>(`/api/auth/providers/${provider}/oauth/session/${sessionId}`'), 'ProviderAuthModal should poll OAuth through apiRequest')
-assert(providerModal.includes('apiRequest(`/api/auth/providers/${provider}/oauth/session/${manualSessionId}/manual`'), 'ProviderAuthModal should submit manual OAuth codes through apiRequest')
+assert(providerModal.includes('startProviderOAuthSession(provider'), 'ProviderAuthModal should start OAuth through the provider auth API module')
+assert(providerModal.includes('fetchProviderOAuthSession(provider, sessionId'), 'ProviderAuthModal should poll OAuth through the provider auth API module')
+assert(providerModal.includes('submitProviderOAuthManual(provider, manualSessionId'), 'ProviderAuthModal should submit manual OAuth codes through the provider auth API module')
 assert(!providerModal.includes('fetchJsonWithTimeout'), 'ProviderAuthModal should not keep a legacy JSON fetch shim')
 assert(!providerModal.includes('new Response'), 'ProviderAuthModal should not synthesize Response objects for API errors')
 assert(!/\bfetch\s*\(/.test(providerModal), 'ProviderAuthModal should not bypass the canonical API client')
 
-assert(editor.includes("apiRequest<{providers:AuthProviderStatus[]}>('/api/auth/providers'"), 'AgentEditorModal should load auth providers through apiRequest')
-assert(recruit.includes("apiRequest<{ providers?: unknown }>('/api/auth/providers'"), 'RecruitAgentModal should load auth providers through apiRequest')
-assert(modelSelector.includes("apiRequest<{ providers: AuthProviderStatus[] }>('/api/auth/providers'"), 'ModelSelectorModal should load auth providers through apiRequest')
-assert(modelSelector.includes('apiRequest(`/api/auth/providers/${encodeURIComponent(authModalProvider.provider)}`'), 'ModelSelectorModal provider key save should use apiRequest')
-assert(editor.includes('apiRequest(`/api/auth/providers/${encodeURIComponent(authModalProvider.provider)}`'), 'AgentEditorModal provider key save should use apiRequest')
-assert(recruit.includes('apiRequest(`/api/auth/providers/${encodeURIComponent(authModalProvider.provider)}`'), 'RecruitAgentModal provider key save should use apiRequest')
+assert(editor.includes('fetchProviderAuthStatuses({ refresh: force'), 'AgentEditorModal should load auth providers through the provider auth API module')
+assert(recruit.includes('fetchProviderAuthStatuses({'), 'RecruitAgentModal should load auth providers through the provider auth API module')
+assert(modelSelector.includes('fetchProviderAuthStatuses({ refresh: force'), 'ModelSelectorModal should load auth providers through the provider auth API module')
+assert(modelSelector.includes('saveProviderApiKey(authModalProvider.provider, apiKey)'), 'ModelSelectorModal provider key save should use the provider auth API module')
+assert(editor.includes('saveProviderApiKey(authModalProvider.provider, apiKey)'), 'AgentEditorModal provider key save should use the provider auth API module')
+assert(recruit.includes('saveProviderApiKey(authModalProvider.provider, apiKey)'), 'RecruitAgentModal provider key save should use the provider auth API module')
+for (const [name, content] of [
+  ['ProviderAuthModal', providerModal],
+  ['AgentEditorModal', editor],
+  ['RecruitAgentModal', recruit],
+  ['ModelSelectorModal', modelSelector],
+] as const) {
+  assert(!content.includes('/api/auth/providers'), `${name} should not own provider auth endpoint literals after renderer API extraction`)
+}
 assert(editor.includes("const CODEX_5_3_SPARK_MODEL_ID = 'openai/gpt-5.3-codex-spark'"), 'AgentEditorModal should seed the canonical Codex 5.3 Spark model id')
 assert(editor.includes("name: 'Codex 5.3 Spark'"), 'AgentEditorModal should label the seeded Codex model as 5.3 Spark')
 assert(!editor.includes(staleCodexSparkId), 'AgentEditorModal should not expose the stale pre-5.3 Spark id')
@@ -190,10 +210,10 @@ assert(modelCatalogService.includes("{ id: 'openai/gpt-5.3-codex-spark', alias: 
 assert(modelSelector.includes("const CODEX_5_3_SPARK_MODEL_ID = 'openai/gpt-5.3-codex-spark'"), 'ModelSelectorModal should seed the canonical Codex 5.3 Spark model id')
 assert(modelSelector.includes("name: 'Codex 5.3 Spark'"), 'ModelSelectorModal should label the seeded Codex model as 5.3 Spark')
 assert(modelSelector.includes('const seededCatalog = catalog.some((model) => model.id === CODEX_5_3_SPARK_MODEL_ID)'), 'ModelSelectorModal should keep Codex 5.3 Spark in the selectable catalog')
-assert(editor.includes('const effectiveAuthStatusForProvider = (providers: AuthProviderStatus[], provider: string) =>'), 'AgentEditorModal should use effective provider auth status for Codex subscription models')
-assert(editor.includes("const openAiStatus = authStatusForProvider(providers, 'openai')"), 'AgentEditorModal should accept the canonical OpenAI auth route for OpenAI Codex model saves')
+assert(providerAuthApi.includes('export function effectiveAuthStatusForProvider'), 'renderer provider auth API should own effective provider auth status for Codex subscription models')
+assert(providerAuthApi.includes("const openAiStatus = authStatusForProvider(providers, 'openai')"), 'renderer provider auth API should accept the canonical OpenAI auth route for OpenAI Codex model saves')
 assert(editor.includes('configLoadSeqRef.current += 1'), 'AgentEditorModal model save should invalidate stale config loads before applying the save result')
-assert(modelSelector.includes('const effectiveAuthStatusForProvider = (providers: AuthProviderStatus[], provider: string) =>'), 'ModelSelectorModal should use effective provider auth status for Codex subscription models')
+assert(modelSelector.includes('effectiveAuthStatusForProvider(authProviders, primaryProvider)'), 'ModelSelectorModal should use effective provider auth status for Codex subscription models')
 assert(modelSelector.includes('const providerStatus = effectiveAuthStatusForProvider(authProviders, primaryProvider)'), 'ModelSelectorModal save should use effective provider auth status')
 assert(!unavailableModelsBlock.includes('openai/gpt-5.3-codex-spark'), 'Codex 5.3 Spark should not be classified as unavailable')
 assert(!suppressedModelsBlock.includes('openai/gpt-5.3-codex-spark'), 'Codex 5.3 Spark should be allowed through saved OpenClaw config normalization')
@@ -214,5 +234,14 @@ assert(
   packageJson.scripts?.['test:ci']?.includes('npm run smoke:provider-setup-service'),
   'test:ci should run the provider setup service smoke',
 )
+assert(
+  packageJson.scripts?.['smoke:phase-k-provider-agent'] === 'tsx scripts/smoke-phase-k-provider-agent.ts',
+  'package.json should expose the Phase K provider/agent smoke',
+)
+assert(phaseKProviderAgentSmoke.includes("'/api/auth/providers'"), 'Phase K smoke should capture provider status through the backend route')
+assert(phaseKProviderAgentSmoke.includes("'/api/party/recruit'"), 'Phase K smoke should recruit through the backend route')
+assert(phaseKProviderAgentSmoke.includes("'/api/party/workspace'"), 'Phase K smoke should edit workspace through the backend route')
+assert(phaseKProviderAgentSmoke.includes('providerStatusHasSecretMaterial'), 'Phase K smoke should guard provider evidence redaction')
+assert(phaseKProviderAgentSmoke.includes('completedItems = providerItemBlocked ? [115, 116] : [114, 115, 116]'), 'Phase K smoke should complete item 114 only when a provider is configured')
 
 console.log('auth provider/model control-plane contract ok')

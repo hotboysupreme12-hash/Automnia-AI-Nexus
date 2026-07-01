@@ -3,6 +3,14 @@ import { motion, AnimatePresence } from 'framer-motion'
 import { ProviderAuthModal } from '../auth/ProviderAuthModal'
 import type { ThinkingLevel } from '../../types/nexus'
 import { apiErrorMessage, apiRequest } from '../../api/client'
+import {
+  authKindForProvider,
+  authLabelForProvider,
+  effectiveAuthStatusForProvider,
+  fetchProviderAuthStatuses,
+  saveProviderApiKey,
+  type AuthProviderStatus,
+} from '../../api/providerAuth'
 import { formatModelGroupLabel, groupAvailableModels } from '../../utils/modelGrouping'
 
 interface AvailableModel {
@@ -12,66 +20,10 @@ interface AvailableModel {
   name: string
 }
 
-interface AuthProviderStatus {
-  provider: string
-  configured: boolean
-  envKeys: string[]
-  label?: string
-  oauth?: {
-    supported: boolean
-    configured: boolean
-    available: boolean
-    missing?: string[]
-    docs?: string
-    redirectUri?: string
-    projectId?: string
-    accountId?: string
-    email?: string
-    expiresAt?: number
-    clientIdEnvKeys?: string[]
-    projectIdEnvKeys?: string[]
-  }
-}
-
-const OAUTH_PROVIDER_FALLBACKS: Record<string, AuthProviderStatus> = {
-  'openai-codex': {
-    provider: 'openai-codex',
-    configured: false,
-    envKeys: [],
-    label: 'OpenAI Codex',
-    oauth: {
-      supported: true,
-      configured: false,
-      available: true,
-      missing: [],
-      redirectUri: 'http://localhost:1455/auth/callback',
-    },
-  },
-}
-
-const authStatusForProvider = (providers: AuthProviderStatus[], provider: string) =>
-  providers.find((entry) => entry.provider === provider) || OAUTH_PROVIDER_FALLBACKS[provider]
-
-const effectiveAuthStatusForProvider = (providers: AuthProviderStatus[], provider: string) => {
-  const status = authStatusForProvider(providers, provider)
-  if (provider !== 'openai-codex' || status?.configured) return status
-  const openAiStatus = authStatusForProvider(providers, 'openai')
-  if (!openAiStatus?.configured) return status
-  return {
-    ...(status || OAUTH_PROVIDER_FALLBACKS['openai-codex']),
-    configured: true,
-  }
-}
-
 const isOpenAiCodexSubscriptionModel = (modelId: string) => {
   const [, model = ''] = modelId.trim().split('/')
   return /^gpt-5(?:\.\d+)?(?:-[a-z0-9][a-z0-9.-]*)?$/i.test(model)
 }
-
-const authLabelForProvider = (provider: string, status?: AuthProviderStatus) =>
-  status?.label || (provider === 'openai-codex' ? 'OpenAI Codex' : provider)
-
-const authKindForProvider = (status?: AuthProviderStatus) => (status?.oauth?.supported ? 'OAuth' : 'auth')
 
 interface ModelSelectorModalProps {
   isOpen: boolean
@@ -203,9 +155,7 @@ export function ModelSelectorModal({
 
   const fetchAuthProviders = useCallback(async (force = false) => {
     try {
-      const result = force
-        ? await apiRequest<{ providers: AuthProviderStatus[] }>('/api/auth/providers?refresh=1', { timeoutMs: 30_000, cache: 'no-store' })
-        : await apiRequest<{ providers: AuthProviderStatus[] }>('/api/auth/providers', { timeoutMs: 8000 })
+      const result = await fetchProviderAuthStatuses({ refresh: force, timeoutMs: force ? 30_000 : 8_000 })
       const next = result.ok ? result.data.providers || [] : []
       setAuthProviders(next)
       setAuthModalProvider((current) => current ? next.find((entry) => entry.provider === current.provider) || current : current)
@@ -470,11 +420,7 @@ export function ModelSelectorModal({
           providerStatus={authModalProvider}
           onClose={() => setAuthModalProvider(null)}
           onSave={async (apiKey) => {
-            const result = await apiRequest(`/api/auth/providers/${encodeURIComponent(authModalProvider.provider)}`, {
-              method: 'POST',
-              timeoutMs: 20_000,
-              body: { apiKey },
-            })
+            const result = await saveProviderApiKey(authModalProvider.provider, apiKey)
             if (!result.ok) throw new Error(apiErrorMessage(result.error))
             await fetchAuthProviders(true)
           }}

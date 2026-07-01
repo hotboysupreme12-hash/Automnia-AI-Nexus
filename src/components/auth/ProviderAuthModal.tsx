@@ -1,44 +1,13 @@
 import { useCallback, useEffect, useState } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
-import { apiErrorMessage, apiRequest } from '../../api/client'
-
-interface AuthProviderOAuthStatus {
-  supported: boolean
-  configured: boolean
-  available: boolean
-  missing?: string[]
-  docs?: string
-  redirectUri?: string
-  projectId?: string
-  accountId?: string
-  email?: string
-  expiresAt?: number
-  refreshAvailable?: boolean
-  clientIdEnvKeys?: string[]
-  projectIdEnvKeys?: string[]
-}
-
-interface AuthProviderGcloudStatus {
-  supported: boolean
-  installed: boolean
-  authenticated: boolean
-  configured: boolean
-  projectId?: string
-  location?: string
-  account?: string
-  missing?: string[]
-  installUrl?: string
-  commands?: string[]
-}
-
-interface AuthProviderStatus {
-  provider: string
-  configured: boolean
-  envKeys: string[]
-  label?: string
-  oauth?: AuthProviderOAuthStatus
-  gcloud?: AuthProviderGcloudStatus
-}
+import { apiErrorMessage } from '../../api/client'
+import {
+  fetchProviderAuthStatuses,
+  fetchProviderOAuthSession,
+  startProviderOAuthSession,
+  submitProviderOAuthManual,
+  type AuthProviderStatus,
+} from '../../api/providerAuth'
 
 interface ProviderAuthModalProps {
   isOpen: boolean
@@ -62,23 +31,6 @@ const providerLabels: Record<string, string> = {
 }
 
 const sleep = (ms: number) => new Promise((resolve) => window.setTimeout(resolve, ms))
-
-type OAuthSessionPayload = {
-  status?: 'pending' | 'complete' | 'error'
-  error?: string
-  authorizationUrl?: string
-  manualInputRequired?: boolean
-  manualPrompt?: string
-  result?: { email?: string; projectId?: string }
-  providerStatus?: AuthProviderStatus
-}
-
-type OAuthStartPayload = {
-  ok?: boolean
-  sessionId?: string
-  authorizationUrl?: string
-  openedBrowser?: boolean
-}
 
 function formatOAuthExpiry(expiresAt?: number, refreshAvailable = false) {
   if (!expiresAt) return refreshAvailable ? 'refresh token available' : 'not reported'
@@ -119,10 +71,7 @@ export function ProviderAuthModal({ isOpen, provider, envKeys, providerStatus, o
   const refreshProviderStatus = useCallback(async (announceReady = false) => {
     setGcloudRefreshing(true)
     try {
-      const result = await apiRequest<{ providers?: AuthProviderStatus[] }>('/api/auth/providers?refresh=1', {
-        cache: 'no-store',
-        timeoutMs: 30_000,
-      })
+      const result = await fetchProviderAuthStatuses({ refresh: true, timeoutMs: 30_000 })
       if (!result.ok) throw new Error(apiErrorMessage(result.error))
       const next = result.data.providers?.find((entry) => entry.provider === provider) || null
       if (!next) {
@@ -199,10 +148,7 @@ export function ProviderAuthModal({ isOpen, provider, envKeys, providerStatus, o
   const pollOAuthSession = async (sessionId: string) => {
     for (let attempt = 0; attempt < 90; attempt += 1) {
       await sleep(1500)
-      const result = await apiRequest<OAuthSessionPayload>(`/api/auth/providers/${provider}/oauth/session/${sessionId}`, {
-        cache: 'no-store',
-        timeoutMs: 10_000,
-      })
+      const result = await fetchProviderOAuthSession(provider, sessionId, { timeoutMs: 10_000 })
       if (!result.ok) throw new Error(apiErrorMessage(result.error))
       const data = result.data
       if (data.authorizationUrl) setAuthorizationUrl(data.authorizationUrl)
@@ -239,9 +185,8 @@ export function ProviderAuthModal({ isOpen, provider, envKeys, providerStatus, o
     setManualPrompt('')
     setManualSessionId('')
     try {
-      const result = await apiRequest<OAuthStartPayload>(`/api/auth/providers/${provider}/oauth/start`, {
-        method: 'POST',
-        body: { projectId: projectId.trim() || undefined },
+      const result = await startProviderOAuthSession(provider, {
+        projectId: projectId.trim() || undefined,
         timeoutMs: 20_000,
       })
       if (!result.ok) throw new Error(apiErrorMessage(result.error))
@@ -265,11 +210,7 @@ export function ProviderAuthModal({ isOpen, provider, envKeys, providerStatus, o
     setManualSubmitting(true)
     setStatus('')
     try {
-      const result = await apiRequest(`/api/auth/providers/${provider}/oauth/session/${manualSessionId}/manual`, {
-        method: 'POST',
-        body: { input: manualCode.trim() },
-        timeoutMs: 15_000,
-      })
+      const result = await submitProviderOAuthManual(provider, manualSessionId, manualCode.trim())
       if (!result.ok) throw new Error(apiErrorMessage(result.error))
       setManualCode('')
       setManualPrompt('')

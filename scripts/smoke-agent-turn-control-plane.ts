@@ -134,8 +134,20 @@ assert(
   'nexusStore should delegate non-SSE agent-turn requests to src/api/agentTurns.ts',
 )
 assert(
-  store.includes("fetch(apiUrl('/api/openclaw/agent-turn/stream')"),
-  'renderer should preserve direct fetch only for the SSE agent-turn stream',
+  agentTurnsApi.includes("fetch(apiUrl('/api/openclaw/agent-turn/stream')"),
+  'renderer should call SSE agent-turn through the extracted agent-turn API helper',
+)
+assert(
+  agentTurnsApi.includes('createSseFrameParser()'),
+  'agent-turn API helper should own SSE frame parsing iteration',
+)
+assert(
+  store.includes('sendStreamingAgentTurn('),
+  'nexusStore should delegate SSE agent-turn transport to src/api/agentTurns.ts',
+)
+assert(
+  !store.includes("'/api/openclaw/agent-turn/stream'") && !store.includes('"/api/openclaw/agent-turn/stream"'),
+  'nexusStore should not own the SSE agent-turn endpoint literal',
 )
 
 assert(
