@@ -55,6 +55,22 @@ function estimateCommandConsoleTokenCount(text: string): number {
   return Math.max(1, Math.ceil((text || '').length / 4))
 }
 
+function commandConsoleDraftKeyIncludesAgent(storageKey: string, agentId: string): boolean {
+  const normalizedAgentId = agentId.trim().toLowerCase()
+  if (!normalizedAgentId) return false
+
+  const normalizedKey = storageKey.trim().toLowerCase()
+  if (!normalizedKey.startsWith(COMMAND_CONSOLE_DRAFT_PREFIX)) return false
+
+  const routeKey = normalizedKey.slice(COMMAND_CONSOLE_DRAFT_PREFIX.length)
+  const targetSegment = routeKey.split(':').at(-1) || ''
+  return targetSegment
+    .split(',')
+    .map((part) => part.trim())
+    .filter(Boolean)
+    .includes(normalizedAgentId)
+}
+
 export function makeCommandConsoleDraftStorageKey(routeKey: string): string {
   return `${COMMAND_CONSOLE_DRAFT_PREFIX}${routeKey}`
 }
@@ -94,7 +110,7 @@ export function removeCommandConsoleDraftsForAgent(agentId: string, storage: Com
   try {
     for (let index = storage.length - 1; index >= 0; index -= 1) {
       const key = storage.key(index)
-      if (key?.startsWith(COMMAND_CONSOLE_DRAFT_PREFIX) && key.toLowerCase().includes(normalized)) {
+      if (key && commandConsoleDraftKeyIncludesAgent(key, normalized)) {
         storage.removeItem(key)
         removed += 1
       }
