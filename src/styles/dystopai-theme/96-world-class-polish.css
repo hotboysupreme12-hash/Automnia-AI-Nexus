@@ -1,0 +1,76 @@
+/* Final product-polish pass: interaction clarity, safer resize behavior, and calmer motion. */
+
+html.dui-pro-overhaul .dy-agent-split-resizer {
+  touch-action: none !important;
+  cursor: col-resize !important;
+}
+
+html.dui-pro-overhaul .dy-agent-split-resizer:hover,
+html.dui-pro-overhaul .dy-agent-split-resizer:focus-visible {
+  background: linear-gradient(180deg, rgba(0, 234, 255, .12), rgba(168, 85, 247, .08)) !important;
+}
+
+html.dui-pro-overhaul .dy-console-toggle,
+html.dui-pro-overhaul .dy-command-stop-run,
+html.dui-pro-overhaul .dy-command-response-cta button,
+html.dui-pro-overhaul .dy-command-upload-remove {
+  transition: border-color .16s ease, background .16s ease, box-shadow .16s ease, color .16s ease, transform .16s ease !important;
+}
+
+html.dui-pro-overhaul .dy-console-toggle:hover,
+html.dui-pro-overhaul .dy-command-stop-run:hover,
+html.dui-pro-overhaul .dy-command-response-cta button:hover,
+html.dui-pro-overhaul .dy-command-upload-remove:hover {
+  transform: translateY(-1px) !important;
+}
+
+html.dui-pro-overhaul .dy-command-send:disabled,
+html.dui-pro-overhaul .dy-command-icon-button:disabled,
+html.dui-pro-overhaul .dy-command-response-cta button:disabled {
+  cursor: not-allowed !important;
+  opacity: .48 !important;
+  transform: none !important;
+  box-shadow: none !important;
+}
+
+html.dui-pro-overhaul .dy-command-textarea::placeholder {
+  color: color-mix(in srgb, var(--dui-muted, #8393a8) 78%, transparent) !important;
+}
+
+html.dui-pro-overhaul .dy-command-upload-error {
+  white-space: pre-wrap !important;
+  overflow-wrap: anywhere !important;
+}
+
+html.dui-pro-overhaul .dy-command-target-chip {
+  min-width: 0 !important;
+}
+
+html.dui-pro-overhaul .dy-command-target-chip:focus-visible {
+  outline: 1px solid rgba(0, 234, 255, .78) !important;
+  outline-offset: 2px !important;
+  box-shadow: 0 0 0 4px rgba(0, 234, 255, .12) !important;
+}
+
+html.dui-pro-overhaul .dy-workspace-context__notice {
+  overflow-wrap: anywhere !important;
+}
+
+html.dui-pro-overhaul .dy-status-chip[disabled] {
+  opacity: .62 !important;
+}
+
+html.dui-pro-overhaul .dy-command-message-body {
+  overflow-wrap: anywhere !important;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  html.dui-pro-overhaul *,
+  html.dui-pro-overhaul *::before,
+  html.dui-pro-overhaul *::after {
+    animation-duration: .01ms !important;
+    animation-iteration-count: 1 !important;
+    scroll-behavior: auto !important;
+    transition-duration: .01ms !important;
+  }
+}
