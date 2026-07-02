@@ -48,6 +48,9 @@ const controlPlaneHttp = readWorkspaceFile('server/controlPlaneHttp.ts')
 const store = readWorkspaceFile('src/store/nexusStore.ts')
 const agentTurnsApi = readWorkspaceFile('src/api/agentTurns.ts')
 const consolePanel = readWorkspaceFile('src/components/monitor/AgentResponseConsole.tsx')
+const phaseKCommandConsoleSmoke = readWorkspaceFile('scripts/smoke-phase-k-command-console.ts')
+const phaseKRedactedFailedCommandSmoke = readWorkspaceFile('scripts/smoke-phase-k-redacted-failed-command.ts')
+const uiSmoke = readWorkspaceFile('scripts/smoke-ui-render.mjs')
 const packageJson = JSON.parse(readWorkspaceFile('package.json')) as { scripts?: Record<string, string> }
 
 for (const code of ['agent_turn_failed', 'clawtalk_console_failed', 'party_handoff_failed']) {
@@ -155,8 +158,68 @@ assert(
   'package.json should expose smoke:agent-turn-control-plane',
 )
 assert(
+  packageJson.scripts?.['smoke:phase-k-command-console'] === 'tsx scripts/smoke-phase-k-command-console.ts',
+  'package.json should expose smoke:phase-k-command-console',
+)
+assert(
+  packageJson.scripts?.['smoke:phase-k-redacted-failed-command'] === 'tsx scripts/smoke-phase-k-redacted-failed-command.ts',
+  'package.json should expose smoke:phase-k-redacted-failed-command',
+)
+assert(
   packageJson.scripts?.['test:ci']?.includes('npm run smoke:agent-turn-control-plane'),
   'test:ci should run the agent-turn control-plane smoke',
+)
+assert(
+  phaseKCommandConsoleSmoke.includes("'/api/openclaw/agent-turn/stream'"),
+  'Phase K command-console smoke should send commands through the stream route',
+)
+assert(
+  phaseKCommandConsoleSmoke.includes("'/api/files/upload'"),
+  'Phase K command-console smoke should upload an attachment before the attachment command',
+)
+assert(
+  phaseKCommandConsoleSmoke.includes("'x-control-center-stream-smoke': '1'"),
+  'Phase K command-console smoke should use the deterministic stream smoke hook',
+)
+assert(
+  phaseKCommandConsoleSmoke.includes('completedItems: [117, 118]'),
+  'Phase K command-console smoke should record items 117 and 118 together',
+)
+assert(
+  phaseKCommandConsoleSmoke.includes('evidenceHasSecretMaterial'),
+  'Phase K command-console smoke should guard evidence against credential material',
+)
+assert(
+  agentTurnRoutes.includes("streamSmokeMode === 'failure' || streamSmokeMode === 'fail'"),
+  'agent-turn stream route should expose a deterministic redacted failure smoke mode',
+)
+assert(
+  agentTurnRoutes.includes('const failureTransport = parsed.data.forceOpenClawRuntime ?'),
+  'agent-turn stream failures should preserve the Gateway transport when forced through the Command Console runtime path',
+)
+assert(
+  phaseKRedactedFailedCommandSmoke.includes("'x-control-center-stream-smoke': 'failure'"),
+  'Phase K redacted failed-command smoke should use the deterministic stream failure hook',
+)
+assert(
+  phaseKRedactedFailedCommandSmoke.includes('completedItems: [128]'),
+  'Phase K redacted failed-command smoke should record item 128',
+)
+assert(
+  phaseKRedactedFailedCommandSmoke.includes('assertRedactedCommandFailure'),
+  'Phase K redacted failed-command smoke should verify redacted SSE error/final payloads',
+)
+assert(
+  phaseKRedactedFailedCommandSmoke.includes('evidenceHasSecretMaterial'),
+  'Phase K redacted failed-command smoke should guard evidence against credential material',
+)
+assert(
+  uiSmoke.includes('seedRedactedFailedCommandConsole'),
+  'UI smoke should render a redacted failed Command Console response',
+)
+assert(
+  uiSmoke.includes('redactedFailureRawLeakAbsent') && uiSmoke.includes('redactedFailureMarkersPresent'),
+  'UI smoke should assert failed-command redaction markers and raw leak absence',
 )
 
 console.log('agent-turn control-plane contract ok')

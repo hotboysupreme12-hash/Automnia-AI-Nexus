@@ -32,6 +32,7 @@ const pluginsPanel = readWorkspaceFile('src/components/plugins/PluginsPanel.tsx'
 const pluginsApi = readWorkspaceFile('src/api/plugins.ts')
 const pluginStateProjection = readWorkspaceFile('src/components/plugins/pluginStateProjection.ts')
 const pluginInventoryService = readWorkspaceFile('server/services/plugins/pluginInventoryService.ts')
+const phaseKPluginStatusSmoke = readWorkspaceFile('scripts/smoke-phase-k-plugin-status.ts')
 const packageJson = JSON.parse(readWorkspaceFile('package.json')) as { scripts?: Record<string, string> }
 
 const pluginRouteMarkers = [
@@ -265,9 +266,20 @@ for (const pageStateFragment of [
   )
 }
 
+assert(phaseKPluginStatusSmoke.includes('completedItems: [126]'), 'Phase K plugin status smoke should record item 126 completion')
+assert(phaseKPluginStatusSmoke.includes('/api/plugins?refresh=1'), 'Phase K plugin status smoke should force-refresh plugin status')
+assert(phaseKPluginStatusSmoke.includes('/api/openclaw/runtime/status?refresh=1'), 'Phase K plugin status smoke should cross-check runtime plugin projection')
+assert(phaseKPluginStatusSmoke.includes('summarizePluginPageStates'), 'Phase K plugin status smoke should reuse Plugins page state summaries')
+assert(phaseKPluginStatusSmoke.includes('validateRuntimePlugins'), 'Phase K plugin status smoke should verify runtime plugin counts')
+assert(phaseKPluginStatusSmoke.includes('evidenceHasSecretMaterial'), 'Phase K plugin status smoke should guard evidence redaction')
+
 assert(
   packageJson.scripts?.['smoke:plugins-control-plane'] === 'tsx scripts/smoke-plugins-control-plane.ts',
   'package.json should expose smoke:plugins-control-plane',
+)
+assert(
+  packageJson.scripts?.['smoke:phase-k-plugin-status'] === 'tsx scripts/smoke-phase-k-plugin-status.ts',
+  'package.json should expose smoke:phase-k-plugin-status',
 )
 assert(
   packageJson.scripts?.['test:ci']?.includes('npm run smoke:plugins-control-plane'),

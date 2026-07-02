@@ -2246,14 +2246,22 @@ export const useNexusStore = create<NexusState>()(
               { signal: controller.signal, timeoutMs: requestTimeoutMs },
             )
             if (result.ok) return { payload: result.data, responseOk: true, streamed: liveResponseCreated }
-            const message = apiErrorMessage(result.error)
+            const networkFailure = result.error.code === 'network_error'
+            const message = networkFailure
+              ? [
+                  'Control Center lost the local backend connection before the provider returned.',
+                  'The Gateway may have restarted while this turn was opening. Reset Gateway from Monitor, then retry.',
+                  `Detail: ${result.error.message}`,
+                ].join('\n')
+              : apiErrorMessage(result.error)
+            const failureKind = networkFailure ? 'gateway_disconnect' : result.error.code
             return {
               payload: {
                 ok: false,
                 reply: message,
                 stderr: message,
                 code: result.status || 1,
-                failureKind: result.error.code,
+                failureKind,
               },
               responseOk: false,
               streamed: liveResponseCreated,
@@ -2447,9 +2455,9 @@ export const useNexusStore = create<NexusState>()(
             ? 'Agent turn request timed out after 6h waiting for backend response.'
             : offline
             ? [
-                'Control Center API request failed before the provider returned a response.',
-                'Restart the backend with npm run dev:server, or run npm run dev to start both client and server.',
-                `Detail: ${message}`,
+                'Control Center lost the local backend connection before the provider returned.',
+                'The Gateway may have restarted while this turn was opening. Reset Gateway from Monitor, then retry.',
+                `Detail: ${compactLine(message, 700)}`,
               ].join('\n')
             : message
           if (liveResponseCreated) {

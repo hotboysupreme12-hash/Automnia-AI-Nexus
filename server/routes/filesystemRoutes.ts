@@ -89,12 +89,14 @@ type FilesystemRoutesOptions = {
   propagateDisplayNameAcrossAgentFiles: (agentId: string, previousName: string | null, local: AgentLocalConfig) => Promise<void>
   readAgentLocalConfigIfPresent: (agentId: string) => Promise<AgentLocalConfig | null | undefined>
   rememberAgentLocalConfigCache: (filePath: string, local: AgentLocalConfig) => Promise<void>
+  resetAgentTurnSessionsForAgentContextChange: (agentId: string, reason: string) => { sessions: number; histories: number }
   resolveAgentResourceContext: (agentId: string, seedFiles?: readonly string[]) => Promise<AgentResourceContext | null>
   resolveWorkspaceForAgent: (target: AgentConfigEntry | undefined, agentId: string, defaultsWorkspace?: string) => string
   samePath: (left: string, right: string) => boolean
   saveAgentFileToCodexProfile: (agentId: string, file: string, content: string) => Promise<void>
   sharedTeamFiles: readonly string[]
   syncDoctrineToWorkspace: (agentId: string, workspace: string) => Promise<void>
+  syncAgentDerivedFiles: (agentId: string, local: AgentLocalConfig) => Promise<void>
   workspaceRoot: string
   writeOpenclawConfig: (config: OpenClawConfigFile) => Promise<void>
   writeTextFileWithLockRetry: (filePath: string, content: string) => Promise<void>
@@ -223,6 +225,13 @@ export function registerFilesystemRoutes(app: Express, options: FilesystemRoutes
       if (options.sharedTeamFiles.includes(file)) {
         await options.mirrorSharedTeamFile(file, parsed.data.content)
       }
+      const localForRuntimeSync = await options.ensureAgentLocalConfig({
+        agentId,
+        entry: context.target,
+        defaultsModel: context.config.agents?.defaults?.model || {},
+      })
+      await options.syncAgentDerivedFiles(agentId, localForRuntimeSync)
+      options.resetAgentTurnSessionsForAgentContextChange(agentId, 'agent markdown changed')
       if (!options.samePath(context.executionWorkspace, context.canonicalWorkspace)) {
         await options.syncDoctrineToWorkspace(agentId, context.executionWorkspace)
       }

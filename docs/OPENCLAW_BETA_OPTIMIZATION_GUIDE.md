@@ -1,7 +1,7 @@
 # OpenClaw 2026.6.11 Stable Upgrade Notes
 
 Date prepared: 2026-06-04
-Last updated for stable: 2026-06-30
+Last updated for stable: 2026-07-01
 
 Baseline: this guide now tracks the app's stable upgrade from the previous vendored OpenClaw `2026.6.10` runtime to OpenClaw `2026.6.11`. Older optimization notes remain below where they still describe durable runtime, Gateway, cron, plugin, and recovery work that is relevant to the stable release.
 
@@ -14,7 +14,7 @@ Source release notes:
 - npm integrity: `sha512-T+P/g19IheeT1ckXMoPN61dYuE8vBF4MderI+kWkvpuFYxPkJxn8AXLpu9IXCnN9g36Acpm9+mMD/V+lsvOkyA==`
 - Bundled Codex plugin verified: https://www.npmjs.com/package/@openclaw/codex/v/2026.6.11
 - Bundled Codex integrity: `sha512-L9rO95x0DW7rpVJisPv2kkgwr04nKYAA1xbgDXVAm2oh801BCJFIJFo021bvhPmwo7MTAXNcuchO3laGa30QRQ==`
-- Docs mirror: `docs/openclaw-latest` synced from https://docs.openclaw.ai on 2026-06-30, 2,051 pages.
+- Docs mirror: `docs/openclaw-latest` synced from https://docs.openclaw.ai on 2026-07-01, 697 pages, with the `v2026.6.11` release notes captured at `docs/openclaw-latest/pages/releases/2026.6.11.md`.
 
 ## Current Beta Split Plan Alignment
 

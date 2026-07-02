@@ -40,6 +40,7 @@ export function registerAgentConfigRoutes(app: Express, options: AgentConfigRout
     recruitRuntimeDefaults,
     recruitSoulDefaults,
     rememberAgentLocalConfigCache,
+    resetAgentTurnSessionsForAgentContextChange,
     resetAgentTurnSessionsForModelChange,
     sanitizeProfile,
     schedulePluginGatewayRestart,
@@ -424,6 +425,15 @@ export function registerAgentConfigRoutes(app: Express, options: AgentConfigRout
 
     applyLocalConfigToGlobal(target.id, local, config)
     await writeOpenclawConfig(config)
+    const shouldResetContextSession = Boolean(
+      needsDerivedFileSync ||
+      patch.tools ||
+      patch.auth ||
+      (currentDisplayName && currentDisplayName !== previousDisplayName),
+    )
+    const contextSessionReset = shouldResetContextSession
+      ? resetAgentTurnSessionsForAgentContextChange(target.id, 'agent context changed')
+      : null
     const modelSessionReset = patch.model ? resetAgentTurnSessionsForModelChange(target.id) : null
     if (patch.model) {
       modelOverrideCleanup = await clearDisallowedAutoModelOverridesForAgent(target.id, local.model)
@@ -436,6 +446,7 @@ export function registerAgentConfigRoutes(app: Express, options: AgentConfigRout
       agentId: target.id,
       path: agentLocalConfigPath(target.id),
       config: local,
+      contextSessionReset,
       modelOverrideCleanup,
       modelSessionReset,
       gatewayRestart,

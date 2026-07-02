@@ -49,6 +49,20 @@
     "smoke:fresh-checkout": "tsx scripts/smoke-fresh-checkout-setup.ts",
     "smoke:phase-k-desktop-launch": "tsx scripts/smoke-phase-k-desktop-launch.ts",
     "smoke:phase-k-provider-agent": "tsx scripts/smoke-phase-k-provider-agent.ts",
+    "smoke:phase-k-command-console": "tsx scripts/smoke-phase-k-command-console.ts",
+    "smoke:phase-k-mission-launch": "tsx scripts/smoke-phase-k-mission-launch.ts",
+    "smoke:phase-k-mission-cancellation": "tsx scripts/smoke-phase-k-mission-cancellation.ts",
+    "smoke:phase-k-monitor-runtime-evidence": "tsx scripts/smoke-phase-k-monitor-runtime-evidence.ts",
+    "smoke:phase-k-gateway-restart-ui": "tsx scripts/smoke-phase-k-gateway-restart-ui.ts",
+    "smoke:phase-k-gateway-tray-recovery": "tsx scripts/smoke-phase-k-gateway-tray-recovery.ts",
+    "smoke:phase-k-app-rehydration": "tsx scripts/smoke-phase-k-app-rehydration.ts",
+    "smoke:phase-k-plugin-status": "tsx scripts/smoke-phase-k-plugin-status.ts",
+    "smoke:phase-k-missing-provider-auth": "tsx scripts/smoke-phase-k-missing-provider-auth.ts",
+    "smoke:phase-k-redacted-failed-command": "tsx scripts/smoke-phase-k-redacted-failed-command.ts",
+    "smoke:phase-k-mission-report-inspection": "tsx scripts/smoke-phase-k-mission-report-inspection.ts",
+    "smoke:phase-k-settings-persistence": "tsx scripts/smoke-phase-k-settings-persistence.ts",
+    "smoke:beta-exit-criteria": "tsx scripts/smoke-beta-exit-criteria.ts",
+    "smoke:private-beta-handoff": "tsx scripts/smoke-private-beta-review-handoff.ts",
     "capture:packaged-beta-screenshots": "tsx scripts/capture-packaged-beta-screenshots.ts",
     "smoke:ci-workflow": "tsx scripts/smoke-ci-workflow.ts",
     "smoke:server-architecture": "tsx scripts/smoke-server-entrypoint-boundary.ts",
@@ -66,6 +80,7 @@
     "smoke:gateway-chat": "tsx scripts/smoke-gateway-chat-service.ts",
     "secret:scan": "node scripts/secret-scan.cjs",
     "audit:dependencies": "npm audit --omit=dev --audit-level=high",
+    "smoke:dependency-audit-clean": "tsx scripts/smoke-dependency-audit-clean.ts",
     "smoke:mission-verification": "tsx scripts/smoke-mission-verification.ts",
     "smoke:mission-report": "tsx scripts/smoke-mission-report-truth.ts",
     "smoke:mission-report-service": "tsx scripts/smoke-mission-report-service.ts",
@@ -176,6 +191,10 @@
         "to": "openclaw"
       },
       {
+        "from": "vendor/agency-agents",
+        "to": "agency-agents"
+      },
+      {
         "from": ".openclaw/agents",
         "to": "openclaw/agents"
       },
@@ -253,7 +272,7 @@
     "concurrently": "^9.2.1",
     "cross-spawn": "^7.0.6",
     "electron": "^42.0.1",
-    "electron-builder": "^26.8.1",
+    "electron-builder": "26.8.1",
     "esbuild": "^0.28.0",
     "eslint": "^9.39.1",
     "eslint-plugin-react-hooks": "^7.0.1",

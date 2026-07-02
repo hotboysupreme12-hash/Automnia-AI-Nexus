@@ -1163,9 +1163,12 @@ export function createGatewayChatService<RunRecord>(options: GatewayChatServiceO
     return { text: '', messageId: '', placeholder: false }
   }
 
-  function gatewayChatSessionKey(agentId: string, sessionId: string, requestedSessionKey?: string | null) {
+  function gatewayChatSessionKey(agentId: string, sessionId: string, requestedSessionKey?: string | null, freshSession = false) {
     const requested = requestedSessionKey?.trim()
-    if (requested) return requested.startsWith('agent:') ? requested : `agent:${agentId}:${requested}`
+    if (requested) {
+      const base = requested.startsWith('agent:') ? requested : `agent:${agentId}:${requested}`
+      return freshSession ? `${base}:fresh:${sessionId}` : base
+    }
     return `agent:${agentId}:control-center:${sessionId}`
   }
 
@@ -1243,6 +1246,7 @@ export function createGatewayChatService<RunRecord>(options: GatewayChatServiceO
     attachments?: unknown[]
     sessionId: string
     requestedSessionKey?: string
+    freshSession?: boolean
     thinking: GatewayChatThinkingLevel
     fastMode?: GatewayChatFastModePreference
     timeoutMs: number
@@ -1252,7 +1256,7 @@ export function createGatewayChatService<RunRecord>(options: GatewayChatServiceO
   }): Promise<GatewayChatTurnResult> {
     const state = await ensureClient(params.signal)
     const runId = randomUUID()
-    const sessionKey = gatewayChatSessionKey(params.agentId, params.sessionId, params.requestedSessionKey)
+    const sessionKey = gatewayChatSessionKey(params.agentId, params.sessionId, params.requestedSessionKey, params.freshSession)
     const attachments = await options.gatewayChatAttachmentsFromTurnAttachments(params.attachments)
     streamObserver(params.streamObserverId)?.emit('progress', {
       transport: 'gateway-chat',

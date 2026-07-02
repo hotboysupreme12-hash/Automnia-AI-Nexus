@@ -225,9 +225,16 @@ async function fileForRequest(requestUrl) {
   return { status: 404, filePath: null }
 }
 
+async function readRequestBody(request) {
+  const chunks = []
+  for await (const chunk of request) chunks.push(Buffer.from(chunk))
+  return Buffer.concat(chunks).toString('utf8')
+}
+
 function startStaticServer() {
   const agentTurnStreamStats = { opened: 0, closed: 0 }
   const runtimeMonitorClearStats = { calls: 0, failures: 0, failNext: false }
+  const gatewayRestartStats = { calls: 0 }
   const server = createServer(async (request, response) => {
     try {
       const requestUrl = new URL(request.url || '/', 'http://127.0.0.1')
@@ -287,6 +294,10 @@ function startStaticServer() {
         sendJson(response, 200, runtimeMonitorClearStats)
         return
       }
+      if (requestPath === '/api/ui-smoke/gateway-restart-stats') {
+        sendJson(response, 200, gatewayRestartStats)
+        return
+      }
       if (requestPath === '/api/ui-smoke/runtime-monitor-clear-mode') {
         runtimeMonitorClearStats.failNext = requestUrl.searchParams.get('mode') === 'fail'
         sendJson(response, 200, { ok: true, failNext: runtimeMonitorClearStats.failNext })
@@ -324,7 +335,54 @@ function startStaticServer() {
         })
         return
       }
+      if (requestPath === '/api/openclaw/runtime/gateway/restart') {
+        if (request.method !== 'POST') {
+          sendJson(response, 405, { error: 'method_not_allowed' })
+          return
+        }
+        gatewayRestartStats.calls += 1
+        sendJson(response, 200, {
+          ok: true,
+          restart: {
+            restarted: true,
+            detail: 'ui smoke gateway restart accepted',
+          },
+          gateway: {
+            healthy: true,
+            processRunning: true,
+          },
+        })
+        return
+      }
       if (requestPath === '/api/openclaw/agent-turn/stream') {
+        const requestBody = await readRequestBody(request)
+        if (/redacted failed command/i.test(requestBody)) {
+          const redactedFailure = 'Gateway transport error: simulated Command Console failure. Gateway unavailable while dispatching the command. api_key=[redacted] Authorization=[redacted] [redacted-email] [redacted-phone] %USERPROFILE%\\AppData\\Local\\DystopAI\\secret.txt Cookie=[redacted]'
+          response.writeHead(200, {
+            'Cache-Control': 'no-cache, no-transform',
+            'Content-Type': 'text/event-stream; charset=utf-8',
+            'X-Accel-Buffering': 'no',
+          })
+          response.write(': connected\n\n')
+          response.write('event: status\ndata: {"transport":"gateway-chat","mode":"progress","label":"OpenClaw session","message":"Command accepted; opening the Gateway-backed OpenClaw session.","agent":"hn-commander","sessionKey":"agent:hn-commander:control-center:redacted-failure","runId":"ui-smoke-redacted-failure","liveTokens":true}\n\n')
+          response.write('event: progress\ndata: {"transport":"gateway-chat","text":"Runtime ready; dispatching through Gateway chat.","agent":"hn-commander","sessionKey":"agent:hn-commander:control-center:redacted-failure","runId":"ui-smoke-redacted-failure","liveTokens":true}\n\n')
+          response.write(`event: error\ndata: ${JSON.stringify({ message: redactedFailure, failureKind: 'gateway_disconnect', transport: 'gateway-chat', liveTokens: false })}\n\n`)
+          response.write(`event: final\ndata: ${JSON.stringify({ ok: false, reply: redactedFailure, stderr: redactedFailure, code: 1, failureKind: 'gateway_disconnect', streaming: { transport: 'gateway-chat', liveTokens: false } })}\n\n`)
+          response.end()
+          return
+        }
+        if (/missing provider auth/i.test(requestBody)) {
+          response.writeHead(200, {
+            'Cache-Control': 'no-cache, no-transform',
+            'Content-Type': 'text/event-stream; charset=utf-8',
+            'X-Accel-Buffering': 'no',
+          })
+          response.write(': connected\n\n')
+          response.write('event: error\ndata: {"message":"Missing auth for deepseek. Connect this provider before retrying.","failureKind":"auth_missing","transport":"gateway-chat","agent":"hn-commander","modelId":"deepseek/deepseek-v4-pro"}\n\n')
+          response.write('event: final\ndata: {"ok":false,"reply":"Missing auth for deepseek. Connect this provider before retrying.","code":401,"failureKind":"auth_missing","provider":"deepseek","modelId":"deepseek/deepseek-v4-pro","streaming":{"transport":"gateway-chat","liveTokens":true,"modelId":"deepseek/deepseek-v4-pro","provider":"deepseek"}}\n\n')
+          response.end()
+          return
+        }
         agentTurnStreamStats.opened += 1
         response.writeHead(200, {
           'Cache-Control': 'no-cache, no-transform',
@@ -338,7 +396,7 @@ function startStaticServer() {
           response.write(': keepalive\n\n')
         }, 1000)
         let closed = false
-        request.once('close', () => {
+        response.once('close', () => {
           if (closed) return
           closed = true
           agentTurnStreamStats.closed += 1
@@ -542,6 +600,10 @@ async function inspectWorkspaceNavigation(window) {
     "        doctorRepairButtonPresent: Boolean(document.querySelector('.dy-monitor-doctor-repair-button')),",
     "        doctorRepairButtonDisabled: document.querySelector('.dy-monitor-doctor-repair-button')?.disabled === true,",
     "        doctorRepairButtonTitle: document.querySelector('.dy-monitor-doctor-repair-button')?.getAttribute('title') || '',",
+    "        gatewayRestartButtonPresent: Boolean(document.querySelector('.dy-gateway-restart-button')),",
+    "        gatewayRestartButtonText: document.querySelector('.dy-gateway-restart-button')?.textContent.replace(/\\s+/g, ' ').trim() || '',",
+    "        gatewayRestartButtonAriaLabel: document.querySelector('.dy-gateway-restart-button')?.getAttribute('aria-label') || '',",
+    "        gatewayRestartButtonTitle: document.querySelector('.dy-gateway-restart-button')?.getAttribute('title') || '',",
     "        doctorFindingListPresent: Boolean(document.querySelector('.dy-doctor-finding-list')),",
     "        doctorFindingText: document.querySelector('.dy-doctor-finding-list')?.textContent.replace(/\\s+/g, ' ').trim() || '',",
       "      })",
@@ -680,6 +742,118 @@ async function stopRunningCommandConsole(window) {
   return window.webContents.executeJavaScript(stopScript)
 }
 
+async function seedMissingProviderAuthCommandConsole(window) {
+  const authMissingScript = [
+    "(() => {",
+    "  const wait = (ms) => new Promise((resolve) => setTimeout(resolve, ms))",
+    "  const waitFor = async (predicate, timeout = 5000) => {",
+    "    const started = Date.now()",
+    "    while (Date.now() - started < timeout) {",
+    "      const value = predicate()",
+    "      if (value) return value",
+    "      await wait(100)",
+    "    }",
+    "    return null",
+    "  }",
+    "  return (async () => {",
+    "    const agentsNavItem = document.querySelector('#nexus-nav-agents')",
+    "    if (agentsNavItem) {",
+    "      agentsNavItem.click()",
+    "      await wait(500)",
+    "    }",
+    "    const commandConsole = document.querySelector('[data-dui-panel=\"command-console\"]')",
+    "    const textarea = commandConsole ? commandConsole.querySelector('textarea[aria-label=\"Command console message\"]') : null",
+    "    const sendButton = commandConsole ? commandConsole.querySelector('button[aria-label=\"Send message\"]') : null",
+    "    if (!commandConsole || !textarea || !sendButton) {",
+    "      return { attempted: false, reason: 'command-console-controls-missing' }",
+    "    }",
+    "    const setter = Object.getOwnPropertyDescriptor(window.HTMLTextAreaElement.prototype, 'value')?.set",
+    "    if (setter) setter.call(textarea, 'UI smoke: trigger missing provider auth.')",
+    "    else textarea.value = 'UI smoke: trigger missing provider auth.'",
+    "    textarea.dispatchEvent(new Event('input', { bubbles: true }))",
+    "    await waitFor(() => !sendButton.disabled, 3000)",
+    "    if (sendButton.disabled) return { attempted: false, reason: 'send-button-stayed-disabled' }",
+    "    sendButton.click()",
+    "    const cta = await waitFor(() => Array.from(commandConsole.querySelectorAll('.dy-command-response-cta')).find((element) => /Connect provider/.test(element.textContent || '')), 5000)",
+    "    const message = cta ? cta.closest('.dy-command-message') : null",
+    "    const failureChip = message ? Array.from(message.querySelectorAll('.dy-command-message-chip.is-warning')).find((element) => /auth missing/i.test(element.textContent || '')) : null",
+    "    const body = message ? message.querySelector('.dy-command-message-body') : null",
+    "    const rect = cta ? cta.getBoundingClientRect() : null",
+    "    return {",
+    "      attempted: true,",
+    "      authMissingCtaPresent: Boolean(cta),",
+    "      authMissingCtaText: cta ? cta.textContent.replace(/\\s+/g, ' ').trim() : '',",
+    "      authMissingFailureChipText: failureChip ? failureChip.textContent.replace(/\\s+/g, ' ').trim() : '',",
+    "      authMissingBodyText: body ? body.textContent.replace(/\\s+/g, ' ').trim() : '',",
+    "      authMissingMessageState: message ? message.getAttribute('data-message-state') || '' : '',",
+    "      authMissingMessageTransport: message ? message.getAttribute('data-message-transport') || '' : '',",
+    "      authMissingCtaRect: rect ? { width: Math.round(rect.width), height: Math.round(rect.height) } : null,",
+    "    }",
+    "  })()",
+    "})()",
+  ].join('\n')
+  return window.webContents.executeJavaScript(authMissingScript)
+}
+
+async function seedRedactedFailedCommandConsole(window) {
+  const failedCommandScript = [
+    "(() => {",
+    "  const wait = (ms) => new Promise((resolve) => setTimeout(resolve, ms))",
+    "  const waitFor = async (predicate, timeout = 5000) => {",
+    "    const started = Date.now()",
+    "    while (Date.now() - started < timeout) {",
+    "      const value = predicate()",
+    "      if (value) return value",
+    "      await wait(100)",
+    "    }",
+    "    return null",
+    "  }",
+    "  return (async () => {",
+    "    const agentsNavItem = document.querySelector('#nexus-nav-agents')",
+    "    if (agentsNavItem) {",
+    "      agentsNavItem.click()",
+    "      await wait(500)",
+    "    }",
+    "    const commandConsole = document.querySelector('[data-dui-panel=\"command-console\"]')",
+    "    const textarea = commandConsole ? commandConsole.querySelector('textarea[aria-label=\"Command console message\"]') : null",
+    "    const sendButton = commandConsole ? commandConsole.querySelector('button[aria-label=\"Send message\"]') : null",
+    "    if (!commandConsole || !textarea || !sendButton) {",
+    "      return { attempted: false, reason: 'command-console-controls-missing' }",
+    "    }",
+    "    const setter = Object.getOwnPropertyDescriptor(window.HTMLTextAreaElement.prototype, 'value')?.set",
+    "    if (setter) setter.call(textarea, 'UI smoke: trigger redacted failed command.')",
+    "    else textarea.value = 'UI smoke: trigger redacted failed command.'",
+    "    textarea.dispatchEvent(new Event('input', { bubbles: true }))",
+    "    await waitFor(() => !sendButton.disabled, 3000)",
+    "    if (sendButton.disabled) return { attempted: false, reason: 'send-button-stayed-disabled' }",
+    "    sendButton.click()",
+    "    const cta = await waitFor(() => Array.from(commandConsole.querySelectorAll('.dy-command-response-cta')).find((element) => /Reset gateway/.test(element.textContent || '')), 5000)",
+    "    const message = cta ? cta.closest('.dy-command-message') : null",
+    "    const failureChip = message ? Array.from(message.querySelectorAll('.dy-command-message-chip.is-warning')).find((element) => /gateway disconnect/i.test(element.textContent || '')) : null",
+    "    const body = message ? message.querySelector('.dy-command-message-body') : null",
+    "    const bodyText = body ? body.textContent.replace(/\\s+/g, ' ').trim() : ''",
+    "    const ctaText = cta ? cta.textContent.replace(/\\s+/g, ' ').trim() : ''",
+    "    const rect = cta ? cta.getBoundingClientRect() : null",
+    "    const rawLeakPattern = /(sk-ui-smoke-failed-command|ui-smoke-bearer-secret|leak@example\\.com|555[)\\s.-]*010[\\s.-]*1280|dystopai_session|Users\\\\UiSmoke)/i",
+    "    const markerPatterns = [/api_key=\\[redacted\\]/i, /Authorization=\\[redacted\\]/i, /\\[redacted-email\\]/i, /\\[redacted-phone\\]/i, /%USERPROFILE%/i, /Cookie=\\[redacted\\]/i]",
+    "    return {",
+    "      attempted: true,",
+    "      redactedFailureCtaPresent: Boolean(cta),",
+    "      redactedFailureCtaText: ctaText,",
+    "      redactedFailureFailureChipText: failureChip ? failureChip.textContent.replace(/\\s+/g, ' ').trim() : '',",
+    "      redactedFailureBodyText: bodyText,",
+    "      redactedFailureMessageState: message ? message.getAttribute('data-message-state') || '' : '',",
+    "      redactedFailureMessageTransport: message ? message.getAttribute('data-message-transport') || '' : '',",
+    "      redactedFailureMarkersPresent: markerPatterns.every((pattern) => pattern.test(bodyText)),",
+    "      redactedFailureRawLeakAbsent: !rawLeakPattern.test(bodyText + ' ' + ctaText),",
+    "      redactedFailureCtaRect: rect ? { width: Math.round(rect.width), height: Math.round(rect.height) } : null,",
+    "    }",
+    "  })()",
+    "})()",
+  ].join('\n')
+  return window.webContents.executeJavaScript(failedCommandScript)
+}
+
 async function cleanSlateMonitor(window, mode = 'success') {
   const cleanSlateScript = [
     "(() => {",
@@ -740,6 +914,68 @@ async function cleanSlateMonitor(window, mode = 'success') {
     "})()",
   ].join('\n')
   return window.webContents.executeJavaScript(cleanSlateScript)
+}
+
+async function restartGatewayFromMonitor(window) {
+  const restartScript = [
+    "(() => {",
+    "  const wait = (ms) => new Promise((resolve) => setTimeout(resolve, ms))",
+    "  const readStats = async () => {",
+    "    const response = await fetch('/api/ui-smoke/gateway-restart-stats', { cache: 'no-store' })",
+    "    return response.json()",
+    "  }",
+    "  const waitFor = async (predicate, timeout = 5000) => {",
+    "    const started = Date.now()",
+    "    while (Date.now() - started < timeout) {",
+    "      const value = await predicate()",
+    "      if (value) return value",
+    "      await wait(100)",
+    "    }",
+    "    return null",
+    "  }",
+    "  return (async () => {",
+    "    const monitorNavItem = document.querySelector('#nexus-nav-monitor')",
+    "    if (!monitorNavItem) return { attempted: false, reason: 'monitor-nav-missing' }",
+    "    monitorNavItem.click()",
+    "    await wait(700)",
+    "    const gatewayTab = document.querySelector('#monitor-tab-gateway')",
+    "    if (gatewayTab) {",
+    "      gatewayTab.click()",
+    "      await wait(300)",
+    "    }",
+    "    const monitorPanel = document.querySelector('[data-dui-panel=\"monitor\"]')",
+    "    const restartButton = monitorPanel ? monitorPanel.querySelector('button.dy-gateway-restart-button') : null",
+    "    const beforeStats = await readStats().catch(() => ({ calls: 0 }))",
+    "    if (!monitorPanel || !restartButton) {",
+    "      return { attempted: false, reason: 'gateway-restart-button-missing', beforeStats }",
+    "    }",
+    "    const buttonTitle = restartButton.getAttribute('title') || ''",
+    "    const buttonAriaLabel = restartButton.getAttribute('aria-label') || ''",
+    "    restartButton.click()",
+    "    const calledStats = await waitFor(async () => {",
+    "      const stats = await readStats().catch(() => null)",
+    "      return stats && stats.calls > beforeStats.calls ? stats : null",
+    "    }, 5000)",
+    "    const status = await waitFor(() => Array.from(monitorPanel.querySelectorAll('[role=\"status\"]')).find((element) => /Gateway restart/.test(element.textContent || '')), 5000)",
+    "    const afterStats = await readStats().catch(() => calledStats || beforeStats)",
+    "    const statusText = status ? status.textContent.replace(/\\s+/g, ' ').trim() : ''",
+    "    return {",
+    "      attempted: true,",
+    "      clicked: true,",
+    "      endpointCalled: Boolean(calledStats),",
+    "      beforeStats,",
+    "      afterStats,",
+    "      buttonTitle,",
+    "      buttonAriaLabel,",
+    "      statusPresent: Boolean(status),",
+    "      statusRole: status ? status.getAttribute('role') || '' : '',",
+    "      statusAriaLive: status ? status.getAttribute('aria-live') || '' : '',",
+    "      statusText,",
+    "    }",
+    "  })()",
+    "})()",
+  ].join('\n')
+  return window.webContents.executeJavaScript(restartScript)
 }
 
 async function inspectViewport(viewport) {
@@ -807,8 +1043,11 @@ async function inspectViewport(viewport) {
   const screenshotPath = path.join(outputDir, 'ui-smoke-' + viewport.label + '.png')
   fs.writeFileSync(screenshotPath, image.toPNG())
   const commandConsoleStopClick = await stopRunningCommandConsole(window)
+  const commandConsoleMissingProviderAuth = await seedMissingProviderAuthCommandConsole(window)
+  const commandConsoleRedactedFailure = await seedRedactedFailedCommandConsole(window)
   const monitorCleanSlate = await cleanSlateMonitor(window)
   const monitorCleanSlateFailure = await cleanSlateMonitor(window, 'fail')
+  const monitorGatewayRestart = await restartGatewayFromMonitor(window)
   window.destroy()
 
   const bitmap = bitmapStats(image)
@@ -879,6 +1118,10 @@ async function inspectViewport(viewport) {
   const doctorRepairButtonOk = Boolean(gatewayMonitorTab?.doctorRepairButtonPresent)
     && gatewayMonitorTab.doctorRepairButtonDisabled === false
     && /Doctor safe non-interactive repair/.test(gatewayMonitorTab.doctorRepairButtonTitle)
+  const gatewayRestartButtonOk = Boolean(gatewayMonitorTab?.gatewayRestartButtonPresent)
+    && gatewayMonitorTab.gatewayRestartButtonText === 'Restart Gateway'
+    && gatewayMonitorTab.gatewayRestartButtonAriaLabel === 'Restart Gateway from Monitor'
+    && /Restart the local OpenClaw Gateway/.test(gatewayMonitorTab.gatewayRestartButtonTitle)
   const doctorStructuredFindingsOk = Boolean(gatewayMonitorTab?.doctorFindingListPresent)
     && /plugin/i.test(gatewayMonitorTab.doctorFindingText)
     && /core\/doctor\/plugin-config/.test(gatewayMonitorTab.doctorFindingText)
@@ -899,6 +1142,28 @@ async function inspectViewport(viewport) {
     && commandConsoleStopClick.streamClosed
     && commandConsoleStopClick.busyCleared
     && !commandConsoleStopClick.stopButtonPresentAfterClick
+    && commandConsoleMissingProviderAuth.attempted
+    && commandConsoleMissingProviderAuth.authMissingCtaPresent
+    && /Connect provider/.test(commandConsoleMissingProviderAuth.authMissingCtaText)
+    && /Refresh credentials, then retry this turn\./.test(commandConsoleMissingProviderAuth.authMissingCtaText)
+    && /auth missing/i.test(commandConsoleMissingProviderAuth.authMissingFailureChipText)
+    && /Missing auth for deepseek\. Connect this provider before retrying\./.test(commandConsoleMissingProviderAuth.authMissingBodyText)
+    && commandConsoleMissingProviderAuth.authMissingMessageState === 'blocked'
+    && commandConsoleMissingProviderAuth.authMissingMessageTransport === 'gateway-chat'
+    && commandConsoleMissingProviderAuth.authMissingCtaRect?.width > 0
+    && commandConsoleMissingProviderAuth.authMissingCtaRect?.height > 0
+    && commandConsoleRedactedFailure.attempted
+    && commandConsoleRedactedFailure.redactedFailureCtaPresent
+    && /Reset gateway/.test(commandConsoleRedactedFailure.redactedFailureCtaText)
+    && /Gateway connection dropped\. Reset it, then retry\./.test(commandConsoleRedactedFailure.redactedFailureCtaText)
+    && /gateway disconnect/i.test(commandConsoleRedactedFailure.redactedFailureFailureChipText)
+    && /Gateway transport error: simulated Command Console failure\./.test(commandConsoleRedactedFailure.redactedFailureBodyText)
+    && commandConsoleRedactedFailure.redactedFailureMarkersPresent
+    && commandConsoleRedactedFailure.redactedFailureRawLeakAbsent
+    && commandConsoleRedactedFailure.redactedFailureMessageState === 'blocked'
+    && commandConsoleRedactedFailure.redactedFailureMessageTransport === 'gateway-chat'
+    && commandConsoleRedactedFailure.redactedFailureCtaRect?.width > 0
+    && commandConsoleRedactedFailure.redactedFailureCtaRect?.height > 0
     && monitorCleanSlate.attempted
     && monitorCleanSlate.clicked
     && monitorCleanSlate.endpointCalled
@@ -923,8 +1188,20 @@ async function inspectViewport(viewport) {
     && /ui_smoke_monitor_clear_failed/.test(monitorCleanSlateFailure.statusText)
     && /simulated Clean Slate failure/.test(monitorCleanSlateFailure.statusText)
     && !monitorCleanSlateFailure.successTextStillPresent
+    && monitorGatewayRestart.attempted
+    && monitorGatewayRestart.clicked
+    && monitorGatewayRestart.endpointCalled
+    && monitorGatewayRestart.afterStats.calls > monitorGatewayRestart.beforeStats.calls
+    && monitorGatewayRestart.buttonAriaLabel === 'Restart Gateway from Monitor'
+    && /Restart the local OpenClaw Gateway/.test(monitorGatewayRestart.buttonTitle)
+    && monitorGatewayRestart.statusPresent
+    && monitorGatewayRestart.statusRole === 'status'
+    && monitorGatewayRestart.statusAriaLive === 'polite'
+    && /Gateway restart started from Monitor\./.test(monitorGatewayRestart.statusText)
+    && /ui smoke gateway restart accepted/.test(monitorGatewayRestart.statusText)
     && monitorTabsOk
     && doctorRepairButtonOk
+    && gatewayRestartButtonOk
     && doctorStructuredFindingsOk
     && bitmap.nonBlankRatio > 0.02
 
@@ -939,8 +1216,11 @@ async function inspectViewport(viewport) {
     dom,
     commandConsoleStopSeed,
     commandConsoleStopClick,
+    commandConsoleMissingProviderAuth,
+    commandConsoleRedactedFailure,
     monitorCleanSlate,
     monitorCleanSlateFailure,
+    monitorGatewayRestart,
     workspaceNavigation,
   }
 }

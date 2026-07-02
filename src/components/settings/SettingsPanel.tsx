@@ -174,14 +174,14 @@ export function SettingsPanel() {
             </select>
           </Field>
           <Field label="Density" hint="Changes spacing without breaking layout.">
-            <select value={uiSettings.density} onChange={(event) => updateUiSetting('density', event.target.value as UiDensity)}>
+            <select data-dui-setting="density" value={uiSettings.density} onChange={(event) => updateUiSetting('density', event.target.value as UiDensity)}>
               <option value="compact">Compact</option>
               <option value="comfortable">Comfortable</option>
               <option value="spacious">Spacious</option>
             </select>
           </Field>
           <Field label="Motion" hint="Reduced motion disables most UI transitions.">
-            <select value={uiSettings.motion} onChange={(event) => updateUiSetting('motion', event.target.value as UiMotion)}>
+            <select data-dui-setting="motion" value={uiSettings.motion} onChange={(event) => updateUiSetting('motion', event.target.value as UiMotion)}>
               <option value="standard">Standard</option>
               <option value="reduced">Reduced</option>
             </select>

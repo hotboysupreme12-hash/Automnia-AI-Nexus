@@ -184,6 +184,7 @@ export function registerPartyManagementRoutes(app: Express, options: PartyManage
       await writeTextFileWithLockRetry(agentLocalConfigPath(agentId), `${JSON.stringify(local, null, 2)}\n`)
       await rememberAgentLocalConfigCache(agentLocalConfigPath(agentId), local)
       await syncAgentDerivedFiles(agentId, local)
+      clearAgentTurnSessions(agentId)
     } catch {
       // profile still persisted in party-profiles; local file sync best-effort
     }
@@ -246,6 +247,7 @@ export function registerPartyManagementRoutes(app: Express, options: PartyManage
           await syncAgentDerivedFiles(agentId, local)
           applyLocalConfigToGlobal(agentId, local, config)
           await writeOpenclawConfig(config)
+          clearAgentTurnSessions(agentId)
 
           if (normalizedWorkspace && CANONICAL_DOCTRINE_ONLY) {
             await cleanupAgentWorkspaceDoctrineFiles(agentId, normalizedWorkspace, {
