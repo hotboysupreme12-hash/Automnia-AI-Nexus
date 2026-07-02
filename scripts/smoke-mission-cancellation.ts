@@ -11,6 +11,7 @@ const missionSchedulerServiceSource = readFileSync(path.join(rootDir, 'server/se
 const missionStateTestsSource = readFileSync(path.join(rootDir, 'tests/missionStateService.test.ts'), 'utf8')
 const missionApiSource = readFileSync(path.join(rootDir, 'src/api/missions.ts'), 'utf8')
 const storeSource = readFileSync(path.join(rootDir, 'src/store/nexusStore.ts'), 'utf8')
+const phaseKMissionCancellationSmoke = readFileSync(path.join(rootDir, 'scripts/smoke-phase-k-mission-cancellation.ts'), 'utf8')
 const packageJson = JSON.parse(readFileSync(path.join(rootDir, 'package.json'), 'utf8')) as { scripts?: Record<string, string> }
 
 assert.match(missionSchedulerServiceSource, /MissionCronCleanupResult/)
@@ -47,5 +48,17 @@ assert.doesNotMatch(storeSource, /\/api\/missions\/stop/)
 const scripts = packageJson.scripts || {}
 assert.equal(typeof scripts['smoke:mission-cancellation'], 'string')
 assert.match(scripts['test:ci'] || '', /npm run smoke:mission-cancellation/)
+assert.equal(scripts['smoke:phase-k-mission-cancellation'], 'tsx scripts/smoke-phase-k-mission-cancellation.ts')
+assert.match(phaseKMissionCancellationSmoke, /'\/api\/missions\/start'/, 'Phase K cancellation smoke should launch a running mission through the backend route')
+assert.match(phaseKMissionCancellationSmoke, /'\/api\/missions\/stop'/, 'Phase K cancellation smoke should cancel through the backend stop route')
+assert.match(phaseKMissionCancellationSmoke, /'\/api\/missions\/projection'/, 'Phase K cancellation smoke should verify cancelled mission projection')
+assert.match(phaseKMissionCancellationSmoke, /\/api\/missions\/\$\{[^}]+\.id\}\/lifecycle/, 'Phase K cancellation smoke should verify lifecycle projection')
+assert.match(phaseKMissionCancellationSmoke, /\/api\/missions\/\$\{[^}]+\.id\}\/events/, 'Phase K cancellation smoke should verify cancellation event ledger reads')
+assert.match(phaseKMissionCancellationSmoke, /\/api\/missions\/\$\{[^}]+\.id\}\/report/, 'Phase K cancellation smoke should verify cancellation report evidence')
+assert.match(phaseKMissionCancellationSmoke, /CONTROL_CENTER_MISSION_SCHEDULER_DRY_RUN:\s*'1'/, 'Phase K cancellation smoke should use isolated scheduler dry-run mode')
+assert.match(phaseKMissionCancellationSmoke, /completedItems:\s*\[121\]/, 'Phase K cancellation smoke should record item 121')
+assert.match(phaseKMissionCancellationSmoke, /transition:running->cancelled/, 'Phase K cancellation smoke should verify durable running-to-cancelled ledger evidence')
+assert.match(phaseKMissionCancellationSmoke, /TEAM_SYNC\.md/, 'Phase K cancellation smoke should assert Team Sync cancellation evidence')
+assert.match(phaseKMissionCancellationSmoke, /evidenceHasSecretMaterial/, 'Phase K cancellation smoke should guard evidence against credential material')
 
 console.log('mission cancellation contract ok')

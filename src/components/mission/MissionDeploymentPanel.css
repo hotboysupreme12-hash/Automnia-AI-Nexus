@@ -813,3 +813,120 @@ html.dui-pro-overhaul.dui-cohesive-ui .dy-human-nav button[aria-current="page"] 
     grid-template-columns: minmax(72px, .42fr) minmax(0, 1fr) !important;
   }
 }
+
+/* Laptop fit: preserve the desktop mission board on MacBook-class screens. */
+@media (min-width: 901px) and (max-width: 1500px),
+       (min-width: 901px) and (max-height: 900px) {
+  html.dui-pro-overhaul.dui-cohesive-ui .dy-workspace-context[data-workspace="missions"] {
+    flex-direction: row !important;
+    align-items: center !important;
+    gap: 12px !important;
+    min-height: 48px !important;
+    padding: 7px 10px 7px 12px !important;
+  }
+
+  html.dui-pro-overhaul.dui-cohesive-ui .dy-workspace-context[data-workspace="missions"] p {
+    display: block !important;
+    max-width: 420px !important;
+  }
+
+  html.dui-pro-overhaul.dui-cohesive-ui .dy-workspace-context[data-workspace="missions"] .dy-workspace-context__meta {
+    flex-direction: row !important;
+    justify-content: flex-end !important;
+    max-width: min(780px, 64vw) !important;
+  }
+
+  html.dui-pro-overhaul.dui-cohesive-ui .dy-workspace-context[data-workspace="missions"] .dy-status-grid {
+    justify-content: flex-end !important;
+    gap: 5px !important;
+  }
+
+  html.dui-pro-overhaul.dui-cohesive-ui .dy-workspace-context[data-workspace="missions"] .badge.dy-status-chip {
+    min-width: 60px !important;
+    min-height: 26px !important;
+    height: 26px !important;
+    padding: 0 7px !important;
+  }
+
+  html.dui-pro-overhaul.dui-cohesive-ui [data-dui-panel="missions"].dui-mission-screen {
+    min-height: calc((100dvh / var(--dui-laptop-fit-scale, 1)) - 48px) !important;
+  }
+
+  html.dui-pro-overhaul.dui-cohesive-ui [data-dui-panel="missions"] .dui-mission-stage {
+    grid-template-columns: minmax(620px, 1fr) clamp(320px, 24vw, 390px) !important;
+    gap: 10px !important;
+    padding: 10px !important;
+  }
+
+  html.dui-pro-overhaul.dui-cohesive-ui [data-dui-panel="missions"] .dui-mission-main--organized,
+  html.dui-pro-overhaul.dui-cohesive-ui [data-dui-panel="missions"] .dui-mission-sidebar {
+    gap: 10px !important;
+  }
+
+  html.dui-pro-overhaul.dui-cohesive-ui [data-dui-panel="missions"] .dui-template-card--organized,
+  html.dui-pro-overhaul.dui-cohesive-ui [data-dui-panel="missions"] .dui-mission-config-card,
+  html.dui-pro-overhaul.dui-cohesive-ui [data-dui-panel="missions"] .dui-agents-card,
+  html.dui-pro-overhaul.dui-cohesive-ui [data-dui-panel="missions"] .dui-mission-bottom-card > section {
+    padding: 10px !important;
+  }
+
+  html.dui-pro-overhaul.dui-cohesive-ui [data-dui-panel="missions"] .dui-template-tile {
+    min-height: 76px !important;
+    padding: 8px 10px !important;
+  }
+
+  html.dui-pro-overhaul.dui-cohesive-ui [data-dui-panel="missions"] :is(.dui-segment-grid--organized, .dui-type-grid--organized) .dui-option {
+    min-height: 62px !important;
+  }
+
+  html.dui-pro-overhaul.dui-cohesive-ui [data-dui-panel="missions"] .dui-agents-card {
+    min-height: 0 !important;
+  }
+
+  html.dui-pro-overhaul.dui-cohesive-ui [data-dui-panel="missions"] .dui-agent-list {
+    max-height: none !important;
+  }
+
+  html.dui-pro-overhaul.dui-cohesive-ui [data-dui-panel="missions"] .dui-mission-bottom-card {
+    grid-template-columns: minmax(300px, 1.15fr) minmax(250px, .85fr) minmax(280px, 1fr) !important;
+    gap: 10px !important;
+  }
+
+  html.dui-pro-overhaul.dui-cohesive-ui [data-dui-panel="missions"] .dui-mission-bottom-objective {
+    grid-column: auto !important;
+  }
+
+  html.dui-pro-overhaul.dui-cohesive-ui [data-dui-panel="missions"] .dui-mission-bottom-objective .dui-textarea {
+    min-height: 98px !important;
+  }
+
+  html.dui-pro-overhaul.dui-cohesive-ui [data-dui-panel="missions"] .dui-cadence-grid {
+    grid-template-columns: minmax(68px, .52fr) minmax(108px, .72fr) minmax(124px, 1fr) !important;
+  }
+
+  html.dui-pro-overhaul.dui-cohesive-ui [data-dui-panel="missions"] .dui-section-head--dispatch {
+    align-items: flex-start !important;
+    flex-direction: row !important;
+  }
+
+  html.dui-pro-overhaul.dui-cohesive-ui [data-dui-panel="missions"] .dui-readiness-mini {
+    flex-basis: min(156px, 46%) !important;
+    width: auto !important;
+    min-width: 128px !important;
+  }
+}
+
+@media (min-width: 901px) and (max-width: 1180px),
+       (min-width: 901px) and (max-height: 760px) {
+  html.dui-pro-overhaul.dui-cohesive-ui [data-dui-panel="missions"] .dui-mission-stage {
+    grid-template-columns: minmax(560px, 1fr) clamp(292px, 24vw, 340px) !important;
+  }
+
+  html.dui-pro-overhaul.dui-cohesive-ui [data-dui-panel="missions"] .dui-mission-bottom-card {
+    grid-template-columns: minmax(260px, 1.12fr) minmax(210px, .82fr) minmax(235px, 1fr) !important;
+  }
+
+  html.dui-pro-overhaul.dui-cohesive-ui .dy-workspace-context[data-workspace="missions"] p {
+    max-width: 320px !important;
+  }
+}

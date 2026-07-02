@@ -12,14 +12,19 @@ function resolveWindowsCsc() {
 
 function installWindowsElectronLauncher(root, context) {
   if (process.platform !== 'win32') return
-  const electronSource = path.join(root, 'node_modules', 'electron', 'dist', 'electron.exe')
   const electronTarget = path.join(context.appOutDir, 'electron.exe')
   const launcherSource = path.join(root, 'scripts', 'windows-electron-launcher.cs')
   const launcherTarget = path.join(context.appOutDir, `${context.packager.appInfo.productFilename}.exe`)
   const csc = resolveWindowsCsc()
+  const electronSourceCandidates = [
+    path.join(root, 'node_modules', 'electron', 'dist', 'electron.exe'),
+    launcherTarget,
+    electronTarget,
+  ]
+  const electronSource = electronSourceCandidates.find((candidate) => fs.existsSync(candidate)) || null
 
-  if (!fs.existsSync(electronSource)) {
-    throw new Error(`[afterPack] Missing Electron runtime executable at ${electronSource}`)
+  if (!electronSource) {
+    throw new Error(`[afterPack] Missing Electron runtime executable. Checked: ${electronSourceCandidates.join(', ')}`)
   }
   if (!fs.existsSync(launcherSource)) {
     throw new Error(`[afterPack] Missing Windows launcher source at ${launcherSource}`)
@@ -28,7 +33,9 @@ function installWindowsElectronLauncher(root, context) {
     throw new Error('[afterPack] Could not find .NET Framework csc.exe needed to build the Windows launcher.')
   }
 
-  fs.copyFileSync(electronSource, electronTarget)
+  if (path.resolve(electronSource) !== path.resolve(electronTarget)) {
+    fs.copyFileSync(electronSource, electronTarget)
+  }
   const result = spawnSync(csc, [
     '/nologo',
     '/target:winexe',

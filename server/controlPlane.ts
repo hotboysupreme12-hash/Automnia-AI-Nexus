@@ -116,6 +116,7 @@ import {
   type GatewayLifecycleService,
   type GatewayStartupPluginRepairSummary,
 } from './services/gateway/gatewayLifecycleService'
+import { archiveCoveredLegacyConfigHealthState } from './services/gateway/legacyStateCleanupService'
 import {
   createGatewayDiagnosticsService,
   type GatewayDiagnosticsClient,
@@ -2547,15 +2548,19 @@ function clearAgentTurnSessions(agentId?: string) {
   return { sessions, histories }
 }
 
-function resetAgentTurnSessionsForModelChange(agentId: string) {
+function resetAgentTurnSessionsForAgentContextChange(agentId: string, reason: string) {
   const reset = clearAgentTurnSessions(agentId)
   if (reset.sessions || reset.histories) {
     pushGatewayLog(
       'lifecycle',
-      `model config changed for ${agentId}; reset ${reset.sessions} active session(s) and ${reset.histories} provider history cache(s)`,
+      `${reason} for ${agentId}; reset ${reset.sessions} active session(s) and ${reset.histories} provider history cache(s)`,
     )
   }
   return reset
+}
+
+function resetAgentTurnSessionsForModelChange(agentId: string) {
+  return resetAgentTurnSessionsForAgentContextChange(agentId, 'model config changed')
 }
 
 function abortGatewayChatOpenClawRun(run: OpenClawRunRecord, reason = 'runtime session close') {
@@ -3377,6 +3382,7 @@ function runControlCenterGatewayChatTurn(params: {
   attachments?: unknown[]
   sessionId: string
   requestedSessionKey?: string
+  freshSession?: boolean
   thinking: ThinkingLevel
   fastMode?: FastModePreference
   timeoutMs: number
@@ -3518,6 +3524,16 @@ async function prepareOpenClawConfigForGatewayStartup(reason: string) {
       openclawConfigCache = null
       const config = await readOpenclawConfig()
       await writeOpenclawConfig(config)
+      const configHealthCleanup = await archiveCoveredLegacyConfigHealthState({ stateRoot: OPENCLAW_STATE_ROOT })
+        .catch((error) => ({
+          archived: false,
+          reason: String(error),
+          sourcePath: path.join(OPENCLAW_STATE_ROOT, 'logs', 'config-health.json'),
+          entries: 0,
+        }))
+      if (configHealthCleanup.archived) {
+        pushGatewayLog('lifecycle', `Archived covered legacy config health state (${reason})`)
+      }
       let validation = await validateOpenClawConfigForGateway(reason)
       if (validation.valid) return true
 
@@ -12710,11 +12726,10 @@ function deriveAgentAliases(agentId: string, displayName: string) {
 
 
 async function syncAgentDerivedFiles(agentId: string, local: AgentLocalConfig) {
-  const targets = uniqueStrings(
-    canonicalDoctrineRoot(agentId),
-    openclawAgentFolder(agentId),
-    codexAgentProfilePath(agentId),
-  )
+  const canonicalDir = canonicalDoctrineRoot(agentId)
+  const runtimeDir = openclawAgentFolder(agentId)
+  const codexDir = codexAgentProfilePath(agentId)
+  const targets = uniqueStrings(canonicalDir, runtimeDir, codexDir)
 
   const stripManagedBlocks = (content: string) => {
     const normalized = (content || '').replace(/\r\n/g, '\n')
@@ -12749,14 +12764,31 @@ async function syncAgentDerivedFiles(agentId: string, local: AgentLocalConfig) {
     },
   }
 
+  for (const file of AGENT_RESOURCE_FILES) {
+    if (file !== AGENT_MDS_FILE) await seedCanonicalResourceIfMissing(agentId, file)
+  }
+
+  const canonicalMarkdownFiles = await fs.readdir(canonicalDir, { withFileTypes: true })
+    .then((entries) => entries
+      .filter((entry) => entry.isFile() && entry.name.toLowerCase().endsWith('.md'))
+      .map((entry) => entry.name))
+    .catch(() => [])
+  const mirroredFiles = uniqueStrings(
+    ...AGENT_RESOURCE_FILES.filter((file) => file !== AGENT_MDS_FILE && file.toLowerCase().endsWith('.md')),
+    ...canonicalMarkdownFiles,
+  )
+
   for (const dir of targets) {
     await fs.mkdir(dir, { recursive: true })
-    await writeTextFileWithLockRetry(path.join(dir, AGENT_MDS_FILE), `${JSON.stringify(mdsPayload, null, 2)}\n`)
 
-    for (const file of AGENT_RESOURCE_FILES) {
+    for (const file of mirroredFiles) {
       await scrubManagedBlocksAtPath(path.join(dir, file))
-      await scrubManagedBlocksAtPath(path.join(codexAgentProfilePath(agentId), file))
+      if (!samePath(dir, canonicalDir)) {
+        await copyFileOverwrite(path.join(canonicalDir, file), path.join(dir, file))
+      }
     }
+
+    await writeTextFileWithLockRetry(path.join(dir, AGENT_MDS_FILE), `${JSON.stringify(mdsPayload, null, 2)}\n`)
   }
 }
 
@@ -13919,6 +13951,7 @@ async function runControlCenterAgentRuntimeTurn(params: {
     enabled: boolean
     sessionId: string
     requestedSessionKey?: string
+    freshSession?: boolean
     thinking: ThinkingLevel
     fastMode?: FastModePreference
     message: string
@@ -13962,6 +13995,7 @@ async function runControlCenterAgentRuntimeTurn(params: {
             attachments: params.gatewayChat.attachments,
             sessionId: params.gatewayChat.sessionId,
             requestedSessionKey: params.gatewayChat.requestedSessionKey,
+            freshSession: params.gatewayChat.freshSession,
             thinking: params.gatewayChat.thinking,
             fastMode: params.gatewayChat.fastMode,
             timeoutMs: params.timeoutMs,
@@ -16864,11 +16898,13 @@ registerFilesystemRoutes(app, {
   propagateDisplayNameAcrossAgentFiles: (agentId, previousName, local) => propagateDisplayNameAcrossAgentFiles(agentId, previousName, local as AgentLocalConfig),
   readAgentLocalConfigIfPresent,
   rememberAgentLocalConfigCache: (filePath, local) => rememberAgentLocalConfigCache(filePath, local as AgentLocalConfig),
+  resetAgentTurnSessionsForAgentContextChange,
   resolveAgentResourceContext: (agentId, seedFiles) => resolveAgentResourceContext(agentId, seedFiles as readonly AgentResourceFile[] | undefined),
   resolveWorkspaceForAgent,
   samePath,
   saveAgentFileToCodexProfile,
   sharedTeamFiles: SHARED_TEAM_FILES,
+  syncAgentDerivedFiles: (agentId, local) => syncAgentDerivedFiles(agentId, local as AgentLocalConfig),
   syncDoctrineToWorkspace,
   workspaceRoot: WORKSPACE_ROOT,
   writeOpenclawConfig: (config) => writeOpenclawConfig(config),
@@ -17195,6 +17231,7 @@ async function runGatewayAgentTurnForStream(
   if (clawTalkIntent) effectiveMessage = buildClawTalkRuntimeInstruction(effectiveMessage, clawTalkSetupIntent)
   const previousSessionId = agentTurnSessions.get(sessionScope)
   const sessionId = wantsFreshSession ? randomUUID() : previousSessionId || randomUUID()
+  const isFreshSession = wantsFreshSession || !agentTurnSessions.has(sessionScope)
   if (wantsFreshSession && previousSessionId) providerConversationHistories.delete(previousSessionId)
   agentTurnSessions.set(sessionScope, sessionId)
 
@@ -17210,7 +17247,7 @@ async function runGatewayAgentTurnForStream(
     effectiveMessage,
   ].join('\n')
   const composedPrompt = composeAgentDoctrinePrompt(agent, enforcedMessage, context.executionWorkspace, context.doctrineWorkspace)
-  const gatewayMessage = isClawTalkRoute ? composedPrompt : effectiveMessage
+  const gatewayMessage = composedPrompt
   const runCwd = runCwdForContext(context)
   const openClawTimeoutMs = agentWorkTimeoutWrapperMs(effectiveTimeoutSeconds)
 
@@ -17235,6 +17272,7 @@ async function runGatewayAgentTurnForStream(
     attachments: requestedAttachments,
     sessionId,
     requestedSessionKey,
+    freshSession: isFreshSession,
     thinking: effectiveThinking,
     fastMode: effectiveFastMode,
     timeoutMs: openClawTimeoutMs,
@@ -17858,6 +17896,7 @@ export type AgentConfigRoutesContext = {
   recruitRuntimeDefaults: typeof recruitRuntimeDefaults
   recruitSoulDefaults: typeof recruitSoulDefaults
   rememberAgentLocalConfigCache: typeof rememberAgentLocalConfigCache
+  resetAgentTurnSessionsForAgentContextChange: typeof resetAgentTurnSessionsForAgentContextChange
   resetAgentTurnSessionsForModelChange: typeof resetAgentTurnSessionsForModelChange
   sanitizeProfile: typeof sanitizeProfile
   schedulePluginGatewayRestart: typeof schedulePluginGatewayRestart
@@ -17898,6 +17937,7 @@ const agentConfigRoutesContext: AgentConfigRoutesContext = {
   recruitRuntimeDefaults,
   recruitSoulDefaults,
   rememberAgentLocalConfigCache,
+  resetAgentTurnSessionsForAgentContextChange,
   resetAgentTurnSessionsForModelChange,
   sanitizeProfile,
   schedulePluginGatewayRestart,

@@ -6,11 +6,14 @@ const root = process.cwd()
 const read = (relativePath: string) => readFileSync(path.join(root, relativePath), 'utf8')
 
 const shell = read('src/components/layout/NexusShell.tsx')
+const settingsPanel = read('src/components/settings/SettingsPanel.tsx')
+const uiSettings = read('src/components/settings/uiSettings.ts')
 const missionPanel = read('src/components/mission/MissionDeploymentPanel.tsx')
 const missionPanelCss = read('src/components/mission/MissionDeploymentPanel.css')
 const accessibility = read('src/styles/accessibility.css')
 const polish = read('src/styles/dystopai-theme/80-production-polish.css')
 const theme = read('src/dystopai-app-theme.css')
+const phaseKSettingsPersistenceSmoke = read('scripts/smoke-phase-k-settings-persistence.ts')
 const packageJson = JSON.parse(read('package.json')) as { scripts?: Record<string, string> }
 const productionPolishImport = "@import './styles/dystopai-theme/80-production-polish.css';"
 const referenceScreenshotImport = "@import './styles/dystopai-theme/90-reference-screenshot.css';"
@@ -39,6 +42,7 @@ assert.doesNotMatch(utilityRailBlock, /role="tab"/, 'utility rail should not adv
 assert.doesNotMatch(utilityRailBlock, /role="tablist"/, 'utility rail should not advertise a tablist role')
 assert.doesNotMatch(utilityRailBlock, /aria-selected=/, 'utility rail should not advertise tab selection state')
 assert.doesNotMatch(utilityRailBlock, /aria-controls=/, 'utility rail should not advertise tab panel controls')
+assert.match(utilityRailBlock, /id="nexus-nav-settings"/, 'settings utility navigation should expose a stable automation id')
 assert.match(utilityRailBlock, /aria-current=\{tab === 'settings' \? 'page' : undefined\}/, 'settings navigation should use aria-current page when active')
 assert.match(shell, /role="region"[\s\S]*aria-label=\{`\$\{activeTab\.label\} workspace`\}/, 'active workspace should be a named region')
 assert.match(shell, /id=\{`nexus-workspace-\$\{tab\}`\}/, 'workspace region should use a workspace id, not a tab id')
@@ -94,8 +98,18 @@ assert.match(accessibility, /:focus-visible[\s\S]*outline: 2px solid var\(--focu
 assert.match(accessibility, /:focus-visible[\s\S]*var\(--focus-ring-shadow\)/, 'focus rings should include a dark-surface halo')
 assert.match(accessibility, /data-dui-motion="reduced"[\s\S]*transition-duration: 0\.001ms/, 'explicit reduced-motion mode should collapse transitions')
 assert.match(accessibility, /@media \(prefers-reduced-motion: reduce\)[\s\S]*animation-duration: 0\.001ms/, 'OS reduced-motion preference should collapse animations')
+assert.match(settingsPanel, /data-dui-setting="density"/, 'Settings density control should expose a stable automation selector')
+assert.match(settingsPanel, /data-dui-setting="motion"/, 'Settings motion control should expose a stable automation selector')
+assert.match(settingsPanel, /saveUiSettings\(next\)[\s\S]*applyUiSettings\(next\)/, 'Settings changes should persist before applying root UI state')
+assert.match(uiSettings, /UI_SETTINGS_STORAGE_KEY = 'dystopai-ui-settings-v1'/, 'UI settings storage key should remain stable for rehydration')
+assert.match(uiSettings, /root\.dataset\.duiDensity = settings\.density/, 'UI settings should project density to the document root')
+assert.match(uiSettings, /root\.dataset\.duiMotion = settings\.motion/, 'UI settings should project motion to the document root')
+assert.match(phaseKSettingsPersistenceSmoke, /completedItems:\s*\[130\]/, 'Phase K Settings persistence smoke should record item 130 completion')
+assert.match(phaseKSettingsPersistenceSmoke, /reloadIgnoringCache/, 'Phase K Settings persistence smoke should verify persistence across renderer reload')
+assert.match(phaseKSettingsPersistenceSmoke, /evidenceHasSecretMaterial/, 'Phase K Settings persistence smoke should guard evidence against credential material')
 
 assert.equal(packageJson.scripts?.['smoke:shell-production-ui'], 'tsx scripts/smoke-shell-production-ui.ts')
+assert.equal(packageJson.scripts?.['smoke:phase-k-settings-persistence'], 'tsx scripts/smoke-phase-k-settings-persistence.ts')
 assert.ok(packageJson.scripts?.['test:ci']?.includes('npm run smoke:shell-production-ui'))
 
 console.log('production shell UI contract ok')

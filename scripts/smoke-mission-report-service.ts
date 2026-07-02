@@ -11,6 +11,7 @@ const missionStateService = read('server/services/missions/missionStateService.t
 const missionSchedulerService = read('server/services/missions/missionSchedulerService.ts')
 const missionReportService = read('server/services/missions/missionReportService.ts')
 const missionReportTests = read('tests/missionReportService.test.ts')
+const phaseKMissionReportInspectionSmoke = read('scripts/smoke-phase-k-mission-report-inspection.ts')
 const packageJson = JSON.parse(read('package.json')) as { scripts?: Record<string, string> }
 
 assert.match(missionReportService, /export function createMissionReportService/, 'mission report service should expose a service factory')
@@ -42,6 +43,7 @@ assert.doesNotMatch(controlPlane, /\basync function listMissionReports\b/, 'dura
 
 assert.match(missionRoutes, /MissionLifecycleProjection.*missionReportService/, 'mission routes should use the mission report service projection contract')
 assert.match(missionRoutes, /BackendMissionReport.*missionReportService/, 'mission routes should use the backend report service contract')
+assert.match(missionRoutes, /app\.get\('\/api\/missions\/:missionId\/report'/, 'mission routes should expose authenticated mission report inspection')
 assert.match(missionStateService, /options\.recordMissionReport\(mission\)/, 'mission state service should receive report recording through options')
 assert.match(missionSchedulerService, /options\.recordMissionReport\(mission\)/, 'mission scheduler service should receive report recording through options')
 
@@ -53,5 +55,15 @@ assert.match(missionReportTests, /lifecycle projection merge/, 'unit tests shoul
 const scripts = packageJson.scripts || {}
 assert.equal(scripts['smoke:mission-report-service'], 'tsx scripts/smoke-mission-report-service.ts')
 assert.match(scripts['test:ci'] || '', /npm run smoke:mission-report-service/, 'test:ci must include mission report service boundary coverage')
+assert.equal(scripts['smoke:phase-k-mission-report-inspection'], 'tsx scripts/smoke-phase-k-mission-report-inspection.ts')
+assert.match(phaseKMissionReportInspectionSmoke, /'\/api\/missions\/start'/, 'Phase K report inspection smoke should create report-producing mission state')
+assert.match(phaseKMissionReportInspectionSmoke, /'\/api\/missions\/stop'/, 'Phase K report inspection smoke should drive a terminal report-producing mission state')
+assert.match(phaseKMissionReportInspectionSmoke, /\/api\/missions\/\$\{encodeURIComponent\(missionId\)\}\/report/, 'Phase K report inspection smoke should inspect the mission report route')
+assert.match(phaseKMissionReportInspectionSmoke, /'\/api\/missions\/projection'/, 'Phase K report inspection smoke should verify projection report consistency')
+assert.match(phaseKMissionReportInspectionSmoke, /\/api\/missions\/\$\{encodeURIComponent\(missionId\)\}\/lifecycle/, 'Phase K report inspection smoke should verify lifecycle report consistency')
+assert.match(phaseKMissionReportInspectionSmoke, /mission-reports\.jsonl/, 'Phase K report inspection smoke should verify durable mission report ledger evidence')
+assert.match(phaseKMissionReportInspectionSmoke, /CONTROL_CENTER_MISSION_SCHEDULER_DRY_RUN:\s*'1'/, 'Phase K report inspection smoke should use isolated scheduler dry-run mode')
+assert.match(phaseKMissionReportInspectionSmoke, /completedItems:\s*\[129\]/, 'Phase K report inspection smoke should record item 129')
+assert.match(phaseKMissionReportInspectionSmoke, /evidenceHasSecretMaterial/, 'Phase K report inspection smoke should guard evidence against credential material')
 
 console.log('mission report service contract ok')

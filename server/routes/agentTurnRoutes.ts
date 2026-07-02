@@ -84,6 +84,7 @@ type AgentRuntimeTurnParams = {
     enabled: boolean
     sessionId: string
     requestedSessionKey?: string
+    freshSession?: boolean
     thinking: ThinkingLevel
     message: string
     attachments?: unknown[]
@@ -497,6 +498,38 @@ export function registerAgentTurnRoutes(app: Express, options: AgentTurnRoutesOp
         )
         return
       }
+      if (streamSmokeMode === 'failure' || streamSmokeMode === 'fail') {
+        const runId = randomUUID()
+        const sessionKey = parsed.data.sessionKey?.trim() || `agent:${streamAgent}:control-center:smoke-failure`
+        emit('status', {
+          transport: 'gateway-chat',
+          mode: 'progress',
+          label: 'OpenClaw session',
+          message: 'Command accepted; opening the Gateway-backed OpenClaw session.',
+          agent: streamAgent,
+          sessionKey,
+          runId,
+          liveTokens: true,
+        })
+        emit('progress', {
+          transport: 'gateway-chat',
+          text: 'Runtime ready; dispatching through Gateway chat.',
+          agent: streamAgent,
+          sessionKey,
+          runId,
+          liveTokens: true,
+        })
+        throw new Error([
+          'Gateway transport error: simulated Command Console failure.',
+          'Gateway unavailable while dispatching the command.',
+          'api_key=phasek-failed-command-key-123456',
+          'Authorization: Bearer phase-k-failed-command-bearer-123456',
+          'phasek.operator@example.com',
+          '+1 (555) 010-1280',
+          'C:\\Users\\PhaseK\\AppData\\Local\\DystopAI\\secret.txt',
+          'Cookie: dystopai_session=phase-k-failed-command-cookie-123456',
+        ].join(' '))
+      }
       if (streamSmokeMode && /^(1|true|yes|success)$/i.test(streamSmokeMode)) {
         const runId = randomUUID()
         const sessionKey = parsed.data.sessionKey?.trim() || `agent:${streamAgent}:control-center:smoke`
@@ -588,6 +621,7 @@ export function registerAgentTurnRoutes(app: Express, options: AgentTurnRoutesOp
     } catch (error) {
       const message = redactHiddenReasoningAndSecrets(String(error))
       const failureKind = classifyFailureKind(message, abortController.signal.aborted ? 'aborted' : 'failed') || 'unknown'
+      const failureTransport = parsed.data.forceOpenClawRuntime ? 'gateway-chat' : 'control-center-sse'
       const clawTalkFallbackPending = Boolean(clawTalkMirror && closed && abortController.signal.aborted && failureKind === 'aborted')
       if (clawTalkFallbackPending) {
         emit('status', {
@@ -600,14 +634,19 @@ export function registerAgentTurnRoutes(app: Express, options: AgentTurnRoutesOp
         })
         return
       }
-      emit('error', { message: message.length > SSE_FINAL_TEXT_LIMIT ? `${message.slice(0, SSE_FINAL_TEXT_LIMIT).trimEnd()}\n\n[Error truncated.]` : message, failureKind })
+      emit('error', {
+        message: message.length > SSE_FINAL_TEXT_LIMIT ? `${message.slice(0, SSE_FINAL_TEXT_LIMIT).trimEnd()}\n\n[Error truncated.]` : message,
+        failureKind,
+        transport: failureTransport,
+        liveTokens: false,
+      })
       emit('final', compactFinalSsePayload({
         ok: false,
         reply: message,
         stderr: message,
         code: 1,
         failureKind,
-        streaming: { transport: 'control-center-sse', liveTokens: false },
+        streaming: { transport: failureTransport, liveTokens: false },
       }, liveTextStreamed))
     } finally {
       if (!closed) res.end()
@@ -871,6 +910,7 @@ export function registerAgentTurnRoutes(app: Express, options: AgentTurnRoutesOp
         enabled: !googleGeminiToolWriteRuntime,
         sessionId,
         requestedSessionKey: parsed.data.sessionKey,
+        freshSession: isFreshSession,
         thinking: effectiveThinking,
         message: composedPrompt,
         attachments: parsed.data.attachments,
@@ -930,6 +970,7 @@ export function registerAgentTurnRoutes(app: Express, options: AgentTurnRoutesOp
           enabled: !googleGeminiToolWriteRuntime,
           sessionId,
           requestedSessionKey: parsed.data.sessionKey,
+          freshSession: isFreshSession,
           thinking: effectiveThinking,
           message: recoveryPrompt,
           attachments: parsed.data.attachments,
@@ -983,6 +1024,7 @@ export function registerAgentTurnRoutes(app: Express, options: AgentTurnRoutesOp
           enabled: !googleGeminiToolWriteRuntime,
           sessionId: retrySessionId,
           requestedSessionKey: parsed.data.sessionKey,
+          freshSession: true,
           thinking: effectiveThinking,
           message: composedPrompt,
           attachments: parsed.data.attachments,
@@ -1029,6 +1071,7 @@ export function registerAgentTurnRoutes(app: Express, options: AgentTurnRoutesOp
           enabled: !googleGeminiToolWriteRuntime,
           sessionId: retrySessionId,
           requestedSessionKey: parsed.data.sessionKey,
+          freshSession: true,
           thinking: effectiveThinking,
           message: recoveryPrompt,
           attachments: parsed.data.attachments,
@@ -1080,6 +1123,7 @@ export function registerAgentTurnRoutes(app: Express, options: AgentTurnRoutesOp
             enabled: !googleGeminiToolWriteRuntime,
             sessionId: retrySessionId,
             requestedSessionKey: parsed.data.sessionKey,
+            freshSession: true,
             thinking: effectiveThinking,
             message: recoveryPrompt,
             attachments: parsed.data.attachments,
@@ -1132,6 +1176,7 @@ export function registerAgentTurnRoutes(app: Express, options: AgentTurnRoutesOp
             enabled: !googleGeminiToolWriteRuntime,
             sessionId: retrySessionId,
             requestedSessionKey: parsed.data.sessionKey,
+            freshSession: true,
             thinking: effectiveThinking,
             message: recoveryPrompt,
             attachments: parsed.data.attachments,

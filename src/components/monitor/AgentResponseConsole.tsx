@@ -289,6 +289,8 @@ function responseCta(entry: AgentResponse): ResponseCta | null {
       return { label: 'Connect provider', detail: 'Refresh credentials, then retry this turn.' }
     case 'gateway_disconnect':
       return { label: 'Reset gateway', detail: 'Gateway connection dropped. Reset it, then retry.', action: 'restart-gateway' }
+    case 'network_error':
+      return { label: 'Reset gateway', detail: 'Local backend connection dropped. Reset it, then retry.', action: 'restart-gateway' }
     case 'sandbox_unavailable':
       return { label: 'Fix sandbox', detail: 'Disable sandbox or install the required Docker image.' }
     case 'provider_unsupported':

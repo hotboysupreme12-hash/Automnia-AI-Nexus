@@ -33,6 +33,10 @@ const runtimeActionService = readWorkspaceFile('server/services/runtime/runtimeA
 const runtimeRecoveryService = readWorkspaceFile('server/services/runtime/runtimeRecoveryService.ts')
 const runtimeHook = readWorkspaceFile('src/hooks/useRuntimeStatus.ts')
 const liveMonitor = readWorkspaceFile('src/components/monitor/LiveOperationMonitor.tsx')
+const uiSmoke = readWorkspaceFile('scripts/smoke-ui-render.mjs')
+const phaseKGatewayRestartSmoke = readWorkspaceFile('scripts/smoke-phase-k-gateway-restart-ui.ts')
+const phaseKGatewayTrayRecoverySmoke = readWorkspaceFile('scripts/smoke-phase-k-gateway-tray-recovery.ts')
+const electronMain = readWorkspaceFile('electron/main.cjs')
 const editor = readWorkspaceFile('src/components/editor/AgentEditorModal.tsx')
 const store = readWorkspaceFile('src/store/nexusStore.ts')
 const agentTurnsApi = readWorkspaceFile('src/api/agentTurns.ts')
@@ -196,6 +200,30 @@ assert(runtimeHook.includes('findings?: DoctorFinding[]'), 'runtime status types
 assert(liveMonitor.includes('dy-doctor-finding-list'), 'Runtime Monitor should render structured Doctor findings')
 assert(liveMonitor.includes('doctorFindingAction'), 'Runtime Monitor should surface Doctor finding fix hints or repair actions')
 assert(liveMonitor.includes('guidedAction.command.join'), 'Runtime Monitor should render guided action commands when available')
+assert(liveMonitor.includes('restartGatewayRuntime'), 'Runtime Monitor should import the Gateway restart action')
+assert(liveMonitor.includes('restartGatewayFromMonitor'), 'Runtime Monitor should own the Gateway restart click handler')
+assert(liveMonitor.includes('dy-gateway-restart-button'), 'Runtime Monitor should expose a stable Gateway restart button')
+assert(liveMonitor.includes('aria-label="Restart Gateway from Monitor"'), 'Runtime Monitor Gateway restart button should be accessible')
+assert(uiSmoke.includes('/api/openclaw/runtime/gateway/restart'), 'UI smoke should stub the Gateway restart endpoint')
+assert(uiSmoke.includes('restartGatewayFromMonitor(window)'), 'UI smoke should click the Monitor Gateway restart button')
+assert(phaseKGatewayRestartSmoke.includes('completedItems: [123]'), 'Phase K Gateway restart smoke should record item 123 completion')
+assert(phaseKGatewayRestartSmoke.includes('/api/openclaw/runtime/gateway/restart'), 'Phase K Gateway restart smoke should call the runtime Gateway restart endpoint')
+assert(phaseKGatewayRestartSmoke.includes('manual restart requested from monitor'), 'Phase K Gateway restart smoke should verify the manual Monitor restart reason')
+assert(electronMain.includes("label: shutdownLabel"), 'Electron tray menu should expose the Gateway shutdown label')
+assert(electronMain.includes("const shutdownLabel = gatewayShutdownInFlight && !isQuitting ? 'Shutting Gateway Off...' : 'Shut Gateway Off'"), 'Electron tray menu should label Gateway shutdown clearly')
+assert(electronMain.includes('void stopGatewayCompletely()'), 'Electron tray shutdown item should call stopGatewayCompletely')
+assert(electronMain.includes('void resetGateway()'), 'Electron tray restart item should call resetGateway')
+assert(electronMain.includes("postControlApi('/api/openclaw/runtime/gateway/stop'"), 'Electron tray shutdown should call the runtime Gateway stop endpoint')
+assert(electronMain.includes("postControlApi('/api/openclaw/runtime/gateway/restart'"), 'Electron tray recovery should call the runtime Gateway restart endpoint')
+assert(electronMain.includes('GATEWAY_CONTROL_ACTION_TIMEOUT_MS'), 'Electron tray Gateway controls should use a shared configurable timeout')
+assert(electronMain.includes('DYSTOPAI_ELECTRON_E2E_ASSERT_TRAY_GATEWAY_RECOVERY'), 'Electron E2E should expose tray Gateway recovery assertions')
+assert(electronMain.includes('tray-gateway-stop-ok'), 'Electron E2E should log tray Gateway shutdown evidence')
+assert(electronMain.includes('tray-gateway-recovery-ok'), 'Electron E2E should log tray Gateway recovery evidence')
+assert(phaseKGatewayTrayRecoverySmoke.includes('completedItems: [124]'), 'Phase K tray recovery smoke should record item 124 completion')
+assert(phaseKGatewayTrayRecoverySmoke.includes('scripts/smoke-runtime-actions-control-plane.ts'), 'Phase K tray recovery smoke should validate source smoke pinning')
+assert(phaseKGatewayTrayRecoverySmoke.includes('DYSTOPAI_ELECTRON_E2E_ASSERT_TRAY_GATEWAY_RECOVERY'), 'Phase K tray recovery smoke should enable the Electron tray Gateway recovery assertion')
+assert(phaseKGatewayTrayRecoverySmoke.includes('/api/openclaw/runtime/gateway/stop'), 'Phase K tray recovery smoke should verify the Gateway stop route')
+assert(phaseKGatewayTrayRecoverySmoke.includes('/api/openclaw/runtime/gateway/restart'), 'Phase K tray recovery smoke should verify the Gateway recovery route')
 
 assert(editor.includes("apiRequest<{ models?: unknown }>(path, { timeoutMs: EDITOR_MODEL_FETCH_TIMEOUT_MS })"), 'AgentEditorModal should load models through apiRequest')
 assert(!editor.includes('fetchWithTimeout'), 'AgentEditorModal should not keep the model fetch timeout helper')
@@ -213,6 +241,14 @@ assert(store.includes('sendStreamingAgentTurn('), 'nexusStore should delegate SS
 assert(
   packageJson.scripts?.['smoke:runtime-actions-control-plane'] === 'tsx scripts/smoke-runtime-actions-control-plane.ts',
   'package.json should expose smoke:runtime-actions-control-plane',
+)
+assert(
+  packageJson.scripts?.['smoke:phase-k-gateway-restart-ui'] === 'tsx scripts/smoke-phase-k-gateway-restart-ui.ts',
+  'package.json should expose smoke:phase-k-gateway-restart-ui',
+)
+assert(
+  packageJson.scripts?.['smoke:phase-k-gateway-tray-recovery'] === 'tsx scripts/smoke-phase-k-gateway-tray-recovery.ts',
+  'package.json should expose smoke:phase-k-gateway-tray-recovery',
 )
 assert(
   packageJson.scripts?.['test:ci']?.includes('npm run smoke:runtime-actions-control-plane'),

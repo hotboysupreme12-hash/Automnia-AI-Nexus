@@ -28,6 +28,9 @@ const gatewayLogService = readWorkspaceFile('server/services/gateway/gatewayLogS
 const runtimeStatusService = readWorkspaceFile('server/services/runtime/runtimeStatusService.ts')
 const runtimeActionService = readWorkspaceFile('server/services/runtime/runtimeActionService.ts')
 const runtimeHook = readWorkspaceFile('src/hooks/useRuntimeStatus.ts')
+const liveMonitor = readWorkspaceFile('src/components/monitor/LiveOperationMonitor.tsx')
+const nexusShell = readWorkspaceFile('src/components/layout/NexusShell.tsx')
+const phaseKMonitorSmoke = readWorkspaceFile('scripts/smoke-phase-k-monitor-runtime-evidence.ts')
 const packageJson = JSON.parse(readWorkspaceFile('package.json')) as { scripts?: Record<string, string> }
 
 for (const code of ['runtime_status_failed', 'runtime_summary_failed']) {
@@ -116,14 +119,44 @@ assert(runtimeHook.includes('runtimeStatusRequestAbortReason === \'idle\''), 'ru
 assert(runtimeHook.includes('runtimeSummaryRequestAbortReason === \'idle\''), 'runtime summary polling should preserve idle-abort handling')
 assert(runtimeHook.includes("error.code === 'timeout'"), 'runtime polling should preserve timeout-specific status messages')
 assert(runtimeHook.includes('timeoutMs: requestTimeoutMs'), 'runtime polling should pass bounded request timeouts into apiRequest')
+assert(runtimeHook.includes('function listCronShiftsForHydration'), 'full runtime status should dedupe cron shift hydration requests')
+assert(runtimeHook.includes('RUNTIME_CRON_SHIFT_HYDRATION_CACHE_MS'), 'cron shift hydration should have a short client cache')
+assert(runtimeHook.includes('cachedRuntimeSummaryStatus = result.data'), 'runtime summary polling should not hydrate cron shifts with a second request')
+assert(runtimeStatusService.includes('gatewayExternalLogSource'), 'runtime summary should expose whether log tails were skipped or used as fallback')
+assert(runtimeStatusService.includes("'skipped-ledger-hot-path'"), 'runtime summary should skip external log tails when Gateway ledger evidence is already available')
 assert(runtimeHook.includes('lastRestartReason?: string | null'), 'runtime status types should include the last Gateway restart reason')
 assert(runtimeHook.includes('recentRestarts?: GatewayRestartLifecycleEntry[]'), 'runtime status types should include the Gateway restart timeline')
 assert(runtimeHook.includes('export type GatewayRestartDiagnostics'), 'runtime status types should include Gateway restart diagnostics')
 assert(runtimeHook.includes('restartDiagnostics?: GatewayRestartDiagnostics'), 'runtime status Gateway payload should include restart diagnostics')
 
+assert(nexusShell.includes("monitor: { label: 'Monitor'"), 'NexusShell should expose the Monitor workspace')
+assert(nexusShell.includes("onClick={() => selectTab('monitor')}"), 'runtime status chrome should open the Monitor workspace')
+assert(nexusShell.includes("{tab === 'monitor' &&"), 'NexusShell should mount Monitor when the Monitor tab is active')
+assert(nexusShell.includes('<LiveOperationMonitor />'), 'Monitor workspace should render LiveOperationMonitor')
+assert(liveMonitor.includes('data-dui-panel="monitor"'), 'LiveOperationMonitor should expose the Monitor panel marker')
+assert(liveMonitor.includes('function runtimeStatusEvidenceLabel'), 'Monitor should summarize runtime status evidence source')
+assert(liveMonitor.includes('Ledger fast path'), 'Monitor should label the Gateway ledger fast path')
+assert(liveMonitor.includes('Log-tail fallback'), 'Monitor should label Gateway log-tail fallback status')
+assert(liveMonitor.includes("const [tab, setTab] = useState<MonitorTab>('gateway')"), 'Monitor should open on the Gateway runtime tab')
+assert(liveMonitor.includes('useRuntimeStatus(5000)'), 'Monitor should subscribe to full runtime status')
+assert(liveMonitor.includes('RuntimeGatewayPanel status={runtimeStatus}'), 'Monitor should pass runtime status into the Gateway panel')
+assert(liveMonitor.includes('GatewayActivityCard activity={activity}'), 'Monitor should render Gateway channel activity evidence')
+assert(liveMonitor.includes('<GatewayLogTailCard logs={logs} />'), 'Monitor should render Gateway log-tail evidence')
+assert(liveMonitor.includes('Active Cron Jobs'), 'Monitor should render active cron job evidence')
+assert(liveMonitor.includes('DoctorPanel run={displayedDoctorRun}'), 'Monitor should render persisted Doctor runtime diagnostics')
+assert(phaseKMonitorSmoke.includes('completedItems: [122]'), 'Phase K Monitor smoke should record item 122 completion')
+assert(phaseKMonitorSmoke.includes('/api/openclaw/runtime/status?refresh=1'), 'Phase K Monitor smoke should fetch the full runtime status payload')
+assert(phaseKMonitorSmoke.includes('/api/openclaw/runtime/summary?refresh=1'), 'Phase K Monitor smoke should fetch the runtime summary payload')
+assert(phaseKMonitorSmoke.includes('Gateway channel activity'), 'Phase K Monitor smoke should pin the visible channel activity surface')
+assert(phaseKMonitorSmoke.includes('Gateway log tail'), 'Phase K Monitor smoke should pin the visible log-tail surface')
+
 assert(
   packageJson.scripts?.['smoke:runtime-status-control-plane'] === 'tsx scripts/smoke-runtime-status-control-plane.ts',
   'package.json should expose smoke:runtime-status-control-plane',
+)
+assert(
+  packageJson.scripts?.['smoke:phase-k-monitor-runtime-evidence'] === 'tsx scripts/smoke-phase-k-monitor-runtime-evidence.ts',
+  'package.json should expose smoke:phase-k-monitor-runtime-evidence',
 )
 assert(
   packageJson.scripts?.['test:ci']?.includes('npm run smoke:runtime-status-control-plane'),

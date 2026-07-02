@@ -130,6 +130,8 @@ assert.match(dependencyAudit, /npm run audit:dependencies/, 'scheduled audit mus
 
 assert.match(scripts['smoke:ci-workflow'] || '', /tsx scripts\/smoke-ci-workflow\.ts/)
 assert.match(scripts['audit:dependencies'] || '', /npm audit --omit=dev --audit-level=high/)
+assert.match(scripts['smoke:dependency-audit-clean'] || '', /tsx scripts\/smoke-dependency-audit-clean\.ts/)
+assert.match(scripts['smoke:private-beta-handoff'] || '', /tsx scripts\/smoke-private-beta-review-handoff\.ts/)
 assert.match(scripts['secret:scan'] || '', /node scripts\/secret-scan\.cjs/)
 assert.match(scripts['release:validate'] || '', /node scripts\/validate-release-artifacts\.cjs/)
 assert.match(scripts['release:update-manifest'] || '', /generate-update-manifest\.cjs/)

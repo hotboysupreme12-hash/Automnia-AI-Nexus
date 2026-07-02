@@ -15,6 +15,10 @@ const CONTROL_SERVER_STARTUP_TIMEOUT_MS = Math.max(
   20_000,
   Number(process.env.CONTROL_CENTER_STARTUP_TIMEOUT_MS || 180_000) || 180_000,
 )
+const GATEWAY_CONTROL_ACTION_TIMEOUT_MS = Math.min(
+  120_000,
+  Math.max(15_000, Number(process.env.DYSTOPAI_GATEWAY_CONTROL_ACTION_TIMEOUT_MS || 60_000) || 60_000),
+)
 const MANAGED_PORTS = Array.from(new Set([
   APP_PORT,
   DEV_FRONTEND_PORT,
@@ -1107,7 +1111,7 @@ function appendGatewayLog(stream, text) {
 async function startGateway() {
   appendGatewayLog('lifecycle', `gateway start requested through control API on port ${GATEWAY_PORT}`)
   try {
-    await postControlApi('/api/openclaw/runtime/gateway/restart', 15_000)
+    await postControlApi('/api/openclaw/runtime/gateway/restart', GATEWAY_CONTROL_ACTION_TIMEOUT_MS)
   } catch (err) {
     appendGatewayLog('lifecycle', `gateway API start failed: ${err.message}`)
     throw err
@@ -1430,7 +1434,7 @@ async function stopGatewayCompletely() {
     updateTrayMenu()
     appendGatewayLog('lifecycle', 'tray requested complete gateway shutdown')
     try {
-      await postControlApi('/api/openclaw/runtime/gateway/stop', 7000)
+      await postControlApi('/api/openclaw/runtime/gateway/stop', GATEWAY_CONTROL_ACTION_TIMEOUT_MS)
     } catch (err) {
       appendGatewayLog('lifecycle', `gateway API stop failed: ${err.message}`)
     }
@@ -1603,6 +1607,7 @@ function createMainWindow() {
   let e2eRendererJourneyStarted = false
   let e2eScreenshotCaptureStarted = false
   let e2eDesktopBootstrapStarted = false
+  let e2eAppRehydrationStarted = false
 
   win.on('unresponsive', () => {
     console.warn('[dystopai] renderer became unresponsive')
@@ -1650,6 +1655,23 @@ function createMainWindow() {
         }).catch((error) => {
           logE2e(`desktop-session-bootstrap-failed:${error?.message || error}`)
           process.exit(8)
+        })
+      }, 250)
+      return
+    }
+
+    if (
+      process.env.DYSTOPAI_ELECTRON_E2E_ASSERT_APP_REHYDRATION === '1' &&
+      !e2eAppRehydrationStarted
+    ) {
+      e2eAppRehydrationStarted = true
+      setTimeout(() => {
+        void runElectronE2eAppRehydration(win).then((result) => {
+          logE2e(`app-rehydration-${result.mode}-ok:${JSON.stringify(result)}`)
+          if (process.env.DYSTOPAI_ELECTRON_E2E_QUIT_AFTER_APP_REHYDRATION === '1') app.quit()
+        }).catch((error) => {
+          logE2e(`app-rehydration-failed:${error?.message || error}`)
+          process.exit(9)
         })
       }, 250)
       return
@@ -2131,6 +2153,189 @@ async function runElectronE2eDesktopSessionBootstrap(win) {
   logE2e(`desktop-session-bootstrap-token-length:${result.tokenLength}`)
 }
 
+async function runElectronE2eAppRehydration(win) {
+  if (!ELECTRON_E2E || process.env.DYSTOPAI_ELECTRON_E2E_ASSERT_APP_REHYDRATION !== '1') return { mode: 'skipped' }
+  const mode = process.env.DYSTOPAI_ELECTRON_E2E_APP_REHYDRATION_MODE === 'seed' ? 'seed' : 'verify'
+  const agentId = safeE2eFileSegment(process.env.DYSTOPAI_ELECTRON_E2E_APP_REHYDRATION_AGENT_ID || 'phase-k-rehydration-agent')
+  const initialWorkspace = process.env.DYSTOPAI_ELECTRON_E2E_APP_REHYDRATION_INITIAL_WORKSPACE || path.join(resolveOpenClawHomeDir(), 'phase-k-rehydration-initial')
+  const editedWorkspace = process.env.DYSTOPAI_ELECTRON_E2E_APP_REHYDRATION_EDITED_WORKSPACE || path.join(resolveOpenClawHomeDir(), 'phase-k-rehydration-edited')
+  const marker = process.env.DYSTOPAI_ELECTRON_E2E_APP_REHYDRATION_MARKER || `phase-k-rehydration-${agentId}`
+  const storageKey = `dystopai.phaseK.rehydration.${agentId}`
+  const recruitPayload = {
+    agentId,
+    name: 'Phase K Rehydration Agent',
+    workspace: initialWorkspace,
+    emoji: 'R',
+    theme: 'hybrid',
+    profile: {
+      className: 'Restart Verifier',
+      role: 'Manual beta restart state rehydration agent.',
+      behaviorProfile: 'hybrid',
+      level: 3,
+      motto: 'Restart, reload, verify.',
+      bio: 'Created by the Phase K app rehydration smoke in isolated state.',
+      skills: ['restart validation', 'state persistence'],
+      abilities: ['desktop bootstrap verification', 'party state rehydration'],
+      tools: ['filesystem'],
+      stats: {
+        execution: 66,
+        reliability: 76,
+        speed: 58,
+        analysis: 68,
+        communication: 62,
+      },
+    },
+    runtime: {
+      thinkingDefault: 'minimal',
+      timeoutSeconds: 120,
+      parallelPreferred: false,
+      fastModeDefault: 'auto',
+    },
+    attributes: {
+      intelligence: 62,
+      speed: 58,
+      precision: 67,
+      creativity: 52,
+      stability: 76,
+      compute: 46,
+      parallelism: 34,
+    },
+    mds: {
+      maxContextTokens: 4096,
+      delegationAllowed: false,
+      subAgentSpawnLimit: 0,
+      toolAccess: ['filesystem'],
+      capabilities: {
+        codeGeneration: true,
+        planning: true,
+        research: false,
+        orchestration: false,
+        memoryManagement: true,
+      },
+    },
+    heartbeat: {
+      tickIntervalMs: 5000,
+      maxExecutionTimeMs: 120000,
+      continuous: false,
+      idleTimeoutMs: 60000,
+      recoveryMode: true,
+    },
+    soul: {
+      personality: 'analytical',
+      autonomyLevel: 40,
+      riskTolerance: 20,
+      reflectionDepth: 45,
+      goalOrientation: 70,
+      persistence: 68,
+      alignmentMode: 'balanced',
+    },
+    sandbox: {
+      mode: 'off',
+      scope: 'agent',
+      workspaceAccess: 'rw',
+    },
+    tools: {
+      profile: 'minimal',
+      allow: ['filesystem'],
+      deny: [],
+    },
+  }
+
+  const result = await win.webContents.executeJavaScript(`
+    (async () => {
+      const mode = ${JSON.stringify(mode)};
+      const agentId = ${JSON.stringify(agentId)};
+      const initialWorkspace = ${JSON.stringify(initialWorkspace)};
+      const editedWorkspace = ${JSON.stringify(editedWorkspace)};
+      const marker = ${JSON.stringify(marker)};
+      const storageKey = ${JSON.stringify(storageKey)};
+      const recruitPayload = ${JSON.stringify(recruitPayload)};
+      const normalizePath = (value) => String(value || '').replace(/\\\\/g, '/').replace(/\\/+$/g, '').toLowerCase();
+      const samePath = (left, right) => normalizePath(left) === normalizePath(right);
+      const bridge = window.dystopaiDesktop;
+      if (!bridge || typeof bridge.bootstrapControlCenterSession !== 'function') {
+        throw new Error('desktop bootstrap bridge unavailable for app rehydration');
+      }
+      const token = await bridge.bootstrapControlCenterSession();
+      if (typeof token !== 'string' || token.trim().length < 16) {
+        throw new Error('desktop bootstrap did not return a session token for app rehydration');
+      }
+      const api = async (apiPath, options = {}) => {
+        const headers = new Headers({ Authorization: 'Bearer ' + token.trim() });
+        if (options.body !== undefined) headers.set('Content-Type', 'application/json');
+        const response = await fetch(apiPath, {
+          method: options.method || 'GET',
+          headers,
+          body: options.body !== undefined ? JSON.stringify(options.body) : undefined,
+        });
+        let payload;
+        try {
+          payload = await response.json();
+        } catch (error) {
+          throw new Error((options.method || 'GET') + ' ' + apiPath + ' returned invalid JSON: ' + (error?.message || error));
+        }
+        if (!response.ok || payload?.ok !== true) {
+          throw new Error((options.method || 'GET') + ' ' + apiPath + ' failed: ' + (payload?.error?.code || response.status));
+        }
+        return payload.data;
+      };
+      const status = await api('/api/auth/status');
+      if (!status?.authenticated) throw new Error('bootstrapped app rehydration session was not authenticated');
+
+      if (mode === 'seed') {
+        localStorage.setItem(storageKey, marker);
+        const recruit = await api('/api/party/recruit', {
+          method: 'POST',
+          body: recruitPayload,
+        });
+        if (recruit?.agentId !== agentId) throw new Error('recruit returned unexpected agent id');
+        const workspaceUpdate = await api('/api/party/workspace', {
+          method: 'POST',
+          body: { agentId, workspace: editedWorkspace },
+        });
+        if (workspaceUpdate?.ok !== true || !samePath(workspaceUpdate?.workspace, editedWorkspace)) {
+          throw new Error('workspace update did not persist edited workspace');
+        }
+      }
+
+      const overview = await api('/api/party/overview');
+      const config = await api('/api/party/agent/' + encodeURIComponent(agentId) + '/config');
+      const agent = Array.isArray(overview?.party) ? overview.party.find((entry) => entry?.id === agentId) : null;
+      if (!agent) throw new Error('party overview did not include rehydration agent');
+      if (!samePath(agent.workspace, editedWorkspace)) throw new Error('party overview did not project edited workspace');
+      if (config?.agentId !== agentId) throw new Error('agent config returned unexpected agent id');
+      if (!samePath(config?.config?.routing?.workspace, editedWorkspace)) {
+        throw new Error('agent config did not project edited workspace');
+      }
+      if (config?.config?.identity?.name !== 'Phase K Rehydration Agent') {
+        throw new Error('agent config did not project the recruited identity');
+      }
+
+      const storedMarker = localStorage.getItem(storageKey);
+      if (storedMarker !== marker) {
+        throw new Error('renderer localStorage marker did not rehydrate');
+      }
+
+      return {
+        mode,
+        tokenLength: token.trim().length,
+        authenticated: true,
+        agentId,
+        identityName: config.config.identity.name,
+        overviewWorkspaceMatches: samePath(agent.workspace, editedWorkspace),
+        configWorkspaceMatches: samePath(config.config.routing.workspace, editedWorkspace),
+        localStorageMarkerMatches: storedMarker === marker,
+      };
+    })()
+  `, true)
+  assertElectronE2e(result?.authenticated === true, 'app rehydration session must authenticate')
+  assertElectronE2e(result?.agentId === agentId, 'app rehydration should return the expected agent id')
+  assertElectronE2e(result?.overviewWorkspaceMatches === true, 'app rehydration should verify overview workspace')
+  assertElectronE2e(result?.configWorkspaceMatches === true, 'app rehydration should verify config workspace')
+  assertElectronE2e(result?.localStorageMarkerMatches === true, 'app rehydration should verify renderer persisted state')
+  return result
+}
+
 async function runElectronE2eTraySelfTest(win) {
   if (!ELECTRON_E2E || process.env.DYSTOPAI_ELECTRON_E2E_ASSERT_TRAY_BEHAVIOR !== '1') return
   const menuHas = (label) => lastTrayMenuSnapshot.some((item) => item.label === label && item.enabled)
@@ -2157,6 +2362,24 @@ async function runElectronE2eTraySelfTest(win) {
   updateTrayMenu()
   assertElectronE2e(menuHas('Hide UI'), 'restored window tray menu must offer Hide UI')
   logE2e('tray-click-restore-ok')
+
+  if (process.env.DYSTOPAI_ELECTRON_E2E_ASSERT_TRAY_GATEWAY_RECOVERY === '1') {
+    updateTrayMenu()
+    assertElectronE2e(menuHas('Restart Gateway'), 'tray menu must offer Gateway recovery')
+    assertElectronE2e(menuHas('Shut Gateway Off'), 'tray menu must offer Gateway shutdown')
+    logE2e('tray-gateway-menu-ok')
+
+    await stopGatewayCompletely()
+    updateTrayMenu()
+    assertElectronE2e(menuHas('Restart Gateway'), 'tray menu must re-enable Gateway recovery after shutdown')
+    logE2e('tray-gateway-stop-ok')
+
+    await resetGateway()
+    updateTrayMenu()
+    assertElectronE2e(menuHas('Restart Gateway'), 'tray menu must re-enable Gateway recovery after reset')
+    assertElectronE2e(menuHas('Shut Gateway Off'), 'tray menu must re-enable Gateway shutdown after reset')
+    logE2e('tray-gateway-recovery-ok')
+  }
 
   if (process.env.DYSTOPAI_ELECTRON_E2E_QUIT_AFTER_TRAY_ASSERTIONS === '1') app.quit()
 }

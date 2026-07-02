@@ -4227,16 +4227,1485 @@ Next action:
 
 - Continue Phase K with item `117`: send one simple command in isolated beta state, then proceed to item `118` for a command with attachment.
 
+### 2026-07-01 - Phase K Command Console Simple And Attachment Sends
+
+Scope:
+
+- Completed Phase K items `117` and `118` by adding and running an isolated command-console smoke for one simple command and one attachment-backed command.
+- Added `scripts/smoke-phase-k-command-console.ts`. The smoke starts `server/index.ts` on a free loopback port with isolated `HOME`, `OPENCLAW_STATE_DIR`, `OPENCLAW_HOME`, `OPENCLAW_CONFIG_PATH`, and `CONTROL_CENTER_WORKSPACE_ROOT`; disables Gateway autostart/chat clients; enables the deterministic stream smoke hook; signs in through `/api/auth/login`; and writes Phase K evidence under `release/evidence/phase-k-manual-beta-2026-07-01/`.
+- The smoke sends a simple `hn-commander` command through `/api/openclaw/agent-turn/stream`, uploads `phase-k-command-note.md` through `/api/files/upload`, verifies the uploaded file path remains under the isolated command-console upload root and workspace root, then sends a second stream command carrying the uploaded attachment metadata.
+- Added `npm run smoke:phase-k-command-console` to `package.json`.
+- Extended `scripts/smoke-agent-turn-control-plane.ts` so the source-level agent-turn smoke pins the new Phase K command-console smoke, its package script, the command stream route, upload route, deterministic stream smoke hook, item `117/118` evidence recording, and the evidence secret-material guard.
+
+Files changed:
+
+- `scripts/smoke-phase-k-command-console.ts`
+- `scripts/smoke-agent-turn-control-plane.ts`
+- `package.json`
+- `docs/BETA_CODEBASE_SPLIT_PLAN.md`
+- `docs/OPTIMIZATION_MEMORY.md`
+- `docs/PRODUCTION_HARDENING_LEDGER.md`
+
+Evidence written:
+
+- `release/evidence/phase-k-manual-beta-2026-07-01/command-console-smoke.json`
+- `release/evidence/phase-k-manual-beta-2026-07-01/COMMAND_CONSOLE_SMOKE.md`
+- `release/evidence/phase-k-manual-beta-2026-07-01/07-command-console-smoke.log`
+
+Verification:
+
+- `npm run smoke:phase-k-command-console` passed. The final evidence JSON recorded `completedItems: [117, 118]`, `blockedItems: []`, simple command stream events `status, progress, delta, delta, final`, attachment command stream events `status, progress, delta, delta, final`, final reply `Mock gateway reply complete.`, `transport: gateway-chat`, and `liveTokens: true`.
+- The uploaded attachment evidence recorded name `phase-k-command-note.md`, MIME type `text/markdown`, size `69`, kind `file`, ID length only, and `pathIsUnderUploadRoot: true` plus `pathIsUnderWorkspaceRoot: true`.
+- `npm run smoke:agent-turn-control-plane` passed.
+- `npm run smoke:command-console-files` passed.
+- `npm run typecheck` passed.
+- `npm run lint` passed with the existing Babel deoptimization note for `server/controlPlane.ts`.
+- `git diff --check` passed with only existing LF-to-CRLF working-copy warnings.
+- `npm test` passed end to end with `187` unit tests and the full architecture, renderer-store, command-console, filesystem, plugin, Gateway, runtime, mission, provider, release, security, secret-scan, and CI smoke suite.
+
+Risks and notes:
+
+- The smoke uses the existing deterministic Command Console stream smoke hook instead of live provider credentials, so it proves the authenticated local command/send, SSE frame, and upload/attachment control-plane paths without depending on external model availability.
+- The smoke intentionally uses isolated temporary state and removes it after success, so it does not mutate the operator's real OpenClaw state.
+- Evidence stores token length and attachment metadata only; it does not contain bearer tokens, session tokens, provider secrets, OAuth codes, API keys, cookies, or uploaded file contents.
+
+Next action:
+
+- Continue Phase K with item `119`: launch one instant mission in isolated beta state.
+
+### 2026-07-01 - Phase K Instant And Timed Mission Launches
+
+Scope:
+
+- Completed Phase K items `119` and `120` by adding and running an isolated mission-launch smoke for one instant mission and one one-hour timed mission.
+- Added `scripts/smoke-phase-k-mission-launch.ts`. The smoke starts `server/index.ts` on a free loopback port with isolated `HOME`, `OPENCLAW_STATE_DIR`, `OPENCLAW_HOME`, `OPENCLAW_CONFIG_PATH`, and `CONTROL_CENTER_WORKSPACE_ROOT`; disables Gateway autostart/chat clients; enables `CONTROL_CENTER_MISSION_SCHEDULER_DRY_RUN=1`; signs in through `/api/auth/login`; and writes Phase K evidence under `release/evidence/phase-k-manual-beta-2026-07-01/`.
+- The smoke launches an instant mission through `/api/missions/start`, verifies `/api/missions/:missionId/events`, `/api/missions/:missionId/lifecycle`, `/api/missions/projection`, and asserts Team Sync snapshot evidence under the isolated OpenClaw state tree.
+- The same smoke launches a one-hour timed mission through `/api/missions/start`, verifies the duration-backed `endAt`, active/running scheduler projection, lifecycle/event reads, mission projection, and Team Sync snapshot evidence.
+- Added `npm run smoke:phase-k-mission-launch` to `package.json`.
+- Extended `scripts/smoke-mission-backend-owned.ts` so the source-level mission smoke pins the Phase K mission-launch smoke, its package script, mission start/projection/lifecycle/event routes, scheduler dry-run mode, Team Sync evidence, item `119/120` evidence recording, and the evidence secret-material guard.
+
+Files changed:
+
+- `scripts/smoke-phase-k-mission-launch.ts`
+- `scripts/smoke-mission-backend-owned.ts`
+- `package.json`
+- `docs/BETA_CODEBASE_SPLIT_PLAN.md`
+- `docs/OPTIMIZATION_MEMORY.md`
+- `docs/PRODUCTION_HARDENING_LEDGER.md`
+
+Evidence written:
+
+- `release/evidence/phase-k-manual-beta-2026-07-01/mission-launch-smoke.json`
+- `release/evidence/phase-k-manual-beta-2026-07-01/MISSION_LAUNCH_SMOKE.md`
+- `release/evidence/phase-k-manual-beta-2026-07-01/08-mission-launch-smoke.log`
+
+Verification:
+
+- `npm run smoke:phase-k-mission-launch` passed. The final evidence JSON recorded `completedItems: [119, 120]`, `blockedItems: []`, instant mission `65b5a553-aa00-4f2b-a3ec-fc2966be2576`, timed mission `e817729b-a9ab-4822-91f0-f19d5c51023e`, projection `missionCount: 2`, `activeMissionCount: 2`, `durableRecordCount: 2`, and `memoryRecordCount: 2`.
+- The instant mission evidence recorded mode `instant`, status `active`, lifecycle `running`, progress `100`, scheduler status `waiting`, `round: 0`, `cycleIntervalMs: 60000`, `maxCycles: 1`, and `jobs: 0`.
+- The timed mission evidence recorded mode `hours`, amount `1`, status `active`, lifecycle `running`, a one-hour `endAt`, scheduler status `waiting`, `round: 0`, `cycleIntervalMs: 60000`, `maxCycles: 1`, and `jobs: 0`.
+- Lifecycle evidence for each mission recorded `draft->validating`, `validating->scheduled`, and `scheduled->running`, plus one `agent_assigned` event and one scheduler dry-run event.
+- Team Sync evidence for both missions was written under the isolated state tree for `phase-k-mission-agent`.
+- `npm run smoke:mission-backend-owned` passed.
+- `npm run typecheck` passed.
+- `npm run lint` passed with the existing Babel deoptimization note for `server/controlPlane.ts`.
+- `npm run smoke:mission-durable-state` passed.
+- `npm run smoke:mission-lifecycle-projection` passed.
+- `npm run secret:scan` passed with no high-confidence checked-in secrets found.
+- `npm run smoke:api-integration` passed.
+- `git diff --check` passed with only existing LF-to-CRLF working-copy warnings.
+
+Risks and notes:
+
+- This slice intentionally uses mission scheduler dry-run mode rather than live OpenClaw cron/provider execution. It proves authenticated launch, backend projection, lifecycle/event ledger writes, scheduler arming, and Team Sync writes without depending on external model credentials. A later Phase K item still needs cancellation and runtime/Monitor/Gateway recovery evidence.
+- The smoke uses isolated temporary state and removes it after success, so it does not mutate the operator's real OpenClaw state.
+- Evidence stores token length and local isolated paths only; it does not contain bearer tokens, session tokens, provider secrets, OAuth codes, API keys, cookies, or uploaded file contents.
+
+Next action:
+
+- Continue Phase K with item `121`: cancel a running mission in isolated beta state.
+
+### 2026-07-01 - Phase K Running Mission Cancellation
+
+Scope:
+
+- Completed Phase K item `121` by adding and running an isolated mission-cancellation smoke for one running mission.
+- Added `scripts/smoke-phase-k-mission-cancellation.ts`. The smoke starts `server/index.ts` on a free loopback port with isolated `HOME`, `OPENCLAW_STATE_DIR`, `OPENCLAW_HOME`, `OPENCLAW_CONFIG_PATH`, and `CONTROL_CENTER_WORKSPACE_ROOT`; disables Gateway autostart/chat clients; enables `CONTROL_CENTER_MISSION_SCHEDULER_DRY_RUN=1`; signs in through `/api/auth/login`; and writes Phase K evidence under `release/evidence/phase-k-manual-beta-2026-07-01/`.
+- The smoke launches one continuous running mission through `/api/missions/start`, waits for launch lifecycle events, cancels it through `/api/missions/stop`, verifies cancelled projection, lifecycle events, mission report evidence, Team Sync cancellation evidence, and mission-record ledger markers.
+- Added `npm run smoke:phase-k-mission-cancellation` to `package.json`.
+- Extended `scripts/smoke-mission-cancellation.ts` so the source-level mission cancellation smoke pins the Phase K cancellation smoke, package script, mission start/stop/projection/lifecycle/event/report routes, scheduler dry-run mode, Team Sync evidence, item `121` evidence recording, durable `transition:running->cancelled` ledger evidence, and the evidence secret-material guard.
+
+Files changed:
+
+- `scripts/smoke-phase-k-mission-cancellation.ts`
+- `scripts/smoke-mission-cancellation.ts`
+- `package.json`
+- `docs/BETA_CODEBASE_SPLIT_PLAN.md`
+- `docs/OPTIMIZATION_MEMORY.md`
+- `docs/PRODUCTION_HARDENING_LEDGER.md`
+
+Evidence written:
+
+- `release/evidence/phase-k-manual-beta-2026-07-01/mission-cancellation-smoke.json`
+- `release/evidence/phase-k-manual-beta-2026-07-01/MISSION_CANCELLATION_SMOKE.md`
+- `release/evidence/phase-k-manual-beta-2026-07-01/09-mission-cancellation-smoke.log`
+
+Verification:
+
+- `npm run smoke:phase-k-mission-cancellation` passed. The final evidence JSON recorded `completedItems: [121]`, `blockedItems: []`, continuous mission `1cc91f9d-1b7e-4031-b2e9-91a8a3d5e9ea`, stop status `cancelled`, lifecycle state `cancelled`, scheduler status `stopped`, cleanup `attempted: 0`, `removed: 0`, `disabled: 0`, and `failed: 0`.
+- Cancellation evidence recorded lifecycle transitions `draft->validating`, `validating->scheduled`, `scheduled->running`, `running->running`, and `running->cancelled`, plus one operator cancellation-request event and one `mission_cancelled` event.
+- Projection evidence recorded `missionCount: 1`, `activeMissionCount: 0`, `durableRecordCount: 1`, and `memoryRecordCount: 1` after cancellation.
+- Report evidence recorded `source: mission-feed`, `cancelledRuns: 1`, `humanInterventions: 2`, `agentParticipation: [phase-k-cancel-agent]`, and heartbeat stability score `92`.
+- Team Sync cancellation evidence was written under the isolated state tree for `phase-k-cancel-agent`, and the mission record ledger contained both `cancellation-requested` and `transition:running->cancelled`.
+- `npm run smoke:mission-cancellation` passed.
+- `npm run smoke:mission-backend-owned` passed.
+- `npm run smoke:mission-lifecycle-projection` passed.
+- `npm run typecheck` passed.
+- `npm run lint` passed with the existing Babel deoptimization note for `server/controlPlane.ts`.
+- `git diff --check` passed with only existing LF-to-CRLF working-copy warnings.
+- `npm run secret:scan` passed with no high-confidence checked-in secrets found.
+- `npm test` passed end to end with `187` unit tests and the full architecture, renderer-store, command-console, filesystem, plugin, Gateway, runtime, mission, provider, release, security, secret-scan, and CI smoke suite.
+
+Risks and notes:
+
+- The smoke intentionally uses mission scheduler dry-run mode rather than live OpenClaw cron/provider execution. It proves authenticated launch, operator cancellation, projection, lifecycle/event ledger reads, report generation, Team Sync writes, and durable mission-record cancellation evidence without depending on external model credentials.
+- The smoke uses isolated temporary state and removes it after success, so it does not mutate the operator's real OpenClaw state.
+- Evidence stores token length and local isolated paths only; it does not contain bearer tokens, session tokens, provider secrets, OAuth codes, API keys, cookies, or uploaded file contents.
+
+Next action:
+
+- Continue Phase K with item `122`: open Monitor and confirm runtime evidence is visible.
+
+### 2026-07-01 - Phase K Monitor Runtime Evidence
+
+Scope:
+
+- Completed Phase K item `122` by adding and running an isolated Monitor runtime-evidence smoke.
+- Added `scripts/smoke-phase-k-monitor-runtime-evidence.ts`. The smoke starts `server/index.ts` on a free loopback port with isolated `HOME`, `OPENCLAW_STATE_DIR`, `OPENCLAW_HOME`, `OPENCLAW_CONFIG_PATH`, `CONTROL_CENTER_WORKSPACE_ROOT`, and `OPENCLAW_GATEWAY_LOG_PATH`; disables Gateway autostart/chat clients; signs in through `/api/auth/login`; seeds only an isolated local Gateway log; and writes Phase K evidence under `release/evidence/phase-k-manual-beta-2026-07-01/`.
+- The smoke verifies the source path for opening Monitor through `NexusShell`, the `LiveOperationMonitor` default Gateway tab, `useRuntimeStatus(5000)`, and the visible Monitor runtime evidence surfaces for Gateway channel activity, active cron jobs, Gateway log tail, Doctor diagnostics, and Clean Slate status.
+- The smoke verifies authenticated `/api/openclaw/runtime/status?refresh=1` and `/api/openclaw/runtime/summary?refresh=1` payloads that feed Monitor, including Monitor metadata, runtime/persistence evidence, Gateway state/readiness/stability/restart diagnostics, seeded log-tail rows, channel activity counts, runtime collections, plugin counts, shifts, missions, and Doctor diagnostics summary counts.
+- Added `npm run smoke:phase-k-monitor-runtime-evidence` to `package.json`.
+- Extended `scripts/smoke-runtime-status-control-plane.ts` so the source-level runtime-status smoke pins the Phase K Monitor smoke, package script, Monitor source wiring, runtime status hook usage, item `122` evidence recording, and the visible Monitor evidence surfaces.
+
+Files changed:
+
+- `scripts/smoke-phase-k-monitor-runtime-evidence.ts`
+- `scripts/smoke-runtime-status-control-plane.ts`
+- `package.json`
+- `docs/BETA_CODEBASE_SPLIT_PLAN.md`
+- `docs/OPTIMIZATION_MEMORY.md`
+- `docs/PRODUCTION_HARDENING_LEDGER.md`
+
+Evidence written:
+
+- `release/evidence/phase-k-manual-beta-2026-07-01/monitor-runtime-evidence-smoke.json`
+- `release/evidence/phase-k-manual-beta-2026-07-01/MONITOR_RUNTIME_EVIDENCE_SMOKE.md`
+- `release/evidence/phase-k-manual-beta-2026-07-01/10-monitor-runtime-evidence-smoke.log`
+
+Verification:
+
+- `npm run smoke:phase-k-monitor-runtime-evidence` passed. The final evidence JSON recorded `completedItems: [122]`, `blockedItems: []`, Monitor source wiring, Gateway state `offline`, `3` Gateway log-tail rows, `2` Gateway channel activity events, `1` inbound event, `1` outbound event, runtime persistence evidence, `1` active run, `66` enabled plugins of `139` total plugins, `0` active shifts, `0` active missions, and Doctor diagnostics summary counts.
+- `npm run smoke:runtime-status-control-plane` passed.
+- `npm run typecheck` passed.
+- `npm run lint` passed with the existing Babel deoptimization note for `server/controlPlane.ts`.
+- `npm run secret:scan` passed with no high-confidence checked-in secrets found.
+- `npm run smoke:ui` passed across desktop, wide, and mobile viewports. It opened the Monitor workspace and verified visible Monitor tab panels, channel activity, active cron jobs, Gateway log tail, Doctor repair controls, structured Doctor findings, and Clean Slate success/failure status.
+- `git diff --check` passed with only the existing LF-to-CRLF working-copy warnings.
+- `npm test` passed end to end with `187` unit tests and the full architecture, renderer-store, command-console, filesystem, plugin, Gateway, runtime, mission, provider, release, security, secret-scan, and CI smoke suite.
+
+Risks and notes:
+
+- The first smoke attempt received a valid timeout fallback because the default runtime status response cap is `6000ms`. The isolated smoke now sets `CONTROL_CENTER_RUNTIME_STATUS_RESPONSE_TIMEOUT_MS=15000` and `CONTROL_CENTER_RUNTIME_SUMMARY_RESPONSE_TIMEOUT_MS=10000`, matching the service maximums, so the check proves the full Monitor payload instead of fallback evidence.
+- The smoke intentionally uses isolated temporary state and removes it after success, so it does not mutate the operator's real OpenClaw state.
+- Evidence stores token length and isolated local paths only; it does not contain bearer tokens, session tokens, provider secrets, OAuth codes, API keys, cookies, or uploaded file contents.
+
+Next action:
+
+- Continue Phase K with item `123`: restart Gateway from UI.
+
+### 2026-07-01 - Phase K Gateway Restart From UI
+
+Scope:
+
+- Completed Phase K item `123` by wiring and proving Gateway restart from the Monitor UI path.
+- Added a stable `Restart Gateway` control to `src/components/monitor/LiveOperationMonitor.tsx` on the Monitor Gateway tab. The control calls `restartGatewayRuntime()`, renders success/failure through the existing Monitor action banners, and refreshes runtime status immediately and again after a short delay.
+- Added `scripts/smoke-phase-k-gateway-restart-ui.ts`. The smoke starts `server/index.ts` on a free loopback port with isolated `HOME`, `OPENCLAW_STATE_DIR`, `OPENCLAW_HOME`, `OPENCLAW_CONFIG_PATH`, `CONTROL_CENTER_WORKSPACE_ROOT`, and `OPENCLAW_GATEWAY_LOG_PATH`; signs in through `/api/auth/login`; calls the authenticated `/api/openclaw/runtime/gateway/restart` route used by the UI; and verifies runtime status exposes the manual restart lifecycle reason.
+- Added `npm run smoke:phase-k-gateway-restart-ui` to `package.json`.
+- Extended `scripts/smoke-runtime-actions-control-plane.ts` so the source-level runtime action smoke pins the Monitor restart button, click handler, runtime action helper, Phase K smoke, package script, manual restart reason, and UI smoke click coverage.
+- Extended `scripts/smoke-ui-render.mjs` so the Electron UI smoke stubs `/api/openclaw/runtime/gateway/restart`, clicks the Monitor Gateway restart button across desktop, wide, and mobile viewports, and verifies the button title/ARIA label, endpoint call, and status banner.
+
+Files changed:
+
+- `src/components/monitor/LiveOperationMonitor.tsx`
+- `scripts/smoke-phase-k-gateway-restart-ui.ts`
+- `scripts/smoke-runtime-actions-control-plane.ts`
+- `scripts/smoke-ui-render.mjs`
+- `package.json`
+- `docs/BETA_CODEBASE_SPLIT_PLAN.md`
+- `docs/OPTIMIZATION_MEMORY.md`
+- `docs/PRODUCTION_HARDENING_LEDGER.md`
+
+Evidence written:
+
+- `release/evidence/phase-k-manual-beta-2026-07-01/gateway-restart-ui-smoke.json`
+- `release/evidence/phase-k-manual-beta-2026-07-01/GATEWAY_RESTART_UI_SMOKE.md`
+- `release/evidence/phase-k-manual-beta-2026-07-01/11-gateway-restart-ui-smoke.log`
+
+Verification:
+
+- `npm run smoke:phase-k-gateway-restart-ui` passed. The final evidence JSON recorded `completedItems: [123]`, `blockedItems: []`, restart route `/api/openclaw/runtime/gateway/restart`, restart reason `manual restart requested from monitor`, `restartAction.restarted: true`, Gateway `state: healthy`, `healthy: true`, `processRunning: true`, `lastRestartOutcome: succeeded`, and one recent restart lifecycle entry in runtime status.
+- `npm run smoke:runtime-actions-control-plane` passed.
+- `npm run typecheck` passed.
+- `npm run smoke:runtime-status-control-plane` passed.
+- `npm run lint` passed with the existing Babel deoptimization note for `server/controlPlane.ts`.
+- `npm run secret:scan` passed with no high-confidence checked-in secrets found.
+- `npm run build:client` passed.
+- `npm run smoke:ui` passed across desktop, wide, and mobile viewports. It clicked the Monitor Gateway restart button, verified `/api/openclaw/runtime/gateway/restart` was called, and confirmed the status banner text `Gateway restart started from Monitor. ui smoke gateway restart accepted`.
+- `npm test` passed end to end with `187` unit tests and the full architecture, renderer-store, command-console, filesystem, plugin, Gateway, runtime, mission, provider, release, security, secret-scan, and CI smoke suite.
+- `git diff --check` passed with only the existing LF-to-CRLF working-copy warnings.
+
+Risks and notes:
+
+- The isolated Phase K smoke used a real local Gateway lifecycle action and succeeded with Gateway healthy. It stored token length and isolated local paths only; it did not store bearer tokens, session tokens, provider secrets, OAuth codes, API keys, cookies, or uploaded file contents.
+- `smoke:ui` uses a static Electron harness endpoint stub for the UI click proof. The real backend restart behavior is covered separately by `smoke:phase-k-gateway-restart-ui` and existing runtime action tests.
+
+Next action:
+
+- Continue Phase K with item `124`: stop Gateway from tray/menu and recover it.
+
+### 2026-07-01 - Phase K Gateway Tray Stop And Recovery
+
+Scope:
+
+- Completed Phase K item `124` by adding and running an isolated Electron tray/menu Gateway stop-and-recover smoke.
+- Added an E2E-only tray Gateway recovery assertion in `electron/main.cjs` behind `DYSTOPAI_ELECTRON_E2E_ASSERT_TRAY_GATEWAY_RECOVERY`. The assertion verifies the existing tray menu exposes `Shut Gateway Off` and `Restart Gateway`, calls the tray-owned shutdown path, then calls the tray-owned recovery path.
+- Fixed a real beta issue found by the first item `124` run: tray recovery previously called the Gateway restart API with a hard-coded `15000ms` timeout, which expired before local Gateway startup completed. The tray Gateway stop/recovery path now uses configurable `DYSTOPAI_GATEWAY_CONTROL_ACTION_TIMEOUT_MS` through `GATEWAY_CONTROL_ACTION_TIMEOUT_MS`.
+- Added `scripts/smoke-phase-k-gateway-tray-recovery.ts`. The smoke launches Electron with isolated `user-data`, OpenClaw state, workspace root, loopback-only ports, and `OPENCLAW_GATEWAY_LOG_PATH`; enables the tray Gateway recovery E2E flag; waits for `tray-gateway-stop-ok` and `tray-gateway-recovery-ok`; records redacted evidence; and terminates the isolated Electron process tree after the recovery marker.
+- Added `npm run smoke:phase-k-gateway-tray-recovery` to `package.json`.
+- Extended `scripts/smoke-runtime-actions-control-plane.ts` so the source-level runtime action smoke pins the tray Gateway labels, runtime Gateway stop/restart endpoint calls, shared timeout, E2E flag, Phase K smoke, package script, and item `124` evidence recording.
+
+Files changed:
+
+- `electron/main.cjs`
+- `scripts/smoke-phase-k-gateway-tray-recovery.ts`
+- `scripts/smoke-runtime-actions-control-plane.ts`
+- `package.json`
+- `docs/BETA_CODEBASE_SPLIT_PLAN.md`
+- `docs/OPTIMIZATION_MEMORY.md`
+- `docs/PRODUCTION_HARDENING_LEDGER.md`
+
+Evidence written:
+
+- `release/evidence/phase-k-manual-beta-2026-07-01/gateway-tray-recovery-smoke.json`
+- `release/evidence/phase-k-manual-beta-2026-07-01/GATEWAY_TRAY_RECOVERY_SMOKE.md`
+- `release/evidence/phase-k-manual-beta-2026-07-01/12-gateway-tray-recovery-smoke.log`
+
+Verification:
+
+- `npm run smoke:phase-k-gateway-tray-recovery` passed. The final evidence JSON recorded `completedItems: [124]`, `blockedItems: []`, tray stop API `/api/openclaw/runtime/gateway/stop`, tray recovery API `/api/openclaw/runtime/gateway/restart`, the E2E flag `DYSTOPAI_ELECTRON_E2E_ASSERT_TRAY_GATEWAY_RECOVERY`, token length only, isolated local paths, tray assertions for visible state, hide-on-close, tray-click restore, Gateway menu, Gateway stop, and Gateway recovery, plus Gateway lifecycle log proof for tray shutdown, tray reset, and control-API recovery start.
+- `npm run smoke:runtime-actions-control-plane` passed.
+- `npm run typecheck:electron` passed.
+- `npm run build:standalone` passed.
+- `npm run typecheck` passed.
+- `npm run lint` passed with the existing Babel deoptimization note for `server/controlPlane.ts`.
+- `npm run smoke:electron-e2e` passed.
+- `npm run secret:scan` passed with no high-confidence checked-in secrets found.
+- `git diff --check` passed with only existing LF-to-CRLF working-copy warnings.
+- `npm test` passed end to end with `187` unit tests and the full architecture, renderer-store, command-console, filesystem, plugin, Gateway, runtime, mission, provider, release, security, secret-scan, and CI smoke suite.
+
+Risks and notes:
+
+- The dedicated Phase K tray recovery smoke terminates the isolated Electron process tree after the recovery marker. It is intentionally scoped to tray stop/recover evidence; existing quit cleanup remains covered by `npm run smoke:electron-e2e`.
+- Evidence stores token length and isolated local paths only; it does not contain bearer tokens, session tokens, provider secrets, OAuth codes, API keys, cookies, or uploaded file contents.
+
+Next action:
+
+- Continue Phase K with item `125`: restart the app and confirm state rehydrates.
+
+### 2026-07-01 - Phase K App Restart State Rehydration
+
+Scope:
+
+- Completed Phase K item `125` by adding and running an isolated two-launch Electron smoke for app restart state rehydration.
+- Added an E2E-only app rehydration assertion in `electron/main.cjs` behind `DYSTOPAI_ELECTRON_E2E_ASSERT_APP_REHYDRATION`. The assertion runs from the renderer after load, bootstraps a desktop session through `window.dystopaiDesktop.bootstrapControlCenterSession()`, writes state in `seed` mode, verifies state in `verify` mode, and quits cleanly when `DYSTOPAI_ELECTRON_E2E_QUIT_AFTER_APP_REHYDRATION=1`.
+- Added `scripts/smoke-phase-k-app-rehydration.ts`. The smoke launches Electron twice with the same isolated `DYSTOPAI_USER_DATA_DIR`, `HOME`, `OPENCLAW_STATE_DIR`, `OPENCLAW_HOME`, `OPENCLAW_CONFIG_PATH`, `CONTROL_CENTER_WORKSPACE_ROOT`, and loopback ports.
+- The smoke intentionally leaves `CONTROL_CENTER_TOKEN` empty, proving Electron creates the local Control Center launch-token file on first launch and reuses the exact file on second launch. Evidence records token lengths and booleans only.
+- First launch recruits `phase-k-rehydration-agent`, edits its workspace, writes a renderer `localStorage` marker on the same loopback origin, and verifies the state through authenticated renderer API calls.
+- Second launch verifies `/api/party/overview`, `/api/party/agent/:agentId/config`, and renderer persisted state still rehydrate after the app restart.
+- Added `npm run smoke:phase-k-app-rehydration` to `package.json`.
+- Extended `scripts/smoke-auth-control-plane.ts` so the source-level auth smoke pins the Electron E2E hook, package script, first/second launch modes, local token-file reuse assertion, renderer persisted-state assertion, item `125` evidence recording, and evidence redaction guard.
+
+Files changed:
+
+- `electron/main.cjs`
+- `scripts/smoke-phase-k-app-rehydration.ts`
+- `scripts/smoke-auth-control-plane.ts`
+- `package.json`
+- `docs/BETA_CODEBASE_SPLIT_PLAN.md`
+- `docs/OPTIMIZATION_MEMORY.md`
+- `docs/PRODUCTION_HARDENING_LEDGER.md`
+
+Evidence written:
+
+- `release/evidence/phase-k-manual-beta-2026-07-01/app-rehydration-smoke.json`
+- `release/evidence/phase-k-manual-beta-2026-07-01/APP_REHYDRATION_SMOKE.md`
+- `release/evidence/phase-k-manual-beta-2026-07-01/13-app-rehydration-smoke.log`
+
+Verification:
+
+- `npm run smoke:phase-k-app-rehydration` passed. The final evidence JSON recorded `completedItems: [125]`, `blockedItems: []`, E2E flag `DYSTOPAI_ELECTRON_E2E_ASSERT_APP_REHYDRATION`, seed marker `app-rehydration-seed-ok`, verify marker `app-rehydration-verify-ok`, `launchTokenFileCreated: true`, `launchTokenFileReusedAcrossRestart: true`, `tokenFileSource: "generated"`, fresh session-token lengths only, `firstLaunchSeededAgent: true`, `secondLaunchReadAgent: true`, `overviewWorkspaceMatches: true`, `configWorkspaceMatches: true`, and `rendererLocalStorageRehydrated: true`.
+- `npm run smoke:auth` passed.
+- `npm run typecheck:electron` passed.
+- `npm run typecheck` passed.
+- `npm run lint` passed with the existing Babel deoptimization note for `server/controlPlane.ts`.
+- `npm run smoke:electron-e2e` passed.
+- `npm run secret:scan` passed with no high-confidence checked-in secrets found.
+- `git diff --check` passed with only the existing LF-to-CRLF working-copy warnings.
+
+Risks and notes:
+
+- The app rehydration smoke uses isolated temporary local state and removes it after success, so it does not mutate the operator's real OpenClaw or desktop state.
+- The smoke uses the built development Electron harness against `dist` and `dist-server`, matching the existing Phase K tray recovery approach. Packaged desktop launch remains covered by item `112` and `npm run smoke:phase-k-desktop-launch`.
+- Evidence stores token lengths and isolated local paths only; it does not contain launch tokens, bearer tokens, session tokens, provider secrets, OAuth codes, API keys, cookies, or uploaded file contents.
+
+Next action:
+
+- Continue Phase K with item `126`: run a plugin status check.
+
+### 2026-07-01 - Phase K Plugin Status Check
+
+Scope:
+
+- Completed Phase K item `126` by adding and running an isolated authenticated plugin-status smoke.
+- Added `scripts/smoke-phase-k-plugin-status.ts`. The smoke starts `server/index.ts` on a free loopback port with isolated `HOME`, `OPENCLAW_STATE_DIR`, `OPENCLAW_HOME`, `OPENCLAW_CONFIG_PATH`, `CONTROL_CENTER_WORKSPACE_ROOT`, and `OPENCLAW_GATEWAY_LOG_PATH`; disables Gateway autostart/chat clients; signs in through `/api/auth/login`; and records Phase K evidence under `release/evidence/phase-k-manual-beta-2026-07-01/`.
+- The smoke verifies source wiring for `src/api/plugins.ts`, `src/components/plugins/PluginsPanel.tsx`, `src/components/plugins/pluginStateProjection.ts`, `server/routes/pluginRoutes.ts`, and `server/services/runtime/runtimeStatusService.ts`.
+- The smoke runs authenticated `/api/plugins?refresh=1`, cached `/api/plugins`, and `/api/openclaw/runtime/status?refresh=1` reads, then cross-checks plugin totals, enabled counts, cache metadata, and Plugins page state summaries against the runtime plugin projection.
+- Added `npm run smoke:phase-k-plugin-status` to `package.json`.
+- Extended `scripts/smoke-plugins-control-plane.ts` so the source-level plugin smoke pins the Phase K smoke, package script, item `126` evidence recording, force-refresh plugin route, runtime status cross-check route, Plugins page summary reuse, runtime count validation, and evidence redaction guard.
+
+Files changed:
+
+- `scripts/smoke-phase-k-plugin-status.ts`
+- `scripts/smoke-plugins-control-plane.ts`
+- `package.json`
+- `docs/BETA_CODEBASE_SPLIT_PLAN.md`
+- `docs/OPTIMIZATION_MEMORY.md`
+- `docs/PRODUCTION_HARDENING_LEDGER.md`
+
+Evidence written:
+
+- `release/evidence/phase-k-manual-beta-2026-07-01/plugin-status-smoke.json`
+- `release/evidence/phase-k-manual-beta-2026-07-01/PLUGIN_STATUS_SMOKE.md`
+- `release/evidence/phase-k-manual-beta-2026-07-01/14-plugin-status-smoke.log`
+
+Verification:
+
+- `npm run smoke:phase-k-plugin-status` passed. The final evidence JSON recorded `completedItems: [126]`, `blockedItems: []`, plugin status route `/api/plugins?refresh=1`, runtime status route `/api/openclaw/runtime/status?refresh=1`, `139` total plugins, `66` enabled plugins, `73` disabled plugins, `35` missing-auth plugins, `35` setup-needed plugins, `29` communication/channel plugins, bundled plugin cache source with background refresh running, and matching runtime projection totals of `66` enabled of `139` total.
+- `npm run smoke:plugins-control-plane` passed.
+- `npm run typecheck` passed.
+- `npm run lint` passed with the existing Babel deoptimization note for `server/controlPlane.ts`.
+- `npm run secret:scan` passed with no high-confidence checked-in secrets found.
+- `git diff --check` passed with only existing LF-to-CRLF working-copy warnings.
+- `npm test` passed end to end with `187` unit tests and the full architecture, renderer-store, command-console, filesystem, plugin, Gateway, runtime, mission, provider, release, security, secret-scan, and CI smoke suite.
+
+Risks and notes:
+
+- The smoke intentionally uses isolated temporary local state and removes it after success, so it does not mutate the operator's real OpenClaw or desktop state.
+- Plugin refresh returned bundled cache evidence while the OpenClaw refresh ran in the background. This is expected for the isolated manual check and matches the plugin inventory service's force-refresh behavior.
+- Evidence stores session-token length, status counts, sample plugin metadata, and isolated local paths only; it does not contain bearer tokens, session tokens, provider secrets, OAuth codes, API keys, cookies, or uploaded file contents.
+
+Next action:
+
+- Continue Phase K with item `127`: trigger a missing-provider-auth path and confirm UI explains it.
+
+### 2026-07-01 - Phase K Missing Provider Auth Path
+
+Scope:
+
+- Completed Phase K item `127` by adding and running an isolated missing-provider-auth smoke plus rendered UI coverage.
+- Added `scripts/smoke-phase-k-missing-provider-auth.ts`. The smoke starts `server/index.ts` on a free loopback port with isolated `HOME`, `OPENCLAW_STATE_DIR`, `OPENCLAW_HOME`, `OPENCLAW_CONFIG_PATH`, and `CONTROL_CENTER_WORKSPACE_ROOT`; blanks inherited provider credential env vars from `AUTH_ENV_MAP`; disables Gateway autostart/chat clients; signs in through `/api/auth/login`; and records Phase K evidence under `release/evidence/phase-k-manual-beta-2026-07-01/`.
+- The smoke verifies `/api/auth/providers?refresh=1` reports `deepseek` unconfigured in isolated state, then triggers missing-provider-auth paths through `/api/party/recruit`, `/api/party/agent/:agentId/model`, and `/api/party/recruit/auto-markdown`.
+- Added `npm run smoke:phase-k-missing-provider-auth` to `package.json`.
+- Extended `scripts/smoke-auth-control-plane.ts` so the source-level auth smoke pins the Phase K smoke, package script, credential-env scrubbing, backend route coverage, item `127` evidence recording, UI-render assertion, and evidence redaction guard.
+- Extended `scripts/smoke-ui-render.mjs` so the Electron UI smoke returns an `auth_missing` terminal Command Console SSE frame, then verifies the rendered `Connect provider` CTA, retry detail, `auth missing` failure chip, blocked state, and `gateway-chat` transport across desktop, wide, and mobile viewports. The harness stream-close counter now listens on the response close event so the existing stop-control assertion remains valid after request bodies are read.
+
+Files changed:
+
+- `scripts/smoke-phase-k-missing-provider-auth.ts`
+- `scripts/smoke-auth-control-plane.ts`
+- `scripts/smoke-ui-render.mjs`
+- `package.json`
+- `docs/BETA_CODEBASE_SPLIT_PLAN.md`
+- `docs/OPTIMIZATION_MEMORY.md`
+- `docs/PRODUCTION_HARDENING_LEDGER.md`
+
+Evidence written:
+
+- `release/evidence/phase-k-manual-beta-2026-07-01/missing-provider-auth-smoke.json`
+- `release/evidence/phase-k-manual-beta-2026-07-01/MISSING_PROVIDER_AUTH_SMOKE.md`
+- `release/evidence/phase-k-manual-beta-2026-07-01/15-missing-provider-auth-smoke.log`
+
+Verification:
+
+- `npm run smoke:phase-k-missing-provider-auth` passed. The final evidence JSON recorded `completedItems: [127]`, `blockedItems: []`, provider `deepseek`, model `deepseek/deepseek-v4-pro`, provider configured `false`, `/api/auth/providers?refresh=1`, route statuses for recruit/model-save/Auto Forge missing-auth failures, session-token length only, and isolated local paths only.
+- `npm run smoke:auth` passed.
+- `npm run smoke:ui` passed across desktop, wide, and mobile viewports. The UI smoke verified the rendered Command Console `Connect provider` CTA, `Refresh credentials, then retry this turn.` detail, `auth missing` failure chip, blocked state, `gateway-chat` transport, and preserved the existing stop-control, Clean Slate, and Gateway restart UI assertions.
+- `npm run typecheck` passed.
+- `npm run lint` passed with the existing Babel deoptimization note for `server/controlPlane.ts`.
+- `npm run smoke:provider-auth-beta` passed.
+- `npm run secret:scan` passed with no high-confidence checked-in secrets found.
+- `git diff --check` passed with only existing LF-to-CRLF working-copy warnings.
+- `npm test` passed end to end with `187` unit tests and the full architecture, renderer-store, command-console, filesystem, plugin, Gateway, runtime, mission, provider, release, security, secret-scan, and CI smoke suite.
+
+Risks and notes:
+
+- The smoke intentionally blanks inherited provider credential env vars and uses isolated temporary local state, so the missing-auth result is deterministic and does not mutate the operator's real OpenClaw state.
+- Evidence stores session-token length, provider/model ids, route status summaries, and isolated local paths only; it does not contain bearer tokens, session tokens, provider secrets, OAuth codes, API keys, cookies, or uploaded file contents.
+
+Next action:
+
+- Continue Phase K with item `128`: trigger a failed command and confirm the error is redacted.
+
+### 2026-07-01 - Phase K Redacted Failed Command
+
+Scope:
+
+- Completed Phase K item `128` by adding and running an isolated failed Command Console smoke with rendered UI redaction coverage.
+- Added a deterministic `x-control-center-stream-smoke: failure` mode in `server/routes/agentTurnRoutes.ts` behind `CONTROL_CENTER_AGENT_TURN_STREAM_SMOKE_MOCK`. The route emits the authenticated Command Console stream events used by the UI, then fails with synthetic key, bearer, email, phone, user-path, and cookie markers that must be redacted before returning `error` and `final` SSE payloads.
+- Fixed the stream failure metadata for forced Gateway-backed Command Console turns so failures preserve `gateway-chat` as the transport instead of reporting generic `control-center-sse`.
+- Added `scripts/smoke-phase-k-redacted-failed-command.ts`. The smoke starts `server/index.ts` on a free loopback port with isolated `HOME`, `OPENCLAW_STATE_DIR`, `OPENCLAW_HOME`, `OPENCLAW_CONFIG_PATH`, `CONTROL_CENTER_WORKSPACE_ROOT`, and `OPENCLAW_GATEWAY_LOG_PATH`; disables Gateway autostart/chat clients; signs in through `/api/auth/login`; triggers `/api/openclaw/agent-turn/stream` with `x-control-center-stream-smoke: failure`; and records Phase K evidence under `release/evidence/phase-k-manual-beta-2026-07-01/`.
+- Added `npm run smoke:phase-k-redacted-failed-command` to `package.json`.
+- Extended `scripts/smoke-agent-turn-control-plane.ts` so the source-level smoke pins the Phase K item `128` smoke, package script, deterministic failure hook, Gateway transport preservation, SSE redaction assertions, evidence redaction guard, and UI-render coverage.
+- Extended `scripts/smoke-ui-render.mjs` so the Electron UI smoke renders a failed Command Console response across desktop, wide, and mobile viewports and verifies the `Reset gateway` CTA, `gateway disconnect` failure chip, blocked state, `gateway-chat` transport, all expected redaction markers, and absence of raw secret patterns.
+
+Files changed:
+
+- `server/routes/agentTurnRoutes.ts`
+- `scripts/smoke-phase-k-redacted-failed-command.ts`
+- `scripts/smoke-agent-turn-control-plane.ts`
+- `scripts/smoke-ui-render.mjs`
+- `package.json`
+- `docs/BETA_CODEBASE_SPLIT_PLAN.md`
+- `docs/OPTIMIZATION_MEMORY.md`
+- `docs/PRODUCTION_HARDENING_LEDGER.md`
+
+Evidence written:
+
+- `release/evidence/phase-k-manual-beta-2026-07-01/redacted-failed-command-smoke.json`
+- `release/evidence/phase-k-manual-beta-2026-07-01/REDACTED_FAILED_COMMAND_SMOKE.md`
+- `release/evidence/phase-k-manual-beta-2026-07-01/16-redacted-failed-command-smoke.log`
+
+Verification:
+
+- `npm run smoke:phase-k-redacted-failed-command` passed. The final evidence JSON recorded `completedItems: [128]`, `blockedItems: []`, stream events `status, progress, error, final`, `failureKind: gateway_disconnect`, `transport: gateway-chat`, `liveTokens: false`, all six redaction markers present (`apiKey`, `bearer`, `email`, `phone`, `userProfile`, `cookie`), and `rawSecretLeakDetected: false`.
+- `npm run smoke:agent-turn-control-plane` passed.
+- `npm run smoke:ui` passed across desktop, wide, and mobile viewports. The UI smoke verified the rendered failed Command Console `Reset gateway` CTA, `gateway disconnect` failure chip, blocked state, `gateway-chat` transport, all redaction markers, and no raw secret patterns.
+- `npm run typecheck` passed.
+- `npm run lint` passed with the existing Babel deoptimization note for `server/controlPlane.ts`.
+- `npm run secret:scan` passed with no high-confidence checked-in secrets found. The first synthetic fixture used an OpenAI-shaped `sk-...` marker and was correctly rejected by secret scan; the final fixture uses a non-realistic `api_key=` value that still proves key redaction without resembling a live provider token.
+- `git diff --check` passed with only existing LF-to-CRLF working-copy warnings.
+- `npm test` passed end to end with `187` unit tests and the full architecture, renderer-store, command-console, filesystem, plugin, Gateway, runtime, mission, provider, release, security, secret-scan, and CI smoke suite.
+
+Risks and notes:
+
+- The new failure mode is gated behind the existing smoke-only `CONTROL_CENTER_AGENT_TURN_STREAM_SMOKE_MOCK` flag and is inert in normal runtime.
+- The smoke uses isolated temporary local state and removes it after success, so it does not mutate the operator's real OpenClaw or desktop state.
+- Evidence stores session-token length, redacted error text, marker booleans, and isolated local paths only; it does not contain bearer tokens, session tokens, provider secrets, OAuth codes, API keys, cookies, or uploaded file contents.
+
+Next action:
+
+- Continue Phase K with item `129`: export or inspect a mission report.
+
+### 2026-07-01 - Phase K Mission Report Inspection
+
+Scope:
+
+- Completed Phase K item `129` by adding and running an isolated mission-report inspection smoke.
+- Added `scripts/smoke-phase-k-mission-report-inspection.ts`. The smoke starts `server/index.ts` on a free loopback port with isolated `HOME`, `OPENCLAW_STATE_DIR`, `OPENCLAW_HOME`, `OPENCLAW_CONFIG_PATH`, and `CONTROL_CENTER_WORKSPACE_ROOT`; disables Gateway autostart/chat clients; enables `CONTROL_CENTER_MISSION_SCHEDULER_DRY_RUN=1`; signs in through `/api/auth/login`; creates a report-producing mission path; and records Phase K evidence under `release/evidence/phase-k-manual-beta-2026-07-01/`.
+- The smoke inspects `/api/missions/:missionId/report`, verifies it matches `/api/missions/:missionId/lifecycle`, verifies `/api/missions/projection` contains the same report and cancelled mission state, and waits for durable `control-center-ledger/mission-reports.jsonl` proof.
+- Added `npm run smoke:phase-k-mission-report-inspection` to `package.json`.
+- Extended `scripts/smoke-mission-report-service.ts` so the source-level mission report smoke pins the Phase K item `129` smoke, package script, report route, lifecycle/projection consistency checks, durable ledger proof, scheduler dry-run mode, item `129` evidence recording, and evidence redaction guard.
+
+Files changed:
+
+- `scripts/smoke-phase-k-mission-report-inspection.ts`
+- `scripts/smoke-mission-report-service.ts`
+- `package.json`
+- `docs/BETA_CODEBASE_SPLIT_PLAN.md`
+- `docs/OPTIMIZATION_MEMORY.md`
+- `docs/PRODUCTION_HARDENING_LEDGER.md`
+
+Evidence written:
+
+- `release/evidence/phase-k-manual-beta-2026-07-01/mission-report-inspection-smoke.json`
+- `release/evidence/phase-k-manual-beta-2026-07-01/MISSION_REPORT_INSPECTION_SMOKE.md`
+- `release/evidence/phase-k-manual-beta-2026-07-01/17-mission-report-inspection-smoke.log`
+
+Verification:
+
+- `npm run smoke:phase-k-mission-report-inspection` passed. The final evidence JSON recorded `completedItems: [129]`, `blockedItems: []`, report id `mission-report:b7f939a8-e847-4f81-a492-761c0ab512c6`, `source: "mission-feed"`, `acceptedRuns: 1`, `startedRuns: 1`, `completedRuns: 0`, `failedRuns: 0`, `cancelledRuns: 1`, `humanInterventions: 2`, agent participation `phase-k-report-agent`, `heartbeatStabilityScore: 92`, unavailable metrics `efficiencyRating`, `soulDrift`, `runtimeEfficiency`, and `xpGained`, matching lifecycle/projection reports, projected mission status `cancelled`, `reportCount: 1`, and durable report ledger proof with `875` bytes.
+- `npm run smoke:mission-report-service` passed.
+- `npm run typecheck` passed.
+- `npm run smoke:mission-backend-owned` passed.
+- `npm run smoke:mission-cancellation` passed.
+- `npm run smoke:mission-report` passed.
+- `npm run lint` passed with the existing Babel deoptimization note for `server/controlPlane.ts`.
+- `npm run secret:scan` passed with no high-confidence checked-in secrets found.
+- `git diff --check` passed with only existing LF-to-CRLF working-copy warnings.
+- `npm test` passed end to end with `187` unit tests and the full architecture, renderer-store, command-console, filesystem, plugin, Gateway, runtime, mission, provider, release, security, secret-scan, and CI smoke suite.
+
+Risks and notes:
+
+- The smoke uses isolated temporary local state and removes it after success, so it does not mutate the operator's real OpenClaw or desktop state.
+- Scheduler dry-run mode intentionally proves report inspection without live provider credentials or external cron execution.
+- Evidence stores session-token length, report metrics, and isolated local paths only; it does not contain bearer tokens, session tokens, provider secrets, OAuth codes, API keys, cookies, or uploaded file contents.
+
+Next action:
+
+- Continue Phase K with item `130`: use Settings to change UI density or motion and confirm persistence.
+
+### 2026-07-01 - Phase K Settings Persistence
+
+Scope:
+
+- Completed Phase K item `130` by adding and running a Settings density/motion persistence smoke against the built desktop UI.
+- Added `id="nexus-nav-settings"` to the existing Settings utility navigation in `src/components/layout/NexusShell.tsx`, keeping the navigation semantics unchanged while giving automation a stable target.
+- Added stable automation selectors to the existing Settings density and motion controls in `src/components/settings/SettingsPanel.tsx`: `select[data-dui-setting="density"]` and `select[data-dui-setting="motion"]`.
+- Added `scripts/smoke-phase-k-settings-persistence.ts`. The smoke serves the production `dist/` client from a loopback-only static harness, launches Electron, opens the real Settings panel, sets density to `spacious`, sets motion to `reduced`, verifies immediate root dataset updates and localStorage writes, reloads the renderer, and verifies both Settings controls and root attributes rehydrate from `dystopai-ui-settings-v1`.
+- Added `npm run smoke:phase-k-settings-persistence` to `package.json`.
+- Extended `scripts/smoke-shell-production-ui.ts` so the source-level UI contract pins the Settings nav id, density/motion selectors, settings persistence ordering, UI settings storage key, root dataset projection, item `130` smoke, package script, renderer reload verification, and evidence redaction guard.
+
+Files changed:
+
+- `src/components/layout/NexusShell.tsx`
+- `src/components/settings/SettingsPanel.tsx`
+- `scripts/smoke-phase-k-settings-persistence.ts`
+- `scripts/smoke-shell-production-ui.ts`
+- `package.json`
+- `docs/BETA_CODEBASE_SPLIT_PLAN.md`
+- `docs/OPTIMIZATION_MEMORY.md`
+- `docs/PRODUCTION_HARDENING_LEDGER.md`
+
+Evidence written:
+
+- `release/evidence/phase-k-manual-beta-2026-07-01/settings-persistence-smoke.json`
+- `release/evidence/phase-k-manual-beta-2026-07-01/SETTINGS_PERSISTENCE_SMOKE.md`
+- `release/evidence/phase-k-manual-beta-2026-07-01/18-settings-persistence-smoke.log`
+- `release/evidence/phase-k-manual-beta-2026-07-01/settings-persistence-smoke.png`
+
+Verification:
+
+- `npm run smoke:shell-production-ui` passed.
+- `npm run typecheck` passed.
+- `npm run build:client` passed.
+- `npm run smoke:phase-k-settings-persistence` passed. The final evidence JSON recorded `completedItems: [130]`, `blockedItems: []`, density `spacious`, motion `reduced`, `rootDatasetUpdatedImmediately: true`, `localStorageUpdated: true`, `rehydratedAfterReload: true`, and active Settings navigation after reload.
+- `npm run smoke:ui` passed across desktop, wide, and mobile viewports, now including `nexus-nav-settings` in the shared workspace navigation sweep.
+- `npm run lint` passed with the existing Babel deoptimization note for `server/controlPlane.ts`.
+- `npm run secret:scan` passed with no high-confidence checked-in secrets found.
+- `npm test` passed end to end with `187` unit tests and the full architecture, renderer-store, command-console, filesystem, plugin, Gateway, runtime, mission, provider, release, security, secret-scan, and CI smoke suite.
+
+Risks and notes:
+
+- The Settings persistence smoke records UI state values, evidence file paths, and a screenshot only; it does not contain bearer tokens, session tokens, provider secrets, OAuth codes, API keys, cookies, or uploaded file contents.
+- The static harness uses loopback-only serving and a fixed non-secret desktop bootstrap token for the renderer smoke; no real OpenClaw, provider, or desktop state is touched.
+- The first attempt exposed the missing stable Settings nav id; the final implementation adds the id and proves the broader UI smoke still passes with Settings included in navigation coverage.
+
+Next action:
+
+- Continue Phase L with item `131`: add a beta disclaimer to release notes.
+
+### 2026-07-01 - Phase M Beta Exit Criteria Gate
+
+Scope:
+
+- Completed Phase M items `141-150` by adding and running an explicit private beta exit-criteria smoke.
+- Added `scripts/smoke-beta-exit-criteria.ts`. The smoke verifies the current `controlPlane.ts` growth ratchet, extracted Gateway/Mission/Runtime service boundaries, renderer store/API split, packaged desktop launch evidence, mission restart recovery proof, beta docs, packaged resources, release evidence, and the objective Phase M production score.
+- Added `npm run smoke:beta-exit-criteria` to `package.json`.
+- Rebuilt the packaged desktop directory after the package-script change and regenerated release evidence so `release:validate` checked current artifacts instead of stale checksums.
+
+Files changed:
+
+- `scripts/smoke-beta-exit-criteria.ts`
+- `package.json`
+- `docs/BETA_CODEBASE_SPLIT_PLAN.md`
+- `docs/OPTIMIZATION_MEMORY.md`
+- `docs/PRODUCTION_HARDENING_LEDGER.md`
+
+Evidence written:
+
+- `release/evidence/phase-m-exit-criteria-2026-07-01/beta-exit-criteria-smoke.json`
+- `release/evidence/phase-m-exit-criteria-2026-07-01/BETA_EXIT_CRITERIA_SMOKE.md`
+- Refreshed `release/evidence/dystopai-sbom.cdx.json`
+- Refreshed `release/evidence/checksums.sha256`
+- Refreshed `release/evidence/release-evidence.json`
+
+Verification:
+
+- `npm run smoke:beta-exit-criteria` passed with `completedItems: [141,142,143,144,145,146,147,148,149,150]`, no blocked items, and `productionScore: 10`.
+- `npm run smoke:server-architecture` passed with `17,960/29,000` composition lines and `0` inline routes.
+- `npm run smoke:renderer-store-boundary` passed with `3,865/3,889` `nexusStore` lines, `0` store-owned API request calls, `0` API path literals, and `0` direct fetches.
+- `npm run smoke:mission-restart-recovery` passed.
+- `npm run smoke:packaged-electron-launch` passed.
+- `npm run smoke:release-validation` passed.
+- `npm run package:desktop` passed and rebuilt `release/win-unpacked`.
+- `npm run release:evidence` passed and regenerated SBOM/checksum/release evidence.
+- `npm run check:bundle-budgets` passed with entry JS `493,486` bytes / `154,550` gzip bytes, entry CSS `1,225,106` bytes / `155,599` gzip bytes, and total JS `785,169` bytes / `241,943` gzip bytes.
+- `npm run release:validate` passed in non-public mode with `35,683` checksums, `35,665` packaged artifact files, and `635` SBOM components. Update manifest, checksum signature, and distribution signing checks were correctly skipped for this private beta milestone.
+- `npm run typecheck` passed.
+- `npm run lint` passed with the existing Babel deoptimization note for `server/controlPlane.ts`.
+- `npm run secret:scan` passed with no high-confidence checked-in secrets found.
+- `git diff --check` passed with only the existing LF-to-CRLF working-copy warnings.
+- `npm test` passed end to end with `187` unit tests and the full architecture, renderer-store, command-console, filesystem, plugin, Gateway, runtime, mission, provider, release, security, secret-scan, and CI smoke suite.
+
+Risks and notes:
+
+- Dependency audit warnings from the Phase J `npm ci` gate remain open: `8` total (`2` low, `2` moderate, `2` high, `2` critical). This pass did not run `npm audit fix`.
+- Public signing, notarization, signed update-channel evidence, paid distribution, multi-user cloud auth, and LAN/public control-plane exposure remain intentionally outside the private beta milestone.
+- Existing uncommitted Phase K changes remain in the worktree and were preserved.
+
+Next action:
+
+- Private beta split-plan implementation is complete through Phase M. The dependency audit remediation slice is now recorded below; next work should prepare review/release handoff from the refreshed evidence.
+
+### 2026-07-01 - Dependency Audit Remediation Closure
+
+Scope:
+
+- Closed the recorded Phase J dependency-audit risk without restarting completed Phase F-M implementation work.
+- Updated `package-lock.json` within the existing dependency policy to eliminate the dev-scope audit findings for `@babel/core`, `concurrently`/`shell-quote`, `esbuild`, `form-data`, `js-yaml`, `tar`, and `undici`.
+- Pinned `electron-builder` to the previously verified `26.8.1` package line in `package.json`. The unlocked `26.15.3` line fixed audit transitives but failed packaging because its downloaded icon helper ran as ESM under this repo's `"type": "module"` mode and called `require`.
+- Kept `eslint-plugin-react-hooks` at `7.0.1` in the lockfile after `7.1.1` promoted existing React Compiler diagnostics to lint errors outside this remediation scope.
+- Updated `scripts/after-pack.cjs` so the Windows launcher hook can use either the legacy `node_modules/electron/dist/electron.exe` path or the already packaged Electron runtime at `release/win-unpacked/DystopAI.exe` before compiling the custom launcher. This preserves packaging with Electron `42.5.2`, whose npm package no longer installs a local `dist/electron.exe`.
+- Regenerated `THIRD_PARTY_NOTICES.txt` for the updated dependency graph.
+- Rebuilt `release/win-unpacked`, regenerated `release/evidence/dystopai-sbom.cdx.json`, `release/evidence/checksums.sha256`, and `release/evidence/release-evidence.json`, and validated the refreshed package.
+- Added `scripts/smoke-dependency-audit-clean.ts`, which runs full `npm audit --json` and production-only `npm audit --omit=dev --json`, parses the JSON reports, and fails unless both contain zero vulnerability entries and zero total vulnerabilities.
+- Added `npm run smoke:dependency-audit-clean` to `package.json`.
+- Updated `scripts/smoke-ci-workflow.ts` so the new clean-audit package script is pinned alongside the existing production dependency policy and scheduled full-audit artifact checks.
+
+Files changed:
+
+- `package.json`
+- `package-lock.json`
+- `scripts/after-pack.cjs`
+- `scripts/smoke-dependency-audit-clean.ts`
+- `scripts/smoke-ci-workflow.ts`
+- `THIRD_PARTY_NOTICES.txt`
+- `docs/BETA_CODEBASE_SPLIT_PLAN.md`
+- `docs/OPTIMIZATION_MEMORY.md`
+- `docs/PRODUCTION_HARDENING_LEDGER.md`
+
+Verification:
+
+- `npm ci` passed with `found 0 vulnerabilities`; deprecated transitive package warnings remain informational.
+- Full `npm audit --json` passed with `0` total vulnerabilities.
+- `npm run audit:dependencies` passed with `found 0 vulnerabilities`.
+- Direct `npm audit --omit=dev --json` passed with `0` production vulnerabilities.
+- `npm run smoke:dependency-audit-clean` passed and reported `dependency audit clean: full=0, production=0`.
+- `npm run smoke:ci-workflow` passed and confirmed the new package script is wired.
+- `npm run typecheck` passed.
+- `npm run lint` passed with the existing Babel deoptimization note for `server/controlPlane.ts`.
+- `npm run build:standalone` passed with Vite `7.3.6`.
+- `npm run smoke:beta-exit-criteria` passed with score `10/10`.
+- `npm run package:desktop` passed using `electron-builder` `26.8.1` and Electron `42.5.2`, with the launcher hook copying the packaged runtime to `electron.exe` and rebuilding `DystopAI.exe`.
+- `npm run smoke:packaged-electron-launch` passed.
+- `npm run check:bundle-budgets` passed with entry JS `497,341` bytes / `155,636` gzip bytes, entry CSS `1,225,106` bytes / `155,599` gzip bytes, and total JS `789,298` bytes / `243,153` gzip bytes.
+- `npm run notices:check` passed with `597` package notice entries.
+- `npm run release:evidence` passed and regenerated SBOM/checksum/release evidence.
+- `npm run release:validate` passed in non-public mode with `35,683` checksums, `35,665` packaged artifact files, and `600` SBOM components. Update manifest, checksum signature, and distribution signing checks were correctly skipped.
+- `npm run secret:scan` passed with no high-confidence checked-in secrets found.
+- `git diff --check` passed with only existing LF-to-CRLF working-copy warnings.
+- `npm test` passed end to end with `187` unit tests and the full architecture, renderer-store, command-console, filesystem, plugin, Gateway, runtime, mission, provider, release, security, secret-scan, and CI smoke suite.
+
+Risks and notes:
+
+- The old dependency-audit risk is closed for the current lockfile and installed graph.
+- Deprecated transitive package warnings from `npm ci` remain, but they are not active audit findings.
+- The first clean-audit smoke attempt exposed a Windows `spawnSync npm.cmd` launcher issue; the final script invokes npm through `process.env.npm_execpath` when available and passes on Windows.
+- Public signing, notarization, signed update-channel evidence, paid distribution, multi-user cloud auth, and LAN/public control-plane exposure remain intentionally outside the private beta milestone.
+- Existing uncommitted Phase K/M changes remain in the worktree and were preserved.
+
+Next action:
+
+- Prepare review/release handoff from the refreshed private beta evidence.
+
+### 2026-07-01 - Private Beta Review Handoff
+
+Scope:
+
+- Prepared the review/release handoff from the refreshed private beta evidence after the split-plan milestone and dependency-audit remediation were complete.
+- Added `scripts/smoke-private-beta-review-handoff.ts`, a source-controlled smoke gate that validates the draft prerelease upload status, local evidence bundle digest, Phase J/K/M evidence files, refreshed release evidence counts, dependency-audit closure, and carried risks before producing reviewer handoff artifacts.
+- Added `npm run smoke:private-beta-handoff` to `package.json`.
+- Updated `scripts/smoke-ci-workflow.ts` so the new handoff package script remains pinned by the source-level CI contract smoke.
+- Generated `docs/PRIVATE_BETA_REVIEW_HANDOFF.md` for reviewers. It records the draft prerelease URL, uploaded evidence bundle path and SHA-256 digest, release evidence counts, Phase K item `111-130` evidence map, Phase M score, dependency-audit closure, verification commands, and remaining private-beta risks.
+- Generated ignored evidence copies under `release/evidence/private-beta-review-handoff-2026-07-01/`.
+- Corrected `release/evidence/phase-j-beta-readiness-2026-06-30/BETA_KNOWN_ISSUES.md` so it no longer carries the stale “upload pending” note after `UPLOAD_STATUS.md` records the completed draft prerelease upload.
+
+Files changed:
+
+- `docs/PRIVATE_BETA_REVIEW_HANDOFF.md`
+- `scripts/smoke-private-beta-review-handoff.ts`
+- `package.json`
+- `scripts/smoke-ci-workflow.ts`
+- `docs/BETA_CODEBASE_SPLIT_PLAN.md`
+- `docs/OPTIMIZATION_MEMORY.md`
+- `docs/PRODUCTION_HARDENING_LEDGER.md`
+
+Evidence written:
+
+- `docs/PRIVATE_BETA_REVIEW_HANDOFF.md`
+- `release/evidence/private-beta-review-handoff-2026-07-01/private-beta-review-handoff.json`
+- `release/evidence/private-beta-review-handoff-2026-07-01/PRIVATE_BETA_REVIEW_HANDOFF.md`
+
+Verification:
+
+- `npm run smoke:private-beta-handoff` passed. It verified all Phase K manual beta evidence items `111-130`, Phase M production score `10/10`, refreshed release evidence counts of `600` SBOM components, `35,683` checksums, and `2` runtime metadata entries, and the local evidence zip digest `5da8bbc10e611eb737b5e3a0f3a9be15a5f93ffc9a73b01cfc79e5abf17cae5b`.
+- `npm run smoke:ci-workflow` passed with the new handoff package script pinned.
+- `npm run typecheck` passed.
+- `npm run lint` passed with the existing Babel deoptimization note for `server/controlPlane.ts`.
+- `npm run secret:scan` passed with no high-confidence checked-in secrets found.
+- `git diff --check` passed with only existing LF-to-CRLF working-copy warnings.
+
+Risks and notes:
+
+- This is a post-Phase-M handoff slice; it did not mark additional split-plan item numbers.
+- Release evidence under `release/` remains ignored build output, but the source-controlled handoff document and smoke script reproduce the handoff checks.
+- Public signing, notarization, signed update-channel evidence, paid distribution, multi-user cloud auth, and LAN/public control-plane exposure remain intentionally outside this private beta milestone.
+
+Next action:
+
+- Review the uncommitted private beta implementation diff and `docs/PRIVATE_BETA_REVIEW_HANDOFF.md`, then decide whether to tag/share the draft prerelease evidence or request a focused cleanup pass.
+
+### 2026-07-01 - Private Beta Handoff Revalidation
+
+Scope:
+
+- Revalidated the generated private beta handoff after confirming Phase F item `57` and all Phase F-M split-plan items are already complete and verified.
+- Reviewed the current uncommitted diff inventory, including the tracked beta implementation changes and untracked Phase K/M/dependency/handoff smoke scripts.
+- Regenerated `docs/PRIVATE_BETA_REVIEW_HANDOFF.md` through the source-controlled handoff smoke so the reviewer packet reflects the current evidence timestamp and bundle digest.
+- Did not mark additional split-plan items or rework completed service-split phases.
+
+Files changed:
+
+- `docs/PRIVATE_BETA_REVIEW_HANDOFF.md`
+- `docs/BETA_CODEBASE_SPLIT_PLAN.md`
+- `docs/OPTIMIZATION_MEMORY.md`
+- `docs/PRODUCTION_HARDENING_LEDGER.md`
+
+Verification:
+
+- `npm run smoke:private-beta-handoff` passed and verified all Phase K evidence items `111-130`, Phase M production score `10/10`, release evidence counts, dependency-audit closure, and evidence bundle digest `5da8bbc10e611eb737b5e3a0f3a9be15a5f93ffc9a73b01cfc79e5abf17cae5b`.
+- `npm run smoke:ci-workflow` passed with the handoff and dependency-audit package scripts pinned.
+- `git diff --check` passed with only existing LF-to-CRLF working-copy warnings.
+- `npm run secret:scan` passed with no high-confidence checked-in secrets found.
+
+Risks and notes:
+
+- The repo remains intentionally dirty with the uncommitted private beta implementation, evidence handoff, dependency remediation, and Phase K/M smoke scripts.
+- Public signing, notarization, signed update-channel evidence, paid distribution, multi-user cloud auth, and LAN/public control-plane exposure remain outside this private beta milestone.
+
+Next action:
+
+- Make the review/share decision for the private beta handoff: inspect the uncommitted diff and `docs/PRIVATE_BETA_REVIEW_HANDOFF.md`, then tag/share the draft prerelease evidence or request a focused cleanup pass.
+
+### 2026-07-01 - Private Beta Handoff Source Inventory
+
+Scope:
+
+- Refined the private beta review handoff instead of reworking completed Phase F-M split-plan items.
+- Updated `scripts/smoke-private-beta-review-handoff.ts` so the smoke captures the current source-review scope from `git diff --name-status` and `git ls-files --others --exclude-standard`.
+- Regenerated `docs/PRIVATE_BETA_REVIEW_HANDOFF.md` with a `Review Decision` section and a `Source Change Inventory` section.
+- The generated handoff now records `ready-for-human-review`, states that no commit, push, tag, or release publish was performed, and lists `24` tracked changed files plus `16` untracked source files for reviewer inspection.
+
+Files changed:
+
+- `scripts/smoke-private-beta-review-handoff.ts`
+- `docs/PRIVATE_BETA_REVIEW_HANDOFF.md`
+- `docs/BETA_CODEBASE_SPLIT_PLAN.md`
+- `docs/OPTIMIZATION_MEMORY.md`
+- `docs/PRODUCTION_HARDENING_LEDGER.md`
+
+Verification:
+
+- `npm run smoke:private-beta-handoff` passed and regenerated the handoff document plus ignored evidence copies under `release/evidence/private-beta-review-handoff-2026-07-01/`.
+- `npm run smoke:ci-workflow` passed with the handoff package script pinned.
+- `npm run typecheck` passed.
+- `npm run secret:scan` passed with no high-confidence checked-in secrets found.
+- `git diff --check` passed with only existing LF-to-CRLF working-copy warnings.
+
+Risks and notes:
+
+- This is a post-Phase-M handoff refinement; no split-plan item numbers were marked.
+- The repo remains intentionally dirty with the private beta implementation and handoff artifacts awaiting review.
+- No commit, push, tag, or release publish was performed by this automation run.
+
+Next action:
+
+- Human review/share decision: inspect the `40` listed source files and `docs/PRIVATE_BETA_REVIEW_HANDOFF.md`, then share the draft prerelease evidence or request a focused cleanup pass.
+
+### 2026-07-01 - Private Beta Handoff Freshness Check
+
+Scope:
+
+- Revalidated the generated private beta handoff against the current dirty worktree without reworking completed Phase F-M service-split items.
+- Confirmed Phase F item `57` and all Phase F-M split-plan items remain recorded complete and verified.
+- Regenerated `docs/PRIVATE_BETA_REVIEW_HANDOFF.md` from `scripts/smoke-private-beta-review-handoff.ts`; the handoff timestamp is now `2026-07-01T06:56:27.811Z`.
+- Confirmed the handoff still records `ready-for-human-review`, no commit/push/tag/release publish, the uploaded evidence bundle digest, and the `24` tracked plus `16` untracked source-review inventory.
+
+Files changed:
+
+- `docs/PRIVATE_BETA_REVIEW_HANDOFF.md`
+- `docs/BETA_CODEBASE_SPLIT_PLAN.md`
+- `docs/OPTIMIZATION_MEMORY.md`
+- `docs/PRODUCTION_HARDENING_LEDGER.md`
+
+Verification:
+
+- `npm run smoke:private-beta-handoff` passed and regenerated the handoff document plus ignored evidence copies under `release/evidence/private-beta-review-handoff-2026-07-01/`.
+- `npm run smoke:ci-workflow` passed with the handoff and dependency-audit package scripts pinned.
+- `npm run typecheck` passed.
+- `npm run secret:scan` passed with no high-confidence checked-in secrets found.
+- `git diff --check` passed with only existing LF-to-CRLF working-copy warnings.
+
+Risks and notes:
+
+- This is a post-Phase-M handoff freshness check; no split-plan item numbers were marked.
+- The repo remains intentionally dirty with the private beta implementation and handoff artifacts awaiting review.
+- No commit, push, tag, or release publish was performed by this automation run.
+
+Next action:
+
+- Human review/share decision: inspect the `40` listed source files and `docs/PRIVATE_BETA_REVIEW_HANDOFF.md`, then share the draft prerelease evidence or request a focused cleanup pass.
+
+### 2026-07-01 - Private Beta Handoff Review-Decision Blocker
+
+Scope:
+
+- Revalidated the generated private beta handoff against the current dirty worktree without reworking completed Phase F-M service-split items.
+- Confirmed Phase F item `57` and all Phase F-M split-plan items remain recorded complete and verified.
+- Regenerated `docs/PRIVATE_BETA_REVIEW_HANDOFF.md` from `scripts/smoke-private-beta-review-handoff.ts`; the handoff timestamp is now `2026-07-01T07:12:10.795Z`.
+- Confirmed the handoff still records `ready-for-human-review`, no commit/push/tag/release publish, the uploaded evidence bundle digest, and the `24` tracked plus `16` untracked source-review inventory.
+
+Files changed:
+
+- `docs/PRIVATE_BETA_REVIEW_HANDOFF.md`
+- `docs/BETA_CODEBASE_SPLIT_PLAN.md`
+- `docs/OPTIMIZATION_MEMORY.md`
+- `docs/PRODUCTION_HARDENING_LEDGER.md`
+
+Verification:
+
+- `npm run smoke:private-beta-handoff` passed and regenerated the handoff document plus ignored evidence copies under `release/evidence/private-beta-review-handoff-2026-07-01/`.
+- `npm run smoke:ci-workflow` passed with the handoff and dependency-audit package scripts pinned.
+- `npm run secret:scan` passed with no high-confidence checked-in secrets found.
+- `git diff --check` passed with only existing LF-to-CRLF working-copy warnings.
+
+Risks and notes:
+
+- This is a post-Phase-M handoff recheck; no split-plan item numbers were marked.
+- The active implementation plan is complete through Phase M. The remaining unclosed action is blocked on a human review/share decision, not an unstarted local code slice.
+- The repo remains intentionally dirty with the private beta implementation and handoff artifacts awaiting review.
+- No commit, push, tag, or release publish was performed by this automation run.
+
+Next action:
+
+- Human review/share decision: inspect the `40` listed source files and `docs/PRIVATE_BETA_REVIEW_HANDOFF.md`, then share the draft prerelease evidence or request a focused cleanup pass.
+
+### 2026-07-01 - Private Beta Phase M Evidence Cleanup
+
+Scope:
+
+- Cleaned up stale post-Phase-M evidence wording without reworking completed Phase F-M split-plan items.
+- Updated `scripts/smoke-beta-exit-criteria.ts` so regenerated Phase M evidence records the dependency-audit risk as closed by the 2026-07-01 remediation pass and `smoke:dependency-audit-clean` guard.
+- Updated `scripts/smoke-private-beta-review-handoff.ts` so the handoff smoke rejects Phase M evidence that reintroduces the stale "dependency audit warnings remain" risk and requires the closed-risk wording.
+- Regenerated Phase M exit criteria evidence and the private beta handoff from the current worktree.
+
+Files changed:
+
+- `scripts/smoke-beta-exit-criteria.ts`
+- `scripts/smoke-private-beta-review-handoff.ts`
+- `docs/PRIVATE_BETA_REVIEW_HANDOFF.md`
+- `docs/BETA_CODEBASE_SPLIT_PLAN.md`
+- `docs/OPTIMIZATION_MEMORY.md`
+- `docs/PRODUCTION_HARDENING_LEDGER.md`
+
+Verification:
+
+- `npm run smoke:beta-exit-criteria` passed and regenerated `release/evidence/phase-m-exit-criteria-2026-07-01/beta-exit-criteria-smoke.json` with production score `10/10` and closed dependency-audit risk text.
+- `npm run smoke:private-beta-handoff` passed with the new stale-risk assertion.
+- `npm run smoke:ci-workflow` passed with the handoff and dependency-audit scripts pinned.
+- `npm run typecheck` passed.
+- `npm run lint` passed with the existing Babel deoptimization note for `server/controlPlane.ts`.
+- `npm run secret:scan` passed with no high-confidence checked-in secrets found.
+- `git diff --check` passed with only existing LF-to-CRLF working-copy warnings.
+
+Risks and notes:
+
+- This is a post-Phase-M evidence-hygiene slice; no split-plan item numbers were marked.
+- The active implementation plan remains complete through Phase M.
+- No commit, push, tag, or release publish was performed by this automation run.
+
+Next action:
+
+- Human review/share decision: inspect the `40` listed source files and `docs/PRIVATE_BETA_REVIEW_HANDOFF.md`, then share the draft prerelease evidence or request a focused cleanup pass.
+
+### 2026-07-01 - Private Beta Handoff Current-Worktree Revalidation
+
+Scope:
+
+- Revalidated the generated private beta handoff against the current dirty worktree without reworking completed Phase F-M service-split items.
+- Confirmed Phase F item `57` and all Phase F-M split-plan items remain recorded complete and verified.
+- Regenerated `docs/PRIVATE_BETA_REVIEW_HANDOFF.md` from `scripts/smoke-private-beta-review-handoff.ts`; the handoff timestamp is now `2026-07-01T07:41:25.292Z`.
+- Confirmed the handoff still records `ready-for-human-review`, no commit/push/tag/release publish, the uploaded evidence bundle digest, and the `24` tracked plus `16` untracked source-review inventory.
+
+Files changed:
+
+- `docs/PRIVATE_BETA_REVIEW_HANDOFF.md`
+- `docs/BETA_CODEBASE_SPLIT_PLAN.md`
+- `docs/OPTIMIZATION_MEMORY.md`
+- `docs/PRODUCTION_HARDENING_LEDGER.md`
+
+Verification:
+
+- `npm run smoke:private-beta-handoff` passed and regenerated the handoff document plus ignored evidence copies under `release/evidence/private-beta-review-handoff-2026-07-01/`.
+- `npm run smoke:ci-workflow` passed with the handoff and dependency-audit package scripts pinned.
+- `npm run typecheck` passed.
+- `npm run secret:scan` passed with no high-confidence checked-in secrets found.
+- `git diff --check` passed with only existing LF-to-CRLF working-copy warnings.
+
+Risks and notes:
+
+- This is a post-Phase-M handoff revalidation; no split-plan item numbers were marked.
+- The active implementation plan remains complete through Phase M.
+- The repo remains intentionally dirty with the private beta implementation and handoff artifacts awaiting review.
+- No commit, push, tag, or release publish was performed by this automation run.
+
+Next action:
+
+- Human review/share decision: inspect the `40` listed source files and `docs/PRIVATE_BETA_REVIEW_HANDOFF.md`, then share the draft prerelease evidence or request a focused cleanup pass.
+
+### 2026-07-01 - Private Beta Handoff Current Evidence Revalidation
+
+Scope:
+
+- Revalidated the generated private beta handoff against freshly regenerated Phase M evidence and the current dirty worktree without reworking completed Phase F-M service-split items.
+- Confirmed Phase F item `57` and all Phase F-M split-plan items remain recorded complete and verified.
+- Regenerated Phase M exit criteria evidence through `npm run smoke:beta-exit-criteria`; the Phase M score remains `10/10` and dependency-audit risk remains closed.
+- Regenerated `docs/PRIVATE_BETA_REVIEW_HANDOFF.md` from `scripts/smoke-private-beta-review-handoff.ts`; the handoff timestamp is now `2026-07-01T07:56:58.094Z`.
+- Confirmed the handoff still records `ready-for-human-review`, no commit/push/tag/release publish, the uploaded evidence bundle digest, and the `24` tracked plus `16` untracked source-review inventory.
+
+Files changed:
+
+- `docs/PRIVATE_BETA_REVIEW_HANDOFF.md`
+- `docs/BETA_CODEBASE_SPLIT_PLAN.md`
+- `docs/OPTIMIZATION_MEMORY.md`
+- `docs/PRODUCTION_HARDENING_LEDGER.md`
+
+Verification:
+
+- `npm run smoke:beta-exit-criteria` passed.
+- `npm run smoke:private-beta-handoff` passed and regenerated the handoff document plus ignored evidence copies under `release/evidence/private-beta-review-handoff-2026-07-01/`.
+- `npm run smoke:ci-workflow` passed with the handoff and dependency-audit package scripts pinned.
+- `npm run typecheck` passed.
+- `npm run secret:scan` passed with no high-confidence checked-in secrets found.
+- `git diff --check` passed with only existing LF-to-CRLF working-copy warnings.
+
+Risks and notes:
+
+- This is a post-Phase-M handoff revalidation; no split-plan item numbers were marked.
+- The active implementation plan remains complete through Phase M.
+- The repo remains intentionally dirty with the private beta implementation and handoff artifacts awaiting review.
+- No commit, push, tag, or release publish was performed by this automation run.
+
+Next action:
+
+- Human review/share decision: inspect the `40` listed source files and `docs/PRIVATE_BETA_REVIEW_HANDOFF.md`, then share the draft prerelease evidence or request a focused cleanup pass.
+
+### 2026-07-01 - Private Beta Handoff Review Anchor
+
+Scope:
+
+- Hardened the private beta review handoff instead of reworking completed Phase F-M service-split items.
+- Confirmed Phase F item `57` and all Phase F-M split-plan items remain recorded complete and verified.
+- Updated `scripts/smoke-private-beta-review-handoff.ts` so the generated handoff records a Git review anchor: branch, HEAD, upstream ref, upstream HEAD, status header, tracked diff shortstat, and a SHA-256 digest over the tracked/untracked source inventory.
+- Regenerated `docs/PRIVATE_BETA_REVIEW_HANDOFF.md` with the Git review anchor and source inventory digest.
+- Confirmed the handoff still records `ready-for-human-review`, no commit/push/tag/release publish, the uploaded evidence bundle digest, and the `24` tracked plus `16` untracked source-review inventory.
+
+Files changed:
+
+- `scripts/smoke-private-beta-review-handoff.ts`
+- `docs/PRIVATE_BETA_REVIEW_HANDOFF.md`
+- `docs/BETA_CODEBASE_SPLIT_PLAN.md`
+- `docs/OPTIMIZATION_MEMORY.md`
+- `docs/PRODUCTION_HARDENING_LEDGER.md`
+
+Verification:
+
+- `npm run smoke:private-beta-handoff` passed and regenerated the handoff document plus ignored evidence copies under `release/evidence/private-beta-review-handoff-2026-07-01/`.
+- `npm run smoke:ci-workflow` passed with the handoff and dependency-audit package scripts pinned.
+- `npm run typecheck` passed.
+- `npm run lint` passed with the existing Babel deoptimization note for `server/controlPlane.ts`.
+- `npm run secret:scan` passed with no high-confidence checked-in secrets found.
+- `git diff --check` passed with only existing LF-to-CRLF working-copy warnings.
+
+Risks and notes:
+
+- This is a post-Phase-M handoff hardening slice; no split-plan item numbers were marked.
+- The active implementation plan remains complete through Phase M.
+- The repo remains intentionally dirty with the private beta implementation and handoff artifacts awaiting review.
+- No commit, push, tag, or release publish was performed by this automation run.
+
+Next action:
+
+- Human review/share decision: inspect the `40` listed source files, the Git review anchor, and `docs/PRIVATE_BETA_REVIEW_HANDOFF.md`, then share the draft prerelease evidence or request a focused cleanup pass.
+
+### 2026-07-01 - Private Beta Handoff Content Anchor
+
+Scope:
+
+- Hardened the private beta review handoff with a content-aware source anchor instead of reworking completed Phase F-M service-split items.
+- Confirmed Phase F item `57` and all Phase F-M split-plan items remain recorded complete and verified.
+- Updated `scripts/smoke-private-beta-review-handoff.ts` so the generated handoff records tracked diff content evidence through `git diff --binary`, hashes all untracked source files in the review inventory, and emits a combined source-content SHA-256 for human review.
+- Regenerated `docs/PRIVATE_BETA_REVIEW_HANDOFF.md` with tracked diff hash/byte evidence and an `Untracked Source Content Hashes` table.
+- Excluded the generated handoff document itself from the content digest to avoid a self-referential hash, while preserving it in the visible source inventory.
+
+Files changed:
+
+- `scripts/smoke-private-beta-review-handoff.ts`
+- `docs/PRIVATE_BETA_REVIEW_HANDOFF.md`
+- `docs/BETA_CODEBASE_SPLIT_PLAN.md`
+- `docs/OPTIMIZATION_MEMORY.md`
+- `docs/PRODUCTION_HARDENING_LEDGER.md`
+
+Verification:
+
+- `npm run smoke:private-beta-handoff` passed and regenerated the handoff document plus ignored evidence copies under `release/evidence/private-beta-review-handoff-2026-07-01/`.
+- The final verification sweep for this slice also passed: `npm run smoke:ci-workflow`, `npm run typecheck`, `npm run lint`, `npm run secret:scan`, and `git diff --check` with only existing LF-to-CRLF working-copy warnings.
+
+Risks and notes:
+
+- This is a post-Phase-M handoff hardening slice; no split-plan item numbers were marked.
+- The active implementation plan remains complete through Phase M.
+- The repo remains intentionally dirty with the private beta implementation and handoff artifacts awaiting review.
+- No commit, push, tag, or release publish was performed by this automation run.
+
+Next action:
+
+- Human review/share decision: inspect the `40` listed source files, the Git/content review anchors, and `docs/PRIVATE_BETA_REVIEW_HANDOFF.md`, then share the draft prerelease evidence or request a focused cleanup pass.
+
+### 2026-07-01 - Private Beta Handoff Decision Check
+
+Scope:
+
+- Revalidated the current private beta handoff state without reworking completed Phase F-M service-split items.
+- Confirmed Phase F item `57` and all Phase F-M split-plan items remain recorded complete and verified.
+- Verified the item `57` implementation boundary remains in `server/services/plugins/pluginInstallService.ts`, with focused coverage in `tests/pluginInstallService.test.ts` for install/update/update-all/uninstall, redacted command failures, managed plugin runtime-state writes, Gateway restart scheduling, and plugin controls refresh behavior.
+- Regenerated `docs/PRIVATE_BETA_REVIEW_HANDOFF.md` from the current worktree and confirmed the handoff still records `ready-for-human-review`, no commit/push/tag/release publish, the uploaded evidence bundle digest, and the `24` tracked plus `16` untracked source-review inventory.
+- Confirmed there is no unstarted local Phase F-M implementation item left; the remaining unclosed action is the human review/share decision for the private beta handoff.
+
+Files changed:
+
+- `docs/PRIVATE_BETA_REVIEW_HANDOFF.md`
+- `docs/BETA_CODEBASE_SPLIT_PLAN.md`
+- `docs/OPTIMIZATION_MEMORY.md`
+- `docs/PRODUCTION_HARDENING_LEDGER.md`
+
+Verification:
+
+- `npm run smoke:private-beta-handoff` passed.
+- `npm run smoke:plugin-install-service` passed.
+- `node --import tsx --test tests/pluginInstallService.test.ts` passed with `11` plugin install service tests.
+- `npm run smoke:ci-workflow` passed.
+- `npm run typecheck` passed.
+- `npm run secret:scan` passed with no high-confidence checked-in secrets found.
+- `git diff --check` passed with only existing LF-to-CRLF working-copy warnings.
+
+Risks and notes:
+
+- This is a post-Phase-M decision-check pass; no split-plan item numbers were marked.
+- The active implementation plan remains complete through Phase M.
+- The repo remains intentionally dirty with the private beta implementation and handoff artifacts awaiting review.
+- No commit, push, tag, or release publish was performed by this automation run.
+
+Next action:
+
+- Human review/share decision: inspect the `40` listed source files, the Git/content review anchors in `docs/PRIVATE_BETA_REVIEW_HANDOFF.md`, and then share the draft prerelease evidence or request a focused cleanup pass.
+
+### 2026-07-01 - Private Beta Handoff Source-Content Stabilization
+
+Scope:
+
+- Hardened the private beta review handoff content anchor without reworking completed Phase F-M service-split items.
+- Confirmed Phase F item `57` and all Phase F-M split-plan items remain recorded complete and verified.
+- Fixed a post-Phase-M handoff stability issue where hashing the full tracked diff meant routine ledger updates made after handoff generation could immediately stale the recorded source-content hash.
+- Updated `scripts/smoke-private-beta-review-handoff.ts` so the full tracked/untracked source inventory remains visible for review, while generated/mutable handoff outputs are excluded from the source-content hash: `docs/PRIVATE_BETA_REVIEW_HANDOFF.md`, `docs/BETA_CODEBASE_SPLIT_PLAN.md`, `docs/OPTIMIZATION_MEMORY.md`, and `docs/PRODUCTION_HARDENING_LEDGER.md`.
+- Regenerated `docs/PRIVATE_BETA_REVIEW_HANDOFF.md` after the ledger updates so the review packet records the stabilized content anchor, tracked source file count included in the hash, and the generated/mutable outputs excluded from the hash.
+
+Files changed:
+
+- `scripts/smoke-private-beta-review-handoff.ts`
+- `docs/PRIVATE_BETA_REVIEW_HANDOFF.md`
+- `docs/BETA_CODEBASE_SPLIT_PLAN.md`
+- `docs/OPTIMIZATION_MEMORY.md`
+- `docs/PRODUCTION_HARDENING_LEDGER.md`
+
+Verification:
+
+- `npm run smoke:private-beta-handoff` passed.
+- `npm run smoke:plugin-install-service` passed.
+- `node --import tsx --test tests/pluginInstallService.test.ts` passed with `11` plugin install service tests.
+- `npm run smoke:ci-workflow` passed.
+- `npm run typecheck` passed.
+- `npm run secret:scan` passed with no high-confidence checked-in secrets found.
+- `git diff --check` passed with only existing LF-to-CRLF working-copy warnings.
+
+Risks and notes:
+
+- This is a post-Phase-M handoff stabilization slice; no split-plan item numbers were marked.
+- The active implementation plan remains complete through Phase M.
+- The repo remains intentionally dirty with the private beta implementation and handoff artifacts awaiting review.
+- No commit, push, tag, release publish, reset, revert, or stash was performed by this automation run.
+
+Next action:
+
+- Human review/share decision: inspect the `40` listed source files and the stabilized Git/content review anchors in `docs/PRIVATE_BETA_REVIEW_HANDOFF.md`, then share the draft prerelease evidence or request a focused cleanup pass.
+
+### 2026-07-01 - Private Beta Handoff Diff-Shortstat Stabilization
+
+Scope:
+
+- Hardened the private beta review handoff Git anchor without reworking completed Phase F-M service-split items.
+- Confirmed Phase F item `57` and all Phase F-M split-plan items remain recorded complete and verified.
+- Fixed the remaining handoff drift risk where `docs/PRIVATE_BETA_REVIEW_HANDOFF.md` excluded generated/mutable ledgers from the source-content hash, but still displayed a full tracked diff shortstat that could be made stale by routine ledger updates.
+- Updated `scripts/smoke-private-beta-review-handoff.ts` so the displayed Git review shortstat uses the same non-ledger tracked source file set as the source-content hash.
+- Regenerated `docs/PRIVATE_BETA_REVIEW_HANDOFF.md`; it now labels the value as `Tracked content diff shortstat`, records `21` tracked files included in the content hash, and continues listing all `40` tracked/untracked review files for human inspection.
+
+Files changed:
+
+- `scripts/smoke-private-beta-review-handoff.ts`
+- `docs/PRIVATE_BETA_REVIEW_HANDOFF.md`
+- `docs/BETA_CODEBASE_SPLIT_PLAN.md`
+- `docs/OPTIMIZATION_MEMORY.md`
+- `docs/PRODUCTION_HARDENING_LEDGER.md`
+
+Verification:
+
+- `npm run smoke:private-beta-handoff` passed.
+- `npm run smoke:plugin-install-service` passed.
+- `node --import tsx --test tests/pluginInstallService.test.ts` passed with `11` plugin install service tests.
+- `npm run smoke:ci-workflow` passed.
+- `npm run typecheck` passed.
+- `npm run lint` passed with the existing Babel deoptimization note for `server/controlPlane.ts`.
+- `npm run secret:scan` passed with no high-confidence checked-in secrets found.
+
+Risks and notes:
+
+- This is a post-Phase-M handoff stabilization slice; no split-plan item numbers were marked.
+- The active implementation plan remains complete through Phase M.
+- The repo remains intentionally dirty with the private beta implementation and handoff artifacts awaiting review.
+- No commit, push, tag, release publish, reset, revert, or stash was performed by this automation run.
+
+Next action:
+
+- Human review/share decision: inspect the `40` listed source files and the stabilized Git/content review anchors in `docs/PRIVATE_BETA_REVIEW_HANDOFF.md`, then share the draft prerelease evidence or request a focused cleanup pass.
+
+### 2026-07-01 - Private Beta Handoff Read-Only Anchor Verification
+
+Scope:
+
+- Revalidated the current private beta handoff without regenerating handoff artifacts or reworking completed Phase F-M service-split items.
+- Confirmed Phase F item `57` and all Phase F-M split-plan items remain recorded complete and verified.
+- Recomputed the handoff source-review anchors read-only and confirmed `docs/PRIVATE_BETA_REVIEW_HANDOFF.md` still matches the current worktree: `24` tracked changed files, `16` untracked source files, `21` tracked files included in the content hash, tracked content diff shortstat `21 files changed, 2265 insertions(+), 2259 deletions(-)`, and source-content SHA-256 `6765df8685eb2fb4fe191b19c46fa00f142960401212a9416aeff93002a80f29`.
+- Revalidated the Phase F item `57` plugin install service boundary and current CI workflow contract.
+
+Files changed:
+
+- `docs/BETA_CODEBASE_SPLIT_PLAN.md`
+- `docs/OPTIMIZATION_MEMORY.md`
+- `docs/PRODUCTION_HARDENING_LEDGER.md`
+
+Verification:
+
+- Read-only handoff anchor recomputation passed and matched `docs/PRIVATE_BETA_REVIEW_HANDOFF.md`.
+- `npm run smoke:plugin-install-service` passed.
+- `node --import tsx --test tests/pluginInstallService.test.ts` passed with `11` plugin install service tests.
+- `npm run smoke:ci-workflow` passed.
+- `npm run typecheck` passed.
+- `npm run secret:scan` passed with no high-confidence checked-in secrets found.
+- `git diff --check` passed with only existing LF-to-CRLF working-copy warnings.
+
+Risks and notes:
+
+- This is a post-Phase-M read-only verification pass; no split-plan item numbers were marked.
+- The active implementation plan remains complete through Phase M.
+- The repo remains intentionally dirty with the private beta implementation and handoff artifacts awaiting review.
+- No commit, push, tag, release publish, handoff regeneration, source-code edit, reset, revert, or stash was performed by this automation run.
+
+Next action:
+
+- Human review/share decision: inspect the `40` listed source files and the stabilized Git/content review anchors in `docs/PRIVATE_BETA_REVIEW_HANDOFF.md`, then share the draft prerelease evidence or request a focused cleanup pass.
+
+### 2026-07-01 - Private Beta Handoff Read-Only Recheck
+
+Scope:
+
+- Revalidated the current private beta handoff without regenerating handoff artifacts or reworking completed Phase F-M service-split items.
+- Confirmed Phase F item `57` and all Phase F-M split-plan items remain recorded complete and verified.
+- Recomputed the handoff source-review anchors read-only and confirmed `docs/PRIVATE_BETA_REVIEW_HANDOFF.md` still matches the current worktree: `24` tracked changed files, `16` untracked source files, `21` tracked files included in the content hash, tracked content diff shortstat `21 files changed, 2265 insertions(+), 2259 deletions(-)`, tracked diff SHA-256 `3b334a4dd239aaae2f065de3fb0829fc1f7de4dfddffe44c82d6b92f67801578`, and source-content SHA-256 `6765df8685eb2fb4fe191b19c46fa00f142960401212a9416aeff93002a80f29`.
+- Revalidated the Phase F item `57` plugin install service boundary and current CI workflow contract.
+
+Files changed:
+
+- `docs/BETA_CODEBASE_SPLIT_PLAN.md`
+- `docs/OPTIMIZATION_MEMORY.md`
+- `docs/PRODUCTION_HARDENING_LEDGER.md`
+
+Verification:
+
+- Read-only handoff anchor recomputation passed and matched `docs/PRIVATE_BETA_REVIEW_HANDOFF.md`.
+- `npm run smoke:plugin-install-service` passed.
+- `node --import tsx --test tests/pluginInstallService.test.ts` passed with `11` plugin install service tests.
+- `npm run smoke:ci-workflow` passed.
+- `npm run typecheck` passed.
+- `npm run secret:scan` passed with no high-confidence checked-in secrets found.
+- `git diff --check` passed with only existing LF-to-CRLF working-copy warnings.
+
+Risks and notes:
+
+- This is a post-Phase-M read-only verification pass; no split-plan item numbers were marked.
+- The active implementation plan remains complete through Phase M.
+- The repo remains intentionally dirty with the private beta implementation and handoff artifacts awaiting review.
+- No commit, push, tag, release publish, handoff regeneration, source-code edit, reset, revert, or stash was performed by this automation run.
+
+Next action:
+
+- Human review/share decision: inspect the `40` listed source files and the stabilized Git/content review anchors in `docs/PRIVATE_BETA_REVIEW_HANDOFF.md`, then share the draft prerelease evidence or request a focused cleanup pass.
+
+### 2026-07-01 - Private Beta Handoff Read-Only Revalidation
+
+Scope:
+
+- Revalidated the current private beta handoff without regenerating handoff artifacts or reworking completed Phase F-M service-split items.
+- Confirmed Phase F item `57` and all Phase F-M split-plan items remain recorded complete and verified.
+- Recomputed the handoff source-review anchors read-only and confirmed `docs/PRIVATE_BETA_REVIEW_HANDOFF.md` still matches the current worktree: `24` tracked changed files, `16` untracked source files, `21` tracked files included in the content hash, tracked content diff shortstat `21 files changed, 2265 insertions(+), 2259 deletions(-)`, tracked diff SHA-256 `3b334a4dd239aaae2f065de3fb0829fc1f7de4dfddffe44c82d6b92f67801578`, and source-content SHA-256 `6765df8685eb2fb4fe191b19c46fa00f142960401212a9416aeff93002a80f29`.
+- Revalidated the Phase F item `57` plugin install service boundary and current CI workflow contract.
+
+Files changed:
+
+- `docs/BETA_CODEBASE_SPLIT_PLAN.md`
+- `docs/OPTIMIZATION_MEMORY.md`
+- `docs/PRODUCTION_HARDENING_LEDGER.md`
+
+Verification:
+
+- Read-only handoff anchor recomputation passed and matched `docs/PRIVATE_BETA_REVIEW_HANDOFF.md`.
+- `npm run smoke:plugin-install-service` passed.
+- `node --import tsx --test tests/pluginInstallService.test.ts` passed with `11` plugin install service tests.
+- `npm run smoke:ci-workflow` passed.
+- `npm run typecheck` passed.
+- `npm run secret:scan` passed with no high-confidence checked-in secrets found.
+- `git diff --check` passed with only existing LF-to-CRLF working-copy warnings.
+
+Risks and notes:
+
+- This is a post-Phase-M read-only verification pass; no split-plan item numbers were marked.
+- The active implementation plan remains complete through Phase M.
+- The repo remains intentionally dirty with the private beta implementation and handoff artifacts awaiting review.
+- No commit, push, tag, release publish, handoff regeneration, source-code edit, reset, revert, or stash was performed by this automation run.
+
+Next action:
+
+- Human review/share decision: inspect the `40` listed source files and the stabilized Git/content review anchors in `docs/PRIVATE_BETA_REVIEW_HANDOFF.md`, then share the draft prerelease evidence or request a focused cleanup pass.
+
+### 2026-07-01 - Private Beta Handoff Read-Only Confirmation
+
+Scope:
+
+- Revalidated the current private beta handoff without regenerating handoff artifacts or reworking completed Phase F-M service-split items.
+- Confirmed Phase F item `57` and all Phase F-M split-plan items remain recorded complete and verified.
+- Recomputed the handoff source-review anchors read-only and confirmed `docs/PRIVATE_BETA_REVIEW_HANDOFF.md` still matches the current worktree: `24` tracked changed files, `16` untracked source files, `21` tracked files included in the content hash, tracked content diff shortstat `21 files changed, 2265 insertions(+), 2259 deletions(-)`, tracked diff SHA-256 `3b334a4dd239aaae2f065de3fb0829fc1f7de4dfddffe44c82d6b92f67801578`, and source-content SHA-256 `6765df8685eb2fb4fe191b19c46fa00f142960401212a9416aeff93002a80f29`.
+- Revalidated the Phase F item `57` plugin install service boundary and current CI workflow contract.
+
+Files changed:
+
+- `docs/BETA_CODEBASE_SPLIT_PLAN.md`
+- `docs/OPTIMIZATION_MEMORY.md`
+- `docs/PRODUCTION_HARDENING_LEDGER.md`
+
+Verification:
+
+- Read-only handoff anchor recomputation passed and matched `docs/PRIVATE_BETA_REVIEW_HANDOFF.md`.
+- `npm run smoke:plugin-install-service` passed.
+- `node --import tsx --test tests/pluginInstallService.test.ts` passed with `11` plugin install service tests.
+- `npm run smoke:ci-workflow` passed.
+- `npm run typecheck` passed.
+- `npm run secret:scan` passed with no high-confidence checked-in secrets found.
+- `git diff --check` passed with only existing LF-to-CRLF working-copy warnings.
+
+Risks and notes:
+
+- This is a post-Phase-M read-only verification pass; no split-plan item numbers were marked.
+- The active implementation plan remains complete through Phase M.
+- The repo remains intentionally dirty with the private beta implementation and handoff artifacts awaiting review.
+- No commit, push, tag, release publish, handoff regeneration, source-code edit, reset, revert, or stash was performed by this automation run.
+
+Next action:
+
+- Human review/share decision: inspect the `40` listed source files and the stabilized Git/content review anchors in `docs/PRIVATE_BETA_REVIEW_HANDOFF.md`, then share the draft prerelease evidence or request a focused cleanup pass.
+
+### 2026-07-01 - Private Beta Handoff Current-Anchor Verification
+
+Scope:
+
+- Revalidated the current private beta handoff without regenerating handoff artifacts or reworking completed Phase F-M service-split items.
+- Confirmed Phase F item `57` and all Phase F-M split-plan items remain recorded complete and verified.
+- Recomputed the handoff source-review anchors read-only and confirmed `docs/PRIVATE_BETA_REVIEW_HANDOFF.md` still matches the current worktree: `24` tracked changed files, `16` untracked source files, `21` tracked files included in the content hash, tracked content diff shortstat `21 files changed, 2265 insertions(+), 2259 deletions(-)`, tracked diff SHA-256 `3b334a4dd239aaae2f065de3fb0829fc1f7de4dfddffe44c82d6b92f67801578`, source inventory SHA-256 `207b0815c687549d77ebfcf00081d2680836a770801442fb9a9389b71f6c13a2`, and source-content SHA-256 `6765df8685eb2fb4fe191b19c46fa00f142960401212a9416aeff93002a80f29`.
+- Revalidated the Phase F item `57` plugin install service boundary and current CI workflow contract.
+
+Files changed:
+
+- `docs/BETA_CODEBASE_SPLIT_PLAN.md`
+- `docs/OPTIMIZATION_MEMORY.md`
+- `docs/PRODUCTION_HARDENING_LEDGER.md`
+
+Verification:
+
+- Read-only handoff anchor recomputation passed and matched `docs/PRIVATE_BETA_REVIEW_HANDOFF.md`.
+- `npm run smoke:plugin-install-service` passed.
+- `node --import tsx --test tests/pluginInstallService.test.ts` passed with `11` plugin install service tests.
+- `npm run smoke:ci-workflow` passed.
+- `npm run typecheck` passed.
+- `npm run secret:scan` passed with no high-confidence checked-in secrets found.
+- `git diff --check` passed with only existing LF-to-CRLF working-copy warnings.
+
+Risks and notes:
+
+- This is a post-Phase-M read-only verification pass; no split-plan item numbers were marked.
+- The active implementation plan remains complete through Phase M.
+- The repo remains intentionally dirty with the private beta implementation and handoff artifacts awaiting review.
+- No commit, push, tag, release publish, handoff regeneration, source-code edit, reset, revert, or stash was performed by this automation run.
+
+Next action:
+
+- Human review/share decision: inspect the `40` listed source files and the stabilized Git/content review anchors in `docs/PRIVATE_BETA_REVIEW_HANDOFF.md`, then share the draft prerelease evidence or request a focused cleanup pass.
+
+### 2026-07-01 - Private Beta Handoff Current-Anchor Revalidation
+
+Scope:
+
+- Revalidated the current private beta handoff without regenerating handoff artifacts or reworking completed Phase F-M service-split items.
+- Confirmed Phase F item `57` and all Phase F-M split-plan items remain recorded complete and verified.
+- Recomputed the handoff source-review anchors read-only and confirmed `docs/PRIVATE_BETA_REVIEW_HANDOFF.md` still matches the current worktree: `24` tracked changed files, `16` untracked source files, `21` tracked files included in the content hash, tracked content diff shortstat `21 files changed, 2265 insertions(+), 2259 deletions(-)`, tracked diff SHA-256 `3b334a4dd239aaae2f065de3fb0829fc1f7de4dfddffe44c82d6b92f67801578`, source inventory SHA-256 `207b0815c687549d77ebfcf00081d2680836a770801442fb9a9389b71f6c13a2`, and source-content SHA-256 `6765df8685eb2fb4fe191b19c46fa00f142960401212a9416aeff93002a80f29`.
+- Revalidated the Phase F item `57` plugin install service boundary and current CI workflow contract.
+
+Files changed:
+
+- `docs/BETA_CODEBASE_SPLIT_PLAN.md`
+- `docs/OPTIMIZATION_MEMORY.md`
+- `docs/PRODUCTION_HARDENING_LEDGER.md`
+
+Verification:
+
+- Read-only handoff anchor recomputation passed and matched `docs/PRIVATE_BETA_REVIEW_HANDOFF.md`.
+- `npm run smoke:plugin-install-service` passed.
+- `node --import tsx --test tests/pluginInstallService.test.ts` passed with `11` plugin install service tests.
+- `npm run smoke:ci-workflow` passed.
+- `npm run typecheck` passed.
+- `npm run secret:scan` passed with no high-confidence checked-in secrets found.
+- `git diff --check` passed with only existing LF-to-CRLF working-copy warnings.
+
+Risks and notes:
+
+- This is a post-Phase-M read-only verification pass; no split-plan item numbers were marked.
+- The active implementation plan remains complete through Phase M.
+- The repo remains intentionally dirty with the private beta implementation and handoff artifacts awaiting review.
+- No commit, push, tag, release publish, handoff regeneration, source-code edit, reset, revert, or stash was performed by this automation run.
+
+Next action:
+
+- Human review/share decision: inspect the `40` listed source files and the stabilized Git/content review anchors in `docs/PRIVATE_BETA_REVIEW_HANDOFF.md`, then share the draft prerelease evidence or request a focused cleanup pass.
+
+### 2026-07-01 - Private Beta Handoff Current-Anchor Read-Only Check
+
+Scope:
+
+- Revalidated the current private beta handoff without regenerating handoff artifacts or reworking completed Phase F-M service-split items.
+- Confirmed Phase F item `57` and all Phase F-M split-plan items remain recorded complete and verified.
+- Recomputed the handoff source-review anchors read-only and confirmed `docs/PRIVATE_BETA_REVIEW_HANDOFF.md` still matches the current worktree: `24` tracked changed files, `16` untracked source files, `21` tracked files included in the content hash, tracked content diff shortstat `21 files changed, 2265 insertions(+), 2259 deletions(-)`, tracked diff SHA-256 `3b334a4dd239aaae2f065de3fb0829fc1f7de4dfddffe44c82d6b92f67801578`, source inventory SHA-256 `207b0815c687549d77ebfcf00081d2680836a770801442fb9a9389b71f6c13a2`, and source-content SHA-256 `6765df8685eb2fb4fe191b19c46fa00f142960401212a9416aeff93002a80f29`.
+- Revalidated the Phase F item `57` plugin install service boundary and current CI workflow contract.
+
+Files changed:
+
+- `docs/BETA_CODEBASE_SPLIT_PLAN.md`
+- `docs/OPTIMIZATION_MEMORY.md`
+- `docs/PRODUCTION_HARDENING_LEDGER.md`
+
+Verification:
+
+- Read-only handoff anchor recomputation passed and matched `docs/PRIVATE_BETA_REVIEW_HANDOFF.md`.
+- `npm run smoke:plugin-install-service` passed.
+- `node --import tsx --test tests/pluginInstallService.test.ts` passed with `11` plugin install service tests.
+- `npm run smoke:ci-workflow` passed.
+- `npm run typecheck` passed.
+- `npm run secret:scan` passed with no high-confidence checked-in secrets found.
+- `git diff --check` passed with only existing LF-to-CRLF working-copy warnings.
+
+Risks and notes:
+
+- This is a post-Phase-M read-only verification pass; no split-plan item numbers were marked.
+- The active implementation plan remains complete through Phase M.
+- The repo remains intentionally dirty with the private beta implementation and handoff artifacts awaiting review.
+- No commit, push, tag, release publish, handoff regeneration, source-code edit, reset, revert, or stash was performed by this automation run.
+
+Next action:
+
+- Human review/share decision: inspect the `40` listed source files and the stabilized Git/content review anchors in `docs/PRIVATE_BETA_REVIEW_HANDOFF.md`, then share the draft prerelease evidence or request a focused cleanup pass.
+
+### 2026-07-01 - Private Beta Handoff Latest Read-Only Verification
+
+Scope:
+
+- Revalidated the current private beta handoff without regenerating handoff artifacts or reworking completed Phase F-M service-split items.
+- Confirmed Phase F item `57` and all Phase F-M split-plan items remain recorded complete and verified.
+- Recomputed the handoff source-review anchors read-only and confirmed `docs/PRIVATE_BETA_REVIEW_HANDOFF.md` still matches the current worktree: `24` tracked changed files, `16` untracked source files, `21` tracked files included in the content hash, tracked content diff shortstat `21 files changed, 2265 insertions(+), 2259 deletions(-)`, tracked diff SHA-256 `3b334a4dd239aaae2f065de3fb0829fc1f7de4dfddffe44c82d6b92f67801578`, source inventory SHA-256 `207b0815c687549d77ebfcf00081d2680836a770801442fb9a9389b71f6c13a2`, and source-content SHA-256 `6765df8685eb2fb4fe191b19c46fa00f142960401212a9416aeff93002a80f29`.
+- Revalidated the Phase F item `57` plugin install service boundary and current CI workflow contract.
+
+Files changed:
+
+- `docs/BETA_CODEBASE_SPLIT_PLAN.md`
+- `docs/OPTIMIZATION_MEMORY.md`
+- `docs/PRODUCTION_HARDENING_LEDGER.md`
+
+Verification:
+
+- Read-only handoff anchor recomputation passed and matched `docs/PRIVATE_BETA_REVIEW_HANDOFF.md`.
+- `npm run smoke:plugin-install-service` passed.
+- `node --import tsx --test tests/pluginInstallService.test.ts` passed with `11` plugin install service tests.
+- `npm run smoke:ci-workflow` passed.
+- `npm run typecheck` passed.
+- `npm run secret:scan` passed with no high-confidence checked-in secrets found.
+- `git diff --check` passed with only existing LF-to-CRLF working-copy warnings.
+
+Risks and notes:
+
+- This is a post-Phase-M read-only verification pass; no split-plan item numbers were marked.
+- The active implementation plan remains complete through Phase M.
+- The repo remains intentionally dirty with the private beta implementation and handoff artifacts awaiting review.
+- No commit, push, tag, release publish, handoff regeneration, source-code edit, reset, revert, or stash was performed by this automation run.
+
+Next action:
+
+- Human review/share decision: inspect the `40` listed source files and the stabilized Git/content review anchors in `docs/PRIVATE_BETA_REVIEW_HANDOFF.md`, then share the draft prerelease evidence or request a focused cleanup pass.
+
 ## In Progress
 
-- Optimization work now resumes from `docs/BETA_CODEBASE_SPLIT_PLAN.md`, with Phase A, Phase B, Phase C, Phase D items `31-45`, Phase E items `46-55`, Phase F items `56-65`, Phase G items `66-75`, Phase H items `76-85`, Phase I items `86-95`, Phase J items `96-110`, and Phase K items `111-116` complete and verified for the private beta service-split milestone.
+- Optimization work now resumes from `docs/BETA_CODEBASE_SPLIT_PLAN.md`, with Phase A, Phase B, Phase C, Phase D items `31-45`, Phase E items `46-55`, Phase F items `56-65`, Phase G items `66-75`, Phase H items `76-85`, Phase I items `86-95`, Phase J items `96-110`, Phase K items `111-130`, Phase L items `131-140`, and Phase M items `141-150` complete and verified for the private beta service-split milestone. The private beta review handoff has been generated, revalidated, upgraded with a source-change inventory, refreshed against the current worktree, guarded against stale Phase M dependency-audit risk evidence, revalidated at `2026-07-01T07:56:58.094Z`, hardened with a Git review anchor, hardened again with a content-aware source anchor, rechecked against Phase F item `57` plugin-install evidence, stabilized so generated/mutable ledgers no longer stale the source-content hash, stabilized again so the displayed tracked content diff shortstat uses the same non-ledger file set as the source-content hash, and read-only verified eight times against the current worktree without regenerating handoff artifacts.
 - Runtime status cache refresh optimization now targets `server/services/runtime/runtimeStatusService.ts`: forced full runtime refreshes seed normalized full and summary caches, so shell and console summary views receive fresh plugin/runtime evidence after manual refreshes without keeping the stale `forceRefresh` marker. Verification passed: `node --import tsx --test tests/runtimeStatusService.test.ts`, `npm run smoke:runtime-status-control-plane`, `npm run typecheck`, and `npm run lint`.
 - Follow-up runtime/UI optimization batch added `10` focused improvements: normalized summary-cache writes, forced summary-refresh cache warming, status-cache-to-summary cache warming, in-flight summary cache normalization, mission projection slicing before shaping, single-pass plugin runtime summary projection, client full-status-to-summary cache publishing, set-backed Monitor active/busy agent lookups, one-pass activity timestamp sorting, and stable/memoized shell cron summary inputs. Verification passed: `node --import tsx --test tests/runtimeStatusService.test.ts`, `npm run smoke:runtime-status-control-plane`, `npm run typecheck`, and `npm run lint`.
 - Gateway startup speed optimization now targets `server/services/gateway/gatewayLifecycleService.ts` and `server/controlPlane.ts`: independent ClawTalk and Telegram repair checks run in parallel during startup preflight, and the later startup-defaults step reuses those repair results instead of scanning/patching the same plugin runtime files again. Verification passed: `node --import tsx --test tests/gatewayLifecycleService.test.ts`, `npm run smoke:gateway-lifecycle`, `npm run smoke:server-architecture`, `npm run typecheck`, and `npm run lint`.
 
 Next action:
 
-- Continue Phase K with item `117`: send one simple command in isolated beta state.
+- Human review/share decision for the private beta handoff: inspect the `40` listed source files, the Git/content review anchors, and `docs/PRIVATE_BETA_REVIEW_HANDOFF.md`, then share the draft prerelease evidence or request a focused cleanup pass.
 
 ## Backlog
 

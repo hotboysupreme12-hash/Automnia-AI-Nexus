@@ -252,6 +252,28 @@ test('runTurn falls back to chat.message.get for placeholder history rows', asyn
   assert.equal(harness.finishes.at(-1)?.status, 'completed')
 })
 
+test('runTurn isolates fresh Gateway chat turns from stable requested session keys', async () => {
+  const harness = createHarness()
+
+  await harness.service.runTurn({
+    agentId: 'agent-fresh',
+    message: 'who are you?',
+    sessionId: 'fresh-session-1',
+    requestedSessionKey: 'control-center:console',
+    freshSession: true,
+    thinking: 'off',
+    timeoutMs: 100,
+    cwd: process.cwd(),
+  })
+
+  const send = harness.requests.find((request) => request.method === 'chat.send')
+  assert.ok(send)
+  assert.equal(
+    isRecord(send.params) && send.params.sessionKey,
+    'agent:agent-fresh:control-center:console:fresh:fresh-session-1',
+  )
+})
+
 test('runTurn aborts pending Gateway chat when the request signal is cancelled', async () => {
   const harness = createHarness({ suppressFinal: true })
   const controller = new AbortController()
