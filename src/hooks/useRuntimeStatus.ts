@@ -6,6 +6,7 @@ const RUNTIME_STATUS_MAX_TIMEOUT_MS = 45_000
 const RUNTIME_STATUS_CLIENT_CACHE_MS = 1_000
 const RUNTIME_ACTION_TIMEOUT_MS = 30_000
 const RUNTIME_DOCTOR_TIMEOUT_MS = 60_000
+const RUNTIME_CRON_SHIFT_HYDRATION_CACHE_MS = 5_000
 
 export type GatewayLogEntry = {
   id: number
@@ -572,6 +573,7 @@ export async function stopCronShift(shiftId: string) {
     timeoutMs: RUNTIME_ACTION_TIMEOUT_MS,
   })
   if (!result.ok) throw new Error(apiErrorMessage(result.error))
+  invalidateCronShiftHydrationCache()
   return result.data
 }
 
@@ -589,6 +591,7 @@ export async function updateCronShift(payload: {
     timeoutMs: 60_000,
   })
   if (!result.ok) throw new Error(apiErrorMessage(result.error))
+  invalidateCronShiftHydrationCache()
   return result.data
 }
 
@@ -601,6 +604,32 @@ export async function listCronShifts(options: ApiRequestOptions = {}): Promise<R
   if (!result.ok) throw new Error(apiErrorMessage(result.error))
   if (!Array.isArray(result.data.shifts)) throw new Error('Cron list response missing shifts.')
   return result.data.shifts
+}
+
+let cachedCronShiftHydration: { loadedAt: number; shifts: RuntimeCronJob[] } | null = null
+let cronShiftHydrationRequest: Promise<RuntimeCronJob[]> | null = null
+
+function invalidateCronShiftHydrationCache() {
+  cachedCronShiftHydration = null
+}
+
+async function listCronShiftsForHydration(): Promise<RuntimeCronJob[]> {
+  const now = Date.now()
+  if (cachedCronShiftHydration && now - cachedCronShiftHydration.loadedAt <= RUNTIME_CRON_SHIFT_HYDRATION_CACHE_MS) {
+    return cachedCronShiftHydration.shifts
+  }
+  if (cronShiftHydrationRequest) return cronShiftHydrationRequest
+
+  cronShiftHydrationRequest = listCronShifts({ timeoutMs: 20_000 })
+    .then((shifts) => {
+      cachedCronShiftHydration = { loadedAt: Date.now(), shifts }
+      return shifts
+    })
+    .finally(() => {
+      cronShiftHydrationRequest = null
+    })
+
+  return cronShiftHydrationRequest
 }
 
 export async function stopGatewayRuntime() {
@@ -642,9 +671,9 @@ function isRuntimeStatusPayload(value: unknown): value is RuntimeStatus {
   return Boolean(value && typeof value === 'object' && 'gateway' in value)
 }
 
-async function hydrateRuntimeStatusCronJobs(status: RuntimeStatus, signal?: AbortSignal): Promise<RuntimeStatus> {
+async function hydrateRuntimeStatusCronJobs(status: RuntimeStatus): Promise<RuntimeStatus> {
   try {
-    const shifts = await listCronShifts({ signal, timeoutMs: 20_000 })
+    const shifts = await listCronShiftsForHydration()
     return {
       ...status,
       shifts: {
@@ -705,6 +734,14 @@ function notifyRuntimeSubscribers() {
 
 function notifyRuntimeSummarySubscribers() {
   runtimeSummarySubscribers.forEach((listener) => listener())
+}
+
+function publishRuntimeStatusSnapshot(status: RuntimeStatus) {
+  cachedRuntimeStatus = status
+  cachedRuntimeError = ''
+  cachedRuntimeSummaryStatus = status
+  cachedRuntimeSummaryError = ''
+  notifyRuntimeSummarySubscribers()
 }
 
 function emptyGatewayActivity(): GatewayActivitySummary {
@@ -934,8 +971,7 @@ async function loadRuntimeStatus(intervalMs: number, forceRefresh = false) {
     if (!isRuntimeStatusPayload(result.data)) {
       throw new Error('Runtime status response missing gateway data.')
     }
-    cachedRuntimeStatus = await hydrateRuntimeStatusCronJobs(result.data, controller.signal)
-    cachedRuntimeError = ''
+    publishRuntimeStatusSnapshot(await hydrateRuntimeStatusCronJobs(result.data))
   } catch (loadError) {
     const idleAbort = runtimeStatusRequestAbortReason === 'idle' && controller.signal.aborted
     if (!idleAbort) {
@@ -995,7 +1031,7 @@ async function loadRuntimeSummaryStatus(intervalMs: number, forceRefresh = false
     if (!isRuntimeStatusPayload(result.data)) {
       throw new Error('Runtime summary response missing gateway data.')
     }
-    cachedRuntimeSummaryStatus = await hydrateRuntimeStatusCronJobs(result.data, controller.signal)
+    cachedRuntimeSummaryStatus = result.data
     cachedRuntimeSummaryError = ''
   } catch (loadError) {
     const idleAbort = runtimeSummaryRequestAbortReason === 'idle' && controller.signal.aborted

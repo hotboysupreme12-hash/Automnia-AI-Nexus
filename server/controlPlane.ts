@@ -111,7 +111,11 @@ import {
   createCommandConsoleUploadService,
 } from './services/filesystem/commandConsoleUploadService'
 import { createPickerSessionService } from './services/filesystem/pickerSessionService'
-import { createGatewayLifecycleService, type GatewayLifecycleService } from './services/gateway/gatewayLifecycleService'
+import {
+  createGatewayLifecycleService,
+  type GatewayLifecycleService,
+  type GatewayStartupPluginRepairSummary,
+} from './services/gateway/gatewayLifecycleService'
 import {
   createGatewayDiagnosticsService,
   type GatewayDiagnosticsClient,
@@ -9094,26 +9098,37 @@ async function ensureOpenclawAgentRunConfigDefaults() {
   await openclawAgentRunDefaultsPending
 }
 
-async function ensureGatewayStartupPluginDefaults() {
+async function ensureGatewayStartupPluginDefaults(repairSummary: GatewayStartupPluginRepairSummary = {}) {
   const config = await readOpenclawConfig().catch(() => null)
   if (!config) return
   const before = JSON.stringify({ gateway: config.gateway || {}, plugins: config.plugins || {}, tools: config.tools || {} })
   ensureGatewayConfigDefaults(config)
   ensureClawTalkBundledPluginDefaults(config)
   await ensureClawTalkApiKeyMaterial(config)
-  const repairedClawTalkManifests = await repairClawTalkPluginManifestContracts()
-  const repairedTelegramRuntimes = await repairTelegramAgentRoutingRuntime()
+  const [
+    repairedClawTalkManifests,
+    repairedTelegramRuntimes,
+  ] = await Promise.all([
+    repairSummary.repairedClawTalkManifests
+      ? Promise.resolve(repairSummary.repairedClawTalkManifests)
+      : repairClawTalkPluginManifestContracts(),
+    repairSummary.repairedTelegramRuntimes
+      ? Promise.resolve(repairSummary.repairedTelegramRuntimes)
+      : repairTelegramAgentRoutingRuntime(),
+  ])
   ensureBrowserRuntimeDefaults(config)
   await ensureTrustedPluginAllowlistFromRuntimeState(config)
   await ensureEnabledManagedPluginLoadPaths(config)
   await ensureWebSearchProviderSelectionFromRuntimeState(config)
   const after = JSON.stringify({ gateway: config.gateway || {}, plugins: config.plugins || {}, tools: config.tools || {} })
   if (after !== before) await writeOpenclawConfig(config)
-  if (repairedClawTalkManifests.length) {
+  if (repairedClawTalkManifests.length && !repairSummary.clawTalkRegistryRefreshed) {
     console.info(`[plugins/clawtalk] repaired manifest contracts in ${repairedClawTalkManifests.length} install(s)`)
     await refreshOpenClawPluginRegistry('clawtalk-manifest-repair').catch((error) => {
       console.warn('[plugins/clawtalk] registry refresh after manifest repair failed:', error)
     })
+  } else if (repairedClawTalkManifests.length) {
+    console.info(`[plugins/clawtalk] reused startup manifest repair results for ${repairedClawTalkManifests.length} install(s)`)
   }
   if (repairedTelegramRuntimes.length) {
     console.info(`[plugins/telegram] repaired agent-routing runtime in ${repairedTelegramRuntimes.length} install(s)`)

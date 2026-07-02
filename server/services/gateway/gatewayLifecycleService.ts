@@ -105,6 +105,12 @@ type PluginRegistryRefreshResult = {
 
 type GatewayStabilityUnavailableSource = 'diagnostics.stability' | 'gateway-client-not-ready'
 
+export type GatewayStartupPluginRepairSummary = {
+  repairedClawTalkManifests?: string[]
+  repairedTelegramRuntimes?: string[]
+  clawTalkRegistryRefreshed?: boolean
+}
+
 export type GatewayLifecycleServiceOptions = {
   gatewayHttpPort: number
   controlCenterPort: number
@@ -142,7 +148,7 @@ export type GatewayLifecycleServiceOptions = {
   repairClawTalkPluginManifestContracts: () => Promise<string[]>
   repairTelegramAgentRoutingRuntime: () => Promise<string[]>
   refreshOpenClawPluginRegistry: (reason: string) => Promise<PluginRegistryRefreshResult>
-  ensureGatewayStartupPluginDefaults: () => Promise<void>
+  ensureGatewayStartupPluginDefaults: (repairSummary?: GatewayStartupPluginRepairSummary) => Promise<void>
   prepareOpenClawConfigForGatewayStartup: (reason: string) => Promise<boolean>
   isInvalidOpenClawConfigText: (value: string) => boolean
   scheduleOpenClawSessionLockSweep: (reason: string) => void
@@ -569,19 +575,26 @@ export function createGatewayLifecycleService(options: GatewayLifecycleServiceOp
       return
     }
 
-    const repairedClawTalkManifests = await options.repairClawTalkPluginManifestContracts().catch((error) => {
-      log.warn('[plugins/clawtalk] startup repair failed:', error)
-      return [] as string[]
-    })
-    const repairedTelegramRuntimes = await options.repairTelegramAgentRoutingRuntime().catch((error) => {
-      log.warn('[plugins/telegram] startup agent-routing repair failed:', error)
-      return [] as string[]
-    })
+    const [clawTalkRepairResult, telegramRepairResult] = await Promise.all([
+      options.repairClawTalkPluginManifestContracts().then((repaired) => ({ ok: true as const, repaired })).catch((error) => {
+        log.warn('[plugins/clawtalk] startup repair failed:', error)
+        return { ok: false as const, repaired: [] as string[] }
+      }),
+      options.repairTelegramAgentRoutingRuntime().then((repaired) => ({ ok: true as const, repaired })).catch((error) => {
+        log.warn('[plugins/telegram] startup agent-routing repair failed:', error)
+        return { ok: false as const, repaired: [] as string[] }
+      }),
+    ])
+    const repairedClawTalkManifests = clawTalkRepairResult.repaired
+    const repairedTelegramRuntimes = telegramRepairResult.repaired
+    let clawTalkRegistryRefreshed = false
     if (repairedClawTalkManifests.length) {
       log.info(`[plugins/clawtalk] repaired package contracts/runtime in ${repairedClawTalkManifests.length} install(s)`)
-      await options.refreshOpenClawPluginRegistry('clawtalk-startup-repair').catch((error) => {
+      const registryResult = await options.refreshOpenClawPluginRegistry('clawtalk-startup-repair').catch((error) => {
         log.warn('[plugins/clawtalk] registry refresh after startup repair failed:', error)
+        return null
       })
+      clawTalkRegistryRefreshed = registryResult?.code === 0
     }
     if (repairedTelegramRuntimes.length) {
       log.info(`[plugins/telegram] repaired agent-routing runtime in ${repairedTelegramRuntimes.length} install(s)`)
@@ -637,7 +650,11 @@ export function createGatewayLifecycleService(options: GatewayLifecycleServiceOp
     options.pushGatewayLog('lifecycle', `starting requested on port ${options.gatewayHttpPort}`)
     try {
       await options.sweepOpenClawSessionLocks('gateway startup', { minIntervalMs: 0, minAgeMs: 0 })
-      await options.ensureGatewayStartupPluginDefaults()
+      await options.ensureGatewayStartupPluginDefaults({
+        ...(clawTalkRepairResult.ok ? { repairedClawTalkManifests } : {}),
+        ...(telegramRepairResult.ok ? { repairedTelegramRuntimes } : {}),
+        clawTalkRegistryRefreshed,
+      })
       recordGatewayStartupEvent('config', 'started', 'Validating OpenClaw config')
       const configReady = await options.prepareOpenClawConfigForGatewayStartup('gateway startup')
       if (!configReady) {

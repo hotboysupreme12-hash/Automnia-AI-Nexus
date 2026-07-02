@@ -10,6 +10,8 @@ type MutableRuntimeStatusState = {
   healthy: boolean
   hangStatus: boolean
   sessions: unknown[]
+  missions: Array<{ id: string; status: string }>
+  missionViewCalls: number
   gatewayLedgerEntries: RuntimeStatusServiceOptions['readRuntimeGatewayLedgerSnapshot'] extends (limit?: number) => Promise<infer Snapshot>
     ? Snapshot['entries']
     : never
@@ -19,6 +21,7 @@ type MutableRuntimeStatusState = {
   externalGatewayLogs: RuntimeStatusServiceOptions['readExternalGatewayLogEntries'] extends (limit?: number) => Promise<infer Logs>
     ? Logs
     : never
+  externalGatewayReads: number
   externalChannelLogs: RuntimeStatusServiceOptions['readExternalChannelActivityEntries'] extends (limit?: number) => Promise<infer Logs>
     ? Logs
     : never
@@ -64,6 +67,8 @@ function createService(overrides: Partial<MutableRuntimeStatusState> = {}) {
     healthy: true,
     hangStatus: false,
     sessions: [],
+    missions: [{ id: 'mission-1', status: 'active' }],
+    missionViewCalls: 0,
     gatewayLedgerEntries: [
       {
         id: 1,
@@ -82,6 +87,7 @@ function createService(overrides: Partial<MutableRuntimeStatusState> = {}) {
       eventAt: '2026-06-30T11:59:58.000Z',
     },
     externalGatewayLogs: [],
+    externalGatewayReads: 0,
     externalChannelLogs: [],
     ...overrides,
   }
@@ -116,7 +122,10 @@ function createService(overrides: Partial<MutableRuntimeStatusState> = {}) {
         recentRestarts: state.gatewayRestart ? [state.gatewayRestart] : [],
       }
     },
-    readExternalGatewayLogEntries: async (limit = 80) => state.externalGatewayLogs.slice(0, limit),
+    readExternalGatewayLogEntries: async (limit = 80) => {
+      state.externalGatewayReads += 1
+      return state.externalGatewayLogs.slice(0, limit)
+    },
     readExternalChannelActivityEntries: async (limit = 80) => state.externalChannelLogs.slice(0, limit),
     listPluginControls: async () => ({
       plugins: [
@@ -183,8 +192,11 @@ function createService(overrides: Partial<MutableRuntimeStatusState> = {}) {
     runtimeLoadedPluginIdsFromGatewayLogs: () => new Set<string>(),
     summarizeGatewayActivity: createActivity,
     openAgentSessionSnapshots: async () => state.sessions,
-    listMissions: () => [{ id: 'mission-1', status: 'active' }],
-    missionView: (mission) => ({ id: mission.id, status: mission.status }),
+    listMissions: () => state.missions,
+    missionView: (mission) => {
+      state.missionViewCalls += 1
+      return { id: mission.id, status: mission.status }
+    },
     listActiveCronJobViews: () => ({ active: [{ id: 'shift-1' }] }),
     activeRunSnapshots: () => [{ id: 'run-active', status: 'running' }],
     recentRunSnapshots: (limit) => [{ id: 'run-recent', status: 'completed' }].slice(0, limit),
@@ -238,7 +250,7 @@ function createService(overrides: Partial<MutableRuntimeStatusState> = {}) {
 }
 
 test('runtime summary projects a healthy Gateway without changing API shape', async () => {
-  const { service, requestedLedgerLimits } = createService({
+  const { service, state, requestedLedgerLimits } = createService({
     externalChannelLogs: [
       {
         id: 2,
@@ -258,6 +270,7 @@ test('runtime summary projects a healthy Gateway without changing API shape', as
   const plugins = record(summary.plugins)
   const diagnostics = record(summary.diagnostics)
   const doctor = record(diagnostics.doctor)
+  const sources = record(monitor.sources)
 
   assert.equal(summary.ok, true)
   assert.equal(monitor.summary, true)
@@ -268,7 +281,38 @@ test('runtime summary projects a healthy Gateway without changing API shape', as
   assert.equal(activity.inboundCount, 1)
   assert.equal(plugins.enabledCount, 0)
   assert.equal(array(doctor.recent).length, 1)
+  assert.equal(state.externalGatewayReads, 0)
+  assert.equal(sources.gatewayExternalLogSource, 'skipped-ledger-hot-path')
   assert.deepEqual(requestedLedgerLimits, [48])
+})
+
+test('runtime summary falls back to external Gateway logs when the ledger is empty', async () => {
+  const { service, state } = createService({
+    gatewayLedgerEntries: [],
+    gatewayRestart: null,
+    externalGatewayLogs: [
+      {
+        id: 7,
+        timestamp: '2026-06-30T11:59:57.000Z',
+        stream: 'gateway',
+        message: 'message processed: channel=telegram outcome=ok',
+        channel: 'telegram',
+        direction: 'outbound',
+      },
+    ],
+  })
+
+  const summary = await service.getRuntimeSummaryPayload(false)
+  const monitor = record(summary.monitor)
+  const sources = record(monitor.sources)
+  const gateway = record(summary.gateway)
+  const activity = record(gateway.activity)
+
+  assert.equal(state.externalGatewayReads, 1)
+  assert.equal(sources.gatewayExternalLogSource, 'fallback-log-tail')
+  assert.equal(sources.gatewayExternalLogs, 1)
+  assert.equal(array(activity.events).length, 1)
+  assert.equal(activity.outboundCount, 1)
 })
 
 test('runtime summary uses Gateway ledger evidence when Gateway is missing', async () => {
@@ -329,6 +373,56 @@ test('runtime status preserves stale session evidence from the session snapshot 
   assert.equal(stale.active, false)
   assert.equal(sessionLock.status, 'stale')
   assert.equal(record(status.monitor).forceRefresh, false)
+})
+
+test('forced runtime status refresh updates the summary cache without keeping the force flag', async () => {
+  const { service, state } = createService()
+  const status = await service.getRuntimeStatusPayload(true)
+  const statusMonitor = record(status.monitor)
+  assert.equal(statusMonitor.forceRefresh, true)
+
+  state.now += 1
+  const summary = await service.getRuntimeSummaryPayload(false)
+  const monitor = record(summary.monitor)
+  const plugins = record(summary.plugins)
+
+  assert.equal(monitor.summary, true)
+  assert.equal(monitor.cached, true)
+  assert.equal(monitor.forceRefresh, false)
+  assert.equal(plugins.enabledCount, 1)
+  assert.equal(plugins.totalCount, 1)
+})
+
+test('forced runtime summary refresh updates the normalized summary cache', async () => {
+  const { service, state } = createService()
+  const first = await service.getRuntimeSummaryPayload(true)
+  assert.equal(record(first.monitor).cached, false)
+
+  state.now += 1
+  const cached = await service.getRuntimeSummaryPayload(false)
+  const monitor = record(cached.monitor)
+
+  assert.equal(monitor.summary, true)
+  assert.equal(monitor.cached, true)
+  assert.equal(monitor.forceRefresh, false)
+})
+
+test('runtime payloads project only visible mission rows before shaping', async () => {
+  const missions = Array.from({ length: 20 }, (_, index) => ({
+    id: `mission-${index + 1}`,
+    status: 'active',
+  }))
+  const { service, state } = createService({ missions })
+
+  const summary = await service.getRuntimeSummaryPayload(false)
+  assert.equal(array(record(summary.missions).active).length, 4)
+  assert.equal(state.missionViewCalls, 4)
+
+  state.now += 200
+  state.missionViewCalls = 0
+  const status = await service.getRuntimeStatusPayload(true)
+  assert.equal(array(record(status.missions).active).length, 12)
+  assert.equal(state.missionViewCalls, 12)
 })
 
 test('runtime status timeout falls back to the cached payload with redacted evidence', async () => {

@@ -1,5 +1,5 @@
 import { motion } from 'framer-motion'
-import { lazy, Suspense, useCallback, useEffect, useState, useTransition } from 'react'
+import { lazy, Suspense, useCallback, useEffect, useMemo, useState, useTransition } from 'react'
 import type { CSSProperties, KeyboardEvent, PointerEvent } from 'react'
 import { useNexusStore } from '../../store/nexusStore'
 import type { AppTab } from '../../store/nexusStore'
@@ -27,6 +27,7 @@ const AGENT_CONSOLE_MIN_WIDTH = 360
 const AGENT_CONSOLE_MAX_WIDTH = 760
 const AGENT_REGISTRY_MIN_WIDTH = 640
 const AGENT_SPLIT_HANDLE_WIDTH = 18
+const EMPTY_RUNTIME_CRON_JOBS: RuntimeCronJob[] = []
 type ShellNotice = { tone: 'success' | 'warning' | 'error' | 'neutral'; message: string }
 
 type PrimaryWorkspace = Exclude<AppTab, 'settings'>
@@ -95,7 +96,7 @@ export function NexusShell() {
   const activeTab = WORKSPACE_META[tab] || WORKSPACE_META.agents
   const { status: runtimeStatus, refresh: refreshRuntimeStatus } = useRuntimeSummaryStatus(8000)
   const gatewayOnline = Boolean(runtimeStatus?.gateway.healthy || runtimeStatus?.gateway.processRunning)
-  const cronJobs = runtimeStatus?.shifts?.active || []
+  const cronJobs = runtimeStatus?.shifts?.active ?? EMPTY_RUNTIME_CRON_JOBS
   const activeCronCount = runtimeStatus?.shifts?.activeCount ?? cronJobs.length
   const workspaceState = tab === 'agents'
     ? busyAgentCount
@@ -129,7 +130,7 @@ export function NexusShell() {
           : runtimeStatus
             ? 'offline'
             : 'loading'
-  const cronJobSummary = cronJobs.slice(0, 4).map((job) => `${job.name} (${job.agent})`).join(', ')
+  const cronJobSummary = useMemo(() => cronJobs.slice(0, 4).map((job) => `${job.name} (${job.agent})`).join(', '), [cronJobs])
   const cronChipTitle = runtimeStatus
     ? activeCronCount
       ? `${activeCronCount} active/scheduled cron job${activeCronCount === 1 ? '' : 's'}${cronJobSummary ? `: ${cronJobSummary}` : ''}. Right-click to clear.`
@@ -445,6 +446,7 @@ export function NexusShell() {
         <div className="dy-human-rail-bottom">
           <nav className="dy-human-nav dy-human-nav--utility flex flex-col" aria-label="Utility navigation">
             <button
+              id="nexus-nav-settings"
               type="button"
               className={`dy-human-nav-utility flex items-center gap-3 text-left ${tab === 'settings' ? 'is-active' : ''}`}
               aria-label="Open runtime settings"
