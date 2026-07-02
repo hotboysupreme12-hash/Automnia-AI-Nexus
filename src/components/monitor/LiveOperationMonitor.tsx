@@ -2,7 +2,7 @@ import { memo, useId, useMemo, useState } from 'react'
 import { motion } from 'framer-motion'
 import { useNexusStore } from '../../store/nexusStore'
 import type { AgentOperationState, AgentResponse, MissionEvent, OpenClawAgent } from '../../types/nexus'
-import { clearRuntimeMonitor, runRuntimeDoctor, runRuntimeDoctorRepair, stopCronShift, updateCronShift, useRuntimeStatus } from '../../hooks/useRuntimeStatus'
+import { clearRuntimeMonitor, restartGatewayRuntime, runRuntimeDoctor, runRuntimeDoctorRepair, stopCronShift, updateCronShift, useRuntimeStatus } from '../../hooks/useRuntimeStatus'
 import type { DoctorFinding, DoctorRun, GatewayChannelActivity, GatewayLogEntry, RuntimeCronJob, RuntimeMonitorClearResult, RuntimeStatus } from '../../hooks/useRuntimeStatus'
 import { ActionStatusBanner } from '../common/ActionStatusBanner'
 
@@ -48,6 +48,29 @@ function formatRuntimeTime(ts: string | null | undefined): string {
   const date = new Date(ts)
   if (Number.isNaN(date.getTime())) return 'unknown'
   return date.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit', second: '2-digit' })
+}
+
+function formatRuntimeDurationMs(value: unknown): string {
+  const ms = typeof value === 'number' && Number.isFinite(value) ? Math.max(0, Math.round(value)) : null
+  if (ms === null) return ''
+  if (ms < 1000) return `${ms}ms`
+  return `${(ms / 1000).toFixed(ms < 10_000 ? 1 : 0)}s`
+}
+
+function runtimeStatusEvidenceLabel(status: RuntimeStatus | null): string {
+  const source = status?.monitor?.sources?.gatewayExternalLogSource
+  if (source === 'skipped-ledger-hot-path') return 'Ledger fast path'
+  if (source === 'fallback-log-tail') return 'Log-tail fallback'
+  if (status?.monitor?.summary) return 'Summary payload'
+  return status ? 'Full payload' : 'Waiting for status'
+}
+
+function runtimeStatusEvidenceTitle(status: RuntimeStatus | null): string {
+  const sources = status?.monitor?.sources || {}
+  const ledgerRows = typeof sources.gatewayLedgerLogs === 'number' ? sources.gatewayLedgerLogs : 0
+  const externalRows = typeof sources.gatewayExternalLogs === 'number' ? sources.gatewayExternalLogs : 0
+  const channelRows = typeof sources.channelExternalLogs === 'number' ? sources.channelExternalLogs : 0
+  return `Gateway ledger rows: ${ledgerRows}; external log rows: ${externalRows}; channel rows: ${channelRows}.`
 }
 
 function formatCronRemaining(ts: string | null | undefined): string {
@@ -964,6 +987,7 @@ function RuntimeGatewayPanel({
   onRefresh: () => void
 }) {
   const gateway = status?.gateway
+  const monitor = status?.monitor
   const activeCronJobs = useMemo(() => status?.shifts?.active || [], [status?.shifts?.active])
   const activeCronCount = status?.shifts?.activeCount ?? activeCronJobs.length
   const cronCadences = useMemo(() => Array.from(new Set(activeCronJobs.map((job) => job.every).filter(Boolean))), [activeCronJobs])
@@ -973,8 +997,13 @@ function RuntimeGatewayPanel({
   const [cronCancelConfirm, setCronCancelConfirm] = useState(false)
   const [cronEditJob, setCronEditJob] = useState<RuntimeCronJob | null>(null)
   const [cronEditKey, setCronEditKey] = useState('')
+  const [gatewayActionKey, setGatewayActionKey] = useState('')
   const [actionError, setActionError] = useState('')
   const [runtimeNotice, setRuntimeNotice] = useState('')
+  const statusEvidenceLabel = runtimeStatusEvidenceLabel(status)
+  const statusBuildText = formatRuntimeDurationMs(monitor?.buildMs)
+  const statusCacheText = monitor?.cached ? formatRuntimeDurationMs(monitor.cacheAgeMs) : ''
+  const statusEvidenceTitle = runtimeStatusEvidenceTitle(status)
   const cronCancelPreview = useMemo(() => {
     return activeCronJobs.slice(0, 3).map((job) => `${job.name} (${job.agent})`).join(', ')
   }, [activeCronJobs])
@@ -1052,6 +1081,26 @@ function RuntimeGatewayPanel({
       setCronEditKey('')
     }
   }
+  const restartGatewayFromMonitor = async () => {
+    if (gatewayActionKey) return
+    setGatewayActionKey('restart')
+    setActionError('')
+    setRuntimeNotice('')
+    try {
+      const result = await restartGatewayRuntime()
+      const restart = result.restart && typeof result.restart === 'object'
+        ? result.restart as { restarted?: boolean; detail?: string }
+        : null
+      const detail = restart?.detail ? ` ${restart.detail}` : ''
+      setRuntimeNotice(`Gateway restart ${restart?.restarted === false ? 'requested' : 'started'} from Monitor.${detail}`.trim())
+      onRefresh()
+      window.setTimeout(onRefresh, 1200)
+    } catch (error) {
+      setActionError(error instanceof Error ? error.message : String(error))
+    } finally {
+      setGatewayActionKey('')
+    }
+  }
   return (
     <div className="dy-gateway-panel grid gap-3">
       {error && (
@@ -1115,6 +1164,31 @@ function RuntimeGatewayPanel({
           onSave={saveCronJobEdit}
         />
       )}
+
+      <div className="dy-monitor-card dy-gateway-summary-card flex flex-wrap items-center justify-between gap-3 rounded-none border border-white/[0.04] bg-white/[0.015] px-4 py-3">
+        <div className="min-w-0">
+          <p className="text-[13px] font-bold text-slate-100">Gateway Runtime</p>
+          <p className="mt-0.5 truncate text-[12px] text-slate-400" title={gateway?.restartDiagnostics?.summary || gateway?.state || 'Gateway status unavailable'}>
+            {gateway ? `${gateway.state} / ${gateway.healthy ? 'healthy' : gateway.processRunning ? 'process running' : 'not running'}` : 'Status not loaded'}
+            {gateway?.restartDiagnostics?.summary ? ` / ${gateway.restartDiagnostics.summary}` : ''}
+          </p>
+          <p className="mt-1 truncate text-[11px] font-semibold uppercase tracking-[0.10em] text-slate-500" title={statusEvidenceTitle}>
+            {statusEvidenceLabel}
+            {statusBuildText ? ` / ${statusBuildText}` : ''}
+            {statusCacheText ? ` / cached ${statusCacheText}` : ''}
+          </p>
+        </div>
+        <button
+          type="button"
+          disabled={gatewayActionKey === 'restart'}
+          onClick={() => void restartGatewayFromMonitor()}
+          className="dy-gateway-action-button dy-gateway-restart-button rounded-none border border-cyan-300/20 bg-cyan-300/[0.055] px-3 py-2 text-[12px] font-semibold uppercase tracking-[0.10em] text-cyan-100 transition hover:border-cyan-300/40 hover:bg-cyan-300/[0.10] disabled:cursor-not-allowed disabled:opacity-50"
+          title="Restart the local OpenClaw Gateway and refresh Monitor status"
+          aria-label="Restart Gateway from Monitor"
+        >
+          {gatewayActionKey === 'restart' ? 'Restarting' : 'Restart Gateway'}
+        </button>
+      </div>
 
       <div className="dy-gateway-layout">
         <GatewayActivityCard activity={activity} />
@@ -1199,7 +1273,9 @@ export function LiveOperationMonitor() {
   const [cleanSlateError, setCleanSlateError] = useState('')
   const [cleanSlateResult, setCleanSlateResult] = useState<RuntimeMonitorClearResult | null>(null)
 
-  const visibleAgents = useMemo(() => agents.filter((agent) => activePartyIds.includes(agent.id)), [agents, activePartyIds])
+  const activePartyIdSet = useMemo(() => new Set(activePartyIds), [activePartyIds])
+  const busyAgentIdSet = useMemo(() => new Set(busyAgentIds), [busyAgentIds])
+  const visibleAgents = useMemo(() => agents.filter((agent) => activePartyIdSet.has(agent.id)), [agents, activePartyIdSet])
   const visibleAgentIds = useMemo(() => new Set(visibleAgents.map((agent) => agent.id)), [visibleAgents])
   const agentById = useMemo(() => new Map(agents.map((agent) => [agent.id, agent])), [agents])
   const recentResponsesByAgent = useMemo(() => {
@@ -1218,10 +1294,10 @@ export function LiveOperationMonitor() {
   const liveMetricsByAgent = useMemo(() => {
     const metrics = new Map<string, AgentLiveMetrics>()
     for (const agent of visibleAgents) {
-      metrics.set(agent.id, deriveAgentMetrics(agent, recentResponsesByAgent.get(agent.id) || [], operationStates[agent.id], busyAgentIds.includes(agent.id)))
+      metrics.set(agent.id, deriveAgentMetrics(agent, recentResponsesByAgent.get(agent.id) || [], operationStates[agent.id], busyAgentIdSet.has(agent.id)))
     }
     return metrics
-  }, [busyAgentIds, operationStates, recentResponsesByAgent, visibleAgents])
+  }, [busyAgentIdSet, operationStates, recentResponsesByAgent, visibleAgents])
   const persistedDoctorRun = runtimeStatus?.diagnostics?.doctor?.lastRun || null
   const rawDisplayedDoctorRun = doctorRun || (doctorError ? null : persistedDoctorRun)
   const rawDisplayedDoctorRunKey = doctorRunDismissKey(rawDisplayedDoctorRun)
@@ -1239,11 +1315,16 @@ export function LiveOperationMonitor() {
         return Boolean(actionableCheck || actionableFinding)
       }),
   )
-  const activity = useMemo(
-    () => [...agentResponses.slice(0, 18).map(makeResponseActivity), ...missionFeed.slice(0, 18).map(makeEventActivity)]
-      .sort((a, b) => Date.parse(b.timestamp) - Date.parse(a.timestamp)).slice(0, 18),
-    [agentResponses, missionFeed],
-  )
+  const activity = useMemo(() => {
+    const items = [
+      ...agentResponses.slice(0, 18).map((entry) => ({ item: makeResponseActivity(entry), timestampMs: Date.parse(entry.timestamp) })),
+      ...missionFeed.slice(0, 18).map((event) => ({ item: makeEventActivity(event), timestampMs: Date.parse(event.timestamp) })),
+    ]
+    return items
+      .sort((a, b) => b.timestampMs - a.timestampMs)
+      .slice(0, 18)
+      .map((entry) => entry.item)
+  }, [agentResponses, missionFeed])
 
   const runDoctor = async () => {
     setDoctorBusy(true)

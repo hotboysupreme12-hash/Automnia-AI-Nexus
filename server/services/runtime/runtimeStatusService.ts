@@ -204,6 +204,44 @@ export function createRuntimeStatusService(options: RuntimeStatusServiceOptions)
     }
   }
 
+  function cacheRuntimeStatusPayload(payload: Record<string, unknown>) {
+    const builtAt = nowMs()
+    const monitor = isLooseRecord(payload.monitor) ? payload.monitor : {}
+    const cachedPayload = {
+      ...payload,
+      monitor: {
+        ...monitor,
+        cached: false,
+        cacheAgeMs: 0,
+        cacheTtlMs: options.statusCacheMs,
+        forceRefresh: false,
+      },
+    }
+    runtimeStatusPayloadCache = { builtAt, payload: cachedPayload }
+    runtimeSummaryPayloadCache = {
+      builtAt,
+      payload: runtimeSummaryPayloadFromStatusPayload(cachedPayload, builtAt, { cached: false }),
+    }
+  }
+
+  function cacheRuntimeSummaryPayload(payload: Record<string, unknown>, builtAt = nowMs()) {
+    const monitor = isLooseRecord(payload.monitor) ? payload.monitor : {}
+    runtimeSummaryPayloadCache = {
+      builtAt,
+      payload: {
+        ...payload,
+        monitor: {
+          ...monitor,
+          cached: false,
+          summary: true,
+          cacheAgeMs: 0,
+          cacheTtlMs: options.summaryCacheMs,
+          forceRefresh: false,
+        },
+      },
+    }
+  }
+
   function runtimeSummaryPayloadFromStatusPayload(
     payload: Record<string, unknown>,
     builtAt: number,
@@ -341,7 +379,7 @@ export function createRuntimeStatusService(options: RuntimeStatusServiceOptions)
       },
       missions: {
         activeCount: activeMissions.length,
-        active: activeMissions.map((mission) => options.missionView(mission)).slice(0, 4),
+        active: activeMissions.slice(0, 4).map((mission) => options.missionView(mission)),
       },
       diagnostics: {
         doctor: options.cachedDoctorDiagnosticsSummary(),
@@ -443,8 +481,9 @@ export function createRuntimeStatusService(options: RuntimeStatusServiceOptions)
       const status = plugin.status.trim().toLowerCase()
       return runtimeLoadedPluginIds.has(plugin.id) || plugin.runtimeLoaded || status === 'loaded'
     }
-    const enabledPlugins = pluginControls.plugins.filter((plugin) => plugin.enabled || isPluginRuntimeLoaded(plugin))
-    const communicationPlugins = enabledPlugins.filter((plugin) => plugin.category === 'communications' || plugin.channels.length)
+    const pluginSummaries = pluginControls.plugins.map((plugin) => pluginSummary(plugin, Boolean(isPluginRuntimeLoaded(plugin))))
+    const enabledPluginSummaries = pluginSummaries.filter((plugin) => plugin.enabled)
+    const communicationPluginSummaries = enabledPluginSummaries.filter((plugin) => plugin.category === 'communications' || plugin.channels.length)
     const activeMissions = options.listMissions().filter((mission) => mission.status === 'active')
     const cronJobs = options.listActiveCronJobViews({ sqlite: false })
     gateway.logs = options.dedupeGatewayLogEntries([...gatewayLogs(gateway), ...currentGatewayLogs], 80)
@@ -485,11 +524,11 @@ export function createRuntimeStatusService(options: RuntimeStatusServiceOptions)
       activeRuns: options.activeRunSnapshots(),
       recentRuns: options.recentRunSnapshots(20),
       plugins: {
-        enabledCount: enabledPlugins.length,
-        totalCount: pluginControls.plugins.length,
-        all: pluginControls.plugins.map((plugin) => pluginSummary(plugin, Boolean(isPluginRuntimeLoaded(plugin)))),
-        enabled: enabledPlugins.slice(0, 24).map((plugin) => pluginSummary(plugin, Boolean(isPluginRuntimeLoaded(plugin)))),
-        communication: communicationPlugins.slice(0, 12).map((plugin) => pluginSummary(plugin, Boolean(isPluginRuntimeLoaded(plugin)))),
+        enabledCount: enabledPluginSummaries.length,
+        totalCount: pluginSummaries.length,
+        all: pluginSummaries,
+        enabled: enabledPluginSummaries.slice(0, 24),
+        communication: communicationPluginSummaries.slice(0, 12),
         cache: pluginControls.cache,
         ...(pluginControls.cliError ? { cliError: pluginControls.cliError } : {}),
       },
@@ -500,7 +539,7 @@ export function createRuntimeStatusService(options: RuntimeStatusServiceOptions)
       },
       missions: {
         activeCount: activeMissions.length,
-        active: activeMissions.map((mission) => options.missionView(mission)).slice(0, 12),
+        active: activeMissions.slice(0, 12).map((mission) => options.missionView(mission)),
       },
       diagnostics: {
         doctor: doctorDiagnostics,
@@ -510,21 +549,26 @@ export function createRuntimeStatusService(options: RuntimeStatusServiceOptions)
 
   async function buildRuntimeSummaryPayload(): Promise<Record<string, unknown>> {
     const builtStartedAt = nowMs()
-    const [gatewayHealth, gatewayReadiness, gatewayLedgerSnapshot, externalGatewayLogs, externalChannelActivityLogs, gatewayStability, doctorDiagnostics] = await Promise.all([
+    const [gatewayHealth, gatewayReadiness, gatewayLedgerSnapshot, externalChannelActivityLogs, gatewayStability, doctorDiagnostics] = await Promise.all([
       options.fetchGatewayHealthPayload(),
       options.fetchGatewayReadinessPayload(),
       options.readRuntimeGatewayLedgerSnapshot(48),
-      options.readExternalGatewayLogEntries(48),
       options.readExternalChannelActivityEntries(48),
       options.readGatewayStabilitySnapshot(8),
       options.readDoctorDiagnosticsSummary(false, { sqlite: false }),
     ])
-    const probesMs = nowMs() - builtStartedAt
     const gateway = options.gatewayStatusSnapshot(gatewayHealth.healthy, null, gatewayLedgerSnapshot.restart, gatewayLedgerSnapshot.recentRestarts, gatewayStability)
     const ledgerGatewayLogs = gatewayLedgerSnapshot.entries
+    const currentLedgerGatewayLogs = options.gatewayLogEntriesSinceCurrentStart(ledgerGatewayLogs)
+    const shouldReadExternalGatewayLogs = currentLedgerGatewayLogs.length === 0
+    const externalGatewayLogs = shouldReadExternalGatewayLogs
+      ? await options.readExternalGatewayLogEntries(48)
+      : []
+    const probesMs = nowMs() - builtStartedAt
+    const currentExternalGatewayLogs = options.gatewayLogEntriesSinceCurrentStart(externalGatewayLogs)
     const currentGatewayLogs = options.dedupeGatewayLogEntries([
-      ...options.gatewayLogEntriesSinceCurrentStart(ledgerGatewayLogs),
-      ...options.gatewayLogEntriesSinceCurrentStart(externalGatewayLogs),
+      ...currentLedgerGatewayLogs,
+      ...currentExternalGatewayLogs,
     ], 48)
     const currentChannelActivityLogs = options.gatewayLogEntriesSinceCurrentStart(externalChannelActivityLogs)
     const activity = options.summarizeGatewayActivity([...currentGatewayLogs, ...currentChannelActivityLogs])
@@ -553,8 +597,9 @@ export function createRuntimeStatusService(options: RuntimeStatusServiceOptions)
           totalMs: nowMs() - builtStartedAt,
         },
         sources: {
-          gatewayLedgerLogs: ledgerGatewayLogs.length,
-          gatewayExternalLogs: externalGatewayLogs.length,
+          gatewayLedgerLogs: currentLedgerGatewayLogs.length,
+          gatewayExternalLogs: currentExternalGatewayLogs.length,
+          gatewayExternalLogSource: shouldReadExternalGatewayLogs ? 'fallback-log-tail' : 'skipped-ledger-hot-path',
           channelExternalLogs: externalChannelActivityLogs.length,
           doctorRuns: doctorDiagnostics.recent.length,
         },
@@ -587,7 +632,7 @@ export function createRuntimeStatusService(options: RuntimeStatusServiceOptions)
       },
       missions: {
         activeCount: activeMissions.length,
-        active: activeMissions.map((mission) => options.missionView(mission)).slice(0, 4),
+        active: activeMissions.slice(0, 4).map((mission) => options.missionView(mission)),
       },
       diagnostics: {
         doctor: {
@@ -617,11 +662,7 @@ export function createRuntimeStatusService(options: RuntimeStatusServiceOptions)
     }
 
     const promise = buildRuntimeStatusPayload(forcePluginRefresh).then((payload) => {
-      if (!forcePluginRefresh) {
-        const builtAt = nowMs()
-        runtimeStatusPayloadCache = { builtAt, payload }
-        runtimeSummaryPayloadCache = { builtAt, payload: runtimeSummaryPayloadFromStatusPayload(payload, builtAt, { cached: false }) }
-      }
+      cacheRuntimeStatusPayload(payload)
       return payload
     }).finally(() => {
       if (runtimeStatusPayloadInFlight === promise) runtimeStatusPayloadInFlight = null
@@ -644,14 +685,17 @@ export function createRuntimeStatusService(options: RuntimeStatusServiceOptions)
       return runtimeSummaryFromCache(runtimeSummaryPayloadCache.payload, runtimeSummaryPayloadCache.builtAt)
     }
     if (!forceRefresh && runtimeStatusPayloadCache && now - runtimeStatusPayloadCache.builtAt <= Math.min(options.statusCacheMs, options.summaryCacheMs)) {
-      return runtimeSummaryPayloadFromStatusPayload(runtimeStatusPayloadCache.payload, runtimeStatusPayloadCache.builtAt, { cached: true })
+      const builtAt = runtimeStatusPayloadCache.builtAt
+      const summary = runtimeSummaryPayloadFromStatusPayload(runtimeStatusPayloadCache.payload, builtAt, { cached: true })
+      cacheRuntimeSummaryPayload(runtimeSummaryPayloadFromStatusPayload(runtimeStatusPayloadCache.payload, builtAt, { cached: false }), builtAt)
+      return summary
     }
     if (!forceRefresh && runtimeStatusPayloadInFlight) {
       try {
         const payload = await withResponseDeadline(runtimeStatusPayloadInFlight, 'runtime status refresh for summary', options.summaryResponseTimeoutMs)
         const builtAt = runtimeStatusPayloadCache?.builtAt || nowMs()
         const summary = runtimeSummaryPayloadFromStatusPayload(payload, builtAt, { cached: true })
-        runtimeSummaryPayloadCache = { builtAt, payload: runtimeSummaryPayloadFromStatusPayload(payload, builtAt, { cached: false }) }
+        cacheRuntimeSummaryPayload(runtimeSummaryPayloadFromStatusPayload(payload, builtAt, { cached: false }), builtAt)
         return summary
       } catch (error) {
         if (isRuntimeResponseTimeout(error)) {
@@ -675,9 +719,7 @@ export function createRuntimeStatusService(options: RuntimeStatusServiceOptions)
     }
 
     const promise = buildRuntimeSummaryPayload().then((payload) => {
-      if (!forceRefresh) {
-        runtimeSummaryPayloadCache = { builtAt: nowMs(), payload }
-      }
+      cacheRuntimeSummaryPayload(payload)
       return payload
     }).finally(() => {
       if (runtimeSummaryPayloadInFlight === promise) runtimeSummaryPayloadInFlight = null

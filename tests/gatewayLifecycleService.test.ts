@@ -18,6 +18,10 @@ type HarnessOptions = {
   portBusy?: boolean
   portBusySequence?: boolean[]
   releaseResult?: { released: boolean; detail: string }
+  repairClawTalkResult?: string[]
+  repairTelegramResult?: string[]
+  onClawTalkRepair?: () => Promise<void> | void
+  onTelegramRepair?: () => Promise<void> | void
   onSpawn?: (child: ChildProcess) => void
 }
 
@@ -47,8 +51,12 @@ function createHarness(config: HarnessOptions = {}) {
   const lifecycleEvents: Record<string, unknown>[] = []
   const spawnSpecs: GatewaySpawnSpec[] = []
   const envOverrides: Record<string, string | undefined>[] = []
+  const registryRefreshReasons: string[] = []
+  const startupRepairSummaries: unknown[] = []
   let healthCalls = 0
   let releaseCalls = 0
+  let clawTalkRepairCalls = 0
+  let telegramRepairCalls = 0
   let spawnCalls = 0
   const healthSequence = config.healthSequence ? [...config.healthSequence] : [false]
   const portBusySequence = config.portBusySequence ? [...config.portBusySequence] : null
@@ -137,10 +145,23 @@ function createHarness(config: HarnessOptions = {}) {
       healthCalls += 1
       return { healthy: healthSequence[index] === true, payload: {} }
     },
-    repairClawTalkPluginManifestContracts: async () => [],
-    repairTelegramAgentRoutingRuntime: async () => [],
-    refreshOpenClawPluginRegistry: async () => ({ code: 0 }),
-    ensureGatewayStartupPluginDefaults: async () => undefined,
+    repairClawTalkPluginManifestContracts: async () => {
+      clawTalkRepairCalls += 1
+      await config.onClawTalkRepair?.()
+      return config.repairClawTalkResult || []
+    },
+    repairTelegramAgentRoutingRuntime: async () => {
+      telegramRepairCalls += 1
+      await config.onTelegramRepair?.()
+      return config.repairTelegramResult || []
+    },
+    refreshOpenClawPluginRegistry: async (reason) => {
+      registryRefreshReasons.push(reason)
+      return { code: 0 }
+    },
+    ensureGatewayStartupPluginDefaults: async (repairSummary) => {
+      startupRepairSummaries.push(repairSummary || null)
+    },
     prepareOpenClawConfigForGatewayStartup: async () => true,
     isInvalidOpenClawConfigText: () => false,
     scheduleOpenClawSessionLockSweep: () => undefined,
@@ -157,6 +178,8 @@ function createHarness(config: HarnessOptions = {}) {
   const service = createGatewayLifecycleService(options)
   return {
     envOverrides,
+    registryRefreshReasons,
+    startupRepairSummaries,
     get healthCalls() {
       return healthCalls
     },
@@ -168,10 +191,24 @@ function createHarness(config: HarnessOptions = {}) {
     get releaseCalls() {
       return releaseCalls
     },
+    get clawTalkRepairCalls() {
+      return clawTalkRepairCalls
+    },
+    get telegramRepairCalls() {
+      return telegramRepairCalls
+    },
     get spawnCalls() {
       return spawnCalls
     },
   }
+}
+
+function deferred() {
+  let resolve!: () => void
+  const promise = new Promise<void>((innerResolve) => {
+    resolve = innerResolve
+  })
+  return { promise, resolve }
 }
 
 test('buildGatewayRunArgs constructs the OpenClaw gateway command', () => {
@@ -214,6 +251,56 @@ test('ensureGatewayRunning releases an unhealthy stale listener before starting 
   assert.equal(harness.spawnCalls, 1)
   assert.deepEqual(harness.spawnSpecs[0]?.args, ['gateway', 'run', '--port', '19999', '--allow-unconfigured'])
   assert.equal(harness.service.gatewayStatusSnapshot(true).state, 'healthy')
+})
+
+test('ensureGatewayRunning starts independent plugin repairs in parallel', async () => {
+  const clawTalkRepair = deferred()
+  const telegramRepair = deferred()
+  const repairStarts: string[] = []
+  const harness = createHarness({
+    healthSequence: [false, false, true],
+    onClawTalkRepair: async () => {
+      repairStarts.push('clawtalk')
+      await clawTalkRepair.promise
+    },
+    onTelegramRepair: async () => {
+      repairStarts.push('telegram')
+      await telegramRepair.promise
+    },
+  })
+
+  const ensure = harness.service.ensureGatewayRunning()
+  await new Promise((resolve) => setImmediate(resolve))
+
+  assert.deepEqual(repairStarts.sort(), ['clawtalk', 'telegram'])
+  clawTalkRepair.resolve()
+  telegramRepair.resolve()
+  await ensure
+  harness.service.stopGatewayHealthMonitor()
+
+  assert.equal(harness.clawTalkRepairCalls, 1)
+  assert.equal(harness.telegramRepairCalls, 1)
+  assert.equal(harness.spawnCalls, 1)
+})
+
+test('ensureGatewayRunning passes startup repair results into defaults without duplicate registry refresh', async () => {
+  const harness = createHarness({
+    healthSequence: [false, false, true],
+    repairClawTalkResult: ['clawtalk-root'],
+    repairTelegramResult: ['telegram-runtime'],
+  })
+
+  await harness.service.ensureGatewayRunning()
+  harness.service.stopGatewayHealthMonitor()
+
+  assert.equal(harness.clawTalkRepairCalls, 1)
+  assert.equal(harness.telegramRepairCalls, 1)
+  assert.deepEqual(harness.registryRefreshReasons, ['clawtalk-startup-repair', 'gateway-startup'])
+  assert.deepEqual(harness.startupRepairSummaries[0], {
+    repairedClawTalkManifests: ['clawtalk-root'],
+    repairedTelegramRuntimes: ['telegram-runtime'],
+    clawTalkRegistryRefreshed: true,
+  })
 })
 
 test('ensureGatewayRunning does not spawn over a stale listener that remains busy after release fails', async () => {
