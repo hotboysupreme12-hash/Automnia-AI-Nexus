@@ -28,6 +28,8 @@
   "GET /api/party/folder-picker/:sessionId",
   "GET /api/party/folders",
   "GET /api/party/overview",
+  "GET /api/party/recruit/templates",
+  "GET /api/party/recruit/templates/:templateId",
   "GET /api/party/resources/:agentId",
   "GET /api/party/resources/:agentId/:file",
   "GET /api/plugins",

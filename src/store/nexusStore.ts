@@ -708,6 +708,10 @@ export type RecruitAgentInput = {
   primaryModel?: string
   capabilities: Partial<Record<CapabilityKey, boolean>>
   addToParty?: boolean
+  templateId?: string
+  templateName?: string
+  templateSource?: string
+  toolAccess?: string[]
   resourceFiles?: Array<{ file: string; content: string }>
 }
 
@@ -863,6 +867,17 @@ function recruitTools(capabilities: Record<CapabilityKey, boolean>) {
   return [...tools]
 }
 
+function normalizeRecruitToolAccess(tools: string[] | undefined, fallback: string[]) {
+  const normalized = new Set<string>()
+  for (const tool of tools || []) {
+    const value = tool.trim()
+    if (value) normalized.add(value)
+  }
+  if (!normalized.size) fallback.forEach((tool) => normalized.add(tool))
+  normalized.add('message')
+  return [...normalized].sort((a, b) => a.localeCompare(b))
+}
+
 function recruitStats(behaviorProfile: OpenClawAgent['behaviorProfile'], capabilities: Record<CapabilityKey, boolean>) {
   const stats = { ...BEHAVIOR_RECRUIT_STATS[behaviorProfile] }
   const boost = (key: keyof typeof stats, amount: number) => {
@@ -892,7 +907,7 @@ function recruitSkillIds(capabilities: Record<CapabilityKey, boolean>) {
 function makeRecruitAgentDraft(input: RecruitAgentInput): OpenClawAgent {
   const template = getDefaultTemplateAgent()
   const capabilities = recruitCapabilities(input.capabilities)
-  const tools = recruitTools(capabilities)
+  const tools = normalizeRecruitToolAccess(input.toolAccess, recruitTools(capabilities))
   const stats = recruitStats(input.behaviorProfile, capabilities)
   const level = clampLevel(input.level, 18)
 
@@ -2836,7 +2851,9 @@ export const useNexusStore = create<NexusState>()(
             behaviorProfile: draft.behaviorProfile,
             level: draft.level,
             motto: `${draft.className} tuned for ${draft.behaviorProfile} work.`,
-            bio: `${draft.name} was recruited from the Control Center with ${enabledCapabilityKeys.join(', ')} capability coverage.`,
+            bio: input.templateName
+              ? `${draft.name} was recruited from the ${input.templateName} Agency template${input.templateSource ? ` (${input.templateSource})` : ''} with ${enabledCapabilityKeys.join(', ')} capability coverage.`
+              : `${draft.name} was recruited from the Control Center with ${enabledCapabilityKeys.join(', ')} capability coverage.`,
             skills: draft.unlockedSkills,
             abilities: enabledCapabilityKeys,
             tools: draft.mds.toolAccess,
