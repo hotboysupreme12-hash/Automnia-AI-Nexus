@@ -1,0 +1,167 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1600 1120" role="img" aria-labelledby="title desc">
+  <title id="title">DystopAI command center hero art</title>
+  <desc id="desc">A futuristic product interface showing agent cards, a mission timeline, plugin tiles, and a runtime monitor.</desc>
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#09101f"/>
+      <stop offset="0.48" stop-color="#0b1223"/>
+      <stop offset="1" stop-color="#03050b"/>
+    </linearGradient>
+    <linearGradient id="panel" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#17223a" stop-opacity="0.95"/>
+      <stop offset="1" stop-color="#07101f" stop-opacity="0.98"/>
+    </linearGradient>
+    <linearGradient id="accent" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#77e7ff"/>
+      <stop offset="0.55" stop-color="#a884ff"/>
+      <stop offset="1" stop-color="#ff7adf"/>
+    </linearGradient>
+    <linearGradient id="mint" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#6df6bd"/>
+      <stop offset="1" stop-color="#77e7ff"/>
+    </linearGradient>
+    <radialGradient id="halo" cx="48%" cy="34%" r="58%">
+      <stop offset="0" stop-color="#77e7ff" stop-opacity="0.26"/>
+      <stop offset="0.46" stop-color="#a884ff" stop-opacity="0.16"/>
+      <stop offset="1" stop-color="#ff7adf" stop-opacity="0"/>
+    </radialGradient>
+    <filter id="softShadow" x="-30%" y="-30%" width="160%" height="160%">
+      <feDropShadow dx="0" dy="40" stdDeviation="45" flood-color="#000000" flood-opacity="0.48"/>
+    </filter>
+    <filter id="glow" x="-50%" y="-50%" width="200%" height="200%">
+      <feGaussianBlur stdDeviation="16" result="blur"/>
+      <feMerge>
+        <feMergeNode in="blur"/>
+        <feMergeNode in="SourceGraphic"/>
+      </feMerge>
+    </filter>
+    <pattern id="grid" width="64" height="64" patternUnits="userSpaceOnUse">
+      <path d="M64 0H0V64" fill="none" stroke="#ffffff" stroke-opacity="0.055"/>
+    </pattern>
+  </defs>
+
+  <rect width="1600" height="1120" rx="72" fill="url(#bg)"/>
+  <rect width="1600" height="1120" rx="72" fill="url(#grid)"/>
+  <circle cx="780" cy="360" r="520" fill="url(#halo)"/>
+  <circle cx="178" cy="152" r="112" fill="#77e7ff" opacity="0.12" filter="url(#glow)"/>
+  <circle cx="1392" cy="890" r="164" fill="#ff7adf" opacity="0.12" filter="url(#glow)"/>
+
+  <g opacity="0.88">
+    <path d="M278 764C470 612 604 732 764 552C924 372 1068 428 1328 274" fill="none" stroke="#77e7ff" stroke-opacity="0.22" stroke-width="4"/>
+    <path d="M224 310C470 382 596 274 790 410C982 544 1140 494 1390 620" fill="none" stroke="#ff7adf" stroke-opacity="0.18" stroke-width="4"/>
+    <path d="M236 552C418 514 514 456 662 604C810 750 972 742 1358 720" fill="none" stroke="#a884ff" stroke-opacity="0.2" stroke-width="4"/>
+  </g>
+
+  <g filter="url(#softShadow)">
+    <rect x="132" y="120" width="1336" height="880" rx="44" fill="#050912" stroke="#ffffff" stroke-opacity="0.14"/>
+    <rect x="156" y="144" width="1288" height="832" rx="32" fill="url(#panel)" stroke="#ffffff" stroke-opacity="0.1"/>
+    <rect x="156" y="144" width="1288" height="76" rx="32" fill="#ffffff" opacity="0.045"/>
+    <circle cx="207" cy="183" r="10" fill="#ff7c96"/>
+    <circle cx="239" cy="183" r="10" fill="#ffd28b"/>
+    <circle cx="271" cy="183" r="10" fill="#6df6bd"/>
+    <text x="318" y="191" fill="#dce6f7" font-family="Inter, Arial, sans-serif" font-size="21" font-weight="800" letter-spacing="4">DYSTOPAI COMMAND NEXUS</text>
+
+    <g transform="translate(194 260)">
+      <rect width="330" height="640" rx="28" fill="#0b1324" stroke="#ffffff" stroke-opacity="0.1"/>
+      <text x="28" y="52" fill="#77e7ff" font-family="Inter, Arial, sans-serif" font-size="18" font-weight="900" letter-spacing="3">ACTIVE PARTY</text>
+      <g transform="translate(28 88)">
+        <rect width="274" height="118" rx="22" fill="#ffffff" opacity="0.055" stroke="#ffffff" stroke-opacity="0.1"/>
+        <circle cx="48" cy="58" r="28" fill="url(#accent)"/>
+        <text x="92" y="52" fill="#ffffff" font-family="Inter, Arial, sans-serif" font-size="24" font-weight="900">Diana</text>
+        <text x="92" y="80" fill="#9da8bd" font-family="Inter, Arial, sans-serif" font-size="16">Research analyst</text>
+        <rect x="212" y="34" width="34" height="34" rx="10" fill="#6df6bd" opacity="0.15"/>
+        <circle cx="229" cy="51" r="6" fill="#6df6bd"/>
+      </g>
+      <g transform="translate(28 224)">
+        <rect width="274" height="118" rx="22" fill="#ffffff" opacity="0.045" stroke="#ffffff" stroke-opacity="0.1"/>
+        <circle cx="48" cy="58" r="28" fill="#a884ff"/>
+        <text x="92" y="52" fill="#ffffff" font-family="Inter, Arial, sans-serif" font-size="24" font-weight="900">Builder</text>
+        <text x="92" y="80" fill="#9da8bd" font-family="Inter, Arial, sans-serif" font-size="16">Code lane</text>
+        <rect x="212" y="34" width="34" height="34" rx="10" fill="#77e7ff" opacity="0.14"/>
+        <circle cx="229" cy="51" r="6" fill="#77e7ff"/>
+      </g>
+      <g transform="translate(28 360)">
+        <rect width="274" height="118" rx="22" fill="#ffffff" opacity="0.045" stroke="#ffffff" stroke-opacity="0.1"/>
+        <circle cx="48" cy="58" r="28" fill="#ff7adf"/>
+        <text x="92" y="52" fill="#ffffff" font-family="Inter, Arial, sans-serif" font-size="24" font-weight="900">Reviewer</text>
+        <text x="92" y="80" fill="#9da8bd" font-family="Inter, Arial, sans-serif" font-size="16">Proof gate</text>
+        <rect x="212" y="34" width="34" height="34" rx="10" fill="#ffd28b" opacity="0.14"/>
+        <circle cx="229" cy="51" r="6" fill="#ffd28b"/>
+      </g>
+      <rect x="28" y="532" width="274" height="62" rx="20" fill="url(#accent)" opacity="0.92"/>
+      <text x="90" y="571" fill="#06101a" font-family="Inter, Arial, sans-serif" font-size="18" font-weight="950">Recruit agent</text>
+    </g>
+
+    <g transform="translate(566 260)">
+      <rect width="514" height="362" rx="30" fill="#0a1221" stroke="#ffffff" stroke-opacity="0.11"/>
+      <text x="30" y="52" fill="#ffffff" font-family="Inter, Arial, sans-serif" font-size="32" font-weight="950">Mission control</text>
+      <text x="30" y="86" fill="#9da8bd" font-family="Inter, Arial, sans-serif" font-size="18">Release readiness review in progress</text>
+      <rect x="30" y="122" width="454" height="72" rx="20" fill="#ffffff" opacity="0.055"/>
+      <circle cx="68" cy="158" r="12" fill="#6df6bd"/>
+      <text x="96" y="151" fill="#dce6f7" font-family="Inter, Arial, sans-serif" font-size="18" font-weight="850">Inspect changed files</text>
+      <text x="96" y="176" fill="#8f9bb0" font-family="Inter, Arial, sans-serif" font-size="15">Evidence required</text>
+      <rect x="30" y="214" width="454" height="72" rx="20" fill="#ffffff" opacity="0.045"/>
+      <circle cx="68" cy="250" r="12" fill="#77e7ff"/>
+      <text x="96" y="243" fill="#dce6f7" font-family="Inter, Arial, sans-serif" font-size="18" font-weight="850">Run verification gates</text>
+      <text x="96" y="268" fill="#8f9bb0" font-family="Inter, Arial, sans-serif" font-size="15">Lint, typecheck, smoke tests</text>
+      <rect x="30" y="306" width="220" height="34" rx="17" fill="#6df6bd" opacity="0.16"/>
+      <text x="55" y="329" fill="#c7ffe8" font-family="Inter, Arial, sans-serif" font-size="15" font-weight="900">Awaiting approval</text>
+    </g>
+
+    <g transform="translate(1114 260)">
+      <rect width="286" height="362" rx="30" fill="#0a1221" stroke="#ffffff" stroke-opacity="0.11"/>
+      <text x="28" y="52" fill="#ffffff" font-family="Inter, Arial, sans-serif" font-size="30" font-weight="950">Monitor</text>
+      <g transform="translate(28 86)">
+        <rect width="230" height="44" rx="14" fill="#6df6bd" opacity="0.14"/>
+        <text x="16" y="28" fill="#c7ffe8" font-family="Inter, Arial, sans-serif" font-size="15" font-weight="900">Gateway healthy</text>
+      </g>
+      <g transform="translate(28 146)">
+        <rect width="230" height="44" rx="14" fill="#77e7ff" opacity="0.12"/>
+        <text x="16" y="28" fill="#d6f7ff" font-family="Inter, Arial, sans-serif" font-size="15" font-weight="900">2 active runs</text>
+      </g>
+      <g transform="translate(28 206)">
+        <rect width="230" height="44" rx="14" fill="#ff7adf" opacity="0.12"/>
+        <text x="16" y="28" fill="#ffe0f7" font-family="Inter, Arial, sans-serif" font-size="15" font-weight="900">1 approval needed</text>
+      </g>
+      <path d="M36 304h42l26-46 35 65 30-42 36 23h45" fill="none" stroke="#77e7ff" stroke-width="5" stroke-linecap="round" stroke-linejoin="round"/>
+    </g>
+
+    <g transform="translate(566 666)">
+      <rect width="834" height="234" rx="30" fill="#0a1221" stroke="#ffffff" stroke-opacity="0.11"/>
+      <text x="30" y="52" fill="#ffffff" font-family="Inter, Arial, sans-serif" font-size="30" font-weight="950">Plugin and channel layer</text>
+      <text x="30" y="82" fill="#9da8bd" font-family="Inter, Arial, sans-serif" font-size="17">Model providers, browser flows, communication channels, skills, memory, and service connections</text>
+      <g transform="translate(30 120)">
+        <rect width="126" height="72" rx="20" fill="#ffffff" opacity="0.055"/>
+        <circle cx="32" cy="36" r="12" fill="#77e7ff"/>
+        <text x="58" y="42" fill="#dce6f7" font-family="Inter, Arial, sans-serif" font-size="16" font-weight="850">Models</text>
+      </g>
+      <g transform="translate(176 120)">
+        <rect width="126" height="72" rx="20" fill="#ffffff" opacity="0.055"/>
+        <circle cx="32" cy="36" r="12" fill="#a884ff"/>
+        <text x="58" y="42" fill="#dce6f7" font-family="Inter, Arial, sans-serif" font-size="16" font-weight="850">Browser</text>
+      </g>
+      <g transform="translate(322 120)">
+        <rect width="126" height="72" rx="20" fill="#ffffff" opacity="0.055"/>
+        <circle cx="32" cy="36" r="12" fill="#ff7adf"/>
+        <text x="58" y="42" fill="#dce6f7" font-family="Inter, Arial, sans-serif" font-size="16" font-weight="850">SMS</text>
+      </g>
+      <g transform="translate(468 120)">
+        <rect width="126" height="72" rx="20" fill="#ffffff" opacity="0.055"/>
+        <circle cx="32" cy="36" r="12" fill="#6df6bd"/>
+        <text x="58" y="42" fill="#dce6f7" font-family="Inter, Arial, sans-serif" font-size="16" font-weight="850">Skills</text>
+      </g>
+      <g transform="translate(614 120)">
+        <rect width="158" height="72" rx="20" fill="#ffffff" opacity="0.055"/>
+        <circle cx="32" cy="36" r="12" fill="#ffd28b"/>
+        <text x="58" y="42" fill="#dce6f7" font-family="Inter, Arial, sans-serif" font-size="16" font-weight="850">Approvals</text>
+      </g>
+    </g>
+  </g>
+
+  <g filter="url(#glow)" opacity="0.86">
+    <circle cx="782" cy="552" r="7" fill="#77e7ff"/>
+    <circle cx="1080" cy="438" r="6" fill="#ff7adf"/>
+    <circle cx="526" cy="784" r="6" fill="#6df6bd"/>
+    <circle cx="1260" cy="260" r="5" fill="#ffd28b"/>
+  </g>
+</svg>
