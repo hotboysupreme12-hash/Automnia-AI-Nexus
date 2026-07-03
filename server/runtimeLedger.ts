@@ -47,6 +47,13 @@ type ControlCenterStateWriteOptions = {
   sqlite?: boolean
 }
 
+type AgencyTemplateCatalogLike = {
+  schemaVersion?: number
+  source?: unknown
+  divisions?: unknown
+  templates?: unknown
+}
+
 type JsonlTailDiagnostic = {
   ledger: string
   filePath: string
@@ -301,6 +308,43 @@ function openDatabase() {
       );
       CREATE INDEX IF NOT EXISTS idx_control_center_state_recent
         ON control_center_state(namespace, updated_at_ms);
+
+      CREATE TABLE IF NOT EXISTS agency_agent_template_catalogs (
+        id TEXT PRIMARY KEY,
+        schema_version INTEGER NOT NULL,
+        source_json TEXT NOT NULL,
+        divisions_json TEXT NOT NULL,
+        template_count INTEGER NOT NULL,
+        updated_at TEXT NOT NULL,
+        updated_at_ms INTEGER NOT NULL
+      );
+
+      CREATE TABLE IF NOT EXISTS agency_agent_templates (
+        id TEXT PRIMARY KEY,
+        slug TEXT,
+        name TEXT,
+        description TEXT,
+        division TEXT,
+        division_label TEXT,
+        color TEXT,
+        relative_path TEXT,
+        source_url TEXT,
+        behavior_profile TEXT,
+        level INTEGER,
+        tools_json TEXT NOT NULL,
+        capabilities_json TEXT NOT NULL,
+        documents_json TEXT NOT NULL,
+        source_markdown TEXT,
+        source_commit TEXT,
+        sort_index INTEGER NOT NULL,
+        updated_at TEXT NOT NULL,
+        updated_at_ms INTEGER NOT NULL,
+        payload_json TEXT NOT NULL
+      );
+      CREATE INDEX IF NOT EXISTS idx_agency_agent_templates_division
+        ON agency_agent_templates(division, name);
+      CREATE INDEX IF NOT EXISTS idx_agency_agent_templates_search
+        ON agency_agent_templates(name, description, division_label);
     `)
     try {
       database.exec('ALTER TABLE gateway_events ADD COLUMN source_key TEXT;')
@@ -643,6 +687,132 @@ export function deleteControlCenterState(
     return true
   } catch {
     return false
+  }
+}
+
+function recordValue(value: unknown): Record<string, unknown> {
+  return value && typeof value === 'object' && !Array.isArray(value) ? value as Record<string, unknown> : {}
+}
+
+function arrayValue(value: unknown): unknown[] {
+  return Array.isArray(value) ? value : []
+}
+
+function jsonValue(value: unknown) {
+  try {
+    return JSON.stringify(value ?? null)
+  } catch {
+    return 'null'
+  }
+}
+
+export function writeAgencyAgentTemplateCatalog(
+  catalog: AgencyTemplateCatalogLike,
+  options: LedgerReadOptions = {},
+) {
+  const db = options.sqlite === false ? null : openDatabase()
+  if (!db || catalog.schemaVersion !== 1) return false
+  const templates = arrayValue(catalog.templates)
+  const source = recordValue(catalog.source)
+  const sourceCommit = typeof source.commit === 'string' ? source.commit : null
+  const now = new Date()
+
+  try {
+    db.exec('BEGIN IMMEDIATE;')
+    db.prepare(`
+      INSERT INTO agency_agent_template_catalogs
+        (id, schema_version, source_json, divisions_json, template_count, updated_at, updated_at_ms)
+      VALUES ('current', ?, ?, ?, ?, ?, ?)
+      ON CONFLICT(id) DO UPDATE SET
+        schema_version = excluded.schema_version,
+        source_json = excluded.source_json,
+        divisions_json = excluded.divisions_json,
+        template_count = excluded.template_count,
+        updated_at = excluded.updated_at,
+        updated_at_ms = excluded.updated_at_ms
+    `).run(
+      1,
+      jsonValue(catalog.source || {}),
+      jsonValue(catalog.divisions || {}),
+      templates.length,
+      now.toISOString(),
+      now.getTime(),
+    )
+    db.prepare('DELETE FROM agency_agent_templates').run()
+
+    const insert = db.prepare(`
+      INSERT INTO agency_agent_templates
+        (
+          id, slug, name, description, division, division_label, color, relative_path, source_url,
+          behavior_profile, level, tools_json, capabilities_json, documents_json, source_markdown,
+          source_commit, sort_index, updated_at, updated_at_ms, payload_json
+        )
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `)
+
+    templates.forEach((templateValue, index) => {
+      const template = recordValue(templateValue)
+      const defaults = recordValue(template.defaults)
+      insert.run(
+        stringField(template, 'id') || randomUUID(),
+        stringField(template, 'slug'),
+        stringField(template, 'name'),
+        stringField(template, 'description'),
+        stringField(template, 'division'),
+        stringField(template, 'divisionLabel'),
+        stringField(template, 'color'),
+        stringField(template, 'relativePath'),
+        stringField(template, 'sourceUrl'),
+        stringField(defaults, 'behaviorProfile'),
+        Number.isFinite(Number(defaults.level)) ? Math.round(Number(defaults.level)) : null,
+        jsonValue(defaults.tools || []),
+        jsonValue(defaults.capabilities || {}),
+        jsonValue(template.documents || []),
+        stringField(template, 'sourceMarkdown'),
+        sourceCommit,
+        index,
+        now.toISOString(),
+        now.getTime(),
+        jsonValue(template),
+      )
+    })
+
+    db.exec('COMMIT;')
+    return true
+  } catch {
+    try {
+      db.exec('ROLLBACK;')
+    } catch {
+      // Ignore rollback failures on failed catalog writes.
+    }
+    return false
+  }
+}
+
+export function readAgencyAgentTemplateCatalog<T>(options: LedgerReadOptions = {}): T | null {
+  const db = options.sqlite === false ? null : openDatabase()
+  if (!db) return null
+  try {
+    const meta = db.prepare(`
+      SELECT schema_version, source_json, divisions_json
+      FROM agency_agent_template_catalogs
+      WHERE id = 'current'
+    `).get?.()
+    if (!meta || Number(meta.schema_version) !== 1) return null
+    const rows = db.prepare(`
+      SELECT payload_json
+      FROM agency_agent_templates
+      ORDER BY sort_index ASC, division ASC, name ASC
+    `).all()
+    const templates = parsePayloadRows<unknown>(rows)
+    return {
+      schemaVersion: 1,
+      source: JSON.parse(String(meta.source_json || '{}')),
+      divisions: JSON.parse(String(meta.divisions_json || '{}')),
+      templates,
+    } as T
+  } catch {
+    return null
   }
 }
 

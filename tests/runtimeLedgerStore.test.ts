@@ -86,3 +86,54 @@ test('runtime ledger store owns control-center state namespace', async () => {
     assert.equal(existsSync(store.paths.sqlite), true)
   })
 })
+
+test('runtime ledger store persists agency recruit templates as queryable rows', async () => {
+  await withRuntimeLedgerStore('ledger-store-agency-templates', async (store) => {
+    const status = store.status()
+    if (!status.sqliteAvailable) {
+      assert.equal(store.writeAgencyAgentTemplateCatalog({ schemaVersion: 1, source: {}, divisions: {}, templates: [] }), false)
+      assert.ok(status.fallback)
+      return
+    }
+
+    const catalog = {
+      schemaVersion: 1,
+      source: {
+        repository: 'msitarzewski/agency-agents',
+        commit: 'fixture-commit',
+        importedAt: '2026-07-02T00:00:00.000Z',
+        templateCount: 1,
+      },
+      divisions: {
+        specialized: { label: 'Specialized', color: '#6366F1' },
+      },
+      templates: [
+        {
+          id: 'specialized:grant-writer',
+          slug: 'grant-writer',
+          name: 'Grant Writer',
+          description: 'Writes grant proposals.',
+          division: 'specialized',
+          divisionLabel: 'Specialized',
+          color: '#6366F1',
+          relativePath: 'specialized/grant-writer.md',
+          sourceUrl: 'https://github.com/msitarzewski/agency-agents/blob/main/specialized/grant-writer.md',
+          defaults: {
+            behaviorProfile: 'executor',
+            level: 22,
+            tools: ['memory', 'planner', 'web_search'],
+            capabilities: { research: true, planning: true },
+          },
+          documents: [{ file: 'TOOLS.md', content: '# TOOLS.md\n' }],
+          sourceMarkdown: '# Grant Writer\n',
+        },
+      ],
+    }
+
+    assert.equal(store.writeAgencyAgentTemplateCatalog(catalog), true)
+    const roundTrip = store.readAgencyAgentTemplateCatalog<typeof catalog>()
+    assert.equal(roundTrip?.templates.length, 1)
+    assert.equal(roundTrip?.templates[0].id, 'specialized:grant-writer')
+    assert.equal(roundTrip?.source.commit, 'fixture-commit')
+  })
+})

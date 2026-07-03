@@ -5,6 +5,11 @@ import type { Express } from 'express'
 import { z } from 'zod'
 import { apiFailure, apiSuccess } from '../controlPlaneHttp'
 import type { PartyManagementRoutesContext } from '../controlPlane'
+import {
+  loadAgencyAgentTemplateCatalog,
+  summarizeAgencyAgentTemplate,
+  type AgencyAgentTemplateCatalog,
+} from '../services/recruit/agencyAgentTemplateService'
 
 /**
  * Owns roster, recruitment, workspace, identity, retirement, and avatar HTTP
@@ -16,6 +21,9 @@ export function registerPartyManagementRoutes(app: Express, options: PartyManage
     CANONICAL_DOCTRINE_ONLY,
     RECRUIT_AUTO_MARKDOWN_DEFAULT_FILES,
     WORKSPACE_ROOT,
+    agencyAgentTemplateSourceRoot,
+    agencyAgentTemplateStateFilePath,
+    agencyAgentTemplateStateKey,
     agentLocalConfigPath,
     applyExecutionWorkspaceToLocalConfig,
     applyLocalConfigToGlobal,
@@ -55,6 +63,8 @@ export function registerPartyManagementRoutes(app: Express, options: PartyManage
     normalizeSandboxConfig,
     persistAgentAvatarBytes,
     purgeAgentState,
+    readAgencyAgentTemplateCatalog,
+    readControlCenterStateRecord,
     readOpenclawConfig,
     readPartyProfiles,
     recoverLocalAgentEntries,
@@ -76,6 +86,8 @@ export function registerPartyManagementRoutes(app: Express, options: PartyManage
     terminateOpenClawRunsForSession,
     validateWorkspaceAccess,
     workspaceAccessFailurePayload,
+    writeAgencyAgentTemplateCatalog,
+    writeControlCenterStateRecord,
     writeOpenclawConfig,
     writePartyProfiles,
     writeTextFileWithLockRetry,
@@ -87,6 +99,43 @@ export function registerPartyManagementRoutes(app: Express, options: PartyManage
       return apiSuccess(res, { party })
     } catch (error) {
       return apiFailure(res, 500, 'party_operation_failed', 'Failed to fetch party', String(error))
+    }
+  })
+
+  const loadAgencyTemplates = (forceRefresh = false) => loadAgencyAgentTemplateCatalog({
+    sourceRoot: agencyAgentTemplateSourceRoot,
+    stateKey: agencyAgentTemplateStateKey,
+    stateFilePath: agencyAgentTemplateStateFilePath,
+    forceRefresh,
+    readState: readControlCenterStateRecord,
+    writeState: writeControlCenterStateRecord,
+    readTemplateCatalog: () => readAgencyAgentTemplateCatalog<AgencyAgentTemplateCatalog>(),
+    writeTemplateCatalog: writeAgencyAgentTemplateCatalog,
+  })
+
+  app.get('/api/party/recruit/templates', async (req, res) => {
+    try {
+      const refresh = req.query.refresh === '1' || req.query.refresh === 'true'
+      const catalog = await loadAgencyTemplates(refresh)
+      return apiSuccess(res, {
+        source: catalog.source,
+        divisions: catalog.divisions,
+        templates: catalog.templates.map(summarizeAgencyAgentTemplate),
+      })
+    } catch (error) {
+      return apiFailure(res, 500, 'party_operation_failed', 'Failed to load recruit templates', String(error))
+    }
+  })
+
+  app.get('/api/party/recruit/templates/:templateId', async (req, res) => {
+    try {
+      const templateId = decodeURIComponent(req.params.templateId || '')
+      const catalog = await loadAgencyTemplates(false)
+      const template = catalog.templates.find((entry) => entry.id === templateId)
+      if (!template) return apiFailure(res, 404, 'invalid_payload', 'Recruit template not found.')
+      return apiSuccess(res, { template })
+    } catch (error) {
+      return apiFailure(res, 500, 'party_operation_failed', 'Failed to load recruit template', String(error))
     }
   })
 

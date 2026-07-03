@@ -10,6 +10,7 @@ import {
   closeRuntimeLedger,
   configureRuntimeLedger,
   deleteControlCenterState,
+  readAgencyAgentTemplateCatalog,
   readControlCenterState,
   readDiagnosticRunLedgerTail,
   readGatewayEventLedgerTail,
@@ -18,6 +19,7 @@ import {
   readMissionReportLedgerTail,
   readRuntimeRunLedgerTail,
   runtimeLedgerStatus,
+  writeAgencyAgentTemplateCatalog,
   writeControlCenterState,
 } from '../runtimeLedger'
 
@@ -44,6 +46,7 @@ export type RuntimeLedgerReadOptions = {
 export const CONTROL_CENTER_STATE_KEYS = {
   heartbeatDefaults: 'runtime:heartbeat-defaults',
   heartbeatPerAgent: 'runtime:heartbeat-per-agent',
+  agencyAgentTemplates: 'agents:agency-templates',
   localAuth: 'auth:local',
   partyProfiles: 'agents:party-profiles',
   pluginListCache: 'plugins:list-cache',
@@ -115,6 +118,10 @@ export function createRuntimeLedgerStore(paths: RuntimeLedgerStorePaths) {
       writeControlCenterState(CONTROL_CENTER_STATE_NAMESPACE, stateKey, value, { ...(options || {}), sourcePath }),
     deleteControlCenterState: (stateKey: string, options?: RuntimeLedgerReadOptions) =>
       deleteControlCenterState(CONTROL_CENTER_STATE_NAMESPACE, stateKey, options),
+    readAgencyAgentTemplateCatalog: <T>(options?: RuntimeLedgerReadOptions) =>
+      readAgencyAgentTemplateCatalog<T>(options),
+    writeAgencyAgentTemplateCatalog: (catalog: unknown, options?: RuntimeLedgerReadOptions) =>
+      writeAgencyAgentTemplateCatalog(catalog as never, options),
     status: (options?: RuntimeLedgerReadOptions) => runtimeLedgerStatus(options),
     close: () => closeRuntimeLedger(),
   }

@@ -1035,3 +1035,45 @@ html.dui-pro-overhaul [data-dui-panel="missions"] .dui-mission-bottom-card .dui-
     grid-template-columns: minmax(0, 1fr) !important;
   }
 }
+
+html.dui-pro-overhaul [data-dui-modal="recruit-agent"] .dui-recruit-template-search {
+  display: grid;
+  min-width: 0;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 6px;
+  align-items: center;
+}
+
+html.dui-pro-overhaul [data-dui-modal="recruit-agent"] .dui-recruit-template-search input {
+  width: 100%;
+  min-width: 0;
+  min-height: 32px;
+  border: 1px solid rgba(216, 226, 233, .14);
+  border-radius: 8px;
+  background: rgba(4, 8, 10, .72);
+  color: #dce8eb;
+  padding: 0 10px;
+  font-size: 12px;
+  outline: none;
+}
+
+html.dui-pro-overhaul [data-dui-modal="recruit-agent"] .dui-recruit-template-search input:focus {
+  border-color: rgba(53, 213, 206, .42);
+  box-shadow: 0 0 0 2px rgba(53, 213, 206, .12);
+}
+
+html.dui-pro-overhaul [data-dui-modal="recruit-agent"] .dui-recruit-template-search button {
+  display: inline-grid !important;
+  width: 32px !important;
+  min-width: 32px !important;
+  height: 32px !important;
+  min-height: 32px !important;
+  place-items: center !important;
+  border: 1px solid rgba(216, 226, 233, .14) !important;
+  border-radius: 8px !important;
+  background: rgba(255, 255, 255, .035) !important;
+  color: #aebbc2 !important;
+  padding: 0 !important;
+  font-size: 12px !important;
+  font-weight: 800 !important;
+}

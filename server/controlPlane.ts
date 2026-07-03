@@ -233,6 +233,17 @@ function isLegacyControlCenterOpenClawPath(value: string | undefined) {
   return value.replace(/\\/g, '/').toLowerCase().includes('/openclaw-control-center/openclaw')
 }
 
+function defaultAgencyAgentTemplateSourceRoot() {
+  const electronResourcesPath = getElectronResourcesPath()
+  const candidates = [
+    path.join(WORKSPACE_ROOT, 'vendor', 'agency-agents'),
+    path.resolve(process.cwd(), 'vendor', 'agency-agents'),
+    path.resolve(process.cwd(), 'resources', 'agency-agents'),
+    electronResourcesPath ? path.join(electronResourcesPath, 'agency-agents') : '',
+  ].filter(Boolean)
+  return candidates.find((candidate) => existsSync(candidate)) || path.join(WORKSPACE_ROOT, 'vendor', 'agency-agents')
+}
+
 const CONFIGURED_OPENCLAW_STATE_ROOT = process.env.OPENCLAW_STATE_DIR || process.env.OPENCLAW_HOME || ''
 const OPENCLAW_STATE_ROOT = path.resolve(
   CONFIGURED_OPENCLAW_STATE_ROOT && !isLegacyControlCenterOpenClawPath(CONFIGURED_OPENCLAW_STATE_ROOT)
@@ -259,6 +270,10 @@ const HEARTBEAT_DEFAULTS_PATH = path.join(OPENCLAW_STATE_ROOT, 'heartbeat-runtim
 const HEARTBEAT_AGENT_DEFAULTS_PATH = path.join(OPENCLAW_STATE_ROOT, 'heartbeat-runtime-per-agent.json')
 const RETIRED_AGENT_IDS_PATH = path.join(OPENCLAW_STATE_ROOT, 'retired-agents.json')
 const PARTY_PROFILE_PATH = path.join(WORKSPACE_ROOT, '.openclaw', 'party-profiles.json')
+const AGENCY_AGENT_TEMPLATE_SOURCE_ROOT = path.resolve(
+  process.env.AGENCY_AGENT_TEMPLATE_SOURCE_ROOT || defaultAgencyAgentTemplateSourceRoot(),
+)
+const AGENCY_AGENT_TEMPLATE_STATE_PATH = path.join(OPENCLAW_STATE_ROOT, 'agency-agent-template-catalog.json')
 const OPENCLAW_AGENTS_ROOT = path.join(OPENCLAW_STATE_ROOT, 'agents')
 const SHARED_SKILLS_ROOT = path.join(OPENCLAW_STATE_ROOT, 'skills')
 const CODEX_AGENT_PROFILES_ROOT = path.join(HOME_DIR, '.codex', 'agent-profiles')
@@ -16683,6 +16698,9 @@ export type PartyManagementRoutesContext = {
   CANONICAL_DOCTRINE_ONLY: typeof CANONICAL_DOCTRINE_ONLY
   RECRUIT_AUTO_MARKDOWN_DEFAULT_FILES: typeof RECRUIT_AUTO_MARKDOWN_DEFAULT_FILES
   WORKSPACE_ROOT: typeof WORKSPACE_ROOT
+  agencyAgentTemplateSourceRoot: typeof AGENCY_AGENT_TEMPLATE_SOURCE_ROOT
+  agencyAgentTemplateStateFilePath: typeof AGENCY_AGENT_TEMPLATE_STATE_PATH
+  agencyAgentTemplateStateKey: typeof CONTROL_CENTER_STATE_KEYS.agencyAgentTemplates
   agentLocalConfigPath: typeof agentLocalConfigPath
   applyExecutionWorkspaceToLocalConfig: typeof applyExecutionWorkspaceToLocalConfig
   applyLocalConfigToGlobal: typeof applyLocalConfigToGlobal
@@ -16722,6 +16740,8 @@ export type PartyManagementRoutesContext = {
   normalizeSandboxConfig: typeof normalizeSandboxConfig
   persistAgentAvatarBytes: typeof persistAgentAvatarBytes
   purgeAgentState: typeof purgeAgentState
+  readAgencyAgentTemplateCatalog: typeof runtimeLedgerStore.readAgencyAgentTemplateCatalog
+  readControlCenterStateRecord: typeof readControlCenterStateRecord
   readOpenclawConfig: typeof readOpenclawConfig
   readPartyProfiles: typeof readPartyProfiles
   recoverLocalAgentEntries: typeof recoverLocalAgentEntries
@@ -16743,6 +16763,8 @@ export type PartyManagementRoutesContext = {
   terminateOpenClawRunsForSession: typeof terminateOpenClawRunsForSession
   validateWorkspaceAccess: typeof validateWorkspaceAccess
   workspaceAccessFailurePayload: typeof workspaceAccessFailurePayload
+  writeAgencyAgentTemplateCatalog: typeof runtimeLedgerStore.writeAgencyAgentTemplateCatalog
+  writeControlCenterStateRecord: typeof writeControlCenterStateRecord
   writeOpenclawConfig: typeof writeOpenclawConfig
   writePartyProfiles: typeof writePartyProfiles
   writeTextFileWithLockRetry: typeof writeTextFileWithLockRetry
@@ -16752,6 +16774,9 @@ const partyManagementRoutesContext: PartyManagementRoutesContext = {
   CANONICAL_DOCTRINE_ONLY,
   RECRUIT_AUTO_MARKDOWN_DEFAULT_FILES,
   WORKSPACE_ROOT,
+  agencyAgentTemplateSourceRoot: AGENCY_AGENT_TEMPLATE_SOURCE_ROOT,
+  agencyAgentTemplateStateFilePath: AGENCY_AGENT_TEMPLATE_STATE_PATH,
+  agencyAgentTemplateStateKey: CONTROL_CENTER_STATE_KEYS.agencyAgentTemplates,
   agentLocalConfigPath,
   applyExecutionWorkspaceToLocalConfig,
   applyLocalConfigToGlobal,
@@ -16791,6 +16816,8 @@ const partyManagementRoutesContext: PartyManagementRoutesContext = {
   normalizeSandboxConfig,
   persistAgentAvatarBytes,
   purgeAgentState,
+  readAgencyAgentTemplateCatalog: runtimeLedgerStore.readAgencyAgentTemplateCatalog,
+  readControlCenterStateRecord,
   readOpenclawConfig,
   readPartyProfiles,
   recoverLocalAgentEntries,
@@ -16812,6 +16839,8 @@ const partyManagementRoutesContext: PartyManagementRoutesContext = {
   terminateOpenClawRunsForSession,
   validateWorkspaceAccess,
   workspaceAccessFailurePayload,
+  writeAgencyAgentTemplateCatalog: runtimeLedgerStore.writeAgencyAgentTemplateCatalog,
+  writeControlCenterStateRecord,
   writeOpenclawConfig,
   writePartyProfiles,
   writeTextFileWithLockRetry,
