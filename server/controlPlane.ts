@@ -638,12 +638,91 @@ async function boundedOperation<T>(
 
 function isNodeScriptBin(bin: string) {
   const lower = bin.toLowerCase()
-  return lower.endsWith('.mjs') || lower.endsWith('.js')
+  return lower.endsWith('.mjs') || lower.endsWith('.cjs') || lower.endsWith('.js')
 }
 
 function isWindowsCommandScript(bin: string) {
   const lower = path.basename(bin).toLowerCase()
   return lower === 'openclaw' || lower.endsWith('.cmd') || lower.endsWith('.bat')
+}
+
+function isLikelyNodeExecutable(command: string) {
+  const base = path.basename(command || '').toLowerCase()
+  return base === 'node' || base === 'node.exe'
+}
+
+function executableFileExists(filePath: string) {
+  if (!filePath) return false
+  try {
+    const stat = statSync(filePath)
+    if (!stat.isFile()) return false
+    if (process.platform === 'win32') return true
+    if ((stat.mode & 0o111) === 0) chmodSync(filePath, stat.mode | 0o755)
+    return (statSync(filePath).mode & 0o111) !== 0
+  } catch {
+    return false
+  }
+}
+
+function nodeToolchainPlatformSegment() {
+  if (process.platform === 'win32') return 'win'
+  if (process.platform === 'darwin') return 'darwin'
+  if (process.platform === 'linux') return 'linux'
+  return ''
+}
+
+function nodeToolchainDirMatchesCurrentPlatform(name: string) {
+  const platform = nodeToolchainPlatformSegment()
+  const arch = process.arch === 'arm64' ? 'arm64' : process.arch === 'x64' ? 'x64' : ''
+  if (!platform || !arch) return false
+  return new RegExp(`^node-v\\d+\\.\\d+\\.\\d+-${platform}-${arch}$`, 'i').test(name)
+}
+
+function nodeBinInToolchainDir(nodeDir: string) {
+  return process.platform === 'win32' ? path.join(nodeDir, 'node.exe') : path.join(nodeDir, 'bin', 'node')
+}
+
+function nodeRuntimeCandidatesFromToolchainRoot(root: string) {
+  if (!root || !existsSync(root)) return []
+  try {
+    return readdirSync(root, { withFileTypes: true })
+      .filter((entry) => entry.isDirectory() && nodeToolchainDirMatchesCurrentPlatform(entry.name))
+      .map((entry) => nodeBinInToolchainDir(path.join(root, entry.name)))
+  } catch {
+    return []
+  }
+}
+
+function nodeRuntimeToolchainRoots() {
+  const electronResourcesPath = getElectronResourcesPath()
+  return uniqueStrings(
+    electronResourcesPath ? path.join(electronResourcesPath, 'toolchains', 'node') : '',
+    path.resolve(process.cwd(), '.cache', 'runtime-bundles', 'toolchains', 'node'),
+    ...sourceRootCandidates().map((root) => path.join(root, '.cache', 'runtime-bundles', 'toolchains', 'node')),
+  ).filter(Boolean)
+}
+
+function nodeRuntimeCommandExists(command: string) {
+  if (!command) return false
+  if (command === 'node' || command === 'node.exe') return commandExistsOnPath(command)
+  return executableFileExists(command)
+}
+
+let resolvedNodeRuntimeExecutable: string | null = null
+
+function resolveNodeRuntimeExecutable() {
+  if (resolvedNodeRuntimeExecutable) return resolvedNodeRuntimeExecutable
+  const pathNode = process.platform === 'win32' ? 'node.exe' : 'node'
+  const candidates = uniqueStrings(
+    process.env.DYSTOPAI_NODE_BIN || '',
+    process.env.NODE_EXE || '',
+    process.env.NODE_BINARY || '',
+    isLikelyNodeExecutable(process.execPath) ? process.execPath : '',
+    ...nodeRuntimeToolchainRoots().flatMap(nodeRuntimeCandidatesFromToolchainRoot),
+    pathNode,
+  ).filter(Boolean)
+  resolvedNodeRuntimeExecutable = candidates.find(nodeRuntimeCommandExists) || pathNode
+  return resolvedNodeRuntimeExecutable
 }
 
 function quoteCmdArgument(value: string) {
@@ -675,7 +754,7 @@ function shelllessSpawnSpecForCommand(command: string, args: string[], options: 
 
 function openClawSpawnSpecForBin(bin: string, args: string[]) {
   if (isNodeScriptBin(bin)) {
-    return { command: process.execPath, args: [bin, ...args], shell: false }
+    return { command: resolveNodeRuntimeExecutable(), args: [bin, ...args], shell: false }
   }
   if (process.platform === 'win32') {
     if (isWindowsCommandScript(bin)) return windowsCmdShellSpec(bin, args)
@@ -734,7 +813,7 @@ function prepareSourceOpenClawVendorIfMissing() {
   if (!vendor || hasOpenClawEntryArtifact(vendor.vendorRoot)) return
 
   console.warn(`[openclaw] missing vendored dist/entry artifact; preparing OpenClaw vendor payload at ${vendor.vendorRoot}`)
-  const result = spawnSync(process.execPath, [vendor.prepScript], {
+  const result = spawnSync(resolveNodeRuntimeExecutable(), [vendor.prepScript], {
     cwd: vendor.root,
     env: {
       ...process.env,

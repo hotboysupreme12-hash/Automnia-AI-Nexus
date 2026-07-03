@@ -555,10 +555,35 @@ function nodeBinInNodeDir(nodeDir) {
   return process.platform === 'win32' ? path.join(nodeDir, 'node.exe') : path.join(nodeDir, 'bin', 'node')
 }
 
+function nodeToolchainPlatformSegment() {
+  if (process.platform === 'win32') return 'win'
+  if (process.platform === 'darwin') return 'darwin'
+  if (process.platform === 'linux') return 'linux'
+  return ''
+}
+
+function nodeToolchainDirMatchesCurrentPlatform(name) {
+  const platform = nodeToolchainPlatformSegment()
+  const arch = process.arch === 'arm64' ? 'arm64' : process.arch === 'x64' ? 'x64' : ''
+  if (!platform || !arch) return false
+  return new RegExp(`^node-v\\d+\\.\\d+\\.\\d+-${platform}-${arch}$`, 'i').test(name)
+}
+
+function nodeBinForNpmBin(npmBin) {
+  return process.platform === 'win32' ? path.join(path.dirname(npmBin), 'node.exe') : path.join(path.dirname(npmBin), 'node')
+}
+
+function rememberNodeForNpm(npmBin) {
+  const nodeBin = nodeBinForNpmBin(npmBin)
+  if (!isExecutableFile(nodeBin)) return
+  process.env.NODE_EXE = process.env.NODE_EXE || nodeBin
+  process.env.DYSTOPAI_NODE_BIN = process.env.DYSTOPAI_NODE_BIN || nodeBin
+}
+
 function existingNpmBinInToolchainRoot(root) {
   if (!root || !fs.existsSync(root)) return ''
   return fs.readdirSync(root, { withFileTypes: true })
-    .filter((entry) => entry.isDirectory() && /^node-v\d+\.\d+\.\d+-win-(?:x64|arm64)$/i.test(entry.name))
+    .filter((entry) => entry.isDirectory() && nodeToolchainDirMatchesCurrentPlatform(entry.name))
     .map((entry) => path.join(root, entry.name))
     .filter((dir) => isExecutableFile(npmBinInNodeDir(dir)) && isExecutableFile(nodeBinInNodeDir(dir)))
     .sort((a, b) => b.localeCompare(a))
@@ -757,15 +782,20 @@ async function ensureNpmToolchainAvailable() {
   const configured = process.env.DYSTOPAI_NPM_BIN || process.env.NPM_BIN || ''
   if (configured && isExecutableFile(configured)) {
     prependProcessPath(path.dirname(configured))
+    rememberNodeForNpm(configured)
     return
   }
   const pathNpm = findNpmOnPath()
-  if (pathNpm) return
+  if (pathNpm) {
+    rememberNodeForNpm(pathNpm)
+    return
+  }
 
   const bundled = existingBundledNpmBin()
   if (bundled) {
     prependProcessPath(path.dirname(bundled))
     process.env.DYSTOPAI_NPM_BIN = bundled
+    rememberNodeForNpm(bundled)
     return
   }
 
@@ -773,6 +803,7 @@ async function ensureNpmToolchainAvailable() {
   if (managed) {
     prependProcessPath(path.dirname(managed))
     process.env.DYSTOPAI_NPM_BIN = managed
+    rememberNodeForNpm(managed)
     return
   }
 
@@ -782,6 +813,7 @@ async function ensureNpmToolchainAvailable() {
     const npmBin = await installManagedNodeToolchain()
     prependProcessPath(path.dirname(npmBin))
     process.env.DYSTOPAI_NPM_BIN = npmBin
+    rememberNodeForNpm(npmBin)
     console.log('[dystopai] npm toolchain ready:', npmBin)
   } catch (err) {
     console.warn('[dystopai] automatic npm provisioning failed:', err?.message || err)
