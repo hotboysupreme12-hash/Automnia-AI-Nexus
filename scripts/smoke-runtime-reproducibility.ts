@@ -209,6 +209,16 @@ assert.match(
   /nodeToolchainDirMatchesCurrentPlatform/,
   'desktop launcher must discover bundled Node/npm toolchains for the current platform',
 )
+assert.match(
+  electronMain,
+  /function applyMacOSLocalAgentRuntimeDefaults/,
+  'desktop launcher must apply macOS local runtime defaults before starting the server child',
+)
+assert.match(
+  electronMain,
+  /CONTROL_CENTER_FORCE_LOCAL_AGENT_RUNTIME = process\.env\.CONTROL_CENTER_FORCE_LOCAL_AGENT_RUNTIME \|\| '1'/,
+  'macOS desktop startup should force local agent runtime unless explicitly overridden',
+)
 assert.doesNotMatch(
   electronMain,
   /node-v\\d\+\\\.\\d\+\\\.\\d\+-win-\(\?:x64\|arm64\)/,

@@ -113,6 +113,21 @@ assert.match(
   'Gateway chat service should keep tools.effective behind a diagnostic gate',
 )
 assert.match(
+  controlPlane,
+  /const MACOS_LOCAL_AGENT_RUNTIME_DEFAULT = process\.platform === 'darwin'/,
+  'macOS should default away from Gateway chat when local runtime is safer',
+)
+assert.match(
+  controlPlane,
+  /CONTROL_CENTER_GATEWAY_AGENT_SESSIONS \|\| \(MACOS_LOCAL_AGENT_RUNTIME_DEFAULT \? '0' : '1'\)/,
+  'macOS Gateway agent sessions should default off unless explicitly enabled',
+)
+assert.match(
+  controlPlane,
+  /CONTROL_CENTER_FORCE_LOCAL_AGENT_RUNTIME \|\| \(MACOS_LOCAL_AGENT_RUNTIME_DEFAULT \? '1' : ''\)/,
+  'macOS should default to the local agent runtime unless explicitly overridden',
+)
+assert.match(
   gatewayChatService,
   /function redactedGatewayErrorText/,
   'Gateway chat service should redact request failures before surfacing them',
