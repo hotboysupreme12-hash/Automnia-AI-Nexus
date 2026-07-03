@@ -114,18 +114,23 @@ assert.match(
 )
 assert.match(
   controlPlane,
-  /const MACOS_LOCAL_AGENT_RUNTIME_DEFAULT = process\.platform === 'darwin'/,
-  'macOS should default away from Gateway chat when local runtime is safer',
+  /const MACOS_GATEWAY_CHAT_EXPLICIT_OPT_IN = \/[\s\S]*CONTROL_CENTER_ENABLE_MAC_GATEWAY_CHAT/,
+  'macOS Gateway chat should require an explicit opt-in flag',
 )
 assert.match(
   controlPlane,
-  /CONTROL_CENTER_GATEWAY_AGENT_SESSIONS \|\| \(MACOS_LOCAL_AGENT_RUNTIME_DEFAULT \? '0' : '1'\)/,
-  'macOS Gateway agent sessions should default off unless explicitly enabled',
+  /const MACOS_LOCAL_AGENT_RUNTIME_DEFAULT = process\.platform === 'darwin' && !MACOS_GATEWAY_CHAT_EXPLICIT_OPT_IN/,
+  'macOS should default away from Gateway chat unless explicitly opted in',
 )
 assert.match(
   controlPlane,
-  /CONTROL_CENTER_FORCE_LOCAL_AGENT_RUNTIME \|\| \(MACOS_LOCAL_AGENT_RUNTIME_DEFAULT \? '1' : ''\)/,
-  'macOS should default to the local agent runtime unless explicitly overridden',
+  /const CONTROL_CENTER_GATEWAY_AGENT_SESSIONS = MACOS_LOCAL_AGENT_RUNTIME_DEFAULT\s*\?\s*false/,
+  'macOS Gateway agent sessions should be forced off by default',
+)
+assert.match(
+  controlPlane,
+  /const FORCE_LOCAL_AGENT_RUNTIME = MACOS_LOCAL_AGENT_RUNTIME_DEFAULT \|\|/,
+  'macOS should force the local agent runtime by default',
 )
 assert.match(
   gatewayChatService,

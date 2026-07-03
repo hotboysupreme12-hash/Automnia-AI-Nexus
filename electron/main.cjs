@@ -822,9 +822,10 @@ async function ensureNpmToolchainAvailable() {
 
 function applyMacOSLocalAgentRuntimeDefaults() {
   if (process.platform !== 'darwin') return
-  process.env.CONTROL_CENTER_GATEWAY_AGENT_SESSIONS = process.env.CONTROL_CENTER_GATEWAY_AGENT_SESSIONS || '0'
-  process.env.CONTROL_CENTER_GATEWAY_CHAT_CLIENT = process.env.CONTROL_CENTER_GATEWAY_CHAT_CLIENT || '0'
-  process.env.CONTROL_CENTER_FORCE_LOCAL_AGENT_RUNTIME = process.env.CONTROL_CENTER_FORCE_LOCAL_AGENT_RUNTIME || '1'
+  if (/^(1|true|yes)$/i.test(process.env.CONTROL_CENTER_ENABLE_MAC_GATEWAY_CHAT || '')) return
+  process.env.CONTROL_CENTER_GATEWAY_AGENT_SESSIONS = '0'
+  process.env.CONTROL_CENTER_GATEWAY_CHAT_CLIENT = '0'
+  process.env.CONTROL_CENTER_FORCE_LOCAL_AGENT_RUNTIME = '1'
 }
 
 function appOwnershipRoots() {
