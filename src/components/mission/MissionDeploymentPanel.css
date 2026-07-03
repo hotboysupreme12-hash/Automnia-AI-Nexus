@@ -1,9 +1,9 @@
 /* Component-owned mission pass: flatter hierarchy, calmer accents, denser controls. */
 html.dui-pro-overhaul.dui-cohesive-ui .app-bg:has(.dy-workspace-context[data-workspace="missions"]) {
-  --mission-canvas: #090a0b;
-  --mission-surface: #101316;
-  --mission-surface-2: #14191d;
-  --mission-surface-3: #1a2025;
+  --mission-canvas: #050707;
+  --mission-surface: #080a0b;
+  --mission-surface-2: #0a0c0d;
+  --mission-surface-3: #0d0f10;
   --mission-border: rgba(222, 228, 224, .13);
   --mission-border-strong: rgba(152, 202, 170, .28);
   --mission-text: #f2f4f1;
@@ -18,14 +18,11 @@ html.dui-pro-overhaul.dui-cohesive-ui .app-bg:has(.dy-workspace-context[data-wor
   --mission-violet-rgb: 181, 164, 218;
   --mission-rose: #d38679;
   --mission-rose-rgb: 211, 134, 121;
-  background:
-    radial-gradient(ellipse at 18% -10%, rgba(var(--mission-accent-rgb), .045), transparent 34%),
-    radial-gradient(ellipse at 92% 4%, rgba(var(--mission-amber-rgb), .035), transparent 30%),
-    linear-gradient(180deg, #0b0d0e 0%, #080909 58%, #060707 100%) !important;
+  background: linear-gradient(180deg, #080a0b 0%, var(--mission-canvas) 46%, #030404 100%) !important;
 }
 
 html.dui-pro-overhaul.dui-cohesive-ui .app-bg:has(.dy-workspace-context[data-workspace="missions"]) .grid-overlay {
-  opacity: .09 !important;
+  opacity: .045 !important;
   background-size: 96px 96px !important;
   background-image:
     linear-gradient(rgba(230, 235, 231, .040) 1px, transparent 1px),
@@ -34,11 +31,21 @@ html.dui-pro-overhaul.dui-cohesive-ui .app-bg:has(.dy-workspace-context[data-wor
 }
 
 html.dui-pro-overhaul.dui-cohesive-ui .app-bg:has(.dy-workspace-context[data-workspace="missions"])::after {
-  opacity: .035 !important;
+  opacity: 0 !important;
   filter: grayscale(1) saturate(.12) contrast(.92) !important;
 }
 
 html.dui-pro-overhaul.dui-cohesive-ui .dy-workspace-context[data-workspace="missions"] {
+  --mission-border: rgba(232, 234, 238, .13);
+  --mission-border-strong: rgba(232, 234, 238, .18);
+  --mission-text: #f2f4f1;
+  --mission-text-2: #eef3f0;
+  --mission-muted: #98a29d;
+  --mission-faint: #8a948f;
+  --mission-accent: #74e2a5;
+  --mission-accent-rgb: 116, 226, 165;
+  --mission-red: #ef8b82;
+  --mission-yellow: #f4c866;
   display: flex !important;
   width: auto !important;
   max-width: none !important;
@@ -53,8 +60,8 @@ html.dui-pro-overhaul.dui-cohesive-ui .dy-workspace-context[data-workspace="miss
   border-bottom: 1px solid var(--mission-border) !important;
   border-radius: 0 !important;
   background:
-    linear-gradient(180deg, rgba(255, 255, 255, .020), rgba(255, 255, 255, .004)),
-    rgba(8, 10, 11, .72) !important;
+    linear-gradient(180deg, rgba(255, 255, 255, .026), rgba(255, 255, 255, .006)),
+    rgba(5, 6, 8, .84) !important;
   box-shadow: none !important;
 }
 
@@ -149,6 +156,25 @@ html.dui-pro-overhaul.dui-cohesive-ui .dy-workspace-context[data-workspace="miss
   color: var(--mission-accent) !important;
 }
 
+html.dui-pro-overhaul.dui-cohesive-ui .dy-workspace-context[data-workspace="missions"] .dy-status-chip[data-indicator="gateway"][data-state="offline"] .dy-status-value,
+html.dui-pro-overhaul.dui-cohesive-ui .dy-workspace-context[data-workspace="missions"] .dy-status-chip[data-tone="error"] .dy-status-value {
+  color: var(--mission-red) !important;
+}
+
+html.dui-pro-overhaul.dui-cohesive-ui .dy-workspace-context[data-workspace="missions"] .dy-status-chip[data-indicator="running"][data-state="active"] .dy-status-value,
+html.dui-pro-overhaul.dui-cohesive-ui .dy-workspace-context[data-workspace="missions"] .dy-status-chip[data-indicator="cron"][data-state="active"] .dy-status-value,
+html.dui-pro-overhaul.dui-cohesive-ui .dy-workspace-context[data-workspace="missions"] .dy-status-chip[data-indicator="cron"][data-state="busy"] .dy-status-value,
+html.dui-pro-overhaul.dui-cohesive-ui .dy-workspace-context[data-workspace="missions"] .dy-status-chip[data-tone="warn"] .dy-status-value {
+  color: var(--mission-yellow) !important;
+}
+
+html.dui-pro-overhaul.dui-cohesive-ui .dy-workspace-context[data-workspace="missions"] .dy-status-chip[data-indicator="running"][data-state="idle"] .dy-status-value,
+html.dui-pro-overhaul.dui-cohesive-ui .dy-workspace-context[data-workspace="missions"] .dy-status-chip[data-indicator="cron"][data-state="idle"] .dy-status-value,
+html.dui-pro-overhaul.dui-cohesive-ui .dy-workspace-context[data-workspace="missions"] .dy-status-chip[data-indicator="cron"][data-state="loading"] .dy-status-value,
+html.dui-pro-overhaul.dui-cohesive-ui .dy-workspace-context[data-workspace="missions"] .dy-status-chip[data-indicator="results"][data-state="idle"] .dy-status-value {
+  color: var(--mission-text-2) !important;
+}
+
 html.dui-pro-overhaul.dui-cohesive-ui .dy-workspace-context[data-workspace="missions"] .dy-status-chip .dy-status-label {
   color: var(--mission-faint) !important;
   font-size: var(--dy-type-micro, 11px) !important;
@@ -176,6 +202,16 @@ html.dui-pro-overhaul.dui-cohesive-ui .dy-workspace-context[data-workspace="miss
   height: 7px !important;
   background: var(--mission-accent) !important;
   box-shadow: 0 0 0 3px rgba(var(--mission-accent-rgb), .10) !important;
+}
+
+html.dui-pro-overhaul.dui-cohesive-ui .dy-workspace-context[data-workspace="missions"] .dy-workspace-context__state[data-state="offline"] > span {
+  background: var(--mission-red) !important;
+  box-shadow: 0 0 0 3px rgba(239, 139, 130, .10) !important;
+}
+
+html.dui-pro-overhaul.dui-cohesive-ui .dy-workspace-context[data-workspace="missions"] .dy-workspace-context__state[data-state="active"] > span {
+  background: var(--mission-yellow) !important;
+  box-shadow: 0 0 0 3px rgba(244, 200, 102, .10) !important;
 }
 
 html.dui-pro-overhaul.dui-cohesive-ui .dy-mission-tab-frame {
@@ -369,7 +405,7 @@ html.dui-pro-overhaul.dui-cohesive-ui [data-dui-panel="missions"] .dui-control {
   border-radius: 7px !important;
   background:
     linear-gradient(180deg, rgba(255, 255, 255, .030), rgba(255, 255, 255, .006)),
-    #171d22 !important;
+    #0b1012 !important;
   color: var(--mission-text) !important;
   box-shadow: inset 0 1px 0 rgba(255, 255, 255, .024) !important;
 }
@@ -478,7 +514,7 @@ html.dui-pro-overhaul.dui-cohesive-ui [data-dui-panel="missions"] .dui-agent-row
 html.dui-pro-overhaul.dui-cohesive-ui [data-dui-panel="missions"] .dui-agent-avatar {
   border-color: rgba(222, 228, 224, .14) !important;
   border-radius: 8px !important;
-  background: #0d1012 !important;
+  background: #080b0c !important;
 }
 
 html.dui-pro-overhaul.dui-cohesive-ui [data-dui-panel="missions"] .dui-agent-avatar img {
@@ -644,7 +680,7 @@ html.dui-pro-overhaul.dui-cohesive-ui [data-dui-panel="missions"] .dui-avatar-st
 }
 
 html.dui-pro-overhaul.dui-cohesive-ui [data-dui-panel="missions"] .dui-avatar-stack div {
-  border-color: #111416 !important;
+  border-color: #0a0d0e !important;
   border-radius: 6px !important;
   box-shadow: 0 0 0 1px rgba(222, 228, 224, .11) !important;
 }
@@ -928,5 +964,267 @@ html.dui-pro-overhaul.dui-cohesive-ui .dy-human-nav button[aria-current="page"] 
 
   html.dui-pro-overhaul.dui-cohesive-ui .dy-workspace-context[data-workspace="missions"] p {
     max-width: 320px !important;
+  }
+}
+
+/* Bottom row repair: avoid a cramped three-card row and remove the dead strip below it. */
+html.dui-pro-overhaul.dui-cohesive-ui [data-dui-panel="missions"] .dui-mission-stage {
+  min-height: calc((100dvh / var(--dui-laptop-fit-scale, 1)) - 55px) !important;
+  grid-template-rows: auto minmax(380px, 1fr) !important;
+  align-items: stretch !important;
+}
+
+html.dui-pro-overhaul.dui-cohesive-ui [data-dui-panel="missions"] .dui-mission-bottom-card {
+  height: 100% !important;
+  align-self: stretch !important;
+  grid-template-columns: minmax(360px, 1fr) minmax(340px, .86fr) !important;
+  grid-template-areas:
+    "objective cron"
+    "objective tuning" !important;
+  grid-template-rows: auto minmax(0, 1fr) !important;
+  align-items: stretch !important;
+}
+
+html.dui-pro-overhaul.dui-cohesive-ui [data-dui-panel="missions"] .dui-mission-bottom-card > section {
+  display: grid !important;
+  height: 100% !important;
+  min-height: 0 !important;
+}
+
+html.dui-pro-overhaul.dui-cohesive-ui [data-dui-panel="missions"] .dui-mission-bottom-objective {
+  grid-area: objective !important;
+  grid-template-rows: auto minmax(0, 1fr) !important;
+}
+
+html.dui-pro-overhaul.dui-cohesive-ui [data-dui-panel="missions"] .dui-mission-bottom-objective .dui-textarea {
+  height: 100% !important;
+  min-height: 0 !important;
+  max-height: none !important;
+  resize: vertical !important;
+}
+
+html.dui-pro-overhaul.dui-cohesive-ui [data-dui-panel="missions"] .dui-mission-bottom-cron {
+  grid-area: cron !important;
+  grid-template-rows: auto auto auto auto !important;
+  align-content: stretch !important;
+  justify-content: normal !important;
+  gap: 12px !important;
+}
+
+html.dui-pro-overhaul.dui-cohesive-ui [data-dui-panel="missions"] .dui-mission-bottom-cron .dui-cadence-grid {
+  grid-template-columns: minmax(86px, .48fr) minmax(112px, .52fr) !important;
+}
+
+html.dui-pro-overhaul.dui-cohesive-ui [data-dui-panel="missions"] .dui-mission-bottom-cron .dui-cadence-grid .dui-secondary-button {
+  grid-column: 1 / -1 !important;
+  width: 100% !important;
+  min-width: 0 !important;
+}
+
+html.dui-pro-overhaul.dui-cohesive-ui [data-dui-panel="missions"] .dui-mission-bottom-cron .dui-loadout-head {
+  display: grid !important;
+  grid-template-columns: minmax(0, 1fr) auto !important;
+  align-self: start !important;
+  align-items: center !important;
+  margin: 0 !important;
+}
+
+html.dui-pro-overhaul.dui-cohesive-ui [data-dui-panel="missions"] .dui-mission-bottom-cron .dui-avatar-stack {
+  max-width: 100% !important;
+}
+
+html.dui-pro-overhaul.dui-cohesive-ui [data-dui-panel="missions"] .dui-mission-bottom-tuning {
+  grid-area: tuning !important;
+  display: flex !important;
+  height: 100% !important;
+  min-height: 0 !important;
+  flex-direction: column !important;
+  align-self: stretch !important;
+  gap: 8px !important;
+}
+
+html.dui-pro-overhaul.dui-cohesive-ui [data-dui-panel="missions"] .dui-mission-bottom-tuning .dui-action-grid {
+  margin-top: auto !important;
+  padding-top: 4px !important;
+}
+
+html.dui-pro-overhaul.dui-cohesive-ui [data-dui-panel="missions"] .dui-mission-bottom-tuning .dui-section-head {
+  margin-bottom: 0 !important;
+}
+
+html.dui-pro-overhaul.dui-cohesive-ui [data-dui-panel="missions"] .dui-mission-bottom-tuning .dui-readiness-mini {
+  padding: 6px 8px !important;
+  gap: 4px !important;
+}
+
+html.dui-pro-overhaul.dui-cohesive-ui [data-dui-panel="missions"] .dui-mission-bottom-tuning .dui-dispatch-copy {
+  margin: 0 !important;
+  line-height: 1.28 !important;
+}
+
+html.dui-pro-overhaul.dui-cohesive-ui [data-dui-panel="missions"] .dui-mission-bottom-tuning .dui-stat-grid {
+  gap: 7px !important;
+}
+
+html.dui-pro-overhaul.dui-cohesive-ui [data-dui-panel="missions"] .dui-mission-bottom-tuning .dui-stat-grid > div {
+  min-height: 48px !important;
+  padding: 8px 10px !important;
+}
+
+html.dui-pro-overhaul.dui-cohesive-ui [data-dui-panel="missions"] .dui-mission-bottom-tuning .dui-slider-grid {
+  gap: 8px !important;
+  margin-top: 0 !important;
+}
+
+html.dui-pro-overhaul.dui-cohesive-ui [data-dui-panel="missions"] .dui-mission-bottom-tuning .dui-range-field {
+  gap: 4px !important;
+}
+
+html.dui-pro-overhaul.dui-cohesive-ui [data-dui-panel="missions"] .dui-mission-bottom-tuning .dui-primary-button,
+html.dui-pro-overhaul.dui-cohesive-ui [data-dui-panel="missions"] .dui-mission-bottom-tuning .dui-secondary-button {
+  min-height: 40px !important;
+}
+
+/* Right rail repair: make Agents end on the same line as the setup stack. */
+html.dui-pro-overhaul.dui-cohesive-ui [data-dui-panel="missions"] .dui-mission-sidebar {
+  align-self: stretch !important;
+  align-content: stretch !important;
+  grid-template-rows: minmax(0, 1fr) !important;
+  height: 100% !important;
+}
+
+html.dui-pro-overhaul.dui-cohesive-ui [data-dui-panel="missions"] .dui-agents-card {
+  display: flex !important;
+  height: 100% !important;
+  min-height: 0 !important;
+  flex-direction: column !important;
+}
+
+html.dui-pro-overhaul.dui-cohesive-ui [data-dui-panel="missions"] .dui-agents-card .dui-agent-list {
+  display: grid !important;
+  flex: 1 1 auto !important;
+  grid-auto-rows: minmax(74px, 1fr) !important;
+  align-content: stretch !important;
+  min-height: 0 !important;
+  overflow: visible !important;
+}
+
+html.dui-pro-overhaul.dui-cohesive-ui [data-dui-panel="missions"] .dui-agents-card .dui-agent-row {
+  min-height: 0 !important;
+  height: 100% !important;
+}
+
+/* Mission-only slider reset: remove the inherited blue slab and keep a thin rail. */
+html.dui-pro-overhaul.dui-cohesive-ui [data-dui-panel="missions"] .dui-range-field {
+  --mission-range-empty: rgba(255, 255, 255, .115);
+  --mission-range-thumb: #b8bec0;
+}
+
+html.dui-pro-overhaul.dui-cohesive-ui [data-dui-panel="missions"] .dui-range-field input[type="range"],
+html.dui-pro-overhaul.dui-cohesive-ui [data-dui-panel="missions"] input[type="range"].dy-colored-range {
+  width: 100% !important;
+  height: 18px !important;
+  min-height: 18px !important;
+  max-height: 18px !important;
+  padding: 0 !important;
+  border: 0 !important;
+  border-radius: 999px !important;
+  line-height: 1 !important;
+  appearance: none !important;
+  -webkit-appearance: none !important;
+  background: transparent !important;
+  box-shadow: none !important;
+  cursor: pointer !important;
+}
+
+html.dui-pro-overhaul.dui-cohesive-ui [data-dui-panel="missions"] .dui-range-field input[type="range"]::-webkit-slider-runnable-track,
+html.dui-pro-overhaul.dui-cohesive-ui [data-dui-panel="missions"] input[type="range"].dy-colored-range::-webkit-slider-runnable-track {
+  height: 5px !important;
+  border: 0 !important;
+  border-radius: 999px !important;
+  background:
+    linear-gradient(
+      90deg,
+      var(--dy-gauge-start, var(--mission-accent)) 0%,
+      var(--dy-gauge-end, var(--mission-accent)) var(--dy-range-value, 50%),
+      var(--mission-range-empty) var(--dy-range-value, 50%),
+      var(--mission-range-empty) 100%
+    ) !important;
+  box-shadow: none !important;
+}
+
+html.dui-pro-overhaul.dui-cohesive-ui [data-dui-panel="missions"] .dui-range-field input[type="range"]::-webkit-slider-thumb,
+html.dui-pro-overhaul.dui-cohesive-ui [data-dui-panel="missions"] input[type="range"].dy-colored-range::-webkit-slider-thumb {
+  width: 14px !important;
+  height: 14px !important;
+  margin-top: -4.5px !important;
+  border: 1px solid rgba(255, 255, 255, .42) !important;
+  border-radius: 999px !important;
+  appearance: none !important;
+  -webkit-appearance: none !important;
+  background: var(--mission-range-thumb) !important;
+  box-shadow: 0 1px 4px rgba(0, 0, 0, .58) !important;
+}
+
+html.dui-pro-overhaul.dui-cohesive-ui [data-dui-panel="missions"] .dui-range-field input[type="range"]::-moz-range-track,
+html.dui-pro-overhaul.dui-cohesive-ui [data-dui-panel="missions"] input[type="range"].dy-colored-range::-moz-range-track {
+  height: 5px !important;
+  border: 0 !important;
+  border-radius: 999px !important;
+  background: var(--mission-range-empty) !important;
+  box-shadow: none !important;
+}
+
+html.dui-pro-overhaul.dui-cohesive-ui [data-dui-panel="missions"] .dui-range-field input[type="range"]::-moz-range-progress,
+html.dui-pro-overhaul.dui-cohesive-ui [data-dui-panel="missions"] input[type="range"].dy-colored-range::-moz-range-progress {
+  height: 5px !important;
+  border-radius: 999px !important;
+  background: linear-gradient(90deg, var(--dy-gauge-start, var(--mission-accent)), var(--dy-gauge-end, var(--mission-accent))) !important;
+  box-shadow: none !important;
+}
+
+html.dui-pro-overhaul.dui-cohesive-ui [data-dui-panel="missions"] .dui-range-field input[type="range"]::-moz-range-thumb,
+html.dui-pro-overhaul.dui-cohesive-ui [data-dui-panel="missions"] input[type="range"].dy-colored-range::-moz-range-thumb {
+  width: 14px !important;
+  height: 14px !important;
+  border: 1px solid rgba(255, 255, 255, .42) !important;
+  border-radius: 999px !important;
+  background: var(--mission-range-thumb) !important;
+  box-shadow: 0 1px 4px rgba(0, 0, 0, .58) !important;
+}
+
+@media (min-width: 1600px) and (min-height: 760px) {
+  html.dui-pro-overhaul.dui-cohesive-ui [data-dui-panel="missions"] .dui-mission-bottom-card {
+    grid-template-columns: minmax(360px, 1.2fr) minmax(300px, .82fr) minmax(330px, 1fr) !important;
+    grid-template-areas: "objective cron tuning" !important;
+    grid-template-rows: minmax(0, 1fr) !important;
+  }
+
+  html.dui-pro-overhaul.dui-cohesive-ui [data-dui-panel="missions"] .dui-mission-bottom-cron .dui-cadence-grid {
+    grid-template-columns: minmax(74px, .52fr) minmax(118px, .72fr) minmax(138px, 1fr) !important;
+  }
+
+  html.dui-pro-overhaul.dui-cohesive-ui [data-dui-panel="missions"] .dui-mission-bottom-cron .dui-cadence-grid .dui-secondary-button {
+    grid-column: auto !important;
+  }
+}
+
+@media (max-width: 900px) {
+  html.dui-pro-overhaul.dui-cohesive-ui [data-dui-panel="missions"] .dui-mission-bottom-card {
+    grid-template-columns: minmax(0, 1fr) !important;
+    grid-template-areas:
+      "objective"
+      "cron"
+      "tuning" !important;
+    grid-template-rows: auto auto auto !important;
+    height: auto !important;
+  }
+
+  html.dui-pro-overhaul.dui-cohesive-ui [data-dui-panel="missions"] .dui-mission-bottom-card > section {
+    height: auto !important;
+  }
+
+  html.dui-pro-overhaul.dui-cohesive-ui [data-dui-panel="missions"] .dui-mission-bottom-objective .dui-textarea {
+    min-height: 140px !important;
   }
 }

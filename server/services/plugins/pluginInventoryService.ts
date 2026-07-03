@@ -25,6 +25,7 @@ export type PluginControlEntry = {
   systemImage?: string
   packageName?: string
   installSpec?: string
+  installable?: boolean
   origin: string
   status: string
   enabled: boolean
@@ -519,7 +520,7 @@ function pluginRawFromExternalCatalogEntry(entry: Record<string, unknown>): Reco
     kind: stringField(entry, ['kind']) || 'plugin',
     source: stringField(entry, ['source']) || 'official',
     enabled: false,
-    status: 'disabled',
+    status: 'available',
     setup: setupProviders.length ? { providers: setupProviders } : undefined,
     providerAuthChoices: providerAuthChoices.length ? providerAuthChoices : undefined,
     commands: pluginArrayFromRecord(contracts, 'tools'),
@@ -764,6 +765,9 @@ function pluginGuidance(
   if (entry.missingDependencies.length) {
     guidance.push(`Missing dependencies: ${entry.missingDependencies.slice(0, 4).join(', ')}.`)
   }
+  if (entry.origin === 'official-catalog' && entry.installSpec && !entry.enabled) {
+    guidance.push(`Install official plugin ${entry.installSpec}.`)
+  }
   if (entry.enabled && missingFields.length) {
     guidance.push(`Paste ${missingFields.map((field) => field.label).join(', ')} and refresh.`)
   }
@@ -838,10 +842,12 @@ function buildPluginControlEntry(
     missingDependencies: uniqueStrings(...pluginMissingDependencies(raw)),
     restartRequired: typeof raw.restartRequired === 'boolean' ? raw.restartRequired : false,
   }
+  const installable = base.origin === 'official-catalog' && Boolean(base.installSpec)
   const configFields = knownPluginConfigFields(id, raw, config, pluginState, providerAuthStatus)
   const guidance = pluginGuidance(base, configFields)
   return {
     ...base,
+    ...(installable ? { installable: true } : {}),
     configFields,
     guidance,
     needsSetup: Boolean(

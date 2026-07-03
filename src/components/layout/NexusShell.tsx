@@ -1,5 +1,5 @@
 import { motion } from 'framer-motion'
-import { lazy, Suspense, useCallback, useEffect, useMemo, useState, useTransition } from 'react'
+import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type { CSSProperties, KeyboardEvent, PointerEvent } from 'react'
 import { useNexusStore } from '../../store/nexusStore'
 import type { AppTab } from '../../store/nexusStore'
@@ -152,11 +152,36 @@ export function NexusShell() {
   const [isAgentSplitResizing, setAgentSplitResizing] = useState(false)
   const [agentsWorkspaceNode, setAgentsWorkspaceNode] = useState<HTMLDivElement | null>(null)
   const [agentRegistryPaneNode, setAgentRegistryPaneNode] = useState<HTMLDivElement | null>(null)
-  const [, startTabTransition] = useTransition()
+  const pendingTabRef = useRef<AppTab | null>(null)
+  const tabFrameRef = useRef<number | null>(null)
   const selectTab = useCallback((nextTab: AppTab) => {
-    if (nextTab === 'missions') setHasMountedMissionPanel(true)
-    startTabTransition(() => setTab(nextTab))
-  }, [setTab, startTabTransition])
+    const currentTab = useNexusStore.getState().tab
+    if (nextTab === currentTab && pendingTabRef.current == null) return
+    pendingTabRef.current = nextTab
+    if (tabFrameRef.current != null) return
+
+    if (typeof window === 'undefined') {
+      const targetTab = pendingTabRef.current
+      pendingTabRef.current = null
+      if (targetTab && targetTab !== currentTab) {
+        if (targetTab === 'missions') setHasMountedMissionPanel(true)
+        setTab(targetTab)
+      }
+      return
+    }
+
+    tabFrameRef.current = window.requestAnimationFrame(() => {
+      tabFrameRef.current = null
+      const targetTab = pendingTabRef.current
+      pendingTabRef.current = null
+      if (!targetTab || targetTab === useNexusStore.getState().tab) return
+      if (targetTab === 'missions') setHasMountedMissionPanel(true)
+      setTab(targetTab)
+    })
+  }, [setTab])
+  useEffect(() => () => {
+    if (tabFrameRef.current != null && typeof window !== 'undefined') window.cancelAnimationFrame(tabFrameRef.current)
+  }, [])
   const requestClearCronJobs = async () => {
     if ((!activeCronCount && !cronJobs.length) || cronClearBusy) return
     setCronClearTargets([])
@@ -559,7 +584,12 @@ export function NexusShell() {
                 </span>
                 <span className="dy-status-label">Cron</span>
               </button>
-              <span className="badge badge--success dy-status-chip" data-tone="success" data-indicator="results">
+              <span
+                className={responseCount ? 'badge badge--success dy-status-chip' : 'badge dy-status-chip'}
+                data-tone={responseCount ? 'success' : 'neutral'}
+                data-indicator="results"
+                data-state={responseCount ? 'active' : 'idle'}
+              >
                 <span className="dy-status-value">
                   {responseCount}
                 </span>

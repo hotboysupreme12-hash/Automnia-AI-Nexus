@@ -1403,9 +1403,15 @@ html.dui-pro-overhaul .dy-monitor-tab-list button {
 
 html.dui-pro-overhaul .dy-monitor-tab-list button[data-active="true"],
 html.dui-pro-overhaul .dy-monitor-tab-list button[aria-selected="true"] {
-  color: var(--dui-cyan) !important;
-  background: linear-gradient(180deg, rgba(0, 234, 255, .09), rgba(0, 234, 255, .025)) !important;
-  box-shadow: inset 0 -2px 0 var(--dui-cyan), 0 0 22px rgba(0, 234, 255, .12) !important;
+  color: #4ade80 !important;
+  background: linear-gradient(180deg, rgba(74, 222, 128, .11), rgba(74, 222, 128, .030)) !important;
+  box-shadow: inset 0 -2px 0 #4ade80, 0 0 22px rgba(74, 222, 128, .14) !important;
+}
+
+html.dui-pro-overhaul .dy-monitor-tab-list button svg,
+html.dui-pro-overhaul .dy-monitor-tab-list button svg * {
+  color: #4ade80 !important;
+  stroke: #4ade80 !important;
 }
 
 html.dui-pro-overhaul .dy-gateway-layout {
@@ -4522,7 +4528,7 @@ html.dui-pro-overhaul :where(
 
 html.dui-pro-overhaul :where(
   [data-dui-panel="plugins"].dy-plugins-panel .dy-plugin-row-setup,
-  [data-dui-panel="monitor"] .dy-monitor-doctor-repair-button,
+  [data-dui-panel="monitor"] .dy-gateway-restart-button,
   [class^="bg-amber"],
   [class*=" bg-amber"],
   [class^="border-amber"],
@@ -4759,4 +4765,173 @@ html.dui-pro-overhaul [data-dui-panel="plugins"].dy-plugins-panel .dy-plugin-row
   box-shadow:
     inset 0 1px 0 rgba(255, 255, 255, 0.024),
     inset 0 0 0 1px rgba(255, 255, 255, 0.008) !important;
+}
+
+/* Agent registry pager: remove the heavy black slab around the icon controls. */
+html.dui-pro-overhaul [data-dui-panel="agent-registry"] .agent-registry-pager,
+html.dui-pro-overhaul.dui-cohesive-ui [data-dui-panel="agent-registry"] .agent-registry-pager,
+html.dui-cohesive-ui [data-dui-panel="agent-registry"] .agent-registry-pager {
+  background: transparent !important;
+  background-color: transparent !important;
+  background-image: none !important;
+  border-color: transparent !important;
+  box-shadow: none !important;
+}
+
+html.dui-pro-overhaul [data-dui-panel="agent-registry"] .agent-registry-pager :is(.agent-registry-pager-btn, .agent-registry-pager-count),
+html.dui-pro-overhaul.dui-cohesive-ui [data-dui-panel="agent-registry"] .agent-registry-pager :is(.agent-registry-pager-btn, .agent-registry-pager-count),
+html.dui-cohesive-ui [data-dui-panel="agent-registry"] .agent-registry-pager :is(.agent-registry-pager-btn, .agent-registry-pager-count) {
+  background: transparent !important;
+  background-color: transparent !important;
+  background-image: none !important;
+  border-color: transparent !important;
+  box-shadow: none !important;
+  color: rgba(199, 232, 241, 0.90) !important;
+}
+
+html.dui-pro-overhaul [data-dui-panel="agent-registry"] .agent-registry-pager .agent-registry-pager-btn:is(:hover, :focus, :focus-visible),
+html.dui-pro-overhaul.dui-cohesive-ui [data-dui-panel="agent-registry"] .agent-registry-pager .agent-registry-pager-btn:is(:hover, :focus, :focus-visible),
+html.dui-cohesive-ui [data-dui-panel="agent-registry"] .agent-registry-pager .agent-registry-pager-btn:is(:hover, :focus, :focus-visible) {
+  background: rgba(76, 181, 209, 0.10) !important;
+  background-color: rgba(76, 181, 209, 0.10) !important;
+  border-color: transparent !important;
+  color: #eefbff !important;
+  outline-color: rgba(76, 181, 209, 0.28) !important;
+}
+
+html.dui-pro-overhaul [data-dui-panel="agent-registry"] .agent-registry-pager .agent-registry-pager-btn:disabled,
+html.dui-pro-overhaul.dui-cohesive-ui [data-dui-panel="agent-registry"] .agent-registry-pager .agent-registry-pager-btn:disabled,
+html.dui-cohesive-ui [data-dui-panel="agent-registry"] .agent-registry-pager .agent-registry-pager-btn:disabled {
+  background: transparent !important;
+  border-color: transparent !important;
+  color: rgba(199, 232, 241, 0.34) !important;
+}
+
+/* Agent registry filter toolbar: rebuilt without the legacy nested-outline hooks. */
+html.dui-pro-overhaul [data-dui-panel="agent-registry"] [data-agent-filter-toolbar],
+html.dui-pro-overhaul.dui-cohesive-ui [data-dui-panel="agent-registry"] [data-agent-filter-toolbar] {
+  display: grid !important;
+  grid-template-columns: minmax(260px, 1fr) auto !important;
+  align-items: center !important;
+  gap: 8px !important;
+  border: 0 !important;
+  outline: 0 !important;
+  background: transparent !important;
+  box-shadow: none !important;
+}
+
+html.dui-pro-overhaul [data-dui-panel="agent-registry"] [data-agent-filter-search] {
+  min-width: 0 !important;
+}
+
+html.dui-pro-overhaul [data-dui-panel="agent-registry"] [data-agent-filter-search] svg {
+  left: 12px !important;
+  width: 14px !important;
+  height: 14px !important;
+  color: #67e8f9 !important;
+}
+
+html.dui-pro-overhaul [data-dui-panel="agent-registry"] [data-agent-filter-search] input,
+html.dui-pro-overhaul [data-dui-panel="agent-registry"] [data-agent-filter-select] {
+  height: 38px !important;
+  border: 1px solid rgba(76, 181, 209, .38) !important;
+  border-radius: 7px !important;
+  outline: 0 !important;
+  background-color: #08090c !important;
+  color: #cfe7ee !important;
+  box-shadow: none !important;
+}
+
+html.dui-pro-overhaul [data-dui-panel="agent-registry"] [data-agent-filter-search] input {
+  background-image: none !important;
+}
+
+html.dui-pro-overhaul [data-dui-panel="agent-registry"] [data-agent-filter-select] {
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='8' height='8' viewBox='0 0 24 24' fill='none' stroke='%2367e8f9' stroke-width='3' stroke-linecap='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E") !important;
+  background-repeat: no-repeat !important;
+  background-position: right 8px center !important;
+  background-size: 8px 8px !important;
+}
+
+html.dui-pro-overhaul [data-dui-panel="agent-registry"] [data-agent-filter-search] input::placeholder {
+  color: rgba(199, 232, 241, .76) !important;
+  opacity: 1 !important;
+}
+
+html.dui-pro-overhaul [data-dui-panel="agent-registry"] [data-agent-filter-search] input:is(:hover, :focus, :focus-visible),
+html.dui-pro-overhaul [data-dui-panel="agent-registry"] [data-agent-filter-select]:is(:hover, :focus, :focus-visible) {
+  border-color: rgba(103, 232, 249, .62) !important;
+  outline: 0 !important;
+  background-color: #08090c !important;
+  box-shadow: none !important;
+}
+
+html.dui-pro-overhaul [data-dui-panel="agent-registry"] [data-agent-filter-controls] {
+  min-width: 0 !important;
+  align-items: center !important;
+  justify-content: flex-end !important;
+  gap: 6px !important;
+}
+
+html.dui-pro-overhaul [data-dui-panel="agent-registry"] [data-agent-view-switch] {
+  min-height: 38px !important;
+  align-items: center !important;
+  gap: 2px !important;
+  border: 0 !important;
+  outline: 0 !important;
+  background: transparent !important;
+  box-shadow: none !important;
+}
+
+html.dui-pro-overhaul [data-dui-panel="agent-registry"] [data-agent-view-choice] {
+  min-height: 34px !important;
+  min-width: 48px !important;
+  border: 1px solid transparent !important;
+  border-radius: 7px !important;
+  outline: 0 !important;
+  background: transparent !important;
+  color: rgba(199, 232, 241, .72) !important;
+  box-shadow: none !important;
+}
+
+html.dui-pro-overhaul [data-dui-panel="agent-registry"] [data-agent-view-choice][data-active="true"] {
+  border-color: rgba(103, 232, 249, .50) !important;
+  background: rgba(76, 181, 209, .16) !important;
+  color: #dffaff !important;
+}
+
+html.dui-pro-overhaul [data-dui-panel="agent-registry"] [data-agent-view-choice]:not([data-active="true"]):is(:hover, :focus, :focus-visible) {
+  border-color: rgba(76, 181, 209, .26) !important;
+  background: rgba(76, 181, 209, .08) !important;
+  color: #dffaff !important;
+}
+
+@container agent-registry (max-width: 900px) {
+  html.dui-pro-overhaul [data-dui-panel="agent-registry"] [data-agent-filter-toolbar] {
+    grid-template-columns: minmax(0, 1fr) !important;
+  }
+
+  html.dui-pro-overhaul [data-dui-panel="agent-registry"] [data-agent-filter-controls] {
+    justify-content: flex-start !important;
+  }
+}
+
+/* Active cron jobs share the Channel Activity surface; keep the empty state neutral. */
+html.dui-pro-overhaul .app-bg.dy-monitor-focus [data-dui-panel="monitor"] .dy-cron-jobs-card,
+html.dui-pro-overhaul.dui-cohesive-ui .app-bg.dy-monitor-focus [data-dui-panel="monitor"] .dy-cron-jobs-card {
+  --monitor-tone: #74e2a5;
+}
+
+html.dui-pro-overhaul .app-bg.dy-monitor-focus [data-dui-panel="monitor"] .dy-cron-jobs-card .dy-cron-empty-state,
+html.dui-pro-overhaul.dui-cohesive-ui .app-bg.dy-monitor-focus [data-dui-panel="monitor"] .dy-cron-jobs-card .dy-cron-empty-state {
+  background: transparent !important;
+  background-image: none !important;
+  box-shadow: none !important;
+  color: #8f9aa3 !important;
+}
+
+html.dui-pro-overhaul .app-bg.dy-monitor-focus [data-dui-panel="monitor"] .dy-cron-jobs-card .dy-cron-empty-state strong,
+html.dui-pro-overhaul.dui-cohesive-ui .app-bg.dy-monitor-focus [data-dui-panel="monitor"] .dy-cron-jobs-card .dy-cron-empty-state strong {
+  color: #a4adb5 !important;
+  text-shadow: 0 0 12px rgba(164, 173, 181, .14) !important;
 }

@@ -253,6 +253,22 @@ test('ensureGatewayRunning releases an unhealthy stale listener before starting 
   assert.equal(harness.service.gatewayStatusSnapshot(true).state, 'healthy')
 })
 
+test('ensureGatewayRunning attaches to an existing gateway listener that becomes healthy', async () => {
+  const harness = createHarness({
+    healthSequence: [false, false, true],
+    listenerPid: 4321,
+    portBusySequence: [true],
+  })
+
+  await harness.service.ensureGatewayRunning()
+  harness.service.stopGatewayHealthMonitor()
+
+  assert.equal(harness.releaseCalls, 0)
+  assert.equal(harness.spawnCalls, 0)
+  assert.match(harness.logs.map((entry) => entry.message).join('\n'), /attached to existing healthy gateway listener pid=4321/)
+  assert.equal(harness.service.gatewayStatusSnapshot(true, 4321).state, 'healthy')
+})
+
 test('ensureGatewayRunning starts independent plugin repairs in parallel', async () => {
   const clawTalkRepair = deferred()
   const telegramRepair = deferred()

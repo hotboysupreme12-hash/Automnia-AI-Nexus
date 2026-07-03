@@ -1344,7 +1344,7 @@ html.dui-pro-overhaul [data-dui-modal="recruit-agent"] .dui-recruit-secondary:di
 
 html.dui-pro-overhaul [data-dui-modal="recruit-agent"] .dui-recruit-file-toolbar {
   display: grid !important;
-  grid-template-columns: minmax(0, 1fr) minmax(160px, 190px) auto !important;
+  grid-template-columns: minmax(0, 1fr) minmax(160px, 190px) !important;
   align-items: start !important;
   gap: 10px !important;
 }

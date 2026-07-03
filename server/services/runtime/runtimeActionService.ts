@@ -108,7 +108,7 @@ export function createRuntimeActionService(options: RuntimeActionServiceOptions)
   }
 
   async function stopGateway() {
-    const stop = await options.stopGatewayRuntime('manual stop requested from monitor')
+    const stop = await options.stopGatewayRuntime('manual gateway stop requested')
     options.invalidateRuntimeStatusCache()
     const gateway = await gatewayStatusAfterAction(true)
     return { ok: true, stop, gateway }
@@ -133,7 +133,7 @@ export function createRuntimeActionService(options: RuntimeActionServiceOptions)
     const restart = await options.tryRestartGatewayService({
       force: true,
       allowExternalTakeover: true,
-      reason: 'manual restart requested from monitor',
+      reason: 'manual gateway restart requested',
     })
     options.invalidateRuntimeStatusCache()
     const gateway = await gatewayStatusAfterAction(true)

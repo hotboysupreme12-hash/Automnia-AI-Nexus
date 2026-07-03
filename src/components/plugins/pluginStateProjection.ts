@@ -23,10 +23,6 @@ export type PluginPageState = {
 export const PLUGIN_FILTERS = [
   { id: 'all', label: 'All' },
   { id: 'enabled', label: 'Enabled' },
-  { id: 'configured', label: 'Configured' },
-  { id: 'missing-auth', label: 'Missing Auth' },
-  { id: 'unavailable', label: 'Unavailable' },
-  { id: 'failed', label: 'Failed' },
   { id: 'disabled', label: 'Disabled' },
 ] as const
 
@@ -58,6 +54,7 @@ export function pluginPageState(plugin: PluginPageEntry): PluginPageState {
 
   if (status === 'failed') return { key: 'failed', label: 'failed', tone: 'failed' }
   if (status === 'unavailable') return { key: 'unavailable', label: 'unavailable', tone: 'unavailable' }
+  if (!plugin.enabled && plugin.installable) return { key: 'disabled', label: 'available', tone: 'disabled' }
   if (!plugin.enabled || status === 'disabled') return { key: 'disabled', label: 'disabled', tone: 'disabled' }
   if (plugin.needsSetup && hasMissingAuth(plugin)) return { key: 'missing-auth', label: 'missing auth', tone: 'setup' }
   if (status === 'configured') return { key: 'configured', label: 'configured', tone: 'configured' }

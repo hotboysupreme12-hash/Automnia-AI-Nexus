@@ -2566,7 +2566,7 @@ html.dui-pro-overhaul.dui-cohesive-ui .dui-recruit-file-customize svg {
 }
 
 html.dui-pro-overhaul.dui-cohesive-ui .dui-recruit-file-toolbar {
-  grid-template-columns: minmax(0, 1fr) minmax(160px, 190px) auto !important;
+  grid-template-columns: minmax(0, 1fr) minmax(160px, 190px) !important;
   align-items: start !important;
 }
 

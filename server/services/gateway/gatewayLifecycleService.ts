@@ -391,6 +391,28 @@ export function createGatewayLifecycleService(options: GatewayLifecycleServiceOp
     return false
   }
 
+  async function waitForExistingGatewayHealth(listenerPid: number): Promise<boolean> {
+    const timeoutMs = Math.min(options.startupHealthConfirmTimeoutMs, 15_000)
+    const deadline = Date.now() + timeoutMs
+    markGatewayStartupGrace()
+    options.pushGatewayLog('lifecycle', `existing gateway listener pid=${listenerPid} detected; waiting for health before recovery`)
+    while (Date.now() <= deadline) {
+      if (!options.isPidAlive(listenerPid)) break
+      if (await isGatewayHealthy()) {
+        gatewayStartupGraceUntilMs = 0
+        gatewayRestartCount = 0
+        if (gatewayLastRestartOutcome === 'scheduled' || gatewayLastRestartOutcome === 'started') {
+          markGatewayRestartOutcome('succeeded')
+        }
+        options.pushGatewayLog('lifecycle', `attached to existing healthy gateway listener pid=${listenerPid}`)
+        return true
+      }
+      await options.delayMs(options.startupHealthPollMs)
+    }
+    gatewayStartupGraceUntilMs = 0
+    return false
+  }
+
   function startGatewayHealthMonitor(): void {
     if (gatewayHealthCheckInterval) return
     gatewayHealthCheckInterval = setInterval(async () => {
@@ -630,6 +652,11 @@ export function createGatewayLifecycleService(options: GatewayLifecycleServiceOp
 
     const portBusy = await options.checkTcpPort('127.0.0.1', options.gatewayHttpPort, 700)
     if (portBusy) {
+      const listenerPid = await gatewayListenerPidForPort(options.gatewayHttpPort).catch(() => null)
+      if (listenerPid && options.isPidAlive(listenerPid) && await waitForExistingGatewayHealth(listenerPid)) {
+        return
+      }
+
       const now = Date.now()
       if (now - lastGatewayPortReleaseAt < 5000) {
         log.warn(`[gateway] port ${options.gatewayHttpPort} is busy but unhealthy; waiting before another recovery attempt`)
@@ -639,6 +666,7 @@ export function createGatewayLifecycleService(options: GatewayLifecycleServiceOp
       log.warn(`[gateway] port ${options.gatewayHttpPort} accepts TCP but did not answer /health; releasing stale listener`)
       const released = await options.tryReleaseGatewayPort()
       log.warn(`[gateway] stale listener release ${released.released ? 'ok' : 'failed'}: ${released.detail}`)
+      clearListenerPidCache()
       if (!released.released && (await options.checkTcpPort('127.0.0.1', options.gatewayHttpPort, 700))) {
         return
       }
@@ -830,8 +858,8 @@ export function createGatewayLifecycleService(options: GatewayLifecycleServiceOp
       ? activeWork > 0 || queuedWork > 0
         ? 'Inspect active Gateway work before forcing a restart; use Doctor if the queue does not drain.'
         : failureStreak > 0 || recentFailures > 1
-          ? 'Run Doctor, inspect Gateway logs, then restart the Gateway from Monitor.'
-          : 'Restart Gateway from Monitor and rerun Doctor if health does not recover.'
+          ? 'Run Doctor, inspect Gateway logs, then restart the Gateway.'
+          : 'Restart Gateway and rerun Doctor if health does not recover.'
       : undefined
     const summary = needsAttention
       ? [

@@ -21,6 +21,7 @@ export type PluginEntry = {
   systemImage?: string
   packageName?: string
   installSpec?: string
+  installable?: boolean
   origin: string
   status: string
   enabled: boolean

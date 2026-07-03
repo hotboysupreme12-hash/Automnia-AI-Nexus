@@ -312,7 +312,6 @@ function initials(name: string) {
 }
 
 function portraitSrcForAgent(agent: Pick<OpenClawAgent, 'id' | 'portrait'>) {
-  if (agent.id === 'hn-netanyahu') return `${import.meta.env.BASE_URL}agents/generated/benjamin-netanyahu.jpg`
   return agent.portrait || ''
 }
 
@@ -578,6 +577,14 @@ export function AgentResponseConsole() {
     () => basePartyTargetIds.filter((id) => !chatRemovedPartyIds.includes(id)),
     [basePartyTargetIds, chatRemovedPartyIds],
   )
+
+  useEffect(() => {
+    setChatRemovedPartyIds((current) => {
+      const activeRemovals = current.filter((id) => basePartyTargetIds.includes(id))
+      return activeRemovals.length === current.length ? current : activeRemovals
+    })
+  }, [basePartyTargetIds])
+
   const draftRouteKey = useMemo(() => {
     if (selectedAgentIds.length === 1) return `direct:${selectedAgentIds[0]}`
     if (selectedAgentIds.length > 1) return `selected:${[...selectedAgentIds].sort().join(',')}`
@@ -683,6 +690,14 @@ export function AgentResponseConsole() {
     clawTalkStreamHealth.detail,
     clawTalkStreamHealth.retries > 0 ? `Reconnect attempts: ${clawTalkStreamHealth.retries}` : '',
   ].filter(Boolean).join(' ')
+  const emptyTargetLabel = selectedTargets.length > 0
+    ? `${selectedTargets.length} agent${selectedTargets.length === 1 ? '' : 's'} selected`
+    : targetCount > 0
+      ? `${targetCount} party agent${targetCount === 1 ? '' : 's'}`
+      : 'No agents selected'
+  const emptyStreamLabel = clawTalkStreamHealth.state === 'live'
+    ? 'Live link idle'
+    : streamLabel[clawTalkStreamHealth.state]
   const markPortraitFailed = useCallback((agentId: string, src: string) => {
     if (!src) return
     const key = portraitFailureKey(agentId, src)
@@ -1021,16 +1036,20 @@ export function AgentResponseConsole() {
     }
   }, [busyAgents, stopActiveAgentRuns])
 
-  const removeAgentFromChat = (agentId: string) => {
-    if (selectedTargets.length) {
-      setChatRemovedPartyIds((current) => current.length ? [] : current)
-      selectAgent(agentId, { toggle: true })
-      return
-    }
+  const hidePartyTargetFromChat = (agentId: string) => {
     setChatRemovedPartyIds((current) => {
       const activeRemovals = current.filter((id) => basePartyTargetIds.includes(id))
       return activeRemovals.includes(agentId) ? activeRemovals : [...activeRemovals, agentId]
     })
+  }
+
+  const removeAgentFromChat = (agentId: string) => {
+    if (selectedTargets.length) {
+      if (basePartyTargetIds.includes(agentId)) hidePartyTargetFromChat(agentId)
+      selectAgent(agentId, { toggle: true })
+      return
+    }
+    hidePartyTargetFromChat(agentId)
   }
 
   const handleTargetKeyDown = (event: React.KeyboardEvent<HTMLSpanElement>, agentId: string) => {
@@ -1206,20 +1225,18 @@ export function AgentResponseConsole() {
                       {laneDiagnostic.severity === 'stalled' ? 'stalled' : 'quiet'} {laneDiagnostic.quietLabel}
                     </span>
                   )}
-                  {selectedTargets.length > 0 && (
-                    <button
-                      type="button"
-                      className="dy-command-target-remove group-hover/chip:opacity-100"
-                      onClick={(event) => {
-                        event.stopPropagation()
-                        selectAgent(agent.id, { toggle: true })
-                      }}
-                      title={`Remove ${agent.name} from chat`}
-                      aria-label={`Remove ${agent.name} from chat`}
-                    >
+                  <button
+                    type="button"
+                    className="dy-command-target-remove group-hover/chip:opacity-100"
+                    onClick={(event) => {
+                      event.stopPropagation()
+                      removeAgentFromChat(agent.id)
+                    }}
+                    title={`Remove ${agent.name} from chat`}
+                    aria-label={`Remove ${agent.name} from chat`}
+                  >
                       ×
-                    </button>
-                  )}
+                  </button>
                 </span>
               )
             })}
@@ -1271,7 +1288,15 @@ export function AgentResponseConsole() {
         aria-relevant="additions text"
         aria-label="Command console responses"
         className="dy-command-messages min-h-0 flex-1 overflow-y-auto overflow-x-hidden space-y-3"
+        data-empty={visibleDisplayedResponses.length === 0 ? 'true' : 'false'}
       >
+        {visibleDisplayedResponses.length === 0 && (
+          <div className="dy-command-idle-hint" aria-label="Command console is standing by">
+            <p className="dy-command-idle-hint__title">Standing by</p>
+            <p className="dy-command-idle-hint__target">{emptyTargetLabel}</p>
+            <p className="dy-command-idle-hint__stream">{emptyStreamLabel}</p>
+          </div>
+        )}
         {visibleDisplayedResponses.map((entry) => {
           const meta = agentMetaById.get(entry.agentId)
           const avatar = meta?.portrait || ''
@@ -1291,50 +1316,6 @@ export function AgentResponseConsole() {
         })}
       </div>
 
-      {/* Attachment preview */}
-      {uploadedAttachment && (
-        <div className="dy-command-upload-preview shrink-0">
-          <div className="relative inline-flex max-w-full items-center gap-3">
-            {uploadedAttachment.preview ? (
-              <img
-                src={uploadedAttachment.preview}
-                alt="Attachment preview"
-                className="h-16 max-w-[200px] rounded-xl border border-white/[0.08] object-cover shadow-lg"
-              />
-            ) : (
-              <div
-                className="dy-command-attachment-card flex h-16 min-w-0 max-w-[260px] items-center gap-3 rounded-xl border border-white/[0.06] bg-slate-950/60 px-3 text-slate-300"
-                data-kind={uploadedAttachment.kind}
-              >
-                <span className="dy-command-attachment-icon flex h-9 w-9 shrink-0 items-center justify-center rounded-lg" aria-hidden="true">
-                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" className="h-[18px] w-[18px]">
-                    <path d="M14 2H7a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V7Z" />
-                    <path d="M14 2v5h5" />
-                  </svg>
-                </span>
-                <span className="min-w-0">
-                  <span className="block truncate text-[11px] font-semibold text-slate-200">{uploadedAttachment.file.name}</span>
-                  <span className="block text-[11px] font-bold uppercase tracking-[0.08em] text-slate-400">
-                    {attachmentKindLabel(uploadedAttachment.kind, uploadedAttachment.file)}
-                  </span>
-                </span>
-              </div>
-            )}
-            <button
-              type="button"
-              onClick={removeAttachment}
-              aria-label={`Remove attached file ${uploadedAttachment.file.name}`}
-              className="dy-command-upload-remove absolute -right-1.5 -top-1.5 flex h-5 w-5 items-center justify-center"
-              title="Remove attachment"
-            >
-              x
-            </button>
-          </div>
-          <span className="ml-3 align-middle text-[12px] font-medium text-slate-400">
-            {formatFileSize(uploadedAttachment.file.size)}
-          </span>
-        </div>
-      )}
       {uploadError && (
         <div className="dy-command-upload-error shrink-0">
           {uploadError}
@@ -1347,26 +1328,57 @@ export function AgentResponseConsole() {
       )}
       {/* Input area */}
       <div className="dy-command-composer shrink-0">
-        <div className="dy-command-composer__row" data-has-draft={prompt.trim() ? 'true' : 'false'}>
-          {/* Attachment upload button */}
-          <button
-            type="button"
-            aria-label="Attach file"
-            onClick={() => fileInputRef.current?.click()}
-            className="dy-command-icon-button flex h-10 w-10 shrink-0 items-center justify-center"
-            title="Attach file"
-          >
-            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" className="h-[18px] w-[18px]">
-              <path d="m21.4 11.1-9.2 9.2a6 6 0 0 1-8.5-8.5l9.2-9.2a4 4 0 0 1 5.7 5.7l-9.2 9.2a2 2 0 1 1-2.8-2.8l8.5-8.5" />
-            </svg>
-          </button>
-          <input
-            ref={fileInputRef}
-            type="file"
-            accept={COMMAND_CONSOLE_ACCEPTED_FILE_TYPES}
-            className="hidden"
-            onChange={handleAttachmentUpload}
-          />
+        <div
+          className="dy-command-composer__row"
+          data-has-draft={prompt.trim() ? 'true' : 'false'}
+          data-has-attachment={uploadedAttachment ? 'true' : 'false'}
+        >
+          {uploadedAttachment && (
+            <div className="dy-command-upload-preview shrink-0">
+              <div className="relative inline-flex max-w-full items-center gap-3">
+                {uploadedAttachment.preview ? (
+                  <img
+                    src={uploadedAttachment.preview}
+                    alt="Attachment preview"
+                    className="h-16 max-w-[200px] rounded-xl border border-white/[0.08] object-cover shadow-lg"
+                  />
+                ) : (
+                  <div
+                    className="dy-command-attachment-card flex h-16 min-w-0 max-w-[260px] items-center gap-3 rounded-xl border border-white/[0.06] bg-slate-950/60 px-3 text-slate-300"
+                    data-kind={uploadedAttachment.kind}
+                  >
+                    <span className="dy-command-attachment-icon flex h-9 w-9 shrink-0 items-center justify-center rounded-lg" aria-hidden="true">
+                      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" className="h-[18px] w-[18px]">
+                        <path d="M14 2H7a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V7Z" />
+                        <path d="M14 2v5h5" />
+                      </svg>
+                    </span>
+                    <span className="min-w-0">
+                      <span className="block truncate text-[11px] font-semibold text-slate-200">{uploadedAttachment.file.name}</span>
+                      <span className="block text-[11px] font-bold uppercase tracking-[0.08em] text-slate-400">
+                        {attachmentKindLabel(uploadedAttachment.kind, uploadedAttachment.file)}
+                      </span>
+                    </span>
+                  </div>
+                )}
+                <button
+                  type="button"
+                  onClick={removeAttachment}
+                  aria-label={`Remove attached file ${uploadedAttachment.file.name}`}
+                  className="dy-command-upload-remove absolute -right-1.5 -top-1.5 flex h-5 w-5 items-center justify-center"
+                  title="Remove attachment"
+                >
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" className="h-3 w-3" aria-hidden="true">
+                    <path d="M18 6 6 18" />
+                    <path d="m6 6 12 12" />
+                  </svg>
+                </button>
+              </div>
+              <span className="dy-command-upload-size">
+                {formatFileSize(uploadedAttachment.file.size)}
+              </span>
+            </div>
+          )}
 
           {/* Text input */}
           <div className="dy-command-composer__field relative flex-1">
@@ -1388,26 +1400,50 @@ export function AgentResponseConsole() {
             />
           </div>
 
-          {/* Send button */}
-          <button
-            type="button"
-            aria-label="Send message"
-            disabled={!canSend}
-            onClick={() => void handleSend()}
-            className="dy-command-send flex h-10 w-10 shrink-0 items-center justify-center"
-            title={isUploading ? 'Uploading attachment' : hardBlockedSendReason || queuedSendReason || 'Send (Enter)'}
-          >
-            {isUploading ? (
-              <svg className="h-4 w-4 animate-spin" viewBox="0 0 24 24" fill="none">
-                <circle cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="3" strokeDasharray="31.4 31.4" strokeLinecap="round" />
-              </svg>
-            ) : (
-              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className="h-4 w-4">
-                <path d="m22 2-7 20-4-9-9-4Z" />
-                <path d="M22 2 11 13" />
-              </svg>
-            )}
-          </button>
+          <div className="dy-command-composer__toolbar">
+            <div className="dy-command-composer__tools">
+              <button
+                type="button"
+                aria-label="Attach file"
+                onClick={() => fileInputRef.current?.click()}
+                className="dy-command-icon-button flex h-10 w-10 shrink-0 items-center justify-center"
+                title="Attach file"
+              >
+                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round" className="h-[18px] w-[18px]" aria-hidden="true">
+                  <path d="M12 5v14" />
+                  <path d="M5 12h14" />
+                </svg>
+              </button>
+              <input
+                ref={fileInputRef}
+                type="file"
+                accept={COMMAND_CONSOLE_ACCEPTED_FILE_TYPES}
+                className="hidden"
+                onChange={handleAttachmentUpload}
+              />
+            </div>
+
+            {/* Send button */}
+            <button
+              type="button"
+              aria-label="Send message"
+              disabled={!canSend}
+              onClick={() => void handleSend()}
+              className="dy-command-send flex h-10 w-10 shrink-0 items-center justify-center"
+              title={isUploading ? 'Uploading attachment' : hardBlockedSendReason || queuedSendReason || 'Send (Enter)'}
+            >
+              {isUploading ? (
+                <svg className="h-4 w-4 animate-spin" viewBox="0 0 24 24" fill="none">
+                  <circle cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="3" strokeDasharray="31.4 31.4" strokeLinecap="round" />
+                </svg>
+              ) : (
+                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" className="h-4 w-4" aria-hidden="true">
+                  <path d="M12 19V5" />
+                  <path d="m5 12 7-7 7 7" />
+                </svg>
+              )}
+            </button>
+          </div>
         </div>
       </div>
     </section>

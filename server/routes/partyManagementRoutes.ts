@@ -463,6 +463,14 @@ export function registerPartyManagementRoutes(app: Express, options: PartyManage
     if (!parsed.success) return apiFailure(res, 400, 'invalid_payload', 'Invalid payload', parsed.error.flatten())
 
     const payload = parsed.data
+    if (isRetiredAgentId(payload.agentId)) {
+      return apiFailure(
+        res,
+        409,
+        'recruit_failed',
+        'Roster is locked to Elena Vasquez, Sarah Cooper, and Marcus Chen. Retired agents cannot be recruited.',
+      )
+    }
     try {
       const config = await readOpenclawConfig()
       const profiles = await readPartyProfiles()

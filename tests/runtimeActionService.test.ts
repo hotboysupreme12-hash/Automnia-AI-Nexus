@@ -199,12 +199,12 @@ test('clearRuntimeMonitor delegates clean-slate recovery and preserves result sh
   assert.equal(state.recoveryClearCalls, 1)
 })
 
-test('Gateway actions preserve monitor-facing stop, start, and restart snapshots', async () => {
+test('Gateway actions preserve manual stop, start, and restart snapshots', async () => {
   const { service, state } = createHarness()
 
   const stop = await service.stopGateway()
   assert.equal(record(stop.gateway).healthy, false)
-  assert.deepEqual(state.stoppedReasons, ['manual stop requested from monitor'])
+  assert.deepEqual(state.stoppedReasons, ['manual gateway stop requested'])
   assert.deepEqual(state.listenerPortRequests, [])
 
   const start = await service.startGateway()
@@ -218,7 +218,7 @@ test('Gateway actions preserve monitor-facing stop, start, and restart snapshots
   assert.deepEqual(state.restartRequests, [{
     force: true,
     allowExternalTakeover: true,
-    reason: 'manual restart requested from monitor',
+    reason: 'manual gateway restart requested',
   }])
   assert.equal(state.invalidations, 3)
 })
