@@ -91,6 +91,8 @@ const command = process.execPath
 const requestedArgs = process.argv.slice(2)
 const unsignedDirectoryPackage = requestedArgs.includes('--unsigned') || process.env.DYSTOPAI_SKIP_PLATFORM_SIGNING === '1'
 const forwardedArgs = requestedArgs.filter((arg) => arg !== '--unsigned')
+const hasPublishMode = forwardedArgs.some((arg, index) => arg === '--publish' || arg.startsWith('--publish=') || forwardedArgs[index - 1] === '--publish')
+const publishArgs = hasPublishMode ? [] : ['--publish', 'never']
 const signingOverrideArgs = unsignedDirectoryPackage
   ? [
       '--config.win.signAndEditExecutable=false',
@@ -152,7 +154,7 @@ if (vendorPrep.status !== 0) {
 
 cleanGeneratedWindowsDirPackage()
 
-const child = spawn(command, [electronBuilderCli, ...forwardedArgs, ...signingOverrideArgs], {
+const child = spawn(command, [electronBuilderCli, ...forwardedArgs, ...publishArgs, ...signingOverrideArgs], {
   cwd: root,
   stdio: 'inherit',
   shell: false,
