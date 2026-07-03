@@ -270,22 +270,15 @@ Simple does not mean shallow. DystopAI is built to make agent work easier to tru
 
 ## Showcase
 
-The screenshots below reflect the refreshed dark control-center UI captured on June 29, 2026.
+The screenshots below reflect the refreshed dark control-center UI captured on July 3, 2026.
 
 | Agents | Missions |
 | --- | --- |
 | ![DystopAI Agents workspace](docs/assets/readme/dystopai-agents.png) | ![DystopAI Mission Board](docs/assets/readme/dystopai-missions.png) |
 
-| Runtime Monitor | Quiet Monitor |
+| Runtime Monitor | Plugin Runtime |
 | --- | --- |
-| ![DystopAI Runtime Monitor with channel activity](docs/assets/readme/dystopai-monitor.png) | ![DystopAI Runtime Monitor quiet state](docs/assets/readme/dystopai-monitor-quiet.png) |
-
-<details>
-<summary>View plugin runtime screenshot</summary>
-
-![DystopAI Plugin Runtime](docs/assets/readme/dystopai-plugins.png)
-
-</details>
+| ![DystopAI Runtime Monitor with channel activity](docs/assets/readme/dystopai-monitor.png) | ![DystopAI Plugin Runtime](docs/assets/readme/dystopai-plugins.png) |
 
 <details>
 <summary>View agent settings screenshot</summary>
