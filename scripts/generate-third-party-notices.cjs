@@ -26,6 +26,7 @@ for (const [packagePath, entry] of Object.entries(packages)) {
 }
 
 const sorted = [...rows.values()].sort((left, right) => `${left.name}@${left.version}`.localeCompare(`${right.name}@${right.version}`))
+const normalizeLineEndings = (value) => value.replace(/\r\n/g, '\n')
 const body = [
   'DystopAI Third-Party Software Notices',
   '=====================================',
@@ -42,7 +43,7 @@ const body = [
 
 if (checkOnly) {
   if (!fs.existsSync(output)) throw new Error(`[third-party-notices] Missing ${path.relative(root, output)}`)
-  if (fs.readFileSync(output, 'utf8') !== body) {
+  if (normalizeLineEndings(fs.readFileSync(output, 'utf8')) !== body) {
     throw new Error('[third-party-notices] THIRD_PARTY_NOTICES.txt is stale. Run npm run notices:generate.')
   }
   console.log(`[third-party-notices] verified ${sorted.length} package notice entries`)
