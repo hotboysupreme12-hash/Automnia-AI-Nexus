@@ -10,6 +10,7 @@ const packageJson = JSON.parse(read('package.json')) as {
 }
 const prepareRuntimeBundles = read('scripts/prepare-runtime-bundles.cjs')
 const prepareOpenClawVendor = read('scripts/prepare-openclaw-vendor.cjs')
+const electronMain = read('electron/main.cjs')
 const serverIndex = read('server/index.ts')
 const serverControlPlane = read('server/controlPlane.ts')
 
@@ -187,6 +188,31 @@ assert.match(
   serverControlPlane,
   /DYSTOPAI_OPENCLAW_VENDOR_ROOT/,
   'server startup self-heal must run the vendor prep script against the detected vendor root',
+)
+assert.match(
+  serverControlPlane,
+  /function resolveNodeRuntimeExecutable/,
+  'server startup must resolve a real Node runtime instead of reusing Electron for OpenClaw scripts',
+)
+assert.match(
+  serverControlPlane,
+  /return lower\.endsWith\('\.mjs'\) \|\| lower\.endsWith\('\.cjs'\) \|\| lower\.endsWith\('\.js'\)/,
+  'OpenClaw spawn specs must treat .mjs, .cjs, and .js files as Node scripts',
+)
+assert.match(
+  serverControlPlane,
+  /command: resolveNodeRuntimeExecutable\(\), args: \[bin, \.\.\.args\]/,
+  'OpenClaw script spawn specs must use the resolved Node runtime',
+)
+assert.match(
+  electronMain,
+  /nodeToolchainDirMatchesCurrentPlatform/,
+  'desktop launcher must discover bundled Node/npm toolchains for the current platform',
+)
+assert.doesNotMatch(
+  electronMain,
+  /node-v\\d\+\\\.\\d\+\\\.\\d\+-win-\(\?:x64\|arm64\)/,
+  'desktop launcher must not limit bundled Node/npm discovery to Windows directories',
 )
 
 assert.match(
