@@ -216,8 +216,13 @@ assert.match(
 )
 assert.match(
   electronMain,
-  /CONTROL_CENTER_FORCE_LOCAL_AGENT_RUNTIME = process\.env\.CONTROL_CENTER_FORCE_LOCAL_AGENT_RUNTIME \|\| '1'/,
-  'macOS desktop startup should force local agent runtime unless explicitly overridden',
+  /CONTROL_CENTER_ENABLE_MAC_GATEWAY_CHAT/,
+  'macOS desktop startup should keep Gateway chat opt-in only',
+)
+assert.match(
+  electronMain,
+  /CONTROL_CENTER_GATEWAY_AGENT_SESSIONS = '0'[\s\S]*CONTROL_CENTER_GATEWAY_CHAT_CLIENT = '0'[\s\S]*CONTROL_CENTER_FORCE_LOCAL_AGENT_RUNTIME = '1'/,
+  'macOS desktop startup should force local agent runtime by default',
 )
 assert.doesNotMatch(
   electronMain,
