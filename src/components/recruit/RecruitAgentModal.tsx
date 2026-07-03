@@ -794,7 +794,6 @@ export function RecruitAgentModal({ isOpen, onClose }: { isOpen: boolean; onClos
   const [newFileName, setNewFileName] = useState('')
   const [filesTouched, setFilesTouched] = useState(false)
   const [editorExpanded, setEditorExpanded] = useState(false)
-  const [showMarkdownEditor, setShowMarkdownEditor] = useState(false)
   const [cursorStatus, setCursorStatus] = useState({ line: 1, column: 1, selectionLength: 0 })
 
   const existingIds = useMemo(() => new Set(agents.map((agent) => agent.id)), [agents])
@@ -1020,7 +1019,6 @@ export function RecruitAgentModal({ isOpen, onClose }: { isOpen: boolean; onClos
     setNewFileName('')
     setFilesTouched(false)
     setEditorExpanded(false)
-    setShowMarkdownEditor(false)
     setCursorStatus({ line: 1, column: 1, selectionLength: 0 })
     setAutoForging(false)
     setSelectedTemplateDivision('')
@@ -1230,7 +1228,7 @@ export function RecruitAgentModal({ isOpen, onClose }: { isOpen: boolean; onClos
         filesForCleanup.style.removeProperty('min-height')
       }
     }
-  }, [isOpen, showMarkdownEditor, syncRecruitColumnHeights])
+  }, [isOpen, syncRecruitColumnHeights])
 
   const applyRecruitTemplate = useCallback((template: RecruitAgentTemplate) => {
     const defaults = template.defaults
@@ -1269,7 +1267,6 @@ export function RecruitAgentModal({ isOpen, onClose }: { isOpen: boolean; onClos
     setResourceFiles(nextFiles)
     setFilesTouched(true)
     setActiveFile(nextOrder.find((file) => file.toLowerCase() === 'identity.md') || nextOrder[0] || 'IDENTITY.md')
-    setShowMarkdownEditor(false)
     setStatusTone('success')
     setStatus(`Loaded ${template.name} with ${nextOrder.length} markdown files and ${(defaults.tools || []).length} tools.`)
     window.setTimeout(() => updateEditorCursor(), 0)
@@ -1387,7 +1384,6 @@ export function RecruitAgentModal({ isOpen, onClose }: { isOpen: boolean; onClos
     }))
     setFilesTouched(true)
     setActiveFile(nextFile)
-    setShowMarkdownEditor(true)
     if (newFileNameInputRef.current) newFileNameInputRef.current.value = ''
     setNewFileName('')
   }
@@ -1469,7 +1465,6 @@ export function RecruitAgentModal({ isOpen, onClose }: { isOpen: boolean; onClos
       setFilesTouched(true)
       setActiveFile(generatedFiles[0].file)
       setEditorExpanded(false)
-      setShowMarkdownEditor(true)
       setStatusTone('success')
       const generatedDepth = payload.personalityDepth
         ? personalityDepthOption(payload.personalityDepth).label
@@ -1555,7 +1550,7 @@ export function RecruitAgentModal({ isOpen, onClose }: { isOpen: boolean; onClos
             aria-modal="true"
             aria-labelledby="recruit-agent-title"
             data-dui-modal="recruit-agent"
-            data-markdown-editor={showMarkdownEditor ? 'open' : 'summary'}
+            data-markdown-editor="open"
             className="dui-recruit-modal w-full overflow-hidden"
             onPointerDown={(event) => event.stopPropagation()}
             onClick={(event) => event.stopPropagation()}
@@ -1575,7 +1570,7 @@ export function RecruitAgentModal({ isOpen, onClose }: { isOpen: boolean; onClos
                     <small>02</small>
                     <strong>Style</strong>
                   </span>
-                  <span data-state={showMarkdownEditor ? 'active' : 'done'}>
+                  <span data-state="active">
                     <small>03</small>
                     <strong>Files</strong>
                   </span>
@@ -1898,129 +1893,95 @@ export function RecruitAgentModal({ isOpen, onClose }: { isOpen: boolean; onClos
 
                   <div ref={recruitSideRef} className="dui-recruit-side">
                     <section ref={recruitFilesRef} className="dui-recruit-files" aria-label="Agent markdown bootstrap files">
-                    <SectionTitle icon="markdown" label="Markdown files" meta={`${fileOrder.length} ready`} />
-                    {!showMarkdownEditor ? (
-                      <div className="dui-recruit-file-summary">
-                        <div className="dui-recruit-file-summary-card">
-                          <span className="dui-recruit-file-summary-kicker">Auto-prepared</span>
-                          <strong>{fileOrder.length} bootstrap files</strong>
-                          <p>Defaults are ready from the details on the left. Open the editor only when you want to adjust the markdown.</p>
-                        </div>
-                        <div className="dui-recruit-file-pills" aria-label="Prepared markdown files">
+                      <SectionTitle icon="markdown" label="Markdown files" meta={`${fileOrder.length} ready`} />
+                      <div className="dui-recruit-file-toolbar">
+                        <div className="dui-recruit-file-tabs" role="tablist" aria-label="Markdown files">
                           {fileOrder.map((file) => (
-                            <span key={file} data-md-tone={markdownFileTone(file)}>{file}</span>
+                            <button
+                              key={file}
+                              type="button"
+                              role="tab"
+                              aria-selected={activeFile === file}
+                              data-md-tone={markdownFileTone(file)}
+                              className={activeFile === file ? 'is-active' : ''}
+                              onClick={() => setActiveFile(file)}
+                              title={`Edit ${file}`}
+                            >
+                              {file}
+                            </button>
                           ))}
                         </div>
-                        <button
-                          type="button"
-                          className="dui-recruit-file-customize"
-                          onClick={() => {
-                            setSelectedTemplateDivision('')
-                            setTemplateSearchQuery('')
-                            setEditorExpanded(false)
-                            setShowMarkdownEditor(true)
-                            window.setTimeout(() => editorTextRef.current?.focus(), 0)
-                          }}
-                        >
-                          Customize files
-                          <RecruitIcon type="chevron" />
-                        </button>
-                      </div>
-                    ) : (
-                      <>
-                        <div className="dui-recruit-file-toolbar">
-                          <div className="dui-recruit-file-tabs" role="tablist" aria-label="Markdown files">
-                            {fileOrder.map((file) => (
-                              <button
-                                key={file}
-                                type="button"
-                                role="tab"
-                                aria-selected={activeFile === file}
-                                data-md-tone={markdownFileTone(file)}
-                                className={activeFile === file ? 'is-active' : ''}
-                                onClick={() => setActiveFile(file)}
-                                title={`Edit ${file}`}
-                              >
-                                {file}
-                              </button>
-                            ))}
-                          </div>
-                          <div className="dui-recruit-file-add">
-                            <input ref={newFileNameInputRef} defaultValue={newFileName} onChange={() => scheduleTextDraftCommit()} onBlur={() => commitTextDrafts()} placeholder="EXTRA.md" />
-                            <button type="button" onClick={addMarkdownFile} title="Add a markdown bootstrap file">
-                              Add
-                              <RecruitIcon type="add" />
-                            </button>
-                          </div>
-                          <button type="button" className="dui-recruit-file-hide" onClick={() => setShowMarkdownEditor(false)}>
-                            Hide editor
+                        <div className="dui-recruit-file-add">
+                          <input ref={newFileNameInputRef} defaultValue={newFileName} onChange={() => scheduleTextDraftCommit()} onBlur={() => commitTextDrafts()} placeholder="EXTRA.md" />
+                          <button type="button" onClick={addMarkdownFile} title="Add a markdown bootstrap file">
+                            Add
+                            <RecruitIcon type="add" />
                           </button>
                         </div>
-                        <div className={editorClassName} onClick={() => editorTextRef.current?.focus()}>
-                          <div className="dui-recruit-code-scroll">
-                            <div ref={editorGutterRef} className="dui-recruit-code-gutter" aria-hidden="true">
-                              {highlightedMarkdownLines.map((_, index) => (
-                                <span key={`${activeFile}-line-${index}`}>{index + 1}</span>
-                              ))}
-                            </div>
-                            <pre ref={editorPreviewRef} className="dui-recruit-code-preview" aria-hidden="true">
-                              {highlightedMarkdownLines.map((line, index) => (
-                                <span key={`${activeFile}-preview-${index}`} className="dui-recruit-code-line">
-                                  {renderMarkdownLine(line)}
-                                </span>
-                              ))}
-                            </pre>
-                            <textarea
-                              ref={editorTextRef}
-                              className="dui-recruit-code-input"
-                              value={activeMarkdownContent}
-                              onChange={(event) => {
-                                setFilesTouched(true)
-                                setResourceFiles((current) => ({ ...current, [activeFile]: event.target.value }))
-                                updateEditorCursor(event.currentTarget)
-                              }}
-                              onClick={(event) => updateEditorCursor(event.currentTarget)}
-                              onFocus={(event) => updateEditorCursor(event.currentTarget)}
-                              onKeyDown={handleEditorKeyDown}
-                              onKeyUp={(event) => updateEditorCursor(event.currentTarget)}
-                              onSelect={(event) => updateEditorCursor(event.currentTarget)}
-                              onScroll={syncEditorScroll}
-                              spellCheck
-                              aria-label={`Edit ${activeFile}`}
-                            />
+                      </div>
+                      <div className={editorClassName} onClick={() => editorTextRef.current?.focus()}>
+                        <div className="dui-recruit-code-scroll">
+                          <div ref={editorGutterRef} className="dui-recruit-code-gutter" aria-hidden="true">
+                            {highlightedMarkdownLines.map((_, index) => (
+                              <span key={`${activeFile}-line-${index}`}>{index + 1}</span>
+                            ))}
                           </div>
-                          <div className="dui-recruit-code-status">
-                            <span className="dui-recruit-code-mode">{activeFile}</span>
-                            <span>Ln {cursorStatus.line}, Col {cursorStatus.column}</span>
-                            <span>{activeMarkdownLineCount} lines</span>
-                            <span>{activeMarkdownCharCount} chars</span>
-                            {!markdownHighlightEnabled ? <span>Plain text</span> : null}
-                            {cursorStatus.selectionLength ? <span>{cursorStatus.selectionLength} selected</span> : null}
-                            <span>Spaces: 2</span>
-                            <button
-                              type="button"
-                              className="dui-recruit-code-expand"
-                              aria-label={editorExpanded ? 'Collapse markdown editor' : 'Expand markdown editor'}
-                              aria-pressed={editorExpanded}
-                              title={editorExpanded ? 'Collapse markdown editor' : 'Expand markdown editor'}
-                              onClick={(event) => {
-                                event.stopPropagation()
-                                setEditorExpanded((current) => !current)
-                                window.setTimeout(() => {
-                                  editorTextRef.current?.focus()
-                                  syncEditorScroll()
-                                }, 0)
-                              }}
-                            >
-                              <RecruitIcon type="expand" />
-                            </button>
-                          </div>
+                          <pre ref={editorPreviewRef} className="dui-recruit-code-preview" aria-hidden="true">
+                            {highlightedMarkdownLines.map((line, index) => (
+                              <span key={`${activeFile}-preview-${index}`} className="dui-recruit-code-line">
+                                {renderMarkdownLine(line)}
+                              </span>
+                            ))}
+                          </pre>
+                          <textarea
+                            ref={editorTextRef}
+                            className="dui-recruit-code-input"
+                            value={activeMarkdownContent}
+                            onChange={(event) => {
+                              setFilesTouched(true)
+                              setResourceFiles((current) => ({ ...current, [activeFile]: event.target.value }))
+                              updateEditorCursor(event.currentTarget)
+                            }}
+                            onClick={(event) => updateEditorCursor(event.currentTarget)}
+                            onFocus={(event) => updateEditorCursor(event.currentTarget)}
+                            onKeyDown={handleEditorKeyDown}
+                            onKeyUp={(event) => updateEditorCursor(event.currentTarget)}
+                            onSelect={(event) => updateEditorCursor(event.currentTarget)}
+                            onScroll={syncEditorScroll}
+                            spellCheck
+                            aria-label={`Edit ${activeFile}`}
+                          />
                         </div>
-                      </>
-                    )}
-                  </section>
+                        <div className="dui-recruit-code-status">
+                          <span className="dui-recruit-code-mode">{activeFile}</span>
+                          <span>Ln {cursorStatus.line}, Col {cursorStatus.column}</span>
+                          <span>{activeMarkdownLineCount} lines</span>
+                          <span>{activeMarkdownCharCount} chars</span>
+                          {!markdownHighlightEnabled ? <span>Plain text</span> : null}
+                          {cursorStatus.selectionLength ? <span>{cursorStatus.selectionLength} selected</span> : null}
+                          <span>Spaces: 2</span>
+                          <button
+                            type="button"
+                            className="dui-recruit-code-expand"
+                            aria-label={editorExpanded ? 'Collapse markdown editor' : 'Expand markdown editor'}
+                            aria-pressed={editorExpanded}
+                            title={editorExpanded ? 'Collapse markdown editor' : 'Expand markdown editor'}
+                            onClick={(event) => {
+                              event.stopPropagation()
+                              setEditorExpanded((current) => !current)
+                              window.setTimeout(() => {
+                                editorTextRef.current?.focus()
+                                syncEditorScroll()
+                              }, 0)
+                            }}
+                          >
+                            <RecruitIcon type="expand" />
+                          </button>
+                        </div>
+                      </div>
+                    </section>
+                  </div>
                 </div>
-              </div>
               </div>
 
               <div className="dui-recruit-footer">

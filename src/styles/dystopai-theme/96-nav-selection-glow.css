@@ -1,0 +1,178 @@
+/* Nav selection: flat idle rail with one blue selected state. */
+html.dui-pro-overhaul .dy-human-nav {
+  --dy-nav-selected-blue: #149dff;
+  --dy-nav-selected-blue-rgb: 20, 157, 255;
+}
+
+html.dui-pro-overhaul .dy-human-nav :is(button[data-tone], .dy-human-nav-action[data-tone], .dy-human-nav-utility),
+html.dui-pro-overhaul.dui-cohesive-ui .dy-human-nav :is(button[data-tone], .dy-human-nav-action[data-tone], .dy-human-nav-utility) {
+  --nav-tone: var(--dy-nav-selected-blue) !important;
+  --dy-nav-accent: var(--dy-nav-selected-blue) !important;
+  --dy-nav-accent-rgb: var(--dy-nav-selected-blue-rgb) !important;
+}
+
+html.dui-pro-overhaul .dy-human-nav :is(button, .dy-human-nav-action, .dy-human-nav-utility) {
+  border-color: rgba(120, 170, 205, .20) !important;
+  outline: 1px solid rgba(120, 170, 205, .10) !important;
+  background: transparent !important;
+  box-shadow: none !important;
+  color: var(--dui-text-2) !important;
+  transform: none !important;
+  contain: layout paint !important;
+  transition:
+    border-color 90ms ease-out,
+    outline-color 90ms ease-out,
+    background-color 90ms ease-out,
+    color 90ms ease-out !important;
+}
+
+html.dui-pro-overhaul .dy-human-nav :is(button, .dy-human-nav-action, .dy-human-nav-utility)::before,
+html.dui-pro-overhaul.dui-cohesive-ui .dy-human-nav :is(button, .dy-human-nav-action, .dy-human-nav-utility)::before {
+  display: none !important;
+  opacity: 0 !important;
+  background: none !important;
+  box-shadow: none !important;
+}
+
+html.dui-pro-overhaul .dy-human-nav :is(button, .dy-human-nav-action, .dy-human-nav-utility)::after,
+html.dui-pro-overhaul.dui-cohesive-ui .dy-human-nav :is(button, .dy-human-nav-action, .dy-human-nav-utility)::after {
+  display: none !important;
+  width: 0 !important;
+  opacity: 0 !important;
+  background: none !important;
+  box-shadow: none !important;
+}
+
+html.dui-pro-overhaul .dy-human-nav :is(button, .dy-human-nav-action, .dy-human-nav-utility):hover,
+html.dui-pro-overhaul.dui-cohesive-ui .dy-human-nav :is(button, .dy-human-nav-action, .dy-human-nav-utility):hover {
+  border-color: rgba(var(--dy-nav-selected-blue-rgb), .72) !important;
+  outline: 1px solid rgba(var(--dy-nav-selected-blue-rgb), .34) !important;
+  background: rgba(var(--dy-nav-selected-blue-rgb), .10) !important;
+  box-shadow: none !important;
+  color: #f4f9ff !important;
+}
+
+html.dui-pro-overhaul .dy-human-nav .dy-human-nav-icon {
+  border-color: rgba(174, 193, 215, .16) !important;
+  background: rgba(7, 12, 20, .78) !important;
+  box-shadow: none !important;
+  color: #b8c7d8 !important;
+  transition:
+    border-color 90ms ease-out,
+    background-color 90ms ease-out,
+    color 90ms ease-out !important;
+}
+
+html.dui-pro-overhaul .dy-human-nav .dy-human-nav-icon-img {
+  opacity: .84 !important;
+  filter: none !important;
+  transform: none !important;
+  transition: opacity 90ms ease-out !important;
+}
+
+html.dui-pro-overhaul .dy-human-nav .dy-human-nav-icon svg {
+  color: currentColor !important;
+  filter: none !important;
+}
+
+html.dui-pro-overhaul .dy-human-nav .dy-human-nav-icon svg * {
+  stroke: currentColor !important;
+}
+
+html.dui-pro-overhaul .dy-human-nav :is(button, .dy-human-nav-action, .dy-human-nav-utility):hover .dy-human-nav-icon,
+html.dui-pro-overhaul.dui-cohesive-ui .dy-human-nav :is(button, .dy-human-nav-action, .dy-human-nav-utility):hover .dy-human-nav-icon {
+  border-color: rgba(var(--dy-nav-selected-blue-rgb), .70) !important;
+  background: rgba(var(--dy-nav-selected-blue-rgb), .14) !important;
+  box-shadow: none !important;
+  color: #dff1ff !important;
+}
+
+html.dui-pro-overhaul .dy-human-nav :is(button, .dy-human-nav-action, .dy-human-nav-utility):hover .dy-human-nav-icon-img,
+html.dui-pro-overhaul.dui-cohesive-ui .dy-human-nav :is(button, .dy-human-nav-action, .dy-human-nav-utility):hover .dy-human-nav-icon-img {
+  opacity: 1 !important;
+  filter: none !important;
+  transform: none !important;
+}
+
+html.dui-pro-overhaul .dy-human-nav :is(button, .dy-human-nav-action, .dy-human-nav-utility):hover .dy-human-nav-copy span,
+html.dui-pro-overhaul.dui-cohesive-ui .dy-human-nav :is(button, .dy-human-nav-action, .dy-human-nav-utility):hover .dy-human-nav-copy span {
+  color: #9fd6ff !important;
+}
+
+html.dui-pro-overhaul .dy-human-nav :is(button, .dy-human-nav-action, .dy-human-nav-utility):is(.is-active, [aria-current="page"]),
+html.dui-pro-overhaul.dui-cohesive-ui .dy-human-nav :is(button, .dy-human-nav-action, .dy-human-nav-utility):is(.is-active, [aria-current="page"]) {
+  border-color: rgba(var(--dy-nav-selected-blue-rgb), .76) !important;
+  outline: 1px solid rgba(var(--dy-nav-selected-blue-rgb), .42) !important;
+  background: rgba(var(--dy-nav-selected-blue-rgb), .11) !important;
+  box-shadow: none !important;
+  color: #f4f9ff !important;
+}
+
+html.dui-pro-overhaul .dy-human-nav :is(button, .dy-human-nav-action, .dy-human-nav-utility):is(.is-active, [aria-current="page"])::after,
+html.dui-pro-overhaul.dui-cohesive-ui .dy-human-nav :is(button, .dy-human-nav-action, .dy-human-nav-utility):is(.is-active, [aria-current="page"])::after {
+  width: 0 !important;
+  opacity: 0 !important;
+  background: none !important;
+  box-shadow: none !important;
+}
+
+html.dui-pro-overhaul .dy-human-nav :is(button, .dy-human-nav-action, .dy-human-nav-utility):is(.is-active, [aria-current="page"]) .dy-human-nav-icon,
+html.dui-pro-overhaul.dui-cohesive-ui .dy-human-nav :is(button, .dy-human-nav-action, .dy-human-nav-utility):is(.is-active, [aria-current="page"]) .dy-human-nav-icon {
+  border-color: rgba(var(--dy-nav-selected-blue-rgb), .82) !important;
+  background: rgba(var(--dy-nav-selected-blue-rgb), .16) !important;
+  color: #dff1ff !important;
+  box-shadow: none !important;
+}
+
+html.dui-pro-overhaul .dy-human-nav :is(button, .dy-human-nav-action, .dy-human-nav-utility):is(.is-active, [aria-current="page"]) .dy-human-nav-icon-img {
+  opacity: 1 !important;
+  filter: none !important;
+  transform: none !important;
+}
+
+html.dui-pro-overhaul .dy-human-nav :is(button, .dy-human-nav-action, .dy-human-nav-utility):is(.is-active, [aria-current="page"]) .dy-human-nav-copy span {
+  color: #9fd6ff !important;
+}
+
+/* Workspace shelf de-overlap: keep the title bar as one opaque surface. */
+html.dui-pro-overhaul .app-bg > .dy-app-main,
+html.dui-pro-overhaul.dui-cohesive-ui .app-bg > .dy-app-main {
+  padding-top: 0 !important;
+}
+
+html.dui-pro-overhaul .dy-workspace-context[data-workspace="agents"],
+html.dui-pro-overhaul.dui-cohesive-ui .dy-workspace-context[data-workspace="agents"],
+html.dui-pro-overhaul.dui-no-blue-forms .dy-workspace-context[data-workspace="agents"],
+html.dui-pro-overhaul:not([data-dui-accent-mode]) .dy-workspace-context[data-workspace="agents"] {
+  top: 0 !important;
+  min-height: 88px !important;
+  margin: 0 0 10px !important;
+  padding: 16px 18px !important;
+  border-top: 0 !important;
+  border-color: rgba(232, 234, 238, .13) !important;
+  background: #050608 !important;
+  background-image: none !important;
+  box-shadow: none !important;
+  backdrop-filter: none !important;
+  -webkit-backdrop-filter: none !important;
+}
+
+html.dui-pro-overhaul .dy-workspace-context[data-workspace="agents"]::before,
+html.dui-pro-overhaul.dui-cohesive-ui .dy-workspace-context[data-workspace="agents"]::before {
+  right: 0 !important;
+  bottom: 0 !important;
+  left: 0 !important;
+  top: auto !important;
+  width: auto !important;
+  height: 1px !important;
+  background: rgba(232, 234, 238, .13) !important;
+  box-shadow: none !important;
+  opacity: 1 !important;
+}
+
+html.dui-pro-overhaul .dy-workspace-context[data-workspace="agents"] .dy-workspace-context__meta .badge.dy-status-chip,
+html.dui-pro-overhaul .dy-workspace-context[data-workspace="agents"] .dy-workspace-context__meta .dy-status-chip,
+html.dui-pro-overhaul.dui-cohesive-ui .dy-workspace-context[data-workspace="agents"] .dy-workspace-context__meta .badge.dy-status-chip,
+html.dui-pro-overhaul.dui-cohesive-ui .dy-workspace-context[data-workspace="agents"] .dy-workspace-context__meta .dy-status-chip {
+  box-shadow: none !important;
+}

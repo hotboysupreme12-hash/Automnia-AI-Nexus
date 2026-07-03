@@ -325,7 +325,7 @@ assertIncludes(gatewayLifecycleService, 'allowExternalTakeover', 'Gateway restar
 
 assertRegex(
   runtimeActionService,
-  /tryRestartGatewayService\(\{\s*force: true,\s*allowExternalTakeover: true,\s*reason: 'manual restart requested from monitor',\s*\}\)/,
+  /tryRestartGatewayService\(\{\s*force: true,\s*allowExternalTakeover: true,\s*reason: 'manual gateway restart requested',\s*\}\)/,
   'manual restart takeover flag',
 )
 

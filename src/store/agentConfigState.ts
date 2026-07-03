@@ -4,14 +4,16 @@ import type { OpenClawAgent } from '../types/nexus'
 
 export const MAX_PARTY_SIZE = 6
 
-const DEFAULT_TEMPLATE_AGENT_ID = 'hn-commander'
-const DEFAULT_ACTIVE_PARTY_IDS = [
-  'hn-commander',
-  'hn-coordinator',
-  'hn-builder',
-  'hn-reviewer',
+const SURVIVING_AGENT_IDS = new Set([
   'hn-architect',
-  'hn-fullstack',
+  'hn-coordinator',
+  'hn-crypto-lead',
+])
+const DEFAULT_TEMPLATE_AGENT_ID = 'hn-coordinator'
+const DEFAULT_ACTIVE_PARTY_IDS = [
+  'hn-architect',
+  'hn-coordinator',
+  'hn-crypto-lead',
 ]
 export const LEGACY_DEFAULT_PARTY_IDS = [
   'hn-netanyahu',
@@ -26,29 +28,28 @@ const BUILTIN_RETIRED_AGENT_IDS = new Set([
   'recruit-check-mps3678p',
   'no-such-agent',
   'hn-builder',
+  'hn-commander',
+  'hn-reviewer',
+  'hn-fullstack',
+  'hn-netanyahu',
+  'hn-crypto-technical',
+  'hn-crypto-onchain',
+  'hn-crypto-quant',
+  'hn-crypto-sentiment',
+  'hn-buffett',
+  'hn-devops',
+  'hn-security',
+  'hn-testing',
+  'hn-ux',
   'hn-franklin',
   'hn-trump',
 ])
 const RETIRED_AGENT_IDS = new Set(BUILTIN_RETIRED_AGENT_IDS)
 
 const DEFAULT_AGENT_PORTRAIT_SUFFIXES: Record<string, string[]> = {
-  'hn-netanyahu': ['agents/benjamin-netanyahu.jpg', 'agents/generated/benjamin-netanyahu.jpg'],
-  'hn-commander': ['agents/donald-trump.jpg', 'agents/generated/donald-trump.jpg'],
-  'hn-coordinator': ['agents/sarah-cooper.jpg', 'agents/generated/sarah-cooper.jpg'],
-  'hn-builder': ['agents/james-roberts.jpg', 'agents/generated/james-roberts.jpg'],
-  'hn-reviewer': ['agents/brandon-riley.jpg', 'agents/generated/brandon-riley.jpg'],
-  'hn-crypto-lead': ['agents/marcus-chen.jpg', 'agents/generated/marcus-chen.jpg'],
-  'hn-crypto-technical': ['agents/diana-reyes.jpg', 'agents/generated/diana-reyes.jpg'],
-  'hn-crypto-onchain': ['agents/viktor-volkov.jpg', 'agents/generated/viktor-volkov.jpg'],
-  'hn-crypto-quant': ['agents/aisha-patel.jpg', 'agents/generated/aisha-patel.jpg'],
-  'hn-crypto-sentiment': ['agents/zoe-kim.jpg', 'agents/generated/zoe-kim.jpg'],
-  'hn-buffett': ['agents/warren-buffett.jpg', 'agents/generated/warren-buffett.jpg'],
   'hn-architect': ['agents/elena-vasquez.svg', 'agents/generated/elena-vasquez.jpg'],
-  'hn-devops': ['agents/marcus-thorne.svg', 'agents/generated/marcus-thorne.jpg'],
-  'hn-fullstack': ['agents/priya-sharma.svg', 'agents/generated/priya-sharma.jpg'],
-  'hn-security': ['agents/thomas-blackwood.svg', 'agents/generated/thomas-blackwood.jpg'],
-  'hn-testing': ['agents/yuki-tanaka.svg', 'agents/generated/yuki-tanaka.jpg'],
-  'hn-ux': ['agents/olivia-chen.svg', 'agents/generated/olivia-chen.jpg'],
+  'hn-coordinator': ['agents/sarah-cooper.jpg', 'agents/generated/sarah-cooper.jpg'],
+  'hn-crypto-lead': ['agents/marcus-chen.jpg', 'agents/generated/marcus-chen.jpg'],
 }
 
 export interface NexusAgentConfigState {
@@ -99,19 +100,19 @@ export function retiredAgentIdsForStore(): string[] {
 
 export function isRetiredAgentId(agentId: string | undefined): boolean {
   const id = normalizeRetiredAgentId(agentId)
-  return Boolean(id && RETIRED_AGENT_IDS.has(id))
+  return Boolean(id && (RETIRED_AGENT_IDS.has(id) || !SURVIVING_AGENT_IDS.has(id)))
 }
 
 let seedCache: OpenClawAgent[] | null = null
 export function getSeedAgents(): OpenClawAgent[] {
-  if (!seedCache) seedCache = makeSeedAgents()
+  if (!seedCache) seedCache = makeSeedAgents().filter((agent) => !isRetiredAgentId(agent.id))
   return seedCache
 }
 
 export function resolveDefaultTemplateAgentId(agents: OpenClawAgent[]): string | null {
   const selectableAgents = agents.filter((agent) => !isRetiredAgentId(agent.id))
   if (selectableAgents.some((agent) => agent.id === DEFAULT_TEMPLATE_AGENT_ID)) return DEFAULT_TEMPLATE_AGENT_ID
-  return selectableAgents.find((agent) => agent.id !== 'hn-netanyahu')?.id ?? selectableAgents[0]?.id ?? null
+  return selectableAgents[0]?.id ?? null
 }
 
 export function getDefaultTemplateAgent(): OpenClawAgent {
@@ -126,7 +127,7 @@ export function makeDefaultParty(agents: OpenClawAgent[]): string[] {
   const preferredIds = new Set(preferred)
   const fillers = agents
     .map((agent) => agent.id)
-    .filter((id) => validIds.has(id) && !preferredIds.has(id) && id !== 'hn-netanyahu')
+    .filter((id) => validIds.has(id) && !preferredIds.has(id))
   const fallback = agents
     .map((agent) => agent.id)
     .filter((id) => validIds.has(id) && !preferredIds.has(id) && !fillers.includes(id))

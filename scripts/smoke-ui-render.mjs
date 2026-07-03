@@ -597,13 +597,12 @@ async function inspectWorkspaceNavigation(window) {
     "        controls,",
     "        selected: monitorTab.getAttribute('aria-selected') === 'true',",
     "        ...summarizePanel(panel),",
-    "        doctorRepairButtonPresent: Boolean(document.querySelector('.dy-monitor-doctor-repair-button')),",
-    "        doctorRepairButtonDisabled: document.querySelector('.dy-monitor-doctor-repair-button')?.disabled === true,",
-    "        doctorRepairButtonTitle: document.querySelector('.dy-monitor-doctor-repair-button')?.getAttribute('title') || '',",
     "        gatewayRestartButtonPresent: Boolean(document.querySelector('.dy-gateway-restart-button')),",
-    "        gatewayRestartButtonText: document.querySelector('.dy-gateway-restart-button')?.textContent.replace(/\\s+/g, ' ').trim() || '',",
-    "        gatewayRestartButtonAriaLabel: document.querySelector('.dy-gateway-restart-button')?.getAttribute('aria-label') || '',",
+    "        gatewayRestartButtonDisabled: document.querySelector('.dy-gateway-restart-button')?.disabled === true,",
     "        gatewayRestartButtonTitle: document.querySelector('.dy-gateway-restart-button')?.getAttribute('title') || '',",
+    "        gatewayRestartButtonText: document.querySelector('.dy-gateway-restart-button')?.textContent.replace(/\\s+/g, ' ').trim() || '',",
+    "        gatewayRuntimeStripPresent: Boolean(document.querySelector('.dy-gateway-summary-card')),",
+    "        gatewayRuntimeStripText: document.querySelector('.dy-gateway-summary-card')?.textContent.replace(/\\s+/g, ' ').trim() || '',",
     "        doctorFindingListPresent: Boolean(document.querySelector('.dy-doctor-finding-list')),",
     "        doctorFindingText: document.querySelector('.dy-doctor-finding-list')?.textContent.replace(/\\s+/g, ' ').trim() || '',",
       "      })",
@@ -916,7 +915,7 @@ async function cleanSlateMonitor(window, mode = 'success') {
   return window.webContents.executeJavaScript(cleanSlateScript)
 }
 
-async function restartGatewayFromMonitor(window) {
+async function restartGatewayFromToolbar(window) {
   const restartScript = [
     "(() => {",
     "  const wait = (ms) => new Promise((resolve) => setTimeout(resolve, ms))",
@@ -938,39 +937,24 @@ async function restartGatewayFromMonitor(window) {
     "    if (!monitorNavItem) return { attempted: false, reason: 'monitor-nav-missing' }",
     "    monitorNavItem.click()",
     "    await wait(700)",
-    "    const gatewayTab = document.querySelector('#monitor-tab-gateway')",
-    "    if (gatewayTab) {",
-    "      gatewayTab.click()",
-    "      await wait(300)",
-    "    }",
-    "    const monitorPanel = document.querySelector('[data-dui-panel=\"monitor\"]')",
-    "    const restartButton = monitorPanel ? monitorPanel.querySelector('button.dy-gateway-restart-button') : null",
+    "    const button = document.querySelector('.dy-gateway-restart-button')",
     "    const beforeStats = await readStats().catch(() => ({ calls: 0 }))",
-    "    if (!monitorPanel || !restartButton) {",
-    "      return { attempted: false, reason: 'gateway-restart-button-missing', beforeStats }",
-    "    }",
-    "    const buttonTitle = restartButton.getAttribute('title') || ''",
-    "    const buttonAriaLabel = restartButton.getAttribute('aria-label') || ''",
-    "    restartButton.click()",
-    "    const calledStats = await waitFor(async () => {",
-    "      const stats = await readStats().catch(() => null)",
-    "      return stats && stats.calls > beforeStats.calls ? stats : null",
-    "    }, 5000)",
-    "    const status = await waitFor(() => Array.from(monitorPanel.querySelectorAll('[role=\"status\"]')).find((element) => /Gateway restart/.test(element.textContent || '')), 5000)",
-    "    const afterStats = await readStats().catch(() => calledStats || beforeStats)",
-    "    const statusText = status ? status.textContent.replace(/\\s+/g, ' ').trim() : ''",
+    "    if (!button) return { attempted: false, reason: 'restart-button-missing', beforeStats }",
+    "    const buttonTitle = button.getAttribute('title') || ''",
+    "    const buttonText = button.textContent.replace(/\\s+/g, ' ').trim()",
+    "    button.click()",
+    "    const afterStats = await waitFor(async () => {",
+    "      const stats = await readStats().catch(() => beforeStats)",
+    "      return stats.calls > beforeStats.calls ? stats : null",
+    "    }, 5000) || beforeStats",
     "    return {",
     "      attempted: true,",
     "      clicked: true,",
-    "      endpointCalled: Boolean(calledStats),",
+    "      endpointCalled: afterStats.calls > beforeStats.calls,",
     "      beforeStats,",
     "      afterStats,",
     "      buttonTitle,",
-    "      buttonAriaLabel,",
-    "      statusPresent: Boolean(status),",
-    "      statusRole: status ? status.getAttribute('role') || '' : '',",
-    "      statusAriaLive: status ? status.getAttribute('aria-live') || '' : '',",
-    "      statusText,",
+    "      buttonText,",
     "    }",
     "  })()",
     "})()",
@@ -1045,9 +1029,9 @@ async function inspectViewport(viewport) {
   const commandConsoleStopClick = await stopRunningCommandConsole(window)
   const commandConsoleMissingProviderAuth = await seedMissingProviderAuthCommandConsole(window)
   const commandConsoleRedactedFailure = await seedRedactedFailedCommandConsole(window)
+  const monitorGatewayRestart = await restartGatewayFromToolbar(window)
   const monitorCleanSlate = await cleanSlateMonitor(window)
   const monitorCleanSlateFailure = await cleanSlateMonitor(window, 'fail')
-  const monitorGatewayRestart = await restartGatewayFromMonitor(window)
   window.destroy()
 
   const bitmap = bitmapStats(image)
@@ -1115,13 +1099,12 @@ async function inspectViewport(viewport) {
         && innerTab.panelRect?.width > 0
         && innerTab.panelRect?.height > 0
     ))
-  const doctorRepairButtonOk = Boolean(gatewayMonitorTab?.doctorRepairButtonPresent)
-    && gatewayMonitorTab.doctorRepairButtonDisabled === false
-    && /Doctor safe non-interactive repair/.test(gatewayMonitorTab.doctorRepairButtonTitle)
   const gatewayRestartButtonOk = Boolean(gatewayMonitorTab?.gatewayRestartButtonPresent)
-    && gatewayMonitorTab.gatewayRestartButtonText === 'Restart Gateway'
-    && gatewayMonitorTab.gatewayRestartButtonAriaLabel === 'Restart Gateway from Monitor'
-    && /Restart the local OpenClaw Gateway/.test(gatewayMonitorTab.gatewayRestartButtonTitle)
+    && gatewayMonitorTab.gatewayRestartButtonDisabled === false
+    && /Restart the OpenClaw Gateway/.test(gatewayMonitorTab.gatewayRestartButtonTitle)
+    && /Restart Gateway/.test(gatewayMonitorTab.gatewayRestartButtonText)
+  const gatewayRuntimeStripRemovedOk = Boolean(gatewayMonitorTab)
+    && gatewayMonitorTab.gatewayRuntimeStripPresent === false
   const doctorStructuredFindingsOk = Boolean(gatewayMonitorTab?.doctorFindingListPresent)
     && /plugin/i.test(gatewayMonitorTab.doctorFindingText)
     && /core\/doctor\/plugin-config/.test(gatewayMonitorTab.doctorFindingText)
@@ -1164,6 +1147,11 @@ async function inspectViewport(viewport) {
     && commandConsoleRedactedFailure.redactedFailureMessageTransport === 'gateway-chat'
     && commandConsoleRedactedFailure.redactedFailureCtaRect?.width > 0
     && commandConsoleRedactedFailure.redactedFailureCtaRect?.height > 0
+    && monitorGatewayRestart.attempted
+    && monitorGatewayRestart.clicked
+    && monitorGatewayRestart.endpointCalled
+    && /Restart Gateway/.test(monitorGatewayRestart.buttonText)
+    && /Restart the OpenClaw Gateway/.test(monitorGatewayRestart.buttonTitle)
     && monitorCleanSlate.attempted
     && monitorCleanSlate.clicked
     && monitorCleanSlate.endpointCalled
@@ -1188,20 +1176,9 @@ async function inspectViewport(viewport) {
     && /ui_smoke_monitor_clear_failed/.test(monitorCleanSlateFailure.statusText)
     && /simulated Clean Slate failure/.test(monitorCleanSlateFailure.statusText)
     && !monitorCleanSlateFailure.successTextStillPresent
-    && monitorGatewayRestart.attempted
-    && monitorGatewayRestart.clicked
-    && monitorGatewayRestart.endpointCalled
-    && monitorGatewayRestart.afterStats.calls > monitorGatewayRestart.beforeStats.calls
-    && monitorGatewayRestart.buttonAriaLabel === 'Restart Gateway from Monitor'
-    && /Restart the local OpenClaw Gateway/.test(monitorGatewayRestart.buttonTitle)
-    && monitorGatewayRestart.statusPresent
-    && monitorGatewayRestart.statusRole === 'status'
-    && monitorGatewayRestart.statusAriaLive === 'polite'
-    && /Gateway restart started from Monitor\./.test(monitorGatewayRestart.statusText)
-    && /ui smoke gateway restart accepted/.test(monitorGatewayRestart.statusText)
     && monitorTabsOk
-    && doctorRepairButtonOk
     && gatewayRestartButtonOk
+    && gatewayRuntimeStripRemovedOk
     && doctorStructuredFindingsOk
     && bitmap.nonBlankRatio > 0.02
 
@@ -1218,9 +1195,9 @@ async function inspectViewport(viewport) {
     commandConsoleStopClick,
     commandConsoleMissingProviderAuth,
     commandConsoleRedactedFailure,
+    monitorGatewayRestart,
     monitorCleanSlate,
     monitorCleanSlateFailure,
-    monitorGatewayRestart,
     workspaceNavigation,
   }
 }

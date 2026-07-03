@@ -298,7 +298,7 @@ test('agent config state owns roster and party persistence without mission keys'
   })
   assert.equal(Object.keys(persisted).includes('missionHistory'), false)
   assert.equal(persisted.agents[0]?.portrait.startsWith('data:'), false)
-  assert.deepEqual(persisted.activePartyIds, [state.agents[0]!.id, 'missing'])
+  assert.deepEqual(persisted.activePartyIds, [state.agents[0]!.id])
 })
 
 test('agent config hydration repairs legacy default party without mission state', () => {
@@ -307,8 +307,10 @@ test('agent config hydration repairs legacy default party without mission state'
     confirmedPartyIds: ['hn-netanyahu', 'hn-commander', 'hn-coordinator', 'hn-builder', 'hn-reviewer'],
   })
   assert.equal(merged.activePartyIds.includes('hn-netanyahu'), false)
+  assert.equal(merged.activePartyIds.includes('hn-commander'), false)
   assert.equal(merged.activePartyIds.includes('hn-builder'), false)
   assert.equal(merged.activePartyIds.every((id) => merged.agents.some((agent) => agent.id === id)), true)
+  assert.deepEqual(merged.activePartyIds, ['hn-architect', 'hn-coordinator', 'hn-crypto-lead'])
   assert.deepEqual(merged.confirmedPartyIds, merged.activePartyIds)
 })
 
@@ -340,6 +342,8 @@ test('agent config helpers normalize retired ids, parties, portraits, and persis
   assert.deepEqual(rememberRetiredAgentIds([' Phase-J-Retired ', 42, 'bad id']), ['phase-j-retired'])
   assert.deepEqual(rememberRetiredAgentId('phase-j-second-retired'), ['phase-j-retired', 'phase-j-second-retired'])
   assert.equal(isRetiredAgentId('PHASE-J-RETIRED'), true)
+  assert.equal(isRetiredAgentId('hn-commander'), true)
+  assert.equal(isRetiredAgentId(first.id), false)
 
   assert.equal(resolveDefaultTemplateAgentId([]), null)
   assert.equal(resolveDefaultTemplateAgentId([first]), first.id)
@@ -471,6 +475,7 @@ test('nexus persistence migration hydrates split modules while preserving volati
 
   assert.notEqual(merged, current)
   assert.equal(merged.activePartyIds.includes('hn-netanyahu'), false)
+  assert.equal(merged.activePartyIds.includes('hn-commander'), false)
   assert.equal(merged.activePartyIds.includes('hn-builder'), false)
   assert.equal(merged.activePartyIds.every((id) => merged.agents.some((agent) => agent.id === id)), true)
   assert.deepEqual(merged.confirmedPartyIds, merged.activePartyIds)
@@ -529,7 +534,7 @@ test('nexus persistence partialize writes the compact nexus-v10 payload shape on
     'retiredAgentIds',
   ])
   assert.equal(persisted.agents[0]?.portrait.startsWith('data:'), false)
-  assert.deepEqual(persisted.activePartyIds, [firstAgent.id, 'missing-agent'])
+  assert.deepEqual(persisted.activePartyIds, [firstAgent.id])
   assert.equal(persisted.missionHistory.length, MAX_HISTORY)
   assert.equal(persisted.missionReports.length, MAX_REPORTS)
   assert.equal('activeMission' in persisted, false)

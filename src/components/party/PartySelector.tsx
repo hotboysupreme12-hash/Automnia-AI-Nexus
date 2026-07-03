@@ -118,14 +118,9 @@ const INTENT_KEYWORDS: Record<string, string[]> = {
 }
 
 const AGENT_INTENT_TAGS: Record<string, string[]> = {
-  'hn-buffett': ['money', 'finance', 'wealth', 'investing', 'investment', 'portfolio', 'value', 'market', 'capital', 'stocks', 'stock', 'buffett', 'warren'],
   'hn-crypto-lead': ['money', 'finance', 'crypto', 'trading', 'market', 'alpha', 'token', 'defi', 'portfolio'],
-  'hn-crypto-technical': ['crypto', 'trading', 'technical', 'charts', 'patterns', 'market', 'alpha', 'trade', 'stocks'],
-  'hn-crypto-onchain': ['crypto', 'blockchain', 'onchain', 'wallet', 'token', 'forensics', 'market', 'alpha'],
-  'hn-crypto-quant': ['crypto', 'trading', 'quant', 'statistics', 'risk', 'modeling', 'market', 'alpha', 'finance'],
-  'hn-crypto-sentiment': ['crypto', 'trading', 'sentiment', 'social', 'narrative', 'market', 'alpha'],
-  'hn-netanyahu': ['strategy', 'geopolitics', 'risk', 'market', 'macro'],
   'hn-coordinator': ['strategy', 'planning', 'finance', 'market', 'coordination'],
+  'hn-architect': ['architecture', 'planning', 'research', 'strategy', 'coordination'],
 }
 
 function levenshteinDistance(a: string, b: string): number {
@@ -188,8 +183,7 @@ function scoreAgentForSearch(agent: OpenClawAgent, query: string, index?: AgentS
   }
 
   if (tokens.some((token) => ['money', 'finance', 'wealth', 'investing', 'investor', 'stocks', 'stock', 'market', 'trading', 'crypto'].includes(token))) {
-    if (agent.id === 'hn-buffett') score += 30
-    if (agent.id.startsWith('hn-crypto-')) score += 22
+    if (agent.id === 'hn-crypto-lead') score += 22
   }
 
   return score
@@ -379,9 +373,9 @@ export function PartySelector() {
         }
       >
         {/* ── Search + Sort + Filter toolbar ── */}
-        <div data-agent-toolbar className="mb-4 rounded-2xl border border-[#4cb5d1]/34 bg-[#08090c] p-3 text-cyan-300 shadow-inner">
+        <div data-agent-filter-toolbar className="mb-4">
           {/* Transparent search bar */}
-          <div data-agent-search className="relative">
+          <div data-agent-filter-search className="relative">
             <svg
               className="pointer-events-none absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-cyan-300"
               viewBox="0 0 24 24"
@@ -400,7 +394,7 @@ export function PartySelector() {
               onChange={(e) => setSearchQuery(e.target.value)}
               placeholder="Search by name, role, keyword…"
               spellCheck={false}
-              className="w-full rounded-lg border border-[#4cb5d1]/28 bg-[#08090c] py-2 pl-9 pr-8 text-[11px] font-medium text-cyan-100 placeholder:text-cyan-300/80 outline-none transition focus:border-[#4cb5d1]/60 focus:bg-[#08090c]"
+              className="w-full py-2 pl-9 pr-8 text-[11px] font-medium outline-none transition"
             />
             {searchQuery && (
               <button type="button"
@@ -414,13 +408,13 @@ export function PartySelector() {
           </div>
 
           {/* Sort + Rarity filter row */}
-          <div data-agent-controls className="flex items-center gap-2 flex-wrap">
+          <div data-agent-filter-controls className="flex items-center gap-2 flex-wrap">
             <select
-              data-agent-control
+              data-agent-filter-select
               aria-label="Sort agents"
               value={sortKey}
               onChange={(e) => setSortKey(e.target.value as SortKey)}
-              className="rounded-lg border border-[#4cb5d1]/30 bg-[#08090c] px-2.5 py-1.5 pr-7 text-[10px] font-semibold text-cyan-100 outline-none transition focus:border-[#4cb5d1]/60 cursor-pointer appearance-none"
+              className="px-2.5 py-1.5 pr-7 text-[10px] font-semibold outline-none transition cursor-pointer appearance-none"
               style={CYAN_SELECT_CHEVRON_STYLE}
             >
               <option value="party">Party First</option>
@@ -430,11 +424,11 @@ export function PartySelector() {
             </select>
 
             <select
-              data-agent-control
+              data-agent-filter-select
               aria-label="Filter agents by rarity"
               value={rarityFilter}
               onChange={(e) => setRarityFilter(e.target.value as AgentRarity | 'all')}
-              className="rounded-lg border border-[#4cb5d1]/30 bg-[#08090c] px-2.5 py-1.5 pr-7 text-[10px] font-semibold text-cyan-100 outline-none transition focus:border-[#4cb5d1]/60 cursor-pointer appearance-none"
+              className="px-2.5 py-1.5 pr-7 text-[10px] font-semibold outline-none transition cursor-pointer appearance-none"
               style={CYAN_SELECT_CHEVRON_STYLE}
             >
               <option value="all">All rarities</option>
@@ -444,19 +438,19 @@ export function PartySelector() {
               <option value="common">Common</option>
             </select>
 
-            <div data-agent-view-toggle className="flex rounded-lg border border-[#4cb5d1]/34 bg-[#08090c] p-0.5">
+            <div data-agent-view-switch className="flex">
               {DISPLAY_MODES.map((mode) => (
                 <button
                   key={mode.id}
-                  data-agent-view-option
+                  data-agent-view-choice
                   data-active={displayMode === mode.id ? 'true' : undefined}
                   type="button"
                   title={mode.hint}
                   onClick={() => setDisplayMode(mode.id)}
-                  className={`rounded-md px-2.5 py-1.5 text-[9px] font-black uppercase tracking-[0.10em] transition ${
+                  className={`px-2.5 py-1.5 text-[9px] font-black uppercase tracking-[0.10em] transition ${
                     displayMode === mode.id
-                      ? 'bg-[#08090c] text-cyan-100 shadow-[inset_0_1px_0_rgba(255,255,255,0.08)]'
-                      : 'text-cyan-300/85 hover:bg-[#08090c] hover:text-cyan-100'
+                      ? 'text-cyan-100'
+                      : 'text-cyan-300/85 hover:text-cyan-100'
                   }`}
                 >
                   {mode.label}
@@ -465,11 +459,11 @@ export function PartySelector() {
             </div>
 
             <select
-              data-agent-overlay-control
+              data-agent-filter-select
               aria-label="Card overlay style"
               value={overlayPreset}
               onChange={(e) => setOverlayPreset(e.target.value as AgentOverlayPreset)}
-              className="rounded-lg border border-[#4cb5d1]/30 bg-[#08090c] px-2.5 py-1.5 pr-7 text-[10px] font-semibold text-cyan-100 outline-none transition focus:border-[#4cb5d1]/60 cursor-pointer appearance-none"
+              className="px-2.5 py-1.5 pr-7 text-[10px] font-semibold outline-none transition cursor-pointer appearance-none"
               style={CYAN_SELECT_CHEVRON_STYLE}
             >
               {OVERLAY_PRESETS.map((preset) => (

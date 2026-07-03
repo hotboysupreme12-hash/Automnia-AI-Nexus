@@ -1562,23 +1562,24 @@ html.dui-pro-overhaul [data-dui-panel="monitor"] .dy-monitor-tab-list button:fir
 html.dui-pro-overhaul [data-dui-panel="monitor"] .dy-monitor-tab-list button[data-active="true"],
 html.dui-pro-overhaul .app-bg.dy-monitor-focus [data-dui-panel="monitor"] .dy-monitor-tab-list button[data-active="true"] {
   z-index: 2;
-  border-color: rgba(96, 165, 250, .78) !important;
+  border-color: rgba(74, 222, 128, .72) !important;
   background:
-    linear-gradient(180deg, rgba(37, 99, 235, .24), rgba(255, 255, 255, .010)),
-    #15191f !important;
+    linear-gradient(180deg, rgba(74, 222, 128, .15), rgba(255, 255, 255, .010)),
+    #121b17 !important;
   color: #f4f9ff !important;
-  outline: 1px solid rgba(147, 197, 253, .72) !important;
+  outline: 1px solid rgba(74, 222, 128, .58) !important;
   outline-offset: -2px !important;
   box-shadow:
-    0 0 0 1px rgba(96, 165, 250, .20),
-    0 0 16px rgba(59, 130, 246, .34),
-    inset 0 0 18px rgba(59, 130, 246, .10) !important;
+    0 0 0 1px rgba(74, 222, 128, .18),
+    0 0 16px rgba(74, 222, 128, .28),
+    inset 0 0 18px rgba(74, 222, 128, .08) !important;
 }
 
 html.dui-pro-overhaul [data-dui-panel="monitor"] .dy-monitor-tab-list button[data-active="true"] svg,
 html.dui-pro-overhaul .app-bg.dy-monitor-focus [data-dui-panel="monitor"] .dy-monitor-tab-list button[data-active="true"] svg {
-  color: #93c5fd !important;
-  filter: drop-shadow(0 0 5px rgba(96, 165, 250, .46));
+  color: #4ade80 !important;
+  stroke: #4ade80 !important;
+  filter: drop-shadow(0 0 5px rgba(74, 222, 128, .42));
 }
 
 html.dui-pro-overhaul [data-dui-overlay="agent-editor"][data-windows="true"] {
@@ -3185,6 +3186,104 @@ html.dui-pro-overhaul .dy-command-console__stability-pill[data-stability-state="
   html.dui-pro-overhaul .dy-command-console__stream-pill[data-stream-state="connecting"] > span,
   html.dui-pro-overhaul .dy-command-console__stream-pill[data-stream-state="reconnecting"] > span {
     animation: none !important;
+  }
+}
+
+@media (max-width: 1180px), (max-height: 860px) {
+  html.dui-pro-overhaul.dui-cohesive-ui [data-dui-panel="command-console"].dy-command-console .dy-command-console__header {
+    min-height: 0 !important;
+    padding: 6px 8px !important;
+  }
+
+  html.dui-pro-overhaul.dui-cohesive-ui [data-dui-panel="command-console"].dy-command-console .dy-command-console__header-inner {
+    flex-direction: row !important;
+    flex-wrap: nowrap !important;
+    align-items: center !important;
+    gap: 8px !important;
+  }
+
+  html.dui-pro-overhaul.dui-cohesive-ui [data-dui-panel="command-console"].dy-command-console .dy-command-console__title-row {
+    flex: 0 0 auto !important;
+    gap: 0 !important;
+  }
+
+  html.dui-pro-overhaul.dui-cohesive-ui [data-dui-panel="command-console"].dy-command-console .dy-command-console__title-row > div {
+    width: 0 !important;
+    min-width: 0 !important;
+  }
+
+  html.dui-pro-overhaul.dui-cohesive-ui [data-dui-panel="command-console"].dy-command-console .dy-command-console__mark {
+    width: 28px !important;
+    height: 28px !important;
+  }
+
+  html.dui-pro-overhaul.dui-cohesive-ui [data-dui-panel="command-console"].dy-command-console .dy-command-console__mark svg {
+    width: 14px !important;
+    height: 14px !important;
+  }
+
+  html.dui-pro-overhaul.dui-cohesive-ui [data-dui-panel="command-console"].dy-command-console .dy-command-console__title {
+    position: absolute !important;
+    width: 1px !important;
+    height: 1px !important;
+    margin: -1px !important;
+    padding: 0 !important;
+    overflow: hidden !important;
+    clip: rect(0 0 0 0) !important;
+    clip-path: inset(50%) !important;
+    border: 0 !important;
+    white-space: nowrap !important;
+  }
+
+  html.dui-pro-overhaul.dui-cohesive-ui [data-dui-panel="command-console"].dy-command-console .dy-command-console__subtitle {
+    display: none !important;
+  }
+
+  html.dui-pro-overhaul.dui-cohesive-ui [data-dui-panel="command-console"].dy-command-console .dy-command-console__meta {
+    width: auto !important;
+    min-width: 0 !important;
+    flex: 1 1 auto !important;
+    flex-wrap: nowrap !important;
+    justify-content: flex-end !important;
+    gap: 6px !important;
+    margin-left: auto !important;
+    overflow: hidden !important;
+  }
+
+  html.dui-pro-overhaul.dui-cohesive-ui [data-dui-panel="command-console"].dy-command-console .dy-command-console__stat,
+  html.dui-pro-overhaul.dui-cohesive-ui [data-dui-panel="command-console"].dy-command-console .dy-command-console__pill,
+  html.dui-pro-overhaul.dui-cohesive-ui [data-dui-panel="command-console"].dy-command-console .dy-command-console__clear {
+    min-height: 26px !important;
+  }
+
+  html.dui-pro-overhaul.dui-cohesive-ui [data-dui-panel="command-console"].dy-command-console .dy-command-console__stat {
+    padding: 0 8px !important;
+  }
+
+  html.dui-pro-overhaul.dui-cohesive-ui [data-dui-panel="command-console"].dy-command-console .dy-command-console__pill {
+    min-width: 0 !important;
+    padding: 0 8px !important;
+    margin-left: 0 !important;
+    white-space: nowrap !important;
+  }
+
+  html.dui-pro-overhaul.dui-cohesive-ui [data-dui-panel="command-console"].dy-command-console .dy-command-console__stream-pill,
+  html.dui-pro-overhaul.dui-cohesive-ui [data-dui-panel="command-console"].dy-command-console .dy-command-console__stability-pill {
+    min-width: 0 !important;
+  }
+}
+
+@media (max-width: 520px) {
+  html.dui-pro-overhaul.dui-cohesive-ui [data-dui-panel="command-console"].dy-command-console .dy-command-console__meta {
+    gap: 5px !important;
+  }
+
+  html.dui-pro-overhaul.dui-cohesive-ui [data-dui-panel="command-console"].dy-command-console .dy-command-console__stat span {
+    display: none !important;
+  }
+
+  html.dui-pro-overhaul.dui-cohesive-ui [data-dui-panel="command-console"].dy-command-console .dy-command-console__pill {
+    padding: 0 7px !important;
   }
 }
 

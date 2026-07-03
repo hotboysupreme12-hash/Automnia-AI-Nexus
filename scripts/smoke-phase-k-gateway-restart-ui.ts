@@ -12,7 +12,7 @@ const evidenceJsonPath = path.join(phaseKEvidenceDir, 'gateway-restart-ui-smoke.
 const evidenceMarkdownPath = path.join(phaseKEvidenceDir, 'GATEWAY_RESTART_UI_SMOKE.md')
 const evidenceLogPath = path.join(phaseKEvidenceDir, '11-gateway-restart-ui-smoke.log')
 const startedAt = new Date().toISOString()
-const manualRestartReason = 'manual restart requested from monitor'
+const manualRestartReason = 'manual gateway restart requested'
 
 type ApiEnvelope<T = unknown> =
   | { ok: true; data: T; requestId: string }
@@ -163,25 +163,21 @@ function compactDetail(value: unknown) {
   return String(value || '').replace(/\s+/g, ' ').trim().slice(0, 600)
 }
 
-function validateGatewayRestartUiSource() {
+function validateGatewayRestartSource() {
   const liveMonitor = readFileSync(path.join(root, 'src/components/monitor/LiveOperationMonitor.tsx'), 'utf8')
   const runtimeHook = readFileSync(path.join(root, 'src/hooks/useRuntimeStatus.ts'), 'utf8')
-  const uiSmoke = readFileSync(path.join(root, 'scripts/smoke-ui-render.mjs'), 'utf8')
 
+  assert.ok(!liveMonitor.includes('Gateway Runtime'), 'Monitor should not render the Gateway Runtime summary strip')
+  assert.ok(!liveMonitor.includes('restartGatewayFromMonitor'), 'Monitor should not keep the removed Gateway restart click handler')
   assert.ok(liveMonitor.includes('restartGatewayRuntime'), 'Monitor should import the Gateway restart runtime action')
-  assert.ok(liveMonitor.includes('restartGatewayFromMonitor'), 'Monitor should own the Gateway restart click handler')
-  assert.ok(liveMonitor.includes('dy-gateway-restart-button'), 'Monitor should render a stable Gateway restart button')
-  assert.ok(liveMonitor.includes('aria-label="Restart Gateway from Monitor"'), 'Gateway restart button should be accessible')
-  assert.ok(liveMonitor.includes('Gateway restart'), 'Monitor should surface Gateway restart status text')
+  assert.ok(liveMonitor.includes('dy-gateway-restart-button'), 'Monitor should render the Gateway restart toolbar button')
+  assert.ok(liveMonitor.includes('Restart Gateway'), 'Monitor Gateway restart button should be labeled Restart Gateway')
   assert.ok(runtimeHook.includes("runtimeActionRequest<{ ok?: boolean; restart?: unknown; gateway?: unknown }>('/api/openclaw/runtime/gateway/restart'"), 'useRuntimeStatus should call the runtime Gateway restart endpoint')
-  assert.ok(uiSmoke.includes('/api/openclaw/runtime/gateway/restart'), 'UI smoke should stub the Gateway restart endpoint')
-  assert.ok(uiSmoke.includes('restartGatewayFromMonitor(window)'), 'UI smoke should click the Monitor Gateway restart button')
 
   return {
-    restartButton: true,
-    actionHandler: true,
+    monitorRuntimeSummaryRemoved: true,
+    monitorRestartButtonPresent: true,
     runtimeActionHelper: true,
-    uiClickSmoke: true,
   }
 }
 
@@ -278,7 +274,7 @@ mkdirSync(workspaceRoot, { recursive: true })
 mkdirSync(homeDir, { recursive: true })
 mkdirSync(phaseKEvidenceDir, { recursive: true })
 
-const gatewayRestartUi = validateGatewayRestartUiSource()
+const gatewayRestartSource = validateGatewayRestartSource()
 const child = spawnServer(port, stateDir, workspaceRoot, homeDir, gatewayLogPath)
 
 try {
@@ -305,12 +301,12 @@ try {
     blockedItems: [],
     startedAt,
     completedAt,
-    mode: 'isolated-control-plane-gateway-restart-ui',
+    mode: 'isolated-control-plane-gateway-restart',
     auth: {
       loginRoute: '/api/auth/login',
       sessionTokenLength: token.length,
     },
-    gatewayRestartUi,
+    gatewayRestartSource,
     isolatedState: {
       stateDir,
       workspaceRoot,
@@ -344,19 +340,20 @@ try {
     `evidenceJson=${path.relative(root, evidenceJsonPath)}`,
   ].join('\n') + '\n', 'utf8')
   writeFileSync(evidenceMarkdownPath, [
-    '# Phase K Gateway Restart UI Smoke',
+    '# Phase K Gateway Restart Smoke',
     '',
     `Started: ${startedAt}`,
     `Completed: ${completedAt}`,
     '',
     'Manual beta item covered:',
     '',
-    '- 123. Complete: restart Gateway from the Monitor UI path and verify the authenticated restart lifecycle evidence.',
+    '- 123. Complete: restart Gateway through the authenticated runtime action and verify restart lifecycle evidence.',
     '',
     'Evidence:',
     '',
-    `- UI source button: ${gatewayRestartUi.restartButton ? 'present' : 'missing'}`,
-    `- UI click smoke coverage: ${gatewayRestartUi.uiClickSmoke ? 'present' : 'missing'}`,
+    `- Monitor Gateway Runtime strip removed: ${gatewayRestartSource.monitorRuntimeSummaryRemoved ? 'yes' : 'no'}`,
+    `- Monitor restart button present: ${gatewayRestartSource.monitorRestartButtonPresent ? 'yes' : 'no'}`,
+    `- Runtime action helper: ${gatewayRestartSource.runtimeActionHelper ? 'present' : 'missing'}`,
     `- Restart route: ${evidence.restartRoute}`,
     `- Runtime status route: ${evidence.runtimeStatusRoute}`,
     `- Restart reason: ${manualRestartReason}`,
@@ -371,7 +368,7 @@ try {
     '',
   ].join('\n'), 'utf8')
 
-  console.log(`Phase K Gateway restart UI smoke ok: ${evidenceJsonPath}`)
+  console.log(`Phase K Gateway restart smoke ok: ${evidenceJsonPath}`)
 } finally {
   await stopProcess(child)
   rmSync(tempRoot, { recursive: true, force: true })

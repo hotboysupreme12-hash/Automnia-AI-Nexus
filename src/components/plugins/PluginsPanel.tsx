@@ -5,7 +5,6 @@ import {
   installOpenClawPlugin,
   pluginRequestError,
   restartPluginGateway,
-  runOpenClawPluginCommand,
   savePluginSetup,
   searchOpenClawPlugins,
   setPluginEnabled,
@@ -14,7 +13,6 @@ import {
   updateAllOpenClawPlugins,
   updateOpenClawPlugin,
   type PluginApiPayload,
-  type PluginCommandResult,
   type PluginEntry,
   type PluginRestartResponse,
   type PluginRuntimeInspect,
@@ -31,17 +29,11 @@ import {
   type PluginFilter,
 } from './pluginStateProjection'
 
-type PluginBusyAction = 'toggle' | 'refresh' | 'update' | 'inspect' | 'uninstall' | 'restart'
+type PluginBusyAction = 'toggle' | 'refresh' | 'update' | 'inspect' | 'uninstall' | 'restart' | 'install'
 
 type PluginInspectState = {
   plugin: PluginEntry
   inspect: PluginRuntimeInspect
-}
-
-type OpenClawCommandState = {
-  command: string
-  result: PluginCommandResult
-  ok: boolean
 }
 
 let pluginsPanelCache: PluginsResponse | null = null
@@ -191,11 +183,6 @@ function commandNotice(payload: PluginApiPayload, fallback: string) {
   return command ? `${fallback} (${command}).` : fallback
 }
 
-function commandOutputText(result: PluginCommandResult | null | undefined) {
-  if (!result) return ''
-  return result.output || [result.stdout, result.stderr].filter(Boolean).join('\n') || `Exited ${result.code}.`
-}
-
 function setupFieldsForPlugin(plugin: PluginEntry) {
   return plugin.configFields
     .filter((field) => field.acceptsDirectSave)
@@ -241,6 +228,7 @@ function PluginRow({
   onToggle,
   onRefresh,
   onSetup,
+  onInstall,
   onManage,
   onUpdate,
   onInspect,
@@ -253,6 +241,7 @@ function PluginRow({
   onToggle: (plugin: PluginEntry) => void
   onRefresh: (plugin: PluginEntry) => void
   onSetup: (plugin: PluginEntry) => void
+  onInstall: (plugin: PluginEntry) => void
   onManage: (plugin: PluginEntry) => void
   onUpdate: (plugin: PluginEntry) => void
   onInspect: (plugin: PluginEntry) => void
@@ -261,8 +250,9 @@ function PluginRow({
 }) {
   const primaryGuidance = plugin.guidance[0] || (plugin.enabled ? 'Ready after gateway refresh.' : 'Disabled.')
   const busy = Boolean(busyAction)
-  const toggleLabel = plugin.enabled ? 'Stop' : 'Start'
-  const toggleBusyLabel = plugin.enabled ? 'Stopping' : 'Starting'
+  const installable = Boolean(plugin.installable && plugin.installSpec)
+  const toggleLabel = installable ? 'Install' : plugin.enabled ? 'Stop' : 'Start'
+  const toggleBusyLabel = installable ? 'Installing' : plugin.enabled ? 'Stopping' : 'Starting'
   const statusState = pluginPageState(plugin)
   return (
     <article
@@ -304,7 +294,7 @@ function PluginRow({
       </div>
 
       <div className="dy-plugin-row-actions flex shrink-0 items-center justify-end gap-2">
-        {plugin.needsSetup && (
+        {plugin.needsSetup && !installable && (
           <button
             type="button"
             onClick={() => onSetup(plugin)}
@@ -330,13 +320,13 @@ function PluginRow({
         </button>
         <button
           type="button"
-          onClick={() => onToggle(plugin)}
+          onClick={() => installable ? onInstall(plugin) : onToggle(plugin)}
           disabled={busy}
           className={`dy-plugin-row-action dy-plugin-row-power h-8 rounded-md border px-3 text-[10px] font-semibold transition disabled:cursor-not-allowed disabled:opacity-50 ${plugin.enabled ? 'is-stop' : 'is-start'}`}
-          title={plugin.enabled ? `Stop and disable ${plugin.name}` : `Start ${plugin.name}`}
+          title={installable ? `Install ${plugin.installSpec}` : plugin.enabled ? `Stop and disable ${plugin.name}` : `Start ${plugin.name}`}
         >
           <span className="dy-plugin-power-icon" data-state={plugin.enabled ? 'stop' : 'start'} aria-hidden="true" />
-          {busyAction === 'toggle' ? toggleBusyLabel : toggleLabel}
+          {busyAction === (installable ? 'install' : 'toggle') ? toggleBusyLabel : toggleLabel}
         </button>
         <button
           type="button"
@@ -359,125 +349,60 @@ function PluginRow({
       {expanded && (
         <div className="md:col-span-4">
           <div className="flex flex-wrap items-center justify-end gap-2 border-t border-white/[0.05] pt-3">
-            <button
-              type="button"
-              onClick={() => onUpdate(plugin)}
-              disabled={busy}
-              className="h-8 rounded-md border border-white/[0.08] bg-white/[0.025] px-3 text-[10px] font-semibold text-slate-300 transition hover:border-emerald-300/25 hover:text-emerald-100 disabled:cursor-wait disabled:opacity-50"
-              title={`Run openclaw plugins update ${plugin.id}`}
-            >
-              {busyAction === 'update' ? 'Updating' : 'Update'}
-            </button>
-            <button
-              type="button"
-              onClick={() => onInspect(plugin)}
-              disabled={busy}
-              className="h-8 rounded-md border border-white/[0.08] bg-white/[0.025] px-3 text-[10px] font-semibold text-slate-300 transition hover:border-cyan-300/25 hover:text-cyan-100 disabled:cursor-wait disabled:opacity-50"
-              title={`Run openclaw plugins inspect ${plugin.id} --runtime --json`}
-            >
-              {busyAction === 'inspect' ? 'Checking' : 'Inspect'}
-            </button>
-            <button
-              type="button"
-              onClick={() => onRestart(plugin)}
-              disabled={busy}
-              className="h-8 rounded-md border border-white/[0.08] bg-white/[0.025] px-3 text-[10px] font-semibold text-slate-300 transition hover:border-amber-300/25 hover:text-amber-100 disabled:cursor-wait disabled:opacity-50"
-              title="Restart embedded OpenClaw gateway"
-            >
-              {busyAction === 'restart' ? 'Restarting' : 'Restart'}
-            </button>
-            <button
-              type="button"
-              onClick={() => onUninstall(plugin)}
-              disabled={busy}
-              className="h-8 rounded-md border border-rose-300/20 bg-rose-400/[0.05] px-3 text-[10px] font-semibold text-rose-100 transition hover:bg-rose-400/[0.10] disabled:cursor-wait disabled:opacity-50"
-              title={`Run openclaw plugins uninstall ${plugin.id}`}
-            >
-              {busyAction === 'uninstall' ? 'Removing' : 'Uninstall'}
-            </button>
+            {installable ? (
+              <button
+                type="button"
+                onClick={() => onInstall(plugin)}
+                disabled={busy}
+                className="h-8 rounded-md border border-emerald-300/20 bg-emerald-300/[0.06] px-3 text-[10px] font-semibold text-emerald-100 transition hover:bg-emerald-300/[0.11] disabled:cursor-wait disabled:opacity-50"
+                title={`Install ${plugin.installSpec}`}
+              >
+                {busyAction === 'install' ? 'Installing' : 'Install'}
+              </button>
+            ) : (
+              <>
+                <button
+                  type="button"
+                  onClick={() => onUpdate(plugin)}
+                  disabled={busy}
+                  className="h-8 rounded-md border border-white/[0.08] bg-white/[0.025] px-3 text-[10px] font-semibold text-slate-300 transition hover:border-emerald-300/25 hover:text-emerald-100 disabled:cursor-wait disabled:opacity-50"
+                  title={`Run openclaw plugins update ${plugin.id}`}
+                >
+                  {busyAction === 'update' ? 'Updating' : 'Update'}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => onInspect(plugin)}
+                  disabled={busy}
+                  className="h-8 rounded-md border border-white/[0.08] bg-white/[0.025] px-3 text-[10px] font-semibold text-slate-300 transition hover:border-cyan-300/25 hover:text-cyan-100 disabled:cursor-wait disabled:opacity-50"
+                  title={`Run openclaw plugins inspect ${plugin.id} --runtime --json`}
+                >
+                  {busyAction === 'inspect' ? 'Checking' : 'Inspect'}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => onRestart(plugin)}
+                  disabled={busy}
+                  className="h-8 rounded-md border border-white/[0.08] bg-white/[0.025] px-3 text-[10px] font-semibold text-slate-300 transition hover:border-amber-300/25 hover:text-amber-100 disabled:cursor-wait disabled:opacity-50"
+                  title="Restart embedded OpenClaw gateway"
+                >
+                  {busyAction === 'restart' ? 'Restarting' : 'Restart'}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => onUninstall(plugin)}
+                  disabled={busy}
+                  className="h-8 rounded-md border border-rose-300/20 bg-rose-400/[0.05] px-3 text-[10px] font-semibold text-rose-100 transition hover:bg-rose-400/[0.10] disabled:cursor-wait disabled:opacity-50"
+                  title={`Run openclaw plugins uninstall ${plugin.id}`}
+                >
+                  {busyAction === 'uninstall' ? 'Removing' : 'Uninstall'}
+                </button>
+              </>
+            )}
           </div>
         </div>
       )}
     </article>
-  )
-}
-
-function OpenClawCommandPanel({
-  onPayload,
-  setNotice,
-  setError,
-}: {
-  onPayload: (payload: PluginApiPayload) => void
-  setNotice: (notice: string) => void
-  setError: (error: string) => void
-}) {
-  const [command, setCommand] = useState('openclaw doctor --help')
-  const [running, setRunning] = useState(false)
-  const [lastRun, setLastRun] = useState<OpenClawCommandState | null>(null)
-
-  const runCommand = useCallback(async () => {
-    const trimmed = command.trim()
-    if (!trimmed || running) return
-    setRunning(true)
-    setError('')
-    setNotice('')
-    try {
-      const payload = await runOpenClawPluginCommand(trimmed)
-      if (!payload.command) throw new Error('OpenClaw command failed.')
-      onPayload(payload)
-      setLastRun({ command: trimmed, result: payload.command, ok: payload.ok !== false })
-      setNotice(`${payload.command.command} exited ${payload.command.code}; output added to gateway tail.`)
-    } catch (err) {
-      setError(pluginRequestError(err))
-    } finally {
-      setRunning(false)
-    }
-  }, [command, onPayload, running, setError, setNotice])
-
-  const output = commandOutputText(lastRun?.result)
-
-  return (
-    <section className="rounded-lg border border-white/[0.06] bg-black/15 p-3">
-      <form
-        className="flex flex-wrap items-center gap-2"
-        onSubmit={(event) => {
-          event.preventDefault()
-          void runCommand()
-        }}
-      >
-        <div className="flex h-9 shrink-0 items-center rounded-md border border-white/[0.07] bg-black/25 px-2 font-mono text-[11px] text-slate-500">
-          $
-        </div>
-        <input
-          value={command}
-          onChange={(event) => setCommand(event.target.value)}
-          className="h-9 min-w-[220px] flex-1 rounded-md border border-white/[0.07] bg-black/25 px-3 font-mono text-[11px] text-slate-200 outline-none transition placeholder:text-slate-600 focus:border-cyan-300/30"
-          placeholder="openclaw status"
-          spellCheck={false}
-        />
-        <button
-          type="submit"
-          disabled={running || !command.trim()}
-          className="h-9 rounded-md border border-cyan-300/20 bg-cyan-300/[0.07] px-3 text-[11px] font-semibold uppercase text-cyan-100 transition hover:bg-cyan-300/[0.12] disabled:cursor-wait disabled:opacity-50"
-        >
-          {running ? 'Running' : 'Run'}
-        </button>
-      </form>
-
-      {lastRun && (
-        <div className={`mt-3 rounded-md border px-3 py-2 ${lastRun.ok ? 'border-white/[0.06] bg-white/[0.018]' : 'border-rose-400/20 bg-rose-400/[0.04]'}`}>
-          <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
-            <p className="truncate font-mono text-[11px] text-slate-500">{lastRun.result.command}</p>
-            <span className={`rounded-full border px-2 py-0.5 text-[11px] font-semibold uppercase ${lastRun.ok ? 'border-emerald-400/20 bg-emerald-400/[0.05] text-emerald-200' : 'border-rose-400/20 bg-rose-400/[0.06] text-rose-200'}`}>
-              exit {lastRun.result.code}
-            </span>
-          </div>
-          <pre className="max-h-32 overflow-auto whitespace-pre-wrap break-words font-mono text-[11px] leading-relaxed text-slate-300">
-            {output}
-          </pre>
-        </div>
-      )}
-    </section>
   )
 }
 
@@ -967,6 +892,33 @@ export function PluginsPanel() {
     }
   }, [loadPlugins])
 
+  const installCatalogPlugin = useCallback(async (plugin: PluginEntry) => {
+    const installSpec = plugin.installSpec?.trim()
+    if (!installSpec) {
+      setError(`${plugin.name} does not advertise an install package.`)
+      return
+    }
+    setBusyPluginAction({ id: plugin.id, action: 'install' })
+    setError('')
+    setNotice('')
+    try {
+      const payload = await installOpenClawPlugin({
+        spec: installSpec,
+        pluginId: plugin.id,
+        pin: true,
+        enable: true,
+        restart: true,
+      })
+      applyInstalledPayload(payload)
+      const repairSuffix = payload.repair?.applied ? ' Auto-repaired installer staging lock.' : ''
+      setNotice(`${payload.plugin?.name || plugin.name} installed and enabled; ${restartNotice(payload.restart)}.${repairSuffix}`)
+    } catch (err) {
+      setError(pluginRequestError(err))
+    } finally {
+      setBusyPluginAction(null)
+    }
+  }, [applyInstalledPayload])
+
   const managePlugin = useCallback((plugin: PluginEntry) => {
     setExpandedPluginId((current) => current === plugin.id ? null : plugin.id)
   }, [])
@@ -1159,14 +1111,6 @@ export function PluginsPanel() {
           />
         </div>
 
-        <div className="mt-3">
-          <OpenClawCommandPanel
-            onPayload={applyPayload}
-            setNotice={setNotice}
-            setError={setError}
-          />
-        </div>
-
         {uninstallConfirmPlugin && (
           <ActionStatusBanner
             className="mt-3 text-[11px]"
@@ -1241,6 +1185,7 @@ export function PluginsPanel() {
                   onToggle={togglePlugin}
                   onRefresh={refreshPlugin}
                   onSetup={setSetupPlugin}
+                  onInstall={installCatalogPlugin}
                   onManage={managePlugin}
                   onUpdate={updatePlugin}
                   onInspect={inspectPlugin}

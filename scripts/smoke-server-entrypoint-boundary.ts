@@ -175,7 +175,7 @@ assert.match(runtimeActionService, /ensureGatewayRunning: \(\) => Promise<void>/
 assert.match(runtimeActionService, /gatewayStatusSnapshot: \(healthy: boolean, listenerPid\?: number \| null\) => GatewayStatusSnapshot/, 'runtime action service should receive Gateway Monitor status through options')
 assert.match(runtimeActionService, /tryRestartGatewayService: \(options: \{ force\?: boolean; allowExternalTakeover\?: boolean; reason\?: string \}\) => Promise<unknown>/, 'runtime action service should receive Gateway restart through options')
 assert.match(runtimeActionService, /runtimeRecovery: Pick<RuntimeRecoveryService, 'clearRuntimeMonitor' \| 'shutdownRuntime'>/, 'runtime action service should receive clean-slate and shutdown recovery through options')
-assert.match(runtimeActionService, /allowExternalTakeover: true/, 'manual Monitor restarts should explicitly opt into external listener takeover')
+assert.match(runtimeActionService, /allowExternalTakeover: true/, 'manual Gateway restarts should explicitly opt into external listener takeover')
 assert.match(diagnosticsRoutes, /gatewayChatRuntimeSnapshot: \(\) => Record<string, unknown>/, 'diagnostics routes should receive Gateway chat runtime projection through options')
 assert.match(agentTurnRoutes, /gatewayChat\?: \{/, 'agent turn route/service seam should keep Gateway chat inputs explicit')
 assert.match(gatewayLifecycleService, /\bfunction\s+spawnGateway\b/, 'Gateway lifecycle service should own process spawning')

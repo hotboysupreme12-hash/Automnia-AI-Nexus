@@ -556,7 +556,7 @@ html.dui-pro-overhaul.dui-cohesive-ui [data-dui-panel="plugins"].dy-plugins-pane
 html.dui-pro-overhaul .dy-workspace-context,
 html.dui-pro-overhaul.dui-cohesive-ui .dy-workspace-context {
   position: sticky !important;
-  top: var(--dui-shell-gutter, 18px) !important;
+  top: 0 !important;
   z-index: 35 !important;
   display: grid !important;
   box-sizing: border-box !important;
@@ -751,6 +751,462 @@ html.dui-pro-overhaul.dui-cohesive-ui .dy-workspace-context__notice {
   html.dui-pro-overhaul.dui-cohesive-ui .dy-workspace-context__state {
     justify-self: start !important;
     margin-top: 0 !important;
+  }
+}
+
+/* Workspace title bars: identical black glass chrome; chip values carry the color. */
+html.dui-pro-overhaul.dui-cohesive-ui .dy-workspace-context:is(
+  [data-workspace="agents"],
+  [data-workspace="missions"],
+  [data-workspace="monitor"],
+  [data-workspace="plugins"]
+) {
+  --dy-title-border: rgba(232, 234, 238, .13);
+  --dy-title-border-soft: rgba(232, 234, 238, .11);
+  --dy-title-text: #f2f4f1;
+  --dy-title-text-2: #eef3f0;
+  --dy-title-muted: #98a29d;
+  --dy-title-faint: #8a948f;
+  --dy-chip-green: #74e2a5;
+  --dy-chip-red: #ef8b82;
+  --dy-chip-yellow: #f4c866;
+  --dy-chip-white: #eef3f0;
+  display: flex !important;
+  width: auto !important;
+  max-width: none !important;
+  min-height: 54px !important;
+  align-items: center !important;
+  justify-content: space-between !important;
+  gap: 18px !important;
+  margin: 0 !important;
+  padding: 9px 14px 9px 16px !important;
+  overflow: visible !important;
+  border: 0 !important;
+  border-bottom: 1px solid var(--dy-title-border) !important;
+  border-radius: 0 !important;
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, .026), rgba(255, 255, 255, .006)),
+    rgba(5, 6, 8, .84) !important;
+  box-shadow: none !important;
+}
+
+html.dui-pro-overhaul.dui-cohesive-ui .dy-workspace-context:is(
+  [data-workspace="agents"],
+  [data-workspace="missions"],
+  [data-workspace="monitor"],
+  [data-workspace="plugins"]
+)::before,
+html.dui-pro-overhaul.dui-cohesive-ui .dy-workspace-context:is(
+  [data-workspace="agents"],
+  [data-workspace="missions"],
+  [data-workspace="monitor"],
+  [data-workspace="plugins"]
+)::after {
+  display: none !important;
+  content: none !important;
+}
+
+html.dui-pro-overhaul.dui-cohesive-ui .dy-workspace-context:is(
+  [data-workspace="agents"],
+  [data-workspace="missions"],
+  [data-workspace="monitor"],
+  [data-workspace="plugins"]
+) .dy-workspace-context__copy {
+  position: static !important;
+  display: block !important;
+  flex: 1 1 auto !important;
+  width: auto !important;
+  height: auto !important;
+  min-width: 180px !important;
+  margin: 0 !important;
+  padding: 0 !important;
+  overflow: visible !important;
+  clip: auto !important;
+  clip-path: none !important;
+  white-space: normal !important;
+}
+
+html.dui-pro-overhaul.dui-cohesive-ui .dy-workspace-context:is(
+  [data-workspace="agents"],
+  [data-workspace="missions"],
+  [data-workspace="monitor"],
+  [data-workspace="plugins"]
+) h1 {
+  margin: 0 !important;
+  color: var(--dy-title-text) !important;
+  font-family: var(--font-body, system-ui, sans-serif) !important;
+  font-size: var(--dy-type-title, 18px) !important;
+  font-weight: 760 !important;
+  letter-spacing: 0 !important;
+  line-height: 1.1 !important;
+  text-transform: none !important;
+  text-shadow: none !important;
+}
+
+html.dui-pro-overhaul.dui-cohesive-ui .dy-workspace-context:is(
+  [data-workspace="agents"],
+  [data-workspace="missions"],
+  [data-workspace="monitor"],
+  [data-workspace="plugins"]
+) p {
+  max-width: 520px !important;
+  margin: 2px 0 0 !important;
+  color: var(--dy-title-muted) !important;
+  font-size: var(--dy-type-caption, 12px) !important;
+  font-weight: 520 !important;
+  line-height: 1.35 !important;
+}
+
+html.dui-pro-overhaul.dui-cohesive-ui .dy-workspace-context:is(
+  [data-workspace="agents"],
+  [data-workspace="missions"],
+  [data-workspace="monitor"],
+  [data-workspace="plugins"]
+) .dy-workspace-context__meta {
+  display: flex !important;
+  flex: 0 1 auto !important;
+  width: auto !important;
+  max-width: min(860px, 66vw) !important;
+  min-width: 0 !important;
+  flex-direction: row !important;
+  align-items: center !important;
+  justify-content: flex-end !important;
+  gap: 8px !important;
+}
+
+html.dui-pro-overhaul.dui-cohesive-ui .dy-workspace-context:is(
+  [data-workspace="agents"],
+  [data-workspace="missions"],
+  [data-workspace="monitor"],
+  [data-workspace="plugins"]
+) .dy-status-grid {
+  display: flex !important;
+  width: auto !important;
+  min-height: 0 !important;
+  flex-wrap: wrap !important;
+  justify-content: flex-end !important;
+  gap: 6px !important;
+}
+
+html.dui-pro-overhaul.dui-cohesive-ui .dy-workspace-context:is(
+  [data-workspace="agents"],
+  [data-workspace="missions"],
+  [data-workspace="monitor"],
+  [data-workspace="plugins"]
+) .badge.dy-status-chip {
+  min-width: 76px !important;
+  min-height: 30px !important;
+  height: 30px !important;
+  align-items: center !important;
+  justify-content: center !important;
+  gap: 5px !important;
+  border: 1px solid var(--dy-title-border-soft) !important;
+  border-radius: 7px !important;
+  padding: 0 9px !important;
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, .040), rgba(255, 255, 255, .010)),
+    rgba(255, 255, 255, .026) !important;
+  box-shadow: none !important;
+}
+
+html.dui-pro-overhaul.dui-cohesive-ui .dy-workspace-context:is(
+  [data-workspace="agents"],
+  [data-workspace="missions"],
+  [data-workspace="monitor"],
+  [data-workspace="plugins"]
+) .dy-status-chip .dy-status-value {
+  color: var(--dy-title-text-2) !important;
+  font-size: var(--dy-type-caption, 12px) !important;
+  font-weight: 760 !important;
+  letter-spacing: 0 !important;
+  text-shadow: none !important;
+}
+
+html.dui-pro-overhaul.dui-cohesive-ui .dy-workspace-context:is(
+  [data-workspace="agents"],
+  [data-workspace="missions"],
+  [data-workspace="monitor"],
+  [data-workspace="plugins"]
+) .dy-status-chip[data-indicator="agents"] .dy-status-value,
+html.dui-pro-overhaul.dui-cohesive-ui .dy-workspace-context:is(
+  [data-workspace="agents"],
+  [data-workspace="missions"],
+  [data-workspace="monitor"],
+  [data-workspace="plugins"]
+) .dy-status-chip[data-indicator="party"] .dy-status-value,
+html.dui-pro-overhaul.dui-cohesive-ui .dy-workspace-context:is(
+  [data-workspace="agents"],
+  [data-workspace="missions"],
+  [data-workspace="monitor"],
+  [data-workspace="plugins"]
+) .dy-status-chip[data-indicator="gateway"][data-state="online"] .dy-status-value,
+html.dui-pro-overhaul.dui-cohesive-ui .dy-workspace-context:is(
+  [data-workspace="agents"],
+  [data-workspace="missions"],
+  [data-workspace="monitor"],
+  [data-workspace="plugins"]
+) .dy-status-chip[data-indicator="results"][data-state="active"] .dy-status-value,
+html.dui-pro-overhaul.dui-cohesive-ui .dy-workspace-context:is(
+  [data-workspace="agents"],
+  [data-workspace="missions"],
+  [data-workspace="monitor"],
+  [data-workspace="plugins"]
+) .dy-status-chip[data-tone="success"] .dy-status-value {
+  color: var(--dy-chip-green) !important;
+}
+
+html.dui-pro-overhaul.dui-cohesive-ui .dy-workspace-context:is(
+  [data-workspace="agents"],
+  [data-workspace="missions"],
+  [data-workspace="monitor"],
+  [data-workspace="plugins"]
+) .dy-status-chip[data-indicator="gateway"][data-state="offline"] .dy-status-value,
+html.dui-pro-overhaul.dui-cohesive-ui .dy-workspace-context:is(
+  [data-workspace="agents"],
+  [data-workspace="missions"],
+  [data-workspace="monitor"],
+  [data-workspace="plugins"]
+) .dy-status-chip[data-tone="error"] .dy-status-value {
+  color: var(--dy-chip-red) !important;
+}
+
+html.dui-pro-overhaul.dui-cohesive-ui .dy-workspace-context:is(
+  [data-workspace="agents"],
+  [data-workspace="missions"],
+  [data-workspace="monitor"],
+  [data-workspace="plugins"]
+) .dy-status-chip[data-indicator="running"][data-state="active"] .dy-status-value,
+html.dui-pro-overhaul.dui-cohesive-ui .dy-workspace-context:is(
+  [data-workspace="agents"],
+  [data-workspace="missions"],
+  [data-workspace="monitor"],
+  [data-workspace="plugins"]
+) .dy-status-chip[data-indicator="cron"][data-state="active"] .dy-status-value,
+html.dui-pro-overhaul.dui-cohesive-ui .dy-workspace-context:is(
+  [data-workspace="agents"],
+  [data-workspace="missions"],
+  [data-workspace="monitor"],
+  [data-workspace="plugins"]
+) .dy-status-chip[data-indicator="cron"][data-state="busy"] .dy-status-value,
+html.dui-pro-overhaul.dui-cohesive-ui .dy-workspace-context:is(
+  [data-workspace="agents"],
+  [data-workspace="missions"],
+  [data-workspace="monitor"],
+  [data-workspace="plugins"]
+) .dy-status-chip[data-tone="warn"] .dy-status-value {
+  color: var(--dy-chip-yellow) !important;
+}
+
+html.dui-pro-overhaul.dui-cohesive-ui .dy-workspace-context:is(
+  [data-workspace="agents"],
+  [data-workspace="missions"],
+  [data-workspace="monitor"],
+  [data-workspace="plugins"]
+) .dy-status-chip[data-indicator="running"][data-state="idle"] .dy-status-value,
+html.dui-pro-overhaul.dui-cohesive-ui .dy-workspace-context:is(
+  [data-workspace="agents"],
+  [data-workspace="missions"],
+  [data-workspace="monitor"],
+  [data-workspace="plugins"]
+) .dy-status-chip[data-indicator="cron"][data-state="idle"] .dy-status-value,
+html.dui-pro-overhaul.dui-cohesive-ui .dy-workspace-context:is(
+  [data-workspace="agents"],
+  [data-workspace="missions"],
+  [data-workspace="monitor"],
+  [data-workspace="plugins"]
+) .dy-status-chip[data-indicator="cron"][data-state="loading"] .dy-status-value,
+html.dui-pro-overhaul.dui-cohesive-ui .dy-workspace-context:is(
+  [data-workspace="agents"],
+  [data-workspace="missions"],
+  [data-workspace="monitor"],
+  [data-workspace="plugins"]
+) .dy-status-chip[data-indicator="results"][data-state="idle"] .dy-status-value {
+  color: var(--dy-chip-white) !important;
+}
+
+html.dui-pro-overhaul.dui-cohesive-ui .dy-workspace-context:is(
+  [data-workspace="agents"],
+  [data-workspace="missions"],
+  [data-workspace="monitor"],
+  [data-workspace="plugins"]
+) .dy-status-chip .dy-status-label {
+  color: var(--dy-title-faint) !important;
+  font-size: var(--dy-type-micro, 11px) !important;
+  font-weight: 620 !important;
+  letter-spacing: 0 !important;
+  text-transform: none !important;
+  opacity: 1 !important;
+}
+
+html.dui-pro-overhaul.dui-cohesive-ui .dy-workspace-context:is(
+  [data-workspace="agents"],
+  [data-workspace="missions"],
+  [data-workspace="monitor"],
+  [data-workspace="plugins"]
+) .dy-workspace-context__state {
+  min-height: 30px !important;
+  border-color: var(--dy-title-border-soft) !important;
+  border-radius: 7px !important;
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, .040), rgba(255, 255, 255, .010)),
+    rgba(255, 255, 255, .030) !important;
+  color: var(--dy-title-text-2) !important;
+  padding: 0 10px !important;
+  font-size: var(--dy-type-micro, 11px) !important;
+  font-weight: 650 !important;
+  letter-spacing: 0 !important;
+  box-shadow: none !important;
+}
+
+html.dui-pro-overhaul.dui-cohesive-ui .dy-workspace-context:is(
+  [data-workspace="agents"],
+  [data-workspace="missions"],
+  [data-workspace="monitor"],
+  [data-workspace="plugins"]
+) .dy-workspace-context__state > span {
+  width: 7px !important;
+  height: 7px !important;
+  background: var(--dy-chip-green) !important;
+  box-shadow: 0 0 0 3px rgba(116, 226, 165, .10) !important;
+}
+
+html.dui-pro-overhaul.dui-cohesive-ui .dy-workspace-context:is(
+  [data-workspace="agents"],
+  [data-workspace="missions"],
+  [data-workspace="monitor"],
+  [data-workspace="plugins"]
+) .dy-workspace-context__state[data-state="offline"] > span {
+  background: var(--dy-chip-red) !important;
+  box-shadow: 0 0 0 3px rgba(239, 139, 130, .10) !important;
+}
+
+html.dui-pro-overhaul.dui-cohesive-ui .dy-workspace-context:is(
+  [data-workspace="agents"],
+  [data-workspace="missions"],
+  [data-workspace="monitor"],
+  [data-workspace="plugins"]
+) .dy-workspace-context__state[data-state="active"] > span {
+  background: var(--dy-chip-yellow) !important;
+  box-shadow: 0 0 0 3px rgba(244, 200, 102, .10) !important;
+}
+
+@media (max-width: 1180px) {
+  html.dui-pro-overhaul.dui-cohesive-ui .dy-workspace-context:is(
+    [data-workspace="agents"],
+    [data-workspace="missions"],
+    [data-workspace="monitor"],
+    [data-workspace="plugins"]
+  ) {
+    flex-direction: column !important;
+    align-items: stretch !important;
+  }
+
+  html.dui-pro-overhaul.dui-cohesive-ui .dy-workspace-context:is(
+    [data-workspace="agents"],
+    [data-workspace="missions"],
+    [data-workspace="monitor"],
+    [data-workspace="plugins"]
+  ) .dy-workspace-context__meta {
+    max-width: none !important;
+    justify-content: flex-start !important;
+  }
+
+  html.dui-pro-overhaul.dui-cohesive-ui .dy-workspace-context:is(
+    [data-workspace="agents"],
+    [data-workspace="missions"],
+    [data-workspace="monitor"],
+    [data-workspace="plugins"]
+  ) .dy-status-grid {
+    justify-content: flex-start !important;
+  }
+}
+
+@media (max-width: 860px) {
+  html.dui-pro-overhaul.dui-cohesive-ui .dy-workspace-context:is(
+    [data-workspace="agents"],
+    [data-workspace="missions"],
+    [data-workspace="monitor"],
+    [data-workspace="plugins"]
+  ) {
+    min-height: 0 !important;
+    padding: 10px !important;
+  }
+
+  html.dui-pro-overhaul.dui-cohesive-ui .dy-workspace-context:is(
+    [data-workspace="agents"],
+    [data-workspace="missions"],
+    [data-workspace="monitor"],
+    [data-workspace="plugins"]
+  ) p {
+    display: none !important;
+  }
+
+  html.dui-pro-overhaul.dui-cohesive-ui .dy-workspace-context:is(
+    [data-workspace="agents"],
+    [data-workspace="missions"],
+    [data-workspace="monitor"],
+    [data-workspace="plugins"]
+  ) .badge.dy-status-chip {
+    min-width: 0 !important;
+  }
+}
+
+@media (min-width: 901px) and (max-width: 1500px),
+       (min-width: 901px) and (max-height: 900px) {
+  html.dui-pro-overhaul.dui-cohesive-ui .dy-workspace-context:is(
+    [data-workspace="agents"],
+    [data-workspace="missions"],
+    [data-workspace="monitor"],
+    [data-workspace="plugins"]
+  ) {
+    flex-direction: row !important;
+    align-items: center !important;
+    gap: 12px !important;
+    min-height: 48px !important;
+    padding: 7px 10px 7px 12px !important;
+  }
+
+  html.dui-pro-overhaul.dui-cohesive-ui .dy-workspace-context:is(
+    [data-workspace="agents"],
+    [data-workspace="missions"],
+    [data-workspace="monitor"],
+    [data-workspace="plugins"]
+  ) p {
+    display: block !important;
+    max-width: 420px !important;
+  }
+
+  html.dui-pro-overhaul.dui-cohesive-ui .dy-workspace-context:is(
+    [data-workspace="agents"],
+    [data-workspace="missions"],
+    [data-workspace="monitor"],
+    [data-workspace="plugins"]
+  ) .dy-workspace-context__meta {
+    flex-direction: row !important;
+    justify-content: flex-end !important;
+    max-width: min(780px, 64vw) !important;
+  }
+
+  html.dui-pro-overhaul.dui-cohesive-ui .dy-workspace-context:is(
+    [data-workspace="agents"],
+    [data-workspace="missions"],
+    [data-workspace="monitor"],
+    [data-workspace="plugins"]
+  ) .dy-status-grid {
+    justify-content: flex-end !important;
+    gap: 5px !important;
+  }
+
+  html.dui-pro-overhaul.dui-cohesive-ui .dy-workspace-context:is(
+    [data-workspace="agents"],
+    [data-workspace="missions"],
+    [data-workspace="monitor"],
+    [data-workspace="plugins"]
+  ) .badge.dy-status-chip {
+    min-width: 60px !important;
+    min-height: 26px !important;
+    height: 26px !important;
+    padding: 0 7px !important;
   }
 }
 
@@ -1161,4 +1617,257 @@ html.dui-pro-overhaul [data-dui-modal="recruit-agent"] .dui-recruit-template-sea
   padding: 0 !important;
   font-size: 12px !important;
   font-weight: 800 !important;
+}
+
+/* Recruit modal graphite finish: one neutral accent system for this dialog. */
+html.dui-pro-overhaul [data-dui-modal="recruit-agent"] {
+  --dui-recruit-accent: #c3c8cc;
+  --dui-recruit-accent-soft: rgba(195, 200, 204, .11);
+  --dui-recruit-green: #c3c8cc;
+  --dui-recruit-ink: #060707;
+  --dui-recruit-panel: #101112;
+  --dui-recruit-panel-2: #0b0c0d;
+  --dui-recruit-panel-3: #18191a;
+  --dui-recruit-border: rgba(198, 202, 205, .14);
+  --dui-recruit-border-strong: rgba(210, 214, 216, .24);
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, .030), rgba(255, 255, 255, .006) 80px, rgba(0, 0, 0, .13)),
+    #0b0c0d !important;
+}
+
+html.dui-pro-overhaul [data-dui-modal="recruit-agent"] .dui-recruit-header,
+html.dui-pro-overhaul [data-dui-modal="recruit-agent"] .dui-recruit-footer {
+  border-color: rgba(198, 202, 205, .12) !important;
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, .032), rgba(255, 255, 255, .006)),
+    #101112 !important;
+  box-shadow: none !important;
+}
+
+html.dui-pro-overhaul [data-dui-modal="recruit-agent"] .dui-recruit-form > .dui-recruit-section,
+html.dui-pro-overhaul [data-dui-modal="recruit-agent"] .dui-recruit-files,
+html.dui-pro-overhaul [data-dui-modal="recruit-agent"] .dui-recruit-style-settings,
+html.dui-pro-overhaul [data-dui-modal="recruit-agent"] .dui-recruit-setting-group {
+  border-color: rgba(198, 202, 205, .13) !important;
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, .026), rgba(255, 255, 255, .004)),
+    #101112 !important;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, .025) !important;
+}
+
+html.dui-pro-overhaul [data-dui-modal="recruit-agent"] .dui-recruit-style-settings,
+html.dui-pro-overhaul [data-dui-modal="recruit-agent"] .dui-recruit-setting-group {
+  background-color: #111213 !important;
+}
+
+html.dui-pro-overhaul [data-dui-modal="recruit-agent"] :where(input, select, textarea, .dui-recruit-choice-trigger, .dui-recruit-static-value) {
+  border-color: rgba(198, 202, 205, .15) !important;
+  background-color: #070808 !important;
+  color: #e6e8ea !important;
+}
+
+html.dui-pro-overhaul [data-dui-modal="recruit-agent"] :where(input, select, textarea, .dui-recruit-choice-trigger):focus,
+html.dui-pro-overhaul [data-dui-modal="recruit-agent"] .dui-recruit-choice-field[data-open="true"] .dui-recruit-choice-trigger,
+html.dui-pro-overhaul [data-dui-modal="recruit-agent"] .dui-recruit-template-search input:focus {
+  border-color: rgba(226, 229, 231, .34) !important;
+  box-shadow:
+    0 0 0 1px rgba(226, 229, 231, .11),
+    inset 0 1px 0 rgba(255, 255, 255, .032) !important;
+}
+
+html.dui-pro-overhaul [data-dui-modal="recruit-agent"] .dui-recruit-step-rail span {
+  border-color: rgba(198, 202, 205, .14) !important;
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, .028), rgba(255, 255, 255, .004)),
+    #0b0c0d !important;
+}
+
+html.dui-pro-overhaul [data-dui-modal="recruit-agent"] .dui-recruit-step-rail span[data-state="active"],
+html.dui-pro-overhaul [data-dui-modal="recruit-agent"] .dui-recruit-step-rail span[data-state="done"] {
+  border-color: rgba(226, 229, 231, .30) !important;
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, .070), rgba(255, 255, 255, .012)),
+    #1c1d1f !important;
+}
+
+html.dui-pro-overhaul [data-dui-modal="recruit-agent"] .dui-recruit-step-rail span[data-state="active"] small,
+html.dui-pro-overhaul [data-dui-modal="recruit-agent"] .dui-recruit-step-rail span[data-state="done"] small {
+  color: #d7dadc !important;
+}
+
+html.dui-pro-overhaul [data-dui-modal="recruit-agent"] .dui-recruit-step-rail span[data-state="active"] strong,
+html.dui-pro-overhaul [data-dui-modal="recruit-agent"] .dui-recruit-step-rail span[data-state="done"] strong {
+  color: #f5f6f7 !important;
+}
+
+html.dui-pro-overhaul [data-dui-modal="recruit-agent"] .dui-recruit-section-primary,
+html.dui-pro-overhaul [data-dui-modal="recruit-agent"] .dui-recruit-section-icon,
+html.dui-pro-overhaul [data-dui-modal="recruit-agent"] .dui-recruit-status-icon,
+html.dui-pro-overhaul [data-dui-modal="recruit-agent"] .dui-recruit-code-expand {
+  border-color: rgba(198, 202, 205, .18) !important;
+}
+
+html.dui-pro-overhaul [data-dui-modal="recruit-agent"] .dui-recruit-section-icon,
+html.dui-pro-overhaul [data-dui-modal="recruit-agent"] .dui-recruit-status-icon,
+html.dui-pro-overhaul [data-dui-modal="recruit-agent"] .dui-recruit-code-expand {
+  background: #171819 !important;
+  color: #d7dadc !important;
+}
+
+html.dui-pro-overhaul [data-dui-modal="recruit-agent"] .dui-recruit-choice-menu {
+  border-color: rgba(198, 202, 205, .20) !important;
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, .032), rgba(255, 255, 255, .008)),
+    #0b0c0d !important;
+}
+
+html.dui-pro-overhaul [data-dui-modal="recruit-agent"] .dui-recruit-choice-menu button:hover:not(:disabled),
+html.dui-pro-overhaul [data-dui-modal="recruit-agent"] .dui-recruit-choice-menu button[data-active="true"],
+html.dui-pro-overhaul [data-dui-modal="recruit-agent"] .dui-recruit-template-reset:hover:not(:disabled),
+html.dui-pro-overhaul [data-dui-modal="recruit-agent"] .dui-recruit-category-chips button:hover:not(:disabled),
+html.dui-pro-overhaul [data-dui-modal="recruit-agent"] .dui-recruit-category-chips button[data-active="true"],
+html.dui-pro-overhaul [data-dui-modal="recruit-agent"] .dui-recruit-template-card:hover:not(:disabled),
+html.dui-pro-overhaul [data-dui-modal="recruit-agent"] .dui-recruit-template-card[data-active="true"] {
+  border-color: rgba(226, 229, 231, .26) !important;
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, .060), rgba(255, 255, 255, .010)),
+    #191a1b !important;
+  color: #f3f4f5 !important;
+}
+
+html.dui-pro-overhaul [data-dui-modal="recruit-agent"] .dui-recruit-template-card-blank,
+html.dui-pro-overhaul [data-dui-modal="recruit-agent"] .dui-recruit-file-summary-card {
+  border-color: rgba(198, 202, 205, .15) !important;
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, .038), rgba(255, 255, 255, .006)),
+    #0d0e0f !important;
+}
+
+html.dui-pro-overhaul [data-dui-modal="recruit-agent"] .dui-recruit-portrait-preview {
+  border-color: rgba(198, 202, 205, .20) !important;
+  background:
+    linear-gradient(135deg, rgba(255, 255, 255, .070), rgba(255, 255, 255, .018)),
+    #151617 !important;
+}
+
+html.dui-pro-overhaul [data-dui-modal="recruit-agent"] .dui-recruit-behaviors button.is-active,
+html.dui-pro-overhaul [data-dui-modal="recruit-agent"] .dui-recruit-file-tabs button.is-active,
+html.dui-pro-overhaul [data-dui-modal="recruit-agent"] .dui-recruit-file-tabs button.is-active[data-md-tone],
+html.dui-pro-overhaul [data-dui-modal="recruit-agent"] .dui-recruit-personality-depth-scale button[data-active="true"],
+html.dui-pro-overhaul [data-dui-modal="recruit-agent"] .dui-recruit-code-expand[aria-pressed="true"] {
+  border-color: rgba(226, 229, 231, .34) !important;
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, .070), rgba(255, 255, 255, .012)),
+    #202123 !important;
+  color: #ffffff !important;
+  outline: 1px solid rgba(226, 229, 231, .13) !important;
+  outline-offset: -1px !important;
+}
+
+html.dui-pro-overhaul [data-dui-modal="recruit-agent"] .dui-recruit-file-tabs button[data-md-tone] {
+  --dui-md-file-accent: #c3c8cc;
+  --dui-md-file-soft: rgba(195, 200, 204, .10);
+  --dui-md-file-border: rgba(195, 200, 204, .22);
+}
+
+html.dui-pro-overhaul [data-dui-modal="recruit-agent"] .dui-recruit-file-tabs button[data-md-tone]::before,
+html.dui-pro-overhaul [data-dui-modal="recruit-agent"] .dui-recruit-file-tabs button.is-active[data-md-tone]::after {
+  background: #c3c8cc !important;
+  box-shadow: none !important;
+}
+
+html.dui-pro-overhaul [data-dui-modal="recruit-agent"] .dui-recruit-personality-depth em,
+html.dui-pro-overhaul [data-dui-modal="recruit-agent"] .dui-recruit-file-summary-kicker,
+html.dui-pro-overhaul [data-dui-modal="recruit-agent"] .dui-recruit-auto-indicator {
+  border-color: rgba(198, 202, 205, .24) !important;
+  background: rgba(255, 255, 255, .045) !important;
+  color: #dce0e2 !important;
+}
+
+html.dui-pro-overhaul [data-dui-modal="recruit-agent"] .dui-recruit-primary,
+html.dui-pro-overhaul [data-dui-modal="recruit-agent"] .dui-recruit-auto-button {
+  border-color: rgba(226, 229, 231, .34) !important;
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, .090), rgba(255, 255, 255, .018)),
+    #202123 !important;
+  color: #f5f6f7 !important;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, .060) !important;
+}
+
+html.dui-pro-overhaul [data-dui-modal="recruit-agent"] .dui-recruit-primary:hover:not(:disabled),
+html.dui-pro-overhaul [data-dui-modal="recruit-agent"] .dui-recruit-auto-button:hover:not(:disabled),
+html.dui-pro-overhaul [data-dui-modal="recruit-agent"] .dui-recruit-file-add button:hover:not(:disabled),
+html.dui-pro-overhaul [data-dui-modal="recruit-agent"] .dui-recruit-secondary:hover:not(:disabled) {
+  border-color: rgba(240, 242, 243, .40) !important;
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, .115), rgba(255, 255, 255, .025)),
+    #252628 !important;
+}
+
+html.dui-pro-overhaul [data-dui-modal="recruit-agent"] .dui-recruit-capability input::after,
+html.dui-pro-overhaul [data-dui-modal="recruit-agent"] .dui-recruit-toggle input::after {
+  border-color: #080909 !important;
+}
+
+html.dui-pro-overhaul [data-dui-modal="recruit-agent"] .dui-recruit-capability input:checked,
+html.dui-pro-overhaul [data-dui-modal="recruit-agent"] .dui-recruit-toggle input:checked {
+  border-color: rgba(240, 242, 243, .72) !important;
+  background:
+    linear-gradient(180deg, #e0e3e5, #aeb4b8) !important;
+}
+
+html.dui-pro-overhaul [data-dui-modal="recruit-agent"] .dui-recruit-capability:has(input:checked),
+html.dui-pro-overhaul [data-dui-modal="recruit-agent"] .dui-recruit-toggle:has(input:checked) {
+  border-color: rgba(226, 229, 231, .24) !important;
+  background: rgba(255, 255, 255, .040) !important;
+}
+
+html.dui-pro-overhaul [data-dui-modal="recruit-agent"] .dui-recruit-footer p[data-tone="success"],
+html.dui-pro-overhaul [data-dui-modal="recruit-agent"] .dui-recruit-status-icon {
+  color: #dce0e2 !important;
+}
+
+html.dui-pro-overhaul [data-dui-modal="recruit-agent"] .dui-recruit-personality-depth input[type="range"] {
+  accent-color: #c3c8cc !important;
+}
+
+html.dui-pro-overhaul [data-dui-modal="recruit-agent"] .dui-recruit-personality-depth input[type="range"]::-webkit-slider-runnable-track {
+  border-color: rgba(198, 202, 205, .16) !important;
+  background:
+    linear-gradient(90deg, #c3c8cc 0 var(--dy-range-value), rgba(255, 255, 255, .085) var(--dy-range-value) 100%),
+    #050607 !important;
+}
+
+html.dui-pro-overhaul [data-dui-modal="recruit-agent"] .dui-recruit-personality-depth input[type="range"]::-webkit-slider-thumb {
+  border-color: rgba(245, 246, 247, .84) !important;
+  background: radial-gradient(circle at 35% 28%, #ffffff, #cbd0d4 48%, #555b60) !important;
+  box-shadow:
+    0 0 0 3px rgba(195, 200, 204, .14),
+    0 0 12px rgba(195, 200, 204, .16) !important;
+}
+
+html.dui-pro-overhaul [data-dui-modal="recruit-agent"] .dui-recruit-personality-depth input[type="range"]::-moz-range-progress {
+  background: #c3c8cc !important;
+}
+
+html.dui-pro-overhaul [data-dui-modal="recruit-agent"] .dui-recruit-personality-depth input[type="range"]::-moz-range-thumb {
+  border-color: rgba(245, 246, 247, .84) !important;
+  background: #cbd0d4 !important;
+}
+
+html.dui-pro-overhaul [data-dui-panel="active-party"] [data-slot-card][data-slot-state="empty"],
+html.dui-pro-overhaul.dui-cohesive-ui [data-dui-panel="active-party"] [data-slot-card][data-slot-state="empty"],
+html.dui-pro-overhaul [data-dui-panel="active-party"] [data-slot-card].is-empty,
+html.dui-pro-overhaul.dui-cohesive-ui [data-dui-panel="active-party"] [data-slot-card].is-empty,
+html.dui-pro-overhaul [data-dui-panel="active-party"] .dy-party-slot.is-empty,
+html.dui-pro-overhaul.dui-cohesive-ui [data-dui-panel="active-party"] .dy-party-slot.is-empty {
+  border-style: solid !important;
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, .018), rgba(255, 255, 255, .004)),
+    rgba(8, 10, 11, .34) !important;
+}
+
+html.dui-pro-overhaul [data-dui-panel="active-party"] .dy-party-slot.is-empty::before,
+html.dui-pro-overhaul.dui-cohesive-ui [data-dui-panel="active-party"] .dy-party-slot.is-empty::before {
+  border: 0 !important;
 }

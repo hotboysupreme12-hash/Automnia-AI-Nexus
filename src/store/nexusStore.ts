@@ -1011,11 +1011,8 @@ function runtimePolicyFromOverview(entry: PartyOverviewAgent, existing: OpenClaw
 }
 
 function mapOverviewAgentToLocal(entry: PartyOverviewAgent, existing: OpenClawAgent | undefined): OpenClawAgent {
-  const fp = `${import.meta.env.BASE_URL}agents/benjamin-franklin.jpg`
   const seedFallback = getSeedAgents().find((a) => a.id === entry.id)
-  const portrait = entry.id === 'hn-franklin'
-    ? fp
-    : portraitFromOverview(entry, existing, seedFallback)
+  const portrait = portraitFromOverview(entry, existing, seedFallback)
   const cn = (entry.className || existing?.className || 'Operator').trim() || 'Operator'
   const role = (entry.role || existing?.role || 'Agent').trim() || 'Agent'
   const analysis = clampPercent(entry.stats?.analysis, existing?.attributes.intelligence ?? 68)
@@ -2250,7 +2247,7 @@ export const useNexusStore = create<NexusState>()(
             const message = networkFailure
               ? [
                   'Control Center lost the local backend connection before the provider returned.',
-                  'The Gateway may have restarted while this turn was opening. Reset Gateway from Monitor, then retry.',
+                  'The Gateway may have restarted while this turn was opening. Reset Gateway, then retry.',
                   `Detail: ${result.error.message}`,
                 ].join('\n')
               : apiErrorMessage(result.error)
@@ -2456,7 +2453,7 @@ export const useNexusStore = create<NexusState>()(
             : offline
             ? [
                 'Control Center lost the local backend connection before the provider returned.',
-                'The Gateway may have restarted while this turn was opening. Reset Gateway from Monitor, then retry.',
+                'The Gateway may have restarted while this turn was opening. Reset Gateway, then retry.',
                 `Detail: ${compactLine(message, 700)}`,
               ].join('\n')
             : message
@@ -2842,6 +2839,7 @@ export const useNexusStore = create<NexusState>()(
           const agentId = draft.id
           const warnings: string[] = []
           const current = get()
+          if (isRetiredAgentId(agentId)) throw new Error('Roster is locked to Elena Vasquez, Sarah Cooper, and Marcus Chen. Retired agents cannot be recruited.')
           if (!/^[a-z0-9-]{3,60}$/.test(agentId)) {
             throw new Error('Agent ID must be 3-60 characters using lowercase letters, numbers, and hyphens.')
           }

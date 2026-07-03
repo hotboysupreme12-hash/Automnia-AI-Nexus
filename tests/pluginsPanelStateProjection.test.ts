@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
 import {
+  PLUGIN_FILTERS,
   pluginMatchesFilter,
   pluginPageState,
   pluginStatusClass,
@@ -73,6 +74,15 @@ test('plugins page projection distinguishes beta plugin states', () => {
       status: 'disabled',
       guidance: ['Disabled by operator policy.'],
     }),
+    pluginEntry('perplexity', {
+      enabled: false,
+      configuredEnabled: null,
+      origin: 'official-catalog',
+      status: 'available',
+      installSpec: '@openclaw/perplexity-plugin',
+      installable: true,
+      guidance: ['Install official plugin @openclaw/perplexity-plugin.'],
+    }),
   ]
 
   const states = new Map(plugins.map((plugin) => [plugin.id, pluginPageState(plugin)]))
@@ -81,24 +91,30 @@ test('plugins page projection distinguishes beta plugin states', () => {
   assert.deepEqual(states.get('channel-unavailable'), { key: 'unavailable', label: 'unavailable', tone: 'unavailable' })
   assert.deepEqual(states.get('websearch-failed'), { key: 'failed', label: 'failed', tone: 'failed' })
   assert.deepEqual(states.get('disabled-one'), { key: 'disabled', label: 'disabled', tone: 'disabled' })
+  assert.deepEqual(states.get('perplexity'), { key: 'disabled', label: 'available', tone: 'disabled' })
 
-  assert.equal(pluginMatchesFilter(plugins[0], 'configured'), true)
-  assert.equal(pluginMatchesFilter(plugins[1], 'missing-auth'), true)
-  assert.equal(pluginMatchesFilter(plugins[2], 'unavailable'), true)
-  assert.equal(pluginMatchesFilter(plugins[3], 'failed'), true)
+  assert.deepEqual(PLUGIN_FILTERS.map((option) => option.label), ['All', 'Enabled', 'Disabled'])
+  assert.equal(pluginMatchesFilter(plugins[0], 'all'), true)
+  assert.equal(pluginMatchesFilter(plugins[0], 'enabled'), true)
+  assert.equal(pluginMatchesFilter(plugins[1], 'enabled'), true)
+  assert.equal(pluginMatchesFilter(plugins[2], 'enabled'), true)
+  assert.equal(pluginMatchesFilter(plugins[3], 'enabled'), true)
   assert.equal(pluginMatchesFilter(plugins[4], 'disabled'), true)
-  assert.equal(pluginMatchesFilter(plugins[1], 'configured'), false)
-  assert.equal(pluginMatchesFilter(plugins[3], 'missing-auth'), false)
+  assert.equal(pluginMatchesFilter(plugins[4], 'enabled'), false)
+  assert.equal(pluginMatchesFilter(plugins[5], 'disabled'), true)
+  assert.equal(pluginMatchesFilter(plugins[5], 'enabled'), false)
+  assert.equal(pluginMatchesFilter(plugins[0], 'disabled'), false)
 
   assert.match(pluginStatusClass(plugins[0]), /cyan/)
   assert.match(pluginStatusClass(plugins[1]), /amber/)
   assert.match(pluginStatusClass(plugins[2]), /amber/)
   assert.match(pluginStatusClass(plugins[3]), /rose/)
   assert.match(pluginStatusClass(plugins[4]), /slate/)
+  assert.match(pluginStatusClass(plugins[5]), /slate/)
 
   assert.deepEqual(summarizePluginPageStates(plugins), {
     configured: 1,
-    disabled: 1,
+    disabled: 2,
     enabled: 4,
     failed: 1,
     missingAuth: 1,

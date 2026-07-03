@@ -410,7 +410,12 @@ const CLAWTALK_PLUGIN_ID = 'clawtalk'
 const BROWSER_PLUGIN_ID = 'browser'
 const EXTERNAL_LOAD_PATH_RESERVED_PLUGIN_IDS = new Set(['codex'])
 const CLAWTALK_DEFAULT_SERVER = 'https://clawdtalk.com'
-const CLAWTALK_DEFAULT_AGENT_ID = 'hn-commander'
+const CLAWTALK_DEFAULT_AGENT_ID = 'hn-coordinator'
+const SURVIVING_AGENT_IDS = new Set([
+  'hn-architect',
+  'hn-coordinator',
+  'hn-crypto-lead',
+])
 const CLAWTALK_AGENT_TOOL_NAMES = [
   'clawtalk_bot_config',
   'clawtalk_call',
@@ -1827,24 +1832,9 @@ const startGoogleOAuthSession = oauthCallbackService.startGoogleOAuthSession
 const startOpenAICodexOAuthSession = oauthCallbackService.startOpenAICodexOAuthSession
 
 const DEFAULT_BOOTSTRAP_AGENTS: Array<{ id: string; name: string }> = [
-  { id: 'hn-commander', name: 'Donald J. Trump' },
-  { id: 'hn-coordinator', name: 'Sarah Cooper' },
-  { id: 'hn-builder', name: 'James Roberts' },
-  { id: 'hn-reviewer', name: 'Brandon Riley' },
   { id: 'hn-architect', name: 'Elena Vasquez' },
-  { id: 'hn-fullstack', name: 'Priya Sharma' },
-  { id: 'hn-netanyahu', name: 'Benjamin Netanyahu' },
+  { id: 'hn-coordinator', name: 'Sarah Cooper' },
   { id: 'hn-crypto-lead', name: 'Marcus Chen' },
-  { id: 'hn-crypto-technical', name: 'Diana Reyes' },
-  { id: 'hn-crypto-onchain', name: 'Viktor Volkov' },
-  { id: 'hn-crypto-quant', name: 'Dr. Aisha Patel' },
-  { id: 'hn-crypto-sentiment', name: 'Zoe Kim' },
-  { id: 'hn-buffett', name: 'Warren Buffett' },
-  { id: 'hn-devops', name: 'Marcus Thorne' },
-  { id: 'hn-security', name: 'Thomas Blackwood' },
-  { id: 'hn-testing', name: 'Yuki Tanaka' },
-  { id: 'hn-ux', name: 'Olivia Chen' },
-  { id: 'hn-franklin', name: 'Benjamin Franklin' },
 ]
 const DEFAULT_BOOTSTRAP_AGENT_BY_ID = new Map(DEFAULT_BOOTSTRAP_AGENTS.map((agent) => [agent.id, agent]))
 
@@ -3494,6 +3484,20 @@ function pauseGatewayAutoRestartForRuntimeUnavailable(detail: string) {
   gatewayLifecycle.pauseAutoRestartForRuntimeUnavailable(detail)
 }
 
+async function cleanupLegacyConfigHealthStateForGateway(reason: string) {
+  const cleanup = await archiveCoveredLegacyConfigHealthState({ stateRoot: OPENCLAW_STATE_ROOT })
+    .catch((error) => ({
+      archived: false,
+      reason: String(error),
+      sourcePath: path.join(OPENCLAW_STATE_ROOT, 'logs', 'config-health.json'),
+      entries: 0,
+    }))
+  if (cleanup.archived) {
+    pushGatewayLog('lifecycle', `Archived covered legacy config health state (${reason})`)
+  }
+  return cleanup
+}
+
 async function repairOpenClawConfigForGateway(reason: string) {
   pushGatewayLog('lifecycle', `running OpenClaw doctor repair for config (${reason})`)
   const result = await runOpenClaw(
@@ -3522,18 +3526,10 @@ async function prepareOpenClawConfigForGatewayStartup(reason: string) {
         return false
       }
       openclawConfigCache = null
+      await cleanupLegacyConfigHealthStateForGateway(reason)
       const config = await readOpenclawConfig()
       await writeOpenclawConfig(config)
-      const configHealthCleanup = await archiveCoveredLegacyConfigHealthState({ stateRoot: OPENCLAW_STATE_ROOT })
-        .catch((error) => ({
-          archived: false,
-          reason: String(error),
-          sourcePath: path.join(OPENCLAW_STATE_ROOT, 'logs', 'config-health.json'),
-          entries: 0,
-        }))
-      if (configHealthCleanup.archived) {
-        pushGatewayLog('lifecycle', `Archived covered legacy config health state (${reason})`)
-      }
+      await cleanupLegacyConfigHealthStateForGateway(reason)
       let validation = await validateOpenClawConfigForGateway(reason)
       if (validation.valid) return true
 
@@ -3541,6 +3537,7 @@ async function prepareOpenClawConfigForGatewayStartup(reason: string) {
       openclawConfigCache = null
       const repairedConfig = await readOpenclawConfig().catch(() => null)
       if (repairedConfig) await writeOpenclawConfig(repairedConfig)
+      await cleanupLegacyConfigHealthStateForGateway(`${reason}; after doctor repair`)
       validation = await validateOpenClawConfigForGateway(`${reason}; after doctor repair`)
       if (validation.valid) {
         gatewayLifecycle.resumeAutoRestartAfterConfigRepair()
@@ -8300,7 +8297,11 @@ async function readOpenclawConfig() {
       (text) => JSON.parse(text) as OpenClawConfigFile,
       (entry) => { openclawConfigCache = entry },
     )
-    if (sanitizeOpenClawConfigAgentAvatars(cached) || migrateGeneratedDeepSeekDefaultsInOpenClawConfig(cached)) {
+    if (
+      sanitizeOpenClawConfigAgentAvatars(cached)
+      || migrateGeneratedDeepSeekDefaultsInOpenClawConfig(cached)
+      || pruneRetiredAgentsFromOpenClawConfig(cached)
+    ) {
       await writeOpenclawConfig(cached).catch(() => undefined)
     }
     return cached
@@ -8319,7 +8320,11 @@ async function readOpenclawConfig() {
   for (let attempt = 0; attempt < 2; attempt += 1) {
     try {
       const parsed = JSON.parse(raw.replace(/^\uFEFF/, '')) as OpenClawConfigFile
-      if (sanitizeOpenClawConfigAgentAvatars(parsed) || migrateGeneratedDeepSeekDefaultsInOpenClawConfig(parsed)) {
+      if (
+        sanitizeOpenClawConfigAgentAvatars(parsed)
+        || migrateGeneratedDeepSeekDefaultsInOpenClawConfig(parsed)
+        || pruneRetiredAgentsFromOpenClawConfig(parsed)
+      ) {
         await writeOpenclawConfig(parsed).catch(() => undefined)
       }
       await rememberJsonFileCache(OPENCLAW_CONFIG_PATH, parsed, (entry) => { openclawConfigCache = entry })
@@ -8336,7 +8341,11 @@ async function readOpenclawConfig() {
   try {
     const fallbackRaw = await fs.readFile(`${OPENCLAW_CONFIG_PATH}.last-good`, 'utf-8')
     const parsed = JSON.parse(fallbackRaw.replace(/^\uFEFF/, '')) as OpenClawConfigFile
-    if (sanitizeOpenClawConfigAgentAvatars(parsed) || migrateGeneratedDeepSeekDefaultsInOpenClawConfig(parsed)) {
+    if (
+      sanitizeOpenClawConfigAgentAvatars(parsed)
+      || migrateGeneratedDeepSeekDefaultsInOpenClawConfig(parsed)
+      || pruneRetiredAgentsFromOpenClawConfig(parsed)
+    ) {
       await writeOpenclawConfig(parsed).catch(() => undefined)
     }
     await rememberJsonFileCache(OPENCLAW_CONFIG_PATH, parsed, (entry) => { openclawConfigCache = entry })
@@ -9059,7 +9068,7 @@ async function writeOpenclawConfig(config: unknown) {
     agents: parsed.agents
       ? {
           ...parsed.agents,
-          list: (parsed.agents.list || []).map((entry) => {
+          list: (parsed.agents.list || []).filter((entry) => !isRetiredAgentId(entry.id)).map((entry) => {
             const safeEntry = { ...(entry as Record<string, unknown>) }
             delete safeEntry.executionWorkspace
             delete safeEntry.heartbeat
@@ -11825,11 +11834,13 @@ async function saveAgentFileToCodexProfile(agentId: string, file: string, conten
 async function getAgentById(agentId: string) {
   const config = await readOpenclawConfig()
   const normalized = agentId.trim().toLowerCase()
+  if (isValidAgentId(normalized) && isRetiredAgentId(normalized)) return { config, target: undefined }
   let target = (config.agents?.list || []).find((entry) => {
     const idMatch = entry.id.toLowerCase() === normalized
     const nameMatch = (entry.identity?.name || entry.name || '').trim().toLowerCase() === normalized
     return idMatch || nameMatch
   })
+  if (target && isRetiredAgentId(target.id)) return { config, target: undefined }
   if (!target && isValidAgentId(normalized)) {
     const local = await readAgentLocalConfigIfPresent(normalized)
     if (local) {
@@ -12114,6 +12125,19 @@ const BUILTIN_RETIRED_AGENT_IDS = new Set([
   'recruit-check-mps3678p',
   'no-such-agent',
   'hn-builder',
+  'hn-commander',
+  'hn-reviewer',
+  'hn-fullstack',
+  'hn-netanyahu',
+  'hn-crypto-technical',
+  'hn-crypto-onchain',
+  'hn-crypto-quant',
+  'hn-crypto-sentiment',
+  'hn-buffett',
+  'hn-devops',
+  'hn-security',
+  'hn-testing',
+  'hn-ux',
   'hn-franklin',
   'hn-trump',
 ])
@@ -12169,7 +12193,16 @@ loadRetiredAgentIdsFromDisk()
 
 function isRetiredAgentId(agentId: string | undefined) {
   const normalized = normalizeRetiredAgentId(agentId)
-  return Boolean(normalized && RETIRED_AGENT_IDS.has(normalized))
+  return Boolean(normalized && normalized !== 'main' && (RETIRED_AGENT_IDS.has(normalized) || !SURVIVING_AGENT_IDS.has(normalized)))
+}
+
+function pruneRetiredAgentsFromOpenClawConfig(config: OpenClawConfigFile) {
+  const list = config.agents?.list
+  if (!Array.isArray(list)) return false
+  const next = list.filter((entry) => !isRetiredAgentId(entry.id))
+  if (next.length === list.length) return false
+  config.agents!.list = next
+  return true
 }
 
 type RetireAgentReport = {

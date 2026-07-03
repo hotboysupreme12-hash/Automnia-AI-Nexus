@@ -88,7 +88,7 @@ assert(server.includes('gatewayLifecycleLedger.value?.recentRestarts || []'), 'D
 assert(server.includes('const gatewayDoctorLastRestartReason = gatewayLifecycleState.lastRestartReason || gatewayDoctorLastRestart?.reason || null'), 'Doctor gateway diagnostics should fall back to the ledger restart reason after process restart')
 assert(server.includes('Recent restarts:'), 'Doctor gateway diagnostics should summarize a compact restart timeline when multiple rows exist')
 assert(server.includes('Restart diagnostics: ${gatewayDoctorRestartDiagnostics.summary}'), 'Doctor gateway diagnostics should include derived restart repair guidance')
-assert(runtimeActionService.includes("reason: 'manual restart requested from monitor'"), 'manual monitor restarts should pass a structured restart reason')
+assert(runtimeActionService.includes("reason: 'manual gateway restart requested'"), 'manual gateway restarts should pass a structured restart reason')
 assert(gatewayLogService.includes('function isGatewayPollingIngressLifecycle'), 'gateway activity should classify polling ingress lifecycle separately')
 assert(
   gatewayLogService.includes("if (isGatewayPollingIngressLifecycle(text)) return 'system'"),
@@ -134,9 +134,10 @@ assert(nexusShell.includes("onClick={() => selectTab('monitor')}"), 'runtime sta
 assert(nexusShell.includes("{tab === 'monitor' &&"), 'NexusShell should mount Monitor when the Monitor tab is active')
 assert(nexusShell.includes('<LiveOperationMonitor />'), 'Monitor workspace should render LiveOperationMonitor')
 assert(liveMonitor.includes('data-dui-panel="monitor"'), 'LiveOperationMonitor should expose the Monitor panel marker')
-assert(liveMonitor.includes('function runtimeStatusEvidenceLabel'), 'Monitor should summarize runtime status evidence source')
-assert(liveMonitor.includes('Ledger fast path'), 'Monitor should label the Gateway ledger fast path')
-assert(liveMonitor.includes('Log-tail fallback'), 'Monitor should label Gateway log-tail fallback status')
+assert(!liveMonitor.includes('function runtimeStatusEvidenceLabel'), 'Monitor should not keep the removed runtime evidence label helper')
+assert(!liveMonitor.includes('Gateway Runtime'), 'Monitor should not render the removed Gateway Runtime status strip')
+assert(!liveMonitor.includes('Ledger fast path'), 'Monitor should not render the removed Gateway ledger fast-path label')
+assert(!liveMonitor.includes('Log-tail fallback'), 'Monitor should not render the removed Gateway log-tail fallback label')
 assert(liveMonitor.includes("const [tab, setTab] = useState<MonitorTab>('gateway')"), 'Monitor should open on the Gateway runtime tab')
 assert(liveMonitor.includes('useRuntimeStatus(5000)'), 'Monitor should subscribe to full runtime status')
 assert(liveMonitor.includes('RuntimeGatewayPanel status={runtimeStatus}'), 'Monitor should pass runtime status into the Gateway panel')

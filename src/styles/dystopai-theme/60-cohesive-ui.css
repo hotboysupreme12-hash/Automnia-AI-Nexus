@@ -3853,28 +3853,10 @@ html.dui-pro-overhaul.dui-cohesive-ui [data-dui-panel="monitor"] .dy-health-card
   stroke: rgba(var(--dy-health-accent-rgb), .20) !important;
 }
 
-html.dui-pro-overhaul.dui-cohesive-ui .app-bg.dy-monitor-focus [data-dui-panel="monitor"].dy-monitor-shell .dy-monitor-tab-list button:nth-child(1),
-html.dui-pro-overhaul.dui-cohesive-ui [data-dui-panel="monitor"] .dy-monitor-tab-list button:nth-child(1) {
-  --dy-monitor-tab-accent: #93c5fd;
-  --dy-monitor-tab-accent-rgb: 147, 197, 253;
-}
-
-html.dui-pro-overhaul.dui-cohesive-ui .app-bg.dy-monitor-focus [data-dui-panel="monitor"].dy-monitor-shell .dy-monitor-tab-list button:nth-child(2),
-html.dui-pro-overhaul.dui-cohesive-ui [data-dui-panel="monitor"] .dy-monitor-tab-list button:nth-child(2) {
-  --dy-monitor-tab-accent: #f0ba63;
-  --dy-monitor-tab-accent-rgb: 240, 186, 99;
-}
-
-html.dui-pro-overhaul.dui-cohesive-ui .app-bg.dy-monitor-focus [data-dui-panel="monitor"].dy-monitor-shell .dy-monitor-tab-list button:nth-child(3),
-html.dui-pro-overhaul.dui-cohesive-ui [data-dui-panel="monitor"] .dy-monitor-tab-list button:nth-child(3) {
-  --dy-monitor-tab-accent: #a68cff;
-  --dy-monitor-tab-accent-rgb: 166, 140, 255;
-}
-
-html.dui-pro-overhaul.dui-cohesive-ui .app-bg.dy-monitor-focus [data-dui-panel="monitor"].dy-monitor-shell .dy-monitor-tab-list button:nth-child(4),
-html.dui-pro-overhaul.dui-cohesive-ui [data-dui-panel="monitor"] .dy-monitor-tab-list button:nth-child(4) {
-  --dy-monitor-tab-accent: #ee6aaa;
-  --dy-monitor-tab-accent-rgb: 238, 106, 170;
+html.dui-pro-overhaul.dui-cohesive-ui .app-bg.dy-monitor-focus [data-dui-panel="monitor"].dy-monitor-shell .dy-monitor-tab-list button,
+html.dui-pro-overhaul.dui-cohesive-ui [data-dui-panel="monitor"] .dy-monitor-tab-list button {
+  --dy-monitor-tab-accent: #4ade80;
+  --dy-monitor-tab-accent-rgb: 74, 222, 128;
 }
 
 html.dui-pro-overhaul.dui-cohesive-ui .app-bg.dy-monitor-focus [data-dui-panel="monitor"].dy-monitor-shell .dy-monitor-tab-list button,

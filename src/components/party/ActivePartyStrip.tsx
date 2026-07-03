@@ -46,7 +46,6 @@ function initials(name: string) {
 }
 
 function portraitSrcForAgent(agent: OpenClawAgent) {
-  if (agent.id === 'hn-netanyahu') return `${import.meta.env.BASE_URL}agents/generated/benjamin-netanyahu.jpg`
   if (agent.portrait) return agent.portrait
   return ''
 }

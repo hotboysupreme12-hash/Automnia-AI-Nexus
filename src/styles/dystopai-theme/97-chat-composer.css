@@ -1,0 +1,272 @@
+/* Command Console composer: compact chat-field layout with low-noise file controls. */
+html.dui-pro-overhaul .dy-command-console {
+  --dy-chat-composer-bg: #27282b;
+  --dy-chat-composer-bg-strong: #2e2f32;
+  --dy-chat-composer-border: rgba(236, 241, 245, .14);
+  --dy-chat-composer-text: #f3f5f7;
+  --dy-chat-composer-muted: #a6adb5;
+}
+
+html.dui-pro-overhaul .dy-command-console .dy-command-composer,
+html.dui-pro-overhaul.dui-cohesive-ui .dy-command-console .dy-command-composer {
+  padding: 12px 14px 14px !important;
+  border-top: 1px solid rgba(236, 241, 245, .08) !important;
+  background: #17181a !important;
+}
+
+html.dui-pro-overhaul .dy-command-console .dy-command-composer__row,
+html.dui-pro-overhaul.dui-cohesive-ui .dy-command-console .dy-command-composer__row {
+  position: relative !important;
+  display: grid !important;
+  grid-template-columns: minmax(0, 1fr) !important;
+  grid-template-rows: auto minmax(36px, auto) 32px !important;
+  align-items: stretch !important;
+  gap: 7px !important;
+  width: 100% !important;
+  min-height: 92px !important;
+  padding: 11px 11px 9px !important;
+  border: 1px solid var(--dy-chat-composer-border) !important;
+  border-radius: 18px !important;
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, .045), rgba(255, 255, 255, .018)),
+    var(--dy-chat-composer-bg) !important;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, .060),
+    0 16px 32px -28px rgba(0, 0, 0, .95) !important;
+  backdrop-filter: blur(16px) saturate(1.06) !important;
+  -webkit-backdrop-filter: blur(16px) saturate(1.06) !important;
+}
+
+html.dui-pro-overhaul .dy-command-console .dy-command-composer__row::before,
+html.dui-pro-overhaul.dui-cohesive-ui .dy-command-console .dy-command-composer__row::before {
+  display: none !important;
+  content: none !important;
+}
+
+html.dui-pro-overhaul .dy-command-console .dy-command-composer__row[data-has-attachment="false"] {
+  grid-template-rows: minmax(42px, auto) 32px !important;
+}
+
+html.dui-pro-overhaul .dy-command-console .dy-command-composer__row[data-has-draft="true"],
+html.dui-pro-overhaul .dy-command-console .dy-command-composer__row:focus-within,
+html.dui-pro-overhaul.dui-cohesive-ui .dy-command-console .dy-command-composer__row[data-has-draft="true"],
+html.dui-pro-overhaul.dui-cohesive-ui .dy-command-console .dy-command-composer__row:focus-within {
+  border-color: rgba(206, 220, 231, .24) !important;
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, .060), rgba(255, 255, 255, .024)),
+    var(--dy-chat-composer-bg-strong) !important;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, .080),
+    0 0 0 3px rgba(148, 171, 190, .055),
+    0 18px 34px -30px rgba(0, 0, 0, .92) !important;
+}
+
+html.dui-pro-overhaul .dy-command-console .dy-command-composer__row:has(textarea.dy-command-textarea[data-run-status="blocked"]) {
+  border-color: rgba(255, 137, 147, .32) !important;
+  background:
+    linear-gradient(180deg, rgba(255, 137, 147, .075), rgba(255, 255, 255, .020)),
+    #2e2528 !important;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 221, 224, .075),
+    0 0 0 3px rgba(255, 137, 147, .055) !important;
+}
+
+html.dui-pro-overhaul .dy-command-console .dy-command-composer__row:has(textarea.dy-command-textarea[data-run-status="queued"]) {
+  border-color: rgba(244, 203, 94, .30) !important;
+  background:
+    linear-gradient(180deg, rgba(244, 203, 94, .080), rgba(255, 255, 255, .020)),
+    #302d24 !important;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 241, 202, .070),
+    0 0 0 3px rgba(244, 203, 94, .050) !important;
+}
+
+html.dui-pro-overhaul .dy-command-console .dy-command-composer__field,
+html.dui-pro-overhaul.dui-cohesive-ui .dy-command-console .dy-command-composer__field {
+  display: block !important;
+  min-width: 0 !important;
+  min-height: 36px !important;
+  border: 0 !important;
+  border-radius: 0 !important;
+  background: transparent !important;
+  box-shadow: none !important;
+}
+
+html.dui-pro-overhaul .dy-command-console textarea.dy-command-textarea,
+html.dui-pro-overhaul.dui-cohesive-ui .dy-command-console textarea.dy-command-textarea {
+  min-height: 36px !important;
+  max-height: min(30dvh, 220px) !important;
+  padding: 1px 3px 0 !important;
+  border: 0 !important;
+  border-radius: 0 !important;
+  background: transparent !important;
+  color: var(--dy-chat-composer-text) !important;
+  box-shadow: none !important;
+  font-size: 14px !important;
+  font-weight: 540 !important;
+  line-height: 1.46 !important;
+  overflow-wrap: anywhere !important;
+  scrollbar-gutter: stable;
+}
+
+html.dui-pro-overhaul .dy-command-console textarea.dy-command-textarea::placeholder,
+html.dui-pro-overhaul.dui-cohesive-ui .dy-command-console textarea.dy-command-textarea::placeholder {
+  color: #b2bac2 !important;
+  font-size: 13.5px !important;
+  font-weight: 620 !important;
+}
+
+html.dui-pro-overhaul .dy-command-console textarea.dy-command-textarea:focus {
+  outline: none !important;
+  box-shadow: none !important;
+}
+
+html.dui-pro-overhaul .dy-command-console .dy-command-composer__toolbar {
+  display: flex !important;
+  min-width: 0 !important;
+  min-height: 32px !important;
+  align-items: center !important;
+  justify-content: space-between !important;
+  gap: 10px !important;
+}
+
+html.dui-pro-overhaul .dy-command-console .dy-command-composer__tools {
+  display: flex !important;
+  min-width: 0 !important;
+  align-items: center !important;
+  gap: 8px !important;
+}
+
+html.dui-pro-overhaul .dy-command-console .dy-command-icon-button,
+html.dui-pro-overhaul.dui-cohesive-ui .dy-command-console .dy-command-icon-button {
+  width: 30px !important;
+  height: 30px !important;
+  min-width: 30px !important;
+  min-height: 30px !important;
+  align-self: center !important;
+  border: 0 !important;
+  border-radius: 999px !important;
+  background: transparent !important;
+  color: var(--dy-chat-composer-muted) !important;
+  box-shadow: none !important;
+  backdrop-filter: none !important;
+  -webkit-backdrop-filter: none !important;
+}
+
+html.dui-pro-overhaul .dy-command-console .dy-command-icon-button:hover,
+html.dui-pro-overhaul.dui-cohesive-ui .dy-command-console .dy-command-icon-button:hover {
+  background: rgba(255, 255, 255, .075) !important;
+  color: #eef3f7 !important;
+  box-shadow: none !important;
+}
+
+html.dui-pro-overhaul .dy-command-console .dy-command-send,
+html.dui-pro-overhaul.dui-cohesive-ui .dy-command-console .dy-command-send,
+html.dui-pro-overhaul [data-chat-panel="true"] button[aria-label="Send message"] {
+  width: 32px !important;
+  height: 32px !important;
+  min-width: 32px !important;
+  min-height: 32px !important;
+  align-self: center !important;
+  border: 0 !important;
+  border-radius: 999px !important;
+  background: #f4f6f8 !important;
+  color: #17181a !important;
+  box-shadow: 0 8px 18px -14px rgba(0, 0, 0, .9) !important;
+  backdrop-filter: none !important;
+  -webkit-backdrop-filter: none !important;
+}
+
+html.dui-pro-overhaul .dy-command-console .dy-command-send:hover:not(:disabled),
+html.dui-pro-overhaul.dui-cohesive-ui .dy-command-console .dy-command-send:hover:not(:disabled),
+html.dui-pro-overhaul [data-chat-panel="true"] button[aria-label="Send message"]:hover:not(:disabled) {
+  background: #ffffff !important;
+  color: #08090b !important;
+  box-shadow:
+    0 10px 22px -14px rgba(0, 0, 0, .86),
+    0 0 0 3px rgba(255, 255, 255, .075) !important;
+}
+
+html.dui-pro-overhaul .dy-command-console .dy-command-send:disabled,
+html.dui-pro-overhaul.dui-cohesive-ui .dy-command-console .dy-command-send:disabled,
+html.dui-pro-overhaul [data-chat-panel="true"] button[aria-label="Send message"]:disabled {
+  opacity: 1 !important;
+  background: rgba(255, 255, 255, .15) !important;
+  color: rgba(255, 255, 255, .38) !important;
+  box-shadow: none !important;
+}
+
+html.dui-pro-overhaul .dy-command-console .dy-command-upload-preview,
+html.dui-pro-overhaul.dui-cohesive-ui .dy-command-console .dy-command-upload-preview {
+  display: flex !important;
+  min-width: 0 !important;
+  max-width: 100% !important;
+  align-items: center !important;
+  gap: 9px !important;
+  padding: 0 !important;
+  border: 0 !important;
+  background: transparent !important;
+  box-shadow: none !important;
+}
+
+html.dui-pro-overhaul .dy-command-console .dy-command-upload-preview img {
+  width: 58px !important;
+  height: 58px !important;
+  max-width: 58px !important;
+  border-radius: 8px !important;
+  border-color: rgba(255, 255, 255, .18) !important;
+  box-shadow: none !important;
+}
+
+html.dui-pro-overhaul .dy-command-console .dy-command-attachment-card {
+  width: min(100%, 240px) !important;
+  height: 54px !important;
+  max-width: 100% !important;
+  border-radius: 8px !important;
+  border-color: rgba(255, 255, 255, .12) !important;
+  background: rgba(10, 11, 13, .42) !important;
+  box-shadow: none !important;
+}
+
+html.dui-pro-overhaul .dy-command-console .dy-command-attachment-icon {
+  width: 32px !important;
+  height: 32px !important;
+  border-radius: 7px !important;
+}
+
+html.dui-pro-overhaul .dy-command-console .dy-command-upload-remove {
+  width: 19px !important;
+  height: 19px !important;
+  border: 1px solid rgba(255, 255, 255, .20) !important;
+  border-radius: 999px !important;
+  background: #f3f5f7 !important;
+  color: #15171a !important;
+  box-shadow: 0 8px 16px -12px rgba(0, 0, 0, .72) !important;
+}
+
+html.dui-pro-overhaul .dy-command-console .dy-command-upload-remove:hover {
+  background: #ffffff !important;
+  color: #050608 !important;
+  transform: scale(1.04) !important;
+}
+
+html.dui-pro-overhaul .dy-command-console .dy-command-upload-size {
+  flex: 0 0 auto !important;
+  color: #b7bec5 !important;
+  font-size: 12px !important;
+  font-weight: 650 !important;
+  line-height: 1 !important;
+}
+
+@media (max-width: 640px) {
+  html.dui-pro-overhaul .dy-command-console .dy-command-composer,
+  html.dui-pro-overhaul.dui-cohesive-ui .dy-command-console .dy-command-composer {
+    padding: 10px !important;
+  }
+
+  html.dui-pro-overhaul .dy-command-console .dy-command-composer__row,
+  html.dui-pro-overhaul.dui-cohesive-ui .dy-command-console .dy-command-composer__row {
+    border-radius: 16px !important;
+    padding: 10px 10px 8px !important;
+  }
+}
