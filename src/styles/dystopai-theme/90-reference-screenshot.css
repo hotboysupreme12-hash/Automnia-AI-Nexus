@@ -1403,15 +1403,15 @@ html.dui-pro-overhaul .dy-monitor-tab-list button {
 
 html.dui-pro-overhaul .dy-monitor-tab-list button[data-active="true"],
 html.dui-pro-overhaul .dy-monitor-tab-list button[aria-selected="true"] {
-  color: #4ade80 !important;
-  background: linear-gradient(180deg, rgba(74, 222, 128, .11), rgba(74, 222, 128, .030)) !important;
-  box-shadow: inset 0 -2px 0 #4ade80, 0 0 22px rgba(74, 222, 128, .14) !important;
+  color: #35f2a4 !important;
+  background: linear-gradient(180deg, rgba(53, 242, 164, .11), rgba(53, 242, 164, .030)) !important;
+  box-shadow: inset 0 -2px 0 #35f2a4, 0 0 22px rgba(53, 242, 164, .14) !important;
 }
 
 html.dui-pro-overhaul .dy-monitor-tab-list button svg,
 html.dui-pro-overhaul .dy-monitor-tab-list button svg * {
-  color: #4ade80 !important;
-  stroke: #4ade80 !important;
+  color: #35f2a4 !important;
+  stroke: #35f2a4 !important;
 }
 
 html.dui-pro-overhaul .dy-gateway-layout {

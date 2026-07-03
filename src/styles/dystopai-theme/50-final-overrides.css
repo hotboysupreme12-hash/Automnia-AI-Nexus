@@ -1566,7 +1566,7 @@ html.dui-pro-overhaul .app-bg.dy-monitor-focus [data-dui-panel="monitor"] .dy-mo
   background:
     linear-gradient(180deg, rgba(74, 222, 128, .15), rgba(255, 255, 255, .010)),
     #121b17 !important;
-  color: #f4f9ff !important;
+  color: var(--dy-chip-green, var(--dui-green, #4ade80)) !important;
   outline: 1px solid rgba(74, 222, 128, .58) !important;
   outline-offset: -2px !important;
   box-shadow:
@@ -1577,8 +1577,8 @@ html.dui-pro-overhaul .app-bg.dy-monitor-focus [data-dui-panel="monitor"] .dy-mo
 
 html.dui-pro-overhaul [data-dui-panel="monitor"] .dy-monitor-tab-list button[data-active="true"] svg,
 html.dui-pro-overhaul .app-bg.dy-monitor-focus [data-dui-panel="monitor"] .dy-monitor-tab-list button[data-active="true"] svg {
-  color: #4ade80 !important;
-  stroke: #4ade80 !important;
+  color: var(--dy-chip-green, var(--dui-green, #4ade80)) !important;
+  stroke: var(--dy-chip-green, var(--dui-green, #4ade80)) !important;
   filter: drop-shadow(0 0 5px rgba(74, 222, 128, .42));
 }
 
@@ -1781,7 +1781,7 @@ html.dui-pro-overhaul .app-bg.dy-monitor-focus .dy-monitor-tool-button:hover {
   background:
     linear-gradient(180deg, rgba(149, 220, 255, .115), rgba(255, 255, 255, .012)),
     rgba(21, 24, 27, .70) !important;
-  color: var(--dy-glass-text) !important;
+  color: var(--dy-chip-green, var(--dui-green, #4ade80)) !important;
   outline: 0 !important;
   box-shadow:
     inset 0 1px 0 rgba(255, 255, 255, .075),
@@ -2762,7 +2762,7 @@ html.dui-pro-overhaul .app-bg.dy-monitor-focus .dy-monitor-tab-list button {
 }
 
 html.dui-pro-overhaul .app-bg.dy-monitor-focus .dy-monitor-tab-list button[data-active="true"] {
-  color: #f3f7f9 !important;
+  color: var(--dy-chip-green, var(--dui-green, #4ade80)) !important;
   background: #11161a !important;
   box-shadow: inset 0 -2px 0 rgba(72, 224, 255, .46) !important;
 }
@@ -3358,7 +3358,7 @@ html.dui-pro-overhaul .app-bg.dy-monitor-focus [data-dui-panel="monitor"] .dy-mo
   background:
     linear-gradient(180deg, rgba(255, 255, 255, .070), rgba(255, 255, 255, .014)),
     rgba(25, 28, 31, .64) !important;
-  color: #f4f7f8 !important;
+  color: var(--dy-chip-green, var(--dui-green, #4ade80)) !important;
   box-shadow: inset 0 1px 0 rgba(255, 255, 255, .070) !important;
 }
 
@@ -3909,7 +3909,7 @@ html.dui-pro-overhaul .app-bg.dy-monitor-focus [data-dui-panel="monitor"] .dy-mo
   background:
     linear-gradient(180deg, rgba(255, 255, 255, .056), rgba(255, 255, 255, .010)),
     rgba(18, 21, 24, .82) !important;
-  color: var(--dy-monitor-graphite-text) !important;
+  color: var(--dy-chip-green, var(--dui-green, #4ade80)) !important;
   box-shadow: inset 0 1px 0 rgba(255, 255, 255, .060) !important;
 }
 
