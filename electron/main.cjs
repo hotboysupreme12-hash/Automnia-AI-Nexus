@@ -820,6 +820,13 @@ async function ensureNpmToolchainAvailable() {
   }
 }
 
+function applyMacOSLocalAgentRuntimeDefaults() {
+  if (process.platform !== 'darwin') return
+  process.env.CONTROL_CENTER_GATEWAY_AGENT_SESSIONS = process.env.CONTROL_CENTER_GATEWAY_AGENT_SESSIONS || '0'
+  process.env.CONTROL_CENTER_GATEWAY_CHAT_CLIENT = process.env.CONTROL_CENTER_GATEWAY_CHAT_CLIENT || '0'
+  process.env.CONTROL_CENTER_FORCE_LOCAL_AGENT_RUNTIME = process.env.CONTROL_CENTER_FORCE_LOCAL_AGENT_RUNTIME || '1'
+}
+
 function appOwnershipRoots() {
   const roots = ELECTRON_E2E
     ? [
@@ -2422,6 +2429,7 @@ app.whenReady().then(async () => {
   startingUp = true
 
   try {
+    applyMacOSLocalAgentRuntimeDefaults()
     // Set env vars before launching the server child process.
     const staticDir = resolveStaticDir()
     const openclawStateDir = resolveOpenClawHomeDir()
