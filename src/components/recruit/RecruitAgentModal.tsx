@@ -2,6 +2,12 @@ import { useCallback, useDeferredValue, useEffect, useMemo, useRef, useState } f
 import type { CSSProperties, FormEvent, KeyboardEvent, ReactNode } from 'react'
 import { apiErrorMessage, apiRequest } from '../../api/client'
 import {
+  fetchRecruitAgentTemplate,
+  fetchRecruitAgentTemplates,
+  type RecruitAgentTemplate,
+  type RecruitAgentTemplateSummary,
+} from '../../api/party'
+import {
   authStatusForProvider,
   fetchProviderAuthStatuses,
   saveProviderApiKey,
@@ -11,7 +17,7 @@ import {
 import { useNexusStore } from '../../store/nexusStore'
 import type { RecruitAgentInput } from '../../store/nexusStore'
 import type { BehaviorProfile, CapabilityKey } from '../../types/nexus'
-import { formatModelChoiceLabel, formatModelGroupLabel, groupAvailableModels } from '../../utils/modelGrouping'
+import { formatModelGroupLabel, groupAvailableModels } from '../../utils/modelGrouping'
 import { ProviderAuthModal } from '../auth/ProviderAuthModal'
 
 type AvailableModel = {
@@ -39,6 +45,8 @@ let recruitModelsCache: { value: AvailableModel[]; expiresAt: number } | null = 
 let recruitModelsRequest: Promise<AvailableModel[]> | null = null
 let recruitAuthProvidersCache: { value: AuthProviderStatus[]; expiresAt: number } | null = null
 let recruitAuthProvidersRequest: Promise<AuthProviderStatus[]> | null = null
+let recruitTemplatesCache: { value: RecruitAgentTemplateSummary[]; expiresAt: number } | null = null
+let recruitTemplatesRequest: Promise<RecruitAgentTemplateSummary[]> | null = null
 
 const isAvailableModel = (value: unknown): value is AvailableModel => {
   if (!value || typeof value !== 'object') return false
@@ -49,11 +57,26 @@ const isAvailableModel = (value: unknown): value is AvailableModel => {
 const safeAvailableModels = (value: unknown): AvailableModel[] =>
   Array.isArray(value) ? value.filter(isAvailableModel) : []
 
+const isRecruitAgentTemplateSummary = (value: unknown): value is RecruitAgentTemplateSummary => {
+  if (!value || typeof value !== 'object') return false
+  const entry = value as Partial<RecruitAgentTemplateSummary>
+  return typeof entry.id === 'string'
+    && typeof entry.name === 'string'
+    && typeof entry.divisionLabel === 'string'
+    && Boolean(entry.defaults)
+}
+
+const safeRecruitAgentTemplates = (value: unknown): RecruitAgentTemplateSummary[] =>
+  Array.isArray(value) ? value.filter(isRecruitAgentTemplateSummary) : []
+
 const cachedRecruitModels = () =>
   recruitModelsCache && recruitModelsCache.expiresAt > Date.now() ? recruitModelsCache.value : null
 
 const cachedRecruitAuthProviders = () =>
   recruitAuthProvidersCache && recruitAuthProvidersCache.expiresAt > Date.now() ? recruitAuthProvidersCache.value : null
+
+const cachedRecruitTemplates = () =>
+  recruitTemplatesCache && recruitTemplatesCache.expiresAt > Date.now() ? recruitTemplatesCache.value : null
 
 async function loadRecruitModels() {
   const cached = cachedRecruitModels()
@@ -94,6 +117,31 @@ async function loadRecruitAuthProviders(force = false) {
       recruitAuthProvidersRequest = null
     })
   return recruitAuthProvidersRequest
+}
+
+async function loadRecruitTemplates(force = false) {
+  const cached = force ? null : cachedRecruitTemplates()
+  if (cached) return cached
+  if (!force && recruitTemplatesRequest) return recruitTemplatesRequest
+
+  recruitTemplatesRequest = fetchRecruitAgentTemplates(force)
+    .then(async (result) => {
+      if (!result.ok) throw new Error(apiErrorMessage(result.error))
+      let templates = safeRecruitAgentTemplates(result.data.templates)
+      if (!force && templates.length > 0 && templates.length <= 51) {
+        const refreshed = await fetchRecruitAgentTemplates(true)
+        if (refreshed.ok) {
+          const nextTemplates = safeRecruitAgentTemplates(refreshed.data.templates)
+          if (nextTemplates.length > templates.length) templates = nextTemplates
+        }
+      }
+      recruitTemplatesCache = { value: templates, expiresAt: Date.now() + RECRUIT_LOOKUP_CACHE_MS }
+      return templates
+    })
+    .finally(() => {
+      recruitTemplatesRequest = null
+    })
+  return recruitTemplatesRequest
 }
 
 const isOpenAiCodexSubscriptionModel = (modelId: string) => {
@@ -172,6 +220,25 @@ const DEFAULT_MD_FILES = [
   'MEMORY.md',
   'TOOLS.md',
   'MISSION_PROMPT.md',
+]
+
+const AGENCY_TEMPLATE_CATEGORY_ORDER = [
+  'academic',
+  'engineering',
+  'design',
+  'finance',
+  'game-development',
+  'gis',
+  'marketing',
+  'paid-media',
+  'product',
+  'project-management',
+  'sales',
+  'security',
+  'testing',
+  'support',
+  'spatial-computing',
+  'specialized',
 ]
 
 const PERSONALITY_DEPTH_OPTIONS = [
@@ -315,6 +382,84 @@ function SectionTitle({ icon, label, meta }: { icon: RecruitIconName; label: str
   )
 }
 
+type RecruitChoiceOption = {
+  value: string
+  label: ReactNode
+  detail?: ReactNode
+  disabled?: boolean
+}
+
+function RecruitChoiceField({
+  label,
+  value,
+  options,
+  placeholder,
+  meta,
+  disabled,
+  className,
+  onChange,
+}: {
+  label: string
+  value: string
+  options: RecruitChoiceOption[]
+  placeholder: ReactNode
+  meta?: ReactNode
+  disabled?: boolean
+  className?: string
+  onChange: (value: string) => void
+}) {
+  const [open, setOpen] = useState(false)
+  const selected = options.find((option) => option.value === value)
+
+  return (
+    <div
+      className={['dui-recruit-field', 'dui-recruit-choice-field', className || ''].filter(Boolean).join(' ')}
+      data-open={open ? 'true' : 'false'}
+      onBlur={(event) => {
+        const nextFocus = event.relatedTarget
+        if (!(nextFocus instanceof Node) || !event.currentTarget.contains(nextFocus)) setOpen(false)
+      }}
+    >
+      <span>{label}</span>
+      <button
+        type="button"
+        className="dui-recruit-choice-trigger"
+        aria-haspopup="listbox"
+        aria-expanded={open}
+        disabled={disabled}
+        onClick={() => setOpen((current) => !current)}
+      >
+        <strong>{selected?.label || placeholder}</strong>
+        <RecruitIcon type="chevron" />
+      </button>
+      {meta ? <small>{meta}</small> : null}
+      {open && (
+        <div className="dui-recruit-choice-menu" role="listbox" aria-label={label}>
+          {options.map((option) => (
+            <button
+              key={option.value || 'empty'}
+              type="button"
+              role="option"
+              aria-selected={option.value === value}
+              disabled={option.disabled}
+              data-active={option.value === value ? 'true' : 'false'}
+              onMouseDown={(event) => event.preventDefault()}
+              onClick={() => {
+                if (option.disabled) return
+                onChange(option.value)
+                setOpen(false)
+              }}
+            >
+              <strong>{option.label}</strong>
+              {option.detail ? <small>{option.detail}</small> : null}
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
+  )
+}
+
 function renderInlineMarkdown(text: string) {
   if (!text) return null
 
@@ -424,6 +569,81 @@ function normalizeMdFileName(value: string) {
   return cleaned.toLowerCase().endsWith('.md') ? cleaned : `${cleaned}.md`
 }
 
+function setTextInputValue(ref: { current: HTMLInputElement | null }, value: string) {
+  if (ref.current) ref.current.value = value
+}
+
+function uniqueRecruitAgentId(base: string, existingIds: Set<string>) {
+  const fallback = slugifyAgentId(base) || 'agency-agent'
+  if (!existingIds.has(fallback)) return fallback
+  for (let index = 2; index < 1000; index += 1) {
+    const suffix = `-${index}`
+    const stem = fallback.slice(0, Math.max(3, 60 - suffix.length)).replace(/-+$/g, '')
+    const candidate = `${stem || 'agency'}${suffix}`
+    if (!existingIds.has(candidate)) return candidate
+  }
+  return fallback
+}
+
+function templateDocumentsToResources(template: RecruitAgentTemplate) {
+  const order: string[] = []
+  const files: Record<string, string> = {}
+  const seen = new Set<string>()
+  for (const document of template.documents || []) {
+    const file = normalizeMdFileName(document.file)
+    const content = document.content.trim()
+    if (!file || !content) continue
+    const key = file.toLowerCase()
+    if (seen.has(key)) continue
+    seen.add(key)
+    order.push(file)
+    files[file] = content.endsWith('\n') ? content : `${content}\n`
+  }
+  return { order, files }
+}
+
+function templateCategoryRank(division: string) {
+  const index = AGENCY_TEMPLATE_CATEGORY_ORDER.indexOf(division)
+  return index === -1 ? AGENCY_TEMPLATE_CATEGORY_ORDER.length : index
+}
+
+function compareTemplateCategories(
+  left: Pick<RecruitAgentTemplateSummary, 'division' | 'divisionLabel'>,
+  right: Pick<RecruitAgentTemplateSummary, 'division' | 'divisionLabel'>,
+) {
+  return templateCategoryRank(left.division) - templateCategoryRank(right.division)
+    || (left.divisionLabel || left.division).localeCompare(right.divisionLabel || right.division)
+}
+
+function normalizeRecruitTemplateSearch(value: string) {
+  return value
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, ' ')
+    .trim()
+}
+
+function templateMatchesSearch(template: RecruitAgentTemplateSummary, normalizedQuery: string) {
+  if (!normalizedQuery) return true
+  const enabledCapabilities = Object.entries(template.defaults.capabilities || {})
+    .filter(([, enabled]) => enabled)
+    .map(([capability]) => capability)
+  const haystack = normalizeRecruitTemplateSearch([
+    template.name,
+    template.description,
+    template.division,
+    template.divisionLabel,
+    template.relativePath,
+    template.defaults.role,
+    template.defaults.behaviorProfile,
+    ...(template.defaults.tools || []),
+    ...enabledCapabilities,
+  ].join(' '))
+  return normalizedQuery
+    .split(/\s+/)
+    .filter(Boolean)
+    .every((token) => haystack.includes(token))
+}
+
 function markdownDefaults(input: {
   name: string
   agentId: string
@@ -530,8 +750,13 @@ export function RecruitAgentModal({ isOpen, onClose }: { isOpen: boolean; onClos
   const editorTextRef = useRef<HTMLTextAreaElement | null>(null)
   const editorPreviewRef = useRef<HTMLPreElement | null>(null)
   const editorGutterRef = useRef<HTMLDivElement | null>(null)
+  const recruitBodyRef = useRef<HTMLDivElement | null>(null)
+  const recruitFormRef = useRef<HTMLDivElement | null>(null)
+  const recruitSideRef = useRef<HTMLDivElement | null>(null)
+  const recruitFilesRef = useRef<HTMLElement | null>(null)
   const textDraftTimerRef = useRef<number | null>(null)
   const authRefreshKeyRef = useRef('')
+  const templateRequestIdRef = useRef(0)
 
   const [name, setName] = useState('')
   const [agentId, setAgentId] = useState('')
@@ -548,6 +773,15 @@ export function RecruitAgentModal({ isOpen, onClose }: { isOpen: boolean; onClos
   const [addToParty, setAddToParty] = useState(true)
   const [models, setModels] = useState<AvailableModel[]>([])
   const [modelsLoading, setModelsLoading] = useState(false)
+  const [templates, setTemplates] = useState<RecruitAgentTemplateSummary[]>([])
+  const [templatesLoading, setTemplatesLoading] = useState(false)
+  const [templatesError, setTemplatesError] = useState('')
+  const [selectedTemplateDivision, setSelectedTemplateDivision] = useState('')
+  const [selectedTemplateId, setSelectedTemplateId] = useState('')
+  const [templateSearchQuery, setTemplateSearchQuery] = useState('')
+  const [selectedTemplate, setSelectedTemplate] = useState<RecruitAgentTemplate | null>(null)
+  const [templateToolAccess, setTemplateToolAccess] = useState<string[]>([])
+  const [templateApplying, setTemplateApplying] = useState(false)
   const [authProviders, setAuthProviders] = useState<AuthProviderStatus[]>([])
   const [authModalProvider, setAuthModalProvider] = useState<AuthProviderStatus | null>(null)
   const [submitting, setSubmitting] = useState(false)
@@ -560,7 +794,6 @@ export function RecruitAgentModal({ isOpen, onClose }: { isOpen: boolean; onClos
   const [newFileName, setNewFileName] = useState('')
   const [filesTouched, setFilesTouched] = useState(false)
   const [editorExpanded, setEditorExpanded] = useState(false)
-  const [showAdvancedOptions, setShowAdvancedOptions] = useState(false)
   const [showMarkdownEditor, setShowMarkdownEditor] = useState(false)
   const [cursorStatus, setCursorStatus] = useState({ line: 1, column: 1, selectionLength: 0 })
 
@@ -579,6 +812,102 @@ export function RecruitAgentModal({ isOpen, onClose }: { isOpen: boolean; onClos
   const enabledCapabilities = CAPABILITY_OPTIONS.filter((option) => capabilities[option.key])
   const selectedModel = useMemo(() => models.find((model) => model.id === primaryModel), [models, primaryModel])
   const modelGroups = useMemo(() => groupAvailableModels(models), [models])
+  const classChoiceOptions = useMemo(() => {
+    const options = CLASS_OPTIONS.includes(className) ? CLASS_OPTIONS : [className, ...CLASS_OPTIONS]
+    return options
+      .filter(Boolean)
+      .map((option) => ({ value: option, label: option }))
+  }, [className])
+  const modelChoiceOptions = useMemo<RecruitChoiceOption[]>(() => [
+    {
+      value: '',
+      label: modelsLoading ? 'Loading models...' : 'Use system default',
+      detail: 'Follow the current runtime lane',
+      disabled: modelsLoading,
+    },
+    ...modelGroups.flatMap((group) => group.models.map((model) => ({
+      value: model.id,
+      label: model.name || model.alias || model.id,
+      detail: formatModelGroupLabel(group),
+    }))),
+  ], [modelGroups, modelsLoading])
+  const trimmedTemplateSearch = templateSearchQuery.trim()
+  const normalizedTemplateSearch = useMemo(
+    () => normalizeRecruitTemplateSearch(templateSearchQuery),
+    [templateSearchQuery],
+  )
+  const searchedTemplates = useMemo(
+    () => templates.filter((template) => templateMatchesSearch(template, normalizedTemplateSearch)),
+    [normalizedTemplateSearch, templates],
+  )
+  const templateCategories = useMemo(() => {
+    const groups = new Map<string, {
+      division: string
+      label: string
+      color: string
+      count: number
+      sample: RecruitAgentTemplateSummary
+    }>()
+    for (const template of searchedTemplates) {
+      const current = groups.get(template.division)
+      if (current) {
+        current.count += 1
+      } else {
+        groups.set(template.division, {
+          division: template.division,
+          label: template.divisionLabel || template.division,
+          color: template.color,
+          count: 1,
+          sample: template,
+        })
+      }
+    }
+    return Array.from(groups.values())
+      .sort((a, b) => compareTemplateCategories(a.sample, b.sample))
+  }, [searchedTemplates])
+  const templateGroups = useMemo(() => {
+    const visibleTemplates = selectedTemplateDivision
+      ? searchedTemplates.filter((template) => template.division === selectedTemplateDivision)
+      : searchedTemplates
+    const groups = new Map<string, { division: string; label: string; templates: RecruitAgentTemplateSummary[]; sample: RecruitAgentTemplateSummary }>()
+    for (const template of visibleTemplates) {
+      const current = groups.get(template.division)
+      if (current) {
+        current.templates.push(template)
+      } else {
+        groups.set(template.division, {
+          division: template.division,
+          label: template.divisionLabel || template.division || 'Agency',
+          templates: [template],
+          sample: template,
+        })
+      }
+    }
+    return Array.from(groups.values())
+      .map((group) => ({
+        ...group,
+        templates: group.templates.slice().sort((a, b) => a.name.localeCompare(b.name)),
+      }))
+      .sort((a, b) => compareTemplateCategories(a.sample, b.sample))
+  }, [searchedTemplates, selectedTemplateDivision])
+  const selectedTemplateCategory = selectedTemplateDivision
+    ? templateCategories.find((category) => category.division === selectedTemplateDivision)
+    : undefined
+  const visibleTemplateCount = templateGroups.reduce((count, group) => count + group.templates.length, 0)
+  const visibleTemplateSummaries = useMemo(
+    () => templateGroups.flatMap((group) => group.templates),
+    [templateGroups],
+  )
+  const templatePickerMeta = templatesLoading
+    ? 'loading'
+    : trimmedTemplateSearch
+      ? `${visibleTemplateCount} matches for "${trimmedTemplateSearch}"`
+      : selectedTemplateDivision
+        ? `${selectedTemplateCategory?.label || 'Category'}: ${visibleTemplateCount} templates`
+      : templates.length
+        ? `${templateCategories.length} organized categories`
+      : 'blank'
+  const browsingTemplateCategories = !selectedTemplateDivision && !trimmedTemplateSearch
   const selectedProvider = primaryModel
     ? isOpenAiCodexSubscriptionModel(primaryModel)
       ? 'openai-codex'
@@ -587,12 +916,12 @@ export function RecruitAgentModal({ isOpen, onClose }: { isOpen: boolean; onClos
   const selectedProviderAuth = selectedProvider ? authStatusForProvider(authProviders, selectedProvider) : undefined
   const selectedPersonalityDepth = personalityDepthOption(personalityDepth)
   const autoForgeVisible = Boolean(trimmedName && className.trim() && role.trim())
-  const autoForgeControlsVisible = Boolean(autoForgeVisible && (showAdvancedOptions || primaryModel.trim()))
+  const autoForgeControlsVisible = autoForgeVisible
   const autoForgeModelLabel = selectedModel
     ? `${selectedModel.provider} / ${selectedModel.name || selectedModel.alias}`
     : primaryModel.trim()
-  const canAutoForge = Boolean(autoForgeVisible && primaryModel.trim() && !autoForging && !submitting)
-  const canSubmit = Boolean(trimmedName && trimmedId && !idError && !submitting && !autoForging)
+  const canAutoForge = Boolean(autoForgeVisible && primaryModel.trim() && !autoForging && !submitting && !templateApplying)
+  const canSubmit = Boolean(trimmedName && trimmedId && !idError && !submitting && !autoForging && !templateApplying)
   const avatarValue = avatar.trim()
   const canPreviewAvatar = Boolean(avatarValue && !/^[a-zA-Z]:[\\/]/.test(avatarValue))
   const activeMarkdownContent = resourceFiles[activeFile] || ''
@@ -608,6 +937,28 @@ export function RecruitAgentModal({ isOpen, onClose }: { isOpen: boolean; onClos
     editorExpanded ? 'is-expanded' : '',
     markdownHighlightEnabled ? '' : 'is-plain-text',
   ].filter(Boolean).join(' ')
+
+  const syncRecruitColumnHeights = useCallback(() => {
+    const form = recruitFormRef.current
+    const side = recruitSideRef.current
+    const files = recruitFilesRef.current
+    if (!form || !side || !files || typeof window === 'undefined') return
+
+    const twoColumn = window.matchMedia('(min-width: 1041px)').matches
+    side.style.removeProperty('height')
+    side.style.removeProperty('min-height')
+    files.style.removeProperty('height')
+    files.style.removeProperty('min-height')
+
+    if (!twoColumn) return
+
+    const formHeight = Math.ceil(Math.max(form.scrollHeight, form.getBoundingClientRect().height))
+    const nextHeight = `${formHeight}px`
+    side.style.setProperty('height', nextHeight, 'important')
+    side.style.setProperty('min-height', nextHeight, 'important')
+    files.style.setProperty('height', nextHeight, 'important')
+    files.style.setProperty('min-height', nextHeight, 'important')
+  }, [])
 
   const readTextDrafts = useCallback(() => ({
     name: nameRef.current?.value ?? name,
@@ -669,10 +1020,15 @@ export function RecruitAgentModal({ isOpen, onClose }: { isOpen: boolean; onClos
     setNewFileName('')
     setFilesTouched(false)
     setEditorExpanded(false)
-    setShowAdvancedOptions(false)
     setShowMarkdownEditor(false)
     setCursorStatus({ line: 1, column: 1, selectionLength: 0 })
     setAutoForging(false)
+    setSelectedTemplateDivision('')
+    setSelectedTemplateId('')
+    setSelectedTemplate(null)
+    setTemplateToolAccess([])
+    setTemplateApplying(false)
+    setTemplatesError('')
     authRefreshKeyRef.current = ''
     setResourceFiles(markdownDefaults({
       name: '',
@@ -715,6 +1071,34 @@ export function RecruitAgentModal({ isOpen, onClose }: { isOpen: boolean; onClos
           if (!cancelled) setModelsLoading(false)
         })
     }, cached ? 120 : 40)
+    return () => {
+      cancelled = true
+      window.clearTimeout(loadHandle)
+    }
+  }, [isOpen])
+
+  useEffect(() => {
+    if (!isOpen) return
+    let cancelled = false
+    const cached = cachedRecruitTemplates()
+    if (cached) setTemplates(cached)
+    setTemplatesError('')
+    setTemplatesLoading(!cached)
+    const loadHandle = window.setTimeout(() => {
+      loadRecruitTemplates()
+        .then((nextTemplates) => {
+          if (!cancelled) setTemplates(nextTemplates)
+        })
+        .catch((error) => {
+          if (!cancelled) {
+            setTemplates([])
+            setTemplatesError(error instanceof Error ? error.message : String(error))
+          }
+        })
+        .finally(() => {
+          if (!cancelled) setTemplatesLoading(false)
+        })
+    }, cached ? 140 : 40)
     return () => {
       cancelled = true
       window.clearTimeout(loadHandle)
@@ -814,6 +1198,155 @@ export function RecruitAgentModal({ isOpen, onClose }: { isOpen: boolean; onClos
     if (!isOpen) return
     window.setTimeout(() => updateEditorCursor(), 0)
   }, [activeFile, isOpen, updateEditorCursor])
+
+  useEffect(() => {
+    if (!isOpen) return
+
+    let frame = 0
+    const scheduleSync = () => {
+      if (frame) window.cancelAnimationFrame(frame)
+      frame = window.requestAnimationFrame(syncRecruitColumnHeights)
+    }
+
+    scheduleSync()
+
+    const form = recruitFormRef.current
+    const sideForCleanup = recruitSideRef.current
+    const filesForCleanup = recruitFilesRef.current
+    const observer = typeof ResizeObserver === 'undefined' ? null : new ResizeObserver(scheduleSync)
+    if (form) observer?.observe(form)
+    window.addEventListener('resize', scheduleSync)
+
+    return () => {
+      if (frame) window.cancelAnimationFrame(frame)
+      observer?.disconnect()
+      window.removeEventListener('resize', scheduleSync)
+      if (sideForCleanup) {
+        sideForCleanup.style.removeProperty('height')
+        sideForCleanup.style.removeProperty('min-height')
+      }
+      if (filesForCleanup) {
+        filesForCleanup.style.removeProperty('height')
+        filesForCleanup.style.removeProperty('min-height')
+      }
+    }
+  }, [isOpen, showMarkdownEditor, syncRecruitColumnHeights])
+
+  const applyRecruitTemplate = useCallback((template: RecruitAgentTemplate) => {
+    const defaults = template.defaults
+    const fallbackBehavior = behaviorOption(defaults.behaviorProfile || 'hybrid')
+    const nextName = defaults.name || template.name
+    const nextAgentId = uniqueRecruitAgentId(defaults.agentId || nextName, existingIds)
+    const nextClassName = defaults.className || template.divisionLabel || fallbackBehavior.className
+    const nextRole = defaults.role || template.description || fallbackBehavior.role
+    const { order, files } = templateDocumentsToResources(template)
+    const nextOrder = order.length ? order : DEFAULT_MD_FILES
+    const nextFiles = order.length
+      ? files
+      : markdownDefaults({
+        name: nextName,
+        agentId: nextAgentId,
+        className: nextClassName,
+        role: nextRole,
+        behaviorLabel: fallbackBehavior.label,
+        capabilities: CAPABILITY_OPTIONS.filter((entry) => defaults.capabilities?.[entry.key]).map((entry) => entry.label),
+        files: nextOrder,
+      })
+
+    setTextInputValue(nameRef, nextName)
+    setTextInputValue(agentIdRef, nextAgentId)
+    setTextInputValue(roleInputRef, nextRole)
+    setName(nextName)
+    setAgentId(nextAgentId)
+    setIdTouched(true)
+    setBehaviorProfile(defaults.behaviorProfile || 'hybrid')
+    setClassName(nextClassName)
+    setRole(nextRole)
+    setLevel(Math.min(99, Math.max(1, Math.round(defaults.level || 22))))
+    setCapabilities({ ...DEFAULT_CAPABILITIES, ...(defaults.capabilities || {}) })
+    setTemplateToolAccess(defaults.tools || [])
+    setFileOrder(nextOrder)
+    setResourceFiles(nextFiles)
+    setFilesTouched(true)
+    setActiveFile(nextOrder.find((file) => file.toLowerCase() === 'identity.md') || nextOrder[0] || 'IDENTITY.md')
+    setShowMarkdownEditor(false)
+    setStatusTone('success')
+    setStatus(`Loaded ${template.name} with ${nextOrder.length} markdown files and ${(defaults.tools || []).length} tools.`)
+    window.setTimeout(() => updateEditorCursor(), 0)
+  }, [existingIds, updateEditorCursor])
+
+  const handleTemplateDivisionChange = (nextDivision: string) => {
+    setSelectedTemplateDivision(nextDivision)
+    const selectedSummary = selectedTemplateId
+      ? templates.find((template) => template.id === selectedTemplateId)
+      : undefined
+    if (nextDivision && selectedSummary && selectedSummary.division !== nextDivision) {
+      templateRequestIdRef.current += 1
+      setSelectedTemplateId('')
+      setSelectedTemplate(null)
+      setTemplateToolAccess([])
+      setTemplateApplying(false)
+    }
+    const category = nextDivision
+      ? templateCategories.find((entry) => entry.division === nextDivision)
+      : undefined
+    setStatusTone('neutral')
+    setStatus(nextDivision
+      ? `Showing ${category?.count || 0} ${category?.label || 'category'} templates.`
+      : `Showing ${templateCategories.length} organized template categories.`)
+  }
+
+  const handleTemplateSelect = async (nextTemplateId: string) => {
+    const requestId = templateRequestIdRef.current + 1
+    templateRequestIdRef.current = requestId
+    setSelectedTemplateId(nextTemplateId)
+    setTemplatesError('')
+
+    if (!nextTemplateId) {
+      setSelectedTemplate(null)
+      setTemplateToolAccess([])
+      setTemplateApplying(false)
+      setStatusTone('neutral')
+      setStatus('Blank recruit defaults ready.')
+      return
+    }
+
+    setTemplateApplying(true)
+    setStatusTone('neutral')
+    setStatus('Loading agency template...')
+    try {
+      const result = await fetchRecruitAgentTemplate(nextTemplateId)
+      if (!result.ok) throw new Error(apiErrorMessage(result.error))
+      const template = result.data.template
+      if (!template) throw new Error('Template response did not include template details.')
+      if (templateRequestIdRef.current !== requestId) return
+      setSelectedTemplateId(template.id)
+      setSelectedTemplate(template)
+      applyRecruitTemplate(template)
+    } catch (error) {
+      if (templateRequestIdRef.current !== requestId) return
+      const message = error instanceof Error ? error.message : String(error)
+      setSelectedTemplate(null)
+      setTemplateToolAccess([])
+      setTemplatesError(message)
+      setStatusTone('error')
+      setStatus(message)
+    } finally {
+      if (templateRequestIdRef.current === requestId) setTemplateApplying(false)
+    }
+  }
+
+  const handlePrimaryModelChange = (next: string) => {
+    setPrimaryModel(next)
+    const selected = models.find((model) => model.id === next)
+    const provider = next
+      ? isOpenAiCodexSubscriptionModel(next)
+        ? 'openai-codex'
+        : selected?.provider || next.split('/')[0]
+      : ''
+    const auth = provider ? authStatusForProvider(authProviders, provider) : undefined
+    if (auth && !auth.configured) setAuthModalProvider(auth)
+  }
 
   const handleEditorKeyDown = (event: KeyboardEvent<HTMLTextAreaElement>) => {
     if (event.key !== 'Tab') return
@@ -935,7 +1468,7 @@ export function RecruitAgentModal({ isOpen, onClose }: { isOpen: boolean; onClos
       })
       setFilesTouched(true)
       setActiveFile(generatedFiles[0].file)
-      setShowAdvancedOptions(false)
+      setEditorExpanded(false)
       setShowMarkdownEditor(true)
       setStatusTone('success')
       const generatedDepth = payload.personalityDepth
@@ -985,6 +1518,10 @@ export function RecruitAgentModal({ isOpen, onClose }: { isOpen: boolean; onClos
       primaryModel: primaryModel.trim() || undefined,
       capabilities,
       addToParty,
+      templateId: selectedTemplate?.id,
+      templateName: selectedTemplate?.name,
+      templateSource: selectedTemplate?.relativePath,
+      toolAccess: templateToolAccess,
       resourceFiles: fileOrder.map((file) => ({
         file,
         content: resourceFiles[file] || defaults[file as keyof typeof defaults] || `# ${file}\n\n`,
@@ -1023,23 +1560,152 @@ export function RecruitAgentModal({ isOpen, onClose }: { isOpen: boolean; onClos
             onPointerDown={(event) => event.stopPropagation()}
             onClick={(event) => event.stopPropagation()}
           >
-            <form onSubmit={handleSubmit} onKeyDown={handleRecruitFormKeyDown} className="flex max-h-[88vh] flex-col">
+            <form onSubmit={handleSubmit} onKeyDown={handleRecruitFormKeyDown} className="dui-recruit-form-shell flex max-h-[88vh] flex-col">
               <div className="dui-recruit-header">
                 <div className="dui-recruit-title-block">
                   <h2 id="recruit-agent-title">New Agent</h2>
                   <p className="dui-recruit-copy">Start with a name. The rest has calm defaults.</p>
+                </div>
+                <div className="dui-recruit-step-rail" aria-label="Recruit setup progress">
+                  <span data-state={trimmedName && trimmedId && !idError ? 'done' : 'active'}>
+                    <small>01</small>
+                    <strong>Basics</strong>
+                  </span>
+                  <span data-state="done">
+                    <small>02</small>
+                    <strong>Style</strong>
+                  </span>
+                  <span data-state={showMarkdownEditor ? 'active' : 'done'}>
+                    <small>03</small>
+                    <strong>Files</strong>
+                  </span>
                 </div>
                 <button type="button" className="dui-recruit-close" onClick={onClose} disabled={submitting || autoForging} aria-label="Close recruit agent" title="Close recruit menu">
                   <RecruitIcon type="close" />
                 </button>
               </div>
 
-              <div className="dui-recruit-body min-h-0 overflow-y-auto">
+              <div ref={recruitBodyRef} className="dui-recruit-body min-h-0 overflow-y-auto">
                 <div className="dui-recruit-layout">
-                  <div className="dui-recruit-form">
+                  <div ref={recruitFormRef} className="dui-recruit-form">
                     <section className="dui-recruit-section dui-recruit-section-primary">
                       <SectionTitle icon="identity" label="Basics" meta={trimmedId || 'new-agent'} />
                       <div className="dui-recruit-basics-stack">
+                        <div className="dui-recruit-template-panel">
+                          <div className="dui-recruit-template-panel-head">
+                            <span>
+                              <strong>Template</strong>
+                              <small>{templatesLoading ? 'Loading agency templates...' : templateApplying ? 'Applying template...' : templatePickerMeta}</small>
+                            </span>
+                            {selectedTemplateDivision ? (
+                              <button
+                                type="button"
+                                className="dui-recruit-template-reset"
+                                disabled={templatesLoading || templateApplying || submitting || autoForging}
+                                onClick={() => handleTemplateDivisionChange('')}
+                              >
+                                Back to categories
+                              </button>
+                            ) : null}
+                          </div>
+                          <div className="dui-recruit-template-search">
+                            <input
+                              type="search"
+                              value={templateSearchQuery}
+                              disabled={templatesLoading || templateApplying || submitting || autoForging}
+                              placeholder="Search agents, jobs, tools..."
+                              aria-label="Search agent templates"
+                              onChange={(event) => setTemplateSearchQuery(event.target.value)}
+                            />
+                            {templateSearchQuery ? (
+                              <button
+                                type="button"
+                                disabled={templateApplying || submitting || autoForging}
+                                aria-label="Clear template search"
+                                title="Clear search"
+                                onClick={() => setTemplateSearchQuery('')}
+                              >
+                                x
+                              </button>
+                            ) : null}
+                          </div>
+                          <div className="dui-recruit-category-chips" aria-label="Template categories">
+                            {templateCategories.map((category) => (
+                              <button
+                                key={category.division}
+                                type="button"
+                                data-active={selectedTemplateDivision === category.division}
+                                disabled={templatesLoading || templateApplying || submitting || autoForging}
+                                onClick={() => handleTemplateDivisionChange(category.division)}
+                              >
+                                {category.label} <small>{category.count}</small>
+                              </button>
+                            ))}
+                          </div>
+                          <div className="dui-recruit-template-cards" aria-label="Agent templates">
+                            {!browsingTemplateCategories ? (
+                              <button
+                                type="button"
+                                className="dui-recruit-template-card dui-recruit-template-card-blank"
+                                data-active={!selectedTemplateId}
+                                disabled={templateApplying || submitting || autoForging}
+                                onClick={() => handleTemplateSelect('')}
+                              >
+                                <strong>Blank recruit defaults</strong>
+                                <small>Clean starter agent with prepared markdown.</small>
+                              </button>
+                            ) : null}
+                            {templatesError ? (
+                              <p className="dui-recruit-template-empty" data-tone="error">{templatesError}</p>
+                            ) : null}
+                            {!templatesError && templatesLoading ? (
+                              <p className="dui-recruit-template-empty">Loading templates...</p>
+                            ) : null}
+                            {!templatesError && !templatesLoading && visibleTemplateSummaries.length === 0 ? (
+                              <p className="dui-recruit-template-empty">
+                                {trimmedTemplateSearch ? 'No matching templates found.' : 'No templates found for this category.'}
+                              </p>
+                            ) : null}
+                            {!browsingTemplateCategories && templateGroups.map((group) => (
+                              <section
+                                key={group.division}
+                                className="dui-recruit-template-group"
+                              >
+                                <div className="dui-recruit-template-group-head">
+                                  <strong>{group.label}</strong>
+                                  <small>{group.templates.length}</small>
+                                </div>
+                                <div className="dui-recruit-template-group-grid">
+                                  {group.templates.map((template) => (
+                                    <button
+                                      key={template.id}
+                                      type="button"
+                                      className="dui-recruit-template-card"
+                                      data-active={selectedTemplateId === template.id}
+                                      disabled={templateApplying || submitting || autoForging}
+                                      onClick={() => handleTemplateSelect(template.id)}
+                                    >
+                                      <strong>{template.emoji ? `${template.emoji} ` : ''}{template.name}</strong>
+                                      <small>{template.defaults.behaviorProfile} - {template.defaults.tools.length} tools</small>
+                                      <span>{template.description}</span>
+                                    </button>
+                                  ))}
+                                </div>
+                              </section>
+                            ))}
+                          </div>
+                        </div>
+                        {selectedTemplate && (
+                          <div className="dui-recruit-template-preview">
+                            <strong>{selectedTemplate.emoji ? `${selectedTemplate.emoji} ` : ''}{selectedTemplate.name}</strong>
+                            <p>{selectedTemplate.description}</p>
+                            <span className="dui-recruit-template-meta">
+                              <span>{selectedTemplate.divisionLabel}</span>
+                              <span>{selectedTemplate.documents.length} files</span>
+                              <span>{templateToolAccess.length} tools</span>
+                            </span>
+                          </div>
+                        )}
                         <div className="dui-recruit-grid two">
                           <label className="dui-recruit-field">
                             <span>Name</span>
@@ -1112,36 +1778,22 @@ export function RecruitAgentModal({ isOpen, onClose }: { isOpen: boolean; onClos
                           </button>
                         ))}
                       </div>
-                    </section>
-
-                    <section className="dui-recruit-section dui-recruit-advanced-section" data-open={showAdvancedOptions ? 'true' : 'false'}>
-                      <button
-                        type="button"
-                        className="dui-recruit-disclosure"
-                        aria-expanded={showAdvancedOptions}
-                        onClick={() => setShowAdvancedOptions((current) => !current)}
-                      >
-                        <span>
-                          <strong>Optional settings</strong>
+                      <div className="dui-recruit-style-settings" aria-label="Agent settings">
+                        <div className="dui-recruit-style-settings-head">
+                          <strong>Agent settings</strong>
                           <small>{className} - {enabledCapabilities.length} lanes - {primaryModel ? autoForgeModelLabel : 'system default'}</small>
-                        </span>
-                        <RecruitIcon type="chevron" />
-                      </button>
-
-                      {showAdvancedOptions && (
-                        <div className="dui-recruit-advanced-content">
-                          <div className="dui-recruit-mini-group">
+                        </div>
+                        <div className="dui-recruit-settings-content">
+                          <section className="dui-recruit-setting-group">
                             <SectionTitle icon="role" label="Role details" meta={`Level ${level}`} />
                             <div className="dui-recruit-grid three">
-                              <label className="dui-recruit-field">
-                                <span>Class</span>
-                                <select value={className} onChange={(event) => setClassName(event.target.value)}>
-                                  {!CLASS_OPTIONS.includes(className) && <option value={className}>{className}</option>}
-                                  {CLASS_OPTIONS.map((option) => (
-                                    <option key={option} value={option}>{option}</option>
-                                  ))}
-                                </select>
-                              </label>
+                              <RecruitChoiceField
+                                label="Class"
+                                value={className}
+                                options={classChoiceOptions}
+                                placeholder="Choose class"
+                                onChange={setClassName}
+                              />
                               <label className="dui-recruit-field">
                                 <span>Role</span>
                                 <input ref={roleInputRef} type="text" defaultValue={role} onChange={() => scheduleTextDraftCommit()} onBlur={() => commitTextDrafts()} maxLength={180} />
@@ -1182,40 +1834,20 @@ export function RecruitAgentModal({ isOpen, onClose }: { isOpen: boolean; onClos
                                 ))}
                               </div>
                             </div>
-                          </div>
+                          </section>
 
-                          <div className="dui-recruit-mini-group">
+                          <section className="dui-recruit-setting-group">
                             <SectionTitle icon="runtime" label="Runtime" meta={`${enabledCapabilities.length} lanes`} />
                             <div className="dui-recruit-grid two">
-                              <label className="dui-recruit-field">
-                                <span>Model</span>
-                                <select
+                              <div className="dui-recruit-model-field">
+                                <RecruitChoiceField
+                                  label="Model"
                                   value={primaryModel}
-                                  onChange={(event) => {
-                                    const next = event.target.value
-                                    setPrimaryModel(next)
-                                    const selected = models.find((model) => model.id === next)
-                                    const provider = next
-                                      ? isOpenAiCodexSubscriptionModel(next)
-                                        ? 'openai-codex'
-                                        : selected?.provider || next.split('/')[0]
-                                      : ''
-                                    const auth = provider ? authStatusForProvider(authProviders, provider) : undefined
-                                    if (auth && !auth.configured) setAuthModalProvider(auth)
-                                  }}
+                                  options={modelChoiceOptions}
+                                  placeholder="Use system default"
                                   disabled={modelsLoading}
-                                >
-                                  <option value="">{modelsLoading ? 'Loading models...' : 'Use system default'}</option>
-                                  {modelGroups.map((group) => (
-                                    <optgroup key={group.key} label={formatModelGroupLabel(group)}>
-                                      {group.models.map((model) => (
-                                        <option key={model.id} value={model.id}>
-                                          {formatModelChoiceLabel(model)}
-                                        </option>
-                                      ))}
-                                    </optgroup>
-                                  ))}
-                                </select>
+                                  onChange={handlePrimaryModelChange}
+                                />
                                 {selectedProviderAuth && !selectedProviderAuth.configured && (
                                   <small data-tone="error">
                                     {selectedProviderAuth.label || selectedProviderAuth.provider} auth required.{' '}
@@ -1227,17 +1859,15 @@ export function RecruitAgentModal({ isOpen, onClose }: { isOpen: boolean; onClos
                                     google-vertex
                                   </small>
                                 )}
-                              </label>
-                              <label className="dui-recruit-field">
+                              </div>
+                              <div className="dui-recruit-field">
                                 <span>Workspace</span>
-                                <select className={workspace ? '' : 'is-empty'} value={workspace} onChange={(event) => setWorkspace(event.target.value)}>
-                                  <option value="">Default workspace</option>
-                                </select>
-                              </label>
+                                <div className="dui-recruit-static-value">{workspace || 'Default workspace'}</div>
+                              </div>
                             </div>
-                          </div>
+                          </section>
 
-                          <div className="dui-recruit-mini-group">
+                          <section className="dui-recruit-setting-group">
                             <SectionTitle icon="capabilities" label="Capabilities" />
                             <div className="dui-recruit-capability-grid">
                               {CAPABILITY_OPTIONS.map((option) => (
@@ -1259,13 +1889,15 @@ export function RecruitAgentModal({ isOpen, onClose }: { isOpen: boolean; onClos
                               <input type="checkbox" checked={addToParty} disabled={!partyRoom} onChange={(event) => setAddToParty(event.target.checked)} />
                               <span>{partyRoom ? 'Add to active party' : 'Active party is full'}</span>
                             </label>
-                          </div>
+                          </section>
                         </div>
-                      )}
+                      </div>
                     </section>
+
                   </div>
 
-                  <section className="dui-recruit-files" aria-label="Agent markdown bootstrap files">
+                  <div ref={recruitSideRef} className="dui-recruit-side">
+                    <section ref={recruitFilesRef} className="dui-recruit-files" aria-label="Agent markdown bootstrap files">
                     <SectionTitle icon="markdown" label="Markdown files" meta={`${fileOrder.length} ready`} />
                     {!showMarkdownEditor ? (
                       <div className="dui-recruit-file-summary">
@@ -1283,7 +1915,9 @@ export function RecruitAgentModal({ isOpen, onClose }: { isOpen: boolean; onClos
                           type="button"
                           className="dui-recruit-file-customize"
                           onClick={() => {
-                            setShowAdvancedOptions(false)
+                            setSelectedTemplateDivision('')
+                            setTemplateSearchQuery('')
+                            setEditorExpanded(false)
                             setShowMarkdownEditor(true)
                             window.setTimeout(() => editorTextRef.current?.focus(), 0)
                           }}
@@ -1386,6 +2020,7 @@ export function RecruitAgentModal({ isOpen, onClose }: { isOpen: boolean; onClos
                     )}
                   </section>
                 </div>
+              </div>
               </div>
 
               <div className="dui-recruit-footer">

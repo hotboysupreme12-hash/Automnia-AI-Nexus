@@ -3,6 +3,7 @@ import type {
   AgentMDS,
   AgentRuntimePolicy,
   BehaviorProfile,
+  CapabilityKey,
   CoreAttributes,
   HeartbeatConfig,
   OpenClawAgent,
@@ -76,6 +77,58 @@ export type RecruitAgentPayload = {
   agentId?: string
 }
 
+export type RecruitAgentTemplateDocument = {
+  file: string
+  content: string
+}
+
+export type RecruitAgentTemplateDefaults = {
+  agentId: string
+  name: string
+  className: string
+  role: string
+  behaviorProfile: BehaviorProfile
+  level: number
+  capabilities: Record<CapabilityKey, boolean>
+  tools: string[]
+}
+
+export type RecruitAgentTemplateSummary = {
+  id: string
+  slug: string
+  name: string
+  description: string
+  division: string
+  divisionLabel: string
+  color: string
+  emoji?: string
+  vibe?: string
+  relativePath: string
+  sourceUrl: string
+  defaults: RecruitAgentTemplateDefaults
+}
+
+export type RecruitAgentTemplate = RecruitAgentTemplateSummary & {
+  documents: RecruitAgentTemplateDocument[]
+  sourceMarkdown: string
+}
+
+export type RecruitAgentTemplateCatalogPayload = {
+  source?: {
+    repository?: string
+    sourceRoot?: string
+    commit?: string | null
+    importedAt?: string
+    templateCount?: number
+  }
+  divisions?: Record<string, { label: string; color: string; icon?: string }>
+  templates?: RecruitAgentTemplateSummary[]
+}
+
+export type RecruitAgentTemplatePayload = {
+  template?: RecruitAgentTemplate
+}
+
 export type AgentConfigSavePayload = {
   ok?: boolean
   error?: string
@@ -93,6 +146,17 @@ export function partyAvatarUrl(agentId: string): string {
 
 export function fetchPartyOverview(): Promise<ApiResult<PartyOverviewPayload>> {
   return apiRequest<PartyOverviewPayload>('/api/party/overview', { timeoutMs: 20_000 })
+}
+
+export function fetchRecruitAgentTemplates(refresh = false): Promise<ApiResult<RecruitAgentTemplateCatalogPayload>> {
+  const suffix = refresh ? '?refresh=1' : ''
+  return apiRequest<RecruitAgentTemplateCatalogPayload>(`/api/party/recruit/templates${suffix}`, { timeoutMs: 30_000 })
+}
+
+export function fetchRecruitAgentTemplate(templateId: string): Promise<ApiResult<RecruitAgentTemplatePayload>> {
+  return apiRequest<RecruitAgentTemplatePayload>(`/api/party/recruit/templates/${encodeURIComponent(templateId)}`, {
+    timeoutMs: 30_000,
+  })
 }
 
 export function saveAgentConfig(
