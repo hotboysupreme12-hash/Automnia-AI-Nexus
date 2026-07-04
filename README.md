@@ -48,7 +48,7 @@ Read the evidence.
 | **Code crew** | Architect, builder, reviewer, tester, and release-check agents working inside one approved repo. |
 | **Smart home operator** | Uses a smart-home CLI or plugin to watch power usage, lights, routines, and device state, then reports back through your preferred channel. |
 | **Research desk** | Compares sources, separates facts from assumptions, and returns a decision-ready brief. |
-| **Content studio** | Plans scripts, hooks, titles, descriptions, thumbnails, launch posts, and repurposed clips. |
+| **Content studio** | Plans scripts, hooks, titles, descriptions, thumbnails, launch posts, and media-generation workflows using configured Gemini, image/video, or other supported models and tools. |
 | **Support desk** | Drafts replies, organizes customer context, flags urgent messages, and waits for approval before sending. |
 | **Watcher** | Checks configured products, prices, releases, jobs, markets, alerts, or system signals on a cadence. |
 | **Personal operator** | Plans weekly tasks, drafts notes, organizes reminders, and prepares errands for approval. |
@@ -65,19 +65,41 @@ Read the evidence.
 | **Tools** | Browser, files, runtime, plugins, skills, channels, and service integrations where configured. |
 | **Schedule** | Run now, run for a timed mission, repeat on cadence, or watch for changes. |
 
-## Architecture at a glance
+## Architecture map
 
-```text
-Operator
-  ↓
-Automnia AI desktop cockpit
-  ↓
-Agents + Missions + Monitor + Plugins + Settings
-  ↓
-OpenClaw Gateway and runtime services
-  ↓
-Models · Files · Browser · Skills · Channels · External tools
+```mermaid
+flowchart TD
+    Operator[Operator] --> Desktop[Automnia AI desktop cockpit]
+    Desktop --> Renderer[Frontend: React + Vite + Electron shell]
+    Renderer --> Store[Renderer state: agents, missions, runtime projection, UI settings]
+    Renderer --> Api[API client modules]
+    Api --> Control[Backend Control Plane API]
+    Control --> Routes[Route modules: auth, agents, missions, runtime, plugins, files]
+    Routes --> Services[Services: Gateway, runtime, missions, providers, plugins, filesystem, browser, agent turns]
+    Services --> Ledger[Local state, ledgers, reports, workspaces]
+    Services --> Gateway[OpenClaw Gateway]
+    Gateway --> Models[Model providers and local model routes]
+    Gateway --> Tools[Files, browser tools, skills, plugins]
+    Gateway --> Channels[Compatible channels: chat, SMS-style flows, webhooks, team tools]
+    Services --> Monitor[Monitor evidence: runs, sessions, logs, cron, failures, recovery]
 ```
+
+<details>
+<summary><strong>Open the wiring map</strong></summary>
+
+| Layer | What it does |
+| --- | --- |
+| **Electron shell** | Starts the desktop app, protects the local session path, and hosts the UI. |
+| **Frontend** | React/Vite interface for Agents, Missions, Monitor, Plugins, Settings, and the Command Console. |
+| **Renderer state** | Keeps UI state separate from backend truth: selected agents, mission projection, runtime projection, command-console state, and preferences. |
+| **API modules** | Keep frontend calls organized instead of scattering raw endpoints through components. |
+| **Control Plane API** | Local backend boundary for auth, missions, runtime status, plugins, files, provider setup, and diagnostics. |
+| **Route modules** | Keep HTTP endpoints split by domain so the backend is not one giant route file. |
+| **Service layer** | Owns the real work: Gateway lifecycle, agent turns, mission state, runtime recovery, provider setup, plugin actions, uploads, browser preflight, and filesystem safety. |
+| **OpenClaw Gateway** | Runs the agent runtime, sessions, plugins, tools, channels, and model/provider paths. |
+| **Monitor evidence** | Shows what is running, what failed, what was scheduled, what needs recovery, and what proof came back. |
+
+</details>
 
 The goal is simple: make powerful agent workflows visible, configurable, repeatable, and recoverable.
 
