@@ -35,7 +35,7 @@ Read the evidence.
 | One chat box | Automnia AI |
 | --- | --- |
 | One personality | Many specialized agents |
-| One model choice | Per-agent model lanes and fallbacks |
+| One model choice | Dozens of supported model routes, with per-agent model lanes, fallbacks, thinking levels, and timeouts |
 | One messy history | Separate workspaces, sessions, doctrine, and memory |
 | Blind waiting | Live runtime, Gateway, mission, plugin, and log visibility |
 | Prompt and hope | Missions, schedules, approvals, and final reports |
@@ -46,12 +46,13 @@ Read the evidence.
 | Build this | What it does |
 | --- | --- |
 | **Code crew** | Architect, builder, reviewer, tester, and release-check agents working inside one approved repo. |
-| **Smart home operator** | Uses a smart-home CLI or plugin to watch power usage, lights, routines, and device state, then reports back through your preferred channel. |
-| **Research desk** | Compares sources, separates facts from assumptions, and returns a decision-ready brief. |
+| **Customer service agent** | Reviews customer emails, prepares replies, organizes inquiry context, and routes follow-ups through configured email, call, text, or channel tools. |
+| **Shopify store operator** | Uses Shopify CLI or compatible store tools to inspect inventory, orders, website data, SEO tasks, product details, and promotional codes. |
+| **Store command center** | Combines inventory checks, order review, customer inquiry drafts, promotion planning, and store intelligence on a schedule. |
+| **Promotional agent** | Prepares campaign copy, recurring outreach drafts, launch posts, discount campaigns, and scheduled promotional plans for review. |
 | **Content studio** | Plans scripts, hooks, titles, descriptions, thumbnails, launch posts, and media-generation workflows using configured Gemini, image/video, or other supported models and tools. |
-| **Support desk** | Drafts replies, organizes customer context, flags urgent messages, and waits for approval before sending. |
+| **Research desk** | Compares sources, separates facts from assumptions, and returns a decision-ready brief. |
 | **Watcher** | Checks configured products, prices, releases, jobs, markets, alerts, or system signals on a cadence. |
-| **Personal operator** | Plans weekly tasks, drafts notes, organizes reminders, and prepares errands for approval. |
 | **Mission control** | Turns a goal into assigned agents, timing, risk, acceptance criteria, recovery, and proof. |
 
 ## Agent customization
@@ -82,6 +83,10 @@ flowchart TD
     Gateway --> Tools[Files, browser tools, skills, plugins]
     Gateway --> Channels[Compatible channels: chat, SMS-style flows, webhooks, team tools]
     Services --> Monitor[Monitor evidence: runs, sessions, logs, cron, failures, recovery]
+    Services --> Approval{Approval or authorization needed?}
+    Approval -->|review request| Operator
+    Operator -->|approve, deny, or adjust| Desktop
+    Approval -->|approved action| Gateway
 ```
 
 <details>
@@ -97,6 +102,7 @@ flowchart TD
 | **Route modules** | Keep HTTP endpoints split by domain so the backend is not one giant route file. |
 | **Service layer** | Owns the real work: Gateway lifecycle, agent turns, mission state, runtime recovery, provider setup, plugin actions, uploads, browser preflight, and filesystem safety. |
 | **OpenClaw Gateway** | Runs the agent runtime, sessions, plugins, tools, channels, and model/provider paths. |
+| **Approval loop** | Keeps the operator in the loop when a workflow needs confirmation, authorization, or a high-impact decision. |
 | **Monitor evidence** | Shows what is running, what failed, what was scheduled, what needs recovery, and what proof came back. |
 
 </details>
