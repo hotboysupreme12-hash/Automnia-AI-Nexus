@@ -1,8 +1,8 @@
 <div align="center">
 
-<img src="public/brand/automnia-ai-nexus-logo-transparent-cropped.png" alt="Automnnia AI Nexus transparent logo" width="680" />
+<img src="public/brand/automnia-ai-nexus-logo-transparent-cropped.png" alt="Automnia AI Nexus transparent logo" width="680" />
 
-# Automnnia AI
+# Automnia AI
 
 ### A local-first desktop command center for OpenClaw agents
 
@@ -14,11 +14,11 @@ Build custom agents. Give them models, tools, workspaces, schedules, plugins, ch
 
 </div>
 
-## What is Automnnia AI?
+## What is Automnia AI?
 
-OpenClaw gives you the agent engine. **Automnnia AI gives you the cockpit.**
+OpenClaw gives you the agent engine. **Automnia AI gives you the cockpit.**
 
-Automnnia AI is a standalone desktop app for creating, operating, scheduling, and monitoring OpenClaw agents from one visual control center. Instead of one endless chat thread, your agents can have their own roles, personalities, models, tools, workspaces, memories, schedules, and permissions.
+Automnia AI is a standalone desktop app for creating, operating, scheduling, and monitoring OpenClaw agents from one visual control center. Instead of one endless chat thread, your agents can have their own roles, personalities, models, tools, workspaces, memories, schedules, and permissions.
 
 ```text
 Create agents.
@@ -32,7 +32,7 @@ Read the evidence.
 
 ## Why it feels different
 
-| One chat box | Automnnia AI |
+| One chat box | Automnia AI |
 | --- | --- |
 | One personality | Many specialized agents |
 | One model choice | Per-agent model lanes and fallbacks |
@@ -84,7 +84,7 @@ For deeper setup, provider auth, missions, plugins, recovery, screenshots, and b
 
 ## Current status
 
-Automnnia AI is a **Public Beta Candidate**. Stable public release depends on hosted CI evidence, packaged launch proof, release validation, and beta screenshot artifacts.
+Automnia AI is a **Public Beta Candidate**. Stable public release depends on hosted CI evidence, packaged launch proof, release validation, and beta screenshot artifacts.
 
 ## Documentation map
 
@@ -99,4 +99,4 @@ Automnnia AI is a **Public Beta Candidate**. Stable public release depends on ho
 
 ## One-sentence pitch
 
-**Automnnia AI turns OpenClaw agents into a visual local operations system: custom workers, real missions, scheduled automation, plugin-powered workflows, live runtime visibility, and approval-first control.**
+**Automnia AI turns OpenClaw agents into a visual local operations system: custom workers, real missions, scheduled automation, plugin-powered workflows, live runtime visibility, and approval-first control.**
