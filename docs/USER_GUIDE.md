@@ -1,14 +1,14 @@
-# DystopAI Core User Guide
+# Automnia AI User Guide
 
-Last updated: 2026-06-25
+Last updated: 2026-07-04
 
-DystopAI Core is a local-first command center for operating OpenClaw agent teams. Use it to recruit agents, assemble an active party, send live commands, launch missions, monitor runtime health, manage plugins, and route work through compatible communication channels.
+Automnia AI is a local-first command center for operating OpenClaw agent teams. Use it to recruit agents, assemble an active party, send live commands, launch missions, monitor runtime health, manage plugins, and route work through compatible communication channels.
 
-This guide is written for operators. It explains what each surface does, how the current workflows fit together, and what to check when something needs attention.
+This guide is written for operators. The README is the front door; this guide is the manual.
 
 ## Operating Model
 
-DystopAI works best when you treat it like an AI operations desk:
+Automnia AI works best when you treat it like an AI operations desk:
 
 1. **Agents** hold identity, model, tools, workspace, policy, memory, and doctrine.
 2. **Active Party** slots define who receives direct team work and mission work.
@@ -16,14 +16,14 @@ DystopAI works best when you treat it like an AI operations desk:
 4. **Missions** turn an objective into structured work with mode, cadence, risk, readiness, and proof.
 5. **Plugins and channels** add providers, tools, communication surfaces, memory, browser automation, and external integrations.
 6. **Monitor** shows Gateway health, running calls, cron jobs, channel traffic, logs, and recovery actions.
-7. **Approval gates** keep high-impact work under operator control.
+7. **Approval gates** keep important work under operator control.
 
 The desktop app is the deep control surface. Compatible channels are the remote command layer.
 
 ## Quick Start
 
 1. Start the app.
-   - Packaged desktop: open DystopAI.
+   - Packaged desktop: open Automnia AI.
    - Development web surfaces: run `npm ci`, then `npm run dev`.
    - Desktop development shell: run `npm run desktop`.
 
@@ -55,15 +55,14 @@ The desktop app is the deep control surface. Compatible channels are the remote 
 | --- | --- |
 | `Recruit` | Create a new agent profile and bootstrap doctrine. |
 | `Agents` | Browse the roster, deploy the party, edit agents, and use the Command Console. |
-| `Missions` | Define structured objectives, dispatch modes, cadence, and proof. |
+| `Missions` | Define structured objectives, dispatch modes, cadence, risk, and proof. |
 | `Monitor` | Inspect Gateway health, active calls, cron jobs, channel activity, logs, and recovery controls. |
 | `Plugins` | Manage providers, tools, communication channels, skills, and runtime plugin surfaces. |
+| `Settings` | Tune runtime policy, UI density, motion, contrast, defaults, and local preferences. |
 
 The top status badges summarize total agents, party size, running turns, Gateway state, cron jobs, and result count.
 
 ## Agents Workspace
-
-![Agents workspace](assets/user-guide/agents.png)
 
 The Agents workspace is the main operating surface. It combines the active party, roster, search/filter tools, and Command Console.
 
@@ -128,7 +127,7 @@ Use `Recruit` when you want a new worker in the roster. Use `Edit` when you want
 6. Choose model access and runtime settings.
 7. Review the generated doctrine before saving.
 
-New agents should be specific. "Release QA" or "Shopify Theme Builder" is more useful than "Assistant."
+New agents should be specific. `Release QA` or `Shopify Theme Builder` is more useful than `Assistant`.
 
 ### Edit Workflow
 
@@ -147,8 +146,6 @@ Use `Edit` from any agent card.
 After changing model, workspace, or policy, send a small test prompt before launching a large mission.
 
 ## Missions Workspace
-
-![Missions workspace](assets/user-guide/missions.png)
 
 Missions turn an objective into coordinated work. They are the right surface when you need multiple agents, scheduling, repeatability, verification, or operator-readable proof.
 
@@ -217,11 +214,7 @@ Use scheduling when work should recur or stay active:
 
 ## Monitor Workspace
 
-![Monitor workspace](assets/user-guide/monitor.png)
-
 Monitor is the source of truth for runtime state. Open it whenever you need to know what is running, what is stuck, what channel sent traffic, or what needs recovery.
-
-![Monitor quiet state](assets/user-guide/monitor-quiet.png)
 
 ### Top Metrics
 
@@ -264,9 +257,7 @@ Use Channel Activity to answer:
 
 ## Plugins Workspace
 
-![Plugins workspace](assets/user-guide/plugins.png)
-
-Plugins extend what DystopAI can do. Some plugins provide model providers. Some provide tools. Some provide channels. Some provide memory, browser automation, skills, or external service access.
+Plugins extend what Automnia AI can do. Some plugins provide model providers. Some provide tools. Some provide channels. Some provide memory, browser automation, skills, or external service access.
 
 ### Plugin Workflow
 
@@ -279,7 +270,7 @@ Plugins extend what DystopAI can do. Some plugins provide model providers. Some 
 
 ### Channel Plugins
 
-Channel plugins are how DystopAI becomes reachable outside the desktop app.
+Channel plugins are how Automnia AI becomes reachable outside the desktop app.
 
 Supported behavior depends on the installed plugin and OpenClaw configuration, but the operating model is:
 
@@ -287,7 +278,7 @@ Supported behavior depends on the installed plugin and OpenClaw configuration, b
 - The channel maps that message to a session, agent, party, or command.
 - The agent responds through the same channel when delivery is supported.
 - Monitor records channel activity and runtime logs.
-- High-impact actions should ask for approval before they execute.
+- Important actions should ask for approval before they execute.
 
 If a channel supports target prefixes, route to a specific agent with a unique alias or agent ID. For example:
 
@@ -305,7 +296,7 @@ Compatible channels can turn your phone or team chat into an operator console:
 ```text
 status
 stop all active runs
-launch a release review mission on DystopAI Core
+launch a release review mission
 ask the analyst to alert me if the market moves sharply
 prepare my grocery list every Friday morning
 have the reviewer inspect the latest GitHub patch
@@ -346,7 +337,7 @@ For purchases, file deletion, account changes, deployment, GitHub pushes, or out
 2. Send a small test message such as `status`.
 3. Confirm the inbound event appears in Monitor.
 4. Route to a specific agent with an alias or agent ID.
-5. Keep high-impact actions behind approval.
+5. Keep important actions behind approval.
 
 ### Clean Up A Stale Session
 
@@ -390,9 +381,6 @@ If a model works in direct console chat but fails from a channel, check the plug
 Check the token and session type.
 
 - Desktop sessions should authenticate through the packaged app.
-- On Windows first run, the packaged app creates `%USERPROFILE%\.dystopai-control-center\auth\control-center-token.json` and reuses that local token on later starts.
-- To set your own persistent local desktop token, close DystopAI, edit the `token` field in that file to a long random value with no line breaks, then reopen the app.
-- If that file is deleted, blank, or malformed, DystopAI moves it aside when possible and creates a fresh local token so the desktop app can still open.
 - Browser sessions need `CONTROL_CENTER_TOKEN` or the generated local token printed in the server log.
 - If the token changed, clear the saved browser token and log in again.
 
