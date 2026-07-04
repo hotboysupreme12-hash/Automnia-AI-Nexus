@@ -26,6 +26,12 @@ The Control Plane CI artifact set for the evaluated commit must include:
 
 If any artifact upload is missing, empty, or generated from a different commit, the release remains a beta candidate only. Record the green workflow URL, commit SHA, and artifact names in `docs/CI_EVIDENCE.md` only after the hosted run exists.
 
+## Beta Screenshot Visual Freeze
+
+After the packaged beta screenshot artifact exists for the evaluated commit, treat the captured Agents, Missions, Monitor, Plugins, Settings, and Agent Editor screens as the public beta visual baseline. Do not accept cosmetic redesigns, layout churn, palette changes, animation changes, or selector-only UI rewrites on those surfaces before the public beta cut.
+
+Allowed post-baseline UI changes are limited to accessibility fixes, readability fixes, broken-state corrections, screenshot-capture repairs, and clear regressions found during release qualification. Any allowed change must rerun `npm run capture:packaged-beta-screenshots`, keep all 18 packaged screenshots present, and record the reason in the release handoff or ledger.
+
 ## Public Release Signing
 
 Public release validation must fail closed when signing evidence is absent. A public release is qualified by the dedicated `Public Release Candidate` workflow on a `v*` tag or a manual `workflow_dispatch` run. The workflow sets `DYSTOPAI_RELEASE_REQUIRE_SIGNING=true`; local validation can enforce the same policy explicitly.

@@ -34,6 +34,7 @@ internal static class Program
                 UseShellExecute = false,
                 Arguments = BuildArguments(appPath, args),
             };
+            startInfo.EnvironmentVariables.Remove("ELECTRON_RUN_AS_NODE");
             Process.Start(startInfo);
             return 0;
         }
