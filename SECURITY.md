@@ -1,6 +1,6 @@
 # Security Policy
 
-DystopAI Core is a privileged, local-first operator console for OpenClaw agents. It is designed for one trusted operator boundary per machine or gateway, not hostile multi-tenant use.
+Automnia AI is a privileged, local-first operator console for OpenClaw agents. It is designed for one trusted operator boundary per machine or gateway, not hostile multi-tenant use.
 
 ## Supported Version
 
@@ -8,9 +8,9 @@ Security fixes are applied to the latest revision of `main`. Older builds are no
 
 ## Reporting a Vulnerability
 
-Do not open a public issue for a suspected vulnerability that includes exploit details, credentials, private logs, or personal data. Use GitHub's private vulnerability reporting or security advisory workflow for this repository.
+Do not open a public issue for a suspected vulnerability that includes exploit details, private logs, or personal data. Use GitHub's private vulnerability reporting or security advisory workflow for this repository.
 
-Include the affected version or commit, operating system, reproduction steps, expected and observed behavior, impact, and any safe proof-of-concept material. Remove secrets, access tokens, phone numbers, email addresses, and private workspace content from evidence.
+Include the affected version or commit, operating system, reproduction steps, expected and observed behavior, impact, and safe proof material. Remove private access values, phone numbers, email addresses, and private workspace content from evidence.
 
 ## Security Boundary
 
