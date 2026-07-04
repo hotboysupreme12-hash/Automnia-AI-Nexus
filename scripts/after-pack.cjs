@@ -81,6 +81,30 @@ function copyDirectorySync(source, target, label) {
   }
 
   fs.cpSync(source, target, { recursive: true })
+  materializeAbsoluteSymlinks(target)
+}
+
+function materializeAbsoluteSymlinks(root) {
+  for (const entry of fs.readdirSync(root, { withFileTypes: true })) {
+    const entryPath = path.join(root, entry.name)
+    if (entry.isSymbolicLink()) {
+      const linkTarget = fs.readlinkSync(entryPath)
+      if (!path.isAbsolute(linkTarget)) continue
+
+      const stat = fs.statSync(linkTarget)
+      fs.rmSync(entryPath, { recursive: true, force: true })
+      fs.cpSync(linkTarget, entryPath, {
+        recursive: stat.isDirectory(),
+        dereference: true,
+        preserveTimestamps: true,
+      })
+      continue
+    }
+
+    if (entry.isDirectory()) {
+      materializeAbsoluteSymlinks(entryPath)
+    }
+  }
 }
 
 function copyBundledExtensionSkills(root, resourcesDir) {
