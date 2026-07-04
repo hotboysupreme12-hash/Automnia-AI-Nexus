@@ -3268,6 +3268,7 @@ type GatewayLedgerSnapshot = {
 const GATEWAY_HTTP_PORT = Number(process.env.OPENCLAW_GATEWAY_PORT || 18789)
 let gatewayAutostartTimer: NodeJS.Timeout | null = null
 let shuttingDown = false
+let desktopParentWatchdogTimer: NodeJS.Timeout | null = null
 
 const RUNTIME_STATUS_CACHE_MS = Math.max(
   500,
@@ -4090,11 +4091,16 @@ async function closeControlServerForShutdown(reason: string): Promise<void> {
 }
 
 function handleControlCenterShutdown(signalName: 'SIGTERM' | 'SIGINT' | 'SIGHUP' | 'process exit') {
+  if (desktopParentWatchdogTimer) {
+    clearInterval(desktopParentWatchdogTimer)
+    desktopParentWatchdogTimer = null
+  }
   if (shuttingDown && signalName !== 'process exit') {
     if (!signalShutdownInFlight) return
     console.warn(`[control-center] ${signalName} received while shutdown is still in progress; forcing exit.`)
     process.exit(1)
   }
+  if (signalName !== 'process exit') shuttingDown = true
   if (signalName !== 'process exit') console.log(`[control-center] received ${signalName}`)
   if (signalName !== 'process exit') {
     signalShutdownInFlight = true
@@ -4127,6 +4133,21 @@ process.on('SIGHUP', () => handleControlCenterShutdown('SIGHUP'))
 process.on('exit', () => {
   handleControlCenterShutdown('process exit')
 })
+
+function startDesktopParentWatchdog(): void {
+  const parentPid = Number(process.env.DYSTOPAI_DESKTOP_SERVER_PARENT_PID || 0)
+  if (process.env.DYSTOPAI_DESKTOP_SERVER_CHILD !== '1' || !Number.isFinite(parentPid) || parentPid <= 1) return
+
+  desktopParentWatchdogTimer = setInterval(() => {
+    if (shuttingDown) return
+    if (process.ppid === parentPid && isPidAlive(parentPid)) return
+    console.warn(`[control-center] desktop parent pid ${parentPid} is gone; shutting down orphaned API server.`)
+    handleControlCenterShutdown('SIGHUP')
+  }, 1500)
+  desktopParentWatchdogTimer.unref?.()
+}
+
+startDesktopParentWatchdog()
 
 function isMarkdownResourceFile(file: string) {
   return /^[^\\/]+\.md$/i.test(file)
