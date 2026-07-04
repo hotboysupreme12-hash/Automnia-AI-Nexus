@@ -2,188 +2,218 @@
 
 Last updated: 2026-07-04
 
-Automnia AI is a local-first command center for operating hyper customizable OpenClaw agent teams. Use it to create agents, assign model lanes, connect workspaces, launch missions, schedule recurring jobs, manage plugins, route compatible channels, and monitor runtime health from one desktop cockpit.
+Automnia AI is a local-first desktop command center for hyper customizable agents. Use it to build specialized OpenClaw-powered workers, assign models and tools, connect workspaces, launch missions, schedule recurring jobs, manage plugins, route compatible channels, and monitor everything from one cockpit.
 
-This guide is the operating manual. The README is the front door; this document is where setup, advanced workflows, troubleshooting, and feature details live.
+This guide is the full operating manual. The README is the front door. This document covers setup, configuration, agent design, supported workflows, plugins, skills, missions, schedules, approvals, monitoring, recovery, troubleshooting, and advanced use cases.
 
 ## Table of Contents
 
-- [Operating Model](#operating-model)
-- [Quick Start](#quick-start)
-- [Main Surfaces](#main-surfaces)
-- [Agents](#agents)
-- [Model Setup](#model-setup)
-- [Workspaces](#workspaces)
-- [Command Console](#command-console)
-- [Missions](#missions)
-- [Schedules And Cadence](#schedules-and-cadence)
-- [Monitor And Recovery](#monitor-and-recovery)
-- [Plugins](#plugins)
-- [Channels](#channels)
-- [Skills And Doctrine](#skills-and-doctrine)
-- [Advanced Workflows](#advanced-workflows)
-- [Compatibility](#compatibility)
-- [Troubleshooting](#troubleshooting)
-- [Glossary](#glossary)
+- [1. Mental Model](#1-mental-model)
+- [2. Quick Start](#2-quick-start)
+- [3. Core Surfaces](#3-core-surfaces)
+- [4. Agent Design](#4-agent-design)
+- [5. Model And Provider Setup](#5-model-and-provider-setup)
+- [6. Workspaces And File Boundaries](#6-workspaces-and-file-boundaries)
+- [7. Command Console](#7-command-console)
+- [8. Missions](#8-missions)
+- [9. Scheduling And Cadence](#9-scheduling-and-cadence)
+- [10. Monitor And Recovery](#10-monitor-and-recovery)
+- [11. Plugins](#11-plugins)
+- [12. Channels](#12-channels)
+- [13. Skills, Doctrine, And Memory](#13-skills-doctrine-and-memory)
+- [14. Approval Gates And Safety](#14-approval-gates-and-safety)
+- [15. Advanced Workflow Library](#15-advanced-workflow-library)
+- [16. Settings And Policy](#16-settings-and-policy)
+- [17. Troubleshooting](#17-troubleshooting)
+- [18. Glossary](#18-glossary)
 
-## Operating Model
+---
 
-Automnia AI works best when you treat it like an AI operations desk:
+## 1. Mental Model
 
-1. **Agents** hold identity, model, workspace, policy, memory, skills, and doctrine.
-2. **Active Party** slots decide which agents are armed for group work.
-3. **Command Console** sends direct live turns to one agent, selected agents, or the confirmed party.
-4. **Missions** turn a goal into structured work with timing, risk, readiness, and proof.
-5. **Plugins** add providers, tools, browser flows, memory, skills, services, and channels.
-6. **Monitor** shows Gateway health, running calls, cron jobs, channel activity, logs, failures, and recovery actions.
-7. **Approval gates** keep high-impact work under operator control.
+Automnia AI turns agents into a local operations team.
 
 ```text
 Operator
   -> Automnia AI desktop cockpit
-  -> Agents + Missions + Monitor + Plugins + Settings
+  -> Agents, Missions, Monitor, Plugins, Settings
   -> OpenClaw Gateway and runtime services
   -> Models, files, browser tools, skills, channels, and external systems
+  -> Approval loop back to the operator when decisions matter
 ```
 
-## Quick Start
+Think in plain questions:
 
-1. Start the app.
-   - Packaged desktop: open Automnia AI.
-   - Development web surface: run `npm ci`, then `npm run dev`.
-   - Desktop development shell: run `npm run desktop`.
+| Question | Automnia AI surface |
+| --- | --- |
+| Who should do this? | Agents and Active Party |
+| What should they use? | Model lane, tools, plugins, skills, workspace |
+| When should it happen? | Missions and schedules |
+| What is happening right now? | Monitor |
+| What needs my approval? | Approval gates and Command Console |
+| What happened? | Mission reports, logs, ledgers, and final evidence |
 
-2. Connect model access.
-   - Open an agent with `Edit`.
-   - Pick a primary model and fallback models.
-   - Complete the provider setup needed by that model.
+Automnia AI is not just a prettier chat window. It is a local command layer for agent work.
 
-3. Build a party.
-   - Open `Agents`.
-   - Deploy one or more agents into party slots.
-   - Keep Slot 1 as the lead when work needs command, delegation, or review.
-   - Confirm the party before party-wide turns or missions.
+---
 
-4. Run a tiny proof.
+## 2. Quick Start
+
+### Run from source
+
+Recommended runtime: Node.js 24.
+
+```bash
+git clone <this repository>
+cd <this repository>
+npm ci
+npm run desktop
+```
+
+### First safe path
+
+1. Open Automnia AI.
+2. Connect one provider or model route.
+3. Choose one existing agent or recruit one focused agent.
+4. Give the agent a narrow workspace only if the task needs files.
+5. Send a small Command Console test.
+6. Open Monitor and confirm Gateway, session, logs, and result.
+7. Launch a mission only after the direct path works.
+
+Good first prompt:
 
 ```text
 Review this folder at a high level. Tell me what you inspected, what looks risky, and one next step.
 ```
 
-5. Open Monitor.
-   - Confirm Gateway state.
-   - Check active run/session evidence.
-   - Read logs and final output.
+Avoid:
 
-6. Launch missions only after the basic direct path works.
+```text
+Fix everything.
+```
 
-## Main Surfaces
+---
 
-| Surface | Use it for |
+## 3. Core Surfaces
+
+| Surface | Purpose |
 | --- | --- |
-| **Recruit** | Create a new agent profile and bootstrap doctrine. |
-| **Agents** | Browse the roster, deploy the party, edit agents, and run the Command Console. |
-| **Missions** | Define structured objectives, dispatch modes, cadence, readiness, and proof. |
-| **Monitor** | Inspect Gateway health, active calls, cron jobs, channel activity, logs, and recovery controls. |
-| **Plugins** | Manage providers, tools, communication channels, skills, browser automation, and runtime surfaces. |
-| **Settings** | Tune runtime policy, UI density, motion, contrast, defaults, and local preferences. |
+| Recruit | Create a new agent profile and bootstrap doctrine. |
+| Agents | Browse the roster, deploy the active party, edit agents, and run the Command Console. |
+| Missions | Turn goals into structured work with agents, dispatch modes, cadence, risk, and proof. |
+| Monitor | Inspect Gateway health, running calls, cron jobs, channel activity, logs, failures, and recovery controls. |
+| Plugins | Configure providers, tools, channels, skills, browser flows, memory, and external services. |
+| Settings | Tune runtime policy, UI density, motion, contrast, defaults, timeouts, and local preferences. |
 
-### Screenshots
+Suggested screenshots in docs:
 
-| Agents | Missions |
+```text
+docs/assets/readme/automnia-ui-agents.png
+docs/assets/readme/automnia-ui-missions.png
+docs/assets/readme/automnia-ui-monitor.png
+docs/assets/readme/automnia-ui-plugins.png
+```
+
+---
+
+## 4. Agent Design
+
+Agents are configurable workers. They should have clear lanes.
+
+### Agent fields to think about
+
+| Area | What to configure |
 | --- | --- |
-| ![Automnia AI Agents workspace](assets/readme/automnia-ui-agents.png) | ![Automnia AI Missions workspace](assets/readme/automnia-ui-missions.png) |
+| Identity | Name, portrait, class, role, tags, tone, description |
+| Model lane | Primary model, fallback models, provider setup, thinking level, timeout |
+| Workspace | Folder scope, repo, docs folder, content folder, support export, or no file access |
+| Doctrine | Operating style, rules, tool policy, memory, mission instructions |
+| Skills | Repeatable procedures, project playbooks, plugin-provided capabilities |
+| Policy | Sandbox behavior, allowed tools, denied tools, approval rules |
+| Schedule | Cadence defaults, watch mode, loop mode, recovery behavior |
 
-| Monitor | Plugins |
+### Agent ideas that make the product click
+
+| Agent | What it can do |
 | --- | --- |
-| ![Automnia AI Monitor workspace](assets/readme/automnia-ui-monitor.png) | ![Automnia AI Plugins workspace](assets/readme/automnia-ui-plugins.png) |
+| Customer Service Agent | Review emails, prepare replies, organize customer context, answer common inquiries, route unresolved questions, and draft text/channel replies for approval. |
+| Shopify Store Operator | Use Shopify CLI or compatible store tools to inspect inventory, orders, product data, website content, SEO tasks, and promotional codes. |
+| Store Command Center | Combine inventory checks, order review, customer inquiry drafts, promotion planning, and store intelligence on a cadence. |
+| Promotional Agent | Prepare campaign copy, mailers, launch posts, discount campaigns, follow-up drafts, and scheduled promotional plans. |
+| Content Producer | Plan scripts, hooks, titles, descriptions, thumbnails, launch posts, and supported media generation workflows using configured Gemini, image/video, or other supported models and tools. |
+| Code Crew | Split work across architect, builder, reviewer, tester, and release-check agents. |
+| Research Desk | Compare sources, separate facts from assumptions, and return a decision-ready brief. |
+| Watcher | Monitor prices, products, release notes, inventory, jobs, alerts, competitor changes, or system signals. |
+| Personal Chief of Staff | Prepare weekly plans, reminders, errands, notes, email drafts, and summaries for review. |
+| Commander | Delegate work to specialist agents and return one final report. |
 
-## Agents
+---
 
-Agents are configurable workers. They are not just names in one chat box.
+## 5. Model And Provider Setup
 
-### What an agent can own
+Automnia AI can use the model/provider routes configured through OpenClaw and the app provider surfaces.
 
-| Area | Examples |
-| --- | --- |
-| Identity | Name, portrait, class, role, tags, description, tone. |
-| Model lane | Primary model, fallback models, thinking level, timeout, fast-mode policy. |
-| Workspace | A project folder, docs folder, content folder, or no file access. |
-| Doctrine | `SOUL.md`, `TOOLS.md`, `MEMORY.md`, mission prompts, rules, preferences. |
-| Skills | Built-in skills, learned skills, plugin-provided skills, workflow playbooks. |
-| Policy | Sandbox behavior, allowed tools, denied tools, approval rules. |
-| Schedule | Cadence defaults, recovery mode, loop/watch behavior. |
-
-### Good agent ideas
-
-| Agent | Purpose |
-| --- | --- |
-| **Release Architect** | Plans safe changes, identifies risk, and decides verification steps. |
-| **Code Builder** | Makes focused edits in approved folders. |
-| **QA Reviewer** | Finds regressions, missing tests, and release blockers. |
-| **Research Analyst** | Compares options and separates facts from assumptions. |
-| **Content Producer** | Turns ideas into scripts, outlines, thumbnails, titles, and launch copy. |
-| **Support Operator** | Drafts replies and organizes customer context. |
-| **Smart Home Operator** | Uses a configured smart-home CLI/plugin to inspect device state, lights, routines, and power usage, then reports through your preferred channel. |
-| **Personal Chief of Staff** | Prepares schedules, errands, reminders, email drafts, and weekly summaries for approval. |
-| **Commander** | Delegates work to specialists and returns one final report. |
-
-## Model Setup
-
-Automnia AI supports whatever model/provider routes are configured through OpenClaw and the app provider surfaces.
-
-Common lanes include:
+Common model lanes include:
 
 - OpenAI-compatible API providers.
 - Anthropic-style message providers.
 - Google Gemini or Vertex-style providers.
-- Local or self-hosted model routes when configured through OpenClaw-compatible tooling.
-- Subscription-backed or OAuth-backed provider flows where supported.
-- API-key-backed providers where supported.
+- Local or self-hosted model routes when configured through compatible tooling.
+- API-key-backed provider flows where supported.
+- OAuth or subscription-backed provider flows where supported.
+- Media-capable model/tool routes when configured, including supported Gemini, image, video, audio, or multimodal generation tools.
 
-Recommended setup pattern:
+### Recommended provider setup pattern
 
-1. Pick one reliable primary model for the agent.
-2. Add one fallback model.
+1. Start with one dependable primary model.
+2. Add one fallback.
 3. Set timeout and thinking level.
-4. Send a small direct test prompt.
-5. Only then use that agent in missions or channels.
+4. Send one small direct Command Console test.
+5. Check Monitor for the route used.
+6. Only then use the agent in missions, channels, or schedules.
 
-If a model works in direct console chat but fails from a channel, inspect plugin setup, Gateway logs, channel routing, and the target agent's provider lane.
+### When a model fails
 
-## Workspaces
+Check:
+
+- Provider setup is complete.
+- Quota or subscription access is still valid.
+- The selected agent is using the intended model lane.
+- The channel/plugin is not pointing at a different agent or stale route.
+- Gateway is healthy.
+- The prompt is not requesting a denied tool.
+
+---
+
+## 6. Workspaces And File Boundaries
 
 Workspaces keep work scoped.
 
-Use them to decide what an agent can inspect or change:
+Good workspace examples:
 
-- A code repo.
-- A docs folder.
-- A content library.
-- A support-export folder.
-- A smart-home automation repo or CLI config folder.
-- A safe scratch directory.
+- Code repo.
+- Docs folder.
+- Content library.
+- Support export folder.
+- Storefront theme or product export folder.
+- Safe scratch folder.
 
-Good practice:
+Use narrow workspaces. Do not give every agent broad file access by default.
 
-- Use narrow workspaces.
-- Give different agents different folders.
-- Use read-only or approval-first behavior for sensitive tasks.
-- Test with a small prompt before giving mission-scale work.
+---
 
-## Command Console
+## 7. Command Console
 
-The Command Console is the live operator lane.
+Use Command Console for:
 
-Use it for:
-
-- One-off questions.
-- Direct code review.
-- Small file inspections.
-- Agent-specific commands.
-- Party prompts.
+- Small direct tests.
+- One-agent commands.
+- Party commands.
+- File inspection.
+- Code review.
+- Provider setup validation.
 - Attachment-backed context.
-- Testing provider setup before missions.
+- Stopping or steering work when supported.
 
 Good prompt shape:
 
@@ -191,316 +221,313 @@ Good prompt shape:
 Inspect these files. Report bugs first, list files inspected, then tell me the safest next step.
 ```
 
-Weak prompt shape:
+---
 
-```text
-Fix everything.
-```
+## 8. Missions
 
-## Missions
+Missions are for structured work.
 
-Missions turn an objective into coordinated work.
-
-Use Missions when you need:
+Use missions when you need:
 
 - Multiple agents.
-- Scheduling.
 - Repeatability.
+- Timing or cadence.
 - Acceptance criteria.
 - Verification commands.
-- A final proof report.
-- Recovery visibility.
+- A final report.
+- Recovery evidence.
 
 ### Mission flow
 
-1. Confirm at least one agent in the Active Party.
-2. Choose a mission preset.
-3. Pick the dispatch mode.
-4. Pick the mission type.
-5. Write a clear objective.
-6. Set cadence, complexity, risk, and readiness.
-7. Add acceptance criteria or verification commands.
-8. Deploy the mission.
-9. Watch progress in Missions and Monitor.
+1. Confirm an active party.
+2. Choose preset.
+3. Pick dispatch mode.
+4. Pick mission type.
+5. Write objective.
+6. Set cadence, complexity, risk, readiness.
+7. Add proof criteria.
+8. Deploy.
+9. Watch in Missions and Monitor.
+10. Read final report.
 
-### Presets
+### Useful mission presets
 
 | Preset | Use it for |
 | --- | --- |
-| Code Sweep | Code review, cleanup, regression checks, targeted repair. |
-| Mission Plan | Scoping, ownership, milestones, risks, next actions. |
-| Research Map | Evidence gathering, comparisons, unknowns, decision support. |
-| Launch Push | Implementation, release polish, verification, publication support. |
-| Command Ops | Lead-agent delegation, synthesis, blocker resolution. |
+| Code Sweep | Code review, cleanup, regression checks, targeted repair |
+| Mission Plan | Scoping, ownership, milestones, risks |
+| Research Map | Evidence gathering, comparisons, unknowns |
+| Launch Push | Implementation, polish, verification, publication support |
+| Command Ops | Delegation, synthesis, blocker resolution |
 
-### Dispatch modes
+---
 
-| Mode | Use when |
-| --- | --- |
-| Command | Slot 1 should delegate and synthesize. |
-| Parallel | Agents should work in separate lanes immediately. |
-| Specialist | Only matching agents should run. |
-| Relay | Agents should pass context in sequence. |
-| Swarm | You want broad exploration or many angles. |
+## 9. Scheduling And Cadence
 
-## Schedules And Cadence
-
-Use cadence when work should recur or stay active.
-
-Examples:
+Use cadence when work should repeat or stay active.
 
 | Cadence | Workflow |
 | --- | --- |
-| Every morning | Summarize overnight alerts, messages, or repo changes. |
-| Every Friday | Prepare groceries, household tasks, or weekly planning. |
-| Hourly | Watch a service, product page, market signal, or inventory status. |
-| Watch style | Run when files, feeds, or external signals change. |
-| Loop until stopped | Keep a monitor active while you are away. |
+| Every morning | Summarize overnight alerts, messages, orders, or repo changes |
+| Every Friday | Prepare plans, shopping lists, store promotions, or weekly reports |
+| Hourly | Watch inventory, product pages, support queues, or system status |
+| Watch style | Run when configured signals change |
+| Loop until stopped | Keep a monitor active while the operator is away |
 
-Smart-home example:
+Example store workflow:
 
 ```text
-Every 30 minutes, inspect smart-home status through the configured CLI.
-Report unusual power usage, offline devices, unlocked doors, or lights left on.
-Send summary to my preferred channel.
-Wait for approval before changing device state.
+Every 2 hours, check inventory and new orders.
+Flag low stock, delayed orders, and promotion opportunities.
+Draft customer replies where needed.
+Send summary through the configured channel.
+Wait for approval before changing discounts, orders, or outbound messages.
 ```
 
-## Monitor And Recovery
+---
 
-Monitor is the source of truth for runtime state.
+## 10. Monitor And Recovery
 
-Use it to see:
+Monitor is the truth window.
+
+Use it to inspect:
 
 - Gateway health.
 - Running calls.
 - Active sessions.
 - Cron jobs.
-- Plugin and channel events.
+- Plugin events.
+- Channel traffic.
 - Logs.
-- Failures and recovery actions.
+- Failures.
+- Recovery actions.
 
 Recovery order:
 
 1. Wait for health polling.
 2. Check active work.
 3. Use Clean Slate for stale UI/runtime projection.
-4. Use Reset gateway when Gateway is unhealthy.
+4. Use Reset Gateway when Gateway is unhealthy.
 5. Stop Gateway only when plugin/channel state needs a hard reset.
-6. Reopen the app if the runtime cannot recover.
-7. Send a small direct prompt before retrying big work.
+6. Reopen the app if runtime cannot recover.
+7. Retry a tiny direct prompt before relaunching big work.
 
-## Plugins
+---
+
+## 11. Plugins
 
 Plugins extend what agents can do.
 
-Common plugin categories:
-
 | Plugin type | Enables |
 | --- | --- |
-| Provider plugins | Model access and model routing. |
-| Browser plugins | Page inspection, browser context, and web workflows. |
-| Memory plugins | Reusable knowledge and continuity. |
-| Skill plugins | Playbooks, procedures, and specialized tools. |
-| Channel plugins | SMS, chat, team tools, voice-style flows, webhooks, or future channels. |
-| Service plugins | External systems such as home automation, support tools, publishing systems, or internal APIs. |
+| Provider plugins | Model access and routing |
+| Browser plugins | Page inspection and web workflows |
+| Memory plugins | Durable context and continuity |
+| Skill plugins | Procedures and specialized playbooks |
+| Channel plugins | Chat, SMS-style flows, team tools, webhooks, future channels |
+| Media tools | Supported image, video, audio, or multimodal generation flows |
+| Service plugins | Store systems, support tooling, internal APIs, publishing tools, automation CLIs |
 
-Plugin setup pattern:
+### Plugin setup pattern
 
 1. Open Plugins.
 2. Search for the plugin.
-3. Check status chips.
+3. Read status chips.
 4. Complete required setup fields.
 5. Save configuration.
 6. Refresh plugins.
-7. Restart Gateway if the plugin needs runtime reload.
+7. Restart Gateway if required.
 8. Confirm runtime state in Monitor.
-9. Test with a tiny command.
+9. Test with a small command.
 
-## Channels
+---
 
-Channels turn Automnia AI into an operator layer outside the desktop.
+## 12. Channels
 
-Depending on configured plugins, channels can include chat apps, team tools, SMS-like flows, voice-style flows, webhooks, browser chat, or future channel surfaces.
+Channels let agents operate outside the desktop when compatible plugins are configured.
 
-Channel command pattern:
+Command examples:
 
 ```text
 status
-@researcher summarize overnight alerts
-@home check lights and power usage
+@support summarize urgent customer messages
+@store check orders and low inventory
+@promo draft tomorrow's campaign plan
 @stop stop active runs and return current evidence
 ```
 
 Best practices:
 
 - Use unique agent aliases.
-- Test with `status` first.
+- Test with `status`.
 - Watch Monitor for inbound/outbound events.
-- Keep approval gates on for external actions.
-- Use short commands for channel workflows.
+- Keep approval gates on for important actions.
+- Use short channel commands.
 
-### Telegram-style setup pattern
+---
 
-Exact setup depends on the installed plugin, but the operating pattern is:
+## 13. Skills, Doctrine, And Memory
 
-1. Install or enable the channel plugin.
-2. Add required setup values in Plugins.
-3. Save configuration.
-4. Restart or refresh Gateway when the plugin asks for a runtime reload.
-5. Send a small `status` message.
-6. Confirm Channel Activity in Monitor.
-7. Route to one agent with a unique alias.
-8. Keep approvals enabled for messages or actions that affect others.
-
-## Skills And Doctrine
-
-Skills and doctrine are how agents keep working style and procedures.
+Doctrine tells an agent how to behave.
 
 Use doctrine for:
 
-- Agent identity.
-- Operating rules.
-- Tone and boundaries.
+- Identity.
+- Tone.
+- Rules.
 - Tool policy.
 - Mission playbooks.
 - Memory notes.
-- Verification rules.
+- Verification standards.
 
-Use skills for:
+Skills are reusable workflows.
 
-- Repeatable workflows.
-- Project-specific checklists.
-- Writing formats.
-- Code review procedures.
-- Research methods.
-- Publishing routines.
-- Smart-home routines.
-- Support response formats.
+Examples:
 
-Good skill idea:
+- Release review checklist.
+- Shopify inventory check.
+- Customer reply format.
+- Promotional campaign routine.
+- Research comparison method.
+- Content launch checklist.
+- Media prompt style guide.
+- Support escalation policy.
 
-```text
-Release Review Skill
-1. Inspect changed files.
-2. Find user-facing risk first.
-3. Run or recommend verification.
-4. Report blockers, warnings, and safe-to-ship status.
-```
+---
 
-## Advanced Workflows
+## 14. Approval Gates And Safety
 
-### Code release crew
+Approval gates keep the operator in the loop.
 
-- Architect defines the safest plan.
-- Builder edits approved files.
-- Reviewer checks regressions.
-- Tester runs verification.
-- Commander writes the final report.
+Use approvals before:
 
-### Smart home operator
+- Sending customer messages.
+- Sending campaigns.
+- Changing discounts.
+- Changing orders.
+- Publishing content.
+- Modifying important files.
+- Pushing code.
+- Running risky external actions.
 
-- Agent uses a smart-home CLI or plugin.
-- Runs on cadence while you are away.
-- Reports power usage, lights, routines, and device anomalies.
-- Sends summary through your preferred channel.
-- Waits for approval before changing devices.
+The goal is not to block automation. The goal is to let agents prepare work and let humans approve high-impact steps.
+
+---
+
+## 15. Advanced Workflow Library
+
+### Customer service agent
+
+- Reviews inbox or channel exports.
+- Groups inquiries by urgency.
+- Drafts replies.
+- Flags refund, order, escalation, or support-risk cases.
+- Waits for approval before outbound replies.
+
+### Shopify store operator
+
+- Uses Shopify CLI or compatible store tooling.
+- Checks inventory, products, orders, discounts, and SEO data.
+- Drafts changes for approval.
+- Reports store health on a cadence.
+
+### Store command center
+
+- Combines customer support, inventory, orders, promotion planning, and store intelligence.
+- Runs on schedule.
+- Summarizes what changed.
+- Drafts next actions.
+- Waits for approval before acting externally.
+
+### Promotional agent
+
+- Drafts campaign plans.
+- Builds mailer copy.
+- Prepares launch posts.
+- Schedules recurring promotion drafts.
+- Reports performance signals when connected tools provide them.
 
 ### Content studio
 
-- Researcher gathers context.
-- Writer drafts scripts and posts.
-- Editor tightens hooks.
-- Producer creates launch checklist.
-- Scheduler prepares recurring publishing tasks.
+- Plans scripts, hooks, titles, descriptions, thumbnails, and launch posts.
+- Prepares creative media workflows when supported Gemini, image/video, or other compatible model/tool routes are configured.
+- Adapts content into platform-specific formats.
+- Keeps approvals on before publishing.
 
-### Support desk
+### Code release crew
 
-- Watches support exports or channel messages.
-- Drafts replies.
-- Flags urgent issues.
-- Organizes context.
-- Waits for approval before sending.
+- Architect plans.
+- Builder edits.
+- Reviewer checks.
+- Tester verifies.
+- Commander summarizes.
 
-### Product watcher
+---
 
-- Watches product pages, pricing, release notes, inventory, or competitor updates.
-- Ignores noise.
-- Reports meaningful changes.
-- Creates follow-up tasks or drafts replies.
+## 16. Settings And Policy
 
-## Compatibility
+Use Settings to tune:
 
-Automnia AI is a public beta candidate compatible with Windows, macOS, and Linux source workflows. The primary packaged beta target is Windows 11 x64. Other packaged builds should follow the release evidence attached to that build.
+- Runtime defaults.
+- Mission defaults.
+- Thinking mode.
+- Timeout behavior.
+- UI density.
+- Reduced motion.
+- High contrast or reduced glow.
+- Local preference reset.
+- Agent/runtime policy defaults.
 
-## Troubleshooting
+For agent-level policy, check:
 
-### I cannot log in
+- Allowed tools.
+- Denied tools.
+- Sandbox behavior.
+- Workspace scope.
+- Approval requirements.
+- Schedule defaults.
 
-- Desktop sessions should authenticate through the packaged app.
-- Browser sessions need the configured local access flow.
-- If access changed, clear the saved browser session and try again.
+---
 
-### Gateway is off or unhealthy
+## 17. Troubleshooting
 
-- Open Monitor.
-- Wait for polling.
-- Check logs.
-- Use Reset gateway.
-- Restart the app only if Gateway cannot recover.
+### Agent does not respond
 
-### An agent does not respond
+Check model setup, provider availability, agent selection, active runs, denied tools, and Gateway health.
 
-Check:
+### Mission will not deploy
 
-- Is the agent selected or deployed?
-- Is the model configured?
-- Is the provider available?
-- Is the agent already running?
-- Is the prompt asking for a denied tool?
-- Is Gateway healthy?
+Check deployed agents, confirmed party, title, objective, model setup, and whether selected agents are already busy.
 
-### A mission will not deploy
+### Channel message does not arrive
 
-Check:
+Check channel plugin setup, Gateway health, Channel Activity, and target agent alias.
 
-- At least one agent is deployed.
-- The party is confirmed.
-- The mission has a title and objective.
-- Model setup is complete.
-- No selected agent is busy with a long task.
+### Plugin needs setup
 
-### A channel message does not arrive
-
-Check:
-
-- Is the channel plugin enabled?
-- Does the plugin need setup?
-- Is Gateway running?
-- Does Monitor show Channel Activity?
-- Is the target agent alias unique?
-
-### A plugin needs setup
-
-Open Plugins, search for the plugin, complete setup, save, refresh, and confirm runtime state in Monitor.
+Open Plugins, complete setup, save, refresh, and confirm runtime state in Monitor.
 
 ### Attachments do not work
 
 Check file size, file type, workspace access, and agent policy. Attachment-heavy prompts may need runtime-backed execution.
 
-## Glossary
+### Runtime looks stale
+
+Use Monitor, inspect logs, use Clean Slate, then Reset Gateway only if needed.
+
+---
+
+## 18. Glossary
 
 | Term | Meaning |
 | --- | --- |
 | Agent | A configured OpenClaw worker with identity, model, workspace, policy, memory, and tools. |
-| Active Party | The agents currently deployed for party chat or mission work. |
-| Slot 1 | The lead party position for command, delegation, and review workflows. |
-| Command Console | The live operator chat surface for direct agent or party work. |
+| Active Party | Agents currently deployed for party chat or mission work. |
+| Command Console | Live operator chat surface for direct agent or party work. |
 | Mission | A structured objective with dispatch mode, timing, proof, and agent assignment. |
 | Gateway | The OpenClaw background process that runs chat, sessions, plugins, channels, and runtime work. |
-| Plugin | A runtime extension for providers, tools, channels, memory, browser automation, skills, or external services. |
-| Channel | A communication path that can send or receive messages through a compatible plugin or Gateway surface. |
-| Session | A reusable conversation/runtime context for an agent, channel, or Gateway chat lane. |
-| Approval gate | A point where the agent prepares an action but waits for operator confirmation before execution. |
+| Plugin | Runtime extension for providers, tools, channels, memory, browser automation, skills, or services. |
+| Channel | Communication path through a compatible plugin or Gateway surface. |
+| Approval gate | Human review point before an important action executes. |
 | Cron mission | Scheduled work that runs on a cadence. |
-| Clean Slate | A recovery action for stale UI/runtime state that preserves healthy active work where possible. |
+| Clean Slate | Recovery action for stale UI/runtime state that preserves healthy active work where possible. |
