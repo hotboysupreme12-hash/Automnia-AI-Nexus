@@ -35,6 +35,7 @@ import { registerSkillRoutes } from './routes/skillRoutes'
 import { createControlFilesService } from './services/controlFilesService'
 import {
   AVATAR_UPLOAD_LIMIT_BYTES,
+  assertAvatarImageUploadSignature,
   assertAvatarUploadBytes,
   assertAvatarUploadSize,
   avatarUploadLimitErrorMessage,
@@ -128,15 +129,17 @@ import {
   type GatewayChannelActivity,
   type GatewayLogEntry,
 } from './services/gateway/gatewayLogService'
-import {
-  createGatewayChatService,
-  gatewayChatAbortError,
-} from './services/gateway/gatewayChatService'
+import { createGatewayChatService } from './services/gateway/gatewayChatService'
+import { createBufferedAgentTurnService } from './services/agents/agentTurnService'
+import { createGatewayAgentTurnService } from './services/agents/gatewayAgentTurnService'
+import { createAgentRuntimeService } from './services/agents/agentRuntimeService'
+import { createAgentStreamingService } from './services/agents/agentStreamingService'
 import {
   createRuntimeStatusService,
   type RuntimeStatusService,
 } from './services/runtime/runtimeStatusService'
 import { createRuntimeActionService } from './services/runtime/runtimeActionService'
+import { createBrowserPreflightService } from './services/browser/browserPreflightService'
 import { createRuntimeRecoveryService } from './services/runtime/runtimeRecoveryService'
 import {
   createPluginInventoryService,
@@ -6958,6 +6961,7 @@ function spawnDetached(command: string, args: string[]): Promise<{ ok: boolean; 
 async function persistAgentAvatarBytes(agentId: string, bytes: Buffer, sourceName: string) {
   if (!isValidAgentId(agentId)) throw new Error('Invalid agent id.')
   assertAvatarUploadBytes(bytes, AVATAR_UPLOAD_LIMIT_BYTES)
+  assertAvatarImageUploadSignature(bytes, sourceName)
   if (!isSupportedAvatarImagePath(sourceName)) {
     throw new Error('Choose a PNG, JPG, WEBP, GIF, BMP, ICO, or SVG image.')
   }
@@ -7002,6 +7006,7 @@ async function persistAgentAvatarFromPath(agentId: string, sourcePath: string) {
   const stat = await fs.stat(selectedPath)
   if (!stat.isFile()) throw new Error('Selected avatar is not a file.')
   assertAvatarUploadSize(stat.size, AVATAR_UPLOAD_LIMIT_BYTES)
+  assertAvatarImageUploadSignature(await fs.readFile(selectedPath), selectedPath)
 
   const { config, target } = await getAgentById(agentId)
   if (!target) throw new Error(`Agent not found: ${agentId}`)
@@ -7906,131 +7911,28 @@ async function runBrowserToolProbe(agentId: string): Promise<{ ok: boolean; deta
   return { ok, detail }
 }
 
-async function checkBrowserPreflight(agentId?: string): Promise<{
-  ok: boolean
-  reason: 'ready' | 'browser_plugin_disabled' | 'gateway_unhealthy' | 'relay_unreachable' | 'browser_probe_failed'
-  message: string
-  detail?: string
-}> {
-  await ensureOpenclawAgentRunConfigDefaults().catch(() => undefined)
-  const browserPlugin = await getOpenClawPluginEnabled('browser')
-  if (!browserPlugin.enabled) {
-    return {
-      ok: false,
-      reason: 'browser_plugin_disabled',
-      message: 'Browser preflight skipped: the OpenClaw browser plugin is disabled.',
-      detail: browserPlugin.detail,
-    }
-  }
+const browserPreflightService = createBrowserPreflightService({
+  ensureOpenclawAgentRunConfigDefaults,
+  getOpenClawPluginEnabled,
+  repairGatewayTokenConfigSync,
+  ensureGatewayRunning,
+  startGatewayHealthMonitor,
+  isGatewayHealthy,
+  tryRestartGatewayService,
+  tryStartBrowserRelayWithRepair,
+  runBrowserToolProbe,
+  tryReleaseBrowserRelayPort: async () => {
+    const released = await tryReleaseBrowserRelayPort()
+    if (released.released) browserProbeCache.clear()
+    return released
+  },
+  hasBrowserRelayPortConflict,
+  hasNoAttachedBrowserTab,
+  redactSensitiveText,
+})
 
-  const configRepair = repairGatewayTokenConfigSync()
-  await ensureGatewayRunning()
-  startGatewayHealthMonitor()
-  const probeGatewayHealth = async () => {
-    const gatewayOk = await isGatewayHealthy()
-    return {
-      gatewayOk,
-      gatewayNormalized: gatewayOk ? 'gateway health ok (http)' : 'gateway /health did not respond',
-      code: gatewayOk ? 0 : 1,
-    }
-  }
-
-  const waitForGatewayHealthy = async (maxMs: number) => {
-    const started = Date.now()
-    let lastDetail = ''
-    while (Date.now() - started < maxMs) {
-      const probe = await probeGatewayHealth()
-      lastDetail = probe.gatewayNormalized
-      if (probe.gatewayOk) return { ok: true, detail: probe.gatewayNormalized }
-      await new Promise((resolve) => setTimeout(resolve, 900))
-    }
-    return { ok: false, detail: lastDetail }
-  }
-
-  let firstProbe = await probeGatewayHealth()
-  if (!firstProbe.gatewayOk && /token_missing|gateway token missing|unauthorized/i.test(firstProbe.gatewayNormalized)) {
-    repairGatewayTokenConfigSync()
-    firstProbe = await probeGatewayHealth()
-  }
-  const gatewayNormalized = firstProbe.gatewayNormalized
-  const gatewayOk = firstProbe.gatewayOk
-  if (!gatewayOk) {
-    const recovered = await tryRestartGatewayService({ reason: 'browser relay gateway recovery' })
-    const recheck = await waitForGatewayHealthy(7000)
-    if (recheck.ok) {
-      const browserStartedAfterRecovery = await tryStartBrowserRelayWithRepair()
-      if (browserStartedAfterRecovery.started) {
-        return {
-          ok: true,
-          reason: 'ready',
-          message: 'Browser relay preflight passed after gateway recovery.',
-          detail: [
-            configRepair.repaired ? `[gateway-token-autofix] ${configRepair.detail}` : '',
-            `Gateway recovered and browser service started.\n${browserStartedAfterRecovery.detail}`,
-          ].filter(Boolean).join('\n'),
-        }
-      }
-    }
-
-    return {
-      ok: false,
-      reason: 'gateway_unhealthy',
-      message: 'Browser preflight failed: OpenClaw gateway is not healthy. Start a single gateway instance and retry.',
-      detail:
-        [
-          configRepair.repaired ? `[gateway-token-autofix] ${configRepair.detail}` : '',
-          gatewayNormalized || `gateway health exit code ${firstProbe.code}`,
-          recovered.detail ? `recovery: ${recovered.detail}` : '',
-        ]
-          .filter(Boolean)
-          .join('\n') || `gateway health exit code ${firstProbe.code}`,
-    }
-  }
-
-  const started = await tryStartBrowserRelayWithRepair()
-  if (!started.started) {
-    const startDetail = started.detail || 'browser relay bootstrap did not produce diagnostic output.'
-    const attachHint = hasNoAttachedBrowserTab(startDetail)
-      ? 'Relay process is up but no tab is attached. Click the OpenClaw/Clawdbot extension icon on any Chrome tab, then retry.'
-      : 'Browser service did not become ready after bootstrap.'
-
-    return {
-      ok: false,
-      reason: 'relay_unreachable',
-      message: 'Browser preflight failed: OpenClaw browser service is unreachable. Start or attach the browser runtime, then retry.',
-      detail: `${attachHint}\n${startDetail}`,
-    }
-  }
-
-  if (agentId) {
-    let probe = await runBrowserToolProbe(agentId)
-    if (!probe.ok && hasBrowserRelayPortConflict(probe.detail)) {
-      const released = await tryReleaseBrowserRelayPort()
-      if (released.released) {
-        browserProbeCache.delete(agentId)
-        probe = await runBrowserToolProbe(agentId)
-      }
-    }
-
-    if (!probe.ok) {
-      return {
-        ok: true,
-        reason: 'ready',
-        message: 'Browser relay preflight passed with probe warning. Proceeding with execution.',
-        detail: `probe-warning: ${probe.detail}`,
-      }
-    }
-  }
-
-  return {
-    ok: true,
-    reason: 'ready',
-    message: 'Browser relay preflight passed.',
-    detail: [
-      configRepair.repaired ? `[gateway-token-autofix] ${configRepair.detail}` : '',
-      `Gateway health OK and browser bootstrap succeeded.\n${started.detail}`,
-    ].filter(Boolean).join('\n'),
-  }
+async function checkBrowserPreflight(agentId?: string) {
+  return browserPreflightService.checkBrowserPreflight(agentId)
 }
 
 async function persistAllMissionRecords(reason: string) {
@@ -14072,127 +13974,6 @@ async function runOpenClawWithGeminiToolWritePolicy(
   })
 }
 
-function shouldFallbackGatewayAgentRun(result: OpenClawResult) {
-  if (result.code === 0) return false
-  const combined = `${result.stderr || ''}\n${result.stdout || ''}`
-  return (result.failureKind || classifyFailureKind(combined, 'failed')) === 'gateway_disconnect'
-}
-
-async function runControlCenterAgentRuntimeTurn(params: {
-  agentId: string
-  message: string
-  context: { executionWorkspace: string; doctrineWorkspace: string }
-  args: string[]
-  timeoutMs: number
-  cwd: string
-  envOverrides?: Record<string, string>
-  signal?: AbortSignal
-  retry?: boolean
-  gatewayChat?: {
-    enabled: boolean
-    sessionId: string
-    requestedSessionKey?: string
-    freshSession?: boolean
-    thinking: ThinkingLevel
-    fastMode?: FastModePreference
-    message: string
-    attachments?: unknown[]
-    streamObserverId?: string
-  }
-}): Promise<OpenClawResult> {
-  const run = (mode: AgentRuntimeFlagMode, extraEnv?: Record<string, string>) =>
-    runOpenClawWithGeminiToolWritePolicy(
-      params.agentId,
-      params.message,
-      params.context,
-      withAgentRuntimeFlags(params.args, { mode }),
-      params.timeoutMs,
-      {
-        cwd: params.cwd,
-        envOverrides: {
-          ...(params.envOverrides || {}),
-          ...(extraEnv || {}),
-        },
-        signal: params.signal,
-        retry: params.retry,
-      },
-    )
-
-  if (!CONTROL_CENTER_GATEWAY_AGENT_SESSIONS || FORCE_LOCAL_AGENT_RUNTIME) {
-    const local = await run('local')
-    return { ...local, runtimeTransport: 'local' as const }
-  }
-
-  let gatewayFallbackDetail = ''
-  try {
-    await ensureGatewayRunning()
-    startGatewayHealthMonitor()
-    if (await isGatewayHealthy()) {
-      if (CONTROL_CENTER_GATEWAY_CHAT_CLIENT && params.gatewayChat?.enabled) {
-        try {
-          return await runControlCenterGatewayChatTurn({
-            agentId: params.agentId,
-            message: params.gatewayChat.message,
-            attachments: params.gatewayChat.attachments,
-            sessionId: params.gatewayChat.sessionId,
-            requestedSessionKey: params.gatewayChat.requestedSessionKey,
-            freshSession: params.gatewayChat.freshSession,
-            thinking: params.gatewayChat.thinking,
-            fastMode: params.gatewayChat.fastMode,
-            timeoutMs: params.timeoutMs,
-            cwd: params.cwd,
-            streamObserverId: params.gatewayChat.streamObserverId,
-            signal: params.signal,
-          })
-        } catch (error) {
-          if (params.signal?.aborted) throw error
-          gatewayFallbackDetail = redactSensitiveText(
-            stripAnsi(String(error)).trim() || 'gateway chat client failed',
-          )
-        }
-      }
-      const gateway = await run('gateway')
-      if (!shouldFallbackGatewayAgentRun(gateway)) {
-        return {
-          ...gateway,
-          runtimeTransport: 'gateway' as const,
-          ...(gatewayFallbackDetail
-            ? {
-                gatewayFallbackDetail,
-                stderr: [gateway.stderr, `Gateway chat client fallback: ${gatewayFallbackDetail}`].filter(Boolean).join('\n'),
-              }
-            : {}),
-        }
-      }
-      gatewayFallbackDetail = redactSensitiveText(
-        [
-          gatewayFallbackDetail,
-          stripAnsi(`${gateway.stderr || ''}\n${gateway.stdout || ''}`).trim() || 'gateway-backed agent run failed',
-        ].filter(Boolean).join('\n'),
-      )
-    } else {
-      gatewayFallbackDetail = `gateway not healthy on port ${GATEWAY_HTTP_PORT}`
-    }
-  } catch (error) {
-    if (params.signal?.aborted) throw error
-    gatewayFallbackDetail = redactSensitiveText(String(error))
-  }
-
-  if (params.signal?.aborted) {
-    throw Object.assign(new Error('gateway agent run aborted before fallback'), { name: 'AbortError' })
-  }
-
-  const local = await run('local')
-  return {
-    ...local,
-    runtimeTransport: 'local' as const,
-    gatewayFallbackDetail,
-    stderr: [local.stderr, gatewayFallbackDetail ? `Gateway session fallback: ${gatewayFallbackDetail}` : '']
-      .filter(Boolean)
-      .join('\n'),
-  }
-}
-
 function resolveGoogleGeminiArtifactTarget(message: string, executionWorkspace: string) {
   const hint = extractFilenameHints(message)[0]
   if (!hint) return null
@@ -16879,6 +16660,8 @@ export type PartyManagementRoutesContext = {
   agentLocalConfigPath: typeof agentLocalConfigPath
   applyExecutionWorkspaceToLocalConfig: typeof applyExecutionWorkspaceToLocalConfig
   applyLocalConfigToGlobal: typeof applyLocalConfigToGlobal
+  assertAvatarImageUploadSignature: typeof assertAvatarImageUploadSignature
+  assertAvatarUploadBytes: typeof assertAvatarUploadBytes
   avatarUploadLimitBytes: typeof AVATAR_UPLOAD_LIMIT_BYTES
   avatarUploadLimitErrorMessage: typeof avatarUploadLimitErrorMessage
   avatarUploadFileName: typeof avatarUploadFileName
@@ -16955,6 +16738,8 @@ const partyManagementRoutesContext: PartyManagementRoutesContext = {
   agentLocalConfigPath,
   applyExecutionWorkspaceToLocalConfig,
   applyLocalConfigToGlobal,
+  assertAvatarImageUploadSignature,
+  assertAvatarUploadBytes,
   avatarUploadLimitBytes: AVATAR_UPLOAD_LIMIT_BYTES,
   avatarUploadLimitErrorMessage,
   avatarUploadFileName,
@@ -17104,622 +16889,128 @@ registerMissionRoutes(app, {
   readMissionEvents: (limit) => runtimeLedgerStore.readMissionEvents<MissionLifecycleEvent>(limit).catch(() => []),
 })
 
-async function runBufferedAgentTurnForStream(
-  body: Record<string, unknown>,
-  emit: StreamEmitter,
-  signal: AbortSignal,
-  reason?: BufferedRuntimeReason,
-): Promise<Record<string, unknown>> {
-  if (signal.aborted) throw gatewayChatAbortError('gateway agent run aborted before start')
-  const agent = typeof body.agent === 'string' ? body.agent.trim() : ''
-  const quietRuntimeHandoff = reason?.code === 'forced-openclaw-runtime'
-  const emitProgress = (id: string, text: string, extra: Record<string, unknown> = {}) => {
-    emit('progress', {
-      id,
-      text,
-      visibility: 'channel',
-      privacy: 'public',
-      transport: 'buffered-openclaw',
-      ...extra,
-    })
-  }
-
-  if (body.forceOpenClawRuntime === true) {
-    const gatewayStream = registerGatewayChatStreamObserver(emit, signal)
-    try {
-      emit('status', {
-        transport: 'gateway-chat',
-        ...(reason ? { reason: reason.code } : {}),
-        mode: 'progress',
-        label: 'OpenClaw session',
-        message: 'Agent accepted the turn; connecting to the Gateway chat session.',
-        liveTokens: true,
-      })
-      emit('progress', {
-        id: 'openclaw:gateway-chat',
-        text: 'Dispatching directly through Gateway chat.',
-        visibility: 'channel',
-        privacy: 'public',
-        transport: 'gateway-chat',
-        agent,
-        ...(reason ? { reason: reason.code } : {}),
-        liveTokens: true,
-      })
-      await delayMs(0)
-      if (signal.aborted) throw gatewayChatAbortError('gateway agent run aborted before Gateway dispatch')
-      return await runGatewayAgentTurnForStream(body, gatewayStream.observer.id, signal, {
-        route: body.source === 'clawtalk'
-          ? '/api/openclaw/agent-turn/stream:clawtalk-direct'
-          : '/api/openclaw/agent-turn/stream:command-console-direct',
-        note: body.source === 'clawtalk'
-          ? 'ClawTalk direct Gateway chat stream route'
-          : 'Command Console direct Gateway chat stream route',
-      })
-    } finally {
-      gatewayStream.dispose()
-    }
-  }
-
-  emit('status', {
-    transport: 'buffered-openclaw',
-    ...(reason ? { reason: reason.code } : {}),
-    mode: 'progress',
-    label: 'Working',
-    message: reason?.message || 'Agent is using tools for this request.',
-  })
-  emitProgress(
-    'openclaw:handoff',
-    reason?.message || 'Agent is using workspace or plugin tools.',
-    reason ? { reason: reason.code } : {},
-  )
-  emitProgress('openclaw:doctrine', 'Loading mission instructions and agent doctrine.', {
-    agent,
-    reason: reason?.code || 'runtime',
-  })
-  emitProgress('openclaw:context', 'Building current workspace and session context.', {
-    agent,
-    reason: reason?.code || 'runtime',
-  })
-  emitProgress('openclaw:prompt', 'Preparing agent prompt and tool policy.', {
-    agent,
-    reason: reason?.code || 'runtime',
-  })
-  if (reason?.code === 'browser') {
-    emitProgress('openclaw:browser', 'Preparing browser tool preflight and relay.', {
-      agent,
-      reason: reason.code,
-    })
-  }
-  void prewarmControlCenterGatewayAgentRuntime('runtime-stream')
-  const gatewayStream = registerGatewayChatStreamObserver(emit, signal)
-  const startedAt = Date.now()
-  let lastRunId = ''
-  let lastMilestoneAt = 0
-  const keepAlive = setInterval(() => {
-    const activeRun = agent
-      ? Array.from(activeOpenClawRuns.values()).find((run) => run.agentId === agent && run.status === 'running')
-      : undefined
-    const elapsedSeconds = Math.round((Date.now() - startedAt) / 1000)
-    const runPayload = activeRun
-      ? {
-          runId: activeRun.id,
-          sessionId: activeRun.sessionId,
-          elapsedSeconds: Math.round((activeRun.elapsedMs || (Date.now() - Date.parse(activeRun.startedAt))) / 1000),
-        }
-      : { elapsedSeconds }
-
-    if (activeRun && activeRun.id !== lastRunId) {
-      lastRunId = activeRun.id
-      lastMilestoneAt = Date.now()
-      emitProgress('openclaw:process', quietRuntimeHandoff ? 'Agent process started.' : 'Tool process started.', runPayload)
-    } else if (Date.now() - lastMilestoneAt >= 20_000) {
-      lastMilestoneAt = Date.now()
-      emitProgress(
-        activeRun ? 'openclaw:working' : 'openclaw:waiting',
-        quietRuntimeHandoff
-          ? activeRun ? `Agent working for ${elapsedSeconds}s.` : `Waiting for agent process for ${elapsedSeconds}s.`
-          : activeRun ? `Agent using tools for ${elapsedSeconds}s.` : `Waiting for tool process for ${elapsedSeconds}s.`,
-        runPayload,
-      )
-    }
-
-    emit('status', {
-      transport: 'buffered-openclaw',
-      ...(reason ? { reason: reason.code } : {}),
-      mode: 'progress',
-      keepAlive: true,
-      ...runPayload,
-      message: quietRuntimeHandoff
-        ? activeRun ? 'Agent is still working.' : 'Waiting for agent process to start.'
-        : activeRun ? 'Agent is still using tools.' : 'Waiting for tool process to start.',
-    })
-  }, 5_000)
-  keepAlive.unref?.()
-
-  let response: LocalJsonPostResponse
-  try {
-    response = await postLocalJsonNoHeaderTimeout('/api/openclaw/agent-turn', {
-      ...body,
-      gatewayStreamObserverId: gatewayStream.observer.id,
-    }, signal)
-  } catch (error) {
-    throw new Error([
-      'Control Center could not start the tool-backed agent turn.',
-      'The backend may have restarted or the local gateway may have dropped.',
-      `Original error: ${String(error)}`,
-    ].join('\n'))
-  } finally {
-    clearInterval(keepAlive)
-    gatewayStream.dispose()
-  }
-  const text = response.text || ''
-  let payload: Record<string, unknown>
-  try {
-    const parsedPayload = text ? unwrapCanonicalApiPayload(JSON.parse(text) as unknown) : {}
-    payload = parsedPayload && typeof parsedPayload === 'object' && !Array.isArray(parsedPayload)
-      ? parsedPayload as Record<string, unknown>
-      : {
-          ok: false,
-          reply: text.trim() ? `HTTP ${response.status}: ${trimTask(text, 300)}` : `HTTP ${response.status}`,
-          stderr: text,
-          code: response.status,
-        }
-  } catch {
-    payload = {
-      ok: false,
-      reply: text.trim() ? `HTTP ${response.status}: ${trimTask(text, 300)}` : `HTTP ${response.status}`,
-      stderr: text,
-      code: response.status,
-    }
-  }
-  const reply = typeof payload.reply === 'string' ? sanitizeUserVisibleRuntimeText(payload.reply) : ''
-  if (typeof payload.reply === 'string' && reply !== payload.reply) {
-    payload.reply = reply || 'No response returned.'
-    payload.runtimeLogsFiltered = true
-  }
-  const finalOk = response.ok && payload.ok !== false
-  emitProgress('openclaw:finalizing', finalOk ? 'Agent returned a final payload.' : 'Agent returned an error payload.', {
-    ok: finalOk,
-    failureKind: typeof payload.failureKind === 'string' ? payload.failureKind : undefined,
-  })
-  if (reply && !gatewayStream.observer.textStreamed) {
-    emit('delta', { text: redactHiddenReasoningAndSecrets(reply), buffered: true, transport: 'buffered-openclaw' })
-  }
-  const liveGatewayStream = gatewayStream.observer.textStreamed && payload.runtimeTransport === 'gateway-chat'
-  const failureKind = payload.failureKind || (!response.ok || payload.ok === false
-    ? classifyFailureKind(`${reply}\n${typeof payload.stderr === 'string' ? payload.stderr : ''}`, 'failed') || 'unknown'
-    : undefined)
-  return {
-    ...payload,
-    ok: response.ok && payload.ok !== false,
-    code: typeof payload.code === 'number' ? payload.code : response.status,
-    ...(failureKind ? { failureKind } : {}),
-    streaming: {
-      transport: liveGatewayStream ? 'gateway-chat' : 'buffered-openclaw',
-      liveTokens: liveGatewayStream,
-      ...(liveGatewayStream ? { buffered: false } : {}),
-    },
-  }
-}
-
-async function runGatewayAgentTurnForStream(
-  body: Record<string, unknown>,
-  streamObserverId: string,
-  signal: AbortSignal,
-  options: { route: string; note: string },
-): Promise<Record<string, unknown>> {
-  const agent = typeof body.agent === 'string' ? body.agent.trim() : ''
-  const rawMessage = typeof body.message === 'string' ? body.message : ''
-  const intentMessage = typeof body.intentMessage === 'string' ? body.intentMessage : rawMessage
-  const requestedSessionKey = typeof body.sessionKey === 'string' ? body.sessionKey.trim() : undefined
-  const requestedThinking = typeof body.thinking === 'string' ? body.thinking as ThinkingLevel : 'low'
-  const requestedTimeoutSeconds = typeof body.timeoutSeconds === 'number' ? body.timeoutSeconds : undefined
-  const requestedFastMode = body.fastMode
-  const requestedAttachments = Array.isArray(body.attachments) ? body.attachments : undefined
-
-  if (!isValidAgentId(agent) || isRetiredAgentId(agent)) throw new Error('Invalid or retired agent id.')
-  const streamObserver = gatewayChatStreamObserver(streamObserverId)
-  const emitGatewayStage = (text: string, extra: Record<string, unknown> = {}) => {
-    streamObserver?.emit('progress', {
-      transport: 'gateway-chat',
-      liveTokens: true,
-      text,
-      agent,
-      ...(requestedSessionKey ? { sessionKey: requestedSessionKey } : {}),
-      ...extra,
-    })
-  }
-
-  const isClawTalkRoute = /\bclawtalk\b/i.test(options.route)
-  if (isClawTalkRoute) {
-    emitGatewayStage('Checking ClawTalk runtime requirements.')
-    await ensureOpenclawAgentRunConfigDefaults()
-    const runtimeConfig = await readOpenclawConfig()
-    await ensureAgentRuntimeHealthPreflight(agent, runtimeConfig)
-    await ensureAgentSandboxCompatibleWithHost(agent)
-  }
-
-  if (signal.aborted) throw gatewayChatAbortError('gateway agent run aborted before Gateway health check')
-  startGatewayHealthMonitor()
-  if (isClawTalkRoute) {
-    await ensureGatewayRunning()
-    if (signal.aborted) throw gatewayChatAbortError('gateway agent run aborted before Gateway dispatch')
-    if (!await isGatewayHealthy()) throw new Error(`gateway not healthy on port ${GATEWAY_HTTP_PORT}`)
-  }
-  if (signal.aborted) throw gatewayChatAbortError('gateway agent run aborted before Gateway dispatch')
-
-  const intentText = intentMessage.trim() || rawMessage
-  emitGatewayStage('Preparing Gateway chat context.')
-  const clawTalkSetupIntent = isClawTalkSetupIntentMessage(intentText)
-  const clawTalkIntent = clawTalkSetupIntent || isClawTalkIntentMessage(intentText)
-  const agentPrimaryModelId = readAgentPrimaryModelIdSync(agent)
-  const vertexCompactMode = isGoogleGeminiModelId(agentPrimaryModelId)
-  const effectiveThinking = clawTalkIntent ? 'off' : thinkingForOpenClawRuntimeModel(agentPrimaryModelId, requestedThinking)
-  const effectiveFastMode = await resolveEffectiveAgentFastMode(agent, requestedFastMode)
-  const policyTimeoutSeconds = Math.max(
-    await resolveEffectiveAgentWorkTimeoutSeconds(agent, requestedTimeoutSeconds),
-    OPENCLAW_AGENT_TURN_TIMEOUT_FLOOR_SECONDS,
-  )
-  const effectiveTimeoutSeconds = policyTimeoutSeconds
-  emitGatewayStage('Resolving agent workspace.')
-  const context = await resolveAgentRunContext(agent)
-  const sessionScope = agentTurnSessionScope(agent, requestedSessionKey)
-  const explicitFreshSession = /^\s*\/new\b/i.test(rawMessage)
-  const wantsFreshSession = explicitFreshSession || vertexCompactMode
-  const cleanedMessage = explicitFreshSession ? rawMessage.replace(/^\s*\/new\b\s*/i, '') : rawMessage
-  const filenameResolution = await resolveFilenameHintsForMessage(cleanedMessage, context.executionWorkspace)
-  let effectiveMessage = filenameResolution.message
-  if (clawTalkIntent) effectiveMessage = buildClawTalkRuntimeInstruction(effectiveMessage, clawTalkSetupIntent)
-  const previousSessionId = agentTurnSessions.get(sessionScope)
-  const sessionId = wantsFreshSession ? randomUUID() : previousSessionId || randomUUID()
-  const isFreshSession = wantsFreshSession || !agentTurnSessions.has(sessionScope)
-  if (wantsFreshSession && previousSessionId) providerConversationHistories.delete(previousSessionId)
-  agentTurnSessions.set(sessionScope, sessionId)
-
-  emitGatewayStage('Preparing Gateway chat message.')
-  const party = await getPartyMembers().catch(() => [])
-  const self = party.find((member) => member.id === agent)
-  const identityLine = self?.name ? `You are ${self.name} (${agent}).` : `You are ${agent}.`
-  const enforcedMessage = [
-    identityLine,
-    'Do not claim to be any other person or agent.',
-    'If any prior persona conflicts with this identity, discard it now.',
-    '',
-    effectiveMessage,
-  ].join('\n')
-  const composedPrompt = composeAgentDoctrinePrompt(agent, enforcedMessage, context.executionWorkspace, context.doctrineWorkspace)
-  const gatewayMessage = composedPrompt
-  const runCwd = runCwdForContext(context)
-  const openClawTimeoutMs = agentWorkTimeoutWrapperMs(effectiveTimeoutSeconds)
-
-  await appendAgentPromptDump({
-    route: options.route,
-    agent,
-    sessionId,
-    thinking: effectiveThinking,
-    fastMode: effectiveFastMode,
-    timeoutSeconds: effectiveTimeoutSeconds,
-    cwd: runCwd,
-    requestMessage: rawMessage,
-    intentMessage,
-    finalMessage: gatewayMessage,
-    note: options.note,
-  })
-
-  emitGatewayStage('Connecting Gateway chat client.', { sessionId })
-  const result = await runControlCenterGatewayChatTurn({
-    agentId: agent,
-    message: gatewayMessage,
-    attachments: requestedAttachments,
-    sessionId,
-    requestedSessionKey,
-    freshSession: isFreshSession,
-    thinking: effectiveThinking,
-    fastMode: effectiveFastMode,
-    timeoutMs: openClawTimeoutMs,
-    cwd: runCwd,
-    streamObserverId,
-    signal,
-  })
-  const reply = extractAgentReply(result.stdout, result.stderr)
-  const ok = result.code === 0
-  return {
-    ok,
-    reply: reply || (ok ? 'No response returned.' : result.stderr || 'Agent turn failed.'),
-    stdout: result.stdout,
-    stderr: result.stderr,
-    code: result.code,
-    modelId: agentPrimaryModelId,
-    runtimeTransport: 'gateway-chat',
-    sessionId,
-    sessionKey: requestedSessionKey,
-    streaming: { transport: 'gateway-chat', liveTokens: true, buffered: false },
-  }
-}
-
-async function streamProviderAgentTurn(
-  input: {
-    agent: string
-    message: string
-    intentMessage?: string
-    thinking: 'off' | 'minimal' | 'low' | 'medium' | 'high'
-    timeoutSeconds?: number
-    attachments?: unknown[]
-    sessionKey?: string
-    source?: 'clawtalk'
-    forceOpenClawRuntime?: boolean
+const gatewayAgentTurnService = createGatewayAgentTurnService({
+  gatewayHttpPort: GATEWAY_HTTP_PORT,
+  openClawAgentTurnTimeoutFloorSeconds: OPENCLAW_AGENT_TURN_TIMEOUT_FLOOR_SECONDS,
+  isValidAgentId,
+  isRetiredAgentId,
+  streamObserver: gatewayChatStreamObserver,
+  ensureOpenclawAgentRunConfigDefaults,
+  readOpenclawConfig,
+  ensureAgentRuntimeHealthPreflight: async (agentId, runtimeConfig) => {
+    await ensureAgentRuntimeHealthPreflight(agentId, runtimeConfig as OpenClawConfigFile)
   },
-  emit: StreamEmitter,
-  signal: AbortSignal,
-): Promise<Record<string, unknown>> {
-  if (!isValidAgentId(input.agent) || isRetiredAgentId(input.agent)) {
-    throw new Error('Invalid or retired agent id.')
-  }
+  ensureAgentSandboxCompatibleWithHost,
+  startGatewayHealthMonitor,
+  ensureGatewayRunning,
+  isGatewayHealthy,
+  isClawTalkSetupIntentMessage,
+  isClawTalkIntentMessage,
+  buildClawTalkRuntimeInstruction,
+  readAgentPrimaryModelIdSync,
+  isGoogleGeminiModelId,
+  thinkingForOpenClawRuntimeModel,
+  resolveEffectiveAgentFastMode,
+  resolveEffectiveAgentWorkTimeoutSeconds,
+  resolveAgentRunContext,
+  agentTurnSessionScope,
+  agentTurnSessions,
+  deleteProviderConversationHistory: (sessionId) => {
+    providerConversationHistories.delete(sessionId)
+  },
+  resolveFilenameHintsForMessage,
+  getPartyMembers,
+  composeAgentDoctrinePrompt,
+  runCwdForContext,
+  agentWorkTimeoutWrapperMs,
+  appendAgentPromptDump,
+  runGatewayChatTurn: runControlCenterGatewayChatTurn,
+  extractAgentReply,
+})
 
-  const runtimeShortcut = parseAgentRuntimeShortcut(input.message)
-  if (runtimeShortcut || input.forceOpenClawRuntime) {
-    return runBufferedAgentTurnForStream(
-      {
-        ...input,
-        message: runtimeShortcut?.message || input.message,
-        intentMessage: runtimeShortcut?.message || input.intentMessage || input.message,
-        forceOpenClawRuntime: true,
-      },
-      emit,
-      signal,
-      agentRuntimeShortcutReason(runtimeShortcut),
-    )
-  }
+const runGatewayAgentTurnForStream = gatewayAgentTurnService.runGatewayAgentTurnForStream
 
-  const bufferedReason = bufferedAgentRuntimeReason(input.message, input.attachments, input.intentMessage)
-  if (bufferedReason) {
-    return runBufferedAgentTurnForStream(input, emit, signal, bufferedReason)
-  }
+const bufferedAgentTurnService = createBufferedAgentTurnService({
+  registerGatewayChatStreamObserver,
+  runGatewayAgentTurnForStream,
+  delayMs,
+  prewarmControlCenterGatewayAgentRuntime: (source) => {
+    void prewarmControlCenterGatewayAgentRuntime(source)
+  },
+  activeOpenClawRuns: () => activeOpenClawRuns.values(),
+  postLocalJsonNoHeaderTimeout,
+  unwrapCanonicalApiPayload,
+  trimTask,
+  sanitizeUserVisibleRuntimeText,
+  redactHiddenReasoningAndSecrets,
+  classifyFailureKind,
+})
 
-  const modelId = await resolveAgentPrimaryModelId(input.agent)
-  const openAiCodexBufferedReason = openAiCodexEmbeddedRuntimeReason(modelId, input.message, input.intentMessage)
-  if (openAiCodexBufferedReason) {
-    return runBufferedAgentTurnForStream(input, emit, signal, openAiCodexBufferedReason)
-  }
+const runBufferedAgentTurnForStream = bufferedAgentTurnService.runBufferedAgentTurnForStream
 
-  const googleGeminiBufferedReason = googleGeminiEmbeddedRuntimeReason(modelId, input.message, input.intentMessage)
-  if (googleGeminiBufferedReason) {
-    return runBufferedAgentTurnForStream(input, emit, signal, googleGeminiBufferedReason)
-  }
+const agentRuntimeService = createAgentRuntimeService({
+  controlCenterGatewayAgentSessions: CONTROL_CENTER_GATEWAY_AGENT_SESSIONS,
+  forceLocalAgentRuntime: FORCE_LOCAL_AGENT_RUNTIME,
+  controlCenterGatewayChatClient: CONTROL_CENTER_GATEWAY_CHAT_CLIENT,
+  gatewayHttpPort: GATEWAY_HTTP_PORT,
+  runOpenClawWithGeminiToolWritePolicy,
+  withAgentRuntimeFlags,
+  ensureGatewayRunning,
+  startGatewayHealthMonitor,
+  isGatewayHealthy,
+  runControlCenterGatewayChatTurn,
+  classifyFailureKind,
+  redactSensitiveText,
+})
 
-  const { provider: modelProvider, model } = splitModelId(modelId)
-  const isCodexSubscriptionTurn = isOpenAiCodexSubscriptionModel(modelId)
-  let provider = isCodexSubscriptionTurn ? 'openai-codex' : modelProvider
-  let providerConfig = STREAMING_PROVIDER_CONFIG[provider]
-  if (!providerConfig) {
-    return runBufferedAgentTurnForStream(input, emit, signal, {
-      code: 'unsupported-provider-streaming',
-      message: `Direct token streaming is not configured for ${provider || 'this provider'}, so the agent is using the tool-capable path.`,
-    })
-  }
+const runControlCenterAgentRuntimeTurn = agentRuntimeService.runControlCenterAgentRuntimeTurn
 
-  const envOverrides = await getAgentAuthEnv(input.agent)
-  const openAiSubscriptionAuth = isCodexSubscriptionTurn
-    ? await resolveOpenAiSubscriptionRequestAuth(envOverrides)
-    : null
-  if (openAiSubscriptionAuth) {
-    provider = openAiSubscriptionAuth.provider
-    providerConfig = openAiSubscriptionAuth.providerConfig
-  }
-  const requestAuth: ProviderRequestAuth | null = openAiSubscriptionAuth
-    ? openAiSubscriptionAuth.requestAuth
-    : await resolveProviderRequestAuth(provider, envOverrides, providerConfig.envKeys)
-  const capability = streamingCapabilityForModel(modelId)
-  if (!requestAuth) {
-    const providerAuthRequirement = isCodexSubscriptionTurn
-      ? 'OpenAI Codex OAuth credential or OpenAI API key'
-      : provider === 'google-vertex'
-      ? 'Google Cloud CLI auth (gcloud auth login) plus a configured Google Cloud project'
-      : provider === 'openai-codex'
-        ? 'OpenAI Codex OAuth credential'
-        : provider === 'openai'
-          ? 'OpenAI API key'
-        : provider === 'google'
-          ? `${providerConfig.envKeys.join(' or ')} or Google OAuth credential`
-          : providerConfig.envKeys.join(' or ')
-    const reply = [
-      `Streaming is wired for ${modelId}, but no usable ${providerAuthRequirement} is configured.`,
-      'Connect the provider in the app auth modal or set an environment key, then retry.',
-    ].join('\n')
-    emit('error', { message: reply, provider: isCodexSubscriptionTurn ? 'openai-codex' : provider, model: modelId, capability })
-    return {
-      ok: false,
-      reply,
-      stdout: '',
-      stderr: reply,
-      code: 401,
-      failureKind: 'auth_missing',
-      modelId,
-      provider: isCodexSubscriptionTurn ? 'openai-codex' : provider,
-      model,
-      streaming: {
-        ...capability,
-        configured: false,
-        liveTokens: false,
-      },
-    }
-  }
+const agentStreamingService = createAgentStreamingService({
+  streamingProviderConfig: STREAMING_PROVIDER_CONFIG,
+  isValidAgentId,
+  isRetiredAgentId,
+  parseAgentRuntimeShortcut,
+  agentRuntimeShortcutReason,
+  bufferedAgentRuntimeReason,
+  runBufferedAgentTurnForStream,
+  resolveAgentPrimaryModelId,
+  openAiCodexEmbeddedRuntimeReason,
+  googleGeminiEmbeddedRuntimeReason,
+  splitModelId,
+  isOpenAiCodexSubscriptionModel,
+  getAgentAuthEnv,
+  resolveOpenAiSubscriptionRequestAuth,
+  resolveProviderRequestAuth,
+  streamingCapabilityForModel,
+  resolveAgentRunContext,
+  agentTurnSessionScope,
+  agentTurnSessions,
+  deleteProviderConversationHistory: (sessionId) => {
+    providerConversationHistories.delete(sessionId)
+  },
+  resolveFilenameHintsForMessage,
+  getPartyMembers,
+  composeDirectProviderPrompt,
+  providerConversationMessagesForRequest,
+  streamOpenAiCompatibleCompletion,
+  streamOpenAiResponsesCompletion,
+  streamOpenAICodexResponsesCompletion,
+  streamAnthropicMessage,
+  streamGoogleVertexContent,
+  streamGeminiContent,
+  classifyFailureKind,
+  redactHiddenReasoningAndSecrets,
+  appendAgentDailyMemory,
+  trimTask,
+  cleanupDoctrineMirrorsAfterRun,
+  sanitizeUserVisibleRuntimeText,
+  saveProviderConversationTurn,
+  buildDoctrineSyncReport,
+  agentRuntimeContextPayload,
+  providerConversationMessageCount: (sessionId) => providerConversationHistories.get(sessionId)?.messages.length || 0,
+})
 
-  const context = await resolveAgentRunContext(input.agent)
-  const sessionScope = agentTurnSessionScope(input.agent, input.sessionKey)
-  const wantsFreshSession = /^\s*\/new\b/i.test(input.message)
-  const cleanedMessage = wantsFreshSession ? input.message.replace(/^\s*\/new\b\s*/i, '') : input.message
-  const filenameResolution = await resolveFilenameHintsForMessage(cleanedMessage, context.executionWorkspace)
-  const effectiveMessage = filenameResolution.message
-  const previousSessionId = agentTurnSessions.get(sessionScope)
-  const sessionId = wantsFreshSession ? randomUUID() : previousSessionId || randomUUID()
-  if (wantsFreshSession && previousSessionId) providerConversationHistories.delete(previousSessionId)
-  agentTurnSessions.set(sessionScope, sessionId)
-  const party = await getPartyMembers().catch(() => [])
-  const self = party.find((member) => member.id === input.agent)
-  const identityLine = self?.name ? `You are ${self.name} (${input.agent}).` : `You are ${input.agent}.`
-  const enforcedMessage = [
-    identityLine,
-    'Do not claim to be any other person or agent.',
-    'If any prior persona conflicts with this identity, discard it now.',
-    '',
-    effectiveMessage,
-  ].join('\n')
-  const composedPrompt = composeDirectProviderPrompt(input.agent, enforcedMessage, context.executionWorkspace)
-  const requestMessages = providerConversationMessagesForRequest(sessionId, provider, modelId, composedPrompt)
-  const effectiveStreamingKind: StreamingProviderKind =
-    isCodexSubscriptionTurn && provider === 'openai-codex'
-      ? 'openai-codex-responses'
-      : provider === 'openai' && requestAuth.type === 'oauth'
-      ? 'openai-codex-responses'
-      : providerConfig.kind
-  const streamingTransport: StreamingProviderKind =
-    effectiveStreamingKind === 'openai-codex-responses' && requestAuth.type === 'apiKey'
-      ? 'openai-responses'
-      : effectiveStreamingKind
-
-  emit('start', {
-    transport: streamingTransport,
-    provider,
-    model,
-    modelId,
-    sessionId,
-    conversationMessages: requestMessages.length,
-    capability,
-    runtimeContext: agentRuntimeContextPayload(input.agent, context),
-  })
-
-  let streamedReply: { content: string; reasoningContent?: string } = { content: '' }
-  try {
-    if (providerConfig.kind === 'openai-compatible') {
-      if (requestAuth.type !== 'apiKey') throw new Error(`${provider} streaming requires an API key credential.`)
-      streamedReply = await streamOpenAiCompatibleCompletion({
-        provider,
-        model,
-        endpoint: providerConfig.endpoint || '',
-        apiKey: requestAuth.value,
-        messages: requestMessages,
-        thinking: input.thinking,
-        signal,
-        emit,
-      })
-    } else if (effectiveStreamingKind === 'openai-responses') {
-      if (requestAuth.type !== 'apiKey') throw new Error('OpenAI Responses streaming requires an API key credential.')
-      streamedReply = await streamOpenAiResponsesCompletion({
-        provider,
-        model,
-        endpoint: providerConfig.endpoint || 'https://api.openai.com/v1/responses',
-        apiKey: requestAuth.value,
-        messages: requestMessages,
-        thinking: input.thinking,
-        signal,
-        emit,
-      })
-    } else if (effectiveStreamingKind === 'openai-codex-responses') {
-      if (requestAuth.type === 'oauth') {
-        streamedReply = await streamOpenAICodexResponsesCompletion({
-          model,
-          accessToken: requestAuth.accessToken,
-          messages: requestMessages,
-          thinking: input.thinking,
-          sessionId,
-          signal,
-          emit,
-        })
-      } else {
-        throw new Error('OpenAI Codex streaming requires an OpenAI Codex OAuth credential.')
-      }
-    } else if (providerConfig.kind === 'anthropic-messages') {
-      if (requestAuth.type !== 'apiKey') throw new Error('Anthropic streaming requires an API key credential.')
-      streamedReply = await streamAnthropicMessage({
-        model,
-        apiKey: requestAuth.value,
-        messages: requestMessages,
-        thinking: input.thinking,
-        signal,
-        emit,
-      })
-    } else if (providerConfig.kind === 'gemini-vertex-generate-content') {
-      streamedReply = await streamGoogleVertexContent({
-        model,
-        auth: requestAuth,
-        messages: requestMessages,
-        thinking: input.thinking,
-        signal,
-        emit,
-      })
-    } else {
-      streamedReply = await streamGeminiContent({
-        model,
-        auth: requestAuth,
-        messages: requestMessages,
-        thinking: input.thinking,
-        signal,
-        emit,
-      })
-    }
-  } catch (error) {
-    const failure = redactHiddenReasoningAndSecrets(String(error))
-    const failureKind = classifyFailureKind(failure, 'failed') || 'unknown'
-    await appendAgentDailyMemory(
-      input.agent,
-      `[turn] failed streaming | prompt: ${trimTask(input.message, 120)} | outcome: ${trimTask(failure, 220)}`,
-    ).catch(() => undefined)
-    return {
-      ok: false,
-      reply: failure,
-      stdout: '',
-      stderr: failure,
-      code: 1,
-      failureKind,
-      modelId,
-      provider,
-      model,
-      runtimeContext: agentRuntimeContextPayload(input.agent, context),
-      streaming: {
-        ...capability,
-        configured: true,
-        liveTokens: true,
-      },
-    }
-  }
-
-  await cleanupDoctrineMirrorsAfterRun(input.agent, context.executionWorkspace)
-
-  const finalReply = sanitizeUserVisibleRuntimeText(streamedReply.content).trim() || 'No response returned.'
-  saveProviderConversationTurn(sessionId, provider, modelId, requestMessages, {
-    content: finalReply,
-    reasoningContent: streamedReply.reasoningContent,
-  })
-  await appendAgentDailyMemory(
-    input.agent,
-    `[turn] completed streaming | prompt: ${trimTask(input.message, 120)}${
-      filenameResolution.notes.length ? ` | resolved: ${trimTask(filenameResolution.notes.join('; '), 120)}` : ''
-    } | outcome: ${trimTask(finalReply, 220)}`,
-  )
-
-  const doctrineSync = await buildDoctrineSyncReport(input.agent, context.executionWorkspace)
-
-  return {
-    ok: true,
-    reply: finalReply,
-    stdout: '',
-    stderr: '',
-    code: 0,
-    modelId,
-    provider,
-    model,
-    doctrineSync,
-    runtimeContext: agentRuntimeContextPayload(input.agent, context),
-    streaming: {
-      ...capability,
-      configured: true,
-      liveTokens: true,
-      sessionId,
-      conversationMessages: providerConversationHistories.get(sessionId)?.messages.length || requestMessages.length + 1,
-    },
-  }
-}
+const streamProviderAgentTurn = agentStreamingService.streamProviderAgentTurn
 
 registerAgentTurnRoutes(app, {
   AUTH_TOKEN,

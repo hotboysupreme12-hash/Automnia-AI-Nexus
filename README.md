@@ -463,6 +463,7 @@ The release flow can record artifact size, SHA-256 digest, update metadata, sign
 
 - [`docs/USER_GUIDE.md`](docs/USER_GUIDE.md): walkthrough for agents, missions, monitoring, plugins, ClawTalk, and model authentication.
 - [`docs/BETA_SUPPORT.md`](docs/BETA_SUPPORT.md): private beta disclaimer, known issues, Gateway recovery, local state reset, safe logs, data boundaries, supported OS, and feedback link.
+- [`docs/BETA_RELEASE_NOTES.md`](docs/BETA_RELEASE_NOTES.md): draft public beta release note with limitations, installer caveats, recovery steps, and qualification checklist.
 - [`docs/OPENCLAW_GATEWAY_COMMAND_CONSOLE_GUIDE.md`](docs/OPENCLAW_GATEWAY_COMMAND_CONSOLE_GUIDE.md): Gateway protocol and Command Console integration.
 - [`docs/PRODUCTION_RELEASE_RUNBOOK.md`](docs/PRODUCTION_RELEASE_RUNBOOK.md): signed Windows qualification and publication sequence.
 - [`docs/RELEASE_GOVERNANCE.md`](docs/RELEASE_GOVERNANCE.md): CI, signing, evidence, release, and threat-model policy.

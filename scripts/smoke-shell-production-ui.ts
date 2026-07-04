@@ -10,6 +10,9 @@ const settingsPanel = read('src/components/settings/SettingsPanel.tsx')
 const uiSettings = read('src/components/settings/uiSettings.ts')
 const missionPanel = read('src/components/mission/MissionDeploymentPanel.tsx')
 const missionPanelCss = read('src/components/mission/MissionDeploymentPanel.css')
+const monitorPanel = read('src/components/monitor/LiveOperationMonitor.tsx')
+const commandConsole = read('src/components/monitor/AgentResponseConsole.tsx')
+const pluginsPanel = read('src/components/plugins/PluginsPanel.tsx')
 const accessibility = read('src/styles/accessibility.css')
 const polish = read('src/styles/dystopai-theme/80-production-polish.css')
 const theme = read('src/dystopai-app-theme.css')
@@ -18,6 +21,9 @@ const packageJson = JSON.parse(read('package.json')) as { scripts?: Record<strin
 const productionPolishImport = "@import './styles/dystopai-theme/80-production-polish.css';"
 const referenceScreenshotImport = "@import './styles/dystopai-theme/90-reference-screenshot.css';"
 const typographyPolishImport = "@import './styles/dystopai-theme/95-typography-polish.css';"
+const navSelectionGlowImport = "@import './styles/dystopai-theme/96-nav-selection-glow.css';"
+const chatComposerImport = "@import './styles/dystopai-theme/97-chat-composer.css';"
+const flattenedShellImport = "@import './styles/dystopai-theme/98-flattened-shell.css';"
 
 assert.match(shell, /className="dy-skip-link" href="#dystopai-main"/, 'shell should expose a keyboard skip link')
 assert.match(shell, /<main id="dystopai-main" tabIndex=\{-1\}/, 'workspace should use a focusable main landmark')
@@ -58,6 +64,14 @@ assert.match(shell, /id="dystopai-workspace-title">\{activeTab\.label\}/, 'works
 assert.match(shell, /<p>\{activeTab\.description\}<\/p>/, 'workspace context should explain the active operator surface')
 assert.match(shell, /className="dy-workspace-context__meta"/, 'workspace context should host the static status controls')
 assert.match(shell, /aria-label="Workspace status summary"/, 'workspace status chips should remain named')
+assert.match(shell, /import \{ Button, StatusChip \} from '..\/ui'/, 'shell rail actions and workspace status chips should use local UI primitives')
+assert.match(primaryRailBlock, /<Button[\s\S]*data-tone="recruit"/, 'recruit rail action should use the Button primitive')
+assert.match(primaryRailBlock, /<Button[\s\S]*id=\{`nexus-nav-\$\{t\.id\}`\}/, 'primary rail destinations should use the Button primitive')
+assert.match(utilityRailBlock, /<Button[\s\S]*id="nexus-nav-settings"/, 'settings rail action should use the Button primitive')
+assert.match(shell, /<Button[\s\S]*className="dy-console-toggle"/, 'agent console header toggle should use the Button primitive')
+for (const indicator of ['agents', 'party', 'running', 'gateway', 'results']) {
+  assert.match(shell, new RegExp(`<StatusChip[\\s\\S]*data-indicator="${indicator}"`), `${indicator} workspace status should be rendered through StatusChip`)
+}
 assert.match(shell, /className="dy-workspace-context__state"[\s\S]*role="status" aria-live="polite"/, 'workspace runtime state should be announced')
 
 assert.match(polish, /\.dy-skip-link:focus-visible/, 'skip link should become visible on keyboard focus')
@@ -76,11 +90,18 @@ assert.match(polish, /\.dy-workspace-context__meta[\s\S]*flex-direction: column/
 assert.ok(theme.includes(productionPolishImport), 'production polish must remain in the theme cascade')
 assert.ok(theme.includes(referenceScreenshotImport), 'reference screenshot polish must remain in the theme cascade')
 assert.ok(theme.includes(typographyPolishImport), 'typography polish must remain in the theme cascade')
+assert.ok(theme.includes(navSelectionGlowImport), 'nav selection glow must remain in the theme cascade')
+assert.ok(theme.includes(chatComposerImport), 'chat composer polish must remain in the theme cascade')
+assert.ok(theme.includes(flattenedShellImport), 'flattened shell polish must remain in the theme cascade')
 const themeLayerImports = [...theme.matchAll(/@import '\.\/styles\/dystopai-theme\/(\d+)-([^']+)\.css';/g)]
 const layersAfterTypography = themeLayerImports
   .map((match) => ({ order: Number(match[1]), name: match[2] }))
   .filter((layer) => layer.order > 95)
-assert.deepEqual(layersAfterTypography, [], 'global dystopai theme layers must stop at 95-typography-polish.css')
+assert.deepEqual(layersAfterTypography, [
+  { order: 96, name: 'nav-selection-glow' },
+  { order: 97, name: 'chat-composer' },
+  { order: 98, name: 'flattened-shell' },
+], 'global dystopai theme layers after typography must remain limited to the current shell polish layers')
 assert.doesNotMatch(theme, /99-mission-quiet-redesign/, 'mission quiet redesign should no longer be a global late layer')
 assert.ok(
   theme.indexOf(productionPolishImport) < theme.indexOf(referenceScreenshotImport),
@@ -90,8 +111,34 @@ assert.ok(
   theme.indexOf(referenceScreenshotImport) < theme.indexOf(typographyPolishImport),
   'reference screenshot polish must load before the final typography layer',
 )
-assert.ok(theme.trimEnd().endsWith(typographyPolishImport), 'typography polish must load last in the theme cascade')
+assert.ok(theme.indexOf(typographyPolishImport) < theme.indexOf(navSelectionGlowImport), 'typography polish must load before nav-selection glow')
+assert.ok(theme.indexOf(navSelectionGlowImport) < theme.indexOf(chatComposerImport), 'nav-selection glow must load before chat composer polish')
+assert.ok(theme.indexOf(chatComposerImport) < theme.indexOf(flattenedShellImport), 'chat composer polish must load before flattened shell polish')
+assert.ok(theme.trimEnd().endsWith(flattenedShellImport), 'flattened shell polish must load last in the theme cascade')
 assert.match(missionPanel, /import '\.\/MissionDeploymentPanel\.css'/, 'mission late overrides should be owned by the mission component')
+assert.match(monitorPanel, /import \{ Badge, Button, IconButton, StatusChip \} from '\.\.\/ui'/, 'Monitor controls and status chips should use local UI primitives')
+assert.match(commandConsole, /import \{ Badge, Button, IconButton, StatusChip \} from '\.\.\/ui'/, 'Command Console controls and runtime chips should use local UI primitives')
+assert.match(missionPanel, /import \{ Badge, Button, StatusChip \} from '\.\.\/ui'/, 'Mission action rows and mission status should use local UI primitives')
+assert.match(pluginsPanel, /import \{ Badge, Button, IconButton, StatusChip \} from '\.\.\/ui'/, 'Plugin action rows and summary chips should use local UI primitives')
+for (const [sourceName, source, primitive] of [
+  ['Monitor', monitorPanel, 'Button'],
+  ['Monitor', monitorPanel, 'IconButton'],
+  ['Monitor', monitorPanel, 'StatusChip'],
+  ['Monitor', monitorPanel, 'Badge'],
+  ['Command Console', commandConsole, 'Button'],
+  ['Command Console', commandConsole, 'IconButton'],
+  ['Command Console', commandConsole, 'StatusChip'],
+  ['Command Console', commandConsole, 'Badge'],
+  ['Missions', missionPanel, 'Button'],
+  ['Missions', missionPanel, 'StatusChip'],
+  ['Missions', missionPanel, 'Badge'],
+  ['Plugins', pluginsPanel, 'Button'],
+  ['Plugins', pluginsPanel, 'IconButton'],
+  ['Plugins', pluginsPanel, 'StatusChip'],
+  ['Plugins', pluginsPanel, 'Badge'],
+] as const) {
+  assert.match(source, new RegExp(`<${primitive}\\b`), `${sourceName} should render ${primitive} primitives`)
+}
 assert.match(missionPanelCss, /Component-owned mission pass/, 'mission component CSS should explain its ownership')
 assert.doesNotMatch(missionPanelCss, /font-size:\s*(?:[0-9]|10(?:\.\d+)?)px\b/, 'mission component CSS should not reintroduce sub-11px text')
 assert.match(accessibility, /:focus-visible[\s\S]*outline: 2px solid var\(--focus-ring\)/, 'token-backed focus rings should stay visible on dark surfaces')

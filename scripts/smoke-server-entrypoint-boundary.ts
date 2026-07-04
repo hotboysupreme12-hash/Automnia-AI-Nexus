@@ -48,6 +48,7 @@ const reporter = read('scripts/report-server-index-architecture.mjs')
 const packageJson = JSON.parse(read('package.json')) as { scripts?: Record<string, string> }
 const CONTROL_PLANE_MAX_LINES = 29_000
 const CONTROL_PLANE_GUARD_COMMENT = 'No new domain logic goes here.'
+const CONTROL_PLANE_NEXT_WARNING_LINES = 12_000
 
 const entryLines = entry.split(/\r?\n/).length
 const controlPlaneLines = controlPlane.split(/\r?\n/).length
@@ -60,6 +61,10 @@ assert.ok(controlPlane.startsWith('// No new domain logic goes here.'), 'control
 assert.match(controlPlane, /target service folder from docs\/BETA_CODEBASE_SPLIT_PLAN\.md/, 'controlPlane.ts guard must direct new backend behavior to a target service folder')
 assert.ok(CONTROL_PLANE_MAX_LINES <= 29_000, `controlPlane.ts extraction budget must not be loosened above 29,000 lines: ${CONTROL_PLANE_MAX_LINES}`)
 assert.ok(controlPlaneLines <= CONTROL_PLANE_MAX_LINES, `controlPlane.ts exceeded the current extraction budget: ${controlPlaneLines} lines`)
+assert.ok(CONTROL_PLANE_NEXT_WARNING_LINES <= 12_000, `controlPlane.ts next milestone warning budget must not exceed 12,000 lines: ${CONTROL_PLANE_NEXT_WARNING_LINES}`)
+if (controlPlaneLines > CONTROL_PLANE_NEXT_WARNING_LINES) {
+  console.warn(`controlPlane.ts remains above the next milestone warning budget: ${controlPlaneLines}/${CONTROL_PLANE_NEXT_WARNING_LINES} lines`)
+}
 assert.equal(inlineRoutes.length, 0, `controlPlane.ts must not own inline API routes: ${inlineRoutes.length}`)
 assert.match(controlPlane, /prepareSourceOpenClawVendorIfMissing/, 'controlPlane.ts should self-heal source OpenClaw vendor artifacts before runtime resolution')
 
@@ -405,5 +410,45 @@ for (const script of ['dev:server', 'build:server', 'start']) {
 }
 assert.equal(packageJson.scripts?.['smoke:server-architecture'], 'tsx scripts/smoke-server-entrypoint-boundary.ts')
 assert.ok(packageJson.scripts?.['test:ci']?.includes('npm run smoke:server-architecture'))
+for (const script of [
+  'smoke:plugins-control-plane',
+  'smoke:plugin-inventory-service',
+  'smoke:plugin-install-service',
+  'smoke:plugin-diagnostics-service',
+  'smoke:plugin-runtime-service',
+  'smoke:auth-provider-model',
+  'smoke:model-catalog-service',
+  'smoke:provider-auth-service',
+  'smoke:oauth-callback-service',
+  'smoke:provider-setup-service',
+  'smoke:mission-verification',
+  'smoke:mission-report',
+  'smoke:mission-report-service',
+  'smoke:mission-recovery',
+  'smoke:mission-restart-recovery',
+  'smoke:mission-team-sync',
+  'smoke:mission-durable-state',
+  'smoke:mission-idempotency',
+  'smoke:mission-cron-reconciliation',
+  'smoke:mission-scheduler',
+  'smoke:mission-cancellation',
+  'smoke:mission-runtime-references',
+  'smoke:mission-gateway-reconciliation',
+  'smoke:mission-lifecycle-projection',
+  'smoke:mission-backend-owned',
+  'smoke:runtime-status-control-plane',
+  'smoke:runtime-actions-control-plane',
+  'smoke:runtime-recovery-soak',
+  'smoke:gateway-auth-hardening',
+  'smoke:gateway-lifecycle',
+  'smoke:gateway-diagnostics',
+  'smoke:gateway-logs',
+  'smoke:gateway-chat',
+  'smoke:filesystem-control-plane',
+  'smoke:command-console-files',
+  'smoke:renderer-store-boundary',
+] as const) {
+  assert.ok(packageJson.scripts?.['test:ci']?.includes(`npm run ${script}`), `npm test must keep ${script} in the local CI gate`)
+}
 
 console.log(`server architecture contract ok (${entryLines} entry lines, ${controlPlaneLines}/${CONTROL_PLANE_MAX_LINES} composition lines, ${inlineRoutes.length} inline routes, guard: ${CONTROL_PLANE_GUARD_COMMENT})`)

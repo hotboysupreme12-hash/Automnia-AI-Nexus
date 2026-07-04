@@ -8,6 +8,7 @@ import type { RuntimeCronJob } from '../../hooks/useRuntimeStatus'
 import { ActionStatusBanner } from '../common/ActionStatusBanner'
 import { preloadMissionIconAssets } from '../mission/missionIconAssets'
 import { applyStoredUiSettings } from '../settings/uiSettings'
+import { Button, StatusChip } from '../ui'
 
 const PartySelector = lazy(() => import('../party/PartySelector').then((module) => ({ default: module.PartySelector })))
 const ActivePartyStrip = lazy(() => import('../party/ActivePartyStrip').then((module) => ({ default: module.ActivePartyStrip })))
@@ -431,82 +432,90 @@ export function NexusShell() {
         </div>
 
         <nav className="dy-human-nav flex flex-col" aria-label="Primary navigation">
-          <button
-            type="button"
+          <Button
+            variant="quiet"
             className="dy-human-nav-action flex items-center gap-3 text-left"
             data-tone="recruit"
             aria-label="Recruit a new agent"
             onClick={() => setRecruitOpen(true)}
+            leadingIcon={(
+              <span className="dy-human-nav-icon" style={navIconStyle(RECRUIT_ICON_SRC)}>
+                <img className="dy-human-nav-icon-img" src={RECRUIT_ICON_SRC} alt="" />
+              </span>
+            )}
           >
-            <span className="dy-human-nav-icon" style={navIconStyle(RECRUIT_ICON_SRC)}>
-              <img className="dy-human-nav-icon-img" src={RECRUIT_ICON_SRC} alt="" />
-            </span>
             <span className="dy-human-nav-copy">
               <strong className="block">Recruit</strong>
               <span className="block">Discover</span>
             </span>
-          </button>
+          </Button>
           {PRIMARY_WORKSPACES.map((t) => (
-            <button
+            <Button
               key={t.id}
               id={`nexus-nav-${t.id}`}
-              type="button"
+              variant="quiet"
               onClick={() => selectTab(t.id)}
               aria-label={`${t.label} ${t.railMeta}`}
               aria-current={tab === t.id ? 'page' : undefined}
               data-tone={t.tone}
               className={`flex items-center gap-3 text-left ${tab === t.id ? 'is-active' : ''}`}
+              leadingIcon={(
+                <span className="dy-human-nav-icon" style={navIconStyle(t.iconSrc)}>
+                  <img className="dy-human-nav-icon-img" src={t.iconSrc} alt="" />
+                </span>
+              )}
             >
-              <span className="dy-human-nav-icon" style={navIconStyle(t.iconSrc)}>
-                <img className="dy-human-nav-icon-img" src={t.iconSrc} alt="" />
-              </span>
               <span className="dy-human-nav-copy">
                 <strong className="block">{t.label}</strong>
                 <span className="block">{t.railMeta}</span>
               </span>
-            </button>
+            </Button>
           ))}
         </nav>
 
         <div className="dy-human-rail-bottom">
           <nav className="dy-human-nav dy-human-nav--utility flex flex-col" aria-label="Utility navigation">
-            <button
+            <Button
               id="nexus-nav-settings"
-              type="button"
+              variant="quiet"
               className={`dy-human-nav-utility flex items-center gap-3 text-left ${tab === 'settings' ? 'is-active' : ''}`}
               aria-label="Open runtime settings"
               aria-current={tab === 'settings' ? 'page' : undefined}
               onClick={() => selectTab('settings')}
+              leadingIcon={(
+                <span className="dy-human-nav-icon dy-human-nav-icon--settings" aria-hidden="true">
+                  <svg viewBox="0 0 24 24">
+                    <path d="M12 8.25a3.75 3.75 0 1 0 0 7.5 3.75 3.75 0 0 0 0-7.5Z" />
+                    <path d="M19.5 13.5v-3l-2.35-.42a7.72 7.72 0 0 0-.72-1.73l1.36-1.96-2.12-2.12-1.96 1.36c-.55-.31-1.13-.55-1.73-.72L11.55 2.5h-3l-.42 2.35c-.6.17-1.18.41-1.73.72L4.44 4.21 2.32 6.33l1.36 1.96c-.31.55-.55 1.13-.72 1.73L.61 10.45v3l2.35.42c.17.6.41 1.18.72 1.73l-1.36 1.96 2.12 2.12 1.96-1.36c.55.31 1.13.55 1.73.72l.42 2.35h3l.42-2.35c.6-.17 1.18-.41 1.73-.72l1.96 1.36 2.12-2.12-1.36-1.96c.31-.55.55-1.13.72-1.73l2.35-.42Z" />
+                  </svg>
+                </span>
+              )}
             >
-              <span className="dy-human-nav-icon dy-human-nav-icon--settings" aria-hidden="true">
-                <svg viewBox="0 0 24 24">
-                  <path d="M12 8.25a3.75 3.75 0 1 0 0 7.5 3.75 3.75 0 0 0 0-7.5Z" />
-                  <path d="M19.5 13.5v-3l-2.35-.42a7.72 7.72 0 0 0-.72-1.73l1.36-1.96-2.12-2.12-1.96 1.36c-.55-.31-1.13-.55-1.73-.72L11.55 2.5h-3l-.42 2.35c-.6.17-1.18.41-1.73.72L4.44 4.21 2.32 6.33l1.36 1.96c-.31.55-.55 1.13-.72 1.73L.61 10.45v3l2.35.42c.17.6.41 1.18.72 1.73l-1.36 1.96 2.12 2.12 1.96-1.36c.55.31 1.13.55 1.73.72l.42 2.35h3l.42-2.35c.6-.17 1.18-.41 1.73-.72l1.96 1.36 2.12-2.12-1.36-1.96c.31-.55.55-1.13.72-1.73l2.35-.42Z" />
-                </svg>
-              </span>
               <span className="dy-human-nav-copy">
                 <strong className="block">Settings</strong>
                 <span className="block">System</span>
               </span>
-            </button>
-            <button
-              type="button"
+            </Button>
+            <Button
+              variant="quiet"
               className="dy-human-nav-utility flex items-center gap-3 text-left"
               aria-label="Open DystopAI documentation"
               onClick={() => window.open('https://github.com/hotboysupreme12-hash/DystopAI-Core', '_blank', 'noopener,noreferrer')}
+              leadingIcon={(
+                <span className="dy-human-nav-icon dy-human-nav-icon--help" aria-hidden="true">
+                  <svg viewBox="0 0 24 24">
+                    <circle cx="12" cy="12" r="9" />
+                    <path d="M9.75 9.5a2.35 2.35 0 0 1 4.5 1c0 1.7-2.25 1.85-2.25 3.5" />
+                    <path d="M12 17.25h.01" />
+                  </svg>
+                </span>
+              )}
             >
-              <span className="dy-human-nav-icon dy-human-nav-icon--help" aria-hidden="true">
-                <svg viewBox="0 0 24 24">
-                  <circle cx="12" cy="12" r="9" />
-                  <path d="M9.75 9.5a2.35 2.35 0 0 1 4.5 1c0 1.7-2.25 1.85-2.25 3.5" />
-                  <path d="M12 17.25h.01" />
-                </svg>
-              </span>
               <span className="dy-human-nav-copy">
                 <strong className="block">Help</strong>
                 <span className="block">Documentation</span>
               </span>
-            </button>
+            </Button>
           </nav>
 
         </div>
@@ -522,42 +531,41 @@ export function NexusShell() {
           </div>
           <div className="dy-workspace-context__meta">
             <div className="dy-status-grid flex flex-wrap items-center justify-end gap-2" aria-label="Workspace status summary">
-              <span className="badge dy-status-chip" data-tone="neutral" data-indicator="agents">
-                <span className="dy-status-value">
-                  {agentCount}
-                </span>
-                <span className="dy-status-label">Agents</span>
-              </span>
-              <span className="badge badge--live dy-status-chip" data-tone="live" data-indicator="party">
-                <span className="dy-status-value">
-                  {activePartyCount}
-                </span>
-                <span className="dy-status-label">In Party</span>
-              </span>
-              <span
+              <StatusChip
+                className="badge dy-status-chip"
+                data-tone="neutral"
+                data-indicator="agents"
+                label="Agents"
+                value={agentCount}
+              />
+              <StatusChip
+                className="badge badge--live dy-status-chip"
+                data-tone="live"
+                data-indicator="party"
+                label="In Party"
+                value={activePartyCount}
+                tone="info"
+              />
+              <StatusChip
                 className={busyAgentCount ? 'badge badge--warn dy-status-chip' : 'badge dy-status-chip'}
                 data-indicator="running"
-                data-status-kind="running-agents"
-                data-state={busyAgentCount ? 'active' : 'idle'}
                 data-tone={busyAgentCount ? 'warn' : 'neutral'}
+                data-status-kind="running-agents"
+                label="Running"
+                state={busyAgentCount ? 'active' : 'idle'}
+                tone={busyAgentCount ? 'warning' : 'neutral'}
                 title={busyAgentCount ? `${busyAgentCount} agent${busyAgentCount === 1 ? '' : 's'} running` : 'No agents running'}
-              >
-                <span className="dy-status-value">
-                  {busyAgentCount}
-                </span>
-                <span className="dy-status-label">Running</span>
-              </span>
-              <span
+                value={busyAgentCount}
+              />
+              <StatusChip
                 className={gatewayOnline ? 'badge badge--success dy-status-chip' : 'badge dy-status-chip'}
                 data-indicator="gateway"
-                data-state={gatewayOnline ? 'online' : runtimeStatus ? 'offline' : 'loading'}
                 data-tone={gatewayOnline ? 'success' : 'neutral'}
-              >
-                <span className="dy-status-value">
-                  {gatewayOnline ? 'ON' : runtimeStatus ? 'OFF' : '...'}
-                </span>
-                <span className="dy-status-label">Gateway</span>
-              </span>
+                label="Gateway"
+                state={gatewayOnline ? 'online' : runtimeStatus ? 'offline' : 'loading'}
+                tone={gatewayOnline ? 'success' : 'neutral'}
+                value={gatewayOnline ? 'ON' : runtimeStatus ? 'OFF' : '...'}
+              />
               <button
                 type="button"
                 className={activeCronCount ? 'badge badge--live dy-status-chip' : 'badge dy-status-chip'}
@@ -584,22 +592,23 @@ export function NexusShell() {
                 </span>
                 <span className="dy-status-label">Cron</span>
               </button>
-              <span
+              <StatusChip
                 className={responseCount ? 'badge badge--success dy-status-chip' : 'badge dy-status-chip'}
                 data-tone={responseCount ? 'success' : 'neutral'}
                 data-indicator="results"
-                data-state={responseCount ? 'active' : 'idle'}
-              >
-                <span className="dy-status-value">
-                  {responseCount}
-                </span>
-                <span className="dy-status-label">Results</span>
-              </span>
+                label="Results"
+                state={responseCount ? 'active' : 'idle'}
+                tone={responseCount ? 'success' : 'neutral'}
+                value={responseCount}
+              />
               {activeMission && (
-                <span className={`badge dy-status-chip ${missionRunning ? 'badge--warn' : 'badge--success'}`} data-tone={missionRunning ? 'warn' : 'success'}>
-                  <span className="dy-status-value">{activeMission.status}</span>
-                  <span className="dy-status-label">Mission</span>
-                </span>
+                <StatusChip
+                  className={`badge dy-status-chip ${missionRunning ? 'badge--warn' : 'badge--success'}`}
+                  data-tone={missionRunning ? 'warn' : 'success'}
+                  label="Mission"
+                  tone={missionRunning ? 'warning' : 'success'}
+                  value={activeMission.status}
+                />
               )}
             </div>
             <div className="dy-workspace-context__state" data-state={workspaceStateTone} role="status" aria-live="polite">
@@ -655,11 +664,21 @@ export function NexusShell() {
                 <div className="dy-active-party-pane min-w-0">
                   <ActivePartyStrip
                     toolbar={
-                      <button
-                        type="button"
+                      <Button
+                        variant="quiet"
+                        size="compact"
                         className="dy-console-toggle"
                         aria-pressed={!isAgentConsoleVisible}
                         aria-label={isAgentConsoleVisible ? 'Hide command console' : 'Show command console'}
+                        leadingIcon={(
+                          <span className="dy-console-toggle__icon" aria-hidden="true">
+                            <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round">
+                              <path d="M4.5 6.5h11" />
+                              <path d="M4.5 10h7" />
+                              <path d="M4.5 13.5h11" />
+                            </svg>
+                          </span>
+                        )}
                         onPointerDown={(event) => {
                           event.preventDefault()
                           setAgentConsoleVisible((visible) => !visible)
@@ -670,15 +689,8 @@ export function NexusShell() {
                           setAgentConsoleVisible((visible) => !visible)
                         }}
                       >
-                        <span className="dy-console-toggle__icon" aria-hidden="true">
-                          <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round">
-                            <path d="M4.5 6.5h11" />
-                            <path d="M4.5 10h7" />
-                            <path d="M4.5 13.5h11" />
-                          </svg>
-                        </span>
                         <span>{isAgentConsoleVisible ? 'Hide console' : 'Show console'}</span>
-                      </button>
+                      </Button>
                     }
                   />
                 </div>

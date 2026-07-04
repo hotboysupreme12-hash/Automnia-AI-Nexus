@@ -14,6 +14,18 @@ Protect `main` in the repository settings before treating a build as release eli
 
 These settings are governance requirements. The repository can document and smoke-test their expected names, but GitHub branch protection itself must be enforced in GitHub settings or the GitHub API by a repository administrator.
 
+## Beta-Ready Release Gate
+
+Do not apply a beta-ready label, publish a beta handoff, or call a build public-beta ready until the `Control Plane CI / Hardened control plane` check has passed on the exact commit being evaluated. A local `npm test` pass is useful developer evidence, but it does not replace the hosted Control Plane CI gate because beta readiness depends on the Windows packaging, packaged launch, release evidence, and artifact upload path running in GitHub Actions.
+
+The Control Plane CI artifact set for the evaluated commit must include:
+
+- `dystopai-release-evidence`, including release SBOM/checksum evidence plus `release/evidence/ci-logs/npm-test.log`, `release/evidence/ci-logs/unit-coverage.log`, `release/evidence/bundle-budgets/renderer-bundle-budgets.log`, `release/evidence/ci-logs/packaged-electron-launch.log`, `release/evidence/ci-logs/packaged-beta-screenshots.log`, and `release/evidence/ci-logs/release-validate.log`;
+- `dystopai-packaged-beta-screenshots`, containing the packaged-production screenshot manifest and PNG set from `npm run capture:packaged-beta-screenshots`;
+- when the run is not a pull request and unsigned beta packaging is allowed, `dystopai-windows-installer-candidate`.
+
+If any artifact upload is missing, empty, or generated from a different commit, the release remains a beta candidate only. Record the green workflow URL, commit SHA, and artifact names in `docs/CI_EVIDENCE.md` only after the hosted run exists.
+
 ## Public Release Signing
 
 Public release validation must fail closed when signing evidence is absent. A public release is qualified by the dedicated `Public Release Candidate` workflow on a `v*` tag or a manual `workflow_dispatch` run. The workflow sets `DYSTOPAI_RELEASE_REQUIRE_SIGNING=true`; local validation can enforce the same policy explicitly.

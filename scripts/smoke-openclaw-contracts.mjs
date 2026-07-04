@@ -51,9 +51,11 @@ const routingHelpers = read('server/integrations/agentRoutingHelpers.ts')
 const gatewayLifecycleService = read('server/services/gateway/gatewayLifecycleService.ts')
 const gatewayLogService = read('server/services/gateway/gatewayLogService.ts')
 const gatewayChatService = read('server/services/gateway/gatewayChatService.ts')
+const gatewayAgentTurnService = read('server/services/agents/gatewayAgentTurnService.ts')
 const runtimeStatusService = read('server/services/runtime/runtimeStatusService.ts')
 const runtimeActionService = read('server/services/runtime/runtimeActionService.ts')
 const agentTurnRoutes = read('server/routes/agentTurnRoutes.ts')
+const agentRuntimeService = read('server/services/agents/agentRuntimeService.ts')
 const runtimeLedger = read('server/runtimeLedger.ts')
 const runtimeLedgerStore = read('server/state/runtimeLedgerStore.ts')
 const runtimeHook = read('src/hooks/useRuntimeStatus.ts')
@@ -105,7 +107,7 @@ assertOrderedIncludes(gatewayClientStartup, [
   'throw new Error(`gateway not healthy on port ${options.gatewayHttpPort}`)',
   'stopStaleClient()',
 ], 'Gateway chat client only runs startup when health probe fails')
-assertIncludes(server, "gateway agent run aborted before Gateway dispatch", 'Command Console Gateway abort checkpoint')
+assertIncludes(gatewayAgentTurnService, "gateway agent run aborted before Gateway dispatch", 'Command Console Gateway abort checkpoint')
 assertIncludes(server, 'runtimeLedgerStore.appendRuntimeRun(openClawRunLedgerPayload(record), { mirrorJsonl: false })', 'Runtime run hot path writes SQLite-primary state through the store')
 assertIncludes(server, 'appendGatewayLogEntry: (entry) => runtimeLedgerStore.appendGatewayEvent(entry, { sqlite: false })', 'Gateway log ledger append remains mirrored through the service store boundary')
 assertIncludes(gatewayLogService, 'void Promise.resolve(options.appendGatewayLogEntry({', 'Gateway log hot path starts async ledger mirroring')
@@ -124,10 +126,10 @@ assertIncludes(runtimeStatusService, 'runtimeLedgerStatus({ sqlite: false })', '
 assertIncludes(runtimeStatusService, 'listActiveCronJobViews({ sqlite: false })', 'Runtime status summaries avoid synchronous cron SQLite reads')
 assertIncludes(runtimeLedger, 'runtimeLedgerStatus(options: LedgerReadOptions = {})', 'Runtime ledger status can skip synchronous SQLite')
 assertIncludes(runtimeLedgerStore, 'status: (options?: RuntimeLedgerReadOptions) => runtimeLedgerStatus(options)', 'Runtime ledger store exposes non-blocking status reads')
-assertIncludes(server, 'const gatewayMessage = isClawTalkRoute ? composedPrompt : effectiveMessage', 'Command Console plain Gateway chat message')
+assertIncludes(gatewayAgentTurnService, 'const gatewayMessage = options.composeAgentDoctrinePrompt(', 'Command Console Gateway chat message composition')
 assertIncludes(agentTurnRoutes, "const forcedGatewayConsoleTurn = parsed.data.forceOpenClawRuntime && parsed.data.source !== 'clawtalk'", 'Command Console forced Gateway fast path')
 assertIncludes(agentTurnRoutes, "if (!forcedGatewayConsoleTurn)", 'Command Console skips heavy route preflight for forced Gateway turns')
-assertIncludes(server, 'if (isClawTalkRoute)', 'ClawTalk keeps channel-specific runtime preflight')
+assertIncludes(gatewayAgentTurnService, 'if (isClawTalkRoute)', 'ClawTalk keeps channel-specific runtime preflight')
 assertIncludes(gatewayChatService, "request('chat.send'", 'Gateway chat.send call')
 assertNotIncludes(gatewayChatService, 'deliver: false', 'Command Console chat.send leaves WebChat delivery semantics to Gateway')
 assertNotIncludes(gatewayChatService, 'suppressCommandInterpretation: true', 'Command Console chat.send keeps Gateway command semantics')
@@ -222,9 +224,9 @@ const agentTurnStreamRoute = sectionBetween(
   'Command Console stream route',
 )
 const agentRuntimeTurn = sectionBetween(
-  server,
+  agentRuntimeService,
   'async function runControlCenterAgentRuntimeTurn',
-  'function resolveGoogleGeminiArtifactTarget',
+  'return { runControlCenterAgentRuntimeTurn }',
   'Command Console runtime fallback ladder',
 )
 

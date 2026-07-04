@@ -37,8 +37,8 @@ export function StatusChip({
     >
       <span className="dui-status-chip__dot" aria-hidden="true" />
       {icon ? <span className="dui-status-chip__icon" aria-hidden="true">{icon}</span> : null}
-      <span className="dui-status-chip__label">{label}</span>
-      <span className="dui-status-chip__value">{visibleValue}</span>
+      <span className="dui-status-chip__label dy-status-label">{label}</span>
+      <span className="dui-status-chip__value dy-status-value">{visibleValue}</span>
     </span>
   )
 }
