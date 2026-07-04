@@ -839,6 +839,9 @@ function appOwnershipRoots() {
         appRoot(),
         process.resourcesPath,
         path.dirname(process.execPath),
+        process.platform === 'darwin' && process.execPath.includes('.app/Contents/MacOS/')
+          ? process.execPath.slice(0, process.execPath.indexOf('.app/Contents/MacOS/') + 4)
+          : '',
         DYSTOPAI_USER_DATA_DIR,
         NPM_TOOLCHAIN_ROOT,
         resolveOpenClawHomeDir(),
@@ -1337,9 +1340,11 @@ function startControlServerProcess(serverEntry) {
       ...process.env,
       CONTROL_CENTER_EXIT_ON_PORT_ERROR: process.env.CONTROL_CENTER_EXIT_ON_PORT_ERROR || '1',
       DYSTOPAI_DESKTOP_SERVER_CHILD: '1',
+      DYSTOPAI_DESKTOP_SERVER_PARENT_PID: String(process.pid),
       ELECTRON_RUN_AS_NODE: '1',
     },
     stdio: pipeLogs ? ['ignore', 'pipe', 'pipe'] : 'ignore',
+    detached: process.platform !== 'win32',
     windowsHide: true,
   })
 
@@ -1426,11 +1431,18 @@ async function stopControlServerProcess(reason = 'control server cleanup') {
 
   if (process.platform !== 'win32') {
     try {
-      child.kill('SIGTERM')
+      process.kill(-pid, 'SIGTERM')
     } catch {
-      // Process may have already exited after the shutdown API completed.
+      try { child.kill('SIGTERM') } catch {}
     }
-    if (await waitForProcessExit(child, 2000)) return
+    if (await waitForProcessExit(child, 4000)) return
+    try {
+      process.kill(-pid, 'SIGKILL')
+    } catch {
+      try { child.kill('SIGKILL') } catch {}
+    }
+    await waitForProcessExit(child, 1000)
+    return
   }
 
   killProcessTree(pid, reason)
