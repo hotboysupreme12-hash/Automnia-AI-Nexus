@@ -35,7 +35,7 @@ Read the evidence.
 | One chat box | Automnia AI |
 | --- | --- |
 | One personality | Many specialized agents |
-| One model choice | Dozens of supported model routes, with per-agent model lanes, fallbacks, thinking levels, and timeouts |
+| Few model choices | Dozens of supported model routes, with per-agent model lanes, fallbacks, thinking levels, and timeouts |
 | One messy history | Separate workspaces, sessions, doctrine, and memory |
 | Blind waiting | Live runtime, Gateway, mission, plugin, and log visibility |
 | Prompt and hope | Missions, schedules, approvals, and final reports |
@@ -129,17 +129,7 @@ For deeper setup and advanced workflows, read:
 
 ## Current status
 
-Automnia AI is a **public beta candidate** for Windows, macOS, and Linux. Packaged public beta readiness depends on hosted CI evidence, packaged launch proof, release validation, and beta screenshot artifacts.
-
-| Area | Status |
-| --- | --- |
-| Local desktop app | Active |
-| OpenClaw integration | Active |
-| Agents and missions | Active |
-| Runtime monitor | Active |
-| Plugins and provider setup | Active |
-| Public beta | Candidate, evidence-gated |
-| Paid/stable release | Not yet |
+Automnia AI is a **public beta** for Windows, macOS, and Linux.
 
 ### Interface preview
 
