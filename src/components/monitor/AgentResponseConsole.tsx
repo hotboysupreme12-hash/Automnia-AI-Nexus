@@ -14,6 +14,8 @@ import type { AgentResponse, AgentTurnAttachment, OpenClawAgent } from '../../ty
 import { apiUrl } from '../../utils/apiUrl'
 import { redactDiagnosticText } from '../../utils/diagnosticRedaction'
 import { createSseFrameParser } from '../../utils/sseStream'
+import { Badge, Button, IconButton, StatusChip } from '../ui'
+import type { BadgeTone } from '../ui'
 
 const RARITY_RING: Record<string, string> = {
   legendary: 'ring-[#f2cc62]/55',
@@ -219,6 +221,12 @@ function gatewayStabilityHeaderLabel(stability?: GatewayStabilityStatus | null) 
   return 'Diag ok'
 }
 
+function responseStatusTone(status: 'streaming' | 'complete' | 'blocked'): BadgeTone {
+  if (status === 'complete') return 'success'
+  if (status === 'blocked') return 'error'
+  return 'info'
+}
+
 function gatewayStabilityTitle(stability?: GatewayStabilityStatus | null) {
   if (!stability) return 'Gateway diagnostics have not loaded yet.'
   if (!stability.available) {
@@ -396,9 +404,9 @@ const ResponseMessage = memo(function ResponseMessage({
         <div className="dy-command-message-identity">
           <div className="dy-command-message-title-row">
             <span className="dy-command-agent-name" title={name}>{name}</span>
-            <span className="dy-command-message-status" data-state={status}>
+            <Badge className="dy-command-message-status" data-state={status} tone={responseStatusTone(status)} size="micro">
               {statusText}
-            </span>
+            </Badge>
           </div>
           {role && (
             <p className="dy-command-agent-role" title={role}>{role}</p>
@@ -423,35 +431,39 @@ const ResponseMessage = memo(function ResponseMessage({
         </div>
         <div className="dy-command-message-meta">
           {durationLabel && (
-            <span
+            <Badge
               className={`dy-command-message-chip ${entry.ok ? 'is-success' : 'is-error'}`}
               title={runtimeTitle || 'Runtime'}
+              tone={entry.ok ? 'success' : 'error'}
+              size="micro"
             >
               {durationLabel}
-            </span>
+            </Badge>
           )}
           {firstTokenLabel && (
-            <span className="dy-command-message-chip is-info" title="Time to first visible output">
+            <Badge className="dy-command-message-chip is-info" title="Time to first visible output" tone="info" size="micro">
               first {firstTokenLabel}
-            </span>
+            </Badge>
           )}
           {transport && (
-            <span className="dy-command-message-chip is-transport" title={runtimeTitle || `Transport: ${transport}`}>
+            <Badge className="dy-command-message-chip is-transport" title={runtimeTitle || `Transport: ${transport}`} tone="info" size="micro">
               {transport}
-            </span>
+            </Badge>
           )}
           {queuePositionLabel && (
-            <span
+            <Badge
               className="dy-command-message-chip is-queue"
               title={`Queue position ${entry.queuePosition} of ${entry.queueDepth}`}
+              tone="warning"
+              size="micro"
             >
               queue {queuePositionLabel}
-            </span>
+            </Badge>
           )}
           {entry.failureKind && !entry.ok && (
-            <span className="dy-command-message-chip is-warning" title={`Failure kind: ${entry.failureKind}`}>
+            <Badge className="dy-command-message-chip is-warning" title={`Failure kind: ${entry.failureKind}`} tone="warning" size="micro">
               {entry.failureKind.replace(/_/g, ' ')}
-            </span>
+            </Badge>
           )}
         </div>
       </div>
@@ -494,24 +506,28 @@ const ResponseMessage = memo(function ResponseMessage({
             {cta.detail && <span>{cta.detail}</span>}
           </div>
           {cta.action === 'restart-gateway' && (
-            <button
-              type="button"
+            <Button
               disabled={actionBusy}
               onClick={() => onRestartGateway(entry.id)}
               title="Reset the OpenClaw gateway"
+              size="compact"
+              variant="secondary"
+              loading={actionBusy}
             >
               {actionBusy ? 'Resetting' : 'Reset'}
-            </button>
+            </Button>
           )}
           {cta.action === 'cancel-queued' && (
-            <button
-              type="button"
+            <Button
               disabled={actionBusy}
               onClick={() => onCancelQueuedTurn(entry.id)}
               title="Cancel this queued Command Console turn"
+              size="compact"
+              variant="danger"
+              loading={actionBusy}
             >
               {actionBusy ? 'Canceling' : 'Cancel'}
-            </button>
+            </Button>
           )}
         </div>
       )}
@@ -1095,36 +1111,39 @@ export function AgentResponseConsole() {
                 <span>Queued</span>
               </span>
             )}
-            <span
+            <StatusChip
+              label="Stream"
+              value={streamLabel[clawTalkStreamHealth.state]}
+              state={clawTalkStreamHealth.state}
+              tone={clawTalkStreamHealth.state === 'live' ? 'success' : clawTalkStreamHealth.state === 'offline' ? 'error' : 'warning'}
               className="dy-command-console__pill dy-command-console__stream-pill"
               data-stream-state={clawTalkStreamHealth.state}
               title={streamTitle}
               role="status"
-              aria-live="polite"
+              live
               aria-label={`ClawTalk console stream ${streamLabel[clawTalkStreamHealth.state].toLowerCase()}. ${clawTalkStreamHealth.detail}`}
-            >
-              <span aria-hidden="true" />
-              {streamLabel[clawTalkStreamHealth.state]}
-            </span>
-            <span
+            />
+            <StatusChip
+              label="Gateway"
+              value={gatewayStabilityChipLabel}
+              state={gatewayStabilityChipState}
+              tone={gatewayStabilityChipState === 'healthy' ? 'success' : gatewayStabilityChipState === 'offline' ? 'error' : gatewayStabilityChipState === 'warning' ? 'warning' : 'neutral'}
               className="dy-command-console__pill dy-command-console__stability-pill"
               data-stability-state={gatewayStabilityChipState}
               title={gatewayStabilityTitleText}
               role="status"
-              aria-live="polite"
+              live
               aria-label={`Gateway diagnostics ${gatewayStabilityChipLabel}. ${gatewayStabilityTitleText}`}
-            >
-              <span aria-hidden="true" />
-              {gatewayStabilityChipLabel}
-            </span>
+            />
             {responses.length > 0 && (
-              <button
-                type="button"
+              <IconButton
                 onClick={clearAgentResponses}
                 className="dy-command-console__clear"
                 title="Clear messages and reset AI sessions"
                 aria-label="Clear messages and reset AI sessions"
-              >
+                variant="quiet"
+                size="compact"
+                icon={(
                 <svg
                   aria-hidden="true"
                   viewBox="0 0 24 24"
@@ -1140,7 +1159,8 @@ export function AgentResponseConsole() {
                   <path d="M10 11v5" />
                   <path d="M14 11v5" />
                 </svg>
-              </button>
+                )}
+              />
             )}
           </div>
         </div>
@@ -1264,15 +1284,16 @@ export function AgentResponseConsole() {
                     {laneDiagnostics.length} quiet
                   </span>
                 )}
-                <button
-                  type="button"
+                <Button
                   className="dy-command-stop-run"
                   onClick={handleStopRunning}
                   aria-label={`Stop ${busyAgents.length} running Command Console ${busyAgents.length === 1 ? 'run' : 'runs'}`}
                   title="Stop running turns"
+                  variant="danger"
+                  size="compact"
                 >
                   Stop
-                </button>
+                </Button>
               </span>
             )}
           </div>
@@ -1361,18 +1382,20 @@ export function AgentResponseConsole() {
                     </span>
                   </div>
                 )}
-                <button
-                  type="button"
+                <IconButton
                   onClick={removeAttachment}
                   aria-label={`Remove attached file ${uploadedAttachment.file.name}`}
                   className="dy-command-upload-remove absolute -right-1.5 -top-1.5 flex h-5 w-5 items-center justify-center"
                   title="Remove attachment"
-                >
+                  variant="danger"
+                  size="compact"
+                  icon={(
                   <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" className="h-3 w-3" aria-hidden="true">
                     <path d="M18 6 6 18" />
                     <path d="m6 6 12 12" />
                   </svg>
-                </button>
+                  )}
+                />
               </div>
               <span className="dy-command-upload-size">
                 {formatFileSize(uploadedAttachment.file.size)}
@@ -1402,18 +1425,19 @@ export function AgentResponseConsole() {
 
           <div className="dy-command-composer__toolbar">
             <div className="dy-command-composer__tools">
-              <button
-                type="button"
+              <IconButton
                 aria-label="Attach file"
                 onClick={() => fileInputRef.current?.click()}
                 className="dy-command-icon-button flex h-10 w-10 shrink-0 items-center justify-center"
                 title="Attach file"
-              >
+                variant="quiet"
+                icon={(
                 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round" className="h-[18px] w-[18px]" aria-hidden="true">
                   <path d="M12 5v14" />
                   <path d="M5 12h14" />
                 </svg>
-              </button>
+                )}
+              />
               <input
                 ref={fileInputRef}
                 type="file"
@@ -1424,15 +1448,13 @@ export function AgentResponseConsole() {
             </div>
 
             {/* Send button */}
-            <button
-              type="button"
+            <IconButton
               aria-label="Send message"
               disabled={!canSend}
               onClick={() => void handleSend()}
               className="dy-command-send flex h-10 w-10 shrink-0 items-center justify-center"
               title={isUploading ? 'Uploading attachment' : hardBlockedSendReason || queuedSendReason || 'Send (Enter)'}
-            >
-              {isUploading ? (
+              icon={isUploading ? (
                 <svg className="h-4 w-4 animate-spin" viewBox="0 0 24 24" fill="none">
                   <circle cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="3" strokeDasharray="31.4 31.4" strokeLinecap="round" />
                 </svg>
@@ -1442,7 +1464,7 @@ export function AgentResponseConsole() {
                   <path d="m5 12 7-7 7 7" />
                 </svg>
               )}
-            </button>
+            />
           </div>
         </div>
       </div>

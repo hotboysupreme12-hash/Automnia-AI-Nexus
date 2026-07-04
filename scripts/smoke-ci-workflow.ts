@@ -23,6 +23,7 @@ const workflow = read('.github/workflows/control-plane-ci.yml')
 const publicRelease = read('.github/workflows/public-release.yml')
 const quality = read('.github/workflows/quality-matrix.yml')
 const dependencyAudit = read('.github/workflows/dependency-audit.yml')
+const releaseGovernance = read('docs/RELEASE_GOVERNANCE.md')
 const secretScanner = read('scripts/secret-scan.cjs')
 const packageDesktop = read('scripts/package-desktop.cjs')
 const electronE2eSmoke = read('scripts/smoke-electron-e2e.ts')
@@ -57,6 +58,7 @@ for (const command of [
   'npm run prepare:runtime-bundles',
   'node scripts/package-desktop.cjs --dir',
   'npm run smoke:packaged-electron-launch',
+  'npm run capture:packaged-beta-screenshots',
   'npm run release:evidence',
   'npm run release:validate',
 ]) {
@@ -64,6 +66,13 @@ for (const command of [
 }
 assert.match(workflow, /permissions:\s*\n\s*contents:\s*read/, 'control-plane CI must use read-only repository permissions')
 assert.match(workflow, /if-no-files-found:\s*error/, 'control-plane CI must fail when evidence artifacts are missing')
+assert.match(workflow, /release\/evidence\/ci-logs\/npm-test\.log/, 'control-plane CI must preserve full npm test logs')
+assert.match(workflow, /release\/evidence\/ci-logs\/unit-coverage\.log/, 'control-plane CI must preserve coverage logs')
+assert.match(workflow, /release\/evidence\/bundle-budgets\/renderer-bundle-budgets\.log/, 'control-plane CI must preserve bundle budget output')
+assert.match(workflow, /release\/evidence\/ci-logs\/packaged-electron-launch\.log/, 'control-plane CI must preserve packaged launch smoke logs')
+assert.match(workflow, /release\/evidence\/ci-logs\/packaged-beta-screenshots\.log/, 'control-plane CI must preserve packaged screenshot capture logs')
+assert.match(workflow, /name:\s*dystopai-release-evidence[\s\S]*path:\s*release\/evidence\/\*\*/m, 'control-plane CI must upload release evidence artifacts')
+assert.match(workflow, /name:\s*dystopai-packaged-beta-screenshots[\s\S]*path:\s*output\/packaged-beta-screenshots\/\*\*/m, 'control-plane CI must upload packaged screenshot artifacts')
 
 const order = [
   'npm ci',
@@ -80,6 +89,7 @@ const order = [
   'npm run prepare:runtime-bundles',
   'node scripts/package-desktop.cjs --dir',
   'npm run smoke:packaged-electron-launch',
+  'npm run capture:packaged-beta-screenshots',
   'npm run release:evidence',
   'npm run release:validate',
 ]
@@ -127,11 +137,16 @@ assert.match(quality, /macos-latest/, 'cross-platform quality must cover macOS')
 assert.match(quality, /npm run test:unit:coverage/, 'cross-platform quality must enforce behavioral unit coverage')
 assert.match(dependencyAudit, /npm audit --json > full-dependency-audit\.json/, 'scheduled audit must capture development and build dependency findings')
 assert.match(dependencyAudit, /npm run audit:dependencies/, 'scheduled audit must still fail on production dependency policy')
+assert.match(releaseGovernance, /Beta-Ready Release Gate/, 'release governance must document the beta-ready release gate')
+assert.match(releaseGovernance, /Control Plane CI \/ Hardened control plane/, 'release governance must name the required Control Plane CI check')
+assert.match(releaseGovernance, /dystopai-release-evidence/, 'release governance must name the release evidence artifact')
+assert.match(releaseGovernance, /dystopai-packaged-beta-screenshots/, 'release governance must name the packaged screenshot artifact')
 
 assert.match(scripts['smoke:ci-workflow'] || '', /tsx scripts\/smoke-ci-workflow\.ts/)
 assert.match(scripts['audit:dependencies'] || '', /npm audit --omit=dev --audit-level=high/)
 assert.match(scripts['smoke:dependency-audit-clean'] || '', /tsx scripts\/smoke-dependency-audit-clean\.ts/)
 assert.match(scripts['smoke:private-beta-handoff'] || '', /tsx scripts\/smoke-private-beta-review-handoff\.ts/)
+assert.match(scripts['smoke:packaged-beta-screenshots-contract'] || '', /tsx scripts\/smoke-packaged-beta-screenshots-contract\.ts/)
 assert.match(scripts['secret:scan'] || '', /node scripts\/secret-scan\.cjs/)
 assert.match(scripts['release:validate'] || '', /node scripts\/validate-release-artifacts\.cjs/)
 assert.match(scripts['release:update-manifest'] || '', /generate-update-manifest\.cjs/)
@@ -139,6 +154,7 @@ assert.match(scripts['release:lifecycle:windows'] || '', /windows-release-lifecy
 assert.match(testCiScript, /npm run lint && npm run typecheck && npm run test:unit/, 'test:ci must run behavioral units after semantic checks')
 assert.match(testCiScript, /npm run smoke:runtime-recovery-soak/, 'test:ci must exercise durable restart recovery')
 assert.match(testCiScript, /npm run smoke:release-lifecycle/, 'test:ci must preserve release and recovery contracts')
+assert.match(testCiScript, /npm run smoke:packaged-beta-screenshots-contract/, 'test:ci must preserve packaged screenshot coverage contracts')
 assert.match(testCiScript, /npm run smoke:ci-workflow/, 'test:ci must finish with CI workflow contract checks')
 
 assert.match(electronE2eSmoke, /renderer-journey/, 'Electron E2E must exercise rendered primary navigation')

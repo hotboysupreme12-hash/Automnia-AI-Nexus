@@ -3,6 +3,7 @@ import test from 'node:test'
 
 import {
   AVATAR_UPLOAD_LIMIT_BYTES,
+  assertAvatarImageUploadSignature,
   assertAvatarUploadBytes,
   assertAvatarUploadSize,
   avatarUploadLimitErrorMessage,
@@ -10,6 +11,13 @@ import {
   isSupportedAvatarImagePath,
   managedAvatarFileName,
 } from '../server/services/filesystem/avatarFileService'
+
+const PNG_BYTES = Buffer.from([
+  0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a,
+  0x00, 0x00, 0x00, 0x0d,
+])
+const WEBP_BYTES = Buffer.from('RIFF\x10\x00\x00\x00WEBPVP8 ', 'binary')
+const SVG_BYTES = Buffer.from('<svg xmlns="http://www.w3.org/2000/svg"></svg>', 'utf-8')
 
 test('avatar file service accepts supported extensions and MIME fallbacks', () => {
   assert.equal(isSupportedAvatarImagePath('portrait.WEBP'), true)
@@ -48,4 +56,22 @@ test('avatar file service enforces avatar upload byte limits for persistence hel
   assert.throws(() => assertAvatarUploadBytes(Buffer.from('12345'), 4), /Choose an image smaller than 4 bytes/)
   assert.throws(() => assertAvatarUploadSize(5, 4), /Choose an image smaller than 4 bytes/)
   assert.throws(() => assertAvatarUploadBytes(Buffer.alloc(0), 4), /Choose an image file to upload/)
+})
+
+test('avatar file service requires image signatures to match names and MIME types', () => {
+  assert.doesNotThrow(() => assertAvatarImageUploadSignature(PNG_BYTES, 'portrait.png', 'image/png'))
+  assert.doesNotThrow(() => assertAvatarImageUploadSignature(WEBP_BYTES, 'portrait.webp', 'image/webp'))
+  assert.doesNotThrow(() => assertAvatarImageUploadSignature(SVG_BYTES, 'portrait.svg', 'image/svg+xml; charset=utf-8'))
+  assert.throws(
+    () => assertAvatarImageUploadSignature(Buffer.from('not an image', 'utf-8'), 'portrait.png', 'image/png'),
+    /contents do not match/,
+  )
+  assert.throws(
+    () => assertAvatarImageUploadSignature(PNG_BYTES, 'portrait.webp', 'image/webp'),
+    /contents do not match/,
+  )
+  assert.throws(
+    () => assertAvatarImageUploadSignature(PNG_BYTES, 'portrait.png', 'image/webp'),
+    /does not match its extension/,
+  )
 })

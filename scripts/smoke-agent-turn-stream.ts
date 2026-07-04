@@ -186,9 +186,9 @@ async function main() {
       method: 'POST',
       headers: streamHeaders('1'),
       body: JSON.stringify({
-        agent: 'hn-commander',
+        agent: 'hn-architect',
         message: 'Smoke test the successful stream contract.',
-        sessionKey: 'agent:hn-commander:control-center:smoke',
+        sessionKey: 'agent:hn-architect:control-center:smoke',
         forceOpenClawRuntime: true,
       }),
     })
@@ -221,9 +221,9 @@ async function main() {
       method: 'POST',
       headers: streamHeaders('abort'),
       body: JSON.stringify({
-        agent: 'hn-commander',
+        agent: 'hn-architect',
         message: 'Smoke test stream abort handling.',
-        sessionKey: 'agent:hn-commander:control-center:smoke-abort',
+        sessionKey: 'agent:hn-architect:control-center:smoke-abort',
         forceOpenClawRuntime: true,
       }),
     })
@@ -239,11 +239,11 @@ async function main() {
       transport?: unknown
       liveTokens?: unknown
     }
-    assert.equal(abortStatus.agent, 'hn-commander')
+    assert.equal(abortStatus.agent, 'hn-architect')
     assert.equal(abortStatus.transport, 'gateway-chat')
     assert.equal(abortStatus.liveTokens, true)
     assert.equal(abortStatus.message, 'Gateway accepted the live chat run.')
-    assert.equal(abortStatus.sessionKey, 'agent:hn-commander:control-center:smoke-abort')
+    assert.equal(abortStatus.sessionKey, 'agent:hn-architect:control-center:smoke-abort')
     assert.equal(typeof abortStatus.runId, 'string')
     assert.match(String(abortStatus.runId), /^[0-9a-f-]{36}$/i)
 
@@ -261,9 +261,9 @@ async function main() {
     assert.equal(abortMarker.aborted, true)
     assert.equal(abortMarker.closed, true)
     assert.equal(abortMarker.reason, 'client-close')
-    assert.equal(abortMarker.agent, 'hn-commander')
+    assert.equal(abortMarker.agent, 'hn-architect')
     assert.equal(abortMarker.runId, abortStatus.runId)
-    assert.equal(abortMarker.sessionKey, 'agent:hn-commander:control-center:smoke-abort')
+    assert.equal(abortMarker.sessionKey, 'agent:hn-architect:control-center:smoke-abort')
     assert.equal(abortMarker.transport, 'gateway-chat')
   } finally {
     child.kill('SIGTERM')

@@ -43,6 +43,12 @@ jobs:
       - name: Prepare vendored OpenClaw dependencies
         run: npm run prepare:openclaw-vendor
 
+      - name: Initialize CI evidence folders
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force -Path release/evidence/ci-logs | Out-Null
+          New-Item -ItemType Directory -Force -Path release/evidence/bundle-budgets | Out-Null
+
       - name: Audit production dependencies
         run: npm run audit:dependencies
 
@@ -56,10 +62,16 @@ jobs:
         run: npm run typecheck
 
       - name: Run production hardening suite
-        run: npm test
+        shell: pwsh
+        run: |
+          npm test 2>&1 | Tee-Object -FilePath release/evidence/ci-logs/npm-test.log
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
       - name: Enforce unit coverage thresholds
-        run: npm run test:unit:coverage
+        shell: pwsh
+        run: |
+          npm run test:unit:coverage 2>&1 | Tee-Object -FilePath release/evidence/ci-logs/unit-coverage.log
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
       - name: Build server bundle
         run: npm run build:server
@@ -68,19 +80,37 @@ jobs:
         run: npm run build:client
 
       - name: Enforce renderer bundle budgets
-        run: npm run check:bundle-budgets
+        shell: pwsh
+        run: |
+          npm run check:bundle-budgets 2>&1 | Tee-Object -FilePath release/evidence/bundle-budgets/renderer-bundle-budgets.log
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
       - name: Run Electron end-to-end smoke
-        run: npm run smoke:electron-e2e
+        shell: pwsh
+        run: |
+          npm run smoke:electron-e2e 2>&1 | Tee-Object -FilePath release/evidence/ci-logs/electron-e2e-smoke.log
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
       - name: Prepare reproducible runtime bundles
         run: npm run prepare:runtime-bundles
 
       - name: Package desktop directory
-        run: node scripts/package-desktop.cjs --dir
+        shell: pwsh
+        run: |
+          node scripts/package-desktop.cjs --dir 2>&1 | Tee-Object -FilePath release/evidence/ci-logs/package-desktop-dir.log
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
       - name: Run packaged desktop launch smoke
-        run: npm run smoke:packaged-electron-launch
+        shell: pwsh
+        run: |
+          npm run smoke:packaged-electron-launch 2>&1 | Tee-Object -FilePath release/evidence/ci-logs/packaged-electron-launch.log
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
+      - name: Capture packaged beta screenshots
+        shell: pwsh
+        run: |
+          npm run capture:packaged-beta-screenshots 2>&1 | Tee-Object -FilePath release/evidence/ci-logs/packaged-beta-screenshots.log
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
       - name: Build unsigned Windows installer candidate
         if: ${{ github.event_name != 'pull_request' && env.DYSTOPAI_RELEASE_REQUIRE_SIGNING != 'true' }}
@@ -97,13 +127,23 @@ jobs:
         run: npm run release:sign
 
       - name: Validate packaged release artifacts
-        run: npm run release:validate
+        shell: pwsh
+        run: |
+          npm run release:validate 2>&1 | Tee-Object -FilePath release/evidence/ci-logs/release-validate.log
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
       - name: Upload release evidence
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         with:
           name: dystopai-release-evidence
           path: release/evidence/**
+          if-no-files-found: error
+
+      - name: Upload packaged screenshot evidence
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: dystopai-packaged-beta-screenshots
+          path: output/packaged-beta-screenshots/**
           if-no-files-found: error
 
       - name: Upload Windows installer candidate

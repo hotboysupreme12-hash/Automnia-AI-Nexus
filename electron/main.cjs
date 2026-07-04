@@ -61,6 +61,7 @@ const WINDOWS_DIAGNOSTIC_SINGLE_PROCESS = process.platform === 'win32' &&
   process.env.DYSTOPAI_ACK_UNSAFE_ELECTRON_SANDBOX_DIAGNOSTIC === '1'
 const ELECTRON_E2E = process.env.DYSTOPAI_ELECTRON_E2E === '1'
 const ELECTRON_E2E_AUTO_QUIT_MS = Math.max(0, Number(process.env.DYSTOPAI_ELECTRON_E2E_AUTO_QUIT_MS || 0) || 0)
+const ELECTRON_E2E_ALLOW_PARALLEL = ELECTRON_E2E && process.env.DYSTOPAI_ELECTRON_E2E_ALLOW_PARALLEL === '1'
 const WSLG_RUNTIME = process.platform === 'linux' && (
   Boolean(process.env.WSL_DISTRO_NAME || process.env.WSL_INTEROP) ||
   fs.existsSync('/mnt/wslg')
@@ -83,7 +84,7 @@ if (WINDOWS_RENDERER_STABILITY) {
   app.commandLine.appendSwitch('disable-renderer-backgrounding')
   app.commandLine.appendSwitch('disable-features', 'CalculateNativeWinOcclusion,HardwareMediaKeyHandling')
 }
-const hasSingleInstanceLock = app.requestSingleInstanceLock()
+const hasSingleInstanceLock = ELECTRON_E2E_ALLOW_PARALLEL ? true : app.requestSingleInstanceLock()
 
 if (!hasSingleInstanceLock) {
   app.quit()
@@ -2004,10 +2005,12 @@ async function runElectronE2eScreenshotCapture(win) {
     { label: 'mobile', width: 390, height: 844 },
   ]
   const workspaces = [
-    { id: 'agents', label: 'Agents' },
-    { id: 'missions', label: 'Missions' },
-    { id: 'monitor', label: 'Monitor' },
-    { id: 'plugins', label: 'Plugins' },
+    { id: 'agents', label: 'Agents', mode: 'workspace' },
+    { id: 'missions', label: 'Missions', mode: 'workspace' },
+    { id: 'monitor', label: 'Monitor', mode: 'workspace' },
+    { id: 'plugins', label: 'Plugins', mode: 'workspace' },
+    { id: 'settings', label: 'Settings', mode: 'workspace' },
+    { id: 'agent-editor', label: 'Agent Editor', mode: 'agent-editor' },
   ]
   const captured = []
 
@@ -2041,21 +2044,46 @@ async function runElectronE2eScreenshotCapture(win) {
             }
             throw new Error('Timed out waiting for ' + label);
           };
-          const navItem = document.querySelector(${JSON.stringify(`#nexus-nav-${workspace.id}`)});
-          if (!navItem) throw new Error('Missing nav item for ${workspace.id}');
+          const workspaceMode = ${JSON.stringify(workspace.mode)};
+          const navId = workspaceMode === 'agent-editor' ? 'agents' : ${JSON.stringify(workspace.id)};
+          const navItem = document.querySelector('#nexus-nav-' + navId);
+          if (!navItem) throw new Error('Missing nav item for ' + navId);
           navItem.click();
           await waitFor(
             () => navItem.getAttribute('aria-current') === 'page',
-            '${workspace.id} aria-current'
+            navId + ' aria-current'
+          );
+          const expectedWorkspaceLabel = workspaceMode === 'agent-editor' ? 'Agents' : ${JSON.stringify(workspace.label)};
+          await waitFor(
+            () => document.querySelector('#dystopai-workspace-title')?.textContent?.trim() === expectedWorkspaceLabel,
+            navId + ' title'
           );
           await waitFor(
-            () => document.querySelector('#dystopai-workspace-title')?.textContent?.trim() === ${JSON.stringify(workspace.label)},
-            '${workspace.id} title'
+            () => document.querySelector('[role="region"][aria-label="' + expectedWorkspaceLabel + ' workspace"]'),
+            navId + ' region'
           );
-          await waitFor(
-            () => document.querySelector('[role="region"][aria-label="${workspace.label} workspace"]'),
-            '${workspace.id} region'
-          );
+          if (workspaceMode === 'agent-editor') {
+            const editButton = await waitFor(
+              () => document.querySelector('button[aria-label^="Edit "]'),
+              'agent editor edit action'
+            );
+            editButton.click();
+            await waitFor(
+              () => document.querySelector('[data-dui-modal="agent-editor"]'),
+              'agent editor modal'
+            );
+            await waitFor(
+              () => document.querySelector('[data-editor-panel="profile"]'),
+              'agent editor profile panel'
+            );
+          } else {
+            const doneButton = document.querySelector('[data-editor-action="done"]');
+            if (doneButton) doneButton.click();
+            await waitFor(
+              () => !document.querySelector('[data-dui-modal="agent-editor"]'),
+              'agent editor modal close'
+            );
+          }
           await wait(500);
           const bodyText = document.body.innerText.replace(/\\s+/g, ' ').trim();
           return {

@@ -27,6 +27,8 @@ export function registerPartyManagementRoutes(app: Express, options: PartyManage
     agentLocalConfigPath,
     applyExecutionWorkspaceToLocalConfig,
     applyLocalConfigToGlobal,
+    assertAvatarImageUploadSignature,
+    assertAvatarUploadBytes,
     avatarUploadLimitBytes,
     avatarUploadLimitErrorMessage,
     avatarUploadFileName,
@@ -901,6 +903,8 @@ export function registerPartyManagementRoutes(app: Express, options: PartyManage
       const rawName = typeof req.query.filename === 'string' ? req.query.filename : 'avatar'
       const sourceName = avatarUploadFileName(rawName, req.headers['content-type'])
       const bytes = Buffer.isBuffer(req.body) ? req.body : Buffer.alloc(0)
+      assertAvatarUploadBytes(bytes, avatarUploadLimitBytes)
+      assertAvatarImageUploadSignature(bytes, sourceName, req.headers['content-type'])
       const persisted = await persistAgentAvatarBytes(agentId, bytes, sourceName)
       return apiSuccess(res, {
         status: 'selected',

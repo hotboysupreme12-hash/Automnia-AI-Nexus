@@ -18,6 +18,23 @@ const COMMAND_CONSOLE_UPLOAD_EXTENSIONS = new Set([
 
 const COMMAND_CONSOLE_IMAGE_ATTACHMENT_MIME_TYPES = new Set(['image/png', 'image/jpeg', 'image/jpg', 'image/webp', 'image/gif'])
 
+const COMMAND_CONSOLE_SIGNATURE_EXTENSIONS: Record<string, string> = {
+  '.png': 'image/png',
+  '.jpg': 'image/jpeg',
+  '.jpeg': 'image/jpeg',
+  '.webp': 'image/webp',
+  '.gif': 'image/gif',
+  '.pdf': 'application/pdf',
+  '.mp3': 'audio/mpeg',
+  '.wav': 'audio/wav',
+  '.m4a': 'audio/mp4',
+  '.aac': 'audio/aac',
+  '.ogg': 'audio/ogg',
+  '.oga': 'audio/ogg',
+  '.flac': 'audio/flac',
+  '.opus': 'audio/ogg',
+}
+
 const COMMAND_CONSOLE_UPLOAD_MIME_EXTENSIONS: Record<string, string> = {
   'image/png': '.png',
   'image/jpeg': '.jpg',
@@ -58,6 +75,8 @@ const COMMAND_CONSOLE_UPLOAD_MIME_EXTENSIONS: Record<string, string> = {
   'audio/flac': '.flac',
   'audio/opus': '.opus',
 }
+
+const COMMAND_CONSOLE_SIGNATURE_MIME_TYPES = new Set(Object.values(COMMAND_CONSOLE_SIGNATURE_EXTENSIONS))
 
 export type CommandConsoleUploadAttachment = {
   id: string
@@ -137,6 +156,74 @@ function contentTypeFromUploadName(filePath: string) {
   return 'application/octet-stream'
 }
 
+function canonicalSignatureMimeType(mimeType: string) {
+  if (mimeType === 'image/jpg') return 'image/jpeg'
+  if (mimeType === 'audio/mp3') return 'audio/mpeg'
+  if (mimeType === 'audio/x-wav') return 'audio/wav'
+  if (mimeType === 'audio/opus') return 'audio/ogg'
+  return mimeType
+}
+
+function commandConsoleSignatureMimeFromBytes(bytes: Buffer): string | null {
+  if (bytes.length >= 8 && bytes.subarray(0, 8).equals(Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]))) {
+    return 'image/png'
+  }
+  if (bytes.length >= 3 && bytes[0] === 0xff && bytes[1] === 0xd8 && bytes[2] === 0xff) {
+    return 'image/jpeg'
+  }
+  if (bytes.length >= 12 && bytes.subarray(0, 4).toString('ascii') === 'RIFF' && bytes.subarray(8, 12).toString('ascii') === 'WEBP') {
+    return 'image/webp'
+  }
+  if (bytes.length >= 6) {
+    const header = bytes.subarray(0, 6).toString('ascii')
+    if (header === 'GIF87a' || header === 'GIF89a') return 'image/gif'
+  }
+  if (bytes.length >= 5 && bytes.subarray(0, 5).toString('ascii') === '%PDF-') {
+    return 'application/pdf'
+  }
+  if (bytes.length >= 4 && bytes.subarray(0, 4).toString('ascii') === 'fLaC') {
+    return 'audio/flac'
+  }
+  if (bytes.length >= 4 && bytes.subarray(0, 4).toString('ascii') === 'OggS') {
+    return 'audio/ogg'
+  }
+  if (bytes.length >= 12 && bytes.subarray(0, 4).toString('ascii') === 'RIFF' && bytes.subarray(8, 12).toString('ascii') === 'WAVE') {
+    return 'audio/wav'
+  }
+  if (bytes.length >= 3 && bytes.subarray(0, 3).toString('ascii') === 'ID3') {
+    return 'audio/mpeg'
+  }
+  if (bytes.length >= 2 && bytes[0] === 0xff && (bytes[1] === 0xf1 || bytes[1] === 0xf9)) {
+    return 'audio/aac'
+  }
+  if (bytes.length >= 2 && bytes[0] === 0xff && (bytes[1] & 0xe0) === 0xe0) {
+    return 'audio/mpeg'
+  }
+  if (bytes.length >= 12 && bytes.subarray(4, 8).toString('ascii') === 'ftyp') {
+    const brand = bytes.subarray(8, 12).toString('ascii')
+    if (brand === 'M4A ' || brand === 'isom' || brand === 'mp42' || brand === 'mp41') return 'audio/mp4'
+  }
+  return null
+}
+
+function assertCommandConsoleUploadSignature(bytes: Buffer, safeName: string, resolvedMimeType: string) {
+  const extSignatureMimeType = COMMAND_CONSOLE_SIGNATURE_EXTENSIONS[path.extname(safeName).toLowerCase()] || null
+  const mimeSignatureMimeType = canonicalSignatureMimeType(resolvedMimeType)
+  const requiresMimeSignature = COMMAND_CONSOLE_SIGNATURE_MIME_TYPES.has(mimeSignatureMimeType)
+  if (requiresMimeSignature && extSignatureMimeType && extSignatureMimeType !== mimeSignatureMimeType) {
+    throw new Error('Upload file type does not match its extension.')
+  }
+  if (requiresMimeSignature && !extSignatureMimeType) {
+    throw new Error('Upload file type does not match its extension.')
+  }
+  const expectedMimeType = extSignatureMimeType || (requiresMimeSignature ? mimeSignatureMimeType : null)
+  if (!expectedMimeType) return
+  const detectedMimeType = commandConsoleSignatureMimeFromBytes(bytes)
+  if (detectedMimeType !== expectedMimeType) {
+    throw new Error('Upload file contents do not match the declared file type.')
+  }
+}
+
 export function commandConsoleUploadFileName(rawName: string | undefined, mimeType: string) {
   const cleanName = path.basename((rawName || 'attachment').trim() || 'attachment')
     .replace(/[\r\n]/g, ' ')
@@ -208,6 +295,7 @@ export function createCommandConsoleUploadService(options: CommandConsoleUploadS
     const resolvedMimeType = mimeType === 'application/octet-stream'
       ? normalizeCommandConsoleMimeType(contentTypeFromUploadName(safeName))
       : mimeType
+    assertCommandConsoleUploadSignature(bytes, safeName, resolvedMimeType)
     const kind = COMMAND_CONSOLE_IMAGE_ATTACHMENT_MIME_TYPES.has(resolvedMimeType) ? 'image' : 'file'
     const digest = createHash('sha256').update(bytes).digest('hex').slice(0, 16)
     const uploadId = randomId()

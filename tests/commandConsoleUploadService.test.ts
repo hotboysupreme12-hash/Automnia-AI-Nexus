@@ -18,6 +18,12 @@ async function createTempUploadsRoot(t: { after(callback: () => Promise<void> | 
   return root
 }
 
+const PNG_BYTES = Buffer.from([
+  0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a,
+  0x00, 0x00, 0x00, 0x0d,
+])
+const WAV_BYTES = Buffer.from('RIFF\x24\x00\x00\x00WAVEfmt ', 'binary')
+
 test('command console upload service persists sanitized supported uploads inside the upload root', async (t) => {
   const uploadsDir = await createTempUploadsRoot(t)
   const service = createCommandConsoleUploadService({
@@ -67,8 +73,9 @@ test('command console upload service accepts supported extension and MIME fallba
     randomId: () => 'upload-id',
   })
 
-  const image = await service.persistUpload(Buffer.from('image-bytes', 'utf-8'), 'Screenshot.PNG', 'application/octet-stream')
-  const pdf = await service.persistUpload(Buffer.from('%PDF', 'utf-8'), 'reference', 'application/pdf')
+  const image = await service.persistUpload(PNG_BYTES, 'Screenshot.PNG', 'application/octet-stream')
+  const pdf = await service.persistUpload(Buffer.from('%PDF-1.7\n', 'utf-8'), 'reference', 'application/pdf')
+  const audio = await service.persistUpload(WAV_BYTES, 'clip.wav', 'audio/x-wav')
 
   assert.equal(image.name, 'screenshot.png')
   assert.equal(image.mimeType, 'image/png')
@@ -76,6 +83,27 @@ test('command console upload service accepts supported extension and MIME fallba
   assert.equal(pdf.name, 'reference.pdf')
   assert.equal(pdf.mimeType, 'application/pdf')
   assert.equal(pdf.kind, 'file')
+  assert.equal(audio.name, 'clip.wav')
+  assert.equal(audio.mimeType, 'audio/x-wav')
+  assert.equal(audio.kind, 'file')
+})
+
+test('command console upload service requires high-risk file signatures to match names and MIME types', async (t) => {
+  const uploadsDir = await createTempUploadsRoot(t)
+  const service = createCommandConsoleUploadService({ uploadsDir })
+
+  await assert.rejects(
+    service.persistUpload(Buffer.from('not really a png', 'utf-8'), 'screenshot.png', 'application/octet-stream'),
+    /contents do not match/,
+  )
+  await assert.rejects(
+    service.persistUpload(Buffer.from('not really a pdf', 'utf-8'), 'reference.pdf', 'application/pdf'),
+    /contents do not match/,
+  )
+  await assert.rejects(
+    service.persistUpload(PNG_BYTES, 'notes.txt', 'image/png'),
+    /does not match its extension/,
+  )
 })
 
 test('command console upload service rejects unsupported file types and oversized uploads', async (t) => {

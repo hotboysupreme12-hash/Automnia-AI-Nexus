@@ -113,6 +113,7 @@ const env = {
   CONTROL_CENTER_TOKEN: 'packaged-beta-screenshots',
   DYSTOPAI_DISABLE_TRAY: '1',
   DYSTOPAI_ELECTRON_E2E: '1',
+  DYSTOPAI_ELECTRON_E2E_ALLOW_PARALLEL: '1',
   DYSTOPAI_ELECTRON_E2E_LOG_PATH: logPath,
   DYSTOPAI_ELECTRON_E2E_AUTO_QUIT_MS: '0',
   DYSTOPAI_ELECTRON_E2E_ASSERT_NAVIGATION: '1',
@@ -153,7 +154,7 @@ try {
     /\[dystopai-e2e\] port-cleanup-skipped/,
     /\[dystopai-e2e\] server-ready/,
     /\[dystopai-e2e\] navigation-policy-ok/,
-    /\[dystopai-e2e\] screenshots-ok:12/,
+    /\[dystopai-e2e\] screenshots-ok:18/,
     /\[dystopai-e2e\] quit-cleanup-complete/,
   ])
   const exitCode = await exitPromise
@@ -163,7 +164,7 @@ try {
     .filter((name) => name.endsWith('.png'))
     .map((name) => path.join(outputDir, name))
     .sort()
-  assert.equal(screenshots.length, 12, `expected 12 packaged beta screenshots in ${outputDir}`)
+  assert.equal(screenshots.length, 18, `expected 18 packaged beta screenshots in ${outputDir}`)
   const manifestPath = path.join(outputDir, 'manifest.json')
   writeFileSync(manifestPath, JSON.stringify({
     capturedAt: new Date().toISOString(),

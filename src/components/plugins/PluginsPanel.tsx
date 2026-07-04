@@ -20,11 +20,12 @@ import {
   type PluginsResponse,
 } from '../../api/plugins'
 import { ActionStatusBanner } from '../common/ActionStatusBanner'
+import { Badge, Button, IconButton, StatusChip } from '../ui'
+import type { BadgeTone } from '../ui'
 import {
   PLUGIN_FILTERS,
   pluginMatchesFilter,
   pluginPageState,
-  pluginStatusClass,
   summarizePluginPageStates,
   type PluginFilter,
 } from './pluginStateProjection'
@@ -178,6 +179,14 @@ function restartNotice(restart?: PluginRestartResponse) {
   return 'gateway restart skipped'
 }
 
+function pluginStateTone(tone: string): BadgeTone {
+  if (tone === 'enabled' || tone === 'configured' || tone === 'success') return 'success'
+  if (tone === 'failed') return 'error'
+  if (tone === 'setup' || tone === 'unavailable' || tone === 'warn') return 'warning'
+  if (tone === 'browser-on') return 'info'
+  return 'neutral'
+}
+
 function commandNotice(payload: PluginApiPayload, fallback: string) {
   const command = payload.command?.command
   return command ? `${fallback} (${command}).` : fallback
@@ -207,14 +216,16 @@ function ClawTalkOperationsCard({ plugin }: { plugin: PluginEntry }) {
       <div className="flex flex-wrap items-center gap-2">
         <span className="text-[9px] font-semibold uppercase tracking-[0.10em] text-cyan-200/80">ClawTalk Ops</span>
         {statusItems.map((item) => (
-          <span
+          <Badge
             key={item.label}
             data-tone={item.tone}
+            tone={pluginStateTone(item.tone)}
+            size="micro"
             className="rounded-md border border-white/[0.07] bg-black/20 px-2 py-1 text-[9px] font-semibold uppercase text-slate-300 data-[tone=success]:border-emerald-300/20 data-[tone=success]:text-emerald-200 data-[tone=warn]:border-amber-300/20 data-[tone=warn]:text-amber-200"
             title={`${item.label}: ${item.value}`}
           >
             {item.label} {item.value}
-          </span>
+          </Badge>
         ))}
       </div>
     </div>
@@ -269,12 +280,12 @@ function PluginRow({
         <div className="min-w-0">
           <div className="flex min-w-0 flex-wrap items-center gap-2">
             <h3 className="truncate text-[13px] font-bold text-slate-100">{plugin.name}</h3>
-            <span className={`rounded-full border px-2 py-0.5 text-[8px] font-semibold uppercase ${pluginStatusClass(plugin)}`}>
+            <Badge className="rounded-full border px-2 py-0.5 text-[8px] font-semibold uppercase" tone={pluginStateTone(statusState.tone)} size="micro" data-plugin-state={statusState.key}>
               {statusState.label}
-            </span>
-            <span className="rounded-full border border-white/[0.06] bg-white/[0.02] px-2 py-0.5 text-[8px] font-semibold uppercase text-slate-500">
+            </Badge>
+            <Badge className="rounded-full border border-white/[0.06] bg-white/[0.02] px-2 py-0.5 text-[8px] font-semibold uppercase text-slate-500" tone="neutral" size="micro">
               {plugin.category}
-            </span>
+            </Badge>
           </div>
           <p className="mt-1 truncate text-[11px] text-slate-500">{plugin.id} / {plugin.origin}</p>
           <p className="mt-1 line-clamp-1 text-[12px] text-slate-400">{plugin.description}</p>
@@ -295,44 +306,50 @@ function PluginRow({
 
       <div className="dy-plugin-row-actions flex shrink-0 items-center justify-end gap-2">
         {plugin.needsSetup && !installable && (
-          <button
-            type="button"
+          <Button
             onClick={() => onSetup(plugin)}
             disabled={busy}
+            variant="secondary"
+            size="compact"
             className="dy-plugin-row-action dy-plugin-row-setup h-8 rounded-md border border-amber-300/20 bg-amber-300/[0.06] px-3 text-[10px] font-semibold text-amber-100 transition hover:bg-amber-300/[0.11] disabled:cursor-not-allowed disabled:opacity-50"
             title={`Set up ${plugin.name}`}
           >
             Setup
-          </button>
+          </Button>
         )}
-        <button
-          type="button"
+        <Button
           onClick={() => onRefresh(plugin)}
           disabled={busy}
+          variant="secondary"
+          size="compact"
+          leadingIcon={(
+            <svg aria-hidden="true" className="dy-plugin-row-action-svg" viewBox="0 0 16 16">
+              <path d="M13.2 5.7A5.4 5.4 0 0 0 3.3 4L2.2 5.8H5" />
+              <path d="M2.8 10.3A5.4 5.4 0 0 0 12.7 12l1.1-1.8H11" />
+            </svg>
+          )}
           className="dy-plugin-row-action dy-plugin-row-refresh h-8 rounded-md border border-white/[0.08] bg-white/[0.025] px-3 text-[10px] font-semibold text-slate-300 transition hover:border-cyan-300/25 hover:text-cyan-100 disabled:cursor-not-allowed disabled:opacity-50"
           title={`Refresh ${plugin.name}`}
         >
-          <svg aria-hidden="true" className="dy-plugin-row-action-svg" viewBox="0 0 16 16">
-            <path d="M13.2 5.7A5.4 5.4 0 0 0 3.3 4L2.2 5.8H5" />
-            <path d="M2.8 10.3A5.4 5.4 0 0 0 12.7 12l1.1-1.8H11" />
-          </svg>
           {busyAction === 'refresh' ? 'Refreshing' : 'Refresh'}
-        </button>
-        <button
-          type="button"
+        </Button>
+        <Button
           onClick={() => installable ? onInstall(plugin) : onToggle(plugin)}
           disabled={busy}
+          variant={plugin.enabled ? 'danger' : 'primary'}
+          size="compact"
+          leadingIcon={<span className="dy-plugin-power-icon" data-state={plugin.enabled ? 'stop' : 'start'} aria-hidden="true" />}
           className={`dy-plugin-row-action dy-plugin-row-power h-8 rounded-md border px-3 text-[10px] font-semibold transition disabled:cursor-not-allowed disabled:opacity-50 ${plugin.enabled ? 'is-stop' : 'is-start'}`}
           title={installable ? `Install ${plugin.installSpec}` : plugin.enabled ? `Stop and disable ${plugin.name}` : `Start ${plugin.name}`}
         >
-          <span className="dy-plugin-power-icon" data-state={plugin.enabled ? 'stop' : 'start'} aria-hidden="true" />
           {busyAction === (installable ? 'install' : 'toggle') ? toggleBusyLabel : toggleLabel}
-        </button>
-        <button
-          type="button"
+        </Button>
+        <Button
           onClick={() => onManage(plugin)}
           disabled={busy}
           aria-expanded={expanded}
+          variant={expanded ? 'primary' : 'secondary'}
+          size="compact"
           className={`dy-plugin-row-action dy-plugin-row-manage h-8 rounded-md border px-3 text-[10px] font-semibold transition disabled:cursor-not-allowed disabled:opacity-50 ${
             expanded
               ? 'border-cyan-300/25 bg-cyan-300/[0.07] text-cyan-100'
@@ -341,7 +358,7 @@ function PluginRow({
           title={`Manage ${plugin.name}`}
         >
           Manage
-        </button>
+        </Button>
       </div>
 
       {plugin.id === 'clawtalk' && <ClawTalkOperationsCard plugin={plugin} />}
@@ -350,53 +367,58 @@ function PluginRow({
         <div className="md:col-span-4">
           <div className="flex flex-wrap items-center justify-end gap-2 border-t border-white/[0.05] pt-3">
             {installable ? (
-              <button
-                type="button"
+              <Button
                 onClick={() => onInstall(plugin)}
                 disabled={busy}
+                variant="primary"
+                size="compact"
                 className="h-8 rounded-md border border-emerald-300/20 bg-emerald-300/[0.06] px-3 text-[10px] font-semibold text-emerald-100 transition hover:bg-emerald-300/[0.11] disabled:cursor-wait disabled:opacity-50"
                 title={`Install ${plugin.installSpec}`}
               >
                 {busyAction === 'install' ? 'Installing' : 'Install'}
-              </button>
+              </Button>
             ) : (
               <>
-                <button
-                  type="button"
+                <Button
                   onClick={() => onUpdate(plugin)}
                   disabled={busy}
+                  variant="secondary"
+                  size="compact"
                   className="h-8 rounded-md border border-white/[0.08] bg-white/[0.025] px-3 text-[10px] font-semibold text-slate-300 transition hover:border-emerald-300/25 hover:text-emerald-100 disabled:cursor-wait disabled:opacity-50"
                   title={`Run openclaw plugins update ${plugin.id}`}
                 >
                   {busyAction === 'update' ? 'Updating' : 'Update'}
-                </button>
-                <button
-                  type="button"
+                </Button>
+                <Button
                   onClick={() => onInspect(plugin)}
                   disabled={busy}
+                  variant="secondary"
+                  size="compact"
                   className="h-8 rounded-md border border-white/[0.08] bg-white/[0.025] px-3 text-[10px] font-semibold text-slate-300 transition hover:border-cyan-300/25 hover:text-cyan-100 disabled:cursor-wait disabled:opacity-50"
                   title={`Run openclaw plugins inspect ${plugin.id} --runtime --json`}
                 >
                   {busyAction === 'inspect' ? 'Checking' : 'Inspect'}
-                </button>
-                <button
-                  type="button"
+                </Button>
+                <Button
                   onClick={() => onRestart(plugin)}
                   disabled={busy}
+                  variant="secondary"
+                  size="compact"
                   className="h-8 rounded-md border border-white/[0.08] bg-white/[0.025] px-3 text-[10px] font-semibold text-slate-300 transition hover:border-amber-300/25 hover:text-amber-100 disabled:cursor-wait disabled:opacity-50"
                   title="Restart embedded OpenClaw gateway"
                 >
                   {busyAction === 'restart' ? 'Restarting' : 'Restart'}
-                </button>
-                <button
-                  type="button"
+                </Button>
+                <Button
                   onClick={() => onUninstall(plugin)}
                   disabled={busy}
+                  variant="danger"
+                  size="compact"
                   className="h-8 rounded-md border border-rose-300/20 bg-rose-400/[0.05] px-3 text-[10px] font-semibold text-rose-100 transition hover:bg-rose-400/[0.10] disabled:cursor-wait disabled:opacity-50"
                   title={`Run openclaw plugins uninstall ${plugin.id}`}
                 >
                   {busyAction === 'uninstall' ? 'Removing' : 'Uninstall'}
-                </button>
+                </Button>
               </>
             )}
           </div>
@@ -478,14 +500,15 @@ function PluginSetupModal({
             <p className="truncate text-[14px] font-bold text-slate-100">{plugin.name}</p>
             <p className="mt-1 line-clamp-2 text-[11px] text-slate-500">{primaryGuidance}</p>
           </div>
-          <button
-            type="button"
+          <IconButton
             onClick={onClose}
             className="h-8 w-8 shrink-0 rounded-md border border-white/[0.07] bg-white/[0.025] text-[14px] font-semibold text-slate-400 transition hover:border-white/[0.13] hover:text-slate-100"
             title="Close setup"
-          >
-            x
-          </button>
+            aria-label="Close setup"
+            variant="quiet"
+            size="compact"
+            icon={<span aria-hidden="true">x</span>}
+          />
         </div>
 
         {missingDependencyText && (
@@ -525,21 +548,24 @@ function PluginSetupModal({
         )}
 
         <div className="mt-4 flex justify-end gap-2">
-          <button
-            type="button"
+          <Button
             onClick={onClose}
+            variant="secondary"
+            size="compact"
             className="h-9 rounded-md border border-white/[0.07] bg-white/[0.025] px-3 text-[10px] font-semibold text-slate-400 transition hover:border-white/[0.13] hover:text-slate-200"
           >
             Close
-          </button>
-          <button
-            type="button"
+          </Button>
+          <Button
             onClick={() => void saveSetup()}
             disabled={saving || !fields.length}
+            variant="primary"
+            size="compact"
+            loading={saving}
             className="h-9 rounded-md border border-amber-300/20 bg-amber-300/[0.07] px-3 text-[10px] font-semibold text-amber-100 transition hover:bg-amber-300/[0.12] disabled:cursor-not-allowed disabled:opacity-50"
           >
             {saving ? 'Saving' : 'Save Setup'}
-          </button>
+          </Button>
         </div>
       </section>
     </div>
@@ -571,23 +597,24 @@ function PluginInspectModal({
             <p className="truncate text-[14px] font-bold text-slate-100">{plugin.name}</p>
             <p className="mt-1 truncate font-mono text-[10px] text-slate-600">{inspect.command.command}</p>
           </div>
-          <button
-            type="button"
+          <IconButton
             onClick={onClose}
             className="h-8 w-8 shrink-0 rounded-md border border-white/[0.07] bg-white/[0.025] text-[14px] font-semibold text-slate-400 transition hover:border-white/[0.13] hover:text-slate-100"
             title="Close runtime check"
-          >
-            x
-          </button>
+            aria-label="Close runtime check"
+            variant="quiet"
+            size="compact"
+            icon={<span aria-hidden="true">x</span>}
+          />
         </div>
 
         <div className="mt-3 flex flex-wrap items-center gap-2">
-          <span className="rounded-full border border-cyan-300/20 bg-cyan-300/[0.06] px-2.5 py-1 text-[9px] font-semibold uppercase text-cyan-100">
+          <Badge className="rounded-full border border-cyan-300/20 bg-cyan-300/[0.06] px-2.5 py-1 text-[9px] font-semibold uppercase text-cyan-100" tone={inspect.runtimeLoaded ? 'success' : 'warning'} size="micro">
             runtime {runtimeLabel}
-          </span>
-          <span className="rounded-full border border-white/[0.08] bg-white/[0.025] px-2.5 py-1 text-[9px] font-semibold uppercase text-slate-400">
+          </Badge>
+          <Badge className="rounded-full border border-white/[0.08] bg-white/[0.025] px-2.5 py-1 text-[9px] font-semibold uppercase text-slate-400" tone="neutral" size="micro">
             {inspect.status || 'checked'}
-          </span>
+          </Badge>
         </div>
 
         {inspect.surfaces.length > 0 ? (
@@ -612,13 +639,14 @@ function PluginInspectModal({
         )}
 
         <div className="mt-4 flex justify-end">
-          <button
-            type="button"
+          <Button
             onClick={onClose}
+            variant="secondary"
+            size="compact"
             className="h-9 rounded-md border border-white/[0.07] bg-white/[0.025] px-3 text-[10px] font-semibold text-slate-300 transition hover:border-white/[0.13] hover:text-slate-100"
           >
             Close
-          </button>
+          </Button>
         </div>
       </section>
     </div>
@@ -712,14 +740,16 @@ function PluginDiscoveryPanel({
             className="h-9 min-w-0 flex-1 border-0 bg-transparent px-3 text-[12px] text-slate-200 outline-none placeholder:text-slate-600"
           />
         </div>
-        <button
-          type="button"
+        <Button
           onClick={() => void searchPlugins()}
           disabled={searching || (clawHubMode && !clawHubQuery)}
+          variant="primary"
+          size="compact"
+          loading={searching}
           className="h-9 rounded-md border border-cyan-300/20 bg-cyan-300/[0.06] px-3 text-[10px] font-semibold text-cyan-100 transition hover:bg-cyan-300/[0.10] disabled:cursor-wait disabled:opacity-50"
         >
           {searching ? 'Searching' : clawHubMode ? 'Search ClawHub' : 'Filter'}
-        </button>
+        </Button>
       </div>
 
       <div className="mt-2 flex flex-wrap items-center gap-2">
@@ -733,10 +763,11 @@ function PluginDiscoveryPanel({
           Pin installs
         </label>
         {PLUGIN_FILTERS.map((option) => (
-          <button
+          <Button
             key={option.id}
-            type="button"
             onClick={() => setFilter(option.id)}
+            variant={filter === option.id ? 'primary' : 'secondary'}
+            size="compact"
             className={`h-8 rounded-md border px-3 text-[10px] font-semibold transition ${
               filter === option.id
                 ? 'border-cyan-300/25 bg-cyan-300/[0.08] text-cyan-100'
@@ -744,7 +775,7 @@ function PluginDiscoveryPanel({
             }`}
           >
             {option.label}
-          </button>
+          </Button>
         ))}
         <span className="text-[10px] font-semibold text-slate-600">{visibleCount} shown</span>
       </div>
@@ -762,20 +793,22 @@ function PluginDiscoveryPanel({
               <div className="min-w-0">
                 <div className="flex flex-wrap items-center gap-2">
                   <p className="truncate text-[12px] font-bold text-slate-100">{result.name}</p>
-                  {result.version && <span className="text-[10px] text-slate-500">{result.version}</span>}
-                  <span className="rounded-full border border-white/[0.06] px-2 py-0.5 text-[8px] uppercase text-slate-500">{result.source}</span>
+                  {result.version && <Badge className="text-[10px] text-slate-500" tone="neutral" size="micro">{result.version}</Badge>}
+                  <Badge className="rounded-full border border-white/[0.06] px-2 py-0.5 text-[8px] uppercase text-slate-500" tone="neutral" size="micro">{result.source}</Badge>
                 </div>
                 <p className="mt-1 line-clamp-1 text-[11px] text-slate-500">{result.description}</p>
                 <p className="mt-1 truncate font-mono text-[10px] text-slate-600">{result.installSpec}</p>
               </div>
-              <button
-                type="button"
+              <Button
                 onClick={() => void installPlugin(result.installSpec, result.id)}
                 disabled={Boolean(installing) || result.installed}
+                variant="secondary"
+                size="compact"
+                loading={installing === result.installSpec}
                 className="h-8 self-center rounded-md border border-white/[0.08] bg-white/[0.025] px-3 text-[10px] font-semibold text-slate-300 transition hover:border-emerald-300/25 hover:text-emerald-100 disabled:cursor-not-allowed disabled:opacity-50"
               >
                 {result.installed ? 'Installed' : installing === result.installSpec ? 'Installing' : 'Install'}
-              </button>
+              </Button>
             </div>
           ))}
         </div>
@@ -1057,44 +1090,36 @@ export function PluginsPanel() {
           </div>
           <div className="flex flex-wrap items-center gap-2">
             {browser && (
-              <span
+              <StatusChip
+                label="Browser"
+                value={browser.enabled ? 'on' : 'off'}
+                state={browser.enabled ? 'on' : 'off'}
+                tone={browser.enabled ? 'info' : 'neutral'}
                 className={`dy-plugin-summary-chip rounded-full border px-2.5 py-1 text-[9px] font-semibold ${
                   browser.enabled
                     ? 'border-cyan-300/30 bg-cyan-300/[0.10] text-cyan-100'
                     : 'border-slate-400/25 bg-slate-500/[0.08] text-slate-300'
                 }`}
                 data-tone={browser.enabled ? 'browser-on' : 'browser-off'}
-              >
-                Browser {browser.enabled ? 'on' : 'off'}
-              </span>
+              />
             )}
-            <span className="dy-plugin-summary-chip rounded-full border border-emerald-300/30 bg-emerald-300/[0.10] px-2.5 py-1 text-[9px] font-semibold text-emerald-100" data-tone="success">
-              {stateSummary.enabled} enabled
-            </span>
-            <span className="dy-plugin-summary-chip rounded-full border border-cyan-300/25 bg-cyan-300/[0.08] px-2.5 py-1 text-[9px] font-semibold text-cyan-100" data-tone="configured">
-              {stateSummary.configured} configured
-            </span>
-            <span className="dy-plugin-summary-chip rounded-full border border-amber-300/30 bg-amber-300/[0.10] px-2.5 py-1 text-[9px] font-semibold text-amber-100" data-tone="warning">
-              {stateSummary.missingAuth} missing auth
-            </span>
-            <span className="dy-plugin-summary-chip rounded-full border border-amber-300/25 bg-amber-300/[0.07] px-2.5 py-1 text-[9px] font-semibold text-amber-100" data-tone="unavailable">
-              {stateSummary.unavailable} unavailable
-            </span>
-            <span className="dy-plugin-summary-chip rounded-full border border-rose-300/25 bg-rose-400/[0.07] px-2.5 py-1 text-[9px] font-semibold text-rose-100" data-tone="failed">
-              {stateSummary.failed} failed
-            </span>
-            <span className="dy-plugin-summary-chip rounded-full border border-slate-500/25 bg-slate-500/[0.08] px-2.5 py-1 text-[9px] font-semibold text-slate-300" data-tone="disabled">
-              {stateSummary.disabled} disabled
-            </span>
-            <button
-              type="button"
+            <StatusChip label="Enabled" value={stateSummary.enabled} tone="success" className="dy-plugin-summary-chip rounded-full border border-emerald-300/30 bg-emerald-300/[0.10] px-2.5 py-1 text-[9px] font-semibold text-emerald-100" data-tone="success" />
+            <StatusChip label="Configured" value={stateSummary.configured} tone="info" className="dy-plugin-summary-chip rounded-full border border-cyan-300/25 bg-cyan-300/[0.08] px-2.5 py-1 text-[9px] font-semibold text-cyan-100" data-tone="configured" />
+            <StatusChip label="Missing auth" value={stateSummary.missingAuth} tone="warning" className="dy-plugin-summary-chip rounded-full border border-amber-300/30 bg-amber-300/[0.10] px-2.5 py-1 text-[9px] font-semibold text-amber-100" data-tone="warning" />
+            <StatusChip label="Unavailable" value={stateSummary.unavailable} tone="warning" className="dy-plugin-summary-chip rounded-full border border-amber-300/25 bg-amber-300/[0.07] px-2.5 py-1 text-[9px] font-semibold text-amber-100" data-tone="unavailable" />
+            <StatusChip label="Failed" value={stateSummary.failed} tone="error" className="dy-plugin-summary-chip rounded-full border border-rose-300/25 bg-rose-400/[0.07] px-2.5 py-1 text-[9px] font-semibold text-rose-100" data-tone="failed" />
+            <StatusChip label="Disabled" value={stateSummary.disabled} tone="neutral" className="dy-plugin-summary-chip rounded-full border border-slate-500/25 bg-slate-500/[0.08] px-2.5 py-1 text-[9px] font-semibold text-slate-300" data-tone="disabled" />
+            <Button
               onClick={() => void updateAllPlugins()}
               disabled={updatingAll || loading}
+              variant="primary"
+              size="compact"
+              loading={updatingAll}
               className="h-7 rounded-md border border-cyan-300/20 bg-cyan-300/[0.07] px-3 text-[9px] font-semibold uppercase text-cyan-100 transition hover:bg-cyan-300/[0.12] disabled:cursor-wait disabled:opacity-50"
               title="Run openclaw plugins update-all and restart the embedded gateway"
             >
               {updatingAll ? 'Updating All' : 'Update All'}
-            </button>
+            </Button>
           </div>
         </div>
 
@@ -1203,25 +1228,28 @@ export function PluginsPanel() {
                 </span>
                 <div className="mt-4 flex flex-wrap justify-center gap-2">
                   {(query || filter !== 'all') && (
-                    <button
-                      type="button"
+                    <Button
                       onClick={() => {
                         setQuery('')
                         setFilter('all')
                       }}
+                      variant="secondary"
+                      size="compact"
                       className="h-8 rounded-md border border-white/[0.08] bg-white/[0.025] px-3 text-[10px] font-semibold text-slate-300 transition hover:border-white/[0.14] hover:text-slate-100"
                     >
                       Clear filters
-                    </button>
+                    </Button>
                   )}
-                  <button
-                    type="button"
+                  <Button
                     onClick={() => void loadPlugins({ force: true })}
                     disabled={loading}
+                    variant="primary"
+                    size="compact"
+                    loading={loading}
                     className="h-8 rounded-md border border-cyan-300/20 bg-cyan-300/[0.07] px-3 text-[10px] font-semibold text-cyan-100 transition hover:bg-cyan-300/[0.12] disabled:cursor-wait disabled:opacity-50"
                   >
                     Refresh plugins
-                  </button>
+                  </Button>
                 </div>
               </div>
             )}

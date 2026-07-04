@@ -41,6 +41,10 @@ function assertCanonicalRoute(name: string, source: string) {
 }
 
 const server = readWorkspaceFile('server/controlPlane.ts')
+const bufferedAgentTurnService = readWorkspaceFile('server/services/agents/agentTurnService.ts')
+const gatewayAgentTurnService = readWorkspaceFile('server/services/agents/gatewayAgentTurnService.ts')
+const agentRuntimeService = readWorkspaceFile('server/services/agents/agentRuntimeService.ts')
+const agentStreamingService = readWorkspaceFile('server/services/agents/agentStreamingService.ts')
 const agentTurnRoutes = readWorkspaceFile('server/routes/agentTurnRoutes.ts')
 const browserRoutes = readWorkspaceFile('server/routes/browserRoutes.ts')
 const clawTalkConsoleRoutes = readWorkspaceFile('server/routes/clawTalkConsoleRoutes.ts')
@@ -72,12 +76,28 @@ const streamBlock = sliceBetween(
 const agentTurnBlock = routeBlock(agentTurnRoutes, "app.post('/api/openclaw/agent-turn'")
 const browserPreflightBlock = routeBlock(browserRoutes, "app.get('/api/browser/preflight'")
 const runBufferedBlock = sliceBetween(
-  server,
+  bufferedAgentTurnService,
   'async function runBufferedAgentTurnForStream',
-  'async function runGatewayAgentTurnForStream',
+  'return { runBufferedAgentTurnForStream }',
 )
 
 assert(server.includes("import { registerAgentTurnRoutes } from './routes/agentTurnRoutes'"), 'server should import agent-turn route module')
+assert(server.includes("import { createBufferedAgentTurnService } from './services/agents/agentTurnService'"), 'server should import buffered agent-turn service')
+assert(server.includes("import { createGatewayAgentTurnService } from './services/agents/gatewayAgentTurnService'"), 'server should import Gateway agent-turn service')
+assert(server.includes("import { createAgentRuntimeService } from './services/agents/agentRuntimeService'"), 'server should import agent runtime service')
+assert(server.includes("import { createAgentStreamingService } from './services/agents/agentStreamingService'"), 'server should import agent streaming service')
+assert(server.includes('createBufferedAgentTurnService({'), 'server should wire buffered agent-turn service')
+assert(server.includes('createGatewayAgentTurnService({'), 'server should wire Gateway agent-turn service')
+assert(server.includes('createAgentRuntimeService({'), 'server should wire agent runtime service')
+assert(server.includes('createAgentStreamingService({'), 'server should wire agent streaming service')
+assert(gatewayAgentTurnService.includes('async function runGatewayAgentTurnForStream'), 'Gateway agent-turn service should own Gateway stream preparation')
+assert(gatewayAgentTurnService.includes('runGatewayChatTurn({'), 'Gateway agent-turn service should dispatch through Gateway chat')
+assert(agentRuntimeService.includes('async function runControlCenterAgentRuntimeTurn'), 'agent runtime service should own runtime fallback orchestration')
+assert(agentRuntimeService.includes("throw Object.assign(new Error('gateway agent run aborted before fallback'), { name: 'AbortError' })"), 'agent runtime service should preserve abort-before-fallback behavior')
+assert(agentStreamingService.includes('async function streamProviderAgentTurn'), 'agent streaming service should own direct provider streaming orchestration')
+assert(agentStreamingService.includes('streamOpenAiCompatibleCompletion({'), 'agent streaming service should own provider streaming dispatch')
+assert(!server.includes('async function runControlCenterAgentRuntimeTurn'), 'server should not own runtime fallback orchestration')
+assert(!server.includes('async function streamProviderAgentTurn'), 'server should not own direct provider streaming orchestration')
 assert(server.includes('registerAgentTurnRoutes(app, {'), 'server should register agent-turn routes')
 assert(!server.includes("app.post('/api/openclaw/agent-turn/stream'"), 'server should not inline the agent-turn stream route')
 assert(!server.includes("app.post('/api/openclaw/agent-turn'"), 'server should not inline the buffered agent-turn route')

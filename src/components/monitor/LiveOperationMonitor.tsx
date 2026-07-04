@@ -5,6 +5,8 @@ import type { AgentOperationState, AgentResponse, MissionEvent, OpenClawAgent } 
 import { clearRuntimeMonitor, restartGatewayRuntime, runRuntimeDoctor, stopCronShift, updateCronShift, useRuntimeStatus } from '../../hooks/useRuntimeStatus'
 import type { DoctorFinding, DoctorRun, GatewayChannelActivity, GatewayLogEntry, RuntimeCronJob, RuntimeMonitorClearResult, RuntimeStatus } from '../../hooks/useRuntimeStatus'
 import { ActionStatusBanner } from '../common/ActionStatusBanner'
+import { Badge, Button, IconButton, StatusChip } from '../ui'
+import type { BadgeTone } from '../ui'
 
 const CONTROL_CENTER_LOGO_SRC = '/brand/dystopai-app-icon.png'
 const DOCTOR_PANEL_DISMISSED_RUN_KEY = 'dystopai-monitor-doctor-dismissed-run'
@@ -182,6 +184,17 @@ function statusClass(status: AgentOperationState['heartbeatStatus'] | undefined)
   return 'dy-monitor-status-pill is-dormant'
 }
 
+function heartbeatStatusTone(status: AgentOperationState['heartbeatStatus'] | undefined): BadgeTone {
+  if (status === 'active') return 'success'
+  if (status === 'idle') return 'info'
+  return 'neutral'
+}
+
+function activityStatusTone(item: ActivityItem, isControlCenter: boolean): BadgeTone {
+  if (isControlCenter) return 'neutral'
+  return item.ok ? 'success' : 'error'
+}
+
 function extractFiles(text: string): string[] {
   const matches = text.match(/(?:[\w.-]+\/)+[\w .@()[\]-]+\.[a-z0-9]+|[\w .@()[\]-]+\.(?:tsx?|jsx?|css|json|md|html|py|txt|log)/gi) || []
   return Array.from(new Set(matches.map((match) => match.trim().replace(/[),.;:]+$/, '')))).slice(0, 4)
@@ -354,15 +367,16 @@ function cleanSlateSummary(result: RuntimeMonitorClearResult): string {
 function DoctorDismissButton({ onDismiss }: { onDismiss?: () => void }) {
   if (!onDismiss) return null
   return (
-    <button
-      type="button"
+    <Button
       onClick={onDismiss}
+      variant="quiet"
+      size="compact"
       className="shrink-0 rounded-lg border border-white/[0.08] bg-white/[0.025] px-2.5 py-1 text-[12px] font-semibold uppercase text-slate-300 transition hover:border-white/20 hover:bg-white/[0.055] hover:text-slate-100 focus-visible:outline focus-visible:outline-2 focus-visible:outline-cyan-300/40"
       title="Hide this Doctor summary"
       aria-label="Hide Doctor summary"
     >
       Hide
-    </button>
+    </Button>
   )
 }
 
@@ -498,38 +512,42 @@ function CronJobCard({
       title={`OpenClaw cron ${job.cronId}`}
     >
       <div className="dy-cron-job-actions absolute right-3 top-3 inline-flex items-center gap-1">
-        <button
-          type="button"
+        <IconButton
           onClick={() => onEdit(job)}
           title={`Edit ${job.name}`}
           aria-label={`Edit cron job ${job.name}`}
+          size="compact"
+          variant="quiet"
           className="dy-cron-action-button dy-cron-edit-button inline-flex items-center justify-center"
-        >
+          icon={(
           <svg aria-hidden="true" viewBox="0 0 24 24">
             <path d="M4 20h4.4L18.9 9.5a2.1 2.1 0 0 0 0-3l-1.4-1.4a2.1 2.1 0 0 0-3 0L4 15.6V20Z" />
             <path d="m13.6 6 4.4 4.4" />
           </svg>
-        </button>
-        <button
-          type="button"
+          )}
+        />
+        <IconButton
           disabled={pausing}
           onClick={() => onPause(job)}
           title={`Pause ${job.name}`}
           aria-label={`Pause cron job ${job.name}`}
+          size="compact"
+          variant="danger"
           className="dy-cron-action-button dy-cron-pause-button inline-flex items-center justify-center disabled:cursor-not-allowed disabled:opacity-50"
-        >
+          icon={(
           <svg aria-hidden="true" viewBox="0 0 24 24">
             <path d="M7 7h10v10H7Z" />
           </svg>
-        </button>
+          )}
+        />
       </div>
 
       <div className="dy-cron-job-header min-w-0 pr-16">
         <div className="dy-cron-job-title-block min-w-0">
           <div className="dy-cron-job-meta-row flex min-w-0 flex-wrap items-center gap-1.5">
-            <span className="dy-cron-status-badge rounded-none border border-white/10 bg-white/[0.03] px-2 py-0.5 text-[11px] font-semibold uppercase text-slate-300" data-state={status}>
+            <Badge className="dy-cron-status-badge rounded-none border border-white/10 bg-white/[0.03] px-2 py-0.5 text-[11px] font-semibold uppercase text-slate-300" data-state={status} tone={status === 'active' ? 'success' : 'neutral'} size="micro">
               {status}
-            </span>
+            </Badge>
             <span className="dy-cron-job-source">{job.source || 'openclaw'}</span>
           </div>
           <div className="dy-cron-job-title-row flex min-w-0 flex-wrap items-center gap-1.5">
@@ -619,18 +637,20 @@ function CronJobEditDialog({
             <h2 id={titleId} className="truncate text-[13px] font-bold text-white">Edit cron job</h2>
             <p className="mt-1 truncate text-[12px] text-slate-400">{agentName} / {shortSessionId(job.cronId)}</p>
           </div>
-          <button
-            type="button"
+          <IconButton
             onClick={onClose}
             disabled={saving}
+            icon={(
+              <svg aria-hidden="true" viewBox="0 0 24 24" className="h-4 w-4">
+                <path d="M6 6l12 12M18 6 6 18" />
+              </svg>
+            )}
+            variant="quiet"
+            size="compact"
             className="dy-cron-action-button inline-flex h-8 w-8 items-center justify-center border border-white/10 text-slate-300 transition hover:border-white/20 hover:text-white disabled:cursor-not-allowed disabled:opacity-50"
             title="Close editor"
             aria-label="Close cron editor"
-          >
-            <svg aria-hidden="true" viewBox="0 0 24 24" className="h-4 w-4">
-              <path d="M6 6l12 12M18 6 6 18" />
-            </svg>
-          </button>
+          />
         </div>
 
         <div className="grid min-h-0 gap-3 overflow-auto p-4">
@@ -689,21 +709,24 @@ function CronJobEditDialog({
         </div>
 
         <div className="flex flex-wrap items-center justify-end gap-2 border-t border-white/10 px-4 py-3">
-          <button
-            type="button"
+          <Button
             onClick={onClose}
             disabled={saving}
+            variant="secondary"
+            size="compact"
             className="border border-white/10 bg-white/[0.03] px-3 py-2 text-[12px] font-semibold uppercase tracking-[0.08em] text-slate-300 transition hover:border-white/20 hover:text-white disabled:cursor-not-allowed disabled:opacity-50"
           >
             Cancel
-          </button>
-          <button
+          </Button>
+          <Button
             type="submit"
             disabled={!canSave}
+            variant="primary"
+            size="compact"
             className="border border-cyan-300/25 bg-cyan-300/[0.08] px-3 py-2 text-[12px] font-semibold uppercase tracking-[0.08em] text-cyan-100 transition hover:border-cyan-300/45 hover:bg-cyan-300/[0.12] disabled:cursor-not-allowed disabled:opacity-50"
           >
             {saving ? 'Saving' : 'Save changes'}
-          </button>
+          </Button>
         </div>
       </form>
     </div>
@@ -927,15 +950,16 @@ function GatewayLogTailCard({ logs }: { logs: GatewayLogEntry[] }) {
         <div className="dy-gateway-log-title text-[13px] font-bold text-slate-100">Gateway Log Tail</div>
         <div className="dy-gateway-log-controls flex items-center gap-2">
           <span className="text-[12px] font-semibold uppercase tracking-[0.10em] text-slate-400">{logs.length} entries</span>
-          <button
-            type="button"
+          <Button
             className="dy-gateway-log-toggle rounded-none border border-white/[0.10] bg-black/30 px-2.5 py-1 text-[12px] font-semibold uppercase tracking-[0.10em] text-slate-300 transition hover:border-white/30 hover:bg-white/[0.06]"
             aria-controls={logTailId}
             aria-expanded={expanded}
             onClick={() => setExpanded((value) => !value)}
+            size="compact"
+            variant="secondary"
           >
             {expanded ? 'Collapse' : 'Expand'}
-          </button>
+          </Button>
         </div>
       </div>
       {expanded && (
@@ -1133,15 +1157,16 @@ function RuntimeGatewayPanel({
                   </span>
                 )}
                 {activeCronJobs.length > 0 && (
-                  <button
-                    type="button"
+                  <Button
                     disabled={cronCancelKey === '__all__'}
                     onClick={requestCancelAllCronJobs}
                     title={`Pause all ${activeCronJobs.length} active cron jobs`}
+                    variant="danger"
+                    size="compact"
                     className="dy-cron-cancel-button rounded-none border border-rose-300/15 bg-rose-300/[0.035] px-2 py-1 text-[12px] font-semibold uppercase tracking-[0.10em] text-rose-100 transition hover:border-rose-300/30 hover:bg-rose-300/[0.07] disabled:cursor-not-allowed disabled:opacity-50"
                   >
                     {cronCancelKey === '__all__' ? 'Pausing' : 'Pause all'}
-                  </button>
+                  </Button>
                 )}
               </div>
             </div>
@@ -1347,35 +1372,41 @@ export function LiveOperationMonitor() {
             aria-label="Monitor views"
           >
           {(['gateway', 'heartbeat', 'performance', 'logs'] as MonitorTab[]).map((item) => (
-            <button key={item} id={`monitor-tab-${item}`} type="button" role="tab" onClick={() => setTab(item)} data-active={tab === item ? 'true' : 'false'} aria-selected={tab === item} aria-controls={`monitor-panel-${item}`} title={MONITOR_TAB_TITLE[item]}
+            <Button key={item} id={`monitor-tab-${item}`} role="tab" onClick={() => setTab(item)} data-active={tab === item ? 'true' : 'false'} aria-selected={tab === item} aria-controls={`monitor-panel-${item}`} title={MONITOR_TAB_TITLE[item]}
+              variant={tab === item ? 'primary' : 'quiet'}
+              size="compact"
+              leadingIcon={<MonitorTabIcon tab={item} />}
               className={`flex-1 rounded-none px-3 py-2 text-[12px] font-semibold uppercase tracking-[0.14em] transition-all ${tab === item ? 'bg-white/[0.065] text-slate-100 shadow-[inset_0_1px_0_rgba(255,255,255,0.06)]' : 'text-slate-400 hover:text-slate-200 hover:bg-white/[0.02]'}`}>
-              <MonitorTabIcon tab={item} />
               {item === 'heartbeat' ? 'scheduler' : item}
-            </button>
+            </Button>
           ))}
           </div>
           <div className="dy-monitor-tools">
-            <button type="button" disabled={doctorBusy} onClick={runDoctor} className="dy-monitor-tool-button" title="Run runtime doctor">
+            <Button disabled={doctorBusy} onClick={runDoctor} className="dy-monitor-tool-button" title="Run runtime doctor" size="compact" variant="secondary" loading={doctorBusy}>
               {doctorBusy ? 'Doctor running' : 'Doctor'}
-            </button>
-            <button
-              type="button"
+            </Button>
+            <Button
               disabled={gatewayRestartBusy}
               onClick={() => void restartGateway()}
+              size="compact"
+              variant="secondary"
+              loading={gatewayRestartBusy}
               className="dy-monitor-tool-button dy-gateway-restart-button"
               title="Restart the OpenClaw Gateway and refresh runtime status."
             >
               {gatewayRestartBusy ? 'Restarting' : 'Restart Gateway'}
-            </button>
-            <button
-              type="button"
+            </Button>
+            <Button
               disabled={cleanSlateBusy}
               onClick={() => void cleanSlate()}
+              size="compact"
+              variant="secondary"
+              loading={cleanSlateBusy}
               className="dy-monitor-tool-button"
               title="Clear local monitor cache, log tail snapshots, recent runtime calls, and stale session locks without stopping active Gateway runs."
             >
               {cleanSlateBusy ? 'Cleaning' : 'Clean Slate'}
-            </button>
+            </Button>
           </div>
         </div>
       </div>
@@ -1394,9 +1425,13 @@ export function LiveOperationMonitor() {
                 <div key={agent.id} className="rounded-xl border border-white/[0.04] bg-white/[0.015] p-4">
                   <div className="flex items-center justify-between gap-3">
                     <p className="text-[13px] font-bold text-slate-100">{agent.name}</p>
-                    <span className={`rounded-full border px-2.5 py-1 text-[11px] font-semibold uppercase tracking-[0.10em] ${statusClass(op?.heartbeatStatus)}`}>
-                      {op?.heartbeatStatus ?? 'dormant'}
-                    </span>
+                    <StatusChip
+                      label="Heartbeat"
+                      value={op?.heartbeatStatus ?? 'dormant'}
+                      state={op?.heartbeatStatus ?? 'dormant'}
+                      tone={heartbeatStatusTone(op?.heartbeatStatus)}
+                      className={`rounded-full border px-2.5 py-1 text-[11px] font-semibold uppercase tracking-[0.10em] ${statusClass(op?.heartbeatStatus)}`}
+                    />
                   </div>
                   <div className="mt-3.5 grid gap-2 sm:grid-cols-2">
                     <div className="rounded-md border border-white/[0.04] bg-white/[0.015] px-2.5 py-1.5">
@@ -1481,11 +1516,11 @@ export function LiveOperationMonitor() {
                     <div className="min-w-0 flex-1">
                       <div className="flex flex-wrap items-center gap-2">
                         <p className={`truncate text-[12px] font-bold ${isControlCenter ? 'text-slate-300' : 'text-slate-100'}`}>{agent?.name || item.agentId || 'Control Center'}</p>
-                        <span className="dy-activity-status rounded-full border px-2 py-0.5 text-[11px] font-semibold uppercase tracking-[0.08em]" data-status={isControlCenter ? 'control' : item.ok ? 'ok' : 'blocked'}>{item.ok ? item.title : 'Blocked'}</span>
+                        <Badge className="dy-activity-status rounded-full border px-2 py-0.5 text-[11px] font-semibold uppercase tracking-[0.08em]" data-status={isControlCenter ? 'control' : item.ok ? 'ok' : 'blocked'} tone={activityStatusTone(item, isControlCenter)} size="micro">{item.ok ? item.title : 'Blocked'}</Badge>
                         {item.failureKind && (
-                          <span className="rounded-full border border-amber-300/15 bg-amber-300/[0.04] px-2 py-0.5 text-[11px] font-semibold uppercase tracking-[0.08em] text-amber-100">
+                          <Badge className="rounded-full border border-amber-300/15 bg-amber-300/[0.04] px-2 py-0.5 text-[11px] font-semibold uppercase tracking-[0.08em] text-amber-100" tone="warning" size="micro">
                             {item.failureKind.replace(/_/g, ' ')}
-                          </span>
+                          </Badge>
                         )}
                         <span className="font-mono text-[12px] text-slate-400">{new Date(item.timestamp).toLocaleTimeString()}</span>
                       </div>

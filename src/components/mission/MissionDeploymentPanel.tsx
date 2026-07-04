@@ -3,6 +3,7 @@ import type { CSSProperties } from 'react'
 import { motion } from 'framer-motion'
 import { useNexusStore } from '../../store/nexusStore'
 import type { CapabilityKey, CollaborationMode, DurationMode, DurationUnit } from '../../types/nexus'
+import { Badge, Button, StatusChip } from '../ui'
 import { MISSION_GLYPH_ASSETS, MISSION_PRESET_ASSETS, preloadMissionIconAssets } from './missionIconAssets'
 import type { MissionGlyph } from './missionIconAssets'
 import './MissionDeploymentPanel.css'
@@ -476,9 +477,13 @@ export function MissionDeploymentPanel() {
                 <div className="dui-active-mission-strip" data-mission-projection-state={activeMission.status} data-mission-id={activeMission.id} aria-live="polite">
                   <span>Mission</span>
                   <strong>{activeMission.title}</strong>
-                  <small>
-                    {activeMission.status} / {activeMission.scheduler?.status || 'scheduler'} / round {activeMission.scheduler?.round ?? 0}
-                  </small>
+                  <StatusChip
+                    label={activeMission.status}
+                    value={`${activeMission.scheduler?.status || 'scheduler'} / round ${activeMission.scheduler?.round ?? 0}`}
+                    state={activeMission.status}
+                    tone={activeMission.status === 'running' ? 'success' : activeMission.status === 'failed' ? 'error' : 'neutral'}
+                    className="dui-active-mission-status"
+                  />
                 </div>
               )}
               <div className="dui-mission-config-grid">
@@ -649,9 +654,9 @@ export function MissionDeploymentPanel() {
                   <option value="minutes">Minutes</option>
                   <option value="hours">Hours</option>
                 </select>
-                <button type="button" onClick={applyHeartbeatToParty} disabled={!selectedAgents.length || missionRunning} className="dui-secondary-button">
+                <Button type="button" onClick={applyHeartbeatToParty} disabled={!selectedAgents.length || missionRunning} className="dui-secondary-button" variant="secondary" size="compact">
                   Apply Cadence
-                </button>
+                </Button>
               </div>
 
               <div className="dui-loadout-head">
@@ -727,17 +732,19 @@ export function MissionDeploymentPanel() {
               </div>
 
               <div className="dui-action-grid">
-                <button type="button" onClick={() => setShowTiming((v) => !v)} className="dui-secondary-button">
+                <Button type="button" onClick={() => setShowTiming((v) => !v)} className="dui-secondary-button" variant="secondary" size="compact">
                   Timing <span>{missionDraft.durationMode}</span>
-                </button>
-                <button
+                </Button>
+                <Button
                   type="button"
                   onClick={missionRunning ? stopMission : deployMission}
                   disabled={!missionRunning && !canDeploy}
+                  variant={missionRunning ? 'danger' : 'primary'}
+                  size="primary"
                   className={`dui-primary-button dui-mission-deploy-button ${missionRunning ? 'is-stop' : ''}`}
                 >
                   {missionRunning ? 'Stop Mission' : 'Deploy Mission'}
-                </button>
+                </Button>
               </div>
 
               {showTiming && (
@@ -777,9 +784,9 @@ export function MissionDeploymentPanel() {
               )}
 
               {missionRunning && (
-                <button type="button" onClick={steerMission} disabled={!canDeploy} className="dui-steer-button">
+                <Button type="button" onClick={steerMission} disabled={!canDeploy} className="dui-steer-button" variant="secondary" size="compact">
                   Steer Mission
-                </button>
+                </Button>
               )}
             </section>
           </div>
@@ -799,7 +806,7 @@ export function MissionDeploymentPanel() {
             {missionHistory.slice(0, 9).map((mission) => (
               <div key={mission.id} className="dui-history-item">
                 <strong>{mission.title}</strong>
-                <span>{mission.status}</span>
+                <Badge tone={mission.status === 'running' ? 'success' : mission.status === 'failed' ? 'error' : 'neutral'} size="micro">{mission.status}</Badge>
                 <p>{mission.collaborationMode} / {mission.selectedAgents.length} agents / {new Date(mission.startedAt).toLocaleDateString()}</p>
               </div>
             ))}
