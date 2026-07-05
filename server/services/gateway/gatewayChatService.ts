@@ -320,7 +320,7 @@ export class LightweightGatewayClient implements GatewayClientLike {
         ...(this.options.password ? { password: this.options.password } : {}),
       },
       locale: 'en-US',
-      userAgent: `openclaw-control-center/${this.options.clientVersion}`,
+      userAgent: `automnia-ai-nexus/${this.options.clientVersion}`,
     }, { timeoutMs: this.options.requestTimeoutMs }).catch((error) => {
       const retryAfterMs = typeof (error as Error & { retryAfterMs?: unknown }).retryAfterMs === 'number'
         ? Math.max(250, Math.min(10_000, Number((error as Error & { retryAfterMs?: number }).retryAfterMs)))

@@ -70,8 +70,8 @@ const env = {
 mkdirSync(path.join(artifactRoot, 'win-unpacked'), { recursive: true })
 mkdirSync(nodeRuntimeDir, { recursive: true })
 mkdirSync(codexRuntimeDir, { recursive: true })
-writeFileSync(path.join(artifactRoot, 'win-unpacked', 'DystopAI.exe'), 'packaged-app-binary-placeholder\n')
-writeFileSync(path.join(artifactRoot, 'DystopAI-Setup-0.0.6.exe'), 'windows-installer-placeholder\n')
+writeFileSync(path.join(artifactRoot, 'win-unpacked', 'Automnia AI Nexus.exe'), 'packaged-app-binary-placeholder\n')
+writeFileSync(path.join(artifactRoot, 'Automnia AI Nexus-Setup-0.0.6.exe'), 'windows-installer-placeholder\n')
 writeFileSync(path.join(nodeRuntimeDir, '.dystopai-runtime-bundle.json'), `${JSON.stringify({
   schema: 1,
   generatedAt: '2026-06-24T00:00:00.000Z',
@@ -154,14 +154,14 @@ writeFileSync(path.join(evidenceDir, 'distribution-signing.json'), `${JSON.strin
   artifacts: [
     {
       platform: 'windows',
-      artifact: path.relative(root, path.join(artifactRoot, 'DystopAI-Setup-0.0.6.exe')).replace(/\\/g, '/'),
+  artifact: path.relative(root, path.join(artifactRoot, 'Automnia AI Nexus-Setup-0.0.6.exe')).replace(/\\/g, '/'),
       signing: {
         type: 'authenticode',
         status: 'verified',
         signer: 'DystopAI Release Test Certificate',
         thumbprint: '0123456789abcdef0123456789abcdef01234567',
         timestamp: '2026-06-24T00:00:00.000Z',
-        verificationCommand: 'signtool verify /pa /tw DystopAI-Setup-0.0.6.exe',
+  verificationCommand: 'signtool verify /pa /tw "Automnia AI Nexus-Setup-0.0.6.exe"',
       },
     },
   ],
@@ -193,7 +193,7 @@ assert.match(validation.stdout, /verified Ed25519 checksum signature/)
 assert.match(validation.stdout, /validation-smoke-key/)
 assert.match(validation.stdout, /verified distribution signing evidence/)
 
-appendFileSync(path.join(artifactRoot, 'win-unpacked', 'DystopAI.exe'), 'tampered\n')
+appendFileSync(path.join(artifactRoot, 'win-unpacked', 'Automnia AI Nexus.exe'), 'tampered\n')
 const tampered = spawnSync(process.execPath, ['scripts/validate-release-artifacts.cjs'], {
   cwd: root,
   encoding: 'utf8',

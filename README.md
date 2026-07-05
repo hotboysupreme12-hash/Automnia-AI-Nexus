@@ -151,7 +151,7 @@ For complete setup, read the [User Guide](docs/USER_GUIDE.md). For beta testing,
 
 ## Current status
 
-Automnia AI is a **public beta** for Windows, macOS, Linux, and source-based validation paths. Packaged support can vary by build, so beta reports should always include the exact build target being tested.
+Automnia AI is on the **public beta track** for Windows, macOS, Linux, and source-based validation paths. Treat the current build as a public beta candidate until the exact release commit has green hosted CI evidence and packaged artifacts attached. Packaged support can vary by build, so beta reports should always include the exact build target being tested.
 
 ## Documentation map
 
@@ -160,6 +160,7 @@ Automnia AI is a **public beta** for Windows, macOS, Linux, and source-based val
 | Learn the app | [User Guide](docs/USER_GUIDE.md) |
 | Test a beta build or send feedback | [Beta Support](docs/BETA_SUPPORT.md) |
 | Understand beta limits | [Beta Release Notes](docs/BETA_RELEASE_NOTES.md) |
+| Review hosted CI proof | [CI Evidence](docs/CI_EVIDENCE.md) |
 | Understand data boundaries | [Data Handling](DATA_HANDLING.md) |
 | Report security issues | [Security](SECURITY.md) |
 | Review release rules | [Release Governance](docs/RELEASE_GOVERNANCE.md) |

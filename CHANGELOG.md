@@ -16,7 +16,7 @@
 - State backups skip symlinked plugin-skill entries and record them in the manifest instead of following the link target.
 - Public release signing, public auto-update, paid distribution, multi-user cloud auth, and LAN/public control-plane exposure remain outside this beta milestone.
 - The local Control Plane API and OpenClaw Gateway must remain loopback-only.
-- Beta feedback should use the GitHub issue template: https://github.com/hotboysupreme12-hash/DystopAI-Core/issues/new?template=beta_feedback.yml
+- Beta feedback should use the GitHub issue template: https://github.com/hotboysupreme12-hash/Automnia-AI-Nexus/issues/new?template=beta_feedback.yml
 
 ### Security
 

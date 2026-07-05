@@ -379,7 +379,7 @@ The goal is not to slow the app down. The goal is to let agents prepare useful w
 Use the GitHub beta feedback template when something is confusing, broken, slow, or hard to recover from:
 
 ```text
-https://github.com/hotboysupreme12-hash/DystopAI-Core/issues/new?template=beta_feedback.yml
+https://github.com/hotboysupreme12-hash/Automnia-AI-Nexus/issues/new?template=beta_feedback.yml
 ```
 
 Include the build target you tested:

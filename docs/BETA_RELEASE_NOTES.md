@@ -1,4 +1,4 @@
-# Automnia AI Public Beta Notes
+# Automnia AI Public Beta Candidate Notes
 
 Last updated: 2026-07-05
 
@@ -6,7 +6,7 @@ Automnia AI is a local-first desktop cockpit for OpenClaw agents, missions, sche
 
 ## Beta boundary
 
-- Automnia AI is in public beta.
+- Automnia AI is on the public beta track. Treat each build as a public beta candidate until the exact release commit has green hosted CI evidence and packaged artifacts attached.
 - Packaged build availability can vary by platform and release.
 - Windows desktop builds are the primary packaged beta path unless a release says otherwise.
 - Linux, macOS, and server/headless paths may be packaged or source-based depending on the build being tested.
@@ -46,5 +46,5 @@ When reporting beta feedback, include the app version or commit, build target, o
 Use the beta feedback template:
 
 ```text
-https://github.com/hotboysupreme12-hash/DystopAI-Core/issues/new?template=beta_feedback.yml
+https://github.com/hotboysupreme12-hash/Automnia-AI-Nexus/issues/new?template=beta_feedback.yml
 ```

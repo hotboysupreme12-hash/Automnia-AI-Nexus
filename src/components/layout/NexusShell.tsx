@@ -500,7 +500,7 @@ export function NexusShell() {
               variant="quiet"
               className="dy-human-nav-utility flex items-center gap-3 text-left"
               aria-label="Open DystopAI documentation"
-              onClick={() => window.open('https://github.com/hotboysupreme12-hash/DystopAI-Core', '_blank', 'noopener,noreferrer')}
+              onClick={() => window.open('https://github.com/hotboysupreme12-hash/Automnia-AI-Nexus', '_blank', 'noopener,noreferrer')}
               leadingIcon={(
                 <span className="dy-human-nav-icon dy-human-nav-icon--help" aria-hidden="true">
                   <svg viewBox="0 0 24 24">

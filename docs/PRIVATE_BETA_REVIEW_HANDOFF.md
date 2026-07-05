@@ -1,7 +1,7 @@
 # Automnia AI Private Beta Review Handoff
 
 Generated: 2026-07-01T09:59:38.086Z
-Package: openclaw-control-center 0.0.6
+Package: automnia-ai-nexus 0.0.6
 Release posture: private-beta-non-public-signing
 
 ## Reviewer Focus
