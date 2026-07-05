@@ -1,18 +1,18 @@
 {
-  "name": "openclaw-control-center",
+  "name": "automnia-ai-nexus",
   "private": true,
   "version": "0.0.6",
-  "description": "Standalone DystopAI OpenClaw control center desktop app.",
+  "description": "Standalone Automnia AI Nexus OpenClaw control center desktop app.",
   "author": {
-    "name": "DystopAI"
+    "name": "Automnia AI"
   },
-  "homepage": "https://github.com/hotboysupreme12-hash/DystopAI-Core",
+  "homepage": "https://github.com/hotboysupreme12-hash/Automnia-AI-Nexus",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/hotboysupreme12-hash/DystopAI-Core.git"
+    "url": "git+https://github.com/hotboysupreme12-hash/Automnia-AI-Nexus.git"
   },
   "bugs": {
-    "url": "https://github.com/hotboysupreme12-hash/DystopAI-Core/issues"
+    "url": "https://github.com/hotboysupreme12-hash/Automnia-AI-Nexus/issues"
   },
   "type": "module",
   "main": "electron/main.cjs",
@@ -159,8 +159,8 @@
     "notices:check": "node scripts/generate-third-party-notices.cjs --check"
   },
   "build": {
-    "appId": "ai.dystopai.controlcenter",
-    "productName": "DystopAI",
+    "appId": "ai.automnia.nexus",
+    "productName": "Automnia AI Nexus",
     "icon": "build/icon-graphite.png",
     "asar": true,
     "npmRebuild": false,
@@ -214,7 +214,7 @@
         "deb"
       ],
       "category": "Development",
-      "maintainer": "DystopAI",
+      "maintainer": "Automnia AI",
       "artifactName": "${productName}-${version}-${arch}.${ext}"
     },
     "mac": {

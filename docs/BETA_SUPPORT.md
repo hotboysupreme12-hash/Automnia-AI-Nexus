@@ -109,7 +109,7 @@ Do not expose the Automnia AI local API or OpenClaw Gateway to a LAN or the publ
 Use the GitHub beta feedback template:
 
 ```text
-https://github.com/hotboysupreme12-hash/DystopAI-Core/issues/new?template=beta_feedback.yml
+https://github.com/hotboysupreme12-hash/Automnia-AI-Nexus/issues/new?template=beta_feedback.yml
 ```
 
 For private security reports, follow `SECURITY.md`.

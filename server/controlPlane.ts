@@ -232,9 +232,10 @@ function mutableRecord(value: unknown): Record<string, unknown> {
   return value && typeof value === 'object' && !Array.isArray(value) ? value as Record<string, unknown> : {}
 }
 
-function isLegacyControlCenterOpenClawPath(value: string | undefined) {
+function isBundledOpenClawPath(value: string | undefined) {
   if (!value) return false
-  return value.replace(/\\/g, '/').toLowerCase().includes('/openclaw-control-center/openclaw')
+  const normalized = value.replace(/\\/g, '/').toLowerCase()
+  return normalized.includes('/openclaw-control-center/openclaw') || normalized.includes('/automnia-ai-nexus/openclaw')
 }
 
 function defaultAgencyAgentTemplateSourceRoot() {
@@ -250,18 +251,18 @@ function defaultAgencyAgentTemplateSourceRoot() {
 
 const CONFIGURED_OPENCLAW_STATE_ROOT = process.env.OPENCLAW_STATE_DIR || process.env.OPENCLAW_HOME || ''
 const OPENCLAW_STATE_ROOT = path.resolve(
-  CONFIGURED_OPENCLAW_STATE_ROOT && !isLegacyControlCenterOpenClawPath(CONFIGURED_OPENCLAW_STATE_ROOT)
+  CONFIGURED_OPENCLAW_STATE_ROOT && !isBundledOpenClawPath(CONFIGURED_OPENCLAW_STATE_ROOT)
     ? CONFIGURED_OPENCLAW_STATE_ROOT
     : NATIVE_OPENCLAW_STATE_ROOT,
 )
 const OPENCLAW_PROFILE = (process.env.OPENCLAW_PROFILE || 'default').trim() || 'default'
 const OPENCLAW_CONFIG_PATH = path.resolve(
-  process.env.OPENCLAW_CONFIG_PATH && !isLegacyControlCenterOpenClawPath(process.env.OPENCLAW_CONFIG_PATH)
+  process.env.OPENCLAW_CONFIG_PATH && !isBundledOpenClawPath(process.env.OPENCLAW_CONFIG_PATH)
     ? process.env.OPENCLAW_CONFIG_PATH
     : path.join(OPENCLAW_STATE_ROOT, 'openclaw.json'),
 )
 const OPENCLAW_GATEWAY_LOG_PATH = path.resolve(
-  process.env.OPENCLAW_GATEWAY_LOG_PATH && !isLegacyControlCenterOpenClawPath(process.env.OPENCLAW_GATEWAY_LOG_PATH)
+  process.env.OPENCLAW_GATEWAY_LOG_PATH && !isBundledOpenClawPath(process.env.OPENCLAW_GATEWAY_LOG_PATH)
     ? process.env.OPENCLAW_GATEWAY_LOG_PATH
     : path.join(OPENCLAW_STATE_ROOT, 'gateway.log'),
 )

@@ -465,7 +465,7 @@ function resolveAppIcon() {
 
 function resolveOpenClawHomeDir() {
   const configured = process.env.OPENCLAW_STATE_DIR || process.env.OPENCLAW_HOME || ''
-  if (configured && !normalizeForMatch(configured).includes('/openclaw-control-center/openclaw')) {
+  if (configured && !isBundledOpenClawStatePath(configured)) {
     return path.resolve(configured)
   }
   const homeDir = process.env.USERPROFILE || process.env.HOME || app.getPath('home')
@@ -478,6 +478,11 @@ function sleep(ms) {
 
 function normalizeForMatch(value) {
   return String(value || '').replace(/\\/g, '/').toLowerCase()
+}
+
+function isBundledOpenClawStatePath(value) {
+  const normalized = normalizeForMatch(value)
+  return normalized.includes('/openclaw-control-center/openclaw') || normalized.includes('/automnia-ai-nexus/openclaw')
 }
 
 function powerShellQuote(value) {

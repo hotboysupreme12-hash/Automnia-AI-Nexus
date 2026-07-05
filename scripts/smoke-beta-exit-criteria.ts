@@ -185,7 +185,7 @@ for (const key of ['packagedAppLaunched', 'controlPlaneReady', 'rendererLoaded',
   assert.equal(desktopLaunchEvidence.assertions?.[key], true, `desktop launch assertion ${key} must be true`)
 }
 const packageLaunchFiles = [
-  process.platform === 'win32' ? `${unpackedRoot}/DystopAI.exe` : `${unpackedRoot}/dystopai`,
+  process.platform === 'win32' ? `${unpackedRoot}/Automnia AI Nexus.exe` : `${unpackedRoot}/dystopai`,
   process.platform === 'win32' ? `${unpackedRoot}/electron.exe` : `${unpackedRoot}/dystopai`,
   `${resourcesRoot}/app.asar`,
   `${resourcesRoot}/dist/index.html`,
