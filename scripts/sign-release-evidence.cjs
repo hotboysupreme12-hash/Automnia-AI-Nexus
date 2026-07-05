@@ -10,6 +10,13 @@ const signaturePath = path.join(evidenceDir, 'checksums.sha256.sig')
 const publicKeyPath = path.join(evidenceDir, 'signing-public-key.pem')
 const signingSummaryPath = path.join(evidenceDir, 'release-signing.json')
 
+function envValue(primaryName, legacyName) {
+  const primary = process.env[primaryName]
+  if (primary && primary.trim()) return primary
+  const legacy = process.env[legacyName]
+  return legacy && legacy.trim() ? legacy : ''
+}
+
 function relativePath(filePath) {
   return path.relative(root, filePath).replace(/\\/g, '/')
 }
@@ -26,16 +33,16 @@ function readRequiredFile(filePath, label) {
 }
 
 function readPrivateKeyPem() {
-  const inlinePem = process.env.DYSTOPAI_RELEASE_SIGNING_PRIVATE_KEY_PEM
+  const inlinePem = envValue('AUTOMNIA_RELEASE_SIGNING_PRIVATE_KEY_PEM', 'DYSTOPAI_RELEASE_SIGNING_PRIVATE_KEY_PEM')
   if (inlinePem && inlinePem.trim()) return inlinePem
 
-  const keyFile = process.env.DYSTOPAI_RELEASE_SIGNING_PRIVATE_KEY_FILE
+  const keyFile = envValue('AUTOMNIA_RELEASE_SIGNING_PRIVATE_KEY_FILE', 'DYSTOPAI_RELEASE_SIGNING_PRIVATE_KEY_FILE')
   if (keyFile && keyFile.trim()) {
     return fs.readFileSync(path.resolve(keyFile), 'utf8')
   }
 
   throw new Error(
-    '[release-signing] Missing signing key. Set DYSTOPAI_RELEASE_SIGNING_PRIVATE_KEY_FILE or DYSTOPAI_RELEASE_SIGNING_PRIVATE_KEY_PEM.',
+    '[release-signing] Missing signing key. Set AUTOMNIA_RELEASE_SIGNING_PRIVATE_KEY_FILE or AUTOMNIA_RELEASE_SIGNING_PRIVATE_KEY_PEM.',
   )
 }
 
@@ -43,7 +50,7 @@ function loadPrivateKey() {
   const key = readPrivateKeyPem()
   const privateKey = crypto.createPrivateKey({
     key,
-    passphrase: process.env.DYSTOPAI_RELEASE_SIGNING_PASSPHRASE || undefined,
+    passphrase: envValue('AUTOMNIA_RELEASE_SIGNING_PASSPHRASE', 'DYSTOPAI_RELEASE_SIGNING_PASSPHRASE') || undefined,
   })
   if (privateKey.asymmetricKeyType !== 'ed25519') {
     throw new Error(`[release-signing] Expected an Ed25519 private key, got ${privateKey.asymmetricKeyType || 'unknown'}.`)
@@ -61,7 +68,7 @@ function main() {
   const publicKeyDer = publicKey.export({ type: 'spki', format: 'der' })
   const signature = crypto.sign(null, checksums, privateKey)
   const generatedAt = new Date().toISOString()
-  const keyId = process.env.DYSTOPAI_RELEASE_SIGNING_KEY_ID?.trim() || sha256Bytes(publicKeyDer).slice(0, 16)
+  const keyId = envValue('AUTOMNIA_RELEASE_SIGNING_KEY_ID', 'DYSTOPAI_RELEASE_SIGNING_KEY_ID') || sha256Bytes(publicKeyDer).slice(0, 16)
 
   fs.writeFileSync(signaturePath, `${signature.toString('base64')}\n`)
   fs.writeFileSync(publicKeyPath, publicKeyPem)

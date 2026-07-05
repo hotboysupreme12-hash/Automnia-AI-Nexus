@@ -128,8 +128,8 @@ function createUpdateManifest(options) {
 }
 
 function loadPrivateKey(options = {}) {
-  const pem = options.privateKeyPem || process.env.DYSTOPAI_UPDATE_SIGNING_PRIVATE_KEY_PEM
-  const filePath = options.privateKeyFile || process.env.DYSTOPAI_UPDATE_SIGNING_PRIVATE_KEY_FILE
+  const pem = options.privateKeyPem || process.env.AUTOMNIA_UPDATE_SIGNING_PRIVATE_KEY_PEM || process.env.DYSTOPAI_UPDATE_SIGNING_PRIVATE_KEY_PEM
+  const filePath = options.privateKeyFile || process.env.AUTOMNIA_UPDATE_SIGNING_PRIVATE_KEY_FILE || process.env.DYSTOPAI_UPDATE_SIGNING_PRIVATE_KEY_FILE
   if (pem && filePath) throw new Error('Configure either update signing PEM or file, not both')
   if (filePath) return crypto.createPrivateKey(fs.readFileSync(path.resolve(filePath), 'utf8'))
   if (pem) return crypto.createPrivateKey(String(pem).replace(/\\n/g, '\n'))
@@ -153,7 +153,7 @@ function signManifest(manifest, options = {}) {
     summary: {
       schema: 1,
       algorithm: 'Ed25519',
-      keyId: options.keyId || process.env.DYSTOPAI_UPDATE_SIGNING_KEY_ID || sha256Bytes(publicKeyDer).slice(0, 16),
+      keyId: options.keyId || process.env.AUTOMNIA_UPDATE_SIGNING_KEY_ID || process.env.DYSTOPAI_UPDATE_SIGNING_KEY_ID || sha256Bytes(publicKeyDer).slice(0, 16),
       signedAt: new Date().toISOString(),
       manifestSha256: sha256Bytes(bytes),
       signatureSha256: sha256Bytes(signature),

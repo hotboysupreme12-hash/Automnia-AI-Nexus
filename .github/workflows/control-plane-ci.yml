@@ -25,7 +25,7 @@ jobs:
     runs-on: windows-latest
     timeout-minutes: 75
     env:
-      DYSTOPAI_RELEASE_REQUIRE_SIGNING: 'false'
+      AUTOMNIA_RELEASE_REQUIRE_SIGNING: 'false'
 
     steps:
       - name: Check out repository
@@ -113,17 +113,17 @@ jobs:
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
       - name: Build unsigned Windows installer candidate
-        if: ${{ github.event_name != 'pull_request' && env.DYSTOPAI_RELEASE_REQUIRE_SIGNING != 'true' }}
+        if: ${{ github.event_name != 'pull_request' && env.AUTOMNIA_RELEASE_REQUIRE_SIGNING != 'true' }}
         run: node scripts/package-desktop.cjs --win --x64
 
       - name: Generate release SBOM and checksums
         run: npm run release:evidence
 
       - name: Sign release evidence
-        if: ${{ vars.DYSTOPAI_RELEASE_SIGNING_ENABLED == 'true' && env.DYSTOPAI_RELEASE_REQUIRE_SIGNING != 'true' }}
+        if: ${{ vars.AUTOMNIA_RELEASE_SIGNING_ENABLED == 'true' && env.AUTOMNIA_RELEASE_REQUIRE_SIGNING != 'true' }}
         env:
-          DYSTOPAI_RELEASE_SIGNING_PRIVATE_KEY_PEM: ${{ secrets.DYSTOPAI_RELEASE_SIGNING_PRIVATE_KEY_PEM }}
-          DYSTOPAI_RELEASE_SIGNING_KEY_ID: ${{ vars.DYSTOPAI_RELEASE_SIGNING_KEY_ID }}
+          AUTOMNIA_RELEASE_SIGNING_PRIVATE_KEY_PEM: ${{ secrets.AUTOMNIA_RELEASE_SIGNING_PRIVATE_KEY_PEM }}
+          AUTOMNIA_RELEASE_SIGNING_KEY_ID: ${{ vars.AUTOMNIA_RELEASE_SIGNING_KEY_ID }}
         run: npm run release:sign
 
       - name: Validate packaged release artifacts
@@ -135,21 +135,21 @@ jobs:
       - name: Upload release evidence
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         with:
-          name: dystopai-release-evidence
+          name: automnia-release-evidence
           path: release/evidence/**
           if-no-files-found: error
 
       - name: Upload packaged screenshot evidence
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         with:
-          name: dystopai-packaged-beta-screenshots
+          name: automnia-packaged-beta-screenshots
           path: output/packaged-beta-screenshots/**
           if-no-files-found: error
 
       - name: Upload Windows installer candidate
-        if: ${{ github.event_name != 'pull_request' && env.DYSTOPAI_RELEASE_REQUIRE_SIGNING != 'true' }}
+        if: ${{ github.event_name != 'pull_request' && env.AUTOMNIA_RELEASE_REQUIRE_SIGNING != 'true' }}
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         with:
-          name: dystopai-windows-installer-candidate
+          name: automnia-windows-installer-candidate
           path: release/*Setup*.exe
           if-no-files-found: error
