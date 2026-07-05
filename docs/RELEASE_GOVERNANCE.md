@@ -15,7 +15,7 @@ Protect `main` in the repository settings before treating a build as release eli
 
 Do not apply a beta-ready label, publish a beta handoff, or call a build public-beta ready until the hosted Control Plane CI check has passed on the exact commit being evaluated. A local `npm test` pass is useful developer evidence, but it does not replace the hosted gate because beta readiness depends on Windows packaging, packaged launch, release evidence, screenshots, and artifact upload running in GitHub Actions.
 
-The evaluated commit should include release evidence, packaged launch logs, unit coverage output, bundle-budget output, release validation output, and packaged beta screenshots.
+The evaluated commit should include the `dystopai-release-evidence` artifact, packaged launch logs, unit coverage output, bundle-budget output, release validation output, and the `dystopai-packaged-beta-screenshots` artifact.
 
 If any artifact is missing, empty, or generated from a different commit, the release remains a beta candidate only. Record the green workflow URL, commit SHA, and artifact names in `docs/CI_EVIDENCE.md` only after the hosted run exists.
 
@@ -28,6 +28,10 @@ Allowed post-baseline UI changes are limited to accessibility fixes, readability
 ## Public Release Signing
 
 Public release validation must fail closed when signing evidence is absent. A public release is qualified by the dedicated `Public Release Candidate` workflow on a version tag or manual release-candidate run.
+
+Automnia AI is a localhost API only desktop control plane; public release evidence must preserve that local-only threat model and avoid implying a remotely hosted control surface.
+
+Keep `DYSTOPAI_RELEASE_REQUIRE_SIGNING` enabled for public-release runs so missing release signing material blocks publication instead of producing unsigned evidence.
 
 Public consumer builds should include platform distribution evidence:
 

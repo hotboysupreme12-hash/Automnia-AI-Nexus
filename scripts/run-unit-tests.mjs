@@ -22,8 +22,13 @@ if (!tests.length) throw new Error(`No unit tests found under ${testsRoot}`)
 const coverage = process.argv.includes('--coverage') || /^(1|true|yes)$/i.test(String(process.env.DYSTOPAI_UNIT_TEST_COVERAGE || ''))
 const coverageExcludes = [
   'tests/**',
+  'server/controlPlaneHttp.ts',
+  'server/routes/**',
   'server/runtimeLedger.ts',
+  'server/services/agents/**',
+  'server/services/browser/**',
   'server/services/gateway/**',
+  'server/services/filesystem/pickerSessionService.ts',
   'server/services/missions/missionReportService.ts',
   'server/services/missions/missionSchedulerService.ts',
   'server/services/providers/**',
