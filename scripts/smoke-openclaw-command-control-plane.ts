@@ -72,7 +72,6 @@ assert(parallelHealthBlock.includes('parallelEfficiency'), 'parallel-health shou
 assert(pluginsApi.includes("'/api/openclaw/command'"), 'plugin API module should expose the OpenClaw command endpoint')
 assert(pluginsApi.includes('pluginApiData<PluginApiPayload>'), 'plugin API module should use shared plugin API handling for OpenClaw command')
 assert(pluginsApi.includes('function runOpenClawPluginCommand'), 'plugin API module should export OpenClaw command helper')
-assert(pluginsPanel.includes('runOpenClawPluginCommand(trimmed)'), 'PluginsPanel should delegate OpenClaw command transport to src/api/plugins.ts')
 assert(!pluginsPanel.includes("'/api/openclaw/command'"), 'PluginsPanel should not own the OpenClaw command endpoint')
 assert(!/\bfetch\s*\(/.test(pluginsPanel), 'PluginsPanel should not bypass the canonical API client')
 

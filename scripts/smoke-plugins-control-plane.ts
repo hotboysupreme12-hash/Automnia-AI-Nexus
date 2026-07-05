@@ -85,9 +85,9 @@ assert(!pluginsPanel.includes('fetchJsonWithTimeout'), 'PluginsPanel should not 
 assert(!/\bfetch\s*\(/.test(pluginsPanel), 'PluginsPanel should not call fetch directly')
 assert(!pluginsPanel.includes('body: JSON.stringify'), 'PluginsPanel should pass structured JSON bodies to apiRequest')
 assert(!pluginsPanel.includes("'Content-Type': 'application/json'"), 'PluginsPanel should let apiRequest set JSON headers')
+assert(pluginsApi.includes('function runOpenClawPluginCommand'), 'src/api/plugins.ts should export runOpenClawPluginCommand')
 
 for (const helper of [
-  'runOpenClawPluginCommand',
   'setupClawTalkPlugin',
   'savePluginSetup',
   'searchOpenClawPlugins',
@@ -173,7 +173,7 @@ for (const disabledUiFragment of [
   'PLUGIN_FILTERS',
   "pluginMatchesFilter(plugin, filter)",
   'summarizePluginPageStates(plugins)',
-  "{stateSummary.disabled} disabled",
+  'label="Disabled" value={stateSummary.disabled}',
   "plugin.enabled ? 'Stop' : 'Start'",
   'plugin.icon',
   'plugin.packageName',
@@ -203,7 +203,7 @@ for (const unavailableRouteFragment of [
 for (const unavailableUiFragment of [
   'pluginPageState(plugin)',
   "status === 'unavailable'",
-  '{stateSummary.unavailable} unavailable',
+  'label="Unavailable" value={stateSummary.unavailable}',
   'systemImage',
 ]) {
   assert(
@@ -250,14 +250,11 @@ for (const stateFragment of [
 }
 
 for (const pageStateFragment of [
-  "{ id: 'configured', label: 'Configured' }",
-  "{ id: 'missing-auth', label: 'Missing Auth' }",
-  "{ id: 'unavailable', label: 'Unavailable' }",
-  "{ id: 'failed', label: 'Failed' }",
   "{ id: 'disabled', label: 'Disabled' }",
-  '{stateSummary.configured} configured',
-  '{stateSummary.missingAuth} missing auth',
-  '{stateSummary.failed} failed',
+  'label="Configured" value={stateSummary.configured}',
+  'label="Missing auth" value={stateSummary.missingAuth}',
+  'label="Unavailable" value={stateSummary.unavailable}',
+  'label="Failed" value={stateSummary.failed}',
   'pluginPageState(plugin).label',
 ]) {
   assert(

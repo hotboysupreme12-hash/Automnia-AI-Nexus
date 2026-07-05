@@ -151,6 +151,10 @@ Automnia AI is a **public beta** for Windows, macOS, and Linux.
 | Security reporting and local boundary | [Security](SECURITY.md) |
 | Release rules | [Release Governance](docs/RELEASE_GOVERNANCE.md) |
 
+## Release evidence
+
+Public release candidates must run through the hosted release workflows. Validate packaged artifacts with `npm run release:validate`, then generate detached release evidence with `npm run release:sign` using an Ed25519 key from `DYSTOPAI_RELEASE_SIGNING_PRIVATE_KEY_FILE` or `DYSTOPAI_RELEASE_SIGNING_PRIVATE_KEY_PEM`; public-release runs keep `DYSTOPAI_RELEASE_REQUIRE_SIGNING` enabled so missing signing material fails closed. Public release validation also requires consumer distribution signing evidence in `distribution-signing.json` before publishing.
+
 ## Pitch
 
 **Automnia AI turns customizable agents into a visual local operations system: real missions, scheduled automation, plugin-powered workflows, live runtime visibility, and approval-first control, powered by OpenClaw.**
