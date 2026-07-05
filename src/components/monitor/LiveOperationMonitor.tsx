@@ -8,7 +8,7 @@ import { ActionStatusBanner } from '../common/ActionStatusBanner'
 import { Badge, Button, IconButton, StatusChip } from '../ui'
 import type { BadgeTone } from '../ui'
 
-const CONTROL_CENTER_LOGO_SRC = '/brand/dystopai-app-icon.png'
+const CONTROL_CENTER_LOGO_SRC = '/brand/automnia-ai-nexus-app-icon.png'
 const DOCTOR_PANEL_DISMISSED_RUN_KEY = 'dystopai-monitor-doctor-dismissed-run'
 
 function doctorRunDismissKey(run: DoctorRun | null): string {

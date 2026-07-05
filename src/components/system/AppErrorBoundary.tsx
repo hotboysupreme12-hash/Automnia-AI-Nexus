@@ -237,14 +237,14 @@ export class AppErrorBoundary extends Component<AppErrorBoundaryProps, AppErrorB
       ? 'Renderer crash loop paused'
       : 'Renderer recovery screen'
     const summary = guard.crashLoopDetected
-      ? 'DystopAI caught repeated renderer failures in the current session and paused normal rendering so the console stays recoverable.'
-      : 'DystopAI caught a renderer failure before it could blank the console. You can retry the shell or reload the desktop view.'
+      ? 'Automnia AI Nexus caught repeated renderer failures in the current session and paused normal rendering so the console stays recoverable.'
+      : 'Automnia AI Nexus caught a renderer failure before it could blank the console. You can retry the shell or reload the desktop view.'
     const lastCrash = guard.lastCrashAt ? new Date(guard.lastCrashAt).toLocaleTimeString() : 'Unavailable'
 
     return (
       <main className="dy-error-boundary" role="alert" aria-live="assertive">
         <section className="dy-error-boundary__panel" aria-labelledby="dy-error-boundary-title">
-          <p className="dy-error-boundary__kicker">DystopAI Control Center</p>
+          <p className="dy-error-boundary__kicker">Automnia AI Nexus Control Center</p>
           <h1 id="dy-error-boundary-title" className="dy-error-boundary__title">
             {title}
           </h1>

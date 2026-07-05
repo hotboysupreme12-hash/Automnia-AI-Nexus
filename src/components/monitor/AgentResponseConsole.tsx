@@ -1121,6 +1121,7 @@ export function AgentResponseConsole() {
               title={streamTitle}
               role="status"
               live
+              showDot={false}
               aria-label={`ClawTalk console stream ${streamLabel[clawTalkStreamHealth.state].toLowerCase()}. ${clawTalkStreamHealth.detail}`}
             />
             <StatusChip
@@ -1133,6 +1134,7 @@ export function AgentResponseConsole() {
               title={gatewayStabilityTitleText}
               role="status"
               live
+              showDot={false}
               aria-label={`Gateway diagnostics ${gatewayStabilityChipLabel}. ${gatewayStabilityTitleText}`}
             />
             {responses.length > 0 && (

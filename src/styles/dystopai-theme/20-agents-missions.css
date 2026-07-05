@@ -1949,7 +1949,7 @@ html.dui-pro-overhaul .dy-command-console__pill {
   padding: 0 10px;
 }
 
-html.dui-pro-overhaul .dy-command-console__pill > span {
+html.dui-pro-overhaul .dy-command-console__pill .dui-status-chip__dot {
   width: 6px;
   height: 6px;
   border-radius: 999px;
@@ -3165,7 +3165,7 @@ html.dui-pro-overhaul section > div.relative.overflow-hidden.border-b > .pointer
 html.dui-pro-overhaul .brand-lockup.dy-logo-fixed .dy-logo-mark,
 html.dui-pro-overhaul .dy-human-rail-head img,
 html.dui-pro-overhaul .dui-login-brand img,
-html.dui-pro-overhaul img[src*="dystopai-mark-graphite"] {
+html.dui-pro-overhaul img[src*="automnia-ai-nexus-app-icon"] {
   border-color: rgba(190, 204, 210, .22) !important;
   background:
     radial-gradient(circle at 50% 42%, rgba(160, 176, 184, .10), transparent 54%),
@@ -3620,7 +3620,7 @@ html.dui-pro-overhaul .dy-command-icon-button svg {
   filter: drop-shadow(0 0 5px rgba(160, 176, 184, .18)) !important;
 }
 
-html.dui-pro-overhaul .dy-command-console__pill > span,
+html.dui-pro-overhaul .dy-command-console__pill .dui-status-chip__dot,
 html.dui-pro-overhaul .dy-command-busy > span,
 html.dui-pro-overhaul [class*="animate-pulse"]:not(.agent-card-pro):not(.agent-card-pro *) {
   background-color: #9fb3bc !important;
