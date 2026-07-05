@@ -429,7 +429,7 @@ for (const file of [
   'release/evidence/dystopai-sbom.cdx.json',
   'release/evidence/checksums.sha256',
   'release/evidence/release-evidence.json',
-  'release/win-unpacked/DystopAI.exe',
+  'release/win-unpacked/Automnia AI Nexus.exe',
   'release/win-unpacked/electron.exe',
   'release/win-unpacked/resources/app.asar',
   'release/win-unpacked/resources/dist/index.html',
@@ -456,7 +456,7 @@ assertIncludes(productionLedger, [
 const draftUrlMatch = betaPlan.match(/Current draft release URL: `([^`]+)`/)
 assert.ok(draftUrlMatch, 'beta split plan must record current draft release URL')
 const draftUrl = draftUrlMatch[1]
-assert.match(draftUrl, /^https:\/\/github\.com\/hotboysupreme12-hash\/DystopAI-Core\/releases\//)
+assert.match(draftUrl, /^https:\/\/github\.com\/hotboysupreme12-hash\/Automnia-AI-Nexus\/releases\//)
 const sourceChangeInventory = buildSourceChangeInventory()
 const sourceContentAnchor = buildSourceContentAnchor(sourceChangeInventory)
 const gitReviewAnchor = buildGitReviewAnchor(sourceChangeInventory, sourceContentAnchor)

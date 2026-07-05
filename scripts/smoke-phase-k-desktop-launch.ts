@@ -10,7 +10,7 @@ const phaseKEvidenceDir = path.join(root, 'release', 'evidence', 'phase-k-manual
 const releaseRoot = path.join(root, 'release')
 const unpackedRoot = path.join(releaseRoot, process.platform === 'win32' ? 'win-unpacked' : 'linux-unpacked')
 const launcherPath = process.platform === 'win32'
-  ? path.join(unpackedRoot, 'DystopAI.exe')
+  ? path.join(unpackedRoot, 'Automnia AI Nexus.exe')
   : path.join(unpackedRoot, 'dystopai')
 const electronRuntimePath = process.platform === 'win32'
   ? path.join(unpackedRoot, 'electron.exe')
