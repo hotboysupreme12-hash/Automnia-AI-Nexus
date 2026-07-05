@@ -2,7 +2,8 @@ import { useState } from 'react'
 import { motion } from 'framer-motion'
 import { useAuth } from '../../context/useAuth'
 
-const DYSTOPAI_LOCKUP_SRC = '/brand/dystopai-logo-multi-model-transparent-v2.png'
+const AUTOMNIA_LOCKUP_SRC = '/brand/automnia-ai-nexus-logo-transparent-cropped.png'
+const AUTOMNIA_BRAND_LABEL = 'Automnia AI Nexus'
 
 export function LoginModal() {
   const { login, checking } = useAuth()
@@ -28,8 +29,8 @@ export function LoginModal() {
     return (
       <div className="fixed inset-0 z-50 grid place-items-center bg-[linear-gradient(180deg,rgba(255,255,255,0.018),rgba(255,255,255,0)_220px),linear-gradient(135deg,#050607_0%,#090b0f_44%,#0c1015_72%,#050607_100%)] px-4">
         <div className="w-full max-w-sm rounded-lg border border-slate-200/15 bg-[linear-gradient(180deg,rgba(18,22,25,0.96),rgba(8,10,11,0.96))] p-6 shadow-[inset_0_1px_0_rgba(255,255,255,0.06),0_18px_44px_-34px_rgba(180,200,190,0.34)]">
-          <div className="dui-login-brand mx-auto flex w-full max-w-[260px] items-center justify-center" aria-label="DystopAI Multi Model Nexus">
-            <img src={DYSTOPAI_LOCKUP_SRC} alt="DystopAI Multi Model Nexus" className="dui-login-logo-lockup" draggable={false} />
+          <div className="dui-login-brand mx-auto flex w-full max-w-[260px] items-center justify-center" aria-label={AUTOMNIA_BRAND_LABEL}>
+            <img src={AUTOMNIA_LOCKUP_SRC} alt={AUTOMNIA_BRAND_LABEL} className="dui-login-logo-lockup" draggable={false} />
           </div>
           <div className="mt-6 h-1.5 overflow-hidden rounded-full bg-white/10" aria-hidden="true">
             <div className="h-full w-1/2 animate-[shimmer_1.4s_linear_infinite] rounded-full bg-slate-200/70" />
@@ -49,8 +50,8 @@ export function LoginModal() {
         className="w-full max-w-md rounded-2xl border border-slate-200/15 bg-[linear-gradient(180deg,rgba(20,23,25,0.96),rgba(6,7,8,0.96))] p-8 shadow-[0_30px_80px_-48px_rgba(160,176,184,0.28),inset_0_1px_0_rgba(255,255,255,0.08)]"
       >
         <div className="mb-6 text-center">
-          <div className="dui-login-brand mx-auto flex w-full max-w-[360px] items-center justify-center" aria-label="DystopAI Multi Model Nexus">
-            <img src={DYSTOPAI_LOCKUP_SRC} alt="DystopAI Multi Model Nexus" className="dui-login-logo-lockup" draggable={false} />
+          <div className="dui-login-brand mx-auto flex w-full max-w-[360px] items-center justify-center" aria-label={AUTOMNIA_BRAND_LABEL}>
+            <img src={AUTOMNIA_LOCKUP_SRC} alt={AUTOMNIA_BRAND_LABEL} className="dui-login-logo-lockup" draggable={false} />
           </div>
           <p className="mt-1 text-sm text-slate-300">Enter your access token to continue</p>
         </div>

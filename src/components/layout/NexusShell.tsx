@@ -20,7 +20,8 @@ const SettingsPanel = lazy(() => import('../settings/SettingsPanel').then((modul
 const AgentEditorModal = lazy(() => import('../editor/AgentEditorModal').then((module) => ({ default: module.AgentEditorModal })))
 const RecruitAgentModal = lazy(() => import('../recruit/RecruitAgentModal').then((module) => ({ default: module.RecruitAgentModal })))
 
-const DYSTOPAI_LOCKUP_SRC = '/brand/dystopai-logo-multi-model-transparent-v2.png'
+const AUTOMNIA_LOCKUP_SRC = '/brand/automnia-ai-nexus-logo-transparent-cropped.png'
+const AUTOMNIA_BRAND_LABEL = 'Automnia AI Nexus'
 const RECRUIT_ICON_SRC = '/icons/nav-recruit-flat.png'
 const AGENT_CONSOLE_PREF_KEY = 'dystopai-agent-console-visibility'
 const AGENT_CONSOLE_WIDTH_PREF_KEY = 'dystopai-agent-console-width'
@@ -421,12 +422,12 @@ export function NexusShell() {
       <div className="pointer-events-none fixed inset-0 grid-overlay" />
       <a className="dy-skip-link" href="#dystopai-main">Skip to workspace</a>
 
-      <aside className="dy-human-rail fixed z-40 flex flex-col overflow-hidden" aria-label="DystopAI navigation">
-        <div className="dy-human-rail-head dy-human-rail-head--lockup flex items-center" aria-label="DystopAI Multi Model Nexus">
+      <aside className="dy-human-rail fixed z-40 flex flex-col overflow-hidden" aria-label="Automnia AI Nexus navigation">
+        <div className="dy-human-rail-head dy-human-rail-head--lockup flex items-center" aria-label={AUTOMNIA_BRAND_LABEL}>
           <img
             className="dy-human-rail-lockup"
-            src={DYSTOPAI_LOCKUP_SRC}
-            alt="DystopAI Multi Model Nexus"
+            src={AUTOMNIA_LOCKUP_SRC}
+            alt={AUTOMNIA_BRAND_LABEL}
             draggable={false}
           />
         </div>
@@ -499,7 +500,7 @@ export function NexusShell() {
             <Button
               variant="quiet"
               className="dy-human-nav-utility flex items-center gap-3 text-left"
-              aria-label="Open DystopAI documentation"
+              aria-label="Open Automnia AI Nexus documentation"
               onClick={() => window.open('https://github.com/hotboysupreme12-hash/Automnia-AI-Nexus', '_blank', 'noopener,noreferrer')}
               leadingIcon={(
                 <span className="dy-human-nav-icon dy-human-nav-icon--help" aria-hidden="true">

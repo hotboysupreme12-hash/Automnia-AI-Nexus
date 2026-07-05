@@ -10,6 +10,7 @@ export interface StatusChipProps extends HTMLAttributes<HTMLSpanElement> {
   state?: string
   icon?: ReactNode
   live?: boolean
+  showDot?: boolean
 }
 
 export function StatusChip({
@@ -19,6 +20,7 @@ export function StatusChip({
   state,
   icon,
   live = false,
+  showDot = true,
   className,
   'aria-label': ariaLabel,
   ...props
@@ -35,7 +37,7 @@ export function StatusChip({
       aria-label={accessibleLabel}
       {...props}
     >
-      <span className="dui-status-chip__dot" aria-hidden="true" />
+      {showDot ? <span className="dui-status-chip__dot" aria-hidden="true" /> : null}
       {icon ? <span className="dui-status-chip__icon" aria-hidden="true">{icon}</span> : null}
       <span className="dui-status-chip__label dy-status-label">{label}</span>
       <span className="dui-status-chip__value dy-status-value">{visibleValue}</span>
