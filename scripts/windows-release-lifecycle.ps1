@@ -1,6 +1,6 @@
 param(
   [string]$InstallerPath = $env:DYSTOPAI_WINDOWS_INSTALLER_PATH,
-  [string]$PreviousInstallerPath = $env:DYSTOPAI_PREVIOUS_WINDOWS_INSTALLER_PATH,
+  [string]$PreviousInstallerPath = $(if ($env:AUTOMNIA_PREVIOUS_WINDOWS_INSTALLER_PATH) { $env:AUTOMNIA_PREVIOUS_WINDOWS_INSTALLER_PATH } else { $env:DYSTOPAI_PREVIOUS_WINDOWS_INSTALLER_PATH }),
   [string]$EvidenceDir = $env:DYSTOPAI_RELEASE_EVIDENCE_DIR,
   [string]$UpdateManifestPath = $env:DYSTOPAI_UPDATE_MANIFEST_PATH,
   [string]$UpdateSignaturePath = $env:DYSTOPAI_UPDATE_SIGNATURE_PATH,
@@ -118,13 +118,13 @@ function Verify-UpdateChannel {
   $OldManifest = $env:DYSTOPAI_UPDATE_MANIFEST_PATH
   $OldSignature = $env:DYSTOPAI_UPDATE_SIGNATURE_PATH
   $OldPublic = $env:DYSTOPAI_UPDATE_PUBLIC_KEY_PATH
-  $OldRequire = $env:DYSTOPAI_UPDATE_REQUIRE_SIGNING
+  $OldRequire = $env:AUTOMNIA_UPDATE_REQUIRE_SIGNING
   try {
     $env:DYSTOPAI_RELEASE_ARTIFACT_ROOT = Join-Path $Root 'release'
     $env:DYSTOPAI_UPDATE_MANIFEST_PATH = $UpdateManifestPath
     $env:DYSTOPAI_UPDATE_SIGNATURE_PATH = $UpdateSignaturePath
     $env:DYSTOPAI_UPDATE_PUBLIC_KEY_PATH = $UpdatePublicKeyPath
-    $env:DYSTOPAI_UPDATE_REQUIRE_SIGNING = '1'
+    $env:AUTOMNIA_UPDATE_REQUIRE_SIGNING = '1'
     & node (Join-Path $Root 'scripts\verify-update-manifest.cjs') *>&1 | Tee-Object -FilePath (Join-Path $LifecycleDir 'update-verify.log')
     if ($LASTEXITCODE -ne 0) { throw 'Signed update manifest verification failed.' }
   } finally {
@@ -132,7 +132,7 @@ function Verify-UpdateChannel {
     $env:DYSTOPAI_UPDATE_MANIFEST_PATH = $OldManifest
     $env:DYSTOPAI_UPDATE_SIGNATURE_PATH = $OldSignature
     $env:DYSTOPAI_UPDATE_PUBLIC_KEY_PATH = $OldPublic
-    $env:DYSTOPAI_UPDATE_REQUIRE_SIGNING = $OldRequire
+    $env:AUTOMNIA_UPDATE_REQUIRE_SIGNING = $OldRequire
   }
 }
 
@@ -160,13 +160,13 @@ function Test-CorruptedUpdateRejection {
   $OldManifest = $env:DYSTOPAI_UPDATE_MANIFEST_PATH
   $OldSignature = $env:DYSTOPAI_UPDATE_SIGNATURE_PATH
   $OldPublic = $env:DYSTOPAI_UPDATE_PUBLIC_KEY_PATH
-  $OldRequire = $env:DYSTOPAI_UPDATE_REQUIRE_SIGNING
+  $OldRequire = $env:AUTOMNIA_UPDATE_REQUIRE_SIGNING
   try {
     $env:DYSTOPAI_RELEASE_ARTIFACT_ROOT = $CorruptRoot
     $env:DYSTOPAI_UPDATE_MANIFEST_PATH = Join-Path $CorruptRoot 'updates\update-manifest.json'
     $env:DYSTOPAI_UPDATE_SIGNATURE_PATH = Join-Path $CorruptRoot 'updates\update-manifest.json.sig'
     $env:DYSTOPAI_UPDATE_PUBLIC_KEY_PATH = Join-Path $CorruptRoot 'updates\update-manifest-public-key.pem'
-    $env:DYSTOPAI_UPDATE_REQUIRE_SIGNING = '1'
+    $env:AUTOMNIA_UPDATE_REQUIRE_SIGNING = '1'
     $Output = & node (Join-Path $Root 'scripts\verify-update-manifest.cjs') *>&1
     $Output | Set-Content -LiteralPath (Join-Path $LifecycleDir 'corrupted-update.log') -Encoding UTF8
     if ($LASTEXITCODE -eq 0) { throw 'Corrupted update artifact was incorrectly accepted.' }
@@ -176,7 +176,7 @@ function Test-CorruptedUpdateRejection {
     $env:DYSTOPAI_UPDATE_MANIFEST_PATH = $OldManifest
     $env:DYSTOPAI_UPDATE_SIGNATURE_PATH = $OldSignature
     $env:DYSTOPAI_UPDATE_PUBLIC_KEY_PATH = $OldPublic
-    $env:DYSTOPAI_UPDATE_REQUIRE_SIGNING = $OldRequire
+    $env:AUTOMNIA_UPDATE_REQUIRE_SIGNING = $OldRequire
   }
 }
 

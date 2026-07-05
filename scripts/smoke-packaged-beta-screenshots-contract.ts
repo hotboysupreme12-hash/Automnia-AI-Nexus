@@ -10,7 +10,6 @@ const screenshotCapture = read('scripts/capture-packaged-beta-screenshots.ts')
 const workflow = read('.github/workflows/control-plane-ci.yml')
 const packageJson = JSON.parse(read('package.json')) as { scripts?: Record<string, string> }
 const releaseGovernance = read('docs/RELEASE_GOVERNANCE.md')
-const productionPlan = read('docs/NEXT_30_POINT_PRODUCTION_PLAN.md')
 
 const requiredSurfaces = [
   ['agents', 'Agents'],
@@ -46,9 +45,9 @@ assert.match(screenshotCapture, /mode: 'packaged-production-dir'/, 'screenshot m
 assert.match(screenshotCapture, /packaged screenshot capture requires/, 'packaged capture must fail closed when packaging output is missing')
 
 assert.match(workflow, /npm run capture:packaged-beta-screenshots/, 'Control Plane CI must capture packaged screenshots')
-assert.match(workflow, /name:\s*dystopai-packaged-beta-screenshots[\s\S]*path:\s*output\/packaged-beta-screenshots\/\*\*/m, 'Control Plane CI must upload packaged screenshot artifacts')
-assert.match(releaseGovernance, /dystopai-packaged-beta-screenshots/, 'release governance must name the packaged screenshot artifact')
-assert.match(productionPlan, /Agents, Missions, Monitor, Plugins, Settings, and Agent Editor/, 'production plan must define the core packaged screenshot surface set')
+assert.match(workflow, /name:\s*automnia-packaged-beta-screenshots[\s\S]*path:\s*output\/packaged-beta-screenshots\/\*\*/m, 'Control Plane CI must upload packaged screenshot artifacts')
+assert.match(releaseGovernance, /automnia-packaged-beta-screenshots/, 'release governance must name the packaged screenshot artifact')
+assert.match(releaseGovernance, /Agents, Missions, Monitor, Plugins, Settings, and Agent Editor/, 'release governance must define the core packaged screenshot surface set')
 
 assert.equal(packageJson.scripts?.['smoke:packaged-beta-screenshots-contract'], 'tsx scripts/smoke-packaged-beta-screenshots-contract.ts')
 assert.ok(packageJson.scripts?.['test:ci']?.includes('npm run smoke:packaged-beta-screenshots-contract'), 'npm test must keep packaged screenshot coverage in the local gate')
