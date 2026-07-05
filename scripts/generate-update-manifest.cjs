@@ -7,8 +7,8 @@ const root = path.resolve(__dirname, '..')
 const packageJson = JSON.parse(fs.readFileSync(path.join(root, 'package.json'), 'utf8'))
 const artifactRoot = path.resolve(process.env.DYSTOPAI_RELEASE_ARTIFACT_ROOT || path.join(root, 'release'))
 const outputDir = path.resolve(process.env.DYSTOPAI_UPDATE_OUTPUT_DIR || path.join(artifactRoot, 'updates'))
-const requireSigning = /^(1|true|yes)$/i.test(String(process.env.DYSTOPAI_UPDATE_REQUIRE_SIGNING || ''))
-const artifacts = String(process.env.DYSTOPAI_UPDATE_ARTIFACTS || '')
+const requireSigning = /^(1|true|yes)$/i.test(String(process.env.AUTOMNIA_UPDATE_REQUIRE_SIGNING || process.env.DYSTOPAI_UPDATE_REQUIRE_SIGNING || ''))
+const artifacts = String(process.env.AUTOMNIA_UPDATE_ARTIFACTS || process.env.DYSTOPAI_UPDATE_ARTIFACTS || '')
   .split(path.delimiter)
   .map((entry) => entry.trim())
   .filter(Boolean)
@@ -19,12 +19,12 @@ try {
     outputDir,
     artifacts,
     product: packageJson.build?.productName || packageJson.name,
-    version: process.env.DYSTOPAI_RELEASE_VERSION || packageJson.version,
-    minimumVersion: process.env.DYSTOPAI_UPDATE_MINIMUM_VERSION || packageJson.version,
-    channel: process.env.DYSTOPAI_UPDATE_CHANNEL || 'stable',
+    version: process.env.AUTOMNIA_RELEASE_VERSION || process.env.DYSTOPAI_RELEASE_VERSION || packageJson.version,
+    minimumVersion: process.env.AUTOMNIA_UPDATE_MINIMUM_VERSION || process.env.DYSTOPAI_UPDATE_MINIMUM_VERSION || packageJson.version,
+    channel: process.env.AUTOMNIA_UPDATE_CHANNEL || process.env.DYSTOPAI_UPDATE_CHANNEL || 'stable',
   })
   if (requireSigning && !result.signed) {
-    throw new Error('Update signing is required. Configure DYSTOPAI_UPDATE_SIGNING_PRIVATE_KEY_FILE or DYSTOPAI_UPDATE_SIGNING_PRIVATE_KEY_PEM.')
+    throw new Error('Update signing is required. Configure AUTOMNIA_UPDATE_SIGNING_PRIVATE_KEY_FILE or AUTOMNIA_UPDATE_SIGNING_PRIVATE_KEY_PEM.')
   }
   console.log(`[update-manifest] wrote ${result.manifestPath}`)
   console.log(`[update-manifest] recorded ${result.manifest.artifacts.length} artifact(s)`)

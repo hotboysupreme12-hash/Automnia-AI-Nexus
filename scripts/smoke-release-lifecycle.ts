@@ -16,7 +16,7 @@ const releaseValidator = read('scripts/validate-release-artifacts.cjs')
 assert.match(updateLibrary, /crypto\.sign\(null, bytes, privateKey\)/, 'update manifests must use detached Ed25519 signatures')
 assert.match(updateLibrary, /Update artifact checksum mismatch/, 'update verification must reject tampered artifacts')
 assert.match(updateLibrary, /isWithin\(artifactRoot, filePath\)/, 'update artifact paths must remain contained')
-assert.match(updateGenerator, /DYSTOPAI_UPDATE_REQUIRE_SIGNING/, 'update generation must support a fail-closed public release mode')
+assert.match(updateGenerator, /AUTOMNIA_UPDATE_REQUIRE_SIGNING/, 'update generation must support a fail-closed public release mode')
 assert.match(updateVerifier, /verifyUpdateManifest/, 'update verification must execute artifact and signature checks')
 assert.match(releaseValidator, /validateUpdateChannelIfPresent/, 'release validation must verify the update manifest, not trust a boolean evidence claim')
 
