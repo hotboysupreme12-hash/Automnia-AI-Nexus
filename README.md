@@ -135,13 +135,27 @@ flowchart TD
 
 ## Start simple
 
-Recommended runtime: Node.js 24, or Node.js 22.19+ for compatibility.
+Recommended runtime: Node.js 24, or Node.js 22.19+ for compatibility. You also need npm and Git.
 
 ```bash
-git clone <this repository>
-cd <this repository>
+git clone https://github.com/hotboysupreme12-hash/Automnia-AI-Nexus.git
+cd Automnia-AI-Nexus
 npm ci
+npm run prepare:openclaw-vendor
 npm run desktop
+```
+
+For development mode, run the server and client together:
+
+```bash
+npm run dev
+```
+
+For validation before changing or packaging the app:
+
+```bash
+npm test
+npm run build:standalone
 ```
 
 For complete setup, read the [User Guide](docs/USER_GUIDE.md). For recovery and feedback details, read the [Support Guide](docs/BETA_SUPPORT.md).
