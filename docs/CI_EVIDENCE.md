@@ -21,9 +21,9 @@ Additional hosted checks for the same merge:
 
 Hosted release artifacts for the same merge:
 
-- `dystopai-release-evidence` - 1,673,407 bytes
-- `dystopai-packaged-beta-screenshots` - 2,150,700 bytes
-- `dystopai-windows-installer-candidate` - 630,220,139 bytes
+- `automnia-release-evidence` - uploaded by current Automnia Control Plane CI
+- `automnia-packaged-beta-screenshots` - uploaded by current Automnia Control Plane CI
+- `automnia-windows-installer-candidate` - uploaded by current Automnia Control Plane CI
 
 ## Release Gate
 

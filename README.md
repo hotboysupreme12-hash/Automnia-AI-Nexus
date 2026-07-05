@@ -158,6 +158,18 @@ npm test
 npm run build:standalone
 ```
 
+For release evidence and signing validation:
+
+```bash
+npm run release:evidence
+npm run release:sign
+npm run release:validate
+```
+
+Set `AUTOMNIA_RELEASE_SIGNING_PRIVATE_KEY_FILE` or `AUTOMNIA_RELEASE_SIGNING_PRIVATE_KEY_PEM` before signing. Set `AUTOMNIA_RELEASE_REQUIRE_SIGNING=1` for mandatory public-release validation.
+
+Public release evidence also needs `distribution-signing.json` so reviewers can verify consumer signing, update-channel signing, install, upgrade, rollback, and uninstall evidence.
+
 For complete setup, read the [User Guide](docs/USER_GUIDE.md). For recovery and feedback details, read the [Support Guide](docs/BETA_SUPPORT.md).
 
 ## Current status

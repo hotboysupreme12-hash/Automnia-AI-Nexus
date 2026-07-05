@@ -5,7 +5,7 @@ const { verifyUpdateManifest } = require('./lib/update-manifest.cjs')
 const root = path.resolve(__dirname, '..')
 const artifactRoot = path.resolve(process.env.DYSTOPAI_RELEASE_ARTIFACT_ROOT || path.join(root, 'release'))
 const outputDir = path.resolve(process.env.DYSTOPAI_UPDATE_OUTPUT_DIR || path.join(artifactRoot, 'updates'))
-const requireSigning = /^(1|true|yes)$/i.test(String(process.env.DYSTOPAI_UPDATE_REQUIRE_SIGNING || ''))
+const requireSigning = /^(1|true|yes)$/i.test(String(process.env.AUTOMNIA_UPDATE_REQUIRE_SIGNING || process.env.DYSTOPAI_UPDATE_REQUIRE_SIGNING || ''))
 
 try {
   const result = verifyUpdateManifest({

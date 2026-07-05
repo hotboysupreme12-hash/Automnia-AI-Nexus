@@ -71,8 +71,8 @@ assert.match(workflow, /release\/evidence\/ci-logs\/unit-coverage\.log/, 'contro
 assert.match(workflow, /release\/evidence\/bundle-budgets\/renderer-bundle-budgets\.log/, 'control-plane CI must preserve bundle budget output')
 assert.match(workflow, /release\/evidence\/ci-logs\/packaged-electron-launch\.log/, 'control-plane CI must preserve packaged launch smoke logs')
 assert.match(workflow, /release\/evidence\/ci-logs\/packaged-beta-screenshots\.log/, 'control-plane CI must preserve packaged screenshot capture logs')
-assert.match(workflow, /name:\s*dystopai-release-evidence[\s\S]*path:\s*release\/evidence\/\*\*/m, 'control-plane CI must upload release evidence artifacts')
-assert.match(workflow, /name:\s*dystopai-packaged-beta-screenshots[\s\S]*path:\s*output\/packaged-beta-screenshots\/\*\*/m, 'control-plane CI must upload packaged screenshot artifacts')
+assert.match(workflow, /name:\s*automnia-release-evidence[\s\S]*path:\s*release\/evidence\/\*\*/m, 'control-plane CI must upload release evidence artifacts')
+assert.match(workflow, /name:\s*automnia-packaged-beta-screenshots[\s\S]*path:\s*output\/packaged-beta-screenshots\/\*\*/m, 'control-plane CI must upload packaged screenshot artifacts')
 
 const order = [
   'npm ci',
@@ -101,13 +101,13 @@ for (const command of order) {
 }
 
 assert.match(publicRelease, /tags:\s*\n\s*- 'v\*'/, 'version tags must trigger the dedicated public release workflow')
-assert.match(publicRelease, /DYSTOPAI_RELEASE_REQUIRE_SIGNING:\s*'1'/, 'public releases must fail closed without release signing')
-assert.match(publicRelease, /DYSTOPAI_UPDATE_REQUIRE_SIGNING:\s*'1'/, 'public releases must fail closed without update signing')
+assert.match(publicRelease, /AUTOMNIA_RELEASE_REQUIRE_SIGNING:\s*'1'/, 'public releases must fail closed without release signing')
+assert.match(publicRelease, /AUTOMNIA_UPDATE_REQUIRE_SIGNING:\s*'1'/, 'public releases must fail closed without update signing')
 for (const secret of [
   'WIN_CSC_LINK',
   'WIN_CSC_KEY_PASSWORD',
-  'DYSTOPAI_RELEASE_SIGNING_PRIVATE_KEY_PEM',
-  'DYSTOPAI_UPDATE_SIGNING_PRIVATE_KEY_PEM',
+  'AUTOMNIA_RELEASE_SIGNING_PRIVATE_KEY_PEM',
+  'AUTOMNIA_UPDATE_SIGNING_PRIVATE_KEY_PEM',
   'MAC_CSC_LINK',
   'APPLE_ID',
   'APPLE_APP_SPECIFIC_PASSWORD',
@@ -139,8 +139,8 @@ assert.match(dependencyAudit, /npm audit --json > full-dependency-audit\.json/, 
 assert.match(dependencyAudit, /npm run audit:dependencies/, 'scheduled audit must still fail on production dependency policy')
 assert.match(releaseGovernance, /Beta-Ready Release Gate/, 'release governance must document the beta-ready release gate')
 assert.match(releaseGovernance, /Control Plane CI \/ Hardened control plane/, 'release governance must name the required Control Plane CI check')
-assert.match(releaseGovernance, /dystopai-release-evidence/, 'release governance must name the release evidence artifact')
-assert.match(releaseGovernance, /dystopai-packaged-beta-screenshots/, 'release governance must name the packaged screenshot artifact')
+assert.match(releaseGovernance, /automnia-release-evidence/, 'release governance must name the release evidence artifact')
+assert.match(releaseGovernance, /automnia-packaged-beta-screenshots/, 'release governance must name the packaged screenshot artifact')
 
 assert.match(scripts['smoke:ci-workflow'] || '', /tsx scripts\/smoke-ci-workflow\.ts/)
 assert.match(scripts['audit:dependencies'] || '', /npm audit --omit=dev --audit-level=high/)
