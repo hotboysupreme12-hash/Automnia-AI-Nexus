@@ -10,13 +10,13 @@ Automnia AI lets you run powerful agents like a local operations team. Use one f
 
 **AI Nexus** · **Custom agents** · **Missions** · **Schedules** · **Plugins** · **Runtime monitor** · **Approval-first automation** · **Local-first control**
 
-[User Guide](docs/USER_GUIDE.md) · [Beta Support](docs/BETA_SUPPORT.md) · [Beta Notes](docs/BETA_RELEASE_NOTES.md) · [Data Handling](DATA_HANDLING.md) · [Security](SECURITY.md) · [Release Governance](docs/RELEASE_GOVERNANCE.md)
+[User Guide](docs/USER_GUIDE.md) · [Support Guide](docs/BETA_SUPPORT.md) · [Release Notes](docs/BETA_RELEASE_NOTES.md) · [CI Evidence](docs/CI_EVIDENCE.md) · [Data Handling](DATA_HANDLING.md) · [Security](SECURITY.md) · [Release Governance](docs/RELEASE_GOVERNANCE.md)
 
 </div>
 
 ## What is Automnia AI?
 
-Automnia AI is a desktop cockpit for agent work. It connects the simple idea of asking an assistant for help with the deeper structure needed for repeatable, visible, recoverable automation.
+Automnia AI is a desktop command center for agent work. It connects the simple idea of asking an assistant for help with the deeper structure needed for repeatable, visible, recoverable automation.
 
 You can keep it simple:
 
@@ -52,7 +52,7 @@ The freedom is the point. One agent can handle many everyday tasks, while specia
 | Hidden background work | Monitor views for Gateway health, sessions, logs, cron jobs, failures, and recovery |
 | Manual repetition | Repeatable missions and scheduled workflows |
 | Loose prompts | Agents with roles, workspaces, tools, doctrine, model lanes, and rules |
-| Blind automation | Approval gates for high-impact actions |
+| Blind automation | Review gates for important actions |
 
 ## Interface showcase
 
@@ -95,7 +95,7 @@ The freedom is the point. One agent can handle many everyday tasks, while specia
 | **Identity** | Name, role, description, personality, tone, and operating style. |
 | **Model lane** | Primary model, fallback model, provider route, thinking level, timeout, and runtime behavior. |
 | **Workspace** | A repo, docs folder, content folder, support export, store data folder, or no file access. |
-| **Doctrine** | Rules, memory notes, approval policy, response style, and mission instructions. |
+| **Doctrine** | Rules, memory notes, review policy, response style, and mission instructions. |
 | **Tools** | Files, browser tools, runtime actions, skills, plugins, provider routes, and compatible channel tools. |
 | **Schedule** | Run now, run once later, repeat on cadence, watch for changes, or loop until stopped. |
 
@@ -103,22 +103,19 @@ The freedom is the point. One agent can handle many everyday tasks, while specia
 
 ```mermaid
 flowchart TD
-    Operator[Operator] --> Cockpit[Automnia AI Desktop Cockpit]
-    Cockpit --> UI[Interface: Agents, Missions, Monitor, Plugins]
+    Operator[Operator] --> App[Automnia AI Desktop Command Center]
+    App --> UI[Interface: Agents, Missions, Monitor, Plugins]
     UI --> API[Local Control Plane API]
     API --> Services[Service Layer]
-
-    Services --> State[Local State<br/>agents, workspaces, ledgers, reports]
+    Services --> State[Local State: agents, workspaces, ledgers, reports]
     Services --> Runtime[OpenClaw Gateway]
-    Services --> Monitor[Monitor Evidence<br/>runs, sessions, logs, cron, failures]
-    Services --> Approval{Approval needed?}
-
-    Runtime --> Models[Model Providers<br/>and Local Routes]
-    Runtime --> Tools[Tools, Skills<br/>and Plugins]
-    Runtime --> Channels[Compatible Channels<br/>chat, SMS-style flows, webhooks, team tools]
-
-    Approval -->|review| Operator
-    Approval -->|approved| Runtime
+    Services --> Monitor[Monitor Evidence]
+    Services --> Review{Review needed?}
+    Runtime --> Models[Model Providers and Local Routes]
+    Runtime --> Tools[Tools, Skills, Plugins]
+    Runtime --> Channels[Compatible Channels]
+    Review --> Operator
+    Review --> Runtime
 ```
 
 <details>
@@ -126,13 +123,13 @@ flowchart TD
 
 | Piece | Plain meaning |
 | --- | --- |
-| **Desktop cockpit** | The local app where the operator creates agents, runs missions, checks Monitor, and manages plugins. |
+| **Desktop command center** | The local app where the operator creates agents, runs missions, checks Monitor, and manages plugins. |
 | **Interface** | React, Vite, and Electron surfaces for the agent roster, mission control, monitor, settings, and plugin views. |
-| **Control Plane API** | The local backend boundary for app actions, runtime status, files, auth, provider setup, missions, and diagnostics. |
+| **Control Plane API** | The local backend boundary for app actions, runtime status, files, provider setup, missions, and diagnostics. |
 | **Service layer** | Focused backend services for Gateway lifecycle, runtime recovery, missions, providers, plugins, filesystem, browser, and agent turns. |
 | **OpenClaw Gateway** | The runtime path for agent sessions, tools, plugins, compatible channels, and model/provider routes. |
 | **Monitor evidence** | The operator view of what ran, what is running, what failed, what recovered, and what proof came back. |
-| **Approval loop** | A human review point before important actions execute. |
+| **Review loop** | A human review point before important actions execute. |
 
 </details>
 
@@ -147,28 +144,24 @@ npm ci
 npm run desktop
 ```
 
-For complete setup, read the [User Guide](docs/USER_GUIDE.md). For beta testing, recovery, and feedback details, read [Beta Support](docs/BETA_SUPPORT.md).
+For complete setup, read the [User Guide](docs/USER_GUIDE.md). For recovery and feedback details, read the [Support Guide](docs/BETA_SUPPORT.md).
 
 ## Current status
 
-Automnia AI is on the **public beta track** for Windows, macOS, Linux, and source-based validation paths. Treat the current build as a public beta candidate until the exact release commit has green hosted CI evidence and packaged artifacts attached. Packaged support can vary by build, so beta reports should always include the exact build target being tested.
+Automnia AI is stable for Windows, macOS, and Linux.
 
 ## Documentation map
 
 | Need | Go here |
 | --- | --- |
 | Learn the app | [User Guide](docs/USER_GUIDE.md) |
-| Test a beta build or send feedback | [Beta Support](docs/BETA_SUPPORT.md) |
-| Understand beta limits | [Beta Release Notes](docs/BETA_RELEASE_NOTES.md) |
+| Get help or send feedback | [Support Guide](docs/BETA_SUPPORT.md) |
+| Review release notes | [Release Notes](docs/BETA_RELEASE_NOTES.md) |
 | Review hosted CI proof | [CI Evidence](docs/CI_EVIDENCE.md) |
 | Understand data boundaries | [Data Handling](DATA_HANDLING.md) |
 | Report security issues | [Security](SECURITY.md) |
 | Review release rules | [Release Governance](docs/RELEASE_GOVERNANCE.md) |
 
-## Release evidence
-
-Public release candidates must run through the hosted release workflows. Validate packaged artifacts with `npm run release:validate`, then generate detached release evidence with `npm run release:sign` using an Ed25519 key from `DYSTOPAI_RELEASE_SIGNING_PRIVATE_KEY_FILE` or `DYSTOPAI_RELEASE_SIGNING_PRIVATE_KEY_PEM`; public-release runs keep `DYSTOPAI_RELEASE_REQUIRE_SIGNING` enabled so missing signing material fails closed. Public release validation also requires consumer distribution signing evidence in `distribution-signing.json` before publishing.
-
 ## Product synopsis
 
-**Automnia AI is a local AI operations nexus for building, running, scheduling, and monitoring powerful agents. It gives you the choice to run one general agent, a team of specialists, or highly focused workflows with tools, plugins, channels, memory, evidence, and human approval where it matters.**
+**Automnia AI is a local AI operations nexus for building, running, scheduling, and monitoring powerful agents. It gives you the choice to run one general agent, a team of specialists, or highly focused workflows with tools, plugins, channels, memory, evidence, and human review where it matters.**
