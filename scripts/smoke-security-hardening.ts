@@ -87,7 +87,7 @@ assert.match(controlPlaneHttp, /secureTokenEqual\(token, options\.authToken\)/, 
 assert.match(packageJson.scripts?.['test:ci'] || '', /smoke:session-tokens/, 'test:ci must cover session expiry and revocation')
 assert.match(packageJson.scripts?.['test:ci'] || '', /smoke:gateway-auth-hardening/, 'test:ci must cover token-only gateway auth defaults')
 assert.match(packageJson.scripts?.['test:ci'] || '', /smoke:security/, 'test:ci must include security hardening smoke')
-assert.equal(packageJson.homepage, 'https://github.com/hotboysupreme12-hash/DystopAI-Core', 'package metadata must point at the public project URL')
+assert.equal(packageJson.homepage, 'https://github.com/hotboysupreme12-hash/Automnia-AI-Nexus', 'package metadata must point at the public project URL')
 assert.ok(packageJson.build?.win?.target?.includes('nsis'), 'Windows consumer distribution must target an installer')
 assert.doesNotMatch(packageSource, /dystopai\.local|support@dystopai\.local/, 'package metadata must not publish stale .local support URLs')
 
