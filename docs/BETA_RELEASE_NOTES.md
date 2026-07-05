@@ -1,32 +1,28 @@
-# Automnia AI Public Beta Candidate Notes
+# Automnia AI Release Notes
 
 Last updated: 2026-07-05
 
-Automnia AI is a local-first desktop cockpit for OpenClaw agents, missions, schedules, plugins, provider setup, compatible channels, and live runtime monitoring.
+Automnia AI is a local-first desktop command center for OpenClaw agents, missions, schedules, plugins, provider setup, compatible channels, and live runtime monitoring.
 
-## Beta boundary
+## Platform status
 
-- Automnia AI is on the public beta track. Treat each build as a public beta candidate until the exact release commit has green hosted CI evidence and packaged artifacts attached.
-- Packaged build availability can vary by platform and release.
-- Windows desktop builds are the primary packaged beta path unless a release says otherwise.
-- Linux, macOS, and server/headless paths may be packaged or source-based depending on the build being tested.
-- Do not use beta builds for unattended business-critical automation.
+Automnia AI is stable for Windows, macOS, and Linux.
+
+## What this release emphasizes
+
+- Configurable agents with roles, model lanes, workspaces, doctrine, skills, and schedules.
+- Missions for structured goals, recurring work, proof, and recovery.
+- Monitor views for Gateway health, sessions, logs, cron jobs, plugin activity, and recovery actions.
+- Plugin and channel support for model routes, browser workflows, skills, compatible communication channels, and service integrations.
+- Review gates for important actions.
+- Hosted CI evidence, packaged launch validation, screenshot capture, and release evidence for reviewed builds.
 
 ## Before you install
 
 - Back up important local Automnia AI and OpenClaw state before testing an upgrade.
-- Use test accounts where possible.
+- Use test accounts when exploring new providers, plugins, or channels.
 - Keep local control surfaces on loopback addresses.
 - Review provider, plugin, channel, and workspace permissions before connecting them.
-- Keep approval gates on for high-impact actions.
-
-## Known limitations
-
-- Gateway, plugin, and channel status can require a manual Gateway reset or app restart after provider setup changes, plugin setup changes, interrupted runs, or local port conflicts.
-- Provider sessions, quotas, and channel setup values expire under the provider's own rules.
-- Clean Slate clears stale monitor cache, completed runtime calls, log tail snapshots, and stale session locks. It does not delete saved agents, durable configuration, or OpenClaw state.
-- Full local state reset is manual during beta.
-- Platform behavior can differ between packaged desktop builds, source runs, and server/headless validation.
 
 ## Recovery path
 
@@ -41,9 +37,9 @@ Automnia AI is a local-first desktop cockpit for OpenClaw agents, missions, sche
 
 ## Feedback
 
-When reporting beta feedback, include the app version or commit, build target, operating system, install type, steps, expected behavior, actual behavior, Gateway state, and a redacted log excerpt when useful.
+When reporting feedback, include the app version or commit, build target, operating system, install type, steps, expected behavior, actual behavior, Gateway state, and a redacted log excerpt when useful.
 
-Use the beta feedback template:
+Use the feedback template:
 
 ```text
 https://github.com/hotboysupreme12-hash/Automnia-AI-Nexus/issues/new?template=beta_feedback.yml
