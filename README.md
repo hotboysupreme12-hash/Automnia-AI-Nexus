@@ -21,8 +21,9 @@ Automnia AI is a desktop cockpit for agent work. It connects the simple idea of 
 You can keep it simple:
 
 ```text
+Launch App
 Create an agent.
-Give it a role.
+Select Model
 Send a task.
 Watch what happens.
 Approve important actions.
