@@ -47,7 +47,7 @@ The freedom is the point. One agent can handle many everyday tasks, while specia
 
 | Typical assistant app | Automnia AI |
 | --- | --- |
-| One long chat thread | A power AI nexus with extensive model support, identity, missions, schedules, skills, plugins, and runtime evidence |
+| One long chat thread | A visual AI operations nexus with extensive model support, identity, missions, schedules, skills, plugins, and runtime evidence |
 | One personality | One general operator, many specialists, or both |
 | Hidden background work | Monitor views for Gateway health, sessions, logs, cron jobs, failures, and recovery |
 | Manual repetition | Repeatable missions and scheduled workflows |
@@ -170,4 +170,4 @@ Public release candidates must run through the hosted release workflows. Validat
 
 ## Product synopsis
 
-**Automnia is a local AI operations nexus for building, running, scheduling, and monitoring powerful agents. It gives you the choice to run one general agent, a team of specialists, or highly focused workflows with tools, plugins, channels, memory, evidence, and human approval where it matters.**
+**Automnia AI is a local AI operations nexus for building, running, scheduling, and monitoring powerful agents. It gives you the choice to run one general agent, a team of specialists, or highly focused workflows with tools, plugins, channels, memory, evidence, and human approval where it matters.**
