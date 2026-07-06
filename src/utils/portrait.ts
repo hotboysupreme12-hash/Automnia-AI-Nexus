@@ -7,7 +7,6 @@ type ViteImportMeta = ImportMeta & {
 }
 
 const assetBaseUrl = ((import.meta as ViteImportMeta).env?.BASE_URL || '/').replace(/\/?$/, '/')
-const imageFilePattern = /\.(?:png|jpe?g|webp|gif|bmp|ico|svg)(?:[?#].*)?$/i
 const windowsAbsolutePathPattern = /^[a-zA-Z]:[\\/]/
 const uncPathPattern = /^\\\\/
 
@@ -31,11 +30,11 @@ function isBundledPortraitAsset(value: string) {
   return value.startsWith('/agents/') || value.startsWith(`${assetBaseUrl}agents/`)
 }
 
-function isLikelyLocalPath(value: string) {
+function isAbsoluteLocalPath(value: string) {
   if (value.startsWith('file:')) return true
   if (windowsAbsolutePathPattern.test(value) || uncPathPattern.test(value)) return true
   if (value.startsWith('/') && !isAppApiPath(value) && !isBundledPortraitAsset(value)) return true
-  return imageFilePattern.test(value) && !isBrowserRuntimeUrl(value) && !isBundledPortraitAsset(value)
+  return false
 }
 
 export function localPortraitPathFromInput(value: string): string {
@@ -50,7 +49,7 @@ export function localPortraitPathFromInput(value: string): string {
       return ''
     }
   }
-  return isLikelyLocalPath(trimmed) ? trimmed : ''
+  return isAbsoluteLocalPath(trimmed) ? trimmed : ''
 }
 
 export function agentPortraitSrc(agentId: string | undefined, portrait: string | undefined): string {

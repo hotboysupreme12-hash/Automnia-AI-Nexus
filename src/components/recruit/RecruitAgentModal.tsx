@@ -18,7 +18,7 @@ import { useNexusStore } from '../../store/nexusStore'
 import type { RecruitAgentInput } from '../../store/nexusStore'
 import type { BehaviorProfile, CapabilityKey } from '../../types/nexus'
 import { formatModelGroupLabel, groupAvailableModels } from '../../utils/modelGrouping'
-import { localPortraitPathFromInput } from '../../utils/portrait'
+import { agentPortraitSrc, localPortraitPathFromInput } from '../../utils/portrait'
 import { ProviderAuthModal } from '../auth/ProviderAuthModal'
 
 type AvailableModel = {
@@ -924,7 +924,7 @@ export function RecruitAgentModal({ isOpen, onClose }: { isOpen: boolean; onClos
   const canAutoForge = Boolean(autoForgeVisible && primaryModel.trim() && !autoForging && !submitting && !templateApplying)
   const canSubmit = Boolean(trimmedName && trimmedId && !idError && !submitting && !autoForging && !templateApplying)
   const avatarValue = avatar.trim()
-  const avatarPreviewSrc = avatarValue && !localPortraitPathFromInput(avatarValue) ? avatarValue : ''
+  const avatarPreviewSrc = avatarValue && !localPortraitPathFromInput(avatarValue) ? agentPortraitSrc(undefined, avatarValue) : ''
   const canPreviewAvatar = Boolean(avatarPreviewSrc && !avatarPreviewFailed)
   const activeMarkdownContent = resourceFiles[activeFile] || ''
   const deferredMarkdownContent = useDeferredValue(activeMarkdownContent)
