@@ -91,6 +91,10 @@ html.dui-pro-overhaul.dui-cohesive-ui {
 
   html.dui-pro-overhaul .dy-human-nav :is(button, .dy-human-nav-action, .dy-human-nav-utility),
   html.dui-pro-overhaul.dui-cohesive-ui .dy-human-nav :is(button, .dy-human-nav-action, .dy-human-nav-utility) {
+    display: flex !important;
+    align-items: center !important;
+    justify-content: flex-start !important;
+    gap: 12px !important;
     min-height: 60px !important;
     padding: 0 20px !important;
     border: 0 !important;
@@ -103,6 +107,40 @@ html.dui-pro-overhaul.dui-cohesive-ui {
     color: #b6c4d2 !important;
     transform: none !important;
     contain: paint !important;
+  }
+
+  html.dui-pro-overhaul .dy-human-nav :is(button, .dy-human-nav-action, .dy-human-nav-utility) > .dui-button__icon,
+  html.dui-pro-overhaul.dui-cohesive-ui .dy-human-nav :is(button, .dy-human-nav-action, .dy-human-nav-utility) > .dui-button__icon {
+    width: 38px !important;
+    height: 38px !important;
+    min-width: 38px !important;
+    flex: 0 0 38px !important;
+  }
+
+  html.dui-pro-overhaul .dy-human-nav :is(button, .dy-human-nav-action, .dy-human-nav-utility) > .dui-button__label,
+  html.dui-pro-overhaul.dui-cohesive-ui .dy-human-nav :is(button, .dy-human-nav-action, .dy-human-nav-utility) > .dui-button__label {
+    display: block !important;
+    min-width: 0 !important;
+    flex: 1 1 auto !important;
+    overflow: hidden !important;
+    text-overflow: clip !important;
+    white-space: normal !important;
+  }
+
+  html.dui-pro-overhaul .dy-human-nav .dy-human-nav-copy,
+  html.dui-pro-overhaul.dui-cohesive-ui .dy-human-nav .dy-human-nav-copy {
+    display: block !important;
+    min-width: 0 !important;
+    max-width: 100% !important;
+    overflow: hidden !important;
+    line-height: 1.05 !important;
+  }
+
+  html.dui-pro-overhaul .dy-human-nav .dy-human-nav-copy :is(strong, span),
+  html.dui-pro-overhaul.dui-cohesive-ui .dy-human-nav .dy-human-nav-copy :is(strong, span) {
+    overflow: hidden !important;
+    text-overflow: ellipsis !important;
+    white-space: nowrap !important;
   }
 
   html.dui-pro-overhaul .dy-human-nav :is(button, .dy-human-nav-action, .dy-human-nav-utility)::before,
@@ -134,6 +172,11 @@ html.dui-pro-overhaul.dui-cohesive-ui {
 
   html.dui-pro-overhaul .dy-human-nav .dy-human-nav-icon,
   html.dui-pro-overhaul.dui-cohesive-ui .dy-human-nav .dy-human-nav-icon {
+    display: grid !important;
+    width: 38px !important;
+    height: 38px !important;
+    place-items: center !important;
+    flex: 0 0 38px !important;
     border-color: rgba(174, 193, 215, .13) !important;
     border-radius: 7px !important;
     background: rgba(255, 255, 255, .025) !important;
@@ -540,4 +583,88 @@ html.dui-pro-overhaul.dui-cohesive-ui .dy-command-console .dy-command-composer__
 html.dui-pro-overhaul.dui-cohesive-ui .dy-command-console .dy-command-composer__tools {
   min-width: 0 !important;
   max-width: 100% !important;
+}
+
+/* Status chip repair: show one compact status value plus the actual status dot. */
+html.dui-pro-overhaul [data-dui-panel="command-console"].dy-command-console .dy-command-console__meta,
+html.dui-pro-overhaul.dui-cohesive-ui [data-dui-panel="command-console"].dy-command-console .dy-command-console__meta {
+  min-width: 0 !important;
+}
+
+html.dui-pro-overhaul [data-dui-panel="command-console"].dy-command-console :is(.dy-command-console__stream-pill, .dy-command-console__stability-pill),
+html.dui-pro-overhaul.dui-cohesive-ui [data-dui-panel="command-console"].dy-command-console :is(.dy-command-console__stream-pill, .dy-command-console__stability-pill) {
+  gap: 6px !important;
+  min-width: 0 !important;
+  max-width: 132px !important;
+  padding: 0 9px !important;
+  overflow: hidden !important;
+  flex: 0 1 auto !important;
+}
+
+html.dui-pro-overhaul [data-dui-panel="command-console"].dy-command-console :is(.dy-command-console__stream-pill, .dy-command-console__stability-pill) > span,
+html.dui-pro-overhaul.dui-cohesive-ui [data-dui-panel="command-console"].dy-command-console :is(.dy-command-console__stream-pill, .dy-command-console__stability-pill) > span {
+  background: transparent !important;
+  box-shadow: none !important;
+  animation: none !important;
+}
+
+html.dui-pro-overhaul [data-dui-panel="command-console"].dy-command-console :is(.dy-command-console__stream-pill, .dy-command-console__stability-pill) .dui-status-chip__dot,
+html.dui-pro-overhaul.dui-cohesive-ui [data-dui-panel="command-console"].dy-command-console :is(.dy-command-console__stream-pill, .dy-command-console__stability-pill) .dui-status-chip__dot {
+  display: inline-block !important;
+  width: 6px !important;
+  min-width: 6px !important;
+  height: 6px !important;
+  flex: 0 0 6px !important;
+  border-radius: 999px !important;
+}
+
+html.dui-pro-overhaul [data-dui-panel="command-console"].dy-command-console .dy-command-console__stream-pill[data-stream-state="live"] .dui-status-chip__dot,
+html.dui-pro-overhaul.dui-cohesive-ui [data-dui-panel="command-console"].dy-command-console .dy-command-console__stream-pill[data-stream-state="live"] .dui-status-chip__dot,
+html.dui-pro-overhaul [data-dui-panel="command-console"].dy-command-console .dy-command-console__stability-pill[data-stability-state="healthy"] .dui-status-chip__dot,
+html.dui-pro-overhaul.dui-cohesive-ui [data-dui-panel="command-console"].dy-command-console .dy-command-console__stability-pill[data-stability-state="healthy"] .dui-status-chip__dot {
+  background: #74e2a5 !important;
+  box-shadow: 0 0 10px rgba(116, 226, 165, .52) !important;
+}
+
+html.dui-pro-overhaul [data-dui-panel="command-console"].dy-command-console .dy-command-console__stream-pill:is([data-stream-state="connecting"], [data-stream-state="reconnecting"]) .dui-status-chip__dot,
+html.dui-pro-overhaul.dui-cohesive-ui [data-dui-panel="command-console"].dy-command-console .dy-command-console__stream-pill:is([data-stream-state="connecting"], [data-stream-state="reconnecting"]) .dui-status-chip__dot,
+html.dui-pro-overhaul [data-dui-panel="command-console"].dy-command-console .dy-command-console__stability-pill:is([data-stability-state="warning"], [data-stability-state="pending"]) .dui-status-chip__dot,
+html.dui-pro-overhaul.dui-cohesive-ui [data-dui-panel="command-console"].dy-command-console .dy-command-console__stability-pill:is([data-stability-state="warning"], [data-stability-state="pending"]) .dui-status-chip__dot {
+  background: #f4c866 !important;
+  box-shadow: 0 0 10px rgba(244, 200, 102, .52) !important;
+}
+
+html.dui-pro-overhaul [data-dui-panel="command-console"].dy-command-console .dy-command-console__stream-pill[data-stream-state="offline"] .dui-status-chip__dot,
+html.dui-pro-overhaul.dui-cohesive-ui [data-dui-panel="command-console"].dy-command-console .dy-command-console__stream-pill[data-stream-state="offline"] .dui-status-chip__dot,
+html.dui-pro-overhaul [data-dui-panel="command-console"].dy-command-console .dy-command-console__stability-pill[data-stability-state="offline"] .dui-status-chip__dot,
+html.dui-pro-overhaul.dui-cohesive-ui [data-dui-panel="command-console"].dy-command-console .dy-command-console__stability-pill[data-stability-state="offline"] .dui-status-chip__dot {
+  background: #ff7280 !important;
+  box-shadow: 0 0 10px rgba(255, 114, 128, .52) !important;
+}
+
+html.dui-pro-overhaul [data-dui-panel="command-console"].dy-command-console :is(.dy-command-console__stream-pill, .dy-command-console__stability-pill) .dui-status-chip__label,
+html.dui-pro-overhaul.dui-cohesive-ui [data-dui-panel="command-console"].dy-command-console :is(.dy-command-console__stream-pill, .dy-command-console__stability-pill) .dui-status-chip__label {
+  position: absolute !important;
+  width: 1px !important;
+  height: 1px !important;
+  margin: -1px !important;
+  padding: 0 !important;
+  overflow: hidden !important;
+  clip: rect(0 0 0 0) !important;
+  clip-path: inset(50%) !important;
+  white-space: nowrap !important;
+}
+
+html.dui-pro-overhaul [data-dui-panel="command-console"].dy-command-console :is(.dy-command-console__stream-pill, .dy-command-console__stability-pill) .dui-status-chip__value,
+html.dui-pro-overhaul.dui-cohesive-ui [data-dui-panel="command-console"].dy-command-console :is(.dy-command-console__stream-pill, .dy-command-console__stability-pill) .dui-status-chip__value {
+  min-width: 0 !important;
+  overflow: hidden !important;
+  color: currentColor !important;
+  font-size: 10px !important;
+  font-weight: 780 !important;
+  letter-spacing: 0 !important;
+  line-height: 1 !important;
+  text-overflow: ellipsis !important;
+  text-transform: none !important;
+  white-space: nowrap !important;
 }
