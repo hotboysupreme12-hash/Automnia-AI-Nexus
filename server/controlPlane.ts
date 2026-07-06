@@ -423,11 +423,6 @@ const BROWSER_PLUGIN_ID = 'browser'
 const EXTERNAL_LOAD_PATH_RESERVED_PLUGIN_IDS = new Set(['codex'])
 const CLAWTALK_DEFAULT_SERVER = 'https://clawdtalk.com'
 const CLAWTALK_DEFAULT_AGENT_ID = 'hn-coordinator'
-const SURVIVING_AGENT_IDS = new Set([
-  'hn-architect',
-  'hn-coordinator',
-  'hn-crypto-lead',
-])
 const CLAWTALK_AGENT_TOOL_NAMES = [
   'clawtalk_bot_config',
   'clawtalk_call',
@@ -12204,7 +12199,7 @@ loadRetiredAgentIdsFromDisk()
 
 function isRetiredAgentId(agentId: string | undefined) {
   const normalized = normalizeRetiredAgentId(agentId)
-  return Boolean(normalized && normalized !== 'main' && (RETIRED_AGENT_IDS.has(normalized) || !SURVIVING_AGENT_IDS.has(normalized)))
+  return Boolean(normalized && normalized !== 'main' && RETIRED_AGENT_IDS.has(normalized))
 }
 
 function pruneRetiredAgentsFromOpenClawConfig(config: OpenClawConfigFile) {
