@@ -4,6 +4,7 @@ import { useNexusStore } from '../../store/nexusStore'
 import type { AgentOperationState, AgentResponse, MissionEvent, OpenClawAgent } from '../../types/nexus'
 import { clearRuntimeMonitor, restartGatewayRuntime, runRuntimeDoctor, stopCronShift, updateCronShift, useRuntimeStatus } from '../../hooks/useRuntimeStatus'
 import type { DoctorFinding, DoctorRun, GatewayChannelActivity, GatewayLogEntry, RuntimeCronJob, RuntimeMonitorClearResult, RuntimeStatus } from '../../hooks/useRuntimeStatus'
+import { agentPortraitSrc } from '../../utils/portrait'
 import { ActionStatusBanner } from '../common/ActionStatusBanner'
 import { Badge, Button, IconButton, StatusChip } from '../ui'
 import type { BadgeTone } from '../ui'
@@ -1224,6 +1225,7 @@ export function LiveOperationMonitor() {
   const [cleanSlateBusy, setCleanSlateBusy] = useState(false)
   const [cleanSlateError, setCleanSlateError] = useState('')
   const [cleanSlateResult, setCleanSlateResult] = useState<RuntimeMonitorClearResult | null>(null)
+  const [failedPortraitKeys, setFailedPortraitKeys] = useState<Set<string>>(() => new Set())
 
   const activePartyIdSet = useMemo(() => new Set(activePartyIds), [activePartyIds])
   const busyAgentIdSet = useMemo(() => new Set(busyAgentIds), [busyAgentIds])
@@ -1491,6 +1493,9 @@ export function LiveOperationMonitor() {
               const agent = item.agentId ? agentById.get(item.agentId) : undefined
               const isControlCenter = item.kind === 'event' && !item.agentId
               const isWorkingStatus = isControlCenter && isWorkingDelegationText(item.detail)
+              const portraitSrc = agent ? agentPortraitSrc(agent.id, agent.portrait) : ''
+              const portraitKey = agent && portraitSrc ? `${agent.id}::${portraitSrc}` : ''
+              const portraitFailed = portraitKey ? failedPortraitKeys.has(portraitKey) : false
               return (
                 <motion.div key={`${item.kind}-${item.id}`} initial={{ opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: Math.min(index * 0.02, 0.15) }}
                   className={`relative overflow-hidden rounded-xl border p-3.5 ${
@@ -1505,8 +1510,13 @@ export function LiveOperationMonitor() {
                     <div className={`relative h-12 w-12 shrink-0 overflow-hidden rounded-xl ring-1 ${isControlCenter ? 'bg-zinc-950/60 ring-white/[0.06]' : 'ring-white/10'}`}>
                       {isControlCenter ? (
                         <img src={CONTROL_CENTER_LOGO_SRC} alt="" className="h-full w-full object-cover opacity-80" />
-                      ) : agent?.portrait ? (
-                        <img src={agent.portrait} alt="" className="h-full w-full object-cover" />
+                      ) : portraitSrc && !portraitFailed ? (
+                        <img
+                          src={portraitSrc}
+                          alt=""
+                          className="h-full w-full object-cover"
+                          onError={() => setFailedPortraitKeys((current) => new Set(current).add(portraitKey))}
+                        />
                       ) : (
                         <div className="flex h-full w-full items-center justify-center bg-white/[0.02] text-sm font-bold text-slate-600">{agent?.name?.charAt(0) || 'O'}</div>
                       )}

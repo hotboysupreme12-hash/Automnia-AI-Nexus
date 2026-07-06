@@ -1,6 +1,7 @@
 import { useMemo, useState, type ReactNode } from 'react'
 import { useNexusStore } from '../../store/nexusStore'
 import type { OpenClawAgent } from '../../types/nexus'
+import { agentPortraitSrc } from '../../utils/portrait'
 
 const PARTY_SLOT_COUNT = 6
 
@@ -46,8 +47,7 @@ function initials(name: string) {
 }
 
 function portraitSrcForAgent(agent: OpenClawAgent) {
-  if (agent.portrait) return agent.portrait
-  return ''
+  return agentPortraitSrc(agent.id, agent.portrait)
 }
 
 interface ActivePartyStripProps {

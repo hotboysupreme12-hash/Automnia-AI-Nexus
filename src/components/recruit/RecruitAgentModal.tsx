@@ -18,6 +18,7 @@ import { useNexusStore } from '../../store/nexusStore'
 import type { RecruitAgentInput } from '../../store/nexusStore'
 import type { BehaviorProfile, CapabilityKey } from '../../types/nexus'
 import { formatModelGroupLabel, groupAvailableModels } from '../../utils/modelGrouping'
+import { localPortraitPathFromInput } from '../../utils/portrait'
 import { ProviderAuthModal } from '../auth/ProviderAuthModal'
 
 type AvailableModel = {
@@ -768,6 +769,7 @@ export function RecruitAgentModal({ isOpen, onClose }: { isOpen: boolean; onClos
   const [personalityDepth, setPersonalityDepth] = useState(DEFAULT_PERSONALITY_DEPTH)
   const [workspace, setWorkspace] = useState('')
   const [avatar, setAvatar] = useState('')
+  const [avatarPreviewFailed, setAvatarPreviewFailed] = useState(false)
   const [primaryModel, setPrimaryModel] = useState('')
   const [capabilities, setCapabilities] = useState<Record<CapabilityKey, boolean>>({ ...DEFAULT_CAPABILITIES })
   const [addToParty, setAddToParty] = useState(true)
@@ -922,7 +924,8 @@ export function RecruitAgentModal({ isOpen, onClose }: { isOpen: boolean; onClos
   const canAutoForge = Boolean(autoForgeVisible && primaryModel.trim() && !autoForging && !submitting && !templateApplying)
   const canSubmit = Boolean(trimmedName && trimmedId && !idError && !submitting && !autoForging && !templateApplying)
   const avatarValue = avatar.trim()
-  const canPreviewAvatar = Boolean(avatarValue && !/^[a-zA-Z]:[\\/]/.test(avatarValue))
+  const avatarPreviewSrc = avatarValue && !localPortraitPathFromInput(avatarValue) ? avatarValue : ''
+  const canPreviewAvatar = Boolean(avatarPreviewSrc && !avatarPreviewFailed)
   const activeMarkdownContent = resourceFiles[activeFile] || ''
   const deferredMarkdownContent = useDeferredValue(activeMarkdownContent)
   const activeMarkdownLines = useMemo(() => deferredMarkdownContent.split('\n'), [deferredMarkdownContent])
@@ -987,6 +990,10 @@ export function RecruitAgentModal({ isOpen, onClose }: { isOpen: boolean; onClos
   useEffect(() => () => {
     if (textDraftTimerRef.current !== null) window.clearTimeout(textDraftTimerRef.current)
   }, [])
+
+  useEffect(() => {
+    setAvatarPreviewFailed(false)
+  }, [avatarValue])
 
   const buildDefaults = (files = fileOrder, draft?: Partial<ReturnType<typeof readTextDrafts>>) => markdownDefaults({
     name: (draft?.name ?? trimmedName).trim(),
@@ -1741,7 +1748,7 @@ export function RecruitAgentModal({ isOpen, onClose }: { isOpen: boolean; onClos
                         <div className="dui-recruit-avatar-row">
                           <div className="dui-recruit-portrait-preview" aria-label="Selected profile picture preview">
                             {canPreviewAvatar ? (
-                              <img src={avatarValue} alt="" />
+                              <img src={avatarPreviewSrc} alt="" onError={() => setAvatarPreviewFailed(true)} />
                             ) : (
                               <span>{trimmedName.charAt(0).toUpperCase() || 'A'}</span>
                             )}

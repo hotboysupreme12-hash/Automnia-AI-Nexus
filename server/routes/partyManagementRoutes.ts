@@ -64,6 +64,7 @@ export function registerPartyManagementRoutes(app: Express, options: PartyManage
     normalizeRecruitPersonalityDepth,
     normalizeSandboxConfig,
     persistAgentAvatarBytes,
+    persistAgentAvatarFromPath,
     purgeAgentState,
     readAgencyAgentTemplateCatalog,
     readControlCenterStateRecord,
@@ -909,6 +910,37 @@ export function registerPartyManagementRoutes(app: Express, options: PartyManage
       return apiSuccess(res, {
         status: 'selected',
         sourcePath: null,
+        path: persisted.avatarPath,
+        avatar: persisted.avatar,
+        previewUrl: persisted.previewUrl,
+        detail: 'Profile picture selected.',
+      })
+    } catch (error) {
+      return apiFailure(
+        res,
+        400,
+        'avatar_upload_failed',
+        'Avatar upload failed',
+        error instanceof Error && error.message ? error.message : String(error),
+      )
+    }
+  })
+
+  app.post('/api/party/avatar-path/:agentId', async (req: Request, res: Response) => {
+    const agentId = String(req.params.agentId || '')
+    if (!isValidAgentId(agentId)) return apiFailure(res, 400, 'invalid_payload', 'Invalid agent id.')
+
+    const schema = z.object({
+      path: z.string().min(1),
+    })
+    const parsed = schema.safeParse(req.body ?? {})
+    if (!parsed.success) return apiFailure(res, 400, 'invalid_payload', 'Invalid payload', parsed.error.flatten())
+
+    try {
+      const persisted = await persistAgentAvatarFromPath(agentId, parsed.data.path)
+      return apiSuccess(res, {
+        status: 'selected',
+        sourcePath: persisted.sourcePath,
         path: persisted.avatarPath,
         avatar: persisted.avatar,
         previewUrl: persisted.previewUrl,

@@ -3,6 +3,7 @@ import type { CSSProperties } from 'react'
 import { motion } from 'framer-motion'
 import { useNexusStore } from '../../store/nexusStore'
 import type { CapabilityKey, CollaborationMode, DurationMode, DurationUnit } from '../../types/nexus'
+import { agentPortraitSrc } from '../../utils/portrait'
 import { Badge, Button, StatusChip } from '../ui'
 import { MISSION_GLYPH_ASSETS, MISSION_PRESET_ASSETS, preloadMissionIconAssets } from './missionIconAssets'
 import type { MissionGlyph } from './missionIconAssets'
@@ -336,6 +337,7 @@ export function MissionDeploymentPanel() {
   const [showTiming, setShowTiming] = useState(false)
   const [heartbeatValue, setHeartbeatValue] = useState(30)
   const [heartbeatUnit, setHeartbeatUnit] = useState<HeartbeatUnit>('seconds')
+  const [failedPortraitKeys, setFailedPortraitKeys] = useState<Set<string>>(() => new Set())
   const missionRunning = activeMission?.status === 'running'
   const selectedParty = confirmedPartyIds.length ? confirmedPartyIds : activePartyIds
   const agentById = useMemo(() => new Map(agents.map((agent) => [agent.id, agent])), [agents])
@@ -580,10 +582,19 @@ export function MissionDeploymentPanel() {
                   const busy = busyAgentSet.has(agent.id)
                   const heartbeat = msToHeartbeat(agent.heartbeat.tickIntervalMs)
                   const excluded = excludedAgents.some((entry) => entry.id === agent.id)
+                  const portraitSrc = agentPortraitSrc(agent.id, agent.portrait)
+                  const portraitKey = `${agent.id}::${portraitSrc}`
+                  const portraitFailed = portraitSrc ? failedPortraitKeys.has(portraitKey) : false
                   return (
                     <div key={agent.id} className={`dui-agent-row ${busy ? 'is-busy' : ''} ${excluded ? 'is-excluded' : ''}`}>
                       <div className="dui-agent-avatar">
-                        {agent.portrait ? <img src={agent.portrait} alt="" /> : <span>{agent.name.charAt(0)}</span>}
+                        {portraitSrc && !portraitFailed ? (
+                          <img
+                            src={portraitSrc}
+                            alt=""
+                            onError={() => setFailedPortraitKeys((current) => new Set(current).add(portraitKey))}
+                          />
+                        ) : <span>{agent.name.charAt(0)}</span>}
                       </div>
                       <div className="dui-agent-main">
                         <strong>{agent.name}</strong>
@@ -662,11 +673,22 @@ export function MissionDeploymentPanel() {
               <div className="dui-loadout-head">
                 <span>Active Loadout</span>
                 <div className="dui-avatar-stack">
-                  {effectiveAgents.slice(0, 6).map((agent) => (
-                    <div key={agent.id}>
-                      {agent.portrait ? <img src={agent.portrait} alt="" /> : <span>{agent.name.charAt(0)}</span>}
-                    </div>
-                  ))}
+                  {effectiveAgents.slice(0, 6).map((agent) => {
+                    const portraitSrc = agentPortraitSrc(agent.id, agent.portrait)
+                    const portraitKey = `${agent.id}::${portraitSrc}`
+                    const portraitFailed = portraitSrc ? failedPortraitKeys.has(portraitKey) : false
+                    return (
+                      <div key={agent.id}>
+                        {portraitSrc && !portraitFailed ? (
+                          <img
+                            src={portraitSrc}
+                            alt=""
+                            onError={() => setFailedPortraitKeys((current) => new Set(current).add(portraitKey))}
+                          />
+                        ) : <span>{agent.name.charAt(0)}</span>}
+                      </div>
+                    )
+                  })}
                 </div>
               </div>
               <div className="dui-meter-grid">

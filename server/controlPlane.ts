@@ -11898,7 +11898,16 @@ function configSafeAgentAvatar(rawAvatar: string | undefined, workspacePath?: st
   const avatar = (rawAvatar || '').trim()
   if (!avatar) return ''
   if (avatar.includes('\0')) return ''
-  if (/^(?:https?|data|file):/i.test(avatar)) return ''
+  if (/^https?:\/\//i.test(avatar)) {
+    try {
+      const url = new URL(avatar)
+      if ((url.protocol === 'http:' || url.protocol === 'https:') && !url.username && !url.password) return url.href
+    } catch {
+      return ''
+    }
+    return ''
+  }
+  if (/^(?:data|file):/i.test(avatar)) return ''
 
   const workspace = agentConfigWorkspaceForAvatar(undefined, workspacePath)
   const candidate = path.isAbsolute(avatar) ? path.resolve(avatar) : path.resolve(workspace, avatar)
@@ -16693,6 +16702,7 @@ export type PartyManagementRoutesContext = {
   normalizeRecruitPersonalityDepth: typeof normalizeRecruitPersonalityDepth
   normalizeSandboxConfig: typeof normalizeSandboxConfig
   persistAgentAvatarBytes: typeof persistAgentAvatarBytes
+  persistAgentAvatarFromPath: typeof persistAgentAvatarFromPath
   purgeAgentState: typeof purgeAgentState
   readAgencyAgentTemplateCatalog: typeof runtimeLedgerStore.readAgencyAgentTemplateCatalog
   readControlCenterStateRecord: typeof readControlCenterStateRecord
@@ -16771,6 +16781,7 @@ const partyManagementRoutesContext: PartyManagementRoutesContext = {
   normalizeRecruitPersonalityDepth,
   normalizeSandboxConfig,
   persistAgentAvatarBytes,
+  persistAgentAvatarFromPath,
   purgeAgentState,
   readAgencyAgentTemplateCatalog: runtimeLedgerStore.readAgencyAgentTemplateCatalog,
   readControlCenterStateRecord,

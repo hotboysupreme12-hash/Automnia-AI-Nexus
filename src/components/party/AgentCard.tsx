@@ -2,6 +2,7 @@ import { memo, useMemo, useState } from 'react'
 import type { OpenClawAgent } from '../../types/nexus'
 import { useNexusStore } from '../../store/nexusStore'
 import { clampAgentStat, deriveLevelScaledAttributes } from '../../engine/AgentStatScaling'
+import { agentPortraitSrc } from '../../utils/portrait'
 
 const RARITY: Record<string, {
   cardBg: string; cardBorder: string; cardGlow: string
@@ -158,8 +159,7 @@ function initials(name: string) {
 }
 
 function portraitSrcForAgent(agent: OpenClawAgent) {
-  if (agent.portrait) return agent.portrait
-  return ''
+  return agentPortraitSrc(agent.id, agent.portrait)
 }
 
 interface AgentCardProps {
