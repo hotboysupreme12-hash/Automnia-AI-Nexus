@@ -14,6 +14,7 @@ import { useNexusStore } from '../../store/nexusStore'
 import type { AgentSkillEntry, BehaviorProfile, FastModeDefault, HeartbeatConfig, OpenClawAgent, ThinkingLevel } from '../../types/nexus'
 import { apiUrl } from '../../utils/apiUrl'
 import { formatModelChoiceLabel, formatModelGroupLabel, groupAvailableModels } from '../../utils/modelGrouping'
+import { agentPortraitSrc, localPortraitPathFromInput } from '../../utils/portrait'
 import { ProviderAuthModal } from '../auth/ProviderAuthModal'
 
 type EditorTab = 'profile'|'model'|'heartbeat'|'policy'|'workspace'|'skills'|'files'
@@ -343,6 +344,7 @@ export function AgentEditorModal() {
   const [levelDraft,setLevelDraft] = useState('')
   const [portraitDraft,setPortraitDraft] = useState('')
   const [portraitPreviewSrc,setPortraitPreviewSrc] = useState('')
+  const [portraitPreviewFailed,setPortraitPreviewFailed] = useState(false)
   const [portraitStatus,setPortraitStatus] = useState('')
   const [portraitPicking,setPortraitPicking] = useState(false)
   const portraitRef = useRef<HTMLInputElement|null>(null)
@@ -402,8 +404,9 @@ export function AgentEditorModal() {
   const [retireConfirmOpen,setRetireConfirmOpen] = useState(false)
   const [retiring,setRetiring] = useState(false)
 
-  const pSrc = portraitPreviewSrc || portraitDraft || agent?.portrait || ''
   const agentId = agent?.id || ''
+  const pSrc = agentPortraitSrc(agentId, portraitPreviewSrc || portraitDraft || agent?.portrait || '')
+  const showPortraitPreview = Boolean(pSrc && !portraitPreviewFailed)
   const partySlotIndex = useMemo(()=>agentId?activePartyIds.indexOf(agentId):-1,[activePartyIds,agentId])
   const enabledSkillIds = useMemo(()=>new Set(agent?.unlockedSkills || []),[agent?.unlockedSkills])
   const ul = installedSkills.filter((skill)=>enabledSkillIds.has(skill.id)).length
@@ -856,7 +859,7 @@ export function AgentEditorModal() {
   }
 
   type AvatarPickerPayload = { ok?:boolean; sessionId?:string; status?:string; path?:string|null; sourcePath?:string|null; avatar?:string|null; previewUrl?:string|null; error?:string; detail?:string }
-  const applyPickedPortrait = (payload:AvatarPickerPayload)=>{
+  const applyPickedPortrait = useCallback((payload:AvatarPickerPayload)=>{
     if(!agent)return false
     const storedAvatar=(payload.avatar||payload.path||'').trim()
     const rawPreview=(payload.previewUrl||'').trim()
@@ -864,11 +867,12 @@ export function AgentEditorModal() {
     if(!storedAvatar&&!preview)return false
     setPortraitDraft(storedAvatar||preview)
     setPortraitPreviewSrc(preview||storedAvatar)
-    updateAgentMeta(agent.id,{portrait:preview||storedAvatar})
+    setPortraitPreviewFailed(false)
+    updateAgentMeta(agent.id,{portrait:storedAvatar||preview})
     agentConfigCache.delete(agent.id)
     setPortraitStatus('Updated.')
     return true
-  }
+  },[agent,updateAgentMeta])
   const UploadPortraitFile = async (file:File)=>{
     if(!agent)return
     if(!isSupportedPortraitFile(file)){
@@ -878,6 +882,7 @@ export function AgentEditorModal() {
     const localPreview = URL.createObjectURL(file)
     setPortraitPicking(true)
     setPortraitPreviewSrc(localPreview)
+    setPortraitPreviewFailed(false)
     setPortraitStatus('Uploading image...')
     try{
       const result=await apiRequest<AvatarPickerPayload>(`/api/party/avatar-upload/${encodeURIComponent(agent.id)}?filename=${encodeURIComponent(file.name||'avatar')}`,{
@@ -903,6 +908,43 @@ export function AgentEditorModal() {
       window.setTimeout(()=>URL.revokeObjectURL(localPreview),30000)
     }
   }
+  const CommitPortraitDraft = useCallback(async ()=>{
+    if(!agent)return
+    const next=portraitDraft.trim()
+    setPortraitPreviewFailed(false)
+    if(!next){
+      setPortraitStatus('')
+      return
+    }
+    const localPath=localPortraitPathFromInput(next)
+    if(localPath){
+      setPortraitPicking(true)
+      setPortraitStatus('Importing image...')
+      try{
+        const result=await apiRequest<AvatarPickerPayload>(`/api/party/avatar-path/${encodeURIComponent(agent.id)}`,{
+          method:'POST',
+          timeoutMs:90000,
+          body:{path:localPath},
+        })
+        if(!result.ok){
+          if(result.error.code==='timeout')throw new Error('Avatar import timed out. Try Browse or a smaller image.')
+          if(result.error.code==='network_error')throw new Error('Avatar import failed before the server responded. Restart the backend if this repeats.')
+          throw new Error(apiErrorMessage(result.error))
+        }
+        if(!applyPickedPortrait(result.data)){
+          throw new Error('Avatar import finished but no preview was returned.')
+        }
+      }catch(e){
+        const message=errorMessage(e)
+        setPortraitStatus(message.startsWith('Avatar import')?message:`Import failed: ${message}`)
+      }finally{
+        setPortraitPicking(false)
+      }
+      return
+    }
+    PM({portrait:next})
+    setPortraitStatus('Updated.')
+  },[PM,agent,applyPickedPortrait,portraitDraft])
   const PickPortrait = ()=>{
     if(!agent||portraitPicking)return
     setPortraitStatus('')
@@ -1072,6 +1114,7 @@ export function AgentEditorModal() {
     setLevelDraft(String(currentAgent.level))
     setPortraitDraft(currentAgent.portrait||'')
     setPortraitPreviewSrc('')
+    setPortraitPreviewFailed(false)
     setPortraitStatus('')
     setPortraitPicking(false)
     setTick(currentAgent.heartbeat.tickIntervalMs)
@@ -1123,6 +1166,7 @@ export function AgentEditorModal() {
   useEffect(()=>{if(isOpen&&agent?.id&&tab==='files')void LdF()},[isOpen,agent?.id,tab,LdF])
   useEffect(()=>{if(isOpen&&editingAgentId&&tab==='files'&&rfile)void LdFC(rfile)},[isOpen,editingAgentId,tab,rfile,LdFC])
   useEffect(()=>{if(isOpen&&agent?.id&&tab==='skills')void LdSharedSkills(agent.id)},[isOpen,agent?.id,tab,LdSharedSkills])
+  useEffect(()=>{setPortraitPreviewFailed(false)},[pSrc])
   useEffect(()=>()=>{void flushPendingConfigPatch().catch(()=>{})},[flushPendingConfigPatch])
 
   if(!agent)return null
@@ -1156,7 +1200,7 @@ export function AgentEditorModal() {
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-3">
                   <div data-editor-avatar className="relative h-12 w-12 overflow-hidden rounded-full ring-2 ring-white/10">
-                    {pSrc?<img src={pSrc} alt="" className="h-full w-full object-cover"/>:<div className="flex h-full w-full items-center justify-center bg-white/[0.03] text-lg font-black text-slate-600">{agent.name.charAt(0)}</div>}
+                    {showPortraitPreview?<img src={pSrc} alt="" className="h-full w-full object-cover" onError={()=>setPortraitPreviewFailed(true)}/>:<div className="flex h-full w-full items-center justify-center bg-white/[0.03] text-lg font-black text-slate-600">{agent.name.charAt(0)}</div>}
                     <div className="pointer-events-none absolute inset-0 rounded-full bg-gradient-to-b from-white/10 to-transparent"/>
                   </div>
                   <div>
@@ -1183,15 +1227,15 @@ export function AgentEditorModal() {
                   <div data-editor-panel="profile" className="space-y-4">
                     <div data-editor-card="portrait" className="flex items-center gap-4">
                       <button type="button" data-editor-portrait onClick={()=>void PickPortrait()} disabled={portraitPicking} title="Upload a new portrait image" aria-label="Upload a new portrait image" className="group relative h-32 w-32 shrink-0 overflow-hidden rounded-full ring-2 ring-white/15 transition hover:ring-cyan-400/40 disabled:opacity-60">
-                        {pSrc?<img src={pSrc} alt="" className="h-full w-full object-cover"/>:<div className="flex h-full w-full items-center justify-center bg-white/[0.03] text-4xl font-black text-slate-700">{agent.name.charAt(0)}</div>}
+                        {showPortraitPreview?<img src={pSrc} alt="" className="h-full w-full object-cover" onError={()=>setPortraitPreviewFailed(true)}/>:<div className="flex h-full w-full items-center justify-center bg-white/[0.03] text-4xl font-black text-slate-700">{agent.name.charAt(0)}</div>}
                         <div className="absolute inset-0 flex items-end justify-center rounded-full bg-gradient-to-t from-black/70 to-transparent opacity-0 transition group-hover:opacity-100"><span className="pb-1.5 text-[9px] font-bold text-white">Change</span></div>
                       </button>
                       <input ref={portraitRef} type="file" accept="image/*" className="hidden" onChange={(e)=>{const f=e.target.files?.[0];e.currentTarget.value='';if(f)void UploadPortraitFile(f)}}/>
                       <div className="flex-1 space-y-2">
-                        <input type="text" value={portraitDraft} onChange={(e)=>{setPortraitDraft(e.target.value);setPortraitPreviewSrc('')}} onBlur={()=>{if(portraitDraft.trim())PM({portrait:portraitDraft.trim()});setPortraitStatus(portraitDraft.trim()?'Updated.':'')}} placeholder="Portrait URL or path" className="w-full rounded-lg border border-white/[0.08] bg-white/[0.03] px-3 py-2 text-[11px] text-slate-200 placeholder:text-slate-600 focus:outline-none focus:border-cyan-400/40"/>
+                        <input type="text" value={portraitDraft} onChange={(e)=>{setPortraitDraft(e.target.value);setPortraitPreviewSrc('');setPortraitPreviewFailed(false)}} onBlur={()=>void CommitPortraitDraft()} onKeyDown={(e)=>{if(e.key==='Enter')e.currentTarget.blur()}} placeholder="Portrait URL or path" className="w-full rounded-lg border border-white/[0.08] bg-white/[0.03] px-3 py-2 text-[11px] text-slate-200 placeholder:text-slate-600 focus:outline-none focus:border-cyan-400/40"/>
                         <div className="flex gap-1.5">
                           <button type="button" onClick={()=>void PickPortrait()} disabled={portraitPicking} title="Choose a portrait image file" className="rounded-md border border-cyan-400/20 bg-cyan-400/[0.05] px-3 py-1.5 text-[9px] font-bold text-cyan-300 hover:bg-cyan-400/[0.1] disabled:opacity-40">{portraitPicking?'Opening...':'Browse'}</button>
-                          <button type="button" onClick={()=>{setPortraitDraft('');setPortraitPreviewSrc('');PM({portrait:''});setPortraitStatus('Cleared.')}} title="Remove the current portrait" className="rounded-md border border-white/[0.08] bg-white/[0.03] px-3 py-1.5 text-[9px] font-bold text-slate-400 hover:border-white/20">Clear</button>
+                          <button type="button" onClick={()=>{setPortraitDraft('');setPortraitPreviewSrc('');setPortraitPreviewFailed(false);PM({portrait:''});setPortraitStatus('Cleared.')}} title="Remove the current portrait" className="rounded-md border border-white/[0.08] bg-white/[0.03] px-3 py-1.5 text-[9px] font-bold text-slate-400 hover:border-white/20">Clear</button>
                         </div>
                         {portraitStatus&&<p className="text-[9px] text-cyan-400">{portraitStatus}</p>}
                       </div>
