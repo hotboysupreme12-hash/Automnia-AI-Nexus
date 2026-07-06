@@ -22,6 +22,7 @@ const packageJson = JSON.parse(readFileSync(path.join(root, 'package.json'), 'ut
 }
 const scripts = packageJson.scripts || {}
 const signingSource = readFileSync(path.join(root, 'scripts/sign-release-evidence.cjs'), 'utf8')
+const packageDesktopSource = readFileSync(path.join(root, 'scripts/package-desktop.cjs'), 'utf8')
 const workflowSource = readFileSync(path.join(root, '.github/workflows/control-plane-ci.yml'), 'utf8')
 const publicReleaseSource = readFileSync(path.join(root, '.github/workflows/public-release.yml'), 'utf8')
 const readme = readFileSync(path.join(root, 'README.md'), 'utf8')
@@ -43,6 +44,10 @@ assert.match(publicReleaseSource, /tags:\s*\n\s*- 'v\*'/, 'dedicated public-rele
 assert.match(publicReleaseSource, /AUTOMNIA_RELEASE_REQUIRE_SIGNING:\s*'1'/, 'public-release CI must fail closed without release signing')
 assert.match(publicReleaseSource, /AUTOMNIA_RELEASE_SIGNING_PRIVATE_KEY_PEM/, 'public-release CI must use the configured release-signing private-key secret')
 assert.match(publicReleaseSource, /npm run release:sign/, 'public-release CI must sign release evidence')
+assert.match(packageDesktopSource, /notarytool'[\s\S]*'submit'/, 'repaired mac DMGs must be resubmitted to notarytool when Apple credentials are present')
+assert.match(packageDesktopSource, /stapler'[\s\S]*'staple'/, 'repaired mac DMGs must be stapled after notarization')
+assert.match(packageDesktopSource, /stapler'[\s\S]*'validate'/, 'repaired mac DMGs must validate their stapled ticket before replacement')
+assert.match(packageDesktopSource, /spctl'[\s\S]*'--assess'/, 'repaired mac DMGs must pass Gatekeeper assessment before replacement')
 assert.match(readme, /npm run release:sign/, 'README must document release signing')
 assert.match(readme, /AUTOMNIA_RELEASE_SIGNING_PRIVATE_KEY_FILE/, 'README must document private-key file based signing')
 assert.match(readme, /AUTOMNIA_RELEASE_REQUIRE_SIGNING/, 'README must document mandatory public-release signing')
