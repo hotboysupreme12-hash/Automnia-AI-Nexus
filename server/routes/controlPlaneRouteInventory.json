@@ -72,6 +72,7 @@
   "POST /api/party/agent-to-agent",
   "POST /api/party/agent/:agentId/config",
   "POST /api/party/agent/:agentId/model",
+  "POST /api/party/avatar-path/:agentId",
   "POST /api/party/avatar-picker/start",
   "POST /api/party/avatar-upload/:agentId",
   "POST /api/party/configs/sync",

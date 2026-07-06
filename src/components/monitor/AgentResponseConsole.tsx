@@ -13,6 +13,7 @@ import { useNexusStore } from '../../store/nexusStore'
 import type { AgentResponse, AgentTurnAttachment, OpenClawAgent } from '../../types/nexus'
 import { apiUrl } from '../../utils/apiUrl'
 import { redactDiagnosticText } from '../../utils/diagnosticRedaction'
+import { agentPortraitSrc } from '../../utils/portrait'
 import { createSseFrameParser } from '../../utils/sseStream'
 import { Badge, Button, IconButton, StatusChip } from '../ui'
 import type { BadgeTone } from '../ui'
@@ -320,7 +321,7 @@ function initials(name: string) {
 }
 
 function portraitSrcForAgent(agent: Pick<OpenClawAgent, 'id' | 'portrait'>) {
-  return agent.portrait || ''
+  return agentPortraitSrc(agent.id, agent.portrait)
 }
 
 function portraitFailureKey(agentId: string, src: string) {
