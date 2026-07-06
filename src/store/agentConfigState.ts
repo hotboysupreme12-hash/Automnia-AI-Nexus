@@ -4,11 +4,6 @@ import type { OpenClawAgent } from '../types/nexus'
 
 export const MAX_PARTY_SIZE = 6
 
-const SURVIVING_AGENT_IDS = new Set([
-  'hn-architect',
-  'hn-coordinator',
-  'hn-crypto-lead',
-])
 const DEFAULT_TEMPLATE_AGENT_ID = 'hn-coordinator'
 const DEFAULT_ACTIVE_PARTY_IDS = [
   'hn-architect',
@@ -100,7 +95,7 @@ export function retiredAgentIdsForStore(): string[] {
 
 export function isRetiredAgentId(agentId: string | undefined): boolean {
   const id = normalizeRetiredAgentId(agentId)
-  return Boolean(id && (RETIRED_AGENT_IDS.has(id) || !SURVIVING_AGENT_IDS.has(id)))
+  return Boolean(id && RETIRED_AGENT_IDS.has(id))
 }
 
 let seedCache: OpenClawAgent[] | null = null
@@ -249,10 +244,11 @@ export function mergeAgentConfigState(data: Partial<NexusAgentConfigState>): Nex
 }
 
 export function partializeAgentConfigState(state: NexusAgentConfigState): NexusAgentConfigState {
+  const agents = state.agents.filter((agent) => !isRetiredAgentId(agent.id)).map(sanitizeAgentForPersistentStore)
   return {
     retiredAgentIds: state.retiredAgentIds,
-    agents: state.agents.filter((agent) => !isRetiredAgentId(agent.id)).map(sanitizeAgentForPersistentStore),
-    activePartyIds: state.activePartyIds.filter((id) => !isRetiredAgentId(id)),
-    confirmedPartyIds: state.confirmedPartyIds.filter((id) => !isRetiredAgentId(id)),
+    agents,
+    activePartyIds: sanitizePartyIds(state.activePartyIds, agents),
+    confirmedPartyIds: sanitizePartyIds(state.confirmedPartyIds, agents),
   }
 }
