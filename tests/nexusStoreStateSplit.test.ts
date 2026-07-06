@@ -343,6 +343,7 @@ test('agent config helpers normalize retired ids, parties, portraits, and persis
   assert.deepEqual(rememberRetiredAgentId('phase-j-second-retired'), ['phase-j-retired', 'phase-j-second-retired'])
   assert.equal(isRetiredAgentId('PHASE-J-RETIRED'), true)
   assert.equal(isRetiredAgentId('hn-commander'), true)
+  assert.equal(isRetiredAgentId(customAgent.id), false)
   assert.equal(isRetiredAgentId(first.id), false)
 
   assert.equal(resolveDefaultTemplateAgentId([]), null)
