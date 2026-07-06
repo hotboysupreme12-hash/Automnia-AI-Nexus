@@ -7,14 +7,36 @@ import net from 'node:net'
 
 const root = process.cwd()
 const releaseRoot = path.join(root, 'release')
-const unpackedRoot = path.join(releaseRoot, process.platform === 'win32' ? 'win-unpacked' : 'linux-unpacked')
+const productName = 'Automnia AI Nexus'
+
+function resolveMacUnpackedRoot() {
+  const candidates = [
+    path.join(releaseRoot, process.arch === 'arm64' ? 'mac-arm64' : 'mac'),
+    path.join(releaseRoot, 'mac-arm64'),
+    path.join(releaseRoot, 'mac'),
+  ]
+  const unpackedRoot = candidates.find((candidate) => existsSync(path.join(candidate, `${productName}.app`)))
+  assert.ok(unpackedRoot, `packaged launch smoke requires a macOS app bundle under ${candidates.join(' or ')}; run node scripts/package-desktop.cjs --dir first`)
+  return unpackedRoot
+}
+
+const unpackedRoot = process.platform === 'darwin'
+  ? resolveMacUnpackedRoot()
+  : path.join(releaseRoot, process.platform === 'win32' ? 'win-unpacked' : 'linux-unpacked')
+const macAppPath = path.join(unpackedRoot, `${productName}.app`)
 const launcherPath = process.platform === 'win32'
   ? path.join(unpackedRoot, 'Automnia AI Nexus.exe')
+  : process.platform === 'darwin'
+    ? path.join(macAppPath, 'Contents', 'MacOS', productName)
   : path.join(unpackedRoot, 'dystopai')
 const electronRuntimePath = process.platform === 'win32'
   ? path.join(unpackedRoot, 'electron.exe')
   : launcherPath
-const resourcesDir = path.join(unpackedRoot, 'resources')
+const resourcesDir = process.platform === 'darwin'
+  ? path.join(macAppPath, 'Contents', 'Resources')
+  : path.join(unpackedRoot, 'resources')
+const launcherCwd = process.platform === 'darwin' ? path.dirname(launcherPath) : unpackedRoot
+const launcherExitTimeoutMs = process.platform === 'darwin' ? 30_000 : 10_000
 const requiredPackagedFiles = [
   launcherPath,
   electronRuntimePath,
@@ -145,7 +167,7 @@ const env = {
 
 try {
   const launcher = spawn(launcherPath, [], {
-    cwd: unpackedRoot,
+    cwd: launcherCwd,
     env,
     windowsHide: true,
     stdio: ['ignore', 'pipe', 'pipe'],
@@ -157,8 +179,8 @@ try {
   const launcherStatus = await new Promise<number | null>((resolve, reject) => {
     const timeout = setTimeout(() => {
       launcher.kill()
-      reject(new Error(`packaged launcher did not exit within 10s\n${launcherOutput}`))
-    }, 10_000)
+      reject(new Error(`packaged launcher did not exit within ${launcherExitTimeoutMs / 1000}s\n${launcherOutput}`))
+    }, launcherExitTimeoutMs)
     launcher.once('error', reject)
     launcher.once('exit', (code) => {
       clearTimeout(timeout)
