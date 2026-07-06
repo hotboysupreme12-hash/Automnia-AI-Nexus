@@ -175,6 +175,61 @@ function macDmgContainsElectronFramework(dmgPath, productName) {
   }
 }
 
+function repairedDmgNotarytoolArgs() {
+  const apiKey = process.env.APPLE_API_KEY || ''
+  const apiKeyId = process.env.APPLE_API_KEY_ID || ''
+  const apiIssuer = process.env.APPLE_API_ISSUER || ''
+  const hasApiCredential = Boolean(apiKey || apiKeyId || apiIssuer)
+  if (hasApiCredential) {
+    const missing = [
+      ['APPLE_API_KEY', apiKey],
+      ['APPLE_API_KEY_ID', apiKeyId],
+      ['APPLE_API_ISSUER', apiIssuer],
+    ].filter(([, value]) => !value).map(([name]) => name)
+    if (missing.length) {
+      throw new Error(`Cannot notarize repaired mac DMG: missing ${missing.join(', ')}`)
+    }
+    return ['--key', apiKey, '--key-id', apiKeyId, '--issuer', apiIssuer]
+  }
+
+  const appleId = process.env.APPLE_ID || ''
+  const password = process.env.APPLE_APP_SPECIFIC_PASSWORD || process.env.APPLE_PASSWORD || ''
+  const teamId = process.env.APPLE_TEAM_ID || ''
+  const hasAppleIdCredential = Boolean(appleId || password || teamId)
+  if (hasAppleIdCredential) {
+    const missing = [
+      ['APPLE_ID', appleId],
+      ['APPLE_APP_SPECIFIC_PASSWORD', password],
+      ['APPLE_TEAM_ID', teamId],
+    ].filter(([, value]) => !value).map(([name]) => name)
+    if (missing.length) {
+      throw new Error(`Cannot notarize repaired mac DMG: missing ${missing.join(', ')}`)
+    }
+    return ['--apple-id', appleId, '--password', password, '--team-id', teamId]
+  }
+
+  return null
+}
+
+function notarizeRepairedMacDmgIfConfigured(dmgPath) {
+  const notaryArgs = repairedDmgNotarytoolArgs()
+  if (!notaryArgs) return false
+
+  runChecked('notarize repaired mac DMG', 'xcrun', ['notarytool', 'submit', dmgPath, ...notaryArgs, '--wait'])
+  runChecked('staple repaired mac DMG', 'xcrun', ['stapler', 'staple', dmgPath])
+  runChecked('validate stapled repaired mac DMG', 'xcrun', ['stapler', 'validate', dmgPath])
+  runChecked('assess repaired mac DMG', 'spctl', [
+    '--assess',
+    '--type',
+    'open',
+    '--context',
+    'context:primary-signature',
+    '--verbose=4',
+    dmgPath,
+  ])
+  return true
+}
+
 function repairMacDmg(dmgPath, appPath, productName) {
   const stageDir = fs.mkdtempSync(path.join(os.tmpdir(), 'automnia-dmg-stage-'))
   const repairedDmg = path.join(path.dirname(dmgPath), `${path.basename(dmgPath, '.dmg')}.repaired.dmg`)
@@ -209,6 +264,9 @@ function repairMacDmg(dmgPath, appPath, productName) {
     ])
     if (!macDmgContainsElectronFramework(repairedDmg, productName)) {
       throw new Error('repaired mac DMG is missing Electron Framework')
+    }
+    if (notarizeRepairedMacDmgIfConfigured(repairedDmg)) {
+      console.warn(`[package-desktop] repaired mac DMG was notarized and stapled: ${path.basename(dmgPath)}`)
     }
     fs.renameSync(repairedDmg, dmgPath)
   } finally {
