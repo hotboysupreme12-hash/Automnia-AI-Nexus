@@ -15,6 +15,7 @@ import {
   createRuntimeLedgerStore,
   runtimeLedgerPathsForStateRoot,
   runtimeMonitorClearMarkerPath,
+  scheduleLegacyRuntimeLedgerImport,
 } from './state/runtimeLedgerStore'
 import { installControlPlaneErrorHandler, installControlPlaneHttp } from './controlPlaneHttp'
 import { registerAuthRoutes } from './routes/authRoutes'
@@ -173,6 +174,17 @@ import type {
 } from './shiftContracts'
 import { applyDiagnosticRedactions } from '../src/utils/diagnosticRedaction'
 
+const CONTROL_CENTER_STARTUP_TRACE = process.env.CONTROL_CENTER_STARTUP_TRACE === '1'
+const CONTROL_CENTER_MODULE_EVALUATION_STARTED_AT = Date.now()
+
+function traceControlCenterStartup(stage: string) {
+  if (!CONTROL_CENTER_STARTUP_TRACE) return
+  const elapsedMs = Date.now() - CONTROL_CENTER_MODULE_EVALUATION_STARTED_AT
+  console.error(`[control-plane:start] +${elapsedMs}ms ${stage}`)
+}
+
+traceControlCenterStartup('control-plane module evaluation started')
+
 const app = express()
 
 const PORT = Number(process.env.CONTROL_CENTER_PORT || 4050)
@@ -304,8 +316,8 @@ const CONTROL_CENTER_STARTED_AT_MS = Date.now()
 
 const runtimeLedgerStore = createRuntimeLedgerStore(CONTROL_CENTER_LEDGER_PATHS)
 
-function readControlCenterStateRecord<T>(stateKey: string): T | null {
-  return runtimeLedgerStore.readControlCenterState<T>(stateKey)
+function readControlCenterStateRecord<T>(stateKey: string, options?: { sqlite?: boolean }): T | null {
+  return runtimeLedgerStore.readControlCenterState<T>(stateKey, options)
 }
 
 function writeControlCenterStateRecord(stateKey: string, value: unknown, sourcePath?: string) {
@@ -966,8 +978,11 @@ function resolveOpenClawBin() {
   return existingEmbedded || cliCandidates.find(openClawBinExists) || 'openclaw'
 }
 
+traceControlCenterStartup('preparing bundled OpenClaw runtime')
 prepareSourceOpenClawVendorIfMissing()
+traceControlCenterStartup('resolving bundled OpenClaw runtime')
 const openclawBin = resolveOpenClawBin()
+traceControlCenterStartup('bundled OpenClaw runtime resolved')
 if (openclawBin && openclawBin !== 'openclaw') process.env.OPENCLAW_BIN = openclawBin
 
 function isOpenClawRuntimeAvailable() {
@@ -12174,7 +12189,10 @@ function retiredAgentIdsFromUnknown(value: unknown) {
 }
 
 function loadRetiredAgentIdsFromDisk() {
-  const sqliteState = readControlCenterStateRecord(CONTROL_CENTER_STATE_KEYS.retiredAgentIds)
+  // Do not open SQLite during module evaluation. Opening it used to import every
+  // historical JSONL entry before the API could bind, making large user ledgers
+  // appear as a desktop startup failure.
+  const sqliteState = readControlCenterStateRecord(CONTROL_CENTER_STATE_KEYS.retiredAgentIds, { sqlite: false })
   if (sqliteState !== null) {
     const sqliteIds = retiredAgentIdsFromUnknown(sqliteState)
     sqliteIds.forEach((agentId) => RETIRED_AGENT_IDS.add(agentId))
@@ -12187,7 +12205,6 @@ function loadRetiredAgentIdsFromDisk() {
   })
   if (legacyIds) {
     legacyIds.forEach((agentId) => RETIRED_AGENT_IDS.add(agentId))
-    writeControlCenterStateRecord(CONTROL_CENTER_STATE_KEYS.retiredAgentIds, { ids: legacyIds }, RETIRED_AGENT_IDS_PATH)
   }
 }
 
@@ -12204,7 +12221,9 @@ async function rememberRetiredAgentId(agentId: string) {
   return true
 }
 
+traceControlCenterStartup('loading durable startup state')
 loadRetiredAgentIdsFromDisk()
+traceControlCenterStartup('durable startup state loaded')
 
 function isRetiredAgentId(agentId: string | undefined) {
   const normalized = normalizeRetiredAgentId(agentId)
@@ -17407,6 +17426,9 @@ controlServer = app.listen(PORT, '127.0.0.1', () => {
     console.log(`Generated local Control Center login token: ${AUTH_TOKEN}`)
     console.log('Set CONTROL_CENTER_TOKEN before startup to choose a stable local token.')
   }
+  // Keep historical ledger migration out of the readiness path. It is safe to
+  // resume in the background once the local desktop API is available.
+  scheduleLegacyRuntimeLedgerImport()
   void (async () => {
     await hydrateRecentOpenClawRunsFromLedger()
     await hydrateMissionRecordsFromLedger()

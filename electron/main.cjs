@@ -106,8 +106,10 @@ let serverRestartTimer = null
 let serverRestartAttempts = 0
 let controlCenterLaunchToken = ''
 let lastTrayMenuSnapshot = []
+let serverStartupOutputTail = ''
 const SERVER_RESTART_BASE_DELAY_MS = 1000
 const SERVER_RESTART_MAX_DELAY_MS = 10_000
+const SERVER_STARTUP_OUTPUT_TAIL_MAX_CHARS = 12_000
 
 function logE2e(message) {
   if (!ELECTRON_E2E) return
@@ -1294,7 +1296,29 @@ function waitForControlServer(timeoutMs = CONTROL_SERVER_STARTUP_TIMEOUT_MS) {
   })
 }
 
+function redactServerStartupDiagnostic(value) {
+  return String(value || '')
+    .replace(/\b(authorization|token|api[_-]?key|password|secret)\s*([:=])\s*[^\s,;]+/gi, '$1$2[redacted]')
+}
+
+function rememberServerStartupOutput(stream, chunk) {
+  const text = redactServerStartupDiagnostic(String(chunk || '').replace(/\r/g, ''))
+  if (!text) return
+  serverStartupOutputTail = `${serverStartupOutputTail}[${stream}] ${text}`.slice(-SERVER_STARTUP_OUTPUT_TAIL_MAX_CHARS)
+}
+
+function serverStartupDiagnostics() {
+  const detail = serverStartupOutputTail.trim()
+  return detail ? `\n\nServer startup diagnostics:\n${detail}` : ''
+}
+
+function startupErrorWithServerDiagnostics(error) {
+  const message = error instanceof Error ? error.message : String(error)
+  return new Error(`${message}${serverStartupDiagnostics()}`)
+}
+
 function pipeServerOutput(stream, chunk) {
+  rememberServerStartupOutput(stream, chunk)
   const text = String(chunk || '').replace(/\r/g, '')
   for (const line of text.split('\n')) {
     if (!line.trim()) continue
@@ -1339,7 +1363,10 @@ function startControlServerProcess(serverEntry) {
   }
 
   controlServerEntry = serverEntry
-  const pipeLogs = isDev || process.env.DYSTOPAI_PIPE_SERVER_LOGS === '1'
+  // Always retain server output: in packaged apps it is the only useful
+  // explanation when the local API cannot start.
+  const pipeLogs = true
+  serverStartupOutputTail = ''
   const child = spawn(process.execPath, [serverEntry], {
     cwd: path.dirname(process.execPath),
     env: {
@@ -1347,6 +1374,7 @@ function startControlServerProcess(serverEntry) {
       CONTROL_CENTER_EXIT_ON_PORT_ERROR: process.env.CONTROL_CENTER_EXIT_ON_PORT_ERROR || '1',
       DYSTOPAI_DESKTOP_SERVER_CHILD: '1',
       DYSTOPAI_DESKTOP_SERVER_PARENT_PID: String(process.pid),
+      CONTROL_CENTER_STARTUP_TRACE: process.env.CONTROL_CENTER_STARTUP_TRACE || '1',
       ELECTRON_RUN_AS_NODE: '1',
     },
     stdio: pipeLogs ? ['ignore', 'pipe', 'pipe'] : 'ignore',
@@ -1387,17 +1415,19 @@ function waitForSpawnedControlServer(child, timeoutMs = CONTROL_SERVER_STARTUP_T
       fn(value)
     }
     const onExit = (code, signal) => {
-      settle(reject, new Error(`Control Center API exited before it was ready (code=${code ?? 'unknown'}, signal=${signal || 'none'}).`))
+      settle(reject, startupErrorWithServerDiagnostics(
+        new Error(`Control Center API exited before it was ready (code=${code ?? 'unknown'}, signal=${signal || 'none'}).`),
+      ))
     }
     const onError = (error) => {
-      settle(reject, error instanceof Error ? error : new Error(String(error)))
+      settle(reject, startupErrorWithServerDiagnostics(error))
     }
 
     child.once('exit', onExit)
     child.once('error', onError)
     waitForControlServer(timeoutMs).then(
       () => settle(resolve),
-      (error) => settle(reject, error),
+      (error) => settle(reject, startupErrorWithServerDiagnostics(error)),
     )
   })
 }
