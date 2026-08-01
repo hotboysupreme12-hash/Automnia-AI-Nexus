@@ -19,6 +19,7 @@ import {
   readMissionReportLedgerTail,
   readRuntimeRunLedgerTail,
   runtimeLedgerStatus,
+  scheduleLegacyRuntimeLedgerImport,
   writeAgencyAgentTemplateCatalog,
   writeControlCenterState,
 } from '../runtimeLedger'
@@ -56,6 +57,8 @@ export const CONTROL_CENTER_STATE_KEYS = {
 } as const
 
 const CONTROL_CENTER_STATE_NAMESPACE = 'control-center'
+
+export { scheduleLegacyRuntimeLedgerImport }
 
 export function runtimeLedgerPathsForStateRoot(openClawStateRoot: string): Required<RuntimeLedgerStorePaths> {
   const directory = path.join(openClawStateRoot, 'control-center-ledger')
