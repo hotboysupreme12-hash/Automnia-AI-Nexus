@@ -86,6 +86,7 @@ type ControlPlaneHttpOptions = {
 }
 
 const PUBLIC_API_PATHS = new Set(['/api/ready', '/api/health', '/api/auth/login', '/api/auth/status'])
+const PUBLIC_AGENT_AVATAR_PATH = /^\/api\/party\/avatar\/[a-z0-9][a-z0-9_-]{0,79}$/i
 
 export function controlCenterAllowedOrigins(port: number, frontendPort: number) {
   return new Set([
@@ -121,7 +122,11 @@ function apiPath(req: Request) {
 }
 
 function isPublicApiRequest(req: Request) {
-  return req.method === 'OPTIONS' || PUBLIC_API_PATHS.has(apiPath(req))
+  if (req.method === 'OPTIONS' || PUBLIC_API_PATHS.has(apiPath(req))) return true
+  // <img> requests cannot attach the desktop bearer token. Expose only the
+  // already-sanitized, read-only local portrait endpoint; every mutating avatar
+  // route remains authenticated.
+  return (req.method === 'GET' || req.method === 'HEAD') && PUBLIC_AGENT_AVATAR_PATH.test(apiPath(req))
 }
 
 export function setStaticSecurityHeaders(res: Response, filePath: string) {

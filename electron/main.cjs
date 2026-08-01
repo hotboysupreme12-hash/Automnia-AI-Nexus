@@ -460,8 +460,8 @@ function resolveOpenClawRuntime() {
 function resolveAppIcon() {
   return [
     resourcePath('icon.png'),
-    path.join(appRoot(), 'build', 'icon-graphite.png'),
     path.join(appRoot(), 'build', 'icon.png'),
+    path.join(appRoot(), 'build', 'icon-graphite.png'),
   ].find((c) => fs.existsSync(c))
 }
 

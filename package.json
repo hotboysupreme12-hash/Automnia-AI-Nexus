@@ -164,7 +164,7 @@
   "build": {
     "appId": "ai.automnia.nexus",
     "productName": "Automnia AI Nexus",
-    "icon": "build/icon-graphite.png",
+    "icon": "build/icon.png",
     "asar": true,
     "npmRebuild": false,
     "buildDependenciesFromSource": false,
@@ -187,7 +187,7 @@
         "to": "dist"
       },
       {
-        "from": "build/icon-graphite.png",
+        "from": "build/icon.png",
         "to": "icon.png"
       },
       {

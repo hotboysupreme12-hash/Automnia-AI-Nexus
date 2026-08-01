@@ -58,10 +58,10 @@ writeFileSync(path.join(codexRuntimeDir, '.dystopai-runtime-bundle.json'), `${JS
   generatedAt: '2026-06-24T00:00:00.000Z',
   codex: {
     package: '@openclaw/codex',
-    spec: '@openclaw/codex@2026.6.11',
-    version: '2026.6.11',
-    integrity: 'sha512-L9rO95x0DW7rpVJisPv2kkgwr04nKYAA1xbgDXVAm2oh801BCJFIJFo021bvhPmwo7MTAXNcuchO3laGa30QRQ==',
-    tarball: 'https://registry.npmjs.org/@openclaw/codex/-/codex-2026.6.11.tgz',
+    spec: '@openclaw/codex@2026.7.1-1',
+    version: '2026.7.1-1',
+    integrity: 'sha512-fRQITjqjC4Q/M6WmkR9XPWPuL+7vcvyVUWIDztB08X2G/mhzSwCYwQp4hugxAtuKmO3yx/7ULMK3nyeKsg5zGw==',
+    tarball: 'https://registry.npmjs.org/@openclaw/codex/-/codex-2026.7.1-1.tgz',
     lockfile: '.dystopai-runtime-package-lock.json',
     dependencies: {
       '@openai/codex': {
@@ -114,7 +114,7 @@ assert.equal(sbom.bomFormat, 'CycloneDX')
 assert.equal(sbom.specVersion, '1.5')
 assert.ok(sbom.components.some((component) => component.name === 'react'), 'SBOM must include lockfile dependencies')
 assert.ok(sbom.components.some((component) => component.name === 'node' && component.hashes?.some((hash) => hash.alg === 'SHA-256')), 'SBOM must include hashed Node runtime metadata')
-assert.ok(sbom.components.some((component) => component.name === '@openclaw/codex' && component.version === '2026.6.11'), 'SBOM must include bundled Codex runtime metadata')
+assert.ok(sbom.components.some((component) => component.name === '@openclaw/codex' && component.version === '2026.7.1-1'), 'SBOM must include bundled Codex runtime metadata')
 assert.ok(sbom.components.some((component) => component.name === '@openai/codex-win32-x64'), 'SBOM must include native Codex runtime dependency metadata')
 assert.match(checksums, /DystopAI-test-artifact\.txt/, 'checksum manifest must include release artifacts')
 assert.match(checksums, /dystopai-sbom\.cdx\.json/, 'checksum manifest must include the generated SBOM')

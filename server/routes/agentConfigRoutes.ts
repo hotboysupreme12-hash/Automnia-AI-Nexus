@@ -436,7 +436,7 @@ export function registerAgentConfigRoutes(app: Express, options: AgentConfigRout
       : null
     const modelSessionReset = patch.model ? resetAgentTurnSessionsForModelChange(target.id) : null
     if (patch.model) {
-      modelOverrideCleanup = await clearDisallowedAutoModelOverridesForAgent(target.id, local.model)
+      modelOverrideCleanup = await clearDisallowedAutoModelOverridesForAgent(target.id, local.model, { clearManualOverrides: true })
     }
     const gatewayRestart = patch.runtime
       ? schedulePluginGatewayRestart()
@@ -533,7 +533,7 @@ export function registerAgentConfigRoutes(app: Express, options: AgentConfigRout
 
       await writeOpenclawConfig(config)
       const modelSessionReset = resetAgentTurnSessionsForModelChange(agentId)
-      const modelOverrideCleanup = await clearDisallowedAutoModelOverridesForAgent(agentId, nextModel)
+      const modelOverrideCleanup = await clearDisallowedAutoModelOverridesForAgent(agentId, nextModel, { clearManualOverrides: true })
       return apiSuccess(res, { ok: true, model: nextModel, modelOverrideCleanup, modelSessionReset })
     } catch (error) {
       return apiFailure(res, 500, 'model_operation_failed', 'Failed to update agent model', { agentId: requestedAgent, detail: String(error) })

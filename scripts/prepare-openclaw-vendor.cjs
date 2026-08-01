@@ -14,9 +14,9 @@ const metadataPath = path.join(nodeModulesRoot, '.dystopai-openclaw-vendor-deps.
 const cacheRoot = path.join(root, '.cache', 'openclaw-vendor')
 const refresh = /^(1|true|yes)$/i.test(process.env.DYSTOPAI_REFRESH_OPENCLAW_VENDOR_DEPS || '')
 
-const DEFAULT_OPENCLAW_PACKAGE_VERSION = '2026.6.11'
-const DEFAULT_OPENCLAW_PACKAGE_TARBALL = 'https://registry.npmjs.org/openclaw/-/openclaw-2026.6.11.tgz'
-const DEFAULT_OPENCLAW_PACKAGE_INTEGRITY = 'sha512-T+P/g19IheeT1ckXMoPN61dYuE8vBF4MderI+kWkvpuFYxPkJxn8AXLpu9IXCnN9g36Acpm9+mMD/V+lsvOkyA=='
+const DEFAULT_OPENCLAW_PACKAGE_VERSION = '2026.7.1-2'
+const DEFAULT_OPENCLAW_PACKAGE_TARBALL = 'https://registry.npmjs.org/openclaw/-/openclaw-2026.7.1-2.tgz'
+const DEFAULT_OPENCLAW_PACKAGE_INTEGRITY = 'sha512-ycF3yPcbjN6bUPeaUx6Mh6vze1hQWoD3CT/wWcmD7a8xaHHHRUaAlaq+lFxMHf1ssEgODVAwjlzYqp2twkYZ7g=='
 
 const installArgs = [
   'ci',
@@ -204,12 +204,31 @@ function resolvePackageTarball(packageJson) {
   return { tarball, integrity }
 }
 
-function missingPackageArtifacts() {
-  return requiredPackageArtifacts.filter((artifact) => !fs.existsSync(path.join(vendorRoot, artifact)))
+function packageArtifactsMetadataPath() {
+  return path.join(vendorRoot, 'dist', '.dystopai-openclaw-package.json')
+}
+
+function packageArtifactsMatch(packageJson) {
+  try {
+    const metadata = readJson(packageArtifactsMetadataPath())
+    return metadata?.schema === 1 &&
+      metadata?.package === packageJson.name &&
+      metadata?.version === packageJson.version
+  } catch {
+    return false
+  }
+}
+
+function missingPackageArtifacts(packageJson) {
+  const missing = requiredPackageArtifacts.filter((artifact) => !fs.existsSync(path.join(vendorRoot, artifact)))
+  if (!packageArtifactsMatch(packageJson)) {
+    missing.push(path.join('dist', '.dystopai-openclaw-package.json'))
+  }
+  return missing
 }
 
 async function hydratePublishedPackageArtifacts(packageJson) {
-  const missing = missingPackageArtifacts()
+  const missing = missingPackageArtifacts(packageJson)
   if (!refresh && missing.length === 0) {
     return { mode: 'existing-package-artifacts' }
   }
@@ -248,7 +267,14 @@ async function hydratePublishedPackageArtifacts(packageJson) {
 
     fs.rmSync(path.join(vendorRoot, 'dist'), { recursive: true, force: true })
     fs.cpSync(packageDist, path.join(vendorRoot, 'dist'), { recursive: true })
-    const stillMissing = missingPackageArtifacts()
+    fs.writeFileSync(packageArtifactsMetadataPath(), `${JSON.stringify({
+      schema: 1,
+      package: publishedPackage.name,
+      version: publishedPackage.version,
+      tarball: source.tarball,
+      integrity: source.integrity,
+    }, null, 2)}\n`)
+    const stillMissing = missingPackageArtifacts(packageJson)
     if (stillMissing.length) {
       throw new Error(`[openclaw-vendor] OpenClaw package payload is missing required artifacts: ${stillMissing.join(', ')}`)
     }

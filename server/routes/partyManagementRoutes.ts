@@ -36,6 +36,7 @@ export function registerPartyManagementRoutes(app: Express, options: PartyManage
     canonicalDoctrineRoot,
     cleanupAgentWorkspaceDoctrineFiles,
     clearAgentTurnSessions,
+    clearDisallowedAutoModelOverridesForAgent,
     configSafeAgentAvatar,
     contentTypeFromExt,
     defaultAgentWorkspace,
@@ -82,6 +83,7 @@ export function registerPartyManagementRoutes(app: Express, options: PartyManage
     runOpenClaw,
     samePath,
     sanitizeProfile,
+    schedulePluginGatewayRestart,
     seedAgentWorkspace,
     splitModelId,
     syncAgentDerivedFiles,
@@ -102,6 +104,70 @@ export function registerPartyManagementRoutes(app: Express, options: PartyManage
       return apiSuccess(res, { party })
     } catch (error) {
       return apiFailure(res, 500, 'party_operation_failed', 'Failed to fetch party', String(error))
+    }
+  })
+
+  /**
+   * Makes an agent the deterministic destination for otherwise-unbound inbound
+   * messages. `agents.list[].default` covers every channel's fallback and the
+   * generic Telegram binding prevents roster order from deciding Telegram DMs.
+   */
+  app.post('/api/party/default-agent', async (req, res) => {
+    const schema = z.object({
+      agentId: z.string().trim().min(1).max(80),
+      channels: z.array(z.string().trim().min(1).max(80)).max(20).default(['telegram']),
+    })
+    const parsed = schema.safeParse(req.body ?? {})
+    if (!parsed.success) return apiFailure(res, 400, 'invalid_payload', 'Invalid payload', parsed.error.flatten())
+
+    try {
+      const config = await readOpenclawConfig()
+      const list = config.agents?.list || []
+      const target = list.find((entry) => entry.id === parsed.data.agentId)
+      if (!target || isRetiredAgentId(target.id)) {
+        return apiFailure(res, 404, 'agent_not_found', 'Agent not found or retired.')
+      }
+
+      for (const entry of list) {
+        if (entry.id === target.id) entry.default = true
+        else delete entry.default
+      }
+
+      const requestedChannels = Array.from(new Set(parsed.data.channels.map((channel) => channel.trim().toLowerCase()).filter(Boolean)))
+      const existingBindings = Array.isArray(config.bindings) ? config.bindings : []
+      const replacementBindings = existingBindings.filter((binding) => {
+        const match = binding && typeof binding === 'object' && !Array.isArray(binding)
+          ? (binding as { match?: { channel?: unknown; accountId?: unknown } }).match
+          : undefined
+        const channel = typeof match?.channel === 'string' ? match.channel.trim().toLowerCase() : ''
+        const accountId = typeof match?.accountId === 'string' ? match.accountId.trim() : ''
+        // Preserve account-specific routing. Replace only each channel's
+        // catch-all route, which is what controls ordinary inbound messages.
+        return !(requestedChannels.includes(channel) && (!accountId || accountId === '*'))
+      })
+      for (const channel of requestedChannels) {
+        replacementBindings.push({ agentId: target.id, match: { channel, accountId: '*' } })
+      }
+      config.bindings = replacementBindings
+
+      await writeOpenclawConfig(config)
+      const modelOverrideCleanup = await clearDisallowedAutoModelOverridesForAgent(
+        target.id,
+        target.model,
+        { clearManualOverrides: true },
+      )
+      const sessionReset = clearAgentTurnSessions(target.id)
+      const gatewayRestart = schedulePluginGatewayRestart()
+      return apiSuccess(res, {
+        ok: true,
+        agentId: target.id,
+        channels: requestedChannels,
+        modelOverrideCleanup,
+        sessionReset,
+        gatewayRestart,
+      })
+    } catch (error) {
+      return apiFailure(res, 500, 'party_operation_failed', 'Failed to set the default message agent.', String(error))
     }
   })
 
@@ -873,6 +939,8 @@ export function registerPartyManagementRoutes(app: Express, options: PartyManage
         : path.resolve(agent.workspace || WORKSPACE_ROOT, agent.avatar)
       const bytes = await fs.readFile(candidate)
       res.setHeader('Content-Type', contentTypeFromExt(candidate))
+      res.setHeader('Cache-Control', 'no-store, max-age=0')
+      res.setHeader('X-Content-Type-Options', 'nosniff')
       return res.send(bytes)
     } catch (error) {
       return apiFailure(res, 404, 'avatar_preview_failed', 'Avatar preview not available', String(error))

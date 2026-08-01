@@ -104,6 +104,7 @@ export type AgentRarity = 'common' | 'rare' | 'epic' | 'legendary'
 export interface OpenClawAgent {
   id: string
   name: string
+  isDefault?: boolean
   workspace?: string
   sandbox?: {
     mode?: 'off' | 'all' | 'non-main'
