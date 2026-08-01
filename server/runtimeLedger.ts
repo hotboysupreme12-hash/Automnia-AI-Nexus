@@ -71,6 +71,8 @@ let database: SqliteDatabase | null = null
 let sqliteUnavailableReason = ''
 let legacyImportWarning = ''
 let jsonlTailDiagnostic: JsonlTailDiagnostic | null = null
+let legacyImportTimer: NodeJS.Timeout | null = null
+let legacyImportScheduled = false
 
 export function configureRuntimeLedger(input: Omit<LedgerPaths, 'sqlite'> & { sqlite?: string }) {
   const nextPaths = {
@@ -82,6 +84,9 @@ export function configureRuntimeLedger(input: Omit<LedgerPaths, 'sqlite'> & { sq
   sqliteUnavailableReason = ''
   legacyImportWarning = ''
   jsonlTailDiagnostic = null
+  if (legacyImportTimer) clearTimeout(legacyImportTimer)
+  legacyImportTimer = null
+  legacyImportScheduled = false
 }
 
 function configuredPaths() {
@@ -351,7 +356,6 @@ function openDatabase() {
     } catch {
       // Existing databases already have the legacy import key column.
     }
-    importLegacyJsonlLedgers(database, currentPaths)
     return database
   } catch (error) {
     sqliteUnavailableReason = error instanceof Error && error.message ? error.message : String(error)
@@ -522,17 +526,6 @@ function markLegacyImportCurrent(db: SqliteDatabase, ledger: string, sourceSize:
   `).run(ledger, new Date().toISOString(), sourceSize, sourceMtimeMs)
 }
 
-function gatewayPayloadExists(db: SqliteDatabase, payload: string) {
-  return Boolean(
-    db.prepare(`
-      SELECT 1
-      FROM gateway_events
-      WHERE payload_json = ?
-      LIMIT 1
-    `).get?.(payload),
-  )
-}
-
 function importLegacyJsonlLedger(db: SqliteDatabase, ledger: string, filePath: string, kind: LedgerKind) {
   if (!existsSync(filePath)) return
   const stat = statSync(filePath)
@@ -548,7 +541,6 @@ function importLegacyJsonlLedger(db: SqliteDatabase, ledger: string, filePath: s
       try {
         const parsed = JSON.parse(trimmed) as Record<string, unknown>
         const canonicalPayload = JSON.stringify(parsed)
-        if (kind === 'gateway_event' && gatewayPayloadExists(db, canonicalPayload)) return
         const createdAtMs =
           parsedDateMs(parsed, 'endedAt', 'startedAt', 'timestamp') ?? stat.mtimeMs + index
         insertSqliteLedgerInto(db, kind, parsed, {
@@ -583,6 +575,28 @@ function importLegacyJsonlLedgers(db: SqliteDatabase, currentPaths: LedgerPaths)
   } catch (error) {
     legacyImportWarning = error instanceof Error && error.message ? error.message : String(error)
   }
+}
+
+/**
+ * Import historical JSONL data only after the HTTP server is accepting
+ * connections. Older releases did this work in the first state read, which
+ * could make the desktop app look offline for minutes on a large ledger.
+ */
+export function scheduleLegacyRuntimeLedgerImport(delayMs = 10_000) {
+  if (legacyImportScheduled) return
+  legacyImportScheduled = true
+  const normalizedDelayMs = Math.max(0, Math.min(60_000, Math.round(delayMs) || 0))
+  legacyImportTimer = setTimeout(() => {
+    legacyImportTimer = null
+    try {
+      const db = openDatabase()
+      if (db) importLegacyJsonlLedgers(db, configuredPaths())
+    } catch (error) {
+      legacyImportWarning = error instanceof Error && error.message ? error.message : String(error)
+      console.warn(`[dystopai] legacy ledger migration deferred after failure: ${legacyImportWarning}`)
+    }
+  }, normalizedDelayMs)
+  legacyImportTimer.unref?.()
 }
 
 function parsePayloadRows<T>(rows: Array<Record<string, unknown>>) {
