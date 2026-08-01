@@ -1047,6 +1047,7 @@ function mapOverviewAgentToLocal(entry: PartyOverviewAgent, existing: OpenClawAg
   return withComputedRuntime({
     ...seed,
     id: entry.id,
+    isDefault: entry.isDefault === true,
     name: (entry.name || existing?.name || entry.id).trim(),
     workspace: entry.workspace || existing?.workspace || seed.workspace || '',
     model: entry.model || existing?.model || seed.model,

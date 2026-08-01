@@ -13,6 +13,7 @@ import { apiRequest, type ApiResult } from './client'
 
 export type PartyOverviewAgent = {
   id: string
+  isDefault?: boolean
   name?: string
   workspace?: string
   avatar?: string

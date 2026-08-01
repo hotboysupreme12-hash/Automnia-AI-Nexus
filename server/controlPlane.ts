@@ -298,7 +298,7 @@ const CODEX_LEGACY_AGENT_PROFILE_ROOT = path.join(HOME_DIR, '.codex', 'agent-pro
 const LOCAL_AUTH_PATH = path.join(OPENCLAW_STATE_ROOT, 'local-auth.json')
 const CONTROL_CENTER_LEDGER_PATHS = runtimeLedgerPathsForStateRoot(OPENCLAW_STATE_ROOT)
 const RUNTIME_MONITOR_CLEAR_MARKER_PATH = runtimeMonitorClearMarkerPath(CONTROL_CENTER_LEDGER_PATHS)
-const RECOMMENDED_OPENCLAW_VERSION = '2026.6.11'
+const RECOMMENDED_OPENCLAW_VERSION = '2026.7.1-2'
 const DEFAULT_OPENCLAW_FAST_MODE = 'auto'
 const DEFAULT_OPENCLAW_FAST_AUTO_ON_SECONDS = 60
 const FAST_MODE_MODEL_PARAM_PROVIDERS = new Set(['openai', 'openai-codex', 'anthropic', 'xai', 'minimax'])
@@ -1111,6 +1111,7 @@ type AgentIdentity = {
 
 type AgentConfigEntry = {
   id: string
+  default?: boolean
   workspace?: string
   agentDir?: string
   sandbox?: AgentSandboxConfig
@@ -1214,6 +1215,16 @@ type OpenClawContextPruningConfig = {
   hardClear?: { enabled?: boolean; placeholder?: string }
 }
 
+type OpenClawBinding = {
+  agentId: string
+  match?: {
+    channel?: string
+    accountId?: string
+    [key: string]: unknown
+  }
+  [key: string]: unknown
+}
+
 type OpenClawSessionConfig = {
   dmScope?: 'main' | 'per-peer' | 'per-channel-peer' | 'per-account-channel-peer'
   maintenance?: {
@@ -1297,6 +1308,7 @@ type OpenClawConfigFile = {
     }
   }
   plugins?: OpenClawPluginsConfig
+  bindings?: OpenClawBinding[]
   tools?: {
     profile?: string
     alsoAllow?: string[]
@@ -3162,6 +3174,7 @@ function clearDisallowedAutoModelOverrideFromEntry(
   sessionKey: string,
   allowedKeys: Set<string>,
   allowedAuthPrefixes: Set<string>,
+  options: { clearManualOverrides?: boolean } = {},
 ): ModelOverrideCleanupResult['cleared'][number] | null {
   const source = sessionStringField(entry, 'modelOverrideSource').toLowerCase()
   const authSource = sessionStringField(entry, 'authProfileOverrideSource').toLowerCase()
@@ -3175,7 +3188,14 @@ function clearDisallowedAutoModelOverrideFromEntry(
     sessionStringField(entry, 'modelProvider'),
     sessionStringField(entry, 'model'),
   )
-  const shouldClearOverride = source === 'auto' && Boolean(overrideKey) && !allowedKeys.has(overrideKey)
+  // A manual /model command is normally allowed to persist. When the agent's
+  // configured model is explicitly saved (or it is made the inbound default),
+  // that configuration is the newer source of truth, so clear an incompatible
+  // manual override as well. This prevents an old OpenAI session from silently
+  // winning over a newly selected Gemini model.
+  const shouldClearOverride = Boolean(overrideKey) && !allowedKeys.has(overrideKey) && (
+    source === 'auto' || options.clearManualOverrides === true
+  )
   const shouldClearNotice = Boolean(activeNoticeKey) && !allowedKeys.has(activeNoticeKey)
   const shouldClearRuntime = Boolean(runtimeKey) && !allowedKeys.has(runtimeKey)
   const shouldClearAuth =
@@ -3224,6 +3244,7 @@ function clearDisallowedAutoModelOverrideFromEntry(
 async function clearDisallowedAutoModelOverridesForAgent(
   agentId: string,
   modelStack?: { primary?: string; fallbacks?: string[] },
+  options: { clearManualOverrides?: boolean } = {},
 ): Promise<ModelOverrideCleanupResult> {
   if (!isValidAgentId(agentId) || isRetiredAgentId(agentId)) return { changed: false, cleared: [] }
   const configured = modelStack || await resolveAgentConfiguredModelStack(agentId)
@@ -3246,7 +3267,7 @@ async function clearDisallowedAutoModelOverridesForAgent(
   const cleared: ModelOverrideCleanupResult['cleared'] = []
   for (const [sessionKey, entry] of Object.entries(store)) {
     if (!entry || typeof entry !== 'object' || Array.isArray(entry)) continue
-    const result = clearDisallowedAutoModelOverrideFromEntry(entry, sessionKey, allowedKeys, allowedAuthPrefixes)
+    const result = clearDisallowedAutoModelOverrideFromEntry(entry, sessionKey, allowedKeys, allowedAuthPrefixes, options)
     if (result) cleared.push(result)
   }
 
@@ -15207,6 +15228,7 @@ async function getPartyMembers() {
 
       return {
         id: agent.id,
+        isDefault: agent.default === true,
         name: local.identity.name || local.agent.displayName || agent.id,
         aliases: local.agent.aliases || [],
         emoji: local.identity.emoji || '@',
@@ -16693,6 +16715,7 @@ export type PartyManagementRoutesContext = {
   canonicalDoctrineRoot: typeof canonicalDoctrineRoot
   cleanupAgentWorkspaceDoctrineFiles: typeof cleanupAgentWorkspaceDoctrineFiles
   clearAgentTurnSessions: typeof clearAgentTurnSessions
+  clearDisallowedAutoModelOverridesForAgent: typeof clearDisallowedAutoModelOverridesForAgent
   configSafeAgentAvatar: typeof configSafeAgentAvatar
   contentTypeFromExt: typeof contentTypeFromExt
   defaultAgentWorkspace: typeof defaultAgentWorkspace
@@ -16739,6 +16762,7 @@ export type PartyManagementRoutesContext = {
   runOpenClaw: typeof runOpenClaw
   samePath: typeof samePath
   sanitizeProfile: typeof sanitizeProfile
+  schedulePluginGatewayRestart: typeof schedulePluginGatewayRestart
   seedAgentWorkspace: typeof seedAgentWorkspace
   splitModelId: typeof splitModelId
   syncAgentDerivedFiles: typeof syncAgentDerivedFiles
@@ -16772,6 +16796,7 @@ const partyManagementRoutesContext: PartyManagementRoutesContext = {
   canonicalDoctrineRoot,
   cleanupAgentWorkspaceDoctrineFiles,
   clearAgentTurnSessions,
+  clearDisallowedAutoModelOverridesForAgent,
   configSafeAgentAvatar,
   contentTypeFromExt,
   defaultAgentWorkspace,
@@ -16818,6 +16843,7 @@ const partyManagementRoutesContext: PartyManagementRoutesContext = {
   runOpenClaw,
   samePath,
   sanitizeProfile,
+  schedulePluginGatewayRestart,
   seedAgentWorkspace,
   splitModelId,
   syncAgentDerivedFiles,

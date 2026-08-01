@@ -213,6 +213,7 @@ const agentEditorRenderKey = (agent: OpenClawAgent | undefined | null) => {
   return [
     agent.id,
     agent.name,
+    agent.isDefault ? 'default' : '',
     agent.portrait || '',
     agent.className,
     agent.role,
@@ -347,6 +348,8 @@ export function AgentEditorModal() {
   const [portraitPreviewFailed,setPortraitPreviewFailed] = useState(false)
   const [portraitStatus,setPortraitStatus] = useState('')
   const [portraitPicking,setPortraitPicking] = useState(false)
+  const [defaultAgentSaving,setDefaultAgentSaving] = useState(false)
+  const [defaultAgentStatus,setDefaultAgentStatus] = useState('')
   const portraitRef = useRef<HTMLInputElement|null>(null)
 
   const [models,setModels] = useState<AvailableModel[]>([])
@@ -950,6 +953,25 @@ export function AgentEditorModal() {
     setPortraitStatus('')
     portraitRef.current?.click()
   }
+  const SetDefaultInboundAgent = async ()=>{
+    if(!agent||defaultAgentSaving)return
+    setDefaultAgentSaving(true)
+    setDefaultAgentStatus('Saving message routing...')
+    try{
+      await flushPendingConfigPatch()
+      const result=await apiRequest<{ok?:boolean;agentId?:string;channels?:string[]}>(
+        '/api/party/default-agent',
+        {method:'POST',timeoutMs:30_000,body:{agentId:agent.id,channels:['telegram']}},
+      )
+      if(!result.ok||!result.data.ok)throw new Error(result.ok?'Could not save default message routing.':apiErrorMessage(result.error))
+      await useNexusStore.getState().syncPartyOverview()
+      setDefaultAgentStatus('Saved. New unbound messages and Telegram DMs will come here.')
+    }catch(error){
+      setDefaultAgentStatus(`Could not save: ${errorMessage(error)}`)
+    }finally{
+      setDefaultAgentSaving(false)
+    }
+  }
 
   const LdSharedSkills = useCallback(async (agentId:string,force=false)=>{
     const cached=skillsCache.get(agentId)
@@ -1117,6 +1139,8 @@ export function AgentEditorModal() {
     setPortraitPreviewFailed(false)
     setPortraitStatus('')
     setPortraitPicking(false)
+    setDefaultAgentStatus('')
+    setDefaultAgentSaving(false)
     setTick(currentAgent.heartbeat.tickIntervalMs)
     setIdle(currentAgent.heartbeat.idleTimeoutMs)
     setCont(currentAgent.heartbeat.continuous)
@@ -1239,6 +1263,19 @@ export function AgentEditorModal() {
                         </div>
                         {portraitStatus&&<p className="text-[9px] text-cyan-400">{portraitStatus}</p>}
                       </div>
+                    </div>
+
+                    <div data-editor-card="inbound-routing" className="rounded-xl border border-cyan-400/15 bg-cyan-400/[0.04] p-3">
+                      <div className="flex items-center justify-between gap-3">
+                        <div>
+                          <p className="text-[11px] font-extrabold text-cyan-100">Inbound message leader</p>
+                          <p className="mt-0.5 text-[9px] text-slate-400">{agent.isDefault?'This agent receives unbound messages by default.':'Choose this agent for unbound messages and Telegram DMs.'}</p>
+                        </div>
+                        <button type="button" onClick={()=>void SetDefaultInboundAgent()} disabled={defaultAgentSaving} className="shrink-0 rounded-md border border-cyan-300/25 bg-cyan-400/[0.08] px-2.5 py-1.5 text-[9px] font-bold text-cyan-200 hover:bg-cyan-400/[0.14] disabled:opacity-50">
+                          {defaultAgentSaving?'Saving…':agent.isDefault?'Reapply routing':'Make default'}
+                        </button>
+                      </div>
+                      {defaultAgentStatus&&<p className="mt-2 text-[9px] text-cyan-300">{defaultAgentStatus}</p>}
                     </div>
 
                     <div className="grid gap-2.5 sm:grid-cols-2">

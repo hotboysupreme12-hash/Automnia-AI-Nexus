@@ -29,8 +29,8 @@
 
 ### Reliability and recovery
 
-- Upgraded the vendored OpenClaw runtime and bundled Codex plugin to `2026.6.11`.
-- Preserved OpenClaw 2026.6.11 official external plugin/provider/channel catalogs in fallback plugin discovery.
+- Upgraded the vendored OpenClaw runtime to `2026.7.1-2` and the bundled Codex plugin to its latest compatible stable release, `2026.7.1-1`.
+- Preserved the current OpenClaw official external plugin/provider/channel catalogs in fallback plugin discovery.
 - Surfaced plugin icon, package, install spec, and channel image metadata through runtime status and the Plugins panel.
 - Added checksummed OpenClaw state backup, verification, atomic restore, and rollback retention.
 - State backup manifests now record skipped symlink entries so realistic plugin-skill junctions do not abort beta backup verification.
