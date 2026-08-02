@@ -246,7 +246,7 @@ export type RuntimeCronJob = {
   durationMinutes: number
   message: string
   model?: string
-  thinking?: 'off' | 'minimal' | 'low' | 'medium' | 'high'
+  thinking?: 'off' | 'minimal' | 'low' | 'medium' | 'high' | 'xhigh' | 'max'
   timeoutSeconds?: number
   wake?: 'now' | 'next-heartbeat'
   session?: 'main' | 'isolated'

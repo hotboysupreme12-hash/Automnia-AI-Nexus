@@ -29,13 +29,24 @@ export type AuthProviderGcloudStatus = {
   commands?: string[]
 }
 
+export type AuthProviderSubscriptionAuthStatus = {
+  supported: boolean
+  configured: boolean
+  label?: string
+  docs?: string
+  setupCommand?: string
+}
+
 export type AuthProviderStatus = {
   provider: string
   configured: boolean
   envKeys: string[]
   stored?: boolean
   label?: string
+  docs?: string
+  apiKeyUrl?: string
   oauth?: AuthProviderOAuthStatus
+  subscriptionAuth?: AuthProviderSubscriptionAuthStatus
   gcloud?: AuthProviderGcloudStatus
 }
 
@@ -61,11 +72,11 @@ export type OAuthStartPayload = {
 }
 
 export const OAUTH_PROVIDER_FALLBACKS: Record<string, AuthProviderStatus> = {
-  'openai-codex': {
-    provider: 'openai-codex',
+  openai: {
+    provider: 'openai',
     configured: false,
-    envKeys: [],
-    label: 'OpenAI Codex',
+    envKeys: ['OPENAI_API_KEY'],
+    label: 'OpenAI / Codex',
     oauth: {
       supported: true,
       configured: false,
@@ -87,23 +98,16 @@ export function safeAuthProviders(value: unknown): AuthProviderStatus[] {
 }
 
 export function authStatusForProvider(providers: AuthProviderStatus[], provider: string): AuthProviderStatus | undefined {
-  return providers.find((entry) => entry.provider === provider) || OAUTH_PROVIDER_FALLBACKS[provider]
+  const canonicalProvider = provider === 'openai-codex' || provider === 'codex' ? 'openai' : provider
+  return providers.find((entry) => entry.provider === canonicalProvider) || OAUTH_PROVIDER_FALLBACKS[canonicalProvider]
 }
 
 export function effectiveAuthStatusForProvider(providers: AuthProviderStatus[], provider: string): AuthProviderStatus | undefined {
-  const status = authStatusForProvider(providers, provider)
-  if (provider !== 'openai-codex' || status?.configured) return status
-  const openAiStatus = authStatusForProvider(providers, 'openai')
-  if (!openAiStatus?.configured) return status
-  return {
-    ...(status || OAUTH_PROVIDER_FALLBACKS['openai-codex']),
-    configured: true,
-    stored: status?.stored || openAiStatus.stored,
-  }
+  return authStatusForProvider(providers, provider)
 }
 
 export function authLabelForProvider(provider: string, status?: AuthProviderStatus): string {
-  return status?.label || (provider === 'openai-codex' ? 'OpenAI Codex' : provider)
+  return status?.label || ((provider === 'openai-codex' || provider === 'codex') ? 'OpenAI / Codex' : provider)
 }
 
 export function authKindForProvider(status?: AuthProviderStatus): 'OAuth' | 'auth' {

@@ -5,6 +5,7 @@ import { CoordinationBus } from '../engine/CoordinationBus'
 import { MDSValidator } from '../engine/MDSValidator'
 import { DEFAULT_MISSION_DRAFT, SKILL_TREE, makeDormantState } from '../data/seeds'
 import { apiErrorMessage } from '../api/client'
+import { resolveInteractiveConsoleThinking } from './commandConsoleRuntimePolicy'
 import {
   clearAgentTurnSessions,
   preflightAgentRuntime as requestAgentRuntimePreflight,
@@ -72,6 +73,7 @@ import {
   makeCommandConsoleResponseState,
   queueProgressLines,
   removeCommandConsoleDraftsForAgent,
+  upsertCommandConsoleResponse,
   type CommandConsoleQueuedFollowup,
   type NexusCommandConsoleResponseState,
 } from './commandConsoleState'
@@ -1617,12 +1619,11 @@ export const useNexusStore = create<NexusState>()(
         agentWorkingTimers.set(aid, timer)
       }
 
-      const isLongWorkPrompt = (promptText: string) =>
-        /\b(build|full build|spec-locked|implement|implementation|refine|continue|resume|team\s*sync|teamsync|source of truth|acceptance ledger|final_verdict)\b/i.test(promptText)
+      const isLongWorkPrompt = (promptText: string) => /\b(build|full build|spec-locked|implement|implementation|refine|continue|resume|team\s*sync|teamsync|source of truth|acceptance ledger|final_verdict)\b/i.test(promptText)
 
       const resolveRunPolicy = (aid: string, options: PromptRunOptions, promptText = '') => {
         const policy = get().agents.find((agent) => agent.id === aid)?.runtimePolicy
-        const thinking = options.thinking ?? policy?.thinkingDefault ?? FAST_THINKING
+        const thinking = options.thinking ?? (options.forceOpenClawRuntime === true ? resolveInteractiveConsoleThinking(promptText) : policy?.thinkingDefault ?? FAST_THINKING)
         const fastMode = options.fastMode ?? policy?.fastModeDefault ?? FAST_MODE_DEFAULT
         const configuredTimeout = options.timeoutSeconds
           ?? (isLongWorkPrompt(promptText) ? Math.max(policy?.timeoutSeconds ?? 0, MISSION_DEFAULT_TIMEOUT_SECONDS) : policy?.timeoutSeconds)
@@ -3563,10 +3564,9 @@ export const useNexusStore = create<NexusState>()(
                 }
               : null
             const prev = s.operationStates[agentId] ?? makeDormantState(agentId, 3000)
+            const responseState = upsertCommandConsoleResponse(s, next)
             return {
-              agentResponses: existing
-                ? s.agentResponses.map((entry) => (entry.id === responseId ? next : entry))
-                : [next, ...s.agentResponses].slice(0, MAX_COMMAND_CONSOLE_RESPONSES),
+              ...responseState,
               ...(missionEvent ? { missionFeed: [missionEvent, ...s.missionFeed].slice(0, MAX_FEED_EVENTS) } : {}),
               operationStates: {
                 ...s.operationStates,

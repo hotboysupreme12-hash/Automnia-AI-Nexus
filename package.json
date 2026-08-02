@@ -199,10 +199,6 @@
         "to": "agency-agents"
       },
       {
-        "from": ".openclaw/agents",
-        "to": "openclaw/agents"
-      },
-      {
         "from": "THIRD_PARTY_NOTICES.txt",
         "to": "legal/THIRD_PARTY_NOTICES.txt"
       },

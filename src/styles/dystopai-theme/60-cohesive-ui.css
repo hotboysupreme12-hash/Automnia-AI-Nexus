@@ -4751,3 +4751,61 @@ html.dui-pro-overhaul.dui-cohesive-ui .dui-monitor-screen,
 html.dui-pro-overhaul.dui-cohesive-ui .dui-mission-wrap {
   background: #030406 !important;
 }
+
+/* Card clarity pass: texture may add depth, but it must never wash out the
+   chosen rarity skin or portrait with a white screen-blended layer. */
+html.dui-pro-overhaul.dui-cohesive-ui .agent-card-shell.agent-card-pro[data-agent-card="true"]::before {
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, .025), transparent 24%, rgba(0, 0, 0, .20) 100%) !important;
+  mix-blend-mode: normal !important;
+  opacity: 1 !important;
+  filter: none !important;
+}
+
+html.dui-pro-overhaul.dui-cohesive-ui .agent-card-pro .agent-card-media::before {
+  background:
+    linear-gradient(180deg, rgba(0, 0, 0, .08), transparent 34%, rgba(0, 0, 0, .38)) !important;
+  mix-blend-mode: normal !important;
+  opacity: 1 !important;
+  filter: none !important;
+}
+
+html.dui-pro-overhaul.dui-cohesive-ui .agent-card-pro .agent-card-portrait-img,
+html.dui-pro-overhaul.dui-cohesive-ui .agent-card-pro .agent-card-media img {
+  filter: saturate(1.08) contrast(1.08) brightness(.99) !important;
+}
+
+html.dui-pro-overhaul.dui-cohesive-ui [data-agent-card] .agent-card-rarity-wash {
+  opacity: .28 !important;
+  mix-blend-mode: normal !important;
+}
+
+html.dui-pro-overhaul.dui-cohesive-ui [data-agent-card] .agent-card-foil {
+  opacity: .13 !important;
+  mix-blend-mode: soft-light !important;
+}
+
+html.dui-pro-overhaul.dui-cohesive-ui .agent-card-shell[data-agent-running="true"] {
+  border-color: color-mix(in srgb, #5eead4 62%, rgba(255, 255, 255, .22)) !important;
+  box-shadow:
+    0 0 0 1px rgba(45, 212, 191, .12),
+    0 18px 42px -30px rgba(45, 212, 191, .58) !important;
+}
+
+html.dui-pro-overhaul.dui-cohesive-ui .agent-card-status-pill.is-live {
+  border-color: rgba(94, 234, 212, .56) !important;
+  background: rgba(4, 28, 28, .92) !important;
+  color: #a7f3e8 !important;
+  letter-spacing: .055em !important;
+}
+
+html.dui-pro-overhaul.dui-cohesive-ui .agent-card-status-pill.is-live > span {
+  background: #5eead4 !important;
+  box-shadow: 0 0 0 3px rgba(94, 234, 212, .13), 0 0 12px rgba(94, 234, 212, .9) !important;
+}
+
+html.dui-pro-overhaul.dui-cohesive-ui .dy-gateway-log-message {
+  min-width: 0 !important;
+  overflow-wrap: anywhere !important;
+  word-break: break-word !important;
+}

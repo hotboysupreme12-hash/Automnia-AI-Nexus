@@ -1000,6 +1000,7 @@ function RuntimeGatewayPanel({
   const [cronEditKey, setCronEditKey] = useState('')
   const [actionError, setActionError] = useState('')
   const [runtimeNotice, setRuntimeNotice] = useState('')
+  const localSessionNeedsReconnect = /\bauth(?:entication)?(?:\s+required)?\b|\bauth_required\b|\blocal runtime session needs to reconnect\b/i.test(error)
   const cronCancelPreview = useMemo(() => {
     return activeCronJobs.slice(0, 3).map((job) => `${job.name} (${job.agent})`).join(', ')
   }, [activeCronJobs])
@@ -1085,7 +1086,20 @@ function RuntimeGatewayPanel({
           data-tone="rose"
           role="alert"
         >
-          Runtime status unavailable: {error}
+          {localSessionNeedsReconnect ? (
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <span>Local runtime session expired while the control service restarted. Reconnecting now should restore status without signing in again.</span>
+              <button
+                type="button"
+                onClick={onRefresh}
+                className="rounded border border-rose-200/30 bg-rose-100/10 px-2.5 py-1 text-[11px] font-semibold text-rose-100 hover:bg-rose-100/20"
+              >
+                Reconnect runtime
+              </button>
+            </div>
+          ) : (
+            <>Runtime status unavailable: {error}</>
+          )}
         </div>
       )}
       {actionError && (

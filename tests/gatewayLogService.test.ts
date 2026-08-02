@@ -27,6 +27,7 @@ function createService(options: {
   clearedAtMs?: number
   configLogPath?: string
   now?: number
+  logTailMaxBytes?: number
 } = {}) {
   const ledger = options.ledger ?? []
   const service = createGatewayLogService({
@@ -47,6 +48,7 @@ function createService(options: {
     now: () => options.now ?? fixedNow,
     includeSharedOpenClawTempLogs: false,
     externalLogCacheMs: 5,
+    logTailMaxBytes: options.logTailMaxBytes,
     rpcLogFailureNoticeMs: 1,
   })
   return { ledger, service }
@@ -65,6 +67,73 @@ test('pushGatewayLog normalizes channel activity and redacts persisted entries',
   assert.doesNotMatch(entry.message, /secret-alpha/)
   assert.equal(ledger.length, 1)
   assert.doesNotMatch(ledger[0]?.message ?? '', /secret-alpha/)
+})
+
+test('pushGatewayLog turns an invalid OpenAI Codex refresh token into an actionable reconnect error', () => {
+  const { service } = createService()
+
+  service.pushGatewayLog(
+    'stderr',
+    'memory sync failed (watch): Error: OAuth token refresh failed for openai: OpenAI Codex token refresh failed (401): {"code":"invalid_refresh_token"}',
+  )
+
+  const [entry] = service.getGatewayLogs()
+  assert.equal(entry.level, 'error')
+  assert.match(entry.message, /Reconnect OpenAI \/ Codex/i)
+  assert.doesNotMatch(entry.message, /invalid_refresh_token/i)
+})
+
+test('pushGatewayLog converts structured model events into concise human-readable console entries', () => {
+  const { service } = createService()
+
+  service.pushGatewayLog('gateway', JSON.stringify({
+    subsystem: 'model-fetch',
+    time: '2026-06-30T08:01:00.000Z',
+    message: '[model-fetch] response provider=google-vertex api=google-vertex model=gemini-3.5-flash status=200 elapsedMs=1299 contentType=text/event-stream',
+    traceId: 'trace-private',
+  }))
+
+  const [entry] = service.getGatewayLogs()
+  assert.equal(entry.message, 'Model response: google vertex / gemini-3.5-flash completed in 1s (HTTP 200; streaming).')
+  assert.doesNotMatch(entry.message, /trace-private|\{"subsystem"/)
+})
+
+test('pushGatewayLog explains channel delivery policy and Codex harness failures', () => {
+  const { service } = createService()
+
+  service.pushGatewayLog('stderr', 'agent produced a long private final reply without calling the configured delivery tool (message_tool_only); response kept private and not delivered to the source channel')
+  service.pushGatewayLog('stderr', 'Embedded agent failed before reply: Requested agent harness "codex" is not registered.')
+
+  const messages = service.getGatewayLogs().map((entry) => entry.message).join('\n')
+  assert.match(messages, /Reply was withheld by this channel policy/i)
+  assert.match(messages, /Automnia will restart the Gateway/i)
+})
+
+test('pushGatewayLog presents Telegram agent routing without exposing a chat identifier', () => {
+  const { service } = createService()
+
+  service.pushGatewayLog('stdout', '[telegram] Agent route selected: agent=hn-crypto-lead mode=sticky scope=session model=openai/gpt-5.5')
+
+  const [entry] = service.getGatewayLogs()
+  assert.equal(entry.message, 'Telegram routed to agent=hn-crypto-lead (sticky selection; session scope; model openai/gpt-5.5).')
+  assert.equal(entry.channel, 'telegram')
+})
+
+test('pushGatewayLog suppresses torn Pino metadata fragments instead of rendering a JSON blob', () => {
+  const { service } = createService()
+
+  service.pushGatewayLog('gateway', '"runtimeVersion":"24.18.1","hostname":"desktop","logLevelName":"INFO"')
+
+  assert.equal(service.getGatewayLogs().length, 0)
+})
+
+test('summarizes channel activity with agent ids embedded in session keys', () => {
+  const { service } = createService()
+
+  service.pushGatewayLog('gateway', 'message processed: channel=telegram outcome=ok inbound sessionKey=agent:hn-architect:telegram:direct:42')
+
+  const summary = service.summarizeGatewayActivity(service.getGatewayLogs())
+  assert.equal(summary.events[0]?.agentId, 'hn-architect')
 })
 
 test('readExternalGatewayLogEntries prefers logs.tail RPC entries', async () => {
@@ -133,6 +202,31 @@ test('readExternalGatewayLogEntries falls back to file tails and redacts RPC fai
     assert.equal(warning?.level, 'warning')
     assert.match(warning?.message ?? '', /token=\[redacted]/)
     assert.doesNotMatch(warning?.message ?? '', /secret-rpc/)
+  } finally {
+    await rm(root, { recursive: true, force: true })
+  }
+})
+
+test('readExternalGatewayLogEntries discards a partial first line from a byte-tail', async () => {
+  const root = await mkdtemp(path.join(tmpdir(), 'dystopai-gateway-tail-'))
+  try {
+    const logPath = path.join(root, 'gateway.log')
+    const completeLine = JSON.stringify({
+      time: '2026-06-30T08:04:00.000Z',
+      subsystem: 'channels/telegram',
+      message: 'message processed: channel=telegram outcome=ok inbound',
+    })
+    await writeFile(logPath, `${'torn Pino metadata '.repeat(80)}\n${completeLine}\n`)
+    const { service } = createService({
+      logPath,
+      logTailMaxBytes: Buffer.byteLength(completeLine) + 12,
+    })
+
+    const entries = await service.readExternalGatewayLogEntries(10)
+
+    assert.equal(entries.length, 1)
+    assert.equal(entries[0]?.channel, 'telegram')
+    assert.equal(entries[0]?.message, 'message processed: channel=telegram outcome=ok inbound')
   } finally {
     await rm(root, { recursive: true, force: true })
   }

@@ -96,7 +96,8 @@ Stores your API token + cached registry URL.
 
 ### `star <skill>` / `unstar <skill>`
 
-- Adds/removes a skill from your highlights.
+- Adds/removes a skill from your Bookmarks. Command names remain `star` and
+  `unstar` for compatibility.
 - Calls `POST /api/v1/stars/<slug>` and `DELETE /api/v1/stars/<slug>`.
 - `--yes` skips confirmation.
 
@@ -106,6 +107,10 @@ Stores your API token + cached registry URL.
 - Output includes the skill slug, owner handle, display name, and relevance score.
 - Search favors exact slug/name token matches before download popularity. A standalone slug token such as `map` matches `personal-map` more strongly than the substring inside `amap`.
 - Popularity is a small ranking prior, not a guarantee of top placement.
+- `--prefix`: lists a deterministic page of matching slugs through `/api/v1/skills`; pass the printed `--cursor` to continue until no cursor remains.
+- `--exact`: restricts relevance search to exact slug matches.
+- `--prefix` and `--exact` are mutually exclusive.
+- `--cursor` is valid only with `--prefix`.
 - If a skill should appear but does not, run `clawhub inspect @owner/slug` while logged in to check owner-visible moderation diagnostics before renaming metadata.
 
 ### `explore`
@@ -125,8 +130,8 @@ Stores your API token + cached registry URL.
 - `--versions`: list version history (first page).
 - `--limit <n>`: max versions to list (1-200).
 - `--files`: list files for the selected version.
-- `--file <path>`: fetch raw file content (text files only; 200KB limit).
-- `--json`: machine-readable output.
+- `--file <path>`: fetch raw file bytes (10MB limit).
+- `--json`: machine-readable output; `--file` includes exact bytes as base64 and UTF-8 text when available.
 
 ### `install @owner/slug`
 
@@ -269,7 +274,7 @@ clawhub scan download @scope/demo --version 2.0.0 --kind plugin --output report.
 #### GitHub Actions
 
 ClawHub ships an official reusable workflow at
-[`/.github/workflows/skill-publish.yml`](https://github.com/openclaw/clawhub/blob/80b06a911afb312a43d3f39ba62d92eb35d772a9/.github/workflows/skill-publish.yml)
+[`/.github/workflows/skill-publish.yml`](https://github.com/openclaw/clawhub/blob/3d3ac2942e4037e937f6b1e315109f84a5b6c8ef/.github/workflows/skill-publish.yml)
 for skill repos and catalog repos.
 
 Typical catalog setup:
@@ -311,10 +316,10 @@ Notes:
 - Without `--version`, soft-delete a skill (owner, moderator, or admin).
 - Calls `DELETE /api/v1/skills/{slug}`.
 - Owner-initiated soft deletes reserve the slug for 30 days; the command prints the expiry time.
-- `--version <version>` permanently deletes one owned non-latest version through a fail-closed,
-  version-specific route.
-  Deleted versions cannot be restored or republished. Publish a replacement before deleting the
-  current latest version. Platform staff do not bypass ownership for this version-only flow.
+- `--version <version>` withdraws one owned non-latest version through a fail-closed,
+  version-specific route. The version number remains reserved and cannot be republished with
+  different contents. Publish a replacement before deleting the current latest version. Platform
+  staff do not bypass ownership for this version-only flow.
 - `--reason <text>` records a moderation note on a whole-skill soft-delete and audit log.
 - `--note <text>` is an alias for `--reason`.
 - `--yes` skips confirmation.
@@ -322,8 +327,10 @@ Notes:
 ### `undelete <skill>`
 
 - Restore a hidden skill (owner, moderator, or admin).
-- There is no version undelete; permanently deleted versions cannot be restored.
 - Calls `POST /api/v1/skills/{slug}/undelete`.
+- `--version <version>` restores only the exact retained artifact previously withdrawn by the same
+  owner actor. It does not make the restored version latest or recreate removed tags.
+- Version restore calls `POST /api/v1/skills/{slug}/versions/{version}/restore`.
 - `--reason <text>` records a moderation note on the skill and audit log.
 - `--note <text>` is an alias for `--reason`.
 - `--yes` skips confirmation.
@@ -407,7 +414,7 @@ clawhub package explore episodic-claw --family code-plugin
 - `--versions`: list version history (first page).
 - `--limit <n>`: max versions to list (1-100).
 - `--files`: list files for the selected version.
-- `--file <path>`: fetch raw file content (text files only; 200KB limit).
+- `--file <path>`: fetch a bounded UTF-8 text preview (200KB limit).
 - `--json`: machine-readable output.
 
 ### `package download <name>`
@@ -483,15 +490,15 @@ If validation reports a package, manifest, SDK import, or artifact finding, see
 ### `package delete <name>`
 
 - Without `--version`, soft-deletes a package and all releases.
-- `--version <version>` permanently deletes one owned non-latest release through a fail-closed,
-  version-specific route.
-  Deleted versions cannot be restored or republished. Publish a replacement before deleting the
-  current latest version. This version-only flow requires the package owner or an org publisher
-  admin; platform staff do not bypass package ownership.
+- `--version <version>` withdraws one owned non-latest release through a fail-closed,
+  version-specific route. The version number remains reserved and cannot be republished with
+  different contents. Publish a replacement before deleting the current latest version. This
+  version-only flow requires the package owner or an org publisher admin; platform staff do not
+  bypass package ownership.
 - Whole-package soft-delete requires the package owner, an org publisher owner/admin, platform
   moderator, or platform admin.
 - Flags:
-  - `--version <version>`: permanently delete one non-latest version.
+  - `--version <version>`: withdraw one non-latest version.
   - `--yes`: skip confirmation.
   - `--json`: machine-readable output.
 
@@ -505,11 +512,14 @@ clawhub package delete @openclaw/example-plugin --version 1.2.3 --yes
 ### `package undelete <name>`
 
 - Restores a soft-deleted package and releases.
-- There is no version undelete; permanently deleted versions cannot be restored.
 - Requires the package owner, an org publisher owner/admin, platform moderator,
   or platform admin.
 - Calls `POST /api/v1/packages/{name}/undelete`.
+- `--version <version>` restores only the exact retained release previously withdrawn by the same
+  owner actor. It does not make the release latest or recreate removed package tags/dist-tags.
+- Version restore calls `POST /api/v1/packages/{name}/versions/{version}/restore`.
 - Flags:
+  - `--version <version>`: restore one owner-withdrawn release.
   - `--yes`: skip confirmation.
   - `--json`: machine-readable output.
 
@@ -637,6 +647,9 @@ clawhub publisher create opik --display-name "Opik"
   Top-level `package.json.version` is not used as a fallback for publish validation.
 - `--dry-run` previews the resolved publish payload without uploading.
 - `--json` emits machine-readable output for CI.
+- `--wait` waits for pre-publication security checks and returns only after the
+  release is published or reaches a terminal failure state.
+- `--wait-timeout <seconds>` sets the `--wait` deadline (default: 1800).
 - `--owner <handle>` publishes under a user or org publisher handle when the actor has publisher access.
 - Scoped package names must match the selected owner. See `docs/publishing.md`.
 - Existing flags (`--family`, `--name`, `--version`, `--source-repo`, `--source-commit`, `--source-ref`, `--source-path`) still work as overrides.
@@ -654,7 +667,7 @@ source attribution before creating a live release:
 ```bash
 npm pack
 clawhub package publish ./my-plugin-1.2.3.tgz --family code-plugin --dry-run
-clawhub package publish ./my-plugin-1.2.3.tgz --family code-plugin
+clawhub package publish ./my-plugin-1.2.3.tgz --family code-plugin --wait
 ```
 
 #### Local folder flow
@@ -711,7 +724,7 @@ Notes:
 #### GitHub Actions
 
 ClawHub also ships an official reusable workflow at
-[`/.github/workflows/package-publish.yml`](https://github.com/openclaw/clawhub/blob/80b06a911afb312a43d3f39ba62d92eb35d772a9/.github/workflows/package-publish.yml)
+[`/.github/workflows/package-publish.yml`](https://github.com/openclaw/clawhub/blob/3d3ac2942e4037e937f6b1e315109f84a5b6c8ef/.github/workflows/package-publish.yml)
 for plugin repos.
 
 Typical caller setup:
@@ -755,6 +768,11 @@ Notes:
 - Real publishes should be limited to trusted events such as `workflow_dispatch` or tag pushes.
 - Trusted publishing without a secret only works on `workflow_dispatch`; tag pushes still need `clawhub_token`.
 - Keep `clawhub_token` available for first publish, untrusted packages, or break-glass publishes.
+- Real publishes wait for definitive publication by default. Set
+  `wait_for_publication: false` only when a caller intentionally wants the
+  legacy submit-and-return behavior.
+- `publication_timeout_minutes` controls the publication wait deadline and
+  defaults to 30 minutes (maximum: 40).
 - The workflow uploads the JSON result as an artifact and exposes it as workflow outputs.
 
 ### `package trusted-publisher get <name>`

@@ -44,6 +44,7 @@ async function createHarness(options: HarnessOptions = {}) {
   const state = {
     config: options.config || { agents: { list: [] }, plugins: { entries: {} } },
     invalidations: 0,
+    bundledProviderPluginCalls: [] as string[],
     openRouterAllowlistCalls: 0,
     openRouterPluginCalls: 0,
     writes: [] as unknown[],
@@ -55,6 +56,12 @@ async function createHarness(options: HarnessOptions = {}) {
     canonicalAgentModelId,
     configuredProviderApiKeyMarker: options.configuredProviderApiKeyMarker || (() => ''),
     createInitialOpenclawConfig: () => ({ agents: { list: [] }, plugins: { entries: {} } }),
+    ensureBundledProviderPluginEnabledForProviderAuth: (config, pluginId) => {
+      state.bundledProviderPluginCalls.push(pluginId)
+      config.plugins ||= {}
+      config.plugins.entries ||= {}
+      config.plugins.entries[pluginId] = { enabled: true }
+    },
     ensureOpenRouterModelCatalogAllowlist: (config) => {
       state.openRouterAllowlistCalls += 1
       config.agents ||= {}
@@ -154,7 +161,7 @@ test('persists OpenAI Codex OAuth into OpenAI-compatible auth profile and remove
       lastGood: { 'openai-codex': 'openai-codex:legacy' },
     })
 
-    await harness.service.persistProviderOAuth('openai-codex', {
+    await harness.service.persistProviderOAuth('openai', {
       accessToken: 'codex-access-token',
       refreshToken: 'codex-refresh-token',
       expiresAt: 1782826384447,
@@ -175,7 +182,7 @@ test('persists OpenAI Codex OAuth into OpenAI-compatible auth profile and remove
     assert.deepEqual(profile.order.openai, ['openai:chatgpt-default'])
     assert.equal(profile.lastGood.openai, 'openai:chatgpt-default')
 
-    const status = harness.service.providerAuthStatus('openai-codex')
+    const status = harness.service.providerAuthStatus('openai')
     assert.equal(status.oauth.configured, true)
     assert.equal(status.oauth.accountId, 'acct_123')
     assert.equal(status.oauth.refreshAvailable, true)
@@ -276,7 +283,7 @@ test('openrouter saves enable plugin/catalog repair and missing Codex models rep
   const harness = await createHarness()
   try {
     const missingCodex = harness.service.modelAuthProblem('openai/gpt-5.3-codex-spark')
-    assert.equal(missingCodex?.provider, 'openai-codex')
+    assert.equal(missingCodex?.provider, 'openai')
     assert.equal(missingCodex?.providerStatus.oauth.supported, true)
 
     await harness.service.persistProviderAuth('openrouter', 'sk-openrouter-secret')
@@ -286,6 +293,20 @@ test('openrouter saves enable plugin/catalog repair and missing Codex models rep
     assert.equal(harness.state.writes.length, 1)
     assert.equal(harness.state.config.plugins?.entries?.openrouter?.enabled, true)
     assert.equal(harness.service.isProviderConfigured('openrouter'), true)
+  } finally {
+    await harness.cleanup()
+  }
+})
+
+test('meta saves enable the bundled provider plugin before model use', async () => {
+  const harness = await createHarness()
+  try {
+    await harness.service.persistProviderAuth('meta', 'meta-api-secret')
+
+    assert.deepEqual(harness.state.bundledProviderPluginCalls, ['meta'])
+    assert.equal(harness.state.writes.length, 1)
+    assert.equal(harness.state.config.plugins?.entries?.meta?.enabled, true)
+    assert.equal(harness.service.isProviderConfigured('meta'), true)
   } finally {
     await harness.cleanup()
   }
@@ -311,7 +332,7 @@ test('blocks unconfigured model providers while allowing configured and optional
     assert.equal(harness.service.modelAuthProblem('deepseek/deepseek-v4-pro'), null)
 
     const missingCodex = harness.service.modelAuthProblem('openai/gpt-5.3-codex-spark')
-    assert.equal(missingCodex?.provider, 'openai-codex')
+    assert.equal(missingCodex?.provider, 'openai')
 
     await harness.service.persistProviderAuth('openai', 'sk-openai-secret')
     assert.equal(harness.service.modelAuthProblem('openai/gpt-5.3-codex-spark'), null)

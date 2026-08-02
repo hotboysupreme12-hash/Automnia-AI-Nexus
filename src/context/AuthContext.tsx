@@ -1,56 +1,22 @@
 import { useEffect, useState } from 'react'
 import type { ReactNode } from 'react'
 import { apiErrorMessage, apiRequest } from '../api/client'
-import { clearAuthToken, readAuthToken, writeAuthToken } from '../api/authTokenStore'
+import { clearAuthToken, readAuthToken, subscribeAuthToken, writeAuthToken } from '../api/authTokenStore'
+import { hasDesktopControlCenterSessionBootstrap, recoverDesktopControlCenterSession } from '../api/desktopSessionRecovery'
 import { AuthContext } from './authContextValue'
 
-type DesktopAuthBridge = {
-  dystopaiDesktop?: {
-    bootstrapControlCenterSession?: () => Promise<string | null> | string | null
-  }
-}
-
-type DesktopSessionBootstrap = NonNullable<NonNullable<DesktopAuthBridge['dystopaiDesktop']>['bootstrapControlCenterSession']>
-
 const DESKTOP_BOOTSTRAP_ATTEMPTS = 4
-const DESKTOP_BOOTSTRAP_TIMEOUT_MS = 6500
 const DESKTOP_BOOTSTRAP_RETRY_MS = 450
 const AUTH_STATUS_TIMEOUT_MS = 4_500
-
-function desktopAuthBridge(): DesktopAuthBridge['dystopaiDesktop'] {
-  if (typeof window === 'undefined') return undefined
-  return (window as Window & DesktopAuthBridge).dystopaiDesktop
-}
-
-function hasDesktopSessionBootstrap(): boolean {
-  return typeof desktopAuthBridge()?.bootstrapControlCenterSession === 'function'
-}
 
 function sleep(ms: number) {
   return new Promise((resolve) => window.setTimeout(resolve, ms))
 }
 
-async function callDesktopSessionBootstrap(provider: DesktopSessionBootstrap, timeoutMs: number): Promise<string | null> {
-  let timer: ReturnType<typeof window.setTimeout> | undefined
-  try {
-    return await Promise.race([
-      Promise.resolve(provider()).then((value) => {
-        const token = typeof value === 'string' ? value.trim() : ''
-        return token || null
-      }),
-      new Promise<null>((resolve) => {
-        timer = window.setTimeout(() => resolve(null), timeoutMs)
-      }),
-    ])
-  } finally {
-    if (timer !== undefined) window.clearTimeout(timer)
-  }
-}
-
-async function bootstrapDesktopSession(provider: DesktopSessionBootstrap, isCancelled: () => boolean): Promise<string | null> {
+async function bootstrapDesktopSession(isCancelled: () => boolean): Promise<string | null> {
   for (let attempt = 0; attempt < DESKTOP_BOOTSTRAP_ATTEMPTS; attempt += 1) {
     if (isCancelled()) return null
-    const sessionToken = await callDesktopSessionBootstrap(provider, DESKTOP_BOOTSTRAP_TIMEOUT_MS).catch(() => null)
+    const sessionToken = await recoverDesktopControlCenterSession().catch(() => null)
     if (sessionToken || isCancelled()) return sessionToken
     await sleep(DESKTOP_BOOTSTRAP_RETRY_MS * (attempt + 1))
   }
@@ -60,7 +26,7 @@ async function bootstrapDesktopSession(provider: DesktopSessionBootstrap, isCanc
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [token, setToken] = useState<string | null>(() => readAuthToken())
   const [isAuthenticated, setIsAuthenticated] = useState(() => Boolean(readAuthToken()))
-  const [checking, setChecking] = useState(() => !readAuthToken() && hasDesktopSessionBootstrap())
+  const [checking, setChecking] = useState(() => !readAuthToken() && hasDesktopControlCenterSessionBootstrap())
 
   const completeLogin = (sessionToken: string) => {
     writeAuthToken(sessionToken)
@@ -70,16 +36,23 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }
 
   useEffect(() => {
+    return subscribeAuthToken((nextToken) => {
+      setToken(nextToken)
+      setIsAuthenticated(Boolean(nextToken))
+      if (nextToken) setChecking(false)
+    })
+  }, [])
+
+  useEffect(() => {
     if (!token) {
-      const provider = desktopAuthBridge()?.bootstrapControlCenterSession
-      if (!provider) {
+      if (!hasDesktopControlCenterSessionBootstrap()) {
         return
       }
       let cancelled = false
       Promise.resolve()
         .then(async () => {
           if (!cancelled) setChecking(true)
-          const sessionToken = await bootstrapDesktopSession(provider, () => cancelled)
+          const sessionToken = await bootstrapDesktopSession(() => cancelled)
           if (!sessionToken || cancelled) return false
           if (!cancelled) completeLogin(sessionToken)
           return true

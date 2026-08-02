@@ -479,6 +479,7 @@ export function NexusShell() {
             <Button
               id="nexus-nav-settings"
               variant="quiet"
+              data-tone="settings"
               className={`dy-human-nav-utility flex items-center gap-3 text-left ${tab === 'settings' ? 'is-active' : ''}`}
               aria-label="Open runtime settings"
               aria-current={tab === 'settings' ? 'page' : undefined}
@@ -499,6 +500,7 @@ export function NexusShell() {
             </Button>
             <Button
               variant="quiet"
+              data-tone="help"
               className="dy-human-nav-utility flex items-center gap-3 text-left"
               aria-label="Open Automnia AI Nexus documentation"
               onClick={() => window.open('https://github.com/hotboysupreme12-hash/Automnia-AI-Nexus', '_blank', 'noopener,noreferrer')}
@@ -669,28 +671,23 @@ export function NexusShell() {
                         variant="quiet"
                         size="compact"
                         className="dy-console-toggle"
-                        aria-pressed={!isAgentConsoleVisible}
+                        aria-pressed={isAgentConsoleVisible}
                         aria-label={isAgentConsoleVisible ? 'Hide command console' : 'Show command console'}
+                        title={isAgentConsoleVisible ? 'Hide command console' : 'Show command console'}
                         leadingIcon={(
                           <span className="dy-console-toggle__icon" aria-hidden="true">
-                            <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round">
-                              <path d="M4.5 6.5h11" />
-                              <path d="M4.5 10h7" />
-                              <path d="M4.5 13.5h11" />
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+                              <rect x="3.5" y="4.5" width="17" height="15" rx="2.5" />
+                              <path d="M14.5 5.5v13" />
+                              {isAgentConsoleVisible ? <path d="m17 9-3 3 3 3" /> : <path d="m12 9 3 3-3 3" />}
                             </svg>
                           </span>
                         )}
-                        onPointerDown={(event) => {
-                          event.preventDefault()
-                          setAgentConsoleVisible((visible) => !visible)
-                        }}
-                        onKeyDown={(event) => {
-                          if (event.key !== 'Enter' && event.key !== ' ') return
-                          event.preventDefault()
+                        onClick={() => {
                           setAgentConsoleVisible((visible) => !visible)
                         }}
                       >
-                        <span>{isAgentConsoleVisible ? 'Hide console' : 'Show console'}</span>
+                        <span className="dy-console-toggle__label">{isAgentConsoleVisible ? 'Hide console' : 'Show console'}</span>
                       </Button>
                     }
                   />

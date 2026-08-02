@@ -140,6 +140,7 @@ import {
   type RuntimeStatusService,
 } from './services/runtime/runtimeStatusService'
 import { createRuntimeActionService } from './services/runtime/runtimeActionService'
+import { recoverMalformedCodexBindingSidecars } from './services/runtime/codexSidecarRecoveryService'
 import { createBrowserPreflightService } from './services/browser/browserPreflightService'
 import { createRuntimeRecoveryService } from './services/runtime/runtimeRecoveryService'
 import {
@@ -165,6 +166,7 @@ import {
   createPluginRuntimeService,
   type PluginRuntimeService,
 } from './services/plugins/pluginRuntimeService'
+import { pluginToggleRequiresGatewayRestart } from './services/plugins/pluginRestartPolicy'
 import { computeShiftDurationMinutes } from './shiftContracts'
 import type {
   HeartbeatRuntimeDefaults,
@@ -463,7 +465,7 @@ const DISABLE_BROWSER_RUNTIME_DEFAULTS = /^(1|true|yes)$/i.test(
   process.env.CONTROL_CENTER_DISABLE_BROWSER_DEFAULTS || process.env.DYSTOPAI_DISABLE_OPENCLAW_BROWSER || '',
 )
 
-type ThinkingLevel = 'off' | 'minimal' | 'low' | 'medium' | 'high'
+type ThinkingLevel = 'off' | 'minimal' | 'low' | 'medium' | 'high' | 'xhigh' | 'max'
 type FastModePreference = 'auto' | 'on' | 'off'
 type OpenClawFastModeDefault = 'auto' | boolean
 type OpenClawChatFastMode = 'auto' | true
@@ -1489,7 +1491,7 @@ type AgentLocalConfig = {
     retentionDays: number
   }
   runtime: {
-    thinkingDefault: 'off' | 'minimal' | 'low' | 'medium' | 'high'
+    thinkingDefault: 'off' | 'minimal' | 'low' | 'medium' | 'high' | 'xhigh' | 'max'
     timeoutSeconds: number
     parallelPreferred: boolean
     fastModeDefault: FastModePreference
@@ -1567,6 +1569,30 @@ const CODEX_APP_SERVER_AUTH_MARKER = 'codex-app-server'
 const OPENCLAW_AGENT_TURN_TIMEOUT_FLOOR_SECONDS = 10 * 60
 const OPENCLAW_TIMEOUT_RECOVERY_SECONDS = 15 * 60
 const MODEL_RESILIENCE_FALLBACKS: Record<string, string[]> = {
+  'openai/gpt-5.6-sol': [
+    'openai/gpt-5.6-terra',
+    'openai/gpt-5.6-luna',
+  ],
+  'openai/gpt-5.6-terra': [
+    'openai/gpt-5.6-sol',
+    'openai/gpt-5.6-luna',
+  ],
+  'openai/gpt-5.6-luna': [
+    'openai/gpt-5.6-terra',
+    'openai/gpt-5.6-sol',
+  ],
+  'google/gemini-3.6-flash': [
+    'google/gemini-3.5-flash',
+    'google/gemini-3.1-flash-lite',
+    'google/gemini-2.5-flash',
+    'google/gemini-2.5-flash-lite',
+  ],
+  'google-vertex/gemini-3.6-flash': [
+    'google-vertex/gemini-3.5-flash',
+    'google-vertex/gemini-3.1-flash-lite',
+    'google-vertex/gemini-2.5-flash',
+    'google-vertex/gemini-2.5-flash-lite',
+  ],
   'google-vertex/gemini-3.5-flash': [
     'google-vertex/gemini-3-flash-preview',
     'google-vertex/gemini-3.1-flash-lite',
@@ -1611,7 +1637,7 @@ const MODEL_RESILIENCE_FALLBACKS: Record<string, string[]> = {
 }
 const OPENROUTER_DEEPSEEK_V4_PRO_MODEL_ID = 'openrouter/deepseek/deepseek-v4-pro'
 const OPENROUTER_DEEPSEEK_V4_FLASH_MODEL_ID = 'openrouter/deepseek/deepseek-v4-flash'
-const OPENAI_DEFAULT_MODEL_ID = 'openai/gpt-5.5'
+const OPENAI_DEFAULT_MODEL_ID = 'openai/gpt-5.6-terra'
 const DEEPSEEK_DEFAULT_MODEL_ID = 'deepseek/deepseek-v4-flash'
 const DEEPSEEK_DEFAULT_FALLBACKS = MODEL_RESILIENCE_FALLBACKS[DEEPSEEK_DEFAULT_MODEL_ID] || [
   'deepseek/deepseek-chat',
@@ -1809,17 +1835,25 @@ function ensureCodexPluginExplicitEnablement(config: OpenClawConfigFile) {
 }
 
 function ensureOpenRouterPluginEnabledForProviderAuth(config: OpenClawConfigFile) {
+  ensureProviderPluginEnabledForProviderAuth(config, 'openrouter')
+}
+
+function ensureBundledProviderPluginEnabledForProviderAuth(config: OpenClawConfigFile, pluginId: 'meta') {
+  ensureProviderPluginEnabledForProviderAuth(config, pluginId)
+}
+
+function ensureProviderPluginEnabledForProviderAuth(config: OpenClawConfigFile, pluginId: 'openrouter' | 'meta') {
   if (!config.plugins) config.plugins = {}
   if (!config.plugins.entries) config.plugins.entries = {}
-  const existingEntry = config.plugins.entries.openrouter || {}
-  config.plugins.entries.openrouter = {
+  const existingEntry = config.plugins.entries[pluginId] || {}
+  config.plugins.entries[pluginId] = {
     ...(existingEntry || {}),
     enabled: true,
   }
-  if (Array.isArray(config.plugins.deny) && config.plugins.deny.includes('openrouter')) {
-    config.plugins.deny = config.plugins.deny.filter((entry) => entry !== 'openrouter')
+  if (Array.isArray(config.plugins.deny) && config.plugins.deny.includes(pluginId)) {
+    config.plugins.deny = config.plugins.deny.filter((entry) => entry !== pluginId)
   }
-  ensureTrustedPluginAllowlist(config, 'openrouter')
+  ensureTrustedPluginAllowlist(config, pluginId)
 }
 
 const providerAuthServiceRef: { current?: ProviderAuthService } = {}
@@ -1885,6 +1919,8 @@ const providerAuthService = createProviderAuthService({
   canonicalAgentModelId,
   configuredProviderApiKeyMarker,
   createInitialOpenclawConfig: () => createInitialOpenclawConfig() as ProviderAuthOpenClawConfig,
+  ensureBundledProviderPluginEnabledForProviderAuth: (config, pluginId) =>
+    ensureBundledProviderPluginEnabledForProviderAuth(config as OpenClawConfigFile, pluginId),
   ensureOpenRouterModelCatalogAllowlist: (config) =>
     modelCatalogService.ensureOpenRouterModelCatalogAllowlist(config as OpenClawConfigFile),
   ensureOpenRouterPluginEnabledForProviderAuth: (config) =>
@@ -1913,6 +1949,7 @@ providerAuthServiceRef.current = providerAuthService
 const ensureLocalAuthStoreLoaded = providerAuthService.ensureLocalAuthStoreLoaded
 const getAgentAuthEnv = providerAuthService.getAgentAuthEnv
 const getLocalAuthEnv = providerAuthService.getLocalAuthEnv
+const getLocalProviderMode = providerAuthService.getLocalProviderMode
 const isProviderConfigured = providerAuthService.isProviderConfigured
 const modelAuthProblem = providerAuthService.modelAuthProblem
 const persistProviderAuth = providerAuthService.persistProviderAuth
@@ -5436,15 +5473,15 @@ const STREAMING_PROVIDER_CONFIG: Record<string, StreamingProviderConfig> = {
 function streamingCapabilityForModel(modelId: string) {
   const canonicalModelId = canonicalAgentModelId(modelId)
   if (isOpenAiCodexSubscriptionModel(canonicalModelId)) {
-    const codexAuth = AUTH_PROVIDER_CATALOG['openai-codex']
-    const oauthConfigured = isOAuthCredentialUsable(providerAuthService.getLocalProviderOAuth('openai-codex'))
+    const openAiAuth = AUTH_PROVIDER_CATALOG.openai
+    const oauthConfigured = isOAuthCredentialUsable(providerAuthService.getLocalProviderOAuth('openai'))
     const openAiApiConfigured = isProviderConfigured('openai')
     return {
       supported: true,
-      provider: oauthConfigured ? 'openai-codex' : 'openai',
+      provider: 'openai',
       transport: oauthConfigured ? 'openai-codex-responses' : 'openai-responses',
       requires: oauthConfigured || openAiApiConfigured ? [] as string[] : ['OpenAI Codex OAuth or OPENAI_API_KEY'],
-      docs: codexAuth?.docs,
+      docs: openAiAuth?.docs,
     }
   }
 
@@ -5495,21 +5532,40 @@ function openClawDistDirCandidates() {
 }
 
 async function resolveOpenAiSubscriptionRequestAuth(env: Record<string, string>) {
-  const codexOAuth = await resolveOpenAICodexOAuthForRequest().catch(() => null)
-  if (codexOAuth?.accessToken) {
-    return {
-      provider: 'openai-codex',
-      providerConfig: STREAMING_PROVIDER_CONFIG['openai-codex'],
-      requestAuth: { type: 'oauth', accessToken: codexOAuth.accessToken, source: 'local-openai-codex-oauth' } as ProviderRequestAuth,
+  const openAiProviderConfig = STREAMING_PROVIDER_CONFIG.openai
+  const preferredMode = getLocalProviderMode('openai')
+  if (preferredMode !== 'apiKey') {
+    const codexOAuth = await resolveOpenAICodexOAuthForRequest().catch(() => null)
+    if (codexOAuth?.accessToken) {
+      return {
+        provider: 'openai',
+        providerConfig: openAiProviderConfig,
+        requestAuth: { type: 'oauth', accessToken: codexOAuth.accessToken, source: 'local-openai-codex-oauth' } as ProviderRequestAuth,
+      }
     }
   }
 
-  const openAiProviderConfig = STREAMING_PROVIDER_CONFIG.openai
   const openAiApiAuth = await resolveProviderRequestAuth('openai', env, openAiProviderConfig.envKeys)
+  if (openAiApiAuth) {
+    return {
+      provider: 'openai',
+      providerConfig: openAiProviderConfig,
+      requestAuth: openAiApiAuth,
+    }
+  }
+
+  const codexOAuth = await resolveOpenAICodexOAuthForRequest().catch(() => null)
+  if (codexOAuth?.accessToken) {
+    return {
+      provider: 'openai',
+      providerConfig: openAiProviderConfig,
+      requestAuth: { type: 'oauth', accessToken: codexOAuth.accessToken, source: 'local-openai-codex-oauth' } as ProviderRequestAuth,
+    }
+  }
   return {
-    provider: openAiApiAuth ? 'openai' : 'openai-codex',
-    providerConfig: openAiApiAuth ? openAiProviderConfig : STREAMING_PROVIDER_CONFIG['openai-codex'],
-    requestAuth: openAiApiAuth,
+    provider: 'openai',
+    providerConfig: openAiProviderConfig,
+    requestAuth: null,
   }
 }
 
@@ -5782,13 +5838,13 @@ async function assertUpstreamOk(response: globalThis.Response, provider: string)
 }
 
 function effortForThinking(thinking: Exclude<ThinkingLevel, 'off'>): 'low' | 'medium' | 'high' {
-  if (thinking === 'high') return 'high'
+  if (thinking === 'high' || thinking === 'xhigh' || thinking === 'max') return 'high'
   if (thinking === 'medium') return 'medium'
   return 'low'
 }
 
 function deepSeekThinkingPatch(thinking: ThinkingLevel) {
-  if (thinking === 'high') return { thinking: { type: 'enabled' }, reasoning_effort: 'high' }
+  if (thinking === 'high' || thinking === 'xhigh' || thinking === 'max') return { thinking: { type: 'enabled' }, reasoning_effort: 'high' }
   if (thinking === 'medium') return { thinking: { type: 'enabled' }, reasoning_effort: 'medium' }
   if (thinking === 'minimal' || thinking === 'low') return { thinking: { type: 'enabled' }, reasoning_effort: 'low' }
   return { thinking: { type: 'disabled' } }
@@ -5920,7 +5976,8 @@ function anthropicSupportsAdaptiveThinking(model: string) {
   return (
     /claude-opus-4-(6|7|8)\b/.test(normalized) ||
     /claude-sonnet-4-6\b/.test(normalized) ||
-    /claude-mythos/.test(normalized)
+    /claude-mythos/.test(normalized) ||
+    /claude-(?:opus|sonnet|fable)-5\b/.test(normalized)
   )
 }
 
@@ -5934,17 +5991,19 @@ function anthropicSupportsEffort(model: string) {
 
 function anthropicSupportsManualThinking(model: string) {
   const normalized = model.toLowerCase()
-  if (/claude-opus-4-(7|8)\b/.test(normalized) || /claude-mythos/.test(normalized)) return false
+  if (/claude-opus-4-(7|8)\b/.test(normalized) || /claude-(?:opus|sonnet|fable|mythos)-5\b/.test(normalized)) return false
   return /claude-(sonnet-3-7|sonnet-4|opus-4|haiku-4-5)\b/.test(normalized)
 }
 
 function anthropicThinkingBudget(thinking: Exclude<ThinkingLevel, 'off'>) {
-  if (thinking === 'high') return 4096
+  if (thinking === 'high' || thinking === 'xhigh' || thinking === 'max') return 4096
   if (thinking === 'medium') return 2048
   return 1024
 }
 
 function anthropicMaxTokens(thinking: ThinkingLevel) {
+  if (thinking === 'max') return 16384
+  if (thinking === 'xhigh') return 12288
   if (thinking === 'high') return 8192
   if (thinking === 'medium') return 6144
   return 4096
@@ -5970,23 +6029,38 @@ function geminiThinkingBudget(model: string, thinking: ThinkingLevel) {
   const normalized = model.toLowerCase()
   const isPro = /gemini-2\.5-pro/.test(normalized)
   if (thinking === 'off' || thinking === 'minimal') return isPro ? 128 : 0
-  if (thinking === 'high') return 8192
+  if (thinking === 'high' || thinking === 'xhigh' || thinking === 'max') return 8192
   if (thinking === 'medium') return 4096
   return 1024
 }
 
 function geminiThinkingConfig(model: string, thinking: ThinkingLevel) {
   const normalized = model.toLowerCase()
+  const nativeThinking = thinking === 'xhigh' || thinking === 'max' ? 'high' : thinking
   if (/gemini-2\.5/.test(normalized)) {
     return { thinkingBudget: geminiThinkingBudget(model, thinking) }
   }
   if (/gemini-3(?:\.\d+)?-flash/.test(normalized)) {
-    return { thinkingLevel: thinking === 'off' ? 'minimal' : thinking }
+    return { thinkingLevel: nativeThinking === 'off' ? 'minimal' : nativeThinking }
   }
   if (/gemini-(3|4|5)/.test(normalized)) {
-    return { thinkingLevel: thinking === 'off' ? 'minimal' : thinking }
+    return { thinkingLevel: nativeThinking === 'off' ? 'minimal' : nativeThinking }
   }
   return undefined
+}
+
+/**
+ * Gemini 3.6 Flash rejects custom temperature, top-p, and top-k values. The
+ * usual streaming path already omits them; this guard keeps the direct Vertex
+ * artifact fallback aligned with that same request contract.
+ */
+function geminiDisallowsCustomSampling(model: string) {
+  const normalized = model
+    .toLowerCase()
+    .replace(/^publishers\/google\/models\//, '')
+    .replace(/^models\//, '')
+    .trim()
+  return /^gemini-3\.6-flash(?:$|[-@])/.test(normalized)
 }
 
 async function streamOpenAiCompatibleCompletion(params: {
@@ -6216,7 +6290,7 @@ function toOpenAICodexContext(
   }
 }
 
-function openAICodexReasoningEffort(thinking: ThinkingLevel): 'none' | 'minimal' | 'low' | 'medium' | 'high' {
+function openAICodexReasoningEffort(thinking: ThinkingLevel): 'none' | 'minimal' | 'low' | 'medium' | 'high' | 'xhigh' | 'max' {
   if (thinking === 'off') return 'none'
   return thinking
 }
@@ -9181,6 +9255,17 @@ async function ensureOpenclawAgentRunConfigDefaults() {
 }
 
 async function ensureGatewayStartupPluginDefaults(repairSummary: GatewayStartupPluginRepairSummary = {}) {
+  const sidecarRecovery = await recoverMalformedCodexBindingSidecars(OPENCLAW_STATE_ROOT)
+  if (sidecarRecovery.recovered.length) {
+    const recoveryFolder = path.join(OPENCLAW_STATE_ROOT, 'recovery', 'codex-binding-sidecars')
+    const message = `Recovered ${sidecarRecovery.recovered.length} malformed legacy Codex binding sidecar${sidecarRecovery.recovered.length === 1 ? '' : 's'} before migration. Original file${sidecarRecovery.recovered.length === 1 ? ' was' : 's were'} moved to ${recoveryFolder}.`
+    console.warn(`[runtime/codex-sidecar] ${message}`)
+    pushGatewayLog('lifecycle', message, 'warning')
+  }
+  for (const warning of sidecarRecovery.warnings) {
+    console.warn(`[runtime/codex-sidecar] ${warning}`)
+    pushGatewayLog('lifecycle', warning, 'warning')
+  }
   const config = await readOpenclawConfig().catch(() => null)
   if (!config) return
   const before = JSON.stringify({ gateway: config.gateway || {}, plugins: config.plugins || {}, tools: config.tools || {} })
@@ -9854,8 +9939,8 @@ function patchedClawTalkRuntimeSource(source: string) {
 }
 
 
-const CLAWTALK_REPAIR_SIGNATURE_VERSION = 'clawtalk-repair:v12'
-const TELEGRAM_REPAIR_SIGNATURE_VERSION = 'telegram-routing-repair:v5'
+const CLAWTALK_REPAIR_SIGNATURE_VERSION = 'clawtalk-repair:v13'
+const TELEGRAM_REPAIR_SIGNATURE_VERSION = 'telegram-routing-repair:v11'
 const clawTalkRepairSignatureCache = new Map<string, string>()
 const telegramRepairSignatureCache = new Map<string, string>()
 
@@ -9894,7 +9979,7 @@ function clawTalkCoreBridgeStreamHelper() {
 
 function patchedClawTalkCoreBridgeSource(source: string) {
   let next = source
-  const routingPatchVersion = 'var CLAWTALK_ROUTING_PATCH_VERSION = 11;'
+  const routingPatchVersion = 'var CLAWTALK_ROUTING_PATCH_VERSION = 12;'
   const routingHelperPattern = /var CLAWTALK_ROUTING_PATCH_VERSION = \d+;[\s\S]*?\nvar DEFAULT_TIMEOUT_MS = 120000;/
   const canPatchBridge = source.includes(routingPatchVersion)
     || routingHelperPattern.test(source)
@@ -10021,7 +10106,7 @@ function patchedClawTalkSmsHandlerSource(source: string) {
 
 function patchedTelegramBotRuntimeSource(source: string) {
   let next = source
-  const routingPatchVersion = 'var TELEGRAM_AGENT_ROUTING_PATCH_VERSION = 5;'
+  const routingPatchVersion = 'var TELEGRAM_AGENT_ROUTING_PATCH_VERSION = 11;'
   const routingHelperPattern = /var TELEGRAM_AGENT_ROUTING_PATCH_VERSION = \d+;[\s\S]*?\/\/#endregion telegram-agent-routing-patch/
   if (routingHelperPattern.test(next)) {
     next = next.replace(routingHelperPattern, TELEGRAM_AGENT_ROUTING_HELPER)
@@ -10060,7 +10145,7 @@ function patchedTelegramBotRuntimeSource(source: string) {
       'bodyResult.rawBody = telegramAgentRoute.rawBody;',
       'bodyResult.bodyText = telegramAgentRoute.bodyText;',
       'const telegramAgentModelRef = route.modelRef || resolveTelegramAgentModelRef(freshCfg, route.agentId);',
-      'logVerbose(`telegram: agent route ${telegramAgentRoute.reason || "selected"} -> ${route.agentId} session=${route.sessionKey} model=${telegramAgentModelRef || "configured-default"}`);',
+      'console.log(`[telegram] Agent route selected: agent=${route.agentId} mode=${telegramAgentRoute.reason || "selected"} scope=${route.lastRoutePolicy || "session"} model=${telegramAgentModelRef || "configured-default"}`);',
       '}',
       'bodyResult.bodyText = withTelegramAgentRouteContext({',
       'config: freshCfg,',
@@ -10078,6 +10163,24 @@ function patchedTelegramBotRuntimeSource(source: string) {
   if (next !== source && !next.includes(routeApplicationMarker)) {
     console.warn('[plugins/telegram] agent route patch skipped: route application marker was not inserted')
     return source
+  }
+  const identityDeliveryMarker = 'beforeDeliver: async (payload) => payload,\n\t\t\t\t\t\t\t\t\tonBeforeDeliverCancelled: (payload, info) => {'
+  if (next.includes(identityDeliveryMarker)) {
+    next = next.replace(
+      identityDeliveryMarker,
+      [
+        'beforeDeliver: async (payload, info) => applyTelegramVerifiedIdentityDeliveryGuard({',
+        'payload,',
+        'info,',
+        'config: cfg,',
+        'agentId: route.agentId,',
+        'prompt: ctxPayload.RawBody',
+        '}),',
+        'onBeforeDeliverCancelled: (payload, info) => {',
+      ].join('\n\t\t\t\t\t\t\t\t\t'),
+    )
+  } else if (!next.includes('applyTelegramVerifiedIdentityDeliveryGuard({')) {
+    console.warn('[plugins/telegram] identity delivery guard skipped: reply delivery marker not found')
   }
   return next
 }
@@ -10100,7 +10203,11 @@ async function telegramBotRuntimeFileCandidates() {
     const entries = await fs.readdir(distRoot, { withFileTypes: true }).catch(() => [])
     for (const entry of entries) {
       if (!entry.isFile()) continue
-      if (!/^bot(?:-[A-Za-z0-9_-]+)?\.js$/u.test(entry.name)) continue
+      // OpenClaw's Telegram entry has shipped under both `bot*.js` and
+      // `telegram-ingress-*.js`. The implementation-shape check in the
+      // repair loop remains the final guard, so discover Telegram-named
+      // direct dist entries instead of relying on one build filename.
+      if (!entry.name.toLowerCase().includes('telegram')) continue
       files.push(path.join(distRoot, entry.name))
     }
   }
@@ -10908,6 +11015,23 @@ async function repairCodexPluginPostInstallState(options: {
     actions.push('verified Codex session routes with OpenClaw doctor')
   }
 
+  // Unlike ordinary settings, the Codex harness is registered while the
+  // Gateway process starts. A successful config hot reload is therefore not
+  // sufficient. Restart an owned, already-running Gateway before reporting
+  // that Codex activation is complete, so the next turn cannot select an
+  // enabled-but-unregistered harness.
+  if (await isGatewayHealthy().catch(() => false)) {
+    const restart = await tryRestartGatewayService({
+      force: true,
+      reason: 'Codex plugin activation requires a fresh Gateway harness',
+    })
+    if (restart.restarted) {
+      actions.push('restarted the Gateway so the Codex harness is registered')
+    } else {
+      warnings.push(`Codex is configured, but the current Gateway was not restarted: ${restart.detail || 'restart was declined'}`)
+    }
+  }
+
   return {
     applied: actions.length > 0,
     reason: 'Codex plugin install/config repair completed.',
@@ -11209,8 +11333,12 @@ async function setOpenClawPluginEnabledForControlCenter(pluginId: string, enable
 
   await markPluginManaged(id, enabled)
   const registryRefresh = schedulePluginRegistryRefresh(`plugin-${enabled ? 'enable' : 'disable'}:${id}`)
-  const restart = options.restart
-    ? options.immediateRestart
+  // The native Codex harness is registered while the gateway process starts.
+  // A config hot reload makes it look enabled but leaves `codex` unregistered
+  // for the current process, causing every OpenAI/Codex turn to fail closed.
+  const restartRequested = options.restart || pluginToggleRequiresGatewayRestart(id)
+  const restart = restartRequested
+    ? (options.immediateRestart || pluginToggleRequiresGatewayRestart(id))
       ? {
           ...(await tryRestartGatewayService({ force: true, reason: `plugin ${enabled ? 'enable' : 'disable'} immediate gateway restart: ${id}` })),
           scheduled: false,
@@ -12905,13 +13033,14 @@ function composeAgentDoctrinePrompt(agentId: string, message: string, executionW
   }
 
   return [
-    'Startup context:',
+    'Interactive runtime context:',
     `- Doctrine folder: ${profileDir}`,
     executionWorkspace ? `- Workspace folder: ${executionWorkspace}` : '',
     vertexCompactMode
       ? 'Startup: Doctrine files are available, but for Google Vertex Gemini read only files needed for this turn.'
-      : 'Startup: read AGENTS.md, BOOTSTRAP.md if present, USER.md, IDENTITY.md, SOUL.md, HEARTBEAT.md, TOOLS.md, MDS.json from Doctrine only.',
-    'Use enabled SKILL.md paths from MDS only when relevant.',
+      : 'Answer directly from the active conversation when enough context is already available. Do not read every doctrine, workspace, or team file just to begin a turn.',
+    'Use tools whenever live state, an external action, or evidence is needed. Tool availability is not limited by the response speed or reasoning level.',
+    'Before changing workspace files, read the applicable AGENTS.md and only the files relevant to the requested change. Read doctrine, MDS.json, or an enabled SKILL.md only when it is relevant to the request.',
     `Shared skill root: ${SHARED_SKILLS_ROOT}. Never use ~/skills for Control Center skills; if MDS lists an absolute SKILL.md path, read that exact path.`,
     vertexCompactDirective,
     executionWorkspace
@@ -14098,8 +14227,10 @@ async function generateGoogleVertexArtifactContent(params: {
     ],
     generationConfig: {
       maxOutputTokens: GOOGLE_GEMINI_DIRECT_ARTIFACT_MAX_OUTPUT_TOKENS,
-      temperature: 0.7,
-      topP: 0.95,
+      ...(geminiDisallowsCustomSampling(modelName) ? {} : {
+        temperature: 0.7,
+        topP: 0.95,
+      }),
       ...(thinkingConfig ? { thinkingConfig } : {}),
     },
   }
@@ -16560,7 +16691,7 @@ async function generateRecruitAutoForgeMarkdown(input: {
   const canonicalModelId = canonicalAgentModelId(input.modelId)
   const { provider: modelProvider, model } = splitModelId(canonicalModelId)
   const isCodexSubscriptionTurn = isOpenAiCodexSubscriptionModel(canonicalModelId)
-  let provider = isCodexSubscriptionTurn ? 'openai-codex' : modelProvider
+  let provider = isCodexSubscriptionTurn ? 'openai' : modelProvider
   let providerConfig = STREAMING_PROVIDER_CONFIG[provider]
   if (!providerConfig) {
     const error = new Error(`Auto Forge inference is not wired for provider "${provider || modelProvider}". Select OpenAI, OpenAI Codex, Anthropic, Google, Google Vertex, or DeepSeek.`)
@@ -16601,12 +16732,9 @@ async function generateRecruitAutoForgeMarkdown(input: {
   const messages: ProviderConversationMessage[] = [{ role: 'user', content: input.prompt }]
   const emit: StreamEmitter = () => undefined
   const thinking: ThinkingLevel = 'minimal'
-  const effectiveKind: StreamingProviderKind =
-    isCodexSubscriptionTurn && provider === 'openai-codex'
-      ? 'openai-codex-responses'
-      : provider === 'openai' && requestAuth.type === 'oauth'
-        ? 'openai-codex-responses'
-        : providerConfig.kind
+  const effectiveKind: StreamingProviderKind = provider === 'openai' && requestAuth.type === 'oauth'
+    ? 'openai-codex-responses'
+    : providerConfig.kind
 
   if (providerConfig.kind === 'openai-compatible') {
     if (requestAuth.type !== 'apiKey') throw new Error(`${provider} Auto Forge requires an API key credential.`)
@@ -17033,6 +17161,7 @@ const agentStreamingService = createAgentStreamingService({
   getAgentAuthEnv,
   resolveOpenAiSubscriptionRequestAuth,
   resolveProviderRequestAuth,
+  anthropicSubscriptionAvailable: () => Boolean(providerAuthStatus('anthropic').subscriptionAuth?.configured),
   streamingCapabilityForModel,
   resolveAgentRunContext,
   agentTurnSessionScope,

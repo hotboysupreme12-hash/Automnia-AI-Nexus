@@ -1,6 +1,6 @@
 # OpenClaw Docs Snapshot
 
-Synced from https://docs.openclaw.ai at 2026-07-02T01:07:09.873Z.
+Synced from https://docs.openclaw.ai at 2026-08-02T21:48:24.613Z.
 
 - `llms.txt` is the live docs map used for discovery.
 - `llms-full.txt` is the full LLM-oriented docs export.
@@ -13,5 +13,5 @@ Refresh with:
 node scripts/sync-openclaw-docs.mjs
 ```
 
-Downloaded pages: 697
+Downloaded pages: 775
 Failed pages: 0

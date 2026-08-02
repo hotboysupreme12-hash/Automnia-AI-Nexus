@@ -1,5 +1,6 @@
 import { apiUrl } from '../utils/apiUrl'
 import { readAuthToken } from './authTokenStore'
+import { recoverDesktopControlCenterSession } from './desktopSessionRecovery'
 
 let installed = false
 
@@ -22,6 +23,15 @@ function isControlCenterApiRequest(input: RequestInfo | URL): boolean {
   }
 }
 
+function isSessionBootstrapRequest(input: RequestInfo | URL): boolean {
+  try {
+    const request = new URL(requestUrl(input), window.location.href)
+    return request.pathname === '/api/auth/login' || request.pathname === '/api/auth/logout'
+  } catch {
+    return false
+  }
+}
+
 function headersWithBearer(input: RequestInfo | URL, init?: RequestInit): Headers {
   const headers = new Headers(init?.headers || (input instanceof Request ? input.headers : undefined))
   if (!headers.has('Authorization')) {
@@ -36,11 +46,24 @@ export function installAuthenticatedFetch(): void {
   installed = true
   const nativeFetch = window.fetch.bind(window)
 
-  window.fetch = (input: RequestInfo | URL, init?: RequestInit) => {
+  window.fetch = async (input: RequestInfo | URL, init?: RequestInit) => {
     if (!isControlCenterApiRequest(input)) return nativeFetch(input, init)
-    return nativeFetch(input, {
+
+    const retryInput = input instanceof Request ? input.clone() : input
+    const firstResponse = await nativeFetch(input, {
       ...(init || {}),
       headers: headersWithBearer(input, init),
+    })
+    if (firstResponse.status !== 401 || isSessionBootstrapRequest(input)) return firstResponse
+
+    const refreshedToken = await recoverDesktopControlCenterSession()
+    if (!refreshedToken) return firstResponse
+
+    const retryHeaders = headersWithBearer(retryInput, init)
+    retryHeaders.set('Authorization', `Bearer ${refreshedToken}`)
+    return nativeFetch(retryInput, {
+      ...(init || {}),
+      headers: retryHeaders,
     })
   }
 }

@@ -4,6 +4,7 @@ import { AgentCard } from './AgentCard'
 import { Panel } from '../common/Panel'
 import { useNexusStore } from '../../store/nexusStore'
 import type { AgentRarity, OpenClawAgent } from '../../types/nexus'
+import { useRuntimeStatus, type RuntimeStatus } from '../../hooks/useRuntimeStatus'
 
 type SortKey = 'party' | 'level' | 'name' | 'rarity'
 type AgentDisplayMode = 'showcase' | 'grid6' | 'grid8' | 'grid10' | 'list'
@@ -45,6 +46,7 @@ const gridClassByMode: Record<AgentDisplayMode, string> = {
 const FLOW_GRID_MODES = new Set<AgentDisplayMode>(['showcase', 'grid6', 'grid8', 'grid10'])
 const REGISTRY_PREFS_KEY = 'dystopai-agent-registry-prefs'
 const REGISTRY_PREFS_VERSION = 4
+const EXTERNAL_CHANNEL_RUNNING_WINDOW_MS = 90_000
 const CYAN_SELECT_CHEVRON_STYLE = {
   backgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='8' height='8' viewBox='0 0 24 24' fill='none' stroke='%2367e8f9' stroke-width='3' stroke-linecap='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E")`,
   backgroundRepeat: 'no-repeat',
@@ -66,6 +68,32 @@ function countRenderedGridColumns(element: HTMLElement | null): number {
   const columns = window.getComputedStyle(element).gridTemplateColumns
   if (!columns || columns === 'none') return 1
   return Math.max(1, columns.split(' ').filter(Boolean).length)
+}
+
+function activeExternalChannelAgentIds(status: RuntimeStatus | null): Set<string> {
+  const active = new Set<string>()
+  if (!status) return active
+
+  for (const session of status.sessions || []) {
+    if (session.active && session.agentId) active.add(session.agentId)
+  }
+
+  const newestActivityByAgent = new Map<string, { direction: string; timestamp: string }>()
+  for (const event of status.gateway.activity?.events || []) {
+    if (!event.agentId || newestActivityByAgent.has(event.agentId)) continue
+    newestActivityByAgent.set(event.agentId, event)
+  }
+  const now = Date.now()
+  for (const [agentId, event] of newestActivityByAgent) {
+    const ageMs = now - Date.parse(event.timestamp)
+    // An inbound message starts the external turn. A later outbound message
+    // ends it; a bounded window prevents a missing provider delivery log from
+    // leaving an agent card in the Running state indefinitely.
+    if (event.direction === 'inbound' && Number.isFinite(ageMs) && ageMs >= 0 && ageMs <= EXTERNAL_CHANNEL_RUNNING_WINDOW_MS) {
+      active.add(agentId)
+    }
+  }
+  return active
 }
 
 const RARITY_ORDER: Record<AgentRarity, number> = {
@@ -195,6 +223,7 @@ export function PartySelector() {
   const activePartyIds = useNexusStore((s) => s.activePartyIds)
   const busyAgentIds = useNexusStore((s) => s.busyAgentIds)
   const activeMission = useNexusStore((s) => s.activeMission)
+  const { status: runtimeStatus } = useRuntimeStatus(5000)
   const missionRunning = activeMission?.status === 'running'
   const registryScrollRef = useRef<HTMLDivElement | null>(null)
   const registryGridRef = useRef<HTMLDivElement | null>(null)
@@ -218,7 +247,10 @@ export function PartySelector() {
   }, [displayMode, nominalPageSize, registryColumnCount])
   const activePartySet = useMemo(() => new Set(activePartyIds), [activePartyIds])
   const selectedAgentSet = useMemo(() => new Set(selectedAgentIds), [selectedAgentIds])
-  const busyAgentSet = useMemo(() => new Set(busyAgentIds), [busyAgentIds])
+  const busyAgentSet = useMemo(() => new Set([
+    ...busyAgentIds,
+    ...activeExternalChannelAgentIds(runtimeStatus),
+  ]), [busyAgentIds, runtimeStatus])
   const searchIndex = useMemo(() => new Map(agents.map((agent) => {
     const haystack = agentSearchText(agent)
     return [agent.id, {

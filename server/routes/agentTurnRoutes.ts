@@ -5,7 +5,7 @@ import path from 'node:path'
 import { z } from 'zod'
 import { apiFailure, apiSuccess } from '../controlPlaneHttp'
 
-type ThinkingLevel = 'off' | 'minimal' | 'low' | 'medium' | 'high'
+type ThinkingLevel = 'off' | 'minimal' | 'low' | 'medium' | 'high' | 'xhigh' | 'max'
 type StreamEmitter = (event: string, data: Record<string, unknown>) => void
 
 type AgentRuntimePreflightCheck = {
@@ -396,7 +396,7 @@ export function registerAgentTurnRoutes(app: Express, options: AgentTurnRoutesOp
       displayPrompt: z.string().optional(),
       source: z.enum(['clawtalk']).optional(),
       sessionKey: z.string().min(1).optional(),
-      thinking: z.enum(['off', 'minimal', 'low', 'medium', 'high']).default('low'),
+      thinking: z.enum(['off', 'minimal', 'low', 'medium', 'high', 'xhigh', 'max']).default('low'),
       timeoutSeconds: z.number().int().min(30).max(7200).optional(),
       attachments: z.array(z.unknown()).optional(),
       forceOpenClawRuntime: z.boolean().optional().default(false),
@@ -659,7 +659,7 @@ export function registerAgentTurnRoutes(app: Express, options: AgentTurnRoutesOp
       message: z.string().min(1),
       intentMessage: z.string().optional(),
       sessionKey: z.string().min(1).optional(),
-      thinking: z.enum(['off', 'minimal', 'low', 'medium', 'high']).default('low'),
+      thinking: z.enum(['off', 'minimal', 'low', 'medium', 'high', 'xhigh', 'max']).default('low'),
       timeoutSeconds: z.number().int().min(30).max(7200).optional(),
       attachments: z.array(z.unknown()).optional(),
       forceOpenClawRuntime: z.boolean().optional().default(false),

@@ -154,7 +154,7 @@ test('completes OpenAI Codex manual OAuth input and stores only redacted session
       accountId: 'acct_manual-code',
       expiresAt: 1782826384447,
     })
-    assert.equal(state.persisted[0].provider, 'openai-codex')
+    assert.equal(state.persisted[0].provider, 'openai')
     assert.equal(state.persisted[0].oauth.accountId, 'acct_manual-code')
     assert.doesNotMatch(JSON.stringify(session), /codex-refresh-secret/)
   } finally {
@@ -184,7 +184,7 @@ test('completes OpenAI Codex OAuth through a loopback-only callback listener wit
       accountId: 'acct_browser-code',
       expiresAt: 1782826384447,
     })
-    assert.equal(state.persisted[0].provider, 'openai-codex')
+    assert.equal(state.persisted[0].provider, 'openai')
     assert.equal(state.persisted[0].oauth.accountId, 'acct_browser-code')
     assert.doesNotMatch(JSON.stringify(session), /codex-refresh-secret/)
   } finally {

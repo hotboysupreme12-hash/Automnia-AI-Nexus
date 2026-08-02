@@ -97,7 +97,7 @@ export function registerProviderAuthRoutes(app: Express, options: ProviderAuthRo
 
   app.post('/api/auth/providers/:provider/oauth/start', async (req, res) => {
     const { provider } = req.params
-    if (provider !== 'google' && provider !== 'openai-codex') {
+    if (provider !== 'google' && provider !== 'openai') {
       return apiFailure(res, 400, 'oauth_operation_failed', 'OAuth is not supported for this provider in the direct model runtime.', { provider })
     }
 
@@ -129,7 +129,7 @@ export function registerProviderAuthRoutes(app: Express, options: ProviderAuthRo
 
   app.get('/api/auth/providers/:provider/oauth/session/:sessionId', async (req, res) => {
     const { provider, sessionId } = req.params
-    if (provider !== 'google' && provider !== 'openai-codex') {
+    if (provider !== 'google' && provider !== 'openai') {
       return apiFailure(res, 400, 'oauth_operation_failed', 'OAuth is not supported for this provider.', { provider })
     }
     try {
@@ -157,7 +157,7 @@ export function registerProviderAuthRoutes(app: Express, options: ProviderAuthRo
 
   app.post('/api/auth/providers/:provider/oauth/session/:sessionId/manual', async (req, res) => {
     const { provider, sessionId } = req.params
-    if (provider !== 'openai-codex') {
+    if (provider !== 'openai') {
       return apiFailure(res, 400, 'oauth_operation_failed', 'Manual OAuth input is only supported for OpenAI Codex.', { provider })
     }
 

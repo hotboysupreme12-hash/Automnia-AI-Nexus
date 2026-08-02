@@ -12,8 +12,8 @@ export type ModelOptionGroup<T extends ModelOptionLike> = {
 }
 
 const PROVIDER_LABELS: Record<string, string> = {
-  'openai-codex': 'OpenAI Codex',
-  openai: 'OpenAI API',
+  'openai-codex': 'OpenAI / Codex',
+  openai: 'OpenAI / Codex',
   anthropic: 'Anthropic Claude',
   google: 'Google Gemini',
   'google-vertex': 'Google Vertex',
@@ -34,7 +34,6 @@ const PROVIDER_LABELS: Record<string, string> = {
 }
 
 const PROVIDER_ORDER = [
-  'openai-codex',
   'openai',
   'anthropic',
   'google',
@@ -90,11 +89,11 @@ const isOpenAiCodexSubscriptionModel = (modelId: string) => {
 }
 
 const modelProviderForGrouping = (model: ModelOptionLike) => {
-  if (isOpenAiCodexSubscriptionModel(model.id)) return 'openai-codex'
+  if (isOpenAiCodexSubscriptionModel(model.id)) return 'openai'
   const explicitProvider = clean(model.provider).toLowerCase()
   const idProvider = splitModelId(model.id).provider
   const provider = idProvider && ROUTE_PROVIDER_IDS.has(idProvider) ? idProvider : explicitProvider || idProvider || 'other'
-  if (provider === 'codex') return 'openai-codex'
+  if (provider === 'codex' || provider === 'openai-codex') return 'openai'
   return provider
 }
 

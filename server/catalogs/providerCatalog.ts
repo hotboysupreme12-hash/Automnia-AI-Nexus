@@ -5,7 +5,7 @@
  */
 
 export type OAuthProviderMetadata = {
-  provider: 'google' | 'openai-codex'
+  provider: 'google' | 'openai'
   docs: string
   redirectUri: string
   scopes: string[]
@@ -21,6 +21,11 @@ export type AuthProviderCatalogEntry = {
   apiKeyUrl?: string
   optionalAuth?: boolean
   oauth?: OAuthProviderMetadata
+  subscriptionAuth?: {
+    label: string
+    docs: string
+    setupCommand: string
+  }
 }
 
 export const GOOGLE_OAUTH_REDIRECT_URI = 'http://localhost:8085/oauth2callback'
@@ -54,18 +59,13 @@ export const OPENCLAW_PROVIDER_DOCS_URL = 'https://docs.openclaw.ai/concepts/mod
 
 export const AUTH_PROVIDER_CATALOG: Record<string, AuthProviderCatalogEntry> = {
   openai: {
-    label: 'OpenAI',
+    label: 'OpenAI / Codex',
     envKeys: ['OPENAI_API_KEY'],
-    docs: 'https://platform.openai.com/docs/api-reference/authentication',
+    docs: 'https://docs.openclaw.ai/providers/openai',
     apiKeyUrl: 'https://platform.openai.com/api-keys',
-  },
-  'openai-codex': {
-    label: 'OpenAI Codex',
-    envKeys: [],
-    docs: 'https://docs.openclaw.ai/concepts/models',
     oauth: {
-      provider: 'openai-codex',
-      docs: 'https://docs.openclaw.ai/concepts/models',
+      provider: 'openai',
+      docs: 'https://docs.openclaw.ai/providers/openai',
       redirectUri: OPENAI_CODEX_OAUTH_REDIRECT_URI,
       scopes: OPENAI_CODEX_OAUTH_SCOPES,
       clientIdEnvKeys: [],
@@ -76,8 +76,13 @@ export const AUTH_PROVIDER_CATALOG: Record<string, AuthProviderCatalogEntry> = {
   anthropic: {
     label: 'Anthropic',
     envKeys: ['ANTHROPIC_API_KEY'],
-    docs: 'https://docs.anthropic.com/en/api/getting-started',
+    docs: 'https://docs.openclaw.ai/providers/anthropic',
     apiKeyUrl: 'https://console.anthropic.com/settings/keys',
+    subscriptionAuth: {
+      label: 'Claude Code subscription',
+      docs: 'https://docs.openclaw.ai/providers/anthropic',
+      setupCommand: 'openclaw models auth login --provider anthropic --method setup-token',
+    },
   },
   google: {
     label: 'Google Gemini',
@@ -138,6 +143,11 @@ export const AUTH_PROVIDER_CATALOG: Record<string, AuthProviderCatalogEntry> = {
     envKeys: ['MISTRAL_API_KEY'],
     docs: 'https://docs.mistral.ai/api/',
     apiKeyUrl: 'https://console.mistral.ai/api-keys',
+  },
+  meta: {
+    label: 'Meta',
+    envKeys: ['MODEL_API_KEY'],
+    docs: 'https://docs.openclaw.ai/providers/meta',
   },
   qwen: {
     label: 'Qwen',
@@ -387,8 +397,15 @@ export const AUTH_PROVIDER_CATALOG: Record<string, AuthProviderCatalogEntry> = {
   },
   'tencent-tokenhub': {
     label: 'Tencent TokenHub',
-    envKeys: ['TENCENT_TOKENHUB_API_KEY', 'TENCENT_API_KEY'],
-    docs: OPENCLAW_PROVIDER_DOCS_URL,
+    // TOKENHUB_API_KEY is the current OpenClaw/Tencent contract. Keep the
+    // older names as secondary compatibility fallbacks for existing installs.
+    envKeys: ['TOKENHUB_API_KEY', 'TENCENT_TOKENHUB_API_KEY', 'TENCENT_API_KEY'],
+    docs: 'https://docs.openclaw.ai/providers/tencent',
+  },
+  'tencent-tokenplan': {
+    label: 'Tencent TokenPlan',
+    envKeys: ['TOKENPLAN_API_KEY'],
+    docs: 'https://docs.openclaw.ai/providers/tencent',
   },
   'vercel-ai-gateway': {
     label: 'Vercel AI Gateway',

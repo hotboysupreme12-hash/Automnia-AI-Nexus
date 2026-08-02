@@ -40,10 +40,10 @@ const CODEX_5_3_SPARK_MODEL_ID = 'openai/gpt-5.3-codex-spark'
 const CODEX_5_3_SPARK_MODEL: AvailableModel = {
   id: CODEX_5_3_SPARK_MODEL_ID,
   alias: 'gpt-5.3-codex-spark',
-  provider: 'openai-codex',
+  provider: 'openai',
   name: 'Codex 5.3 Spark',
 }
-const REASONING_EFFORT_LEVELS = ['off', 'minimal', 'low', 'medium', 'high'] as const satisfies readonly ThinkingLevel[]
+const REASONING_EFFORT_LEVELS = ['off', 'minimal', 'low', 'medium', 'high', 'xhigh', 'max'] as const satisfies readonly ThinkingLevel[]
 const MODEL_SELECTOR_CACHE_MS = 5 * 60 * 1000
 const MODEL_SELECTOR_FETCH_TIMEOUT_MS = 8000
 
@@ -63,9 +63,32 @@ const modelOptionFromId = (modelId: string): AvailableModel | null => {
   const id = modelId.trim()
   if (!id) return null
   const [rawProvider = '', ...modelParts] = id.split('/')
-  const provider = isOpenAiCodexSubscriptionModel(id) ? 'openai-codex' : rawProvider || 'model'
+  const provider = isOpenAiCodexSubscriptionModel(id) ? 'openai' : rawProvider || 'model'
   const name = modelParts.join('/') || id
   return { id, alias: name, provider, name }
+}
+
+function modelBrief(modelId: string): { title: string; description: string; tone: string } | null {
+  const normalized = modelId.toLowerCase()
+  if (normalized.includes('gpt-5.6-sol')) {
+    return { title: 'Flagship research and coding', description: 'Best fit for complex planning, agentic coding, and difficult research tasks.', tone: 'cyan' }
+  }
+  if (normalized.includes('gpt-5.6-terra')) {
+    return { title: 'Balanced reasoning', description: 'Strong general reasoning with a more efficient runtime profile.', tone: 'emerald' }
+  }
+  if (normalized.includes('gpt-5.6-luna')) {
+    return { title: 'High-volume execution', description: 'Optimized for economical, parallel task throughput.', tone: 'amber' }
+  }
+  if (normalized.includes('claude-fable-5')) {
+    return { title: 'Anthropic flagship', description: 'Highest-capability Claude 5 option; check retention requirements before sensitive workloads.', tone: 'violet' }
+  }
+  if (normalized.includes('claude-sonnet-5')) {
+    return { title: 'Fast Claude 5 reasoning', description: 'A strong default for demanding day-to-day analysis and implementation.', tone: 'violet' }
+  }
+  if (normalized.includes('claude-opus-4-8')) {
+    return { title: 'Proven deep reasoning', description: 'A robust Claude option when you need conservative, high-quality outputs.', tone: 'violet' }
+  }
+  return null
 }
 
 const mergeSelectedModelOptions = (catalog: AvailableModel[], selectedIds: string[]) => {
@@ -181,7 +204,7 @@ export function ModelSelectorModal({
   )
 
   const providerForModel = (modelId: string) =>
-    selectableModels.find((model) => model.id === modelId)?.provider || (isOpenAiCodexSubscriptionModel(modelId) ? 'openai-codex' : modelId.split('/')[0] || '')
+    selectableModels.find((model) => model.id === modelId)?.provider || (isOpenAiCodexSubscriptionModel(modelId) ? 'openai' : modelId.split('/')[0] || '')
 
   const handleSave = async () => {
     if (!selectedPrimary) {
@@ -222,6 +245,12 @@ export function ModelSelectorModal({
     : undefined
   const primaryProviderLabel = authLabelForProvider(primaryProvider, primaryProviderStatus)
   const primaryProviderAuthKind = authKindForProvider(primaryProviderStatus)
+  const selectedModelBrief = selectedPrimary ? modelBrief(selectedPrimary) : null
+  const primaryOAuthExpired = Boolean(
+    primaryProviderStatus?.oauth?.supported
+      && primaryProviderStatus.oauth.expiresAt
+      && primaryProviderStatus.oauth.expiresAt <= Date.now(),
+  )
   const modelGroups = useMemo(() => groupAvailableModels(selectableModels), [selectableModels])
   const fallbackModelGroups = useMemo(
     () => groupAvailableModels(selectableModels.filter((model) => model.id !== selectedPrimary)),
@@ -321,6 +350,32 @@ export function ModelSelectorModal({
                     ))}
                   </select>
                   {selectedPrimary && <div className="text-xs text-slate-300">{selectedPrimary}</div>}
+                  {selectedModelBrief && (
+                    <div className={`rounded-xl border px-3 py-2 text-xs ${
+                      selectedModelBrief.tone === 'emerald'
+                        ? 'border-emerald-300/25 bg-emerald-400/[0.07] text-emerald-100'
+                        : selectedModelBrief.tone === 'amber'
+                          ? 'border-amber-300/25 bg-amber-400/[0.07] text-amber-100'
+                          : selectedModelBrief.tone === 'violet'
+                            ? 'border-violet-300/25 bg-violet-400/[0.07] text-violet-100'
+                            : 'border-cyan-300/25 bg-cyan-400/[0.07] text-cyan-100'
+                    }`}>
+                      <p className="font-semibold">{selectedModelBrief.title}</p>
+                      <p className="mt-0.5 text-[11px] text-slate-300">{selectedModelBrief.description}</p>
+                    </div>
+                  )}
+                  {primaryOAuthExpired && (
+                    <div className="rounded-lg border border-rose-400/30 bg-rose-950/30 px-3 py-2 text-xs text-rose-100">
+                      {primaryProviderLabel} sign-in has expired. Reconnect it before the next model call so OpenClaw does not repeatedly retry a stale refresh token.
+                      <button
+                        type="button"
+                        onClick={() => setAuthModalProvider(primaryProviderStatus || null)}
+                        className="ml-2 rounded bg-rose-300/15 px-2 py-0.5 text-[11px] font-semibold text-rose-100"
+                      >
+                        Reconnect
+                      </button>
+                    </div>
+                  )}
                   {primaryProvider === 'google-vertex' && (
                     <div className="inline-flex w-fit rounded-full border border-sky-300/40 bg-sky-400/10 px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.14em] text-sky-100">
                       google-vertex
@@ -363,7 +418,7 @@ export function ModelSelectorModal({
                     {selectedThinking}
                   </span>
                 </div>
-                <div className="mt-3 grid grid-cols-5 gap-1.5">
+                <div className="mt-3 grid grid-cols-4 gap-1.5 sm:grid-cols-7">
                   {REASONING_EFFORT_LEVELS.map((level) => (
                     <button
                       key={level}

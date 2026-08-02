@@ -30,7 +30,7 @@ async function createHarness(options: HarnessOptions = {}) {
     ensureCalls: 0,
     localOAuth: { ...(options.localOAuth || {}) },
     modes: { ...(options.modes || {}) },
-    persisted: [] as Array<{ provider: 'google' | 'openai-codex'; oauth: LocalOAuthCredential }>,
+    persisted: [] as Array<{ provider: 'google' | 'openai'; oauth: LocalOAuthCredential }>,
   }
 
   const service = createProviderSetupService({
@@ -178,9 +178,9 @@ test('resolves provider request auth through env keys and refreshed OAuth creden
   const harness = await createHarness({
     localOAuth: {
       google: { refreshToken: 'google-refresh-secret', expiresAt: 1 },
-      'openai-codex': { refreshToken: 'codex-refresh-secret', expiresAt: 1 },
+      openai: { refreshToken: 'codex-refresh-secret', expiresAt: 1 },
     },
-    modes: { google: 'oauth' },
+    modes: { google: 'oauth', openai: 'oauth' },
   })
   try {
     const vertexAuth = await harness.service.resolveProviderRequestAuth(
@@ -203,13 +203,13 @@ test('resolves provider request auth through env keys and refreshed OAuth creden
       source: 'local-oauth',
     })
 
-    const codexAuth = await harness.service.resolveProviderRequestAuth('openai-codex', {}, [])
+    const codexAuth = await harness.service.resolveProviderRequestAuth('openai', {}, [])
     assert.deepEqual(codexAuth, {
       type: 'oauth',
       accessToken: 'codex-refreshed-access',
       source: 'local-oauth',
     })
-    assert.deepEqual(harness.state.persisted.map((entry) => entry.provider), ['google', 'openai-codex'])
+    assert.deepEqual(harness.state.persisted.map((entry) => entry.provider), ['google', 'openai'])
     assert.equal(harness.state.ensureCalls, 3)
   } finally {
     await harness.cleanup()

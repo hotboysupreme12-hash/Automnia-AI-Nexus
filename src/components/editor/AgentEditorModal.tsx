@@ -68,7 +68,7 @@ const CODEX_5_3_SPARK_MODEL_ID = 'openai/gpt-5.3-codex-spark'
 const CODEX_5_3_SPARK_MODEL: AvailableModel = {
   id: CODEX_5_3_SPARK_MODEL_ID,
   alias: 'gpt-5.3-codex-spark',
-  provider: 'openai-codex',
+  provider: 'openai',
   name: 'Codex 5.3 Spark',
 }
 let modelsCache: TimedEditorCache<AvailableModel[]> | null = null
@@ -95,7 +95,7 @@ const modelOptionFromId = (modelId: string): AvailableModel | null => {
   const id = modelId.trim()
   if (!id) return null
   const [rawProvider = '', ...modelParts] = id.split('/')
-  const provider = isOpenAiCodexSubscriptionModel(id) ? 'openai-codex' : rawProvider || 'model'
+  const provider = isOpenAiCodexSubscriptionModel(id) ? 'openai' : rawProvider || 'model'
   const name = modelParts.join('/') || id
   return { id, alias: name, provider, name }
 }
@@ -167,7 +167,7 @@ const EDITOR_TAB_HELP: Record<EditorTab,string> = {
   files: 'View and edit the agent markdown resource files.',
 }
 const EDITOR_TABS = Object.keys(ICON) as EditorTab[]
-const REASONING_EFFORT_LEVELS = ['off', 'minimal', 'low', 'medium', 'high'] as const satisfies readonly ThinkingLevel[]
+const REASONING_EFFORT_LEVELS = ['off', 'minimal', 'low', 'medium', 'high', 'xhigh', 'max'] as const satisfies readonly ThinkingLevel[]
 const BEHAVIOR_OPTIONS = ['executor','architect','auditor','researcher','hybrid'] as const satisfies readonly BehaviorProfile[]
 const SANDBOX_MODE_OPTIONS = ['off','all','non-main'] as const
 const SANDBOX_SCOPE_OPTIONS = ['session','agent','shared'] as const
@@ -604,7 +604,7 @@ export function AgentEditorModal() {
   },[])
   const selectedModelIds = useMemo(() => [primary, ...fallbacks].filter(Boolean), [primary, fallbacks])
   const selectableModels = useMemo(() => mergeSelectedModelOptions(models, selectedModelIds), [models, selectedModelIds])
-  const providerForModel = (modelId:string)=>selectableModels.find((model)=>model.id===modelId)?.provider || (isOpenAiCodexSubscriptionModel(modelId) ? 'openai-codex' : modelId.split('/')[0]||'')
+  const providerForModel = (modelId:string)=>selectableModels.find((model)=>model.id===modelId)?.provider || (isOpenAiCodexSubscriptionModel(modelId) ? 'openai' : modelId.split('/')[0]||'')
   const authForProvider = (provider:string)=>effectiveAuthStatusForProvider(authProviders, provider)
   const maybePromptProviderAuth = (modelId:string)=>{const status=authForProvider(providerForModel(modelId));if(status&&!status.configured)setAuthModalProvider(status)}
   const selectedPrimaryProviderForAuthRefresh = primary ? providerForModel(primary) : ''

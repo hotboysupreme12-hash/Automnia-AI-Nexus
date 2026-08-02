@@ -1,5 +1,16 @@
 const CONTROL_CENTER_TOKEN_KEY = 'control-center-token'
 let memoryToken: string | null = null
+const tokenListeners = new Set<(token: string | null) => void>()
+
+function notifyTokenListeners(token: string | null): void {
+  for (const listener of tokenListeners) {
+    try {
+      listener(token)
+    } catch {
+      // A stale UI listener must not prevent the rest of the app from recovering.
+    }
+  }
+}
 
 function browserStorage(kind: 'local' | 'session'): Storage | null {
   if (typeof window === 'undefined') return null
@@ -69,10 +80,18 @@ export function writeAuthToken(value: string): void {
   memoryToken = token
   storageWrite(browserStorage('session'), token)
   storageRemove(browserStorage('local'))
+  notifyTokenListeners(token)
 }
 
 export function clearAuthToken(): void {
   memoryToken = null
   storageRemove(browserStorage('session'))
   storageRemove(browserStorage('local'))
+  notifyTokenListeners(null)
+}
+
+/** Subscribe UI state to tokens renewed by the desktop-session recovery layer. */
+export function subscribeAuthToken(listener: (token: string | null) => void): () => void {
+  tokenListeners.add(listener)
+  return () => tokenListeners.delete(listener)
 }
