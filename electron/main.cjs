@@ -7,6 +7,21 @@ const { randomBytes } = require('node:crypto')
 const { assertTrustedHttpsUrl, parseSha256Manifest, sha256File } = require('./runtime-download-security.cjs')
 const path = require('node:path')
 
+// A packaged Windows app can be launched from a short-lived shell (including
+// the branded launcher). Once that parent closes, writing diagnostic output to
+// its inherited console handle can raise EPIPE asynchronously. Logging must
+// never crash the desktop main process or surface an error dialog to the user.
+function guardMainProcessOutputStream(stream) {
+  if (!stream?.on) return
+  stream.on('error', (error) => {
+    if (error?.code === 'EPIPE' || error?.code === 'ERR_STREAM_DESTROYED') return
+    setImmediate(() => { throw error })
+  })
+}
+
+guardMainProcessOutputStream(process.stdout)
+guardMainProcessOutputStream(process.stderr)
+
 const APP_PORT = Number(process.env.CONTROL_CENTER_PORT || 4050)
 const DEV_FRONTEND_PORT = Number(process.env.CONTROL_CENTER_FRONTEND_PORT || 5173)
 const GATEWAY_PORT = Number(process.env.OPENCLAW_GATEWAY_PORT || 18789)
