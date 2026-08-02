@@ -397,9 +397,11 @@ html.dui-pro-overhaul.dui-cohesive-ui [data-dui-panel="active-party"] .party-rar
 html.dui-pro-overhaul [data-dui-panel="active-party"] .party-slot-empty,
 html.dui-pro-overhaul.dui-cohesive-ui [data-dui-panel="active-party"] .party-slot-empty {
   min-height: 72px;
-  border: 1px dashed rgb(156 201 190 / .18);
-  border-radius: 10px;
-  background: rgb(255 255 255 / .012);
+  /* The outer slot card already communicates the available slot. Avoid a
+     second dashed frame that visually brackets the Slot label. */
+  border: 0 !important;
+  border-radius: 0 !important;
+  background: transparent !important;
 }
 
 html.dui-pro-overhaul [data-dui-panel="active-party"] .party-slot-empty p:first-child,
@@ -764,16 +766,18 @@ html.dui-pro-overhaul.dui-cohesive-ui .dy-command-composer__row {
 
 html.dui-pro-overhaul .dy-command-composer__field,
 html.dui-pro-overhaul.dui-cohesive-ui .dy-command-composer__field {
-  border: 1px solid rgb(130 185 222 / .18);
-  border-radius: 11px;
-  background: rgb(2 7 10 / .74);
-  box-shadow: var(--operator-inset);
+  /* Keep one intentional message surface: the composer row. A nested dark
+     field box makes the input look inset and competes with status borders. */
+  border: 0 !important;
+  border-radius: 0 !important;
+  background: transparent !important;
+  box-shadow: none !important;
 }
 
 html.dui-pro-overhaul .dy-command-composer__field:focus-within,
 html.dui-pro-overhaul.dui-cohesive-ui .dy-command-composer__field:focus-within {
-  border-color: rgb(134 208 249 / .45);
-  box-shadow: 0 0 0 3px rgb(102 174 231 / .10), var(--operator-inset);
+  border-color: transparent !important;
+  box-shadow: none !important;
 }
 
 html.dui-pro-overhaul .dy-command-textarea,

@@ -150,6 +150,8 @@ assert.match(horizonCommandCenter, /old left-edge chip/, 'active navigation must
 assert.match(horizonCommandCenter, /box-shadow: none !important;/, 'active navigation should suppress the legacy colored inset marker')
 assert.match(operatorExperience, /Operator Experience refinement suite/, 'final design layer should document its operator-focused ownership')
 assert.match(operatorExperience, /content: none !important;/, 'workspace title chrome should not reintroduce a decorative eyebrow or title line')
+assert.match(operatorExperience, /\.party-slot-empty[\s\S]*?border: 0 !important;[\s\S]*?background: transparent !important;/, 'empty party slots should not draw a second dashed frame around their label')
+assert.match(operatorExperience, /\.dy-command-composer__field[\s\S]*?border: 0 !important;[\s\S]*?background: transparent !important;[\s\S]*?box-shadow: none !important;/, 'composer text should not sit inside a redundant dark inline box')
 assert.match(missionPanel, /import '\.\/MissionDeploymentPanel\.css'/, 'mission late overrides should be owned by the mission component')
 assert.match(monitorPanel, /import \{ Badge, Button, IconButton, StatusChip \} from '\.\.\/ui'/, 'Monitor controls and status chips should use local UI primitives')
 assert.match(commandConsole, /import \{ Badge, Button, IconButton, StatusChip \} from '\.\.\/ui'/, 'Command Console controls and runtime chips should use local UI primitives')
