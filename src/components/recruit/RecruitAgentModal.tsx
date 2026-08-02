@@ -739,6 +739,19 @@ Clarify the objective, claim files, execute the smallest useful change, and retu
   }
 }
 
+function defaultRecruitResourceFiles() {
+  const option = behaviorOption('executor')
+  return markdownDefaults({
+    name: '',
+    agentId: '',
+    className: option.className,
+    role: option.role,
+    behaviorLabel: option.label,
+    capabilities: CAPABILITY_OPTIONS.filter((entry) => DEFAULT_CAPABILITIES[entry.key]).map((entry) => entry.label),
+    files: DEFAULT_MD_FILES,
+  })
+}
+
 export function RecruitAgentModal({ isOpen, onClose }: { isOpen: boolean; onClose: () => void }) {
   const recruitAgent = useNexusStore((s) => s.recruitAgent)
   const agents = useNexusStore((s) => s.agents)
@@ -792,7 +805,7 @@ export function RecruitAgentModal({ isOpen, onClose }: { isOpen: boolean; onClos
   const [statusTone, setStatusTone] = useState<'neutral' | 'success' | 'error'>('neutral')
   const [fileOrder, setFileOrder] = useState<string[]>(DEFAULT_MD_FILES)
   const [activeFile, setActiveFile] = useState('IDENTITY.md')
-  const [resourceFiles, setResourceFiles] = useState<Record<string, string>>({})
+  const [resourceFiles, setResourceFiles] = useState<Record<string, string>>(defaultRecruitResourceFiles)
   const [newFileName, setNewFileName] = useState('')
   const [filesTouched, setFilesTouched] = useState(false)
   const [editorExpanded, setEditorExpanded] = useState(false)
@@ -1036,15 +1049,7 @@ export function RecruitAgentModal({ isOpen, onClose }: { isOpen: boolean; onClos
     setTemplateApplying(false)
     setTemplatesError('')
     authRefreshKeyRef.current = ''
-    setResourceFiles(markdownDefaults({
-      name: '',
-      agentId: '',
-      className: option.className,
-      role: option.role,
-      behaviorLabel: option.label,
-      capabilities: CAPABILITY_OPTIONS.filter((entry) => DEFAULT_CAPABILITIES[entry.key]).map((entry) => entry.label),
-      files: DEFAULT_MD_FILES,
-    }))
+    setResourceFiles(defaultRecruitResourceFiles())
     setStatus('')
     setStatusTone('neutral')
     window.setTimeout(() => nameRef.current?.focus(), 40)
