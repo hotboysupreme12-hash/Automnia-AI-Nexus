@@ -2109,6 +2109,26 @@ html.dui-pro-overhaul.dui-cohesive-ui [data-editor-panel="files"] > div:last-chi
   font-size: var(--dy-type-micro, 11px) !important;
 }
 
+/* Recruit Markdown editor: the panel has four authored-document regions.
+   Keep the toolbar in its own row so the editor cannot be implicitly placed
+   below an overflow-clipped grid track. */
+html.dui-pro-overhaul [data-dui-modal="recruit-agent"][data-markdown-editor="open"] .dui-recruit-files,
+html.dui-pro-overhaul.dui-cohesive-ui [data-dui-modal="recruit-agent"][data-markdown-editor="open"] .dui-recruit-files {
+  grid-template-rows: auto auto auto minmax(0, 1fr) !important;
+}
+
+@media (max-width: 760px) {
+  html.dui-pro-overhaul [data-dui-modal="recruit-agent"][data-markdown-editor="open"] .dui-recruit-file-toolbar,
+  html.dui-pro-overhaul.dui-cohesive-ui [data-dui-modal="recruit-agent"][data-markdown-editor="open"] .dui-recruit-file-toolbar {
+    grid-template-columns: minmax(0, 1fr) !important;
+  }
+
+  html.dui-pro-overhaul [data-dui-modal="recruit-agent"][data-markdown-editor="open"] .dui-recruit-file-tabs,
+  html.dui-pro-overhaul.dui-cohesive-ui [data-dui-modal="recruit-agent"][data-markdown-editor="open"] .dui-recruit-file-tabs {
+    min-width: 0 !important;
+  }
+}
+
 /* Registry scrolling and empty results retain context during deep inventories. */
 
 html.dui-pro-overhaul [data-agent-registry-scroll],

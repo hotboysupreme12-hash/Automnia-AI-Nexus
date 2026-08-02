@@ -2671,7 +2671,7 @@ html.dui-pro-overhaul.dui-cohesive-ui [data-dui-modal="recruit-agent"][data-mark
 html.dui-pro-overhaul.dui-cohesive-ui [data-dui-modal="recruit-agent"][data-markdown-editor="open"] .dui-recruit-files {
   min-height: clamp(520px, 78vh, 760px) !important;
   align-content: stretch !important;
-  grid-template-rows: auto auto minmax(420px, 1fr) !important;
+  grid-template-rows: auto auto auto minmax(420px, 1fr) !important;
   overflow: hidden !important;
 }
 
