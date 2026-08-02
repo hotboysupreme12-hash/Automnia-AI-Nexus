@@ -1,0 +1,2058 @@
+/*
+ * Horizon Command Center
+ *
+ * Final visual layer for the control center. This layer deliberately contains
+ * no state logic: it uses the semantic data attributes already present in the
+ * product so every view, card, dialog, empty state, and control inherits the
+ * same design language without introducing a parallel component system.
+ */
+
+html.dui-pro-overhaul,
+html.dui-pro-overhaul.dui-cohesive-ui {
+  --horizon-canvas: #0a0c0d;
+  --horizon-canvas-raised: #0e1112;
+  --horizon-surface: #131718;
+  --horizon-surface-raised: #181d1e;
+  --horizon-surface-hover: #1d2324;
+  --horizon-panel: rgba(18, 22, 23, .92);
+  --horizon-panel-solid: #121617;
+  --horizon-line: rgba(222, 232, 230, .105);
+  --horizon-line-strong: rgba(222, 232, 230, .17);
+  --horizon-line-subtle: rgba(222, 232, 230, .065);
+  --horizon-text: #f1f5f3;
+  --horizon-text-muted: #a4b0ad;
+  --horizon-text-faint: #72807c;
+  --horizon-accent: #72d5c2;
+  --horizon-accent-bright: #a0eadb;
+  --horizon-accent-deep: #1b8375;
+  --horizon-accent-soft: rgba(114, 213, 194, .12);
+  --horizon-accent-wash: rgba(114, 213, 194, .055);
+  --horizon-success: #73d49a;
+  --horizon-warning: #e1b96f;
+  --horizon-danger: #f08d91;
+  --horizon-radius-sm: 8px;
+  --horizon-radius-md: 12px;
+  --horizon-radius-lg: 16px;
+  --horizon-shadow-card: 0 18px 38px -30px rgba(0, 0, 0, .72);
+  --horizon-shadow-float: 0 28px 80px -36px rgba(0, 0, 0, .82);
+  --horizon-focus: rgba(160, 234, 219, .78);
+  --dy-flat-nav-blue: var(--horizon-accent);
+  --dy-flat-nav-blue-rgb: 114, 213, 194;
+  --dy-flat-shell-bg: var(--horizon-canvas);
+  --dy-flat-shell-panel: var(--horizon-canvas-raised);
+  --dy-flat-shell-panel-2: var(--horizon-surface);
+  --dy-flat-shell-line: var(--horizon-line);
+  --dy-flat-shell-line-soft: var(--horizon-line-subtle);
+  --accent-cyan: var(--horizon-accent);
+  --accent-blue: #77b8dd;
+  --text-primary: var(--horizon-text);
+  --text-secondary: #cad3d0;
+  --text-muted: var(--horizon-text-muted);
+  --border-default: var(--horizon-line);
+  --border-soft: var(--horizon-line-subtle);
+  --focus-ring: var(--horizon-focus);
+  --focus-ring-shadow: rgba(114, 213, 194, .22);
+  --focus-ring-fill: rgba(114, 213, 194, .12);
+  color-scheme: dark;
+}
+
+html.dui-pro-overhaul body,
+html.dui-pro-overhaul.dui-cohesive-ui body,
+html.dui-pro-overhaul #root,
+html.dui-pro-overhaul.dui-cohesive-ui #root {
+  background: var(--horizon-canvas);
+  color: var(--horizon-text);
+}
+
+html.dui-pro-overhaul ::selection,
+html.dui-pro-overhaul.dui-cohesive-ui ::selection {
+  background: rgba(114, 213, 194, .28);
+  color: #ffffff;
+}
+
+html.dui-pro-overhaul :where(button, input, select, textarea, [tabindex]):focus-visible,
+html.dui-pro-overhaul.dui-cohesive-ui :where(button, input, select, textarea, [tabindex]):focus-visible {
+  outline: 2px solid var(--horizon-focus) !important;
+  outline-offset: 2px;
+}
+
+html.dui-pro-overhaul :where(*),
+html.dui-pro-overhaul.dui-cohesive-ui :where(*) {
+  scrollbar-color: rgba(183, 198, 193, .42) transparent;
+}
+
+html.dui-pro-overhaul ::-webkit-scrollbar,
+html.dui-pro-overhaul.dui-cohesive-ui ::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+
+html.dui-pro-overhaul ::-webkit-scrollbar-thumb,
+html.dui-pro-overhaul.dui-cohesive-ui ::-webkit-scrollbar-thumb {
+  border: 3px solid transparent;
+  border-radius: 999px;
+  background: rgba(183, 198, 193, .34);
+  background-clip: padding-box;
+}
+
+html.dui-pro-overhaul ::-webkit-scrollbar-thumb:hover,
+html.dui-pro-overhaul.dui-cohesive-ui ::-webkit-scrollbar-thumb:hover {
+  background: rgba(213, 225, 220, .55);
+  background-clip: padding-box;
+}
+
+/* Application canvas and navigation ------------------------------------------------ */
+
+html.dui-pro-overhaul .app-bg,
+html.dui-pro-overhaul.dui-cohesive-ui .app-bg {
+  isolation: isolate;
+  background:
+    radial-gradient(circle at 78% -8%, rgba(114, 213, 194, .055), transparent 32rem),
+    radial-gradient(circle at 5% 102%, rgba(157, 185, 179, .035), transparent 29rem),
+    var(--horizon-canvas) !important;
+}
+
+html.dui-pro-overhaul .app-bg::before,
+html.dui-pro-overhaul.dui-cohesive-ui .app-bg::before {
+  opacity: .4 !important;
+  background-image:
+    linear-gradient(rgba(220, 232, 228, .016) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(220, 232, 228, .016) 1px, transparent 1px) !important;
+  background-size: 34px 34px !important;
+}
+
+html.dui-pro-overhaul .grid-overlay,
+html.dui-pro-overhaul.dui-cohesive-ui .grid-overlay {
+  opacity: .12 !important;
+  background-image: radial-gradient(rgba(219, 235, 229, .42) .55px, transparent .55px) !important;
+  background-size: 16px 16px !important;
+}
+
+html.dui-pro-overhaul .dy-human-rail,
+html.dui-pro-overhaul.dui-cohesive-ui .dy-human-rail {
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, .022), transparent 14rem),
+    var(--horizon-canvas) !important;
+  border-right-color: var(--horizon-line) !important;
+}
+
+html.dui-pro-overhaul .dy-human-rail-head,
+html.dui-pro-overhaul.dui-cohesive-ui .dy-human-rail-head {
+  min-height: 118px !important;
+  padding-inline: 24px !important;
+  border-bottom-color: var(--horizon-line-subtle) !important;
+}
+
+html.dui-pro-overhaul .dy-human-rail-head--lockup .dy-human-rail-lockup,
+html.dui-pro-overhaul.dui-cohesive-ui .dy-human-rail-head--lockup .dy-human-rail-lockup {
+  width: min(100%, 168px) !important;
+  filter: saturate(.92) brightness(1.09) contrast(1.03) !important;
+}
+
+html.dui-pro-overhaul .dy-human-nav,
+html.dui-pro-overhaul.dui-cohesive-ui .dy-human-nav {
+  gap: 4px !important;
+  padding: 14px 12px !important;
+}
+
+html.dui-pro-overhaul .dy-human-rail-bottom,
+html.dui-pro-overhaul.dui-cohesive-ui .dy-human-rail-bottom {
+  padding: 14px 12px !important;
+  border-top-color: var(--horizon-line-subtle) !important;
+}
+
+html.dui-pro-overhaul .dy-human-nav :is(button, .dy-human-nav-action, .dy-human-nav-utility),
+html.dui-pro-overhaul.dui-cohesive-ui .dy-human-nav :is(button, .dy-human-nav-action, .dy-human-nav-utility) {
+  min-height: 54px !important;
+  gap: 11px !important;
+  padding: 8px 10px !important;
+  border: 1px solid transparent !important;
+  border-radius: var(--horizon-radius-md) !important;
+  background: transparent !important;
+  color: var(--horizon-text-muted) !important;
+  transition: background-color 160ms ease, border-color 160ms ease, color 160ms ease !important;
+}
+
+/* The base rail remains quiet. The spectrum pass below adds a reserved
+   workspace identity treatment only when a destination is selected; it never
+   restores the legacy left-edge chip or a decorative selection bar. */
+html.dui-pro-overhaul .dy-human-nav :is(button, .dy-human-nav-action, .dy-human-nav-utility)::before,
+html.dui-pro-overhaul .dy-human-nav :is(button, .dy-human-nav-action, .dy-human-nav-utility)::after,
+html.dui-pro-overhaul.dui-cohesive-ui .dy-human-nav :is(button, .dy-human-nav-action, .dy-human-nav-utility)::before,
+html.dui-pro-overhaul.dui-cohesive-ui .dy-human-nav :is(button, .dy-human-nav-action, .dy-human-nav-utility)::after {
+  display: none !important;
+  content: none !important;
+}
+
+html.dui-pro-overhaul .dy-human-nav :is(button, .dy-human-nav-action, .dy-human-nav-utility):hover,
+html.dui-pro-overhaul.dui-cohesive-ui .dy-human-nav :is(button, .dy-human-nav-action, .dy-human-nav-utility):hover {
+  border-color: var(--horizon-line-subtle) !important;
+  background: rgba(255, 255, 255, .035) !important;
+  color: var(--horizon-text) !important;
+}
+
+html.dui-pro-overhaul .dy-human-nav :is(button, .dy-human-nav-action, .dy-human-nav-utility):is(.is-active, [aria-current="page"]),
+html.dui-pro-overhaul.dui-cohesive-ui .dy-human-nav :is(button, .dy-human-nav-action, .dy-human-nav-utility):is(.is-active, [aria-current="page"]) {
+  border-color: rgba(231, 239, 236, .14) !important;
+  background: linear-gradient(180deg, rgba(255, 255, 255, .075), rgba(255, 255, 255, .04)) !important;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, .06), 0 8px 20px -18px rgba(0, 0, 0, .95) !important;
+  color: #ffffff !important;
+}
+
+html.dui-pro-overhaul .dy-human-nav .dy-human-nav-icon,
+html.dui-pro-overhaul.dui-cohesive-ui .dy-human-nav .dy-human-nav-icon {
+  width: 34px !important;
+  height: 34px !important;
+  flex-basis: 34px !important;
+  border-color: rgba(218, 230, 226, .1) !important;
+  border-radius: 10px !important;
+  background: rgba(255, 255, 255, .032) !important;
+  color: var(--horizon-text-muted) !important;
+}
+
+html.dui-pro-overhaul .dy-human-nav :is(button, .dy-human-nav-action, .dy-human-nav-utility):is(:hover, .is-active, [aria-current="page"]) .dy-human-nav-icon,
+html.dui-pro-overhaul.dui-cohesive-ui .dy-human-nav :is(button, .dy-human-nav-action, .dy-human-nav-utility):is(:hover, .is-active, [aria-current="page"]) .dy-human-nav-icon {
+  border-color: rgba(231, 239, 236, .16) !important;
+  background: rgba(255, 255, 255, .065) !important;
+  box-shadow: none !important;
+  color: #f7fbf9 !important;
+}
+
+html.dui-pro-overhaul .dy-human-nav-copy strong,
+html.dui-pro-overhaul.dui-cohesive-ui .dy-human-nav-copy strong {
+  color: currentColor !important;
+  font-size: 12px !important;
+  font-weight: 720 !important;
+  letter-spacing: -.01em !important;
+}
+
+html.dui-pro-overhaul .dy-human-nav-copy span,
+html.dui-pro-overhaul.dui-cohesive-ui .dy-human-nav-copy span {
+  margin-top: 3px;
+  color: var(--horizon-text-faint) !important;
+  font-size: var(--dy-type-micro, 11px) !important;
+  font-weight: 560 !important;
+}
+
+html.dui-pro-overhaul .dy-human-nav :is(.is-active, [aria-current="page"]) .dy-human-nav-copy span,
+html.dui-pro-overhaul.dui-cohesive-ui .dy-human-nav :is(.is-active, [aria-current="page"]) .dy-human-nav-copy span {
+  color: #b9c6c2 !important;
+}
+
+/* Workspace context -------------------------------------------------------------- */
+
+html.dui-pro-overhaul .dy-app-main,
+html.dui-pro-overhaul.dui-cohesive-ui .dy-app-main {
+  background: transparent !important;
+}
+
+html.dui-pro-overhaul .dy-workspace-context,
+html.dui-pro-overhaul.dui-cohesive-ui .dy-workspace-context {
+  min-height: 104px !important;
+  padding: 20px clamp(20px, 2.4vw, 36px) !important;
+  border-bottom-color: var(--horizon-line) !important;
+  background:
+    linear-gradient(110deg, rgba(255, 255, 255, .035), rgba(255, 255, 255, 0) 46%),
+    rgba(12, 15, 16, .92) !important;
+}
+
+html.dui-pro-overhaul .dy-workspace-context__copy,
+html.dui-pro-overhaul.dui-cohesive-ui .dy-workspace-context__copy {
+  display: grid;
+  gap: 5px;
+}
+
+html.dui-pro-overhaul .dy-workspace-context__copy::before,
+html.dui-pro-overhaul.dui-cohesive-ui .dy-workspace-context__copy::before {
+  content: 'WORKSPACE';
+  color: var(--horizon-text-faint);
+  font-family: var(--font-mono, ui-monospace, monospace);
+  font-size: var(--dy-type-micro, 11px);
+  font-weight: 700;
+  letter-spacing: .15em;
+}
+
+html.dui-pro-overhaul .dy-workspace-context h1,
+html.dui-pro-overhaul.dui-cohesive-ui .dy-workspace-context h1 {
+  color: var(--horizon-text) !important;
+  font-size: clamp(23px, 2.1vw, 30px) !important;
+  font-weight: 720 !important;
+  letter-spacing: -.045em !important;
+  line-height: 1.05 !important;
+}
+
+html.dui-pro-overhaul .dy-workspace-context p,
+html.dui-pro-overhaul.dui-cohesive-ui .dy-workspace-context p {
+  max-width: 660px;
+  color: var(--horizon-text-muted) !important;
+  font-size: 12px !important;
+  line-height: 1.55 !important;
+}
+
+html.dui-pro-overhaul .dy-workspace-context__meta,
+html.dui-pro-overhaul.dui-cohesive-ui .dy-workspace-context__meta {
+  gap: 9px !important;
+}
+
+html.dui-pro-overhaul .dy-status-grid,
+html.dui-pro-overhaul.dui-cohesive-ui .dy-status-grid {
+  gap: 7px !important;
+}
+
+html.dui-pro-overhaul .dy-status-chip,
+html.dui-pro-overhaul.dui-cohesive-ui .dy-status-chip {
+  min-height: 29px !important;
+  padding: 0 10px !important;
+  border-color: var(--horizon-line) !important;
+  border-radius: 999px !important;
+  background: rgba(255, 255, 255, .03) !important;
+  color: var(--horizon-text-muted) !important;
+  box-shadow: none !important;
+}
+
+html.dui-pro-overhaul .dy-status-chip .dui-status-chip__label,
+html.dui-pro-overhaul.dui-cohesive-ui .dy-status-chip .dui-status-chip__label,
+html.dui-pro-overhaul .dy-status-chip .dy-status-label,
+html.dui-pro-overhaul.dui-cohesive-ui .dy-status-chip .dy-status-label {
+  color: var(--horizon-text-faint) !important;
+  font-size: var(--dy-type-micro, 11px) !important;
+  letter-spacing: .09em !important;
+}
+
+html.dui-pro-overhaul .dy-status-chip .dui-status-chip__value,
+html.dui-pro-overhaul.dui-cohesive-ui .dy-status-chip .dui-status-chip__value,
+html.dui-pro-overhaul .dy-status-chip .dy-status-value,
+html.dui-pro-overhaul.dui-cohesive-ui .dy-status-chip .dy-status-value {
+  color: var(--horizon-text) !important;
+  font-size: var(--dy-type-micro, 11px) !important;
+}
+
+html.dui-pro-overhaul .dy-workspace-context__state,
+html.dui-pro-overhaul.dui-cohesive-ui .dy-workspace-context__state {
+  color: var(--horizon-text-muted) !important;
+  font-size: var(--dy-type-micro, 11px) !important;
+}
+
+html.dui-pro-overhaul .dy-workspace-context__state > span,
+html.dui-pro-overhaul.dui-cohesive-ui .dy-workspace-context__state > span {
+  width: 7px !important;
+  height: 7px !important;
+  background: var(--horizon-success) !important;
+  box-shadow: 0 0 0 3px rgba(115, 212, 154, .1) !important;
+}
+
+html.dui-pro-overhaul .dy-workspace-context__state[data-state="offline"] > span,
+html.dui-pro-overhaul.dui-cohesive-ui .dy-workspace-context__state[data-state="offline"] > span {
+  background: var(--horizon-danger) !important;
+  box-shadow: 0 0 0 3px rgba(240, 141, 145, .1) !important;
+}
+
+html.dui-pro-overhaul .dy-workspace-context__state[data-state="loading"] > span,
+html.dui-pro-overhaul.dui-cohesive-ui .dy-workspace-context__state[data-state="loading"] > span {
+  background: var(--horizon-warning) !important;
+  box-shadow: 0 0 0 3px rgba(225, 185, 111, .1) !important;
+}
+
+/* Universal primitives ----------------------------------------------------------- */
+
+html.dui-pro-overhaul :is(.dui-panel, [data-dui-panel="primitive"]),
+html.dui-pro-overhaul.dui-cohesive-ui :is(.dui-panel, [data-dui-panel="primitive"]) {
+  border-color: var(--horizon-line) !important;
+  border-radius: var(--horizon-radius-lg) !important;
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, .032), rgba(255, 255, 255, .012)),
+    var(--horizon-panel) !important;
+  box-shadow: var(--horizon-shadow-card) !important;
+}
+
+html.dui-pro-overhaul :is(.dui-panel, [data-dui-panel="primitive"])::before,
+html.dui-pro-overhaul.dui-cohesive-ui :is(.dui-panel, [data-dui-panel="primitive"])::before {
+  border-top-color: rgba(255, 255, 255, .08) !important;
+  opacity: 1 !important;
+}
+
+html.dui-pro-overhaul .dui-panel__eyebrow,
+html.dui-pro-overhaul.dui-cohesive-ui .dui-panel__eyebrow {
+  color: var(--horizon-text-faint) !important;
+  font-size: var(--dy-type-micro, 11px) !important;
+  letter-spacing: .12em !important;
+}
+
+html.dui-pro-overhaul .dui-panel__title,
+html.dui-pro-overhaul.dui-cohesive-ui .dui-panel__title {
+  color: var(--horizon-text) !important;
+  font-size: 16px !important;
+  font-weight: 700 !important;
+  letter-spacing: -.025em !important;
+}
+
+html.dui-pro-overhaul :is(.dui-button, .dui-icon-button),
+html.dui-pro-overhaul.dui-cohesive-ui :is(.dui-button, .dui-icon-button) {
+  border-color: var(--horizon-line) !important;
+  border-radius: var(--horizon-radius-sm) !important;
+  background: rgba(255, 255, 255, .035) !important;
+  color: #d9e3df !important;
+  box-shadow: none !important;
+  font-weight: 650 !important;
+  transition: background-color 150ms ease, border-color 150ms ease, color 150ms ease, transform 150ms ease !important;
+}
+
+html.dui-pro-overhaul :is(.dui-button, .dui-icon-button):hover:not(:disabled),
+html.dui-pro-overhaul.dui-cohesive-ui :is(.dui-button, .dui-icon-button):hover:not(:disabled) {
+  border-color: var(--horizon-line-strong) !important;
+  background: rgba(255, 255, 255, .075) !important;
+  color: #ffffff !important;
+}
+
+html.dui-pro-overhaul .dui-button--variant-primary,
+html.dui-pro-overhaul.dui-cohesive-ui .dui-button--variant-primary {
+  border-color: rgba(114, 213, 194, .42) !important;
+  background: linear-gradient(180deg, #287f72, #1b6e63) !important;
+  color: #f3fffc !important;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, .16), 0 12px 28px -20px rgba(68, 210, 181, .62) !important;
+}
+
+html.dui-pro-overhaul .dui-button--variant-primary:hover:not(:disabled),
+html.dui-pro-overhaul.dui-cohesive-ui .dui-button--variant-primary:hover:not(:disabled) {
+  border-color: rgba(160, 234, 219, .62) !important;
+  background: linear-gradient(180deg, #348e80, #207569) !important;
+}
+
+html.dui-pro-overhaul .dui-button--variant-danger,
+html.dui-pro-overhaul.dui-cohesive-ui .dui-button--variant-danger {
+  border-color: rgba(240, 141, 145, .34) !important;
+  background: rgba(240, 141, 145, .09) !important;
+  color: #ffd9da !important;
+}
+
+html.dui-pro-overhaul :is(.dui-input, .dui-select, .dui-textarea),
+html.dui-pro-overhaul.dui-cohesive-ui :is(.dui-input, .dui-select, .dui-textarea) {
+  border-color: var(--horizon-line) !important;
+  border-radius: var(--horizon-radius-sm) !important;
+  background: rgba(4, 6, 7, .48) !important;
+  color: var(--horizon-text) !important;
+  box-shadow: inset 0 1px 1px rgba(0, 0, 0, .25) !important;
+}
+
+html.dui-pro-overhaul :is(.dui-input, .dui-select, .dui-textarea):hover:not(:disabled),
+html.dui-pro-overhaul.dui-cohesive-ui :is(.dui-input, .dui-select, .dui-textarea):hover:not(:disabled) {
+  border-color: rgba(180, 202, 195, .28) !important;
+}
+
+html.dui-pro-overhaul :is(.dui-input, .dui-select, .dui-textarea):focus-visible,
+html.dui-pro-overhaul.dui-cohesive-ui :is(.dui-input, .dui-select, .dui-textarea):focus-visible {
+  border-color: var(--horizon-accent) !important;
+  box-shadow: 0 0 0 3px rgba(114, 213, 194, .15), inset 0 1px 1px rgba(0, 0, 0, .25) !important;
+}
+
+html.dui-pro-overhaul :is(.dui-badge, .dui-status-chip),
+html.dui-pro-overhaul.dui-cohesive-ui :is(.dui-badge, .dui-status-chip) {
+  border-radius: 999px !important;
+  box-shadow: none !important;
+}
+
+/* Agents and active party -------------------------------------------------------- */
+
+html.dui-pro-overhaul .dy-agents-workspace,
+html.dui-pro-overhaul.dui-cohesive-ui .dy-agents-workspace {
+  gap: 16px !important;
+  padding: clamp(16px, 2vw, 28px) !important;
+}
+
+html.dui-pro-overhaul [data-dui-panel="active-party"],
+html.dui-pro-overhaul.dui-cohesive-ui [data-dui-panel="active-party"] {
+  overflow: hidden !important;
+  border: 1px solid var(--horizon-line) !important;
+  border-radius: var(--horizon-radius-lg) !important;
+  background: linear-gradient(180deg, rgba(255, 255, 255, .032), transparent 90%), var(--horizon-panel-solid) !important;
+  box-shadow: var(--horizon-shadow-card) !important;
+}
+
+html.dui-pro-overhaul [data-dui-panel="active-party"] .active-party-head,
+html.dui-pro-overhaul.dui-cohesive-ui [data-dui-panel="active-party"] .active-party-head {
+  padding: 15px 18px !important;
+  border-bottom-color: var(--horizon-line-subtle) !important;
+  background: rgba(255, 255, 255, .018) !important;
+}
+
+html.dui-pro-overhaul [data-dui-panel="active-party"] .active-party-head h3,
+html.dui-pro-overhaul.dui-cohesive-ui [data-dui-panel="active-party"] .active-party-head h3 {
+  color: var(--horizon-text) !important;
+  font-size: 14px !important;
+  letter-spacing: -.02em !important;
+}
+
+html.dui-pro-overhaul [data-dui-panel="active-party"] .active-party-head p,
+html.dui-pro-overhaul.dui-cohesive-ui [data-dui-panel="active-party"] .active-party-head p {
+  color: var(--horizon-text-faint) !important;
+}
+
+html.dui-pro-overhaul [data-dui-panel="active-party"] .active-party-grid,
+html.dui-pro-overhaul.dui-cohesive-ui [data-dui-panel="active-party"] .active-party-grid {
+  gap: 10px !important;
+  padding: 14px 18px 18px !important;
+  background: transparent !important;
+}
+
+html.dui-pro-overhaul [data-slot-card],
+html.dui-pro-overhaul.dui-cohesive-ui [data-slot-card] {
+  min-height: 112px !important;
+  border-width: 1px !important;
+  border-color: var(--horizon-line) !important;
+  border-radius: var(--horizon-radius-md) !important;
+  background: rgba(255, 255, 255, .024) !important;
+  box-shadow: none !important;
+}
+
+html.dui-pro-overhaul [data-slot-card][data-slot-state="empty"],
+html.dui-pro-overhaul.dui-cohesive-ui [data-slot-card][data-slot-state="empty"] {
+  border-style: dashed !important;
+  background: rgba(255, 255, 255, .012) !important;
+}
+
+html.dui-pro-overhaul [data-slot-card]:hover,
+html.dui-pro-overhaul.dui-cohesive-ui [data-slot-card]:hover {
+  border-color: rgba(114, 213, 194, .34) !important;
+  background: var(--horizon-accent-wash) !important;
+}
+
+html.dui-pro-overhaul [data-dui-panel="agent-registry"],
+html.dui-pro-overhaul.dui-cohesive-ui [data-dui-panel="agent-registry"] {
+  overflow: hidden !important;
+  border: 1px solid var(--horizon-line) !important;
+  border-radius: var(--horizon-radius-lg) !important;
+  background: linear-gradient(180deg, rgba(255, 255, 255, .024), transparent 110px), var(--horizon-panel-solid) !important;
+  box-shadow: var(--horizon-shadow-card) !important;
+}
+
+html.dui-pro-overhaul [data-agent-filter-toolbar],
+html.dui-pro-overhaul.dui-cohesive-ui [data-agent-filter-toolbar] {
+  display: grid;
+  gap: 10px;
+  padding: 12px;
+  border: 1px solid var(--horizon-line-subtle);
+  border-radius: var(--horizon-radius-md);
+  background: rgba(255, 255, 255, .018);
+}
+
+html.dui-pro-overhaul [data-agent-filter-search] input,
+html.dui-pro-overhaul.dui-cohesive-ui [data-agent-filter-search] input,
+html.dui-pro-overhaul [data-agent-filter-select],
+html.dui-pro-overhaul.dui-cohesive-ui [data-agent-filter-select] {
+  border: 1px solid var(--horizon-line) !important;
+  border-radius: 8px !important;
+  background-color: rgba(5, 7, 8, .72) !important;
+  color: #d8e1de !important;
+}
+
+html.dui-pro-overhaul [data-agent-filter-search] input:focus,
+html.dui-pro-overhaul.dui-cohesive-ui [data-agent-filter-search] input:focus,
+html.dui-pro-overhaul [data-agent-filter-select]:focus,
+html.dui-pro-overhaul.dui-cohesive-ui [data-agent-filter-select]:focus {
+  border-color: var(--horizon-accent) !important;
+  box-shadow: 0 0 0 3px rgba(114, 213, 194, .13) !important;
+}
+
+html.dui-pro-overhaul [data-agent-view-switch],
+html.dui-pro-overhaul.dui-cohesive-ui [data-agent-view-switch] {
+  padding: 3px;
+  border: 1px solid var(--horizon-line);
+  border-radius: 9px;
+  background: rgba(0, 0, 0, .22);
+}
+
+html.dui-pro-overhaul [data-agent-view-choice],
+html.dui-pro-overhaul.dui-cohesive-ui [data-agent-view-choice] {
+  border-radius: 6px;
+}
+
+html.dui-pro-overhaul [data-agent-view-choice][data-active="true"],
+html.dui-pro-overhaul.dui-cohesive-ui [data-agent-view-choice][data-active="true"] {
+  background: rgba(255, 255, 255, .085) !important;
+  color: #ffffff !important;
+}
+
+html.dui-pro-overhaul [data-agent-status],
+html.dui-pro-overhaul.dui-cohesive-ui [data-agent-status] {
+  color: var(--horizon-text-faint) !important;
+}
+
+html.dui-pro-overhaul [data-agent-card],
+html.dui-pro-overhaul.dui-cohesive-ui [data-agent-card] {
+  overflow: hidden;
+  border-radius: var(--horizon-radius-lg) !important;
+  box-shadow: 0 16px 30px -25px rgba(0, 0, 0, .85) !important;
+  transition: transform 170ms ease, border-color 170ms ease, box-shadow 170ms ease !important;
+}
+
+html.dui-pro-overhaul [data-agent-card]:hover,
+html.dui-pro-overhaul.dui-cohesive-ui [data-agent-card]:hover {
+  transform: translateY(-2px) !important;
+  box-shadow: 0 22px 40px -28px rgba(0, 0, 0, .88) !important;
+}
+
+html.dui-pro-overhaul .agent-card-level-pill,
+html.dui-pro-overhaul.dui-cohesive-ui .agent-card-level-pill {
+  min-width: 46px;
+  border-color: rgba(255, 255, 255, .11) !important;
+  border-radius: 10px !important;
+  background: rgba(0, 0, 0, .26) !important;
+  box-shadow: none !important;
+}
+
+html.dui-pro-overhaul .agent-card-stat-matrix > div,
+html.dui-pro-overhaul.dui-cohesive-ui .agent-card-stat-matrix > div {
+  border-color: rgba(255, 255, 255, .07) !important;
+  border-radius: 8px !important;
+  background: rgba(255, 255, 255, .035) !important;
+}
+
+html.dui-pro-overhaul .agent-card-tags span,
+html.dui-pro-overhaul.dui-cohesive-ui .agent-card-tags span {
+  border-color: rgba(222, 234, 229, .12) !important;
+  border-radius: 999px !important;
+  background: rgba(255, 255, 255, .045) !important;
+  color: #c8d2cf !important;
+}
+
+html.dui-pro-overhaul .agent-card-action-primary,
+html.dui-pro-overhaul.dui-cohesive-ui .agent-card-action-primary {
+  border-color: rgba(114, 213, 194, .3) !important;
+  border-radius: 9px !important;
+  background: rgba(114, 213, 194, .13) !important;
+  color: #d9fff6 !important;
+}
+
+html.dui-pro-overhaul .agent-card-action-secondary,
+html.dui-pro-overhaul.dui-cohesive-ui .agent-card-action-secondary {
+  border-color: rgba(255, 255, 255, .1) !important;
+  border-radius: 9px !important;
+  background: rgba(255, 255, 255, .035) !important;
+  color: #c9d2cf !important;
+}
+
+/* Command console --------------------------------------------------------------- */
+
+html.dui-pro-overhaul [data-dui-panel="command-console"],
+html.dui-pro-overhaul.dui-cohesive-ui [data-dui-panel="command-console"] {
+  overflow: hidden !important;
+  border: 1px solid var(--horizon-line) !important;
+  border-radius: var(--horizon-radius-lg) !important;
+  background: var(--horizon-panel-solid) !important;
+  box-shadow: var(--horizon-shadow-card) !important;
+}
+
+html.dui-pro-overhaul .dy-command-console__header,
+html.dui-pro-overhaul.dui-cohesive-ui .dy-command-console__header {
+  padding: 16px 18px !important;
+  border-bottom-color: var(--horizon-line-subtle) !important;
+  background: linear-gradient(180deg, rgba(255, 255, 255, .035), rgba(255, 255, 255, .012)) !important;
+}
+
+html.dui-pro-overhaul .dy-command-console__title,
+html.dui-pro-overhaul.dui-cohesive-ui .dy-command-console__title {
+  color: var(--horizon-text) !important;
+  font-size: 15px !important;
+  font-weight: 700 !important;
+  letter-spacing: -.02em !important;
+}
+
+html.dui-pro-overhaul .dy-command-console__subtitle,
+html.dui-pro-overhaul.dui-cohesive-ui .dy-command-console__subtitle {
+  color: var(--horizon-text-faint) !important;
+}
+
+html.dui-pro-overhaul .dy-command-messages,
+html.dui-pro-overhaul.dui-cohesive-ui .dy-command-messages {
+  background:
+    linear-gradient(rgba(255, 255, 255, .012) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(255, 255, 255, .012) 1px, transparent 1px),
+    rgba(2, 4, 5, .24) !important;
+  background-size: 26px 26px !important;
+}
+
+html.dui-pro-overhaul .dy-command-idle-hint,
+html.dui-pro-overhaul.dui-cohesive-ui .dy-command-idle-hint {
+  width: min(100%, 210px) !important;
+  gap: 7px !important;
+  padding: 18px 16px !important;
+  border: 1px dashed var(--horizon-line) !important;
+  border-radius: var(--horizon-radius-md) !important;
+  background: rgba(255, 255, 255, .018) !important;
+}
+
+html.dui-pro-overhaul .dy-command-idle-hint__title,
+html.dui-pro-overhaul.dui-cohesive-ui .dy-command-idle-hint__title {
+  color: #c7d2ce !important;
+  font-size: 11px !important;
+}
+
+html.dui-pro-overhaul .dy-command-composer,
+html.dui-pro-overhaul.dui-cohesive-ui .dy-command-composer {
+  padding: 13px !important;
+  border-top-color: var(--horizon-line-subtle) !important;
+  background: rgba(255, 255, 255, .02) !important;
+}
+
+html.dui-pro-overhaul textarea.dy-command-textarea,
+html.dui-pro-overhaul.dui-cohesive-ui textarea.dy-command-textarea {
+  border-color: var(--horizon-line) !important;
+  border-radius: 10px !important;
+  background: rgba(0, 0, 0, .28) !important;
+  color: #e5edea !important;
+}
+
+/* Mission command center -------------------------------------------------------- */
+
+html.dui-pro-overhaul [data-dui-panel="missions"].dui-mission-screen,
+html.dui-pro-overhaul.dui-cohesive-ui [data-dui-panel="missions"].dui-mission-screen {
+  gap: 16px !important;
+  padding: clamp(16px, 2vw, 28px) !important;
+  border: 0 !important;
+  border-radius: 0 !important;
+  background: transparent !important;
+  box-shadow: none !important;
+}
+
+html.dui-pro-overhaul [data-dui-panel="missions"] :is(.dui-mission-main--organized, .dui-mission-sidebar, .dui-mission-bottom-card > section),
+html.dui-pro-overhaul.dui-cohesive-ui [data-dui-panel="missions"] :is(.dui-mission-main--organized, .dui-mission-sidebar, .dui-mission-bottom-card > section) {
+  border-color: var(--horizon-line) !important;
+  border-radius: var(--horizon-radius-lg) !important;
+  background: linear-gradient(180deg, rgba(255, 255, 255, .03), rgba(255, 255, 255, .008)), var(--horizon-panel-solid) !important;
+  box-shadow: var(--horizon-shadow-card) !important;
+}
+
+html.dui-pro-overhaul [data-dui-panel="missions"] :is(.dui-section-head, .dui-loadout-head),
+html.dui-pro-overhaul.dui-cohesive-ui [data-dui-panel="missions"] :is(.dui-section-head, .dui-loadout-head) {
+  padding-bottom: 12px !important;
+  border-bottom-color: var(--horizon-line-subtle) !important;
+}
+
+html.dui-pro-overhaul [data-dui-panel="missions"] :is(.dui-section-head span, .dui-choice-head span, .dui-field label, .dui-loadout-head > span, .dui-range-field > span),
+html.dui-pro-overhaul.dui-cohesive-ui [data-dui-panel="missions"] :is(.dui-section-head span, .dui-choice-head span, .dui-field label, .dui-loadout-head > span, .dui-range-field > span) {
+  color: var(--horizon-text-faint) !important;
+  letter-spacing: .1em !important;
+}
+
+html.dui-pro-overhaul [data-dui-panel="missions"] :is(.dui-section-head strong, .dui-choice-head strong, .dui-template-copy strong, .dui-option-copy strong),
+html.dui-pro-overhaul.dui-cohesive-ui [data-dui-panel="missions"] :is(.dui-section-head strong, .dui-choice-head strong, .dui-template-copy strong, .dui-option-copy strong) {
+  color: var(--horizon-text) !important;
+}
+
+html.dui-pro-overhaul [data-dui-panel="missions"] :is(.dui-template-tile, .dui-option),
+html.dui-pro-overhaul.dui-cohesive-ui [data-dui-panel="missions"] :is(.dui-template-tile, .dui-option) {
+  border-color: var(--horizon-line) !important;
+  border-radius: var(--horizon-radius-md) !important;
+  background: rgba(255, 255, 255, .024) !important;
+  box-shadow: none !important;
+}
+
+html.dui-pro-overhaul [data-dui-panel="missions"] :is(.dui-template-tile, .dui-option):hover,
+html.dui-pro-overhaul [data-dui-panel="missions"] :is(.dui-template-tile, .dui-option).is-active,
+html.dui-pro-overhaul [data-dui-panel="missions"] .dui-option[aria-pressed="true"],
+html.dui-pro-overhaul.dui-cohesive-ui [data-dui-panel="missions"] :is(.dui-template-tile, .dui-option):hover,
+html.dui-pro-overhaul.dui-cohesive-ui [data-dui-panel="missions"] :is(.dui-template-tile, .dui-option).is-active,
+html.dui-pro-overhaul.dui-cohesive-ui [data-dui-panel="missions"] .dui-option[aria-pressed="true"] {
+  border-color: rgba(114, 213, 194, .36) !important;
+  background: linear-gradient(180deg, rgba(114, 213, 194, .12), rgba(114, 213, 194, .045)) !important;
+  box-shadow: inset 0 1px 0 rgba(196, 255, 244, .08) !important;
+}
+
+html.dui-pro-overhaul [data-dui-panel="missions"] :is(.dui-template-tile, .dui-option).is-active::after,
+html.dui-pro-overhaul [data-dui-panel="missions"] .dui-option[aria-pressed="true"]::after,
+html.dui-pro-overhaul.dui-cohesive-ui [data-dui-panel="missions"] :is(.dui-template-tile, .dui-option).is-active::after,
+html.dui-pro-overhaul.dui-cohesive-ui [data-dui-panel="missions"] .dui-option[aria-pressed="true"]::after {
+  display: none !important;
+}
+
+html.dui-pro-overhaul [data-dui-panel="missions"] :is(.dui-control, .dui-textarea),
+html.dui-pro-overhaul.dui-cohesive-ui [data-dui-panel="missions"] :is(.dui-control, .dui-textarea) {
+  border-color: var(--horizon-line) !important;
+  border-radius: var(--horizon-radius-sm) !important;
+  background: rgba(1, 3, 4, .4) !important;
+  color: var(--horizon-text) !important;
+}
+
+html.dui-pro-overhaul [data-dui-panel="missions"] .dui-agent-row,
+html.dui-pro-overhaul.dui-cohesive-ui [data-dui-panel="missions"] .dui-agent-row {
+  border-color: var(--horizon-line-subtle) !important;
+  border-radius: 10px !important;
+  background: rgba(255, 255, 255, .018) !important;
+}
+
+html.dui-pro-overhaul [data-dui-panel="missions"] .dui-agent-row:hover,
+html.dui-pro-overhaul.dui-cohesive-ui [data-dui-panel="missions"] .dui-agent-row:hover {
+  background: rgba(255, 255, 255, .045) !important;
+}
+
+html.dui-pro-overhaul [data-dui-panel="missions"] :is(.dui-stat-grid > div, .dui-meter, .dui-readiness-mini),
+html.dui-pro-overhaul.dui-cohesive-ui [data-dui-panel="missions"] :is(.dui-stat-grid > div, .dui-meter, .dui-readiness-mini) {
+  border-color: var(--horizon-line-subtle) !important;
+  border-radius: 10px !important;
+  background: rgba(255, 255, 255, .025) !important;
+}
+
+html.dui-pro-overhaul [data-dui-panel="missions"] .dui-primary-button,
+html.dui-pro-overhaul.dui-cohesive-ui [data-dui-panel="missions"] .dui-primary-button {
+  min-height: 46px !important;
+  border-color: rgba(114, 213, 194, .46) !important;
+  border-radius: 11px !important;
+  background: linear-gradient(180deg, #2a8677, #1c6b60) !important;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, .16), 0 13px 28px -21px rgba(73, 211, 183, .68) !important;
+}
+
+html.dui-pro-overhaul [data-dui-panel="missions"] .dui-primary-button.is-stop,
+html.dui-pro-overhaul.dui-cohesive-ui [data-dui-panel="missions"] .dui-primary-button.is-stop {
+  border-color: rgba(240, 141, 145, .42) !important;
+  background: linear-gradient(180deg, #9d4f55, #7f3d43) !important;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, .14), 0 13px 28px -21px rgba(240, 141, 145, .48) !important;
+}
+
+/* Monitor ------------------------------------------------------------------------ */
+
+html.dui-pro-overhaul [data-dui-panel="monitor"].dy-monitor-shell,
+html.dui-pro-overhaul.dui-cohesive-ui [data-dui-panel="monitor"].dy-monitor-shell {
+  overflow: hidden !important;
+  margin: clamp(16px, 2vw, 28px) !important;
+  border-color: var(--horizon-line) !important;
+  border-radius: var(--horizon-radius-lg) !important;
+  background: linear-gradient(180deg, rgba(255, 255, 255, .027), transparent 135px), var(--horizon-panel-solid) !important;
+  box-shadow: var(--horizon-shadow-float) !important;
+}
+
+html.dui-pro-overhaul .dy-monitor-tabs,
+html.dui-pro-overhaul.dui-cohesive-ui .dy-monitor-tabs {
+  padding: 16px 18px !important;
+  border-bottom-color: var(--horizon-line-subtle) !important;
+  background: rgba(255, 255, 255, .016) !important;
+}
+
+html.dui-pro-overhaul .dy-monitor-tab-list,
+html.dui-pro-overhaul.dui-cohesive-ui .dy-monitor-tab-list {
+  gap: 3px !important;
+  padding: 4px !important;
+  border-color: var(--horizon-line) !important;
+  border-radius: 11px !important;
+  background: rgba(0, 0, 0, .2) !important;
+}
+
+html.dui-pro-overhaul .dy-monitor-tab-list .dui-button,
+html.dui-pro-overhaul.dui-cohesive-ui .dy-monitor-tab-list .dui-button {
+  min-height: 34px !important;
+  border: 1px solid transparent !important;
+  border-radius: 7px !important;
+  background: transparent !important;
+  color: var(--horizon-text-faint) !important;
+}
+
+html.dui-pro-overhaul .dy-monitor-tab-list .dui-button[data-active="true"],
+html.dui-pro-overhaul.dui-cohesive-ui .dy-monitor-tab-list .dui-button[data-active="true"] {
+  border-color: var(--horizon-line) !important;
+  background: rgba(255, 255, 255, .075) !important;
+  color: var(--horizon-text) !important;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, .07) !important;
+}
+
+html.dui-pro-overhaul .dy-monitor-tools,
+html.dui-pro-overhaul.dui-cohesive-ui .dy-monitor-tools {
+  gap: 7px !important;
+}
+
+html.dui-pro-overhaul .dy-monitor-body,
+html.dui-pro-overhaul.dui-cohesive-ui .dy-monitor-body {
+  padding: clamp(16px, 2vw, 24px) !important;
+}
+
+html.dui-pro-overhaul [data-dui-panel="monitor"] :is(.dy-cron-job-card, .dy-session-meta-chip, .dy-monitor-gauge, .dy-gateway-card),
+html.dui-pro-overhaul.dui-cohesive-ui [data-dui-panel="monitor"] :is(.dy-cron-job-card, .dy-session-meta-chip, .dy-monitor-gauge, .dy-gateway-card) {
+  border-color: var(--horizon-line-subtle) !important;
+  border-radius: var(--horizon-radius-md) !important;
+  background: rgba(255, 255, 255, .022) !important;
+}
+
+html.dui-pro-overhaul [data-dui-panel="monitor"] .dy-monitor-gauge-track,
+html.dui-pro-overhaul.dui-cohesive-ui [data-dui-panel="monitor"] .dy-monitor-gauge-track {
+  border-radius: 999px !important;
+  background: rgba(255, 255, 255, .08) !important;
+}
+
+html.dui-pro-overhaul [data-dui-panel="monitor"] .dy-monitor-gauge-fill,
+html.dui-pro-overhaul.dui-cohesive-ui [data-dui-panel="monitor"] .dy-monitor-gauge-fill {
+  border-radius: 999px !important;
+  background: linear-gradient(90deg, #388d7e, #85dfca) !important;
+}
+
+html.dui-pro-overhaul [data-dui-panel="monitor"] :is(.dy-cron-action-button, .dy-monitor-tool-button),
+html.dui-pro-overhaul.dui-cohesive-ui [data-dui-panel="monitor"] :is(.dy-cron-action-button, .dy-monitor-tool-button) {
+  border-color: var(--horizon-line) !important;
+  border-radius: 8px !important;
+  background: rgba(255, 255, 255, .035) !important;
+  color: #c8d4d0 !important;
+}
+
+html.dui-pro-overhaul .dy-cron-edit-dialog,
+html.dui-pro-overhaul.dui-cohesive-ui .dy-cron-edit-dialog {
+  border-color: var(--horizon-line-strong) !important;
+  border-radius: var(--horizon-radius-lg) !important;
+  background: var(--horizon-panel-solid) !important;
+  box-shadow: var(--horizon-shadow-float) !important;
+}
+
+/* Plugins ------------------------------------------------------------------------ */
+
+html.dui-pro-overhaul [data-dui-panel="plugins"].dy-plugins-panel,
+html.dui-pro-overhaul.dui-cohesive-ui [data-dui-panel="plugins"].dy-plugins-panel {
+  overflow: hidden !important;
+  margin: clamp(16px, 2vw, 28px) !important;
+  border-color: var(--horizon-line) !important;
+  border-radius: var(--horizon-radius-lg) !important;
+  background: linear-gradient(180deg, rgba(255, 255, 255, .028), transparent 132px), var(--horizon-panel-solid) !important;
+  box-shadow: var(--horizon-shadow-float) !important;
+}
+
+html.dui-pro-overhaul [data-dui-panel="plugins"] > div:first-child,
+html.dui-pro-overhaul.dui-cohesive-ui [data-dui-panel="plugins"] > div:first-child {
+  padding: 19px 22px !important;
+  border-bottom-color: var(--horizon-line-subtle) !important;
+  background: rgba(255, 255, 255, .018) !important;
+}
+
+html.dui-pro-overhaul [data-dui-panel="plugins"] h2,
+html.dui-pro-overhaul.dui-cohesive-ui [data-dui-panel="plugins"] h2 {
+  color: var(--horizon-text) !important;
+  font-size: 18px !important;
+  font-weight: 720 !important;
+  letter-spacing: -.03em !important;
+}
+
+html.dui-pro-overhaul [data-dui-panel="plugins"] :is(.dy-plugin-summary-chip, .dy-plugin-empty-state),
+html.dui-pro-overhaul.dui-cohesive-ui [data-dui-panel="plugins"] :is(.dy-plugin-summary-chip, .dy-plugin-empty-state) {
+  border-color: var(--horizon-line) !important;
+  border-radius: 999px !important;
+  background: rgba(255, 255, 255, .035) !important;
+  box-shadow: none !important;
+}
+
+html.dui-pro-overhaul [data-dui-panel="plugins"] .dy-plugin-empty-state,
+html.dui-pro-overhaul.dui-cohesive-ui [data-dui-panel="plugins"] .dy-plugin-empty-state {
+  border-radius: var(--horizon-radius-md) !important;
+  background: rgba(255, 255, 255, .018) !important;
+}
+
+html.dui-pro-overhaul [data-dui-panel="plugins"] :is(.dy-plugin-card, .dy-plugin-row, .dy-plugin-catalog-card, .dy-plugin-diagnostic-card),
+html.dui-pro-overhaul.dui-cohesive-ui [data-dui-panel="plugins"] :is(.dy-plugin-card, .dy-plugin-row, .dy-plugin-catalog-card, .dy-plugin-diagnostic-card) {
+  border-color: var(--horizon-line-subtle) !important;
+  border-radius: var(--horizon-radius-md) !important;
+  background: rgba(255, 255, 255, .02) !important;
+  box-shadow: none !important;
+}
+
+html.dui-pro-overhaul [data-dui-panel="plugins"] :is(input, select, textarea),
+html.dui-pro-overhaul.dui-cohesive-ui [data-dui-panel="plugins"] :is(input, select, textarea) {
+  border-color: var(--horizon-line) !important;
+  border-radius: 8px !important;
+  background: rgba(2, 4, 5, .45) !important;
+  color: var(--horizon-text) !important;
+}
+
+/* Settings ----------------------------------------------------------------------- */
+
+html.dui-pro-overhaul [data-dui-panel="settings"].dui-settings-panel,
+html.dui-pro-overhaul.dui-cohesive-ui [data-dui-panel="settings"].dui-settings-panel {
+  gap: 18px !important;
+  margin: clamp(16px, 2vw, 28px) !important;
+}
+
+html.dui-pro-overhaul .dui-settings-hero,
+html.dui-pro-overhaul.dui-cohesive-ui .dui-settings-hero {
+  padding: clamp(22px, 3vw, 34px) !important;
+  border: 1px solid var(--horizon-line) !important;
+  border-radius: var(--horizon-radius-lg) !important;
+  background:
+    radial-gradient(circle at 90% 15%, rgba(114, 213, 194, .1), transparent 20rem),
+    linear-gradient(130deg, rgba(255, 255, 255, .038), rgba(255, 255, 255, .012)),
+    var(--horizon-panel-solid) !important;
+  box-shadow: var(--horizon-shadow-card) !important;
+}
+
+html.dui-pro-overhaul .dui-settings-hero > div > span,
+html.dui-pro-overhaul.dui-cohesive-ui .dui-settings-hero > div > span {
+  color: var(--horizon-text-faint) !important;
+  font-size: var(--dy-type-micro, 11px) !important;
+  letter-spacing: .14em !important;
+}
+
+html.dui-pro-overhaul .dui-settings-hero h2,
+html.dui-pro-overhaul.dui-cohesive-ui .dui-settings-hero h2 {
+  color: var(--horizon-text) !important;
+  font-size: clamp(22px, 2vw, 28px) !important;
+  letter-spacing: -.045em !important;
+}
+
+html.dui-pro-overhaul .dui-settings-hero p,
+html.dui-pro-overhaul.dui-cohesive-ui .dui-settings-hero p {
+  color: var(--horizon-text-muted) !important;
+}
+
+html.dui-pro-overhaul .dui-settings-status,
+html.dui-pro-overhaul.dui-cohesive-ui .dui-settings-status {
+  border-color: rgba(114, 213, 194, .22) !important;
+  border-radius: var(--horizon-radius-md) !important;
+  background: var(--horizon-accent-wash) !important;
+  color: #c9e9e1 !important;
+}
+
+html.dui-pro-overhaul .dui-settings-card,
+html.dui-pro-overhaul.dui-cohesive-ui .dui-settings-card {
+  border-color: var(--horizon-line) !important;
+  border-radius: var(--horizon-radius-lg) !important;
+  background: linear-gradient(180deg, rgba(255, 255, 255, .026), transparent 110px), var(--horizon-panel-solid) !important;
+  box-shadow: var(--horizon-shadow-card) !important;
+}
+
+html.dui-pro-overhaul .dui-settings-card__head,
+html.dui-pro-overhaul.dui-cohesive-ui .dui-settings-card__head {
+  padding-bottom: 14px !important;
+  border-bottom-color: var(--horizon-line-subtle) !important;
+}
+
+html.dui-pro-overhaul .dui-settings-card__head span,
+html.dui-pro-overhaul.dui-cohesive-ui .dui-settings-card__head span {
+  color: var(--horizon-text-faint) !important;
+  letter-spacing: .12em !important;
+}
+
+html.dui-pro-overhaul .dui-settings-card__head strong,
+html.dui-pro-overhaul.dui-cohesive-ui .dui-settings-card__head strong {
+  color: var(--horizon-text) !important;
+  letter-spacing: -.02em !important;
+}
+
+html.dui-pro-overhaul .dui-settings-field > span strong,
+html.dui-pro-overhaul.dui-cohesive-ui .dui-settings-field > span strong {
+  color: #d9e2df !important;
+}
+
+html.dui-pro-overhaul .dui-settings-field > span small,
+html.dui-pro-overhaul.dui-cohesive-ui .dui-settings-field > span small,
+html.dui-pro-overhaul .dui-settings-note,
+html.dui-pro-overhaul.dui-cohesive-ui .dui-settings-note {
+  color: var(--horizon-text-faint) !important;
+}
+
+html.dui-pro-overhaul .dui-settings-card :is(input:not([type="checkbox"]), select),
+html.dui-pro-overhaul.dui-cohesive-ui .dui-settings-card :is(input:not([type="checkbox"]), select) {
+  border-color: var(--horizon-line) !important;
+  border-radius: 8px !important;
+  background: rgba(0, 0, 0, .25) !important;
+  color: var(--horizon-text) !important;
+}
+
+html.dui-pro-overhaul .dui-settings-actions button,
+html.dui-pro-overhaul.dui-cohesive-ui .dui-settings-actions button {
+  border-color: var(--horizon-line) !important;
+  border-radius: 8px !important;
+  background: rgba(255, 255, 255, .04) !important;
+  color: #d5dfdb !important;
+}
+
+html.dui-pro-overhaul .dui-settings-actions button:hover,
+html.dui-pro-overhaul.dui-cohesive-ui .dui-settings-actions button:hover {
+  border-color: rgba(114, 213, 194, .35) !important;
+  background: var(--horizon-accent-wash) !important;
+  color: #effffb !important;
+}
+
+html.dui-pro-overhaul .dui-settings-actions button.is-danger,
+html.dui-pro-overhaul.dui-cohesive-ui .dui-settings-actions button.is-danger {
+  border-color: rgba(240, 141, 145, .28) !important;
+  background: rgba(240, 141, 145, .07) !important;
+  color: #ffdcdd !important;
+}
+
+html.dui-pro-overhaul .dui-settings-metrics > div,
+html.dui-pro-overhaul.dui-cohesive-ui .dui-settings-metrics > div {
+  border-color: var(--horizon-line-subtle) !important;
+  border-radius: 10px !important;
+  background: rgba(255, 255, 255, .028) !important;
+}
+
+/* Recruit, editor, provider, and login surfaces -------------------------------- */
+
+html.dui-pro-overhaul [data-dui-overlay],
+html.dui-pro-overhaul.dui-cohesive-ui [data-dui-overlay] {
+  background: rgba(3, 5, 6, .72) !important;
+  backdrop-filter: blur(14px) saturate(.82) !important;
+  -webkit-backdrop-filter: blur(14px) saturate(.82) !important;
+}
+
+html.dui-pro-overhaul :is([data-dui-modal], .dui-recruit-modal),
+html.dui-pro-overhaul.dui-cohesive-ui :is([data-dui-modal], .dui-recruit-modal) {
+  border-color: var(--horizon-line-strong) !important;
+  border-radius: 18px !important;
+  background: linear-gradient(180deg, rgba(255, 255, 255, .035), transparent 160px), #111516 !important;
+  box-shadow: var(--horizon-shadow-float) !important;
+}
+
+html.dui-pro-overhaul .dui-recruit-header,
+html.dui-pro-overhaul.dui-cohesive-ui .dui-recruit-header {
+  border-bottom-color: var(--horizon-line-subtle) !important;
+  background: rgba(255, 255, 255, .018) !important;
+}
+
+html.dui-pro-overhaul .dui-recruit-title-block h2,
+html.dui-pro-overhaul.dui-cohesive-ui .dui-recruit-title-block h2 {
+  color: var(--horizon-text) !important;
+  letter-spacing: -.04em !important;
+}
+
+html.dui-pro-overhaul .dui-recruit-copy,
+html.dui-pro-overhaul.dui-cohesive-ui .dui-recruit-copy {
+  color: var(--horizon-text-muted) !important;
+}
+
+html.dui-pro-overhaul .dui-recruit-step-rail > span,
+html.dui-pro-overhaul.dui-cohesive-ui .dui-recruit-step-rail > span {
+  border-color: var(--horizon-line) !important;
+  background: rgba(255, 255, 255, .025) !important;
+}
+
+html.dui-pro-overhaul .dui-recruit-step-rail > span[data-state="active"],
+html.dui-pro-overhaul.dui-cohesive-ui .dui-recruit-step-rail > span[data-state="active"] {
+  border-color: rgba(114, 213, 194, .3) !important;
+  background: var(--horizon-accent-wash) !important;
+}
+
+html.dui-pro-overhaul .dui-recruit-section,
+html.dui-pro-overhaul.dui-cohesive-ui .dui-recruit-section {
+  border-color: var(--horizon-line-subtle) !important;
+  border-radius: var(--horizon-radius-md) !important;
+  background: rgba(255, 255, 255, .017) !important;
+}
+
+html.dui-pro-overhaul .dui-recruit-modal :is(input, select, textarea),
+html.dui-pro-overhaul.dui-cohesive-ui .dui-recruit-modal :is(input, select, textarea) {
+  border-color: var(--horizon-line) !important;
+  border-radius: 8px !important;
+  background: rgba(2, 4, 5, .44) !important;
+  color: var(--horizon-text) !important;
+}
+
+html.dui-pro-overhaul .dui-recruit-template-card,
+html.dui-pro-overhaul.dui-cohesive-ui .dui-recruit-template-card {
+  border-color: var(--horizon-line) !important;
+  border-radius: 10px !important;
+  background: rgba(255, 255, 255, .026) !important;
+}
+
+html.dui-pro-overhaul .dui-recruit-template-card[data-active="true"],
+html.dui-pro-overhaul.dui-cohesive-ui .dui-recruit-template-card[data-active="true"] {
+  border-color: rgba(114, 213, 194, .36) !important;
+  background: var(--horizon-accent-wash) !important;
+}
+
+html.dui-pro-overhaul [data-editor-tabs],
+html.dui-pro-overhaul.dui-cohesive-ui [data-editor-tabs] {
+  border-color: var(--horizon-line) !important;
+  border-radius: 10px !important;
+  background: rgba(0, 0, 0, .17) !important;
+}
+
+html.dui-pro-overhaul [data-editor-tab][data-active="true"],
+html.dui-pro-overhaul.dui-cohesive-ui [data-editor-tab][data-active="true"] {
+  border-color: var(--horizon-line) !important;
+  background: rgba(255, 255, 255, .075) !important;
+  color: #ffffff !important;
+  box-shadow: none !important;
+}
+
+html.dui-pro-overhaul .dui-login-brand,
+html.dui-pro-overhaul.dui-cohesive-ui .dui-login-brand {
+  filter: saturate(.94) brightness(1.06);
+}
+
+html.dui-pro-overhaul .dui-login-brand + p,
+html.dui-pro-overhaul.dui-cohesive-ui .dui-login-brand + p {
+  color: #b7c4c0 !important;
+}
+
+/* Compact screens and motion ----------------------------------------------------- */
+
+@media (min-width: 901px) {
+  html.dui-pro-overhaul .dy-app-main,
+  html.dui-pro-overhaul.dui-cohesive-ui .dy-app-main {
+    min-height: 100dvh;
+  }
+
+  html.dui-pro-overhaul .agent-registry-pane [data-dui-panel="agent-registry"],
+  html.dui-pro-overhaul.dui-cohesive-ui .agent-registry-pane [data-dui-panel="agent-registry"] {
+    border: 1px solid var(--horizon-line) !important;
+  }
+
+  html.dui-pro-overhaul .dy-agent-console-pane [data-dui-panel="command-console"],
+  html.dui-pro-overhaul.dui-cohesive-ui .dy-agent-console-pane [data-dui-panel="command-console"] {
+    border: 1px solid var(--horizon-line) !important;
+  }
+}
+
+@media (max-width: 900px) {
+  html.dui-pro-overhaul .dy-workspace-context,
+  html.dui-pro-overhaul.dui-cohesive-ui .dy-workspace-context {
+    min-height: 0 !important;
+    padding: 18px !important;
+  }
+
+  html.dui-pro-overhaul .dy-workspace-context__meta,
+  html.dui-pro-overhaul.dui-cohesive-ui .dy-workspace-context__meta {
+    align-items: flex-start !important;
+  }
+
+  html.dui-pro-overhaul .dy-agents-workspace,
+  html.dui-pro-overhaul.dui-cohesive-ui .dy-agents-workspace,
+  html.dui-pro-overhaul [data-dui-panel="missions"].dui-mission-screen,
+  html.dui-pro-overhaul.dui-cohesive-ui [data-dui-panel="missions"].dui-mission-screen {
+    padding: 14px !important;
+  }
+
+  html.dui-pro-overhaul [data-dui-panel="monitor"].dy-monitor-shell,
+  html.dui-pro-overhaul.dui-cohesive-ui [data-dui-panel="monitor"].dy-monitor-shell,
+  html.dui-pro-overhaul [data-dui-panel="plugins"].dy-plugins-panel,
+  html.dui-pro-overhaul.dui-cohesive-ui [data-dui-panel="plugins"].dy-plugins-panel,
+  html.dui-pro-overhaul [data-dui-panel="settings"].dui-settings-panel,
+  html.dui-pro-overhaul.dui-cohesive-ui [data-dui-panel="settings"].dui-settings-panel {
+    margin: 14px !important;
+  }
+
+  html.dui-pro-overhaul .dy-monitor-tabbar,
+  html.dui-pro-overhaul.dui-cohesive-ui .dy-monitor-tabbar {
+    align-items: stretch !important;
+  }
+
+  html.dui-pro-overhaul .dy-monitor-tools,
+  html.dui-pro-overhaul.dui-cohesive-ui .dy-monitor-tools {
+    justify-content: flex-start !important;
+  }
+}
+
+@media (max-width: 620px) {
+  html.dui-pro-overhaul .dy-workspace-context h1,
+  html.dui-pro-overhaul.dui-cohesive-ui .dy-workspace-context h1 {
+    font-size: 24px !important;
+  }
+
+  html.dui-pro-overhaul .dy-status-grid,
+  html.dui-pro-overhaul.dui-cohesive-ui .dy-status-grid {
+    justify-content: flex-start !important;
+  }
+
+  html.dui-pro-overhaul .dy-monitor-tab-list .dui-button,
+  html.dui-pro-overhaul.dui-cohesive-ui .dy-monitor-tab-list .dui-button {
+    min-width: calc(50% - 2px);
+    flex: 1 1 calc(50% - 2px) !important;
+  }
+
+  html.dui-pro-overhaul .dui-settings-hero,
+  html.dui-pro-overhaul.dui-cohesive-ui .dui-settings-hero {
+    padding: 20px !important;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  html.dui-pro-overhaul *,
+  html.dui-pro-overhaul.dui-cohesive-ui * {
+    scroll-behavior: auto !important;
+    transition-duration: .001ms !important;
+    animation-duration: .001ms !important;
+    animation-iteration-count: 1 !important;
+  }
+}
+
+/* =============================================================================
+   Spectrum identities and interaction refinement
+   -----------------------------------------------------------------------------
+   Each destination has a dedicated hue. The hue is used only for orientation,
+   selection, and high-value actions; it is never the sole status signal. This
+   replaces the inherited one-blue-navigation rule without reintroducing the
+   old left-edge chip.
+   ============================================================================= */
+
+html.dui-pro-overhaul .dy-human-nav :is(button, .dy-human-nav-action, .dy-human-nav-utility),
+html.dui-pro-overhaul.dui-cohesive-ui .dy-human-nav :is(button, .dy-human-nav-action, .dy-human-nav-utility) {
+  --horizon-nav-accent: #aebbb7;
+  --horizon-nav-accent-rgb: 174 187 183;
+  --horizon-nav-ink: #edf5f2;
+  position: relative;
+  isolation: isolate;
+  outline: 0 !important;
+}
+
+html.dui-pro-overhaul .dy-human-nav :is(button, .dy-human-nav-action, .dy-human-nav-utility)[data-tone="recruit"],
+html.dui-pro-overhaul.dui-cohesive-ui .dy-human-nav :is(button, .dy-human-nav-action, .dy-human-nav-utility)[data-tone="recruit"] {
+  --horizon-nav-accent: #f17d72;
+  --horizon-nav-accent-rgb: 241 125 114;
+  --horizon-nav-ink: #ffe9e7;
+}
+
+html.dui-pro-overhaul .dy-human-nav :is(button, .dy-human-nav-action, .dy-human-nav-utility)[data-tone="agents"],
+html.dui-pro-overhaul.dui-cohesive-ui .dy-human-nav :is(button, .dy-human-nav-action, .dy-human-nav-utility)[data-tone="agents"] {
+  --horizon-nav-accent: #66aee7;
+  --horizon-nav-accent-rgb: 102 174 231;
+  --horizon-nav-ink: #e7f4ff;
+}
+
+html.dui-pro-overhaul .dy-human-nav :is(button, .dy-human-nav-action, .dy-human-nav-utility)[data-tone="missions"],
+html.dui-pro-overhaul.dui-cohesive-ui .dy-human-nav :is(button, .dy-human-nav-action, .dy-human-nav-utility)[data-tone="missions"] {
+  --horizon-nav-accent: #e5b967;
+  --horizon-nav-accent-rgb: 229 185 103;
+  --horizon-nav-ink: #fff4d9;
+}
+
+html.dui-pro-overhaul .dy-human-nav :is(button, .dy-human-nav-action, .dy-human-nav-utility)[data-tone="monitor"],
+html.dui-pro-overhaul.dui-cohesive-ui .dy-human-nav :is(button, .dy-human-nav-action, .dy-human-nav-utility)[data-tone="monitor"] {
+  --horizon-nav-accent: #60d9cb;
+  --horizon-nav-accent-rgb: 96 217 203;
+  --horizon-nav-ink: #e1fffa;
+}
+
+html.dui-pro-overhaul .dy-human-nav :is(button, .dy-human-nav-action, .dy-human-nav-utility)[data-tone="plugins"],
+html.dui-pro-overhaul.dui-cohesive-ui .dy-human-nav :is(button, .dy-human-nav-action, .dy-human-nav-utility)[data-tone="plugins"] {
+  --horizon-nav-accent: #ad8ae8;
+  --horizon-nav-accent-rgb: 173 138 232;
+  --horizon-nav-ink: #f3edff;
+}
+
+html.dui-pro-overhaul .dy-human-nav :is(button, .dy-human-nav-action, .dy-human-nav-utility)[data-tone="settings"],
+html.dui-pro-overhaul.dui-cohesive-ui .dy-human-nav :is(button, .dy-human-nav-action, .dy-human-nav-utility)[data-tone="settings"] {
+  --horizon-nav-accent: #7ec5ad;
+  --horizon-nav-accent-rgb: 126 197 173;
+  --horizon-nav-ink: #e6fff5;
+}
+
+html.dui-pro-overhaul .dy-human-nav :is(button, .dy-human-nav-action, .dy-human-nav-utility)[data-tone="help"],
+html.dui-pro-overhaul.dui-cohesive-ui .dy-human-nav :is(button, .dy-human-nav-action, .dy-human-nav-utility)[data-tone="help"] {
+  --horizon-nav-accent: #93aab9;
+  --horizon-nav-accent-rgb: 147 170 185;
+  --horizon-nav-ink: #edf6fb;
+}
+
+html.dui-pro-overhaul .dy-human-nav :is(button, .dy-human-nav-action, .dy-human-nav-utility):hover,
+html.dui-pro-overhaul.dui-cohesive-ui .dy-human-nav :is(button, .dy-human-nav-action, .dy-human-nav-utility):hover {
+  border-color: rgb(var(--horizon-nav-accent-rgb) / .30) !important;
+  background: linear-gradient(90deg, rgb(var(--horizon-nav-accent-rgb) / .11), rgb(var(--horizon-nav-accent-rgb) / .025) 70%, transparent) !important;
+  color: var(--horizon-nav-ink) !important;
+}
+
+html.dui-pro-overhaul .dy-human-nav :is(button, .dy-human-nav-action, .dy-human-nav-utility):is(.is-active, [aria-current="page"]),
+html.dui-pro-overhaul.dui-cohesive-ui .dy-human-nav :is(button, .dy-human-nav-action, .dy-human-nav-utility):is(.is-active, [aria-current="page"]) {
+  border-color: rgb(var(--horizon-nav-accent-rgb) / .58) !important;
+  background:
+    linear-gradient(110deg, rgb(var(--horizon-nav-accent-rgb) / .22), rgb(var(--horizon-nav-accent-rgb) / .075) 64%, rgb(255 255 255 / .02)) !important;
+  box-shadow:
+    inset 0 1px 0 rgb(255 255 255 / .10),
+    0 10px 24px -20px rgb(var(--horizon-nav-accent-rgb) / .85) !important;
+  color: var(--horizon-nav-ink) !important;
+}
+
+html.dui-pro-overhaul .dy-human-nav :is(button, .dy-human-nav-action, .dy-human-nav-utility):is(.is-active, [aria-current="page"])::before,
+html.dui-pro-overhaul.dui-cohesive-ui .dy-human-nav :is(button, .dy-human-nav-action, .dy-human-nav-utility):is(.is-active, [aria-current="page"])::before {
+  display: block !important;
+  content: '' !important;
+  position: absolute !important;
+  top: 8px !important;
+  right: 9px !important;
+  left: auto !important;
+  width: 5px !important;
+  height: 5px !important;
+  border: 0 !important;
+  border-radius: 999px !important;
+  background: var(--horizon-nav-accent) !important;
+  box-shadow: 0 0 0 3px rgb(var(--horizon-nav-accent-rgb) / .12) !important;
+  opacity: 1 !important;
+}
+
+html.dui-pro-overhaul .dy-human-nav :is(button, .dy-human-nav-action, .dy-human-nav-utility):is(.is-active, [aria-current="page"])::after,
+html.dui-pro-overhaul.dui-cohesive-ui .dy-human-nav :is(button, .dy-human-nav-action, .dy-human-nav-utility):is(.is-active, [aria-current="page"])::after {
+  display: none !important;
+  content: none !important;
+  width: 0 !important;
+  height: 0 !important;
+  box-shadow: none !important;
+}
+
+html.dui-pro-overhaul .dy-human-nav :is(button, .dy-human-nav-action, .dy-human-nav-utility):is(:hover, .is-active, [aria-current="page"]) .dy-human-nav-icon,
+html.dui-pro-overhaul.dui-cohesive-ui .dy-human-nav :is(button, .dy-human-nav-action, .dy-human-nav-utility):is(:hover, .is-active, [aria-current="page"]) .dy-human-nav-icon {
+  border-color: rgb(var(--horizon-nav-accent-rgb) / .52) !important;
+  background: rgb(var(--horizon-nav-accent-rgb) / .13) !important;
+  color: var(--horizon-nav-accent) !important;
+}
+
+html.dui-pro-overhaul .dy-human-nav :is(button, .dy-human-nav-action, .dy-human-nav-utility):is(.is-active, [aria-current="page"]) .dy-human-nav-icon-img,
+html.dui-pro-overhaul.dui-cohesive-ui .dy-human-nav :is(button, .dy-human-nav-action, .dy-human-nav-utility):is(.is-active, [aria-current="page"]) .dy-human-nav-icon-img {
+  filter: saturate(1.22) brightness(1.18) !important;
+}
+
+html.dui-pro-overhaul .dy-human-nav-copy strong,
+html.dui-pro-overhaul.dui-cohesive-ui .dy-human-nav-copy strong {
+  display: flex !important;
+  align-items: center !important;
+  justify-content: space-between !important;
+  gap: 8px !important;
+}
+
+html.dui-pro-overhaul .dy-human-nav-copy kbd,
+html.dui-pro-overhaul.dui-cohesive-ui .dy-human-nav-copy kbd {
+  display: inline-flex;
+  min-height: 17px;
+  align-items: center;
+  padding: 0 5px;
+  border: 1px solid rgb(255 255 255 / .09);
+  border-radius: 5px;
+  background: rgb(0 0 0 / .17);
+  color: rgb(228 239 235 / .54);
+  font-family: var(--font-mono, ui-monospace, monospace);
+  font-size: var(--dy-type-micro, 11px);
+  font-weight: 600;
+  line-height: 1;
+  opacity: 0;
+  transform: translateX(-3px);
+  transition: opacity 150ms ease, transform 150ms ease;
+}
+
+html.dui-pro-overhaul .dy-human-nav :is(button, .dy-human-nav-action, .dy-human-nav-utility):is(:hover, :focus-visible, .is-active, [aria-current="page"]) .dy-human-nav-copy kbd,
+html.dui-pro-overhaul.dui-cohesive-ui .dy-human-nav :is(button, .dy-human-nav-action, .dy-human-nav-utility):is(:hover, :focus-visible, .is-active, [aria-current="page"]) .dy-human-nav-copy kbd {
+  border-color: rgb(var(--horizon-nav-accent-rgb) / .24);
+  color: rgb(var(--horizon-nav-accent-rgb) / .95);
+  opacity: 1;
+  transform: translateX(0);
+}
+
+/* Workspace hue carries the navigational context into the content header. */
+html.dui-pro-overhaul .dy-workspace-context,
+html.dui-pro-overhaul.dui-cohesive-ui .dy-workspace-context {
+  --horizon-workspace-accent: #aebbb7;
+  --horizon-workspace-rgb: 174 187 183;
+}
+
+html.dui-pro-overhaul .dy-workspace-context[data-workspace="agents"],
+html.dui-pro-overhaul.dui-cohesive-ui .dy-workspace-context[data-workspace="agents"] {
+  --horizon-workspace-accent: #66aee7;
+  --horizon-workspace-rgb: 102 174 231;
+}
+
+html.dui-pro-overhaul .dy-workspace-context[data-workspace="missions"],
+html.dui-pro-overhaul.dui-cohesive-ui .dy-workspace-context[data-workspace="missions"] {
+  --horizon-workspace-accent: #e5b967;
+  --horizon-workspace-rgb: 229 185 103;
+}
+
+html.dui-pro-overhaul .dy-workspace-context[data-workspace="monitor"],
+html.dui-pro-overhaul.dui-cohesive-ui .dy-workspace-context[data-workspace="monitor"] {
+  --horizon-workspace-accent: #60d9cb;
+  --horizon-workspace-rgb: 96 217 203;
+}
+
+html.dui-pro-overhaul .dy-workspace-context[data-workspace="plugins"],
+html.dui-pro-overhaul.dui-cohesive-ui .dy-workspace-context[data-workspace="plugins"] {
+  --horizon-workspace-accent: #ad8ae8;
+  --horizon-workspace-rgb: 173 138 232;
+}
+
+html.dui-pro-overhaul .dy-workspace-context[data-workspace="settings"],
+html.dui-pro-overhaul.dui-cohesive-ui .dy-workspace-context[data-workspace="settings"] {
+  --horizon-workspace-accent: #7ec5ad;
+  --horizon-workspace-rgb: 126 197 173;
+}
+
+html.dui-pro-overhaul .dy-workspace-context,
+html.dui-pro-overhaul.dui-cohesive-ui .dy-workspace-context {
+  background:
+    radial-gradient(circle at 88% 0%, rgb(var(--horizon-workspace-rgb) / .11), transparent 25rem),
+    linear-gradient(110deg, rgb(255 255 255 / .035), rgb(255 255 255 / 0) 48%),
+    rgb(12 15 16 / .92) !important;
+}
+
+html.dui-pro-overhaul .dy-workspace-context__copy::before,
+html.dui-pro-overhaul.dui-cohesive-ui .dy-workspace-context__copy::before {
+  color: var(--horizon-workspace-accent) !important;
+}
+
+html.dui-pro-overhaul .dy-workspace-context h1,
+html.dui-pro-overhaul.dui-cohesive-ui .dy-workspace-context h1 {
+  display: inline-flex;
+  width: fit-content;
+  align-items: center;
+  gap: 10px;
+}
+
+html.dui-pro-overhaul .dy-workspace-context h1::after,
+html.dui-pro-overhaul.dui-cohesive-ui .dy-workspace-context h1::after {
+  content: '';
+  display: inline-block;
+  width: 24px;
+  height: 2px;
+  border-radius: 999px;
+  background: var(--horizon-workspace-accent);
+  box-shadow: 0 0 14px rgb(var(--horizon-workspace-rgb) / .42);
+}
+
+html.dui-pro-overhaul .dy-workspace-context .dy-status-chip,
+html.dui-pro-overhaul.dui-cohesive-ui .dy-workspace-context .dy-status-chip {
+  transition: border-color 150ms ease, background-color 150ms ease, transform 150ms ease !important;
+}
+
+html.dui-pro-overhaul .dy-workspace-context .dy-status-chip:hover,
+html.dui-pro-overhaul.dui-cohesive-ui .dy-workspace-context .dy-status-chip:hover {
+  border-color: rgb(var(--horizon-workspace-rgb) / .38) !important;
+  background: rgb(var(--horizon-workspace-rgb) / .08) !important;
+  transform: translateY(-1px);
+}
+
+/* Field, empty, selection, and skeleton affordances. */
+html.dui-pro-overhaul :is(input, select, textarea)::placeholder,
+html.dui-pro-overhaul.dui-cohesive-ui :is(input, select, textarea)::placeholder {
+  color: #6f7c78 !important;
+  opacity: 1;
+}
+
+html.dui-pro-overhaul :is(input, select, textarea):disabled,
+html.dui-pro-overhaul.dui-cohesive-ui :is(input, select, textarea):disabled {
+  border-color: rgb(221 233 228 / .055) !important;
+  background: rgb(255 255 255 / .015) !important;
+  color: #73817c !important;
+}
+
+html.dui-pro-overhaul :is(input[type="range"], .dy-colored-range),
+html.dui-pro-overhaul.dui-cohesive-ui :is(input[type="range"], .dy-colored-range) {
+  accent-color: var(--horizon-accent);
+}
+
+html.dui-pro-overhaul :is([data-empty="true"], .dy-plugin-empty-state),
+html.dui-pro-overhaul.dui-cohesive-ui :is([data-empty="true"], .dy-plugin-empty-state) {
+  background-image: radial-gradient(rgb(180 210 200 / .08) .7px, transparent .7px) !important;
+  background-size: 12px 12px !important;
+}
+
+html.dui-pro-overhaul :is(.animate-pulse, [data-loading="true"]),
+html.dui-pro-overhaul.dui-cohesive-ui :is(.animate-pulse, [data-loading="true"]) {
+  animation-timing-function: ease-in-out !important;
+}
+
+/* Agent registry, party readiness, and console orientation. */
+html.dui-pro-overhaul [data-dui-panel="active-party"] .active-party-actions .dui-button,
+html.dui-pro-overhaul.dui-cohesive-ui [data-dui-panel="active-party"] .active-party-actions .dui-button {
+  min-height: 34px !important;
+  padding-inline: 11px !important;
+}
+
+html.dui-pro-overhaul .dy-console-toggle,
+html.dui-pro-overhaul.dui-cohesive-ui .dy-console-toggle {
+  gap: 8px !important;
+  min-height: 34px !important;
+  padding: 0 11px !important;
+  border-color: rgb(102 174 231 / .26) !important;
+  background: rgb(102 174 231 / .07) !important;
+  color: #dcefff !important;
+}
+
+html.dui-pro-overhaul .dy-console-toggle:hover:not(:disabled),
+html.dui-pro-overhaul.dui-cohesive-ui .dy-console-toggle:hover:not(:disabled) {
+  border-color: rgb(102 174 231 / .48) !important;
+  background: rgb(102 174 231 / .13) !important;
+}
+
+html.dui-pro-overhaul .dy-console-toggle[aria-pressed="false"],
+html.dui-pro-overhaul.dui-cohesive-ui .dy-console-toggle[aria-pressed="false"] {
+  border-color: rgb(126 197 173 / .26) !important;
+  background: rgb(126 197 173 / .07) !important;
+  color: #dbfff2 !important;
+}
+
+html.dui-pro-overhaul .dy-console-toggle .dui-button__icon,
+html.dui-pro-overhaul.dui-cohesive-ui .dy-console-toggle .dui-button__icon {
+  display: grid !important;
+  width: 17px !important;
+  height: 17px !important;
+  min-width: 17px !important;
+  place-items: center !important;
+  line-height: 0 !important;
+}
+
+html.dui-pro-overhaul .dy-console-toggle__icon,
+html.dui-pro-overhaul.dui-cohesive-ui .dy-console-toggle__icon {
+  display: grid;
+  width: 17px;
+  height: 17px;
+  place-items: center;
+  line-height: 0;
+}
+
+html.dui-pro-overhaul .dy-console-toggle__icon svg,
+html.dui-pro-overhaul.dui-cohesive-ui .dy-console-toggle__icon svg {
+  display: block;
+  width: 17px;
+  height: 17px;
+  overflow: visible;
+}
+
+html.dui-pro-overhaul .dy-console-toggle__label,
+html.dui-pro-overhaul.dui-cohesive-ui .dy-console-toggle__label {
+  display: block;
+  padding-top: 1px;
+  line-height: 1 !important;
+}
+
+html.dui-pro-overhaul [data-slot-card],
+html.dui-pro-overhaul.dui-cohesive-ui [data-slot-card] {
+  overflow: hidden;
+}
+
+html.dui-pro-overhaul [data-slot-card]::after,
+html.dui-pro-overhaul.dui-cohesive-ui [data-slot-card]::after {
+  content: 'SLOT ' attr(data-dy-slot-number);
+  position: absolute;
+  top: 9px;
+  left: 10px;
+  color: #73817c;
+  font-family: var(--font-mono, ui-monospace, monospace);
+  font-size: var(--dy-type-micro, 11px);
+  font-weight: 700;
+  letter-spacing: .08em;
+  pointer-events: none;
+}
+
+html.dui-pro-overhaul [data-slot-card][data-slot-state="occupied"]::after,
+html.dui-pro-overhaul.dui-cohesive-ui [data-slot-card][data-slot-state="occupied"]::after {
+  color: rgb(231 242 237 / .52);
+}
+
+html.dui-pro-overhaul [data-agent-card],
+html.dui-pro-overhaul.dui-cohesive-ui [data-agent-card] {
+  background-position: center;
+}
+
+html.dui-pro-overhaul [data-agent-card][data-agent-in-party="true"],
+html.dui-pro-overhaul.dui-cohesive-ui [data-agent-card][data-agent-in-party="true"] {
+  box-shadow: inset 0 0 0 1px rgb(114 213 194 / .24), 0 18px 32px -28px rgb(0 0 0 / .9) !important;
+}
+
+html.dui-pro-overhaul [data-agent-card][data-agent-running="true"],
+html.dui-pro-overhaul.dui-cohesive-ui [data-agent-card][data-agent-running="true"] {
+  box-shadow: inset 0 0 0 1px rgb(115 212 154 / .32), 0 18px 32px -28px rgb(0 0 0 / .9) !important;
+}
+
+html.dui-pro-overhaul .agent-card-action-primary:hover:not(:disabled),
+html.dui-pro-overhaul.dui-cohesive-ui .agent-card-action-primary:hover:not(:disabled) {
+  border-color: rgb(114 213 194 / .58) !important;
+  background: rgb(114 213 194 / .19) !important;
+}
+
+html.dui-pro-overhaul .agent-card-action-secondary:hover:not(:disabled),
+html.dui-pro-overhaul.dui-cohesive-ui .agent-card-action-secondary:hover:not(:disabled) {
+  border-color: rgb(255 255 255 / .2) !important;
+  background: rgb(255 255 255 / .075) !important;
+}
+
+html.dui-pro-overhaul .agent-registry-pager :is(.agent-registry-pager-btn, .agent-registry-pager-count),
+html.dui-pro-overhaul.dui-cohesive-ui .agent-registry-pager :is(.agent-registry-pager-btn, .agent-registry-pager-count) {
+  border-color: rgb(102 174 231 / .24) !important;
+  border-radius: 8px !important;
+  background: rgb(102 174 231 / .055) !important;
+  color: #dcedff !important;
+}
+
+html.dui-pro-overhaul .dy-agent-split-resizer,
+html.dui-pro-overhaul.dui-cohesive-ui .dy-agent-split-resizer {
+  width: 20px !important;
+  min-width: 20px !important;
+}
+
+html.dui-pro-overhaul .dy-agent-split-resizer > span,
+html.dui-pro-overhaul.dui-cohesive-ui .dy-agent-split-resizer > span {
+  width: 2px !important;
+  border-radius: 999px;
+  background: rgb(220 235 229 / .13) !important;
+}
+
+html.dui-pro-overhaul .dy-agent-split-resizer:is(:hover, :focus-visible) > span,
+html.dui-pro-overhaul.dui-cohesive-ui .dy-agent-split-resizer:is(:hover, :focus-visible) > span {
+  background: #66aee7 !important;
+  box-shadow: 0 0 12px rgb(102 174 231 / .42);
+}
+
+html.dui-pro-overhaul .dy-command-console__mark,
+html.dui-pro-overhaul.dui-cohesive-ui .dy-command-console__mark {
+  border-color: rgb(102 174 231 / .28) !important;
+  border-radius: 9px !important;
+  background: rgb(102 174 231 / .09) !important;
+  color: #86c6f2 !important;
+}
+
+html.dui-pro-overhaul .dy-command-console__stat,
+html.dui-pro-overhaul.dui-cohesive-ui .dy-command-console__stat {
+  border-color: var(--horizon-line-subtle) !important;
+  border-radius: 8px !important;
+  background: rgb(255 255 255 / .025) !important;
+}
+
+html.dui-pro-overhaul .dy-command-target-bar,
+html.dui-pro-overhaul.dui-cohesive-ui .dy-command-target-bar {
+  border-bottom-color: var(--horizon-line-subtle) !important;
+  background: rgb(255 255 255 / .015) !important;
+}
+
+html.dui-pro-overhaul .dy-command-target-chip,
+html.dui-pro-overhaul.dui-cohesive-ui .dy-command-target-chip {
+  min-height: 28px;
+  border-radius: 999px !important;
+  box-shadow: inset 0 1px 0 rgb(255 255 255 / .04);
+}
+
+html.dui-pro-overhaul .dy-command-target-chip.is-selected,
+html.dui-pro-overhaul.dui-cohesive-ui .dy-command-target-chip.is-selected {
+  border-color: rgb(102 174 231 / .28) !important;
+  background: rgb(102 174 231 / .09) !important;
+}
+
+html.dui-pro-overhaul .dy-command-target-chip.is-party,
+html.dui-pro-overhaul.dui-cohesive-ui .dy-command-target-chip.is-party {
+  border-color: rgb(174 187 183 / .20) !important;
+  background: rgb(255 255 255 / .035) !important;
+}
+
+html.dui-pro-overhaul .dy-command-composer__row,
+html.dui-pro-overhaul.dui-cohesive-ui .dy-command-composer__row {
+  border-radius: 12px !important;
+  box-shadow: 0 8px 20px -20px rgb(0 0 0 / .9);
+}
+
+/* Mission planning turns complex decisions into visibly grouped steps. */
+html.dui-pro-overhaul [data-dui-panel="missions"] .dui-mission-stage,
+html.dui-pro-overhaul.dui-cohesive-ui [data-dui-panel="missions"] .dui-mission-stage {
+  gap: 18px !important;
+}
+
+html.dui-pro-overhaul [data-dui-panel="missions"] :is(.dui-template-card--organized, .dui-mission-config-card, .dui-agents-card),
+html.dui-pro-overhaul.dui-cohesive-ui [data-dui-panel="missions"] :is(.dui-template-card--organized, .dui-mission-config-card, .dui-agents-card) {
+  position: relative;
+  overflow: hidden;
+}
+
+html.dui-pro-overhaul [data-dui-panel="missions"] :is(.dui-template-card--organized, .dui-mission-config-card, .dui-agents-card)::before,
+html.dui-pro-overhaul.dui-cohesive-ui [data-dui-panel="missions"] :is(.dui-template-card--organized, .dui-mission-config-card, .dui-agents-card)::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  right: 20px;
+  left: 20px;
+  height: 1px;
+  background: linear-gradient(90deg, transparent, rgb(229 185 103 / .42), transparent);
+  opacity: .8;
+}
+
+html.dui-pro-overhaul [data-dui-panel="missions"] .dui-template-tile,
+html.dui-pro-overhaul.dui-cohesive-ui [data-dui-panel="missions"] .dui-template-tile {
+  min-height: 120px;
+  transition: border-color 160ms ease, background-color 160ms ease, transform 160ms ease !important;
+}
+
+html.dui-pro-overhaul [data-dui-panel="missions"] .dui-template-tile:hover,
+html.dui-pro-overhaul.dui-cohesive-ui [data-dui-panel="missions"] .dui-template-tile:hover {
+  transform: translateY(-2px);
+}
+
+html.dui-pro-overhaul [data-dui-panel="missions"] .dui-template-tile.is-active,
+html.dui-pro-overhaul.dui-cohesive-ui [data-dui-panel="missions"] .dui-template-tile.is-active {
+  box-shadow: inset 0 0 0 1px rgb(229 185 103 / .14), 0 14px 26px -24px rgb(229 185 103 / .68) !important;
+}
+
+html.dui-pro-overhaul [data-dui-panel="missions"] :is(.dui-choice-head, .dui-section-head),
+html.dui-pro-overhaul.dui-cohesive-ui [data-dui-panel="missions"] :is(.dui-choice-head, .dui-section-head) {
+  position: relative;
+}
+
+html.dui-pro-overhaul [data-dui-panel="missions"] .dui-choice-head > div,
+html.dui-pro-overhaul.dui-cohesive-ui [data-dui-panel="missions"] .dui-choice-head > div {
+  display: grid;
+  gap: 3px;
+}
+
+html.dui-pro-overhaul [data-dui-panel="missions"] .dui-option,
+html.dui-pro-overhaul.dui-cohesive-ui [data-dui-panel="missions"] .dui-option {
+  min-height: 74px;
+  transition: border-color 150ms ease, background-color 150ms ease, transform 150ms ease !important;
+}
+
+html.dui-pro-overhaul [data-dui-panel="missions"] .dui-option:hover,
+html.dui-pro-overhaul.dui-cohesive-ui [data-dui-panel="missions"] .dui-option:hover {
+  transform: translateY(-1px);
+}
+
+html.dui-pro-overhaul [data-dui-panel="missions"] .dui-active-mission-strip,
+html.dui-pro-overhaul.dui-cohesive-ui [data-dui-panel="missions"] .dui-active-mission-strip {
+  border-color: rgb(115 212 154 / .25) !important;
+  border-radius: 11px !important;
+  background: linear-gradient(90deg, rgb(115 212 154 / .10), transparent) !important;
+}
+
+html.dui-pro-overhaul [data-dui-panel="missions"] .dui-inline-note,
+html.dui-pro-overhaul.dui-cohesive-ui [data-dui-panel="missions"] .dui-inline-note {
+  border-left: 2px solid rgb(229 185 103 / .72) !important;
+  border-radius: 0 8px 8px 0 !important;
+  background: rgb(229 185 103 / .06) !important;
+}
+
+html.dui-pro-overhaul [data-dui-panel="missions"] .dui-agent-row,
+html.dui-pro-overhaul.dui-cohesive-ui [data-dui-panel="missions"] .dui-agent-row {
+  transition: border-color 150ms ease, background-color 150ms ease, transform 150ms ease !important;
+}
+
+html.dui-pro-overhaul [data-dui-panel="missions"] .dui-agent-row:hover,
+html.dui-pro-overhaul.dui-cohesive-ui [data-dui-panel="missions"] .dui-agent-row:hover {
+  transform: translateX(2px);
+}
+
+html.dui-pro-overhaul [data-dui-panel="missions"] .dui-readiness-mini-checks i,
+html.dui-pro-overhaul.dui-cohesive-ui [data-dui-panel="missions"] .dui-readiness-mini-checks i {
+  border-radius: 999px !important;
+}
+
+/* Monitor: dense evidence remains scannable through clear local hierarchy. */
+html.dui-pro-overhaul [data-dui-panel="monitor"] :is([role="alert"], [role="status"]),
+html.dui-pro-overhaul.dui-cohesive-ui [data-dui-panel="monitor"] :is([role="alert"], [role="status"]) {
+  border-radius: 12px;
+}
+
+html.dui-pro-overhaul [data-dui-panel="monitor"] .dy-monitor-tool-button,
+html.dui-pro-overhaul.dui-cohesive-ui [data-dui-panel="monitor"] .dy-monitor-tool-button {
+  min-height: 34px !important;
+  padding-inline: 11px !important;
+}
+
+html.dui-pro-overhaul [data-dui-panel="monitor"] .dy-monitor-tool-button:hover:not(:disabled),
+html.dui-pro-overhaul.dui-cohesive-ui [data-dui-panel="monitor"] .dy-monitor-tool-button:hover:not(:disabled) {
+  border-color: rgb(96 217 203 / .38) !important;
+  background: rgb(96 217 203 / .09) !important;
+  color: #e4fffa !important;
+}
+
+html.dui-pro-overhaul [data-dui-panel="monitor"] .dy-cron-job-card,
+html.dui-pro-overhaul.dui-cohesive-ui [data-dui-panel="monitor"] .dy-cron-job-card {
+  border-left: 2px solid rgb(96 217 203 / .55) !important;
+}
+
+html.dui-pro-overhaul [data-dui-panel="monitor"] .dy-cron-job-card:hover,
+html.dui-pro-overhaul.dui-cohesive-ui [data-dui-panel="monitor"] .dy-cron-job-card:hover {
+  background: rgb(96 217 203 / .045) !important;
+}
+
+html.dui-pro-overhaul [data-dui-panel="monitor"] .dy-session-meta-chip,
+html.dui-pro-overhaul.dui-cohesive-ui [data-dui-panel="monitor"] .dy-session-meta-chip {
+  padding: 7px 8px !important;
+}
+
+html.dui-pro-overhaul [data-dui-panel="monitor"] .dy-doctor-finding,
+html.dui-pro-overhaul.dui-cohesive-ui [data-dui-panel="monitor"] .dy-doctor-finding {
+  border-radius: 0 8px 8px 0;
+  background: rgb(255 255 255 / .018);
+}
+
+html.dui-pro-overhaul [data-dui-panel="monitor"] .dy-activity-rail,
+html.dui-pro-overhaul.dui-cohesive-ui [data-dui-panel="monitor"] .dy-activity-rail {
+  background: #60d9cb !important;
+  box-shadow: 0 0 12px rgb(96 217 203 / .44);
+}
+
+/* Plugins: make operational state legible before users need to open a row. */
+html.dui-pro-overhaul [data-dui-panel="plugins"] [data-plugin-state],
+html.dui-pro-overhaul.dui-cohesive-ui [data-dui-panel="plugins"] [data-plugin-state] {
+  border-radius: 10px;
+}
+
+html.dui-pro-overhaul [data-dui-panel="plugins"] [data-plugin-state="enabled"],
+html.dui-pro-overhaul.dui-cohesive-ui [data-dui-panel="plugins"] [data-plugin-state="enabled"] {
+  border-left: 2px solid rgb(115 212 154 / .66) !important;
+}
+
+html.dui-pro-overhaul [data-dui-panel="plugins"] [data-plugin-state="missing-auth"],
+html.dui-pro-overhaul.dui-cohesive-ui [data-dui-panel="plugins"] [data-plugin-state="missing-auth"] {
+  border-left: 2px solid rgb(225 185 111 / .72) !important;
+}
+
+html.dui-pro-overhaul [data-dui-panel="plugins"] [data-plugin-state="failed"],
+html.dui-pro-overhaul.dui-cohesive-ui [data-dui-panel="plugins"] [data-plugin-state="failed"] {
+  border-left: 2px solid rgb(240 141 145 / .72) !important;
+}
+
+html.dui-pro-overhaul [data-dui-panel="plugins"] .dy-plugin-summary-chip[data-tone="configured"],
+html.dui-pro-overhaul.dui-cohesive-ui [data-dui-panel="plugins"] .dy-plugin-summary-chip[data-tone="configured"] {
+  border-color: rgb(173 138 232 / .34) !important;
+  background: rgb(173 138 232 / .11) !important;
+  color: #f0e9ff !important;
+}
+
+html.dui-pro-overhaul [data-dui-panel="plugins"] .dy-plugin-summary-chip[data-tone="browser-on"],
+html.dui-pro-overhaul.dui-cohesive-ui [data-dui-panel="plugins"] .dy-plugin-summary-chip[data-tone="browser-on"] {
+  border-color: rgb(102 174 231 / .34) !important;
+  background: rgb(102 174 231 / .10) !important;
+  color: #e5f4ff !important;
+}
+
+html.dui-pro-overhaul [data-dui-panel="plugins"] button:hover:not(:disabled),
+html.dui-pro-overhaul.dui-cohesive-ui [data-dui-panel="plugins"] button:hover:not(:disabled) {
+  transition-timing-function: cubic-bezier(.2, .8, .2, 1) !important;
+}
+
+/* Settings: distinguish safe tuning from maintenance actions without noise. */
+html.dui-pro-overhaul .dui-settings-card:nth-child(1),
+html.dui-pro-overhaul.dui-cohesive-ui .dui-settings-card:nth-child(1) {
+  --horizon-settings-accent: 126 197 173;
+}
+
+html.dui-pro-overhaul .dui-settings-card:nth-child(2),
+html.dui-pro-overhaul.dui-cohesive-ui .dui-settings-card:nth-child(2) {
+  --horizon-settings-accent: 229 185 103;
+}
+
+html.dui-pro-overhaul .dui-settings-card:nth-child(3),
+html.dui-pro-overhaul.dui-cohesive-ui .dui-settings-card:nth-child(3) {
+  --horizon-settings-accent: 96 217 203;
+}
+
+html.dui-pro-overhaul .dui-settings-card:nth-child(4),
+html.dui-pro-overhaul.dui-cohesive-ui .dui-settings-card:nth-child(4) {
+  --horizon-settings-accent: 240 141 145;
+}
+
+html.dui-pro-overhaul .dui-settings-card,
+html.dui-pro-overhaul.dui-cohesive-ui .dui-settings-card {
+  border-top-color: rgb(var(--horizon-settings-accent) / .28) !important;
+}
+
+html.dui-pro-overhaul .dui-settings-toggle,
+html.dui-pro-overhaul.dui-cohesive-ui .dui-settings-toggle {
+  padding: 10px 11px;
+  border: 1px solid var(--horizon-line-subtle);
+  border-radius: 10px;
+  background: rgb(255 255 255 / .015);
+}
+
+html.dui-pro-overhaul .dui-settings-toggle:hover,
+html.dui-pro-overhaul.dui-cohesive-ui .dui-settings-toggle:hover {
+  border-color: rgb(var(--horizon-settings-accent) / .25);
+  background: rgb(var(--horizon-settings-accent) / .045);
+}
+
+html.dui-pro-overhaul .dui-settings-metrics > div,
+html.dui-pro-overhaul.dui-cohesive-ui .dui-settings-metrics > div {
+  transition: transform 150ms ease, border-color 150ms ease;
+}
+
+html.dui-pro-overhaul .dui-settings-metrics > div:hover,
+html.dui-pro-overhaul.dui-cohesive-ui .dui-settings-metrics > div:hover {
+  border-color: rgb(var(--horizon-settings-accent) / .34) !important;
+  transform: translateY(-1px);
+}
+
+/* Recruit and editor: reduce visual fatigue in lengthy configuration flows. */
+html.dui-pro-overhaul .dui-recruit-body,
+html.dui-pro-overhaul.dui-cohesive-ui .dui-recruit-body,
+html.dui-pro-overhaul [data-editor-body],
+html.dui-pro-overhaul.dui-cohesive-ui [data-editor-body] {
+  scrollbar-gutter: stable;
+}
+
+html.dui-pro-overhaul .dui-recruit-section-primary,
+html.dui-pro-overhaul.dui-cohesive-ui .dui-recruit-section-primary {
+  border-color: rgb(241 125 114 / .18) !important;
+  background: linear-gradient(150deg, rgb(241 125 114 / .055), transparent 38%), rgb(255 255 255 / .017) !important;
+}
+
+html.dui-pro-overhaul .dui-recruit-template-panel,
+html.dui-pro-overhaul.dui-cohesive-ui .dui-recruit-template-panel {
+  border-color: var(--horizon-line-subtle) !important;
+  border-radius: 12px !important;
+  background: rgb(0 0 0 / .14) !important;
+}
+
+html.dui-pro-overhaul .dui-recruit-category-chips button,
+html.dui-pro-overhaul.dui-cohesive-ui .dui-recruit-category-chips button {
+  border-radius: 999px !important;
+}
+
+html.dui-pro-overhaul .dui-recruit-category-chips button[data-active="true"],
+html.dui-pro-overhaul.dui-cohesive-ui .dui-recruit-category-chips button[data-active="true"] {
+  border-color: rgb(241 125 114 / .36) !important;
+  background: rgb(241 125 114 / .12) !important;
+  color: #ffe9e7 !important;
+}
+
+html.dui-pro-overhaul [data-editor-card],
+html.dui-pro-overhaul.dui-cohesive-ui [data-editor-card] {
+  border-radius: 12px !important;
+}
+
+html.dui-pro-overhaul [data-editor-action="done"],
+html.dui-pro-overhaul.dui-cohesive-ui [data-editor-action="done"] {
+  border-color: rgb(126 197 173 / .30) !important;
+  background: rgb(126 197 173 / .08) !important;
+  color: #dbfff2 !important;
+}
+
+/* Responsive refinement keeps the color vocabulary useful, never crowded. */
+@media (max-width: 900px) {
+  html.dui-pro-overhaul .dy-human-nav-copy kbd,
+  html.dui-pro-overhaul.dui-cohesive-ui .dy-human-nav-copy kbd {
+    display: none;
+  }
+
+  html.dui-pro-overhaul .dy-workspace-context h1::after,
+  html.dui-pro-overhaul.dui-cohesive-ui .dy-workspace-context h1::after {
+    width: 18px;
+  }
+
+  html.dui-pro-overhaul .dy-console-toggle,
+  html.dui-pro-overhaul.dui-cohesive-ui .dy-console-toggle {
+    min-height: 36px !important;
+  }
+
+  html.dui-pro-overhaul [data-dui-panel="monitor"] .dy-monitor-tab-list .dui-button,
+  html.dui-pro-overhaul.dui-cohesive-ui [data-dui-panel="monitor"] .dy-monitor-tab-list .dui-button {
+    min-height: 38px !important;
+  }
+}
+
+@media (max-width: 520px) {
+  html.dui-pro-overhaul .dy-workspace-context h1,
+  html.dui-pro-overhaul.dui-cohesive-ui .dy-workspace-context h1 {
+    gap: 7px;
+  }
+
+  html.dui-pro-overhaul .dy-status-chip,
+  html.dui-pro-overhaul.dui-cohesive-ui .dy-status-chip {
+    min-height: 31px !important;
+  }
+
+  html.dui-pro-overhaul [data-slot-card]::after,
+  html.dui-pro-overhaul.dui-cohesive-ui [data-slot-card]::after {
+    top: 7px;
+    left: 8px;
+  }
+
+  html.dui-pro-overhaul [data-dui-panel="missions"] .dui-template-tile,
+  html.dui-pro-overhaul.dui-cohesive-ui [data-dui-panel="missions"] .dui-template-tile {
+    min-height: 105px;
+  }
+}
+
+@media (prefers-contrast: more) {
+  html.dui-pro-overhaul .dy-human-nav :is(button, .dy-human-nav-action, .dy-human-nav-utility):is(.is-active, [aria-current="page"]),
+  html.dui-pro-overhaul.dui-cohesive-ui .dy-human-nav :is(button, .dy-human-nav-action, .dy-human-nav-utility):is(.is-active, [aria-current="page"]) {
+    border-width: 2px !important;
+    background: rgb(var(--horizon-nav-accent-rgb) / .22) !important;
+  }
+
+  html.dui-pro-overhaul .dy-workspace-context,
+  html.dui-pro-overhaul.dui-cohesive-ui .dy-workspace-context {
+    border-bottom-color: rgb(240 248 245 / .30) !important;
+  }
+}

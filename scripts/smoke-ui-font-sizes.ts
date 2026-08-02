@@ -17,17 +17,19 @@ const monitorTypographySources: [string, string][] = [
 const typographyImport = "@import './styles/typography.css';"
 const foundationImport = "@import './styles/dystopai-theme/00-foundation.css';"
 const finalTypographyImport = "@import './styles/dystopai-theme/95-typography-polish.css';"
+const horizonCommandCenterImport = "@import './styles/dystopai-theme/99-horizon-command-center.css';"
 
 assert.ok(theme.includes(typographyImport), 'theme should import typography tokens')
 assert.ok(theme.includes(foundationImport), 'theme should import legacy foundation after typography tokens')
 assert.ok(theme.includes(finalTypographyImport), 'theme should import final typography compatibility layer')
+assert.ok(theme.includes(horizonCommandCenterImport), 'theme should import the final Horizon Command Center visual layer')
 assert.ok(
   theme.indexOf(typographyImport) < theme.indexOf(foundationImport),
   'typography tokens must load before legacy theme files',
 )
 assert.ok(
-  theme.trimEnd().endsWith(finalTypographyImport),
-  'typography compatibility layer must remain last in the theme cascade',
+  theme.indexOf(finalTypographyImport) < theme.indexOf(horizonCommandCenterImport),
+  'typography compatibility layer must load before the final Horizon Command Center visual layer',
 )
 
 function readPxVariable(source: string, name: string): number {

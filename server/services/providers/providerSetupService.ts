@@ -134,7 +134,7 @@ export type ProviderSetupServiceOptions = {
   now?: () => number
   openClawBin?: string
   openClawStateRoot: string
-  persistProviderOAuth: (provider: 'google' | 'openai-codex', oauth: LocalOAuthCredential) => Promise<unknown>
+  persistProviderOAuth: (provider: 'google' | 'openai', oauth: LocalOAuthCredential) => Promise<unknown>
   platform?: NodeJS.Platform
   processEnv?: NodeJS.ProcessEnv
   readFileSync?: (filePath: string, encoding: BufferEncoding) => string
@@ -532,7 +532,7 @@ export function createProviderSetupService(options: ProviderSetupServiceOptions)
   }
 
   async function resolveOpenAICodexOAuthForRequest(): Promise<{ accessToken: string } | null> {
-    const stored = options.getLocalProviderOAuth('openai-codex') || options.localOAuthFromMainAuthProfile('openai-codex') || undefined
+    const stored = options.getLocalProviderOAuth('openai') || options.localOAuthFromMainAuthProfile('openai') || undefined
     if (!isOAuthCredentialUsable(stored)) return null
 
     const accessToken = stored.accessToken?.trim()
@@ -542,8 +542,8 @@ export function createProviderSetupService(options: ProviderSetupServiceOptions)
     }
 
     const refreshed = await options.refreshOpenAICodexOAuthCredential(stored)
-    await options.persistProviderOAuth('openai-codex', refreshed)
-    const next = options.getLocalProviderOAuth('openai-codex') || refreshed
+    await options.persistProviderOAuth('openai', refreshed)
+    const next = options.getLocalProviderOAuth('openai') || refreshed
     const nextAccessToken = next.accessToken?.trim() || refreshed.accessToken?.trim()
     return nextAccessToken ? { accessToken: nextAccessToken } : null
   }
@@ -580,10 +580,9 @@ export function createProviderSetupService(options: ProviderSetupServiceOptions)
       }
     }
 
-    if (provider === 'openai-codex') {
+    if (provider === 'openai' && localMode === 'oauth') {
       const oauth = await resolveOpenAICodexOAuthForRequest().catch(() => null)
       if (oauth?.accessToken) return { type: 'oauth', accessToken: oauth.accessToken, source: 'local-oauth' }
-      return null
     }
 
     const apiKey = resolveEnvValue(env, envKeys)
@@ -594,6 +593,11 @@ export function createProviderSetupService(options: ProviderSetupServiceOptions)
       if (oauth?.accessToken) {
         return { type: 'oauth', accessToken: oauth.accessToken, ...(oauth.projectId ? { projectId: oauth.projectId } : {}), source: 'local-oauth' }
       }
+    }
+
+    if (provider === 'openai' && localMode !== 'apiKey') {
+      const oauth = await resolveOpenAICodexOAuthForRequest().catch(() => null)
+      if (oauth?.accessToken) return { type: 'oauth', accessToken: oauth.accessToken, source: 'local-oauth' }
     }
 
     return null

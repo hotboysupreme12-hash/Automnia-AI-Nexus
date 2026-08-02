@@ -107,7 +107,7 @@ export function registerAgentConfigRoutes(app: Express, options: AgentConfigRout
         .optional(),
       runtime: z
         .object({
-          thinkingDefault: z.enum(['off', 'minimal', 'low', 'medium', 'high']).optional(),
+          thinkingDefault: z.enum(['off', 'minimal', 'low', 'medium', 'high', 'xhigh', 'max']).optional(),
           timeoutSeconds: z.number().int().min(30).max(86400).optional(),
           parallelPreferred: z.boolean().optional(),
           fastModeDefault: z.enum(['auto', 'on', 'off']).optional(),

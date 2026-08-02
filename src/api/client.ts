@@ -195,5 +195,8 @@ export async function apiRequest<T = unknown>(path: string, options: ApiRequestO
 }
 
 export function apiErrorMessage(error: ApiErrorEnvelope): string {
+  if (error.code === 'auth_required') {
+    return 'The local runtime session needs to reconnect. Keep Automnia open and try again, or restart the desktop app.'
+  }
   return error.detail ? `${error.message}: ${error.detail}` : error.message
 }

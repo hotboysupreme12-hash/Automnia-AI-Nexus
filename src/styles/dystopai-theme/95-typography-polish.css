@@ -701,7 +701,7 @@ html.dui-pro-overhaul.dui-cohesive-ui .dy-workspace-context__meta .dy-status-val
 
 html.dui-pro-overhaul .dy-workspace-context__meta .dy-status-label,
 html.dui-pro-overhaul.dui-cohesive-ui .dy-workspace-context__meta .dy-status-label {
-  font-size: 9px !important;
+  font-size: var(--dy-type-micro) !important;
   line-height: 1 !important;
   letter-spacing: 0 !important;
 }

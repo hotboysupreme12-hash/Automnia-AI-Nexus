@@ -8,7 +8,7 @@ export type Shift = {
   durationMinutes: number
   message: string
   model?: string
-  thinking?: 'off' | 'minimal' | 'low' | 'medium' | 'high'
+  thinking?: 'off' | 'minimal' | 'low' | 'medium' | 'high' | 'xhigh' | 'max'
   timeoutSeconds?: number
   wake?: 'now' | 'next-heartbeat'
   session?: 'main' | 'isolated'
@@ -31,7 +31,7 @@ export type RuntimeCronJobSummary = Omit<Shift, 'endsAt'> & {
 
 export type HeartbeatRuntimeDefaults = {
   model: string
-  thinking: 'off' | 'minimal' | 'low' | 'medium' | 'high'
+  thinking: 'off' | 'minimal' | 'low' | 'medium' | 'high' | 'xhigh' | 'max'
   timeoutSeconds: number
   wake: 'now' | 'next-heartbeat'
   session: 'main' | 'isolated'
@@ -48,7 +48,7 @@ export type StartShiftPayload = {
   durationUnit?: 'minutes' | 'hours' | 'days' | 'weeks'
   message: string
   model?: string
-  thinking?: 'off' | 'minimal' | 'low' | 'medium' | 'high'
+  thinking?: 'off' | 'minimal' | 'low' | 'medium' | 'high' | 'xhigh' | 'max'
   timeoutSeconds?: number
   wake?: 'now' | 'next-heartbeat'
   session?: 'main' | 'isolated'

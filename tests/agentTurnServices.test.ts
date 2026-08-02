@@ -5,6 +5,7 @@ import { createAgentRuntimeService } from '../server/services/agents/agentRuntim
 import { createAgentStreamingService } from '../server/services/agents/agentStreamingService'
 import { createBufferedAgentTurnService } from '../server/services/agents/agentTurnService'
 import { createGatewayAgentTurnService } from '../server/services/agents/gatewayAgentTurnService'
+import type { ProviderRequestAuth } from '../server/services/providers/providerSetupService'
 
 function createAbortSignal() {
   return new AbortController().signal
@@ -391,6 +392,141 @@ test('agent streaming service streams direct provider turns and persists convers
   assert.equal((result.streaming as Record<string, unknown>).conversationMessages, 2)
   assert.equal(events.some((entry) => entry.event === 'start' && entry.data.transport === 'openai-compatible'), true)
   assert.equal(memories.some((entry) => entry.includes('completed streaming')), true)
+})
+
+test('agent streaming service dispatches Gemini 3.6 Flash through both native Google transports', async () => {
+  const providerCases: Array<{
+    modelId: string
+    provider: 'google' | 'google-vertex'
+    kind: 'gemini-generate-content' | 'gemini-vertex-generate-content'
+    auth: ProviderRequestAuth
+  }> = [
+    {
+      modelId: 'google/gemini-3.6-flash',
+      provider: 'google',
+      kind: 'gemini-generate-content',
+      auth: { type: 'apiKey', value: 'gemini-test-key', source: 'test' },
+    },
+    {
+      modelId: 'google-vertex/gemini-3.6-flash',
+      provider: 'google-vertex',
+      kind: 'gemini-vertex-generate-content',
+      auth: {
+        type: 'oauth',
+        accessToken: 'vertex-test-token',
+        projectId: 'test-project',
+        location: 'global',
+        source: 'test',
+      },
+    },
+  ]
+
+  for (const providerCase of providerCases) {
+    const events: Array<{ event: string; data: Record<string, unknown> }> = []
+    const nativeCalls: string[] = []
+    const service = createAgentStreamingService({
+      streamingProviderConfig: {
+        google: {
+          kind: 'gemini-generate-content',
+          envKeys: ['GEMINI_API_KEY', 'GOOGLE_API_KEY'],
+          docs: 'https://ai.google.dev/gemini-api/docs/models/gemini-3.6-flash',
+        },
+        'google-vertex': {
+          kind: 'gemini-vertex-generate-content',
+          envKeys: ['GOOGLE_VERTEX_ACCESS_TOKEN'],
+          docs: 'https://docs.cloud.google.com/gemini-enterprise-agent-platform/models/gemini/3-6-flash',
+        },
+      },
+      isValidAgentId: (agentId) => agentId === 'agent-alpha',
+      isRetiredAgentId: () => false,
+      parseAgentRuntimeShortcut: () => null,
+      agentRuntimeShortcutReason: () => ({ code: 'runtime-shortcut', message: 'shortcut' }),
+      bufferedAgentRuntimeReason: () => null,
+      runBufferedAgentTurnForStream: async () => {
+        throw new Error('Gemini 3.6 should use its native direct streaming transport')
+      },
+      resolveAgentPrimaryModelId: async () => providerCase.modelId,
+      openAiCodexEmbeddedRuntimeReason: () => null,
+      googleGeminiEmbeddedRuntimeReason: () => null,
+      splitModelId: (modelId) => {
+        const [provider, ...rest] = modelId.split('/')
+        return { provider, model: rest.join('/') }
+      },
+      isOpenAiCodexSubscriptionModel: () => false,
+      getAgentAuthEnv: async () => ({}),
+      resolveOpenAiSubscriptionRequestAuth: async () => {
+        throw new Error('not used')
+      },
+      resolveProviderRequestAuth: async (provider) => {
+        assert.equal(provider, providerCase.provider)
+        return providerCase.auth
+      },
+      streamingCapabilityForModel: (modelId) => ({
+        supported: true,
+        provider: modelId.split('/')[0],
+        transport: providerCase.kind,
+      }),
+      resolveAgentRunContext: async () => ({
+        executionWorkspace: 'C:/workspace',
+        doctrineWorkspace: 'C:/workspace/.openclaw/agents/agent-alpha',
+      }),
+      agentTurnSessionScope: (agentId, key) => `${agentId}:${key || 'default'}`,
+      agentTurnSessions: new Map<string, string>(),
+      deleteProviderConversationHistory: () => undefined,
+      resolveFilenameHintsForMessage: async (message) => ({ message, notes: [] }),
+      getPartyMembers: async () => [{ id: 'agent-alpha', name: 'Ada' }],
+      composeDirectProviderPrompt: (_agentId, message) => message,
+      providerConversationMessagesForRequest: (_sessionId, _provider, _modelId, userContent) => [
+        { role: 'user', content: userContent },
+      ],
+      streamOpenAiCompatibleCompletion: async () => {
+        throw new Error('not used')
+      },
+      streamOpenAiResponsesCompletion: async () => {
+        throw new Error('not used')
+      },
+      streamOpenAICodexResponsesCompletion: async () => {
+        throw new Error('not used')
+      },
+      streamAnthropicMessage: async () => {
+        throw new Error('not used')
+      },
+      streamGoogleVertexContent: async (params) => {
+        nativeCalls.push('vertex')
+        assert.equal(params.model, 'gemini-3.6-flash')
+        assert.equal(params.auth.type, 'oauth')
+        return { content: 'OK' }
+      },
+      streamGeminiContent: async (params) => {
+        nativeCalls.push('google')
+        assert.equal(params.model, 'gemini-3.6-flash')
+        assert.equal(params.auth.type, 'apiKey')
+        return { content: 'OK' }
+      },
+      classifyFailureKind: () => undefined,
+      redactHiddenReasoningAndSecrets: (value) => value,
+      appendAgentDailyMemory: async () => undefined,
+      trimTask: (value, maxChars) => value.slice(0, maxChars),
+      cleanupDoctrineMirrorsAfterRun: async () => undefined,
+      sanitizeUserVisibleRuntimeText: (value) => value,
+      saveProviderConversationTurn: () => undefined,
+      buildDoctrineSyncReport: async () => ({ ok: true }),
+      agentRuntimeContextPayload: (_agentId, context) => ({ workspace: context.executionWorkspace }),
+      providerConversationMessageCount: () => 0,
+    })
+
+    const result = await service.streamProviderAgentTurn({
+      agent: 'agent-alpha',
+      message: 'Reply with exactly OK.',
+      thinking: 'minimal',
+      sessionKey: 'gemini-3-6-smoke',
+    }, (event, data) => events.push({ event, data }), createAbortSignal())
+
+    assert.equal(result.ok, true)
+    assert.equal(result.reply, 'OK')
+    assert.deepEqual(nativeCalls, [providerCase.provider === 'google' ? 'google' : 'vertex'])
+    assert.equal(events.some((entry) => entry.event === 'start' && entry.data.transport === providerCase.kind), true)
+  }
 })
 
 test('agent streaming service returns redacted direct provider failures', async () => {

@@ -7,7 +7,9 @@ export type GoogleOAuthClientConfig = {
   clientSecret?: string
 }
 
-export type OAuthProvider = 'google' | 'openai-codex'
+// OpenClaw uses one canonical provider key, "openai", for API keys and
+// ChatGPT/Codex subscription OAuth. "openai-codex" is a repaired legacy key.
+export type OAuthProvider = 'google' | 'openai'
 export type OAuthSessionStatus = 'pending' | 'complete' | 'error'
 
 export type ProviderOAuthSession = {
@@ -573,7 +575,7 @@ export function createOAuthCallbackService(options: OAuthCallbackServiceOptions)
         scope: options.openAiCodexOAuthScopes,
         ...(accountId ? { accountId } : {}),
       }
-      await options.persistProviderOAuth('openai-codex', credential)
+      await options.persistProviderOAuth('openai', credential)
       session.status = 'complete'
       session.manualInputRequired = false
       session.completedAt = completeAt()
@@ -608,7 +610,7 @@ export function createOAuthCallbackService(options: OAuthCallbackServiceOptions)
           const code = requestUrl.searchParams.get('code') || ''
           const error = requestUrl.searchParams.get('error') || ''
           const session = Array.from(oauthSessions.values()).find(
-            (entry) => entry.provider === 'openai-codex' && entry.state === state,
+            (entry) => entry.provider === 'openai' && entry.state === state,
           )
           if (!session) {
             res.writeHead(400, { 'Content-Type': 'text/html; charset=utf-8' })
@@ -626,7 +628,7 @@ export function createOAuthCallbackService(options: OAuthCallbackServiceOptions)
           const message = safeErrorText(err, redactSensitiveText)
           const state = new URL(req.url || '/', options.openAiCodexOAuthRedirectUri).searchParams.get('state') || ''
           const session = Array.from(oauthSessions.values()).find(
-            (entry) => entry.provider === 'openai-codex' && entry.state === state,
+            (entry) => entry.provider === 'openai' && entry.state === state,
           )
           if (session) failSession(session, message)
           res.writeHead(500, { 'Content-Type': 'text/html; charset=utf-8' })
@@ -662,7 +664,7 @@ export function createOAuthCallbackService(options: OAuthCallbackServiceOptions)
     const flow = await options.createOpenAICodexAuthorizationFlow('dystopai')
     const session: ProviderOAuthSession = {
       id,
-      provider: 'openai-codex',
+      provider: 'openai',
       state: flow.state,
       verifier: flow.verifier,
       redirectUri: flow.redirectUri,

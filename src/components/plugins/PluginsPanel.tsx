@@ -212,23 +212,25 @@ function ClawTalkOperationsCard({ plugin }: { plugin: PluginEntry }) {
   ]
 
   return (
-    <div className="md:col-span-4 rounded-md border border-cyan-300/10 bg-cyan-300/[0.025] px-3 py-2">
-      <div className="flex flex-wrap items-center gap-2">
-        <span className="text-[9px] font-semibold uppercase tracking-[0.10em] text-cyan-200/80">ClawTalk Ops</span>
-        {statusItems.map((item) => (
-          <Badge
-            key={item.label}
-            data-tone={item.tone}
-            tone={pluginStateTone(item.tone)}
-            size="micro"
-            className="rounded-md border border-white/[0.07] bg-black/20 px-2 py-1 text-[9px] font-semibold uppercase text-slate-300 data-[tone=success]:border-emerald-300/20 data-[tone=success]:text-emerald-200 data-[tone=warn]:border-amber-300/20 data-[tone=warn]:text-amber-200"
-            title={`${item.label}: ${item.value}`}
-          >
-            {item.label} {item.value}
-          </Badge>
-        ))}
+    <section className="dy-plugin-clawtalk-ops" data-clawtalk-ops="inline" aria-label="ClawTalk runtime overview">
+      <div className="dy-plugin-clawtalk-ops__head">
+        <span className="dy-plugin-clawtalk-ops__icon" aria-hidden="true">
+          <svg viewBox="0 0 24 24"><path d="M7 7.5a7 7 0 0 1 10.4 8.9L20 19l-2.6.1a7 7 0 0 1-10.4-8.9L4 8l3-.1Z" /><path d="M8.5 12h.01M12 12h.01M15.5 12h.01" /></svg>
+        </span>
+        <div>
+          <strong>ClawTalk runtime</strong>
+          <span>Connection readiness and delivery health</span>
+        </div>
       </div>
-    </div>
+      <dl className="dy-plugin-clawtalk-ops__grid">
+        {statusItems.map((item) => (
+          <div key={item.label} data-tone={item.tone} title={`${item.label}: ${item.value}`}>
+            <dt>{item.label}</dt>
+            <dd><i aria-hidden="true" />{item.value}</dd>
+          </div>
+        ))}
+      </dl>
+    </section>
   )
 }
 
@@ -289,6 +291,7 @@ function PluginRow({
           </div>
           <p className="mt-1 truncate text-[11px] text-slate-500">{plugin.id} / {plugin.origin}</p>
           <p className="mt-1 line-clamp-1 text-[12px] text-slate-400">{plugin.description}</p>
+          {plugin.id === 'clawtalk' && <ClawTalkOperationsCard plugin={plugin} />}
         </div>
       </div>
 
@@ -360,8 +363,6 @@ function PluginRow({
           Manage
         </Button>
       </div>
-
-      {plugin.id === 'clawtalk' && <ClawTalkOperationsCard plugin={plugin} />}
 
       {expanded && (
         <div className="md:col-span-4">

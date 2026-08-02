@@ -119,6 +119,24 @@ export function preserveCommandConsoleResponseState(current: NexusCommandConsole
   }
 }
 
+/** Update one response while retaining an agent's busy indicator for its other live lanes. */
+export function upsertCommandConsoleResponse(
+  current: NexusCommandConsoleResponseState,
+  next: AgentResponse,
+): NexusCommandConsoleResponseState {
+  const alreadyTracked = current.agentResponses.some((entry) => entry.id === next.id)
+  const agentResponses = alreadyTracked
+    ? current.agentResponses.map((entry) => (entry.id === next.id ? next : entry))
+    : [next, ...current.agentResponses].slice(0, MAX_COMMAND_CONSOLE_RESPONSES)
+  const agentStillStreaming = agentResponses.some((entry) => entry.agentId === next.agentId && entry.streaming)
+  return {
+    agentResponses,
+    busyAgentIds: agentStillStreaming
+      ? [...new Set([...current.busyAgentIds, next.agentId])]
+      : current.busyAgentIds.filter((agentId) => agentId !== next.agentId),
+  }
+}
+
 export function commandConsoleSessionKey(agentId: string): string {
   return `agent:${agentId}:control-center:console`
 }

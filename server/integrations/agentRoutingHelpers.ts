@@ -7,7 +7,7 @@
  */
 
 export const CLAWTALK_CORE_BRIDGE_ROUTING_HELPER = String.raw`
-var CLAWTALK_ROUTING_PATCH_VERSION = 11;
+var CLAWTALK_ROUTING_PATCH_VERSION = 12;
 function resolveClawTalkStateRoot() {
     var root = process.env.OPENCLAW_STATE_ROOT || process.env.OPENCLAW_STATE_DIR || process.env.OPENCLAW_HOME || '';
     if (!root) {
@@ -32,9 +32,22 @@ function addClawTalkAgentAlias(aliases, seen, display, agentId) {
     var key = normalizeClawTalkAgentAlias(text);
     if (!key || !agentId) return;
     if (seen.has(key)) {
+        var alreadyPresent = false;
+        var ambiguous = false;
         for(var i = 0; i < aliases.length; i++){
-            if (aliases[i].key === key && aliases[i].agentId !== agentId) aliases[i].ambiguous = true;
+            if (aliases[i].key !== key) continue;
+            if (aliases[i].agentId !== agentId) {
+                aliases[i].ambiguous = true;
+                ambiguous = true;
+            }
+            if (aliases[i].agentId === agentId && aliases[i].display === text) alreadyPresent = true;
         }
+        if (!alreadyPresent) aliases.push({
+            display: text,
+            key: key,
+            agentId: agentId,
+            ambiguous: ambiguous
+        });
         return;
     }
     seen.add(key);
@@ -57,6 +70,7 @@ function addClawTalkNameAliases(aliases, seen, name, agentId) {
     if (!text) return;
     addClawTalkAgentAlias(aliases, seen, text, agentId);
     addClawTalkAgentAlias(aliases, seen, text.replace(/\s+/g, '-'), agentId);
+    addClawTalkAgentAlias(aliases, seen, text.replace(/\s+/g, ''), agentId);
     var tokens = clawTalkNameTokens(text);
     if (!tokens.length) return;
     addClawTalkAgentAlias(aliases, seen, tokens[0], agentId);
@@ -66,6 +80,7 @@ function addClawTalkNameAliases(aliases, seen, name, agentId) {
         var firstLast = tokens[0] + ' ' + last;
         addClawTalkAgentAlias(aliases, seen, firstLast, agentId);
         addClawTalkAgentAlias(aliases, seen, firstLast.replace(/\s+/g, '-'), agentId);
+        addClawTalkAgentAlias(aliases, seen, firstLast.replace(/\s+/g, ''), agentId);
     }
     for(var i = 0; i < tokens.length; i++){
         if (tokens[i].length > 1) addClawTalkAgentAlias(aliases, seen, tokens[i], agentId);
@@ -86,6 +101,7 @@ function buildClawTalkAgentAliases(config, fallbackAgentId) {
         var agentId = typeof agent.id === 'string' ? agent.id.trim() : '';
         if (!agentId) continue;
         addClawTalkAgentAlias(aliases, seen, agentId, agentId);
+        addClawTalkAgentAlias(aliases, seen, agentId.replace(/[-_]/g, ''), agentId);
         if (/^hn-/i.test(agentId)) addClawTalkAgentAlias(aliases, seen, agentId.replace(/^hn-/i, ''), agentId);
         var names = [
             agent.name,
@@ -520,7 +536,7 @@ async function runClawTalkControlCenterOrEmbeddedAgentTurn(options) {
 `.trim()
 
 export const TELEGRAM_AGENT_ROUTING_HELPER = String.raw`
-var TELEGRAM_AGENT_ROUTING_PATCH_VERSION = 5;
+var TELEGRAM_AGENT_ROUTING_PATCH_VERSION = 11;
 var TELEGRAM_AGENT_ROUTE_MEMORY_KEY = '__openclawTelegramAgentRoutes';
 function resolveTelegramAgentRouteMemory() {
     var root = globalThis;
@@ -542,9 +558,22 @@ function addTelegramAgentAlias(aliases, seen, display, agentId) {
     var key = normalizeTelegramAgentAlias(text);
     if (!key || !agentId) return;
     if (seen.has(key)) {
+        var alreadyPresent = false;
+        var ambiguous = false;
         for(var i = 0; i < aliases.length; i++){
-            if (aliases[i].key === key && aliases[i].agentId !== agentId) aliases[i].ambiguous = true;
+            if (aliases[i].key !== key) continue;
+            if (aliases[i].agentId !== agentId) {
+                aliases[i].ambiguous = true;
+                ambiguous = true;
+            }
+            if (aliases[i].agentId === agentId && aliases[i].display === text) alreadyPresent = true;
         }
+        if (!alreadyPresent) aliases.push({
+            display: text,
+            key: key,
+            agentId: agentId,
+            ambiguous: ambiguous
+        });
         return;
     }
     seen.add(key);
@@ -567,6 +596,7 @@ function addTelegramAgentNameAliases(aliases, seen, name, agentId) {
     if (!text) return;
     addTelegramAgentAlias(aliases, seen, text, agentId);
     addTelegramAgentAlias(aliases, seen, text.replace(/\s+/g, '-'), agentId);
+    addTelegramAgentAlias(aliases, seen, text.replace(/\s+/g, ''), agentId);
     var tokens = telegramAgentNameTokens(text);
     if (!tokens.length) return;
     addTelegramAgentAlias(aliases, seen, tokens[0], agentId);
@@ -576,6 +606,7 @@ function addTelegramAgentNameAliases(aliases, seen, name, agentId) {
         var firstLast = tokens[0] + ' ' + last;
         addTelegramAgentAlias(aliases, seen, firstLast, agentId);
         addTelegramAgentAlias(aliases, seen, firstLast.replace(/\s+/g, '-'), agentId);
+        addTelegramAgentAlias(aliases, seen, firstLast.replace(/\s+/g, ''), agentId);
     }
     for(var i = 0; i < tokens.length; i++){
         if (tokens[i].length > 1) addTelegramAgentAlias(aliases, seen, tokens[i], agentId);
@@ -596,6 +627,7 @@ function buildTelegramAgentAliases(config, fallbackAgentId) {
         var agentId = typeof agent.id === 'string' ? agent.id.trim() : '';
         if (!agentId) continue;
         addTelegramAgentAlias(aliases, seen, agentId, agentId);
+        addTelegramAgentAlias(aliases, seen, agentId.replace(/[-_]/g, ''), agentId);
         if (/^hn-/i.test(agentId)) addTelegramAgentAlias(aliases, seen, agentId.replace(/^hn-/i, ''), agentId);
         var names = [
             agent.name,
@@ -641,7 +673,8 @@ function escapeTelegramAgentRegExp(value) {
 }
 function parseTelegramAgentRouteReset(prompt) {
     var trimmed = String(prompt == null ? '' : prompt).replace(/^\s+/, '');
-    if (trimmed.charAt(0) !== '/') return null;
+    var marker = trimmed.charAt(0);
+    if (marker !== '/' && marker !== '\\') return null;
     var rest = trimmed.slice(1).replace(/^\s+/, '');
     var match = /^(default|main|reset|clear)(?:@[A-Za-z0-9_]+)?(?:\s+|$)/i.exec(rest);
     if (!match) return null;
@@ -651,8 +684,12 @@ function parseTelegramAgentRouteReset(prompt) {
 }
 function parseTelegramAgentRoutePrefix(prompt, aliases) {
     var trimmed = String(prompt == null ? '' : prompt).replace(/^\s+/, '');
-    var mode = trimmed.charAt(0);
-    if (mode !== '@' && mode !== '/') return null;
+    var marker = trimmed.charAt(0);
+    if (marker !== '@' && marker !== '/' && marker !== '\\') return null;
+    // A literal backslash is accepted as a keyboard-friendly alias for a
+    // slash command. Treat it as sticky rather than creating a third routing
+    // mode, so the rest of the state machine stays deterministic.
+    var mode = marker === '\\' ? '/' : marker;
     var rest = trimmed.slice(1).replace(/^\s+/, '');
     var sorted = aliases.slice().sort(function(a, b) {
         return b.display.length - a.display.length;
@@ -674,7 +711,7 @@ function parseTelegramAgentRoutePrefix(prompt, aliases) {
 }
 function parseTelegramAgentRouteAutoStart(prompt, aliases) {
     var trimmed = String(prompt == null ? '' : prompt).replace(/^\s+/, '');
-    if (!trimmed || trimmed.charAt(0) === '@' || trimmed.charAt(0) === '/') return null;
+    if (!trimmed || trimmed.charAt(0) === '@' || trimmed.charAt(0) === '/' || trimmed.charAt(0) === '\\') return null;
     var sorted = aliases.slice().sort(function(a, b) {
         return b.display.length - a.display.length;
     });
@@ -730,13 +767,37 @@ function buildTelegramAgentRoutingPrompt(route) {
     if (route.mode === '/') return 'You are now the active Telegram agent for this chat. Reply briefly confirming the switch.';
     return 'Reply briefly as the requested Telegram agent.';
 }
+function normalizeTelegramAgentPurpose(value) {
+    return String(value == null ? '' : value).replace(/[\u0000-\u001f\u007f]/g, ' ').replace(/[\*\`_>#]/g, '').replace(/\s+/g, ' ').trim().slice(0, 180);
+}
+function readTelegramAgentPurposeFromIdentity(agent) {
+    var agentDir = String(agent && agent.agentDir || '').trim();
+    if (!agentDir || typeof process === 'undefined' || typeof process.getBuiltinModule !== 'function') return '';
+    try {
+        var fs = process.getBuiltinModule('node:fs');
+        if (!fs || typeof fs.readFileSync !== 'function') return '';
+        var separator = agentDir.indexOf('\\') >= 0 ? '\\' : '/';
+        var identityPath = agentDir.replace(/[\\/]+$/, '') + separator + 'IDENTITY.md';
+        var lines = String(fs.readFileSync(identityPath, 'utf8') || '').slice(0, 8192).split(/\r?\n/);
+        for(var i = 0; i < lines.length; i++){
+            var cleaned = normalizeTelegramAgentPurpose(lines[i]);
+            var match = /^(?:[- ]+)?(?:role|responsibility|purpose|focus|creature)\s*:\s*(.+)$/i.exec(cleaned);
+            if (match) return normalizeTelegramAgentPurpose(match[1]);
+        }
+    } catch (_error) {
+        // The route remains fully usable when an optional identity file is absent.
+    }
+    return '';
+}
 function resolveTelegramAgentRouteProfile(config, agentId) {
     var agent = resolveAgentConfig(config || {}, agentId) || {};
     var identity = agent.identity && typeof agent.identity === 'object' ? agent.identity : {};
     var name = String(identity.name || agent.name || agentId || '').trim();
+    var role = normalizeTelegramAgentPurpose(identity.role || agent.role || agent.description || agent.className || agent.behaviorProfile || '') || readTelegramAgentPurposeFromIdentity(agent);
     var workspace = String(agent.workspace || (config && config.agents && config.agents.defaults && config.agents.defaults.workspace) || '').trim();
     return {
         name: name,
+        role: role,
         workspace: workspace
     };
 }
@@ -746,21 +807,57 @@ function buildTelegramAgentRouteContext(params) {
     var profile = resolveTelegramAgentRouteProfile(params.config || {}, agentId);
     var modelRef = resolveTelegramAgentModelRef(params.config || {}, agentId);
     return [
-        'Telegram route context (system facts for this turn):',
-        '- Active agent id: ' + agentId,
-        profile.name ? '- Active agent name: ' + profile.name : '',
-        modelRef ? '- Active configured model: ' + modelRef : '',
+        'Automnia Telegram identity contract (authoritative system facts for this turn):',
+        '- Product: Automnia AI Nexus (DystopAI Telegram bot).',
+        profile.name ? '- Active Automnia agent: ' + profile.name + ' (agent id: ' + agentId + ').' : '- Active Automnia agent id: ' + agentId + '.',
+        profile.role ? '- Assigned role: ' + profile.role + '.' : '',
+        modelRef ? '- Configured primary execution model: ' + modelRef + '.' : '- Configured primary execution model: unavailable from the active route configuration.',
         profile.workspace ? '- Active execution workspace: ' + profile.workspace : '',
         params.sessionKey ? '- Active Telegram session key: ' + String(params.sessionKey) : '',
+        '- These are runtime routing facts, not optional persona suggestions.',
         '- If prior chat history names another agent or workspace, ignore that stale context.',
-        '- If asked who you are or what workspace is active, answer from these route facts.'
+        '- Never replace this identity with a generic label such as Codex, an OpenClaw personal agent, or GPT-5 when the route facts name an Automnia agent.',
+        '- If asked who you are, begin with the active Automnia agent name, assigned role when present, and agent id. If asked for the model, state the configured primary execution model above exactly, including its provider/model id. If a runtime status explicitly reports a fallback model, name that fallback instead.',
+        '- The Telegram delivery layer verifies direct identity and model questions against these routing facts. Do not contradict that verified response.'
     ].filter(Boolean).join('\n');
+}
+function normalizeTelegramIdentityQuestionText(value) {
+    return String(value == null ? '' : value).replace(/\s+/g, ' ').trim().replace(/[?!.,:;]+$/g, '').trim().toLowerCase();
+}
+function resolveTelegramIdentityQuestionKind(prompt) {
+    var text = normalizeTelegramIdentityQuestionText(prompt);
+    if (!text) return '';
+    if (/^(?:who|what)\s+(?:are|r)\s+you(?:\s+exactly)?$/i.test(text) || /^(?:what(?:'s| is) your name|which agent are you|what agent are you)$/i.test(text)) return 'identity';
+    if (/^(?:what|which)\s+(?:ai\s+)?model(?:\s+(?:are you|do you)\s+(?:using|running))?$/i.test(text) || /^(?:what|which)\s+model\s+(?:are you|do you)\s+(?:use|run)$/i.test(text) || /^what are you running on$/i.test(text)) return 'model';
+    return '';
+}
+function buildTelegramVerifiedIdentityReply(params) {
+    var kind = resolveTelegramIdentityQuestionKind(params && params.prompt);
+    if (!kind) return '';
+    var agentId = String(params && params.agentId || '').trim();
+    if (!agentId) return '';
+    var profile = resolveTelegramAgentRouteProfile(params && params.config || {}, agentId);
+    var displayName = profile.name || agentId;
+    var description = displayName + (profile.role ? ', ' + profile.role : '') + ' (agent id: ' + agentId + ')';
+    var modelRef = resolveTelegramAgentModelRef(params && params.config || {}, agentId);
+    if (kind === 'model') return 'I am ' + description + '. My configured primary execution model is ' + (modelRef || 'not configured') + '.';
+    return 'I am ' + description + '. I am the Automnia agent selected for this Telegram message.';
+}
+function applyTelegramVerifiedIdentityDeliveryGuard(params) {
+    var payload = params && params.payload;
+    if (!payload || payload.isError === true || !params.info || params.info.kind !== 'final') return payload;
+    var reply = buildTelegramVerifiedIdentityReply(params);
+    if (!reply) return payload;
+    return {
+        ...payload,
+        text: reply
+    };
 }
 function withTelegramAgentRouteContext(params) {
     var prompt = String(params && params.prompt != null ? params.prompt : '').trim();
     var context = buildTelegramAgentRouteContext(params || {});
     if (!context) return prompt;
-    if (prompt.indexOf('Telegram route context (system facts for this turn):') === 0) return prompt;
+    if (prompt.indexOf('Automnia Telegram identity contract (authoritative system facts for this turn):') === 0 || prompt.indexOf('Telegram route context (system facts for this turn):') === 0) return prompt;
     return prompt ? context + '\n\n' + prompt : context;
 }
 function applyTelegramAgentRoutedText(original, rawPrompt, prompt) {
@@ -777,55 +874,92 @@ function buildTelegramAgentFreshSessionKey(sessionKey) {
     var entropy = Date.now().toString(36) + '-' + Math.random().toString(36).slice(2, 10);
     return String(sessionKey || '').replace(/:+$/g, '') + ':fresh:' + entropy;
 }
+function normalizeTelegramRoutedAgentId(value) {
+    return String(value == null ? '' : value).trim();
+}
+function normalizeTelegramRouteKey(value) {
+    return String(value == null ? '' : value).trim().toLowerCase();
+}
+function resolveTelegramRoutedDirectPeerId(params) {
+    var senderId = params && params.senderId != null ? String(params.senderId).trim() : '';
+    return senderId || String(params && params.chatId != null ? params.chatId : '').trim();
+}
+function buildTelegramRoutedMainSessionKey(agentId) {
+    return 'agent:' + normalizeTelegramRouteKey(agentId) + ':main';
+}
+function resolveTelegramRoutedLinkedPeerId(identityLinks, peerId) {
+    if (!identityLinks || typeof identityLinks !== 'object' || !peerId) return '';
+    var candidates = new Set([
+        normalizeTelegramRouteKey(peerId),
+        normalizeTelegramRouteKey('telegram:' + peerId)
+    ]);
+    var entries = Object.entries(identityLinks);
+    for(var i = 0; i < entries.length; i++){
+        var canonical = String(entries[i][0] || '').trim();
+        var ids = entries[i][1];
+        if (!canonical || !Array.isArray(ids)) continue;
+        for(var j = 0; j < ids.length; j++){
+            if (candidates.has(normalizeTelegramRouteKey(ids[j]))) return canonical;
+        }
+    }
+    return '';
+}
+function buildTelegramRoutedSessionKey(params) {
+    var agentId = normalizeTelegramRouteKey(params.agentId) || 'main';
+    var channel = 'telegram';
+    var peer = params.peer || {};
+    var peerKind = peer.kind === 'group' ? 'group' : 'direct';
+    var peerId = normalizeTelegramRouteKey(peer.id) || 'unknown';
+    if (peerKind === 'group') return 'agent:' + agentId + ':' + channel + ':group:' + peerId;
+    var dmScope = String(params.dmScope || 'main').trim().toLowerCase();
+    var linkedPeerId = dmScope === 'main' ? '' : resolveTelegramRoutedLinkedPeerId(params.identityLinks, peerId);
+    if (linkedPeerId) peerId = normalizeTelegramRouteKey(linkedPeerId) || peerId;
+    if (dmScope === 'per-account-channel-peer' && peerId !== 'unknown') {
+        return 'agent:' + agentId + ':' + channel + ':' + (normalizeTelegramRouteKey(params.accountId) || 'default') + ':direct:' + peerId;
+    }
+    if (dmScope === 'per-channel-peer' && peerId !== 'unknown') return 'agent:' + agentId + ':' + channel + ':direct:' + peerId;
+    if (dmScope === 'per-peer' && peerId !== 'unknown') return 'agent:' + agentId + ':direct:' + peerId;
+    return buildTelegramRoutedMainSessionKey(agentId);
+}
+function buildTelegramRoutedThreadSessionKey(baseSessionKey, chatId, dmThreadId) {
+    return String(baseSessionKey || '').replace(/:+$/g, '') + ':thread:' + normalizeTelegramRouteKey(String(chatId) + ':' + String(dmThreadId));
+}
 function buildTelegramRouteForAgent(params, agentId, options) {
-    var targetAgentId = sanitizeAgentId(agentId);
-    var peerId = params.isGroup ? buildTelegramGroupPeerId(params.chatId, params.resolvedThreadId) : resolveTelegramDirectPeerId({
+    // This helper is injected into OpenClaw's standalone Telegram bundle. Keep
+    // it self-contained: peer/session helpers belong to different bundle scopes.
+    var targetAgentId = normalizeTelegramRoutedAgentId(agentId);
+    var peerId = params.isGroup ? String(params.chatId) + (params.resolvedThreadId != null ? ':topic:' + String(params.resolvedThreadId) : '') : resolveTelegramRoutedDirectPeerId({
         chatId: params.chatId,
         senderId: params.senderId
     });
-    var mainSessionKey = normalizeLowercaseStringOrEmpty(buildAgentMainSessionKey({
-        agentId: targetAgentId
-    }));
+    var sessionConfig = params.cfg && params.cfg.session && typeof params.cfg.session === 'object' ? params.cfg.session : {};
+    var mainSessionKey = buildTelegramRoutedMainSessionKey(targetAgentId);
     var baseRoute = {
         ...params.route,
         agentId: targetAgentId,
         modelRef: resolveTelegramAgentModelRef(params.cfg || {}, targetAgentId),
-        sessionKey: normalizeLowercaseStringOrEmpty(buildAgentSessionKey({
+        sessionKey: buildTelegramRoutedSessionKey({
             agentId: targetAgentId,
-            channel: 'telegram',
             accountId: params.accountId,
             peer: {
                 kind: params.isGroup ? 'group' : 'direct',
                 id: peerId
             },
-            dmScope: params.cfg.session && params.cfg.session.dmScope,
-            identityLinks: params.cfg.session && params.cfg.session.identityLinks
-        })),
+            dmScope: sessionConfig.dmScope,
+            identityLinks: sessionConfig.identityLinks
+        }),
         mainSessionKey: mainSessionKey,
         matchedBy: 'telegram-agent-route'
     };
-    var baseSessionKey = resolveTelegramConversationBaseSessionKey({
-        cfg: params.cfg,
-        route: baseRoute,
-        chatId: params.chatId,
-        isGroup: params.isGroup,
-        senderId: params.senderId
-    });
-    var sessionKey = (!params.isGroup && params.dmThreadId != null && shouldUseTelegramDmThreadSession({
-        dmThreadId: params.dmThreadId,
-        botHasTopicsEnabled: params.botHasTopicsEnabled
-    }) ? resolveThreadSessionKeys({
-        baseSessionKey: baseSessionKey,
-        threadId: String(params.chatId) + ':' + String(params.dmThreadId)
-    }) : null)?.sessionKey ?? baseSessionKey;
+    var sessionKey = baseRoute.sessionKey;
+    if (!params.isGroup && params.dmThreadId != null && params.botHasTopicsEnabled === true) {
+        sessionKey = buildTelegramRoutedThreadSessionKey(sessionKey, params.chatId, params.dmThreadId);
+    }
     if (options && options.freshSession === true) sessionKey = buildTelegramAgentFreshSessionKey(sessionKey);
     return {
         ...baseRoute,
         sessionKey: sessionKey,
-        lastRoutePolicy: deriveLastRoutePolicy({
-            sessionKey: sessionKey,
-            mainSessionKey: mainSessionKey
-        })
+        lastRoutePolicy: sessionKey === mainSessionKey ? 'main' : 'session'
     };
 }
 function resolveTelegramAgentRouteForMessage(params) {

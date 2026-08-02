@@ -247,6 +247,7 @@ export const AgentCard = memo(function AgentCard({ agent, isSelected, slotNumber
       data-agent-rarity={agent.rarity || 'common'}
       data-agent-display-mode={displayMode}
       data-agent-in-party={inP ? 'true' : 'false'}
+      data-agent-running={busy ? 'true' : 'false'}
       role="button"
       tabIndex={missionRunning && !inP ? -1 : 0}
       aria-pressed={isSelected}
@@ -322,7 +323,7 @@ export const AgentCard = memo(function AgentCard({ agent, isSelected, slotNumber
             {busy && (
               <span className="agent-card-status-pill is-live shrink-0">
                 <span aria-hidden="true" />
-                Live
+                Running
               </span>
             )}
           </div>

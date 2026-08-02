@@ -61,7 +61,7 @@ export interface RuntimeConfig {
   concurrencyLimit: number
 }
 
-export type ThinkingLevel = 'off' | 'minimal' | 'low' | 'medium' | 'high'
+export type ThinkingLevel = 'off' | 'minimal' | 'low' | 'medium' | 'high' | 'xhigh' | 'max'
 export type FastModeDefault = 'auto' | 'on' | 'off'
 
 export interface AgentRuntimePolicy {

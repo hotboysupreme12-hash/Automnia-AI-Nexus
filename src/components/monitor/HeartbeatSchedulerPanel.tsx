@@ -3,7 +3,7 @@ import { apiErrorMessage, apiRequest, type ApiRequestOptions } from '../../api/c
 import { useNexusStore } from '../../store/nexusStore'
 import { ActionStatusBanner } from '../common/ActionStatusBanner'
 
-type ThinkingLevel = 'off' | 'minimal' | 'low' | 'medium' | 'high'
+type ThinkingLevel = 'off' | 'minimal' | 'low' | 'medium' | 'high' | 'xhigh' | 'max'
 type WakeMode = 'now' | 'next-heartbeat'
 type SessionMode = 'main' | 'isolated'
 type DurationUnit = 'seconds' | 'minutes' | 'hours' | 'days' | 'weeks'
@@ -132,7 +132,7 @@ export function HeartbeatSchedulerPanel() {
   const [agentId, setAgentId] = useState('')
 
   const [defaults, setDefaults] = useState<HeartbeatDefaults>({
-    model: 'openai/gpt-5.5',
+    model: 'openai/gpt-5.6-terra',
     thinking: 'minimal',
     timeoutSeconds: 120,
     wake: 'next-heartbeat',
@@ -496,7 +496,7 @@ export function HeartbeatSchedulerPanel() {
             onChange={(event) => patchDefaults({ thinking: event.target.value as ThinkingLevel })}
             className="mt-1 w-full rounded-lg border border-white/15 bg-slate-950/70 px-2 py-2 text-sm text-slate-100"
           >
-            {(['off', 'minimal', 'low', 'medium', 'high'] as ThinkingLevel[]).map((item) => (
+            {(['off', 'minimal', 'low', 'medium', 'high', 'xhigh', 'max'] as ThinkingLevel[]).map((item) => (
               <option key={item} value={item}>
                 {item}
               </option>

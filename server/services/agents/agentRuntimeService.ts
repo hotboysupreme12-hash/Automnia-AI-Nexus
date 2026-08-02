@@ -1,5 +1,5 @@
 export type AgentRuntimeFlagMode = 'default' | 'gateway' | 'local'
-export type AgentRuntimeThinkingLevel = 'off' | 'minimal' | 'low' | 'medium' | 'high'
+export type AgentRuntimeThinkingLevel = 'off' | 'minimal' | 'low' | 'medium' | 'high' | 'xhigh' | 'max'
 export type AgentRuntimeFastModePreference = 'auto' | 'on' | 'off'
 
 export type AgentRuntimeResult = {

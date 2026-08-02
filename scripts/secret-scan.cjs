@@ -19,6 +19,13 @@ const skippedPathPrefixes = [
   'vendor/',
 ]
 
+// Packaging experiments and release-candidate directories are generated from
+// the same source tree. Scan their source inputs, not duplicate unpacked app
+// payloads (which can otherwise repeat an instructional PEM fixture).
+const skippedPathPatterns = [
+  /^release-[^/]+\//,
+]
+
 const skippedFileNames = new Set([
   'package-lock.json',
 ])
@@ -135,6 +142,7 @@ function shouldSkip(filePath) {
   if (skippedFileNames.has(path.basename(filePath))) return true
   if (skippedExtensions.has(path.extname(filePath).toLowerCase())) return true
   return skippedPathPrefixes.some((prefix) => filePath === prefix.slice(0, -1) || filePath.startsWith(prefix))
+    || skippedPathPatterns.some((pattern) => pattern.test(filePath))
 }
 
 function lineNumberAt(text, index) {

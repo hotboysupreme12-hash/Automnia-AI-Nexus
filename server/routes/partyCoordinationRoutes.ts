@@ -191,7 +191,7 @@ app.post('/api/party/dispatch', async (req, res) => {
         z.object({
           agent: z.string().min(1),
           message: z.string().min(1),
-          thinking: z.enum(['off', 'minimal', 'low', 'medium', 'high']).default('medium'),
+          thinking: z.enum(['off', 'minimal', 'low', 'medium', 'high', 'xhigh', 'max']).default('medium'),
           timeoutSeconds: z.number().int().min(30).max(7200).optional(),
         }),
       )
@@ -610,7 +610,7 @@ app.post('/api/party/agent-to-agent', async (req, res) => {
     fromAgent: z.string().min(1),
     toAgent: z.string().min(1),
     instruction: z.string().min(1),
-    thinking: z.enum(['off', 'minimal', 'low', 'medium', 'high']).default('low'),
+    thinking: z.enum(['off', 'minimal', 'low', 'medium', 'high', 'xhigh', 'max']).default('low'),
     timeoutSeconds: z.number().int().min(30).max(7200).optional(),
   })
   const parsed = schema.safeParse(req.body)
@@ -863,7 +863,7 @@ app.post('/api/party/parallel-health', async (req, res) => {
   const schema = z.object({
     agents: z.array(z.string().min(1)).min(2).max(8).optional(),
     timeoutSeconds: z.number().int().min(30).max(7200).optional(),
-    thinking: z.enum(['off', 'minimal', 'low', 'medium', 'high']).default('off'),
+    thinking: z.enum(['off', 'minimal', 'low', 'medium', 'high', 'xhigh', 'max']).default('off'),
     prompt: z.string().min(1).max(500).default('Parallel health check: reply HEALTH_OK only.'),
   })
   const parsed = schema.safeParse(req.body ?? {})

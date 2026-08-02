@@ -395,7 +395,7 @@ export function registerPartyManagementRoutes(app: Express, options: PartyManage
       return apiSuccess(res, {
         ok: true,
         modelId: canonicalModelId,
-        provider: isOpenAiCodexSubscriptionModel(canonicalModelId) ? 'openai-codex' : provider,
+        provider: isOpenAiCodexSubscriptionModel(canonicalModelId) ? 'openai' : provider,
         model,
         personalityDepth: normalizeRecruitPersonalityDepth(payload.personalityDepth),
         files: markdownFiles,
@@ -455,7 +455,7 @@ export function registerPartyManagementRoutes(app: Express, options: PartyManage
         .optional(),
       runtime: z
         .object({
-          thinkingDefault: z.enum(['off', 'minimal', 'low', 'medium', 'high']).optional(),
+          thinkingDefault: z.enum(['off', 'minimal', 'low', 'medium', 'high', 'xhigh', 'max']).optional(),
           timeoutSeconds: z.number().int().min(30).max(86400).optional(),
           parallelPreferred: z.boolean().optional(),
           fastModeDefault: z.enum(['auto', 'on', 'off']).optional(),

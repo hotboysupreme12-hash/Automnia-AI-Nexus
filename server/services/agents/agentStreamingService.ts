@@ -3,7 +3,7 @@ import type { ProviderRequestAuth } from '../providers/providerSetupService'
 import type { AgentTurnStreamEmitter } from './gatewayAgentTurnService'
 import type { BufferedRuntimeReason } from './agentTurnService'
 
-export type AgentStreamingThinkingLevel = 'off' | 'minimal' | 'low' | 'medium' | 'high'
+export type AgentStreamingThinkingLevel = 'off' | 'minimal' | 'low' | 'medium' | 'high' | 'xhigh' | 'max'
 
 export type StreamingProviderKind =
   | 'openai-compatible'
@@ -94,6 +94,7 @@ export type AgentStreamingServiceOptions = {
     env: Record<string, string>,
     envKeys: string[],
   ) => Promise<ProviderRequestAuth | null>
+  anthropicSubscriptionAvailable?: () => boolean
   streamingCapabilityForModel: (modelId: string) => Record<string, unknown>
   resolveAgentRunContext: (agentId: string) => Promise<AgentStreamingContext>
   agentTurnSessionScope: (agentId: string, requestedSessionKey?: string) => string
@@ -232,7 +233,7 @@ export function createAgentStreamingService(options: AgentStreamingServiceOption
 
     const { provider: modelProvider, model } = options.splitModelId(modelId)
     const isCodexSubscriptionTurn = options.isOpenAiCodexSubscriptionModel(modelId)
-    let provider = isCodexSubscriptionTurn ? 'openai-codex' : modelProvider
+    let provider = isCodexSubscriptionTurn ? 'openai' : modelProvider
     let providerConfig = options.streamingProviderConfig[provider]
     if (!providerConfig) {
       return options.runBufferedAgentTurnForStream(input, emit, signal, {
@@ -253,15 +254,19 @@ export function createAgentStreamingService(options: AgentStreamingServiceOption
       ? openAiSubscriptionAuth.requestAuth
       : await options.resolveProviderRequestAuth(provider, envOverrides, providerConfig.envKeys)
     const capability = options.streamingCapabilityForModel(modelId)
+    if (!requestAuth && provider === 'anthropic' && options.anthropicSubscriptionAvailable?.()) {
+      return options.runBufferedAgentTurnForStream(input, emit, signal, {
+        code: 'anthropic-claude-cli-runtime',
+        message: 'Claude Code subscription authentication is being handled by the OpenClaw runtime.',
+      })
+    }
     if (!requestAuth) {
       const providerAuthRequirement = isCodexSubscriptionTurn
         ? 'OpenAI Codex OAuth credential or OpenAI API key'
         : provider === 'google-vertex'
         ? 'Google Cloud CLI auth (gcloud auth login) plus a configured Google Cloud project'
-        : provider === 'openai-codex'
-          ? 'OpenAI Codex OAuth credential'
-          : provider === 'openai'
-            ? 'OpenAI API key'
+        : provider === 'openai'
+            ? 'OpenAI / Codex OAuth credential or OpenAI API key'
             : provider === 'google'
               ? `${providerConfig.envKeys.join(' or ')} or Google OAuth credential`
               : providerConfig.envKeys.join(' or ')
@@ -269,7 +274,7 @@ export function createAgentStreamingService(options: AgentStreamingServiceOption
         `Streaming is wired for ${modelId}, but no usable ${providerAuthRequirement} is configured.`,
         'Connect the provider in the app auth modal or set an environment key, then retry.',
       ].join('\n')
-      emit('error', { message: reply, provider: isCodexSubscriptionTurn ? 'openai-codex' : provider, model: modelId, capability })
+      emit('error', { message: reply, provider: isCodexSubscriptionTurn ? 'openai' : provider, model: modelId, capability })
       return {
         ok: false,
         reply,
@@ -278,7 +283,7 @@ export function createAgentStreamingService(options: AgentStreamingServiceOption
         code: 401,
         failureKind: 'auth_missing',
         modelId,
-        provider: isCodexSubscriptionTurn ? 'openai-codex' : provider,
+        provider: isCodexSubscriptionTurn ? 'openai' : provider,
         model,
         streaming: {
           ...capability,
@@ -311,9 +316,7 @@ export function createAgentStreamingService(options: AgentStreamingServiceOption
     const composedPrompt = options.composeDirectProviderPrompt(input.agent, enforcedMessage, context.executionWorkspace)
     const requestMessages = options.providerConversationMessagesForRequest(sessionId, provider, modelId, composedPrompt)
     const effectiveStreamingKind: StreamingProviderKind =
-      isCodexSubscriptionTurn && provider === 'openai-codex'
-        ? 'openai-codex-responses'
-        : provider === 'openai' && requestAuth.type === 'oauth'
+      provider === 'openai' && requestAuth.type === 'oauth'
         ? 'openai-codex-responses'
         : providerConfig.kind
     const streamingTransport: StreamingProviderKind =

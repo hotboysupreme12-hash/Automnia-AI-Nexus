@@ -24,6 +24,10 @@ const typographyPolishImport = "@import './styles/dystopai-theme/95-typography-p
 const navSelectionGlowImport = "@import './styles/dystopai-theme/96-nav-selection-glow.css';"
 const chatComposerImport = "@import './styles/dystopai-theme/97-chat-composer.css';"
 const flattenedShellImport = "@import './styles/dystopai-theme/98-flattened-shell.css';"
+const horizonCommandCenterImport = "@import './styles/dystopai-theme/99-horizon-command-center.css';"
+const operatorExperienceImport = "@import './styles/dystopai-theme/100-operator-experience.css';"
+const horizonCommandCenter = read('src/styles/dystopai-theme/99-horizon-command-center.css')
+const operatorExperience = read('src/styles/dystopai-theme/100-operator-experience.css')
 
 assert.match(shell, /className="dy-skip-link" href="#dystopai-main"/, 'shell should expose a keyboard skip link')
 assert.match(shell, /<main id="dystopai-main" tabIndex=\{-1\}/, 'workspace should use a focusable main landmark')
@@ -67,8 +71,13 @@ assert.match(shell, /aria-label="Workspace status summary"/, 'workspace status c
 assert.match(shell, /import \{ Button, StatusChip \} from '..\/ui'/, 'shell rail actions and workspace status chips should use local UI primitives')
 assert.match(primaryRailBlock, /<Button[\s\S]*data-tone="recruit"/, 'recruit rail action should use the Button primitive')
 assert.match(primaryRailBlock, /<Button[\s\S]*id=\{`nexus-nav-\$\{t\.id\}`\}/, 'primary rail destinations should use the Button primitive')
+assert.doesNotMatch(primaryRailBlock, /<kbd\b/, 'rail destinations should not crowd labels with visible keyboard shortcut badges')
 assert.match(utilityRailBlock, /<Button[\s\S]*id="nexus-nav-settings"/, 'settings rail action should use the Button primitive')
+assert.match(utilityRailBlock, /data-tone="settings"/, 'settings should retain its dedicated navigation identity')
+assert.doesNotMatch(utilityRailBlock, /<kbd\b/, 'utility rail should not crowd labels with visible keyboard shortcut badges')
 assert.match(shell, /<Button[\s\S]*className="dy-console-toggle"/, 'agent console header toggle should use the Button primitive')
+assert.match(shell, /aria-pressed=\{isAgentConsoleVisible\}/, 'console toggle pressed state should report the actual console visibility')
+assert.match(shell, /className="dy-console-toggle"[\s\S]*onClick=\{\(\) => \{\s*setAgentConsoleVisible\(\(visible\) => !visible\)\s*\}\}/, 'console toggle should use the Button click interaction without duplicate pointer or keyboard handlers')
 for (const indicator of ['agents', 'party', 'running', 'gateway', 'results']) {
   assert.match(shell, new RegExp(`<StatusChip[\\s\\S]*data-indicator="${indicator}"`), `${indicator} workspace status should be rendered through StatusChip`)
 }
@@ -93,6 +102,8 @@ assert.ok(theme.includes(typographyPolishImport), 'typography polish must remain
 assert.ok(theme.includes(navSelectionGlowImport), 'nav selection glow must remain in the theme cascade')
 assert.ok(theme.includes(chatComposerImport), 'chat composer polish must remain in the theme cascade')
 assert.ok(theme.includes(flattenedShellImport), 'flattened shell polish must remain in the theme cascade')
+assert.ok(theme.includes(horizonCommandCenterImport), 'Horizon Command Center must remain the final global visual layer')
+assert.ok(theme.includes(operatorExperienceImport), 'Operator Experience must remain the final global refinement layer')
 const themeLayerImports = [...theme.matchAll(/@import '\.\/styles\/dystopai-theme\/(\d+)-([^']+)\.css';/g)]
 const layersAfterTypography = themeLayerImports
   .map((match) => ({ order: Number(match[1]), name: match[2] }))
@@ -101,7 +112,9 @@ assert.deepEqual(layersAfterTypography, [
   { order: 96, name: 'nav-selection-glow' },
   { order: 97, name: 'chat-composer' },
   { order: 98, name: 'flattened-shell' },
-], 'global dystopai theme layers after typography must remain limited to the current shell polish layers')
+  { order: 99, name: 'horizon-command-center' },
+  { order: 100, name: 'operator-experience' },
+], 'global dystopai theme layers after typography must remain limited to the approved shell and operator-experience layers')
 assert.doesNotMatch(theme, /99-mission-quiet-redesign/, 'mission quiet redesign should no longer be a global late layer')
 assert.ok(
   theme.indexOf(productionPolishImport) < theme.indexOf(referenceScreenshotImport),
@@ -114,7 +127,29 @@ assert.ok(
 assert.ok(theme.indexOf(typographyPolishImport) < theme.indexOf(navSelectionGlowImport), 'typography polish must load before nav-selection glow')
 assert.ok(theme.indexOf(navSelectionGlowImport) < theme.indexOf(chatComposerImport), 'nav-selection glow must load before chat composer polish')
 assert.ok(theme.indexOf(chatComposerImport) < theme.indexOf(flattenedShellImport), 'chat composer polish must load before flattened shell polish')
-assert.ok(theme.trimEnd().endsWith(flattenedShellImport), 'flattened shell polish must load last in the theme cascade')
+assert.ok(theme.indexOf(flattenedShellImport) < theme.indexOf(horizonCommandCenterImport), 'flattened shell polish must load before Horizon Command Center')
+assert.ok(theme.indexOf(horizonCommandCenterImport) < theme.indexOf(operatorExperienceImport), 'Horizon Command Center must load before Operator Experience')
+assert.ok(theme.trimEnd().endsWith(operatorExperienceImport), 'Operator Experience must load last in the theme cascade')
+assert.match(horizonCommandCenter, /Each destination has a dedicated hue/, 'navigation selection should document the workspace identity system')
+for (const [tone, accent] of [
+  ['recruit', '#f17d72'],
+  ['agents', '#66aee7'],
+  ['missions', '#e5b967'],
+  ['monitor', '#60d9cb'],
+  ['plugins', '#ad8ae8'],
+  ['settings', '#7ec5ad'],
+] as const) {
+  assert.match(
+    horizonCommandCenter,
+    new RegExp(`\\[data-tone="${tone}"\\][\\s\\S]*?--horizon-nav-accent: ${accent.replace('#', '\\#')}`),
+    `${tone} should retain its selected navigation accent`,
+  )
+}
+assert.match(horizonCommandCenter, /right: 9px !important;/, 'active navigation should use a compact right-side identity dot')
+assert.match(horizonCommandCenter, /old left-edge chip/, 'active navigation must not restore the retired left-edge chip')
+assert.match(horizonCommandCenter, /box-shadow: none !important;/, 'active navigation should suppress the legacy colored inset marker')
+assert.match(operatorExperience, /Operator Experience refinement suite/, 'final design layer should document its operator-focused ownership')
+assert.match(operatorExperience, /content: none !important;/, 'workspace title chrome should not reintroduce a decorative eyebrow or title line')
 assert.match(missionPanel, /import '\.\/MissionDeploymentPanel\.css'/, 'mission late overrides should be owned by the mission component')
 assert.match(monitorPanel, /import \{ Badge, Button, IconButton, StatusChip \} from '\.\.\/ui'/, 'Monitor controls and status chips should use local UI primitives')
 assert.match(commandConsole, /import \{ Badge, Button, IconButton, StatusChip \} from '\.\.\/ui'/, 'Command Console controls and runtime chips should use local UI primitives')

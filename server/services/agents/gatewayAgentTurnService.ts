@@ -1,7 +1,7 @@
 import { randomUUID } from 'node:crypto'
 import { gatewayChatAbortError } from '../gateway/gatewayChatService'
 
-export type AgentTurnThinkingLevel = 'off' | 'minimal' | 'low' | 'medium' | 'high'
+export type AgentTurnThinkingLevel = 'off' | 'minimal' | 'low' | 'medium' | 'high' | 'xhigh' | 'max'
 export type AgentTurnFastModePreference = 'auto' | 'on' | 'off'
 export type AgentTurnStreamEmitter = (event: string, data: Record<string, unknown>) => void
 

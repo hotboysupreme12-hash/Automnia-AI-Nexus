@@ -27,7 +27,7 @@ const providerLabels: Record<string, string> = {
   deepseek: 'DeepSeek',
   opencode: 'OpenCode',
   'opencode-go': 'OpenCode Go',
-  'openai-codex': 'OpenAI Codex',
+  'openai-codex': 'OpenAI / Codex',
 }
 
 const sleep = (ms: number) => new Promise((resolve) => window.setTimeout(resolve, ms))
@@ -35,7 +35,7 @@ const sleep = (ms: number) => new Promise((resolve) => window.setTimeout(resolve
 function formatOAuthExpiry(expiresAt?: number, refreshAvailable = false) {
   if (!expiresAt) return refreshAvailable ? 'refresh token available' : 'not reported'
   const deltaMs = expiresAt - Date.now()
-  if (deltaMs <= 0) return refreshAvailable ? 'expired, refresh available' : 'expired'
+  if (deltaMs <= 0) return 'expired — reconnect now'
   const minutes = Math.round(deltaMs / 60000)
   if (minutes < 60) return `${minutes} min remaining`
   const hours = Math.round(minutes / 60)
@@ -46,7 +46,7 @@ function formatOAuthExpiry(expiresAt?: number, refreshAvailable = false) {
 function oauthHealth(expiresAt?: number, refreshAvailable = false) {
   if (!expiresAt) return { label: refreshAvailable ? 'Refreshable' : 'Connected', tone: 'emerald' as const }
   const deltaMs = expiresAt - Date.now()
-  if (deltaMs <= 0) return refreshAvailable ? { label: 'Refreshable', tone: 'amber' as const } : { label: 'Expired', tone: 'rose' as const }
+  if (deltaMs <= 0) return { label: 'Reconnect required', tone: 'rose' as const }
   if (deltaMs < 15 * 60 * 1000) return { label: refreshAvailable ? 'Refresh Soon' : 'Expiring', tone: 'amber' as const }
   return { label: 'Ready', tone: 'emerald' as const }
 }
@@ -125,6 +125,7 @@ export function ProviderAuthModal({ isOpen, provider, envKeys, providerStatus, o
   const oauthReady = Boolean(oauth?.available)
   const oauthMissing = oauth?.missing?.filter(Boolean) || []
   const oauthState = oauthHealth(oauth?.expiresAt, oauth?.refreshAvailable)
+  const subscriptionAuth = activeProviderStatus?.subscriptionAuth
   const gcloud = activeProviderStatus?.gcloud
   const gcloudMissing = gcloud?.missing?.filter(Boolean) || []
   const hasApiKeyAuth = envKeys.length > 0
@@ -239,7 +240,13 @@ export function ProviderAuthModal({ isOpen, provider, envKeys, providerStatus, o
           <div className="mb-3 flex items-center justify-between">
             <div>
               <h3 className="font-heading text-2xl text-slate-100">Connect {label}</h3>
-              <p className="text-xs text-cyan-100">Store local credentials for this provider.</p>
+              <p className="text-xs text-cyan-100">
+                {provider === 'openai'
+                  ? 'Choose an API key or your ChatGPT / Codex subscription.'
+                  : provider === 'anthropic'
+                    ? 'Use a production API key or an existing Claude Code subscription.'
+                    : 'Store local credentials for this provider.'}
+              </p>
             </div>
             <button
               type="button"
@@ -250,11 +257,36 @@ export function ProviderAuthModal({ isOpen, provider, envKeys, providerStatus, o
             </button>
           </div>
 
+          {(activeProviderStatus?.docs || activeProviderStatus?.apiKeyUrl) && (
+            <div className="mb-4 flex flex-wrap gap-2">
+              {activeProviderStatus.docs && (
+                <a
+                  href={activeProviderStatus.docs}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="rounded-full border border-cyan-300/25 bg-cyan-400/[0.08] px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.12em] text-cyan-100 hover:bg-cyan-400/[0.14]"
+                >
+                  Provider guide
+                </a>
+              )}
+              {activeProviderStatus.apiKeyUrl && (
+                <a
+                  href={activeProviderStatus.apiKeyUrl}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="rounded-full border border-white/15 bg-slate-950/35 px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.12em] text-slate-200 hover:bg-white/[0.08]"
+                >
+                  Create API key
+                </a>
+              )}
+            </div>
+          )}
+
           {oauthSupported && (
             <div className="mb-4 rounded-xl border border-emerald-300/20 bg-emerald-950/25 p-3">
               <div className="flex items-start justify-between gap-3">
                 <div>
-                  <p className="text-sm font-semibold text-emerald-100">OAuth</p>
+                  <p className="text-sm font-semibold text-emerald-100">{provider === 'openai' ? 'ChatGPT / Codex subscription' : 'OAuth'}</p>
                   <p className="mt-1 text-xs text-slate-300">
                     {oauth?.configured
                       ? `Connected${oauth.email ? ` as ${oauth.email}` : oauth.accountId ? ` as ${oauth.accountId}` : ''}.`
@@ -344,6 +376,39 @@ export function ProviderAuthModal({ isOpen, provider, envKeys, providerStatus, o
             </div>
           )}
 
+          {subscriptionAuth?.supported && (
+            <div className="mb-4 rounded-xl border border-violet-300/20 bg-violet-950/25 p-3">
+              <div className="flex items-start justify-between gap-3">
+                <div>
+                  <p className="text-sm font-semibold text-violet-100">{subscriptionAuth.label || 'Subscription sign-in'}</p>
+                  <p className="mt-1 text-xs text-slate-300">
+                    {subscriptionAuth.configured
+                      ? 'An OpenClaw-compatible Claude Code session was detected on this machine.'
+                      : 'OpenClaw can use a Claude Code subscription already signed in on this machine.'}
+                  </p>
+                </div>
+                <span className={`rounded-full border px-2 py-0.5 text-[10px] font-semibold uppercase tracking-[0.12em] ${subscriptionAuth.configured ? 'border-emerald-300/30 bg-emerald-400/10 text-emerald-100' : 'border-amber-300/30 bg-amber-400/10 text-amber-100'}`}>
+                  {subscriptionAuth.configured ? 'Detected' : 'Optional'}
+                </span>
+              </div>
+              {!subscriptionAuth.configured && subscriptionAuth.setupCommand && (
+                <div className="mt-3 rounded-lg border border-white/10 bg-slate-950/50 px-2.5 py-2 font-mono text-[10px] text-violet-100">
+                  {subscriptionAuth.setupCommand}
+                </div>
+              )}
+              {subscriptionAuth.docs && (
+                <a
+                  href={subscriptionAuth.docs}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="mt-3 inline-flex text-[11px] font-semibold text-violet-100 underline decoration-violet-300/40 underline-offset-4"
+                >
+                  Read Claude / OpenClaw setup guidance
+                </a>
+              )}
+            </div>
+          )}
+
           {gcloud?.supported && (
             <div className="mb-4 rounded-xl border border-sky-300/20 bg-sky-950/25 p-3">
               <div className="flex items-start justify-between gap-3">
@@ -409,7 +474,7 @@ export function ProviderAuthModal({ isOpen, provider, envKeys, providerStatus, o
           {hasApiKeyAuth && (
             <>
               <label className="block text-sm text-slate-200">
-                API Key
+                {provider === 'anthropic' ? 'Anthropic API Key' : provider === 'openai' ? 'OpenAI API Key' : 'API Key'}
                 <input
                   type="password"
                   value={apiKey}
@@ -421,7 +486,7 @@ export function ProviderAuthModal({ isOpen, provider, envKeys, providerStatus, o
 
               <div className="mt-3 text-xs text-slate-300">
                 <p>Env vars used: {envKeys.join(', ')}</p>
-                <p className="mt-1">Keys are stored locally and injected into OpenClaw runtime.</p>
+                <p className="mt-1">Keys are stored locally and injected into the OpenClaw runtime; they are never rendered after save.</p>
               </div>
             </>
           )}

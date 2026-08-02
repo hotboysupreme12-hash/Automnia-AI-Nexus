@@ -170,9 +170,10 @@ function createHarness(options: {
   }
 }
 
-test('runTurn sends Gateway chat payloads and resolves the durable history reply', async () => {
+test('runTurn sends Gateway chat payloads and uses a visible terminal reply without a history round trip', async () => {
   const harness = createHarness({
     attachments: [{ type: 'image', content: 'abc', mimeType: 'image/png' }],
+    finalPayload: (runId) => ({ runId, state: 'final', message: { text: 'Terminal final' } }),
   })
   const events: Array<{ event: string; data: Record<string, unknown> }> = []
   const stream = harness.service.registerStreamObserver((event, data) => events.push({ event, data }))
@@ -205,24 +206,22 @@ test('runTurn sends Gateway chat payloads and resolves the durable history reply
   assert.equal(isRecord(send.params) && 'suppressCommandInterpretation' in send.params, false)
   assert.equal(Array.isArray(isRecord(send.params) && send.params.attachments), true)
 
-  const history = harness.requests.find((request) => request.method === 'chat.history')
-  assert.ok(history)
-  assert.equal(isRecord(history.params) && history.params.limit, 8)
-  assert.equal(isRecord(history.params) && history.params.maxChars, 48_000)
+  assert.equal(harness.requests.some((request) => request.method === 'chat.history'), false)
 
   const parsed = JSON.parse(result.stdout) as Record<string, unknown>
   assert.equal(result.code, 0)
   assert.equal(result.runtimeTransport, 'gateway-chat')
-  assert.equal(parsed.text, 'History final')
+  assert.equal(parsed.text, 'Terminal final')
   assert.equal(parsed.toolEventCount, 1)
   assert.equal(harness.finishes.at(-1)?.status, 'completed')
-  assert.equal(harness.finishes.at(-1)?.output.stdout, 'History final')
+  assert.equal(harness.finishes.at(-1)?.output.stdout, 'Terminal final')
   assert.equal(events.some((entry) => entry.event === 'delta' && entry.data.text === 'Live '), true)
   assert.equal(events.some((entry) => entry.event === 'progress' && /Tool files\.search/.test(String(entry.data.text))), true)
 })
 
 test('runTurn falls back to chat.message.get for placeholder history rows', async () => {
   const harness = createHarness({
+    finalPayload: (runId) => ({ runId, state: 'final' }),
     history: {
       messages: [
         {

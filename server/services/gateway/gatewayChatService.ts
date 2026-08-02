@@ -19,7 +19,7 @@ export type GatewayChatFailureKind =
   | 'unknown'
 
 export type GatewayChatRunStatus = 'running' | 'completed' | 'failed' | 'timeout' | 'aborted' | 'interrupted'
-export type GatewayChatThinkingLevel = 'off' | 'minimal' | 'low' | 'medium' | 'high'
+export type GatewayChatThinkingLevel = 'off' | 'minimal' | 'low' | 'medium' | 'high' | 'xhigh' | 'max'
 export type GatewayChatFastModePreference = 'auto' | 'on' | 'off'
 export type GatewayChatOpenClawFastMode = 'auto' | true
 
@@ -507,8 +507,11 @@ export function createGatewayChatService<RunRecord>(options: GatewayChatServiceO
   )
   const requestTimeoutMs = options.requestTimeoutMs ?? 30_000
   const finalExtraTimeoutMs = options.finalExtraTimeoutMs ?? 20_000
-  const historyLimit = options.historyLimit ?? 8
-  const historyMaxChars = options.historyMaxChars ?? 48_000
+  // A terminal chat event normally already carries the visible reply. When it
+  // does not, the last two transcript entries are enough to recover the final
+  // assistant message without serializing the whole recent conversation.
+  const historyLimit = options.historyLimit ?? 2
+  const historyMaxChars = options.historyMaxChars ?? 12_000
   const messageGetMaxChars = options.messageGetMaxChars ?? 1_000_000
 
   let gatewayClientState: GatewayClientState | null = null
@@ -1332,8 +1335,13 @@ export function createGatewayChatService<RunRecord>(options: GatewayChatServiceO
       const final = await finalPromise
       const finalPayload = final.payload
       const finalState = gatewayPayloadChatState(finalPayload) || 'final'
-      const finalText = gatewayChatMessageText(finalPayload.message)
-      const shouldReadHistory = finalState !== 'error' || !finalText
+      const finalText = options.sanitizeUserVisibleRuntimeText(gatewayChatMessageText(finalPayload.message))
+      const finalTextIsVisible = isVisibleGatewayAssistantText(finalText) && !isGatewayProtocolStatusText(finalText)
+      // The Gateway's terminal event is the fastest authoritative reply when
+      // present. Keep chat.history as a bounded recovery path for older or
+      // partial terminal payloads, where it supplies the display-normalized
+      // transcript entry and a possible chat.message.get expansion.
+      const shouldReadHistory = !finalTextIsVisible
       const history = shouldReadHistory
         ? await state.client.request('chat.history', {
             sessionKey,

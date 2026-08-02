@@ -226,6 +226,13 @@ export function createGatewayLogService(options: GatewayLogServiceOptions) {
 
   function summarizeGatewayAuthRefreshFailure(value: string): { message: string; level: 'warning' | 'error' } | null {
     const text = stripAnsi(value || '').replace(/\s+/g, ' ').trim()
+    if (/\bOAuth token refresh failed for openai\b.*\bOpenAI Codex token refresh failed\s*\(401\)/iu.test(text)
+      || /\binvalid_refresh_token\b.*\b(?:OpenAI|Codex)\b/iu.test(text)) {
+      return {
+        message: 'OpenAI / Codex sign-in was rejected or revoked. Reconnect OpenAI / Codex before retrying memory sync or model calls.',
+        level: 'error',
+      }
+    }
     if (!/\bauth refresh request timed out after 10s\b/iu.test(text)) return null
     const provider = gatewayLogTokenValue(text, 'provider') || gatewayLogTokenValue(text, 'modelProvider')
     const model = gatewayLogTokenValue(text, 'model') || gatewayLogTokenValue(text, 'modelId')
@@ -256,6 +263,14 @@ export function createGatewayLogService(options: GatewayLogServiceOptions) {
     if (/^[{}[\],]+$/u.test(text)) return { message: '' }
     if (/^"?(?:issues|details|errors)"?\s*:\s*[[{]?\s*,?$/iu.test(text)) return { message: '' }
     if (/^"?(?:valid|ok)"?\s*:\s*(?:true|false|null)\s*,?$/iu.test(text)) return { message: '' }
+
+    // Pino/console bridge records may be pretty-printed or torn at a tail
+    // boundary. Those continuation lines contain runtime metadata rather than
+    // a user-facing event, and used to fill the console with an unreadable
+    // JSON blob such as runtimeVersion, hostname, and source-file details.
+    if (/^"?(?:runtimeVersion|hostname|name|date|time|logLevelId|logLevelName|_meta|fileName|fileNameWithLine|fileColumn|fileLine|filePath|filePathWithLine|method)"?\s*:/iu.test(text)) {
+      return { message: '' }
+    }
 
     const field = text.match(/^"?(message|path|error|detail|reason)"?\s*:\s*(.+?)\s*,?$/iu)
     if (!field) return null
@@ -296,13 +311,81 @@ export function createGatewayLogService(options: GatewayLogServiceOptions) {
   }
 
   function normalizeGatewayLogDisplayMessage(value: string): { message: string; level?: string } {
-    const compact = compactGatewayLogMessage(value)
+    // Gateway child-process output is frequently Pino JSON. Extract its
+    // message before applying the human-facing formatter so one model request
+    // does not become an unreadable screen-width JSON record in the console.
+    const compact = compactGatewayLogMessage(gatewayLogPayloadMessage(value))
     const withoutTimestamp = compact
       .replace(/^\[[^\]]+\]\s+\[(?:stdout|stderr|lifecycle|gateway|channel)\]\s+/iu, '')
       .replace(/^\d{4}-\d{2}-\d{2}T\S+\s+\[memory\]\s+/iu, 'memory ')
       .replace(/^\d{4}-\d{2}-\d{2}T\S+\s+\[[^\]]+\]\s+/iu, '')
       .replace(/^\[memory\]\s+/iu, 'memory ')
       .trim()
+
+    const modelFetch = /\[model-fetch\]\s+response\s+provider=([^\s]+).*?\bmodel=([^\s]+).*?\bstatus=(\d{3}).*?\belapsedMs=(\d+)/iu.exec(withoutTimestamp)
+    if (modelFetch) {
+      const provider = modelFetch[1].replace(/[-_]+/gu, ' ')
+      const model = modelFetch[2]
+      const elapsedMs = Number(modelFetch[4])
+      const duration = Number.isFinite(elapsedMs) ? displayDurationMs(elapsedMs) : ''
+      const streamed = /\bcontentType=text\/event-stream\b/iu.test(withoutTimestamp)
+      return {
+        message: `Model response: ${provider} / ${model} completed${duration ? ` in ${duration}` : ''} (HTTP ${modelFetch[3]}${streamed ? '; streaming' : ''}).`,
+        level: Number(modelFetch[3]) >= 400 ? 'warning' : undefined,
+      }
+    }
+
+    const telegramRoute = /(?:\[telegram\]\s*)?agent route selected:\s*agent=([a-z0-9][a-z0-9-]{1,80})\s+mode=([^\s]+)\s+scope=([^\s]+)\s+model=([^\s]+)/iu.exec(withoutTimestamp)
+    if (telegramRoute) {
+      const modeLabels: Record<string, string> = {
+        sticky: 'sticky selection',
+        'one-shot-fresh': 'one-shot mention',
+        'auto-fresh': 'one-shot name match',
+        reset: 'default selection restored',
+      }
+      return {
+        message: `Telegram routed to agent=${telegramRoute[1]} (${modeLabels[telegramRoute[2]] || telegramRoute[2]}; ${telegramRoute[3]} scope; model ${telegramRoute[4]}).`,
+      }
+    }
+
+    if (/\bmessage_tool_only\b/iu.test(withoutTimestamp)) {
+      return {
+        message: 'Reply was withheld by this channel policy because the agent did not use its required delivery tool. The reply was not sent.',
+        level: 'warning',
+      }
+    }
+
+    if (/Requested agent harness ["']codex["'] is not registered/iu.test(withoutTimestamp)) {
+      return {
+        message: 'Codex runtime was enabled after the Gateway started, so its harness is unavailable in this process. Automnia will restart the Gateway before the next Codex turn.',
+        level: 'error',
+      }
+    }
+
+    if (/Left Codex binding sidecar in place because migration or archiving failed/iu.test(withoutTimestamp)) {
+      return {
+        message: 'A legacy Codex session sidecar is malformed. Automnia will preserve it in the recovery folder before the next Gateway startup so migration can continue.',
+        level: 'warning',
+      }
+    }
+
+    if (/\[clawtalk\]\s+\[MissionObserver\]\s+Failed to fetch missions:.*(?:Network error|fetch failed)/iu.test(withoutTimestamp)) {
+      return {
+        message: 'ClawTalk could not refresh mission data because its network request failed. It will retry when the ClawTalk service is reachable.',
+        level: 'warning',
+      }
+    }
+
+    const unknownTools = /tools\.allow\s+allowlist contains unknown entries\s*\(([^)]+)\)/iu.exec(withoutTimestamp)
+    if (unknownTools) {
+      return {
+        message: `An agent tool allowlist references optional tools that are not enabled: ${unknownTools[1]}. Enable the matching plugin or remove those entries.`,
+        level: 'warning',
+      }
+    }
+
+    const rpcSuccess = /^(?:⇄|â‡„)\s*res\s*(?:✓|âœ“)?\s*([^\s]+)\s+(\d+)ms\b/iu.exec(withoutTimestamp)
+    if (rpcSuccess) return { message: `Gateway RPC completed: ${rpcSuccess[1]} (${rpcSuccess[2]}ms).` }
 
     const authRefreshFailure = summarizeGatewayAuthRefreshFailure(withoutTimestamp)
     if (authRefreshFailure) return authRefreshFailure
@@ -425,7 +508,7 @@ export function createGatewayLogService(options: GatewayLogServiceOptions) {
   function formatGatewayProcessOutput(prefix: string, message: string) {
     const segments = visibleGatewayLogSegments(message)
     if (!segments.length) return ''
-    return `${segments.map((segment) => `${prefix} ${segment.line}`).join('\n')}\n`
+    return `${segments.map((segment) => `${prefix} ${segment.display.message}`).join('\n')}\n`
   }
 
   function normalizeGatewayChannelName(value: string) {
@@ -479,8 +562,12 @@ export function createGatewayLogService(options: GatewayLogServiceOptions) {
   }
 
   function gatewayActivityAgentId(message: string) {
-    const match = message.match(/^([a-z0-9][a-z0-9-]{1,80})\s+\/\s+[^/]+?\s+(?:heartbeat|mission|unit)\b/i)
-    return match?.[1] || undefined
+    const direct = message.match(/^([a-z0-9][a-z0-9-]{1,80})\s+\/\s+[^/]+?\s+(?:heartbeat|mission|unit)\b/i)
+    if (direct?.[1]) return direct[1]
+    const explicit = message.match(/\bagent(?:Id)?\s*[=:]\s*([a-z0-9][a-z0-9-]{1,80})\b/iu)
+    if (explicit?.[1]) return explicit[1]
+    const session = message.match(/\bsessionKey\s*[=:]\s*agent:([a-z0-9][a-z0-9-]{1,80})(?::|\b)/iu)
+    return session?.[1] || undefined
   }
 
   function isGatewayPollingIngressLifecycle(message: string) {
@@ -690,7 +777,18 @@ export function createGatewayLogService(options: GatewayLogServiceOptions) {
     try {
       const buffer = Buffer.alloc(length)
       await handle.read(buffer, 0, length, start)
-      return buffer.toString('utf-8')
+      const text = buffer.toString('utf-8')
+      if (start <= 0) return text
+
+      // A byte-tail can begin in the middle of a JSON/Pino record. Never pass
+      // that torn prefix to the formatter: it otherwise becomes a misleading
+      // wall of `runtimeVersion`, `hostname`, and source-file metadata.
+      const precedingByte = Buffer.alloc(1)
+      await handle.read(precedingByte, 0, 1, start - 1)
+      const beginsAfterLineBreak = precedingByte[0] === 0x0a || precedingByte[0] === 0x0d
+      if (beginsAfterLineBreak) return text
+      const firstLineBreak = text.indexOf('\n')
+      return firstLineBreak >= 0 ? text.slice(firstLineBreak + 1) : ''
     } finally {
       await handle.close().catch(() => undefined)
     }

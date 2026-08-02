@@ -94,6 +94,11 @@ export type ProviderAuthCatalogEntry = {
     clientIdEnvKeys?: string[]
     projectIdEnvKeys?: string[]
   }
+  subscriptionAuth?: {
+    label?: string
+    docs?: string
+    setupCommand?: string
+  }
 }
 
 export type ProviderAuthOpenClawConfig = {
@@ -124,6 +129,7 @@ export type ProviderAuthServiceOptions = {
   canonicalAgentModelId: (modelId: string | undefined) => string
   configuredProviderApiKeyMarker: (provider: string) => string
   createInitialOpenclawConfig: () => ProviderAuthOpenClawConfig
+  ensureBundledProviderPluginEnabledForProviderAuth: (config: ProviderAuthOpenClawConfig, pluginId: 'meta') => void
   ensureOpenRouterModelCatalogAllowlist: (config: ProviderAuthOpenClawConfig) => void
   ensureOpenRouterPluginEnabledForProviderAuth: (config: ProviderAuthOpenClawConfig) => void
   googleOAuthClientConfigStatus: () => { available: boolean; missing: string[] }
@@ -197,7 +203,22 @@ function parseLooseJsonObject(raw: string): Record<string, unknown> | null {
 
 function normalizeLocalAuthStore(value: unknown): LocalAuthStore | null {
   if (!isLooseRecord(value) || !isLooseRecord(value.providers)) return null
-  return { providers: value.providers as Record<string, LocalProviderAuth> }
+  const providers = { ...(value.providers as Record<string, LocalProviderAuth>) }
+  // OpenClaw now uses the canonical "openai" provider for both API keys and
+  // ChatGPT/Codex OAuth. Merge rather than discard a user's older local entry.
+  const legacyCodex = providers['openai-codex']
+  if (legacyCodex) {
+    const openai = providers.openai || {}
+    providers.openai = {
+      ...legacyCodex,
+      ...openai,
+      apiKey: openai.apiKey || legacyCodex.apiKey,
+      oauth: openai.oauth || legacyCodex.oauth,
+      mode: openai.mode || legacyCodex.mode,
+    }
+    delete providers['openai-codex']
+  }
+  return { providers }
 }
 
 async function readLegacyJsonState<T>(filePath: string, normalize: (value: unknown) => T | null): Promise<T | null> {
@@ -426,17 +447,11 @@ function authProfileProvidersFor(provider: string) {
 }
 
 function authProfileIdFor(provider: string, mode: AuthMode) {
-  if (provider === 'openai-codex' && mode === 'oauth') return 'openai:chatgpt-default'
-  if (provider === 'openai' && mode === 'oauth') return `${provider}:default`
+  if (provider === 'openai' && mode === 'oauth') return 'openai:chatgpt-default'
   return mode === 'oauth' ? `${provider}:oauth-default` : `${provider}:default`
 }
 
 function authProfileOAuthTargetsFor(provider: string) {
-  if (provider === 'openai-codex') {
-    return [
-      { provider: 'openai', profileId: authProfileIdFor('openai-codex', 'oauth') },
-    ]
-  }
   return authProfileProvidersFor(provider).map((authProvider) => ({
     provider: authProvider,
     profileId: authProfileIdFor(authProvider, 'oauth'),
@@ -455,7 +470,7 @@ function prependAuthProfileForProvider(store: AuthProfileStore, provider: string
 }
 
 function preferredOpenAiCodexOrder(existing: string[] | undefined) {
-  const preferred = authProfileIdFor('openai-codex', 'oauth')
+  const preferred = authProfileIdFor('openai', 'oauth')
   return Array.from(
     new Set([
       preferred,
@@ -465,7 +480,7 @@ function preferredOpenAiCodexOrder(existing: string[] | undefined) {
 }
 
 function preferOpenAiCodexOAuthProfile(store: AuthProfileStore) {
-  const profileId = authProfileIdFor('openai-codex', 'oauth')
+  const profileId = authProfileIdFor('openai', 'oauth')
   if (!store.profiles[profileId]) return
   store.order = {
     ...(store.order || {}),
@@ -516,7 +531,7 @@ async function readAuthProfileState(agentDir: string): Promise<AuthProfileStateS
 }
 
 function preferOpenAiCodexOAuthInState(state: AuthProfileStateStore) {
-  const profileId = authProfileIdFor('openai-codex', 'oauth')
+  const profileId = authProfileIdFor('openai', 'oauth')
   state.order = {
     ...(state.order || {}),
     openai: preferredOpenAiCodexOrder(state.order?.openai),
@@ -698,7 +713,7 @@ export function createProviderAuthService(options: ProviderAuthServiceOptions) {
 
     const authPath = path.join(agentDir, 'auth-profiles.json')
     const store = await readAuthProfileStore(agentDir)
-    if (provider === 'openai-codex') removeLegacyOpenAiCodexAuthProfiles(store)
+    if (provider === 'openai') removeLegacyOpenAiCodexAuthProfiles(store)
     for (const { provider: authProvider, profileId } of authProfileOAuthTargetsFor(provider)) {
       store.profiles[profileId] = {
         type: 'oauth',
@@ -714,11 +729,11 @@ export function createProviderAuthService(options: ProviderAuthServiceOptions) {
       }
       prependAuthProfileForProvider(store, authProvider, profileId)
     }
-    if (provider === 'openai-codex') preferOpenAiCodexOAuthProfile(store)
+    if (provider === 'openai') preferOpenAiCodexOAuthProfile(store)
 
     await options.writePrivateJsonFileAtomically(authPath, store)
     await writeAuthProfileSqlite(agentDir, store)
-    if (provider === 'openai-codex') await writeOpenAiCodexAuthStatePreference(agentDir).catch(() => undefined)
+    if (provider === 'openai') await writeOpenAiCodexAuthStatePreference(agentDir).catch(() => undefined)
   }
 
   async function syncUserCodexAuthToAgentHome(agentDir: string): Promise<boolean> {
@@ -758,6 +773,11 @@ export function createProviderAuthService(options: ProviderAuthServiceOptions) {
       const nextConfig = config || options.createInitialOpenclawConfig()
       options.ensureOpenRouterPluginEnabledForProviderAuth(nextConfig)
       options.ensureOpenRouterModelCatalogAllowlist(nextConfig)
+      await options.writeOpenclawConfig(nextConfig)
+    }
+    if (provider === 'meta') {
+      const nextConfig = config || options.createInitialOpenclawConfig()
+      options.ensureBundledProviderPluginEnabledForProviderAuth(nextConfig, 'meta')
       await options.writeOpenclawConfig(nextConfig)
     }
     options.invalidateAvailableModelsForAuthChange()
@@ -811,7 +831,7 @@ export function createProviderAuthService(options: ProviderAuthServiceOptions) {
         await writeProviderOAuthAuthProfiles(options.openclawAgentFolder(agentId), provider, config.oauth)
       }
     }
-    if (provider === 'openai-codex') {
+    if (provider === 'openai') {
       await syncUserCodexAuthToAgentHome(options.openclawAgentFolder('main')).catch(() => undefined)
       for (const entry of openclawConfig?.agents?.list || []) {
         const agentId = entry.id
@@ -830,8 +850,8 @@ export function createProviderAuthService(options: ProviderAuthServiceOptions) {
         authProfileIdFor(authProvider, 'apiKey'),
         authProfileIdFor(authProvider, 'oauth'),
       ])
-      if (provider === 'openai-codex') {
-        managedProfileIds.add(authProfileIdFor('openai-codex', 'oauth'))
+      if (provider === 'openai') {
+        managedProfileIds.add(authProfileIdFor('openai', 'oauth'))
         for (const profileId of Object.keys(store.profiles)) {
           if (profileId.toLowerCase().startsWith('openai-codex:')) managedProfileIds.add(profileId)
         }
@@ -846,7 +866,7 @@ export function createProviderAuthService(options: ProviderAuthServiceOptions) {
       if (store.order?.[authProvider]) store.order[authProvider] = store.order[authProvider].filter((id) => !managedProfileIds.has(id))
       if (store.lastGood?.[authProvider] && managedProfileIds.has(store.lastGood[authProvider])) delete store.lastGood[authProvider]
     }
-    if (provider === 'openai-codex') {
+    if (provider === 'openai') {
       if (store.order?.['openai-codex']) {
         for (const profileId of store.order['openai-codex']) removedProfileIds.add(profileId)
         delete store.order['openai-codex']
@@ -962,6 +982,7 @@ export function createProviderAuthService(options: ProviderAuthServiceOptions) {
     const sqliteStore = mainAuthProfileSqliteStore()
     const sqliteApiKeyConfigured = authProfileStoreHasProvider(sqliteStore, provider, 'apiKey')
     const sqliteOAuthConfigured = authProfileStoreHasProvider(sqliteStore, provider, 'oauth')
+    const subscriptionConfigured = Boolean(catalog?.subscriptionAuth && sqliteOAuthConfigured)
     const storedApiKey = authProfileProvidersFor(provider).some((authProvider) =>
       Boolean(localAuthStore.providers[authProvider]?.apiKey?.trim()),
     )
@@ -970,10 +991,10 @@ export function createProviderAuthService(options: ProviderAuthServiceOptions) {
     const oauthConfigured = Boolean(catalog?.oauth && (isOAuthCredentialUsable(local.oauth) || sqliteOAuthConfigured))
     const oauthAvailability = provider === 'google'
       ? options.googleOAuthClientConfigStatus()
-      : provider === 'openai-codex'
+      : provider === 'openai'
         ? { available: true, missing: [] as string[] }
         : { available: false, missing: [] as string[] }
-    const configured = envConfigured || configApiKeyConfigured || storedApiKey || sqliteApiKeyConfigured || oauthConfigured || vertexOAuthConfigured || Boolean((gcloud as { configured?: unknown } | undefined)?.configured)
+    const configured = envConfigured || configApiKeyConfigured || storedApiKey || sqliteApiKeyConfigured || oauthConfigured || subscriptionConfigured || vertexOAuthConfigured || Boolean((gcloud as { configured?: unknown } | undefined)?.configured)
     const defaultMode: AuthMode = catalog?.oauth && !envKeys.length ? 'oauth' : oauthConfigured ? 'oauth' : 'apiKey'
 
     return {
@@ -985,7 +1006,7 @@ export function createProviderAuthService(options: ProviderAuthServiceOptions) {
       docs: catalog?.docs,
       apiKeyUrl: catalog?.apiKeyUrl,
       optionalAuth: Boolean(catalog?.optionalAuth),
-      stored: storedApiKey || sqliteApiKeyConfigured || oauthConfigured || vertexOAuthConfigured || Boolean((gcloud as { configured?: unknown } | undefined)?.configured),
+      stored: storedApiKey || sqliteApiKeyConfigured || oauthConfigured || subscriptionConfigured || vertexOAuthConfigured || Boolean((gcloud as { configured?: unknown } | undefined)?.configured),
       apiKey: {
         configured: envConfigured || configApiKeyConfigured || storedApiKey || sqliteApiKeyConfigured,
         stored: configApiKeyConfigured || storedApiKey || sqliteApiKeyConfigured,
@@ -994,6 +1015,17 @@ export function createProviderAuthService(options: ProviderAuthServiceOptions) {
         envKeys,
       },
       ...(gcloud ? { gcloud } : {}),
+      ...(catalog?.subscriptionAuth
+        ? {
+            subscriptionAuth: {
+              supported: true,
+              configured: subscriptionConfigured,
+              label: catalog.subscriptionAuth.label,
+              docs: catalog.subscriptionAuth.docs,
+              setupCommand: catalog.subscriptionAuth.setupCommand,
+            },
+          }
+        : {}),
       oauth: catalog?.oauth
         ? {
             supported: true,
@@ -1022,12 +1054,12 @@ export function createProviderAuthService(options: ProviderAuthServiceOptions) {
   function modelAuthProblem(modelId: string | undefined) {
     const canonicalModelId = options.canonicalAgentModelId(modelId)
     if (options.isOpenAiCodexSubscriptionModel(canonicalModelId)) {
-      if (isOAuthCredentialUsable(localAuthStore.providers['openai-codex']?.oauth)) return null
-      if (authProfileStoreHasProvider(mainAuthProfileSqliteStore(), 'openai-codex')) return null
+      if (isOAuthCredentialUsable(localAuthStore.providers.openai?.oauth)) return null
+      if (authProfileStoreHasProvider(mainAuthProfileSqliteStore(), 'openai')) return null
       if (isProviderConfigured('openai')) return null
       return {
-        provider: 'openai-codex',
-        providerStatus: providerAuthStatus('openai-codex'),
+        provider: 'openai',
+        providerStatus: providerAuthStatus('openai'),
       }
     }
     const provider = canonicalModelId.split('/')[0] || ''

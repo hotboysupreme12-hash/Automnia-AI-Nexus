@@ -911,7 +911,7 @@ export function RecruitAgentModal({ isOpen, onClose }: { isOpen: boolean; onClos
   const browsingTemplateCategories = !selectedTemplateDivision && !trimmedTemplateSearch
   const selectedProvider = primaryModel
     ? isOpenAiCodexSubscriptionModel(primaryModel)
-      ? 'openai-codex'
+      ? 'openai'
       : selectedModel?.provider || primaryModel.split('/')[0]
     : ''
   const selectedProviderAuth = selectedProvider ? authStatusForProvider(authProviders, selectedProvider) : undefined
@@ -939,6 +939,7 @@ export function RecruitAgentModal({ isOpen, onClose }: { isOpen: boolean; onClos
     editorExpanded ? 'is-expanded' : '',
     markdownHighlightEnabled ? '' : 'is-plain-text',
   ].filter(Boolean).join(' ')
+  const activeMarkdownTone = markdownFileTone(activeFile)
 
   const syncRecruitColumnHeights = useCallback(() => {
     const form = recruitFormRef.current
@@ -1345,7 +1346,7 @@ export function RecruitAgentModal({ isOpen, onClose }: { isOpen: boolean; onClos
     const selected = models.find((model) => model.id === next)
     const provider = next
       ? isOpenAiCodexSubscriptionModel(next)
-        ? 'openai-codex'
+        ? 'openai'
         : selected?.provider || next.split('/')[0]
       : ''
     const auth = provider ? authStatusForProvider(authProviders, provider) : undefined
@@ -1780,14 +1781,39 @@ export function RecruitAgentModal({ isOpen, onClose }: { isOpen: boolean; onClos
                           </button>
                         ))}
                       </div>
-                      <div className="dui-recruit-style-settings" aria-label="Agent settings">
+                      <div className="dui-recruit-style-settings" data-recruit-settings="agent-profile" aria-label="Agent settings">
                         <div className="dui-recruit-style-settings-head">
-                          <strong>Agent settings</strong>
-                          <small>{className} - {enabledCapabilities.length} lanes - {primaryModel ? autoForgeModelLabel : 'system default'}</small>
+                          <div>
+                            <span>Configuration</span>
+                            <strong>Agent profile</strong>
+                            <small>Review the identity, runtime lane, and access boundaries before recruitment.</small>
+                          </div>
+                          <span className="dui-recruit-settings-ready" data-ready={canSubmit ? 'true' : 'false'}>
+                            <i aria-hidden="true" />
+                            {canSubmit ? 'Ready to recruit' : 'Profile in progress'}
+                          </span>
+                        </div>
+                        <div className="dui-recruit-settings-overview" aria-label="Agent profile summary">
+                          <span data-tone="profile">
+                            <small>Behavior</small>
+                            <strong>{selectedBehavior.label}</strong>
+                          </span>
+                          <span data-tone="role">
+                            <small>Role level</small>
+                            <strong>{className} · {level}</strong>
+                          </span>
+                          <span data-tone="runtime">
+                            <small>Runtime lane</small>
+                            <strong>{primaryModel ? autoForgeModelLabel : 'System default'}</strong>
+                          </span>
+                          <span data-tone="access">
+                            <small>Access</small>
+                            <strong>{enabledCapabilities.length} capabilities</strong>
+                          </span>
                         </div>
                         <div className="dui-recruit-settings-content">
                           <section className="dui-recruit-setting-group">
-                            <SectionTitle icon="role" label="Role details" meta={`Level ${level}`} />
+                            <SectionTitle icon="role" label="Identity and role" meta={`Level ${level}`} />
                             <div className="dui-recruit-grid three">
                               <RecruitChoiceField
                                 label="Class"
@@ -1839,7 +1865,7 @@ export function RecruitAgentModal({ isOpen, onClose }: { isOpen: boolean; onClos
                           </section>
 
                           <section className="dui-recruit-setting-group">
-                            <SectionTitle icon="runtime" label="Runtime" meta={`${enabledCapabilities.length} lanes`} />
+                            <SectionTitle icon="runtime" label="Runtime lane" meta={primaryModel ? 'Model selected' : 'System default'} />
                             <div className="dui-recruit-grid two">
                               <div className="dui-recruit-model-field">
                                 <RecruitChoiceField
@@ -1870,7 +1896,7 @@ export function RecruitAgentModal({ isOpen, onClose }: { isOpen: boolean; onClos
                           </section>
 
                           <section className="dui-recruit-setting-group">
-                            <SectionTitle icon="capabilities" label="Capabilities" />
+                            <SectionTitle icon="capabilities" label="Capabilities and party" meta={`${enabledCapabilities.length} enabled`} />
                             <div className="dui-recruit-capability-grid">
                               {CAPABILITY_OPTIONS.map((option) => (
                                 <label key={option.key} className="dui-recruit-capability" title={option.detail}>
@@ -1899,8 +1925,9 @@ export function RecruitAgentModal({ isOpen, onClose }: { isOpen: boolean; onClos
                   </div>
 
                   <div ref={recruitSideRef} className="dui-recruit-side">
-                    <section ref={recruitFilesRef} className="dui-recruit-files" aria-label="Agent markdown bootstrap files">
-                      <SectionTitle icon="markdown" label="Markdown files" meta={`${fileOrder.length} ready`} />
+                    <section ref={recruitFilesRef} className="dui-recruit-files" data-markdown-tone={activeMarkdownTone} aria-label="Agent markdown bootstrap files">
+                      <SectionTitle icon="markdown" label="Markdown files" meta={`${fileOrder.length} authored`} />
+                      <p className="dui-recruit-files__intro">Each document becomes part of the agent’s durable operating context. Select a file to edit its identity, memory, instructions, or tools.</p>
                       <div className="dui-recruit-file-toolbar">
                         <div className="dui-recruit-file-tabs" role="tablist" aria-label="Markdown files">
                           {fileOrder.map((file) => (
@@ -1909,12 +1936,16 @@ export function RecruitAgentModal({ isOpen, onClose }: { isOpen: boolean; onClos
                               type="button"
                               role="tab"
                               aria-selected={activeFile === file}
+                              aria-controls="recruit-markdown-editor-panel"
                               data-md-tone={markdownFileTone(file)}
+                              data-file-extension="md"
                               className={activeFile === file ? 'is-active' : ''}
                               onClick={() => setActiveFile(file)}
                               title={`Edit ${file}`}
                             >
-                              {file}
+                              <span className="dui-recruit-file-tab__icon" aria-hidden="true"><RecruitIcon type="markdown" /></span>
+                              <span className="dui-recruit-file-tab__name">{file}</span>
+                              <span className="dui-recruit-file-tab__type" aria-hidden="true">MD</span>
                             </button>
                           ))}
                         </div>
@@ -1926,7 +1957,7 @@ export function RecruitAgentModal({ isOpen, onClose }: { isOpen: boolean; onClos
                           </button>
                         </div>
                       </div>
-                      <div className={editorClassName} onClick={() => editorTextRef.current?.focus()}>
+                      <div id="recruit-markdown-editor-panel" role="tabpanel" aria-label={`${activeFile} markdown editor`} className={editorClassName} data-md-tone={activeMarkdownTone} onClick={() => editorTextRef.current?.focus()}>
                         <div className="dui-recruit-code-scroll">
                           <div ref={editorGutterRef} className="dui-recruit-code-gutter" aria-hidden="true">
                             {highlightedMarkdownLines.map((_, index) => (
@@ -1960,7 +1991,7 @@ export function RecruitAgentModal({ isOpen, onClose }: { isOpen: boolean; onClos
                           />
                         </div>
                         <div className="dui-recruit-code-status">
-                          <span className="dui-recruit-code-mode">{activeFile}</span>
+                          <span className="dui-recruit-code-mode"><span aria-hidden="true">MD</span>{activeFile}</span>
                           <span>Ln {cursorStatus.line}, Col {cursorStatus.column}</span>
                           <span>{activeMarkdownLineCount} lines</span>
                           <span>{activeMarkdownCharCount} chars</span>

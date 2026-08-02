@@ -45,6 +45,7 @@ import {
   readCommandConsoleDraft,
   removeCommandConsoleDraft,
   removeCommandConsoleDraftsForAgent,
+  upsertCommandConsoleResponse,
   writeCommandConsoleDraft,
   type CommandConsoleDraftStorage,
 } from '../src/store/commandConsoleState'
@@ -211,6 +212,25 @@ test('command-console response state preserves responses separately from runtime
     'busyAgentIds',
   ])
   assert.deepEqual(preserveCommandConsoleResponseState(commandConsoleState), commandConsoleState)
+})
+
+test('command-console response updates retain an agent busy while another lane streams', () => {
+  const completed = { ...makeAgentResponse('completed-alpha'), streaming: false }
+  const streaming = { ...makeAgentResponse('streaming-alpha'), streaming: true }
+  const current = { agentResponses: [completed, streaming], busyAgentIds: ['alpha'] }
+
+  const afterCompletedUpdate = upsertCommandConsoleResponse(current, {
+    ...completed,
+    response: 'updated completion',
+  })
+  assert.deepEqual(afterCompletedUpdate.busyAgentIds, ['alpha'])
+  assert.equal(afterCompletedUpdate.agentResponses.find((entry) => entry.id === completed.id)?.response, 'updated completion')
+
+  const afterStreamingCompletes = upsertCommandConsoleResponse(afterCompletedUpdate, {
+    ...streaming,
+    streaming: false,
+  })
+  assert.deepEqual(afterStreamingCompletes.busyAgentIds, [])
 })
 
 test('command-console draft helpers own draft storage and retired-agent cleanup', () => {

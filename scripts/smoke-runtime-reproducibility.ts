@@ -21,7 +21,7 @@ assert.match(
 )
 assert.match(
   prepareRuntimeBundles,
-  /const DEFAULT_BUNDLED_CODEX_VERSION = '2026\.6\.11'/,
+  /const DEFAULT_BUNDLED_CODEX_VERSION = '2026\.7\.1-1'/,
   'bundled Codex plugin must default to an exact version',
 )
 assert.match(

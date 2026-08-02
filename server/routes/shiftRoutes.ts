@@ -104,7 +104,7 @@ export function registerShiftRoutes(app: Express, options: ShiftRoutesOptions) {
       durationUnit: z.enum(['minutes', 'hours', 'days', 'weeks']).optional(),
       message: z.string().min(5),
       model: z.string().min(3).max(160).optional(),
-      thinking: z.enum(['off', 'minimal', 'low', 'medium', 'high']).optional(),
+      thinking: z.enum(['off', 'minimal', 'low', 'medium', 'high', 'xhigh', 'max']).optional(),
       timeoutSeconds: z.number().int().min(30).max(7200).optional(),
       wake: z.enum(['now', 'next-heartbeat']).optional(),
       session: z.enum(['main', 'isolated']).optional(),
@@ -141,7 +141,7 @@ export function registerShiftRoutes(app: Express, options: ShiftRoutesOptions) {
       model: z.string().min(3).max(160).optional(),
       leadModel: z.string().min(3).max(160).optional(),
       workerModel: z.string().min(3).max(160).optional(),
-      thinking: z.enum(['off', 'minimal', 'low', 'medium', 'high']).optional(),
+      thinking: z.enum(['off', 'minimal', 'low', 'medium', 'high', 'xhigh', 'max']).optional(),
       timeoutSeconds: z.number().int().min(30).max(7200).optional(),
       wake: z.enum(['now', 'next-heartbeat']).optional(),
       session: z.enum(['main', 'isolated']).optional(),
@@ -367,7 +367,7 @@ export function registerShiftRoutes(app: Express, options: ShiftRoutesOptions) {
   app.post('/api/shifts/defaults', async (req, res) => {
     const schema = z.object({
       model: z.string().min(3).max(160).optional(),
-      thinking: z.enum(['off', 'minimal', 'low', 'medium', 'high']).optional(),
+      thinking: z.enum(['off', 'minimal', 'low', 'medium', 'high', 'xhigh', 'max']).optional(),
       timeoutSeconds: z.number().int().min(30).max(7200).optional(),
       wake: z.enum(['now', 'next-heartbeat']).optional(),
       session: z.enum(['main', 'isolated']).optional(),
@@ -408,7 +408,7 @@ export function registerShiftRoutes(app: Express, options: ShiftRoutesOptions) {
 
     const schema = z.object({
       model: z.string().min(3).max(160).optional(),
-      thinking: z.enum(['off', 'minimal', 'low', 'medium', 'high']).optional(),
+      thinking: z.enum(['off', 'minimal', 'low', 'medium', 'high', 'xhigh', 'max']).optional(),
       timeoutSeconds: z.number().int().min(30).max(7200).optional(),
       wake: z.enum(['now', 'next-heartbeat']).optional(),
       session: z.enum(['main', 'isolated']).optional(),

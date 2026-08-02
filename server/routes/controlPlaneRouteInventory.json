@@ -76,6 +76,7 @@
   "POST /api/party/avatar-picker/start",
   "POST /api/party/avatar-upload/:agentId",
   "POST /api/party/configs/sync",
+  "POST /api/party/default-agent",
   "POST /api/party/dispatch",
   "POST /api/party/folder-picker",
   "POST /api/party/folder-picker/start",
