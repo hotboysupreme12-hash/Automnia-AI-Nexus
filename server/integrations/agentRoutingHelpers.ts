@@ -7,7 +7,7 @@
  */
 
 export const CLAWTALK_CORE_BRIDGE_ROUTING_HELPER = String.raw`
-var CLAWTALK_ROUTING_PATCH_VERSION = 12;
+var CLAWTALK_ROUTING_PATCH_VERSION = 13;
 function resolveClawTalkStateRoot() {
     var root = process.env.OPENCLAW_STATE_ROOT || process.env.OPENCLAW_STATE_DIR || process.env.OPENCLAW_HOME || '';
     if (!root) {
@@ -306,6 +306,14 @@ function resolveClawTalkControlCenterStreamUrl() {
     var url = process.env.CLAWTALK_CONTROL_CENTER_AGENT_TURN_STREAM_URL || process.env.CONTROL_CENTER_AGENT_TURN_STREAM_URL || '';
     return String(url == null ? '' : url).trim();
 }
+function clawTalkControlCenterHeaders() {
+    var token = String(process.env.CLAWTALK_CONTROL_CENTER_TOKEN || process.env.CONTROL_CENTER_TOKEN || '').trim();
+    var headers = {
+        'Content-Type': 'application/json'
+    };
+    if (token) headers.Authorization = 'Bearer ' + token;
+    return headers;
+}
 function resolveClawTalkControlCenterConsoleFinalUrl() {
     var url = process.env.CLAWTALK_CONTROL_CENTER_CONSOLE_FINAL_URL || '';
     url = String(url == null ? '' : url).trim();
@@ -319,9 +327,7 @@ async function notifyClawTalkControlCenterConsoleFinal(options, text) {
     try {
         await fetch(url, {
             method: 'POST',
-            headers: {
-                'Content-Type': 'application/json'
-            },
+            headers: clawTalkControlCenterHeaders(),
             body: JSON.stringify({
                 source: 'clawtalk',
                 agent: options.agentId,
@@ -487,9 +493,7 @@ async function runClawTalkControlCenterOrEmbeddedAgentTurn(options) {
             var message = extra ? extra + '\n\n' + prompt : prompt;
             var response = await fetch(url, {
                 method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json'
-                },
+                headers: clawTalkControlCenterHeaders(),
                 signal: controller ? controller.signal : undefined,
                 body: JSON.stringify({
                     source: 'clawtalk',

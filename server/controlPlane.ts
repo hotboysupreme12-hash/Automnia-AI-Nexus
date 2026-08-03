@@ -9979,7 +9979,7 @@ function clawTalkCoreBridgeStreamHelper() {
 
 function patchedClawTalkCoreBridgeSource(source: string) {
   let next = source
-  const routingPatchVersion = 'var CLAWTALK_ROUTING_PATCH_VERSION = 12;'
+  const routingPatchVersion = 'var CLAWTALK_ROUTING_PATCH_VERSION = 13;'
   const routingHelperPattern = /var CLAWTALK_ROUTING_PATCH_VERSION = \d+;[\s\S]*?\nvar DEFAULT_TIMEOUT_MS = 120000;/
   const canPatchBridge = source.includes(routingPatchVersion)
     || routingHelperPattern.test(source)
@@ -10100,6 +10100,44 @@ function patchedClawTalkSmsHandlerSource(source: string) {
   next = next.replace('var SMS_TIMEOUT_MS = 90000;', 'var SMS_TIMEOUT_MS = 60000;')
   next = next.replace('const SMS_TIMEOUT_MS = 90000;', 'const SMS_TIMEOUT_MS = 60000;')
   next = next.replace(/\nvar CLAWTALK_SMS_HANDLER_PATCH_VERSION = \d+;[\s\S]*$/u, '')
+  const deliveryPatchVersion = 'var CLAWTALK_SMS_DELIVERY_RETRY_PATCH_VERSION = 1;'
+  const deliveryPatchPattern = /var CLAWTALK_SMS_DELIVERY_RETRY_PATCH_VERSION = \d+;[\s\S]*?\/\/#endregion clawtalk-sms-delivery-retry-patch/
+  const deliveryPatch = String.raw`${deliveryPatchVersion}
+var CLAWTALK_SMS_DELIVERY_MAX_ATTEMPTS = 3;
+var CLAWTALK_SMS_DELIVERY_RETRY_BASE_MS = 750;
+function isClawTalkSmsDeliveryRetryable(error) {
+    var status = Number(error === null || error === void 0 ? void 0 : error.status);
+    if (Number.isFinite(status) && status >= 400 && status < 500 && status !== 408 && status !== 429) return false;
+    var message = error instanceof Error ? error.message : String(error);
+    return !Number.isFinite(status) || status === 0 || status === 408 || status === 429 || /network error|fetch failed|econnreset|econnrefused|enotfound|etimedout|socket hang up|timeout|abort/i.test(message);
+}
+function waitForClawTalkSmsDeliveryRetry(delayMs) {
+    return new Promise(function(resolve) { return setTimeout(resolve, delayMs); });
+}
+async function sendClawTalkSmsWithRetry(client, logger, params) {
+    var lastError;
+    for(var attempt = 1; attempt <= CLAWTALK_SMS_DELIVERY_MAX_ATTEMPTS; attempt++){
+        try {
+            return await client.sms.send(params);
+        } catch (error) {
+            lastError = error;
+            if (attempt >= CLAWTALK_SMS_DELIVERY_MAX_ATTEMPTS || !isClawTalkSmsDeliveryRetryable(error)) throw error;
+            var delayMs = CLAWTALK_SMS_DELIVERY_RETRY_BASE_MS * Math.pow(2, attempt - 1);
+            var reason = error instanceof Error ? error.message : String(error);
+            if (logger && typeof logger.warn === 'function') logger.warn("SMS delivery transient failure; retry ".concat(attempt, "/").concat(CLAWTALK_SMS_DELIVERY_MAX_ATTEMPTS - 1, " in ").concat(delayMs, "ms: ").concat(reason));
+            await waitForClawTalkSmsDeliveryRetry(delayMs);
+        }
+    }
+    throw lastError;
+}
+//#endregion clawtalk-sms-delivery-retry-patch`
+  if (deliveryPatchPattern.test(next)) {
+    next = next.replace(deliveryPatchPattern, deliveryPatch)
+  } else if (!next.includes(deliveryPatchVersion)) {
+    next = next.replace('function normalizePhone(phone) {', `${deliveryPatch}\nfunction normalizePhone(phone) {`)
+  }
+  next = next.replace('Promise.resolve(client.sms.send({', 'Promise.resolve(sendClawTalkSmsWithRetry(client, logger, {')
+  next = next.replace('this.client.sms.send({', 'sendClawTalkSmsWithRetry(this.client, this.logger, {')
   return next
 }
 

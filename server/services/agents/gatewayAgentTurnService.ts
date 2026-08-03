@@ -90,6 +90,11 @@ export type GatewayAgentTurnServiceOptions = {
   extractAgentReply: (stdout: string, stderr: string) => string
 }
 
+function isStaleCodexSessionGenerationFailure(result: GatewayAgentTurnResult) {
+  if (result.code === 0) return false
+  return /codex session generation is no longer current/iu.test(`${result.stdout}\n${result.stderr}`)
+}
+
 export function createGatewayAgentTurnService(options: GatewayAgentTurnServiceOptions) {
   async function runGatewayAgentTurnForStream(
     body: Record<string, unknown>,
@@ -164,7 +169,7 @@ export function createGatewayAgentTurnService(options: GatewayAgentTurnServiceOp
     let effectiveMessage = filenameResolution.message
     if (clawTalkIntent) effectiveMessage = options.buildClawTalkRuntimeInstruction(effectiveMessage, clawTalkSetupIntent)
     const previousSessionId = options.agentTurnSessions.get(sessionScope)
-    const sessionId = wantsFreshSession ? randomUUID() : previousSessionId || randomUUID()
+    let sessionId = wantsFreshSession ? randomUUID() : previousSessionId || randomUUID()
     const isFreshSession = wantsFreshSession || !options.agentTurnSessions.has(sessionScope)
     if (wantsFreshSession && previousSessionId) options.deleteProviderConversationHistory(previousSessionId)
     options.agentTurnSessions.set(sessionScope, sessionId)
@@ -204,7 +209,7 @@ export function createGatewayAgentTurnService(options: GatewayAgentTurnServiceOp
     })
 
     emitGatewayStage('Connecting Gateway chat client.', { sessionId })
-    const result = await options.runGatewayChatTurn({
+    let result = await options.runGatewayChatTurn({
       agentId: agent,
       message: gatewayMessage,
       attachments: requestedAttachments,
@@ -218,6 +223,40 @@ export function createGatewayAgentTurnService(options: GatewayAgentTurnServiceOp
       streamObserverId,
       signal,
     })
+    if (isClawTalkRoute && isStaleCodexSessionGenerationFailure(result)) {
+      const staleSessionId = sessionId
+      sessionId = randomUUID()
+      options.deleteProviderConversationHistory(staleSessionId)
+      options.agentTurnSessions.set(sessionScope, sessionId)
+      emitGatewayStage('Resetting a stale Codex session and retrying your message once.', { sessionId, retry: 'stale-codex-session' })
+      await options.appendAgentPromptDump({
+        route: routeOptions.route,
+        agent,
+        sessionId,
+        thinking: effectiveThinking,
+        fastMode: effectiveFastMode,
+        timeoutSeconds: effectiveTimeoutSeconds,
+        cwd: runCwd,
+        requestMessage: rawMessage,
+        intentMessage,
+        finalMessage: gatewayMessage,
+        note: `${routeOptions.note}; stale Codex session retry using a fresh Gateway session`,
+      })
+      result = await options.runGatewayChatTurn({
+        agentId: agent,
+        message: gatewayMessage,
+        attachments: requestedAttachments,
+        sessionId,
+        requestedSessionKey,
+        freshSession: true,
+        thinking: effectiveThinking,
+        fastMode: effectiveFastMode,
+        timeoutMs: openClawTimeoutMs,
+        cwd: runCwd,
+        streamObserverId,
+        signal,
+      })
+    }
     const reply = options.extractAgentReply(result.stdout, result.stderr)
     const ok = result.code === 0
     return {

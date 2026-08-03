@@ -146,7 +146,7 @@ const INTENT_KEYWORDS: Record<string, string[]> = {
 }
 
 const AGENT_INTENT_TAGS: Record<string, string[]> = {
-  'hn-crypto-lead': ['money', 'finance', 'crypto', 'trading', 'market', 'alpha', 'token', 'defi', 'portfolio'],
+  'hn-crypto-lead': ['money', 'finance', 'trading', 'market', 'futures', 'index', 'indices', 'nasdaq', 'mnq', 'nq', 'qqq', 'ymu', 'stocks', 'equity', 'portfolio'],
   'hn-coordinator': ['strategy', 'planning', 'finance', 'market', 'coordination'],
   'hn-architect': ['architecture', 'planning', 'research', 'strategy', 'coordination'],
 }
