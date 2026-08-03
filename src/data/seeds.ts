@@ -215,8 +215,8 @@ export function makeSeedAgents(): OpenClawAgent[] {
     {
       id: 'hn-crypto-lead',
       name: 'Marcus Chen',
-      className: 'Crypto Strategist',
-      role: 'Lead Alpha Hunter',
+      className: 'Futures & Equity Index Analyst',
+      role: 'Market Intelligence & Trade Context Lead',
       behaviorProfile: 'architect',
       level: 22,
       rarity: 'rare',

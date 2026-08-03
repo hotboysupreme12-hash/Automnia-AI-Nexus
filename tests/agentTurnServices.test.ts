@@ -101,6 +101,79 @@ test('gateway agent turn service prepares a Gateway chat turn with identity and 
   assert.equal(events.some((entry) => entry.event === 'progress' && entry.data.text === 'Connecting Gateway chat client.'), true)
 })
 
+test('gateway agent turn service resets and retries a stale Codex session for ClawTalk once', async () => {
+  const events: Array<{ event: string; data: Record<string, unknown> }> = []
+  const gatewayTurns: Array<Record<string, unknown>> = []
+  const deletedSessionIds: string[] = []
+  const sessions = new Map<string, string>()
+
+  const service = createGatewayAgentTurnService({
+    gatewayHttpPort: 18789,
+    openClawAgentTurnTimeoutFloorSeconds: 60,
+    isValidAgentId: (agentId) => agentId === 'agent-alpha',
+    isRetiredAgentId: () => false,
+    streamObserver: () => ({ emit: (event, data) => events.push({ event, data }) }),
+    ensureOpenclawAgentRunConfigDefaults: async () => undefined,
+    readOpenclawConfig: async () => ({}),
+    ensureAgentRuntimeHealthPreflight: async () => undefined,
+    ensureAgentSandboxCompatibleWithHost: async () => undefined,
+    startGatewayHealthMonitor: () => undefined,
+    ensureGatewayRunning: async () => undefined,
+    isGatewayHealthy: async () => true,
+    isClawTalkSetupIntentMessage: () => false,
+    isClawTalkIntentMessage: () => false,
+    buildClawTalkRuntimeInstruction: (message) => message,
+    readAgentPrimaryModelIdSync: () => 'openai-codex/gpt-5',
+    isGoogleGeminiModelId: () => false,
+    thinkingForOpenClawRuntimeModel: (_modelId, thinking) => thinking,
+    resolveEffectiveAgentFastMode: async () => 'auto',
+    resolveEffectiveAgentWorkTimeoutSeconds: async () => 60,
+    resolveAgentRunContext: async () => ({
+      executionWorkspace: 'C:/workspace',
+      doctrineWorkspace: 'C:/workspace/.openclaw/agents/agent-alpha',
+    }),
+    agentTurnSessionScope: (agentId, key) => `${agentId}:${key || 'default'}`,
+    agentTurnSessions: sessions,
+    deleteProviderConversationHistory: (sessionId) => deletedSessionIds.push(sessionId),
+    resolveFilenameHintsForMessage: async (message) => ({ message }),
+    getPartyMembers: async () => [{ id: 'agent-alpha', name: 'Ada' }],
+    composeAgentDoctrinePrompt: (_agentId, message) => message,
+    runCwdForContext: (context) => context.executionWorkspace,
+    agentWorkTimeoutWrapperMs: (seconds) => seconds * 1000,
+    appendAgentPromptDump: async () => undefined,
+    runGatewayChatTurn: async (payload) => {
+      gatewayTurns.push(payload)
+      if (gatewayTurns.length === 1) {
+        return {
+          stdout: '',
+          stderr: 'Codex session generation is no longer current: stale-session-id',
+          code: 1,
+        }
+      }
+      return { stdout: 'fresh reply', stderr: '', code: 0 }
+    },
+    extractAgentReply: (stdout) => stdout,
+  })
+
+  const result = await service.runGatewayAgentTurnForStream({
+    agent: 'agent-alpha',
+    message: 'What can you help me do?',
+    sessionKey: 'clawtalk:sms:example',
+  }, 'observer-1', createAbortSignal(), {
+    route: '/api/openclaw/agent-turn/stream:clawtalk-direct',
+    note: 'ClawTalk direct Gateway chat stream route',
+  })
+
+  assert.equal(result.ok, true)
+  assert.equal(result.reply, 'fresh reply')
+  assert.equal(gatewayTurns.length, 2)
+  assert.notEqual(gatewayTurns[0].sessionId, gatewayTurns[1].sessionId)
+  assert.equal(gatewayTurns[1].freshSession, true)
+  assert.deepEqual(deletedSessionIds, [gatewayTurns[0].sessionId])
+  assert.equal(sessions.get('agent-alpha:clawtalk:sms:example'), gatewayTurns[1].sessionId)
+  assert.equal(events.some((entry) => entry.data.retry === 'stale-codex-session'), true)
+})
+
 test('buffered agent turn service dispatches forced runtime turns directly to Gateway chat', async () => {
   const events: Array<{ event: string; data: Record<string, unknown> }> = []
   let disposed = false
