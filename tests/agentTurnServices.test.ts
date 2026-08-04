@@ -259,13 +259,14 @@ test('buffered agent turn service emits sanitized buffered replies when no live 
   assert.equal(events.some((entry) => entry.event === 'progress' && entry.data.id === 'openclaw:finalizing'), true)
 })
 
-test('agent runtime service falls back to local runtime with redacted Gateway detail', async () => {
+test('agent runtime service uses the local runtime only when the fallback is explicitly enabled', async () => {
   const modes: string[] = []
   let gatewayMonitorStarts = 0
 
   const service = createAgentRuntimeService({
     controlCenterGatewayAgentSessions: true,
     forceLocalAgentRuntime: false,
+    allowLocalAgentRuntimeFallback: true,
     controlCenterGatewayChatClient: false,
     gatewayHttpPort: 18789,
     runOpenClawWithGeminiToolWritePolicy: async (_agentId, _message, _context, args) => {
@@ -311,6 +312,47 @@ test('agent runtime service falls back to local runtime with redacted Gateway de
   assert.doesNotMatch(result.stderr, /secret-123/)
 })
 
+test('agent runtime service returns a recoverable Gateway error instead of starting the embedded local agent by default', async () => {
+  const modes: string[] = []
+  const service = createAgentRuntimeService({
+    controlCenterGatewayAgentSessions: true,
+    forceLocalAgentRuntime: false,
+    allowLocalAgentRuntimeFallback: false,
+    controlCenterGatewayChatClient: false,
+    gatewayHttpPort: 18789,
+    runOpenClawWithGeminiToolWritePolicy: async (_agentId, _message, _context, args) => {
+      const mode = args.includes('--local') ? 'local' : 'gateway'
+      modes.push(mode)
+      return { stdout: '', stderr: 'Gateway disconnected', code: 1, failureKind: 'gateway_disconnect' }
+    },
+    withAgentRuntimeFlags: (args, options) => options?.mode === 'local' ? ['agent', '--local', ...args.slice(1)] : args,
+    ensureGatewayRunning: async () => undefined,
+    startGatewayHealthMonitor: () => undefined,
+    isGatewayHealthy: async () => true,
+    runControlCenterGatewayChatTurn: async () => {
+      throw new Error('not used')
+    },
+    classifyFailureKind: (message) => /gateway/i.test(message) ? 'gateway_disconnect' : undefined,
+    redactSensitiveText: (value) => value,
+  })
+
+  const result = await service.runControlCenterAgentRuntimeTurn({
+    agentId: 'agent-alpha',
+    message: 'inspect workspace',
+    context: { executionWorkspace: 'C:/workspace', doctrineWorkspace: 'C:/workspace/.openclaw/agents/agent-alpha' },
+    args: ['agent', '--agent', 'agent-alpha'],
+    timeoutMs: 1000,
+    cwd: 'C:/workspace',
+    signal: createAbortSignal(),
+  })
+
+  assert.deepEqual(modes, ['gateway'])
+  assert.equal(result.code, 503)
+  assert.equal(result.failureKind, 'gateway_unavailable')
+  assert.equal(result.runtimeTransport, 'gateway')
+  assert.match(result.stderr, /not switched to the embedded local agent/i)
+})
+
 test('agent runtime service aborts before local fallback after Gateway failure', async () => {
   const modes: string[] = []
 
@@ -318,6 +360,7 @@ test('agent runtime service aborts before local fallback after Gateway failure',
   const service = createAgentRuntimeService({
     controlCenterGatewayAgentSessions: true,
     forceLocalAgentRuntime: false,
+    allowLocalAgentRuntimeFallback: false,
     controlCenterGatewayChatClient: false,
     gatewayHttpPort: 18789,
     runOpenClawWithGeminiToolWritePolicy: async (_agentId, _message, _context, args) => {

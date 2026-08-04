@@ -400,25 +400,26 @@ const AGENT_LOCAL_CONFIG_FILE = 'config.json'
 const AGENT_MDS_FILE = 'MDS.json'
 const CANONICAL_DOCTRINE_ONLY = true
 const ENABLE_HOST_ACTION_SHORTCUTS = false
-const MACOS_GATEWAY_CHAT_EXPLICIT_OPT_IN = /^(1|true|yes)$/i.test(
-  process.env.CONTROL_CENTER_ENABLE_MAC_GATEWAY_CHAT || '',
+const CONTROL_CENTER_GATEWAY_AGENT_SESSIONS = !/^(0|false|no)$/i.test(
+  process.env.CONTROL_CENTER_GATEWAY_AGENT_SESSIONS || '1',
 )
-const MACOS_LOCAL_AGENT_RUNTIME_DEFAULT = process.platform === 'darwin' && !MACOS_GATEWAY_CHAT_EXPLICIT_OPT_IN
-const CONTROL_CENTER_GATEWAY_AGENT_SESSIONS = MACOS_LOCAL_AGENT_RUNTIME_DEFAULT
-  ? false
-  : !/^(0|false|no)$/i.test(process.env.CONTROL_CENTER_GATEWAY_AGENT_SESSIONS || '1')
-const CONTROL_CENTER_GATEWAY_CHAT_CLIENT = MACOS_LOCAL_AGENT_RUNTIME_DEFAULT
-  ? false
-  : !/^(0|false|no)$/i.test(
-    process.env.CONTROL_CENTER_GATEWAY_CHAT_CLIENT || (CONTROL_CENTER_GATEWAY_AGENT_SESSIONS ? '1' : ''),
-  )
+const CONTROL_CENTER_GATEWAY_CHAT_CLIENT = !/^(0|false|no)$/i.test(
+  process.env.CONTROL_CENTER_GATEWAY_CHAT_CLIENT || (CONTROL_CENTER_GATEWAY_AGENT_SESSIONS ? '1' : ''),
+)
 const CONTROL_CENTER_GATEWAY_PREWARM_ON_STARTUP = /^(1|true|yes)$/i.test(
   process.env.CONTROL_CENTER_GATEWAY_PREWARM_ON_STARTUP || '',
 )
 const CONTROL_CENTER_GATEWAY_TOOLS_EFFECTIVE_DIAGNOSTIC = /^(1|true|yes)$/i.test(
   process.env.CONTROL_CENTER_GATEWAY_TOOLS_EFFECTIVE_DIAGNOSTIC || '',
 )
-const FORCE_LOCAL_AGENT_RUNTIME = MACOS_LOCAL_AGENT_RUNTIME_DEFAULT || /^(1|true|yes)$/i.test(
+// The local embedded runner can be useful for advanced recovery, but it adds a
+// second execution stack (and its own provider/session state) to a failed
+// Gateway request. Keep it opt-in so a Gateway failure is a contained,
+// actionable error instead of silently switching the end user to another agent.
+const CONTROL_CENTER_ALLOW_LOCAL_AGENT_FALLBACK = /^(1|true|yes)$/i.test(
+  process.env.CONTROL_CENTER_ALLOW_LOCAL_AGENT_FALLBACK || '',
+)
+const FORCE_LOCAL_AGENT_RUNTIME = /^(1|true|yes)$/i.test(
   process.env.CONTROL_CENTER_FORCE_LOCAL_AGENT_RUNTIME || '',
 )
 const CONTROL_CENTER_AGENT_TURN_STREAM_SMOKE_MOCK = /^(1|true|yes)$/i.test(
@@ -8589,7 +8590,11 @@ function migrateLegacyOpenAiCodexProviderConfig(config: OpenClawConfigFile) {
 
   if (remainingOpenAiModels.length) {
     openAiProvider.models = remainingOpenAiModels
-    openAiProvider.agentRuntime = { id: 'codex' }
+    // ChatGPT/Codex OAuth model discovery must not silently select the Codex
+    // app-server harness for every OpenAI tool turn. Direct streaming can use
+    // the OAuth credential without that embedded runner; users who want the
+    // native harness can explicitly choose it in their OpenClaw config.
+    delete openAiProvider.agentRuntime
     delete openAiProvider.apiKey
     delete openAiProvider.auth
     if (openAiProvider.baseUrl === CODEX_PROVIDER_BASE_URL) delete openAiProvider.baseUrl
@@ -8912,8 +8917,11 @@ function ensureOpenclawRuntimeDefaults(config: OpenClawConfigFile) {
   if (!defaults.memorySearch.query.hybrid) defaults.memorySearch.query.hybrid = {}
   delete defaults.memorySearch.store
 
-  defaults.memorySearch.enabled ??= true
-  defaults.memorySearch.sync.watch ??= true
+  // Embedding search can incur provider billing and, when the account is not
+  // active, older gateways retry it in a hot loop. Durable markdown memory is
+  // still available; semantic/vector search and its file watcher are opt-in.
+  defaults.memorySearch.enabled ??= false
+  defaults.memorySearch.sync.watch ??= false
   defaults.memorySearch.cache.enabled ??= true
   defaults.memorySearch.cache.maxEntries ??= 50000
 
@@ -17169,6 +17177,7 @@ const runBufferedAgentTurnForStream = bufferedAgentTurnService.runBufferedAgentT
 const agentRuntimeService = createAgentRuntimeService({
   controlCenterGatewayAgentSessions: CONTROL_CENTER_GATEWAY_AGENT_SESSIONS,
   forceLocalAgentRuntime: FORCE_LOCAL_AGENT_RUNTIME,
+  allowLocalAgentRuntimeFallback: CONTROL_CENTER_ALLOW_LOCAL_AGENT_FALLBACK,
   controlCenterGatewayChatClient: CONTROL_CENTER_GATEWAY_CHAT_CLIENT,
   gatewayHttpPort: GATEWAY_HTTP_PORT,
   runOpenClawWithGeminiToolWritePolicy,

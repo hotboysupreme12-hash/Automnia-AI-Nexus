@@ -175,7 +175,8 @@ Use these escape hatches for diagnostics:
 
 - `CONTROL_CENTER_GATEWAY_CHAT_CLIENT=0`: skip persistent Gateway chat client.
 - `CONTROL_CENTER_GATEWAY_AGENT_SESSIONS=0`: skip Gateway-backed console runs.
-- `CONTROL_CENTER_FORCE_LOCAL_AGENT_RUNTIME=1`: force embedded local execution.
+- `CONTROL_CENTER_ALLOW_LOCAL_AGENT_FALLBACK=1`: explicitly allow a failed Gateway tool turn to fall back to embedded local execution. This is off by default.
+- `CONTROL_CENTER_FORCE_LOCAL_AGENT_RUNTIME=1`: force embedded local execution for diagnostics only.
 - `CONTROL_CENTER_GATEWAY_TOOLS_EFFECTIVE_DIAGNOSTIC=1`: issue the
   `tools.effective` diagnostic inventory call after `chat.send`. Keep this off
   during normal chat because the docs define it as read-only inventory, not a

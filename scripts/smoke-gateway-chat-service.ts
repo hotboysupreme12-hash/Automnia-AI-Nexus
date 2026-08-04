@@ -114,23 +114,13 @@ assert.match(
 )
 assert.match(
   controlPlane,
-  /const MACOS_GATEWAY_CHAT_EXPLICIT_OPT_IN = \/[\s\S]*CONTROL_CENTER_ENABLE_MAC_GATEWAY_CHAT/,
-  'macOS Gateway chat should require an explicit opt-in flag',
+  /const CONTROL_CENTER_ALLOW_LOCAL_AGENT_FALLBACK = \/\^\(1\|true\|yes\)\$\/i\.test\(/,
+  'embedded local fallback should require an explicit opt-in',
 )
-assert.match(
+assert.doesNotMatch(
   controlPlane,
-  /const MACOS_LOCAL_AGENT_RUNTIME_DEFAULT = process\.platform === 'darwin' && !MACOS_GATEWAY_CHAT_EXPLICIT_OPT_IN/,
-  'macOS should default away from Gateway chat unless explicitly opted in',
-)
-assert.match(
-  controlPlane,
-  /const CONTROL_CENTER_GATEWAY_AGENT_SESSIONS = MACOS_LOCAL_AGENT_RUNTIME_DEFAULT\s*\?\s*false/,
-  'macOS Gateway agent sessions should be forced off by default',
-)
-assert.match(
-  controlPlane,
-  /const FORCE_LOCAL_AGENT_RUNTIME = MACOS_LOCAL_AGENT_RUNTIME_DEFAULT \|\|/,
-  'macOS should force the local agent runtime by default',
+  /MACOS_LOCAL_AGENT_RUNTIME_DEFAULT/,
+  'macOS should not force the embedded local runtime by default',
 )
 assert.match(
   gatewayChatService,

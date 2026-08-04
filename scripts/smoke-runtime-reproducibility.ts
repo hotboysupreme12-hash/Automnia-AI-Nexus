@@ -209,20 +209,10 @@ assert.match(
   /nodeToolchainDirMatchesCurrentPlatform/,
   'desktop launcher must discover bundled Node/npm toolchains for the current platform',
 )
-assert.match(
+assert.doesNotMatch(
   electronMain,
-  /function applyMacOSLocalAgentRuntimeDefaults/,
-  'desktop launcher must apply macOS local runtime defaults before starting the server child',
-)
-assert.match(
-  electronMain,
-  /CONTROL_CENTER_ENABLE_MAC_GATEWAY_CHAT/,
-  'macOS desktop startup should keep Gateway chat opt-in only',
-)
-assert.match(
-  electronMain,
-  /CONTROL_CENTER_GATEWAY_AGENT_SESSIONS = '0'[\s\S]*CONTROL_CENTER_GATEWAY_CHAT_CLIENT = '0'[\s\S]*CONTROL_CENTER_FORCE_LOCAL_AGENT_RUNTIME = '1'/,
-  'macOS desktop startup should force local agent runtime by default',
+  /function applyMacOSLocalAgentRuntimeDefaults|CONTROL_CENTER_FORCE_LOCAL_AGENT_RUNTIME = '1'/,
+  'desktop launcher must not force the embedded local agent runtime on macOS',
 )
 assert.doesNotMatch(
   electronMain,
