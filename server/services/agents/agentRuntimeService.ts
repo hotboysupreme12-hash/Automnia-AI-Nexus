@@ -40,6 +40,7 @@ export type AgentRuntimeTurnParams = {
 export type AgentRuntimeServiceOptions = {
   controlCenterGatewayAgentSessions: boolean
   forceLocalAgentRuntime: boolean
+  allowLocalAgentRuntimeFallback: boolean
   controlCenterGatewayChatClient: boolean
   gatewayHttpPort: number
   runOpenClawWithGeminiToolWritePolicy: (
@@ -166,6 +167,22 @@ export function createAgentRuntimeService(options: AgentRuntimeServiceOptions) {
 
     if (params.signal?.aborted) {
       throw Object.assign(new Error('gateway agent run aborted before fallback'), { name: 'AbortError' })
+    }
+
+    if (!options.allowLocalAgentRuntimeFallback) {
+      const recovery = [
+        'The OpenClaw Gateway is unavailable, so this request was not switched to the embedded local agent.',
+        'Use Runtime Monitor to restart the Gateway, then retry the request.',
+        'Local embedded fallback is disabled by default to keep failed Gateway turns isolated and predictable.',
+      ].join(' ')
+      return {
+        stdout: '',
+        stderr: recovery,
+        code: 503,
+        failureKind: 'gateway_unavailable',
+        runtimeTransport: 'gateway',
+        gatewayFallbackDetail,
+      }
     }
 
     const local = await run('local')
