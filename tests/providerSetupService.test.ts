@@ -11,6 +11,7 @@ import {
 import type { LocalOAuthCredential } from '../server/services/providers/providerAuthService'
 
 type HarnessOptions = {
+  fetch?: ProviderSetupServiceOptions['fetch']
   importModule?: ProviderSetupServiceOptions['importModule']
   localOAuth?: Record<string, LocalOAuthCredential | undefined>
   modes?: Record<string, 'oauth' | 'apiKey' | undefined>
@@ -37,6 +38,7 @@ async function createHarness(options: HarnessOptions = {}) {
     ensureLocalAuthStoreLoaded: async () => {
       state.ensureCalls += 1
     },
+    fetch: options.fetch,
     getLocalProviderMode: (provider) => state.modes[provider],
     getLocalProviderOAuth: (provider) => state.localOAuth[provider],
     googleOAuthClientIdKeys: ['DYSTOPAI_GOOGLE_OAUTH_CLIENT_ID'],
@@ -146,7 +148,7 @@ test('reports fast Google Vertex readiness from local OAuth without probing gclo
   }
 })
 
-test('probes gcloud for Google Vertex project, account, and access token readiness', async () => {
+test('probes gcloud for Google Vertex project, account, and access token readiness while preferring ADC', async () => {
   const calls: string[][] = []
   const spawnSync: NonNullable<ProviderSetupServiceOptions['spawnSync']> = (_command, args) => {
     calls.push([...args])
@@ -154,7 +156,8 @@ test('probes gcloud for Google Vertex project, account, and access token readine
     if (key === 'config get-value project --quiet') return { status: 0, stdout: 'project-probed\n', stderr: '' }
     if (key === '--version') return { status: 0, stdout: 'Google Cloud SDK 999.0.0\n', stderr: '' }
     if (key === 'auth list --filter=status:ACTIVE --format=value(account) --quiet') return { status: 0, stdout: 'operator@example.test\n', stderr: '' }
-    if (key === 'auth print-access-token --quiet') return { status: 0, stdout: 'ya29.probed-token\n', stderr: '' }
+    if (key === 'auth application-default print-access-token --quiet') return { status: 0, stdout: 'ya29.adc-token\n', stderr: '' }
+    if (key === 'auth print-access-token --quiet') return { status: 0, stdout: 'ya29.gcloud-token\n', stderr: '' }
     return { status: 1, stdout: '', stderr: 'unexpected gcloud command' }
   }
   const harness = await createHarness({ platform: 'linux', spawnSync })
@@ -166,9 +169,74 @@ test('probes gcloud for Google Vertex project, account, and access token readine
     assert.equal(status.configured, true)
     assert.equal(status.projectId, 'project-probed')
     assert.equal(status.account, 'operator@example.test')
+    assert.equal(status.credentialSource, 'application-default')
     assert.equal(status.source, 'probe')
     assert.deepEqual(status.missing, [])
-    assert.ok(calls.some((args) => args.join(' ') === 'auth print-access-token --quiet'))
+    assert.ok(calls.some((args) => args.join(' ') === 'auth application-default print-access-token --quiet'))
+    assert.ok(!calls.some((args) => args.join(' ') === 'auth print-access-token --quiet'))
+  } finally {
+    await harness.cleanup()
+  }
+})
+
+test('falls back to regular gcloud login when ADC is unavailable', async () => {
+  const spawnSync: NonNullable<ProviderSetupServiceOptions['spawnSync']> = (_command, args) => {
+    const key = args.join(' ')
+    if (key === 'config get-value project --quiet') return { status: 0, stdout: 'project-probed\n', stderr: '' }
+    if (key === '--version') return { status: 0, stdout: 'Google Cloud SDK 999.0.0\n', stderr: '' }
+    if (key === 'auth application-default print-access-token --quiet') return { status: 1, stdout: '', stderr: 'ADC unavailable' }
+    if (key === 'auth print-access-token --quiet') return { status: 0, stdout: 'ya29.gcloud-token\n', stderr: '' }
+    return { status: 1, stdout: '', stderr: 'unexpected gcloud command' }
+  }
+  const harness = await createHarness({ platform: 'linux', spawnSync })
+  try {
+    const auth = await harness.service.resolveGoogleVertexRequestAuth({})
+    assert.deepEqual(auth, {
+      type: 'oauth',
+      accessToken: 'ya29.gcloud-token',
+      projectId: 'project-probed',
+      location: 'global',
+      source: 'gcloud',
+    })
+  } finally {
+    await harness.cleanup()
+  }
+})
+
+test('uses authorized-user ADC directly without waiting for the gcloud token command', async () => {
+  const processEnv: NodeJS.ProcessEnv = {}
+  const requests: Array<{ url: string; body: string }> = []
+  const harness = await createHarness({
+    processEnv,
+    fetch: async (input, init) => {
+      requests.push({ url: String(input), body: String(init?.body || '') })
+      return new Response(JSON.stringify({ access_token: 'ya29.refreshed-adc-token' }), { status: 200 })
+    },
+    spawnSync: () => ({ status: 1, stdout: '', stderr: 'gcloud must not be called for direct ADC refresh' }),
+  })
+  try {
+    const adcPath = path.join(harness.workspaceRoot, 'application_default_credentials.json')
+    await writeFile(adcPath, JSON.stringify({
+      type: 'authorized_user',
+      client_id: 'adc-client-id',
+      client_secret: 'adc-client-secret',
+      refresh_token: 'adc-refresh-token',
+      quota_project_id: 'project-adc',
+    }), 'utf-8')
+    processEnv.GOOGLE_APPLICATION_CREDENTIALS = adcPath
+
+    const auth = await harness.service.resolveGoogleVertexRequestAuth({})
+    assert.deepEqual(auth, {
+      type: 'oauth',
+      accessToken: 'ya29.refreshed-adc-token',
+      projectId: 'project-adc',
+      location: 'global',
+      source: 'application-default',
+    })
+    assert.deepEqual(requests, [{
+      url: 'https://oauth2.googleapis.com/token',
+      body: 'client_id=adc-client-id&client_secret=adc-client-secret&refresh_token=adc-refresh-token&grant_type=refresh_token',
+    }])
   } finally {
     await harness.cleanup()
   }

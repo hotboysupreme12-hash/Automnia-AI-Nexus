@@ -21,6 +21,7 @@ export type AuthProviderGcloudStatus = {
   installed: boolean
   authenticated: boolean
   configured: boolean
+  credentialSource?: 'application-default' | 'gcloud' | 'environment' | 'local-oauth'
   projectId?: string
   location?: string
   account?: string
