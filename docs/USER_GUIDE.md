@@ -153,6 +153,18 @@ Recommended setup pattern:
 5. Check Monitor for the route used.
 6. Use the agent in missions, channels, or schedules after the direct path works.
 
+### Google Vertex AI: one-time local sign-in
+
+Vertex models use Google Application Default Credentials (ADC). You do **not** need a Google OAuth client secret or a Vertex API key in Automnia AI.
+
+```bash
+gcloud auth application-default login
+gcloud config set project YOUR_PROJECT_ID
+gcloud services enable aiplatform.googleapis.com --project YOUR_PROJECT_ID
+```
+
+Then choose any `google-vertex/...` model. The app reads the ADC project and refreshes its access token automatically. Your Google Cloud project still needs billing enabled and the signed-in identity needs the Vertex AI User role.
+
 ---
 
 ## 6. Workspaces and file boundaries

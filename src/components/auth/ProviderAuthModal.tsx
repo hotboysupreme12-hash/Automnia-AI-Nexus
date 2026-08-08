@@ -129,6 +129,15 @@ export function ProviderAuthModal({ isOpen, provider, envKeys, providerStatus, o
   const gcloud = activeProviderStatus?.gcloud
   const gcloudMissing = gcloud?.missing?.filter(Boolean) || []
   const hasApiKeyAuth = envKeys.length > 0
+  const gcloudCredentialLabel = gcloud?.credentialSource === 'application-default'
+    ? 'Application Default Credentials'
+    : gcloud?.credentialSource === 'gcloud'
+      ? 'Google Cloud CLI sign-in'
+      : gcloud?.credentialSource === 'environment'
+        ? 'environment access token'
+        : gcloud?.credentialSource === 'local-oauth'
+          ? 'local Google OAuth'
+          : ''
 
   const handleSave = async () => {
     if (!apiKey.trim()) return
@@ -413,11 +422,11 @@ export function ProviderAuthModal({ isOpen, provider, envKeys, providerStatus, o
             <div className="mb-4 rounded-xl border border-sky-300/20 bg-sky-950/25 p-3">
               <div className="flex items-start justify-between gap-3">
                 <div>
-                  <p className="text-sm font-semibold text-sky-100">Google Cloud CLI</p>
+                  <p className="text-sm font-semibold text-sky-100">Google Cloud sign-in</p>
                   <p className="mt-1 text-xs text-slate-300">
                     {gcloud.configured
-                      ? `Ready${gcloud.account ? ` as ${gcloud.account}` : ''}${gcloud.projectId ? ` on ${gcloud.projectId}` : ''}.`
-                      : 'Use gcloud authentication for Vertex AI model calls.'}
+                      ? `Ready${gcloud.account ? ` as ${gcloud.account}` : ''}${gcloud.projectId ? ` on ${gcloud.projectId}` : ''}${gcloudCredentialLabel ? ` via ${gcloudCredentialLabel}` : ''}.`
+                      : 'One local Google sign-in unlocks every Vertex model.'}
                   </p>
                 </div>
                 <div className="flex shrink-0 items-center gap-2">
@@ -444,6 +453,9 @@ export function ProviderAuthModal({ isOpen, provider, envKeys, providerStatus, o
                 <span>Project: {gcloud.projectId || 'not set'}</span>
                 <span>Location: {gcloud.location || 'us-central1'}</span>
               </div>
+              <p className="mt-2 text-[11px] text-slate-300">
+                Vertex uses Google Application Default Credentials (ADC), not a client secret or API key. Run the three commands below once, then select any <code className="font-mono text-sky-100">google-vertex/…</code> model.
+              </p>
               {!gcloud.configured && (
                 <div className="mt-3 space-y-2">
                   {gcloudMissing.length > 0 && (

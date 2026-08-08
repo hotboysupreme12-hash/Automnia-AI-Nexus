@@ -23,6 +23,7 @@ export type GoogleVertexGcloudStatus = {
   installed: boolean
   authenticated: boolean
   configured: boolean
+  credentialSource?: 'application-default' | 'gcloud' | 'environment' | 'local-oauth'
   projectId?: string
   location: string
   account?: string
@@ -39,6 +40,13 @@ export type ProviderRequestAuth =
 export type GoogleOAuthClientConfig = {
   clientId: string
   clientSecret?: string
+}
+
+type GoogleApplicationDefaultAuthorizedUserCredential = {
+  clientId: string
+  clientSecret: string
+  refreshToken: string
+  projectId?: string
 }
 
 export type OpenAICodexAuthorizationFlow = {
@@ -124,6 +132,7 @@ export type ProviderSetupServiceOptions = {
   electronResourcesPath?: () => string
   ensureLocalAuthStoreLoaded: () => Promise<unknown>
   existsSync?: (filePath: string) => boolean
+  fetch?: typeof fetch
   getLocalProviderMode: (provider: string) => 'oauth' | 'apiKey' | undefined
   getLocalProviderOAuth: (provider: string) => LocalOAuthCredential | undefined
   googleOAuthClientIdKeys: string[]
@@ -212,6 +221,7 @@ export function createProviderSetupService(options: ProviderSetupServiceOptions)
   const readFile = options.readFileSync || readFileSync
   const readDir = options.readdirSync || readdirSync
   const spawn = options.spawnSync || (spawnSync as SpawnSyncLike)
+  const fetch = options.fetch || globalThis.fetch
   const now = options.now || Date.now
   const importModule = options.importModule || defaultImportModule
   const googleProjectIdKeys = uniqueStrings(options.googleProjectIdKeys)
@@ -319,6 +329,8 @@ export function createProviderSetupService(options: ProviderSetupServiceOptions)
   function resolveGoogleVertexProjectId(env: Record<string, string | undefined> = {}) {
     const fromEnv = resolveEnvValue(env, googleVertexProjectIdKeys)
     if (fromEnv) return fromEnv
+    const fromAdc = readGoogleApplicationDefaultAuthorizedUserCredential()?.projectId
+    if (fromAdc) return fromAdc
     const result = runGcloud(['config', 'get-value', 'project', '--quiet'], 5000)
     return result.code === 0 ? cleanGcloudConfigValue(result.stdout) : ''
   }
@@ -333,6 +345,7 @@ export function createProviderSetupService(options: ProviderSetupServiceOptions)
     return (
       resolveEnvValue(env, googleVertexProjectIdKeys) ||
       options.getLocalProviderOAuth('google')?.projectId?.trim() ||
+      readGoogleApplicationDefaultAuthorizedUserCredential()?.projectId ||
       resolveGoogleProjectId() ||
       ''
     )
@@ -362,14 +375,99 @@ export function createProviderSetupService(options: ProviderSetupServiceOptions)
       return googleVertexAccessTokenCache.value
     }
 
-    const token = runGcloud(['auth', 'print-access-token', '--quiet'], 10000)
-    const accessToken = token.code === 0 ? token.stdout.trim() : ''
-    if (!accessToken) return ''
+    const credential = resolveGoogleVertexGcloudAccessToken({
+      includeApplicationDefault: !readGoogleApplicationDefaultAuthorizedUserCredential(),
+    })
+    if (!credential) return ''
     googleVertexAccessTokenCache = {
-      value: accessToken,
+      value: credential.accessToken,
       expiresAt: now() + GOOGLE_VERTEX_ACCESS_TOKEN_CACHE_MS,
     }
-    return accessToken
+    return credential.accessToken
+  }
+
+  /**
+   * Vertex's recommended local-development credential is ADC, created by
+   * `gcloud auth application-default login`. Keep the ordinary gcloud account
+   * as a compatibility fallback for people who only use `gcloud auth login`.
+   * Tokens remain in-process and are never surfaced in provider status.
+   */
+  function resolveGoogleVertexGcloudAccessToken({ includeApplicationDefault = true }: { includeApplicationDefault?: boolean } = {}): {
+    accessToken: string
+    source: 'application-default' | 'gcloud'
+  } | null {
+    if (includeApplicationDefault) {
+      const adc = runGcloud(['auth', 'application-default', 'print-access-token', '--quiet'], 10000)
+      const adcToken = adc.code === 0 ? adc.stdout.trim() : ''
+      if (adcToken) return { accessToken: adcToken, source: 'application-default' }
+    }
+
+    const gcloud = runGcloud(['auth', 'print-access-token', '--quiet'], 10000)
+    const gcloudToken = gcloud.code === 0 ? gcloud.stdout.trim() : ''
+    if (gcloudToken) return { accessToken: gcloudToken, source: 'gcloud' }
+
+    return null
+  }
+
+  function googleApplicationDefaultCredentialFileCandidates() {
+    const configuredPath = resolveEnvValue({}, ['GOOGLE_APPLICATION_CREDENTIALS'])
+    const homeDir = resolveEnvValue({}, ['HOME', 'USERPROFILE'])
+    const appData = resolveEnvValue({}, ['APPDATA', 'AppData'])
+    return uniqueStrings(
+      configuredPath,
+      platform === 'win32' && appData ? path.join(appData, 'gcloud', 'application_default_credentials.json') : '',
+      homeDir ? path.join(homeDir, '.config', 'gcloud', 'application_default_credentials.json') : '',
+    )
+  }
+
+  function readGoogleApplicationDefaultAuthorizedUserCredential(): GoogleApplicationDefaultAuthorizedUserCredential | null {
+    for (const filePath of googleApplicationDefaultCredentialFileCandidates()) {
+      try {
+        const parsed = JSON.parse(readFile(filePath, 'utf-8')) as {
+          type?: string
+          client_id?: string
+          client_secret?: string
+          refresh_token?: string
+          quota_project_id?: string
+        }
+        const clientId = parsed.client_id?.trim()
+        const clientSecret = parsed.client_secret?.trim()
+        const refreshToken = parsed.refresh_token?.trim()
+        if (parsed.type !== 'authorized_user' || !clientId || !clientSecret || !refreshToken) continue
+        const projectId = parsed.quota_project_id?.trim()
+        return { clientId, clientSecret, refreshToken, ...(projectId ? { projectId } : {}) }
+      } catch {
+        // ADC may be absent or use a credential type handled by gcloud instead.
+      }
+    }
+    return null
+  }
+
+  async function resolveGoogleVertexApplicationDefaultAuth(): Promise<{
+    accessToken: string
+    source: 'application-default'
+  } | null> {
+    const credential = readGoogleApplicationDefaultAuthorizedUserCredential()
+    if (!credential) return null
+
+    try {
+      const response = await fetch('https://oauth2.googleapis.com/token', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+        body: new URLSearchParams({
+          client_id: credential.clientId,
+          client_secret: credential.clientSecret,
+          refresh_token: credential.refreshToken,
+          grant_type: 'refresh_token',
+        }).toString(),
+      })
+      if (!response.ok) return null
+      const payload = await response.json() as { access_token?: unknown }
+      const accessToken = typeof payload.access_token === 'string' ? payload.access_token.trim() : ''
+      return accessToken ? { accessToken, source: 'application-default' } : null
+    } catch {
+      return null
+    }
   }
 
   function getGoogleVertexProcessEnv(baseEnv: Record<string, string | undefined> = processEnv): Record<string, string> {
@@ -415,13 +513,18 @@ export function createProviderSetupService(options: ProviderSetupServiceOptions)
         installed: googleVertexGcloudStatusCache?.value.installed ?? false,
         authenticated,
         configured,
+        ...(tokenFromEnv
+          ? { credentialSource: 'environment' as const }
+          : localOAuthUsable
+            ? { credentialSource: 'local-oauth' as const }
+            : {}),
         ...(projectId ? { projectId } : {}),
         location,
         ...(localGoogleOAuth?.email ? { account: localGoogleOAuth.email } : {}),
         missing,
         installUrl: GOOGLE_CLOUD_CLI_INSTALL_URL,
         commands: [
-          'gcloud auth login',
+          'gcloud auth application-default login',
           'gcloud config set project YOUR_PROJECT_ID',
           `gcloud services enable aiplatform.googleapis.com --project ${projectId || 'YOUR_PROJECT_ID'}`,
         ],
@@ -437,17 +540,16 @@ export function createProviderSetupService(options: ProviderSetupServiceOptions)
     const account = installed
       ? cleanGcloudConfigValue(runGcloud(['auth', 'list', '--filter=status:ACTIVE', '--format=value(account)', '--quiet'], 7000).stdout)
       : ''
-    const tokenProbe = installed && !tokenFromEnv
-      ? runGcloud(['auth', 'print-access-token', '--quiet'], 10000)
-      : { stdout: '', stderr: '', code: tokenFromEnv ? 0 : 1 }
-    const authenticated = Boolean(tokenFromEnv || (tokenProbe.code === 0 && tokenProbe.stdout.trim()))
+    const localAdc = !tokenFromEnv ? readGoogleApplicationDefaultAuthorizedUserCredential() : null
+    const credential = installed && !tokenFromEnv && !localAdc ? resolveGoogleVertexGcloudAccessToken() : null
+    const authenticated = Boolean(tokenFromEnv || localAdc || credential)
     const configured = Boolean(projectId && authenticated)
     const missing: string[] = []
     if (!installed && !tokenFromEnv) {
       missing.push(`Install Google Cloud CLI: ${GOOGLE_CLOUD_CLI_INSTALL_URL}`)
     }
     if (installed && !authenticated) {
-      missing.push('Run gcloud auth login, then retry.')
+      missing.push('Run gcloud auth application-default login, then retry.')
     }
     if (!projectId) {
       missing.push('Set a Google Cloud project with gcloud config set project YOUR_PROJECT_ID.')
@@ -461,13 +563,20 @@ export function createProviderSetupService(options: ProviderSetupServiceOptions)
       installed,
       authenticated,
       configured,
+      ...(tokenFromEnv
+        ? { credentialSource: 'environment' as const }
+        : localAdc
+          ? { credentialSource: 'application-default' as const }
+        : credential
+          ? { credentialSource: credential.source }
+          : {}),
       ...(projectId ? { projectId } : {}),
       location,
       ...(account ? { account } : {}),
       missing,
       installUrl: GOOGLE_CLOUD_CLI_INSTALL_URL,
       commands: [
-        'gcloud auth login',
+        'gcloud auth application-default login',
         'gcloud config set project YOUR_PROJECT_ID',
         `gcloud services enable aiplatform.googleapis.com --project ${projectId || 'YOUR_PROJECT_ID'}`,
       ],
@@ -502,12 +611,17 @@ export function createProviderSetupService(options: ProviderSetupServiceOptions)
       return { type: 'oauth', accessToken: envToken, projectId, location, source: 'env-token' }
     }
 
+    const hasLocalAdc = Boolean(readGoogleApplicationDefaultAuthorizedUserCredential())
+    const applicationDefault = await resolveGoogleVertexApplicationDefaultAuth()
+    if (applicationDefault && projectId) {
+      return { type: 'oauth', accessToken: applicationDefault.accessToken, projectId, location, source: applicationDefault.source }
+    }
+
     const version = runGcloud(['--version'], 5000)
     if (version.code !== 0) return null
-    const token = runGcloud(['auth', 'print-access-token', '--quiet'], 10000)
-    const accessToken = token.stdout.trim()
-    if (token.code !== 0 || !accessToken || !projectId) return null
-    return { type: 'oauth', accessToken, projectId, location, source: 'gcloud' }
+    const credential = resolveGoogleVertexGcloudAccessToken({ includeApplicationDefault: !hasLocalAdc })
+    if (!credential || !projectId) return null
+    return { type: 'oauth', accessToken: credential.accessToken, projectId, location, source: credential.source }
   }
 
   async function resolveGoogleOAuthForRequest(): Promise<{ accessToken: string; projectId?: string } | null> {
@@ -761,6 +875,7 @@ export function createProviderSetupService(options: ProviderSetupServiceOptions)
     createOpenAICodexAuthorizationFlow,
     exchangeOpenAICodexAuthorizationCode,
     getGoogleVertexProcessEnv,
+    googleApplicationDefaultCredentialFileCandidates,
     googleOAuthClientConfigFileCandidates,
     googleOAuthClientConfigStatus,
     googleVertexGcloudStatus,
@@ -769,12 +884,15 @@ export function createProviderSetupService(options: ProviderSetupServiceOptions)
     isGoogleVertexConfigured,
     isGoogleVertexLocalOAuthConfigured,
     openAICodexOAuthModulePath,
+    readGoogleApplicationDefaultAuthorizedUserCredential,
     readGoogleOAuthClientConfigFile,
     refreshOpenAICodexToken,
     resolveGoogleOAuthClientConfig,
     resolveGoogleOAuthForRequest,
     resolveGoogleProjectId,
     resolveGoogleVertexAccessTokenForProcessEnv,
+    resolveGoogleVertexApplicationDefaultAuth,
+    resolveGoogleVertexGcloudAccessToken,
     resolveGoogleVertexLocation,
     resolveGoogleVertexLocationFast,
     resolveGoogleVertexProjectId,
