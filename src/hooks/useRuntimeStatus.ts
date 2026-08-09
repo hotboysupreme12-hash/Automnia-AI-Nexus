@@ -704,7 +704,7 @@ let cachedRuntimeError = ''
 let runtimeStatusRequest: AbortController | null = null
 let runtimeStatusRequestAbortReason: 'idle' | null = null
 let runtimeStatusRefreshPending = false
-let runtimePollTimer: ReturnType<typeof window.setInterval> | null = null
+let runtimePollTimer: number | null = null
 let runtimeSubscriberId = 0
 const runtimeStatusSubscribers = new Set<() => void>()
 const runtimeSubscriberIntervals = new Map<number, number>()
@@ -713,12 +713,12 @@ let cachedRuntimeSummaryError = ''
 let runtimeSummaryRequest: AbortController | null = null
 let runtimeSummaryRequestAbortReason: 'idle' | null = null
 let runtimeSummaryRefreshPending = false
-let runtimeSummaryPollTimer: ReturnType<typeof window.setInterval> | null = null
+let runtimeSummaryPollTimer: number | null = null
 let runtimeSummarySubscriberId = 0
 const runtimeSummarySubscribers = new Set<() => void>()
 const runtimeSummarySubscriberIntervals = new Map<number, number>()
 let runtimeLifecycleListenersInstalled = false
-let runtimeResumeRefreshTimer: ReturnType<typeof window.setTimeout> | null = null
+let runtimeResumeRefreshTimer: number | null = null
 
 function runtimeSnapshot(): RuntimeStatusSnapshot {
   return { status: cachedRuntimeStatus, error: cachedRuntimeError }

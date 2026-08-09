@@ -28,6 +28,7 @@ type SkillContentPayload = {
 
 type ClawHubSkillResult = {
   slug: string
+  install?: { reference?: string }
   displayName?: string
   summary?: string
   version?: string | null
@@ -47,6 +48,13 @@ type ClawHubSearchPayload = {
 type ClawHubInstallPayload = {
   skill?: AgentSkillEntry
   output?: string
+}
+
+function clawHubSkillReference(skill: ClawHubSkillResult) {
+  const registryReference = skill.install?.reference?.trim()
+  if (registryReference) return registryReference.includes('/') && !registryReference.startsWith('@') ? `@${registryReference}` : registryReference
+  const owner = (skill.ownerHandle || skill.owner?.handle || '').trim().replace(/^@/, '')
+  return owner ? `@${owner}/${skill.slug}` : skill.slug
 }
 
 type SkillSourceFilter = 'all' | 'equipped' | AgentSkillEntry['source']
@@ -312,12 +320,13 @@ export function SkillsPanel() {
 
   const installClawHubSkill = useCallback(async (skill: ClawHubSkillResult) => {
     if (!activeAgentId) return
-    setInstallingClawHubSlug(skill.slug)
+    const skillRef = clawHubSkillReference(skill)
+    setInstallingClawHubSlug(skillRef)
     try {
       const result = await apiRequest<ClawHubInstallPayload>('/api/skills/clawhub/install', {
         method: 'POST',
         timeoutMs: 120_000,
-        body: { slug: skill.slug },
+        body: { skillRef },
       })
       if (!result.ok) {
         setError(apiErrorMessage(result.error))
@@ -337,12 +346,13 @@ export function SkillsPanel() {
 
   const updateClawHubSkill = useCallback(async (skill: ClawHubSkillResult) => {
     if (!activeAgentId) return
-    setUpdatingClawHubSlug(skill.slug)
+    const skillRef = clawHubSkillReference(skill)
+    setUpdatingClawHubSlug(skillRef)
     try {
       const result = await apiRequest<ClawHubInstallPayload>('/api/skills/clawhub/update', {
         method: 'POST',
         timeoutMs: 180_000,
-        body: { slug: skill.slug },
+        body: { skillRef },
       })
       if (!result.ok) {
         setError(apiErrorMessage(result.error))
@@ -610,12 +620,13 @@ export function SkillsPanel() {
             </div>
             <div className="grid gap-2">
               {clawHubResults.map((result) => {
+                const skillRef = clawHubSkillReference(result)
                 const installed = installedClawHubIds.has(slugifySkillId(result.slug))
-                const busyInstall = installingClawHubSlug === result.slug
-                const busyUpdate = updatingClawHubSlug === result.slug
+                const busyInstall = installingClawHubSlug === skillRef
+                const busyUpdate = updatingClawHubSlug === skillRef
                 const updated = formatClawHubDate(result.updatedAt)
                 return (
-                  <div key={result.slug} className="rounded-lg border border-white/[0.04] bg-black/15 px-3 py-2">
+                  <div key={skillRef} className="rounded-lg border border-white/[0.04] bg-black/15 px-3 py-2">
                     <div className="flex flex-wrap items-start justify-between gap-2">
                       <div className="min-w-0 flex-1">
                         <div className="flex flex-wrap items-center gap-1.5">
@@ -626,7 +637,7 @@ export function SkillsPanel() {
                         </div>
                         <p className="mt-1 text-[10px] leading-relaxed text-slate-400">{compactText(result.summary || 'No summary available.', 260)}</p>
                         <p className="mt-1 font-mono text-[8px] text-slate-600">
-                          {result.slug}{result.ownerHandle ? ` by ${result.ownerHandle}` : ''}{updated ? ` updated ${updated}` : ''}
+                          {skillRef}{updated ? ` updated ${updated}` : ''}
                         </p>
                       </div>
                       <div className="flex shrink-0 flex-wrap gap-1.5">

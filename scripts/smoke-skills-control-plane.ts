@@ -50,6 +50,11 @@ assert.doesNotMatch(skillRoutesModule, /res\.status\([^)]*\)\.json\(\{\s*ok:/, '
 assert.match(skillRoutesModule, /apiFailure\([\s\S]*?502,[\s\S]*?'skill_command_failed',[\s\S]*?'ClawHub search failed'/, 'ClawHub search command failures must be typed')
 assert.match(skillRoutesModule, /apiFailure\([\s\S]*?500,[\s\S]*?'skill_command_failed',[\s\S]*?'ClawHub skill install failed'/, 'ClawHub install command failures must be typed')
 assert.match(skillRoutesModule, /apiFailure\([\s\S]*?500,[\s\S]*?'skill_command_failed',[\s\S]*?'ClawHub skill update failed'/, 'ClawHub update command failures must be typed')
+assert.match(skillRoutesModule, /CLAWHUB_SKILL_REFERENCE_PATTERN/, 'ClawHub routes must validate publisher-qualified skill references')
+assert.match(skillRoutesModule, /reference\.includes\('\/'\) && !reference\.startsWith\('@'\) \? `@\$\{reference\}` : reference/, 'ClawHub routes must normalize owner-qualified references to the @owner/skill CLI form')
+assert.match(skillRoutesModule, /\['skills', 'install', skillRef, '--global'\]/, 'ClawHub installs must target the shared managed skills directory')
+assert.match(skillRoutesModule, /\['skills', 'update', '--all', '--global'\]/, 'bulk ClawHub updates must target shared managed skills')
+assert.match(skillRoutesModule, /\['skills', 'update', skillRef, '--global'\]/, 'ClawHub updates must preserve the publisher-qualified skill reference')
 
 const avatarUploadStart = partyManagementRoutes.indexOf("app.post('/api/party/avatar-upload/:agentId'")
 const avatarUploadEnd = partyManagementRoutes.indexOf('\n}', avatarUploadStart)
@@ -66,6 +71,7 @@ assert.doesNotMatch(skillsPanel, /apiUrl/, 'SkillsPanel must not hand-roll API b
 assert.match(skillsPanel, /apiRequest<ClawHubSearchPayload>\(`\/api\/skills\/clawhub\/search/, 'SkillsPanel ClawHub search must use apiRequest')
 assert.match(skillsPanel, /apiRequest<ClawHubInstallPayload>\('\/api\/skills\/clawhub\/install'/, 'SkillsPanel ClawHub install must use apiRequest')
 assert.match(skillsPanel, /apiRequest<ClawHubInstallPayload>\('\/api\/skills\/clawhub\/update'/, 'SkillsPanel ClawHub update must use apiRequest')
+assert.match(skillsPanel, /body: \{ skillRef \}/, 'SkillsPanel must send the publisher-qualified ClawHub reference')
 assert.match(skillsPanel, /apiRequest<\{ skill\?: AgentSkillEntry \}>\('\/api\/skills\/learn'/, 'SkillsPanel learned-skill saves must use apiRequest')
 
 const editorAvatarStart = editor.indexOf('const UploadPortraitFile')
@@ -85,6 +91,7 @@ assert.match(editorSkillsBlock, /apiRequest<\{shared\?:AgentSkillEntry\[\]; agen
 assert.match(editorSkillsBlock, /apiRequest<ClawHubSearchPayload>\(`\/api\/skills\/clawhub\/search/, 'agent editor ClawHub search must use apiRequest')
 assert.match(editorSkillsBlock, /apiRequest<ClawHubInstallPayload>\('\/api\/skills\/clawhub\/install'/, 'agent editor ClawHub install must use apiRequest')
 assert.match(editorSkillsBlock, /apiRequest<ClawHubInstallPayload>\('\/api\/skills\/clawhub\/update'/, 'agent editor ClawHub update must use apiRequest')
+assert.match(editorSkillsBlock, /body:\{skillRef\}/, 'agent editor must send the publisher-qualified ClawHub reference')
 assert.doesNotMatch(editorSkillsBlock, /fetchWithTimeout|fetch\(|apiUrl\(/, 'agent editor skill install/update paths must not bypass the canonical API client')
 
 assert.match(packageJson.scripts?.['smoke:skills-control-plane'] || '', /smoke-skills-control-plane\.ts/, 'package must expose skills control-plane smoke')

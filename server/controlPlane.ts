@@ -33,6 +33,7 @@ import { registerPluginRoutes } from './routes/pluginRoutes'
 import { registerProviderAuthRoutes } from './routes/providerAuthRoutes'
 import { registerRuntimeRoutes } from './routes/runtimeRoutes'
 import { registerSkillRoutes } from './routes/skillRoutes'
+import { registerSpeechRoutes } from './routes/speechRoutes'
 import { createControlFilesService } from './services/controlFilesService'
 import {
   AVATAR_UPLOAD_LIMIT_BYTES,
@@ -142,6 +143,7 @@ import {
 import { createRuntimeActionService } from './services/runtime/runtimeActionService'
 import { recoverMalformedCodexBindingSidecars } from './services/runtime/codexSidecarRecoveryService'
 import { createBrowserPreflightService } from './services/browser/browserPreflightService'
+import { createSpeechTranscriptionService } from './services/speech/speechTranscriptionService'
 import { createRuntimeRecoveryService } from './services/runtime/runtimeRecoveryService'
 import {
   createPluginInventoryService,
@@ -17538,6 +17540,22 @@ registerProviderAuthRoutes(app, {
   startGoogleOAuthSession,
   startOpenAICodexOAuthSession,
 })
+
+const speechTranscriptionService = createSpeechTranscriptionService({
+  resolveOpenAiApiKey: async () => {
+    await ensureLocalAuthStoreLoaded().catch(() => undefined)
+    const processEnvironment = Object.fromEntries(
+      Object.entries(process.env).filter((entry): entry is [string, string] => typeof entry[1] === 'string'),
+    )
+    const requestAuth = await resolveProviderRequestAuth('openai', {
+      ...processEnvironment,
+      ...getLocalAuthEnv(),
+    }, AUTH_ENV_MAP.openai || ['OPENAI_API_KEY'])
+    return requestAuth?.type === 'apiKey' ? requestAuth.value : ''
+  },
+})
+
+registerSpeechRoutes(app, { speechTranscription: speechTranscriptionService })
 
 registerSkillRoutes(app, {
   findSkillContent,

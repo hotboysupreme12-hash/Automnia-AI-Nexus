@@ -24,6 +24,8 @@ const allAssets = fs.readdirSync(path.join(distDir, 'assets'))
   .filter((filePath) => fs.statSync(filePath).isFile())
 const allJs = allAssets.filter((filePath) => filePath.endsWith('.js'))
 const allCss = allAssets.filter((filePath) => filePath.endsWith('.css'))
+const deferredSpeechJs = allJs.filter((filePath) => /^localSpeech\.worker-[^.]+\.js$/.test(path.basename(filePath)))
+const interactiveJs = allJs.filter((filePath) => !deferredSpeechJs.includes(filePath))
 const entryJs = scriptUrls.map(assetPath)
 const entryCss = styleUrls.map(assetPath)
 
@@ -39,8 +41,10 @@ const metrics = {
   entryJsGzipBytes: sum(entryJs, gzipBytes),
   entryCssBytes: sum(entryCss, rawBytes),
   entryCssGzipBytes: sum(entryCss, gzipBytes),
-  totalJsBytes: sum(allJs, rawBytes),
-  totalJsGzipBytes: sum(allJs, gzipBytes),
+  totalJsBytes: sum(interactiveJs, rawBytes),
+  totalJsGzipBytes: sum(interactiveJs, gzipBytes),
+  deferredSpeechJsBytes: sum(deferredSpeechJs, rawBytes),
+  deferredSpeechJsGzipBytes: sum(deferredSpeechJs, gzipBytes),
 }
 
 const numberEnv = (key, fallback) => {
@@ -55,6 +59,8 @@ const budgets = {
   entryCssGzipBytes: numberEnv('DYSTOPAI_BUDGET_ENTRY_CSS_GZIP_BYTES', 175_000),
   totalJsBytes: numberEnv('DYSTOPAI_BUDGET_TOTAL_JS_BYTES', 850_000),
   totalJsGzipBytes: numberEnv('DYSTOPAI_BUDGET_TOTAL_JS_GZIP_BYTES', 265_000),
+  deferredSpeechJsBytes: numberEnv('DYSTOPAI_BUDGET_DEFERRED_SPEECH_JS_BYTES', 550_000),
+  deferredSpeechJsGzipBytes: numberEnv('DYSTOPAI_BUDGET_DEFERRED_SPEECH_JS_GZIP_BYTES', 160_000),
 }
 
 const format = (bytes) => `${(bytes / 1024).toFixed(1)} KiB`
@@ -67,6 +73,7 @@ for (const [metric, actual] of Object.entries(metrics)) {
 console.log(JSON.stringify({
   entryScripts: scriptUrls,
   entryStyles: styleUrls,
+  deferredSpeechScripts: deferredSpeechJs.map((filePath) => `/${path.relative(distDir, filePath)}`),
   metrics,
   budgets,
 }, null, 2))
