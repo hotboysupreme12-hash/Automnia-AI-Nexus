@@ -1,4 +1,5 @@
 import { existsSync, readdirSync, readFileSync } from 'node:fs'
+import { homedir } from 'node:os'
 import path from 'node:path'
 import { pathToFileURL } from 'node:url'
 import { spawnSync } from 'node:child_process'
@@ -14,6 +15,8 @@ export const GOOGLE_VERTEX_LOCATION_KEYS = [
 ]
 export const GOOGLE_VERTEX_ACCESS_TOKEN_KEYS = ['GOOGLE_VERTEX_ACCESS_TOKEN', 'GCLOUD_ACCESS_TOKEN']
 export const GOOGLE_CLOUD_CLI_INSTALL_URL = 'https://cloud.google.com/sdk/docs/install'
+export const GOOGLE_ADC_SETUP_SCRIPT_URL = 'https://storage.googleapis.com/cloud-samples-data/adc/setup_adc.sh'
+export const GOOGLE_ADC_SETUP_POWERSHELL_URL = 'https://storage.googleapis.com/cloud-samples-data/adc/setup_adc.ps1'
 export const GOOGLE_VERTEX_GLOBAL_LOCATION = 'global'
 export const GOOGLE_VERTEX_DEFAULT_LOCATION = GOOGLE_VERTEX_GLOBAL_LOCATION
 export const GOOGLE_VERTEX_ACCESS_TOKEN_CACHE_MS = 45 * 60 * 1000
@@ -29,8 +32,14 @@ export type GoogleVertexGcloudStatus = {
   account?: string
   missing: string[]
   installUrl: string
+  setupScript: GoogleVertexSetupScript
   commands: string[]
   source?: 'probe' | 'cache' | 'fast'
+}
+
+export type GoogleVertexSetupScript = {
+  label: string
+  command: string
 }
 
 export type ProviderRequestAuth =
@@ -216,6 +225,7 @@ function spawnResultText(value: string | Buffer | undefined) {
 
 export function createProviderSetupService(options: ProviderSetupServiceOptions) {
   const processEnv = options.processEnv || process.env
+  const hasExplicitProcessEnv = Boolean(options.processEnv)
   const platform = options.platform || process.platform
   const exists = options.existsSync || existsSync
   const readFile = options.readFileSync || readFileSync
@@ -240,18 +250,49 @@ export function createProviderSetupService(options: ProviderSetupServiceOptions)
   }
 
   function googleCloudSdkRootCandidates() {
+    const homeDir = googleCloudHomeDir()
     const localAppData = resolveEnvValue({}, ['LOCALAPPDATA', 'LocalAppData'])
     const appData = resolveEnvValue({}, ['APPDATA', 'AppData'])
     const programFiles = resolveEnvValue({}, ['ProgramFiles', 'PROGRAMFILES'])
     const programFilesX86 = processEnv['ProgramFiles(x86)']?.trim() || processEnv.PROGRAMFILES_X86?.trim() || ''
     return uniqueStrings(
       resolveEnvValue({}, ['CLOUDSDK_ROOT_DIR', 'GCLOUD_SDK_ROOT', 'GOOGLE_CLOUD_SDK_HOME']),
+      homeDir ? path.join(homeDir, 'google-cloud-sdk') : '',
       localAppData ? path.join(localAppData, 'Google', 'Cloud SDK', 'google-cloud-sdk') : '',
       localAppData ? path.join(localAppData, 'Programs', 'Google', 'Cloud SDK', 'google-cloud-sdk') : '',
       appData ? path.join(appData, 'gcloud', 'google-cloud-sdk') : '',
       programFiles ? path.join(programFiles, 'Google', 'Cloud SDK', 'google-cloud-sdk') : '',
       programFilesX86 ? path.join(programFilesX86, 'Google', 'Cloud SDK', 'google-cloud-sdk') : '',
+      platform === 'darwin' ? '/opt/homebrew/Caskroom/google-cloud-sdk/latest/google-cloud-sdk' : '',
+      platform === 'darwin' ? '/usr/local/Caskroom/google-cloud-sdk/latest/google-cloud-sdk' : '',
+      platform === 'linux' ? '/usr/lib/google-cloud-sdk' : '',
+      platform === 'linux' ? '/snap/google-cloud-sdk/current' : '',
     )
+  }
+
+  function googleCloudHomeDir() {
+    return resolveEnvValue({}, ['HOME', 'USERPROFILE']) || (hasExplicitProcessEnv ? '' : homedir())
+  }
+
+  function googleVertexSetupScript(): GoogleVertexSetupScript {
+    if (platform === 'win32') {
+      return {
+        label: 'Windows PowerShell',
+        command: `powershell -c "iex (irm ${GOOGLE_ADC_SETUP_POWERSHELL_URL})"`,
+      }
+    }
+    return {
+      label: platform === 'darwin' ? 'macOS Terminal' : 'Linux terminal',
+      command: `bash <(curl -sSL ${GOOGLE_ADC_SETUP_SCRIPT_URL})`,
+    }
+  }
+
+  function googleVertexManualSetupCommands(projectId = 'YOUR_PROJECT_ID') {
+    return [
+      'gcloud auth application-default login',
+      `gcloud config set project ${projectId}`,
+      `gcloud services enable aiplatform.googleapis.com --project ${projectId}`,
+    ]
   }
 
   function googleCloudSdkBinForRoot(root: string) {
@@ -411,7 +452,7 @@ export function createProviderSetupService(options: ProviderSetupServiceOptions)
 
   function googleApplicationDefaultCredentialFileCandidates() {
     const configuredPath = resolveEnvValue({}, ['GOOGLE_APPLICATION_CREDENTIALS'])
-    const homeDir = resolveEnvValue({}, ['HOME', 'USERPROFILE'])
+    const homeDir = googleCloudHomeDir()
     const appData = resolveEnvValue({}, ['APPDATA', 'AppData'])
     return uniqueStrings(
       configuredPath,
@@ -523,11 +564,8 @@ export function createProviderSetupService(options: ProviderSetupServiceOptions)
         ...(localGoogleOAuth?.email ? { account: localGoogleOAuth.email } : {}),
         missing,
         installUrl: GOOGLE_CLOUD_CLI_INSTALL_URL,
-        commands: [
-          'gcloud auth application-default login',
-          'gcloud config set project YOUR_PROJECT_ID',
-          `gcloud services enable aiplatform.googleapis.com --project ${projectId || 'YOUR_PROJECT_ID'}`,
-        ],
+        setupScript: googleVertexSetupScript(),
+        commands: googleVertexManualSetupCommands(projectId || 'YOUR_PROJECT_ID'),
         source: 'fast',
       }
     }
@@ -549,7 +587,7 @@ export function createProviderSetupService(options: ProviderSetupServiceOptions)
       missing.push(`Install Google Cloud CLI: ${GOOGLE_CLOUD_CLI_INSTALL_URL}`)
     }
     if (installed && !authenticated) {
-      missing.push('Run gcloud auth application-default login, then retry.')
+      missing.push('Run the recommended ADC setup script, then select Refresh.')
     }
     if (!projectId) {
       missing.push('Set a Google Cloud project with gcloud config set project YOUR_PROJECT_ID.')
@@ -575,11 +613,8 @@ export function createProviderSetupService(options: ProviderSetupServiceOptions)
       ...(account ? { account } : {}),
       missing,
       installUrl: GOOGLE_CLOUD_CLI_INSTALL_URL,
-      commands: [
-        'gcloud auth application-default login',
-        'gcloud config set project YOUR_PROJECT_ID',
-        `gcloud services enable aiplatform.googleapis.com --project ${projectId || 'YOUR_PROJECT_ID'}`,
-      ],
+      setupScript: googleVertexSetupScript(),
+      commands: googleVertexManualSetupCommands(projectId || 'YOUR_PROJECT_ID'),
       source: 'probe',
     }
     googleVertexGcloudStatusCache = { value, expiresAt: current + 15000 }
@@ -875,10 +910,12 @@ export function createProviderSetupService(options: ProviderSetupServiceOptions)
     createOpenAICodexAuthorizationFlow,
     exchangeOpenAICodexAuthorizationCode,
     getGoogleVertexProcessEnv,
+    googleCloudSdkRootCandidates,
     googleApplicationDefaultCredentialFileCandidates,
     googleOAuthClientConfigFileCandidates,
     googleOAuthClientConfigStatus,
     googleVertexGcloudStatus,
+    googleVertexSetupScript,
     googleVertexLocalOAuthProjectId,
     importOpenAICodexOAuthModule,
     isGoogleVertexConfigured,

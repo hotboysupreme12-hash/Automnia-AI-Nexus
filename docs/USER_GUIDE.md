@@ -157,6 +157,20 @@ Recommended setup pattern:
 
 Vertex models use Google Application Default Credentials (ADC). You do **not** need a Google OAuth client secret or a Vertex API key in Automnia AI.
 
+Use Google's guided setup—it installs or finds the Cloud CLI, asks for your project ID, signs in with ADC, sets the quota project, enables Vertex AI, and verifies access:
+
+```bash
+# macOS / Linux
+bash <(curl -sSL https://storage.googleapis.com/cloud-samples-data/adc/setup_adc.sh)
+```
+
+```powershell
+# Windows PowerShell
+powershell -c "iex (irm https://storage.googleapis.com/cloud-samples-data/adc/setup_adc.ps1)"
+```
+
+Manual setup remains available if preferred:
+
 ```bash
 gcloud auth application-default login
 gcloud config set project YOUR_PROJECT_ID

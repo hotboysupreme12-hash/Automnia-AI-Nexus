@@ -27,6 +27,10 @@ export type AuthProviderGcloudStatus = {
   account?: string
   missing?: string[]
   installUrl?: string
+  setupScript?: {
+    label: string
+    command: string
+  }
   commands?: string[]
 }
 

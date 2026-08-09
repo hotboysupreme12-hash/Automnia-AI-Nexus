@@ -11,6 +11,7 @@ import {
 import type { LocalOAuthCredential } from '../server/services/providers/providerAuthService'
 
 type HarnessOptions = {
+  existsSync?: ProviderSetupServiceOptions['existsSync']
   fetch?: ProviderSetupServiceOptions['fetch']
   importModule?: ProviderSetupServiceOptions['importModule']
   localOAuth?: Record<string, LocalOAuthCredential | undefined>
@@ -38,6 +39,7 @@ async function createHarness(options: HarnessOptions = {}) {
     ensureLocalAuthStoreLoaded: async () => {
       state.ensureCalls += 1
     },
+    existsSync: options.existsSync,
     fetch: options.fetch,
     getLocalProviderMode: (provider) => state.modes[provider],
     getLocalProviderOAuth: (provider) => state.localOAuth[provider],
@@ -200,6 +202,48 @@ test('falls back to regular gcloud login when ADC is unavailable', async () => {
     })
   } finally {
     await harness.cleanup()
+  }
+})
+
+test('uses Google ADC setup scripts and discovers their Cloud SDK path across desktop platforms', async () => {
+  const macSdk = '/Users/operator/google-cloud-sdk/bin/gcloud'
+  const macCommands: string[] = []
+  const macHarness = await createHarness({
+    platform: 'darwin',
+    processEnv: { HOME: '/Users/operator' },
+    existsSync: (filePath) => filePath === macSdk,
+    spawnSync: (command, args) => {
+      macCommands.push(command)
+      if (command === 'gcloud') return { status: 1, stdout: '', stderr: 'ENOENT' }
+      const key = args.join(' ')
+      if (key === 'config get-value project --quiet') return { status: 0, stdout: 'project-mac\n', stderr: '' }
+      if (key === '--version') return { status: 0, stdout: 'Google Cloud SDK 999.0.0\n', stderr: '' }
+      if (key === 'auth list --filter=status:ACTIVE --format=value(account) --quiet') return { status: 0, stdout: 'operator@example.test\n', stderr: '' }
+      if (key === 'auth application-default print-access-token --quiet') return { status: 0, stdout: 'ya29.adc-token\n', stderr: '' }
+      return { status: 1, stdout: '', stderr: 'unexpected gcloud command' }
+    },
+  })
+  try {
+    const status = macHarness.service.googleVertexGcloudStatus({ probeGcloud: true })
+    assert.equal(status.installed, true)
+    assert.equal(status.projectId, 'project-mac')
+    assert.deepEqual(status.setupScript, {
+      label: 'macOS Terminal',
+      command: 'bash <(curl -sSL https://storage.googleapis.com/cloud-samples-data/adc/setup_adc.sh)',
+    })
+    assert.ok(macCommands.includes(macSdk))
+  } finally {
+    await macHarness.cleanup()
+  }
+
+  const windowsHarness = await createHarness({ platform: 'win32' })
+  try {
+    assert.deepEqual(windowsHarness.service.googleVertexSetupScript(), {
+      label: 'Windows PowerShell',
+      command: 'powershell -c "iex (irm https://storage.googleapis.com/cloud-samples-data/adc/setup_adc.ps1)"',
+    })
+  } finally {
+    await windowsHarness.cleanup()
   }
 })
 
