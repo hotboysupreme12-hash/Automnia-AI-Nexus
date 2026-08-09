@@ -519,8 +519,9 @@ function CronJobCard({
   const missionInfo = cronMissionInfo(job, agentName, timingLabel, timing, timingValue)
   return (
     <div
-      className="dy-cron-job-card relative flex min-h-16 flex-col gap-2 px-3 py-2.5 text-[12px] leading-tight transition hover:bg-white/[0.025]"
+      className="dy-cron-job-card relative flex min-h-16 flex-col gap-2 px-3 py-2.5 text-[12px] leading-tight transition"
       data-state={status}
+      data-ui-revision="cron-job-v2"
       title={`OpenClaw cron ${job.cronId}`}
     >
       <div className="dy-cron-job-actions absolute right-3 top-3 inline-flex items-center gap-1">
@@ -555,6 +556,13 @@ function CronJobCard({
       </div>
 
       <div className="dy-cron-job-header min-w-0 pr-16">
+        <span className="dy-cron-job-glyph" aria-hidden="true">
+          <svg viewBox="0 0 24 24">
+            <circle cx="12" cy="12" r="7.5" />
+            <path d="M12 7.7v4.8l3.2 1.8" />
+            <path d="M7 3.8 4.8 6M17 3.8 19.2 6" />
+          </svg>
+        </span>
         <div className="dy-cron-job-title-block min-w-0">
           <div className="dy-cron-job-meta-row flex min-w-0 flex-wrap items-center gap-1.5">
             <Badge className="dy-cron-status-badge rounded-none border border-white/10 bg-white/[0.03] px-2 py-0.5 text-[11px] font-semibold uppercase text-slate-300" data-state={status} tone={status === 'active' ? 'success' : 'neutral'} size="micro">
@@ -580,7 +588,7 @@ function CronJobCard({
         title={missionInfo.fullDescription}
         tabIndex={0}
       >
-        <span>Description</span>
+        <span>Current instruction</span>
         <strong>{missionInfo.summary}</strong>
       </div>
     </div>
@@ -1170,13 +1178,13 @@ function RuntimeGatewayPanel({
         <GatewayActivityCard activity={activity} />
 
           <div className="dy-monitor-card dy-cron-jobs-card flex min-h-0 flex-col self-stretch rounded-none border border-white/[0.04] bg-white/[0.015] p-3">
-            <div className="mb-2 flex items-center justify-between gap-3">
-              <div>
+            <div className="dy-cron-panel-header mb-2 flex items-center justify-between gap-3">
+              <div className="dy-cron-panel-title">
                 <p className="text-[13px] font-bold text-slate-100">Active Cron Jobs</p>
                 <p className="mt-0.5 text-[12px] text-slate-400">Enabled OpenClaw cron jobs currently scheduled</p>
               </div>
-              <div className="flex items-center gap-2">
-                <span className="text-[12px] font-semibold uppercase tracking-[0.10em] text-slate-400">{activeCronCount} active</span>
+              <div className="dy-cron-panel-summary flex items-center gap-2">
+                <span className="dy-cron-active-count text-[12px] font-semibold uppercase tracking-[0.10em] text-slate-400"><i aria-hidden="true" />{activeCronCount} active</span>
                 {cronCadences.length > 0 && (
                   <span className="dy-cron-cadence-badge hidden rounded-none border border-white/[0.06] bg-white/[0.025] px-2 py-0.5 text-[11px] font-semibold text-slate-300 sm:inline-flex" title={cronCadences.join(', ')}>
                     {cronCadences.slice(0, 2).join(' / ')}
@@ -1196,7 +1204,7 @@ function RuntimeGatewayPanel({
                 )}
               </div>
             </div>
-            <div className={`dy-monitor-stream-box min-h-0 flex-1 overflow-auto rounded-none border border-white/[0.04] bg-black/25 shadow-inner shadow-black/20 divide-y divide-white/[0.035] ${activeCronJobs.length ? '' : 'dy-cron-stream-empty'}`}>
+            <div className={`dy-monitor-stream-box dy-cron-job-list min-h-0 flex-1 overflow-auto rounded-none border border-white/[0.04] bg-black/25 shadow-inner shadow-black/20 ${activeCronJobs.length ? '' : 'dy-cron-stream-empty'}`}>
               {activeCronJobs.map((job) => (
                 <CronJobCard
                   key={job.id}
