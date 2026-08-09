@@ -1,4 +1,4 @@
-const END_OF_SPEECH_SILENCE_MS = 1_150
+const DEFAULT_END_OF_SPEECH_SILENCE_MS = 1_150
 const NO_SPEECH_TIMEOUT_MS = 8_000
 const MIN_VOICE_ACTIVITY_MS = 220
 const ANALYSIS_INTERVAL_MS = 45
@@ -6,13 +6,19 @@ const ANALYSIS_INTERVAL_MS = 45
 type VoiceActivityCallbacks = {
   onLevel?: (level: number) => void
   onSpeechStart?: () => void
-  onSilence: () => void
-  onNoSpeech: () => void
+  onSilence?: () => void
+  onNoSpeech?: () => void
+}
+
+type VoiceActivityOptions = {
+  autoStop?: boolean
+  pauseDurationMs?: number
 }
 
 export function monitorVoiceActivity(
   stream: MediaStream,
   callbacks: VoiceActivityCallbacks,
+  options: VoiceActivityOptions = {},
 ): () => void {
   const context = new AudioContext()
   const source = context.createMediaStreamSource(stream)
@@ -28,6 +34,8 @@ export function monitorVoiceActivity(
   let lastSpeechAt = 0
   let consecutiveSpeechFrames = 0
   let finished = false
+  const autoStop = options.autoStop !== false
+  const pauseDurationMs = Math.max(600, Math.min(3_000, Math.round(options.pauseDurationMs || DEFAULT_END_OF_SPEECH_SILENCE_MS)))
 
   const finish = (callback: () => void) => {
     if (finished) return
@@ -64,12 +72,14 @@ export function monitorVoiceActivity(
 
     if (speechStartedAt
       && lastSpeechAt - speechStartedAt >= MIN_VOICE_ACTIVITY_MS
-      && now - lastSpeechAt >= END_OF_SPEECH_SILENCE_MS) {
+      && now - lastSpeechAt >= pauseDurationMs
+      && autoStop
+      && callbacks.onSilence) {
       finish(callbacks.onSilence)
       return
     }
 
-    if (!speechStartedAt && now - startedAt >= NO_SPEECH_TIMEOUT_MS) finish(callbacks.onNoSpeech)
+    if (!speechStartedAt && now - startedAt >= NO_SPEECH_TIMEOUT_MS && autoStop && callbacks.onNoSpeech) finish(callbacks.onNoSpeech)
   }, ANALYSIS_INTERVAL_MS)
 
   void context.resume().catch(() => undefined)

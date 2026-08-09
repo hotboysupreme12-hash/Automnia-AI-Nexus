@@ -28,6 +28,7 @@ const flattenedShellImport = "@import './styles/dystopai-theme/98-flattened-shel
 const horizonCommandCenterImport = "@import './styles/dystopai-theme/99-horizon-command-center.css';"
 const operatorExperienceImport = "@import './styles/dystopai-theme/100-operator-experience.css';"
 const agentCardThemesImport = "@import './styles/dystopai-theme/101-agent-card-themes.css';"
+const settingsSystemImport = "@import './styles/dystopai-theme/102-settings-system.css';"
 const horizonCommandCenter = read('src/styles/dystopai-theme/99-horizon-command-center.css')
 const operatorExperience = read('src/styles/dystopai-theme/100-operator-experience.css')
 
@@ -107,6 +108,7 @@ assert.ok(theme.includes(flattenedShellImport), 'flattened shell polish must rem
 assert.ok(theme.includes(horizonCommandCenterImport), 'Horizon Command Center must remain the final global visual layer')
 assert.ok(theme.includes(operatorExperienceImport), 'Operator Experience must remain the final global refinement layer')
 assert.ok(theme.includes(agentCardThemesImport), 'Agent Card Themes must remain in the theme cascade')
+assert.ok(theme.includes(settingsSystemImport), 'Settings System must remain the final scoped settings and autosave layer')
 const themeLayerImports = [...theme.matchAll(/@import '\.\/styles\/dystopai-theme\/(\d+)-([^']+)\.css';/g)]
 const layersAfterTypography = themeLayerImports
   .map((match) => ({ order: Number(match[1]), name: match[2] }))
@@ -118,7 +120,8 @@ assert.deepEqual(layersAfterTypography, [
   { order: 99, name: 'horizon-command-center' },
   { order: 100, name: 'operator-experience' },
   { order: 101, name: 'agent-card-themes' },
-], 'global dystopai theme layers after typography must remain limited to the approved shell and operator-experience layers')
+  { order: 102, name: 'settings-system' },
+], 'global dystopai theme layers after typography must remain limited to the approved shell, operator, card, and settings layers')
 assert.doesNotMatch(theme, /99-mission-quiet-redesign/, 'mission quiet redesign should no longer be a global late layer')
 assert.ok(
   theme.indexOf(productionPolishImport) < theme.indexOf(referenceScreenshotImport),
@@ -134,7 +137,8 @@ assert.ok(theme.indexOf(chatComposerImport) < theme.indexOf(flattenedShellImport
 assert.ok(theme.indexOf(flattenedShellImport) < theme.indexOf(horizonCommandCenterImport), 'flattened shell polish must load before Horizon Command Center')
 assert.ok(theme.indexOf(horizonCommandCenterImport) < theme.indexOf(operatorExperienceImport), 'Horizon Command Center must load before Operator Experience')
 assert.ok(theme.indexOf(operatorExperienceImport) < theme.indexOf(agentCardThemesImport), 'Operator Experience must load before Agent Card Themes')
-assert.ok(theme.trimEnd().endsWith(agentCardThemesImport), 'Agent Card Themes must load last in the theme cascade')
+assert.ok(theme.indexOf(agentCardThemesImport) < theme.indexOf(settingsSystemImport), 'Agent Card Themes must load before the scoped Settings System')
+assert.ok(theme.trimEnd().endsWith(settingsSystemImport), 'Settings System must load last in the theme cascade')
 assert.match(operatorExperience, /\.dui-recruit-code-editor:focus-within[\s\S]*#071012 !important/, 'focused recruit Markdown editing must retain its dedicated contrast treatment')
 assert.match(horizonCommandCenter, /Each destination has a dedicated hue/, 'navigation selection should document the workspace identity system')
 for (const [tone, accent] of [
