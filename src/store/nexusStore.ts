@@ -918,10 +918,10 @@ function makeRecruitAgentDraft(input: RecruitAgentInput): OpenClawAgent {
     id: input.agentId.trim(),
     name: input.name.trim(),
     workspace: input.workspace?.trim() || '',
-    sandbox: { mode: 'off', scope: 'agent', workspaceAccess: 'rw' },
+    sandbox: { mode: 'all', scope: 'agent', workspaceAccess: 'rw' },
     model: input.primaryModel?.trim() ? { primary: input.primaryModel.trim(), fallbacks: [] } : template.model,
     runtimePolicy: { thinkingDefault: FAST_THINKING, timeoutSeconds: FAST_TIMEOUT_SECONDS, parallelPreferred: true, fastModeDefault: FAST_MODE_DEFAULT },
-    toolsPolicy: { profile: 'full', allow: tools, deny: [] },
+    toolsPolicy: { profile: 'full', allow: [], deny: [] },
     rarity: recruitRarity(level),
     className: input.className.trim() || 'Operator',
     role: input.role.trim() || 'Agent',
@@ -2369,7 +2369,7 @@ export const useNexusStore = create<NexusState>()(
             turn = await post(outboundMessage, preferOpenClawRuntime)
             payload = turn.payload
           }
-          if (payload.ok !== false && isDirectToolAccessDenial(extractOutput(payload))) {
+          if (!preferOpenClawRuntime && payload.ok !== false && isDirectToolAccessDenial(extractOutput(payload))) {
             liveResponseText = ''
             liveFirstTokenAt = ''
             liveTransport = 'buffered-openclaw'
