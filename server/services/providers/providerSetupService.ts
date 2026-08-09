@@ -168,7 +168,7 @@ function uniqueStrings(...items: Array<unknown>): string[] {
 }
 
 function isWindowsCommandScript(bin: string) {
-  const lower = path.basename(bin).toLowerCase()
+  const lower = (bin.split(/[\\/]/).pop() || bin).toLowerCase()
   return lower === 'openclaw' || lower.endsWith('.cmd') || lower.endsWith('.bat')
 }
 
@@ -195,10 +195,11 @@ function shelllessSpawnSpecForCommand(
   env: NodeJS.ProcessEnv,
   options: { wrapWindowsPathLookup?: boolean } = {},
 ) {
+  const commandPath = platform === 'win32' ? path.win32 : path.posix
   if (
     platform === 'win32' &&
     (isWindowsCommandScript(command) ||
-      (options.wrapWindowsPathLookup && !path.isAbsolute(command) && !/\.(?:exe|com)$/i.test(command)))
+      (options.wrapWindowsPathLookup && !commandPath.isAbsolute(command) && !/\.(?:exe|com)$/i.test(command)))
   ) {
     return windowsCmdShellSpec(command, args, env)
   }
@@ -227,6 +228,7 @@ export function createProviderSetupService(options: ProviderSetupServiceOptions)
   const processEnv = options.processEnv || process.env
   const hasExplicitProcessEnv = Boolean(options.processEnv)
   const platform = options.platform || process.platform
+  const platformPath = platform === 'win32' ? path.win32 : path.posix
   const exists = options.existsSync || existsSync
   const readFile = options.readFileSync || readFileSync
   const readDir = options.readdirSync || readdirSync
@@ -257,12 +259,12 @@ export function createProviderSetupService(options: ProviderSetupServiceOptions)
     const programFilesX86 = processEnv['ProgramFiles(x86)']?.trim() || processEnv.PROGRAMFILES_X86?.trim() || ''
     return uniqueStrings(
       resolveEnvValue({}, ['CLOUDSDK_ROOT_DIR', 'GCLOUD_SDK_ROOT', 'GOOGLE_CLOUD_SDK_HOME']),
-      homeDir ? path.join(homeDir, 'google-cloud-sdk') : '',
-      localAppData ? path.join(localAppData, 'Google', 'Cloud SDK', 'google-cloud-sdk') : '',
-      localAppData ? path.join(localAppData, 'Programs', 'Google', 'Cloud SDK', 'google-cloud-sdk') : '',
-      appData ? path.join(appData, 'gcloud', 'google-cloud-sdk') : '',
-      programFiles ? path.join(programFiles, 'Google', 'Cloud SDK', 'google-cloud-sdk') : '',
-      programFilesX86 ? path.join(programFilesX86, 'Google', 'Cloud SDK', 'google-cloud-sdk') : '',
+      homeDir ? platformPath.join(homeDir, 'google-cloud-sdk') : '',
+      localAppData ? platformPath.join(localAppData, 'Google', 'Cloud SDK', 'google-cloud-sdk') : '',
+      localAppData ? platformPath.join(localAppData, 'Programs', 'Google', 'Cloud SDK', 'google-cloud-sdk') : '',
+      appData ? platformPath.join(appData, 'gcloud', 'google-cloud-sdk') : '',
+      programFiles ? platformPath.join(programFiles, 'Google', 'Cloud SDK', 'google-cloud-sdk') : '',
+      programFilesX86 ? platformPath.join(programFilesX86, 'Google', 'Cloud SDK', 'google-cloud-sdk') : '',
       platform === 'darwin' ? '/opt/homebrew/Caskroom/google-cloud-sdk/latest/google-cloud-sdk' : '',
       platform === 'darwin' ? '/usr/local/Caskroom/google-cloud-sdk/latest/google-cloud-sdk' : '',
       platform === 'linux' ? '/usr/lib/google-cloud-sdk' : '',
@@ -296,7 +298,7 @@ export function createProviderSetupService(options: ProviderSetupServiceOptions)
   }
 
   function googleCloudSdkBinForRoot(root: string) {
-    return path.basename(root).toLowerCase() === 'bin' ? root : path.join(root, 'bin')
+    return platformPath.basename(root).toLowerCase() === 'bin' ? root : platformPath.join(root, 'bin')
   }
 
   function googleVertexGcloudCommandCandidates() {
@@ -306,7 +308,7 @@ export function createProviderSetupService(options: ProviderSetupServiceOptions)
     return uniqueStrings(
       ...googleCloudSdkRootCandidates().flatMap((root) => {
         const binDir = googleCloudSdkBinForRoot(root)
-        return commandNames.map((name) => path.join(binDir, name))
+        return commandNames.map((name) => platformPath.join(binDir, name))
       }),
     ).filter((candidate) => exists(candidate))
   }
@@ -315,14 +317,14 @@ export function createProviderSetupService(options: ProviderSetupServiceOptions)
     const current = value || ''
     const delimiter = platform === 'win32' ? ';' : ':'
     const parts = current.split(delimiter).filter(Boolean)
-    if (parts.some((part) => path.resolve(part).toLowerCase() === path.resolve(entry).toLowerCase())) return current
+    if (parts.some((part) => platformPath.resolve(part).toLowerCase() === platformPath.resolve(entry).toLowerCase())) return current
     return [entry, ...parts].join(delimiter)
   }
 
   function spawnGcloud(command: string, args: string[], timeoutMs: number) {
     const env = { ...processEnv } as NodeJS.ProcessEnv
-    if (path.isAbsolute(command)) {
-      const binDir = path.dirname(command)
+    if (platformPath.isAbsolute(command)) {
+      const binDir = platformPath.dirname(command)
       env.PATH = prependPathEntry(env.PATH, binDir)
       env.Path = prependPathEntry(env.Path, binDir)
     }
@@ -456,8 +458,8 @@ export function createProviderSetupService(options: ProviderSetupServiceOptions)
     const appData = resolveEnvValue({}, ['APPDATA', 'AppData'])
     return uniqueStrings(
       configuredPath,
-      platform === 'win32' && appData ? path.join(appData, 'gcloud', 'application_default_credentials.json') : '',
-      homeDir ? path.join(homeDir, '.config', 'gcloud', 'application_default_credentials.json') : '',
+      platform === 'win32' && appData ? platformPath.join(appData, 'gcloud', 'application_default_credentials.json') : '',
+      homeDir ? platformPath.join(homeDir, '.config', 'gcloud', 'application_default_credentials.json') : '',
     )
   }
 

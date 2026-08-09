@@ -123,10 +123,13 @@ for (const fragment of [
   'apiRequest<FolderPickerSessionPayload>(`/api/party/folder-picker/${encodeURIComponent(d.sessionId)}`',
   'apiRequest<AgentResourceListPayload>(`/api/party/resources/${encodeURIComponent(agentId)}`',
   'apiRequest<AgentResourceContentPayload>(`/api/party/resources/${encodeURIComponent(agentId)}/${encodeURIComponent(f)}`',
-  'apiRequest<AgentResourceSavePayload>(`/api/party/resources/${encodeURIComponent(agent.id)}/${encodeURIComponent(rfile)}`',
+  'apiRequest<AgentResourceSavePayload>(`/api/party/resources/${encodeURIComponent(agent.id)}/${encodeURIComponent(file)}`',
 ]) {
   assert(editorModal.includes(fragment), `AgentEditorModal is missing API-client fragment ${fragment}`)
 }
+
+assert(editorModal.includes('const ScheduleResourceAutosave = (content:string)=>'), 'Agent resource edits should schedule an autosave')
+assert(editorModal.includes('void SvF(content,file)'), 'Agent resource autosave should persist the captured file and content')
 
 for (const legacyFragment of [
   'fetchWithTimeout(`/api/party/folders',
