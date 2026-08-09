@@ -4603,6 +4603,10 @@ function normalizeAgentToolsConfig(input?: AgentToolsConfig): AgentToolsConfig {
   }
 }
 
+function unrestrictedAgentToolsConfig(): AgentToolsConfig {
+  return normalizeAgentToolsConfig({ profile: 'full' })
+}
+
 function applyExecutionWorkspaceToLocalConfig(local: AgentLocalConfig, workspacePath: string) {
   const workspace = normalizeExecutionWorkspacePath(path.resolve(workspacePath || defaultAgentWorkspace(local.agent.id)))
   local.routing.workspace = workspace
@@ -8907,6 +8911,7 @@ function ensureOpenclawRuntimeDefaults(config: OpenClawConfigFile) {
 
   for (const entry of config.agents.list || []) {
     entry.fastModeDefault ??= openClawFastModeDefault(DEFAULT_OPENCLAW_FAST_MODE)
+    if (entry.sandbox?.mode === 'off') entry.tools = unrestrictedAgentToolsConfig()
     applyNoBootstrapAgentConfig(entry)
   }
 
@@ -13506,7 +13511,9 @@ function applyLocalConfigToGlobal(
     ...local.sandbox,
     workspaceRoot: normalizedExecutionWorkspace,
   })
-  target.tools = normalizeAgentToolsConfig(local.tools)
+  target.tools = local.sandbox.mode === 'off'
+    ? unrestrictedAgentToolsConfig()
+    : normalizeAgentToolsConfig(local.tools)
   applyNoBootstrapAgentConfig(target)
 }
 
@@ -13543,6 +13550,25 @@ async function ensureAgentSandboxCompatibleWithHost(agentId: string) {
     defaultsSandbox: (config.agents?.defaults as { sandbox?: AgentSandboxConfig } | undefined)?.sandbox,
   })
 
+  if (local.sandbox.mode === 'off') {
+    const unrestrictedTools = unrestrictedAgentToolsConfig()
+    if (JSON.stringify(local.tools) !== JSON.stringify(unrestrictedTools)) {
+      local.tools = unrestrictedTools
+      local.sandbox = normalizeSandboxConfig({
+        ...local.sandbox,
+        mode: 'off',
+        scope: 'agent',
+        workspaceAccess: 'rw',
+      })
+      local.agent.updatedAt = new Date().toISOString()
+      await writeTextFileWithLockRetry(agentLocalConfigPath(agentId), `${JSON.stringify(local, null, 2)}\n`)
+      await rememberAgentLocalConfigCache(agentLocalConfigPath(agentId), local)
+      applyLocalConfigToGlobal(agentId, local, config)
+      await writeOpenclawConfig(config)
+    }
+    return { changed: false, local, message: '' }
+  }
+
   if (!sandboxRequiresDocker(local.sandbox) || isDockerCliAvailable()) {
     return { changed: false, local, message: '' }
   }
@@ -13554,6 +13580,7 @@ async function ensureAgentSandboxCompatibleWithHost(agentId: string) {
     scope: local.sandbox.scope || 'agent',
     workspaceAccess: local.sandbox.workspaceAccess || 'rw',
   })
+  local.tools = unrestrictedAgentToolsConfig()
   applyExecutionWorkspaceToLocalConfig(local, local.routing.workspace)
   local.agent.updatedAt = new Date().toISOString()
   await writeTextFileWithLockRetry(agentLocalConfigPath(agentId), `${JSON.stringify(local, null, 2)}\n`)

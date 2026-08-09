@@ -633,14 +633,13 @@ export function registerPartyManagementRoutes(app: Express, options: PartyManage
       local.soul = { ...recruitSoulDefaults(sanitized.behaviorProfile), ...(soulPayload || {}) }
       local.sandbox = normalizeSandboxConfig({
         ...local.sandbox,
-        mode: 'off',
+        mode: 'all',
         scope: 'agent',
         workspaceAccess: 'rw',
         ...(payload.sandbox || {}),
       })
       local.tools = normalizeAgentToolsConfig({
         profile: 'full',
-        allow: inferredMds.toolAccess,
         deny: [],
         ...(payload.tools || {}),
       })

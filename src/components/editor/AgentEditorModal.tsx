@@ -723,7 +723,43 @@ export function AgentEditorModal() {
       applyAgentConfigPayload(agentId,result.data.config,{skipDirty:true})
     }
   },[agent?.id,applyAgentConfigPayload])
-  const SvP = async ()=>{if(!agent)return;setPs(true);setPsStatus('');try{const result=await apiRequest<{ok?:boolean;error?:string}>(`/api/party/agent/${encodeURIComponent(agent.id)}/config`,{method:'POST',timeoutMs:18000,body:{sandbox:{mode:sbMode,scope:sbScope,workspaceAccess:sbAccess},tools:{allow:csv(tAllow),deny:csv(tDeny)}}});if(result.ok){agentConfigCache.delete(agent.id);clearConfigDirty('policy')}setPsStatus(result.ok?'Saved.':apiErrorMessage(result.error))}catch(e){setPsStatus(String(e))}finally{setPs(false)}}
+  const SvP = async () => {
+    if (!agent) return
+    setPs(true)
+    setPsStatus('')
+    const sandboxOff = sbMode === 'off'
+    try {
+      const result = await apiRequest<{ok?:boolean;error?:string}>(`/api/party/agent/${encodeURIComponent(agent.id)}/config`, {
+        method: 'POST',
+        timeoutMs: 18000,
+        body: {
+          sandbox: {
+            mode: sbMode,
+            scope: sandboxOff ? 'agent' : sbScope,
+            workspaceAccess: sandboxOff ? 'rw' : sbAccess,
+          },
+          tools: sandboxOff
+            ? { profile: 'full', allow: [], deny: [] }
+            : { profile: 'full', allow: csv(tAllow), deny: csv(tDeny) },
+        },
+      })
+      if (result.ok) {
+        if (sandboxOff) {
+          setSbScope('agent')
+          setSbAccess('rw')
+          setTAllow('')
+          setTDeny('')
+        }
+        agentConfigCache.delete(agent.id)
+        clearConfigDirty('policy')
+      }
+      setPsStatus(result.ok ? (sandboxOff ? 'Saved. Sandbox off with full tool access.' : 'Saved.') : apiErrorMessage(result.error))
+    } catch (e) {
+      setPsStatus(String(e))
+    } finally {
+      setPs(false)
+    }
+  }
 
   const LdW = useCallback(async ()=>{
     const agentId=agent?.id

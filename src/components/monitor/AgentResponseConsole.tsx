@@ -571,6 +571,7 @@ export function AgentResponseConsole() {
   const stickToBottomRef = useRef(true)
   const fileInputRef = useRef<HTMLInputElement | null>(null)
   const textareaRef = useRef<HTMLTextAreaElement | null>(null)
+  const lastSendAttemptRef = useRef('')
   const hasActiveConsoleWork = busyAgentIds.length > 0 || responses.some((entry) => entry.streaming)
   const { status: runtimeSummaryStatus } = useRuntimeSummaryStatus(hasActiveConsoleWork ? 5000 : 12000)
   const gatewayStability = runtimeSummaryStatus?.gateway.stability ?? null
@@ -905,8 +906,8 @@ export function AgentResponseConsole() {
     return () => window.removeEventListener('resize', resizeComposerTextarea)
   }, [resizeComposerTextarea])
 
-  const buildMessage = (attachments: AgentTurnAttachment[]): string => {
-    const base = prompt.trim() || 'Analyze the attached file.'
+  const buildMessage = (draftPrompt: string, attachments: AgentTurnAttachment[]): string => {
+    const base = draftPrompt.trim() || 'Analyze the attached file.'
     if (!attachments.length) return base
     const list = attachments.map((attachment) => `- ${attachment.name}: ${attachment.path}`).join('\n')
     return `${base}\n\nAttached file(s):\n${list}`
@@ -963,7 +964,9 @@ export function AgentResponseConsole() {
   }
 
   const handleSend = async () => {
-    if (!prompt.trim() && !uploadedAttachment) return
+    const draftPrompt = prompt
+    if (!draftPrompt.trim() && !uploadedAttachment) return
+    if (isUploading) return
     setUploadError('')
     setMessageActionError('')
     if (hardBlockedSendReason) {
@@ -972,6 +975,16 @@ export function AgentResponseConsole() {
     }
     if (queuedSendReason) setMessageActionError('Queued turn will start automatically when the addressed lane is free.')
 
+    const attachmentFingerprint = uploadedAttachment
+      ? `${uploadedAttachment.file.name}:${uploadedAttachment.file.size}:${uploadedAttachment.file.lastModified}`
+      : ''
+    const sendFingerprint = `${draftRouteKey}\u0000${draftPrompt}\u0000${attachmentFingerprint}`
+    if (lastSendAttemptRef.current === sendFingerprint) return
+    lastSendAttemptRef.current = sendFingerprint
+    window.setTimeout(() => {
+      if (lastSendAttemptRef.current === sendFingerprint) lastSendAttemptRef.current = ''
+    }, 1_500)
+
     setIsUploading(true)
     let attachments: AgentTurnAttachment[] = []
     try {
@@ -979,9 +992,10 @@ export function AgentResponseConsole() {
     } catch (error) {
       setUploadError(String(error))
       setIsUploading(false)
+      if (lastSendAttemptRef.current === sendFingerprint) lastSendAttemptRef.current = ''
       return
     }
-    const msg = buildMessage(attachments)
+    const msg = buildMessage(draftPrompt, attachments)
     setIsUploading(false)
     stickToBottomRef.current = true
     if (selectedTargets.length === 1) {
@@ -992,9 +1006,9 @@ export function AgentResponseConsole() {
       await sendPromptToSelectedAgents(msg, attachments)
     } else {
       if (!partyTargetIds.length) return
-      const trimmed = prompt.trim().toLowerCase()
+      const trimmed = draftPrompt.trim().toLowerCase()
 
-      const multi = prompt.match(/(?:^|\n)\s*(?:\d+|#\d+|slot\s*\d+|agent\s*\d+|@[a-z0-9_-]+)\s*[:-]\s+/gim)
+      const multi = draftPrompt.match(/(?:^|\n)\s*(?:\d+|#\d+|slot\s*\d+|agent\s*\d+|@[a-z0-9_-]+)\s*[:-]\s+/gim)
       if (multi && multi.length > 1) {
         clearInput()
         await sendPromptToActiveParty(msg, attachments)

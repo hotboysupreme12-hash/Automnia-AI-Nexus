@@ -390,6 +390,15 @@ export function registerAgentConfigRoutes(app: Express, options: AgentConfigRout
         },
       })
     }
+    if (local.sandbox.mode === 'off') {
+      local.sandbox = normalizeSandboxConfig({
+        ...local.sandbox,
+        mode: 'off',
+        scope: 'agent',
+        workspaceAccess: 'rw',
+      })
+      local.tools = normalizeAgentToolsConfig({ profile: 'full' })
+    }
 
     applyExecutionWorkspaceToLocalConfig(local, local.routing.workspace)
     const changed = JSON.stringify(local) !== beforeSerialized
