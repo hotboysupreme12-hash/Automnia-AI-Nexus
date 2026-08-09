@@ -454,18 +454,27 @@ export function ProviderAuthModal({ isOpen, provider, envKeys, providerStatus, o
                 <span>Location: {gcloud.location || 'us-central1'}</span>
               </div>
               <p className="mt-2 text-[11px] text-slate-300">
-                Vertex uses Google Application Default Credentials (ADC), not a client secret or API key. Run the three commands below once, then select any <code className="font-mono text-sky-100">google-vertex/…</code> model.
+                Vertex uses Google Application Default Credentials (ADC), not a client secret or API key. Use the recommended one-time setup below, then select any <code className="font-mono text-sky-100">google-vertex/…</code> model.
               </p>
               {!gcloud.configured && (
                 <div className="mt-3 space-y-2">
                   {gcloudMissing.length > 0 && (
                     <p className="text-[11px] text-amber-100">{gcloudMissing[0]}</p>
                   )}
+                  {gcloud.setupScript && (
+                    <div className="rounded-lg border border-sky-300/20 bg-sky-950/35 p-2">
+                      <p className="mb-1 text-[10px] font-semibold uppercase tracking-[0.1em] text-sky-100">Recommended: {gcloud.setupScript.label}</p>
+                      <div className="font-mono text-[10px] text-slate-100">{gcloud.setupScript.command}</div>
+                    </div>
+                  )}
                   {gcloud.commands?.length ? (
-                    <div className="rounded-lg border border-white/10 bg-slate-950/50 p-2 font-mono text-[10px] text-slate-200">
-                      {gcloud.commands.map((command) => (
-                        <div key={command}>{command}</div>
-                      ))}
+                    <div className="rounded-lg border border-white/10 bg-slate-950/50 p-2 text-[10px] text-slate-200">
+                      <p className="mb-1 font-sans text-slate-400">Manual alternative</p>
+                      <div className="font-mono">
+                        {gcloud.commands.map((command) => (
+                          <div key={command}>{command}</div>
+                        ))}
+                      </div>
                     </div>
                   ) : null}
                   {!gcloud.installed && gcloud.installUrl && (
