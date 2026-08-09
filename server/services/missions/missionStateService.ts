@@ -2,6 +2,9 @@ import { randomUUID } from 'node:crypto'
 
 export type MissionMode = 'instant' | 'hours' | 'days' | 'weeks' | 'continuous' | 'indefinite'
 export type MissionStatus = 'active' | 'completed' | 'cancelled'
+export type MissionType = 'codeGeneration' | 'planning' | 'research' | 'orchestration' | 'memoryManagement'
+export type MissionCollaborationMode = 'parallel' | 'sequential' | 'hierarchical' | 'swarm' | 'specialist'
+export type MissionSchedulerPolicy = MissionCollaborationMode | 'leader-first'
 export type MissionLifecycleState =
   | 'draft'
   | 'validating'
@@ -41,6 +44,12 @@ export type MissionCronJob = {
   cronRunId: string | null
   sessionId: string | null
   sessionKey: string | null
+  scheduleKind?: 'one-shot' | 'recurring'
+  runCount?: number
+  completedRunCount?: number
+  failedRunCount?: number
+  lastRunAt?: string | null
+  lastRunStatus?: 'completed' | 'failed' | null
 }
 
 export type MissionCronCleanupResult = {
@@ -64,7 +73,7 @@ export type MissionCronCleanupSummary = {
 
 export type MissionSchedulerState = {
   engine: 'openclaw-cron'
-  policy: 'leader-first'
+  policy: MissionSchedulerPolicy
   status: 'idle' | 'running' | 'waiting' | 'completed' | 'failed' | 'stopping' | 'stopped'
   round: number
   cycleIntervalMs: number
@@ -83,11 +92,12 @@ export type Mission = {
   brief: string
   mode: MissionMode
   amount: number | null
-  missionType?: string
-  collaborationMode?: string
+  missionType?: MissionType
+  collaborationMode?: MissionCollaborationMode
   complexity?: number
   riskTolerance?: number
   cadenceSeconds?: number
+  agentCadenceSeconds?: Record<string, number>
   startAt: string
   endAt: string | null
   status: MissionStatus
@@ -144,11 +154,12 @@ export type MissionStartPayload = {
   party: string[]
   mode: MissionMode
   amount?: number | null
-  missionType?: string
-  collaborationMode?: string
+  missionType?: MissionType
+  collaborationMode?: MissionCollaborationMode
   complexity?: number
   riskTolerance?: number
   cadenceSeconds?: number
+  agentCadenceSeconds?: Record<string, number>
   maxCycles?: number | null
   idempotencyKey?: string
 }
@@ -216,6 +227,7 @@ export type MissionStateServiceOptions = {
   now?: () => Date
   persistWarning?: (message: string, error: unknown) => void
   randomId?: () => string
+  redactSensitiveText: (text: string) => string
   recordMissionReport: (mission: Mission) => unknown
   scheduleNextMissionRound: (
     mission: Mission,
@@ -224,6 +236,11 @@ export type MissionStateServiceOptions = {
     delayMs: number,
   ) => void
   startRecurringMissionCronJobs: (
+    mission: Mission,
+    assignments: TeamSyncAssignment[],
+    activity: string[],
+  ) => Promise<void>
+  launchRecurringMissionImmediately: (
     mission: Mission,
     assignments: TeamSyncAssignment[],
     activity: string[],
@@ -254,11 +271,18 @@ export function missionDurationMs(mode: MissionMode, amount: number | null) {
   return safeAmount * 7 * 24 * 60 * 60 * 1000
 }
 
+const MAX_SAFE_MISSION_TIMER_DELAY_MS = 2_147_000_000
+
+export function missionTimerDelayMs(remainingMs: number) {
+  if (!Number.isFinite(remainingMs) || remainingMs <= 0) return 0
+  return Math.min(MAX_SAFE_MISSION_TIMER_DELAY_MS, Math.ceil(remainingMs))
+}
+
 function missionProgress(mission: Mission) {
   if (mission.status === 'completed') return 100
   if (mission.status === 'cancelled') return 0
   if (mission.mode === 'indefinite' || mission.mode === 'continuous') return null
-  if (mission.mode === 'instant') return 100
+  if (mission.mode === 'instant') return 0
   if (!mission.endAt) return null
 
   const total = new Date(mission.endAt).getTime() - new Date(mission.startAt).getTime()
@@ -280,20 +304,38 @@ export function missionCycleIntervalMs(cadenceSeconds?: number | null) {
   return Math.max(15, Math.min(24 * 60 * 60, Math.round(seconds))) * 1000
 }
 
+export function missionCadenceLabel(cycleIntervalMs: number) {
+  const seconds = Math.max(15, Math.round(cycleIntervalMs / 1000))
+  if (seconds % 3600 === 0) return `${seconds / 3600}h`
+  if (seconds % 60 === 0) return `${seconds / 60}m`
+  return `${seconds}s`
+}
+
+function missionCadenceDescription(mission: Pick<Mission, 'agentCadenceSeconds' | 'scheduler'>) {
+  const cadences = Object.values(mission.agentCadenceSeconds || {})
+    .map((seconds) => Math.max(15, Math.round(seconds)))
+    .sort((left, right) => left - right)
+  if (!cadences.length) return `every ${missionCadenceLabel(mission.scheduler.cycleIntervalMs)}`
+  if (cadences[0] === cadences[cadences.length - 1]) return `every ${missionCadenceLabel(cadences[0] * 1000)}`
+  return `on per-agent cadences ${missionCadenceLabel(cadences[0] * 1000)}–${missionCadenceLabel(cadences[cadences.length - 1] * 1000)}`
+}
+
 export function missionSchedulerInitialState(args: {
   party: string[]
   cadenceSeconds?: number | null
   maxCycles?: number | null
+  collaborationMode?: MissionCollaborationMode | null
 }): MissionSchedulerState {
+  const collaborationMode = args.collaborationMode || 'hierarchical'
   return {
     engine: 'openclaw-cron',
-    policy: 'leader-first',
+    policy: collaborationMode,
     status: 'idle',
     round: 0,
     cycleIntervalMs: missionCycleIntervalMs(args.cadenceSeconds),
     nextRoundAt: null,
     maxCycles: args.maxCycles ?? null,
-    leaderAgentId: args.party[0] || null,
+    leaderAgentId: collaborationMode === 'hierarchical' ? args.party[0] || null : null,
     activeJobId: null,
     jobs: [],
     lastError: null,
@@ -327,6 +369,29 @@ export function createMissionStateService(options: MissionStateServiceOptions) {
   const isoNow = () => now().toISOString()
   const randomId = () => options.randomId?.() || randomUUID()
   const warn = options.persistWarning || defaultPersistWarning
+  const safeError = (error: unknown) => options.redactSensitiveText(String(error)).slice(0, 500)
+
+  function armMissionEndTimer(mission: Mission, assignments: TeamSyncAssignment[], activity: string[]) {
+    if (!mission.endAt || mission.status !== 'active') return
+    const existing = options.missionTimers.get(mission.id)
+    if (existing) clearTimeout(existing)
+    const checkDeadline = () => {
+      const target = options.missions.get(mission.id)
+      if (!target || target.status !== 'active' || !target.endAt) {
+        options.missionTimers.delete(mission.id)
+        return
+      }
+      const remainingMs = Date.parse(target.endAt) - now().getTime()
+      if (!Number.isFinite(remainingMs) || remainingMs <= 0) {
+        options.missionTimers.delete(mission.id)
+        void options.completeCronMission(target, 'completed', `Mission completed by cron timer: ${target.title}`, assignments, activity)
+        return
+      }
+      const timer = setTimeout(checkDeadline, missionTimerDelayMs(remainingMs))
+      options.missionTimers.set(mission.id, timer)
+    }
+    checkDeadline()
+  }
 
   function listMissions(): Mission[] {
     return Array.from(options.missions.values()).sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
@@ -422,8 +487,25 @@ export function createMissionStateService(options: MissionStateServiceOptions) {
         mission: missionView(existingMission),
       }
     }
+    const activeMission = Array.from(options.missions.values()).find((mission) => mission.status === 'active')
+    if (activeMission) {
+      return {
+        ok: false,
+        status: 409,
+        code: 'mission_invalid_state',
+        message: `Mission "${activeMission.title}" is already active. Stop it before deploying another mission.`,
+        detail: { activeMissionId: activeMission.id },
+      }
+    }
 
     const createdAt = isoNow()
+    const agentCadenceSeconds = Object.fromEntries(
+      party.map((agentId) => {
+        const requested = Number(payload.agentCadenceSeconds?.[agentId] ?? payload.cadenceSeconds ?? 300)
+        return [agentId, Math.max(15, Math.min(24 * 60 * 60, Math.round(Number.isFinite(requested) ? requested : 300)))]
+      }),
+    )
+    const cadenceSeconds = Math.min(...Object.values(agentCadenceSeconds))
     const mission: Mission = {
       id: randomId(),
       ...(idempotencyKey ? { idempotencyKey } : {}),
@@ -435,7 +517,8 @@ export function createMissionStateService(options: MissionStateServiceOptions) {
       collaborationMode: payload.collaborationMode,
       complexity: payload.complexity,
       riskTolerance: payload.riskTolerance,
-      cadenceSeconds: payload.cadenceSeconds,
+      cadenceSeconds,
+      agentCadenceSeconds,
       startAt: createdAt,
       endAt: null,
       status: 'active',
@@ -445,8 +528,9 @@ export function createMissionStateService(options: MissionStateServiceOptions) {
       completedAt: null,
       scheduler: missionSchedulerInitialState({
         party,
-        cadenceSeconds: payload.cadenceSeconds,
+        cadenceSeconds,
         maxCycles: payload.maxCycles ?? null,
+        collaborationMode: payload.collaborationMode,
       }),
     }
     const missionActivity: string[] = []
@@ -459,17 +543,11 @@ export function createMissionStateService(options: MissionStateServiceOptions) {
 
     const durationMs = missionDurationMs(mission.mode, mission.amount)
     if (durationMs > 0) {
-      mission.endAt = new Date(Date.now() + durationMs).toISOString()
-      const timer = setTimeout(() => {
-        const target = options.missions.get(mission.id)
-        if (!target || target.status !== 'active') return
-        options.missionTimers.delete(mission.id)
-        void options.completeCronMission(target, 'completed', `Mission completed by cron timer: ${target.title}`, missionAssignments, missionActivity)
-      }, durationMs)
-      options.missionTimers.set(mission.id, timer)
+      mission.endAt = new Date(now().getTime() + durationMs).toISOString()
     }
 
     options.missions.set(mission.id, mission)
+    if (mission.endAt) armMissionEndTimer(mission, missionAssignments, missionActivity)
     transitionMissionState(mission, 'validating', 'mission_started', `Cron mission accepted for validation: ${mission.title}`, {
       idempotencyKey: `${mission.id}:draft->validating`,
       evidence: { partySize: mission.party.length, mode: mission.mode },
@@ -479,10 +557,11 @@ export function createMissionStateService(options: MissionStateServiceOptions) {
       evidence: { cadenceSeconds: mission.cadenceSeconds || null, maxCycles: mission.scheduler.maxCycles },
     })
     missionActivity.unshift(`${isoNow()} | cron mission started`)
+    const hierarchical = (mission.collaborationMode || 'hierarchical') === 'hierarchical'
     for (const state of missionAssignments) {
       state.status = 'queued'
       state.updatedAt = isoNow()
-      state.note = 'awaiting cron leader round'
+      state.note = hierarchical ? 'awaiting immediate commander kickoff' : 'awaiting immediate mission kickoff'
     }
     for (const agentId of mission.party) {
       pushMissionEvent({
@@ -499,6 +578,14 @@ export function createMissionStateService(options: MissionStateServiceOptions) {
       status: mission.status,
       assignments: missionAssignments,
       activity: missionActivity,
+    }).catch((error) => {
+      warn('[missions] initial Team Sync snapshot failed:', error)
+      pushMissionEvent({
+        missionId: mission.id,
+        type: 'agent_update',
+        actor: 'scheduler',
+        message: 'Initial Team Sync snapshot failed; scheduler setup will continue and agents will retry the shared file path.',
+      })
     })
 
     try {
@@ -525,11 +612,35 @@ export function createMissionStateService(options: MissionStateServiceOptions) {
       } else {
         await options.startRecurringMissionCronJobs(mission, missionAssignments, missionActivity)
       }
-      transitionMissionState(mission, 'running', 'mission_started', `Cron mission running: ${mission.title}`, {
-        idempotencyKey: `${mission.id}:scheduled->running`,
-        evidence: { schedulerStatus: mission.scheduler.status, jobs: mission.scheduler.jobs.length },
-      })
+      const recurring = mission.mode !== 'instant'
+      const immediateKickoff = !options.controlCenterMissionSchedulerDryRun
+      const cadenceDescription = missionCadenceDescription(mission)
+      transitionMissionState(
+        mission,
+        'running',
+        'mission_started',
+        !immediateKickoff
+          ? `Mission scheduler dry run ready: ${mission.title}. No agents were launched.`
+          : recurring
+          ? `Mission deployed: ${mission.title}. Immediate kickoff is starting now; scheduled cycles continue ${cadenceDescription}.`
+          : `Mission deployed: ${mission.title}. The Strike cycle is starting now.`,
+        {
+          idempotencyKey: `${mission.id}:scheduled->running`,
+          evidence: {
+            schedulerStatus: mission.scheduler.status,
+            jobs: mission.scheduler.jobs.length,
+            immediateKickoff,
+            ...(recurring ? { nextRoundAt: mission.scheduler.nextRoundAt } : {}),
+          },
+        },
+      )
+      if (recurring && immediateKickoff) {
+        void options.launchRecurringMissionImmediately(mission, missionAssignments, missionActivity).catch((error) => {
+          warn('[missions] immediate recurring kickoff failed:', error)
+        })
+      }
     } catch (error) {
+      const errorDetail = safeError(error)
       const timer = options.missionTimers.get(mission.id)
       if (timer) {
         clearTimeout(timer)
@@ -537,9 +648,9 @@ export function createMissionStateService(options: MissionStateServiceOptions) {
       }
       mission.status = 'cancelled'
       mission.completedAt = isoNow()
-      transitionMissionState(mission, 'failed', 'mission_cancelled', `Cron mission failed during scheduler setup: ${String(error)}`, {
+      transitionMissionState(mission, 'failed', 'mission_cancelled', `Cron mission failed during scheduler setup: ${errorDetail}`, {
         idempotencyKey: `${mission.id}:scheduled->failed`,
-        evidence: { error: String(error) },
+        evidence: { error: errorDetail },
       })
       options.recordMissionReport(mission)
       options.missions.delete(mission.id)
@@ -548,7 +659,7 @@ export function createMissionStateService(options: MissionStateServiceOptions) {
         status: 500,
         code: 'mission_scheduler_failed',
         message: 'Failed to create mission cron jobs',
-        detail: String(error),
+        detail: errorDetail,
       }
     }
 
@@ -640,6 +751,14 @@ export function createMissionStateService(options: MissionStateServiceOptions) {
         `${isoNow()} | ${cancellationReason}`,
         `${isoNow()} | scheduler | cancellation cleanup removed=${cleanup.removed} disabled=${cleanup.disabled} failed=${cleanup.failed}`,
       ],
+    }).catch((error) => {
+      warn('[missions] cancellation Team Sync snapshot failed:', error)
+      pushMissionEvent({
+        missionId: mission.id,
+        type: 'agent_update',
+        actor: 'scheduler',
+        message: 'Mission was cancelled, but the final Team Sync snapshot could not be written.',
+      })
     })
     return { ok: true, mission: missionView(mission), cleanup }
   }
