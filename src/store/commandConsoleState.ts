@@ -1,4 +1,5 @@
 import type { AgentActivityEvent, AgentResponse, AgentTurnAttachment } from '../types/nexus'
+import { readConsolePreferences } from '../components/settings/workspaceSettings'
 
 export const COMMAND_CONSOLE_DRAFT_PREFIX = 'dystopai:command-draft:'
 export const MAX_COMMAND_CONSOLE_RESPONSES = 80
@@ -60,7 +61,7 @@ export function makeCommandConsoleDraftStorageKey(routeKey: string): string {
 }
 
 export function readCommandConsoleDraft(storageKey: string, storage: CommandConsoleDraftStorage | null = browserDraftStorage()): string {
-  if (!storage) return ''
+  if (!storage || !readConsolePreferences().rememberDrafts) return ''
   try {
     return storage.getItem(storageKey) || ''
   } catch {
@@ -71,11 +72,31 @@ export function readCommandConsoleDraft(storageKey: string, storage: CommandCons
 export function writeCommandConsoleDraft(storageKey: string, value: string, storage: CommandConsoleDraftStorage | null = browserDraftStorage()): void {
   if (!storage) return
   try {
+    if (!readConsolePreferences().rememberDrafts) {
+      storage.removeItem(storageKey)
+      return
+    }
     if (value.trim()) storage.setItem(storageKey, value)
     else storage.removeItem(storageKey)
   } catch {
     // Draft persistence is best-effort; chat sending must not depend on browser storage.
   }
+}
+
+export function clearAllCommandConsoleDrafts(storage: CommandConsoleDraftStorage | null = browserDraftStorage()): number {
+  if (!storage) return 0
+  let removed = 0
+  try {
+    for (let index = storage.length - 1; index >= 0; index -= 1) {
+      const key = storage.key(index)
+      if (!key?.startsWith(COMMAND_CONSOLE_DRAFT_PREFIX)) continue
+      storage.removeItem(key)
+      removed += 1
+    }
+  } catch {
+    // Draft cleanup is best-effort.
+  }
+  return removed
 }
 
 export function removeCommandConsoleDraft(storageKey: string, storage: CommandConsoleDraftStorage | null = browserDraftStorage()): void {

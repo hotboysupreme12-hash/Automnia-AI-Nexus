@@ -16,7 +16,6 @@ import { redactDiagnosticText } from '../../utils/diagnosticRedaction'
 import { agentPortraitSrc } from '../../utils/portrait'
 import { createSseFrameParser } from '../../utils/sseStream'
 import {
-  MAX_VOICE_RECORDING_MS,
   decodeAudioToMono16Khz,
   friendlyMicrophoneError,
   preferredRecordingMimeType,
@@ -30,6 +29,7 @@ import {
 import {
   SPEECH_SETTINGS_CHANGED_EVENT,
   readSpeechSettings,
+  type SpeechSettings,
   type SpeechTranscriptionMode,
 } from '../../speech/speechSettings'
 import { monitorVoiceActivity } from '../../speech/voiceActivity'
@@ -598,7 +598,8 @@ export function AgentResponseConsole() {
   const [isUploading, setIsUploading] = useState(false)
   const [messageActionId, setMessageActionId] = useState('')
   const [messageActionError, setMessageActionError] = useState('')
-  const [speechMode, setSpeechMode] = useState<SpeechTranscriptionMode>(() => readSpeechSettings().mode)
+  const [speechSettings, setSpeechSettings] = useState<SpeechSettings>(() => readSpeechSettings())
+  const speechMode = speechSettings.mode
   const [voicePhase, setVoicePhase] = useState<VoiceInputPhase>('idle')
   const [voiceStatus, setVoiceStatus] = useState('')
   const [voiceError, setVoiceError] = useState('')
@@ -966,12 +967,12 @@ export function AgentResponseConsole() {
   }, [resizeComposerTextarea])
 
   useEffect(() => {
-    const syncSpeechMode = () => setSpeechMode(readSpeechSettings().mode)
-    window.addEventListener(SPEECH_SETTINGS_CHANGED_EVENT, syncSpeechMode)
-    window.addEventListener('storage', syncSpeechMode)
+    const syncSpeechSettings = () => setSpeechSettings(readSpeechSettings())
+    window.addEventListener(SPEECH_SETTINGS_CHANGED_EVENT, syncSpeechSettings)
+    window.addEventListener('storage', syncSpeechSettings)
     return () => {
-      window.removeEventListener(SPEECH_SETTINGS_CHANGED_EVENT, syncSpeechMode)
-      window.removeEventListener('storage', syncSpeechMode)
+      window.removeEventListener(SPEECH_SETTINGS_CHANGED_EVENT, syncSpeechSettings)
+      window.removeEventListener('storage', syncSpeechSettings)
     }
   }, [])
 
@@ -1121,9 +1122,9 @@ export function AgentResponseConsole() {
       const stream = await navigator.mediaDevices.getUserMedia({
         audio: {
           channelCount: 1,
-          echoCancellation: true,
-          noiseSuppression: true,
-          autoGainControl: true,
+          echoCancellation: speechSettings.echoCancellation,
+          noiseSuppression: speechSettings.noiseSuppression,
+          autoGainControl: speechSettings.autoGainControl,
         },
         video: false,
       })
@@ -1139,6 +1140,7 @@ export function AgentResponseConsole() {
       const recorder = new MediaRecorder(stream, mimeType ? { mimeType, audioBitsPerSecond: 64_000 } : undefined)
       mediaRecorderRef.current = recorder
       const recordingMode = speechMode
+      const recordingSettings = speechSettings
 
       recorder.addEventListener('dataavailable', (event) => {
         if (event.data.size > 0) recordingChunksRef.current.push(event.data)
@@ -1183,7 +1185,7 @@ export function AgentResponseConsole() {
       recordingTickRef.current = window.setInterval(() => {
         setRecordingSeconds(Math.floor((Date.now() - recordingStartedAtRef.current) / 1000))
       }, 1_000)
-      recordingLimitRef.current = window.setTimeout(() => stopVoiceRecording(), MAX_VOICE_RECORDING_MS)
+      recordingLimitRef.current = window.setTimeout(() => stopVoiceRecording(), recordingSettings.maxRecordingSeconds * 1_000)
 
       try {
         voiceActivityCleanupRef.current = monitorVoiceActivity(stream, {
@@ -1204,6 +1206,9 @@ export function AgentResponseConsole() {
             recordingDiscardReasonRef.current = 'No speech was detected. Check the selected microphone and try again.'
             stopVoiceRecording()
           },
+        }, {
+          autoStop: recordingSettings.autoStop,
+          pauseDurationMs: recordingSettings.pauseDurationMs,
         })
       } catch {
         setVoiceStatus(`${recordingMode === 'local' ? 'Listening locally' : 'Listening online'} · tap stop when finished`)
@@ -1223,7 +1228,7 @@ export function AgentResponseConsole() {
       setVoiceStatus('')
       setVoicePhase('idle')
     }
-  }, [clearVoiceTimers, localSpeechProgress, speechMode, stopMicrophoneTracks, stopVoiceRecording, transcribeVoiceBlob, voicePhase])
+  }, [clearVoiceTimers, localSpeechProgress, speechMode, speechSettings, stopMicrophoneTracks, stopVoiceRecording, transcribeVoiceBlob, voicePhase])
 
   const buildMessage = (draftPrompt: string, attachments: AgentTurnAttachment[]): string => {
     const base = draftPrompt.trim() || 'Analyze the attached file.'

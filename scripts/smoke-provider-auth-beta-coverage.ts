@@ -110,8 +110,8 @@ assert.match(
 )
 assert.match(
   agentEditor,
-  /Connect this provider before saving\./,
-  'Agent editor model save must stop on missing provider auth before runtime work starts',
+  /Connect this provider to finish autosave\./,
+  'Agent editor model autosave must stop on missing provider auth before runtime work starts',
 )
 assert.match(
   agentEditor,

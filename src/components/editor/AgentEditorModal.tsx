@@ -40,6 +40,8 @@ type AgentConfigPatch = {
 }
 type AgentConfigDirtySection = 'profile'|'model'|'runtime'|'heartbeat'|'policy'
 type ApplyAgentConfigOptions = { skipDirty?: boolean }
+type PolicyDraft = { mode:SandboxMode; scope:SandboxScope; access:SandboxAccess; allow:string; deny:string }
+type EditorAutosavePhase = 'saved'|'saving'|'error'
 type DesktopDirectoryPickerPayload = { ok?:boolean; path?:string|null; cancelled?:boolean; error?:string; detail?:string }
 type FolderListPayload = { base?:string; folders?:string[] }
 type FolderPickerSessionPayload = { sessionId?:string; status?:'pending'|'selected'|'cancelled'|'error'; path?:string|null; cancelled?:boolean; detail?:string }
@@ -358,7 +360,10 @@ export function AgentEditorModal() {
   const [portraitPicking,setPortraitPicking] = useState(false)
   const [defaultAgentSaving,setDefaultAgentSaving] = useState(false)
   const [defaultAgentStatus,setDefaultAgentStatus] = useState('')
+  const [autosavePhase,setAutosavePhase] = useState<EditorAutosavePhase>('saved')
+  const [autosaveMessage,setAutosaveMessage] = useState('All changes save automatically')
   const portraitRef = useRef<HTMLInputElement|null>(null)
+  const portraitSaveTimerRef = useRef<number|null>(null)
 
   const [models,setModels] = useState<AvailableModel[]>([])
   const [modelsLoading,setModelsLoading] = useState(false)
@@ -377,6 +382,7 @@ export function AgentEditorModal() {
   const heartbeatCommitRef = useRef<HeartbeatConfig|null>(null)
   const heartbeatSaveSeqRef = useRef(0)
   const runtimeCommitRef = useRef<NonNullable<OpenClawAgent['runtimePolicy']>|null>(null)
+  const modelSaveTimerRef = useRef<number|null>(null)
   const configPatchRef = useRef<AgentConfigPatch|null>(null)
   const configPatchAgentIdRef = useRef('')
   const configPatchTimerRef = useRef<number|null>(null)
@@ -391,11 +397,13 @@ export function AgentEditorModal() {
   const [sbAccess,setSbAccess] = useState<SandboxAccess>('rw')
   const [tAllow,setTAllow] = useState(''); const [tDeny,setTDeny] = useState('')
   const [ps,setPs] = useState(false); const [psStatus,setPsStatus] = useState('')
+  const policySaveTimerRef = useRef<number|null>(null)
 
   const [wsPath,setWsPath] = useState(''); const [wsFolders,setWsFolders] = useState<string[]>([])
   const [wsLoading,setWsLoading] = useState(false); const [wsSaving,setWsSaving] = useState(false)
   const [wsStatus,setWsStatus] = useState('')
   const workspaceDirectoryRef = useRef<HTMLInputElement|null>(null)
+  const workspaceSaveTimerRef = useRef<number|null>(null)
 
   const [sk,setSk] = useState(''); const [skFilter,setSkFilter] = useState<'all'|'enabled'|'disabled'>('all')
   const [installedSkills,setInstalledSkills] = useState<AgentSkillEntry[]>([])
@@ -412,6 +420,8 @@ export function AgentEditorModal() {
   const [rcontent,setRcontent] = useState(''); const [rstatus,setRstatus] = useState('')
   const [rloading,setRloading] = useState(false); const [rcontentLoading,setRcontentLoading] = useState(false)
   const [rsaving,setRsaving] = useState(false)
+  const resourceSaveTimerRef = useRef<number|null>(null)
+  const resourceDirtyRef = useRef(false)
   const [retireConfirmOpen,setRetireConfirmOpen] = useState(false)
   const [retiring,setRetiring] = useState(false)
 
@@ -451,14 +461,22 @@ export function AgentEditorModal() {
     configPatchRef.current = null
     configPatchAgentIdRef.current = ''
     if(!patch||!agentId)return
+    setAutosavePhase('saving')
+    setAutosaveMessage('Saving changes…')
     const result = await apiRequest<{ok?:boolean;error?:string;detail?:unknown}>(`/api/party/agent/${encodeURIComponent(agentId)}/config`,{
       method:'POST',
       timeoutMs:18_000,
       body:patch,
     })
-    if(!result.ok)throw new Error(apiErrorMessage(result.error))
+    if(!result.ok){
+      setAutosavePhase('error')
+      setAutosaveMessage(`Autosave failed: ${apiErrorMessage(result.error)}`)
+      throw new Error(apiErrorMessage(result.error))
+    }
     agentConfigCache.delete(agentId)
     clearConfigDirty(...patchDirtySections(patch))
+    setAutosavePhase('saved')
+    setAutosaveMessage('All changes saved')
   },[clearConfigDirty,patchDirtySections])
 
   const scheduleConfigPatch = useCallback((agentId:string,patch:AgentConfigPatch)=>{
@@ -466,6 +484,8 @@ export function AgentEditorModal() {
       void flushPendingConfigPatch().catch(()=>{})
     }
     configPatchAgentIdRef.current = agentId
+    setAutosavePhase('saving')
+    setAutosaveMessage('Waiting to save…')
     markConfigDirty(agentId,...patchDirtySections(patch))
     configPatchRef.current = mergeAgentConfigPatch(configPatchRef.current||{},patch)
     if(configPatchTimerRef.current)window.clearTimeout(configPatchTimerRef.current)
@@ -542,7 +562,24 @@ export function AgentEditorModal() {
     markConfigDirty(agent.id,'heartbeat')
     updateHeartbeat(agent.id,heartbeat)
   }
-  const closeWithHeartbeatFlush = async ()=>{try{await flushPendingConfigPatch()}catch(e){setMsStatus(`Failed to save pending settings: ${errorMessage(e)}`)}if(agent&&heartbeatDraftRef.current){try{await saveHeartbeatConfig(agent.id,heartbeatDraftRef.current)}catch(e){setMsStatus(`Failed to save heartbeat settings: ${errorMessage(e)}`)}}closeEditor()}
+  const closeWithHeartbeatFlush = async ()=>{
+    try{
+      if(portraitSaveTimerRef.current){window.clearTimeout(portraitSaveTimerRef.current);portraitSaveTimerRef.current=null;await CommitPortraitDraft()}
+      if(modelSaveTimerRef.current){window.clearTimeout(modelSaveTimerRef.current);modelSaveTimerRef.current=null;await SvM(primary,fallbacks)}
+      if(policySaveTimerRef.current){window.clearTimeout(policySaveTimerRef.current);policySaveTimerRef.current=null;await SvP()}
+      if(workspaceSaveTimerRef.current){window.clearTimeout(workspaceSaveTimerRef.current);workspaceSaveTimerRef.current=null;await SvW(wsPath)}
+      if(resourceSaveTimerRef.current){window.clearTimeout(resourceSaveTimerRef.current);resourceSaveTimerRef.current=null}
+      if(resourceDirtyRef.current)await SvF(rcontent,rfile)
+      await flushPendingConfigPatch()
+      if(agent&&heartbeatDraftRef.current)await saveHeartbeatConfig(agent.id,heartbeatDraftRef.current)
+      closeEditor()
+    }catch(e){
+      const message=`Could not finish autosave: ${errorMessage(e)}`
+      setMsStatus(message)
+      setAutosavePhase('error')
+      setAutosaveMessage(message)
+    }
+  }
   const PR = (p:Partial<NonNullable<OpenClawAgent['runtimePolicy']>>)=>{
     if(!agent)return
     const runtime={
@@ -619,65 +656,69 @@ export function AgentEditorModal() {
   const selectedPrimaryAuthForRefresh = selectedPrimaryProviderForAuthRefresh ? authForProvider(selectedPrimaryProviderForAuthRefresh) : undefined
   const modelGroups = useMemo(() => groupAvailableModels(selectableModels), [selectableModels])
   const fallbackModelGroups = useMemo(() => groupAvailableModels(selectableModels.filter((m) => m.id !== primary)), [selectableModels, primary])
-  const SvM = async () => {
+  const SvM = async (nextPrimary=primary,nextFallbacks=fallbacks) => {
     if (!agent) return
-    const providerStatus = authForProvider(providerForModel(primary))
+    const providerStatus = authForProvider(providerForModel(nextPrimary))
     if (providerStatus && !providerStatus.configured) {
-      setMsStatus(`Missing ${authLabelForProvider(providerStatus.provider, providerStatus)} ${authKindForProvider(providerStatus)}. Connect this provider before saving.`)
+      const message=`Missing ${authLabelForProvider(providerStatus.provider, providerStatus)} ${authKindForProvider(providerStatus)}. Connect this provider to finish autosave.`
+      setMsStatus(message)
+      setAutosavePhase('error')
+      setAutosaveMessage(message)
       setAuthModalProvider(providerStatus)
       return
     }
     setMs(true)
-    setMsStatus('')
+    setMsStatus('Saving model…')
+    setAutosavePhase('saving')
+    setAutosaveMessage('Saving model settings…')
     configLoadSeqRef.current += 1
-    const thinkingDefault: ThinkingLevel = thinkingOn ? thinkingLevel : 'off'
-    const timeoutSeconds = Math.max(30, Math.min(7200, Math.round(runtimeTimeoutSeconds)))
     try {
       const result = await apiRequest<{
         ok?: boolean
         error?: string
-        config?: {
-          model?: OpenClawAgent['model']
-          runtime?: {
-            thinkingDefault?: ThinkingLevel
-            timeoutSeconds?: number
-            parallelPreferred?: boolean
-            fastModeDefault?: FastModeDefault
-          }
-        }
+        config?: { model?: OpenClawAgent['model'] }
       }>(`/api/party/agent/${encodeURIComponent(agent.id)}/config`, {
         method: 'POST',
         timeoutMs: 18_000,
-        body: {
-          model: { primary, fallbacks },
-          runtime: { thinkingDefault, timeoutSeconds, parallelPreferred: true, fastModeDefault: agent.runtimePolicy?.fastModeDefault ?? 'auto' },
-        },
+        body: { model: { primary:nextPrimary, fallbacks:nextFallbacks } },
       })
       if (!result.ok) {
-        setMsStatus(apiErrorMessage(result.error))
+        const message=apiErrorMessage(result.error)
+        setMsStatus(`Autosave failed: ${message}`)
+        setAutosavePhase('error')
+        setAutosaveMessage(`Model autosave failed: ${message}`)
         return
       }
-      const data = result.data
-      const savedModel = data.config?.model || { primary, fallbacks }
-      const savedRuntime = data.config?.runtime || { thinkingDefault, timeoutSeconds, parallelPreferred: true, fastModeDefault: agent.runtimePolicy?.fastModeDefault ?? 'auto' }
+      const savedModel = result.data.config?.model || { primary:nextPrimary, fallbacks:nextFallbacks }
       updateAgentModel(agent.id, savedModel)
-      setPrimary(savedModel.primary || primary)
+      setPrimary(savedModel.primary || nextPrimary)
       setFallbacks(savedModel.fallbacks || [])
-      updateAgentRuntimePolicy(agent.id, {
-        thinkingDefault: savedRuntime.thinkingDefault || thinkingDefault,
-        timeoutSeconds: savedRuntime.timeoutSeconds || timeoutSeconds,
-        parallelPreferred: savedRuntime.parallelPreferred ?? true,
-        fastModeDefault: savedRuntime.fastModeDefault || agent.runtimePolicy?.fastModeDefault || 'auto',
-      }, { persist: false })
-      setRuntimeTimeoutSeconds(savedRuntime.timeoutSeconds || timeoutSeconds)
       agentConfigCache.delete(agent.id)
-      clearConfigDirty('model','runtime')
-      setMsStatus(`Saved. Reasoning ${savedRuntime.thinkingDefault || thinkingDefault} - timeout ${formatDuration((savedRuntime.timeoutSeconds || timeoutSeconds) * 1000)}.`)
+      clearConfigDirty('model')
+      setMsStatus('Model saved automatically.')
+      setAutosavePhase('saved')
+      setAutosaveMessage('All changes saved')
     } catch (e) {
-      setMsStatus(String(e))
+      const message=errorMessage(e)
+      setMsStatus(`Autosave failed: ${message}`)
+      setAutosavePhase('error')
+      setAutosaveMessage(`Model autosave failed: ${message}`)
     } finally {
       setMs(false)
     }
+  }
+
+  const scheduleModelAutosave = (nextPrimary:string,nextFallbacks:string[]) => {
+    if(!agent)return
+    markConfigDirty(agent.id,'model')
+    if(modelSaveTimerRef.current)window.clearTimeout(modelSaveTimerRef.current)
+    setMsStatus('Waiting to save…')
+    setAutosavePhase('saving')
+    setAutosaveMessage('Waiting to save model…')
+    modelSaveTimerRef.current=window.setTimeout(()=>{
+      modelSaveTimerRef.current=null
+      void SvM(nextPrimary,nextFallbacks)
+    },EDITOR_PATCH_DEBOUNCE_MS)
   }
 
   const applyAgentConfigPayload = useCallback((agentId:string,config:AgentConfigPayload,options:ApplyAgentConfigOptions={})=>{
@@ -731,24 +772,26 @@ export function AgentEditorModal() {
       applyAgentConfigPayload(agentId,result.data.config,{skipDirty:true})
     }
   },[agent?.id,applyAgentConfigPayload])
-  const SvP = async () => {
+  const SvP = async (draft:PolicyDraft={mode:sbMode,scope:sbScope,access:sbAccess,allow:tAllow,deny:tDeny}) => {
     if (!agent) return
     setPs(true)
-    setPsStatus('')
-    const sandboxOff = sbMode === 'off'
+    setPsStatus('Saving policy…')
+    setAutosavePhase('saving')
+    setAutosaveMessage('Saving policy settings…')
+    const sandboxOff = draft.mode === 'off'
     try {
       const result = await apiRequest<{ok?:boolean;error?:string}>(`/api/party/agent/${encodeURIComponent(agent.id)}/config`, {
         method: 'POST',
         timeoutMs: 18000,
         body: {
           sandbox: {
-            mode: sbMode,
-            scope: sandboxOff ? 'agent' : sbScope,
-            workspaceAccess: sandboxOff ? 'rw' : sbAccess,
+            mode: draft.mode,
+            scope: sandboxOff ? 'agent' : draft.scope,
+            workspaceAccess: sandboxOff ? 'rw' : draft.access,
           },
           tools: sandboxOff
             ? { profile: 'full', allow: [], deny: [] }
-            : { profile: 'full', allow: csv(tAllow), deny: csv(tDeny) },
+            : { profile: 'full', allow: csv(draft.allow), deny: csv(draft.deny) },
         },
       })
       if (result.ok) {
@@ -760,13 +803,35 @@ export function AgentEditorModal() {
         }
         agentConfigCache.delete(agent.id)
         clearConfigDirty('policy')
+        setAutosavePhase('saved')
+        setAutosaveMessage('All changes saved')
+      }else{
+        setAutosavePhase('error')
+        setAutosaveMessage(`Policy autosave failed: ${apiErrorMessage(result.error)}`)
       }
-      setPsStatus(result.ok ? (sandboxOff ? 'Saved. Sandbox off with full tool access.' : 'Saved.') : apiErrorMessage(result.error))
+      setPsStatus(result.ok ? (sandboxOff ? 'Saved automatically · sandbox off with full tool access.' : 'Policy saved automatically.') : `Autosave failed: ${apiErrorMessage(result.error)}`)
     } catch (e) {
-      setPsStatus(String(e))
+      const message=errorMessage(e)
+      setPsStatus(`Autosave failed: ${message}`)
+      setAutosavePhase('error')
+      setAutosaveMessage(`Policy autosave failed: ${message}`)
     } finally {
       setPs(false)
     }
+  }
+
+  const schedulePolicyAutosave = (patch:Partial<PolicyDraft>) => {
+    if(!agent)return
+    const next:PolicyDraft={mode:sbMode,scope:sbScope,access:sbAccess,allow:tAllow,deny:tDeny,...patch}
+    markConfigDirty(agent.id,'policy')
+    if(policySaveTimerRef.current)window.clearTimeout(policySaveTimerRef.current)
+    setPsStatus('Waiting to save…')
+    setAutosavePhase('saving')
+    setAutosaveMessage('Waiting to save policy…')
+    policySaveTimerRef.current=window.setTimeout(()=>{
+      policySaveTimerRef.current=null
+      void SvP(next)
+    },EDITOR_PATCH_DEBOUNCE_MS)
   }
 
   const LdW = useCallback(async ()=>{
@@ -801,7 +866,7 @@ export function AgentEditorModal() {
         setWsFolders([])
       }
     }catch(e){
-      setWsStatus(isAbortError(e)?'Browse timed out. Paste a directory path manually and press Set.':isFetchNetworkError(e)?'Browse request failed before the server responded. Check that the backend is running, then try again.':`Browse failed: ${errorMessage(e)}`)
+      setWsStatus(isAbortError(e)?'Browse timed out. Paste a directory path and pause briefly to save it.':isFetchNetworkError(e)?'Browse request failed before the server responded. Check that the backend is running, then try again.':`Browse failed: ${errorMessage(e)}`)
       setWsFolders([])
     }finally{setWsLoading(false)}
   }
@@ -811,6 +876,7 @@ export function AgentEditorModal() {
     setWsPath(p)
     setWsStatus(`Selected: ${p}`)
     void Br(p)
+    scheduleWorkspaceAutosave(p)
     return true
   }
   const PickWorkspaceDirectoryInput = async (files:FileList|null)=>{
@@ -873,36 +939,56 @@ export function AgentEditorModal() {
         setWsStatus(pd.detail||'Folder picker failed.')
         return
       }
-      setWsStatus('Folder picker timed out. Paste a directory path manually and press Set, or try Browse again.')
+      setWsStatus('Folder picker timed out. Paste a directory path and pause briefly to save it, or try Browse again.')
     }catch(e){
-      setWsStatus(isAbortError(e)?'Folder picker timed out. Paste a directory path manually and press Set, or try Browse again.':isFetchNetworkError(e)?'Folder picker request was interrupted before the server responded. Paste a directory path manually and press Set, or try Browse again.':`Picker failed: ${errorMessage(e)}`)
+      setWsStatus(isAbortError(e)?'Folder picker timed out. Paste a directory path and pause briefly to save it, or try Browse again.':isFetchNetworkError(e)?'Folder picker request was interrupted. Paste a directory path and pause briefly to save it.':`Picker failed: ${errorMessage(e)}`)
     }finally{
       setWsLoading(false)
     }
   }
-  const SvW = async ()=>{
+  const SvW = async (nextPath=wsPath)=>{
     if(!agent)return
+    const normalizedPath=nextPath.trim()
+    if(!normalizedPath)return
     setWsSaving(true)
-    setWsStatus('Setting workspace...')
+    setWsStatus('Saving workspace…')
+    setAutosavePhase('saving')
+    setAutosaveMessage('Saving workspace…')
     try{
-      const result=await apiRequest<{ok?:boolean;workspace?:string;error?:string;detail?:string;suggestedWorkspace?:string|null}>('/api/party/workspace',{method:'POST',timeoutMs:90000,body:{agentId:agent.id,workspace:wsPath}})
+      const result=await apiRequest<{ok?:boolean;workspace?:string;error?:string;detail?:string;suggestedWorkspace?:string|null}>('/api/party/workspace',{method:'POST',timeoutMs:90000,body:{agentId:agent.id,workspace:normalizedPath}})
       if(result.ok&&result.data.ok){
         const d=result.data
-        const finalPath=d.workspace||wsPath
+        const finalPath=d.workspace||normalizedPath
         setWsPath(finalPath)
         updateAgentMeta(agent.id,{workspace:finalPath})
-        setWsStatus(`Set: ${finalPath}`)
+        setWsStatus(`Saved automatically: ${finalPath}`)
+        setAutosavePhase('saved')
+        setAutosaveMessage('All changes saved')
         void Br(finalPath)
       }else if(result.ok&&result.data.suggestedWorkspace){
         const d=result.data
         const suggestedWorkspace=d.suggestedWorkspace||''
         setWsPath(suggestedWorkspace)
         setWsStatus(`${d.error||d.detail||'Failed.'} Suggested: ${suggestedWorkspace}`)
-      }else if(result.ok)setWsStatus(result.data.error||result.data.detail||'Failed.')
-      else setWsStatus(result.error.code==='timeout'?'Workspace setting timed out. The server may still be syncing; try Set again.':`Workspace failed: ${apiErrorMessage(result.error)}`)
+      }else if(result.ok){setWsStatus(result.data.error||result.data.detail||'Autosave failed.');setAutosavePhase('error');setAutosaveMessage('Workspace autosave failed')}
+      else{const message=result.error.code==='timeout'?'Workspace autosave timed out. Pause, then change the path to retry.':`Workspace autosave failed: ${apiErrorMessage(result.error)}`;setWsStatus(message);setAutosavePhase('error');setAutosaveMessage(message)}
     }catch(e){
-      setWsStatus(isAbortError(e)?'Workspace setting timed out. The server may still be syncing; try Set again.':isFetchNetworkError(e)?'Workspace request failed before the server responded. The desktop app will try to restart the backend automatically; try Set again in a moment.':`Workspace failed: ${errorMessage(e)}`)
+      const message=isAbortError(e)?'Workspace autosave timed out. Change the path to retry.':isFetchNetworkError(e)?'Workspace autosave could not reach the backend. It will retry after the next change.':`Workspace autosave failed: ${errorMessage(e)}`
+      setWsStatus(message)
+      setAutosavePhase('error')
+      setAutosaveMessage(message)
     }finally{setWsSaving(false)}
+  }
+  const scheduleWorkspaceAutosave = (nextPath:string)=>{
+    if(!nextPath.trim())return
+    if(workspaceSaveTimerRef.current)window.clearTimeout(workspaceSaveTimerRef.current)
+    setWsStatus('Waiting to save…')
+    setAutosavePhase('saving')
+    setAutosaveMessage('Waiting to save workspace…')
+    workspaceSaveTimerRef.current=window.setTimeout(()=>{
+      workspaceSaveTimerRef.current=null
+      void SvW(nextPath)
+    },800)
   }
 
   type AvatarPickerPayload = { ok?:boolean; sessionId?:string; status?:string; path?:string|null; sourcePath?:string|null; avatar?:string|null; previewUrl?:string|null; error?:string; detail?:string }
@@ -918,6 +1004,8 @@ export function AgentEditorModal() {
     updateAgentMeta(agent.id,{portrait:storedAvatar||preview})
     agentConfigCache.delete(agent.id)
     setPortraitStatus('Updated.')
+    setAutosavePhase('saved')
+    setAutosaveMessage('All changes saved')
     return true
   },[agent,updateAgentMeta])
   const UploadPortraitFile = async (file:File)=>{
@@ -955,9 +1043,9 @@ export function AgentEditorModal() {
       window.setTimeout(()=>URL.revokeObjectURL(localPreview),30000)
     }
   }
-  const CommitPortraitDraft = useCallback(async ()=>{
+  const CommitPortraitDraft = useCallback(async (draftValue=portraitDraft)=>{
     if(!agent)return
-    const next=portraitDraft.trim()
+    const next=draftValue.trim()
     setPortraitPreviewFailed(false)
     if(!next){
       setPortraitStatus('')
@@ -992,6 +1080,16 @@ export function AgentEditorModal() {
     PM({portrait:next})
     setPortraitStatus('Updated.')
   },[PM,agent,applyPickedPortrait,portraitDraft])
+  const SchedulePortraitAutosave = (next:string)=>{
+    if(portraitSaveTimerRef.current)window.clearTimeout(portraitSaveTimerRef.current)
+    if(!next.trim())return
+    setAutosavePhase('saving')
+    setAutosaveMessage('Waiting to save portrait…')
+    portraitSaveTimerRef.current=window.setTimeout(()=>{
+      portraitSaveTimerRef.current=null
+      void CommitPortraitDraft(next)
+    },800)
+  }
   const PickPortrait = ()=>{
     if(!agent||portraitPicking)return
     setPortraitStatus('')
@@ -1138,7 +1236,7 @@ export function AgentEditorModal() {
     try{
       const result=await apiRequest<AgentResourceContentPayload>(`/api/party/resources/${encodeURIComponent(agentId)}/${encodeURIComponent(f)}`,{timeoutMs:15000})
       if(seq!==fileContentSeqRef.current)return
-      if(result.ok)setRcontent(result.data.content||'')
+      if(result.ok){setRcontent(result.data.content||'');resourceDirtyRef.current=false}
       else{setRcontent('');setRstatus(apiErrorMessage(result.error)||`Could not load ${f}.`)}
     }catch(e){
       if(seq===fileContentSeqRef.current){
@@ -1149,7 +1247,50 @@ export function AgentEditorModal() {
       if(seq===fileContentSeqRef.current)setRcontentLoading(false)
     }
   },[agent?.id])
-  const SvF = async ()=>{if(!agent)return;setRsaving(true);try{const result=await apiRequest<AgentResourceSavePayload>(`/api/party/resources/${encodeURIComponent(agent.id)}/${encodeURIComponent(rfile)}`,{method:'PUT',timeoutMs:20000,body:{content:rcontent}});setRstatus(result.ok?'Saved.':apiErrorMessage(result.error))}catch(e){setRstatus(String(e))}finally{setRsaving(false)}}
+  const SvF = async (content=rcontent,file=rfile)=>{
+    if(!agent||!file)return
+    setRsaving(true)
+    setRstatus(`Saving ${file}…`)
+    setAutosavePhase('saving')
+    setAutosaveMessage(`Saving ${file}…`)
+    try{
+      const result=await apiRequest<AgentResourceSavePayload>(`/api/party/resources/${encodeURIComponent(agent.id)}/${encodeURIComponent(file)}`,{method:'PUT',timeoutMs:20000,body:{content}})
+      if(result.ok){
+        resourceDirtyRef.current=false
+        setRstatus(`${file} saved automatically.`)
+        setAutosavePhase('saved')
+        setAutosaveMessage('All changes saved')
+      }else{
+        const message=apiErrorMessage(result.error)
+        setRstatus(`Autosave failed: ${message}`)
+        setAutosavePhase('error')
+        setAutosaveMessage(`${file} autosave failed: ${message}`)
+      }
+    }catch(e){
+      const message=errorMessage(e)
+      setRstatus(`Autosave failed: ${message}`)
+      setAutosavePhase('error')
+      setAutosaveMessage(`${file} autosave failed: ${message}`)
+    }finally{setRsaving(false)}
+  }
+  const ScheduleResourceAutosave = (content:string)=>{
+    resourceDirtyRef.current=true
+    if(resourceSaveTimerRef.current)window.clearTimeout(resourceSaveTimerRef.current)
+    setRstatus('Waiting to save…')
+    setAutosavePhase('saving')
+    setAutosaveMessage(`Waiting to save ${rfile}…`)
+    const file=rfile
+    resourceSaveTimerRef.current=window.setTimeout(()=>{
+      resourceSaveTimerRef.current=null
+      void SvF(content,file)
+    },800)
+  }
+  const SelectResourceFile = async (file:string)=>{
+    if(file===rfile)return
+    if(resourceSaveTimerRef.current){window.clearTimeout(resourceSaveTimerRef.current);resourceSaveTimerRef.current=null}
+    if(resourceDirtyRef.current)await SvF(rcontent,rfile)
+    setRfile(file)
+  }
   const RetireAgent = useCallback(async ()=>{
     if(!agent||retiring)return
     if(configPatchTimerRef.current){
@@ -1187,6 +1328,8 @@ export function AgentEditorModal() {
     setPortraitPicking(false)
     setDefaultAgentStatus('')
     setDefaultAgentSaving(false)
+    setAutosavePhase('saved')
+    setAutosaveMessage('All changes save automatically')
     setTick(currentAgent.heartbeat.tickIntervalMs)
     setIdle(currentAgent.heartbeat.idleTimeoutMs)
     setCont(currentAgent.heartbeat.continuous)
@@ -1207,6 +1350,7 @@ export function AgentEditorModal() {
     setRfiles([])
     setRcontent('')
     setRstatus('')
+    resourceDirtyRef.current=false
     setRloading(false)
     setRcontentLoading(false)
     setRetireConfirmOpen(false)
@@ -1254,6 +1398,11 @@ export function AgentEditorModal() {
   const runtimeStoreStatusText = runtimeSaveStatus?.phase === 'failed' || runtimeSaveStatus?.phase === 'saving'
     ? runtimeSaveStatus.message
     : ''
+  const backendSaveEntries = Object.values(agentConfigSaveStatus || {})
+  const backendFailure = backendSaveEntries.find((entry) => entry?.phase === 'failed')
+  const backendSaving = backendSaveEntries.find((entry) => entry?.phase === 'saving')
+  const effectiveAutosavePhase:EditorAutosavePhase = backendFailure ? 'error' : backendSaving || autosavePhase === 'saving' ? 'saving' : autosavePhase
+  const effectiveAutosaveMessage = backendFailure?.message || backendSaving?.message || autosaveMessage
   const primaryProvider = providerForModel(primary)
   const primaryAuth = primaryProvider ? authForProvider(primaryProvider) : undefined
   const primaryAuthLabel = authLabelForProvider(primaryProvider, primaryAuth)
@@ -1278,7 +1427,10 @@ export function AgentEditorModal() {
                     <p className="text-[9px] font-medium text-slate-500">{agent.id} · Lv.{agent.level} · <span className="capitalize">{agent.rarity}</span></p>
                   </div>
                 </div>
-                <button type="button" data-editor-action="done" onClick={()=>void closeWithHeartbeatFlush()} title="Save pending changes and close agent settings" aria-label="Close agent settings" className="rounded-lg border border-white/[0.08] bg-white/[0.03] px-3 py-1.5 text-[9px] font-bold uppercase tracking-[0.14em] text-slate-400 transition hover:border-white/20 hover:text-white">Done</button>
+                <div data-editor-header-actions>
+                  <span data-editor-autosave="global" data-phase={effectiveAutosavePhase} role={effectiveAutosavePhase==='error'?'alert':'status'} aria-live="polite"><i aria-hidden="true" /><span>{effectiveAutosaveMessage}</span></span>
+                  <button type="button" data-editor-action="done" onClick={()=>void closeWithHeartbeatFlush()} title="Close agent settings after pending autosaves finish" aria-label="Close agent settings" className="rounded-lg border border-white/[0.08] bg-white/[0.03] px-3 py-1.5 text-[9px] font-bold uppercase tracking-[0.14em] text-slate-400 transition hover:border-white/20 hover:text-white">Done</button>
+                </div>
               </div>
               <div data-editor-tabs className="mt-3 flex gap-0.5 rounded-lg border border-white/[0.06] bg-white/[0.02] p-0.5">
                 {EDITOR_TABS.map((t)=>(
@@ -1302,7 +1454,7 @@ export function AgentEditorModal() {
                       </button>
                       <input ref={portraitRef} type="file" accept="image/*" className="hidden" onChange={(e)=>{const f=e.target.files?.[0];e.currentTarget.value='';if(f)void UploadPortraitFile(f)}}/>
                       <div className="flex-1 space-y-2">
-                        <input type="text" value={portraitDraft} onChange={(e)=>{setPortraitDraft(e.target.value);setPortraitPreviewSrc('');setPortraitPreviewFailed(false)}} onBlur={()=>void CommitPortraitDraft()} onKeyDown={(e)=>{if(e.key==='Enter')e.currentTarget.blur()}} placeholder="Portrait URL or path" className="w-full rounded-lg border border-white/[0.08] bg-white/[0.03] px-3 py-2 text-[11px] text-slate-200 placeholder:text-slate-600 focus:outline-none focus:border-cyan-400/40"/>
+                        <input type="text" value={portraitDraft} onChange={(e)=>{const next=e.target.value;setPortraitDraft(next);setPortraitPreviewSrc('');setPortraitPreviewFailed(false);SchedulePortraitAutosave(next)}} onBlur={()=>{if(portraitSaveTimerRef.current){window.clearTimeout(portraitSaveTimerRef.current);portraitSaveTimerRef.current=null}void CommitPortraitDraft()}} onKeyDown={(e)=>{if(e.key==='Enter')e.currentTarget.blur()}} placeholder="Portrait URL or path" className="w-full rounded-lg border border-white/[0.08] bg-white/[0.03] px-3 py-2 text-[11px] text-slate-200 placeholder:text-slate-600 focus:outline-none focus:border-cyan-400/40"/>
                         <div className="flex gap-1.5">
                           <button type="button" onClick={()=>void PickPortrait()} disabled={portraitPicking} title="Choose a portrait image file" className="rounded-md border border-cyan-400/20 bg-cyan-400/[0.05] px-3 py-1.5 text-[9px] font-bold text-cyan-300 hover:bg-cyan-400/[0.1] disabled:opacity-40">{portraitPicking?'Opening...':'Browse'}</button>
                           <button type="button" onClick={()=>{setPortraitDraft('');setPortraitPreviewSrc('');setPortraitPreviewFailed(false);PM({portrait:''});setPortraitStatus('Cleared.')}} title="Remove the current portrait" className="rounded-md border border-white/[0.08] bg-white/[0.03] px-3 py-1.5 text-[9px] font-bold text-slate-400 hover:border-white/20">Clear</button>
@@ -1325,10 +1477,10 @@ export function AgentEditorModal() {
                     </div>
 
                     <div className="grid gap-2.5 sm:grid-cols-2">
-                      {[{l:'Name',v:nameDraft,s:(v:string)=>setNameDraft(v),b:()=>commitProfileDraft('name'),p:'Agent name'},
-                        {l:'Role',v:roleDraft,s:(v:string)=>setRoleDraft(v),b:()=>commitProfileDraft('role'),p:'e.g. Scope Commander'},
-                        {l:'Class',v:classDraft,s:(v:string)=>setClassDraft(v),b:()=>commitProfileDraft('className'),p:'e.g. Strategist'},
-                        {l:'Level',v:levelDraft,s:(v:string)=>setLevelDraft(v),b:()=>commitProfileDraft('level'),p:'1-99'},
+                      {[{l:'Name',v:nameDraft,s:(v:string)=>{setNameDraft(v);if(v.trim())PM({name:v.trim()})},b:()=>commitProfileDraft('name'),p:'Agent name'},
+                        {l:'Role',v:roleDraft,s:(v:string)=>{setRoleDraft(v);PM({role:v.trim()})},b:()=>commitProfileDraft('role'),p:'e.g. Scope Commander'},
+                        {l:'Class',v:classDraft,s:(v:string)=>{setClassDraft(v);PM({className:v.trim()})},b:()=>commitProfileDraft('className'),p:'e.g. Strategist'},
+                        {l:'Level',v:levelDraft,s:(v:string)=>{setLevelDraft(v);const next=parseInt(v,10);if(next>0&&next<100)PM({level:next})},b:()=>commitProfileDraft('level'),p:'1-99'},
                       ].map((f)=>(
                         <div key={f.l} className="space-y-1">
                           <label className="block text-[9px] font-bold uppercase tracking-[0.12em] text-slate-500">{f.l}</label>
@@ -1351,7 +1503,7 @@ export function AgentEditorModal() {
                     <div>
                       <h3 className="text-xs font-extrabold text-slate-200 mb-1">Primary Model</h3>
                       {modelsLoading&&!primary&&!modelGroups.length?<div className="animate-pulse h-9 rounded-lg bg-white/[0.03]"/>:(
-                        <select value={primary} onChange={(e)=>{markConfigDirty(agent.id,'model');setPrimary(e.target.value);maybePromptProviderAuth(e.target.value)}} className="w-full rounded-lg border border-white/[0.08] bg-white/[0.03] px-3 py-2 text-[11px] text-slate-200 focus:outline-none focus:border-cyan-400/40">
+                        <select value={primary} onChange={(e)=>{const next=e.target.value;setPrimary(next);maybePromptProviderAuth(next);scheduleModelAutosave(next,fallbacks.filter((id)=>id!==next))}} className="w-full rounded-lg border border-white/[0.08] bg-white/[0.03] px-3 py-2 text-[11px] text-slate-200 focus:outline-none focus:border-cyan-400/40">
                           {!primary&&<option value="">Choose a model...</option>}
                           {modelGroups.length?modelGroups.map((group) => (
                             <optgroup key={group.key} label={formatModelGroupLabel(group)}>
@@ -1382,7 +1534,7 @@ export function AgentEditorModal() {
                             <div className="px-2.5 pb-1 pt-2 text-[8px] font-extrabold uppercase tracking-[0.14em] text-slate-500 first:pt-0">{formatModelGroupLabel(group)}</div>
                             {group.models.map((m)=>(
                               <label key={m.id} className="flex items-center gap-2 rounded-md px-2.5 py-2 text-[11px] text-slate-300 hover:bg-white/[0.04] cursor-pointer transition">
-                                <input type="checkbox" checked={fallbacks.includes(m.id)} onChange={()=>{markConfigDirty(agent.id,'model');setFallbacks((p)=>p.includes(m.id)?p.filter((id)=>id!==m.id):[...p,m.id])}} className="rounded accent-cyan-500"/>
+                                <input type="checkbox" checked={fallbacks.includes(m.id)} onChange={()=>{setFallbacks((current)=>{const next=current.includes(m.id)?current.filter((id)=>id!==m.id):[...current,m.id];scheduleModelAutosave(primary,next);return next})}} className="rounded accent-cyan-500"/>
                                 <span className="flex-1">{m.provider} / {m.name}</span>
                                 <span className="text-[9px] text-slate-500">{m.alias}</span>
                               </label>
@@ -1453,9 +1605,8 @@ export function AgentEditorModal() {
                         })}
                       </div>
                     </div>
-                    <div className="flex items-center gap-2">
-                      <button type="button" onClick={()=>void SvM()} disabled={ms} className="rounded-lg border border-cyan-400/30 bg-cyan-400/[0.06] px-4 py-2 text-[9px] font-bold uppercase tracking-[0.12em] text-cyan-300 hover:bg-cyan-400/[0.12] disabled:opacity-40">{ms?'Saving...':'Save'}</button>
-                      {(msStatus||runtimeStoreStatusText)&&<span className={`text-[9px] font-semibold ${(msStatus||runtimeStoreStatusText).includes('Failed')?'text-red-400':'text-emerald-400'}`} role={(msStatus||runtimeStoreStatusText).includes('Failed')?'alert':'status'} aria-live={(msStatus||runtimeStoreStatusText).includes('Failed')?'assertive':'polite'}>{msStatus||runtimeStoreStatusText}</span>}
+                    <div data-editor-autosave="section" data-phase={(msStatus||runtimeStoreStatusText).toLowerCase().includes('fail')?'error':ms?'saving':'saved'} role={(msStatus||runtimeStoreStatusText).toLowerCase().includes('fail')?'alert':'status'} aria-live="polite">
+                      <i aria-hidden="true" /><span>{msStatus||runtimeStoreStatusText||'Model and reasoning changes save automatically.'}</span>
                     </div>
                   </div>
                 )}
@@ -1578,9 +1729,9 @@ export function AgentEditorModal() {
                   <div data-editor-panel="policy" className="space-y-4">
                     <h3 className="text-xs font-extrabold text-slate-200">Sandbox</h3>
                     <div className="grid gap-2.5 sm:grid-cols-3">
-                      {[{l:'Mode',v:sbMode,s:(x:string)=>{if(isOption(x,SANDBOX_MODE_OPTIONS)){markConfigDirty(agent.id,'policy');setSbMode(x)}},o:SANDBOX_MODE_OPTIONS},
-                        {l:'Scope',v:sbScope,s:(x:string)=>{if(isOption(x,SANDBOX_SCOPE_OPTIONS)){markConfigDirty(agent.id,'policy');setSbScope(x)}},o:SANDBOX_SCOPE_OPTIONS},
-                        {l:'Access',v:sbAccess,s:(x:string)=>{if(isOption(x,SANDBOX_ACCESS_OPTIONS)){markConfigDirty(agent.id,'policy');setSbAccess(x)}},o:SANDBOX_ACCESS_OPTIONS},
+                      {[{l:'Mode',v:sbMode,s:(x:string)=>{if(isOption(x,SANDBOX_MODE_OPTIONS)){setSbMode(x);schedulePolicyAutosave({mode:x})}},o:SANDBOX_MODE_OPTIONS},
+                        {l:'Scope',v:sbScope,s:(x:string)=>{if(isOption(x,SANDBOX_SCOPE_OPTIONS)){setSbScope(x);schedulePolicyAutosave({scope:x})}},o:SANDBOX_SCOPE_OPTIONS},
+                        {l:'Access',v:sbAccess,s:(x:string)=>{if(isOption(x,SANDBOX_ACCESS_OPTIONS)){setSbAccess(x);schedulePolicyAutosave({access:x})}},o:SANDBOX_ACCESS_OPTIONS},
                       ].map((f)=>(
                         <div key={f.l} className="space-y-1">
                           <label className="block text-[9px] font-bold uppercase tracking-[0.12em] text-slate-500">{f.l}</label>
@@ -1591,17 +1742,14 @@ export function AgentEditorModal() {
                     <div className="grid gap-3 sm:grid-cols-2">
                       <div className="space-y-1">
                         <label className="block text-[9px] font-bold uppercase tracking-[0.12em] text-slate-500">Allow</label>
-                        <input type="text" value={tAllow} onChange={(e)=>{markConfigDirty(agent.id,'policy');setTAllow(e.target.value)}} placeholder="read, write, edit" className="w-full rounded-lg border border-white/[0.08] bg-white/[0.03] px-3 py-2 text-[11px] text-slate-200 placeholder:text-slate-600 focus:outline-none focus:border-cyan-400/40"/>
+                        <input type="text" value={tAllow} onChange={(e)=>{const next=e.target.value;setTAllow(next);schedulePolicyAutosave({allow:next})}} placeholder="read, write, edit" className="w-full rounded-lg border border-white/[0.08] bg-white/[0.03] px-3 py-2 text-[11px] text-slate-200 placeholder:text-slate-600 focus:outline-none focus:border-cyan-400/40"/>
                       </div>
                       <div className="space-y-1">
                         <label className="block text-[9px] font-bold uppercase tracking-[0.12em] text-slate-500">Deny</label>
-                        <input type="text" value={tDeny} onChange={(e)=>{markConfigDirty(agent.id,'policy');setTDeny(e.target.value)}} placeholder="exec, browser" className="w-full rounded-lg border border-white/[0.08] bg-white/[0.03] px-3 py-2 text-[11px] text-slate-200 placeholder:text-slate-600 focus:outline-none focus:border-cyan-400/40"/>
+                        <input type="text" value={tDeny} onChange={(e)=>{const next=e.target.value;setTDeny(next);schedulePolicyAutosave({deny:next})}} placeholder="exec, browser" className="w-full rounded-lg border border-white/[0.08] bg-white/[0.03] px-3 py-2 text-[11px] text-slate-200 placeholder:text-slate-600 focus:outline-none focus:border-cyan-400/40"/>
                       </div>
                     </div>
-                    <div className="flex items-center gap-2">
-                      <button type="button" onClick={()=>void SvP()} disabled={ps} title="Save sandbox and tool policy" className="rounded-lg border border-cyan-400/30 bg-cyan-400/[0.06] px-4 py-2 text-[9px] font-bold uppercase tracking-[0.12em] text-cyan-300 hover:bg-cyan-400/[0.12] disabled:opacity-40">{ps?'Saving...':'Save'}</button>
-                      {psStatus&&<span className={`text-[9px] font-semibold ${psStatus.includes('Failed')?'text-red-400':'text-emerald-400'}`}>{psStatus}</span>}
-                    </div>
+                    <div data-editor-autosave="section" data-phase={psStatus.toLowerCase().includes('fail')?'error':ps?'saving':'saved'} role={psStatus.toLowerCase().includes('fail')?'alert':'status'} aria-live="polite"><i aria-hidden="true" /><span>{psStatus||'Sandbox and tool policy changes save automatically.'}</span></div>
                   </div>
                 )}
 
@@ -1621,21 +1769,18 @@ export function AgentEditorModal() {
                         }}
                       />
                       <div className="flex gap-1.5 mb-2">
-                        <input type="text" value={wsPath} onChange={(e)=>setWsPath(e.target.value)} placeholder="/home/.../project" className="flex-1 rounded-lg border border-white/[0.08] bg-white/[0.03] px-3 py-2 text-[11px] font-mono text-slate-200 placeholder:text-slate-600 focus:outline-none focus:border-cyan-400/40"/>
+                        <input type="text" value={wsPath} onChange={(e)=>{const next=e.target.value;setWsPath(next);scheduleWorkspaceAutosave(next)}} placeholder="/home/.../project" className="flex-1 rounded-lg border border-white/[0.08] bg-white/[0.03] px-3 py-2 text-[11px] font-mono text-slate-200 placeholder:text-slate-600 focus:outline-none focus:border-cyan-400/40"/>
                       <button type="button" onClick={()=>void Pk()} disabled={wsLoading} className="rounded-lg border border-cyan-400/20 bg-cyan-400/[0.05] px-3 py-2 text-[9px] font-bold text-cyan-300 hover:bg-cyan-400/[0.1] disabled:opacity-40">{wsLoading?'Working...':'Browse'}</button>
                       </div>
                       {wsFolders.length>0&&(
                         <div className="max-h-40 overflow-auto rounded-lg border border-white/[0.06] bg-white/[0.02] p-1 space-y-0.5">
                           {wsFolders.map((f)=>(
-                            <button type="button" key={f} onClick={()=>{setWsPath(f);void Br(f)}} className="w-full text-left rounded-md px-2.5 py-1.5 text-[11px] text-cyan-300 font-mono truncate hover:bg-cyan-400/[0.06]">📁 {f}</button>
+                            <button type="button" key={f} onClick={()=>{setWsPath(f);void Br(f);scheduleWorkspaceAutosave(f)}} className="w-full text-left rounded-md px-2.5 py-1.5 text-[11px] text-cyan-300 font-mono truncate hover:bg-cyan-400/[0.06]">📁 {f}</button>
                           ))}
                         </div>
                       )}
                     </div>
-                    <div className="flex items-center gap-2">
-                      <button type="button" onClick={()=>void SvW()} disabled={wsSaving||!wsPath.trim()} title="Assign this workspace to the agent" className="rounded-lg border border-cyan-400/30 bg-cyan-400/[0.06] px-4 py-2 text-[9px] font-bold uppercase tracking-[0.12em] text-cyan-300 hover:bg-cyan-400/[0.12] disabled:opacity-40">{wsSaving?'Setting...':'Set'}</button>
-                      {wsStatus&&<span className={`min-w-0 max-w-[520px] break-words text-[9px] font-semibold leading-relaxed ${workspaceStatusIsError(wsStatus)?'text-red-400':'text-emerald-400'}`}>{wsStatus}</span>}
-                    </div>
+                    <div data-editor-autosave="section" data-phase={workspaceStatusIsError(wsStatus)?'error':wsSaving?'saving':'saved'} role={workspaceStatusIsError(wsStatus)?'alert':'status'} aria-live="polite"><i aria-hidden="true" /><span>{wsStatus||'Workspace path changes save automatically.'}</span></div>
                   </div>
                 )}
 
@@ -1725,14 +1870,13 @@ export function AgentEditorModal() {
                       {rloading&&rfiles.length===0&&<span className="rounded-md border border-white/[0.05] bg-white/[0.02] px-2.5 py-1.5 text-[9px] font-bold uppercase tracking-[0.08em] text-slate-500">Loading files...</span>}
                       {!rloading&&rfiles.length===0&&<span className="rounded-md border border-white/[0.05] bg-white/[0.02] px-2.5 py-1.5 text-[9px] font-bold uppercase tracking-[0.08em] text-slate-500">No files loaded</span>}
                       {rfiles.map((f)=>(
-                        <button type="button" key={f} onClick={()=>setRfile(f)} className={`rounded-md px-2.5 py-1.5 text-[9px] font-bold uppercase tracking-[0.08em] transition ${f===rfile?'bg-cyan-400/[0.08] text-cyan-200 border border-cyan-400/20':'bg-white/[0.02] text-slate-500 hover:text-slate-300 border border-white/[0.05]'}`}>{f}</button>
+                        <button type="button" key={f} onClick={()=>void SelectResourceFile(f)} className={`rounded-md px-2.5 py-1.5 text-[9px] font-bold uppercase tracking-[0.08em] transition ${f===rfile?'bg-cyan-400/[0.08] text-cyan-200 border border-cyan-400/20':'bg-white/[0.02] text-slate-500 hover:text-slate-300 border border-white/[0.05]'}`}>{f}</button>
                       ))}
                     </div>
-                    <textarea value={rcontent} onChange={(e)=>setRcontent(e.target.value)} spellCheck readOnly={rloading||rcontentLoading} placeholder={rcontentLoading?`Loading ${rfile}...`:rloading?'Loading agent files...':'Select a markdown file.'} className="h-64 w-full rounded-lg border border-white/[0.08] bg-white/[0.02] p-3 font-mono text-[11px] text-slate-300 leading-relaxed resize-y placeholder:text-slate-600 focus:outline-none focus:border-cyan-400/30"/>
+                    <textarea value={rcontent} onChange={(e)=>{const next=e.target.value;setRcontent(next);ScheduleResourceAutosave(next)}} spellCheck readOnly={rloading||rcontentLoading} placeholder={rcontentLoading?`Loading ${rfile}...`:rloading?'Loading agent files...':'Select a markdown file.'} className="h-64 w-full rounded-lg border border-white/[0.08] bg-white/[0.02] p-3 font-mono text-[11px] text-slate-300 leading-relaxed resize-y placeholder:text-slate-600 focus:outline-none focus:border-cyan-400/30"/>
                     <div className="flex flex-wrap items-center gap-2">
-                      <button type="button" onClick={()=>void SvF()} disabled={rsaving||rloading||rcontentLoading||!rfile} title={`Save ${rfile || 'selected file'}`} className="rounded-lg border border-emerald-400/30 bg-emerald-400/[0.06] px-4 py-2 text-[9px] font-bold uppercase tracking-[0.12em] text-emerald-300 hover:bg-emerald-400/[0.12] disabled:opacity-40">{rsaving?'Saving...':'Save'}</button>
                       <button type="button" onClick={()=>void LdFC(rfile)} disabled={rloading||rcontentLoading||!rfile} title={`Reload ${rfile || 'selected file'}`} className="rounded-lg border border-white/[0.08] bg-white/[0.03] px-3 py-2 text-[9px] font-bold uppercase tracking-[0.12em] text-slate-400 hover:border-white/20 disabled:opacity-40">{rcontentLoading?'Loading...':'Reload'}</button>
-                      {(rstatus||rloading||rcontentLoading)&&<span className="text-[9px] font-semibold text-cyan-400">{rstatus||(rcontentLoading?`Loading ${rfile}...`:'Loading files...')}</span>}
+                      <div data-editor-autosave="section" data-phase={rstatus.toLowerCase().includes('fail')?'error':rsaving?'saving':'saved'} role={rstatus.toLowerCase().includes('fail')?'alert':'status'} aria-live="polite"><i aria-hidden="true" /><span>{rstatus||(rcontentLoading?`Loading ${rfile}…`:rloading?'Loading files…':`${rfile} saves automatically.`)}</span></div>
                       <button type="button" onClick={()=>setRetireConfirmOpen(true)} disabled={retiring} title={`Retire ${agent.name}`} className="ml-auto rounded-lg border border-red-400/40 bg-red-500/[0.10] px-4 py-2 text-[9px] font-bold uppercase tracking-[0.12em] text-red-200 transition hover:border-red-300/70 hover:bg-red-500/[0.18] disabled:opacity-40">{retiring?'Retiring...':'Retire'}</button>
                     </div>
                   </div>

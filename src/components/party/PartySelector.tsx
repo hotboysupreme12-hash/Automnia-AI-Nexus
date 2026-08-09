@@ -5,35 +5,24 @@ import { Panel } from '../common/Panel'
 import { useNexusStore } from '../../store/nexusStore'
 import type { AgentRarity, OpenClawAgent } from '../../types/nexus'
 import { useRuntimeStatus, type RuntimeStatus } from '../../hooks/useRuntimeStatus'
+import {
+  DEFAULT_REGISTRY_PREFERENCES,
+  REGISTRY_DISPLAY_OPTIONS,
+  REGISTRY_OVERLAY_OPTIONS,
+  REGISTRY_PREFS_CHANGED_EVENT,
+  readRegistryPreferences,
+  saveRegistryPreferences,
+  type AgentDisplayMode,
+  type AgentOverlayPreset,
+  type RegistryPreferences,
+  type RegistrySortKey as SortKey,
+} from '../settings/workspaceSettings'
 
-type SortKey = 'party' | 'level' | 'name' | 'rarity'
-type AgentDisplayMode = 'showcase' | 'grid6' | 'grid8' | 'grid10' | 'list'
-type AgentOverlayPreset = 'rarity' | 'original' | 'graphite-glass' | 'anime-sky' | 'neon-city' | 'cloud-horizon' | 'blueprint-grid' | 'aurora-mesh' | 'tactical-map' | 'silver-lines' | 'studio-noir'
-type PersistedRegistryPrefs = { displayMode?: AgentDisplayMode; overlayPreset?: AgentOverlayPreset; overlayPresetVersion?: number; rarityFilter?: AgentRarity | 'all'; sortKey?: SortKey }
 type DisplayModeConfig = { id: AgentDisplayMode; label: string; pageSize: number; hint: string }
 type OverlayPresetConfig = { id: AgentOverlayPreset; label: string; hint: string }
 
-const DISPLAY_MODES: DisplayModeConfig[] = [
-  { id: 'showcase', label: 'Showcase', pageSize: 6, hint: 'large cards' },
-  { id: 'grid6', label: '6 Grid', pageSize: 6, hint: 'balanced' },
-  { id: 'grid8', label: '9 Grid', pageSize: 9, hint: 'more agents' },
-  { id: 'grid10', label: '12 Grid', pageSize: 12, hint: 'dense' },
-  { id: 'list', label: 'List', pageSize: 12, hint: 'scan rows' },
-]
-
-const OVERLAY_PRESETS: OverlayPresetConfig[] = [
-  { id: 'rarity', label: 'By Rarity', hint: 'rarity card skins' },
-  { id: 'original', label: 'Original', hint: 'cyber circuit' },
-  { id: 'graphite-glass', label: 'Graphite', hint: 'clean modern glass' },
-  { id: 'anime-sky', label: 'Anime Sky', hint: 'soft open sky' },
-  { id: 'neon-city', label: 'Neon City', hint: 'night city glow' },
-  { id: 'cloud-horizon', label: 'Horizon', hint: 'quiet clouds' },
-  { id: 'blueprint-grid', label: 'Blueprint', hint: 'technical grid' },
-  { id: 'aurora-mesh', label: 'Aurora', hint: 'soft mesh wave' },
-  { id: 'tactical-map', label: 'Tactical', hint: 'stone map texture' },
-  { id: 'silver-lines', label: 'Silver', hint: 'minimal data lines' },
-  { id: 'studio-noir', label: 'Noir', hint: 'warm studio shadow' },
-]
+const DISPLAY_MODES: DisplayModeConfig[] = REGISTRY_DISPLAY_OPTIONS
+const OVERLAY_PRESETS: OverlayPresetConfig[] = REGISTRY_OVERLAY_OPTIONS
 
 const gridClassByMode: Record<AgentDisplayMode, string> = {
   showcase: 'agent-card-registry-grid agent-card-registry-grid--showcase',
@@ -44,29 +33,12 @@ const gridClassByMode: Record<AgentDisplayMode, string> = {
 }
 
 const FLOW_GRID_MODES = new Set<AgentDisplayMode>(['showcase', 'grid6', 'grid8', 'grid10'])
-const REGISTRY_PREFS_KEY = 'dystopai-agent-registry-prefs'
-const REGISTRY_PREFS_VERSION = 4
-const DEFAULT_OVERLAY_PRESET: AgentOverlayPreset = 'rarity'
 const EXTERNAL_CHANNEL_RUNNING_WINDOW_MS = 90_000
 const CYAN_SELECT_CHEVRON_STYLE = {
   backgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='8' height='8' viewBox='0 0 24 24' fill='none' stroke='%2367e8f9' stroke-width='3' stroke-linecap='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E")`,
   backgroundRepeat: 'no-repeat',
   backgroundPosition: 'right 8px center',
 } as const
-
-function loadRegistryPrefs(): PersistedRegistryPrefs {
-  try {
-    const raw = window.localStorage.getItem(REGISTRY_PREFS_KEY)
-    const prefs = raw ? JSON.parse(raw) as PersistedRegistryPrefs : {}
-    const hasValidOverlayPreset = OVERLAY_PRESETS.some((preset) => preset.id === prefs.overlayPreset)
-    return {
-      ...prefs,
-      overlayPreset: hasValidOverlayPreset ? prefs.overlayPreset : DEFAULT_OVERLAY_PRESET,
-    }
-  } catch {
-    return { overlayPreset: DEFAULT_OVERLAY_PRESET }
-  }
-}
 
 function countRenderedGridColumns(element: HTMLElement | null): number {
   if (!element) return 1
@@ -232,14 +204,14 @@ export function PartySelector() {
   const missionRunning = activeMission?.status === 'running'
   const registryScrollRef = useRef<HTMLDivElement | null>(null)
   const registryGridRef = useRef<HTMLDivElement | null>(null)
-  const prefs = useMemo(() => loadRegistryPrefs(), [])
+  const prefs = useMemo(() => readRegistryPreferences(), [])
   const [pageIndex, setPageIndex] = useState(0)
   const [searchQuery, setSearchQuery] = useState('')
   const deferredSearchQuery = useDeferredValue(searchQuery)
   const [sortKey, setSortKey] = useState<SortKey>(prefs.sortKey || 'party')
   const [rarityFilter, setRarityFilter] = useState<AgentRarity | 'all'>(prefs.rarityFilter || 'all')
   const [displayMode, setDisplayMode] = useState<AgentDisplayMode>(prefs.displayMode || 'grid8')
-  const [overlayPreset, setOverlayPreset] = useState<AgentOverlayPreset>(prefs.overlayPreset || DEFAULT_OVERLAY_PRESET)
+  const [overlayPreset, setOverlayPreset] = useState<AgentOverlayPreset>(prefs.overlayPreset)
   const [registryColumnCount, setRegistryColumnCount] = useState(1)
   const activeDisplayMode = DISPLAY_MODES.find((mode) => mode.id === displayMode) || DISPLAY_MODES[1]
   const nominalPageSize = activeDisplayMode.pageSize
@@ -323,8 +295,26 @@ export function PartySelector() {
     : `${filtered.length}/${agents.length} agents`
 
   useEffect(() => {
-    window.localStorage.setItem(REGISTRY_PREFS_KEY, JSON.stringify({ displayMode, overlayPreset, overlayPresetVersion: REGISTRY_PREFS_VERSION, rarityFilter, sortKey }))
+    saveRegistryPreferences({ displayMode, overlayPreset, rarityFilter, sortKey })
   }, [displayMode, overlayPreset, rarityFilter, sortKey])
+
+  useEffect(() => {
+    const syncPreferences = (event?: Event) => {
+      const next = event instanceof CustomEvent
+        ? event.detail as RegistryPreferences
+        : readRegistryPreferences()
+      setDisplayMode(next.displayMode || DEFAULT_REGISTRY_PREFERENCES.displayMode)
+      setOverlayPreset(next.overlayPreset || DEFAULT_REGISTRY_PREFERENCES.overlayPreset)
+      setRarityFilter(next.rarityFilter || DEFAULT_REGISTRY_PREFERENCES.rarityFilter)
+      setSortKey(next.sortKey || DEFAULT_REGISTRY_PREFERENCES.sortKey)
+    }
+    window.addEventListener(REGISTRY_PREFS_CHANGED_EVENT, syncPreferences)
+    window.addEventListener('storage', syncPreferences)
+    return () => {
+      window.removeEventListener(REGISTRY_PREFS_CHANGED_EVENT, syncPreferences)
+      window.removeEventListener('storage', syncPreferences)
+    }
+  }, [])
 
   useEffect(() => {
     document.documentElement.dataset.agentCardOverlay = overlayPreset
