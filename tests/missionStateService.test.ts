@@ -9,6 +9,7 @@ import {
   createMissionStateService,
   missionRecordSnapshot,
   missionSchedulerInitialState,
+  missionTimerDelayMs,
   type Mission,
   type MissionCronJob,
   type MissionCronCleanupSummary,
@@ -32,6 +33,7 @@ function createHarness(overrides: Partial<{
     scheduledRounds: [] as unknown[],
     snapshots: [] as unknown[],
     startRecurringCalls: [] as unknown[],
+    launchRecurringCalls: [] as unknown[],
   }
   const missions = new Map<string, Mission>()
   const missionFeed: MissionFeedEvent[] = []
@@ -75,12 +77,16 @@ function createHarness(overrides: Partial<{
       }],
     }),
     missionCronJobNeedsRecovery: (job) => job.status === 'created' || job.status === 'running',
+    launchRecurringMissionImmediately: async (...args) => {
+      state.launchRecurringCalls.push(args)
+    },
     missionFeed,
     missions,
     missionTimers,
     now: () => new Date('2026-06-30T12:00:00.000Z'),
     persistWarning: () => undefined,
     randomId: () => `id-${++id}`,
+    redactSensitiveText: (text) => text.replace(/secret-token/gi, '[REDACTED]'),
     recordMissionReport: (mission) => {
       state.reports.push({ ...mission })
       return { missionId: mission.id }
@@ -211,6 +217,30 @@ test('startMission creates a ledger-backed mission and dedupes repeated launch k
   assert.equal(state.appendedRecords.some((record) => record.persistReason === 'scheduler-dry-run'), true)
 })
 
+test('startMission blocks a second active mission so the UI cannot lose control of the first', async () => {
+  const { service, missions } = createHarness()
+  const first = await service.startMission({
+    title: 'Active mission',
+    brief: 'Keep this mission active.',
+    party: ['agent-a'],
+    mode: 'continuous',
+    idempotencyKey: 'active-key-123',
+  })
+  const second = await service.startMission({
+    title: 'Overlapping mission',
+    brief: 'This should be rejected.',
+    party: ['agent-b'],
+    mode: 'instant',
+    idempotencyKey: 'overlap-key-123',
+  })
+
+  assert.equal(first.ok, true)
+  assert.equal(second.ok, false)
+  assert.equal(second.ok === false && second.status, 409)
+  assert.equal(second.ok === false && second.code, 'mission_invalid_state')
+  assert.equal(missions.size, 1)
+})
+
 test('startMission delegates instant missions to scheduler rounds when dry-run is disabled', async () => {
   const { service, state, missions, missionTimers } = createHarness({ dryRun: false })
 
@@ -241,6 +271,7 @@ test('startMission arms duration timers and delegates recurring scheduler setup'
     mode: 'hours',
     amount: 2,
     cadenceSeconds: 30,
+    agentCadenceSeconds: { 'agent-a': 30, 'agent-b': 90 },
     maxCycles: 3,
     idempotencyKey: 'recurring-key-123',
   })
@@ -249,15 +280,41 @@ test('startMission arms duration timers and delegates recurring scheduler setup'
   assert.equal(missions.size, 1)
   assert.equal(missionTimers.size, 1)
   assert.equal(state.startRecurringCalls.length, 1)
+  assert.equal(state.launchRecurringCalls.length, 1)
   assert.equal(state.scheduledRounds.length, 0)
   const mission = Array.from(missions.values())[0]
   assert.ok(mission.endAt)
+  assert.equal(mission.endAt, '2026-06-30T14:00:00.000Z')
   assert.equal(mission.scheduler.maxCycles, 3)
   assert.equal(mission.scheduler.cycleIntervalMs, 30_000)
+  assert.deepEqual(mission.agentCadenceSeconds, { 'agent-a': 30, 'agent-b': 90 })
   assert.equal(state.appendedEvents.at(-1)?.nextState, 'running')
   assert.equal(state.appendedRecords.at(-1)?.persistReason, 'transition:scheduled->running')
 
   for (const timer of missionTimers.values()) clearTimeout(timer)
+  missionTimers.clear()
+})
+
+test('long timed missions use bounded timers instead of overflowing and completing immediately', async () => {
+  const { service, missions, missionTimers } = createHarness()
+
+  const result = await service.startMission({
+    title: 'Long mission',
+    brief: 'Run for a full year without overflowing Node timers.',
+    party: ['agent-a'],
+    mode: 'weeks',
+    amount: 52,
+    idempotencyKey: 'long-timer-key-123',
+  })
+
+  assert.equal(result.ok, true)
+  const mission = Array.from(missions.values())[0]
+  assert.equal(mission.endAt, '2027-06-29T12:00:00.000Z')
+  assert.equal(missionTimerDelayMs(52 * 7 * 24 * 60 * 60 * 1000), 2_147_000_000)
+  const timer = missionTimers.get(mission.id) as (NodeJS.Timeout & { _idleTimeout?: number }) | undefined
+  assert.equal(timer?._idleTimeout, 2_147_000_000)
+
+  if (timer) clearTimeout(timer)
   missionTimers.clear()
 })
 

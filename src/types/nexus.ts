@@ -200,8 +200,11 @@ export interface MissionRun extends MissionDraft {
     policy: string
     status: string
     round: number
+    cycleIntervalMs?: number
     nextRoundAt: string | null
+    maxCycles?: number | null
     activeJobId: string | null
+    lastError?: string | null
     jobs?: Array<{
       id: string
       cronId: string
@@ -210,6 +213,12 @@ export interface MissionRun extends MissionDraft {
       round: number
       status: string
       summary: string | null
+      scheduleKind?: 'one-shot' | 'recurring'
+      runCount?: number
+      completedRunCount?: number
+      failedRunCount?: number
+      lastRunAt?: string | null
+      lastRunStatus?: 'completed' | 'failed' | null
     }>
   }
 }

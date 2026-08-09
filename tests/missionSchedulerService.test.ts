@@ -47,6 +47,7 @@ function makeAssignments(party: string[], task = 'Initial mission task'): TeamSy
 
 function createHarness(overrides: Partial<{
   runOpenClaw: (args: string[]) => Promise<MissionSchedulerOpenClawResult>
+  extractAgentReply: (stdout: string, stderr: string) => string
 }> = {}) {
   const state = {
     activeShifts: new Map<string, unknown>(),
@@ -82,7 +83,7 @@ function createHarness(overrides: Partial<{
       state.gatewayReadyChecks += 1
     },
     ensureTeamSyncFile: async () => undefined,
-    extractAgentReply: () => 'round 1 complete evidence: ok',
+    extractAgentReply: overrides.extractAgentReply || (() => 'round 1 complete evidence: ok'),
     getAgentAuthEnv: async (agentId) => ({ [`AUTH_${agentId.toUpperCase()}`]: 'configured' }),
     missionAgentTimeoutSeconds: 900,
     missionLoopTimers,
@@ -205,7 +206,274 @@ test('startRecurringMissionCronJobs arms leader and worker cron pulses with Team
   assert.equal(state.persisted.includes('recurring-cron-armed'), true)
   assert.equal(state.openClawCalls.filter((args) => args[0] === 'cron' && args[1] === 'add').length, 2)
   assert.equal(state.openClawCalls.some((args) => args.includes('--every') && args.includes('5m')), true)
-  assert.equal(assignments.every((entry) => entry.note === 'recurring cron pulse armed every 5m'), true)
+  assert.equal(assignments.every((entry) => entry.note === 'scheduled every 5m; immediate kickoff queued'), true)
+})
+
+test('startRecurringMissionCronJobs prepares multi-agent schedules concurrently for a fast kickoff', async () => {
+  let activeAdds = 0
+  let maxConcurrentAdds = 0
+  let cronId = 0
+  const { service, missions } = createHarness({
+    runOpenClaw: async (args) => {
+      if (args[0] !== 'cron' || args[1] !== 'add') return { stdout: '{}', stderr: '', code: 0 }
+      activeAdds += 1
+      maxConcurrentAdds = Math.max(maxConcurrentAdds, activeAdds)
+      await new Promise((resolve) => setTimeout(resolve, 5))
+      activeAdds -= 1
+      return { stdout: JSON.stringify({ id: `cron-concurrent-${++cronId}` }), stderr: '', code: 0 }
+    },
+  })
+  const mission = makeMission({
+    id: 'mission-concurrent-setup',
+    mode: 'continuous',
+    party: ['agent-a', 'agent-b', 'agent-c'],
+    scheduler: missionSchedulerInitialState({ party: ['agent-a', 'agent-b', 'agent-c'] }),
+  })
+  missions.set(mission.id, mission)
+
+  await service.startRecurringMissionCronJobs(mission, makeAssignments(mission.party), [])
+
+  assert.equal(maxConcurrentAdds, 3)
+  assert.equal(mission.scheduler.jobs.length, 3)
+})
+
+test('launchRecurringMissionImmediately runs hierarchical leader before workers and preserves every schedule', async () => {
+  const { service, state, missions } = createHarness()
+  const mission = makeMission({
+    id: 'mission-recurring-now',
+    mode: 'continuous',
+    collaborationMode: 'hierarchical',
+    cadenceSeconds: 300,
+    party: ['agent-a', 'agent-b', 'agent-c'],
+    scheduler: missionSchedulerInitialState({
+      party: ['agent-a', 'agent-b', 'agent-c'],
+      cadenceSeconds: 300,
+      collaborationMode: 'hierarchical',
+    }),
+  })
+  missions.set(mission.id, mission)
+  const assignments = makeAssignments(mission.party)
+  const activity: string[] = []
+
+  await service.startRecurringMissionCronJobs(mission, assignments, activity)
+  await service.launchRecurringMissionImmediately(mission, assignments, activity)
+
+  const runCalls = state.openClawCalls.filter((args) => args[0] === 'cron' && args[1] === 'run')
+  assert.equal(runCalls.length, 3)
+  assert.equal(runCalls[0][2], 'cron-1')
+  assert.deepEqual(new Set(runCalls.slice(1).map((args) => args[2])), new Set(['cron-2', 'cron-3']))
+  assert.equal(state.openClawCalls.some((args) => args[0] === 'cron' && args[1] === 'rm'), false)
+  assert.equal(mission.scheduler.round, 1)
+  assert.equal(mission.scheduler.status, 'waiting')
+  assert.equal(mission.scheduler.jobs.every((job) => job.status === 'created'), true)
+  assert.equal(mission.scheduler.jobs.every((job) => job.runCount === 1 && job.lastRunStatus === 'completed'), true)
+  assert.equal(assignments.every((entry) => entry.status === 'completed'), true)
+  assert.equal(state.events.some((event) => /Immediate kickoff completed for all 3 agent/.test(event.message)), true)
+  const workerAddCall = state.openClawCalls.find((args) => args[0] === 'cron' && args[1] === 'add' && args.includes('agent-b'))
+  assert.equal(workerAddCall?.some((argument) => /newest named assignment for your agent id/.test(argument)), true)
+})
+
+test('parallel recurring missions launch every selected agent as a worker', async () => {
+  const { service, state, missions } = createHarness()
+  const mission = makeMission({
+    id: 'mission-parallel-now',
+    mode: 'indefinite',
+    collaborationMode: 'parallel',
+    party: ['agent-a', 'agent-b', 'agent-c'],
+    scheduler: missionSchedulerInitialState({
+      party: ['agent-a', 'agent-b', 'agent-c'],
+      collaborationMode: 'parallel',
+    }),
+  })
+  missions.set(mission.id, mission)
+
+  await service.startRecurringMissionCronJobs(mission, makeAssignments(mission.party), [])
+  await service.launchRecurringMissionImmediately(mission, makeAssignments(mission.party), [])
+
+  assert.equal(mission.scheduler.jobs.every((job) => job.role === 'worker'), true)
+  assert.equal(state.openClawCalls.filter((args) => args[0] === 'cron' && args[1] === 'run').length, 3)
+})
+
+test('every mission type and execution profile reaches the recurring agent prompt', async () => {
+  const expectations = {
+    codeGeneration: 'Build mission:',
+    planning: 'Planning mission:',
+    research: 'Research mission:',
+    orchestration: 'Orchestration mission:',
+    memoryManagement: 'Memory mission:',
+  } as const
+  for (const [missionType, expectedDirective] of Object.entries(expectations)) {
+    const { service, state, missions } = createHarness()
+    const mission = makeMission({
+      id: `mission-type-${missionType}`,
+      mode: 'continuous',
+      missionType: missionType as keyof typeof expectations,
+      complexity: 87,
+      riskTolerance: 12,
+      party: ['agent-a'],
+      scheduler: missionSchedulerInitialState({ party: ['agent-a'] }),
+    })
+    missions.set(mission.id, mission)
+
+    await service.startRecurringMissionCronJobs(mission, makeAssignments(mission.party), [])
+
+    const addCall = state.openClawCalls.find((args) => args[0] === 'cron' && args[1] === 'add')
+    assert.equal(addCall?.some((argument) => argument.includes(expectedDirective)), true, missionType)
+    assert.equal(addCall?.some((argument) => argument.includes('complexity 87/100; risk tolerance 12/100')), true, missionType)
+  }
+})
+
+test('recurring schedules preserve each agent cadence instead of collapsing to the fastest lane', async () => {
+  const { service, state, missions } = createHarness()
+  const mission = makeMission({
+    id: 'mission-mixed-cadence',
+    mode: 'continuous',
+    collaborationMode: 'parallel',
+    cadenceSeconds: 120,
+    agentCadenceSeconds: { 'agent-a': 120, 'agent-b': 300 },
+    party: ['agent-a', 'agent-b'],
+    scheduler: missionSchedulerInitialState({ party: ['agent-a', 'agent-b'], cadenceSeconds: 120, collaborationMode: 'parallel' }),
+  })
+  missions.set(mission.id, mission)
+
+  await service.startRecurringMissionCronJobs(mission, makeAssignments(mission.party), [])
+
+  const addCalls = state.openClawCalls.filter((args) => args[0] === 'cron' && args[1] === 'add')
+  const everyForAgent = Object.fromEntries(addCalls.map((args) => [args[args.indexOf('--agent') + 1], args[args.indexOf('--every') + 1]]))
+  assert.deepEqual(everyForAgent, { 'agent-a': '2m', 'agent-b': '5m' })
+})
+
+test('recurring runtime reconciliation shows scheduled starts and completions exactly once', async () => {
+  const { service, state, missions } = createHarness()
+  const mission = makeMission({
+    id: 'mission-runtime-reconciliation',
+    mode: 'continuous',
+    collaborationMode: 'parallel',
+    cadenceSeconds: 300,
+    party: ['agent-a', 'agent-b'],
+    scheduler: missionSchedulerInitialState({
+      party: ['agent-a', 'agent-b'],
+      cadenceSeconds: 300,
+      collaborationMode: 'parallel',
+    }),
+  })
+  missions.set(mission.id, mission)
+  await service.startRecurringMissionCronJobs(mission, makeAssignments(mission.party), [])
+
+  await service.reconcileRecurringMissionCronRuntime(mission.scheduler.jobs.map((job) => ({
+    cronId: job.cronId,
+    runningAt: '2026-06-30T12:05:00.000Z',
+    lastRunAt: null,
+    lastRunStatus: null,
+    lastError: null,
+    nextRunAt: '2026-06-30T12:10:00.000Z',
+  })))
+
+  assert.equal(mission.scheduler.status, 'running')
+  assert.equal(mission.scheduler.jobs.every((job) => job.status === 'running'), true)
+  assert.equal(state.events.filter((event) => /Scheduled cycle started/.test(event.message)).length, 2)
+
+  const completedSnapshots = mission.scheduler.jobs.map((job) => ({
+    cronId: job.cronId,
+    runningAt: null,
+    lastRunAt: '2026-06-30T12:05:00.000Z',
+    lastRunStatus: 'ok',
+    lastError: null,
+    nextRunAt: '2026-06-30T12:10:00.000Z',
+  }))
+  await service.reconcileRecurringMissionCronRuntime(completedSnapshots)
+  await service.reconcileRecurringMissionCronRuntime(completedSnapshots)
+
+  assert.equal(mission.scheduler.status, 'waiting')
+  assert.equal(mission.scheduler.round, 1)
+  assert.equal(mission.scheduler.nextRoundAt, '2026-06-30T12:10:00.000Z')
+  assert.equal(mission.scheduler.jobs.every((job) => job.status === 'created'), true)
+  assert.equal(mission.scheduler.jobs.every((job) => job.runCount === 1 && job.completedRunCount === 1), true)
+  assert.equal(state.events.filter((event) => /Scheduled cycle completed/.test(event.message)).length, 2)
+})
+
+test('runtime reconciliation does not double-count an immediate kickoff still tracked by the scheduler', async () => {
+  const { service, missions, missionRunControllers } = createHarness()
+  const mission = makeMission({
+    id: 'mission-runtime-manual-run',
+    mode: 'continuous',
+    cadenceSeconds: 300,
+    party: ['agent-a'],
+    scheduler: missionSchedulerInitialState({ party: ['agent-a'], cadenceSeconds: 300 }),
+  })
+  missions.set(mission.id, mission)
+  await service.startRecurringMissionCronJobs(mission, makeAssignments(mission.party), [])
+  missionRunControllers.set(mission.id, new AbortController())
+
+  await service.reconcileRecurringMissionCronRuntime([{
+    cronId: mission.scheduler.jobs[0].cronId,
+    runningAt: null,
+    lastRunAt: '2026-06-30T12:01:00.000Z',
+    lastRunStatus: 'ok',
+    lastError: null,
+    nextRunAt: '2026-06-30T12:05:00.000Z',
+  }])
+
+  assert.equal(mission.scheduler.jobs[0].runCount, 0)
+  assert.equal(mission.scheduler.round, 0)
+  missionRunControllers.delete(mission.id)
+})
+
+test('recurring runtime reconciliation keeps failed lanes scheduled and exposes a safe retry error', async () => {
+  const { service, missions } = createHarness()
+  const mission = makeMission({
+    id: 'mission-runtime-failure',
+    mode: 'continuous',
+    cadenceSeconds: 300,
+    party: ['agent-a'],
+    scheduler: missionSchedulerInitialState({ party: ['agent-a'], cadenceSeconds: 300 }),
+  })
+  missions.set(mission.id, mission)
+  await service.startRecurringMissionCronJobs(mission, makeAssignments(mission.party), [])
+
+  await service.reconcileRecurringMissionCronRuntime([{
+    cronId: mission.scheduler.jobs[0].cronId,
+    runningAt: null,
+    lastRunAt: '2026-06-30T12:05:00.000Z',
+    lastRunStatus: 'error',
+    lastError: 'provider failed with secret-token',
+    nextRunAt: '2026-06-30T12:10:00.000Z',
+  }])
+
+  assert.equal(mission.status, 'active')
+  assert.equal(mission.scheduler.status, 'waiting')
+  assert.equal(mission.scheduler.jobs[0].status, 'created')
+  assert.equal(mission.scheduler.jobs[0].failedRunCount, 1)
+  assert.match(mission.scheduler.lastError || '', /\[REDACTED\]/)
+  assert.equal((mission.scheduler.lastError || '').includes('secret-token'), false)
+})
+
+test('recurring runtime reconciliation enforces the configured cycle limit', async () => {
+  const { service, state, missions } = createHarness()
+  const mission = makeMission({
+    id: 'mission-runtime-max-cycles',
+    mode: 'continuous',
+    cadenceSeconds: 300,
+    party: ['agent-a'],
+    scheduler: missionSchedulerInitialState({ party: ['agent-a'], cadenceSeconds: 300, maxCycles: 1 }),
+  })
+  missions.set(mission.id, mission)
+  await service.startRecurringMissionCronJobs(mission, makeAssignments(mission.party), [])
+
+  await service.reconcileRecurringMissionCronRuntime([{
+    cronId: mission.scheduler.jobs[0].cronId,
+    runningAt: null,
+    lastRunAt: '2026-06-30T12:05:00.000Z',
+    lastRunStatus: 'ok',
+    lastError: null,
+    nextRunAt: '2026-06-30T12:10:00.000Z',
+  }])
+
+  assert.equal(mission.status, 'completed')
+  assert.equal(mission.lifecycleState, 'completed')
+  assert.equal(mission.scheduler.status, 'completed')
+  assert.equal(state.reports.length, 1)
+  assert.equal(state.openClawCalls.some((args) => args[0] === 'cron' && args[1] === 'rm'), true)
 })
 
 test('cleanupMissionCronJobs disables a cron job when removal fails', async () => {
@@ -295,13 +563,74 @@ test('scheduleNextMissionRound drives an instant mission through cron run comple
 
   assert.equal(mission.scheduler.round, 1)
   assert.equal(mission.scheduler.status, 'completed')
-  assert.equal(mission.scheduler.jobs.length, 3)
+  assert.equal(mission.scheduler.jobs.length, 1)
   assert.equal(mission.scheduler.jobs.every((job) => job.status === 'completed'), true)
-  assert.equal(state.openClawCalls.filter((args) => args[0] === 'cron' && args[1] === 'add').length, 3)
-  assert.equal(state.openClawCalls.filter((args) => args[0] === 'cron' && args[1] === 'run').length, 3)
-  assert.equal(state.openClawCalls.filter((args) => args[0] === 'cron' && args[1] === 'rm').length, 3)
-  assert.equal(state.agentMemory.length, 3)
+  assert.equal(state.openClawCalls.filter((args) => args[0] === 'cron' && args[1] === 'add').length, 1)
+  assert.equal(state.openClawCalls.filter((args) => args[0] === 'cron' && args[1] === 'run').length, 1)
+  assert.equal(state.openClawCalls.filter((args) => args[0] === 'cron' && args[1] === 'rm').length, 1)
+  assert.equal(state.agentMemory.length, 1)
   assert.equal(missionLoopTimers.size, 0)
   assert.equal(missionRunControllers.size, 0)
   assert.equal(state.reports.length, 1)
+})
+
+test('instant missions fail visibly instead of being marked completed when an agent run fails', async () => {
+  let cronId = 0
+  const { service, state, missions } = createHarness({
+    extractAgentReply: () => '',
+    runOpenClaw: async (args) => {
+      if (args[0] === 'cron' && args[1] === 'add') {
+        return { stdout: JSON.stringify({ id: `cron-fail-${++cronId}` }), stderr: '', code: 0 }
+      }
+      if (args[0] === 'cron' && args[1] === 'run') {
+        return { stdout: '', stderr: 'provider execution failed', code: 1 }
+      }
+      return { stdout: '{}', stderr: '', code: 0 }
+    },
+  })
+  const mission = makeMission({
+    id: 'mission-instant-failure',
+    mode: 'instant',
+    party: ['agent-a'],
+    scheduler: missionSchedulerInitialState({ party: ['agent-a'] }),
+  })
+  missions.set(mission.id, mission)
+
+  await service.runMissionCronRound(mission.id, makeAssignments(mission.party), [])
+
+  assert.equal(mission.status, 'cancelled')
+  assert.equal(mission.lifecycleState, 'failed')
+  assert.equal(mission.scheduler.status, 'failed')
+  assert.match(mission.scheduler.lastError || '', /Strike mission failed/)
+  assert.equal(state.reports.length, 1)
+  assert.equal(state.transitions.some((transition) => (transition as { nextState?: string }).nextState === 'failed'), true)
+})
+
+test('instant collaboration modes use distinct command, relay, and concurrent execution plans', async () => {
+  for (const mode of ['hierarchical', 'sequential', 'parallel', 'swarm', 'specialist'] as const) {
+    const { service, state, missions } = createHarness()
+    const mission = makeMission({
+      id: `mission-${mode}`,
+      mode: 'instant',
+      collaborationMode: mode,
+      party: ['agent-a', 'agent-b', 'agent-c'],
+      scheduler: missionSchedulerInitialState({ party: ['agent-a', 'agent-b', 'agent-c'], collaborationMode: mode }),
+    })
+    missions.set(mission.id, mission)
+
+    await service.runMissionCronRound(mission.id, makeAssignments(mission.party), [])
+
+    const roles = mission.scheduler.jobs.map((job) => job.role)
+    assert.equal(mission.scheduler.leaderAgentId, mode === 'hierarchical' ? 'agent-a' : null)
+    assert.equal(roles.filter((role) => role === 'reviewer').length, 1, `${mode} should finish with one review`)
+    if (mode === 'hierarchical') {
+      assert.equal(roles.filter((role) => role === 'leader').length, 1)
+      assert.equal(roles.filter((role) => role === 'worker').length, 2)
+    } else {
+      assert.equal(roles.filter((role) => role === 'leader').length, 0)
+      assert.equal(roles.filter((role) => role === 'worker').length, 3)
+    }
+    assert.equal(state.openClawCalls.filter((args) => args[0] === 'cron' && args[1] === 'run').length, 4)
+    assert.equal(mission.status, 'completed')
+  }
 })

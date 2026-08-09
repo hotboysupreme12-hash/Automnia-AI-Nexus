@@ -24,6 +24,7 @@ export type AgentConfigSaveReporter = (agentId: string, scope: AgentConfigSaveSc
 
 export interface NexusRuntimeProjectionState {
   activeMission: MissionRun | null
+  missionLaunchPending: boolean
   missionFeed: MissionEvent[]
   operationStates: Record<string, AgentOperationState>
   sessionWarmAgentIds: string[]
@@ -43,6 +44,7 @@ export function makeDormantOperationStates(agents: RuntimeProjectionAgent[]): Re
 export function makeRuntimeProjectionState(agents: RuntimeProjectionAgent[]): NexusRuntimeProjectionState {
   return {
     activeMission: null,
+    missionLaunchPending: false,
     missionFeed: [],
     operationStates: makeDormantOperationStates(agents),
     sessionWarmAgentIds: [],
@@ -53,6 +55,7 @@ export function makeRuntimeProjectionState(agents: RuntimeProjectionAgent[]): Ne
 export function preserveRuntimeProjectionState(current: NexusRuntimeProjectionState): NexusRuntimeProjectionState {
   return {
     activeMission: current.activeMission,
+    missionLaunchPending: false,
     missionFeed: current.missionFeed,
     operationStates: current.operationStates,
     sessionWarmAgentIds: [],

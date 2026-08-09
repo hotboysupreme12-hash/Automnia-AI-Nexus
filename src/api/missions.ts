@@ -15,6 +15,7 @@ export type BackendMission = {
   complexity?: number
   riskTolerance?: number
   cadenceSeconds?: number
+  agentCadenceSeconds?: Record<string, number>
   startAt: string
   endAt: string | null
   status: BackendMissionStatus
@@ -62,6 +63,7 @@ export type MissionStartRequest = {
   complexity: number
   riskTolerance: number
   cadenceSeconds: number
+  agentCadenceSeconds: Record<string, number>
 }
 
 export type MissionStartPayload = {
