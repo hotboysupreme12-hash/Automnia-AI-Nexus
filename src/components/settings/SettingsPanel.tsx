@@ -593,14 +593,13 @@ export function SettingsPanel() {
       )}
 
       <div className="dui-settings-layout">
-        <aside className="dui-settings-nav" aria-label="Settings categories">
+        <nav className="dui-settings-nav" aria-label="Settings categories">
           {SETTINGS_SECTIONS.map((section) => (
             <button key={section.id} type="button" role="tab" aria-selected={!normalizedSearch && activeSection === section.id} aria-controls={`settings-section-${section.id}`} data-active={!normalizedSearch && activeSection === section.id ? 'true' : 'false'} onClick={() => { setActiveSection(section.id); setSearchQuery('') }}>
               <span><SettingsGlyph name={section.id} /></span><div><strong>{section.label}</strong><small>{section.description}</small></div><b aria-hidden="true">›</b>
             </button>
           ))}
-          <div className="dui-settings-nav__footer"><strong>Autosave on</strong><span>Changes persist immediately</span></div>
-        </aside>
+        </nav>
 
         <main className="dui-settings-content">
           {normalizedSearch && <div className="dui-settings-results"><strong>{visibleSections.length} matching categor{visibleSections.length === 1 ? 'y' : 'ies'}</strong><span>Results for “{searchQuery.trim()}”</span></div>}
