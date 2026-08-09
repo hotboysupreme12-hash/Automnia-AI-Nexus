@@ -2639,6 +2639,10 @@ app.on('before-quit', (event) => {
   if (quitCleanupComplete || startupFailed) return
   event.preventDefault()
   void performQuitCleanup().finally(() => {
+    if (ELECTRON_E2E) {
+      process.exit(0)
+      return
+    }
     app.exit(0)
   })
 })
