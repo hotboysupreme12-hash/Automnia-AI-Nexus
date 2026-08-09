@@ -8,6 +8,12 @@ import type { RuntimeCronJob } from '../../hooks/useRuntimeStatus'
 import { ActionStatusBanner } from '../common/ActionStatusBanner'
 import { preloadMissionIconAssets } from '../mission/missionIconAssets'
 import { applyStoredUiSettings } from '../settings/uiSettings'
+import {
+  CONSOLE_PREFS_CHANGED_EVENT,
+  readConsolePreferences,
+  saveConsolePreferences,
+  type ConsolePreferences,
+} from '../settings/workspaceSettings'
 import { Button, StatusChip } from '../ui'
 
 const PartySelector = lazy(() => import('../party/PartySelector').then((module) => ({ default: module.PartySelector })))
@@ -23,8 +29,6 @@ const RecruitAgentModal = lazy(() => import('../recruit/RecruitAgentModal').then
 const AUTOMNIA_LOCKUP_SRC = '/brand/automnia-ai-nexus-logo-transparent-cropped.png'
 const AUTOMNIA_BRAND_LABEL = 'Automnia AI Nexus'
 const RECRUIT_ICON_SRC = '/icons/nav-recruit-flat.png'
-const AGENT_CONSOLE_PREF_KEY = 'dystopai-agent-console-visibility'
-const AGENT_CONSOLE_WIDTH_PREF_KEY = 'dystopai-agent-console-width'
 const AGENT_CONSOLE_MIN_WIDTH = 360
 const AGENT_CONSOLE_MAX_WIDTH = 760
 const AGENT_REGISTRY_MIN_WIDTH = 640
@@ -51,15 +55,6 @@ const PRIMARY_WORKSPACES: { id: PrimaryWorkspace; label: string; railMeta: strin
 
 function navIconStyle(src: string): CSSProperties {
   return { '--dy-nav-icon': `url("${src}")` } as CSSProperties
-}
-
-function savedAgentConsoleWidth(): number | null {
-  try {
-    const stored = Number(window.localStorage.getItem(AGENT_CONSOLE_WIDTH_PREF_KEY))
-    return Number.isFinite(stored) && stored > 0 ? stored : null
-  } catch {
-    return null
-  }
 }
 
 function clampAgentConsoleWidth(value: number, workspace: HTMLElement): number {
@@ -143,14 +138,8 @@ export function NexusShell() {
   const [cronClearBusy, setCronClearBusy] = useState(false)
   const [cronClearTargets, setCronClearTargets] = useState<RuntimeCronJob[]>([])
   const [cronNotice, setCronNotice] = useState<ShellNotice | null>(null)
-  const [isAgentConsoleVisible, setAgentConsoleVisible] = useState(() => {
-    try {
-      return window.localStorage.getItem(AGENT_CONSOLE_PREF_KEY) !== 'hidden'
-    } catch {
-      return true
-    }
-  })
-  const [agentConsoleWidth, setAgentConsoleWidth] = useState<number | null>(savedAgentConsoleWidth)
+  const [isAgentConsoleVisible, setAgentConsoleVisible] = useState(() => readConsolePreferences().visible)
+  const [agentConsoleWidth, setAgentConsoleWidth] = useState<number | null>(() => readConsolePreferences().width)
   const [isAgentSplitResizing, setAgentSplitResizing] = useState(false)
   const [agentsWorkspaceNode, setAgentsWorkspaceNode] = useState<HTMLDivElement | null>(null)
   const [agentRegistryPaneNode, setAgentRegistryPaneNode] = useState<HTMLDivElement | null>(null)
@@ -231,11 +220,7 @@ export function NexusShell() {
   }
   const commitAgentConsoleWidth = useCallback((nextWidth: number) => {
     setAgentConsoleWidth(nextWidth)
-    try {
-      window.localStorage.setItem(AGENT_CONSOLE_WIDTH_PREF_KEY, String(nextWidth))
-    } catch {
-      // Browser storage can be unavailable in hardened profiles.
-    }
+    saveConsolePreferences({ ...readConsolePreferences(), width: nextWidth })
   }, [])
   const currentAgentConsoleWidth = useCallback((workspace: HTMLElement) => {
     const consolePane = workspace.querySelector<HTMLElement>('.dy-agent-console-pane')
@@ -314,6 +299,21 @@ export function NexusShell() {
   useEffect(() => { void preloadMissionIconAssets() }, [])
   useEffect(() => { applyStoredUiSettings() }, [])
   useEffect(() => {
+    const syncConsolePreferences = (event?: Event) => {
+      const next = event instanceof CustomEvent
+        ? event.detail as ConsolePreferences
+        : readConsolePreferences()
+      setAgentConsoleVisible(next.visible)
+      setAgentConsoleWidth(next.width)
+    }
+    window.addEventListener(CONSOLE_PREFS_CHANGED_EVENT, syncConsolePreferences)
+    window.addEventListener('storage', syncConsolePreferences)
+    return () => {
+      window.removeEventListener(CONSOLE_PREFS_CHANGED_EVENT, syncConsolePreferences)
+      window.removeEventListener('storage', syncConsolePreferences)
+    }
+  }, [])
+  useEffect(() => {
     const handleWorkspaceShortcut = (event: globalThis.KeyboardEvent) => {
       if (!event.altKey || event.ctrlKey || event.metaKey || event.shiftKey || event.defaultPrevented) return
       const target = event.target as HTMLElement | null
@@ -346,11 +346,7 @@ export function NexusShell() {
     if (tab === 'missions') setHasMountedMissionPanel(true)
   }, [tab])
   useEffect(() => {
-    try {
-      window.localStorage.setItem(AGENT_CONSOLE_PREF_KEY, isAgentConsoleVisible ? 'visible' : 'hidden')
-    } catch {
-      // Browser storage can be unavailable in hardened profiles.
-    }
+    saveConsolePreferences({ ...readConsolePreferences(), visible: isAgentConsoleVisible })
   }, [isAgentConsoleVisible])
   useEffect(() => {
     if (tab !== 'agents' || !isAgentConsoleVisible || !agentsWorkspaceNode || !agentConsoleWidth) return
