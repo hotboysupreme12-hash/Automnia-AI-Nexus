@@ -54,6 +54,7 @@ import {
 } from './services/missions/missionStateService'
 import {
   createMissionSchedulerService,
+  type MissionCronRuntimeSnapshot,
   type MissionCronRuntimeDefaults,
   type MissionSchedulerService,
 } from './services/missions/missionSchedulerService'
@@ -2355,6 +2356,10 @@ const missionReportService = createMissionReportService({
   readMissionReports: (limit) => runtimeLedgerStore.readMissionReports(limit),
 })
 const buildMissionLifecycleProjection = missionReportService.buildMissionLifecycleProjection
+const buildReconciledMissionLifecycleProjection: typeof buildMissionLifecycleProjection = async (projectionOptions) => {
+  await missionSchedulerService.reconcileRecurringMissionCronRuntime(listMissionCronRuntimeSnapshotsFromStateDb())
+  return buildMissionLifecycleProjection(projectionOptions)
+}
 const listMissionReports = missionReportService.listMissionReports
 const recordMissionReport = missionReportService.recordMissionReport
 const missionTeamSyncService = createMissionTeamSyncService({
@@ -2382,9 +2387,12 @@ const missionStateService = createMissionStateService({
   controlCenterMissionSchedulerDryRun: CONTROL_CENTER_MISSION_SCHEDULER_DRY_RUN,
   missionCronCleanupFailureSummary: (error) => missionSchedulerService.missionCronCleanupFailureSummary(error),
   missionCronJobNeedsRecovery: (job) => missionSchedulerService.missionCronJobNeedsRecovery(job),
+  launchRecurringMissionImmediately: (mission, assignments, activity) =>
+    missionSchedulerService.launchRecurringMissionImmediately(mission, assignments, activity),
   missionFeed,
   missions,
   missionTimers,
+  redactSensitiveText,
   recordMissionReport,
   scheduleNextMissionRound: (mission, assignments, activity, delayMs) =>
     missionSchedulerService.scheduleNextMissionRound(mission, assignments, activity, delayMs),
@@ -14930,6 +14938,57 @@ function missionCronRowLooksLikeControlCenterMission(row: Record<string, unknown
   return /\bcontrol-center\s+mission=/i.test(sourceText) || /\bMission ID:/i.test(sourceText)
 }
 
+function listMissionCronRuntimeSnapshotsFromStateDb(): MissionCronRuntimeSnapshot[] {
+  const dbPath = cronStateDbPath()
+  if (!existsSync(dbPath)) return []
+  let db: SqliteDatabase | null = null
+  try {
+    const sqlite = optionalRequire('node:sqlite') as SqliteModule
+    if (!sqlite?.DatabaseSync) return []
+    db = new sqlite.DatabaseSync(dbPath, { readOnly: true })
+    const rows = db.prepare(`
+      SELECT
+        job_id,
+        description,
+        payload_message,
+        running_at_ms,
+        last_run_at_ms,
+        last_run_status,
+        last_error,
+        next_run_at_ms,
+        job_json
+      FROM cron_jobs
+      WHERE description LIKE '%control-center mission=%'
+        OR payload_message LIKE '%Mission ID:%'
+        OR job_json LIKE '%control-center mission=%'
+        OR job_json LIKE '%Mission ID:%'
+      LIMIT 1000
+    `).all()
+    return rows.flatMap((row) => {
+      if (!missionCronRowLooksLikeControlCenterMission(row)) return []
+      const cronId = cleanCronString(row.job_id)
+      if (!cronId) return []
+      return [{
+        cronId,
+        runningAt: cronIsoFromMs(row.running_at_ms),
+        lastRunAt: cronIsoFromMs(row.last_run_at_ms),
+        lastRunStatus: cleanCronString(row.last_run_status) || null,
+        lastError: row.last_error ? redactSensitiveText(String(row.last_error)) : null,
+        nextRunAt: cronIsoFromMs(row.next_run_at_ms),
+      }]
+    })
+  } catch (error) {
+    pushGatewayLog('stderr', `mission cron runtime reconciliation unavailable: ${redactSensitiveText(String(error))}`)
+    return []
+  } finally {
+    try {
+      db?.close?.()
+    } catch {
+      // Ignore close failures on read-only status snapshots.
+    }
+  }
+}
+
 function unavailableMissionCronReconciliationSnapshot(error: string): MissionCronReconciliationSnapshot {
   return {
     available: false,
@@ -17138,7 +17197,7 @@ registerPartyCoordinationRoutes(app, {
 })
 
 registerMissionRoutes(app, {
-  buildMissionLifecycleProjection,
+  buildMissionLifecycleProjection: buildReconciledMissionLifecycleProjection,
   listMissionReports,
   missionStateService,
   readMissionEvents: (limit) => runtimeLedgerStore.readMissionEvents<MissionLifecycleEvent>(limit).catch(() => []),

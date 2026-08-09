@@ -1491,6 +1491,7 @@ export const useNexusStore = create<NexusState>()(
           const retainedReports = s.missionReports.filter((report) => !backendReportIds.has(report.missionId) && !backendMissionIds.has(report.missionId))
           return {
             activeMission: activeRun,
+            missionLaunchPending: activeRun ? false : s.missionLaunchPending,
             missionHistory: historyRuns.length ? historyRuns : s.missionHistory,
             missionFeed,
             missionReports: backendReports.length || backendMissionIds.size
@@ -3113,6 +3114,7 @@ export const useNexusStore = create<NexusState>()(
         deployMission: () => {
           {
             const s = get()
+            if (s.missionLaunchPending || s.activeMission?.status === 'running') return
             const party = s.confirmedPartyIds.length ? s.confirmedPartyIds : s.activePartyIds
             if (!party.length) return
             const candidateAgents = selectMissionAgentsForDraft(s.agents, party, s.missionDraft)
@@ -3167,6 +3169,7 @@ export const useNexusStore = create<NexusState>()(
             const readinessWarnings = readiness.issues.filter((issue) => issue.severity === 'warning')
             const requestId = crypto.randomUUID()
             set((st) => ({
+              missionLaunchPending: true,
               missionFeed: [{
                 id: crypto.randomUUID(),
                 missionId: requestId,
@@ -3190,6 +3193,10 @@ export const useNexusStore = create<NexusState>()(
                   complexity: draft.complexity,
                   riskTolerance: draft.riskTolerance,
                   cadenceSeconds,
+                  agentCadenceSeconds: Object.fromEntries(candidateAgents.map((agent) => [
+                    agent.id,
+                    Math.max(15, Math.round((agent.heartbeat.tickIntervalMs || 300000) / 1000)),
+                  ])),
                 })
                 if (!result.ok) throw new Error(apiErrorMessage(result.error))
                 const out = result.data
@@ -3215,21 +3222,19 @@ export const useNexusStore = create<NexusState>()(
                 }
                 set((st) => ({
                   activeMission: run,
+                  missionLaunchPending: false,
                   missionFeed: [...launchEvents, ...st.missionFeed.filter((event) => event.missionId !== requestId)].slice(0, MAX_FEED_EVENTS),
                 }))
                 startMissionBackendPolling()
                 void syncBackendMissions().catch(() => undefined)
               } catch (error) {
                 set((st) => ({
-                  activeMission: null,
-                  missionFeed: [{
-                    id: crypto.randomUUID(),
-                    missionId: requestId,
-                    timestamp: new Date().toISOString(),
-                    type: 'mission' as const,
-                    message: `Cron mission start failed: ${String(error)}`,
-                  }, ...st.missionFeed].slice(0, MAX_FEED_EVENTS),
+                  missionLaunchPending: false,
+                  missionFeed: st.missionFeed.filter((event) => event.missionId !== requestId),
                 }))
+                await syncBackendMissions().catch(() => undefined)
+                addMissionFeedEvent(requestId, `Cron mission start failed: ${String(error)}`, 'mission')
+                if (get().activeMission?.status === 'running') startMissionBackendPolling()
               }
             })()
             return
@@ -3245,6 +3250,7 @@ export const useNexusStore = create<NexusState>()(
           cycleToCommanderFn = null
           dispatchNextWorkerCycleFn = null
           refreshLoopDelegationsFn = null
+          set({ missionLaunchPending: false })
           if (!current) return
           void (async () => {
             try {
@@ -3252,7 +3258,9 @@ export const useNexusStore = create<NexusState>()(
               if (!result.ok) throw new Error(apiErrorMessage(result.error))
               await syncBackendMissions().catch(() => undefined)
             } catch (error) {
+              await syncBackendMissions().catch(() => undefined)
               addMissionFeedEvent(current.id, `Cron mission stop failed: ${String(error)}`, 'mission')
+              if (get().activeMission?.status === 'running') startMissionBackendPolling()
             }
           })()
           set((s) => ({

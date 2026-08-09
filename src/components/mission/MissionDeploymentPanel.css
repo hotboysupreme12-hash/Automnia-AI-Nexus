@@ -1005,10 +1005,17 @@ html.dui-pro-overhaul.dui-cohesive-ui [data-dui-panel="missions"] .dui-mission-b
 
 html.dui-pro-overhaul.dui-cohesive-ui [data-dui-panel="missions"] .dui-mission-bottom-cron {
   grid-area: cron !important;
-  grid-template-rows: auto auto auto auto !important;
+  grid-template-rows: auto auto auto auto auto !important;
   align-content: stretch !important;
   justify-content: normal !important;
   gap: 12px !important;
+}
+
+html.dui-pro-overhaul.dui-cohesive-ui [data-dui-panel="missions"] .dui-mission-schedule-note {
+  margin: -5px 0 0 !important;
+  color: var(--mission-muted) !important;
+  font-size: var(--dy-type-micro, 11px) !important;
+  line-height: 1.35 !important;
 }
 
 html.dui-pro-overhaul.dui-cohesive-ui [data-dui-panel="missions"] .dui-mission-bottom-cron .dui-cadence-grid {

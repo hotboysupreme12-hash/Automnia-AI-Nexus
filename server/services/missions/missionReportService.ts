@@ -5,6 +5,7 @@ import {
   type MissionCronJob,
   type MissionCronJobStatus,
   type MissionCronRole,
+  type MissionCollaborationMode,
   type MissionFeedEvent,
   type MissionLifecycleEvent,
   type MissionLifecycleState,
@@ -12,6 +13,7 @@ import {
   type MissionRecordSnapshot,
   type MissionSchedulerState,
   type MissionStatus,
+  type MissionType,
 } from './missionStateService'
 
 export type BackendMissionReportEvidence = {
@@ -121,6 +123,18 @@ function normalizeMissionStatus(value: unknown): MissionStatus {
   return value === 'completed' || value === 'cancelled' ? value : 'active'
 }
 
+function normalizeMissionType(value: unknown): MissionType | undefined {
+  return value === 'codeGeneration' || value === 'planning' || value === 'research' || value === 'orchestration' || value === 'memoryManagement'
+    ? value
+    : undefined
+}
+
+function normalizeMissionCollaborationMode(value: unknown): MissionCollaborationMode | undefined {
+  return value === 'parallel' || value === 'sequential' || value === 'hierarchical' || value === 'swarm' || value === 'specialist'
+    ? value
+    : undefined
+}
+
 function lifecycleStateFromStatus(status: MissionStatus): MissionLifecycleState {
   if (status === 'completed') return 'completed'
   if (status === 'cancelled') return 'cancelled'
@@ -175,12 +189,24 @@ function normalizeMissionCronJob(value: unknown, missionId: string): MissionCron
     cronRunId: stringValue(record.cronRunId) || stringValue(record.runId),
     sessionId: stringValue(record.sessionId),
     sessionKey: stringValue(record.sessionKey),
+    scheduleKind: record.scheduleKind === 'recurring' ? 'recurring' : 'one-shot',
+    runCount: Math.max(0, Math.round(numberValue(record.runCount) || 0)),
+    completedRunCount: Math.max(0, Math.round(numberValue(record.completedRunCount) || 0)),
+    failedRunCount: Math.max(0, Math.round(numberValue(record.failedRunCount) || 0)),
+    lastRunAt: stringValue(record.lastRunAt),
+    lastRunStatus: record.lastRunStatus === 'completed' || record.lastRunStatus === 'failed' ? record.lastRunStatus : null,
   }
 }
 
-function normalizeMissionSchedulerState(value: unknown, missionId: string, party: string[], cadenceSeconds?: number | null): MissionSchedulerState {
+function normalizeMissionSchedulerState(
+  value: unknown,
+  missionId: string,
+  party: string[],
+  cadenceSeconds?: number | null,
+  collaborationMode?: MissionCollaborationMode,
+): MissionSchedulerState {
   const record = value && typeof value === 'object' && !Array.isArray(value) ? value as Record<string, unknown> : {}
-  const fallback = missionSchedulerInitialState({ party, cadenceSeconds })
+  const fallback = missionSchedulerInitialState({ party, cadenceSeconds, collaborationMode })
   const status = record.status
   const schedulerStatus: MissionSchedulerState['status'] =
     status === 'idle' ||
@@ -194,7 +220,15 @@ function normalizeMissionSchedulerState(value: unknown, missionId: string, party
       : fallback.status
   return {
     engine: 'openclaw-cron',
-    policy: 'leader-first',
+    policy:
+      record.policy === 'leader-first' ||
+      record.policy === 'parallel' ||
+      record.policy === 'sequential' ||
+      record.policy === 'hierarchical' ||
+      record.policy === 'swarm' ||
+      record.policy === 'specialist'
+        ? record.policy
+        : fallback.policy,
     status: schedulerStatus,
     round: Math.max(0, Math.round(numberValue(record.round) || fallback.round)),
     cycleIntervalMs: Math.max(15_000, Math.round(numberValue(record.cycleIntervalMs) || fallback.cycleIntervalMs)),
@@ -221,6 +255,17 @@ export function normalizeMissionRecordSnapshot(value: unknown): Mission | null {
   const status = normalizeMissionStatus(record.status)
   const mode = normalizeMissionMode(record.mode)
   const cadenceSeconds = numberValue(record.cadenceSeconds)
+  const missionType = normalizeMissionType(record.missionType)
+  const collaborationMode = normalizeMissionCollaborationMode(record.collaborationMode)
+  const agentCadenceRecord = record.agentCadenceSeconds && typeof record.agentCadenceSeconds === 'object' && !Array.isArray(record.agentCadenceSeconds)
+    ? record.agentCadenceSeconds as Record<string, unknown>
+    : {}
+  const agentCadenceSeconds = Object.fromEntries(
+    party.flatMap((agentId) => {
+      const seconds = numberValue(agentCadenceRecord[agentId])
+      return seconds === null ? [] : [[agentId, Math.max(15, Math.min(24 * 60 * 60, Math.round(seconds)))] as const]
+    }),
+  )
   return {
     id,
     ...(stringValue(record.idempotencyKey) ? { idempotencyKey: stringValue(record.idempotencyKey) || undefined } : {}),
@@ -228,11 +273,12 @@ export function normalizeMissionRecordSnapshot(value: unknown): Mission | null {
     brief,
     mode,
     amount: numberValue(record.amount),
-    ...(stringValue(record.missionType) ? { missionType: stringValue(record.missionType) || undefined } : {}),
-    ...(stringValue(record.collaborationMode) ? { collaborationMode: stringValue(record.collaborationMode) || undefined } : {}),
+    ...(missionType ? { missionType } : {}),
+    ...(collaborationMode ? { collaborationMode } : {}),
     ...(numberValue(record.complexity) !== null ? { complexity: numberValue(record.complexity) || 0 } : {}),
     ...(numberValue(record.riskTolerance) !== null ? { riskTolerance: numberValue(record.riskTolerance) || 0 } : {}),
     ...(cadenceSeconds !== null ? { cadenceSeconds } : {}),
+    ...(Object.keys(agentCadenceSeconds).length ? { agentCadenceSeconds } : {}),
     startAt: stringValue(record.startAt) || stringValue(record.createdAt) || new Date().toISOString(),
     endAt: stringValue(record.endAt),
     status,
@@ -240,7 +286,7 @@ export function normalizeMissionRecordSnapshot(value: unknown): Mission | null {
     party,
     createdAt: stringValue(record.createdAt) || stringValue(record.startAt) || new Date().toISOString(),
     completedAt: stringValue(record.completedAt),
-    scheduler: normalizeMissionSchedulerState(record.scheduler, id, party, cadenceSeconds),
+    scheduler: normalizeMissionSchedulerState(record.scheduler, id, party, cadenceSeconds, collaborationMode),
   }
 }
 
@@ -340,9 +386,15 @@ export function createMissionReportService(options: MissionReportServiceOptions)
   function buildMissionReport(mission: Mission, events: MissionFeedEvent[] = options.missionFeed): BackendMissionReport {
     const missionEvents = events.filter((event) => event.missionId === mission.id)
     const jobs = mission.scheduler.jobs
-    const terminalJobs = jobs.filter((job) => job.status === 'completed' || job.status === 'failed')
-    const completedRuns = terminalJobs.filter((job) => job.status === 'completed').length
-    const failedRuns = terminalJobs.filter((job) => job.status === 'failed').length
+    const terminalJobs = jobs.filter((job) => (job.runCount || 0) > 0 || job.status === 'completed' || job.status === 'failed')
+    const completedRuns = jobs.reduce(
+      (total, job) => total + Math.max(0, job.completedRunCount || (job.status === 'completed' ? 1 : 0)),
+      0,
+    )
+    const failedRuns = jobs.reduce(
+      (total, job) => total + Math.max(0, job.failedRunCount || (job.status === 'failed' ? 1 : 0)),
+      0,
+    )
     const terminalRuns = completedRuns + failedRuns
     const runtimeRunIds = Array.from(new Set(jobs.map((job) => job.runtimeRunId).filter((value): value is string => Boolean(value))))
     const cronRunIds = Array.from(new Set(jobs.map((job) => job.cronRunId).filter((value): value is string => Boolean(value))))
