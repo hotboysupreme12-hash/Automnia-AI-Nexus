@@ -15,6 +15,24 @@ import { apiUrl } from '../../utils/apiUrl'
 import { redactDiagnosticText } from '../../utils/diagnosticRedaction'
 import { agentPortraitSrc } from '../../utils/portrait'
 import { createSseFrameParser } from '../../utils/sseStream'
+import {
+  MAX_VOICE_RECORDING_MS,
+  decodeAudioToMono16Khz,
+  friendlyMicrophoneError,
+  preferredRecordingMimeType,
+  voiceRecordingFileName,
+} from '../../speech/audioCapture'
+import {
+  prepareLocalSpeechModel,
+  transcribeAudioLocally,
+  type LocalSpeechProgress,
+} from '../../speech/localSpeechClient'
+import {
+  SPEECH_SETTINGS_CHANGED_EVENT,
+  readSpeechSettings,
+  type SpeechTranscriptionMode,
+} from '../../speech/speechSettings'
+import { monitorVoiceActivity } from '../../speech/voiceActivity'
 import { Badge, Button, IconButton, StatusChip } from '../ui'
 import type { BadgeTone } from '../ui'
 
@@ -29,6 +47,7 @@ const MESSAGE_RENDER_LIMIT = 60
 const LANE_DIAGNOSTIC_WARN_MS = 10 * 60 * 1000
 const LANE_DIAGNOSTIC_STALLED_MS = 30 * 60 * 1000
 const LANE_DIAGNOSTIC_TICK_MS = 30 * 1000
+const VOICE_WAVEFORM_PROFILE = [0.46, 0.7, 0.94, 1, 0.86, 0.64, 0.42]
 const COMMAND_CONSOLE_ACCEPTED_FILE_TYPES = [
   'image/*',
   'audio/*',
@@ -68,6 +87,14 @@ type ConsoleStreamHealth = {
   retries: number
 }
 
+type VoiceInputPhase = 'idle' | 'requesting' | 'recording' | 'processing'
+
+type OnlineSpeechTranscriptionPayload = {
+  text: string
+  model: string
+  provider: 'openai'
+}
+
 function timeAgo(ts: string) {
   const now = Date.now()
   const then = new Date(ts).getTime()
@@ -102,6 +129,18 @@ function compactModelLabel(modelId?: string) {
   if (!cleaned) return ''
   const parts = cleaned.split('/').filter(Boolean)
   return parts.at(-1) || cleaned
+}
+
+function paintVoiceWaveform(element: HTMLSpanElement | null, level: number) {
+  if (!element) return
+  const normalized = Math.max(0, Math.min(1, level))
+  for (const [index, bar] of Array.from(element.children).entries()) {
+    const profile = VOICE_WAVEFORM_PROFILE[index] || 0.7
+    const shapedLevel = Math.max(0.12, Math.min(1, normalized * profile + (index % 2 ? 0.08 : 0.03)))
+    const target = bar as HTMLElement
+    target.style.height = `${Math.round(3 + shapedLevel * 15)}px`
+    target.style.opacity = `${0.48 + shapedLevel * 0.52}`
+  }
 }
 
 function agentBusyMessage(agent: Pick<OpenClawAgent, 'name'>) {
@@ -559,6 +598,11 @@ export function AgentResponseConsole() {
   const [isUploading, setIsUploading] = useState(false)
   const [messageActionId, setMessageActionId] = useState('')
   const [messageActionError, setMessageActionError] = useState('')
+  const [speechMode, setSpeechMode] = useState<SpeechTranscriptionMode>(() => readSpeechSettings().mode)
+  const [voicePhase, setVoicePhase] = useState<VoiceInputPhase>('idle')
+  const [voiceStatus, setVoiceStatus] = useState('')
+  const [voiceError, setVoiceError] = useState('')
+  const [recordingSeconds, setRecordingSeconds] = useState(0)
   const [chatRemovedPartyIds, setChatRemovedPartyIds] = useState<string[]>([])
   const [laneDiagnosticNow, setLaneDiagnosticNow] = useState(() => Date.now())
   const [clawTalkStreamHealth, setClawTalkStreamHealth] = useState<ConsoleStreamHealth>(() => ({
@@ -571,7 +615,19 @@ export function AgentResponseConsole() {
   const stickToBottomRef = useRef(true)
   const fileInputRef = useRef<HTMLInputElement | null>(null)
   const textareaRef = useRef<HTMLTextAreaElement | null>(null)
+  const promptRef = useRef('')
   const lastSendAttemptRef = useRef('')
+  const mediaRecorderRef = useRef<MediaRecorder | null>(null)
+  const mediaStreamRef = useRef<MediaStream | null>(null)
+  const recordingChunksRef = useRef<Blob[]>([])
+  const recordingStartedAtRef = useRef(0)
+  const recordingTickRef = useRef<number | null>(null)
+  const recordingLimitRef = useRef<number | null>(null)
+  const voiceActivityCleanupRef = useRef<(() => void) | null>(null)
+  const voiceWaveformRef = useRef<HTMLSpanElement | null>(null)
+  const recordingDiscardReasonRef = useRef('')
+  const voiceStatusClearRef = useRef<number | null>(null)
+  const voiceMountedRef = useRef(true)
   const hasActiveConsoleWork = busyAgentIds.length > 0 || responses.some((entry) => entry.streaming)
   const { status: runtimeSummaryStatus } = useRuntimeSummaryStatus(hasActiveConsoleWork ? 5000 : 12000)
   const gatewayStability = runtimeSummaryStatus?.gateway.stability ?? null
@@ -617,9 +673,11 @@ export function AgentResponseConsole() {
   const storedPromptDraft = useMemo(() => readCommandConsoleDraft(draftStorageKey), [draftStorageKey])
   const prompt = promptDraft.storageKey === draftStorageKey ? promptDraft.value : storedPromptDraft
   const setPrompt = useCallback((value: string) => {
+    promptRef.current = value
     setPromptDraft({ storageKey: draftStorageKey, value })
     writeCommandConsoleDraft(draftStorageKey, value)
   }, [draftStorageKey])
+  promptRef.current = prompt
 
   const busyAgents = useMemo(
     () => busyAgentIds.map((id) => agentById.get(id)).filter((a): a is OpenClawAgent => Boolean(a)),
@@ -697,7 +755,8 @@ export function AgentResponseConsole() {
     if (armedTargets.length === 1) return agentBusyMessage(armedTargets[0])
     return 'Every addressed agent is already running. Send now to queue this turn until lanes are free.'
   }, [allTargetsBusy, armedTargets, hardBlockedSendReason])
-  const canSend = Boolean(prompt.trim() || uploadedAttachment) && !isUploading && !hardBlockedSendReason
+  const voiceBusy = voicePhase !== 'idle'
+  const canSend = Boolean(prompt.trim() || uploadedAttachment) && !isUploading && !voiceBusy && !hardBlockedSendReason
   const composerPlaceholder = hardBlockedSendReason || queuedSendReason || 'Message the agents...'
   const streamLabel: Record<ConsoleStreamState, string> = {
     connecting: 'Connecting',
@@ -906,6 +965,266 @@ export function AgentResponseConsole() {
     return () => window.removeEventListener('resize', resizeComposerTextarea)
   }, [resizeComposerTextarea])
 
+  useEffect(() => {
+    const syncSpeechMode = () => setSpeechMode(readSpeechSettings().mode)
+    window.addEventListener(SPEECH_SETTINGS_CHANGED_EVENT, syncSpeechMode)
+    window.addEventListener('storage', syncSpeechMode)
+    return () => {
+      window.removeEventListener(SPEECH_SETTINGS_CHANGED_EVENT, syncSpeechMode)
+      window.removeEventListener('storage', syncSpeechMode)
+    }
+  }, [])
+
+  const clearVoiceTimers = useCallback(() => {
+    if (recordingTickRef.current !== null) window.clearInterval(recordingTickRef.current)
+    if (recordingLimitRef.current !== null) window.clearTimeout(recordingLimitRef.current)
+    voiceActivityCleanupRef.current?.()
+    recordingTickRef.current = null
+    recordingLimitRef.current = null
+    voiceActivityCleanupRef.current = null
+    paintVoiceWaveform(voiceWaveformRef.current, 0)
+  }, [])
+
+  const stopMicrophoneTracks = useCallback(() => {
+    for (const track of mediaStreamRef.current?.getTracks() || []) track.stop()
+    mediaStreamRef.current = null
+  }, [])
+
+  useEffect(() => {
+    voiceMountedRef.current = true
+    return () => {
+      voiceMountedRef.current = false
+      clearVoiceTimers()
+      if (voiceStatusClearRef.current !== null) window.clearTimeout(voiceStatusClearRef.current)
+      const recorder = mediaRecorderRef.current
+      if (recorder?.state === 'recording') recorder.stop()
+      stopMicrophoneTracks()
+    }
+  }, [clearVoiceTimers, stopMicrophoneTracks])
+
+  const localSpeechProgress = useCallback((progress: LocalSpeechProgress) => {
+    if (!voiceMountedRef.current) return
+    const backendLabel = progress.backend === 'webgpu' ? 'GPU' : 'CPU'
+    if (progress.phase === 'loading') {
+      const percentage = progress.progress === undefined ? '' : ` ${Math.round(progress.progress)}%`
+      setVoiceStatus(`Preparing local speech${percentage} · ${backendLabel}`)
+      return
+    }
+    if (progress.phase === 'transcribing') {
+      setVoiceStatus(`Transcribing on device · ${backendLabel}`)
+      return
+    }
+    setVoiceStatus(mediaRecorderRef.current?.state === 'recording'
+      ? `Listening · local ${backendLabel} ready`
+      : `Local ${backendLabel} ready`)
+  }, [])
+
+  const appendVoiceTranscript = useCallback((transcript: string) => {
+    const cleanTranscript = transcript.trim()
+    if (!cleanTranscript) throw new Error('No speech was recognized. Try again a little closer to the microphone.')
+    const current = promptRef.current
+    const separator = current && !/\s$/.test(current) ? ' ' : ''
+    setPrompt(`${current}${separator}${cleanTranscript}`)
+    window.requestAnimationFrame(() => textareaRef.current?.focus())
+  }, [setPrompt])
+
+  const settleVoiceStatus = useCallback((status: string) => {
+    setVoiceStatus(status)
+    if (voiceStatusClearRef.current !== null) window.clearTimeout(voiceStatusClearRef.current)
+    voiceStatusClearRef.current = window.setTimeout(() => {
+      if (voiceMountedRef.current && mediaRecorderRef.current?.state !== 'recording') setVoiceStatus('')
+      voiceStatusClearRef.current = null
+    }, 4_000)
+  }, [])
+
+  useEffect(() => {
+    if (speechMode !== 'local') return
+    let disposed = false
+    const timer = window.setTimeout(() => {
+      void prepareLocalSpeechModel((progress) => {
+        if (!disposed) localSpeechProgress(progress)
+      }).catch(() => {
+        if (!disposed && mediaRecorderRef.current?.state !== 'recording') {
+          setVoiceStatus('Local speech will prepare when you tap the mic')
+        }
+      })
+    }, 450)
+    return () => {
+      disposed = true
+      window.clearTimeout(timer)
+    }
+  }, [localSpeechProgress, speechMode])
+
+  const transcribeVoiceBlob = useCallback(async (blob: Blob, mode: SpeechTranscriptionMode) => {
+    if (!voiceMountedRef.current) return
+    setVoicePhase('processing')
+    setVoiceError('')
+    try {
+      if (mode === 'local') {
+        setVoiceStatus('Preparing audio for on-device transcription')
+        const audio = await decodeAudioToMono16Khz(blob)
+        const result = await transcribeAudioLocally(audio, localSpeechProgress)
+        if (!voiceMountedRef.current) return
+        appendVoiceTranscript(result.text)
+        settleVoiceStatus(`Transcript added · local ${result.backend === 'webgpu' ? 'GPU' : 'CPU'}`)
+      } else {
+        setVoiceStatus('Transcribing securely with OpenAI')
+        const result = await apiRequest<OnlineSpeechTranscriptionPayload>(
+          `/api/speech/transcribe?filename=${encodeURIComponent(voiceRecordingFileName(blob.type))}`,
+          {
+            method: 'POST',
+            timeoutMs: 90_000,
+            headers: { 'Content-Type': blob.type || 'audio/webm' },
+            body: blob,
+          },
+        )
+        if (!result.ok) throw new Error(apiErrorMessage(result.error))
+        if (!voiceMountedRef.current) return
+        appendVoiceTranscript(result.data.text)
+        settleVoiceStatus('Transcript added · online accuracy')
+      }
+    } catch (error) {
+      if (!voiceMountedRef.current) return
+      const message = error instanceof Error ? error.message : String(error)
+      const localSetupHint = mode === 'local' && /fetch|network|load|download/i.test(message)
+        ? ' Local speech needs internet once to download its model; after that it stays cached and runs offline.'
+        : ''
+      setVoiceError(`${message}${localSetupHint}`)
+      setVoiceStatus('')
+    } finally {
+      if (voiceMountedRef.current) setVoicePhase('idle')
+    }
+  }, [appendVoiceTranscript, localSpeechProgress, settleVoiceStatus])
+
+  const stopVoiceRecording = useCallback(() => {
+    const recorder = mediaRecorderRef.current
+    if (!recorder || recorder.state !== 'recording') return
+    clearVoiceTimers()
+    setVoiceStatus('Finishing voice input')
+    recorder.stop()
+  }, [clearVoiceTimers])
+
+  const startVoiceRecording = useCallback(async () => {
+    if (voicePhase !== 'idle') return
+    if (!navigator.mediaDevices?.getUserMedia || typeof MediaRecorder === 'undefined') {
+      setVoiceError('Voice input is not supported by this browser or desktop runtime.')
+      return
+    }
+
+    if (voiceStatusClearRef.current !== null) window.clearTimeout(voiceStatusClearRef.current)
+    voiceStatusClearRef.current = null
+    setVoiceError('')
+    setVoiceStatus('Requesting microphone access')
+    setVoicePhase('requesting')
+
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({
+        audio: {
+          channelCount: 1,
+          echoCancellation: true,
+          noiseSuppression: true,
+          autoGainControl: true,
+        },
+        video: false,
+      })
+      if (!voiceMountedRef.current) {
+        for (const track of stream.getTracks()) track.stop()
+        return
+      }
+
+      mediaStreamRef.current = stream
+      recordingChunksRef.current = []
+      recordingDiscardReasonRef.current = ''
+      const mimeType = preferredRecordingMimeType()
+      const recorder = new MediaRecorder(stream, mimeType ? { mimeType, audioBitsPerSecond: 64_000 } : undefined)
+      mediaRecorderRef.current = recorder
+      const recordingMode = speechMode
+
+      recorder.addEventListener('dataavailable', (event) => {
+        if (event.data.size > 0) recordingChunksRef.current.push(event.data)
+      })
+      recorder.addEventListener('error', (event) => {
+        if (!voiceMountedRef.current) return
+        setVoiceError(friendlyMicrophoneError((event as ErrorEvent).error))
+        setVoicePhase('idle')
+        clearVoiceTimers()
+        stopMicrophoneTracks()
+      })
+      recorder.addEventListener('stop', () => {
+        clearVoiceTimers()
+        stopMicrophoneTracks()
+        mediaRecorderRef.current = null
+        const durationMs = Math.max(0, Date.now() - recordingStartedAtRef.current)
+        const blob = new Blob(recordingChunksRef.current, { type: recorder.mimeType || mimeType || 'audio/webm' })
+        recordingChunksRef.current = []
+        const discardReason = recordingDiscardReasonRef.current
+        recordingDiscardReasonRef.current = ''
+        if (!voiceMountedRef.current) return
+        if (discardReason) {
+          setVoiceError(discardReason)
+          setVoiceStatus('')
+          setVoicePhase('idle')
+          return
+        }
+        if (durationMs < 350 || !blob.size) {
+          setVoiceError('The voice recording was too short. Hold the thought for a moment, then press stop.')
+          setVoiceStatus('')
+          setVoicePhase('idle')
+          return
+        }
+        void transcribeVoiceBlob(blob, recordingMode)
+      }, { once: true })
+
+      recorder.start(250)
+      recordingStartedAtRef.current = Date.now()
+      setRecordingSeconds(0)
+      setVoicePhase('recording')
+      setVoiceStatus(recordingMode === 'local' ? 'Listening · audio stays on device' : 'Listening · Online mode')
+      recordingTickRef.current = window.setInterval(() => {
+        setRecordingSeconds(Math.floor((Date.now() - recordingStartedAtRef.current) / 1000))
+      }, 1_000)
+      recordingLimitRef.current = window.setTimeout(() => stopVoiceRecording(), MAX_VOICE_RECORDING_MS)
+
+      try {
+        voiceActivityCleanupRef.current = monitorVoiceActivity(stream, {
+          onLevel: (level) => paintVoiceWaveform(voiceWaveformRef.current, level),
+          onSpeechStart: () => {
+            if (!voiceMountedRef.current || recorder.state !== 'recording') return
+            setVoiceStatus(recordingMode === 'local'
+              ? 'Voice detected · pause to transcribe locally'
+              : 'Voice detected · pause to transcribe online')
+          },
+          onSilence: () => {
+            if (!voiceMountedRef.current || recorder.state !== 'recording') return
+            setVoiceStatus('Pause detected · transcribing')
+            stopVoiceRecording()
+          },
+          onNoSpeech: () => {
+            if (!voiceMountedRef.current || recorder.state !== 'recording') return
+            recordingDiscardReasonRef.current = 'No speech was detected. Check the selected microphone and try again.'
+            stopVoiceRecording()
+          },
+        })
+      } catch {
+        setVoiceStatus(`${recordingMode === 'local' ? 'Listening locally' : 'Listening online'} · tap stop when finished`)
+      }
+
+      if (recordingMode === 'local') {
+        void prepareLocalSpeechModel(localSpeechProgress).catch((error) => {
+          if (!voiceMountedRef.current || mediaRecorderRef.current?.state !== 'recording') return
+          const message = error instanceof Error ? error.message : String(error)
+          setVoiceStatus(`Listening · local model setup will retry (${redactDiagnosticText(message, 80)})`)
+        })
+      }
+    } catch (error) {
+      stopMicrophoneTracks()
+      if (!voiceMountedRef.current) return
+      setVoiceError(friendlyMicrophoneError(error))
+      setVoiceStatus('')
+      setVoicePhase('idle')
+    }
+  }, [clearVoiceTimers, localSpeechProgress, speechMode, stopMicrophoneTracks, stopVoiceRecording, transcribeVoiceBlob, voicePhase])
+
   const buildMessage = (draftPrompt: string, attachments: AgentTurnAttachment[]): string => {
     const base = draftPrompt.trim() || 'Analyze the attached file.'
     if (!attachments.length) return base
@@ -915,6 +1234,7 @@ export function AgentResponseConsole() {
 
   const clearInput = () => {
     removeCommandConsoleDraft(draftStorageKey)
+    promptRef.current = ''
     setPromptDraft({ storageKey: draftStorageKey, value: '' })
     setUploadedAttachment(null)
     setUploadError('')
@@ -969,6 +1289,10 @@ export function AgentResponseConsole() {
     if (isUploading) return
     setUploadError('')
     setMessageActionError('')
+    if (voiceBusy) {
+      setMessageActionError('Finish voice input before sending this message.')
+      return
+    }
     if (hardBlockedSendReason) {
       setMessageActionError(hardBlockedSendReason)
       return
@@ -1365,6 +1689,11 @@ export function AgentResponseConsole() {
           {messageActionError}
         </div>
       )}
+      {voiceError && (
+        <div className="dy-command-voice-error shrink-0" role="alert">
+          {voiceError}
+        </div>
+      )}
       {/* Input area */}
       <div className="dy-command-composer shrink-0">
         <div
@@ -1463,26 +1792,81 @@ export function AgentResponseConsole() {
                 className="hidden"
                 onChange={handleAttachmentUpload}
               />
+              {voiceStatus && (
+                <span
+                  className="dy-command-voice-status"
+                  data-phase={voicePhase}
+                  role="status"
+                  aria-live="polite"
+                >
+                  {voicePhase === 'recording' ? (
+                    <>
+                      <span className="dy-command-voice-status__label">Listening</span>
+                      <span ref={voiceWaveformRef} className="dy-command-voice-waveform" aria-hidden="true">
+                        <i /><i /><i /><i /><i /><i /><i />
+                      </span>
+                      <time aria-label={`${recordingSeconds} seconds recorded`}>
+                        {`${Math.floor(recordingSeconds / 60)}:${String(recordingSeconds % 60).padStart(2, '0')}`}
+                      </time>
+                    </>
+                  ) : (
+                    <span>{voiceStatus}</span>
+                  )}
+                </span>
+              )}
             </div>
 
-            {/* Send button */}
-            <IconButton
-              aria-label="Send message"
-              disabled={!canSend}
-              onClick={() => void handleSend()}
-              className="dy-command-send flex h-10 w-10 shrink-0 items-center justify-center"
-              title={isUploading ? 'Uploading attachment' : hardBlockedSendReason || queuedSendReason || 'Send (Enter)'}
-              icon={isUploading ? (
-                <svg className="h-4 w-4 animate-spin" viewBox="0 0 24 24" fill="none">
-                  <circle cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="3" strokeDasharray="31.4 31.4" strokeLinecap="round" />
-                </svg>
-              ) : (
-                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" className="h-4 w-4" aria-hidden="true">
-                  <path d="M12 19V5" />
-                  <path d="m5 12 7-7 7 7" />
-                </svg>
-              )}
-            />
+            <div className="dy-command-composer__actions">
+              <IconButton
+                aria-label={voicePhase === 'recording' ? 'Stop recording and transcribe' : 'Start voice dictation'}
+                disabled={voicePhase === 'requesting' || voicePhase === 'processing' || isUploading}
+                onClick={() => voicePhase === 'recording' ? stopVoiceRecording() : void startVoiceRecording()}
+                className="dy-command-voice flex h-10 w-10 shrink-0 items-center justify-center"
+                data-phase={voicePhase}
+                data-mode={speechMode}
+                title={voicePhase === 'recording'
+                  ? 'Stop and transcribe now · otherwise pause and it will stop automatically'
+                  : voicePhase === 'processing'
+                    ? 'Transcribing voice input'
+                    : speechMode === 'local'
+                      ? 'Speak to your agents · local transcription (change mode in Settings)'
+                      : 'Speak to your agents · cloud transcription (change mode in Settings)'}
+                variant="quiet"
+                icon={voicePhase === 'requesting' || voicePhase === 'processing' ? (
+                  <svg className="h-4 w-4 animate-spin" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                    <circle cx="12" cy="12" r="9" stroke="currentColor" strokeWidth="2.4" strokeDasharray="28 28" strokeLinecap="round" />
+                  </svg>
+                ) : voicePhase === 'recording' ? (
+                  <svg className="dy-command-voice-stop" viewBox="0 0 24 24" aria-hidden="true">
+                    <rect x="7" y="7" width="10" height="10" rx="1.5" fill="currentColor" />
+                  </svg>
+                ) : (
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round" className="h-[18px] w-[18px]" aria-hidden="true">
+                    <rect x="9" y="2" width="6" height="12" rx="3" />
+                    <path d="M5 10a7 7 0 0 0 14 0M12 17v5M8 22h8" />
+                  </svg>
+                )}
+              />
+
+              {/* Send button */}
+              <IconButton
+                aria-label="Send message"
+                disabled={!canSend}
+                onClick={() => void handleSend()}
+                className="dy-command-send flex h-10 w-10 shrink-0 items-center justify-center"
+                title={voiceBusy ? 'Finish voice input before sending' : isUploading ? 'Uploading attachment' : hardBlockedSendReason || queuedSendReason || 'Send (Enter)'}
+                icon={isUploading ? (
+                  <svg className="h-4 w-4 animate-spin" viewBox="0 0 24 24" fill="none">
+                    <circle cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="3" strokeDasharray="31.4 31.4" strokeLinecap="round" />
+                  </svg>
+                ) : (
+                  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" className="h-4 w-4" aria-hidden="true">
+                    <path d="M12 19V5" />
+                    <path d="m5 12 7-7 7 7" />
+                  </svg>
+                )}
+              />
+            </div>
           </div>
         </div>
       </div>

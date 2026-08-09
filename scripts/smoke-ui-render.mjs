@@ -512,6 +512,71 @@ function bitmapStats(image) {
   return { sampled, nonBlank, nonBlankRatio: sampled ? nonBlank / sampled : 0 }
 }
 
+async function inspectRecruitMarkdownEditor(window) {
+  const inspectScript = [
+    "(() => {",
+    "  const wait = (ms) => new Promise((resolve) => setTimeout(resolve, ms))",
+    "  const waitFor = async (predicate, timeout = 5000) => {",
+    "    const started = Date.now()",
+    "    while (Date.now() - started < timeout) {",
+    "      const value = predicate()",
+    "      if (value) return value",
+    "      await wait(100)",
+    "    }",
+    "    return null",
+    "  }",
+    "  const centerY = (element) => {",
+    "    const rect = element ? element.getBoundingClientRect() : null",
+    "    return rect ? rect.top + (rect.height / 2) : null",
+    "  }",
+    "  return (async () => {",
+    "    const trigger = document.querySelector('button[data-tone=\"recruit\"]')",
+    "    if (!trigger) return { present: false, reason: 'recruit-trigger-missing' }",
+    "    trigger.click()",
+    "    const modal = await waitFor(() => document.querySelector('[data-dui-modal=\"recruit-agent\"]'))",
+    "    const input = modal ? modal.querySelector('.dui-recruit-code-input') : null",
+    "    const preview = modal ? modal.querySelector('.dui-recruit-code-preview') : null",
+    "    const editor = modal ? modal.querySelector('.dui-recruit-code-editor') : null",
+    "    const firstTab = modal ? modal.querySelector('.dui-recruit-file-tabs button[data-md-tone]') : null",
+    "    if (!modal || !input || !preview || !editor || !firstTab) {",
+    "      return { present: false, reason: 'recruit-markdown-controls-missing' }",
+    "    }",
+    "    input.focus()",
+    "    await wait(120)",
+    "    const inputStyle = getComputedStyle(input)",
+    "    const previewStyle = getComputedStyle(preview)",
+    "    const editorStyle = getComputedStyle(editor)",
+    "    const beforeStyle = getComputedStyle(firstTab, '::before')",
+    "    const icon = firstTab.querySelector('.dui-recruit-file-tab__icon')",
+    "    const name = firstTab.querySelector('.dui-recruit-file-tab__name')",
+    "    const type = firstTab.querySelector('.dui-recruit-file-tab__type')",
+    "    const centers = [centerY(icon), centerY(name), centerY(type)].filter((value) => value !== null)",
+    "    const centerSpread = centers.length ? Math.max(...centers) - Math.min(...centers) : null",
+    "    return {",
+    "      present: true,",
+    "      activeFile: firstTab.textContent.replace(/\\s+/g, ' ').trim(),",
+    "      inputBackgroundColor: inputStyle.backgroundColor,",
+    "      inputBackgroundImage: inputStyle.backgroundImage,",
+    "      inputTextFillColor: inputStyle.webkitTextFillColor,",
+    "      previewColor: previewStyle.color,",
+    "      editorBackgroundColor: editorStyle.backgroundColor,",
+    "      editorBorderColor: editorStyle.borderColor,",
+    "      pseudoBeforeContent: beforeStyle.content,",
+    "      pseudoBeforeDisplay: beforeStyle.display,",
+    "      tabGridTemplateColumns: getComputedStyle(firstTab).gridTemplateColumns,",
+    "      tabChildCenterSpread: centerSpread === null ? null : Math.round(centerSpread * 100) / 100,",
+    "      iconRect: icon ? { width: Math.round(icon.getBoundingClientRect().width), height: Math.round(icon.getBoundingClientRect().height) } : null,",
+    "      typeRect: type ? { width: Math.round(type.getBoundingClientRect().width), height: Math.round(type.getBoundingClientRect().height) } : null,",
+    "    }",
+    "  })()",
+    "})()",
+  ].join('\n')
+  const inspection = await window.webContents.executeJavaScript(inspectScript)
+  await window.webContents.executeJavaScript("document.querySelector('[data-dui-modal=\\\"recruit-agent\\\"] .dui-recruit-close')?.click()")
+  await new Promise((resolve) => setTimeout(resolve, 120))
+  return inspection
+}
+
 async function inspectWorkspaceNavigation(window) {
   const tabScript = [
     "(() => {",
@@ -1022,6 +1087,7 @@ async function inspectViewport(viewport) {
   ].join('\n')
   const dom = await window.webContents.executeJavaScript(inspectScript)
   const workspaceNavigation = await inspectWorkspaceNavigation(window)
+  const recruitMarkdown = await inspectRecruitMarkdownEditor(window)
 
   const image = await window.webContents.capturePage()
   const screenshotPath = path.join(outputDir, 'ui-smoke-' + viewport.label + '.png')
@@ -1119,6 +1185,18 @@ async function inspectViewport(viewport) {
     && shellFillsViewport
     && dom.workspaceNavItems.length >= 4
     && workspaceNavigationOk
+    && recruitMarkdown.present
+    && recruitMarkdown.inputBackgroundColor === 'rgba(0, 0, 0, 0)'
+    && recruitMarkdown.inputBackgroundImage === 'none'
+    && recruitMarkdown.previewColor === 'rgb(226, 233, 235)'
+    && recruitMarkdown.editorBackgroundColor === 'rgb(5, 5, 5)'
+    && recruitMarkdown.pseudoBeforeContent === 'none'
+    && recruitMarkdown.pseudoBeforeDisplay === 'none'
+    && recruitMarkdown.tabChildCenterSpread <= 1
+    && recruitMarkdown.iconRect?.width === 20
+    && recruitMarkdown.iconRect?.height === 20
+    && recruitMarkdown.typeRect?.width === 28
+    && recruitMarkdown.typeRect?.height === 18
     && commandConsoleOk
     && commandConsoleStopClick.attempted
     && commandConsoleStopClick.clicked
@@ -1138,7 +1216,7 @@ async function inspectViewport(viewport) {
     && commandConsoleRedactedFailure.attempted
     && commandConsoleRedactedFailure.redactedFailureCtaPresent
     && /Reset gateway/.test(commandConsoleRedactedFailure.redactedFailureCtaText)
-    && /Gateway connection dropped\. Reset it, then retry\./.test(commandConsoleRedactedFailure.redactedFailureCtaText)
+    && /Gateway is unavailable\. Reset it, then retry\./.test(commandConsoleRedactedFailure.redactedFailureCtaText)
     && /gateway disconnect/i.test(commandConsoleRedactedFailure.redactedFailureFailureChipText)
     && /Gateway transport error: simulated Command Console failure\./.test(commandConsoleRedactedFailure.redactedFailureBodyText)
     && commandConsoleRedactedFailure.redactedFailureMarkersPresent
@@ -1191,6 +1269,7 @@ async function inspectViewport(viewport) {
     bitmap,
     shellFillsViewport,
     dom,
+    recruitMarkdown,
     commandConsoleStopSeed,
     commandConsoleStopClick,
     commandConsoleMissingProviderAuth,

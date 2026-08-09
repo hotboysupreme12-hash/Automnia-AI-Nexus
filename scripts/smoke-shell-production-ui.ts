@@ -27,6 +27,7 @@ const chatComposerImport = "@import './styles/dystopai-theme/97-chat-composer.cs
 const flattenedShellImport = "@import './styles/dystopai-theme/98-flattened-shell.css';"
 const horizonCommandCenterImport = "@import './styles/dystopai-theme/99-horizon-command-center.css';"
 const operatorExperienceImport = "@import './styles/dystopai-theme/100-operator-experience.css';"
+const agentCardThemesImport = "@import './styles/dystopai-theme/101-agent-card-themes.css';"
 const horizonCommandCenter = read('src/styles/dystopai-theme/99-horizon-command-center.css')
 const operatorExperience = read('src/styles/dystopai-theme/100-operator-experience.css')
 
@@ -105,6 +106,7 @@ assert.ok(theme.includes(chatComposerImport), 'chat composer polish must remain 
 assert.ok(theme.includes(flattenedShellImport), 'flattened shell polish must remain in the theme cascade')
 assert.ok(theme.includes(horizonCommandCenterImport), 'Horizon Command Center must remain the final global visual layer')
 assert.ok(theme.includes(operatorExperienceImport), 'Operator Experience must remain the final global refinement layer')
+assert.ok(theme.includes(agentCardThemesImport), 'Agent Card Themes must remain in the theme cascade')
 const themeLayerImports = [...theme.matchAll(/@import '\.\/styles\/dystopai-theme\/(\d+)-([^']+)\.css';/g)]
 const layersAfterTypography = themeLayerImports
   .map((match) => ({ order: Number(match[1]), name: match[2] }))
@@ -115,6 +117,7 @@ assert.deepEqual(layersAfterTypography, [
   { order: 98, name: 'flattened-shell' },
   { order: 99, name: 'horizon-command-center' },
   { order: 100, name: 'operator-experience' },
+  { order: 101, name: 'agent-card-themes' },
 ], 'global dystopai theme layers after typography must remain limited to the approved shell and operator-experience layers')
 assert.doesNotMatch(theme, /99-mission-quiet-redesign/, 'mission quiet redesign should no longer be a global late layer')
 assert.ok(
@@ -130,7 +133,9 @@ assert.ok(theme.indexOf(navSelectionGlowImport) < theme.indexOf(chatComposerImpo
 assert.ok(theme.indexOf(chatComposerImport) < theme.indexOf(flattenedShellImport), 'chat composer polish must load before flattened shell polish')
 assert.ok(theme.indexOf(flattenedShellImport) < theme.indexOf(horizonCommandCenterImport), 'flattened shell polish must load before Horizon Command Center')
 assert.ok(theme.indexOf(horizonCommandCenterImport) < theme.indexOf(operatorExperienceImport), 'Horizon Command Center must load before Operator Experience')
-assert.ok(theme.trimEnd().endsWith(operatorExperienceImport), 'Operator Experience must load last in the theme cascade')
+assert.ok(theme.indexOf(operatorExperienceImport) < theme.indexOf(agentCardThemesImport), 'Operator Experience must load before Agent Card Themes')
+assert.ok(theme.trimEnd().endsWith(agentCardThemesImport), 'Agent Card Themes must load last in the theme cascade')
+assert.match(operatorExperience, /\.dui-recruit-code-editor:focus-within[\s\S]*#071012 !important/, 'focused recruit Markdown editing must retain its dedicated contrast treatment')
 assert.match(horizonCommandCenter, /Each destination has a dedicated hue/, 'navigation selection should document the workspace identity system')
 for (const [tone, accent] of [
   ['recruit', '#f17d72'],
@@ -156,6 +161,9 @@ assert.match(operatorExperience, /\.dy-command-composer__field[\s\S]*?border: 0 
 assert.match(recruitModal, /function defaultRecruitResourceFiles\(\)/, 'recruit modal should define Markdown defaults before the dialog opens')
 assert.match(recruitModal, /useState<Record<string, string>>\(defaultRecruitResourceFiles\)/, 'recruit modal should render the selected Markdown document with an immediate default value')
 assert.match(operatorExperience, /Recruit Markdown editor:[\s\S]*?grid-template-rows: auto auto auto minmax\(0, 1fr\) !important;/, 'recruit Markdown layout should reserve a distinct grid row for the file toolbar and editor')
+assert.match(operatorExperience, /Recruit Markdown legibility and file-tab alignment[\s\S]*?\.dui-recruit-code-input:focus-visible[\s\S]*?background-color: transparent !important;/, 'recruit Markdown input should remain transparent on focus so the highlighted preview stays legible')
+assert.match(operatorExperience, /\.dui-recruit-file-tabs button\[data-md-tone\]::before[\s\S]*?content: none !important;[\s\S]*?display: none !important;/, 'recruit Markdown tabs should suppress the retired decorative pseudo-icon')
+assert.match(operatorExperience, /grid-template-columns: 20px minmax\(0, 1fr\) 28px !important;/, 'recruit Markdown tabs should align one document icon, filename, and MD badge')
 assert.match(missionPanel, /import '\.\/MissionDeploymentPanel\.css'/, 'mission late overrides should be owned by the mission component')
 assert.match(monitorPanel, /import \{ Badge, Button, IconButton, StatusChip \} from '\.\.\/ui'/, 'Monitor controls and status chips should use local UI primitives')
 assert.match(commandConsole, /import \{ Badge, Button, IconButton, StatusChip \} from '\.\.\/ui'/, 'Command Console controls and runtime chips should use local UI primitives')

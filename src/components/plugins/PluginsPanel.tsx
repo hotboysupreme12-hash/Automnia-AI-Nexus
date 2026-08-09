@@ -821,7 +821,7 @@ function PluginDiscoveryPanel({
 export function PluginsPanel() {
   const [plugins, setPlugins] = useState<PluginEntry[]>(() => pluginsPanelCache?.plugins || [])
   const [query, setQuery] = useState('')
-  const [filter, setFilter] = useState<PluginFilter>('all')
+  const [filter, setFilter] = useState<PluginFilter>('active')
   const [loading, setLoading] = useState(() => !pluginsPanelCache)
   const [error, setError] = useState('')
   const [notice, setNotice] = useState(() => (pluginsPanelCache ? responseNotice(pluginsPanelCache) : ''))
@@ -833,6 +833,7 @@ export function PluginsPanel() {
   const [busyPluginAction, setBusyPluginAction] = useState<{ id: string; action: PluginBusyAction } | null>(null)
   const [inspectState, setInspectState] = useState<PluginInspectState | null>(null)
   const [uninstallConfirmPlugin, setUninstallConfirmPlugin] = useState<PluginEntry | null>(null)
+  const [updateAllConfirm, setUpdateAllConfirm] = useState(false)
 
   const applyPayload = useCallback((payload: PluginApiPayload) => {
     if (Array.isArray(payload.plugins)) {
@@ -974,6 +975,7 @@ export function PluginsPanel() {
 
   const updateAllPlugins = useCallback(async () => {
     if (updatingAll) return
+    setUpdateAllConfirm(false)
     setUpdatingAll(true)
     setError('')
     setNotice('')
@@ -987,6 +989,17 @@ export function PluginsPanel() {
       setUpdatingAll(false)
     }
   }, [applyPayload, updatingAll])
+
+  const requestUpdateAllPlugins = useCallback(() => {
+    setError('')
+    setNotice('Review before updating all installed plugins.')
+    setUpdateAllConfirm(true)
+  }, [])
+
+  const keepCurrentPluginVersions = useCallback(() => {
+    setUpdateAllConfirm(false)
+    setNotice('Plugin updates cancelled.')
+  }, [])
 
   const inspectPlugin = useCallback(async (plugin: PluginEntry) => {
     setBusyPluginAction({ id: plugin.id, action: 'inspect' })
@@ -1111,7 +1124,7 @@ export function PluginsPanel() {
             <StatusChip label="Failed" value={stateSummary.failed} tone="error" className="dy-plugin-summary-chip rounded-full border border-rose-300/25 bg-rose-400/[0.07] px-2.5 py-1 text-[9px] font-semibold text-rose-100" data-tone="failed" />
             <StatusChip label="Disabled" value={stateSummary.disabled} tone="neutral" className="dy-plugin-summary-chip rounded-full border border-slate-500/25 bg-slate-500/[0.08] px-2.5 py-1 text-[9px] font-semibold text-slate-300" data-tone="disabled" />
             <Button
-              onClick={() => void updateAllPlugins()}
+              onClick={requestUpdateAllPlugins}
               disabled={updatingAll || loading}
               variant="primary"
               size="compact"
@@ -1155,13 +1168,30 @@ export function PluginsPanel() {
           />
         )}
 
+        {updateAllConfirm && (
+          <ActionStatusBanner
+            className="mt-3 text-[11px]"
+            rounded="md"
+            detailClassName="text-[10px] text-amber-100/65"
+            message="Update all installed plugins?"
+            detail="Downloads compatible plugin updates and restarts the embedded gateway. Finish active work before proceeding."
+            confirmLabel="Update all"
+            confirmBusyLabel="Updating all"
+            confirmAriaLabel="Update all installed plugins"
+            cancelAriaLabel="Keep current plugin versions"
+            busy={updatingAll}
+            onConfirm={() => void updateAllPlugins()}
+            onCancel={keepCurrentPluginVersions}
+          />
+        )}
+
         {statusMessage && (
           <div
             className={`mt-3 rounded-md border px-3 py-2 text-[11px] ${error ? 'border-rose-400/20 bg-rose-400/[0.06] text-rose-200' : 'border-cyan-300/15 bg-cyan-300/[0.04] text-cyan-100/80'}`}
             role={error ? 'alert' : 'status'}
             aria-live={error ? 'assertive' : 'polite'}
           >
-            <span className="block overflow-hidden text-ellipsis whitespace-nowrap">{statusMessage}</span>
+            <span className="block break-words leading-relaxed" title={statusMessage}>{statusMessage}</span>
           </div>
         )}
       </div>

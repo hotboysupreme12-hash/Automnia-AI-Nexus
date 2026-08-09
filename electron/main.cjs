@@ -1596,8 +1596,31 @@ async function performQuitCleanup() {
 
 function configureRendererPermissionPolicy(win) {
   const rendererSession = win.webContents.session
-  rendererSession.setPermissionCheckHandler(() => false)
-  rendererSession.setPermissionRequestHandler((_webContents, _permission, callback) => callback(false))
+  const isTrustedAudioCapture = (webContents, permission, requestingOrigin, details = {}) => {
+    if (webContents !== win.webContents || permission !== 'media') return false
+    const originValue = requestingOrigin || details.requestingUrl || details.securityOrigin || webContents.getURL?.() || ''
+    let trustedOrigin = false
+    try {
+      const parsed = new URL(originValue)
+      trustedOrigin = parsed.origin === controlCenterOrigin() || (isDev && parsed.origin === `http://localhost:${DEV_FRONTEND_PORT}`)
+    } catch {
+      trustedOrigin = false
+    }
+    if (!trustedOrigin) return false
+
+    const requestedMediaTypes = Array.isArray(details.mediaTypes) ? details.mediaTypes : []
+    if (requestedMediaTypes.length) {
+      return requestedMediaTypes.includes('audio') && requestedMediaTypes.every((mediaType) => mediaType === 'audio')
+    }
+    return !details.mediaType || details.mediaType === 'audio'
+  }
+
+  rendererSession.setPermissionCheckHandler((webContents, permission, requestingOrigin, details) => (
+    isTrustedAudioCapture(webContents, permission, requestingOrigin, details)
+  ))
+  rendererSession.setPermissionRequestHandler((webContents, permission, callback, details) => {
+    callback(isTrustedAudioCapture(webContents, permission, details?.requestingUrl, details))
+  })
   if (typeof rendererSession.setDevicePermissionHandler === 'function') {
     rendererSession.setDevicePermissionHandler(() => false)
   }

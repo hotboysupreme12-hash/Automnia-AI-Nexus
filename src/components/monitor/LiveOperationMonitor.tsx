@@ -11,10 +11,18 @@ import type { BadgeTone } from '../ui'
 
 const CONTROL_CENTER_LOGO_SRC = '/brand/automnia-ai-nexus-app-icon.png'
 const DOCTOR_PANEL_DISMISSED_RUN_KEY = 'dystopai-monitor-doctor-dismissed-run'
+const DOCTOR_SNAPSHOT_STALE_AFTER_MS = 24 * 60 * 60 * 1000
 
 function doctorRunDismissKey(run: DoctorRun | null): string {
   if (!run) return ''
   return [run.id, run.endedAt, run.startedAt].filter(Boolean).join(':')
+}
+
+function doctorSnapshotIsStale(run: DoctorRun | null): boolean {
+  const timestamp = run?.endedAt || run?.startedAt
+  if (!timestamp) return false
+  const completedAt = Date.parse(timestamp)
+  return Number.isFinite(completedAt) && Date.now() - completedAt > DOCTOR_SNAPSHOT_STALE_AFTER_MS
 }
 
 function readDismissedDoctorRunKey(): string {
@@ -401,7 +409,7 @@ function doctorFindingAction(finding: DoctorFinding): string {
   ].filter(Boolean).join(' | ')
 }
 
-function DoctorPanel({ run, error, persisted = false, onDismiss }: { run: DoctorRun | null; error: string; persisted?: boolean; onDismiss?: () => void }) {
+function DoctorPanel({ run, error, persisted = false, stale = false, onDismiss }: { run: DoctorRun | null; error: string; persisted?: boolean; stale?: boolean; onDismiss?: () => void }) {
   if (!run && !error) return null
   const checks = run?.checks || []
   const title = persisted && run?.endedAt
@@ -425,10 +433,13 @@ function DoctorPanel({ run, error, persisted = false, onDismiss }: { run: Doctor
               {persisted && run?.summary && (
                 <p className="mt-0.5 truncate text-[12px] text-slate-400" title={run.summary}>{run.summary}</p>
               )}
+              {stale && (
+                <p className="mt-1 text-[11px] text-amber-200/85">This Doctor snapshot is over 24 hours old. Run Doctor to refresh runtime state.</p>
+              )}
             </div>
             <div className="flex shrink-0 items-center gap-2">
-              <span className={`rounded-full border px-2.5 py-1 text-[11px] font-semibold uppercase tracking-[0.10em] ${run?.ok ? 'border-emerald-400/20 bg-emerald-400/[0.06] text-emerald-200' : 'border-rose-400/20 bg-rose-400/[0.06] text-rose-200'}`}>
-                {run?.ok ? 'doctor ok' : 'action needed'}
+              <span className={`rounded-full border px-2.5 py-1 text-[11px] font-semibold uppercase tracking-[0.10em] ${stale ? 'border-amber-400/20 bg-amber-400/[0.06] text-amber-200' : run?.ok ? 'border-emerald-400/20 bg-emerald-400/[0.06] text-emerald-200' : 'border-rose-400/20 bg-rose-400/[0.06] text-rose-200'}`}>
+                {stale ? 'refresh recommended' : run?.ok ? 'doctor ok' : 'action needed'}
               </span>
               <DoctorDismissButton onDismiss={onDismiss} />
             </div>
@@ -1272,6 +1283,7 @@ export function LiveOperationMonitor() {
   const doctorPanelDismissed = !doctorError && Boolean(rawDisplayedDoctorRunKey) && rawDisplayedDoctorRunKey === dismissedDoctorRunKey
   const displayedDoctorRun = doctorPanelDismissed ? null : rawDisplayedDoctorRun
   const displayedDoctorRunPersisted = !doctorRun && !doctorError && Boolean(persistedDoctorRun) && !doctorPanelDismissed
+  const displayedDoctorRunStale = displayedDoctorRunPersisted && doctorSnapshotIsStale(displayedDoctorRun)
   const activity = useMemo(() => {
     const items = [
       ...agentResponses.slice(0, 18).map((entry) => ({ item: makeResponseActivity(entry), timestampMs: Date.parse(entry.timestamp) })),
@@ -1344,7 +1356,7 @@ export function LiveOperationMonitor() {
 
   return (
     <section data-dui-panel="monitor" className="dy-monitor-shell overflow-hidden rounded-none border border-white/[0.06] bg-[linear-gradient(180deg,#101112,#080909)] shadow-2xl shadow-black/40">
-      <DoctorPanel run={displayedDoctorRun} error={doctorError} persisted={displayedDoctorRunPersisted} onDismiss={dismissDoctorPanel} />
+      <DoctorPanel run={displayedDoctorRun} error={doctorError} persisted={displayedDoctorRunPersisted} stale={displayedDoctorRunStale} onDismiss={dismissDoctorPanel} />
       {gatewayRestartError && (
         <div className="border-b border-white/[0.04] bg-black/20 px-5 py-3">
           <div

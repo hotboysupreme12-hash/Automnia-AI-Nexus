@@ -1,0 +1,287 @@
+/* Agent card themes ----------------------------------------------------------
+   This file is intentionally last in the theme cascade. Earlier compatibility
+   passes reduce card overlays to near-invisible rarity tints; the registry's
+   theme selector now owns the complete card surface and pattern here. */
+
+html.dui-pro-overhaul.dui-cohesive-ui [data-agent-card-theme] {
+  --selected-card-accent: #d6dee5;
+  --selected-card-accent-rgb: 214, 222, 229;
+  --selected-card-top: #20272f;
+  --selected-card-mid: #13191f;
+  --selected-card-bottom: #080b0e;
+  --selected-card-panel: rgba(12, 16, 20, .86);
+  --selected-card-panel-hover: rgba(23, 29, 35, .94);
+  --selected-card-overlay: url("/card-overlays/graphite-glass.png");
+  --selected-card-overlay-opacity: .42;
+  --selected-card-overlay-filter: saturate(.82) contrast(1.14) brightness(.94);
+  --selected-card-pattern:
+    linear-gradient(112deg, transparent 0 15%, rgba(255, 255, 255, .055) 15.2% 15.7%, transparent 15.9% 72%, rgba(255, 255, 255, .035) 72.2% 72.5%, transparent 72.7%),
+    radial-gradient(circle at 14% 4%, rgba(214, 222, 229, .18), transparent 35%);
+  --selected-card-pattern-size: cover;
+}
+
+html.dui-pro-overhaul.dui-cohesive-ui [data-agent-card-theme="original"] {
+  --selected-card-accent: #e8ad4f;
+  --selected-card-accent-rgb: 232, 173, 79;
+  --selected-card-top: #291b09;
+  --selected-card-mid: #171006;
+  --selected-card-bottom: #080604;
+  --selected-card-panel: rgba(23, 15, 5, .86);
+  --selected-card-panel-hover: rgba(38, 25, 8, .94);
+  --selected-card-overlay: url("/card-overlays/original.png");
+  --selected-card-overlay-opacity: .52;
+  --selected-card-overlay-filter: saturate(1.14) contrast(1.18) brightness(.98);
+  --selected-card-pattern:
+    linear-gradient(135deg, transparent 0 18%, rgba(232, 173, 79, .15) 18.2% 18.8%, transparent 19% 62%, rgba(232, 173, 79, .08) 62.2% 62.7%, transparent 63%),
+    radial-gradient(circle at 82% 15%, rgba(232, 173, 79, .20), transparent 28%);
+}
+
+html.dui-pro-overhaul.dui-cohesive-ui [data-agent-card-theme="graphite-glass"] {
+  --selected-card-accent: #d6dee5;
+  --selected-card-accent-rgb: 214, 222, 229;
+  --selected-card-top: #20272f;
+  --selected-card-mid: #13191f;
+  --selected-card-bottom: #080b0e;
+  --selected-card-panel: rgba(12, 16, 20, .86);
+  --selected-card-panel-hover: rgba(23, 29, 35, .94);
+  --selected-card-overlay: url("/card-overlays/graphite-glass.png");
+  --selected-card-overlay-opacity: .42;
+  --selected-card-overlay-filter: saturate(.82) contrast(1.14) brightness(.94);
+  --selected-card-pattern:
+    linear-gradient(112deg, transparent 0 15%, rgba(255, 255, 255, .055) 15.2% 15.7%, transparent 15.9% 72%, rgba(255, 255, 255, .035) 72.2% 72.5%, transparent 72.7%),
+    radial-gradient(circle at 14% 4%, rgba(214, 222, 229, .18), transparent 35%);
+}
+
+html.dui-pro-overhaul.dui-cohesive-ui [data-agent-card-theme="anime-sky"] {
+  --selected-card-accent: #ffb7d1;
+  --selected-card-accent-rgb: 255, 183, 209;
+  --selected-card-top: #264b71;
+  --selected-card-mid: #192c4d;
+  --selected-card-bottom: #0d1325;
+  --selected-card-panel: rgba(18, 31, 54, .84);
+  --selected-card-panel-hover: rgba(31, 50, 78, .94);
+  --selected-card-overlay: url("/card-overlays/anime-sky.png");
+  --selected-card-overlay-opacity: .58;
+  --selected-card-overlay-filter: saturate(1.20) contrast(1.02) brightness(1.06);
+  --selected-card-pattern:
+    radial-gradient(ellipse 52% 25% at 18% 20%, rgba(255, 255, 255, .16), transparent 70%),
+    radial-gradient(ellipse 48% 24% at 82% 38%, rgba(255, 183, 209, .14), transparent 72%),
+    linear-gradient(180deg, rgba(108, 190, 255, .14), transparent 55%);
+}
+
+html.dui-pro-overhaul.dui-cohesive-ui [data-agent-card-theme="neon-city"] {
+  --selected-card-accent: #ff56dc;
+  --selected-card-accent-rgb: 255, 86, 220;
+  --selected-card-top: #291046;
+  --selected-card-mid: #170b2c;
+  --selected-card-bottom: #080612;
+  --selected-card-panel: rgba(22, 8, 37, .88);
+  --selected-card-panel-hover: rgba(40, 13, 58, .95);
+  --selected-card-overlay: url("/card-overlays/neon-city.png");
+  --selected-card-overlay-opacity: .60;
+  --selected-card-overlay-filter: saturate(1.38) contrast(1.22) brightness(.98);
+  --selected-card-pattern:
+    repeating-linear-gradient(90deg, transparent 0 21px, rgba(61, 218, 255, .10) 22px, transparent 23px 38px),
+    linear-gradient(160deg, rgba(255, 44, 201, .20), transparent 38%, rgba(36, 197, 255, .13) 72%, transparent);
+  --selected-card-pattern-size: 100% 100%;
+}
+
+html.dui-pro-overhaul.dui-cohesive-ui [data-agent-card-theme="cloud-horizon"] {
+  --selected-card-accent: #ffd3ad;
+  --selected-card-accent-rgb: 255, 211, 173;
+  --selected-card-top: #465365;
+  --selected-card-mid: #292d36;
+  --selected-card-bottom: #101116;
+  --selected-card-panel: rgba(32, 32, 36, .86);
+  --selected-card-panel-hover: rgba(49, 48, 51, .94);
+  --selected-card-overlay: url("/card-overlays/cloud-horizon.png");
+  --selected-card-overlay-opacity: .55;
+  --selected-card-overlay-filter: saturate(.92) contrast(1.08) brightness(1.03);
+  --selected-card-pattern:
+    linear-gradient(180deg, transparent 0 42%, rgba(255, 211, 173, .18) 42.4% 43.2%, transparent 43.6%),
+    radial-gradient(ellipse 60% 24% at 50% 42%, rgba(255, 211, 173, .15), transparent 72%);
+}
+
+html.dui-pro-overhaul.dui-cohesive-ui [data-agent-card-theme="blueprint-grid"] {
+  --selected-card-accent: #55dcff;
+  --selected-card-accent-rgb: 85, 220, 255;
+  --selected-card-top: #0b3b5b;
+  --selected-card-mid: #08253b;
+  --selected-card-bottom: #04101b;
+  --selected-card-panel: rgba(5, 29, 46, .88);
+  --selected-card-panel-hover: rgba(8, 45, 67, .95);
+  --selected-card-overlay: url("/card-overlays/blueprint-grid.png");
+  --selected-card-overlay-opacity: .64;
+  --selected-card-overlay-filter: saturate(1.18) contrast(1.28) brightness(1.02);
+  --selected-card-pattern:
+    linear-gradient(rgba(85, 220, 255, .15) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(85, 220, 255, .15) 1px, transparent 1px),
+    linear-gradient(rgba(85, 220, 255, .055) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(85, 220, 255, .055) 1px, transparent 1px);
+  --selected-card-pattern-size: 48px 48px, 48px 48px, 12px 12px, 12px 12px;
+}
+
+html.dui-pro-overhaul.dui-cohesive-ui [data-agent-card-theme="aurora-mesh"] {
+  --selected-card-accent: #62f1bd;
+  --selected-card-accent-rgb: 98, 241, 189;
+  --selected-card-top: #103c38;
+  --selected-card-mid: #0c2428;
+  --selected-card-bottom: #050d14;
+  --selected-card-panel: rgba(7, 29, 29, .86);
+  --selected-card-panel-hover: rgba(11, 45, 42, .94);
+  --selected-card-overlay: url("/card-overlays/aurora-mesh.png");
+  --selected-card-overlay-opacity: .58;
+  --selected-card-overlay-filter: saturate(1.28) contrast(1.12) brightness(1.02);
+  --selected-card-pattern:
+    radial-gradient(ellipse 70% 46% at 15% 5%, rgba(79, 255, 186, .24), transparent 65%),
+    radial-gradient(ellipse 66% 45% at 92% 78%, rgba(131, 98, 255, .20), transparent 68%);
+}
+
+html.dui-pro-overhaul.dui-cohesive-ui [data-agent-card-theme="tactical-map"] {
+  --selected-card-accent: #d6c47b;
+  --selected-card-accent-rgb: 214, 196, 123;
+  --selected-card-top: #303027;
+  --selected-card-mid: #1e211a;
+  --selected-card-bottom: #0b0d09;
+  --selected-card-panel: rgba(25, 27, 20, .88);
+  --selected-card-panel-hover: rgba(40, 43, 31, .95);
+  --selected-card-overlay: url("/card-overlays/tactical-map.png");
+  --selected-card-overlay-opacity: .60;
+  --selected-card-overlay-filter: sepia(.14) saturate(1.06) contrast(1.24) brightness(.96);
+  --selected-card-pattern:
+    repeating-radial-gradient(circle at 72% 28%, transparent 0 24px, rgba(214, 196, 123, .11) 25px 26px, transparent 27px 48px),
+    linear-gradient(35deg, transparent 48.8%, rgba(214, 196, 123, .10) 49% 51%, transparent 51.2%);
+}
+
+html.dui-pro-overhaul.dui-cohesive-ui [data-agent-card-theme="silver-lines"] {
+  --selected-card-accent: #edf5fa;
+  --selected-card-accent-rgb: 237, 245, 250;
+  --selected-card-top: #313943;
+  --selected-card-mid: #1b2229;
+  --selected-card-bottom: #090d11;
+  --selected-card-panel: rgba(20, 25, 30, .88);
+  --selected-card-panel-hover: rgba(33, 40, 47, .95);
+  --selected-card-overlay: url("/card-overlays/silver-lines.png");
+  --selected-card-overlay-opacity: .54;
+  --selected-card-overlay-filter: grayscale(.12) saturate(.72) contrast(1.18) brightness(1.08);
+  --selected-card-pattern:
+    repeating-linear-gradient(168deg, transparent 0 15px, rgba(237, 245, 250, .09) 16px, transparent 17px 31px),
+    linear-gradient(105deg, transparent, rgba(255, 255, 255, .10) 48%, transparent 52%);
+}
+
+html.dui-pro-overhaul.dui-cohesive-ui [data-agent-card-theme="studio-noir"] {
+  --selected-card-accent: #efb45f;
+  --selected-card-accent-rgb: 239, 180, 95;
+  --selected-card-top: #2c1b10;
+  --selected-card-mid: #190f0b;
+  --selected-card-bottom: #070505;
+  --selected-card-panel: rgba(24, 13, 9, .90);
+  --selected-card-panel-hover: rgba(40, 22, 13, .96);
+  --selected-card-overlay: url("/card-overlays/studio-noir.png");
+  --selected-card-overlay-opacity: .58;
+  --selected-card-overlay-filter: sepia(.16) saturate(1.16) contrast(1.20) brightness(.94);
+  --selected-card-pattern:
+    radial-gradient(ellipse 56% 78% at 18% 0%, rgba(255, 201, 125, .24), transparent 62%),
+    linear-gradient(118deg, rgba(239, 180, 95, .10), transparent 28% 74%, rgba(0, 0, 0, .34));
+}
+
+/* All named themes other than rarity own a unified palette and layout. */
+html.dui-pro-overhaul.dui-cohesive-ui [data-agent-card-theme]:not([data-agent-card-theme="rarity"]) .agent-card-shell.agent-card-pro[data-agent-card="true"] {
+  --agent-accent: var(--selected-card-accent) !important;
+  --agent-accent-rgb: var(--selected-card-accent-rgb) !important;
+  --agent-card-theme-accent: var(--selected-card-accent) !important;
+  --agent-card-theme-bg-top: var(--selected-card-top) !important;
+  --agent-card-theme-bg-mid: var(--selected-card-mid) !important;
+  --agent-card-theme-bg-bottom: var(--selected-card-bottom) !important;
+  --agent-card-theme-panel: var(--selected-card-panel) !important;
+  --agent-card-theme-panel-hover: var(--selected-card-panel-hover) !important;
+  --agent-card-card-overlay-image: var(--selected-card-overlay) !important;
+  --agent-card-card-overlay-opacity: var(--selected-card-overlay-opacity) !important;
+  --agent-card-card-overlay-filter: var(--selected-card-overlay-filter) !important;
+  border-color: color-mix(in srgb, var(--selected-card-accent) 52%, rgba(255, 255, 255, .16)) !important;
+  background-color: var(--selected-card-mid) !important;
+  background-image:
+    var(--selected-card-pattern),
+    radial-gradient(circle at 14% 0%, rgba(var(--selected-card-accent-rgb), .24), transparent 38%),
+    linear-gradient(145deg, var(--selected-card-top), var(--selected-card-mid) 57%, var(--selected-card-bottom)) !important;
+  background-position: center !important;
+  background-size: var(--selected-card-pattern-size), cover, cover !important;
+  box-shadow:
+    0 20px 50px rgba(0, 0, 0, .44),
+    0 0 34px -20px rgba(var(--selected-card-accent-rgb), .56),
+    inset 0 1px 0 rgba(255, 255, 255, .07) !important;
+}
+
+html.dui-pro-overhaul.dui-cohesive-ui [data-agent-card-theme]:not([data-agent-card-theme="rarity"]) .agent-card-shell.agent-card-pro[data-agent-card="true"]::before {
+  content: "" !important;
+  display: block !important;
+  position: absolute !important;
+  inset: 0 !important;
+  z-index: 1 !important;
+  pointer-events: none !important;
+  background-image:
+    linear-gradient(180deg, rgba(255, 255, 255, .035), transparent 28%, rgba(0, 0, 0, .24)),
+    var(--selected-card-overlay) !important;
+  background-position: center !important;
+  background-size: cover !important;
+  background-blend-mode: normal !important;
+  mix-blend-mode: normal !important;
+  opacity: var(--selected-card-overlay-opacity) !important;
+  filter: var(--selected-card-overlay-filter) !important;
+}
+
+html.dui-pro-overhaul.dui-cohesive-ui [data-agent-card-theme]:not([data-agent-card-theme="rarity"]) [data-agent-card] .agent-card-rarity-wash {
+  opacity: 0 !important;
+}
+
+html.dui-pro-overhaul.dui-cohesive-ui [data-agent-card-theme]:not([data-agent-card-theme="rarity"]) [data-agent-card] .agent-card-grid {
+  display: block !important;
+  background-image: var(--selected-card-pattern) !important;
+  background-position: center !important;
+  background-size: var(--selected-card-pattern-size) !important;
+  mix-blend-mode: screen !important;
+  opacity: .48 !important;
+}
+
+html.dui-pro-overhaul.dui-cohesive-ui [data-agent-card-theme]:not([data-agent-card-theme="rarity"]) [data-agent-card] .agent-card-accent-line {
+  display: block !important;
+  background: linear-gradient(90deg, transparent, var(--selected-card-accent) 18%, rgba(255, 255, 255, .92) 48%, var(--selected-card-accent) 74%, transparent) !important;
+  box-shadow: 0 0 18px rgba(var(--selected-card-accent-rgb), .34) !important;
+}
+
+html.dui-pro-overhaul.dui-cohesive-ui [data-agent-card-theme]:not([data-agent-card-theme="rarity"]) .agent-card-pro .agent-card-media::before {
+  background:
+    linear-gradient(135deg, rgba(var(--selected-card-accent-rgb), .12), transparent 36%),
+    linear-gradient(180deg, rgba(0, 0, 0, .08), transparent 34%, rgba(0, 0, 0, .42)) !important;
+  mix-blend-mode: normal !important;
+  opacity: 1 !important;
+  filter: none !important;
+}
+
+html.dui-pro-overhaul.dui-cohesive-ui [data-agent-card-theme]:not([data-agent-card-theme="rarity"]) .agent-card-pro :is(
+  .agent-card-level-pill,
+  .agent-card-stat-matrix > div,
+  .agent-card-tags span,
+  .agent-card-action-primary,
+  .agent-card-action-secondary
+) {
+  border-color: rgba(var(--selected-card-accent-rgb), .25) !important;
+  background:
+    linear-gradient(180deg, rgba(var(--selected-card-accent-rgb), .10), rgba(255, 255, 255, .008)),
+    var(--selected-card-panel) !important;
+}
+
+html.dui-pro-overhaul.dui-cohesive-ui [data-agent-card-theme]:not([data-agent-card-theme="rarity"]) .agent-card-pro .agent-card-class {
+  color: color-mix(in srgb, var(--selected-card-accent) 68%, #ffffff) !important;
+}
+
+html.dui-pro-overhaul.dui-cohesive-ui [data-agent-card-theme]:not([data-agent-card-theme="rarity"]) [data-agent-overlay-control] {
+  border-color: rgba(var(--selected-card-accent-rgb), .45) !important;
+  box-shadow: inset 2px 0 0 var(--selected-card-accent) !important;
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  html.dui-pro-overhaul.dui-cohesive-ui [data-agent-card-theme]:not([data-agent-card-theme="rarity"]) .agent-card-shell.agent-card-pro[data-agent-card="true"] {
+    transition: border-color 180ms ease, background 220ms ease, box-shadow 220ms ease, transform 180ms ease !important;
+  }
+}

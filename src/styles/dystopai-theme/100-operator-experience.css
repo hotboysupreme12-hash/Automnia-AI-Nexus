@@ -751,6 +751,19 @@ html.dui-pro-overhaul.dui-cohesive-ui .dy-command-upload-error {
   border-radius: 9px !important;
 }
 
+html.dui-pro-overhaul .dy-command-voice-error,
+html.dui-pro-overhaul.dui-cohesive-ui .dy-command-voice-error {
+  margin: 0 12px 9px;
+  padding: 8px 10px;
+  border: 1px solid rgb(240 141 145 / .28);
+  border-radius: 9px;
+  background: rgb(240 141 145 / .075);
+  color: #ffd9dc;
+  font-size: 11px;
+  font-weight: 630;
+  line-height: 1.42;
+}
+
 html.dui-pro-overhaul .dy-command-composer,
 html.dui-pro-overhaul.dui-cohesive-ui .dy-command-composer {
   padding: 10px 12px 12px !important;
@@ -780,12 +793,19 @@ html.dui-pro-overhaul.dui-cohesive-ui .dy-command-composer__field:focus-within {
   box-shadow: none !important;
 }
 
+html.dui-pro-overhaul .dy-command-console textarea.dy-command-textarea,
+html.dui-pro-overhaul.dui-cohesive-ui .dy-command-console textarea.dy-command-textarea,
+html.dui-pro-overhaul textarea.dy-command-textarea,
+html.dui-pro-overhaul.dui-cohesive-ui textarea.dy-command-textarea,
 html.dui-pro-overhaul .dy-command-textarea,
 html.dui-pro-overhaul.dui-cohesive-ui .dy-command-textarea {
   min-height: 40px !important;
   padding: 10px 12px !important;
   border: 0 !important;
+  border-radius: 0 !important;
   background: transparent !important;
+  background-color: transparent !important;
+  background-image: none !important;
   box-shadow: none !important;
   color: var(--operator-text) !important;
   font-size: 12px !important;
@@ -797,6 +817,198 @@ html.dui-pro-overhaul.dui-cohesive-ui .dy-command-icon-button {
   width: 38px !important;
   height: 38px !important;
   border-radius: 10px !important;
+}
+
+html.dui-pro-overhaul .dy-command-composer__actions,
+html.dui-pro-overhaul.dui-cohesive-ui .dy-command-composer__actions {
+  display: flex;
+  flex: 0 0 auto;
+  align-items: center;
+  gap: 6px;
+}
+
+html.dui-pro-overhaul .dy-command-voice,
+html.dui-pro-overhaul.dui-cohesive-ui .dy-command-voice {
+  width: 40px !important;
+  height: 40px !important;
+  min-width: 40px !important;
+  min-height: 40px !important;
+  border: 1px solid rgb(151 202 234 / .16) !important;
+  border-radius: 11px !important;
+  background: rgb(255 255 255 / .035) !important;
+  color: #bdcbd5 !important;
+  box-shadow: none !important;
+}
+
+html.dui-pro-overhaul .dy-command-voice:hover:not(:disabled),
+html.dui-pro-overhaul.dui-cohesive-ui .dy-command-voice:hover:not(:disabled) {
+  border-color: rgb(151 202 234 / .34) !important;
+  background: rgb(102 174 231 / .105) !important;
+  color: #edf8ff !important;
+}
+
+html.dui-pro-overhaul .dy-command-voice[data-phase="recording"],
+html.dui-pro-overhaul.dui-cohesive-ui .dy-command-voice[data-phase="recording"] {
+  border-color: rgb(255 142 151 / .72) !important;
+  background: rgb(190 57 70 / .88) !important;
+  color: #fff !important;
+  box-shadow: 0 5px 16px rgb(139 31 43 / .26) !important;
+  animation: dy-voice-recording-pulse 1.6s ease-in-out infinite;
+}
+
+html.dui-pro-overhaul .dy-command-voice-stop,
+html.dui-pro-overhaul.dui-cohesive-ui .dy-command-voice-stop {
+  width: 20px;
+  height: 20px;
+}
+
+html.dui-pro-overhaul .dy-command-voice-waveform,
+html.dui-pro-overhaul.dui-cohesive-ui .dy-command-voice-waveform {
+  display: inline-flex;
+  width: 30px;
+  height: 20px;
+  align-items: center;
+  justify-content: center;
+  gap: 2px;
+}
+
+html.dui-pro-overhaul .dy-command-voice-waveform > i,
+html.dui-pro-overhaul.dui-cohesive-ui .dy-command-voice-waveform > i {
+  display: block;
+  width: 2px;
+  height: 4px;
+  border-radius: 999px;
+  background: currentColor;
+  box-shadow: 0 0 7px rgb(120 222 242 / .24);
+  opacity: .58;
+  transition: height 70ms linear, opacity 70ms linear;
+}
+
+html[data-dui-motion="reduced"] .dy-command-voice-waveform > i {
+  transition: none;
+}
+
+html.dui-pro-overhaul .dy-command-voice-status,
+html.dui-pro-overhaul.dui-cohesive-ui .dy-command-voice-status {
+  display: inline-flex;
+  min-width: 0;
+  max-width: 190px;
+  align-items: center;
+  gap: 7px;
+  color: #94aab8;
+  font-size: 10px;
+  font-weight: 650;
+  line-height: 1;
+}
+
+html.dui-pro-overhaul .dy-command-voice-status > span,
+html.dui-pro-overhaul.dui-cohesive-ui .dy-command-voice-status > span {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+html.dui-pro-overhaul .dy-command-voice-status[data-phase="recording"],
+html.dui-pro-overhaul.dui-cohesive-ui .dy-command-voice-status[data-phase="recording"] {
+  color: #a9dbe7;
+}
+
+html.dui-pro-overhaul .dy-command-voice-status__label,
+html.dui-pro-overhaul.dui-cohesive-ui .dy-command-voice-status__label {
+  flex: 0 0 auto;
+  overflow: visible !important;
+  color: #d6edf3;
+  text-overflow: clip !important;
+}
+
+html.dui-pro-overhaul .dy-command-voice-status > time,
+html.dui-pro-overhaul.dui-cohesive-ui .dy-command-voice-status > time {
+  flex: 0 0 auto;
+  min-width: 31px;
+  color: #e5f1f5;
+  font-family: var(--font-mono, ui-monospace, monospace);
+  font-size: 10px;
+  font-variant-numeric: tabular-nums;
+}
+
+@keyframes dy-voice-recording-pulse {
+  0%, 100% { box-shadow: 0 5px 16px rgb(139 31 43 / .22); }
+  50% { box-shadow: 0 5px 18px rgb(139 31 43 / .36), 0 0 0 3px rgb(255 126 136 / .10); }
+}
+
+html.dui-pro-overhaul [data-dui-panel="settings"] .dui-settings-voice-mode,
+html.dui-pro-overhaul.dui-cohesive-ui [data-dui-panel="settings"] .dui-settings-voice-mode {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 7px;
+}
+
+html.dui-pro-overhaul [data-dui-panel="settings"] .dui-settings-voice-mode > button,
+html.dui-pro-overhaul.dui-cohesive-ui [data-dui-panel="settings"] .dui-settings-voice-mode > button {
+  display: grid;
+  grid-template-columns: 26px minmax(0, 1fr);
+  min-height: 48px;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 9px;
+  border: 1px solid rgb(173 225 216 / .12);
+  border-radius: 9px;
+  background: rgb(255 255 255 / .025);
+  color: #a8b9b5;
+  text-align: left;
+  transition: border-color 140ms ease, background-color 140ms ease, color 140ms ease;
+}
+
+html.dui-pro-overhaul [data-dui-panel="settings"] .dui-settings-voice-mode > button:hover,
+html.dui-pro-overhaul.dui-cohesive-ui [data-dui-panel="settings"] .dui-settings-voice-mode > button:hover {
+  border-color: rgb(96 217 203 / .30);
+  background: rgb(96 217 203 / .055);
+  color: #e0f4ef;
+}
+
+html.dui-pro-overhaul [data-dui-panel="settings"] .dui-settings-voice-mode > button[aria-pressed="true"],
+html.dui-pro-overhaul.dui-cohesive-ui [data-dui-panel="settings"] .dui-settings-voice-mode > button[aria-pressed="true"] {
+  border-color: rgb(96 217 203 / .42);
+  background: linear-gradient(145deg, rgb(96 217 203 / .14), rgb(96 217 203 / .045));
+  color: #e4fbf5;
+  box-shadow: inset 0 0 0 1px rgb(96 217 203 / .08);
+}
+
+html.dui-pro-overhaul [data-dui-panel="settings"] .dui-settings-voice-mode svg,
+html.dui-pro-overhaul.dui-cohesive-ui [data-dui-panel="settings"] .dui-settings-voice-mode svg {
+  width: 20px;
+  height: 20px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.7;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+html.dui-pro-overhaul [data-dui-panel="settings"] .dui-settings-voice-mode span,
+html.dui-pro-overhaul.dui-cohesive-ui [data-dui-panel="settings"] .dui-settings-voice-mode span {
+  min-width: 0;
+}
+
+html.dui-pro-overhaul [data-dui-panel="settings"] .dui-settings-voice-mode strong,
+html.dui-pro-overhaul.dui-cohesive-ui [data-dui-panel="settings"] .dui-settings-voice-mode strong {
+  display: block;
+  color: inherit;
+  font-size: 11px;
+  font-weight: 780;
+}
+
+html.dui-pro-overhaul [data-dui-panel="settings"] .dui-settings-voice-mode small,
+html.dui-pro-overhaul.dui-cohesive-ui [data-dui-panel="settings"] .dui-settings-voice-mode small {
+  display: block;
+  margin-top: 2px;
+  overflow: hidden;
+  color: #718985;
+  font-size: 9px;
+  line-height: 1;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 html.dui-pro-overhaul .dy-command-send,
@@ -2117,57 +2329,49 @@ html.dui-pro-overhaul.dui-cohesive-ui [data-dui-modal="recruit-agent"][data-mark
   grid-template-rows: auto auto auto minmax(0, 1fr) !important;
 }
 
-@media (max-width: 760px) {
-  html.dui-pro-overhaul [data-dui-modal="recruit-agent"][data-markdown-editor="open"] .dui-recruit-file-toolbar,
-  html.dui-pro-overhaul.dui-cohesive-ui [data-dui-modal="recruit-agent"][data-markdown-editor="open"] .dui-recruit-file-toolbar {
-    grid-template-columns: minmax(0, 1fr) !important;
-  }
-
-  html.dui-pro-overhaul [data-dui-modal="recruit-agent"][data-markdown-editor="open"] .dui-recruit-file-tabs,
-  html.dui-pro-overhaul.dui-cohesive-ui [data-dui-modal="recruit-agent"][data-markdown-editor="open"] .dui-recruit-file-tabs {
-    min-width: 0 !important;
-  }
+/* Recruit Markdown legibility and file-tab alignment ---------------------------
+   The editor uses a transparent textarea over a highlighted preview. Global
+   field hover/focus colors must not turn that textarea opaque, or the preview
+   disappears while the user is typing. File tabs already render a real document
+   icon, so retire the older decorative dot that became a fourth grid child. */
+html.dui-pro-overhaul [data-dui-modal="recruit-agent"] #recruit-markdown-editor-panel textarea.dui-recruit-code-input,
+html.dui-pro-overhaul [data-dui-modal="recruit-agent"] #recruit-markdown-editor-panel textarea.dui-recruit-code-input:hover:not(:disabled),
+html.dui-pro-overhaul [data-dui-modal="recruit-agent"] #recruit-markdown-editor-panel textarea.dui-recruit-code-input:focus,
+html.dui-pro-overhaul [data-dui-modal="recruit-agent"] #recruit-markdown-editor-panel textarea.dui-recruit-code-input:focus-visible,
+html.dui-pro-overhaul.dui-cohesive-ui [data-dui-modal="recruit-agent"] #recruit-markdown-editor-panel textarea.dui-recruit-code-input,
+html.dui-pro-overhaul.dui-cohesive-ui [data-dui-modal="recruit-agent"] #recruit-markdown-editor-panel textarea.dui-recruit-code-input:hover:not(:disabled),
+html.dui-pro-overhaul.dui-cohesive-ui [data-dui-modal="recruit-agent"] #recruit-markdown-editor-panel textarea.dui-recruit-code-input:focus,
+html.dui-pro-overhaul.dui-cohesive-ui [data-dui-modal="recruit-agent"] #recruit-markdown-editor-panel textarea.dui-recruit-code-input:focus-visible {
+  border: 0 !important;
+  outline: 0 !important;
+  background: transparent !important;
+  background-color: transparent !important;
+  background-image: none !important;
+  box-shadow: none !important;
+  color: transparent !important;
+  -webkit-text-fill-color: transparent !important;
 }
 
-/* Registry scrolling and empty results retain context during deep inventories. */
-
-html.dui-pro-overhaul [data-agent-registry-scroll],
-html.dui-pro-overhaul.dui-cohesive-ui [data-agent-registry-scroll] {
-  padding: 4px !important;
-  border-radius: 12px;
-  scrollbar-color: rgb(102 174 231 / .45) transparent;
+html.dui-pro-overhaul [data-dui-modal="recruit-agent"] #recruit-markdown-editor-panel.dui-recruit-code-editor.is-plain-text textarea.dui-recruit-code-input,
+html.dui-pro-overhaul [data-dui-modal="recruit-agent"] #recruit-markdown-editor-panel.dui-recruit-code-editor.is-plain-text textarea.dui-recruit-code-input:hover:not(:disabled),
+html.dui-pro-overhaul [data-dui-modal="recruit-agent"] #recruit-markdown-editor-panel.dui-recruit-code-editor.is-plain-text textarea.dui-recruit-code-input:focus,
+html.dui-pro-overhaul [data-dui-modal="recruit-agent"] #recruit-markdown-editor-panel.dui-recruit-code-editor.is-plain-text textarea.dui-recruit-code-input:focus-visible,
+html.dui-pro-overhaul.dui-cohesive-ui [data-dui-modal="recruit-agent"] #recruit-markdown-editor-panel.dui-recruit-code-editor.is-plain-text textarea.dui-recruit-code-input,
+html.dui-pro-overhaul.dui-cohesive-ui [data-dui-modal="recruit-agent"] #recruit-markdown-editor-panel.dui-recruit-code-editor.is-plain-text textarea.dui-recruit-code-input:hover:not(:disabled),
+html.dui-pro-overhaul.dui-cohesive-ui [data-dui-modal="recruit-agent"] #recruit-markdown-editor-panel.dui-recruit-code-editor.is-plain-text textarea.dui-recruit-code-input:focus,
+html.dui-pro-overhaul.dui-cohesive-ui [data-dui-modal="recruit-agent"] #recruit-markdown-editor-panel.dui-recruit-code-editor.is-plain-text textarea.dui-recruit-code-input:focus-visible {
+  color: #e8eef0 !important;
+  -webkit-text-fill-color: #e8eef0 !important;
 }
 
-html.dui-pro-overhaul [data-agent-registry-scroll] > [data-agent-grid-mode],
-html.dui-pro-overhaul.dui-cohesive-ui [data-agent-registry-scroll] > [data-agent-grid-mode] {
-  align-content: start;
+html.dui-pro-overhaul [data-dui-modal="recruit-agent"] .dui-recruit-code-preview,
+html.dui-pro-overhaul.dui-cohesive-ui [data-dui-modal="recruit-agent"] .dui-recruit-code-preview {
+  color: #e2e9eb !important;
 }
 
-html.dui-pro-overhaul [data-agent-registry-scroll] > [data-agent-grid-mode] > div,
-html.dui-pro-overhaul.dui-cohesive-ui [data-agent-registry-scroll] > [data-agent-grid-mode] > div {
-  min-width: 0;
-}
-
-html.dui-pro-overhaul [data-agent-registry-scroll] + *,
-html.dui-pro-overhaul.dui-cohesive-ui [data-agent-registry-scroll] + * {
-  margin-top: 10px;
-}
-
-html.dui-pro-overhaul [data-agent-filter-toolbar] ~ .grid.h-32,
-html.dui-pro-overhaul.dui-cohesive-ui [data-agent-filter-toolbar] ~ .grid.h-32 {
-  min-height: 170px;
-  border-color: rgb(102 174 231 / .18) !important;
-  border-radius: 12px !important;
-  background: radial-gradient(circle at center, rgb(102 174 231 / .06), transparent 68%) !important;
-}
-
-html.dui-pro-overhaul [data-agent-filter-toolbar] ~ .grid.h-32 p,
-html.dui-pro-overhaul.dui-cohesive-ui [data-agent-filter-toolbar] ~ .grid.h-32 p {
-  color: var(--operator-muted) !important;
-  font-size: var(--dy-type-micro, 11px) !important;
-}
-
-/* Recruit editor input alignment and unclipped profile controls. */
+/* Recruit profile controls must retain enough inline space for readable values.
+   The previous compact three-column profile grid reduced the Class field and
+   its menu to roughly 80px, which clipped both field values and menu options. */
 @media (min-width: 1041px) {
   html.dui-pro-overhaul [data-dui-modal="recruit-agent"][data-markdown-editor="open"] .dui-recruit-layout,
   html.dui-pro-overhaul.dui-cohesive-ui [data-dui-modal="recruit-agent"][data-markdown-editor="open"] .dui-recruit-layout {
@@ -2222,6 +2426,9 @@ html.dui-pro-overhaul.dui-cohesive-ui [data-dui-modal="recruit-agent"] .dui-recr
   white-space: normal !important;
 }
 
+/* The textarea owns selection and caret placement while this preview is shown
+   underneath it. Keep their glyph metrics identical: token weight changes make
+   wrapped lines and click positions diverge from the native textarea. */
 html.dui-pro-overhaul [data-dui-modal="recruit-agent"] #recruit-markdown-editor-panel .dui-recruit-code-preview,
 html.dui-pro-overhaul [data-dui-modal="recruit-agent"] #recruit-markdown-editor-panel .dui-recruit-code-preview *,
 html.dui-pro-overhaul [data-dui-modal="recruit-agent"] #recruit-markdown-editor-panel textarea.dui-recruit-code-input,
@@ -2236,4 +2443,136 @@ html.dui-pro-overhaul.dui-cohesive-ui [data-dui-modal="recruit-agent"] #recruit-
   font-variant-ligatures: none;
   letter-spacing: 0 !important;
   line-height: 29px !important;
+}
+
+html.dui-pro-overhaul [data-dui-modal="recruit-agent"] .dui-recruit-code-editor:focus-within,
+html.dui-pro-overhaul.dui-cohesive-ui [data-dui-modal="recruit-agent"] .dui-recruit-code-editor:focus-within {
+  border-color: rgb(var(--markdown-accent, 96 217 203) / .58) !important;
+  background:
+    linear-gradient(180deg, rgb(var(--markdown-accent, 96 217 203) / .075), transparent 112px),
+    #071012 !important;
+  box-shadow:
+    0 0 0 3px rgb(var(--markdown-accent, 96 217 203) / .10),
+    inset 0 1px 0 rgb(255 255 255 / .045) !important;
+}
+
+html.dui-pro-overhaul [data-dui-modal="recruit-agent"] .dui-recruit-file-tabs,
+html.dui-pro-overhaul.dui-cohesive-ui [data-dui-modal="recruit-agent"] .dui-recruit-file-tabs {
+  align-items: stretch !important;
+  gap: 8px !important;
+  padding: 2px 2px 8px !important;
+  scroll-padding-inline: 2px;
+  scroll-snap-type: x proximity;
+}
+
+html.dui-pro-overhaul [data-dui-modal="recruit-agent"] .dui-recruit-file-tabs button[data-md-tone],
+html.dui-pro-overhaul.dui-cohesive-ui [data-dui-modal="recruit-agent"] .dui-recruit-file-tabs button[data-md-tone] {
+  display: inline-grid !important;
+  grid-template-columns: 20px minmax(0, 1fr) 28px !important;
+  grid-template-rows: minmax(24px, auto) !important;
+  align-items: center !important;
+  column-gap: 8px !important;
+  min-height: 40px !important;
+  margin-left: 0 !important;
+  padding: 5px 8px !important;
+  line-height: 1 !important;
+  scroll-snap-align: start;
+}
+
+html.dui-pro-overhaul [data-dui-modal="recruit-agent"] .dui-recruit-file-tabs button[data-md-tone]::before,
+html.dui-pro-overhaul.dui-cohesive-ui [data-dui-modal="recruit-agent"] .dui-recruit-file-tabs button[data-md-tone]::before {
+  content: none !important;
+  display: none !important;
+}
+
+html.dui-pro-overhaul [data-dui-modal="recruit-agent"] .dui-recruit-file-tab__icon,
+html.dui-pro-overhaul.dui-cohesive-ui [data-dui-modal="recruit-agent"] .dui-recruit-file-tab__icon {
+  display: inline-grid !important;
+  width: 20px !important;
+  height: 20px !important;
+  place-items: center !important;
+  align-self: center !important;
+  border: 1px solid rgb(var(--md-file-accent, 96 217 203) / .30);
+  border-radius: 5px;
+  background: rgb(var(--md-file-accent, 96 217 203) / .09);
+  color: rgb(var(--md-file-accent, 96 217 203)) !important;
+  line-height: 0 !important;
+}
+
+html.dui-pro-overhaul [data-dui-modal="recruit-agent"] .dui-recruit-file-tab__icon svg,
+html.dui-pro-overhaul.dui-cohesive-ui [data-dui-modal="recruit-agent"] .dui-recruit-file-tab__icon svg {
+  display: block !important;
+  width: 14px !important;
+  height: 14px !important;
+  margin: 0 !important;
+}
+
+html.dui-pro-overhaul [data-dui-modal="recruit-agent"] .dui-recruit-file-tab__name,
+html.dui-pro-overhaul.dui-cohesive-ui [data-dui-modal="recruit-agent"] .dui-recruit-file-tab__name {
+  display: block;
+  min-width: 0;
+  align-self: center;
+  line-height: 1.2 !important;
+}
+
+html.dui-pro-overhaul [data-dui-modal="recruit-agent"] .dui-recruit-file-tab__type,
+html.dui-pro-overhaul.dui-cohesive-ui [data-dui-modal="recruit-agent"] .dui-recruit-file-tab__type {
+  display: inline-grid !important;
+  width: 28px !important;
+  min-width: 28px !important;
+  height: 18px !important;
+  place-items: center !important;
+  align-self: center !important;
+  padding: 0 !important;
+  line-height: 1 !important;
+}
+
+@media (max-width: 760px) {
+  html.dui-pro-overhaul [data-dui-modal="recruit-agent"][data-markdown-editor="open"] .dui-recruit-file-toolbar,
+  html.dui-pro-overhaul.dui-cohesive-ui [data-dui-modal="recruit-agent"][data-markdown-editor="open"] .dui-recruit-file-toolbar {
+    grid-template-columns: minmax(0, 1fr) !important;
+  }
+
+  html.dui-pro-overhaul [data-dui-modal="recruit-agent"][data-markdown-editor="open"] .dui-recruit-file-tabs,
+  html.dui-pro-overhaul.dui-cohesive-ui [data-dui-modal="recruit-agent"][data-markdown-editor="open"] .dui-recruit-file-tabs {
+    min-width: 0 !important;
+  }
+}
+
+/* Registry scrolling and empty results retain context during deep inventories. */
+
+html.dui-pro-overhaul [data-agent-registry-scroll],
+html.dui-pro-overhaul.dui-cohesive-ui [data-agent-registry-scroll] {
+  padding: 4px !important;
+  border-radius: 12px;
+  scrollbar-color: rgb(102 174 231 / .45) transparent;
+}
+
+html.dui-pro-overhaul [data-agent-registry-scroll] > [data-agent-grid-mode],
+html.dui-pro-overhaul.dui-cohesive-ui [data-agent-registry-scroll] > [data-agent-grid-mode] {
+  align-content: start;
+}
+
+html.dui-pro-overhaul [data-agent-registry-scroll] > [data-agent-grid-mode] > div,
+html.dui-pro-overhaul.dui-cohesive-ui [data-agent-registry-scroll] > [data-agent-grid-mode] > div {
+  min-width: 0;
+}
+
+html.dui-pro-overhaul [data-agent-registry-scroll] + *,
+html.dui-pro-overhaul.dui-cohesive-ui [data-agent-registry-scroll] + * {
+  margin-top: 10px;
+}
+
+html.dui-pro-overhaul [data-agent-filter-toolbar] ~ .grid.h-32,
+html.dui-pro-overhaul.dui-cohesive-ui [data-agent-filter-toolbar] ~ .grid.h-32 {
+  min-height: 170px;
+  border-color: rgb(102 174 231 / .18) !important;
+  border-radius: 12px !important;
+  background: radial-gradient(circle at center, rgb(102 174 231 / .06), transparent 68%) !important;
+}
+
+html.dui-pro-overhaul [data-agent-filter-toolbar] ~ .grid.h-32 p,
+html.dui-pro-overhaul.dui-cohesive-ui [data-agent-filter-toolbar] ~ .grid.h-32 p {
+  color: var(--operator-muted) !important;
+  font-size: var(--dy-type-micro, 11px) !important;
 }

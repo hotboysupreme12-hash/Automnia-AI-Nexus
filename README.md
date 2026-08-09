@@ -43,6 +43,8 @@ Use Monitor as the truth window.
 
 The freedom is the point. One agent can handle many everyday tasks, while specialized agents can own precise lanes like code review, research, customer replies, store operations, content planning, or scheduled monitoring.
 
+The Command Console also supports one-tap dictation beside the Send button, with a microphone-level waveform while speaking. Voice input stops automatically after a short pause (or when the microphone is tapped again). Local mode prewarms a compact speech model, filters silent captures, and runs recognition on the device after a one-time model download; Settings → Voice transcription can switch between Local and Cloud (OpenAI) processing.
+
 ## How it feels in plain English
 
 | Typical assistant app | Automnia AI |

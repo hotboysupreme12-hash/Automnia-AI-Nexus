@@ -46,6 +46,7 @@ const gridClassByMode: Record<AgentDisplayMode, string> = {
 const FLOW_GRID_MODES = new Set<AgentDisplayMode>(['showcase', 'grid6', 'grid8', 'grid10'])
 const REGISTRY_PREFS_KEY = 'dystopai-agent-registry-prefs'
 const REGISTRY_PREFS_VERSION = 4
+const DEFAULT_OVERLAY_PRESET: AgentOverlayPreset = 'rarity'
 const EXTERNAL_CHANNEL_RUNNING_WINDOW_MS = 90_000
 const CYAN_SELECT_CHEVRON_STYLE = {
   backgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='8' height='8' viewBox='0 0 24 24' fill='none' stroke='%2367e8f9' stroke-width='3' stroke-linecap='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E")`,
@@ -57,9 +58,13 @@ function loadRegistryPrefs(): PersistedRegistryPrefs {
   try {
     const raw = window.localStorage.getItem(REGISTRY_PREFS_KEY)
     const prefs = raw ? JSON.parse(raw) as PersistedRegistryPrefs : {}
-    return { ...prefs, overlayPreset: 'rarity', rarityFilter: 'all' }
+    const hasValidOverlayPreset = OVERLAY_PRESETS.some((preset) => preset.id === prefs.overlayPreset)
+    return {
+      ...prefs,
+      overlayPreset: hasValidOverlayPreset ? prefs.overlayPreset : DEFAULT_OVERLAY_PRESET,
+    }
   } catch {
-    return { overlayPreset: 'rarity' }
+    return { overlayPreset: DEFAULT_OVERLAY_PRESET }
   }
 }
 
@@ -234,7 +239,7 @@ export function PartySelector() {
   const [sortKey, setSortKey] = useState<SortKey>(prefs.sortKey || 'party')
   const [rarityFilter, setRarityFilter] = useState<AgentRarity | 'all'>(prefs.rarityFilter || 'all')
   const [displayMode, setDisplayMode] = useState<AgentDisplayMode>(prefs.displayMode || 'grid8')
-  const [overlayPreset, setOverlayPreset] = useState<AgentOverlayPreset>(prefs.overlayPreset || 'graphite-glass')
+  const [overlayPreset, setOverlayPreset] = useState<AgentOverlayPreset>(prefs.overlayPreset || DEFAULT_OVERLAY_PRESET)
   const [registryColumnCount, setRegistryColumnCount] = useState(1)
   const activeDisplayMode = DISPLAY_MODES.find((mode) => mode.id === displayMode) || DISPLAY_MODES[1]
   const nominalPageSize = activeDisplayMode.pageSize
@@ -318,8 +323,8 @@ export function PartySelector() {
     : `${filtered.length}/${agents.length} agents`
 
   useEffect(() => {
-    window.localStorage.setItem(REGISTRY_PREFS_KEY, JSON.stringify({ displayMode, overlayPreset, overlayPresetVersion: REGISTRY_PREFS_VERSION, sortKey }))
-  }, [displayMode, overlayPreset, sortKey])
+    window.localStorage.setItem(REGISTRY_PREFS_KEY, JSON.stringify({ displayMode, overlayPreset, overlayPresetVersion: REGISTRY_PREFS_VERSION, rarityFilter, sortKey }))
+  }, [displayMode, overlayPreset, rarityFilter, sortKey])
 
   useEffect(() => {
     document.documentElement.dataset.agentCardOverlay = overlayPreset
@@ -374,7 +379,7 @@ export function PartySelector() {
   }, [totalPages, pageIndex])
 
   return (
-    <div className="min-h-0">
+    <div className="min-h-0" data-agent-card-theme={overlayPreset}>
       <Panel
         title="Agent Registry"
         className="flex min-h-0 flex-col"
@@ -492,7 +497,8 @@ export function PartySelector() {
 
             <select
               data-agent-filter-select
-              aria-label="Card overlay style"
+              data-agent-overlay-control
+              aria-label="Card background theme"
               value={overlayPreset}
               onChange={(e) => setOverlayPreset(e.target.value as AgentOverlayPreset)}
               className="px-2.5 py-1.5 pr-7 text-[10px] font-semibold outline-none transition cursor-pointer appearance-none"
@@ -569,4 +575,3 @@ export function PartySelector() {
     </div>
   )
 }
-

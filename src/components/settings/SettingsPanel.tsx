@@ -1,5 +1,6 @@
 import { useMemo, useState } from 'react'
 import type { ReactNode } from 'react'
+import { readSpeechSettings, saveSpeechSettings, type SpeechTranscriptionMode } from '../../speech/speechSettings'
 import { useNexusStore } from '../../store/nexusStore'
 import type { DurationMode, DurationUnit, FastModeDefault, OpenClawAgent, ThinkingLevel } from '../../types/nexus'
 import {
@@ -106,6 +107,18 @@ function Field({ label, hint, children }: { label: string; hint?: string; childr
   )
 }
 
+function SettingGroup({ label, hint, children }: { label: string; hint?: string; children: ReactNode }) {
+  return (
+    <div className="dui-settings-field">
+      <span>
+        <strong>{label}</strong>
+        {hint && <small>{hint}</small>}
+      </span>
+      {children}
+    </div>
+  )
+}
+
 function ToggleField({ label, hint, checked, onChange }: { label: string; hint?: string; checked: boolean; onChange: (checked: boolean) => void }) {
   return (
     <label className="dui-settings-toggle">
@@ -137,6 +150,7 @@ export function SettingsPanel() {
   const clearSelectedAgents = useNexusStore((state) => state.clearSelectedAgents)
 
   const [uiSettings, setUiSettings] = useState<DystopAIUiSettings>(() => readUiSettings())
+  const [speechMode, setSpeechMode] = useState<SpeechTranscriptionMode>(() => readSpeechSettings().mode)
   const [targetScope, setTargetScope] = useState<RuntimeTargetScope>(() => activePartyIds.length ? 'party' : 'selection')
   const partyTargetIds = useMemo(
     () => activePartyIds.filter((id) => agents.some((agent) => agent.id === id)),
@@ -180,6 +194,17 @@ export function SettingsPanel() {
 
   const updateUiSetting = <Key extends keyof DystopAIUiSettings>(key: Key, value: DystopAIUiSettings[Key]) => {
     updateUiSettings({ [key]: value } as Partial<DystopAIUiSettings>, settingLabel(String(key)))
+  }
+
+  const updateSpeechMode = (mode: SpeechTranscriptionMode) => {
+    saveSpeechSettings({ mode })
+    setSpeechMode(mode)
+    setNotice({
+      tone: 'success',
+      text: mode === 'local'
+        ? 'Voice transcription now stays on this device.'
+        : 'Voice transcription now uses the configured OpenAI cloud provider.',
+    })
   }
 
   const resetUiSettings = () => {
@@ -270,6 +295,28 @@ export function SettingsPanel() {
               <option value="warm">Warm black</option>
             </select>
           </Field>
+          <SettingGroup label="Voice transcription" hint="Choose where microphone recordings are transcribed. The composer keeps only the microphone control.">
+            <div className="dui-settings-voice-mode" role="group" aria-label="Voice transcription provider" data-mode={speechMode}>
+              <button
+                type="button"
+                aria-pressed={speechMode === 'local'}
+                onClick={() => updateSpeechMode('local')}
+                title="Private on-device transcription after the one-time model download"
+              >
+                <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="5" y="3" width="14" height="16" rx="3" /><path d="M9 7h6M9 11h6M9 22h6M12 19v3" /></svg>
+                <span><strong>Local</strong><small>On-device</small></span>
+              </button>
+              <button
+                type="button"
+                aria-pressed={speechMode === 'online'}
+                onClick={() => updateSpeechMode('online')}
+                title="Cloud transcription with the configured OpenAI API key"
+              >
+                <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M17.5 19H7a5 5 0 1 1 1.1-9.88A6 6 0 0 1 19.7 11.2 4 4 0 0 1 17.5 19Z" /></svg>
+                <span><strong>Cloud</strong><small>OpenAI</small></span>
+              </button>
+            </div>
+          </SettingGroup>
           <Field label="Density" hint="Changes spacing without breaking layout.">
             <select data-dui-setting="density" value={uiSettings.density} onChange={(event) => updateUiSetting('density', event.target.value as UiDensity)}>
               <option value="compact">Compact</option>

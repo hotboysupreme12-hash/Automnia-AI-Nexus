@@ -11,7 +11,7 @@ export const CONTROL_CENTER_CONTENT_SECURITY_POLICY = [
   "style-src 'self' 'unsafe-inline'",
   "img-src 'self' data: blob:",
   "font-src 'self' data:",
-  "connect-src 'self' http://127.0.0.1:* http://localhost:* ws://127.0.0.1:* ws://localhost:*",
+  "connect-src 'self' http://127.0.0.1:* http://localhost:* ws://127.0.0.1:* ws://localhost:* https://huggingface.co https://*.huggingface.co https://*.hf.co https://*.xethub.hf.co",
   "media-src 'self' data: blob:",
   "worker-src 'self' blob:",
   "object-src 'none'",
@@ -75,6 +75,7 @@ export type ApiErrorCode =
   | 'skill_command_failed'
   | 'skill_not_found'
   | 'skill_operation_failed'
+  | 'speech_transcription_failed'
   | 'team_sync_failed'
   | 'workspace_unwritable'
 

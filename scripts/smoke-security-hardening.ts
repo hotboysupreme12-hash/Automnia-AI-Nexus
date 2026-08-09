@@ -31,7 +31,7 @@ for (const directive of [
   "frame-src 'none'",
   "frame-ancestors 'none'",
   "form-action 'none'",
-  "connect-src 'self' http://127.0.0.1:* http://localhost:* ws://127.0.0.1:* ws://localhost:*",
+  "connect-src 'self' http://127.0.0.1:* http://localhost:* ws://127.0.0.1:* ws://localhost:* https://huggingface.co",
 ]) {
   assert.ok(controlPlaneHttp.includes(directive), `CSP must include ${directive}`)
 }
@@ -59,8 +59,10 @@ assert.doesNotMatch(electronMain, /DYSTOPAI_WINDOWS_SINGLE_PROCESS/, 'Electron m
 assert.match(electronMain, /const WINDOWS_DIAGNOSTIC_SINGLE_PROCESS = process\.platform === 'win32' &&[\s\S]*isDev[\s\S]*DYSTOPAI_WINDOWS_DIAGNOSTIC_SINGLE_PROCESS[\s\S]*DYSTOPAI_ACK_UNSAFE_ELECTRON_SANDBOX_DIAGNOSTIC/, 'Unsafe single-process mode must require explicit development-only diagnostic acknowledgement')
 assert.match(electronMain, /if \(WINDOWS_DIAGNOSTIC_SINGLE_PROCESS\) \{[\s\S]*appendSwitch\('single-process'\)[\s\S]*appendSwitch\('in-process-gpu'\)[\s\S]*appendSwitch\('disable-gpu-sandbox'\)/, 'Unsafe Electron process switches must be gated behind diagnostic mode only')
 assert.match(electronMain, /function configureRendererPermissionPolicy/, 'Electron must centralize renderer permission policy')
-assert.match(electronMain, /setPermissionCheckHandler\(\(\) => false\)/, 'Electron permission checks must deny by default')
-assert.match(electronMain, /setPermissionRequestHandler\([^]*callback\(false\)/, 'Electron permission requests must deny by default')
+assert.match(electronMain, /permission !== 'media'/, 'Electron permissions must deny every capability except explicitly handled media')
+assert.match(electronMain, /webContents !== win\.webContents/, 'Electron microphone permission must be scoped to the application webContents')
+assert.match(electronMain, /requestedMediaTypes\.includes\('audio'\)[^]*every\(\(mediaType\) => mediaType === 'audio'\)/, 'Electron media permission must allow audio-only capture')
+assert.match(electronMain, /setDevicePermissionHandler\(\(\) => false\)/, 'Electron device permissions must remain denied by default')
 assert.match(electronMain, /will-redirect', handleWillNavigate/, 'Electron redirects must use the same navigation policy')
 assert.match(electronMain, /event\.sender !== mainWindow\.webContents/, 'IPC sender validation must bind to the actual application webContents')
 assert.match(electronMain, /event\.senderFrame !== event\.sender\.mainFrame/, 'IPC must reject subframe senders')

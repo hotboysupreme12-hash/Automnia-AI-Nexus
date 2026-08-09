@@ -108,6 +108,7 @@
   "POST /api/skills/clawhub/install",
   "POST /api/skills/clawhub/update",
   "POST /api/skills/learn",
+  "POST /api/speech/transcribe",
   "POST /api/team-sync/append",
   "PUT /api/files/:file",
   "PUT /api/party/profile/:agentId",

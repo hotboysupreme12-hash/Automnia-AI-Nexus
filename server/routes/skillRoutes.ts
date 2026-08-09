@@ -46,8 +46,24 @@ type SkillRoutesOptions = {
   }) => Promise<unknown>
 }
 
+const CLAWHUB_SKILL_REFERENCE_PATTERN = /^(?:@?[a-z0-9][a-z0-9._-]{0,63}\/)?[a-z0-9][a-z0-9._-]{0,127}$/i
+
 function queryAgentId(value: unknown) {
   return typeof value === 'string' ? value : undefined
+}
+
+function resolveClawHubSkillReference(value: { skillRef?: string; slug?: string }) {
+  const reference = (value.skillRef || value.slug || '').trim()
+  if (!CLAWHUB_SKILL_REFERENCE_PATTERN.test(reference)) return ''
+  // Current OpenClaw requires the @ prefix for a publisher-qualified ClawHub
+  // reference. Older search responses may omit it (for example,
+  // "grpaiva/youtube"), so canonicalize before invoking the CLI.
+  return reference.includes('/') && !reference.startsWith('@') ? `@${reference}` : reference
+}
+
+function clawHubSkillSlug(reference: string) {
+  const normalized = reference.replace(/^@/, '')
+  return normalized.slice(normalized.lastIndexOf('/') + 1)
 }
 
 export function registerSkillRoutes(app: Express, options: SkillRoutesOptions) {
@@ -178,36 +194,45 @@ export function registerSkillRoutes(app: Express, options: SkillRoutesOptions) {
 
   app.post('/api/skills/clawhub/install', async (req, res) => {
     const schema = z.object({
-      slug: z.string().regex(/^[a-z0-9](?:[a-z0-9-]*[a-z0-9])?$/i),
+      skillRef: z.string().trim().min(1).max(196).optional(),
+      // Keep the legacy field for existing clients, but prefer the owner-qualified ref.
+      slug: z.string().trim().min(1).max(196).optional(),
       version: z.string().min(1).max(80).optional(),
       force: z.boolean().default(false),
     })
     const parsed = schema.safeParse(req.body)
     if (!parsed.success) return apiFailure(res, 400, 'invalid_payload', 'Invalid payload', parsed.error.flatten())
+    const skillRef = resolveClawHubSkillReference(parsed.data)
+    if (!skillRef) return apiFailure(res, 400, 'invalid_payload', 'Provide a valid ClawHub skill reference such as @owner/skill')
+    const skillSlug = clawHubSkillSlug(skillRef)
 
     try {
-      const existing = await options.readSkillEntryFromDir(options.sharedSkillsRoot, options.slugifySkillId(parsed.data.slug), 'library')
-      if (existing && !parsed.data.force) {
+      const existing = await options.readSkillEntryFromDir(options.sharedSkillsRoot, options.slugifySkillId(skillSlug), 'library')
+      // Bare slugs are retained only for backwards compatibility. Scoped refs must
+      // always reach OpenClaw so the publisher cannot be silently substituted.
+      if (!skillRef.includes('/') && existing && !parsed.data.force) {
         return apiSuccess(res, {
-          output: `Skill ${parsed.data.slug} is already installed in the shared OpenClaw skills folder.`,
+          output: `Skill ${skillRef} is already installed in the shared OpenClaw skills folder.`,
           skill: existing,
+          skillRef,
           alreadyInstalled: true,
           sharedRoot: options.sharedSkillsRoot,
         })
       }
-      const args = ['skills', 'install', parsed.data.slug]
+      const args = ['skills', 'install', skillRef, '--global']
       if (parsed.data.version) args.push('--version', parsed.data.version)
       if (parsed.data.force) args.push('--force')
-      const install = await options.installClawHubSkillWithRetry(args, parsed.data.slug)
+      const install = await options.installClawHubSkillWithRetry(args, skillSlug)
       const { result } = install
       options.invalidateSkillLibraryCache(options.sharedSkillsRoot)
-      const skill = await options.readSkillEntryFromDir(options.sharedSkillsRoot, options.slugifySkillId(parsed.data.slug), 'library')
+      const skill = await options.readSkillEntryFromDir(options.sharedSkillsRoot, options.slugifySkillId(skillSlug), 'library')
       const data = {
         output: result.stdout,
         code: result.code,
         retried: install.retried,
         cleanup: install.cleanup,
         skill,
+        skillRef,
         sharedRoot: options.sharedSkillsRoot,
       }
       if (result.code !== 0) {
@@ -221,22 +246,27 @@ export function registerSkillRoutes(app: Express, options: SkillRoutesOptions) {
 
   app.post('/api/skills/clawhub/update', async (req, res) => {
     const schema = z.object({
-      slug: z.string().regex(/^[a-z0-9](?:[a-z0-9-]*[a-z0-9])?$/i).optional(),
+      skillRef: z.string().trim().min(1).max(196).optional(),
+      // Keep accepting slug while clients migrate to owner-qualified refs.
+      slug: z.string().trim().min(1).max(196).optional(),
       all: z.boolean().default(false),
     })
     const parsed = schema.safeParse(req.body)
     if (!parsed.success) return apiFailure(res, 400, 'invalid_payload', 'Invalid payload', parsed.error.flatten())
-    if (!parsed.data.slug && !parsed.data.all) return apiFailure(res, 400, 'invalid_payload', 'Provide a slug or set all=true')
-    if (parsed.data.slug && parsed.data.all) return apiFailure(res, 400, 'invalid_payload', 'Use either slug or all, not both')
+    const skillRef = resolveClawHubSkillReference(parsed.data)
+    if (!skillRef && !parsed.data.all) return apiFailure(res, 400, 'invalid_payload', 'Provide a skill reference or set all=true')
+    if (skillRef && parsed.data.all) return apiFailure(res, 400, 'invalid_payload', 'Use either a skill reference or all=true, not both')
+    if (!parsed.data.all && !skillRef) return apiFailure(res, 400, 'invalid_payload', 'Provide a valid ClawHub skill reference such as @owner/skill')
 
     try {
-      const args = parsed.data.all ? ['skills', 'update', '--all'] : ['skills', 'update', parsed.data.slug as string]
+      const args = parsed.data.all ? ['skills', 'update', '--all', '--global'] : ['skills', 'update', skillRef, '--global']
       const result = await options.runOpenClawWithManagedSkillsWorkspace(args, 180000)
       options.invalidateSkillLibraryCache(options.sharedSkillsRoot)
       const shared = await options.listSkillsFromRoot(options.sharedSkillsRoot, 'library')
       const data = {
         output: result.stdout,
         code: result.code,
+        ...(skillRef ? { skillRef } : {}),
         shared,
         sharedRoot: options.sharedSkillsRoot,
       }

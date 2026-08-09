@@ -21,6 +21,8 @@ export type PluginPageState = {
 }
 
 export const PLUGIN_FILTERS = [
+  { id: 'active', label: 'Active' },
+  { id: 'attention', label: 'Needs attention' },
   { id: 'all', label: 'All' },
   { id: 'enabled', label: 'Enabled' },
   { id: 'disabled', label: 'Disabled' },
@@ -70,8 +72,12 @@ export function pluginStatusClass(plugin: PluginPageEntry) {
 
 export function pluginMatchesFilter(plugin: PluginPageEntry, filter: PluginFilter) {
   if (filter === 'all') return true
+  const state = pluginPageState(plugin)
+  const needsAttention = plugin.needsSetup || state.key === 'failed' || state.key === 'unavailable' || state.key === 'missing-auth'
+  if (filter === 'active') return plugin.enabled || needsAttention
+  if (filter === 'attention') return needsAttention
   if (filter === 'enabled') return plugin.enabled
-  return pluginPageState(plugin).key === filter
+  return state.key === filter
 }
 
 export function summarizePluginPageStates(plugins: PluginPageEntry[]) {

@@ -137,6 +137,7 @@ async function loadEditorModels(force = false) {
 
 interface ClawHubSkillResult {
   slug: string
+  install?: { reference?: string }
   displayName?: string
   summary?: string
   version?: string | null
@@ -146,6 +147,13 @@ interface ClawHubSkillResult {
 }
 interface ClawHubSearchPayload { results?:ClawHubSkillResult[] }
 interface ClawHubInstallPayload { alreadyInstalled?:boolean; skill?:AgentSkillEntry; output?:string }
+
+function clawHubSkillReference(skill: ClawHubSkillResult) {
+  const registryReference = skill.install?.reference?.trim()
+  if (registryReference) return registryReference.includes('/') && !registryReference.startsWith('@') ? `@${registryReference}` : registryReference
+  const owner = (skill.ownerHandle || skill.owner?.handle || '').trim().replace(/^@/, '')
+  return owner ? `@${owner}/${skill.slug}` : skill.slug
+}
 
 const ICON: Record<EditorTab,string> = { profile:'ID', model:'AI', heartbeat:'HB', policy:'SC', workspace:'WS', skills:'SK', files:'MD' }
 const EDITOR_TAB_LABEL: Record<EditorTab,string> = {
@@ -371,7 +379,7 @@ export function AgentEditorModal() {
   const runtimeCommitRef = useRef<NonNullable<OpenClawAgent['runtimePolicy']>|null>(null)
   const configPatchRef = useRef<AgentConfigPatch|null>(null)
   const configPatchAgentIdRef = useRef('')
-  const configPatchTimerRef = useRef<ReturnType<typeof window.setTimeout>|null>(null)
+  const configPatchTimerRef = useRef<number|null>(null)
   const configLoadSeqRef = useRef(0)
   const dirtyConfigSectionsRef = useRef<Set<AgentConfigDirtySection>>(new Set())
   const authRefreshKeyRef = useRef('')
@@ -1054,9 +1062,10 @@ export function AgentEditorModal() {
 
   const InstallClawHub = useCallback(async (skill:ClawHubSkillResult)=>{
     if(!agent)return
-    setClawHubInstalling(skill.slug);setClawHubError('');setClawHubStatus('')
+    const skillRef = clawHubSkillReference(skill)
+    setClawHubInstalling(skillRef);setClawHubError('');setClawHubStatus('')
     try {
-      const result = await apiRequest<ClawHubInstallPayload>('/api/skills/clawhub/install',{method:'POST',timeoutMs:120_000,body:{slug:skill.slug}})
+      const result = await apiRequest<ClawHubInstallPayload>('/api/skills/clawhub/install',{method:'POST',timeoutMs:120_000,body:{skillRef}})
       if(!result.ok){setClawHubError(apiErrorMessage(result.error));return}
       const d = result.data
       setClawHubStatus(d.alreadyInstalled?`${skill.displayName||skill.slug} is already installed.`:`Installed ${d.skill?.name||skill.displayName||skill.slug} to the shared OpenClaw skills folder.`)
@@ -1071,9 +1080,10 @@ export function AgentEditorModal() {
 
   const UpdateClawHub = useCallback(async (skill:ClawHubSkillResult)=>{
     if(!agent)return
-    setClawHubUpdating(skill.slug);setClawHubError('');setClawHubStatus('')
+    const skillRef = clawHubSkillReference(skill)
+    setClawHubUpdating(skillRef);setClawHubError('');setClawHubStatus('')
     try {
-      const result = await apiRequest<ClawHubInstallPayload>('/api/skills/clawhub/update',{method:'POST',timeoutMs:180_000,body:{slug:skill.slug}})
+      const result = await apiRequest<ClawHubInstallPayload>('/api/skills/clawhub/update',{method:'POST',timeoutMs:180_000,body:{skillRef}})
       if(!result.ok){setClawHubError(apiErrorMessage(result.error));return}
       const d = result.data
       setClawHubStatus(`Updated ${d.skill?.name||skill.displayName||skill.slug}.`)
@@ -1663,20 +1673,20 @@ export function AgentEditorModal() {
                       {clawHubResults.length>0&&(
                         <div className="mt-2 max-h-56 space-y-1.5 overflow-auto pr-1">
                           {clawHubResults.map((result)=>{
+                            const skillRef = clawHubSkillReference(result)
                             const installed = installedClawHubIds.has(skillIdKey(result.slug))
-                            const owner = result.owner?.handle || result.ownerHandle || result.owner?.displayName || ''
                             const updated = formatClawHubDate(result.updatedAt)
                             return (
-                              <div key={result.slug} className="rounded-lg border border-white/[0.06] bg-black/20 px-3 py-2.5">
+                              <div key={skillRef} className="rounded-lg border border-white/[0.06] bg-black/20 px-3 py-2.5">
                                 <div className="flex items-start justify-between gap-2">
                                   <div className="min-w-0">
                                     <p className="truncate text-[11px] font-bold text-slate-100">{result.displayName||result.slug}</p>
-                                    <p className="mt-0.5 truncate font-mono text-[8px] text-slate-600">{result.slug}{owner?` / ${owner}`:''}{result.version?` / v${result.version}`:''}{updated?` / ${updated}`:''}</p>
+                                    <p className="mt-0.5 truncate font-mono text-[8px] text-slate-600">{skillRef}{result.version?` / v${result.version}`:''}{updated?` / ${updated}`:''}</p>
                                   </div>
                                   {installed?(
-                                    <button type="button" onClick={()=>void UpdateClawHub(result)} disabled={clawHubUpdating===result.slug} title={`Update ${result.displayName||result.slug}`} className="shrink-0 rounded-md border border-cyan-400/20 bg-cyan-400/[0.06] px-2.5 py-1.5 text-[8px] font-bold uppercase tracking-[0.10em] text-cyan-300 hover:bg-cyan-400/[0.12] disabled:opacity-40">{clawHubUpdating===result.slug?'Updating':'Update'}</button>
+                                    <button type="button" onClick={()=>void UpdateClawHub(result)} disabled={clawHubUpdating===skillRef} title={`Update ${result.displayName||result.slug}`} className="shrink-0 rounded-md border border-cyan-400/20 bg-cyan-400/[0.06] px-2.5 py-1.5 text-[8px] font-bold uppercase tracking-[0.10em] text-cyan-300 hover:bg-cyan-400/[0.12] disabled:opacity-40">{clawHubUpdating===skillRef?'Updating':'Update'}</button>
                                   ):(
-                                    <button type="button" onClick={()=>void InstallClawHub(result)} disabled={Boolean(clawHubInstalling)} title={`Install ${result.displayName||result.slug}`} className="shrink-0 rounded-md border border-emerald-400/25 bg-emerald-400/[0.08] px-2.5 py-1.5 text-[8px] font-bold uppercase tracking-[0.10em] text-emerald-200 hover:bg-emerald-400/[0.14] disabled:opacity-40">{clawHubInstalling===result.slug?'Installing':'Install'}</button>
+                                    <button type="button" onClick={()=>void InstallClawHub(result)} disabled={Boolean(clawHubInstalling)} title={`Install ${result.displayName||result.slug}`} className="shrink-0 rounded-md border border-emerald-400/25 bg-emerald-400/[0.08] px-2.5 py-1.5 text-[8px] font-bold uppercase tracking-[0.10em] text-emerald-200 hover:bg-emerald-400/[0.14] disabled:opacity-40">{clawHubInstalling===skillRef?'Installing':'Install'}</button>
                                   )}
                                 </div>
                                 {result.summary&&<p className="mt-1.5 text-[9px] leading-snug text-slate-500">{compactText(result.summary)}</p>}
