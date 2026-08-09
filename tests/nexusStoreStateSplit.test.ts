@@ -165,10 +165,12 @@ test('runtime projection state resets volatile runtime truth without UI keys', (
     'activeMission',
     'agentConfigSaveStatus',
     'missionFeed',
+    'missionLaunchPending',
     'operationStates',
     'sessionWarmAgentIds',
   ])
   assert.equal(projection.activeMission, null)
+  assert.equal(projection.missionLaunchPending, false)
   assert.equal(projection.operationStates.alpha.tickRate, 2500)
   assert.equal(projection.operationStates.beta.tickRate, 5000)
   assert.equal('agentResponses' in projection, false)

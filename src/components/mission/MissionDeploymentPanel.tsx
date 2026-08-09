@@ -320,12 +320,20 @@ function formatWorkTimeout(seconds: number | undefined): string {
   return formatHeartbeat(Math.max(30, Math.round(seconds || 720)) * 1000)
 }
 
+function formatNextMissionRun(nextRoundAt: string | null | undefined): string {
+  if (!nextRoundAt) return 'next cycle pending'
+  const timestamp = Date.parse(nextRoundAt)
+  if (!Number.isFinite(timestamp)) return 'next cycle pending'
+  return `next ${new Date(timestamp).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })}`
+}
+
 export function MissionDeploymentPanel() {
   const agents = useNexusStore((s) => s.agents)
   const missionDraft = useNexusStore((s) => s.missionDraft)
   const activePartyIds = useNexusStore((s) => s.activePartyIds)
   const confirmedPartyIds = useNexusStore((s) => s.confirmedPartyIds)
   const activeMission = useNexusStore((s) => s.activeMission)
+  const missionLaunchPending = useNexusStore((s) => s.missionLaunchPending)
   const missionHistory = useNexusStore((s) => s.missionHistory)
   const busyAgentIds = useNexusStore((s) => s.busyAgentIds)
   const updateMissionDraft = useNexusStore((s) => s.updateMissionDraft)
@@ -355,10 +363,10 @@ export function MissionDeploymentPanel() {
     ? selectedAgents.filter((agent) => !agent.mds.capabilities[missionDraft.missionType])
     : []
   const capabilityCoverage = selectedAgents.length ? Math.round((specialistAgents.length / selectedAgents.length) * 100) : 0
-  const runningLaneCount = effectiveAgents.filter((agent) => busyAgentSet.has(agent.id)).length
   const objectiveLength = missionDraft.description.trim().length
   const objectiveIsPresetCopy = PRESET_OBJECTIVES.has(missionDraft.description.trim())
   const objectiveIsCustom = objectiveLength > 0 && !objectiveIsPresetCopy
+  const displayedCollaborationMode = activeMission?.collaborationMode || missionDraft.collaborationMode
   const checks = [
     { label: 'Party', ready: effectiveAgents.length > 0 },
     { label: 'Title', ready: missionDraft.title.trim().length > 0 },
@@ -367,6 +375,13 @@ export function MissionDeploymentPanel() {
   const readinessScore = Math.round((checks.filter((check) => check.ready).length / checks.length) * 100)
   const readinessState = readinessTone(readinessScore)
   const canDeploy = readinessScore === 100
+  const schedulerStatusText = activeMission?.scheduler?.lastError
+    ? `Attention needed / ${activeMission.scheduler.lastError}`
+    : activeMission?.scheduler?.status === 'running'
+    ? `agents working now / cycle ${activeMission.scheduler.round}`
+    : activeMission?.scheduler?.status === 'waiting'
+      ? `schedule active / ${formatNextMissionRun(activeMission.scheduler.nextRoundAt)}`
+      : `${activeMission?.scheduler?.status || 'preparing'} / cycle ${activeMission?.scheduler?.round ?? 0}`
   const currentType = MISSION_TYPES.find((type) => type.id === missionDraft.missionType) || MISSION_TYPES[0]
   const currentMode = COLLAB_MODES.find((mode) => mode.id === missionDraft.collaborationMode) || COLLAB_MODES[0]
   const activePreset = PRESETS.find(
@@ -480,10 +495,10 @@ export function MissionDeploymentPanel() {
                   <span>Mission</span>
                   <strong>{activeMission.title}</strong>
                   <StatusChip
-                    label={activeMission.status}
-                    value={`${activeMission.scheduler?.status || 'scheduler'} / round ${activeMission.scheduler?.round ?? 0}`}
+                    label={activeMission.scheduler?.status === 'running' ? 'Working now' : 'Mission active'}
+                    value={schedulerStatusText}
                     state={activeMission.status}
-                    tone={activeMission.status === 'running' ? 'success' : activeMission.status === 'failed' ? 'error' : 'neutral'}
+                    tone={activeMission.scheduler?.lastError || activeMission.status === 'failed' ? 'error' : activeMission.status === 'running' ? 'success' : 'neutral'}
                     className="dui-active-mission-status"
                   />
                 </div>
@@ -573,9 +588,9 @@ export function MissionDeploymentPanel() {
               <div className="dui-section-head">
                 <div>
                   <span>Agents</span>
-                  <strong>{effectiveAgents.length || 0} armed</strong>
+                  <strong>{effectiveAgents.length || 0} ready</strong>
                 </div>
-                <p>{missionRunning ? `${runningLaneCount} live` : 'Standing by'}</p>
+                <p>{missionLaunchPending ? 'Launching now' : missionRunning ? activeMission.scheduler?.status === 'running' ? 'Agents running' : 'Schedule active' : 'Standing by'}</p>
               </div>
               <div className="dui-agent-list">
                 {selectedAgents.map((agent, index) => {
@@ -585,6 +600,15 @@ export function MissionDeploymentPanel() {
                   const portraitSrc = agentPortraitSrc(agent.id, agent.portrait)
                   const portraitKey = `${agent.id}::${portraitSrc}`
                   const portraitFailed = portraitSrc ? failedPortraitKeys.has(portraitKey) : false
+                  const laneLabel = displayedCollaborationMode === 'hierarchical'
+                    ? index === 0 ? 'Slot 1 commander' : `Execution lane ${index + 1}`
+                    : displayedCollaborationMode === 'sequential'
+                      ? `Relay slot ${index + 1}`
+                      : displayedCollaborationMode === 'swarm'
+                        ? `Swarm lane ${index + 1}`
+                        : displayedCollaborationMode === 'specialist'
+                          ? `Specialist lane ${index + 1}`
+                          : `Parallel lane ${index + 1}`
                   return (
                     <div key={agent.id} className={`dui-agent-row ${busy ? 'is-busy' : ''} ${excluded ? 'is-excluded' : ''}`}>
                       <div className="dui-agent-avatar">
@@ -598,7 +622,7 @@ export function MissionDeploymentPanel() {
                       </div>
                       <div className="dui-agent-main">
                         <strong>{agent.name}</strong>
-                        <p>{excluded ? 'Specialist standby' : index === 0 ? 'Slot 1 commander' : `Lane ${index + 1}`} / {agent.role}</p>
+                        <p>{excluded ? 'Specialist standby' : laneLabel} / {agent.role}</p>
                         <div>
                           <span>{formatHeartbeat(agent.heartbeat.tickIntervalMs)} cron</span>
                           <span>{formatWorkTimeout(agent.runtimePolicy?.timeoutSeconds)} work</span>
@@ -654,7 +678,7 @@ export function MissionDeploymentPanel() {
               <div className="dui-section-head compact">
                 <div>
                   <span>Mission Cron</span>
-                  <strong>{selectedHeartbeat ? selectedHeartbeat.mixed ? `${formatHeartbeat(selectedHeartbeat.min)}-${formatHeartbeat(selectedHeartbeat.max)}` : formatHeartbeat(selectedHeartbeat.min) : 'Unset'}</strong>
+                  <strong>{selectedHeartbeat ? `Run now · then ${selectedHeartbeat.mixed ? `${formatHeartbeat(selectedHeartbeat.min)}-${formatHeartbeat(selectedHeartbeat.max)}` : formatHeartbeat(selectedHeartbeat.min)}` : 'Set a cadence'}</strong>
                 </div>
                 <p>{missionDraft.durationMode}</p>
               </div>
@@ -669,6 +693,7 @@ export function MissionDeploymentPanel() {
                   Apply Cadence
                 </Button>
               </div>
+              <p className="dui-mission-schedule-note">Deploy starts the first cycle immediately. The cadence controls later cycles only.</p>
 
               <div className="dui-loadout-head">
                 <span>Active Loadout</span>
@@ -760,12 +785,12 @@ export function MissionDeploymentPanel() {
                 <Button
                   type="button"
                   onClick={missionRunning ? stopMission : deployMission}
-                  disabled={!missionRunning && !canDeploy}
+                  disabled={missionLaunchPending || (!missionRunning && !canDeploy)}
                   variant={missionRunning ? 'danger' : 'primary'}
                   size="primary"
                   className={`dui-primary-button dui-mission-deploy-button ${missionRunning ? 'is-stop' : ''}`}
                 >
-                  {missionRunning ? 'Stop Mission' : 'Deploy Mission'}
+                  {missionRunning ? 'Stop Mission' : missionLaunchPending ? 'Deploying…' : 'Deploy & Run Now'}
                 </Button>
               </div>
 

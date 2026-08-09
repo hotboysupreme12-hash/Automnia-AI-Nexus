@@ -50,10 +50,6 @@ export class MDSValidator {
       return { ok: false, reason: `${agent.name} lacks ${required}` }
     }
 
-    if (mission.collaborationMode === 'hierarchical' && !agent.mds.capabilities.orchestration) {
-      return { ok: false, reason: `${agent.name} cannot coordinate hierarchical flow` }
-    }
-
     return { ok: true }
   }
 
