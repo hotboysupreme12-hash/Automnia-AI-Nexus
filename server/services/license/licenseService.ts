@@ -5,6 +5,8 @@ export type LicenseStatus = {
   active: boolean
   email: string | null
   tier: string | null
+  mode: 'hosted_credits' | 'byok' | null
+  creditBalance: number | null
   activatedAt: string | null
   verifiedAt: string | null
 }
@@ -35,12 +37,14 @@ function licenseApiBaseUrl(value: string | undefined) {
 
 function publicStatus(record: StoredLicense | null): LicenseStatus {
   if (!record?.active) {
-    return { active: false, email: null, tier: null, activatedAt: null, verifiedAt: null }
+    return { active: false, email: null, tier: null, mode: null, creditBalance: null, activatedAt: null, verifiedAt: null }
   }
   return {
     active: true,
     email: record.email || null,
     tier: record.tier || null,
+    mode: record.mode || (record.tier === 'founding_beta_byok' ? 'byok' : 'hosted_credits'),
+    creditBalance: typeof record.creditBalance === 'number' ? record.creditBalance : null,
     activatedAt: record.activatedAt || null,
     verifiedAt: record.verifiedAt || null,
   }
@@ -55,6 +59,8 @@ function storedLicense(value: unknown): StoredLicense | null {
     licenseKey: record.licenseKey,
     email: typeof record.email === 'string' ? record.email : null,
     tier: typeof record.tier === 'string' ? record.tier : null,
+    mode: record.mode === 'byok' ? 'byok' : record.mode === 'hosted_credits' ? 'hosted_credits' : null,
+    creditBalance: typeof record.creditBalance === 'number' ? record.creditBalance : null,
     activatedAt: typeof record.activatedAt === 'string' ? record.activatedAt : null,
     verifiedAt: typeof record.verifiedAt === 'string' ? record.verifiedAt : null,
   }
@@ -91,6 +97,8 @@ export function createLicenseService(options: LicenseServiceOptions) {
           licenseKey,
           email: typeof payload.email === 'string' ? payload.email : email,
           tier: typeof payload.tier === 'string' ? payload.tier : null,
+          mode: payload.mode === 'byok' ? 'byok' : payload.mode === 'hosted_credits' ? 'hosted_credits' : null,
+          creditBalance: typeof payload.creditBalance === 'number' ? payload.creditBalance : null,
           activatedAt: typeof payload.activatedAt === 'string' ? payload.activatedAt : now,
           verifiedAt: now,
         }

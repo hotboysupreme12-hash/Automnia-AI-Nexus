@@ -4,6 +4,8 @@ export type LicenseInfo = {
   active: boolean
   email: string | null
   tier: string | null
+  mode: 'hosted_credits' | 'byok' | null
+  creditBalance: number | null
   activatedAt: string | null
   verifiedAt: string | null
 }
