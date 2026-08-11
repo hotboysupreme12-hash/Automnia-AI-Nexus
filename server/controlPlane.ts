@@ -17,8 +17,9 @@ import {
   runtimeMonitorClearMarkerPath,
   scheduleLegacyRuntimeLedgerImport,
 } from './state/runtimeLedgerStore'
-import { installControlPlaneErrorHandler, installControlPlaneHttp } from './controlPlaneHttp'
+import { apiFailure, installControlPlaneErrorHandler, installControlPlaneHttp } from './controlPlaneHttp'
 import { registerAuthRoutes } from './routes/authRoutes'
+import { registerLicenseRoutes } from './routes/licenseRoutes'
 import { registerCommandConsoleFileRoutes } from './routes/commandConsoleFileRoutes'
 import { registerClawTalkConsoleRoutes } from './routes/clawTalkConsoleRoutes'
 import { registerDiagnosticsRoutes } from './routes/diagnosticsRoutes'
@@ -66,6 +67,7 @@ import {
 import { createMissionTeamSyncService } from './services/missions/missionTeamSyncService'
 import { createLoginAttemptLimiter } from './loginAttemptLimiter'
 import { createSessionTokenStore } from './sessionTokenStore'
+import { createLicenseService } from './services/license/licenseService'
 import {
   AUTH_ENV_MAP,
   AUTH_PROVIDER_CATALOG,
@@ -320,6 +322,27 @@ const SKILL_LIBRARY_CACHE_MS = 15_000
 const CONTROL_CENTER_STARTED_AT_MS = Date.now()
 
 const runtimeLedgerStore = createRuntimeLedgerStore(CONTROL_CENTER_LEDGER_PATHS)
+const licenseService = createLicenseService({
+  read: runtimeLedgerStore.readControlCenterState,
+  write: runtimeLedgerStore.writeControlCenterState,
+  remove: runtimeLedgerStore.deleteControlCenterState,
+})
+
+// License routes remain accessible after local authentication. Every other
+// control-plane API requires an active customer license.
+app.use('/api', (req, res, next) => {
+  const requestPath = (req.originalUrl.split('?')[0] || req.path).replace(/\/+$/, '') || '/'
+  if (
+    requestPath === '/api/ready' ||
+    requestPath === '/api/health' ||
+    requestPath.startsWith('/api/auth/') ||
+    requestPath.startsWith('/api/license/')
+  ) return next()
+  if (!licenseService.isActive()) {
+    return apiFailure(res, 402, 'license_required', 'Activate your Automnia license to use the Control Center.')
+  }
+  return next()
+})
 
 function readControlCenterStateRecord<T>(stateKey: string, options?: { sqlite?: boolean }): T | null {
   return runtimeLedgerStore.readControlCenterState<T>(stateKey, options)
@@ -17716,6 +17739,7 @@ const agentConfigRoutesContext: AgentConfigRoutesContext = {
 registerAgentConfigRoutes(app, agentConfigRoutesContext)
 
 registerAuthRoutes(app, { authToken: AUTH_TOKEN, loginAttempts, sessionTokens })
+registerLicenseRoutes(app, { licenseService })
 
 const { staticRoot: STATIC_ROOT } = registerStaticUi(app, {
   staticDir: process.env.CONTROL_CENTER_STATIC_DIR?.trim(),
