@@ -64,6 +64,13 @@ export type AgentStreamingServiceOptions = {
     attachments?: unknown[],
     intentMessage?: string,
   ) => BufferedRuntimeReason | null
+  getHostedRelayCredentials: () => { email: string; licenseKey: string; mode: 'hosted_credits' } | null
+  streamAutomniaCloudRelay: (
+    input: AgentStreamingInput,
+    emit: AgentTurnStreamEmitter,
+    signal: AbortSignal,
+    credentials: { email: string; licenseKey: string; mode: 'hosted_credits' },
+  ) => Promise<Record<string, unknown>>
   runBufferedAgentTurnForStream: (
     input: Record<string, unknown>,
     emit: AgentTurnStreamEmitter,
@@ -218,6 +225,11 @@ export function createAgentStreamingService(options: AgentStreamingServiceOption
     const bufferedReason = options.bufferedAgentRuntimeReason(input.message, input.attachments, input.intentMessage)
     if (bufferedReason) {
       return options.runBufferedAgentTurnForStream(input, emit, signal, bufferedReason)
+    }
+
+    const hostedRelayCredentials = options.getHostedRelayCredentials()
+    if (hostedRelayCredentials) {
+      return options.streamAutomniaCloudRelay(input, emit, signal, hostedRelayCredentials)
     }
 
     const modelId = await options.resolveAgentPrimaryModelId(input.agent)
