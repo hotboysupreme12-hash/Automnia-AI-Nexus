@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Your Exclusive Automnia AI Nexus BYOK License is Active!</title>
+    <title>Congratulations! Your Exclusive Automnia AI Nexus BYOK Lifetime License is Active!</title>
     <style>
         body {
             font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
@@ -26,42 +26,48 @@
             background-color: #ffffff;
             border-radius: 12px;
             border: 1px solid #e2e8f0;
-            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05), 0 2px 4px -1px rgba(0, 0, 0, 0.03);
+            box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05);
             overflow: hidden;
         }
         .header {
             background: linear-gradient(135deg, #0f172a 0%, #1e293b 100%);
-            padding: 40px;
+            padding: 45px 40px;
             text-align: center;
-            border-bottom: 4px solid #3b82f6;
-        }
-        .header img {
-            max-width: 180px;
-            height: auto;
-            margin-bottom: 15px;
+            border-bottom: 4px solid #10b981;
+            position: relative;
         }
         .logo-text {
             color: #ffffff;
-            font-size: 24px;
+            font-size: 26px;
             font-weight: 800;
             letter-spacing: -0.05em;
             text-transform: uppercase;
             margin: 0;
         }
         .logo-text span {
-            color: #3b82f6;
+            color: #10b981;
         }
         .badge {
             display: inline-block;
-            background-color: rgba(59, 130, 246, 0.15);
-            color: #60a5fa;
+            background-color: rgba(16, 185, 129, 0.15);
+            color: #34d399;
             font-size: 11px;
             font-weight: 700;
             text-transform: uppercase;
             letter-spacing: 0.1em;
-            padding: 4px 12px;
+            padding: 4px 14px;
             border-radius: 9999px;
-            margin-top: 10px;
+            margin-top: 12px;
+        }
+        .congrats-banner {
+            background: linear-gradient(90deg, #10b981 0%, #059669 100%);
+            color: #ffffff;
+            padding: 15px;
+            text-align: center;
+            font-weight: 700;
+            font-size: 16px;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
         }
         .content {
             padding: 40px;
@@ -78,13 +84,15 @@
             margin-bottom: 16px;
             color: #475569;
             font-size: 15px;
+            line-height: 1.6;
         }
         .credentials-card {
             background-color: #f1f5f9;
-            border-left: 4px solid #3b82f6;
+            border-left: 4px solid #10b981;
             border-radius: 0 8px 8px 0;
             padding: 24px;
             margin: 28px 0;
+            box-shadow: inset 0 1px 2px rgba(0,0,0,0.02);
         }
         .credentials-title {
             font-size: 13px;
@@ -92,10 +100,10 @@
             letter-spacing: 0.05em;
             color: #64748b;
             font-weight: 700;
-            margin-bottom: 12px;
+            margin-bottom: 14px;
         }
         .credential-row {
-            margin-bottom: 8px;
+            margin-bottom: 10px;
             font-size: 14px;
         }
         .credential-row:last-child {
@@ -105,14 +113,14 @@
             font-weight: 600;
             color: #334155;
             display: inline-block;
-            width: 120px;
+            width: 140px;
         }
         .credential-value {
             font-family: "Courier New", Courier, monospace;
             font-weight: bold;
             color: #0f172a;
             background-color: #e2e8f0;
-            padding: 2px 8px;
+            padding: 3px 8px;
             border-radius: 4px;
             font-size: 14px;
         }
@@ -122,23 +130,23 @@
         }
         .btn {
             display: inline-block;
-            background-color: #3b82f6;
+            background-color: #10b981;
             color: #ffffff !important;
             text-decoration: none;
             font-size: 15px;
             font-weight: 600;
-            padding: 14px 32px;
+            padding: 14px 36px;
             border-radius: 8px;
-            box-shadow: 0 4px 6px -1px rgba(59, 130, 246, 0.3);
-            transition: background-color 0.2s;
+            box-shadow: 0 4px 6px -1px rgba(16, 185, 129, 0.3);
+            transition: background-color 0.2s, transform 0.1s;
         }
         .btn:hover {
-            background-color: #2563eb;
+            background-color: #059669;
         }
         .section-divider {
             height: 1px;
             background-color: #e2e8f0;
-            margin: 32px 0;
+            margin: 35px 0;
         }
         .pricing-table {
             width: 100%;
@@ -171,22 +179,42 @@
         }
         .pricing-cost {
             font-weight: bold;
-            color: #10b981;
+            color: #059669;
         }
         .pricing-cost.free {
-            color: #3b82f6;
+            color: #10b981;
         }
         .use-cases {
             margin: 24px 0;
         }
         .use-case-item {
-            margin-bottom: 16px;
+            margin-bottom: 20px;
+            border-bottom: 1px dashed #e2e8f0;
+            padding-bottom: 16px;
+        }
+        .use-case-item:last-child {
+            margin-bottom: 0;
+            border-bottom: none;
+            padding-bottom: 0;
         }
         .use-case-title {
             font-weight: 700;
             color: #0f172a;
             font-size: 15px;
-            margin-bottom: 4px;
+            margin-bottom: 6px;
+            display: flex;
+            align-items: center;
+        }
+        .use-case-title span {
+            display: inline-block;
+            background-color: rgba(16, 185, 129, 0.1);
+            color: #10b981;
+            padding: 2px 8px;
+            border-radius: 4px;
+            font-size: 11px;
+            margin-right: 10px;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
         }
         .use-case-desc {
             font-size: 14px;
@@ -206,12 +234,13 @@
             margin-bottom: 12px;
         }
         .footer-logo span {
-            color: #3b82f6;
+            color: #10b981;
         }
         .footer p {
             font-size: 12px;
             color: #94a3b8;
             margin-bottom: 8px;
+            line-height: 1.5;
         }
         .footer-links a {
             color: #64748b;
@@ -220,7 +249,7 @@
             margin: 0 10px;
         }
         .footer-links a:hover {
-            color: #3b82f6;
+            color: #10b981;
         }
     </style>
 </head>
@@ -233,27 +262,36 @@
                 <div class="badge">Founding Beta Program</div>
             </div>
 
+            <!-- CONGRATS RIBBON -->
+            <div class="congrats-banner">
+                🎉 Congratulations! Your License Key is Now Active
+            </div>
+
             <!-- CONTENT -->
             <div class="content">
                 <h1>Welcome to DystopAI, Jean!</h1>
-                <p>We are absolutely thrilled to welcome you to the elite inner circle of <strong>Automnia AI Nexus</strong>. You are receiving this exclusive invitation because an active Founding Beta Admin has generated a lifetime, uncapped <strong>Bring Your Own Key (BYOK) License</strong> for your email address.</p>
+                <p>We are absolutely thrilled to welcome you to the elite inner circle of <strong>Automnia AI Nexus</strong>. You are receiving this official corporate notification because an active Founding Beta Administrator has generated and provisioned a lifetime, uncapped <strong>Bring Your Own Key (BYOK) License</strong> for your email address.</p>
                 
-                <p>This is not just another utility—it is a powerful local orchestration control plane. With your new BYOK license, you bypass all standard cloud execution metering and model markups by connecting your own direct API endpoints (OpenAI, Anthropic Claude, Google Vertex AI, and OpenRouter), running unlimited native local agent loops entirely on your own hardware.</p>
+                <p>This is not just a standard software license—it is an infinite local orchestration control plane. In BYOK mode, your model calls will utilize your own direct developer API keys. This guarantees <strong>100% data privacy</strong>, uncapped context length, and direct wholesale pricing while completely bypassing commercial relay metering.</p>
 
                 <!-- CREDENTIALS -->
                 <div class="credentials-card">
-                    <div class="credentials-title">🔑 Your Personal Activation Credentials</div>
+                    <div class="credentials-title">🔑 Your Activated BYOK License</div>
                     <div class="credential-row">
                         <span class="credential-label">Registered Email:</span>
-                        <span class="credential-value" style="font-family: monospace;">jeanmyrvil1@gmail.com</span>
+                        <span class="credential-value">jeanmyrvil1@gmail.com</span>
                     </div>
                     <div class="credential-row">
                         <span class="credential-label">License Key:</span>
-                        <span class="credential-value" style="font-family: monospace; letter-spacing: 0.5px;">AUT-BYOK-F11B-7FC9-630E</span>
+                        <span class="credential-value" style="letter-spacing: 0.5px;">AUT-BYOK-F11B-7FC9-630E</span>
                     </div>
                     <div class="credential-row">
                         <span class="credential-label">License Tier:</span>
-                        <span class="credential-value" style="font-family: monospace;">Founding Beta BYOK</span>
+                        <span class="credential-value">Founding Beta BYOK</span>
+                    </div>
+                    <div class="credential-row">
+                        <span class="credential-label">License Term:</span>
+                        <span class="credential-value">Lifetime / Uncapped</span>
                     </div>
                 </div>
 
@@ -264,60 +302,66 @@
                 <div class="section-divider"></div>
 
                 <!-- USE CASES -->
-                <h2 style="font-size: 18px; color: #0f172a; margin-top: 0;">⚡ How Automnia Will Transform Your Workflow</h2>
-                <p>Automnia AI Nexus is a next-generation desktop agent engine that blends raw LLM capabilities with native local operating system tools, advanced stream interception, and custom workflows. Here are the amazing use cases waiting for you:</p>
+                <h2 style="font-size: 18px; color: #0f172a; margin-top: 0;">🚀 Supercharge Your Workflow: Niche Use Cases</h2>
+                <p>Automnia AI Nexus seamlessly blends cutting-edge LLMs with native local OS tools, stealth browser runtimes, and file system execution pipelines. Here is how Automnia can change your life:</p>
                 
                 <div class="use-cases">
                     <div class="use-case-item">
-                        <div class="use-case-title">💼 1. Autonomous Software & Web Engineering</div>
-                        <p class="use-case-desc">Need a custom app or landing page? Automnia agents can generate, edit, compile, and run complete local static servers (such as Node.js HTTP preview servers) instantly. It writes code, reviews its own logs, and patches bugs in a continuous self-healing loop.</p>
+                        <div class="use-case-title"><span>🛍️ Shopping</span> Smart Online Purchase & Retail Automation</div>
+                        <p class="use-case-desc">Deploy stealth browser agents that navigate dynamically. Track back-to-school savings, monitor rare inventory restocks (like highly-coveted sneakers), fill forms in real-time, and add products directly to retail carts (such as Foot Locker) completely on autopilot.</p>
                     </div>
                     <div class="use-case-item">
-                        <div class="use-case-title">🔍 2. Headless Browser Automation</div>
-                        <p class="use-case-desc">Control automated browser sessions via Chromium. Scrape highly interactive, JavaScript-heavy sites, monitor restocks, fill fields, and execute tasks like finding sneakers on Foot Locker and adding items directly to your cart natively.</p>
+                        <div class="use-case-title"><span>📝 Admin</span> Automated Document & Form Filling</div>
+                        <p class="use-case-desc">Banish manual administrative drag forever. Automnia can parse complex local documents (PDFs, spreadsheets, text files), map inputs, dynamically auto-fill digital forms, draft legal contracts, and compile professional office reports natively in seconds.</p>
                     </div>
                     <div class="use-case-item">
-                        <div class="use-case-title">🛡️ 3. Stream Regex Interceptor Safety Net</div>
-                        <p class="use-case-desc">Never worry about models leaking raw markdown command syntax. Our patented stream interceptor silences plain-text tool-calling outputs instantly and handles local environment conversions seamlessly.</p>
+                        <div class="use-case-title"><span>📣 Marketing</span> Programmatic Social Media & Content Delivery</div>
+                        <p class="use-case-desc">Manage, draft, schedule, and execute automated social media campaigns. Automnia can read live crypto markets, draft high-engagement tweets, schedule publication queues, monitor feedback streams, and drive continuous growth campaigns on autopilot.</p>
+                    </div>
+                    <div class="use-case-item">
+                        <div class="use-case-title"><span>💻 Code</span> Autonomous Software Engineering</div>
+                        <p class="use-case-desc">Design, edit, test, and host entire web applications. Tell Automnia to build an interactive HTML/CSS/JS game; it will create the game files, run a local Node.js static HTTP preview server, debug execution stack traces, and push changes directly to your GitHub repo.</p>
+                    </div>
+                    <div class="use-case-item">
+                        <div class="use-case-title"><span>🛡️ Stream</span> Patent-Pending Interceptor Safety Net</div>
+                        <p class="use-case-desc">Never worry about raw markdown, function calls, or <code>[Runtime tool request]</code> codes leaking into your chat window. Our advanced interceptor catches, silences, and redirects raw syntax into clean local executions on the fly.</p>
                     </div>
                 </div>
 
                 <div class="section-divider"></div>
 
                 <!-- PRICING -->
-                <h2 style="font-size: 18px; color: #0f172a; margin-top: 0;">📊 License Options & Pricing</h2>
-                <p>As a lifetime Founding Beta member, your BYOK license grants you complete local access with no recurring subscription fees:</p>
+                <h2 style="font-size: 18px; color: #0f172a; margin-top: 0;">📊 Plan Comparison & Value</h2>
+                <p>As an exclusive Founding Beta recipient, you gain lifetime software access without any recurring seat charges:</p>
                 
                 <table class="pricing-table">
                     <thead>
                         <tr class="pricing-header">
                             <th>Plan Tier</th>
                             <th>Pricing</th>
-                            <th>Execution Mode</th>
+                            <th>Features & Limits</th>
                         </tr>
                     </thead>
                     <tbody>
                         <tr class="pricing-row">
                             <td class="pricing-plan">Starter Plan</td>
                             <td class="pricing-cost">$19.99 / mo</td>
-                            <td>Hosted Cloud Credits (Metered)</td>
+                            <td>Hosted Cloud Credits, Metered Routing, Standard Models</td>
                         </tr>
-                        <tr class="pricing-row" style="background-color: rgba(59,130,246,0.02);">
-                            <td class="pricing-plan" style="color: #3b82f6;">⭐️ BYOK Founding Beta</td>
+                        <tr class="pricing-row" style="background-color: rgba(16, 185, 129, 0.02);">
+                            <td class="pricing-plan" style="color: #10b981;">⭐️ BYOK Founding Beta</td>
                             <td class="pricing-cost free">FREE (Lifetime)</td>
-                            <td style="font-weight: 600; color: #3b82f6;">Unlimited Local (BYOK)</td>
+                            <td style="font-weight: 600; color: #10b981;">Unlimited Local Runs, Your Direct Developer Keys, Uncapped Context</td>
                         </tr>
                     </tbody>
                 </table>
-
-                <p style="font-size: 13px; color: #64748b; font-style: italic; margin-top: 15px;">Note: In BYOK mode, your model calls will utilize your own direct developer API keys, providing 100% data privacy and allowing you to utilize wholesale API pricing.</p>
             </div>
 
             <!-- FOOTER -->
             <div class="footer">
                 <div class="footer-logo">AUTOMNIA<span>.AI</span></div>
                 <p>© 2026 Automnia AI. All rights reserved.</p>
-                <p>Distributed by Automnia AI Nexus Office Systems. You are receiving this official mailer because a corporate license was provisioned for your secure inbox.</p>
+                <p>Distributed by Automnia AI Nexus Office Systems. You are receiving this official mailer because a secure, corporate lifetime license was provisioned for your inbox.</p>
                 <div class="footer-links">
                     <a href="https://github.com/hotboysupreme12-hash/Automnia-AI-Nexus" target="_blank">Documentation</a>
                     <a href="https://github.com/hotboysupreme12-hash/Automnia-AI-Nexus" target="_blank">Support Portal</a>
