@@ -3,7 +3,14 @@ import { z } from 'zod'
 import { apiFailure, apiSuccess } from '../controlPlaneHttp'
 import { LicenseServiceError, type LicenseService } from '../services/license/licenseService'
 
-export function registerLicenseRoutes(app: Express, options: { licenseService: LicenseService }) {
+export function registerLicenseRoutes(app: Express, options: {
+  licenseService: LicenseService
+  synchronizeOpenClawBillingRoute?: () => Promise<void>
+}) {
+  const synchronizeOpenClawBillingRoute = async () => {
+    await options.synchronizeOpenClawBillingRoute?.()
+  }
+
   app.get('/api/license/status', (_req, res) => apiSuccess(res, options.licenseService.getStatus()))
 
   app.post('/api/license/activate', async (req, res) => {
@@ -18,6 +25,7 @@ export function registerLicenseRoutes(app: Express, options: { licenseService: L
         email: parsed.data.email.toLowerCase(),
         licenseKey: parsed.data.licenseKey.toUpperCase(),
       })
+      await synchronizeOpenClawBillingRoute()
       return apiSuccess(res, status)
     } catch (error) {
       const known = error instanceof LicenseServiceError ? error : null
@@ -31,14 +39,16 @@ export function registerLicenseRoutes(app: Express, options: { licenseService: L
   // license state.
   app.post('/api/license/refresh', async (_req, res) => {
     try {
-      return apiSuccess(res, await options.licenseService.refresh())
+      const status = await options.licenseService.refresh()
+      await synchronizeOpenClawBillingRoute()
+      return apiSuccess(res, status)
     } catch (error) {
       const known = error instanceof LicenseServiceError ? error : null
       return apiFailure(res, known?.code === 'license_activation_failed' ? 401 : 502, known?.code || 'license_service_unavailable', known?.message || 'License refresh failed.')
     }
   })
 
-  app.post('/api/license/usage-priority', (req, res) => {
+  app.post('/api/license/usage-priority', async (req, res) => {
     const parsed = z.object({
       usagePriority: z.enum(['automnia_first', 'provider_first']),
     }).safeParse(req.body)
@@ -47,7 +57,9 @@ export function registerLicenseRoutes(app: Express, options: { licenseService: L
       return apiFailure(res, 409, 'invalid_payload', 'Usage priority is available to active hosted subscribers. BYOK access always uses the connected provider.')
     }
     try {
-      return apiSuccess(res, options.licenseService.setUsagePriority(parsed.data.usagePriority))
+      const status = options.licenseService.setUsagePriority(parsed.data.usagePriority)
+      await synchronizeOpenClawBillingRoute()
+      return apiSuccess(res, status)
     } catch (error) {
       const known = error instanceof LicenseServiceError ? error : null
       return apiFailure(res, 500, known?.code || 'license_service_unavailable', known?.message || 'The usage priority could not be saved.')
@@ -66,9 +78,11 @@ export function registerLicenseRoutes(app: Express, options: { licenseService: L
     }
   })
 
-  app.post('/api/license/deactivate', (_req, res) => {
+  app.post('/api/license/deactivate', async (_req, res) => {
     try {
-      return apiSuccess(res, options.licenseService.deactivate())
+      const status = options.licenseService.deactivate()
+      await synchronizeOpenClawBillingRoute()
+      return apiSuccess(res, status)
     } catch (error) {
       const message = error instanceof Error ? error.message : 'The local license record could not be removed.'
       return apiFailure(res, 500, 'license_service_unavailable', message)

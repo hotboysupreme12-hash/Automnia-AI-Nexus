@@ -29,8 +29,28 @@ function Invoke-Gcloud {
     [Parameter(Mandatory)][string[]]$Arguments,
     [switch]$AllowFailure
   )
-  $output = & gcloud @Arguments 2>&1
-  $exitCode = $LASTEXITCODE
+  # On Windows, `gcloud` resolves to gcloud.ps1. PowerShell turns benign
+  # progress text written by that wrapper into a terminating NativeCommandError
+  # under the package's fail-closed error policy, even when the Cloud SDK exits
+  # successfully. Invoke the CMD launcher directly when it is available so
+  # deployment and verification retain their real exit-code semantics.
+  $gcloudExecutable = if ($env:OS -eq 'Windows_NT') {
+    $cmd = Get-Command gcloud.cmd -ErrorAction SilentlyContinue
+    if ($cmd) { $cmd.Source } else { 'gcloud' }
+  } else {
+    'gcloud'
+  }
+  # Let the native launcher write informational progress to stderr without
+  # allowing PowerShell to throw before `$LASTEXITCODE` can be inspected.
+  # The Cloud SDK's process exit code remains the authoritative result.
+  $previousErrorActionPreference = $ErrorActionPreference
+  try {
+    $ErrorActionPreference = 'Continue'
+    $output = & $gcloudExecutable @Arguments 2>&1
+    $exitCode = $LASTEXITCODE
+  } finally {
+    $ErrorActionPreference = $previousErrorActionPreference
+  }
   $text = ($output | ForEach-Object { [string]$_ }) -join "`n"
   if ($exitCode -ne 0 -and -not $AllowFailure) {
     throw "gcloud $($Arguments -join ' ') failed with exit code ${exitCode}:`n$text"

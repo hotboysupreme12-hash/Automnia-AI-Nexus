@@ -522,7 +522,7 @@ async function runClawTalkControlCenterOrEmbeddedAgentTurn(options) {
             };
         } catch (err) {
             try {
-                var fallbackMessage = 'CoreBridge: Control Center stream unavailable, falling back to embedded agent: ' + (err instanceof Error ? err.message : String(err));
+                var fallbackMessage = 'CoreBridge: Control Center stream unavailable; embedded provider fallback is disabled to protect Automnia billing: ' + (err instanceof Error ? err.message : String(err));
                 var logDebug = options.logger && typeof options.logger.debug === 'function' ? options.logger.debug.bind(options.logger) : null;
                 var logWarn = options.logger && typeof options.logger.warn === 'function' ? options.logger.warn.bind(options.logger) : null;
                 if (/aborted|aborterror/i.test(fallbackMessage) && logDebug) logDebug(fallbackMessage);
@@ -532,10 +532,13 @@ async function runClawTalkControlCenterOrEmbeddedAgentTurn(options) {
             if (timer) clearTimeout(timer);
         }
     }
-    var embeddedResult = await options.embedded(options.embeddedParams);
-    var embeddedText = clawTalkPayloadText(embeddedResult);
-    if (embeddedText) await notifyClawTalkControlCenterConsoleFinal(options, embeddedText);
-    return embeddedResult;
+    var unavailableMessage = url
+        ? 'Automnia could not complete this ClawTalk request through the billed route. No unbilled provider fallback was used; retry shortly.'
+        : 'Automnia ClawTalk billing route is not configured. No provider request was sent; restart the Automnia Gateway and retry.';
+    return {
+        payloads: [{ text: unavailableMessage, isError: true }],
+        meta: { controlCenter: true, billingRoute: 'unavailable', embeddedFallbackDisabled: true }
+    };
 }
 `.trim()
 

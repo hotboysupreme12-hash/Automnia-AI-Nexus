@@ -87,6 +87,8 @@ SHOPIFY_PLAN_MAPPINGS: '$planBase64'
 SHOPIFY_CHECKOUT_URL: '$($config.ShopifyCheckoutUrl)'
 VERTEX_LOCATION: '$($config.VertexLocation)'
 AUTOMNIA_SCHEMA_VERSION: '$($config.SchemaVersion)'
+GOOGLE_CLOUD_PROJECT: '$ProjectId'
+GCLOUD_PROJECT: '$ProjectId'
 "@
   [IO.File]::WriteAllText($envFile, $environmentYaml, [Text.UTF8Encoding]::new($false))
   $secretFlags = @($config.SecretBindings.GetEnumerator() | ForEach-Object { "$($_.Key)=$($_.Value):latest" }) -join ','
@@ -107,7 +109,7 @@ AUTOMNIA_SCHEMA_VERSION: '$($config.SchemaVersion)'
     '--timeout=300',
     '--min=0',
     '--max=3',
-    '--startup-cpu-boost',
+    '--cpu-boost',
     '--env-vars-file', $envFile,
     '--set-secrets', $secretFlags,
     '--labels=automnia-component=provisioner,managed-by=automnia-gcloud-package',
@@ -122,7 +124,10 @@ AUTOMNIA_SCHEMA_VERSION: '$($config.SchemaVersion)'
 }
 
 $service = Get-ServiceDescriptor -ProjectId $ProjectId -Region $Region -ServiceName $config.ServiceName
-$candidateTraffic = @($service.status.traffic | Where-Object { $_.tag -eq 'candidate' } | Select-Object -First 1)
+$candidateTraffic = $null
+if ($service.status -and $service.status.PSObject.Properties['traffic'] -and $service.status.traffic) {
+  $candidateTraffic = @($service.status.traffic | Where-Object { $_ -and $_.PSObject.Properties['tag'] -and $_.tag -eq 'candidate' } | Select-Object -First 1)
+}
 $candidateUrl = if ($candidateTraffic -and $candidateTraffic.url) { [string]$candidateTraffic.url } else { [string]$service.status.url }
 $health = & (Join-Path $PSScriptRoot 'health.ps1') -ProjectId $ProjectId -Region $Region -BaseUrl $candidateUrl
 $timestamp = [DateTimeOffset]::UtcNow.ToString('yyyyMMddTHHmmssZ')

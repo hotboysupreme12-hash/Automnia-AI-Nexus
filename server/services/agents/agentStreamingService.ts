@@ -224,6 +224,20 @@ export function createAgentStreamingService(options: AgentStreamingServiceOption
     const hostedRelayCredentials = skipHostedRouting ? null : options.getHostedRelayCredentials?.()
     const streamHostedRelay = options.streamAutomniaCloudRelay
     if (hostedRelayCredentials && streamHostedRelay) {
+      // Tool-capable and channel-originated turns must stay inside OpenClaw's
+      // native loop. The gateway model is synchronised to the authenticated
+      // Automnia OpenAI-compatible provider before startup, so this preserves
+      // tool calls, channel delivery, and credit charging in one supported
+      // OpenClaw path instead of collapsing a tool request into a text relay.
+      if (input.forceOpenClawRuntime) {
+        const runtimeResult = await streamProviderAgentTurn(input, emit, signal, true)
+        return {
+          ...runtimeResult,
+          usagePriority: hostedRelayCredentials.usagePriority,
+          fallbackUsed: false,
+          billingRoute: 'openclaw-configured-automnia-provider',
+        }
+      }
       const hostedInput = runtimeShortcut
         ? {
             ...input,

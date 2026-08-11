@@ -1,0 +1,50 @@
+# Learn more about configuring your app at https://shopify.dev/docs/apps/tools/cli/configuration
+
+client_id = "d0972d80b936c44961e9490b1d113432"
+name = "Automnia AI Nexus"
+application_url = "https://automnia-shopify-provisioner-336625531977.us-east1.run.app/health"
+embedded = false
+
+[webhooks]
+api_version = "2026-07"
+
+  [[webhooks.subscriptions]]
+  uri = "https://automnia-shopify-provisioner-336625531977.us-east1.run.app/shopify/webhooks/orders-paid"
+  topics = [ "orders/paid" ]
+
+  [[webhooks.subscriptions]]
+  uri = "https://automnia-shopify-provisioner-336625531977.us-east1.run.app/shopify/webhooks/orders-cancelled"
+  topics = [ "orders/cancelled" ]
+
+  [[webhooks.subscriptions]]
+  uri = "https://automnia-shopify-provisioner-336625531977.us-east1.run.app/shopify/webhooks/refunds-create"
+  topics = [ "refunds/create" ]
+
+  [[webhooks.subscriptions]]
+  uri = "https://automnia-shopify-provisioner-336625531977.us-east1.run.app/shopify/webhooks/subscription-contracts-create"
+  topics = [ "subscription_contracts/create" ]
+
+  [[webhooks.subscriptions]]
+  uri = "https://automnia-shopify-provisioner-336625531977.us-east1.run.app/shopify/webhooks/subscription-contracts-update"
+  topics = [ "subscription_contracts/update" ]
+
+  [[webhooks.subscriptions]]
+  uri = "https://automnia-shopify-provisioner-336625531977.us-east1.run.app/shopify/webhooks/subscription-contracts-cancel"
+  topics = [ "subscription_contracts/cancel" ]
+
+  [[webhooks.subscriptions]]
+  uri = "https://automnia-shopify-provisioner-336625531977.us-east1.run.app/shopify/webhooks/subscription-billing-attempts-success"
+  topics = [ "subscription_billing_attempts/success" ]
+
+  [[webhooks.subscriptions]]
+  uri = "https://automnia-shopify-provisioner-336625531977.us-east1.run.app/shopify/webhooks/subscription-billing-attempts-failure"
+  topics = [ "subscription_billing_attempts/failure" ]
+
+[access_scopes]
+# Learn more at https://shopify.dev/docs/apps/tools/cli/configuration#access_scopes
+scopes = "read_customers,read_orders,read_own_subscription_contracts,read_products,write_customers,write_own_subscription_contracts"
+
+[auth]
+redirect_urls = [
+  "https://automnia-shopify-provisioner-336625531977.us-east1.run.app/health"
+]

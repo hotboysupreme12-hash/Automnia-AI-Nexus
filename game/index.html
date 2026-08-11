@@ -1,0 +1,41 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Crypto Catcher - Moonshot Arcade</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <div class="game-container">
+    <header>
+      <h1>🚀 MOONSHOT CATCHER</h1>
+      <p class="subtitle">Catch the Gems & Coins • Dodge the Rugpulls!</p>
+    </header>
+
+    <div class="stats-bar">
+      <div class="stat-box">SCORE: <span id="score">0</span></div>
+      <div class="stat-box">HIGH SCORE: <span id="high-score">0</span></div>
+      <div class="stat-box">LIVES: <span id="lives">❤️❤️❤️</span></div>
+      <div class="stat-box">MULTIPLIER: <span id="multiplier">1x</span></div>
+    </div>
+
+    <div class="canvas-wrapper">
+      <canvas id="gameCanvas" width="600" height="500"></canvas>
+      <div id="overlay" class="overlay">
+        <div id="overlay-content">
+          <h2 id="overlay-title">MOONSHOT CATCHER</h2>
+          <p id="overlay-desc">Use <strong>A / D</strong> or <strong>Left / Right Arrow</strong> or move mouse to control your Rocket Collector.</p>
+          <button id="start-btn" class="btn">START GAME</button>
+        </div>
+      </div>
+    </div>
+
+    <footer>
+      <p>Controls: ⬅️ / ➡️ or A / D | Built by Marcus Chen (hn-crypto-lead)</p>
+    </footer>
+  </div>
+
+  <script src="script.js"></script>
+</body>
+</html>

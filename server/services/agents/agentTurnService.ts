@@ -143,7 +143,21 @@ export function createBufferedAgentTurnService(options: BufferedAgentTurnService
       })
     }
     options.prewarmControlCenterGatewayAgentRuntime('runtime-stream')
-    const gatewayStream = options.registerGatewayChatStreamObserver(emit, signal)
+    let isIntercepted = false
+    let deltaBuffer = ''
+    const wrappedEmit: AgentTurnStreamEmitter = (event, data) => {
+      if (event === 'delta' && data && typeof data.text === 'string') {
+        deltaBuffer += data.text
+        if (deltaBuffer.includes('[Runtime tool request:')) {
+          isIntercepted = true
+          return
+        }
+      }
+      if (!isIntercepted) {
+        emit(event, data)
+      }
+    }
+    const gatewayStream = options.registerGatewayChatStreamObserver(wrappedEmit, signal)
     const startedAt = Date.now()
     let lastRunId = ''
     let lastMilestoneAt = 0
@@ -225,6 +239,20 @@ export function createBufferedAgentTurnService(options: BufferedAgentTurnService
       }
     }
     const reply = typeof payload.reply === 'string' ? options.sanitizeUserVisibleRuntimeText(payload.reply) : ''
+    
+    const hasToolRequest = isIntercepted || text.includes('[Runtime tool request:') || reply.includes('[Runtime tool request:')
+    if (hasToolRequest) {
+      emitProgress('openclaw:interceptor', 'Intercepted raw tool request in text stream. Activating native local runtime execution safety net...', {
+        agent,
+      })
+      return await runBufferedAgentTurnForStream(
+        { ...body, forceOpenClawRuntime: true },
+        emit,
+        signal,
+        { code: 'forced-openclaw-runtime', message: 'Converting raw tool request to native local execution.' }
+      )
+    }
+
     if (typeof payload.reply === 'string' && reply !== payload.reply) {
       payload.reply = reply || 'No response returned.'
       payload.runtimeLogsFiltered = true
