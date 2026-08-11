@@ -9,7 +9,7 @@ application_url = "https://api.automnia.ai/health"
 embedded = false
 
 [access_scopes]
-scopes = "read_customers,read_orders,read_products,write_customers"
+scopes = "read_customers,read_orders,read_own_subscription_contracts,read_products,write_customers,write_own_subscription_contracts"
 
 [auth]
 redirect_urls = ["https://api.automnia.ai/health"]

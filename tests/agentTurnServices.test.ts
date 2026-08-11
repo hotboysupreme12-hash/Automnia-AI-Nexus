@@ -403,7 +403,7 @@ test('agent runtime service aborts before local fallback after Gateway failure',
   assert.deepEqual(modes, ['gateway'])
 })
 
-test('agent streaming service streams direct provider turns and gives hosted credits priority over legacy forced-runtime flags', async () => {
+test('agent streaming service keeps hosted tool/runtime turns in the configured OpenClaw provider loop', async () => {
   const events: Array<{ event: string; data: Record<string, unknown> }> = []
   const sessions = new Map<string, string>()
   const histories = new Map<string, Array<{ role: 'user' | 'assistant'; content: string }>>()
@@ -553,7 +553,6 @@ test('agent streaming service streams direct provider turns and gives hosted cre
     message: 'hello from the Command Console',
     thinking: 'low',
     sessionKey: 'console',
-    forceOpenClawRuntime: true,
   }, () => undefined, createAbortSignal())
 
   assert.equal(hostedRelayCalls, 1)
@@ -569,22 +568,22 @@ test('agent streaming service streams direct provider turns and gives hosted cre
     forceOpenClawRuntime: true,
   }, () => undefined, createAbortSignal())
 
-  assert.equal(hostedRelayCalls, 2)
-  assert.equal(runtimeResult.provider, 'automnia-cloud')
-  assert.equal(runtimeResult.reply, 'hosted relay reply')
-  assert.deepEqual(bufferedMessages, [])
+  assert.equal(hostedRelayCalls, 1)
+  assert.equal(runtimeResult.provider, 'gateway')
+  assert.equal(runtimeResult.reply, 'runtime reply')
+  assert.deepEqual(bufferedMessages, ['inspect the local workspace'])
+  bufferedMessages.length = 0
 
   hostedRelayShouldFail = true
   const fallbackEvents: Array<{ event: string; data: Record<string, unknown> }> = []
   const fallbackResult = await service.streamProviderAgentTurn({
     agent: 'agent-alpha',
-    message: '/work inspect the local workspace',
+    message: 'inspect the local workspace',
     thinking: 'low',
     sessionKey: 'console',
-    forceOpenClawRuntime: true,
   }, (event, data) => fallbackEvents.push({ event, data }), createAbortSignal())
 
-  assert.equal(hostedRelayCalls, 3)
+  assert.equal(hostedRelayCalls, 2)
   assert.equal(fallbackResult.provider, 'gateway')
   assert.deepEqual(bufferedMessages, ['inspect the local workspace'])
   assert.equal(fallbackEvents.some((entry) => entry.event === 'status' && entry.data.reason === 'automnia-cloud-local-fallback'), true)
@@ -599,7 +598,7 @@ test('agent streaming service streams direct provider turns and gives hosted cre
     sessionKey: 'console',
   }, (event, data) => transientCloudEvents.push({ event, data }), createAbortSignal())
 
-  assert.equal(hostedRelayCalls, 4)
+  assert.equal(hostedRelayCalls, 3)
   assert.equal(transientCloudResult.ok, false)
   assert.equal(transientCloudResult.provider, 'automnia-cloud')
   assert.equal(transientCloudResult.usagePriority, 'automnia_first')
@@ -622,7 +621,7 @@ test('agent streaming service streams direct provider turns and gives hosted cre
   assert.equal(providerFirstResult.provider, 'gateway')
   assert.equal(providerFirstResult.usagePriority, 'provider_first')
   assert.equal(providerFirstResult.fallbackUsed, false)
-  assert.equal(hostedRelayCalls, 4)
+  assert.equal(hostedRelayCalls, 3)
   assert.deepEqual(bufferedMessages, ['inspect the local workspace'])
 
   bufferedShouldFail = true
@@ -637,7 +636,7 @@ test('agent streaming service streams direct provider turns and gives hosted cre
   assert.equal(providerFallbackResult.provider, 'automnia-cloud')
   assert.equal(providerFallbackResult.usagePriority, 'provider_first')
   assert.equal(providerFallbackResult.fallbackUsed, true)
-  assert.equal(hostedRelayCalls, 5)
+  assert.equal(hostedRelayCalls, 4)
   assert.equal(providerFallbackEvents.some((entry) => entry.event === 'status' && entry.data.reason === 'provider-to-automnia-fallback'), true)
 })
 

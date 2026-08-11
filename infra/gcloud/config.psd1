@@ -1,8 +1,11 @@
 @{
-  SchemaVersion = '2026-08-11.1'
+  SchemaVersion = '2026-08-11.3'
   Region = 'us-east1'
   FirestoreLocation = 'us-east1'
-  VertexLocation = 'us-central1'
+  # Gemini 3.6 Flash is served through Vertex's global endpoint. Keeping this
+  # separate from the Cloud Run and Firestore regions prevents a regional
+  # endpoint from rejecting the reference model used for chat and tools.
+  VertexLocation = 'global'
   ServiceName = 'automnia-shopify-provisioner'
   ServiceAccountName = 'automnia-provisioner'
   PermanentBaseUrl = 'https://api.automnia.ai'

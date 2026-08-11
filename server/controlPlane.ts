@@ -68,7 +68,7 @@ import { createMissionTeamSyncService } from './services/missions/missionTeamSyn
 import { createLoginAttemptLimiter } from './loginAttemptLimiter'
 import { createSessionTokenStore } from './sessionTokenStore'
 import { createLicenseService } from './services/license/licenseService'
-import { AUTOMNIA_PUBLIC_CLOUD_URL, automniaCloudBaseUrl } from './config/automniaCloud'
+import { AUTOMNIA_PUBLIC_CLOUD_URL, automniaCloudRuntimeBaseUrl } from './config/automniaCloud'
 import {
   AUTH_ENV_MAP,
   AUTH_PROVIDER_CATALOG,
@@ -3725,7 +3725,7 @@ async function prepareOpenClawConfigForGatewayStartup(reason: string) {
       openclawConfigCache = null
       await cleanupLegacyConfigHealthStateForGateway(reason)
       const config = await readOpenclawConfig()
-      await writeOpenclawConfig(config)
+      await synchronizeOpenClawBillingRoute(config)
       await cleanupLegacyConfigHealthStateForGateway(reason)
       let validation = await validateOpenClawConfigForGateway(reason)
       if (validation.valid) return true
@@ -3733,7 +3733,7 @@ async function prepareOpenClawConfigForGatewayStartup(reason: string) {
       const repair = await repairOpenClawConfigForGateway(reason)
       openclawConfigCache = null
       const repairedConfig = await readOpenclawConfig().catch(() => null)
-      if (repairedConfig) await writeOpenclawConfig(repairedConfig)
+      if (repairedConfig) await synchronizeOpenClawBillingRoute(repairedConfig)
       await cleanupLegacyConfigHealthStateForGateway(`${reason}; after doctor repair`)
       validation = await validateOpenClawConfigForGateway(`${reason}; after doctor repair`)
       if (validation.valid) {
@@ -9279,6 +9279,127 @@ async function writeOpenclawConfig(config: unknown) {
     modelCatalogService.invalidateAvailableModels()
     await rememberJsonFileCache(OPENCLAW_CONFIG_PATH, next as OpenClawConfigFile, (entry) => { openclawConfigCache = entry })
   })
+}
+
+// OpenClaw owns channel ingress, session routing, tool execution, and reply
+// delivery.  The supported way to keep every one of those paths billable is
+// therefore to register Automnia as an OpenAI-compatible model provider in
+// its config, not to replace a channel's bundled dispatch function.  This
+// synchronizer is invoked whenever license state changes and immediately
+// before the Gateway starts, so a stale Telegram/ClawTalk process cannot keep
+// a direct provider as the active model after a hosted plan is selected.
+const AUTOMNIA_OPENCLAW_PROVIDER_ID = 'automnia-cloud'
+const AUTOMNIA_OPENCLAW_MODEL = `${AUTOMNIA_OPENCLAW_PROVIDER_ID}/gemini-3.6-flash`
+
+type OpenClawModelSelection = { primary?: string; fallbacks?: string[] }
+
+function configuredAutomniaCloudBaseUrl(config?: OpenClawConfigFile) {
+  const existingProvider = config?.models?.providers?.[AUTOMNIA_OPENCLAW_PROVIDER_ID] as { baseUrl?: unknown } | undefined
+  const existingBaseUrl = typeof existingProvider?.baseUrl === 'string' ? existingProvider.baseUrl.trim().replace(/\/v1\/?$/i, '') : null
+  // Preserve an existing valid provider route when the environment was not
+  // supplied. This prevents gateway startup from changing a working hosted
+  // route back to the unconfigured permanent-domain placeholder.
+  return automniaCloudRuntimeBaseUrl(existingBaseUrl || AUTOMNIA_PUBLIC_CLOUD_URL)
+}
+
+function isAutomniaOpenClawModel(value: unknown) {
+  return splitModelId(canonicalAgentModelId(typeof value === 'string' ? value : '')).provider.toLowerCase() === AUTOMNIA_OPENCLAW_PROVIDER_ID
+}
+
+function nonAutomniaOpenClawModels(selection: OpenClawModelSelection | undefined) {
+  return uniqueStrings(
+    selection?.primary,
+    ...(Array.isArray(selection?.fallbacks) ? selection.fallbacks : []),
+  ).filter((modelId) => !isAutomniaOpenClawModel(modelId))
+}
+
+function applyAutomniaBillingModelOrder(
+  selection: OpenClawModelSelection | undefined,
+  usagePriority: 'automnia_first' | 'provider_first' | null,
+) {
+  const providerModels = nonAutomniaOpenClawModels(selection)
+  if (usagePriority === 'automnia_first') {
+    // "Automnia credits first" is a billing boundary, not a preference hint.
+    // Do not silently fall back to a direct provider: that would produce an
+    // answer outside the hosted relay and leave the subscriber unbilled.
+    return {
+      primary: AUTOMNIA_OPENCLAW_MODEL,
+    }
+  }
+  if (usagePriority === 'provider_first' && providerModels.length) {
+    return {
+      primary: providerModels[0],
+      fallbacks: uniqueStrings(AUTOMNIA_OPENCLAW_MODEL, ...providerModels.slice(1)),
+    }
+  }
+  // A subscriber may select provider-first before actually connecting a
+  // provider. Cloud stays available in that case rather than allowing an
+  // unconfigured direct-provider attempt to bypass billing.
+  return { primary: AUTOMNIA_OPENCLAW_MODEL }
+}
+
+function removeAutomniaBillingModel(selection: OpenClawModelSelection | undefined) {
+  const providerModels = nonAutomniaOpenClawModels(selection)
+  if (!providerModels.length) return undefined
+  return {
+    primary: providerModels[0],
+    ...(providerModels.length > 1 ? { fallbacks: providerModels.slice(1) } : {}),
+  }
+}
+
+async function synchronizeOpenClawBillingRoute(configInput?: OpenClawConfigFile) {
+  const config = configInput || await readOpenclawConfig()
+  if (!config.models) config.models = {}
+  if (!config.models.providers) config.models.providers = {}
+  if (!config.agents) config.agents = {}
+  if (!config.agents.defaults) config.agents.defaults = {}
+
+  const hosted = licenseService.getActiveRelayCredentials()
+  if (!hosted) {
+    delete config.models.providers[AUTOMNIA_OPENCLAW_PROVIDER_ID]
+    const defaultSelection = removeAutomniaBillingModel(config.agents.defaults.model)
+    if (defaultSelection) config.agents.defaults.model = defaultSelection
+    for (const agent of config.agents.list || []) {
+      const selection = removeAutomniaBillingModel(agent.model)
+      if (selection) agent.model = selection
+    }
+    await writeOpenclawConfig(config)
+    return { routed: false, mode: 'byok-or-inactive' as const }
+  }
+
+  const cloudBaseUrl = configuredAutomniaCloudBaseUrl(config)
+  config.models.providers[AUTOMNIA_OPENCLAW_PROVIDER_ID] = {
+    baseUrl: `${cloudBaseUrl}/v1`,
+    api: 'openai-completions',
+    // The key is stored only in the local OpenClaw configuration. It is sent
+    // as Bearer authentication to the provisioner; the matching email is an
+    // explicit tenant header. Neither credential is exposed to the renderer.
+    apiKey: hosted.licenseKey,
+    authHeader: true,
+    headers: { 'X-Automnia-Email': hosted.email },
+    timeoutSeconds: 7200,
+    models: [{
+      id: 'gemini-3.6-flash',
+      name: 'Automnia Cloud Credits - Gemini 3.6 Flash',
+      reasoning: false,
+      input: ['text'],
+      contextWindow: 1_000_000,
+      contextTokens: 128_000,
+      maxTokens: 8_192,
+    }],
+  }
+  const priority = hosted.usagePriority
+  config.agents.defaults.model = applyAutomniaBillingModelOrder(config.agents.defaults.model, priority)
+  for (const agent of config.agents.list || []) {
+    agent.model = applyAutomniaBillingModelOrder(agent.model, priority)
+  }
+  if (!config.agents.defaults.models) config.agents.defaults.models = {}
+  config.agents.defaults.models[AUTOMNIA_OPENCLAW_MODEL] = {
+    alias: 'Automnia credits',
+    params: { transport: 'sse' },
+  }
+  await writeOpenclawConfig(config)
+  return { routed: true, mode: 'hosted_credits' as const, usagePriority: priority }
 }
 
 async function ensureOpenclawAgentRunConfigDefaults() {
@@ -17306,7 +17427,7 @@ const agentRuntimeService = createAgentRuntimeService({
 
 const runControlCenterAgentRuntimeTurn = agentRuntimeService.runControlCenterAgentRuntimeTurn
 
-const AUTOMNIA_CLOUD_RELAY_URL = automniaCloudBaseUrl(process.env.AUTOMNIA_CLOUD_RELAY_URL || AUTOMNIA_PUBLIC_CLOUD_URL)
+const AUTOMNIA_CLOUD_RELAY_URL = automniaCloudRuntimeBaseUrl()
 
 async function streamAutomniaCloudRelay(
   input: AgentStreamingInput,
@@ -17875,7 +17996,12 @@ const agentConfigRoutesContext: AgentConfigRoutesContext = {
 registerAgentConfigRoutes(app, agentConfigRoutesContext)
 
 registerAuthRoutes(app, { authToken: AUTH_TOKEN, loginAttempts, sessionTokens })
-registerLicenseRoutes(app, { licenseService })
+registerLicenseRoutes(app, {
+  licenseService,
+  synchronizeOpenClawBillingRoute: async () => {
+    await synchronizeOpenClawBillingRoute()
+  },
+})
 
 const { staticRoot: STATIC_ROOT } = registerStaticUi(app, {
   staticDir: process.env.CONTROL_CENTER_STATIC_DIR?.trim(),

@@ -1,4 +1,4 @@
-import { AUTOMNIA_PUBLIC_CLOUD_URL, automniaCloudBaseUrl } from '../../config/automniaCloud'
+import { AUTOMNIA_PUBLIC_CLOUD_URL, automniaCloudBaseUrl, automniaCloudRuntimeBaseUrl } from '../../config/automniaCloud'
 
 export const DEFAULT_LICENSE_API_URL = AUTOMNIA_PUBLIC_CLOUD_URL
 const ACTIVATION_TIMEOUT_MS = 10_000
@@ -47,7 +47,8 @@ export class LicenseServiceError extends Error {
 }
 
 function licenseApiBaseUrl(value: string | undefined) {
-  return automniaCloudBaseUrl(value || process.env.AUTOMNIA_LICENSE_API_URL || DEFAULT_LICENSE_API_URL)
+  const explicitOverride = value || process.env.AUTOMNIA_LICENSE_API_URL
+  return explicitOverride ? automniaCloudBaseUrl(explicitOverride) : automniaCloudRuntimeBaseUrl(DEFAULT_LICENSE_API_URL)
 }
 
 function validCreditBalance(value: unknown): value is number {

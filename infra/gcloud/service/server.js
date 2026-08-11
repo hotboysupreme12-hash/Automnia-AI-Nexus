@@ -5,8 +5,8 @@ import { GoogleAuth } from 'google-auth-library';
 
 const app = express();
 const port = process.env.PORT || 8080;
-const serviceVersion = '2.0.0';
-const schemaVersion = '2026-08-11.1';
+const serviceVersion = '2.1.1';
+const schemaVersion = '2026-08-11.3';
 const secrets = (process.env.SHOPIFY_WEBHOOK_SECRETS || process.env.SHOPIFY_WEBHOOK_SECRET || '')
   .split(',')
   .map((value) => value.trim())
@@ -31,7 +31,7 @@ const creditTopups = firestore?.collection('automnia_credit_topups');
 const creditUsage = firestore?.collection('automnia_credit_usage');
 const shopifyWebhookEvents = firestore?.collection('automnia_shopify_webhook_events');
 
-app.use('/api', express.json({ limit: '4mb' }));
+app.use(['/api', '/v1'], express.json({ limit: '4mb' }));
 
 function generateLicenseKey(tierPrefix = 'AUT-NEXUS') {
   const segment = () => crypto.randomBytes(2).toString('hex').toUpperCase();
@@ -557,6 +557,299 @@ async function verifyLicenseRequest(emailValue, licenseKeyValue, res) {
 app.post('/api/verify', async (req, res) => verifyLicenseRequest(req.body?.email, req.body?.licenseKey, res));
 app.get('/api/verify', async (req, res) => verifyLicenseRequest(req.query.email, req.query.licenseKey, res));
 
+function openAiError(res, status, message, type = 'invalid_request_error', code) {
+  return res.status(status).json({
+    error: {
+      message,
+      type,
+      ...(code ? { code } : {}),
+    },
+  });
+}
+
+function openAiTextContent(content) {
+  if (typeof content === 'string') return content;
+  if (!Array.isArray(content)) return '';
+  return content.map((part) => {
+    if (!part || typeof part !== 'object') return '';
+    if (typeof part.text === 'string') return part.text;
+    if (typeof part.input_text === 'string') return part.input_text;
+    return '';
+  }).filter(Boolean).join('\n');
+}
+
+function vertexContentsFromOpenAiMessages(messages) {
+  const contents = [];
+  const systemParts = [];
+  const toolCallNames = new Map();
+
+  for (const rawMessage of Array.isArray(messages) ? messages : []) {
+    if (!rawMessage || typeof rawMessage !== 'object') continue;
+    const role = String(rawMessage.role || '').trim().toLowerCase();
+    const text = openAiTextContent(rawMessage.content);
+    if (role === 'system' || role === 'developer') {
+      if (text.trim()) systemParts.push({ text: text.trim() });
+      continue;
+    }
+    if (role === 'tool') {
+      const toolCallId = String(rawMessage.tool_call_id || '').trim();
+      const name = toolCallNames.get(toolCallId) || 'tool';
+      // Gemini 3.x attaches an opaque thought signature to function-call
+      // parts.  OpenAI-compatible callers do not retain that field when they
+      // send the assistant tool call back with its result.  Reconstructing a
+      // Vertex functionCall/functionResponse pair therefore causes Vertex to
+      // reject the continuation before it can be billed.  Preserve the tool
+      // context as ordinary transcript text instead.  The current request
+      // still receives the full tool declarations, so the model can make the
+      // next real function call normally.
+      const result = text.trim() || '(The runtime returned no output.)';
+      contents.push({
+        role: 'user',
+        parts: [{ text: `[Runtime tool result for ${name}]\n${result}` }],
+      });
+      continue;
+    }
+
+    const parts = [];
+    if (text.trim()) parts.push({ text: text.trim() });
+    if (role === 'assistant' && Array.isArray(rawMessage.tool_calls)) {
+      for (const call of rawMessage.tool_calls) {
+        const name = String(call?.function?.name || '').trim();
+        if (!name) continue;
+        const id = String(call?.id || '').trim();
+        if (id) toolCallNames.set(id, name);
+        let args = {};
+        const encoded = call?.function?.arguments;
+        if (typeof encoded === 'string' && encoded.trim()) {
+          try {
+            const parsed = JSON.parse(encoded);
+            if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) args = parsed;
+          } catch {
+            args = { input: encoded };
+          }
+        } else if (encoded && typeof encoded === 'object' && !Array.isArray(encoded)) {
+          args = encoded;
+        }
+        // See the tool-result branch above: do not replay a historical
+        // functionCall without Vertex's original thought signature.  A
+        // compact model transcript preserves the context for the continuation
+        // without relying on a provider-private field that OpenClaw cannot
+        // round-trip through the OpenAI tool-call shape.
+        parts.push({
+          text: `[Runtime tool request: ${name}]\nArguments: ${JSON.stringify(args)}`,
+        });
+      }
+    }
+    if (!parts.length) continue;
+    contents.push({ role: role === 'assistant' ? 'model' : 'user', parts });
+  }
+
+  return {
+    contents,
+    ...(systemParts.length ? { systemInstruction: { parts: systemParts } } : {}),
+  };
+}
+
+/**
+ * Gemini function declarations use a deliberately smaller OpenAPI-schema
+ * subset than OpenAI-compatible clients advertise.  OpenClaw supplies normal
+ * JSON Schema (for example `exclusiveMinimum`), which Vertex rejects before
+ * the model runs.  Normalize at the hosted boundary rather than weakening
+ * tool definitions in every client or allowing a billing-bypassing fallback.
+ */
+function vertexSchemaFromOpenAiSchema(value, depth = 0) {
+  if (!value || typeof value !== 'object' || Array.isArray(value) || depth > 16) return undefined;
+  const schema = {};
+  const rawType = value.type;
+  if (typeof rawType === 'string' && rawType.trim()) schema.type = rawType.trim();
+  else if (Array.isArray(rawType)) {
+    const supportedType = rawType.find((candidate) => typeof candidate === 'string' && candidate.toLowerCase() !== 'null');
+    if (supportedType) schema.type = supportedType;
+    if (rawType.some((candidate) => String(candidate).toLowerCase() === 'null')) schema.nullable = true;
+  }
+  for (const key of ['title', 'description', 'format', 'default', 'minimum', 'maximum', 'minLength', 'maxLength', 'minItems', 'maxItems', 'pattern']) {
+    if (value[key] !== undefined && value[key] !== null) schema[key] = value[key];
+  }
+  if (value.nullable === true) schema.nullable = true;
+  if (Array.isArray(value.enum)) schema.enum = value.enum.filter((candidate) => ['string', 'number', 'boolean'].includes(typeof candidate));
+  if (value.items && typeof value.items === 'object' && !Array.isArray(value.items)) {
+    const items = vertexSchemaFromOpenAiSchema(value.items, depth + 1);
+    if (items && Object.keys(items).length) schema.items = items;
+  }
+  if (value.properties && typeof value.properties === 'object' && !Array.isArray(value.properties)) {
+    const properties = {};
+    for (const [name, property] of Object.entries(value.properties)) {
+      const normalized = vertexSchemaFromOpenAiSchema(property, depth + 1);
+      if (normalized && Object.keys(normalized).length) properties[name] = normalized;
+    }
+    if (Object.keys(properties).length) schema.properties = properties;
+  }
+  if (Array.isArray(value.required)) {
+    const propertyNames = new Set(Object.keys(schema.properties || {}));
+    const required = value.required.filter((name) => typeof name === 'string' && propertyNames.has(name));
+    if (required.length) schema.required = required;
+  }
+  return schema;
+}
+
+function vertexToolsFromOpenAi(tools) {
+  const declarations = (Array.isArray(tools) ? tools : []).flatMap((tool) => {
+    if (!tool || typeof tool !== 'object' || tool.type !== 'function' || !tool.function || typeof tool.function !== 'object') return [];
+    const name = String(tool.function.name || '').trim();
+    if (!name) return [];
+    const declaration = { name };
+    if (typeof tool.function.description === 'string' && tool.function.description.trim()) declaration.description = tool.function.description.trim();
+    if (tool.function.parameters && typeof tool.function.parameters === 'object' && !Array.isArray(tool.function.parameters)) {
+      const parameters = vertexSchemaFromOpenAiSchema(tool.function.parameters);
+      if (parameters && Object.keys(parameters).length) declaration.parameters = parameters;
+    }
+    return [declaration];
+  });
+  return declarations.length ? [{ functionDeclarations: declarations }] : undefined;
+}
+
+function vertexToolConfigFromOpenAi(toolChoice) {
+  if (toolChoice === 'none') return { functionCallingConfig: { mode: 'NONE' } };
+  if (toolChoice === 'required') return { functionCallingConfig: { mode: 'ANY' } };
+  if (toolChoice && typeof toolChoice === 'object' && toolChoice.type === 'function') {
+    const name = String(toolChoice.function?.name || '').trim();
+    return name ? { functionCallingConfig: { mode: 'ANY', allowedFunctionNames: [name] } } : undefined;
+  }
+  return undefined;
+}
+
+function vertexCandidateResult(payload) {
+  const candidate = payload?.candidates?.[0] || {};
+  const parts = Array.isArray(candidate?.content?.parts) ? candidate.content.parts : [];
+  const text = parts.map((part) => typeof part?.text === 'string' ? part.text : '').filter(Boolean).join('');
+  const toolCalls = parts.flatMap((part, index) => {
+    const call = part?.functionCall;
+    const name = String(call?.name || '').trim();
+    if (!name) return [];
+    return [{
+      id: `call_${crypto.randomUUID().replace(/-/g, '').slice(0, 24)}_${index}`,
+      type: 'function',
+      function: {
+        name,
+        arguments: JSON.stringify(call?.args && typeof call.args === 'object' ? call.args : {}),
+      },
+    }];
+  });
+  const usage = payload?.usageMetadata || {};
+  const promptTokens = Math.max(0, Number(usage.promptTokenCount) || 0);
+  const completionTokens = Math.max(0, Number(usage.candidatesTokenCount) || 0);
+  const totalTokens = Math.max(0, Number(usage.totalTokenCount) || promptTokens + completionTokens);
+  return { text, toolCalls, promptTokens, completionTokens, totalTokens };
+}
+
+async function generateVertexContent(input) {
+  const client = await vertexAuth.getClient();
+  const accessToken = await client.getAccessToken();
+  if (!accessToken.token) throw new Error('Unable to obtain a Vertex AI service token.');
+  // Keep chat and function/tool turns on the same reference model. The
+  // incoming OpenAI-compatible model field is metadata only: customers may
+  // not select an arbitrary Vertex model through the hosted billing proxy.
+  const targetModel = 'gemini-3.6-flash';
+  const vertexHost = vertexLocation === 'global' ? 'aiplatform.googleapis.com' : `${vertexLocation}-aiplatform.googleapis.com`;
+  const vertexUrl = `https://${vertexHost}/v1/projects/${gcpProjectId}/locations/${vertexLocation}/publishers/google/models/${targetModel}:generateContent`;
+  let apiResponse = null;
+  let errText = '';
+  for (let attempt = 0; attempt < vertexRetryAttempts; attempt += 1) {
+    apiResponse = await fetch(vertexUrl, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${accessToken.token}` },
+      body: JSON.stringify(input),
+    });
+    if (apiResponse.ok) break;
+    errText = await apiResponse.text().catch(() => '');
+    const canRetry = retryableVertexStatus(apiResponse.status) && attempt + 1 < vertexRetryAttempts;
+    if (!canRetry) break;
+    const retryDelayMs = vertexRetryDelayMs(apiResponse, attempt);
+    console.warn(JSON.stringify({ event: 'vertex_retry_scheduled', upstreamStatus: apiResponse.status, attempt: attempt + 1, maxAttempts: vertexRetryAttempts, retryDelayMs }));
+    await delay(retryDelayMs);
+  }
+  if (!apiResponse?.ok) {
+    const upstreamStatus = apiResponse?.status || 503;
+    const error = new Error(errText || 'Vertex AI request failed.');
+    error.status = upstreamStatus === 429 ? 429 : 502;
+    error.retryable = retryableVertexStatus(upstreamStatus);
+    throw error;
+  }
+  return apiResponse.json();
+}
+
+async function resolveHostedRelayAccess(req) {
+  const email = normalizeEmail(req.get('X-Automnia-Email'));
+  const licenseKey = normalizeKey(req.get('X-Automnia-License-Key') || req.get('authorization')?.replace(/^Bearer\s+/i, ''));
+  if (!email || !licenseKey) return { error: 'Both X-Automnia-Email and a license key are required for Automnia Cloud routing.', status: 401 };
+  const record = await findLicense(email, licenseKey);
+  if (!record) return { error: 'No active license found matching this email and key.', status: 401 };
+  const mode = record.mode || (record.tier === 'founding_beta_byok' ? 'byok' : 'hosted_credits');
+  const credits = Math.max(0, Number(record.creditBalance) || 0);
+  if (mode === 'byok') return { error: 'BYOK access never uses Automnia Cloud billing. Configure your own provider first.', status: 403 };
+  if (credits <= 0) return { error: 'Credit balance exhausted. Refill your Automnia balance to continue.', status: 402 };
+  return { record, email, licenseKey, credits };
+}
+
+function writeOpenAiSse(res, payload) {
+  res.write(`data: ${JSON.stringify(payload)}\n\n`);
+}
+
+/**
+ * Standards-compatible transport for OpenClaw and other OpenAI-compatible
+ * clients. Credits are deducted in the same Firestore transaction used by
+ * the existing Automnia relay; tool-call turns are represented as Gemini
+ * function calls, so OpenClaw keeps ownership of tool execution and delivery.
+ */
+app.post('/v1/chat/completions', requireWritesEnabled, async (req, res) => {
+  try {
+    const access = await resolveHostedRelayAccess(req);
+    if (access.error) return openAiError(res, access.status, access.error, access.status === 402 ? 'insufficient_quota' : 'authentication_error');
+    const messages = Array.isArray(req.body?.messages) ? req.body.messages : [];
+    const converted = vertexContentsFromOpenAiMessages(messages);
+    if (!converted.contents.length) return openAiError(res, 400, 'At least one text, tool-call, or tool-response message is required.');
+    const maxOutputTokens = Math.max(128, Math.min(vertexMaxOutputTokens, Number(req.body?.max_tokens || req.body?.max_completion_tokens) || vertexMaxOutputTokens));
+    const payload = await generateVertexContent({
+      ...converted,
+      ...(vertexToolsFromOpenAi(req.body?.tools) ? { tools: vertexToolsFromOpenAi(req.body?.tools) } : {}),
+      ...(vertexToolConfigFromOpenAi(req.body?.tool_choice) ? { toolConfig: vertexToolConfigFromOpenAi(req.body?.tool_choice) } : {}),
+      generationConfig: { maxOutputTokens },
+    });
+    const result = vertexCandidateResult(payload);
+    const tokensUsed = result.totalTokens || Math.ceil(JSON.stringify(messages).length / 4);
+    const requestId = String(req.get('idempotency-key') || req.get('x-request-id') || crypto.randomUUID()).trim().slice(0, 160);
+    const debit = await deductCredits(access.record.orderId, tokensUsed, requestId);
+    const responseId = `chatcmpl_${crypto.randomUUID().replace(/-/g, '')}`;
+    const created = Math.floor(Date.now() / 1000);
+    const model = 'gemini-3.6-flash';
+    const message = {
+      role: 'assistant',
+      content: result.text || null,
+      ...(result.toolCalls.length ? { tool_calls: result.toolCalls } : {}),
+    };
+    const usage = { prompt_tokens: result.promptTokens, completion_tokens: result.completionTokens, total_tokens: tokensUsed };
+    console.log(JSON.stringify({ event: 'openai_compatible_generation', orderId: access.record.orderId, tokensUsed, deductedCredits: debit.deductedCredits, remainingCredits: debit.remainingCredits, toolCalls: result.toolCalls.length, duplicateUsageRequest: debit.duplicate }));
+    if (req.body?.stream === true) {
+      res.status(200);
+      res.set({ 'Content-Type': 'text/event-stream; charset=utf-8', 'Cache-Control': 'no-cache, no-transform', Connection: 'keep-alive', 'X-Accel-Buffering': 'no' });
+      writeOpenAiSse(res, { id: responseId, object: 'chat.completion.chunk', created, model, choices: [{ index: 0, delta: { role: 'assistant' }, finish_reason: null }] });
+      if (result.text) writeOpenAiSse(res, { id: responseId, object: 'chat.completion.chunk', created, model, choices: [{ index: 0, delta: { content: result.text }, finish_reason: null }] });
+      for (const [index, call] of result.toolCalls.entries()) {
+        writeOpenAiSse(res, { id: responseId, object: 'chat.completion.chunk', created, model, choices: [{ index: 0, delta: { tool_calls: [{ index, id: call.id, type: 'function', function: call.function }] }, finish_reason: null }] });
+      }
+      writeOpenAiSse(res, { id: responseId, object: 'chat.completion.chunk', created, model, choices: [{ index: 0, delta: {}, finish_reason: result.toolCalls.length ? 'tool_calls' : 'stop' }], ...(req.body?.stream_options?.include_usage ? { usage } : {}) });
+      res.write('data: [DONE]\n\n');
+      return res.end();
+    }
+    return res.status(200).json({ id: responseId, object: 'chat.completion', created, model, choices: [{ index: 0, message, finish_reason: result.toolCalls.length ? 'tool_calls' : 'stop' }], usage, automnia: { remainingCredits: debit.remainingCredits, deductedCredits: debit.deductedCredits, tier: access.record.tier } });
+  } catch (error) {
+    const status = Number(error?.status) || 502;
+    if (status === 429) res.set('Retry-After', '5');
+    console.error('OpenAI-compatible relay error:', error);
+    return openAiError(res, status, status === 429 ? 'Automnia Cloud is temporarily busy. Retry shortly; the route did not fall back.' : 'Automnia Cloud provider request failed.', status === 429 ? 'rate_limit_error' : 'api_error');
+  }
+});
+
 /**
  * AI Relay Proxy Endpoint for Subscription / Credit Pack Customers
  */
@@ -590,7 +883,7 @@ app.post('/api/ai/generate', requireWritesEnabled, async (req, res) => {
       });
     }
 
-    const { prompt, model = 'gemini-2.5-flash', messages } = req.body || {};
+    const { prompt, model = 'gemini-3.6-flash', messages } = req.body || {};
     const promptText = prompt || (Array.isArray(messages) ? messages.map((m) => m.content || m.text || '').join('\n') : '');
 
     if (!promptText.trim()) {
@@ -599,11 +892,12 @@ app.post('/api/ai/generate', requireWritesEnabled, async (req, res) => {
 
     // Customer-controlled model IDs are never passed upstream. Vertex AI uses the Cloud Run service identity,
     // so a client device never receives a master API key.
-    const targetModel = 'gemini-2.5-flash';
+    const targetModel = 'gemini-3.6-flash';
     const client = await vertexAuth.getClient();
     const accessToken = await client.getAccessToken();
     if (!accessToken.token) throw new Error('Unable to obtain a Vertex AI service token.');
-    const vertexUrl = `https://${vertexLocation}-aiplatform.googleapis.com/v1/projects/${gcpProjectId}/locations/${vertexLocation}/publishers/google/models/${targetModel}:generateContent`;
+    const vertexHost = vertexLocation === 'global' ? 'aiplatform.googleapis.com' : `${vertexLocation}-aiplatform.googleapis.com`;
+    const vertexUrl = `https://${vertexHost}/v1/projects/${gcpProjectId}/locations/${vertexLocation}/publishers/google/models/${targetModel}:generateContent`;
 
     let apiResponse = null;
     let errText = '';
