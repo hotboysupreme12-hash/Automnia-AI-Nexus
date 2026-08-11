@@ -7,6 +7,8 @@ const EMPTY_LICENSE: LicenseInfo = {
   active: false,
   email: null,
   tier: null,
+  mode: null,
+  creditBalance: null,
   activatedAt: null,
   verifiedAt: null,
 }

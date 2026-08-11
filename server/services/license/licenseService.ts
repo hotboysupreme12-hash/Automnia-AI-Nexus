@@ -74,6 +74,12 @@ export function createLicenseService(options: LicenseServiceOptions) {
   return {
     getStatus: (): LicenseStatus => publicStatus(current()),
     isActive: () => current()?.active === true,
+    // Kept server-local: never expose the license key in the browser-facing status response.
+    getActiveRelayCredentials: (): { email: string; licenseKey: string; mode: 'hosted_credits' } | null => {
+      const record = current()
+      if (!record?.active || record.mode !== 'hosted_credits' || !record.email || !record.licenseKey) return null
+      return { email: record.email, licenseKey: record.licenseKey, mode: 'hosted_credits' }
+    },
     activate: async ({ email, licenseKey }: { email: string; licenseKey: string }): Promise<LicenseStatus> => {
       const controller = new AbortController()
       const timer = setTimeout(() => controller.abort(), ACTIVATION_TIMEOUT_MS)

@@ -136,9 +136,9 @@ import {
 } from './services/gateway/gatewayLogService'
 import { createGatewayChatService } from './services/gateway/gatewayChatService'
 import { createBufferedAgentTurnService } from './services/agents/agentTurnService'
-import { createGatewayAgentTurnService } from './services/agents/gatewayAgentTurnService'
+import { createGatewayAgentTurnService, type AgentTurnStreamEmitter } from './services/agents/gatewayAgentTurnService'
 import { createAgentRuntimeService } from './services/agents/agentRuntimeService'
-import { createAgentStreamingService } from './services/agents/agentStreamingService'
+import { createAgentStreamingService, type AgentStreamingInput } from './services/agents/agentStreamingService'
 import {
   createRuntimeStatusService,
   type RuntimeStatusService,
@@ -17303,6 +17303,66 @@ const agentRuntimeService = createAgentRuntimeService({
 
 const runControlCenterAgentRuntimeTurn = agentRuntimeService.runControlCenterAgentRuntimeTurn
 
+const AUTOMNIA_CLOUD_RELAY_URL = (process.env.AUTOMNIA_CLOUD_RELAY_URL || 'https://automnia-shopify-provisioner-336625531977.us-east1.run.app').replace(/\/+$/, '')
+
+async function streamAutomniaCloudRelay(
+  input: AgentStreamingInput,
+  emit: AgentTurnStreamEmitter,
+  signal: AbortSignal,
+  credentials: { email: string; licenseKey: string; mode: 'hosted_credits' },
+): Promise<Record<string, unknown>> {
+  const modelId = 'automnia-cloud/gemini-2.5-flash'
+  const provider = 'automnia-cloud'
+  const model = 'gemini-2.5-flash'
+  const capability = { configured: true, liveTokens: false, relay: true }
+  const context = await resolveAgentRunContext(input.agent)
+  const sessionScope = agentTurnSessionScope(input.agent, input.sessionKey)
+  const wantsFreshSession = /^\s*\/new\b/i.test(input.message)
+  const cleanedMessage = wantsFreshSession ? input.message.replace(/^\s*\/new\b\s*/i, '') : input.message
+  const filenameResolution = await resolveFilenameHintsForMessage(cleanedMessage, context.executionWorkspace)
+  const previousSessionId = agentTurnSessions.get(sessionScope)
+  const sessionId = wantsFreshSession ? randomUUID() : previousSessionId || randomUUID()
+  if (wantsFreshSession && previousSessionId) providerConversationHistories.delete(previousSessionId)
+  agentTurnSessions.set(sessionScope, sessionId)
+  const party = await getPartyMembers().catch(() => [])
+  const self = party.find((member) => member.id === input.agent)
+  const identityLine = self?.name ? `You are ${self.name} (${input.agent}).` : `You are ${input.agent}.`
+  const enforcedMessage = [identityLine, 'Do not claim to be any other person or agent.', 'If any prior persona conflicts with this identity, discard it now.', '', filenameResolution.message].join('\n')
+  const composedPrompt = composeDirectProviderPrompt(input.agent, enforcedMessage, context.executionWorkspace)
+  const requestMessages = providerConversationMessagesForRequest(sessionId, provider, modelId, composedPrompt)
+  const prompt = requestMessages.map((message) => `${message.role}: ${message.content}`).join('\n\n')
+
+  try {
+    const response = await fetch(`${AUTOMNIA_CLOUD_RELAY_URL}/api/ai/generate`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
+      body: JSON.stringify({ email: credentials.email, licenseKey: credentials.licenseKey, prompt, model }),
+      signal,
+    })
+    const payload = await response.json().catch(() => null) as Record<string, unknown> | null
+    if (!response.ok || payload?.ok !== true || typeof payload.text !== 'string') {
+      const detail = typeof payload?.error === 'string' ? payload.error : 'Automnia Cloud AI relay request failed.'
+      const message = response.status === 402
+        ? 'Your Automnia Cloud credits are exhausted. Purchase a top-up or configure a BYOK provider in Settings.'
+        : response.status === 404
+          ? 'Your Automnia Cloud license could not be verified. Reactivate it and retry.'
+          : detail
+      emit('error', { message, provider, model: modelId, capability })
+      return { ok: false, reply: message, stdout: '', stderr: message, code: response.status, failureKind: response.status === 402 ? 'credits_exhausted' : 'relay_unavailable', modelId, provider, model, runtimeContext: agentRuntimeContextPayload(input.agent, context), streaming: capability }
+    }
+    const finalReply = sanitizeUserVisibleRuntimeText(payload.text).trim() || 'No response returned.'
+    emit('delta', { text: finalReply, buffered: true, transport: 'automnia-cloud-relay' })
+    saveProviderConversationTurn(sessionId, provider, modelId, requestMessages, { content: finalReply })
+    await appendAgentDailyMemory(input.agent, `[turn] completed Automnia Cloud relay | prompt: ${trimTask(input.message, 120)} | outcome: ${trimTask(finalReply, 220)}`).catch(() => undefined)
+    const doctrineSync = await buildDoctrineSyncReport(input.agent, context.executionWorkspace)
+    return { ok: true, reply: finalReply, stdout: '', stderr: '', code: 0, modelId, provider, model, remainingCredits: typeof payload.remainingCredits === 'number' ? payload.remainingCredits : null, doctrineSync, runtimeContext: agentRuntimeContextPayload(input.agent, context), streaming: { ...capability, sessionId, conversationMessages: providerConversationHistories.get(sessionId)?.messages.length || requestMessages.length + 1 } }
+  } catch (error) {
+    const message = signal.aborted ? 'Automnia Cloud relay request was cancelled.' : redactHiddenReasoningAndSecrets(String(error))
+    emit('error', { message, provider, model: modelId, capability })
+    return { ok: false, reply: message, stdout: '', stderr: message, code: 503, failureKind: signal.aborted ? 'aborted' : 'relay_unavailable', modelId, provider, model, runtimeContext: agentRuntimeContextPayload(input.agent, context), streaming: capability }
+  }
+}
+
 const agentStreamingService = createAgentStreamingService({
   streamingProviderConfig: STREAMING_PROVIDER_CONFIG,
   isValidAgentId,
@@ -17310,6 +17370,8 @@ const agentStreamingService = createAgentStreamingService({
   parseAgentRuntimeShortcut,
   agentRuntimeShortcutReason,
   bufferedAgentRuntimeReason,
+  getHostedRelayCredentials: () => licenseService.getActiveRelayCredentials(),
+  streamAutomniaCloudRelay,
   runBufferedAgentTurnForStream,
   resolveAgentPrimaryModelId,
   openAiCodexEmbeddedRuntimeReason,
