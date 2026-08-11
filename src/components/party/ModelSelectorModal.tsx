@@ -12,6 +12,8 @@ import {
   type AuthProviderStatus,
 } from '../../api/providerAuth'
 import { formatModelGroupLabel, groupAvailableModels } from '../../utils/modelGrouping'
+import { resolveLicenseEntitlement } from '../../utils/licenseEntitlement'
+import { useLicense } from '../../context/useLicense'
 
 interface AvailableModel {
   id: string
@@ -136,6 +138,7 @@ export function ModelSelectorModal({
   onClose,
   onSave,
 }: ModelSelectorModalProps) {
+  const { license } = useLicense()
   const [models, setModels] = useState<AvailableModel[]>([])
   const [loading, setLoading] = useState(false)
   const [saving, setSaving] = useState(false)
@@ -251,6 +254,10 @@ export function ModelSelectorModal({
       && primaryProviderStatus.oauth.expiresAt
       && primaryProviderStatus.oauth.expiresAt <= Date.now(),
   )
+  const entitlement = resolveLicenseEntitlement(license)
+  const usesHostedCredits = entitlement.isHosted
+  const usesByok = entitlement.isByok
+  const providerFirst = usesHostedCredits && license?.usagePriority === 'provider_first'
   const modelGroups = useMemo(() => groupAvailableModels(selectableModels), [selectableModels])
   const fallbackModelGroups = useMemo(
     () => groupAvailableModels(selectableModels.filter((model) => model.id !== selectedPrimary)),
@@ -309,10 +316,14 @@ export function ModelSelectorModal({
             <p className="text-center text-slate-300">Loading models...</p>
           ) : (
             <>
+              <div data-model-selector-billing-route={usesHostedCredits ? providerFirst ? 'provider-first' : 'automnia-first' : usesByok ? 'byok' : 'unconfigured'} className={`mb-4 rounded-xl border p-3 ${usesHostedCredits ? 'border-emerald-300/25 bg-emerald-400/[0.07] text-emerald-100' : usesByok ? 'border-sky-300/25 bg-sky-400/[0.07] text-sky-100' : 'border-slate-300/20 bg-slate-950/40 text-slate-200'}`}>
+                <p className="text-sm font-semibold">{usesHostedCredits ? `${entitlement.tierLabel} — ${providerFirst ? 'My Provider First' : 'Automnia Credits First'}` : usesByok ? `${entitlement.tierLabel} — Your Provider Account` : 'License route not configured'}</p>
+                <p className="mt-1 text-xs text-slate-300">{usesHostedCredits ? providerFirst ? 'This connected provider or OAuth account is used first. Automnia credits are used automatically if that route cannot complete the request.' : 'Automnia credits are used first for every message. This connected provider or OAuth account remains the automatic fallback.' : usesByok ? 'This selection uses the customer’s connected provider account. Add an API key or sign in normally whenever that provider asks.' : 'Activate a Cloud Subscription or BYOK license before sending agent messages.'}</p>
+              </div>
               <div className="mb-4 grid gap-4 sm:grid-cols-[1.2fr_0.8fr]">
                 <div className="space-y-2">
-                  <h4 className="text-lg font-semibold text-slate-100">Primary Model</h4>
-                  <p className="text-xs text-slate-300">Select the primary model for this agent.</p>
+                  <h4 className="text-lg font-semibold text-slate-100">{usesHostedCredits ? providerFirst ? 'Primary Provider Model' : 'Provider Fallback Model' : 'Primary Model'}</h4>
+                  <p className="text-xs text-slate-300">{usesHostedCredits ? providerFirst ? 'This model and its connected key or OAuth account are attempted before Automnia credits.' : 'Used if the metered Automnia Cloud route cannot complete the request.' : 'Select the primary model for this agent.'}</p>
                   {primaryProviderStatus && !primaryProviderStatus.configured && (
                     <div className="rounded-lg border border-amber-400/30 bg-amber-900/30 px-3 py-2 text-xs text-amber-100">
                       Missing {primaryProviderLabel} {primaryProviderAuthKind}. Connect it before using this model.

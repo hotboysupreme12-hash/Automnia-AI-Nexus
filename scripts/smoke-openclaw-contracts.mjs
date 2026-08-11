@@ -129,8 +129,8 @@ assertIncludes(runtimeStatusService, 'listActiveCronJobViews({ sqlite: false })'
 assertIncludes(runtimeLedger, 'runtimeLedgerStatus(options: LedgerReadOptions = {})', 'Runtime ledger status can skip synchronous SQLite')
 assertIncludes(runtimeLedgerStore, 'status: (options?: RuntimeLedgerReadOptions) => runtimeLedgerStatus(options)', 'Runtime ledger store exposes non-blocking status reads')
 assertIncludes(gatewayAgentTurnService, 'const gatewayMessage = options.composeAgentDoctrinePrompt(', 'Command Console Gateway chat message composition')
-assertIncludes(agentTurnRoutes, "const forcedGatewayConsoleTurn = parsed.data.forceOpenClawRuntime && parsed.data.source !== 'clawtalk'", 'Command Console forced Gateway fast path')
-assertIncludes(agentTurnRoutes, "if (!forcedGatewayConsoleTurn)", 'Command Console skips heavy route preflight for forced Gateway turns')
+assertIncludes(agentTurnRoutes, "const forcedGatewayConsoleTurn = gatewayRoute && parsed.data.source !== 'clawtalk'", 'Command Console forced Gateway fast path respects hosted-credit routing')
+assertIncludes(agentTurnRoutes, "if (!hostedCreditRoute && !forcedGatewayConsoleTurn)", 'Hosted-credit and forced Gateway turns skip local runtime preflight')
 assertIncludes(gatewayAgentTurnService, 'if (isClawTalkRoute)', 'ClawTalk keeps channel-specific runtime preflight')
 assertIncludes(gatewayChatService, "request('chat.send'", 'Gateway chat.send call')
 assertNotIncludes(gatewayChatService, 'deliver: false', 'Command Console chat.send leaves WebChat delivery semantics to Gateway')
@@ -253,19 +253,19 @@ assertIncludes(server, "res.write(': connected\\n\\n')", 'SSE connection comment
 assertOrderedIncludes(agentTurnStreamRoute, [
   'initializeSseResponse(res)',
   "emit('status'",
-  'Command accepted; opening the Gateway-backed OpenClaw session.',
+  'BYOK/runtime request accepted; opening the Gateway-backed OpenClaw session.',
   "emit('progress'",
-  'Opening Gateway chat session.',
-  "if (!forcedGatewayConsoleTurn)",
+  'Opening Gateway chat session with your configured provider.',
+  "if (!hostedCreditRoute && !forcedGatewayConsoleTurn)",
   'await ensureOpenclawAgentRunConfigDefaults()',
   "emit('progress'",
-  'Runtime ready; dispatching through Gateway chat.',
+  'Runtime ready; dispatching through your Gateway provider.',
   'const payload = await streamProviderAgentTurn',
   "emit('final'",
 ], 'Command Console stream SSE startup order')
 
-assertIncludes(agentTurnStreamRoute, "transport: parsed.data.forceOpenClawRuntime ? 'gateway-chat' : 'control-center-sse'", 'Command Console stream transport metadata')
-assertIncludes(agentTurnStreamRoute, 'liveTokens: parsed.data.forceOpenClawRuntime', 'Command Console stream live-token metadata')
+assertIncludes(agentTurnStreamRoute, 'transport: initialTransport', 'Command Console stream transport metadata')
+assertIncludes(agentTurnStreamRoute, 'liveTokens: gatewayRoute', 'Command Console stream live-token metadata')
 assertIncludes(agentTurnStreamRoute, 'splitTextForSse(text)', 'Command Console stream delta chunking')
 assertIncludes(agentTurnStreamRoute, 'if (!closed) res.end()', 'Command Console stream response cleanup')
 assertIncludes(agentRuntimeTurn, "if (params.signal?.aborted) throw error", 'Command Console abort avoids transport fallback catch')

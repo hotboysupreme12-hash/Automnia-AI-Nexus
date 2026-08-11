@@ -2,6 +2,10 @@ import type { AgentSkillEntry, AgentTurnAttachment, FastModeDefault, ThinkingLev
 import { apiUrl } from '../utils/apiUrl'
 import { createSseFrameParser, type SseFrame } from '../utils/sseStream'
 import { apiRequest, type ApiRequestOptions, type ApiResult } from './client'
+import {
+  LICENSE_STATUS_UPDATED_EVENT,
+  type HostedCreditBalanceUpdate,
+} from '../utils/licenseEntitlement'
 
 export type AgentRuntimePreflightPayload = {
   agent?: string
@@ -35,6 +39,10 @@ export type AgentTurnPayload = {
   modelId?: string
   provider?: string
   failureKind?: string
+  remainingCredits?: number | null
+  creditBalanceSynchronized?: boolean
+  usagePriority?: 'automnia_first' | 'provider_first'
+  fallbackUsed?: boolean
   runtimeTransport?: 'gateway-chat' | 'gateway' | 'local'
   gatewayFallbackDetail?: string
   streaming?: {
@@ -44,6 +52,7 @@ export type AgentTurnPayload = {
     transport?: string
     liveTokens?: boolean
     buffered?: boolean
+    billingMode?: 'hosted_credits'
   }
   learnedSkills?: AgentSkillEntry[]
   incompleteRun?: boolean
@@ -101,6 +110,25 @@ async function readAgentTurnSseFrames(response: Response, onFrame: AgentTurnStre
   for (const frame of sseParser.flush()) onFrame(frame)
 }
 
+function notifyHostedCreditBalanceUpdated(payload: AgentTurnPayload) {
+  if (
+    payload.provider !== 'automnia-cloud' ||
+    typeof payload.remainingCredits !== 'number' ||
+    !Number.isFinite(payload.remainingCredits) ||
+    typeof window === 'undefined'
+  ) return
+  const detail: HostedCreditBalanceUpdate = {
+    creditBalance: payload.remainingCredits,
+    creditBalanceUpdatedAt: new Date().toISOString(),
+    synchronized: payload.creditBalanceSynchronized === true,
+  }
+  // Keep post-turn billing reconciliation outside the response/render batch.
+  // The command console can finish painting before the account badge updates.
+  window.setTimeout(() => {
+    window.dispatchEvent(new CustomEvent<HostedCreditBalanceUpdate>(LICENSE_STATUS_UPDATED_EVENT, { detail }))
+  }, 0)
+}
+
 export function preflightAgentRuntime(agentId: string): Promise<ApiResult<AgentRuntimePreflightPayload>> {
   return apiRequest<AgentRuntimePreflightPayload>('/api/openclaw/agent-preflight', {
     method: 'POST',
@@ -134,27 +162,25 @@ export async function sendStreamingAgentTurn(
   const contentType = response.headers.get('content-type') || ''
   if (response.body && contentType.includes('text/event-stream')) {
     await readAgentTurnSseFrames(response, options.onFrame)
-    return options.onStreamComplete(response)
+    const completed = options.onStreamComplete(response)
+    notifyHostedCreditBalanceUpdated(completed.payload)
+    return completed
   }
   const read = await readAgentTurnResponsePayload<AgentTurnPayload>(response)
-  return {
+  const completed = {
     payload: read.payload || options.fallbackPayload(response, read.text),
     responseOk: response.ok,
     streamed: false,
   }
+  notifyHostedCreditBalanceUpdated(completed.payload)
+  return completed
 }
 
-export function prewarmAgentTurn(agentId: string): Promise<ApiResult<AgentTurnPayload>> {
-  return apiRequest<AgentTurnPayload>('/api/openclaw/agent-turn', {
-    method: 'POST',
-    timeoutMs: 60_000,
-    body: {
-      agent: agentId,
-      message: 'Confirm readiness in one word: ready.',
-      thinking: 'off',
-      promptProfile: 'fast',
-    },
-  })
+export function prewarmAgentTurn(agentId: string): Promise<ApiResult<AgentRuntimePreflightPayload>> {
+  // Warming an agent is an infrastructure check, not a customer prompt. Keep
+  // it non-generative so startup never spends hosted credits in the
+  // background; actual user turns use the metered stream/buffered routes.
+  return preflightAgentRuntime(agentId)
 }
 
 export function clearAgentTurnSessions(): Promise<ApiResult<AgentTurnSessionClearPayload>> {

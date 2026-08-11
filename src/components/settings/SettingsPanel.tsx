@@ -1,5 +1,6 @@
 import { useMemo, useState } from 'react'
 import type { ReactNode } from 'react'
+import { useLicense } from '../../context/useLicense'
 import { DEFAULT_MISSION_DRAFT } from '../../data/seeds'
 import {
   DEFAULT_SPEECH_SETTINGS,
@@ -10,6 +11,7 @@ import {
 } from '../../speech/speechSettings'
 import { clearAllCommandConsoleDrafts } from '../../store/commandConsoleState'
 import { useNexusStore } from '../../store/nexusStore'
+import { resolveLicenseEntitlement } from '../../utils/licenseEntitlement'
 import type {
   CapabilityKey,
   CollaborationMode,
@@ -48,7 +50,7 @@ import {
 } from './workspaceSettings'
 
 type NoticeTone = 'neutral' | 'success' | 'warning' | 'error'
-type SettingsSectionId = 'appearance' | 'workspace' | 'voice' | 'missions' | 'agents' | 'data'
+type SettingsSectionId = 'account' | 'appearance' | 'workspace' | 'voice' | 'missions' | 'agents' | 'data'
 type RuntimeTargetScope = 'party' | 'selection'
 type PendingConfirmation = 'reset-all' | 'reset-runtime' | 'clear-workspace' | null
 
@@ -69,6 +71,7 @@ const SETTINGS_SECTIONS: Array<{
   description: string
   keywords: string
 }> = [
+  { id: 'account', label: 'Account & License', description: 'License key, credits and account details', keywords: 'account license credits key email tier balance provider oauth usage priority automnia fallback' },
   { id: 'appearance', label: 'Appearance', description: 'Theme, density and accessibility', keywords: 'theme color accent contrast glow motion forms scrollbar interface display' },
   { id: 'workspace', label: 'Workspace', description: 'Registry and command console', keywords: 'agents registry cards grid list sort filter console width drafts layout' },
   { id: 'voice', label: 'Voice', description: 'Transcription and microphone', keywords: 'speech microphone local cloud online silence pause noise echo gain recording' },
@@ -120,6 +123,7 @@ function defaultRuntimeDraft(agent?: Pick<OpenClawAgent, 'heartbeat' | 'runtimeP
 
 function SettingsGlyph({ name }: { name: SettingsSectionId }) {
   const paths: Record<SettingsSectionId, ReactNode> = {
+    account: <><path d="M12 2a5 5 0 0 0-5 5v3H6a2 2 0 0 0-2 2v8a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-8a2 2 0 0 0-2-2h-1V7a5 5 0 0 0-5-5zm-3 5a3 3 0 0 1 6 0v3H9V7zm3 8a1.5 1.5 0 1 1 0 3 1.5 1.5 0 0 1 0-3z" /></>,
     appearance: <><path d="M12 3a9 9 0 1 0 9 9c0-1.1-.9-2-2-2h-1.5a1.5 1.5 0 0 1-1.3-2.2l.4-.7A1.7 1.7 0 0 0 15.1 4H12Z" /><path d="M7.5 12h.01M9.5 7.5h.01M14.5 7h.01" /></>,
     workspace: <><rect x="3" y="4" width="18" height="16" rx="2" /><path d="M8 4v16M8 9h13" /></>,
     voice: <><rect x="9" y="3" width="6" height="11" rx="3" /><path d="M5 10a7 7 0 0 0 14 0M12 17v4M8 21h8" /></>,
@@ -196,7 +200,26 @@ function SegmentedControl<T extends string>({ value, options, label, onChange }:
   )
 }
 
+function formatCreditBalance(value: number | null | undefined) {
+  return typeof value === 'number' && Number.isFinite(value) ? `${value.toLocaleString('en-US')} credits` : 'Awaiting a confirmed balance'
+}
+
+function formatAccountTimestamp(value: string | null | undefined) {
+  if (!value) return 'Not reported yet'
+  const timestamp = new Date(value)
+  return Number.isNaN(timestamp.getTime())
+    ? 'Not reported yet'
+    : timestamp.toLocaleString(undefined, {
+      month: 'short',
+      day: 'numeric',
+      year: 'numeric',
+      hour: 'numeric',
+      minute: '2-digit',
+    })
+}
+
 export function SettingsPanel() {
+  const { license, refresh: refreshLicense, setUsagePriority, openSubscriptionCheckout, requestLicenseActivation } = useLicense()
   const agents = useNexusStore((state) => state.agents)
   const activePartyIds = useNexusStore((state) => state.activePartyIds)
   const selectedAgentIds = useNexusStore((state) => state.selectedAgentIds)
@@ -213,7 +236,7 @@ export function SettingsPanel() {
   const selectAgent = useNexusStore((state) => state.selectAgent)
   const clearSelectedAgents = useNexusStore((state) => state.clearSelectedAgents)
 
-  const [activeSection, setActiveSection] = useState<SettingsSectionId>('appearance')
+  const [activeSection, setActiveSection] = useState<SettingsSectionId>('account')
   const [searchQuery, setSearchQuery] = useState('')
   const [uiSettings, setUiSettings] = useState<DystopAIUiSettings>(() => readUiSettings())
   const [speechSettings, setSpeechSettings] = useState<SpeechSettings>(() => readSpeechSettings())
@@ -222,6 +245,12 @@ export function SettingsPanel() {
   const [targetScope, setTargetScope] = useState<RuntimeTargetScope>(() => activePartyIds.length ? 'party' : 'selection')
   const [pendingConfirmation, setPendingConfirmation] = useState<PendingConfirmation>(null)
   const [notice, setNotice] = useState<{ tone: NoticeTone; text: string }>({ tone: 'neutral', text: 'Every preference saves automatically and applies immediately.' })
+  const [accountRefreshBusy, setAccountRefreshBusy] = useState(false)
+  const [accountRefreshError, setAccountRefreshError] = useState('')
+  const [checkoutBusy, setCheckoutBusy] = useState(false)
+  const [checkoutError, setCheckoutError] = useState('')
+  const [usagePriorityBusy, setUsagePriorityBusy] = useState(false)
+  const [usagePriorityError, setUsagePriorityError] = useState('')
 
   const partyTargetIds = useMemo(() => activePartyIds.filter((id) => agents.some((agent) => agent.id === id)), [activePartyIds, agents])
   const selectedTargetIds = useMemo(() => selectedAgentIds.filter((id) => agents.some((agent) => agent.id === id)), [agents, selectedAgentIds])
@@ -551,7 +580,135 @@ export function SettingsPanel() {
     </div>
   )
 
+  const renderAccount = () => {
+    const entitlement = resolveLicenseEntitlement(license)
+    const hostedCredits = entitlement.isHosted
+    const isByok = entitlement.isByok
+    const usagePriority = license?.usagePriority === 'provider_first' ? 'provider_first' : 'automnia_first'
+    const balance = hostedCredits ? formatCreditBalance(license?.creditBalance) : 'Not applicable — provider-billed'
+    const refreshAccount = async () => {
+      if (accountRefreshBusy) return
+      setAccountRefreshBusy(true)
+      setAccountRefreshError('')
+      try {
+        await refreshLicense()
+      } catch (error) {
+        setAccountRefreshError(error instanceof Error ? error.message : 'Could not refresh the account balance.')
+      } finally {
+        setAccountRefreshBusy(false)
+      }
+    }
+    const openCheckout = async () => {
+      if (checkoutBusy) return
+      setCheckoutBusy(true)
+      setCheckoutError('')
+      try {
+        await openSubscriptionCheckout()
+      } catch (error) {
+        setCheckoutError(error instanceof Error ? error.message : 'Could not open Shopify checkout.')
+      } finally {
+        setCheckoutBusy(false)
+      }
+    }
+    const saveUsagePriority = async (nextPriority: 'automnia_first' | 'provider_first') => {
+      if (!hostedCredits || usagePriorityBusy || nextPriority === usagePriority) return
+      setUsagePriorityBusy(true)
+      setUsagePriorityError('')
+      try {
+        await setUsagePriority(nextPriority)
+        setNotice({
+          tone: 'success',
+          text: nextPriority === 'provider_first'
+            ? 'Usage priority saved: your connected provider will be used before Automnia credits.'
+            : 'Usage priority saved: Automnia credits will be used before your connected provider.',
+        })
+      } catch (error) {
+        setUsagePriorityError(error instanceof Error ? error.message : 'Could not save the usage priority.')
+      } finally {
+        setUsagePriorityBusy(false)
+      }
+    }
+
+    return (
+      <div className="dui-settings-section" id="settings-section-account" role="tabpanel">
+        <SectionHeader section="account" eyebrow="Automnia AI Nexus Plan, Access & Billing" />
+        <SettingsCard title="Active Plan & Access" description="Google Cloud confirms subscription access and reconciles hosted-credit balances after each request without interrupting the workspace.">
+          <Field label="Account Email" hint="Registered subscriber address.">
+            <input type="text" readOnly value={license?.email || 'Not reported'} style={{ fontWeight: 'bold', backgroundColor: 'rgba(255, 255, 255, 0.05)', cursor: 'not-allowed' }} />
+          </Field>
+          <Field label="License Authorization" hint="The license key remains server-local and is never revealed in the app.">
+            <input type="text" readOnly value={license?.active ? 'Active — stored securely on this device' : 'No active license'} style={{ backgroundColor: 'rgba(255, 255, 255, 0.05)', cursor: 'not-allowed' }} />
+          </Field>
+          <Field label="Plan or Access Tier" hint="The exact entitlement activated for this account.">
+            <input type="text" readOnly value={entitlement.tierLabel} style={{ fontWeight: 'bold', backgroundColor: 'rgba(255, 255, 255, 0.05)', cursor: 'not-allowed' }} />
+          </Field>
+          <Field label="Access & Billing Mode" hint="Hosted subscriptions use Automnia credits. One-time BYOK access uses the provider account that the customer connects.">
+            <input type="text" readOnly value={entitlement.billingLabel} style={{ backgroundColor: 'rgba(255, 255, 255, 0.05)', cursor: 'not-allowed' }} />
+          </Field>
+          <Field label="Usage Priority" hint={hostedCredits ? 'Choose which balance is attempted first. The other route remains available as automatic fallback.' : isByok ? 'BYOK access always uses the connected provider account.' : 'Activate a hosted plan to choose a usage priority.'}>
+            <select
+              value={hostedCredits ? usagePriority : 'provider_first'}
+              disabled={!hostedCredits || usagePriorityBusy}
+              onChange={(event) => void saveUsagePriority(event.target.value as 'automnia_first' | 'provider_first')}
+            >
+              <option value="automnia_first">Automnia credits first</option>
+              <option value="provider_first">My connected provider first</option>
+            </select>
+          </Field>
+          <Field label="Effective Agent Route" hint={hostedCredits ? 'This saved preference applies to normal messages, /runtime, /work, /openclaw, streamed turns, and buffered recovery.' : isByok ? 'Choose a model, then add that provider API key or sign in from Model Settings. The provider bills those requests directly.' : 'Activate a Cloud Subscription or BYOK license to enable agent messages.'}>
+            <input type="text" readOnly value={entitlement.defaultRouteLabel} style={{ fontWeight: 'bold', backgroundColor: hostedCredits ? 'rgba(16, 185, 129, 0.10)' : isByok ? 'rgba(56, 189, 248, 0.10)' : 'rgba(255, 255, 255, 0.05)', cursor: 'not-allowed' }} />
+          </Field>
+          <section className="dui-settings-billing-summary" data-billing-mode={hostedCredits ? 'hosted' : isByok ? 'byok' : 'inactive'} aria-label="Subscription and credit summary">
+            <div className="dui-settings-billing-summary__head">
+              <div>
+                <span>Automnia billing</span>
+                <strong>{hostedCredits ? entitlement.tierLabel : isByok ? 'BYOK one-time access' : 'Plan status'}</strong>
+                <small>{hostedCredits ? usagePriority === 'provider_first' ? 'Your connected provider is used first; Automnia credits are the fallback.' : 'Automnia credits are used first; your connected provider is the fallback.' : isByok ? 'Your provider charges usage directly. You can upgrade to Automnia Cloud any time.' : 'Activate a license to receive your current entitlement.'}</small>
+              </div>
+              <b>{entitlement.statusLabel}</b>
+            </div>
+            <dl className="dui-settings-billing-summary__metrics">
+              <div>
+                <dt>Plan or access</dt>
+                <dd title={license?.tier || undefined}>{entitlement.tierLabel}</dd>
+              </div>
+              <div>
+                <dt>Confirmed balance</dt>
+                <dd data-balance="true">{balance}</dd>
+              </div>
+              <div>
+                <dt>Balance updated</dt>
+                <dd>{hostedCredits ? formatAccountTimestamp(license?.creditBalanceUpdatedAt) : 'Not applicable — provider-billed'}</dd>
+              </div>
+            </dl>
+          </section>
+          <div className="dui-settings-inline" style={{ marginTop: '1rem' }}>
+            <button type="button" onClick={() => void refreshAccount()} disabled={accountRefreshBusy || !license?.active}>
+              {accountRefreshBusy ? 'Refreshing account…' : hostedCredits ? 'Refresh account balance' : 'Refresh account access'}
+            </button>
+          </div>
+          <div className="dui-settings-inline" style={{ marginTop: '0.75rem' }}>
+            <button type="button" onClick={() => void openCheckout()} disabled={checkoutBusy}>
+              {checkoutBusy ? 'Opening secure Shopify checkout...' : hostedCredits ? 'Refill credits or change plan' : isByok ? 'Upgrade to a subscription on Shopify' : 'Choose a plan on Shopify'}
+            </button>
+          </div>
+          <div className="dui-settings-inline" style={{ marginTop: '0.75rem' }}>
+            <button type="button" onClick={requestLicenseActivation} disabled={!license?.active}>
+              {isByok ? 'Enter Cloud Subscription key' : 'Change license key'}
+            </button>
+          </div>
+          {hostedCredits && <p style={{ color: '#99f6e4', margin: '0.75rem 0 0', fontSize: '0.84rem' }}>Refills convert the Shopify purchase amount into Automnia credits automatically. Google Cloud confirms the payment and adds the credits to this balance.</p>}
+          {isByok && <p style={{ color: '#93c5fd', margin: '0.75rem 0 0', fontSize: '0.84rem' }}>Keep using your own provider keys or regular provider sign-in. You can subscribe for hosted Automnia credits at any time; Shopify handles checkout and Google Cloud updates the entitlement after payment.</p>}
+          {accountRefreshError && <p role="alert" style={{ color: '#fb7185', margin: '0.75rem 0 0' }}>{accountRefreshError}</p>}
+          {checkoutError && <p role="alert" style={{ color: '#fb7185', margin: '0.75rem 0 0' }}>{checkoutError}</p>}
+          {usagePriorityError && <p role="alert" style={{ color: '#fb7185', margin: '0.75rem 0 0' }}>{usagePriorityError}</p>}
+        </SettingsCard>
+      </div>
+    )
+  }
+
   const renderSection = (section: SettingsSectionId) => {
+    if (section === 'account') return renderAccount()
     if (section === 'appearance') return renderAppearance()
     if (section === 'workspace') return renderWorkspace()
     if (section === 'voice') return renderVoice()

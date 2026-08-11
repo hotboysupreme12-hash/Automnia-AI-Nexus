@@ -7,6 +7,13 @@ import { DEFAULT_MISSION_DRAFT, SKILL_TREE, makeDormantState } from '../data/see
 import { apiErrorMessage } from '../api/client'
 import { resolveInteractiveConsoleThinking } from './commandConsoleRuntimePolicy'
 import {
+  bufferedFromTurnPayload,
+  modelIdFromParts,
+  modelIdFromTurnPayload,
+  remainingCreditsFromTurnPayload,
+  transportFromTurnPayload,
+} from './agentTurnProjection'
+import {
   clearAgentTurnSessions,
   preflightAgentRuntime as requestAgentRuntimePreflight,
   prewarmAgentTurn,
@@ -1294,30 +1301,6 @@ export const useNexusStore = create<NexusState>()(
         for (const l of lines) { try { const e = parseNested(JSON.parse(l.replace(/,$/, ''))); if (e) extracted.push(e) } catch { if (!/^"?[a-zA-Z0-9_]+"?\s*:/.test(l.replace(/,$/, ''))) extracted.push(l.replace(/,$/, '').replace(/^"|"$/g, '').trim()) } }
         return strip(extracted.join('\n')) || 'No response.'
       }
-      const modelIdFromParts = (provider?: string, model?: string) => {
-        const providerText = provider?.trim()
-        const modelText = model?.trim()
-        if (!modelText) return ''
-        if (modelText.includes('/')) return modelText
-        return providerText ? `${providerText}/${modelText}` : modelText
-      }
-      const modelIdFromTurnPayload = (payload?: AT | null) => {
-        if (!payload) return ''
-        return (
-          payload.modelId?.trim() ||
-          modelIdFromParts(payload.provider, payload.model) ||
-          payload.streaming?.modelId?.trim() ||
-          modelIdFromParts(payload.streaming?.provider, payload.streaming?.model)
-        )
-      }
-      const transportFromTurnPayload = (payload?: AT | null) => {
-        const streamingTransport = payload?.streaming?.transport?.trim()
-        if (streamingTransport) return streamingTransport
-        const runtimeTransport = payload?.runtimeTransport?.trim()
-        if (runtimeTransport) return `${runtimeTransport}-agent`
-        return ''
-      }
-      const bufferedFromTurnPayload = (payload?: AT | null) => payload?.streaming?.buffered === true || payload?.streaming?.liveTokens === false
       const isRuntimeNoticeTransport = (transport?: string) => {
         const clean = transport?.trim().toLowerCase()
         return clean === 'buffered-openclaw' ||
@@ -1361,7 +1344,7 @@ export const useNexusStore = create<NexusState>()(
         ok: boolean,
         dur = 0,
         modelId = '',
-        meta: Partial<Pick<AgentResponse, 'failureKind' | 'transport' | 'buffered' | 'queuedAt' | 'startedAt' | 'firstTokenAt' | 'completedAt' | 'tokenCountEstimate'>> = {},
+        meta: Partial<Pick<AgentResponse, 'failureKind' | 'transport' | 'buffered' | 'queuedAt' | 'startedAt' | 'firstTokenAt' | 'completedAt' | 'tokenCountEstimate' | 'remainingCredits'>> = {},
       ) => {
         const ts = new Date().toISOString()
         const seconds = Math.round(dur / 1000)
@@ -1391,6 +1374,7 @@ export const useNexusStore = create<NexusState>()(
               timestamp: ts,
               durationMs: dur,
               modelId: responseModelId,
+              ...(meta.remainingCredits !== undefined ? { remainingCredits: meta.remainingCredits } : {}),
               ...(failureKind ? { failureKind } : {}),
               ...(meta.transport ? { transport: meta.transport } : {}),
               ...(meta.buffered !== undefined ? { buffered: meta.buffered } : {}),
@@ -1839,6 +1823,7 @@ export const useNexusStore = create<NexusState>()(
         let liveStartedAt = ''
         let liveFirstTokenAt = ''
         let liveResponseText = ''
+        let liveRemainingCredits: number | undefined
         let liveProgressLabel = 'Working'
         let liveProgressMode: AgentResponse['progressMode'] = 'progress'
         let liveProgressUpdatedAt = ''
@@ -1918,6 +1903,7 @@ export const useNexusStore = create<NexusState>()(
               timestamp: existing?.timestamp || ts,
               durationMs: dur,
               modelId: responseModelId,
+              ...(liveRemainingCredits !== undefined ? { remainingCredits: liveRemainingCredits } : existing?.remainingCredits !== undefined ? { remainingCredits: existing.remainingCredits } : {}),
               streaming,
               ...(failureKind ? { failureKind } : existing?.failureKind ? { failureKind: existing.failureKind } : {}),
               transport: liveTransport,
@@ -2022,6 +2008,7 @@ export const useNexusStore = create<NexusState>()(
               timestamp: existing?.timestamp || ts,
               durationMs: dur,
               modelId: responseModelId,
+              ...(liveRemainingCredits !== undefined ? { remainingCredits: liveRemainingCredits } : existing?.remainingCredits !== undefined ? { remainingCredits: existing.remainingCredits } : {}),
               streaming: false,
               ...(finalFailureKind ? { failureKind: finalFailureKind } : {}),
               transport: liveTransport,
@@ -2193,6 +2180,7 @@ export const useNexusStore = create<NexusState>()(
               liveResponseModelId = modelIdFromTurnPayload(finalPayload) || liveResponseModelId
               liveTransport = transportFromTurnPayload(finalPayload) || liveTransport
               liveBuffered = bufferedFromTurnPayload(finalPayload) || liveBuffered
+              liveRemainingCredits = remainingCreditsFromTurnPayload(finalPayload) ?? liveRemainingCredits
               addLiveActivity(finalPayload?.ok === false ? 'run.failed' : 'run.finished', finalPayload?.ok === false ? 'Agent run failed.' : 'Agent finished.', 'control-center.sse.final', {
                 severity: finalPayload?.ok === false ? 'error' : 'success',
                 payload: streamPayload(data),
@@ -2214,6 +2202,7 @@ export const useNexusStore = create<NexusState>()(
             liveResponseModelId = modelIdFromTurnPayload(payload) || liveResponseModelId
             liveTransport = transportFromTurnPayload(payload) || liveTransport
             liveBuffered = bufferedFromTurnPayload(payload) || liveBuffered
+            liveRemainingCredits = remainingCreditsFromTurnPayload(payload) ?? liveRemainingCredits
             const failureKind = typeof payload.failureKind === 'string' ? payload.failureKind : (!payload.ok ? inferFailureKind(finalText) : undefined)
             if (liveStarted) upsertLiveResponse(finalText, !!payload.ok, Date.now() - start, false, liveResponseModelId, failureKind)
             return { payload: { ...payload, reply: finalText }, responseOk: res.ok, streamed: liveStarted }
@@ -2399,6 +2388,7 @@ export const useNexusStore = create<NexusState>()(
             liveResponseModelId = modelIdFromTurnPayload(payload) || liveResponseModelId
             liveTransport = transportFromTurnPayload(payload) || liveTransport
             liveBuffered = bufferedFromTurnPayload(payload) || liveBuffered
+            liveRemainingCredits = remainingCreditsFromTurnPayload(payload) ?? liveRemainingCredits
             finalizeLiveResponse(output, ok, Date.now() - start, payload.failureKind)
           } else {
             const failureKind = typeof payload.failureKind === 'string' ? payload.failureKind : (!ok ? inferFailureKind(output) : undefined)
@@ -2411,6 +2401,7 @@ export const useNexusStore = create<NexusState>()(
               firstTokenAt: new Date().toISOString(),
               completedAt: new Date().toISOString(),
               tokenCountEstimate: estimateTokenCount(output),
+              remainingCredits: remainingCreditsFromTurnPayload(payload),
             })
           }
           if (ok && Array.isArray(payload.learnedSkills)) {

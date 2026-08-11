@@ -1,3 +1,4 @@
+import { memo } from 'react'
 import { NexusShell } from './components/layout/NexusShell'
 import { LicenseActivationModal } from './components/auth/LicenseActivationModal'
 import { LoginModal } from './components/auth/LoginModal'
@@ -6,11 +7,17 @@ import { LicenseProvider } from './context/LicenseContext'
 import { useAuth } from './context/useAuth'
 import { useLicense } from './context/useLicense'
 
+const StableNexusShell = memo(NexusShell)
+
 function AuthenticatedShell() {
   const { isAuthenticated } = useAuth()
-  const { checking, isLicensed } = useLicense()
+  const { checking, isLicensed, licenseActivationRequested, dismissLicenseActivation } = useLicense()
   if (!isAuthenticated || checking) return <LoginModal />
-  return isLicensed ? <NexusShell /> : <LicenseActivationModal />
+  if (!isLicensed) return <LicenseActivationModal />
+  return <>
+    <StableNexusShell />
+    {licenseActivationRequested && <LicenseActivationModal onClose={dismissLicenseActivation} />}
+  </>
 }
 
 function App() {

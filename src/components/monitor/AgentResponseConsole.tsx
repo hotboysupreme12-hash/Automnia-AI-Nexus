@@ -127,8 +127,25 @@ function messageTimestampTitle(ts: string) {
 function compactModelLabel(modelId?: string) {
   const cleaned = modelId?.trim()
   if (!cleaned) return ''
+  if (cleaned.startsWith('automnia-cloud/')) return 'Automnia Cloud AI'
   const parts = cleaned.split('/').filter(Boolean)
   return parts.at(-1) || cleaned
+}
+
+function billingRouteLabel(entry: AgentResponse): { label: string; title: string; tone: BadgeTone } | null {
+  const modelId = entry.modelId?.trim().toLowerCase() || ''
+  const transport = entry.transport?.trim().toLowerCase() || ''
+  const hostedCredits = modelId.startsWith('automnia-cloud/') || transport === 'automnia-cloud-relay'
+  if (hostedCredits) {
+    const balance = typeof entry.remainingCredits === 'number' && Number.isFinite(entry.remainingCredits)
+      ? `${entry.remainingCredits.toLocaleString('en-US')} credits remaining`
+      : 'Balance will refresh after the Automnia Cloud response is confirmed.'
+    return { label: 'Automnia credits', title: `Cloud Subscription route. ${balance}`, tone: 'success' }
+  }
+  if (modelId || transport.includes('gateway') || transport.includes('openclaw')) {
+    return { label: 'Your provider', title: 'BYOK or /runtime route. The configured provider account bills this request, not Automnia hosted credits.', tone: 'info' }
+  }
+  return null
 }
 
 function paintVoiceWaveform(element: HTMLSpanElement | null, level: number) {
@@ -394,6 +411,7 @@ const ResponseMessage = memo(function ResponseMessage({
   const hasContent = replyText.trim().length > 0
   const modelId = entry.modelId || meta?.modelId || ''
   const modelLabel = compactModelLabel(modelId)
+  const billingRoute = billingRouteLabel(entry)
   const firstTokenMs = timestampDeltaMs(entry.queuedAt || entry.startedAt || entry.timestamp, entry.firstTokenAt)
   const firstTokenLabel = formatMs(firstTokenMs)
   const transport = transportLabel(entry.transport, entry.buffered)
@@ -489,6 +507,11 @@ const ResponseMessage = memo(function ResponseMessage({
           {transport && (
             <Badge className="dy-command-message-chip is-transport" title={runtimeTitle || `Transport: ${transport}`} tone="info" size="micro">
               {transport}
+            </Badge>
+          )}
+          {billingRoute && (
+            <Badge className="dy-command-message-chip is-billing" title={billingRoute.title} tone={billingRoute.tone} size="micro">
+              {billingRoute.label}
             </Badge>
           )}
           {queuePositionLabel && (

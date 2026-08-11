@@ -1,11 +1,12 @@
 import { useState } from 'react'
 import { motion } from 'framer-motion'
 import { useLicense } from '../../context/useLicense'
+import { resolveLicenseEntitlement } from '../../utils/licenseEntitlement'
 
 const AUTOMNIA_LOCKUP_SRC = '/brand/automnia-ai-nexus-logo-transparent-cropped.png'
 const AUTOMNIA_BRAND_LABEL = 'Automnia AI Nexus'
 
-export function LicenseActivationModal() {
+export function LicenseActivationModal({ onClose }: { onClose?: () => void }) {
   const { activate, license } = useLicense()
   const [email, setEmail] = useState(license?.email || '')
   const [licenseKey, setLicenseKey] = useState('')
@@ -18,6 +19,7 @@ export function LicenseActivationModal() {
     setLoading(true)
     try {
       await activate(email.trim(), licenseKey.trim())
+      onClose?.()
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Activation failed. Please try again.')
     } finally {
@@ -25,7 +27,9 @@ export function LicenseActivationModal() {
     }
   }
 
-  const isCloudCredits = license?.mode === 'hosted_credits'
+  const entitlement = resolveLicenseEntitlement(license)
+  const isCloudCredits = entitlement.isHosted
+  const providerFirst = isCloudCredits && license?.usagePriority === 'provider_first'
   return (
     <div className="fixed inset-0 z-50 grid place-items-center bg-[radial-gradient(circle_at_18%_10%,rgba(160,176,184,0.10),transparent_28%),linear-gradient(160deg,#030303_0%,#101214_48%,#050505_100%)] px-4">
       <motion.div initial={{ scale: 0.95, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} className="w-full max-w-md rounded-2xl border border-slate-200/15 bg-[linear-gradient(180deg,rgba(20,23,25,0.96),rgba(6,7,8,0.96))] p-8 shadow-[0_30px_80px_-48px_rgba(160,176,184,0.28),inset_0_1px_0_rgba(255,255,255,0.08)]">
@@ -33,30 +37,31 @@ export function LicenseActivationModal() {
           <div className="dui-login-brand mx-auto flex w-full max-w-[360px] items-center justify-center" aria-label={AUTOMNIA_BRAND_LABEL}>
             <img src={AUTOMNIA_LOCKUP_SRC} alt={AUTOMNIA_BRAND_LABEL} className="dui-login-logo-lockup" draggable={false} />
           </div>
-          <p className="mt-3 text-sm text-slate-300">Automnia AI Nexus License & Smart Model Routing</p>
+          <p className="mt-3 text-sm text-slate-300">Automnia AI Nexus License & Billing Route</p>
         </div>
 
         {license?.active && (
           <div className="mb-6 rounded-xl border border-emerald-500/20 bg-emerald-950/20 p-4 text-left">
             <div className="flex items-center justify-between">
               <span className="text-xs font-semibold uppercase tracking-wider text-emerald-400">License Active</span>
-              <span className="rounded bg-emerald-500/10 px-2 py-0.5 text-xs text-emerald-300">{license.tier || 'Standard'}</span>
+              <span className="rounded bg-emerald-500/10 px-2 py-0.5 text-xs text-emerald-300">{entitlement.tierLabel}</span>
             </div>
             <p className="mt-2 text-sm text-slate-200"><strong className="text-slate-100">Email:</strong> {license.email}</p>
 
             <div className="mt-3 border-t border-emerald-500/10 pt-3">
               {isCloudCredits ? (
                 <div>
-                  <p className="text-xs font-medium text-emerald-300">⚡ Automnia Cloud AI Active (Master Relay)</p>
+                  <p className="text-xs font-medium text-emerald-300">{entitlement.tierLabel} — {providerFirst ? 'My Provider First' : 'Automnia Credits First'}</p>
                   <p className="mt-1 font-mono text-lg font-bold text-white">
-                    {license.creditBalance !== null ? license.creditBalance.toLocaleString() : '1,000,000+'} Credits Remaining
+                    {license.creditBalance !== null ? license.creditBalance.toLocaleString() : 'Balance pending confirmation'}
                   </p>
-                  <p className="mt-1 text-xs text-slate-400">Requests automatically route through Automnia master credits.</p>
+                  <p className="mt-1 text-xs text-slate-400">{providerFirst ? 'Your connected provider or OAuth account is used first. Automnia credits are deducted only when that route falls back.' : 'Automnia credits are used first and deducted from this confirmed balance.'}</p>
+                  <p className="mt-1 text-xs text-slate-500">Change this priority at any time under Settings → Account &amp; License.</p>
                 </div>
               ) : (
                 <div>
-                  <p className="text-xs font-medium text-sky-300">🔑 BYOK Mode Active (Bring Your Own Keys)</p>
-                  <p className="mt-1 text-xs text-slate-300">App uses your configured local API keys (OpenAI / Gemini / Anthropic).</p>
+                  <p className="text-xs font-medium text-sky-300">BYOK One-Time Access — Your Provider Account</p>
+                  <p className="mt-1 text-xs text-slate-300">Add an API key or sign in with OpenAI, Gemini, Anthropic, or another provider in model settings. That provider bills the usage; hosted credits are not used.</p>
                 </div>
               )}
             </div>
@@ -74,8 +79,9 @@ export function LicenseActivationModal() {
           <button type="submit" disabled={loading || !email.trim() || !licenseKey.trim()} className="w-full rounded-lg border border-slate-100/20 bg-[linear-gradient(180deg,rgba(214,224,228,0.18),rgba(116,132,140,0.12))] px-4 py-3 font-semibold text-slate-100 shadow-[inset_0_1px_0_rgba(255,255,255,0.10),0_18px_36px_-30px_rgba(190,206,214,0.52)] transition disabled:opacity-50">
             {loading ? 'Activating...' : license?.active ? 'Reactivate / Switch Key' : 'Activate license'}
           </button>
+          {onClose && <button type="button" onClick={onClose} className="w-full rounded-lg border border-slate-100/10 bg-slate-950/40 px-4 py-2 text-sm font-medium text-slate-300 transition hover:border-slate-100/20 hover:text-white">Keep current license</button>}
           <p className="text-center text-xs text-slate-400">
-            Automnia automatically detects whether your key is a <strong>Cloud Subscription (Credits)</strong> or a <strong>BYOK One-Time License</strong>.
+            Enter a Cloud Subscription key after checkout to switch from BYOK at any time. Automnia detects whether the key enables <strong>Cloud Subscription (Credits)</strong> or <strong>BYOK</strong> mode.
           </p>
         </form>
       </motion.div>

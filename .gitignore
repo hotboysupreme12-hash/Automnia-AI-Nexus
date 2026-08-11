@@ -29,6 +29,7 @@ tmp/
 .agents/
 memory/
 runtime-behavior-probe/
+infra/gcloud/.state/
 
 # Python/virtual environments
 .venv/
