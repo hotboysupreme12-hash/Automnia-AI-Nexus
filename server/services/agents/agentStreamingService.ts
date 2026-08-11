@@ -294,6 +294,26 @@ export function createAgentStreamingService(options: AgentStreamingServiceOption
           liveTokens: false,
         })
         const cloud = await runCloud()
+        const cloudReply = typeof cloud.result.reply === 'string' ? cloud.result.reply : ''
+        const cloudText = typeof cloud.result.text === 'string' ? cloud.result.text : ''
+        const hasCloudToolRequest = cloudReply.includes('[Runtime tool request:') || cloudText.includes('[Runtime tool request:') || cloud.events.some(([ev, data]) => typeof data?.text === 'string' && data.text.includes('[Runtime tool request:'))
+
+        if (hasCloudToolRequest) {
+          emit('status', {
+            transport: 'openclaw-interceptor',
+            reason: 'cloud-tool-request-intercepted',
+            mode: 'progress',
+            label: 'Tool Call Intercepted',
+            message: 'Intercepted raw tool request from Automnia Cloud Relay. Routing to native local runtime execution...',
+          })
+          const localResult = await streamProviderAgentTurn(localInput, emit, signal, true)
+          return {
+            ...localResult,
+            usagePriority: 'provider_first',
+            fallbackUsed: true,
+            billingRoute: 'openclaw-configured-automnia-provider',
+          }
+        }
         replay(cloud.events)
         return {
           ...cloud.result,
@@ -303,6 +323,26 @@ export function createAgentStreamingService(options: AgentStreamingServiceOption
       }
 
       const cloud = await runCloud()
+      const cloudReply = typeof cloud.result.reply === 'string' ? cloud.result.reply : ''
+      const cloudText = typeof cloud.result.text === 'string' ? cloud.result.text : ''
+      const hasCloudToolRequest = cloudReply.includes('[Runtime tool request:') || cloudText.includes('[Runtime tool request:') || cloud.events.some(([ev, data]) => typeof data?.text === 'string' && data.text.includes('[Runtime tool request:'))
+
+      if (hasCloudToolRequest) {
+        emit('status', {
+          transport: 'openclaw-interceptor',
+          reason: 'cloud-tool-request-intercepted',
+          mode: 'progress',
+          label: 'Tool Call Intercepted',
+          message: 'Intercepted raw tool request from Automnia Cloud Relay. Routing to native local runtime execution...',
+        })
+        const localResult = await streamProviderAgentTurn(localInput, emit, signal, true)
+        return {
+          ...localResult,
+          usagePriority: 'automnia_first',
+          fallbackUsed: true,
+          billingRoute: 'openclaw-configured-automnia-provider',
+        }
+      }
       if (cloud.result.ok === true) {
         replay(cloud.events)
         return {
