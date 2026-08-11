@@ -442,6 +442,7 @@ export interface AgentResponse {
   timestamp: string
   durationMs: number
   modelId?: string
+  remainingCredits?: number
   streaming?: boolean
   failureKind?: string
   transport?: string

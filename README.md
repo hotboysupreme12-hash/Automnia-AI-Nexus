@@ -189,6 +189,7 @@ Automnia AI is stable for Windows, macOS, and Linux.
 | Understand data boundaries | [Data Handling](DATA_HANDLING.md) |
 | Report security issues | [Security](SECURITY.md) |
 | Review release rules | [Release Governance](docs/RELEASE_GOVERNANCE.md) |
+| Deploy or migrate Automnia Cloud | [Google Cloud deployment package](infra/gcloud/README.md) |
 
 ## Product synopsis
 

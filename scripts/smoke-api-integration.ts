@@ -5,6 +5,12 @@ import { tmpdir } from 'node:os'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 
+import {
+  CONTROL_CENTER_STATE_KEYS,
+  createRuntimeLedgerStore,
+  runtimeLedgerPathsForStateRoot,
+} from '../server/state/runtimeLedgerStore'
+
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..')
 const CONTROL_TOKEN = 'integration-control-token'
 
@@ -187,6 +193,24 @@ async function main() {
   const workspaceRoot = mkdtempSync(path.join(tmpdir(), 'dystopai-api-workspace-'))
   const stateDir = mkdtempSync(path.join(tmpdir(), 'dystopai-api-state-'))
   const homeDir = mkdtempSync(path.join(tmpdir(), 'dystopai-api-home-'))
+  const seededAt = '2026-08-11T12:00:00.000Z'
+  const runtimeLedgerStore = createRuntimeLedgerStore(runtimeLedgerPathsForStateRoot(stateDir))
+  try {
+    assert.equal(runtimeLedgerStore.writeControlCenterState(CONTROL_CENTER_STATE_KEYS.licenseActivation, {
+      active: true,
+      email: 'integration@example.test',
+      licenseKey: 'AUT-INTEGRATION-0001',
+      tier: 'founding_beta_byok',
+      mode: 'byok',
+      usagePriority: 'provider_first',
+      creditBalance: 0,
+      creditBalanceUpdatedAt: null,
+      activatedAt: seededAt,
+      verifiedAt: seededAt,
+    }), true, 'integration fixture must persist an active license before the server starts')
+  } finally {
+    runtimeLedgerStore.close()
+  }
   const child = spawnServer(port, workspaceRoot, stateDir, homeDir)
 
   try {
@@ -248,6 +272,23 @@ async function main() {
     })
     assert.equal(status.response.status, 200)
     assert.equal(assertSuccess(status.payload).authenticated, true)
+
+    const licenseStatus = await request<{ active: boolean; mode: string | null }>(port, 'GET', '/api/license/status', {
+      token: sessionToken,
+      requestId: 'integration-license-status',
+    })
+    assert.equal(licenseStatus.response.status, 200)
+    assert.deepEqual(assertSuccess(licenseStatus.payload), {
+      active: true,
+      email: 'integration@example.test',
+      tier: 'founding_beta_byok',
+      mode: 'byok',
+      usagePriority: 'provider_first',
+      creditBalance: 0,
+      creditBalanceUpdatedAt: null,
+      activatedAt: seededAt,
+      verifiedAt: seededAt,
+    })
 
     const unauthenticatedProjection = await request(port, 'GET', '/api/missions/projection', {
       requestId: 'integration-missing-auth',

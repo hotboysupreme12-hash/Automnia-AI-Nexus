@@ -1,0 +1,50 @@
+# One-time Shopify app migration to the permanent Automnia hostname.
+# Copy this into the private Shopify app project, preserve that project's
+# client_id, and run `shopify app deploy`. No future Google project switch
+# requires another Shopify webhook edit.
+
+client_id = "REPLACE_WITH_SHOPIFY_APP_CLIENT_ID"
+name = "Automnia AI Nexus"
+application_url = "https://api.automnia.ai/health"
+embedded = false
+
+[access_scopes]
+scopes = "read_customers,read_orders,read_products,write_customers"
+
+[auth]
+redirect_urls = ["https://api.automnia.ai/health"]
+
+[webhooks]
+api_version = "2026-07"
+
+[[webhooks.subscriptions]]
+topics = ["orders/paid"]
+uri = "https://api.automnia.ai/shopify/webhooks/orders-paid"
+
+[[webhooks.subscriptions]]
+topics = ["orders/cancelled"]
+uri = "https://api.automnia.ai/shopify/webhooks/orders-cancelled"
+
+[[webhooks.subscriptions]]
+topics = ["refunds/create"]
+uri = "https://api.automnia.ai/shopify/webhooks/refunds-create"
+
+[[webhooks.subscriptions]]
+topics = ["subscription_contracts/create"]
+uri = "https://api.automnia.ai/shopify/webhooks/subscription-contracts-create"
+
+[[webhooks.subscriptions]]
+topics = ["subscription_contracts/update"]
+uri = "https://api.automnia.ai/shopify/webhooks/subscription-contracts-update"
+
+[[webhooks.subscriptions]]
+topics = ["subscription_contracts/cancel"]
+uri = "https://api.automnia.ai/shopify/webhooks/subscription-contracts-cancel"
+
+[[webhooks.subscriptions]]
+topics = ["subscription_billing_attempts/success"]
+uri = "https://api.automnia.ai/shopify/webhooks/subscription-billing-attempts-success"
+
+[[webhooks.subscriptions]]
+topics = ["subscription_billing_attempts/failure"]
+uri = "https://api.automnia.ai/shopify/webhooks/subscription-billing-attempts-failure"

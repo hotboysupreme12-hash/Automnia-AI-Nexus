@@ -200,6 +200,8 @@ type AgentTurnRoutesOptions = {
   isContextOverflowReply(reply: string): boolean
   isEmptyAgentNoResponseReply(reply: string): boolean
   isGoogleGeminiModelId(modelId: string): boolean
+  isHostedCreditsActive?: () => boolean
+  hostedUsagePriority?: () => 'automnia_first' | 'provider_first' | null
   isRetiredAgentId(agent: string): boolean
   isValidAgentId(agent: string): boolean
   launchChromeHost(url?: string): Promise<HostLaunchResult>
@@ -287,6 +289,8 @@ export function registerAgentTurnRoutes(app: Express, options: AgentTurnRoutesOp
     isContextOverflowReply,
     isEmptyAgentNoResponseReply,
     isGoogleGeminiModelId,
+    isHostedCreditsActive,
+    hostedUsagePriority,
     isRetiredAgentId,
     isValidAgentId,
     launchChromeHost,
@@ -581,37 +585,58 @@ export function registerAgentTurnRoutes(app: Express, options: AgentTurnRoutesOp
         }, liveTextStreamed))
         return
       }
+      const hostedCreditRoute = Boolean(isHostedCreditsActive?.())
+      const providerFirst = hostedCreditRoute && hostedUsagePriority?.() === 'provider_first'
+      const cloudFirst = hostedCreditRoute && !providerFirst
+      const gatewayRoute = providerFirst || (parsed.data.forceOpenClawRuntime && !hostedCreditRoute)
+      const initialTransport = cloudFirst
+        ? 'automnia-cloud-relay'
+        : gatewayRoute
+          ? 'gateway-chat'
+          : 'control-center-sse'
       emit('status', {
-        transport: parsed.data.forceOpenClawRuntime ? 'gateway-chat' : 'control-center-sse',
+        transport: initialTransport,
         mode: 'progress',
-        label: parsed.data.forceOpenClawRuntime ? 'OpenClaw session' : 'Command Console',
-        message: parsed.data.forceOpenClawRuntime
-          ? 'Command accepted; opening the Gateway-backed OpenClaw session.'
-          : 'Command accepted; preparing the agent session.',
+        label: cloudFirst ? 'Automnia credits first' : providerFirst ? 'My provider first' : gatewayRoute ? 'OpenClaw session' : 'Command Console',
+        message: cloudFirst
+          ? 'Cloud Subscription enabled; this request will use Automnia Cloud credits.'
+          : providerFirst
+            ? 'Subscriber preference enabled; this request will use your connected provider before Automnia credits.'
+          : gatewayRoute
+            ? 'BYOK/runtime request accepted; opening the Gateway-backed OpenClaw session.'
+            : 'Command accepted; preparing the agent session.',
         agent: streamAgent,
         ...(parsed.data.sessionKey ? { sessionKey: parsed.data.sessionKey.trim() } : {}),
-        liveTokens: parsed.data.forceOpenClawRuntime,
+        liveTokens: gatewayRoute,
       })
-      const forcedGatewayConsoleTurn = parsed.data.forceOpenClawRuntime && parsed.data.source !== 'clawtalk'
+      const forcedGatewayConsoleTurn = gatewayRoute && parsed.data.source !== 'clawtalk'
       emit('progress', {
-        transport: parsed.data.forceOpenClawRuntime ? 'gateway-chat' : 'control-center-sse',
-        text: forcedGatewayConsoleTurn
-          ? 'Opening Gateway chat session.'
-          : 'Checking runtime health and workspace access.',
+        transport: initialTransport,
+        text: cloudFirst
+          ? 'Cloud Subscription route confirmed; contacting Automnia Cloud.'
+          : providerFirst
+            ? 'Opening the local model fallback configured in Model Settings.'
+          : forcedGatewayConsoleTurn
+            ? 'Opening Gateway chat session with your configured provider.'
+            : 'Checking runtime health and workspace access.',
         agent: streamAgent,
         ...(parsed.data.sessionKey ? { sessionKey: parsed.data.sessionKey.trim() } : {}),
       })
-      if (!forcedGatewayConsoleTurn) {
+      if (!hostedCreditRoute && !forcedGatewayConsoleTurn) {
         await ensureOpenclawAgentRunConfigDefaults()
         const config = await readOpenclawConfig()
         await ensureAgentRuntimeHealthPreflight(streamAgent, config)
         await ensureAgentSandboxCompatibleWithHost(streamAgent)
       }
       emit('progress', {
-        transport: parsed.data.forceOpenClawRuntime ? 'gateway-chat' : 'control-center-sse',
-        text: parsed.data.forceOpenClawRuntime
-          ? 'Runtime ready; dispatching through Gateway chat.'
-          : 'Runtime ready; dispatching agent turn.',
+        transport: initialTransport,
+        text: cloudFirst
+          ? 'Cloud Subscription route ready; dispatching through Automnia Cloud credits.'
+          : providerFirst
+            ? 'Provider-first route ready; Automnia credits remain available as fallback.'
+          : gatewayRoute
+            ? 'Runtime ready; dispatching through your Gateway provider.'
+            : 'Runtime ready; dispatching agent turn.',
         agent: streamAgent,
         ...(parsed.data.sessionKey ? { sessionKey: parsed.data.sessionKey.trim() } : {}),
       })
@@ -621,7 +646,12 @@ export function registerAgentTurnRoutes(app: Express, options: AgentTurnRoutesOp
     } catch (error) {
       const message = redactHiddenReasoningAndSecrets(String(error))
       const failureKind = classifyFailureKind(message, abortController.signal.aborted ? 'aborted' : 'failed') || 'unknown'
-      const failureTransport = parsed.data.forceOpenClawRuntime ? 'gateway-chat' : 'control-center-sse'
+      const activeHostedUsagePriority = hostedUsagePriority?.()
+      const failureTransport = isHostedCreditsActive?.()
+        ? activeHostedUsagePriority === 'provider_first' ? 'gateway-chat' : 'automnia-cloud-relay'
+        : parsed.data.forceOpenClawRuntime
+          ? 'gateway-chat'
+          : 'control-center-sse'
       const clawTalkFallbackPending = Boolean(clawTalkMirror && closed && abortController.signal.aborted && failureKind === 'aborted')
       if (clawTalkFallbackPending) {
         emit('status', {
@@ -695,6 +725,22 @@ export function registerAgentTurnRoutes(app: Express, options: AgentTurnRoutesOp
         code: 1,
       })
     }
+
+    // The buffered endpoint is the renderer's recovery path when SSE cannot
+    // complete. Hosted customers must keep the same billing route here for
+    // every message, including /runtime, /work, and /openclaw; otherwise a
+    // successful fallback reply can bypass the Cloud relay and leave the
+    // confirmed credit balance unchanged.
+    const hostedCreditRoute = Boolean(isHostedCreditsActive?.())
+    if (hostedCreditRoute) {
+      const hostedPayload = await streamProviderAgentTurn(
+        { ...parsed.data, agent: agent.trim() },
+        () => undefined,
+        requestAbortController.signal,
+      )
+      return apiSuccess(res, compactHttpJsonPayload(hostedPayload))
+    }
+
     await ensureOpenclawAgentRunConfigDefaults()
     const runtimeConfig = await readOpenclawConfig()
     await ensureAgentRuntimeHealthPreflight(agent, runtimeConfig)

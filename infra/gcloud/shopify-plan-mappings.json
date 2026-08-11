@@ -1,0 +1,83 @@
+[
+  {
+    "tier": "credit_refill",
+    "mode": "hosted_credits",
+    "kind": "topup",
+    "initialCredits": 500000,
+    "productIds": [],
+    "variantIds": ["47340005589161"],
+    "skus": ["AUTO-REFILL-500K"]
+  },
+  {
+    "tier": "credit_refill",
+    "mode": "hosted_credits",
+    "kind": "topup",
+    "initialCredits": 1000000,
+    "productIds": [],
+    "variantIds": ["47340005621929"],
+    "skus": ["AUTO-REFILL-1M"]
+  },
+  {
+    "tier": "credit_refill",
+    "mode": "hosted_credits",
+    "kind": "topup",
+    "initialCredits": 2500000,
+    "productIds": [],
+    "variantIds": ["47340005654697"],
+    "skus": ["AUTO-REFILL-2500K"]
+  },
+  {
+    "tier": "credit_refill",
+    "mode": "hosted_credits",
+    "kind": "topup",
+    "initialCredits": 5000000,
+    "productIds": [],
+    "variantIds": ["47340005687465"],
+    "skus": ["AUTO-REFILL-5M"]
+  },
+  {
+    "tier": "credit_refill",
+    "mode": "hosted_credits",
+    "kind": "topup",
+    "initialCredits": 10000000,
+    "productIds": [],
+    "variantIds": ["47340005720233"],
+    "skus": ["AUTO-REFILL-10M"]
+  },
+  {
+    "tier": "starter",
+    "mode": "hosted_credits",
+    "kind": "subscription",
+    "initialCredits": 500000,
+    "productIds": ["9017938215081"],
+    "variantIds": ["47340005851305"],
+    "skus": ["AUTO-SUB-STARTER-MONTHLY"]
+  },
+  {
+    "tier": "pro",
+    "mode": "hosted_credits",
+    "kind": "subscription",
+    "initialCredits": 2000000,
+    "productIds": ["9017938182313"],
+    "variantIds": ["47340005818537"],
+    "skus": ["AUTO-SUB-PRO-MONTHLY"]
+  },
+  {
+    "tier": "enterprise",
+    "mode": "hosted_credits",
+    "kind": "subscription",
+    "initialCredits": 10000000,
+    "productIds": ["9017938280617"],
+    "variantIds": ["47340005916841"],
+    "skus": ["AUTO-SUB-ENTERPRISE-MONTHLY"]
+  },
+  {
+    "tier": "byok",
+    "mode": "byok",
+    "kind": "license",
+    "initialCredits": 0,
+    "productIds": ["9017938247849"],
+    "variantIds": ["47340005884073"],
+    "skus": ["AUTO-BYOK-ONETIME"]
+  }
+]

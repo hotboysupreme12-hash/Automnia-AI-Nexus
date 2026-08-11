@@ -5,6 +5,12 @@ import { tmpdir } from 'node:os'
 import path from 'node:path'
 import net from 'node:net'
 
+import {
+  CONTROL_CENTER_STATE_KEYS,
+  createRuntimeLedgerStore,
+  runtimeLedgerPathsForStateRoot,
+} from '../server/state/runtimeLedgerStore'
+
 const root = process.cwd()
 const CONTROL_TOKEN = 'recovery-soak-control-token'
 
@@ -120,8 +126,27 @@ const tempRoot = mkdtempSync(path.join(tmpdir(), 'dystopai-recovery-soak-'))
 const stateDir = path.join(tempRoot, 'state')
 const workspaceRoot = path.join(tempRoot, 'workspace')
 const homeDir = path.join(tempRoot, 'home')
+mkdirSync(stateDir, { recursive: true })
 mkdirSync(workspaceRoot, { recursive: true })
 mkdirSync(homeDir, { recursive: true })
+const runtimeLedgerStore = createRuntimeLedgerStore(runtimeLedgerPathsForStateRoot(stateDir))
+try {
+  const seededAt = '2026-08-11T12:00:00.000Z'
+  assert.equal(runtimeLedgerStore.writeControlCenterState(CONTROL_CENTER_STATE_KEYS.licenseActivation, {
+    active: true,
+    email: 'recovery-soak@example.test',
+    licenseKey: 'AUT-RECOVERY-SOAK-0001',
+    tier: 'founding_beta_byok',
+    mode: 'byok',
+    usagePriority: 'provider_first',
+    creditBalance: 0,
+    creditBalanceUpdatedAt: null,
+    activatedAt: seededAt,
+    verifiedAt: seededAt,
+  }), true, 'recovery soak fixture must persist an active license before the server starts')
+} finally {
+  runtimeLedgerStore.close()
+}
 let child = spawnServer(port, stateDir, workspaceRoot, homeDir)
 
 try {

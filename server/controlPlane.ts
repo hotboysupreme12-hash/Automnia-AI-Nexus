@@ -68,6 +68,7 @@ import { createMissionTeamSyncService } from './services/missions/missionTeamSyn
 import { createLoginAttemptLimiter } from './loginAttemptLimiter'
 import { createSessionTokenStore } from './sessionTokenStore'
 import { createLicenseService } from './services/license/licenseService'
+import { AUTOMNIA_PUBLIC_CLOUD_URL, automniaCloudBaseUrl } from './config/automniaCloud'
 import {
   AUTH_ENV_MAP,
   AUTH_PROVIDER_CATALOG,
@@ -136,9 +137,11 @@ import {
 } from './services/gateway/gatewayLogService'
 import { createGatewayChatService } from './services/gateway/gatewayChatService'
 import { createBufferedAgentTurnService } from './services/agents/agentTurnService'
-import { createGatewayAgentTurnService, type AgentTurnStreamEmitter } from './services/agents/gatewayAgentTurnService'
+import { createGatewayAgentTurnService } from './services/agents/gatewayAgentTurnService'
+import type { AgentTurnStreamEmitter } from './services/agents/gatewayAgentTurnService'
 import { createAgentRuntimeService } from './services/agents/agentRuntimeService'
-import { createAgentStreamingService, type AgentStreamingInput } from './services/agents/agentStreamingService'
+import { createAgentStreamingService } from './services/agents/agentStreamingService'
+import type { AgentStreamingInput } from './services/agents/agentStreamingService'
 import {
   createRuntimeStatusService,
   type RuntimeStatusService,
@@ -17303,13 +17306,13 @@ const agentRuntimeService = createAgentRuntimeService({
 
 const runControlCenterAgentRuntimeTurn = agentRuntimeService.runControlCenterAgentRuntimeTurn
 
-const AUTOMNIA_CLOUD_RELAY_URL = (process.env.AUTOMNIA_CLOUD_RELAY_URL || 'https://automnia-shopify-provisioner-336625531977.us-east1.run.app').replace(/\/+$/, '')
+const AUTOMNIA_CLOUD_RELAY_URL = automniaCloudBaseUrl(process.env.AUTOMNIA_CLOUD_RELAY_URL || AUTOMNIA_PUBLIC_CLOUD_URL)
 
 async function streamAutomniaCloudRelay(
   input: AgentStreamingInput,
   emit: AgentTurnStreamEmitter,
   signal: AbortSignal,
-  credentials: { email: string; licenseKey: string; mode: 'hosted_credits' },
+  credentials: { email: string; licenseKey: string; mode: 'hosted_credits'; usagePriority: 'automnia_first' | 'provider_first' },
 ): Promise<Record<string, unknown>> {
   const modelId = 'automnia-cloud/gemini-2.5-flash'
   const provider = 'automnia-cloud'
@@ -17331,35 +17334,104 @@ async function streamAutomniaCloudRelay(
   const composedPrompt = composeDirectProviderPrompt(input.agent, enforcedMessage, context.executionWorkspace)
   const requestMessages = providerConversationMessagesForRequest(sessionId, provider, modelId, composedPrompt)
   const prompt = requestMessages.map((message) => `${message.role}: ${message.content}`).join('\n\n')
+  // The provisioner can use this stable request ID to reject a duplicate
+  // delivery if a transport retry reaches it after the original request.
+  const usageRequestId = randomUUID()
 
   try {
     const response = await fetch(`${AUTOMNIA_CLOUD_RELAY_URL}/api/ai/generate`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
-      body: JSON.stringify({ email: credentials.email, licenseKey: credentials.licenseKey, prompt, model }),
+      headers: {
+        'Content-Type': 'application/json',
+        Accept: 'application/json',
+        'Idempotency-Key': usageRequestId,
+      },
+      body: JSON.stringify({ email: credentials.email, licenseKey: credentials.licenseKey, prompt, model, requestId: usageRequestId }),
       signal,
     })
     const payload = await response.json().catch(() => null) as Record<string, unknown> | null
     if (!response.ok || payload?.ok !== true || typeof payload.text !== 'string') {
       const detail = typeof payload?.error === 'string' ? payload.error : 'Automnia Cloud AI relay request failed.'
+      const retryable = payload?.retryable === true || [408, 409, 429, 502, 503, 504].includes(response.status)
       const message = response.status === 402
         ? 'Your Automnia Cloud credits are exhausted. Purchase a top-up or configure a BYOK provider in Settings.'
         : response.status === 404
           ? 'Your Automnia Cloud license could not be verified. Reactivate it and retry.'
           : detail
       emit('error', { message, provider, model: modelId, capability })
-      return { ok: false, reply: message, stdout: '', stderr: message, code: response.status, failureKind: response.status === 402 ? 'credits_exhausted' : 'relay_unavailable', modelId, provider, model, runtimeContext: agentRuntimeContextPayload(input.agent, context), streaming: capability }
+      return {
+        ok: false,
+        reply: message,
+        stdout: '',
+        stderr: message,
+        code: response.status,
+        failureKind: response.status === 402 ? 'credits_exhausted' : 'relay_unavailable',
+        retryable,
+        retryAfterSeconds: Number(response.headers.get('retry-after')) || null,
+        modelId,
+        provider,
+        model,
+        runtimeContext: agentRuntimeContextPayload(input.agent, context),
+        streaming: { ...capability, transport: 'automnia-cloud-relay', billingMode: 'hosted_credits' },
+      }
     }
     const finalReply = sanitizeUserVisibleRuntimeText(payload.text).trim() || 'No response returned.'
+    const remainingCredits = typeof payload.remainingCredits === 'number' && Number.isFinite(payload.remainingCredits) && payload.remainingCredits >= 0
+      ? payload.remainingCredits
+      : null
+    let creditBalanceSynchronized = false
+    if (remainingCredits !== null) {
+      try {
+        creditBalanceSynchronized = licenseService.recordHostedCreditBalance(remainingCredits) !== null
+      } catch (error) {
+        // The provider has already completed and charged this request. Do not
+        // convert that successful reply into a failure solely because the
+        // local display cache could not be updated; Account & License can
+        // reconcile from the provisioner later.
+        console.warn(`[license] hosted credit balance sync failed after a successful relay request: ${redactSensitiveText(String(error))}`)
+      }
+    }
     emit('delta', { text: finalReply, buffered: true, transport: 'automnia-cloud-relay' })
     saveProviderConversationTurn(sessionId, provider, modelId, requestMessages, { content: finalReply })
     await appendAgentDailyMemory(input.agent, `[turn] completed Automnia Cloud relay | prompt: ${trimTask(input.message, 120)} | outcome: ${trimTask(finalReply, 220)}`).catch(() => undefined)
     const doctrineSync = await buildDoctrineSyncReport(input.agent, context.executionWorkspace)
-    return { ok: true, reply: finalReply, stdout: '', stderr: '', code: 0, modelId, provider, model, remainingCredits: typeof payload.remainingCredits === 'number' ? payload.remainingCredits : null, doctrineSync, runtimeContext: agentRuntimeContextPayload(input.agent, context), streaming: { ...capability, sessionId, conversationMessages: providerConversationHistories.get(sessionId)?.messages.length || requestMessages.length + 1 } }
+    return {
+      ok: true,
+      reply: finalReply,
+      stdout: '',
+      stderr: '',
+      code: 0,
+      modelId,
+      provider,
+      model,
+      remainingCredits,
+      creditBalanceSynchronized,
+      doctrineSync,
+      runtimeContext: agentRuntimeContextPayload(input.agent, context),
+      streaming: {
+        ...capability,
+        transport: 'automnia-cloud-relay',
+        billingMode: 'hosted_credits',
+        sessionId,
+        conversationMessages: providerConversationHistories.get(sessionId)?.messages.length || requestMessages.length + 1,
+      },
+    }
   } catch (error) {
     const message = signal.aborted ? 'Automnia Cloud relay request was cancelled.' : redactHiddenReasoningAndSecrets(String(error))
     emit('error', { message, provider, model: modelId, capability })
-    return { ok: false, reply: message, stdout: '', stderr: message, code: 503, failureKind: signal.aborted ? 'aborted' : 'relay_unavailable', modelId, provider, model, runtimeContext: agentRuntimeContextPayload(input.agent, context), streaming: capability }
+    return {
+      ok: false,
+      reply: message,
+      stdout: '',
+      stderr: message,
+      code: 503,
+      failureKind: signal.aborted ? 'aborted' : 'relay_unavailable',
+      modelId,
+      provider,
+      model,
+      runtimeContext: agentRuntimeContextPayload(input.agent, context),
+      streaming: { ...capability, transport: 'automnia-cloud-relay', billingMode: 'hosted_credits' },
+    }
   }
 }
 
@@ -17465,6 +17537,8 @@ registerAgentTurnRoutes(app, {
   isContextOverflowReply,
   isEmptyAgentNoResponseReply,
   isGoogleGeminiModelId,
+  isHostedCreditsActive: () => Boolean(licenseService.getActiveRelayCredentials()),
+  hostedUsagePriority: () => licenseService.getUsagePriority(),
   isRetiredAgentId,
   isValidAgentId,
   launchChromeHost,

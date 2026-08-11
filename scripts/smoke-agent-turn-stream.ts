@@ -5,6 +5,11 @@ import { tmpdir } from 'node:os'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 
+import {
+  CONTROL_CENTER_STATE_KEYS,
+  createRuntimeLedgerStore,
+  runtimeLedgerPathsForStateRoot,
+} from '../server/state/runtimeLedgerStore'
 import { createSseFrameParser } from '../src/utils/sseStream'
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..')
@@ -155,6 +160,24 @@ async function waitForFile(filePath: string, timeoutMs = 5000) {
 async function main() {
   const port = await reservePort()
   const stateDir = mkdtempSync(path.join(tmpdir(), 'dystopai-stream-smoke-'))
+  const runtimeLedgerStore = createRuntimeLedgerStore(runtimeLedgerPathsForStateRoot(stateDir))
+  try {
+    const seededAt = '2026-08-11T12:00:00.000Z'
+    assert.equal(runtimeLedgerStore.writeControlCenterState(CONTROL_CENTER_STATE_KEYS.licenseActivation, {
+      active: true,
+      email: 'agent-stream@example.test',
+      licenseKey: 'AUT-AGENT-STREAM-0001',
+      tier: 'founding_beta_byok',
+      mode: 'byok',
+      usagePriority: 'provider_first',
+      creditBalance: 0,
+      creditBalanceUpdatedAt: null,
+      activatedAt: seededAt,
+      verifiedAt: seededAt,
+    }), true, 'agent-turn stream fixture must persist an active license before the server starts')
+  } finally {
+    runtimeLedgerStore.close()
+  }
   const child = spawnServer(port, stateDir)
 
   try {

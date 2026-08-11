@@ -12,6 +12,7 @@ const authRoutes = read('server/routes/authRoutes.ts')
 const missionRoutes = read('server/routes/missionRoutes.ts')
 const missionStateService = read('server/services/missions/missionStateService.ts')
 const agentConfigRoutes = read('server/routes/agentConfigRoutes.ts')
+const licenseRoutes = read('server/routes/licenseRoutes.ts')
 const apiClient = read('src/api/client.ts')
 const editor = read('src/components/editor/AgentEditorModal.tsx')
 const packageJson = JSON.parse(read('package.json')) as { scripts?: Record<string, string> }
@@ -88,6 +89,11 @@ const authStatusSlice = sliceFrom(authRoutes, "app.get('/api/auth/status'")
 assert.match(authStatusSlice, /apiSuccess\(res, \{ authenticated: true \}\)/, 'auth status success must use canonical true envelope')
 assert.match(authStatusSlice, /apiSuccess\(res, \{ authenticated: false \}\)/, 'auth status false must use canonical false envelope')
 assert.doesNotMatch(authStatusSlice, /res\.json\(/, 'auth status must not emit ad hoc JSON')
+
+const usagePrioritySlice = sliceBetween(licenseRoutes, "app.post('/api/license/usage-priority'", "app.post('/api/license/checkout'")
+assertCanonicalRouteSlice('license usage-priority route', usagePrioritySlice)
+assert.match(usagePrioritySlice, /z\.enum\(\['automnia_first', 'provider_first'\]\)/, 'usage priority must accept only the two supported routes')
+assert.match(usagePrioritySlice, /getStatus\(\)\.mode !== 'hosted_credits'/, 'BYOK-only access must not change hosted usage priority')
 
 const scripts = packageJson.scripts || {}
 assert.equal(typeof scripts['smoke:api-envelope'], 'string')

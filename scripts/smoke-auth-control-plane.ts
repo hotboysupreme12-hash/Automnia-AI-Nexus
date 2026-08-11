@@ -34,7 +34,10 @@ const forbiddenDefaultToken = 'dev-token-change-me'
 
 assert.match(app, /<AuthProvider>/, 'App must mount AuthProvider in the live render tree')
 assert.match(app, /<LoginModal \/>/, 'Unauthenticated app state must render LoginModal')
-assert.match(app, /<NexusShell \/>/, 'Authenticated app state must render NexusShell')
+assert.match(app, /const StableNexusShell = memo\(NexusShell\)/, 'Authenticated app state must keep the Nexus shell mounted across license modal requests')
+assert.match(app, /<StableNexusShell \/>/, 'Authenticated and licensed app state must render NexusShell')
+assert.match(app, /if \(!isLicensed\) return <LicenseActivationModal \/>/, 'Unlicensed app state must render the activation gate')
+assert.match(app, /licenseActivationRequested && <LicenseActivationModal onClose=\{dismissLicenseActivation\}/, 'Licensed users must be able to reopen and dismiss activation details without unmounting the shell')
 assert.match(main, /installAuthenticatedFetch\(\)/, 'Renderer entry must install authenticated fetch bridge for legacy API calls')
 
 assert.match(authContext, /apiRequest<[\s\S]*\/api\/auth\/login/, 'AuthContext login must use the canonical API client')

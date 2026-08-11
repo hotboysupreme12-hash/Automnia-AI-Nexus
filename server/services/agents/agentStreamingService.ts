@@ -53,6 +53,13 @@ export type StreamedProviderReply = {
   reasoningContent?: string
 }
 
+type HostedRelayCredentials = {
+  email: string
+  licenseKey: string
+  mode: 'hosted_credits'
+  usagePriority: 'automnia_first' | 'provider_first'
+}
+
 export type AgentStreamingServiceOptions = {
   streamingProviderConfig: Record<string, StreamingProviderConfig>
   isValidAgentId: (agentId: string) => boolean
@@ -64,12 +71,12 @@ export type AgentStreamingServiceOptions = {
     attachments?: unknown[],
     intentMessage?: string,
   ) => BufferedRuntimeReason | null
-  getHostedRelayCredentials: () => { email: string; licenseKey: string; mode: 'hosted_credits' } | null
-  streamAutomniaCloudRelay: (
+  getHostedRelayCredentials?: () => HostedRelayCredentials | null
+  streamAutomniaCloudRelay?: (
     input: AgentStreamingInput,
     emit: AgentTurnStreamEmitter,
     signal: AbortSignal,
-    credentials: { email: string; licenseKey: string; mode: 'hosted_credits' },
+    credentials: HostedRelayCredentials,
   ) => Promise<Record<string, unknown>>
   runBufferedAgentTurnForStream: (
     input: Record<string, unknown>,
@@ -202,18 +209,130 @@ export function createAgentStreamingService(options: AgentStreamingServiceOption
     input: AgentStreamingInput,
     emit: AgentTurnStreamEmitter,
     signal: AbortSignal,
+    skipHostedRouting = false,
   ): Promise<Record<string, unknown>> {
     if (!options.isValidAgentId(input.agent) || options.isRetiredAgentId(input.agent)) {
       throw new Error('Invalid or retired agent id.')
     }
 
     const runtimeShortcut = options.parseAgentRuntimeShortcut(input.message)
-    if (runtimeShortcut || input.forceOpenClawRuntime) {
+
+    // Hosted members can choose which paid route is attempted first. Both
+    // lanes are staged until success is known so a failed preferred route can
+    // fall back without briefly rendering a terminal error in the UI.
+    const hostedRelayCredentials = skipHostedRouting ? null : options.getHostedRelayCredentials?.()
+    const streamHostedRelay = options.streamAutomniaCloudRelay
+    if (hostedRelayCredentials && streamHostedRelay) {
+      const hostedInput = runtimeShortcut
+        ? {
+            ...input,
+            message: runtimeShortcut.message,
+            intentMessage: runtimeShortcut.message,
+          }
+        : input
+      const localInput = {
+        ...hostedInput,
+        forceOpenClawRuntime: true,
+      }
+      const runCloud = async () => {
+        const events: Array<[string, Record<string, unknown>]> = []
+        const result = await streamHostedRelay(
+          hostedInput,
+          (event, data) => events.push([event, data]),
+          signal,
+          hostedRelayCredentials,
+        )
+        return { events, result }
+      }
+      const replay = (events: Array<[string, Record<string, unknown>]>) => {
+        for (const [event, data] of events) emit(event, data)
+      }
+
+      if (hostedRelayCredentials.usagePriority === 'provider_first') {
+        const providerEvents: Array<[string, Record<string, unknown>]> = []
+        const providerResult = await streamProviderAgentTurn(
+          localInput,
+          (event, data) => providerEvents.push([event, data]),
+          signal,
+          true,
+        ).catch((error) => ({
+          ok: false,
+          reply: options.redactHiddenReasoningAndSecrets(String(error)),
+          failureKind: options.classifyFailureKind(String(error), 'failed') || 'unknown',
+        }))
+        if (providerResult.ok === true) {
+          replay(providerEvents)
+          return {
+            ...providerResult,
+            usagePriority: 'provider_first',
+            fallbackUsed: false,
+          }
+        }
+
+        const fallbackMessage = 'Your connected provider could not complete this request. Using Automnia credits as the fallback.'
+        emit('status', {
+          transport: 'automnia-cloud-relay',
+          reason: 'provider-to-automnia-fallback',
+          mode: 'progress',
+          label: 'Automnia credit fallback',
+          message: fallbackMessage,
+          liveTokens: false,
+        })
+        const cloud = await runCloud()
+        replay(cloud.events)
+        return {
+          ...cloud.result,
+          usagePriority: 'provider_first',
+          fallbackUsed: true,
+        }
+      }
+
+      const cloud = await runCloud()
+      if (cloud.result.ok === true) {
+        replay(cloud.events)
+        return {
+          ...cloud.result,
+          usagePriority: 'automnia_first',
+          fallbackUsed: false,
+        }
+      }
+
+      // A transient Cloud capacity response is not permission to silently
+      // change who bills the customer. The provisioner retries Vertex first;
+      // if it is still busy, preserve the Automnia route and let the customer
+      // retry instead of spending their connected-provider balance.
+      if (cloud.result.retryable === true) {
+        replay(cloud.events)
+        return {
+          ...cloud.result,
+          usagePriority: 'automnia_first',
+          fallbackUsed: false,
+        }
+      }
+
+      const fallbackMessage = 'Automnia Cloud could not complete this request. Using the local fallback configured in Model Settings.'
+      emit('status', {
+        transport: 'gateway-chat',
+        reason: 'automnia-cloud-local-fallback',
+        mode: 'progress',
+        label: 'Local model fallback',
+        message: fallbackMessage,
+        liveTokens: true,
+      })
+      const localResult = await streamProviderAgentTurn(localInput, emit, signal, true)
+      return {
+        ...localResult,
+        usagePriority: 'automnia_first',
+        fallbackUsed: true,
+      }
+    }
+
+    if (runtimeShortcut) {
       return options.runBufferedAgentTurnForStream(
         {
           ...input,
-          message: runtimeShortcut?.message || input.message,
-          intentMessage: runtimeShortcut?.message || input.intentMessage || input.message,
+          message: runtimeShortcut.message,
+          intentMessage: runtimeShortcut.message,
           forceOpenClawRuntime: true,
         },
         emit,
@@ -222,14 +341,22 @@ export function createAgentStreamingService(options: AgentStreamingServiceOption
       )
     }
 
+    if (input.forceOpenClawRuntime) {
+      return options.runBufferedAgentTurnForStream(
+        {
+          ...input,
+          intentMessage: input.intentMessage || input.message,
+          forceOpenClawRuntime: true,
+        },
+        emit,
+        signal,
+        options.agentRuntimeShortcutReason(),
+      )
+    }
+
     const bufferedReason = options.bufferedAgentRuntimeReason(input.message, input.attachments, input.intentMessage)
     if (bufferedReason) {
       return options.runBufferedAgentTurnForStream(input, emit, signal, bufferedReason)
-    }
-
-    const hostedRelayCredentials = options.getHostedRelayCredentials()
-    if (hostedRelayCredentials) {
-      return options.streamAutomniaCloudRelay(input, emit, signal, hostedRelayCredentials)
     }
 
     const modelId = await options.resolveAgentPrimaryModelId(input.agent)

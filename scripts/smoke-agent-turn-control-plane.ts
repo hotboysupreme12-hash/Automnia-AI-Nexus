@@ -51,7 +51,14 @@ const clawTalkConsoleRoutes = readWorkspaceFile('server/routes/clawTalkConsoleRo
 const controlPlaneHttp = readWorkspaceFile('server/controlPlaneHttp.ts')
 const store = readWorkspaceFile('src/store/nexusStore.ts')
 const agentTurnsApi = readWorkspaceFile('src/api/agentTurns.ts')
+const appShell = readWorkspaceFile('src/App.tsx')
+const licenseContext = readWorkspaceFile('src/context/LicenseContext.tsx')
+const licenseEntitlement = readWorkspaceFile('src/utils/licenseEntitlement.ts')
 const consolePanel = readWorkspaceFile('src/components/monitor/AgentResponseConsole.tsx')
+const settingsPanel = readWorkspaceFile('src/components/settings/SettingsPanel.tsx')
+const modelSelector = readWorkspaceFile('src/components/party/ModelSelectorModal.tsx')
+const agentEditor = readWorkspaceFile('src/components/editor/AgentEditorModal.tsx')
+const licenseActivation = readWorkspaceFile('src/components/auth/LicenseActivationModal.tsx')
 const phaseKCommandConsoleSmoke = readWorkspaceFile('scripts/smoke-phase-k-command-console.ts')
 const phaseKRedactedFailedCommandSmoke = readWorkspaceFile('scripts/smoke-phase-k-redacted-failed-command.ts')
 const uiSmoke = readWorkspaceFile('scripts/smoke-ui-render.mjs')
@@ -139,6 +146,20 @@ assert(agentTurnBlock.includes('preflight,'), 'agent-turn should preserve browse
 assert(agentTurnBlock.includes('handoffOk'), 'agent-turn should preserve handoff outcome evidence')
 assert(agentTurnBlock.includes('runtimeContext: agentRuntimeContextPayload(agent, context)'), 'agent-turn should preserve runtime context evidence')
 assert(agentTurnBlock.includes('compactHttpJsonPayload({'), 'agent-turn should compact large diagnostics before returning them')
+assert(agentTurnBlock.includes('const hostedCreditRoute = Boolean(isHostedCreditsActive?.())'), 'buffered agent turns should detect active hosted-credit licenses for every command')
+assert(agentTurnBlock.includes('const hostedPayload = await streamProviderAgentTurn('), 'buffered hosted turns should use the same metered relay as streamed turns')
+assert(agentTurnBlock.includes('return apiSuccess(res, compactHttpJsonPayload(hostedPayload))'), 'buffered hosted relay replies should remain canonical API data')
+assert(agentTurnRoutes.includes('every message, including /runtime, /work, and /openclaw'), 'hosted billing should cover every explicit runtime command')
+assert(agentStreamingService.indexOf('const hostedRelayCredentials = skipHostedRouting ? null : options.getHostedRelayCredentials?.()') < agentStreamingService.indexOf('if (runtimeShortcut) {'), 'hosted billing preference must be selected before runtime shortcut routing')
+assert(agentStreamingService.includes("reason: 'automnia-cloud-local-fallback'"), 'hosted failures should use the configured local model fallback')
+assert(agentStreamingService.includes("hostedRelayCredentials.usagePriority === 'provider_first'"), 'subscribers should be able to select their connected provider first')
+assert(agentStreamingService.includes("reason: 'provider-to-automnia-fallback'"), 'provider-first failures should fall back to Automnia credits')
+assert(agentTurnRoutes.includes("label: cloudFirst ? 'Automnia credits first' : providerFirst ? 'My provider first'"), 'stream status should label the saved subscriber priority')
+assert(licenseContext.includes("apiRequest<LicenseInfo>('/api/license/usage-priority'"), 'the renderer should persist usage priority through the protected license API')
+assert(settingsPanel.includes('<option value="automnia_first">Automnia credits first</option>'), 'Account settings should expose Automnia-first priority')
+assert(settingsPanel.includes('<option value="provider_first">My connected provider first</option>'), 'Account settings should expose provider-first priority')
+assert(modelSelector.includes("providerFirst ? 'My Provider First' : 'Automnia Credits First'"), 'model selection should label the active usage priority')
+assert(agentEditor.includes("providerFirst ? 'Primary Provider Model' : 'Provider Fallback Model'"), 'agent model settings should explain primary and fallback roles')
 
 assert(/apiSuccess\s*\(\s*res/.test(browserPreflightBlock), '/api/browser/preflight should return a canonical success envelope')
 assertNoRawJsonResponse('/api/browser/preflight', browserPreflightBlock)
@@ -151,6 +172,10 @@ assert(runBufferedBlock.includes('!Array.isArray(parsedPayload)'), 'stream fallb
 assert(
   agentTurnsApi.includes("apiRequest<AgentTurnPayload>('/api/openclaw/agent-turn'"),
   'renderer should call non-SSE agent-turn through the extracted agent-turn API helper',
+)
+assert(
+  agentTurnsApi.includes('return preflightAgentRuntime(agentId)'),
+  'agent prewarm should be non-generative so background startup checks never spend hosted credits',
 )
 assert(
   store.includes('sendBufferedAgentTurn('),
@@ -172,6 +197,42 @@ assert(
   !store.includes("'/api/openclaw/agent-turn/stream'") && !store.includes('"/api/openclaw/agent-turn/stream"'),
   'nexusStore should not own the SSE agent-turn endpoint literal',
 )
+assert(
+  agentTurnsApi.includes('window.setTimeout(() => {')
+    && agentTurnsApi.includes('new CustomEvent<HostedCreditBalanceUpdate>(LICENSE_STATUS_UPDATED_EVENT, { detail })'),
+  'hosted-credit reconciliation should be deferred until after the final response render batch',
+)
+assert(
+  licenseContext.includes('if (blocking) setChecking(true)')
+    && !licenseContext.includes('const onHostedCreditUpdate = () =>'),
+  'automatic credit updates must not re-enter the blocking license startup state',
+)
+assert(
+  licenseContext.includes('startTransition(() => {')
+    && licenseContext.includes('mergeHostedCreditBalance('),
+  'automatic hosted-credit events should reconcile the in-memory balance as a low-priority transition',
+)
+assert(
+  appShell.includes('const StableNexusShell = memo(NexusShell)')
+    && appShell.includes('<StableNexusShell />'),
+  'license balance changes should not rerender the whole mounted Nexus shell',
+)
+assert(
+  licenseEntitlement.includes("starter: 'Starter Subscription'")
+    && licenseEntitlement.includes("pro: 'Pro Subscription'")
+    && licenseEntitlement.includes("enterprise: 'Enterprise Subscription'")
+    && licenseEntitlement.includes("credit_pack_topup: 'Hosted Credit Refill'")
+    && licenseEntitlement.includes("tierLabel: 'BYOK One-Time Access'"),
+  'license entitlement presentation should cover every published plan and one-time BYOK access',
+)
+for (const [name, source] of [
+  ['Settings', settingsPanel],
+  ['Model selector', modelSelector],
+  ['Agent editor', agentEditor],
+  ['License activation', licenseActivation],
+] as const) {
+  assert(source.includes('resolveLicenseEntitlement('), `${name} should use the shared active-tier presentation`)
+}
 
 assert(
   packageJson.scripts?.['smoke:agent-turn-control-plane'] === 'tsx scripts/smoke-agent-turn-control-plane.ts',
@@ -214,8 +275,16 @@ assert(
   'agent-turn stream route should expose a deterministic redacted failure smoke mode',
 )
 assert(
-  agentTurnRoutes.includes('const failureTransport = parsed.data.forceOpenClawRuntime ?'),
-  'agent-turn stream failures should preserve the Gateway transport when forced through the Command Console runtime path',
+  agentTurnRoutes.includes('const hostedCreditRoute = Boolean(isHostedCreditsActive?.())'),
+  'agent-turn stream routes should give an active hosted entitlement priority over runtime shortcuts and the legacy forced-runtime flag',
+)
+assert(
+  agentTurnRoutes.includes("? 'automnia-cloud-relay'"),
+  'agent-turn stream failures should label Cloud Subscription failures as the Automnia credit route',
+)
+assert(
+  agentTurnRoutes.includes("? 'gateway-chat'"),
+  'agent-turn stream failures should preserve the Gateway label for BYOK requests',
 )
 assert(
   phaseKRedactedFailedCommandSmoke.includes("'x-control-center-stream-smoke': 'failure'"),

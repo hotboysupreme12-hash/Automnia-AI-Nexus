@@ -25,6 +25,47 @@ export function registerLicenseRoutes(app: Express, options: { licenseService: L
     }
   })
 
+  // A manual reconciliation is useful after a top-up or when the same
+  // subscription was used on another device. It never changes a balance
+  // locally; it asks the Shopify provisioner for its current authoritative
+  // license state.
+  app.post('/api/license/refresh', async (_req, res) => {
+    try {
+      return apiSuccess(res, await options.licenseService.refresh())
+    } catch (error) {
+      const known = error instanceof LicenseServiceError ? error : null
+      return apiFailure(res, known?.code === 'license_activation_failed' ? 401 : 502, known?.code || 'license_service_unavailable', known?.message || 'License refresh failed.')
+    }
+  })
+
+  app.post('/api/license/usage-priority', (req, res) => {
+    const parsed = z.object({
+      usagePriority: z.enum(['automnia_first', 'provider_first']),
+    }).safeParse(req.body)
+    if (!parsed.success) return apiFailure(res, 400, 'invalid_payload', 'Choose Automnia credits first or your connected provider first.')
+    if (options.licenseService.getStatus().mode !== 'hosted_credits') {
+      return apiFailure(res, 409, 'invalid_payload', 'Usage priority is available to active hosted subscribers. BYOK access always uses the connected provider.')
+    }
+    try {
+      return apiSuccess(res, options.licenseService.setUsagePriority(parsed.data.usagePriority))
+    } catch (error) {
+      const known = error instanceof LicenseServiceError ? error : null
+      return apiFailure(res, 500, known?.code || 'license_service_unavailable', known?.message || 'The usage priority could not be saved.')
+    }
+  })
+
+  // Checkout is provisioner-owned: the desktop app only asks for a verified
+  // HTTPS URL and opens it for the customer. It never constructs Shopify cart
+  // links, product IDs, prices, or an entitlement locally.
+  app.post('/api/license/checkout', async (_req, res) => {
+    try {
+      return apiSuccess(res, await options.licenseService.getSubscriptionCheckout())
+    } catch (error) {
+      const known = error instanceof LicenseServiceError ? error : null
+      return apiFailure(res, known?.code === 'license_activation_failed' ? 404 : 502, known?.code || 'license_service_unavailable', known?.message || 'Shopify checkout is currently unavailable.')
+    }
+  })
+
   app.post('/api/license/deactivate', (_req, res) => {
     try {
       return apiSuccess(res, options.licenseService.deactivate())
