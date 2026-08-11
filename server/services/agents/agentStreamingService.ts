@@ -33,6 +33,7 @@ export type AgentStreamingInput = {
   thinking: AgentStreamingThinkingLevel
   timeoutSeconds?: number
   attachments?: unknown[]
+  tools?: unknown[]
   sessionKey?: string
   source?: 'clawtalk'
   forceOpenClawRuntime?: boolean

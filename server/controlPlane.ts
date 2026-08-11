@@ -17314,9 +17314,9 @@ async function streamAutomniaCloudRelay(
   signal: AbortSignal,
   credentials: { email: string; licenseKey: string; mode: 'hosted_credits'; usagePriority: 'automnia_first' | 'provider_first' },
 ): Promise<Record<string, unknown>> {
-  const modelId = 'automnia-cloud/gemini-2.5-flash'
+  const modelId = 'automnia-cloud/gemini-3.6-flash'
   const provider = 'automnia-cloud'
-  const model = 'gemini-2.5-flash'
+  const model = 'gemini-3.6-flash'
   const capability = { configured: true, liveTokens: false, relay: true }
   const context = await resolveAgentRunContext(input.agent)
   const sessionScope = agentTurnSessionScope(input.agent, input.sessionKey)
