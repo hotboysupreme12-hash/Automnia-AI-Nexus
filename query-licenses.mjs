@@ -30,7 +30,7 @@ async function run() {
       const creditBalance = doc.fields?.creditBalance?.integerValue || doc.fields?.creditBalance?.doubleValue;
       const tier = doc.fields?.tier?.stringValue;
       
-      if (email && email.includes('hotboysupreme3')) {
+      if (email) {
         console.log('\n=== MATCH FOUND ===');
         console.log(`Document Name: ${doc.name}`);
         console.log(`Email: ${email}`);
