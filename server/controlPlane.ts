@@ -9315,7 +9315,7 @@ function nonAutomniaOpenClawModels(selection: OpenClawModelSelection | undefined
 
 function applyAutomniaBillingModelOrder(
   selection: OpenClawModelSelection | undefined,
-  usagePriority: 'automnia_first' | 'provider_first' | null,
+  usagePriority: 'automnia_first' | 'provider_first' | 'byok_only' | null,
 ) {
   const providerModels = nonAutomniaOpenClawModels(selection)
   if (usagePriority === 'automnia_first') {
@@ -9326,15 +9326,28 @@ function applyAutomniaBillingModelOrder(
       primary: AUTOMNIA_OPENCLAW_MODEL,
     }
   }
-  if (usagePriority === 'provider_first' && providerModels.length) {
+  if (usagePriority === 'provider_first') {
+    // Automnia credits first, fallback to BYOK keys (our standard fallback)
+    if (providerModels.length) {
+      return {
+        primary: AUTOMNIA_OPENCLAW_MODEL,
+        fallbacks: providerModels,
+      }
+    }
     return {
-      primary: providerModels[0],
-      fallbacks: uniqueStrings(AUTOMNIA_OPENCLAW_MODEL, ...providerModels.slice(1)),
+      primary: AUTOMNIA_OPENCLAW_MODEL,
     }
   }
-  // A subscriber may select provider-first before actually connecting a
-  // provider. Cloud stays available in that case rather than allowing an
-  // unconfigured direct-provider attempt to bypass billing.
+  if (usagePriority === 'byok_only') {
+    // BYOK only: bypass subscription credits completely and use direct provider keys
+    if (providerModels.length) {
+      return {
+        primary: providerModels[0],
+        ...(providerModels.length > 1 ? { fallbacks: providerModels.slice(1) } : {}),
+      }
+    }
+    return undefined
+  }
   return { primary: AUTOMNIA_OPENCLAW_MODEL }
 }
 
@@ -17658,7 +17671,10 @@ registerAgentTurnRoutes(app, {
   isContextOverflowReply,
   isEmptyAgentNoResponseReply,
   isGoogleGeminiModelId,
-  isHostedCreditsActive: () => Boolean(licenseService.getActiveRelayCredentials()),
+  isHostedCreditsActive: () => {
+    const hosted = licenseService.getActiveRelayCredentials()
+    return Boolean(hosted && hosted.usagePriority !== 'byok_only')
+  },
   hostedUsagePriority: () => licenseService.getUsagePriority(),
   isRetiredAgentId,
   isValidAgentId,

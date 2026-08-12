@@ -3,7 +3,7 @@ import { AUTOMNIA_PUBLIC_CLOUD_URL, automniaCloudBaseUrl, automniaCloudRuntimeBa
 export const DEFAULT_LICENSE_API_URL = AUTOMNIA_PUBLIC_CLOUD_URL
 const ACTIVATION_TIMEOUT_MS = 10_000
 
-export type HostedUsagePriority = 'automnia_first' | 'provider_first'
+export type HostedUsagePriority = 'automnia_first' | 'provider_first' | 'byok_only'
 
 export type LicenseStatus = {
   active: boolean
@@ -66,7 +66,7 @@ function validCheckoutUrl(value: unknown): value is string {
 }
 
 function validUsagePriority(value: unknown): value is HostedUsagePriority {
-  return value === 'automnia_first' || value === 'provider_first'
+  return value === 'automnia_first' || value === 'provider_first' || value === 'byok_only'
 }
 
 function effectiveMode(record: Pick<StoredLicense, 'mode' | 'tier'>): 'hosted_credits' | 'byok' {

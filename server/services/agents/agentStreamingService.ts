@@ -221,7 +221,10 @@ export function createAgentStreamingService(options: AgentStreamingServiceOption
     // Hosted members can choose which paid route is attempted first. Both
     // lanes are staged until success is known so a failed preferred route can
     // fall back without briefly rendering a terminal error in the UI.
-    const hostedRelayCredentials = skipHostedRouting ? null : options.getHostedRelayCredentials?.()
+    let hostedRelayCredentials = skipHostedRouting ? null : options.getHostedRelayCredentials?.()
+    if (hostedRelayCredentials && hostedRelayCredentials.usagePriority === 'byok_only') {
+      hostedRelayCredentials = null
+    }
     const streamHostedRelay = options.streamAutomniaCloudRelay
     if (hostedRelayCredentials && streamHostedRelay) {
       // Tool-capable and channel-originated turns must stay inside OpenClaw's
@@ -404,6 +407,11 @@ export function createAgentStreamingService(options: AgentStreamingServiceOption
           usagePriority: 'automnia_first',
           fallbackUsed: false,
         }
+      }
+
+      if (hostedRelayCredentials.usagePriority === 'automnia_first') {
+        const errorMessage = 'Automnia Cloud could not complete this request, and BYOK fallback is disabled.'
+        throw new Error(errorMessage)
       }
 
       const fallbackMessage = 'Automnia Cloud could not complete this request. Using the local fallback configured in Model Settings.'
