@@ -5,11 +5,16 @@ import { tmpdir } from 'node:os'
 import path from 'node:path'
 import net from 'node:net'
 
+import {
+  CONTROL_CENTER_STATE_KEYS,
+  createRuntimeLedgerStore,
+  runtimeLedgerPathsForStateRoot,
+} from '../server/state/runtimeLedgerStore'
 import { createSseFrameParser } from '../src/utils/sseStream'
 
 const root = process.cwd()
 const CONTROL_TOKEN = 'phase-k-command-console'
-const AGENT_ID = 'hn-commander'
+const AGENT_ID = 'hn-coordinator'
 const phaseKEvidenceDir = path.join(root, 'release', 'evidence', 'phase-k-manual-beta-2026-07-01')
 const evidenceJsonPath = path.join(phaseKEvidenceDir, 'command-console-smoke.json')
 const evidenceMarkdownPath = path.join(phaseKEvidenceDir, 'COMMAND_CONSOLE_SMOKE.md')
@@ -303,6 +308,25 @@ const uploadRoot = path.join(workspaceRoot, '.openclaw', 'command-console-upload
 mkdirSync(workspaceRoot, { recursive: true })
 mkdirSync(homeDir, { recursive: true })
 mkdirSync(phaseKEvidenceDir, { recursive: true })
+
+const runtimeLedgerStore = createRuntimeLedgerStore(runtimeLedgerPathsForStateRoot(stateDir))
+try {
+  const seededAt = '2026-08-12T12:00:00.000Z'
+  assert.equal(runtimeLedgerStore.writeControlCenterState(CONTROL_CENTER_STATE_KEYS.licenseActivation, {
+    active: true,
+    email: 'phase-k-command-console@example.test',
+    licenseKey: 'AUT-PHASE-K-COMMAND-CONSOLE-0001',
+    tier: 'founding_beta_byok',
+    mode: 'byok',
+    usagePriority: 'provider_first',
+    creditBalance: 0,
+    creditBalanceUpdatedAt: null,
+    activatedAt: seededAt,
+    verifiedAt: seededAt,
+  }), true, 'command-console smoke fixture must persist an active license before the server starts')
+} finally {
+  runtimeLedgerStore.close()
+}
 
 const child = spawnServer(port, stateDir, workspaceRoot, homeDir)
 

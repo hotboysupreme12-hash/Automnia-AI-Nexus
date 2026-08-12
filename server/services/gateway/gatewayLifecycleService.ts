@@ -628,20 +628,17 @@ export function createGatewayLifecycleService(options: GatewayLifecycleServiceOp
         repairedTelegramRuntimes.length ? 'Telegram' : '',
       ].filter(Boolean)
       if (repairedRuntimeLabels.length) {
-        if (!gatewayProcessOwnedByControlCenter || !gatewayProcess) {
-          const detail = `external gateway is healthy; restart it to load repaired ${repairedRuntimeLabels.join(' and ')} runtime`
-          log.info(`[gateway] ${detail}`)
-          options.pushGatewayLog('lifecycle', detail)
-          gatewayRestartCount = 0
-          gatewayStartupGraceUntilMs = 0
-          return
-        }
-        log.info(`[gateway] restarting owned healthy gateway to load repaired ${repairedRuntimeLabels.join(' and ')} runtime`)
-        options.pushGatewayLog('lifecycle', `restarting owned gateway to load repaired ${repairedRuntimeLabels.join(' and ')} runtime`)
-        await options.terminateProcessTree(gatewayProcess.pid, 'gateway repaired runtime restart', true).catch(() => ({ ok: false, detail: 'terminate failed' }))
-        gatewayProcess = null
-        gatewayProcessOwnedByControlCenter = false
-        await options.delayMs(750)
+        // A healthy Gateway is already serving active turns.  Plugin repair is
+        // startup maintenance; killing the process from this hot path drops
+        // the in-flight request and makes the UI report "Failed to fetch".
+        // Keep the repaired files for the next explicit Gateway restart.
+        const ownership = gatewayProcessOwnedByControlCenter && gatewayProcess ? 'owned' : 'external'
+        const detail = `${ownership} gateway is healthy; repaired ${repairedRuntimeLabels.join(' and ')} runtime will load on the next explicit Gateway restart`
+        log.info(`[gateway] ${detail}`)
+        options.pushGatewayLog('lifecycle', detail)
+        gatewayRestartCount = 0
+        gatewayStartupGraceUntilMs = 0
+        return
       } else {
         log.log(`[gateway] already healthy on port ${options.gatewayHttpPort}`)
         gatewayRestartCount = 0
