@@ -6,6 +6,7 @@ import { LicenseServiceError, type LicenseService } from '../services/license/li
 export function registerLicenseRoutes(app: Express, options: {
   licenseService: LicenseService
   synchronizeOpenClawBillingRoute?: () => Promise<void>
+  pushGatewayLog?: (stream: 'lifecycle' | 'stderr' | 'stdout' | 'gateway' | 'channel', message: string, level?: string) => void
 }) {
   const synchronizeOpenClawBillingRoute = async () => {
     await options.synchronizeOpenClawBillingRoute?.()
@@ -37,15 +38,27 @@ export function registerLicenseRoutes(app: Express, options: {
   // subscription was used on another device. It never changes a balance
   // locally; it asks the Shopify provisioner for its current authoritative
   // license state.
-  app.post('/api/license/refresh', async (_req, res) => {
-    try {
-      const status = await options.licenseService.refresh()
-      await synchronizeOpenClawBillingRoute()
-      return apiSuccess(res, status)
-    } catch (error) {
-      const known = error instanceof LicenseServiceError ? error : null
-      return apiFailure(res, known?.code === 'license_activation_failed' ? 401 : 502, known?.code || 'license_service_unavailable', known?.message || 'License refresh failed.')
-    }
+  app.post('/api/license/refresh', (_req, res) => {
+    // Return immediately to shield the gateway from the 1200ms timeout.
+    apiSuccess(res, { status: 'refresh_initiated' })
+
+    // Execute refresh in the background
+    options.licenseService.refresh()
+      .then(async (status) => {
+        await synchronizeOpenClawBillingRoute()
+        if (options.pushGatewayLog) {
+          options.pushGatewayLog('lifecycle', `Background license refresh succeeded: ${status.email || 'unknown user'}`)
+        } else {
+          console.log(`Background license refresh succeeded: ${status.email || 'unknown user'}`)
+        }
+      })
+      .catch((error) => {
+        if (options.pushGatewayLog) {
+          options.pushGatewayLog('stderr', `Background license refresh failed: ${error instanceof Error ? error.message : String(error)}`)
+        } else {
+          console.error('Background license refresh failed:', error)
+        }
+      })
   })
 
   app.post('/api/license/usage-priority', async (req, res) => {
