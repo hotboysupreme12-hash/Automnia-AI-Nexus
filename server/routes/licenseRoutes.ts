@@ -39,8 +39,9 @@ export function registerLicenseRoutes(app: Express, options: {
   // locally; it asks the Shopify provisioner for its current authoritative
   // license state.
   app.post('/api/license/refresh', (_req, res) => {
-    // Return immediately to shield the gateway from the 1200ms timeout.
-    apiSuccess(res, { status: 'refresh_initiated' })
+    // Return current status immediately to keep the UI in "active" state and shield from timeouts
+    const currentStatus = options.licenseService.getStatus()
+    apiSuccess(res, currentStatus)
 
     // Execute refresh in the background
     options.licenseService.refresh()

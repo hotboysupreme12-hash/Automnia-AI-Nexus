@@ -111,8 +111,35 @@ export function LicenseProvider({ children }: { children: ReactNode }) {
       body: {},
     })
     if (!result.ok) throw new Error(apiErrorMessage(result.error))
+    
     setLicense(result.data)
     setLicenseActivationRequested(false)
+
+    // Poll /api/license/status in the background to retrieve the updated balance
+    const startBalanceUpdatedAt = result.data.creditBalanceUpdatedAt
+    let attempts = 0
+    const maxAttempts = 8
+    const intervalMs = 1500
+
+    const pollStatus = async () => {
+      if (attempts >= maxAttempts) return
+      attempts++
+      try {
+        const pollResult = await apiRequest<LicenseInfo>('/api/license/status', { timeoutMs: 5000 })
+        if (pollResult.ok) {
+          setLicense(pollResult.data)
+          if (pollResult.data.creditBalanceUpdatedAt !== startBalanceUpdatedAt) {
+            return
+          }
+        }
+      } catch (error) {
+        console.warn('[license-refresh-poll] failed:', error)
+      }
+      setTimeout(pollStatus, intervalMs)
+    }
+
+    setTimeout(pollStatus, 1000)
+
     return result.data
   }, [])
 

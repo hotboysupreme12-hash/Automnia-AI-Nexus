@@ -17999,11 +17999,18 @@ registerAuthRoutes(app, { authToken: AUTH_TOKEN, loginAttempts, sessionTokens })
 registerLicenseRoutes(app, {
   licenseService,
   synchronizeOpenClawBillingRoute: async () => {
+    const beforeStr = JSON.stringify(await readOpenclawConfig().catch(() => ({})))
     await synchronizeOpenClawBillingRoute()
-    // Force gateway restart after updating the configuration so the new provider/model routing/billing takes effect immediately.
-    await tryRestartGatewayService({ force: true, reason: 'subscription tier change synchronization' }).catch((error) => {
-      console.warn('[license-restart] failed to force restart gateway service:', error)
-    })
+    const afterStr = JSON.stringify(await readOpenclawConfig().catch(() => ({})))
+
+    // Only restart if the actual openclaw config changed (e.g. tier, key, or priority order changed)
+    if (beforeStr !== afterStr) {
+      await tryRestartGatewayService({ force: true, reason: 'subscription tier change synchronization' }).catch((error) => {
+        console.warn('[license-restart] failed to force restart gateway service:', error)
+      })
+    } else {
+      console.log('[license-restart] OpenClaw configuration did not change, skipping gateway restart')
+    }
   },
   pushGatewayLog,
 })
