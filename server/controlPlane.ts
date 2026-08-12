@@ -8928,8 +8928,8 @@ function ensureOpenclawRuntimeDefaults(config: OpenClawConfigFile) {
   if (!defaults.compaction) defaults.compaction = {}
   if (!defaults.compaction.midTurnPrecheck) defaults.compaction.midTurnPrecheck = {}
   if (!defaults.compaction.memoryFlush) defaults.compaction.memoryFlush = {}
-  defaults.compaction.reserveTokensFloor ??= 12000
-  defaults.compaction.keepRecentTokens ??= 12000
+  defaults.compaction.reserveTokensFloor ??= 60000
+  defaults.compaction.keepRecentTokens ??= 50000
   defaults.compaction.midTurnPrecheck.enabled ??= true
   defaults.compaction.truncateAfterCompaction ??= true
   defaults.compaction.maxActiveTranscriptBytes ??= '12mb'
