@@ -232,7 +232,7 @@ export function createAgentStreamingService(options: AgentStreamingServiceOption
       // Automnia OpenAI-compatible provider before startup, so this preserves
       // tool calls, channel delivery, and credit charging in one supported
       // OpenClaw path instead of collapsing a tool request into a text relay.
-      if (input.forceOpenClawRuntime) {
+      if (input.forceOpenClawRuntime || (input.tools && input.tools.length > 0)) {
         const runtimeResult = await streamProviderAgentTurn(input, emit, signal, true)
         return {
           ...runtimeResult,

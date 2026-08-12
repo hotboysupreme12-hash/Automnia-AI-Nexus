@@ -9397,8 +9397,8 @@ async function synchronizeOpenClawBillingRoute(configInput?: OpenClawConfigFile)
       reasoning: false,
       input: ['text'],
       contextWindow: 1_000_000,
-      contextTokens: 128_000,
-      maxTokens: 8_192,
+      contextTokens: 20_000,
+      maxTokens: 16_384,
     }],
   }
   const priority = hosted.usagePriority
