@@ -689,17 +689,17 @@ export function SettingsPanel() {
               </div>
             </dl>
           </section>
-          <div className="dui-settings-inline" style={{ marginTop: '1rem' }}>
+          <div className="dui-settings-inline" style={{ marginTop: '1rem', display: 'flex', justifyContent: 'center' }}>
             <button type="button" onClick={() => void refreshAccount()} disabled={accountRefreshBusy || !license?.active}>
               {accountRefreshBusy ? 'Refreshing account…' : hostedCredits ? 'Refresh account balance' : 'Refresh account access'}
             </button>
           </div>
-          <div className="dui-settings-inline" style={{ marginTop: '0.75rem' }}>
+          <div className="dui-settings-inline" style={{ marginTop: '0.75rem', display: 'flex', justifyContent: 'center' }}>
             <button type="button" onClick={() => void openCheckout()} disabled={checkoutBusy}>
               {checkoutBusy ? 'Opening secure Shopify checkout...' : hostedCredits ? 'Refill credits or change plan' : isByok ? 'Upgrade to a subscription on Shopify' : 'Choose a plan on Shopify'}
             </button>
           </div>
-          <div className="dui-settings-inline" style={{ marginTop: '0.75rem' }}>
+          <div className="dui-settings-inline" style={{ marginTop: '0.75rem', display: 'flex', justifyContent: 'center' }}>
             <button type="button" onClick={requestLicenseActivation} disabled={!license?.active}>
               {isByok ? 'Enter Cloud Subscription key' : 'Change license key'}
             </button>
