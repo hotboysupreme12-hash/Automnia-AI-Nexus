@@ -9256,12 +9256,23 @@ async function writeOpenclawConfig(config: unknown) {
       : parsed.agents,
   }
   // Create a version of the config for comparison that excludes dynamic metadata fields
-  // like lastTouchedAt, to prevent unnecessary restarts.
-  const compareNext = { ...next }
-  if (compareNext.meta) {
-    delete compareNext.meta.lastTouchedAt
-    delete compareNext.meta.lastTouchedVersion
+  // (like lastTouchedAt, lastTouchedVersion, updatedAt) using a true deep clone to prevent unnecessary restarts.
+  const stripDynamicConfigFieldsForComparison = (cfg: unknown) => {
+    if (!cfg || typeof cfg !== 'object') return cfg
+    const cloned = JSON.parse(JSON.stringify(cfg)) as Record<string, unknown>
+    if (cloned.meta && typeof cloned.meta === 'object' && !Array.isArray(cloned.meta)) {
+      const meta = cloned.meta as Record<string, unknown>
+      delete meta.lastTouchedAt
+      delete meta.lastTouchedVersion
+      delete meta.lastTouchedBy
+      delete meta.updatedAt
+      delete meta.createdAt
+      if (Object.keys(meta).length === 0) delete cloned.meta
+    }
+    return cloned
   }
+
+  const compareNext = stripDynamicConfigFieldsForComparison(next)
   const serializedCompare = `${JSON.stringify(compareNext, null, 2)}\n`
 
   const serialized = `${JSON.stringify(next, null, 2)}\n`
@@ -9270,12 +9281,8 @@ async function writeOpenclawConfig(config: unknown) {
     await fs.mkdir(path.dirname(OPENCLAW_CONFIG_PATH), { recursive: true })
     try {
       const current = await readTextFileWithLockRetry(OPENCLAW_CONFIG_PATH)
-      const currentConfig = JSON.parse(current) as OpenClawConfigFile
-      const compareCurrent = { ...currentConfig }
-      if (compareCurrent.meta) {
-        delete compareCurrent.meta.lastTouchedAt
-        delete compareCurrent.meta.lastTouchedVersion
-      }
+      const currentConfig = JSON.parse(current)
+      const compareCurrent = stripDynamicConfigFieldsForComparison(currentConfig)
       const serializedCurrentCompare = `${JSON.stringify(compareCurrent, null, 2)}\n`
       if (serializedCurrentCompare === serializedCompare) return
     } catch (error) {
