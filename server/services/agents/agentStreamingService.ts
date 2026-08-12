@@ -296,7 +296,7 @@ export function createAgentStreamingService(options: AgentStreamingServiceOption
         const cloud = await runCloud()
         const cloudReply = typeof cloud.result.reply === 'string' ? cloud.result.reply : ''
         const cloudText = typeof cloud.result.text === 'string' ? cloud.result.text : ''
-        const hasCloudToolRequest = cloudReply.includes('[Runtime tool request:') || cloudText.includes('[Runtime tool request:') || cloud.events.some(([ev, data]) => typeof data?.text === 'string' && data.text.includes('[Runtime tool request:'))
+        const hasCloudToolRequest = cloudReply.includes('[Runtime tool request:') || cloudText.includes('[Runtime tool request:') || cloud.events.some(([, data]) => typeof data?.text === 'string' && data.text.includes('[Runtime tool request:'))
 
         if (hasCloudToolRequest) {
           emit('status', {
@@ -325,7 +325,7 @@ export function createAgentStreamingService(options: AgentStreamingServiceOption
       const cloud = await runCloud()
       const cloudReply = typeof cloud.result.reply === 'string' ? cloud.result.reply : ''
       const cloudText = typeof cloud.result.text === 'string' ? cloud.result.text : ''
-      const hasCloudToolRequest = cloudReply.includes('[Runtime tool request:') || cloudText.includes('[Runtime tool request:') || cloud.events.some(([ev, data]) => typeof data?.text === 'string' && data.text.includes('[Runtime tool request:'))
+      const hasCloudToolRequest = cloudReply.includes('[Runtime tool request:') || cloudText.includes('[Runtime tool request:') || cloud.events.some(([, data]) => typeof data?.text === 'string' && data.text.includes('[Runtime tool request:'))
 
       if (hasCloudToolRequest) {
         emit('status', {
