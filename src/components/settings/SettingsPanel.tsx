@@ -623,7 +623,7 @@ export function SettingsPanel() {
         setNotice({
           tone: 'success',
           text: nextPriority === 'provider_first'
-            ? 'Usage priority saved: Automnia credits with BYOK fallback.'
+            ? 'Usage priority saved: BYOK first with Automnia credits fallback.'
             : nextPriority === 'byok_only'
               ? 'Usage priority saved: BYOK only (direct provider access).'
               : 'Usage priority saved: Automnia credits only (strict, no BYOK fallback).',
@@ -651,14 +651,14 @@ export function SettingsPanel() {
           <Field label="Access & Billing Mode" hint="Hosted subscriptions use Automnia credits. One-time BYOK access uses the provider account that the customer connects.">
             <input type="text" readOnly value={entitlement.billingLabel} style={{ backgroundColor: 'rgba(255, 255, 255, 0.05)', cursor: 'not-allowed' }} />
           </Field>
-          <Field label="Usage Priority" hint={hostedCredits ? 'Choose which balance is attempted first. If Automnia credits (strict) is selected, BYOK fallbacks are disabled. BYOK Only bypasses credits entirely.' : isByok ? 'BYOK access always uses the connected provider account.' : 'Activate a hosted plan to choose a usage priority.'}>
+          <Field label="Usage Priority" hint={hostedCredits ? 'Choose which route is attempted first. Strict Automnia disables BYOK fallback. BYOK only bypasses credits entirely.' : isByok ? 'BYOK access always uses the connected provider account.' : 'Activate a hosted plan to choose a usage priority.'}>
             <select
               value={hostedCredits ? usagePriority : 'provider_first'}
               disabled={!hostedCredits || usagePriorityBusy}
               onChange={(event) => void saveUsagePriority(event.target.value as 'automnia_first' | 'provider_first' | 'byok_only')}
             >
               <option value="automnia_first">Automnia credits only (no BYOK fallback)</option>
-              <option value="provider_first">Automnia credits + BYOK fallback</option>
+              <option value="provider_first">BYOK first + Automnia credits fallback</option>
               <option value="byok_only">BYOK only (bypass subscription credits)</option>
             </select>
           </Field>

@@ -156,8 +156,9 @@ assert(agentStreamingService.includes("hostedRelayCredentials.usagePriority === 
 assert(agentStreamingService.includes("reason: 'provider-to-automnia-fallback'"), 'provider-first failures should fall back to Automnia credits')
 assert(agentTurnRoutes.includes("label: cloudFirst ? 'Automnia credits first' : providerFirst ? 'My provider first'"), 'stream status should label the saved subscriber priority')
 assert(licenseContext.includes("apiRequest<LicenseInfo>('/api/license/usage-priority'"), 'the renderer should persist usage priority through the protected license API')
-assert(settingsPanel.includes('<option value="automnia_first">Automnia credits first</option>'), 'Account settings should expose Automnia-first priority')
-assert(settingsPanel.includes('<option value="provider_first">My connected provider first</option>'), 'Account settings should expose provider-first priority')
+assert(settingsPanel.includes('<option value="automnia_first">Automnia credits only (no BYOK fallback)</option>'), 'Account settings should expose strict Automnia priority')
+assert(settingsPanel.includes('<option value="provider_first">BYOK first + Automnia credits fallback</option>'), 'Account settings should expose provider-first priority')
+assert(settingsPanel.includes('<option value="byok_only">BYOK only (bypass subscription credits)</option>'), 'Account settings should expose BYOK-only priority')
 assert(modelSelector.includes("providerFirst ? 'My Provider First' : 'Automnia Credits First'"), 'model selection should label the active usage priority')
 assert(agentEditor.includes("providerFirst ? 'Primary Provider Model' : 'Provider Fallback Model'"), 'agent model settings should explain primary and fallback roles')
 

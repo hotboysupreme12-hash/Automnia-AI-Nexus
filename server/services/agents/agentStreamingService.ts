@@ -54,11 +54,21 @@ export type StreamedProviderReply = {
   reasoningContent?: string
 }
 
+type HostedRelayPriority = 'automnia_first' | 'provider_first'
+
 type HostedRelayCredentials = {
   email: string
   licenseKey: string
   mode: 'hosted_credits'
-  usagePriority: 'automnia_first' | 'provider_first'
+  usagePriority: HostedRelayPriority
+}
+
+type HostedRelayCandidateCredentials = Omit<HostedRelayCredentials, 'usagePriority'> & {
+  usagePriority: HostedRelayPriority | 'byok_only'
+}
+
+function isHostedRelayCredentials(value: HostedRelayCandidateCredentials | null | undefined): value is HostedRelayCredentials {
+  return value?.usagePriority === 'automnia_first' || value?.usagePriority === 'provider_first'
 }
 
 export type AgentStreamingServiceOptions = {
@@ -72,7 +82,7 @@ export type AgentStreamingServiceOptions = {
     attachments?: unknown[],
     intentMessage?: string,
   ) => BufferedRuntimeReason | null
-  getHostedRelayCredentials?: () => HostedRelayCredentials | null
+  getHostedRelayCredentials?: () => HostedRelayCandidateCredentials | null
   streamAutomniaCloudRelay?: (
     input: AgentStreamingInput,
     emit: AgentTurnStreamEmitter,
@@ -184,6 +194,7 @@ export type AgentStreamingServiceOptions = {
     signal: AbortSignal
     emit: AgentTurnStreamEmitter
   }) => Promise<StreamedProviderReply>
+  runToolNative?: (toolName: string, toolArgs: unknown, signal: AbortSignal) => Promise<unknown>
   classifyFailureKind: (
     message: string,
     fallback?: 'failed' | 'timeout' | 'aborted' | 'interrupted' | null,
@@ -221,10 +232,11 @@ export function createAgentStreamingService(options: AgentStreamingServiceOption
     // Hosted members can choose which paid route is attempted first. Both
     // lanes are staged until success is known so a failed preferred route can
     // fall back without briefly rendering a terminal error in the UI.
-    let hostedRelayCredentials = skipHostedRouting ? null : options.getHostedRelayCredentials?.()
-    if (hostedRelayCredentials && hostedRelayCredentials.usagePriority === 'byok_only') {
-      hostedRelayCredentials = null
-    }
+    const relayCandidateCredentials = skipHostedRouting ? null : options.getHostedRelayCredentials?.()
+    const hostedRelayCredentials: HostedRelayCredentials | null =
+      isHostedRelayCredentials(relayCandidateCredentials)
+        ? relayCandidateCredentials
+        : null
     const streamHostedRelay = options.streamAutomniaCloudRelay
     if (hostedRelayCredentials && streamHostedRelay) {
       // Tool-capable and channel-originated turns must stay inside OpenClaw's
@@ -358,7 +370,7 @@ export function createAgentStreamingService(options: AgentStreamingServiceOption
         })
         
       // Use JSON-native tool call dispatch instead of regex parsing
-        if (cloud.result.toolCalls && Array.isArray(cloud.result.toolCalls) && cloud.result.toolCalls.length > 0) {
+        if (options.runToolNative && cloud.result.toolCalls && Array.isArray(cloud.result.toolCalls) && cloud.result.toolCalls.length > 0) {
            const call = cloud.result.toolCalls[0];
            const toolName = call.function.name;
            let toolArgs;

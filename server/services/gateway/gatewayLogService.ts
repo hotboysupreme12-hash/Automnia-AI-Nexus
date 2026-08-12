@@ -387,7 +387,7 @@ export function createGatewayLogService(options: GatewayLogServiceOptions) {
 
     const rpcSuccess = /^(?:⇄|â‡„)\s*res\s*(?:✓|âœ“)?\s*([^\s]+)\s+(\d+)ms\b/iu.exec(withoutTimestamp)
     if (rpcSuccess) {
-      if (rpcSuccess[1] === 'logs.tail') return null
+      if (rpcSuccess[1] === 'logs.tail') return { message: '' }
       return { message: `Gateway RPC completed: ${rpcSuccess[1]} (${rpcSuccess[2]}ms).` }
     }
 

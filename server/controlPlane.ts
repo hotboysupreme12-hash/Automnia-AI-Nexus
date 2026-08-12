@@ -1153,6 +1153,7 @@ type AgentConfigEntry = {
   fastModeDefault?: OpenClawFastModeDefault
   identity?: AgentIdentity
   name?: string
+  modelOverride?: string
   model?: {
     primary?: string
     fallbacks?: string[]
@@ -1369,6 +1370,7 @@ type OpenClawConfigFile = {
       workspace?: string
       timeoutSeconds?: number
       fastModeDefault?: OpenClawFastModeDefault
+      modelOverride?: string
       model?: { primary?: string; fallbacks?: string[] }
       models?: Record<string, OpenClawModelAllowlistEntry>
       sandbox?: AgentSandboxConfig
@@ -9336,11 +9338,45 @@ function nonAutomniaOpenClawModels(selection: OpenClawModelSelection | undefined
   ).filter((modelId) => !isAutomniaOpenClawModel(modelId))
 }
 
+function configuredOpenClawProviderModels(config: OpenClawConfigFile) {
+  const candidates = uniqueStrings(
+    ...Object.keys(config.agents?.defaults?.models || {}),
+    ...Object.entries(config.models?.providers || {}).flatMap(([provider, providerConfig]) => {
+      if (provider === AUTOMNIA_OPENCLAW_PROVIDER_ID) return []
+      const models = providerConfig && typeof providerConfig === 'object' && Array.isArray(providerConfig.models)
+        ? providerConfig.models
+        : []
+      return models.map((entry) => {
+        const model = rawProviderModelId(entry)
+        return model.includes('/') ? model : `${provider}/${model}`
+      })
+    }),
+  )
+  return candidates
+    .map((modelId) => canonicalAgentModelId(modelId))
+    .filter((modelId) => {
+      if (!modelId || isAutomniaOpenClawModel(modelId)) return false
+      const { provider, model } = splitModelId(modelId)
+      const providerConfig = config.models?.providers?.[provider]
+      if (!providerConfig || !model) return false
+      const listedModels = Array.isArray(providerConfig.models) ? providerConfig.models : []
+      if (!listedModels.length) return true
+      return listedModels.some((entry) => {
+        const listed = rawProviderModelId(entry)
+        return listed === model || canonicalAgentModelId(listed) === modelId
+      })
+    })
+}
+
 function applyAutomniaBillingModelOrder(
   selection: OpenClawModelSelection | undefined,
   usagePriority: 'automnia_first' | 'provider_first' | 'byok_only' | null,
+  providerCandidates: string[] = [],
 ) {
-  const providerModels = nonAutomniaOpenClawModels(selection)
+  const providerModels = uniqueStrings(
+    ...nonAutomniaOpenClawModels(selection),
+    ...providerCandidates,
+  )
   if (usagePriority === 'automnia_first') {
     // "Automnia credits first" is a billing boundary, not a preference hint.
     // Do not silently fall back to a direct provider: that would produce an
@@ -9350,11 +9386,11 @@ function applyAutomniaBillingModelOrder(
     }
   }
   if (usagePriority === 'provider_first') {
-    // Automnia credits first, fallback to BYOK keys (our standard fallback)
+    // Use the connected provider first; Automnia credits are the fallback.
     if (providerModels.length) {
       return {
-        primary: AUTOMNIA_OPENCLAW_MODEL,
-        fallbacks: providerModels,
+        primary: providerModels[0],
+        fallbacks: [AUTOMNIA_OPENCLAW_MODEL, ...providerModels.slice(1)],
       }
     }
     return {
@@ -9374,8 +9410,11 @@ function applyAutomniaBillingModelOrder(
   return { primary: AUTOMNIA_OPENCLAW_MODEL }
 }
 
-function removeAutomniaBillingModel(selection: OpenClawModelSelection | undefined) {
-  const providerModels = nonAutomniaOpenClawModels(selection)
+function removeAutomniaBillingModel(selection: OpenClawModelSelection | undefined, providerCandidates: string[] = []) {
+  const providerModels = uniqueStrings(
+    ...nonAutomniaOpenClawModels(selection),
+    ...providerCandidates,
+  )
   if (!providerModels.length) return undefined
   return {
     primary: providerModels[0],
@@ -9390,13 +9429,31 @@ async function synchronizeOpenClawBillingRoute(configInput?: OpenClawConfigFile)
   if (!config.agents) config.agents = {}
   if (!config.agents.defaults) config.agents.defaults = {}
 
+  // Agent-local settings are the durable source of a user's BYOK model
+  // stack. The hosted route may temporarily replace the global OpenClaw
+  // selection with Automnia, so recover those provider models before applying
+  // a new priority instead of losing them on the next mode switch.
+  const localModels = new Map<string, OpenClawModelSelection>()
+  await Promise.all((config.agents.list || []).map(async (agent) => {
+    const local = await readAgentLocalConfigIfPresent(agent.id).catch(() => null)
+    if (local?.model) localModels.set(agent.id, local.model)
+  }))
+  const configuredProviderModels = configuredOpenClawProviderModels(config)
+  const allProviderModels = uniqueStrings(
+    ...configuredProviderModels,
+    ...Array.from(localModels.values()).flatMap((selection) => nonAutomniaOpenClawModels(selection)),
+  )
+
   const hosted = licenseService.getActiveRelayCredentials()
   if (!hosted) {
     delete config.models.providers[AUTOMNIA_OPENCLAW_PROVIDER_ID]
-    const defaultSelection = removeAutomniaBillingModel(config.agents.defaults.model)
+    const defaultSelection = removeAutomniaBillingModel(config.agents.defaults.model, allProviderModels)
     if (defaultSelection) config.agents.defaults.model = defaultSelection
     for (const agent of config.agents.list || []) {
-      const selection = removeAutomniaBillingModel(agent.model)
+      const selection = removeAutomniaBillingModel(agent.model, uniqueStrings(
+        ...nonAutomniaOpenClawModels(localModels.get(agent.id)),
+        ...allProviderModels,
+      ))
       if (selection) agent.model = selection
     }
     await writeOpenclawConfig(config)
@@ -9429,9 +9486,12 @@ async function synchronizeOpenClawBillingRoute(configInput?: OpenClawConfigFile)
   }
 
   const priority = hosted.usagePriority
-  config.agents.defaults.model = applyAutomniaBillingModelOrder(config.agents.defaults.model, priority)
+  config.agents.defaults.model = applyAutomniaBillingModelOrder(config.agents.defaults.model, priority, allProviderModels)
   for (const agent of config.agents.list || []) {
-    agent.model = applyAutomniaBillingModelOrder(agent.model, priority)
+    agent.model = applyAutomniaBillingModelOrder(agent.model, priority, uniqueStrings(
+      ...nonAutomniaOpenClawModels(localModels.get(agent.id)),
+      ...allProviderModels,
+    ))
   }
   if (!config.agents.defaults.models) config.agents.defaults.models = {}
   config.agents.defaults.models[AUTOMNIA_OPENCLAW_MODEL] = {
@@ -9440,6 +9500,16 @@ async function synchronizeOpenClawBillingRoute(configInput?: OpenClawConfigFile)
   }
   await writeOpenclawConfig(config)
   return { routed: true, mode: 'hosted_credits' as const, usagePriority: priority }
+}
+
+function automniaBillingRouteSnapshot(config: OpenClawConfigFile | null | undefined) {
+  return JSON.stringify({
+    provider: config?.models?.providers?.[AUTOMNIA_OPENCLAW_PROVIDER_ID] || null,
+    defaults: config?.agents?.defaults?.model || null,
+    agents: (config?.agents?.list || [])
+      .map((agent) => ({ id: agent.id, model: agent.model || null }))
+      .sort((left, right) => left.id.localeCompare(right.id)),
+  })
 }
 
 async function ensureOpenclawAgentRunConfigDefaults() {
@@ -17702,7 +17772,10 @@ registerAgentTurnRoutes(app, {
     const hosted = licenseService.getActiveRelayCredentials()
     return Boolean(hosted && hosted.usagePriority !== 'byok_only')
   },
-  hostedUsagePriority: () => licenseService.getUsagePriority(),
+  hostedUsagePriority: () => {
+    const priority = licenseService.getUsagePriority()
+    return priority === 'byok_only' ? null : priority
+  },
   isRetiredAgentId,
   isValidAgentId,
   launchChromeHost,
@@ -18042,12 +18115,16 @@ registerAuthRoutes(app, { authToken: AUTH_TOKEN, loginAttempts, sessionTokens })
 registerLicenseRoutes(app, {
   licenseService,
   synchronizeOpenClawBillingRoute: async () => {
-    const beforeStr = JSON.stringify(await readOpenclawConfig().catch(() => ({})))
+    const beforeConfig = await readOpenclawConfig().catch(() => null)
+    const beforeRoute = automniaBillingRouteSnapshot(beforeConfig)
     await synchronizeOpenClawBillingRoute()
-    const afterStr = JSON.stringify(await readOpenclawConfig().catch(() => ({})))
+    const afterConfig = await readOpenclawConfig().catch(() => null)
+    const afterRoute = automniaBillingRouteSnapshot(afterConfig)
 
-    // Only restart if the actual openclaw config changed (e.g. tier, key, or priority order changed)
-    if (beforeStr !== afterStr) {
+    // Ignore unrelated/dynamic OpenClaw metadata. A full JSON comparison here
+    // used to force a Gateway restart on every background license refresh,
+    // dropping active turns and creating a restart/refresh loop.
+    if (beforeRoute !== afterRoute) {
       await tryRestartGatewayService({ force: true, reason: 'subscription tier change synchronization' }).catch((error) => {
         console.warn('[license-restart] failed to force restart gateway service:', error)
       })
