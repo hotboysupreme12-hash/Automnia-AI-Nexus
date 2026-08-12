@@ -721,7 +721,7 @@ function vertexToolConfigFromOpenAi(toolChoice) {
 function vertexCandidateResult(payload) {
   const candidate = payload?.candidates?.[0] || {};
   const parts = Array.isArray(candidate?.content?.parts) ? candidate.content.parts : [];
-  const text = parts.map((part) => typeof part?.text === 'string' ? part.text : '').filter(Boolean).join('');
+  let text = parts.map((part) => typeof part?.text === 'string' ? part.text : '').filter(Boolean).join('');
   const toolCalls = parts.flatMap((part, index) => {
     const call = part?.functionCall;
     const name = String(call?.name || '').trim();
@@ -735,6 +735,30 @@ function vertexCandidateResult(payload) {
       },
     }];
   });
+
+  // Intercept plain-text tool requests and convert them into native structured tool calls
+  const regex = /\[Runtime tool request:\s*(\w+)\].*?Arguments:\s*({.*?})/gs;
+  let match;
+  while ((match = regex.exec(text)) !== null) {
+    const name = match[1];
+    const argsString = match[2];
+    let args = {};
+    try {
+      args = JSON.parse(argsString);
+    } catch {
+      args = { input: argsString };
+    }
+    toolCalls.push({
+      id: `call_${crypto.randomUUID().replace(/-/g, '').slice(0, 24)}_${toolCalls.length}`,
+      type: 'function',
+      function: {
+        name,
+        arguments: JSON.stringify(args),
+      },
+    });
+  }
+  text = text.replace(regex, '').trim();
+
   const usage = payload?.usageMetadata || {};
   const promptTokens = Math.max(0, Number(usage.promptTokenCount) || 0);
   const completionTokens = Math.max(0, Number(usage.candidatesTokenCount) || 0);

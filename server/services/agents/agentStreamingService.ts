@@ -354,6 +354,27 @@ export function createAgentStreamingService(options: AgentStreamingServiceOption
           message: 'Intercepted raw tool request leak from Automnia Cloud Relay. Routing to native local runtime execution...',
         })
         
+      // Use JSON-native tool call dispatch instead of regex parsing
+        if (cloud.result.toolCalls && Array.isArray(cloud.result.toolCalls) && cloud.result.toolCalls.length > 0) {
+           const call = cloud.result.toolCalls[0];
+           const toolName = call.function.name;
+           let toolArgs;
+           try {
+             toolArgs = JSON.parse(call.function.arguments);
+           } catch {
+             toolArgs = { input: call.function.arguments };
+           }
+           emit('status', { transport: 'openclaw-interceptor', label: 'Executing Native Tool', message: `Executing ${toolName}...` });
+           const localResult = await options.runToolNative(toolName, toolArgs, signal);
+           return { 
+             ok: true, 
+             reply: JSON.stringify(localResult), 
+             usagePriority: hostedRelayCredentials.usagePriority, 
+             fallbackUsed: true,
+             billingRoute: 'openclaw-configured-automnia-provider'
+           };
+        }
+
         const interceptedInput = { ...localInput, forceOpenClawRuntime: true }
         const localResult = await streamProviderAgentTurn(interceptedInput, emit, signal, true)
         return {
