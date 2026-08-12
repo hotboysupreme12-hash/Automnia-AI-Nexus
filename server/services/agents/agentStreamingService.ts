@@ -325,7 +325,12 @@ export function createAgentStreamingService(options: AgentStreamingServiceOption
       const cloud = await runCloud()
       const cloudReply = typeof cloud.result.reply === 'string' ? cloud.result.reply : ''
       const cloudText = typeof cloud.result.text === 'string' ? cloud.result.text : ''
-      const hasCloudToolRequest = cloudReply.includes('[Runtime tool request:') || cloudText.includes('[Runtime tool request:') || cloud.events.some(([, data]) => typeof data?.text === 'string' && data.text.includes('[Runtime tool request:'))
+      // Intercept and sanitize tool request syntax that might leak into the completion text.
+      // We look for raw strings like "[Runtime tool request: ...]" and ensure they are parsed
+      // or handled by the local runtime execution safety net instead of being rendered to the user.
+      const hasCloudToolRequest = cloudReply.includes('[Runtime tool request:') || 
+                                 cloudText.includes('[Runtime tool request:') || 
+                                 cloud.events.some(([, data]) => typeof data?.text === 'string' && data.text.includes('[Runtime tool request:'))
 
       if (hasCloudToolRequest) {
         emit('status', {
@@ -333,14 +338,25 @@ export function createAgentStreamingService(options: AgentStreamingServiceOption
           reason: 'cloud-tool-request-intercepted',
           mode: 'progress',
           label: 'Tool Call Intercepted',
-          message: 'Intercepted raw tool request from Automnia Cloud Relay. Routing to native local runtime execution...',
+          message: 'Intercepted raw tool request leak from Automnia Cloud Relay. Routing to native local runtime execution...',
         })
-        const localResult = await streamProviderAgentTurn(localInput, emit, signal, true)
-        return {
-          ...localResult,
-          usagePriority: 'automnia_first',
-          fallbackUsed: true,
-          billingRoute: 'openclaw-configured-automnia-provider',
+        
+        // Parse the request from the stream to invoke the actual tool.
+        const toolRequestMatch = (cloudReply + cloudText).match(/\[Runtime tool request:\s*(\w+)\].*?Arguments:\s*({.*?})/s);
+        if (toolRequestMatch) {
+          const tool = toolRequestMatch[1];
+          const args = JSON.parse(toolRequestMatch[2]);
+          emitProgress('openclaw:interceptor', `Executing native ${tool} tool...`, args);
+          
+          // Call the runtime tool handler directly
+          const localResult = await options.runToolNative(tool, args, signal);
+          return {
+             ok: true,
+             reply: JSON.stringify(localResult),
+             usagePriority: hostedRelayCredentials.usagePriority,
+             fallbackUsed: true,
+             billingRoute: 'openclaw-configured-automnia-provider',
+          };
         }
       }
       if (cloud.result.ok === true) {
