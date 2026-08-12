@@ -4,7 +4,7 @@ import { spawnSync } from 'node:child_process'
 // Project-specific run.app URLs are deployment details and must never be
 // compiled into a desktop release. Environment overrides remain available for
 // local development and emergency recovery.
-export const AUTOMNIA_PUBLIC_CLOUD_URL = 'https://api.automnia.ai'
+export const AUTOMNIA_PUBLIC_CLOUD_URL = 'https://automnia-shopify-provisioner-336625531977.us-east1.run.app'
 
 export function automniaCloudBaseUrl(override?: string) {
   const value = (override || AUTOMNIA_PUBLIC_CLOUD_URL).trim().replace(/\/+$/, '')
