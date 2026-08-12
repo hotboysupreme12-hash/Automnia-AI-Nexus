@@ -584,7 +584,11 @@ export function SettingsPanel() {
     const entitlement = resolveLicenseEntitlement(license)
     const hostedCredits = entitlement.isHosted
     const isByok = entitlement.isByok
-    const usagePriority = license?.usagePriority === 'provider_first' ? 'provider_first' : 'automnia_first'
+    const usagePriority = license?.usagePriority === 'provider_first'
+      ? 'provider_first'
+      : license?.usagePriority === 'byok_only'
+        ? 'byok_only'
+        : 'automnia_first'
     const balance = hostedCredits ? formatCreditBalance(license?.creditBalance) : 'Not applicable — provider-billed'
     const refreshAccount = async () => {
       if (accountRefreshBusy) return
@@ -610,7 +614,7 @@ export function SettingsPanel() {
         setCheckoutBusy(false)
       }
     }
-    const saveUsagePriority = async (nextPriority: 'automnia_first' | 'provider_first') => {
+    const saveUsagePriority = async (nextPriority: 'automnia_first' | 'provider_first' | 'byok_only') => {
       if (!hostedCredits || usagePriorityBusy || nextPriority === usagePriority) return
       setUsagePriorityBusy(true)
       setUsagePriorityError('')
@@ -619,8 +623,10 @@ export function SettingsPanel() {
         setNotice({
           tone: 'success',
           text: nextPriority === 'provider_first'
-            ? 'Usage priority saved: your connected provider will be used before Automnia credits.'
-            : 'Usage priority saved: Automnia credits will be used before your connected provider.',
+            ? 'Usage priority saved: Automnia credits with BYOK fallback.'
+            : nextPriority === 'byok_only'
+              ? 'Usage priority saved: BYOK only (direct provider access).'
+              : 'Usage priority saved: Automnia credits only (strict, no BYOK fallback).',
         })
       } catch (error) {
         setUsagePriorityError(error instanceof Error ? error.message : 'Could not save the usage priority.')
@@ -645,14 +651,15 @@ export function SettingsPanel() {
           <Field label="Access & Billing Mode" hint="Hosted subscriptions use Automnia credits. One-time BYOK access uses the provider account that the customer connects.">
             <input type="text" readOnly value={entitlement.billingLabel} style={{ backgroundColor: 'rgba(255, 255, 255, 0.05)', cursor: 'not-allowed' }} />
           </Field>
-          <Field label="Usage Priority" hint={hostedCredits ? 'Choose which balance is attempted first. If Automnia credits are selected, BYOK fallbacks are disabled to ensure consistent billing.' : isByok ? 'BYOK access always uses the connected provider account.' : 'Activate a hosted plan to choose a usage priority.'}>
+          <Field label="Usage Priority" hint={hostedCredits ? 'Choose which balance is attempted first. If Automnia credits (strict) is selected, BYOK fallbacks are disabled. BYOK Only bypasses credits entirely.' : isByok ? 'BYOK access always uses the connected provider account.' : 'Activate a hosted plan to choose a usage priority.'}>
             <select
               value={hostedCredits ? usagePriority : 'provider_first'}
               disabled={!hostedCredits || usagePriorityBusy}
-              onChange={(event) => void saveUsagePriority(event.target.value as 'automnia_first' | 'provider_first')}
+              onChange={(event) => void saveUsagePriority(event.target.value as 'automnia_first' | 'provider_first' | 'byok_only')}
             >
-              <option value="automnia_first">Automnia credits (no BYOK fallback)</option>
+              <option value="automnia_first">Automnia credits only (no BYOK fallback)</option>
               <option value="provider_first">Automnia credits + BYOK fallback</option>
+              <option value="byok_only">BYOK only (bypass subscription credits)</option>
             </select>
           </Field>
           <Field label="Effective Agent Route" hint={hostedCredits ? 'This saved preference applies to normal messages, /runtime, /work, /openclaw, streamed turns, and buffered recovery.' : isByok ? 'Choose a model, then add that provider API key or sign in from Model Settings. The provider bills those requests directly.' : 'Activate a Cloud Subscription or BYOK license to enable agent messages.'}>
@@ -663,7 +670,7 @@ export function SettingsPanel() {
               <div>
                 <span>Automnia billing</span>
                 <strong>{hostedCredits ? entitlement.tierLabel : isByok ? 'BYOK one-time access' : 'Plan status'}</strong>
-                <small>{hostedCredits ? usagePriority === 'provider_first' ? 'Your connected provider is used first; Automnia credits are the fallback.' : 'Automnia credits are used first; your connected provider is the fallback.' : isByok ? 'Your provider charges usage directly. You can upgrade to Automnia Cloud any time.' : 'Activate a license to receive your current entitlement.'}</small>
+                <small>{hostedCredits ? usagePriority === 'provider_first' ? 'Your connected provider is used first; Automnia credits are the fallback.' : usagePriority === 'byok_only' ? 'Direct provider-billed access is forced; credits bypassed.' : 'Automnia credits are used first; your connected provider is the fallback.' : isByok ? 'Your provider charges usage directly. You can upgrade to Automnia Cloud any time.' : 'Activate a license to receive your current entitlement.'}</small>
               </div>
               <b>{entitlement.statusLabel}</b>
             </div>

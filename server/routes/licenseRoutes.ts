@@ -64,9 +64,9 @@ export function registerLicenseRoutes(app: Express, options: {
 
   app.post('/api/license/usage-priority', async (req, res) => {
     const parsed = z.object({
-      usagePriority: z.enum(['automnia_first', 'provider_first']),
+      usagePriority: z.enum(['automnia_first', 'provider_first', 'byok_only']),
     }).safeParse(req.body)
-    if (!parsed.success) return apiFailure(res, 400, 'invalid_payload', 'Choose Automnia credits first or your connected provider first.')
+    if (!parsed.success) return apiFailure(res, 400, 'invalid_payload', 'Choose Automnia credits first, Automnia with fallback, or BYOK only.')
     if (options.licenseService.getStatus().mode !== 'hosted_credits') {
       return apiFailure(res, 409, 'invalid_payload', 'Usage priority is available to active hosted subscribers. BYOK access always uses the connected provider.')
     }
