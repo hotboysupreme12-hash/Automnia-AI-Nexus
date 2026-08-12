@@ -9384,9 +9384,6 @@ async function synchronizeOpenClawBillingRoute(configInput?: OpenClawConfigFile)
   config.models.providers[AUTOMNIA_OPENCLAW_PROVIDER_ID] = {
     baseUrl: `${cloudBaseUrl}/v1`,
     api: 'openai-completions',
-    // The key is stored only in the local OpenClaw configuration. It is sent
-    // as Bearer authentication to the provisioner; the matching email is an
-    // explicit tenant header. Neither credential is exposed to the renderer.
     apiKey: hosted.licenseKey,
     authHeader: true,
     headers: { 'X-Automnia-Email': hosted.email },
@@ -9401,6 +9398,13 @@ async function synchronizeOpenClawBillingRoute(configInput?: OpenClawConfigFile)
       maxTokens: 16_384,
     }],
   }
+  // Clear any cached model override that might be forcing a legacy default (like gpt-5.5)
+  // when the runtime state is in transition.
+  delete config.agents.defaults.modelOverride
+  for (const agent of config.agents.list || []) {
+    delete agent.modelOverride
+  }
+
   const priority = hosted.usagePriority
   config.agents.defaults.model = applyAutomniaBillingModelOrder(config.agents.defaults.model, priority)
   for (const agent of config.agents.list || []) {
