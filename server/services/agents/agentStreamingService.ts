@@ -298,22 +298,23 @@ export function createAgentStreamingService(options: AgentStreamingServiceOption
         const cloudText = typeof cloud.result.text === 'string' ? cloud.result.text : ''
         const hasCloudToolRequest = cloudReply.includes('[Runtime tool request:') || cloudText.includes('[Runtime tool request:') || cloud.events.some(([, data]) => typeof data?.text === 'string' && data.text.includes('[Runtime tool request:'))
 
-        if (hasCloudToolRequest) {
-          emit('status', {
-            transport: 'openclaw-interceptor',
-            reason: 'cloud-tool-request-intercepted',
-            mode: 'progress',
-            label: 'Tool Call Intercepted',
-            message: 'Intercepted raw tool request from Automnia Cloud Relay. Routing to native local runtime execution...',
-          })
-          const localResult = await streamProviderAgentTurn(localInput, emit, signal, true)
-          return {
-            ...localResult,
-            usagePriority: 'provider_first',
-            fallbackUsed: true,
-            billingRoute: 'openclaw-configured-automnia-provider',
-          }
+      if (hasCloudToolRequest) {
+        emit('status', {
+          transport: 'openclaw-interceptor',
+          reason: 'cloud-tool-request-intercepted',
+          mode: 'progress',
+          label: 'Tool Call Intercepted',
+          message: 'Intercepted raw tool request from Automnia Cloud Relay. Routing to native local runtime execution...',
+        })
+        const interceptedInput = { ...localInput, forceOpenClawRuntime: true }
+        const localResult = await streamProviderAgentTurn(interceptedInput, emit, signal, true)
+        return {
+          ...localResult,
+          usagePriority: 'provider_first',
+          fallbackUsed: true,
+          billingRoute: 'openclaw-configured-automnia-provider',
         }
+      }
         replay(cloud.events)
         return {
           ...cloud.result,
@@ -333,6 +334,18 @@ export function createAgentStreamingService(options: AgentStreamingServiceOption
                                  cloud.events.some(([, data]) => typeof data?.text === 'string' && data.text.includes('[Runtime tool request:'))
 
       if (hasCloudToolRequest) {
+        // Prevent infinite loops if we are already inside the native local runtime.
+        if (input.forceOpenClawRuntime || (input.tools && input.tools.length > 0)) {
+          if (cloud.result.ok === true) {
+            replay(cloud.events)
+            return {
+              ...cloud.result,
+              usagePriority: 'automnia_first',
+              fallbackUsed: false,
+            }
+          }
+        }
+
         emit('status', {
           transport: 'openclaw-interceptor',
           reason: 'cloud-tool-request-intercepted',
@@ -341,22 +354,13 @@ export function createAgentStreamingService(options: AgentStreamingServiceOption
           message: 'Intercepted raw tool request leak from Automnia Cloud Relay. Routing to native local runtime execution...',
         })
         
-        // Parse the request from the stream to invoke the actual tool.
-        const toolRequestMatch = (cloudReply + cloudText).match(/\[Runtime tool request:\s*(\w+)\].*?Arguments:\s*({.*?})/s);
-        if (toolRequestMatch) {
-          const tool = toolRequestMatch[1];
-          const args = JSON.parse(toolRequestMatch[2]);
-          emitProgress('openclaw:interceptor', `Executing native ${tool} tool...`, args);
-          
-          // Call the runtime tool handler directly
-          const localResult = await options.runToolNative(tool, args, signal);
-          return {
-             ok: true,
-             reply: JSON.stringify(localResult),
-             usagePriority: hostedRelayCredentials.usagePriority,
-             fallbackUsed: true,
-             billingRoute: 'openclaw-configured-automnia-provider',
-          };
+        const interceptedInput = { ...localInput, forceOpenClawRuntime: true }
+        const localResult = await streamProviderAgentTurn(interceptedInput, emit, signal, true)
+        return {
+          ...localResult,
+          usagePriority: hostedRelayCredentials.usagePriority,
+          fallbackUsed: true,
+          billingRoute: 'openclaw-configured-automnia-provider',
         }
       }
       if (cloud.result.ok === true) {
