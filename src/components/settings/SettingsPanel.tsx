@@ -645,14 +645,14 @@ export function SettingsPanel() {
           <Field label="Access & Billing Mode" hint="Hosted subscriptions use Automnia credits. One-time BYOK access uses the provider account that the customer connects.">
             <input type="text" readOnly value={entitlement.billingLabel} style={{ backgroundColor: 'rgba(255, 255, 255, 0.05)', cursor: 'not-allowed' }} />
           </Field>
-          <Field label="Usage Priority" hint={hostedCredits ? 'Choose which balance is attempted first. The other route remains available as automatic fallback.' : isByok ? 'BYOK access always uses the connected provider account.' : 'Activate a hosted plan to choose a usage priority.'}>
+          <Field label="Usage Priority" hint={hostedCredits ? 'Choose which balance is attempted first. If Automnia credits are selected, BYOK fallbacks are disabled to ensure consistent billing.' : isByok ? 'BYOK access always uses the connected provider account.' : 'Activate a hosted plan to choose a usage priority.'}>
             <select
               value={hostedCredits ? usagePriority : 'provider_first'}
               disabled={!hostedCredits || usagePriorityBusy}
               onChange={(event) => void saveUsagePriority(event.target.value as 'automnia_first' | 'provider_first')}
             >
-              <option value="automnia_first">Automnia credits first</option>
-              <option value="provider_first">My connected provider first</option>
+              <option value="automnia_first">Automnia credits (no BYOK fallback)</option>
+              <option value="provider_first">Automnia credits + BYOK fallback</option>
             </select>
           </Field>
           <Field label="Effective Agent Route" hint={hostedCredits ? 'This saved preference applies to normal messages, /runtime, /work, /openclaw, streamed turns, and buffered recovery.' : isByok ? 'Choose a model, then add that provider API key or sign in from Model Settings. The provider bills those requests directly.' : 'Activate a Cloud Subscription or BYOK license to enable agent messages.'}>

@@ -586,14 +586,15 @@ export function registerAgentTurnRoutes(app: Express, options: AgentTurnRoutesOp
         return
       }
       const hostedCreditRoute = Boolean(isHostedCreditsActive?.())
+      // Fix UI glitch: always default transport based on license mode immediately, 
+      // rather than waiting for agent turn completion to resolve "Automnia credits" status.
+      const initialTransport = hostedCreditRoute
+        ? 'automnia-cloud-relay'
+        : 'gateway-chat'
+      
       const providerFirst = hostedCreditRoute && hostedUsagePriority?.() === 'provider_first'
       const cloudFirst = hostedCreditRoute && !providerFirst
       const gatewayRoute = providerFirst || (parsed.data.forceOpenClawRuntime && !hostedCreditRoute)
-      const initialTransport = cloudFirst
-        ? 'automnia-cloud-relay'
-        : gatewayRoute
-          ? 'gateway-chat'
-          : 'control-center-sse'
       emit('status', {
         transport: initialTransport,
         mode: 'progress',

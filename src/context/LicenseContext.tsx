@@ -97,7 +97,7 @@ export function LicenseProvider({ children }: { children: ReactNode }) {
   const activate = useCallback(async (email: string, licenseKey: string) => {
     const result = await apiRequest<LicenseInfo>('/api/license/activate', {
       method: 'POST',
-      timeoutMs: 12_000,
+      timeoutMs: 20_000,
       body: { email, licenseKey },
     })
     if (!result.ok) throw new Error(apiErrorMessage(result.error))
