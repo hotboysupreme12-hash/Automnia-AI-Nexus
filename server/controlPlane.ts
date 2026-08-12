@@ -9255,13 +9255,29 @@ async function writeOpenclawConfig(config: unknown) {
         }
       : parsed.agents,
   }
+  // Create a version of the config for comparison that excludes dynamic metadata fields
+  // like lastTouchedAt, to prevent unnecessary restarts.
+  const compareNext = { ...next }
+  if (compareNext.meta) {
+    delete compareNext.meta.lastTouchedAt
+    delete compareNext.meta.lastTouchedVersion
+  }
+  const serializedCompare = `${JSON.stringify(compareNext, null, 2)}\n`
+
   const serialized = `${JSON.stringify(next, null, 2)}\n`
 
   const write = async () => {
     await fs.mkdir(path.dirname(OPENCLAW_CONFIG_PATH), { recursive: true })
     try {
       const current = await readTextFileWithLockRetry(OPENCLAW_CONFIG_PATH)
-      if (current === serialized) return
+      const currentConfig = JSON.parse(current) as OpenClawConfigFile
+      const compareCurrent = { ...currentConfig }
+      if (compareCurrent.meta) {
+        delete compareCurrent.meta.lastTouchedAt
+        delete compareCurrent.meta.lastTouchedVersion
+      }
+      const serializedCurrentCompare = `${JSON.stringify(compareCurrent, null, 2)}\n`
+      if (serializedCurrentCompare === serializedCompare) return
     } catch (error) {
       if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error
     }
