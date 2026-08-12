@@ -18000,6 +18000,10 @@ registerLicenseRoutes(app, {
   licenseService,
   synchronizeOpenClawBillingRoute: async () => {
     await synchronizeOpenClawBillingRoute()
+    // Force gateway restart after updating the configuration so the new provider/model routing/billing takes effect immediately.
+    await tryRestartGatewayService({ force: true, reason: 'subscription tier change synchronization' }).catch((error) => {
+      console.warn('[license-restart] failed to force restart gateway service:', error)
+    })
   },
 })
 
