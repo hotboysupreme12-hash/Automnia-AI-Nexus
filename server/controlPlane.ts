@@ -18005,6 +18005,7 @@ registerLicenseRoutes(app, {
       console.warn('[license-restart] failed to force restart gateway service:', error)
     })
   },
+  pushGatewayLog,
 })
 
 const { staticRoot: STATIC_ROOT } = registerStaticUi(app, {
