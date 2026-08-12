@@ -9394,7 +9394,7 @@ async function synchronizeOpenClawBillingRoute(configInput?: OpenClawConfigFile)
       reasoning: false,
       input: ['text'],
       contextWindow: 1_000_000,
-      contextTokens: 20_000,
+      contextTokens: 45_000,
       maxTokens: 16_384,
     }],
   }

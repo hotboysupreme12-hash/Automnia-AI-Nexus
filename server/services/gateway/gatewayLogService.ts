@@ -186,7 +186,8 @@ export function createGatewayLogService(options: GatewayLogServiceOptions) {
       || /^incomplete turn detected:\s+runId=/iu.test(text)
       || /^\[clawtalk\]\s+CoreBridge:\s+Control Center stream unavailable,\s+falling back to embedded agent:/iu.test(text)
       || /^CoreBridge:\s+Control Center stream unavailable,\s+falling back to embedded agent:/iu.test(text)
-      || /^\S{0,8}\s*res\s*\S{0,8}\s*chat\.(?:history|message\.get)\b/iu.test(text)
+      || /^\S{0,8}\s*res\s*\S{0,8}\s*(?:chat\.(?:history|message\.get)|logs\.tail)\b/iu.test(text)
+      || /Gateway RPC completed:\s*logs\.tail\b/iu.test(text)
   }
 
   function displayDurationMs(ms: number) {
@@ -385,7 +386,10 @@ export function createGatewayLogService(options: GatewayLogServiceOptions) {
     }
 
     const rpcSuccess = /^(?:⇄|â‡„)\s*res\s*(?:✓|âœ“)?\s*([^\s]+)\s+(\d+)ms\b/iu.exec(withoutTimestamp)
-    if (rpcSuccess) return { message: `Gateway RPC completed: ${rpcSuccess[1]} (${rpcSuccess[2]}ms).` }
+    if (rpcSuccess) {
+      if (rpcSuccess[1] === 'logs.tail') return null
+      return { message: `Gateway RPC completed: ${rpcSuccess[1]} (${rpcSuccess[2]}ms).` }
+    }
 
     const authRefreshFailure = summarizeGatewayAuthRefreshFailure(withoutTimestamp)
     if (authRefreshFailure) return authRefreshFailure
