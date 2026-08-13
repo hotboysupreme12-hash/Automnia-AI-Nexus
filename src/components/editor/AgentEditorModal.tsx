@@ -14,7 +14,7 @@ import { useNexusStore } from '../../store/nexusStore'
 import type { AgentSkillEntry, BehaviorProfile, FastModeDefault, HeartbeatConfig, OpenClawAgent, ThinkingLevel } from '../../types/nexus'
 import { apiUrl } from '../../utils/apiUrl'
 import { formatModelChoiceLabel, formatModelGroupLabel, groupAvailableModels } from '../../utils/modelGrouping'
-import { resolveLicenseEntitlement } from '../../utils/licenseEntitlement'
+import { resolveAgentRoutePresentation, resolveLicenseEntitlement } from '../../utils/licenseEntitlement'
 import { agentPortraitSrc, localPortraitPathFromInput } from '../../utils/portrait'
 import { ProviderAuthModal } from '../auth/ProviderAuthModal'
 import { useLicense } from '../../context/useLicense'
@@ -53,7 +53,7 @@ type AgentResourceSavePayload = { file?:string; resourcePath?:string }
 
 declare global {
   interface Window {
-    dystopaiDesktop?: {
+    automniaDesktop?: {
       getPathForFile?: (file: File) => string | Promise<string>
       pickDirectory?: (options?: { startPath?: string }) => Promise<DesktopDirectoryPickerPayload>
     }
@@ -885,7 +885,7 @@ export function AgentEditorModal() {
   const PickWorkspaceDirectoryInput = async (files:FileList|null)=>{
     const selected=files?.[0]
     if(!selected){setWsStatus('No folder selected.');return}
-    const resolvePath=window.dystopaiDesktop?.getPathForFile
+    const resolvePath=window.automniaDesktop?.getPathForFile
     if(!resolvePath){setWsStatus('Desktop folder path access is not loaded. Restart the desktop app, then try Browse again.');return}
     setWsLoading(true)
     setWsStatus('Reading selected folder...')
@@ -905,7 +905,7 @@ export function AgentEditorModal() {
     setWsLoading(true)
     setWsStatus('Opening folder picker...')
     try{
-      const desktopPicker=window.dystopaiDesktop?.pickDirectory
+      const desktopPicker=window.automniaDesktop?.pickDirectory
       if(desktopPicker){
         try{
           const picked=await desktopPicker({startPath:wsPath||agent?.workspace||''})
@@ -916,7 +916,7 @@ export function AgentEditorModal() {
           setWsStatus(`Native folder picker failed: ${errorMessage(e)}. Trying fallback picker...`)
         }
       }
-      if(!desktopPicker&&window.dystopaiDesktop?.getPathForFile&&workspaceDirectoryRef.current){
+      if(!desktopPicker&&window.automniaDesktop?.getPathForFile&&workspaceDirectoryRef.current){
         setWsLoading(false)
         setWsStatus('')
         workspaceDirectoryRef.current.value=''
@@ -1411,9 +1411,10 @@ export function AgentEditorModal() {
   const primaryAuthLabel = authLabelForProvider(primaryProvider, primaryAuth)
   const primaryAuthKind = authKindForProvider(primaryAuth)
   const entitlement = resolveLicenseEntitlement(license)
+  const routePresentation = resolveAgentRoutePresentation(license)
   const usesHostedCredits = entitlement.isHosted
   const usesByok = entitlement.isByok
-  const providerFirst = usesHostedCredits && license?.usagePriority === 'provider_first'
+  const providerFirst = routePresentation.providerFirst
 
   return (
     <AnimatePresence>
@@ -1507,13 +1508,21 @@ export function AgentEditorModal() {
                 {/* MODEL */}
                 {tab==='model'&&(
                   <div data-editor-panel="model" className="space-y-4">
-                    <div data-editor-billing-route={usesHostedCredits ? providerFirst ? 'provider-first' : 'automnia-first' : usesByok ? 'byok' : 'unconfigured'} className={`rounded-xl border p-3 ${usesHostedCredits ? 'border-emerald-400/20 bg-emerald-400/[0.05]' : usesByok ? 'border-sky-400/20 bg-sky-400/[0.05]' : 'border-white/[0.08] bg-white/[0.02]'}`}>
-                      <p className={`text-[11px] font-extrabold ${usesHostedCredits ? 'text-emerald-200' : usesByok ? 'text-sky-200' : 'text-slate-300'}`}>{usesHostedCredits ? `${entitlement.tierLabel} — ${providerFirst ? 'My Provider First' : 'Automnia Credits First'}` : usesByok ? `${entitlement.tierLabel} — Your Provider Account` : 'License route not configured'}</p>
-                      <p className="mt-1 text-[9px] text-slate-400">{usesHostedCredits ? providerFirst ? 'This model and connected provider key or OAuth account are used first. Automnia credits remain the automatic fallback.' : 'Automnia credits are used first for every message. The model below is the automatic connected-provider fallback.' : usesByok ? 'This agent uses the model and provider account selected below. Add a provider key or sign in normally whenever the provider requires it.' : 'Activate a Cloud Subscription or BYOK license before using this agent.'}</p>
+                    <div data-editor-billing-route={usesHostedCredits ? routePresentation.providerOnly ? 'provider-only' : providerFirst ? 'provider-first' : 'automnia-first' : usesByok ? 'byok' : 'unconfigured'} className={`rounded-xl border p-3 ${usesHostedCredits ? 'border-emerald-400/20 bg-emerald-400/[0.05]' : usesByok ? 'border-sky-400/20 bg-sky-400/[0.05]' : 'border-white/[0.08] bg-white/[0.02]'}`}>
+                      <p className={`text-[11px] font-extrabold ${usesHostedCredits ? 'text-emerald-200' : usesByok ? 'text-sky-200' : 'text-slate-300'}`}>{usesHostedCredits ? `${entitlement.tierLabel} — ${routePresentation.routeLabel}` : usesByok ? `${entitlement.tierLabel} — ${routePresentation.routeLabel}` : 'License route not configured'}</p>
+                      <p className="mt-1 text-[9px] text-slate-400">{routePresentation.modelDescription}</p>
                     </div>
                     <div>
-                      <h3 className="text-xs font-extrabold text-slate-200 mb-1">{usesHostedCredits ? providerFirst ? 'Primary Provider Model' : 'Provider Fallback Model' : 'Primary Model'}</h3>
-                      {modelsLoading&&!primary&&!modelGroups.length?<div className="animate-pulse h-9 rounded-lg bg-white/[0.03]"/>:(
+                      <h3 className="text-xs font-extrabold text-slate-200 mb-1">{routePresentation.modelLabel}</h3>
+                      {routePresentation.managedRoute ? (
+                        <div data-editor-managed-route className="rounded-lg border border-emerald-400/20 bg-emerald-400/[0.05] px-3 py-3">
+                          <div className="flex items-center justify-between gap-3">
+                            <span className="text-sm font-extrabold text-emerald-100">Automnia</span>
+                            <span className="rounded-full border border-emerald-300/25 bg-emerald-300/[0.08] px-2 py-1 text-[8px] font-bold uppercase tracking-[0.12em] text-emerald-200">Subscription Relay</span>
+                          </div>
+                          <p className="mt-2 text-[9px] text-slate-400">{routePresentation.managedRouteDescription}</p>
+                        </div>
+                      ) : modelsLoading&&!primary&&!modelGroups.length?<div className="animate-pulse h-9 rounded-lg bg-white/[0.03]"/>:(
                         <select value={primary} onChange={(e)=>{const next=e.target.value;setPrimary(next);maybePromptProviderAuth(next);scheduleModelAutosave(next,fallbacks.filter((id)=>id!==next))}} className="w-full rounded-lg border border-white/[0.08] bg-white/[0.03] px-3 py-2 text-[11px] text-slate-200 focus:outline-none focus:border-cyan-400/40">
                           {!primary&&<option value="">Choose a model...</option>}
                           {modelGroups.length?modelGroups.map((group) => (
@@ -1523,10 +1532,10 @@ export function AgentEditorModal() {
                           )):<option value={primary}>{primary||'No models available'}</option>}
                         </select>
                       )}
-                      {primaryProvider==='google-vertex'&&(
+                      {!routePresentation.managedRoute&&primaryProvider==='google-vertex'&&(
                         <span className="mt-2 inline-flex rounded-full border border-sky-300/30 bg-sky-400/[0.08] px-2.5 py-1 text-[8px] font-bold uppercase tracking-[0.14em] text-sky-200">google-vertex</span>
                       )}
-                      {primaryAuth&&(
+                      {!routePresentation.managedRoute&&primaryAuth&&(
                         <div className={`mt-2 rounded-lg border px-3 py-2 text-[9px] ${primaryAuth.configured?'border-emerald-400/20 bg-emerald-400/[0.05] text-emerald-300':'border-amber-400/25 bg-amber-400/[0.06] text-amber-200'}`}>
                           <div className="flex items-center justify-between gap-2">
                             <span>{primaryAuth.configured?`${primaryAuthLabel} ${primaryAuthKind} connected.`:`${primaryAuthLabel} ${primaryAuthKind} required.`}</span>
@@ -1537,8 +1546,8 @@ export function AgentEditorModal() {
                         </div>
                       )}
                     </div>
-                    <div>
-                      <h3 className="text-xs font-extrabold text-slate-200 mb-1">Fallbacks</h3>
+                    {!routePresentation.managedRoute && <div>
+                      <h3 className="text-xs font-extrabold text-slate-200 mb-1">Additional models</h3>
                       <div className="max-h-44 space-y-0.5 overflow-auto rounded-lg border border-white/[0.06] bg-white/[0.02] p-1.5">
                         {fallbackModelGroups.map((group)=>(
                           <div key={group.key} className="space-y-0.5">
@@ -1553,7 +1562,11 @@ export function AgentEditorModal() {
                           </div>
                         ))}
                       </div>
-                    </div>
+                    </div>}
+                    {usesHostedCredits && providerFirst && <div data-editor-managed-route className="rounded-xl border border-emerald-400/15 bg-emerald-400/[0.04] p-3">
+                      <p className="text-[11px] font-extrabold text-emerald-100">Automnia</p>
+                      <p className="mt-1 text-[9px] text-slate-400">{routePresentation.managedRouteDescription}</p>
+                    </div>}
                     <div className="rounded-xl border border-violet-400/15 bg-violet-400/[0.04] p-3">
                       <div className="flex items-center justify-between gap-3">
                         <div>

@@ -31,13 +31,13 @@ export type AuthProviderCatalogEntry = {
 export const GOOGLE_OAUTH_REDIRECT_URI = 'http://localhost:8085/oauth2callback'
 
 export const GOOGLE_OAUTH_CLIENT_ID_KEYS = [
-  'DYSTOPAI_GOOGLE_OAUTH_CLIENT_ID',
+  'AUTOMNIA_GOOGLE_OAUTH_CLIENT_ID',
   'OPENCLAW_GEMINI_OAUTH_CLIENT_ID',
   'GEMINI_CLI_OAUTH_CLIENT_ID',
 ]
 
 export const GOOGLE_OAUTH_CLIENT_SECRET_KEYS = [
-  'DYSTOPAI_GOOGLE_OAUTH_CLIENT_SECRET',
+  'AUTOMNIA_GOOGLE_OAUTH_CLIENT_SECRET',
   'OPENCLAW_GEMINI_OAUTH_CLIENT_SECRET',
   'GEMINI_CLI_OAUTH_CLIENT_SECRET',
 ]
@@ -50,6 +50,10 @@ export const GOOGLE_OAUTH_SCOPES = [
   'https://www.googleapis.com/auth/userinfo.email',
   'https://www.googleapis.com/auth/userinfo.profile',
 ]
+
+// Account sign-in only needs the verified Google identity. Keep it separate
+// from the broader provider scopes used when connecting Google AI/Vertex.
+export const GOOGLE_ACCOUNT_OAUTH_SCOPES = ['openid', 'email', 'profile']
 
 export const OPENAI_CODEX_OAUTH_REDIRECT_URI = 'http://localhost:1455/auth/callback'
 

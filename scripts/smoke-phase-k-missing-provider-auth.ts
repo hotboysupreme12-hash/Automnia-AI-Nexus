@@ -244,7 +244,7 @@ function sourceAssertions() {
 }
 
 const port = await freePort()
-const tempRoot = mkdtempSync(path.join(tmpdir(), 'dystopai-phase-k-missing-provider-auth-'))
+const tempRoot = mkdtempSync(path.join(tmpdir(), 'automnia-phase-k-missing-provider-auth-'))
 const stateDir = path.join(tempRoot, 'state')
 const workspaceRoot = path.join(tempRoot, 'workspace-root')
 const homeDir = path.join(tempRoot, 'home')

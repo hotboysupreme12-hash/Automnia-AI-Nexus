@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict'
 import { spawn } from 'node:child_process'
+import { createHmac } from 'node:crypto'
 import { readFile } from 'node:fs/promises'
 import net from 'node:net'
 import path from 'node:path'
@@ -79,6 +80,49 @@ async function runMode(writeMode) {
     assert.equal(activation.status, writeMode === 'read_only' ? 503 : 404)
     if (writeMode === 'read_only') {
       assert.equal((await activation.json()).retryable, true)
+    } else {
+      const sendPaidOrder = async (id, sku, email = 'owner@example.test') => {
+        const body = JSON.stringify({
+          id,
+          email,
+          name: `#${id}`,
+          line_items: [{ sku }],
+        })
+        const signature = createHmac('sha256', 'local-smoke-webhook-value').update(body).digest('base64')
+        return fetch(`${baseUrl}/shopify/webhooks/orders-paid`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'x-shopify-hmac-sha256': signature,
+            'x-shopify-webhook-id': `smoke-${id}`,
+          },
+          body,
+        })
+      }
+
+      const starterOrder = await sendPaidOrder('smoke-starter', 'AUTO-SUB-STARTER-MONTHLY')
+      assert.equal(starterOrder.status, 200)
+      let provisioned = await fetch(`${baseUrl}/provisioned`, { headers: { Authorization: 'Bearer local-smoke-admin-value' } }).then((response) => response.json())
+      assert.equal(provisioned.count, 1)
+      assert.equal(provisioned.records[0]?.tier, 'starter')
+      assert.equal(provisioned.records[0]?.mode, 'hosted_credits')
+      assert.equal(provisioned.records[0]?.byokAllowed, false)
+      assert.equal(provisioned.records[0]?.permanentAccess, false)
+      assert.equal(provisioned.records[0]?.accessType, 'subscription')
+
+      const proOrder = await sendPaidOrder('smoke-pro', 'AUTO-SUB-PRO-MONTHLY')
+      assert.equal(proOrder.status, 200)
+      provisioned = await fetch(`${baseUrl}/provisioned`, { headers: { Authorization: 'Bearer local-smoke-admin-value' } }).then((response) => response.json())
+      assert.equal(provisioned.count, 1)
+      assert.equal(provisioned.records[0]?.tier, 'pro')
+      assert.equal(provisioned.records[0]?.mode, 'hosted_credits')
+      assert.equal(provisioned.records[0]?.accessType, 'permanent')
+
+      const lowerOrder = await sendPaidOrder('smoke-starter-again', 'AUTO-SUB-STARTER-MONTHLY')
+      assert.equal(lowerOrder.status, 200)
+      provisioned = await fetch(`${baseUrl}/provisioned`, { headers: { Authorization: 'Bearer local-smoke-admin-value' } }).then((response) => response.json())
+      assert.equal(provisioned.count, 1)
+      assert.equal(provisioned.records[0]?.tier, 'pro')
     }
     return { writeMode, planMappingHash: health.commerce.planMappingHash, activationStatus: activation.status }
   } finally {

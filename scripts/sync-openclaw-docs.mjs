@@ -33,7 +33,7 @@ async function fetchText(url) {
   const res = await fetch(url, {
     headers: {
       accept: url.endsWith('.xml') ? 'application/xml,text/xml,*/*' : 'text/markdown,text/plain,*/*',
-      'user-agent': 'dystopai-openclaw-docs-sync/1.0',
+      'user-agent': 'automnia-openclaw-docs-sync/1.0',
     },
   })
   if (!res.ok) throw new Error(`${res.status} ${res.statusText}`)

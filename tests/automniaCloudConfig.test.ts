@@ -3,9 +3,9 @@ import test from 'node:test'
 
 import { AUTOMNIA_PUBLIC_CLOUD_URL, automniaCloudBaseUrl } from '../server/config/automniaCloud'
 
-test('uses the permanent Automnia hostname instead of a project-specific Cloud Run URL', () => {
-  assert.equal(AUTOMNIA_PUBLIC_CLOUD_URL, 'https://api.automnia.ai')
-  assert.equal(automniaCloudBaseUrl(), 'https://api.automnia.ai')
+test('uses the temporary Automnia Cloud Run origin until DNS cutover', () => {
+  assert.equal(AUTOMNIA_PUBLIC_CLOUD_URL, 'https://automnia-shopify-provisioner-336625531977.us-east1.run.app')
+  assert.equal(automniaCloudBaseUrl(), 'https://automnia-shopify-provisioner-336625531977.us-east1.run.app')
   assert.equal(automniaCloudBaseUrl('https://staging.automnia.ai///'), 'https://staging.automnia.ai')
 })
 

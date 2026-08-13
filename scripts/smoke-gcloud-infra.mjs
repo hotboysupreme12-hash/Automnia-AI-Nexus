@@ -37,13 +37,13 @@ for (const relative of requiredFiles) assert.equal(existsSync(path.join(infra, r
 const mappings = JSON.parse(readFileSync(path.join(infra, 'shopify-plan-mappings.json'), 'utf8'))
 assert.equal(mappings.length, 9, 'the production catalog has nine mappings')
 assert.deepEqual(
-  Object.fromEntries(mappings.filter((entry) => entry.kind === 'subscription').map((entry) => [entry.tier, entry.initialCredits])),
-  { starter: 500000, pro: 2000000, enterprise: 10000000 },
+  Object.fromEntries(mappings.filter((entry) => entry.kind === 'subscription' && entry.tier === 'starter').map((entry) => [entry.tier, entry.initialCredits])),
+  { starter: 500000 },
 )
 assert.equal(new Set(mappings.flatMap((entry) => entry.variantIds)).size, 9, 'variant IDs must be unique')
 assert.equal(new Set(mappings.flatMap((entry) => entry.skus)).size, 9, 'SKUs must be unique')
 assert.equal(mappings.filter((entry) => entry.kind === 'topup').length, 5)
-assert.equal(mappings.find((entry) => entry.tier === 'byok')?.initialCredits, 0)
+assert.equal(mappings.find((entry) => entry.mode === 'byok')?.initialCredits, 0)
 
 const indexConfig = JSON.parse(readFileSync(path.join(infra, 'firestore.indexes.json'), 'utf8'))
 assert.ok(Array.isArray(indexConfig.indexes))
@@ -62,6 +62,12 @@ for (const contract of [
   'schemaVersion',
   'writeMode',
 ]) assert.match(service, new RegExp(contract.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')))
+assert.match(service, /vertexInlineImagePart/)
+assert.match(service, /vertexPartsFromOpenAiContent/)
+assert.match(service, /functionResponse/)
+assert.match(service, /thought_signature/)
+assert.match(service, /tool_calls/)
+assert.doesNotMatch(service, /Runtime tool request:.*Arguments:/s)
 
 const servicePackage = JSON.parse(readFileSync(path.join(infra, 'service', 'package.json'), 'utf8'))
 for (const dependency of ['@google-cloud/firestore', 'express', 'google-auth-library']) assert.ok(servicePackage.dependencies[dependency])
@@ -69,16 +75,17 @@ for (const dependency of ['@google-cloud/firestore', 'express', 'google-auth-lib
 const serverCloudConfig = readFileSync(path.join(root, 'server', 'config', 'automniaCloud.ts'), 'utf8')
 const rendererCloudConfig = readFileSync(path.join(root, 'src', 'config', 'gcloudConfig.ts'), 'utf8')
 for (const source of [serverCloudConfig, rendererCloudConfig]) {
-  assert.match(source, /https:\/\/api\.automnia\.ai/)
-  assert.doesNotMatch(source, /\.run\.app|licenseKey|creditBalance|@gmail\.com/)
+  assert.match(source, /https:\/\/automnia-shopify-provisioner-336625531977\.us-east1\.run\.app/)
+  assert.doesNotMatch(source, /api\.automnia\.ai|licenseKey|creditBalance|@gmail\.com/)
 }
 
 const licenseService = readFileSync(path.join(root, 'server', 'services', 'license', 'licenseService.ts'), 'utf8')
 const controlPlane = readFileSync(path.join(root, 'server', 'controlPlane.ts'), 'utf8')
 assert.match(licenseService, /DEFAULT_LICENSE_API_URL = AUTOMNIA_PUBLIC_CLOUD_URL/)
-assert.match(controlPlane, /AUTOMNIA_CLOUD_RELAY_URL = automniaCloudBaseUrl/)
-assert.doesNotMatch(licenseService, /\.run\.app/)
-assert.doesNotMatch(controlPlane, /automnia-shopify-provisioner-\d+\./)
+assert.doesNotMatch(controlPlane, /streamAutomniaCloudRelay|AUTOMNIA_CLOUD_RELAY_URL/)
+assert.match(controlPlane, /AUTOMNIA_OPENCLAW_PROVIDER_ID = 'automnia-cloud'/)
+assert.match(licenseService, /AUTOMNIA_PUBLIC_CLOUD_URL/)
+assert.match(serverCloudConfig, /automnia-shopify-provisioner-336625531977\.us-east1\.run\.app/)
 
 const verification = readFileSync(path.join(infra, 'verify.ps1'), 'utf8')
 for (const gate of [

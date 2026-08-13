@@ -112,15 +112,15 @@ function createHarness(overrides: Partial<{
     },
     redactSensitiveText: (text) => text.replace(/secret-token/gi, '[REDACTED]'),
     resolveAgentRunContext: async () => ({
-      doctrineWorkspace: 'C:/dystopai/doctrine',
-      executionWorkspace: 'C:/dystopai/work',
+      doctrineWorkspace: 'C:/automnia/doctrine',
+      executionWorkspace: 'C:/automnia/work',
     }),
     resolveMissionCronRuntimeDefaultsForAgent: async () => ({
       model: 'openai/gpt-test',
       thinking: 'medium',
       timeoutSeconds: 60,
     }),
-    resolveSharedTeamSyncPath: async (agentId) => `C:/dystopai/${agentId}/TEAM_SYNC.md`,
+    resolveSharedTeamSyncPath: async (agentId) => `C:/automnia/${agentId}/TEAM_SYNC.md`,
     runCwdForContext: (context) => context.executionWorkspace,
     runOpenClaw: async (args) => {
       state.openClawCalls.push([...args])

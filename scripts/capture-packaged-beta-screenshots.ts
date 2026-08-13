@@ -10,7 +10,7 @@ const releaseRoot = path.join(root, 'release')
 const unpackedRoot = path.join(releaseRoot, process.platform === 'win32' ? 'win-unpacked' : 'linux-unpacked')
 const launcherPath = process.platform === 'win32'
   ? path.join(unpackedRoot, 'Automnia AI Nexus.exe')
-  : path.join(unpackedRoot, 'dystopai')
+  : path.join(unpackedRoot, 'automnia')
 const electronRuntimePath = process.platform === 'win32'
   ? path.join(unpackedRoot, 'electron.exe')
   : launcherPath
@@ -87,7 +87,7 @@ function timestampSegment() {
   return new Date().toISOString().replace(/[:.]/g, '-')
 }
 
-const tempRoot = mkdtempSync(path.join(tmpdir(), 'dystopai-packaged-screens-'))
+const tempRoot = mkdtempSync(path.join(tmpdir(), 'automnia-packaged-screens-'))
 const userDataDir = path.join(tempRoot, 'user-data')
 const openclawDir = path.join(tempRoot, 'openclaw')
 const workspaceRoot = path.join(tempRoot, 'workspace')
@@ -111,17 +111,17 @@ const env = {
   CONTROL_CENTER_AUTOSTART_GATEWAY: '0',
   CONTROL_CENTER_GATEWAY_CHAT_CLIENT: '0',
   CONTROL_CENTER_TOKEN: 'packaged-beta-screenshots',
-  DYSTOPAI_DISABLE_TRAY: '1',
-  DYSTOPAI_ELECTRON_E2E: '1',
-  DYSTOPAI_ELECTRON_E2E_ALLOW_PARALLEL: '1',
-  DYSTOPAI_ELECTRON_E2E_LOG_PATH: logPath,
-  DYSTOPAI_ELECTRON_E2E_AUTO_QUIT_MS: '0',
-  DYSTOPAI_ELECTRON_E2E_ASSERT_NAVIGATION: '1',
-  DYSTOPAI_ELECTRON_E2E_DISABLE_OPEN_EXTERNAL: '1',
-  DYSTOPAI_ELECTRON_E2E_SKIP_PORT_CLEANUP: '1',
-  DYSTOPAI_ELECTRON_E2E_SCREENSHOT_DIR: outputDir,
-  DYSTOPAI_ELECTRON_E2E_QUIT_AFTER_SCREENSHOTS: '1',
-  DYSTOPAI_USER_DATA_DIR: userDataDir,
+  AUTOMNIA_DISABLE_TRAY: '1',
+  AUTOMNIA_ELECTRON_E2E: '1',
+  AUTOMNIA_ELECTRON_E2E_ALLOW_PARALLEL: '1',
+  AUTOMNIA_ELECTRON_E2E_LOG_PATH: logPath,
+  AUTOMNIA_ELECTRON_E2E_AUTO_QUIT_MS: '0',
+  AUTOMNIA_ELECTRON_E2E_ASSERT_NAVIGATION: '1',
+  AUTOMNIA_ELECTRON_E2E_DISABLE_OPEN_EXTERNAL: '1',
+  AUTOMNIA_ELECTRON_E2E_SKIP_PORT_CLEANUP: '1',
+  AUTOMNIA_ELECTRON_E2E_SCREENSHOT_DIR: outputDir,
+  AUTOMNIA_ELECTRON_E2E_QUIT_AFTER_SCREENSHOTS: '1',
+  AUTOMNIA_USER_DATA_DIR: userDataDir,
   OPENCLAW_STATE_DIR: openclawDir,
   OPENCLAW_HOME: openclawDir,
   CONTROL_CENTER_WORKSPACE_ROOT: workspaceRoot,
@@ -151,11 +151,11 @@ try {
   })
 
   await waitForLogPatterns(logPath, [
-    /\[dystopai-e2e\] port-cleanup-skipped/,
-    /\[dystopai-e2e\] server-ready/,
-    /\[dystopai-e2e\] navigation-policy-ok/,
-    /\[dystopai-e2e\] screenshots-ok:18/,
-    /\[dystopai-e2e\] quit-cleanup-complete/,
+    /\[automnia-e2e\] port-cleanup-skipped/,
+    /\[automnia-e2e\] server-ready/,
+    /\[automnia-e2e\] navigation-policy-ok/,
+    /\[automnia-e2e\] screenshots-ok:18/,
+    /\[automnia-e2e\] quit-cleanup-complete/,
   ])
   const exitCode = await exitPromise
   assert.equal(exitCode, 0, `packaged screenshot capture exited ${exitCode}\n${launcherOutput}`)

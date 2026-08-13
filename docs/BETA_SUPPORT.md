@@ -42,6 +42,10 @@ Recommended local tooling for source runs:
 7. Reconnect expired provider or plugin access.
 8. Send a small direct Command Console prompt before retrying a mission or channel workflow.
 
+### Gateway startup migrations
+
+On a new Automnia setup or after an OpenClaw upgrade, startup migrations can take several minutes. During this work, the top-right Gateway chip changes to `MIGRATING` and stays visible while the Gateway retries. The Gateway may reset several times; leave Automnia open and wait for the chip to return to `ON` before retrying work.
+
 ## Reset local state
 
 Start with the least destructive option:

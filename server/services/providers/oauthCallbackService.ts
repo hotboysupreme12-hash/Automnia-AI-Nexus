@@ -15,6 +15,7 @@ export type OAuthSessionStatus = 'pending' | 'complete' | 'error'
 export type ProviderOAuthSession = {
   id: string
   provider: OAuthProvider
+  purpose?: 'provider' | 'account'
   state?: string
   verifier?: string
   challenge?: string
@@ -34,6 +35,9 @@ export type ProviderOAuthSession = {
     projectId?: string
     expiresAt?: number
   }
+  // Public account fields only. OAuth access and refresh tokens never belong
+  // in the session object returned to the renderer.
+  account?: Record<string, unknown>
 }
 
 export type OAuthLaunchResult = {
@@ -97,8 +101,10 @@ export type OAuthCallbackServiceOptions = {
   ) => Promise<OpenAICodexTokenExchangeResult>
   fetch?: FetchLike
   googleCallbackPort?: number
+  googleAccountOAuthScopes?: string[]
   googleOAuthRedirectUri: string
   googleOAuthScopes: string[]
+  authenticateGoogleAccount?: (accessToken: string) => Promise<{ account: Record<string, unknown> }>
   isShuttingDown: () => boolean
   now?: () => Date
   openAiCodexCallbackPort?: number
@@ -279,13 +285,13 @@ export function createOAuthCallbackService(options: OAuthCallbackServiceOptions)
     return failed
   }
 
-  function buildGoogleOAuthAuthorizationUrl(challenge: string, state: string) {
+  function buildGoogleOAuthAuthorizationUrl(challenge: string, state: string, scopes = options.googleOAuthScopes) {
     const { clientId } = options.resolveGoogleOAuthClientConfig()
     return `https://accounts.google.com/o/oauth2/v2/auth?${new URLSearchParams({
       client_id: clientId,
       response_type: 'code',
       redirect_uri: options.googleOAuthRedirectUri,
-      scope: options.googleOAuthScopes.join(' '),
+      scope: scopes.join(' '),
       code_challenge: challenge,
       code_challenge_method: 'S256',
       state,
@@ -431,7 +437,7 @@ export function createOAuthCallbackService(options: OAuthCallbackServiceOptions)
           const session = Array.from(oauthSessions.values()).find((entry) => entry.provider === 'google' && entry.state === state)
           if (!session) {
             res.writeHead(400, { 'Content-Type': 'text/html; charset=utf-8' })
-            res.end('<h1>OAuth session not found</h1><p>Return to DystopAI and start the connection again.</p>')
+            res.end('<h1>OAuth session not found</h1><p>Return to Automnia and start the connection again.</p>')
             return
           }
 
@@ -440,7 +446,17 @@ export function createOAuthCallbackService(options: OAuthCallbackServiceOptions)
           if (!session.verifier) throw new Error('Google OAuth verifier missing. Restart the connection.')
 
           const credential = await exchangeGoogleOAuthCodeForTokens(code, session.verifier, session.projectId)
-          await options.persistProviderOAuth('google', credential)
+          if (session.purpose === 'account') {
+            if (!options.authenticateGoogleAccount) {
+              throw new Error('Google account sign-in is not configured in this build.')
+            }
+            const accessToken = credential.accessToken?.trim()
+            if (!accessToken) throw new Error('Google sign-in did not return an account token.')
+            const account = await options.authenticateGoogleAccount(accessToken)
+            session.account = account.account
+          } else {
+            await options.persistProviderOAuth('google', credential)
+          }
           session.status = 'complete'
           session.completedAt = completeAt()
           clearSessionTimeout(session.id)
@@ -451,7 +467,7 @@ export function createOAuthCallbackService(options: OAuthCallbackServiceOptions)
           }
 
           res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' })
-          res.end('<h1>Google connected</h1><p>You can close this window and return to DystopAI.</p>')
+          res.end('<h1>Google connected</h1><p>You can close this window and return to Automnia.</p>')
         } catch (err) {
           const message = safeErrorText(err, redactSensitiveText)
           const state = new URL(req.url || '/', options.googleOAuthRedirectUri).searchParams.get('state') || ''
@@ -484,16 +500,21 @@ export function createOAuthCallbackService(options: OAuthCallbackServiceOptions)
     return googleOAuthCallbackServerStarting
   }
 
-  async function startGoogleOAuthSession(projectId?: string): Promise<OAuthStartResult> {
+  async function startGoogleOAuthSessionWithScopes(
+    projectId: string | undefined,
+    purpose: 'provider' | 'account',
+    scopes: string[],
+  ): Promise<OAuthStartResult> {
     if (options.isShuttingDown()) throw new Error('Control Center is shutting down.')
     const id = randomUUID()
     const state = randomBytes(24).toString('base64url')
     const { verifier, challenge } = generatePkcePair()
-    const authorizationUrl = buildGoogleOAuthAuthorizationUrl(challenge, state)
-    const resolvedProjectId = options.resolveGoogleProjectId(projectId)
+    const authorizationUrl = buildGoogleOAuthAuthorizationUrl(challenge, state, scopes)
+    const resolvedProjectId = purpose === 'provider' ? options.resolveGoogleProjectId(projectId) : ''
     const session: ProviderOAuthSession = {
       id,
       provider: 'google',
+      purpose,
       state,
       verifier,
       challenge,
@@ -517,6 +538,18 @@ export function createOAuthCallbackService(options: OAuthCallbackServiceOptions)
     }
     const launched = await options.openExternalAuthUrl(authorizationUrl).catch((error) => ({ ok: false, detail: safeErrorText(error, redactSensitiveText) }))
     return { session, launched }
+  }
+
+  async function startGoogleOAuthSession(projectId?: string): Promise<OAuthStartResult> {
+    return startGoogleOAuthSessionWithScopes(projectId, 'provider', options.googleOAuthScopes)
+  }
+
+  async function startGoogleAccountOAuthSession(): Promise<OAuthStartResult> {
+    return startGoogleOAuthSessionWithScopes(
+      undefined,
+      'account',
+      options.googleAccountOAuthScopes?.length ? options.googleAccountOAuthScopes : ['openid', 'email', 'profile'],
+    )
   }
 
   function parseOpenAICodexAuthorizationInput(input: string): { code: string; state?: string } {
@@ -614,7 +647,7 @@ export function createOAuthCallbackService(options: OAuthCallbackServiceOptions)
           )
           if (!session) {
             res.writeHead(400, { 'Content-Type': 'text/html; charset=utf-8' })
-            res.end('<h1>OAuth session not found</h1><p>Return to DystopAI and start the connection again.</p>')
+            res.end('<h1>OAuth session not found</h1><p>Return to Automnia and start the connection again.</p>')
             return
           }
 
@@ -623,7 +656,7 @@ export function createOAuthCallbackService(options: OAuthCallbackServiceOptions)
 
           await completeOpenAICodexOAuthSession(session, code, state)
           res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' })
-          res.end('<h1>OpenAI Codex connected</h1><p>You can close this window and return to DystopAI.</p>')
+          res.end('<h1>OpenAI Codex connected</h1><p>You can close this window and return to Automnia.</p>')
         } catch (err) {
           const message = safeErrorText(err, redactSensitiveText)
           const state = new URL(req.url || '/', options.openAiCodexOAuthRedirectUri).searchParams.get('state') || ''
@@ -661,7 +694,7 @@ export function createOAuthCallbackService(options: OAuthCallbackServiceOptions)
   async function startOpenAICodexOAuthSession(): Promise<OAuthStartResult> {
     if (options.isShuttingDown()) throw new Error('Control Center is shutting down.')
     const id = randomUUID()
-    const flow = await options.createOpenAICodexAuthorizationFlow('dystopai')
+    const flow = await options.createOpenAICodexAuthorizationFlow('automnia')
     const session: ProviderOAuthSession = {
       id,
       provider: 'openai',
@@ -753,6 +786,7 @@ export function createOAuthCallbackService(options: OAuthCallbackServiceOptions)
     refreshGoogleOAuthCredential,
     refreshOpenAICodexOAuthCredential,
     startGoogleOAuthSession,
+    startGoogleAccountOAuthSession,
     startOpenAICodexOAuthSession,
   }
 }

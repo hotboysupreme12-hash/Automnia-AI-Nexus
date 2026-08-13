@@ -1,5 +1,7 @@
 const CONTROL_CENTER_TOKEN_KEY = 'control-center-token'
+const CONTROL_CENTER_SIGNED_OUT_KEY = 'control-center-signed-out'
 let memoryToken: string | null = null
+let explicitSignOut = false
 const tokenListeners = new Set<(token: string | null) => void>()
 
 function notifyTokenListeners(token: string | null): void {
@@ -46,12 +48,33 @@ function storageRemove(storage: Storage | null): void {
   }
 }
 
+function storageHasSignOutFlag(storage: Storage | null): boolean {
+  try {
+    return storage?.getItem(CONTROL_CENTER_SIGNED_OUT_KEY) === '1'
+  } catch {
+    return false
+  }
+}
+
+function storageWriteSignOutFlag(storage: Storage | null, value: boolean): void {
+  try {
+    if (value) storage?.setItem(CONTROL_CENTER_SIGNED_OUT_KEY, '1')
+    else storage?.removeItem(CONTROL_CENTER_SIGNED_OUT_KEY)
+  } catch {
+    // The in-memory flag still protects this renderer when storage is blocked.
+  }
+}
+
 function normalizeToken(value: string | null | undefined): string | null {
   const token = typeof value === 'string' ? value.trim() : ''
   return token || null
 }
 
 export function readAuthToken(): string | null {
+  if (isAuthExplicitlySignedOut()) {
+    memoryToken = null
+    return null
+  }
   if (memoryToken) return memoryToken
 
   const session = browserStorage('session')
@@ -73,6 +96,31 @@ export function readAuthToken(): string | null {
   }
 
   return null
+}
+
+/**
+ * An explicit logout must win over Electron's automatic session recovery.
+ * This marker is scoped to the current browser tab/window and is cleared only
+ * by a deliberate password or Google sign-in.
+ */
+export function isAuthExplicitlySignedOut(): boolean {
+  if (explicitSignOut) return true
+  explicitSignOut = storageHasSignOutFlag(browserStorage('session'))
+  return explicitSignOut
+}
+
+export function markAuthSignedOut(): void {
+  explicitSignOut = true
+  memoryToken = null
+  storageWriteSignOutFlag(browserStorage('session'), true)
+  storageRemove(browserStorage('session'))
+  storageRemove(browserStorage('local'))
+  notifyTokenListeners(null)
+}
+
+export function clearAuthSignedOut(): void {
+  explicitSignOut = false
+  storageWriteSignOutFlag(browserStorage('session'), false)
 }
 
 export function writeAuthToken(value: string): void {

@@ -1,4 +1,4 @@
-DystopAI Third-Party Software Notices
+Automnia Third-Party Software Notices
 =====================================
 
 This product includes third-party software. The applicable license files

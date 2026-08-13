@@ -11,7 +11,7 @@ const bundledCodexRoot = path.join(bundleRoot, 'openclaw-codex', 'codex')
 const downloadsRoot = path.join(bundleRoot, '.downloads')
 const installWorkRoot = path.join(bundleRoot, '.work')
 
-const RUNTIME_BUNDLE_METADATA_FILE = '.dystopai-runtime-bundle.json'
+const RUNTIME_BUNDLE_METADATA_FILE = '.automnia-runtime-bundle.json'
 const DEFAULT_BUNDLED_NODE_VERSION = 'v24.16.0'
 const DEFAULT_BUNDLED_CODEX_VERSION = '2026.7.1-1'
 const DEFAULT_BUNDLED_CODEX_SPEC = `@openclaw/codex@${DEFAULT_BUNDLED_CODEX_VERSION}`
@@ -21,7 +21,7 @@ const DEFAULT_BUNDLED_CODEX_TARBALL = 'https://registry.npmjs.org/@openclaw/code
 function normalizeExactNodeVersion(value) {
   const raw = String(value || '').trim().replace(/^node-/, '')
   if (!/^v\d+\.\d+\.\d+$/.test(raw)) {
-    throw new Error(`DYSTOPAI_BUNDLED_NODE_VERSION must be an exact Node.js version like v24.16.0; received ${JSON.stringify(value)}`)
+    throw new Error(`AUTOMNIA_BUNDLED_NODE_VERSION must be an exact Node.js version like v24.16.0; received ${JSON.stringify(value)}`)
   }
   return raw
 }
@@ -30,25 +30,25 @@ function parseExactCodexSpec(spec) {
   const raw = String(spec || '').trim()
   const match = /^@openclaw\/codex@(\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?)$/.exec(raw)
   if (!match) {
-    throw new Error(`DYSTOPAI_BUNDLED_CODEX_SPEC must pin an exact @openclaw/codex version; received ${JSON.stringify(spec)}`)
+    throw new Error(`AUTOMNIA_BUNDLED_CODEX_SPEC must pin an exact @openclaw/codex version; received ${JSON.stringify(spec)}`)
   }
   return { spec: raw, version: match[1] }
 }
 
-const bundledNodeVersion = normalizeExactNodeVersion(process.env.DYSTOPAI_BUNDLED_NODE_VERSION || DEFAULT_BUNDLED_NODE_VERSION)
-const bundledCodex = parseExactCodexSpec(process.env.DYSTOPAI_BUNDLED_CODEX_SPEC || DEFAULT_BUNDLED_CODEX_SPEC)
+const bundledNodeVersion = normalizeExactNodeVersion(process.env.AUTOMNIA_BUNDLED_NODE_VERSION || DEFAULT_BUNDLED_NODE_VERSION)
+const bundledCodex = parseExactCodexSpec(process.env.AUTOMNIA_BUNDLED_CODEX_SPEC || DEFAULT_BUNDLED_CODEX_SPEC)
 const bundledCodexIntegrity = String(
-  process.env.DYSTOPAI_BUNDLED_CODEX_INTEGRITY ||
+  process.env.AUTOMNIA_BUNDLED_CODEX_INTEGRITY ||
   (bundledCodex.spec === DEFAULT_BUNDLED_CODEX_SPEC ? DEFAULT_BUNDLED_CODEX_INTEGRITY : ''),
 ).trim()
 const bundledCodexTarball = String(
-  process.env.DYSTOPAI_BUNDLED_CODEX_TARBALL ||
+  process.env.AUTOMNIA_BUNDLED_CODEX_TARBALL ||
   (bundledCodex.spec === DEFAULT_BUNDLED_CODEX_SPEC ? DEFAULT_BUNDLED_CODEX_TARBALL : ''),
 ).trim()
-const refresh = /^(1|true|yes)$/i.test(process.env.DYSTOPAI_REFRESH_RUNTIME_BUNDLES || '')
+const refresh = /^(1|true|yes)$/i.test(process.env.AUTOMNIA_REFRESH_RUNTIME_BUNDLES || '')
 
 if (!/^sha512-[A-Za-z0-9+/=]+$/.test(bundledCodexIntegrity)) {
-  throw new Error('DYSTOPAI_BUNDLED_CODEX_INTEGRITY must be provided as the expected sha512 npm integrity for the pinned Codex package.')
+  throw new Error('AUTOMNIA_BUNDLED_CODEX_INTEGRITY must be provided as the expected sha512 npm integrity for the pinned Codex package.')
 }
 
 function platformArchive() {
@@ -385,7 +385,7 @@ async function prepareCodexBundle() {
   console.log('[runtime-bundles] copying locked Codex plugin dependencies into bundle root')
   fs.cpSync(path.join(source, 'node_modules'), path.join(bundledCodexRoot, 'node_modules'), { recursive: true })
   removeNestedBundledPackage(bundledCodexRoot)
-  fs.copyFileSync(sourceDependencyLock, path.join(bundledCodexRoot, '.dystopai-runtime-package-lock.json'))
+  fs.copyFileSync(sourceDependencyLock, path.join(bundledCodexRoot, '.automnia-runtime-package-lock.json'))
 
   if (!validateCodexBundle(bundledCodexRoot)) {
     throw new Error(`Prepared Codex plugin bundle is incomplete for ${process.platform}/${process.arch}: ${bundledCodexRoot}`)
@@ -399,7 +399,7 @@ async function prepareCodexBundle() {
       version,
       integrity: bundledCodexIntegrity,
       ...(bundledCodexTarball ? { tarball: bundledCodexTarball } : {}),
-      lockfile: '.dystopai-runtime-package-lock.json',
+      lockfile: '.automnia-runtime-package-lock.json',
       dependencies: {
         '@openai/codex': {
           version: openaiCodexEntry.version,

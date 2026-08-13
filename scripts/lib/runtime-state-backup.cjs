@@ -81,7 +81,7 @@ function copyFileVerified(sourcePath, targetPath, expectedSha256) {
 function createStateBackup(options) {
   const sourceRoot = path.resolve(options.sourceRoot)
   const backupParent = path.resolve(options.backupParent)
-  const backupName = options.backupName || `dystopai-state-${timestampSlug()}`
+  const backupName = options.backupName || `automnia-state-${timestampSlug()}`
   const backupRoot = path.resolve(backupParent, backupName)
   if (!isWithin(backupParent, backupRoot)) throw new Error('Backup destination escapes backup parent')
   if (fs.existsSync(backupRoot)) throw new Error(`Backup destination already exists: ${backupRoot}`)
@@ -105,7 +105,7 @@ function createStateBackup(options) {
     }
     const manifest = {
       schema: 1,
-      product: 'DystopAI',
+      product: 'Automnia',
       createdAt: new Date().toISOString(),
       sourceName: path.basename(sourceRoot),
       fileCount: manifestFiles.length,
@@ -170,7 +170,7 @@ function restoreStateBackup(options) {
   const targetRoot = path.resolve(options.targetRoot)
   const manifest = verifyStateBackup(backupRoot)
   if (directoryHasEntries(targetRoot) && !options.force) {
-    throw new Error(`Restore target is not empty: ${targetRoot}. Set force only after stopping DystopAI and confirming a backup.`)
+    throw new Error(`Restore target is not empty: ${targetRoot}. Set force only after stopping Automnia and confirming a backup.`)
   }
 
   const parent = path.dirname(targetRoot)

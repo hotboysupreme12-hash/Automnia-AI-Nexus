@@ -11,7 +11,7 @@ async function createTempStateRoot(prefix: string) {
 }
 
 test('archiveCoveredLegacyConfigHealthState returns a quiet no-op when no legacy file exists', async () => {
-  const stateRoot = await createTempStateRoot('dystopai-legacy-config-health-missing-')
+  const stateRoot = await createTempStateRoot('automnia-legacy-config-health-missing-')
   try {
     const result = await archiveCoveredLegacyConfigHealthState({ stateRoot })
 
@@ -24,7 +24,7 @@ test('archiveCoveredLegacyConfigHealthState returns a quiet no-op when no legacy
 })
 
 test('archiveCoveredLegacyConfigHealthState archives stale config health JSON', async () => {
-  const stateRoot = await createTempStateRoot('dystopai-legacy-config-health-')
+  const stateRoot = await createTempStateRoot('automnia-legacy-config-health-')
   try {
     const logsDir = path.join(stateRoot, 'logs')
     const sourcePath = path.join(logsDir, 'config-health.json')

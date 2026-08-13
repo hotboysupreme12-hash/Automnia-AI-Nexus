@@ -122,7 +122,7 @@ async function stopProcess(child: ChildProcessWithoutNullStreams) {
 }
 
 const port = await freePort()
-const tempRoot = mkdtempSync(path.join(tmpdir(), 'dystopai-recovery-soak-'))
+const tempRoot = mkdtempSync(path.join(tmpdir(), 'automnia-recovery-soak-'))
 const stateDir = path.join(tempRoot, 'state')
 const workspaceRoot = path.join(tempRoot, 'workspace')
 const homeDir = path.join(tempRoot, 'home')

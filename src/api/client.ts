@@ -1,6 +1,7 @@
 import { apiUrl } from '../utils/apiUrl'
 import { redactDiagnosticText } from '../utils/diagnosticRedaction'
 import { readAuthToken } from './authTokenStore'
+import { fetchControlCenterWithAuth } from './authenticatedFetch'
 
 const DEFAULT_TIMEOUT_MS = 20_000
 
@@ -141,7 +142,7 @@ export async function apiRequest<T = unknown>(path: string, options: ApiRequestO
   const body = requestBodyAndHeaders(options.body, headers)
 
   try {
-    const response = await fetch(url, { ...options, body, headers, signal })
+    const response = await fetchControlCenterWithAuth(url, { ...options, body, headers, signal })
     const responseRequestId = response.headers.get('x-request-id') || response.headers.get('x-control-center-request-id') || requestId
     const { payload, text } = await readResponsePayload(response)
     const payloadFailure = isExplicitFailurePayload(payload)
@@ -151,7 +152,14 @@ export async function apiRequest<T = unknown>(path: string, options: ApiRequestO
 
     const payloadError = payloadErrorMessage(payload)
     const message = payloadError.message || response.statusText || `HTTP ${response.status}`
-    const detail = payloadError.detail !== undefined ? payloadError.detail : text
+    // Standard API failures already contain a safe, user-facing message. Do
+    // not fall back to the entire JSON envelope as a detail string; that used
+    // to leak `{ ok, error, requestId }` into login and other UI alerts.
+    const detail = payloadError.detail !== undefined
+      ? payloadError.detail
+      : typeof payload === 'string'
+        ? text
+        : undefined
     return {
       ok: false,
       status: response.status,
@@ -198,5 +206,18 @@ export function apiErrorMessage(error: ApiErrorEnvelope): string {
   if (error.code === 'auth_required') {
     return 'The local runtime session needs to reconnect. Keep Automnia open and try again, or restart the desktop app.'
   }
-  return error.detail ? `${error.message}: ${error.detail}` : error.message
+  const detail = error.detail?.trim()
+  if (!detail || detail === error.message || looksLikeApiEnvelope(detail)) return error.message
+  return `${error.message}: ${detail}`
+}
+
+function looksLikeApiEnvelope(value: string): boolean {
+  if (!value.startsWith('{') && !value.startsWith('[')) return false
+  try {
+    const parsed = JSON.parse(value) as unknown
+    if (!isRecord(parsed)) return false
+    return parsed.ok === true || parsed.ok === false || isRecord(parsed.error) || typeof parsed.requestId === 'string'
+  } catch {
+    return false
+  }
 }

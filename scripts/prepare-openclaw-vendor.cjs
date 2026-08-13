@@ -6,13 +6,13 @@ const { tmpdir } = require('node:os')
 const path = require('node:path')
 
 const root = path.resolve(__dirname, '..')
-const vendorRoot = path.resolve(process.env.DYSTOPAI_OPENCLAW_VENDOR_ROOT || path.join(root, 'vendor', 'openclaw'))
+const vendorRoot = path.resolve(process.env.AUTOMNIA_OPENCLAW_VENDOR_ROOT || path.join(root, 'vendor', 'openclaw'))
 const packageJsonPath = path.join(vendorRoot, 'package.json')
 const shrinkwrapPath = path.join(vendorRoot, 'npm-shrinkwrap.json')
 const nodeModulesRoot = path.join(vendorRoot, 'node_modules')
-const metadataPath = path.join(nodeModulesRoot, '.dystopai-openclaw-vendor-deps.json')
+const metadataPath = path.join(nodeModulesRoot, '.automnia-openclaw-vendor-deps.json')
 const cacheRoot = path.join(root, '.cache', 'openclaw-vendor')
-const refresh = /^(1|true|yes)$/i.test(process.env.DYSTOPAI_REFRESH_OPENCLAW_VENDOR_DEPS || '')
+const refresh = /^(1|true|yes)$/i.test(process.env.AUTOMNIA_REFRESH_OPENCLAW_VENDOR_DEPS || '')
 
 const DEFAULT_OPENCLAW_PACKAGE_VERSION = '2026.7.1-2'
 const DEFAULT_OPENCLAW_PACKAGE_TARBALL = 'https://registry.npmjs.org/openclaw/-/openclaw-2026.7.1-2.tgz'
@@ -185,27 +185,27 @@ function runNpmInstall(packageJson, lock) {
 
 function resolvePackageTarball(packageJson) {
   const tarball = String(
-    process.env.DYSTOPAI_OPENCLAW_PACKAGE_TARBALL ||
+    process.env.AUTOMNIA_OPENCLAW_PACKAGE_TARBALL ||
     (packageJson.version === DEFAULT_OPENCLAW_PACKAGE_VERSION ? DEFAULT_OPENCLAW_PACKAGE_TARBALL : ''),
   ).trim()
   const integrity = String(
-    process.env.DYSTOPAI_OPENCLAW_PACKAGE_INTEGRITY ||
+    process.env.AUTOMNIA_OPENCLAW_PACKAGE_INTEGRITY ||
     (packageJson.version === DEFAULT_OPENCLAW_PACKAGE_VERSION ? DEFAULT_OPENCLAW_PACKAGE_INTEGRITY : ''),
   ).trim()
 
   if (!tarball || !integrity) {
     throw new Error(
-      `[openclaw-vendor] Set DYSTOPAI_OPENCLAW_PACKAGE_TARBALL and DYSTOPAI_OPENCLAW_PACKAGE_INTEGRITY for OpenClaw ${packageJson.version}`,
+      `[openclaw-vendor] Set AUTOMNIA_OPENCLAW_PACKAGE_TARBALL and AUTOMNIA_OPENCLAW_PACKAGE_INTEGRITY for OpenClaw ${packageJson.version}`,
     )
   }
   if (!/^sha512-[A-Za-z0-9+/=]+$/.test(integrity)) {
-    throw new Error('[openclaw-vendor] DYSTOPAI_OPENCLAW_PACKAGE_INTEGRITY must be an npm sha512 integrity value')
+    throw new Error('[openclaw-vendor] AUTOMNIA_OPENCLAW_PACKAGE_INTEGRITY must be an npm sha512 integrity value')
   }
   return { tarball, integrity }
 }
 
 function packageArtifactsMetadataPath() {
-  return path.join(vendorRoot, 'dist', '.dystopai-openclaw-package.json')
+  return path.join(vendorRoot, 'dist', '.automnia-openclaw-package.json')
 }
 
 function packageArtifactsMatch(packageJson) {
@@ -222,7 +222,7 @@ function packageArtifactsMatch(packageJson) {
 function missingPackageArtifacts(packageJson) {
   const missing = requiredPackageArtifacts.filter((artifact) => !fs.existsSync(path.join(vendorRoot, artifact)))
   if (!packageArtifactsMatch(packageJson)) {
-    missing.push(path.join('dist', '.dystopai-openclaw-package.json'))
+    missing.push(path.join('dist', '.automnia-openclaw-package.json'))
   }
   return missing
 }
@@ -238,7 +238,7 @@ async function hydratePublishedPackageArtifacts(packageJson) {
   }
   const source = resolvePackageTarball(packageJson)
   const tarballPath = path.join(cacheRoot, `openclaw-${packageJson.version}.tgz`)
-  const extractRoot = fs.mkdtempSync(path.join(tmpdir(), 'dystopai-openclaw-package-'))
+  const extractRoot = fs.mkdtempSync(path.join(tmpdir(), 'automnia-openclaw-package-'))
 
   try {
     if (refresh || !fs.existsSync(tarballPath)) {
@@ -287,6 +287,28 @@ async function hydratePublishedPackageArtifacts(packageJson) {
   } finally {
     fs.rmSync(extractRoot, { recursive: true, force: true })
   }
+}
+
+function ensureAutomniaRelayThoughtSignatureSupport() {
+  const distRoot = path.join(vendorRoot, 'dist')
+  if (!fs.existsSync(distRoot)) throw new Error('[openclaw-vendor] Missing OpenClaw dist directory for Automnia Relay compatibility patch')
+  const marker = 'const isAutomniaGeminiRelay = model.provider === "automnia-cloud"'
+  const sourcePattern = /function isGoogleOpenAICompatModel\(model\) \{\n\tconst endpointClass = detectOpenAICompletionsCompat\(model\)\.capabilities\.endpointClass;\n\treturn model\.provider === "google" \|\| endpointClass === "google-generative-ai" \|\| endpointClass === "google-vertex";\n\}/
+  const replacement = `function isGoogleOpenAICompatModel(model) {\n\tconst endpointClass = detectOpenAICompletionsCompat(model).capabilities.endpointClass;\n\t// Automnia Relay is an OpenAI-compatible billing boundary backed by\n\t// Gemini 3.x. Keep it on the same thought-signature replay path as Google\n\t// providers so a hosted tool call can continue through the next Gateway\n\t// turn without degrading the function call into transcript text.\n\tconst isAutomniaGeminiRelay = model.provider === "automnia-cloud" && /(?:^|\\/)gemini-3(?:\\.\\d+)?-(?:flash|pro)(?:-|$)/i.test(model.id);\n\treturn model.provider === "google" || isAutomniaGeminiRelay || endpointClass === "google-generative-ai" || endpointClass === "google-vertex";\n}`
+  let patched = false
+  for (const name of fs.readdirSync(distRoot)) {
+    if (!name.endsWith('.js')) continue
+    const filePath = path.join(distRoot, name)
+    const source = fs.readFileSync(filePath, 'utf8')
+    if (source.includes(marker)) {
+      patched = true
+      continue
+    }
+    if (!sourcePattern.test(source)) continue
+    fs.writeFileSync(filePath, source.replace(sourcePattern, replacement))
+    patched = true
+  }
+  if (!patched) throw new Error('[openclaw-vendor] Could not install Automnia Relay thought-signature compatibility patch')
 }
 
 function packageJsonFor(packageName) {
@@ -387,6 +409,7 @@ async function main() {
   const shrinkwrapSha256 = sha256File(shrinkwrapPath)
   validateVendorSource(lock)
   const packageArtifacts = await hydratePublishedPackageArtifacts(packageJson)
+  ensureAutomniaRelayThoughtSignatureSupport()
 
   if (!refresh && fs.existsSync(nodeModulesRoot)) {
     const missing = validateInstalledPackages(lock)

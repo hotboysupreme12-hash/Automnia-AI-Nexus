@@ -169,7 +169,7 @@ type AgentTurnRoutesOptions = {
   buildClawTalkRuntimeInstruction(message: string, setupIntent: boolean): string
   buildDoctrineSyncReport(agent: string, workspace: string): Promise<unknown>
   buildRuntimeTimeoutContinuationInstruction(message: string, timeoutSeconds: number): string
-  checkBrowserPreflight(agent: string): Promise<BrowserPreflightResult>
+  checkBrowserPreflight(agent?: string): Promise<BrowserPreflightResult>
   classifyFailureKind(message: string, fallback?: FailureStatus | null): string | undefined
   cleanupDoctrineMirrorsAfterRun(agent: string, workspace: string): Promise<unknown>
   cleanupOpenClawSessionLocks(options: { agentId?: string; all?: boolean; minAgeMs: number; reason: string }): Promise<{ scanned: number; removed: unknown[]; errors: unknown[] }>
@@ -530,8 +530,8 @@ export function registerAgentTurnRoutes(app: Express, options: AgentTurnRoutesOp
           'Authorization: Bearer phase-k-failed-command-bearer-123456',
           'phasek.operator@example.com',
           '+1 (555) 010-1280',
-          'C:\\Users\\PhaseK\\AppData\\Local\\DystopAI\\secret.txt',
-          'Cookie: dystopai_session=phase-k-failed-command-cookie-123456',
+          'C:\\Users\\PhaseK\\AppData\\Local\\Automnia\\secret.txt',
+          'Cookie: automnia_session=phase-k-failed-command-cookie-123456',
         ].join(' '))
       }
       if (streamSmokeMode && /^(1|true|yes|success)$/i.test(streamSmokeMode)) {
@@ -586,26 +586,34 @@ export function registerAgentTurnRoutes(app: Express, options: AgentTurnRoutesOp
         return
       }
       const hostedCreditRoute = Boolean(isHostedCreditsActive?.())
-      // Fix UI glitch: always default transport based on license mode immediately, 
-      // rather than waiting for agent turn completion to resolve "Automnia credits" status.
-      const initialTransport = hostedCreditRoute
-        ? 'automnia-cloud-relay'
-        : 'gateway-chat'
-      
+      // Hosted turns use the same Gateway transport as BYOK. Automnia is the
+      // selected OpenClaw model provider, so the Gateway owns the complete
+      // tool loop and the provider charges each model request.
+      const initialTransport = 'gateway-chat'
       const providerFirst = hostedCreditRoute && hostedUsagePriority?.() === 'provider_first'
       const cloudFirst = hostedCreditRoute && !providerFirst
-      const gatewayRoute = providerFirst || (parsed.data.forceOpenClawRuntime && !hostedCreditRoute)
+      const gatewayRoute = hostedCreditRoute || providerFirst || parsed.data.forceOpenClawRuntime
+      const hostedBrowserIntent = hostedCreditRoute
+        ? await shouldRouteBrowserIntentThroughBrowserPlugin(parsed.data.intentMessage?.trim() || parsed.data.message, null)
+        : false
+      if (hostedBrowserIntent) {
+        // Hosted browser turns use the same local browser-service readiness
+        // checks as BYOK, but skip the model-backed probe so readiness does
+        // not consume a second Automnia request before the actual turn.
+        const preflight = await checkBrowserPreflight()
+        if (!preflight.ok) throw new Error(`${preflight.message}${preflight.detail ? `\n${preflight.detail}` : ''}`)
+      }
       emit('status', {
         transport: initialTransport,
         mode: 'progress',
-        label: cloudFirst ? 'Automnia credits first' : providerFirst ? 'My provider first' : gatewayRoute ? 'OpenClaw session' : 'Command Console',
+        label: cloudFirst ? 'Automnia credits via Gateway' : providerFirst ? 'My provider first' : gatewayRoute ? 'OpenClaw session' : 'Command Console',
         message: cloudFirst
-          ? 'Cloud Subscription enabled; this request will use Automnia Cloud credits.'
+          ? 'Automnia credits enabled; opening the Gateway provider session.'
           : providerFirst
-            ? 'Subscriber preference enabled; this request will use your connected provider before Automnia credits.'
-          : gatewayRoute
-            ? 'BYOK/runtime request accepted; opening the Gateway-backed OpenClaw session.'
-            : 'Command accepted; preparing the agent session.',
+            ? 'Subscriber preference enabled; the Gateway will try your connected provider before Automnia credits.'
+            : gatewayRoute
+              ? 'BYOK/runtime request accepted; opening the Gateway-backed OpenClaw session.'
+              : 'Command accepted; preparing the agent session.',
         agent: streamAgent,
         ...(parsed.data.sessionKey ? { sessionKey: parsed.data.sessionKey.trim() } : {}),
         liveTokens: gatewayRoute,
@@ -614,11 +622,11 @@ export function registerAgentTurnRoutes(app: Express, options: AgentTurnRoutesOp
       emit('progress', {
         transport: initialTransport,
         text: cloudFirst
-          ? 'Cloud Subscription route confirmed; contacting Automnia Cloud.'
+          ? 'Automnia provider route confirmed; dispatching through Gateway chat.'
           : providerFirst
-            ? 'Opening the local model fallback configured in Model Settings.'
-          : forcedGatewayConsoleTurn
-            ? 'Opening Gateway chat session with your configured provider.'
+            ? 'Opening the Gateway model route with Automnia fallback available.'
+            : forcedGatewayConsoleTurn
+              ? 'Opening Gateway chat session with your configured provider.'
             : 'Checking runtime health and workspace access.',
         agent: streamAgent,
         ...(parsed.data.sessionKey ? { sessionKey: parsed.data.sessionKey.trim() } : {}),
@@ -632,9 +640,9 @@ export function registerAgentTurnRoutes(app: Express, options: AgentTurnRoutesOp
       emit('progress', {
         transport: initialTransport,
         text: cloudFirst
-          ? 'Cloud Subscription route ready; dispatching through Automnia Cloud credits.'
+          ? 'Gateway route ready; dispatching through Automnia credits.'
           : providerFirst
-            ? 'Provider-first route ready; Automnia credits remain available as fallback.'
+            ? 'Provider-first Gateway route ready; Automnia credits remain available as fallback.'
           : gatewayRoute
             ? 'Runtime ready; dispatching through your Gateway provider.'
             : 'Runtime ready; dispatching agent turn.',
@@ -642,14 +650,14 @@ export function registerAgentTurnRoutes(app: Express, options: AgentTurnRoutesOp
         ...(parsed.data.sessionKey ? { sessionKey: parsed.data.sessionKey.trim() } : {}),
       })
       await delayMs(0)
-      const payload = await streamProviderAgentTurn(parsed.data, emit, abortController.signal)
+      const hostedInput = hostedBrowserIntent ? { ...parsed.data, thinking: 'off' as const } : parsed.data
+      const payload = await streamProviderAgentTurn(hostedInput, emit, abortController.signal)
       emit('final', compactFinalSsePayload(payload, liveTextStreamed))
     } catch (error) {
       const message = redactHiddenReasoningAndSecrets(String(error))
       const failureKind = classifyFailureKind(message, abortController.signal.aborted ? 'aborted' : 'failed') || 'unknown'
-      const activeHostedUsagePriority = hostedUsagePriority?.()
       const failureTransport = isHostedCreditsActive?.()
-        ? activeHostedUsagePriority === 'provider_first' ? 'gateway-chat' : 'automnia-cloud-relay'
+        ? 'gateway-chat'
         : parsed.data.forceOpenClawRuntime
           ? 'gateway-chat'
           : 'control-center-sse'
@@ -734,8 +742,23 @@ export function registerAgentTurnRoutes(app: Express, options: AgentTurnRoutesOp
     // confirmed credit balance unchanged.
     const hostedCreditRoute = Boolean(isHostedCreditsActive?.())
     if (hostedCreditRoute) {
+      const hostedBrowserIntent = await shouldRouteBrowserIntentThroughBrowserPlugin(message, null)
+      if (hostedBrowserIntent) {
+        const preflight = await checkBrowserPreflight()
+        if (!preflight.ok) {
+          return apiSuccess(res, compactHttpJsonPayload({
+            ok: false,
+            reply: preflight.message,
+            stdout: '',
+            stderr: preflight.detail || preflight.message,
+            code: 1,
+            failureKind: 'browser_preflight_failed',
+            preflight,
+          }))
+        }
+      }
       const hostedPayload = await streamProviderAgentTurn(
-        { ...parsed.data, agent: agent.trim() },
+        { ...parsed.data, agent: agent.trim(), ...(hostedBrowserIntent ? { thinking: 'off' as const } : {}) },
         () => undefined,
         requestAbortController.signal,
       )

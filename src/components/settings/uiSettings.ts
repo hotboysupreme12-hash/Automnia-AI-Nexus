@@ -3,7 +3,7 @@ export type UiFormChrome = 'graphite' | 'obsidian' | 'warm'
 export type UiDensity = 'compact' | 'comfortable' | 'spacious'
 export type UiMotion = 'standard' | 'reduced'
 
-export type DystopAIUiSettings = {
+export type AutomniaUiSettings = {
   accentMode: UiAccentMode
   formChrome: UiFormChrome
   density: UiDensity
@@ -14,9 +14,9 @@ export type DystopAIUiSettings = {
   controlGlow: boolean
 }
 
-export const UI_SETTINGS_STORAGE_KEY = 'dystopai-ui-settings-v1'
+export const UI_SETTINGS_STORAGE_KEY = 'automnia-ui-settings-v1'
 
-export const DEFAULT_UI_SETTINGS: DystopAIUiSettings = {
+export const DEFAULT_UI_SETTINGS: AutomniaUiSettings = {
   accentMode: 'reference',
   formChrome: 'graphite',
   density: 'comfortable',
@@ -36,12 +36,12 @@ function isBoolean(value: unknown): value is boolean {
   return typeof value === 'boolean'
 }
 
-export function readUiSettings(): DystopAIUiSettings {
+export function readUiSettings(): AutomniaUiSettings {
   if (typeof window === 'undefined') return DEFAULT_UI_SETTINGS
   try {
     const raw = window.localStorage.getItem(UI_SETTINGS_STORAGE_KEY)
     if (!raw) return DEFAULT_UI_SETTINGS
-    const parsed = JSON.parse(raw) as Partial<DystopAIUiSettings>
+    const parsed = JSON.parse(raw) as Partial<AutomniaUiSettings>
     const controlGlow = isBoolean(parsed.controlGlow) ? parsed.controlGlow : DEFAULT_UI_SETTINGS.controlGlow
     return {
       ...DEFAULT_UI_SETTINGS,
@@ -59,12 +59,12 @@ export function readUiSettings(): DystopAIUiSettings {
   }
 }
 
-export function saveUiSettings(settings: DystopAIUiSettings): void {
+export function saveUiSettings(settings: AutomniaUiSettings): void {
   if (typeof window === 'undefined') return
   window.localStorage.setItem(UI_SETTINGS_STORAGE_KEY, JSON.stringify(settings))
 }
 
-export function applyUiSettings(settings: DystopAIUiSettings): void {
+export function applyUiSettings(settings: AutomniaUiSettings): void {
   if (typeof document === 'undefined') return
   const root = document.documentElement
   root.dataset.duiAccentMode = settings.accentMode
@@ -80,7 +80,7 @@ export function applyUiSettings(settings: DystopAIUiSettings): void {
   root.classList.toggle('dui-reduced-glow', settings.reducedGlow)
 }
 
-export function applyStoredUiSettings(): DystopAIUiSettings {
+export function applyStoredUiSettings(): AutomniaUiSettings {
   const settings = readUiSettings()
   applyUiSettings(settings)
   return settings

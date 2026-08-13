@@ -12,6 +12,13 @@ export function registerLicenseRoutes(app: Express, options: {
     await options.synchronizeOpenClawBillingRoute?.()
   }
 
+  const synchronizeOpenClawBillingRouteInBackground = () => {
+    void synchronizeOpenClawBillingRoute().catch((error) => {
+      const message = error instanceof Error ? error.message : String(error)
+      options.pushGatewayLog?.('stderr', `Usage priority synchronization failed after save: ${message}`)
+    })
+  }
+
   app.get('/api/license/status', (_req, res) => apiSuccess(res, options.licenseService.getStatus()))
 
   app.post('/api/license/activate', async (req, res) => {
@@ -35,31 +42,34 @@ export function registerLicenseRoutes(app: Express, options: {
   })
 
   // A manual reconciliation is useful after a top-up or when the same
-  // subscription was used on another device. It never changes a balance
-  // locally; it asks the Shopify provisioner for its current authoritative
-  // license state.
-  app.post('/api/license/refresh', (_req, res) => {
-    // Return current status immediately to keep the UI in "active" state and shield from timeouts
-    const currentStatus = options.licenseService.getStatus()
-    apiSuccess(res, currentStatus)
+  // subscription was used on another device. Keep this request synchronous:
+  // returning the old status before the provisioner answers made a failed
+  // refresh look successful and only surfaced later as a confusing stderr log.
+  app.post('/api/license/refresh', async (_req, res) => {
+    try {
+      const status = await options.licenseService.refresh()
+      await synchronizeOpenClawBillingRoute()
+      if (options.pushGatewayLog) {
+        options.pushGatewayLog('lifecycle', `License refresh succeeded: ${status.email || 'unknown user'}`)
+      }
+      return apiSuccess(res, status)
+    } catch (error) {
+      const known = error instanceof LicenseServiceError ? error : null
+      const message = known?.message || 'Unable to refresh the Automnia license right now. Check your connection and try again.'
+      if (options.pushGatewayLog) options.pushGatewayLog('stderr', `License refresh failed: ${message}`)
+      return apiFailure(res, 502, known?.code || 'license_service_unavailable', message)
+    }
+  })
 
-    // Execute refresh in the background
-    options.licenseService.refresh()
-      .then(async (status) => {
-        await synchronizeOpenClawBillingRoute()
-        if (options.pushGatewayLog) {
-          options.pushGatewayLog('lifecycle', `Background license refresh succeeded: ${status.email || 'unknown user'}`)
-        } else {
-          console.log(`Background license refresh succeeded: ${status.email || 'unknown user'}`)
-        }
-      })
-      .catch((error) => {
-        if (options.pushGatewayLog) {
-          options.pushGatewayLog('stderr', `Background license refresh failed: ${error instanceof Error ? error.message : String(error)}`)
-        } else {
-          console.error('Background license refresh failed:', error)
-        }
-      })
+  app.post('/api/knowledge/answer', async (req, res) => {
+    const parsed = z.object({ query: z.string().trim().min(1).max(5_000) }).safeParse(req.body)
+    if (!parsed.success) return apiFailure(res, 400, 'invalid_payload', 'Enter a knowledge question between 1 and 5,000 characters.')
+    try {
+      return apiSuccess(res, await options.licenseService.answerKnowledge(parsed.data.query))
+    } catch (error) {
+      const known = error instanceof LicenseServiceError ? error : null
+      return apiFailure(res, known?.code === 'license_activation_failed' ? 401 : 502, known?.code || 'license_service_unavailable', known?.message || 'The Automnia knowledge assistant is unavailable.')
+    }
   })
 
   app.post('/api/license/usage-priority', async (req, res) => {
@@ -67,12 +77,19 @@ export function registerLicenseRoutes(app: Express, options: {
       usagePriority: z.enum(['automnia_first', 'provider_first', 'byok_only']),
     }).safeParse(req.body)
     if (!parsed.success) return apiFailure(res, 400, 'invalid_payload', 'Choose Automnia credits first, Automnia with fallback, or BYOK only.')
-    if (options.licenseService.getStatus().mode !== 'hosted_credits') {
-      return apiFailure(res, 409, 'invalid_payload', 'Usage priority is available to active hosted subscribers. BYOK access always uses the connected provider.')
+    const currentStatus = options.licenseService.getStatus()
+    if (currentStatus.mode !== 'hosted_credits') {
+      return apiFailure(res, 409, 'invalid_payload', 'BYOK access uses the connected provider. Hosted priority options are available on Pro and higher permanent tiers.')
+    }
+    if (options.licenseService.isUsagePriorityLocked() && parsed.data.usagePriority !== 'automnia_first') {
+      return apiFailure(res, 409, 'invalid_payload', 'Starter Subscription ($19.99) stays on Subscription Relay. Upgrade to Pro or higher to choose another usage priority.')
     }
     try {
       const status = options.licenseService.setUsagePriority(parsed.data.usagePriority)
-      await synchronizeOpenClawBillingRoute()
+      // Saving the preference is local and synchronous. Config reconciliation
+      // may wait on a Gateway restart, so do it after the response instead of
+      // holding the renderer request open until the 8-second client timeout.
+      synchronizeOpenClawBillingRouteInBackground()
       return apiSuccess(res, status)
     } catch (error) {
       const known = error instanceof LicenseServiceError ? error : null

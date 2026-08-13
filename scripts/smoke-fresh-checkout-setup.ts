@@ -28,7 +28,7 @@ const outputRoot = path.join(root, 'output', 'fresh-checkout-smoke')
 const runRoot = path.join(outputRoot, runSegment)
 const freshRoot = path.join(runRoot, 'workspace')
 const evidenceDir = path.join(root, 'release', 'evidence', 'phase-k-manual-beta-2026-07-01')
-const keepWorkspace = /^(1|true|yes)$/i.test(String(process.env.DYSTOPAI_KEEP_FRESH_CHECKOUT_SMOKE || ''))
+const keepWorkspace = /^(1|true|yes)$/i.test(String(process.env.AUTOMNIA_KEEP_FRESH_CHECKOUT_SMOKE || ''))
 
 const requiredSnapshotFiles = [
   'package.json',
@@ -103,7 +103,7 @@ function runNpmStep(label: string, args: string[], stepIndex: number): CommandEv
     env: {
       ...process.env,
       CI: '1',
-      DYSTOPAI_FRESH_CHECKOUT_SMOKE: '1',
+      AUTOMNIA_FRESH_CHECKOUT_SMOKE: '1',
     },
     maxBuffer: 80 * 1024 * 1024,
     windowsHide: true,

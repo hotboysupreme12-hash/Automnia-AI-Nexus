@@ -5,9 +5,9 @@ import path from 'node:path'
 const root = process.cwd()
 const read = (relativePath: string) => readFileSync(path.join(root, relativePath), 'utf8')
 
-const theme = read('src/dystopai-app-theme.css')
+const theme = read('src/automnia-app-theme.css')
 const typography = read('src/styles/typography.css')
-const finalTypography = read('src/styles/dystopai-theme/95-typography-polish.css')
+const finalTypography = read('src/styles/automnia-theme/95-typography-polish.css')
 const missionPanelCss = read('src/components/mission/MissionDeploymentPanel.css')
 const monitorTypographySources: [string, string][] = [
   ['src/components/monitor/LiveOperationMonitor.tsx', read('src/components/monitor/LiveOperationMonitor.tsx')],
@@ -15,9 +15,9 @@ const monitorTypographySources: [string, string][] = [
 ]
 
 const typographyImport = "@import './styles/typography.css';"
-const foundationImport = "@import './styles/dystopai-theme/00-foundation.css';"
-const finalTypographyImport = "@import './styles/dystopai-theme/95-typography-polish.css';"
-const horizonCommandCenterImport = "@import './styles/dystopai-theme/99-horizon-command-center.css';"
+const foundationImport = "@import './styles/automnia-theme/00-foundation.css';"
+const finalTypographyImport = "@import './styles/automnia-theme/95-typography-polish.css';"
+const horizonCommandCenterImport = "@import './styles/automnia-theme/99-horizon-command-center.css';"
 
 assert.ok(theme.includes(typographyImport), 'theme should import typography tokens')
 assert.ok(theme.includes(foundationImport), 'theme should import legacy foundation after typography tokens')
@@ -106,7 +106,7 @@ assert.match(
 
 const explicitFinalMicrotype: string[] = []
 for (const [relativePath, source] of [
-  ['src/styles/dystopai-theme/95-typography-polish.css', finalTypography],
+  ['src/styles/automnia-theme/95-typography-polish.css', finalTypography],
   ['src/components/mission/MissionDeploymentPanel.css', missionPanelCss],
 ] as const) {
   for (const match of source.matchAll(/font-size:\s*([0-9]+(?:\.[0-9]+)?)px\b/g)) {

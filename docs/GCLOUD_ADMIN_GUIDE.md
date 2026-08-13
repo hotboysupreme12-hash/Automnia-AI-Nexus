@@ -1,14 +1,48 @@
 # Automnia Google Cloud deployment and migration guide
 
-Automnia now uses one permanent public origin for license activation, Shopify webhooks, checkout, and hosted-credit AI relay traffic:
+For the temporary deployment period, Automnia uses one Cloud Run origin for license activation, Shopify webhooks, checkout, and hosted-credit AI relay traffic:
 
 ```text
-https://api.automnia.ai
+https://automnia-shopify-provisioner-336625531977.us-east1.run.app
 ```
 
-Desktop releases no longer contain a project-specific `run.app` address. `AUTOMNIA_LICENSE_API_URL` and `AUTOMNIA_CLOUD_RELAY_URL` remain available as explicit development or emergency overrides, but ordinary customer traffic uses the permanent domain.
+Desktop releases currently use the Cloud Run origin above. `AUTOMNIA_LICENSE_API_URL` and `AUTOMNIA_CLOUD_RELAY_URL` remain available as explicit development or emergency overrides. Move `AUTOMNIA_PUBLIC_CLOUD_URL` back to the Automnia public hostname after DNS cutover.
+
+## Automnia knowledge assistant
+
+The production project also contains a private Google Agent Search knowledge
+store and grounded search engine. It is seeded from the sanitized, curated
+corpus under [`infra/gcloud/knowledge`](../infra/gcloud/knowledge) and selected
+product/OpenClaw documentation. Publish the current corpus with:
+
+```bash
+npm run publish:knowledge
+```
+
+The publisher uploads only the selected user/product and runtime reference
+documents; it does not upload the repository wholesale. It is exposed through
+the authenticated, read-only Cloud Run route `POST /api/knowledge/answer`.
+Normal hosted-credit chat does not call this route automatically; a caller must
+explicitly request knowledge help. Do not upload passwords, access tokens, API
+keys, license keys, customer emails, or private workspace files to the knowledge
+store.
+
+Account activation, password sign-in, Google account linking, and password
+changes are served by this same Cloud Run service. The live origin is now on
+revision `automnia-shopify-provisioner-knowledge241` (`2.4.0` / schema
+`2026-08-13.2`), which includes the authenticated knowledge route, the
+3.1-first grounded assistant, and stale-session recovery. Account
+password hashes and Google subject links are stored on the existing license
+documents in Firestore. Password recovery intentionally has no public
+email-plus-license-key reset route.
 
 The complete deployment package lives in [`infra/gcloud`](../infra/gcloud/README.md). It contains the deployable Cloud Run provisioner source, API enablement, dedicated service-account roles, Secret Manager bindings, Firestore initialization and indexes, the nine production Shopify plan mappings, health/readiness checks, managed export/import commands, fail-closed verification, protected cutover, and reverse-migration rollback.
+
+The production billing account also has a project-scoped promotional-credit
+alert budget named `Automnia promotional credit alert`, covering the current
+`$1,000` credit window through May 29, 2027 with alerts at 50%, 75%, 90%, and
+100%. Cloud Billing budgets notify; they do not stop Cloud Run or Vertex AI
+automatically. Review the budget before adding any new paid services.
 
 ## Normal project migration
 
@@ -21,7 +55,7 @@ Run these commands from the repository root in PowerShell:
 .\infra\gcloud\switch-traffic.ps1 -ProjectId new-project-id
 ```
 
-The first migration still requires a one-time permanent-domain bootstrap and a one-time Shopify app deployment. See the package README. Once Shopify sends every webhook to `api.automnia.ai`, later Google project changes do not require a customer reinstall, new activation keys, balance resets, or webhook edits.
+The first migration still requires a one-time public-domain bootstrap and a one-time Shopify app deployment. See the package README. Once Shopify sends every webhook to the public Automnia hostname, later Google project changes do not require a customer reinstall, new activation keys, balance resets, or webhook edits.
 
 ## Why the cutover is fail-closed
 
@@ -51,4 +85,4 @@ It freezes the current target, reverse-migrates new balances and billing events 
 
 ## Customer-facing data boundary
 
-The renderer contains only the permanent public origin. Google project IDs, Cloud Run origins, Secret Manager names, customer emails, license keys, and default balances are server-owned. Account and credit values shown in the app come from the authenticated provisioner response and its local server-side cache; they are not editable defaults compiled into the UI.
+The renderer contains only the temporary Cloud Run origin needed for this deployment. Secret Manager names, customer emails, license keys, and default balances are server-owned. Account and credit values shown in the app come from the authenticated provisioner response and its local server-side cache; they are not editable defaults compiled into the UI.

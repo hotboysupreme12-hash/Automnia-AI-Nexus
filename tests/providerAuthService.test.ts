@@ -223,9 +223,9 @@ test('removes provider credentials from local auth and propagated auth profiles'
 test('reports missing credential states for API-key, OAuth, and Vertex providers without leaking credential markers', async () => {
   const authEnvMap = {
     ...AUTH_ENV_MAP,
-    anthropic: ['DYSTOPAI_TEST_MISSING_ANTHROPIC_API_KEY'],
-    deepseek: ['DYSTOPAI_TEST_MISSING_DEEPSEEK_API_KEY'],
-    google: ['DYSTOPAI_TEST_MISSING_GOOGLE_API_KEY'],
+    anthropic: ['AUTOMNIA_TEST_MISSING_ANTHROPIC_API_KEY'],
+    deepseek: ['AUTOMNIA_TEST_MISSING_DEEPSEEK_API_KEY'],
+    google: ['AUTOMNIA_TEST_MISSING_GOOGLE_API_KEY'],
   }
   const harness = await createHarness({
     authEnvMap,
@@ -233,7 +233,7 @@ test('reports missing credential states for API-key, OAuth, and Vertex providers
       provider === 'deepseek' ? 'SecretRef:sk-deepseek-should-not-leak' : '',
     googleOAuthClientStatus: {
       available: false,
-      missing: ['Set DYSTOPAI_GOOGLE_OAUTH_CLIENT_ID', 'Set DYSTOPAI_GOOGLE_OAUTH_CLIENT_SECRET'],
+      missing: ['Set AUTOMNIA_GOOGLE_OAUTH_CLIENT_ID', 'Set AUTOMNIA_GOOGLE_OAUTH_CLIENT_SECRET'],
     },
     googleVertexGcloudStatus: () => ({
       supported: true,
@@ -265,8 +265,8 @@ test('reports missing credential states for API-key, OAuth, and Vertex providers
     assert.equal(googleStatus.oauth.supported, true)
     assert.equal(googleStatus.oauth.available, false)
     assert.deepEqual(googleStatus.oauth.missing, [
-      'Set DYSTOPAI_GOOGLE_OAUTH_CLIENT_ID',
-      'Set DYSTOPAI_GOOGLE_OAUTH_CLIENT_SECRET',
+      'Set AUTOMNIA_GOOGLE_OAUTH_CLIENT_ID',
+      'Set AUTOMNIA_GOOGLE_OAUTH_CLIENT_SECRET',
     ])
 
     const vertexStatus = harness.service.providerAuthStatus('google-vertex')
@@ -315,8 +315,8 @@ test('meta saves enable the bundled provider plugin before model use', async () 
 test('blocks unconfigured model providers while allowing configured and optional-auth selections', async () => {
   const authEnvMap = {
     ...AUTH_ENV_MAP,
-    deepseek: ['DYSTOPAI_TEST_MISSING_DEEPSEEK_API_KEY'],
-    openai: ['DYSTOPAI_TEST_MISSING_OPENAI_API_KEY'],
+    deepseek: ['AUTOMNIA_TEST_MISSING_DEEPSEEK_API_KEY'],
+    openai: ['AUTOMNIA_TEST_MISSING_OPENAI_API_KEY'],
   }
   const harness = await createHarness({ authEnvMap })
   try {

@@ -1,8 +1,7 @@
 import { memo, useId, useMemo, useState } from 'react'
-import { motion } from 'framer-motion'
 import { useNexusStore } from '../../store/nexusStore'
 import type { AgentOperationState, AgentResponse, MissionEvent, OpenClawAgent } from '../../types/nexus'
-import { clearRuntimeMonitor, restartGatewayRuntime, runRuntimeDoctor, stopCronShift, updateCronShift, useRuntimeStatus } from '../../hooks/useRuntimeStatus'
+import { clearRuntimeMonitor, restartGatewayRuntime, runRuntimeDoctor, stopCronShift, updateCronShift } from '../../hooks/useRuntimeStatus'
 import type { DoctorFinding, DoctorRun, GatewayChannelActivity, GatewayLogEntry, RuntimeCronJob, RuntimeMonitorClearResult, RuntimeStatus } from '../../hooks/useRuntimeStatus'
 import { agentPortraitSrc } from '../../utils/portrait'
 import { ActionStatusBanner } from '../common/ActionStatusBanner'
@@ -10,7 +9,7 @@ import { Badge, Button, IconButton, StatusChip } from '../ui'
 import type { BadgeTone } from '../ui'
 
 const CONTROL_CENTER_LOGO_SRC = '/brand/automnia-ai-nexus-app-icon.png'
-const DOCTOR_PANEL_DISMISSED_RUN_KEY = 'dystopai-monitor-doctor-dismissed-run'
+const DOCTOR_PANEL_DISMISSED_RUN_KEY = 'automnia-monitor-doctor-dismissed-run'
 const DOCTOR_SNAPSHOT_STALE_AFTER_MS = 24 * 60 * 60 * 1000
 
 function doctorRunDismissKey(run: DoctorRun | null): string {
@@ -930,7 +929,7 @@ function GatewayActivityLine({ event }: { event: GatewayChannelActivity }) {
   )
 }
 
-function GatewayActivityCard({ activity }: { activity: RuntimeStatus['gateway']['activity'] | undefined }) {
+const GatewayActivityCard = memo(function GatewayActivityCard({ activity }: { activity: RuntimeStatus['gateway']['activity'] | undefined }) {
   const events = activity?.events || []
   return (
     <div className="dy-monitor-card dy-channel-activity-card dy-gateway-feed-card flex min-h-0 flex-col self-stretch rounded-none border border-white/[0.04] bg-white/[0.015] p-3">
@@ -956,9 +955,9 @@ function GatewayActivityCard({ activity }: { activity: RuntimeStatus['gateway'][
       </div>
     </div>
   )
-}
+})
 
-function GatewayLogTailCard({ logs }: { logs: GatewayLogEntry[] }) {
+const GatewayLogTailCard = memo(function GatewayLogTailCard({ logs }: { logs: GatewayLogEntry[] }) {
   const logTailId = 'gateway-log-tail'
   const [expanded, setExpanded] = useState(false)
   const visibleLogs = useMemo(() => logs.slice(0, expanded ? 48 : 0), [expanded, logs])
@@ -994,9 +993,9 @@ function GatewayLogTailCard({ logs }: { logs: GatewayLogEntry[] }) {
       )}
     </div>
   )
-}
+})
 
-function RuntimeGatewayPanel({
+const RuntimeGatewayPanel = memo(function RuntimeGatewayPanel({
   status,
   error,
   agentById,
@@ -1235,36 +1234,59 @@ function RuntimeGatewayPanel({
       </div>
     </div>
   )
-}
+})
 
-export function LiveOperationMonitor() {
-  const activePartyIds = useNexusStore((state) => state.activePartyIds)
-  const agents = useNexusStore((state) => state.agents)
+const MonitorHeartbeatPanel = memo(function MonitorHeartbeatPanel({ visibleAgents }: { visibleAgents: OpenClawAgent[] }) {
   const operationStates = useNexusStore((state) => state.operationStates)
-  const missionFeed = useNexusStore((state) => state.missionFeed)
+
+  return (
+    <div className="grid gap-3 md:grid-cols-2">
+      {visibleAgents.map((agent) => {
+        const op = operationStates[agent.id]
+        return (
+          <div key={agent.id} className="rounded-xl border border-white/[0.04] bg-white/[0.015] p-4">
+            <div className="flex items-center justify-between gap-3">
+              <p className="text-[13px] font-bold text-slate-100">{agent.name}</p>
+              <StatusChip
+                label="Heartbeat"
+                value={op?.heartbeatStatus ?? 'dormant'}
+                state={op?.heartbeatStatus ?? 'dormant'}
+                tone={heartbeatStatusTone(op?.heartbeatStatus)}
+                className={`rounded-full border px-2.5 py-1 text-[11px] font-semibold uppercase tracking-[0.10em] ${statusClass(op?.heartbeatStatus)}`}
+              />
+            </div>
+            <div className="mt-3.5 grid gap-2 sm:grid-cols-2">
+              <div className="rounded-md border border-white/[0.04] bg-white/[0.015] px-2.5 py-1.5">
+                <span className="text-[12px] text-slate-400">Cron Cadence</span>
+                <p className="font-semibold text-slate-200 text-[11px]">{formatCadence(agent.heartbeat.tickIntervalMs)}</p>
+              </div>
+              <div className="rounded-md border border-white/[0.04] bg-white/[0.015] px-2.5 py-1.5">
+                <span className="text-[12px] text-slate-400">Retry</span>
+                <p className="font-semibold text-slate-200 text-[11px]">{op?.retryCount ?? 0} / interval {formatCadence(agent.heartbeat.idleTimeoutMs)}</p>
+              </div>
+              <div className="rounded-md border border-white/[0.04] bg-white/[0.015] px-2.5 py-1.5">
+                <span className="text-[12px] text-slate-400">Loop Flag</span>
+                <p className="font-semibold text-slate-200 text-[11px]">{agent.heartbeat.continuous ? 'on' : 'off'}</p>
+              </div>
+              <div className="rounded-md border border-white/[0.04] bg-white/[0.015] px-2.5 py-1.5">
+                <span className="text-[12px] text-slate-400">Recovery</span>
+                <p className="font-semibold text-slate-200 text-[11px]">{agent.heartbeat.recoveryMode ? 'on' : 'off'}</p>
+              </div>
+            </div>
+          </div>
+        )
+      })}
+    </div>
+  )
+})
+
+const MonitorPerformancePanel = memo(function MonitorPerformancePanel({ visibleAgents }: { visibleAgents: OpenClawAgent[] }) {
+  const operationStates = useNexusStore((state) => state.operationStates)
   const agentResponses = useNexusStore((state) => state.agentResponses)
   const latestReport = useNexusStore((state) => state.missionReports[0])
   const busyAgentIds = useNexusStore((state) => state.busyAgentIds)
-  const resetSimulation = useNexusStore((state) => state.resetSimulation)
-  const { status: runtimeStatus, error: runtimeError, refresh: refreshRuntimeStatus } = useRuntimeStatus(5000)
-
-  const [tab, setTab] = useState<MonitorTab>('gateway')
-  const [doctorRun, setDoctorRun] = useState<DoctorRun | null>(null)
-  const [doctorError, setDoctorError] = useState('')
-  const [doctorBusy, setDoctorBusy] = useState(false)
-  const [gatewayRestartBusy, setGatewayRestartBusy] = useState(false)
-  const [gatewayRestartError, setGatewayRestartError] = useState('')
-  const [dismissedDoctorRunKey, setDismissedDoctorRunKey] = useState(readDismissedDoctorRunKey)
-  const [cleanSlateBusy, setCleanSlateBusy] = useState(false)
-  const [cleanSlateError, setCleanSlateError] = useState('')
-  const [cleanSlateResult, setCleanSlateResult] = useState<RuntimeMonitorClearResult | null>(null)
-  const [failedPortraitKeys, setFailedPortraitKeys] = useState<Set<string>>(() => new Set())
-
-  const activePartyIdSet = useMemo(() => new Set(activePartyIds), [activePartyIds])
-  const busyAgentIdSet = useMemo(() => new Set(busyAgentIds), [busyAgentIds])
-  const visibleAgents = useMemo(() => agents.filter((agent) => activePartyIdSet.has(agent.id)), [agents, activePartyIdSet])
   const visibleAgentIds = useMemo(() => new Set(visibleAgents.map((agent) => agent.id)), [visibleAgents])
-  const agentById = useMemo(() => new Map(agents.map((agent) => [agent.id, agent])), [agents])
+  const busyAgentIdSet = useMemo(() => new Set(busyAgentIds), [busyAgentIds])
   const recentResponsesByAgent = useMemo(() => {
     const grouped = new Map<string, AgentResponse[]>()
     for (const response of agentResponses.slice(0, 80)) {
@@ -1285,13 +1307,40 @@ export function LiveOperationMonitor() {
     }
     return metrics
   }, [busyAgentIdSet, operationStates, recentResponsesByAgent, visibleAgents])
-  const persistedDoctorRun = runtimeStatus?.diagnostics?.doctor?.lastRun || null
-  const rawDisplayedDoctorRun = doctorRun || (doctorError ? null : persistedDoctorRun)
-  const rawDisplayedDoctorRunKey = doctorRunDismissKey(rawDisplayedDoctorRun)
-  const doctorPanelDismissed = !doctorError && Boolean(rawDisplayedDoctorRunKey) && rawDisplayedDoctorRunKey === dismissedDoctorRunKey
-  const displayedDoctorRun = doctorPanelDismissed ? null : rawDisplayedDoctorRun
-  const displayedDoctorRunPersisted = !doctorRun && !doctorError && Boolean(persistedDoctorRun) && !doctorPanelDismissed
-  const displayedDoctorRunStale = displayedDoctorRunPersisted && doctorSnapshotIsStale(displayedDoctorRun)
+
+  return (
+    <div className="grid gap-3">
+      {visibleAgents.map((agent) => (
+        <div key={agent.id} className="rounded-xl border border-white/[0.04] bg-white/[0.015] p-4">
+          <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+            <p className="text-[13px] font-bold text-slate-100">{agent.name}</p>
+            <span className="rounded-full border border-cyan-400/15 bg-cyan-400/[0.04] px-2.5 py-1 text-[12px] font-semibold text-cyan-100/90">
+              {(liveMetricsByAgent.get(agent.id)?.turns || 0)} turns · {liveMetricsByAgent.get(agent.id)?.lastTurnAt ? new Date(liveMetricsByAgent.get(agent.id)!.lastTurnAt!).toLocaleTimeString() : 'no runs'}
+            </span>
+          </div>
+          <div className="grid gap-3 md:grid-cols-4">
+            <MetricBar label="Efficiency" value={liveMetricsByAgent.get(agent.id)?.efficiency || 0} />
+            <MetricBar label="Runtime" value={liveMetricsByAgent.get(agent.id)?.runtime || 0} />
+            <MetricBar label="Stability" value={liveMetricsByAgent.get(agent.id)?.stability || 0} />
+            <MetricBar label="Success" value={liveMetricsByAgent.get(agent.id)?.successRate || 0} />
+          </div>
+        </div>
+      ))}
+      {latestReport && (
+        <div className="rounded-xl border border-cyan-400/15 bg-cyan-400/[0.04] p-3.5">
+          <p className="text-[11px] text-cyan-200/90 leading-relaxed">
+            Last report: efficiency {formatReportMetric(latestReport.efficiencyRating)}, drift {formatReportMetric(latestReport.soulDrift)}, errors {formatReportMetric(latestReport.errors)}, XP {formatReportMetric(latestReport.xpGained)}
+          </p>
+        </div>
+      )}
+    </div>
+  )
+})
+
+const MonitorActivityPanel = memo(function MonitorActivityPanel({ agentById }: { agentById: Map<string, OpenClawAgent> }) {
+  const agentResponses = useNexusStore((state) => state.agentResponses)
+  const missionFeed = useNexusStore((state) => state.missionFeed)
+  const [failedPortraitKeys, setFailedPortraitKeys] = useState<Set<string>>(() => new Set())
   const activity = useMemo(() => {
     const items = [
       ...agentResponses.slice(0, 18).map((entry) => ({ item: makeResponseActivity(entry), timestampMs: Date.parse(entry.timestamp) })),
@@ -1302,6 +1351,102 @@ export function LiveOperationMonitor() {
       .slice(0, 18)
       .map((entry) => entry.item)
   }, [agentResponses, missionFeed])
+
+  return (
+    <div className="grid gap-3">
+      {activity.map((item) => {
+        const agent = item.agentId ? agentById.get(item.agentId) : undefined
+        const isControlCenter = item.kind === 'event' && !item.agentId
+        const isWorkingStatus = isControlCenter && isWorkingDelegationText(item.detail)
+        const portraitSrc = agent ? agentPortraitSrc(agent.id, agent.portrait) : ''
+        const portraitKey = agent && portraitSrc ? `${agent.id}::${portraitSrc}` : ''
+        const portraitFailed = portraitKey ? failedPortraitKeys.has(portraitKey) : false
+        return (
+          <div key={`${item.kind}-${item.id}`} className={`relative overflow-hidden rounded-xl border p-3.5 ${
+            isControlCenter
+              ? 'border-white/[0.045] bg-zinc-950/35'
+              : item.ok
+                ? 'border-white/[0.04] bg-white/[0.015]'
+                : 'border-rose-400/15 bg-rose-400/[0.03]'
+          }`}>
+            <div className={`pointer-events-none absolute inset-y-0 left-0 w-0.5 ${isControlCenter ? 'bg-slate-600/45' : 'dy-activity-rail'}`} />
+            <div className="flex gap-3 pl-2">
+              <div className={`relative h-12 w-12 shrink-0 overflow-hidden rounded-xl ring-1 ${isControlCenter ? 'bg-zinc-950/60 ring-white/[0.06]' : 'ring-white/10'}`}>
+                {isControlCenter ? (
+                  <img src={CONTROL_CENTER_LOGO_SRC} alt="" className="h-full w-full object-cover opacity-80" />
+                ) : portraitSrc && !portraitFailed ? (
+                  <img
+                    src={portraitSrc}
+                    alt=""
+                    className="h-full w-full object-cover"
+                    onError={() => setFailedPortraitKeys((current) => new Set(current).add(portraitKey))}
+                  />
+                ) : (
+                  <div className="flex h-full w-full items-center justify-center bg-white/[0.02] text-sm font-bold text-slate-600">{agent?.name?.charAt(0) || 'O'}</div>
+                )}
+                {item.ok && !isControlCenter && <span className="dy-activity-dot absolute right-0.5 top-0.5 h-2 w-2 rounded-full" data-tone="emerald" />}
+                {isWorkingStatus && <span className="dy-activity-dot absolute right-1 top-1 h-2 w-2 rounded-full animate-pulse" data-tone="neutral" />}
+              </div>
+              <div className="min-w-0 flex-1">
+                <div className="flex flex-wrap items-center gap-2">
+                  <p className={`truncate text-[12px] font-bold ${isControlCenter ? 'text-slate-300' : 'text-slate-100'}`}>{agent?.name || item.agentId || 'Control Center'}</p>
+                  <Badge className="dy-activity-status rounded-full border px-2 py-0.5 text-[11px] font-semibold uppercase tracking-[0.08em]" data-status={isControlCenter ? 'control' : item.ok ? 'ok' : 'blocked'} tone={activityStatusTone(item, isControlCenter)} size="micro">{item.ok ? item.title : 'Blocked'}</Badge>
+                  {item.failureKind && (
+                    <Badge className="rounded-full border border-amber-300/15 bg-amber-300/[0.04] px-2 py-0.5 text-[11px] font-semibold uppercase tracking-[0.08em] text-amber-100" tone="warning" size="micro">
+                      {item.failureKind.replace(/_/g, ' ')}
+                    </Badge>
+                  )}
+                  <span className="font-mono text-[12px] text-slate-400">{new Date(item.timestamp).toLocaleTimeString()}</span>
+                </div>
+                <p className={`mt-1.5 text-[12px] leading-relaxed ${isControlCenter ? 'text-slate-400' : 'text-slate-300/90'}`}><LiveText text={item.detail} /></p>
+                {item.files.length > 0 && (
+                  <div className="mt-2 flex flex-wrap gap-1.5">
+                    {item.files.map((file) => <span key={file} className="max-w-[240px] truncate rounded-md border border-amber-300/15 bg-amber-300/[0.04] px-2 py-1 font-mono text-[12px] text-amber-100">{file}</span>)}
+                  </div>
+                )}
+              </div>
+            </div>
+          </div>
+        )
+      })}
+      {!activity.length && <div className="rounded-xl border border-dashed border-white/[0.06] py-10 text-center text-[12px] font-medium text-slate-400">No activity recorded.</div>}
+    </div>
+  )
+})
+
+export const LiveOperationMonitor = memo(function LiveOperationMonitor({
+  status: runtimeStatus,
+  error: runtimeError,
+  onRefresh: refreshRuntimeStatus,
+}: {
+  status: RuntimeStatus | null
+  error: string
+  onRefresh: () => void
+}) {
+  const activePartyIds = useNexusStore((state) => state.activePartyIds)
+  const agents = useNexusStore((state) => state.agents)
+  const resetSimulation = useNexusStore((state) => state.resetSimulation)
+  const [tab, setTab] = useState<MonitorTab>('gateway')
+  const [doctorRun, setDoctorRun] = useState<DoctorRun | null>(null)
+  const [doctorError, setDoctorError] = useState('')
+  const [doctorBusy, setDoctorBusy] = useState(false)
+  const [gatewayRestartBusy, setGatewayRestartBusy] = useState(false)
+  const [gatewayRestartError, setGatewayRestartError] = useState('')
+  const [dismissedDoctorRunKey, setDismissedDoctorRunKey] = useState(readDismissedDoctorRunKey)
+  const [cleanSlateBusy, setCleanSlateBusy] = useState(false)
+  const [cleanSlateError, setCleanSlateError] = useState('')
+  const [cleanSlateResult, setCleanSlateResult] = useState<RuntimeMonitorClearResult | null>(null)
+
+  const activePartyIdSet = useMemo(() => new Set(activePartyIds), [activePartyIds])
+  const visibleAgents = useMemo(() => agents.filter((agent) => activePartyIdSet.has(agent.id)), [agents, activePartyIdSet])
+  const agentById = useMemo(() => new Map(agents.map((agent) => [agent.id, agent])), [agents])
+  const persistedDoctorRun = runtimeStatus?.diagnostics?.doctor?.lastRun || null
+  const rawDisplayedDoctorRun = doctorRun || (doctorError ? null : persistedDoctorRun)
+  const rawDisplayedDoctorRunKey = doctorRunDismissKey(rawDisplayedDoctorRun)
+  const doctorPanelDismissed = !doctorError && Boolean(rawDisplayedDoctorRunKey) && rawDisplayedDoctorRunKey === dismissedDoctorRunKey
+  const displayedDoctorRun = doctorPanelDismissed ? null : rawDisplayedDoctorRun
+  const displayedDoctorRunPersisted = !doctorRun && !doctorError && Boolean(persistedDoctorRun) && !doctorPanelDismissed
+  const displayedDoctorRunStale = displayedDoctorRunPersisted && doctorSnapshotIsStale(displayedDoctorRun)
 
   const runDoctor = async () => {
     setDoctorBusy(true)
@@ -1453,135 +1598,11 @@ export function LiveOperationMonitor() {
         role="tabpanel"
         aria-labelledby={`monitor-tab-${tab}`}
       >
-        {tab === 'heartbeat' && (
-          <div className="grid gap-3 md:grid-cols-2">
-            {visibleAgents.map((agent) => {
-              const op = operationStates[agent.id]
-              return (
-                <div key={agent.id} className="rounded-xl border border-white/[0.04] bg-white/[0.015] p-4">
-                  <div className="flex items-center justify-between gap-3">
-                    <p className="text-[13px] font-bold text-slate-100">{agent.name}</p>
-                    <StatusChip
-                      label="Heartbeat"
-                      value={op?.heartbeatStatus ?? 'dormant'}
-                      state={op?.heartbeatStatus ?? 'dormant'}
-                      tone={heartbeatStatusTone(op?.heartbeatStatus)}
-                      className={`rounded-full border px-2.5 py-1 text-[11px] font-semibold uppercase tracking-[0.10em] ${statusClass(op?.heartbeatStatus)}`}
-                    />
-                  </div>
-                  <div className="mt-3.5 grid gap-2 sm:grid-cols-2">
-                    <div className="rounded-md border border-white/[0.04] bg-white/[0.015] px-2.5 py-1.5">
-                      <span className="text-[12px] text-slate-400">Cron Cadence</span>
-                      <p className="font-semibold text-slate-200 text-[11px]">{formatCadence(agent.heartbeat.tickIntervalMs)}</p>
-                    </div>
-                    <div className="rounded-md border border-white/[0.04] bg-white/[0.015] px-2.5 py-1.5">
-                      <span className="text-[12px] text-slate-400">Retry</span>
-                      <p className="font-semibold text-slate-200 text-[11px]">{op?.retryCount ?? 0} / interval {formatCadence(agent.heartbeat.idleTimeoutMs)}</p>
-                    </div>
-                    <div className="rounded-md border border-white/[0.04] bg-white/[0.015] px-2.5 py-1.5">
-                      <span className="text-[12px] text-slate-400">Loop Flag</span>
-                      <p className="font-semibold text-slate-200 text-[11px]">{agent.heartbeat.continuous ? 'on' : 'off'}</p>
-                    </div>
-                    <div className="rounded-md border border-white/[0.04] bg-white/[0.015] px-2.5 py-1.5">
-                      <span className="text-[12px] text-slate-400">Recovery</span>
-                      <p className="font-semibold text-slate-200 text-[11px]">{agent.heartbeat.recoveryMode ? 'on' : 'off'}</p>
-                    </div>
-                  </div>
-                </div>
-              )
-            })}
-          </div>
-        )}
+        {tab === 'heartbeat' && <MonitorHeartbeatPanel visibleAgents={visibleAgents} />}
 
-        {tab === 'performance' && (
-          <div className="grid gap-3">
-            {visibleAgents.map((agent) => (
-              <div key={agent.id} className="rounded-xl border border-white/[0.04] bg-white/[0.015] p-4">
-                <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
-                  <p className="text-[13px] font-bold text-slate-100">{agent.name}</p>
-                  <span className="rounded-full border border-cyan-400/15 bg-cyan-400/[0.04] px-2.5 py-1 text-[12px] font-semibold text-cyan-100/90">
-                    {(liveMetricsByAgent.get(agent.id)?.turns || 0)} turns · {liveMetricsByAgent.get(agent.id)?.lastTurnAt ? new Date(liveMetricsByAgent.get(agent.id)!.lastTurnAt!).toLocaleTimeString() : 'no runs'}
-                  </span>
-                </div>
-                <div className="grid gap-3 md:grid-cols-4">
-                  <MetricBar label="Efficiency" value={liveMetricsByAgent.get(agent.id)?.efficiency || 0} />
-                  <MetricBar label="Runtime" value={liveMetricsByAgent.get(agent.id)?.runtime || 0} />
-                  <MetricBar label="Stability" value={liveMetricsByAgent.get(agent.id)?.stability || 0} />
-                  <MetricBar label="Success" value={liveMetricsByAgent.get(agent.id)?.successRate || 0} />
-                </div>
-              </div>
-            ))}
-            {latestReport && (
-              <div className="rounded-xl border border-cyan-400/15 bg-cyan-400/[0.04] p-3.5">
-                <p className="text-[11px] text-cyan-200/90 leading-relaxed">
-                  Last report: efficiency {formatReportMetric(latestReport.efficiencyRating)}, drift {formatReportMetric(latestReport.soulDrift)}, errors {formatReportMetric(latestReport.errors)}, XP {formatReportMetric(latestReport.xpGained)}
-                </p>
-              </div>
-            )}
-          </div>
-        )}
+        {tab === 'performance' && <MonitorPerformancePanel visibleAgents={visibleAgents} />}
 
-        {tab === 'logs' && (
-          <div className="grid gap-3">
-            {activity.map((item, index) => {
-              const agent = item.agentId ? agentById.get(item.agentId) : undefined
-              const isControlCenter = item.kind === 'event' && !item.agentId
-              const isWorkingStatus = isControlCenter && isWorkingDelegationText(item.detail)
-              const portraitSrc = agent ? agentPortraitSrc(agent.id, agent.portrait) : ''
-              const portraitKey = agent && portraitSrc ? `${agent.id}::${portraitSrc}` : ''
-              const portraitFailed = portraitKey ? failedPortraitKeys.has(portraitKey) : false
-              return (
-                <motion.div key={`${item.kind}-${item.id}`} initial={{ opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: Math.min(index * 0.02, 0.15) }}
-                  className={`relative overflow-hidden rounded-xl border p-3.5 ${
-                    isControlCenter
-                      ? 'border-white/[0.045] bg-zinc-950/35'
-                      : item.ok
-                        ? 'border-white/[0.04] bg-white/[0.015]'
-                        : 'border-rose-400/15 bg-rose-400/[0.03]'
-                  }`}>
-                  <div className={`pointer-events-none absolute inset-y-0 left-0 w-0.5 ${isControlCenter ? 'bg-slate-600/45' : 'dy-activity-rail'}`} />
-                  <div className="flex gap-3 pl-2">
-                    <div className={`relative h-12 w-12 shrink-0 overflow-hidden rounded-xl ring-1 ${isControlCenter ? 'bg-zinc-950/60 ring-white/[0.06]' : 'ring-white/10'}`}>
-                      {isControlCenter ? (
-                        <img src={CONTROL_CENTER_LOGO_SRC} alt="" className="h-full w-full object-cover opacity-80" />
-                      ) : portraitSrc && !portraitFailed ? (
-                        <img
-                          src={portraitSrc}
-                          alt=""
-                          className="h-full w-full object-cover"
-                          onError={() => setFailedPortraitKeys((current) => new Set(current).add(portraitKey))}
-                        />
-                      ) : (
-                        <div className="flex h-full w-full items-center justify-center bg-white/[0.02] text-sm font-bold text-slate-600">{agent?.name?.charAt(0) || 'O'}</div>
-                      )}
-                      {item.ok && !isControlCenter && <span className="dy-activity-dot absolute right-0.5 top-0.5 h-2 w-2 rounded-full" data-tone="emerald" />}
-                      {isWorkingStatus && <span className="dy-activity-dot absolute right-1 top-1 h-2 w-2 rounded-full animate-pulse" data-tone="neutral" />}
-                    </div>
-                    <div className="min-w-0 flex-1">
-                      <div className="flex flex-wrap items-center gap-2">
-                        <p className={`truncate text-[12px] font-bold ${isControlCenter ? 'text-slate-300' : 'text-slate-100'}`}>{agent?.name || item.agentId || 'Control Center'}</p>
-                        <Badge className="dy-activity-status rounded-full border px-2 py-0.5 text-[11px] font-semibold uppercase tracking-[0.08em]" data-status={isControlCenter ? 'control' : item.ok ? 'ok' : 'blocked'} tone={activityStatusTone(item, isControlCenter)} size="micro">{item.ok ? item.title : 'Blocked'}</Badge>
-                        {item.failureKind && (
-                          <Badge className="rounded-full border border-amber-300/15 bg-amber-300/[0.04] px-2 py-0.5 text-[11px] font-semibold uppercase tracking-[0.08em] text-amber-100" tone="warning" size="micro">
-                            {item.failureKind.replace(/_/g, ' ')}
-                          </Badge>
-                        )}
-                        <span className="font-mono text-[12px] text-slate-400">{new Date(item.timestamp).toLocaleTimeString()}</span>
-                      </div>
-                      <p className={`mt-1.5 text-[12px] leading-relaxed ${isControlCenter ? 'text-slate-400' : 'text-slate-300/90'}`}><LiveText text={item.detail} /></p>
-                      {item.files.length > 0 && (
-                        <div className="mt-2 flex flex-wrap gap-1.5">
-                          {item.files.map((file) => <span key={file} className="max-w-[240px] truncate rounded-md border border-amber-300/15 bg-amber-300/[0.04] px-2 py-1 font-mono text-[12px] text-amber-100">{file}</span>)}
-                        </div>
-                      )}
-                    </div>
-                  </div>
-                </motion.div>
-              )
-            })}
-            {!activity.length && <div className="rounded-xl border border-dashed border-white/[0.06] py-10 text-center text-[12px] font-medium text-slate-400">No activity recorded.</div>}
-          </div>
-        )}
+        {tab === 'logs' && <MonitorActivityPanel agentById={agentById} />}
 
         {tab === 'gateway' && (
           <RuntimeGatewayPanel status={runtimeStatus} error={runtimeError} agentById={agentById} onRefresh={refreshRuntimeStatus} />
@@ -1589,4 +1610,4 @@ export function LiveOperationMonitor() {
       </div>
     </section>
   )
-}
+})

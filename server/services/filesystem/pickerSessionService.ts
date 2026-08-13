@@ -442,7 +442,7 @@ export function createPickerSessionService(options: PickerSessionServiceOptions)
         'if ([string]::IsNullOrWhiteSpace($initialDirectory) -or -not (Test-Path -LiteralPath $initialDirectory -PathType Container)) { $initialDirectory = [System.Environment]::GetFolderPath("Pictures") }',
         'if ([string]::IsNullOrWhiteSpace($initialDirectory) -or -not (Test-Path -LiteralPath $initialDirectory -PathType Container)) { $initialDirectory = [System.Environment]::GetFolderPath("DesktopDirectory") }',
         '$owner = New-Object System.Windows.Forms.Form',
-        '$owner.Text = "DystopAI Profile Picture"',
+        '$owner.Text = "Automnia Profile Picture"',
         '$owner.StartPosition = "CenterScreen"',
         '$owner.Size = New-Object System.Drawing.Size(1, 1)',
         '$owner.TopMost = $true',
@@ -805,7 +805,7 @@ export function createPickerSessionService(options: PickerSessionServiceOptions)
         '    $initialDirectory = [System.Environment]::GetFolderPath("DesktopDirectory")',
         '  }',
         '  $owner = New-Object System.Windows.Forms.Form',
-        '  $owner.Text = "DystopAI Profile Picture"',
+        '  $owner.Text = "Automnia Profile Picture"',
         '  $owner.StartPosition = "CenterScreen"',
         '  $owner.Size = New-Object System.Drawing.Size(320, 80)',
         '  $owner.TopMost = $true',
@@ -836,7 +836,7 @@ export function createPickerSessionService(options: PickerSessionServiceOptions)
         '',
       ].join('\n')
       await fsApi.writeFile(scriptPath, script, 'utf-8')
-      await writeWindowsPickerLauncher(launcherPath, 'DystopAI Profile Picture', scriptPath, outputPath, pickerStart, fsApi)
+      await writeWindowsPickerLauncher(launcherPath, 'Automnia Profile Picture', scriptPath, outputPath, pickerStart, fsApi)
       const launcher = spawnProcess('cmd.exe', ['/d', '/s', '/c', launcherPath], {
         detached: true,
         stdio: 'ignore',

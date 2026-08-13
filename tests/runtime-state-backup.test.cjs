@@ -29,7 +29,7 @@ function createState(root) {
 }
 
 test('runtime state backup verifies and restores durable files', () => {
-  const root = tempRoot('dystopai-backup-test-')
+  const root = tempRoot('automnia-backup-test-')
   try {
     const state = createState(root)
     const backups = path.join(root, 'backups')
@@ -54,7 +54,7 @@ test('runtime state backup verifies and restores durable files', () => {
 })
 
 test('force restore preserves the prior state and non-force restore refuses data loss', () => {
-  const root = tempRoot('dystopai-backup-force-')
+  const root = tempRoot('automnia-backup-force-')
   try {
     const state = createState(root)
     const backup = createStateBackup({ sourceRoot: state, backupParent: path.join(root, 'backups'), backupName: 'snapshot' })
@@ -73,7 +73,7 @@ test('force restore preserves the prior state and non-force restore refuses data
 })
 
 test('backup validation rejects missing sources, duplicate and unsafe manifest paths', () => {
-  const root = tempRoot('dystopai-backup-invalid-')
+  const root = tempRoot('automnia-backup-invalid-')
   try {
     assert.throws(() => collectSourceFiles(path.join(root, 'missing')), /does not exist/)
     const state = createState(root)

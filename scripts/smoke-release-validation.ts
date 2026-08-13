@@ -25,7 +25,7 @@ assert.match(validatorSource, /parseChecksumManifest/, 'release validation must 
 assert.match(validatorSource, /sha256File/, 'release validation must recompute artifact checksums')
 assert.match(validatorSource, /artifactCount < 1/, 'release validation must require packaged artifacts by default')
 assert.match(validatorSource, /crypto\.verify\(null, checksums, publicKey, signature\)/, 'release validation must verify release signatures when present')
-assert.match(validatorSource, /DYSTOPAI_RELEASE_VALIDATE_ALLOW_NO_ARTIFACTS/, 'release validation must provide an explicit no-artifact escape hatch')
+assert.match(validatorSource, /AUTOMNIA_RELEASE_VALIDATE_ALLOW_NO_ARTIFACTS/, 'release validation must provide an explicit no-artifact escape hatch')
 assert.match(validatorSource, /AUTOMNIA_RELEASE_REQUIRE_SIGNING/, 'release validation must support mandatory public-release signing')
 assert.match(validatorSource, /distribution-signing\.json/, 'release validation must require consumer distribution signing evidence for public builds')
 assert.match(validatorSource, /authenticode/, 'release validation must require Windows Authenticode evidence for public Windows builds')
@@ -55,16 +55,16 @@ function run(command: string, args: string[], env: NodeJS.ProcessEnv, expectedSt
   return result
 }
 
-const tempRoot = mkdtempSync(path.join(tmpdir(), 'dystopai-release-validation-'))
+const tempRoot = mkdtempSync(path.join(tmpdir(), 'automnia-release-validation-'))
 const artifactRoot = path.join(tempRoot, 'release')
 const evidenceDir = path.join(artifactRoot, 'evidence')
 const runtimeRoot = path.join(tempRoot, 'runtime-bundles')
 const nodeRuntimeDir = path.join(runtimeRoot, 'toolchains', 'node')
 const codexRuntimeDir = path.join(runtimeRoot, 'openclaw-codex', 'codex')
 const env = {
-  DYSTOPAI_RELEASE_ARTIFACT_ROOT: artifactRoot,
-  DYSTOPAI_RELEASE_EVIDENCE_DIR: evidenceDir,
-  DYSTOPAI_RUNTIME_BUNDLE_ROOT: runtimeRoot,
+  AUTOMNIA_RELEASE_ARTIFACT_ROOT: artifactRoot,
+  AUTOMNIA_RELEASE_EVIDENCE_DIR: evidenceDir,
+  AUTOMNIA_RUNTIME_BUNDLE_ROOT: runtimeRoot,
 }
 
 mkdirSync(path.join(artifactRoot, 'win-unpacked'), { recursive: true })
@@ -72,7 +72,7 @@ mkdirSync(nodeRuntimeDir, { recursive: true })
 mkdirSync(codexRuntimeDir, { recursive: true })
 writeFileSync(path.join(artifactRoot, 'win-unpacked', 'Automnia AI Nexus.exe'), 'packaged-app-binary-placeholder\n')
 writeFileSync(path.join(artifactRoot, 'Automnia AI Nexus-Setup-0.0.6.exe'), 'windows-installer-placeholder\n')
-writeFileSync(path.join(nodeRuntimeDir, '.dystopai-runtime-bundle.json'), `${JSON.stringify({
+writeFileSync(path.join(nodeRuntimeDir, '.automnia-runtime-bundle.json'), `${JSON.stringify({
   schema: 1,
   generatedAt: '2026-06-24T00:00:00.000Z',
   node: {
@@ -82,7 +82,7 @@ writeFileSync(path.join(nodeRuntimeDir, '.dystopai-runtime-bundle.json'), `${JSO
     shasumsUrl: 'https://nodejs.org/dist/v24.16.0/SHASUMS256.txt',
   },
 }, null, 2)}\n`)
-writeFileSync(path.join(codexRuntimeDir, '.dystopai-runtime-bundle.json'), `${JSON.stringify({
+writeFileSync(path.join(codexRuntimeDir, '.automnia-runtime-bundle.json'), `${JSON.stringify({
   schema: 1,
   generatedAt: '2026-06-24T00:00:00.000Z',
   codex: {
@@ -91,7 +91,7 @@ writeFileSync(path.join(codexRuntimeDir, '.dystopai-runtime-bundle.json'), `${JS
     version: '2026.7.1-1',
     integrity: 'sha512-fRQITjqjC4Q/M6WmkR9XPWPuL+7vcvyVUWIDztB08X2G/mhzSwCYwQp4hugxAtuKmO3yx/7ULMK3nyeKsg5zGw==',
     tarball: 'https://registry.npmjs.org/@openclaw/codex/-/codex-2026.7.1-1.tgz',
-    lockfile: '.dystopai-runtime-package-lock.json',
+    lockfile: '.automnia-runtime-package-lock.json',
     dependencies: {
       '@openai/codex': {
         version: '0.139.0',
@@ -131,7 +131,7 @@ assert.match(validation.stderr, /signed update manifest/i, 'public release valid
 
 run(process.execPath, ['scripts/generate-update-manifest.cjs'], {
   ...env,
-  DYSTOPAI_UPDATE_OUTPUT_DIR: path.join(artifactRoot, 'updates'),
+  AUTOMNIA_UPDATE_OUTPUT_DIR: path.join(artifactRoot, 'updates'),
   AUTOMNIA_UPDATE_REQUIRE_SIGNING: '1',
   AUTOMNIA_UPDATE_SIGNING_PRIVATE_KEY_PEM: privatePem,
   AUTOMNIA_UPDATE_SIGNING_KEY_ID: 'update-validation-smoke-key',
@@ -158,7 +158,7 @@ writeFileSync(path.join(evidenceDir, 'distribution-signing.json'), `${JSON.strin
       signing: {
         type: 'authenticode',
         status: 'verified',
-        signer: 'DystopAI Release Test Certificate',
+        signer: 'Automnia Release Test Certificate',
         thumbprint: '0123456789abcdef0123456789abcdef01234567',
         timestamp: '2026-06-24T00:00:00.000Z',
   verificationCommand: 'signtool verify /pa /tw "Automnia AI Nexus-Setup-0.0.6.exe"',

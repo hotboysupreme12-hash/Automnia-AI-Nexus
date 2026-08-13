@@ -7,7 +7,7 @@ import { fileURLToPath } from 'node:url'
 
 const root = fileURLToPath(new URL('..', import.meta.url))
 const script = path.join(root, 'scripts', 'setup-openclaw-gateway-auth.mjs')
-const tempRoot = mkdtempSync(path.join(tmpdir(), 'dystopai-gateway-auth-'))
+const tempRoot = mkdtempSync(path.join(tmpdir(), 'automnia-gateway-auth-'))
 
 try {
   const tokenOnlyHome = path.join(tempRoot, 'token-only')

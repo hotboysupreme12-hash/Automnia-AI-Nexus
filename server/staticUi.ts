@@ -43,6 +43,31 @@ export function registerStaticUi(app: Express, options: StaticUiOptions) {
     return !path.extname(decoded)
   }
 
+  // Vite fingerprints lazy chunks. During a local desktop rebuild the
+  // renderer can still hold an older index.html while the server is already
+  // serving the new dist directory. Resolve that short-lived version skew by
+  // matching a missing hashed asset to the current asset with the same logical
+  // name. This keeps a workspace switch from turning into a renderer crash.
+  const versionedAssetFallbackPath = async (requestPath: string) => {
+    if (!staticRoot) return null
+    const decoded = decodedRequestPathname(requestPath).replace(/\\/g, '/')
+    if (!decoded.startsWith('/assets/')) return null
+    const filename = path.posix.basename(decoded)
+    const match = filename.match(/^(.+)-([A-Za-z0-9_-]+)(\.[A-Za-z0-9]+)$/)
+    if (!match) return null
+
+    const assetRoot = path.resolve(staticRoot, 'assets')
+    if (!options.isInsidePath(staticRoot, assetRoot)) return null
+    const logicalPrefix = `${match[1]}-`
+    const extension = match[3]
+    const entries = await fs.readdir(assetRoot, { withFileTypes: true }).catch(() => [])
+    const candidates = entries
+      .filter((entry) => entry.isFile() && entry.name.startsWith(logicalPrefix) && entry.name.endsWith(extension))
+      .map((entry) => path.resolve(assetRoot, entry.name))
+      .filter((candidate) => options.isInsidePath(assetRoot, candidate))
+    return candidates.length === 1 ? candidates[0] : null
+  }
+
   const staticRootRealPath = async () => {
     if (!staticRoot) return ''
     staticRootRealPathPromise ||= fs.realpath(staticRoot)
@@ -109,6 +134,10 @@ export function registerStaticUi(app: Express, options: StaticUiOptions) {
       }
 
       let file = await safeOpenStaticFile(candidate)
+      if (!file) {
+        const fallback = await versionedAssetFallbackPath(req.path)
+        if (fallback) file = await safeOpenStaticFile(fallback)
+      }
       if (!file && staticRequestShouldFallbackToIndex(req.path) && req.accepts('html')) {
         file = await safeOpenStaticFile(path.join(staticRoot, 'index.html'))
       }

@@ -121,7 +121,7 @@ assert(clawTalkStreamConsoleBlock.includes('options.initializeSseResponse(res)')
 assert(clawTalkStreamConsoleBlock.includes('[...options.clawTalkConsoleEvents].reverse()'), 'ClawTalk console stream should replay buffered events')
 assert(clawTalkStreamConsoleBlock.includes("options.writeSseEvent(res, 'heartbeat'"), 'ClawTalk console stream should emit heartbeat events')
 assert(consolePanel.includes("import { createSseFrameParser } from '../../utils/sseStream'"), 'Command Console should parse authenticated ClawTalk SSE fetches')
-assert(consolePanel.includes("fetch(apiUrl('/api/openclaw/clawtalk-console/stream')"), 'Command Console should use fetch for the ClawTalk SSE stream so the auth bridge can attach bearer tokens')
+assert(consolePanel.includes("fetchControlCenterWithAuth(apiUrl('/api/openclaw/clawtalk-console/stream')"), 'Command Console should use the authenticated fetch helper for the ClawTalk SSE stream')
 assert(consolePanel.includes("headers: { Accept: 'text/event-stream' }"), 'Command Console should request ClawTalk SSE with an event-stream Accept header')
 assert(consolePanel.includes('response.body.getReader()'), 'Command Console should read ClawTalk SSE frames from the fetch response body')
 assert(!consolePanel.includes('new EventSource('), 'Command Console should not use EventSource because it cannot send Authorization headers')
@@ -147,20 +147,20 @@ assert(agentTurnBlock.includes('handoffOk'), 'agent-turn should preserve handoff
 assert(agentTurnBlock.includes('runtimeContext: agentRuntimeContextPayload(agent, context)'), 'agent-turn should preserve runtime context evidence')
 assert(agentTurnBlock.includes('compactHttpJsonPayload({'), 'agent-turn should compact large diagnostics before returning them')
 assert(agentTurnBlock.includes('const hostedCreditRoute = Boolean(isHostedCreditsActive?.())'), 'buffered agent turns should detect active hosted-credit licenses for every command')
-assert(agentTurnBlock.includes('const hostedPayload = await streamProviderAgentTurn('), 'buffered hosted turns should use the same metered relay as streamed turns')
-assert(agentTurnBlock.includes('return apiSuccess(res, compactHttpJsonPayload(hostedPayload))'), 'buffered hosted relay replies should remain canonical API data')
+assert(agentTurnBlock.includes('const hostedPayload = await streamProviderAgentTurn('), 'buffered hosted turns should use the same hosted Gateway provider route as streamed turns')
+assert(agentTurnBlock.includes('return apiSuccess(res, compactHttpJsonPayload(hostedPayload))'), 'buffered hosted Gateway replies should remain canonical API data')
 assert(agentTurnRoutes.includes('every message, including /runtime, /work, and /openclaw'), 'hosted billing should cover every explicit runtime command')
 assert(agentStreamingService.indexOf('const hostedRelayCredentials = skipHostedRouting ? null : options.getHostedRelayCredentials?.()') < agentStreamingService.indexOf('if (runtimeShortcut) {'), 'hosted billing preference must be selected before runtime shortcut routing')
-assert(agentStreamingService.includes("reason: 'automnia-cloud-local-fallback'"), 'hosted failures should use the configured local model fallback')
-assert(agentStreamingService.includes("hostedRelayCredentials.usagePriority === 'provider_first'"), 'subscribers should be able to select their connected provider first')
-assert(agentStreamingService.includes("reason: 'provider-to-automnia-fallback'"), 'provider-first failures should fall back to Automnia credits')
-assert(agentTurnRoutes.includes("label: cloudFirst ? 'Automnia credits first' : providerFirst ? 'My provider first'"), 'stream status should label the saved subscriber priority')
+assert(agentStreamingService.includes("billingRoute: 'openclaw-gateway-automnia-provider'"), 'hosted turns should be billed through the configured OpenClaw Automnia provider')
+assert(agentStreamingService.includes('nativeToolLoop: true'), 'hosted turns should preserve the native OpenClaw tool loop')
+assert(agentStreamingService.includes('usagePriority: hostedRelayCredentials.usagePriority'), 'hosted turns should preserve the selected billing priority in their Gateway result')
+assert(agentTurnRoutes.includes("label: cloudFirst ? 'Automnia credits via Gateway' : providerFirst ? 'My provider first'"), 'stream status should label the saved subscriber priority')
 assert(licenseContext.includes("apiRequest<LicenseInfo>('/api/license/usage-priority'"), 'the renderer should persist usage priority through the protected license API')
-assert(settingsPanel.includes('<option value="automnia_first">Automnia credits only (no BYOK fallback)</option>'), 'Account settings should expose strict Automnia priority')
-assert(settingsPanel.includes('<option value="provider_first">BYOK first + Automnia credits fallback</option>'), 'Account settings should expose provider-first priority')
-assert(settingsPanel.includes('<option value="byok_only">BYOK only (bypass subscription credits)</option>'), 'Account settings should expose BYOK-only priority')
-assert(modelSelector.includes("providerFirst ? 'My Provider First' : 'Automnia Credits First'"), 'model selection should label the active usage priority')
-assert(agentEditor.includes("providerFirst ? 'Primary Provider Model' : 'Provider Fallback Model'"), 'agent model settings should explain primary and fallback roles')
+assert(settingsPanel.includes('<option value="automnia_first">Subscription Relay</option>'), 'Account settings should expose the Subscription Relay priority')
+assert(settingsPanel.includes('<option value="provider_first"'), 'Account settings should expose provider-first priority')
+assert(settingsPanel.includes('<option value="byok_only"'), 'Account settings should expose BYOK-only priority')
+assert(modelSelector.includes("routePresentation.modelLabel"), 'model selection should label the active agent route')
+assert(agentEditor.includes('data-editor-managed-route'), 'agent model settings should show the managed Automnia route')
 
 assert(/apiSuccess\s*\(\s*res/.test(browserPreflightBlock), '/api/browser/preflight should return a canonical success envelope')
 assertNoRawJsonResponse('/api/browser/preflight', browserPreflightBlock)
@@ -183,7 +183,7 @@ assert(
   'nexusStore should delegate non-SSE agent-turn requests to src/api/agentTurns.ts',
 )
 assert(
-  agentTurnsApi.includes("fetch(apiUrl('/api/openclaw/agent-turn/stream')"),
+  agentTurnsApi.includes("fetchControlCenterWithAuth(apiUrl('/api/openclaw/agent-turn/stream')"),
   'renderer should call SSE agent-turn through the extracted agent-turn API helper',
 )
 assert(
@@ -280,8 +280,8 @@ assert(
   'agent-turn stream routes should give an active hosted entitlement priority over runtime shortcuts and the legacy forced-runtime flag',
 )
 assert(
-  agentTurnRoutes.includes("? 'automnia-cloud-relay'"),
-  'agent-turn stream failures should label Cloud Subscription failures as the Automnia credit route',
+  agentTurnRoutes.includes("const failureTransport = isHostedCreditsActive?.()\n        ? 'gateway-chat'"),
+  'agent-turn stream failures should preserve the Gateway transport for Cloud Subscription turns',
 )
 assert(
   agentTurnRoutes.includes("? 'gateway-chat'"),

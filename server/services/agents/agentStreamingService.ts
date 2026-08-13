@@ -83,12 +83,6 @@ export type AgentStreamingServiceOptions = {
     intentMessage?: string,
   ) => BufferedRuntimeReason | null
   getHostedRelayCredentials?: () => HostedRelayCandidateCredentials | null
-  streamAutomniaCloudRelay?: (
-    input: AgentStreamingInput,
-    emit: AgentTurnStreamEmitter,
-    signal: AbortSignal,
-    credentials: HostedRelayCredentials,
-  ) => Promise<Record<string, unknown>>
   runBufferedAgentTurnForStream: (
     input: Record<string, unknown>,
     emit: AgentTurnStreamEmitter,
@@ -194,7 +188,12 @@ export type AgentStreamingServiceOptions = {
     signal: AbortSignal
     emit: AgentTurnStreamEmitter
   }) => Promise<StreamedProviderReply>
-  runToolNative?: (toolName: string, toolArgs: unknown, signal: AbortSignal) => Promise<unknown>
+  /**
+   * Reconcile the server-side hosted balance after a Gateway turn. The
+   * Gateway/provider remains the source of truth for charging; this callback
+   * only refreshes the local account projection for the renderer.
+   */
+  reconcileHostedCreditBalance?: () => Promise<{ creditBalance: number | null } | null>
   classifyFailureKind: (
     message: string,
     fallback?: 'failed' | 'timeout' | 'aborted' | 'interrupted' | null,
@@ -229,217 +228,49 @@ export function createAgentStreamingService(options: AgentStreamingServiceOption
 
     const runtimeShortcut = options.parseAgentRuntimeShortcut(input.message)
 
-    // Hosted members can choose which paid route is attempted first. Both
-    // lanes are staged until success is known so a failed preferred route can
-    // fall back without briefly rendering a terminal error in the UI.
+    // Hosted members can choose which paid route is attempted first. Every
+    // hosted turn still goes through the native OpenClaw Gateway loop. The
+    // Automnia provider is configured in OpenClaw with the same model/provider
+    // contract as BYOK, so tool calls, exec, filesystem, browser, channels,
+    // retries, and session state all stay in one runtime.
     const relayCandidateCredentials = skipHostedRouting ? null : options.getHostedRelayCredentials?.()
     const hostedRelayCredentials: HostedRelayCredentials | null =
       isHostedRelayCredentials(relayCandidateCredentials)
         ? relayCandidateCredentials
         : null
-    const streamHostedRelay = options.streamAutomniaCloudRelay
-    if (hostedRelayCredentials && streamHostedRelay) {
-      // Tool-capable and channel-originated turns must stay inside OpenClaw's
-      // native loop. The gateway model is synchronised to the authenticated
-      // Automnia OpenAI-compatible provider before startup, so this preserves
-      // tool calls, channel delivery, and credit charging in one supported
-      // OpenClaw path instead of collapsing a tool request into a text relay.
-      if (input.forceOpenClawRuntime || (input.tools && input.tools.length > 0)) {
-        const runtimeResult = await streamProviderAgentTurn(input, emit, signal, true)
-        return {
-          ...runtimeResult,
-          usagePriority: hostedRelayCredentials.usagePriority,
-          fallbackUsed: false,
-          billingRoute: 'openclaw-configured-automnia-provider',
-        }
-      }
-      const hostedInput = runtimeShortcut
+    if (hostedRelayCredentials) {
+      const gatewayInput = runtimeShortcut
         ? {
             ...input,
             message: runtimeShortcut.message,
             intentMessage: runtimeShortcut.message,
           }
         : input
-      const localInput = {
-        ...hostedInput,
-        forceOpenClawRuntime: true,
-      }
-      const runCloud = async () => {
-        const events: Array<[string, Record<string, unknown>]> = []
-        const result = await streamHostedRelay(
-          hostedInput,
-          (event, data) => events.push([event, data]),
-          signal,
-          hostedRelayCredentials,
-        )
-        return { events, result }
-      }
-      const replay = (events: Array<[string, Record<string, unknown>]>) => {
-        for (const [event, data] of events) emit(event, data)
-      }
+      const runtimeResult = await options.runBufferedAgentTurnForStream(
+        {
+          ...gatewayInput,
+          forceOpenClawRuntime: true,
+        },
+        emit,
+        signal,
+        options.agentRuntimeShortcutReason(runtimeShortcut),
+      )
 
-      if (hostedRelayCredentials.usagePriority === 'provider_first') {
-        const providerEvents: Array<[string, Record<string, unknown>]> = []
-        const providerResult = await streamProviderAgentTurn(
-          localInput,
-          (event, data) => providerEvents.push([event, data]),
-          signal,
-          true,
-        ).catch((error) => ({
-          ok: false,
-          reply: options.redactHiddenReasoningAndSecrets(String(error)),
-          failureKind: options.classifyFailureKind(String(error), 'failed') || 'unknown',
-        }))
-        if (providerResult.ok === true) {
-          replay(providerEvents)
-          return {
-            ...providerResult,
-            usagePriority: 'provider_first',
-            fallbackUsed: false,
-          }
-        }
-
-        const fallbackMessage = 'Your connected provider could not complete this request. Using Automnia credits as the fallback.'
-        emit('status', {
-          transport: 'automnia-cloud-relay',
-          reason: 'provider-to-automnia-fallback',
-          mode: 'progress',
-          label: 'Automnia credit fallback',
-          message: fallbackMessage,
-          liveTokens: false,
-        })
-        const cloud = await runCloud()
-        const cloudReply = typeof cloud.result.reply === 'string' ? cloud.result.reply : ''
-        const cloudText = typeof cloud.result.text === 'string' ? cloud.result.text : ''
-        const hasCloudToolRequest = cloudReply.includes('[Runtime tool request:') || cloudText.includes('[Runtime tool request:') || cloud.events.some(([, data]) => typeof data?.text === 'string' && data.text.includes('[Runtime tool request:'))
-
-      if (hasCloudToolRequest) {
-        emit('status', {
-          transport: 'openclaw-interceptor',
-          reason: 'cloud-tool-request-intercepted',
-          mode: 'progress',
-          label: 'Tool Call Intercepted',
-          message: 'Intercepted raw tool request from Automnia Cloud Relay. Routing to native local runtime execution...',
-        })
-        const interceptedInput = { ...localInput, forceOpenClawRuntime: true }
-        const localResult = await streamProviderAgentTurn(interceptedInput, emit, signal, true)
-        return {
-          ...localResult,
-          usagePriority: 'provider_first',
-          fallbackUsed: true,
-          billingRoute: 'openclaw-configured-automnia-provider',
-        }
-      }
-        replay(cloud.events)
-        return {
-          ...cloud.result,
-          usagePriority: 'provider_first',
-          fallbackUsed: true,
-        }
-      }
-
-      const cloud = await runCloud()
-      const cloudReply = typeof cloud.result.reply === 'string' ? cloud.result.reply : ''
-      const cloudText = typeof cloud.result.text === 'string' ? cloud.result.text : ''
-      // Intercept and sanitize tool request syntax that might leak into the completion text.
-      // We look for raw strings like "[Runtime tool request: ...]" and ensure they are parsed
-      // or handled by the local runtime execution safety net instead of being rendered to the user.
-      const hasCloudToolRequest = cloudReply.includes('[Runtime tool request:') || 
-                                 cloudText.includes('[Runtime tool request:') || 
-                                 cloud.events.some(([, data]) => typeof data?.text === 'string' && data.text.includes('[Runtime tool request:'))
-
-      if (hasCloudToolRequest) {
-        // Prevent infinite loops if we are already inside the native local runtime.
-        if (input.forceOpenClawRuntime || (input.tools && input.tools.length > 0)) {
-          if (cloud.result.ok === true) {
-            replay(cloud.events)
-            return {
-              ...cloud.result,
-              usagePriority: 'automnia_first',
-              fallbackUsed: false,
-            }
-          }
-        }
-
-        emit('status', {
-          transport: 'openclaw-interceptor',
-          reason: 'cloud-tool-request-intercepted',
-          mode: 'progress',
-          label: 'Tool Call Intercepted',
-          message: 'Intercepted raw tool request leak from Automnia Cloud Relay. Routing to native local runtime execution...',
-        })
-        
-      // Use JSON-native tool call dispatch instead of regex parsing
-        if (options.runToolNative && cloud.result.toolCalls && Array.isArray(cloud.result.toolCalls) && cloud.result.toolCalls.length > 0) {
-           const call = cloud.result.toolCalls[0];
-           const toolName = call.function.name;
-           let toolArgs;
-           try {
-             toolArgs = JSON.parse(call.function.arguments);
-           } catch {
-             toolArgs = { input: call.function.arguments };
-           }
-           emit('status', { transport: 'openclaw-interceptor', label: 'Executing Native Tool', message: `Executing ${toolName}...` });
-           const localResult = await options.runToolNative(toolName, toolArgs, signal);
-           return { 
-             ok: true, 
-             reply: JSON.stringify(localResult), 
-             usagePriority: hostedRelayCredentials.usagePriority, 
-             fallbackUsed: true,
-             billingRoute: 'openclaw-configured-automnia-provider'
-           };
-        }
-
-        const interceptedInput = { ...localInput, forceOpenClawRuntime: true }
-        const localResult = await streamProviderAgentTurn(interceptedInput, emit, signal, true)
-        return {
-          ...localResult,
-          usagePriority: hostedRelayCredentials.usagePriority,
-          fallbackUsed: true,
-          billingRoute: 'openclaw-configured-automnia-provider',
-        }
-      }
-      if (cloud.result.ok === true) {
-        replay(cloud.events)
-        return {
-          ...cloud.result,
-          usagePriority: 'automnia_first',
-          fallbackUsed: false,
-        }
-      }
-
-      // A transient Cloud capacity response is not permission to silently
-      // change who bills the customer. The provisioner retries Vertex first;
-      // if it is still busy, preserve the Automnia route and let the customer
-      // retry instead of spending their connected-provider balance.
-      if (cloud.result.retryable === true) {
-        replay(cloud.events)
-        return {
-          ...cloud.result,
-          usagePriority: 'automnia_first',
-          fallbackUsed: false,
-        }
-      }
-
-      if (hostedRelayCredentials.usagePriority === 'automnia_first') {
-        const errorMessage = 'Automnia Cloud could not complete this request, and BYOK fallback is disabled.'
-        throw new Error(errorMessage)
-      }
-
-      const fallbackMessage = 'Automnia Cloud could not complete this request. Using the local fallback configured in Model Settings.'
-      emit('status', {
-        transport: 'gateway-chat',
-        reason: 'automnia-cloud-local-fallback',
-        mode: 'progress',
-        label: 'Local model fallback',
-        message: fallbackMessage,
-        liveTokens: true,
-      })
-      const localResult = await streamProviderAgentTurn(localInput, emit, signal, true)
+      // The provider performs the debit as part of the OpenAI-compatible
+      // request. Refresh only the local account projection after the Gateway
+      // turn has settled; a refresh failure must never turn a successful,
+      // already-billed agent run into an error.
+      const balance = options.reconcileHostedCreditBalance
+        ? await options.reconcileHostedCreditBalance().catch(() => null)
+        : null
       return {
-        ...localResult,
-        usagePriority: 'automnia_first',
-        fallbackUsed: true,
+        ...runtimeResult,
+        usagePriority: hostedRelayCredentials.usagePriority,
+        billingRoute: 'openclaw-gateway-automnia-provider',
+        nativeToolLoop: true,
+        ...(typeof balance?.creditBalance === 'number'
+          ? { remainingCredits: balance.creditBalance, creditBalanceSynchronized: true }
+          : {}),
       }
     }
 

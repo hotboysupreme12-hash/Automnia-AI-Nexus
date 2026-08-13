@@ -28,7 +28,7 @@ const launcherPath = process.platform === 'win32'
   ? path.join(unpackedRoot, 'Automnia AI Nexus.exe')
   : process.platform === 'darwin'
     ? path.join(macAppPath, 'Contents', 'MacOS', productName)
-  : path.join(unpackedRoot, 'dystopai')
+  : path.join(unpackedRoot, 'automnia')
 const electronRuntimePath = process.platform === 'win32'
   ? path.join(unpackedRoot, 'electron.exe')
   : launcherPath
@@ -130,7 +130,7 @@ async function waitForLogPatterns(logPath: string, patterns: RegExp[], timeoutMs
   throw new Error(`packaged Electron launch log did not contain ${missing}\n${content}`)
 }
 
-const tempRoot = mkdtempSync(path.join(tmpdir(), 'dystopai-packaged-launch-'))
+const tempRoot = mkdtempSync(path.join(tmpdir(), 'automnia-packaged-launch-'))
 const userDataDir = path.join(tempRoot, 'user-data')
 const openclawDir = path.join(tempRoot, 'openclaw')
 const workspaceRoot = path.join(tempRoot, 'workspace')
@@ -152,14 +152,14 @@ const env = {
   CONTROL_CENTER_AUTOSTART_GATEWAY: '0',
   CONTROL_CENTER_GATEWAY_CHAT_CLIENT: '0',
   CONTROL_CENTER_TOKEN: 'packaged-electron-e2e',
-  DYSTOPAI_ELECTRON_E2E: '1',
-  DYSTOPAI_ELECTRON_E2E_ALLOW_PARALLEL: '1',
-  DYSTOPAI_ELECTRON_E2E_LOG_PATH: logPath,
-  DYSTOPAI_ELECTRON_E2E_AUTO_QUIT_MS: '1500',
-  DYSTOPAI_ELECTRON_E2E_ASSERT_NAVIGATION: '1',
-  DYSTOPAI_ELECTRON_E2E_DISABLE_OPEN_EXTERNAL: '1',
-  DYSTOPAI_ELECTRON_E2E_SKIP_PORT_CLEANUP: '1',
-  DYSTOPAI_USER_DATA_DIR: userDataDir,
+  AUTOMNIA_ELECTRON_E2E: '1',
+  AUTOMNIA_ELECTRON_E2E_ALLOW_PARALLEL: '1',
+  AUTOMNIA_ELECTRON_E2E_LOG_PATH: logPath,
+  AUTOMNIA_ELECTRON_E2E_AUTO_QUIT_MS: '1500',
+  AUTOMNIA_ELECTRON_E2E_ASSERT_NAVIGATION: '1',
+  AUTOMNIA_ELECTRON_E2E_DISABLE_OPEN_EXTERNAL: '1',
+  AUTOMNIA_ELECTRON_E2E_SKIP_PORT_CLEANUP: '1',
+  AUTOMNIA_USER_DATA_DIR: userDataDir,
   OPENCLAW_STATE_DIR: openclawDir,
   OPENCLAW_HOME: openclawDir,
   CONTROL_CENTER_WORKSPACE_ROOT: workspaceRoot,
@@ -190,11 +190,11 @@ try {
   assert.equal(launcherStatus, 0, `packaged launcher exited ${launcherStatus}\n${launcherOutput}`)
 
   await waitForLogPatterns(logPath, [
-    /\[dystopai-e2e\] port-cleanup-skipped/,
-    /\[dystopai-e2e\] server-ready/,
-    /\[dystopai-e2e\] navigation-policy-ok/,
-    /\[dystopai-e2e\] auto-quit/,
-    /\[dystopai-e2e\] quit-cleanup-complete/,
+    /\[automnia-e2e\] port-cleanup-skipped/,
+    /\[automnia-e2e\] server-ready/,
+    /\[automnia-e2e\] navigation-policy-ok/,
+    /\[automnia-e2e\] auto-quit/,
+    /\[automnia-e2e\] quit-cleanup-complete/,
   ])
 } finally {
   killPackagedElectronProcesses()

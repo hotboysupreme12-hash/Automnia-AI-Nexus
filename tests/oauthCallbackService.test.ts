@@ -138,6 +138,45 @@ test('completes Google OAuth through a loopback-only callback listener without e
   }
 })
 
+test('opens a minimal Google account OAuth flow and verifies the subscriber before storing provider credentials', async () => {
+  const { service, state } = createHarness({
+    authenticateGoogleAccount: async (accessToken) => {
+      assert.equal(accessToken, 'google-access-secret')
+      return {
+        account: {
+          accountId: 'acct-subscriber',
+          email: 'operator@example.test',
+          hasPassword: true,
+          googleLinked: true,
+        },
+      }
+    },
+    googleAccountOAuthScopes: ['openid', 'email', 'profile'],
+  })
+  try {
+    const { session, launched } = await service.startGoogleAccountOAuthSession()
+    assert.equal(launched.ok, true)
+    assert.deepEqual(new URL(state.openUrls[0]).searchParams.get('scope')?.split(' '), ['openid', 'email', 'profile'])
+
+    const snapshot = service.callbackServerSnapshot()
+    const response = await getCallback(
+      snapshot.google.port!,
+      `/oauth2callback?state=${encodeURIComponent(session.state || '')}&code=google-code-secret`,
+    )
+    assert.equal(response.statusCode, 200)
+    assert.equal(session.status, 'complete')
+    assert.equal(state.persisted.length, 0)
+    assert.deepEqual(session.account, {
+      accountId: 'acct-subscriber',
+      email: 'operator@example.test',
+      hasPassword: true,
+      googleLinked: true,
+    })
+  } finally {
+    await service.closeOAuthCallbackServersForShutdown('test cleanup')
+  }
+})
+
 test('completes OpenAI Codex manual OAuth input and stores only redacted session result fields', async () => {
   const { service, state } = createHarness()
   try {

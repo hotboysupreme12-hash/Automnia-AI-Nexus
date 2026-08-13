@@ -210,7 +210,7 @@ test('plugin install service installs, enables, refreshes controls, schedules re
 })
 
 test('plugin install service repairs Windows stage rename failure and retries with force', async () => {
-  const tempRoot = await mkdtemp(path.join(os.tmpdir(), 'dystopai-plugin-install-'))
+  const tempRoot = await mkdtemp(path.join(os.tmpdir(), 'automnia-plugin-install-'))
   try {
     const extensionsDir = path.join(tempRoot, 'extensions')
     const sourcePath = path.join(extensionsDir, '.openclaw-install-stage-weather')
@@ -412,7 +412,7 @@ test('plugin command result quotes spaced args, strips ANSI, redacts output, and
 })
 
 test('plugin install service uses bundled Codex source and records post-install repair evidence', async () => {
-  const tempRoot = await mkdtemp(path.join(os.tmpdir(), 'dystopai-plugin-codex-'))
+  const tempRoot = await mkdtemp(path.join(os.tmpdir(), 'automnia-plugin-codex-'))
   try {
     const bundledRoot = path.join(tempRoot, 'bundled-codex')
     await mkdir(bundledRoot, { recursive: true })

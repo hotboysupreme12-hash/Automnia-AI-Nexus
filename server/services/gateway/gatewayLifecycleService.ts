@@ -111,6 +111,14 @@ export type GatewayStartupPluginRepairSummary = {
   clawTalkRegistryRefreshed?: boolean
 }
 
+export type GatewayMigrationStatus = {
+  active: boolean
+  startedAt: string | null
+  lastSeenAt: string | null
+  retryAfterAt: string | null
+  message: string
+}
+
 export type GatewayLifecycleServiceOptions = {
   gatewayHttpPort: number
   controlCenterPort: number
@@ -192,6 +200,47 @@ export function createGatewayLifecycleService(options: GatewayLifecycleServiceOp
   let gatewayStartupTimelineSeq = 0
   let gatewayStartupTimelineStartedAtMs = 0
   let gatewayHealthCheckInterval: NodeJS.Timeout | null = null
+  let gatewayMigrationStartedAt: string | null = null
+  let gatewayMigrationLastSeenAt: string | null = null
+  let gatewayMigrationRetryAfterAt: string | null = null
+
+  const gatewayMigrationMessage = 'OpenClaw is applying startup migrations. The Gateway may restart several times while this completes.'
+
+  function migrationRetryAfterFromText(value: string): string | null {
+    const match = value.match(/\b(20\d{2}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d{1,3})?Z)\b/)
+    return match?.[1] || null
+  }
+
+  function isGatewayMigrationInProgressText(value: string): boolean {
+    return /startup migrations? are already running|migrations? (?:are )?(?:already )?(?:running|in progress)|retry after .*\d{4}-\d{2}-\d{2}T/i.test(value)
+  }
+
+  function markGatewayMigrationInProgress(value: string): void {
+    if (!isGatewayMigrationInProgressText(value)) return
+    const now = new Date().toISOString()
+    if (!gatewayMigrationStartedAt) gatewayMigrationStartedAt = now
+    gatewayMigrationLastSeenAt = now
+    gatewayMigrationRetryAfterAt = migrationRetryAfterFromText(value) || gatewayMigrationRetryAfterAt
+    options.invalidateRuntimeStatusCache()
+  }
+
+  function completeGatewayMigration(): void {
+    if (!gatewayMigrationStartedAt) return
+    gatewayMigrationStartedAt = null
+    gatewayMigrationLastSeenAt = null
+    gatewayMigrationRetryAfterAt = null
+    options.invalidateRuntimeStatusCache()
+  }
+
+  function gatewayMigrationStatus(): GatewayMigrationStatus {
+    return {
+      active: Boolean(gatewayMigrationStartedAt),
+      startedAt: gatewayMigrationStartedAt,
+      lastSeenAt: gatewayMigrationLastSeenAt,
+      retryAfterAt: gatewayMigrationRetryAfterAt,
+      message: gatewayMigrationMessage,
+    }
+  }
 
   function clearRestartTimer(): void {
     if (!gatewayRestartTimer) return
@@ -369,7 +418,10 @@ export function createGatewayLifecycleService(options: GatewayLifecycleServiceOp
 
   async function isGatewayHealthy(): Promise<boolean> {
     const health = await options.fetchGatewayHealthPayload()
-    if (health.healthy) markGatewayHealthy()
+    if (health.healthy) {
+      markGatewayHealthy()
+      completeGatewayMigration()
+    }
     return health.healthy
   }
 
@@ -483,6 +535,7 @@ export function createGatewayLifecycleService(options: GatewayLifecycleServiceOp
       child.stdout?.on('data', (chunk) => {
         const text = chunk.toString()
         stdout = options.appendBoundedRuntimeOutput(stdout, text)
+        markGatewayMigrationInProgress(stdout)
         if (options.isInvalidOpenClawConfigText(text)) sawInvalidConfig = true
         const visibleOutput = options.formatGatewayProcessOutput('[gateway]', text)
         if (visibleOutput) process.stdout.write(visibleOutput)
@@ -511,6 +564,7 @@ export function createGatewayLifecycleService(options: GatewayLifecycleServiceOp
       child.stderr?.on('data', (chunk) => {
         const text = chunk.toString()
         stderr = options.appendBoundedRuntimeOutput(stderr, text)
+        markGatewayMigrationInProgress(stderr)
         if (options.isInvalidOpenClawConfigText(text)) sawInvalidConfig = true
         const visibleOutput = options.formatGatewayProcessOutput('[gateway-err]', text)
         if (visibleOutput) process.stderr.write(visibleOutput)
@@ -744,6 +798,7 @@ export function createGatewayLifecycleService(options: GatewayLifecycleServiceOp
 
   function stopGateway(): void {
     if (!gatewayProcess) return
+    completeGatewayMigration()
     log.log('[gateway] stopping...')
     options.pushGatewayLog('lifecycle', 'stopping gateway process')
     try {
@@ -771,6 +826,7 @@ export function createGatewayLifecycleService(options: GatewayLifecycleServiceOp
 
   async function stopGatewayRuntime(reason = 'manual stop'): Promise<{ stopped: boolean; detail: string; port: number; pid: number | null }> {
     pauseAutoRestart()
+    completeGatewayMigration()
     gatewayStartupGraceUntilMs = 0
     stopGatewayHealthMonitor()
     options.stopControlCenterGatewayClient(`${reason}: gateway runtime stop`)
@@ -946,6 +1002,7 @@ export function createGatewayLifecycleService(options: GatewayLifecycleServiceOp
       lastRestartOutcome,
       recentRestarts,
       restartDiagnostics: diagnostics,
+      migration: gatewayMigrationStatus(),
       uptimeMs: Number.isFinite(startedMs) && (healthy || processRunning) ? Date.now() - startedMs : 0,
       logs: options.getGatewayLogs().filter((entry) => options.isRuntimeMonitorEntryVisible(entry.timestamp)).slice(0, 80),
     }

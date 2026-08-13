@@ -203,14 +203,14 @@ function startStaticServer() {
 function writeElectronRunner(runnerAppDir: string) {
   mkdirSync(runnerAppDir, { recursive: true })
   writeFileSync(path.join(runnerAppDir, 'package.json'), JSON.stringify({
-    name: 'dystopai-settings-persistence-smoke',
+    name: 'automnia-settings-persistence-smoke',
     private: true,
     main: 'main.cjs',
   }, null, 2), 'utf8')
   writeFileSync(path.join(runnerAppDir, 'preload.cjs'), String.raw`
 const { contextBridge } = require('electron')
 
-contextBridge.exposeInMainWorld('dystopaiDesktop', {
+contextBridge.exposeInMainWorld('automniaDesktop', {
   bootstrapControlCenterSession: () => ${JSON.stringify(uiSmokeSessionToken)},
 })
 `, 'utf8')
@@ -219,10 +219,10 @@ const { app, BrowserWindow } = require('electron')
 const fs = require('node:fs')
 const path = require('node:path')
 
-const targetUrl = process.env.DYSTOPAI_SETTINGS_SMOKE_URL
-const screenshotPath = process.env.DYSTOPAI_SETTINGS_SMOKE_SCREENSHOT
+const targetUrl = process.env.AUTOMNIA_SETTINGS_SMOKE_URL
+const screenshotPath = process.env.AUTOMNIA_SETTINGS_SMOKE_SCREENSHOT
 if (!targetUrl || !screenshotPath) {
-  throw new Error('DYSTOPAI_SETTINGS_SMOKE_URL and DYSTOPAI_SETTINGS_SMOKE_SCREENSHOT are required.')
+  throw new Error('AUTOMNIA_SETTINGS_SMOKE_URL and AUTOMNIA_SETTINGS_SMOKE_SCREENSHOT are required.')
 }
 
 app.commandLine.appendSwitch('disable-background-timer-throttling')
@@ -279,7 +279,7 @@ async function changeSettings(window) {
     "    const panel = document.querySelector('[data-dui-panel=\"settings\"]')",
     "    const densitySelect = panel ? panel.querySelector('select[data-dui-setting=\"density\"]') : null",
     "    const motionSelect = panel ? panel.querySelector('select[data-dui-setting=\"motion\"]') : null",
-    "    const stored = JSON.parse(window.localStorage.getItem('dystopai-ui-settings-v1') || '{}')",
+    "    const stored = JSON.parse(window.localStorage.getItem('automnia-ui-settings-v1') || '{}')",
     "    const notice = panel ? panel.querySelector('.dui-settings-status') : null",
     "    return {",
     "      settingsPanelPresent: Boolean(panel),",
@@ -294,7 +294,7 @@ async function changeSettings(window) {
     "    }",
     "  }",
     "  return (async () => {",
-    "    window.localStorage.removeItem('dystopai-ui-settings-v1')",
+    "    window.localStorage.removeItem('automnia-ui-settings-v1')",
     "    const settingsNavItem = await waitFor(() => document.querySelector('#nexus-nav-settings'))",
     "    if (!settingsNavItem) return snapshot()",
     "    settingsNavItem.click()",
@@ -307,7 +307,7 @@ async function changeSettings(window) {
     "    setSelect(motionSelect, 'reduced')",
     "    await waitFor(() => document.documentElement.dataset.duiMotion === 'reduced')",
     "    await waitFor(() => {",
-    "      const stored = JSON.parse(window.localStorage.getItem('dystopai-ui-settings-v1') || '{}')",
+    "      const stored = JSON.parse(window.localStorage.getItem('automnia-ui-settings-v1') || '{}')",
     "      return stored.density === 'spacious' && stored.motion === 'reduced'",
     "    })",
     "    return snapshot()",
@@ -334,7 +334,7 @@ async function verifySettings(window) {
     "    const panel = document.querySelector('[data-dui-panel=\"settings\"]')",
     "    const densitySelect = panel ? panel.querySelector('select[data-dui-setting=\"density\"]') : null",
     "    const motionSelect = panel ? panel.querySelector('select[data-dui-setting=\"motion\"]') : null",
-    "    const stored = JSON.parse(window.localStorage.getItem('dystopai-ui-settings-v1') || '{}')",
+    "    const stored = JSON.parse(window.localStorage.getItem('automnia-ui-settings-v1') || '{}')",
     "    const notice = panel ? panel.querySelector('.dui-settings-status') : null",
     "    return {",
     "      settingsPanelPresent: Boolean(panel),",
@@ -439,8 +439,8 @@ async function runElectronSettingsSmoke(url: string, runnerAppDir: string) {
       ...process.env,
       ELECTRON_DISABLE_SECURITY_WARNINGS: 'true',
       ELECTRON_ENABLE_LOGGING: '0',
-      DYSTOPAI_SETTINGS_SMOKE_URL: url,
-      DYSTOPAI_SETTINGS_SMOKE_SCREENSHOT: evidenceScreenshotPath,
+      AUTOMNIA_SETTINGS_SMOKE_URL: url,
+      AUTOMNIA_SETTINGS_SMOKE_SCREENSHOT: evidenceScreenshotPath,
     },
     stdio: ['ignore', 'pipe', 'pipe'],
     windowsHide: true,
@@ -478,7 +478,7 @@ assert.ok(typeof electronPath === 'string' && electronPath.length > 0, 'Electron
 assert.ok(existsSync(path.join(distDir, 'index.html')), 'Phase K Settings persistence smoke requires dist/index.html; run npm run build:client first')
 mkdirSync(phaseKEvidenceDir, { recursive: true })
 
-const tempRoot = mkdtempSync(path.join(tmpdir(), 'dystopai-phase-k-settings-persistence-'))
+const tempRoot = mkdtempSync(path.join(tmpdir(), 'automnia-phase-k-settings-persistence-'))
 const runnerAppDir = path.join(tempRoot, 'settings-smoke-electron-app')
 
 const { server, url } = await startStaticServer()
@@ -495,7 +495,7 @@ try {
     sourcePins: {
       packageScript: 'smoke:phase-k-settings-persistence',
       settingsPanelSelectors: ['select[data-dui-setting="density"]', 'select[data-dui-setting="motion"]'],
-      storageKey: 'dystopai-ui-settings-v1',
+      storageKey: 'automnia-ui-settings-v1',
       rootDatasets: ['data-dui-density', 'data-dui-motion'],
     },
     check: {
@@ -559,7 +559,7 @@ try {
     '- Opened the built desktop UI through an Electron static harness.',
     '- Used the real Settings panel controls to set density to `spacious` and motion to `reduced`.',
     '- Confirmed the root `data-dui-density` and `data-dui-motion` attributes updated immediately.',
-    '- Confirmed `dystopai-ui-settings-v1` stored the selected density and motion values.',
+    '- Confirmed `automnia-ui-settings-v1` stored the selected density and motion values.',
     '- Reloaded the renderer and confirmed both root attributes and Settings select values rehydrated from storage.',
     `- Evidence JSON: ${path.relative(root, evidenceJsonPath)}`,
     `- Evidence log: ${path.relative(root, evidenceLogPath)}`,

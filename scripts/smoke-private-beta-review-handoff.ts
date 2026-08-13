@@ -426,7 +426,7 @@ assert.ok((releaseEvidence.componentCount || 0) >= 500, 'release evidence must i
 assert.ok((releaseEvidence.checksumCount || 0) >= 35_000, 'release evidence must include the refreshed checksum count')
 assert.equal(releaseEvidence.runtimeMetadataCount, 2, 'release evidence must include Node and Codex runtime metadata')
 for (const file of [
-  'release/evidence/dystopai-sbom.cdx.json',
+  'release/evidence/automnia-sbom.cdx.json',
   'release/evidence/checksums.sha256',
   'release/evidence/release-evidence.json',
   'release/win-unpacked/Automnia AI Nexus.exe',

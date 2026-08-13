@@ -15,28 +15,28 @@ const commandConsole = read('src/components/monitor/AgentResponseConsole.tsx')
 const pluginsPanel = read('src/components/plugins/PluginsPanel.tsx')
 const recruitModal = read('src/components/recruit/RecruitAgentModal.tsx')
 const accessibility = read('src/styles/accessibility.css')
-const polish = read('src/styles/dystopai-theme/80-production-polish.css')
-const theme = read('src/dystopai-app-theme.css')
+const polish = read('src/styles/automnia-theme/80-production-polish.css')
+const theme = read('src/automnia-app-theme.css')
 const phaseKSettingsPersistenceSmoke = read('scripts/smoke-phase-k-settings-persistence.ts')
 const packageJson = JSON.parse(read('package.json')) as { scripts?: Record<string, string> }
-const productionPolishImport = "@import './styles/dystopai-theme/80-production-polish.css';"
-const referenceScreenshotImport = "@import './styles/dystopai-theme/90-reference-screenshot.css';"
-const typographyPolishImport = "@import './styles/dystopai-theme/95-typography-polish.css';"
-const navSelectionGlowImport = "@import './styles/dystopai-theme/96-nav-selection-glow.css';"
-const chatComposerImport = "@import './styles/dystopai-theme/97-chat-composer.css';"
-const flattenedShellImport = "@import './styles/dystopai-theme/98-flattened-shell.css';"
-const horizonCommandCenterImport = "@import './styles/dystopai-theme/99-horizon-command-center.css';"
-const operatorExperienceImport = "@import './styles/dystopai-theme/100-operator-experience.css';"
-const agentCardThemesImport = "@import './styles/dystopai-theme/101-agent-card-themes.css';"
-const settingsSystemImport = "@import './styles/dystopai-theme/102-settings-system.css';"
-const cronJobsSystemImport = "@import './styles/dystopai-theme/103-cron-jobs-system.css';"
-const horizonCommandCenter = read('src/styles/dystopai-theme/99-horizon-command-center.css')
-const operatorExperience = read('src/styles/dystopai-theme/100-operator-experience.css')
+const productionPolishImport = "@import './styles/automnia-theme/80-production-polish.css';"
+const referenceScreenshotImport = "@import './styles/automnia-theme/90-reference-screenshot.css';"
+const typographyPolishImport = "@import './styles/automnia-theme/95-typography-polish.css';"
+const navSelectionGlowImport = "@import './styles/automnia-theme/96-nav-selection-glow.css';"
+const chatComposerImport = "@import './styles/automnia-theme/97-chat-composer.css';"
+const flattenedShellImport = "@import './styles/automnia-theme/98-flattened-shell.css';"
+const horizonCommandCenterImport = "@import './styles/automnia-theme/99-horizon-command-center.css';"
+const operatorExperienceImport = "@import './styles/automnia-theme/100-operator-experience.css';"
+const agentCardThemesImport = "@import './styles/automnia-theme/101-agent-card-themes.css';"
+const settingsSystemImport = "@import './styles/automnia-theme/102-settings-system.css';"
+const cronJobsSystemImport = "@import './styles/automnia-theme/103-cron-jobs-system.css';"
+const horizonCommandCenter = read('src/styles/automnia-theme/99-horizon-command-center.css')
+const operatorExperience = read('src/styles/automnia-theme/100-operator-experience.css')
 
-assert.match(shell, /className="dy-skip-link" href="#dystopai-main"/, 'shell should expose a keyboard skip link')
-assert.match(shell, /<main id="dystopai-main" tabIndex=\{-1\}/, 'workspace should use a focusable main landmark')
+assert.match(shell, /className="dy-skip-link" href="#automnia-main"/, 'shell should expose a keyboard skip link')
+assert.match(shell, /<main id="automnia-main" tabIndex=\{-1\}/, 'workspace should use a focusable main landmark')
 assert.match(shell, /<nav className="dy-human-nav flex flex-col" aria-label="Primary navigation">/, 'primary navigation should be named')
-assert.match(shell, /dy-human-rail-head--lockup/, 'sidebar should host the full DystopAI logo lockup')
+assert.match(shell, /dy-human-rail-head--lockup/, 'sidebar should host the full Automnia logo lockup')
 assert.match(shell, /className="dy-human-rail-lockup"/, 'sidebar logo should use the full lockup image')
 assert.match(shell, /id=\{`nexus-nav-\$\{t\.id\}`\}/, 'workspace navigation should expose stable ids for automation')
 const primaryRailBlock = shell.slice(
@@ -68,7 +68,7 @@ assert.match(shell, /aria-keyshortcuts=\{activeCronCount \? 'Delete'/, 'cron cle
 assert.match(shell, /event\.key !== 'Delete'/, 'cron cleanup should support the declared keyboard shortcut')
 assert.match(shell, /role="status" aria-live="polite" aria-label="Loading workspace"/, 'lazy workspace loading should be announced')
 assert.match(shell, /className="dy-workspace-context" data-workspace=\{tab\}/, 'shell should expose a contextual workspace header')
-assert.match(shell, /id="dystopai-workspace-title">\{activeTab\.label\}/, 'workspace context should expose the active page title')
+assert.match(shell, /id="automnia-workspace-title">\{activeTab\.label\}/, 'workspace context should expose the active page title')
 assert.match(shell, /<p>\{activeTab\.description\}<\/p>/, 'workspace context should explain the active operator surface')
 assert.match(shell, /className="dy-workspace-context__meta"/, 'workspace context should host the static status controls')
 assert.match(shell, /aria-label="Workspace status summary"/, 'workspace status chips should remain named')
@@ -111,7 +111,7 @@ assert.ok(theme.includes(operatorExperienceImport), 'Operator Experience must re
 assert.ok(theme.includes(agentCardThemesImport), 'Agent Card Themes must remain in the theme cascade')
 assert.ok(theme.includes(settingsSystemImport), 'Settings System must remain the final scoped settings and autosave layer')
 assert.ok(theme.includes(cronJobsSystemImport), 'Cron Jobs System must remain in the theme cascade')
-const themeLayerImports = [...theme.matchAll(/@import '\.\/styles\/dystopai-theme\/(\d+)-([^']+)\.css';/g)]
+const themeLayerImports = [...theme.matchAll(/@import '\.\/styles\/automnia-theme\/(\d+)-([^']+)\.css';/g)]
 const layersAfterTypography = themeLayerImports
   .map((match) => ({ order: Number(match[1]), name: match[2] }))
   .filter((layer) => layer.order > 95)
@@ -124,7 +124,7 @@ assert.deepEqual(layersAfterTypography, [
   { order: 101, name: 'agent-card-themes' },
   { order: 102, name: 'settings-system' },
   { order: 103, name: 'cron-jobs-system' },
-], 'global dystopai theme layers after typography must remain limited to the approved shell, operator, card, settings, and cron layers')
+], 'global automnia theme layers after typography must remain limited to the approved shell, operator, card, settings, and cron layers')
 assert.doesNotMatch(theme, /99-mission-quiet-redesign/, 'mission quiet redesign should no longer be a global late layer')
 assert.ok(
   theme.indexOf(productionPolishImport) < theme.indexOf(referenceScreenshotImport),
@@ -208,7 +208,7 @@ assert.match(accessibility, /@media \(prefers-reduced-motion: reduce\)[\s\S]*ani
 assert.match(settingsPanel, /data-dui-setting="density"/, 'Settings density control should expose a stable automation selector')
 assert.match(settingsPanel, /data-dui-setting="motion"/, 'Settings motion control should expose a stable automation selector')
 assert.match(settingsPanel, /saveUiSettings\(next\)[\s\S]*applyUiSettings\(next\)/, 'Settings changes should persist before applying root UI state')
-assert.match(uiSettings, /UI_SETTINGS_STORAGE_KEY = 'dystopai-ui-settings-v1'/, 'UI settings storage key should remain stable for rehydration')
+assert.match(uiSettings, /UI_SETTINGS_STORAGE_KEY = 'automnia-ui-settings-v1'/, 'UI settings storage key should remain stable for rehydration')
 assert.match(uiSettings, /root\.dataset\.duiDensity = settings\.density/, 'UI settings should project density to the document root')
 assert.match(uiSettings, /root\.dataset\.duiMotion = settings\.motion/, 'UI settings should project motion to the document root')
 assert.match(phaseKSettingsPersistenceSmoke, /completedItems:\s*\[130\]/, 'Phase K Settings persistence smoke should record item 130 completion')

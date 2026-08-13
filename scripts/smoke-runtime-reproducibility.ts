@@ -76,7 +76,7 @@ assert.match(
 )
 assert.match(
   prepareRuntimeBundles,
-  /\.dystopai-runtime-package-lock\.json/,
+  /\.automnia-runtime-package-lock\.json/,
   'runtime bundle prep must preserve the lockfile used for bundled Codex dependencies',
 )
 assert.match(
@@ -91,7 +91,7 @@ assert.match(
 )
 assert.match(
   prepareRuntimeBundles,
-  /\.dystopai-runtime-bundle\.json/,
+  /\.automnia-runtime-bundle\.json/,
   'runtime bundle prep must leave verifiable bundle metadata',
 )
 assert.match(
@@ -101,7 +101,7 @@ assert.match(
 )
 assert.match(
   prepareOpenClawVendor,
-  /DYSTOPAI_OPENCLAW_VENDOR_ROOT/,
+  /AUTOMNIA_OPENCLAW_VENDOR_ROOT/,
   'vendored OpenClaw dependency prep must be testable against a temporary vendor root',
 )
 assert.match(
@@ -146,7 +146,7 @@ assert.match(
 )
 assert.match(
   prepareOpenClawVendor,
-  /\.dystopai-openclaw-vendor-deps\.json/,
+  /\.automnia-openclaw-vendor-deps\.json/,
   'vendored OpenClaw dependency prep must leave verifiable dependency metadata',
 )
 assert.match(
@@ -186,7 +186,7 @@ assert.match(
 )
 assert.match(
   serverControlPlane,
-  /DYSTOPAI_OPENCLAW_VENDOR_ROOT/,
+  /AUTOMNIA_OPENCLAW_VENDOR_ROOT/,
   'server startup self-heal must run the vendor prep script against the detected vendor root',
 )
 assert.match(

@@ -8,7 +8,7 @@ const root = process.cwd()
 const tokensPath = path.join(root, 'src/styles/tokens.css')
 const tokenDocsPath = path.join(root, 'docs/DESIGN_TOKENS.md')
 const missionCssPath = path.join(root, 'src/components/mission/MissionDeploymentPanel.css')
-const themePath = path.join(root, 'src/dystopai-app-theme.css')
+const themePath = path.join(root, 'src/automnia-app-theme.css')
 const tokens = readFileSync(tokensPath, 'utf8')
 const tokenDocs = readFileSync(tokenDocsPath, 'utf8')
 const missionCss = readFileSync(missionCssPath, 'utf8')
@@ -18,7 +18,7 @@ const requiredImports = [
   "@import './styles/tokens.css';",
   "@import './styles/typography.css';",
   "@import './styles/accessibility.css';",
-  "@import './styles/dystopai-theme/00-foundation.css';",
+  "@import './styles/automnia-theme/00-foundation.css';",
 ]
 
 for (let index = 0; index < requiredImports.length - 1; index += 1) {
