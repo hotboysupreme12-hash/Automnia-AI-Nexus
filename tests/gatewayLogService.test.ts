@@ -169,7 +169,7 @@ test('readExternalGatewayLogEntries prefers logs.tail RPC entries', async () => 
 })
 
 test('readExternalGatewayLogEntries falls back to file tails and redacts RPC failure logs', async () => {
-  const root = await mkdtemp(path.join(tmpdir(), 'dystopai-gateway-log-'))
+  const root = await mkdtemp(path.join(tmpdir(), 'automnia-gateway-log-'))
   try {
     const logPath = path.join(root, 'gateway.log')
     await writeFile(logPath, [
@@ -208,7 +208,7 @@ test('readExternalGatewayLogEntries falls back to file tails and redacts RPC fai
 })
 
 test('readExternalGatewayLogEntries discards a partial first line from a byte-tail', async () => {
-  const root = await mkdtemp(path.join(tmpdir(), 'dystopai-gateway-tail-'))
+  const root = await mkdtemp(path.join(tmpdir(), 'automnia-gateway-tail-'))
   try {
     const logPath = path.join(root, 'gateway.log')
     const completeLine = JSON.stringify({
@@ -233,7 +233,7 @@ test('readExternalGatewayLogEntries discards a partial first line from a byte-ta
 })
 
 test('readExternalChannelActivityEntries parses ClawTalk websocket activity', async () => {
-  const root = await mkdtemp(path.join(tmpdir(), 'dystopai-clawtalk-log-'))
+  const root = await mkdtemp(path.join(tmpdir(), 'automnia-clawtalk-log-'))
   try {
     const stateRoot = path.join(root, 'state')
     const nativeStateRoot = path.join(root, 'native')

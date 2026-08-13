@@ -10,7 +10,7 @@ import {
 } from '../server/state/runtimeLedgerStore.ts'
 
 const rootDir = fileURLToPath(new URL('..', import.meta.url))
-const tempDir = await mkdtemp(path.join(os.tmpdir(), 'dystopai-mission-ledger-'))
+const tempDir = await mkdtemp(path.join(os.tmpdir(), 'automnia-mission-ledger-'))
 
 try {
   const missionRecordsJsonl = path.join(tempDir, 'mission-records.jsonl')

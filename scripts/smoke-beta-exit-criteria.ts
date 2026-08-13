@@ -185,8 +185,8 @@ for (const key of ['packagedAppLaunched', 'controlPlaneReady', 'rendererLoaded',
   assert.equal(desktopLaunchEvidence.assertions?.[key], true, `desktop launch assertion ${key} must be true`)
 }
 const packageLaunchFiles = [
-  process.platform === 'win32' ? `${unpackedRoot}/Automnia AI Nexus.exe` : `${unpackedRoot}/dystopai`,
-  process.platform === 'win32' ? `${unpackedRoot}/electron.exe` : `${unpackedRoot}/dystopai`,
+  process.platform === 'win32' ? `${unpackedRoot}/Automnia AI Nexus.exe` : `${unpackedRoot}/automnia`,
+  process.platform === 'win32' ? `${unpackedRoot}/electron.exe` : `${unpackedRoot}/automnia`,
   `${resourcesRoot}/app.asar`,
   `${resourcesRoot}/dist/index.html`,
   `${resourcesRoot}/dist-server/index.cjs`,
@@ -227,7 +227,7 @@ const readme = read('README.md')
 const betaFeedbackTemplate = read('.github/ISSUE_TEMPLATE/beta_feedback.yml')
 assertTextIncludes(changelog, ['### Beta status', '### Known issues', 'private beta / early access candidate', 'Windows 11 x64', 'Do not expose'], 'CHANGELOG.md')
 assertTextIncludes(betaSupport, [
-  '# DystopAI Beta Support Runbook',
+  '# Automnia Beta Support Runbook',
   '## Supported OS For Beta',
   '## Known Issues',
   '## How To Recover Gateway',

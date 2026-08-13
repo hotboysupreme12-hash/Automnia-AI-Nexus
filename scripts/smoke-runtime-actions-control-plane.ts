@@ -215,12 +215,12 @@ assert(electronMain.includes('void resetGateway()'), 'Electron tray restart item
 assert(electronMain.includes("postControlApi('/api/openclaw/runtime/gateway/stop'"), 'Electron tray shutdown should call the runtime Gateway stop endpoint')
 assert(electronMain.includes("postControlApi('/api/openclaw/runtime/gateway/restart'"), 'Electron tray recovery should call the runtime Gateway restart endpoint')
 assert(electronMain.includes('GATEWAY_CONTROL_ACTION_TIMEOUT_MS'), 'Electron tray Gateway controls should use a shared configurable timeout')
-assert(electronMain.includes('DYSTOPAI_ELECTRON_E2E_ASSERT_TRAY_GATEWAY_RECOVERY'), 'Electron E2E should expose tray Gateway recovery assertions')
+assert(electronMain.includes('AUTOMNIA_ELECTRON_E2E_ASSERT_TRAY_GATEWAY_RECOVERY'), 'Electron E2E should expose tray Gateway recovery assertions')
 assert(electronMain.includes('tray-gateway-stop-ok'), 'Electron E2E should log tray Gateway shutdown evidence')
 assert(electronMain.includes('tray-gateway-recovery-ok'), 'Electron E2E should log tray Gateway recovery evidence')
 assert(phaseKGatewayTrayRecoverySmoke.includes('completedItems: [124]'), 'Phase K tray recovery smoke should record item 124 completion')
 assert(phaseKGatewayTrayRecoverySmoke.includes('scripts/smoke-runtime-actions-control-plane.ts'), 'Phase K tray recovery smoke should validate source smoke pinning')
-assert(phaseKGatewayTrayRecoverySmoke.includes('DYSTOPAI_ELECTRON_E2E_ASSERT_TRAY_GATEWAY_RECOVERY'), 'Phase K tray recovery smoke should enable the Electron tray Gateway recovery assertion')
+assert(phaseKGatewayTrayRecoverySmoke.includes('AUTOMNIA_ELECTRON_E2E_ASSERT_TRAY_GATEWAY_RECOVERY'), 'Phase K tray recovery smoke should enable the Electron tray Gateway recovery assertion')
 assert(phaseKGatewayTrayRecoverySmoke.includes('/api/openclaw/runtime/gateway/stop'), 'Phase K tray recovery smoke should verify the Gateway stop route')
 assert(phaseKGatewayTrayRecoverySmoke.includes('/api/openclaw/runtime/gateway/restart'), 'Phase K tray recovery smoke should verify the Gateway recovery route')
 
@@ -232,7 +232,7 @@ assert(!editor.includes('fetch(apiUrl(path)'), 'AgentEditorModal should not use 
 const storeFetchMatches = [...store.matchAll(/\bfetch\s*\(/g)]
 assert(storeFetchMatches.length === 0, `nexusStore should not own direct fetch calls after renderer API extraction, found ${storeFetchMatches.length}`)
 assert(
-  agentTurnsApi.includes("fetch(apiUrl('/api/openclaw/agent-turn/stream')"),
+  agentTurnsApi.includes("fetchControlCenterWithAuth(apiUrl('/api/openclaw/agent-turn/stream')"),
   'SSE agent-turn endpoint should live in src/api/agentTurns.ts',
 )
 assert(store.includes('sendStreamingAgentTurn('), 'nexusStore should delegate SSE agent-turn transport to src/api/agentTurns.ts')

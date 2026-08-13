@@ -13,6 +13,10 @@ const EMPTY_LICENSE: LicenseInfo = {
   email: null,
   tier: null,
   mode: null,
+  planPriceCents: null,
+  byokAllowed: false,
+  permanentAccess: false,
+  subscriptionStatus: null,
   usagePriority: null,
   creditBalance: null,
   creditBalanceUpdatedAt: null,
@@ -107,46 +111,26 @@ export function LicenseProvider({ children }: { children: ReactNode }) {
   const refresh = useCallback(async () => {
     const result = await apiRequest<LicenseInfo>('/api/license/refresh', {
       method: 'POST',
-      timeoutMs: 12_000,
+      // The server retries transient provisioner failures before returning a
+      // definitive refresh result. Keep the client request alive long enough
+      // to receive that result instead of surfacing a false timeout.
+      timeoutMs: 40_000,
       body: {},
     })
     if (!result.ok) throw new Error(apiErrorMessage(result.error))
     
     setLicense(result.data)
     setLicenseActivationRequested(false)
-
-    // Poll /api/license/status in the background to retrieve the updated balance
-    const startBalanceUpdatedAt = result.data.creditBalanceUpdatedAt
-    let attempts = 0
-    const maxAttempts = 8
-    const intervalMs = 1500
-
-    const pollStatus = async () => {
-      if (attempts >= maxAttempts) return
-      attempts++
-      try {
-        const pollResult = await apiRequest<LicenseInfo>('/api/license/status', { timeoutMs: 5000 })
-        if (pollResult.ok) {
-          setLicense(pollResult.data)
-          if (pollResult.data.creditBalanceUpdatedAt !== startBalanceUpdatedAt) {
-            return
-          }
-        }
-      } catch (error) {
-        console.warn('[license-refresh-poll] failed:', error)
-      }
-      setTimeout(pollStatus, intervalMs)
-    }
-
-    setTimeout(pollStatus, 1000)
-
     return result.data
   }, [])
 
   const setUsagePriority = useCallback(async (usagePriority: HostedUsagePriority) => {
     const result = await apiRequest<LicenseInfo>('/api/license/usage-priority', {
       method: 'POST',
-      timeoutMs: 8_000,
+      // The server acknowledges the local preference immediately; this still
+      // leaves room for a slow loopback response without surfacing a false
+      // timeout while the Gateway reconciles in the background.
+      timeoutMs: 20_000,
       body: { usagePriority },
     })
     if (!result.ok) throw new Error(apiErrorMessage(result.error))
@@ -174,7 +158,10 @@ export function LicenseProvider({ children }: { children: ReactNode }) {
   const requestLicenseActivation = useCallback(() => setLicenseActivationRequested(true), [])
   const dismissLicenseActivation = useCallback(() => setLicenseActivationRequested(false), [])
   const contextValue = useMemo(() => ({
-    checking: isAuthenticated && Boolean(token) ? checking : false,
+    // Do not render the manual activation screen during the first render
+    // after Google/password login, before the imported local license status
+    // has been read from the loopback server.
+    checking: isAuthenticated && Boolean(token) ? checking || license === null : false,
     license: isAuthenticated && token ? license : null,
     isLicensed: isAuthenticated && Boolean(token) && license?.active === true,
     activate,

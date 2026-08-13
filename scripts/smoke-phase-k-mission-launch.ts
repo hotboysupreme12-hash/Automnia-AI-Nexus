@@ -395,7 +395,7 @@ function evidenceHasSecretMaterial(value: unknown) {
 }
 
 const port = await freePort()
-const tempRoot = mkdtempSync(path.join(tmpdir(), 'dystopai-phase-k-mission-launch-'))
+const tempRoot = mkdtempSync(path.join(tmpdir(), 'automnia-phase-k-mission-launch-'))
 const stateDir = path.join(tempRoot, 'state')
 const workspaceRoot = path.join(tempRoot, 'workspace-root')
 const homeDir = path.join(tempRoot, 'home')

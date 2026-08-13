@@ -1018,7 +1018,7 @@ export function createGatewayChatService<RunRecord>(options: GatewayChatServiceO
       token: gatewayAuth.OPENCLAW_GATEWAY_TOKEN,
       password: gatewayAuth.OPENCLAW_GATEWAY_PASSWORD,
       clientName: 'gateway-client',
-      clientDisplayName: 'DystopAI Control Center',
+      clientDisplayName: 'Automnia Control Center',
       clientVersion: options.clientVersion,
       platform: process.platform,
       mode: 'backend',

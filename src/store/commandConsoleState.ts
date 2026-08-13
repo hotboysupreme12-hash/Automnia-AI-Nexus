@@ -1,7 +1,7 @@
 import type { AgentActivityEvent, AgentResponse, AgentTurnAttachment } from '../types/nexus'
 import { readConsolePreferences } from '../components/settings/workspaceSettings'
 
-export const COMMAND_CONSOLE_DRAFT_PREFIX = 'dystopai:command-draft:'
+export const COMMAND_CONSOLE_DRAFT_PREFIX = 'automnia:command-draft:'
 export const MAX_COMMAND_CONSOLE_RESPONSES = 80
 
 export type CommandConsoleDraft = {

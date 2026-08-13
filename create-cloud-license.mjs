@@ -45,7 +45,7 @@ async function run() {
         email: { stringValue: email },
         createdAt: { stringValue: nowStr },
         testEntitlement: { booleanValue: true },
-        creditBalance: { integerValue: '1000000' }, // 1,000,000 credits
+        creditBalance: { integerValue: '500000' },
         customerId: { nullValue: null },
         lastShopifyOrderId: { nullValue: null }
       }
@@ -101,7 +101,7 @@ async function run() {
     console.log('🎉 CLOUD LICENSE PROVISIONED SUCCESSFULLY!');
     console.log(`Email:          ${email}`);
     console.log(`New License Key: ${licenseKey}`);
-    console.log(`Credit Balance: 1,000,000 credits`);
+    console.log(`Credit Balance: 500,000 credits`);
     console.log(`Mode:           hosted_credits`);
     console.log(`Document ID:    ${docId}`);
     console.log(`Index ID:       ${indexId}`);

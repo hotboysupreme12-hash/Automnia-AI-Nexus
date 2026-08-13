@@ -1,0 +1,585 @@
+.dui-help-overlay {
+  position: fixed;
+  z-index: 1200;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  padding: clamp(16px, 3vw, 42px);
+  background:
+    radial-gradient(circle at 50% 14%, rgb(27 88 101 / .22), transparent 34rem),
+    rgb(1 5 8 / .82);
+  backdrop-filter: blur(18px) saturate(.86);
+  -webkit-backdrop-filter: blur(18px) saturate(.86);
+  animation: dui-help-overlay-in 180ms ease-out both;
+}
+
+.dui-help-panel {
+  --help-accent: #6ed9cc;
+  --help-accent-strong: #96eee2;
+  --help-blue: #8bc8f8;
+  --help-panel: #0b1216;
+  --help-panel-raised: #111a1f;
+  --help-line: rgb(190 220 225 / .12);
+  display: flex;
+  width: min(920px, 100%);
+  height: min(820px, 100%);
+  min-height: 560px;
+  flex-direction: column;
+  overflow: hidden;
+  border: 1px solid rgb(166 220 215 / .18);
+  border-radius: 22px;
+  background:
+    radial-gradient(circle at 12% 0%, rgb(75 175 163 / .08), transparent 22rem),
+    linear-gradient(155deg, rgb(12 21 25 / .995), rgb(5 10 13 / .995));
+  box-shadow:
+    0 44px 120px rgb(0 0 0 / .62),
+    0 0 0 1px rgb(255 255 255 / .025) inset,
+    0 1px 0 rgb(255 255 255 / .05) inset;
+  color: #e8f0f2;
+  animation: dui-help-panel-in 220ms cubic-bezier(.2, .8, .2, 1) both;
+}
+
+.dui-help-panel__header {
+  position: relative;
+  z-index: 2;
+  display: flex;
+  min-height: 78px;
+  align-items: center;
+  justify-content: space-between;
+  gap: 20px;
+  padding: 14px 16px 14px 20px;
+  border-bottom: 1px solid var(--help-line);
+  background: rgb(9 16 20 / .86);
+  box-shadow: 0 14px 30px rgb(0 0 0 / .1);
+}
+
+.dui-help-panel__header::after {
+  position: absolute;
+  right: 18%;
+  bottom: -1px;
+  left: 18%;
+  height: 1px;
+  background: linear-gradient(90deg, transparent, rgb(110 217 204 / .24), transparent);
+  content: '';
+}
+
+.dui-help-panel__title,
+.dui-help-panel__actions {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+}
+
+.dui-help-panel__title { gap: 12px; }
+.dui-help-panel__actions { gap: 8px; }
+
+.dui-help-panel__glyph {
+  position: relative;
+  display: grid;
+  width: 42px;
+  height: 42px;
+  flex: 0 0 auto;
+  place-items: center;
+  overflow: hidden;
+  border: 1px solid rgb(111 221 208 / .28);
+  border-radius: 13px;
+  background:
+    radial-gradient(circle at 34% 18%, rgb(204 255 247 / .16), transparent 42%),
+    linear-gradient(145deg, rgb(60 164 151 / .24), rgb(31 83 84 / .18));
+  color: #a8f5e9;
+  box-shadow: 0 10px 24px rgb(17 93 89 / .15), inset 0 1px 0 rgb(255 255 255 / .08);
+}
+
+.dui-help-panel__glyph svg { width: 21px; height: 21px; }
+
+.dui-help-panel__title > div > span,
+.dui-help-welcome__eyebrow {
+  display: block;
+  color: var(--help-accent);
+  font-size: 9px;
+  font-weight: 760;
+  letter-spacing: .15em;
+  line-height: 1.2;
+  text-transform: uppercase;
+}
+
+.dui-help-panel__title h2 {
+  margin: 3px 0 0;
+  color: #f5f8f9;
+  font-size: 17px;
+  font-weight: 720;
+  letter-spacing: -.025em;
+  line-height: 1.15;
+}
+
+.dui-help-panel__title p {
+  margin: 4px 0 0;
+  color: #84969d;
+  font-size: 10px;
+  line-height: 1.3;
+}
+
+.dui-help-panel__actions button {
+  display: inline-flex;
+  min-height: 36px;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  padding: 7px 11px;
+  border: 1px solid rgb(168 206 211 / .13);
+  border-radius: 10px;
+  background: rgb(255 255 255 / .03);
+  color: #aec0c5;
+  font: inherit;
+  font-size: 10px;
+  font-weight: 680;
+  transition: 140ms ease;
+}
+
+.dui-help-panel__actions button svg { width: 15px; height: 15px; }
+.dui-help-panel__actions button:hover:not(:disabled) { border-color: rgb(112 217 208 / .32); background: rgb(112 217 208 / .07); color: #ebfffc; }
+.dui-help-panel__actions button:disabled { cursor: not-allowed; opacity: .38; }
+
+.dui-help-panel__actions .dui-help-panel__close {
+  width: 36px;
+  padding: 0;
+  border-color: transparent;
+  background: transparent;
+  color: #879ba2;
+}
+
+.dui-help-panel__actions .dui-help-panel__close svg { width: 18px; height: 18px; }
+.dui-help-panel__actions .dui-help-panel__close:hover:not(:disabled) { border-color: rgb(240 144 151 / .16); background: rgb(240 144 151 / .08); color: #fff1f2; }
+
+.dui-help-panel__status {
+  display: inline-flex;
+  min-height: 28px;
+  align-items: center;
+  gap: 7px;
+  margin-right: 2px;
+  padding: 5px 9px;
+  border: 1px solid rgb(111 217 178 / .11);
+  border-radius: 999px;
+  background: rgb(57 146 113 / .055);
+  color: #8fd5be;
+  font-size: 9px;
+  font-weight: 640;
+  white-space: nowrap;
+}
+
+.dui-help-panel__status i {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: #65d5ad;
+  box-shadow: 0 0 10px rgb(102 215 178 / .65);
+}
+
+.dui-help-panel__workspace {
+  display: flex;
+  min-height: 0;
+  flex: 1;
+}
+
+.dui-help-conversation {
+  display: flex;
+  width: 100%;
+  min-width: 0;
+  min-height: 0;
+  flex-direction: column;
+  background:
+    radial-gradient(circle at 50% 8%, rgb(87 176 165 / .045), transparent 24rem),
+    rgb(8 14 17 / .3);
+}
+
+.dui-help-transcript {
+  display: flex;
+  min-height: 0;
+  flex: 1;
+  flex-direction: column;
+  gap: 22px;
+  overflow: auto;
+  padding: 34px clamp(24px, 4vw, 48px) 28px;
+  scrollbar-color: rgb(92 129 134 / .5) transparent;
+}
+
+.dui-help-welcome {
+  width: min(100%, 660px);
+  margin: auto;
+  padding: 18px 0 10px;
+  text-align: center;
+}
+
+.dui-help-welcome__orb {
+  position: relative;
+  display: grid;
+  width: 64px;
+  height: 64px;
+  margin: 0 auto 20px;
+  place-items: center;
+  border: 1px solid rgb(114 219 207 / .16);
+  border-radius: 22px;
+  background: rgb(87 179 168 / .055);
+  box-shadow: 0 18px 40px rgb(9 75 73 / .13);
+}
+
+.dui-help-welcome__orb::before,
+.dui-help-welcome__orb::after {
+  position: absolute;
+  border: 1px solid rgb(114 219 207 / .08);
+  border-radius: inherit;
+  content: '';
+  inset: -9px;
+}
+
+.dui-help-welcome__orb::after { border-color: rgb(114 219 207 / .04); inset: -18px; }
+
+.dui-help-welcome__orb > span {
+  display: grid;
+  width: 42px;
+  height: 42px;
+  place-items: center;
+  border-radius: 14px;
+  background: linear-gradient(145deg, rgb(89 193 180 / .26), rgb(36 90 91 / .2));
+  color: #adf8ec;
+  box-shadow: inset 0 1px 0 rgb(255 255 255 / .09);
+}
+
+.dui-help-welcome__orb svg { width: 22px; height: 22px; }
+.dui-help-welcome__eyebrow { color: #75cfc2; }
+
+.dui-help-welcome h3 {
+  margin: 10px 0 7px;
+  color: #f2f7f8;
+  font-size: clamp(25px, 3vw, 32px);
+  font-weight: 650;
+  letter-spacing: -.045em;
+  line-height: 1.12;
+}
+
+.dui-help-welcome > p {
+  max-width: 480px;
+  margin: 0 auto;
+  color: #899ca2;
+  font-size: 12px;
+  line-height: 1.55;
+}
+
+.dui-help-suggestions {
+  display: grid;
+  margin-top: 28px;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+  text-align: left;
+}
+
+.dui-help-suggestions button {
+  position: relative;
+  display: grid;
+  min-height: 104px;
+  grid-template-columns: 32px minmax(0, 1fr) 16px;
+  grid-template-rows: auto auto;
+  align-items: center;
+  gap: 1px 10px;
+  padding: 14px;
+  overflow: hidden;
+  border: 1px solid rgb(154 197 201 / .12);
+  border-radius: 13px;
+  background: linear-gradient(145deg, rgb(255 255 255 / .038), rgb(255 255 255 / .015));
+  color: #cfe0e3;
+  font: inherit;
+  text-align: left;
+  transition: 150ms ease;
+}
+
+.dui-help-suggestions button::after {
+  position: absolute;
+  width: 70px;
+  height: 70px;
+  border-radius: 50%;
+  background: rgb(90 189 177 / .08);
+  content: '';
+  filter: blur(24px);
+  right: -24px;
+  top: -28px;
+}
+
+.dui-help-suggestions button:hover:not(:disabled) {
+  border-color: rgb(116 216 204 / .28);
+  background: linear-gradient(145deg, rgb(91 186 175 / .085), rgb(255 255 255 / .02));
+  box-shadow: 0 16px 30px rgb(0 0 0 / .12);
+  transform: translateY(-2px);
+}
+
+.dui-help-suggestions button:disabled { cursor: not-allowed; opacity: .48; }
+
+.dui-help-suggestions button > span {
+  display: grid;
+  width: 32px;
+  height: 32px;
+  grid-row: 1 / span 2;
+  place-items: center;
+  border-radius: 9px;
+  background: rgb(91 190 178 / .08);
+  color: #87dfd3;
+}
+
+.dui-help-suggestions button > span svg { width: 16px; height: 16px; }
+.dui-help-suggestions strong { align-self: end; color: #dce8ea; font-size: 10.5px; font-weight: 700; }
+.dui-help-suggestions small { align-self: start; overflow: hidden; color: #71878d; font-size: 9px; line-height: 1.35; text-overflow: ellipsis; white-space: nowrap; }
+.dui-help-suggestions i { grid-column: 3; grid-row: 1 / span 2; color: #52686e; font-size: 14px; font-style: normal; }
+.dui-help-suggestions button:hover i { color: #9beade; }
+
+.dui-help-message {
+  display: flex;
+  width: min(92%, 690px);
+  align-items: flex-start;
+  gap: 11px;
+}
+
+.dui-help-message--user {
+  align-self: flex-end;
+  flex-direction: row-reverse;
+}
+
+.dui-help-message__avatar {
+  display: grid;
+  width: 30px;
+  height: 30px;
+  flex: 0 0 auto;
+  place-items: center;
+  border: 1px solid rgb(116 210 199 / .18);
+  border-radius: 10px;
+  background: rgb(79 172 162 / .09);
+  color: #8fe3d7;
+  box-shadow: inset 0 1px 0 rgb(255 255 255 / .05);
+}
+
+.dui-help-message--user .dui-help-message__avatar {
+  border-color: rgb(131 188 232 / .17);
+  background: rgb(98 156 203 / .08);
+  color: #9acaf0;
+}
+
+.dui-help-message__avatar svg { width: 15px; height: 15px; }
+.dui-help-message__content { min-width: 0; }
+
+.dui-help-message__label {
+  display: block;
+  margin: 0 0 6px 3px;
+  color: #7da79f;
+  font-size: 9px;
+  font-weight: 730;
+  letter-spacing: .055em;
+  text-transform: uppercase;
+}
+
+.dui-help-message--user .dui-help-message__label { margin-right: 3px; color: #789cb9; text-align: right; }
+
+.dui-help-message__content > p {
+  margin: 0;
+  padding: 13px 15px;
+  border: 1px solid rgb(157 197 201 / .11);
+  border-radius: 4px 14px 14px;
+  background: linear-gradient(145deg, rgb(255 255 255 / .045), rgb(255 255 255 / .022));
+  box-shadow: inset 0 1px 0 rgb(255 255 255 / .025);
+  color: #d2e0e3;
+  font-size: 12px;
+  line-height: 1.66;
+  white-space: pre-wrap;
+}
+
+.dui-help-message--user .dui-help-message__content > p {
+  border-color: rgb(108 202 193 / .16);
+  border-radius: 14px 4px 14px 14px;
+  background: linear-gradient(145deg, rgb(63 158 149 / .19), rgb(42 105 111 / .14));
+  color: #e5f2f3;
+}
+
+.dui-help-thinking {
+  display: flex;
+  min-height: 46px;
+  align-items: center;
+  gap: 4px;
+  color: #91a7ad !important;
+}
+
+.dui-help-thinking i {
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: #74d9cb;
+  animation: dui-help-thinking 1.15s ease-in-out infinite;
+}
+
+.dui-help-thinking i:nth-child(2) { animation-delay: 140ms; }
+.dui-help-thinking i:nth-child(3) { animation-delay: 280ms; }
+.dui-help-thinking span { margin-left: 7px; font-size: 10px; }
+
+.dui-help-composer-dock {
+  position: relative;
+  padding: 13px clamp(18px, 3vw, 34px) 15px;
+  border-top: 1px solid var(--help-line);
+  background: linear-gradient(180deg, rgb(8 15 18 / .94), rgb(5 10 13 / .98));
+  box-shadow: 0 -18px 34px rgb(2 6 8 / .17);
+}
+
+.dui-help-error {
+  margin: 0 0 9px;
+  padding: 8px 10px;
+  border: 1px solid rgb(238 125 134 / .22);
+  border-radius: 9px;
+  background: rgb(130 35 49 / .12);
+  color: #f4a7ae;
+  font-size: 10px;
+  line-height: 1.45;
+}
+
+.dui-help-composer {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: end;
+  gap: 10px;
+  padding: 9px 9px 9px 14px;
+  border: 1px solid rgb(153 201 205 / .16);
+  border-radius: 15px;
+  background: linear-gradient(180deg, rgb(255 255 255 / .045), rgb(255 255 255 / .024));
+  box-shadow: inset 0 1px 0 rgb(255 255 255 / .035), 0 14px 32px rgb(0 0 0 / .12);
+  transition: 150ms ease;
+}
+
+.dui-help-composer:focus-within {
+  border-color: rgb(112 217 208 / .34);
+  box-shadow: inset 0 1px 0 rgb(255 255 255 / .05), 0 0 0 3px rgb(74 181 170 / .07), 0 14px 32px rgb(0 0 0 / .13);
+}
+
+.dui-help-composer textarea {
+  width: 100%;
+  min-height: 38px;
+  max-height: 144px;
+  padding: 9px 2px 7px;
+  resize: none;
+  border: 0;
+  outline: 0;
+  overflow-y: auto;
+  background: transparent;
+  color: #edf5f6;
+  font: inherit;
+  font-size: 12px;
+  line-height: 1.55;
+  scrollbar-color: rgb(92 129 134 / .45) transparent;
+}
+
+.dui-help-composer textarea::placeholder { color: #677b82; }
+
+.dui-help-composer button {
+  display: inline-flex;
+  min-width: 82px;
+  min-height: 40px;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 8px 12px;
+  border: 1px solid rgb(146 238 225 / .24);
+  border-radius: 11px;
+  background: linear-gradient(180deg, #64c8bb, #459f97);
+  color: #04110f;
+  font: inherit;
+  font-size: 10.5px;
+  font-weight: 760;
+  box-shadow: inset 0 1px 0 rgb(255 255 255 / .2), 0 9px 20px rgb(27 104 99 / .17);
+  transition: 140ms ease;
+}
+
+.dui-help-composer button svg { width: 15px; height: 15px; }
+.dui-help-composer button:hover:not(:disabled) { background: linear-gradient(180deg, #7bd9cc, #55b3aa); transform: translateY(-1px); }
+.dui-help-composer button:disabled { cursor: not-allowed; filter: saturate(.25); opacity: .35; box-shadow: none; }
+
+.dui-help-composer-meta {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  padding: 8px 3px 0;
+  color: #596d74;
+  font-size: 8.5px;
+  line-height: 1.3;
+}
+
+.dui-help-composer-meta kbd {
+  border: 0;
+  background: transparent;
+  color: #7f9298;
+  font: inherit;
+  font-weight: 690;
+}
+
+.dui-help-composer-meta__privacy { display: inline-flex; align-items: center; gap: 5px; color: #69817f; white-space: nowrap; }
+.dui-help-composer-meta__privacy svg { width: 11px; height: 11px; }
+
+@keyframes dui-help-overlay-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@keyframes dui-help-panel-in {
+  from { opacity: 0; transform: translateY(10px) scale(.99); }
+  to { opacity: 1; transform: translateY(0) scale(1); }
+}
+
+@keyframes dui-help-thinking {
+  0%, 60%, 100% { opacity: .3; transform: translateY(0); }
+  30% { opacity: 1; transform: translateY(-2px); }
+}
+
+@media (max-width: 860px) {
+  .dui-help-suggestions { grid-template-columns: 1fr; }
+  .dui-help-suggestions button { min-height: 76px; }
+}
+
+@media (max-width: 680px) {
+  .dui-help-overlay { padding: 0; }
+  .dui-help-panel { width: 100%; height: 100%; min-height: 0; border: 0; border-radius: 0; }
+  .dui-help-panel__header { min-height: 70px; padding: 11px 12px 11px 14px; }
+  .dui-help-panel__glyph { width: 38px; height: 38px; }
+  .dui-help-panel__title p { display: none; }
+  .dui-help-panel__status { display: none; }
+  .dui-help-panel__workspace { min-height: 0; }
+  .dui-help-conversation { height: 100%; }
+  .dui-help-transcript { padding: 26px 18px 22px; }
+  .dui-help-welcome { padding-top: 8px; }
+  .dui-help-welcome__orb { width: 56px; height: 56px; margin-bottom: 17px; }
+  .dui-help-welcome h3 { font-size: 25px; }
+  .dui-help-suggestions { margin-top: 22px; }
+  .dui-help-message { width: 97%; }
+  .dui-help-composer-dock { padding: 11px 12px 13px; }
+  .dui-help-composer-meta > span:first-child { display: none; }
+  .dui-help-composer-meta { justify-content: flex-end; }
+}
+
+@media (max-width: 440px) {
+  .dui-help-panel__title > div > span { display: none; }
+  .dui-help-panel__title h2 { margin: 0; font-size: 15px; }
+  .dui-help-panel__actions .dui-help-panel__new { width: 36px; padding: 0; }
+  .dui-help-panel__new span { display: none; }
+  .dui-help-suggestions button { min-height: 70px; padding: 11px; }
+  .dui-help-message__avatar { width: 27px; height: 27px; }
+  .dui-help-message { gap: 8px; }
+  .dui-help-message__content > p { padding: 11px 12px; }
+  .dui-help-composer { padding-left: 11px; }
+  .dui-help-composer button { width: 40px; min-width: 40px; padding: 0; }
+  .dui-help-composer button span { display: none; }
+}
+
+html[data-dui-motion="reduced"] .dui-help-panel,
+html[data-dui-motion="reduced"] .dui-help-overlay,
+html[data-dui-motion="reduced"] .dui-help-panel * {
+  animation: none !important;
+  scroll-behavior: auto !important;
+  transition-duration: .001ms !important;
+}
+
+html[data-dui-high-contrast="true"] .dui-help-panel { border-color: rgb(210 238 238 / .36); }
+html[data-dui-high-contrast="true"] .dui-help-message__content > p,
+html[data-dui-high-contrast="true"] .dui-help-suggestions button,
+html[data-dui-high-contrast="true"] .dui-help-composer { border-color: rgb(210 238 238 / .27); }

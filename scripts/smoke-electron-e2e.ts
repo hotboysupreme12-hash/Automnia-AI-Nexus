@@ -165,7 +165,7 @@ type ElectronCaseOptions = {
 }
 
 async function runElectronCase(options: ElectronCaseOptions) {
-  const tempRoot = mkdtempSync(path.join(tmpdir(), `dystopai-electron-${options.name}-`))
+  const tempRoot = mkdtempSync(path.join(tmpdir(), `automnia-electron-${options.name}-`))
   const userDataDir = path.join(tempRoot, 'user-data')
   const openclawDir = path.join(tempRoot, 'openclaw')
   const workspaceRoot = path.join(tempRoot, 'workspace')
@@ -188,13 +188,13 @@ async function runElectronCase(options: ElectronCaseOptions) {
     CONTROL_CENTER_AUTOSTART_GATEWAY: '0',
     CONTROL_CENTER_GATEWAY_CHAT_CLIENT: '0',
     CONTROL_CENTER_TOKEN: `electron-e2e-${options.name}`,
-    DYSTOPAI_ELECTRON_E2E: '1',
-    DYSTOPAI_ELECTRON_E2E_AUTO_QUIT_MS: '1500',
-    DYSTOPAI_ELECTRON_E2E_ASSERT_NAVIGATION: '1',
-    DYSTOPAI_ELECTRON_E2E_DISABLE_OPEN_EXTERNAL: '1',
-    DYSTOPAI_ELECTRON_E2E_SKIP_PORT_CLEANUP: '1',
-    DYSTOPAI_PIPE_SERVER_LOGS: '1',
-    DYSTOPAI_USER_DATA_DIR: userDataDir,
+    AUTOMNIA_ELECTRON_E2E: '1',
+    AUTOMNIA_ELECTRON_E2E_AUTO_QUIT_MS: '1500',
+    AUTOMNIA_ELECTRON_E2E_ASSERT_NAVIGATION: '1',
+    AUTOMNIA_ELECTRON_E2E_DISABLE_OPEN_EXTERNAL: '1',
+    AUTOMNIA_ELECTRON_E2E_SKIP_PORT_CLEANUP: '1',
+    AUTOMNIA_PIPE_SERVER_LOGS: '1',
+    AUTOMNIA_USER_DATA_DIR: userDataDir,
     OPENCLAW_STATE_DIR: openclawDir,
     OPENCLAW_HOME: openclawDir,
     CONTROL_CENTER_WORKSPACE_ROOT: workspaceRoot,
@@ -245,11 +245,11 @@ await runElectronCase({
   name: 'startup',
   expectedStatus: 0,
   requiredOutput: [
-    /\[dystopai-e2e\] port-cleanup-skipped/,
-    /\[dystopai-e2e\] server-ready/,
-    /\[dystopai-e2e\] navigation-policy-ok/,
-    /\[dystopai-e2e\] auto-quit/,
-    /\[dystopai-e2e\] quit-cleanup-complete/,
+    /\[automnia-e2e\] port-cleanup-skipped/,
+    /\[automnia-e2e\] server-ready/,
+    /\[automnia-e2e\] navigation-policy-ok/,
+    /\[automnia-e2e\] auto-quit/,
+    /\[automnia-e2e\] quit-cleanup-complete/,
   ],
 })
 
@@ -257,18 +257,18 @@ await runElectronCase({
   name: 'tray-behavior',
   expectedStatus: 0,
   env: {
-    DYSTOPAI_ELECTRON_E2E_AUTO_QUIT_MS: '10000',
-    DYSTOPAI_ELECTRON_E2E_ASSERT_TRAY_BEHAVIOR: '1',
-    DYSTOPAI_ELECTRON_E2E_QUIT_AFTER_TRAY_ASSERTIONS: '1',
+    AUTOMNIA_ELECTRON_E2E_AUTO_QUIT_MS: '10000',
+    AUTOMNIA_ELECTRON_E2E_ASSERT_TRAY_BEHAVIOR: '1',
+    AUTOMNIA_ELECTRON_E2E_QUIT_AFTER_TRAY_ASSERTIONS: '1',
   },
   requiredOutput: [
-    /\[dystopai-e2e\] port-cleanup-skipped/,
-    /\[dystopai-e2e\] server-ready/,
-    /\[dystopai-e2e\] renderer-load:1/,
-    /\[dystopai-e2e\] tray-visible-state-ok/,
-    /\[dystopai-e2e\] tray-hide-on-close-ok/,
-    /\[dystopai-e2e\] tray-click-restore-ok/,
-    /\[dystopai-e2e\] quit-cleanup-complete/,
+    /\[automnia-e2e\] port-cleanup-skipped/,
+    /\[automnia-e2e\] server-ready/,
+    /\[automnia-e2e\] renderer-load:1/,
+    /\[automnia-e2e\] tray-visible-state-ok/,
+    /\[automnia-e2e\] tray-hide-on-close-ok/,
+    /\[automnia-e2e\] tray-click-restore-ok/,
+    /\[automnia-e2e\] quit-cleanup-complete/,
   ],
 })
 
@@ -277,16 +277,16 @@ await runElectronCase({
   expectedStatus: 0,
   timeoutMs: 60_000,
   env: {
-    DYSTOPAI_ELECTRON_E2E_AUTO_QUIT_MS: '20000',
-    DYSTOPAI_ELECTRON_E2E_ASSERT_RENDERER_JOURNEY: '1',
-    DYSTOPAI_ELECTRON_E2E_QUIT_AFTER_RENDERER_JOURNEY: '1',
+    AUTOMNIA_ELECTRON_E2E_AUTO_QUIT_MS: '20000',
+    AUTOMNIA_ELECTRON_E2E_ASSERT_RENDERER_JOURNEY: '1',
+    AUTOMNIA_ELECTRON_E2E_QUIT_AFTER_RENDERER_JOURNEY: '1',
   },
   requiredOutput: [
-    /\[dystopai-e2e\] port-cleanup-skipped/,
-    /\[dystopai-e2e\] server-ready/,
-    /\[dystopai-e2e\] renderer-load:1/,
-    /\[dystopai-e2e\] renderer-journey-ok/,
-    /\[dystopai-e2e\] quit-cleanup-complete/,
+    /\[automnia-e2e\] port-cleanup-skipped/,
+    /\[automnia-e2e\] server-ready/,
+    /\[automnia-e2e\] renderer-load:1/,
+    /\[automnia-e2e\] renderer-journey-ok/,
+    /\[automnia-e2e\] quit-cleanup-complete/,
   ],
 })
 
@@ -294,23 +294,23 @@ await runElectronCase({
   name: 'renderer-recovery',
   expectedStatus: 0,
   env: {
-    DYSTOPAI_ELECTRON_E2E_AUTO_QUIT_MS: '10000',
-    DYSTOPAI_ELECTRON_E2E_ASSERT_RENDERER_EXTERNALS: '1',
-    DYSTOPAI_ELECTRON_E2E_ASSERT_RENDERER_RECOVERY: '1',
-    DYSTOPAI_ELECTRON_E2E_QUIT_AFTER_RENDERER_ASSERTIONS: '1',
+    AUTOMNIA_ELECTRON_E2E_AUTO_QUIT_MS: '10000',
+    AUTOMNIA_ELECTRON_E2E_ASSERT_RENDERER_EXTERNALS: '1',
+    AUTOMNIA_ELECTRON_E2E_ASSERT_RENDERER_RECOVERY: '1',
+    AUTOMNIA_ELECTRON_E2E_QUIT_AFTER_RENDERER_ASSERTIONS: '1',
   },
   requiredOutput: [
-    /\[dystopai-e2e\] port-cleanup-skipped/,
-    /\[dystopai-e2e\] server-ready/,
-    /\[dystopai-e2e\] renderer-load:1/,
-    /\[dystopai-e2e\] external-open:https:\/\/example\.com\/dystopai-e2e-window-open/,
-    /\[dystopai-e2e\] external-open:https:\/\/example\.com\/dystopai-e2e-navigation/,
-    /\[dystopai-e2e\] renderer-external-policy-ok/,
-    /\[dystopai-e2e\] renderer-crash-requested/,
-    /\[dystopai-e2e\] renderer-process-gone:/,
-    /\[dystopai-e2e\] renderer-load:2/,
-    /\[dystopai-e2e\] renderer-recovered/,
-    /\[dystopai-e2e\] quit-cleanup-complete/,
+    /\[automnia-e2e\] port-cleanup-skipped/,
+    /\[automnia-e2e\] server-ready/,
+    /\[automnia-e2e\] renderer-load:1/,
+    /\[automnia-e2e\] external-open:https:\/\/example\.com\/automnia-e2e-window-open/,
+    /\[automnia-e2e\] external-open:https:\/\/example\.com\/automnia-e2e-navigation/,
+    /\[automnia-e2e\] renderer-external-policy-ok/,
+    /\[automnia-e2e\] renderer-crash-requested/,
+    /\[automnia-e2e\] renderer-process-gone:/,
+    /\[automnia-e2e\] renderer-load:2/,
+    /\[automnia-e2e\] renderer-recovered/,
+    /\[automnia-e2e\] quit-cleanup-complete/,
   ],
 })
 
@@ -318,12 +318,12 @@ await runElectronCase({
   name: 'startup-failure',
   expectedStatus: 0,
   env: {
-    DYSTOPAI_ELECTRON_E2E_FORCE_MISSING_SERVER: '1',
-    DYSTOPAI_ELECTRON_E2E_AUTO_QUIT_MS: '0',
+    AUTOMNIA_ELECTRON_E2E_FORCE_MISSING_SERVER: '1',
+    AUTOMNIA_ELECTRON_E2E_AUTO_QUIT_MS: '0',
   },
   requiredOutput: [
-    /\[dystopai-e2e\] port-cleanup-skipped/,
-    /\[dystopai-e2e\] DystopAI - Startup Error: Error: E2E forced missing server/,
+    /\[automnia-e2e\] port-cleanup-skipped/,
+    /\[automnia-e2e\] Automnia - Startup Error: Error: E2E forced missing server/,
   ],
 })
 

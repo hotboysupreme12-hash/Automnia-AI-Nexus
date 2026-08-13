@@ -832,6 +832,10 @@ export function createProviderSetupService(options: ProviderSetupServiceOptions)
       path.join(options.openClawStateRoot, 'google-oauth-client.json'),
       path.join(options.workspaceRoot, 'google-oauth-client.json'),
       path.join(options.workspaceRoot, 'client_secret.json'),
+      // `gcloud auth application-default login` creates an authorized-user
+      // credential that already contains a valid desktop OAuth client. Reuse
+      // that local client when the app has no separate client_secret.json.
+      ...googleApplicationDefaultCredentialFileCandidates(),
     ]
 
     try {
@@ -892,7 +896,7 @@ export function createProviderSetupService(options: ProviderSetupServiceOptions)
     if (fileConfig) return fileConfig
 
     throw new Error(
-      `Google OAuth needs a desktop OAuth client. Set ${options.googleOAuthClientIdKeys[0]} or place client_secret.json in ${options.workspaceRoot}.`,
+      `Google OAuth needs a desktop OAuth client. Set ${options.googleOAuthClientIdKeys[0]}, run "gcloud auth application-default login", or place client_secret.json in ${options.workspaceRoot}.`,
     )
   }
 

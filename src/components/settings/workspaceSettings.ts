@@ -2,11 +2,13 @@ import type { AgentRarity } from '../../types/nexus'
 
 export type RegistrySortKey = 'party' | 'level' | 'name' | 'rarity'
 export type AgentDisplayMode = 'showcase' | 'grid6' | 'grid8' | 'grid10' | 'list'
-export type AgentOverlayPreset = 'rarity' | 'original' | 'graphite-glass' | 'anime-sky' | 'neon-city' | 'cloud-horizon' | 'blueprint-grid' | 'aurora-mesh' | 'tactical-map' | 'silver-lines' | 'studio-noir'
+export type AgentOverlayPreset = 'rarity' | 'original' | 'epic-purple' | 'graphite-glass' | 'blueprint-grid'
+export type AgentCardTheme = Exclude<AgentOverlayPreset, 'rarity'>
 
 export type RegistryPreferences = {
   displayMode: AgentDisplayMode
   overlayPreset: AgentOverlayPreset
+  rarityColorsEnabled: boolean
   rarityFilter: AgentRarity | 'all'
   sortKey: RegistrySortKey
 }
@@ -17,12 +19,12 @@ export type ConsolePreferences = {
   rememberDrafts: boolean
 }
 
-export const REGISTRY_PREFS_KEY = 'dystopai-agent-registry-prefs'
+export const REGISTRY_PREFS_KEY = 'automnia-agent-registry-prefs'
 export const REGISTRY_PREFS_CHANGED_EVENT = 'automnia:registry-preferences-changed'
-export const REGISTRY_PREFS_VERSION = 5
-export const CONSOLE_VISIBILITY_KEY = 'dystopai-agent-console-visibility'
-export const CONSOLE_WIDTH_KEY = 'dystopai-agent-console-width'
-export const CONSOLE_DRAFTS_KEY = 'dystopai-command-draft-persistence'
+export const REGISTRY_PREFS_VERSION = 6
+export const CONSOLE_VISIBILITY_KEY = 'automnia-agent-console-visibility'
+export const CONSOLE_WIDTH_KEY = 'automnia-agent-console-width'
+export const CONSOLE_DRAFTS_KEY = 'automnia-command-draft-persistence'
 export const CONSOLE_PREFS_CHANGED_EVENT = 'automnia:console-preferences-changed'
 
 export const REGISTRY_DISPLAY_OPTIONS: Array<{ id: AgentDisplayMode; label: string; hint: string; pageSize: number }> = [
@@ -34,24 +36,33 @@ export const REGISTRY_DISPLAY_OPTIONS: Array<{ id: AgentDisplayMode; label: stri
 ]
 
 export const REGISTRY_OVERLAY_OPTIONS: Array<{ id: AgentOverlayPreset; label: string; hint: string }> = [
-  { id: 'rarity', label: 'By Rarity', hint: 'Rarity card skins' },
+  { id: 'rarity', label: 'By rarity', hint: 'Legendary Original · Epic Purple · Rare Blueprint · Common Graphite' },
   { id: 'original', label: 'Original', hint: 'Cyber circuit' },
+  { id: 'epic-purple', label: 'Epic Purple', hint: 'High-contrast violet' },
   { id: 'graphite-glass', label: 'Graphite', hint: 'Modern glass' },
-  { id: 'anime-sky', label: 'Anime Sky', hint: 'Soft open sky' },
-  { id: 'neon-city', label: 'Neon City', hint: 'Night glow' },
-  { id: 'cloud-horizon', label: 'Horizon', hint: 'Quiet clouds' },
   { id: 'blueprint-grid', label: 'Blueprint', hint: 'Technical grid' },
-  { id: 'aurora-mesh', label: 'Aurora', hint: 'Mesh wave' },
-  { id: 'tactical-map', label: 'Tactical', hint: 'Stone map' },
-  { id: 'silver-lines', label: 'Silver', hint: 'Minimal data' },
-  { id: 'studio-noir', label: 'Noir', hint: 'Warm shadow' },
 ]
 
 export const DEFAULT_REGISTRY_PREFERENCES: RegistryPreferences = {
   displayMode: 'grid8',
-  overlayPreset: 'rarity',
+  overlayPreset: 'graphite-glass',
+  rarityColorsEnabled: true,
   rarityFilter: 'all',
   sortKey: 'party',
+}
+
+export const AGENT_CARD_RARITY_THEMES: Record<AgentRarity, AgentCardTheme> = {
+  legendary: 'original',
+  epic: 'epic-purple',
+  rare: 'blueprint-grid',
+  common: 'graphite-glass',
+}
+
+export function resolveAgentCardTheme(rarity: AgentRarity | undefined, preferences: Pick<RegistryPreferences, 'overlayPreset' | 'rarityColorsEnabled'>): AgentCardTheme {
+  if (preferences.rarityColorsEnabled) {
+    return AGENT_CARD_RARITY_THEMES[rarity || 'common']
+  }
+  return preferences.overlayPreset === 'rarity' ? 'graphite-glass' : preferences.overlayPreset
 }
 
 export const DEFAULT_CONSOLE_PREFERENCES: ConsolePreferences = {
@@ -79,9 +90,14 @@ export function readRegistryPreferences(): RegistryPreferences {
   if (!storage) return DEFAULT_REGISTRY_PREFERENCES
   try {
     const parsed = JSON.parse(storage.getItem(REGISTRY_PREFS_KEY) || '{}') as Partial<RegistryPreferences>
+    const storedOverlayPreset = parsed.overlayPreset && OVERLAY_PRESETS.has(parsed.overlayPreset)
+      ? parsed.overlayPreset
+      : DEFAULT_REGISTRY_PREFERENCES.overlayPreset
+    const overlayPreset = storedOverlayPreset === 'rarity' ? 'graphite-glass' : storedOverlayPreset
     return {
       displayMode: parsed.displayMode && DISPLAY_MODES.has(parsed.displayMode) ? parsed.displayMode : DEFAULT_REGISTRY_PREFERENCES.displayMode,
-      overlayPreset: parsed.overlayPreset && OVERLAY_PRESETS.has(parsed.overlayPreset) ? parsed.overlayPreset : DEFAULT_REGISTRY_PREFERENCES.overlayPreset,
+      overlayPreset,
+      rarityColorsEnabled: typeof parsed.rarityColorsEnabled === 'boolean' ? parsed.rarityColorsEnabled : storedOverlayPreset === 'rarity',
       rarityFilter: parsed.rarityFilter && RARITIES.has(parsed.rarityFilter) ? parsed.rarityFilter : DEFAULT_REGISTRY_PREFERENCES.rarityFilter,
       sortKey: parsed.sortKey && SORT_KEYS.has(parsed.sortKey) ? parsed.sortKey : DEFAULT_REGISTRY_PREFERENCES.sortKey,
     }
@@ -93,8 +109,13 @@ export function readRegistryPreferences(): RegistryPreferences {
 export function saveRegistryPreferences(preferences: RegistryPreferences): void {
   const storage = localStorageOrNull()
   if (!storage) return
-  storage.setItem(REGISTRY_PREFS_KEY, JSON.stringify({ ...preferences, overlayPresetVersion: REGISTRY_PREFS_VERSION }))
-  window.dispatchEvent(new CustomEvent<RegistryPreferences>(REGISTRY_PREFS_CHANGED_EVENT, { detail: preferences }))
+  const normalized: RegistryPreferences = {
+    ...preferences,
+    overlayPreset: preferences.overlayPreset === 'rarity' ? 'graphite-glass' : preferences.overlayPreset,
+    rarityColorsEnabled: Boolean(preferences.rarityColorsEnabled),
+  }
+  storage.setItem(REGISTRY_PREFS_KEY, JSON.stringify({ ...normalized, overlayPresetVersion: REGISTRY_PREFS_VERSION }))
+  window.dispatchEvent(new CustomEvent<RegistryPreferences>(REGISTRY_PREFS_CHANGED_EVENT, { detail: normalized }))
 }
 
 export function readConsolePreferences(): ConsolePreferences {

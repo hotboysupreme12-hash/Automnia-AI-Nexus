@@ -172,7 +172,7 @@ function warnStorageQuotaSkipped(name: string, value: string): void {
   storageQuotaLastWarnedAt.set(name, now)
 
   const approxKb = Math.max(1, Math.round(value.length / 1024))
-  console.warn(`DystopAI local persistence skipped because browser storage quota is full (${name}, ~${approxKb} KB).`)
+  console.warn(`Automnia local persistence skipped because browser storage quota is full (${name}, ~${approxKb} KB).`)
 }
 
 function writeLocalStorageItem(name: string, value: string): void {

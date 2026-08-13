@@ -12,9 +12,12 @@ import {
 import { useNexusStore } from '../../store/nexusStore'
 import type { AgentResponse, AgentTurnAttachment, OpenClawAgent } from '../../types/nexus'
 import { apiUrl } from '../../utils/apiUrl'
+import { fetchControlCenterWithAuth } from '../../api/authenticatedFetch'
+import { useLicense } from '../../context/useLicense'
 import { redactDiagnosticText } from '../../utils/diagnosticRedaction'
 import { agentPortraitSrc } from '../../utils/portrait'
 import { createSseFrameParser } from '../../utils/sseStream'
+import { resolveLicenseEntitlement } from '../../utils/licenseEntitlement'
 import {
   decodeAudioToMono16Khz,
   friendlyMicrophoneError,
@@ -127,20 +130,20 @@ function messageTimestampTitle(ts: string) {
 function compactModelLabel(modelId?: string) {
   const cleaned = modelId?.trim()
   if (!cleaned) return ''
-  if (cleaned.startsWith('automnia-cloud/')) return 'Automnia Cloud AI'
+  if (cleaned.startsWith('automnia-cloud/')) return 'Automnia'
   const parts = cleaned.split('/').filter(Boolean)
   return parts.at(-1) || cleaned
 }
 
-function billingRouteLabel(entry: AgentResponse): { label: string; title: string; tone: BadgeTone } | null {
+function billingRouteLabel(entry: AgentResponse, hostedCreditsFirst = false): { label: string; title: string; tone: BadgeTone } | null {
   const modelId = entry.modelId?.trim().toLowerCase() || ''
   const transport = entry.transport?.trim().toLowerCase() || ''
-  const hostedCredits = modelId.startsWith('automnia-cloud/') || transport === 'automnia-cloud-relay'
+  const hostedCredits = hostedCreditsFirst || modelId.startsWith('automnia-cloud/') || transport === 'automnia-cloud-relay'
   if (hostedCredits) {
     const balance = typeof entry.remainingCredits === 'number' && Number.isFinite(entry.remainingCredits)
       ? `${entry.remainingCredits.toLocaleString('en-US')} credits remaining`
       : 'Balance will refresh after the Automnia Cloud response is confirmed.'
-    return { label: 'Automnia credits', title: `Cloud Subscription route. ${balance}`, tone: 'success' }
+    return { label: 'Automnia', title: `Subscription Relay route. ${balance}`, tone: 'success' }
   }
   if (modelId || transport.includes('gateway') || transport.includes('openclaw')) {
     return { label: 'Your provider', title: 'BYOK or /runtime route. The configured provider account bills this request, not Automnia hosted credits.', tone: 'info' }
@@ -393,6 +396,7 @@ const ResponseMessage = memo(function ResponseMessage({
   onRestartGateway,
   onCancelQueuedTurn,
   actionBusy,
+  hostedCreditsFirst,
 }: {
   entry: AgentResponse
   meta?: AgentMessageMeta
@@ -401,6 +405,7 @@ const ResponseMessage = memo(function ResponseMessage({
   onRestartGateway: (entryId: string) => void
   onCancelQueuedTurn: (entryId: string) => void
   actionBusy: boolean
+  hostedCreditsFirst: boolean
 }) {
   const avatar = meta?.portrait || ''
   const name = meta?.name || entry.agentId
@@ -411,7 +416,7 @@ const ResponseMessage = memo(function ResponseMessage({
   const hasContent = replyText.trim().length > 0
   const modelId = entry.modelId || meta?.modelId || ''
   const modelLabel = compactModelLabel(modelId)
-  const billingRoute = billingRouteLabel(entry)
+  const billingRoute = billingRouteLabel(entry, hostedCreditsFirst)
   const firstTokenMs = timestampDeltaMs(entry.queuedAt || entry.startedAt || entry.timestamp, entry.firstTokenAt)
   const firstTokenLabel = formatMs(firstTokenMs)
   const transport = transportLabel(entry.transport, entry.buffered)
@@ -444,7 +449,6 @@ const ResponseMessage = memo(function ResponseMessage({
       data-message-transport={entry.transport || ''}
       className="dy-command-message group/message relative overflow-hidden border border-white/[0.055] bg-[linear-gradient(180deg,rgba(255,255,255,0.035),rgba(255,255,255,0.018))] p-4 transition-all duration-200 hover:bg-white/[0.045] hover:border-white/[0.09] border-l-[3px]"
     >
-      <div className="pointer-events-none absolute inset-x-0 top-0 h-px bg-gradient-to-r from-white/16 via-white/4 to-transparent" />
       <div className="dy-command-message-header mb-3">
         <div className={`dy-command-message-avatar relative h-10 w-10 shrink-0 overflow-hidden rounded-xl ring-1 shadow-lg ring-offset-1 ring-offset-slate-950 ${avatarRing}`}>
           {avatar && !avatarFailed ? (
@@ -467,8 +471,12 @@ const ResponseMessage = memo(function ResponseMessage({
               {statusText}
             </Badge>
           </div>
-          {role && (
-            <p className="dy-command-agent-role" title={role}>{role}</p>
+          {(modelLabel || role) && (
+            <p className="dy-command-agent-context">
+              {modelLabel && <span className="dy-command-message-model" title={`Model: ${modelId}`}>{modelLabel}</span>}
+              {modelLabel && role && <i aria-hidden="true">·</i>}
+              {role && <span className="dy-command-agent-role" title={role}>{role}</span>}
+            </p>
           )}
         </div>
         <div className="dy-command-message-runtime">
@@ -479,56 +487,6 @@ const ResponseMessage = memo(function ResponseMessage({
           >
             {messageClock(entry.timestamp)}
           </time>
-          {modelLabel && (
-            <span
-              title={`Model: ${modelId}`}
-              className="dy-command-message-model"
-            >
-              {modelLabel}
-            </span>
-          )}
-        </div>
-        <div className="dy-command-message-meta">
-          {durationLabel && (
-            <Badge
-              className={`dy-command-message-chip ${entry.ok ? 'is-success' : 'is-error'}`}
-              title={runtimeTitle || 'Runtime'}
-              tone={entry.ok ? 'success' : 'error'}
-              size="micro"
-            >
-              {durationLabel}
-            </Badge>
-          )}
-          {firstTokenLabel && (
-            <Badge className="dy-command-message-chip is-info" title="Time to first visible output" tone="info" size="micro">
-              first {firstTokenLabel}
-            </Badge>
-          )}
-          {transport && (
-            <Badge className="dy-command-message-chip is-transport" title={runtimeTitle || `Transport: ${transport}`} tone="info" size="micro">
-              {transport}
-            </Badge>
-          )}
-          {billingRoute && (
-            <Badge className="dy-command-message-chip is-billing" title={billingRoute.title} tone={billingRoute.tone} size="micro">
-              {billingRoute.label}
-            </Badge>
-          )}
-          {queuePositionLabel && (
-            <Badge
-              className="dy-command-message-chip is-queue"
-              title={`Queue position ${entry.queuePosition} of ${entry.queueDepth}`}
-              tone="warning"
-              size="micro"
-            >
-              queue {queuePositionLabel}
-            </Badge>
-          )}
-          {entry.failureKind && !entry.ok && (
-            <Badge className="dy-command-message-chip is-warning" title={`Failure kind: ${entry.failureKind}`} tone="warning" size="micro">
-              {entry.failureKind.replace(/_/g, ' ')}
-            </Badge>
-          )}
         </div>
       </div>
 
@@ -562,6 +520,67 @@ const ResponseMessage = memo(function ResponseMessage({
           {entry.ok ? 'No output' : 'Request failed'}
         </div>
       )}
+
+      <div className="dy-command-message-meta" aria-label="Response details">
+        {(durationLabel || firstTokenLabel) && (
+          <div className="dy-command-message-meta-group dy-command-message-meta-group--performance" aria-label="Performance">
+            {durationLabel && (
+              <Badge
+                className={`dy-command-message-chip dy-command-message-chip--metric ${entry.ok ? 'is-success' : 'is-error'}`}
+                title={runtimeTitle || 'Runtime'}
+                tone={entry.ok ? 'success' : 'error'}
+                size="micro"
+              >
+                <span className="dy-command-message-chip-label">Runtime</span>
+                <strong className="dy-command-message-chip-value">{durationLabel}</strong>
+              </Badge>
+            )}
+            {firstTokenLabel && (
+              <Badge className="dy-command-message-chip dy-command-message-chip--metric is-info" title="Time to first visible output" tone="info" size="micro">
+                <span className="dy-command-message-chip-label">First</span>
+                <strong className="dy-command-message-chip-value">{firstTokenLabel}</strong>
+              </Badge>
+            )}
+          </div>
+        )}
+
+        {(transport || billingRoute) && (
+          <div className="dy-command-message-meta-group dy-command-message-meta-group--routing" aria-label="Routing">
+            {transport && (
+              <Badge className="dy-command-message-chip dy-command-message-chip--route is-transport" title={runtimeTitle || `Transport: ${transport}`} tone="info" size="micro">
+                <span className="dy-command-message-chip-label">Route</span>
+                <strong className="dy-command-message-chip-value">{transport}</strong>
+              </Badge>
+            )}
+            {billingRoute && (
+              <Badge className="dy-command-message-chip dy-command-message-chip--route is-billing" title={billingRoute.title} tone={billingRoute.tone} size="micro">
+                <span className="dy-command-message-chip-label">Billing</span>
+                <strong className="dy-command-message-chip-value">{billingRoute.label}</strong>
+              </Badge>
+            )}
+          </div>
+        )}
+
+        {(queuePositionLabel || (entry.failureKind && !entry.ok)) && (
+          <div className="dy-command-message-meta-group dy-command-message-meta-group--auxiliary" aria-label="Additional response details">
+            {queuePositionLabel && (
+              <Badge
+                className="dy-command-message-chip is-queue"
+                title={`Queue position ${entry.queuePosition} of ${entry.queueDepth}`}
+                tone="warning"
+                size="micro"
+              >
+                queue {queuePositionLabel}
+              </Badge>
+            )}
+            {entry.failureKind && !entry.ok && (
+              <Badge className="dy-command-message-chip is-warning" title={`Failure kind: ${entry.failureKind}`} tone="warning" size="micro">
+                {entry.failureKind.replace(/_/g, ' ')}
+              </Badge>
+            )}
+          </div>
+        )}
+      </div>
 
       {cta && (
         <div className="dy-command-response-cta">
@@ -600,6 +619,7 @@ const ResponseMessage = memo(function ResponseMessage({
 })
 
 export function AgentResponseConsole() {
+  const { license } = useLicense()
   const agents = useNexusStore((s) => s.agents)
   const selectedAgentIds = useNexusStore((s) => s.selectedAgentIds)
   const activePartyIds = useNexusStore((s) => s.activePartyIds)
@@ -615,6 +635,9 @@ export function AgentResponseConsole() {
   const selectAgent = useNexusStore((s) => s.selectAgent)
   const clearAgentResponses = useNexusStore((s) => s.clearAgentResponses)
   const missionRunning = useNexusStore((s) => s.activeMission?.status === 'running')
+  const hostedCreditsFirst = resolveLicenseEntitlement(license).isHosted
+    && license?.usagePriority !== 'provider_first'
+    && license?.usagePriority !== 'byok_only'
 
   const [uploadedAttachment, setUploadedAttachment] = useState<PendingAttachment | null>(null)
   const [uploadError, setUploadError] = useState('')
@@ -758,8 +781,8 @@ export function AgentResponseConsole() {
   const visibleDisplayedResponses = displayedResponses
   const targetCount = selectedTargets.length || partyTargetIds.length
   const targetMode = selectedTargets.length
-    ? selectedTargets.length === 1 ? 'Agent lane' : 'Selected lanes'
-    : 'Party broadcast'
+    ? selectedTargets.length === 1 ? 'Direct chat' : 'Multi-agent chat'
+    : 'Party chat'
   const armedTargets = selectedTargets.length
     ? selectedTargets
     : partyTargetIds.map((id) => agentById.get(id)).filter((a): a is OpenClawAgent => Boolean(a))
@@ -770,7 +793,7 @@ export function AgentResponseConsole() {
   )
   const allTargetsBusy = targetCount > 0 && armedTargets.length > 0 && runnableArmedTargets.length === 0
   const hardBlockedSendReason = useMemo(() => {
-    if (targetCount === 0) return 'Select at least one agent before sending.'
+    if (targetCount === 0) return 'Select an agent'
     if (!armedTargets.length) return 'No available agents are currently armed for this message.'
     return ''
   }, [armedTargets.length, targetCount])
@@ -781,7 +804,7 @@ export function AgentResponseConsole() {
   }, [allTargetsBusy, armedTargets, hardBlockedSendReason])
   const voiceBusy = voicePhase !== 'idle'
   const canSend = Boolean(prompt.trim() || uploadedAttachment) && !isUploading && !voiceBusy && !hardBlockedSendReason
-  const composerPlaceholder = hardBlockedSendReason || queuedSendReason || 'Message the agents...'
+  const composerPlaceholder = hardBlockedSendReason || queuedSendReason || 'Message…'
   const streamLabel: Record<ConsoleStreamState, string> = {
     connecting: 'Connecting',
     live: 'Live stream',
@@ -792,14 +815,6 @@ export function AgentResponseConsole() {
     clawTalkStreamHealth.detail,
     clawTalkStreamHealth.retries > 0 ? `Reconnect attempts: ${clawTalkStreamHealth.retries}` : '',
   ].filter(Boolean).join(' ')
-  const emptyTargetLabel = selectedTargets.length > 0
-    ? `${selectedTargets.length} agent${selectedTargets.length === 1 ? '' : 's'} selected`
-    : targetCount > 0
-      ? `${targetCount} party agent${targetCount === 1 ? '' : 's'}`
-      : 'No agents selected'
-  const emptyStreamLabel = clawTalkStreamHealth.state === 'live'
-    ? 'Live link idle'
-    : streamLabel[clawTalkStreamHealth.state]
   const markPortraitFailed = useCallback((agentId: string, src: string) => {
     if (!src) return
     const key = portraitFailureKey(agentId, src)
@@ -868,7 +883,7 @@ export function AgentResponseConsole() {
         const abortStream = () => streamController.abort(controller.signal.reason)
         controller.signal.addEventListener('abort', abortStream, { once: true })
         try {
-          const response = await fetch(apiUrl('/api/openclaw/clawtalk-console/stream'), {
+          const response = await fetchControlCenterWithAuth(apiUrl('/api/openclaw/clawtalk-console/stream'), {
             cache: 'no-store',
             headers: { Accept: 'text/event-stream' },
             signal: streamController.signal,
@@ -1455,30 +1470,21 @@ export function AgentResponseConsole() {
           <div className="dy-command-console__title-row min-w-0">
             <span className="dy-command-console__mark" aria-hidden="true">
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
-                <path d="m6 8 4 4-4 4" />
-                <path d="M12 16h6" />
+                <path d="M7.5 8.5h9M7.5 12h6M7.5 15.5h3.5" />
+                <path d="M5 4.5h14a2 2 0 0 1 2 2V17a2 2 0 0 1-2 2h-6l-4 2v-2H5a2 2 0 0 1-2-2V6.5a2 2 0 0 1 2-2Z" />
               </svg>
             </span>
             <div className="min-w-0">
+              <span className="dy-command-console__eyebrow">Command Console</span>
               <h2 className="dy-command-console__title">
-                Command Console
+                Agent Chat
               </h2>
               <p className="dy-command-console__subtitle">
-                {targetMode} / {targetCount} lane{targetCount === 1 ? '' : 's'} / {thinkingCount ? `${thinkingCount} thinking` : 'fast runtime'}
+                {targetMode} · {targetCount} recipient{targetCount === 1 ? '' : 's'}{thinkingCount ? ` · ${thinkingCount} reasoning` : ''}
               </p>
             </div>
           </div>
           <div className="dy-command-console__meta">
-            <span className="dy-command-console__stat" title="Console messages">
-              <strong>{responses.length}</strong>
-              <span>Msgs</span>
-            </span>
-            {queuedResponseCount > 0 && (
-              <span className="dy-command-console__stat" title="Queued Command Console follow-ups">
-                <strong>{queuedResponseCount}</strong>
-                <span>Queued</span>
-              </span>
-            )}
             <StatusChip
               label="Stream"
               value={streamLabel[clawTalkStreamHealth.state]}
@@ -1540,9 +1546,6 @@ export function AgentResponseConsole() {
       {(selectedTargets.length > 0 || partyTargetIds.length > 0 || busyAgents.length > 0) && (
         <div className={`dy-command-target-bar shrink-0 ${selectedTargets.length ? 'is-selected-mode' : 'is-party-mode'}`}>
           <div className="dy-command-targets">
-            <span className="dy-command-target-label">
-              {selectedTargets.length ? 'TO' : 'PARTY'}
-            </span>
             {armedTargets.map((agent) => {
               const inParty = activePartyIds.includes(agent.id)
               const rarity = agent.rarity ?? 'common'
@@ -1595,7 +1598,12 @@ export function AgentResponseConsole() {
                       </span>
                     )}
                   </div>
-                  <span className="truncate max-w-[100px]">{agent.name}</span>
+                  <span className="dy-command-target-identity">
+                    <strong title={agent.name}>{agent.name}</strong>
+                    <small title={`Model: ${agent.model?.primary || 'Default model'}`}>
+                      {compactModelLabel(agent.model?.primary) || 'Default model'}
+                    </small>
+                  </span>
                   {queuedForAgent > 0 && (
                     <span
                       className="dy-command-target-queue"
@@ -1683,9 +1691,14 @@ export function AgentResponseConsole() {
       >
         {visibleDisplayedResponses.length === 0 && (
           <div className="dy-command-idle-hint" aria-label="Command console is standing by">
-            <p className="dy-command-idle-hint__title">Standing by</p>
-            <p className="dy-command-idle-hint__target">{emptyTargetLabel}</p>
-            <p className="dy-command-idle-hint__stream">{emptyStreamLabel}</p>
+            <span className="dy-command-idle-hint__icon" aria-hidden="true">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M7.5 8.5h9M7.5 12h6M7.5 15.5h3.5" />
+                <path d="M5 4.5h14a2 2 0 0 1 2 2V17a2 2 0 0 1-2 2h-6l-4 2v-2H5a2 2 0 0 1-2-2V6.5a2 2 0 0 1 2-2Z" />
+              </svg>
+            </span>
+            <p className="dy-command-idle-hint__title">{targetCount ? 'Send a message' : 'No agent selected'}</p>
+            {targetCount > 0 && <p className="dy-command-idle-hint__copy">Ask a question or delegate a task.</p>}
           </div>
         )}
         {visibleDisplayedResponses.map((entry) => {
@@ -1702,6 +1715,7 @@ export function AgentResponseConsole() {
               onRestartGateway={restartGatewayFromMessage}
               onCancelQueuedTurn={cancelQueuedTurnFromMessage}
               actionBusy={messageActionId === entry.id}
+              hostedCreditsFirst={hostedCreditsFirst}
             />
           )
         })}
@@ -1889,8 +1903,8 @@ export function AgentResponseConsole() {
                   </svg>
                 ) : (
                   <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" className="h-4 w-4" aria-hidden="true">
-                    <path d="M12 19V5" />
-                    <path d="m5 12 7-7 7 7" />
+                    <path d="m21 3-7.5 18-3.5-7-7-3.5L21 3Z" />
+                    <path d="M10 14 21 3" />
                   </svg>
                 )}
               />

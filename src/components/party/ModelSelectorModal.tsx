@@ -12,7 +12,7 @@ import {
   type AuthProviderStatus,
 } from '../../api/providerAuth'
 import { formatModelGroupLabel, groupAvailableModels } from '../../utils/modelGrouping'
-import { resolveLicenseEntitlement } from '../../utils/licenseEntitlement'
+import { resolveAgentRoutePresentation, resolveLicenseEntitlement } from '../../utils/licenseEntitlement'
 import { useLicense } from '../../context/useLicense'
 
 interface AvailableModel {
@@ -255,9 +255,10 @@ export function ModelSelectorModal({
       && primaryProviderStatus.oauth.expiresAt <= Date.now(),
   )
   const entitlement = resolveLicenseEntitlement(license)
+  const routePresentation = resolveAgentRoutePresentation(license)
   const usesHostedCredits = entitlement.isHosted
   const usesByok = entitlement.isByok
-  const providerFirst = usesHostedCredits && license?.usagePriority === 'provider_first'
+  const providerFirst = routePresentation.providerFirst
   const modelGroups = useMemo(() => groupAvailableModels(selectableModels), [selectableModels])
   const fallbackModelGroups = useMemo(
     () => groupAvailableModels(selectableModels.filter((model) => model.id !== selectedPrimary)),
@@ -316,14 +317,23 @@ export function ModelSelectorModal({
             <p className="text-center text-slate-300">Loading models...</p>
           ) : (
             <>
-              <div data-model-selector-billing-route={usesHostedCredits ? providerFirst ? 'provider-first' : 'automnia-first' : usesByok ? 'byok' : 'unconfigured'} className={`mb-4 rounded-xl border p-3 ${usesHostedCredits ? 'border-emerald-300/25 bg-emerald-400/[0.07] text-emerald-100' : usesByok ? 'border-sky-300/25 bg-sky-400/[0.07] text-sky-100' : 'border-slate-300/20 bg-slate-950/40 text-slate-200'}`}>
-                <p className="text-sm font-semibold">{usesHostedCredits ? `${entitlement.tierLabel} — ${providerFirst ? 'My Provider First' : 'Automnia Credits First'}` : usesByok ? `${entitlement.tierLabel} — Your Provider Account` : 'License route not configured'}</p>
-                <p className="mt-1 text-xs text-slate-300">{usesHostedCredits ? providerFirst ? 'This connected provider or OAuth account is used first. Automnia credits are used automatically if that route cannot complete the request.' : 'Automnia credits are used first for every message. This connected provider or OAuth account remains the automatic fallback.' : usesByok ? 'This selection uses the customer’s connected provider account. Add an API key or sign in normally whenever that provider asks.' : 'Activate a Cloud Subscription or BYOK license before sending agent messages.'}</p>
+              <div data-model-selector-billing-route={usesHostedCredits ? routePresentation.providerOnly ? 'provider-only' : providerFirst ? 'provider-first' : 'automnia-first' : usesByok ? 'byok' : 'unconfigured'} className={`mb-4 rounded-xl border p-3 ${usesHostedCredits ? 'border-emerald-300/25 bg-emerald-400/[0.07] text-emerald-100' : usesByok ? 'border-sky-300/25 bg-sky-400/[0.07] text-sky-100' : 'border-slate-300/20 bg-slate-950/40 text-slate-200'}`}>
+                <p className="text-sm font-semibold">{usesHostedCredits || usesByok ? `${entitlement.tierLabel} — ${routePresentation.routeLabel}` : 'License route not configured'}</p>
+                <p className="mt-1 text-xs text-slate-300">{routePresentation.modelDescription}</p>
               </div>
               <div className="mb-4 grid gap-4 sm:grid-cols-[1.2fr_0.8fr]">
                 <div className="space-y-2">
-                  <h4 className="text-lg font-semibold text-slate-100">{usesHostedCredits ? providerFirst ? 'Primary Provider Model' : 'Provider Fallback Model' : 'Primary Model'}</h4>
-                  <p className="text-xs text-slate-300">{usesHostedCredits ? providerFirst ? 'This model and its connected key or OAuth account are attempted before Automnia credits.' : 'Used if the metered Automnia Cloud route cannot complete the request.' : 'Select the primary model for this agent.'}</p>
+                  <h4 className="text-lg font-semibold text-slate-100">{routePresentation.modelLabel}</h4>
+                  {routePresentation.managedRoute ? (
+                    <div data-model-selector-managed-route className="rounded-lg border border-emerald-300/25 bg-emerald-400/[0.07] px-3 py-3">
+                      <div className="flex items-center justify-between gap-3">
+                        <span className="text-base font-semibold text-emerald-100">Automnia</span>
+                        <span className="rounded-full border border-emerald-300/25 bg-emerald-300/[0.08] px-2 py-1 text-[9px] font-semibold uppercase tracking-[0.12em] text-emerald-200">Subscription Relay</span>
+                      </div>
+                      <p className="mt-2 text-xs text-slate-300">{routePresentation.managedRouteDescription}</p>
+                    </div>
+                  ) : <>
+                  <p className="text-xs text-slate-300">{routePresentation.modelDescription}</p>
                   {primaryProviderStatus && !primaryProviderStatus.configured && (
                     <div className="rounded-lg border border-amber-400/30 bg-amber-900/30 px-3 py-2 text-xs text-amber-100">
                       Missing {primaryProviderLabel} {primaryProviderAuthKind}. Connect it before using this model.
@@ -392,11 +402,16 @@ export function ModelSelectorModal({
                       google-vertex
                     </div>
                   )}
+                  </>}
+                  {usesHostedCredits && providerFirst && <div data-model-selector-managed-route className="rounded-xl border border-emerald-300/20 bg-emerald-400/[0.05] px-3 py-2">
+                    <p className="text-sm font-semibold text-emerald-100">Automnia</p>
+                    <p className="mt-1 text-[11px] text-slate-300">{routePresentation.managedRouteDescription}</p>
+                  </div>}
                 </div>
 
-                <div className="space-y-2">
-                  <h4 className="text-lg font-semibold text-slate-100">Fallbacks</h4>
-                  <p className="text-xs text-slate-300">Optional failover models.</p>
+                {!routePresentation.managedRoute && <div className="space-y-2">
+                  <h4 className="text-lg font-semibold text-slate-100">Additional models</h4>
+                  <p className="text-xs text-slate-300">Optional additional provider models.</p>
                   <div className="max-h-48 space-y-2 overflow-auto rounded-lg border border-slate-100/10 bg-slate-950/55 p-2">
                     {fallbackModelGroups.map((group) => (
                       <div key={group.key} className="space-y-1">
@@ -416,7 +431,7 @@ export function ModelSelectorModal({
                       </div>
                     ))}
                   </div>
-                </div>
+                </div>}
               </div>
 
               <div className="mb-4 rounded-xl border border-violet-300/20 bg-violet-950/20 p-3">

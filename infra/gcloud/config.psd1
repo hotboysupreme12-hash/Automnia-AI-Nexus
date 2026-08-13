@@ -1,5 +1,5 @@
 @{
-  SchemaVersion = '2026-08-11.3'
+  SchemaVersion = '2026-08-13.2'
   Region = 'us-east1'
   FirestoreLocation = 'us-east1'
   # Gemini 3.6 Flash is served through Vertex's global endpoint. Keeping this
@@ -8,6 +8,10 @@
   VertexLocation = 'global'
   ServiceName = 'automnia-shopify-provisioner'
   ServiceAccountName = 'automnia-provisioner'
+  KnowledgeDataStoreId = 'automnia-knowledge'
+  KnowledgeEngineId = 'automnia-assistant-grounded'
+  KnowledgeModelVersion = 'gemini-3.1-pro-preview/answer_gen/v1'
+  KnowledgeFallbackModelVersion = 'gemini-2.5-flash/answer_gen/v1'
   PermanentBaseUrl = 'https://api.automnia.ai'
   PermanentDomain = 'api.automnia.ai'
   ShopifyCheckoutUrl = 'https://unbkay-k3.myshopify.com/collections/automnia-plans-and-refills'
@@ -24,6 +28,7 @@
     'cloudbuild.googleapis.com'
     'cloudresourcemanager.googleapis.com'
     'dns.googleapis.com'
+    'discoveryengine.googleapis.com'
     'firestore.googleapis.com'
     'iam.googleapis.com'
     'iamcredentials.googleapis.com'
@@ -35,6 +40,9 @@
   RuntimeRoles = @(
     'roles/aiplatform.user'
     'roles/datastore.user'
+    # The Help console calls Discovery Engine's Answer method on the private
+    # Automnia knowledge serving config.
+    'roles/discoveryengine.viewer'
     'roles/logging.logWriter'
     'roles/secretmanager.secretAccessor'
   )

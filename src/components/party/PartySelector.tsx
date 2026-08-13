@@ -11,6 +11,7 @@ import {
   REGISTRY_OVERLAY_OPTIONS,
   REGISTRY_PREFS_CHANGED_EVENT,
   readRegistryPreferences,
+  resolveAgentCardTheme,
   saveRegistryPreferences,
   type AgentDisplayMode,
   type AgentOverlayPreset,
@@ -212,6 +213,7 @@ export function PartySelector() {
   const [rarityFilter, setRarityFilter] = useState<AgentRarity | 'all'>(prefs.rarityFilter || 'all')
   const [displayMode, setDisplayMode] = useState<AgentDisplayMode>(prefs.displayMode || 'grid8')
   const [overlayPreset, setOverlayPreset] = useState<AgentOverlayPreset>(prefs.overlayPreset)
+  const [rarityColorsEnabled, setRarityColorsEnabled] = useState(prefs.rarityColorsEnabled)
   const [registryColumnCount, setRegistryColumnCount] = useState(1)
   const activeDisplayMode = DISPLAY_MODES.find((mode) => mode.id === displayMode) || DISPLAY_MODES[1]
   const nominalPageSize = activeDisplayMode.pageSize
@@ -295,8 +297,8 @@ export function PartySelector() {
     : `${filtered.length}/${agents.length} agents`
 
   useEffect(() => {
-    saveRegistryPreferences({ displayMode, overlayPreset, rarityFilter, sortKey })
-  }, [displayMode, overlayPreset, rarityFilter, sortKey])
+    saveRegistryPreferences({ displayMode, overlayPreset, rarityColorsEnabled, rarityFilter, sortKey })
+  }, [displayMode, overlayPreset, rarityColorsEnabled, rarityFilter, sortKey])
 
   useEffect(() => {
     const syncPreferences = (event?: Event) => {
@@ -305,6 +307,7 @@ export function PartySelector() {
         : readRegistryPreferences()
       setDisplayMode(next.displayMode || DEFAULT_REGISTRY_PREFERENCES.displayMode)
       setOverlayPreset(next.overlayPreset || DEFAULT_REGISTRY_PREFERENCES.overlayPreset)
+      setRarityColorsEnabled(next.rarityColorsEnabled ?? DEFAULT_REGISTRY_PREFERENCES.rarityColorsEnabled)
       setRarityFilter(next.rarityFilter || DEFAULT_REGISTRY_PREFERENCES.rarityFilter)
       setSortKey(next.sortKey || DEFAULT_REGISTRY_PREFERENCES.sortKey)
     }
@@ -317,11 +320,13 @@ export function PartySelector() {
   }, [])
 
   useEffect(() => {
-    document.documentElement.dataset.agentCardOverlay = overlayPreset
+    document.documentElement.dataset.agentCardOverlay = rarityColorsEnabled ? 'rarity' : overlayPreset
+    document.documentElement.dataset.agentCardRarityColors = rarityColorsEnabled ? 'enabled' : 'disabled'
     return () => {
       delete document.documentElement.dataset.agentCardOverlay
+      delete document.documentElement.dataset.agentCardRarityColors
     }
-  }, [overlayPreset])
+  }, [overlayPreset, rarityColorsEnabled])
 
   useEffect(() => {
     if (!FLOW_GRID_MODES.has(displayMode)) {
@@ -369,7 +374,11 @@ export function PartySelector() {
   }, [totalPages, pageIndex])
 
   return (
-    <div className="min-h-0" data-agent-card-theme={overlayPreset}>
+    <div
+      className="min-h-0"
+      data-agent-card-theme={rarityColorsEnabled ? 'rarity' : overlayPreset}
+      data-agent-card-rarity-colors={rarityColorsEnabled ? 'enabled' : 'disabled'}
+    >
       <Panel
         title="Agent Registry"
         className="flex min-h-0 flex-col"
@@ -489,8 +498,17 @@ export function PartySelector() {
               data-agent-filter-select
               data-agent-overlay-control
               aria-label="Card background theme"
-              value={overlayPreset}
-              onChange={(e) => setOverlayPreset(e.target.value as AgentOverlayPreset)}
+              value={rarityColorsEnabled ? 'rarity' : overlayPreset}
+              onChange={(e) => {
+                const nextPreset = e.target.value as AgentOverlayPreset
+                if (nextPreset === 'rarity') {
+                  setRarityColorsEnabled(true)
+                  return
+                }
+                setOverlayPreset(nextPreset)
+                setRarityColorsEnabled(false)
+              }}
+              disabled={rarityColorsEnabled}
               className="px-2.5 py-1.5 pr-7 text-[10px] font-semibold outline-none transition cursor-pointer appearance-none"
               style={CYAN_SELECT_CHEVRON_STYLE}
             >
@@ -553,6 +571,7 @@ export function PartySelector() {
                       partyIndex={inParty && slotNumber ? slotNumber - 1 : null}
                       isBusy={busyAgentSet.has(agent.id)}
                       missionRunning={missionRunning}
+                      cardTheme={resolveAgentCardTheme(agent.rarity, { overlayPreset, rarityColorsEnabled })}
                       displayMode={displayMode}
                     />
                   </motion.div>

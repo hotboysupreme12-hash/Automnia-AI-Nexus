@@ -33,7 +33,7 @@ function declarationKey(rule: Rule, declaration: Declaration): string {
 
 function dedupeCssDeclarations(): Plugin {
   return {
-    postcssPlugin: 'dystopai-dedupe-css-declarations',
+    postcssPlugin: 'automnia-dedupe-css-declarations',
     Once(root) {
       const rules: Rule[] = []
       root.walkRules((rule) => {

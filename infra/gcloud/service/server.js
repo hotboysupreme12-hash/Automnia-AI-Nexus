@@ -5,8 +5,8 @@ import { GoogleAuth } from 'google-auth-library';
 
 const app = express();
 const port = process.env.PORT || 8080;
-const serviceVersion = '2.1.1';
-const schemaVersion = '2026-08-11.3';
+const serviceVersion = '2.5.0';
+const schemaVersion = '2026-08-13.3';
 const secrets = (process.env.SHOPIFY_WEBHOOK_SECRETS || process.env.SHOPIFY_WEBHOOK_SECRET || '')
   .split(',')
   .map((value) => value.trim())
@@ -17,6 +17,9 @@ const adminApiToken = process.env.ADMIN_API_TOKEN || '';
 const gcpProjectId = process.env.GOOGLE_CLOUD_PROJECT || process.env.GCLOUD_PROJECT || 'local-development';
 const vertexLocation = process.env.VERTEX_LOCATION || 'us-central1';
 const vertexAuth = new GoogleAuth({ scopes: ['https://www.googleapis.com/auth/cloud-platform'] });
+const knowledgeServingConfig = String(process.env.AUTOMNIA_KNOWLEDGE_SERVING_CONFIG || '').trim();
+const knowledgeModelVersion = String(process.env.AUTOMNIA_KNOWLEDGE_MODEL_VERSION || 'gemini-3.1-pro-preview/answer_gen/v1').trim();
+const knowledgeFallbackModelVersion = String(process.env.AUTOMNIA_KNOWLEDGE_FALLBACK_MODEL_VERSION || 'gemini-2.5-flash/answer_gen/v1').trim();
 const vertexRetryAttempts = Math.max(1, Math.min(5, Number(process.env.VERTEX_RETRY_ATTEMPTS || 4) || 4));
 const vertexMaxOutputTokens = Math.max(512, Math.min(8192, Number(process.env.VERTEX_MAX_OUTPUT_TOKENS || 8192) || 8192));
 const checkoutUrl = configuredHttpsUrl(process.env.SHOPIFY_CHECKOUT_URL);
@@ -44,6 +47,112 @@ function normalizeEmail(value) {
 
 function normalizeKey(value) {
   return String(value || '').trim().toUpperCase();
+}
+
+const ACCOUNT_PASSWORD_MIN_LENGTH = 12;
+const ACCOUNT_PASSWORD_MAX_LENGTH = 128;
+
+function validateAccountPassword(value) {
+  const password = String(value || '');
+  return password.length >= ACCOUNT_PASSWORD_MIN_LENGTH && password.length <= ACCOUNT_PASSWORD_MAX_LENGTH;
+}
+
+function byokAllowedForTier(tier) {
+  const normalized = String(tier || '').trim().toLowerCase().replace(/[\s-]+/g, '_');
+  if (!normalized) return false;
+  if (new Set(['credit_pack_topup', 'credit_refill', 'starter', 'starter_subscription', 'cloud_starter_subscription']).has(normalized)) return false;
+  return true;
+}
+
+function tierRank(tier) {
+  const normalized = String(tier || '').trim().toLowerCase().replace(/[\s-]+/g, '_');
+  if (normalized.includes('enterprise')) return 3;
+  if (normalized.includes('pro')) return 2;
+  if (normalized === 'starter' || normalized.includes('starter') || normalized === 'byok' || normalized.includes('byok')) return 1;
+  if (normalized.includes('credit') || normalized.includes('refill') || normalized.includes('topup')) return 0;
+  return normalized ? 1 : 0;
+}
+
+function planHasPermanentAccess(plan) {
+  return starterSubscriptionOnly(plan) ? false : plan?.permanentAccess === true || plan?.mode === 'byok' || tierRank(plan?.tier) >= 2;
+}
+
+function recordHasPermanentAccess(record) {
+  return starterSubscriptionOnly(record) ? false : record?.permanentAccess === true || record?.mode === 'byok' || tierRank(record?.tier) >= 2;
+}
+
+function starterSubscriptionOnly(record) {
+  const normalized = String(record?.tier || '').trim().toLowerCase().replace(/[\s-]+/g, '_');
+  const isStarterTier = normalized === 'starter' || normalized === 'cloud_starter_subscription' || (normalized.includes('starter') && !normalized.includes('pro'));
+  const mode = record?.mode || 'hosted_credits';
+  return mode === 'hosted_credits' && isStarterTier;
+}
+
+function bestLicense(records) {
+  return records.sort((left, right) => {
+    const rankDelta = tierRank(right.tier) - tierRank(left.tier);
+    if (rankDelta) return rankDelta;
+    const permanentDelta = Number(recordHasPermanentAccess(right)) - Number(recordHasPermanentAccess(left));
+    if (permanentDelta) return permanentDelta;
+    const accountDelta = Number(Boolean(right.passwordHash || right.googleSubject || right.accountId)) - Number(Boolean(left.passwordHash || left.googleSubject || left.accountId));
+    if (accountDelta) return accountDelta;
+    const leftTime = Date.parse(left.updatedAt || left.activatedAt || left.createdAt || 0) || 0;
+    const rightTime = Date.parse(right.updatedAt || right.activatedAt || right.createdAt || 0) || 0;
+    return rightTime - leftTime;
+  })[0] || null;
+}
+
+const ACCOUNT_IDENTITY_FIELDS = [
+  'accountId',
+  'passwordVersion',
+  'passwordSalt',
+  'passwordHash',
+  'passwordUpdatedAt',
+  'googleSubject',
+  'googleLinkedAt',
+];
+
+async function mergeAccountIdentityIntoCanonical(canonical, candidates) {
+  if (!canonical) return null;
+  const identitySources = [...candidates]
+    .filter((candidate) => candidate && candidate !== canonical)
+    .sort((left, right) => (Date.parse(right.updatedAt || right.createdAt || 0) || 0) - (Date.parse(left.updatedAt || left.createdAt || 0) || 0));
+  const fields = {};
+  for (const field of ACCOUNT_IDENTITY_FIELDS) {
+    if (canonical[field]) continue;
+    const source = identitySources.find((candidate) => candidate[field]);
+    if (source) fields[field] = source[field];
+  }
+  if (!Object.keys(fields).length) return canonical;
+  const updated = { ...canonical, ...fields };
+  if (useInMemoryStorage) {
+    Object.assign(canonical, fields);
+    return canonical;
+  }
+  const canonicalRef = canonical._ref || licenses.doc(canonical.orderId);
+  await canonicalRef.update({ ...fields, updatedAt: new Date().toISOString() });
+  return updated;
+}
+
+function hashAccountPassword(password) {
+  const salt = crypto.randomBytes(16);
+  const hash = crypto.scryptSync(password, salt, 64);
+  return {
+    passwordVersion: 'scrypt-v1',
+    passwordSalt: salt.toString('base64url'),
+    passwordHash: hash.toString('base64url'),
+  };
+}
+
+function verifyAccountPassword(password, record) {
+  if (record?.passwordVersion !== 'scrypt-v1' || !record.passwordSalt || !record.passwordHash) return false;
+  try {
+    const expected = Buffer.from(record.passwordHash, 'base64url');
+    const actual = crypto.scryptSync(password, Buffer.from(record.passwordSalt, 'base64url'), expected.length);
+    return expected.length > 0 && crypto.timingSafeEqual(actual, expected);
+  } catch {
+    return false;
+  }
 }
 
 function delay(ms) {
@@ -102,8 +211,10 @@ function readPlanMappings(value) {
       return [{
         tier,
         mode,
+        planPriceCents: Number.isInteger(Number(candidate.planPriceCents)) && Number(candidate.planPriceCents) >= 0 ? Number(candidate.planPriceCents) : null,
         initialCredits: Math.floor(initialCredits),
         kind,
+        permanentAccess: candidate.permanentAccess === true || mode === 'byok' || tierRank(tier) >= 2,
         productIds: ids('productIds'),
         variantIds: ids('variantIds'),
         skus: ids('skus').map((sku) => sku.toLowerCase()),
@@ -123,7 +234,7 @@ function legacyTierConfiguration(tierName, itemTitles = '') {
     return { tier: 'credit_pack_topup', mode: 'hosted_credits', initialCredits: 1_000_000, kind: 'topup' };
   }
   if (normalizedTier.includes('cloud') || normalizedTitles.includes('cloud') || normalizedTitles.includes('hosting')) {
-    return { tier: 'cloud_starter_subscription', mode: 'hosted_credits', initialCredits: 2_500_000, kind: 'subscription' };
+    return { tier: 'cloud_starter_subscription', mode: 'hosted_credits', planPriceCents: 1_999, initialCredits: 2_500_000, kind: 'subscription' };
   }
   if (normalizedTier.includes('pro') || normalizedTitles.includes('pro')) {
     return { tier: 'pro_tier', mode: 'hosted_credits', initialCredits: 5_000_000, kind: 'subscription' };
@@ -158,12 +269,43 @@ function publicLicense(record) {
     email: record.email,
     tier: record.tier,
     mode: record.mode || (record.tier === 'founding_beta_byok' ? 'byok' : 'hosted_credits'),
+    planPriceCents: Number.isInteger(Number(record.planPriceCents)) && Number(record.planPriceCents) >= 0 ? Number(record.planPriceCents) : null,
+    byokAllowed: !starterSubscriptionOnly(record) && (record.mode === 'byok' || record.byokAllowed === true || byokAllowedForTier(record.tier)),
+    permanentAccess: recordHasPermanentAccess(record),
+    accessType: recordHasPermanentAccess(record) ? 'permanent' : 'subscription',
     creditBalance: typeof record.creditBalance === 'number' ? record.creditBalance : 0,
     status: record.status,
     subscriptionStatus: record.subscriptionStatus || null,
     createdAt: record.createdAt,
     updatedAt: record.updatedAt || null,
     activatedAt: record.activatedAt || null,
+  };
+}
+
+function publicAccount(record) {
+  return {
+    accountId: record.accountId || null,
+    email: normalizeEmail(record.email),
+    hasPassword: Boolean(record.passwordHash),
+    googleLinked: Boolean(record.googleSubject),
+    // This response travels to the authenticated desktop control plane so it
+    // can prove a first-password setup. The renderer-facing account shape
+    // intentionally omits this stable provider identifier.
+    googleSubject: record.googleSubject || null,
+  };
+}
+
+function accountResponse(record) {
+  return {
+    ok: true,
+    active: record.status !== 'revoked',
+    account: publicAccount(record),
+    // This response is consumed by the local loopback control plane over TLS
+    // and is never forwarded to the renderer. It lets a new device cache the
+    // relay credential after account authentication without a token prompt.
+    licenseKey: record.licenseKey,
+    license: publicLicense(record),
+    ...publicLicense(record),
   };
 }
 
@@ -183,9 +325,9 @@ function buildOnboardingPackage(order, licenseKey, tierConfig) {
     telegramStartUrl,
     instructions: [
       '1. Open the Automnia App or portal activation screen.',
-      `2. Enter your checkout email (${customerEmail}) and license key (${licenseKey}).`,
-      `3. Mode: ${tierConfig.mode === 'hosted_credits' ? 'Automnia Cloud AI (Credits Pre-loaded)' : 'BYOK (Bring Your Own API Keys)'}.`,
-      '4. Click Activate to verify your license and start using Automnia.',
+      `2. Enter your checkout email (${customerEmail}) and license key (${licenseKey}) once to link the account.`,
+      `3. Access: ${planHasPermanentAccess(tierConfig) ? 'Permanent access tied to this Automnia account.' : tierConfig.mode === 'hosted_credits' ? 'Automnia Cloud credits.' : 'BYOK (Bring Your Own API Keys).'}`,
+      '4. After linking, sign in with your password or Google account. Future upgrades merge automatically into this same account and key.',
     ],
   };
 }
@@ -212,9 +354,15 @@ async function findLicense(email, licenseKey) {
   const normalizedEmail = normalizeEmail(email);
   const normalizedKey = normalizeKey(licenseKey);
   if (useInMemoryStorage) {
-    return Array.from(provisionedCustomers.values()).find((record) =>
+    const keyMatch = Array.from(provisionedCustomers.values()).find((record) =>
       normalizeEmail(record.email) === normalizedEmail && normalizeKey(record.licenseKey) === normalizedKey,
-    ) || null;
+    );
+    if (!keyMatch || keyMatch.status === 'revoked') return null;
+    // A legacy key is accepted as an ownership proof, but the response always
+    // becomes the one canonical, highest-tier account entitlement.
+    const candidates = Array.from(provisionedCustomers.values()).filter((record) =>
+      normalizeEmail(record.email) === normalizedEmail && record.status !== 'revoked');
+    return await mergeAccountIdentityIntoCanonical(bestLicense(candidates), candidates) || keyMatch;
   }
 
   const indexSnapshot = await licenseIndexes.doc(licenseIndexId(normalizedEmail, normalizedKey)).get();
@@ -224,7 +372,12 @@ async function findLicense(email, licenseKey) {
   const licenseSnapshot = await licenses.doc(orderId).get();
   if (!licenseSnapshot.exists) return null;
   const record = licenseSnapshot.data();
-  return normalizeEmail(record.email) === normalizedEmail && normalizeKey(record.licenseKey) === normalizedKey && record.status !== 'revoked' ? record : null;
+  if (normalizeEmail(record.email) !== normalizedEmail || normalizeKey(record.licenseKey) !== normalizedKey || record.status === 'revoked') return null;
+  const snapshot = await licenses.where('email', '==', normalizedEmail).limit(50).get();
+  const candidates = snapshot.docs
+    .map((document) => ({ ...document.data(), _ref: document.ref }))
+    .filter((candidate) => candidate.status !== 'revoked');
+  return await mergeAccountIdentityIntoCanonical(bestLicense(candidates) || record, candidates) || record;
 }
 
 function sortNewestLicense(records) {
@@ -239,15 +392,16 @@ async function findLicenseByEmail(email, { hostedOnly = false } = {}) {
   const normalizedEmail = normalizeEmail(email);
   if (!normalizedEmail) return null;
   if (useInMemoryStorage) {
-    return sortNewestLicense(Array.from(provisionedCustomers.values())
-      .filter((record) => normalizeEmail(record.email) === normalizedEmail && (!hostedOnly || record.mode === 'hosted_credits') && record.status !== 'revoked'))[0] || null;
+    const candidates = Array.from(provisionedCustomers.values())
+      .filter((record) => normalizeEmail(record.email) === normalizedEmail && (!hostedOnly || record.mode === 'hosted_credits') && record.status !== 'revoked');
+    return mergeAccountIdentityIntoCanonical(bestLicense(candidates), candidates);
   }
 
   const snapshot = await licenses.where('email', '==', normalizedEmail).limit(20).get();
-  const candidates = sortNewestLicense(snapshot.docs
+  const candidates = snapshot.docs
     .map((document) => ({ ...document.data(), _ref: document.ref }))
-    .filter((record) => (!hostedOnly || record.mode === 'hosted_credits') && record.status !== 'revoked'));
-  return candidates[0] || null;
+    .filter((record) => (!hostedOnly || record.mode === 'hosted_credits') && record.status !== 'revoked');
+  return mergeAccountIdentityIntoCanonical(bestLicense(candidates), candidates);
 }
 
 async function findHostedLicenseByEmail(email) {
@@ -277,9 +431,24 @@ async function updateHostedEntitlement({ record, order, tierConfig, topic, deliv
   const eventId = webhookEventId(topic, deliveryId, `order:${orderId}`);
   const now = new Date().toISOString();
   const contractId = normalizePlanId(order.subscription_contract_id || order.subscriptionContractId) || null;
-  const preserveExistingHostedTier = tierConfig.kind === 'topup' && record.mode === 'hosted_credits';
-  const nextTier = preserveExistingHostedTier ? record.tier : tierConfig.tier;
-  const nextMode = preserveExistingHostedTier ? record.mode : tierConfig.mode;
+  const incomingRank = tierRank(tierConfig.tier);
+  const currentRank = tierRank(record.tier);
+  const shouldUpgrade = incomingRank > currentRank || (
+    incomingRank === currentRank &&
+    planHasPermanentAccess(tierConfig) &&
+    !recordHasPermanentAccess(record)
+  );
+  const preserveExistingEntitlement = tierConfig.kind === 'topup' || !shouldUpgrade;
+  const nextTier = preserveExistingEntitlement ? record.tier : tierConfig.tier;
+  const nextMode = preserveExistingEntitlement ? record.mode : tierConfig.mode;
+  const nextPlanPriceCents = preserveExistingEntitlement
+    ? (Number.isInteger(Number(record.planPriceCents)) ? Number(record.planPriceCents) : tierConfig.planPriceCents ?? null)
+    : tierConfig.planPriceCents ?? null;
+  const nextPermanentAccess = recordHasPermanentAccess(record) || planHasPermanentAccess(tierConfig);
+  const nextByokAllowed = nextMode === 'byok' || (!starterSubscriptionOnly({ tier: nextTier, mode: nextMode, planPriceCents: nextPlanPriceCents }) && (record.byokAllowed === true || byokAllowedForTier(nextTier)));
+  const nextSubscriptionStatus = nextPermanentAccess
+    ? 'permanent'
+    : tierConfig.kind === 'subscription' ? 'active' : record.subscriptionStatus || null;
 
   if (useInMemoryStorage) {
     if (record.lastWebhookEventId === eventId) return record;
@@ -287,8 +456,12 @@ async function updateHostedEntitlement({ record, order, tierConfig, topic, deliv
     Object.assign(record, {
       tier: nextTier,
       mode: nextMode,
+      planPriceCents: nextPlanPriceCents,
+      byokAllowed: nextByokAllowed,
+      permanentAccess: nextPermanentAccess,
+      accessType: nextPermanentAccess ? 'permanent' : 'subscription',
       creditBalance: (record.creditBalance || 0) + grant,
-      subscriptionStatus: tierConfig.kind === 'subscription' ? 'active' : record.subscriptionStatus || null,
+      subscriptionStatus: nextSubscriptionStatus,
       subscriptionContractId: contractId || record.subscriptionContractId || null,
       lastShopifyOrderId: orderId,
       lastWebhookEventId: eventId,
@@ -306,10 +479,16 @@ async function updateHostedEntitlement({ record, order, tierConfig, topic, deliv
     if (eventSnapshot.exists) return current;
     const grant = tierConfig.initialCredits;
     const update = {
-      tier: tierConfig.kind === 'topup' && current.mode === 'hosted_credits' ? current.tier : tierConfig.tier,
-      mode: tierConfig.kind === 'topup' && current.mode === 'hosted_credits' ? current.mode : tierConfig.mode,
+      tier: preserveExistingEntitlement ? current.tier : tierConfig.tier,
+      mode: preserveExistingEntitlement ? current.mode : tierConfig.mode,
+      planPriceCents: nextPlanPriceCents,
+      byokAllowed: nextMode === 'byok' || (!starterSubscriptionOnly({ tier: nextTier, mode: nextMode, planPriceCents: nextPlanPriceCents }) && (current.byokAllowed === true || byokAllowedForTier(nextTier))),
+      permanentAccess: recordHasPermanentAccess(current) || planHasPermanentAccess(tierConfig),
+      accessType: (recordHasPermanentAccess(current) || planHasPermanentAccess(tierConfig)) ? 'permanent' : 'subscription',
       creditBalance: (current.creditBalance || 0) + grant,
-      subscriptionStatus: tierConfig.kind === 'subscription' ? 'active' : current.subscriptionStatus || null,
+      subscriptionStatus: (recordHasPermanentAccess(current) || planHasPermanentAccess(tierConfig))
+        ? 'permanent'
+        : tierConfig.kind === 'subscription' ? 'active' : current.subscriptionStatus || null,
       subscriptionContractId: contractId || current.subscriptionContractId || null,
       lastShopifyOrderId: orderId,
       updatedAt: now,
@@ -475,6 +654,8 @@ app.get('/health', (_req, res) => res.status(200).json({
   writeMode,
   storage: useInMemoryStorage ? 'memory-development-only' : 'firestore',
   aiRelay: 'vertex-ai-service-account',
+  knowledgeAssistant: knowledgeServingConfig ? 'configured' : 'disabled',
+  knowledgeModelVersion,
   commerce: {
     checkoutConfigured: Boolean(checkoutUrl),
     planMappingsConfigured: planMappings.length > 0,
@@ -531,10 +712,165 @@ app.post('/api/activate', requireWritesEnabled, async (req, res) => {
     if (!record) return res.status(404).json({ ok: false, error: 'No active paid license found matching this email and key.' });
     const activated = await activateLicense(record, deviceId);
     console.log(JSON.stringify({ event: 'license_activated', orderId: activated.orderId, tier: activated.tier, mode: activated.mode, activatedAt: activated.activatedAt }));
-    return res.status(200).json({ ok: true, active: true, ...publicLicense(activated) });
+    // The local control plane may have presented a legacy key. Return the
+    // account's canonical key so the desktop replaces that old local pointer
+    // after the highest-tier entitlement is resolved.
+    return res.status(200).json({ ok: true, active: true, canonicalLicenseKey: activated.licenseKey, ...publicLicense(activated) });
   } catch (error) {
     console.error('License activation storage error:', error);
     return res.status(503).json({ ok: false, error: 'License storage is temporarily unavailable.' });
+  }
+});
+
+async function updateAccountRecord(record, fields) {
+  const { _ref, ...storedRecord } = record;
+  const updated = { ...storedRecord, ...fields, updatedAt: new Date().toISOString() };
+  if (useInMemoryStorage) {
+    Object.assign(record, updated);
+    return record;
+  }
+  const licenseRef = record._ref || licenses.doc(record.orderId);
+  await licenseRef.update(updated);
+  return updated;
+}
+
+app.post('/api/account/setup', requireWritesEnabled, async (req, res) => {
+  const email = normalizeEmail(req.body?.email);
+  const licenseKey = normalizeKey(req.body?.licenseKey);
+  const password = String(req.body?.password || '');
+  if (!email || !licenseKey || !validateAccountPassword(password)) {
+    return res.status(400).json({ ok: false, error: 'Enter a valid email, license key, and a password between 12 and 128 characters.' });
+  }
+
+  try {
+    const record = await findLicense(email, licenseKey);
+    if (!record) return res.status(404).json({ ok: false, error: 'No active Automnia license found for this email and key.' });
+    if (record.passwordHash) return res.status(409).json({ ok: false, error: 'This Automnia account is already activated. Sign in with its password.' });
+    const account = await updateAccountRecord(record, {
+      accountId: record.accountId || crypto.randomUUID(),
+      ...hashAccountPassword(password),
+      passwordUpdatedAt: new Date().toISOString(),
+    });
+    return res.status(200).json(accountResponse(account));
+  } catch (error) {
+    console.error('Account setup storage error:', error);
+    return res.status(503).json({ ok: false, error: 'Account setup is temporarily unavailable.' });
+  }
+});
+
+app.post('/api/account/login', async (req, res) => {
+  const email = normalizeEmail(req.body?.email);
+  const password = String(req.body?.password || '');
+  if (!email || !validateAccountPassword(password)) return res.status(400).json({ ok: false, error: 'Enter your account email and password.' });
+
+  try {
+    const record = await findLicenseByEmail(email);
+    if (!record) return res.status(401).json({ ok: false, error: 'The email or password is incorrect.' });
+    if (!record.passwordHash) return res.status(409).json({ ok: false, error: 'This account uses Google sign-in and does not have an Automnia password yet. Continue with Google or create a password from Account Settings.' });
+    if (!verifyAccountPassword(password, record)) return res.status(401).json({ ok: false, error: 'The email or password is incorrect.' });
+    return res.status(200).json(accountResponse(record));
+  } catch (error) {
+    console.error('Account login storage error:', error);
+    return res.status(503).json({ ok: false, error: 'Account sign-in is temporarily unavailable.' });
+  }
+});
+
+app.post('/api/account/google', async (req, res) => {
+  const accessToken = String(req.body?.accessToken || '').trim();
+  if (!accessToken) return res.status(400).json({ ok: false, error: 'Google sign-in did not return an account token.' });
+
+  try {
+    const profileResponse = await fetch('https://www.googleapis.com/oauth2/v3/userinfo', {
+      headers: { Authorization: `Bearer ${accessToken}`, Accept: 'application/json' },
+    });
+    const profile = await profileResponse.json().catch(() => null);
+    const email = normalizeEmail(profile?.email);
+    const subject = String(profile?.sub || '').trim();
+    if (!profileResponse.ok || !email || !subject || profile?.email_verified !== true) {
+      return res.status(401).json({ ok: false, error: 'Google could not verify this account email.' });
+    }
+    const record = await findLicenseByEmail(email);
+    if (!record) return res.status(404).json({ ok: false, error: 'No active Automnia license is linked to this Google account email.' });
+    if (record.googleSubject && record.googleSubject !== subject) {
+      return res.status(403).json({ ok: false, error: 'This Automnia account is linked to a different Google identity.' });
+    }
+    const linked = await updateAccountRecord(record, {
+      accountId: record.accountId || crypto.randomUUID(),
+      googleSubject: subject,
+      googleLinkedAt: record.googleLinkedAt || new Date().toISOString(),
+    });
+    return res.status(200).json(accountResponse(linked));
+  } catch (error) {
+    console.error('Google account login error:', error);
+    return res.status(503).json({ ok: false, error: 'Google account sign-in is temporarily unavailable.' });
+  }
+});
+
+// Password changes require the existing password. Google-linked accounts can
+// create their first password through the local authenticated control plane;
+// this endpoint still requires the linked Google subject so an email alone can
+// never create credentials.
+app.post('/api/account/password/change', requireWritesEnabled, async (req, res) => {
+  const email = normalizeEmail(req.body?.email);
+  const currentPassword = String(req.body?.currentPassword || '');
+  const newPassword = String(req.body?.newPassword || '');
+  if (!email || !validateAccountPassword(currentPassword) || !validateAccountPassword(newPassword)) {
+    return res.status(400).json({ ok: false, error: 'Enter the current password and a new password between 12 and 128 characters.' });
+  }
+  try {
+    const record = await findLicenseByEmail(email);
+    if (!record || !verifyAccountPassword(currentPassword, record)) return res.status(401).json({ ok: false, error: 'The current password is incorrect.' });
+    const updated = await updateAccountRecord(record, {
+      ...hashAccountPassword(newPassword),
+      passwordUpdatedAt: new Date().toISOString(),
+    });
+    return res.status(200).json(accountResponse(updated));
+  } catch (error) {
+    console.error('Account password change error:', error);
+    return res.status(503).json({ ok: false, error: 'Password change is temporarily unavailable.' });
+  }
+});
+
+app.post('/api/account/password/set', requireWritesEnabled, async (req, res) => {
+  const email = normalizeEmail(req.body?.email);
+  const googleSubject = String(req.body?.googleSubject || '').trim();
+  const googleAccessToken = String(req.body?.googleAccessToken || '').trim();
+  const newPassword = String(req.body?.newPassword || '');
+  if (!email || (!googleSubject && !googleAccessToken) || !validateAccountPassword(newPassword)) {
+    return res.status(400).json({ ok: false, error: 'Create a password between 12 and 128 characters after signing in with Google.' });
+  }
+  try {
+    const record = await findLicenseByEmail(email);
+    if (!record) return res.status(401).json({ ok: false, error: 'The Google account is not linked to an active Automnia account.' });
+    let verifiedGoogleSubject = googleSubject;
+    if (googleAccessToken) {
+      const profileResponse = await fetch('https://www.googleapis.com/oauth2/v3/userinfo', {
+        headers: { Authorization: `Bearer ${googleAccessToken}`, Accept: 'application/json' },
+      });
+      const profile = await profileResponse.json().catch(() => null);
+      const verifiedEmail = normalizeEmail(profile?.email);
+      const verifiedSubject = String(profile?.sub || '').trim();
+      if (!profileResponse.ok || !verifiedEmail || verifiedEmail !== email || !verifiedSubject || profile?.email_verified !== true) {
+        return res.status(401).json({ ok: false, error: 'Google could not verify this account email.' });
+      }
+      if (verifiedGoogleSubject && verifiedGoogleSubject !== verifiedSubject) {
+        return res.status(403).json({ ok: false, error: 'This Automnia account is linked to a different Google identity.' });
+      }
+      verifiedGoogleSubject = verifiedSubject;
+    }
+    if (!verifiedGoogleSubject || (record.googleSubject && record.googleSubject !== verifiedGoogleSubject)) {
+      return res.status(403).json({ ok: false, error: 'Verify this Automnia account with its linked Google identity before creating a password.' });
+    }
+    if (record.passwordHash) return res.status(409).json({ ok: false, error: 'This account already has a password. Enter the current password to change it.' });
+    const updated = await updateAccountRecord(record, {
+      ...(record.googleSubject ? {} : { googleSubject: verifiedGoogleSubject, googleLinkedAt: new Date().toISOString() }),
+      ...hashAccountPassword(newPassword),
+      passwordUpdatedAt: new Date().toISOString(),
+    });
+    return res.status(200).json(accountResponse(updated));
+  } catch (error) {
+    console.error('Account password setup error:', error);
+    return res.status(503).json({ ok: false, error: 'Password setup is temporarily unavailable.' });
   }
 });
 
@@ -567,15 +903,65 @@ function openAiError(res, status, message, type = 'invalid_request_error', code)
   });
 }
 
+function vertexInlineImagePart(part) {
+  if (!part || typeof part !== 'object') return null;
+  let mimeType = '';
+  let data = '';
+  const imageUrl = part.image_url && typeof part.image_url === 'object' ? part.image_url.url : undefined;
+  const source = part.source && typeof part.source === 'object' ? part.source : undefined;
+  if (typeof imageUrl === 'string' && imageUrl.startsWith('data:')) {
+    const match = imageUrl.match(/^data:([^;,]+);base64,(.+)$/s);
+    if (match) {
+      mimeType = match[1];
+      data = match[2];
+    }
+  } else if (source?.type === 'base64' && typeof source.data === 'string') {
+    mimeType = typeof source.media_type === 'string' ? source.media_type : '';
+    data = source.data;
+  } else if (typeof part.data === 'string') {
+    mimeType = typeof part.mime_type === 'string' ? part.mime_type : typeof part.mimeType === 'string' ? part.mimeType : '';
+    data = part.data;
+  }
+  if (!mimeType || !data || !/^image\/(?:png|jpe?g|webp|gif)$/i.test(mimeType)) return null;
+  return { inlineData: { mimeType, data } };
+}
+
+function vertexPartsFromOpenAiContent(content) {
+  if (typeof content === 'string') return content ? [{ text: content }] : [];
+  if (!Array.isArray(content)) return [];
+  return content.flatMap((part) => {
+    if (typeof part === 'string') return part ? [{ text: part }] : [];
+    if (!part || typeof part !== 'object') return [];
+    if (typeof part.text === 'string' && part.text) return [{ text: part.text }];
+    if (typeof part.input_text === 'string' && part.input_text) return [{ text: part.input_text }];
+    const image = vertexInlineImagePart(part);
+    return image ? [image] : [];
+  });
+}
+
 function openAiTextContent(content) {
-  if (typeof content === 'string') return content;
-  if (!Array.isArray(content)) return '';
-  return content.map((part) => {
-    if (!part || typeof part !== 'object') return '';
-    if (typeof part.text === 'string') return part.text;
-    if (typeof part.input_text === 'string') return part.input_text;
-    return '';
-  }).filter(Boolean).join('\n');
+  return vertexPartsFromOpenAiContent(content)
+    .map((part) => typeof part.text === 'string' ? part.text : '')
+    .filter(Boolean)
+    .join('\n');
+}
+
+function openAiToolCallThoughtSignature(call) {
+  const extraSignature = call?.extra_content?.google?.thought_signature;
+  if (typeof extraSignature === 'string' && extraSignature.trim()) return extraSignature.trim();
+  const functionSignature = call?.function?.thought_signature;
+  return typeof functionSignature === 'string' && functionSignature.trim() ? functionSignature.trim() : '';
+}
+
+function openAiToolResultValue(content) {
+  const text = openAiTextContent(content).trim();
+  if (!text) return { result: '(The runtime returned no output.)' };
+  try {
+    const parsed = JSON.parse(text);
+    return parsed && typeof parsed === 'object' && !Array.isArray(parsed) ? parsed : { result: parsed };
+  } catch {
+    return { result: text };
+  }
 }
 
 function vertexContentsFromOpenAiMessages(messages) {
@@ -586,7 +972,8 @@ function vertexContentsFromOpenAiMessages(messages) {
   for (const rawMessage of Array.isArray(messages) ? messages : []) {
     if (!rawMessage || typeof rawMessage !== 'object') continue;
     const role = String(rawMessage.role || '').trim().toLowerCase();
-    const text = openAiTextContent(rawMessage.content);
+    const messageParts = vertexPartsFromOpenAiContent(rawMessage.content);
+    const text = messageParts.map((part) => typeof part.text === 'string' ? part.text : '').filter(Boolean).join('\n');
     if (role === 'system' || role === 'developer') {
       if (text.trim()) systemParts.push({ text: text.trim() });
       continue;
@@ -594,24 +981,25 @@ function vertexContentsFromOpenAiMessages(messages) {
     if (role === 'tool') {
       const toolCallId = String(rawMessage.tool_call_id || '').trim();
       const name = toolCallNames.get(toolCallId) || 'tool';
-      // Gemini 3.x attaches an opaque thought signature to function-call
-      // parts.  OpenAI-compatible callers do not retain that field when they
-      // send the assistant tool call back with its result.  Reconstructing a
-      // Vertex functionCall/functionResponse pair therefore causes Vertex to
-      // reject the continuation before it can be billed.  Preserve the tool
-      // context as ordinary transcript text instead.  The current request
-      // still receives the full tool declarations, so the model can make the
-      // next real function call normally.
-      const result = text.trim() || '(The runtime returned no output.)';
+      const resultParts = messageParts.filter((part) => !('text' in part));
       contents.push({
         role: 'user',
-        parts: [{ text: `[Runtime tool result for ${name}]\n${result}` }],
+        parts: [{
+          functionResponse: {
+            name,
+            response: openAiToolResultValue(rawMessage.content),
+            ...(toolCallId ? { id: toolCallId } : {}),
+          },
+        }, ...resultParts],
       });
       continue;
     }
 
-    const parts = [];
-    if (text.trim()) parts.push({ text: text.trim() });
+    const parts = messageParts.flatMap((part) => {
+      if (typeof part.text !== 'string') return [part];
+      const trimmed = part.text.trim();
+      return trimmed ? [{ text: trimmed }] : [];
+    });
     if (role === 'assistant' && Array.isArray(rawMessage.tool_calls)) {
       for (const call of rawMessage.tool_calls) {
         const name = String(call?.function?.name || '').trim();
@@ -630,13 +1018,15 @@ function vertexContentsFromOpenAiMessages(messages) {
         } else if (encoded && typeof encoded === 'object' && !Array.isArray(encoded)) {
           args = encoded;
         }
-        // See the tool-result branch above: do not replay a historical
-        // functionCall without Vertex's original thought signature.  A
-        // compact model transcript preserves the context for the continuation
-        // without relying on a provider-private field that OpenClaw cannot
-        // round-trip through the OpenAI tool-call shape.
+        const thoughtSignature = openAiToolCallThoughtSignature(call);
+        const callId = typeof call?.id === 'string' ? call.id.trim() : '';
         parts.push({
-          text: `[Runtime tool request: ${name}]\nArguments: ${JSON.stringify(args)}`,
+          functionCall: {
+            name,
+            args,
+            ...(callId ? { id: callId } : {}),
+          },
+          ...(thoughtSignature ? { thoughtSignature } : {}),
         });
       }
     }
@@ -726,38 +1116,19 @@ function vertexCandidateResult(payload) {
     const call = part?.functionCall;
     const name = String(call?.name || '').trim();
     if (!name) return [];
+    const thoughtSignature = typeof part?.thoughtSignature === 'string' && part.thoughtSignature.trim()
+      ? part.thoughtSignature.trim()
+      : '';
     return [{
       id: `call_${crypto.randomUUID().replace(/-/g, '').slice(0, 24)}_${index}`,
       type: 'function',
       function: {
         name,
         arguments: JSON.stringify(call?.args && typeof call.args === 'object' ? call.args : {}),
+        ...(thoughtSignature ? { thought_signature: thoughtSignature } : {}),
       },
     }];
   });
-
-  // Intercept plain-text tool requests and convert them into native structured tool calls
-  const regex = /\[Runtime tool request:\s*(\w+)\].*?Arguments:\s*({.*?})/gs;
-  let match;
-  while ((match = regex.exec(text)) !== null) {
-    const name = match[1];
-    const argsString = match[2];
-    let args = {};
-    try {
-      args = JSON.parse(argsString);
-    } catch {
-      args = { input: argsString };
-    }
-    toolCalls.push({
-      id: `call_${crypto.randomUUID().replace(/-/g, '').slice(0, 24)}_${toolCalls.length}`,
-      type: 'function',
-      function: {
-        name,
-        arguments: JSON.stringify(args),
-      },
-    });
-  }
-  text = text.replace(regex, '').trim();
 
   const usage = payload?.usageMetadata || {};
   const promptTokens = Math.max(0, Number(usage.promptTokenCount) || 0);
@@ -814,6 +1185,176 @@ async function resolveHostedRelayAccess(req) {
   if (credits <= 0) return { error: 'Credit balance exhausted. Refill your Automnia balance to continue.', status: 402 };
   return { record, email, licenseKey, credits };
 }
+
+function knowledgeServingEndpoint() {
+  if (!knowledgeServingConfig.startsWith('projects/')) return null;
+  return `https://discoveryengine.googleapis.com/v1/${knowledgeServingConfig}:answer`;
+}
+
+function knowledgeEngineResource() {
+  if (!knowledgeServingConfig.startsWith('projects/')) return null;
+  return knowledgeServingConfig.replace(/\/servingConfigs\/[^/]+$/, '');
+}
+
+function knowledgeSessionEndpoint() {
+  const engineResource = knowledgeEngineResource();
+  return engineResource ? `https://discoveryengine.googleapis.com/v1/${engineResource}/sessions` : null;
+}
+
+function validKnowledgeSessionName(value, sessionPrefix) {
+  return typeof value === 'string'
+    && Boolean(sessionPrefix)
+    && value.startsWith(sessionPrefix)
+    && value.length > sessionPrefix.length
+    && !value.endsWith('/-');
+}
+
+function isInvalidKnowledgeSessionError(error) {
+  return [400, 404].includes(Number(error?.status)) && /invalid session name/i.test(String(error?.message || ''));
+}
+
+async function createAutomniaKnowledgeSession(userPseudoId, accessToken) {
+  const endpoint = knowledgeSessionEndpoint();
+  if (!endpoint) return null;
+  const response = await fetch(endpoint, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${accessToken}`,
+    },
+    body: JSON.stringify({ userPseudoId }),
+  });
+  const payload = await response.json().catch(() => null);
+  if (!response.ok) {
+    console.warn(JSON.stringify({
+      event: 'knowledge_session_create_failed',
+      upstreamStatus: response.status,
+      message: payload?.error?.message || 'Unknown session creation error',
+    }));
+    return null;
+  }
+  return typeof payload?.name === 'string' && payload.name ? payload.name : null;
+}
+
+async function answerAutomniaKnowledge(query, userPseudoId, sessionName) {
+  const endpoint = knowledgeServingEndpoint();
+  if (!endpoint) {
+    const error = new Error('Automnia knowledge assistant is not configured.');
+    error.status = 503;
+    throw error;
+  }
+  const client = await vertexAuth.getClient();
+  const accessToken = await client.getAccessToken();
+  if (!accessToken.token) throw new Error('Unable to obtain a Google Cloud service token for the Automnia knowledge assistant.');
+  const engineResource = knowledgeEngineResource();
+  const sessionPrefix = engineResource ? `${engineResource}/sessions/` : '';
+  const requestedSessionName = validKnowledgeSessionName(sessionName, sessionPrefix) ? sessionName : null;
+  let activeSessionName = requestedSessionName || await createAutomniaKnowledgeSession(userPseudoId, accessToken.token);
+  const requestBody = (modelVersion) => ({
+    query: { text: query },
+    ...(activeSessionName ? { session: activeSessionName } : {}),
+    userPseudoId,
+    answerGenerationSpec: {
+      modelSpec: { modelVersion },
+      promptSpec: {
+        preamble: 'You are Automnia Assistant, the official in-product support agent for Automnia AI Nexus. You are a highly capable product specialist with access to the supplied Automnia documentation and retrieved evidence. Answer as Automnia Assistant, not as a generic chatbot and not as the OpenClaw gateway itself. Use the exact Automnia surfaces and terminology in the documentation: Login, Account & License, Settings, Agents, Missions, Monitor, Plugins, Command Console, and Help. For a how-to question, give a concise explanation followed by ordered steps and name the screen or control to use. Normalize informal wording and spelling mistakes into the closest Automnia topic. Combine relevant facts across documents when that makes the answer more useful. Explain hosted credits versus BYOK, the local OpenClaw Gateway, provider/model setup, agents, missions, plugins, schedules, voice, recovery, and privacy accurately. Distinguish documented product behavior from machine-specific state. You cannot see the user’s screen, local files, live gateway state, private account records, passwords, license keys, provider secrets, or raw logs unless the product explicitly supplies a redacted diagnostic result. Never claim that you changed a setting, reconnected a gateway, checked an account, repaired a machine, or completed a deployment. Never request or repeat passwords, access tokens, API keys, license keys, OAuth codes, customer emails, cookies, or private files; direct the user to the secure UI control instead. Never invent prices, entitlements, permissions, model availability, account state, or repair results. If the answer depends on the local machine, direct the user to Monitor, Settings, Doctor, or Diagnostics and say what safe evidence to inspect. If the documentation does not establish the answer, acknowledge the limitation and ask one focused follow-up question rather than guessing. Do not call a normal product-help question rejected; answer it from the product knowledge whenever possible.',
+      },
+      includeCitations: true,
+      answerLanguageCode: 'en',
+      ignoreLowRelevantContent: false,
+    },
+  });
+
+  const requestModel = async (modelVersion) => {
+    const response = await fetch(endpoint, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${accessToken.token}`,
+      },
+      body: JSON.stringify(requestBody(modelVersion)),
+    });
+    const payload = await response.json().catch(() => null);
+    if (response.ok) return { payload, modelVersion, sessionName: activeSessionName };
+    const error = new Error(payload?.error?.message || 'Automnia knowledge assistant request failed.');
+    error.status = response.status >= 500 && response.status !== 503 ? 502 : response.status;
+    error.retryable = response.status === 429 || response.status >= 500;
+    const retryAfter = Number(response.headers.get('retry-after'));
+    if (Number.isFinite(retryAfter) && retryAfter > 0) error.retryAfterSeconds = Math.ceil(retryAfter);
+    error.upstreamCode = payload?.error?.status || payload?.error?.code || null;
+    error.modelVersion = modelVersion;
+    throw error;
+  };
+
+  try {
+    return await requestModel(knowledgeModelVersion);
+  } catch (error) {
+    // Agent Search sessions can expire while the desktop Help window remains
+    // open. Recover once with a fresh session instead of surfacing a generic
+    // rejection or making the user reopen Help.
+    if (requestedSessionName && isInvalidKnowledgeSessionError(error)) {
+      activeSessionName = await createAutomniaKnowledgeSession(userPseudoId, accessToken.token);
+      return await requestModel(knowledgeModelVersion);
+    }
+    const canFallback = knowledgeFallbackModelVersion
+      && knowledgeFallbackModelVersion !== knowledgeModelVersion
+      && [400, 404, 422].includes(Number(error?.status));
+    if (!canFallback) throw error;
+    console.warn(JSON.stringify({
+      event: 'knowledge_model_fallback',
+      preferredModelVersion: knowledgeModelVersion,
+      fallbackModelVersion: knowledgeFallbackModelVersion,
+      upstreamStatus: error?.status || null,
+    }));
+    return await requestModel(knowledgeFallbackModelVersion);
+  }
+}
+
+// Authenticated, read-only product help. This route is deliberately separate
+// from /api/ai/generate so a normal hosted-credit turn never triggers Agent
+// Search or its separate billing path unless the caller explicitly asks for
+// Automnia knowledge help.
+app.post('/api/knowledge/answer', async (req, res) => {
+  const email = normalizeEmail(req.body?.email || req.get('X-Automnia-Email'));
+  const licenseKey = normalizeKey(req.body?.licenseKey || req.get('X-Automnia-License-Key'));
+  const query = String(req.body?.query || '').trim();
+  const sessionName = String(req.body?.sessionName || '').trim();
+  if (!email || !licenseKey) return res.status(401).json({ ok: false, error: 'Automnia account credentials are required.' });
+  if (!query || query.length > 5_000) return res.status(400).json({ ok: false, error: 'Enter a knowledge question between 1 and 5,000 characters.' });
+  if (!knowledgeServingEndpoint()) return res.status(503).json({ ok: false, retryable: true, error: 'Automnia knowledge assistant is not configured yet.' });
+
+  try {
+    const record = await findLicense(email, licenseKey);
+    if (!record) return res.status(401).json({ ok: false, error: 'No active Automnia license found matching this account.' });
+    const userPseudoId = `automnia-${crypto.createHash('sha256').update(email).digest('hex').slice(0, 32)}`;
+    const result = await answerAutomniaKnowledge(query, userPseudoId, sessionName || null);
+    const answer = result.payload?.answer || {};
+    return res.status(200).json({
+      ok: true,
+      grounded: true,
+      state: answer.state || null,
+      answerText: typeof answer.answerText === 'string' ? answer.answerText : '',
+      citations: Array.isArray(answer.citations) ? answer.citations : [],
+      references: Array.isArray(answer.references) ? answer.references : [],
+      skippedReasons: Array.isArray(answer.answerSkippedReasons) ? answer.answerSkippedReasons : [],
+      sessionName: typeof result.payload?.session?.name === 'string' ? result.payload.session.name : result.sessionName || null,
+      modelVersion: result.modelVersion,
+    });
+  } catch (error) {
+    const status = Number(error?.status) || 502;
+    console.error('Automnia knowledge assistant error:', error);
+    const message = status === 429
+      ? `Automnia Assistant is temporarily busy because the knowledge service reached its request limit. Try again shortly${error?.retryAfterSeconds ? ` (about ${error.retryAfterSeconds} seconds)` : ''}.`
+      : status >= 500
+      ? 'Automnia knowledge assistant is temporarily unavailable. Try again in a moment.'
+      : status === 401 || status === 403
+        ? 'Automnia Cloud is not authorized to query the private knowledge base yet. Redeploy the service with Discovery Engine Viewer access, then try again.'
+        : status === 404
+          ? 'The Automnia private knowledge base serving configuration was not found. Check the deployed knowledge engine and serving config.'
+          : 'Automnia knowledge assistant rejected that question. Ask a direct product-help question and try again.';
+    return res.status(status).json({ ok: false, retryable: status === 429 || status >= 500, retryAfterSeconds: error?.retryAfterSeconds || undefined, error: message, upstreamCode: error?.upstreamCode || undefined });
+  }
+});
 
 function writeOpenAiSse(res, payload) {
   res.write(`data: ${JSON.stringify(payload)}\n\n`);
@@ -1064,11 +1605,15 @@ async function handlePaidOrder(order, deliveryId) {
     customerId: order.customer?.id ? String(order.customer.id) : null,
     tier: tierConfig.tier,
     mode: tierConfig.mode,
+    planPriceCents: tierConfig.planPriceCents ?? null,
+    byokAllowed: tierConfig.mode === 'byok' || (!starterSubscriptionOnly(tierConfig) && byokAllowedForTier(tierConfig.tier)),
+    permanentAccess: planHasPermanentAccess(tierConfig),
+    accessType: planHasPermanentAccess(tierConfig) ? 'permanent' : 'subscription',
     creditBalance: tierConfig.initialCredits,
     licenseKey,
     onboarding: buildOnboardingPackage(order, licenseKey, tierConfig),
     status: 'provisioned',
-    subscriptionStatus: tierConfig.kind === 'subscription' ? 'active' : null,
+    subscriptionStatus: planHasPermanentAccess(tierConfig) ? 'permanent' : tierConfig.kind === 'subscription' ? 'active' : null,
     subscriptionContractId: contractId || null,
     lastShopifyOrderId: orderId,
     createdAt,

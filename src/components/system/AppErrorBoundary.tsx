@@ -1,12 +1,12 @@
 import { Component, type ErrorInfo, type ReactNode } from 'react'
 import './AppErrorBoundary.css'
 
-const CRASH_EVENTS_KEY = 'dystopai.renderer.crash.events'
+const CRASH_EVENTS_KEY = 'automnia.renderer.crash.events'
 const CRASH_WINDOW_MS = 60_000
 const CRASH_LOOP_LIMIT = 3
 const MAX_RECORDED_EVENTS = 8
 const MAX_ERROR_DETAIL_LENGTH = 1_600
-const RENDERER_ERROR_EVENT = 'dystopai:renderer-error'
+const RENDERER_ERROR_EVENT = 'automnia:renderer-error'
 
 type RendererErrorSource = 'react-render' | 'window-error' | 'unhandled-rejection'
 
@@ -211,7 +211,12 @@ export class AppErrorBoundary extends Component<AppErrorBoundaryProps, AppErrorB
   }
 
   private handleReload = (): void => {
-    window.location.reload()
+    // A renderer can still hold an index.html from before a Vite build
+    // rotated hashed chunks. Add a one-shot cache buster so recovery fetches
+    // the current module graph instead of retrying the stale document.
+    const reloadUrl = new URL(window.location.href)
+    reloadUrl.searchParams.set('renderer-reload', String(Date.now()))
+    window.location.replace(reloadUrl.toString())
   }
 
   private renderDetails(): string {

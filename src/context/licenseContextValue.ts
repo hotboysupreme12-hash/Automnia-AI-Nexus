@@ -7,6 +7,10 @@ export type LicenseInfo = {
   email: string | null
   tier: string | null
   mode: 'hosted_credits' | 'byok' | null
+  planPriceCents: number | null
+  byokAllowed: boolean
+  permanentAccess: boolean
+  subscriptionStatus: string | null
   usagePriority: HostedUsagePriority | null
   creditBalance: number | null
   creditBalanceUpdatedAt: string | null

@@ -19,7 +19,7 @@ const tests = walk(testsRoot)
 
 if (!tests.length) throw new Error(`No unit tests found under ${testsRoot}`)
 
-const coverage = process.argv.includes('--coverage') || /^(1|true|yes)$/i.test(String(process.env.DYSTOPAI_UNIT_TEST_COVERAGE || ''))
+const coverage = process.argv.includes('--coverage') || /^(1|true|yes)$/i.test(String(process.env.AUTOMNIA_UNIT_TEST_COVERAGE || ''))
 const coverageExcludes = [
   'tests/**',
   'server/controlPlaneHttp.ts',

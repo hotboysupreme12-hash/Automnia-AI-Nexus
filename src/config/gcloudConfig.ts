@@ -1,8 +1,8 @@
-// Public client-safe Automnia Cloud information only. Project IDs, Cloud Run
-// origins, secret names, license keys, customer emails, and credit balances are
-// deliberately server-owned and must not be compiled into the renderer.
+// Public client-safe Automnia Cloud information only. This temporary Cloud Run
+// origin is safe to display; secret names, license keys, customer emails, and
+// credit balances remain server-owned.
 export const ADMIN_GCLOUD_CONFIG = {
-  permanentProvisionerUrl: 'https://api.automnia.ai',
-  shopifyWebhookBaseUrl: 'https://api.automnia.ai/shopify/webhooks',
-  status: 'Automnia Cloud (permanent domain)',
+  provisionerUrl: 'https://automnia-shopify-provisioner-336625531977.us-east1.run.app',
+  shopifyWebhookBaseUrl: 'https://automnia-shopify-provisioner-336625531977.us-east1.run.app/shopify/webhooks',
+  status: 'Automnia Cloud (temporary Cloud Run endpoint)',
 } as const

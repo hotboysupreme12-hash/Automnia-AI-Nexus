@@ -159,7 +159,7 @@ async function waitForFile(filePath: string, timeoutMs = 5000) {
 
 async function main() {
   const port = await reservePort()
-  const stateDir = mkdtempSync(path.join(tmpdir(), 'dystopai-stream-smoke-'))
+  const stateDir = mkdtempSync(path.join(tmpdir(), 'automnia-stream-smoke-'))
   const runtimeLedgerStore = createRuntimeLedgerStore(runtimeLedgerPathsForStateRoot(stateDir))
   try {
     const seededAt = '2026-08-11T12:00:00.000Z'

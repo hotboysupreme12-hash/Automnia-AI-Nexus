@@ -55,13 +55,13 @@ assert.match(governance, /Branch Protection/, 'release governance docs must defi
 assert.match(governance, /AUTOMNIA_RELEASE_REQUIRE_SIGNING/, 'release governance docs must define mandatory release signing')
 assert.match(governance, /localhost API only/, 'release governance docs must document the local-only threat model')
 
-const tempRoot = mkdtempSync(path.join(tmpdir(), 'dystopai-release-signing-'))
+const tempRoot = mkdtempSync(path.join(tmpdir(), 'automnia-release-signing-'))
 const evidenceDir = path.join(tempRoot, 'evidence')
 mkdirSync(evidenceDir, { recursive: true })
 
 const checksumBytes = Buffer.from([
-  '71b5d1a54391b12a3a0a0b77a62b34f2a7337477602bd97a88b01b0cb595a0b7  release/DystopAI-test-artifact.txt',
-  'a5c0651a209e63bc148152780c992c2901a27af98c5d890e60dd008ee840eadb  release/evidence/dystopai-sbom.cdx.json',
+  '71b5d1a54391b12a3a0a0b77a62b34f2a7337477602bd97a88b01b0cb595a0b7  release/Automnia-test-artifact.txt',
+  'a5c0651a209e63bc148152780c992c2901a27af98c5d890e60dd008ee840eadb  release/evidence/automnia-sbom.cdx.json',
   '',
 ].join('\n'), 'utf8')
 writeFileSync(path.join(evidenceDir, 'checksums.sha256'), checksumBytes)
@@ -74,11 +74,11 @@ const missingKey = spawnSync(process.execPath, ['scripts/sign-release-evidence.c
   encoding: 'utf8',
   env: {
     ...process.env,
-    DYSTOPAI_RELEASE_EVIDENCE_DIR: evidenceDir,
+    AUTOMNIA_RELEASE_EVIDENCE_DIR: evidenceDir,
     AUTOMNIA_RELEASE_SIGNING_PRIVATE_KEY_PEM: '',
     AUTOMNIA_RELEASE_SIGNING_PRIVATE_KEY_FILE: '',
-    DYSTOPAI_RELEASE_SIGNING_PRIVATE_KEY_PEM: '',
-    DYSTOPAI_RELEASE_SIGNING_PRIVATE_KEY_FILE: '',
+    AUTOMNIA_RELEASE_SIGNING_PRIVATE_KEY_PEM: '',
+    AUTOMNIA_RELEASE_SIGNING_PRIVATE_KEY_FILE: '',
   },
   windowsHide: true,
 })
@@ -90,7 +90,7 @@ const result = spawnSync(process.execPath, ['scripts/sign-release-evidence.cjs']
   encoding: 'utf8',
   env: {
     ...process.env,
-    DYSTOPAI_RELEASE_EVIDENCE_DIR: evidenceDir,
+    AUTOMNIA_RELEASE_EVIDENCE_DIR: evidenceDir,
     AUTOMNIA_RELEASE_SIGNING_PRIVATE_KEY_PEM: privatePem,
     AUTOMNIA_RELEASE_SIGNING_KEY_ID: 'test-release-key',
   },

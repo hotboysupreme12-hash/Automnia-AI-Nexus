@@ -815,7 +815,7 @@ function buildTelegramAgentRouteContext(params) {
     var modelRef = resolveTelegramAgentModelRef(params.config || {}, agentId);
     return [
         'Automnia Telegram identity contract (authoritative system facts for this turn):',
-        '- Product: Automnia AI Nexus (DystopAI Telegram bot).',
+        '- Product: Automnia AI Nexus (Automnia Telegram bot).',
         profile.name ? '- Active Automnia agent: ' + profile.name + ' (agent id: ' + agentId + ').' : '- Active Automnia agent id: ' + agentId + '.',
         profile.role ? '- Assigned role: ' + profile.role + '.' : '',
         modelRef ? '- Configured primary execution model: ' + modelRef + '.' : '- Configured primary execution model: unavailable from the active route configuration.',

@@ -1,7 +1,7 @@
-import { writeAuthToken } from './authTokenStore'
+import { isAuthExplicitlySignedOut, writeAuthToken } from './authTokenStore'
 
 type DesktopAuthBridge = {
-  dystopaiDesktop?: {
+  automniaDesktop?: {
     bootstrapControlCenterSession?: () => Promise<string | null> | string | null
   }
 }
@@ -11,7 +11,7 @@ let recoveryInFlight: Promise<string | null> | null = null
 
 function desktopSessionBootstrap(): (() => Promise<string | null> | string | null) | null {
   if (typeof window === 'undefined') return null
-  const bridge = (window as Window & DesktopAuthBridge).dystopaiDesktop
+  const bridge = (window as Window & DesktopAuthBridge).automniaDesktop
   return typeof bridge?.bootstrapControlCenterSession === 'function' ? bridge.bootstrapControlCenterSession : null
 }
 
@@ -35,6 +35,7 @@ export function hasDesktopControlCenterSessionBootstrap(): boolean {
  * a burst of polling failures creates one IPC request and one fresh bearer token.
  */
 export async function recoverDesktopControlCenterSession(): Promise<string | null> {
+  if (isAuthExplicitlySignedOut()) return null
   const bootstrap = desktopSessionBootstrap()
   if (!bootstrap) return null
   if (recoveryInFlight) return recoveryInFlight
@@ -43,6 +44,9 @@ export async function recoverDesktopControlCenterSession(): Promise<string | nul
     .then((value) => {
       const token = typeof value === 'string' ? value.trim() : ''
       if (!token) return null
+      // Logout can happen while the Electron IPC request is in flight. Never
+      // let that late response put the user straight back into the app.
+      if (isAuthExplicitlySignedOut()) return null
       writeAuthToken(token)
       return token
     })

@@ -411,11 +411,10 @@ test('agent streaming service keeps hosted tool/runtime turns in the configured 
   let streamCalled = false
   let hostedRelayActive = false
   let hostedUsagePriority: 'automnia_first' | 'provider_first' = 'automnia_first'
-  let hostedRelayCalls = 0
-  let hostedRelayShouldFail = false
-  let hostedRelayRetryable = false
+  let hostedBalanceRefreshes = 0
   let bufferedShouldFail = false
   const bufferedMessages: string[] = []
+  const bufferedInputs: Array<Record<string, unknown>> = []
 
   const service = createAgentStreamingService({
     streamingProviderConfig: {
@@ -440,15 +439,8 @@ test('agent streaming service keeps hosted tool/runtime turns in the configured 
     getHostedRelayCredentials: () => hostedRelayActive
       ? { email: 'subscriber@example.test', licenseKey: 'license-key', mode: 'hosted_credits', usagePriority: hostedUsagePriority }
       : null,
-    streamAutomniaCloudRelay: async (input) => {
-      hostedRelayCalls += 1
-      assert.equal(input.message.startsWith('/runtime '), false)
-      assert.equal(input.message.startsWith('/work '), false)
-      assert.equal(input.message.startsWith('/openclaw '), false)
-      if (hostedRelayShouldFail) return { ok: false, reply: 'cloud unavailable', provider: 'automnia-cloud', retryable: hostedRelayRetryable }
-      return { ok: true, reply: 'hosted relay reply', provider: 'automnia-cloud' }
-    },
     runBufferedAgentTurnForStream: async (input) => {
+      bufferedInputs.push({ ...input })
       bufferedMessages.push(String(input.message))
       if (bufferedShouldFail) return { ok: false, reply: 'provider unavailable', provider: 'gateway' }
       return { ok: true, reply: 'runtime reply', provider: 'gateway' }
@@ -504,6 +496,10 @@ test('agent streaming service keeps hosted tool/runtime turns in the configured 
     streamGeminiContent: async () => {
       throw new Error('not used')
     },
+    reconcileHostedCreditBalance: async () => {
+      hostedBalanceRefreshes += 1
+      return { creditBalance: 1234 }
+    },
     classifyFailureKind: () => undefined,
     redactHiddenReasoningAndSecrets: (value) => value,
     appendAgentDailyMemory: async (_agentId, entry) => {
@@ -550,15 +546,20 @@ test('agent streaming service keeps hosted tool/runtime turns in the configured 
   hostedRelayActive = true
   const hostedResult = await service.streamProviderAgentTurn({
     agent: 'agent-alpha',
-    message: 'hello from the Command Console',
+    message: 'Use the browser, read and write a workspace file, then run an exec command.',
     thinking: 'low',
     sessionKey: 'console',
   }, () => undefined, createAbortSignal())
 
-  assert.equal(hostedRelayCalls, 1)
-  assert.equal(hostedResult.provider, 'automnia-cloud')
-  assert.equal(hostedResult.reply, 'hosted relay reply')
-  assert.deepEqual(bufferedMessages, [])
+  assert.equal(hostedResult.provider, 'gateway')
+  assert.equal(hostedResult.reply, 'runtime reply')
+  assert.equal(hostedResult.usagePriority, 'automnia_first')
+  assert.equal(hostedResult.billingRoute, 'openclaw-gateway-automnia-provider')
+  assert.equal(hostedResult.nativeToolLoop, true)
+  assert.equal(hostedResult.remainingCredits, 1234)
+  assert.equal(hostedResult.creditBalanceSynchronized, true)
+  assert.deepEqual(bufferedMessages, ['Use the browser, read and write a workspace file, then run an exec command.'])
+  assert.equal(bufferedInputs.at(-1)?.forceOpenClawRuntime, true)
 
   const runtimeResult = await service.streamProviderAgentTurn({
     agent: 'agent-alpha',
@@ -568,47 +569,16 @@ test('agent streaming service keeps hosted tool/runtime turns in the configured 
     forceOpenClawRuntime: true,
   }, () => undefined, createAbortSignal())
 
-  assert.equal(hostedRelayCalls, 1)
   assert.equal(runtimeResult.provider, 'gateway')
   assert.equal(runtimeResult.reply, 'runtime reply')
-  assert.deepEqual(bufferedMessages, ['inspect the local workspace'])
-  bufferedMessages.length = 0
-
-  hostedRelayShouldFail = true
-  const fallbackEvents: Array<{ event: string; data: Record<string, unknown> }> = []
-  const fallbackResult = await service.streamProviderAgentTurn({
-    agent: 'agent-alpha',
-    message: 'inspect the local workspace',
-    thinking: 'low',
-    sessionKey: 'console',
-  }, (event, data) => fallbackEvents.push({ event, data }), createAbortSignal())
-
-  assert.equal(hostedRelayCalls, 2)
-  assert.equal(fallbackResult.provider, 'gateway')
-  assert.deepEqual(bufferedMessages, ['inspect the local workspace'])
-  assert.equal(fallbackEvents.some((entry) => entry.event === 'status' && entry.data.reason === 'automnia-cloud-local-fallback'), true)
-
-  hostedRelayRetryable = true
-  bufferedMessages.length = 0
-  const transientCloudEvents: Array<{ event: string; data: Record<string, unknown> }> = []
-  const transientCloudResult = await service.streamProviderAgentTurn({
-    agent: 'agent-alpha',
-    message: 'write an elaborate billed response',
-    thinking: 'high',
-    sessionKey: 'console',
-  }, (event, data) => transientCloudEvents.push({ event, data }), createAbortSignal())
-
-  assert.equal(hostedRelayCalls, 3)
-  assert.equal(transientCloudResult.ok, false)
-  assert.equal(transientCloudResult.provider, 'automnia-cloud')
-  assert.equal(transientCloudResult.usagePriority, 'automnia_first')
-  assert.equal(transientCloudResult.fallbackUsed, false)
-  assert.deepEqual(bufferedMessages, [])
-  assert.equal(transientCloudEvents.some((entry) => entry.data.reason === 'automnia-cloud-local-fallback'), false)
+  assert.equal(runtimeResult.usagePriority, 'automnia_first')
+  assert.equal(hostedBalanceRefreshes, 2)
+  assert.deepEqual(bufferedMessages, [
+    'Use the browser, read and write a workspace file, then run an exec command.',
+    'inspect the local workspace',
+  ])
 
   hostedUsagePriority = 'provider_first'
-  hostedRelayShouldFail = false
-  hostedRelayRetryable = false
   bufferedMessages.length = 0
   const providerFirstResult = await service.streamProviderAgentTurn({
     agent: 'agent-alpha',
@@ -620,24 +590,21 @@ test('agent streaming service keeps hosted tool/runtime turns in the configured 
 
   assert.equal(providerFirstResult.provider, 'gateway')
   assert.equal(providerFirstResult.usagePriority, 'provider_first')
-  assert.equal(providerFirstResult.fallbackUsed, false)
-  assert.equal(hostedRelayCalls, 3)
+  assert.equal(providerFirstResult.billingRoute, 'openclaw-gateway-automnia-provider')
   assert.deepEqual(bufferedMessages, ['inspect the local workspace'])
 
   bufferedShouldFail = true
-  const providerFallbackEvents: Array<{ event: string; data: Record<string, unknown> }> = []
-  const providerFallbackResult = await service.streamProviderAgentTurn({
+  const providerFailureResult = await service.streamProviderAgentTurn({
     agent: 'agent-alpha',
     message: 'use my provider, then fall back',
     thinking: 'low',
     sessionKey: 'console',
-  }, (event, data) => providerFallbackEvents.push({ event, data }), createAbortSignal())
+  }, () => undefined, createAbortSignal())
 
-  assert.equal(providerFallbackResult.provider, 'automnia-cloud')
-  assert.equal(providerFallbackResult.usagePriority, 'provider_first')
-  assert.equal(providerFallbackResult.fallbackUsed, true)
-  assert.equal(hostedRelayCalls, 4)
-  assert.equal(providerFallbackEvents.some((entry) => entry.event === 'status' && entry.data.reason === 'provider-to-automnia-fallback'), true)
+  assert.equal(providerFailureResult.provider, 'gateway')
+  assert.equal(providerFailureResult.usagePriority, 'provider_first')
+  assert.equal(providerFailureResult.billingRoute, 'openclaw-gateway-automnia-provider')
+  assert.equal(hostedBalanceRefreshes, 4)
 })
 
 test('agent streaming service dispatches Gemini 3.6 Flash through both native Google transports', async () => {

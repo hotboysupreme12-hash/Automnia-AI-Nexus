@@ -107,7 +107,7 @@ function normalizedTailLimit(limit: number) {
 function recordJsonlTailDiagnostic(diagnostic: JsonlTailDiagnostic | null) {
   jsonlTailDiagnostic = diagnostic
   if (diagnostic?.malformedRows) {
-    console.warn(`[dystopai] ${diagnostic.message}`)
+    console.warn(`[automnia] ${diagnostic.message}`)
   }
 }
 
@@ -593,7 +593,7 @@ export function scheduleLegacyRuntimeLedgerImport(delayMs = 10_000) {
       if (db) importLegacyJsonlLedgers(db, configuredPaths())
     } catch (error) {
       legacyImportWarning = error instanceof Error && error.message ? error.message : String(error)
-      console.warn(`[dystopai] legacy ledger migration deferred after failure: ${legacyImportWarning}`)
+      console.warn(`[automnia] legacy ledger migration deferred after failure: ${legacyImportWarning}`)
     }
   }, normalizedDelayMs)
   legacyImportTimer.unref?.()

@@ -11,7 +11,7 @@ import {
 } from '../server/services/filesystem/commandConsoleUploadService'
 
 async function createTempUploadsRoot(t: { after(callback: () => Promise<void> | void): void }) {
-  const root = await fs.mkdtemp(path.join(os.tmpdir(), 'dystopai-command-uploads-'))
+  const root = await fs.mkdtemp(path.join(os.tmpdir(), 'automnia-command-uploads-'))
   t.after(async () => {
     await fs.rm(root, { recursive: true, force: true })
   })

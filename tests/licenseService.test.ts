@@ -3,16 +3,27 @@ import test from 'node:test'
 
 import { createLicenseService, type LicenseServiceOptions } from '../server/services/license/licenseService'
 
-function createHarness(options: { responses?: Array<Record<string, unknown>> } = {}) {
+function createHarness(options: {
+  responses?: Array<Record<string, unknown>>
+  failuresByRequest?: Record<number, 'network' | 'service_unavailable'>
+} = {}) {
   const values = new Map<string, unknown>()
   const requests: Array<{ url: string; body: Record<string, unknown> }> = []
   const responses = [...(options.responses || [])]
   const fetch = (async (input: string | URL | Request, init?: RequestInit) => {
-    const next = responses.shift() || { ok: true, active: true, mode: 'hosted_credits' }
     requests.push({
       url: String(input),
       body: JSON.parse(String(init?.body || '{}')) as Record<string, unknown>,
     })
+    const failure = options.failuresByRequest?.[requests.length]
+    if (failure === 'network') throw new Error('simulated network failure')
+    if (failure === 'service_unavailable') {
+      return new Response(JSON.stringify({ ok: false, error: 'simulated provisioner outage' }), {
+        status: 503,
+        headers: { 'Content-Type': 'application/json' },
+      })
+    }
+    const next = responses.shift() || { ok: true, active: true, mode: 'hosted_credits' }
     return new Response(JSON.stringify(next), {
       status: 200,
       headers: { 'Content-Type': 'application/json' },
@@ -50,6 +61,7 @@ test('persists the provisioner-confirmed hosted-credit balance on activation and
   const activated = await harness.service.activate({ email: 'customer@example.test', licenseKey: 'AUT-TEST-0001' })
   assert.equal(activated.creditBalance, 2_000)
   assert.equal(activated.usagePriority, 'automnia_first')
+  assert.equal(activated.byokAllowed, true)
   assert.equal(activated.creditBalanceUpdatedAt, '2026-08-11T12:00:00.000Z')
   assert.equal(harness.requests[0]?.url, 'https://provisioner.example.test/api/activate')
   assert.deepEqual(harness.requests[0]?.body, { email: 'customer@example.test', licenseKey: 'AUT-TEST-0001' })
@@ -62,6 +74,25 @@ test('persists the provisioner-confirmed hosted-credit balance on activation and
   const stored = harness.values.get('license:activation') as Record<string, unknown>
   assert.equal(stored.licenseKey, 'AUT-TEST-0001')
   assert.equal(stored.creditBalance, 1_731)
+})
+
+test('replaces a legacy local key with the provisioner canonical account key', async () => {
+  const harness = createHarness({
+    responses: [{
+      ok: true,
+      active: true,
+      email: 'customer@example.test',
+      tier: 'pro',
+      mode: 'hosted_credits',
+      permanentAccess: true,
+      canonicalLicenseKey: 'AUT-CANONICAL-0001',
+      creditBalance: 2_000,
+    }],
+  })
+
+  await harness.service.activate({ email: 'customer@example.test', licenseKey: 'AUT-LEGACY-0001' })
+  const stored = harness.values.get('license:activation') as Record<string, unknown>
+  assert.equal(stored.licenseKey, 'AUT-CANONICAL-0001')
 })
 
 test('persists hosted usage priority across balance updates and provisioner refreshes', async () => {
@@ -79,6 +110,58 @@ test('persists hosted usage priority across balance updates and provisioner refr
   assert.equal(harness.service.recordHostedCreditBalance(450)?.usagePriority, 'provider_first')
   assert.equal((await harness.service.refresh()).usagePriority, 'provider_first')
   assert.equal(harness.service.getStatus().creditBalance, 700)
+})
+
+test('locks the $19.99 Starter subscription to Automnia credits', async () => {
+  const harness = createHarness({
+    responses: [{
+      ok: true,
+      active: true,
+      email: 'customer@example.test',
+      tier: 'starter',
+      mode: 'hosted_credits',
+      planPriceCents: 1_999,
+      byokAllowed: true,
+      permanentAccess: true,
+      usagePriority: 'provider_first',
+      creditBalance: 1_000,
+    }],
+  })
+
+  const activated = await harness.service.activate({ email: 'customer@example.test', licenseKey: 'AUT-TEST-STARTER' })
+  assert.equal(activated.planPriceCents, 1_999)
+  assert.equal(activated.byokAllowed, false)
+  assert.equal(activated.permanentAccess, false)
+  assert.equal(activated.usagePriority, 'automnia_first')
+  assert.equal(harness.service.isUsagePriorityLocked(), true)
+  assert.equal(harness.service.setUsagePriority('provider_first').usagePriority, 'automnia_first')
+  assert.equal(harness.service.getActiveRelayCredentials()?.usagePriority, 'automnia_first')
+
+  const higherPricedStarter = createHarness({
+    responses: [{ ok: true, active: true, email: 'customer@example.test', tier: 'starter', mode: 'hosted_credits', planPriceCents: 2_999, byokAllowed: true }],
+  })
+  const higherPricedStatus = await higherPricedStarter.service.activate({ email: 'customer@example.test', licenseKey: 'AUT-TEST-STARTER-HIGHER' })
+  assert.equal(higherPricedStatus.usagePriority, 'automnia_first')
+  assert.equal(higherPricedStatus.byokAllowed, false)
+  assert.equal(higherPricedStatus.permanentAccess, false)
+  assert.equal(higherPricedStarter.service.isUsagePriorityLocked(), true)
+  assert.equal(higherPricedStarter.service.setUsagePriority('provider_first').usagePriority, 'automnia_first')
+})
+
+test('resets a BYOK priority when the account changes to a hosted subscription', async () => {
+  const harness = createHarness({
+    responses: [
+      { ok: true, active: true, email: 'customer@example.test', tier: 'founding_beta_byok', mode: 'byok' },
+      { ok: true, active: true, email: 'customer@example.test', tier: 'pro', mode: 'hosted_credits', creditBalance: 700 },
+    ],
+  })
+
+  await harness.service.activate({ email: 'customer@example.test', licenseKey: 'AUT-TEST-MODE-SWITCH' })
+  assert.equal(harness.service.getStatus().usagePriority, 'provider_first')
+
+  const refreshed = await harness.service.refresh()
+  assert.equal(refreshed.mode, 'hosted_credits')
+  assert.equal(refreshed.usagePriority, 'automnia_first')
 })
 
 test('does not invent or accept malformed hosted-credit balances', async () => {
@@ -107,6 +190,21 @@ test('refresh reconciles a balance changed outside the desktop app without expos
   assert.equal('licenseKey' in refreshed, false)
   assert.equal(harness.requests.length, 2)
   assert.deepEqual(harness.requests[1]?.body, { email: 'customer@example.test', licenseKey: 'AUT-TEST-0003' })
+})
+
+test('refresh retries transient relay-license transport failures before reporting success', async () => {
+  const harness = createHarness({
+    responses: [
+      { ok: true, active: true, email: 'customer@example.test', tier: 'pro', mode: 'hosted_credits', creditBalance: 100 },
+      { ok: true, active: true, email: 'customer@example.test', tier: 'pro', mode: 'hosted_credits', creditBalance: 125 },
+    ],
+    failuresByRequest: { 2: 'network', 3: 'service_unavailable' },
+  })
+  await harness.service.activate({ email: 'customer@example.test', licenseKey: 'AUT-TEST-RETRY' })
+
+  const refreshed = await harness.service.refresh()
+  assert.equal(refreshed.creditBalance, 125)
+  assert.equal(harness.requests.length, 4)
 })
 
 test('never overwrites a BYOK account with a hosted-credit relay result', async () => {

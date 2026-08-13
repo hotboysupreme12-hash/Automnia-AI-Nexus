@@ -3,10 +3,12 @@ import test from 'node:test'
 import {
   DEFAULT_CONSOLE_PREFERENCES,
   DEFAULT_REGISTRY_PREFERENCES,
+  AGENT_CARD_RARITY_THEMES,
   REGISTRY_PREFS_CHANGED_EVENT,
   REGISTRY_PREFS_KEY,
   readConsolePreferences,
   readRegistryPreferences,
+  resolveAgentCardTheme,
   saveConsolePreferences,
   saveRegistryPreferences,
 } from '../src/components/settings/workspaceSettings'
@@ -41,18 +43,27 @@ Object.defineProperty(globalThis, 'window', {
 
 test('registry preferences validate persisted values and publish live updates', () => {
   storage.clear()
-  storage.setItem(REGISTRY_PREFS_KEY, JSON.stringify({ displayMode: 'broken', overlayPreset: 'aurora-mesh', rarityFilter: 'invalid', sortKey: 'level' }))
+  storage.setItem(REGISTRY_PREFS_KEY, JSON.stringify({ displayMode: 'broken', overlayPreset: 'blueprint-grid', rarityFilter: 'invalid', sortKey: 'level' }))
   assert.deepEqual(readRegistryPreferences(), {
     ...DEFAULT_REGISTRY_PREFERENCES,
-    overlayPreset: 'aurora-mesh',
+    overlayPreset: 'blueprint-grid',
+    rarityColorsEnabled: false,
     sortKey: 'level',
   })
 
   let changed = false
   events.addEventListener(REGISTRY_PREFS_CHANGED_EVENT, () => { changed = true }, { once: true })
-  saveRegistryPreferences({ displayMode: 'list', overlayPreset: 'studio-noir', rarityFilter: 'epic', sortKey: 'name' })
+  saveRegistryPreferences({ displayMode: 'list', overlayPreset: 'blueprint-grid', rarityColorsEnabled: true, rarityFilter: 'epic', sortKey: 'name' })
   assert.equal(changed, true)
-  assert.deepEqual(readRegistryPreferences(), { displayMode: 'list', overlayPreset: 'studio-noir', rarityFilter: 'epic', sortKey: 'name' })
+  assert.deepEqual(readRegistryPreferences(), { displayMode: 'list', overlayPreset: 'blueprint-grid', rarityColorsEnabled: true, rarityFilter: 'epic', sortKey: 'name' })
+  assert.deepEqual(AGENT_CARD_RARITY_THEMES, {
+    legendary: 'original',
+    epic: 'epic-purple',
+    rare: 'blueprint-grid',
+    common: 'graphite-glass',
+  })
+  assert.equal(resolveAgentCardTheme('rare', { overlayPreset: 'graphite-glass', rarityColorsEnabled: true }), 'blueprint-grid')
+  assert.equal(resolveAgentCardTheme('legendary', { overlayPreset: 'graphite-glass', rarityColorsEnabled: false }), 'graphite-glass')
 })
 
 test('console preferences preserve defaults and clamp unsafe widths', () => {

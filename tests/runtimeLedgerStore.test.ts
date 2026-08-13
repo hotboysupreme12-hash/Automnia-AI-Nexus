@@ -15,7 +15,7 @@ async function withRuntimeLedgerStore<T>(
   name: string,
   run: (store: ReturnType<typeof createRuntimeLedgerStore>) => Promise<T>,
 ) {
-  const tempDir = await mkdtemp(path.join(os.tmpdir(), `dystopai-${name}-`))
+  const tempDir = await mkdtemp(path.join(os.tmpdir(), `automnia-${name}-`))
   const store = createRuntimeLedgerStore(runtimeLedgerPathsForStateRoot(tempDir))
   try {
     return await run(store)

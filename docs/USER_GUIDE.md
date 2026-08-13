@@ -10,6 +10,7 @@ Use this guide as the public operating manual. It focuses on what a tester or op
 
 - [1. Mental model](#1-mental-model)
 - [2. Quick start](#2-quick-start)
+- [2.1. Account activation and offline access](#21-account-activation-and-offline-access)
 - [3. Main surfaces](#3-main-surfaces)
 - [4. Agent design](#4-agent-design)
 - [5. Model and provider setup](#5-model-and-provider-setup)
@@ -86,6 +87,34 @@ Avoid broad first prompts like:
 ```text
 Fix everything.
 ```
+
+### 2.1. Account activation and offline access
+
+Automnia no longer asks customers to paste a Control Center access token. On
+first activation, enter the email from the order and the Automnia license key,
+then create a password of at least 12 characters. That key links the purchase to
+one account; later purchases are merged automatically by Google Cloud and the
+account receives its highest purchased tier. The desktop app stores only a
+scrypt password verifier locally; later sign-in creates a short-lived local
+session, and the password itself is never used as a bearer token.
+
+Google sign-in is available when the app's Google OAuth client is configured and
+the Google account email matches the Automnia license email. Password changes
+require the current password. There is no public email-plus-license-key reset
+path; support can perform an account migration when ownership has been verified.
+
+| Plan | Access policy |
+| --- | --- |
+| Starter — $19.99 | Hosted Automnia subscription access through Subscription Relay. No BYOK and no permanent/offline entitlement. |
+| Pro — $29.99 | Permanent Pro access, hosted Automnia credits, and BYOK priority options. |
+| Enterprise — $49.99 or $199.99 | Permanent Enterprise access, hosted Automnia credits, and BYOK priority options. |
+
+When a customer owns more than one product, the account automatically uses the
+highest tier. Customers do not need to manage a separate key for each purchase.
+After the first account link, password or Google sign-in restores the account
+entitlement across devices. Starter requires online subscription verification;
+Pro and higher permanent tiers remain usable offline through a configured BYOK
+provider.
 
 ---
 
@@ -284,6 +313,8 @@ Recovery order:
 5. Stop Gateway only when plugin or channel state needs a hard reset.
 6. Reopen the app if runtime cannot recover.
 7. Retry a tiny direct prompt before relaunching big work.
+
+During first setup or an OpenClaw upgrade, the Gateway may run startup migrations and restart several times. Automnia shows `Gateway: MIGRATING` in the top-right status area until health is confirmed; wait for it to return to `ON` before retrying work.
 
 ---
 

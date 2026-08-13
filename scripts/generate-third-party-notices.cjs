@@ -2,7 +2,7 @@ const fs = require('node:fs')
 const path = require('node:path')
 
 const root = path.resolve(__dirname, '..')
-const output = path.resolve(process.env.DYSTOPAI_THIRD_PARTY_NOTICES_PATH || path.join(root, 'THIRD_PARTY_NOTICES.txt'))
+const output = path.resolve(process.env.AUTOMNIA_THIRD_PARTY_NOTICES_PATH || path.join(root, 'THIRD_PARTY_NOTICES.txt'))
 const checkOnly = process.argv.includes('--check')
 const lock = JSON.parse(fs.readFileSync(path.join(root, 'package-lock.json'), 'utf8'))
 const packages = lock.packages && typeof lock.packages === 'object' ? lock.packages : {}
@@ -28,7 +28,7 @@ for (const [packagePath, entry] of Object.entries(packages)) {
 const sorted = [...rows.values()].sort((left, right) => `${left.name}@${left.version}`.localeCompare(`${right.name}@${right.version}`))
 const normalizeLineEndings = (value) => value.replace(/\r\n/g, '\n')
 const body = [
-  'DystopAI Third-Party Software Notices',
+  'Automnia Third-Party Software Notices',
   '=====================================',
   '',
   'This product includes third-party software. The applicable license files',

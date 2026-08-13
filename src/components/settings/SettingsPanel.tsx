@@ -1,6 +1,7 @@
 import { useMemo, useState } from 'react'
 import type { ReactNode } from 'react'
 import { useLicense } from '../../context/useLicense'
+import { useAuth } from '../../context/useAuth'
 import { DEFAULT_MISSION_DRAFT } from '../../data/seeds'
 import {
   DEFAULT_SPEECH_SETTINGS,
@@ -27,7 +28,7 @@ import {
   applyUiSettings,
   readUiSettings,
   saveUiSettings,
-  type DystopAIUiSettings,
+  type AutomniaUiSettings,
   type UiAccentMode,
   type UiDensity,
   type UiFormChrome,
@@ -220,6 +221,7 @@ function formatAccountTimestamp(value: string | null | undefined) {
 
 export function SettingsPanel() {
   const { license, refresh: refreshLicense, setUsagePriority, openSubscriptionCheckout, requestLicenseActivation } = useLicense()
+  const { account, changePassword, setPassword, loginWithGoogle, logout, checking } = useAuth()
   const agents = useNexusStore((state) => state.agents)
   const activePartyIds = useNexusStore((state) => state.activePartyIds)
   const selectedAgentIds = useNexusStore((state) => state.selectedAgentIds)
@@ -238,7 +240,7 @@ export function SettingsPanel() {
 
   const [activeSection, setActiveSection] = useState<SettingsSectionId>('account')
   const [searchQuery, setSearchQuery] = useState('')
-  const [uiSettings, setUiSettings] = useState<DystopAIUiSettings>(() => readUiSettings())
+  const [uiSettings, setUiSettings] = useState<AutomniaUiSettings>(() => readUiSettings())
   const [speechSettings, setSpeechSettings] = useState<SpeechSettings>(() => readSpeechSettings())
   const [registryPreferences, setRegistryPreferences] = useState<RegistryPreferences>(() => readRegistryPreferences())
   const [consolePreferences, setConsolePreferences] = useState<ConsolePreferences>(() => readConsolePreferences())
@@ -251,6 +253,12 @@ export function SettingsPanel() {
   const [checkoutError, setCheckoutError] = useState('')
   const [usagePriorityBusy, setUsagePriorityBusy] = useState(false)
   const [usagePriorityError, setUsagePriorityError] = useState('')
+  const [currentPassword, setCurrentPassword] = useState('')
+  const [newPassword, setNewPassword] = useState('')
+  const [confirmNewPassword, setConfirmNewPassword] = useState('')
+  const [passwordChangeBusy, setPasswordChangeBusy] = useState(false)
+  const [passwordChangeError, setPasswordChangeError] = useState('')
+  const [googleReconnectBusy, setGoogleReconnectBusy] = useState(false)
 
   const partyTargetIds = useMemo(() => activePartyIds.filter((id) => agents.some((agent) => agent.id === id)), [activePartyIds, agents])
   const selectedTargetIds = useMemo(() => selectedAgentIds.filter((id) => agents.some((agent) => agent.id === id)), [agents, selectedAgentIds])
@@ -270,7 +278,7 @@ export function SettingsPanel() {
 
   const announceSaved = (label: string) => setNotice({ tone: 'success', text: `${label} saved and applied.` })
 
-  const updateUiSettings = (patch: Partial<DystopAIUiSettings>, label: string) => {
+  const updateUiSettings = (patch: Partial<AutomniaUiSettings>, label: string) => {
     setUiSettings((current) => {
       const next = { ...current, ...patch }
       saveUiSettings(next)
@@ -280,8 +288,8 @@ export function SettingsPanel() {
     announceSaved(label)
   }
 
-  const updateUiSetting = <Key extends keyof DystopAIUiSettings>(key: Key, value: DystopAIUiSettings[Key], label: string) => {
-    updateUiSettings({ [key]: value } as Partial<DystopAIUiSettings>, label)
+  const updateUiSetting = <Key extends keyof AutomniaUiSettings>(key: Key, value: AutomniaUiSettings[Key], label: string) => {
+    updateUiSettings({ [key]: value } as Partial<AutomniaUiSettings>, label)
   }
 
   const updateSpeechSettings = (patch: Partial<SpeechSettings>, label: string) => {
@@ -374,7 +382,7 @@ export function SettingsPanel() {
     setConsolePreferences(DEFAULT_CONSOLE_PREFERENCES)
     setSpeechSettings(DEFAULT_SPEECH_SETTINGS)
     clearAllCommandConsoleDrafts()
-    window.localStorage.removeItem('dystopai-monitor-doctor-dismissed-run')
+    window.localStorage.removeItem('automnia-monitor-doctor-dismissed-run')
     resetMission()
     setPendingConfirmation(null)
     setNotice({ tone: 'success', text: 'All app preferences and mission defaults were restored. Agents, credentials, plugins, and files were kept.' })
@@ -440,8 +448,28 @@ export function SettingsPanel() {
             {REGISTRY_DISPLAY_OPTIONS.map((option) => <option key={option.id} value={option.id}>{option.label} — {option.hint}</option>)}
           </select>
         </Field>
-        <Field label="Card background" hint="Changes the visual treatment behind agent portraits.">
-          <select value={registryPreferences.overlayPreset} onChange={(event) => updateRegistryPreferences({ overlayPreset: event.target.value as AgentOverlayPreset }, 'Agent card background')}>
+        <ToggleField
+          label="Use rarity colors"
+          hint="Legendary uses Original, Epic uses Purple, Rare uses Blueprint and Common uses Graphite."
+          checked={registryPreferences.rarityColorsEnabled}
+          onChange={(value) => updateRegistryPreferences({
+            rarityColorsEnabled: value,
+            ...(value || registryPreferences.overlayPreset !== 'rarity' ? {} : { overlayPreset: 'graphite-glass' as AgentOverlayPreset }),
+          }, value ? 'Agent card rarity colors' : 'Shared agent card theme')}
+        />
+        <Field label="Card background" hint={registryPreferences.rarityColorsEnabled ? 'By rarity is active. Turn rarity colors off to choose one theme for every card.' : 'One shared visual treatment behind every agent portrait.'}>
+          <select
+            value={registryPreferences.rarityColorsEnabled ? 'rarity' : registryPreferences.overlayPreset}
+            onChange={(event) => {
+              const nextPreset = event.target.value as AgentOverlayPreset
+              updateRegistryPreferences(
+                nextPreset === 'rarity'
+                  ? { rarityColorsEnabled: true }
+                  : { overlayPreset: nextPreset, rarityColorsEnabled: false },
+                nextPreset === 'rarity' ? 'Agent card rarity colors' : 'Agent card background',
+              )
+            }}
+          >
             {REGISTRY_OVERLAY_OPTIONS.map((option) => <option key={option.id} value={option.id}>{option.label} — {option.hint}</option>)}
           </select>
         </Field>
@@ -584,10 +612,12 @@ export function SettingsPanel() {
     const entitlement = resolveLicenseEntitlement(license)
     const hostedCredits = entitlement.isHosted
     const isByok = entitlement.isByok
+    const byokAllowed = entitlement.byokAllowed
+    const usagePriorityLocked = entitlement.usagePriorityLocked
     const usagePriority = license?.usagePriority === 'provider_first'
-      ? 'provider_first'
+      ? byokAllowed ? 'provider_first' : 'automnia_first'
       : license?.usagePriority === 'byok_only'
-        ? 'byok_only'
+        ? byokAllowed ? 'byok_only' : 'automnia_first'
         : 'automnia_first'
     const balance = hostedCredits ? formatCreditBalance(license?.creditBalance) : 'Not applicable — provider-billed'
     const refreshAccount = async () => {
@@ -616,6 +646,14 @@ export function SettingsPanel() {
     }
     const saveUsagePriority = async (nextPriority: 'automnia_first' | 'provider_first' | 'byok_only') => {
       if (!hostedCredits || usagePriorityBusy || nextPriority === usagePriority) return
+      if (usagePriorityLocked) {
+        setUsagePriorityError('Starter Subscription ($19.99) stays on Subscription Relay. Upgrade to Pro or higher to choose another usage priority.')
+        return
+      }
+      if (!byokAllowed && nextPriority !== 'automnia_first') {
+        setUsagePriorityError('Starter uses Subscription Relay. Upgrade to Pro or higher for provider priority options.')
+        return
+      }
       setUsagePriorityBusy(true)
       setUsagePriorityError('')
       try {
@@ -623,10 +661,10 @@ export function SettingsPanel() {
         setNotice({
           tone: 'success',
           text: nextPriority === 'provider_first'
-            ? 'Usage priority saved: BYOK first with Automnia credits fallback.'
+            ? 'Usage priority saved: your provider first, Subscription Relay available.'
             : nextPriority === 'byok_only'
-              ? 'Usage priority saved: BYOK only (direct provider access).'
-              : 'Usage priority saved: Automnia credits only (strict, no BYOK fallback).',
+              ? 'Usage priority saved: your provider only.'
+              : 'Usage priority saved: Subscription Relay.',
         })
       } catch (error) {
         setUsagePriorityError(error instanceof Error ? error.message : 'Could not save the usage priority.')
@@ -635,31 +673,130 @@ export function SettingsPanel() {
       }
     }
 
+    const savePassword = async () => {
+      setPasswordChangeError('')
+      if (!account) {
+        setPasswordChangeError('Account security details are still loading. Try again in a moment.')
+        return
+      }
+      if (newPassword.length < 12 || newPassword.length > 128) {
+        setPasswordChangeError('Choose a password between 12 and 128 characters.')
+        return
+      }
+      if (account.hasPassword && currentPassword.length < 1) {
+        setPasswordChangeError('Enter your current password to change it.')
+        return
+      }
+      if (!account.hasPassword && !account.googleLinked) {
+        setPasswordChangeError('Sign in with Google again before creating an Automnia password for this account.')
+        return
+      }
+      if (newPassword !== confirmNewPassword) {
+        setPasswordChangeError('The new passwords do not match.')
+        return
+      }
+      setPasswordChangeBusy(true)
+      try {
+        if (account.hasPassword) await changePassword(currentPassword, newPassword)
+        else await setPassword(newPassword)
+        setCurrentPassword('')
+        setNewPassword('')
+        setConfirmNewPassword('')
+        setNotice({
+          tone: 'success',
+          text: account.hasPassword
+            ? 'Password changed. Your existing session remains active.'
+            : 'Password created. You can now sign in with your Automnia email and password as well as Google.',
+        })
+      } catch (error) {
+        setPasswordChangeError(error instanceof Error ? error.message : 'Could not change the password.')
+      } finally {
+        setPasswordChangeBusy(false)
+      }
+    }
+
+    const reconnectGoogleForPassword = async () => {
+      setPasswordChangeError('')
+      setGoogleReconnectBusy(true)
+      try {
+        await loginWithGoogle()
+        setNotice({ tone: 'success', text: 'Google is connected. You can now create an Automnia password without entering a current password.' })
+      } catch (error) {
+        setPasswordChangeError(error instanceof Error ? error.message : 'Google could not be connected. Try again.')
+      } finally {
+        setGoogleReconnectBusy(false)
+      }
+    }
+
     return (
       <div className="dui-settings-section" id="settings-section-account" role="tabpanel">
         <SectionHeader section="account" eyebrow="Automnia AI Nexus Plan, Access & Billing" />
-        <SettingsCard title="Active Plan & Access" description="Google Cloud confirms subscription access and reconciles hosted-credit balances after each request without interrupting the workspace.">
+        <div className="dui-settings-account-hero">
+          <div>
+            <span>Signed in as</span>
+            <strong>{license?.email || 'Account email unavailable'}</strong>
+            <small>{account?.googleLinked ? 'Google sign-in linked' : account?.hasPassword ? 'Automnia password enabled' : account ? 'Google connection required for password setup' : 'Account security details loading'}</small>
+          </div>
+          <div data-tone={license?.active ? 'active' : 'inactive'}>
+            <span>Access status</span>
+            <strong>{entitlement.statusLabel}</strong>
+            <small>{entitlement.tierLabel} · {entitlement.billingLabel}</small>
+          </div>
+        </div>
+        <SettingsCard title="Profile & security" description="Your email is read-only. Manage the optional Automnia password here without interrupting the current session.">
           <Field label="Account Email" hint="Registered subscriber address.">
             <input type="text" readOnly value={license?.email || 'Not reported'} style={{ fontWeight: 'bold', backgroundColor: 'rgba(255, 255, 255, 0.05)', cursor: 'not-allowed' }} />
           </Field>
+          <div className="dui-settings-account-password" style={{ marginTop: '0.75rem', display: 'grid', gap: '0.6rem' }}>
+            <strong style={{ color: '#e2e8f0' }}>
+              {!account ? 'Account password' : account.hasPassword ? 'Change account password' : account.googleLinked ? 'Create an account password' : 'Connect Google to create a password'}
+            </strong>
+            <p style={{ color: '#94a3b8', margin: 0, fontSize: '0.84rem' }}>
+              {checking || !account
+                ? 'Loading whether this account already has a password…'
+                : account.hasPassword
+                  ? account.googleLinked
+                    ? 'This account already has an Automnia password. Google sign-in remains available; enter the current password only if you want to change it.'
+                    : 'This account already has an Automnia password. Enter the current password below to choose a new one.'
+                  : account.googleLinked
+                    ? 'Google sign-in is connected. No current password is needed—create one below to enable email and password sign-in too.'
+                    : 'This account has no password yet, and Google is not connected on this device. Connect Google first; no password will be changed or removed.'}
+            </p>
+            {!checking && account && !account.googleLinked && !account.hasPassword && (
+              <button type="button" onClick={() => void reconnectGoogleForPassword()} disabled={googleReconnectBusy}>
+                {googleReconnectBusy ? 'Connecting Google…' : 'Connect Google securely'}
+              </button>
+            )}
+            {!checking && account && (account.hasPassword || account.googleLinked) && <>
+              {account.hasPassword && <input type="password" value={currentPassword} onChange={(event) => setCurrentPassword(event.target.value)} placeholder="Current password" autoComplete="current-password" maxLength={128} />}
+              <input type="password" value={newPassword} onChange={(event) => setNewPassword(event.target.value)} placeholder={account.hasPassword ? 'New password — 12 to 128 characters' : 'Create a password — 12 to 128 characters'} autoComplete="new-password" minLength={12} maxLength={128} />
+              <input type="password" value={confirmNewPassword} onChange={(event) => setConfirmNewPassword(event.target.value)} placeholder="Confirm password" autoComplete="new-password" minLength={12} maxLength={128} />
+              <button type="button" onClick={() => void savePassword()} disabled={passwordChangeBusy || newPassword.length < 12 || newPassword.length > 128 || confirmNewPassword.length < 12 || confirmNewPassword.length > 128 || Boolean(account.hasPassword && currentPassword.length < 1)}>
+                {passwordChangeBusy ? 'Saving password…' : account.hasPassword ? 'Change password' : 'Create password'}
+              </button>
+            </>}
+            {passwordChangeError && <p role="alert" style={{ color: '#fb7185', margin: 0, fontSize: '0.84rem' }}>{passwordChangeError}</p>}
+          </div>
+        </SettingsCard>
+        <SettingsCard title="Plan, access & billing" description="Google Cloud confirms subscription access and reconciles hosted-credit balances after each request without interrupting the workspace.">
           <Field label="License Authorization" hint="The license key remains server-local and is never revealed in the app.">
             <input type="text" readOnly value={license?.active ? 'Active — stored securely on this device' : 'No active license'} style={{ backgroundColor: 'rgba(255, 255, 255, 0.05)', cursor: 'not-allowed' }} />
           </Field>
           <Field label="Plan or Access Tier" hint="The exact entitlement activated for this account.">
             <input type="text" readOnly value={entitlement.tierLabel} style={{ fontWeight: 'bold', backgroundColor: 'rgba(255, 255, 255, 0.05)', cursor: 'not-allowed' }} />
           </Field>
-          <Field label="Access & Billing Mode" hint="Hosted subscriptions use Automnia credits. One-time BYOK access uses the provider account that the customer connects.">
+          <Field label="Access & Billing Mode" hint="Starter Subscription uses Automnia hosted credits. Higher tiers include hosted credits and provider priority controls.">
             <input type="text" readOnly value={entitlement.billingLabel} style={{ backgroundColor: 'rgba(255, 255, 255, 0.05)', cursor: 'not-allowed' }} />
           </Field>
-          <Field label="Usage Priority" hint={hostedCredits ? 'Choose which route is attempted first. Strict Automnia disables BYOK fallback. BYOK only bypasses credits entirely.' : isByok ? 'BYOK access always uses the connected provider account.' : 'Activate a hosted plan to choose a usage priority.'}>
+          <Field label="Usage Priority" hint={usagePriorityLocked ? 'Starter Subscription ($19.99) stays on Subscription Relay. Higher tiers unlock provider-first and provider-only routing.' : hostedCredits ? 'Choose Subscription Relay, your provider first, or your provider only. This preference belongs to your one Automnia account.' : isByok ? 'BYOK access uses the connected provider account.' : 'Activate a hosted plan to choose a usage priority.'}>
             <select
               value={hostedCredits ? usagePriority : 'provider_first'}
-              disabled={!hostedCredits || usagePriorityBusy}
+              disabled={!hostedCredits || usagePriorityBusy || usagePriorityLocked}
               onChange={(event) => void saveUsagePriority(event.target.value as 'automnia_first' | 'provider_first' | 'byok_only')}
             >
-              <option value="automnia_first">Automnia credits only (no BYOK fallback)</option>
-              <option value="provider_first">BYOK first + Automnia credits fallback</option>
-              <option value="byok_only">BYOK only (bypass subscription credits)</option>
+              <option value="automnia_first">Subscription Relay</option>
+              <option value="provider_first" disabled={!byokAllowed}>My provider first + Subscription Relay{byokAllowed ? '' : ' — provider access not included'}</option>
+              <option value="byok_only" disabled={!byokAllowed}>My provider only{byokAllowed ? '' : ' — provider access not included'}</option>
             </select>
           </Field>
           <Field label="Effective Agent Route" hint={hostedCredits ? 'This saved preference applies to normal messages, /runtime, /work, /openclaw, streamed turns, and buffered recovery.' : isByok ? 'Choose a model, then add that provider API key or sign in from Model Settings. The provider bills those requests directly.' : 'Activate a Cloud Subscription or BYOK license to enable agent messages.'}>
@@ -669,8 +806,8 @@ export function SettingsPanel() {
             <div className="dui-settings-billing-summary__head">
               <div>
                 <span>Automnia billing</span>
-                <strong>{hostedCredits ? entitlement.tierLabel : isByok ? 'BYOK one-time access' : 'Plan status'}</strong>
-                <small>{hostedCredits ? usagePriority === 'provider_first' ? 'Your connected provider is used first; Automnia credits are the fallback.' : usagePriority === 'byok_only' ? 'Direct provider-billed access is forced; credits bypassed.' : 'Automnia credits are used first; your connected provider is the fallback.' : isByok ? 'Your provider charges usage directly. You can upgrade to Automnia Cloud any time.' : 'Activate a license to receive your current entitlement.'}</small>
+                <strong>{hostedCredits ? entitlement.tierLabel : isByok ? 'BYOK access' : 'Plan status'}</strong>
+                <small>{hostedCredits ? usagePriority === 'provider_first' ? 'Your connected provider is used first; Subscription Relay remains available.' : usagePriority === 'byok_only' ? 'Direct provider-billed access is forced; Automnia credits are bypassed.' : 'Subscription Relay is used for every message.' : isByok ? 'Your provider charges usage directly. This access remains tied to your Automnia account.' : 'Activate a license to receive your current entitlement.'}</small>
               </div>
               <b>{entitlement.statusLabel}</b>
             </div>
@@ -689,23 +826,65 @@ export function SettingsPanel() {
               </div>
             </dl>
           </section>
-          <div className="dui-settings-inline" style={{ marginTop: '1rem', display: 'flex', justifyContent: 'center' }}>
-            <button type="button" onClick={() => void refreshAccount()} disabled={accountRefreshBusy || !license?.active}>
-              {accountRefreshBusy ? 'Refreshing account…' : hostedCredits ? 'Refresh account balance' : 'Refresh account access'}
-            </button>
-          </div>
-          <div className="dui-settings-inline" style={{ marginTop: '0.75rem', display: 'flex', justifyContent: 'center' }}>
-            <button type="button" onClick={() => void openCheckout()} disabled={checkoutBusy}>
-              {checkoutBusy ? 'Opening secure Shopify checkout...' : hostedCredits ? 'Refill credits or change plan' : isByok ? 'Upgrade to a subscription on Shopify' : 'Choose a plan on Shopify'}
-            </button>
-          </div>
-          <div className="dui-settings-inline" style={{ marginTop: '0.75rem', display: 'flex', justifyContent: 'center' }}>
-            <button type="button" onClick={requestLicenseActivation} disabled={!license?.active}>
-              {isByok ? 'Enter Cloud Subscription key' : 'Change license key'}
-            </button>
-          </div>
-          {hostedCredits && <p style={{ color: '#99f6e4', margin: '0.75rem 0 0', fontSize: '0.84rem' }}>Refills convert the Shopify purchase amount into Automnia credits automatically. Google Cloud confirms the payment and adds the credits to this balance.</p>}
-          {isByok && <p style={{ color: '#93c5fd', margin: '0.75rem 0 0', fontSize: '0.84rem' }}>Keep using your own provider keys or regular provider sign-in. You can subscribe for hosted Automnia credits at any time; Shopify handles checkout and Google Cloud updates the entitlement after payment.</p>}
+          <section className="dui-settings-account-actions" aria-labelledby="settings-account-actions-title">
+            <div className="dui-settings-account-actions__head">
+              <div>
+                <span>Account controls</span>
+                <strong id="settings-account-actions-title">Manage billing and access</strong>
+              </div>
+              <small>Secure account actions</small>
+            </div>
+            <div className="dui-settings-account-actions__grid">
+              <button
+                type="button"
+                className="dui-settings-account-action is-primary"
+                onClick={() => void openCheckout()}
+                disabled={checkoutBusy}
+              >
+                <span>
+                  <small>Billing & plan</small>
+                  <strong>{checkoutBusy ? 'Opening secure checkout…' : hostedCredits ? 'Manage credits or upgrade' : isByok ? 'Upgrade your Automnia access' : 'Choose an Automnia plan'}</strong>
+                  <em>{hostedCredits ? 'Add usage credits or review available higher tiers.' : 'View available plans in the secure Shopify checkout.'}</em>
+                </span>
+                <b aria-hidden="true">›</b>
+              </button>
+              <button
+                type="button"
+                className="dui-settings-account-action"
+                onClick={() => void refreshAccount()}
+                disabled={accountRefreshBusy || !license?.active}
+              >
+                <span>
+                  <small>Account status</small>
+                  <strong>{accountRefreshBusy ? 'Refreshing account…' : hostedCredits ? 'Refresh balance and access' : 'Refresh account access'}</strong>
+                  <em>Sync the latest highest-tier entitlement for this account.</em>
+                </span>
+                <b aria-hidden="true">›</b>
+              </button>
+              <button
+                type="button"
+                className="dui-settings-account-action is-compact"
+                onClick={requestLicenseActivation}
+                disabled={!license?.active}
+              >
+                <span>
+                  <small>License</small>
+                  <strong>{isByok ? 'Link another purchase' : 'Link legacy license'}</strong>
+                </span>
+                <b aria-hidden="true">›</b>
+              </button>
+              <button type="button" className="dui-settings-account-action is-compact is-danger" onClick={logout}>
+                <span>
+                  <small>Session</small>
+                  <strong>Log out of Automnia</strong>
+                </span>
+                <b aria-hidden="true">›</b>
+              </button>
+            </div>
+          </section>
+          {hostedCredits && <p style={{ color: '#99f6e4', margin: '0.75rem 0 0', fontSize: '0.84rem' }}>Refills add Automnia credits automatically. Google Cloud confirms payment and keeps the highest purchased tier on this same account.</p>}
+          {license?.active && <p style={{ color: '#93f6d2', margin: '0.75rem 0 0', fontSize: '0.84rem' }}>Your purchases are managed as one Automnia account. Higher-tier purchases upgrade this entitlement automatically, so you keep one account and one canonical license key.</p>}
+          {isByok && <p style={{ color: '#93c5fd', margin: '0.75rem 0 0', fontSize: '0.84rem' }}>BYOK access uses your own provider keys. Sign in with your Automnia password or Google account to keep this access available across devices.</p>}
           {accountRefreshError && <p role="alert" style={{ color: '#fb7185', margin: '0.75rem 0 0' }}>{accountRefreshError}</p>}
           {checkoutError && <p role="alert" style={{ color: '#fb7185', margin: '0.75rem 0 0' }}>{checkoutError}</p>}
           {usagePriorityError && <p role="alert" style={{ color: '#fb7185', margin: '0.75rem 0 0' }}>{usagePriorityError}</p>}
@@ -741,7 +920,7 @@ export function SettingsPanel() {
   }
 
   return (
-    <section data-dui-panel="settings" data-ui-revision="settings-v2" className="dui-settings-panel">
+    <section data-dui-panel="settings" data-ui-revision="settings-v2" className="dui-settings-panel dui-settings-redesign">
       <header className="dui-settings-topbar">
         <div><span>Control center</span><h2>Settings</h2><p>Everything here is functional, persistent and safe to change.</p></div>
         <label className="dui-settings-search"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="7" /><path d="m16 16 4 4" /></svg><input type="search" value={searchQuery} onChange={(event) => setSearchQuery(event.target.value)} placeholder="Search settings…" aria-label="Search settings" />{searchQuery && <button type="button" onClick={() => setSearchQuery('')} aria-label="Clear settings search">×</button>}</label>
