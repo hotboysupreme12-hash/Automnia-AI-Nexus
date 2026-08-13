@@ -447,7 +447,10 @@ const ResponseMessage = memo(function ResponseMessage({
   actionBusy: boolean
   hostedCreditsFirst: boolean
 }) {
-  const [showAllActivity, setShowAllActivity] = useState(false)
+  const [activeActivityId, setActiveActivityId] = useState<string | null>(null)
+  const activityQueueRef = useRef<string[]>([])
+  const knownActivityIdsRef = useRef<Set<string>>(new Set())
+  const activityTimerRef = useRef<number | null>(null)
   const avatar = meta?.portrait || ''
   const name = meta?.name || entry.agentId
   const role = meta?.role || ''
@@ -469,9 +472,14 @@ const ResponseMessage = memo(function ResponseMessage({
   const statusText = runtimeNoticeActive ? 'runtime' : status
   const durationLabel = entry.durationMs > 0 ? `${(entry.durationMs / 1000).toFixed(1)}s` : ''
   const cta = responseCta(entry)
-  const activityEvents = (entry.activity || []).filter((event) => event.type !== 'message.partial' && event.type !== 'message.final')
-  const hasActivity = activityEvents.length > 0
-  const visibleActivityEvents = (showAllActivity ? activityEvents.slice(-10) : activityEvents.slice(-4)).reverse()
+  const activityEvents = useMemo(
+    () => (entry.activity || []).filter((event) => event.type !== 'message.partial' && event.type !== 'message.final'),
+    [entry.activity],
+  )
+  const activeActivity = entry.streaming
+    ? activityEvents.find((event) => event.id === activeActivityId)
+    : undefined
+  const hasActivity = Boolean(activeActivity)
   const openClawActivity = isRuntimeNoticeTransport(entry.transport) || activityEvents.some((event) => event.rawSource.startsWith('gateway.'))
   const runtimeTitle = [
     durationLabel ? `Total runtime: ${durationLabel}` : '',
@@ -485,6 +493,61 @@ const ResponseMessage = memo(function ResponseMessage({
   const progressText = entry.streaming && !hasContent && !showInlineThinking && !hasActivity ? latestRunStatus(entry) : ''
   const displayText = bodyText || progressText
   const bodyState = showInlineThinking ? 'thinking' : hasContent ? 'response' : progressText ? 'progress' : entry.ok ? 'empty' : 'blocked'
+
+  useEffect(() => {
+    if (activityTimerRef.current !== null) {
+      window.clearTimeout(activityTimerRef.current)
+      activityTimerRef.current = null
+    }
+
+    if (!entry.streaming) {
+      activityQueueRef.current = []
+      knownActivityIdsRef.current.clear()
+      return
+    }
+
+    const currentIds = new Set(activityEvents.map((event) => event.id))
+    activityQueueRef.current = activityQueueRef.current.filter((id) => currentIds.has(id) && id !== activeActivityId)
+    for (const event of activityEvents) {
+      if (knownActivityIdsRef.current.has(event.id)) continue
+      knownActivityIdsRef.current.add(event.id)
+      activityQueueRef.current.push(event.id)
+    }
+
+    const activeStillPresent = Boolean(activeActivityId && currentIds.has(activeActivityId))
+    if (!activeStillPresent) {
+      const nextId = activityQueueRef.current.shift() || activityEvents.at(-1)?.id || null
+      activityTimerRef.current = window.setTimeout(() => {
+        activityTimerRef.current = null
+        setActiveActivityId(nextId)
+      }, 0)
+      return () => {
+        if (activityTimerRef.current !== null) {
+          window.clearTimeout(activityTimerRef.current)
+          activityTimerRef.current = null
+        }
+      }
+    }
+
+    if (activityQueueRef.current.length > 0) {
+      activityTimerRef.current = window.setTimeout(() => {
+        activityTimerRef.current = null
+        const nextId = activityQueueRef.current.shift()
+        if (nextId) setActiveActivityId(nextId)
+      }, 350)
+    }
+
+    return () => {
+      if (activityTimerRef.current !== null) {
+        window.clearTimeout(activityTimerRef.current)
+        activityTimerRef.current = null
+      }
+    }
+  }, [activityEvents, activeActivityId, entry.streaming])
+
+  useEffect(() => () => {
+    if (activityTimerRef.current !== null) window.clearTimeout(activityTimerRef.current)
+  }, [])
 
   return (
     <div
@@ -525,6 +588,12 @@ const ResponseMessage = memo(function ResponseMessage({
           )}
         </div>
         <div className="dy-command-message-runtime">
+          {!entry.streaming && durationLabel && (
+            <span className="dy-command-message-runtime-chip" title={runtimeTitle || 'Total runtime'}>
+              <span>Runtime</span>
+              <strong>{durationLabel}</strong>
+            </span>
+          )}
           <time
             dateTime={entry.timestamp}
             title={clockTitle}
@@ -566,44 +635,31 @@ const ResponseMessage = memo(function ResponseMessage({
         </div>
       )}
 
-      {hasActivity && (
+      {hasActivity && activeActivity && (
         <section className="dy-command-activity-panel" aria-label={`${entry.streaming ? 'Live' : 'Run'} activity`}>
           <div className="dy-command-activity-head">
             <div className="min-w-0">
               <strong className="dy-command-activity-title">
                 {openClawActivity ? 'OpenClaw activity' : entry.streaming ? 'Live activity' : 'Run activity'}
               </strong>
-              <span className="dy-command-activity-current" aria-live="polite">
-                {latestRunStatus(entry)}
-              </span>
             </div>
-            {activityEvents.length > 4 && (
-              <button type="button" onClick={() => setShowAllActivity((current) => !current)}>
-                {showAllActivity ? 'Collapse' : `Show ${Math.min(activityEvents.length, 10)}`}
-              </button>
-            )}
           </div>
           <div className="dy-command-activity-list" aria-live={entry.streaming ? 'polite' : undefined}>
-            {visibleActivityEvents.map((event) => {
-              const detail = activityDetail(event)
-              return (
-                <div key={event.id} className="dy-command-activity-row" data-severity={event.severity}>
-                  <span className="dy-command-activity-dot" aria-hidden="true" />
-                  <time dateTime={event.timestamp}>{messageClock(event.timestamp)}</time>
-                  <span className="dy-command-activity-kind">{activityKindLabel(event.type)}</span>
-                  <span className="dy-command-activity-label" title={event.label}>{event.label}</span>
-                  {detail && <code title={detail}>{detail}</code>}
-                </div>
-              )
-            })}
+            <div key={activeActivity.id} className="dy-command-activity-row" data-severity={activeActivity.severity}>
+              <span className="dy-command-activity-dot" aria-hidden="true" />
+              <time dateTime={activeActivity.timestamp}>{messageClock(activeActivity.timestamp)}</time>
+              <span className="dy-command-activity-kind">{activityKindLabel(activeActivity.type)}</span>
+              <span className="dy-command-activity-label" title={activeActivity.label}>{activeActivity.label}</span>
+              {activityDetail(activeActivity) && <code title={activityDetail(activeActivity)}>{activityDetail(activeActivity)}</code>}
+            </div>
           </div>
         </section>
       )}
 
       <div className="dy-command-message-meta" aria-label="Response details">
-        {(durationLabel || firstTokenLabel) && (
+        {(firstTokenLabel || (durationLabel && entry.streaming)) && (
           <div className="dy-command-message-meta-group dy-command-message-meta-group--performance" aria-label="Performance">
-            {durationLabel && (
+            {durationLabel && entry.streaming && (
               <Badge
                 className={`dy-command-message-chip dy-command-message-chip--metric ${entry.ok ? 'is-success' : 'is-error'}`}
                 title={runtimeTitle || 'Runtime'}
