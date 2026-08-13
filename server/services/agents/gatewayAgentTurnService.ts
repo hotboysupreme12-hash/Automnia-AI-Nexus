@@ -75,6 +75,7 @@ export type GatewayAgentTurnServiceOptions = {
   }) => Promise<void>
   runGatewayChatTurn: (params: {
     agentId: string
+    agentName?: string
     message: string
     attachments?: unknown[]
     sessionId: string
@@ -177,6 +178,7 @@ export function createGatewayAgentTurnService(options: GatewayAgentTurnServiceOp
     emitGatewayStage('Preparing Gateway chat message.')
     const party = await options.getPartyMembers().catch(() => [])
     const self = party.find((member) => member.id === agent)
+    const agentName = self?.name?.trim() || agent
     const identityLine = self?.name ? `You are ${self.name} (${agent}).` : `You are ${agent}.`
     const enforcedMessage = [
       identityLine,
@@ -211,6 +213,7 @@ export function createGatewayAgentTurnService(options: GatewayAgentTurnServiceOp
     emitGatewayStage('Connecting Gateway chat client.', { sessionId })
     let result = await options.runGatewayChatTurn({
       agentId: agent,
+      agentName,
       message: gatewayMessage,
       attachments: requestedAttachments,
       sessionId,
@@ -244,6 +247,7 @@ export function createGatewayAgentTurnService(options: GatewayAgentTurnServiceOp
       })
       result = await options.runGatewayChatTurn({
         agentId: agent,
+        agentName,
         message: gatewayMessage,
         attachments: requestedAttachments,
         sessionId,

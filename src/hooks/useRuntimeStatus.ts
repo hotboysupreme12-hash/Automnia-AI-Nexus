@@ -637,7 +637,12 @@ async function listCronShiftsForHydration(): Promise<RuntimeCronJob[]> {
 
   cronShiftHydrationRequest = listCronShifts({ timeoutMs: 20_000 })
     .then((shifts) => {
-      cachedCronShiftHydration = { loadedAt: Date.now(), shifts }
+      // Do not cache an empty read. A cron add can return before OpenClaw's
+      // SQLite writer has committed, and caching that empty response would
+      // hide a valid job for the entire hydration window.
+      cachedCronShiftHydration = shifts.length > 0
+        ? { loadedAt: Date.now(), shifts }
+        : null
       return shifts
     })
     .finally(() => {
@@ -689,6 +694,14 @@ function isRuntimeStatusPayload(value: unknown): value is RuntimeStatus {
 async function hydrateRuntimeStatusCronJobs(status: RuntimeStatus): Promise<RuntimeStatus> {
   try {
     const shifts = await listCronShiftsForHydration()
+    const serverShifts = status.shifts?.active || []
+    const serverActiveCount = status.shifts?.activeCount ?? serverShifts.length
+
+    // An empty hydration result is not authoritative while the status
+    // payload already has active jobs. Preserve the last known-good snapshot
+    // instead of replacing it with the transient empty read.
+    if (!shifts.length && (serverShifts.length > 0 || serverActiveCount > 0)) return status
+
     return {
       ...status,
       shifts: {

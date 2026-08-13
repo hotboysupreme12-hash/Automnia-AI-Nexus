@@ -337,7 +337,11 @@ export function createRuntimeStatusService(options: RuntimeStatusServiceOptions)
   function minimalRuntimeStatusPayload(reason: string, responseTimeoutMs: number): Record<string, unknown> {
     const gateway = options.gatewayStatusSnapshot(false)
     const activeMissions = options.listMissions().filter((mission) => mission.status === 'active')
-    const cronJobs = options.listActiveCronJobViews({ sqlite: false })
+    // Cron state is owned by OpenClaw's durable scheduler database. Keep the
+    // fallback payload truthful for jobs created outside the Control Center;
+    // the list helper still falls back to in-memory shifts if SQLite is not
+    // available.
+    const cronJobs = options.listActiveCronJobViews()
     return {
       ok: true,
       generatedAt: new Date(nowMs()).toISOString(),
@@ -485,7 +489,9 @@ export function createRuntimeStatusService(options: RuntimeStatusServiceOptions)
     const enabledPluginSummaries = pluginSummaries.filter((plugin) => plugin.enabled)
     const communicationPluginSummaries = enabledPluginSummaries.filter((plugin) => plugin.category === 'communications' || plugin.channels.length)
     const activeMissions = options.listMissions().filter((mission) => mission.status === 'active')
-    const cronJobs = options.listActiveCronJobViews({ sqlite: false })
+    // The summary is what the Monitor shell renders, so it must include
+    // durable OpenClaw jobs as well as Control Center-owned shifts.
+    const cronJobs = options.listActiveCronJobViews()
     gateway.logs = options.dedupeGatewayLogEntries([...gatewayLogs(gateway), ...currentGatewayLogs], 80)
 
     return {
@@ -572,7 +578,7 @@ export function createRuntimeStatusService(options: RuntimeStatusServiceOptions)
     ], 48)
     const currentChannelActivityLogs = options.gatewayLogEntriesSinceCurrentStart(externalChannelActivityLogs)
     const activity = options.summarizeGatewayActivity([...currentGatewayLogs, ...currentChannelActivityLogs])
-    const cronJobs = options.listActiveCronJobViews({ sqlite: false })
+    const cronJobs = options.listActiveCronJobViews()
     const activeMissions = options.listMissions().filter((mission) => mission.status === 'active')
     const cachedPlugins = isLooseRecord(runtimeStatusPayloadCache?.payload?.plugins)
       ? runtimeStatusPayloadCache?.payload.plugins

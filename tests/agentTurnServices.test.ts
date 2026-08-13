@@ -90,6 +90,7 @@ test('gateway agent turn service prepares a Gateway chat turn with identity and 
   assert.equal(promptDumps.length, 1)
   assert.equal(promptDumps[0]?.timeoutSeconds, 60)
   assert.equal(capturedGatewayTurn?.agentId, 'agent-alpha')
+  assert.equal(capturedGatewayTurn?.agentName, 'Ada')
   assert.equal(capturedGatewayTurn?.requestedSessionKey, 'console')
   assert.equal(capturedGatewayTurn?.freshSession, true)
   assert.equal(capturedGatewayTurn?.thinking, 'low')

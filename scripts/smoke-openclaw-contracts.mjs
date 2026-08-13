@@ -128,7 +128,7 @@ assertIncludes(gatewayLogService, 'Model auth refresh timed out after 10s', 'Gat
 assertIncludes(runtimeStatusService, 'readRuntimeGatewayLedgerSnapshot(48)', 'Runtime summary avoids synchronous Gateway log SQLite reads')
 assertIncludes(runtimeStatusService, 'readDoctorDiagnosticsSummary(false, { sqlite: false })', 'Runtime summary avoids synchronous diagnostic SQLite reads')
 assertIncludes(runtimeStatusService, 'runtimeLedgerStatus({ sqlite: false })', 'Runtime health/status avoids synchronous ledger SQLite opens')
-assertIncludes(runtimeStatusService, 'listActiveCronJobViews({ sqlite: false })', 'Runtime status summaries avoid synchronous cron SQLite reads')
+assertIncludes(runtimeStatusService, 'const cronJobs = options.listActiveCronJobViews()', 'Runtime status summaries include durable OpenClaw cron jobs')
 assertIncludes(runtimeLedger, 'runtimeLedgerStatus(options: LedgerReadOptions = {})', 'Runtime ledger status can skip synchronous SQLite')
 assertIncludes(runtimeLedgerStore, 'status: (options?: RuntimeLedgerReadOptions) => runtimeLedgerStatus(options)', 'Runtime ledger store exposes non-blocking status reads')
 assertIncludes(gatewayAgentTurnService, 'const gatewayMessage = options.composeAgentDoctrinePrompt(', 'Command Console Gateway chat message composition')

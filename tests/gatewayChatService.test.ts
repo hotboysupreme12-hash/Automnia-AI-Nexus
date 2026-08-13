@@ -180,6 +180,7 @@ test('runTurn sends Gateway chat payloads and uses a visible terminal reply with
 
   const result = await harness.service.runTurn({
     agentId: 'agent-alpha',
+    agentName: 'Marcus',
     message: 'hello',
     attachments: [{ id: 'upload-1' }],
     sessionId: 'session-1',
@@ -216,7 +217,9 @@ test('runTurn sends Gateway chat payloads and uses a visible terminal reply with
   assert.equal(harness.finishes.at(-1)?.status, 'completed')
   assert.equal(harness.finishes.at(-1)?.output.stdout, 'Terminal final')
   assert.equal(events.some((entry) => entry.event === 'delta' && entry.data.text === 'Live '), true)
-  assert.equal(events.some((entry) => entry.event === 'progress' && /Tool files\.search/.test(String(entry.data.text))), true)
+  assert.equal(events.some((entry) => entry.event === 'progress' && entry.data.text === 'Marcus is using files.search.'), true)
+  assert.equal(events.some((entry) => entry.event === 'progress' && entry.data.agentName === 'Marcus'), true)
+  assert.equal(events.some((entry) => entry.event === 'progress' && /Gateway agent event/.test(String(entry.data.text))), false)
 })
 
 test('runTurn falls back to chat.message.get for placeholder history rows', async () => {

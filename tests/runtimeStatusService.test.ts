@@ -12,6 +12,7 @@ type MutableRuntimeStatusState = {
   sessions: unknown[]
   missions: Array<{ id: string; status: string }>
   missionViewCalls: number
+  cronListOptions: Array<{ sqlite?: boolean }>
   gatewayLedgerEntries: RuntimeStatusServiceOptions['readRuntimeGatewayLedgerSnapshot'] extends (limit?: number) => Promise<infer Snapshot>
     ? Snapshot['entries']
     : never
@@ -69,6 +70,7 @@ function createService(overrides: Partial<MutableRuntimeStatusState> = {}) {
     sessions: [],
     missions: [{ id: 'mission-1', status: 'active' }],
     missionViewCalls: 0,
+    cronListOptions: [],
     gatewayLedgerEntries: [
       {
         id: 1,
@@ -197,7 +199,14 @@ function createService(overrides: Partial<MutableRuntimeStatusState> = {}) {
       state.missionViewCalls += 1
       return { id: mission.id, status: mission.status }
     },
-    listActiveCronJobViews: () => ({ active: [{ id: 'shift-1' }] }),
+    listActiveCronJobViews: (options) => {
+      state.cronListOptions.push(options || {})
+      return {
+        active: options?.sqlite === false
+          ? [{ id: 'memory-shift' }]
+          : [{ id: 'durable-cron', source: 'openclaw' }],
+      }
+    },
     activeRunSnapshots: () => [{ id: 'run-active', status: 'running' }],
     recentRunSnapshots: (limit) => [{ id: 'run-recent', status: 'completed' }].slice(0, limit),
     runtimeVersionCheckPayload: () => ({ ok: true, current: '2026.7.1-2' }),
@@ -284,6 +293,16 @@ test('runtime summary projects a healthy Gateway without changing API shape', as
   assert.equal(state.externalGatewayReads, 0)
   assert.equal(sources.gatewayExternalLogSource, 'skipped-ledger-hot-path')
   assert.deepEqual(requestedLedgerLimits, [48])
+})
+
+test('runtime summary includes durable OpenClaw cron jobs', async () => {
+  const { service, state } = createService()
+
+  const summary = await service.getRuntimeSummaryPayload(true)
+  const shifts = record(summary.shifts)
+
+  assert.deepEqual(array(shifts.active), [{ id: 'durable-cron', source: 'openclaw' }])
+  assert.equal(state.cronListOptions.some((options) => options.sqlite !== false), true)
 })
 
 test('runtime summary falls back to external Gateway logs when the ledger is empty', async () => {

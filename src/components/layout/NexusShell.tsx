@@ -147,6 +147,7 @@ export function NexusShell() {
   const gatewayMigrationMessage = runtimeStatus?.gateway.migration?.message
     || 'OpenClaw is applying startup migrations. The Gateway may restart several times while this completes.'
   const cronJobs = runtimeStatus?.shifts?.active ?? EMPTY_RUNTIME_CRON_JOBS
+  const cronStatusUnavailable = Boolean(runtimeStatus?.shifts?.error)
   const activeCronCount = runtimeStatus?.shifts?.activeCount ?? cronJobs.length
   const workspaceState = gatewayMigration
     ? 'Gateway migration in progress'
@@ -186,7 +187,9 @@ export function NexusShell() {
               : 'loading'
   const cronJobSummary = useMemo(() => cronJobs.slice(0, 4).map((job) => `${job.name} (${job.agent})`).join(', '), [cronJobs])
   const cronChipTitle = runtimeStatus
-    ? activeCronCount
+    ? cronStatusUnavailable
+      ? 'Cron status temporarily unavailable. Open Monitor to retry.'
+      : activeCronCount
       ? `${activeCronCount} active/scheduled cron job${activeCronCount === 1 ? '' : 's'}${cronJobSummary ? `: ${cronJobSummary}` : ''}. Right-click to clear.`
       : 'No active/scheduled cron jobs.'
     : 'Loading cron jobs...'
@@ -702,13 +705,13 @@ export function NexusShell() {
               />
               <button
                 type="button"
-                className={activeCronCount ? 'badge badge--live dy-status-chip' : 'badge dy-status-chip'}
+                className={activeCronCount && !cronStatusUnavailable ? 'badge badge--live dy-status-chip' : 'badge dy-status-chip'}
                 data-indicator="cron"
-                data-state={cronClearBusy ? 'busy' : runtimeStatus ? activeCronCount ? 'active' : 'idle' : 'loading'}
-                data-tone={activeCronCount ? 'live' : 'neutral'}
+                data-state={cronClearBusy ? 'busy' : runtimeStatus ? cronStatusUnavailable ? 'error' : activeCronCount ? 'active' : 'idle' : 'loading'}
+                data-tone={cronStatusUnavailable ? 'warning' : activeCronCount ? 'live' : 'neutral'}
                 title={cronChipTitle}
-                aria-label={`${cronChipTitle} Activate to open Monitor${activeCronCount ? '; press Delete to review clearing.' : '.'}`}
-                aria-keyshortcuts={activeCronCount ? 'Delete' : undefined}
+                aria-label={`${cronChipTitle} Activate to open Monitor${activeCronCount && !cronStatusUnavailable ? '; press Delete to review clearing.' : '.'}`}
+                aria-keyshortcuts={activeCronCount && !cronStatusUnavailable ? 'Delete' : undefined}
                 disabled={cronClearBusy || !runtimeStatus}
                 onClick={() => selectTab('monitor')}
                 onKeyDown={(event) => {
@@ -722,7 +725,7 @@ export function NexusShell() {
                 }}
               >
                 <span className="dy-status-value">
-                  {cronClearBusy ? '...' : runtimeStatus ? activeCronCount : '-'}
+                  {cronClearBusy ? '...' : runtimeStatus ? cronStatusUnavailable ? '—' : activeCronCount : '-'}
                 </span>
                 <span className="dy-status-label">Cron</span>
               </button>

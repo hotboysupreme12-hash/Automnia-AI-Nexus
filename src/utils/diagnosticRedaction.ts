@@ -3,6 +3,7 @@ const DEFAULT_DIAGNOSTIC_TEXT_LIMIT = 500
 const SAFE_DIAGNOSTIC_PAYLOAD_KEYS = new Set([
   'agent',
   'agentId',
+  'agentName',
   'buffered',
   'chunked',
   'code',

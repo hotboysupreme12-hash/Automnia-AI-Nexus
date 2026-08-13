@@ -103,6 +103,7 @@ export type GatewayChatRecoveryEvent = {
 
 type GatewayChatRunWaiter = {
   runId: string
+  agentName: string
   sessionKey: string
   startedAt: number
   toolEvents: unknown[]
@@ -724,6 +725,7 @@ export function createGatewayChatService<RunRecord>(options: GatewayChatServiceO
       liveTokens: true,
       runId: waiter.runId,
       sessionKey: waiter.sessionKey,
+      agentName: waiter.agentName,
       gatewayEvent: eventName,
       ...(state ? { state } : {}),
       ...(phase ? { phase } : {}),
@@ -765,7 +767,7 @@ export function createGatewayChatService<RunRecord>(options: GatewayChatServiceO
     return ''
   }
 
-  function gatewayEventProgressText(eventName: string, payload: Record<string, unknown>) {
+  function gatewayEventProgressText(eventName: string, payload: Record<string, unknown>, agentName: string) {
     const pick = (...keys: string[]) => {
       for (const key of keys) {
         const value = payload[key]
@@ -773,21 +775,52 @@ export function createGatewayChatService<RunRecord>(options: GatewayChatServiceO
       }
       return ''
     }
+    const displayName = agentName.trim() || 'Agent'
     const state = pick('state', 'phase', 'status')
+    const normalizedState = state.toLowerCase()
+    const toolAction = pick('action', 'operation', 'verb')
+    const normalizedToolAction = toolAction.toLowerCase()
+    const isStarting = /\b(start|started|begin|running|pending|call)\b/.test(normalizedState)
+    const isFinished = /\b(done|complete|completed|finished|success|ok)\b/.test(normalizedState)
+    const isFailed = /\b(error|failed|failure|blocked|denied)\b/.test(normalizedState)
+    const hasStateLikeToolAction = /\b(start|started|begin|running|pending|call|done|complete|completed|finished|success|ok|error|failed|failure|blocked|denied)\b/.test(normalizedToolAction)
+    const actionSuffix = toolAction && !hasStateLikeToolAction ? ` to ${toolAction}` : ''
     if (eventName === 'session.tool') {
       const toolName = pick('toolName', 'tool', 'name', 'displayName')
-      if (toolName && state) return `Tool ${toolName} ${state}.`
-      if (toolName) return `Tool ${toolName} activity.`
-      return state ? `Tool activity: ${state}.` : 'Tool activity received.'
+      const isCommandTool = /(?:^|[._-])(?:exec|shell|command)(?:$|[._-])/i.test(toolName)
+      const subject = toolName ? (isCommandTool ? 'a command' : toolName) : 'a tool'
+      if (isFailed) return `${displayName} could not complete ${subject}.`
+      if (isFinished) return `${displayName} just finished ${isCommandTool ? 'executing the command' : `using ${subject}`}.`
+      if (isStarting) return `${displayName} is ${isCommandTool ? 'executing a command' : `using ${subject}`}${actionSuffix}.`
+      return `${displayName} is working with ${subject}${actionSuffix}.`
     }
     if (eventName === 'agent') {
       const stream = pick('stream', 'phase', 'type')
-      if (['assistant', 'item'].includes(stream.toLowerCase())) return ''
+      const normalizedStream = stream.toLowerCase()
+      if (['assistant', 'item'].includes(normalizedStream)) return ''
       const message = pick('message', 'summary', 'title', 'text', 'output', 'command')
-      if (message) return trimText(message, 180)
-      if (stream.toLowerCase() === 'tool' && !state) return ''
-      if (stream.toLowerCase() === 'command_output') return 'Exec output received.'
-      return stream || state ? `Gateway agent event: ${stream || state}.` : ''
+      const toolName = pick('toolName', 'tool', 'name', 'displayName')
+      const isCommandStream = /command|exec|shell/.test(normalizedStream)
+      const isToolStream = /tool/.test(normalizedStream) || Boolean(toolName)
+      if (isCommandStream) {
+        if (normalizedStream === 'command_output') return `${displayName} just received command output.`
+        if (isFailed) return `${displayName} could not complete the command${message ? `: ${trimText(message, 120)}` : ''}.`
+        if (isFinished) return `${displayName} just finished executing the command${message ? `: ${trimText(message, 120)}` : ''}.`
+        return message
+          ? `${displayName} is executing: ${trimText(message, 160)}.`
+          : `${displayName} is executing a command.`
+      }
+      if (isToolStream) {
+        const subject = toolName || 'a tool'
+        if (isFailed) return `${displayName} could not complete ${subject}.`
+        if (isFinished) return `${displayName} just finished using ${subject}.`
+        return message
+          ? `${displayName} is using ${subject}: ${trimText(message, 140)}.`
+          : `${displayName} is using ${subject}.`
+      }
+      if (message) return `${displayName}: ${trimText(message, 180)}`
+      if (stream || state) return `${displayName} is working${stream ? ` in ${stream}` : ''}.`
+      return `${displayName} is working.`
     }
     return ''
   }
@@ -795,7 +828,7 @@ export function createGatewayChatService<RunRecord>(options: GatewayChatServiceO
   function emitGatewayProgress(waiter: GatewayChatRunWaiter, eventName: string, payload: Record<string, unknown>) {
     const observer = streamObserver(waiter.streamObserverId)
     if (!observer) return
-    const text = gatewayEventProgressText(eventName, payload)
+    const text = gatewayEventProgressText(eventName, payload, waiter.agentName)
     if (!text) return
     const streamPayload = gatewayStreamPayload(waiter, eventName, payload)
     observer.emit('progress', {
@@ -1248,6 +1281,7 @@ export function createGatewayChatService<RunRecord>(options: GatewayChatServiceO
   function waitForGatewayChatRun(params: {
     client: GatewayClientLike
     runId: string
+    agentName: string
     sessionKey: string
     timeoutMs: number
     streamObserverId?: string
@@ -1265,6 +1299,7 @@ export function createGatewayChatService<RunRecord>(options: GatewayChatServiceO
       timer.unref?.()
       const waiter: GatewayChatRunWaiter = {
         runId: params.runId,
+        agentName: params.agentName,
         sessionKey: params.sessionKey,
         startedAt: nowMs(),
         toolEvents: [],
@@ -1296,6 +1331,7 @@ export function createGatewayChatService<RunRecord>(options: GatewayChatServiceO
 
   async function runTurn(params: {
     agentId: string
+    agentName?: string
     message: string
     attachments?: unknown[]
     sessionId: string
@@ -1310,12 +1346,16 @@ export function createGatewayChatService<RunRecord>(options: GatewayChatServiceO
   }): Promise<GatewayChatTurnResult> {
     const state = await ensureClient(params.signal)
     const runId = randomUUID()
+    const agentName = params.agentName?.trim() || params.agentId
     const sessionKey = gatewayChatSessionKey(params.agentId, params.sessionId, params.requestedSessionKey, params.freshSession)
     const attachments = await options.gatewayChatAttachmentsFromTurnAttachments(params.attachments)
     streamObserver(params.streamObserverId)?.emit('progress', {
       transport: 'gateway-chat',
       liveTokens: true,
-      text: attachments.length ? 'Sending message and image attachment through Gateway chat.' : 'Sending message through Gateway chat.',
+      text: attachments.length
+        ? `${agentName} is sending a message and image attachment through Gateway chat.`
+        : `${agentName} is sending a message through Gateway chat.`,
+      agentName,
       agent: params.agentId,
       sessionKey,
       runId,
@@ -1331,6 +1371,7 @@ export function createGatewayChatService<RunRecord>(options: GatewayChatServiceO
     const finalPromise = waitForGatewayChatRun({
       client: state.client,
       runId,
+      agentName,
       sessionKey,
       timeoutMs: params.timeoutMs + finalExtraTimeoutMs,
       streamObserverId: params.streamObserverId,

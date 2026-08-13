@@ -1008,6 +1008,7 @@ const RuntimeGatewayPanel = memo(function RuntimeGatewayPanel({
 }) {
   const gateway = status?.gateway
   const activeCronJobs = useMemo(() => status?.shifts?.active || [], [status?.shifts?.active])
+  const cronSyncError = status?.shifts?.error || ''
   const activeCronCount = status?.shifts?.activeCount ?? activeCronJobs.length
   const cronCadences = useMemo(() => Array.from(new Set(activeCronJobs.map((job) => job.every).filter(Boolean))), [activeCronJobs])
   const logs = gateway?.logs || []
@@ -1183,7 +1184,7 @@ const RuntimeGatewayPanel = memo(function RuntimeGatewayPanel({
                 <p className="mt-0.5 text-[12px] text-slate-400">Enabled OpenClaw cron jobs currently scheduled</p>
               </div>
               <div className="dy-cron-panel-summary flex items-center gap-2">
-                <span className="dy-cron-active-count text-[12px] font-semibold uppercase tracking-[0.10em] text-slate-400"><i aria-hidden="true" />{activeCronCount} active</span>
+                <span className="dy-cron-active-count text-[12px] font-semibold uppercase tracking-[0.10em] text-slate-400"><i aria-hidden="true" />{cronSyncError ? 'sync unavailable' : `${activeCronCount} active`}</span>
                 {cronCadences.length > 0 && (
                   <span className="dy-cron-cadence-badge hidden rounded-none border border-white/[0.06] bg-white/[0.025] px-2 py-0.5 text-[11px] font-semibold text-slate-300 sm:inline-flex" title={cronCadences.join(', ')}>
                     {cronCadences.slice(0, 2).join(' / ')}
@@ -1214,7 +1215,14 @@ const RuntimeGatewayPanel = memo(function RuntimeGatewayPanel({
                   pausing={cronCancelKey === job.id || cronCancelKey === '__all__'}
                 />
               ))}
-              {!activeCronJobs.length && (
+              {!activeCronJobs.length && cronSyncError && (
+                <div className="dy-monitor-empty dy-session-empty-state dy-cron-empty-state py-6 text-center text-[12px] font-medium text-amber-100/80" role="alert">
+                  <strong>Unable to read cron jobs.</strong>
+                  <span>Scheduler state is temporarily unavailable.</span>
+                  <Button onClick={onRefresh} variant="secondary" size="compact" className="mt-3">Retry</Button>
+                </div>
+              )}
+              {!activeCronJobs.length && !cronSyncError && (
                 <div className="dy-monitor-empty dy-session-empty-state dy-cron-empty-state py-6 text-center text-[12px] font-medium text-slate-400">
                   <span className="dy-cron-empty-icon" aria-hidden="true">
                     <svg viewBox="0 0 24 24">

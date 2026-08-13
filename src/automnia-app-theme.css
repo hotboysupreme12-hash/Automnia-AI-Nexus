@@ -27,3 +27,4 @@
 @import './styles/automnia-theme/107-agent-assistant-revamp.css';
 /* Performance constraints must win the cascade on every workspace. */
 @import './styles/automnia-theme/105-performance.css';
+@import './styles/automnia-theme/108-command-console-scroll.css';

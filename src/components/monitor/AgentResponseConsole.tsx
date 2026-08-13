@@ -606,27 +606,35 @@ const ResponseMessage = memo(function ResponseMessage({
 
       {displayText || showInlineThinking ? (
         <div className="dy-command-message-body-wrap relative">
-          <p
-            className="dy-command-message-body whitespace-pre-wrap break-words border border-white/[0.04] bg-slate-950/30 px-3 py-2.5 text-[12px] leading-relaxed text-slate-300/95"
+          <div
+            className="dy-command-message-body-scroll"
             data-body-state={bodyState}
-            aria-live={entry.streaming ? 'polite' : undefined}
+            data-scroll-surface="agent-response"
+            aria-label={bodyState === 'response' ? `Scrollable response from ${name}` : undefined}
+            tabIndex={bodyState === 'response' ? 0 : undefined}
           >
-            {showInlineThinking ? (
-              <span className="dy-command-thinking-label">
-                Thinking
-                <span className="dy-command-thinking-dots" aria-hidden="true">
-                  <span />
-                  <span />
-                  <span />
+            <p
+              className="dy-command-message-body whitespace-pre-wrap break-words border border-white/[0.04] bg-slate-950/30 px-3 py-2.5 text-[12px] leading-relaxed text-slate-300/95"
+              data-body-state={bodyState}
+              aria-live={entry.streaming ? 'polite' : undefined}
+            >
+              {showInlineThinking ? (
+                <span className="dy-command-thinking-label">
+                  Thinking
+                  <span className="dy-command-thinking-dots" aria-hidden="true">
+                    <span />
+                    <span />
+                    <span />
+                  </span>
                 </span>
-              </span>
-            ) : (
-              <>
-                {displayText}
-                {entry.streaming && <span className="ml-0.5 inline-block h-3 w-1 animate-pulse rounded-sm bg-cyan-300/70 align-[-2px]" />}
-              </>
-            )}
-          </p>
+              ) : (
+                <>
+                  {displayText}
+                  {entry.streaming && <span className="ml-0.5 inline-block h-3 w-1 animate-pulse rounded-sm bg-cyan-300/70 align-[-2px]" />}
+                </>
+              )}
+            </p>
+          </div>
         </div>
       ) : !entry.streaming && (
         <div className="flex items-center gap-2 text-[11px] text-slate-500 italic">
@@ -1130,6 +1138,7 @@ export function AgentResponseConsole() {
     // owns its own wheel input, while the message list owns wheel input over
     // cards and the gaps between them.
     if (
+      target.closest('.dy-command-message-body-scroll[data-body-state="response"]') ||
       target.closest('.dy-command-message-body[data-body-state="response"]') ||
       target.closest('.dy-command-messages')
     ) return
@@ -1832,6 +1841,7 @@ export function AgentResponseConsole() {
         aria-relevant="additions text"
         aria-label="Command console responses"
         className="dy-command-messages min-h-0 flex-1 overflow-y-auto overflow-x-hidden space-y-3"
+        data-scroll-surface="chat-history"
         data-empty={visibleDisplayedResponses.length === 0 ? 'true' : 'false'}
       >
         {visibleDisplayedResponses.length === 0 && (

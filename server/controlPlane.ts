@@ -15524,12 +15524,13 @@ function cronRowToRuntimeCronJob(row: Record<string, unknown>, shift?: Shift): R
 }
 
 function listActiveCronJobsFromStateDb(): RuntimeCronJobSummary[] {
+  const inMemoryJobs = Array.from(activeShifts.values()).map(shiftToRuntimeCronJob)
   const dbPath = cronStateDbPath()
-  if (!existsSync(dbPath)) return Array.from(activeShifts.values()).map(shiftToRuntimeCronJob)
+  if (!existsSync(dbPath)) return inMemoryJobs
   let db: SqliteDatabase | null = null
   try {
     const sqlite = optionalRequire('node:sqlite') as SqliteModule
-    if (!sqlite?.DatabaseSync) return Array.from(activeShifts.values()).map(shiftToRuntimeCronJob)
+    if (!sqlite?.DatabaseSync) return inMemoryJobs
     db = new sqlite.DatabaseSync(dbPath, { readOnly: true })
     const rows = db.prepare(`
       SELECT
@@ -15563,9 +15564,27 @@ function listActiveCronJobsFromStateDb(): RuntimeCronJobSummary[] {
       LIMIT 200
     `).all()
     const shiftsByCronId = new Map(Array.from(activeShifts.values()).map((shift) => [shift.cronId, shift]))
-    return rows
-      .map((row) => cronRowToRuntimeCronJob(row, shiftsByCronId.get(cleanCronString(row.job_id))))
-      .filter((job): job is RuntimeCronJobSummary => Boolean(job))
+    const jobsByCronId = new Map<string, RuntimeCronJobSummary>()
+    for (const row of rows) {
+      const job = cronRowToRuntimeCronJob(row, shiftsByCronId.get(cleanCronString(row.job_id)))
+      if (job) jobsByCronId.set(job.cronId, job)
+    }
+
+    // OpenClaw persists a newly-added job asynchronously. Include the
+    // Control Center's in-memory registration during that short window so a
+    // successful create cannot flash in the UI and then disappear.
+    for (const job of inMemoryJobs) {
+      if (!jobsByCronId.has(job.cronId)) jobsByCronId.set(job.cronId, job)
+    }
+
+    return Array.from(jobsByCronId.values())
+      .sort((left, right) => {
+        const leftTime = Date.parse(left.nextRunAt || left.endsAt || left.startedAt)
+        const rightTime = Date.parse(right.nextRunAt || right.endsAt || right.startedAt)
+        return (Number.isFinite(leftTime) ? leftTime : Number.MAX_SAFE_INTEGER)
+          - (Number.isFinite(rightTime) ? rightTime : Number.MAX_SAFE_INTEGER)
+      })
+      .slice(0, 200)
   } finally {
     try {
       db?.close?.()
