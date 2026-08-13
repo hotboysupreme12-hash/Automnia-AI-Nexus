@@ -17,3 +17,13 @@ test('agent editor uses autosave for every editable settings surface', () => {
   assert.doesNotMatch(source, /onClick=\{\(\)=>void SvW\(\)\}/)
   assert.doesNotMatch(source, /onClick=\{\(\)=>void SvF\(\)\}/)
 })
+
+test('model autosave retains drafts through auth refresh and retries after OAuth connects', () => {
+  assert.match(source, /pendingModelSaveRef/)
+  assert.match(source, /await LdAuth\(true\)/)
+  assert.match(source, /const retryPendingModelSave = async \(\) =>/)
+  assert.match(source, /await retryPendingModelSave\(\)/)
+  assert.match(source, /agent\.model\?\.primary/)
+  assert.match(source, /applyAgentConfigPayload\(agentId,cached\.value\)/)
+  assert.match(source, /applyAgentConfigPayload\(agentId,result\.data\.config\)/)
+})

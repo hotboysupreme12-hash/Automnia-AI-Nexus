@@ -3180,6 +3180,27 @@ html.dui-pro-overhaul .dy-command-message-runtime {
   gap: 5px;
 }
 
+html.dui-pro-overhaul .dy-command-message-runtime-chip {
+  display: inline-flex;
+  min-height: 22px;
+  align-items: center;
+  gap: 5px;
+  border: 1px solid rgba(92, 214, 164, .22);
+  border-radius: 999px;
+  background: rgba(92, 214, 164, .055);
+  padding: 0 8px;
+  color: #9fe4c0;
+  font-size: 9px;
+  font-weight: 750;
+  line-height: 1;
+  font-variant-numeric: tabular-nums;
+}
+
+html.dui-pro-overhaul .dy-command-message-runtime-chip strong {
+  color: #d7f7e5;
+  font-weight: 850;
+}
+
 html.dui-pro-overhaul .dy-command-message-clock {
   display: inline-flex;
   min-height: 26px;

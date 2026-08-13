@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type { CSSProperties } from 'react'
-import { apiErrorMessage, apiRequest } from '../../api/client'
+import { apiErrorMessage, apiRequest, type ApiResult } from '../../api/client'
 import type { AgentEditorTab } from '../../store/nexusUiState'
 import {
   authKindForProvider,
@@ -33,6 +33,11 @@ type AgentConfigPayload = {
   model?:OpenClawAgent['model']
   heartbeat?:HeartbeatConfig
   runtime?:{thinkingDefault?:ThinkingLevel;timeoutSeconds?:number;parallelPreferred?:boolean;fastModeDefault?:FastModeDefault}
+}
+type AgentModelSavePayload = {
+  ok?: boolean
+  error?: string
+  config?: { model?: OpenClawAgent['model'] }
 }
 
 type AgentConfigPatch = {
@@ -233,6 +238,8 @@ const agentEditorRenderKey = (agent: OpenClawAgent | undefined | null) => {
     agent.behaviorProfile,
     agent.rarity,
     agent.workspace || '',
+    agent.model?.primary || '',
+    (agent.model?.fallbacks || []).join(','),
     (agent.unlockedSkills || []).join(','),
   ].join('\u001f')
 }
@@ -394,6 +401,10 @@ export function AgentEditorModal() {
   const configLoadSeqRef = useRef(0)
   const dirtyConfigSectionsRef = useRef<Set<AgentConfigDirtySection>>(new Set())
   const authRefreshKeyRef = useRef('')
+  const authProvidersRef = useRef<AuthProviderStatus[]>([])
+  const pendingModelSaveRef = useRef<{agentId:string;primary:string;fallbacks:string[]}|null>(null)
+  const modelSaveSeqRef = useRef(0)
+  const modelSaveInFlightRef = useRef<Promise<unknown>|null>(null)
   const fileListSeqRef = useRef(0)
   const fileContentSeqRef = useRef(0)
 
@@ -571,6 +582,7 @@ export function AgentEditorModal() {
     try{
       if(portraitSaveTimerRef.current){window.clearTimeout(portraitSaveTimerRef.current);portraitSaveTimerRef.current=null;await CommitPortraitDraft()}
       if(modelSaveTimerRef.current){window.clearTimeout(modelSaveTimerRef.current);modelSaveTimerRef.current=null;await SvM(primary,fallbacks)}
+      else if(pendingModelSaveRef.current?.agentId===agent?.id){await retryPendingModelSave()}
       if(policySaveTimerRef.current){window.clearTimeout(policySaveTimerRef.current);policySaveTimerRef.current=null;await SvP()}
       if(workspaceSaveTimerRef.current){window.clearTimeout(workspaceSaveTimerRef.current);workspaceSaveTimerRef.current=null;await SvW(wsPath)}
       if(resourceSaveTimerRef.current){window.clearTimeout(resourceSaveTimerRef.current);resourceSaveTimerRef.current=null}
@@ -631,25 +643,32 @@ export function AgentEditorModal() {
       const merged = current.some((entry)=>entry.provider===next.provider)
         ? current.map((entry)=>entry.provider===next.provider?next:entry)
         : [next,...current]
+      authProvidersRef.current=merged
       authProvidersCache={expiresAt:Date.now()+EDITOR_AUTH_CACHE_MS,value:merged}
       return merged
     })
   },[])
-  const LdAuth = useCallback(async (force=false)=>{
+  const LdAuth = useCallback(async (force=false):Promise<AuthProviderStatus[]>=>{
     const now=Date.now()
     if(!force&&authProvidersCache&&authProvidersCache.expiresAt>now){
+      authProvidersRef.current=authProvidersCache.value
       setAuthProviders(authProvidersCache.value)
-      return
+      return authProvidersCache.value
     }
     try{
       const result = await fetchProviderAuthStatuses({ refresh: force, timeoutMs: force ? 30_000 : 8_000 })
       if(!result.ok)throw new Error(apiErrorMessage(result.error))
       const next=result.data.providers||[]
+      authProvidersRef.current=next
       authProvidersCache={expiresAt:Date.now()+EDITOR_AUTH_CACHE_MS,value:next}
       setAuthProviders(next)
       setAuthModalProvider((current)=>current?next.find((entry)=>entry.provider===current.provider)||current:current)
+      return next
     }catch{
-      setAuthProviders(authProvidersCache?.value||[])
+      const fallback=authProvidersCache?.value||authProvidersRef.current
+      authProvidersRef.current=fallback
+      setAuthProviders(fallback)
+      return fallback
     }
   },[])
   const selectedModelIds = useMemo(() => [primary, ...fallbacks].filter(Boolean), [primary, fallbacks])
@@ -663,7 +682,16 @@ export function AgentEditorModal() {
   const fallbackModelGroups = useMemo(() => groupAvailableModels(selectableModels.filter((m) => m.id !== primary)), [selectableModels, primary])
   const SvM = async (nextPrimary=primary,nextFallbacks=fallbacks) => {
     if (!agent) return
-    const providerStatus = authForProvider(providerForModel(nextPrimary))
+    const requestSeq=modelSaveSeqRef.current
+    const provider=providerForModel(nextPrimary)
+    let providerStatus = effectiveAuthStatusForProvider(authProvidersRef.current, provider)
+    if (!authProvidersRef.current.length || (providerStatus && !providerStatus.configured)) {
+      // Auth can finish between the model selection and this debounced save.
+      // Re-read the server state before treating the model as unauthorized.
+      await LdAuth(true)
+      providerStatus = effectiveAuthStatusForProvider(authProvidersRef.current, provider)
+    }
+    if (requestSeq!==modelSaveSeqRef.current) return
     if (providerStatus && !providerStatus.configured) {
       const message=`Missing ${authLabelForProvider(providerStatus.provider, providerStatus)} ${authKindForProvider(providerStatus)}. Connect this provider to finish autosave.`
       setMsStatus(message)
@@ -672,22 +700,31 @@ export function AgentEditorModal() {
       setAuthModalProvider(providerStatus)
       return
     }
+    const previousSave=modelSaveInFlightRef.current
+    if(previousSave){
+      await previousSave.catch(()=>{})
+      const pendingModelSave=pendingModelSaveRef.current
+      if(requestSeq!==modelSaveSeqRef.current
+        || pendingModelSave?.agentId!==agent.id
+        || pendingModelSave.primary!==nextPrimary
+        || JSON.stringify(pendingModelSave.fallbacks)!==JSON.stringify(nextFallbacks)) return
+    }
     setMs(true)
     setMsStatus('Saving model…')
     setAutosavePhase('saving')
     setAutosaveMessage('Saving model settings…')
     configLoadSeqRef.current += 1
+    let saveRequest:Promise<ApiResult<AgentModelSavePayload>>|null=null
     try {
-      const result = await apiRequest<{
-        ok?: boolean
-        error?: string
-        config?: { model?: OpenClawAgent['model'] }
-      }>(`/api/party/agent/${encodeURIComponent(agent.id)}/config`, {
+      saveRequest=apiRequest<AgentModelSavePayload>(`/api/party/agent/${encodeURIComponent(agent.id)}/config`, {
         method: 'POST',
         timeoutMs: 18_000,
         body: { model: { primary:nextPrimary, fallbacks:nextFallbacks } },
       })
+      modelSaveInFlightRef.current=saveRequest
+      const result = await saveRequest
       if (!result.ok) {
+        if (requestSeq!==modelSaveSeqRef.current) return
         const message=apiErrorMessage(result.error)
         setMsStatus(`Autosave failed: ${message}`)
         setAutosavePhase('error')
@@ -695,26 +732,37 @@ export function AgentEditorModal() {
         return
       }
       const savedModel = result.data.config?.model || { primary:nextPrimary, fallbacks:nextFallbacks }
+      const pendingModelSave=pendingModelSaveRef.current
+      const requestIsCurrent = requestSeq===modelSaveSeqRef.current
+        && pendingModelSave?.agentId===agent.id
+        && pendingModelSave.primary===nextPrimary
+        && JSON.stringify(pendingModelSave.fallbacks)===JSON.stringify(nextFallbacks)
+      if (!requestIsCurrent) return
       updateAgentModel(agent.id, savedModel)
       setPrimary(savedModel.primary || nextPrimary)
       setFallbacks(savedModel.fallbacks || [])
+      pendingModelSaveRef.current=null
       agentConfigCache.delete(agent.id)
       clearConfigDirty('model')
       setMsStatus('Model saved automatically.')
       setAutosavePhase('saved')
       setAutosaveMessage('All changes saved')
     } catch (e) {
+      if (requestSeq!==modelSaveSeqRef.current) return
       const message=errorMessage(e)
       setMsStatus(`Autosave failed: ${message}`)
       setAutosavePhase('error')
       setAutosaveMessage(`Model autosave failed: ${message}`)
     } finally {
-      setMs(false)
+      if (modelSaveInFlightRef.current===saveRequest) modelSaveInFlightRef.current=null
+      if (requestSeq===modelSaveSeqRef.current) setMs(false)
     }
   }
 
   const scheduleModelAutosave = (nextPrimary:string,nextFallbacks:string[]) => {
     if(!agent)return
+    modelSaveSeqRef.current+=1
+    pendingModelSaveRef.current={agentId:agent.id,primary:nextPrimary,fallbacks:[...nextFallbacks]}
     markConfigDirty(agent.id,'model')
     if(modelSaveTimerRef.current)window.clearTimeout(modelSaveTimerRef.current)
     setMsStatus('Waiting to save…')
@@ -724,6 +772,16 @@ export function AgentEditorModal() {
       modelSaveTimerRef.current=null
       void SvM(nextPrimary,nextFallbacks)
     },EDITOR_PATCH_DEBOUNCE_MS)
+  }
+
+  const retryPendingModelSave = async () => {
+    const pending=pendingModelSaveRef.current
+    if(!pending||!agent||pending.agentId!==agent.id)return
+    if(modelSaveTimerRef.current){
+      window.clearTimeout(modelSaveTimerRef.current)
+      modelSaveTimerRef.current=null
+    }
+    await SvM(pending.primary,pending.fallbacks)
   }
 
   const applyAgentConfigPayload = useCallback((agentId:string,config:AgentConfigPayload,options:ApplyAgentConfigOptions={})=>{
@@ -766,7 +824,7 @@ export function AgentEditorModal() {
     if(!agentId)return
     const cached=agentConfigCache.get(agentId)
     if(!force&&cached&&cached.expiresAt>Date.now()){
-      applyAgentConfigPayload(agentId,cached.value,{skipDirty:true})
+      applyAgentConfigPayload(agentId,cached.value)
       return
     }
     const seq = ++configLoadSeqRef.current
@@ -774,7 +832,7 @@ export function AgentEditorModal() {
     if(seq!==configLoadSeqRef.current)return
     if(result.ok&&result.data.config){
       agentConfigCache.set(agentId,{expiresAt:Date.now()+EDITOR_CONFIG_CACHE_MS,value:result.data.config})
-      applyAgentConfigPayload(agentId,result.data.config,{skipDirty:true})
+      applyAgentConfigPayload(agentId,result.data.config)
     }
   },[agent?.id,applyAgentConfigPayload])
   const SvP = async (draft:PolicyDraft={mode:sbMode,scope:sbScope,access:sbAccess,allow:tAllow,deny:tDeny}) => {
@@ -1368,6 +1426,9 @@ export function AgentEditorModal() {
     setClawHubError('')
     setClawHubResults([])
     dirtyConfigSectionsRef.current.clear()
+    pendingModelSaveRef.current=null
+    modelSaveSeqRef.current=0
+    modelSaveInFlightRef.current=null
     configLoadSeqRef.current += 1
     authRefreshKeyRef.current = ''
   },[isOpen,editingAgentId,requestedEditorTab,editorOpenRequest])
@@ -1923,11 +1984,15 @@ export function AgentEditorModal() {
             const result=await saveProviderApiKey(authModalProvider.provider, apiKey)
             if(!result.ok)throw new Error(apiErrorMessage(result.error))
             await LdAuth(true)
+            void LdM(true)
+            await retryPendingModelSave()
             setMsStatus(`${authModalProvider.provider} key saved.`)
           }}
           onConnected={async(nextStatus)=>{
             upsertAuthProviderStatus(nextStatus)
             await LdAuth(true)
+            void LdM(true)
+            await retryPendingModelSave()
           }}
         />
       )}

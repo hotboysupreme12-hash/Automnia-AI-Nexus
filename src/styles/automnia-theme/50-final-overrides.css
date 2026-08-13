@@ -3572,6 +3572,13 @@ html.dui-pro-overhaul .dy-command-console .dy-command-message-runtime {
   gap: 6px !important;
 }
 
+html.dui-pro-overhaul .dy-command-console .dy-command-message-runtime-chip {
+  min-height: 18px !important;
+  border-radius: 5px !important;
+  padding: 0 6px !important;
+  font-size: 8px !important;
+}
+
 html.dui-pro-overhaul .dy-command-console .dy-command-message-model {
   flex: 1 1 auto !important;
   max-width: 100% !important;
