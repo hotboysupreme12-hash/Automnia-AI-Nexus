@@ -84,12 +84,13 @@ test('keeps Starter subscription hosted and without BYOK while higher tiers allo
   }
 })
 
-test('keeps the grandfathered BYOK entitlement provider-billed', () => {
-  const entitlement = resolveLicenseEntitlement(license({ tier: 'byok', mode: 'byok', planPriceCents: null, byokAllowed: true }))
+test('keeps the grandfathered BYOK entitlement permanent while exposing managed priority', () => {
+  const entitlement = resolveLicenseEntitlement(license({ tier: 'byok', mode: 'byok', planPriceCents: null, byokAllowed: true, usagePriority: 'provider_first' }))
   assert.equal(isStarterSubscriptionOnly({ ...license({ tier: 'byok', mode: 'byok', planPriceCents: 1_999 }) }), false)
   assert.equal(entitlement.isByok, true)
   assert.equal(entitlement.byokAllowed, true)
   assert.equal(entitlement.usagePriorityLocked, false)
+  assert.equal(entitlement.defaultRouteLabel, 'Your connected provider → Automnia credits fallback')
 })
 
 test('presents current and legacy BYOK tiers as permanent provider-billed access', () => {
@@ -128,9 +129,9 @@ test('merges a hosted balance without changing the active tier or access mode', 
   assert.equal(next?.mode, 'hosted_credits')
 })
 
-test('never applies hosted-credit events to BYOK or malformed balances', () => {
+test('applies pooled-credit events to BYOK and rejects malformed balances', () => {
   const byok = license({ tier: 'byok', mode: 'byok', creditBalance: null })
-  assert.equal(mergeHostedCreditBalance(byok, 10, '2026-08-11T12:01:00.000Z'), byok)
+  assert.equal(mergeHostedCreditBalance(byok, 10, '2026-08-11T12:01:00.000Z')?.creditBalance, 10)
   const hosted = license()
   assert.equal(mergeHostedCreditBalance(hosted, Number.NaN, '2026-08-11T12:01:00.000Z'), hosted)
   assert.equal(mergeHostedCreditBalance(hosted, -1, '2026-08-11T12:01:00.000Z'), hosted)

@@ -33,6 +33,7 @@ export type AutomniaKnowledgeAnswer = {
   citations: unknown[]
   references: unknown[]
   skippedReasons: string[]
+  sessionName: string | null
 }
 
 type StoredLicense = LicenseStatus & {
@@ -123,9 +124,10 @@ function isStarterSubscriptionOnly(record: {
 }
 
 function effectiveUsagePriority(record: StoredLicense, mode = effectiveMode(record)): HostedUsagePriority {
-  if (mode === 'byok') return 'provider_first'
   if (isStarterSubscriptionOnly(record)) return 'automnia_first'
-  return validUsagePriority(record.usagePriority) ? record.usagePriority : 'automnia_first'
+  return validUsagePriority(record.usagePriority)
+    ? record.usagePriority
+    : mode === 'byok' && !(validCreditBalance(record.creditBalance) && record.creditBalance > 0) ? 'provider_first' : 'automnia_first'
 }
 
 function publicStatus(record: StoredLicense | null): LicenseStatus {
@@ -212,7 +214,6 @@ export function createLicenseService(options: LicenseServiceOptions) {
     const tier = typeof payload.tier === 'string' ? payload.tier : fallback.tier
     const planPriceCents = validPlanPriceCents(payload.planPriceCents) ? payload.planPriceCents : fallback.planPriceCents
     const starterSubscriptionOnly = isStarterSubscriptionOnly({ mode, tier, planPriceCents })
-    const previousMode = effectiveMode(fallback)
     return {
       active: true,
       licenseKey: typeof payload.canonicalLicenseKey === 'string' && payload.canonicalLicenseKey.trim()
@@ -225,11 +226,13 @@ export function createLicenseService(options: LicenseServiceOptions) {
       byokAllowed: !starterSubscriptionOnly && (payload.byokAllowed === true || fallback.byokAllowed === true || mode === 'byok' || tierAllowsByok(tier)),
       permanentAccess: !starterSubscriptionOnly && (payload.permanentAccess === true || fallback.permanentAccess === true || mode === 'byok' || tierRank(tier) >= 2),
       subscriptionStatus: typeof payload.subscriptionStatus === 'string' ? payload.subscriptionStatus : fallback.subscriptionStatus,
-      usagePriority: mode === 'byok'
-        ? 'provider_first'
-        : starterSubscriptionOnly || previousMode !== 'hosted_credits'
-          ? 'automnia_first'
-          : validUsagePriority(fallback.usagePriority) ? fallback.usagePriority : 'automnia_first',
+      usagePriority: starterSubscriptionOnly
+        ? 'automnia_first'
+        : validUsagePriority(payload.usagePriority)
+          ? payload.usagePriority
+          : validUsagePriority(fallback.usagePriority)
+            ? fallback.usagePriority
+            : mode === 'byok' && !(validCreditBalance(reportedCreditBalance) && reportedCreditBalance > 0) ? 'provider_first' : 'automnia_first',
       creditBalance: reportedCreditBalance,
       creditBalanceUpdatedAt: validCreditBalance(payload.creditBalance) ? now() : fallback.creditBalanceUpdatedAt,
       activatedAt: typeof payload.activatedAt === 'string' ? payload.activatedAt : fallback.activatedAt || now(),
@@ -320,18 +323,20 @@ export function createLicenseService(options: LicenseServiceOptions) {
     // Kept server-local: never expose the license key in the browser-facing status response.
     getActiveRelayCredentials: (): { email: string; licenseKey: string; mode: 'hosted_credits'; usagePriority: HostedUsagePriority } | null => {
       const record = current()
-      if (!record?.active || effectiveMode(record) !== 'hosted_credits' || !record.email || !record.licenseKey) return null
+      if (!record?.active || !record.email || !record.licenseKey) return null
+      const usagePriority = effectiveUsagePriority(record)
+      if (usagePriority === 'byok_only') return null
       return {
         email: record.email,
         licenseKey: record.licenseKey,
         mode: 'hosted_credits',
-        usagePriority: effectiveUsagePriority(record, 'hosted_credits'),
+        usagePriority,
       }
     },
     getUsagePriority: (): HostedUsagePriority | null => publicStatus(current()).usagePriority,
     isUsagePriorityLocked: (): boolean => {
       const record = current()
-      return Boolean(record?.active && effectiveMode(record) === 'hosted_credits' && isStarterSubscriptionOnly(record))
+      return Boolean(record?.active && isStarterSubscriptionOnly(record))
     },
     activate: async ({ email, licenseKey }: { email: string; licenseKey: string }): Promise<LicenseStatus> => {
       const payload = await verifyWithProvisioner({ email, licenseKey })
@@ -345,7 +350,7 @@ export function createLicenseService(options: LicenseServiceOptions) {
         byokAllowed: false,
         permanentAccess: false,
         subscriptionStatus: null,
-        usagePriority: 'automnia_first',
+        usagePriority: null,
         creditBalance: null,
         creditBalanceUpdatedAt: null,
         activatedAt: null,
@@ -368,7 +373,7 @@ export function createLicenseService(options: LicenseServiceOptions) {
           byokAllowed: existing?.byokAllowed || false,
           permanentAccess: existing?.permanentAccess || false,
           subscriptionStatus: existing?.subscriptionStatus || null,
-          usagePriority: existing?.usagePriority || 'automnia_first',
+          usagePriority: existing?.usagePriority || null,
           creditBalance: existing?.creditBalance || null,
           creditBalanceUpdatedAt: existing?.creditBalanceUpdatedAt || null,
           activatedAt: existing?.activatedAt || null,
@@ -377,12 +382,12 @@ export function createLicenseService(options: LicenseServiceOptions) {
         'The account was verified, but the local license record could not be saved.',
       )
     },
-    // A successful hosted-relay response is the only in-app source permitted
-    // to change this cached balance. The provisioner remains authoritative.
+    // A successful Automnia relay response is the only in-app source permitted
+    // to change this cached pooled balance. The provisioner remains authoritative.
     recordHostedCreditBalance: (creditBalance: number): LicenseStatus | null => {
       if (!validCreditBalance(creditBalance)) return null
       const record = current()
-      if (!record?.active || effectiveMode(record) !== 'hosted_credits') return null
+      if (!record?.active || effectiveUsagePriority(record) === 'byok_only') return null
       return store({
         ...record,
         creditBalance,
@@ -392,7 +397,7 @@ export function createLicenseService(options: LicenseServiceOptions) {
     },
     setUsagePriority: (usagePriority: HostedUsagePriority): LicenseStatus => {
       const record = current()
-      if (!record?.active || effectiveMode(record) !== 'hosted_credits') return publicStatus(record)
+      if (!record?.active) return publicStatus(record)
       return store({
         ...record,
         usagePriority: isStarterSubscriptionOnly(record) ? 'automnia_first' : usagePriority,
@@ -407,7 +412,7 @@ export function createLicenseService(options: LicenseServiceOptions) {
         'The license was verified, but the refreshed account balance could not be saved.',
       )
     },
-    answerKnowledge: async (query: string): Promise<AutomniaKnowledgeAnswer> => {
+    answerKnowledge: async (query: string, sessionName?: string): Promise<AutomniaKnowledgeAnswer> => {
       const record = current()
       if (!record?.active || !record.email || !record.licenseKey) {
         throw new LicenseServiceError('license_activation_failed', 'Activate an Automnia account before using the knowledge assistant.')
@@ -418,7 +423,12 @@ export function createLicenseService(options: LicenseServiceOptions) {
         const response = await request(`${apiBaseUrl}/api/knowledge/answer`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
-          body: JSON.stringify({ email: record.email, licenseKey: record.licenseKey, query }),
+          body: JSON.stringify({
+            email: record.email,
+            licenseKey: record.licenseKey,
+            query,
+            ...(sessionName?.trim() ? { sessionName: sessionName.trim() } : {}),
+          }),
           signal: controller.signal,
         })
         const payload = await response.json().catch(() => null) as Record<string, unknown> | null
@@ -436,6 +446,7 @@ export function createLicenseService(options: LicenseServiceOptions) {
           citations: Array.isArray(payload.citations) ? payload.citations : [],
           references: Array.isArray(payload.references) ? payload.references : [],
           skippedReasons: Array.isArray(payload.skippedReasons) ? payload.skippedReasons.filter((value): value is string => typeof value === 'string') : [],
+          sessionName: typeof payload.sessionName === 'string' ? payload.sessionName : null,
         }
       } catch (error) {
         if (error instanceof LicenseServiceError) throw error

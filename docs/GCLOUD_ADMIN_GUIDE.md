@@ -27,10 +27,21 @@ explicitly request knowledge help. Do not upload passwords, access tokens, API
 keys, license keys, customer emails, or private workspace files to the knowledge
 store.
 
+The grounded assistant uses an **agent-first setup** policy. For a model,
+plugin, skill, chat, channel, or workflow request, it first directs a user with
+a configured primary agent to send that agent a plain-language setup goal in
+Command Console. The agent performs the safe setup and verification available
+to its configured tools, then reports any remaining secure credential, consent,
+or approval step. The assistant supplies the detailed manual configuration path
+second, or first only for first-agent bootstrap and requirements that need the
+operator. Tokens and keys remain in secure provider/plugin fields; they are not
+accepted in Help or Command Console. Publish the corpus after changing this
+behavior so Agent Search and the deployed prompt stay aligned.
+
 Account activation, password sign-in, Google account linking, and password
 changes are served by this same Cloud Run service. The live origin is now on
-revision `automnia-shopify-provisioner-knowledge241` (`2.4.0` / schema
-`2026-08-13.2`), which includes the authenticated knowledge route, the
+revision `automnia-shopify-provisioner-00048-suw` (`2.5.0` / schema
+`2026-08-13.4`), which includes the authenticated knowledge route, the
 3.1-first grounded assistant, and stale-session recovery. Account
 password hashes and Google subject links are stored on the existing license
 documents in Firestore. Password recovery intentionally has no public

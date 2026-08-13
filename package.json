@@ -123,6 +123,7 @@
     "smoke:nexus-control-plane": "tsx scripts/smoke-nexus-control-plane.ts",
     "smoke:misc-control-plane": "tsx scripts/smoke-misc-control-plane.ts",
     "smoke:ui": "node scripts/smoke-ui-render.mjs",
+    "smoke:help-navigation-links": "node scripts/smoke-help-navigation-links.mjs",
     "test:unit": "node scripts/run-unit-tests.mjs",
     "test:unit:coverage": "node scripts/run-unit-tests.mjs --coverage",
     "test": "npm run test:ci",

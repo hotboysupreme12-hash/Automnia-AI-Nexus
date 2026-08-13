@@ -1,5 +1,4 @@
 import { useCallback, useEffect, useState } from 'react'
-import { motion, AnimatePresence } from 'framer-motion'
 import { apiErrorMessage } from '../../api/client'
 import {
   fetchProviderAuthStatuses,
@@ -233,19 +232,11 @@ export function ProviderAuthModal({ isOpen, provider, envKeys, providerStatus, o
   }
 
   return (
-    <AnimatePresence>
-      <motion.div
+    <>
+      <div
         className="fixed inset-0 z-[60] grid place-items-center bg-slate-950/80 p-4 backdrop-blur-md"
-        initial={{ opacity: 0 }}
-        animate={{ opacity: 1 }}
-        exit={{ opacity: 0 }}
       >
-        <motion.div
-          initial={{ scale: 0.96, y: 10 }}
-          animate={{ scale: 1, y: 0 }}
-          exit={{ scale: 0.96, y: 10 }}
-          className="w-full max-w-lg rounded-2xl border border-cyan-200/45 bg-gradient-to-b from-blue-900/95 to-slate-950/95 p-5 shadow-glow"
-        >
+        <div className="dy-surface-enter w-full max-w-lg rounded-2xl border border-cyan-200/45 bg-gradient-to-b from-blue-900/95 to-slate-950/95 p-5 shadow-glow">
           <div className="mb-3 flex items-center justify-between">
             <div>
               <h3 className="font-heading text-2xl text-slate-100">Connect {label}</h3>
@@ -526,8 +517,8 @@ export function ProviderAuthModal({ isOpen, provider, envKeys, providerStatus, o
               </button>
             </div>
           )}
-        </motion.div>
-      </motion.div>
-    </AnimatePresence>
+        </div>
+      </div>
+    </>
   )
 }

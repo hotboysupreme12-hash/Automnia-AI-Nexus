@@ -2,12 +2,27 @@ import assert from 'node:assert/strict'
 import test from 'node:test'
 import {
   PLUGIN_FILTERS,
+  PLUGIN_FILTER_PREFS_KEY,
   pluginMatchesFilter,
   pluginPageState,
   pluginStatusClass,
+  readPluginFilter,
+  savePluginFilter,
   summarizePluginPageStates,
   type PluginPageEntry,
 } from '../src/components/plugins/pluginStateProjection'
+
+class MemoryStorage {
+  private readonly values = new Map<string, string>()
+
+  getItem(key: string) {
+    return this.values.get(key) ?? null
+  }
+
+  setItem(key: string, value: string) {
+    this.values.set(key, value)
+  }
+}
 
 function pluginEntry(id: string, overrides: Partial<PluginPageEntry> = {}): PluginPageEntry {
   const enabled = typeof overrides.enabled === 'boolean' ? overrides.enabled : true
@@ -32,6 +47,18 @@ function pluginEntry(id: string, overrides: Partial<PluginPageEntry> = {}): Plug
     ...overrides,
   }
 }
+
+test('plugin filter defaults to all and persists validated user choices', () => {
+  const storage = new MemoryStorage()
+
+  assert.equal(readPluginFilter(storage), 'all')
+  savePluginFilter('disabled', storage)
+  assert.equal(storage.getItem(PLUGIN_FILTER_PREFS_KEY), 'disabled')
+  assert.equal(readPluginFilter(storage), 'disabled')
+
+  storage.setItem(PLUGIN_FILTER_PREFS_KEY, 'not-a-filter')
+  assert.equal(readPluginFilter(storage), 'all')
+})
 
 test('plugins page projection distinguishes beta plugin states', () => {
   const plugins = [

@@ -11,7 +11,7 @@
  */
 
 import { execFileSync } from 'node:child_process'
-import { readFileSync } from 'node:fs'
+import { readdirSync, readFileSync, statSync } from 'node:fs'
 import path from 'node:path'
 import process from 'node:process'
 
@@ -26,12 +26,54 @@ function source(relativePath) {
   return path.join(repositoryRoot, relativePath)
 }
 
+function markdownFiles(relativeDirectory, excludedPrefixes = []) {
+  const root = source(relativeDirectory)
+  const output = []
+  const walk = (directory) => {
+    for (const name of readdirSync(directory).sort()) {
+      const filePath = path.join(directory, name)
+      const relativePath = path.relative(repositoryRoot, filePath).split(path.sep).join('/')
+      if (excludedPrefixes.some((prefix) => relativePath.startsWith(prefix))) continue
+      if (statSync(filePath).isDirectory()) {
+        walk(filePath)
+      } else if (name.toLowerCase().endsWith('.md')) {
+        output.push(relativePath)
+      }
+    }
+  }
+  walk(root)
+  return output
+}
+
+// Keep the user-facing corpus complete as new Automnia Markdown is added. The
+// synced OpenClaw snapshot is intentionally handled by the curated groups
+// below; indexing that entire vendor snapshot would drown out Automnia UI and
+// support guidance and would make the corpus unnecessarily large.
+const completeAutomniaDocumentation = Array.from(new Set([
+  'README.md',
+  'SECURITY.md',
+  'DATA_HANDLING.md',
+  'infra/gcloud/README.md',
+  ...markdownFiles('docs', ['docs/openclaw-latest/']),
+  ...markdownFiles('infra/gcloud/knowledge'),
+])).sort()
+
 const sourceGroups = [
   {
     id: 'automnia-assistant-playbook',
     title: 'Automnia Assistant identity and operational playbook',
-    description: 'Role instructions, account safety, gateway recovery, product surfaces, and support behavior for Automnia Assistant.',
-    files: ['infra/gcloud/knowledge/automnia-assistant-operational-playbook.md'],
+    description: 'Role instructions, agent-first setup behavior, account safety, gateway recovery, product surfaces, and support behavior for Automnia Assistant.',
+    files: [
+      'infra/gcloud/knowledge/automnia-assistant-operational-playbook.md',
+      'infra/gcloud/knowledge/automnia-assistant.md',
+      'docs/AUTOMNIA_ASSISTANT_OPERATIONS_MANUAL.md',
+    ],
+  },
+  {
+    id: 'automnia-complete-documentation',
+    title: 'Complete Automnia AI Nexus documentation and operations manual',
+    description: 'Complete sanitized Automnia documentation across the product guide, exact UI reference, agent setup, support, security, Google Cloud operations, and the private Help Assistant knowledge sources.',
+    files: completeAutomniaDocumentation,
   },
   {
     id: 'automnia-product-user-guide',
@@ -44,6 +86,12 @@ const sourceGroups = [
     title: 'Automnia exact navigation, setup, and agent-assisted workflow guides',
     description: 'Exact in-app click paths for agents, Command Console, plugins, ClawTalk, Telegram, Google Workspace/Gog, Google Cloud, YouTube workflows, and troubleshooting.',
     files: ['docs/AGENT_SETUP_GUIDES.md'],
+  },
+  {
+    id: 'automnia-agent-capability-playbook',
+    title: 'Automnia agent capability playbook and outcome templates',
+    description: 'Outcome-based Help templates with ready-to-paste agent-first prompts, exact manual controls, secure setup, safe tests, advanced multi-agent workflows, browser and social planning boundaries, and a 100-idea capability catalog.',
+    files: ['docs/AGENT_CAPABILITY_PLAYBOOK.md'],
   },
   {
     id: 'automnia-bundled-skills-catalog',

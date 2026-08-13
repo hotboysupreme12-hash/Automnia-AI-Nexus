@@ -41,6 +41,7 @@ import {
 import {
   makeNexusUiState,
   normalizeNexusSelection,
+  type AgentEditorTab,
   type AppTab,
   type NexusUiState,
 } from './nexusUiState'
@@ -775,7 +776,7 @@ interface NexusState extends NexusAgentConfigState, NexusMissionState, NexusUiSt
   togglePartyMember: (agentId: string) => void
   reorderPartyMembers: (fromIndex: number, toIndex: number) => void
   confirmParty: () => void
-  openEditor: (agentId: string) => void
+  openEditor: (agentId: string, tab?: AgentEditorTab) => void
   closeEditor: () => void
 
   updateMissionDraft: (patch: Partial<MissionDraft>) => void
@@ -2073,6 +2074,19 @@ export const useNexusStore = create<NexusState>()(
             if (data.mode === 'partial' || data.mode === 'block' || data.mode === 'progress') liveProgressMode = data.mode
           }
           const streamPayload = (data: Record<string, unknown>) => safeActivityPayload(data) || undefined
+          const activityTypeFromFrame = (data: Record<string, unknown>, fallbackText: string, fallbackEvent: string) => {
+            if (typeof data.activityType === 'string' && data.activityType.trim()) return data.activityType.trim()
+            if (typeof data.toolName === 'string' && data.toolName.trim()) {
+              const state = [data.state, data.status, data.phase]
+                .find((value): value is string => typeof value === 'string' && value.trim().length > 0)
+                ?.toLowerCase() || ''
+              if (/\b(error|failed|failure|blocked|denied)\b/.test(state)) return 'tool.error'
+              if (/\b(done|complete|completed|finished|success|ok)\b/.test(state)) return 'tool.finished'
+              if (/\b(start|started|begin|running|pending|call)\b/.test(state)) return 'tool.started'
+              return 'tool.progress'
+            }
+            return activityTypeForOperationalText(fallbackText, fallbackEvent)
+          }
           const consumeFrame = (event: string, rawData: string) => {
             let data: Record<string, unknown> = {}
             try {
@@ -2112,11 +2126,11 @@ export const useNexusStore = create<NexusState>()(
               ensureLiveStarted('')
               const message = progressTextFromFrame(data)
               if (message) {
-                const activityType = activityTypeForOperationalText(message, 'status')
+                const activityType = activityTypeFromFrame(data, message, 'status')
                 addLiveProgressLine(message, {
                   label: liveProgressLabel,
                   activityType,
-                  rawSource: 'control-center.sse.status',
+                  rawSource: typeof data.gatewayEvent === 'string' ? `gateway.${data.gatewayEvent}` : 'control-center.sse.status',
                   payload: streamPayload(data),
                   refresh: true,
                 })
@@ -2128,11 +2142,11 @@ export const useNexusStore = create<NexusState>()(
               ensureLiveStarted('')
               const text = progressTextFromFrame(data)
               if (text) {
-                const activityType = activityTypeForOperationalText(text, 'progress')
+                const activityType = activityTypeFromFrame(data, text, 'progress')
                 addLiveProgressLine(text, {
                   label: liveProgressLabel,
                   activityType,
-                  rawSource: 'control-center.sse.progress',
+                  rawSource: typeof data.gatewayEvent === 'string' ? `gateway.${data.gatewayEvent}` : 'control-center.sse.progress',
                   payload: streamPayload(data),
                   refresh: true,
                 })
@@ -3052,8 +3066,8 @@ export const useNexusStore = create<NexusState>()(
         }),
         reorderPartyMembers: (f, t) => set((s) => { const active = sanitizePartyIds(s.activePartyIds, s.agents); if (f === t || f < 0 || t < 0 || f >= active.length || t >= active.length) return { activePartyIds: active }; const n = [...active]; const [m] = n.splice(f, 1); n.splice(t, 0, m); return { activePartyIds: n } }),
         confirmParty: () => set((s) => ({ confirmedPartyIds: sanitizePartyIds(s.activePartyIds, s.agents) })),
-        openEditor: (aid) => set({ isEditorOpen: true, editingAgentId: aid }),
-        closeEditor: () => set({ isEditorOpen: false, editingAgentId: null }),
+        openEditor: (aid, editorTab = 'profile') => set((s) => ({ isEditorOpen: true, editingAgentId: aid, editorTab, editorOpenRequest: s.editorOpenRequest + 1 })),
+        closeEditor: () => set({ isEditorOpen: false, editingAgentId: null, editorTab: 'profile' }),
         updateMissionDraft: (p) => set((s) => ({ missionDraft: { ...s.missionDraft, ...p } })),
         syncMissionProjection,
 

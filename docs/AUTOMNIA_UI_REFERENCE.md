@@ -2,6 +2,11 @@
 
 This reference is the source of truth for Automnia Assistant when it explains the product interface. Use visible labels exactly as written here. When a user asks where to click, lead with the screen name, then the control label, then what it changes. Do not invent settings or promise that an action completed until the interface reports a result.
 
+For the complete operating sequence—including every Agent Editor tab, the
+irreversible **Agent files → Retire** lifecycle, all Settings categories, the
+documentation-source map, and Google Cloud Help publishing—see
+[`AUTOMNIA_ASSISTANT_OPERATIONS_MANUAL.md`](AUTOMNIA_ASSISTANT_OPERATIONS_MANUAL.md).
+
 ## How Automnia is laid out
 
 Automnia AI Nexus has a fixed left navigation rail, a workspace header, and a main workspace. The left rail remains visible while moving between workspaces.
@@ -243,7 +248,7 @@ Before installing a third-party skill, review its publisher, description, reques
 
 ### Account & License
 
-Use **Account & License** for account status, read-only account email, optional Automnia password management, plan/access/billing information, account refresh, hosted credit balance, and the **Effective Agent Route**. The effective route applies to normal messages, runtime/work/OpenClaw activity, streamed turns, and buffered recovery. If the account uses BYOK, a provider key or provider sign-in must be completed through the supported model/provider route; the provider bills those requests directly.
+Use **Account & License** for account status, read-only account email, optional Automnia password management, plan/access/billing information, account refresh, pooled Automnia credit balance, usage priority, and the **Effective Agent Route**. The effective route applies to normal messages, runtime/work/OpenClaw activity, streamed turns, and buffered recovery. BYOK accounts with a confirmed pooled balance expose the same priority controls: Automnia credits first, provider first with Automnia fallback, or provider-only—even when the balance was carried over from Starter. Provider-only bypasses the wallet without deleting it. Starter remains locked to Automnia credits. Purchases tied to the same verified email are pooled after Google or confirmed-password sign-in.
 
 ### Appearance
 
@@ -303,12 +308,13 @@ Use **Data & reset** carefully:
 
 Help is a product guidance surface. It should be help-first: give the exact click path, explain the expected result, identify prerequisites, and offer the agent-assisted route when a task has many steps.
 
-The four fast templates are:
-
-1. **Give an agent a phone number** — ClawTalk account/plugin setup, secure verification, and a bounded agent workflow.
-2. **Set up Telegram** — BotFather, plugin setup, pairing/group safeguards, testing, and agent-assisted troubleshooting.
-3. **Create an agent** — Recruit, editor, model, workspace, skills, permissions, test, and first task.
-4. **What can agents do?** — configured skills, Google/email work, research such as YouTube, plugins, missions, and Command Console delegation.
+Help presents outcome-based playbooks one at a time as clickable suggestions.
+The source playbook in `docs/AGENT_CAPABILITY_PLAYBOOK.md` contains
+ready-to-paste Command Console prompts, exact manual controls, secure handoff
+rules, safe tests, and a 100-idea capability catalog. Suggestions cover agent
+customization, Google Workspace email, ClawTalk phone setup, Telegram, skills
+and plugins, recurring missions, advanced teams, YouTube research, browser
+workflows, Instagram planning, Google Cloud/Gog CLI, and end-to-end setup.
 
 When answering a hard setup question, Help should say: “I can walk you through the controls, or you can select a configured agent in **Agents** and ask it in the **Command Console** to inspect the setup and complete the authorized portions.” It must then state the boundary: the user still supplies their own login, token, account approval, and any required payment or consent.
 
@@ -322,4 +328,3 @@ For an exact interface answer, Automnia Assistant should:
 4. State prerequisites: account, plugin installed, OAuth/credential, selected agent, skill enabled, active party, or Gateway online.
 5. Explain the agent-assisted alternative for multi-step work, while respecting account consent and policy limits.
 6. Never request secrets in Help chat or claim that a hypothetical agent action already happened.
-

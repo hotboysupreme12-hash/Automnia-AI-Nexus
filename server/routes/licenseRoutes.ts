@@ -62,10 +62,13 @@ export function registerLicenseRoutes(app: Express, options: {
   })
 
   app.post('/api/knowledge/answer', async (req, res) => {
-    const parsed = z.object({ query: z.string().trim().min(1).max(5_000) }).safeParse(req.body)
+    const parsed = z.object({
+      query: z.string().trim().min(1).max(5_000),
+      sessionName: z.string().trim().max(500).optional(),
+    }).safeParse(req.body)
     if (!parsed.success) return apiFailure(res, 400, 'invalid_payload', 'Enter a knowledge question between 1 and 5,000 characters.')
     try {
-      return apiSuccess(res, await options.licenseService.answerKnowledge(parsed.data.query))
+      return apiSuccess(res, await options.licenseService.answerKnowledge(parsed.data.query, parsed.data.sessionName))
     } catch (error) {
       const known = error instanceof LicenseServiceError ? error : null
       return apiFailure(res, known?.code === 'license_activation_failed' ? 401 : 502, known?.code || 'license_service_unavailable', known?.message || 'The Automnia knowledge assistant is unavailable.')
@@ -78,11 +81,11 @@ export function registerLicenseRoutes(app: Express, options: {
     }).safeParse(req.body)
     if (!parsed.success) return apiFailure(res, 400, 'invalid_payload', 'Choose Automnia credits first, Automnia with fallback, or BYOK only.')
     const currentStatus = options.licenseService.getStatus()
-    if (currentStatus.mode !== 'hosted_credits') {
-      return apiFailure(res, 409, 'invalid_payload', 'BYOK access uses the connected provider. Hosted priority options are available on Pro and higher permanent tiers.')
+    if (!currentStatus.active) {
+      return apiFailure(res, 409, 'invalid_payload', 'Activate an Automnia license before choosing a usage priority.')
     }
     if (options.licenseService.isUsagePriorityLocked() && parsed.data.usagePriority !== 'automnia_first') {
-      return apiFailure(res, 409, 'invalid_payload', 'Starter Subscription ($19.99) stays on Subscription Relay. Upgrade to Pro or higher to choose another usage priority.')
+      return apiFailure(res, 409, 'invalid_payload', 'Starter Subscription ($19.99) stays on Automnia credits. Upgrade to a permanent tier to choose another usage priority.')
     }
     try {
       const status = options.licenseService.setUsagePriority(parsed.data.usagePriority)

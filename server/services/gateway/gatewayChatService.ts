@@ -702,6 +702,23 @@ export function createGatewayChatService<RunRecord>(options: GatewayChatServiceO
         : typeof payload.name === 'string'
           ? payload.name.trim()
           : ''
+    const pick = (...keys: string[]) => {
+      for (const key of keys) {
+        const value = payload[key]
+        if (typeof value === 'string' && value.trim()) return value.trim()
+      }
+      return ''
+    }
+    const compactValue = (value: unknown, max = 360) => {
+      const redacted = redactedGatewayDiagnosticValue(value)
+      const text = typeof redacted === 'string' ? redacted : JSON.stringify(redacted)
+      return text ? trimText(text, max) : ''
+    }
+    const toolAction = pick('action', 'operation', 'verb')
+    const command = pick('command', 'cmd', 'commandLine', 'shellCommand')
+    const toolInput = compactValue(payload.args ?? payload.arguments ?? payload.input ?? payload.params)
+    const toolOutput = compactValue(payload.output ?? payload.result ?? payload.commandOutput)
+    const activityType = gatewayActivityType(eventName, payload)
     return {
       transport: 'gateway-chat',
       liveTokens: true,
@@ -713,7 +730,39 @@ export function createGatewayChatService<RunRecord>(options: GatewayChatServiceO
       ...(status ? { status } : {}),
       ...(stream ? { stream } : {}),
       ...(toolName ? { toolName } : {}),
+      ...(activityType ? { activityType } : {}),
+      ...(toolAction ? { toolAction: trimText(toolAction, 120) } : {}),
+      ...(command ? { command: compactValue(command, 360) } : {}),
+      ...(toolInput ? { toolInput } : {}),
+      ...(toolOutput ? { toolOutput } : {}),
     }
+  }
+
+  function gatewayActivityType(eventName: string, payload: Record<string, unknown>) {
+    const state = [payload.state, payload.status, payload.phase, payload.type]
+      .find((value): value is string => typeof value === 'string' && value.trim().length > 0)
+      ?.trim()
+      .toLowerCase() || ''
+    const stream = [payload.stream, payload.type]
+      .find((value): value is string => typeof value === 'string' && value.trim().length > 0)
+      ?.trim()
+      .toLowerCase() || ''
+    if (eventName === 'session.tool') {
+      if (/\b(start|started|begin|running|pending|call)\b/.test(state)) return 'tool.started'
+      if (/\b(error|failed|failure|blocked|denied)\b/.test(state)) return 'tool.error'
+      if (/\b(done|complete|completed|finished|success|ok)\b/.test(state)) return 'tool.finished'
+      return 'tool.progress'
+    }
+    if (eventName === 'agent') {
+      if (/command|exec|shell/.test(stream)) {
+        if (/\b(error|failed|failure)\b/.test(state)) return 'command.failed'
+        if (/\b(done|complete|completed|finished|success|ok)\b/.test(state)) return 'command.finished'
+        return 'command.output'
+      }
+      if (/tool/.test(stream)) return 'tool.progress'
+      return 'agent.working'
+    }
+    return ''
   }
 
   function gatewayEventProgressText(eventName: string, payload: Record<string, unknown>) {
@@ -733,10 +782,11 @@ export function createGatewayChatService<RunRecord>(options: GatewayChatServiceO
     }
     if (eventName === 'agent') {
       const stream = pick('stream', 'phase', 'type')
-      if (['assistant', 'item', 'command_output'].includes(stream.toLowerCase())) return ''
-      const message = pick('message', 'summary', 'title')
+      if (['assistant', 'item'].includes(stream.toLowerCase())) return ''
+      const message = pick('message', 'summary', 'title', 'text', 'output', 'command')
       if (message) return trimText(message, 180)
       if (stream.toLowerCase() === 'tool' && !state) return ''
+      if (stream.toLowerCase() === 'command_output') return 'Exec output received.'
       return stream || state ? `Gateway agent event: ${stream || state}.` : ''
     }
     return ''
@@ -747,8 +797,9 @@ export function createGatewayChatService<RunRecord>(options: GatewayChatServiceO
     if (!observer) return
     const text = gatewayEventProgressText(eventName, payload)
     if (!text) return
+    const streamPayload = gatewayStreamPayload(waiter, eventName, payload)
     observer.emit('progress', {
-      ...gatewayStreamPayload(waiter, eventName, payload),
+      ...streamPayload,
       text,
     })
   }

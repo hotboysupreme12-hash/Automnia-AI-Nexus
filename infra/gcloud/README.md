@@ -2,6 +2,11 @@
 
 This directory is the source of truth for the Automnia Shopify provisioner and for moving it between Google Cloud projects. Every mutating script supports `-WhatIf`. All operational reports are written under `.state/`, which is ignored by Git and contains hashes and counts, not secret payloads or license keys.
 
+The complete product/operator documentation map and Help response contract are
+in [`../../docs/AUTOMNIA_ASSISTANT_OPERATIONS_MANUAL.md`](../../docs/AUTOMNIA_ASSISTANT_OPERATIONS_MANUAL.md).
+Private Help Assistant source files live in `infra/gcloud/knowledge/` and are
+included in the sanitized corpus by `npm run publish:knowledge`.
+
 ## Included components
 
 | File | Purpose |
@@ -106,6 +111,29 @@ The normal command creates a uniformly-access-controlled migration bucket in the
 ```
 
 The target must be empty by default. `-AllowNonEmptyTarget` is reserved for the final cutover delta and rollback; exact post-import hashing still catches extra or stale documents.
+
+### Hosted-credit wallet behavior during upgrades
+
+An account’s hosted credits are an email-level pooled wallet. When a Starter
+account upgrades to BYOK, Pro, Enterprise, or another eligible tier, the
+canonical entitlement changes but the prior non-revoked hosted-credit balances
+are preserved. Any credits granted by the new order are additive; they are not
+used to replace the previous balance. The public license response reports the
+pooled balance, and the hosted relay can use that wallet when the account’s
+usage priority is **Automnia credits first** or **provider first with Automnia
+fallback**. **BYOK only** intentionally bypasses hosted-credit charging while
+leaving the wallet intact for a later priority change.
+
+The service keeps wallet sources separate for auditability and starts future
+deductions with the canonical upgraded entitlement, then consumes older
+non-revoked sources. Revoked records are excluded from the pool.
+
+BYOK does not force provider-first routing. If a BYOK account has a confirmed
+pooled balance—such as credits carried over from Starter—the Account & License
+selector defaults to **Automnia credits first** and remains editable for all
+three routes. A zero-balance BYOK account defaults to provider-first until a
+hosted balance is available. Only Starter Subscription is locked to Automnia
+credits.
 
 The lower-level commands are available for audited backup/restore operations:
 

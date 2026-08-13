@@ -396,6 +396,37 @@
   color: #e5f2f3;
 }
 
+.dui-help-inline-link {
+  display: inline;
+  margin: 0;
+  padding: 0 3px;
+  border: 1px solid rgb(110 217 204 / .24);
+  border-radius: 5px;
+  background: rgb(90 189 177 / .09);
+  color: #a8f4e8;
+  font: inherit;
+  line-height: inherit;
+  text-decoration: underline;
+  text-decoration-color: rgb(168 244 232 / .45);
+  text-decoration-thickness: 1px;
+  text-underline-offset: 2px;
+  transition: 140ms ease;
+}
+
+.dui-help-inline-link:hover,
+.dui-help-inline-link:focus-visible {
+  border-color: rgb(150 238 226 / .58);
+  background: rgb(90 189 177 / .2);
+  color: #effffc;
+  outline: none;
+}
+
+.dui-help-code {
+  color: #c4d8da;
+  font-family: var(--font-mono, ui-monospace, SFMono-Regular, Menlo, monospace);
+  font-size: .94em;
+}
+
 .dui-help-thinking {
   display: flex;
   min-height: 46px;

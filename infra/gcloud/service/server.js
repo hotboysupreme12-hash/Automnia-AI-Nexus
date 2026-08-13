@@ -6,7 +6,7 @@ import { GoogleAuth } from 'google-auth-library';
 const app = express();
 const port = process.env.PORT || 8080;
 const serviceVersion = '2.5.0';
-const schemaVersion = '2026-08-13.3';
+const schemaVersion = '2026-08-13.4';
 const secrets = (process.env.SHOPIFY_WEBHOOK_SECRETS || process.env.SHOPIFY_WEBHOOK_SECRET || '')
   .split(',')
   .map((value) => value.trim())
@@ -86,6 +86,49 @@ function starterSubscriptionOnly(record) {
   const isStarterTier = normalized === 'starter' || normalized === 'cloud_starter_subscription' || (normalized.includes('starter') && !normalized.includes('pro'));
   const mode = record?.mode || 'hosted_credits';
   return mode === 'hosted_credits' && isStarterTier;
+}
+
+function validUsagePriority(value) {
+  return value === 'automnia_first' || value === 'provider_first' || value === 'byok_only';
+}
+
+function effectiveUsagePriority(record) {
+  if (starterSubscriptionOnly(record)) return 'automnia_first';
+  return validUsagePriority(record?.usagePriority)
+    ? record.usagePriority
+    : record?.mode === 'byok' && pooledCreditBalance(record) <= 0 ? 'provider_first' : 'automnia_first';
+}
+
+function attachCreditSources(record, candidates = [record]) {
+  if (!record) return null;
+  const sources = [];
+  // The active/canonical entitlement is always first. Older non-revoked
+  // records remain separate wallet sources so an upgrade cannot erase their
+  // hosted-credit balance. The canonical wallet receives future grants first;
+  // pooled reporting and fallback billing still include every source.
+  for (const candidate of [record, ...candidates]) {
+    if (!candidate || candidate.status === 'revoked' || sources.some((source) => source.orderId === candidate.orderId)) continue;
+    sources.push(candidate);
+  }
+  // Keep the pooled wallet metadata server-local. It must never be written
+  // back to a license document or exposed as a customer-controlled field.
+  Object.defineProperty(record, '_creditSources', {
+    configurable: true,
+    enumerable: false,
+    value: sources,
+    writable: true,
+  });
+  return record;
+}
+
+function creditSourcesFor(record) {
+  return Array.isArray(record?._creditSources) && record._creditSources.length
+    ? record._creditSources
+    : record ? [record] : [];
+}
+
+function pooledCreditBalance(record) {
+  return creditSourcesFor(record).reduce((total, source) => total + Math.max(0, Number(source.creditBalance) || 0), 0);
 }
 
 function bestLicense(records) {
@@ -273,7 +316,8 @@ function publicLicense(record) {
     byokAllowed: !starterSubscriptionOnly(record) && (record.mode === 'byok' || record.byokAllowed === true || byokAllowedForTier(record.tier)),
     permanentAccess: recordHasPermanentAccess(record),
     accessType: recordHasPermanentAccess(record) ? 'permanent' : 'subscription',
-    creditBalance: typeof record.creditBalance === 'number' ? record.creditBalance : 0,
+    usagePriority: effectiveUsagePriority(record),
+    creditBalance: pooledCreditBalance(record),
     status: record.status,
     subscriptionStatus: record.subscriptionStatus || null,
     createdAt: record.createdAt,
@@ -362,7 +406,8 @@ async function findLicense(email, licenseKey) {
     // becomes the one canonical, highest-tier account entitlement.
     const candidates = Array.from(provisionedCustomers.values()).filter((record) =>
       normalizeEmail(record.email) === normalizedEmail && record.status !== 'revoked');
-    return await mergeAccountIdentityIntoCanonical(bestLicense(candidates), candidates) || keyMatch;
+    const canonical = await mergeAccountIdentityIntoCanonical(bestLicense(candidates), candidates) || keyMatch;
+    return attachCreditSources(canonical, candidates);
   }
 
   const indexSnapshot = await licenseIndexes.doc(licenseIndexId(normalizedEmail, normalizedKey)).get();
@@ -377,7 +422,8 @@ async function findLicense(email, licenseKey) {
   const candidates = snapshot.docs
     .map((document) => ({ ...document.data(), _ref: document.ref }))
     .filter((candidate) => candidate.status !== 'revoked');
-  return await mergeAccountIdentityIntoCanonical(bestLicense(candidates) || record, candidates) || record;
+  const canonical = await mergeAccountIdentityIntoCanonical(bestLicense(candidates) || record, candidates) || record;
+  return attachCreditSources(canonical, candidates);
 }
 
 function sortNewestLicense(records) {
@@ -394,14 +440,16 @@ async function findLicenseByEmail(email, { hostedOnly = false } = {}) {
   if (useInMemoryStorage) {
     const candidates = Array.from(provisionedCustomers.values())
       .filter((record) => normalizeEmail(record.email) === normalizedEmail && (!hostedOnly || record.mode === 'hosted_credits') && record.status !== 'revoked');
-    return mergeAccountIdentityIntoCanonical(bestLicense(candidates), candidates);
+    const canonical = await mergeAccountIdentityIntoCanonical(bestLicense(candidates), candidates);
+    return attachCreditSources(canonical, candidates);
   }
 
-  const snapshot = await licenses.where('email', '==', normalizedEmail).limit(20).get();
+  const snapshot = await licenses.where('email', '==', normalizedEmail).get();
   const candidates = snapshot.docs
     .map((document) => ({ ...document.data(), _ref: document.ref }))
     .filter((record) => (!hostedOnly || record.mode === 'hosted_credits') && record.status !== 'revoked');
-  return mergeAccountIdentityIntoCanonical(bestLicense(candidates), candidates);
+  const canonical = await mergeAccountIdentityIntoCanonical(bestLicense(candidates), candidates);
+  return attachCreditSources(canonical, candidates);
 }
 
 async function findHostedLicenseByEmail(email) {
@@ -452,7 +500,10 @@ async function updateHostedEntitlement({ record, order, tierConfig, topic, deliv
 
   if (useInMemoryStorage) {
     if (record.lastWebhookEventId === eventId) return record;
-    const grant = tierConfig.initialCredits;
+    // An upgrade changes the canonical entitlement but never resets its
+    // existing hosted-credit wallet. A new plan grant is additive; separate
+    // prior wallet sources remain pooled through _creditSources.
+    const grant = Math.max(0, Number(tierConfig.initialCredits) || 0);
     Object.assign(record, {
       tier: nextTier,
       mode: nextMode,
@@ -477,7 +528,10 @@ async function updateHostedEntitlement({ record, order, tierConfig, topic, deliv
     if (!licenseSnapshot.exists) return null;
     const current = licenseSnapshot.data();
     if (eventSnapshot.exists) return current;
-    const grant = tierConfig.initialCredits;
+    // Preserve the current wallet and add only the incoming plan grant. The
+    // public response and relay wallet pool all non-revoked account sources,
+    // including hosted credits earned before a BYOK or higher-tier upgrade.
+    const grant = Math.max(0, Number(tierConfig.initialCredits) || 0);
     const update = {
       tier: preserveExistingEntitlement ? current.tier : tierConfig.tier,
       mode: preserveExistingEntitlement ? current.mode : tierConfig.mode,
@@ -579,35 +633,58 @@ async function applyCreditTopUp(orderId, email, credits) {
   });
 }
 
-function usageEventId(orderId, requestId) {
-  return crypto.createHash('sha256').update(`${orderId}\u0000${requestId}`).digest('hex');
+function usageEventId(walletId, requestId) {
+  return crypto.createHash('sha256').update(`${walletId}\u0000${requestId}`).digest('hex');
 }
 
-async function deductCredits(orderId, tokensUsed, requestId) {
+async function deductCredits(recordOrOrderId, tokensUsed, requestId) {
   const safeTokensUsed = Math.max(0, Math.floor(Number(tokensUsed) || 0));
   const safeRequestId = String(requestId || '').trim().slice(0, 160);
+  const canonical = typeof recordOrOrderId === 'object' && recordOrOrderId
+    ? recordOrOrderId
+    : provisionedCustomers.get(String(recordOrOrderId || ''));
+  const orderId = String(canonical?.orderId || recordOrOrderId || '');
+  const sources = creditSourcesFor(canonical);
+  const walletId = String(canonical?.email || orderId);
   if (useInMemoryStorage) {
-    const record = provisionedCustomers.get(orderId);
-    if (!record) return { remainingCredits: 0, deductedCredits: 0, duplicate: false };
-    const usageId = safeRequestId ? usageEventId(orderId, safeRequestId) : null;
-    if (usageId && record.creditUsage?.[usageId]) return { ...record.creditUsage[usageId], duplicate: true };
-    const current = Math.max(0, Number(record.creditBalance) || 0);
-    const deductedCredits = Math.min(current, safeTokensUsed);
-    const remainingCredits = current - deductedCredits;
-    record.creditBalance = remainingCredits;
-    record.updatedAt = new Date().toISOString();
-    if (usageId) record.creditUsage = { ...(record.creditUsage || {}), [usageId]: { remainingCredits, deductedCredits } };
+    if (!canonical || !sources.length) return { remainingCredits: 0, deductedCredits: 0, duplicate: false };
+    const usageId = safeRequestId ? usageEventId(walletId, safeRequestId) : null;
+    if (usageId && canonical.creditUsage?.[usageId]) return { ...canonical.creditUsage[usageId], duplicate: true };
+    let remainingToDeduct = safeTokensUsed;
+    let deductedCredits = 0;
+    const allocations = [];
+    for (const source of sources) {
+      const current = Math.max(0, Number(source.creditBalance) || 0);
+      const deducted = Math.min(current, remainingToDeduct);
+      if (deducted > 0) {
+        source.creditBalance = current - deducted;
+        source.updatedAt = new Date().toISOString();
+        deductedCredits += deducted;
+        remainingToDeduct -= deducted;
+        allocations.push({ orderId: source.orderId, deductedCredits: deducted });
+      }
+      if (remainingToDeduct <= 0) break;
+    }
+    const remainingCredits = pooledCreditBalance(canonical);
+    canonical.updatedAt = new Date().toISOString();
+    if (usageId) {
+      canonical.creditUsage = {
+        ...(canonical.creditUsage || {}),
+        [usageId]: { remainingCredits, deductedCredits, allocations },
+      };
+    }
     return { remainingCredits, deductedCredits, duplicate: false };
   }
 
-  const licenseRef = licenses.doc(orderId);
-  const usageRef = safeRequestId ? creditUsage.doc(usageEventId(orderId, safeRequestId)) : null;
+  if (!canonical || !sources.length) return { remainingCredits: 0, deductedCredits: 0, duplicate: false };
+  const sourceRefs = sources.map((source) => source._ref || licenses.doc(source.orderId));
+  const usageRef = safeRequestId ? creditUsage.doc(usageEventId(walletId, safeRequestId)) : null;
   return firestore.runTransaction(async (transaction) => {
-    const [licenseSnapshot, usageSnapshot] = await Promise.all([
-      transaction.get(licenseRef),
+    const [sourceSnapshots, usageSnapshot] = await Promise.all([
+      Promise.all(sourceRefs.map((sourceRef) => transaction.get(sourceRef))),
       usageRef ? transaction.get(usageRef) : Promise.resolve(null),
     ]);
-    if (!licenseSnapshot.exists) return { remainingCredits: 0, deductedCredits: 0, duplicate: false };
+    if (!sourceSnapshots.some((snapshot) => snapshot.exists)) return { remainingCredits: 0, deductedCredits: 0, duplicate: false };
     if (usageSnapshot?.exists) {
       return {
         remainingCredits: Math.max(0, Number(usageSnapshot.get('remainingCredits')) || 0),
@@ -615,13 +692,35 @@ async function deductCredits(orderId, tokensUsed, requestId) {
         duplicate: true,
       };
     }
-    const current = Math.max(0, Number(licenseSnapshot.get('creditBalance')) || 0);
-    const deductedCredits = Math.min(current, safeTokensUsed);
-    const remainingCredits = current - deductedCredits;
     const updatedAt = new Date().toISOString();
-    transaction.update(licenseRef, { creditBalance: remainingCredits, updatedAt });
+    let remainingToDeduct = safeTokensUsed;
+    let deductedCredits = 0;
+    const allocations = [];
+    let remainingCredits = 0;
+    sourceSnapshots.forEach((snapshot, index) => {
+      if (!snapshot.exists) return;
+      const current = Math.max(0, Number(snapshot.get('creditBalance')) || 0);
+      const deducted = Math.min(current, remainingToDeduct);
+      const nextBalance = current - deducted;
+      remainingCredits += nextBalance;
+      if (deducted > 0) {
+        deductedCredits += deducted;
+        remainingToDeduct -= deducted;
+        transaction.update(sourceRefs[index], { creditBalance: nextBalance, updatedAt });
+        allocations.push({ orderId: sources[index].orderId, deductedCredits: deducted });
+      }
+    });
     if (usageRef) {
-      transaction.create(usageRef, { orderId, requestId: safeRequestId, tokensUsed: safeTokensUsed, deductedCredits, remainingCredits, createdAt: updatedAt });
+      transaction.create(usageRef, {
+        orderId,
+        walletId,
+        requestId: safeRequestId,
+        tokensUsed: safeTokensUsed,
+        deductedCredits,
+        remainingCredits,
+        allocations,
+        createdAt: updatedAt,
+      });
     }
     return { remainingCredits, deductedCredits, duplicate: false };
   });
@@ -1179,9 +1278,7 @@ async function resolveHostedRelayAccess(req) {
   if (!email || !licenseKey) return { error: 'Both X-Automnia-Email and a license key are required for Automnia Cloud routing.', status: 401 };
   const record = await findLicense(email, licenseKey);
   if (!record) return { error: 'No active license found matching this email and key.', status: 401 };
-  const mode = record.mode || (record.tier === 'founding_beta_byok' ? 'byok' : 'hosted_credits');
-  const credits = Math.max(0, Number(record.creditBalance) || 0);
-  if (mode === 'byok') return { error: 'BYOK access never uses Automnia Cloud billing. Configure your own provider first.', status: 403 };
+  const credits = pooledCreditBalance(record);
   if (credits <= 0) return { error: 'Credit balance exhausted. Refill your Automnia balance to continue.', status: 402 };
   return { record, email, licenseKey, credits };
 }
@@ -1199,6 +1296,14 @@ function knowledgeEngineResource() {
 function knowledgeSessionEndpoint() {
   const engineResource = knowledgeEngineResource();
   return engineResource ? `https://discoveryengine.googleapis.com/v1/${engineResource}/sessions` : null;
+}
+
+const KNOWLEDGE_DETAIL_INSTRUCTION = 'For a setup, UI inventory, retirement procedure, troubleshooting guide, or operations question, prefer a complete source-grounded answer: state the exact surface and control, prerequisites, ordered agent-first and manual paths, expected evidence, safety boundaries, and recovery branch. Enumerate every requested tab, folder, or control. Be detailed when the user asks for detail, but never invent live state or claim an action happened without evidence.';
+
+function addKnowledgeDetailInstruction(body) {
+  const preamble = body?.answerGenerationSpec?.promptSpec?.preamble;
+  if (typeof preamble === 'string') body.answerGenerationSpec.promptSpec.preamble = `${preamble} ${KNOWLEDGE_DETAIL_INSTRUCTION}`;
+  return body;
 }
 
 function validKnowledgeSessionName(value, sessionPrefix) {
@@ -1257,7 +1362,7 @@ async function answerAutomniaKnowledge(query, userPseudoId, sessionName) {
     answerGenerationSpec: {
       modelSpec: { modelVersion },
       promptSpec: {
-        preamble: 'You are Automnia Assistant, the official in-product support agent for Automnia AI Nexus. You are a highly capable product specialist with access to the supplied Automnia documentation and retrieved evidence. Answer as Automnia Assistant, not as a generic chatbot and not as the OpenClaw gateway itself. Use the exact Automnia surfaces and terminology in the documentation: Login, Account & License, Settings, Agents, Missions, Monitor, Plugins, Command Console, and Help. For a how-to question, give a concise explanation followed by ordered steps and name the screen or control to use. Normalize informal wording and spelling mistakes into the closest Automnia topic. Combine relevant facts across documents when that makes the answer more useful. Explain hosted credits versus BYOK, the local OpenClaw Gateway, provider/model setup, agents, missions, plugins, schedules, voice, recovery, and privacy accurately. Distinguish documented product behavior from machine-specific state. You cannot see the user’s screen, local files, live gateway state, private account records, passwords, license keys, provider secrets, or raw logs unless the product explicitly supplies a redacted diagnostic result. Never claim that you changed a setting, reconnected a gateway, checked an account, repaired a machine, or completed a deployment. Never request or repeat passwords, access tokens, API keys, license keys, OAuth codes, customer emails, cookies, or private files; direct the user to the secure UI control instead. Never invent prices, entitlements, permissions, model availability, account state, or repair results. If the answer depends on the local machine, direct the user to Monitor, Settings, Doctor, or Diagnostics and say what safe evidence to inspect. If the documentation does not establish the answer, acknowledge the limitation and ask one focused follow-up question rather than guessing. Do not call a normal product-help question rejected; answer it from the product knowledge whenever possible.',
+        preamble: 'You are Automnia Assistant, the official in-product support agent for Automnia AI Nexus. You are a highly capable product specialist with access to the supplied Automnia documentation and retrieved evidence. Answer as Automnia Assistant, not as a generic chatbot and not as the OpenClaw gateway itself. Use the exact Automnia surfaces and terminology in the documentation: Login, Account & License, Settings, Agents, Missions, Monitor, Plugins, Command Console, and Help. For a how-to question, give a concise explanation followed by ordered steps and name the screen or control to use. Normalize informal wording and spelling mistakes into the closest Automnia topic. For an agent, model, plugin, skill, chat, channel, or workflow setup request, default to agent-first setup: when the user has a configured primary agent with a working model route, first tell them to select it in Agents, open Command Console, and give it a plain-language desired outcome. Give a ready-to-paste prompt that directs the agent to inventory skills, plugins, model, workspace, policy, and runtime readiness, complete the safe configuration and verification its enabled tools allow, and report evidence plus only the smallest remaining human step. Use the Agent Capability Playbook for outcome-based templates and creative ideas; present the selected playbook’s agent-first prompt first, then exact manual controls, prerequisites, safe test, approval boundary, and relevant next playbook. Present manual configuration second, as the detailed self-service path for users who request it or when there is no configured agent yet, account ownership, OAuth consent, a secure credential, billing, or approval is required. Tokens and keys are a secure handoff: never ask for, repeat, or accept passwords, access tokens, API keys, license keys, OAuth codes, customer emails, cookies, or private files in Help or Command Console; direct the user to the secure provider or plugin field, then explain that the primary agent can resume and validate setup after it is saved. Combine relevant facts across documents when that makes the answer more useful. Explain hosted credits versus BYOK, the local OpenClaw Gateway, provider/model setup, agents, missions, plugins, schedules, voice, recovery, and privacy accurately. Distinguish documented product behavior from machine-specific state. You cannot see the user’s screen, local files, live gateway state, private account records, passwords, license keys, provider secrets, or raw logs unless the product explicitly supplies a redacted diagnostic result. Never claim that you changed a setting, reconnected a gateway, checked an account, repaired a machine, or completed a deployment. Never invent prices, entitlements, permissions, model availability, account state, or repair results. If the answer depends on the local machine, direct the user to Monitor, Settings, Doctor, or Diagnostics and say what safe evidence to inspect. If the documentation does not establish the answer, acknowledge the limitation and ask one focused follow-up question rather than guessing. Do not call a normal product-help question rejected; answer it from the product knowledge whenever possible.',
       },
       includeCitations: true,
       answerLanguageCode: 'en',
@@ -1272,7 +1377,7 @@ async function answerAutomniaKnowledge(query, userPseudoId, sessionName) {
         'Content-Type': 'application/json',
         Authorization: `Bearer ${accessToken.token}`,
       },
-      body: JSON.stringify(requestBody(modelVersion)),
+        body: JSON.stringify(addKnowledgeDetailInstruction(requestBody(modelVersion))),
     });
     const payload = await response.json().catch(() => null);
     if (response.ok) return { payload, modelVersion, sessionName: activeSessionName };
@@ -1383,7 +1488,7 @@ app.post('/v1/chat/completions', requireWritesEnabled, async (req, res) => {
     const result = vertexCandidateResult(payload);
     const tokensUsed = result.totalTokens || Math.ceil(JSON.stringify(messages).length / 4);
     const requestId = String(req.get('idempotency-key') || req.get('x-request-id') || crypto.randomUUID()).trim().slice(0, 160);
-    const debit = await deductCredits(access.record.orderId, tokensUsed, requestId);
+    const debit = await deductCredits(access.record, tokensUsed, requestId);
     const responseId = `chatcmpl_${crypto.randomUUID().replace(/-/g, '')}`;
     const created = Math.floor(Date.now() / 1000);
     const model = 'gemini-3.6-flash';
@@ -1433,17 +1538,19 @@ app.post('/api/ai/generate', requireWritesEnabled, async (req, res) => {
     }
 
     const mode = record.mode || (record.tier === 'founding_beta_byok' ? 'byok' : 'hosted_credits');
-    const credits = typeof record.creditBalance === 'number' ? record.creditBalance : 0;
+    const credits = pooledCreditBalance(record);
 
-    // BYOK users or exhausted credit balance
-    if (mode === 'byok' || credits <= 0) {
+    // An eligible permanent/BYOK account can spend a pooled Automnia balance
+    // when the local account selected an Automnia-backed route. A zero balance
+    // still leaves the desktop free to use its configured provider directly.
+    if (credits <= 0) {
       return res.status(402).json({
         ok: false,
         active: true,
-        mode: 'byok',
+        mode,
         creditBalance: credits,
         error: mode === 'byok'
-          ? 'BYOK Tier: Configure your own API key in Automnia App Settings.'
+          ? 'Automnia credit balance exhausted. Configure your own API key in Automnia App Settings or add credits on Shopify.'
           : 'Credit balance exhausted. Top up your credits on Shopify to continue using Cloud AI.',
       });
     }
@@ -1510,7 +1617,7 @@ app.post('/api/ai/generate', requireWritesEnabled, async (req, res) => {
     const generatedText = payload.candidates?.[0]?.content?.parts?.[0]?.text || '';
     const tokensUsed = payload.usageMetadata?.totalTokenCount || Math.ceil((promptText.length + generatedText.length) / 4);
     const requestId = String(req.get('idempotency-key') || req.body?.requestId || '').trim().slice(0, 160);
-    const debit = await deductCredits(record.orderId, tokensUsed, requestId);
+    const debit = await deductCredits(record, tokensUsed, requestId);
 
     console.log(JSON.stringify({
       event: 'ai_relay_generation',

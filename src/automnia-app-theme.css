@@ -23,6 +23,7 @@
 @import './styles/automnia-theme/102-settings-system.css';
 @import './styles/automnia-theme/103-cron-jobs-system.css';
 @import './styles/automnia-theme/104-responsive-fit.css';
-@import './styles/automnia-theme/105-performance.css';
 @import './styles/automnia-theme/106-responsive-ux.css';
 @import './styles/automnia-theme/107-agent-assistant-revamp.css';
+/* Performance constraints must win the cascade on every workspace. */
+@import './styles/automnia-theme/105-performance.css';

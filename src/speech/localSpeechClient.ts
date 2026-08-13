@@ -1,5 +1,5 @@
 export type LocalSpeechProgress = {
-  phase: 'loading' | 'ready' | 'transcribing'
+  phase: 'loading' | 'ready' | 'processing' | 'transcribing'
   progress?: number
   backend?: 'webgpu' | 'wasm'
 }
@@ -84,6 +84,11 @@ export function transcribeAudioLocally(
   audio: Float32Array,
   onProgress?: (progress: LocalSpeechProgress) => void,
 ) {
-  const transferableAudio = audio.buffer.slice(audio.byteOffset, audio.byteOffset + audio.byteLength) as ArrayBuffer
+  const canTransferDirectly = audio.buffer instanceof ArrayBuffer
+    && audio.byteOffset === 0
+    && audio.byteLength === audio.buffer.byteLength
+  const transferableAudio = canTransferDirectly
+    ? audio.buffer as ArrayBuffer
+    : new Float32Array(audio).buffer
   return runWorkerRequest({ type: 'transcribe', requestId: nextRequestId(), audio: transferableAudio }, onProgress)
 }

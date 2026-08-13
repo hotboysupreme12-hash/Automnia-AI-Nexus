@@ -31,6 +31,14 @@ function declarationKey(rule: Rule, declaration: Declaration): string {
   ].join('\u0000')
 }
 
+function declarationOverrideKey(rule: Rule, declaration: Declaration): string {
+  return [
+    cssRuleContext(rule),
+    rule.selector,
+    declaration.prop,
+  ].join('\u0000')
+}
+
 function dedupeCssDeclarations(): Plugin {
   return {
     postcssPlugin: 'automnia-dedupe-css-declarations',
@@ -40,6 +48,7 @@ function dedupeCssDeclarations(): Plugin {
         rules.push(rule)
       })
       const seen = new Set<string>()
+      const laterOverrides = new Map<string, boolean>()
 
       for (let index = rules.length - 1; index >= 0; index -= 1) {
         const rule = rules[index]
@@ -48,11 +57,25 @@ function dedupeCssDeclarations(): Plugin {
         for (let declarationIndex = declarations.length - 1; declarationIndex >= 0; declarationIndex -= 1) {
           const declaration = declarations[declarationIndex]
           const key = declarationKey(rule, declaration)
+          const overrideKey = declarationOverrideKey(rule, declaration)
+          const laterOverrideIsImportant = laterOverrides.get(overrideKey)
           if (seen.has(key)) {
+            declaration.remove()
+          } else if (laterOverrideIsImportant !== undefined && (laterOverrideIsImportant || !declaration.important)) {
+            // An identical selector/property in the same at-rule context wins
+            // later in the cascade. Remove the unreachable earlier value so
+            // Chromium has fewer bytes and declarations to parse at startup.
             declaration.remove()
           } else {
             seen.add(key)
           }
+        }
+
+        // Register only after processing the full rule. This preserves
+        // intentional same-rule fallbacks such as prefixed or legacy values.
+        for (const declaration of rule.nodes?.filter((node): node is Declaration => node.type === 'decl') || []) {
+          const overrideKey = declarationOverrideKey(rule, declaration)
+          laterOverrides.set(overrideKey, Boolean(laterOverrides.get(overrideKey) || declaration.important))
         }
 
         if (rule.nodes?.every((node) => node.type === 'comment')) {

@@ -1,4 +1,3 @@
-import { motion } from 'framer-motion'
 import { useDeferredValue, useEffect, useMemo, useRef, useState } from 'react'
 import { AgentCard } from './AgentCard'
 import { Panel } from '../common/Panel'
@@ -225,6 +224,10 @@ export function PartySelector() {
     return Math.max(nominalPageSize, columns * rows)
   }, [displayMode, nominalPageSize, registryColumnCount])
   const activePartySet = useMemo(() => new Set(activePartyIds), [activePartyIds])
+  const activePartyOrder = useMemo(
+    () => new Map(activePartyIds.map((agentId, slotIndex) => [agentId, slotIndex])),
+    [activePartyIds],
+  )
   const selectedAgentSet = useMemo(() => new Set(selectedAgentIds), [selectedAgentIds])
   const busyAgentSet = useMemo(() => new Set([
     ...busyAgentIds,
@@ -262,17 +265,21 @@ export function PartySelector() {
 
     // Sort
     list.sort((a, b) => {
+      const aPartySlot = activePartyOrder.get(a.id)
+      const bPartySlot = activePartyOrder.get(b.id)
+      if (sortKey === 'party') {
+        const aIn = aPartySlot === undefined ? 1 : 0
+        const bIn = bPartySlot === undefined ? 1 : 0
+        if (aIn !== bIn) return aIn - bIn
+        if (aPartySlot !== undefined && bPartySlot !== undefined) return aPartySlot - bPartySlot
+      }
       if (query) {
         const scoreDelta = (searchScores.get(b.id) || 0) - (searchScores.get(a.id) || 0)
         if (scoreDelta !== 0) return scoreDelta
       }
       switch (sortKey) {
-        case 'party': {
-          const aIn = activePartySet.has(a.id) ? 0 : 1
-          const bIn = activePartySet.has(b.id) ? 0 : 1
-          if (aIn !== bIn) return aIn - bIn
+        case 'party':
           return (b.level || 1) - (a.level || 1)
-        }
         case 'level':
           return (b.level || 1) - (a.level || 1)
         case 'name':
@@ -284,7 +291,7 @@ export function PartySelector() {
       }
     })
     return list
-  }, [activePartySet, agents, deferredSearchQuery, rarityFilter, searchIndex, sortKey])
+  }, [activePartyOrder, activePartySet, agents, deferredSearchQuery, rarityFilter, searchIndex, sortKey])
 
   const totalPages = Math.max(1, Math.ceil(filtered.length / pageSize))
   const safePage = Math.min(pageIndex, totalPages - 1)
@@ -341,20 +348,28 @@ export function PartySelector() {
       setRegistryColumnCount((current) => (current === nextColumnCount ? current : nextColumnCount))
     }
 
-    const frameId = window.requestAnimationFrame(updateColumnCount)
+    let frameId = 0
+    const scheduleColumnCountUpdate = () => {
+      if (frameId) return
+      frameId = window.requestAnimationFrame(() => {
+        frameId = 0
+        updateColumnCount()
+      })
+    }
+    scheduleColumnCountUpdate()
 
     if (typeof ResizeObserver === 'undefined') {
-      window.addEventListener('resize', updateColumnCount)
+      window.addEventListener('resize', scheduleColumnCountUpdate)
       return () => {
-        window.cancelAnimationFrame(frameId)
-        window.removeEventListener('resize', updateColumnCount)
+        if (frameId) window.cancelAnimationFrame(frameId)
+        window.removeEventListener('resize', scheduleColumnCountUpdate)
       }
     }
 
-    const observer = new ResizeObserver(updateColumnCount)
+    const observer = new ResizeObserver(scheduleColumnCountUpdate)
     observer.observe(element)
     return () => {
-      window.cancelAnimationFrame(frameId)
+      if (frameId) window.cancelAnimationFrame(frameId)
       observer.disconnect()
     }
   }, [displayMode, filtered.length])
@@ -556,12 +571,9 @@ export function PartySelector() {
                 const inParty = activePartySet.has(agent.id)
                 const slotNumber = inParty ? activePartyIds.indexOf(agent.id) + 1 : null
                 return (
-                  <motion.div
+                  <div
                     key={agent.id}
-                    initial={{ opacity: 0, y: 8 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    transition={{ duration: 0.12 }}
-                    className={missionRunning && !inParty ? 'pointer-events-none opacity-30' : ''}
+                    className={`dy-agent-card-entry ${missionRunning && !inParty ? 'pointer-events-none opacity-30' : ''}`}
                   >
                     <AgentCard
                       agent={agent}
@@ -574,7 +586,7 @@ export function PartySelector() {
                       cardTheme={resolveAgentCardTheme(agent.rarity, { overlayPreset, rarityColorsEnabled })}
                       displayMode={displayMode}
                     />
-                  </motion.div>
+                  </div>
                 )
               })}
             </div>

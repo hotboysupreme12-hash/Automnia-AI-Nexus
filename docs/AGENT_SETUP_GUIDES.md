@@ -4,6 +4,11 @@ This guide is the user-facing source of truth for the Automnia Assistant. It
 describes the controls that exist in the current desktop app and separates them
 from setup that belongs to a provider, Google Cloud, Telegram, or OpenClaw.
 
+For the exhaustive documentation map, local startup path, every Agent Editor
+tab, the irreversible **Agents → Edit → Agent files → Retire** workflow, all
+Settings categories, and Google Cloud Help publishing, use
+[`AUTOMNIA_ASSISTANT_OPERATIONS_MANUAL.md`](AUTOMNIA_ASSISTANT_OPERATIONS_MANUAL.md).
+
 ## 1. Find the right Automnia control
 
 The fixed left navigation rail is the starting point for every workflow:
@@ -24,7 +29,57 @@ says `MIGRATING`, keep Automnia open and wait; do not start a second gateway or
 delete state files. If it says `OFF`, use **Monitor** before retrying a large
 task.
 
-## 2. The Command Console: ask an agent to do the work
+## 2. Agent-first setup: give the configured primary agent the goal first
+
+For a new model route, plugin, skill, integration, chat, or channel, Automnia
+defaults to **agent-first setup**. Do not begin by sending the user through a
+long manual configuration checklist when a configured primary agent is
+available. Select that agent in **Agents**, open the **Command Console**, and
+give it the desired outcome in plain language. The agent should inspect the
+current state, complete the safe setup and verification work its enabled tools
+allow, and report only the small secure or approval step that requires the
+operator.
+
+This lets the user start with the intent—such as “set up Telegram for support,”
+“connect this agent to the team chat,” or “prepare Gmail triage”—rather than
+needing to know every plugin, model, or runtime setting first. Automnia is
+responsible for turning that intent into a checked setup plan, using the
+primary agent as the setup lead. A primary agent still needs a working model
+route before it can lead another setup; if there is no configured agent yet,
+follow the bootstrap path in the next section.
+
+Use this default prompt shape:
+
+```text
+Set up [MODEL, CHAT, CHANNEL, PLUGIN, OR WORKFLOW] for [AGENT OR OUTCOME].
+Inspect current Automnia, provider, plugin, and runtime readiness first. Complete
+all safe configuration and verification available to you. Do not send messages,
+publish, call anyone, or make destructive changes. If a credential, consent, or
+approval is needed, tell me the exact secure control to use; never ask me to put
+it in this chat. Return the final state, evidence, and the smallest remaining
+step, if any.
+```
+
+### Secure credentials are a handoff, not a chat message
+
+The user may supply an API key, bot token, OAuth consent, or similar credential
+only through the relevant **Provider connection** or **Plugins > Setup** secure
+field. They must never paste it into Help, a Command Console prompt, agent
+files, or an uploaded document. Once it is stored, the primary agent can
+continue the setup, validate the connection, and run a safe test. Giving a
+token to the agent means using that secure handoff; it never means revealing
+the token in normal chat.
+
+### Detailed manual path
+
+Agent-first setup is the default, not the only option. When a user prefers to
+learn or perform the setup themselves, provide the exact manual instructions
+for the relevant provider/channel after the agent-first option. Use the
+manual paths below for first-agent bootstrap, a user who explicitly wants to
+configure it personally, or a requirement the agent cannot satisfy because it
+needs account ownership, OAuth consent, a secret, billing, or an approval.
+
+## 3. The Command Console: ask an agent to do the work
 
 Open **Agents**. The Agent Registry is the large center/left area, and the
 **Command Console / Agent Chat** is the right-hand panel. If the Console is
@@ -47,8 +102,10 @@ Command console**.
 Use the Command Console when the task is more than a short question: diagnose a
 setup, inspect files, research a subject, prepare content, build or review
 code, compare options, organize a workflow, or carry out an already-authorized
-tool action. Give the agent scope, result, constraints, and a verification
-request. Example:
+tool action. For setup, start with the desired model, chat, channel, plugin, or
+workflow—not a manual form checklist—and ask the selected primary agent to
+lead it. Give the agent scope, result, constraints, and a verification request.
+Example:
 
 ```text
 Set up a safe email-triage workflow for this agent. First inspect which Google
@@ -64,9 +121,9 @@ channel. Do not log in, upload, publish, comment, or change channel settings.
 Return sources and a draft for my approval.
 ```
 
-## 3. Create and configure an agent
+## 4. Create and configure an agent
 
-### Create it
+### Create it (first-agent bootstrap)
 
 1. Click **Recruit** in the left rail.
 2. In **New Agent**, use **Template** to search or browse an agency template,
@@ -87,7 +144,9 @@ Return sources and a draft for my approval.
    files such as `IDENTITY.md`, `SOUL.md`, `TOOLS.md`, and `MISSION_PROMPT.md`.
    Edit them only when their instructions should persist for future work.
 8. Click **Create Agent**. Then select the new card in **Agents** and send a
-   small direct Command Console test before assigning a mission.
+   small direct Command Console test before assigning a mission. That verified
+   agent becomes the primary setup lead for later models, plugins, skills,
+   chats, channels, and workflows.
 
 ### Tune it after creation
 
@@ -105,7 +164,7 @@ Return sources and a draft for my approval.
 6. Use **Agent files** for the markdown resource files that shape recurring
    behavior. Put stable role and safety rules here, not in one-off prompts.
 
-## 4. Plug-ins: install, configure, verify
+## 5. Plug-ins: install, configure, verify
 
 Open **Plugins** from the left rail. The top search field filters installed
 plugins; typing `/clawhub ` followed by a query switches it to ClawHub plugin
@@ -148,7 +207,7 @@ paste secrets here. Tell me only the secure field or account approval that is
 still required, then verify the final runtime state.
 ```
 
-## 5. ClawTalk: phone calls and SMS
+## 6. ClawTalk: phone calls and SMS
 
 ClawTalk is the Automnia phone/SMS integration. It is configured as a plugin,
 not as a phone-number field on the Agent Profile.
@@ -197,7 +256,7 @@ Tell me the exact remaining secure account, number, or authorization step, and
 return the diagnostic evidence.
 ```
 
-## 6. Telegram: bot setup, pairing, and testing
+## 7. Telegram: bot setup, pairing, and testing
 
 Telegram requires a bot token from Telegram and a configured Telegram channel.
 It does not use a normal username/password login in Automnia.
@@ -229,7 +288,7 @@ BotFather, review Privacy Mode and group permissions; a bot may need Privacy
 Mode disabled or admin status to see every group message. Remove and re-add it
 to the group after changing that setting.
 
-## 7. Google Workspace email, Calendar, Drive, Sheets, and Docs with Gog
+## 8. Google Workspace email, Calendar, Drive, Sheets, and Docs with Gog
 
 `gog` is the bundled Google Workspace CLI skill. It can support Gmail,
 Calendar, Drive, Contacts, Sheets, and Docs after the **gog** binary and Google
@@ -312,7 +371,7 @@ Do not send, archive, label, delete, forward, or create calendar events. Return
 the draft text and a short approval checklist.
 ```
 
-## 8. Google Cloud and always-on agents
+## 9. Google Cloud and always-on agents
 
 Automnia’s hosted-credit relay is operated by Automnia; customers do not need
 to deploy it to use hosted credits. Use **Settings > Account & License** to
@@ -333,7 +392,7 @@ Google Cloud Owner role. This is an advanced deployment: ask an Automnia agent
 to plan and verify it, but review the cloud project, billing, IAM, network, and
 secrets decisions yourself before authorizing changes.
 
-## 9. YouTube and content operations
+## 10. YouTube and content operations
 
 Automnia can help with YouTube research and content production through skills
 such as **summarize**, **video-frames**, **browser-automation**, **diagram-maker**,
@@ -356,7 +415,7 @@ draft three video concepts. Do not log in, upload, publish, comment, or modify
 the channel.
 ```
 
-## 10. Skills and ClawHub
+## 11. Skills and ClawHub
 
 Skills are instruction bundles that tell an agent when and how to use a
 capability. Plugins add runtime code/surfaces; skills teach the agent a
@@ -382,7 +441,7 @@ verification exposes a trust envelope/Skill Card and scans, but a passing scan
 is not a substitute for reviewing what the skill can access. Never silently
 install a community skill on a user’s behalf.
 
-## 11. Troubleshooting guide
+## 12. Troubleshooting guide
 
 | Symptom | First exact place to check |
 | --- | --- |

@@ -100,6 +100,8 @@ export function resolveLicenseEntitlement(license: LicenseInfo | null | undefine
   const permanentAccess = active && !usagePriorityLocked && (license?.permanentAccess === true || isByok || tier.includes('pro') || tier.includes('enterprise'))
 
   if (isByok) {
+    const providerFirst = license?.usagePriority === 'provider_first'
+    const providerOnly = license?.usagePriority === 'byok_only'
     return {
       active,
       mode,
@@ -114,7 +116,11 @@ export function resolveLicenseEntitlement(license: LicenseInfo | null | undefine
       usagePriorityLocked: false,
       tierLabel: 'BYOK Access',
       billingLabel: 'Permanent BYOK access — Your Provider Account',
-      defaultRouteLabel: 'Your connected provider / OpenClaw runtime',
+      defaultRouteLabel: providerOnly
+        ? 'Your connected provider / OpenClaw runtime'
+        : providerFirst
+          ? 'Your connected provider → Automnia credits fallback'
+          : 'Automnia credits → your connected provider fallback',
       statusLabel: 'Permanent access active',
     }
   }
@@ -183,24 +189,28 @@ export function resolveLicenseEntitlement(license: LicenseInfo | null | undefine
  */
 export function resolveAgentRoutePresentation(license: LicenseInfo | null | undefined): AgentRoutePresentation {
   const entitlement = resolveLicenseEntitlement(license)
-  const providerFirst = entitlement.isHosted && !entitlement.usagePriorityLocked && license?.usagePriority === 'provider_first'
-  const providerOnly = entitlement.isHosted && !entitlement.usagePriorityLocked && license?.usagePriority === 'byok_only'
+  const providerFirst = (entitlement.isHosted || entitlement.isByok) && !entitlement.usagePriorityLocked && license?.usagePriority === 'provider_first'
+  const providerOnly = (entitlement.isHosted || entitlement.isByok) && !entitlement.usagePriorityLocked && license?.usagePriority === 'byok_only'
 
-  if (entitlement.isHosted) {
+  if (entitlement.isHosted || entitlement.isByok) {
     return {
-      routeLabel: providerOnly ? 'My Provider' : 'Subscription Relay',
+      routeLabel: providerOnly ? 'My Provider' : providerFirst ? 'My Provider → Automnia' : entitlement.isByok ? 'Automnia → My Provider' : 'Subscription Relay',
       modelLabel: providerFirst || providerOnly ? 'Primary Provider Model' : 'Automnia',
       modelDescription: providerFirst
-        ? 'Your connected provider runs first. Subscription Relay remains available for the same agent.'
+        ? 'Your connected provider runs first. Automnia credits remain available as the same-account fallback.'
         : providerOnly
           ? 'Your connected provider bills this agent directly. Subscription credits are bypassed.'
-          : 'Automnia manages model selection for this subscription.',
+          : entitlement.isByok
+            ? 'Automnia credits are used first when your pooled balance is available; your provider remains the fallback.'
+            : 'Automnia manages model selection for this subscription.',
       managedRouteDescription: providerFirst
-        ? 'Subscription Relay is available when your connected provider cannot complete the request.'
+        ? 'Automnia credits are available when your connected provider cannot complete the request.'
         : providerOnly
           ? 'Automnia subscription credits are bypassed while provider-only mode is active.'
-          : 'Subscription Relay · model selection is managed automatically.',
-      managedRoute: !providerFirst && !providerOnly,
+          : entitlement.isByok
+            ? 'Your connected provider is available when the pooled Automnia balance cannot complete the request.'
+            : 'Subscription Relay · model selection is managed automatically.',
+      managedRoute: entitlement.isByok ? false : !providerFirst && !providerOnly,
       providerFirst,
       providerOnly,
     }
@@ -235,7 +245,8 @@ export function mergeHostedCreditBalance(
   creditBalanceUpdatedAt: string,
 ): LicenseInfo | null {
   if (!Number.isFinite(creditBalance) || creditBalance < 0) return license
-  if (!resolveLicenseEntitlement(license).isHosted || !license) return license
+  const entitlement = resolveLicenseEntitlement(license)
+  if (!license || !entitlement.active || (!entitlement.isHosted && !entitlement.isByok)) return license
   return {
     ...license,
     creditBalance,

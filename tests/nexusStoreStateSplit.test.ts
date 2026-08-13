@@ -27,7 +27,7 @@ import {
   mergeMissionState,
   partializeMissionState,
 } from '../src/store/missionState'
-import { makeNexusUiState, normalizeNexusSelection } from '../src/store/nexusUiState'
+import { makeNexusUiState, normalizeNexusSelection, resolveAgentEditorId } from '../src/store/nexusUiState'
 import {
   configSaveEntry,
   makeRuntimeProjectionState,
@@ -149,6 +149,8 @@ test('nexus UI state owns only shell selection and editor state', () => {
   const uiState = makeNexusUiState(agents, { tab: 'monitor', selectedAgentIds: ['beta'] })
   assert.deepEqual(Object.keys(uiState).sort(), [
     'editingAgentId',
+    'editorOpenRequest',
+    'editorTab',
     'isEditorOpen',
     'selectedAgentId',
     'selectedAgentIds',
@@ -157,6 +159,15 @@ test('nexus UI state owns only shell selection and editor state', () => {
   assert.equal(uiState.tab, 'monitor')
   assert.equal(uiState.selectedAgentId, 'beta')
   assert.equal(uiState.isEditorOpen, false)
+  assert.equal(uiState.editorTab, 'profile')
+})
+
+test('help editor targets prefer selection, then party order, then visible registry order', () => {
+  assert.equal(resolveAgentEditorId(agents, 'beta', ['alpha'], 'alpha'), 'beta')
+  assert.equal(resolveAgentEditorId(agents, null, [], 'alpha', ['beta']), 'beta')
+  assert.equal(resolveAgentEditorId(agents, null, ['beta', 'alpha'], 'alpha'), 'beta')
+  assert.equal(resolveAgentEditorId(agents, null, [], 'beta'), 'beta')
+  assert.equal(resolveAgentEditorId(agents, null, [], 'missing'), 'alpha')
 })
 
 test('runtime projection state resets volatile runtime truth without UI keys', () => {

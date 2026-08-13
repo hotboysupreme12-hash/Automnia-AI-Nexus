@@ -112,3 +112,87 @@ html.dy-desktop-safe-renderer .app-bg.dy-monitor-focus :is(
   backdrop-filter: none !important;
   -webkit-backdrop-filter: none !important;
 }
+
+/* Cross-architecture fast path -------------------------------------------------
+   These selectors deliberately target large or frequently repainted surfaces.
+   Opaque gradients retain the visual hierarchy without forcing the compositor
+   to sample and blur everything behind each panel on every live update. */
+html.dy-fast-renderer :is(
+  .dy-human-rail,
+  .dy-workspace-context,
+  .dui-auth-card,
+  .dui-help-panel,
+  .dui-help-overlay,
+  .dy-command-composer,
+  .dy-command-message,
+  .agent-card-shell,
+  [data-dui-panel]
+),
+html.dy-fast-renderer [class*="backdrop-blur"] {
+  backdrop-filter: none !important;
+  -webkit-backdrop-filter: none !important;
+}
+
+html.dy-fast-renderer .grid-overlay {
+  display: none !important;
+}
+
+html.dy-fast-renderer :is(
+  .agent-card-shell,
+  .dy-command-message,
+  .dy-gateway-event-card,
+  .dy-cron-job-card,
+  .dy-runtime-session-card,
+  .dy-runtime-call-card,
+  .dy-gateway-plugin-row
+) {
+  contain: layout paint style;
+}
+
+html.dy-fast-renderer :is(
+  .dy-command-message,
+  .dy-gateway-event-card,
+  .dy-cron-job-card,
+  .dy-runtime-session-card,
+  .dy-runtime-call-card,
+  .dy-gateway-plugin-row
+) {
+  content-visibility: auto;
+  contain-intrinsic-size: 0 96px;
+}
+
+html.dy-fast-renderer .agent-card-shell {
+  box-shadow: 0 12px 28px rgba(0, 0, 0, .32), inset 0 1px 0 rgba(255, 255, 255, .05) !important;
+  transition-property: transform, border-color, box-shadow, opacity !important;
+  transition-duration: 140ms !important;
+}
+
+html.dy-fast-renderer .agent-card-media,
+html.dy-fast-renderer .agent-card-portrait-img,
+html.dy-fast-renderer :is(.dui-button, button, input, select, textarea) {
+  transition-property: transform, border-color, background-color, color, opacity, box-shadow !important;
+  transition-duration: 140ms !important;
+}
+
+html.dy-fast-renderer .dy-agent-card-entry {
+  min-width: 0;
+  contain: layout paint style;
+}
+
+html.dy-fast-renderer :is(
+  [data-dui-panel="agent-registry"],
+  [data-dui-panel="command-console"],
+  [data-dui-panel="monitor"],
+  .dui-mission-screen,
+  .dui-plugins-screen,
+  .dui-settings-screen
+) {
+  box-shadow: 0 14px 34px rgba(0, 0, 0, .28), inset 0 1px 0 rgba(255, 255, 255, .035) !important;
+}
+
+@media (hover: none), (pointer: coarse) {
+  html.dy-fast-renderer .agent-card-shell:hover,
+  html.dy-fast-renderer :is(.dui-button, button):hover {
+    transform: none !important;
+  }
+}

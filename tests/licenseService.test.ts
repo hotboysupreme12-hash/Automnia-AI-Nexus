@@ -148,7 +148,7 @@ test('locks the $19.99 Starter subscription to Automnia credits', async () => {
   assert.equal(higherPricedStarter.service.setUsagePriority('provider_first').usagePriority, 'automnia_first')
 })
 
-test('resets a BYOK priority when the account changes to a hosted subscription', async () => {
+test('keeps a managed priority when the account changes between permanent and hosted modes', async () => {
   const harness = createHarness({
     responses: [
       { ok: true, active: true, email: 'customer@example.test', tier: 'founding_beta_byok', mode: 'byok' },
@@ -161,7 +161,7 @@ test('resets a BYOK priority when the account changes to a hosted subscription',
 
   const refreshed = await harness.service.refresh()
   assert.equal(refreshed.mode, 'hosted_credits')
-  assert.equal(refreshed.usagePriority, 'automnia_first')
+  assert.equal(refreshed.usagePriority, 'provider_first')
 })
 
 test('does not invent or accept malformed hosted-credit balances', async () => {
@@ -207,17 +207,71 @@ test('refresh retries transient relay-license transport failures before reportin
   assert.equal(harness.requests.length, 4)
 })
 
-test('never overwrites a BYOK account with a hosted-credit relay result', async () => {
+test('allows pooled relay balances on a BYOK account without changing its access mode', async () => {
   const harness = createHarness({
     responses: [{ ok: true, active: true, email: 'customer@example.test', tier: 'founding_beta_byok', mode: 'byok', creditBalance: 999 }],
   })
   await harness.service.activate({ email: 'customer@example.test', licenseKey: 'AUT-TEST-0004' })
 
-  assert.equal(harness.service.recordHostedCreditBalance(1), null)
+  assert.equal(harness.service.recordHostedCreditBalance(1)?.creditBalance, 1)
   assert.equal(harness.service.getStatus().mode, 'byok')
-  assert.equal(harness.service.getStatus().usagePriority, 'provider_first')
-  assert.equal(harness.service.getStatus().creditBalance, 999)
-  assert.equal(harness.service.setUsagePriority('automnia_first').usagePriority, 'provider_first')
+  assert.equal(harness.service.getStatus().usagePriority, 'automnia_first')
+  assert.equal(harness.service.getStatus().creditBalance, 1)
+  assert.equal(harness.service.setUsagePriority('automnia_first').usagePriority, 'automnia_first')
+})
+
+test('exposes the Automnia relay as a selectable fallback for permanent BYOK tiers', async () => {
+  const harness = createHarness({
+    responses: [{ ok: true, active: true, email: 'customer@example.test', tier: 'byok', mode: 'byok', creditBalance: 250 }],
+  })
+  await harness.service.activate({ email: 'customer@example.test', licenseKey: 'AUT-TEST-BYOK-PRIORITY' })
+
+  assert.equal(harness.service.getActiveRelayCredentials()?.usagePriority, 'automnia_first')
+  assert.equal(harness.service.setUsagePriority('automnia_first').usagePriority, 'automnia_first')
+  assert.equal(harness.service.getActiveRelayCredentials()?.mode, 'hosted_credits')
+  assert.equal(harness.service.setUsagePriority('byok_only').usagePriority, 'byok_only')
+  assert.equal(harness.service.getActiveRelayCredentials(), null)
+})
+
+test('defaults an upgraded BYOK account with carried-over hosted credits to Automnia first while keeping every route editable', async () => {
+  const harness = createHarness({
+    responses: [
+      { ok: true, active: true, email: 'customer@example.test', tier: 'starter', mode: 'hosted_credits', creditBalance: 500_000 },
+      { ok: true, active: true, email: 'customer@example.test', tier: 'byok', mode: 'byok', creditBalance: 500_000 },
+    ],
+  })
+
+  await harness.service.activate({ email: 'customer@example.test', licenseKey: 'AUT-TEST-STARTER-BYOK' })
+  const upgraded = await harness.service.refresh()
+  assert.equal(upgraded.mode, 'byok')
+  assert.equal(upgraded.creditBalance, 500_000)
+  assert.equal(upgraded.usagePriority, 'automnia_first')
+  assert.equal(harness.service.isUsagePriorityLocked(), false)
+
+  for (const priority of ['provider_first', 'byok_only', 'automnia_first'] as const) {
+    assert.equal(harness.service.setUsagePriority(priority).usagePriority, priority)
+  }
+})
+
+test('forwards and returns the Help Assistant session for grounded follow-up questions', async () => {
+  const harness = createHarness({
+    responses: [
+      { ok: true, active: true, email: 'customer@example.test', tier: 'pro', mode: 'hosted_credits', creditBalance: 500 },
+      { ok: true, grounded: true, answerText: 'Use Agents → Agent files.', sessionName: 'projects/test/locations/global/collections/default_collection/dataStores/automnia-knowledge/sessions/help-123' },
+    ],
+  })
+
+  await harness.service.activate({ email: 'customer@example.test', licenseKey: 'AUT-TEST-KNOWLEDGE-SESSION' })
+  const answer = await harness.service.answerKnowledge('Where are agent files?', 'projects/test/locations/global/collections/default_collection/dataStores/automnia-knowledge/sessions/help-123')
+
+  assert.equal(answer.answerText, 'Use Agents → Agent files.')
+  assert.equal(answer.sessionName, 'projects/test/locations/global/collections/default_collection/dataStores/automnia-knowledge/sessions/help-123')
+  assert.deepEqual(harness.requests[1]?.body, {
+    email: 'customer@example.test',
+    licenseKey: 'AUT-TEST-KNOWLEDGE-SESSION',
+    query: 'Where are agent files?',
+    sessionName: 'projects/test/locations/global/collections/default_collection/dataStores/automnia-knowledge/sessions/help-123',
+  })
 })
 
 test('returns only a provisioner-configured HTTPS Shopify checkout URL', async () => {

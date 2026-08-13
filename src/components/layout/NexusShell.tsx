@@ -1,13 +1,12 @@
-import { motion } from 'framer-motion'
-import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { lazy, memo, Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type { CSSProperties, KeyboardEvent, PointerEvent } from 'react'
 import { useNexusStore } from '../../store/nexusStore'
 import type { AppTab } from '../../store/nexusStore'
+import { resolveAgentEditorId, type AgentEditorTab } from '../../store/nexusUiState'
 import { listCronShifts, stopCronShift, useRuntimeSummaryStatus } from '../../hooks/useRuntimeStatus'
 import type { RuntimeCronJob } from '../../hooks/useRuntimeStatus'
 import { ActionStatusBanner } from '../common/ActionStatusBanner'
-import { HelpAssistantPanel } from '../help/HelpAssistantPanel'
-import { preloadMissionIconAssets } from '../mission/missionIconAssets'
+import { HelpAssistantPanel, type HelpNavigationTarget } from '../help/HelpAssistantPanel'
 import { applyStoredUiSettings } from '../settings/uiSettings'
 import {
   CONSOLE_PREFS_CHANGED_EVENT,
@@ -61,13 +60,16 @@ function recoverableLazyImport<T>(key: string, loader: () => Promise<T>): Promis
     })
 }
 
-const PartySelector = lazy(() => recoverableLazyImport('party-selector', () => import('../party/PartySelector').then((module) => ({ default: module.PartySelector }))))
-const ActivePartyStrip = lazy(() => recoverableLazyImport('active-party-strip', () => import('../party/ActivePartyStrip').then((module) => ({ default: module.ActivePartyStrip }))))
-const MissionDeploymentPanel = lazy(() => recoverableLazyImport('mission-deployment-panel', () => import('../mission/MissionDeploymentPanel').then((module) => ({ default: module.MissionDeploymentPanel }))))
-const AgentResponseConsole = lazy(() => recoverableLazyImport('agent-response-console', () => import('../monitor/AgentResponseConsole').then((module) => ({ default: module.AgentResponseConsole }))))
-const LiveOperationMonitor = lazy(() => recoverableLazyImport('live-operation-monitor', () => import('../monitor/LiveOperationMonitor').then((module) => ({ default: module.LiveOperationMonitor }))))
-const PluginsPanel = lazy(() => recoverableLazyImport('plugins-panel', () => import('../plugins/PluginsPanel').then((module) => ({ default: module.PluginsPanel }))))
-const SettingsPanel = lazy(() => recoverableLazyImport('settings-panel', () => import('../settings/SettingsPanel').then((module) => ({ default: module.SettingsPanel }))))
+// Status polling updates the shell independently from the active workspace.
+// Memoized lazy boundaries prevent those small header changes from walking the
+// entire registry, console, monitor, plugin, or settings subtree.
+const PartySelector = memo(lazy(() => recoverableLazyImport('party-selector', () => import('../party/PartySelector').then((module) => ({ default: module.PartySelector })))))
+const ActivePartyStrip = memo(lazy(() => recoverableLazyImport('active-party-strip', () => import('../party/ActivePartyStrip').then((module) => ({ default: module.ActivePartyStrip })))))
+const MissionDeploymentPanel = memo(lazy(() => recoverableLazyImport('mission-deployment-panel', () => import('../mission/MissionDeploymentPanel').then((module) => ({ default: module.MissionDeploymentPanel })))))
+const AgentResponseConsole = memo(lazy(() => recoverableLazyImport('agent-response-console', () => import('../monitor/AgentResponseConsole').then((module) => ({ default: module.AgentResponseConsole })))))
+const LiveOperationMonitor = memo(lazy(() => recoverableLazyImport('live-operation-monitor', () => import('../monitor/LiveOperationMonitor').then((module) => ({ default: module.LiveOperationMonitor })))))
+const PluginsPanel = memo(lazy(() => recoverableLazyImport('plugins-panel', () => import('../plugins/PluginsPanel').then((module) => ({ default: module.PluginsPanel })))))
+const SettingsPanel = memo(lazy(() => recoverableLazyImport('settings-panel', () => import('../settings/SettingsPanel').then((module) => ({ default: module.SettingsPanel })))))
 const AgentEditorModal = lazy(() => recoverableLazyImport('agent-editor-modal', () => import('../editor/AgentEditorModal').then((module) => ({ default: module.AgentEditorModal }))))
 const RecruitAgentModal = lazy(() => recoverableLazyImport('recruit-agent-modal', () => import('../recruit/RecruitAgentModal').then((module) => ({ default: module.RecruitAgentModal }))))
 
@@ -190,8 +192,11 @@ export function NexusShell() {
     : 'Loading cron jobs...'
   const [isRecruitOpen, setRecruitOpen] = useState(false)
   const [isHelpOpen, setHelpOpen] = useState(false)
+  const [pluginsFocusQuery, setPluginsFocusQuery] = useState('')
+  const [settingsFocusSection, setSettingsFocusSection] = useState<'account' | 'appearance' | 'workspace' | 'voice' | 'missions' | 'agents' | 'data'>('account')
+  const [settingsFocusRequest, setSettingsFocusRequest] = useState(0)
+  const [focusCommandConsole, setFocusCommandConsole] = useState(false)
   const closeHelp = useCallback(() => setHelpOpen(false), [])
-  const [hasMountedMissionPanel, setHasMountedMissionPanel] = useState(tab === 'missions')
   const [cronClearBusy, setCronClearBusy] = useState(false)
   const [cronClearTargets, setCronClearTargets] = useState<RuntimeCronJob[]>([])
   const [cronNotice, setCronNotice] = useState<ShellNotice | null>(null)
@@ -212,7 +217,6 @@ export function NexusShell() {
       const targetTab = pendingTabRef.current
       pendingTabRef.current = null
       if (targetTab && targetTab !== currentTab) {
-        if (targetTab === 'missions') setHasMountedMissionPanel(true)
         setTab(targetTab)
       }
       return
@@ -223,10 +227,54 @@ export function NexusShell() {
       const targetTab = pendingTabRef.current
       pendingTabRef.current = null
       if (!targetTab || targetTab === useNexusStore.getState().tab) return
-      if (targetTab === 'missions') setHasMountedMissionPanel(true)
       setTab(targetTab)
     })
   }, [setTab])
+  const navigateFromHelp = useCallback((target: HelpNavigationTarget) => {
+    closeHelp()
+    if (target === 'recruit') {
+      setRecruitOpen(true)
+      return
+    }
+    if (target.startsWith('agent-editor')) {
+      const editorTab = target === 'agent-editor'
+        ? 'profile'
+        : target.replace('agent-editor-', '') as AgentEditorTab
+      const state = useNexusStore.getState()
+      const firstVisibleRegistryAgentId = typeof document === 'undefined'
+        ? undefined
+        : document.querySelector<HTMLElement>('[data-agent-registry-scroll] [data-agent-card="true"]')?.dataset.agentId
+      const agentId = resolveAgentEditorId(state.agents, state.selectedAgentId, state.activePartyIds, firstVisibleRegistryAgentId, state.selectedAgentIds)
+      if (!agentId) {
+        selectTab('agents')
+        return
+      }
+      state.selectAgent(agentId)
+      state.openEditor(agentId, editorTab)
+      selectTab('agents')
+      return
+    }
+    if (target.startsWith('settings-')) {
+      setSettingsFocusSection(target.replace('settings-', '') as 'account' | 'appearance' | 'workspace' | 'voice' | 'missions' | 'agents' | 'data')
+      setSettingsFocusRequest((request) => request + 1)
+      selectTab('settings')
+      return
+    }
+    if (target === 'command-console') {
+      setAgentConsoleVisible(true)
+      setFocusCommandConsole(true)
+      selectTab('agents')
+      return
+    }
+    if (target === 'plugins-clawtalk' || target === 'plugins-telegram') {
+      setPluginsFocusQuery(target === 'plugins-clawtalk' ? 'ClawTalk' : 'Telegram')
+      selectTab('plugins')
+      return
+    }
+    if (target === 'agents' || target === 'missions' || target === 'monitor' || target === 'plugins' || target === 'settings') {
+      selectTab(target)
+    }
+  }, [closeHelp, selectTab])
   useEffect(() => () => {
     if (tabFrameRef.current != null && typeof window !== 'undefined') window.cancelAnimationFrame(tabFrameRef.current)
   }, [])
@@ -294,12 +342,15 @@ export function NexusShell() {
     const workspaceRect = workspace.getBoundingClientRect()
     const workspaceStyle = window.getComputedStyle(workspace)
     const gap = Number.parseFloat(workspaceStyle.columnGap || workspaceStyle.gap || '0') || 0
+    const maxFromWorkspace = workspaceRect.width - AGENT_REGISTRY_MIN_WIDTH - gap
+    const pointerMaxWidth = Math.max(AGENT_CONSOLE_MIN_WIDTH, Math.min(AGENT_CONSOLE_MAX_WIDTH, maxFromWorkspace))
     let nextWidth = currentAgentConsoleWidth(workspace)
 
     const resizeToPointer = (clientX: number) => {
       const rawWidth = workspaceRect.right - clientX - gap
-      nextWidth = clampAgentConsoleWidth(rawWidth, workspace)
-      setAgentConsoleWidth(nextWidth)
+      nextWidth = Math.round(Math.min(pointerMaxWidth, Math.max(AGENT_CONSOLE_MIN_WIDTH, rawWidth)))
+      // Keep pointer movement off React's render path. State and persistence
+      // are committed once when the drag finishes.
       workspace.style.setProperty('--dy-command-console-width', `${nextWidth}px`)
     }
     const stopResize = () => {
@@ -353,7 +404,6 @@ export function NexusShell() {
 
   useEffect(() => { void syncPartyOverview().catch(() => undefined) }, [syncPartyOverview])
   useEffect(() => { void syncMissionProjection().catch(() => undefined) }, [syncMissionProjection])
-  useEffect(() => { void preloadMissionIconAssets() }, [])
   useEffect(() => { applyStoredUiSettings() }, [])
   useEffect(() => {
     const syncConsolePreferences = (event?: Event) => {
@@ -400,11 +450,25 @@ export function NexusShell() {
     return () => window.removeEventListener('keydown', handleWorkspaceShortcut)
   }, [selectTab])
   useEffect(() => {
-    if (tab === 'missions') setHasMountedMissionPanel(true)
-  }, [tab])
-  useEffect(() => {
     saveConsolePreferences({ ...readConsolePreferences(), visible: isAgentConsoleVisible })
   }, [isAgentConsoleVisible])
+  useEffect(() => {
+    if (!focusCommandConsole || tab !== 'agents' || !isAgentConsoleVisible) return
+    let frameId = 0
+    let attempts = 0
+    const focusConsole = () => {
+      const textarea = document.querySelector<HTMLTextAreaElement>('.dy-command-textarea')
+      if (textarea) {
+        textarea.focus()
+        setFocusCommandConsole(false)
+        return
+      }
+      attempts += 1
+      if (attempts < 12) frameId = window.requestAnimationFrame(focusConsole)
+    }
+    frameId = window.requestAnimationFrame(focusConsole)
+    return () => window.cancelAnimationFrame(frameId)
+  }, [focusCommandConsole, isAgentConsoleVisible, tab])
   useEffect(() => {
     if (tab !== 'agents' || !isAgentConsoleVisible || !agentsWorkspaceNode || !agentConsoleWidth) return
 
@@ -430,6 +494,7 @@ export function NexusShell() {
     if (!workspace || !registryPane) return
 
     let frameId = 0
+    let previousAvailableHeight = 0
     const syncConsoleHeight = () => {
       if (frameId) window.cancelAnimationFrame(frameId)
       frameId = window.requestAnimationFrame(() => {
@@ -442,8 +507,10 @@ export function NexusShell() {
         const appMainPaddingBottom = Number.parseFloat(appMainStyle.paddingBottom || '0') || 0
         const bottomInset = Math.max(8, shellGutter) + appMainPaddingBottom
         const availableHeight = Math.floor(viewportHeight - panelTop - bottomInset)
-        if (availableHeight > 0) {
-          workspace.style.setProperty('--dy-agent-registry-pane-height', `${Math.max(320, availableHeight)}px`)
+        const nextAvailableHeight = Math.max(320, availableHeight)
+        if (availableHeight > 0 && nextAvailableHeight !== previousAvailableHeight) {
+          previousAvailableHeight = nextAvailableHeight
+          workspace.style.setProperty('--dy-agent-registry-pane-height', `${nextAvailableHeight}px`)
         }
       })
     }
@@ -719,14 +786,12 @@ export function NexusShell() {
         </section>
 
         {/* Workspace content */}
-        <motion.div
+        <div
+          key={tab}
           id={`nexus-workspace-${tab}`}
           role="region"
           aria-label={`${activeTab.label} workspace`}
-          initial={{ opacity: 0, y: 4 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.12 }}
-          className="dy-tab-content"
+          className="dy-tab-content dy-surface-enter"
         >
           {tab === 'agents' && (
             <Suspense fallback={<PanelLoader />}>
@@ -795,8 +860,8 @@ export function NexusShell() {
             </Suspense>
           )}
 
-          {hasMountedMissionPanel && (
-            <div className={`dy-mission-tab-frame grid gap-5 ${tab === 'missions' ? '' : 'dy-tab-panel-hidden'}`} aria-hidden={tab !== 'missions'}>
+          {tab === 'missions' && (
+            <div className="dy-mission-tab-frame grid gap-5">
               <Suspense fallback={<PanelLoader />}>
                 <MissionDeploymentPanel />
               </Suspense>
@@ -811,24 +876,24 @@ export function NexusShell() {
 
           {tab === 'plugins' && (
             <Suspense fallback={<PanelLoader />}>
-              <PluginsPanel />
+              <PluginsPanel focusQuery={pluginsFocusQuery} />
             </Suspense>
           )}
 
           {tab === 'settings' && (
             <Suspense fallback={<PanelLoader />}>
-              <SettingsPanel />
+              <SettingsPanel focusSection={settingsFocusSection} focusRequest={settingsFocusRequest} />
             </Suspense>
           )}
 
-        </motion.div>
+        </div>
       </main>
 
       <Suspense fallback={null}>
         {isEditorOpen && <AgentEditorModal />}
         {isRecruitOpen && <RecruitAgentModal isOpen={isRecruitOpen} onClose={() => setRecruitOpen(false)} />}
       </Suspense>
-      {isHelpOpen && <HelpAssistantPanel isOpen={isHelpOpen} onClose={closeHelp} />}
+      <HelpAssistantPanel isOpen={isHelpOpen} onClose={closeHelp} onNavigate={navigateFromHelp} />
     </div>
   )
 }

@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import type { ReactNode } from 'react'
 import { useLicense } from '../../context/useLicense'
 import { useAuth } from '../../context/useAuth'
@@ -51,7 +51,7 @@ import {
 } from './workspaceSettings'
 
 type NoticeTone = 'neutral' | 'success' | 'warning' | 'error'
-type SettingsSectionId = 'account' | 'appearance' | 'workspace' | 'voice' | 'missions' | 'agents' | 'data'
+export type SettingsSectionId = 'account' | 'appearance' | 'workspace' | 'voice' | 'missions' | 'agents' | 'data'
 type RuntimeTargetScope = 'party' | 'selection'
 type PendingConfirmation = 'reset-all' | 'reset-runtime' | 'clear-workspace' | null
 
@@ -219,7 +219,7 @@ function formatAccountTimestamp(value: string | null | undefined) {
     })
 }
 
-export function SettingsPanel() {
+export function SettingsPanel({ focusSection = 'account', focusRequest = 0 }: { focusSection?: SettingsSectionId; focusRequest?: number }) {
   const { license, refresh: refreshLicense, setUsagePriority, openSubscriptionCheckout, requestLicenseActivation } = useLicense()
   const { account, changePassword, setPassword, loginWithGoogle, logout, checking } = useAuth()
   const agents = useNexusStore((state) => state.agents)
@@ -238,7 +238,7 @@ export function SettingsPanel() {
   const selectAgent = useNexusStore((state) => state.selectAgent)
   const clearSelectedAgents = useNexusStore((state) => state.clearSelectedAgents)
 
-  const [activeSection, setActiveSection] = useState<SettingsSectionId>('account')
+  const [activeSection, setActiveSection] = useState<SettingsSectionId>(focusSection)
   const [searchQuery, setSearchQuery] = useState('')
   const [uiSettings, setUiSettings] = useState<AutomniaUiSettings>(() => readUiSettings())
   const [speechSettings, setSpeechSettings] = useState<SpeechSettings>(() => readSpeechSettings())
@@ -259,6 +259,11 @@ export function SettingsPanel() {
   const [passwordChangeBusy, setPasswordChangeBusy] = useState(false)
   const [passwordChangeError, setPasswordChangeError] = useState('')
   const [googleReconnectBusy, setGoogleReconnectBusy] = useState(false)
+
+  useEffect(() => {
+    setActiveSection(focusSection)
+    setSearchQuery('')
+  }, [focusSection, focusRequest])
 
   const partyTargetIds = useMemo(() => activePartyIds.filter((id) => agents.some((agent) => agent.id === id)), [activePartyIds, agents])
   const selectedTargetIds = useMemo(() => selectedAgentIds.filter((id) => agents.some((agent) => agent.id === id)), [agents, selectedAgentIds])
@@ -614,12 +619,13 @@ export function SettingsPanel() {
     const isByok = entitlement.isByok
     const byokAllowed = entitlement.byokAllowed
     const usagePriorityLocked = entitlement.usagePriorityLocked
+    const usagePriorityManaged = (hostedCredits || isByok) && !usagePriorityLocked
     const usagePriority = license?.usagePriority === 'provider_first'
       ? byokAllowed ? 'provider_first' : 'automnia_first'
       : license?.usagePriority === 'byok_only'
         ? byokAllowed ? 'byok_only' : 'automnia_first'
         : 'automnia_first'
-    const balance = hostedCredits ? formatCreditBalance(license?.creditBalance) : 'Not applicable — provider-billed'
+    const balance = hostedCredits || isByok ? formatCreditBalance(license?.creditBalance) : 'Not applicable — provider-billed'
     const refreshAccount = async () => {
       if (accountRefreshBusy) return
       setAccountRefreshBusy(true)
@@ -645,13 +651,13 @@ export function SettingsPanel() {
       }
     }
     const saveUsagePriority = async (nextPriority: 'automnia_first' | 'provider_first' | 'byok_only') => {
-      if (!hostedCredits || usagePriorityBusy || nextPriority === usagePriority) return
+      if (!usagePriorityManaged || usagePriorityBusy || nextPriority === usagePriority) return
       if (usagePriorityLocked) {
-        setUsagePriorityError('Starter Subscription ($19.99) stays on Subscription Relay. Upgrade to Pro or higher to choose another usage priority.')
+        setUsagePriorityError('Starter Subscription ($19.99) stays on Automnia credits. Upgrade to Pro or higher to choose another usage priority.')
         return
       }
       if (!byokAllowed && nextPriority !== 'automnia_first') {
-        setUsagePriorityError('Starter uses Subscription Relay. Upgrade to Pro or higher for provider priority options.')
+        setUsagePriorityError('Starter uses Automnia credits only. Upgrade to Pro or higher for provider priority options.')
         return
       }
       setUsagePriorityBusy(true)
@@ -661,10 +667,10 @@ export function SettingsPanel() {
         setNotice({
           tone: 'success',
           text: nextPriority === 'provider_first'
-            ? 'Usage priority saved: your provider first, Subscription Relay available.'
+            ? 'Usage priority saved: your provider first, Automnia credits available as fallback.'
             : nextPriority === 'byok_only'
               ? 'Usage priority saved: your provider only.'
-              : 'Usage priority saved: Subscription Relay.',
+              : 'Usage priority saved: Automnia credits first.',
         })
       } catch (error) {
         setUsagePriorityError(error instanceof Error ? error.message : 'Could not save the usage priority.')
@@ -788,18 +794,18 @@ export function SettingsPanel() {
           <Field label="Access & Billing Mode" hint="Starter Subscription uses Automnia hosted credits. Higher tiers include hosted credits and provider priority controls.">
             <input type="text" readOnly value={entitlement.billingLabel} style={{ backgroundColor: 'rgba(255, 255, 255, 0.05)', cursor: 'not-allowed' }} />
           </Field>
-          <Field label="Usage Priority" hint={usagePriorityLocked ? 'Starter Subscription ($19.99) stays on Subscription Relay. Higher tiers unlock provider-first and provider-only routing.' : hostedCredits ? 'Choose Subscription Relay, your provider first, or your provider only. This preference belongs to your one Automnia account.' : isByok ? 'BYOK access uses the connected provider account.' : 'Activate a hosted plan to choose a usage priority.'}>
+          <Field label="Usage Priority" hint={usagePriorityLocked ? 'Starter Subscription ($19.99) stays on Automnia credits only. A BYOK upgrade with a carried-over balance unlocks all three routes.' : hostedCredits ? 'Choose Automnia credits, your provider first, or your provider only. This preference belongs to your one Automnia account.' : isByok ? 'BYOK accounts with a confirmed Automnia balance can choose Automnia first, provider first with Automnia fallback, or provider-only routing.' : 'Activate a permanent or hosted plan to choose a usage priority.'}>
             <select
-              value={hostedCredits ? usagePriority : 'provider_first'}
-              disabled={!hostedCredits || usagePriorityBusy || usagePriorityLocked}
+              value={usagePriorityManaged ? usagePriority : 'automnia_first'}
+              disabled={!usagePriorityManaged || usagePriorityBusy || usagePriorityLocked}
               onChange={(event) => void saveUsagePriority(event.target.value as 'automnia_first' | 'provider_first' | 'byok_only')}
             >
-              <option value="automnia_first">Subscription Relay</option>
-              <option value="provider_first" disabled={!byokAllowed}>My provider first + Subscription Relay{byokAllowed ? '' : ' — provider access not included'}</option>
+              <option value="automnia_first">Automnia credits first</option>
+              <option value="provider_first" disabled={!byokAllowed}>My provider first + Automnia fallback{byokAllowed ? '' : ' — provider access not included'}</option>
               <option value="byok_only" disabled={!byokAllowed}>My provider only{byokAllowed ? '' : ' — provider access not included'}</option>
             </select>
           </Field>
-          <Field label="Effective Agent Route" hint={hostedCredits ? 'This saved preference applies to normal messages, /runtime, /work, /openclaw, streamed turns, and buffered recovery.' : isByok ? 'Choose a model, then add that provider API key or sign in from Model Settings. The provider bills those requests directly.' : 'Activate a Cloud Subscription or BYOK license to enable agent messages.'}>
+          <Field label="Effective Agent Route" hint={hostedCredits || isByok ? 'This saved preference applies to normal messages, /runtime, /work, /openclaw, streamed turns, and buffered recovery.' : 'Activate a Cloud Subscription or BYOK license to enable agent messages.'}>
             <input type="text" readOnly value={entitlement.defaultRouteLabel} style={{ fontWeight: 'bold', backgroundColor: hostedCredits ? 'rgba(16, 185, 129, 0.10)' : isByok ? 'rgba(56, 189, 248, 0.10)' : 'rgba(255, 255, 255, 0.05)', cursor: 'not-allowed' }} />
           </Field>
           <section className="dui-settings-billing-summary" data-billing-mode={hostedCredits ? 'hosted' : isByok ? 'byok' : 'inactive'} aria-label="Subscription and credit summary">
@@ -807,7 +813,7 @@ export function SettingsPanel() {
               <div>
                 <span>Automnia billing</span>
                 <strong>{hostedCredits ? entitlement.tierLabel : isByok ? 'BYOK access' : 'Plan status'}</strong>
-                <small>{hostedCredits ? usagePriority === 'provider_first' ? 'Your connected provider is used first; Subscription Relay remains available.' : usagePriority === 'byok_only' ? 'Direct provider-billed access is forced; Automnia credits are bypassed.' : 'Subscription Relay is used for every message.' : isByok ? 'Your provider charges usage directly. This access remains tied to your Automnia account.' : 'Activate a license to receive your current entitlement.'}</small>
+                <small>{hostedCredits || isByok ? usagePriority === 'provider_first' ? 'Your connected provider is used first; Automnia pooled credits remain available as fallback.' : usagePriority === 'byok_only' ? 'Direct provider-billed access is forced; Automnia credits are bypassed.' : 'Automnia credits are used first, with your provider available as fallback on eligible permanent tiers.' : 'Activate a license to receive your current entitlement.'}</small>
               </div>
               <b>{entitlement.statusLabel}</b>
             </div>
@@ -822,7 +828,7 @@ export function SettingsPanel() {
               </div>
               <div>
                 <dt>Balance updated</dt>
-                <dd>{hostedCredits ? formatAccountTimestamp(license?.creditBalanceUpdatedAt) : 'Not applicable — provider-billed'}</dd>
+                <dd>{hostedCredits || isByok ? formatAccountTimestamp(license?.creditBalanceUpdatedAt) : 'Not applicable — provider-billed'}</dd>
               </div>
             </dl>
           </section>
@@ -884,7 +890,7 @@ export function SettingsPanel() {
           </section>
           {hostedCredits && <p style={{ color: '#99f6e4', margin: '0.75rem 0 0', fontSize: '0.84rem' }}>Refills add Automnia credits automatically. Google Cloud confirms payment and keeps the highest purchased tier on this same account.</p>}
           {license?.active && <p style={{ color: '#93f6d2', margin: '0.75rem 0 0', fontSize: '0.84rem' }}>Your purchases are managed as one Automnia account. Higher-tier purchases upgrade this entitlement automatically, so you keep one account and one canonical license key.</p>}
-          {isByok && <p style={{ color: '#93c5fd', margin: '0.75rem 0 0', fontSize: '0.84rem' }}>BYOK access uses your own provider keys. Sign in with your Automnia password or Google account to keep this access available across devices.</p>}
+          {isByok && <p style={{ color: '#93c5fd', margin: '0.75rem 0 0', fontSize: '0.84rem' }}>BYOK keeps your provider connection, and any pooled Automnia credits carried over from Starter remain available. Change the route here at any time; provider-only bypasses hosted-credit charging without deleting the balance.</p>}
           {accountRefreshError && <p role="alert" style={{ color: '#fb7185', margin: '0.75rem 0 0' }}>{accountRefreshError}</p>}
           {checkoutError && <p role="alert" style={{ color: '#fb7185', margin: '0.75rem 0 0' }}>{checkoutError}</p>}
           {usagePriorityError && <p role="alert" style={{ color: '#fb7185', margin: '0.75rem 0 0' }}>{usagePriorityError}</p>}
@@ -938,7 +944,7 @@ export function SettingsPanel() {
       <div className="dui-settings-layout">
         <nav className="dui-settings-nav" aria-label="Settings categories">
           {SETTINGS_SECTIONS.map((section) => (
-            <button key={section.id} type="button" role="tab" aria-selected={!normalizedSearch && activeSection === section.id} aria-controls={`settings-section-${section.id}`} data-active={!normalizedSearch && activeSection === section.id ? 'true' : 'false'} onClick={() => { setActiveSection(section.id); setSearchQuery('') }}>
+            <button key={section.id} type="button" role="tab" aria-selected={!normalizedSearch && activeSection === section.id} aria-controls={`settings-section-${section.id}`} data-settings-section={section.id} data-active={!normalizedSearch && activeSection === section.id ? 'true' : 'false'} onClick={() => { setActiveSection(section.id); setSearchQuery('') }}>
               <span><SettingsGlyph name={section.id} /></span><div><strong>{section.label}</strong><small>{section.description}</small></div><b aria-hidden="true">›</b>
             </button>
           ))}

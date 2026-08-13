@@ -1,11 +1,10 @@
 import { useEffect, useMemo, useState } from 'react'
 import type { CSSProperties } from 'react'
-import { motion } from 'framer-motion'
 import { useNexusStore } from '../../store/nexusStore'
 import type { CapabilityKey, CollaborationMode, DurationMode, DurationUnit } from '../../types/nexus'
 import { agentPortraitSrc } from '../../utils/portrait'
 import { Badge, Button, StatusChip } from '../ui'
-import { MISSION_GLYPH_ASSETS, MISSION_PRESET_ASSETS, preloadMissionIconAssets } from './missionIconAssets'
+import { MISSION_PRESET_ASSETS } from './missionIconAssets'
 import type { MissionGlyph } from './missionIconAssets'
 import './MissionDeploymentPanel.css'
 
@@ -208,21 +207,9 @@ export function MissionGlyphIcon({ icon, className }: { icon: MissionGlyph; clas
 }
 
 function FlatGlyph({ icon }: { icon: MissionGlyph }) {
-  return (
-    <>
-      <img
-        src={MISSION_GLYPH_ASSETS[icon]}
-        alt=""
-        aria-hidden="true"
-        draggable={false}
-        width={52}
-        height={52}
-        loading="eager"
-        decoding="sync"
-        className="dui-flat-glyph"
-      />
-    </>
-  )
+  // Inline vector glyphs avoid fetching and synchronously decoding fifteen
+  // separate PNGs whenever the mission workspace opens.
+  return <MissionGlyphIcon icon={icon} className="dui-flat-glyph" />
 }
 
 function optionLabel(value: CapabilityKey): string {
@@ -413,10 +400,6 @@ export function MissionDeploymentPanel() {
   }, [selectedAgents])
 
   useEffect(() => {
-    void preloadMissionIconAssets()
-  }, [])
-
-  useEffect(() => {
     if (!selectedHeartbeat || selectedHeartbeat.mixed) return
     const timer = window.setTimeout(() => {
       const next = msToHeartbeat(selectedHeartbeat.min)
@@ -469,7 +452,7 @@ export function MissionDeploymentPanel() {
                         width={72}
                         height={72}
                         loading="eager"
-                        decoding="sync"
+                        decoding="async"
                         className="dui-template-icon"
                       />
                     </span>
@@ -742,7 +725,7 @@ export function MissionDeploymentPanel() {
                     <strong>{readinessScore}%</strong>
                   </div>
                   <div className="dui-progress-track">
-                    <motion.div className="dui-progress-fill" initial={false} animate={{ width: `${readinessScore}%` }} transition={{ duration: 0.28 }} />
+                    <div className="dui-progress-fill" style={{ width: `${readinessScore}%` }} />
                   </div>
                   <div className="dui-readiness-mini-checks" aria-hidden="true">
                     {checks.map((check) => (
@@ -795,7 +778,7 @@ export function MissionDeploymentPanel() {
               </div>
 
               {showTiming && (
-                <motion.div initial={{ opacity: 0, y: -4 }} animate={{ opacity: 1, y: 0 }} className="dui-timing-panel">
+                <div className="dui-timing-panel dy-surface-enter">
                   <div className="dui-duration-grid">
                     {DURATION_MODES.map((mode) => (
                       <button
@@ -827,7 +810,7 @@ export function MissionDeploymentPanel() {
                       </select>
                     </div>
                   )}
-                </motion.div>
+                </div>
               )}
 
               {missionRunning && (

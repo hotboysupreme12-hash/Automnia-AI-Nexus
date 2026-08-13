@@ -1,5 +1,5 @@
 @{
-  SchemaVersion = '2026-08-13.2'
+  SchemaVersion = '2026-08-13.4'
   Region = 'us-east1'
   FirestoreLocation = 'us-east1'
   # Gemini 3.6 Flash is served through Vertex's global endpoint. Keeping this

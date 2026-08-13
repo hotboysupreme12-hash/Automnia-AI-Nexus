@@ -1,5 +1,4 @@
 import { useState } from 'react'
-import { motion } from 'framer-motion'
 import { useAuth } from '../../context/useAuth'
 
 const AUTOMNIA_LOCKUP_SRC = '/brand/automnia-ai-nexus-logo-transparent-cropped.png'
@@ -65,11 +64,7 @@ export function LoginModal() {
   const isSetup = mode === 'setup'
   return (
     <div className="dui-auth-screen fixed inset-0 z-50 grid place-items-center bg-[radial-gradient(circle_at_18%_10%,rgba(160,176,184,0.10),transparent_28%),radial-gradient(circle_at_82%_4%,rgba(255,255,255,0.035),transparent_30%),linear-gradient(160deg,#030303_0%,#101214_48%,#050505_100%)] px-4">
-      <motion.div
-        initial={{ scale: 0.95, opacity: 0 }}
-        animate={{ scale: 1, opacity: 1 }}
-        className="dui-auth-card w-full max-w-md rounded-2xl border border-slate-200/15 bg-[linear-gradient(180deg,rgba(20,23,25,0.96),rgba(6,7,8,0.96))] p-8 shadow-[0_30px_80px_-48px_rgba(160,176,184,0.28),inset_0_1px_0_rgba(255,255,255,0.08)]"
-      >
+      <div className="dui-auth-card dy-surface-enter w-full max-w-md rounded-2xl border border-slate-200/15 bg-[linear-gradient(180deg,rgba(20,23,25,0.96),rgba(6,7,8,0.96))] p-8 shadow-[0_30px_80px_-48px_rgba(160,176,184,0.28),inset_0_1px_0_rgba(255,255,255,0.08)]">
         <div className="mb-6 text-center">
           <div className="dui-login-brand mx-auto flex w-full max-w-[360px] items-center justify-center" aria-label={AUTOMNIA_BRAND_LABEL}>
             <img src={AUTOMNIA_LOCKUP_SRC} alt={AUTOMNIA_BRAND_LABEL} className="dui-login-logo-lockup" draggable={false} />
@@ -174,7 +169,7 @@ export function LoginModal() {
             <p className="mt-3">Your password is verified locally after account linking; eligible Pro and higher permanent tiers can continue offline. Starter requires online subscription verification. Automnia never uses the password itself as a session token.</p>
           </div>
         </form>
-      </motion.div>
+      </div>
     </div>
   )
 }

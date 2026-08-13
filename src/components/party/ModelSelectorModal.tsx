@@ -1,5 +1,4 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { motion, AnimatePresence } from 'framer-motion'
 import { ProviderAuthModal } from '../auth/ProviderAuthModal'
 import type { ThinkingLevel } from '../../types/nexus'
 import { apiErrorMessage, apiRequest } from '../../api/client'
@@ -284,19 +283,11 @@ export function ModelSelectorModal({
   if (!isOpen) return null
 
   return (
-    <AnimatePresence>
-      <motion.div
+    <>
+      <div
         className="fixed inset-0 z-50 grid place-items-center bg-slate-950/80 p-4 backdrop-blur-md"
-        initial={{ opacity: 0 }}
-        animate={{ opacity: 1 }}
-        exit={{ opacity: 0 }}
       >
-        <motion.div
-          initial={{ scale: 0.95, y: 12 }}
-          animate={{ scale: 1, y: 0 }}
-          exit={{ scale: 0.95, y: 8 }}
-          className="max-h-[90vh] w-full max-w-3xl overflow-auto rounded-2xl border border-cyan-200/45 bg-gradient-to-b from-blue-900/90 to-slate-950/95 p-5 shadow-glow"
-        >
+        <div className="dy-surface-enter max-h-[90vh] w-full max-w-3xl overflow-auto rounded-2xl border border-cyan-200/45 bg-gradient-to-b from-blue-900/90 to-slate-950/95 p-5 shadow-glow">
           <div className="mb-4 flex items-center justify-between">
             <div>
               <h3 className="font-heading text-3xl text-slate-100">Configure Model</h3>
@@ -491,8 +482,8 @@ export function ModelSelectorModal({
               </div>
             </>
           )}
-        </motion.div>
-      </motion.div>
+        </div>
+      </div>
       {authModalProvider && (
         <ProviderAuthModal
           isOpen={true}
@@ -511,6 +502,6 @@ export function ModelSelectorModal({
           }}
         />
       )}
-    </AnimatePresence>
+    </>
   )
 }

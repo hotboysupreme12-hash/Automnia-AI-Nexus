@@ -10,7 +10,7 @@ Automnia AI lets you run powerful agents like a local operations team. Use one f
 
 **AI Nexus** · **Custom agents** · **Missions** · **Schedules** · **Plugins** · **Runtime monitor** · **Approval-first automation** · **Local-first control**
 
-[User Guide](docs/USER_GUIDE.md) · [Support Guide](docs/BETA_SUPPORT.md) · [Release Notes](docs/BETA_RELEASE_NOTES.md) · [CI Evidence](docs/CI_EVIDENCE.md) · [Data Handling](DATA_HANDLING.md) · [Security](SECURITY.md) · [Release Governance](docs/RELEASE_GOVERNANCE.md)
+[Assistant Operations Manual](docs/AUTOMNIA_ASSISTANT_OPERATIONS_MANUAL.md) · [User Guide](docs/USER_GUIDE.md) · [UI Reference](docs/AUTOMNIA_UI_REFERENCE.md) · [Support Guide](docs/BETA_SUPPORT.md) · [Release Notes](docs/BETA_RELEASE_NOTES.md) · [CI Evidence](docs/CI_EVIDENCE.md) · [Data Handling](DATA_HANDLING.md) · [Security](SECURITY.md) · [Release Governance](docs/RELEASE_GOVERNANCE.md)
 
 </div>
 

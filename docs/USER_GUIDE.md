@@ -114,7 +114,11 @@ highest tier. Customers do not need to manage a separate key for each purchase.
 After the first account link, password or Google sign-in restores the account
 entitlement across devices. Starter requires online subscription verification;
 Pro and higher permanent tiers remain usable offline through a configured BYOK
-provider.
+provider. BYOK is not locked to provider-first: a BYOK account with a confirmed
+pooled Automnia balance—including credits carried over from Starter—can choose
+Automnia credits first, provider first with Automnia fallback, or provider-only.
+Provider-only bypasses the hosted wallet without deleting it. Credits from
+purchases using the same verified email are pooled across the account.
 
 ---
 

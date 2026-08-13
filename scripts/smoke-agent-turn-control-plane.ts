@@ -156,7 +156,7 @@ assert(agentStreamingService.includes('nativeToolLoop: true'), 'hosted turns sho
 assert(agentStreamingService.includes('usagePriority: hostedRelayCredentials.usagePriority'), 'hosted turns should preserve the selected billing priority in their Gateway result')
 assert(agentTurnRoutes.includes("label: cloudFirst ? 'Automnia credits via Gateway' : providerFirst ? 'My provider first'"), 'stream status should label the saved subscriber priority')
 assert(licenseContext.includes("apiRequest<LicenseInfo>('/api/license/usage-priority'"), 'the renderer should persist usage priority through the protected license API')
-assert(settingsPanel.includes('<option value="automnia_first">Subscription Relay</option>'), 'Account settings should expose the Subscription Relay priority')
+assert(settingsPanel.includes('<option value="automnia_first">Automnia credits first</option>'), 'Account settings should expose the Automnia credits priority')
 assert(settingsPanel.includes('<option value="provider_first"'), 'Account settings should expose provider-first priority')
 assert(settingsPanel.includes('<option value="byok_only"'), 'Account settings should expose BYOK-only priority')
 assert(modelSelector.includes("routePresentation.modelLabel"), 'model selection should label the active agent route')
@@ -220,11 +220,11 @@ assert(
 )
 assert(
   licenseEntitlement.includes("starter: 'Starter Subscription'")
-    && licenseEntitlement.includes("pro: 'Pro Subscription'")
-    && licenseEntitlement.includes("enterprise: 'Enterprise Subscription'")
+    && licenseEntitlement.includes("pro: 'Pro Access'")
+    && licenseEntitlement.includes("enterprise: 'Enterprise Access'")
     && licenseEntitlement.includes("credit_pack_topup: 'Hosted Credit Refill'")
-    && licenseEntitlement.includes("tierLabel: 'BYOK One-Time Access'"),
-  'license entitlement presentation should cover every published plan and one-time BYOK access',
+    && licenseEntitlement.includes("tierLabel: 'BYOK Access'"),
+  'license entitlement presentation should cover every published plan and permanent BYOK access',
 )
 for (const [name, source] of [
   ['Settings', settingsPanel],

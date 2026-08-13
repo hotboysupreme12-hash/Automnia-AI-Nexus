@@ -1,5 +1,4 @@
 import { useState } from 'react'
-import { motion } from 'framer-motion'
 import { useLicense } from '../../context/useLicense'
 import { resolveAgentRoutePresentation, resolveLicenseEntitlement } from '../../utils/licenseEntitlement'
 
@@ -30,10 +29,11 @@ export function LicenseActivationModal({ onClose }: { onClose?: () => void }) {
   const entitlement = resolveLicenseEntitlement(license)
   const routePresentation = resolveAgentRoutePresentation(license)
   const isCloudCredits = entitlement.isHosted
+  const hasManagedCredits = isCloudCredits || entitlement.isByok
   const providerFirst = routePresentation.providerFirst
   return (
     <div className="dui-auth-screen fixed inset-0 z-50 grid place-items-center bg-[radial-gradient(circle_at_18%_10%,rgba(160,176,184,0.10),transparent_28%),linear-gradient(160deg,#030303_0%,#101214_48%,#050505_100%)] px-4">
-      <motion.div initial={{ scale: 0.95, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} className="dui-auth-card w-full max-w-md rounded-2xl border border-slate-200/15 bg-[linear-gradient(180deg,rgba(20,23,25,0.96),rgba(6,7,8,0.96))] p-8 shadow-[0_30px_80px_-48px_rgba(160,176,184,0.28),inset_0_1px_0_rgba(255,255,255,0.08)]">
+      <div className="dui-auth-card dy-surface-enter w-full max-w-md rounded-2xl border border-slate-200/15 bg-[linear-gradient(180deg,rgba(20,23,25,0.96),rgba(6,7,8,0.96))] p-8 shadow-[0_30px_80px_-48px_rgba(160,176,184,0.28),inset_0_1px_0_rgba(255,255,255,0.08)]">
         <div className="mb-6 text-center">
           <div className="dui-login-brand mx-auto flex w-full max-w-[360px] items-center justify-center" aria-label={AUTOMNIA_BRAND_LABEL}>
             <img src={AUTOMNIA_LOCKUP_SRC} alt={AUTOMNIA_BRAND_LABEL} className="dui-login-logo-lockup" draggable={false} />
@@ -50,19 +50,19 @@ export function LicenseActivationModal({ onClose }: { onClose?: () => void }) {
             <p className="mt-2 text-sm text-slate-200"><strong className="text-slate-100">Email:</strong> {license.email}</p>
 
             <div className="mt-3 border-t border-emerald-500/10 pt-3">
-              {isCloudCredits ? (
+              {hasManagedCredits ? (
                 <div>
                   <p className="text-xs font-medium text-emerald-300">{entitlement.tierLabel} — {routePresentation.routeLabel}</p>
                   <p className="mt-1 font-mono text-lg font-bold text-white">
                     {license.creditBalance !== null ? license.creditBalance.toLocaleString() : 'Balance pending confirmation'}
                   </p>
-                  <p className="mt-1 text-xs text-slate-400">{providerFirst ? 'Your connected provider or OAuth account is used first. Subscription Relay remains available for this account.' : routePresentation.providerOnly ? 'Your connected provider is used directly. Subscription credits are bypassed.' : 'Subscription Relay is used for agent messages and deducted from this confirmed balance.'}</p>
-                  <p className="mt-1 text-xs text-slate-500">{entitlement.usagePriorityLocked ? 'Starter stays on Subscription Relay.' : 'Change this priority at any time under Settings → Account &amp; License.'}</p>
+                  <p className="mt-1 text-xs text-slate-400">{providerFirst ? 'Your connected provider or OAuth account is used first. Automnia pooled credits remain available for this account.' : routePresentation.providerOnly ? 'Your connected provider is used directly. Automnia credits are bypassed.' : 'Automnia credits are available for this confirmed account and can be pooled across its email-linked purchases.'}</p>
+                  <p className="mt-1 text-xs text-slate-500">{entitlement.usagePriorityLocked ? 'Starter stays on Automnia credits.' : 'Change this priority at any time under Settings → Account &amp; License.'}</p>
                 </div>
               ) : (
                 <div>
                   <p className="text-xs font-medium text-sky-300">{entitlement.tierLabel} — Your Provider Account</p>
-                  <p className="mt-1 text-xs text-slate-300">Add an API key or sign in with OpenAI, Gemini, Anthropic, or another provider in model settings. That provider bills the usage; hosted credits are not used.</p>
+                  <p className="mt-1 text-xs text-slate-300">Add an API key or sign in with OpenAI, Gemini, Anthropic, or another provider in model settings. Your provider can be prioritized, or this account can use any pooled Automnia credits linked to the same verified email.</p>
                 </div>
               )}
             </div>
@@ -85,7 +85,7 @@ export function LicenseActivationModal({ onClose }: { onClose?: () => void }) {
             Link a purchase once. Higher-tier purchases are merged automatically into this account and keep one canonical license key.
           </p>
         </form>
-      </motion.div>
+      </div>
     </div>
   )
 }

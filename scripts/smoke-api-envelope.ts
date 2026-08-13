@@ -39,7 +39,7 @@ function assertCanonicalRouteSlice(name: string, source: string): void {
 }
 
 assert.match(server, /installControlPlaneHttp\(app, \{/, 'server must install shared control-plane HTTP middleware')
-assert.match(server, /registerAuthRoutes\(app, \{ authToken: AUTH_TOKEN, loginAttempts, sessionTokens \}\)/, 'server must register extracted auth routes with login throttling')
+assert.match(server, /registerAuthRoutes\(app,\s*\{[\s\S]*?authToken:\s*AUTH_TOKEN,[\s\S]*?loginAttempts,[\s\S]*?sessionTokens,?/, 'server must register extracted auth routes with login throttling')
 assert.doesNotMatch(server, /app\.post\('\/api\/auth\/login'/, 'server index must not inline auth login routes')
 assert.doesNotMatch(server, /app\.get\('\/api\/auth\/status'/, 'server index must not inline auth status routes')
 assert.doesNotMatch(server, /app\.use\(cors\(/, 'server index must not own CORS/auth middleware directly')
@@ -86,14 +86,15 @@ assertCanonicalRouteSlice('auth login route', authLoginSlice)
 assert.match(authLoginSlice, /apiFailure\(res, 401, 'invalid_token'/, 'login failures must expose invalid-token codes')
 
 const authStatusSlice = sliceFrom(authRoutes, "app.get('/api/auth/status'")
-assert.match(authStatusSlice, /apiSuccess\(res, \{ authenticated: true \}\)/, 'auth status success must use canonical true envelope')
-assert.match(authStatusSlice, /apiSuccess\(res, \{ authenticated: false \}\)/, 'auth status false must use canonical false envelope')
+assert.match(authStatusSlice, /apiSuccess\(res, \{\s*authenticated:\s*true(?:,|\s*\})/, 'auth status success must use canonical true envelope')
+assert.match(authStatusSlice, /apiSuccess\(res, \{\s*authenticated:\s*false(?:,|\s*\})/, 'auth status false must use canonical false envelope')
 assert.doesNotMatch(authStatusSlice, /res\.json\(/, 'auth status must not emit ad hoc JSON')
 
 const usagePrioritySlice = sliceBetween(licenseRoutes, "app.post('/api/license/usage-priority'", "app.post('/api/license/checkout'")
 assertCanonicalRouteSlice('license usage-priority route', usagePrioritySlice)
 assert.match(usagePrioritySlice, /z\.enum\(\['automnia_first', 'provider_first', 'byok_only'\]\)/, 'usage priority must accept only the three supported routes')
-assert.match(usagePrioritySlice, /getStatus\(\)\.mode !== 'hosted_credits'/, 'BYOK-only access must not change hosted usage priority')
+assert.match(usagePrioritySlice, /!currentStatus\.active/, 'usage priority changes must require an active license')
+assert.match(usagePrioritySlice, /isUsagePriorityLocked\(\)/, 'Starter must remain locked to Automnia credits')
 
 const scripts = packageJson.scripts || {}
 assert.equal(typeof scripts['smoke:api-envelope'], 'string')

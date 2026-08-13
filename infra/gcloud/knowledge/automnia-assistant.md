@@ -4,6 +4,40 @@
 
 Automnia is a desktop-first AI operations workspace. It combines local runtime controls, OpenClaw gateway sessions, provider and model settings, missions, agents, plugins, a command console, and a live monitor. The application is designed to keep local and BYOK workflows available when hosted services are unavailable.
 
+The expanded source-of-truth guide is `docs/AUTOMNIA_ASSISTANT_OPERATIONS_MANUAL.md`.
+Use it for the complete documentation-folder map, local startup commands, exact
+UI labels, every Agent Editor tab, **Agent files → Retire**, all Settings
+categories, Google Cloud operations, and the detailed Help response contract.
+This file supplies compact identity and routing rules; the manual supplies the
+full operator procedures.
+
+For outcome-based setup templates, use `docs/AGENT_CAPABILITY_PLAYBOOK.md`.
+It covers customizing agents, Google Workspace email with Gog, ClawTalk phone
+setup, Telegram, skills and plugin power-ups, recurring Missions, advanced
+multi-agent teams, YouTube research, browser automation, Instagram planning,
+Google Cloud/Gog CLI boundaries, and a 100-idea capability catalog. Each
+playbook pairs a ready-to-paste agent-first prompt with exact manual controls,
+safe tests, and approval boundaries. The Help cards are suggestions only; a
+click asks for guidance and does not execute a setup.
+
+## Agent-first setup
+
+For setup requests, Automnia starts with the configured primary agent whenever
+one has a working model route. The user selects that agent in **Agents**, opens
+**Command Console**, and describes the desired model, plugin, chat, channel, or
+workflow in plain language. The agent inspects readiness, completes the safe
+configuration and verification its enabled tools permit, and reports the final
+evidence plus only the smallest remaining human step. Help should present this
+as the default before a manual checklist, then provide exact self-service steps
+when the user requests them or when bootstrap, account ownership, OAuth consent,
+billing, or approval requires the user.
+
+Credentials are always a secure handoff: enter a token or key only in the
+relevant **Provider connection** or **Plugins > Setup** secure field, never in
+Help, Command Console, agent files, or a document. After the secure field is
+saved, the primary agent can continue and validate the setup without seeing the
+secret in chat.
+
 ## Account activation and sign-in
 
 On first activation, a user can create an Automnia account password. The password is stored as a one-way password verifier by the hosted account service; Automnia does not display or recover the original password. Users can sign in and out with their Automnia account credentials, and Google sign-in can be linked when it is available.
@@ -14,7 +48,16 @@ Higher plans can use BYOK provider credentials and can continue local work offli
 
 The hosted relay is a Cloud Run service owned by the Automnia deployment. The desktop app sends hosted-credit requests to the relay; the relay authenticates the active license, calls the configured Google Vertex AI service identity, records usage, and returns the remaining Automnia credit balance. A relay failure should be shown as a relay or provider problem and should not silently switch a hosted-credit request to an unpaid provider.
 
-BYOK requests use the user's configured provider and do not spend Automnia hosted credits. If a user sees a credit exhaustion message, they can purchase a credit top-up or configure an eligible BYOK provider in Settings.
+BYOK tiers can choose Automnia-credits-first, provider-first with Automnia
+fallback, or provider-only routing in Account & License. A BYOK account with a
+confirmed pooled balance—including credits carried over from Starter—defaults
+to Automnia credits first but can change the priority at any time. A zero-
+balance BYOK account defaults to provider-first until credits are added.
+Provider-only requests do not spend Automnia credits and do not delete the
+wallet; the other two routes can use the account's pooled Automnia balance.
+The selector is locked only for Starter Subscription. Purchases linked to the
+same verified email are pooled after Google or confirmed-password sign-in, so
+users do not need to manage a separate key for each purchase.
 
 ## OpenClaw gateway and first-run migration
 

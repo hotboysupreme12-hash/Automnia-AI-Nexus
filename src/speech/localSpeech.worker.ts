@@ -1,6 +1,7 @@
 /// <reference lib="webworker" />
 
 import { pipeline } from '@huggingface/transformers'
+import { prepareAudioForSpeechRecognition } from './audioProcessing'
 
 const MODEL_ID = 'onnx-community/whisper-tiny.en'
 
@@ -90,15 +91,18 @@ workerScope.addEventListener('message', (event: MessageEvent<WorkerRequest>) => 
   const request = event.data
   void (async () => {
     try {
-      const transcriber = await loadTranscriber(request.requestId)
+      const transcriberPromise = loadTranscriber(request.requestId)
       if (request.type === 'prepare') {
+        await transcriberPromise
         post(request.requestId, { type: 'prepared', backend })
         return
       }
 
+      post(request.requestId, { type: 'progress', phase: 'processing', backend })
+      const preparedAudio = prepareAudioForSpeechRecognition(new Float32Array(request.audio)).audio
+      const transcriber = await transcriberPromise
       post(request.requestId, { type: 'progress', phase: 'transcribing', backend })
-      const audio = new Float32Array(request.audio)
-      const output = await transcriber(audio, {
+      const output = await transcriber(preparedAudio, {
         chunk_length_s: 15,
         stride_length_s: 3,
         max_new_tokens: 96,

@@ -30,6 +30,42 @@ export const PLUGIN_FILTERS = [
 
 export type PluginFilter = (typeof PLUGIN_FILTERS)[number]['id']
 
+export const PLUGIN_FILTER_PREFS_KEY = 'automnia-plugin-filter'
+
+type PluginFilterStorage = Pick<Storage, 'getItem' | 'setItem'>
+
+function browserStorage(): PluginFilterStorage | null {
+  if (typeof window === 'undefined') return null
+  try {
+    return window.localStorage
+  } catch {
+    return null
+  }
+}
+
+function isPluginFilter(value: string | null): value is PluginFilter {
+  return PLUGIN_FILTERS.some((option) => option.id === value)
+}
+
+export function readPluginFilter(storage: PluginFilterStorage | null = browserStorage()): PluginFilter {
+  if (!storage) return 'all'
+  try {
+    const stored = storage.getItem(PLUGIN_FILTER_PREFS_KEY)
+    return isPluginFilter(stored) ? stored : 'all'
+  } catch {
+    return 'all'
+  }
+}
+
+export function savePluginFilter(filter: PluginFilter, storage: PluginFilterStorage | null = browserStorage()): void {
+  if (!storage) return
+  try {
+    storage.setItem(PLUGIN_FILTER_PREFS_KEY, filter)
+  } catch {
+    // Plugin filtering must remain usable when browser storage is unavailable.
+  }
+}
+
 const STATUS_CLASSES: Record<PluginPageState['tone'], string> = {
   configured: 'border-cyan-400/20 bg-cyan-400/[0.06] text-cyan-100',
   disabled: 'border-white/[0.08] bg-white/[0.03] text-slate-400',

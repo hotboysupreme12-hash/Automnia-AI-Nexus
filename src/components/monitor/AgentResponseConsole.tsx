@@ -1,4 +1,4 @@
-import { memo, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
+import { memo, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type WheelEvent } from 'react'
 import { apiErrorMessage, apiRequest } from '../../api/client'
 import { restartGatewayRuntime, useRuntimeSummaryStatus } from '../../hooks/useRuntimeStatus'
 import type { GatewayStabilityStatus } from '../../hooks/useRuntimeStatus'
@@ -10,7 +10,7 @@ import {
   type CommandConsoleDraft,
 } from '../../store/commandConsoleState'
 import { useNexusStore } from '../../store/nexusStore'
-import type { AgentResponse, AgentTurnAttachment, OpenClawAgent } from '../../types/nexus'
+import type { AgentActivityEvent, AgentResponse, AgentTurnAttachment, OpenClawAgent } from '../../types/nexus'
 import { apiUrl } from '../../utils/apiUrl'
 import { fetchControlCenterWithAuth } from '../../api/authenticatedFetch'
 import { useLicense } from '../../context/useLicense'
@@ -322,13 +322,53 @@ function isRuntimeNoticeTransport(value?: string) {
 }
 
 function latestRunStatus(entry?: AgentResponse) {
-  if (!entry?.streaming) return ''
+  if (!entry) return ''
   const latestActivity = [...(entry.activity || [])].reverse().find((event) => {
     const label = event.label.trim()
     return label && event.type !== 'message.final' && event.type !== 'run.finished' && !/final response received/i.test(label)
   })
   const latestProgress = [...(entry.progressLines || [])].reverse().find((line) => line.trim())
   return latestActivity?.label.trim() || latestProgress?.trim() || entry.progressLabel?.trim() || 'Agent started working.'
+}
+
+function compactActivityValue(value: unknown, max = 220) {
+  const text = typeof value === 'string'
+    ? value
+    : value && typeof value === 'object'
+      ? JSON.stringify(value)
+      : value === undefined || value === null
+        ? ''
+        : String(value)
+  const clean = text.replace(/\s+/g, ' ').trim()
+  return clean.length > max ? `${clean.slice(0, max - 1).trim()}…` : clean
+}
+
+function activityKindLabel(type: string) {
+  const family = type.split('.')[0]?.toLowerCase()
+  if (type.startsWith('command.')) return 'exec'
+  if (type.startsWith('tool.')) return 'tool'
+  if (type.startsWith('browser.')) return 'browser'
+  if (type.startsWith('file.')) return 'file'
+  if (type.startsWith('run.')) return 'run'
+  if (type.startsWith('message.')) return 'reply'
+  if (type.startsWith('approval.')) return 'approval'
+  if (type.startsWith('gateway.')) return 'gateway'
+  return family || 'agent'
+}
+
+function activityDetail(event: AgentActivityEvent) {
+  const payload = event.payload || {}
+  const toolName = compactActivityValue(payload.toolName, 96)
+  const toolAction = compactActivityValue(payload.toolAction, 96)
+  const command = compactActivityValue(payload.command, 180)
+  const input = compactActivityValue(payload.toolInput, 180)
+  const output = compactActivityValue(payload.toolOutput || payload.commandOutput, 180)
+  return [
+    toolName ? `${toolName}${toolAction ? ` · ${toolAction}` : ''}` : '',
+    command ? `exec ${command}` : '',
+    input ? `input ${input}` : '',
+    output ? `output ${output}` : '',
+  ].filter(Boolean).join(' · ')
 }
 
 type ResponseCta = {
@@ -407,6 +447,7 @@ const ResponseMessage = memo(function ResponseMessage({
   actionBusy: boolean
   hostedCreditsFirst: boolean
 }) {
+  const [showAllActivity, setShowAllActivity] = useState(false)
   const avatar = meta?.portrait || ''
   const name = meta?.name || entry.agentId
   const role = meta?.role || ''
@@ -428,6 +469,10 @@ const ResponseMessage = memo(function ResponseMessage({
   const statusText = runtimeNoticeActive ? 'runtime' : status
   const durationLabel = entry.durationMs > 0 ? `${(entry.durationMs / 1000).toFixed(1)}s` : ''
   const cta = responseCta(entry)
+  const activityEvents = (entry.activity || []).filter((event) => event.type !== 'message.partial' && event.type !== 'message.final')
+  const hasActivity = activityEvents.length > 0
+  const visibleActivityEvents = (showAllActivity ? activityEvents.slice(-10) : activityEvents.slice(-4)).reverse()
+  const openClawActivity = isRuntimeNoticeTransport(entry.transport) || activityEvents.some((event) => event.rawSource.startsWith('gateway.'))
   const runtimeTitle = [
     durationLabel ? `Total runtime: ${durationLabel}` : '',
     firstTokenLabel ? `First output: ${firstTokenLabel}` : '',
@@ -436,8 +481,8 @@ const ResponseMessage = memo(function ResponseMessage({
   ].filter(Boolean).join(' / ')
   const clockTitle = `${messageTimestampTitle(entry.timestamp)} / ${timeAgo(entry.timestamp)}`
   const bodyText = hasContent ? replyText : entry.streaming ? '' : entry.ok ? 'No output' : 'Request failed'
-  const showInlineThinking = entry.streaming && !hasContent && runtimeNoticeActive
-  const progressText = entry.streaming && !hasContent && !showInlineThinking ? latestRunStatus(entry) : ''
+  const showInlineThinking = entry.streaming && !hasContent && runtimeNoticeActive && !hasActivity
+  const progressText = entry.streaming && !hasContent && !showInlineThinking && !hasActivity ? latestRunStatus(entry) : ''
   const displayText = bodyText || progressText
   const bodyState = showInlineThinking ? 'thinking' : hasContent ? 'response' : progressText ? 'progress' : entry.ok ? 'empty' : 'blocked'
 
@@ -519,6 +564,40 @@ const ResponseMessage = memo(function ResponseMessage({
           <span className="h-1 w-1 rounded-full bg-slate-600" />
           {entry.ok ? 'No output' : 'Request failed'}
         </div>
+      )}
+
+      {hasActivity && (
+        <section className="dy-command-activity-panel" aria-label={`${entry.streaming ? 'Live' : 'Run'} activity`}>
+          <div className="dy-command-activity-head">
+            <div className="min-w-0">
+              <strong className="dy-command-activity-title">
+                {openClawActivity ? 'OpenClaw activity' : entry.streaming ? 'Live activity' : 'Run activity'}
+              </strong>
+              <span className="dy-command-activity-current" aria-live="polite">
+                {latestRunStatus(entry)}
+              </span>
+            </div>
+            {activityEvents.length > 4 && (
+              <button type="button" onClick={() => setShowAllActivity((current) => !current)}>
+                {showAllActivity ? 'Collapse' : `Show ${Math.min(activityEvents.length, 10)}`}
+              </button>
+            )}
+          </div>
+          <div className="dy-command-activity-list" aria-live={entry.streaming ? 'polite' : undefined}>
+            {visibleActivityEvents.map((event) => {
+              const detail = activityDetail(event)
+              return (
+                <div key={event.id} className="dy-command-activity-row" data-severity={event.severity}>
+                  <span className="dy-command-activity-dot" aria-hidden="true" />
+                  <time dateTime={event.timestamp}>{messageClock(event.timestamp)}</time>
+                  <span className="dy-command-activity-kind">{activityKindLabel(event.type)}</span>
+                  <span className="dy-command-activity-label" title={event.label}>{event.label}</span>
+                  {detail && <code title={detail}>{detail}</code>}
+                </div>
+              )
+            })}
+          </div>
+        </section>
       )}
 
       <div className="dy-command-message-meta" aria-label="Response details">
@@ -984,6 +1063,29 @@ export function AgentResponseConsole() {
     stickToBottomRef.current = distanceFromBottom < 120
   }, [])
 
+  const handleConsoleWheel = useCallback((event: WheelEvent<HTMLElement>) => {
+    const list = listRef.current
+    if (!list || event.deltaY === 0) return
+
+    const target = event.target
+    if (!(target instanceof Element)) return
+
+    // Keep the two existing inner scroll surfaces native. The response body
+    // owns its own wheel input, while the message list owns wheel input over
+    // cards and the gaps between them.
+    if (
+      target.closest('.dy-command-message-body[data-body-state="response"]') ||
+      target.closest('.dy-command-messages')
+    ) return
+
+    // The console header, target bar, status/error rows, and composer are
+    // siblings of the message list. Forward their wheel input to that list so
+    // every part of the console has the same "read the next response" affordance.
+    if (list.scrollHeight <= list.clientHeight) return
+    event.preventDefault()
+    list.scrollTop += event.deltaY
+  }, [])
+
   const resizeComposerTextarea = useCallback(() => {
     const textarea = textareaRef.current
     if (!textarea) return
@@ -1053,6 +1155,10 @@ export function AgentResponseConsole() {
       setVoiceStatus(`Transcribing on device · ${backendLabel}`)
       return
     }
+    if (progress.phase === 'processing') {
+      setVoiceStatus(`Preparing audio off the UI thread · ${backendLabel}`)
+      return
+    }
     setVoiceStatus(mediaRecorderRef.current?.state === 'recording'
       ? `Listening · local ${backendLabel} ready`
       : `Local ${backendLabel} ready`)
@@ -1075,24 +1181,6 @@ export function AgentResponseConsole() {
       voiceStatusClearRef.current = null
     }, 4_000)
   }, [])
-
-  useEffect(() => {
-    if (speechMode !== 'local') return
-    let disposed = false
-    const timer = window.setTimeout(() => {
-      void prepareLocalSpeechModel((progress) => {
-        if (!disposed) localSpeechProgress(progress)
-      }).catch(() => {
-        if (!disposed && mediaRecorderRef.current?.state !== 'recording') {
-          setVoiceStatus('Local speech will prepare when you tap the mic')
-        }
-      })
-    }, 450)
-    return () => {
-      disposed = true
-      window.clearTimeout(timer)
-    }
-  }, [localSpeechProgress, speechMode])
 
   const transcribeVoiceBlob = useCallback(async (blob: Blob, mode: SpeechTranscriptionMode) => {
     if (!voiceMountedRef.current) return
@@ -1462,6 +1550,7 @@ export function AgentResponseConsole() {
       data-dui-panel="command-console"
       data-chat-panel="true"
       className="dy-command-console flex min-h-0 flex-col overflow-hidden"
+      onWheel={handleConsoleWheel}
     >
       {/* Header */}
       <div className="dy-command-console__header relative shrink-0 overflow-hidden">

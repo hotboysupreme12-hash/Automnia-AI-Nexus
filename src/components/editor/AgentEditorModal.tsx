@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type { CSSProperties } from 'react'
-import { AnimatePresence, motion } from 'framer-motion'
 import { apiErrorMessage, apiRequest } from '../../api/client'
+import type { AgentEditorTab } from '../../store/nexusUiState'
 import {
   authKindForProvider,
   authLabelForProvider,
@@ -19,7 +19,7 @@ import { agentPortraitSrc, localPortraitPathFromInput } from '../../utils/portra
 import { ProviderAuthModal } from '../auth/ProviderAuthModal'
 import { useLicense } from '../../context/useLicense'
 
-type EditorTab = 'profile'|'model'|'heartbeat'|'policy'|'workspace'|'skills'|'files'
+type EditorTab = AgentEditorTab
 type AgentMetaPatch = Partial<Pick<OpenClawAgent, 'name'|'portrait'|'className'|'role'|'level'|'behaviorProfile'|'workspace'>>
 type HeartbeatPatch = Partial<HeartbeatConfig>
 type SandboxMode = NonNullable<NonNullable<OpenClawAgent['sandbox']>['mode']>
@@ -340,6 +340,8 @@ export function AgentEditorModal() {
   const isOpen = useNexusStore((s)=>s.isEditorOpen)
   const closeEditor = useNexusStore((s)=>s.closeEditor)
   const editingAgentId = useNexusStore((s)=>s.editingAgentId)
+  const requestedEditorTab = useNexusStore((s)=>s.editorTab)
+  const editorOpenRequest = useNexusStore((s)=>s.editorOpenRequest)
   const editingAgentRenderKey = useNexusStore((s)=>agentEditorRenderKey(s.editingAgentId?s.agents.find((a)=>a.id===s.editingAgentId):null))
   const agentConfigSaveStatus = useNexusStore((s)=>editingAgentId?s.agentConfigSaveStatus[editingAgentId]:undefined)
   const agent = useMemo(()=>editingAgentId&&editingAgentRenderKey?useNexusStore.getState().agents.find((a)=>a.id===editingAgentId)??null:null,[editingAgentId,editingAgentRenderKey])
@@ -1358,7 +1360,7 @@ export function AgentEditorModal() {
     setRcontentLoading(false)
     setRetireConfirmOpen(false)
     setRetiring(false)
-    setTab('profile')
+    setTab(requestedEditorTab)
     setSk('')
     setSkFilter('all')
     setInstalledSkills([])
@@ -1368,7 +1370,7 @@ export function AgentEditorModal() {
     dirtyConfigSectionsRef.current.clear()
     configLoadSeqRef.current += 1
     authRefreshKeyRef.current = ''
-  },[isOpen,editingAgentId])
+  },[isOpen,editingAgentId,requestedEditorTab,editorOpenRequest])
   useEffect(()=>{if(isOpen&&agent?.id&&(tab==='model'||tab==='heartbeat'||tab==='policy'))void LdP()},[isOpen,agent?.id,tab,LdP])
   useEffect(()=>{if(isOpen&&tab==='model'){void LdM();void LdAuth()}},[isOpen,tab,LdM,LdAuth])
   useEffect(()=>{
@@ -1417,10 +1419,10 @@ export function AgentEditorModal() {
   const providerFirst = routePresentation.providerFirst
 
   return (
-    <AnimatePresence>
+    <>
       {isOpen&&(
-        <motion.div data-dui-overlay="agent-editor" data-windows={IS_WINDOWS_CLIENT?'true':'false'} className={`fixed inset-0 z-50 grid place-items-center p-3 ${IS_WINDOWS_CLIENT?'bg-[#030712]/96':'bg-[#030712]/90 backdrop-blur-xl'}`} initial={IS_WINDOWS_CLIENT?false:{opacity:0}} animate={{opacity:1}} exit={IS_WINDOWS_CLIENT?{opacity:1}:{opacity:0}} transition={{duration:IS_WINDOWS_CLIENT?0:0.14}}>
-          <motion.div data-dui-modal="agent-editor" data-windows={IS_WINDOWS_CLIENT?'true':'false'} initial={IS_WINDOWS_CLIENT?false:{scale:0.98,y:8}} animate={IS_WINDOWS_CLIENT?{opacity:1}:{scale:1,y:0}} exit={IS_WINDOWS_CLIENT?{opacity:1}:{scale:0.98,y:8}} transition={{duration:IS_WINDOWS_CLIENT?0:0.14}} className={`flex max-h-[78vh] w-full max-w-[720px] flex-col overflow-hidden rounded-2xl border border-white/[0.08] bg-gradient-to-b from-[#0b1120] to-[#060b12] shadow-2xl shadow-black/50 ${IS_WINDOWS_CLIENT?'':'transform-gpu'}`}>
+        <div data-dui-overlay="agent-editor" data-windows={IS_WINDOWS_CLIENT?'true':'false'} className={`fixed inset-0 z-50 grid place-items-center p-3 ${IS_WINDOWS_CLIENT?'bg-[#030712]/96':'bg-[#030712]/90 backdrop-blur-xl'}`}>
+          <div data-dui-modal="agent-editor" data-windows={IS_WINDOWS_CLIENT?'true':'false'} className="dy-surface-enter flex max-h-[78vh] w-full max-w-[720px] flex-col overflow-hidden rounded-2xl border border-white/[0.08] bg-gradient-to-b from-[#0b1120] to-[#060b12] shadow-2xl shadow-black/50">
 
             {/* HEADER */}
             <div data-editor-header className="shrink-0 border-b border-white/[0.06] bg-white/[0.015] px-5 py-3">
@@ -1907,8 +1909,8 @@ export function AgentEditorModal() {
                 )}
               </div>
             </div>
-          </motion.div>
-        </motion.div>
+          </div>
+        </div>
       )}
       {authModalProvider&&(
         <ProviderAuthModal
@@ -1930,8 +1932,8 @@ export function AgentEditorModal() {
         />
       )}
       {retireConfirmOpen&&(
-        <motion.div initial={{opacity:0}} animate={{opacity:1}} exit={{opacity:0}} className="fixed inset-0 z-[80] flex items-center justify-center bg-black/70 p-4 backdrop-blur-sm">
-          <motion.div initial={{scale:0.96,y:8,opacity:0}} animate={{scale:1,y:0,opacity:1}} exit={{scale:0.96,y:8,opacity:0}} role="dialog" aria-modal="true" aria-labelledby="retire-agent-title" className="w-full max-w-md rounded-lg border border-red-400/20 bg-[#111417] p-5 shadow-2xl shadow-black/50">
+        <div className="fixed inset-0 z-[80] flex items-center justify-center bg-black/70 p-4 backdrop-blur-sm">
+          <div role="dialog" aria-modal="true" aria-labelledby="retire-agent-title" className="dy-surface-enter w-full max-w-md rounded-lg border border-red-400/20 bg-[#111417] p-5 shadow-2xl shadow-black/50">
             <p id="retire-agent-title" className="text-[11px] font-bold uppercase tracking-[0.16em] text-red-300">Retire agent</p>
             <p className="mt-3 text-sm font-semibold text-slate-100">Are you sure you would like to retire this agent?</p>
             <p className="mt-2 text-[11px] leading-relaxed text-slate-400">You will permanently delete {agent.name}, including its OpenClaw customizations, profile, sessions, and agent state. The workspace folder will not be deleted.</p>
@@ -1940,9 +1942,9 @@ export function AgentEditorModal() {
               <button type="button" onClick={()=>setRetireConfirmOpen(false)} disabled={retiring} className="rounded-lg border border-white/[0.08] bg-white/[0.03] px-3 py-2 text-[9px] font-bold uppercase tracking-[0.12em] text-slate-400 transition hover:border-white/20 hover:text-white disabled:opacity-40">Cancel</button>
               <button type="button" onClick={()=>void RetireAgent()} disabled={retiring} className="rounded-lg border border-red-300/50 bg-red-500/[0.16] px-4 py-2 text-[9px] font-bold uppercase tracking-[0.12em] text-red-100 transition hover:bg-red-500/[0.24] disabled:opacity-40">{retiring?'Retiring...':'Yes, retire'}</button>
             </div>
-          </motion.div>
-        </motion.div>
+          </div>
+        </div>
       )}
-    </AnimatePresence>
+    </>
   )
 }

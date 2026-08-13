@@ -26,6 +26,8 @@ import {
   PLUGIN_FILTERS,
   pluginMatchesFilter,
   pluginPageState,
+  readPluginFilter,
+  savePluginFilter,
   summarizePluginPageStates,
   type PluginFilter,
 } from './pluginStateProjection'
@@ -732,6 +734,7 @@ function PluginDiscoveryPanel({
       <div className="grid gap-2 lg:grid-cols-[minmax(0,1fr)_auto]">
         <div className="flex min-w-0 items-center rounded-md border border-white/[0.07] bg-black/20 transition focus-within:border-cyan-300/30">
           <input
+            data-plugin-search="true"
             value={query}
             onChange={(event) => setQuery(event.target.value)}
             onKeyDown={(event) => {
@@ -818,10 +821,10 @@ function PluginDiscoveryPanel({
   )
 }
 
-export function PluginsPanel() {
+export function PluginsPanel({ focusQuery = '' }: { focusQuery?: string }) {
   const [plugins, setPlugins] = useState<PluginEntry[]>(() => pluginsPanelCache?.plugins || [])
   const [query, setQuery] = useState('')
-  const [filter, setFilter] = useState<PluginFilter>('active')
+  const [filter, setFilter] = useState<PluginFilter>(() => readPluginFilter())
   const [loading, setLoading] = useState(() => !pluginsPanelCache)
   const [error, setError] = useState('')
   const [notice, setNotice] = useState(() => (pluginsPanelCache ? responseNotice(pluginsPanelCache) : ''))
@@ -834,6 +837,20 @@ export function PluginsPanel() {
   const [inspectState, setInspectState] = useState<PluginInspectState | null>(null)
   const [uninstallConfirmPlugin, setUninstallConfirmPlugin] = useState<PluginEntry | null>(null)
   const [updateAllConfirm, setUpdateAllConfirm] = useState(false)
+
+  const updateFilter = useCallback((nextFilter: PluginFilter) => {
+    setFilter(nextFilter)
+    savePluginFilter(nextFilter)
+  }, [])
+
+  useEffect(() => {
+    const nextQuery = focusQuery.trim()
+    if (!nextQuery) return
+    setQuery(nextQuery)
+    window.requestAnimationFrame(() => {
+      document.querySelector<HTMLInputElement>('[data-plugin-search]')?.focus()
+    })
+  }, [focusQuery])
 
   const applyPayload = useCallback((payload: PluginApiPayload) => {
     if (Array.isArray(payload.plugins)) {
@@ -1143,7 +1160,7 @@ export function PluginsPanel() {
             query={query}
             setQuery={setQuery}
             filter={filter}
-            setFilter={setFilter}
+            setFilter={updateFilter}
             visibleCount={visiblePlugins.length}
             setNotice={setNotice}
             setError={setError}
@@ -1262,7 +1279,7 @@ export function PluginsPanel() {
                     <Button
                       onClick={() => {
                         setQuery('')
-                        setFilter('all')
+                        updateFilter('all')
                       }}
                       variant="secondary"
                       size="compact"
