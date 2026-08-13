@@ -15,13 +15,13 @@ internal static class Program
 
         if (!File.Exists(electronPath))
         {
-            MessageBox.Show("Unable to find bundled Electron runtime:\n" + electronPath, "DystopAI", MessageBoxButtons.OK, MessageBoxIcon.Error);
+            MessageBox.Show("Unable to find bundled Electron runtime:\n" + electronPath, "Automnia", MessageBoxButtons.OK, MessageBoxIcon.Error);
             return 1;
         }
 
         if (!File.Exists(appPath))
         {
-            MessageBox.Show("Unable to find packaged DystopAI app:\n" + appPath, "DystopAI", MessageBoxButtons.OK, MessageBoxIcon.Error);
+            MessageBox.Show("Unable to find packaged Automnia app:\n" + appPath, "Automnia", MessageBoxButtons.OK, MessageBoxIcon.Error);
             return 1;
         }
 
@@ -40,7 +40,7 @@ internal static class Program
         }
         catch (Exception ex)
         {
-            MessageBox.Show("Unable to launch DystopAI:\n" + ex.Message, "DystopAI", MessageBoxButtons.OK, MessageBoxIcon.Error);
+            MessageBox.Show("Unable to launch Automnia:\n" + ex.Message, "Automnia", MessageBoxButtons.OK, MessageBoxIcon.Error);
             return 1;
         }
     }

@@ -1,0 +1,227 @@
+/*
+  Final viewport-fit layer.
+
+  The reference layout keeps the registry and command console visible together
+  on normal desktop windows. Earlier cascade layers intentionally stacked the
+  console below 1460px, which made the composer disappear below the fold on
+  compact laptop screens. This layer keeps the two surfaces side by side when
+  there is enough usable width, then puts the console immediately after the
+  party strip on narrow screens so the chat surface remains reachable.
+*/
+
+html.dui-pro-overhaul,
+html.dui-pro-overhaul.dui-cohesive-ui {
+  --dy-command-console-min-width: 320px;
+  --dy-command-console-width: clamp(320px, 29vw, 460px);
+}
+
+html.dui-pro-overhaul .dy-tab-content,
+html.dui-pro-overhaul.dui-cohesive-ui .dy-tab-content,
+html.dui-pro-overhaul .dy-agents-workspace,
+html.dui-pro-overhaul.dui-cohesive-ui .dy-agents-workspace {
+  box-sizing: border-box !important;
+  max-width: 100% !important;
+  overflow-x: hidden !important;
+}
+
+/* Keep the markdown editor surface visually stable as its modal reflows. */
+html.dui-pro-overhaul [data-dui-modal="recruit-agent"] .dui-recruit-code-editor,
+html.dui-pro-overhaul.dui-cohesive-ui [data-dui-modal="recruit-agent"] .dui-recruit-code-editor,
+html.dui-pro-overhaul [data-dui-modal="recruit-agent"] .dui-recruit-code-editor:focus-within,
+html.dui-pro-overhaul.dui-cohesive-ui [data-dui-modal="recruit-agent"] .dui-recruit-code-editor:focus-within {
+  background: #050505 !important;
+}
+
+/* Normal desktop and laptop widths: keep chat in the right-hand column. */
+@media (min-width: 1201px) {
+  html.dui-pro-overhaul .dy-agents-workspace.is-console-visible,
+  html.dui-pro-overhaul.dui-cohesive-ui .dy-agents-workspace.is-console-visible {
+    grid-template-columns:
+      minmax(0, 1fr)
+      minmax(12px, 18px)
+      minmax(360px, var(--dy-command-console-width)) !important;
+    grid-template-areas:
+      "party party party"
+      "registry split console" !important;
+    align-items: stretch !important;
+  }
+
+  html.dui-pro-overhaul .dy-agents-workspace.is-console-visible .dy-agent-split-resizer,
+  html.dui-pro-overhaul.dui-cohesive-ui .dy-agents-workspace.is-console-visible .dy-agent-split-resizer {
+    display: flex !important;
+  }
+}
+
+/*
+  Between a small laptop and a tablet, collapse the rail but retain a real
+  two-column workspace. The 90% Electron zoom makes this breakpoint feel like
+  the reference desktop composition without shrinking text by hand.
+*/
+@media (min-width: 901px) and (max-width: 1200px) {
+  html.dui-pro-overhaul,
+  html.dui-pro-overhaul.dui-cohesive-ui {
+    --dui-rail: 82px;
+    --dy-command-console-width: clamp(320px, 36vw, 390px);
+  }
+
+  html.dui-pro-overhaul .dy-human-rail,
+  html.dui-pro-overhaul.dui-cohesive-ui .dy-human-rail {
+    width: var(--dui-rail) !important;
+    padding: 0 10px !important;
+  }
+
+  html.dui-pro-overhaul .dy-human-rail-lockup,
+  html.dui-pro-overhaul.dui-cohesive-ui .dy-human-rail-lockup {
+    width: 58px !important;
+  }
+
+  html.dui-pro-overhaul .dy-human-nav-copy,
+  html.dui-pro-overhaul .dy-operator-copy,
+  html.dui-pro-overhaul .dy-operator-menu,
+  html.dui-pro-overhaul.dui-cohesive-ui .dy-human-nav-copy,
+  html.dui-pro-overhaul.dui-cohesive-ui .dy-operator-copy,
+  html.dui-pro-overhaul.dui-cohesive-ui .dy-operator-menu {
+    display: none !important;
+  }
+
+  html.dui-pro-overhaul .dy-human-nav :is(button, .dy-human-nav-action, .dy-human-nav-utility),
+  html.dui-pro-overhaul.dui-cohesive-ui .dy-human-nav :is(button, .dy-human-nav-action, .dy-human-nav-utility) {
+    justify-content: center !important;
+    padding: 0 !important;
+  }
+
+  html.dui-pro-overhaul .app-bg > .dy-app-main,
+  html.dui-pro-overhaul.dui-cohesive-ui .app-bg > .dy-app-main {
+    width: auto !important;
+    margin-left: var(--dui-rail) !important;
+  }
+
+  html.dui-pro-overhaul .dy-agents-workspace.is-console-visible,
+  html.dui-pro-overhaul.dui-cohesive-ui .dy-agents-workspace.is-console-visible {
+    grid-template-columns:
+      minmax(0, 1fr)
+      12px
+      minmax(320px, var(--dy-command-console-width)) !important;
+    grid-template-areas:
+      "party party party"
+      "registry split console" !important;
+    align-items: stretch !important;
+  }
+
+  html.dui-pro-overhaul .dy-agent-split-resizer,
+  html.dui-pro-overhaul.dui-cohesive-ui .dy-agent-split-resizer {
+    display: flex !important;
+    width: 12px !important;
+    min-width: 12px !important;
+  }
+
+  html.dui-pro-overhaul .agent-card-registry-grid,
+  html.dui-pro-overhaul .agent-card-registry-grid--showcase,
+  html.dui-pro-overhaul .agent-card-registry-grid--grid6,
+  html.dui-pro-overhaul .agent-card-registry-grid--grid8,
+  html.dui-pro-overhaul .agent-card-registry-grid--grid10,
+  html.dui-pro-overhaul.dui-cohesive-ui .agent-card-registry-grid,
+  html.dui-pro-overhaul.dui-cohesive-ui .agent-card-registry-grid--showcase,
+  html.dui-pro-overhaul.dui-cohesive-ui .agent-card-registry-grid--grid6,
+  html.dui-pro-overhaul.dui-cohesive-ui .agent-card-registry-grid--grid8,
+  html.dui-pro-overhaul.dui-cohesive-ui .agent-card-registry-grid--grid10 {
+    grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+  }
+}
+
+/*
+  Narrow screens: the console follows the active party strip, not the full
+  registry. Its flex column keeps the composer pinned to the visible bottom of
+  the chat panel while the registry remains scrollable below it.
+*/
+@media (max-width: 900px) {
+  html.dui-pro-overhaul .dy-agents-workspace.is-console-visible,
+  html.dui-pro-overhaul.dui-cohesive-ui .dy-agents-workspace.is-console-visible {
+    grid-template-columns: minmax(0, 1fr) !important;
+    grid-template-areas:
+      "party"
+      "console"
+      "registry" !important;
+    grid-template-rows: auto clamp(320px, 44dvh, 520px) auto !important;
+    align-items: stretch !important;
+  }
+
+  html.dui-pro-overhaul .dy-agent-split-resizer,
+  html.dui-pro-overhaul.dui-cohesive-ui .dy-agent-split-resizer {
+    display: none !important;
+  }
+
+  html.dui-pro-overhaul .dy-agent-console-pane,
+  html.dui-pro-overhaul.dui-cohesive-ui .dy-agent-console-pane {
+    width: 100% !important;
+    min-width: 0 !important;
+    height: auto !important;
+    min-height: 0 !important;
+    max-height: none !important;
+  }
+
+  html.dui-pro-overhaul .dy-agent-console-pane [data-chat-panel="true"],
+  html.dui-pro-overhaul .dy-agent-console-pane [data-dui-panel="command-console"],
+  html.dui-pro-overhaul.dui-cohesive-ui .dy-agent-console-pane [data-chat-panel="true"],
+  html.dui-pro-overhaul.dui-cohesive-ui .dy-agent-console-pane [data-dui-panel="command-console"] {
+    height: 100% !important;
+    min-height: 0 !important;
+    max-height: none !important;
+  }
+
+  html.dui-pro-overhaul .agent-registry-pane,
+  html.dui-pro-overhaul.dui-cohesive-ui .agent-registry-pane,
+  html.dui-pro-overhaul .agent-registry-pane [data-dui-panel="agent-registry"],
+  html.dui-pro-overhaul.dui-cohesive-ui .agent-registry-pane [data-dui-panel="agent-registry"] {
+    height: auto !important;
+    min-height: 0 !important;
+    max-height: none !important;
+  }
+
+  html.dui-pro-overhaul .agent-registry-pane [data-agent-registry-scroll],
+  html.dui-pro-overhaul.dui-cohesive-ui .agent-registry-pane [data-agent-registry-scroll] {
+    height: auto !important;
+    max-height: none !important;
+    overflow: visible !important;
+  }
+
+  html.dui-pro-overhaul .dy-status-grid,
+  html.dui-pro-overhaul.dui-cohesive-ui .dy-status-grid {
+    grid-template-columns: repeat(3, minmax(0, 1fr)) !important;
+  }
+}
+
+@media (max-width: 600px) {
+  html.dui-pro-overhaul .dy-status-grid,
+  html.dui-pro-overhaul.dui-cohesive-ui .dy-status-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+  }
+
+  html.dui-pro-overhaul .dy-agents-workspace.is-console-visible,
+  html.dui-pro-overhaul.dui-cohesive-ui .dy-agents-workspace.is-console-visible {
+    grid-template-rows: auto clamp(300px, 46dvh, 460px) auto !important;
+  }
+}
+
+/* Short laptop windows still keep the chat column visible instead of stacking it. */
+@media (min-width: 901px) and (max-height: 820px) {
+  html.dui-pro-overhaul .dy-agents-workspace.is-console-visible,
+  html.dui-pro-overhaul.dui-cohesive-ui .dy-agents-workspace.is-console-visible {
+    grid-template-columns:
+      minmax(0, 1fr)
+      12px
+      minmax(320px, var(--dy-command-console-width)) !important;
+    grid-template-areas:
+      "party party party"
+      "registry split console" !important;
+    grid-template-rows: auto minmax(0, 1fr) !important;
+  }
+
+  html.dui-pro-overhaul .dy-agent-console-pane,
+  html.dui-pro-overhaul.dui-cohesive-ui .dy-agent-console-pane,
+  html.dui-pro-overhaul .dy-agent-console-pane [data-chat-panel="true"],
+  html.dui-pro-overhaul.dui-cohesive-ui .dy-agent-console-pane [data-chat-panel="true"] {
+    height: max(420px, calc(100dvh - 210px)) !important;
+    min-height: 420px !important;
+  }
+}

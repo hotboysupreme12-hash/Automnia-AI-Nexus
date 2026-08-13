@@ -92,7 +92,7 @@ assert.doesNotMatch(authStatusSlice, /res\.json\(/, 'auth status must not emit a
 
 const usagePrioritySlice = sliceBetween(licenseRoutes, "app.post('/api/license/usage-priority'", "app.post('/api/license/checkout'")
 assertCanonicalRouteSlice('license usage-priority route', usagePrioritySlice)
-assert.match(usagePrioritySlice, /z\.enum\(\['automnia_first', 'provider_first'\]\)/, 'usage priority must accept only the two supported routes')
+assert.match(usagePrioritySlice, /z\.enum\(\['automnia_first', 'provider_first', 'byok_only'\]\)/, 'usage priority must accept only the three supported routes')
 assert.match(usagePrioritySlice, /getStatus\(\)\.mode !== 'hosted_credits'/, 'BYOK-only access must not change hosted usage priority')
 
 const scripts = packageJson.scripts || {}

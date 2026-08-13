@@ -32,7 +32,7 @@ const CONTROL_SERVER_STARTUP_TIMEOUT_MS = Math.max(
 )
 const GATEWAY_CONTROL_ACTION_TIMEOUT_MS = Math.min(
   120_000,
-  Math.max(15_000, Number(process.env.DYSTOPAI_GATEWAY_CONTROL_ACTION_TIMEOUT_MS || 60_000) || 60_000),
+  Math.max(15_000, Number(process.env.AUTOMNIA_GATEWAY_CONTROL_ACTION_TIMEOUT_MS || 60_000) || 60_000),
 )
 const MANAGED_PORTS = Array.from(new Set([
   APP_PORT,
@@ -55,40 +55,44 @@ function detectPackagedRuntime() {
 }
 const isDev = !detectPackagedRuntime()
 const HOME_DIR = process.env.USERPROFILE || process.env.HOME || app.getPath('home')
-const DYSTOPAI_USER_DATA_DIR = path.resolve(process.env.DYSTOPAI_USER_DATA_DIR || path.join(HOME_DIR, '.dystopai-control-center'))
-app.setPath('userData', DYSTOPAI_USER_DATA_DIR)
+const AUTOMNIA_USER_DATA_DIR = path.resolve(process.env.AUTOMNIA_USER_DATA_DIR || path.join(HOME_DIR, '.automnia-control-center'))
+app.setPath('userData', AUTOMNIA_USER_DATA_DIR)
 const CONTROL_CENTER_TOKEN_FILE = path.resolve(
-  process.env.DYSTOPAI_CONTROL_CENTER_TOKEN_FILE || path.join(DYSTOPAI_USER_DATA_DIR, 'auth', 'control-center-token.json'),
+  process.env.AUTOMNIA_CONTROL_CENTER_TOKEN_FILE || path.join(AUTOMNIA_USER_DATA_DIR, 'auth', 'control-center-token.json'),
 )
 const CONTROL_CENTER_TOKEN_HELP_FILE = path.join(path.dirname(CONTROL_CENTER_TOKEN_FILE), 'README.txt')
-const NPM_TOOLCHAIN_ROOT = path.join(DYSTOPAI_USER_DATA_DIR, 'toolchains', 'node')
+const NPM_TOOLCHAIN_ROOT = path.join(AUTOMNIA_USER_DATA_DIR, 'toolchains', 'node')
 const BUNDLED_NPM_TOOLCHAIN_ROOT = path.join(process.resourcesPath || '', 'toolchains', 'node')
 const MIN_NPM_NODE_MAJOR = 22
 const MIN_NPM_NODE_MINOR = 19
-const WINDOWS_RENDERER_STABILITY = process.platform === 'win32' && process.env.DYSTOPAI_WINDOWS_RENDERER_STABILITY !== '0'
+const WINDOWS_RENDERER_STABILITY = process.platform === 'win32' && process.env.AUTOMNIA_WINDOWS_RENDERER_STABILITY !== '0'
 const WINDOWS_DISABLE_GPU = process.platform === 'win32' && (
-  process.env.DYSTOPAI_WINDOWS_DISABLE_GPU === '1' ||
-  process.env.DYSTOPAI_WINDOWS_SAFE_RENDERER === '1'
+  process.env.AUTOMNIA_WINDOWS_DISABLE_GPU === '1' ||
+  process.env.AUTOMNIA_WINDOWS_SAFE_RENDERER === '1'
 )
 const WINDOWS_DIAGNOSTIC_SINGLE_PROCESS = process.platform === 'win32' &&
   isDev &&
-  process.env.DYSTOPAI_WINDOWS_DIAGNOSTIC_SINGLE_PROCESS === '1' &&
-  process.env.DYSTOPAI_ACK_UNSAFE_ELECTRON_SANDBOX_DIAGNOSTIC === '1'
-const ELECTRON_E2E = process.env.DYSTOPAI_ELECTRON_E2E === '1'
-const ELECTRON_E2E_AUTO_QUIT_MS = Math.max(0, Number(process.env.DYSTOPAI_ELECTRON_E2E_AUTO_QUIT_MS || 0) || 0)
-const ELECTRON_E2E_ALLOW_PARALLEL = ELECTRON_E2E && process.env.DYSTOPAI_ELECTRON_E2E_ALLOW_PARALLEL === '1'
+  process.env.AUTOMNIA_WINDOWS_DIAGNOSTIC_SINGLE_PROCESS === '1' &&
+  process.env.AUTOMNIA_ACK_UNSAFE_ELECTRON_SANDBOX_DIAGNOSTIC === '1'
+const ELECTRON_E2E = process.env.AUTOMNIA_ELECTRON_E2E === '1'
+const DEFAULT_RENDERER_ZOOM_FACTOR = Math.min(
+  1,
+  Math.max(0.8, Number(process.env.AUTOMNIA_DEFAULT_ZOOM_FACTOR || 0.8) || 0.8),
+)
+const ELECTRON_E2E_AUTO_QUIT_MS = Math.max(0, Number(process.env.AUTOMNIA_ELECTRON_E2E_AUTO_QUIT_MS || 0) || 0)
+const ELECTRON_E2E_ALLOW_PARALLEL = ELECTRON_E2E && process.env.AUTOMNIA_ELECTRON_E2E_ALLOW_PARALLEL === '1'
 const WSLG_RUNTIME = process.platform === 'linux' && (
   Boolean(process.env.WSL_DISTRO_NAME || process.env.WSL_INTEROP) ||
   fs.existsSync('/mnt/wslg')
 )
-const TRAY_ENABLED = process.env.DYSTOPAI_DISABLE_TRAY !== '1' &&
-  (!WSLG_RUNTIME || process.env.DYSTOPAI_ENABLE_WSLG_TRAY === '1')
+const TRAY_ENABLED = process.env.AUTOMNIA_DISABLE_TRAY !== '1' &&
+  (!WSLG_RUNTIME || process.env.AUTOMNIA_ENABLE_WSLG_TRAY === '1')
 process.env.OPENCLAW_SUPPRESS_EXTENSION_API_WARNING = process.env.OPENCLAW_SUPPRESS_EXTENSION_API_WARNING || '1'
 if (WINDOWS_DISABLE_GPU) {
   app.disableHardwareAcceleration()
 }
 if (WINDOWS_DIAGNOSTIC_SINGLE_PROCESS) {
-  console.warn('[dystopai] unsafe Electron single-process diagnostic mode is enabled for this development run only.')
+  console.warn('[automnia] unsafe Electron single-process diagnostic mode is enabled for this development run only.')
   app.commandLine.appendSwitch('single-process')
   app.commandLine.appendSwitch('in-process-gpu')
   app.commandLine.appendSwitch('disable-gpu-sandbox')
@@ -128,9 +132,9 @@ const SERVER_STARTUP_OUTPUT_TAIL_MAX_CHARS = 12_000
 
 function logE2e(message) {
   if (!ELECTRON_E2E) return
-  const line = `[dystopai-e2e] ${message}`
+  const line = `[automnia-e2e] ${message}`
   console.log(line)
-  const logPath = process.env.DYSTOPAI_ELECTRON_E2E_LOG_PATH
+  const logPath = process.env.AUTOMNIA_ELECTRON_E2E_LOG_PATH
   if (!logPath) return
   try {
     fs.mkdirSync(path.dirname(logPath), { recursive: true })
@@ -207,22 +211,22 @@ function quarantineInvalidControlCenterTokenFile(reason) {
     const suffix = new Date().toISOString().replace(/[:.]/g, '-')
     const invalidPath = `${CONTROL_CENTER_TOKEN_FILE}.invalid-${suffix}`
     fs.renameSync(CONTROL_CENTER_TOKEN_FILE, invalidPath)
-    console.warn(`[dystopai] Ignored invalid saved Control Center token (${reason}). Moved it to: ${invalidPath}`)
+    console.warn(`[automnia] Ignored invalid saved Control Center token (${reason}). Moved it to: ${invalidPath}`)
   } catch (error) {
-    console.warn(`[dystopai] Ignored invalid saved Control Center token (${reason}); could not move it aside: ${error?.message || error}`)
+    console.warn(`[automnia] Ignored invalid saved Control Center token (${reason}); could not move it aside: ${error?.message || error}`)
   }
 }
 
 function writeControlCenterTokenHelpFile() {
   const body = [
-    'DystopAI Control Center local token',
+    'Automnia Control Center local token',
     '',
     'This folder stores the desktop launch token for the local Control Center API on 127.0.0.1.',
     'Electron keeps this long-lived token in the main process and uses it to mint short session tokens for the app window.',
     'The preload layer and web page do not receive the long-lived token.',
     '',
-    'To choose your own token, close DystopAI and edit the "token" field in control-center-token.json.',
-    'Use a long random value with no line breaks. If the token file is deleted or invalid, DystopAI creates a fresh local token on the next start.',
+    'To choose your own token, close Automnia and edit the "token" field in control-center-token.json.',
+    'Use a long random value with no line breaks. If the token file is deleted or invalid, Automnia creates a fresh local token on the next start.',
     '',
   ].join('\n')
   try {
@@ -230,7 +234,7 @@ function writeControlCenterTokenHelpFile() {
     fs.writeFileSync(CONTROL_CENTER_TOKEN_HELP_FILE, body, { encoding: 'utf8', mode: 0o600 })
     try { fs.chmodSync(CONTROL_CENTER_TOKEN_HELP_FILE, 0o600) } catch {}
   } catch (error) {
-    console.warn('[dystopai] could not write Control Center token help file:', error?.message || error)
+    console.warn('[automnia] could not write Control Center token help file:', error?.message || error)
   }
 }
 
@@ -252,7 +256,7 @@ function writeControlCenterTokenFile(token, source = 'generated') {
     writeControlCenterTokenHelpFile()
   } catch (error) {
     try { fs.rmSync(tempPath, { force: true }) } catch {}
-    console.warn('[dystopai] could not persist Control Center token; this run will continue with an in-memory token:', error?.message || error)
+    console.warn('[automnia] could not persist Control Center token; this run will continue with an in-memory token:', error?.message || error)
   }
 }
 
@@ -297,7 +301,7 @@ function resolveDirectoryPickerStartPath(startPath) {
   return app.getPath('documents')
 }
 
-ipcMain.handle('dystopai:pick-directory', async (event, input = {}) => {
+ipcMain.handle('automnia:pick-directory', async (event, input = {}) => {
   try {
     if (!isTrustedRendererSender(event)) {
       return { ok: false, error: 'Untrusted renderer origin', path: null }
@@ -318,18 +322,18 @@ ipcMain.handle('dystopai:pick-directory', async (event, input = {}) => {
   }
 })
 
-ipcMain.handle('dystopai:bootstrap-control-center-session', async (event) => {
+ipcMain.handle('automnia:bootstrap-control-center-session', async (event) => {
   if (!isTrustedRendererSender(event)) return null
   try {
     return await bootstrapControlCenterSession()
   } catch (error) {
-    console.warn('[dystopai] desktop session bootstrap failed:', error?.message || error)
+    console.warn('[automnia] desktop session bootstrap failed:', error?.message || error)
     return null
   }
 })
 
 function resolveServerEntry() {
-  if (process.env.DYSTOPAI_ELECTRON_E2E_FORCE_MISSING_SERVER === '1') {
+  if (process.env.AUTOMNIA_ELECTRON_E2E_FORCE_MISSING_SERVER === '1') {
     throw new Error('E2E forced missing server')
   }
   const candidates = [
@@ -386,7 +390,7 @@ function ensureWritablePackagedOpenClawRuntime(bundledRuntime) {
     isDev ||
     !bundledRuntime ||
     process.platform === 'win32' ||
-    process.env.DYSTOPAI_ENABLE_WRITABLE_OPENCLAW_RUNTIME !== '1'
+    process.env.AUTOMNIA_ENABLE_WRITABLE_OPENCLAW_RUNTIME !== '1'
   ) return bundledRuntime
   const bundledRoot = path.dirname(path.resolve(bundledRuntime))
   const required = [
@@ -397,9 +401,9 @@ function ensureWritablePackagedOpenClawRuntime(bundledRuntime) {
   if (!required.every((candidate) => fs.existsSync(candidate))) return bundledRuntime
 
   const stamp = packagedOpenClawRuntimeStamp(bundledRoot)
-  const targetRoot = path.join(DYSTOPAI_USER_DATA_DIR, 'runtimes', 'openclaw', stamp)
+  const targetRoot = path.join(AUTOMNIA_USER_DATA_DIR, 'runtimes', 'openclaw', stamp)
   const targetRuntime = path.join(targetRoot, path.basename(bundledRuntime))
-  const readyMarker = path.join(targetRoot, '.dystopai-runtime-ready')
+  const readyMarker = path.join(targetRoot, '.automnia-runtime-ready')
   if (fs.existsSync(targetRuntime) && fs.existsSync(readyMarker)) return targetRuntime
 
   const parent = path.dirname(targetRoot)
@@ -423,16 +427,16 @@ function ensureWritablePackagedOpenClawRuntime(bundledRuntime) {
         fs.chmodSync(candidate, 0o755)
       } catch {}
     }
-    fs.writeFileSync(path.join(tempRoot, '.dystopai-runtime-ready'), `${new Date().toISOString()}\n`, 'utf8')
+    fs.writeFileSync(path.join(tempRoot, '.automnia-runtime-ready'), `${new Date().toISOString()}\n`, 'utf8')
     fs.rmSync(targetRoot, { recursive: true, force: true })
     fs.renameSync(tempRoot, targetRoot)
-    console.log(`[dystopai] hydrated writable OpenClaw runtime -> ${targetRoot}`)
+    console.log(`[automnia] hydrated writable OpenClaw runtime -> ${targetRoot}`)
     return targetRuntime
   } catch (error) {
     try {
       fs.rmSync(tempRoot, { recursive: true, force: true })
     } catch {}
-    console.warn('[dystopai] writable OpenClaw runtime hydration failed:', error?.message || error)
+    console.warn('[automnia] writable OpenClaw runtime hydration failed:', error?.message || error)
     return bundledRuntime
   }
 }
@@ -499,7 +503,7 @@ function normalizeForMatch(value) {
 
 function isBundledOpenClawStatePath(value) {
   const normalized = normalizeForMatch(value)
-  return normalized.includes('/openclaw-control-center/openclaw') || normalized.includes('/automnia-ai-nexus/openclaw')
+  return normalized.includes('/automnia-control-center/openclaw') || normalized.includes('/automnia-ai-nexus/openclaw')
 }
 
 function powerShellQuote(value) {
@@ -600,7 +604,7 @@ function rememberNodeForNpm(npmBin) {
   const nodeBin = nodeBinForNpmBin(npmBin)
   if (!isExecutableFile(nodeBin)) return
   process.env.NODE_EXE = process.env.NODE_EXE || nodeBin
-  process.env.DYSTOPAI_NODE_BIN = process.env.DYSTOPAI_NODE_BIN || nodeBin
+  process.env.AUTOMNIA_NODE_BIN = process.env.AUTOMNIA_NODE_BIN || nodeBin
 }
 
 function existingNpmBinInToolchainRoot(root) {
@@ -785,7 +789,7 @@ async function installManagedNodeToolchain() {
     fs.rmSync(zipPath, { force: true })
     throw new Error(`Node.js archive checksum mismatch for ${archiveFileName}`)
   }
-  console.log(`[dystopai] verified Node.js archive ${archiveFileName} against the published SHA-256 manifest`)
+  console.log(`[automnia] verified Node.js archive ${archiveFileName} against the published SHA-256 manifest`)
   fs.rmSync(extractDir, { recursive: true, force: true })
   fs.mkdirSync(extractDir, { recursive: true })
   expandZip(zipPath, extractDir)
@@ -801,8 +805,8 @@ async function installManagedNodeToolchain() {
 }
 
 async function ensureNpmToolchainAvailable() {
-  if (process.env.DYSTOPAI_AUTO_INSTALL_NPM === '0') return
-  const configured = process.env.DYSTOPAI_NPM_BIN || process.env.NPM_BIN || ''
+  if (process.env.AUTOMNIA_AUTO_INSTALL_NPM === '0') return
+  const configured = process.env.AUTOMNIA_NPM_BIN || process.env.NPM_BIN || ''
   if (configured && isExecutableFile(configured)) {
     prependProcessPath(path.dirname(configured))
     rememberNodeForNpm(configured)
@@ -817,7 +821,7 @@ async function ensureNpmToolchainAvailable() {
   const bundled = existingBundledNpmBin()
   if (bundled) {
     prependProcessPath(path.dirname(bundled))
-    process.env.DYSTOPAI_NPM_BIN = bundled
+    process.env.AUTOMNIA_NPM_BIN = bundled
     rememberNodeForNpm(bundled)
     return
   }
@@ -825,28 +829,28 @@ async function ensureNpmToolchainAvailable() {
   const managed = existingManagedNpmBin()
   if (managed) {
     prependProcessPath(path.dirname(managed))
-    process.env.DYSTOPAI_NPM_BIN = managed
+    process.env.AUTOMNIA_NPM_BIN = managed
     rememberNodeForNpm(managed)
     return
   }
 
   if (process.platform !== 'win32') return
   try {
-    console.log('[dystopai] npm not found; provisioning app-local Node/npm toolchain...')
+    console.log('[automnia] npm not found; provisioning app-local Node/npm toolchain...')
     const npmBin = await installManagedNodeToolchain()
     prependProcessPath(path.dirname(npmBin))
-    process.env.DYSTOPAI_NPM_BIN = npmBin
+    process.env.AUTOMNIA_NPM_BIN = npmBin
     rememberNodeForNpm(npmBin)
-    console.log('[dystopai] npm toolchain ready:', npmBin)
+    console.log('[automnia] npm toolchain ready:', npmBin)
   } catch (err) {
-    console.warn('[dystopai] automatic npm provisioning failed:', err?.message || err)
+    console.warn('[automnia] automatic npm provisioning failed:', err?.message || err)
   }
 }
 
 function appOwnershipRoots() {
   const roots = ELECTRON_E2E
     ? [
-        DYSTOPAI_USER_DATA_DIR,
+        AUTOMNIA_USER_DATA_DIR,
         NPM_TOOLCHAIN_ROOT,
         resolveOpenClawHomeDir(),
       ]
@@ -857,7 +861,7 @@ function appOwnershipRoots() {
         process.platform === 'darwin' && process.execPath.includes('.app/Contents/MacOS/')
           ? process.execPath.slice(0, process.execPath.indexOf('.app/Contents/MacOS/') + 4)
           : '',
-        DYSTOPAI_USER_DATA_DIR,
+        AUTOMNIA_USER_DATA_DIR,
         NPM_TOOLCHAIN_ROOT,
         resolveOpenClawHomeDir(),
       ]
@@ -881,7 +885,7 @@ function isManagedHelperCommand(commandLine) {
   )
   const openClawManagedCommand = openClawRuntime && /\b(?:agent|browser|cron|gateway|openclaw-gateway|mcp|plugins?)\b/.test(command)
   return (
-    command.includes('/dystopai.exe') ||
+    command.includes('/automnia.exe') ||
     command.includes('/vite/bin/vite.js') ||
     (command.includes('/tsx/dist/cli.mjs') && command.includes('server/index.ts')) ||
     (command.includes('/tsx/dist/loader.mjs') && command.includes('server/index.ts')) ||
@@ -900,7 +904,7 @@ function listManagedHelperProcesses() {
             $_.CommandLine -match 'vite\\\\bin\\\\vite\\.js' -or
             $_.CommandLine -match 'server/index\\.ts' -or
             $_.CommandLine -match 'dist-server[\\\\/]index\\.cjs' -or
-            $_.CommandLine -match 'DystopAI\\.exe' -or
+            $_.CommandLine -match 'Automnia\\.exe' -or
             $_.CommandLine -match 'openclaw\\.(?:mjs|cmd).*gateway' -or
             $_.CommandLine -match 'openclaw\\.(?:mjs|cmd).*(?:agent|browser|cron|mcp|plugins?)' -or
             $_.CommandLine -match 'esbuild\\.exe --service'
@@ -914,7 +918,7 @@ function listManagedHelperProcesses() {
       .filter((row) => Number.isFinite(row.pid))
   }
 
-  const result = spawnSync('sh', ['-c', "ps -axo pid=,command= | grep -E 'DystopAI\\.exe|vite/bin/vite\\.js|server/index\\.(ts|cjs)|openclaw\\.(mjs|cmd).*(agent|browser|cron|gateway|mcp|plugins?)|esbuild.*--service' | grep -v grep"], {
+  const result = spawnSync('sh', ['-c', "ps -axo pid=,command= | grep -E 'Automnia\\.exe|vite/bin/vite\\.js|server/index\\.(ts|cjs)|openclaw\\.(mjs|cmd).*(agent|browser|cron|gateway|mcp|plugins?)|esbuild.*--service' | grep -v grep"], {
     encoding: 'utf8',
     timeout: 10_000,
   })
@@ -1062,7 +1066,7 @@ function listDescendantProcesses(rootPid = process.pid) {
 function killProcessTree(pid, reason) {
   const id = Number(pid)
   if (!Number.isFinite(id) || id === process.pid) return false
-  console.log(`[dystopai] stopping app-owned process pid=${id}: ${reason}`)
+  console.log(`[automnia] stopping app-owned process pid=${id}: ${reason}`)
   if (process.platform === 'win32') {
     const result = spawnSync('taskkill.exe', ['/pid', String(id), '/t', '/f'], {
       stdio: 'ignore',
@@ -1329,7 +1333,7 @@ function pipeServerOutput(stream, chunk) {
   const text = String(chunk || '').replace(/\r/g, '')
   for (const line of text.split('\n')) {
     if (!line.trim()) continue
-    const message = `[dystopai-server:${stream}] ${line}`
+    const message = `[automnia-server:${stream}] ${line}`
     if (stream === 'stderr') console.warn(message)
     else console.log(message)
   }
@@ -1343,7 +1347,7 @@ function scheduleControlServerRestart(reason) {
     SERVER_RESTART_MAX_DELAY_MS,
     SERVER_RESTART_BASE_DELAY_MS * Math.max(1, serverRestartAttempts),
   )
-  console.warn(`[dystopai] restarting API server in ${delay}ms: ${reason}`)
+  console.warn(`[automnia] restarting API server in ${delay}ms: ${reason}`)
   serverRestartTimer = setTimeout(async () => {
     serverRestartTimer = null
     if (isQuitting || startupFailed || startingUp || !controlServerEntry) return
@@ -1351,13 +1355,13 @@ function scheduleControlServerRestart(reason) {
       const child = startControlServerProcess(controlServerEntry)
       await waitForSpawnedControlServer(child)
       serverRestartAttempts = 0
-      console.log('[dystopai] API server restarted on port', APP_PORT)
+      console.log('[automnia] API server restarted on port', APP_PORT)
       if (mainWindow && !mainWindow.isDestroyed()) {
         mainWindow.webContents.reloadIgnoringCache()
       }
       updateTrayMenu()
     } catch (error) {
-      console.error('[dystopai] API server restart failed:', error?.message || error)
+      console.error('[automnia] API server restart failed:', error?.message || error)
       scheduleControlServerRestart('previous restart attempt failed')
     }
   }, delay)
@@ -1379,8 +1383,8 @@ function startControlServerProcess(serverEntry) {
     env: {
       ...process.env,
       CONTROL_CENTER_EXIT_ON_PORT_ERROR: process.env.CONTROL_CENTER_EXIT_ON_PORT_ERROR || '1',
-      DYSTOPAI_DESKTOP_SERVER_CHILD: '1',
-      DYSTOPAI_DESKTOP_SERVER_PARENT_PID: String(process.pid),
+      AUTOMNIA_DESKTOP_SERVER_CHILD: '1',
+      AUTOMNIA_DESKTOP_SERVER_PARENT_PID: String(process.pid),
       CONTROL_CENTER_STARTUP_TRACE: process.env.CONTROL_CENTER_STARTUP_TRACE || '1',
       ELECTRON_RUN_AS_NODE: '1',
     },
@@ -1394,13 +1398,13 @@ function startControlServerProcess(serverEntry) {
   child.stderr?.on('data', (chunk) => pipeServerOutput('stderr', chunk))
   child.once('error', (error) => {
     if (serverProcess === child) serverProcess = null
-    console.error('[dystopai] API server process error:', error?.message || error)
+    console.error('[automnia] API server process error:', error?.message || error)
   })
   child.once('exit', (code, signal) => {
     if (serverProcess === child) serverProcess = null
     if (!isQuitting && !startupFailed && !startingUp) {
       const reason = `unexpected exit (code=${code ?? 'unknown'}, signal=${signal || 'none'})`
-      console.error(`[dystopai] API server ${reason}`)
+      console.error(`[automnia] API server ${reason}`)
       scheduleControlServerRestart(reason)
     }
   })
@@ -1470,7 +1474,7 @@ async function stopControlServerProcess(reason = 'control server cleanup') {
 
   const pid = child.pid
   serverProcess = null
-  console.log(`[dystopai] stopping API server pid=${pid}: ${reason}`)
+  console.log(`[automnia] stopping API server pid=${pid}: ${reason}`)
 
   if (process.platform !== 'win32') {
     try {
@@ -1576,14 +1580,14 @@ async function performQuitCleanup() {
     try {
       await stopRuntimeCompletelyForQuit()
     } catch (err) {
-      console.warn('[dystopai] runtime cleanup failed:', err?.message || err)
+      console.warn('[automnia] runtime cleanup failed:', err?.message || err)
     }
     try {
       await cleanupAppOwnedHelpers('quit cleanup')
       await sleep(500)
       await cleanupAppOwnedHelpers('quit cleanup final sweep')
     } catch (err) {
-      console.warn('[dystopai] helper cleanup failed:', err?.message || err)
+      console.warn('[automnia] helper cleanup failed:', err?.message || err)
     }
     quitCleanupComplete = true
     logE2e('quit-cleanup-complete')
@@ -1630,7 +1634,7 @@ function configureTextAssistance(win) {
   try {
     win.webContents.session.setSpellCheckerLanguages(['en-US'])
   } catch (err) {
-    console.warn('[dystopai] spellchecker language setup failed:', err?.message || err)
+    console.warn('[automnia] spellchecker language setup failed:', err?.message || err)
   }
 
   win.webContents.on('context-menu', (_event, params) => {
@@ -1662,7 +1666,7 @@ function configureTextAssistance(win) {
             try {
               win.webContents.session.addWordToSpellCheckerDictionary(params.misspelledWord)
             } catch (err) {
-              console.warn('[dystopai] add spelling dictionary word failed:', err?.message || err)
+              console.warn('[automnia] add spelling dictionary word failed:', err?.message || err)
             }
           },
         })
@@ -1699,7 +1703,7 @@ function configureTextAssistance(win) {
 function createMainWindow() {
   const win = new BrowserWindow({
     width: 1440, height: 960, minWidth: 1100, minHeight: 720,
-    backgroundColor: '#050607', title: 'DystopAI', show: false,
+    backgroundColor: '#050607', title: 'Automnia', show: false,
     ...(resolveAppIcon() ? { icon: resolveAppIcon() } : {}),
     webPreferences: {
       preload: path.join(__dirname, 'preload.cjs'),
@@ -1728,10 +1732,10 @@ function createMainWindow() {
   let e2eAppRehydrationStarted = false
 
   win.on('unresponsive', () => {
-    console.warn('[dystopai] renderer became unresponsive')
+    console.warn('[automnia] renderer became unresponsive')
   })
   win.webContents.on('render-process-gone', (_event, details) => {
-    console.error('[dystopai] renderer process gone:', details)
+    console.error('[automnia] renderer process gone:', details)
     logE2e(`renderer-process-gone:${details?.reason || 'unknown'}`)
     e2eRendererGone = true
     if (isQuitting || win.isDestroyed()) return
@@ -1745,14 +1749,14 @@ function createMainWindow() {
     logE2e(`renderer-load:${e2eRendererLoadCount}`)
 
     if (
-      process.env.DYSTOPAI_ELECTRON_E2E_ASSERT_RENDERER_JOURNEY === '1' &&
+      process.env.AUTOMNIA_ELECTRON_E2E_ASSERT_RENDERER_JOURNEY === '1' &&
       !e2eRendererJourneyStarted
     ) {
       e2eRendererJourneyStarted = true
       setTimeout(() => {
         void runElectronE2eRendererJourney(win).then(() => {
           logE2e('renderer-journey-ok')
-          if (process.env.DYSTOPAI_ELECTRON_E2E_QUIT_AFTER_RENDERER_JOURNEY === '1') app.quit()
+          if (process.env.AUTOMNIA_ELECTRON_E2E_QUIT_AFTER_RENDERER_JOURNEY === '1') app.quit()
         }).catch((error) => {
           logE2e(`renderer-journey-failed:${error?.message || error}`)
           process.exit(6)
@@ -1762,14 +1766,14 @@ function createMainWindow() {
     }
 
     if (
-      process.env.DYSTOPAI_ELECTRON_E2E_ASSERT_DESKTOP_BOOTSTRAP === '1' &&
+      process.env.AUTOMNIA_ELECTRON_E2E_ASSERT_DESKTOP_BOOTSTRAP === '1' &&
       !e2eDesktopBootstrapStarted
     ) {
       e2eDesktopBootstrapStarted = true
       setTimeout(() => {
         void runElectronE2eDesktopSessionBootstrap(win).then(() => {
           logE2e('desktop-session-bootstrap-ok')
-          if (process.env.DYSTOPAI_ELECTRON_E2E_QUIT_AFTER_DESKTOP_BOOTSTRAP === '1') app.quit()
+          if (process.env.AUTOMNIA_ELECTRON_E2E_QUIT_AFTER_DESKTOP_BOOTSTRAP === '1') app.quit()
         }).catch((error) => {
           logE2e(`desktop-session-bootstrap-failed:${error?.message || error}`)
           process.exit(8)
@@ -1779,14 +1783,14 @@ function createMainWindow() {
     }
 
     if (
-      process.env.DYSTOPAI_ELECTRON_E2E_ASSERT_APP_REHYDRATION === '1' &&
+      process.env.AUTOMNIA_ELECTRON_E2E_ASSERT_APP_REHYDRATION === '1' &&
       !e2eAppRehydrationStarted
     ) {
       e2eAppRehydrationStarted = true
       setTimeout(() => {
         void runElectronE2eAppRehydration(win).then((result) => {
           logE2e(`app-rehydration-${result.mode}-ok:${JSON.stringify(result)}`)
-          if (process.env.DYSTOPAI_ELECTRON_E2E_QUIT_AFTER_APP_REHYDRATION === '1') app.quit()
+          if (process.env.AUTOMNIA_ELECTRON_E2E_QUIT_AFTER_APP_REHYDRATION === '1') app.quit()
         }).catch((error) => {
           logE2e(`app-rehydration-failed:${error?.message || error}`)
           process.exit(9)
@@ -1796,7 +1800,7 @@ function createMainWindow() {
     }
 
     if (
-      process.env.DYSTOPAI_ELECTRON_E2E_ASSERT_TRAY_BEHAVIOR === '1' &&
+      process.env.AUTOMNIA_ELECTRON_E2E_ASSERT_TRAY_BEHAVIOR === '1' &&
       !e2eTrayAssertionsStarted
     ) {
       e2eTrayAssertionsStarted = true
@@ -1809,11 +1813,11 @@ function createMainWindow() {
       return
     }
 
-    if (process.env.DYSTOPAI_ELECTRON_E2E_SCREENSHOT_DIR && !e2eScreenshotCaptureStarted) {
+    if (process.env.AUTOMNIA_ELECTRON_E2E_SCREENSHOT_DIR && !e2eScreenshotCaptureStarted) {
       e2eScreenshotCaptureStarted = true
       setTimeout(() => {
         void runElectronE2eScreenshotCapture(win).then(() => {
-          if (process.env.DYSTOPAI_ELECTRON_E2E_QUIT_AFTER_SCREENSHOTS === '1') app.quit()
+          if (process.env.AUTOMNIA_ELECTRON_E2E_QUIT_AFTER_SCREENSHOTS === '1') app.quit()
         }).catch((error) => {
           logE2e(`screenshots-failed:${error?.message || error}`)
           process.exit(7)
@@ -1822,9 +1826,9 @@ function createMainWindow() {
       return
     }
 
-    const assertRendererExternals = process.env.DYSTOPAI_ELECTRON_E2E_ASSERT_RENDERER_EXTERNALS === '1'
-    const assertRendererRecovery = process.env.DYSTOPAI_ELECTRON_E2E_ASSERT_RENDERER_RECOVERY === '1'
-    const quitAfterRendererAssertions = process.env.DYSTOPAI_ELECTRON_E2E_QUIT_AFTER_RENDERER_ASSERTIONS === '1'
+    const assertRendererExternals = process.env.AUTOMNIA_ELECTRON_E2E_ASSERT_RENDERER_EXTERNALS === '1'
+    const assertRendererRecovery = process.env.AUTOMNIA_ELECTRON_E2E_ASSERT_RENDERER_RECOVERY === '1'
+    const quitAfterRendererAssertions = process.env.AUTOMNIA_ELECTRON_E2E_QUIT_AFTER_RENDERER_ASSERTIONS === '1'
     const requestRendererCrash = () => {
       if (!assertRendererRecovery || e2eRendererCrashRequested || win.isDestroyed()) return
       e2eRendererCrashRequested = true
@@ -1835,9 +1839,9 @@ function createMainWindow() {
     if (e2eRendererLoadCount === 1 && assertRendererExternals) {
       void win.webContents.executeJavaScript(`
         (() => {
-          window.open('https://example.com/dystopai-e2e-window-open', '_blank', 'noopener,noreferrer');
+          window.open('https://example.com/automnia-e2e-window-open', '_blank', 'noopener,noreferrer');
           setTimeout(() => {
-            window.location.href = 'https://example.com/dystopai-e2e-navigation';
+            window.location.href = 'https://example.com/automnia-e2e-navigation';
           }, 25);
           return true;
         })()
@@ -1888,6 +1892,10 @@ function createMainWindow() {
     updateTrayMenu()
   })
   win.once('ready-to-show', () => {
+    // Keep the full command console and agent registry visible on ordinary
+    // laptop displays. Screenshot E2E runs explicitly restore 100% before
+    // capturing their contract viewports.
+    if (!ELECTRON_E2E) void win.webContents.setZoomFactor(DEFAULT_RENDERER_ZOOM_FACTOR)
     if (!isQuitting) win.show()
   })
   win.loadURL(`http://127.0.0.1:${APP_PORT}`)
@@ -1965,7 +1973,7 @@ function updateTrayMenu() {
       label: String(item.label || ''),
       enabled: item.enabled !== false,
     }))
-  if (ELECTRON_E2E && process.env.DYSTOPAI_ELECTRON_E2E_LOG_TRAY_MENU === '1') {
+  if (ELECTRON_E2E && process.env.AUTOMNIA_ELECTRON_E2E_LOG_TRAY_MENU === '1') {
     logE2e(`tray-menu:${lastTrayMenuSnapshot.map((item) => `${item.label}:${item.enabled ? 'enabled' : 'disabled'}`).join('|')}`)
   }
   tray.setContextMenu(Menu.buildFromTemplate(template))
@@ -1975,7 +1983,7 @@ function createTray() {
   if (!TRAY_ENABLED) return null
   if (tray) return tray
   tray = new Tray(createTrayIcon())
-  tray.setToolTip('DystopAI - gateway running in background')
+  tray.setToolTip('Automnia - gateway running in background')
   tray.on('click', openFrontend)
   tray.on('double-click', openFrontend)
   updateTrayMenu()
@@ -2009,12 +2017,12 @@ function shouldOpenExternally(targetUrl) {
 
 function openAllowedExternalUrl(targetUrl) {
   if (!shouldOpenExternally(targetUrl)) return false
-  if (process.env.DYSTOPAI_ELECTRON_E2E_DISABLE_OPEN_EXTERNAL === '1') {
+  if (process.env.AUTOMNIA_ELECTRON_E2E_DISABLE_OPEN_EXTERNAL === '1') {
     logE2e(`external-open:${targetUrl}`)
     return true
   }
   void shell.openExternal(targetUrl).catch((error) => {
-    console.warn('[dystopai] failed to open external URL:', error?.message || error)
+    console.warn('[automnia] failed to open external URL:', error?.message || error)
   })
   return true
 }
@@ -2060,7 +2068,7 @@ function safeE2eFileSegment(value) {
 
 async function runElectronE2eScreenshotCapture(win) {
   if (!ELECTRON_E2E) return
-  const outputDir = process.env.DYSTOPAI_ELECTRON_E2E_SCREENSHOT_DIR
+  const outputDir = process.env.AUTOMNIA_ELECTRON_E2E_SCREENSHOT_DIR
   if (!outputDir) return
 
   fs.mkdirSync(outputDir, { recursive: true })
@@ -2120,7 +2128,7 @@ async function runElectronE2eScreenshotCapture(win) {
           );
           const expectedWorkspaceLabel = workspaceMode === 'agent-editor' ? 'Agents' : ${JSON.stringify(workspace.label)};
           await waitFor(
-            () => document.querySelector('#dystopai-workspace-title')?.textContent?.trim() === expectedWorkspaceLabel,
+            () => document.querySelector('#automnia-workspace-title')?.textContent?.trim() === expectedWorkspaceLabel,
             navId + ' title'
           );
           await waitFor(
@@ -2153,7 +2161,7 @@ async function runElectronE2eScreenshotCapture(win) {
           const bodyText = document.body.innerText.replace(/\\s+/g, ' ').trim();
           return {
             workspace: ${JSON.stringify(workspace.id)},
-            title: document.querySelector('#dystopai-workspace-title')?.textContent?.trim() || '',
+            title: document.querySelector('#automnia-workspace-title')?.textContent?.trim() || '',
             ariaCurrent: navItem.getAttribute('aria-current') || '',
             bodyTextLength: bodyText.length,
             focusRing: getComputedStyle(document.documentElement).getPropertyValue('--focus-ring').trim(),
@@ -2189,7 +2197,7 @@ async function runElectronE2eScreenshotCapture(win) {
 }
 
 function runElectronE2ePolicySelfTest() {
-  if (!ELECTRON_E2E || process.env.DYSTOPAI_ELECTRON_E2E_ASSERT_NAVIGATION !== '1') return
+  if (!ELECTRON_E2E || process.env.AUTOMNIA_ELECTRON_E2E_ASSERT_NAVIGATION !== '1') return
 
   const allowedExternal = 'https://example.com/docs'
   const deniedExternal = 'http://example.com/docs'
@@ -2211,7 +2219,7 @@ function runElectronE2ePolicySelfTest() {
 }
 
 async function runElectronE2eRendererJourney(win) {
-  if (!ELECTRON_E2E || process.env.DYSTOPAI_ELECTRON_E2E_ASSERT_RENDERER_JOURNEY !== '1') return
+  if (!ELECTRON_E2E || process.env.AUTOMNIA_ELECTRON_E2E_ASSERT_RENDERER_JOURNEY !== '1') return
   const result = await win.webContents.executeJavaScript(`
     (async () => {
       const waitFor = async (predicate, label, timeoutMs = 15000) => {
@@ -2227,8 +2235,8 @@ async function runElectronE2eRendererJourney(win) {
         () => document.querySelector('nav[aria-label="Primary navigation"]'),
         'primary navigation',
       );
-      const main = document.querySelector('#dystopai-main');
-      const skip = document.querySelector('a.dy-skip-link[href="#dystopai-main"]');
+      const main = document.querySelector('#automnia-main');
+      const skip = document.querySelector('a.dy-skip-link[href="#automnia-main"]');
       if (!main || !skip) throw new Error('Main landmark or skip link is missing');
 
       const visited = [];
@@ -2242,7 +2250,7 @@ async function runElectronE2eRendererJourney(win) {
           label + ' navigation state',
         );
         await waitFor(
-          () => document.querySelector('#dystopai-workspace-title')?.textContent?.trim() === label,
+          () => document.querySelector('#automnia-workspace-title')?.textContent?.trim() === label,
           label + ' workspace title',
         );
         await waitFor(
@@ -2259,10 +2267,10 @@ async function runElectronE2eRendererJourney(win) {
 }
 
 async function runElectronE2eDesktopSessionBootstrap(win) {
-  if (!ELECTRON_E2E || process.env.DYSTOPAI_ELECTRON_E2E_ASSERT_DESKTOP_BOOTSTRAP !== '1') return
+  if (!ELECTRON_E2E || process.env.AUTOMNIA_ELECTRON_E2E_ASSERT_DESKTOP_BOOTSTRAP !== '1') return
   const result = await win.webContents.executeJavaScript(`
     (async () => {
-      const bridge = window.dystopaiDesktop;
+      const bridge = window.automniaDesktop;
       if (!bridge || typeof bridge.bootstrapControlCenterSession !== 'function') {
         throw new Error('desktop bootstrap bridge unavailable');
       }
@@ -2299,13 +2307,13 @@ async function runElectronE2eDesktopSessionBootstrap(win) {
 }
 
 async function runElectronE2eAppRehydration(win) {
-  if (!ELECTRON_E2E || process.env.DYSTOPAI_ELECTRON_E2E_ASSERT_APP_REHYDRATION !== '1') return { mode: 'skipped' }
-  const mode = process.env.DYSTOPAI_ELECTRON_E2E_APP_REHYDRATION_MODE === 'seed' ? 'seed' : 'verify'
-  const agentId = safeE2eFileSegment(process.env.DYSTOPAI_ELECTRON_E2E_APP_REHYDRATION_AGENT_ID || 'phase-k-rehydration-agent')
-  const initialWorkspace = process.env.DYSTOPAI_ELECTRON_E2E_APP_REHYDRATION_INITIAL_WORKSPACE || path.join(resolveOpenClawHomeDir(), 'phase-k-rehydration-initial')
-  const editedWorkspace = process.env.DYSTOPAI_ELECTRON_E2E_APP_REHYDRATION_EDITED_WORKSPACE || path.join(resolveOpenClawHomeDir(), 'phase-k-rehydration-edited')
-  const marker = process.env.DYSTOPAI_ELECTRON_E2E_APP_REHYDRATION_MARKER || `phase-k-rehydration-${agentId}`
-  const storageKey = `dystopai.phaseK.rehydration.${agentId}`
+  if (!ELECTRON_E2E || process.env.AUTOMNIA_ELECTRON_E2E_ASSERT_APP_REHYDRATION !== '1') return { mode: 'skipped' }
+  const mode = process.env.AUTOMNIA_ELECTRON_E2E_APP_REHYDRATION_MODE === 'seed' ? 'seed' : 'verify'
+  const agentId = safeE2eFileSegment(process.env.AUTOMNIA_ELECTRON_E2E_APP_REHYDRATION_AGENT_ID || 'phase-k-rehydration-agent')
+  const initialWorkspace = process.env.AUTOMNIA_ELECTRON_E2E_APP_REHYDRATION_INITIAL_WORKSPACE || path.join(resolveOpenClawHomeDir(), 'phase-k-rehydration-initial')
+  const editedWorkspace = process.env.AUTOMNIA_ELECTRON_E2E_APP_REHYDRATION_EDITED_WORKSPACE || path.join(resolveOpenClawHomeDir(), 'phase-k-rehydration-edited')
+  const marker = process.env.AUTOMNIA_ELECTRON_E2E_APP_REHYDRATION_MARKER || `phase-k-rehydration-${agentId}`
+  const storageKey = `automnia.phaseK.rehydration.${agentId}`
   const recruitPayload = {
     agentId,
     name: 'Phase K Rehydration Agent',
@@ -2397,7 +2405,7 @@ async function runElectronE2eAppRehydration(win) {
       const recruitPayload = ${JSON.stringify(recruitPayload)};
       const normalizePath = (value) => String(value || '').replace(/\\\\/g, '/').replace(/\\/+$/g, '').toLowerCase();
       const samePath = (left, right) => normalizePath(left) === normalizePath(right);
-      const bridge = window.dystopaiDesktop;
+      const bridge = window.automniaDesktop;
       if (!bridge || typeof bridge.bootstrapControlCenterSession !== 'function') {
         throw new Error('desktop bootstrap bridge unavailable for app rehydration');
       }
@@ -2482,7 +2490,7 @@ async function runElectronE2eAppRehydration(win) {
 }
 
 async function runElectronE2eTraySelfTest(win) {
-  if (!ELECTRON_E2E || process.env.DYSTOPAI_ELECTRON_E2E_ASSERT_TRAY_BEHAVIOR !== '1') return
+  if (!ELECTRON_E2E || process.env.AUTOMNIA_ELECTRON_E2E_ASSERT_TRAY_BEHAVIOR !== '1') return
   const menuHas = (label) => lastTrayMenuSnapshot.some((item) => item.label === label && item.enabled)
 
   assertElectronE2e(Boolean(tray), 'tray must be created before renderer tray assertions run')
@@ -2508,7 +2516,7 @@ async function runElectronE2eTraySelfTest(win) {
   assertElectronE2e(menuHas('Hide UI'), 'restored window tray menu must offer Hide UI')
   logE2e('tray-click-restore-ok')
 
-  if (process.env.DYSTOPAI_ELECTRON_E2E_ASSERT_TRAY_GATEWAY_RECOVERY === '1') {
+  if (process.env.AUTOMNIA_ELECTRON_E2E_ASSERT_TRAY_GATEWAY_RECOVERY === '1') {
     updateTrayMenu()
     assertElectronE2e(menuHas('Restart Gateway'), 'tray menu must offer Gateway recovery')
     assertElectronE2e(menuHas('Shut Gateway Off'), 'tray menu must offer Gateway shutdown')
@@ -2526,7 +2534,7 @@ async function runElectronE2eTraySelfTest(win) {
     logE2e('tray-gateway-recovery-ok')
   }
 
-  if (process.env.DYSTOPAI_ELECTRON_E2E_QUIT_AFTER_TRAY_ASSERTIONS === '1') app.quit()
+  if (process.env.AUTOMNIA_ELECTRON_E2E_QUIT_AFTER_TRAY_ASSERTIONS === '1') app.quit()
 }
 
 app.whenReady().then(async () => {
@@ -2558,21 +2566,21 @@ app.whenReady().then(async () => {
     if (openclawRuntime) process.env.OPENCLAW_BIN = openclawRuntime
 
     await ensureNpmToolchainAvailable()
-    if (process.env.DYSTOPAI_ELECTRON_E2E_SKIP_PORT_CLEANUP === '1') {
+    if (process.env.AUTOMNIA_ELECTRON_E2E_SKIP_PORT_CLEANUP === '1') {
       logE2e('port-cleanup-skipped')
     } else {
       await prepareManagedPortsForStartup()
     }
 
     const serverEntry = resolveServerEntry()
-    console.log('[dystopai] starting server process:', serverEntry)
+    console.log('[automnia] starting server process:', serverEntry)
 
     // Keep backend work out of Electron's main process so the desktop UI stays responsive.
     const serverChild = startControlServerProcess(serverEntry)
     await waitForSpawnedControlServer(serverChild)
     serverRestartAttempts = 0
 
-    console.log('[dystopai] server ready on port', APP_PORT)
+    console.log('[automnia] server ready on port', APP_PORT)
     logE2e('server-ready')
     runElectronE2ePolicySelfTest()
 
@@ -2582,9 +2590,9 @@ app.whenReady().then(async () => {
     startupFailed = true
     startingUp = false
     await stopControlServerProcess('startup failure').catch((cleanupError) => {
-      console.warn('[dystopai] startup failure cleanup skipped:', cleanupError?.message || cleanupError)
+      console.warn('[automnia] startup failure cleanup skipped:', cleanupError?.message || cleanupError)
     })
-    showBlockingError('DystopAI - Startup Error', String(err))
+    showBlockingError('Automnia - Startup Error', String(err))
     if (ELECTRON_E2E) {
       app.quit()
       return
@@ -2607,9 +2615,9 @@ app.whenReady().then(async () => {
     startupFailed = true
     startingUp = false
     await stopRuntimeCompletelyForQuit().catch((cleanupError) => {
-      console.warn('[dystopai] UI failure cleanup skipped:', cleanupError?.message || cleanupError)
+      console.warn('[automnia] UI failure cleanup skipped:', cleanupError?.message || cleanupError)
     })
-    showBlockingError('DystopAI - UI Error', String(err))
+    showBlockingError('Automnia - UI Error', String(err))
     if (ELECTRON_E2E) {
       process.exit(3)
       return
@@ -2624,7 +2632,7 @@ app.on('activate', () => {
     openFrontend()
   } catch (err) {
     startupFailed = true
-    showBlockingError('DystopAI', String(err))
+    showBlockingError('Automnia', String(err))
     app.quit()
   }
 })

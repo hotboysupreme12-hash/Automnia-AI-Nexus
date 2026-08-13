@@ -41,7 +41,7 @@ function fakeDetachedSpawn(calls: Array<{ command: string; args: string[]; optio
 }
 
 test('picker session service normalizes start paths, serializes cancellation, and prunes expired sessions', async (t) => {
-  const workspaceRoot = await createTempRoot(t, 'dystopai-picker-workspace-')
+  const workspaceRoot = await createTempRoot(t, 'automnia-picker-workspace-')
   let currentTime = 1_000
   const service = createPickerSessionService({
     stateRoot: path.join(workspaceRoot, '.openclaw'),
@@ -75,7 +75,7 @@ test('picker session service normalizes start paths, serializes cancellation, an
 })
 
 test('picker session service resolves relative start paths under fallback and rejects traversal starts', async (t) => {
-  const workspaceRoot = await createTempRoot(t, 'dystopai-picker-traversal-')
+  const workspaceRoot = await createTempRoot(t, 'automnia-picker-traversal-')
   const fallbackStart = path.join(workspaceRoot, 'agents', 'starter')
   const service = createPickerSessionService({
     stateRoot: path.join(workspaceRoot, '.openclaw'),
@@ -103,7 +103,7 @@ test('picker session service resolves relative start paths under fallback and re
 })
 
 test('picker session service persists selected image picker avatars through an injected dependency', async (t) => {
-  const workspaceRoot = await createTempRoot(t, 'dystopai-picker-avatar-')
+  const workspaceRoot = await createTempRoot(t, 'automnia-picker-avatar-')
   const selectedPath = path.join(workspaceRoot, 'source.png')
   const persistedPath = path.join(workspaceRoot, '.openclaw', 'avatars', 'agent-1-source.png')
   const service = createPickerSessionService({
@@ -143,7 +143,7 @@ test('picker session service persists selected image picker avatars through an i
 })
 
 test('picker session service rejects unsupported image picker file types before avatar persistence', async (t) => {
-  const workspaceRoot = await createTempRoot(t, 'dystopai-picker-avatar-type-')
+  const workspaceRoot = await createTempRoot(t, 'automnia-picker-avatar-type-')
   const selectedPath = path.join(workspaceRoot, 'not-an-image.txt')
   let persistCalls = 0
   const service = createPickerSessionService({
@@ -187,19 +187,19 @@ test('picker session service parses Windows picker output and quotes launcher ar
   })
 
   const launcher = windowsPickerLauncherContents(
-    'DystopAI "Profile" 100%',
+    'Automnia "Profile" 100%',
     'C:\\tmp\\pick "image".ps1',
     'C:\\tmp\\result.json',
     'C:\\Users\\Me\\Pictures',
   )
-  assert.match(launcher, /start "DystopAI ""Profile"" 100%%" powershell\.exe/)
+  assert.match(launcher, /start "Automnia ""Profile"" 100%%" powershell\.exe/)
   assert.match(launcher, /-File "C:\\tmp\\pick ""image""\.ps1"/)
   assert.match(launcher, /-StartPath "C:\\Users\\Me\\Pictures"/)
 })
 
 test('picker session service launches Windows folder and image sessions without opening real dialogs', async (t) => {
-  const workspaceRoot = await createTempRoot(t, 'dystopai-picker-win-workspace-')
-  const stateRoot = await createTempRoot(t, 'dystopai-picker-win-state-')
+  const workspaceRoot = await createTempRoot(t, 'automnia-picker-win-workspace-')
+  const stateRoot = await createTempRoot(t, 'automnia-picker-win-state-')
   const spawnCalls: Array<{ command: string; args: string[]; options?: SpawnOptions }> = []
   const ids = ['folder-session', 'image-session']
   const selectedFolder = path.join(workspaceRoot, 'chosen-folder')

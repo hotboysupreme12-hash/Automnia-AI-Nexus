@@ -68,10 +68,12 @@ import { createMissionTeamSyncService } from './services/missions/missionTeamSyn
 import { createLoginAttemptLimiter } from './loginAttemptLimiter'
 import { createSessionTokenStore } from './sessionTokenStore'
 import { createLicenseService } from './services/license/licenseService'
+import { createAccountAuthService } from './services/auth/accountAuthService'
 import { AUTOMNIA_PUBLIC_CLOUD_URL, automniaCloudRuntimeBaseUrl } from './config/automniaCloud'
 import {
   AUTH_ENV_MAP,
   AUTH_PROVIDER_CATALOG,
+  GOOGLE_ACCOUNT_OAUTH_SCOPES,
   GOOGLE_OAUTH_REDIRECT_URI,
   GOOGLE_OAUTH_SCOPES,
   OPENAI_CODEX_OAUTH_REDIRECT_URI,
@@ -138,10 +140,8 @@ import {
 import { createGatewayChatService } from './services/gateway/gatewayChatService'
 import { createBufferedAgentTurnService } from './services/agents/agentTurnService'
 import { createGatewayAgentTurnService } from './services/agents/gatewayAgentTurnService'
-import type { AgentTurnStreamEmitter } from './services/agents/gatewayAgentTurnService'
 import { createAgentRuntimeService } from './services/agents/agentRuntimeService'
 import { createAgentStreamingService } from './services/agents/agentStreamingService'
-import type { AgentStreamingInput } from './services/agents/agentStreamingService'
 import {
   createRuntimeStatusService,
   type RuntimeStatusService,
@@ -257,7 +257,7 @@ function mutableRecord(value: unknown): Record<string, unknown> {
 function isBundledOpenClawPath(value: string | undefined) {
   if (!value) return false
   const normalized = value.replace(/\\/g, '/').toLowerCase()
-  return normalized.includes('/openclaw-control-center/openclaw') || normalized.includes('/automnia-ai-nexus/openclaw')
+  return normalized.includes('/automnia-control-center/openclaw') || normalized.includes('/automnia-ai-nexus/openclaw')
 }
 
 function defaultAgencyAgentTemplateSourceRoot() {
@@ -329,6 +329,11 @@ const licenseService = createLicenseService({
   read: runtimeLedgerStore.readControlCenterState,
   write: runtimeLedgerStore.writeControlCenterState,
   remove: runtimeLedgerStore.deleteControlCenterState,
+})
+const accountAuthService = createAccountAuthService({
+  read: runtimeLedgerStore.readControlCenterState,
+  write: runtimeLedgerStore.writeControlCenterState,
+  licenseService,
 })
 
 // License routes remain accessible after local authentication. Every other
@@ -492,7 +497,7 @@ const CLAWTALK_AGENT_TOOL_NAMES = [
 ] as const
 const MIN_BROWSER_TIMEOUT_SECONDS = 240
 const DISABLE_BROWSER_RUNTIME_DEFAULTS = /^(1|true|yes)$/i.test(
-  process.env.CONTROL_CENTER_DISABLE_BROWSER_DEFAULTS || process.env.DYSTOPAI_DISABLE_OPENCLAW_BROWSER || '',
+  process.env.CONTROL_CENTER_DISABLE_BROWSER_DEFAULTS || process.env.AUTOMNIA_DISABLE_OPENCLAW_BROWSER || '',
 )
 
 type ThinkingLevel = 'off' | 'minimal' | 'low' | 'medium' | 'high' | 'xhigh' | 'max'
@@ -765,7 +770,7 @@ function resolveNodeRuntimeExecutable() {
   if (resolvedNodeRuntimeExecutable) return resolvedNodeRuntimeExecutable
   const pathNode = process.platform === 'win32' ? 'node.exe' : 'node'
   const candidates = uniqueStrings(
-    process.env.DYSTOPAI_NODE_BIN || '',
+    process.env.AUTOMNIA_NODE_BIN || '',
     process.env.NODE_EXE || '',
     process.env.NODE_BINARY || '',
     isLikelyNodeExecutable(process.execPath) ? process.execPath : '',
@@ -868,7 +873,7 @@ function prepareSourceOpenClawVendorIfMissing() {
     cwd: vendor.root,
     env: {
       ...process.env,
-      DYSTOPAI_OPENCLAW_VENDOR_ROOT: vendor.vendorRoot,
+      AUTOMNIA_OPENCLAW_VENDOR_ROOT: vendor.vendorRoot,
     },
     shell: false,
     stdio: 'inherit',
@@ -1391,11 +1396,14 @@ type OpenClawConfigFile = {
       }
       compaction?: {
         enabled?: boolean
+        mode?: 'default' | 'safeguard'
+        timeoutSeconds?: number
         reserveTokens?: number
         keepRecentTokens?: number
         reserveTokensFloor?: number
         maxActiveTranscriptBytes?: string | number
         truncateAfterCompaction?: boolean
+        notifyUser?: boolean
         midTurnPrecheck?: {
           enabled?: boolean
         }
@@ -1676,8 +1684,8 @@ const DEEPSEEK_DEFAULT_FALLBACKS = MODEL_RESILIENCE_FALLBACKS[DEEPSEEK_DEFAULT_M
   'deepseek/deepseek-reasoner',
   'deepseek/deepseek-v4-pro',
 ]
-const DEEPSEEK_ONLY_DEFAULTS = /^(1|true|yes)$/i.test(process.env.DYSTOPAI_DEEPSEEK_ONLY_DEFAULTS || '')
-const DEFAULT_AGENT_MODEL_ID = process.env.DYSTOPAI_DEFAULT_AGENT_MODEL?.trim() || OPENAI_DEFAULT_MODEL_ID
+const DEEPSEEK_ONLY_DEFAULTS = /^(1|true|yes)$/i.test(process.env.AUTOMNIA_DEEPSEEK_ONLY_DEFAULTS || '')
+const DEFAULT_AGENT_MODEL_ID = process.env.AUTOMNIA_DEFAULT_AGENT_MODEL?.trim() || OPENAI_DEFAULT_MODEL_ID
 const GENERATED_DEEPSEEK_DEFAULT_MODEL_IDS = new Set([
   DEEPSEEK_DEFAULT_MODEL_ID,
   ...DEEPSEEK_DEFAULT_FALLBACKS,
@@ -1837,7 +1845,7 @@ function openClawConfigNeedsCodexPlugin(config: OpenClawConfigFile) {
 }
 
 function codexPluginForceEnableRequested() {
-  return /^(1|true|yes)$/i.test(process.env.DYSTOPAI_ENABLE_EXTERNAL_CODEX_PLUGIN || '')
+  return /^(1|true|yes)$/i.test(process.env.AUTOMNIA_ENABLE_EXTERNAL_CODEX_PLUGIN || '')
 }
 
 function isCodexPluginExplicitlyEnabled(config: OpenClawConfigFile) {
@@ -1990,9 +1998,11 @@ const providerAuthStatus = providerAuthService.providerAuthStatus
 const removeProviderAuth = providerAuthService.removeProviderAuth
 const syncStoredProviderAuthProfiles = providerAuthService.syncStoredProviderAuthProfiles
 const oauthCallbackService = createOAuthCallbackService({
+  authenticateGoogleAccount: (accessToken) => accountAuthService.loginWithGoogle(accessToken),
   createOpenAICodexAuthorizationFlow: providerSetupService.createOpenAICodexAuthorizationFlow,
   exchangeOpenAICodexAuthorizationCode: providerSetupService.exchangeOpenAICodexAuthorizationCode,
   googleOAuthRedirectUri: GOOGLE_OAUTH_REDIRECT_URI,
+  googleAccountOAuthScopes: GOOGLE_ACCOUNT_OAUTH_SCOPES,
   googleOAuthScopes: GOOGLE_OAUTH_SCOPES,
   isShuttingDown: () => shuttingDown,
   openAiCodexOAuthRedirectUri: OPENAI_CODEX_OAUTH_REDIRECT_URI,
@@ -2011,6 +2021,7 @@ const completeOpenAICodexOAuthSession = oauthCallbackService.completeOpenAICodex
 const closeOAuthCallbackServersForProcessExit = oauthCallbackService.closeOAuthCallbackServersForProcessExit
 const closeOAuthCallbackServersForShutdown = oauthCallbackService.closeOAuthCallbackServersForShutdown
 const startGoogleOAuthSession = oauthCallbackService.startGoogleOAuthSession
+const startGoogleAccountOAuthSession = oauthCallbackService.startGoogleAccountOAuthSession
 const startOpenAICodexOAuthSession = oauthCallbackService.startOpenAICodexOAuthSession
 
 const DEFAULT_BOOTSTRAP_AGENTS: Array<{ id: string; name: string }> = [
@@ -2653,18 +2664,46 @@ type ProviderConversationState = {
 const providerConversationHistories = new Map<string, ProviderConversationState>()
 const MAX_PROVIDER_CONVERSATION_MESSAGES = 24
 const MAX_PROVIDER_CONVERSATION_CHARS = 60_000
+const MAX_AUTOMNIA_RELAY_CONVERSATION_MESSAGES = 40
+const MAX_AUTOMNIA_RELAY_CONVERSATION_CHARS = 160_000
+const MAX_PROVIDER_CONVERSATION_SESSIONS = 128
+const PROVIDER_CONVERSATION_TTL_MS = 6 * 60 * 60 * 1000
 
 function providerConversationChars(messages: ProviderConversationMessage[]) {
   return messages.reduce((total, message) => total + message.content.length + (message.reasoningContent?.length || 0), 0)
 }
 
-function trimProviderConversationMessages(messages: ProviderConversationMessage[]) {
+function trimProviderConversationMessages(
+  messages: ProviderConversationMessage[],
+  limits: { maxMessages?: number; maxChars?: number } = {},
+) {
+  const maxMessages = limits.maxMessages || MAX_PROVIDER_CONVERSATION_MESSAGES
+  const maxChars = limits.maxChars || MAX_PROVIDER_CONVERSATION_CHARS
   let next = messages.filter((message) => message.content.trim() || message.reasoningContent?.trim())
-  if (next.length > MAX_PROVIDER_CONVERSATION_MESSAGES) next = next.slice(-MAX_PROVIDER_CONVERSATION_MESSAGES)
-  while (next.length > 2 && providerConversationChars(next) > MAX_PROVIDER_CONVERSATION_CHARS) {
+  if (next.length > maxMessages) next = next.slice(-maxMessages)
+  while (next.length > 2 && providerConversationChars(next) > maxChars) {
     next = next.slice(2)
   }
   return next
+}
+
+function providerConversationLimits(provider: string) {
+  return provider.trim().toLowerCase() === 'automnia-cloud'
+    ? { maxMessages: MAX_AUTOMNIA_RELAY_CONVERSATION_MESSAGES, maxChars: MAX_AUTOMNIA_RELAY_CONVERSATION_CHARS }
+    : { maxMessages: MAX_PROVIDER_CONVERSATION_MESSAGES, maxChars: MAX_PROVIDER_CONVERSATION_CHARS }
+}
+
+function pruneProviderConversationHistories() {
+  const cutoff = Date.now() - PROVIDER_CONVERSATION_TTL_MS
+  for (const [sessionId, history] of providerConversationHistories) {
+    if (history.updatedAt < cutoff) providerConversationHistories.delete(sessionId)
+  }
+  if (providerConversationHistories.size <= MAX_PROVIDER_CONVERSATION_SESSIONS) return
+  const oldest = Array.from(providerConversationHistories.values())
+    .sort((left, right) => left.updatedAt - right.updatedAt)
+  for (const history of oldest.slice(0, providerConversationHistories.size - MAX_PROVIDER_CONVERSATION_SESSIONS)) {
+    providerConversationHistories.delete(history.sessionId)
+  }
 }
 
 function providerConversationMessagesForRequest(
@@ -2673,6 +2712,7 @@ function providerConversationMessagesForRequest(
   modelId: string,
   userContent: string,
 ) {
+  pruneProviderConversationHistories()
   const existing = providerConversationHistories.get(sessionId)
   if (
     existing &&
@@ -2682,7 +2722,7 @@ function providerConversationMessagesForRequest(
     providerConversationHistories.delete(sessionId)
   }
   const history = providerConversationHistories.get(sessionId)?.messages || []
-  return trimProviderConversationMessages([...history, { role: 'user', content: userContent }])
+  return trimProviderConversationMessages([...history, { role: 'user', content: userContent }], providerConversationLimits(provider))
 }
 
 function saveProviderConversationTurn(
@@ -2692,6 +2732,8 @@ function saveProviderConversationTurn(
   requestMessages: ProviderConversationMessage[],
   assistant: { content: string; reasoningContent?: string },
 ) {
+  pruneProviderConversationHistories()
+  const limits = providerConversationLimits(provider)
   providerConversationHistories.set(sessionId, {
     sessionId,
     provider,
@@ -2703,7 +2745,7 @@ function saveProviderConversationTurn(
         content: assistant.content,
         reasoningContent: assistant.reasoningContent,
       },
-    ]),
+    ], limits),
     updatedAt: Date.now(),
   })
 }
@@ -4246,8 +4288,8 @@ process.on('exit', () => {
 })
 
 function startDesktopParentWatchdog(): void {
-  const parentPid = Number(process.env.DYSTOPAI_DESKTOP_SERVER_PARENT_PID || 0)
-  if (process.env.DYSTOPAI_DESKTOP_SERVER_CHILD !== '1' || !Number.isFinite(parentPid) || parentPid <= 1) return
+  const parentPid = Number(process.env.AUTOMNIA_DESKTOP_SERVER_PARENT_PID || 0)
+  if (process.env.AUTOMNIA_DESKTOP_SERVER_CHILD !== '1' || !Number.isFinite(parentPid) || parentPid <= 1) return
 
   desktopParentWatchdogTimer = setInterval(() => {
     if (shuttingDown) return
@@ -6298,7 +6340,7 @@ function toOpenAICodexContext(
   const now = Date.now()
   return {
     systemPrompt: [
-      'You are a DystopAI direct streaming agent.',
+      'You are a Automnia direct streaming agent.',
       'Answer the user directly and concisely.',
       'This direct streaming path has no filesystem, terminal, browser, or app-control tools.',
       'If the request requires tools or workspace edits, state the specific missing tool action without telling the user to send a slash command.',
@@ -6907,7 +6949,7 @@ function inferWorkspaceRuntimeIntent(message: string, intentMessage?: string): B
   const productTarget =
     /\b(?:this|the|our|my)\s+(?:app|application|project|repo(?:sitory)?|codebase|build|release|product|desktop\s+app|electron\s+app)\b/i
   const namedProductTarget =
-    /\b(?:dystopai|openclaw|control\s+center|electron|desktop\s+app|release[/\\]win-unpacked|\.openclaw)\b/i
+    /\b(?:automnia|openclaw|control\s+center|electron|desktop\s+app|release[/\\]win-unpacked|\.openclaw)\b/i
   const explicitToolAction =
     /\b(?:implement|scaffold|patch|edit(?:ed|ing)?|save|rename|delete|install|npm|terminal|shell|command|run\s+tests?|run\s+build|build|compile|lint|fix|update|modify|change|read|inspect|list|search|find|look\s+(?:at|into)|go\s+through|download|digest|analy[sz]e|summari[sz]e|audit|review|check|verify|validate|scan)\b/i
   const commercialAuditAction =
@@ -7006,7 +7048,7 @@ function isLikelyOpenClawRuntimeToolRequest(message: string) {
   const text = normalizeRouterText(message || '')
   if (isDefinitionOnlyWorkspaceQuestion(text)) return false
   const workspaceTarget =
-    /\b(workspace|repo(?:sitory)?|project\s+(?:files?|folder|directory)|directory|folder|files?|source\s+code|codebase|package\.json|tsconfig|vite|server|client|component|html|css|javascript|typescript|this\s+(?:app|application|project|repo|codebase|build|release)|our\s+(?:app|application|project|repo|codebase|build|release)|dystopai|openclaw|control\s+center|\.openclaw)\b/i
+    /\b(workspace|repo(?:sitory)?|project\s+(?:files?|folder|directory)|directory|folder|files?|source\s+code|codebase|package\.json|tsconfig|vite|server|client|component|html|css|javascript|typescript|this\s+(?:app|application|project|repo|codebase|build|release)|our\s+(?:app|application|project|repo|codebase|build|release)|automnia|openclaw|control\s+center|\.openclaw)\b/i
   const toolAction =
     /\b(use\s+(?:tools?|openclaw|terminal|shell|browser)|run|execute|test|build|compile|lint|install|start|restart|read|inspect|list|search|find|review|audit|check|verify|validate|scan|analy[sz]e|summari[sz]e|edit|patch|modify|update|fix|sell|commercial(?:ly)?|license|licen[cs]ing|distribute|ship|release)\b/i
   const localQuestion =
@@ -8306,6 +8348,7 @@ function openClawOptimizationStatus(config: OpenClawConfigFile) {
   const normalized = cloneJson(config)
   ensureOpenclawRuntimeDefaults(normalized)
   const pruning = normalized.agents?.defaults?.contextPruning
+  const compaction = normalized.agents?.defaults?.compaction
   const session = normalized.session
   const memory = normalized.memory
   const agents = normalized.agents?.list || []
@@ -8316,6 +8359,14 @@ function openClawOptimizationStatus(config: OpenClawConfigFile) {
     return params && typeof params === 'object' && !Array.isArray(params) && params.fastMode === 'auto'
   }).length
   return {
+    compaction: {
+      enabled: compaction?.enabled !== false,
+      reserveTokensFloor: compaction?.reserveTokensFloor ?? null,
+      keepRecentTokens: compaction?.keepRecentTokens ?? null,
+      midTurnPrecheck: compaction?.midTurnPrecheck?.enabled === true,
+      truncateAfterCompaction: compaction?.truncateAfterCompaction === true,
+      notifyUser: compaction?.notifyUser === true,
+    },
     fastMode: {
       default: normalizeFastModePreference(normalized.agents?.defaults?.fastModeDefault),
       autoCutoffSeconds: DEFAULT_OPENCLAW_FAST_AUTO_ON_SECONDS,
@@ -8928,12 +8979,35 @@ function ensureOpenclawRuntimeDefaults(config: OpenClawConfigFile) {
   if (!defaults.compaction) defaults.compaction = {}
   if (!defaults.compaction.midTurnPrecheck) defaults.compaction.midTurnPrecheck = {}
   if (!defaults.compaction.memoryFlush) defaults.compaction.memoryFlush = {}
-  defaults.compaction.reserveTokensFloor ??= 60000
+  const legacyAggressiveCompactionDefaults = defaults.compaction.reserveTokensFloor === 60000
+    && defaults.compaction.keepRecentTokens === 50000
+    && defaults.compaction.midTurnPrecheck.enabled === true
+    && defaults.compaction.truncateAfterCompaction === true
+    && defaults.compaction.maxActiveTranscriptBytes === '12mb'
+    && defaults.compaction.memoryFlush.enabled === true
+  if (legacyAggressiveCompactionDefaults) {
+    // Migrate the bundle previously generated by Automnia. The exact-shape
+    // check keeps a user's independently customized compaction settings
+    // intact while fixing existing installs that still carry the old bundle.
+    defaults.compaction.reserveTokensFloor = 24000
+    defaults.compaction.midTurnPrecheck.enabled = false
+    defaults.compaction.truncateAfterCompaction = false
+    defaults.compaction.maxActiveTranscriptBytes = '20mb'
+    defaults.compaction.memoryFlush.enabled = false
+    if (defaults.contextLimits?.toolResultMaxChars === 10000) defaults.contextLimits.toolResultMaxChars = 16000
+    if (defaults.contextLimits?.postCompactionMaxChars === 1200) defaults.contextLimits.postCompactionMaxChars = 2400
+  }
+  // Keep the runtime's documented defaults as the reliability baseline. The
+  // previous values reserved 60k tokens and ran a mid-turn compaction guard,
+  // which caused the hosted relay's 45k runtime cap to compact before a turn
+  // could finish and made tool turns look like skipped messages.
+  defaults.compaction.reserveTokensFloor ??= 24000
   defaults.compaction.keepRecentTokens ??= 50000
-  defaults.compaction.midTurnPrecheck.enabled ??= true
-  defaults.compaction.truncateAfterCompaction ??= true
-  defaults.compaction.maxActiveTranscriptBytes ??= '12mb'
-  defaults.compaction.memoryFlush.enabled ??= true
+  defaults.compaction.midTurnPrecheck.enabled ??= false
+  defaults.compaction.truncateAfterCompaction ??= false
+  defaults.compaction.maxActiveTranscriptBytes ??= '20mb'
+  defaults.compaction.notifyUser ??= true
+  defaults.compaction.memoryFlush.enabled ??= false
   defaults.compaction.memoryFlush.softThresholdTokens ??= 4000
   defaults.compaction.memoryFlush.systemPrompt ??= 'Session nearing compaction. Store durable memories now.'
   defaults.compaction.memoryFlush.prompt ??=
@@ -8942,8 +9016,8 @@ function ensureOpenclawRuntimeDefaults(config: OpenClawConfigFile) {
   if (!defaults.contextLimits) defaults.contextLimits = {}
   defaults.contextLimits.memoryGetMaxChars ??= 8000
   defaults.contextLimits.memoryGetDefaultLines ??= 80
-  defaults.contextLimits.toolResultMaxChars ??= 10000
-  defaults.contextLimits.postCompactionMaxChars ??= 1200
+  defaults.contextLimits.toolResultMaxChars ??= 16000
+  defaults.contextLimits.postCompactionMaxChars ??= 2400
 
   ensureContextPruningDefaults(defaults)
 
@@ -9315,6 +9389,12 @@ async function writeOpenclawConfig(config: unknown) {
 // a direct provider as the active model after a hosted plan is selected.
 const AUTOMNIA_OPENCLAW_PROVIDER_ID = 'automnia-cloud'
 const AUTOMNIA_OPENCLAW_MODEL = `${AUTOMNIA_OPENCLAW_PROVIDER_ID}/gemini-3.6-flash`
+const AUTOMNIA_OPENCLAW_CONTEXT_TOKENS = (() => {
+  const configured = Number(process.env.AUTOMNIA_OPENCLAW_CONTEXT_TOKENS || 256_000)
+  return Number.isFinite(configured)
+    ? Math.max(64_000, Math.min(1_000_000, Math.round(configured)))
+    : 256_000
+})()
 
 type OpenClawModelSelection = { primary?: string; fallbacks?: string[] }
 
@@ -9466,15 +9546,25 @@ async function synchronizeOpenClawBillingRoute(configInput?: OpenClawConfigFile)
     api: 'openai-completions',
     apiKey: hosted.licenseKey,
     authHeader: true,
-    headers: { 'X-Automnia-Email': hosted.email },
+    headers: {
+      // Keep the account identity explicit for the hosted boundary. The
+      // standard Authorization header remains enabled below, but this avoids
+      // coupling billing/authentication to a provider adapter's bearer-header
+      // behavior.
+      'X-Automnia-Email': hosted.email,
+      'X-Automnia-License-Key': hosted.licenseKey,
+    },
     timeoutSeconds: 7200,
     models: [{
       id: 'gemini-3.6-flash',
       name: 'Automnia Cloud Credits - Gemini 3.6 Flash',
       reasoning: false,
-      input: ['text'],
+      input: ['text', 'image'],
       contextWindow: 1_000_000,
-      contextTokens: 45_000,
+      // Keep the hosted model's runtime cap aligned with its advertised
+      // context window. A 45k cap caused OpenClaw to compact healthy relay
+      // sessions before long tool-oriented turns could complete.
+      contextTokens: AUTOMNIA_OPENCLAW_CONTEXT_TOKENS,
       maxTokens: 16_384,
     }],
   }
@@ -14677,7 +14767,7 @@ function looksLikeGeneratedWorkspaceDoctrineContent(file: string, content: strin
   if (!/^#\s+(?:AGENTS|BOOTSTRAP|HEARTBEAT|IDENTITY|MEMORY|MISSION_PROMPT|SOUL|TEAM_INTENTS|TEAM_STATE|TEAM_SYNC|TOOLS|USER)\.md\b/im.test(text)) {
     return false
   }
-  return /DystopAI Control Center|Agent workspace provisioned|Recruited from DystopAI|Read these doctrine files before work|Scoped memory for [a-z0-9-]+|Shared coordination ledger/i.test(text.slice(0, 4000))
+  return /Automnia Control Center|Agent workspace provisioned|Recruited from Automnia|Read these doctrine files before work|Scoped memory for [a-z0-9-]+|Shared coordination ledger/i.test(text.slice(0, 4000))
 }
 
 async function isGeneratedWorkspaceDoctrineMirror(filePath: string, file: string) {
@@ -17005,7 +17095,7 @@ function recruitAutoForgePrompt(input: {
     .join('\n\n')
 
   return [
-    'You are the DystopAI Agent Auto Forge.',
+    'You are the Automnia Agent Auto Forge.',
     'Generate complete bootstrap doctrine markdown for a newly recruited coding agent.',
     'Return only strict JSON. No prose, no markdown fences, no comments.',
     '',
@@ -17537,135 +17627,6 @@ const agentRuntimeService = createAgentRuntimeService({
 
 const runControlCenterAgentRuntimeTurn = agentRuntimeService.runControlCenterAgentRuntimeTurn
 
-const AUTOMNIA_CLOUD_RELAY_URL = automniaCloudRuntimeBaseUrl()
-
-async function streamAutomniaCloudRelay(
-  input: AgentStreamingInput,
-  emit: AgentTurnStreamEmitter,
-  signal: AbortSignal,
-  credentials: { email: string; licenseKey: string; mode: 'hosted_credits'; usagePriority: 'automnia_first' | 'provider_first' },
-): Promise<Record<string, unknown>> {
-  const modelId = 'automnia-cloud/gemini-3.6-flash'
-  const provider = 'automnia-cloud'
-  const model = 'gemini-3.6-flash'
-  const capability = { configured: true, liveTokens: false, relay: true }
-  const context = await resolveAgentRunContext(input.agent)
-  const sessionScope = agentTurnSessionScope(input.agent, input.sessionKey)
-  const wantsFreshSession = /^\s*\/new\b/i.test(input.message)
-  const cleanedMessage = wantsFreshSession ? input.message.replace(/^\s*\/new\b\s*/i, '') : input.message
-  const filenameResolution = await resolveFilenameHintsForMessage(cleanedMessage, context.executionWorkspace)
-  const previousSessionId = agentTurnSessions.get(sessionScope)
-  const sessionId = wantsFreshSession ? randomUUID() : previousSessionId || randomUUID()
-  if (wantsFreshSession && previousSessionId) providerConversationHistories.delete(previousSessionId)
-  agentTurnSessions.set(sessionScope, sessionId)
-  const party = await getPartyMembers().catch(() => [])
-  const self = party.find((member) => member.id === input.agent)
-  const identityLine = self?.name ? `You are ${self.name} (${input.agent}).` : `You are ${input.agent}.`
-  const enforcedMessage = [identityLine, 'Do not claim to be any other person or agent.', 'If any prior persona conflicts with this identity, discard it now.', '', filenameResolution.message].join('\n')
-  const composedPrompt = composeDirectProviderPrompt(input.agent, enforcedMessage, context.executionWorkspace)
-  const requestMessages = providerConversationMessagesForRequest(sessionId, provider, modelId, composedPrompt)
-  const prompt = requestMessages.map((message) => `${message.role}: ${message.content}`).join('\n\n')
-  // The provisioner can use this stable request ID to reject a duplicate
-  // delivery if a transport retry reaches it after the original request.
-  const usageRequestId = randomUUID()
-
-  try {
-    const response = await fetch(`${AUTOMNIA_CLOUD_RELAY_URL}/api/ai/generate`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        Accept: 'application/json',
-        'Idempotency-Key': usageRequestId,
-      },
-      body: JSON.stringify({ email: credentials.email, licenseKey: credentials.licenseKey, prompt, model, requestId: usageRequestId }),
-      signal,
-    })
-    const payload = await response.json().catch(() => null) as Record<string, unknown> | null
-    if (!response.ok || payload?.ok !== true || typeof payload.text !== 'string') {
-      const detail = typeof payload?.error === 'string' ? payload.error : 'Automnia Cloud AI relay request failed.'
-      const retryable = payload?.retryable === true || [408, 409, 429, 502, 503, 504].includes(response.status)
-      const message = response.status === 402
-        ? 'Your Automnia Cloud credits are exhausted. Purchase a top-up or configure a BYOK provider in Settings.'
-        : response.status === 404
-          ? 'Your Automnia Cloud license could not be verified. Reactivate it and retry.'
-          : detail
-      emit('error', { message, provider, model: modelId, capability })
-      return {
-        ok: false,
-        reply: message,
-        stdout: '',
-        stderr: message,
-        code: response.status,
-        failureKind: response.status === 402 ? 'credits_exhausted' : 'relay_unavailable',
-        retryable,
-        retryAfterSeconds: Number(response.headers.get('retry-after')) || null,
-        modelId,
-        provider,
-        model,
-        runtimeContext: agentRuntimeContextPayload(input.agent, context),
-        streaming: { ...capability, transport: 'automnia-cloud-relay', billingMode: 'hosted_credits' },
-      }
-    }
-    const finalReply = sanitizeUserVisibleRuntimeText(payload.text).trim() || 'No response returned.'
-    const remainingCredits = typeof payload.remainingCredits === 'number' && Number.isFinite(payload.remainingCredits) && payload.remainingCredits >= 0
-      ? payload.remainingCredits
-      : null
-    let creditBalanceSynchronized = false
-    if (remainingCredits !== null) {
-      try {
-        creditBalanceSynchronized = licenseService.recordHostedCreditBalance(remainingCredits) !== null
-      } catch (error) {
-        // The provider has already completed and charged this request. Do not
-        // convert that successful reply into a failure solely because the
-        // local display cache could not be updated; Account & License can
-        // reconcile from the provisioner later.
-        console.warn(`[license] hosted credit balance sync failed after a successful relay request: ${redactSensitiveText(String(error))}`)
-      }
-    }
-    emit('delta', { text: finalReply, buffered: true, transport: 'automnia-cloud-relay' })
-    saveProviderConversationTurn(sessionId, provider, modelId, requestMessages, { content: finalReply })
-    await appendAgentDailyMemory(input.agent, `[turn] completed Automnia Cloud relay | prompt: ${trimTask(input.message, 120)} | outcome: ${trimTask(finalReply, 220)}`).catch(() => undefined)
-    const doctrineSync = await buildDoctrineSyncReport(input.agent, context.executionWorkspace)
-    return {
-      ok: true,
-      reply: finalReply,
-      stdout: '',
-      stderr: '',
-      code: 0,
-      modelId,
-      provider,
-      model,
-      remainingCredits,
-      creditBalanceSynchronized,
-      doctrineSync,
-      runtimeContext: agentRuntimeContextPayload(input.agent, context),
-      streaming: {
-        ...capability,
-        transport: 'automnia-cloud-relay',
-        billingMode: 'hosted_credits',
-        sessionId,
-        conversationMessages: providerConversationHistories.get(sessionId)?.messages.length || requestMessages.length + 1,
-      },
-    }
-  } catch (error) {
-    const message = signal.aborted ? 'Automnia Cloud relay request was cancelled.' : redactHiddenReasoningAndSecrets(String(error))
-    emit('error', { message, provider, model: modelId, capability })
-    return {
-      ok: false,
-      reply: message,
-      stdout: '',
-      stderr: message,
-      code: 503,
-      failureKind: signal.aborted ? 'aborted' : 'relay_unavailable',
-      modelId,
-      provider,
-      model,
-      runtimeContext: agentRuntimeContextPayload(input.agent, context),
-      streaming: { ...capability, transport: 'automnia-cloud-relay', billingMode: 'hosted_credits' },
-    }
-  }
-}
-
 const agentStreamingService = createAgentStreamingService({
   streamingProviderConfig: STREAMING_PROVIDER_CONFIG,
   isValidAgentId,
@@ -17674,7 +17635,10 @@ const agentStreamingService = createAgentStreamingService({
   agentRuntimeShortcutReason,
   bufferedAgentRuntimeReason,
   getHostedRelayCredentials: () => licenseService.getActiveRelayCredentials(),
-  streamAutomniaCloudRelay,
+  reconcileHostedCreditBalance: async () => {
+    const status = await licenseService.refresh()
+    return { creditBalance: status.creditBalance }
+  },
   runBufferedAgentTurnForStream,
   resolveAgentPrimaryModelId,
   openAiCodexEmbeddedRuntimeReason,
@@ -18111,7 +18075,17 @@ const agentConfigRoutesContext: AgentConfigRoutesContext = {
 
 registerAgentConfigRoutes(app, agentConfigRoutesContext)
 
-registerAuthRoutes(app, { authToken: AUTH_TOKEN, loginAttempts, sessionTokens })
+registerAuthRoutes(app, {
+  authToken: AUTH_TOKEN,
+  loginAttempts,
+  sessionTokens,
+  accountAuth: accountAuthService,
+  ensureProviderAuthReady: ensureLocalAuthStoreLoaded,
+  getLocalProviderOAuth: providerAuthService.getLocalProviderOAuth,
+  oauthSessions,
+  startGoogleOAuthSession,
+  startGoogleAccountOAuthSession,
+})
 registerLicenseRoutes(app, {
   licenseService,
   synchronizeOpenClawBillingRoute: async () => {

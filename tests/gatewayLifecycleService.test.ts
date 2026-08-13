@@ -200,6 +200,10 @@ function createHarness(config: HarnessOptions = {}) {
     get spawnCalls() {
       return spawnCalls
     },
+    setNextHealth(healthy: boolean) {
+      healthSequence.length = Math.max(healthCalls + 1, 1)
+      healthSequence.fill(healthy)
+    },
   }
 }
 
@@ -223,6 +227,31 @@ test('ensureGatewayRunning records unavailable runtime without spawning', async 
   assert.equal(harness.spawnCalls, 0)
   assert.match(harness.logs.map((entry) => entry.message).join('\n'), /failed to start: Error: missing-runtime/)
   assert.equal(harness.service.gatewayStatusSnapshot(false).state, 'offline')
+})
+
+test('migration-lock output remains visible across Gateway startup retries until health recovers', async () => {
+  const harness = createHarness({
+    healthSequence: [false, false, false],
+    onSpawn: (child) => {
+      setTimeout(() => {
+        child.stderr?.emit('data', Buffer.from(
+          '[openclaw] Reason: OpenClaw startup migrations are already running for this state directory; retry after 2026-08-12T23:34:17.556Z.\n',
+        ))
+      }, 0)
+    },
+  })
+
+  await harness.service.ensureGatewayRunning()
+  await new Promise((resolve) => setTimeout(resolve, 10))
+
+  const status = harness.service.gatewayStatusSnapshot(false)
+  assert.equal(status.migration.active, true)
+  assert.equal(status.migration.retryAfterAt, '2026-08-12T23:34:17.556Z')
+  assert.match(status.migration.message, /startup migrations/i)
+
+  harness.setNextHealth(true)
+  assert.equal(await harness.service.isGatewayHealthy(), true)
+  assert.equal(harness.service.gatewayStatusSnapshot(true).migration.active, false)
 })
 
 test('tryRestartGatewayService does not take over an external listener unless allowed', async () => {

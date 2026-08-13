@@ -343,6 +343,14 @@ export type RuntimeStatus = {
       qmdStartup: string
       qmdTimeoutMs: number | null
     }
+    compaction?: {
+      enabled: boolean
+      reserveTokensFloor: number | null
+      keepRecentTokens: number | null
+      midTurnPrecheck: boolean
+      truncateAfterCompaction: boolean
+      notifyUser: boolean
+    }
   }
   gateway: {
     state: string
@@ -367,6 +375,13 @@ export type RuntimeStatus = {
     lastRestartOutcome?: 'scheduled' | 'started' | 'succeeded' | 'failed' | 'skipped' | null
     recentRestarts?: GatewayRestartLifecycleEntry[]
     restartDiagnostics?: GatewayRestartDiagnostics
+    migration?: {
+      active: boolean
+      startedAt: string | null
+      lastSeenAt: string | null
+      retryAfterAt: string | null
+      message: string
+    }
     uptimeMs: number
     logs: GatewayLogEntry[]
     activity: GatewayActivitySummary
@@ -1061,7 +1076,10 @@ export function useRuntimeStatus(intervalMs = 5000) {
   useEffect(() => {
     const subscriberId = ++runtimeSubscriberId
     const activeIntervalMs = Math.max(1000, Math.round(intervalMs || 0))
-    const listener = () => setSnapshot(runtimeSnapshot())
+    const listener = () => setSnapshot((previous) => {
+      const next = runtimeSnapshot()
+      return previous.status === next.status && previous.error === next.error ? previous : next
+    })
 
     ensureRuntimeLifecycleListeners()
     runtimeStatusSubscribers.add(listener)
@@ -1090,7 +1108,10 @@ export function useRuntimeSummaryStatus(intervalMs = 8000) {
   useEffect(() => {
     const subscriberId = ++runtimeSummarySubscriberId
     const activeIntervalMs = Math.max(1000, Math.round(intervalMs || 0))
-    const listener = () => setSnapshot(runtimeSummarySnapshot())
+    const listener = () => setSnapshot((previous) => {
+      const next = runtimeSummarySnapshot()
+      return previous.status === next.status && previous.error === next.error ? previous : next
+    })
 
     ensureRuntimeLifecycleListeners()
     runtimeSummarySubscribers.add(listener)

@@ -1,9 +1,9 @@
 import { apiUrl } from '../utils/apiUrl'
-import { readAuthToken } from './authTokenStore'
+import { isAuthExplicitlySignedOut, readAuthToken } from './authTokenStore'
 import { recoverDesktopControlCenterSession } from './desktopSessionRecovery'
 
 let installed = false
-
+let nativeFetch: typeof window.fetch | null = null
 
 function requestUrl(input: RequestInfo | URL): string {
   if (input instanceof Request) return input.url
@@ -41,29 +41,50 @@ function headersWithBearer(input: RequestInfo | URL, init?: RequestInit): Header
   return headers
 }
 
+async function fetchWithSessionRecovery(
+  fetchImpl: typeof window.fetch,
+  input: RequestInfo | URL,
+  init?: RequestInit,
+): Promise<Response> {
+  if (!isControlCenterApiRequest(input)) return fetchImpl(input, init)
+
+  const retryInput = input instanceof Request ? input.clone() : input
+  const firstResponse = await fetchImpl(input, {
+    ...(init || {}),
+    headers: headersWithBearer(input, init),
+  })
+  if (firstResponse.status !== 401 || isSessionBootstrapRequest(input)) return firstResponse
+  if (isAuthExplicitlySignedOut()) return firstResponse
+
+  const refreshedToken = await recoverDesktopControlCenterSession()
+  if (!refreshedToken) return firstResponse
+
+  const retryHeaders = headersWithBearer(retryInput, init)
+  retryHeaders.set('Authorization', `Bearer ${refreshedToken}`)
+  return fetchImpl(retryInput, {
+    ...(init || {}),
+    headers: retryHeaders,
+  })
+}
+
+/**
+ * Authenticated fetch for requests that need streaming bodies. It shares the
+ * same desktop-session renewal as the global fetch bridge, including callers
+ * that do not resolve the browser's global fetch binding through window.fetch.
+ */
+export async function fetchControlCenterWithAuth(input: RequestInfo | URL, init?: RequestInit): Promise<Response> {
+  if (!nativeFetch && typeof window !== 'undefined') installAuthenticatedFetch()
+  const fetchImpl = nativeFetch || globalThis.fetch
+  if (!fetchImpl) throw new Error('Fetch is not available in this runtime.')
+  return fetchWithSessionRecovery(fetchImpl, input, init)
+}
+
 export function installAuthenticatedFetch(): void {
   if (installed || typeof window === 'undefined' || typeof window.fetch !== 'function') return
   installed = true
-  const nativeFetch = window.fetch.bind(window)
+  nativeFetch = window.fetch.bind(window)
 
   window.fetch = async (input: RequestInfo | URL, init?: RequestInit) => {
-    if (!isControlCenterApiRequest(input)) return nativeFetch(input, init)
-
-    const retryInput = input instanceof Request ? input.clone() : input
-    const firstResponse = await nativeFetch(input, {
-      ...(init || {}),
-      headers: headersWithBearer(input, init),
-    })
-    if (firstResponse.status !== 401 || isSessionBootstrapRequest(input)) return firstResponse
-
-    const refreshedToken = await recoverDesktopControlCenterSession()
-    if (!refreshedToken) return firstResponse
-
-    const retryHeaders = headersWithBearer(retryInput, init)
-    retryHeaders.set('Authorization', `Bearer ${refreshedToken}`)
-    return nativeFetch(retryInput, {
-      ...(init || {}),
-      headers: retryHeaders,
-    })
+    return fetchWithSessionRecovery(nativeFetch!, input, init)
   }
 }

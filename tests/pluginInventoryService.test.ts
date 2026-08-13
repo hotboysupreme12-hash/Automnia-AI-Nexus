@@ -158,7 +158,7 @@ test('plugin inventory lists configured, missing-auth, unavailable, failed, mana
 })
 
 test('plugin inventory falls back to bundled manifests and redacts CLI warnings', async () => {
-  const workspaceRoot = await mkdtemp(path.join(os.tmpdir(), 'dystopai-plugin-inventory-'))
+  const workspaceRoot = await mkdtemp(path.join(os.tmpdir(), 'automnia-plugin-inventory-'))
   try {
     const pluginRoot = path.join(workspaceRoot, 'vendor', 'openclaw', 'dist', 'extensions', 'browser')
     await mkdir(pluginRoot, { recursive: true })

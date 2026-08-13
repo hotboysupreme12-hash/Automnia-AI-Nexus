@@ -1,0 +1,114 @@
+/*
+  Performance pass.
+
+  The monitor is a live surface, so it is repainted regularly. Keep the
+  graphite look, but avoid stacking backdrop-filter and large shadows across
+  every card and scroll row; that combination is especially expensive in the
+  Electron renderer on lower-powered PCs.
+*/
+
+html.dui-pro-overhaul .app-bg.dy-monitor-focus [data-dui-panel="monitor"].dy-monitor-shell {
+  contain: layout paint;
+  backdrop-filter: none !important;
+  -webkit-backdrop-filter: none !important;
+  box-shadow: 0 18px 42px rgba(0, 0, 0, .30), inset 0 1px 0 rgba(255, 255, 255, .040) !important;
+}
+
+html.dui-pro-overhaul .app-bg.dy-monitor-focus [data-dui-panel="monitor"].dy-monitor-shell :is(
+  .dy-monitor-card,
+  .dy-health-card,
+  .dy-gateway-summary-card,
+  .dy-channel-activity-card,
+  .dy-cron-jobs-card,
+  .dy-gateway-log-card,
+  .dy-runtime-cluster,
+  .dy-runtime-datum,
+  .dy-monitor-stream-box,
+  .dy-monitor-log-box,
+  .dy-gateway-event-list,
+  .dy-gateway-event-card,
+  .dy-gateway-activity-line,
+  .dy-cron-job-card,
+  .dy-runtime-session-card,
+  .dy-gateway-plugin-row,
+  .dy-runtime-call-card,
+  .dy-session-meta-chip,
+  .dy-cron-instruction-chip,
+  .dy-monitor-alert,
+  .dy-monitor-empty
+) {
+  backdrop-filter: none !important;
+  -webkit-backdrop-filter: none !important;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, .035) !important;
+}
+
+html.dui-pro-overhaul .app-bg.dy-monitor-focus [data-dui-panel="monitor"].dy-monitor-shell :is(
+  .dy-gateway-event-list,
+  .dy-cron-job-list,
+  .dy-monitor-log-box
+) {
+  contain: layout paint;
+  overscroll-behavior: contain;
+}
+
+html.dui-pro-overhaul .app-bg.dy-monitor-focus [data-dui-panel="monitor"].dy-monitor-shell :is(
+  .dy-gateway-event-card,
+  .dy-cron-job-card,
+  .dy-gateway-log-line
+) {
+  content-visibility: auto;
+  contain-intrinsic-size: 0 56px;
+}
+
+/* Keep the tab controls usable on laptop and tablet widths without creating a
+   horizontal overflow that makes the whole workspace feel sluggish to scroll. */
+@media (max-width: 900px) {
+  html.dui-pro-overhaul .app-bg.dy-monitor-focus .dy-monitor-tabbar {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  html.dui-pro-overhaul .app-bg.dy-monitor-focus .dy-monitor-tools {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+
+  html.dui-pro-overhaul .app-bg.dy-monitor-focus .dy-monitor-tool-button {
+    min-width: 0 !important;
+    padding-inline: 10px !important;
+  }
+}
+
+@media (max-width: 560px) {
+  html.dui-pro-overhaul .app-bg.dy-monitor-focus .dy-monitor-tab-list {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  html.dui-pro-overhaul .app-bg.dy-monitor-focus .dy-monitor-tab-list button {
+    min-height: 42px;
+    border-bottom: 1px solid rgba(226, 232, 238, .08) !important;
+  }
+
+  html.dui-pro-overhaul .app-bg.dy-monitor-focus .dy-monitor-tools {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  html.dui-pro-overhaul .app-bg.dy-monitor-focus .dy-monitor-tool-button {
+    min-height: 40px !important;
+  }
+}
+
+/* On Windows Electron, remove the remaining large-area glass effect from the
+   shell chrome as well. This keeps navigation and the other tabs responsive
+   while the monitor is streaming updates. */
+html.dy-desktop-safe-renderer .app-bg .grid-overlay {
+  display: none !important;
+}
+
+html.dy-desktop-safe-renderer .app-bg.dy-monitor-focus :is(
+  .dy-monitor-header,
+  .dy-monitor-tabs,
+  [data-dui-panel="monitor"].dy-monitor-shell
+) {
+  backdrop-filter: none !important;
+  -webkit-backdrop-filter: none !important;
+}

@@ -7,7 +7,7 @@ import test from 'node:test'
 import { createControlFilesService } from '../server/services/controlFilesService'
 
 async function createTempWorkspace(t: { after(callback: () => Promise<void> | void): void }) {
-  const root = await fs.mkdtemp(path.join(os.tmpdir(), 'dystopai-control-files-'))
+  const root = await fs.mkdtemp(path.join(os.tmpdir(), 'automnia-control-files-'))
   t.after(async () => {
     await fs.rm(root, { recursive: true, force: true })
   })

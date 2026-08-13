@@ -11,7 +11,7 @@ import {
 } from '../server/state/runtimeLedgerStore.ts'
 
 const rootDir = fileURLToPath(new URL('..', import.meta.url))
-const tempDir = await mkdtemp(path.join(os.tmpdir(), 'dystopai-control-state-'))
+const tempDir = await mkdtemp(path.join(os.tmpdir(), 'automnia-control-state-'))
 const runtimeRunsJsonl = path.join(tempDir, 'runtime-runs.jsonl')
 const runtimeLedgerStore = createRuntimeLedgerStore({
   directory: tempDir,

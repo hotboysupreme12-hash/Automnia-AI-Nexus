@@ -7,9 +7,9 @@ import net from 'node:net'
 
 const root = process.cwd()
 const CONTROL_TOKEN = 'release-soak-control-token'
-const REQUEST_COUNT = Math.max(100, Math.min(2_000, Number(process.env.DYSTOPAI_SOAK_REQUEST_COUNT || 400)))
-const CONCURRENCY = Math.max(1, Math.min(25, Number(process.env.DYSTOPAI_SOAK_CONCURRENCY || 8)))
-const P95_LIMIT_MS = Math.max(250, Number(process.env.DYSTOPAI_SOAK_P95_LIMIT_MS || 2_500))
+const REQUEST_COUNT = Math.max(100, Math.min(2_000, Number(process.env.AUTOMNIA_SOAK_REQUEST_COUNT || 400)))
+const CONCURRENCY = Math.max(1, Math.min(25, Number(process.env.AUTOMNIA_SOAK_CONCURRENCY || 8)))
+const P95_LIMIT_MS = Math.max(250, Number(process.env.AUTOMNIA_SOAK_P95_LIMIT_MS || 2_500))
 
 async function freePort() {
   return await new Promise<number>((resolve, reject) => {
@@ -102,9 +102,9 @@ async function terminate(child: ChildProcessWithoutNullStreams) {
 }
 
 const port = await freePort()
-const workspaceRoot = mkdtempSync(path.join(tmpdir(), 'dystopai-soak-workspace-'))
-const stateDir = mkdtempSync(path.join(tmpdir(), 'dystopai-soak-state-'))
-const homeDir = mkdtempSync(path.join(tmpdir(), 'dystopai-soak-home-'))
+const workspaceRoot = mkdtempSync(path.join(tmpdir(), 'automnia-soak-workspace-'))
+const stateDir = mkdtempSync(path.join(tmpdir(), 'automnia-soak-state-'))
+const homeDir = mkdtempSync(path.join(tmpdir(), 'automnia-soak-home-'))
 const child = spawnServer(port, workspaceRoot, stateDir, homeDir)
 
 try {

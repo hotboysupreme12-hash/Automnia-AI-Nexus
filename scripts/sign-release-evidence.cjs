@@ -4,7 +4,7 @@ const os = require('node:os')
 const path = require('node:path')
 
 const root = path.resolve(__dirname, '..')
-const evidenceDir = path.resolve(process.env.DYSTOPAI_RELEASE_EVIDENCE_DIR || path.join(root, 'release', 'evidence'))
+const evidenceDir = path.resolve(process.env.AUTOMNIA_RELEASE_EVIDENCE_DIR || path.join(root, 'release', 'evidence'))
 const checksumsPath = path.join(evidenceDir, 'checksums.sha256')
 const signaturePath = path.join(evidenceDir, 'checksums.sha256.sig')
 const publicKeyPath = path.join(evidenceDir, 'signing-public-key.pem')
@@ -33,10 +33,10 @@ function readRequiredFile(filePath, label) {
 }
 
 function readPrivateKeyPem() {
-  const inlinePem = envValue('AUTOMNIA_RELEASE_SIGNING_PRIVATE_KEY_PEM', 'DYSTOPAI_RELEASE_SIGNING_PRIVATE_KEY_PEM')
+  const inlinePem = envValue('AUTOMNIA_RELEASE_SIGNING_PRIVATE_KEY_PEM', 'AUTOMNIA_RELEASE_SIGNING_PRIVATE_KEY_PEM')
   if (inlinePem && inlinePem.trim()) return inlinePem
 
-  const keyFile = envValue('AUTOMNIA_RELEASE_SIGNING_PRIVATE_KEY_FILE', 'DYSTOPAI_RELEASE_SIGNING_PRIVATE_KEY_FILE')
+  const keyFile = envValue('AUTOMNIA_RELEASE_SIGNING_PRIVATE_KEY_FILE', 'AUTOMNIA_RELEASE_SIGNING_PRIVATE_KEY_FILE')
   if (keyFile && keyFile.trim()) {
     return fs.readFileSync(path.resolve(keyFile), 'utf8')
   }
@@ -50,7 +50,7 @@ function loadPrivateKey() {
   const key = readPrivateKeyPem()
   const privateKey = crypto.createPrivateKey({
     key,
-    passphrase: envValue('AUTOMNIA_RELEASE_SIGNING_PASSPHRASE', 'DYSTOPAI_RELEASE_SIGNING_PASSPHRASE') || undefined,
+    passphrase: envValue('AUTOMNIA_RELEASE_SIGNING_PASSPHRASE', 'AUTOMNIA_RELEASE_SIGNING_PASSPHRASE') || undefined,
   })
   if (privateKey.asymmetricKeyType !== 'ed25519') {
     throw new Error(`[release-signing] Expected an Ed25519 private key, got ${privateKey.asymmetricKeyType || 'unknown'}.`)
@@ -68,7 +68,7 @@ function main() {
   const publicKeyDer = publicKey.export({ type: 'spki', format: 'der' })
   const signature = crypto.sign(null, checksums, privateKey)
   const generatedAt = new Date().toISOString()
-  const keyId = envValue('AUTOMNIA_RELEASE_SIGNING_KEY_ID', 'DYSTOPAI_RELEASE_SIGNING_KEY_ID') || sha256Bytes(publicKeyDer).slice(0, 16)
+  const keyId = envValue('AUTOMNIA_RELEASE_SIGNING_KEY_ID', 'AUTOMNIA_RELEASE_SIGNING_KEY_ID') || sha256Bytes(publicKeyDer).slice(0, 16)
 
   fs.writeFileSync(signaturePath, `${signature.toString('base64')}\n`)
   fs.writeFileSync(publicKeyPath, publicKeyPem)

@@ -87,8 +87,11 @@ SHOPIFY_PLAN_MAPPINGS: '$planBase64'
 SHOPIFY_CHECKOUT_URL: '$($config.ShopifyCheckoutUrl)'
 VERTEX_LOCATION: '$($config.VertexLocation)'
 AUTOMNIA_SCHEMA_VERSION: '$($config.SchemaVersion)'
+AUTOMNIA_KNOWLEDGE_MODEL_VERSION: '$($config.KnowledgeModelVersion)'
+AUTOMNIA_KNOWLEDGE_FALLBACK_MODEL_VERSION: '$($config.KnowledgeFallbackModelVersion)'
 GOOGLE_CLOUD_PROJECT: '$ProjectId'
 GCLOUD_PROJECT: '$ProjectId'
+AUTOMNIA_KNOWLEDGE_SERVING_CONFIG: 'projects/$projectNumber/locations/global/collections/default_collection/engines/$($config.KnowledgeEngineId)/servingConfigs/default_search'
 "@
   [IO.File]::WriteAllText($envFile, $environmentYaml, [Text.UTF8Encoding]::new($false))
   $secretFlags = @($config.SecretBindings.GetEnumerator() | ForEach-Object { "$($_.Key)=$($_.Value):latest" }) -join ','

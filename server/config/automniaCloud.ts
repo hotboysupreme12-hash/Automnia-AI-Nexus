@@ -1,9 +1,8 @@
 import { spawnSync } from 'node:child_process'
 
-// Stable public origin for licensing, Shopify webhooks, and hosted-credit AI.
-// Project-specific run.app URLs are deployment details and must never be
-// compiled into a desktop release. Environment overrides remain available for
-// local development and emergency recovery.
+// Temporary Cloud Run origin for licensing, Shopify webhooks, and hosted-credit
+// AI. Keep this switchable until the Automnia public DNS cutover is complete.
+// Environment overrides remain available for staging and emergency recovery.
 export const AUTOMNIA_PUBLIC_CLOUD_URL = 'https://automnia-shopify-provisioner-336625531977.us-east1.run.app'
 
 export function automniaCloudBaseUrl(override?: string) {
@@ -29,8 +28,8 @@ function persistedWindowsRelayOverride() {
 }
 
 /**
- * Resolves the desktop's hosted-credit route without compiling a Cloud Run
- * project URL into the app. On Windows, a newly persisted user variable is
+ * Resolves the desktop's hosted-credit route. On Windows, a newly persisted
+ * user variable is
  * not inherited by already-running Explorer/Codex parents, so read it from
  * the user environment registry as the reliable fallback.
  */

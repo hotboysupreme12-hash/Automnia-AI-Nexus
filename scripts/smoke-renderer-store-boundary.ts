@@ -122,7 +122,7 @@ assert.match(store, /makeCommandConsoleResponseState\(\)/, 'nexusStore initial s
 assert.match(store, /merge: mergeNexusPersistedState/, 'nexusStore persistence merge should delegate to the persistence module')
 assert.match(store, /partialize: partializeNexusPersistedState/, 'nexusStore partialize should delegate to the persistence module')
 assert.match(store, /removeCommandConsoleDraftsForAgent\(normalized\)/, 'nexusStore should delegate retired-agent draft cleanup to commandConsoleState')
-assert.doesNotMatch(store, /dystopai:command-draft:/, 'command draft storage keys should stay out of nexusStore after Phase H item 84')
+assert.doesNotMatch(store, /automnia:command-draft:/, 'command draft storage keys should stay out of nexusStore after Phase H item 84')
 assert.match(store, /createControlStreamProjector\(\)/, 'nexusStore should keep stream projection state separate from transport')
 assert.match(store, /sendStreamingAgentTurn\(/, 'nexusStore should delegate agent-turn streaming transport to src/api/agentTurns.ts')
 assert.match(store, /onStreamComplete: streamProjector\.complete/, 'nexusStore should finalize stream projection through the API helper callback')

@@ -2,6 +2,7 @@ import type { AgentSkillEntry, AgentTurnAttachment, FastModeDefault, ThinkingLev
 import { apiUrl } from '../utils/apiUrl'
 import { createSseFrameParser, type SseFrame } from '../utils/sseStream'
 import { apiRequest, type ApiRequestOptions, type ApiResult } from './client'
+import { fetchControlCenterWithAuth } from './authenticatedFetch'
 import {
   LICENSE_STATUS_UPDATED_EVENT,
   type HostedCreditBalanceUpdate,
@@ -42,6 +43,8 @@ export type AgentTurnPayload = {
   remainingCredits?: number | null
   creditBalanceSynchronized?: boolean
   usagePriority?: 'automnia_first' | 'provider_first'
+  billingRoute?: string
+  nativeToolLoop?: boolean
   fallbackUsed?: boolean
   runtimeTransport?: 'gateway-chat' | 'gateway' | 'local'
   gatewayFallbackDetail?: string
@@ -153,7 +156,7 @@ export async function sendStreamingAgentTurn(
   body: AgentTurnRequest,
   options: AgentTurnStreamOptions,
 ): Promise<AgentTurnStreamResult> {
-  const response = await fetch(apiUrl('/api/openclaw/agent-turn/stream'), {
+  const response = await fetchControlCenterWithAuth(apiUrl('/api/openclaw/agent-turn/stream'), {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     signal: options.signal,

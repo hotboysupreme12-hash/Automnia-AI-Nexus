@@ -7,7 +7,7 @@ body:
   - type: markdown
     attributes:
       value: |
-        Thanks for testing DystopAI Core. Before sharing logs, remove API keys, OAuth tokens, bearer tokens, cookies, passwords, private prompts, personal messages, and sensitive file paths.
+        Thanks for testing Automnia Core. Before sharing logs, remove API keys, OAuth tokens, bearer tokens, cookies, passwords, private prompts, personal messages, and sensitive file paths.
   - type: input
     id: version
     attributes:

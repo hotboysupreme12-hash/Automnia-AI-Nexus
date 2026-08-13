@@ -1,7 +1,7 @@
 import { StrictMode } from 'react'
 import { createRoot } from 'react-dom/client'
 import './index.css'
-import './dystopai-app-theme.css'
+import './automnia-app-theme.css'
 import App from './App.tsx'
 import { installAuthenticatedFetch } from './api/authenticatedFetch'
 import { preloadMissionIconAssets } from './components/mission/missionIconAssets'

@@ -3,57 +3,7 @@ import type { OpenClawAgent } from '../../types/nexus'
 import { useNexusStore } from '../../store/nexusStore'
 import { clampAgentStat, deriveLevelScaledAttributes } from '../../engine/AgentStatScaling'
 import { agentPortraitSrc } from '../../utils/portrait'
-
-const RARITY: Record<string, {
-  cardBg: string; cardBorder: string; cardGlow: string
-  badgeBg: string; badgeText: string; badgeBorder: string
-  ring: string; nameClass: string
-  portraitStage?: string
-}> = {
-  legendary: {
-    cardBg: 'from-[#17130b] via-[#111315] to-[#090b0d]',
-    cardBorder: 'border-amber-300/35',
-    cardGlow: 'shadow-[0_22px_70px_-58px_rgba(251,191,36,0.72)]',
-    badgeBg: 'bg-amber-300/[0.10]',
-    badgeText: 'text-amber-100',
-    badgeBorder: 'border-amber-200/35',
-    ring: 'ring-amber-200/65 ring-offset-2 ring-offset-[#101113]',
-    nameClass: 'text-amber-50',
-    portraitStage: 'portrait-stage--legendary',
-  },
-  epic: {
-    cardBg: 'from-[#18150f] via-[#111315] to-[#090b0d]',
-    cardBorder: 'border-[#9475ae]/30',
-    cardGlow: 'shadow-[0_22px_70px_-58px_rgba(148,117,174,0.42)]',
-    badgeBg: 'bg-[#9475ae]/[0.10]',
-    badgeText: 'text-[#eadcff]',
-    badgeBorder: 'border-[#b895d6]/30',
-    ring: 'ring-[#9475ae]/45 ring-offset-2 ring-offset-[#101113]',
-    nameClass: 'text-[#f0e8ff]',
-    portraitStage: 'portrait-stage--epic',
-  },
-  rare: {
-    cardBg: 'from-[#161411] via-[#111315] to-[#090b0d]',
-    cardBorder: 'border-[#7097aa]/28',
-    cardGlow: 'shadow-[0_22px_64px_-58px_rgba(112,151,170,0.34)]',
-    badgeBg: 'bg-[#7097aa]/[0.09]',
-    badgeText: 'text-[#dbeaf0]',
-    badgeBorder: 'border-[#9fb6bf]/28',
-    ring: 'ring-[#7097aa]/36 ring-offset-2 ring-offset-[#101113]',
-    nameClass: 'text-[#edf7fa]',
-    portraitStage: 'portrait-stage--rare',
-  },
-  common: {
-    cardBg: 'from-[#121416] via-[#101214] to-[#090b0d]',
-    cardBorder: 'border-white/[0.12]',
-    cardGlow: '',
-    badgeBg: 'bg-white/[0.045]',
-    badgeText: 'text-white/86',
-    badgeBorder: 'border-white/[0.14]',
-    ring: 'ring-white/18 ring-offset-1 ring-offset-[#101113]',
-    nameClass: 'text-slate-50',
-  },
-}
+import type { AgentCardTheme } from '../settings/workspaceSettings'
 
 const BEHAVIOR_LABELS: Record<string, string> = {
   executor: 'Executor',
@@ -79,26 +29,6 @@ const CAPABILITY_LABELS: Record<string, string> = {
   research: 'Research',
   orchestration: 'Orchestration',
   memoryManagement: 'Memory',
-}
-
-function rarityAccent(rarity: string | undefined) {
-  if (rarity === 'legendary') return 'from-[#caa25a] via-[#e0bf72] to-[#7a5f31]'
-  if (rarity === 'epic') return 'from-[#7e6296] via-[#b795d4] to-[#5c486d]'
-  if (rarity === 'rare') return 'from-[#577887] via-[#9fb6bf] to-[#324b55]'
-  return 'from-stone-500/65 via-stone-400/45 to-neutral-700/30'
-}
-
-function rarityWash(rarity: string | undefined) {
-  if (rarity === 'legendary') {
-    return 'bg-[radial-gradient(circle_at_24%_0%,rgba(242,204,98,0.18),transparent_34%),linear-gradient(145deg,rgba(242,204,98,0.08),transparent_48%)]'
-  }
-  if (rarity === 'epic') {
-    return 'bg-[radial-gradient(circle_at_24%_0%,rgba(148,117,174,0.16),transparent_34%),linear-gradient(145deg,rgba(184,149,214,0.06),transparent_50%)]'
-  }
-  if (rarity === 'rare') {
-    return 'bg-[radial-gradient(circle_at_24%_0%,rgba(112,151,170,0.14),transparent_34%),linear-gradient(145deg,rgba(159,182,191,0.05),transparent_52%)]'
-  }
-  return 'bg-[radial-gradient(circle_at_24%_0%,rgba(255,255,255,0.045),transparent_34%)]'
 }
 
 function modelTier(modelId = '') {
@@ -170,10 +100,11 @@ interface AgentCardProps {
   inParty?: boolean
   isBusy?: boolean
   missionRunning?: boolean
+  cardTheme: AgentCardTheme
   displayMode?: 'showcase' | 'grid6' | 'grid8' | 'grid10' | 'list'
 }
 
-export const AgentCard = memo(function AgentCard({ agent, isSelected, slotNumber, partyIndex, inParty, isBusy = false, missionRunning, displayMode = 'showcase' }: AgentCardProps) {
+export const AgentCard = memo(function AgentCard({ agent, isSelected, slotNumber, partyIndex, inParty, isBusy = false, missionRunning, cardTheme, displayMode = 'showcase' }: AgentCardProps) {
   const selectAgent = useNexusStore((s) => s.selectAgent)
   const togglePartyMember = useNexusStore((s) => s.togglePartyMember)
   const openEditor = useNexusStore((s) => s.openEditor)
@@ -216,7 +147,6 @@ export const AgentCard = memo(function AgentCard({ agent, isSelected, slotNumber
     selectAgent(agent.id, { toggle: true })
   }
 
-  const r = RARITY[agent.rarity || 'common']
   const listMode = displayMode === 'list'
   const denseMode = displayMode === 'grid10'
   const compactMode = displayMode === 'grid8' || denseMode
@@ -245,6 +175,7 @@ export const AgentCard = memo(function AgentCard({ agent, isSelected, slotNumber
       data-agent-card="true"
       data-agent-id={agent.id}
       data-agent-rarity={agent.rarity || 'common'}
+      data-agent-card-theme={cardTheme}
       data-agent-display-mode={displayMode}
       data-agent-in-party={inP ? 'true' : 'false'}
       data-agent-running={busy ? 'true' : 'false'}
@@ -262,9 +193,7 @@ export const AgentCard = memo(function AgentCard({ agent, isSelected, slotNumber
         'agent-card-shell agent-card-pro relative flex h-full cursor-pointer border p-0 transition-all duration-300 select-none overflow-hidden group/card',
         listMode ? 'flex-row' : 'flex-col',
         cardMinHeight,
-        r.cardBorder,
-        r.cardGlow,
-        `bg-gradient-to-b ${r.cardBg}`,
+        'border-white/[0.12] bg-[#101214]',
         isSelected ? 'ring-2 ring-amber-300/55 !border-amber-200/60 z-10 shadow-[0_0_44px_-18px_rgba(214,169,74,0.58),0_22px_58px_-46px_rgba(214,169,74,0.72)]' : '',
         'hover:-translate-y-0.5 hover:z-10',
       ].join(' ')}
@@ -272,9 +201,8 @@ export const AgentCard = memo(function AgentCard({ agent, isSelected, slotNumber
       <div className={[
         'pointer-events-none absolute inset-0 z-[1] opacity-90',
         'agent-card-rarity-wash',
-        rarityWash(agent.rarity),
       ].join(' ')} />
-      <div className={`agent-card-accent-line pointer-events-none absolute inset-x-0 top-0 z-[6] h-[3px] bg-gradient-to-r ${rarityAccent(agent.rarity)} opacity-85`} />
+      <div className="agent-card-accent-line pointer-events-none absolute inset-x-0 top-0 z-[6] h-[3px]" />
       <div className="agent-card-grid pointer-events-none absolute inset-0 z-[1]" />
       <div className="agent-card-foil pointer-events-none absolute inset-0 z-[2]" />
       <div className="agent-card-inner-frame pointer-events-none absolute z-[3]" />
@@ -283,7 +211,7 @@ export const AgentCard = memo(function AgentCard({ agent, isSelected, slotNumber
         <div className={[
           'agent-card-media relative w-full overflow-hidden border border-white/[0.08] shadow-[0_20px_50px_-34px_rgba(0,0,0,0.92)] transition-transform duration-300',
           listMode ? 'h-full min-h-[124px]' : denseMode ? 'aspect-[16/11]' : compactMode ? 'aspect-[16/11]' : 'aspect-[16/10]',
-          agent.rarity !== 'common' ? `portrait-stage ${r.portraitStage || ''}` : '',
+          'portrait-stage',
         ].join(' ')}>
           <div className="pointer-events-none absolute inset-0 z-10 ring-1 ring-inset ring-white/[0.08]" />
           <div className="pointer-events-none absolute inset-[5px] z-10 ring-1 ring-inset ring-white/[0.055]" />
@@ -311,7 +239,7 @@ export const AgentCard = memo(function AgentCard({ agent, isSelected, slotNumber
           <div className="agent-card-media-shade pointer-events-none absolute inset-0 z-10" />
           <div className="agent-card-media-top absolute left-3 right-3 top-3 z-20 flex items-start justify-between gap-2">
             <div className="flex min-w-0 flex-wrap gap-1.5">
-              <span className={`agent-card-badge truncate border px-2 py-1 text-[8px] font-black uppercase leading-none ${r.badgeBg} ${r.badgeText} ${r.badgeBorder}`}>
+              <span className="agent-card-badge truncate border px-2 py-1 text-[8px] font-black uppercase leading-none">
                 {agent.rarity || 'common'}
               </span>
               {inP && (
@@ -336,7 +264,7 @@ export const AgentCard = memo(function AgentCard({ agent, isSelected, slotNumber
             <p className="agent-card-class truncate text-[9px] font-extrabold uppercase leading-none text-white/45">
               {agent.className}
             </p>
-            <h3 className={`agent-card-name mt-1.5 ${listMode ? 'truncate' : 'line-clamp-2'} text-[18px] font-black leading-tight ${r.nameClass}`}>
+            <h3 className={`agent-card-name mt-1.5 ${listMode ? 'truncate' : 'line-clamp-2'} text-[18px] font-black leading-tight text-slate-50`}>
               {agent.name}
             </h3>
             <p className={`${listMode ? 'line-clamp-1' : 'line-clamp-2'} agent-card-role mt-1 min-w-0 text-[11px] font-semibold leading-snug text-white/72`}>

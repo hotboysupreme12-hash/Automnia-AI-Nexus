@@ -190,9 +190,9 @@ function assertSuccess<T>(payload: ApiEnvelope<T>): T {
 
 async function main() {
   const port = await reservePort()
-  const workspaceRoot = mkdtempSync(path.join(tmpdir(), 'dystopai-api-workspace-'))
-  const stateDir = mkdtempSync(path.join(tmpdir(), 'dystopai-api-state-'))
-  const homeDir = mkdtempSync(path.join(tmpdir(), 'dystopai-api-home-'))
+  const workspaceRoot = mkdtempSync(path.join(tmpdir(), 'automnia-api-workspace-'))
+  const stateDir = mkdtempSync(path.join(tmpdir(), 'automnia-api-state-'))
+  const homeDir = mkdtempSync(path.join(tmpdir(), 'automnia-api-home-'))
   const seededAt = '2026-08-11T12:00:00.000Z'
   const runtimeLedgerStore = createRuntimeLedgerStore(runtimeLedgerPathsForStateRoot(stateDir))
   try {

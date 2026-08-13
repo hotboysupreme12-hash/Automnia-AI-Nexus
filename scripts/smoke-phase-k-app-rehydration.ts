@@ -89,7 +89,7 @@ function e2eLines(output: string) {
   const seen = new Set<string>()
   const lines = output
     .split(/\r?\n/u)
-    .filter((line) => line.includes('[dystopai-e2e]'))
+    .filter((line) => line.includes('[automnia-e2e]'))
   return lines.filter((line) => {
     if (seen.has(line)) return false
     seen.add(line)
@@ -152,22 +152,22 @@ async function runElectronRehydrationPass(options: {
     CONTROL_CENTER_INCLUDE_SHARED_OPENCLAW_TEMP_LOGS: '0',
     CONTROL_CENTER_MISSION_SCHEDULER_DRY_RUN: '1',
     CONTROL_CENTER_WORKSPACE_ROOT: options.workspaceRoot,
-    DYSTOPAI_CONTROL_CENTER_TOKEN_FILE: options.controlCenterTokenFile,
-    DYSTOPAI_ELECTRON_E2E: '1',
-    DYSTOPAI_ELECTRON_E2E_AUTO_QUIT_MS: '45000',
-    DYSTOPAI_ELECTRON_E2E_ASSERT_NAVIGATION: '1',
-    DYSTOPAI_ELECTRON_E2E_ASSERT_APP_REHYDRATION: '1',
-    DYSTOPAI_ELECTRON_E2E_APP_REHYDRATION_MODE: options.mode,
-    DYSTOPAI_ELECTRON_E2E_APP_REHYDRATION_AGENT_ID: options.agentId,
-    DYSTOPAI_ELECTRON_E2E_APP_REHYDRATION_INITIAL_WORKSPACE: options.initialWorkspace,
-    DYSTOPAI_ELECTRON_E2E_APP_REHYDRATION_EDITED_WORKSPACE: options.editedWorkspace,
-    DYSTOPAI_ELECTRON_E2E_APP_REHYDRATION_MARKER: options.marker,
-    DYSTOPAI_ELECTRON_E2E_QUIT_AFTER_APP_REHYDRATION: '1',
-    DYSTOPAI_ELECTRON_E2E_DISABLE_OPEN_EXTERNAL: '1',
-    DYSTOPAI_ELECTRON_E2E_SKIP_PORT_CLEANUP: '1',
-    DYSTOPAI_ELECTRON_E2E_LOG_PATH: e2eLogPath,
-    DYSTOPAI_PIPE_SERVER_LOGS: '1',
-    DYSTOPAI_USER_DATA_DIR: options.userDataDir,
+    AUTOMNIA_CONTROL_CENTER_TOKEN_FILE: options.controlCenterTokenFile,
+    AUTOMNIA_ELECTRON_E2E: '1',
+    AUTOMNIA_ELECTRON_E2E_AUTO_QUIT_MS: '45000',
+    AUTOMNIA_ELECTRON_E2E_ASSERT_NAVIGATION: '1',
+    AUTOMNIA_ELECTRON_E2E_ASSERT_APP_REHYDRATION: '1',
+    AUTOMNIA_ELECTRON_E2E_APP_REHYDRATION_MODE: options.mode,
+    AUTOMNIA_ELECTRON_E2E_APP_REHYDRATION_AGENT_ID: options.agentId,
+    AUTOMNIA_ELECTRON_E2E_APP_REHYDRATION_INITIAL_WORKSPACE: options.initialWorkspace,
+    AUTOMNIA_ELECTRON_E2E_APP_REHYDRATION_EDITED_WORKSPACE: options.editedWorkspace,
+    AUTOMNIA_ELECTRON_E2E_APP_REHYDRATION_MARKER: options.marker,
+    AUTOMNIA_ELECTRON_E2E_QUIT_AFTER_APP_REHYDRATION: '1',
+    AUTOMNIA_ELECTRON_E2E_DISABLE_OPEN_EXTERNAL: '1',
+    AUTOMNIA_ELECTRON_E2E_SKIP_PORT_CLEANUP: '1',
+    AUTOMNIA_ELECTRON_E2E_LOG_PATH: e2eLogPath,
+    AUTOMNIA_PIPE_SERVER_LOGS: '1',
+    AUTOMNIA_USER_DATA_DIR: options.userDataDir,
     HOME: options.homeDir,
     USERPROFILE: options.homeDir,
     OPENCLAW_STATE_DIR: options.openclawDir,
@@ -196,12 +196,12 @@ async function runElectronRehydrationPass(options: {
     assert.equal(exit.timedOut, false, `Phase K app rehydration ${options.mode} pass timed out\n${combinedOutput}`)
     assert.equal(exit.status, 0, `Phase K app rehydration ${options.mode} pass exited ${exit.status}\n${combinedOutput}`)
     for (const pattern of [
-      /\[dystopai-e2e\] port-cleanup-skipped/,
-      /\[dystopai-e2e\] server-ready/,
-      /\[dystopai-e2e\] navigation-policy-ok/,
-      /\[dystopai-e2e\] renderer-load:1/,
-      new RegExp(`\\[dystopai-e2e\\] app-rehydration-${options.mode}-ok:`),
-      /\[dystopai-e2e\] quit-cleanup-complete/,
+      /\[automnia-e2e\] port-cleanup-skipped/,
+      /\[automnia-e2e\] server-ready/,
+      /\[automnia-e2e\] navigation-policy-ok/,
+      /\[automnia-e2e\] renderer-load:1/,
+      new RegExp(`\\[automnia-e2e\\] app-rehydration-${options.mode}-ok:`),
+      /\[automnia-e2e\] quit-cleanup-complete/,
     ]) {
       assert.match(combinedOutput, pattern, `Phase K app rehydration ${options.mode} output missing ${pattern}\n${combinedOutput}`)
     }
@@ -220,7 +220,7 @@ assert.ok(existsSync(path.join(root, 'dist', 'index.html')), 'Phase K app rehydr
 assert.ok(existsSync(path.join(root, 'dist-server', 'index.cjs')), 'Phase K app rehydration smoke requires dist-server/index.cjs; run npm run build:server first')
 mkdirSync(phaseKEvidenceDir, { recursive: true })
 
-const tempRoot = mkdtempSync(path.join(tmpdir(), 'dystopai-phase-k-app-rehydration-'))
+const tempRoot = mkdtempSync(path.join(tmpdir(), 'automnia-phase-k-app-rehydration-'))
 const userDataDir = path.join(tempRoot, 'user-data')
 const openclawDir = path.join(tempRoot, 'openclaw')
 const homeDir = path.join(tempRoot, 'home')
@@ -293,7 +293,7 @@ try {
     completedAt,
     mode: 'electron-app-restart-state-rehydration',
     sourcePins: {
-      electronE2eFlag: 'DYSTOPAI_ELECTRON_E2E_ASSERT_APP_REHYDRATION',
+      electronE2eFlag: 'AUTOMNIA_ELECTRON_E2E_ASSERT_APP_REHYDRATION',
       seedMarker: 'app-rehydration-seed-ok',
       verifyMarker: 'app-rehydration-verify-ok',
       packageScript: 'smoke:phase-k-app-rehydration',

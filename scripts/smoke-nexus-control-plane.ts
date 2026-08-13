@@ -103,7 +103,7 @@ for (const legacyFragment of [
 const directFetchMatches = [...store.matchAll(/\bfetch\s*\(/g)]
 assert(directFetchMatches.length === 0, `nexusStore should not own direct fetch calls after renderer API extraction, found ${directFetchMatches.length}`)
 assert(
-  agentTurnsApi.includes("fetch(apiUrl('/api/openclaw/agent-turn/stream')"),
+  agentTurnsApi.includes("fetchControlCenterWithAuth(apiUrl('/api/openclaw/agent-turn/stream')"),
   'SSE agent-turn endpoint should live in src/api/agentTurns.ts',
 )
 assert(agentTurnsApi.includes("contentType.includes('text/event-stream')"), 'SSE route should still require event-stream parsing')

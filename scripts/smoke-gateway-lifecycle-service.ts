@@ -45,8 +45,8 @@ function createLifecycleContext(contextOptions: LifecycleContextOptions = {}) {
   const options: GatewayLifecycleServiceOptions = {
     gatewayHttpPort: 4567,
     controlCenterPort: 4050,
-    openClawConfigPath: 'C:/dystopai/openclaw.json',
-    openClawStateRoot: 'C:/dystopai/state',
+    openClawConfigPath: 'C:/automnia/openclaw.json',
+    openClawStateRoot: 'C:/automnia/state',
     startupHealthGraceMs: 50,
     startupHealthConfirmTimeoutMs: 50,
     startupHealthPollMs: 1,
@@ -58,10 +58,10 @@ function createLifecycleContext(contextOptions: LifecycleContextOptions = {}) {
       return { command: 'openclaw', args, shell: false }
     },
     openClawProcessEnv: (overrides) => ({
-      OPENCLAW_STATE_DIR: 'C:/dystopai/state',
+      OPENCLAW_STATE_DIR: 'C:/automnia/state',
       ...overrides,
     }),
-    openClawRuntimeCwd: () => 'C:/dystopai/openclaw',
+    openClawRuntimeCwd: () => 'C:/automnia/openclaw',
     spawnText: async () => ({
       stdout: contextOptions.listenerPid ? `${contextOptions.listenerPid}\n` : '',
       stderr: '',
@@ -169,7 +169,7 @@ await startContext.service.ensureGatewayRunning()
 assert.deepEqual(startContext.spawnSpecArgs[0], ['gateway', 'run', '--port', '4567', '--allow-unconfigured'])
 assert.equal(startContext.spawnCalls.length, 1, 'ensureGatewayRunning should spawn the Gateway once')
 assert.equal(startContext.spawnCalls[0].command, 'openclaw')
-assert.equal(startContext.spawnCalls[0].options.cwd, 'C:/dystopai/openclaw')
+assert.equal(startContext.spawnCalls[0].options.cwd, 'C:/automnia/openclaw')
 assert.equal(
   (startContext.spawnCalls[0].options.env as NodeJS.ProcessEnv).CONTROL_CENTER_AGENT_TURN_STREAM_URL,
   'http://127.0.0.1:4050/api/openclaw/agent-turn/stream',

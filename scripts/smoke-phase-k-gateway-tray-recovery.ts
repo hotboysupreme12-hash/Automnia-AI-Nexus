@@ -108,18 +108,18 @@ function validateSourcePins() {
   assert.ok(electronMain.includes("postControlApi('/api/openclaw/runtime/gateway/stop'"), 'tray shutdown should call the runtime Gateway stop API')
   assert.ok(electronMain.includes("postControlApi('/api/openclaw/runtime/gateway/restart'"), 'tray recovery should call the runtime Gateway restart API')
   assert.ok(electronMain.includes('GATEWAY_CONTROL_ACTION_TIMEOUT_MS'), 'tray Gateway controls should use the configurable action timeout')
-  assert.ok(electronMain.includes('DYSTOPAI_ELECTRON_E2E_ASSERT_TRAY_GATEWAY_RECOVERY'), 'Electron E2E should expose tray Gateway recovery assertions')
+  assert.ok(electronMain.includes('AUTOMNIA_ELECTRON_E2E_ASSERT_TRAY_GATEWAY_RECOVERY'), 'Electron E2E should expose tray Gateway recovery assertions')
   assert.ok(electronMain.includes('tray-gateway-stop-ok'), 'Electron E2E should log tray Gateway shutdown success')
   assert.ok(electronMain.includes('tray-gateway-recovery-ok'), 'Electron E2E should log tray Gateway recovery success')
   assert.ok(runtimeActionsSmoke.includes('scripts/smoke-phase-k-gateway-tray-recovery.ts'), 'runtime action smoke should pin the Phase K tray recovery smoke')
-  assert.ok(runtimeActionsSmoke.includes('DYSTOPAI_ELECTRON_E2E_ASSERT_TRAY_GATEWAY_RECOVERY'), 'runtime action smoke should pin the tray recovery E2E flag')
+  assert.ok(runtimeActionsSmoke.includes('AUTOMNIA_ELECTRON_E2E_ASSERT_TRAY_GATEWAY_RECOVERY'), 'runtime action smoke should pin the tray recovery E2E flag')
 
   return {
     trayShutdownLabel: true,
     trayRestartLabel: true,
     trayStopApi: '/api/openclaw/runtime/gateway/stop',
     trayRecoverApi: '/api/openclaw/runtime/gateway/restart',
-    electronE2eFlag: 'DYSTOPAI_ELECTRON_E2E_ASSERT_TRAY_GATEWAY_RECOVERY',
+    electronE2eFlag: 'AUTOMNIA_ELECTRON_E2E_ASSERT_TRAY_GATEWAY_RECOVERY',
   }
 }
 
@@ -130,7 +130,7 @@ assert.ok(existsSync(path.join(root, 'dist-server', 'index.cjs')), 'Phase K tray
 mkdirSync(phaseKEvidenceDir, { recursive: true })
 
 const sourcePins = validateSourcePins()
-const tempRoot = mkdtempSync(path.join(tmpdir(), 'dystopai-phase-k-gateway-tray-'))
+const tempRoot = mkdtempSync(path.join(tmpdir(), 'automnia-phase-k-gateway-tray-'))
 const userDataDir = path.join(tempRoot, 'user-data')
 const openclawDir = path.join(tempRoot, 'openclaw')
 const workspaceRoot = path.join(tempRoot, 'workspace')
@@ -163,18 +163,18 @@ const env = {
   CONTROL_CENTER_GATEWAY_STARTUP_HEALTH_CONFIRM_TIMEOUT_MS: '15000',
   CONTROL_CENTER_GATEWAY_STARTUP_HEALTH_POLL_MS: '500',
   CONTROL_CENTER_GATEWAY_STARTUP_HEALTH_GRACE_MS: '15000',
-  DYSTOPAI_GATEWAY_CONTROL_ACTION_TIMEOUT_MS: '90000',
-  DYSTOPAI_ELECTRON_E2E: '1',
-  DYSTOPAI_ELECTRON_E2E_AUTO_QUIT_MS: '0',
-  DYSTOPAI_ELECTRON_E2E_ASSERT_NAVIGATION: '1',
-  DYSTOPAI_ELECTRON_E2E_ASSERT_TRAY_BEHAVIOR: '1',
-  DYSTOPAI_ELECTRON_E2E_ASSERT_TRAY_GATEWAY_RECOVERY: '1',
-  DYSTOPAI_ELECTRON_E2E_QUIT_AFTER_TRAY_ASSERTIONS: '0',
-  DYSTOPAI_ELECTRON_E2E_DISABLE_OPEN_EXTERNAL: '1',
-  DYSTOPAI_ELECTRON_E2E_SKIP_PORT_CLEANUP: '1',
-  DYSTOPAI_ELECTRON_E2E_LOG_PATH: e2eLogPath,
-  DYSTOPAI_PIPE_SERVER_LOGS: '1',
-  DYSTOPAI_USER_DATA_DIR: userDataDir,
+  AUTOMNIA_GATEWAY_CONTROL_ACTION_TIMEOUT_MS: '90000',
+  AUTOMNIA_ELECTRON_E2E: '1',
+  AUTOMNIA_ELECTRON_E2E_AUTO_QUIT_MS: '0',
+  AUTOMNIA_ELECTRON_E2E_ASSERT_NAVIGATION: '1',
+  AUTOMNIA_ELECTRON_E2E_ASSERT_TRAY_BEHAVIOR: '1',
+  AUTOMNIA_ELECTRON_E2E_ASSERT_TRAY_GATEWAY_RECOVERY: '1',
+  AUTOMNIA_ELECTRON_E2E_QUIT_AFTER_TRAY_ASSERTIONS: '0',
+  AUTOMNIA_ELECTRON_E2E_DISABLE_OPEN_EXTERNAL: '1',
+  AUTOMNIA_ELECTRON_E2E_SKIP_PORT_CLEANUP: '1',
+  AUTOMNIA_ELECTRON_E2E_LOG_PATH: e2eLogPath,
+  AUTOMNIA_PIPE_SERVER_LOGS: '1',
+  AUTOMNIA_USER_DATA_DIR: userDataDir,
   HOME: path.join(tempRoot, 'home'),
   USERPROFILE: path.join(tempRoot, 'home'),
   OPENCLAW_STATE_DIR: openclawDir,
@@ -203,14 +203,14 @@ child.stderr.on('data', append)
 
 try {
   const requiredOutput = [
-    /\[dystopai-e2e\] server-ready/,
-    /\[dystopai-e2e\] renderer-load:1/,
-    /\[dystopai-e2e\] tray-visible-state-ok/,
-    /\[dystopai-e2e\] tray-hide-on-close-ok/,
-    /\[dystopai-e2e\] tray-click-restore-ok/,
-    /\[dystopai-e2e\] tray-gateway-menu-ok/,
-    /\[dystopai-e2e\] tray-gateway-stop-ok/,
-    /\[dystopai-e2e\] tray-gateway-recovery-ok/,
+    /\[automnia-e2e\] server-ready/,
+    /\[automnia-e2e\] renderer-load:1/,
+    /\[automnia-e2e\] tray-visible-state-ok/,
+    /\[automnia-e2e\] tray-hide-on-close-ok/,
+    /\[automnia-e2e\] tray-click-restore-ok/,
+    /\[automnia-e2e\] tray-gateway-menu-ok/,
+    /\[automnia-e2e\] tray-gateway-stop-ok/,
+    /\[automnia-e2e\] tray-gateway-recovery-ok/,
   ]
   await waitForRequiredOutput(child, () => `${output}\n${readOptional(e2eLogPath)}`, requiredOutput, 120_000)
   await new Promise((resolve) => setTimeout(resolve, 500))

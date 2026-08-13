@@ -4,12 +4,12 @@ const path = require('node:path')
 const { verifyUpdateManifest } = require('./lib/update-manifest.cjs')
 
 const root = path.resolve(__dirname, '..')
-const evidenceDir = path.resolve(process.env.DYSTOPAI_RELEASE_EVIDENCE_DIR || path.join(root, 'release', 'evidence'))
-const artifactRoot = path.resolve(process.env.DYSTOPAI_RELEASE_ARTIFACT_ROOT || path.join(root, 'release'))
-const allowNoArtifacts = process.env.DYSTOPAI_RELEASE_VALIDATE_ALLOW_NO_ARTIFACTS === '1'
-const requireSigning = /^(1|true|yes)$/i.test(String(process.env.AUTOMNIA_RELEASE_REQUIRE_SIGNING || process.env.DYSTOPAI_RELEASE_REQUIRE_SIGNING || ''))
+const evidenceDir = path.resolve(process.env.AUTOMNIA_RELEASE_EVIDENCE_DIR || path.join(root, 'release', 'evidence'))
+const artifactRoot = path.resolve(process.env.AUTOMNIA_RELEASE_ARTIFACT_ROOT || path.join(root, 'release'))
+const allowNoArtifacts = process.env.AUTOMNIA_RELEASE_VALIDATE_ALLOW_NO_ARTIFACTS === '1'
+const requireSigning = /^(1|true|yes)$/i.test(String(process.env.AUTOMNIA_RELEASE_REQUIRE_SIGNING || process.env.AUTOMNIA_RELEASE_REQUIRE_SIGNING || ''))
 
-const sbomPath = path.join(evidenceDir, 'dystopai-sbom.cdx.json')
+const sbomPath = path.join(evidenceDir, 'automnia-sbom.cdx.json')
 const checksumsPath = path.join(evidenceDir, 'checksums.sha256')
 const evidenceSummaryPath = path.join(evidenceDir, 'release-evidence.json')
 const signaturePath = path.join(evidenceDir, 'checksums.sha256.sig')

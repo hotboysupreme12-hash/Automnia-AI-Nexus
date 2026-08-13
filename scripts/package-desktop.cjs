@@ -90,7 +90,7 @@ const electronBuilderCli = path.join(root, 'node_modules', 'electron-builder', '
 const openClawVendorPrep = path.join(root, 'scripts', 'prepare-openclaw-vendor.cjs')
 const command = process.execPath
 const requestedArgs = process.argv.slice(2)
-const unsignedDirectoryPackage = requestedArgs.includes('--unsigned') || process.env.DYSTOPAI_SKIP_PLATFORM_SIGNING === '1'
+const unsignedDirectoryPackage = requestedArgs.includes('--unsigned') || process.env.AUTOMNIA_SKIP_PLATFORM_SIGNING === '1'
 const forwardedArgs = requestedArgs.filter((arg) => arg !== '--unsigned')
 const hasPublishMode = forwardedArgs.some((arg, index) => arg === '--publish' || arg.startsWith('--publish=') || forwardedArgs[index - 1] === '--publish')
 const publishArgs = hasPublishMode ? [] : ['--publish', 'never']

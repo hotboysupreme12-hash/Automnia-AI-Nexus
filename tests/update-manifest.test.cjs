@@ -26,18 +26,18 @@ function write(root, relative, contents = relative) {
 }
 
 test('signed update manifests verify artifacts and reject tampering', () => {
-  const root = tempRoot('dystopai-update-test-')
+  const root = tempRoot('automnia-update-test-')
   try {
     const release = path.join(root, 'release')
     const updates = path.join(release, 'updates')
     fs.mkdirSync(release, { recursive: true })
-    const artifact = write(release, 'DystopAI-Setup-0.0.6-x64.exe', 'signed-release-candidate')
+    const artifact = write(release, 'Automnia-Setup-0.0.6-x64.exe', 'signed-release-candidate')
     const { privateKey } = crypto.generateKeyPairSync('ed25519')
 
     const written = writeUpdateManifest({
       artifactRoot: release,
       outputDir: updates,
-      product: 'DystopAI',
+      product: 'Automnia',
       version: '0.0.6',
       minimumVersion: '0.0.5',
       channel: 'stable',
@@ -73,17 +73,17 @@ test('signed update manifests verify artifacts and reject tampering', () => {
 })
 
 test('artifact discovery classifies platforms and excludes unpacked or evidence files', () => {
-  const root = tempRoot('dystopai-update-discovery-')
+  const root = tempRoot('automnia-update-discovery-')
   try {
-    write(root, 'DystopAI-Setup-1.2.3-arm64.exe')
-    write(root, 'DystopAI-1.2.3-x64.dmg')
-    write(root, 'DystopAI-1.2.3-amd64.AppImage')
-    write(root, 'DystopAI-portable.zip')
-    write(root, 'win-unpacked/DystopAI.exe')
-    write(root, 'linux-unpacked/dystopai')
+    write(root, 'Automnia-Setup-1.2.3-arm64.exe')
+    write(root, 'Automnia-1.2.3-x64.dmg')
+    write(root, 'Automnia-1.2.3-amd64.AppImage')
+    write(root, 'Automnia-portable.zip')
+    write(root, 'win-unpacked/Automnia.exe')
+    write(root, 'linux-unpacked/automnia')
     write(root, 'evidence/proof.zip')
     write(root, 'updates/old.zip')
-    write(root, 'Uninstall DystopAI.exe')
+    write(root, 'Uninstall Automnia.exe')
     write(root, 'notes.txt')
 
     const artifacts = collectArtifacts(root)
@@ -105,9 +105,9 @@ test('artifact discovery classifies platforms and excludes unpacked or evidence 
 })
 
 test('unsigned update manifests are supported only when signing is optional', () => {
-  const root = tempRoot('dystopai-update-unsigned-')
+  const root = tempRoot('automnia-update-unsigned-')
   try {
-    write(root, 'DystopAI-1.0.0.deb')
+    write(root, 'Automnia-1.0.0.deb')
     const output = path.join(root, 'updates')
     const written = writeUpdateManifest({ artifactRoot: root, outputDir: output, version: '1.0.0' })
     assert.equal(written.signed, false)
@@ -127,10 +127,10 @@ test('unsigned update manifests are supported only when signing is optional', ()
 })
 
 test('update manifest rejects unsafe shapes, duplicate entries, wrong keys, and empty releases', () => {
-  const root = tempRoot('dystopai-update-invalid-')
+  const root = tempRoot('automnia-update-invalid-')
   try {
     assert.throws(() => createUpdateManifest({ artifactRoot: root, version: '1.0.0' }), /No distributable/)
-    const artifact = write(root, 'DystopAI-x86.msi', 'payload')
+    const artifact = write(root, 'Automnia-x86.msi', 'payload')
     const manifest = createUpdateManifest({ artifactRoot: root, version: '1.0.0', artifacts: [artifact] })
     const { privateKey: rsaKey } = crypto.generateKeyPairSync('rsa', { modulusLength: 2048 })
     assert.throws(() => signManifest(manifest, { privateKeyPem: rsaKey.export({ type: 'pkcs8', format: 'pem' }) }), /requires Ed25519/)

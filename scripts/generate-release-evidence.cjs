@@ -4,10 +4,10 @@ const os = require('node:os')
 const path = require('node:path')
 
 const root = path.resolve(__dirname, '..')
-const evidenceDir = path.resolve(process.env.DYSTOPAI_RELEASE_EVIDENCE_DIR || path.join(root, 'release', 'evidence'))
-const artifactRoot = path.resolve(process.env.DYSTOPAI_RELEASE_ARTIFACT_ROOT || path.join(root, 'release'))
-const runtimeBundleRoot = path.resolve(process.env.DYSTOPAI_RUNTIME_BUNDLE_ROOT || path.join(root, '.cache', 'runtime-bundles'))
-const runtimeMetadataFileName = '.dystopai-runtime-bundle.json'
+const evidenceDir = path.resolve(process.env.AUTOMNIA_RELEASE_EVIDENCE_DIR || path.join(root, 'release', 'evidence'))
+const artifactRoot = path.resolve(process.env.AUTOMNIA_RELEASE_ARTIFACT_ROOT || path.join(root, 'release'))
+const runtimeBundleRoot = path.resolve(process.env.AUTOMNIA_RUNTIME_BUNDLE_ROOT || path.join(root, '.cache', 'runtime-bundles'))
+const runtimeMetadataFileName = '.automnia-runtime-bundle.json'
 const distributionSigningPath = path.join(evidenceDir, 'distribution-signing.json')
 
 function readJson(filePath) {
@@ -132,7 +132,7 @@ function runtimeComponents(metadataFiles) {
         version: metadata.node.version,
         hashes: [{ alg: 'SHA-256', content: metadata.node.sha256 }],
         properties: [
-          { name: 'dystopai:runtimeMetadata', value: relativePath(filePath) },
+          { name: 'automnia:runtimeMetadata', value: relativePath(filePath) },
           { name: 'node:archive', value: metadata.node.archive },
           { name: 'node:shasumsUrl', value: metadata.node.shasumsUrl },
         ],
@@ -147,7 +147,7 @@ function runtimeComponents(metadataFiles) {
         purl: `pkg:npm/%40openclaw/codex@${encodeURIComponent(metadata.codex.version)}`,
         externalReferences: metadata.codex.tarball ? [{ type: 'distribution', url: metadata.codex.tarball }] : undefined,
         properties: [
-          { name: 'dystopai:runtimeMetadata', value: relativePath(filePath) },
+          { name: 'automnia:runtimeMetadata', value: relativePath(filePath) },
           { name: 'npm:integrity', value: metadata.codex.integrity },
           { name: 'npm:spec', value: metadata.codex.spec },
           ...(metadata.codex.lockfile ? [{ name: 'npm:lockfile', value: metadata.codex.lockfile }] : []),
@@ -165,7 +165,7 @@ function runtimeComponents(metadataFiles) {
           version: dependency.version,
           purl: componentRef(name, dependency.version),
           properties: [
-            { name: 'dystopai:runtimeDependency', value: '@openclaw/codex' },
+            { name: 'automnia:runtimeDependency', value: '@openclaw/codex' },
             { name: 'npm:integrity', value: dependency.integrity },
           ],
         })
@@ -238,7 +238,7 @@ function buildSbom(runtimeMetadata) {
     metadata: {
       timestamp: generatedAt,
       tools: [{
-        vendor: 'DystopAI',
+        vendor: 'Automnia',
         name: 'generate-release-evidence',
         version: '1',
       }],
@@ -249,12 +249,12 @@ function buildSbom(runtimeMetadata) {
         description: packageJson.description,
       },
       properties: [
-        { name: 'dystopai:artifactRoot', value: relativePath(artifactRoot) },
-        { name: 'dystopai:runtimeBundleRoot', value: relativePath(runtimeBundleRoot) },
-        { name: 'dystopai:runtimeMetadataFiles', value: String(runtimeMetadata.length) },
-        { name: 'dystopai:platform', value: `${process.platform}/${process.arch}` },
-        { name: 'dystopai:node', value: process.version },
-        { name: 'dystopai:hostname', value: os.hostname() },
+        { name: 'automnia:artifactRoot', value: relativePath(artifactRoot) },
+        { name: 'automnia:runtimeBundleRoot', value: relativePath(runtimeBundleRoot) },
+        { name: 'automnia:runtimeMetadataFiles', value: String(runtimeMetadata.length) },
+        { name: 'automnia:platform', value: `${process.platform}/${process.arch}` },
+        { name: 'automnia:node', value: process.version },
+        { name: 'automnia:hostname', value: os.hostname() },
       ],
     },
     components: dedupeComponents([
@@ -268,7 +268,7 @@ function main() {
   fs.mkdirSync(evidenceDir, { recursive: true })
   const runtimeMetadata = runtimeMetadataFiles()
   const sbom = buildSbom(runtimeMetadata)
-  const sbomPath = path.join(evidenceDir, 'dystopai-sbom.cdx.json')
+  const sbomPath = path.join(evidenceDir, 'automnia-sbom.cdx.json')
   fs.writeFileSync(sbomPath, `${JSON.stringify(sbom, null, 2)}\n`)
 
   const checksumFiles = checksumInputFiles(runtimeMetadata)

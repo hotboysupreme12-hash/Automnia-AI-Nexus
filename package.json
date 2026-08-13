@@ -39,6 +39,7 @@
     "smoke:provider-auth-beta": "tsx scripts/smoke-provider-auth-beta-coverage.ts",
     "smoke:security": "tsx scripts/smoke-security-hardening.ts",
     "smoke:gcloud-infra": "node scripts/smoke-gcloud-infra.mjs",
+    "publish:knowledge": "node scripts/publish-knowledge-base.mjs",
     "smoke:runtime-recovery-soak": "tsx scripts/smoke-runtime-recovery-soak.ts",
     "smoke:runtime-reproducibility": "tsx scripts/smoke-runtime-reproducibility.ts",
     "smoke:release-evidence": "tsx scripts/smoke-release-evidence.ts",

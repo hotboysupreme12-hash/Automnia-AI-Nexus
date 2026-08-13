@@ -7,7 +7,7 @@ import {
   createRuntimeLedgerStore,
 } from '../server/state/runtimeLedgerStore.ts'
 
-const tempDir = await mkdtemp(path.join(os.tmpdir(), 'dystopai-ledger-tail-'))
+const tempDir = await mkdtemp(path.join(os.tmpdir(), 'automnia-ledger-tail-'))
 const runtimeRunsJsonl = path.join(tempDir, 'runtime-runs.jsonl')
 const runtimeLedgerStore = createRuntimeLedgerStore({
   directory: tempDir,

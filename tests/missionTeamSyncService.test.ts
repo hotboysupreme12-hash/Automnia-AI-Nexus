@@ -26,7 +26,7 @@ function makeAssignments(): TeamSyncAssignment[] {
 }
 
 async function createHarness(overrides: Partial<MissionTeamSyncServiceOptions> = {}) {
-  const root = await mkdtemp(path.join(os.tmpdir(), 'dystopai-team-sync-'))
+  const root = await mkdtemp(path.join(os.tmpdir(), 'automnia-team-sync-'))
   const workspaces = new Map<string, string>([
     ['agent-a', path.join(root, 'workspaces', 'agent-a')],
     ['agent-b', path.join(root, 'workspaces', 'agent-b')],

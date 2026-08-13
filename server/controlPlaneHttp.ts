@@ -22,6 +22,12 @@ export const CONTROL_CENTER_CONTENT_SECURITY_POLICY = [
 ].join('; ')
 
 export type ApiErrorCode =
+  | 'account_activation_failed'
+  | 'account_exists'
+  | 'account_service_unavailable'
+  | 'account_setup_required'
+  | 'invalid_credentials'
+  | 'password_invalid'
   | 'agent_not_found'
   | 'agent_preflight_failed'
   | 'agent_retire_failed'
@@ -89,7 +95,14 @@ type ControlPlaneHttpOptions = {
   sessionTokens: Pick<SessionTokenStore, 'has'>
 }
 
-const PUBLIC_API_PATHS = new Set(['/api/ready', '/api/health', '/api/auth/login', '/api/auth/status'])
+const PUBLIC_API_PATHS = new Set([
+  '/api/ready',
+  '/api/health',
+  '/api/auth/login',
+  '/api/auth/status',
+  '/api/auth/account/setup',
+  '/api/auth/account/google/start',
+])
 const PUBLIC_AGENT_AVATAR_PATH = /^\/api\/party\/avatar\/[a-z0-9][a-z0-9_-]{0,79}$/i
 
 export function controlCenterAllowedOrigins(port: number, frontendPort: number) {
@@ -127,6 +140,7 @@ function apiPath(req: Request) {
 
 function isPublicApiRequest(req: Request) {
   if (req.method === 'OPTIONS' || PUBLIC_API_PATHS.has(apiPath(req))) return true
+  if (req.method === 'GET' && apiPath(req).startsWith('/api/auth/account/google/session/')) return true
   // <img> requests cannot attach the desktop bearer token. Expose only the
   // already-sanitized, read-only local portrait endpoint; every mutating avatar
   // route remains authenticated.

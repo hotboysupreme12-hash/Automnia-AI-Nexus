@@ -1,10 +1,10 @@
 param(
-  [string]$InstallerPath = $env:DYSTOPAI_WINDOWS_INSTALLER_PATH,
-  [string]$PreviousInstallerPath = $(if ($env:AUTOMNIA_PREVIOUS_WINDOWS_INSTALLER_PATH) { $env:AUTOMNIA_PREVIOUS_WINDOWS_INSTALLER_PATH } else { $env:DYSTOPAI_PREVIOUS_WINDOWS_INSTALLER_PATH }),
-  [string]$EvidenceDir = $env:DYSTOPAI_RELEASE_EVIDENCE_DIR,
-  [string]$UpdateManifestPath = $env:DYSTOPAI_UPDATE_MANIFEST_PATH,
-  [string]$UpdateSignaturePath = $env:DYSTOPAI_UPDATE_SIGNATURE_PATH,
-  [string]$UpdatePublicKeyPath = $env:DYSTOPAI_UPDATE_PUBLIC_KEY_PATH
+  [string]$InstallerPath = $env:AUTOMNIA_WINDOWS_INSTALLER_PATH,
+  [string]$PreviousInstallerPath = $(if ($env:AUTOMNIA_PREVIOUS_WINDOWS_INSTALLER_PATH) { $env:AUTOMNIA_PREVIOUS_WINDOWS_INSTALLER_PATH } else { $env:AUTOMNIA_PREVIOUS_WINDOWS_INSTALLER_PATH }),
+  [string]$EvidenceDir = $env:AUTOMNIA_RELEASE_EVIDENCE_DIR,
+  [string]$UpdateManifestPath = $env:AUTOMNIA_UPDATE_MANIFEST_PATH,
+  [string]$UpdateSignaturePath = $env:AUTOMNIA_UPDATE_SIGNATURE_PATH,
+  [string]$UpdatePublicKeyPath = $env:AUTOMNIA_UPDATE_PUBLIC_KEY_PATH
 )
 
 $ErrorActionPreference = 'Stop'
@@ -22,14 +22,14 @@ if (-not $InstallerPath) {
     Select-Object -First 1 -ExpandProperty FullName
 }
 if (-not $InstallerPath -or -not (Test-Path -LiteralPath $InstallerPath -PathType Leaf)) {
-  throw 'A built Windows installer is required. Set DYSTOPAI_WINDOWS_INSTALLER_PATH or run npm run dist:win.'
+  throw 'A built Windows installer is required. Set AUTOMNIA_WINDOWS_INSTALLER_PATH or run npm run dist:win.'
 }
 
 $InstallerPath = (Resolve-Path -LiteralPath $InstallerPath).Path
 $EvidenceDir = [IO.Path]::GetFullPath($EvidenceDir)
 $LifecycleDir = Join-Path $EvidenceDir 'lifecycle'
 New-Item -ItemType Directory -Force -Path $LifecycleDir | Out-Null
-$TempRoot = Join-Path ([IO.Path]::GetTempPath()) ("dystopai-release-lifecycle-{0}-{1}" -f $PID, [DateTimeOffset]::UtcNow.ToUnixTimeMilliseconds())
+$TempRoot = Join-Path ([IO.Path]::GetTempPath()) ("automnia-release-lifecycle-{0}-{1}" -f $PID, [DateTimeOffset]::UtcNow.ToUnixTimeMilliseconds())
 $InstallRoot = Join-Path $TempRoot 'installed'
 $CorruptRoot = Join-Path $TempRoot 'corrupted-release'
 New-Item -ItemType Directory -Force -Path $TempRoot | Out-Null
@@ -64,12 +64,12 @@ function Invoke-CheckedProcess {
   return $Process.ExitCode
 }
 
-function Install-DystopAI {
+function Install-Automnia {
   param([string]$Path, [string]$Label)
   New-Item -ItemType Directory -Force -Path $InstallRoot | Out-Null
   Invoke-CheckedProcess -FilePath $Path -ArgumentList @('/S', "/D=$InstallRoot") -Label $Label -TimeoutSeconds 300 | Out-Null
-  $AppExe = Get-ChildItem -LiteralPath $InstallRoot -Filter 'DystopAI.exe' -File -Recurse | Select-Object -First 1 -ExpandProperty FullName
-  if (-not $AppExe) { throw "$Label did not install DystopAI.exe under $InstallRoot." }
+  $AppExe = Get-ChildItem -LiteralPath $InstallRoot -Filter 'Automnia.exe' -File -Recurse | Select-Object -First 1 -ExpandProperty FullName
+  if (-not $AppExe) { throw "$Label did not install Automnia.exe under $InstallRoot." }
   return $AppExe
 }
 
@@ -79,9 +79,9 @@ function Invoke-InstalledSmoke {
   $Old = @{}
   foreach ($Name in @(
     'CONTROL_CENTER_PORT', 'CONTROL_CENTER_FRONTEND_PORT', 'OPENCLAW_GATEWAY_PORT', 'OPENCLAW_BROWSER_RELAY_PORT',
-    'CONTROL_CENTER_AUTOSTART_GATEWAY', 'DYSTOPAI_ELECTRON_E2E', 'DYSTOPAI_ELECTRON_E2E_AUTO_QUIT_MS',
-    'DYSTOPAI_ELECTRON_E2E_ASSERT_NAVIGATION', 'DYSTOPAI_ELECTRON_E2E_DISABLE_OPEN_EXTERNAL',
-    'DYSTOPAI_ELECTRON_E2E_SKIP_PORT_CLEANUP', 'DYSTOPAI_ELECTRON_E2E_LOG_PATH', 'DYSTOPAI_USER_DATA_DIR',
+    'CONTROL_CENTER_AUTOSTART_GATEWAY', 'AUTOMNIA_ELECTRON_E2E', 'AUTOMNIA_ELECTRON_E2E_AUTO_QUIT_MS',
+    'AUTOMNIA_ELECTRON_E2E_ASSERT_NAVIGATION', 'AUTOMNIA_ELECTRON_E2E_DISABLE_OPEN_EXTERNAL',
+    'AUTOMNIA_ELECTRON_E2E_SKIP_PORT_CLEANUP', 'AUTOMNIA_ELECTRON_E2E_LOG_PATH', 'AUTOMNIA_USER_DATA_DIR',
     'OPENCLAW_STATE_DIR', 'OPENCLAW_HOME', 'CONTROL_CENTER_WORKSPACE_ROOT'
   )) { $Old[$Name] = [Environment]::GetEnvironmentVariable($Name, 'Process') }
   try {
@@ -90,13 +90,13 @@ function Invoke-InstalledSmoke {
     $env:OPENCLAW_GATEWAY_PORT = [string](Get-FreePort)
     $env:OPENCLAW_BROWSER_RELAY_PORT = [string](Get-FreePort)
     $env:CONTROL_CENTER_AUTOSTART_GATEWAY = '0'
-    $env:DYSTOPAI_ELECTRON_E2E = '1'
-    $env:DYSTOPAI_ELECTRON_E2E_AUTO_QUIT_MS = '3500'
-    $env:DYSTOPAI_ELECTRON_E2E_ASSERT_NAVIGATION = '1'
-    $env:DYSTOPAI_ELECTRON_E2E_DISABLE_OPEN_EXTERNAL = '1'
-    $env:DYSTOPAI_ELECTRON_E2E_SKIP_PORT_CLEANUP = '1'
-    $env:DYSTOPAI_ELECTRON_E2E_LOG_PATH = $LogPath
-    $env:DYSTOPAI_USER_DATA_DIR = Join-Path $TempRoot ("user-data-$Label")
+    $env:AUTOMNIA_ELECTRON_E2E = '1'
+    $env:AUTOMNIA_ELECTRON_E2E_AUTO_QUIT_MS = '3500'
+    $env:AUTOMNIA_ELECTRON_E2E_ASSERT_NAVIGATION = '1'
+    $env:AUTOMNIA_ELECTRON_E2E_DISABLE_OPEN_EXTERNAL = '1'
+    $env:AUTOMNIA_ELECTRON_E2E_SKIP_PORT_CLEANUP = '1'
+    $env:AUTOMNIA_ELECTRON_E2E_LOG_PATH = $LogPath
+    $env:AUTOMNIA_USER_DATA_DIR = Join-Path $TempRoot ("user-data-$Label")
     $env:OPENCLAW_STATE_DIR = Join-Path $TempRoot ("openclaw-$Label")
     $env:OPENCLAW_HOME = $env:OPENCLAW_STATE_DIR
     $env:CONTROL_CENTER_WORKSPACE_ROOT = Join-Path $TempRoot ("workspace-$Label")
@@ -114,24 +114,24 @@ function Invoke-InstalledSmoke {
 }
 
 function Verify-UpdateChannel {
-  $OldRoot = $env:DYSTOPAI_RELEASE_ARTIFACT_ROOT
-  $OldManifest = $env:DYSTOPAI_UPDATE_MANIFEST_PATH
-  $OldSignature = $env:DYSTOPAI_UPDATE_SIGNATURE_PATH
-  $OldPublic = $env:DYSTOPAI_UPDATE_PUBLIC_KEY_PATH
+  $OldRoot = $env:AUTOMNIA_RELEASE_ARTIFACT_ROOT
+  $OldManifest = $env:AUTOMNIA_UPDATE_MANIFEST_PATH
+  $OldSignature = $env:AUTOMNIA_UPDATE_SIGNATURE_PATH
+  $OldPublic = $env:AUTOMNIA_UPDATE_PUBLIC_KEY_PATH
   $OldRequire = $env:AUTOMNIA_UPDATE_REQUIRE_SIGNING
   try {
-    $env:DYSTOPAI_RELEASE_ARTIFACT_ROOT = Join-Path $Root 'release'
-    $env:DYSTOPAI_UPDATE_MANIFEST_PATH = $UpdateManifestPath
-    $env:DYSTOPAI_UPDATE_SIGNATURE_PATH = $UpdateSignaturePath
-    $env:DYSTOPAI_UPDATE_PUBLIC_KEY_PATH = $UpdatePublicKeyPath
+    $env:AUTOMNIA_RELEASE_ARTIFACT_ROOT = Join-Path $Root 'release'
+    $env:AUTOMNIA_UPDATE_MANIFEST_PATH = $UpdateManifestPath
+    $env:AUTOMNIA_UPDATE_SIGNATURE_PATH = $UpdateSignaturePath
+    $env:AUTOMNIA_UPDATE_PUBLIC_KEY_PATH = $UpdatePublicKeyPath
     $env:AUTOMNIA_UPDATE_REQUIRE_SIGNING = '1'
     & node (Join-Path $Root 'scripts\verify-update-manifest.cjs') *>&1 | Tee-Object -FilePath (Join-Path $LifecycleDir 'update-verify.log')
     if ($LASTEXITCODE -ne 0) { throw 'Signed update manifest verification failed.' }
   } finally {
-    $env:DYSTOPAI_RELEASE_ARTIFACT_ROOT = $OldRoot
-    $env:DYSTOPAI_UPDATE_MANIFEST_PATH = $OldManifest
-    $env:DYSTOPAI_UPDATE_SIGNATURE_PATH = $OldSignature
-    $env:DYSTOPAI_UPDATE_PUBLIC_KEY_PATH = $OldPublic
+    $env:AUTOMNIA_RELEASE_ARTIFACT_ROOT = $OldRoot
+    $env:AUTOMNIA_UPDATE_MANIFEST_PATH = $OldManifest
+    $env:AUTOMNIA_UPDATE_SIGNATURE_PATH = $OldSignature
+    $env:AUTOMNIA_UPDATE_PUBLIC_KEY_PATH = $OldPublic
     $env:AUTOMNIA_UPDATE_REQUIRE_SIGNING = $OldRequire
   }
 }
@@ -156,26 +156,26 @@ function Test-CorruptedUpdateRejection {
     $Stream.WriteByte(($Original -bxor 0xFF))
   } finally { $Stream.Dispose() }
 
-  $OldRoot = $env:DYSTOPAI_RELEASE_ARTIFACT_ROOT
-  $OldManifest = $env:DYSTOPAI_UPDATE_MANIFEST_PATH
-  $OldSignature = $env:DYSTOPAI_UPDATE_SIGNATURE_PATH
-  $OldPublic = $env:DYSTOPAI_UPDATE_PUBLIC_KEY_PATH
+  $OldRoot = $env:AUTOMNIA_RELEASE_ARTIFACT_ROOT
+  $OldManifest = $env:AUTOMNIA_UPDATE_MANIFEST_PATH
+  $OldSignature = $env:AUTOMNIA_UPDATE_SIGNATURE_PATH
+  $OldPublic = $env:AUTOMNIA_UPDATE_PUBLIC_KEY_PATH
   $OldRequire = $env:AUTOMNIA_UPDATE_REQUIRE_SIGNING
   try {
-    $env:DYSTOPAI_RELEASE_ARTIFACT_ROOT = $CorruptRoot
-    $env:DYSTOPAI_UPDATE_MANIFEST_PATH = Join-Path $CorruptRoot 'updates\update-manifest.json'
-    $env:DYSTOPAI_UPDATE_SIGNATURE_PATH = Join-Path $CorruptRoot 'updates\update-manifest.json.sig'
-    $env:DYSTOPAI_UPDATE_PUBLIC_KEY_PATH = Join-Path $CorruptRoot 'updates\update-manifest-public-key.pem'
+    $env:AUTOMNIA_RELEASE_ARTIFACT_ROOT = $CorruptRoot
+    $env:AUTOMNIA_UPDATE_MANIFEST_PATH = Join-Path $CorruptRoot 'updates\update-manifest.json'
+    $env:AUTOMNIA_UPDATE_SIGNATURE_PATH = Join-Path $CorruptRoot 'updates\update-manifest.json.sig'
+    $env:AUTOMNIA_UPDATE_PUBLIC_KEY_PATH = Join-Path $CorruptRoot 'updates\update-manifest-public-key.pem'
     $env:AUTOMNIA_UPDATE_REQUIRE_SIGNING = '1'
     $Output = & node (Join-Path $Root 'scripts\verify-update-manifest.cjs') *>&1
     $Output | Set-Content -LiteralPath (Join-Path $LifecycleDir 'corrupted-update.log') -Encoding UTF8
     if ($LASTEXITCODE -eq 0) { throw 'Corrupted update artifact was incorrectly accepted.' }
     if (($Output -join "`n") -notmatch 'size mismatch|checksum mismatch') { throw 'Corrupted update rejection did not report an integrity failure.' }
   } finally {
-    $env:DYSTOPAI_RELEASE_ARTIFACT_ROOT = $OldRoot
-    $env:DYSTOPAI_UPDATE_MANIFEST_PATH = $OldManifest
-    $env:DYSTOPAI_UPDATE_SIGNATURE_PATH = $OldSignature
-    $env:DYSTOPAI_UPDATE_PUBLIC_KEY_PATH = $OldPublic
+    $env:AUTOMNIA_RELEASE_ARTIFACT_ROOT = $OldRoot
+    $env:AUTOMNIA_UPDATE_MANIFEST_PATH = $OldManifest
+    $env:AUTOMNIA_UPDATE_SIGNATURE_PATH = $OldSignature
+    $env:AUTOMNIA_UPDATE_PUBLIC_KEY_PATH = $OldPublic
     $env:AUTOMNIA_UPDATE_REQUIRE_SIGNING = $OldRequire
   }
 }
@@ -196,18 +196,18 @@ try {
   Verify-UpdateChannel
 
   if (Test-Path -LiteralPath $InstallRoot) { Remove-Item -LiteralPath $InstallRoot -Recurse -Force }
-  $FreshExe = Install-DystopAI -Path $InstallerPath -Label 'fresh install'
+  $FreshExe = Install-Automnia -Path $InstallerPath -Label 'fresh install'
   $FreshLog = Invoke-InstalledSmoke -AppExe $FreshExe -Label 'fresh-install'
   Write-LifecycleLog -Name 'fresh-install.log' -Lines @("Installer: $InstallerPath", "Install root: $InstallRoot", "Application: $FreshExe", "E2E log: $FreshLog", 'Status: passed') | Out-Null
 
   if ($PreviousInstallerPath -and (Test-Path -LiteralPath $PreviousInstallerPath -PathType Leaf)) {
     if (Test-Path -LiteralPath $InstallRoot) { Remove-Item -LiteralPath $InstallRoot -Recurse -Force }
-    Install-DystopAI -Path (Resolve-Path -LiteralPath $PreviousInstallerPath).Path -Label 'previous-version install' | Out-Null
+    Install-Automnia -Path (Resolve-Path -LiteralPath $PreviousInstallerPath).Path -Label 'previous-version install' | Out-Null
     $UpgradeMode = 'previous-version'
   } else {
     $UpgradeMode = 'same-version-repair'
   }
-  $UpgradeExe = Install-DystopAI -Path $InstallerPath -Label 'upgrade install'
+  $UpgradeExe = Install-Automnia -Path $InstallerPath -Label 'upgrade install'
   $UpgradeLog = Invoke-InstalledSmoke -AppExe $UpgradeExe -Label 'upgrade'
   Write-LifecycleLog -Name 'upgrade.log' -Lines @("Mode: $UpgradeMode", "Application: $UpgradeExe", "E2E log: $UpgradeLog", 'Status: passed') | Out-Null
 
@@ -220,8 +220,8 @@ try {
   Invoke-CheckedProcess -FilePath $Uninstaller -ArgumentList @('/S') -Label 'silent uninstall' -TimeoutSeconds 180 | Out-Null
   $Deadline = [DateTime]::UtcNow.AddSeconds(30)
   while ((Test-Path -LiteralPath $UpgradeExe) -and [DateTime]::UtcNow -lt $Deadline) { Start-Sleep -Milliseconds 250 }
-  if (Test-Path -LiteralPath $UpgradeExe) { throw 'DystopAI.exe remained after silent uninstall.' }
-  Write-LifecycleLog -Name 'uninstall.log' -Lines @("Uninstaller: $Uninstaller", 'DystopAI.exe removed: true', 'Status: passed') | Out-Null
+  if (Test-Path -LiteralPath $UpgradeExe) { throw 'Automnia.exe remained after silent uninstall.' }
+  Write-LifecycleLog -Name 'uninstall.log' -Lines @("Uninstaller: $Uninstaller", 'Automnia.exe removed: true', 'Status: passed') | Out-Null
 
   $GeneratedAt = [DateTime]::UtcNow.ToString('o')
   $ArtifactRelative = $InstallerPath.Substring($Root.Length).TrimStart('\', '/').Replace('\', '/')

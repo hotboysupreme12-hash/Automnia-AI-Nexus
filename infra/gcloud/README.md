@@ -15,10 +15,11 @@ This directory is the source of truth for the Automnia Shopify provisioner and f
 | `switch-traffic.ps1` | Freezes source writes, performs a final delta migration, re-verifies, moves the permanent domain, and restores the source automatically on failure. |
 | `rollback.ps1` | Freezes the active target, reverse-migrates post-cutover changes, verifies, and moves the domain back. |
 | `configure-domain.ps1` | One-time domain mapping and optional Cloud DNS record setup. |
-| `shopify-plan-mappings.json` | The nine authoritative subscription, BYOK, and refill mappings. |
+| `shopify-plan-mappings.json` | The nine authoritative product mappings. Google Cloud merges purchases by account email into one highest-tier entitlement and canonical license key. |
 | `firestore.indexes.json` | The authoritative composite-index contract. It is empty because the current query plan needs no composite index. |
 | `shopify.app.toml.template` | One-time Shopify webhook migration from a project URL to the permanent Automnia URL. |
-| `service/` | Deployable Node 22 Cloud Run service for license activation, Shopify webhooks, credits, and Vertex AI relay. |
+| `service/` | Deployable Node 22 Cloud Run service for account activation/sign-in, Google linking, license activation, Shopify webhooks, credits, Vertex AI relay, and authenticated Agent Search answers. |
+| `knowledge/` | Sanitized, non-secret source used by the private Automnia Agent Search data store. Never add customer data, passwords, tokens, API keys, or license keys. |
 
 ## Prerequisites
 
@@ -42,6 +43,7 @@ Review `config.psd1` before the first deployment:
 - `PermanentBaseUrl` and `PermanentDomain` default to `https://api.automnia.ai` / `api.automnia.ai`.
 - `DnsProjectId` and `DnsZone` can be filled in to make DNS record changes automatic when Cloud DNS hosts the zone. Leave them blank for another DNS provider and add the returned mapping records there once.
 - `Region`, Firestore location, checkout URL, service name, API list, roles, secret names, and collection contract are centralized here.
+- `KnowledgeDataStoreId` and `KnowledgeEngineId` identify the private Agent Search resources used by `/api/knowledge/answer`. Those resources must exist in a new project before the service is routed to traffic; the current production project already has them.
 
 The base domain must be purchased and verified by the operating Google account. If it is not already verified:
 

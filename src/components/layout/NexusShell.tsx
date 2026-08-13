@@ -6,6 +6,7 @@ import type { AppTab } from '../../store/nexusStore'
 import { listCronShifts, stopCronShift, useRuntimeSummaryStatus } from '../../hooks/useRuntimeStatus'
 import type { RuntimeCronJob } from '../../hooks/useRuntimeStatus'
 import { ActionStatusBanner } from '../common/ActionStatusBanner'
+import { HelpAssistantPanel } from '../help/HelpAssistantPanel'
 import { preloadMissionIconAssets } from '../mission/missionIconAssets'
 import { applyStoredUiSettings } from '../settings/uiSettings'
 import {
@@ -16,15 +17,59 @@ import {
 } from '../settings/workspaceSettings'
 import { Button, StatusChip } from '../ui'
 
-const PartySelector = lazy(() => import('../party/PartySelector').then((module) => ({ default: module.PartySelector })))
-const ActivePartyStrip = lazy(() => import('../party/ActivePartyStrip').then((module) => ({ default: module.ActivePartyStrip })))
-const MissionDeploymentPanel = lazy(() => import('../mission/MissionDeploymentPanel').then((module) => ({ default: module.MissionDeploymentPanel })))
-const AgentResponseConsole = lazy(() => import('../monitor/AgentResponseConsole').then((module) => ({ default: module.AgentResponseConsole })))
-const LiveOperationMonitor = lazy(() => import('../monitor/LiveOperationMonitor').then((module) => ({ default: module.LiveOperationMonitor })))
-const PluginsPanel = lazy(() => import('../plugins/PluginsPanel').then((module) => ({ default: module.PluginsPanel })))
-const SettingsPanel = lazy(() => import('../settings/SettingsPanel').then((module) => ({ default: module.SettingsPanel })))
-const AgentEditorModal = lazy(() => import('../editor/AgentEditorModal').then((module) => ({ default: module.AgentEditorModal })))
-const RecruitAgentModal = lazy(() => import('../recruit/RecruitAgentModal').then((module) => ({ default: module.RecruitAgentModal })))
+const LAZY_IMPORT_RELOAD_WINDOW_MS = 30_000
+
+function isLazyImportFailure(error: unknown): boolean {
+  return error instanceof TypeError && /failed to fetch dynamically imported module|dynamically imported module|importing a module script failed/i.test(error.message)
+}
+
+function recoverableLazyImport<T>(key: string, loader: () => Promise<T>): Promise<T> {
+  return loader()
+    .then((module) => {
+      try {
+        window.sessionStorage.removeItem(`automnia.lazy-import-recovery.${key}`)
+      } catch {
+        // Storage may be unavailable in a restricted renderer; the import is
+        // still valid and should continue normally.
+      }
+      return module
+    })
+    .catch((error: unknown) => {
+      if (!isLazyImportFailure(error) || typeof window === 'undefined') throw error
+
+      const storageKey = `automnia.lazy-import-recovery.${key}`
+      const now = Date.now()
+      let previousAttempt = 0
+      try {
+        previousAttempt = Number(window.sessionStorage.getItem(storageKey) || 0)
+      } catch {
+        // Treat unavailable storage as a first attempt and let the reload
+        // establish a clean module graph.
+      }
+
+      if (!Number.isFinite(previousAttempt) || now - previousAttempt > LAZY_IMPORT_RELOAD_WINDOW_MS) {
+        try {
+          window.sessionStorage.setItem(storageKey, String(now))
+        } catch {
+          // Reload is still the safest recovery when storage is unavailable.
+        }
+        window.location.reload()
+        return new Promise<T>(() => {})
+      }
+
+      throw error
+    })
+}
+
+const PartySelector = lazy(() => recoverableLazyImport('party-selector', () => import('../party/PartySelector').then((module) => ({ default: module.PartySelector }))))
+const ActivePartyStrip = lazy(() => recoverableLazyImport('active-party-strip', () => import('../party/ActivePartyStrip').then((module) => ({ default: module.ActivePartyStrip }))))
+const MissionDeploymentPanel = lazy(() => recoverableLazyImport('mission-deployment-panel', () => import('../mission/MissionDeploymentPanel').then((module) => ({ default: module.MissionDeploymentPanel }))))
+const AgentResponseConsole = lazy(() => recoverableLazyImport('agent-response-console', () => import('../monitor/AgentResponseConsole').then((module) => ({ default: module.AgentResponseConsole }))))
+const LiveOperationMonitor = lazy(() => recoverableLazyImport('live-operation-monitor', () => import('../monitor/LiveOperationMonitor').then((module) => ({ default: module.LiveOperationMonitor }))))
+const PluginsPanel = lazy(() => recoverableLazyImport('plugins-panel', () => import('../plugins/PluginsPanel').then((module) => ({ default: module.PluginsPanel }))))
+const SettingsPanel = lazy(() => recoverableLazyImport('settings-panel', () => import('../settings/SettingsPanel').then((module) => ({ default: module.SettingsPanel }))))
+const AgentEditorModal = lazy(() => recoverableLazyImport('agent-editor-modal', () => import('../editor/AgentEditorModal').then((module) => ({ default: module.AgentEditorModal }))))
+const RecruitAgentModal = lazy(() => recoverableLazyImport('recruit-agent-modal', () => import('../recruit/RecruitAgentModal').then((module) => ({ default: module.RecruitAgentModal }))))
 
 const AUTOMNIA_LOCKUP_SRC = '/brand/automnia-ai-nexus-logo-transparent-cropped.png'
 const AUTOMNIA_BRAND_LABEL = 'Automnia AI Nexus'
@@ -91,42 +136,52 @@ export function NexusShell() {
   const isEditorOpen = useNexusStore((s) => s.isEditorOpen)
   const missionRunning = activeMission?.status === 'running'
   const activeTab = WORKSPACE_META[tab] || WORKSPACE_META.agents
-  const { status: runtimeStatus, refresh: refreshRuntimeStatus } = useRuntimeSummaryStatus(8000)
+  // The shell only needs a lightweight status badge. Give the Monitor tab the
+  // faster cadence while keeping background tabs quiet on lower-powered PCs.
+  const runtimeSummaryPollInterval = tab === 'monitor' ? 8000 : 12000
+  const { status: runtimeStatus, error: runtimeError, refresh: refreshRuntimeStatus } = useRuntimeSummaryStatus(runtimeSummaryPollInterval)
   const gatewayOnline = Boolean(runtimeStatus?.gateway.healthy || runtimeStatus?.gateway.processRunning)
+  const gatewayMigration = runtimeStatus?.gateway.migration?.active === true
+  const gatewayMigrationMessage = runtimeStatus?.gateway.migration?.message
+    || 'OpenClaw is applying startup migrations. The Gateway may restart several times while this completes.'
   const cronJobs = runtimeStatus?.shifts?.active ?? EMPTY_RUNTIME_CRON_JOBS
   const activeCronCount = runtimeStatus?.shifts?.activeCount ?? cronJobs.length
-  const workspaceState = tab === 'agents'
-    ? busyAgentCount
-      ? `${busyAgentCount} agent${busyAgentCount === 1 ? '' : 's'} active`
-      : gatewayOnline
-        ? 'Ready for commands'
-        : runtimeStatus
-          ? 'Runtime offline'
-          : 'Connecting to runtime'
-    : tab === 'missions'
-      ? missionRunning
-        ? 'Mission in progress'
+  const workspaceState = gatewayMigration
+    ? 'Gateway migration in progress'
+    : tab === 'agents'
+      ? busyAgentCount
+        ? `${busyAgentCount} agent${busyAgentCount === 1 ? '' : 's'} active`
         : gatewayOnline
-          ? 'Ready to deploy'
+          ? 'Ready for commands'
           : runtimeStatus
             ? 'Runtime offline'
             : 'Connecting to runtime'
-      : tab === 'monitor'
-        ? gatewayOnline ? 'Runtime connected' : runtimeStatus ? 'Runtime offline' : 'Connecting to runtime'
+      : tab === 'missions'
+        ? missionRunning
+          ? 'Mission in progress'
+          : gatewayOnline
+            ? 'Ready to deploy'
+            : runtimeStatus
+              ? 'Runtime offline'
+              : 'Connecting to runtime'
+        : tab === 'monitor'
+          ? gatewayOnline ? 'Runtime connected' : runtimeStatus ? 'Runtime offline' : 'Connecting to runtime'
+          : tab === 'settings'
+            ? 'Settings ready'
+            : gatewayOnline ? 'Gateway extensions online' : runtimeStatus ? 'Gateway extensions offline' : 'Checking extensions'
+  const workspaceStateTone = gatewayMigration
+    ? 'active'
+    : tab === 'agents'
+      ? busyAgentCount ? 'active' : gatewayOnline ? 'healthy' : runtimeStatus ? 'offline' : 'loading'
+      : tab === 'missions'
+        ? missionRunning ? 'active' : gatewayOnline ? 'healthy' : runtimeStatus ? 'offline' : 'loading'
         : tab === 'settings'
-          ? 'Settings ready'
-          : gatewayOnline ? 'Gateway extensions online' : runtimeStatus ? 'Gateway extensions offline' : 'Checking extensions'
-  const workspaceStateTone = tab === 'agents'
-    ? busyAgentCount ? 'active' : gatewayOnline ? 'healthy' : runtimeStatus ? 'offline' : 'loading'
-    : tab === 'missions'
-      ? missionRunning ? 'active' : gatewayOnline ? 'healthy' : runtimeStatus ? 'offline' : 'loading'
-      : tab === 'settings'
-        ? 'healthy'
-        : gatewayOnline
           ? 'healthy'
-          : runtimeStatus
-            ? 'offline'
-            : 'loading'
+          : gatewayOnline
+            ? 'healthy'
+            : runtimeStatus
+              ? 'offline'
+              : 'loading'
   const cronJobSummary = useMemo(() => cronJobs.slice(0, 4).map((job) => `${job.name} (${job.agent})`).join(', '), [cronJobs])
   const cronChipTitle = runtimeStatus
     ? activeCronCount
@@ -134,6 +189,8 @@ export function NexusShell() {
       : 'No active/scheduled cron jobs.'
     : 'Loading cron jobs...'
   const [isRecruitOpen, setRecruitOpen] = useState(false)
+  const [isHelpOpen, setHelpOpen] = useState(false)
+  const closeHelp = useCallback(() => setHelpOpen(false), [])
   const [hasMountedMissionPanel, setHasMountedMissionPanel] = useState(tab === 'missions')
   const [cronClearBusy, setCronClearBusy] = useState(false)
   const [cronClearTargets, setCronClearTargets] = useState<RuntimeCronJob[]>([])
@@ -294,8 +351,8 @@ export function NexusShell() {
     ? ({ '--dy-command-console-width': `${agentConsoleWidth}px` } as CSSProperties)
     : undefined
 
-  useEffect(() => { void syncPartyOverview() }, [syncPartyOverview])
-  useEffect(() => { void syncMissionProjection() }, [syncMissionProjection])
+  useEffect(() => { void syncPartyOverview().catch(() => undefined) }, [syncPartyOverview])
+  useEffect(() => { void syncMissionProjection().catch(() => undefined) }, [syncMissionProjection])
   useEffect(() => { void preloadMissionIconAssets() }, [])
   useEffect(() => { applyStoredUiSettings() }, [])
   useEffect(() => {
@@ -416,10 +473,17 @@ export function NexusShell() {
   return (
     <div className={`app-bg relative min-h-screen text-[var(--text-1)] ${tab === 'monitor' ? 'dy-monitor-focus' : ''} ${isEditorOpen ? 'dy-editor-open' : ''}`}>
       <div className="pointer-events-none fixed inset-0 grid-overlay" />
-      <a className="dy-skip-link" href="#dystopai-main">Skip to workspace</a>
+      <a className="dy-skip-link" href="#automnia-main">Skip to workspace</a>
 
       <aside className="dy-human-rail fixed z-40 flex flex-col overflow-hidden" aria-label="Automnia AI Nexus navigation">
         <div className="dy-human-rail-head dy-human-rail-head--lockup flex items-center" aria-label={AUTOMNIA_BRAND_LABEL}>
+          <img
+            className="dy-human-rail-app-icon"
+            src="/brand/automnia-ai-nexus-app-icon.png"
+            alt=""
+            aria-hidden="true"
+            draggable={false}
+          />
           <img
             className="dy-human-rail-lockup"
             src={AUTOMNIA_LOCKUP_SRC}
@@ -428,7 +492,8 @@ export function NexusShell() {
           />
         </div>
 
-        <nav className="dy-human-nav flex flex-col" aria-label="Primary navigation">
+        <div className="dy-human-rail-navigation">
+          <nav className="dy-human-nav flex flex-col" aria-label="Primary navigation">
           <Button
             variant="quiet"
             className="dy-human-nav-action flex items-center gap-3 text-left"
@@ -468,10 +533,10 @@ export function NexusShell() {
               </span>
             </Button>
           ))}
-        </nav>
+          </nav>
 
-        <div className="dy-human-rail-bottom">
-          <nav className="dy-human-nav dy-human-nav--utility flex flex-col" aria-label="Utility navigation">
+          <div className="dy-human-rail-bottom">
+            <nav className="dy-human-nav dy-human-nav--utility flex flex-col" aria-label="Utility navigation">
             <Button
               id="nexus-nav-settings"
               variant="quiet"
@@ -498,8 +563,8 @@ export function NexusShell() {
               variant="quiet"
               data-tone="help"
               className="dy-human-nav-utility flex items-center gap-3 text-left"
-              aria-label="Open Automnia AI Nexus documentation"
-              onClick={() => window.open('https://github.com/hotboysupreme12-hash/Automnia-AI-Nexus', '_blank', 'noopener,noreferrer')}
+              aria-label="Open Automnia Assistant help"
+              onClick={() => setHelpOpen(true)}
               leadingIcon={(
                 <span className="dy-human-nav-icon dy-human-nav-icon--help" aria-hidden="true">
                   <svg viewBox="0 0 24 24">
@@ -512,20 +577,21 @@ export function NexusShell() {
             >
               <span className="dy-human-nav-copy">
                 <strong className="block">Help</strong>
-                <span className="block">Documentation</span>
+                <span className="block">Assistant</span>
               </span>
             </Button>
-          </nav>
+            </nav>
 
+          </div>
         </div>
 
       </aside>
 
-      <main id="dystopai-main" tabIndex={-1} className="dy-app-main mx-auto max-w-[1680px] px-4 py-6 sm:px-6 sm:py-8">
+      <main id="automnia-main" tabIndex={-1} className="dy-app-main mx-auto max-w-[1680px] px-4 py-6 sm:px-6 sm:py-8">
         {/* Workspace header */}
-        <section className="dy-workspace-context" data-workspace={tab} aria-labelledby="dystopai-workspace-title">
+        <section className="dy-workspace-context" data-workspace={tab} aria-labelledby="automnia-workspace-title">
           <div className="dy-workspace-context__copy">
-            <h1 id="dystopai-workspace-title">{activeTab.label}</h1>
+            <h1 id="automnia-workspace-title">{activeTab.label}</h1>
             <p>{activeTab.description}</p>
           </div>
           <div className="dy-workspace-context__meta">
@@ -557,13 +623,15 @@ export function NexusShell() {
                 value={busyAgentCount}
               />
               <StatusChip
-                className={gatewayOnline ? 'badge badge--success dy-status-chip' : 'badge dy-status-chip'}
+                className={gatewayMigration ? 'badge badge--warn dy-status-chip' : gatewayOnline ? 'badge badge--success dy-status-chip' : 'badge dy-status-chip'}
                 data-indicator="gateway"
-                data-tone={gatewayOnline ? 'success' : 'neutral'}
+                data-tone={gatewayMigration ? 'warn' : gatewayOnline ? 'success' : 'neutral'}
                 label="Gateway"
-                state={gatewayOnline ? 'online' : runtimeStatus ? 'offline' : 'loading'}
-                tone={gatewayOnline ? 'success' : 'neutral'}
-                value={gatewayOnline ? 'ON' : runtimeStatus ? 'OFF' : '...'}
+                state={gatewayMigration ? 'migrating' : gatewayOnline ? 'online' : runtimeStatus ? 'offline' : 'loading'}
+                tone={gatewayMigration ? 'warning' : gatewayOnline ? 'success' : 'neutral'}
+                value={gatewayMigration ? 'MIGRATING' : gatewayOnline ? 'ON' : runtimeStatus ? 'OFF' : '...'}
+                title={gatewayMigration ? gatewayMigrationMessage : undefined}
+                live={gatewayMigration}
               />
               <button
                 type="button"
@@ -614,6 +682,15 @@ export function NexusShell() {
               <span aria-hidden="true" />
               {workspaceState}
             </div>
+            {gatewayMigration ? (
+              <ActionStatusBanner
+                className="dy-workspace-context__notice dy-gateway-migration-notice mt-3 w-full text-left text-[11px] leading-relaxed"
+                rounded="lg"
+                tone="warning"
+                message="OpenClaw migration in progress"
+                detail={gatewayMigrationMessage}
+              />
+            ) : null}
           </div>
           {(cronNotice || cronClearTargets.length > 0) && (
             <ActionStatusBanner
@@ -728,7 +805,7 @@ export function NexusShell() {
 
           {tab === 'monitor' && (
             <Suspense fallback={<PanelLoader />}>
-              <LiveOperationMonitor />
+              <LiveOperationMonitor status={runtimeStatus} error={runtimeError} onRefresh={refreshRuntimeStatus} />
             </Suspense>
           )}
 
@@ -751,6 +828,7 @@ export function NexusShell() {
         {isEditorOpen && <AgentEditorModal />}
         {isRecruitOpen && <RecruitAgentModal isOpen={isRecruitOpen} onClose={() => setRecruitOpen(false)} />}
       </Suspense>
+      {isHelpOpen && <HelpAssistantPanel isOpen={isHelpOpen} onClose={closeHelp} />}
     </div>
   )
 }

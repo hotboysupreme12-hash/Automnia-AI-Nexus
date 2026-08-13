@@ -26,8 +26,10 @@ async function createHarness(options: HarnessOptions = {}) {
   const root = await mkdtemp(path.join(os.tmpdir(), 'provider-setup-service-'))
   const workspaceRoot = path.join(root, 'workspace')
   const openClawStateRoot = path.join(root, 'state')
+  const homeRoot = path.join(root, 'home')
   await mkdir(workspaceRoot, { recursive: true })
   await mkdir(openClawStateRoot, { recursive: true })
+  await mkdir(path.join(homeRoot, '.config', 'gcloud'), { recursive: true })
   const state = {
     ensureCalls: 0,
     localOAuth: { ...(options.localOAuth || {}) },
@@ -43,8 +45,8 @@ async function createHarness(options: HarnessOptions = {}) {
     fetch: options.fetch,
     getLocalProviderMode: (provider) => state.modes[provider],
     getLocalProviderOAuth: (provider) => state.localOAuth[provider],
-    googleOAuthClientIdKeys: ['DYSTOPAI_GOOGLE_OAUTH_CLIENT_ID'],
-    googleOAuthClientSecretKeys: ['DYSTOPAI_GOOGLE_OAUTH_CLIENT_SECRET'],
+    googleOAuthClientIdKeys: ['AUTOMNIA_GOOGLE_OAUTH_CLIENT_ID'],
+    googleOAuthClientSecretKeys: ['AUTOMNIA_GOOGLE_OAUTH_CLIENT_SECRET'],
     googleProjectIdKeys: ['GOOGLE_CLOUD_PROJECT', 'GOOGLE_PROJECT_ID', 'GCP_PROJECT', 'GCLOUD_PROJECT'],
     importModule: options.importModule,
     localOAuthFromMainAuthProfile: () => null,
@@ -74,6 +76,7 @@ async function createHarness(options: HarnessOptions = {}) {
   return {
     cleanup: () => rm(root, { recursive: true, force: true }),
     openClawStateRoot,
+    homeRoot,
     service,
     state,
     workspaceRoot,
@@ -83,8 +86,8 @@ async function createHarness(options: HarnessOptions = {}) {
 test('resolves Google OAuth client setup from env and client_secret files', async () => {
   const envHarness = await createHarness({
     processEnv: {
-      DYSTOPAI_GOOGLE_OAUTH_CLIENT_ID: 'env-client-id',
-      DYSTOPAI_GOOGLE_OAUTH_CLIENT_SECRET: 'env-client-secret',
+      AUTOMNIA_GOOGLE_OAUTH_CLIENT_ID: 'env-client-id',
+      AUTOMNIA_GOOGLE_OAUTH_CLIENT_SECRET: 'env-client-secret',
     },
   })
   try {
@@ -113,6 +116,29 @@ test('resolves Google OAuth client setup from env and client_secret files', asyn
     })
   } finally {
     await fileHarness.cleanup()
+  }
+
+  const adcHome = await mkdtemp(path.join(os.tmpdir(), 'provider-setup-adc-home-'))
+  await mkdir(path.join(adcHome, '.config', 'gcloud'), { recursive: true })
+  const adcHarness = await createHarness({ processEnv: { HOME: adcHome } })
+  try {
+    await writeFile(
+      path.join(adcHome, '.config', 'gcloud', 'application_default_credentials.json'),
+      JSON.stringify({
+        type: 'authorized_user',
+        client_id: 'adc-client-id',
+        client_secret: 'adc-client-secret',
+        refresh_token: 'adc-refresh-token',
+      }),
+      'utf-8',
+    )
+    assert.deepEqual(adcHarness.service.resolveGoogleOAuthClientConfig(), {
+      clientId: 'adc-client-id',
+      clientSecret: 'adc-client-secret',
+    })
+  } finally {
+    await adcHarness.cleanup()
+    await rm(adcHome, { recursive: true, force: true })
   }
 })
 
@@ -359,8 +385,8 @@ test('loads OpenAI Codex OAuth runtime helpers from explicit and minified export
     },
   })
   try {
-    const flow = await harness.service.createOpenAICodexAuthorizationFlow('dystopai')
-    assert.equal(flow.state, 'dystopai')
+    const flow = await harness.service.createOpenAICodexAuthorizationFlow('automnia')
+    assert.equal(flow.state, 'automnia')
     assert.equal(flow.verifier, 'verifier')
 
     const exchanged = await harness.service.exchangeOpenAICodexAuthorizationCode('manual-code', 'verifier', 'http://callback.test')

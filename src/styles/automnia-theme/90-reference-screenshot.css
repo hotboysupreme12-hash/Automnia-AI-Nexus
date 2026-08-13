@@ -1,7 +1,7 @@
 ﻿/*
-  DystopAI Reference Screenshot Theme
+  Automnia Reference Screenshot Theme
   Final cascade layer built from the supplied Agents, Monitor, Plugins, and Missions references.
-  Drop this file in src/styles/dystopai-theme/ and import it last from src/dystopai-app-theme.css.
+  Drop this file in src/styles/automnia-theme/ and import it last from src/automnia-app-theme.css.
 */
 
 html.dui-pro-overhaul,
@@ -2092,7 +2092,7 @@ html.dui-pro-overhaul .app-bg::after {
   inset: 0;
   z-index: 0;
   pointer-events: none;
-  background-image: url('/visuals/dystopai-hud-overlay.png');
+  background-image: url('/visuals/automnia-hud-overlay.png');
   background-position: center;
   background-size: cover;
   opacity: .14;
@@ -3192,7 +3192,7 @@ html.dui-pro-overhaul .dy-agents-workspace::after {
   inset: -8px !important;
   z-index: 0 !important;
   border-radius: 18px !important;
-  background: url("/visuals/dystopai-hud-overlay.png") center/cover no-repeat !important;
+  background: url("/visuals/automnia-hud-overlay.png") center/cover no-repeat !important;
   opacity: .15 !important;
   filter: grayscale(.72) saturate(.22) brightness(.40) contrast(1.10) !important;
   pointer-events: none !important;
@@ -3218,7 +3218,7 @@ html.dui-pro-overhaul [data-dui-panel="active-party"]::before {
   z-index: 0 !important;
   background:
     radial-gradient(circle at 18% 0%, rgba(34, 67, 112, .08), transparent 26%),
-    url("/visuals/dystopai-hud-overlay.png") center/cover no-repeat !important;
+    url("/visuals/automnia-hud-overlay.png") center/cover no-repeat !important;
   opacity: .08 !important;
   filter: grayscale(.74) saturate(.16) brightness(.36) contrast(1.10) !important;
   pointer-events: none !important;

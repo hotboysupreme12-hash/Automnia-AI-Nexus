@@ -59,3 +59,24 @@ test('auth token storage remains usable when browser storage is blocked or unava
   store.writeAuthToken('   ')
   assert.equal(store.readAuthToken(), null)
 })
+
+test('explicit logout blocks token reads until the user signs in again', () => {
+  Object.defineProperty(globalThis, 'window', {
+    configurable: true,
+    value: { localStorage: new MemoryStorage(), sessionStorage: new MemoryStorage() },
+  })
+
+  store.clearAuthSignedOut()
+  store.writeAuthToken('active-session')
+  assert.equal(store.readAuthToken(), 'active-session')
+
+  store.markAuthSignedOut()
+  assert.equal(store.isAuthExplicitlySignedOut(), true)
+  assert.equal(store.readAuthToken(), null)
+
+  store.clearAuthSignedOut()
+  store.writeAuthToken('new-session')
+  assert.equal(store.isAuthExplicitlySignedOut(), false)
+  assert.equal(store.readAuthToken(), 'new-session')
+  store.clearAuthToken()
+})

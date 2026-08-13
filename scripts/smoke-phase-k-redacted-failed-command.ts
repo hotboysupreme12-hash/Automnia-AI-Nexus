@@ -59,7 +59,7 @@ const rawSecretPatterns = [
   /phasek\.operator@example\.com/i,
   /555[)\s.-]*010[\s.-]*1280/i,
   /Users\\PhaseK/i,
-  /dystopai_session/i,
+  /automnia_session/i,
   /phase-k-failed-command-cookie/i,
 ]
 
@@ -195,7 +195,7 @@ function redactionMarkers(value: string) {
     bearer: /Authorization=\[redacted]/i.test(value),
     email: /\[redacted-email]/i.test(value),
     phone: /\[redacted-phone]/i.test(value),
-    userProfile: /%USERPROFILE%\\AppData\\Local\\DystopAI\\secret\.txt/i.test(value),
+    userProfile: /%USERPROFILE%\\AppData\\Local\\Automnia\\secret\.txt/i.test(value),
     cookie: /Cookie=\[redacted]/i.test(value),
   }
 }
@@ -310,7 +310,7 @@ function evidenceHasSecretMaterial(value: unknown) {
 }
 
 const port = await freePort()
-const tempRoot = mkdtempSync(path.join(tmpdir(), 'dystopai-phase-k-redacted-failed-command-'))
+const tempRoot = mkdtempSync(path.join(tmpdir(), 'automnia-phase-k-redacted-failed-command-'))
 const stateDir = path.join(tempRoot, 'state')
 const workspaceRoot = path.join(tempRoot, 'workspace-root')
 const homeDir = path.join(tempRoot, 'home')

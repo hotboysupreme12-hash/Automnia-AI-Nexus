@@ -250,6 +250,22 @@ function startStaticServer() {
         })
         return
       }
+      if (requestPath === '/api/license/status') {
+        sendJson(response, 200, {
+          active: true,
+          email: 'ui-smoke@example.com',
+          tier: 'pro',
+          mode: 'hosted_credits',
+          byokAllowed: true,
+          subscriptionStatus: 'active',
+          usagePriority: 'automnia_first',
+          creditBalance: 1000,
+          creditBalanceUpdatedAt: new Date().toISOString(),
+          activatedAt: new Date().toISOString(),
+          verifiedAt: new Date().toISOString(),
+        })
+        return
+      }
       if (requestPath === '/api/missions/projection') {
         sendJson(response, 200, { missions: [], reports: [], feed: [] })
         return
@@ -357,7 +373,7 @@ function startStaticServer() {
       if (requestPath === '/api/openclaw/agent-turn/stream') {
         const requestBody = await readRequestBody(request)
         if (/redacted failed command/i.test(requestBody)) {
-          const redactedFailure = 'Gateway transport error: simulated Command Console failure. Gateway unavailable while dispatching the command. api_key=[redacted] Authorization=[redacted] [redacted-email] [redacted-phone] %USERPROFILE%\\AppData\\Local\\DystopAI\\secret.txt Cookie=[redacted]'
+          const redactedFailure = 'Gateway transport error: simulated Command Console failure. Gateway unavailable while dispatching the command. api_key=[redacted] Authorization=[redacted] [redacted-email] [redacted-phone] %USERPROFILE%\\AppData\\Local\\Automnia\\secret.txt Cookie=[redacted]'
           response.writeHead(200, {
             'Cache-Control': 'no-cache, no-transform',
             'Content-Type': 'text/event-stream; charset=utf-8',
@@ -448,14 +464,14 @@ function writeElectronRunner() {
   mkdirSync(runnerAppDir, { recursive: true })
   mkdirSync(outputDir, { recursive: true })
   writeFileSync(path.join(runnerAppDir, 'package.json'), JSON.stringify({
-    name: 'dystopai-ui-smoke',
+    name: 'automnia-ui-smoke',
     private: true,
     main: 'main.cjs',
   }, null, 2), 'utf8')
   writeFileSync(runnerPreloadPath, String.raw`
 const { contextBridge } = require('electron')
 
-contextBridge.exposeInMainWorld('dystopaiDesktop', {
+contextBridge.exposeInMainWorld('automniaDesktop', {
   bootstrapControlCenterSession: () => ${JSON.stringify(uiSmokeSessionToken)},
 })
 `, 'utf8')
@@ -464,10 +480,10 @@ const { app, BrowserWindow } = require('electron')
 const fs = require('node:fs')
 const path = require('node:path')
 
-const targetUrl = process.env.DYSTOPAI_UI_SMOKE_URL
-const outputDir = process.env.DYSTOPAI_UI_SMOKE_OUTPUT_DIR
+const targetUrl = process.env.AUTOMNIA_UI_SMOKE_URL
+const outputDir = process.env.AUTOMNIA_UI_SMOKE_OUTPUT_DIR
 if (!targetUrl || !outputDir) {
-  throw new Error('DYSTOPAI_UI_SMOKE_URL and DYSTOPAI_UI_SMOKE_OUTPUT_DIR are required.')
+  throw new Error('AUTOMNIA_UI_SMOKE_URL and AUTOMNIA_UI_SMOKE_OUTPUT_DIR are required.')
 }
 const checks = [
   { label: 'desktop', width: 1440, height: 1000 },
@@ -577,10 +593,70 @@ async function inspectRecruitMarkdownEditor(window) {
   return inspection
 }
 
+async function inspectHelpAssistant(window) {
+  const inspectScript = [
+    "(() => {",
+    "  const wait = (ms) => new Promise((resolve) => setTimeout(resolve, ms))",
+    "  const waitFor = async (predicate, timeout = 3000) => {",
+    "    const started = Date.now()",
+    "    while (Date.now() - started < timeout) {",
+    "      const value = predicate()",
+    "      if (value) return value",
+    "      await wait(50)",
+    "    }",
+    "    return null",
+    "  }",
+    "  return (async () => {",
+    "    const trigger = document.querySelector('button[data-tone=\"help\"]')",
+    "    if (!trigger) return { attempted: false, reason: 'help-trigger-missing' }",
+    "    trigger.click()",
+    "    const panel = await waitFor(() => document.querySelector('.dui-help-panel'))",
+    "    const input = panel ? panel.querySelector('textarea[aria-label=\"Ask Automnia Assistant\"]') : null",
+    "    const welcome = panel ? panel.querySelector('.dui-help-welcome') : null",
+    "    const close = panel ? panel.querySelector('button[aria-label=\"Close Automnia Assistant\"]') : null",
+    "    const overlay = document.querySelector('.dui-help-overlay')",
+    "    input?.focus()",
+    "    if (input) {",
+    "      const valueSetter = Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, 'value')?.set",
+    "      valueSetter?.call(input, 'Keep the assistant open while I type.')",
+    "      input.dispatchEvent(new Event('input', { bubbles: true }))",
+    "    }",
+    "    await wait(1200)",
+    "    overlay?.dispatchEvent(new MouseEvent('mousedown', { bubbles: true }))",
+    "    await wait(80)",
+    "    const result = {",
+    "      attempted: true,",
+    "      panelPresent: Boolean(panel),",
+    "      inputPresent: Boolean(input),",
+    "      welcomePresent: Boolean(welcome),",
+    "      closePresent: Boolean(close),",
+    "      draftValue: input ? input.value : '',",
+    "      remainsOpenAfterTyping: Boolean(document.querySelector('.dui-help-panel')),",
+    "      remainsOpenAfterBackdropPress: Boolean(document.querySelector('.dui-help-panel')),",
+    "      panelText: panel ? panel.innerText.replace(/\\s+/g, ' ').trim() : '',",
+    "    }",
+    "    close?.click()",
+    "    await wait(80)",
+    "    return { ...result, closed: !document.querySelector('.dui-help-panel') }",
+    "  })()",
+    "})()",
+  ].join('\n')
+  return window.webContents.executeJavaScript(inspectScript)
+}
+
 async function inspectWorkspaceNavigation(window) {
   const tabScript = [
     "(() => {",
     "  const wait = (ms) => new Promise((resolve) => setTimeout(resolve, ms))",
+    "  const waitFor = async (predicate, timeout = 5000) => {",
+    "    const started = Date.now()",
+    "    while (Date.now() - started < timeout) {",
+    "      const value = predicate()",
+    "      if (value) return value",
+    "      await wait(100)",
+    "    }",
+    "    return null",
+    "  }",
     "  const summarizePanel = (panel) => {",
     "    const panelRect = panel ? panel.getBoundingClientRect() : null",
     "    const panelText = panel ? panel.innerText.replace(/\\s+/g, ' ').trim() : ''",
@@ -648,6 +724,26 @@ async function inspectWorkspaceNavigation(window) {
     "      messagesRect: messagesRect ? { width: Math.round(messagesRect.width), height: Math.round(messagesRect.height) } : null,",
     "    }",
     "  }",
+    "  const inspectAgentLayout = (panel) => {",
+    "    const workspace = panel ? panel.querySelector('.dy-agents-workspace') : null",
+    "    const party = panel ? panel.querySelector('.dy-active-party-pane') : null",
+    "    const registry = panel ? panel.querySelector('.agent-registry-pane') : null",
+    "    const consolePane = panel ? panel.querySelector('.dy-agent-console-pane') : null",
+    "    const rect = (element) => {",
+    "      const value = element ? element.getBoundingClientRect() : null",
+    "      return value ? { left: Math.round(value.left), top: Math.round(value.top), right: Math.round(value.right), bottom: Math.round(value.bottom), width: Math.round(value.width), height: Math.round(value.height) } : null",
+    "    }",
+    "    const workspaceStyle = workspace ? getComputedStyle(workspace) : null",
+    "    return {",
+    "      viewportWidth: window.innerWidth,",
+    "      gridTemplateColumns: workspaceStyle ? workspaceStyle.gridTemplateColumns : '',",
+    "      gridTemplateAreas: workspaceStyle ? workspaceStyle.gridTemplateAreas : '',",
+    "      workspaceRect: rect(workspace),",
+    "      partyRect: rect(party),",
+    "      registryRect: rect(registry),",
+    "      consoleRect: rect(consolePane),",
+    "    }",
+    "  }",
     "  const inspectMonitorTabs = async () => {",
     "    const monitorTabs = Array.from(document.querySelectorAll('[role=\"tab\"][id^=\"monitor-tab-\"]'))",
     "    const monitorResults = []",
@@ -678,9 +774,13 @@ async function inspectWorkspaceNavigation(window) {
     "    const navItems = Array.from(document.querySelectorAll('button[id^=\"nexus-nav-\"]'))",
     "    const results = []",
     "    for (const navItem of navItems) {",
-    "      navItem.click()",
-    "      await wait(1200)",
+      "      navItem.click()",
     "      const workspaceId = 'nexus-workspace-' + navItem.id.replace('nexus-nav-', '')",
+    "      await waitFor(() => {",
+    "        const panel = document.getElementById(workspaceId)",
+    "        return panel && panel.innerText.replace(/\\s+/g, ' ').trim().length > 80 ? panel : null",
+    "      }, 5000)",
+    "      await wait(150)",
     "      const panel = document.getElementById(workspaceId)",
     "      const result = {",
     "        id: navItem.id,",
@@ -689,13 +789,17 @@ async function inspectWorkspaceNavigation(window) {
     "        selected: navItem.getAttribute('aria-current') === 'page',",
     "        ...summarizePanel(panel),",
     "      }",
-    "      if (navItem.id === 'nexus-nav-agents') result.commandConsole = inspectCommandConsole(panel)",
+    "      if (navItem.id === 'nexus-nav-agents') {",
+    "        result.commandConsole = inspectCommandConsole(panel)",
+    "        result.agentLayout = inspectAgentLayout(panel)",
+    "      }",
     "      if (navItem.id === 'nexus-nav-monitor') result.monitorTabs = await inspectMonitorTabs()",
     "      results.push(result)",
     "    }",
     "    if (navItems[0]) {",
-    "      navItems[0].click()",
-    "      await wait(500)",
+      "      navItems[0].click()",
+    "      await waitFor(() => document.getElementById('nexus-workspace-agents')?.innerText.replace(/\\s+/g, ' ').trim().length > 80, 5000)",
+    "      await wait(300)",
     "    }",
     "    return results",
     "  })()",
@@ -898,7 +1002,7 @@ async function seedRedactedFailedCommandConsole(window) {
     "    const bodyText = body ? body.textContent.replace(/\\s+/g, ' ').trim() : ''",
     "    const ctaText = cta ? cta.textContent.replace(/\\s+/g, ' ').trim() : ''",
     "    const rect = cta ? cta.getBoundingClientRect() : null",
-    "    const rawLeakPattern = /(sk-ui-smoke-failed-command|ui-smoke-bearer-secret|leak@example\\.com|555[)\\s.-]*010[\\s.-]*1280|dystopai_session|Users\\\\UiSmoke)/i",
+    "    const rawLeakPattern = /(sk-ui-smoke-failed-command|ui-smoke-bearer-secret|leak@example\\.com|555[)\\s.-]*010[\\s.-]*1280|automnia_session|Users\\\\UiSmoke)/i",
     "    const markerPatterns = [/api_key=\\[redacted\\]/i, /Authorization=\\[redacted\\]/i, /\\[redacted-email\\]/i, /\\[redacted-phone\\]/i, /%USERPROFILE%/i, /Cookie=\\[redacted\\]/i]",
     "    return {",
     "      attempted: true,",
@@ -1057,7 +1161,7 @@ async function inspectViewport(viewport) {
   const inspectScript = [
     "(() => {",
     "  const root = document.querySelector('#root')",
-    "  const main = document.querySelector('#dystopai-main')",
+    "  const main = document.querySelector('#automnia-main')",
     "  const workspaceContext = document.querySelector('.dy-workspace-context')",
     "  const rootRect = root ? root.getBoundingClientRect() : null",
     "  const mainRect = main ? main.getBoundingClientRect() : null",
@@ -1088,6 +1192,7 @@ async function inspectViewport(viewport) {
   const dom = await window.webContents.executeJavaScript(inspectScript)
   const workspaceNavigation = await inspectWorkspaceNavigation(window)
   const recruitMarkdown = await inspectRecruitMarkdownEditor(window)
+  const helpAssistant = await inspectHelpAssistant(window)
 
   const image = await window.webContents.capturePage()
   const screenshotPath = path.join(outputDir, 'ui-smoke-' + viewport.label + '.png')
@@ -1108,11 +1213,24 @@ async function inspectViewport(viewport) {
     )
   const workspaceNavigationOk = workspaceNavigation.length >= 4 && workspaceNavigation.every((workspaceNavItem) => (
     workspaceNavItem.selected
-      && workspaceNavItem.panelTextLength > 80
+      && workspaceNavItem.panelTextLength >= 80
       && workspaceNavItem.panelRect?.width > 0
       && workspaceNavItem.panelRect?.height > 0
   ))
   const agentsNavItem = workspaceNavigation.find((workspaceNavItem) => workspaceNavItem.id === 'nexus-nav-agents')
+  const agentLayout = agentsNavItem?.agentLayout
+  const agentLayoutOk = (() => {
+    const party = agentLayout?.partyRect
+    const registry = agentLayout?.registryRect
+    const consolePane = agentLayout?.consoleRect
+    if (!party || !registry || !consolePane) return false
+    if (agentLayout.viewportWidth <= 900) {
+      return consolePane.top >= party.bottom - 4
+        && registry.top >= consolePane.bottom - 4
+    }
+    return Math.abs(registry.top - consolePane.top) <= 4
+      && consolePane.left >= registry.right - 4
+  })()
   const commandConsoleOk = Boolean(agentsNavItem?.commandConsole?.present)
     && agentsNavItem.commandConsole.hasTextarea
     && agentsNavItem.commandConsole.textareaAriaLabel === 'Command console message'
@@ -1185,6 +1303,7 @@ async function inspectViewport(viewport) {
     && shellFillsViewport
     && dom.workspaceNavItems.length >= 4
     && workspaceNavigationOk
+    && agentLayoutOk
     && recruitMarkdown.present
     && recruitMarkdown.inputBackgroundColor === 'rgba(0, 0, 0, 0)'
     && recruitMarkdown.inputBackgroundImage === 'none'
@@ -1197,6 +1316,16 @@ async function inspectViewport(viewport) {
     && recruitMarkdown.iconRect?.height === 20
     && recruitMarkdown.typeRect?.width === 28
     && recruitMarkdown.typeRect?.height === 18
+    && helpAssistant.attempted
+    && helpAssistant.panelPresent
+    && helpAssistant.inputPresent
+    && helpAssistant.welcomePresent
+    && helpAssistant.closePresent
+    && helpAssistant.draftValue === 'Keep the assistant open while I type.'
+    && helpAssistant.remainsOpenAfterTyping
+    && helpAssistant.remainsOpenAfterBackdropPress
+    && helpAssistant.closed
+    && /Automnia Assistant/.test(helpAssistant.panelText)
     && commandConsoleOk
     && commandConsoleStopClick.attempted
     && commandConsoleStopClick.clicked
@@ -1270,6 +1399,7 @@ async function inspectViewport(viewport) {
     shellFillsViewport,
     dom,
     recruitMarkdown,
+    helpAssistant,
     commandConsoleStopSeed,
     commandConsoleStopClick,
     commandConsoleMissingProviderAuth,
@@ -1312,8 +1442,8 @@ function runElectronSmoke(url) {
         ...process.env,
         ELECTRON_DISABLE_SECURITY_WARNINGS: 'true',
         ELECTRON_ENABLE_LOGGING: '0',
-        DYSTOPAI_UI_SMOKE_OUTPUT_DIR: outputDir,
-        DYSTOPAI_UI_SMOKE_URL: url,
+        AUTOMNIA_UI_SMOKE_OUTPUT_DIR: outputDir,
+        AUTOMNIA_UI_SMOKE_URL: url,
       },
       stdio: ['ignore', 'pipe', 'pipe'],
       windowsHide: true,
