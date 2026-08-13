@@ -40,6 +40,24 @@ const sourceGroups = [
     files: ['docs/USER_GUIDE.md'],
   },
   {
+    id: 'automnia-agent-setup-and-navigation',
+    title: 'Automnia exact navigation, setup, and agent-assisted workflow guides',
+    description: 'Exact in-app click paths for agents, Command Console, plugins, ClawTalk, Telegram, Google Workspace/Gog, Google Cloud, YouTube workflows, and troubleshooting.',
+    files: ['docs/AGENT_SETUP_GUIDES.md'],
+  },
+  {
+    id: 'automnia-bundled-skills-catalog',
+    title: 'Automnia bundled OpenClaw skills catalog',
+    description: 'Sanitized capability catalog for the bundled OpenClaw skills, their practical uses, prerequisites, and safe ClawHub discovery/install workflow.',
+    files: ['docs/BUNDLED_SKILLS_CATALOG.md'],
+  },
+  {
+    id: 'automnia-ui-reference',
+    title: 'Automnia exact user interface reference',
+    description: 'Source-verified click paths, controls, effects, safeguards, and agent-assisted alternatives for every Automnia workspace.',
+    files: ['docs/AUTOMNIA_UI_REFERENCE.md'],
+  },
+  {
     id: 'automnia-support-recovery',
     title: 'Automnia support and recovery guide',
     description: 'Safe desktop support, Gateway recovery, migrations, local-first boundaries, feedback, and redacted diagnostics.',

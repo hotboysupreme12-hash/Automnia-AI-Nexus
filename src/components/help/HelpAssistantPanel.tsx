@@ -22,31 +22,31 @@ type KnowledgeAnswer = {
 }
 
 type HelpTopic = {
-  icon: 'gateway' | 'access' | 'credits' | 'missions'
+  icon: 'clawtalk' | 'telegram' | 'agent' | 'console'
   title: string
   question: string
 }
 
 const HELP_TOPICS: HelpTopic[] = [
   {
-    icon: 'gateway',
-    title: 'Reconnect OpenClaw',
-    question: 'How do I reconnect the OpenClaw gateway?',
+    icon: 'clawtalk',
+    title: 'Give an agent a phone number',
+    question: 'How do I give an Automnia agent a phone number through ClawTalk? Walk me through the exact Plugins controls, account requirements, secure setup, safe test, and what an agent can complete for me.',
   },
   {
-    icon: 'access',
-    title: 'Fix provider access',
-    question: 'Why did my agent request need authentication?',
+    icon: 'telegram',
+    title: 'Set up Telegram',
+    question: 'Walk me through setting up Telegram for an Automnia agent. Explain the exact Plugins controls, BotFather, secure token setup, pairing, group safety, testing, and what an agent can complete for me.',
   },
   {
-    icon: 'credits',
-    title: 'Credits & BYOK',
-    question: 'How do hosted credits and BYOK work?',
+    icon: 'agent',
+    title: 'Create an agent',
+    question: 'Walk me through creating and configuring an Automnia agent. Include the exact Recruit and Agent Editor controls, model, workspace, skills, permissions, testing, and how to give it a task.',
   },
   {
-    icon: 'missions',
-    title: 'Launch a mission',
-    question: 'How do I create and launch an agent mission?',
+    icon: 'console',
+    title: 'What can agents do?',
+    question: 'What can Automnia agents do, including Google Workspace email, YouTube research, plugins, skills, and missions? Explain when I should use the Command Console to have an agent complete a complicated task for me.',
   },
 ]
 
@@ -55,34 +55,34 @@ function newMessageId() {
 }
 
 function TopicIcon({ name }: { name: HelpTopic['icon'] }) {
-  if (name === 'gateway') {
+  if (name === 'clawtalk') {
     return (
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-        <path d="M4.5 16.5a4 4 0 0 1 .8-7.92A7 7 0 0 1 18.8 10.5a3 3 0 0 1 .7 5.92" />
-        <path d="m8 15 4-4 4 4M12 11v9" />
+        <path d="M7 5.5h10a3 3 0 0 1 3 3v5a3 3 0 0 1-3 3h-5.8L7 20v-3.5a3 3 0 0 1-3-3v-5a3 3 0 0 1 3-3Z" />
+        <path d="M8.5 11.2h.01M12 11.2h.01M15.5 11.2h.01" />
       </svg>
     )
   }
-  if (name === 'access') {
+  if (name === 'telegram') {
     return (
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-        <rect x="4" y="10" width="16" height="10" rx="2.5" />
-        <path d="M8 10V7a4 4 0 0 1 8 0v3M12 14v2.5" />
+        <path d="m21 3-7.5 18-3.5-7-7-3.5L21 3Z" />
+        <path d="M10 14 21 3" />
       </svg>
     )
   }
-  if (name === 'credits') {
+  if (name === 'agent') {
     return (
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-        <circle cx="12" cy="12" r="8.5" />
-        <path d="M14.5 8.5h-3.25a2 2 0 1 0 0 4h1.5a2 2 0 1 1 0 4H9.5M12 6.5v2M12 16.5v2" />
+        <circle cx="12" cy="8" r="3.25" />
+        <path d="M5.5 20a6.5 6.5 0 0 1 13 0M18.5 7.5h3M20 6v3" />
       </svg>
     )
   }
   return (
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-      <path d="M12 3 4.5 7v5c0 4.2 2.9 7.7 7.5 9 4.6-1.3 7.5-4.8 7.5-9V7L12 3Z" />
-      <path d="m9 12 2 2 4-4" />
+      <path d="M5 5h14v10H9l-4 4V5Z" />
+      <path d="M8.5 9.5h7M8.5 12.5h4" />
     </svg>
   )
 }
@@ -208,9 +208,9 @@ export function HelpAssistantPanel({ isOpen, onClose }: HelpAssistantPanelProps)
                       </svg>
                     </span>
                   </div>
-                  <span className="dui-help-welcome__eyebrow">Automnia product expert</span>
+                  <span className="dui-help-welcome__eyebrow">Automnia setup guide</span>
                   <h3>How can I help today?</h3>
-                  <p>Ask a question in your own words, or choose a common workflow to get started.</p>
+                  <p>Ask in your own words, or start a guided setup. I’ll name the exact Automnia screen and control first.</p>
                   <div className="dui-help-suggestions" aria-label="Suggested questions">
                     {HELP_TOPICS.map((topic) => (
                       <button key={topic.question} type="button" onClick={() => void askQuestion(topic.question)} disabled={busy}>
@@ -284,7 +284,7 @@ export function HelpAssistantPanel({ isOpen, onClose }: HelpAssistantPanelProps)
                       void askQuestion()
                     }
                   }}
-                  placeholder="Ask about Automnia setup, agents, missions, or troubleshooting…"
+                  placeholder="Ask about setup, Google Workspace, agents, plugins, skills, or troubleshooting…"
                   aria-label="Ask Automnia Assistant"
                   rows={1}
                   maxLength={5_000}
