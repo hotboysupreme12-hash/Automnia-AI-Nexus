@@ -428,6 +428,23 @@ function portraitFailureKey(agentId: string, src: string) {
   return `${agentId}::${src}`
 }
 
+function handleResponseWheel(event: WheelEvent<HTMLDivElement>) {
+  const surface = event.currentTarget
+  if (event.deltaY === 0 || surface.scrollHeight <= surface.clientHeight) return
+
+  // Keep wheel/trackpad input on the response under the pointer. Explicitly
+  // moving this surface avoids browser scroll-chain differences in Electron
+  // and prevents the surrounding chat history from growing or moving instead.
+  const delta = event.deltaMode === 1
+    ? event.deltaY * 16
+    : event.deltaMode === 2
+      ? event.deltaY * surface.clientHeight
+      : event.deltaY
+  event.preventDefault()
+  event.stopPropagation()
+  surface.scrollTop += delta
+}
+
 const ResponseMessage = memo(function ResponseMessage({
   entry,
   meta,
@@ -612,6 +629,7 @@ const ResponseMessage = memo(function ResponseMessage({
             data-scroll-surface="agent-response"
             aria-label={bodyState === 'response' ? `Scrollable response from ${name}` : undefined}
             tabIndex={bodyState === 'response' ? 0 : undefined}
+            onWheel={bodyState === 'response' ? handleResponseWheel : undefined}
           >
             <p
               className="dy-command-message-body whitespace-pre-wrap break-words border border-white/[0.04] bg-slate-950/30 px-3 py-2.5 text-[12px] leading-relaxed text-slate-300/95"

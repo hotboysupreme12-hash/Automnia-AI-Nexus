@@ -5,17 +5,21 @@ This product includes third-party software. The applicable license files
 shipped with those packages remain controlling. This inventory is generated
 from package-lock.json and is intended to make review easier.
 
-Generated package count: 647
+Generated package count: 654
 
 @electron/get@3.1.0
   License: MIT
+@noble/hashes@1.4.0
+  License: MIT
 agent-base@6.0.2
+  License: MIT
+ajv@8.20.0
   License: MIT
 balanced-match@1.0.2
   License: MIT
-brace-expansion@1.1.15
+brace-expansion@1.1.18
   License: MIT
-brace-expansion@2.1.1
+brace-expansion@2.1.4
   License: MIT
 ci-info@4.3.1
   License: MIT
@@ -33,7 +37,9 @@ eslint-visitor-keys@5.0.1
   License: Apache-2.0
 fdir@6.5.0
   License: MIT
-fs-extra@11.3.6
+fs-extra@11.3.1
+  License: MIT
+fs-extra@11.4.0
   License: MIT
 fs-extra@7.0.1
   License: MIT
@@ -47,8 +53,6 @@ globals@14.0.0
   License: MIT
 https-proxy-agent@5.0.1
   License: MIT
-iconv-lite@0.6.3
-  License: MIT
 ignore@7.0.5
   License: MIT
 isbinaryfile@4.0.10
@@ -58,6 +62,8 @@ isexe@3.1.5
 isexe@4.0.0
   License: BlueOak-1.0.0
 jiti@1.21.7
+  License: MIT
+json-schema-traverse@1.0.0
   License: MIT
 jsonfile@4.0.0
   License: MIT
@@ -115,8 +121,6 @@ node_modules/@babel/traverse@7.29.7
   License: MIT
 node_modules/@babel/types@7.29.7
   License: MIT
-node_modules/@develar/schema-utils@2.6.5
-  License: MIT
 node_modules/@electron-internal/extract-zip@1.0.4
   License: BSD-2-Clause
 node_modules/@electron/asar@3.4.1
@@ -129,7 +133,7 @@ node_modules/@electron/notarize@2.5.0
   License: MIT
 node_modules/@electron/osx-sign@1.3.3
   License: BSD-2-Clause
-node_modules/@electron/rebuild@4.1.0
+node_modules/@electron/rebuild@4.2.0
   License: MIT
 node_modules/@electron/universal@2.0.3
   License: MIT
@@ -307,11 +311,21 @@ node_modules/@malept/cross-spawn-promise@2.0.0
   License: Apache-2.0
 node_modules/@malept/flatpak-bundler@0.4.0
   License: MIT
+node_modules/@noble/hashes@2.3.0
+  License: MIT
 node_modules/@nodelib/fs.scandir@2.1.5
   License: MIT
 node_modules/@nodelib/fs.stat@2.0.5
   License: MIT
 node_modules/@nodelib/fs.walk@1.2.8
+  License: MIT
+node_modules/@peculiar/asn1-schema@2.8.0
+  License: MIT
+node_modules/@peculiar/json-schema@1.1.12
+  License: MIT
+node_modules/@peculiar/utils@2.0.3
+  License: MIT
+node_modules/@peculiar/webcrypto@1.7.1
   License: MIT
 node_modules/@protobufjs/aspromise@1.1.2
   License: BSD-3-Clause
@@ -427,8 +441,6 @@ node_modules/@types/ms@2.1.0
   License: MIT
 node_modules/@types/node@24.13.2
   License: MIT
-node_modules/@types/plist@3.0.5
-  License: MIT
 node_modules/@types/qs@6.15.1
   License: MIT
 node_modules/@types/range-parser@1.2.7
@@ -442,8 +454,6 @@ node_modules/@types/responselike@1.0.3
 node_modules/@types/send@1.2.1
   License: MIT
 node_modules/@types/serve-static@2.2.0
-  License: MIT
-node_modules/@types/verror@1.10.11
   License: MIT
 node_modules/@typescript-eslint/eslint-plugin@8.62.1
   License: MIT
@@ -467,9 +477,7 @@ node_modules/@typescript-eslint/visitor-keys@8.62.1
   License: MIT
 node_modules/@vitejs/plugin-react@5.2.0
   License: MIT
-node_modules/@xmldom/xmldom@0.8.13
-  License: MIT
-node_modules/7zip-bin@5.2.0
+node_modules/@xmldom/xmldom@0.8.14
   License: MIT
 node_modules/abbrev@4.0.0
   License: ISC
@@ -483,8 +491,6 @@ node_modules/adm-zip@0.5.18
   License: MIT
 node_modules/agent-base@7.1.4
   License: MIT
-node_modules/ajv-keywords@3.5.2
-  License: MIT
 node_modules/ajv@6.15.0
   License: MIT
 node_modules/ansi-regex@5.0.1
@@ -495,18 +501,14 @@ node_modules/any-promise@1.3.0
   License: MIT
 node_modules/anymatch@3.1.3
   License: ISC
-node_modules/app-builder-bin@5.0.0-alpha.12
-  License: MIT
-node_modules/app-builder-lib@26.8.1
+node_modules/app-builder-lib@26.15.3
   License: MIT
 node_modules/arg@5.0.2
   License: MIT
 node_modules/argparse@2.0.1
   License: Python-2.0
-node_modules/assert-plus@1.0.0
-  License: MIT
-node_modules/astral-regex@2.0.0
-  License: MIT
+node_modules/asn1js@3.0.10
+  License: BSD-3-Clause
 node_modules/async-exit-hook@2.0.1
   License: MIT
 node_modules/async@3.2.6
@@ -516,6 +518,8 @@ node_modules/asynckit@0.4.0
 node_modules/at-least-node@1.0.0
   License: ISC
 node_modules/autoprefixer@10.5.2
+  License: MIT
+node_modules/aws4@1.13.2
   License: MIT
 node_modules/axios@1.18.1
   License: MIT
@@ -527,11 +531,13 @@ node_modules/baseline-browser-mapping@2.10.40
   License: Apache-2.0
 node_modules/binary-extensions@2.3.0
   License: MIT
+node_modules/bluebird@3.7.2
+  License: MIT
 node_modules/body-parser@2.3.0
   License: MIT
 node_modules/boolean@3.2.0
   License: MIT
-node_modules/brace-expansion@5.0.7
+node_modules/brace-expansion@5.0.9
   License: MIT
 node_modules/braces@3.0.3
   License: MIT
@@ -539,14 +545,14 @@ node_modules/browserslist@4.28.4
   License: MIT
 node_modules/buffer-from@1.1.2
   License: MIT
-node_modules/buffer@5.7.1
+node_modules/builder-util-runtime@9.7.0
   License: MIT
-node_modules/builder-util-runtime@9.5.1
-  License: MIT
-node_modules/builder-util@26.8.1
+node_modules/builder-util@26.15.3
   License: MIT
 node_modules/bytes@3.1.2
   License: MIT
+node_modules/bytestreamjs@2.0.1
+  License: BSD-3-Clause
 node_modules/cacheable-lookup@5.0.4
   License: MIT
 node_modules/cacheable-request@7.0.4
@@ -571,8 +577,6 @@ node_modules/chromium-pickle-js@0.2.0
   License: MIT
 node_modules/ci-info@4.4.0
   License: MIT
-node_modules/cli-truncate@2.1.0
-  License: MIT
 node_modules/cliui@8.0.1
   License: ISC
 node_modules/clone-response@1.0.3
@@ -589,7 +593,7 @@ node_modules/compare-version@0.1.2
   License: MIT
 node_modules/concat-map@0.0.1
   License: MIT
-node_modules/concurrently@9.2.3
+node_modules/concurrently@9.2.4
   License: MIT
 node_modules/content-disposition@1.1.0
   License: MIT
@@ -601,11 +605,9 @@ node_modules/cookie-signature@1.2.2
   License: MIT
 node_modules/cookie@0.7.2
   License: MIT
-node_modules/core-util-is@1.0.2
+node_modules/core-util-is@1.0.3
   License: MIT
 node_modules/cors@2.8.6
-  License: MIT
-node_modules/crc@3.8.0
   License: MIT
 node_modules/cross-dirname@0.1.0
   License: MIT
@@ -641,9 +643,7 @@ node_modules/dir-compare@4.2.0
   License: MIT
 node_modules/dlv@1.1.3
   License: MIT
-node_modules/dmg-builder@26.8.1
-  License: MIT
-node_modules/dmg-license@1.0.11
+node_modules/dmg-builder@26.15.3
   License: MIT
 node_modules/dotenv-expand@11.0.7
   License: BSD-2-Clause
@@ -651,15 +651,17 @@ node_modules/dotenv@16.6.1
   License: BSD-2-Clause
 node_modules/dunder-proto@1.0.1
   License: MIT
+node_modules/duplexer2@0.1.4
+  License: BSD-3-Clause
 node_modules/ee-first@1.1.1
   License: MIT
 node_modules/ejs@3.1.10
   License: Apache-2.0
-node_modules/electron-builder-squirrel-windows@26.8.1
+node_modules/electron-builder-squirrel-windows@26.15.3
   License: MIT
-node_modules/electron-builder@26.8.1
+node_modules/electron-builder@26.15.3
   License: MIT
-node_modules/electron-publish@26.8.1
+node_modules/electron-publish@26.15.3
   License: MIT
 node_modules/electron-to-chromium@1.5.383
   License: ISC
@@ -721,8 +723,6 @@ node_modules/exponential-backoff@3.1.3
   License: Apache-2.0
 node_modules/express@5.2.1
   License: MIT
-node_modules/extsprintf@1.4.1
-  License: MIT
 node_modules/fast-deep-equal@3.1.3
   License: MIT
 node_modules/fast-glob@3.3.3
@@ -731,6 +731,8 @@ node_modules/fast-json-stable-stringify@2.1.0
   License: MIT
 node_modules/fast-levenshtein@2.0.6
   License: MIT
+node_modules/fast-uri@3.1.5
+  License: BSD-3-Clause
 node_modules/fastq@1.20.1
   License: ISC
 node_modules/file-entry-cache@8.0.0
@@ -823,12 +825,8 @@ node_modules/http2-wrapper@1.0.3
   License: MIT
 node_modules/https-proxy-agent@7.0.6
   License: MIT
-node_modules/iconv-corefoundation@1.1.7
-  License: MIT
 node_modules/iconv-lite@0.7.2
   License: MIT
-node_modules/ieee754@1.2.1
-  License: BSD-3-Clause
 node_modules/ignore@5.3.2
   License: MIT
 node_modules/import-fresh@3.3.1
@@ -855,6 +853,8 @@ node_modules/is-number@7.0.0
   License: MIT
 node_modules/is-promise@4.0.0
   License: MIT
+node_modules/isarray@1.0.0
+  License: MIT
 node_modules/isbinaryfile@5.0.7
   License: MIT
 node_modules/isexe@2.0.0
@@ -867,7 +867,7 @@ node_modules/joi@18.2.3
   License: BSD-3-Clause
 node_modules/js-tokens@4.0.0
   License: MIT
-node_modules/js-yaml@4.3.0
+node_modules/js-yaml@4.3.1
   License: MIT
 node_modules/jsesc@3.1.0
   License: MIT
@@ -943,19 +943,21 @@ node_modules/ms@2.1.3
   License: MIT
 node_modules/mz@2.7.0
   License: MIT
-node_modules/nanoid@3.3.15
+node_modules/nanoid@3.3.18
   License: MIT
 node_modules/natural-compare@1.4.0
   License: MIT
 node_modules/negotiator@1.0.0
   License: MIT
-node_modules/node-abi@4.32.0
+node_modules/node-abi@4.33.0
   License: MIT
 node_modules/node-addon-api@7.1.1
   License: MIT
 node_modules/node-api-version@0.2.1
   License: MIT
 node_modules/node-gyp@12.4.0
+  License: MIT
+node_modules/node-int64@0.4.0
   License: MIT
 node_modules/node-pty@1.2.0-beta.14
   License: MIT
@@ -1017,6 +1019,8 @@ node_modules/pify@2.3.0
   License: MIT
 node_modules/pirates@4.0.7
   License: MIT
+node_modules/pkijs@3.4.0
+  License: BSD-3-Clause
 node_modules/platform@1.3.6
   License: MIT
 node_modules/plist@3.1.0
@@ -1033,7 +1037,7 @@ node_modules/postcss-selector-parser@6.1.4
   License: MIT
 node_modules/postcss-value-parser@4.2.0
   License: MIT
-node_modules/postcss@8.5.16
+node_modules/postcss@8.5.26
   License: MIT
 node_modules/postject@1.0.0-alpha.6
   License: MIT
@@ -1041,6 +1045,8 @@ node_modules/prelude-ls@1.2.1
   License: MIT
 node_modules/proc-log@6.1.0
   License: ISC
+node_modules/process-nextick-args@2.0.1
+  License: MIT
 node_modules/progress@2.0.3
   License: MIT
 node_modules/promise-retry@2.0.1
@@ -1056,6 +1062,10 @@ node_modules/proxy-from-env@2.1.0
 node_modules/pump@3.0.4
   License: MIT
 node_modules/punycode@2.3.1
+  License: MIT
+node_modules/pvtsutils@1.3.6
+  License: MIT
+node_modules/pvutils@1.2.0
   License: MIT
 node_modules/qs@6.15.3
   License: BSD-3-Clause
@@ -1077,9 +1087,13 @@ node_modules/read-binary-file-arch@1.0.6
   License: MIT
 node_modules/read-cache@1.0.0
   License: MIT
+node_modules/readable-stream@2.3.8
+  License: MIT
 node_modules/readdirp@3.6.0
   License: MIT
 node_modules/require-directory@2.1.1
+  License: MIT
+node_modules/require-from-string@2.0.2
   License: MIT
 node_modules/resedit@1.7.2
   License: MIT
@@ -1107,11 +1121,13 @@ node_modules/run-parallel@1.2.0
   License: MIT
 node_modules/rxjs@7.8.2
   License: Apache-2.0
+node_modules/safe-buffer@5.1.2
+  License: MIT
 node_modules/safer-buffer@2.1.2
   License: MIT
 node_modules/sanitize-filename@1.6.4
   License: WTFPL OR ISC
-node_modules/sax@1.6.0
+node_modules/sax@1.6.1
   License: BlueOak-1.0.0
 node_modules/scheduler@0.27.0
   License: MIT
@@ -1133,7 +1149,7 @@ node_modules/shebang-command@2.0.0
   License: MIT
 node_modules/shebang-regex@3.0.0
   License: MIT
-node_modules/shell-quote@1.8.4
+node_modules/shell-quote@1.9.0
   License: MIT
 node_modules/side-channel-list@1.0.1
   License: MIT
@@ -1147,10 +1163,6 @@ node_modules/signal-exit@3.0.7
   License: ISC
 node_modules/simple-update-notifier@2.0.0
   License: MIT
-node_modules/slice-ansi@3.0.0
-  License: MIT
-node_modules/smart-buffer@4.2.0
-  License: MIT
 node_modules/source-map-js@1.2.1
   License: BSD-3-Clause
 node_modules/source-map-support@0.5.21
@@ -1162,6 +1174,8 @@ node_modules/sprintf-js@1.1.3
 node_modules/stat-mode@1.0.0
   License: MIT
 node_modules/statuses@2.0.2
+  License: MIT
+node_modules/string_decoder@1.1.1
   License: MIT
 node_modules/string-width@4.2.3
   License: MIT
@@ -1179,7 +1193,7 @@ node_modules/supports-preserve-symlinks-flag@1.0.0
   License: MIT
 node_modules/tailwindcss@3.4.19
   License: MIT
-node_modules/tar@7.5.19
+node_modules/tar@7.5.22
   License: BlueOak-1.0.0
 node_modules/temp-file@3.4.0
   License: MIT
@@ -1225,11 +1239,13 @@ node_modules/typescript@5.9.3
   License: Apache-2.0
 node_modules/undici-types@7.18.2
   License: MIT
-node_modules/undici@7.28.0
+node_modules/undici@7.29.0
   License: MIT
 node_modules/universalify@2.0.1
   License: MIT
 node_modules/unpipe@1.0.0
+  License: MIT
+node_modules/unzipper@0.12.5
   License: MIT
 node_modules/update-browserslist-db@1.2.3
   License: MIT
@@ -1241,11 +1257,11 @@ node_modules/util-deprecate@1.0.2
   License: MIT
 node_modules/vary@1.1.2
   License: MIT
-node_modules/verror@1.10.1
-  License: MIT
 node_modules/vite@7.3.6
   License: MIT
 node_modules/wait-on@9.0.10
+  License: MIT
+node_modules/webcrypto-core@1.9.2
   License: MIT
 node_modules/which@2.0.2
   License: ISC
@@ -1273,8 +1289,6 @@ node_modules/zod@4.4.3
   License: MIT
 node_modules/zustand@5.0.14
   License: MIT
-node-addon-api@1.7.2
-  License: MIT
 onnxruntime-common@1.24.0-dev.20251116-b39e144322
   License: MIT
 picomatch@4.0.4
@@ -1289,7 +1303,7 @@ semver@7.8.5
   License: ISC
 supports-color@7.2.0
   License: MIT
-undici@6.27.0
+undici@6.28.0
   License: MIT
 universalify@0.1.2
   License: MIT

@@ -8,13 +8,38 @@
 */
 
 html.dui-pro-overhaul .dy-agent-console-pane,
-html.dui-pro-overhaul.dui-cohesive-ui .dy-agent-console-pane,
+html.dui-pro-overhaul.dui-cohesive-ui .dy-agent-console-pane {
+  min-height: 0 !important;
+  overflow: hidden !important;
+}
+
 html.dui-pro-overhaul .dy-agent-console-pane > [data-chat-panel="true"],
 html.dui-pro-overhaul.dui-cohesive-ui .dy-agent-console-pane > [data-chat-panel="true"],
 html.dui-pro-overhaul [data-dui-panel="command-console"].dy-command-console,
 html.dui-pro-overhaul.dui-cohesive-ui [data-dui-panel="command-console"].dy-command-console {
+  height: 100% !important;
   min-height: 0 !important;
   max-height: 100% !important;
+  overflow: hidden !important;
+}
+
+/* A percentage max-height cannot constrain a pane whose final responsive rule
+   says height:auto. Give the desktop pane the viewport-derived height that the
+   shell already measures, so message content can never size the console. */
+@media (min-width: 901px) {
+  html.dui-pro-overhaul .dy-agent-console-pane,
+  html.dui-pro-overhaul.dui-cohesive-ui .dy-agent-console-pane {
+    height: var(--dy-agent-registry-pane-height, max(420px, calc(100dvh - 210px))) !important;
+    max-height: var(--dy-agent-registry-pane-height, max(420px, calc(100dvh - 210px))) !important;
+  }
+}
+
+@media (max-width: 900px) {
+  html.dui-pro-overhaul .dy-agent-console-pane,
+  html.dui-pro-overhaul.dui-cohesive-ui .dy-agent-console-pane {
+    height: 100% !important;
+    max-height: 100% !important;
+  }
 }
 
 html.dui-pro-overhaul .dy-command-messages,
@@ -40,9 +65,9 @@ html.dui-pro-overhaul.dui-cohesive-ui .dy-command-message-body-wrap {
 html.dui-pro-overhaul .dy-command-message-body-scroll[data-body-state="response"],
 html.dui-pro-overhaul.dui-cohesive-ui .dy-command-message-body-scroll[data-body-state="response"] {
   display: block !important;
+  width: 100% !important;
   min-width: 0 !important;
-  max-height: min(42vh, 30rem) !important;
-  max-height: min(42dvh, 30rem) !important;
+  max-height: clamp(11rem, 28dvh, 20rem) !important;
   overflow-x: hidden !important;
   overflow-y: auto !important;
   overscroll-behavior: contain;
@@ -83,6 +108,6 @@ html.dui-pro-overhaul.dui-cohesive-ui .dy-command-message-body-scroll[data-body-
 @media (max-width: 600px) {
   html.dui-pro-overhaul .dy-command-message-body-scroll[data-body-state="response"],
   html.dui-pro-overhaul.dui-cohesive-ui .dy-command-message-body-scroll[data-body-state="response"] {
-    max-height: min(36dvh, 18rem) !important;
+    max-height: clamp(9rem, 30dvh, 16rem) !important;
   }
 }

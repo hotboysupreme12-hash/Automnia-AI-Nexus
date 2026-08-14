@@ -284,7 +284,7 @@
     "concurrently": "^9.2.1",
     "cross-spawn": "^7.0.6",
     "electron": "^42.0.1",
-    "electron-builder": "26.8.1",
+    "electron-builder": "^26.15.3",
     "esbuild": "^0.28.0",
     "eslint": "^9.39.1",
     "eslint-plugin-react-hooks": "^7.0.1",
