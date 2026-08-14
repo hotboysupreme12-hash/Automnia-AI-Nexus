@@ -9301,7 +9301,24 @@ let openclawAgentRunDefaultsPending: Promise<void> | null = null
 let openclawCodexPluginAutoInstallReady = false
 let openclawCodexPluginAutoInstallPending: Promise<void> | null = null
 
+let activeAgentTurnExecutionCount = 0
+
+export function beginAgentTurnExecution(): () => void {
+  activeAgentTurnExecutionCount += 1
+  return () => {
+    activeAgentTurnExecutionCount = Math.max(0, activeAgentTurnExecutionCount - 1)
+  }
+}
+
+export function isAgentTurnExecuting(): boolean {
+  return activeAgentTurnExecutionCount > 0
+}
+
 async function writeOpenclawConfig(config: unknown) {
+  if (isAgentTurnExecuting()) {
+    console.info('[config] writeOpenclawConfig suppressed: agent turn in progress')
+    return
+  }
   const parsed = (config || {}) as OpenClawConfigFile
   ensureOpenclawRuntimeDefaults(parsed)
   await syncModelProviderTimeoutsFromAgentSettings(parsed)
