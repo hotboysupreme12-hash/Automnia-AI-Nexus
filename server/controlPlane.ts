@@ -2792,6 +2792,38 @@ function abortGatewayChatOpenClawRun(run: OpenClawRunRecord, reason = 'runtime s
   return true
 }
 
+async function abortOpenClawRunById(runId: string, reason = 'operator stop requested') {
+  const cleanRunId = runId.trim()
+  const run = activeOpenClawRuns.get(cleanRunId)
+  if (!cleanRunId || !run) {
+    return { found: false, runId: cleanRunId, stopped: false, detail: 'Active runtime run was not found.' }
+  }
+
+  // Gateway chat waiters are the authoritative cancellation boundary for
+  // chat.send runs. This works even while the Gateway websocket is restarting:
+  // the waiter is closed locally, the in-flight chat.abort is best effort, and
+  // runTurn finalizes the same run record as aborted.
+  if (run.sessionKey && gatewayChatService.abortRun(run.id, reason)) {
+    finishOpenClawRun(run, 'aborted', { code: 1, failureKind: 'aborted', stderr: reason })
+    pushGatewayLog('lifecycle', `operator stopped Gateway chat run ${run.id}`)
+    return { found: true, runId: run.id, stopped: true, method: 'gateway-chat', detail: 'Gateway chat abort requested.' }
+  }
+
+  if (run.pid) {
+    const result = await terminateProcessTree(run.pid, reason, true)
+    if (activeOpenClawRuns.has(run.id)) {
+      finishOpenClawRun(run, 'aborted', { code: 1, failureKind: 'aborted', stderr: reason })
+    }
+    return { found: true, runId: run.id, stopped: result.ok, method: 'process-tree', detail: result.detail }
+  }
+
+  // A run can be between its terminal Gateway event and the final response
+  // projection. Close that server-owned record rather than leaving a phantom
+  // spinner that has no child process or Gateway waiter left to cancel.
+  finishOpenClawRun(run, 'aborted', { code: 1, failureKind: 'aborted', stderr: reason })
+  return { found: true, runId: run.id, stopped: true, method: 'record-close', detail: 'Active runtime record closed.' }
+}
+
 function normalizeGatewaySessionKey(value: string | null | undefined, agentId?: string) {
   const raw = typeof value === 'string' ? value.trim() : ''
   if (!raw) return ''
@@ -16943,6 +16975,7 @@ const runtimeRecoveryService = createRuntimeRecoveryService({
 })
 
 const runtimeActionService = createRuntimeActionService({
+  abortOpenClawRun: abortOpenClawRunById,
   abortGatewayRuntimeSessionsForClose,
   abortStaleGatewayChatWaiters,
   cleanupOpenClawSessionLocks,
@@ -17774,8 +17807,11 @@ registerAgentTurnRoutes(app, {
     return Boolean(hosted && hosted.usagePriority !== 'byok_only')
   },
   hostedUsagePriority: () => {
+    const status = licenseService.getStatus()
     const priority = licenseService.getUsagePriority()
-    return priority === 'byok_only' ? null : priority
+    return status.mode === 'byok' && priority !== 'automnia_first'
+      ? null
+      : priority === 'byok_only' ? null : priority
   },
   isRetiredAgentId,
   isValidAgentId,

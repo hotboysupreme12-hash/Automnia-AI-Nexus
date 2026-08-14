@@ -80,6 +80,7 @@
   "POST /api/openclaw/runtime/gateway/start",
   "POST /api/openclaw/runtime/gateway/stop",
   "POST /api/openclaw/runtime/monitor/clear",
+  "POST /api/openclaw/runtime/run/abort",
   "POST /api/openclaw/runtime/session/close",
   "POST /api/openclaw/runtime/shutdown",
   "POST /api/party/agent-to-agent",

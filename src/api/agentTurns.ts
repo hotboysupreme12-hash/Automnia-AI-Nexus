@@ -42,7 +42,7 @@ export type AgentTurnPayload = {
   failureKind?: string
   remainingCredits?: number | null
   creditBalanceSynchronized?: boolean
-  usagePriority?: 'automnia_first' | 'provider_first'
+  usagePriority?: 'automnia_first' | 'provider_first' | 'byok_only'
   billingRoute?: string
   nativeToolLoop?: boolean
   fallbackUsed?: boolean

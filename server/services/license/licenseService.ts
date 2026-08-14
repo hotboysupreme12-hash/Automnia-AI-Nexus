@@ -325,6 +325,10 @@ export function createLicenseService(options: LicenseServiceOptions) {
       const record = current()
       if (!record?.active || !record.email || !record.licenseKey) return null
       const usagePriority = effectiveUsagePriority(record)
+      // A BYOK account is provider-billed unless the user explicitly opts
+      // into Automnia-first. Provider-first must not silently become
+      // provider-then-Automnia when the account is in BYOK mode.
+      if (record.mode === 'byok' && usagePriority !== 'automnia_first') return null
       if (usagePriority === 'byok_only') return null
       return {
         email: record.email,

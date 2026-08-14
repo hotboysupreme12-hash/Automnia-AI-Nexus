@@ -229,6 +229,8 @@ test('exposes the Automnia relay as a selectable fallback for permanent BYOK tie
   assert.equal(harness.service.getActiveRelayCredentials()?.usagePriority, 'automnia_first')
   assert.equal(harness.service.setUsagePriority('automnia_first').usagePriority, 'automnia_first')
   assert.equal(harness.service.getActiveRelayCredentials()?.mode, 'hosted_credits')
+  assert.equal(harness.service.setUsagePriority('provider_first').usagePriority, 'provider_first')
+  assert.equal(harness.service.getActiveRelayCredentials(), null)
   assert.equal(harness.service.setUsagePriority('byok_only').usagePriority, 'byok_only')
   assert.equal(harness.service.getActiveRelayCredentials(), null)
 })

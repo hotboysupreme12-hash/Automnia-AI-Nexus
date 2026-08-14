@@ -21,6 +21,7 @@ type SessionLockCleanupResult = {
 }
 
 export type RuntimeActionServiceOptions = {
+  abortOpenClawRun: (runId: string, reason: string) => Promise<unknown>
   abortGatewayRuntimeSessionsForClose: (input: RuntimeSessionCloseInput) => Promise<unknown>
   abortStaleGatewayChatWaiters: (minAgeMs: number, reason: string) => Record<string, unknown>
   cleanupOpenClawSessionLocks: (options: {
@@ -99,6 +100,12 @@ export function createRuntimeActionService(options: RuntimeActionServiceOptions)
     return { ok: true, ...result }
   }
 
+  async function abortOpenClawRun(runId: string) {
+    const result = await options.abortOpenClawRun(runId, 'operator stop requested')
+    options.invalidateRuntimeStatusCache()
+    return { ok: true, ...result as Record<string, unknown> }
+  }
+
   async function clearRuntimeMonitor() {
     return options.runtimeRecovery.clearRuntimeMonitor()
   }
@@ -141,6 +148,7 @@ export function createRuntimeActionService(options: RuntimeActionServiceOptions)
   }
 
   return {
+    abortOpenClawRun,
     closeRuntimeSession,
     abortStaleGatewayChat,
     clearRuntimeMonitor,

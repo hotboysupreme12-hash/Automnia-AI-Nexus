@@ -1,7 +1,7 @@
 import { memo, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type WheelEvent } from 'react'
 import { apiErrorMessage, apiRequest } from '../../api/client'
-import { restartGatewayRuntime, useRuntimeSummaryStatus } from '../../hooks/useRuntimeStatus'
-import type { GatewayStabilityStatus } from '../../hooks/useRuntimeStatus'
+import { abortRuntimeRun, restartGatewayRuntime, useRuntimeSummaryStatus } from '../../hooks/useRuntimeStatus'
+import type { GatewayStabilityStatus, RuntimeRun } from '../../hooks/useRuntimeStatus'
 import {
   makeCommandConsoleDraftStorageKey,
   readCommandConsoleDraft,
@@ -179,6 +179,22 @@ function formatShortElapsed(ms: number) {
   if (ms < 60_000) return `${Math.round(ms / 1000)}s`
   if (ms < 3_600_000) return `${Math.round(ms / 60_000)}m`
   return `${Math.round(ms / 3_600_000)}h`
+}
+
+function runtimeRunDisplayLabel(run: RuntimeRun) {
+  if (run.agentId) return run.agentId
+  if (run.command.toLowerCase().includes('gateway chat')) return 'Gateway chat'
+  return 'Runtime task'
+}
+
+function runtimeRunCommandPreview(command: string) {
+  const compact = command.replace(/\s+/g, ' ').trim()
+  if (compact.length <= 180) return compact
+  return `${compact.slice(0, 177).trim()}...`
+}
+
+function runtimeActionErrorMessage(error: unknown) {
+  return error instanceof Error && error.message ? error.message : String(error)
 }
 
 function formatFileSize(bytes: number) {
@@ -805,6 +821,7 @@ export function AgentResponseConsole() {
   const [isUploading, setIsUploading] = useState(false)
   const [messageActionId, setMessageActionId] = useState('')
   const [messageActionError, setMessageActionError] = useState('')
+  const [activeRunActionId, setActiveRunActionId] = useState('')
   const [speechSettings, setSpeechSettings] = useState<SpeechSettings>(() => readSpeechSettings())
   const speechMode = speechSettings.mode
   const [voicePhase, setVoicePhase] = useState<VoiceInputPhase>('idle')
@@ -836,8 +853,10 @@ export function AgentResponseConsole() {
   const recordingDiscardReasonRef = useRef('')
   const voiceStatusClearRef = useRef<number | null>(null)
   const voiceMountedRef = useRef(true)
-  const hasActiveConsoleWork = busyAgentIds.length > 0 || responses.some((entry) => entry.streaming)
-  const { status: runtimeSummaryStatus } = useRuntimeSummaryStatus(hasActiveConsoleWork ? 5000 : 12000)
+  // Keep the authoritative server run projection hot even after the renderer
+  // has reloaded or lost an SSE stream. Renderer-local busy state is not a
+  // sufficient monitor for Gateway work.
+  const { status: runtimeSummaryStatus, refresh: refreshRuntimeSummary } = useRuntimeSummaryStatus(5000)
   const gatewayStability = runtimeSummaryStatus?.gateway.stability ?? null
   const gatewayStabilityChipState = gatewayStabilityState(gatewayStability)
   const gatewayStabilityChipLabel = gatewayStabilityHeaderLabel(gatewayStability)
@@ -891,6 +910,12 @@ export function AgentResponseConsole() {
     () => busyAgentIds.map((id) => agentById.get(id)).filter((a): a is OpenClawAgent => Boolean(a)),
     [agentById, busyAgentIds],
   )
+  const activeRuntimeRuns = useMemo(
+    () => (runtimeSummaryStatus?.activeRuns || [])
+      .filter((run) => run.status === 'running')
+      .sort((left, right) => timestampMs(left.startedAt) - timestampMs(right.startedAt)),
+    [runtimeSummaryStatus],
+  )
   const queuedResponsesByAgent = useMemo(() => {
     const counts = new Map<string, number>()
     for (const entry of responses) {
@@ -937,7 +962,13 @@ export function AgentResponseConsole() {
     return diagnostics
   }, [activeResponseByAgent, busyAgents, gatewayStabilityTitleText, laneDiagnosticNow, queuedResponsesByAgent])
   const laneDiagnostics = useMemo(() => Array.from(laneDiagnosticsByAgent.values()), [laneDiagnosticsByAgent])
-  const busyRunLabel = `${busyAgents.length} Command Console ${busyAgents.length === 1 ? 'run' : 'runs'} running${laneDiagnostics.length ? `; ${laneDiagnostics.length} quiet lane${laneDiagnostics.length === 1 ? '' : 's'}` : ''}`
+  const runningSurfaceCount = activeRuntimeRuns.length || busyAgents.length
+  const busyRunLabel = activeRuntimeRuns.length
+    ? `${runningSurfaceCount} monitored Command Console ${runningSurfaceCount === 1 ? 'run' : 'runs'} running${laneDiagnostics.length ? `; ${laneDiagnostics.length} quiet lane${laneDiagnostics.length === 1 ? '' : 's'}` : ''}`
+    : `${busyAgents.length} Command Console ${busyAgents.length === 1 ? 'run' : 'runs'} running${laneDiagnostics.length ? `; ${laneDiagnostics.length} quiet lane${laneDiagnostics.length === 1 ? '' : 's'}` : ''}`
+  const stopRunAriaLabel = activeRuntimeRuns.length
+    ? `Stop ${runningSurfaceCount} monitored running Command Console ${runningSurfaceCount === 1 ? 'run' : 'runs'}`
+    : `Stop ${busyAgents.length} running Command Console ${busyAgents.length === 1 ? 'run' : 'runs'}`
   const displayedResponses = useMemo(() => responses.slice(0, MESSAGE_RENDER_LIMIT).reverse(), [responses])
   const visibleDisplayedResponses = displayedResponses
   const targetCount = selectedTargets.length || partyTargetIds.length
@@ -1598,13 +1629,40 @@ export function AgentResponseConsole() {
 
   const removeAttachment = () => { setUploadedAttachment(null); setUploadError('') }
 
+  const stopAuthoritativeRuntimeRun = useCallback(async (runId: string) => {
+    setMessageActionError('')
+    setActiveRunActionId(runId)
+    try {
+      const result = await abortRuntimeRun(runId)
+      if (!result.stopped && result.found) {
+        setMessageActionError(result.detail || `Could not stop runtime run ${runId}.`)
+      }
+      refreshRuntimeSummary()
+    } catch (error) {
+      setMessageActionError(runtimeActionErrorMessage(error))
+    } finally {
+      setActiveRunActionId((current) => current === runId ? '' : current)
+    }
+  }, [refreshRuntimeSummary])
+
   const handleStopRunning = useCallback(() => {
     setMessageActionError('')
-    const stopped = stopActiveAgentRuns(busyAgents.map((agent) => agent.id))
-    if (stopped === 0) {
-      setMessageActionError('No cancellable Command Console runs are active.')
+    const localStopped = stopActiveAgentRuns(busyAgents.map((agent) => agent.id))
+    const remoteRunIds = activeRuntimeRuns.map((run) => run.id)
+    if (remoteRunIds.length) {
+      setActiveRunActionId('__all__')
+      void Promise.allSettled(remoteRunIds.map((runId) => abortRuntimeRun(runId)))
+        .then((results) => {
+          const rejected = results.find((result): result is PromiseRejectedResult => result.status === 'rejected')
+          if (rejected) setMessageActionError(runtimeActionErrorMessage(rejected.reason))
+          refreshRuntimeSummary()
+        })
+        .finally(() => setActiveRunActionId((current) => current === '__all__' ? '' : current))
     }
-  }, [busyAgents, stopActiveAgentRuns])
+    if (localStopped === 0 && remoteRunIds.length === 0) {
+      setMessageActionError('No active runtime run is available to stop.')
+    }
+  }, [activeRuntimeRuns, busyAgents, refreshRuntimeSummary, stopActiveAgentRuns])
 
   const hidePartyTargetFromChat = (agentId: string) => {
     setChatRemovedPartyIds((current) => {
@@ -1810,7 +1868,7 @@ export function AgentResponseConsole() {
                 </span>
               )
             })}
-            {busyAgents.length > 0 && (
+            {(busyAgents.length > 0 || activeRuntimeRuns.length > 0) && (
               <span className="dy-command-busy ml-auto inline-flex items-center gap-1.5">
                 <span
                   className="dy-command-busy-status inline-flex items-center gap-1.5"
@@ -1819,7 +1877,7 @@ export function AgentResponseConsole() {
                   aria-label={busyRunLabel}
                 >
                   <span className="dy-command-busy-dot h-1.5 w-1.5 rounded-full bg-amber-400 animate-pulse" aria-hidden="true" />
-                  <span className="dy-command-busy-count" aria-hidden="true">{busyAgents.length}</span>
+                  <span className="dy-command-busy-count" aria-hidden="true">{runningSurfaceCount}</span>
                   <span className="dy-command-busy-label" aria-hidden="true">running</span>
                 </span>
                 {laneDiagnostics.length > 0 && (
@@ -1837,16 +1895,70 @@ export function AgentResponseConsole() {
                 <Button
                   className="dy-command-stop-run"
                   onClick={handleStopRunning}
-                  aria-label={`Stop ${busyAgents.length} running Command Console ${busyAgents.length === 1 ? 'run' : 'runs'}`}
+                  aria-label={stopRunAriaLabel}
                   title="Stop running turns"
                   variant="danger"
                   size="compact"
+                  disabled={activeRunActionId === '__all__'}
                 >
-                  Stop
+                  {activeRunActionId === '__all__' ? 'Stopping' : 'Stop'}
                 </Button>
               </span>
             )}
           </div>
+        </div>
+      )}
+
+      {activeRuntimeRuns.length > 0 && (
+        <div
+          className="dy-command-active-runs shrink-0 border-b border-white/[0.08] bg-black/10 px-3 py-2"
+          role="status"
+          aria-live="polite"
+          aria-label={`${activeRuntimeRuns.length} active runtime ${activeRuntimeRuns.length === 1 ? 'run' : 'runs'} monitored by Control Center`}
+          data-active-runtime-runs={activeRuntimeRuns.length}
+        >
+          <div className="mb-1.5 flex items-center justify-between gap-2 text-[10px] uppercase tracking-[0.16em] text-white/55">
+            <span>Active runtime runs</span>
+            <span className="text-cyan-200/70">server monitored · stop available</span>
+          </div>
+          <div className="space-y-1.5">
+            {activeRuntimeRuns.slice(0, 12).map((run) => {
+              const elapsedMs = Math.max(
+                run.elapsedMs || 0,
+                timestampMs(run.startedAt) ? Date.now() - timestampMs(run.startedAt) : 0,
+              )
+              const stopping = activeRunActionId === run.id || activeRunActionId === '__all__'
+              return (
+                <div key={run.id} className="flex items-center gap-2 rounded-md border border-white/[0.08] bg-white/[0.025] px-2 py-1.5" data-active-runtime-run-id={run.id}>
+                  <span className="h-1.5 w-1.5 shrink-0 animate-pulse rounded-full bg-amber-300" aria-hidden="true" />
+                  <div className="min-w-0 flex-1">
+                    <div className="flex min-w-0 items-center gap-2 text-xs text-white/85">
+                      <strong className="shrink-0">{runtimeRunDisplayLabel(run)}</strong>
+                      <span className="truncate text-white/55" title={run.command}>{runtimeRunCommandPreview(run.command)}</span>
+                    </div>
+                    <div className="text-[10px] text-white/45">
+                      {run.sessionId ? `session ${run.sessionId.slice(0, 8)} · ` : ''}{formatShortElapsed(elapsedMs) || 'starting'} · {run.id.slice(0, 8)}
+                    </div>
+                  </div>
+                  <Button
+                    className="shrink-0"
+                    disabled={stopping}
+                    loading={stopping}
+                    onClick={() => void stopAuthoritativeRuntimeRun(run.id)}
+                    title={`Stop ${runtimeRunDisplayLabel(run)} runtime run`}
+                    aria-label={`Stop ${runtimeRunDisplayLabel(run)} runtime run`}
+                    variant="danger"
+                    size="compact"
+                  >
+                    {stopping ? 'Stopping' : 'Stop'}
+                  </Button>
+                </div>
+              )
+            })}
+          </div>
+          {activeRuntimeRuns.length > 12 && (
+            <div className="mt-1 text-[10px] text-white/45">+{activeRuntimeRuns.length - 12} more active runs are being monitored.</div>
+          )}
         </div>
       )}
 

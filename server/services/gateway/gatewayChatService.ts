@@ -103,7 +103,9 @@ export type GatewayChatRecoveryEvent = {
 
 type GatewayChatRunWaiter = {
   runId: string
+  agentId: string
   agentName: string
+  sessionId: string
   sessionKey: string
   startedAt: number
   toolEvents: unknown[]
@@ -623,6 +625,40 @@ export function createGatewayChatService<RunRecord>(options: GatewayChatServiceO
     return true
   }
 
+  function abortRun(runId: string, reason = 'operator stop requested') {
+    const cleanRunId = runId.trim()
+    if (!cleanRunId) return false
+    const waiter = gatewayChatRunWaiters.get(cleanRunId)
+    if (!waiter) return false
+
+    gatewayChatRunWaiters.delete(cleanRunId)
+    clearTimeout(waiter.timer)
+    const client = gatewayClientState?.ready ? gatewayClientState.client : null
+    if (client) {
+      requestGatewayChatAbort(client, waiter.sessionKey, cleanRunId, reason)
+    } else {
+      options.pushGatewayLog(
+        'stderr',
+        `Gateway chat stop recorded for run ${cleanRunId}, but the Gateway client is unavailable; the run waiter was still closed.`,
+      )
+    }
+    const observer = streamObserver(waiter.streamObserverId)
+    try {
+      observer?.emit('status', {
+        type: 'aborted',
+        runId: cleanRunId,
+        sessionKey: waiter.sessionKey,
+        agent: waiter.agentId,
+        message: 'Gateway chat run stopped by the operator.',
+      })
+    } catch {
+      // The renderer may already have disconnected; the server run record is
+      // still finalized by runTurn's rejection path.
+    }
+    waiter.reject(gatewayChatAbortError('gateway chat run stopped by operator'))
+    return true
+  }
+
   function abortStaleWaiters(minAgeMs: number, reason: string) {
     const now = nowMs()
     const minAge = Math.max(30_000, Math.min(24 * 60 * 60_000, Math.round(minAgeMs)))
@@ -912,6 +948,18 @@ export function createGatewayChatService<RunRecord>(options: GatewayChatServiceO
   function rejectGatewayChatWaiters(error: Error) {
     for (const waiter of gatewayChatRunWaiters.values()) {
       clearTimeout(waiter.timer)
+      const observer = streamObserver(waiter.streamObserverId)
+      try {
+        observer?.emit('status', {
+          type: 'interrupted',
+          runId: waiter.runId,
+          sessionKey: waiter.sessionKey,
+          agent: waiter.agentId,
+          message: 'Gateway disconnected while this run was active. The run was stopped; retry only after Gateway is healthy.',
+        })
+      } catch {
+        // The renderer may already have disconnected.
+      }
       waiter.reject(error)
     }
     gatewayChatRunWaiters.clear()
@@ -1281,7 +1329,9 @@ export function createGatewayChatService<RunRecord>(options: GatewayChatServiceO
   function waitForGatewayChatRun(params: {
     client: GatewayClientLike
     runId: string
+    agentId: string
     agentName: string
+    sessionId: string
     sessionKey: string
     timeoutMs: number
     streamObserverId?: string
@@ -1299,7 +1349,9 @@ export function createGatewayChatService<RunRecord>(options: GatewayChatServiceO
       timer.unref?.()
       const waiter: GatewayChatRunWaiter = {
         runId: params.runId,
+        agentId: params.agentId,
         agentName: params.agentName,
+        sessionId: params.sessionId,
         sessionKey: params.sessionKey,
         startedAt: nowMs(),
         toolEvents: [],
@@ -1371,7 +1423,9 @@ export function createGatewayChatService<RunRecord>(options: GatewayChatServiceO
     const finalPromise = waitForGatewayChatRun({
       client: state.client,
       runId,
+      agentId: params.agentId,
       agentName,
+      sessionId: params.sessionId,
       sessionKey,
       timeoutMs: params.timeoutMs + finalExtraTimeoutMs,
       streamObserverId: params.streamObserverId,
@@ -1510,6 +1564,7 @@ export function createGatewayChatService<RunRecord>(options: GatewayChatServiceO
   }
 
   return {
+    abortRun,
     abortStaleWaiters,
     ensureClient,
     getReadyClient: () => gatewayClientState?.ready ? gatewayClientState.client : null,

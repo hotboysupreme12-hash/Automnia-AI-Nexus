@@ -2303,7 +2303,14 @@ export const useNexusStore = create<NexusState>()(
               },
             )
           } catch (streamError) {
-            if (controller.signal.aborted) throw streamError
+            // A Gateway stream can close after the server has accepted and
+            // started the run. Retrying the same prompt through the buffered
+            // endpoint here would create a second background task while the
+            // first one is being reconciled. Gateway/runtime turns therefore
+            // surface one actionable failure and wait for an explicit retry.
+            const streamFailure = requestErrorMessage(streamError).toLowerCase()
+            const gatewayFailure = /gateway|openclaw|websocket|socket hang up/.test(streamFailure)
+            if (controller.signal.aborted || forceOpenClawRuntime || liveResponseCreated || gatewayFailure) throw streamError
             try {
               return await postJson(msg, forceOpenClawRuntime)
             } catch (fallbackError) {

@@ -90,7 +90,8 @@ test('keeps the grandfathered BYOK entitlement permanent while exposing managed 
   assert.equal(entitlement.isByok, true)
   assert.equal(entitlement.byokAllowed, true)
   assert.equal(entitlement.usagePriorityLocked, false)
-  assert.equal(entitlement.defaultRouteLabel, 'Your connected provider → Automnia credits fallback')
+  assert.equal(entitlement.defaultRouteLabel, 'Your connected provider / OpenClaw runtime — Automnia relay off')
+  assert.equal(entitlement.statusLabel, 'Provider-only active')
 })
 
 test('presents current and legacy BYOK tiers as permanent provider-billed access', () => {

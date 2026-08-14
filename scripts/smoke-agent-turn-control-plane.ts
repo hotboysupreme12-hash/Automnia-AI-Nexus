@@ -280,7 +280,7 @@ assert(
   'agent-turn stream routes should give an active hosted entitlement priority over runtime shortcuts and the legacy forced-runtime flag',
 )
 assert(
-  agentTurnRoutes.includes("const failureTransport = isHostedCreditsActive?.()\n        ? 'gateway-chat'"),
+  agentTurnRoutes.replace(/\r\n/g, '\n').includes("const failureTransport = isHostedCreditsActive?.()\n        ? 'gateway-chat'"),
   'agent-turn stream failures should preserve the Gateway transport for Cloud Subscription turns',
 )
 assert(
