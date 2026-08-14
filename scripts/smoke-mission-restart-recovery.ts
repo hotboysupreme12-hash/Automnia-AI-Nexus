@@ -29,7 +29,7 @@ assert.doesNotMatch(storeSource, /apiRequest<BackendMissionsPayload>\('\/api\/mi
 assert.match(storeSource, /const backendMissionStatusToRunStatus = \(mission: BackendMission\): MissionRun\['status'\] => \{/, 'renderer should centralize backend mission status projection')
 assert.match(storeSource, /mission\.lifecycleState === 'failed'\) return 'failed'/, 'renderer should preserve recovered failed lifecycle state')
 assert.match(storeSource, /missionHistory: historyRuns\.length \? historyRuns : s\.missionHistory/, 'backend mission history should replace stale local history when recovered records exist')
-assert.match(shellSource, /useEffect\(\(\) => \{ void syncMissionProjection\(\) \}, \[syncMissionProjection\]\)/, 'shell reload should refresh mission projection after renderer recovery')
+assert.match(shellSource, /useEffect\(\(\) => \{ void syncMissionProjection\(\)\.catch\(\(\) => undefined\) \}, \[syncMissionProjection\]\)/, 'shell reload should refresh mission projection after renderer recovery')
 assert.match(missionPanelSource, /data-mission-projection-state=\{activeMission\.status\}/, 'Mission page should expose backend-projected mission state')
 assert.match(missionPanelSource, /activeMission\.title/, 'Mission page should render the recovered backend mission title')
 assert.match(apiUrlSource, /\(import\.meta as ViteImportMeta\)\.env\?\.VITE_CONTROL_CENTER_API_TARGET/, 'apiUrl should load safely in Node smoke tests')

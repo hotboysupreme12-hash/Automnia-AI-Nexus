@@ -679,6 +679,8 @@ async function inspectWorkspaceNavigation(window) {
     "    const evidencePreview = commandConsole ? commandConsole.querySelector('.dy-command-evidence-preview') : null",
     "    const thinkingBody = commandConsole ? commandConsole.querySelector('.dy-command-message-body[data-body-state=\"thinking\"]') : null",
     "    const thinkingDots = thinkingBody ? thinkingBody.querySelector('.dy-command-thinking-dots') : null",
+    "    const progressBody = commandConsole ? commandConsole.querySelector('.dy-command-message-body[data-body-state=\"progress\"]') : null",
+    "    const activityPanel = commandConsole ? commandConsole.querySelector('.dy-command-activity-panel') : null",
     "    const thinkingCta = commandConsole ? commandConsole.querySelector('.dy-command-response-cta[data-state=\"thinking\"]') : null",
     "    const visibleText = commandConsole ? commandConsole.innerText.replace(/\\s+/g, ' ').trim() : ''",
     "    const messages = commandConsole ? commandConsole.querySelector('.dy-command-messages') : null",
@@ -714,6 +716,10 @@ async function inspectWorkspaceNavigation(window) {
     "      thinkingBodyText: thinkingBody ? thinkingBody.textContent.replace(/\\s+/g, ' ').trim() : '',",
     "      thinkingDotsPresent: Boolean(thinkingDots),",
     "      thinkingDotsCount: thinkingDots ? thinkingDots.querySelectorAll('span').length : 0,",
+    "      progressBodyPresent: Boolean(progressBody),",
+    "      progressBodyText: progressBody ? progressBody.textContent.replace(/\\s+/g, ' ').trim() : '',",
+    "      activityPanelPresent: Boolean(activityPanel),",
+    "      activityPanelText: activityPanel ? activityPanel.textContent.replace(/\\s+/g, ' ').trim() : '',",
     "      thinkingCtaPresent: Boolean(thinkingCta),",
     "      gatewayAcceptedVisible: /Gateway accepted the live chat run\\./.test(visibleText),",
     "      runTraceVisible: /\\brun\\s+ui-smoke-run\\b/i.test(visibleText),",
@@ -1255,10 +1261,22 @@ async function inspectViewport(viewport) {
     && !agentsNavItem.commandConsole.evidencePreviewOpen
     && agentsNavItem.commandConsole.evidencePreviewAriaLabel === ''
     && agentsNavItem.commandConsole.evidenceSummaryText === ''
-    && agentsNavItem.commandConsole.thinkingBodyPresent
-    && /^Thinking$/.test(agentsNavItem.commandConsole.thinkingBodyText)
-    && agentsNavItem.commandConsole.thinkingDotsPresent
-    && agentsNavItem.commandConsole.thinkingDotsCount === 3
+    && (
+      (
+        agentsNavItem.commandConsole.thinkingBodyPresent
+        && /^Thinking$/.test(agentsNavItem.commandConsole.thinkingBodyText)
+        && agentsNavItem.commandConsole.thinkingDotsPresent
+        && agentsNavItem.commandConsole.thinkingDotsCount === 3
+      )
+      || (
+        agentsNavItem.commandConsole.progressBodyPresent
+        && agentsNavItem.commandConsole.progressBodyText.length > 0
+      )
+      || (
+        agentsNavItem.commandConsole.activityPanelPresent
+        && /(?:Live|OpenClaw) activity/.test(agentsNavItem.commandConsole.activityPanelText)
+      )
+    )
     && !agentsNavItem.commandConsole.thinkingCtaPresent
     && !agentsNavItem.commandConsole.gatewayAcceptedVisible
     && !agentsNavItem.commandConsole.runTraceVisible

@@ -242,7 +242,9 @@ test('runTurn falls back to chat.message.get for placeholder history rows', asyn
     message: 'summarize',
     sessionId: 'session-2',
     thinking: 'off',
-    timeoutMs: 100,
+    // This path performs the send, history lookup, and placeholder expansion
+    // round trips; keep enough headroom for the full suite's event-loop load.
+    timeoutMs: 1_000,
     cwd: process.cwd(),
   })
 

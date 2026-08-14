@@ -30,6 +30,7 @@ const operatorExperienceImport = "@import './styles/automnia-theme/100-operator-
 const agentCardThemesImport = "@import './styles/automnia-theme/101-agent-card-themes.css';"
 const settingsSystemImport = "@import './styles/automnia-theme/102-settings-system.css';"
 const cronJobsSystemImport = "@import './styles/automnia-theme/103-cron-jobs-system.css';"
+const commandConsoleScrollImport = "@import './styles/automnia-theme/108-command-console-scroll.css';"
 const horizonCommandCenter = read('src/styles/automnia-theme/99-horizon-command-center.css')
 const operatorExperience = read('src/styles/automnia-theme/100-operator-experience.css')
 
@@ -64,7 +65,7 @@ assert.doesNotMatch(shell, /nexus-tab-/, 'shell should not expose tab-oriented w
 assert.doesNotMatch(shell, /nexus-panel-/, 'shell should not expose tab-panel-oriented workspace ids')
 assert.doesNotMatch(shell, /dy-command-header/, 'shell should not render the retired top command header')
 assert.doesNotMatch(shell, /className="dy-top-tabs/, 'shell should not render a duplicate hidden tab bar')
-assert.match(shell, /aria-keyshortcuts=\{activeCronCount \? 'Delete'/, 'cron cleanup review should be keyboard discoverable')
+assert.match(shell, /aria-keyshortcuts=\{activeCronCount && !cronStatusUnavailable \? 'Delete'/, 'cron cleanup review should be keyboard discoverable only when cron state is available')
 assert.match(shell, /event\.key !== 'Delete'/, 'cron cleanup should support the declared keyboard shortcut')
 assert.match(shell, /role="status" aria-live="polite" aria-label="Loading workspace"/, 'lazy workspace loading should be announced')
 assert.match(shell, /className="dy-workspace-context" data-workspace=\{tab\}/, 'shell should expose a contextual workspace header')
@@ -124,7 +125,12 @@ assert.deepEqual(layersAfterTypography, [
   { order: 101, name: 'agent-card-themes' },
   { order: 102, name: 'settings-system' },
   { order: 103, name: 'cron-jobs-system' },
-], 'global automnia theme layers after typography must remain limited to the approved shell, operator, card, settings, and cron layers')
+  { order: 104, name: 'responsive-fit' },
+  { order: 106, name: 'responsive-ux' },
+  { order: 107, name: 'agent-assistant-revamp' },
+  { order: 105, name: 'performance' },
+  { order: 108, name: 'command-console-scroll' },
+], 'global automnia theme layers after typography must remain limited to the approved shell, operator, card, settings, responsive, performance, and command-console layers')
 assert.doesNotMatch(theme, /99-mission-quiet-redesign/, 'mission quiet redesign should no longer be a global late layer')
 assert.ok(
   theme.indexOf(productionPolishImport) < theme.indexOf(referenceScreenshotImport),
@@ -142,7 +148,7 @@ assert.ok(theme.indexOf(horizonCommandCenterImport) < theme.indexOf(operatorExpe
 assert.ok(theme.indexOf(operatorExperienceImport) < theme.indexOf(agentCardThemesImport), 'Operator Experience must load before Agent Card Themes')
 assert.ok(theme.indexOf(agentCardThemesImport) < theme.indexOf(settingsSystemImport), 'Agent Card Themes must load before the scoped Settings System')
 assert.ok(theme.indexOf(settingsSystemImport) < theme.indexOf(cronJobsSystemImport), 'Settings System must load before the scoped Cron Jobs System')
-assert.ok(theme.trimEnd().endsWith(cronJobsSystemImport), 'Cron Jobs System must load last in the theme cascade')
+assert.ok(theme.trimEnd().endsWith(commandConsoleScrollImport), 'Command Console scroll constraints must load last in the theme cascade')
 assert.match(operatorExperience, /\.dui-recruit-code-editor:focus-within[\s\S]*#071012 !important/, 'focused recruit Markdown editing must retain its dedicated contrast treatment')
 assert.match(horizonCommandCenter, /Each destination has a dedicated hue/, 'navigation selection should document the workspace identity system')
 for (const [tone, accent] of [

@@ -291,7 +291,7 @@ export function PartySelector() {
       }
     })
     return list
-  }, [activePartyOrder, activePartySet, agents, deferredSearchQuery, rarityFilter, searchIndex, sortKey])
+  }, [activePartyOrder, agents, deferredSearchQuery, rarityFilter, searchIndex, sortKey])
 
   const totalPages = Math.max(1, Math.ceil(filtered.length / pageSize))
   const safePage = Math.min(pageIndex, totalPages - 1)

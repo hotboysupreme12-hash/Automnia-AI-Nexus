@@ -113,7 +113,7 @@ assert(directPickerBlock.includes('cancelled: true'), 'Immediate folder picker s
 assert(!directPickerBlock.includes('ok: false, path: null, cancelled: true'), 'Cancelled folder picker should not use legacy ok=false payloads')
 
 assert(
-  editorModal.includes("import { apiErrorMessage, apiRequest } from '../../api/client'"),
+  /import \{\s*apiErrorMessage,\s*apiRequest(?:,\s*type ApiResult)?\s*\} from '..\/..\/api\/client'/.test(editorModal),
   'AgentEditorModal should import the shared API client',
 )
 

@@ -41,7 +41,7 @@ assert.match(storeSource, /if \(get\(\)\.activeMission\?\.status === 'running'\)
 assert.match(storeSource, /syncMissionProjection,\s*\n\s*\n\s*steerMission:/)
 
 assert.match(shellSource, /const syncMissionProjection = useNexusStore\(\(s\) => s\.syncMissionProjection\)/)
-assert.match(shellSource, /useEffect\(\(\) => \{ void syncMissionProjection\(\) \}, \[syncMissionProjection\]\)/)
+assert.match(shellSource, /useEffect\(\(\) => \{ void syncMissionProjection\(\)\.catch\(\(\) => undefined\) \}, \[syncMissionProjection\]\)/)
 
 const scripts = packageJson.scripts || {}
 assert.equal(typeof scripts['smoke:mission-lifecycle-projection'], 'string')
