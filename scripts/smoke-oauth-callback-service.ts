@@ -14,6 +14,7 @@ const packageJson = JSON.parse(read('package.json')) as { scripts?: Record<strin
 
 assert.match(oauthCallbackService, /export function createOAuthCallbackService/, 'OAuth callback service must expose a factory')
 assert.match(oauthCallbackService, /const oauthSessions = new Map<string, ProviderOAuthSession>\(\)/, 'OAuth sessions must be service-owned')
+assert.match(oauthCallbackService, /function cancelOAuthSession/, 'OAuth callback service must support explicit cancellation for recoverable browser-close flows')
 assert.match(oauthCallbackService, /server\.listen\(googleCallbackPort, '127\.0\.0\.1'/, 'Google OAuth callback listener must bind loopback only')
 assert.match(oauthCallbackService, /server\.listen\(openAiCodexCallbackPort, '127\.0\.0\.1'/, 'OpenAI Codex OAuth callback listener must bind loopback only')
 assert.match(oauthCallbackService, /function failPendingOAuthSessionsForShutdown/, 'OAuth service must own pending-session shutdown failure')

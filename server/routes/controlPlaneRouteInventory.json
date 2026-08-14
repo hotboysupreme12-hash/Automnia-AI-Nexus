@@ -1,4 +1,5 @@
 [
+  "DELETE /api/auth/account/google/session/:sessionId",
   "DELETE /api/auth/providers/:provider",
   "DELETE /api/party/agent/:agentId",
   "DELETE /api/plugins/setup-terminal/:sessionId",

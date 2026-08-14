@@ -246,6 +246,12 @@ export function createOAuthCallbackService(options: OAuthCallbackServiceOptions)
     clearSessionTimeout(session.id)
   }
 
+  function cancelOAuthSession(session: ProviderOAuthSession, reason = 'OAuth sign-in was cancelled. Start it again when you are ready.') {
+    if (session.status !== 'pending') return false
+    failSession(session, reason)
+    return true
+  }
+
   function clearSessionTimeout(sessionId: string) {
     const timer = sessionTimeouts.get(sessionId)
     if (!timer) return
@@ -778,6 +784,7 @@ export function createOAuthCallbackService(options: OAuthCallbackServiceOptions)
 
   return {
     callbackServerSnapshot,
+    cancelOAuthSession,
     closeOAuthCallbackServersForProcessExit,
     closeOAuthCallbackServersForShutdown,
     completeOpenAICodexOAuthSession,

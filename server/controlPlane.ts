@@ -2020,6 +2020,7 @@ const parseOpenAICodexAuthorizationInput = oauthCallbackService.parseOpenAICodex
 const completeOpenAICodexOAuthSession = oauthCallbackService.completeOpenAICodexOAuthSession
 const closeOAuthCallbackServersForProcessExit = oauthCallbackService.closeOAuthCallbackServersForProcessExit
 const closeOAuthCallbackServersForShutdown = oauthCallbackService.closeOAuthCallbackServersForShutdown
+const cancelOAuthSession = oauthCallbackService.cancelOAuthSession
 const startGoogleOAuthSession = oauthCallbackService.startGoogleOAuthSession
 const startGoogleAccountOAuthSession = oauthCallbackService.startGoogleAccountOAuthSession
 const startOpenAICodexOAuthSession = oauthCallbackService.startOpenAICodexOAuthSession
@@ -18099,6 +18100,7 @@ registerAuthRoutes(app, {
   loginAttempts,
   sessionTokens,
   accountAuth: accountAuthService,
+  cancelOAuthSession,
   ensureProviderAuthReady: ensureLocalAuthStoreLoaded,
   getLocalProviderOAuth: providerAuthService.getLocalProviderOAuth,
   oauthSessions,

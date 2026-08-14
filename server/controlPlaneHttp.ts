@@ -140,7 +140,7 @@ function apiPath(req: Request) {
 
 function isPublicApiRequest(req: Request) {
   if (req.method === 'OPTIONS' || PUBLIC_API_PATHS.has(apiPath(req))) return true
-  if (req.method === 'GET' && apiPath(req).startsWith('/api/auth/account/google/session/')) return true
+  if ((req.method === 'GET' || req.method === 'DELETE') && apiPath(req).startsWith('/api/auth/account/google/session/')) return true
   // <img> requests cannot attach the desktop bearer token. Expose only the
   // already-sanitized, read-only local portrait endpoint; every mutating avatar
   // route remains authenticated.

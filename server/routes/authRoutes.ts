@@ -12,6 +12,7 @@ type AuthRouteOptions = {
   loginAttempts?: LoginAttemptLimiter
   sessionTokens: SessionTokenStore
   accountAuth?: AccountAuthService
+  cancelOAuthSession?: (session: ProviderOAuthSession, reason?: string) => boolean
   ensureProviderAuthReady?: () => Promise<unknown>
   getLocalProviderOAuth?: (provider: string) => LocalOAuthCredential | undefined
   oauthSessions?: Pick<Map<string, ProviderOAuthSession>, 'get'>
@@ -145,6 +146,19 @@ export function registerAuthRoutes(app: Express, options: AuthRouteOptions) {
     } catch (error) {
       return apiFailure(res, 500, 'oauth_operation_failed', 'Failed to start Google sign-in.', String(error))
     }
+  })
+
+  app.delete('/api/auth/account/google/session/:sessionId', async (req, res) => {
+    const sessionId = String(req.params.sessionId || '')
+    const session = options.oauthSessions?.get(sessionId)
+    if (!session || session.provider !== 'google' || session.purpose !== 'account') {
+      return apiFailure(res, 404, 'oauth_operation_failed', 'Google sign-in session not found.')
+    }
+    if (session.status === 'complete') {
+      return apiFailure(res, 409, 'oauth_operation_failed', 'Google sign-in already completed.')
+    }
+    const cancelled = options.cancelOAuthSession?.(session) ?? false
+    return apiSuccess(res, { sessionId, status: session.status, cancelled })
   })
 
   app.get('/api/auth/account/google/session/:sessionId', async (req, res) => {
