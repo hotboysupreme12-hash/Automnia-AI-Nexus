@@ -753,6 +753,9 @@ type ClawTalkConsoleEvent = {
   liveTokens?: boolean
   failureKind?: string
   modelId?: string
+  usagePriority?: AgentResponse['usagePriority']
+  billingRoute?: AgentResponse['billingRoute']
+  fallbackUsed?: boolean
   model?: string
   provider?: string
   consoleBridgeFinal?: boolean
@@ -1345,7 +1348,7 @@ export const useNexusStore = create<NexusState>()(
         ok: boolean,
         dur = 0,
         modelId = '',
-        meta: Partial<Pick<AgentResponse, 'failureKind' | 'transport' | 'buffered' | 'queuedAt' | 'startedAt' | 'firstTokenAt' | 'completedAt' | 'tokenCountEstimate' | 'remainingCredits'>> = {},
+        meta: Partial<Pick<AgentResponse, 'failureKind' | 'transport' | 'buffered' | 'queuedAt' | 'startedAt' | 'firstTokenAt' | 'completedAt' | 'tokenCountEstimate' | 'remainingCredits' | 'usagePriority' | 'billingRoute' | 'fallbackUsed'>> = {},
       ) => {
         const ts = new Date().toISOString()
         const seconds = Math.round(dur / 1000)
@@ -1376,6 +1379,9 @@ export const useNexusStore = create<NexusState>()(
               durationMs: dur,
               modelId: responseModelId,
               ...(meta.remainingCredits !== undefined ? { remainingCredits: meta.remainingCredits } : {}),
+              ...(meta.usagePriority ? { usagePriority: meta.usagePriority } : {}),
+              ...(meta.billingRoute ? { billingRoute: meta.billingRoute } : {}),
+              ...(meta.fallbackUsed !== undefined ? { fallbackUsed: meta.fallbackUsed } : {}),
               ...(failureKind ? { failureKind } : {}),
               ...(meta.transport ? { transport: meta.transport } : {}),
               ...(meta.buffered !== undefined ? { buffered: meta.buffered } : {}),
@@ -1825,6 +1831,9 @@ export const useNexusStore = create<NexusState>()(
         let liveFirstTokenAt = ''
         let liveResponseText = ''
         let liveRemainingCredits: number | undefined
+        let liveUsagePriority: AgentResponse['usagePriority']
+        let liveBillingRoute: AgentResponse['billingRoute']
+        let liveFallbackUsed = false
         let liveProgressLabel = 'Working'
         let liveProgressMode: AgentResponse['progressMode'] = 'progress'
         let liveProgressUpdatedAt = ''
@@ -1905,6 +1914,9 @@ export const useNexusStore = create<NexusState>()(
               durationMs: dur,
               modelId: responseModelId,
               ...(liveRemainingCredits !== undefined ? { remainingCredits: liveRemainingCredits } : existing?.remainingCredits !== undefined ? { remainingCredits: existing.remainingCredits } : {}),
+              ...(liveUsagePriority ? { usagePriority: liveUsagePriority } : existing?.usagePriority ? { usagePriority: existing.usagePriority } : {}),
+              ...(liveBillingRoute ? { billingRoute: liveBillingRoute } : existing?.billingRoute ? { billingRoute: existing.billingRoute } : {}),
+              ...(liveFallbackUsed ? { fallbackUsed: true } : existing?.fallbackUsed ? { fallbackUsed: true } : {}),
               streaming,
               ...(failureKind ? { failureKind } : existing?.failureKind ? { failureKind: existing.failureKind } : {}),
               transport: liveTransport,
@@ -2010,6 +2022,9 @@ export const useNexusStore = create<NexusState>()(
               durationMs: dur,
               modelId: responseModelId,
               ...(liveRemainingCredits !== undefined ? { remainingCredits: liveRemainingCredits } : existing?.remainingCredits !== undefined ? { remainingCredits: existing.remainingCredits } : {}),
+              ...(liveUsagePriority ? { usagePriority: liveUsagePriority } : existing?.usagePriority ? { usagePriority: existing.usagePriority } : {}),
+              ...(liveBillingRoute ? { billingRoute: liveBillingRoute } : existing?.billingRoute ? { billingRoute: existing.billingRoute } : {}),
+              ...(liveFallbackUsed ? { fallbackUsed: true } : existing?.fallbackUsed ? { fallbackUsed: true } : {}),
               streaming: false,
               ...(finalFailureKind ? { failureKind: finalFailureKind } : {}),
               transport: liveTransport,
@@ -2070,6 +2085,11 @@ export const useNexusStore = create<NexusState>()(
             if (typeof data.transport === 'string' && data.transport.trim()) liveTransport = data.transport.trim()
             if (data.buffered === true) liveBuffered = true
             if (data.liveTokens === false) liveBuffered = true
+            if (data.usagePriority === 'automnia_first' || data.usagePriority === 'provider_first' || data.usagePriority === 'byok_only') {
+              liveUsagePriority = data.usagePriority
+            }
+            if (typeof data.billingRoute === 'string' && data.billingRoute.trim()) liveBillingRoute = data.billingRoute.trim()
+            if (data.fallbackUsed === true) liveFallbackUsed = true
             if (typeof data.label === 'string' && data.label.trim()) liveProgressLabel = data.label.trim()
             if (data.mode === 'partial' || data.mode === 'block' || data.mode === 'progress') liveProgressMode = data.mode
           }
@@ -2195,6 +2215,9 @@ export const useNexusStore = create<NexusState>()(
               liveTransport = transportFromTurnPayload(finalPayload) || liveTransport
               liveBuffered = bufferedFromTurnPayload(finalPayload) || liveBuffered
               liveRemainingCredits = remainingCreditsFromTurnPayload(finalPayload) ?? liveRemainingCredits
+              liveUsagePriority = finalPayload.usagePriority || liveUsagePriority
+              liveBillingRoute = finalPayload.billingRoute || liveBillingRoute
+              liveFallbackUsed = finalPayload.fallbackUsed === true || liveFallbackUsed
               addLiveActivity(finalPayload?.ok === false ? 'run.failed' : 'run.finished', finalPayload?.ok === false ? 'Agent run failed.' : 'Agent finished.', 'control-center.sse.final', {
                 severity: finalPayload?.ok === false ? 'error' : 'success',
                 payload: streamPayload(data),
@@ -2217,6 +2240,9 @@ export const useNexusStore = create<NexusState>()(
             liveTransport = transportFromTurnPayload(payload) || liveTransport
             liveBuffered = bufferedFromTurnPayload(payload) || liveBuffered
             liveRemainingCredits = remainingCreditsFromTurnPayload(payload) ?? liveRemainingCredits
+            liveUsagePriority = payload.usagePriority || liveUsagePriority
+            liveBillingRoute = payload.billingRoute || liveBillingRoute
+            liveFallbackUsed = payload.fallbackUsed === true || liveFallbackUsed
             const failureKind = typeof payload.failureKind === 'string' ? payload.failureKind : (!payload.ok ? inferFailureKind(finalText) : undefined)
             if (liveStarted) upsertLiveResponse(finalText, !!payload.ok, Date.now() - start, false, liveResponseModelId, failureKind)
             return { payload: { ...payload, reply: finalText }, responseOk: res.ok, streamed: liveStarted }
@@ -2410,6 +2436,9 @@ export const useNexusStore = create<NexusState>()(
             liveTransport = transportFromTurnPayload(payload) || liveTransport
             liveBuffered = bufferedFromTurnPayload(payload) || liveBuffered
             liveRemainingCredits = remainingCreditsFromTurnPayload(payload) ?? liveRemainingCredits
+            liveUsagePriority = payload.usagePriority || liveUsagePriority
+            liveBillingRoute = payload.billingRoute || liveBillingRoute
+            liveFallbackUsed = payload.fallbackUsed === true || liveFallbackUsed
             finalizeLiveResponse(output, ok, Date.now() - start, payload.failureKind)
           } else {
             const failureKind = typeof payload.failureKind === 'string' ? payload.failureKind : (!ok ? inferFailureKind(output) : undefined)
@@ -2423,6 +2452,9 @@ export const useNexusStore = create<NexusState>()(
               completedAt: new Date().toISOString(),
               tokenCountEstimate: estimateTokenCount(output),
               remainingCredits: remainingCreditsFromTurnPayload(payload),
+              usagePriority: payload.usagePriority,
+              billingRoute: payload.billingRoute,
+              fallbackUsed: payload.fallbackUsed,
             })
           }
           if (ok && Array.isArray(payload.learnedSkills)) {
@@ -3540,6 +3572,9 @@ export const useNexusStore = create<NexusState>()(
             const failureKind = frame.failureKind || (!ok && isTerminal ? inferFailureKind(response || text) : isTerminal && ok ? undefined : existing?.failureKind)
             const responseModelId = modelId || existing?.modelId || s.agents.find((entry) => entry.id === agentId)?.model?.primary?.trim() || undefined
             const transport = frame.transport?.trim() || existing?.transport || 'clawtalk-control-center'
+            const usagePriority = frame.usagePriority || existing?.usagePriority
+            const billingRoute = frame.billingRoute || existing?.billingRoute
+            const fallbackUsed = frame.fallbackUsed === true || existing?.fallbackUsed
             const completedAt = isTerminal ? ts : existing?.completedAt
             const firstTokenAt = eventName === 'delta' && text && !existing?.firstTokenAt ? ts : existing?.firstTokenAt
             const missionId = existing?.missionId || s.activeMission?.id
@@ -3553,6 +3588,9 @@ export const useNexusStore = create<NexusState>()(
               timestamp: existing?.timestamp || ts,
               durationMs: isTerminal && startedMs ? Math.max(0, new Date(ts).getTime() - startedMs) : elapsedMs,
               modelId: responseModelId,
+              ...(usagePriority ? { usagePriority } : {}),
+              ...(billingRoute ? { billingRoute } : {}),
+              ...(fallbackUsed ? { fallbackUsed: true } : {}),
               streaming: !isTerminal,
               ...(failureKind ? { failureKind } : {}),
               transport,

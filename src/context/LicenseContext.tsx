@@ -127,10 +127,9 @@ export function LicenseProvider({ children }: { children: ReactNode }) {
   const setUsagePriority = useCallback(async (usagePriority: HostedUsagePriority) => {
     const result = await apiRequest<LicenseInfo>('/api/license/usage-priority', {
       method: 'POST',
-      // The server acknowledges the local preference immediately; this still
-      // leaves room for a slow loopback response without surfacing a false
-      // timeout while the Gateway reconciles in the background.
-      timeoutMs: 20_000,
+      // Route changes wait for OpenClaw reconciliation and, when required, a
+      // Gateway restart before they are acknowledged to the renderer.
+      timeoutMs: 60_000,
       body: { usagePriority },
     })
     if (!result.ok) throw new Error(apiErrorMessage(result.error))

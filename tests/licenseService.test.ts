@@ -99,7 +99,9 @@ test('persists hosted usage priority across balance updates and provisioner refr
   const harness = createHarness({
     responses: [
       { ok: true, active: true, email: 'customer@example.test', tier: 'pro', mode: 'hosted_credits', creditBalance: 500 },
-      { ok: true, active: true, email: 'customer@example.test', tier: 'pro', mode: 'hosted_credits', creditBalance: 700 },
+      // The provisioner may still report its legacy Automnia-first default.
+      // A refresh must not overwrite the explicit desktop preference.
+      { ok: true, active: true, email: 'customer@example.test', tier: 'pro', mode: 'hosted_credits', usagePriority: 'automnia_first', creditBalance: 700 },
     ],
   })
   await harness.service.activate({ email: 'customer@example.test', licenseKey: 'AUT-TEST-PRIORITY' })

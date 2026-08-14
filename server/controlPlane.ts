@@ -17750,6 +17750,35 @@ const agentStreamingService = createAgentStreamingService({
 
 const streamProviderAgentTurn = agentStreamingService.streamProviderAgentTurn
 
+let billingRouteSyncPromise: Promise<void> = Promise.resolve()
+const synchronizeBillingRouteWithGateway = async () => {
+  const operation = billingRouteSyncPromise.catch(() => undefined).then(async () => {
+    const beforeConfig = await readOpenclawConfig().catch(() => null)
+    const beforeRoute = automniaBillingRouteSnapshot(beforeConfig)
+    await synchronizeOpenClawBillingRoute()
+    const afterConfig = await readOpenclawConfig().catch(() => null)
+    const afterRoute = automniaBillingRouteSnapshot(afterConfig)
+
+    // Ignore unrelated/dynamic OpenClaw metadata. A full JSON comparison here
+    // used to force a Gateway restart on every background license refresh,
+    // dropping active turns and creating a restart/refresh loop.
+    if (beforeRoute !== afterRoute) {
+      const restart = await tryRestartGatewayService({ force: true, reason: 'subscription tier change synchronization' })
+      if (!restart.restarted) {
+        const detail = restart.detail ? ` ${restart.detail}` : ''
+        throw new Error(`OpenClaw route changed but the Gateway did not become ready.${detail}`)
+      }
+    } else {
+      console.log('[license-restart] OpenClaw configuration did not change, skipping gateway restart')
+    }
+  })
+  // Keep a failed operation observable to turns that arrive before the next
+  // settings/refresh attempt. The next synchronization is still allowed to
+  // recover because it starts from a caught predecessor.
+  billingRouteSyncPromise = operation
+  await operation
+}
+
 registerAgentTurnRoutes(app, {
   AUTH_TOKEN,
   CONTROL_CENTER_AGENT_TURN_STREAM_SMOKE_MOCK,
@@ -17812,6 +17841,20 @@ registerAgentTurnRoutes(app, {
     return status.mode === 'byok' && priority !== 'automnia_first'
       ? null
       : priority === 'byok_only' ? null : priority
+  },
+  awaitBillingRouteReady: () => billingRouteSyncPromise,
+  billingRoutePresentation: () => {
+    const status = licenseService.getStatus()
+    const usagePriority = status.usagePriority
+    if (!status.active || !usagePriority) return null
+    const billingRoute = status.mode === 'byok' && usagePriority !== 'automnia_first'
+      ? 'provider-only'
+      : usagePriority === 'automnia_first'
+        ? 'automnia-first'
+        : usagePriority === 'provider_first'
+          ? 'provider-first'
+          : 'provider-only'
+    return { usagePriority, billingRoute }
   },
   isRetiredAgentId,
   isValidAgentId,
@@ -18162,24 +18205,7 @@ registerAuthRoutes(app, {
 })
 registerLicenseRoutes(app, {
   licenseService,
-  synchronizeOpenClawBillingRoute: async () => {
-    const beforeConfig = await readOpenclawConfig().catch(() => null)
-    const beforeRoute = automniaBillingRouteSnapshot(beforeConfig)
-    await synchronizeOpenClawBillingRoute()
-    const afterConfig = await readOpenclawConfig().catch(() => null)
-    const afterRoute = automniaBillingRouteSnapshot(afterConfig)
-
-    // Ignore unrelated/dynamic OpenClaw metadata. A full JSON comparison here
-    // used to force a Gateway restart on every background license refresh,
-    // dropping active turns and creating a restart/refresh loop.
-    if (beforeRoute !== afterRoute) {
-      await tryRestartGatewayService({ force: true, reason: 'subscription tier change synchronization' }).catch((error) => {
-        console.warn('[license-restart] failed to force restart gateway service:', error)
-      })
-    } else {
-      console.log('[license-restart] OpenClaw configuration did not change, skipping gateway restart')
-    }
-  },
+  synchronizeOpenClawBillingRoute: synchronizeBillingRouteWithGateway,
   pushGatewayLog,
 })
 

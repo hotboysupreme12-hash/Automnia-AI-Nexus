@@ -226,12 +226,17 @@ export function createLicenseService(options: LicenseServiceOptions) {
       byokAllowed: !starterSubscriptionOnly && (payload.byokAllowed === true || fallback.byokAllowed === true || mode === 'byok' || tierAllowsByok(tier)),
       permanentAccess: !starterSubscriptionOnly && (payload.permanentAccess === true || fallback.permanentAccess === true || mode === 'byok' || tierRank(tier) >= 2),
       subscriptionStatus: typeof payload.subscriptionStatus === 'string' ? payload.subscriptionStatus : fallback.subscriptionStatus,
+      // The desktop preference is durable local state. Provisioner/account
+      // payloads currently omit the user's selected route or may contain the
+      // historical Automnia-first default, so never replace an explicit local
+      // choice during refresh/account reconciliation. A starter subscription
+      // remains the one intentional lock.
       usagePriority: starterSubscriptionOnly
         ? 'automnia_first'
-        : validUsagePriority(payload.usagePriority)
-          ? payload.usagePriority
-          : validUsagePriority(fallback.usagePriority)
-            ? fallback.usagePriority
+        : validUsagePriority(fallback.usagePriority)
+          ? fallback.usagePriority
+          : validUsagePriority(payload.usagePriority)
+            ? payload.usagePriority
             : mode === 'byok' && !(validCreditBalance(reportedCreditBalance) && reportedCreditBalance > 0) ? 'provider_first' : 'automnia_first',
       creditBalance: reportedCreditBalance,
       creditBalanceUpdatedAt: validCreditBalance(payload.creditBalance) ? now() : fallback.creditBalanceUpdatedAt,

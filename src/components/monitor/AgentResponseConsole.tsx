@@ -138,12 +138,34 @@ function compactModelLabel(modelId?: string) {
 function billingRouteLabel(entry: AgentResponse, hostedCreditsFirst = false): { label: string; title: string; tone: BadgeTone } | null {
   const modelId = entry.modelId?.trim().toLowerCase() || ''
   const transport = entry.transport?.trim().toLowerCase() || ''
+  const selectedRoute = entry.billingRoute || (
+    entry.usagePriority === 'automnia_first'
+      ? 'automnia-first'
+      : entry.usagePriority === 'provider_first'
+        ? 'provider-first'
+        : entry.usagePriority === 'byok_only'
+          ? 'provider-only'
+          : ''
+  )
+  const balance = typeof entry.remainingCredits === 'number' && Number.isFinite(entry.remainingCredits)
+    ? `${entry.remainingCredits.toLocaleString('en-US')} credits remaining`
+    : 'Balance will refresh after the Automnia Cloud response is confirmed.'
+  if (selectedRoute === 'automnia-first') {
+    return { label: 'Automnia credits', title: `Automnia credits first. ${balance}`, tone: 'success' }
+  }
+  if (selectedRoute === 'provider-first') {
+    return {
+      label: 'Provider → Automnia',
+      title: 'Your connected provider is tried first. Automnia hosted credits are used only if the Gateway falls back.',
+      tone: 'info',
+    }
+  }
+  if (selectedRoute === 'provider-only') {
+    return { label: 'Provider only', title: 'Provider-only route. Automnia hosted credits are bypassed for this request.', tone: 'info' }
+  }
   const hostedCredits = hostedCreditsFirst || modelId.startsWith('automnia-cloud/') || transport === 'automnia-cloud-relay'
   if (hostedCredits) {
-    const balance = typeof entry.remainingCredits === 'number' && Number.isFinite(entry.remainingCredits)
-      ? `${entry.remainingCredits.toLocaleString('en-US')} credits remaining`
-      : 'Balance will refresh after the Automnia Cloud response is confirmed.'
-    return { label: 'Automnia', title: `Subscription Relay route. ${balance}`, tone: 'success' }
+    return { label: 'Automnia credits', title: `Automnia credits first. ${balance}`, tone: 'success' }
   }
   if (modelId || transport.includes('gateway') || transport.includes('openclaw')) {
     return { label: 'Your provider', title: 'BYOK or /runtime route. The configured provider account bills this request, not Automnia hosted credits.', tone: 'info' }

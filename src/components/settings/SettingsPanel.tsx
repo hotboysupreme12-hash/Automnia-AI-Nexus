@@ -667,12 +667,12 @@ export function SettingsPanel({ focusSection = 'account', focusRequest = 0 }: { 
         setNotice({
           tone: 'success',
           text: isByok && nextPriority !== 'automnia_first'
-            ? 'Usage priority saved: your provider only. Automnia credits are bypassed for BYOK.'
-            : nextPriority === 'provider_first'
-              ? 'Usage priority saved: your provider first, Automnia credits available as fallback.'
+          ? 'Usage priority saved and Gateway synchronized: your provider only. Automnia credits are bypassed for BYOK.'
+          : nextPriority === 'provider_first'
+              ? 'Usage priority saved and Gateway synchronized: your provider first, Automnia credits available as fallback.'
               : nextPriority === 'byok_only'
-                ? 'Usage priority saved: your provider only.'
-                : 'Usage priority saved: Automnia credits first.',
+                ? 'Usage priority saved and Gateway synchronized: your provider only.'
+                : 'Usage priority saved and Gateway synchronized: Automnia credits first.',
         })
       } catch (error) {
         setUsagePriorityError(error instanceof Error ? error.message : 'Could not save the usage priority.')

@@ -202,6 +202,11 @@ type AgentTurnRoutesOptions = {
   isGoogleGeminiModelId(modelId: string): boolean
   isHostedCreditsActive?: () => boolean
   hostedUsagePriority?: () => 'automnia_first' | 'provider_first' | null
+  awaitBillingRouteReady?: () => Promise<void>
+  billingRoutePresentation?: () => {
+    usagePriority: 'automnia_first' | 'provider_first' | 'byok_only'
+    billingRoute: 'automnia-first' | 'provider-first' | 'provider-only'
+  } | null
   isRetiredAgentId(agent: string): boolean
   isValidAgentId(agent: string): boolean
   launchChromeHost(url?: string): Promise<HostLaunchResult>
@@ -291,6 +296,8 @@ export function registerAgentTurnRoutes(app: Express, options: AgentTurnRoutesOp
     isGoogleGeminiModelId,
     isHostedCreditsActive,
     hostedUsagePriority,
+    awaitBillingRouteReady,
+    billingRoutePresentation,
     isRetiredAgentId,
     isValidAgentId,
     launchChromeHost,
@@ -446,6 +453,8 @@ export function registerAgentTurnRoutes(app: Express, options: AgentTurnRoutesOp
       res.flushHeaders?.()
     }
 
+    const routeMetadata = () => billingRoutePresentation?.() || {}
+
     try {
       const streamAgent = parsed.data.agent.trim()
       if (!isValidAgentId(streamAgent) || isRetiredAgentId(streamAgent)) {
@@ -585,6 +594,7 @@ export function registerAgentTurnRoutes(app: Express, options: AgentTurnRoutesOp
         }, liveTextStreamed))
         return
       }
+      await awaitBillingRouteReady?.()
       const hostedCreditRoute = Boolean(isHostedCreditsActive?.())
       // Hosted turns use the same Gateway transport as BYOK. Automnia is the
       // selected OpenClaw model provider, so the Gateway owns the complete
@@ -604,6 +614,7 @@ export function registerAgentTurnRoutes(app: Express, options: AgentTurnRoutesOp
         if (!preflight.ok) throw new Error(`${preflight.message}${preflight.detail ? `\n${preflight.detail}` : ''}`)
       }
       emit('status', {
+        ...routeMetadata(),
         transport: initialTransport,
         mode: 'progress',
         label: cloudFirst ? 'Automnia credits via Gateway' : providerFirst ? 'My provider first' : gatewayRoute ? 'OpenClaw session' : 'Command Console',
@@ -620,6 +631,7 @@ export function registerAgentTurnRoutes(app: Express, options: AgentTurnRoutesOp
       })
       const forcedGatewayConsoleTurn = gatewayRoute && parsed.data.source !== 'clawtalk'
       emit('progress', {
+        ...routeMetadata(),
         transport: initialTransport,
         text: cloudFirst
           ? 'Automnia provider route confirmed; dispatching through Gateway chat.'
@@ -638,6 +650,7 @@ export function registerAgentTurnRoutes(app: Express, options: AgentTurnRoutesOp
         await ensureAgentSandboxCompatibleWithHost(streamAgent)
       }
       emit('progress', {
+        ...routeMetadata(),
         transport: initialTransport,
         text: cloudFirst
           ? 'Gateway route ready; dispatching through Automnia credits.'
@@ -652,7 +665,7 @@ export function registerAgentTurnRoutes(app: Express, options: AgentTurnRoutesOp
       await delayMs(0)
       const hostedInput = hostedBrowserIntent ? { ...parsed.data, thinking: 'off' as const } : parsed.data
       const payload = await streamProviderAgentTurn(hostedInput, emit, abortController.signal)
-      emit('final', compactFinalSsePayload(payload, liveTextStreamed))
+      emit('final', compactFinalSsePayload({ ...payload, ...routeMetadata() }, liveTextStreamed))
     } catch (error) {
       const message = redactHiddenReasoningAndSecrets(String(error))
       const failureKind = classifyFailureKind(message, abortController.signal.aborted ? 'aborted' : 'failed') || 'unknown'
@@ -674,12 +687,14 @@ export function registerAgentTurnRoutes(app: Express, options: AgentTurnRoutesOp
         return
       }
       emit('error', {
+        ...routeMetadata(),
         message: message.length > SSE_FINAL_TEXT_LIMIT ? `${message.slice(0, SSE_FINAL_TEXT_LIMIT).trimEnd()}\n\n[Error truncated.]` : message,
         failureKind,
         transport: failureTransport,
         liveTokens: false,
       })
       emit('final', compactFinalSsePayload({
+        ...routeMetadata(),
         ok: false,
         reply: message,
         stderr: message,
@@ -740,13 +755,16 @@ export function registerAgentTurnRoutes(app: Express, options: AgentTurnRoutesOp
     // every message, including /runtime, /work, and /openclaw; otherwise a
     // successful fallback reply can bypass the Cloud relay and leave the
     // confirmed credit balance unchanged.
+    await awaitBillingRouteReady?.()
     const hostedCreditRoute = Boolean(isHostedCreditsActive?.())
+    const routeMetadata = () => billingRoutePresentation?.() || {}
     if (hostedCreditRoute) {
       const hostedBrowserIntent = await shouldRouteBrowserIntentThroughBrowserPlugin(message, null)
       if (hostedBrowserIntent) {
         const preflight = await checkBrowserPreflight()
         if (!preflight.ok) {
           return apiSuccess(res, compactHttpJsonPayload({
+            ...routeMetadata(),
             ok: false,
             reply: preflight.message,
             stdout: '',
@@ -762,7 +780,7 @@ export function registerAgentTurnRoutes(app: Express, options: AgentTurnRoutesOp
         () => undefined,
         requestAbortController.signal,
       )
-      return apiSuccess(res, compactHttpJsonPayload(hostedPayload))
+      return apiSuccess(res, compactHttpJsonPayload({ ...hostedPayload, ...routeMetadata() }))
     }
 
     await ensureOpenclawAgentRunConfigDefaults()
@@ -1335,6 +1353,7 @@ export function registerAgentTurnRoutes(app: Express, options: AgentTurnRoutesOp
       : undefined
 
     return apiSuccess(res, compactHttpJsonPayload({
+      ...routeMetadata(),
       ok: result.code === 0,
       reply,
       stdout: result.stdout,
@@ -1375,6 +1394,7 @@ export function registerAgentTurnRoutes(app: Express, options: AgentTurnRoutesOp
       return apiFailure(res, status, 'agent_turn_failed', aborted
         ? 'Agent turn was cancelled before completion.'
         : 'Agent turn failed before OpenClaw returned a reply.', compactHttpJsonPayload({
+        ...(billingRoutePresentation?.() || {}),
         ok: false,
         reply: aborted
           ? 'Agent turn was cancelled before completion.'
