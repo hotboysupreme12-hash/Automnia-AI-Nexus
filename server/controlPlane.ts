@@ -1626,11 +1626,31 @@ const MODEL_RESILIENCE_FALLBACKS: Record<string, string[]> = {
     'openai/gpt-5.6-terra',
     'openai/gpt-5.6-sol',
   ],
+  'google/gemini-3.7-pro': [
+    'google/gemini-3.7-flash',
+    'google/gemini-3.6-flash',
+    'google/gemini-3.5-flash',
+  ],
+  'google/gemini-3.7-flash': [
+    'google/gemini-3.6-flash',
+    'google/gemini-3.5-flash',
+    'google/gemini-3.1-flash-lite',
+  ],
   'google/gemini-3.6-flash': [
     'google/gemini-3.5-flash',
     'google/gemini-3.1-flash-lite',
     'google/gemini-2.5-flash',
     'google/gemini-2.5-flash-lite',
+  ],
+  'google-vertex/gemini-3.7-pro': [
+    'google-vertex/gemini-3.7-flash',
+    'google-vertex/gemini-3.6-flash',
+    'google-vertex/gemini-3.5-flash',
+  ],
+  'google-vertex/gemini-3.7-flash': [
+    'google-vertex/gemini-3.6-flash',
+    'google-vertex/gemini-3.5-flash',
+    'google-vertex/gemini-3.1-flash-lite',
   ],
   'google-vertex/gemini-3.6-flash': [
     'google-vertex/gemini-3.5-flash',
