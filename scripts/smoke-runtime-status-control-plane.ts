@@ -123,7 +123,7 @@ assert(runtimeHook.includes('function listCronShiftsForHydration'), 'full runtim
 assert(runtimeHook.includes('RUNTIME_CRON_SHIFT_HYDRATION_CACHE_MS'), 'cron shift hydration should have a short client cache')
 assert(runtimeHook.includes('Do not cache an empty read'), 'cron hydration should not cache a transient empty read')
 assert(runtimeHook.includes('if (!shifts.length && (serverShifts.length > 0 || serverActiveCount > 0)) return status'), 'cron hydration should preserve a known-good active snapshot over an empty read')
-assert(runtimeHook.includes('cachedRuntimeSummaryStatus = result.data'), 'runtime summary polling should not hydrate cron shifts with a second request')
+assert(runtimeHook.includes('cachedRuntimeSummaryStatus = mergedStatus'), 'runtime summary polling should cache the merged summary without hydrating cron shifts with a second request')
 assert(runtimeStatusService.includes('gatewayExternalLogSource'), 'runtime summary should expose whether log tails were skipped or used as fallback')
 assert(runtimeStatusService.includes("'skipped-ledger-hot-path'"), 'runtime summary should skip external log tails when Gateway ledger evidence is already available')
 assert(runtimeHook.includes('lastRestartReason?: string | null'), 'runtime status types should include the last Gateway restart reason')
