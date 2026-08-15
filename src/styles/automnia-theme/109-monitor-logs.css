@@ -1,0 +1,457 @@
+/* Logs workspace: one intentional home for agent history and the Gateway tail. */
+
+html.dui-pro-overhaul .dy-monitor-logs-workspace,
+html.dui-pro-overhaul.dui-cohesive-ui .dy-monitor-logs-workspace {
+  display: grid;
+  gap: 14px;
+}
+
+html.dui-pro-overhaul .dy-monitor-logs-hero,
+html.dui-pro-overhaul.dui-cohesive-ui .dy-monitor-logs-hero {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 14px;
+  padding: 18px 20px;
+  border: 1px solid rgba(114, 213, 194, .20);
+  border-radius: 16px;
+  background:
+    radial-gradient(circle at 0 0, rgba(114, 213, 194, .16), transparent 34%),
+    linear-gradient(135deg, rgba(255, 255, 255, .045), rgba(255, 255, 255, .012)),
+    #0d1213;
+  box-shadow: 0 18px 42px -30px rgba(0, 0, 0, .9), inset 0 1px 0 rgba(255, 255, 255, .05);
+}
+
+html.dui-pro-overhaul .dy-monitor-logs-hero__mark,
+html.dui-pro-overhaul.dui-cohesive-ui .dy-monitor-logs-hero__mark {
+  display: grid;
+  width: 50px;
+  height: 50px;
+  place-items: center;
+  overflow: hidden;
+  border: 1px solid rgba(137, 231, 218, .30);
+  border-radius: 15px;
+  background: rgba(4, 18, 19, .75);
+  box-shadow: 0 0 28px rgba(114, 213, 194, .13);
+}
+
+html.dui-pro-overhaul .dy-monitor-logs-hero__mark img,
+html.dui-pro-overhaul.dui-cohesive-ui .dy-monitor-logs-hero__mark img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+html.dui-pro-overhaul .dy-monitor-logs-hero__copy,
+html.dui-pro-overhaul.dui-cohesive-ui .dy-monitor-logs-hero__copy {
+  min-width: 0;
+}
+
+html.dui-pro-overhaul .dy-monitor-logs-hero__copy > span,
+html.dui-pro-overhaul.dui-cohesive-ui .dy-monitor-logs-hero__copy > span {
+  color: #8de7d3;
+  font-size: 9px;
+  font-weight: 800;
+  letter-spacing: .16em;
+  text-transform: uppercase;
+}
+
+html.dui-pro-overhaul .dy-monitor-logs-hero__copy h2,
+html.dui-pro-overhaul.dui-cohesive-ui .dy-monitor-logs-hero__copy h2 {
+  margin: 3px 0 4px;
+  color: #f1fbf8;
+  font-family: var(--font-display);
+  font-size: 22px;
+  font-weight: 720;
+  letter-spacing: -.04em;
+  line-height: 1;
+}
+
+html.dui-pro-overhaul .dy-monitor-logs-hero__copy p,
+html.dui-pro-overhaul.dui-cohesive-ui .dy-monitor-logs-hero__copy p {
+  margin: 0;
+  color: #8fa3a3;
+  font-size: 11px;
+  line-height: 1.45;
+}
+
+html.dui-pro-overhaul .dy-monitor-logs-hero__stats,
+html.dui-pro-overhaul.dui-cohesive-ui .dy-monitor-logs-hero__stats {
+  display: flex;
+  align-items: stretch;
+  gap: 8px;
+}
+
+html.dui-pro-overhaul .dy-monitor-logs-hero__stats > div,
+html.dui-pro-overhaul.dui-cohesive-ui .dy-monitor-logs-hero__stats > div {
+  display: grid;
+  min-width: 78px;
+  gap: 3px;
+  padding: 9px 10px;
+  border: 1px solid rgba(255, 255, 255, .08);
+  border-radius: 10px;
+  background: rgba(0, 0, 0, .18);
+  text-align: right;
+}
+
+html.dui-pro-overhaul .dy-monitor-logs-hero__stats strong,
+html.dui-pro-overhaul.dui-cohesive-ui .dy-monitor-logs-hero__stats strong {
+  color: #a8eee0;
+  font-family: var(--font-display);
+  font-size: 18px;
+  line-height: 1;
+}
+
+html.dui-pro-overhaul .dy-monitor-logs-hero__stats span,
+html.dui-pro-overhaul.dui-cohesive-ui .dy-monitor-logs-hero__stats span {
+  color: #718686;
+  font-size: 8px;
+  font-weight: 750;
+  letter-spacing: .08em;
+  text-transform: uppercase;
+}
+
+html.dui-pro-overhaul .dy-monitor-logs-grid,
+html.dui-pro-overhaul.dui-cohesive-ui .dy-monitor-logs-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1.1fr) minmax(360px, .9fr);
+  align-items: start;
+  gap: 14px;
+}
+
+html.dui-pro-overhaul .dy-monitor-log-surface,
+html.dui-pro-overhaul.dui-cohesive-ui .dy-monitor-log-surface {
+  min-width: 0;
+  padding: 14px;
+  border: 1px solid rgba(255, 255, 255, .095);
+  border-radius: 16px;
+  background: linear-gradient(180deg, rgba(255, 255, 255, .035), rgba(255, 255, 255, .012)), #0b0f10;
+  box-shadow: 0 18px 42px -30px rgba(0, 0, 0, .9), inset 0 1px 0 rgba(255, 255, 255, .035);
+}
+
+html.dui-pro-overhaul .dy-monitor-log-surface__head,
+html.dui-pro-overhaul.dui-cohesive-ui .dy-monitor-log-surface__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin: 0 0 12px;
+  padding: 0 1px 12px;
+  border-bottom: 1px solid rgba(255, 255, 255, .08);
+}
+
+html.dui-pro-overhaul .dy-monitor-log-surface__head span:first-child,
+html.dui-pro-overhaul.dui-cohesive-ui .dy-monitor-log-surface__head span:first-child {
+  display: block;
+  margin-bottom: 4px;
+  color: #7db8b0;
+  font-size: 8px;
+  font-weight: 800;
+  letter-spacing: .14em;
+  text-transform: uppercase;
+}
+
+html.dui-pro-overhaul .dy-monitor-log-surface__head h3,
+html.dui-pro-overhaul.dui-cohesive-ui .dy-monitor-log-surface__head h3 {
+  margin: 0;
+  color: #edf5f3;
+  font-size: 14px;
+  font-weight: 720;
+  letter-spacing: -.02em;
+}
+
+html.dui-pro-overhaul .dy-monitor-log-surface__head > span:last-child,
+html.dui-pro-overhaul.dui-cohesive-ui .dy-monitor-log-surface__head > span:last-child {
+  color: #6f8584;
+  font-family: var(--font-mono);
+  font-size: 9px;
+  white-space: nowrap;
+}
+
+html.dui-pro-overhaul .dy-monitor-log-surface > .grid,
+html.dui-pro-overhaul.dui-cohesive-ui .dy-monitor-log-surface > .grid {
+  gap: 7px;
+}
+
+html.dui-pro-overhaul .dy-monitor-log-surface > .grid > div,
+html.dui-pro-overhaul.dui-cohesive-ui .dy-monitor-log-surface > .grid > div {
+  border-color: rgba(255, 255, 255, .075) !important;
+  border-radius: 11px !important;
+  background: rgba(255, 255, 255, .018) !important;
+}
+
+html.dui-pro-overhaul .dy-gateway-log-card,
+html.dui-pro-overhaul.dui-cohesive-ui .dy-gateway-log-card {
+  grid-area: auto !important;
+  min-width: 0;
+  padding: 14px !important;
+  border: 1px solid rgba(114, 213, 194, .18) !important;
+  border-radius: 16px !important;
+  background:
+    radial-gradient(circle at 100% 0, rgba(114, 213, 194, .08), transparent 42%),
+    linear-gradient(180deg, rgba(255, 255, 255, .035), rgba(255, 255, 255, .012)),
+    #0a0f10 !important;
+  box-shadow: 0 18px 42px -30px rgba(0, 0, 0, .9), inset 0 1px 0 rgba(255, 255, 255, .04) !important;
+}
+
+html.dui-pro-overhaul .dy-gateway-log-heading,
+html.dui-pro-overhaul.dui-cohesive-ui .dy-gateway-log-heading {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  gap: 9px;
+}
+
+html.dui-pro-overhaul .dy-gateway-log-brand,
+html.dui-pro-overhaul.dui-cohesive-ui .dy-gateway-log-brand {
+  display: grid;
+  width: 30px;
+  height: 30px;
+  flex: 0 0 30px;
+  place-items: center;
+  overflow: hidden;
+  border: 1px solid rgba(114, 213, 194, .25);
+  border-radius: 9px;
+  background: rgba(114, 213, 194, .07);
+}
+
+html.dui-pro-overhaul .dy-gateway-log-brand img,
+html.dui-pro-overhaul.dui-cohesive-ui .dy-gateway-log-brand img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+html.dui-pro-overhaul .dy-gateway-log-announcer,
+html.dui-pro-overhaul.dui-cohesive-ui .dy-gateway-log-announcer {
+  margin: 0 0 3px;
+  color: #8de7d3;
+  font-size: 8px;
+  font-weight: 800;
+  letter-spacing: .13em;
+  line-height: 1;
+  text-transform: uppercase;
+}
+
+html.dui-pro-overhaul .dy-gateway-log-title,
+html.dui-pro-overhaul.dui-cohesive-ui .dy-gateway-log-title {
+  margin: 0;
+  color: #eff8f6 !important;
+  font-size: 13px !important;
+  letter-spacing: -.01em;
+}
+
+html.dui-pro-overhaul .dy-gateway-log-controls > span,
+html.dui-pro-overhaul.dui-cohesive-ui .dy-gateway-log-controls > span {
+  color: #6e8583 !important;
+  font-family: var(--font-mono);
+  font-size: 9px !important;
+  letter-spacing: .04em !important;
+}
+
+html.dui-pro-overhaul .dy-gateway-log-card[data-collapsed="true"] .dy-gateway-log-header,
+html.dui-pro-overhaul.dui-cohesive-ui .dy-gateway-log-card[data-collapsed="true"] .dy-gateway-log-header {
+  margin-bottom: 0 !important;
+}
+
+html.dui-pro-overhaul .dy-monitor-log-box,
+html.dui-pro-overhaul.dui-cohesive-ui .dy-monitor-log-box {
+  max-height: min(58vh, 620px);
+  border: 1px solid rgba(255, 255, 255, .08) !important;
+  border-radius: 11px !important;
+  background: rgba(0, 0, 0, .26) !important;
+}
+
+@media (max-width: 980px) {
+  html.dui-pro-overhaul .dy-monitor-logs-grid,
+  html.dui-pro-overhaul.dui-cohesive-ui .dy-monitor-logs-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+@media (max-width: 650px) {
+  html.dui-pro-overhaul .dy-monitor-logs-hero,
+  html.dui-pro-overhaul.dui-cohesive-ui .dy-monitor-logs-hero {
+    grid-template-columns: auto minmax(0, 1fr);
+  }
+
+  html.dui-pro-overhaul .dy-monitor-logs-hero__stats,
+  html.dui-pro-overhaul.dui-cohesive-ui .dy-monitor-logs-hero__stats {
+    grid-column: 1 / -1;
+  }
+
+  html.dui-pro-overhaul .dy-monitor-logs-hero__stats > div,
+  html.dui-pro-overhaul.dui-cohesive-ui .dy-monitor-logs-hero__stats > div {
+    flex: 1;
+    text-align: left;
+  }
+}
+
+/* The Gateway tab carries the Automnia logo's teal signal through every
+   interaction state: idle, hover, active, underline, and icon. */
+html.dui-pro-overhaul.dui-cohesive-ui .app-bg.dy-monitor-focus [data-dui-panel="monitor"].dy-monitor-shell .dy-monitor-tab-list button[data-monitor-tab="gateway"],
+html.dui-pro-overhaul.dui-cohesive-ui [data-dui-panel="monitor"] .dy-monitor-tab-list button[data-monitor-tab="gateway"] {
+  --dy-monitor-tab-accent: #60d9cb;
+  --dy-monitor-tab-accent-rgb: 96, 217, 203;
+}
+
+/* The Logs tab is a single chronological Automnia feed. Gateway lines are
+   rendered alongside agent work so the operator never has to hunt between
+   two competing log surfaces. */
+html.dui-pro-overhaul .dy-monitor-logs-hero,
+html.dui-pro-overhaul.dui-cohesive-ui .dy-monitor-logs-hero {
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: 12px;
+  padding: 16px 18px;
+}
+
+html.dui-pro-overhaul .dy-monitor-logs-hero__brand,
+html.dui-pro-overhaul.dui-cohesive-ui .dy-monitor-logs-hero__brand {
+  display: flex;
+  width: 178px;
+  max-width: 100%;
+  align-items: center;
+  justify-content: flex-start;
+  padding: 2px 0;
+}
+
+html.dui-pro-overhaul .dy-monitor-logs-hero__stats,
+html.dui-pro-overhaul.dui-cohesive-ui .dy-monitor-logs-hero__stats {
+  justify-content: flex-start;
+  gap: 7px;
+  min-width: 0;
+}
+
+html.dui-pro-overhaul .dy-monitor-logs-hero__stats > div,
+html.dui-pro-overhaul.dui-cohesive-ui .dy-monitor-logs-hero__stats > div {
+  min-width: 86px;
+  padding: 8px 11px;
+  text-align: left;
+}
+
+html.dui-pro-overhaul .dy-monitor-logs-hero__brand img,
+html.dui-pro-overhaul.dui-cohesive-ui .dy-monitor-logs-hero__brand img {
+  display: block;
+  width: 100%;
+  height: auto;
+  object-fit: contain;
+  filter: drop-shadow(0 0 16px rgba(114, 213, 194, .14));
+}
+
+html.dui-pro-overhaul .dy-monitor-logs-grid,
+html.dui-pro-overhaul.dui-cohesive-ui .dy-monitor-logs-grid {
+  display: block;
+}
+
+html.dui-pro-overhaul .dy-monitor-log-surface,
+html.dui-pro-overhaul.dui-cohesive-ui .dy-monitor-log-surface {
+  width: 100%;
+}
+
+html.dui-pro-overhaul .dy-gateway-activity-entry,
+html.dui-pro-overhaul.dui-cohesive-ui .dy-gateway-activity-entry {
+  border-color: rgba(255, 255, 255, .075) !important;
+  background: linear-gradient(100deg, rgba(114, 213, 194, .035), rgba(255, 255, 255, .012)) !important;
+  transition: border-color .18s ease, background .18s ease, transform .18s ease;
+}
+
+html.dui-pro-overhaul .dy-gateway-activity-entry:hover,
+html.dui-pro-overhaul.dui-cohesive-ui .dy-gateway-activity-entry:hover {
+  border-color: rgba(114, 213, 194, .24) !important;
+  background: linear-gradient(100deg, rgba(114, 213, 194, .065), rgba(255, 255, 255, .018)) !important;
+  transform: translateY(-1px);
+}
+
+html.dui-pro-overhaul .dy-gateway-activity-entry[data-activity-kind="gateway-log"][data-tone="error"],
+html.dui-pro-overhaul.dui-cohesive-ui .dy-gateway-activity-entry[data-activity-kind="gateway-log"][data-tone="error"] {
+  border-color: rgba(251, 113, 133, .22) !important;
+  background: linear-gradient(100deg, rgba(251, 113, 133, .055), rgba(255, 255, 255, .012)) !important;
+}
+
+html.dui-pro-overhaul .dy-gateway-activity-rail,
+html.dui-pro-overhaul.dui-cohesive-ui .dy-gateway-activity-rail {
+  background: #65d8c8;
+  box-shadow: 0 0 12px rgba(101, 216, 200, .5);
+}
+
+html.dui-pro-overhaul .dy-gateway-activity-entry[data-tone="error"] .dy-gateway-activity-rail,
+html.dui-pro-overhaul.dui-cohesive-ui .dy-gateway-activity-entry[data-tone="error"] .dy-gateway-activity-rail {
+  background: #fb7185;
+  box-shadow: 0 0 12px rgba(251, 113, 133, .4);
+}
+
+html.dui-pro-overhaul .dy-monitor-automnia-avatar,
+html.dui-pro-overhaul.dui-cohesive-ui .dy-monitor-automnia-avatar {
+  object-position: left center;
+}
+
+html.dui-pro-overhaul .dy-gateway-activity-announcer,
+html.dui-pro-overhaul.dui-cohesive-ui .dy-gateway-activity-announcer {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  color: #8de7d3;
+  font-size: 9px;
+  font-weight: 800;
+  letter-spacing: .08em;
+  text-transform: uppercase;
+}
+
+html.dui-pro-overhaul .dy-gateway-activity-announcer img,
+html.dui-pro-overhaul.dui-cohesive-ui .dy-gateway-activity-announcer img {
+  width: 13px;
+  height: 13px;
+  border-radius: 4px;
+  object-fit: cover;
+  object-position: left center;
+}
+
+html.dui-pro-overhaul .dy-gateway-activity-message,
+html.dui-pro-overhaul.dui-cohesive-ui .dy-gateway-activity-message {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  color: #b5c8c6;
+  font-family: var(--font-mono);
+  font-size: 11px;
+}
+
+html.dui-pro-overhaul .dy-gateway-activity-meta,
+html.dui-pro-overhaul.dui-cohesive-ui .dy-gateway-activity-meta {
+  color: #73918d;
+  font-family: var(--font-mono);
+  font-size: 9px;
+  letter-spacing: .06em;
+  text-transform: uppercase;
+}
+
+html.dui-pro-overhaul .dy-gateway-activity-meta span,
+html.dui-pro-overhaul.dui-cohesive-ui .dy-gateway-activity-meta span {
+  padding: 3px 6px;
+  border: 1px solid rgba(114, 213, 194, .14);
+  border-radius: 5px;
+  background: rgba(114, 213, 194, .045);
+}
+
+@media (max-width: 780px) {
+  html.dui-pro-overhaul .dy-monitor-logs-hero,
+  html.dui-pro-overhaul.dui-cohesive-ui .dy-monitor-logs-hero {
+    grid-template-columns: minmax(128px, .32fr) minmax(0, 1fr);
+  }
+
+  html.dui-pro-overhaul .dy-monitor-logs-hero__stats,
+  html.dui-pro-overhaul.dui-cohesive-ui .dy-monitor-logs-hero__stats {
+    grid-column: 1 / -1;
+  }
+}
+
+@media (max-width: 520px) {
+  html.dui-pro-overhaul .dy-monitor-logs-hero,
+  html.dui-pro-overhaul.dui-cohesive-ui .dy-monitor-logs-hero {
+    grid-template-columns: 1fr;
+  }
+
+  html.dui-pro-overhaul .dy-monitor-logs-hero__brand,
+  html.dui-pro-overhaul.dui-cohesive-ui .dy-monitor-logs-hero__brand {
+    width: 158px;
+  }
+}

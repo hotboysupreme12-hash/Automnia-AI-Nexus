@@ -14,6 +14,18 @@ const nodeModulesBin = path.join(root, 'node_modules', '.bin')
 fs.mkdirSync(electronCache, { recursive: true })
 fs.mkdirSync(builderCache, { recursive: true })
 
+// electron-builder downloads a CommonJS icon helper into this cache. The
+// project is ESM, so Node 24 otherwise inherits the repository's
+// `"type": "module"` and rejects that helper's `require(...)` calls on
+// Windows. Keep the cache's module boundary explicit for every platform.
+function ensureBuilderCacheModuleBoundary() {
+  const boundaryPath = path.join(builderCache, 'package.json')
+  if (fs.existsSync(boundaryPath)) return
+  fs.writeFileSync(boundaryPath, '{"type":"commonjs"}\n')
+}
+
+ensureBuilderCacheModuleBoundary()
+
 function ensureLocalNpmBin() {
   const npmCli = path.join(npmToolchainRoot, 'bin', 'npm-cli.js')
   const npxCli = path.join(npmToolchainRoot, 'bin', 'npx-cli.js')

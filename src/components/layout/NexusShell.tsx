@@ -74,8 +74,10 @@ const AgentEditorModal = lazy(() => recoverableLazyImport('agent-editor-modal', 
 const RecruitAgentModal = lazy(() => recoverableLazyImport('recruit-agent-modal', () => import('../recruit/RecruitAgentModal').then((module) => ({ default: module.RecruitAgentModal }))))
 
 const AUTOMNIA_LOCKUP_SRC = '/brand/automnia-ai-nexus-logo-transparent-cropped.png'
-const AUTOMNIA_BRAND_LABEL = 'Automnia AI Nexus'
+const AUTOMNIA_BRAND_LABEL = 'Automnia Control Center'
 const RECRUIT_ICON_SRC = '/icons/nav-recruit-flat.png'
+const SETTINGS_ICON_SRC = '/icons/nav-settings-generated.png'
+const HELP_ICON_SRC = '/icons/nav-help-generated.png'
 const AGENT_CONSOLE_MIN_WIDTH = 360
 const AGENT_CONSOLE_MAX_WIDTH = 760
 const AGENT_REGISTRY_MIN_WIDTH = 640
@@ -90,7 +92,7 @@ const WORKSPACE_META: Record<AppTab, { label: string; railMeta: string; descript
   missions: { label: 'Missions', railMeta: 'Launch', description: 'Turn objectives into coordinated, scheduled, and verifiable agent work.', iconSrc: '/icons/nav-missions-flat.png', tone: 'missions' },
   monitor: { label: 'Monitor', railMeta: 'Live ops', description: 'Inspect runtime health, active calls, sessions, cron jobs, and recovery evidence.', iconSrc: '/icons/nav-monitor-flat.png', tone: 'monitor' },
   plugins: { label: 'Plugins', railMeta: 'Runtime', description: 'Manage providers, communication channels, tools, and reusable skills.', iconSrc: '/icons/nav-plugins-flat.png', tone: 'plugins' },
-  settings: { label: 'Settings', railMeta: 'System', description: 'Tune interface chrome, mission defaults, active-party runtime policy, and maintenance controls.', iconSrc: '/icons/nav-monitor-flat.png', tone: 'settings' },
+  settings: { label: 'Settings', railMeta: 'System', description: 'Tune interface chrome, mission defaults, active-party runtime policy, and maintenance controls.', iconSrc: SETTINGS_ICON_SRC, tone: 'settings' },
 }
 
 const PRIMARY_WORKSPACES: { id: PrimaryWorkspace; label: string; railMeta: string; description: string; iconSrc: string; tone: string }[] = [
@@ -546,7 +548,7 @@ export function NexusShell() {
       <div className="pointer-events-none fixed inset-0 grid-overlay" />
       <a className="dy-skip-link" href="#automnia-main">Skip to workspace</a>
 
-      <aside className="dy-human-rail fixed z-40 flex flex-col overflow-hidden" aria-label="Automnia AI Nexus navigation">
+      <aside className="dy-human-rail fixed z-40 flex flex-col overflow-hidden" aria-label="Automnia Control Center navigation">
         <div className="dy-human-rail-head dy-human-rail-head--lockup flex items-center" aria-label={AUTOMNIA_BRAND_LABEL}>
           <img
             className="dy-human-rail-app-icon"
@@ -618,10 +620,7 @@ export function NexusShell() {
               onClick={() => selectTab('settings')}
               leadingIcon={(
                 <span className="dy-human-nav-icon dy-human-nav-icon--settings" aria-hidden="true">
-                  <svg viewBox="0 0 24 24">
-                    <path d="M12 8.25a3.75 3.75 0 1 0 0 7.5 3.75 3.75 0 0 0 0-7.5Z" />
-                    <path d="M19.5 13.5v-3l-2.35-.42a7.72 7.72 0 0 0-.72-1.73l1.36-1.96-2.12-2.12-1.96 1.36c-.55-.31-1.13-.55-1.73-.72L11.55 2.5h-3l-.42 2.35c-.6.17-1.18.41-1.73.72L4.44 4.21 2.32 6.33l1.36 1.96c-.31.55-.55 1.13-.72 1.73L.61 10.45v3l2.35.42c.17.6.41 1.18.72 1.73l-1.36 1.96 2.12 2.12 1.96-1.36c.55.31 1.13.55 1.73.72l.42 2.35h3l.42-2.35c.6-.17 1.18-.41 1.73-.72l1.96 1.36 2.12-2.12-1.36-1.96c.31-.55.55-1.13.72-1.73l2.35-.42Z" />
-                  </svg>
+                  <img className="dy-human-nav-icon-img" src={SETTINGS_ICON_SRC} alt="" />
                 </span>
               )}
             >
@@ -638,11 +637,7 @@ export function NexusShell() {
               onClick={() => setHelpOpen(true)}
               leadingIcon={(
                 <span className="dy-human-nav-icon dy-human-nav-icon--help" aria-hidden="true">
-                  <svg viewBox="0 0 24 24">
-                    <circle cx="12" cy="12" r="9" />
-                    <path d="M9.75 9.5a2.35 2.35 0 0 1 4.5 1c0 1.7-2.25 1.85-2.25 3.5" />
-                    <path d="M12 17.25h.01" />
-                  </svg>
+                  <img className="dy-human-nav-icon-img" src={HELP_ICON_SRC} alt="" />
                 </span>
               )}
             >

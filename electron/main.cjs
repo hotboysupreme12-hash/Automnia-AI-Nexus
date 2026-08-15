@@ -2648,6 +2648,10 @@ app.on('before-quit', (event) => {
   event.preventDefault()
   void performQuitCleanup().finally(() => {
     if (ELECTRON_E2E) {
+      app.exit(0)
+      // A renderer crash/recovery can leave Chromium helper handles alive
+      // after Electron has completed application cleanup. The smoke harness
+      // must not hang on those handles after the app has reported success.
       process.exit(0)
       return
     }

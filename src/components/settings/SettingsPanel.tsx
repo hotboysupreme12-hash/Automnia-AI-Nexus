@@ -255,7 +255,7 @@ export function SettingsPanel({ focusSection = 'account', focusRequest = 0 }: { 
   const [consolePreferences, setConsolePreferences] = useState<ConsolePreferences>(() => readConsolePreferences())
   const [targetScope, setTargetScope] = useState<RuntimeTargetScope>(() => activePartyIds.length ? 'party' : 'selection')
   const [pendingConfirmation, setPendingConfirmation] = useState<PendingConfirmation>(null)
-  const [notice, setNotice] = useState<{ tone: NoticeTone; text: string }>({ tone: 'neutral', text: 'Every preference saves automatically and applies immediately.' })
+  const [notice, setNotice] = useState<{ tone: NoticeTone; text: string }>({ tone: 'neutral', text: '' })
   const [accountRefreshBusy, setAccountRefreshBusy] = useState(false)
   const [accountRefreshError, setAccountRefreshError] = useState('')
   const [checkoutBusy, setCheckoutBusy] = useState(false)
@@ -949,7 +949,7 @@ export function SettingsPanel({ focusSection = 'account', focusRequest = 0 }: { 
         <label className="dui-settings-search"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="7" /><path d="m16 16 4 4" /></svg><input type="search" value={searchQuery} onChange={(event) => setSearchQuery(event.target.value)} placeholder="Search settings…" aria-label="Search settings" />{searchQuery && <button type="button" onClick={() => setSearchQuery('')} aria-label="Clear settings search">×</button>}</label>
       </header>
 
-      <div className="dui-settings-status" data-tone={notice.tone} role="status" aria-live="polite"><i aria-hidden="true" /><span>{notice.text}</span></div>
+      {notice.text && <div className="dui-settings-status" data-tone={notice.tone} role="status" aria-live="polite"><i aria-hidden="true" /><span>{notice.text}</span></div>}
 
       {pendingConfirmation && (
         <div className="dui-settings-confirm" role="alertdialog" aria-modal="true" aria-labelledby="settings-confirm-title">

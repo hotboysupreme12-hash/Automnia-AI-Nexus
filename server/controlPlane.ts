@@ -15668,7 +15668,6 @@ function listActiveCronJobsFromStateDb(): RuntimeCronJobSummary[] {
       FROM cron_jobs
       WHERE enabled = 1
       ORDER BY COALESCE(next_run_at_ms, running_at_ms, created_at_ms) ASC, name ASC
-      LIMIT 200
     `).all()
     const shiftsByCronId = new Map(Array.from(activeShifts.values()).map((shift) => [shift.cronId, shift]))
     const jobsByCronId = new Map<string, RuntimeCronJobSummary>()
@@ -15691,7 +15690,6 @@ function listActiveCronJobsFromStateDb(): RuntimeCronJobSummary[] {
         return (Number.isFinite(leftTime) ? leftTime : Number.MAX_SAFE_INTEGER)
           - (Number.isFinite(rightTime) ? rightTime : Number.MAX_SAFE_INTEGER)
       })
-      .slice(0, 200)
   } finally {
     try {
       db?.close?.()

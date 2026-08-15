@@ -748,6 +748,7 @@ type RuntimeStatusSnapshot = {
 
 let cachedRuntimeStatus: RuntimeStatus | null = null
 let cachedRuntimeError = ''
+let cachedRuntimeStatusKey = ''
 let runtimeStatusRequest: AbortController | null = null
 let runtimeStatusRequestAbortReason: 'idle' | 'paused' | null = null
 let runtimeStatusRefreshPending = false
@@ -757,6 +758,7 @@ const runtimeStatusSubscribers = new Set<() => void>()
 const runtimeSubscriberIntervals = new Map<number, number>()
 let cachedRuntimeSummaryStatus: RuntimeStatus | null = null
 let cachedRuntimeSummaryError = ''
+let cachedRuntimeSummaryStatusKey = ''
 let runtimeSummaryRequest: AbortController | null = null
 let runtimeSummaryRequestAbortReason: 'idle' | 'paused' | null = null
 let runtimeSummaryRefreshPending = false
@@ -785,11 +787,12 @@ function notifyRuntimeSummarySubscribers() {
 }
 
 function channelActivityEntryKey(event: GatewayChannelActivity) {
-  return `${event.id}|${event.timestamp}|${event.channel}|${event.direction}|${event.message}`
+  return `${event.id}|${event.timestamp}|${event.channel}|${event.direction}|${event.message}|${event.level || ''}|${event.source || ''}|${event.agentId || ''}`
 }
 
 function mergeRuntimeChannelActivity(status: RuntimeStatus): RuntimeStatus {
   const incoming = status.gateway.activity?.events || []
+  const previousByKey = new Map(runtimeChannelActivityHistory.map((event) => [channelActivityEntryKey(event), event]))
   const merged: GatewayChannelActivity[] = []
   const seen = new Set<string>()
 
@@ -797,7 +800,9 @@ function mergeRuntimeChannelActivity(status: RuntimeStatus): RuntimeStatus {
     const key = channelActivityEntryKey(event)
     if (seen.has(key)) continue
     seen.add(key)
-    merged.push(event)
+    // The API creates new event objects on every poll. Reuse the previous
+    // object for unchanged events so memoized activity rows can bail out.
+    merged.push(previousByKey.get(key) || event)
   }
 
   merged.sort((a, b) => {
@@ -826,11 +831,153 @@ function mergeRuntimeChannelActivity(status: RuntimeStatus): RuntimeStatus {
   }
 }
 
+function runtimeLogEntryKey(entry: GatewayLogEntry) {
+  return [entry.id, entry.timestamp, entry.stream, entry.message, entry.level || '', entry.source || '', entry.channel || '', entry.direction || ''].join('|')
+}
+
+function runtimeCronJobKey(job: RuntimeCronJob) {
+  return [
+    job.id,
+    job.cronId,
+    job.name,
+    job.agent,
+    job.every,
+    job.durationMinutes,
+    job.message,
+    job.model || '',
+    job.thinking || '',
+    job.timeoutSeconds || '',
+    job.wake || '',
+    job.session || '',
+    job.announce || '',
+    job.startedAt,
+    job.endsAt || '',
+    job.nextRunAt || '',
+    job.source || '',
+    job.status || '',
+    job.scheduleKind || '',
+    job.scheduleLabel || '',
+    job.payloadKind || '',
+    job.lastError || '',
+  ].join('|')
+}
+
+function runtimeDoctorRunKey(run: DoctorRun | null) {
+  if (!run) return ''
+  return [
+    run.id,
+    run.startedAt,
+    run.endedAt,
+    run.ok,
+    run.summary,
+    run.checks.map((check) => [
+      check.id,
+      check.label,
+      check.ok,
+      check.severity,
+      check.failureKind || '',
+      check.evidence,
+      check.repairAction || '',
+      (check.findings || []).map((finding) => [finding.checkId, finding.severity, finding.message, finding.path || '', finding.ocPath || ''].join('~')).join('^'),
+    ].join('~')).join('^'),
+  ].join('|')
+}
+
+function runtimeStatusSemanticKey(status: RuntimeStatus | null) {
+  if (!status) return 'empty'
+
+  const gateway = status.gateway
+  const activity = gateway.activity
+  const readiness = gateway.readiness
+  const stability = gateway.stability
+  const stabilitySummary = stability?.summary
+  const doctor = status.diagnostics?.doctor
+  const activityKey = (activity?.events || []).map((event) => channelActivityEntryKey(event)).join('^')
+  const sessionsKey = (status.sessions || []).map((session) => [
+    session.agentId,
+    session.sessionId,
+    session.active,
+    session.activeRunId || '',
+    session.gatewayActive || false,
+    session.gatewayLastEventAt || '',
+    session.gatewayEventCount || '',
+  ].join('|')).join('^')
+  const activeRunsKey = (status.activeRuns || []).map((run) => [
+    run.id,
+    run.agentId || '',
+    run.status,
+    run.startedAt,
+    run.endedAt || '',
+    run.elapsedMs || '',
+    run.exitCode || '',
+    run.failureKind || '',
+  ].join('|')).join('^')
+  const stabilityKey = stability ? [
+    stability.available,
+    stability.source,
+    stability.count,
+    stability.dropped,
+    stabilitySummary?.active ?? '',
+    stabilitySummary?.waiting ?? '',
+    stabilitySummary?.queued ?? '',
+    stabilitySummary?.maxQueueDepth ?? '',
+    stabilitySummary?.warningCount ?? '',
+    stabilitySummary?.latestEventType || '',
+    stabilitySummary?.latestEventAt || '',
+    (stabilitySummary?.recentWarnings || []).join('^'),
+    stability.error || '',
+  ].join('|') : ''
+  const restartDiagnostics = gateway.restartDiagnostics
+  const doctorKey = doctor ? [
+    doctor.warningCount,
+    doctor.errorCount,
+    doctor.lastRunAt || '',
+    runtimeDoctorRunKey(doctor.lastRun),
+  ].join('|') : ''
+
+  return [
+    gateway.state,
+    gateway.healthy,
+    gateway.processRunning,
+    gateway.restartScheduled,
+    gateway.ensureInFlight,
+    gateway.lastExitCode ?? '',
+    gateway.lastRestartOutcome || '',
+    gateway.migration?.active || false,
+    gateway.migration?.message || '',
+    readiness ? [readiness.reachable, readiness.ready, readiness.degraded, readiness.status || '', readiness.error || '', readiness.failing.join('^')].join('|') : '',
+    restartDiagnostics ? [restartDiagnostics.severity, restartDiagnostics.needsAttention, restartDiagnostics.summary, restartDiagnostics.recentFailures, restartDiagnostics.failureStreak, restartDiagnostics.latestOutcome || '', restartDiagnostics.latestReason || '', restartDiagnostics.latestAt || '', restartDiagnostics.activeWork, restartDiagnostics.queuedWork].join('|') : '',
+    activity?.active || false,
+    activity?.lastEventAt || '',
+    activity?.sourcePath || '',
+    activity?.inboundCount || 0,
+    activity?.outboundCount || 0,
+    activity?.systemCount || 0,
+    activityKey,
+    (gateway.logs || []).map(runtimeLogEntryKey).join('^'),
+    (status.shifts?.active || []).map(runtimeCronJobKey).join('^'),
+    status.shifts?.activeCount ?? '',
+    status.shifts?.error || '',
+    activeRunsKey,
+    sessionsKey,
+    gateway.chat ? [gateway.chat.activeRuns, gateway.chat.activeObservers].join('|') : '',
+    stabilityKey,
+    doctorKey,
+  ].join('\u001e')
+}
+
 function publishRuntimeStatusSnapshot(status: RuntimeStatus) {
   const stableStatus = mergeRuntimeChannelActivity(status)
-  cachedRuntimeStatus = stableStatus
+  const nextKey = runtimeStatusSemanticKey(stableStatus)
+  if (!cachedRuntimeStatus || cachedRuntimeStatusKey !== nextKey) {
+    cachedRuntimeStatus = stableStatus
+    cachedRuntimeStatusKey = nextKey
+  }
   cachedRuntimeError = ''
-  cachedRuntimeSummaryStatus = stableStatus
+  if (!cachedRuntimeSummaryStatus || cachedRuntimeSummaryStatusKey !== nextKey) {
+    cachedRuntimeSummaryStatus = cachedRuntimeStatus || stableStatus
+    cachedRuntimeSummaryStatusKey = nextKey
+  }
   cachedRuntimeSummaryError = ''
   notifyRuntimeSummarySubscribers()
 }
@@ -885,6 +1032,7 @@ export async function clearRuntimeMonitor(): Promise<RuntimeMonitorClearResult> 
       },
       recentRuns: [],
     }
+    cachedRuntimeStatusKey = runtimeStatusSemanticKey(cachedRuntimeStatus)
     cachedRuntimeError = ''
     notifyRuntimeSubscribers()
   }
@@ -899,6 +1047,7 @@ export async function clearRuntimeMonitor(): Promise<RuntimeMonitorClearResult> 
       },
       recentRuns: [],
     }
+    cachedRuntimeSummaryStatusKey = runtimeStatusSemanticKey(cachedRuntimeSummaryStatus)
     cachedRuntimeSummaryError = ''
     notifyRuntimeSummarySubscribers()
   }
@@ -1139,8 +1288,12 @@ async function loadRuntimeSummaryStatus(intervalMs: number, forceRefresh = false
     if (!isRuntimeStatusPayload(result.data)) {
       throw new Error('Runtime summary response missing gateway data.')
     }
-    cachedRuntimeSummaryStatus = result.data
-    cachedRuntimeSummaryStatus = mergeRuntimeChannelActivity(cachedRuntimeSummaryStatus)
+    const mergedStatus = mergeRuntimeChannelActivity(result.data)
+    const nextKey = runtimeStatusSemanticKey(mergedStatus)
+    if (!cachedRuntimeSummaryStatus || cachedRuntimeSummaryStatusKey !== nextKey) {
+      cachedRuntimeSummaryStatus = mergedStatus
+      cachedRuntimeSummaryStatusKey = nextKey
+    }
     cachedRuntimeSummaryError = ''
   } catch (loadError) {
     const idleAbort = runtimeSummaryRequestAbortReason === 'idle' && controller.signal.aborted

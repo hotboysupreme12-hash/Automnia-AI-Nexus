@@ -10,7 +10,7 @@ import {
   useChannelActivitySettings,
 } from './channelActivitySettings'
 
-const AUTOMNIA_LOGO_SRC = '/brand/automnia-ai-nexus-app-icon.png'
+const AUTOMNIA_LOGO_SRC = '/brand/automnia-ai-nexus-logo-transparent-cropped.png'
 const LOG_LIMIT = 72
 
 type ActivityFilter = 'all' | 'agents' | 'automnia'
@@ -196,11 +196,13 @@ export function SettingsActivityLog() {
   return (
     <div className="dui-settings-section" id="settings-section-logs" role="tabpanel">
       <div className="dui-activity-log__hero">
-        <div className="dui-activity-log__hero-mark"><img src={AUTOMNIA_LOGO_SRC} alt="" draggable={false} /></div>
+        <div className="dui-activity-log__hero-brand">
+          <div className="dui-activity-log__hero-mark"><img src={AUTOMNIA_LOGO_SRC} alt="" draggable={false} /></div>
+          <p>Gateway Announcement reports agent runs and Gateway events in one live operational feed.</p>
+        </div>
         <div className="dui-activity-log__hero-copy">
           <span>Unified activity</span>
           <h3>Logs</h3>
-          <p>Agent runs and Automnia gateway events, together in one calm timeline.</p>
         </div>
         <div className="dui-activity-log__hero-status" data-state={gatewayHealthy === false ? 'offline' : gatewayHealthy ? 'live' : 'pending'}>
           <i aria-hidden="true" />

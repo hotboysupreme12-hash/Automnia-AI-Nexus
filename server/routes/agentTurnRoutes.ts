@@ -780,7 +780,8 @@ export function registerAgentTurnRoutes(app: Express, options: AgentTurnRoutesOp
         () => undefined,
         requestAbortController.signal,
       )
-      return apiSuccess(res, compactHttpJsonPayload({ ...hostedPayload, ...routeMetadata() }))
+      Object.assign(hostedPayload, routeMetadata())
+      return apiSuccess(res, compactHttpJsonPayload(hostedPayload))
     }
 
     await ensureOpenclawAgentRunConfigDefaults()

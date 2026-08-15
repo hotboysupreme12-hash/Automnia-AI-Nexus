@@ -4403,14 +4403,15 @@ html.dui-pro-overhaul .dy-channel-activity-heading {
 
 html.dui-pro-overhaul .dy-channel-activity-heading-mark {
   display: inline-flex;
-  width: 34px;
-  height: 34px;
-  flex: 0 0 34px;
+  width: 52px;
+  height: 52px;
+  flex: 0 0 52px;
+  aspect-ratio: 1 / 1;
   align-items: center;
   justify-content: center;
   gap: 3px;
   border: 1px solid rgba(101, 211, 190, .30);
-  border-radius: 11px;
+  border-radius: 14px;
   background: rgba(101, 211, 190, .09);
   color: #8de7d3;
 }
@@ -4424,6 +4425,14 @@ html.dui-pro-overhaul .dy-channel-activity-heading-mark span {
 html.dui-pro-overhaul .dy-channel-activity-heading-mark span:nth-child(1) { height: 8px; opacity: .55; }
 html.dui-pro-overhaul .dy-channel-activity-heading-mark span:nth-child(2) { height: 14px; }
 html.dui-pro-overhaul .dy-channel-activity-heading-mark span:nth-child(3) { height: 10px; opacity: .75; }
+
+html.dui-pro-overhaul .dy-channel-activity-heading-mark img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  border-radius: inherit;
+}
 
 html.dui-pro-overhaul .dy-channel-activity-eyebrow {
   margin: 0 0 5px !important;
@@ -4690,4 +4699,612 @@ html.dui-pro-overhaul .dui-channel-activity-preferences__toggle input:focus-visi
   html.dui-pro-overhaul .dy-channel-activity-header { flex-direction: column; }
   html.dui-pro-overhaul .dy-channel-activity-status { align-self: flex-start; }
   html.dui-pro-overhaul .dui-channel-activity-preferences { grid-template-columns: 1fr; }
+}
+
+/* Active Cron Jobs: flat schedule surface with one complete, scrollable list. */
+html.dui-pro-overhaul .dy-cron-jobs-card,
+html.dui-pro-overhaul .app-bg.dy-monitor-focus [data-dui-panel="monitor"] .dy-cron-jobs-card {
+  display: flex !important;
+  min-height: 420px !important;
+  min-width: 0 !important;
+  flex-direction: column !important;
+  gap: 0 !important;
+  overflow: hidden !important;
+  padding: 0 !important;
+  border: 1px solid rgba(141, 231, 211, .24) !important;
+  border-radius: 0 !important;
+  background: #0a0e0f !important;
+  box-shadow: none !important;
+  backdrop-filter: none !important;
+  -webkit-backdrop-filter: none !important;
+}
+
+html.dui-pro-overhaul .dy-cron-jobs-card::before,
+html.dui-pro-overhaul .app-bg.dy-monitor-focus [data-dui-panel="monitor"] .dy-cron-jobs-card::before {
+  display: none !important;
+}
+
+html.dui-pro-overhaul .dy-cron-panel-header,
+html.dui-pro-overhaul .app-bg.dy-monitor-focus [data-dui-panel="monitor"] .dy-cron-panel-header {
+  display: flex;
+  min-width: 0;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 18px;
+  padding: 18px 18px 16px !important;
+  border-bottom: 1px solid rgba(255, 255, 255, .10) !important;
+  background: #0e1415 !important;
+}
+
+html.dui-pro-overhaul .dy-cron-panel-heading,
+html.dui-pro-overhaul .app-bg.dy-monitor-focus [data-dui-panel="monitor"] .dy-cron-panel-heading {
+  display: flex;
+  min-width: 0;
+  align-items: flex-start;
+  gap: 12px;
+}
+
+html.dui-pro-overhaul .dy-cron-panel-heading-mark,
+html.dui-pro-overhaul .app-bg.dy-monitor-focus [data-dui-panel="monitor"] .dy-cron-panel-heading-mark {
+  display: grid;
+  width: 52px;
+  height: 52px;
+  flex: 0 0 52px;
+  aspect-ratio: 1 / 1;
+  place-items: center;
+  border: 1px solid rgba(141, 231, 211, .42) !important;
+  border-left: 3px solid #8de7d3 !important;
+  border-radius: 0 !important;
+  background: #102423 !important;
+  color: #9be9dc !important;
+}
+
+html.dui-pro-overhaul .dy-cron-panel-heading-mark svg,
+html.dui-pro-overhaul .app-bg.dy-monitor-focus [data-dui-panel="monitor"] .dy-cron-panel-heading-mark svg {
+  width: 28px;
+  height: 28px;
+  fill: none;
+  stroke: currentColor;
+  stroke-linecap: square;
+  stroke-linejoin: miter;
+  stroke-width: 1.4;
+}
+
+html.dui-pro-overhaul .dy-cron-panel-eyebrow,
+html.dui-pro-overhaul .app-bg.dy-monitor-focus [data-dui-panel="monitor"] .dy-cron-panel-eyebrow {
+  margin: 0 0 4px !important;
+  color: #8de7d3 !important;
+  font-size: 9px !important;
+  font-weight: 800 !important;
+  letter-spacing: .16em !important;
+  line-height: 1 !important;
+  text-transform: uppercase !important;
+}
+
+html.dui-pro-overhaul .dy-cron-panel-title h3,
+html.dui-pro-overhaul .app-bg.dy-monitor-focus [data-dui-panel="monitor"] .dy-cron-panel-title h3 {
+  margin: 0 !important;
+  color: #f0f4f1 !important;
+  font-family: var(--font-display) !important;
+  font-size: 18px !important;
+  font-weight: 720 !important;
+  letter-spacing: -.035em !important;
+  line-height: 1.05 !important;
+}
+
+html.dui-pro-overhaul .dy-cron-panel-title h3 + p,
+html.dui-pro-overhaul .app-bg.dy-monitor-focus [data-dui-panel="monitor"] .dy-cron-panel-title h3 + p {
+  margin: 5px 0 0 !important;
+  color: #879392 !important;
+  font-size: 11px !important;
+  line-height: 1.4 !important;
+}
+
+html.dui-pro-overhaul .dy-cron-panel-summary,
+html.dui-pro-overhaul .app-bg.dy-monitor-focus [data-dui-panel="monitor"] .dy-cron-panel-summary {
+  display: flex !important;
+  min-width: max-content;
+  align-items: center !important;
+  justify-content: flex-end;
+  gap: 8px !important;
+  padding-top: 1px;
+}
+
+html.dui-pro-overhaul .dy-cron-active-count,
+html.dui-pro-overhaul .app-bg.dy-monitor-focus [data-dui-panel="monitor"] .dy-cron-active-count {
+  display: inline-flex !important;
+  align-items: center;
+  gap: 6px;
+  color: #a9f1e1 !important;
+  font-family: var(--font-body) !important;
+  font-size: 11px !important;
+  font-weight: 750 !important;
+  letter-spacing: .05em !important;
+  line-height: 1 !important;
+  text-transform: uppercase !important;
+  white-space: nowrap;
+}
+
+html.dui-pro-overhaul .dy-cron-active-count i,
+html.dui-pro-overhaul .app-bg.dy-monitor-focus [data-dui-panel="monitor"] .dy-cron-active-count i {
+  width: 7px;
+  height: 7px;
+  flex: 0 0 7px;
+  border: 1px solid #9be9dc;
+  border-radius: 0 !important;
+  background: #65d3be;
+}
+
+html.dui-pro-overhaul .dy-cron-cadence-badge,
+html.dui-pro-overhaul .app-bg.dy-monitor-focus [data-dui-panel="monitor"] .dy-cron-cadence-badge {
+  border: 1px solid rgba(102, 190, 231, .28) !important;
+  border-radius: 0 !important;
+  background: #101c22 !important;
+  color: #a9ddf2 !important;
+  font-size: 10px !important;
+  font-weight: 700 !important;
+  letter-spacing: .03em !important;
+  line-height: 1.2 !important;
+}
+
+html.dui-pro-overhaul .dy-cron-cancel-button,
+html.dui-pro-overhaul .app-bg.dy-monitor-focus [data-dui-panel="monitor"] .dy-cron-cancel-button {
+  border: 1px solid rgba(239, 166, 164, .34) !important;
+  border-radius: 0 !important;
+  background: #211517 !important;
+  box-shadow: none !important;
+  color: #f2b8b6 !important;
+  font-size: 10px !important;
+  letter-spacing: .08em !important;
+}
+
+html.dui-pro-overhaul .dy-cron-cancel-button:hover,
+html.dui-pro-overhaul .app-bg.dy-monitor-focus [data-dui-panel="monitor"] .dy-cron-cancel-button:hover {
+  border-color: rgba(239, 166, 164, .62) !important;
+  background: #321a1c !important;
+}
+
+html.dui-pro-overhaul .dy-cron-job-list,
+html.dui-pro-overhaul .app-bg.dy-monitor-focus [data-dui-panel="monitor"] .dy-cron-job-list {
+  display: block !important;
+  min-height: 0 !important;
+  height: auto !important;
+  max-height: min(68vh, 720px) !important;
+  flex: 1 1 auto !important;
+  overflow-x: hidden !important;
+  overflow-y: auto !important;
+  scrollbar-gutter: stable;
+  padding: 0 !important;
+  border: 0 !important;
+  border-radius: 0 !important;
+  background: #070a0b !important;
+  box-shadow: none !important;
+}
+
+html.dui-pro-overhaul .dy-cron-job-card,
+html.dui-pro-overhaul .app-bg.dy-monitor-focus [data-dui-panel="monitor"] .dy-cron-job-card {
+  position: relative;
+  display: block !important;
+  min-height: 0 !important;
+  padding: 15px 16px 16px 18px !important;
+  border: 0 !important;
+  border-bottom: 1px solid rgba(255, 255, 255, .09) !important;
+  border-left: 3px solid rgba(102, 190, 231, .54) !important;
+  border-radius: 0 !important;
+  background: #0c1112 !important;
+  color: #dce5e3 !important;
+  font-family: var(--font-body) !important;
+  box-shadow: none !important;
+}
+
+html.dui-pro-overhaul .dy-cron-job-card[data-state="running"],
+html.dui-pro-overhaul .app-bg.dy-monitor-focus [data-dui-panel="monitor"] .dy-cron-job-card[data-state="running"] {
+  border-left-color: #8de7d3 !important;
+}
+
+html.dui-pro-overhaul .dy-cron-job-card:hover,
+html.dui-pro-overhaul .app-bg.dy-monitor-focus [data-dui-panel="monitor"] .dy-cron-job-card:hover {
+  background: #101819 !important;
+}
+
+html.dui-pro-overhaul .dy-cron-job-card:last-of-type,
+html.dui-pro-overhaul .app-bg.dy-monitor-focus [data-dui-panel="monitor"] .dy-cron-job-card:last-of-type {
+  border-bottom-color: rgba(255, 255, 255, .06) !important;
+}
+
+html.dui-pro-overhaul .dy-cron-job-header,
+html.dui-pro-overhaul .app-bg.dy-monitor-focus [data-dui-panel="monitor"] .dy-cron-job-header {
+  display: flex !important;
+  min-width: 0 !important;
+  align-items: flex-start !important;
+  gap: 11px !important;
+  padding-right: 74px !important;
+}
+
+html.dui-pro-overhaul .dy-cron-job-glyph,
+html.dui-pro-overhaul .app-bg.dy-monitor-focus [data-dui-panel="monitor"] .dy-cron-job-glyph {
+  display: grid !important;
+  width: 30px !important;
+  height: 30px !important;
+  flex: 0 0 30px !important;
+  place-items: center;
+  border: 1px solid rgba(102, 190, 231, .38) !important;
+  border-left: 3px solid #66bee7 !important;
+  border-radius: 0 !important;
+  background: #101c22 !important;
+  color: #a9ddf2 !important;
+}
+
+html.dui-pro-overhaul .dy-cron-job-card[data-state="running"] .dy-cron-job-glyph,
+html.dui-pro-overhaul .app-bg.dy-monitor-focus [data-dui-panel="monitor"] .dy-cron-job-card[data-state="running"] .dy-cron-job-glyph {
+  border-color: rgba(141, 231, 211, .40) !important;
+  border-left-color: #8de7d3 !important;
+  background: #102423 !important;
+  color: #a9f1e1 !important;
+}
+
+html.dui-pro-overhaul .dy-cron-job-glyph svg,
+html.dui-pro-overhaul .app-bg.dy-monitor-focus [data-dui-panel="monitor"] .dy-cron-job-glyph svg {
+  width: 17px;
+  height: 17px;
+  fill: none;
+  stroke: currentColor;
+  stroke-linecap: square;
+  stroke-linejoin: miter;
+  stroke-width: 1.45;
+}
+
+html.dui-pro-overhaul .dy-cron-job-title-block,
+html.dui-pro-overhaul .app-bg.dy-monitor-focus [data-dui-panel="monitor"] .dy-cron-job-title-block {
+  min-width: 0 !important;
+}
+
+html.dui-pro-overhaul .dy-cron-job-meta-row,
+html.dui-pro-overhaul .app-bg.dy-monitor-focus [data-dui-panel="monitor"] .dy-cron-job-meta-row {
+  min-height: 15px;
+  line-height: 1 !important;
+}
+
+html.dui-pro-overhaul .dy-cron-status-badge,
+html.dui-pro-overhaul .app-bg.dy-monitor-focus [data-dui-panel="monitor"] .dy-cron-status-badge {
+  border: 1px solid rgba(101, 211, 190, .34) !important;
+  border-radius: 0 !important;
+  background: #102423 !important;
+  color: #a9f1e1 !important;
+  font-size: 9px !important;
+  font-weight: 800 !important;
+  letter-spacing: .10em !important;
+  line-height: 1.2 !important;
+}
+
+html.dui-pro-overhaul .dy-cron-status-badge[data-state="running"],
+html.dui-pro-overhaul .app-bg.dy-monitor-focus [data-dui-panel="monitor"] .dy-cron-status-badge[data-state="running"] {
+  border-color: rgba(231, 190, 105, .38) !important;
+  background: #221d12 !important;
+  color: #f1d78f !important;
+}
+
+html.dui-pro-overhaul .dy-cron-job-source,
+html.dui-pro-overhaul .app-bg.dy-monitor-focus [data-dui-panel="monitor"] .dy-cron-job-source {
+  color: #778989 !important;
+  font-size: 10px !important;
+  font-weight: 650 !important;
+  line-height: 1.2 !important;
+}
+
+html.dui-pro-overhaul .dy-cron-job-title-row,
+html.dui-pro-overhaul .app-bg.dy-monitor-focus [data-dui-panel="monitor"] .dy-cron-job-title-row {
+  margin-top: 5px;
+}
+
+html.dui-pro-overhaul .dy-cron-job-title-row p,
+html.dui-pro-overhaul .app-bg.dy-monitor-focus [data-dui-panel="monitor"] .dy-cron-job-title-row p {
+  margin: 0 !important;
+  overflow: hidden;
+  color: #f0f5f2 !important;
+  font-size: 14px !important;
+  font-weight: 720 !important;
+  letter-spacing: -.015em !important;
+  line-height: 1.18 !important;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+html.dui-pro-overhaul .dy-cron-job-subtitle,
+html.dui-pro-overhaul .app-bg.dy-monitor-focus [data-dui-panel="monitor"] .dy-cron-job-subtitle {
+  margin-top: 4px !important;
+  overflow: hidden;
+  color: #778989 !important;
+  font-family: var(--font-mono) !important;
+  font-size: 10px !important;
+  line-height: 1.25 !important;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+html.dui-pro-overhaul .dy-cron-job-details,
+html.dui-pro-overhaul .app-bg.dy-monitor-focus [data-dui-panel="monitor"] .dy-cron-job-details {
+  display: grid !important;
+  grid-template-columns: repeat(4, minmax(0, 1fr)) !important;
+  gap: 7px !important;
+  margin-top: 13px !important;
+}
+
+html.dui-pro-overhaul .dy-cron-jobs-card .dy-session-meta-chip,
+html.dui-pro-overhaul .app-bg.dy-monitor-focus [data-dui-panel="monitor"] .dy-cron-jobs-card .dy-session-meta-chip {
+  display: grid !important;
+  min-width: 0 !important;
+  min-height: 48px;
+  align-content: center;
+  gap: 4px;
+  padding: 8px 9px !important;
+  border: 1px solid rgba(255, 255, 255, .10) !important;
+  border-radius: 0 !important;
+  background: #101617 !important;
+  box-shadow: none !important;
+}
+
+html.dui-pro-overhaul .dy-cron-jobs-card .dy-session-meta-chip > span,
+html.dui-pro-overhaul .app-bg.dy-monitor-focus [data-dui-panel="monitor"] .dy-cron-jobs-card .dy-session-meta-chip > span {
+  overflow: hidden;
+  color: #7f9090 !important;
+  font-size: 9px !important;
+  font-weight: 750 !important;
+  letter-spacing: .08em !important;
+  line-height: 1 !important;
+  text-overflow: ellipsis;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+html.dui-pro-overhaul .dy-cron-jobs-card .dy-session-meta-chip strong,
+html.dui-pro-overhaul .app-bg.dy-monitor-focus [data-dui-panel="monitor"] .dy-cron-jobs-card .dy-session-meta-chip strong {
+  overflow: hidden;
+  color: #dce8e5 !important;
+  font-family: var(--font-body) !important;
+  font-size: 11px !important;
+  font-weight: 700 !important;
+  line-height: 1.15 !important;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+html.dui-pro-overhaul .dy-cron-instruction-chip,
+html.dui-pro-overhaul .app-bg.dy-monitor-focus [data-dui-panel="monitor"] .dy-cron-instruction-chip {
+  display: grid !important;
+  min-height: 0 !important;
+  max-height: none !important;
+  margin-top: 10px !important;
+  gap: 5px;
+  padding: 10px 12px !important;
+  overflow: visible !important;
+  border: 1px solid rgba(231, 190, 105, .22) !important;
+  border-left: 3px solid rgba(231, 190, 105, .68) !important;
+  border-radius: 0 !important;
+  background: #17150f !important;
+  color: #d8d1b6 !important;
+  box-shadow: none !important;
+  white-space: normal !important;
+}
+
+html.dui-pro-overhaul .dy-cron-instruction-chip > span,
+html.dui-pro-overhaul .app-bg.dy-monitor-focus [data-dui-panel="monitor"] .dy-cron-instruction-chip > span {
+  color: #c8ad65 !important;
+  font-size: 9px !important;
+  font-weight: 800 !important;
+  letter-spacing: .12em !important;
+  line-height: 1 !important;
+  text-transform: uppercase;
+}
+
+html.dui-pro-overhaul .dy-cron-instruction-chip strong,
+html.dui-pro-overhaul .app-bg.dy-monitor-focus [data-dui-panel="monitor"] .dy-cron-instruction-chip strong {
+  display: block !important;
+  max-height: none !important;
+  overflow: visible !important;
+  color: #e4ddc3 !important;
+  font-size: 11px !important;
+  font-weight: 600 !important;
+  line-height: 1.45 !important;
+  overflow-wrap: anywhere;
+  white-space: normal !important;
+}
+
+html.dui-pro-overhaul .dy-cron-job-actions,
+html.dui-pro-overhaul .app-bg.dy-monitor-focus [data-dui-panel="monitor"] .dy-cron-job-actions {
+  top: 15px !important;
+  right: 16px !important;
+  z-index: 1;
+  gap: 5px !important;
+}
+
+html.dui-pro-overhaul .dy-cron-action-button,
+html.dui-pro-overhaul .app-bg.dy-monitor-focus [data-dui-panel="monitor"] .dy-cron-action-button {
+  width: 28px !important;
+  height: 26px !important;
+  border: 1px solid rgba(255, 255, 255, .13) !important;
+  border-radius: 0 !important;
+  background: #101617 !important;
+  box-shadow: none !important;
+  color: #9eaeac !important;
+}
+
+html.dui-pro-overhaul .dy-cron-action-button:hover,
+html.dui-pro-overhaul .app-bg.dy-monitor-focus [data-dui-panel="monitor"] .dy-cron-action-button:hover {
+  border-color: rgba(141, 231, 211, .48) !important;
+  background: #142525 !important;
+  color: #b5f2e5 !important;
+}
+
+html.dui-pro-overhaul .dy-cron-pause-button,
+html.dui-pro-overhaul .app-bg.dy-monitor-focus [data-dui-panel="monitor"] .dy-cron-pause-button {
+  border-color: rgba(239, 166, 164, .24) !important;
+  background: #1b1214 !important;
+  color: #e5a9a5 !important;
+}
+
+html.dui-pro-overhaul .dy-cron-action-button svg,
+html.dui-pro-overhaul .app-bg.dy-monitor-focus [data-dui-panel="monitor"] .dy-cron-action-button svg {
+  width: 14px;
+  height: 14px;
+  fill: none;
+  stroke: currentColor;
+  stroke-linecap: square;
+  stroke-linejoin: miter;
+  stroke-width: 1.7;
+}
+
+html.dui-pro-overhaul .dy-cron-list-footer,
+html.dui-pro-overhaul .app-bg.dy-monitor-focus [data-dui-panel="monitor"] .dy-cron-list-footer {
+  padding: 10px 16px !important;
+  border-top: 1px solid rgba(255, 255, 255, .10) !important;
+  background: #0b1011 !important;
+  color: #7f9090 !important;
+  font-size: 10px !important;
+  font-weight: 700 !important;
+  letter-spacing: .06em !important;
+  line-height: 1.2 !important;
+  text-transform: uppercase;
+}
+
+html.dui-pro-overhaul .dy-cron-empty-state,
+html.dui-pro-overhaul .app-bg.dy-monitor-focus [data-dui-panel="monitor"] .dy-cron-empty-state {
+  display: grid !important;
+  min-height: 260px;
+  align-content: center;
+  justify-items: center;
+  gap: 7px;
+  padding: 30px !important;
+  color: #849393 !important;
+}
+
+html.dui-pro-overhaul .dy-cron-empty-state strong,
+html.dui-pro-overhaul .app-bg.dy-monitor-focus [data-dui-panel="monitor"] .dy-cron-empty-state strong {
+  color: #d7e2df !important;
+  font-size: 13px !important;
+}
+
+html.dui-pro-overhaul .dy-cron-empty-state > span:not(.dy-cron-empty-icon),
+html.dui-pro-overhaul .app-bg.dy-monitor-focus [data-dui-panel="monitor"] .dy-cron-empty-state > span:not(.dy-cron-empty-icon) {
+  color: #7f9090 !important;
+  font-size: 11px !important;
+  line-height: 1.45 !important;
+}
+
+html.dui-pro-overhaul .dy-cron-empty-icon,
+html.dui-pro-overhaul .app-bg.dy-monitor-focus [data-dui-panel="monitor"] .dy-cron-empty-icon {
+  display: grid !important;
+  width: 38px;
+  height: 38px;
+  place-items: center;
+  margin-bottom: 2px;
+  border: 1px solid rgba(141, 231, 211, .28);
+  border-left: 3px solid #8de7d3;
+  border-radius: 0 !important;
+  background: #102423;
+  color: #8de7d3;
+}
+
+html.dui-pro-overhaul .dy-cron-empty-icon svg,
+html.dui-pro-overhaul .app-bg.dy-monitor-focus [data-dui-panel="monitor"] .dy-cron-empty-icon svg {
+  width: 19px;
+  height: 19px;
+  fill: none;
+  stroke: currentColor;
+  stroke-linecap: square;
+  stroke-linejoin: miter;
+  stroke-width: 1.4;
+}
+
+@media (max-width: 860px) {
+  html.dui-pro-overhaul .dy-cron-panel-header,
+  html.dui-pro-overhaul .app-bg.dy-monitor-focus [data-dui-panel="monitor"] .dy-cron-panel-header {
+    flex-direction: column;
+    gap: 12px;
+  }
+
+  html.dui-pro-overhaul .dy-cron-panel-summary,
+  html.dui-pro-overhaul .app-bg.dy-monitor-focus [data-dui-panel="monitor"] .dy-cron-panel-summary {
+    width: 100%;
+    justify-content: flex-start;
+    flex-wrap: wrap;
+  }
+}
+
+@media (max-width: 600px) {
+  html.dui-pro-overhaul .dy-cron-job-details,
+  html.dui-pro-overhaul .app-bg.dy-monitor-focus [data-dui-panel="monitor"] .dy-cron-job-details {
+    grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+  }
+
+  html.dui-pro-overhaul .dy-cron-job-card,
+  html.dui-pro-overhaul .app-bg.dy-monitor-focus [data-dui-panel="monitor"] .dy-cron-job-card {
+    padding: 14px 13px 15px 15px !important;
+  }
+
+  html.dui-pro-overhaul .dy-cron-job-actions,
+  html.dui-pro-overhaul .app-bg.dy-monitor-focus [data-dui-panel="monitor"] .dy-cron-job-actions {
+    right: 13px !important;
+  }
+}
+
+/* Final Cron contrast pass: keep the panel as dark and grounded as Channel Activity. */
+html.dui-pro-overhaul .dy-cron-jobs-card,
+html.dui-pro-overhaul .app-bg.dy-monitor-focus [data-dui-panel="monitor"] .dy-cron-jobs-card {
+  border-color: rgba(255, 255, 255, .12) !important;
+  background: #0b0c0c !important;
+}
+
+html.dui-pro-overhaul .dy-cron-panel-header,
+html.dui-pro-overhaul .app-bg.dy-monitor-focus [data-dui-panel="monitor"] .dy-cron-panel-header {
+  background: #0b0c0c !important;
+}
+
+html.dui-pro-overhaul .dy-cron-panel-heading-mark,
+html.dui-pro-overhaul .app-bg.dy-monitor-focus [data-dui-panel="monitor"] .dy-cron-panel-heading-mark {
+  width: 52px !important;
+  height: 52px !important;
+  flex-basis: 52px !important;
+  border-color: rgba(101, 211, 190, .30) !important;
+  border-radius: 0 !important;
+  background: #0d1516 !important;
+}
+
+html.dui-pro-overhaul .dy-cron-panel-heading-mark img,
+html.dui-pro-overhaul .app-bg.dy-monitor-focus [data-dui-panel="monitor"] .dy-cron-panel-heading-mark img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  border-radius: 0;
+}
+
+html.dui-pro-overhaul .dy-cron-job-list,
+html.dui-pro-overhaul .app-bg.dy-monitor-focus [data-dui-panel="monitor"] .dy-cron-job-list {
+  background: #060707 !important;
+}
+
+html.dui-pro-overhaul .dy-cron-job-card,
+html.dui-pro-overhaul .app-bg.dy-monitor-focus [data-dui-panel="monitor"] .dy-cron-job-card {
+  background: #0c0d0d !important;
+}
+
+html.dui-pro-overhaul .dy-cron-job-card:hover,
+html.dui-pro-overhaul .app-bg.dy-monitor-focus [data-dui-panel="monitor"] .dy-cron-job-card:hover {
+  background: #101313 !important;
+}
+
+html.dui-pro-overhaul .dy-cron-jobs-card .dy-session-meta-chip,
+html.dui-pro-overhaul .app-bg.dy-monitor-focus [data-dui-panel="monitor"] .dy-cron-jobs-card .dy-session-meta-chip {
+  background: #0e1111 !important;
+}
+
+html.dui-pro-overhaul .dy-cron-instruction-chip,
+html.dui-pro-overhaul .app-bg.dy-monitor-focus [data-dui-panel="monitor"] .dy-cron-instruction-chip {
+  background: #12110d !important;
+}
+
+html.dui-pro-overhaul .dy-cron-list-footer,
+html.dui-pro-overhaul .app-bg.dy-monitor-focus [data-dui-panel="monitor"] .dy-cron-list-footer {
+  background: #0b0c0c !important;
 }

@@ -258,7 +258,7 @@ export function createRuntimeStatusService(options: RuntimeStatusServiceOptions)
     const diagnostics = isLooseRecord(payload.diagnostics) ? payload.diagnostics : {}
     const generatedAt = typeof payload.generatedAt === 'string' ? payload.generatedAt : new Date(nowMs()).toISOString()
     const communicationPlugins = Array.isArray(plugins.communication) ? plugins.communication.slice(0, 4) : []
-    const activeShifts = Array.isArray(shifts.active) ? shifts.active.slice(0, 4) : []
+    const activeShifts = Array.isArray(shifts.active) ? shifts.active : []
     const activeMissions = Array.isArray(missions.active) ? missions.active.slice(0, 4) : []
 
     return {
@@ -380,7 +380,7 @@ export function createRuntimeStatusService(options: RuntimeStatusServiceOptions)
       },
       shifts: {
         activeCount: cronJobs.active.length,
-        active: cronJobs.active.slice(0, 4),
+        active: cronJobs.active,
         ...(cronJobs.error ? { error: cronJobs.error } : {}),
       },
       missions: {
@@ -542,7 +542,7 @@ export function createRuntimeStatusService(options: RuntimeStatusServiceOptions)
       },
       shifts: {
         activeCount: cronJobs.active.length,
-        active: cronJobs.active.slice(0, 12),
+        active: cronJobs.active,
         ...(cronJobs.error ? { error: cronJobs.error } : {}),
       },
       missions: {
@@ -635,7 +635,7 @@ export function createRuntimeStatusService(options: RuntimeStatusServiceOptions)
       },
       shifts: {
         activeCount: cronJobs.active.length,
-        active: cronJobs.active.slice(0, 4),
+        active: cronJobs.active,
         ...(cronJobs.error ? { error: cronJobs.error } : {}),
       },
       missions: {

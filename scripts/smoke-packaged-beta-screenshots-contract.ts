@@ -43,6 +43,8 @@ assert.match(screenshotCapture, new RegExp(`expected ${expectedScreenshotCount} 
 assert.match(screenshotCapture, /manifest\.json/, 'packaged capture script must write a screenshot manifest')
 assert.match(screenshotCapture, /mode: 'packaged-production-dir'/, 'screenshot manifest must identify packaged production mode')
 assert.match(screenshotCapture, /packaged screenshot capture requires/, 'packaged capture must fail closed when packaging output is missing')
+assert.match(screenshotCapture, /createRuntimeLedgerStore/, 'packaged screenshot capture must seed its disposable renderer entitlement')
+assert.match(screenshotCapture, /license:activation/, 'packaged screenshot capture must seed an active license state')
 
 assert.match(workflow, /npm run capture:packaged-beta-screenshots/, 'Control Plane CI must capture packaged screenshots')
 assert.match(workflow, /name:\s*automnia-packaged-beta-screenshots[\s\S]*path:\s*output\/packaged-beta-screenshots\/\*\*/m, 'Control Plane CI must upload packaged screenshot artifacts')

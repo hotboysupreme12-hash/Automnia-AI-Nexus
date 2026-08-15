@@ -3855,8 +3855,8 @@ html.dui-pro-overhaul.dui-cohesive-ui [data-dui-panel="monitor"] .dy-health-card
 
 html.dui-pro-overhaul.dui-cohesive-ui .app-bg.dy-monitor-focus [data-dui-panel="monitor"].dy-monitor-shell .dy-monitor-tab-list button,
 html.dui-pro-overhaul.dui-cohesive-ui [data-dui-panel="monitor"] .dy-monitor-tab-list button {
-  --dy-monitor-tab-accent: #74e2a5;
-  --dy-monitor-tab-accent-rgb: 116, 226, 165;
+  --dy-monitor-tab-accent: #60d9cb;
+  --dy-monitor-tab-accent-rgb: 96, 217, 203;
 }
 
 html.dui-pro-overhaul.dui-cohesive-ui .app-bg.dy-monitor-focus [data-dui-panel="monitor"].dy-monitor-shell .dy-monitor-tab-list button,
