@@ -42,3 +42,22 @@ test('Vertex model metadata exposes the large context and safe output ceiling', 
   ])
   assert.equal(applyGoogleVertexModelLimits(provider), false)
 })
+
+test('Vertex policy ignores malformed catalogs and normalizes non-finite limits', () => {
+  assert.equal(applyGoogleVertexModelLimits({}), false)
+
+  const provider = {
+    models: [
+      null,
+      [],
+      {},
+      { id: '  ' },
+      { id: 'gemini-invalid-max', maxTokens: Number.NaN },
+      { id: 'gemini-infinite-max', maxTokens: Number.POSITIVE_INFINITY },
+    ],
+  }
+
+  assert.equal(applyGoogleVertexModelLimits(provider), true)
+  assert.equal((provider.models[4] as Record<string, unknown>).maxTokens, GOOGLE_VERTEX_MAX_OUTPUT_TOKENS)
+  assert.equal((provider.models[5] as Record<string, unknown>).maxTokens, GOOGLE_VERTEX_MAX_OUTPUT_TOKENS)
+})
