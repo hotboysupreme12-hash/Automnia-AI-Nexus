@@ -46,6 +46,7 @@ const RARITY_RING: Record<string, string> = {
   common: 'ring-white/12',
 }
 
+const AUTOMNIA_APP_ICON_SRC = '/brand/automnia-ai-nexus-app-icon.png'
 const MESSAGE_RENDER_LIMIT = 60
 const LANE_DIAGNOSTIC_WARN_MS = 10 * 60 * 1000
 const LANE_DIAGNOSTIC_STALLED_MS = 30 * 60 * 1000
@@ -506,9 +507,13 @@ const ResponseMessage = memo(function ResponseMessage({
   const activityQueueRef = useRef<string[]>([])
   const knownActivityIdsRef = useRef<Set<string>>(new Set())
   const activityTimerRef = useRef<number | null>(null)
+  const runtimeNoticeActive = Boolean(entry.streaming && (entry.runtimeNoticeActive || isRuntimeNoticeTransport(entry.transport)))
   const avatar = meta?.portrait || ''
   const name = meta?.name || entry.agentId
   const role = meta?.role || ''
+  const displayName = runtimeNoticeActive ? 'Automnia' : name
+  const displayRole = runtimeNoticeActive ? 'Runtime task' : role
+  const displayAvatar = runtimeNoticeActive ? AUTOMNIA_APP_ICON_SRC : avatar
   const rarity = meta?.rarity || 'common'
   const avatarRing = RARITY_RING[rarity] ?? RARITY_RING.common
   const replyText = entry.response
@@ -523,7 +528,6 @@ const ResponseMessage = memo(function ResponseMessage({
     ? `${entry.queuePosition}/${entry.queueDepth}`
     : ''
   const status = entry.streaming ? 'streaming' : entry.ok ? 'complete' : 'blocked'
-  const runtimeNoticeActive = Boolean(entry.streaming && (entry.runtimeNoticeActive || isRuntimeNoticeTransport(entry.transport)))
   const statusText = runtimeNoticeActive ? 'runtime' : status
   const durationLabel = entry.durationMs > 0 ? `${(entry.durationMs / 1000).toFixed(1)}s` : ''
   const cta = responseCta(entry)
@@ -544,8 +548,8 @@ const ResponseMessage = memo(function ResponseMessage({
   ].filter(Boolean).join(' / ')
   const clockTitle = `${messageTimestampTitle(entry.timestamp)} / ${timeAgo(entry.timestamp)}`
   const bodyText = hasContent ? replyText : entry.streaming ? '' : entry.ok ? 'No output' : 'Request failed'
-  const showInlineThinking = entry.streaming && !hasContent && runtimeNoticeActive && !hasActivity
-  const progressText = entry.streaming && !hasContent && !showInlineThinking && !hasActivity ? latestRunStatus(entry) : ''
+  const showInlineThinking = entry.streaming && !hasContent && runtimeNoticeActive && !hasActivity && !entry.progressLabel && !entry.progressLines?.length
+  const progressText = entry.streaming && !hasContent && !showInlineThinking ? latestRunStatus(entry) : ''
   const displayText = bodyText || progressText
   const bodyState = showInlineThinking ? 'thinking' : hasContent ? 'response' : progressText ? 'progress' : entry.ok ? 'empty' : 'blocked'
 
@@ -610,35 +614,38 @@ const ResponseMessage = memo(function ResponseMessage({
       data-agent-rarity={rarity}
       data-message-state={status}
       data-message-transport={entry.transport || ''}
+      data-runtime-notice={runtimeNoticeActive ? 'true' : 'false'}
       className="dy-command-message group/message relative overflow-hidden border border-white/[0.055] bg-[linear-gradient(180deg,rgba(255,255,255,0.035),rgba(255,255,255,0.018))] p-4 transition-all duration-200 hover:bg-white/[0.045] hover:border-white/[0.09] border-l-[3px]"
     >
       <div className="dy-command-message-header mb-3">
         <div className={`dy-command-message-avatar relative h-10 w-10 shrink-0 overflow-hidden rounded-xl ring-1 shadow-lg ring-offset-1 ring-offset-slate-950 ${avatarRing}`}>
-          {avatar && !avatarFailed ? (
+          {displayAvatar && (runtimeNoticeActive || !avatarFailed) ? (
             <img
-              src={avatar}
+              src={displayAvatar}
               alt=""
               className="h-full w-full object-cover"
-              onError={() => onPortraitFailed(entry.agentId, avatar)}
+              onError={() => {
+                if (!runtimeNoticeActive && avatar) onPortraitFailed(entry.agentId, avatar)
+              }}
             />
           ) : (
             <div className="flex h-full w-full items-center justify-center bg-white/[0.03] text-sm font-bold text-slate-500">
-              {initials(name)}
+              {initials(displayName)}
             </div>
           )}
         </div>
         <div className="dy-command-message-identity">
           <div className="dy-command-message-title-row">
-            <span className="dy-command-agent-name" title={name}>{name}</span>
+            <span className="dy-command-agent-name" title={displayName}>{displayName}</span>
             <Badge className="dy-command-message-status" data-state={status} tone={responseStatusTone(status)} size="micro">
               {statusText}
             </Badge>
           </div>
-          {(modelLabel || role) && (
+          {(runtimeNoticeActive || modelLabel || role) && (
             <p className="dy-command-agent-context">
-              {modelLabel && <span className="dy-command-message-model" title={`Model: ${modelId}`}>{modelLabel}</span>}
-              {modelLabel && role && <i aria-hidden="true">·</i>}
-              {role && <span className="dy-command-agent-role" title={role}>{role}</span>}
+              {!runtimeNoticeActive && modelLabel && <span className="dy-command-message-model" title={`Model: ${modelId}`}>{modelLabel}</span>}
+              {!runtimeNoticeActive && modelLabel && role && <i aria-hidden="true">·</i>}
+              {displayRole && <span className="dy-command-agent-role" title={displayRole}>{displayRole}</span>}
             </p>
           )}
         </div>
@@ -1933,14 +1940,15 @@ export function AgentResponseConsole() {
 
       {activeRuntimeRuns.length > 0 && (
         <div
-          className="dy-command-active-runs shrink-0 border-b border-white/[0.08] bg-black/10 px-3 py-2"
+          className="dy-command-active-runs dy-automnia-runtime-notifications shrink-0 border-b border-white/[0.08] bg-black/10 px-3 py-2"
           role="status"
           aria-live="polite"
-          aria-label={`${activeRuntimeRuns.length} active runtime ${activeRuntimeRuns.length === 1 ? 'run' : 'runs'} monitored by Automnia`}
+          aria-label={`${activeRuntimeRuns.length} Automnia runtime ${activeRuntimeRuns.length === 1 ? 'task' : 'tasks'} running`}
           data-active-runtime-runs={activeRuntimeRuns.length}
         >
           <div className="mb-1.5 flex items-center justify-between gap-2 text-[10px] uppercase tracking-[0.16em] text-white/55">
-            <span>Active runtime runs</span>
+            <span>Automnia runtime</span>
+            <span>{activeRuntimeRuns.length} live</span>
           </div>
           <div className="space-y-1.5">
             {activeRuntimeRuns.slice(0, 12).map((run) => {
@@ -1950,15 +1958,22 @@ export function AgentResponseConsole() {
               )
               const stopping = activeRunActionId === run.id || activeRunActionId === '__all__'
               return (
-                <div key={run.id} className="flex items-center gap-2 rounded-md border border-white/[0.08] bg-white/[0.025] px-2 py-1.5" data-active-runtime-run-id={run.id}>
-                  <span className="h-1.5 w-1.5 shrink-0 animate-pulse rounded-full bg-amber-300" aria-hidden="true" />
-                  <div className="min-w-0 flex-1">
-                    <div className="flex min-w-0 items-center gap-2 text-xs text-white/85">
-                      <strong className="shrink-0">{runtimeRunDisplayLabel(run)}</strong>
-                      <span className="truncate text-white/55" title={run.command}>{runtimeRunCommandPreview(run.command)}</span>
+                <div key={run.id} className="dy-automnia-runtime-notice" data-active-runtime-run-id={run.id} data-runtime-notification-id={run.id}>
+                  <div className="dy-automnia-runtime-avatar" aria-hidden="true">
+                    <img src={AUTOMNIA_APP_ICON_SRC} alt="" draggable={false} />
+                    <span />
+                  </div>
+                  <div className="dy-automnia-runtime-copy">
+                    <div className="dy-automnia-runtime-head">
+                      <strong>Automnia</strong>
+                      <span>Runtime task</span>
+                      <Badge tone="info" size="micro">running</Badge>
                     </div>
-                    <div className="text-[10px] text-white/45">
-                      {run.sessionId ? `session ${run.sessionId.slice(0, 8)} · ` : ''}{formatShortElapsed(elapsedMs) || 'starting'} · {run.id.slice(0, 8)}
+                    <p title={run.command}>{runtimeRunCommandPreview(run.command)}</p>
+                    <div className="dy-automnia-runtime-meta">
+                      <span>{formatShortElapsed(elapsedMs) || 'starting'} elapsed</span>
+                      {run.sessionId && <span>session {run.sessionId.slice(0, 8)}</span>}
+                      <code>{run.id.slice(0, 8)}</code>
                     </div>
                   </div>
                   <Button

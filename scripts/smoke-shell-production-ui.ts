@@ -32,6 +32,7 @@ const settingsSystemImport = "@import './styles/automnia-theme/102-settings-syst
 const cronJobsSystemImport = "@import './styles/automnia-theme/103-cron-jobs-system.css';"
 const monitorLogsImport = "@import './styles/automnia-theme/109-monitor-logs.css';"
 const monitorReadableImport = "@import './styles/automnia-theme/110-monitor-readable.css';"
+const runtimeNoticesImport = "@import './styles/automnia-theme/113-runtime-notices.css';"
 const horizonCommandCenter = read('src/styles/automnia-theme/99-horizon-command-center.css')
 const operatorExperience = read('src/styles/automnia-theme/100-operator-experience.css')
 
@@ -115,6 +116,7 @@ assert.ok(theme.includes(settingsSystemImport), 'Settings System must remain the
 assert.ok(theme.includes(cronJobsSystemImport), 'Cron Jobs System must remain in the theme cascade')
 assert.ok(theme.includes(monitorLogsImport), 'Monitor Logs must remain in the theme cascade')
 assert.ok(theme.includes(monitorReadableImport), 'Monitor Readability must remain in the theme cascade')
+assert.ok(theme.includes(runtimeNoticesImport), 'Runtime notices must remain in the theme cascade')
 const themeLayerImports = [...theme.matchAll(/@import '\.\/styles\/automnia-theme\/(\d+)-([^']+)\.css';/g)]
 const layersAfterTypography = themeLayerImports
   .map((match) => ({ order: Number(match[1]), name: match[2] }))
@@ -135,6 +137,7 @@ assert.deepEqual(layersAfterTypography, [
   { order: 108, name: 'command-console-scroll' },
   { order: 109, name: 'monitor-logs' },
   { order: 110, name: 'monitor-readable' },
+  { order: 113, name: 'runtime-notices' },
 ], 'global automnia theme layers after typography must remain limited to the approved shell, operator, card, settings, responsive, performance, command-console, and monitor layers')
 assert.doesNotMatch(theme, /99-mission-quiet-redesign/, 'mission quiet redesign should no longer be a global late layer')
 assert.ok(
@@ -154,7 +157,7 @@ assert.ok(theme.indexOf(operatorExperienceImport) < theme.indexOf(agentCardTheme
 assert.ok(theme.indexOf(agentCardThemesImport) < theme.indexOf(settingsSystemImport), 'Agent Card Themes must load before the scoped Settings System')
 assert.ok(theme.indexOf(settingsSystemImport) < theme.indexOf(cronJobsSystemImport), 'Settings System must load before the scoped Cron Jobs System')
 assert.ok(theme.indexOf(monitorLogsImport) < theme.indexOf(monitorReadableImport), 'Monitor Logs must load before Monitor Readability')
-assert.ok(theme.trimEnd().endsWith(monitorReadableImport), 'Monitor Readability constraints must load last in the theme cascade')
+assert.ok(theme.trimEnd().endsWith(runtimeNoticesImport), 'Runtime notice constraints must load last in the theme cascade')
 assert.match(operatorExperience, /\.dui-recruit-code-editor:focus-within[\s\S]*#071012 !important/, 'focused recruit Markdown editing must retain its dedicated contrast treatment')
 assert.match(horizonCommandCenter, /Each destination has a dedicated hue/, 'navigation selection should document the workspace identity system')
 for (const [tone, accent] of [
@@ -190,6 +193,10 @@ assert.match(monitorPanel, /data-ui-revision="cron-job-v2"/, 'Active cron cards 
 assert.match(monitorPanel, /className="dy-cron-job-glyph"/, 'Active cron cards should expose a glanceable schedule glyph')
 assert.match(monitorPanel, /<span>What this run does<\/span>/, 'Active cron cards should explain the scheduled run clearly')
 assert.match(commandConsole, /import \{ Badge, Button, IconButton, StatusChip \} from '\.\.\/ui'/, 'Command Console controls and runtime chips should use local UI primitives')
+assert.match(commandConsole, /AUTOMNIA_APP_ICON_SRC = '\/brand\/automnia-ai-nexus-app-icon\.png'/, 'runtime notices should use the square Automnia app icon')
+assert.match(commandConsole, /data-runtime-notice=\{runtimeNoticeActive \? 'true' : 'false'\}/, 'ClawTalk runtime notices should expose a stable Automnia announcement marker')
+assert.match(commandConsole, /className="dy-automnia-runtime-notice"/, 'active runtime runs should render as Automnia runtime notices')
+assert.match(commandConsole, /<strong>Automnia<\/strong>[\s\S]*<span>Runtime task<\/span>/, 'runtime notices should identify Automnia and the runtime task role')
 assert.match(missionPanel, /import \{ Badge, Button, StatusChip \} from '\.\.\/ui'/, 'Mission action rows and mission status should use local UI primitives')
 assert.match(pluginsPanel, /import \{ Badge, Button, IconButton, StatusChip \} from '\.\.\/ui'/, 'Plugin action rows and summary chips should use local UI primitives')
 for (const [sourceName, source, primitive] of [
