@@ -28,3 +28,5 @@
 /* Performance constraints must win the cascade on every workspace. */
 @import './styles/automnia-theme/105-performance.css';
 @import './styles/automnia-theme/108-command-console-scroll.css';
+@import './styles/automnia-theme/109-monitor-logs.css';
+@import './styles/automnia-theme/110-monitor-readable.css';

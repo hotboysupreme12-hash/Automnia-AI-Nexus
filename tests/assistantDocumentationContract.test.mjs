@@ -1,9 +1,10 @@
 import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
+import { fileURLToPath } from 'node:url'
 import path from 'node:path'
 import test from 'node:test'
 
-const repositoryRoot = path.resolve(new URL('.', import.meta.url).pathname, '..')
+const repositoryRoot = fileURLToPath(new URL('../', import.meta.url))
 const manual = readFileSync(path.join(repositoryRoot, 'docs/AUTOMNIA_ASSISTANT_OPERATIONS_MANUAL.md'), 'utf8')
 const publisher = readFileSync(path.join(repositoryRoot, 'scripts/publish-knowledge-base.mjs'), 'utf8')
 const cloudService = readFileSync(path.join(repositoryRoot, 'infra/gcloud/service/server.js'), 'utf8')

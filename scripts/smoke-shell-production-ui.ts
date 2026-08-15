@@ -30,7 +30,8 @@ const operatorExperienceImport = "@import './styles/automnia-theme/100-operator-
 const agentCardThemesImport = "@import './styles/automnia-theme/101-agent-card-themes.css';"
 const settingsSystemImport = "@import './styles/automnia-theme/102-settings-system.css';"
 const cronJobsSystemImport = "@import './styles/automnia-theme/103-cron-jobs-system.css';"
-const commandConsoleScrollImport = "@import './styles/automnia-theme/108-command-console-scroll.css';"
+const monitorLogsImport = "@import './styles/automnia-theme/109-monitor-logs.css';"
+const monitorReadableImport = "@import './styles/automnia-theme/110-monitor-readable.css';"
 const horizonCommandCenter = read('src/styles/automnia-theme/99-horizon-command-center.css')
 const operatorExperience = read('src/styles/automnia-theme/100-operator-experience.css')
 
@@ -112,6 +113,8 @@ assert.ok(theme.includes(operatorExperienceImport), 'Operator Experience must re
 assert.ok(theme.includes(agentCardThemesImport), 'Agent Card Themes must remain in the theme cascade')
 assert.ok(theme.includes(settingsSystemImport), 'Settings System must remain the final scoped settings and autosave layer')
 assert.ok(theme.includes(cronJobsSystemImport), 'Cron Jobs System must remain in the theme cascade')
+assert.ok(theme.includes(monitorLogsImport), 'Monitor Logs must remain in the theme cascade')
+assert.ok(theme.includes(monitorReadableImport), 'Monitor Readability must remain in the theme cascade')
 const themeLayerImports = [...theme.matchAll(/@import '\.\/styles\/automnia-theme\/(\d+)-([^']+)\.css';/g)]
 const layersAfterTypography = themeLayerImports
   .map((match) => ({ order: Number(match[1]), name: match[2] }))
@@ -130,7 +133,9 @@ assert.deepEqual(layersAfterTypography, [
   { order: 107, name: 'agent-assistant-revamp' },
   { order: 105, name: 'performance' },
   { order: 108, name: 'command-console-scroll' },
-], 'global automnia theme layers after typography must remain limited to the approved shell, operator, card, settings, responsive, performance, and command-console layers')
+  { order: 109, name: 'monitor-logs' },
+  { order: 110, name: 'monitor-readable' },
+], 'global automnia theme layers after typography must remain limited to the approved shell, operator, card, settings, responsive, performance, command-console, and monitor layers')
 assert.doesNotMatch(theme, /99-mission-quiet-redesign/, 'mission quiet redesign should no longer be a global late layer')
 assert.ok(
   theme.indexOf(productionPolishImport) < theme.indexOf(referenceScreenshotImport),
@@ -148,7 +153,8 @@ assert.ok(theme.indexOf(horizonCommandCenterImport) < theme.indexOf(operatorExpe
 assert.ok(theme.indexOf(operatorExperienceImport) < theme.indexOf(agentCardThemesImport), 'Operator Experience must load before Agent Card Themes')
 assert.ok(theme.indexOf(agentCardThemesImport) < theme.indexOf(settingsSystemImport), 'Agent Card Themes must load before the scoped Settings System')
 assert.ok(theme.indexOf(settingsSystemImport) < theme.indexOf(cronJobsSystemImport), 'Settings System must load before the scoped Cron Jobs System')
-assert.ok(theme.trimEnd().endsWith(commandConsoleScrollImport), 'Command Console scroll constraints must load last in the theme cascade')
+assert.ok(theme.indexOf(monitorLogsImport) < theme.indexOf(monitorReadableImport), 'Monitor Logs must load before Monitor Readability')
+assert.ok(theme.trimEnd().endsWith(monitorReadableImport), 'Monitor Readability constraints must load last in the theme cascade')
 assert.match(operatorExperience, /\.dui-recruit-code-editor:focus-within[\s\S]*#071012 !important/, 'focused recruit Markdown editing must retain its dedicated contrast treatment')
 assert.match(horizonCommandCenter, /Each destination has a dedicated hue/, 'navigation selection should document the workspace identity system')
 for (const [tone, accent] of [
@@ -182,7 +188,7 @@ assert.match(missionPanel, /import '\.\/MissionDeploymentPanel\.css'/, 'mission 
 assert.match(monitorPanel, /import \{ Badge, Button, IconButton, StatusChip \} from '\.\.\/ui'/, 'Monitor controls and status chips should use local UI primitives')
 assert.match(monitorPanel, /data-ui-revision="cron-job-v2"/, 'Active cron cards should expose the upgraded presentation contract')
 assert.match(monitorPanel, /className="dy-cron-job-glyph"/, 'Active cron cards should expose a glanceable schedule glyph')
-assert.match(monitorPanel, /<span>Current instruction<\/span>/, 'Active cron cards should label their current instruction clearly')
+assert.match(monitorPanel, /<span>What this run does<\/span>/, 'Active cron cards should explain the scheduled run clearly')
 assert.match(commandConsole, /import \{ Badge, Button, IconButton, StatusChip \} from '\.\.\/ui'/, 'Command Console controls and runtime chips should use local UI primitives')
 assert.match(missionPanel, /import \{ Badge, Button, StatusChip \} from '\.\.\/ui'/, 'Mission action rows and mission status should use local UI primitives')
 assert.match(pluginsPanel, /import \{ Badge, Button, IconButton, StatusChip \} from '\.\.\/ui'/, 'Plugin action rows and summary chips should use local UI primitives')

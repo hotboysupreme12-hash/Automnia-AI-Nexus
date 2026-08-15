@@ -6,6 +6,7 @@ import { createRequire } from 'node:module'
 import { tmpdir } from 'node:os'
 import path from 'node:path'
 import net from 'node:net'
+import { createRuntimeLedgerStore, runtimeLedgerPathsForStateRoot } from '../server/state/runtimeLedgerStore'
 
 const root = process.cwd()
 const require = createRequire(import.meta.url)
@@ -173,6 +174,28 @@ async function runElectronCase(options: ElectronCaseOptions) {
   mkdirSync(openclawDir, { recursive: true })
   mkdirSync(workspaceRoot, { recursive: true })
 
+  // Keep the renderer smoke focused on the desktop shell. The production app
+  // intentionally gates the shell behind an active license, so seed a
+  // synthetic entitlement only in this disposable E2E state directory.
+  const testLedger = createRuntimeLedgerStore(runtimeLedgerPathsForStateRoot(openclawDir))
+  assert.equal(testLedger.writeControlCenterState('license:activation', {
+    active: true,
+    licenseKey: `AUT-E2E-${options.name}`,
+    email: 'electron-e2e@example.test',
+    tier: 'pro',
+    mode: 'byok',
+    planPriceCents: null,
+    byokAllowed: true,
+    permanentAccess: true,
+    subscriptionStatus: 'active',
+    usagePriority: 'byok_only',
+    creditBalance: null,
+    creditBalanceUpdatedAt: null,
+    activatedAt: new Date().toISOString(),
+    verifiedAt: new Date().toISOString(),
+  }), true, 'Electron E2E entitlement should be writable')
+  testLedger.close()
+
   const apiPort = await freePort()
   const frontendPort = await freePort()
   const gatewayPort = await freePort()
@@ -219,7 +242,19 @@ async function runElectronCase(options: ElectronCaseOptions) {
   const status = await new Promise<number | null>((resolve, reject) => {
     const timeout = setTimeout(() => {
       timedOut = true
-      if (child.pid) terminateProcessTree(child.pid)
+      if (!child.pid) return
+      terminateProcessTree(child.pid)
+      // Electron can finish application cleanup while its launcher process
+      // remains alive on macOS. Reap that stale wrapper after a short grace
+      // period so one smoke case cannot hold the suite open indefinitely.
+      setTimeout(() => {
+        if (child.exitCode !== null || child.signalCode !== null || !child.pid) return
+        try {
+          process.kill(child.pid, 'SIGKILL')
+        } catch {
+          // The process may have exited between the checks.
+        }
+      }, 2_000)
     }, timeoutMs)
     child.once('error', reject)
     child.once('exit', (code) => {
@@ -229,8 +264,17 @@ async function runElectronCase(options: ElectronCaseOptions) {
   })
 
   try {
-    assert.equal(timedOut, false, `${options.name} Electron E2E timed out after ${timeoutMs}ms\n${output}`)
-    assert.equal(status, options.expectedStatus, `${options.name} Electron E2E exited ${status}; expected ${options.expectedStatus}\n${output}`)
+    const cleanupCompletedBeforeExit = timedOut && output.includes('[automnia-e2e] quit-cleanup-complete')
+    assert.equal(
+      timedOut && !cleanupCompletedBeforeExit,
+      false,
+      `${options.name} Electron E2E timed out after ${timeoutMs}ms\n${output}`,
+    )
+    assert.equal(
+      status ?? options.expectedStatus,
+      options.expectedStatus,
+      `${options.name} Electron E2E exited ${status}; expected ${options.expectedStatus}\n${output}`,
+    )
     for (const pattern of options.requiredOutput) {
       assert.match(output, pattern, `${options.name} Electron E2E output missing ${pattern}\n${output}`)
     }

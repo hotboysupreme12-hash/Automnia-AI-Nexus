@@ -1941,7 +1941,6 @@ export function AgentResponseConsole() {
         >
           <div className="mb-1.5 flex items-center justify-between gap-2 text-[10px] uppercase tracking-[0.16em] text-white/55">
             <span>Active runtime runs</span>
-            <span className="text-cyan-200/70">server monitored · stop available</span>
           </div>
           <div className="space-y-1.5">
             {activeRuntimeRuns.slice(0, 12).map((run) => {

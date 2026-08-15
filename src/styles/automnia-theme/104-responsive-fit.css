@@ -24,6 +24,29 @@ html.dui-pro-overhaul.dui-cohesive-ui .dy-agents-workspace {
   overflow-x: hidden !important;
 }
 
+/* Keep the registry cards visually separated from the shell and split rail. */
+@media (min-width: 901px) {
+  html.dui-pro-overhaul [data-dui-panel="agent-registry"],
+  html.dui-pro-overhaul.dui-cohesive-ui [data-dui-panel="agent-registry"] {
+    background: #030405 !important;
+  }
+
+  html.dui-pro-overhaul [data-dui-panel="agent-registry"] [data-agent-registry-scroll],
+  html.dui-pro-overhaul.dui-cohesive-ui [data-dui-panel="agent-registry"] [data-agent-registry-scroll] {
+    margin: 0 !important;
+    padding: 16px 22px 26px !important;
+    border-left: 1px solid rgba(255, 255, 255, .045) !important;
+    border-right: 1px solid rgba(255, 255, 255, .045) !important;
+    background: #010203 !important;
+  }
+
+  html.dui-pro-overhaul [data-dui-panel="agent-registry"] [data-agent-grid-mode],
+  html.dui-pro-overhaul.dui-cohesive-ui [data-dui-panel="agent-registry"] [data-agent-grid-mode] {
+    column-gap: 18px !important;
+    row-gap: 16px !important;
+  }
+}
+
 /* Keep the markdown editor surface visually stable as its modal reflows. */
 html.dui-pro-overhaul [data-dui-modal="recruit-agent"] .dui-recruit-code-editor,
 html.dui-pro-overhaul.dui-cohesive-ui [data-dui-modal="recruit-agent"] .dui-recruit-code-editor,
