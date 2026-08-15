@@ -722,7 +722,7 @@ On scheduled checks, summarize current state, blockers, and the next useful acti
     'MEMORY.md': `# MEMORY.md - ${name}
 
 ## Durable Notes
-- Recruited from Automnia AI Nexus Control Center.
+- Recruited from Automnia AI Nexus.
 `,
     'TOOLS.md': `# TOOLS.md - ${name}
 

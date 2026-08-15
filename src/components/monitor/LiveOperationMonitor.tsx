@@ -4,11 +4,12 @@ import type { AgentOperationState, AgentResponse, MissionEvent, OpenClawAgent } 
 import { clearRuntimeMonitor, restartGatewayRuntime, runRuntimeDoctor, stopCronShift, updateCronShift } from '../../hooks/useRuntimeStatus'
 import type { DoctorFinding, DoctorRun, GatewayChannelActivity, GatewayLogEntry, RuntimeCronJob, RuntimeMonitorClearResult, RuntimeStatus } from '../../hooks/useRuntimeStatus'
 import { agentPortraitSrc } from '../../utils/portrait'
+import { useChannelActivitySettings } from '../settings/channelActivitySettings'
 import { ActionStatusBanner } from '../common/ActionStatusBanner'
 import { Badge, Button, IconButton, StatusChip } from '../ui'
 import type { BadgeTone } from '../ui'
 
-const CONTROL_CENTER_LOGO_SRC = '/brand/automnia-ai-nexus-app-icon.png'
+const AUTOMNIA_LOGO_SRC = '/brand/automnia-ai-nexus-app-icon.png'
 const DOCTOR_PANEL_DISMISSED_RUN_KEY = 'automnia-monitor-doctor-dismissed-run'
 const DOCTOR_SNAPSHOT_STALE_AFTER_MS = 24 * 60 * 60 * 1000
 
@@ -292,7 +293,7 @@ const MONITOR_TAB_TITLE: Record<MonitorTab, string> = {
   gateway: 'Gateway runtime, active cron jobs, channel traffic, and logs',
   heartbeat: 'Heartbeat scheduler state for active party agents',
   performance: 'Live runtime, efficiency, stability, and success metrics',
-  logs: 'Recent agent and control-center activity logs',
+  logs: 'Recent agent runs and Automnia gateway events',
 }
 
 function MonitorTabIcon({ tab }: { tab: MonitorTab }) {
@@ -832,6 +833,17 @@ function gatewayActivitySpoolLabel(spool: string): string {
     : `Watching the inbox spool.`
 }
 
+function humanReadableChannelDetail(value: string): string {
+  const cleaned = value
+    .replace(/\b(?:channel|outcome|duration|sessionKey|scope|mode|model|token)=("[^"]*"|\S+)/giu, '')
+    .replace(/\s+/g, ' ')
+    .replace(/\s+([,.;])/g, '$1')
+    .trim()
+  if (!cleaned) return 'No message content was captured.'
+  if (/^(?:message )?(?:received|sent|delivered|processed)(?:\.)?$/iu.test(cleaned)) return 'No message content was captured.'
+  return compactRuntimeText(cleaned, 420)
+}
+
 function gatewayActivityDisplay(event: GatewayChannelActivity): GatewayActivityDisplay {
   const { prefix, text } = gatewayActivitySourcePrefix(event.message)
   const raw = text || event.message
@@ -886,7 +898,7 @@ function gatewayActivityDisplay(event: GatewayChannelActivity): GatewayActivityD
     return {
       label: 'Sent',
       summary: `${channel} message sent`,
-      detail: compactRaw,
+      detail: humanReadableChannelDetail(compactRaw),
       raw,
     }
   }
@@ -895,7 +907,7 @@ function gatewayActivityDisplay(event: GatewayChannelActivity): GatewayActivityD
     return {
       label: 'Incoming',
       summary: `${channel} message received`,
-      detail: compactRaw,
+      detail: humanReadableChannelDetail(compactRaw),
       raw,
     }
   }
@@ -910,50 +922,63 @@ function gatewayActivityDisplay(event: GatewayChannelActivity): GatewayActivityD
 
 function GatewayActivityLine({ event }: { event: GatewayChannelActivity }) {
   const display = gatewayActivityDisplay(event)
-  const channelLabel = event.agentId ? `${event.channel} / ${event.agentId}` : event.channel
+  const channelLabel = gatewayActivityChannelLabel(event.channel)
+  const sourceLabel = event.agentId ? `${channelLabel} · ${event.agentId}` : channelLabel
+  const channelMark = channelLabel.slice(0, 2).toUpperCase()
   return (
-    <div className="dy-gateway-activity-line dy-gateway-event-card grid grid-cols-[9px_minmax(0,1fr)] items-start gap-3 border-b border-white/[0.08] px-3 py-2.5 text-[12px] leading-tight transition hover:bg-white/[0.025]" data-direction={event.direction} title={display.raw}>
-      <span className="dy-gateway-direction-marker mt-1 h-2 w-2 shrink-0 rounded-none" data-direction={event.direction} aria-hidden="true" />
-      <div className="dy-gateway-activity-copy min-w-0">
-        <div className="dy-gateway-event-meta flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1">
-          <span className="dy-gateway-direction-label text-[11px] font-bold uppercase tracking-[0.08em]">{display.label}</span>
-          <span className="dy-gateway-event-time font-mono text-[12px] tabular-nums text-slate-400">{formatRuntimeTime(event.timestamp)}</span>
-          <span className="dy-gateway-event-source max-w-full truncate font-mono text-[12px] font-semibold text-slate-300" title={channelLabel}>{channelLabel}</span>
+    <article className="dy-gateway-activity-line dy-gateway-event-card" data-direction={event.direction} title={display.raw}>
+      <span className="dy-channel-activity-avatar" data-direction={event.direction} aria-hidden="true">{channelMark}</span>
+      <div className="dy-gateway-activity-copy">
+        <div className="dy-gateway-event-meta">
+          <span className="dy-gateway-event-source" title={sourceLabel}>{sourceLabel}</span>
+          <span className="dy-gateway-direction-label">{display.label}</span>
+          <time className="dy-gateway-event-time" dateTime={event.timestamp}>{formatRuntimeTime(event.timestamp)}</time>
         </div>
-        <p className="dy-gateway-event-message mt-1.5 min-w-0 font-medium text-slate-100">{display.summary}</p>
-        {display.detail && display.detail !== display.summary && (
-          <p className="dy-gateway-event-detail mt-1 min-w-0 text-[12px] leading-snug text-slate-400">{compactRuntimeText(display.detail, 420)}</p>
-        )}
+        <p className="dy-gateway-event-message">{display.summary}</p>
+        {display.detail && display.detail !== display.summary && <p className="dy-gateway-event-detail">{display.detail}</p>}
       </div>
-    </div>
+    </article>
   )
 }
 
 const GatewayActivityCard = memo(function GatewayActivityCard({ activity }: { activity: RuntimeStatus['gateway']['activity'] | undefined }) {
-  const events = activity?.events || []
+  const { retentionLimit, autoTrim } = useChannelActivitySettings()
+  const allEvents = activity?.events || []
+  const events = autoTrim ? allEvents.slice(0, retentionLimit) : allEvents.slice(0, 100)
+  const lastEvent = activity?.lastEventAt ? formatRuntimeTime(activity.lastEventAt) : 'No events yet'
   return (
-    <div className="dy-monitor-card dy-channel-activity-card dy-gateway-feed-card flex min-h-0 flex-col self-stretch rounded-none border border-white/[0.04] bg-white/[0.015] p-3">
-      <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
-        <div>
-          <p className="text-[13px] font-bold text-slate-100">Channel Activity</p>
-          <p className="mt-0.5 text-[12px] text-slate-400">Recent Telegram, SMS, and plugin traffic</p>
+    <section className="dy-monitor-card dy-channel-activity-card dy-gateway-feed-card" aria-labelledby="channel-activity-title">
+      <div className="dy-channel-activity-header">
+        <div className="dy-channel-activity-heading">
+          <span className="dy-channel-activity-heading-mark" aria-hidden="true"><span /><span /><span /></span>
+          <div>
+            <p className="dy-channel-activity-eyebrow">Live communications</p>
+            <h3 id="channel-activity-title">Channel Activity</h3>
+            <p>Readable updates from Telegram, SMS, and connected plugins.</p>
+          </div>
         </div>
-        <div className="dy-channel-activity-stats flex flex-wrap items-center gap-1.5">
-          <span className="dy-channel-activity-stat border border-white/[0.08] px-2 py-1 text-[11px] font-semibold uppercase tracking-[0.08em] text-slate-300" data-state={activity?.active ? 'active' : 'quiet'}>
-            {activity?.active ? 'active' : 'quiet'}
-          </span>
-          <span className="dy-channel-activity-stat border px-2 py-1 text-[11px] font-semibold uppercase tracking-[0.08em] text-slate-300" data-direction="inbound">{activity?.inboundCount || 0} incoming</span>
-          <span className="dy-channel-activity-stat border px-2 py-1 text-[11px] font-semibold uppercase tracking-[0.08em] text-slate-300" data-direction="outbound">{activity?.outboundCount || 0} sent</span>
-          {Boolean(activity?.systemCount) && (
-            <span className="dy-channel-activity-stat border px-2 py-1 text-[11px] font-semibold uppercase tracking-[0.08em] text-slate-300" data-direction="system" title={`${activity?.systemCount || 0} system event${(activity?.systemCount || 0) === 1 ? '' : 's'} captured`}>{activity?.systemCount || 0} system</span>
-          )}
+        <div className="dy-channel-activity-status" data-state={activity?.active ? 'active' : 'quiet'}>
+          <i aria-hidden="true" />
+          <strong>{activity?.active ? 'Live now' : 'Quiet'}</strong>
+          <span>{lastEvent}</span>
         </div>
       </div>
-      <div className="dy-monitor-stream-box dy-gateway-event-list min-h-0 flex-1 overflow-auto rounded-none border border-white/[0.04] bg-black/25 shadow-inner shadow-black/20">
-        {events.slice(0, 28).map((event) => <GatewayActivityLine key={event.id} event={event} />)}
-        {!events.length && <div className="dy-monitor-empty py-6 text-center text-[12px] font-medium text-slate-400">No channel activity captured yet.</div>}
+
+      <div className="dy-channel-activity-stats" aria-label="Channel activity summary">
+        <div className="dy-channel-activity-stat" data-direction="inbound"><span>Incoming</span><strong>{activity?.inboundCount || 0}</strong><small>received</small></div>
+        <div className="dy-channel-activity-stat" data-direction="outbound"><span>Sent</span><strong>{activity?.outboundCount || 0}</strong><small>delivered</small></div>
+        <div className="dy-channel-activity-stat" data-direction="system"><span>Showing</span><strong>{events.length}</strong><small>of {autoTrim ? retentionLimit : 100} recent</small></div>
       </div>
-    </div>
+
+      <div className="dy-channel-activity-feed-head">
+        <div><strong>Recent events</strong><span>{autoTrim ? `Keeping the last ${retentionLimit} automatically` : 'Automatic trimming is off'}</span></div>
+        <span className="dy-channel-activity-count">{events.length} {events.length === 1 ? 'event' : 'events'}</span>
+      </div>
+      <div className="dy-monitor-stream-box dy-gateway-event-list" role="log" aria-live="polite" aria-label="Recent channel activity">
+        {events.map((event) => <GatewayActivityLine key={`${event.id}-${event.timestamp}`} event={event} />)}
+        {!events.length && <div className="dy-monitor-empty dy-channel-activity-empty"><strong>Nothing has moved through the channels yet</strong><span>Incoming messages and delivered replies will appear here in plain language.</span></div>}
+      </div>
+    </section>
   )
 })
 
@@ -1381,7 +1406,7 @@ const MonitorActivityPanel = memo(function MonitorActivityPanel({ agentById }: {
             <div className="flex gap-3 pl-2">
               <div className={`relative h-12 w-12 shrink-0 overflow-hidden rounded-xl ring-1 ${isControlCenter ? 'bg-zinc-950/60 ring-white/[0.06]' : 'ring-white/10'}`}>
                 {isControlCenter ? (
-                  <img src={CONTROL_CENTER_LOGO_SRC} alt="" className="h-full w-full object-cover opacity-80" />
+                  <img src={AUTOMNIA_LOGO_SRC} alt="" className="h-full w-full object-cover opacity-80" />
                 ) : portraitSrc && !portraitFailed ? (
                   <img
                     src={portraitSrc}
@@ -1397,7 +1422,7 @@ const MonitorActivityPanel = memo(function MonitorActivityPanel({ agentById }: {
               </div>
               <div className="min-w-0 flex-1">
                 <div className="flex flex-wrap items-center gap-2">
-                  <p className={`truncate text-[12px] font-bold ${isControlCenter ? 'text-slate-300' : 'text-slate-100'}`}>{agent?.name || item.agentId || 'Control Center'}</p>
+                  <p className={`truncate text-[12px] font-bold ${isControlCenter ? 'text-slate-300' : 'text-slate-100'}`}>{agent?.name || item.agentId || 'Automnia'}</p>
                   <Badge className="dy-activity-status rounded-full border px-2 py-0.5 text-[11px] font-semibold uppercase tracking-[0.08em]" data-status={isControlCenter ? 'control' : item.ok ? 'ok' : 'blocked'} tone={activityStatusTone(item, isControlCenter)} size="micro">{item.ok ? item.title : 'Blocked'}</Badge>
                   {item.failureKind && (
                     <Badge className="rounded-full border border-amber-300/15 bg-amber-300/[0.04] px-2 py-0.5 text-[11px] font-semibold uppercase tracking-[0.08em] text-amber-100" tone="warning" size="micro">
