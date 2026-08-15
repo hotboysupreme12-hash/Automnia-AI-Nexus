@@ -3,7 +3,7 @@ import { spawnSync } from 'node:child_process'
 // Temporary Cloud Run origin for licensing, Shopify webhooks, and hosted-credit
 // AI. Keep this switchable until the Automnia public DNS cutover is complete.
 // Environment overrides remain available for staging and emergency recovery.
-export const AUTOMNIA_PUBLIC_CLOUD_URL = 'https://automnia-shopify-provisioner-336625531977.us-east1.run.app'
+export const AUTOMNIA_PUBLIC_CLOUD_URL = 'https://automnia-shopify-provisioner-idkndr7vfq-ue.a.run.app'
 
 export function automniaCloudBaseUrl(override?: string) {
   const value = (override || AUTOMNIA_PUBLIC_CLOUD_URL).trim().replace(/\/+$/, '')
