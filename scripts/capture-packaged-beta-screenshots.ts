@@ -4,6 +4,7 @@ import { existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, statSync
 import { tmpdir } from 'node:os'
 import path from 'node:path'
 import net from 'node:net'
+import { createRuntimeLedgerStore, runtimeLedgerPathsForStateRoot } from '../server/state/runtimeLedgerStore'
 
 const root = process.cwd()
 const releaseRoot = path.join(root, 'release')
@@ -97,6 +98,29 @@ mkdirSync(userDataDir, { recursive: true })
 mkdirSync(openclawDir, { recursive: true })
 mkdirSync(workspaceRoot, { recursive: true })
 mkdirSync(outputDir, { recursive: true })
+
+// Packaged screenshot capture runs against a disposable state root. Seed the
+// same synthetic entitlement used by the renderer smoke so the production
+// license gate cannot replace the shell with the activation screen before
+// navigation screenshots begin.
+const testLedger = createRuntimeLedgerStore(runtimeLedgerPathsForStateRoot(openclawDir))
+assert.equal(testLedger.writeControlCenterState('license:activation', {
+  active: true,
+  licenseKey: 'AUT-E2E-packaged-beta-screenshots',
+  email: 'packaged-beta-screenshots@example.test',
+  tier: 'pro',
+  mode: 'byok',
+  planPriceCents: null,
+  byokAllowed: true,
+  permanentAccess: true,
+  subscriptionStatus: 'active',
+  usagePriority: 'byok_only',
+  creditBalance: null,
+  creditBalanceUpdatedAt: null,
+  activatedAt: new Date().toISOString(),
+  verifiedAt: new Date().toISOString(),
+}), true, 'Packaged screenshot entitlement should be writable')
+testLedger.close()
 
 const apiPort = await freePort()
 const frontendPort = await freePort()
