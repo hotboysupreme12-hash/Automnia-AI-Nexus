@@ -23,6 +23,10 @@ const RuntimeGatewayChatAbortStaleSchema = z.object({
   minAgeMs: z.number().int().min(30_000).max(24 * 60 * 60_000).optional().default(5 * 60_000),
 })
 
+const RuntimeRunAbortSchema = z.object({
+  runId: z.string().trim().min(1).max(160),
+})
+
 export function registerRuntimeRoutes(app: Express, options: RuntimeRoutesOptions) {
   app.post('/api/openclaw/runtime/session/close', async (req, res) => {
     const parsed = RuntimeSessionCloseSchema.safeParse(req.body)
@@ -47,6 +51,17 @@ export function registerRuntimeRoutes(app: Express, options: RuntimeRoutesOption
       return apiSuccess(res, options.runtimeActions.abortStaleGatewayChat(parsed.data.minAgeMs))
     } catch (error) {
       return apiFailure(res, 500, 'runtime_action_failed', 'Failed to abort stale gateway chat turns', String(error))
+    }
+  })
+
+  app.post('/api/openclaw/runtime/run/abort', async (req, res) => {
+    const parsed = RuntimeRunAbortSchema.safeParse(req.body || {})
+    if (!parsed.success) return apiFailure(res, 400, 'invalid_payload', 'Invalid payload', parsed.error.flatten())
+
+    try {
+      return apiSuccess(res, await options.runtimeActions.abortOpenClawRun(parsed.data.runId))
+    } catch (error) {
+      return apiFailure(res, 500, 'runtime_action_failed', 'Failed to stop the active runtime run', String(error))
     }
   })
 

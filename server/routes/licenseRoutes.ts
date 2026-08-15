@@ -12,13 +12,6 @@ export function registerLicenseRoutes(app: Express, options: {
     await options.synchronizeOpenClawBillingRoute?.()
   }
 
-  const synchronizeOpenClawBillingRouteInBackground = () => {
-    void synchronizeOpenClawBillingRoute().catch((error) => {
-      const message = error instanceof Error ? error.message : String(error)
-      options.pushGatewayLog?.('stderr', `Usage priority synchronization failed after save: ${message}`)
-    })
-  }
-
   app.get('/api/license/status', (_req, res) => apiSuccess(res, options.licenseService.getStatus()))
 
   app.post('/api/license/activate', async (req, res) => {
@@ -89,10 +82,10 @@ export function registerLicenseRoutes(app: Express, options: {
     }
     try {
       const status = options.licenseService.setUsagePriority(parsed.data.usagePriority)
-      // Saving the preference is local and synchronous. Config reconciliation
-      // may wait on a Gateway restart, so do it after the response instead of
-      // holding the renderer request open until the 8-second client timeout.
-      synchronizeOpenClawBillingRouteInBackground()
+      // Do not acknowledge a route change until OpenClaw has been reconciled.
+      // Returning first creates a window where the next turn still uses the
+      // old Automnia-first config and can debit hosted credits unexpectedly.
+      await synchronizeOpenClawBillingRoute()
       return apiSuccess(res, status)
     } catch (error) {
       const known = error instanceof LicenseServiceError ? error : null

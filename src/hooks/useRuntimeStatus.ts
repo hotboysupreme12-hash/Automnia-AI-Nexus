@@ -188,6 +188,15 @@ export type GatewayChatAbortStaleResult = {
   chat: GatewayChatRuntimeSummary
 }
 
+export type RuntimeRunAbortResult = {
+  ok: true
+  found: boolean
+  runId: string
+  stopped: boolean
+  method?: string
+  detail?: string
+}
+
 export type RuntimeRunStatus = 'running' | 'completed' | 'failed' | 'timeout' | 'aborted' | 'interrupted'
 
 export type RuntimeRun = {
@@ -578,6 +587,15 @@ export async function abortStaleGatewayChatTurns(minAgeMs = 5 * 60_000) {
     body: { minAgeMs },
   })
   if (data.ok !== true) throw new Error('Abort stale turns failed.')
+  return data
+}
+
+export async function abortRuntimeRun(runId: string) {
+  const data = await runtimeActionRequest<RuntimeRunAbortResult>('/api/openclaw/runtime/run/abort', {
+    method: 'POST',
+    body: { runId },
+  })
+  if (data.ok !== true) throw new Error('Stop runtime run failed.')
   return data
 }
 

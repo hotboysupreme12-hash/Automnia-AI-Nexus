@@ -133,6 +133,28 @@ export function LandingPage({ onNavigate }: { onNavigate: (page: string) => void
           </motion.button>
         </motion.div>
 
+        <motion.div
+          initial={{ opacity: 0, y: 28, scale: 0.985 }}
+          animate={heroInView ? { opacity: 1, y: 0, scale: 1 } : {}}
+          transition={{ duration: 0.8, delay: 0.62 }}
+          className="mt-14 px-4 sm:px-6"
+        >
+          <div
+            className="mx-auto w-full max-w-7xl overflow-hidden rounded-[2rem] border bg-black/70 p-1.5 shadow-2xl shadow-amber-950/20 sm:p-2"
+            style={{ borderColor: 'rgba(251,191,36,0.22)' }}
+          >
+            <img
+              src="/visuals/automnia-ai-nexus-hero.png"
+              alt="Automnia AI Nexus command center showing the Agents workspace, active party, and live command console"
+              width={2869}
+              height={1854}
+              loading="eager"
+              decoding="async"
+              className="block h-auto w-full rounded-[1.55rem]"
+            />
+          </div>
+        </motion.div>
+
         {/* Stats Row */}
         <motion.div
           initial={{ opacity: 0, y: 20 }}

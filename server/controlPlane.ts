@@ -2026,6 +2026,7 @@ const parseOpenAICodexAuthorizationInput = oauthCallbackService.parseOpenAICodex
 const completeOpenAICodexOAuthSession = oauthCallbackService.completeOpenAICodexOAuthSession
 const closeOAuthCallbackServersForProcessExit = oauthCallbackService.closeOAuthCallbackServersForProcessExit
 const closeOAuthCallbackServersForShutdown = oauthCallbackService.closeOAuthCallbackServersForShutdown
+const cancelOAuthSession = oauthCallbackService.cancelOAuthSession
 const startGoogleOAuthSession = oauthCallbackService.startGoogleOAuthSession
 const startGoogleAccountOAuthSession = oauthCallbackService.startGoogleAccountOAuthSession
 const startOpenAICodexOAuthSession = oauthCallbackService.startOpenAICodexOAuthSession
@@ -2795,6 +2796,38 @@ function abortGatewayChatOpenClawRun(run: OpenClawRunRecord, reason = 'runtime s
   if (!gatewayChatService.requestAbortIfClient(run.sessionKey, run.id, reason)) return false
   finishOpenClawRun(run, 'aborted', { code: 1, failureKind: 'aborted', stderr: reason })
   return true
+}
+
+async function abortOpenClawRunById(runId: string, reason = 'operator stop requested') {
+  const cleanRunId = runId.trim()
+  const run = activeOpenClawRuns.get(cleanRunId)
+  if (!cleanRunId || !run) {
+    return { found: false, runId: cleanRunId, stopped: false, detail: 'Active runtime run was not found.' }
+  }
+
+  // Gateway chat waiters are the authoritative cancellation boundary for
+  // chat.send runs. This works even while the Gateway websocket is restarting:
+  // the waiter is closed locally, the in-flight chat.abort is best effort, and
+  // runTurn finalizes the same run record as aborted.
+  if (run.sessionKey && gatewayChatService.abortRun(run.id, reason)) {
+    finishOpenClawRun(run, 'aborted', { code: 1, failureKind: 'aborted', stderr: reason })
+    pushGatewayLog('lifecycle', `operator stopped Gateway chat run ${run.id}`)
+    return { found: true, runId: run.id, stopped: true, method: 'gateway-chat', detail: 'Gateway chat abort requested.' }
+  }
+
+  if (run.pid) {
+    const result = await terminateProcessTree(run.pid, reason, true)
+    if (activeOpenClawRuns.has(run.id)) {
+      finishOpenClawRun(run, 'aborted', { code: 1, failureKind: 'aborted', stderr: reason })
+    }
+    return { found: true, runId: run.id, stopped: result.ok, method: 'process-tree', detail: result.detail }
+  }
+
+  // A run can be between its terminal Gateway event and the final response
+  // projection. Close that server-owned record rather than leaving a phantom
+  // spinner that has no child process or Gateway waiter left to cancel.
+  finishOpenClawRun(run, 'aborted', { code: 1, failureKind: 'aborted', stderr: reason })
+  return { found: true, runId: run.id, stopped: true, method: 'record-close', detail: 'Active runtime record closed.' }
 }
 
 function normalizeGatewaySessionKey(value: string | null | undefined, agentId?: string) {
@@ -9306,7 +9339,24 @@ let openclawAgentRunDefaultsPending: Promise<void> | null = null
 let openclawCodexPluginAutoInstallReady = false
 let openclawCodexPluginAutoInstallPending: Promise<void> | null = null
 
+let activeAgentTurnExecutionCount = 0
+
+export function beginAgentTurnExecution(): () => void {
+  activeAgentTurnExecutionCount += 1
+  return () => {
+    activeAgentTurnExecutionCount = Math.max(0, activeAgentTurnExecutionCount - 1)
+  }
+}
+
+export function isAgentTurnExecuting(): boolean {
+  return activeAgentTurnExecutionCount > 0
+}
+
 async function writeOpenclawConfig(config: unknown) {
+  if (isAgentTurnExecuting()) {
+    console.info('[config] writeOpenclawConfig suppressed: agent turn in progress')
+    return
+  }
   const parsed = (config || {}) as OpenClawConfigFile
   ensureOpenclawRuntimeDefaults(parsed)
   await syncModelProviderTimeoutsFromAgentSettings(parsed)
@@ -16960,6 +17010,7 @@ const runtimeRecoveryService = createRuntimeRecoveryService({
 })
 
 const runtimeActionService = createRuntimeActionService({
+  abortOpenClawRun: abortOpenClawRunById,
   abortGatewayRuntimeSessionsForClose,
   abortStaleGatewayChatWaiters,
   cleanupOpenClawSessionLocks,
@@ -17734,6 +17785,35 @@ const agentStreamingService = createAgentStreamingService({
 
 const streamProviderAgentTurn = agentStreamingService.streamProviderAgentTurn
 
+let billingRouteSyncPromise: Promise<void> = Promise.resolve()
+const synchronizeBillingRouteWithGateway = async () => {
+  const operation = billingRouteSyncPromise.catch(() => undefined).then(async () => {
+    const beforeConfig = await readOpenclawConfig().catch(() => null)
+    const beforeRoute = automniaBillingRouteSnapshot(beforeConfig)
+    await synchronizeOpenClawBillingRoute()
+    const afterConfig = await readOpenclawConfig().catch(() => null)
+    const afterRoute = automniaBillingRouteSnapshot(afterConfig)
+
+    // Ignore unrelated/dynamic OpenClaw metadata. A full JSON comparison here
+    // used to force a Gateway restart on every background license refresh,
+    // dropping active turns and creating a restart/refresh loop.
+    if (beforeRoute !== afterRoute) {
+      const restart = await tryRestartGatewayService({ force: true, reason: 'subscription tier change synchronization' })
+      if (!restart.restarted) {
+        const detail = restart.detail ? ` ${restart.detail}` : ''
+        throw new Error(`OpenClaw route changed but the Gateway did not become ready.${detail}`)
+      }
+    } else {
+      console.log('[license-restart] OpenClaw configuration did not change, skipping gateway restart')
+    }
+  })
+  // Keep a failed operation observable to turns that arrive before the next
+  // settings/refresh attempt. The next synchronization is still allowed to
+  // recover because it starts from a caught predecessor.
+  billingRouteSyncPromise = operation
+  await operation
+}
+
 registerAgentTurnRoutes(app, {
   AUTH_TOKEN,
   CONTROL_CENTER_AGENT_TURN_STREAM_SMOKE_MOCK,
@@ -17791,8 +17871,25 @@ registerAgentTurnRoutes(app, {
     return Boolean(hosted && hosted.usagePriority !== 'byok_only')
   },
   hostedUsagePriority: () => {
+    const status = licenseService.getStatus()
     const priority = licenseService.getUsagePriority()
-    return priority === 'byok_only' ? null : priority
+    return status.mode === 'byok' && priority !== 'automnia_first'
+      ? null
+      : priority === 'byok_only' ? null : priority
+  },
+  awaitBillingRouteReady: () => billingRouteSyncPromise,
+  billingRoutePresentation: () => {
+    const status = licenseService.getStatus()
+    const usagePriority = status.usagePriority
+    if (!status.active || !usagePriority) return null
+    const billingRoute = status.mode === 'byok' && usagePriority !== 'automnia_first'
+      ? 'provider-only'
+      : usagePriority === 'automnia_first'
+        ? 'automnia-first'
+        : usagePriority === 'provider_first'
+          ? 'provider-first'
+          : 'provider-only'
+    return { usagePriority, billingRoute }
   },
   isRetiredAgentId,
   isValidAgentId,
@@ -18134,6 +18231,7 @@ registerAuthRoutes(app, {
   loginAttempts,
   sessionTokens,
   accountAuth: accountAuthService,
+  cancelOAuthSession,
   ensureProviderAuthReady: ensureLocalAuthStoreLoaded,
   getLocalProviderOAuth: providerAuthService.getLocalProviderOAuth,
   oauthSessions,
@@ -18142,24 +18240,7 @@ registerAuthRoutes(app, {
 })
 registerLicenseRoutes(app, {
   licenseService,
-  synchronizeOpenClawBillingRoute: async () => {
-    const beforeConfig = await readOpenclawConfig().catch(() => null)
-    const beforeRoute = automniaBillingRouteSnapshot(beforeConfig)
-    await synchronizeOpenClawBillingRoute()
-    const afterConfig = await readOpenclawConfig().catch(() => null)
-    const afterRoute = automniaBillingRouteSnapshot(afterConfig)
-
-    // Ignore unrelated/dynamic OpenClaw metadata. A full JSON comparison here
-    // used to force a Gateway restart on every background license refresh,
-    // dropping active turns and creating a restart/refresh loop.
-    if (beforeRoute !== afterRoute) {
-      await tryRestartGatewayService({ force: true, reason: 'subscription tier change synchronization' }).catch((error) => {
-        console.warn('[license-restart] failed to force restart gateway service:', error)
-      })
-    } else {
-      console.log('[license-restart] OpenClaw configuration did not change, skipping gateway restart')
-    }
-  },
+  synchronizeOpenClawBillingRoute: synchronizeBillingRouteWithGateway,
   pushGatewayLog,
 })
 

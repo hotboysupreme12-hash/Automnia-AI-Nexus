@@ -666,11 +666,13 @@ export function SettingsPanel({ focusSection = 'account', focusRequest = 0 }: { 
         await setUsagePriority(nextPriority)
         setNotice({
           tone: 'success',
-          text: nextPriority === 'provider_first'
-            ? 'Usage priority saved: your provider first, Automnia credits available as fallback.'
-            : nextPriority === 'byok_only'
-              ? 'Usage priority saved: your provider only.'
-              : 'Usage priority saved: Automnia credits first.',
+          text: isByok && nextPriority !== 'automnia_first'
+          ? 'Usage priority saved and Gateway synchronized: your provider only. Automnia credits are bypassed for BYOK.'
+          : nextPriority === 'provider_first'
+              ? 'Usage priority saved and Gateway synchronized: your provider first, Automnia credits available as fallback.'
+              : nextPriority === 'byok_only'
+                ? 'Usage priority saved and Gateway synchronized: your provider only.'
+                : 'Usage priority saved and Gateway synchronized: Automnia credits first.',
         })
       } catch (error) {
         setUsagePriorityError(error instanceof Error ? error.message : 'Could not save the usage priority.')
@@ -794,7 +796,7 @@ export function SettingsPanel({ focusSection = 'account', focusRequest = 0 }: { 
           <Field label="Access & Billing Mode" hint="Starter Subscription uses Automnia hosted credits. Higher tiers include hosted credits and provider priority controls.">
             <input type="text" readOnly value={entitlement.billingLabel} style={{ backgroundColor: 'rgba(255, 255, 255, 0.05)', cursor: 'not-allowed' }} />
           </Field>
-          <Field label="Usage Priority" hint={usagePriorityLocked ? 'Starter Subscription ($19.99) stays on Automnia credits only. A BYOK upgrade with a carried-over balance unlocks all three routes.' : hostedCredits ? 'Choose Automnia credits, your provider first, or your provider only. This preference belongs to your one Automnia account.' : isByok ? 'BYOK accounts with a confirmed Automnia balance can choose Automnia first, provider first with Automnia fallback, or provider-only routing.' : 'Activate a permanent or hosted plan to choose a usage priority.'}>
+          <Field label="Usage Priority" hint={usagePriorityLocked ? 'Starter Subscription ($19.99) stays on Automnia credits only. A BYOK upgrade with a carried-over balance unlocks all three routes.' : hostedCredits ? 'Choose Automnia credits, your provider first, or your provider only. This preference belongs to your one Automnia account.' : isByok ? 'BYOK uses your provider without Automnia credits unless you explicitly choose Automnia credits first.' : 'Activate a permanent or hosted plan to choose a usage priority.'}>
             <select
               value={usagePriorityManaged ? usagePriority : 'automnia_first'}
               disabled={!usagePriorityManaged || usagePriorityBusy || usagePriorityLocked}
@@ -804,6 +806,9 @@ export function SettingsPanel({ focusSection = 'account', focusRequest = 0 }: { 
               <option value="provider_first" disabled={!byokAllowed}>My provider first + Automnia fallback{byokAllowed ? '' : ' — provider access not included'}</option>
               <option value="byok_only" disabled={!byokAllowed}>My provider only{byokAllowed ? '' : ' — provider access not included'}</option>
             </select>
+            {isByok && <small style={{ display: 'block', marginTop: '0.45rem', color: '#93c5fd' }}>
+              BYOK safety rule: Automnia credits are used only when “Automnia credits first” is selected. Both provider-only choices bypass the Automnia relay.
+            </small>}
           </Field>
           <Field label="Effective Agent Route" hint={hostedCredits || isByok ? 'This saved preference applies to normal messages, /runtime, /work, /openclaw, streamed turns, and buffered recovery.' : 'Activate a Cloud Subscription or BYOK license to enable agent messages.'}>
             <input type="text" readOnly value={entitlement.defaultRouteLabel} style={{ fontWeight: 'bold', backgroundColor: hostedCredits ? 'rgba(16, 185, 129, 0.10)' : isByok ? 'rgba(56, 189, 248, 0.10)' : 'rgba(255, 255, 255, 0.05)', cursor: 'not-allowed' }} />
@@ -813,7 +818,7 @@ export function SettingsPanel({ focusSection = 'account', focusRequest = 0 }: { 
               <div>
                 <span>Automnia billing</span>
                 <strong>{hostedCredits ? entitlement.tierLabel : isByok ? 'BYOK access' : 'Plan status'}</strong>
-                <small>{hostedCredits || isByok ? usagePriority === 'provider_first' ? 'Your connected provider is used first; Automnia pooled credits remain available as fallback.' : usagePriority === 'byok_only' ? 'Direct provider-billed access is forced; Automnia credits are bypassed.' : 'Automnia credits are used first, with your provider available as fallback on eligible permanent tiers.' : 'Activate a license to receive your current entitlement.'}</small>
+                <small>{hostedCredits || isByok ? isByok && usagePriority !== 'automnia_first' ? 'Your connected provider is used directly; Automnia credits are bypassed.' : usagePriority === 'provider_first' ? 'Your connected provider is used first; Automnia pooled credits remain available as fallback.' : usagePriority === 'byok_only' ? 'Direct provider-billed access is forced; Automnia credits are bypassed.' : 'Automnia credits are used first, with your provider available as fallback on eligible permanent tiers.' : 'Activate a license to receive your current entitlement.'}</small>
               </div>
               <b>{entitlement.statusLabel}</b>
             </div>

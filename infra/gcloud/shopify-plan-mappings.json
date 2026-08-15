@@ -45,6 +45,33 @@
     "skus": ["AUTO-REFILL-10M"]
   },
   {
+    "tier": "credit_refill",
+    "mode": "hosted_credits",
+    "kind": "topup",
+    "initialCredits": 1000000,
+    "productIds": ["9020233089193"],
+    "variantIds": ["47350394388649"],
+    "skus": ["AUTO-REFILL-FREE-1M"]
+  },
+  {
+    "tier": "credit_refill",
+    "mode": "hosted_credits",
+    "kind": "topup",
+    "initialCredits": 5000000,
+    "productIds": ["9020233154729"],
+    "variantIds": ["47350394454185"],
+    "skus": ["AUTO-REFILL-FREE-5M"]
+  },
+  {
+    "tier": "credit_refill",
+    "mode": "hosted_credits",
+    "kind": "topup",
+    "initialCredits": 10000000,
+    "productIds": ["9020233187497"],
+    "variantIds": ["47350394486953"],
+    "skus": ["AUTO-REFILL-FREE-10M"]
+  },
+  {
     "tier": "starter",
     "mode": "hosted_credits",
     "kind": "subscription",

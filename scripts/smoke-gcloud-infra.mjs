@@ -36,14 +36,14 @@ const requiredFiles = [
 for (const relative of requiredFiles) assert.equal(existsSync(path.join(infra, relative)), true, `missing ${relative}`)
 
 const mappings = JSON.parse(readFileSync(path.join(infra, 'shopify-plan-mappings.json'), 'utf8'))
-assert.equal(mappings.length, 9, 'the production catalog has nine mappings')
+assert.equal(mappings.length, 12, 'the production catalog has twelve mappings')
 assert.deepEqual(
   Object.fromEntries(mappings.filter((entry) => entry.kind === 'subscription' && entry.tier === 'starter').map((entry) => [entry.tier, entry.initialCredits])),
   { starter: 500000 },
 )
-assert.equal(new Set(mappings.flatMap((entry) => entry.variantIds)).size, 9, 'variant IDs must be unique')
-assert.equal(new Set(mappings.flatMap((entry) => entry.skus)).size, 9, 'SKUs must be unique')
-assert.equal(mappings.filter((entry) => entry.kind === 'topup').length, 5)
+assert.equal(new Set(mappings.flatMap((entry) => entry.variantIds)).size, 12, 'variant IDs must be unique')
+assert.equal(new Set(mappings.flatMap((entry) => entry.skus)).size, 12, 'SKUs must be unique')
+assert.equal(mappings.filter((entry) => entry.kind === 'topup').length, 8)
 assert.equal(mappings.find((entry) => entry.mode === 'byok')?.initialCredits, 0)
 
 const indexConfig = JSON.parse(readFileSync(path.join(infra, 'firestore.indexes.json'), 'utf8'))
@@ -51,7 +51,7 @@ assert.ok(Array.isArray(indexConfig.indexes))
 assert.ok(Array.isArray(indexConfig.fieldOverrides))
 
 const service = readFileSync(path.join(infra, 'service', 'server.js'), 'utf8')
-assert.doesNotMatch(service, /groovy-iris|336625531977|\.run\.app/)
+assert.doesNotMatch(service, /groovy-iris|336625531977|idkndr7vfq-ue\.a\.run\.app/)
 for (const contract of [
   "app.get('/health'",
   "app.get('/ready'",
@@ -84,7 +84,7 @@ for (const dependency of ['@google-cloud/firestore', 'express', 'google-auth-lib
 const serverCloudConfig = readFileSync(path.join(root, 'server', 'config', 'automniaCloud.ts'), 'utf8')
 const rendererCloudConfig = readFileSync(path.join(root, 'src', 'config', 'gcloudConfig.ts'), 'utf8')
 for (const source of [serverCloudConfig, rendererCloudConfig]) {
-  assert.match(source, /https:\/\/automnia-shopify-provisioner-336625531977\.us-east1\.run\.app/)
+  assert.match(source, /https:\/\/automnia-shopify-provisioner-idkndr7vfq-ue\.a\.run\.app/)
   assert.doesNotMatch(source, /api\.automnia\.ai|licenseKey|creditBalance|@gmail\.com/)
 }
 
@@ -96,7 +96,7 @@ assert.match(controlPlane, /AUTOMNIA_OPENCLAW_PROVIDER_ID = 'automnia-cloud'/)
 assert.match(controlPlane, /reasoning: true,\s*thinkingLevelMap: AUTOMNIA_GEMINI_36_OPENCLAW_THINKING_LEVEL_MAP,/s, 'Automnia Gemini must expose supported thinking levels to OpenClaw')
 assert.match(controlPlane, /synchronizeOpenClawBillingRouteForAgentRun/, 'agent turns must repair a stale hosted Gemini thinking profile before dispatch')
 assert.match(licenseService, /AUTOMNIA_PUBLIC_CLOUD_URL/)
-assert.match(serverCloudConfig, /automnia-shopify-provisioner-336625531977\.us-east1\.run\.app/)
+assert.match(serverCloudConfig, /automnia-shopify-provisioner-idkndr7vfq-ue\.a\.run\.app/)
 
 const verification = readFileSync(path.join(infra, 'verify.ps1'), 'utf8')
 for (const gate of [

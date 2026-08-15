@@ -64,6 +64,7 @@ for (const marker of [
 for (const marker of [
   "app.post('/api/openclaw/runtime/session/close'",
   "app.post('/api/openclaw/runtime/chat/abort-stale'",
+  "app.post('/api/openclaw/runtime/run/abort'",
   "app.post('/api/openclaw/runtime/monitor/clear'",
   "app.post('/api/openclaw/runtime/shutdown'",
   "app.post('/api/openclaw/runtime/gateway/stop'",
@@ -98,6 +99,7 @@ assert(runtimeRoutes.includes('runtimeActions: RuntimeActionService'), 'runtime 
 for (const fragment of [
   'options.runtimeActions.closeRuntimeSession',
   'options.runtimeActions.abortStaleGatewayChat',
+  'options.runtimeActions.abortOpenClawRun',
   'options.runtimeActions.clearRuntimeMonitor',
   'options.runtimeActions.shutdownRuntime',
   'options.runtimeActions.stopGateway',
@@ -156,6 +158,7 @@ assert(!/\bfetch\s*\(/.test(runtimeHook), 'useRuntimeStatus should not use direc
 for (const fragment of [
   "runtimeActionRequest<RuntimeSessionCloseResult>('/api/openclaw/runtime/session/close'",
   "runtimeActionRequest<GatewayChatAbortStaleResult>('/api/openclaw/runtime/chat/abort-stale'",
+  "runtimeActionRequest<RuntimeRunAbortResult>('/api/openclaw/runtime/run/abort'",
   "runtimeActionRequest<{ ok?: boolean; stop?: unknown; gateway?: unknown }>('/api/openclaw/runtime/gateway/stop'",
   "runtimeActionRequest<{ ok?: boolean; start?: unknown; gateway?: unknown }>('/api/openclaw/runtime/gateway/start'",
   "runtimeActionRequest<{ ok?: boolean; restart?: unknown; gateway?: unknown }>('/api/openclaw/runtime/gateway/restart'",

@@ -165,7 +165,7 @@ assertIncludes(nexusStore, 'control-center.client.gateway_runtime', 'Command Con
 assertIncludes(nexusStore, 'activeAgentTurnControllers', 'Command Console active request controller registry')
 assertIncludes(nexusStore, 'operatorCancelledAgentTurns', 'Command Console operator cancellation marker')
 assertIncludes(diagnosticRedaction, "'sessionKey'", 'Command Console preserves Gateway session key in activity payloads')
-assertIncludes(nexusStore, 'if (controller.signal.aborted) throw streamError', 'Command Console stream abort does not retry fallback')
+assertIncludes(nexusStore, 'if (controller.signal.aborted || forceOpenClawRuntime || liveResponseCreated || gatewayFailure) throw streamError', 'Command Console stream abort does not retry fallback')
 assertIncludes(nexusStore, 'return await sendStreamingAgentTurn', 'Command Console keeps stream controller active until SSE drains')
 assertIncludes(agentTurnsApi, "fetchControlCenterWithAuth(apiUrl('/api/openclaw/agent-turn/stream')", 'Command Console stream transport uses the authenticated renderer API helper')
 assertIncludes(nexusStore, 'stopActiveAgentRuns', 'Command Console stop active runs action')

@@ -177,6 +177,20 @@ test('opens a minimal Google account OAuth flow and verifies the subscriber befo
   }
 })
 
+test('cancels a pending Google account OAuth session so a closed browser can be retried immediately', async () => {
+  const { service } = createHarness()
+  try {
+    const { session } = await service.startGoogleAccountOAuthSession()
+
+    assert.equal(service.cancelOAuthSession(session), true)
+    assert.equal(session.status, 'error')
+    assert.equal(session.error, 'OAuth sign-in was cancelled. Start it again when you are ready.')
+    assert.equal(service.cancelOAuthSession(session), false)
+  } finally {
+    await service.closeOAuthCallbackServersForShutdown('test cleanup')
+  }
+})
+
 test('completes OpenAI Codex manual OAuth input and stores only redacted session result fields', async () => {
   const { service, state } = createHarness()
   try {

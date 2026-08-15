@@ -388,6 +388,55 @@ test('abortStaleWaiters aborts aged Gateway chat runs and records recovery evide
   assert.equal(harness.finishes.at(-1)?.status, 'aborted')
 })
 
+test('abortRun closes an active Gateway waiter for an explicit operator stop', async () => {
+  const harness = createHarness({ suppressFinal: true })
+  const pending = harness.service.runTurn({
+    agentId: 'agent-stop',
+    message: 'stop me',
+    sessionId: 'session-stop',
+    thinking: 'low',
+    timeoutMs: 500,
+    cwd: process.cwd(),
+  })
+
+  await waitUntil(() => harness.requests.some((request) => request.method === 'chat.send'))
+  const send = harness.requests.find((request) => request.method === 'chat.send')
+  const runId = isRecord(send?.params) && typeof send.params.idempotencyKey === 'string'
+    ? send.params.idempotencyKey
+    : ''
+  assert.equal(runId.length > 0, true)
+  assert.equal(harness.service.abortRun(runId, 'operator button stop'), true)
+
+  await assert.rejects(pending, /stopped by operator/)
+  assert.ok(harness.requests.some((request) => request.method === 'chat.abort'))
+  assert.equal(harness.service.runtimeSnapshot().activeRuns, 0)
+  assert.equal(harness.finishes.at(-1)?.status, 'aborted')
+})
+
+test('Gateway disconnect interrupts the visible run and clears its active record', async () => {
+  const harness = createHarness({ suppressFinal: true })
+  const events: Array<{ event: string; data: Record<string, unknown> }> = []
+  const stream = harness.service.registerStreamObserver((event, data) => events.push({ event, data }))
+  const pending = harness.service.runTurn({
+    agentId: 'agent-disconnect',
+    message: 'disconnect me',
+    sessionId: 'session-disconnect',
+    thinking: 'low',
+    timeoutMs: 500,
+    cwd: process.cwd(),
+    streamObserverId: stream.observer.id,
+  })
+
+  await waitUntil(() => harness.requests.some((request) => request.method === 'chat.send'))
+  harness.clientOptions?.onClose?.(1006, 'gateway starting')
+
+  await assert.rejects(pending, /gateway client disconnected: gateway starting/)
+  assert.equal(harness.service.runtimeSnapshot().activeRuns, 0)
+  assert.equal(harness.finishes.at(-1)?.status, 'failed')
+  assert.equal(events.some((entry) => entry.event === 'status' && entry.data.type === 'interrupted'), true)
+  assert.match(String(events.find((entry) => entry.event === 'status' && entry.data.type === 'interrupted')?.data.message), /retry only after Gateway is healthy/)
+})
+
 test('gatewayPayloadChatState normalizes Gateway terminal and delta states', () => {
   assert.equal(gatewayPayloadChatState({ state: 'chat.delta' }), 'delta')
   assert.equal(gatewayPayloadChatState({ status: 'completed' }), 'final')

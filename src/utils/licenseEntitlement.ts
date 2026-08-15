@@ -100,8 +100,10 @@ export function resolveLicenseEntitlement(license: LicenseInfo | null | undefine
   const permanentAccess = active && !usagePriorityLocked && (license?.permanentAccess === true || isByok || tier.includes('pro') || tier.includes('enterprise'))
 
   if (isByok) {
-    const providerFirst = license?.usagePriority === 'provider_first'
-    const providerOnly = license?.usagePriority === 'byok_only'
+    // BYOK only reaches the Automnia relay when the user explicitly chooses
+    // Automnia-first. The legacy provider-first value remains persisted for
+    // hosted tiers, but it is provider-only while this account is BYOK.
+    const providerOnly = license?.usagePriority === 'provider_first' || license?.usagePriority === 'byok_only'
     return {
       active,
       mode,
@@ -117,11 +119,9 @@ export function resolveLicenseEntitlement(license: LicenseInfo | null | undefine
       tierLabel: 'BYOK Access',
       billingLabel: 'Permanent BYOK access — Your Provider Account',
       defaultRouteLabel: providerOnly
-        ? 'Your connected provider / OpenClaw runtime'
-        : providerFirst
-          ? 'Your connected provider → Automnia credits fallback'
-          : 'Automnia credits → your connected provider fallback',
-      statusLabel: 'Permanent access active',
+        ? 'Your connected provider / OpenClaw runtime — Automnia relay off'
+        : 'Automnia credits → your connected provider fallback',
+      statusLabel: providerOnly ? 'Provider-only active' : 'Permanent access active',
     }
   }
 
@@ -189,8 +189,11 @@ export function resolveLicenseEntitlement(license: LicenseInfo | null | undefine
  */
 export function resolveAgentRoutePresentation(license: LicenseInfo | null | undefined): AgentRoutePresentation {
   const entitlement = resolveLicenseEntitlement(license)
-  const providerFirst = (entitlement.isHosted || entitlement.isByok) && !entitlement.usagePriorityLocked && license?.usagePriority === 'provider_first'
-  const providerOnly = (entitlement.isHosted || entitlement.isByok) && !entitlement.usagePriorityLocked && license?.usagePriority === 'byok_only'
+  const selectedProviderFirst = (entitlement.isHosted || entitlement.isByok) && !entitlement.usagePriorityLocked && license?.usagePriority === 'provider_first'
+  const providerFirst = entitlement.isHosted && selectedProviderFirst
+  const providerOnly = (entitlement.isHosted || entitlement.isByok) && !entitlement.usagePriorityLocked && (
+    license?.usagePriority === 'byok_only' || (entitlement.isByok && selectedProviderFirst)
+  )
 
   if (entitlement.isHosted || entitlement.isByok) {
     return {

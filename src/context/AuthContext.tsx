@@ -17,6 +17,14 @@ const DESKTOP_BOOTSTRAP_ATTEMPTS = 4
 const DESKTOP_BOOTSTRAP_RETRY_MS = 450
 const AUTH_STATUS_TIMEOUT_MS = 4_500
 const GOOGLE_LOGIN_POLL_ATTEMPTS = 600
+const GOOGLE_LOGIN_POLL_INTERVAL_MS = 1_000
+
+type GoogleLoginAttempt = {
+  cancelled: boolean
+  cancelReason?: string
+  controller: AbortController
+  sessionId?: string
+}
 
 function sleep(ms: number) {
   return new Promise((resolve) => window.setTimeout(resolve, ms))
@@ -49,6 +57,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [account, setAccount] = useState<AccountInfo | null>(null)
   const [checking, setChecking] = useState(() => !readAuthToken() && hasDesktopControlCenterSessionBootstrap())
   const authEpochRef = useRef(0)
+  const googleLoginAttemptRef = useRef<GoogleLoginAttempt | null>(null)
 
   const completeLogin = (
     sessionToken: string,
@@ -173,35 +182,95 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const loginWithGoogle = async () => {
     const epoch = authEpochRef.current
-    const start = await apiRequest<{ sessionId: string; authorizationUrl?: string; openedBrowser?: boolean }>('/api/auth/account/google/start', {
-      method: 'POST',
-      authToken: '',
-      timeoutMs: 15_000,
-      body: {},
-    })
-    if (!start.ok) throw new Error(apiErrorMessage(start.error))
-    if (!start.data.openedBrowser && start.data.authorizationUrl) {
-      const opened = window.open(start.data.authorizationUrl, '_blank', 'noopener,noreferrer')
-      if (!opened) throw new Error('Your browser blocked the Google sign-in window. Allow pop-ups for Automnia AI Nexus and try again.')
+    const loginAttempt: GoogleLoginAttempt = {
+      cancelled: false,
+      controller: new AbortController(),
     }
+    googleLoginAttemptRef.current = loginAttempt
+    // In Electron, a failed account OAuth attempt must not immediately fall
+    // back into the local runtime bootstrap loop. A successful login clears
+    // this marker in completeLogin; password login does the same.
+    markAuthSignedOut()
 
-    for (let attempt = 0; attempt < GOOGLE_LOGIN_POLL_ATTEMPTS; attempt += 1) {
-      if (epoch !== authEpochRef.current) return
-      const result = await apiRequest<{ status?: string; token?: string; account?: AccountInfo }>(`/api/auth/account/google/session/${encodeURIComponent(start.data.sessionId)}`, {
+    let authWindow: Window | null = null
+    try {
+      const start = await apiRequest<{ sessionId: string; authorizationUrl?: string; openedBrowser?: boolean }>('/api/auth/account/google/start', {
+        method: 'POST',
         authToken: '',
-        timeoutMs: 10_000,
+        timeoutMs: 15_000,
+        body: {},
+        signal: loginAttempt.controller.signal,
       })
-      if (!result.ok) throw new Error(apiErrorMessage(result.error))
-      if (result.data.token) {
-        await ensureGoogleLicenseWasImported(result.data.token)
-        if (!completeLogin(result.data.token, result.data.account || null, { allowExplicitSignIn: true, epoch })) {
-          void apiRequest('/api/auth/logout', { method: 'POST', authToken: result.data.token, timeoutMs: 5_000 })
+      if (loginAttempt.cancelled) return
+      if (!start.ok) throw new Error(apiErrorMessage(start.error))
+      if (!start.data.sessionId) throw new Error('Google sign-in did not return a session. Start it again when you are ready.')
+      loginAttempt.sessionId = start.data.sessionId
+
+      if (!start.data.openedBrowser && start.data.authorizationUrl) {
+        authWindow = window.open(start.data.authorizationUrl, '_blank', 'noopener,noreferrer')
+        if (!authWindow) throw new Error('Your browser blocked the Google sign-in window. Allow pop-ups for Automnia AI Nexus and try again.')
+      } else if (!start.data.openedBrowser) {
+        throw new Error('Automnia could not open Google sign-in. Start it again when you are ready.')
+      }
+
+      for (let attempt = 0; attempt < GOOGLE_LOGIN_POLL_ATTEMPTS; attempt += 1) {
+        if (loginAttempt.cancelled || loginAttempt.controller.signal.aborted || epoch !== authEpochRef.current) return
+        const result = await apiRequest<{ status?: string; token?: string; account?: AccountInfo }>(`/api/auth/account/google/session/${encodeURIComponent(start.data.sessionId)}`, {
+          authToken: '',
+          timeoutMs: 10_000,
+          signal: loginAttempt.controller.signal,
+        })
+        if (loginAttempt.cancelled) return
+        if (!result.ok) throw new Error(apiErrorMessage(result.error))
+        if (result.data.token) {
+          await ensureGoogleLicenseWasImported(result.data.token)
+          if (!completeLogin(result.data.token, result.data.account || null, { allowExplicitSignIn: true, epoch })) {
+            void apiRequest('/api/auth/logout', { method: 'POST', authToken: result.data.token, timeoutMs: 5_000 })
+          }
+          return
         }
+        // A renderer-created browser window exposes a safe `closed` flag even
+        // while its cross-origin page is open. Electron's system-browser path
+        // cannot expose that handle, so it still has the explicit Cancel
+        // action in LoginModal.
+        if (authWindow?.closed) {
+          const reason = 'The Google sign-in window was closed before sign-in finished. You can retry Google or use your Automnia password.'
+          cancelGoogleLoginAttempt(loginAttempt, reason)
+          throw new Error(reason)
+        }
+        await sleep(GOOGLE_LOGIN_POLL_INTERVAL_MS)
+      }
+      throw new Error('Google sign-in timed out. Start it again when you are ready.')
+    } catch (error) {
+      if (loginAttempt.cancelled) {
+        if (loginAttempt.cancelReason) throw new Error(loginAttempt.cancelReason)
         return
       }
-      await sleep(1_000)
+      // Do not leave a server-side callback session pending after a start,
+      // poll, or license-verification failure. This also makes retrying safe.
+      cancelGoogleLoginAttempt(loginAttempt)
+      throw error
+    } finally {
+      if (googleLoginAttemptRef.current === loginAttempt) googleLoginAttemptRef.current = null
     }
-    throw new Error('Google sign-in timed out. Start it again when you are ready.')
+  }
+
+  const cancelGoogleLogin = () => {
+    const loginAttempt = googleLoginAttemptRef.current
+    if (!loginAttempt) return
+    cancelGoogleLoginAttempt(
+      loginAttempt,
+      'Google sign-in was cancelled. You can retry Google or use your Automnia password.',
+    )
+  }
+
+  const skipDesktopSessionBootstrap = () => {
+    authEpochRef.current += 1
+    markAuthSignedOut()
+    setToken(null)
+    setIsAuthenticated(false)
+    setAccount(null)
+    setChecking(false)
   }
 
   const changePassword = async (currentPassword: string, newPassword: string) => {
@@ -226,6 +295,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const logout = () => {
     const activeToken = token
+    const activeGoogleLogin = googleLoginAttemptRef.current
+    if (activeGoogleLogin) cancelGoogleLoginAttempt(activeGoogleLogin, 'Google sign-in was cancelled because the session was closed.')
     authEpochRef.current += 1
     markAuthSignedOut()
     setToken(null)
@@ -242,8 +313,21 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }
 
   return (
-    <AuthContext.Provider value={{ isAuthenticated, token, account, login, setupAccount, loginWithGoogle, changePassword, setPassword, logout, checking }}>
+    <AuthContext.Provider value={{ isAuthenticated, token, account, login, setupAccount, loginWithGoogle, cancelGoogleLogin, skipDesktopSessionBootstrap, changePassword, setPassword, logout, checking }}>
       {children}
     </AuthContext.Provider>
   )
+}
+
+function cancelGoogleLoginAttempt(attempt: GoogleLoginAttempt, reason?: string) {
+  if (attempt.cancelled) return
+  attempt.cancelled = true
+  attempt.cancelReason = reason
+  attempt.controller.abort()
+  if (!attempt.sessionId) return
+  void apiRequest(`/api/auth/account/google/session/${encodeURIComponent(attempt.sessionId)}`, {
+    method: 'DELETE',
+    authToken: '',
+    timeoutMs: 5_000,
+  })
 }

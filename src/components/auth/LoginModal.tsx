@@ -5,7 +5,7 @@ const AUTOMNIA_LOCKUP_SRC = '/brand/automnia-ai-nexus-logo-transparent-cropped.p
 const AUTOMNIA_BRAND_LABEL = 'Automnia AI Nexus'
 
 export function LoginModal() {
-  const { login, setupAccount, loginWithGoogle, checking } = useAuth()
+  const { login, setupAccount, loginWithGoogle, cancelGoogleLogin, skipDesktopSessionBootstrap, checking } = useAuth()
   const [mode, setMode] = useState<'login' | 'setup'>('login')
   const [email, setEmail] = useState('')
   const [licenseKey, setLicenseKey] = useState('')
@@ -13,6 +13,7 @@ export function LoginModal() {
   const [confirmPassword, setConfirmPassword] = useState('')
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(false)
+  const [googleLoading, setGoogleLoading] = useState(false)
 
   const handleSubmit = async (event: React.FormEvent) => {
     event.preventDefault()
@@ -35,13 +36,22 @@ export function LoginModal() {
   const handleGoogle = async () => {
     setError('')
     setLoading(true)
+    setGoogleLoading(true)
     try {
       await loginWithGoogle()
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Google sign-in failed. Please try again.')
     } finally {
       setLoading(false)
+      setGoogleLoading(false)
     }
+  }
+
+  const handleGoogleCancel = () => {
+    cancelGoogleLogin()
+    setError('Google sign-in was cancelled. You can retry Google or use your Automnia password.')
+    setLoading(false)
+    setGoogleLoading(false)
   }
 
   if (checking) {
@@ -56,6 +66,14 @@ export function LoginModal() {
           </div>
           <p className="mt-4 text-center text-sm font-semibold text-slate-100">Opening secure session</p>
           <p className="mt-1 text-center text-xs text-slate-400">Verifying the local Automnia runtime.</p>
+          <button
+            type="button"
+            onClick={skipDesktopSessionBootstrap}
+            className="mt-5 w-full rounded-lg border border-slate-200/15 bg-white/[0.04] px-4 py-2 text-xs font-semibold text-slate-200 transition hover:bg-white/[0.08]"
+          >
+            Continue to account sign-in
+          </button>
+          <p className="mt-2 text-center text-xs text-slate-500">If Google sign-in did not finish, use this to return to password or retry Google.</p>
         </div>
       </div>
     )
@@ -156,9 +174,21 @@ export function LoginModal() {
                 disabled={loading}
                 className="w-full rounded-lg border border-slate-200/15 bg-white/[0.04] px-4 py-3 text-sm font-semibold text-slate-200 transition hover:bg-white/[0.08] disabled:opacity-50"
               >
-                {loading ? 'Waiting for Google...' : 'Continue with Google'}
+                {googleLoading ? 'Waiting for Google...' : 'Continue with Google'}
               </button>
-              <p className="text-center text-xs text-slate-500">Your default browser will open for secure Google sign-in. Only active Automnia subscriber emails can continue.</p>
+              {googleLoading && (
+                <div className="space-y-2">
+                  <button
+                    type="button"
+                    onClick={handleGoogleCancel}
+                    className="w-full rounded-lg border border-amber-300/30 bg-amber-300/[0.06] px-4 py-2 text-xs font-semibold text-amber-100 transition hover:bg-amber-300/[0.12]"
+                  >
+                    Cancel and use password
+                  </button>
+                  <p className="text-center text-xs text-slate-500">If the Google window closed or did not finish, cancel here to return to a usable login screen.</p>
+                </div>
+              )}
+              {!googleLoading && <p className="text-center text-xs text-slate-500">Your default browser will open for secure Google sign-in. Only active Automnia subscriber emails can continue.</p>}
             </>
           )}
 

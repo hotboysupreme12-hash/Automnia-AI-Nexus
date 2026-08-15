@@ -52,6 +52,7 @@ function createHarness(overrides: Partial<{
     closedInputs: [] as unknown[],
     cleanupRequests: [] as unknown[],
     gatewayAbortInputs: [] as unknown[],
+    runAbortRequests: [] as Array<{ runId: string; reason: string }>,
     staleAbortRequests: [] as Array<{ minAgeMs: number; reason: string }>,
     stoppedReasons: [] as string[],
     restartRequests: [] as unknown[],
@@ -81,6 +82,10 @@ function createHarness(overrides: Partial<{
     ],
   }
   const service = createRuntimeActionService({
+    abortOpenClawRun: async (runId, reason) => {
+      state.runAbortRequests.push({ runId, reason })
+      return { found: true, runId, stopped: true, method: 'gateway-chat' }
+    },
     abortGatewayRuntimeSessionsForClose: async (input) => {
       state.gatewayAbortInputs.push(input)
       return [{ ok: true, method: 'sessions.abort', sessionKey: input.sessionKey || 'nova:session-1' }]
@@ -185,6 +190,17 @@ test('abortStaleGatewayChat records recovery intent and invalidates cached runti
   assert.deepEqual(state.staleAbortRequests, [
     { minAgeMs: 300_000, reason: 'operator stale-turn recovery' },
   ])
+})
+
+test('abortOpenClawRun delegates an explicit operator stop and invalidates the monitor', async () => {
+  const { service, state } = createHarness()
+
+  const result = await service.abortOpenClawRun('run-123')
+
+  assert.equal(result.ok, true)
+  assert.equal(result.stopped, true)
+  assert.deepEqual(state.runAbortRequests, [{ runId: 'run-123', reason: 'operator stop requested' }])
+  assert.equal(state.invalidations, 1)
 })
 
 test('clearRuntimeMonitor delegates clean-slate recovery and preserves result shape', async () => {

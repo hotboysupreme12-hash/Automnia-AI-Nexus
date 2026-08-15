@@ -2,42 +2,42 @@
 
 client_id = "d0972d80b936c44961e9490b1d113432"
 name = "Automnia AI Nexus"
-application_url = "https://automnia-shopify-provisioner-336625531977.us-east1.run.app/health"
+application_url = "https://automnia-shopify-provisioner-idkndr7vfq-ue.a.run.app/health"
 embedded = false
 
 [webhooks]
 api_version = "2026-07"
 
   [[webhooks.subscriptions]]
-  uri = "https://automnia-shopify-provisioner-336625531977.us-east1.run.app/shopify/webhooks/orders-paid"
+  uri = "https://automnia-shopify-provisioner-idkndr7vfq-ue.a.run.app/shopify/webhooks/orders-paid"
   topics = [ "orders/paid" ]
 
   [[webhooks.subscriptions]]
-  uri = "https://automnia-shopify-provisioner-336625531977.us-east1.run.app/shopify/webhooks/orders-cancelled"
+  uri = "https://automnia-shopify-provisioner-idkndr7vfq-ue.a.run.app/shopify/webhooks/orders-cancelled"
   topics = [ "orders/cancelled" ]
 
   [[webhooks.subscriptions]]
-  uri = "https://automnia-shopify-provisioner-336625531977.us-east1.run.app/shopify/webhooks/refunds-create"
+  uri = "https://automnia-shopify-provisioner-idkndr7vfq-ue.a.run.app/shopify/webhooks/refunds-create"
   topics = [ "refunds/create" ]
 
   [[webhooks.subscriptions]]
-  uri = "https://automnia-shopify-provisioner-336625531977.us-east1.run.app/shopify/webhooks/subscription-contracts-create"
+  uri = "https://automnia-shopify-provisioner-idkndr7vfq-ue.a.run.app/shopify/webhooks/subscription-contracts-create"
   topics = [ "subscription_contracts/create" ]
 
   [[webhooks.subscriptions]]
-  uri = "https://automnia-shopify-provisioner-336625531977.us-east1.run.app/shopify/webhooks/subscription-contracts-update"
+  uri = "https://automnia-shopify-provisioner-idkndr7vfq-ue.a.run.app/shopify/webhooks/subscription-contracts-update"
   topics = [ "subscription_contracts/update" ]
 
   [[webhooks.subscriptions]]
-  uri = "https://automnia-shopify-provisioner-336625531977.us-east1.run.app/shopify/webhooks/subscription-contracts-cancel"
+  uri = "https://automnia-shopify-provisioner-idkndr7vfq-ue.a.run.app/shopify/webhooks/subscription-contracts-cancel"
   topics = [ "subscription_contracts/cancel" ]
 
   [[webhooks.subscriptions]]
-  uri = "https://automnia-shopify-provisioner-336625531977.us-east1.run.app/shopify/webhooks/subscription-billing-attempts-success"
+  uri = "https://automnia-shopify-provisioner-idkndr7vfq-ue.a.run.app/shopify/webhooks/subscription-billing-attempts-success"
   topics = [ "subscription_billing_attempts/success" ]
 
   [[webhooks.subscriptions]]
-  uri = "https://automnia-shopify-provisioner-336625531977.us-east1.run.app/shopify/webhooks/subscription-billing-attempts-failure"
+  uri = "https://automnia-shopify-provisioner-idkndr7vfq-ue.a.run.app/shopify/webhooks/subscription-billing-attempts-failure"
   topics = [ "subscription_billing_attempts/failure" ]
 
 [access_scopes]
@@ -46,5 +46,5 @@ scopes = "read_customers,read_orders,read_own_subscription_contracts,read_produc
 
 [auth]
 redirect_urls = [
-  "https://automnia-shopify-provisioner-336625531977.us-east1.run.app/health"
+  "https://automnia-shopify-provisioner-idkndr7vfq-ue.a.run.app/health"
 ]
