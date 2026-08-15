@@ -95,6 +95,7 @@ import {
   AUTOMNIA_GEMINI_36_OPENCLAW_THINKING_LEVEL_MAP,
   thinkingForAutomniaGeminiRuntimeModel,
 } from './services/providers/automniaGeminiThinking'
+import { applyGoogleVertexModelLimits } from './services/providers/googleVertexModelPolicy'
 import {
   createProviderAuthService,
   isOAuthCredentialUsable,
@@ -8891,6 +8892,7 @@ function ensureGoogleVertexGlobalRouting(config: OpenClawConfigFile) {
   const providerConfig = config.models.providers['google-vertex'] ||= {}
   providerConfig.api = 'google-vertex'
   providerConfig.apiKey ||= 'gcp-vertex-credentials'
+  applyGoogleVertexModelLimits(providerConfig as Record<string, unknown>)
   if (!providerConfig.baseUrl || isGoogleVertexAiplatformBaseUrl(providerConfig.baseUrl)) {
     providerConfig.baseUrl = GOOGLE_VERTEX_GLOBAL_BASE_URL
   }
