@@ -2,6 +2,7 @@ import crypto from 'node:crypto';
 import express from 'express';
 import { Firestore } from '@google-cloud/firestore';
 import { GoogleAuth } from 'google-auth-library';
+import { gemini36ThinkingConfigFromOpenAiRequest } from './geminiThinking.js';
 
 const app = express();
 const port = process.env.PORT || 8080;
@@ -1479,11 +1480,15 @@ app.post('/v1/chat/completions', requireWritesEnabled, async (req, res) => {
     const converted = vertexContentsFromOpenAiMessages(messages);
     if (!converted.contents.length) return openAiError(res, 400, 'At least one text, tool-call, or tool-response message is required.');
     const maxOutputTokens = Math.max(128, Math.min(vertexMaxOutputTokens, Number(req.body?.max_tokens || req.body?.max_completion_tokens) || vertexMaxOutputTokens));
+    const thinkingConfig = gemini36ThinkingConfigFromOpenAiRequest(req.body);
     const payload = await generateVertexContent({
       ...converted,
       ...(vertexToolsFromOpenAi(req.body?.tools) ? { tools: vertexToolsFromOpenAi(req.body?.tools) } : {}),
       ...(vertexToolConfigFromOpenAi(req.body?.tool_choice) ? { toolConfig: vertexToolConfigFromOpenAi(req.body?.tool_choice) } : {}),
-      generationConfig: { maxOutputTokens },
+      generationConfig: {
+        maxOutputTokens,
+        ...(thinkingConfig ? { thinkingConfig } : {}),
+      },
     });
     const result = vertexCandidateResult(payload);
     const tokensUsed = result.totalTokens || Math.ceil(JSON.stringify(messages).length / 4);

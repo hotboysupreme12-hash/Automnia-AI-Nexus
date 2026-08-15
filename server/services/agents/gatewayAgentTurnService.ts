@@ -128,9 +128,9 @@ export function createGatewayAgentTurnService(options: GatewayAgentTurnServiceOp
     }
 
     const isClawTalkRoute = /\bclawtalk\b/i.test(routeOptions.route)
+    emitGatewayStage(isClawTalkRoute ? 'Checking ClawTalk runtime requirements.' : 'Checking Gateway runtime configuration.')
+    await options.ensureOpenclawAgentRunConfigDefaults()
     if (isClawTalkRoute) {
-      emitGatewayStage('Checking ClawTalk runtime requirements.')
-      await options.ensureOpenclawAgentRunConfigDefaults()
       const runtimeConfig = await options.readOpenclawConfig()
       await options.ensureAgentRuntimeHealthPreflight(agent, runtimeConfig)
       await options.ensureAgentSandboxCompatibleWithHost(agent)

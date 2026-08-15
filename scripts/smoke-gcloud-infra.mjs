@@ -23,6 +23,7 @@ const requiredFiles = [
   'switch-traffic.ps1',
   'verify.ps1',
   'service/Dockerfile',
+  'service/geminiThinking.js',
   'service/package-lock.json',
   'service/package.json',
   'service/server.js',
@@ -69,6 +70,8 @@ assert.match(service, /thought_signature/)
 assert.match(service, /tool_calls/)
 assert.doesNotMatch(service, /Runtime tool request:.*Arguments:/s)
 assert.match(service, /function pooledCreditBalance\(record\)/, 'account hosted-credit pooling must remain explicit')
+assert.match(service, /gemini36ThinkingConfigFromOpenAiRequest/, 'the relay must translate OpenAI-compatible thinking levels')
+assert.match(service, /thinkingConfig/, 'the relay must forward Gemini thinking configuration to Vertex')
 assert.match(service, /creditBalance: pooledCreditBalance\(record\)/, 'license responses must expose the pooled wallet')
 assert.match(service, /record\?\.mode === 'byok' && pooledCreditBalance\(record\) <= 0 \? 'provider_first' : 'automnia_first'/, 'BYOK with a pooled balance must not be forced to provider-first')
 assert.match(service, /creditBalance: \(record\.creditBalance \|\| 0\) \+ grant/, 'upgrades must add new credits without resetting the current wallet')
@@ -90,6 +93,8 @@ const controlPlane = readFileSync(path.join(root, 'server', 'controlPlane.ts'), 
 assert.match(licenseService, /DEFAULT_LICENSE_API_URL = AUTOMNIA_PUBLIC_CLOUD_URL/)
 assert.doesNotMatch(controlPlane, /streamAutomniaCloudRelay|AUTOMNIA_CLOUD_RELAY_URL/)
 assert.match(controlPlane, /AUTOMNIA_OPENCLAW_PROVIDER_ID = 'automnia-cloud'/)
+assert.match(controlPlane, /reasoning: true,\s*thinkingLevelMap: AUTOMNIA_GEMINI_36_OPENCLAW_THINKING_LEVEL_MAP,/s, 'Automnia Gemini must expose supported thinking levels to OpenClaw')
+assert.match(controlPlane, /synchronizeOpenClawBillingRouteForAgentRun/, 'agent turns must repair a stale hosted Gemini thinking profile before dispatch')
 assert.match(licenseService, /AUTOMNIA_PUBLIC_CLOUD_URL/)
 assert.match(serverCloudConfig, /automnia-shopify-provisioner-336625531977\.us-east1\.run\.app/)
 
@@ -114,7 +119,7 @@ assert.match(rollback, /migrate-firestore\.ps1/)
 assert.match(rollback, /verify\.ps1/)
 assert.match(rollback, /MIGRATION_WRITE_MODE=read_only/)
 
-for (const relative of ['service/server.js', 'tools/firestore-snapshot.mjs', 'tools/live-billing-test.mjs', 'tools/plan-hash.mjs', 'tools/smoke-service.mjs']) {
+for (const relative of ['service/server.js', 'service/geminiThinking.js', 'tools/firestore-snapshot.mjs', 'tools/live-billing-test.mjs', 'tools/plan-hash.mjs', 'tools/smoke-service.mjs']) {
   const checked = spawnSync(process.execPath, ['--check', path.join(infra, relative)], { encoding: 'utf8' })
   assert.equal(checked.status, 0, `${relative} syntax error: ${checked.stderr}`)
 }

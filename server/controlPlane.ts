@@ -91,6 +91,11 @@ import {
   type ModelProviderConfig,
 } from './services/providers/modelCatalogService'
 import {
+  AUTOMNIA_GEMINI_36_OPENAI_REASONING_COMPAT,
+  AUTOMNIA_GEMINI_36_OPENCLAW_THINKING_LEVEL_MAP,
+  thinkingForAutomniaGeminiRuntimeModel,
+} from './services/providers/automniaGeminiThinking'
+import {
   createProviderAuthService,
   isOAuthCredentialUsable,
   type ProviderAuthOpenClawConfig,
@@ -1719,7 +1724,8 @@ const agentLocalConfigCache = new Map<string, JsonFileCacheEntry<AgentLocalConfi
 const skillRootCache = new Map<string, TimedValueCache<AgentSkillEntry[]>>()
 
 function thinkingForOpenClawRuntimeModel(modelId: string, thinking: ThinkingLevel): ThinkingLevel {
-  return isOpenAiCodexSubscriptionModel(modelId) ? 'off' : thinking
+  if (isOpenAiCodexSubscriptionModel(modelId)) return 'off'
+  return thinkingForAutomniaGeminiRuntimeModel(modelId, thinking)
 }
 
 function primaryModelForOpenClawConfig(modelId: string | undefined) {
@@ -9558,7 +9564,12 @@ async function synchronizeOpenClawBillingRoute(configInput?: OpenClawConfigFile)
     models: [{
       id: 'gemini-3.6-flash',
       name: 'Automnia Cloud Credits - Gemini 3.6 Flash',
-      reasoning: false,
+      // Gemini 3.6 Flash supports minimal, low, medium, and high. Marking
+      // this false made OpenClaw reject every enabled level before the relay
+      // received the request ("Use one of: off").
+      reasoning: true,
+      thinkingLevelMap: AUTOMNIA_GEMINI_36_OPENCLAW_THINKING_LEVEL_MAP,
+      compat: AUTOMNIA_GEMINI_36_OPENAI_REASONING_COMPAT,
       input: ['text', 'image'],
       contextWindow: 1_000_000,
       // Keep the hosted model's runtime cap aligned with its advertised
@@ -9602,13 +9613,37 @@ function automniaBillingRouteSnapshot(config: OpenClawConfigFile | null | undefi
   })
 }
 
+/**
+ * Repair a stale hosted-credits model definition before the first agent turn.
+ *
+ * Older installs registered Gemini 3.6 Flash with `reasoning: false`, which
+ * makes OpenClaw reject every enabled thinking level locally. If that legacy
+ * definition is still loaded by a healthy Gateway, restart the owned Gateway
+ * after writing the corrected profile so the user never receives that
+ * configuration error.
+ */
+async function synchronizeOpenClawBillingRouteForAgentRun(config: OpenClawConfigFile) {
+  const beforeRoute = automniaBillingRouteSnapshot(config)
+  await synchronizeOpenClawBillingRoute(config)
+  const afterConfig = await readOpenclawConfig().catch(() => null)
+  const afterRoute = automniaBillingRouteSnapshot(afterConfig)
+  if (beforeRoute === afterRoute || !await isGatewayHealthy().catch(() => false)) return
+
+  await tryRestartGatewayService({
+    force: true,
+    reason: 'hosted Gemini thinking profile synchronization',
+  }).catch((error) => {
+    console.warn('[hosted-gemini-thinking] failed to restart gateway after profile synchronization:', error)
+  })
+}
+
 async function ensureOpenclawAgentRunConfigDefaults() {
   if (openclawAgentRunDefaultsReady) return
   if (!openclawAgentRunDefaultsPending) {
     openclawAgentRunDefaultsPending = (async () => {
       const config = await readOpenclawConfig()
       ensureConfiguredModelAllowlist(config, agentRuntimeModelIdsForConfig(config))
-      await writeOpenclawConfig(config)
+      await synchronizeOpenClawBillingRouteForAgentRun(config)
       const toolchainChecks = [
         commandCheck(process.platform === 'win32' ? 'node.exe' : 'node', ['--version'], 'Node.js'),
         commandCheck(process.platform === 'win32' ? 'npm.cmd' : 'npm', ['--version'], 'npm'),

@@ -22,6 +22,7 @@ test('gateway agent turn service prepares a Gateway chat turn with identity and 
   const promptDumps: Record<string, unknown>[] = []
   let capturedGatewayTurn: Record<string, unknown> | null = null
   let healthMonitorStarts = 0
+  let runtimeConfigChecks = 0
   const sessions = new Map<string, string>()
 
   const service = createGatewayAgentTurnService({
@@ -30,7 +31,9 @@ test('gateway agent turn service prepares a Gateway chat turn with identity and 
     isValidAgentId: (agentId) => agentId === 'agent-alpha',
     isRetiredAgentId: () => false,
     streamObserver: () => ({ emit: (event, data) => events.push({ event, data }) }),
-    ensureOpenclawAgentRunConfigDefaults: async () => undefined,
+    ensureOpenclawAgentRunConfigDefaults: async () => {
+      runtimeConfigChecks += 1
+    },
     readOpenclawConfig: async () => ({}),
     ensureAgentRuntimeHealthPreflight: async () => undefined,
     ensureAgentSandboxCompatibleWithHost: async () => undefined,
@@ -82,6 +85,7 @@ test('gateway agent turn service prepares a Gateway chat turn with identity and 
   })
 
   assert.equal(healthMonitorStarts, 1)
+  assert.equal(runtimeConfigChecks, 1)
   assert.equal(result.ok, true)
   assert.equal(result.reply, 'reply from gateway stdout')
   assert.equal(result.runtimeTransport, 'gateway-chat')
