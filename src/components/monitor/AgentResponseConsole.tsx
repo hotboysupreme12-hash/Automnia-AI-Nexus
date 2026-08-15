@@ -1936,7 +1936,7 @@ export function AgentResponseConsole() {
           className="dy-command-active-runs shrink-0 border-b border-white/[0.08] bg-black/10 px-3 py-2"
           role="status"
           aria-live="polite"
-          aria-label={`${activeRuntimeRuns.length} active runtime ${activeRuntimeRuns.length === 1 ? 'run' : 'runs'} monitored by Control Center`}
+          aria-label={`${activeRuntimeRuns.length} active runtime ${activeRuntimeRuns.length === 1 ? 'run' : 'runs'} monitored by Automnia`}
           data-active-runtime-runs={activeRuntimeRuns.length}
         >
           <div className="mb-1.5 flex items-center justify-between gap-2 text-[10px] uppercase tracking-[0.16em] text-white/55">

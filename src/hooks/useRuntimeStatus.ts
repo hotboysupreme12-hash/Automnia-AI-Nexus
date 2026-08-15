@@ -7,6 +7,7 @@ const RUNTIME_STATUS_CLIENT_CACHE_MS = 1_000
 const RUNTIME_ACTION_TIMEOUT_MS = 30_000
 const RUNTIME_DOCTOR_TIMEOUT_MS = 60_000
 const RUNTIME_CRON_SHIFT_HYDRATION_CACHE_MS = 5_000
+const CLIENT_CHANNEL_ACTIVITY_HISTORY_LIMIT = 100
 
 export type GatewayLogEntry = {
   id: number
@@ -748,7 +749,7 @@ type RuntimeStatusSnapshot = {
 let cachedRuntimeStatus: RuntimeStatus | null = null
 let cachedRuntimeError = ''
 let runtimeStatusRequest: AbortController | null = null
-let runtimeStatusRequestAbortReason: 'idle' | null = null
+let runtimeStatusRequestAbortReason: 'idle' | 'paused' | null = null
 let runtimeStatusRefreshPending = false
 let runtimePollTimer: number | null = null
 let runtimeSubscriberId = 0
@@ -757,7 +758,7 @@ const runtimeSubscriberIntervals = new Map<number, number>()
 let cachedRuntimeSummaryStatus: RuntimeStatus | null = null
 let cachedRuntimeSummaryError = ''
 let runtimeSummaryRequest: AbortController | null = null
-let runtimeSummaryRequestAbortReason: 'idle' | null = null
+let runtimeSummaryRequestAbortReason: 'idle' | 'paused' | null = null
 let runtimeSummaryRefreshPending = false
 let runtimeSummaryPollTimer: number | null = null
 let runtimeSummarySubscriberId = 0
@@ -765,6 +766,7 @@ const runtimeSummarySubscribers = new Set<() => void>()
 const runtimeSummarySubscriberIntervals = new Map<number, number>()
 let runtimeLifecycleListenersInstalled = false
 let runtimeResumeRefreshTimer: number | null = null
+let runtimeChannelActivityHistory: GatewayChannelActivity[] = []
 
 function runtimeSnapshot(): RuntimeStatusSnapshot {
   return { status: cachedRuntimeStatus, error: cachedRuntimeError }
@@ -782,10 +784,53 @@ function notifyRuntimeSummarySubscribers() {
   runtimeSummarySubscribers.forEach((listener) => listener())
 }
 
+function channelActivityEntryKey(event: GatewayChannelActivity) {
+  return `${event.id}|${event.timestamp}|${event.channel}|${event.direction}|${event.message}`
+}
+
+function mergeRuntimeChannelActivity(status: RuntimeStatus): RuntimeStatus {
+  const incoming = status.gateway.activity?.events || []
+  const merged: GatewayChannelActivity[] = []
+  const seen = new Set<string>()
+
+  for (const event of [...incoming, ...runtimeChannelActivityHistory]) {
+    const key = channelActivityEntryKey(event)
+    if (seen.has(key)) continue
+    seen.add(key)
+    merged.push(event)
+  }
+
+  merged.sort((a, b) => {
+    const aTime = Date.parse(a.timestamp)
+    const bTime = Date.parse(b.timestamp)
+    return (Number.isFinite(bTime) ? bTime : 0) - (Number.isFinite(aTime) ? aTime : 0)
+  })
+  runtimeChannelActivityHistory = merged.slice(0, CLIENT_CHANNEL_ACTIVITY_HISTORY_LIMIT)
+
+  const activity = status.gateway.activity
+  const events = runtimeChannelActivityHistory
+  return {
+    ...status,
+    gateway: {
+      ...status.gateway,
+      activity: {
+        ...activity,
+        lastEventAt: events[0]?.timestamp || activity.lastEventAt || null,
+        sourcePath: events[0]?.source || activity.sourcePath || null,
+        inboundCount: events.filter((event) => event.direction === 'inbound').length,
+        outboundCount: events.filter((event) => event.direction === 'outbound').length,
+        systemCount: events.filter((event) => event.direction === 'system').length,
+        events,
+      },
+    },
+  }
+}
+
 function publishRuntimeStatusSnapshot(status: RuntimeStatus) {
-  cachedRuntimeStatus = status
+  const stableStatus = mergeRuntimeChannelActivity(status)
+  cachedRuntimeStatus = stableStatus
   cachedRuntimeError = ''
-  cachedRuntimeSummaryStatus = status
+  cachedRuntimeSummaryStatus = stableStatus
   cachedRuntimeSummaryError = ''
   notifyRuntimeSummarySubscribers()
 }
@@ -828,6 +873,7 @@ export async function clearRuntimeMonitor(): Promise<RuntimeMonitorClearResult> 
   })
   if (!isRuntimeMonitorClearResult(data)) throw new Error('Clear runtime monitor returned an invalid response.')
 
+  runtimeChannelActivityHistory = []
   if (cachedRuntimeStatus) {
     cachedRuntimeStatus = {
       ...cachedRuntimeStatus,
@@ -872,8 +918,12 @@ function currentRuntimeSummaryPollInterval() {
 
 function runtimePollingAllowed() {
   const visible = typeof document === 'undefined' || document.visibilityState !== 'hidden'
+  // Electron can keep renderer timers alive while its window is occluded. Do
+  // not spend CPU polling a live monitor that the operator cannot currently
+  // see; focus/visibility listeners will trigger a refresh when it returns.
+  const focused = typeof document === 'undefined' || typeof document.hasFocus !== 'function' || document.hasFocus()
   const online = typeof navigator === 'undefined' || navigator.onLine !== false
-  return visible && online
+  return visible && focused && online
 }
 
 function runtimeStatusAgeMs(status: RuntimeStatus | null) {
@@ -939,6 +989,14 @@ function refreshVisibleRuntimePolling() {
   rescheduleRuntimePolling()
   rescheduleRuntimeSummaryPolling()
   if (!runtimePollingAllowed()) {
+    if (runtimeStatusRequest && !runtimeStatusRequest.signal.aborted) {
+      runtimeStatusRequestAbortReason = 'paused'
+      runtimeStatusRequest.abort()
+    }
+    if (runtimeSummaryRequest && !runtimeSummaryRequest.signal.aborted) {
+      runtimeSummaryRequestAbortReason = 'paused'
+      runtimeSummaryRequest.abort()
+    }
     if (runtimeResumeRefreshTimer) {
       window.clearTimeout(runtimeResumeRefreshTimer)
       runtimeResumeRefreshTimer = null
@@ -961,6 +1019,7 @@ function ensureRuntimeLifecycleListeners() {
   if (runtimeLifecycleListenersInstalled || typeof window === 'undefined') return
   runtimeLifecycleListenersInstalled = true
   window.addEventListener('focus', refreshVisibleRuntimePolling)
+  window.addEventListener('blur', refreshVisibleRuntimePolling)
   window.addEventListener('online', refreshVisibleRuntimePolling)
   window.addEventListener('offline', refreshVisibleRuntimePolling)
   if (typeof document !== 'undefined') {
@@ -1010,8 +1069,9 @@ async function loadRuntimeStatus(intervalMs: number, forceRefresh = false) {
       timeoutMs: requestTimeoutMs,
     })
     const idleAbort = runtimeStatusRequestAbortReason === 'idle' && controller.signal.aborted
+    const pausedAbort = runtimeStatusRequestAbortReason === 'paused' && controller.signal.aborted
     if (!result.ok) {
-      if (idleAbort) return
+      if (idleAbort || pausedAbort) return
       throw runtimeApiRequestError(result.error)
     }
     if (!isRuntimeStatusPayload(result.data)) {
@@ -1020,7 +1080,8 @@ async function loadRuntimeStatus(intervalMs: number, forceRefresh = false) {
     publishRuntimeStatusSnapshot(await hydrateRuntimeStatusCronJobs(result.data))
   } catch (loadError) {
     const idleAbort = runtimeStatusRequestAbortReason === 'idle' && controller.signal.aborted
-    if (!idleAbort) {
+    const pausedAbort = runtimeStatusRequestAbortReason === 'paused' && controller.signal.aborted
+    if (!idleAbort && !pausedAbort) {
       cachedRuntimeError = loadError instanceof DOMException && (loadError.name === 'AbortError' || loadError.name === 'TimeoutError')
         ? cachedRuntimeStatus
           ? 'Runtime status timed out; showing the last snapshot.'
@@ -1070,18 +1131,21 @@ async function loadRuntimeSummaryStatus(intervalMs: number, forceRefresh = false
       timeoutMs: requestTimeoutMs,
     })
     const idleAbort = runtimeSummaryRequestAbortReason === 'idle' && controller.signal.aborted
+    const pausedAbort = runtimeSummaryRequestAbortReason === 'paused' && controller.signal.aborted
     if (!result.ok) {
-      if (idleAbort) return
+      if (idleAbort || pausedAbort) return
       throw runtimeApiRequestError(result.error)
     }
     if (!isRuntimeStatusPayload(result.data)) {
       throw new Error('Runtime summary response missing gateway data.')
     }
     cachedRuntimeSummaryStatus = result.data
+    cachedRuntimeSummaryStatus = mergeRuntimeChannelActivity(cachedRuntimeSummaryStatus)
     cachedRuntimeSummaryError = ''
   } catch (loadError) {
     const idleAbort = runtimeSummaryRequestAbortReason === 'idle' && controller.signal.aborted
-    if (!idleAbort) {
+    const pausedAbort = runtimeSummaryRequestAbortReason === 'paused' && controller.signal.aborted
+    if (!idleAbort && !pausedAbort) {
       cachedRuntimeSummaryError = loadError instanceof DOMException && (loadError.name === 'AbortError' || loadError.name === 'TimeoutError')
         ? cachedRuntimeSummaryStatus
           ? 'Runtime summary timed out; showing the last snapshot.'

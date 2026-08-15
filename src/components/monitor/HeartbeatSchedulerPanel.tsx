@@ -417,7 +417,7 @@ export function HeartbeatSchedulerPanel() {
 
     if (!targetShifts.length) {
       setStopConfirmShifts([])
-      setStatus(scopedAgent ? `No Control Center cron shifts for ${scopedAgent}.` : 'No Control Center cron shifts to stop.')
+      setStatus(scopedAgent ? `No Automnia cron shifts for ${scopedAgent}.` : 'No Automnia cron shifts to stop.')
       return
     }
 

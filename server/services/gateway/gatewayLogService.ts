@@ -37,6 +37,8 @@ export type GatewayActivitySummary = {
   events: GatewayChannelActivity[]
 }
 
+const MAX_CHANNEL_ACTIVITY_HISTORY = 100
+
 export type GatewayLogClient = {
   request: (method: string, params?: unknown, options?: { timeoutMs?: number | null; signal?: AbortSignal }) => Promise<unknown>
 }
@@ -1016,7 +1018,7 @@ export function createGatewayLogService(options: GatewayLogServiceOptions) {
         agentId: gatewayActivityAgentId(entry.message),
       }))
       .sort((a, b) => Date.parse(b.timestamp) - Date.parse(a.timestamp))
-      .slice(0, 60)
+      .slice(0, MAX_CHANNEL_ACTIVITY_HISTORY)
 
     const lastEventAt = events[0]?.timestamp || null
     const lastMs = lastEventAt ? Date.parse(lastEventAt) : NaN

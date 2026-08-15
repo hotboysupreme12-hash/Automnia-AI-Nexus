@@ -138,9 +138,10 @@ export function NexusShell() {
   const isEditorOpen = useNexusStore((s) => s.isEditorOpen)
   const missionRunning = activeMission?.status === 'running'
   const activeTab = WORKSPACE_META[tab] || WORKSPACE_META.agents
-  // The shell only needs a lightweight status badge. Give the Monitor tab the
-  // faster cadence while keeping background tabs quiet on lower-powered PCs.
-  const runtimeSummaryPollInterval = tab === 'monitor' ? 8000 : 12000
+  // Runtime status is useful context, not a frame-by-frame feed. Keep the
+  // Monitor responsive without repeatedly waking the Gateway and renderer on
+  // lower-powered PCs; polling also pauses when the window is not focused.
+  const runtimeSummaryPollInterval = tab === 'monitor' ? 15000 : 30000
   const { status: runtimeStatus, error: runtimeError, refresh: refreshRuntimeStatus } = useRuntimeSummaryStatus(runtimeSummaryPollInterval)
   const gatewayOnline = Boolean(runtimeStatus?.gateway.healthy || runtimeStatus?.gateway.processRunning)
   const gatewayMigration = runtimeStatus?.gateway.migration?.active === true

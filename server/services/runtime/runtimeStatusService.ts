@@ -60,6 +60,8 @@ type RuntimeStatusDoctorDiagnostics = Record<string, unknown> & {
   recent: unknown[]
 }
 
+const MAX_CHANNEL_ACTIVITY_HISTORY = 100
+
 export type RuntimeStatusServiceOptions = {
   openClawConfigPath: string
   statusCacheMs: number
@@ -275,7 +277,7 @@ export function createRuntimeStatusService(options: RuntimeStatusServiceOptions)
         logs: Array.isArray(gateway.logs) ? gateway.logs.slice(0, 12) : [],
         activity: {
           ...activity,
-          events: Array.isArray(activity.events) ? activity.events.slice(0, 8) : [],
+          events: Array.isArray(activity.events) ? activity.events.slice(0, MAX_CHANNEL_ACTIVITY_HISTORY) : [],
         },
       },
       sessions: [],
@@ -617,7 +619,7 @@ export function createRuntimeStatusService(options: RuntimeStatusServiceOptions)
         stability: gatewayStability,
         activity: {
           ...activity,
-          events: activity.events.slice(0, 8),
+          events: activity.events.slice(0, MAX_CHANNEL_ACTIVITY_HISTORY),
         },
       },
       sessions: [],

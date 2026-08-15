@@ -612,7 +612,7 @@ function buildRelevantSkillHints(agent: OpenClawAgent | undefined, prompt: strin
   })
   return [
     'Enabled skill files, if relevant. Read the exact SKILL.md path shown; do not rewrite it as ~/skills.',
-    'Control Center shared skills live under the .openclaw skills root when listed there.',
+    'Automnia shared skills live under the .openclaw skills root when listed there.',
     ...skillLines,
   ].join('\n')
 }
@@ -1251,7 +1251,7 @@ export const useNexusStore = create<NexusState>()(
             ok: false,
             code: r.status,
             reply: [
-              'Control Center API is offline.',
+              'Automnia API is offline.',
               'Restart the backend with npm run dev:server, or run npm run dev to start both client and server.',
             ].join('\n'),
             stderr: text || `HTTP ${r.status}`,
@@ -2278,7 +2278,7 @@ export const useNexusStore = create<NexusState>()(
             const networkFailure = result.error.code === 'network_error'
             const message = networkFailure
               ? [
-                  'Control Center lost the local backend connection before the provider returned.',
+                  'Automnia lost the local backend connection before the provider returned.',
                   'The Gateway may have restarted while this turn was opening. Reset Gateway, then retry.',
                   `Detail: ${result.error.message}`,
                 ].join('\n')
@@ -2341,7 +2341,7 @@ export const useNexusStore = create<NexusState>()(
               return await postJson(msg, forceOpenClawRuntime)
             } catch (fallbackError) {
               throw new Error([
-                'Control Center API request failed for both streaming and buffered agent-turn routes.',
+                'Automnia API request failed for both streaming and buffered agent-turn routes.',
                 `Streaming route: ${requestErrorMessage(streamError)}`,
                 `Buffered route: ${requestErrorMessage(fallbackError)}`,
               ].join('\n'))
@@ -2499,7 +2499,7 @@ export const useNexusStore = create<NexusState>()(
             ? 'Agent turn request timed out after 6h waiting for backend response.'
             : offline
             ? [
-                'Control Center lost the local backend connection before the provider returned.',
+                  'Automnia lost the local backend connection before the provider returned.',
                 'The Gateway may have restarted while this turn was opening. Reset Gateway, then retry.',
                 `Detail: ${compactLine(message, 700)}`,
               ].join('\n')
@@ -2906,7 +2906,7 @@ export const useNexusStore = create<NexusState>()(
             motto: `${draft.className} tuned for ${draft.behaviorProfile} work.`,
             bio: input.templateName
               ? `${draft.name} was recruited from the ${input.templateName} Agency template${input.templateSource ? ` (${input.templateSource})` : ''} with ${enabledCapabilityKeys.join(', ')} capability coverage.`
-              : `${draft.name} was recruited from the Control Center with ${enabledCapabilityKeys.join(', ')} capability coverage.`,
+              : `${draft.name} was recruited from Automnia with ${enabledCapabilityKeys.join(', ')} capability coverage.`,
             skills: draft.unlockedSkills,
             abilities: enabledCapabilityKeys,
             tools: draft.mds.toolAccess,

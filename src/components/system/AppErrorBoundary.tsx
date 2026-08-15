@@ -249,7 +249,7 @@ export class AppErrorBoundary extends Component<AppErrorBoundaryProps, AppErrorB
     return (
       <main className="dy-error-boundary" role="alert" aria-live="assertive">
         <section className="dy-error-boundary__panel" aria-labelledby="dy-error-boundary-title">
-          <p className="dy-error-boundary__kicker">Automnia AI Nexus Control Center</p>
+          <p className="dy-error-boundary__kicker">Automnia AI Nexus</p>
           <h1 id="dy-error-boundary-title" className="dy-error-boundary__title">
             {title}
           </h1>

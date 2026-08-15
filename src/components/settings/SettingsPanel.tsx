@@ -49,9 +49,16 @@ import {
   type RegistryPreferences,
   type RegistrySortKey,
 } from './workspaceSettings'
+import { SettingsActivityLog } from './SettingsActivityLog'
+import {
+  CHANNEL_ACTIVITY_SETTINGS_STORAGE_KEY,
+  DEFAULT_CHANNEL_ACTIVITY_SETTINGS,
+  readChannelActivitySettings,
+  saveChannelActivitySettings,
+} from './channelActivitySettings'
 
 type NoticeTone = 'neutral' | 'success' | 'warning' | 'error'
-export type SettingsSectionId = 'account' | 'appearance' | 'workspace' | 'voice' | 'missions' | 'agents' | 'data'
+export type SettingsSectionId = 'account' | 'appearance' | 'workspace' | 'voice' | 'missions' | 'agents' | 'logs' | 'data'
 type RuntimeTargetScope = 'party' | 'selection'
 type PendingConfirmation = 'reset-all' | 'reset-runtime' | 'clear-workspace' | null
 
@@ -78,6 +85,7 @@ const SETTINGS_SECTIONS: Array<{
   { id: 'voice', label: 'Voice', description: 'Transcription and microphone', keywords: 'speech microphone local cloud online silence pause noise echo gain recording' },
   { id: 'missions', label: 'Missions', description: 'Defaults for new deployments', keywords: 'mission objective duration risk complexity collaboration evidence build test' },
   { id: 'agents', label: 'Agent runtime', description: 'Bulk heartbeat and reasoning policy', keywords: 'agent runtime heartbeat timeout thinking fast parallel recovery continuous' },
+  { id: 'logs', label: 'Logs', description: 'Agent runs, channels and activity memory', keywords: 'logs activity agent runs gateway events tail automnia runtime response history channel telegram sms incoming sent retain trim memory' },
   { id: 'data', label: 'Data & reset', description: 'Backup, cleanup and recovery', keywords: 'reset default backup export clear console responses simulation party data' },
 ]
 
@@ -130,6 +138,7 @@ function SettingsGlyph({ name }: { name: SettingsSectionId }) {
     voice: <><rect x="9" y="3" width="6" height="11" rx="3" /><path d="M5 10a7 7 0 0 0 14 0M12 17v4M8 21h8" /></>,
     missions: <><path d="m14.5 4.5 5 5-10 10-5-5 10-10Z" /><path d="m12.5 6.5 5 5M5 19l2 2" /></>,
     agents: <><circle cx="12" cy="8" r="4" /><path d="M4.5 21a7.5 7.5 0 0 1 15 0M19 4v4M17 6h4" /></>,
+    logs: <><path d="M5 5.5h14M5 12h14M5 18.5h9" /><circle cx="3.5" cy="5.5" r=".7" fill="currentColor" stroke="none" /><circle cx="3.5" cy="12" r=".7" fill="currentColor" stroke="none" /><circle cx="3.5" cy="18.5" r=".7" fill="currentColor" stroke="none" /></>,
     data: <><path d="M12 3v12M7 10l5 5 5-5" /><path d="M4 18v3h16v-3" /></>,
   }
   return <svg viewBox="0 0 24 24" aria-hidden="true">{paths[name]}</svg>
@@ -383,6 +392,7 @@ export function SettingsPanel({ focusSection = 'account', focusRequest = 0 }: { 
     saveRegistryPreferences(DEFAULT_REGISTRY_PREFERENCES)
     saveConsolePreferences(DEFAULT_CONSOLE_PREFERENCES)
     saveSpeechSettings(DEFAULT_SPEECH_SETTINGS)
+    saveChannelActivitySettings(DEFAULT_CHANNEL_ACTIVITY_SETTINGS)
     setRegistryPreferences(DEFAULT_REGISTRY_PREFERENCES)
     setConsolePreferences(DEFAULT_CONSOLE_PREFERENCES)
     setSpeechSettings(DEFAULT_SPEECH_SETTINGS)
@@ -398,6 +408,7 @@ export function SettingsPanel({ focusSection = 'account', focusRequest = 0 }: { 
       await navigator.clipboard.writeText(JSON.stringify({
         version: 1,
         [UI_SETTINGS_STORAGE_KEY]: uiSettings,
+        [CHANNEL_ACTIVITY_SETTINGS_STORAGE_KEY]: readChannelActivitySettings(),
         speech: speechSettings,
         registry: registryPreferences,
         console: consolePreferences,
@@ -411,7 +422,7 @@ export function SettingsPanel({ focusSection = 'account', focusRequest = 0 }: { 
 
   const renderAppearance = () => (
     <div className="dui-settings-section" id="settings-section-appearance" role="tabpanel">
-      <SectionHeader section="appearance" eyebrow="Personalize the control center" />
+      <SectionHeader section="appearance" eyebrow="Personalize Automnia" />
       <SettingsCard title="Color and surfaces" description="Applied live across every workspace.">
         <Field label="Accent mode" hint="Changes active controls, status color and highlights.">
           <select value={uiSettings.accentMode} onChange={(event) => updateUiSetting('accentMode', event.target.value as UiAccentMode, 'Accent mode')}>
@@ -911,6 +922,7 @@ export function SettingsPanel({ focusSection = 'account', focusRequest = 0 }: { 
     if (section === 'voice') return renderVoice()
     if (section === 'missions') return renderMissions()
     if (section === 'agents') return renderAgents()
+    if (section === 'logs') return <SettingsActivityLog />
     return renderData()
   }
 
@@ -933,7 +945,7 @@ export function SettingsPanel({ focusSection = 'account', focusRequest = 0 }: { 
   return (
     <section data-dui-panel="settings" data-ui-revision="settings-v2" className="dui-settings-panel dui-settings-redesign">
       <header className="dui-settings-topbar">
-        <div><span>Control center</span><h2>Settings</h2><p>Everything here is functional, persistent and safe to change.</p></div>
+        <div><span>Automnia</span><h2>Settings</h2><p>Everything here is functional, persistent and safe to change.</p></div>
         <label className="dui-settings-search"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="7" /><path d="m16 16 4 4" /></svg><input type="search" value={searchQuery} onChange={(event) => setSearchQuery(event.target.value)} placeholder="Search settings…" aria-label="Search settings" />{searchQuery && <button type="button" onClick={() => setSearchQuery('')} aria-label="Clear settings search">×</button>}</label>
       </header>
 

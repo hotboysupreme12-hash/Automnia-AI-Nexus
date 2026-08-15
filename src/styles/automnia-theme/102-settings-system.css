@@ -1363,3 +1363,278 @@ html.dui-pro-overhaul [data-ui-revision="settings-v2"].dui-settings-redesign .du
   html.dui-pro-overhaul [data-ui-revision="settings-v2"].dui-settings-redesign .dui-settings-account-actions__grid { grid-template-columns: minmax(0, 1fr); }
   html.dui-pro-overhaul [data-ui-revision="settings-v2"].dui-settings-redesign .dui-settings-account-actions__head > small { display: none; }
 }
+
+/* Unified Automnia activity log. It intentionally borrows the response-console
+   rhythm while giving gateway entries a distinct, recognizable source mark. */
+html.dui-pro-overhaul [data-ui-revision="settings-v2"] .dui-activity-log__hero {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 15px;
+  margin: 0 0 14px;
+  padding: 18px 19px;
+  border: 1px solid rgb(117 221 206 / .14);
+  border-radius: 14px;
+  background:
+    radial-gradient(circle at 0 0, rgb(97 221 204 / .13), transparent 38%),
+    linear-gradient(145deg, rgb(255 255 255 / .045), rgb(255 255 255 / .012));
+  box-shadow: 0 16px 32px rgb(0 0 0 / .13);
+}
+
+html.dui-pro-overhaul [data-ui-revision="settings-v2"] .dui-activity-log__hero-mark {
+  display: grid;
+  width: 48px;
+  height: 48px;
+  place-items: center;
+  overflow: hidden;
+  border: 1px solid rgb(132 231 218 / .22);
+  border-radius: 14px;
+  background: rgb(5 17 20 / .74);
+  box-shadow: 0 0 24px rgb(89 210 199 / .12);
+}
+
+html.dui-pro-overhaul [data-ui-revision="settings-v2"] .dui-activity-log__hero-mark img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+html.dui-pro-overhaul [data-ui-revision="settings-v2"] .dui-activity-log__hero-copy > span {
+  color: #7dadae;
+  font-size: 8px;
+  font-weight: 800;
+  letter-spacing: .16em;
+  text-transform: uppercase;
+}
+
+html.dui-pro-overhaul [data-ui-revision="settings-v2"] .dui-activity-log__hero-copy h3 {
+  margin: 2px 0 3px;
+  color: #ecfffb;
+  font-size: 20px;
+  line-height: 1.1;
+}
+
+html.dui-pro-overhaul [data-ui-revision="settings-v2"] .dui-activity-log__hero-copy p {
+  margin: 0;
+  color: #82999d;
+  font-size: 11px;
+  line-height: 1.45;
+}
+
+html.dui-pro-overhaul [data-ui-revision="settings-v2"] .dui-activity-log__hero-status {
+  display: grid;
+  justify-items: end;
+  gap: 3px;
+  color: #93a8aa;
+  font-size: 9px;
+  text-align: right;
+  text-transform: uppercase;
+  letter-spacing: .1em;
+}
+
+html.dui-pro-overhaul [data-ui-revision="settings-v2"] .dui-activity-log__hero-status > i {
+  width: 7px;
+  height: 7px;
+  margin-bottom: 2px;
+  border-radius: 50%;
+  background: #97a4a7;
+  box-shadow: 0 0 8px rgb(151 164 167 / .25);
+}
+
+html.dui-pro-overhaul [data-ui-revision="settings-v2"] .dui-activity-log__hero-status[data-state="live"] { color: #8ee1c3; }
+html.dui-pro-overhaul [data-ui-revision="settings-v2"] .dui-activity-log__hero-status[data-state="live"] > i { background: #62d6a7; box-shadow: 0 0 10px rgb(98 214 167 / .5); }
+html.dui-pro-overhaul [data-ui-revision="settings-v2"] .dui-activity-log__hero-status[data-state="offline"] { color: #e49a9f; }
+html.dui-pro-overhaul [data-ui-revision="settings-v2"] .dui-activity-log__hero-status[data-state="offline"] > i { background: #e27d89; box-shadow: 0 0 10px rgb(226 125 137 / .35); }
+
+html.dui-pro-overhaul [data-ui-revision="settings-v2"] .dui-activity-log__hero-status strong { font-size: 9px; }
+html.dui-pro-overhaul [data-ui-revision="settings-v2"] .dui-activity-log__hero-status small { color: #647b7f; font-size: 8px; letter-spacing: .02em; text-transform: none; }
+
+html.dui-pro-overhaul [data-ui-revision="settings-v2"] .dui-activity-log__summary {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+  margin-bottom: 14px;
+}
+
+html.dui-pro-overhaul [data-ui-revision="settings-v2"] .dui-activity-log__summary > div {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 11px 13px;
+  border: 1px solid rgb(255 255 255 / .06);
+  border-radius: 10px;
+  background: rgb(255 255 255 / .018);
+}
+
+html.dui-pro-overhaul [data-ui-revision="settings-v2"] .dui-activity-log__summary span {
+  color: #71878b;
+  font-size: 8px;
+  font-weight: 800;
+  letter-spacing: .11em;
+  text-transform: uppercase;
+}
+
+html.dui-pro-overhaul [data-ui-revision="settings-v2"] .dui-activity-log__summary strong {
+  color: #e2f0ee;
+  font-size: 17px;
+  line-height: 1;
+}
+
+html.dui-pro-overhaul [data-ui-revision="settings-v2"] .dui-activity-log__card {
+  overflow: hidden;
+  border: 1px solid rgb(255 255 255 / .075);
+  border-radius: 14px;
+  background: linear-gradient(180deg, rgb(10 19 22 / .84), rgb(5 11 14 / .9));
+  box-shadow: 0 18px 38px rgb(0 0 0 / .16);
+}
+
+html.dui-pro-overhaul [data-ui-revision="settings-v2"] .dui-activity-log__toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 12px 13px;
+  border-bottom: 1px solid rgb(255 255 255 / .07);
+  background: linear-gradient(90deg, rgb(255 255 255 / .035), transparent 80%);
+}
+
+html.dui-pro-overhaul [data-ui-revision="settings-v2"] .dui-activity-log__filters,
+html.dui-pro-overhaul [data-ui-revision="settings-v2"] .dui-activity-log__actions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+html.dui-pro-overhaul [data-ui-revision="settings-v2"] .dui-activity-log__filters { min-width: 0; overflow-x: auto; }
+
+html.dui-pro-overhaul [data-ui-revision="settings-v2"] .dui-activity-log__filters button,
+html.dui-pro-overhaul [data-ui-revision="settings-v2"] .dui-activity-log__refresh {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 28px;
+  padding: 5px 9px;
+  border: 1px solid transparent;
+  border-radius: 7px;
+  color: #789094;
+  background: transparent;
+  font-size: 9px;
+  font-weight: 800;
+  letter-spacing: .06em;
+  white-space: nowrap;
+  text-transform: uppercase;
+  transition: color .16s ease, background .16s ease, border-color .16s ease;
+}
+
+html.dui-pro-overhaul [data-ui-revision="settings-v2"] .dui-activity-log__filters button:hover,
+html.dui-pro-overhaul [data-ui-revision="settings-v2"] .dui-activity-log__refresh:hover { color: #c9f7ef; background: rgb(118 222 210 / .07); border-color: rgb(118 222 210 / .14); }
+html.dui-pro-overhaul [data-ui-revision="settings-v2"] .dui-activity-log__filters button[aria-selected="true"] { color: #d9fffa; background: rgb(104 221 207 / .11); border-color: rgb(104 221 207 / .22); }
+html.dui-pro-overhaul [data-ui-revision="settings-v2"] .dui-activity-log__filters b { color: #6f8b8f; font-size: 8px; }
+html.dui-pro-overhaul [data-ui-revision="settings-v2"] .dui-activity-log__filters button[aria-selected="true"] b { color: #8fe4d8; }
+
+html.dui-pro-overhaul [data-ui-revision="settings-v2"] .dui-activity-log__search {
+  display: flex;
+  align-items: center;
+  width: min(190px, 20vw);
+  min-width: 130px;
+  min-height: 28px;
+  gap: 6px;
+  padding: 0 8px;
+  border: 1px solid rgb(255 255 255 / .08);
+  border-radius: 7px;
+  color: #6e888c;
+  background: rgb(0 0 0 / .16);
+}
+
+html.dui-pro-overhaul [data-ui-revision="settings-v2"] .dui-activity-log__search svg { width: 12px; height: 12px; fill: none; stroke: currentColor; stroke-linecap: round; stroke-width: 1.8; }
+html.dui-pro-overhaul [data-ui-revision="settings-v2"] .dui-activity-log__search input { min-width: 0; width: 100%; padding: 0; border: 0; outline: 0; color: #d5e8e6; background: transparent; font-size: 10px; }
+html.dui-pro-overhaul [data-ui-revision="settings-v2"] .dui-activity-log__search input::placeholder { color: #5f777b; }
+
+html.dui-pro-overhaul [data-ui-revision="settings-v2"] .dui-activity-log__notice {
+  margin: 10px 13px 0;
+  padding: 8px 10px;
+  border: 1px solid rgb(226 174 104 / .16);
+  border-radius: 8px;
+  color: #d7b875;
+  background: rgb(226 174 104 / .045);
+  font-size: 10px;
+  line-height: 1.4;
+}
+
+html.dui-pro-overhaul [data-ui-revision="settings-v2"] .dui-activity-log__list { display: grid; }
+
+html.dui-pro-overhaul [data-ui-revision="settings-v2"] .dui-activity-log__row {
+  position: relative;
+  display: grid;
+  grid-template-columns: 3px 34px minmax(0, 1fr);
+  gap: 11px;
+  min-width: 0;
+  padding: 13px 14px;
+  border-bottom: 1px solid rgb(255 255 255 / .055);
+  background: rgb(255 255 255 / .008);
+  transition: background .16s ease;
+}
+
+html.dui-pro-overhaul [data-ui-revision="settings-v2"] .dui-activity-log__row:hover { background: rgb(255 255 255 / .035); }
+html.dui-pro-overhaul [data-ui-revision="settings-v2"] .dui-activity-log__row:last-child { border-bottom: 0; }
+html.dui-pro-overhaul [data-ui-revision="settings-v2"] .dui-activity-log__rail { border-radius: 4px; background: #71858a; opacity: .6; }
+html.dui-pro-overhaul [data-ui-revision="settings-v2"] .dui-activity-log__row[data-kind="agent"] .dui-activity-log__rail { background: #64d8c9; }
+html.dui-pro-overhaul [data-ui-revision="settings-v2"] .dui-activity-log__row[data-tone="active"] .dui-activity-log__rail { background: #78d8f0; box-shadow: 0 0 9px rgb(120 216 240 / .55); }
+html.dui-pro-overhaul [data-ui-revision="settings-v2"] .dui-activity-log__row[data-tone="error"] .dui-activity-log__rail { background: #dd7e88; }
+html.dui-pro-overhaul [data-ui-revision="settings-v2"] .dui-activity-log__row[data-tone="warning"] .dui-activity-log__rail { background: #dcb56c; }
+
+html.dui-pro-overhaul [data-ui-revision="settings-v2"] .dui-activity-log__avatar {
+  display: grid;
+  width: 34px;
+  height: 34px;
+  place-items: center;
+  overflow: hidden;
+  border: 1px solid rgb(255 255 255 / .1);
+  border-radius: 10px;
+  background: rgb(255 255 255 / .035);
+}
+
+html.dui-pro-overhaul [data-ui-revision="settings-v2"] .dui-activity-log__row[data-kind="gateway"] .dui-activity-log__avatar { border-color: rgb(117 221 206 / .2); background: rgb(82 183 171 / .07); }
+html.dui-pro-overhaul [data-ui-revision="settings-v2"] .dui-activity-log__avatar-image { width: 100%; height: 100%; object-fit: cover; }
+html.dui-pro-overhaul [data-ui-revision="settings-v2"] .dui-activity-log__avatar-fallback { color: #a9dfd8; font-size: 10px; font-weight: 900; }
+html.dui-pro-overhaul [data-ui-revision="settings-v2"] .dui-activity-log__body { min-width: 0; }
+html.dui-pro-overhaul [data-ui-revision="settings-v2"] .dui-activity-log__row-head { display: flex; align-items: center; justify-content: space-between; gap: 10px; min-width: 0; }
+html.dui-pro-overhaul [data-ui-revision="settings-v2"] .dui-activity-log__identity { display: flex; align-items: center; min-width: 0; flex-wrap: wrap; gap: 6px; }
+html.dui-pro-overhaul [data-ui-revision="settings-v2"] .dui-activity-log__identity strong { overflow: hidden; color: #e3f0ef; font-size: 11px; text-overflow: ellipsis; white-space: nowrap; }
+html.dui-pro-overhaul [data-ui-revision="settings-v2"] .dui-activity-log__identity > span { color: #7c9598; font-size: 10px; }
+html.dui-pro-overhaul [data-ui-revision="settings-v2"] .dui-activity-log__identity .dui-activity-log__origin { display: inline-flex; align-items: center; gap: 4px; padding: 2px 5px 2px 3px; border: 1px solid rgb(117 221 206 / .18); border-radius: 999px; color: #9ce4d9; background: rgb(117 221 206 / .06); font-size: 8px; font-weight: 800; letter-spacing: .04em; }
+html.dui-pro-overhaul [data-ui-revision="settings-v2"] .dui-activity-log__origin img { width: 12px; height: 12px; border-radius: 4px; object-fit: cover; }
+html.dui-pro-overhaul [data-ui-revision="settings-v2"] .dui-activity-log__identity em { padding: 2px 5px; border: 1px solid rgb(255 255 255 / .1); border-radius: 999px; color: #8fa4a7; font-size: 7px; font-style: normal; font-weight: 900; letter-spacing: .08em; text-transform: uppercase; }
+html.dui-pro-overhaul [data-ui-revision="settings-v2"] .dui-activity-log__identity em[data-tone="active"] { color: #91e2f2; border-color: rgb(116 216 240 / .22); background: rgb(116 216 240 / .06); }
+html.dui-pro-overhaul [data-ui-revision="settings-v2"] .dui-activity-log__identity em[data-tone="success"] { color: #8be0bf; border-color: rgb(108 213 169 / .2); background: rgb(108 213 169 / .05); }
+html.dui-pro-overhaul [data-ui-revision="settings-v2"] .dui-activity-log__identity em[data-tone="error"] { color: #e89aa2; border-color: rgb(224 125 137 / .2); background: rgb(224 125 137 / .05); }
+html.dui-pro-overhaul [data-ui-revision="settings-v2"] .dui-activity-log__identity em[data-tone="warning"] { color: #ddbd7f; border-color: rgb(220 181 108 / .2); background: rgb(220 181 108 / .05); }
+html.dui-pro-overhaul [data-ui-revision="settings-v2"] .dui-activity-log__row-head time { flex: 0 0 auto; color: #60777b; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 8px; white-space: nowrap; }
+html.dui-pro-overhaul [data-ui-revision="settings-v2"] .dui-activity-log__body > p { display: -webkit-box; overflow: hidden; margin: 5px 0 6px; color: #a6b8b9; font-size: 10px; line-height: 1.45; -webkit-box-orient: vertical; -webkit-line-clamp: 2; }
+html.dui-pro-overhaul [data-ui-revision="settings-v2"] .dui-activity-log__meta { display: flex; min-width: 0; flex-wrap: wrap; gap: 5px; }
+html.dui-pro-overhaul [data-ui-revision="settings-v2"] .dui-activity-log__meta span { max-width: 48%; overflow: hidden; padding: 3px 6px; border: 1px solid rgb(255 255 255 / .06); border-radius: 5px; color: #6f898d; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 8px; text-overflow: ellipsis; white-space: nowrap; }
+html.dui-pro-overhaul [data-ui-revision="settings-v2"] .dui-activity-log__row[data-kind="gateway"] .dui-activity-log__meta span:first-child { color: #8bd8ce; border-color: rgb(117 221 206 / .14); background: rgb(117 221 206 / .035); }
+
+html.dui-pro-overhaul [data-ui-revision="settings-v2"] .dui-activity-log__empty {
+  display: grid;
+  justify-items: center;
+  gap: 6px;
+  padding: 48px 20px;
+  color: #6f8588;
+  text-align: center;
+}
+
+html.dui-pro-overhaul [data-ui-revision="settings-v2"] .dui-activity-log__empty img { width: 40px; height: 40px; margin-bottom: 4px; border: 1px solid rgb(117 221 206 / .16); border-radius: 12px; opacity: .72; }
+html.dui-pro-overhaul [data-ui-revision="settings-v2"] .dui-activity-log__empty strong { color: #b6cecc; font-size: 11px; }
+html.dui-pro-overhaul [data-ui-revision="settings-v2"] .dui-activity-log__empty span { font-size: 10px; }
+
+@media (max-width: 650px) {
+  html.dui-pro-overhaul [data-ui-revision="settings-v2"] .dui-activity-log__hero { grid-template-columns: auto minmax(0, 1fr); }
+  html.dui-pro-overhaul [data-ui-revision="settings-v2"] .dui-activity-log__hero-status { grid-column: 2; justify-items: start; text-align: left; }
+  html.dui-pro-overhaul [data-ui-revision="settings-v2"] .dui-activity-log__toolbar { align-items: stretch; flex-direction: column; }
+  html.dui-pro-overhaul [data-ui-revision="settings-v2"] .dui-activity-log__actions { justify-content: space-between; }
+  html.dui-pro-overhaul [data-ui-revision="settings-v2"] .dui-activity-log__search { width: 100%; }
+  html.dui-pro-overhaul [data-ui-revision="settings-v2"] .dui-activity-log__row-head { align-items: flex-start; flex-direction: column; gap: 4px; }
+  html.dui-pro-overhaul [data-ui-revision="settings-v2"] .dui-activity-log__row-head time { order: -1; }
+}
