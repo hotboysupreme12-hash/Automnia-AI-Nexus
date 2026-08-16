@@ -1321,6 +1321,7 @@ async function inspectViewport(viewport) {
     && !agentsNavItem.commandConsole.evidencePreviewOpen
     && agentsNavItem.commandConsole.evidencePreviewAriaLabel === ''
     && agentsNavItem.commandConsole.evidenceSummaryText === ''
+    && !agentsNavItem.commandConsole.activityPanelPresent
     && (
       (
         agentsNavItem.commandConsole.thinkingBodyPresent
@@ -1331,10 +1332,6 @@ async function inspectViewport(viewport) {
       || (
         agentsNavItem.commandConsole.progressBodyPresent
         && agentsNavItem.commandConsole.progressBodyText.length > 0
-      )
-      || (
-        agentsNavItem.commandConsole.activityPanelPresent
-        && /(?:Live|OpenClaw) activity/.test(agentsNavItem.commandConsole.activityPanelText)
       )
     )
     && !agentsNavItem.commandConsole.thinkingCtaPresent

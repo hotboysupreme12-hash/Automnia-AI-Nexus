@@ -1200,6 +1200,49 @@ function ensureRuntimeLifecycleListeners() {
   }
 }
 
+function releaseRuntimeMonitoringResourcesIfIdle() {
+  if (
+    runtimeStatusSubscribers.size
+    || runtimeSummarySubscribers.size
+    || runtimeSubscriberIntervals.size
+    || runtimeSummarySubscriberIntervals.size
+  ) return
+
+  if (runtimePollTimer) {
+    window.clearInterval(runtimePollTimer)
+    runtimePollTimer = null
+  }
+  if (runtimeSummaryPollTimer) {
+    window.clearInterval(runtimeSummaryPollTimer)
+    runtimeSummaryPollTimer = null
+  }
+  if (runtimeResumeRefreshTimer) {
+    window.clearTimeout(runtimeResumeRefreshTimer)
+    runtimeResumeRefreshTimer = null
+  }
+
+  if (runtimeLifecycleListenersInstalled && typeof window !== 'undefined') {
+    window.removeEventListener('focus', refreshVisibleRuntimePolling)
+    window.removeEventListener('blur', refreshVisibleRuntimePolling)
+    window.removeEventListener('online', refreshVisibleRuntimePolling)
+    window.removeEventListener('offline', refreshVisibleRuntimePolling)
+    if (typeof document !== 'undefined') document.removeEventListener('visibilitychange', refreshVisibleRuntimePolling)
+    runtimeLifecycleListenersInstalled = false
+  }
+
+  // These snapshots can contain log/event payloads. They are useful while a
+  // monitor is mounted, but retaining them for the lifetime of the renderer
+  // keeps the largest runtime response strongly reachable after navigation.
+  cachedRuntimeStatus = null
+  cachedRuntimeError = ''
+  cachedRuntimeStatusKey = ''
+  cachedRuntimeSummaryStatus = null
+  cachedRuntimeSummaryError = ''
+  cachedRuntimeSummaryStatusKey = ''
+  runtimeChannelActivityHistory = []
+  cachedCronShiftHydration = null
+}
+
 function abortRuntimeStatusRequestIfIdle() {
   if (runtimeStatusSubscribers.size || runtimeSubscriberIntervals.size || !runtimeStatusRequest) return
   runtimeStatusRequestAbortReason = 'idle'
@@ -1251,6 +1294,7 @@ async function loadRuntimeStatus(intervalMs: number, forceRefresh = false) {
     if (!isRuntimeStatusPayload(result.data)) {
       throw new Error('Runtime status response missing gateway data.')
     }
+    if (idleAbort || pausedAbort) return
     const status = await hydrateRuntimeStatusCronJobs(result.data)
     if (requestClearGeneration !== getRuntimeMonitorClearGeneration()) return
     publishRuntimeStatusSnapshot(status)
@@ -1317,6 +1361,7 @@ async function loadRuntimeSummaryStatus(intervalMs: number, forceRefresh = false
     if (!isRuntimeStatusPayload(result.data)) {
       throw new Error('Runtime summary response missing gateway data.')
     }
+    if (idleAbort || pausedAbort) return
     if (requestClearGeneration !== getRuntimeMonitorClearGeneration()) return
     const mergedStatus = mergeRuntimeChannelActivity(result.data)
     const nextKey = runtimeStatusSemanticKey(mergedStatus)
@@ -1371,6 +1416,7 @@ export function useRuntimeStatus(intervalMs = 5000) {
       runtimeSubscriberIntervals.delete(subscriberId)
       rescheduleRuntimePolling()
       abortRuntimeStatusRequestIfIdle()
+      releaseRuntimeMonitoringResourcesIfIdle()
     }
   }, [intervalMs])
 
@@ -1403,6 +1449,7 @@ export function useRuntimeSummaryStatus(intervalMs = 8000) {
       runtimeSummarySubscriberIntervals.delete(subscriberId)
       rescheduleRuntimeSummaryPolling()
       abortRuntimeSummaryRequestIfIdle()
+      releaseRuntimeMonitoringResourcesIfIdle()
     }
   }, [intervalMs])
 

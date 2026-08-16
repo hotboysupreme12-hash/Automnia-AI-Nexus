@@ -2122,10 +2122,6 @@ html.dui-pro-overhaul .dy-command-message-body {
   color: #d8d5ce !important;
 }
 
-html.dui-pro-overhaul .dy-command-message-body-wrap + .dy-command-activity-panel {
-  margin-top: 10px;
-}
-
 html.dui-pro-overhaul .dy-command-message-body[data-body-state="progress"] {
   border-color: color-mix(in srgb, var(--dy-message-accent) 22%, rgba(255, 255, 255, .08)) !important;
   background:

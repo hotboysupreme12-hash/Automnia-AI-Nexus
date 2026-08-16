@@ -136,6 +136,8 @@ export type OAuthCallbackServiceOptions = {
 }
 
 const DEFAULT_OAUTH_SESSION_TIMEOUT_MS = 10 * 60 * 1000
+const MAX_OAUTH_SESSION_CACHE = 64
+const OAUTH_TERMINAL_SESSION_RETENTION_MS = 30 * 60 * 1000
 
 function defaultRedactSensitiveText(value: string) {
   return value
@@ -250,6 +252,32 @@ export function createOAuthCallbackService(options: OAuthCallbackServiceOptions)
   let openAICodexOAuthCallbackServerStarting: Promise<void> | null = null
   const sessionTimeouts = new Map<string, ReturnType<typeof setTimeout>>()
   const pendingAnthropicOAuthLogins = new Map<string, PendingAnthropicOAuthLogin>()
+
+  function pruneOAuthSessions() {
+    const nowMs = now().getTime()
+    for (const [id, session] of oauthSessions) {
+      if (session.status === 'pending') continue
+      const completedAtMs = session.completedAt ? Date.parse(session.completedAt) : NaN
+      if (Number.isFinite(completedAtMs) && nowMs - completedAtMs > OAUTH_TERMINAL_SESSION_RETENTION_MS) {
+        oauthSessions.delete(id)
+      }
+    }
+
+    if (oauthSessions.size <= MAX_OAUTH_SESSION_CACHE) return
+    const oldest = Array.from(oauthSessions.values())
+      .sort((left, right) => {
+        // Terminal sessions are safe to evict before pending flows. Pending
+        // flows are still capped as a last resort so repeated starts cannot
+        // grow the process without bound.
+        const statusWeight = (session: ProviderOAuthSession) => session.status === 'pending' ? 1 : 0
+        const weightDelta = statusWeight(left) - statusWeight(right)
+        if (weightDelta) return weightDelta
+        return Date.parse(left.completedAt || left.createdAt) - Date.parse(right.completedAt || right.createdAt)
+      })
+    for (const session of oldest.slice(0, oauthSessions.size - MAX_OAUTH_SESSION_CACHE)) {
+      oauthSessions.delete(session.id)
+    }
+  }
 
   function completeAt() {
     return now().toISOString()
@@ -555,6 +583,7 @@ export function createOAuthCallbackService(options: OAuthCallbackServiceOptions)
     scopes: string[],
   ): Promise<OAuthStartResult> {
     if (options.isShuttingDown()) throw new Error('Control Center is shutting down.')
+    pruneOAuthSessions()
     const id = randomUUID()
     const state = randomBytes(24).toString('base64url')
     const { verifier, challenge } = generatePkcePair()
@@ -742,6 +771,7 @@ export function createOAuthCallbackService(options: OAuthCallbackServiceOptions)
 
   async function startOpenAICodexOAuthSession(): Promise<OAuthStartResult> {
     if (options.isShuttingDown()) throw new Error('Control Center is shutting down.')
+    pruneOAuthSessions()
     const id = randomUUID()
     const flow = await options.createOpenAICodexAuthorizationFlow('automnia')
     const session: ProviderOAuthSession = {
@@ -775,6 +805,7 @@ export function createOAuthCallbackService(options: OAuthCallbackServiceOptions)
   async function startAnthropicOAuthSession(): Promise<OAuthStartResult> {
     if (options.isShuttingDown()) throw new Error('Control Center is shutting down.')
     if (!options.loginAnthropicOAuth) throw new Error('Anthropic OAuth is not available in this build.')
+    pruneOAuthSessions()
 
     const id = randomUUID()
     const redirectUri = options.anthropicOAuthRedirectUri || 'http://localhost:53692/callback'

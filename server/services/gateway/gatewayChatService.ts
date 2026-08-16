@@ -73,6 +73,12 @@ type LightweightGatewayPendingRequest = {
   onAbort?: () => void
 }
 
+// A busy Gateway can emit many tool/progress events before its terminal chat
+// event. Keep the live waiter bounded; the durable runtime ledger is the place
+// for archival diagnostics, not this short-lived request object.
+const MAX_GATEWAY_CHAT_TOOL_EVENTS = 256
+const MAX_GATEWAY_CHAT_STREAMED_TEXT_CHARS = 256_000
+
 export type GatewayClientState = {
   client: GatewayClientLike
   ready: boolean
@@ -279,6 +285,7 @@ export class LightweightGatewayClient implements GatewayClientLike {
     return new Promise((resolve, reject) => {
       const timer = setTimeout(() => {
         this.pending.delete(id)
+        this.clearPendingRequest(pending)
         reject(Object.assign(new Error(`gateway request timed out: ${method}`), { name: 'TimeoutError' }))
       }, timeoutMs)
       timer.unref?.()
@@ -880,21 +887,29 @@ export function createGatewayChatService<RunRecord>(options: GatewayChatServiceO
     const deltaText = typeof payload.deltaText === 'string' ? payload.deltaText : ''
     if (deltaText) {
       const text = options.redactHiddenReasoningAndSecrets(deltaText)
-      waiter.streamedText = replace ? text : `${waiter.streamedText}${text}`
-      return { text, replace }
+      if (replace) {
+        waiter.streamedText = text.slice(0, MAX_GATEWAY_CHAT_STREAMED_TEXT_CHARS)
+        return { text: waiter.streamedText, replace }
+      }
+      if (waiter.streamedText.length >= MAX_GATEWAY_CHAT_STREAMED_TEXT_CHARS) return { text: '', replace: false }
+      const remaining = MAX_GATEWAY_CHAT_STREAMED_TEXT_CHARS - waiter.streamedText.length
+      const boundedText = text.slice(0, remaining)
+      waiter.streamedText += boundedText
+      return { text: boundedText, replace: false }
     }
 
     const snapshot = options.redactHiddenReasoningAndSecrets(gatewayChatMessageText(payload.message))
     if (!snapshot) return { text: '', replace: false }
     const previous = waiter.streamedText
     if (snapshot.startsWith(previous)) {
-      const text = snapshot.slice(previous.length)
-      waiter.streamedText = snapshot
+      const text = snapshot.slice(previous.length, previous.length + MAX_GATEWAY_CHAT_STREAMED_TEXT_CHARS - previous.length)
+      waiter.streamedText = `${previous}${text}`
       return { text, replace: false }
     }
     if (snapshot !== previous) {
-      waiter.streamedText = snapshot
-      return { text: snapshot, replace: true }
+      const boundedSnapshot = snapshot.slice(0, MAX_GATEWAY_CHAT_STREAMED_TEXT_CHARS)
+      waiter.streamedText = boundedSnapshot
+      return { text: boundedSnapshot, replace: true }
     }
     return { text: '', replace: false }
   }
@@ -1023,6 +1038,9 @@ export function createGatewayChatService<RunRecord>(options: GatewayChatServiceO
     if (!waiter) return
     if (eventName === 'session.tool' || eventName === 'agent') {
       waiter.toolEvents.push(payload)
+      if (waiter.toolEvents.length > MAX_GATEWAY_CHAT_TOOL_EVENTS) {
+        waiter.toolEvents.splice(0, waiter.toolEvents.length - MAX_GATEWAY_CHAT_TOOL_EVENTS)
+      }
       emitGatewayProgress(waiter, eventName, payload)
       return
     }

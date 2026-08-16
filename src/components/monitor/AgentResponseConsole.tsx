@@ -10,7 +10,7 @@ import {
   type CommandConsoleDraft,
 } from '../../store/commandConsoleState'
 import { useNexusStore } from '../../store/nexusStore'
-import type { AgentActivityEvent, AgentResponse, AgentTurnAttachment, OpenClawAgent } from '../../types/nexus'
+import type { AgentResponse, AgentTurnAttachment, OpenClawAgent } from '../../types/nexus'
 import { apiUrl } from '../../utils/apiUrl'
 import { fetchControlCenterWithAuth } from '../../api/authenticatedFetch'
 import { useLicense } from '../../context/useLicense'
@@ -442,46 +442,6 @@ function latestRunStatus(entry?: AgentResponse) {
   return latestActivity?.label.trim() || latestProgress?.trim() || entry.progressLabel?.trim() || 'Agent started working.'
 }
 
-function compactActivityValue(value: unknown, max = 220) {
-  const text = typeof value === 'string'
-    ? value
-    : value && typeof value === 'object'
-      ? JSON.stringify(value)
-      : value === undefined || value === null
-        ? ''
-        : String(value)
-  const clean = text.replace(/\s+/g, ' ').trim()
-  return clean.length > max ? `${clean.slice(0, max - 1).trim()}…` : clean
-}
-
-function activityKindLabel(type: string) {
-  const family = type.split('.')[0]?.toLowerCase()
-  if (type.startsWith('command.')) return 'exec'
-  if (type.startsWith('tool.')) return 'tool'
-  if (type.startsWith('browser.')) return 'browser'
-  if (type.startsWith('file.')) return 'file'
-  if (type.startsWith('run.')) return 'run'
-  if (type.startsWith('message.')) return 'reply'
-  if (type.startsWith('approval.')) return 'approval'
-  if (type.startsWith('gateway.')) return 'gateway'
-  return family || 'agent'
-}
-
-function activityDetail(event: AgentActivityEvent) {
-  const payload = event.payload || {}
-  const toolName = compactActivityValue(payload.toolName, 96)
-  const toolAction = compactActivityValue(payload.toolAction, 96)
-  const command = compactActivityValue(payload.command, 180)
-  const input = compactActivityValue(payload.toolInput, 180)
-  const output = compactActivityValue(payload.toolOutput || payload.commandOutput, 180)
-  return [
-    toolName ? `${toolName}${toolAction ? ` · ${toolAction}` : ''}` : '',
-    command ? `exec ${command}` : '',
-    input ? `input ${input}` : '',
-    output ? `output ${output}` : '',
-  ].filter(Boolean).join(' · ')
-}
-
 type ResponseCta = {
   label: string
   detail?: string
@@ -581,10 +541,6 @@ const ResponseMessage = memo(function ResponseMessage({
   actionBusy: boolean
   hostedCreditsFirst: boolean
 }) {
-  const [activeActivityId, setActiveActivityId] = useState<string | null>(null)
-  const activityQueueRef = useRef<string[]>([])
-  const knownActivityIdsRef = useRef<Set<string>>(new Set())
-  const activityTimerRef = useRef<number | null>(null)
   const runtimeNoticeActive = Boolean(entry.streaming && (entry.runtimeNoticeActive || isRuntimeNoticeTransport(entry.transport)))
   const avatar = meta?.portrait || ''
   const name = meta?.name || entry.agentId
@@ -612,15 +568,7 @@ const ResponseMessage = memo(function ResponseMessage({
   const statusText = responseStatusLabel(status)
   const durationLabel = entry.durationMs > 0 ? `${(entry.durationMs / 1000).toFixed(1)}s` : ''
   const cta = responseCta(entry)
-  const activityEvents = useMemo(
-    () => (entry.activity || []).filter((event) => event.type !== 'message.partial' && event.type !== 'message.final'),
-    [entry.activity],
-  )
-  const activeActivity = entry.streaming
-    ? activityEvents.find((event) => event.id === activeActivityId)
-    : undefined
-  const hasActivity = Boolean(activeActivity)
-  const openClawActivity = isRuntimeNoticeTransport(entry.transport) || activityEvents.some((event) => event.rawSource.startsWith('gateway.'))
+  const hasActivity = (entry.activity || []).some((event) => event.type !== 'message.partial' && event.type !== 'message.final')
   const runtimeTitle = [
     durationLabel ? `Total runtime: ${durationLabel}` : '',
     firstTokenLabel ? `First output: ${firstTokenLabel}` : '',
@@ -633,61 +581,6 @@ const ResponseMessage = memo(function ResponseMessage({
   const progressText = entry.streaming && !hasContent && !showInlineThinking ? latestRunStatus(entry) : ''
   const displayText = bodyText || progressText
   const bodyState = showInlineThinking ? 'thinking' : hasContent ? 'response' : progressText ? 'progress' : entry.ok ? 'empty' : 'blocked'
-
-  useEffect(() => {
-    if (activityTimerRef.current !== null) {
-      window.clearTimeout(activityTimerRef.current)
-      activityTimerRef.current = null
-    }
-
-    if (!entry.streaming) {
-      activityQueueRef.current = []
-      knownActivityIdsRef.current.clear()
-      return
-    }
-
-    const currentIds = new Set(activityEvents.map((event) => event.id))
-    activityQueueRef.current = activityQueueRef.current.filter((id) => currentIds.has(id) && id !== activeActivityId)
-    for (const event of activityEvents) {
-      if (knownActivityIdsRef.current.has(event.id)) continue
-      knownActivityIdsRef.current.add(event.id)
-      activityQueueRef.current.push(event.id)
-    }
-
-    const activeStillPresent = Boolean(activeActivityId && currentIds.has(activeActivityId))
-    if (!activeStillPresent) {
-      const nextId = activityQueueRef.current.shift() || activityEvents.at(-1)?.id || null
-      activityTimerRef.current = window.setTimeout(() => {
-        activityTimerRef.current = null
-        setActiveActivityId(nextId)
-      }, 0)
-      return () => {
-        if (activityTimerRef.current !== null) {
-          window.clearTimeout(activityTimerRef.current)
-          activityTimerRef.current = null
-        }
-      }
-    }
-
-    if (activityQueueRef.current.length > 0) {
-      activityTimerRef.current = window.setTimeout(() => {
-        activityTimerRef.current = null
-        const nextId = activityQueueRef.current.shift()
-        if (nextId) setActiveActivityId(nextId)
-      }, 350)
-    }
-
-    return () => {
-      if (activityTimerRef.current !== null) {
-        window.clearTimeout(activityTimerRef.current)
-        activityTimerRef.current = null
-      }
-    }
-  }, [activityEvents, activeActivityId, entry.streaming])
-
-  useEffect(() => () => {
-    if (activityTimerRef.current !== null) window.clearTimeout(activityTimerRef.current)
-  }, [])
 
   return (
     <div
@@ -765,7 +658,7 @@ const ResponseMessage = memo(function ResponseMessage({
             onWheel={bodyState === 'response' ? handleResponseWheel : undefined}
           >
             <p
-              className="dy-command-message-body whitespace-pre-wrap break-words border border-white/[0.04] bg-slate-950/30 px-3 py-2.5 text-[12px] leading-relaxed text-slate-300/95"
+              className="dy-command-message-body whitespace-pre-wrap break-words border border-white/[0.04] bg-slate-950/30 px-3 py-2.5 text-[14px] leading-relaxed text-slate-300/95"
               data-body-state={bodyState}
               aria-live={entry.streaming ? 'polite' : undefined}
             >
@@ -792,27 +685,6 @@ const ResponseMessage = memo(function ResponseMessage({
           <span className="h-1 w-1 rounded-full bg-slate-600" />
           {entry.ok ? 'No output' : 'Request failed'}
         </div>
-      )}
-
-      {hasActivity && activeActivity && (
-        <section className="dy-command-activity-panel" aria-label={`${entry.streaming ? 'Live' : 'Run'} activity`}>
-          <div className="dy-command-activity-head">
-            <div className="min-w-0">
-              <strong className="dy-command-activity-title">
-                {openClawActivity ? 'OpenClaw activity' : entry.streaming ? 'Live activity' : 'Run activity'}
-              </strong>
-            </div>
-          </div>
-          <div className="dy-command-activity-list" aria-live={entry.streaming ? 'polite' : undefined}>
-            <div key={activeActivity.id} className="dy-command-activity-row" data-severity={activeActivity.severity}>
-              <span className="dy-command-activity-dot" aria-hidden="true" />
-              <time dateTime={activeActivity.timestamp}>{messageClock(activeActivity.timestamp)}</time>
-              <span className="dy-command-activity-kind">{activityKindLabel(activeActivity.type)}</span>
-              <span className="dy-command-activity-label" title={activeActivity.label}>{activeActivity.label}</span>
-              {activityDetail(activeActivity) && <code title={activityDetail(activeActivity)}>{activityDetail(activeActivity)}</code>}
-            </div>
-          </div>
-        </section>
       )}
 
       <div className="dy-command-message-meta" aria-label="Response details">
@@ -1989,6 +1861,14 @@ export function AgentResponseConsole() {
             })}
             {(busyAgents.length > 0 || activeRuntimeRuns.length > 0) && (
               <span className="dy-command-busy ml-auto inline-flex items-center gap-1.5">
+                <span
+                  className="dy-command-busy-status sr-only"
+                  role="status"
+                  aria-live="polite"
+                  aria-label={`${runningSurfaceCount} Command Console run${runningSurfaceCount === 1 ? '' : 's'} running`}
+                >
+                  {runningSurfaceCount} Command Console run{runningSurfaceCount === 1 ? '' : 's'} running
+                </span>
                 <Button
                   className="dy-command-stop-run"
                   onClick={handleStopRunning}

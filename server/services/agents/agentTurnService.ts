@@ -56,6 +56,8 @@ export type BufferedAgentTurnServiceOptions = {
 }
 
 export function createBufferedAgentTurnService(options: BufferedAgentTurnServiceOptions) {
+  const MAX_RUNTIME_INTERCEPT_BUFFER_CHARS = 64_000
+
   async function runBufferedAgentTurnForStream(
     body: Record<string, unknown>,
     emit: AgentTurnStreamEmitter,
@@ -147,7 +149,9 @@ export function createBufferedAgentTurnService(options: BufferedAgentTurnService
     let deltaBuffer = ''
     const wrappedEmit: AgentTurnStreamEmitter = (event, data) => {
       if (event === 'delta' && data && typeof data.text === 'string') {
-        deltaBuffer += data.text
+        if (deltaBuffer.length < MAX_RUNTIME_INTERCEPT_BUFFER_CHARS) {
+          deltaBuffer += data.text.slice(0, MAX_RUNTIME_INTERCEPT_BUFFER_CHARS - deltaBuffer.length)
+        }
         if (deltaBuffer.includes('[Runtime tool request:')) {
           isIntercepted = true
           return

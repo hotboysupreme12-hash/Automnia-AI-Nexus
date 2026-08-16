@@ -104,13 +104,24 @@ async function readAgentTurnSseFrames(response: Response, onFrame: AgentTurnStre
   const reader = response.body.getReader()
   const decoder = new TextDecoder()
   const sseParser = createSseFrameParser()
-  while (true) {
-    const { done, value } = await reader.read()
-    if (done) break
-    for (const frame of sseParser.push(decoder.decode(value, { stream: true }))) onFrame(frame)
+  let completed = false
+  try {
+    while (true) {
+      const { done, value } = await reader.read()
+      if (done) {
+        completed = true
+        break
+      }
+      for (const frame of sseParser.push(decoder.decode(value, { stream: true }))) onFrame(frame)
+    }
+    for (const frame of sseParser.push(decoder.decode())) onFrame(frame)
+    for (const frame of sseParser.flush()) onFrame(frame)
+  } finally {
+    // Abort/error paths can otherwise leave the body locked until the fetch
+    // implementation decides to collect it. Release it deterministically.
+    if (!completed) await reader.cancel().catch(() => undefined)
+    reader.releaseLock()
   }
-  for (const frame of sseParser.push(decoder.decode())) onFrame(frame)
-  for (const frame of sseParser.flush()) onFrame(frame)
 }
 
 function notifyHostedCreditBalanceUpdated(payload: AgentTurnPayload) {

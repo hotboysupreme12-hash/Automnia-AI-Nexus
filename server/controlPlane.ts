@@ -6730,6 +6730,19 @@ type GoogleVertexModelAvailability = {
 }
 
 const googleVertexModelAvailabilityCache = new Map<string, { value: GoogleVertexModelAvailability; expiresAt: number }>()
+const MAX_GOOGLE_VERTEX_AVAILABILITY_CACHE_ENTRIES = 256
+
+function pruneGoogleVertexModelAvailabilityCache(now = Date.now()) {
+  for (const [key, entry] of googleVertexModelAvailabilityCache) {
+    if (entry.expiresAt <= now) googleVertexModelAvailabilityCache.delete(key)
+  }
+  if (googleVertexModelAvailabilityCache.size <= MAX_GOOGLE_VERTEX_AVAILABILITY_CACHE_ENTRIES) return
+  const oldest = Array.from(googleVertexModelAvailabilityCache.entries())
+    .sort((left, right) => left[1].expiresAt - right[1].expiresAt)
+  for (const [key] of oldest.slice(0, googleVertexModelAvailabilityCache.size - MAX_GOOGLE_VERTEX_AVAILABILITY_CACHE_ENTRIES)) {
+    googleVertexModelAvailabilityCache.delete(key)
+  }
+}
 
 function normalizeGoogleVertexLocation(location?: string) {
   return location?.trim() || GOOGLE_VERTEX_DEFAULT_LOCATION
@@ -6777,6 +6790,7 @@ async function checkGoogleVertexModelAvailability(params: {
   }
 
   const cacheKey = googleVertexAvailabilityCacheKey(projectId, params.location, params.modelName)
+  pruneGoogleVertexModelAvailabilityCache()
   const cached = googleVertexModelAvailabilityCache.get(cacheKey)
   if (cached && cached.expiresAt > Date.now()) return cached.value
 
@@ -6803,6 +6817,7 @@ async function checkGoogleVertexModelAvailability(params: {
     value,
     expiresAt: Date.now() + GOOGLE_VERTEX_MODEL_AVAILABILITY_CACHE_MS,
   })
+  pruneGoogleVertexModelAvailabilityCache()
   return value
 }
 

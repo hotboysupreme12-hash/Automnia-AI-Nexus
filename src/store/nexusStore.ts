@@ -142,6 +142,7 @@ const WORKING_STATUS_INTERVAL_MS = 60 * 1000
 const seenClawTalkConsoleEventIds = new Set<string>()
 const TEAMMATE_MEMORY_REPLY_LIMIT = 10
 const TEAMMATE_MEMORY_LINE_MAX = 180
+const MAX_LIVE_RESPONSE_TEXT_CHARS = 256_000
 const HEARTBEAT_CONFIG_SAVE_DEBOUNCE_MS = 350
 const RUNTIME_POLICY_SAVE_DEBOUNCE_MS = 450
 const STORAGE_WRITE_DEBOUNCE_MS = 120
@@ -1855,8 +1856,8 @@ export const useNexusStore = create<NexusState>()(
         }
         const upsertLiveResponse = (response: string, ok = true, dur = Date.now() - start, streaming = true, modelId = liveResponseModelId, failureKind?: string) => {
           liveResponseCreated = true
-          if (response) liveResponseText = response
-          const visibleResponse = response || liveResponseText
+          if (response) liveResponseText = response.slice(0, MAX_LIVE_RESPONSE_TEXT_CHARS)
+          const visibleResponse = response ? response.slice(0, MAX_LIVE_RESPONSE_TEXT_CHARS) : liveResponseText
           const ts = new Date().toISOString()
           set((s) => {
             const existing = s.agentResponses.find((entry) => entry.id === liveResponseId)
@@ -1980,7 +1981,7 @@ export const useNexusStore = create<NexusState>()(
               ...(missionId ? { missionId } : {}),
               agentId: aid,
               prompt: visiblePrompt,
-              response,
+              response: response.slice(0, MAX_LIVE_RESPONSE_TEXT_CHARS),
               ok,
               timestamp: existing?.timestamp || ts,
               durationMs: dur,
@@ -2150,7 +2151,11 @@ export const useNexusStore = create<NexusState>()(
                 })
               }
               captureStreamMeta(data)
-              accumulated = data.replace === true ? text : `${accumulated}${text}`
+              if (data.replace === true) {
+                accumulated = text.slice(0, MAX_LIVE_RESPONSE_TEXT_CHARS)
+              } else if (accumulated.length < MAX_LIVE_RESPONSE_TEXT_CHARS) {
+                accumulated += text.slice(0, MAX_LIVE_RESPONSE_TEXT_CHARS - accumulated.length)
+              }
               upsertLiveResponse(accumulated, true, Date.now() - start, true)
               return
             }
