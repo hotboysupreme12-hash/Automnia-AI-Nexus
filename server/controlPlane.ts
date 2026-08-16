@@ -68,11 +68,23 @@ import { createMissionTeamSyncService } from './services/missions/missionTeamSyn
 import { createLoginAttemptLimiter } from './loginAttemptLimiter'
 import { createSessionTokenStore } from './sessionTokenStore'
 import { createLicenseService } from './services/license/licenseService'
+import {
+  applyUsagePriorityModelOrder,
+  withUsagePriorityChannelDefault,
+} from './services/license/usagePriorityRouting'
+import {
+  AUTOMNIA_CREDITS_MODEL_ID,
+  AUTOMNIA_CREDITS_PROVIDER_ID,
+  CREDITS_ONLY_MODEL_ACCESS_MESSAGE,
+  creditsOnlyModelSelection,
+  isAutomniaCreditsModelId,
+} from './services/license/creditsOnlyModelPolicy'
 import { createAccountAuthService } from './services/auth/accountAuthService'
-import { AUTOMNIA_PUBLIC_CLOUD_URL, automniaCloudRuntimeBaseUrl } from './config/automniaCloud'
+import { automniaCloudRouteBaseUrl } from './config/automniaCloud'
 import {
   AUTH_ENV_MAP,
   AUTH_PROVIDER_CATALOG,
+  ANTHROPIC_OAUTH_REDIRECT_URI,
   GOOGLE_ACCOUNT_OAUTH_SCOPES,
   GOOGLE_OAUTH_REDIRECT_URI,
   GOOGLE_OAUTH_SCOPES,
@@ -152,7 +164,9 @@ import {
   createRuntimeStatusService,
   type RuntimeStatusService,
 } from './services/runtime/runtimeStatusService'
+import { createGatewayActivityFeedService } from './services/runtime/gatewayActivityFeedService'
 import { createRuntimeActionService } from './services/runtime/runtimeActionService'
+import { ensurePrimaryAgentSelection } from './services/agents/primaryAgentSelectionService'
 import { recoverMalformedCodexBindingSidecars } from './services/runtime/codexSidecarRecoveryService'
 import { createBrowserPreflightService } from './services/browser/browserPreflightService'
 import { createSpeechTranscriptionService } from './services/speech/speechTranscriptionService'
@@ -340,6 +354,13 @@ const accountAuthService = createAccountAuthService({
   read: runtimeLedgerStore.readControlCenterState,
   write: runtimeLedgerStore.writeControlCenterState,
   licenseService,
+  reconcileAccountAccess: async () => {
+    // Account login can replace both the canonical license key and the
+    // entitlement. Refresh the provisioner-owned balance first, then apply
+    // the new hosted/provider route to the live Gateway before the next turn.
+    await licenseService.refresh().catch(() => undefined)
+    await synchronizeBillingRouteWithGateway()
+  },
 })
 
 // License routes remain accessible after local authentication. Every other
@@ -354,6 +375,27 @@ app.use('/api', (req, res, next) => {
   ) return next()
   if (!licenseService.isActive()) {
     return apiFailure(res, 402, 'license_required', 'Activate your Automnia license to use the Control Center.')
+  }
+  const gate = licenseService.getTrafficGate()
+  const isMutatingRequest = !['GET', 'HEAD', 'OPTIONS'].includes(req.method)
+  const isLicenseRecoveryRequest = requestPath === '/api/license/activate'
+    || requestPath === '/api/license/checkout'
+    || requestPath === '/api/license/deactivate'
+    || requestPath === '/api/license/refresh'
+  if (gate.blocked && isMutatingRequest && !isLicenseRecoveryRequest) {
+    return apiFailure(
+      res,
+      402,
+      'credits_exhausted',
+      gate.blockMessage || 'Automnia credits are unavailable. Restore your credit balance before sending traffic.',
+      { gate: { creditState: gate.creditState, tier: gate.tier, mode: gate.mode } },
+    )
+  }
+  // The generic OpenClaw command endpoint is intentionally unavailable to
+  // credits-only accounts. Otherwise a user could write a provider/model
+  // directly through the CLI bridge and bypass the model/config route guards.
+  if (gate.creditsOnly && requestPath === '/api/openclaw/command' && isMutatingRequest) {
+    return apiFailure(res, 403, 'byok_not_allowed', CREDITS_ONLY_MODEL_ACCESS_MESSAGE)
   }
   return next()
 })
@@ -523,6 +565,8 @@ type FailureKind =
   | 'stale_lock'
   | 'disk_low'
   | 'provider_unsupported'
+  | 'provider_forbidden'
+  | 'insufficient_credits'
   | 'sandbox_unavailable'
   | 'network_error'
   | 'process_error'
@@ -1317,6 +1361,10 @@ type OpenClawConfigFile = {
     providers?: Record<string, ModelProviderConfig>
     [key: string]: unknown
   }
+  channels?: {
+    modelByChannel?: Record<string, Record<string, string>>
+    [key: string]: unknown
+  }
   gateway?: {
     mode?: string
     [key: string]: unknown
@@ -1627,11 +1675,6 @@ const MODEL_RESILIENCE_FALLBACKS: Record<string, string[]> = {
     'openai/gpt-5.6-terra',
     'openai/gpt-5.6-sol',
   ],
-  'google/gemini-3.7-pro': [
-    'google/gemini-3.7-flash',
-    'google/gemini-3.6-flash',
-    'google/gemini-3.5-flash',
-  ],
   'google/gemini-3.7-flash': [
     'google/gemini-3.6-flash',
     'google/gemini-3.5-flash',
@@ -1642,11 +1685,6 @@ const MODEL_RESILIENCE_FALLBACKS: Record<string, string[]> = {
     'google/gemini-3.1-flash-lite',
     'google/gemini-2.5-flash',
     'google/gemini-2.5-flash-lite',
-  ],
-  'google-vertex/gemini-3.7-pro': [
-    'google-vertex/gemini-3.7-flash',
-    'google-vertex/gemini-3.6-flash',
-    'google-vertex/gemini-3.5-flash',
   ],
   'google-vertex/gemini-3.7-flash': [
     'google-vertex/gemini-3.6-flash',
@@ -1880,13 +1918,13 @@ function isCodexPluginExplicitlyEnabled(config: OpenClawConfigFile) {
 }
 
 function shouldPrepareCodexPluginForRuntime(config: OpenClawConfigFile) {
-  return isCodexPluginExplicitlyEnabled(config)
+  return openClawConfigNeedsCodexPlugin(config) || isCodexPluginExplicitlyEnabled(config)
 }
 
 function ensureCodexPluginExplicitEnablement(config: OpenClawConfigFile) {
   const forceEnable = codexPluginForceEnableRequested()
   const existingEntry = config.plugins?.entries?.codex
-  if (!forceEnable && existingEntry?.enabled !== true) return
+  if (!forceEnable && existingEntry?.enabled !== true && !openClawConfigNeedsCodexPlugin(config)) return
 
   if (!config.plugins) config.plugins = {}
   if (!config.plugins.entries) config.plugins.entries = {}
@@ -1947,6 +1985,7 @@ const invalidateAvailableModelsForAuthChange = modelCatalogService.invalidateAva
 const refreshAvailableModelsCache = modelCatalogService.refreshAvailableModelsCache
 
 const providerSetupService = createProviderSetupService({
+  anthropicOAuthEnvKeys: AUTH_PROVIDER_CATALOG.anthropic.oauthEnvKeys || ['ANTHROPIC_OAUTH_TOKEN'],
   electronResourcesPath: getElectronResourcesPath,
   ensureLocalAuthStoreLoaded: async () => await providerAuthServiceRef.current?.ensureLocalAuthStoreLoaded(),
   getLocalProviderMode: (provider) => providerAuthServiceRef.current?.getLocalProviderMode(provider),
@@ -1962,6 +2001,11 @@ const providerSetupService = createProviderSetupService({
     const service = oauthCallbackServiceRef.current
     if (!service) throw new Error('OAuth callback service is not initialized.')
     return service.refreshGoogleOAuthCredential(oauth)
+  },
+  refreshAnthropicOAuthCredential: async (oauth) => {
+    const service = oauthCallbackServiceRef.current
+    if (!service) throw new Error('OAuth callback service is not initialized.')
+    return service.refreshAnthropicOAuthCredential(oauth)
   },
   refreshOpenAICodexOAuthCredential: async (oauth) => {
     const service = oauthCallbackServiceRef.current
@@ -2028,16 +2072,22 @@ const oauthCallbackService = createOAuthCallbackService({
   authenticateGoogleAccount: (accessToken) => accountAuthService.loginWithGoogle(accessToken),
   createOpenAICodexAuthorizationFlow: providerSetupService.createOpenAICodexAuthorizationFlow,
   exchangeOpenAICodexAuthorizationCode: providerSetupService.exchangeOpenAICodexAuthorizationCode,
+  anthropicOAuthRedirectUri: ANTHROPIC_OAUTH_REDIRECT_URI,
   googleOAuthRedirectUri: GOOGLE_OAUTH_REDIRECT_URI,
   googleAccountOAuthScopes: GOOGLE_ACCOUNT_OAUTH_SCOPES,
   googleOAuthScopes: GOOGLE_OAUTH_SCOPES,
   isShuttingDown: () => shuttingDown,
+  // The Anthropic OAuth login/refresh implementation is supplied by the
+  // bundled OpenClaw runtime; this keeps its PKCE/client-id contract versioned
+  // with the same runtime that will execute the agent turn.
+  loginAnthropicOAuth: providerSetupService.loginAnthropicOAuth,
   openAiCodexOAuthRedirectUri: OPENAI_CODEX_OAUTH_REDIRECT_URI,
   openAiCodexOAuthScopes: OPENAI_CODEX_OAUTH_SCOPES,
   openExternalAuthUrl,
   persistProviderOAuth,
   redactSensitiveText,
   refreshOpenAICodexToken: providerSetupService.refreshOpenAICodexToken,
+  refreshAnthropicOAuthToken: providerSetupService.refreshAnthropicOAuthToken,
   resolveGoogleOAuthClientConfig: providerSetupService.resolveGoogleOAuthClientConfig,
   resolveGoogleProjectId,
 })
@@ -2050,7 +2100,9 @@ const closeOAuthCallbackServersForShutdown = oauthCallbackService.closeOAuthCall
 const cancelOAuthSession = oauthCallbackService.cancelOAuthSession
 const startGoogleOAuthSession = oauthCallbackService.startGoogleOAuthSession
 const startGoogleAccountOAuthSession = oauthCallbackService.startGoogleAccountOAuthSession
+const startAnthropicOAuthSession = oauthCallbackService.startAnthropicOAuthSession
 const startOpenAICodexOAuthSession = oauthCallbackService.startOpenAICodexOAuthSession
+const submitAnthropicOAuthManualInput = oauthCallbackService.submitAnthropicOAuthManualInput
 
 const DEFAULT_BOOTSTRAP_AGENTS: Array<{ id: string; name: string }> = [
   { id: 'hn-architect', name: 'Elena Vasquez' },
@@ -3520,8 +3572,9 @@ const GATEWAY_CONFIG_DOCTOR_TIMEOUT_MS = 120_000
 const GATEWAY_RESTART_TIMELINE_LIMIT = 5
 let runtimeMonitorClearedAtMs = 0
 let gatewayConfigPreflightInFlight: Promise<boolean> | null = null
-let gatewayLedgerSnapshotCache: { builtAt: number; limit: number; snapshot: GatewayLedgerSnapshot } | null = null
-let gatewayLedgerSnapshotInFlight: { limit: number; promise: Promise<GatewayLedgerSnapshot> } | null = null
+let gatewayLedgerSnapshotCache: { builtAt: number; limit: number; sqlite: boolean; snapshot: GatewayLedgerSnapshot } | null = null
+let gatewayLedgerSnapshotInFlight: { limit: number; sqlite: boolean; promise: Promise<GatewayLedgerSnapshot> } | null = null
+let gatewayLedgerSnapshotGeneration = 0
 const runtimeStatusServiceRef: { current?: RuntimeStatusService } = {}
 
 function invalidateRuntimeStatusCache() {
@@ -3529,7 +3582,9 @@ function invalidateRuntimeStatusCache() {
 }
 
 function invalidateGatewayLedgerSnapshotCache() {
+  gatewayLedgerSnapshotGeneration += 1
   gatewayLedgerSnapshotCache = null
+  gatewayLedgerSnapshotInFlight = null
 }
 
 function sanitizeGatewayStartupMessage(message: string, max = 220) {
@@ -3539,7 +3594,7 @@ function sanitizeGatewayStartupMessage(message: string, max = 220) {
 function isRuntimeMonitorEntryVisible(timestamp: string | null | undefined) {
   if (!runtimeMonitorClearedAtMs) return true
   const entryMs = timestamp ? Date.parse(timestamp) : NaN
-  return Number.isFinite(entryMs) && entryMs >= runtimeMonitorClearedAtMs
+  return Number.isFinite(entryMs) && entryMs > runtimeMonitorClearedAtMs
 }
 
 const gatewayLifecycleRef: { current?: GatewayLifecycleService } = {}
@@ -3552,7 +3607,10 @@ const gatewayLogService = createGatewayLogService({
   controlCenterStartedAtMs: CONTROL_CENTER_STARTED_AT_MS,
   readOpenclawConfig,
   getGatewayClient: () => getGatewayDiagnosticsClient(),
-  appendGatewayLogEntry: (entry) => runtimeLedgerStore.appendGatewayEvent(entry, { sqlite: false }),
+  appendGatewayLogEntry: (entry) => {
+    invalidateGatewayLedgerSnapshotCache()
+    return runtimeLedgerStore.appendGatewayEvent(entry, { mirrorJsonl: false })
+  },
   getGatewayLastStartedAt: () => gatewayLifecycleRef.current?.lifecycleSnapshot().lastStartedAt || null,
   getRuntimeMonitorClearedAtMs: () => runtimeMonitorClearedAtMs,
   applyDiagnosticRedactions,
@@ -3889,6 +3947,7 @@ function readGatewayStabilitySnapshot(limit = 12) {
 const gatewayLifecycle = createGatewayLifecycleService({
   gatewayHttpPort: GATEWAY_HTTP_PORT,
   controlCenterPort: PORT,
+  controlCenterToken: AUTH_TOKEN,
   openClawConfigPath: OPENCLAW_CONFIG_PATH,
   openClawStateRoot: OPENCLAW_STATE_ROOT,
   startupHealthGraceMs: GATEWAY_STARTUP_HEALTH_GRACE_MS,
@@ -3915,7 +3974,7 @@ const gatewayLifecycle = createGatewayLifecycleService({
   pushGatewayLog,
   appendGatewayLifecycleEvent: (entry) => {
     invalidateGatewayLedgerSnapshotCache()
-    return runtimeLedgerStore.appendGatewayEvent(entry, { sqlite: false })
+    return runtimeLedgerStore.appendGatewayEvent(entry, { mirrorJsonl: false })
   },
   getGatewayLogs: () => gatewayLogService.getGatewayLogs(),
   isRuntimeMonitorEntryVisible,
@@ -3951,6 +4010,11 @@ function stopGatewayHealthMonitor(): void {
 }
 
 async function ensureGatewayRunning(): Promise<void> {
+  const gate = licenseService.getTrafficGate()
+  if (gate.blocked) {
+    pushGatewayLog('lifecycle', gate.blockMessage || 'Gateway start blocked by the Automnia traffic gate.', 'warning')
+    return
+  }
   return gatewayLifecycle.ensureGatewayRunning()
 }
 
@@ -4010,17 +4074,22 @@ const runtimeStatusService = createRuntimeStatusService({
   recentRunSnapshots: (limit) => recentOpenClawRuns
     .filter((run) => isRuntimeMonitorEntryVisible(run.endedAt || run.startedAt))
     .slice(0, limit),
+  isRuntimeMonitorEntryVisible,
   runtimeVersionCheckPayload,
   runtimeLedgerStatus: runtimeLedgerStore.status,
   gatewayChatRuntimeSnapshot,
   gatewayReadinessUnavailable,
   gatewayStabilityUnavailable,
   cachedDoctorDiagnosticsSummary,
-  sweepOpenClawSessionLocks,
-  sweepExpiredMissionCronJobs,
   redactSensitiveText,
 })
 runtimeStatusServiceRef.current = runtimeStatusService
+
+const gatewayActivityFeedService = createGatewayActivityFeedService({
+  readGatewayLedgerSnapshot: readRuntimeGatewayLedgerSnapshot,
+  dedupeGatewayLogEntries,
+  isRuntimeMonitorEntryVisible,
+})
 
 function getRuntimeStatusPayload(forcePluginRefresh: boolean): Promise<Record<string, unknown>> {
   return runtimeStatusService.getRuntimeStatusPayload(forcePluginRefresh)
@@ -4028,6 +4097,10 @@ function getRuntimeStatusPayload(forcePluginRefresh: boolean): Promise<Record<st
 
 function getRuntimeSummaryPayload(forceRefresh: boolean): Promise<Record<string, unknown>> {
   return runtimeStatusService.getRuntimeSummaryPayload(forceRefresh)
+}
+
+function getGatewayActivityFeed(limit?: number) {
+  return gatewayActivityFeedService.getGatewayActivityFeed(limit)
 }
 async function agentSessionFileSnapshot(agentId: string, sessionId: string) {
   const sessionFile = path.join(OPENCLAW_AGENTS_ROOT, agentId, 'sessions', `${sessionId}.jsonl`)
@@ -4165,6 +4238,7 @@ function gatewayRestartLifecycleSnapshotsFromRecords(records: unknown[], limit =
   for (const record of records) {
     const snapshot = gatewayRestartLifecycleSnapshotFromRecord(record)
     if (!snapshot) continue
+    if (!isRuntimeMonitorEntryVisible(snapshot.eventAt || snapshot.at)) continue
     byRequestedAt.set(snapshot.at, snapshot)
   }
   return Array.from(byRequestedAt.values())
@@ -4188,6 +4262,7 @@ async function readGatewayLedgerSnapshot(limit = 120, options: { sqlite?: boolea
   const entries = records
     .map((record, index) => normalizeGatewayLedgerEntry(record, index))
     .filter((entry): entry is GatewayLogEntry => Boolean(entry))
+    .filter((entry) => isRuntimeMonitorEntryVisible(entry.timestamp))
     .sort((a, b) => Date.parse(b.timestamp) - Date.parse(a.timestamp))
     .slice(0, limit)
   return {
@@ -4210,32 +4285,38 @@ function limitGatewayLedgerSnapshot(snapshot: GatewayLedgerSnapshot, limit: numb
   }
 }
 
-async function readRuntimeGatewayLedgerSnapshot(limit = 120): Promise<GatewayLedgerSnapshot> {
+async function readRuntimeGatewayLedgerSnapshot(limit = 120, options: { sqlite?: boolean } = {}): Promise<GatewayLedgerSnapshot> {
   const normalizedLimit = normalizedGatewayLedgerSnapshotLimit(limit)
+  const sqlite = options.sqlite !== false
   const now = Date.now()
   if (
     gatewayLedgerSnapshotCache
+    && gatewayLedgerSnapshotCache.sqlite === sqlite
     && gatewayLedgerSnapshotCache.limit >= normalizedLimit
     && now - gatewayLedgerSnapshotCache.builtAt <= GATEWAY_LEDGER_SNAPSHOT_CACHE_MS
   ) {
     return limitGatewayLedgerSnapshot(gatewayLedgerSnapshotCache.snapshot, normalizedLimit)
   }
 
-  if (gatewayLedgerSnapshotInFlight && gatewayLedgerSnapshotInFlight.limit >= normalizedLimit) {
+  if (gatewayLedgerSnapshotInFlight && gatewayLedgerSnapshotInFlight.sqlite === sqlite && gatewayLedgerSnapshotInFlight.limit >= normalizedLimit) {
     return limitGatewayLedgerSnapshot(await gatewayLedgerSnapshotInFlight.promise, normalizedLimit)
   }
 
-  const promise = readGatewayLedgerSnapshot(normalizedLimit, { sqlite: false }).then((snapshot) => {
-    gatewayLedgerSnapshotCache = {
-      builtAt: Date.now(),
-      limit: normalizedLimit,
-      snapshot,
+  const requestGeneration = gatewayLedgerSnapshotGeneration
+  const promise = readGatewayLedgerSnapshot(normalizedLimit, { sqlite }).then((snapshot) => {
+    if (requestGeneration === gatewayLedgerSnapshotGeneration) {
+      gatewayLedgerSnapshotCache = {
+        builtAt: Date.now(),
+        limit: normalizedLimit,
+        sqlite,
+        snapshot,
+      }
     }
     return snapshot
   }).finally(() => {
     if (gatewayLedgerSnapshotInFlight?.promise === promise) gatewayLedgerSnapshotInFlight = null
   })
-  gatewayLedgerSnapshotInFlight = { limit: normalizedLimit, promise }
+  gatewayLedgerSnapshotInFlight = { limit: normalizedLimit, sqlite, promise }
   return limitGatewayLedgerSnapshot(await promise, normalizedLimit)
 }
 
@@ -5372,6 +5453,15 @@ async function runOpenClaw(
   options?: { cwd?: string; envOverrides?: Record<string, string>; signal?: AbortSignal },
 ): Promise<OpenClawResult> {
   const runCwd = options?.cwd || WORKSPACE_ROOT
+  const trafficGate = licenseService.getTrafficGate()
+  if (args[0] === 'agent' && !trafficGate.messageTrafficAllowed) {
+    const message = trafficGate.blockMessage || 'Automnia credits are unavailable. Restore the credit balance before sending another message.'
+    return { stdout: '', stderr: message, code: 402, failureKind: 'insufficient_credits', elapsedMs: 0 }
+  }
+  if (args[0] === 'agent' && !trafficGate.localAiAllowed && args.includes('--local')) {
+    const message = 'Starter Subscription and credit-refill access cannot use local AI runtime features.'
+    return { stdout: '', stderr: message, code: 403, failureKind: 'provider_forbidden', elapsedMs: 0 }
+  }
   if (!isOpenClawRuntimeAvailable()) {
     const runRecord = beginOpenClawRun(args, runCwd, timeoutMs)
     const stderr = openClawRuntimeUnavailableMessage()
@@ -6508,7 +6598,7 @@ async function streamOpenAICodexResponsesCompletion(params: {
 
 async function streamAnthropicMessage(params: {
   model: string
-  apiKey: string
+  auth: ProviderRequestAuth
   messages: ProviderConversationMessage[]
   thinking: ThinkingLevel
   signal: AbortSignal
@@ -6524,9 +6614,16 @@ async function streamAnthropicMessage(params: {
   const upstream = await fetch('https://api.anthropic.com/v1/messages', {
     method: 'POST',
     headers: {
-      'x-api-key': params.apiKey,
       'anthropic-version': '2023-06-01',
       'Content-Type': 'application/json',
+      ...(params.auth.type === 'apiKey'
+        ? { 'x-api-key': params.auth.value }
+        : {
+            Authorization: `Bearer ${params.auth.accessToken}`,
+            'anthropic-beta': 'claude-code-20250219,oauth-2025-04-20',
+            'anthropic-dangerous-direct-browser-access': 'true',
+            'x-app': 'cli',
+          }),
     },
     body: JSON.stringify(body),
     signal: params.signal,
@@ -8059,10 +8156,16 @@ async function tryReleaseTcpPortUnix(port: number): Promise<{ released: boolean;
 }
 
 async function tryRestartGatewayService(options: { force?: boolean; allowExternalTakeover?: boolean; reason?: string } = {}): Promise<{ restarted: boolean; detail: string }> {
+  const gate = licenseService.getTrafficGate()
+  if (gate.blocked) {
+    return { restarted: false, detail: gate.blockMessage || 'Gateway restart blocked by the Automnia traffic gate.' }
+  }
   return gatewayLifecycle.tryRestartGatewayService(options)
 }
 
 async function ensureGatewayReadyForCronMission(): Promise<void> {
+  const gate = licenseService.getTrafficGate()
+  if (gate.blocked) throw new Error(gate.blockMessage || 'Automnia traffic is blocked until credits are restored.')
   if (await isGatewayHealthy()) {
     startGatewayHealthMonitor()
     return
@@ -8492,8 +8595,9 @@ function createInitialOpenclawConfig() {
         startupContext: { enabled: false, applyOn: [] },
         contextPruning: defaultContextPruningConfig(),
       },
-      list: bootstrapAgents.map((agent) => applyNoBootstrapAgentConfig({
+      list: bootstrapAgents.map((agent, index) => applyNoBootstrapAgentConfig({
         id: agent.id,
+        ...(index === 0 ? { default: true } : {}),
         name: agent.name,
         identity: { name: agent.name, emoji: '@', theme: 'adventurer' },
         workspace: WORKSPACE_ROOT,
@@ -8568,7 +8672,8 @@ async function readOpenclawConfig() {
       (entry) => { openclawConfigCache = entry },
     )
     if (
-      sanitizeOpenClawConfigAgentAvatars(cached)
+      ensurePrimaryAgentSelection(cached, isRetiredAgentId)
+      || sanitizeOpenClawConfigAgentAvatars(cached)
       || migrateGeneratedDeepSeekDefaultsInOpenClawConfig(cached)
       || pruneRetiredAgentsFromOpenClawConfig(cached)
     ) {
@@ -8591,7 +8696,8 @@ async function readOpenclawConfig() {
     try {
       const parsed = JSON.parse(raw.replace(/^\uFEFF/, '')) as OpenClawConfigFile
       if (
-        sanitizeOpenClawConfigAgentAvatars(parsed)
+        ensurePrimaryAgentSelection(parsed, isRetiredAgentId)
+        || sanitizeOpenClawConfigAgentAvatars(parsed)
         || migrateGeneratedDeepSeekDefaultsInOpenClawConfig(parsed)
         || pruneRetiredAgentsFromOpenClawConfig(parsed)
       ) {
@@ -8612,7 +8718,8 @@ async function readOpenclawConfig() {
     const fallbackRaw = await fs.readFile(`${OPENCLAW_CONFIG_PATH}.last-good`, 'utf-8')
     const parsed = JSON.parse(fallbackRaw.replace(/^\uFEFF/, '')) as OpenClawConfigFile
     if (
-      sanitizeOpenClawConfigAgentAvatars(parsed)
+      ensurePrimaryAgentSelection(parsed, isRetiredAgentId)
+      || sanitizeOpenClawConfigAgentAvatars(parsed)
       || migrateGeneratedDeepSeekDefaultsInOpenClawConfig(parsed)
       || pruneRetiredAgentsFromOpenClawConfig(parsed)
     ) {
@@ -9014,6 +9121,7 @@ function ensureOpenclawRuntimeDefaults(config: OpenClawConfigFile) {
   if (!Array.isArray(config.agents.list) || !config.agents.list.length) {
     config.agents.list = createInitialOpenclawConfig().agents?.list || []
   }
+  ensurePrimaryAgentSelection(config, isRetiredAgentId)
   applyDeepSeekOnlyRuntimeDefaults(config)
   ensureClawTalkBundledPluginDefaults(config)
   ensureCodexPluginExplicitEnablement(config)
@@ -9374,13 +9482,17 @@ export function isAgentTurnExecuting(): boolean {
   return activeAgentTurnExecutionCount > 0
 }
 
-async function writeOpenclawConfig(config: unknown) {
-  if (isAgentTurnExecuting()) {
+async function writeOpenclawConfig(config: unknown, options: { allowDuringAgentTurn?: boolean } = {}) {
+  if (isAgentTurnExecuting() && options.allowDuringAgentTurn !== true) {
     console.info('[config] writeOpenclawConfig suppressed: agent turn in progress')
     return
   }
   const parsed = (config || {}) as OpenClawConfigFile
   ensureOpenclawRuntimeDefaults(parsed)
+  // The generic OpenClaw normalizer adds resilience fallbacks. Re-apply the
+  // active billing contract afterward so a background config write cannot
+  // silently broaden a just-selected usage policy.
+  enforceActiveBillingRouteModelOrder(parsed)
   await syncModelProviderTimeoutsFromAgentSettings(parsed)
   const next = {
     ...parsed,
@@ -9465,8 +9577,8 @@ async function writeOpenclawConfig(config: unknown) {
 // synchronizer is invoked whenever license state changes and immediately
 // before the Gateway starts, so a stale Telegram/ClawTalk process cannot keep
 // a direct provider as the active model after a hosted plan is selected.
-const AUTOMNIA_OPENCLAW_PROVIDER_ID = 'automnia-cloud'
-const AUTOMNIA_OPENCLAW_MODEL = `${AUTOMNIA_OPENCLAW_PROVIDER_ID}/gemini-3.6-flash`
+const AUTOMNIA_OPENCLAW_PROVIDER_ID = AUTOMNIA_CREDITS_PROVIDER_ID
+const AUTOMNIA_OPENCLAW_MODEL = AUTOMNIA_CREDITS_MODEL_ID
 const AUTOMNIA_OPENCLAW_CONTEXT_TOKENS = (() => {
   const configured = Number(process.env.AUTOMNIA_OPENCLAW_CONTEXT_TOKENS || 256_000)
   return Number.isFinite(configured)
@@ -9477,16 +9589,31 @@ const AUTOMNIA_OPENCLAW_CONTEXT_TOKENS = (() => {
 type OpenClawModelSelection = { primary?: string; fallbacks?: string[] }
 
 function configuredAutomniaCloudBaseUrl(config?: OpenClawConfigFile) {
-  const existingProvider = config?.models?.providers?.[AUTOMNIA_OPENCLAW_PROVIDER_ID] as { baseUrl?: unknown } | undefined
-  const existingBaseUrl = typeof existingProvider?.baseUrl === 'string' ? existingProvider.baseUrl.trim().replace(/\/v1\/?$/i, '') : null
-  // Preserve an existing valid provider route when the environment was not
-  // supplied. This prevents gateway startup from changing a working hosted
-  // route back to the unconfigured permanent-domain placeholder.
-  return automniaCloudRuntimeBaseUrl(existingBaseUrl || AUTOMNIA_PUBLIC_CLOUD_URL)
+  // The provider URL is deployment-owned, not durable user configuration.
+  // Persisting the previous Cloud Run origin here can leave a Gateway pinned
+  // to a retired/stale billing deployment after the public origin changes;
+  // that deployment may report a zero wallet even while Account & License
+  // shows the current pooled balance. Keep explicit environment overrides for
+  // staging/emergency recovery, but always migrate persisted config back to
+  // the current canonical origin otherwise.
+  void config
+  return automniaCloudRouteBaseUrl()
 }
 
 function isAutomniaOpenClawModel(value: unknown) {
   return splitModelId(canonicalAgentModelId(typeof value === 'string' ? value : '')).provider.toLowerCase() === AUTOMNIA_OPENCLAW_PROVIDER_ID
+}
+
+function modelSelectionForActiveBillingRoute(selection: OpenClawModelSelection) {
+  return licenseService.isUsagePriorityLocked() ? creditsOnlyModelSelection() : selection
+}
+
+function modelSelectionBlocked(modelId: string) {
+  if (!licenseService.isUsagePriorityLocked()) return null
+  if (modelId === '__provider_auth__' || !isAutomniaCreditsModelId(canonicalAgentModelId(modelId))) {
+    return CREDITS_ONLY_MODEL_ACCESS_MESSAGE
+  }
+  return null
 }
 
 function nonAutomniaOpenClawModels(selection: OpenClawModelSelection | undefined) {
@@ -9528,56 +9655,150 @@ function configuredOpenClawProviderModels(config: OpenClawConfigFile) {
 
 function applyAutomniaBillingModelOrder(
   selection: OpenClawModelSelection | undefined,
-  usagePriority: 'automnia_first' | 'provider_first' | 'byok_only' | null,
+  usagePriority: 'automnia_only' | 'provider_first' | 'automnia_first_with_provider_fallback' | 'automnia_first' | 'byok_only' | null,
   providerCandidates: string[] = [],
+  automniaCreditBalance?: number | null,
 ) {
-  const providerModels = uniqueStrings(
+  return applyUsagePriorityModelOrder(selection, usagePriority, [
     ...nonAutomniaOpenClawModels(selection),
     ...providerCandidates,
+  ], AUTOMNIA_OPENCLAW_MODEL, {
+    automniaCreditBalance,
+    allowProviderFallbackWhenCreditsExhausted: !licenseService.isUsagePriorityLocked(),
+  })
+}
+
+function telegramBillingDefaultModel(config: OpenClawConfigFile | null | undefined) {
+  const model = config?.channels?.modelByChannel?.telegram?.['*']
+  return typeof model === 'string' && model.trim() ? model.trim() : null
+}
+
+/**
+ * Telegram has a channel-scoped model layer which takes precedence over the
+ * agent's normal model selection. Keep only its wildcard/default entry under
+ * the active billing route; explicit chat and DM entries remain user-owned.
+ */
+function setTelegramBillingDefaultModel(config: OpenClawConfigFile, model: string | undefined) {
+  if (!model) return
+  const channels = config.channels || {}
+  const modelByChannel = channels.modelByChannel || {}
+  const telegram = withUsagePriorityChannelDefault(modelByChannel.telegram, { primary: model }) || {}
+  config.channels = {
+    ...channels,
+    modelByChannel: {
+      ...modelByChannel,
+      telegram,
+    },
+  }
+}
+
+function clearAutomniaTelegramBillingDefaultModel(config: OpenClawConfigFile) {
+  if (telegramBillingDefaultModel(config) !== AUTOMNIA_OPENCLAW_MODEL) return
+  const channels = config.channels
+  const modelByChannel = channels?.modelByChannel
+  const telegram = modelByChannel?.telegram
+  if (!channels || !modelByChannel || !telegram) return
+
+  const nextTelegram = { ...telegram }
+  delete nextTelegram['*']
+  const nextModelByChannel = { ...modelByChannel }
+  if (Object.keys(nextTelegram).length) nextModelByChannel.telegram = nextTelegram
+  else delete nextModelByChannel.telegram
+
+  const nextChannels = { ...channels }
+  if (Object.keys(nextModelByChannel).length) {
+    nextChannels.modelByChannel = nextModelByChannel
+  } else {
+    delete nextChannels.modelByChannel
+  }
+  if (Object.keys(nextChannels).length) config.channels = nextChannels
+  else delete config.channels
+}
+
+function effectiveHostedUsagePriority() {
+  const status = licenseService.getStatus()
+  const priority = status.usagePriority
+  if (priority === 'automnia_first') return 'automnia_only' as const
+  if (priority === 'byok_only') return 'provider_first' as const
+  if (priority === 'automnia_only' && status.creditBalance === 0 && !licenseService.isUsagePriorityLocked()) {
+    return 'provider_first' as const
+  }
+  return priority
+}
+
+function enforceActiveBillingRouteModelOrder(config: OpenClawConfigFile) {
+  const status = licenseService.getStatus()
+  const priority = status.active ? status.usagePriority : null
+  if (!priority || !config.agents?.defaults) return
+
+  const providerCandidates = configuredOpenClawProviderModels(config)
+  delete config.agents.defaults.modelOverride
+  const defaultSelection = applyAutomniaBillingModelOrder(
+    config.agents.defaults.model,
+    priority,
+    providerCandidates,
+    status.creditBalance,
   )
-  if (usagePriority === 'automnia_first') {
-    // "Automnia credits first" is a billing boundary, not a preference hint.
-    // Do not silently fall back to a direct provider: that would produce an
-    // answer outside the hosted relay and leave the subscriber unbilled.
-    return {
-      primary: AUTOMNIA_OPENCLAW_MODEL,
+  config.agents.defaults.model = defaultSelection
+  setTelegramBillingDefaultModel(config, defaultSelection?.primary)
+  for (const agent of config.agents.list || []) {
+    delete agent.modelOverride
+    const nextSelection = applyAutomniaBillingModelOrder(agent.model, priority, providerCandidates, status.creditBalance)
+    if (nextSelection) agent.model = nextSelection
+    else delete agent.model
+  }
+
+  // A BYOK policy must not leave an Automnia alias or provider definition in
+  // the live config for a later generic config write to resurrect.
+  if (priority === 'byok_only') {
+    if (config.models?.providers) delete config.models.providers[AUTOMNIA_OPENCLAW_PROVIDER_ID]
+    if (config.agents.defaults.models) {
+      delete config.agents.defaults.models[AUTOMNIA_OPENCLAW_MODEL]
     }
   }
-  if (usagePriority === 'provider_first') {
-    // Use the connected provider first; Automnia credits are the fallback.
-    if (providerModels.length) {
-      return {
-        primary: providerModels[0],
-        fallbacks: [AUTOMNIA_OPENCLAW_MODEL, ...providerModels.slice(1)],
-      }
+
+  // Starter/refill entitlements are a hard capability boundary, not merely a
+  // preferred route. OpenClaw's /model directive and Telegram model menu both
+  // consult this allowlist, so remove every provider model from the active
+  // runtime contract while retaining the local provider records for a future
+  // upgrade. The local agent files remain the durable source for restoration.
+  const creditsOnly = licenseService.isUsagePriorityLocked()
+  if (creditsOnly) {
+    const existingAutomniaEntry = config.agents.defaults.models?.[AUTOMNIA_OPENCLAW_MODEL]
+    config.agents.defaults.models = {
+      [AUTOMNIA_OPENCLAW_MODEL]: {
+        ...(isLooseRecord(existingAutomniaEntry) ? existingAutomniaEntry : {}),
+        alias: 'Automnia credits',
+      },
     }
-    return {
-      primary: AUTOMNIA_OPENCLAW_MODEL,
+    for (const agent of config.agents.list || []) {
+      delete agent.modelOverride
+      const mutableAgent = agent as AgentConfigEntry & { models?: unknown }
+      delete mutableAgent.models
     }
+    config.env = {
+      ...(config.env || {}),
+      vars: {
+        ...(config.env?.vars || {}),
+        AUTOMNIA_CREDITS_ONLY: '1',
+      },
+    }
+  } else if (config.env?.vars?.AUTOMNIA_CREDITS_ONLY !== undefined) {
+    const vars = { ...(config.env.vars || {}) }
+    delete vars.AUTOMNIA_CREDITS_ONLY
+    config.env = {
+      ...(config.env || {}),
+      ...(Object.keys(vars).length ? { vars } : {}),
+    }
+    if (!config.env.vars) delete config.env
   }
-  if (usagePriority === 'byok_only') {
-    // BYOK only: bypass subscription credits completely and use direct provider keys
-    if (providerModels.length) {
-      return {
-        primary: providerModels[0],
-        ...(providerModels.length > 1 ? { fallbacks: providerModels.slice(1) } : {}),
-      }
-    }
-    return undefined
-  }
-  return { primary: AUTOMNIA_OPENCLAW_MODEL }
 }
 
 function removeAutomniaBillingModel(selection: OpenClawModelSelection | undefined, providerCandidates: string[] = []) {
-  const providerModels = uniqueStrings(
+  return applyUsagePriorityModelOrder(selection, 'byok_only', [
     ...nonAutomniaOpenClawModels(selection),
     ...providerCandidates,
-  )
-  if (!providerModels.length) return undefined
-  return {
-    primary: providerModels[0],
-    ...(providerModels.length > 1 ? { fallbacks: providerModels.slice(1) } : {}),
-  }
+  ], AUTOMNIA_OPENCLAW_MODEL)
 }
 
 async function synchronizeOpenClawBillingRoute(configInput?: OpenClawConfigFile) {
@@ -9601,20 +9822,31 @@ async function synchronizeOpenClawBillingRoute(configInput?: OpenClawConfigFile)
     ...configuredProviderModels,
     ...Array.from(localModels.values()).flatMap((selection) => nonAutomniaOpenClawModels(selection)),
   )
+  const licenseStatus = licenseService.getStatus()
+  const requestedPriority = licenseStatus.usagePriority
+  if ((requestedPriority === 'provider_first' || requestedPriority === 'automnia_first_with_provider_fallback' || requestedPriority === 'byok_only') && !allProviderModels.length) {
+    throw new Error('The selected provider-plus-Automnia route has no configured provider model. Connect a provider before switching usage priority.')
+  }
 
   const hosted = licenseService.getActiveRelayCredentials()
   if (!hosted) {
     delete config.models.providers[AUTOMNIA_OPENCLAW_PROVIDER_ID]
+    if (config.agents.defaults.models) {
+      delete config.agents.defaults.models[AUTOMNIA_OPENCLAW_MODEL]
+    }
     const defaultSelection = removeAutomniaBillingModel(config.agents.defaults.model, allProviderModels)
     if (defaultSelection) config.agents.defaults.model = defaultSelection
+    else delete config.agents.defaults.model
+    clearAutomniaTelegramBillingDefaultModel(config)
     for (const agent of config.agents.list || []) {
       const selection = removeAutomniaBillingModel(agent.model, uniqueStrings(
         ...nonAutomniaOpenClawModels(localModels.get(agent.id)),
         ...allProviderModels,
       ))
       if (selection) agent.model = selection
+      else delete agent.model
     }
-    await writeOpenclawConfig(config)
+    await writeOpenclawConfig(config, { allowDuringAgentTurn: true })
     return { routed: false, mode: 'byok-or-inactive' as const }
   }
 
@@ -9659,19 +9891,36 @@ async function synchronizeOpenClawBillingRoute(configInput?: OpenClawConfigFile)
   }
 
   const priority = hosted.usagePriority
-  config.agents.defaults.model = applyAutomniaBillingModelOrder(config.agents.defaults.model, priority, allProviderModels)
+  const defaultSelection = applyAutomniaBillingModelOrder(
+    config.agents.defaults.model,
+    priority,
+    allProviderModels,
+    licenseStatus.creditBalance,
+  )
+  config.agents.defaults.model = defaultSelection
+  setTelegramBillingDefaultModel(config, defaultSelection?.primary)
   for (const agent of config.agents.list || []) {
     agent.model = applyAutomniaBillingModelOrder(agent.model, priority, uniqueStrings(
       ...nonAutomniaOpenClawModels(localModels.get(agent.id)),
       ...allProviderModels,
-    ))
+    ), licenseStatus.creditBalance)
   }
   if (!config.agents.defaults.models) config.agents.defaults.models = {}
   config.agents.defaults.models[AUTOMNIA_OPENCLAW_MODEL] = {
     alias: 'Automnia credits',
     params: { transport: 'sse' },
   }
-  await writeOpenclawConfig(config)
+  await writeOpenclawConfig(config, { allowDuringAgentTurn: true })
+  if (licenseService.isUsagePriorityLocked()) {
+    await Promise.all((config.agents.list || []).map((agent) =>
+      clearDisallowedAutoModelOverridesForAgent(
+        agent.id,
+        creditsOnlyModelSelection(),
+        { clearManualOverrides: true },
+      ).catch((error) => {
+        console.warn(`[model-guard] failed to clear Telegram model overrides for ${agent.id}:`, error)
+      })))
+  }
   return { routed: true, mode: 'hosted_credits' as const, usagePriority: priority }
 }
 
@@ -9679,6 +9928,7 @@ function automniaBillingRouteSnapshot(config: OpenClawConfigFile | null | undefi
   return JSON.stringify({
     provider: config?.models?.providers?.[AUTOMNIA_OPENCLAW_PROVIDER_ID] || null,
     defaults: config?.agents?.defaults?.model || null,
+    telegramDefault: telegramBillingDefaultModel(config),
     agents: (config?.agents?.list || [])
       .map((agent) => ({ id: agent.id, model: agent.model || null }))
       .sort((left, right) => left.id.localeCompare(right.id)),
@@ -9690,9 +9940,9 @@ function automniaBillingRouteSnapshot(config: OpenClawConfigFile | null | undefi
  *
  * Older installs registered Gemini 3.6 Flash with `reasoning: false`, which
  * makes OpenClaw reject every enabled thinking level locally. If that legacy
- * definition is still loaded by a healthy Gateway, restart the owned Gateway
- * after writing the corrected profile so the user never receives that
- * configuration error.
+ * definition is still loaded by a healthy Gateway, hot-reload the corrected
+ * profile first and restart only if the Gateway does not confirm it, so the
+ * user never receives that configuration error.
  */
 async function synchronizeOpenClawBillingRouteForAgentRun(config: OpenClawConfigFile) {
   const beforeRoute = automniaBillingRouteSnapshot(config)
@@ -9700,6 +9950,9 @@ async function synchronizeOpenClawBillingRouteForAgentRun(config: OpenClawConfig
   const afterConfig = await readOpenclawConfig().catch(() => null)
   const afterRoute = automniaBillingRouteSnapshot(afterConfig)
   if (beforeRoute === afterRoute || !await isGatewayHealthy().catch(() => false)) return
+
+  const hotReload = await applyBillingRouteViaGatewayConfigPatch(afterConfig || config)
+  if (hotReload.ok) return
 
   await tryRestartGatewayService({
     force: true,
@@ -10621,7 +10874,7 @@ async function sendClawTalkSmsWithRetry(client, logger, params) {
 
 function patchedTelegramBotRuntimeSource(source: string) {
   let next = source
-  const routingPatchVersion = 'var TELEGRAM_AGENT_ROUTING_PATCH_VERSION = 11;'
+  const routingPatchVersion = 'var TELEGRAM_AGENT_ROUTING_PATCH_VERSION = 12;'
   const routingHelperPattern = /var TELEGRAM_AGENT_ROUTING_PATCH_VERSION = \d+;[\s\S]*?\/\/#endregion telegram-agent-routing-patch/
   if (routingHelperPattern.test(next)) {
     next = next.replace(routingHelperPattern, TELEGRAM_AGENT_ROUTING_HELPER)
@@ -10642,6 +10895,7 @@ function patchedTelegramBotRuntimeSource(source: string) {
   if (!next.includes(routeApplicationMarker)) {
     const bodyResultMarker = 'if (!bodyResult) return null;'
     const routeApplicationBlock = [
+      'if (!(await automniaTrafficGateAllowsMessages())) return null;',
       'const telegramAgentRoute = resolveTelegramAgentRouteForMessage({',
       'cfg: freshCfg,',
       'route,',
@@ -10696,6 +10950,31 @@ function patchedTelegramBotRuntimeSource(source: string) {
     )
   } else if (!next.includes('applyTelegramVerifiedIdentityDeliveryGuard({')) {
     console.warn('[plugins/telegram] identity delivery guard skipped: reply delivery marker not found')
+  }
+  const modelDataMarker = 'const { byProvider, providers, modelNames, resolvedDefault: activeResolvedDefault } = modelData;'
+  if (!next.includes('telegramCreditsOnlyModelData(runtimeCfg, modelData)')) {
+    if (next.includes(modelDataMarker)) {
+      next = next.replace(
+        modelDataMarker,
+        `const restrictedTelegramModelData = telegramCreditsOnlyModelData(runtimeCfg, modelData);\n\t\t\t\tconst { byProvider, providers, modelNames, resolvedDefault: activeResolvedDefault } = restrictedTelegramModelData;`,
+      )
+    } else {
+      console.warn('[plugins/telegram] credits-only model data guard skipped: model data marker not found')
+    }
+  }
+  const modelSelectionMarker = 'const selection = resolveModelSelection({'
+  if (!next.includes('telegramCreditsOnlyModelSelectionAllowed(runtimeCfg, modelCallback)')) {
+    const modelSelectionGuard = [
+      'if (!telegramCreditsOnlyModelSelectionAllowed(runtimeCfg, modelCallback)) {',
+      'try { await editMessageWithButtons("Starter Subscription is locked to Automnia credits only. Upgrade to choose a provider model.", []); } catch (err) { throw new TelegramRetryableCallbackError(err); }',
+      'return;',
+      '}',
+    ].join('\n\t\t\t\t\t')
+    if (next.includes(modelSelectionMarker)) {
+      next = next.replace(modelSelectionMarker, `${modelSelectionGuard}\n\t\t\t\t\t${modelSelectionMarker}`)
+    } else {
+      console.warn('[plugins/telegram] credits-only model guard skipped: model selection marker not found')
+    }
   }
   return next
 }
@@ -11660,6 +11939,8 @@ type PluginToggleConfigPatch = {
 const JSON_MERGE_PATCH_UNCHANGED = Symbol('jsonMergePatchUnchanged')
 const PLUGIN_TOGGLE_ARRAY_REPLACE_PATHS = ['plugins.allow', 'plugins.deny', 'plugins.load.paths']
 const PLUGIN_TOGGLE_GATEWAY_PATCH_TIMEOUT_MS = 12_000
+const BILLING_ROUTE_ARRAY_REPLACE_PATHS = ['agents.list']
+const BILLING_ROUTE_GATEWAY_PATCH_TIMEOUT_MS = 8_000
 
 function cloneJsonValue<T>(value: T): T {
   if (value === undefined) return value
@@ -11733,6 +12014,131 @@ function gatewayConfigGetPayload(value: unknown): { config: OpenClawConfigFile |
   return {
     config: configValue ? cloneJsonValue(configValue) as OpenClawConfigFile : null,
     hash,
+  }
+}
+
+function billingRouteModelSnapshot(config: OpenClawConfigFile | null | undefined) {
+  return JSON.stringify({
+    providerConfigured: Boolean(config?.models?.providers?.[AUTOMNIA_OPENCLAW_PROVIDER_ID]),
+    defaults: config?.agents?.defaults?.model || null,
+    telegramDefault: telegramBillingDefaultModel(config),
+    agents: (config?.agents?.list || [])
+      .map((agent) => ({ id: agent.id, model: agent.model || null }))
+      .sort((left, right) => left.id.localeCompare(right.id)),
+  })
+}
+
+type BillingRouteConfigApplyResult = {
+  ok: boolean
+  detail: string
+  elapsedMs: number
+}
+
+/**
+ * Apply only the billing-owned parts of OpenClaw's config through the
+ * authenticated Gateway RPC. OpenClaw documents models/agents as hot-reload
+ * safe, so a normal priority switch should not pay the multi-step Gateway
+ * restart cost. A restart remains the fail-safe when hot reload is unavailable
+ * or the Gateway does not confirm the exact route.
+ */
+async function applyBillingRouteViaGatewayConfigPatch(desiredConfig: OpenClawConfigFile): Promise<BillingRouteConfigApplyResult> {
+  const startedAt = Date.now()
+  try {
+    if (!(await isGatewayHealthy().catch(() => false))) {
+      throw new Error(`gateway is not healthy on port ${GATEWAY_HTTP_PORT}`)
+    }
+
+    const state = await ensureControlCenterGatewayClient(AbortSignal.timeout(BILLING_ROUTE_GATEWAY_PATCH_TIMEOUT_MS))
+    const getPayload = await state.client.request(
+      'config.get',
+      {},
+      {
+        timeoutMs: BILLING_ROUTE_GATEWAY_PATCH_TIMEOUT_MS,
+        signal: AbortSignal.timeout(BILLING_ROUTE_GATEWAY_PATCH_TIMEOUT_MS),
+      },
+    )
+    const { config: gatewayConfig, hash } = gatewayConfigGetPayload(getPayload)
+    if (!gatewayConfig) throw new Error('Gateway config.get returned no config')
+
+    const desiredDefaults = desiredConfig.agents?.defaults
+    const desiredAutomniaModel = desiredDefaults?.models?.[AUTOMNIA_OPENCLAW_MODEL]
+    const desiredTelegramDefault = telegramBillingDefaultModel(desiredConfig)
+    const patch: Record<string, unknown> = {
+      models: {
+        providers: {
+          [AUTOMNIA_OPENCLAW_PROVIDER_ID]: desiredConfig.models?.providers?.[AUTOMNIA_OPENCLAW_PROVIDER_ID]
+            ? cloneJsonValue(desiredConfig.models.providers[AUTOMNIA_OPENCLAW_PROVIDER_ID])
+            : null,
+        },
+      },
+      agents: {
+        defaults: {
+          model: desiredDefaults?.model ? cloneJsonValue(desiredDefaults.model) : null,
+          modelOverride: null,
+          models: {
+            [AUTOMNIA_OPENCLAW_MODEL]: desiredAutomniaModel ? cloneJsonValue(desiredAutomniaModel) : null,
+          },
+        },
+        // JSON merge patch replaces arrays; sending the complete sanitized
+        // list prevents one agent from retaining its previous model chain.
+        list: cloneJsonValue(desiredConfig.agents?.list || []),
+      },
+      channels: {
+        modelByChannel: {
+          // Keep explicit Telegram chat/DM mappings intact. Only the
+          // wildcard/default entry is owned by the billing route.
+          telegram: {
+            '*': desiredTelegramDefault,
+          },
+        },
+      },
+    }
+
+    if (billingRouteModelSnapshot(gatewayConfig) !== billingRouteModelSnapshot(desiredConfig)) {
+      const params: Record<string, unknown> = {
+        raw: JSON.stringify(patch),
+        replacePaths: BILLING_ROUTE_ARRAY_REPLACE_PATHS,
+        note: 'Control Center usage priority route switch',
+      }
+      if (hash) params.baseHash = hash
+      await state.client.request(
+        'config.patch',
+        params,
+        {
+          timeoutMs: BILLING_ROUTE_GATEWAY_PATCH_TIMEOUT_MS,
+          signal: AbortSignal.timeout(BILLING_ROUTE_GATEWAY_PATCH_TIMEOUT_MS),
+        },
+      )
+      openclawConfigCache = null
+    }
+
+    const verifiedPayload = await state.client.request(
+      'config.get',
+      {},
+      {
+        timeoutMs: BILLING_ROUTE_GATEWAY_PATCH_TIMEOUT_MS,
+        signal: AbortSignal.timeout(BILLING_ROUTE_GATEWAY_PATCH_TIMEOUT_MS),
+      },
+    )
+    const { config: verifiedConfig } = gatewayConfigGetPayload(verifiedPayload)
+    if (!verifiedConfig || billingRouteModelSnapshot(verifiedConfig) !== billingRouteModelSnapshot(desiredConfig)) {
+      throw new Error('Gateway did not confirm the selected usage priority route')
+    }
+    if (!(await isGatewayHealthy().catch(() => false))) {
+      throw new Error('Gateway became unhealthy after the usage priority route patch')
+    }
+
+    return {
+      ok: true,
+      detail: 'Gateway hot-reloaded the selected usage priority route',
+      elapsedMs: Date.now() - startedAt,
+    }
+  } catch (error) {
+    return {
+      ok: false,
+      detail: redactSensitiveText(String(error)),
+      elapsedMs: Date.now() - startedAt,
+    }
   }
 }
 
@@ -13964,10 +14370,10 @@ function applyLocalConfigToGlobal(
     theme: local.identity.theme,
     ...(avatar ? { avatar } : {}),
   }
-  const projectedModel = modelSelectionForOpenClawConfig(local.model)
+  const projectedModel = modelSelectionForActiveBillingRoute(modelSelectionForOpenClawConfig(local.model))
   target.model = {
     primary: projectedModel.primary,
-    ...(projectedModel.fallbacks.length ? { fallbacks: projectedModel.fallbacks } : {}),
+    ...(projectedModel.fallbacks?.length ? { fallbacks: projectedModel.fallbacks } : {}),
   }
   target.fastModeDefault = openClawFastModeDefault(local.runtime.fastModeDefault)
   target.skills = resolveOpenClawAgentSkillFilter(local)
@@ -14677,6 +15083,15 @@ async function runOpenClawWithGeminiToolWritePolicy(
   timeoutMs: number,
   options?: { cwd?: string; envOverrides?: Record<string, string>; signal?: AbortSignal; retry?: boolean },
 ) {
+  const trafficGate = licenseService.getTrafficGate()
+  if (args[0] === 'agent' && !trafficGate.messageTrafficAllowed) {
+    const message = trafficGate.blockMessage || 'Automnia credits are unavailable. Restore the credit balance before sending another message.'
+    return { stdout: '', stderr: message, code: 402, failureKind: 'insufficient_credits' as const, elapsedMs: 0 }
+  }
+  if (args[0] === 'agent' && !trafficGate.localAiAllowed && args.includes('--local')) {
+    const message = 'Starter Subscription and credit-refill access cannot use local AI runtime features.'
+    return { stdout: '', stderr: message, code: 403, failureKind: 'provider_forbidden' as const, elapsedMs: 0 }
+  }
   return withGoogleGeminiMinimalToolWriteConfig(agentId, message, context, options?.envOverrides, (envOverrides) => {
     const runOptions = { cwd: options?.cwd, envOverrides, signal: options?.signal }
     return options?.retry === false
@@ -15586,8 +16001,8 @@ function shiftToRuntimeCronJob(shift: Shift): RuntimeCronJobSummary {
     ...shift,
     source: 'control-center',
     status: 'active',
-    scheduleKind: 'every',
-    scheduleLabel: shift.every,
+    scheduleKind: shift.scheduleKind || 'every',
+    scheduleLabel: shift.scheduleLabel || shift.every,
     nextRunAt: null,
     endsAt: shift.endsAt,
     message: redactSensitiveText(shift.message),
@@ -15630,16 +16045,29 @@ function cronRowToRuntimeCronJob(row: Record<string, unknown>, shift?: Shift): R
   }
 }
 
-function listActiveCronJobsFromStateDb(): RuntimeCronJobSummary[] {
+function listActiveCronJobsFromStateDb(limit?: number): { active: RuntimeCronJobSummary[]; activeCount: number } {
   const inMemoryJobs = Array.from(activeShifts.values()).map(shiftToRuntimeCronJob)
+  const normalizedLimit = Number.isFinite(limit)
+    ? Math.max(1, Math.min(500, Math.round(limit as number)))
+    : null
   const dbPath = cronStateDbPath()
-  if (!existsSync(dbPath)) return inMemoryJobs
+  if (!existsSync(dbPath)) {
+    return {
+      active: normalizedLimit ? inMemoryJobs.slice(0, normalizedLimit) : inMemoryJobs,
+      activeCount: inMemoryJobs.length,
+    }
+  }
   let db: SqliteDatabase | null = null
   try {
     const sqlite = optionalRequire('node:sqlite') as SqliteModule
-    if (!sqlite?.DatabaseSync) return inMemoryJobs
+    if (!sqlite?.DatabaseSync) {
+      return {
+        active: normalizedLimit ? inMemoryJobs.slice(0, normalizedLimit) : inMemoryJobs,
+        activeCount: inMemoryJobs.length,
+      }
+    }
     db = new sqlite.DatabaseSync(dbPath, { readOnly: true })
-    const rows = db.prepare(`
+    const rowsStatement = db.prepare(`
       SELECT
         job_id,
         name,
@@ -15668,7 +16096,12 @@ function listActiveCronJobsFromStateDb(): RuntimeCronJobSummary[] {
       FROM cron_jobs
       WHERE enabled = 1
       ORDER BY COALESCE(next_run_at_ms, running_at_ms, created_at_ms) ASC, name ASC
-    `).all()
+      ${normalizedLimit ? 'LIMIT ?' : ''}
+    `)
+    const rows = normalizedLimit ? rowsStatement.all(normalizedLimit) : rowsStatement.all()
+    const countRow = normalizedLimit
+      ? db.prepare('SELECT COUNT(*) AS active_count FROM cron_jobs WHERE enabled = 1').get?.()
+      : null
     const shiftsByCronId = new Map(Array.from(activeShifts.values()).map((shift) => [shift.cronId, shift]))
     const jobsByCronId = new Map<string, RuntimeCronJobSummary>()
     for (const row of rows) {
@@ -15683,13 +16116,20 @@ function listActiveCronJobsFromStateDb(): RuntimeCronJobSummary[] {
       if (!jobsByCronId.has(job.cronId)) jobsByCronId.set(job.cronId, job)
     }
 
-    return Array.from(jobsByCronId.values())
+    const active = Array.from(jobsByCronId.values())
       .sort((left, right) => {
         const leftTime = Date.parse(left.nextRunAt || left.endsAt || left.startedAt)
         const rightTime = Date.parse(right.nextRunAt || right.endsAt || right.startedAt)
         return (Number.isFinite(leftTime) ? leftTime : Number.MAX_SAFE_INTEGER)
           - (Number.isFinite(rightTime) ? rightTime : Number.MAX_SAFE_INTEGER)
       })
+    const persistedCount = cleanCronNumber(countRow?.active_count)
+    return {
+      active: normalizedLimit ? active.slice(0, normalizedLimit) : active,
+      activeCount: normalizedLimit && persistedCount !== null
+        ? Math.max(persistedCount, active.length)
+        : active.length,
+    }
   } finally {
     try {
       db?.close?.()
@@ -15699,15 +16139,23 @@ function listActiveCronJobsFromStateDb(): RuntimeCronJobSummary[] {
   }
 }
 
-function listActiveCronJobViews(options: { sqlite?: boolean } = {}): { active: RuntimeCronJobSummary[]; error?: string } {
+function listActiveCronJobViews(options: { sqlite?: boolean; limit?: number } = {}): { active: RuntimeCronJobSummary[]; activeCount: number; error?: string } {
+  const inMemoryJobs = Array.from(activeShifts.values()).map(shiftToRuntimeCronJob)
+  const normalizedLimit = Number.isFinite(options.limit)
+    ? Math.max(1, Math.min(500, Math.round(options.limit as number)))
+    : null
   if (options.sqlite === false) {
-    return { active: Array.from(activeShifts.values()).map(shiftToRuntimeCronJob) }
+    return {
+      active: normalizedLimit ? inMemoryJobs.slice(0, normalizedLimit) : inMemoryJobs,
+      activeCount: inMemoryJobs.length,
+    }
   }
   try {
-    return { active: listActiveCronJobsFromStateDb() }
+    return listActiveCronJobsFromStateDb(normalizedLimit || undefined)
   } catch (error) {
     return {
-      active: Array.from(activeShifts.values()).map(shiftToRuntimeCronJob),
+      active: normalizedLimit ? inMemoryJobs.slice(0, normalizedLimit) : inMemoryJobs,
+      activeCount: inMemoryJobs.length,
       error: redactSensitiveText(String(error)),
     }
   }
@@ -17053,6 +17501,7 @@ const runtimeActionService = createRuntimeActionService({
 })
 
 registerRuntimeRoutes(app, {
+  getGatewayActivityFeed,
   getRuntimeStatusPayload,
   getRuntimeSummaryPayload,
   isValidAgentId,
@@ -17061,6 +17510,7 @@ registerRuntimeRoutes(app, {
 
 registerPluginRoutes(app, {
   clawTalkPluginId: CLAWTALK_PLUGIN_ID,
+  isCreditsOnlyEntitlement: () => licenseService.isUsagePriorityLocked(),
   invalidateRuntimeStatusCache,
   installOpenClawPlugin,
   listPluginControls,
@@ -17384,10 +17834,9 @@ async function generateRecruitAutoForgeMarkdown(input: {
   }
 
   if (providerConfig.kind === 'anthropic-messages') {
-    if (requestAuth.type !== 'apiKey') throw new Error('Anthropic Auto Forge requires an API key credential.')
     return streamAnthropicMessage({
       model,
-      apiKey: requestAuth.value,
+      auth: requestAuth,
       messages,
       thinking,
       signal: input.signal,
@@ -17470,6 +17919,7 @@ export type PartyManagementRoutesContext = {
   isRetiredAgentId: typeof isRetiredAgentId
   isValidAgentId: typeof isValidAgentId
   modelAuthProblem: typeof modelAuthProblem
+  modelSelectionBlocked: typeof modelSelectionBlocked
   normalizeAgentMdsState: typeof normalizeAgentMdsState
   normalizeAgentToolsConfig: typeof normalizeAgentToolsConfig
   normalizeModelWithFallback: typeof normalizeModelWithFallback
@@ -17551,6 +18001,7 @@ const partyManagementRoutesContext: PartyManagementRoutesContext = {
   isRetiredAgentId,
   isValidAgentId,
   modelAuthProblem,
+  modelSelectionBlocked,
   normalizeAgentMdsState,
   normalizeAgentToolsConfig,
   normalizeModelWithFallback,
@@ -17678,6 +18129,20 @@ registerMissionRoutes(app, {
 const gatewayAgentTurnService = createGatewayAgentTurnService({
   gatewayHttpPort: GATEWAY_HTTP_PORT,
   openClawAgentTurnTimeoutFloorSeconds: OPENCLAW_AGENT_TURN_TIMEOUT_FLOOR_SECONDS,
+  trafficGate: () => licenseService.getTrafficGate(),
+  reconcileBillingAccess: async () => {
+    // Refresh the provisioner-owned entitlement and then confirm the live
+    // Gateway route. A successful route reconciliation is enough to retry a
+    // stale-origin/auth failure; the traffic gate still blocks a confirmed
+    // zero balance for credits-only accounts.
+    await licenseService.refresh().catch(() => undefined)
+    try {
+      await synchronizeBillingRouteWithGateway()
+      return licenseService.isActive()
+    } catch {
+      return false
+    }
+  },
   isValidAgentId,
   isRetiredAgentId,
   streamObserver: gatewayChatStreamObserver,
@@ -17740,6 +18205,7 @@ const agentRuntimeService = createAgentRuntimeService({
   allowLocalAgentRuntimeFallback: CONTROL_CENTER_ALLOW_LOCAL_AGENT_FALLBACK,
   controlCenterGatewayChatClient: CONTROL_CENTER_GATEWAY_CHAT_CLIENT,
   gatewayHttpPort: GATEWAY_HTTP_PORT,
+  trafficGate: () => licenseService.getTrafficGate(),
   runOpenClawWithGeminiToolWritePolicy,
   withAgentRuntimeFlags,
   ensureGatewayRunning,
@@ -17760,10 +18226,12 @@ const agentStreamingService = createAgentStreamingService({
   agentRuntimeShortcutReason,
   bufferedAgentRuntimeReason,
   getHostedRelayCredentials: () => licenseService.getActiveRelayCredentials(),
+  trafficGate: () => licenseService.getTrafficGate(),
   reconcileHostedCreditBalance: async () => {
     const status = await licenseService.refresh()
     return { creditBalance: status.creditBalance }
   },
+  synchronizeHostedBillingRoute: () => synchronizeBillingRouteWithGateway(),
   runBufferedAgentTurnForStream,
   resolveAgentPrimaryModelId,
   openAiCodexEmbeddedRuntimeReason,
@@ -17806,32 +18274,98 @@ const agentStreamingService = createAgentStreamingService({
 const streamProviderAgentTurn = agentStreamingService.streamProviderAgentTurn
 
 let billingRouteSyncPromise: Promise<void> = Promise.resolve()
-const synchronizeBillingRouteWithGateway = async () => {
-  const operation = billingRouteSyncPromise.catch(() => undefined).then(async () => {
-    const beforeConfig = await readOpenclawConfig().catch(() => null)
-    const beforeRoute = automniaBillingRouteSnapshot(beforeConfig)
-    await synchronizeOpenClawBillingRoute()
-    const afterConfig = await readOpenclawConfig().catch(() => null)
-    const afterRoute = automniaBillingRouteSnapshot(afterConfig)
+let billingRouteSyncLoop: Promise<void> | null = null
+let billingRouteSyncVersion = 0
+let gatewayPausedForTrafficGate = false
 
-    // Ignore unrelated/dynamic OpenClaw metadata. A full JSON comparison here
-    // used to force a Gateway restart on every background license refresh,
-    // dropping active turns and creating a restart/refresh loop.
-    if (beforeRoute !== afterRoute) {
+async function synchronizeBillingRoutePass(version: number) {
+  const beforeConfig = await readOpenclawConfig().catch(() => null)
+  const beforeRoute = automniaBillingRouteSnapshot(beforeConfig)
+  await synchronizeOpenClawBillingRoute()
+  const afterConfig = await readOpenclawConfig().catch(() => null)
+  const afterRoute = automniaBillingRouteSnapshot(afterConfig)
+
+  // A newer request owns the desired state. Do not restart the Gateway for a
+  // superseded route; the loop will apply only the latest policy next.
+  if (version !== billingRouteSyncVersion) return
+
+  const gate = licenseService.getTrafficGate()
+  if (gate.blocked) {
+    gatewayPausedForTrafficGate = true
+    await stopGatewayRuntime('Automnia traffic gate blocked Gateway and channel traffic').catch((error) => {
+      pushGatewayLog('stderr', `Gateway stop for the Automnia traffic gate failed: ${String(error)}`, 'warning')
+    })
+    pushGatewayLog('lifecycle', gate.blockMessage || 'Gateway and channel traffic paused by the Automnia traffic gate.', 'warning')
+    return
+  }
+  if (gatewayPausedForTrafficGate) {
+    gatewayPausedForTrafficGate = false
+    await ensureGatewayRunning()
+    startGatewayHealthMonitor()
+  }
+
+  // Ignore unrelated/dynamic OpenClaw metadata. A route change is first sent
+  // through the authenticated config.patch RPC, which OpenClaw hot-reloads
+  // for models and agents. A full restart is reserved for a failed patch or a
+  // Gateway that cannot confirm the exact route.
+  if (beforeRoute !== afterRoute) {
+    const hotReload = await applyBillingRouteViaGatewayConfigPatch(afterConfig || await readOpenclawConfig())
+    if (version !== billingRouteSyncVersion) return
+    if (!hotReload.ok) {
+      pushGatewayLog(
+        'lifecycle',
+        `Usage priority changed; Gateway hot reload was unavailable, so Automnia is restarting the Gateway automatically. ${trimTask(hotReload.detail, 240)}`,
+        'warning',
+      )
+      console.warn(`[license-restart] Gateway billing route hot reload unavailable: ${trimTask(hotReload.detail, 320)}`)
       const restart = await tryRestartGatewayService({ force: true, reason: 'subscription tier change synchronization' })
       if (!restart.restarted) {
         const detail = restart.detail ? ` ${restart.detail}` : ''
+        pushGatewayLog('stderr', `Usage priority route could not become ready after the automatic Gateway restart.${detail}`, 'error')
         throw new Error(`OpenClaw route changed but the Gateway did not become ready.${detail}`)
       }
     } else {
-      console.log('[license-restart] OpenClaw configuration did not change, skipping gateway restart')
+      pushGatewayLog('lifecycle', `Usage priority route active before the next agent call (${hotReload.elapsedMs}ms).`)
+      console.log(`[license-restart] ${hotReload.detail} in ${hotReload.elapsedMs}ms`)
     }
-  })
-  // Keep a failed operation observable to turns that arrive before the next
-  // settings/refresh attempt. The next synchronization is still allowed to
-  // recover because it starts from a caught predecessor.
-  billingRouteSyncPromise = operation
-  await operation
+  } else {
+    console.log('[license-restart] OpenClaw configuration did not change, skipping gateway restart')
+  }
+}
+
+const synchronizeBillingRouteWithGateway = () => {
+  billingRouteSyncVersion += 1
+  if (!billingRouteSyncLoop) {
+    const loop = (async () => {
+      while (true) {
+        const version = billingRouteSyncVersion
+        try {
+          await synchronizeBillingRoutePass(version)
+        } catch (error) {
+          // If another switch arrived while this pass failed, its desired
+          // state is still actionable; retry the latest version instead of
+          // surfacing a stale failure to the settings request.
+          if (version !== billingRouteSyncVersion) continue
+          throw error
+        }
+        if (version === billingRouteSyncVersion) {
+          // A successful pass clears the barrier. If the loop rejects, the
+          // rejected promise intentionally remains visible to agent turns so
+          // they cannot run against an unconfirmed route.
+          billingRouteSyncPromise = Promise.resolve()
+          return
+        }
+      }
+    })()
+    billingRouteSyncLoop = loop
+    billingRouteSyncPromise = loop
+    void loop.finally(() => {
+      if (billingRouteSyncLoop === loop) {
+        billingRouteSyncLoop = null
+      }
+    }).catch(() => undefined)
+  }
+  return billingRouteSyncLoop || Promise.resolve()
 }
 
 registerAgentTurnRoutes(app, {
@@ -17891,20 +18425,21 @@ registerAgentTurnRoutes(app, {
     return Boolean(hosted && hosted.usagePriority !== 'byok_only')
   },
   hostedUsagePriority: () => {
+    return effectiveHostedUsagePriority()
+  },
+  hostedCreditsOnlyBlocker: () => {
     const status = licenseService.getStatus()
-    const priority = licenseService.getUsagePriority()
-    return status.mode === 'byok' && priority !== 'automnia_first'
-      ? null
-      : priority === 'byok_only' ? null : priority
+    if (!status.active || status.usagePriority !== 'automnia_only' || status.creditBalance !== 0 || !licenseService.isUsagePriorityLocked()) return null
+    return 'Automnia credits are unavailable because the confirmed balance is 0. Refill your Automnia credits in Settings → Account & License to continue.'
   },
   awaitBillingRouteReady: () => billingRouteSyncPromise,
   billingRoutePresentation: () => {
     const status = licenseService.getStatus()
-    const usagePriority = status.usagePriority
+    const usagePriority = effectiveHostedUsagePriority()
     if (!status.active || !usagePriority) return null
-    const billingRoute = status.mode === 'byok' && usagePriority !== 'automnia_first'
-      ? 'provider-only'
-      : usagePriority === 'automnia_first'
+    const billingRoute = usagePriority === 'automnia_only'
+      ? 'automnia-only'
+      : usagePriority === 'automnia_first_with_provider_fallback'
         ? 'automnia-first'
         : usagePriority === 'provider_first'
           ? 'provider-first'
@@ -17975,7 +18510,14 @@ registerBrowserRoutes(app, { checkBrowserPreflight })
 
 
 async function createShiftFromPayload(input: StartShiftPayload): Promise<Shift> {
-  const { name, every, message } = input
+  const { name, message } = input
+  const scheduleKind = input.scheduleKind || 'every'
+  const schedule = (input.schedule || input.every || '').trim()
+  if (!schedule) throw new Error('A schedule value is required')
+  if (scheduleKind === 'every' && !/^\d+[smhdw]$/u.test(schedule)) {
+    throw new Error('Use an interval like 15m, 2h, 1d, or 1w')
+  }
+  const every = schedule
   const durationMinutes = computeShiftDurationMinutes(input)
   const defaults = await readHeartbeatRuntimeDefaults().catch(() => DEFAULT_HEARTBEAT_RUNTIME)
 
@@ -17989,6 +18531,11 @@ async function createShiftFromPayload(input: StartShiftPayload): Promise<Shift> 
   const mergedDefaults = await resolveHeartbeatRuntimeDefaultsForAgent(resolvedAgent).catch(() => defaults)
 
   const resolvedModel = (input.model || mergedDefaults.model || '').trim()
+  if (resolvedModel && modelSelectionBlocked(resolvedModel)) {
+    const blocked = new Error(CREDITS_ONLY_MODEL_ACCESS_MESSAGE) as Error & { statusCode?: number }
+    blocked.statusCode = 403
+    throw blocked
+  }
   const resolvedThinking = input.thinking || mergedDefaults.thinking
   const resolvedTimeoutSeconds = await resolveEffectiveAgentWorkTimeoutSeconds(
     resolvedAgent,
@@ -18041,8 +18588,7 @@ async function createShiftFromPayload(input: StartShiftPayload): Promise<Shift> 
     name,
     '--description',
     `control-center shift=${shiftId} expiresAt=${endsAt} durationMinutes=${durationMinutes}`,
-    '--every',
-    every,
+    ...(scheduleKind === 'cron' ? ['--cron', schedule] : scheduleKind === 'at' ? ['--at', schedule] : ['--every', schedule]),
     ...(resolvedSession === 'main' ? ['--system-event', heartbeatPrompt] : ['--message', heartbeatPrompt]),
     '--thinking',
     resolvedThinking,
@@ -18075,6 +18621,8 @@ async function createShiftFromPayload(input: StartShiftPayload): Promise<Shift> 
     name,
     agent: resolvedAgent,
     every,
+    scheduleKind,
+    scheduleLabel: schedule,
     durationMinutes,
     message,
     model: resolvedModel || undefined,
@@ -18102,6 +18650,7 @@ registerShiftRoutes(app, {
   isValidAgentId,
   listActiveCronJobViews,
   mergeHeartbeatRuntimeDefaults,
+  modelSelectionBlocked,
   readHeartbeatRuntimeDefaults,
   readHeartbeatRuntimePerAgent,
   runOpenClaw,
@@ -18112,6 +18661,7 @@ registerShiftRoutes(app, {
 })
 
 registerProviderAuthRoutes(app, {
+  anthropicOAuthRedirectUri: ANTHROPIC_OAUTH_REDIRECT_URI,
   authEnvMap: AUTH_ENV_MAP,
   authProviderCatalog: AUTH_PROVIDER_CATALOG,
   ensureProviderAuthReady: ensureLocalAuthStoreLoaded,
@@ -18126,9 +18676,19 @@ registerProviderAuthRoutes(app, {
   persistProviderAuth,
   providerAuthStatus,
   refreshAvailableModelsCache,
+  isCreditsOnlyEntitlement: () => licenseService.isUsagePriorityLocked(),
+  creditsOnlyAvailableModels: () => [{
+    id: AUTOMNIA_OPENCLAW_MODEL,
+    alias: 'Automnia credits',
+    provider: AUTOMNIA_OPENCLAW_PROVIDER_ID,
+    name: 'Gemini 3.6 Flash',
+  }],
   removeProviderAuth,
   startGoogleOAuthSession,
+  startAnthropicOAuthSession,
   startOpenAICodexOAuthSession,
+  submitAnthropicOAuthManualInput,
+  providerAccessAllowed: () => licenseService.getTrafficGate().providerAccessAllowed,
 })
 
 const speechTranscriptionService = createSpeechTranscriptionService({
@@ -18145,7 +18705,10 @@ const speechTranscriptionService = createSpeechTranscriptionService({
   },
 })
 
-registerSpeechRoutes(app, { speechTranscription: speechTranscriptionService })
+registerSpeechRoutes(app, {
+  speechTranscription: speechTranscriptionService,
+  localAiAllowed: () => licenseService.getTrafficGate().localAiAllowed,
+})
 
 registerSkillRoutes(app, {
   findSkillContent,
@@ -18179,6 +18742,8 @@ export type AgentConfigRoutesContext = {
   isLegacyGenericRecruitRuntime: typeof isLegacyGenericRecruitRuntime
   isLegacyGenericRecruitSoul: typeof isLegacyGenericRecruitSoul
   modelAuthProblem: typeof modelAuthProblem
+  modelSelectionForActiveBillingRoute: typeof modelSelectionForActiveBillingRoute
+  modelSelectionBlocked: typeof modelSelectionBlocked
   normalizeAgentMdsState: typeof normalizeAgentMdsState
   normalizeAgentToolsConfig: typeof normalizeAgentToolsConfig
   normalizeModelWithFallback: typeof normalizeModelWithFallback
@@ -18220,6 +18785,8 @@ const agentConfigRoutesContext: AgentConfigRoutesContext = {
   isLegacyGenericRecruitRuntime,
   isLegacyGenericRecruitSoul,
   modelAuthProblem,
+  modelSelectionForActiveBillingRoute,
+  modelSelectionBlocked,
   normalizeAgentMdsState,
   normalizeAgentToolsConfig,
   normalizeModelWithFallback,
@@ -18251,6 +18818,16 @@ registerAuthRoutes(app, {
   loginAttempts,
   sessionTokens,
   accountAuth: accountAuthService,
+  onLogout: async () => {
+    // Do not leave the previous account's hosted key/model route active after
+    // an explicit account logout. Deactivation is local-only; the provisioner
+    // account and its credits remain untouched for the next sign-in.
+    try {
+      licenseService.deactivate()
+    } finally {
+      await synchronizeBillingRouteWithGateway()
+    }
+  },
   cancelOAuthSession,
   ensureProviderAuthReady: ensureLocalAuthStoreLoaded,
   getLocalProviderOAuth: providerAuthService.getLocalProviderOAuth,

@@ -75,11 +75,11 @@ function tierRank(tier) {
 }
 
 function planHasPermanentAccess(plan) {
-  return starterSubscriptionOnly(plan) ? false : plan?.permanentAccess === true || plan?.mode === 'byok' || tierRank(plan?.tier) >= 2;
+  return creditsOnlyEntitlement(plan) ? false : plan?.permanentAccess === true || plan?.mode === 'byok' || tierRank(plan?.tier) >= 2;
 }
 
 function recordHasPermanentAccess(record) {
-  return starterSubscriptionOnly(record) ? false : record?.permanentAccess === true || record?.mode === 'byok' || tierRank(record?.tier) >= 2;
+  return creditsOnlyEntitlement(record) ? false : record?.permanentAccess === true || record?.mode === 'byok' || tierRank(record?.tier) >= 2;
 }
 
 function starterSubscriptionOnly(record) {
@@ -89,15 +89,27 @@ function starterSubscriptionOnly(record) {
   return mode === 'hosted_credits' && isStarterTier;
 }
 
+function creditsOnlyEntitlement(record) {
+  const normalized = String(record?.tier || '').trim().toLowerCase().replace(/[\s-]+/g, '_');
+  const refillOnly = normalized === 'credit_pack_topup' || normalized === 'credit_refill';
+  return (record?.mode || 'hosted_credits') === 'hosted_credits' && (starterSubscriptionOnly(record) || refillOnly);
+}
+
 function validUsagePriority(value) {
-  return value === 'automnia_first' || value === 'provider_first' || value === 'byok_only';
+  return value === 'automnia_only'
+    || value === 'provider_first'
+    || value === 'automnia_first_with_provider_fallback'
+    || value === 'automnia_first'
+    || value === 'byok_only';
 }
 
 function effectiveUsagePriority(record) {
-  if (starterSubscriptionOnly(record)) return 'automnia_first';
+  if (creditsOnlyEntitlement(record)) return 'automnia_only';
+  if (record?.usagePriority === 'automnia_first') return 'automnia_only';
+  if (record?.usagePriority === 'byok_only') return 'provider_first';
   return validUsagePriority(record?.usagePriority)
     ? record.usagePriority
-    : record?.mode === 'byok' && pooledCreditBalance(record) <= 0 ? 'provider_first' : 'automnia_first';
+    : record?.mode === 'byok' && pooledCreditBalance(record) <= 0 ? 'provider_first' : 'automnia_only';
 }
 
 function attachCreditSources(record, candidates = [record]) {
@@ -144,6 +156,46 @@ function bestLicense(records) {
     const rightTime = Date.parse(right.updatedAt || right.activatedAt || right.createdAt || 0) || 0;
     return rightTime - leftTime;
   })[0] || null;
+}
+
+function legacyPermanentEntitlement(records) {
+  return records
+    .filter((record) => record?.status === 'revoked' && recordHasPermanentAccess(record) && (record.mode === 'byok' || byokAllowedForTier(record.tier)))
+    .sort((left, right) => {
+      const rankDelta = tierRank(right.tier) - tierRank(left.tier);
+      if (rankDelta) return rankDelta;
+      const rightTime = Date.parse(right.updatedAt || right.activatedAt || right.createdAt || 0) || 0;
+      const leftTime = Date.parse(left.updatedAt || left.activatedAt || left.createdAt || 0) || 0;
+      return rightTime - leftTime;
+    })[0] || null;
+}
+
+// A prior BYOK record can be marked revoked when a newer same-email hosted
+// record becomes canonical. That is a key replacement, not a license downgrade:
+// restore the permanent BYOK entitlement onto the active canonical record and
+// keep every hosted-credit grant already attached to it. This is deliberately
+// exact-email only, so an intentional checkout-email change remains separate.
+async function restoreLegacyPermanentEntitlement(canonical, allCandidates) {
+  if (!canonical || recordHasPermanentAccess(canonical) || !creditsOnlyEntitlement(canonical)) return canonical;
+  const legacy = legacyPermanentEntitlement(allCandidates);
+  if (!legacy) return canonical;
+  const fields = {
+    tier: legacy.tier || 'founding_beta_byok',
+    mode: 'byok',
+    planPriceCents: Number.isInteger(Number(legacy.planPriceCents)) ? Number(legacy.planPriceCents) : canonical.planPriceCents ?? null,
+    byokAllowed: true,
+    permanentAccess: true,
+    accessType: 'permanent',
+    subscriptionStatus: 'permanent',
+  };
+  const updated = { ...canonical, ...fields, updatedAt: new Date().toISOString() };
+  if (useInMemoryStorage) {
+    Object.assign(canonical, fields, { updatedAt: updated.updatedAt });
+    return canonical;
+  }
+  const canonicalRef = canonical._ref || licenses.doc(canonical.orderId);
+  await canonicalRef.update(fields);
+  return updated;
 }
 
 const ACCOUNT_IDENTITY_FIELDS = [
@@ -314,7 +366,7 @@ function publicLicense(record) {
     tier: record.tier,
     mode: record.mode || (record.tier === 'founding_beta_byok' ? 'byok' : 'hosted_credits'),
     planPriceCents: Number.isInteger(Number(record.planPriceCents)) && Number(record.planPriceCents) >= 0 ? Number(record.planPriceCents) : null,
-    byokAllowed: !starterSubscriptionOnly(record) && (record.mode === 'byok' || record.byokAllowed === true || byokAllowedForTier(record.tier)),
+    byokAllowed: !creditsOnlyEntitlement(record) && (record.mode === 'byok' || record.byokAllowed === true || byokAllowedForTier(record.tier)),
     permanentAccess: recordHasPermanentAccess(record),
     accessType: recordHasPermanentAccess(record) ? 'permanent' : 'subscription',
     usagePriority: effectiveUsagePriority(record),
@@ -402,29 +454,67 @@ async function findLicense(email, licenseKey) {
     const keyMatch = Array.from(provisionedCustomers.values()).find((record) =>
       normalizeEmail(record.email) === normalizedEmail && normalizeKey(record.licenseKey) === normalizedKey,
     );
-    if (!keyMatch || keyMatch.status === 'revoked') return null;
+    if (!keyMatch) return null;
     // A legacy key is accepted as an ownership proof, but the response always
     // becomes the one canonical, highest-tier account entitlement.
-    const candidates = Array.from(provisionedCustomers.values()).filter((record) =>
-      normalizeEmail(record.email) === normalizedEmail && record.status !== 'revoked');
+    const allCandidates = Array.from(provisionedCustomers.values()).filter((record) =>
+      normalizeEmail(record.email) === normalizedEmail);
+    const candidates = allCandidates.filter((record) => record.status !== 'revoked');
+    // Older desktop installs can still hold a license key that was replaced
+    // by a newer canonical entitlement. The exact email + exact legacy key is
+    // still required; once proved, return the active canonical account so the
+    // desktop can self-heal to its current key during activation/refresh.
+    if (keyMatch.status === 'revoked') {
+      const canonical = await mergeAccountIdentityIntoCanonical(bestLicense(candidates), candidates);
+      const repaired = await restoreLegacyPermanentEntitlement(canonical, allCandidates);
+      return repaired ? attachCreditSources(repaired, candidates) : null;
+    }
     const canonical = await mergeAccountIdentityIntoCanonical(bestLicense(candidates), candidates) || keyMatch;
-    return attachCreditSources(canonical, candidates);
+    const repaired = await restoreLegacyPermanentEntitlement(canonical, allCandidates);
+    return attachCreditSources(repaired, candidates);
   }
 
   const indexSnapshot = await licenseIndexes.doc(licenseIndexId(normalizedEmail, normalizedKey)).get();
-  if (!indexSnapshot.exists) return null;
-  const orderId = indexSnapshot.get('orderId');
-  if (typeof orderId !== 'string' || !orderId) return null;
-  const licenseSnapshot = await licenses.doc(orderId).get();
-  if (!licenseSnapshot.exists) return null;
-  const record = licenseSnapshot.data();
-  if (normalizeEmail(record.email) !== normalizedEmail || normalizeKey(record.licenseKey) !== normalizedKey || record.status === 'revoked') return null;
+  let record = null;
+  if (indexSnapshot.exists) {
+    const orderId = indexSnapshot.get('orderId');
+    if (typeof orderId === 'string' && orderId) {
+      const licenseSnapshot = await licenses.doc(orderId).get();
+      if (licenseSnapshot.exists) {
+        const candidate = licenseSnapshot.data();
+        if (normalizeEmail(candidate.email) === normalizedEmail && normalizeKey(candidate.licenseKey) === normalizedKey) {
+          record = { ...candidate, _ref: licenseSnapshot.ref };
+        }
+      }
+    }
+  }
+
+  // A few legacy/manual license records predate the index write. Fall back to
+  // the exact email + key match instead of making an otherwise valid customer
+  // re-enter a key that the service already knows. This remains fail-closed:
+  // an email by itself never activates an account.
+  if (!record) {
+    const fallbackSnapshot = await licenses.where('email', '==', normalizedEmail).limit(50).get();
+    const fallback = fallbackSnapshot.docs.find((document) => {
+      const candidate = document.data();
+      return normalizeKey(candidate.licenseKey) === normalizedKey;
+    });
+    if (fallback) record = { ...fallback.data(), _ref: fallback.ref };
+  }
+  if (!record) return null;
+
   const snapshot = await licenses.where('email', '==', normalizedEmail).limit(50).get();
-  const candidates = snapshot.docs
-    .map((document) => ({ ...document.data(), _ref: document.ref }))
-    .filter((candidate) => candidate.status !== 'revoked');
+  const allCandidates = snapshot.docs
+    .map((document) => ({ ...document.data(), _ref: document.ref }));
+  const candidates = allCandidates.filter((candidate) => candidate.status !== 'revoked');
+  if (record.status === 'revoked') {
+    const canonical = await mergeAccountIdentityIntoCanonical(bestLicense(candidates), candidates);
+    const repaired = await restoreLegacyPermanentEntitlement(canonical, allCandidates);
+    return repaired ? attachCreditSources(repaired, candidates) : null;
+  }
   const canonical = await mergeAccountIdentityIntoCanonical(bestLicense(candidates) || record, candidates) || record;
-  return attachCreditSources(canonical, candidates);
+  const repaired = await restoreLegacyPermanentEntitlement(canonical, allCandidates);
+  return attachCreditSources(repaired, candidates);
 }
 
 function sortNewestLicense(records) {
@@ -439,18 +529,23 @@ async function findLicenseByEmail(email, { hostedOnly = false } = {}) {
   const normalizedEmail = normalizeEmail(email);
   if (!normalizedEmail) return null;
   if (useInMemoryStorage) {
-    const candidates = Array.from(provisionedCustomers.values())
-      .filter((record) => normalizeEmail(record.email) === normalizedEmail && (!hostedOnly || record.mode === 'hosted_credits') && record.status !== 'revoked');
+    const allCandidates = Array.from(provisionedCustomers.values())
+      .filter((record) => normalizeEmail(record.email) === normalizedEmail);
+    const candidates = allCandidates
+      .filter((record) => (!hostedOnly || record.mode === 'hosted_credits') && record.status !== 'revoked');
     const canonical = await mergeAccountIdentityIntoCanonical(bestLicense(candidates), candidates);
-    return attachCreditSources(canonical, candidates);
+    const repaired = await restoreLegacyPermanentEntitlement(canonical, allCandidates);
+    return attachCreditSources(repaired, candidates);
   }
 
   const snapshot = await licenses.where('email', '==', normalizedEmail).get();
-  const candidates = snapshot.docs
-    .map((document) => ({ ...document.data(), _ref: document.ref }))
+  const allCandidates = snapshot.docs
+    .map((document) => ({ ...document.data(), _ref: document.ref }));
+  const candidates = allCandidates
     .filter((record) => (!hostedOnly || record.mode === 'hosted_credits') && record.status !== 'revoked');
   const canonical = await mergeAccountIdentityIntoCanonical(bestLicense(candidates), candidates);
-  return attachCreditSources(canonical, candidates);
+  const repaired = await restoreLegacyPermanentEntitlement(canonical, allCandidates);
+  return attachCreditSources(repaired, candidates);
 }
 
 async function findHostedLicenseByEmail(email) {
@@ -494,7 +589,7 @@ async function updateHostedEntitlement({ record, order, tierConfig, topic, deliv
     ? (Number.isInteger(Number(record.planPriceCents)) ? Number(record.planPriceCents) : tierConfig.planPriceCents ?? null)
     : tierConfig.planPriceCents ?? null;
   const nextPermanentAccess = recordHasPermanentAccess(record) || planHasPermanentAccess(tierConfig);
-  const nextByokAllowed = nextMode === 'byok' || (!starterSubscriptionOnly({ tier: nextTier, mode: nextMode, planPriceCents: nextPlanPriceCents }) && (record.byokAllowed === true || byokAllowedForTier(nextTier)));
+  const nextByokAllowed = nextMode === 'byok' || (!creditsOnlyEntitlement({ tier: nextTier, mode: nextMode, planPriceCents: nextPlanPriceCents }) && (record.byokAllowed === true || byokAllowedForTier(nextTier)));
   const nextSubscriptionStatus = nextPermanentAccess
     ? 'permanent'
     : tierConfig.kind === 'subscription' ? 'active' : record.subscriptionStatus || null;
@@ -537,7 +632,7 @@ async function updateHostedEntitlement({ record, order, tierConfig, topic, deliv
       tier: preserveExistingEntitlement ? current.tier : tierConfig.tier,
       mode: preserveExistingEntitlement ? current.mode : tierConfig.mode,
       planPriceCents: nextPlanPriceCents,
-      byokAllowed: nextMode === 'byok' || (!starterSubscriptionOnly({ tier: nextTier, mode: nextMode, planPriceCents: nextPlanPriceCents }) && (current.byokAllowed === true || byokAllowedForTier(nextTier))),
+      byokAllowed: nextMode === 'byok' || (!creditsOnlyEntitlement({ tier: nextTier, mode: nextMode, planPriceCents: nextPlanPriceCents }) && (current.byokAllowed === true || byokAllowedForTier(nextTier))),
       permanentAccess: recordHasPermanentAccess(current) || planHasPermanentAccess(tierConfig),
       accessType: (recordHasPermanentAccess(current) || planHasPermanentAccess(tierConfig)) ? 'permanent' : 'subscription',
       creditBalance: (current.creditBalance || 0) + grant,
@@ -1280,7 +1375,15 @@ async function resolveHostedRelayAccess(req) {
   const record = await findLicense(email, licenseKey);
   if (!record) return { error: 'No active license found matching this email and key.', status: 401 };
   const credits = pooledCreditBalance(record);
-  if (credits <= 0) return { error: 'Credit balance exhausted. Refill your Automnia balance to continue.', status: 402 };
+  if (credits <= 0) {
+    const usagePriority = effectiveUsagePriority(record);
+    return {
+      error: usagePriority === 'automnia_only'
+        ? 'Automnia credits are the only active route, but your confirmed balance is 0 credits. Refill your Automnia credits in Automnia Settings to continue.'
+        : 'Automnia credit balance exhausted. The provider-plus-Automnia route has no Automnia fallback credits available.',
+      status: 402,
+    };
+  }
   return { record, email, licenseKey, credits };
 }
 
@@ -1549,14 +1652,17 @@ app.post('/api/ai/generate', requireWritesEnabled, async (req, res) => {
     // when the local account selected an Automnia-backed route. A zero balance
     // still leaves the desktop free to use its configured provider directly.
     if (credits <= 0) {
+      const usagePriority = effectiveUsagePriority(record);
       return res.status(402).json({
         ok: false,
         active: true,
         mode,
         creditBalance: credits,
-        error: mode === 'byok'
-          ? 'Automnia credit balance exhausted. Configure your own API key in Automnia App Settings or add credits on Shopify.'
-          : 'Credit balance exhausted. Top up your credits on Shopify to continue using Cloud AI.',
+        error: usagePriority === 'automnia_only'
+          ? 'Automnia credits are the only active route, but your confirmed balance is 0 credits. Refill your Automnia credits in Automnia Settings to continue.'
+          : mode === 'byok'
+            ? 'Automnia credit balance exhausted. The provider-plus-Automnia route has no Automnia fallback credits available.'
+            : 'Credit balance exhausted. Top up your credits on Shopify to continue using Cloud AI.',
       });
     }
 
@@ -1718,7 +1824,7 @@ async function handlePaidOrder(order, deliveryId) {
     tier: tierConfig.tier,
     mode: tierConfig.mode,
     planPriceCents: tierConfig.planPriceCents ?? null,
-    byokAllowed: tierConfig.mode === 'byok' || (!starterSubscriptionOnly(tierConfig) && byokAllowedForTier(tierConfig.tier)),
+    byokAllowed: tierConfig.mode === 'byok' || (!creditsOnlyEntitlement(tierConfig) && byokAllowedForTier(tierConfig.tier)),
     permanentAccess: planHasPermanentAccess(tierConfig),
     accessType: planHasPermanentAccess(tierConfig) ? 'permanent' : 'subscription',
     creditBalance: tierConfig.initialCredits,

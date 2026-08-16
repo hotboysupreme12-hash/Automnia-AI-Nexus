@@ -665,6 +665,8 @@ export type RecruitAgentInput = {
   level?: number
   primaryModel?: string
   capabilities: Partial<Record<CapabilityKey, boolean>>
+  sandbox?: OpenClawAgent['sandbox']
+  toolsPolicy?: OpenClawAgent['toolsPolicy']
   addToParty?: boolean
   templateId?: string
   templateName?: string
@@ -871,16 +873,30 @@ function makeRecruitAgentDraft(input: RecruitAgentInput): OpenClawAgent {
   const tools = normalizeRecruitToolAccess(input.toolAccess, recruitTools(capabilities))
   const stats = recruitStats(input.behaviorProfile, capabilities)
   const level = clampLevel(input.level, 18)
+  const sandboxMode = input.sandbox?.mode || 'all'
+  const sandbox = {
+    ...input.sandbox,
+    mode: sandboxMode,
+    scope: sandboxMode === 'off' ? 'agent' as const : input.sandbox?.scope || 'agent' as const,
+    workspaceAccess: sandboxMode === 'off' ? 'rw' as const : input.sandbox?.workspaceAccess || 'rw' as const,
+  }
+  const toolsPolicy = sandboxMode === 'off'
+    ? { profile: 'full', allow: [], deny: [] }
+    : {
+      profile: input.toolsPolicy?.profile || 'full',
+      allow: input.toolsPolicy?.allow || [],
+      deny: input.toolsPolicy?.deny || [],
+    }
 
   return withComputedRuntime({
     ...template,
     id: input.agentId.trim(),
     name: input.name.trim(),
     workspace: input.workspace?.trim() || '',
-    sandbox: { mode: 'all', scope: 'agent', workspaceAccess: 'rw' },
+    sandbox,
     model: input.primaryModel?.trim() ? { primary: input.primaryModel.trim(), fallbacks: [] } : template.model,
     runtimePolicy: { thinkingDefault: FAST_THINKING, timeoutSeconds: FAST_TIMEOUT_SECONDS, parallelPreferred: true, fastModeDefault: FAST_MODE_DEFAULT },
-    toolsPolicy: { profile: 'full', allow: [], deny: [] },
+    toolsPolicy,
     rarity: recruitRarity(level),
     className: input.className.trim() || 'Operator',
     role: input.role.trim() || 'Agent',
@@ -2033,7 +2049,7 @@ export const useNexusStore = create<NexusState>()(
             if (typeof data.transport === 'string' && data.transport.trim()) liveTransport = data.transport.trim()
             if (data.buffered === true) liveBuffered = true
             if (data.liveTokens === false) liveBuffered = true
-            if (data.usagePriority === 'automnia_first' || data.usagePriority === 'provider_first' || data.usagePriority === 'byok_only') {
+            if (data.usagePriority === 'automnia_only' || data.usagePriority === 'provider_first' || data.usagePriority === 'automnia_first_with_provider_fallback' || data.usagePriority === 'automnia_first' || data.usagePriority === 'byok_only') {
               liveUsagePriority = data.usagePriority
             }
             if (typeof data.billingRoute === 'string' && data.billingRoute.trim()) liveBillingRoute = data.billingRoute.trim()

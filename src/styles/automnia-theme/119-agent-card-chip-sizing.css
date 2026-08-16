@@ -1,0 +1,117 @@
+/* Agent card tags: align the behavior chip with its capability chips. */
+html.dui-pro-overhaul.dui-cohesive-ui .agent-card-pro:not([data-agent-display-mode="list"]) .agent-card-tag {
+  display: inline-flex !important;
+  width: 56px !important;
+  min-width: 56px !important;
+  height: 23px !important;
+  min-height: 23px !important;
+  box-sizing: border-box;
+  align-items: center !important;
+  justify-content: center;
+  padding: 0 4px !important;
+  overflow: hidden;
+  text-align: center;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* Keep rarity readable below the role without the opaque black capsule. */
+html.dui-pro-overhaul.dui-cohesive-ui .agent-card-shell.agent-card-pro[data-agent-card="true"] .agent-card-rarity-badge {
+  min-width: 56px !important;
+  justify-content: center;
+  border-color: color-mix(in srgb, var(--agent-card-theme-accent, var(--agent-accent, #c8d3dc)) 72%, transparent) !important;
+  background: transparent !important;
+  background-image: none !important;
+  color: color-mix(in srgb, var(--agent-card-theme-accent, var(--agent-accent, #c8d3dc)) 82%, #ffffff 18%) !important;
+  box-shadow: 0 1px 8px rgba(0, 0, 0, .28), inset 0 0 0 1px color-mix(in srgb, var(--agent-card-theme-accent, var(--agent-accent, #c8d3dc)) 18%, transparent) !important;
+  filter: none !important;
+  -webkit-filter: none !important;
+  -webkit-backdrop-filter: none !important;
+  backdrop-filter: none !important;
+}
+
+/* Keep the role-adjacent chip visibly tied to the agent rarity in every card skin. */
+html.dui-pro-overhaul.dui-cohesive-ui .agent-card-shell.agent-card-pro[data-agent-card="true"][data-agent-rarity="legendary"] .agent-card-rarity-badge {
+  border-color: rgba(240, 189, 88, .78) !important;
+  background: rgba(240, 189, 88, .12) !important;
+  background-image: none !important;
+  color: #f0bd58 !important;
+}
+
+html.dui-pro-overhaul.dui-cohesive-ui .agent-card-shell.agent-card-pro[data-agent-card="true"][data-agent-rarity="epic"] .agent-card-rarity-badge {
+  border-color: rgba(184, 140, 255, .78) !important;
+  background: rgba(184, 140, 255, .12) !important;
+  background-image: none !important;
+  color: #b88cff !important;
+}
+
+html.dui-pro-overhaul.dui-cohesive-ui .agent-card-shell.agent-card-pro[data-agent-card="true"][data-agent-rarity="rare"] .agent-card-rarity-badge {
+  border-color: rgba(85, 220, 255, .78) !important;
+  background: rgba(85, 220, 255, .12) !important;
+  background-image: none !important;
+  color: #55dcff !important;
+}
+
+html.dui-pro-overhaul.dui-cohesive-ui .agent-card-shell.agent-card-pro[data-agent-card="true"][data-agent-rarity="common"] .agent-card-rarity-badge {
+  border-color: rgba(214, 222, 229, .58) !important;
+  background: rgba(214, 222, 229, .10) !important;
+  background-image: none !important;
+  color: #d6dee5 !important;
+}
+
+/* The active slot belongs with the registry metadata, beside behavior and capabilities. */
+html.dui-pro-overhaul.dui-cohesive-ui .agent-card-pro:not([data-agent-display-mode="list"]) .agent-card-tag--slot {
+  border-color: color-mix(in srgb, var(--agent-card-theme-accent, var(--agent-accent, #c8d3dc)) 40%, rgba(255, 255, 255, .09)) !important;
+  color: color-mix(in srgb, var(--agent-card-theme-accent, var(--agent-accent, #c8d3dc)) 76%, #ffffff 24%) !important;
+  background: color-mix(in srgb, var(--agent-card-theme-accent, var(--agent-accent, #c8d3dc)) 9%, rgba(7, 13, 20, .62)) !important;
+}
+
+/* Keep the Simple card scan-friendly while making the active model explicit. */
+html.dui-pro-overhaul.dui-cohesive-ui .agent-card-pro[data-agent-display-mode="grid8"] .agent-card-simple-meta {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 5px;
+  min-width: 0;
+  margin: -2px 0 8px;
+}
+
+html.dui-pro-overhaul.dui-cohesive-ui .agent-card-pro[data-agent-display-mode="grid8"] .agent-card-simple-meta > div {
+  display: flex;
+  min-width: 0;
+  min-height: 27px;
+  align-items: center;
+  gap: 6px;
+  overflow: hidden;
+  border: 1px solid color-mix(in srgb, var(--agent-accent, #c8d3dc) 22%, transparent);
+  border-radius: 6px;
+  padding: 4px 7px;
+  background: rgb(0 0 0 / .16);
+}
+
+html.dui-pro-overhaul.dui-cohesive-ui .agent-card-pro[data-agent-display-mode="grid8"] .agent-card-simple-meta span {
+  flex: 0 0 auto;
+  color: color-mix(in srgb, var(--agent-accent, #c8d3dc) 62%, #ffffff 25%);
+  font-family: var(--font-mono, ui-monospace, monospace);
+  font-size: 7px;
+  font-weight: 800;
+  letter-spacing: .07em;
+  line-height: 1;
+  text-transform: uppercase;
+}
+
+html.dui-pro-overhaul.dui-cohesive-ui .agent-card-pro[data-agent-display-mode="grid8"] .agent-card-simple-meta strong {
+  min-width: 0;
+  overflow: hidden;
+  color: #f1f4f6;
+  font-family: var(--font-mono, ui-monospace, monospace);
+  font-size: 10px;
+  font-weight: 750;
+  line-height: 1;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+html.dui-pro-overhaul.dui-cohesive-ui .agent-card-pro[data-agent-display-mode="grid8"] .agent-card-simple-meta__tools {
+  min-width: 54px;
+  justify-content: space-between;
+}

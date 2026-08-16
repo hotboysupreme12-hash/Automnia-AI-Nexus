@@ -5,7 +5,7 @@
  */
 
 export type OAuthProviderMetadata = {
-  provider: 'google' | 'openai'
+  provider: 'google' | 'openai' | 'anthropic'
   docs: string
   redirectUri: string
   scopes: string[]
@@ -17,6 +17,7 @@ export type OAuthProviderMetadata = {
 export type AuthProviderCatalogEntry = {
   label: string
   envKeys: string[]
+  oauthEnvKeys?: string[]
   docs: string
   apiKeyUrl?: string
   optionalAuth?: boolean
@@ -59,6 +60,20 @@ export const OPENAI_CODEX_OAUTH_REDIRECT_URI = 'http://localhost:1455/auth/callb
 
 export const OPENAI_CODEX_OAUTH_SCOPES = ['openid', 'profile', 'email', 'offline_access']
 
+// This is the loopback callback used by the bundled OpenClaw Anthropic OAuth
+// runtime. Keep the value in the catalog so the renderer, callback service,
+// and provider status endpoint all describe the same flow.
+export const ANTHROPIC_OAUTH_REDIRECT_URI = 'http://localhost:53692/callback'
+
+export const ANTHROPIC_OAUTH_SCOPES = [
+  'org:create_api_key',
+  'user:profile',
+  'user:inference',
+  'user:sessions:claude_code',
+  'user:mcp_servers',
+  'user:file_upload',
+]
+
 export const OPENCLAW_PROVIDER_DOCS_URL = 'https://docs.openclaw.ai/concepts/model-providers'
 
 export const AUTH_PROVIDER_CATALOG: Record<string, AuthProviderCatalogEntry> = {
@@ -80,8 +95,18 @@ export const AUTH_PROVIDER_CATALOG: Record<string, AuthProviderCatalogEntry> = {
   anthropic: {
     label: 'Anthropic',
     envKeys: ['ANTHROPIC_API_KEY'],
+    oauthEnvKeys: ['ANTHROPIC_OAUTH_TOKEN'],
     docs: 'https://docs.openclaw.ai/providers/anthropic',
     apiKeyUrl: 'https://console.anthropic.com/settings/keys',
+    oauth: {
+      provider: 'anthropic',
+      docs: 'https://docs.openclaw.ai/concepts/oauth',
+      redirectUri: ANTHROPIC_OAUTH_REDIRECT_URI,
+      scopes: ANTHROPIC_OAUTH_SCOPES,
+      clientIdEnvKeys: [],
+      clientSecretEnvKeys: [],
+      projectIdEnvKeys: [],
+    },
     subscriptionAuth: {
       label: 'Claude Code subscription',
       docs: 'https://docs.openclaw.ai/providers/anthropic',
@@ -107,6 +132,17 @@ export const AUTH_PROVIDER_CATALOG: Record<string, AuthProviderCatalogEntry> = {
     label: 'Google Vertex AI',
     envKeys: [],
     docs: 'https://cloud.google.com/vertex-ai/generative-ai/docs/start/quickstarts/quickstart-multimodal',
+    // Vertex can use the same user-consented Google OAuth credential as the
+    // direct Gemini provider. The project is the only extra piece of context.
+    oauth: {
+      provider: 'google',
+      docs: 'https://cloud.google.com/docs/authentication/provide-credentials-adc',
+      redirectUri: GOOGLE_OAUTH_REDIRECT_URI,
+      scopes: GOOGLE_OAUTH_SCOPES,
+      clientIdEnvKeys: GOOGLE_OAUTH_CLIENT_ID_KEYS,
+      clientSecretEnvKeys: GOOGLE_OAUTH_CLIENT_SECRET_KEYS,
+      projectIdEnvKeys: GOOGLE_PROJECT_ID_KEYS,
+    },
   },
   deepseek: {
     label: 'DeepSeek',

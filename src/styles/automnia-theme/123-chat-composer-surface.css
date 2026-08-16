@@ -1,0 +1,149 @@
+/* Final chat composer finish: one rounded message surface without a boxed shell. */
+html.dui-pro-overhaul .dy-command-console .dy-command-composer,
+html.dui-pro-overhaul.dui-cohesive-ui .dy-command-console .dy-command-composer {
+  padding: 12px 14px 14px !important;
+  border-top: 0 !important;
+  background: transparent !important;
+  box-shadow: none !important;
+}
+
+html.dui-pro-overhaul .dy-command-console .dy-command-composer__row,
+html.dui-pro-overhaul.dui-cohesive-ui .dy-command-console .dy-command-composer__row {
+  min-height: 92px !important;
+  padding: 11px 11px 9px !important;
+  border: 1px solid rgba(214, 225, 229, .14) !important;
+  border-radius: 24px !important;
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, .052), rgba(255, 255, 255, .022)),
+    #27292c !important;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, .065),
+    0 14px 28px -24px rgba(0, 0, 0, .9) !important;
+  outline: none !important;
+}
+
+html.dui-pro-overhaul .dy-command-console .dy-command-composer__row:focus-within,
+html.dui-pro-overhaul.dui-cohesive-ui .dy-command-console .dy-command-composer__row:focus-within,
+html.dui-pro-overhaul .dy-command-console .dy-command-composer__row[data-has-draft="true"],
+html.dui-pro-overhaul.dui-cohesive-ui .dy-command-console .dy-command-composer__row[data-has-draft="true"] {
+  border-color: rgba(198, 222, 225, .26) !important;
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, .062), rgba(255, 255, 255, .028)),
+    #2b2d30 !important;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, .075),
+    0 14px 28px -24px rgba(0, 0, 0, .9) !important;
+  outline: none !important;
+}
+
+html.dui-pro-overhaul .dy-command-console .dy-command-composer__field,
+html.dui-pro-overhaul.dui-cohesive-ui .dy-command-console .dy-command-composer__field {
+  border: 0 !important;
+  border-radius: 0 !important;
+  background: transparent !important;
+  box-shadow: none !important;
+}
+
+html.dui-pro-overhaul .dy-command-console textarea.dy-command-textarea,
+html.dui-pro-overhaul.dui-cohesive-ui .dy-command-console textarea.dy-command-textarea {
+  border: 0 !important;
+  border-radius: 0 !important;
+  background: transparent !important;
+  background-color: transparent !important;
+  background-image: none !important;
+  box-shadow: none !important;
+  outline: none !important;
+  color: #edf4f2 !important;
+  font-family: var(--font-body) !important;
+  font-size: 14px !important;
+  font-weight: 450 !important;
+  line-height: 1.5 !important;
+}
+
+html.dui-pro-overhaul .dy-command-console textarea.dy-command-textarea:focus,
+html.dui-pro-overhaul.dui-cohesive-ui .dy-command-console textarea.dy-command-textarea:focus,
+html.dui-pro-overhaul .dy-command-console textarea.dy-command-textarea:focus-visible,
+html.dui-pro-overhaul.dui-cohesive-ui .dy-command-console textarea.dy-command-textarea:focus-visible {
+  border: 0 !important;
+  border-radius: 0 !important;
+  box-shadow: none !important;
+  outline: none !important;
+}
+
+html.dui-pro-overhaul .dy-command-console textarea.dy-command-textarea::placeholder,
+html.dui-pro-overhaul.dui-cohesive-ui .dy-command-console textarea.dy-command-textarea::placeholder {
+  color: #b6c2c5 !important;
+  font-family: var(--font-body) !important;
+  font-size: 14px !important;
+  font-weight: 450 !important;
+  opacity: 1 !important;
+}
+
+html.dui-pro-overhaul .dy-command-console textarea.dy-command-textarea::selection,
+html.dui-pro-overhaul.dui-cohesive-ui .dy-command-console textarea.dy-command-textarea::selection {
+  background: rgba(168, 219, 217, .22) !important;
+  color: #f5fbfa !important;
+}
+
+@media (max-width: 640px) {
+  html.dui-pro-overhaul .dy-command-console .dy-command-composer,
+  html.dui-pro-overhaul.dui-cohesive-ui .dy-command-console .dy-command-composer {
+    padding: 10px !important;
+  }
+
+  html.dui-pro-overhaul .dy-command-console .dy-command-composer__row,
+  html.dui-pro-overhaul.dui-cohesive-ui .dy-command-console .dy-command-composer__row {
+    border-radius: 20px !important;
+  }
+}
+
+/* Blocked responses use a quiet status light instead of a noisy text pill. */
+html.dui-pro-overhaul .dy-command-console .dy-command-message-status[data-state="blocked"],
+html.dui-pro-overhaul.dui-cohesive-ui .dy-command-console .dy-command-message-status[data-state="blocked"] {
+  width: 10px !important;
+  height: 10px !important;
+  min-height: 10px !important;
+  flex: 0 0 10px !important;
+  padding: 0 !important;
+  border: 1px solid rgba(255, 155, 158, .76) !important;
+  border-radius: 999px !important;
+  background: #ed626b !important;
+  box-shadow:
+    0 0 0 2px rgba(237, 98, 107, .10),
+    0 0 9px rgba(237, 98, 107, .62),
+    0 0 20px rgba(237, 98, 107, .20),
+    inset 0 1px 0 rgba(255, 255, 255, .42) !important;
+  color: transparent !important;
+  animation: dy-blocked-status-pulse 2.4s ease-in-out infinite;
+}
+
+html.dui-pro-overhaul .dy-command-console .dy-command-message-status[data-state="blocked"] .dui-badge__label,
+html.dui-pro-overhaul.dui-cohesive-ui .dy-command-console .dy-command-message-status[data-state="blocked"] .dui-badge__label {
+  display: none !important;
+}
+
+@keyframes dy-blocked-status-pulse {
+  0%,
+  100% {
+    box-shadow:
+      0 0 0 2px rgba(237, 98, 107, .10),
+      0 0 9px rgba(237, 98, 107, .62),
+      0 0 20px rgba(237, 98, 107, .20),
+      inset 0 1px 0 rgba(255, 255, 255, .42);
+  }
+
+  50% {
+    box-shadow:
+      0 0 0 3px rgba(237, 98, 107, .14),
+      0 0 13px rgba(237, 98, 107, .78),
+      0 0 27px rgba(237, 98, 107, .28),
+      inset 0 1px 0 rgba(255, 255, 255, .50);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  html.dui-pro-overhaul .dy-command-console .dy-command-message-status[data-state="blocked"],
+  html.dui-pro-overhaul.dui-cohesive-ui .dy-command-console .dy-command-message-status[data-state="blocked"] {
+    animation: none;
+  }
+}

@@ -1,0 +1,110 @@
+/* Workspace header chips: the value carries the status color, without decorative boxes. */
+
+html.dui-pro-overhaul .dy-workspace-context__meta .dui-status-chip__dot,
+html.dui-pro-overhaul.dui-cohesive-ui .dy-workspace-context__meta .dui-status-chip__dot {
+  display: none !important;
+}
+
+/* The roster count follows the rarity of the current primary/deployed agent. */
+html.dui-pro-overhaul .dy-workspace-context__meta .dy-status-chip[data-indicator="agents"][data-agent-rarity="common"] .dy-status-value,
+html.dui-pro-overhaul.dui-cohesive-ui .dy-workspace-context__meta .dy-status-chip[data-indicator="agents"][data-agent-rarity="common"] .dy-status-value {
+  color: #d6dee5 !important;
+}
+
+html.dui-pro-overhaul .dy-workspace-context__meta .dy-status-chip[data-indicator="agents"][data-agent-rarity="rare"] .dy-status-value,
+html.dui-pro-overhaul.dui-cohesive-ui .dy-workspace-context__meta .dy-status-chip[data-indicator="agents"][data-agent-rarity="rare"] .dy-status-value {
+  color: #55dcff !important;
+}
+
+html.dui-pro-overhaul .dy-workspace-context__meta .dy-status-chip[data-indicator="agents"][data-agent-rarity="epic"] .dy-status-value,
+html.dui-pro-overhaul.dui-cohesive-ui .dy-workspace-context__meta .dy-status-chip[data-indicator="agents"][data-agent-rarity="epic"] .dy-status-value {
+  color: #b88cff !important;
+}
+
+html.dui-pro-overhaul .dy-workspace-context__meta .dy-status-chip[data-indicator="agents"][data-agent-rarity="legendary"] .dy-status-value,
+html.dui-pro-overhaul.dui-cohesive-ui .dy-workspace-context__meta .dy-status-chip[data-indicator="agents"][data-agent-rarity="legendary"] .dy-status-value {
+  color: #f0bd58 !important;
+}
+
+/* Party count progresses from green through blue toward the six-slot teal state. */
+html.dui-pro-overhaul .dy-workspace-context__meta .dy-status-chip[data-indicator="party"][data-party-count="0"] .dy-status-value,
+html.dui-pro-overhaul.dui-cohesive-ui .dy-workspace-context__meta .dy-status-chip[data-indicator="party"][data-party-count="0"] .dy-status-value {
+  color: #f6fbff !important;
+}
+
+html.dui-pro-overhaul .dy-workspace-context__meta .dy-status-chip[data-indicator="party"][data-party-count="1"] .dy-status-value,
+html.dui-pro-overhaul.dui-cohesive-ui .dy-workspace-context__meta .dy-status-chip[data-indicator="party"][data-party-count="1"] .dy-status-value {
+  color: #4ade80 !important;
+}
+
+html.dui-pro-overhaul .dy-workspace-context__meta .dy-status-chip[data-indicator="party"][data-party-count="2"] .dy-status-value,
+html.dui-pro-overhaul.dui-cohesive-ui .dy-workspace-context__meta .dy-status-chip[data-indicator="party"][data-party-count="2"] .dy-status-value {
+  color: #34d399 !important;
+}
+
+html.dui-pro-overhaul .dy-workspace-context__meta .dy-status-chip[data-indicator="party"][data-party-count="3"] .dy-status-value,
+html.dui-pro-overhaul.dui-cohesive-ui .dy-workspace-context__meta .dy-status-chip[data-indicator="party"][data-party-count="3"] .dy-status-value {
+  color: #2dd4bf !important;
+}
+
+html.dui-pro-overhaul .dy-workspace-context__meta .dy-status-chip[data-indicator="party"][data-party-count="4"] .dy-status-value,
+html.dui-pro-overhaul.dui-cohesive-ui .dy-workspace-context__meta .dy-status-chip[data-indicator="party"][data-party-count="4"] .dy-status-value {
+  color: #22d3ee !important;
+}
+
+html.dui-pro-overhaul .dy-workspace-context__meta .dy-status-chip[data-indicator="party"][data-party-count="5"] .dy-status-value,
+html.dui-pro-overhaul.dui-cohesive-ui .dy-workspace-context__meta .dy-status-chip[data-indicator="party"][data-party-count="5"] .dy-status-value {
+  color: #38bdf8 !important;
+}
+
+html.dui-pro-overhaul .dy-workspace-context__meta .dy-status-chip[data-indicator="party"][data-party-count="6"] .dy-status-value,
+html.dui-pro-overhaul.dui-cohesive-ui .dy-workspace-context__meta .dy-status-chip[data-indicator="party"][data-party-count="6"] .dy-status-value {
+  color: #5eead4 !important;
+}
+
+/* Cron count bands: 1–5 green, 6–8 yellow, and 9+ teal. */
+html.dui-pro-overhaul .dy-workspace-context__meta .dy-status-chip[data-indicator="cron"][data-cron-band="green"] .dy-status-value,
+html.dui-pro-overhaul.dui-cohesive-ui .dy-workspace-context__meta .dy-status-chip[data-indicator="cron"][data-cron-band="green"] .dy-status-value {
+  color: #4ade80 !important;
+}
+
+html.dui-pro-overhaul .dy-workspace-context__meta .dy-status-chip[data-indicator="cron"][data-cron-band="yellow"] .dy-status-value,
+html.dui-pro-overhaul.dui-cohesive-ui .dy-workspace-context__meta .dy-status-chip[data-indicator="cron"][data-cron-band="yellow"] .dy-status-value {
+  color: #facc15 !important;
+}
+
+html.dui-pro-overhaul .dy-workspace-context__meta .dy-status-chip[data-indicator="cron"][data-cron-band="teal"] .dy-status-value,
+html.dui-pro-overhaul.dui-cohesive-ui .dy-workspace-context__meta .dy-status-chip[data-indicator="cron"][data-cron-band="teal"] .dy-status-value {
+  color: #2dd4bf !important;
+}
+
+html.dui-pro-overhaul .dy-workspace-context__meta .dy-status-chip[data-indicator="cron"][data-cron-band="idle"] .dy-status-value,
+html.dui-pro-overhaul.dui-cohesive-ui .dy-workspace-context__meta .dy-status-chip[data-indicator="cron"][data-cron-band="idle"] .dy-status-value {
+  color: #f6fbff !important;
+}
+
+/* Results are intentionally neutral regardless of how many responses exist. */
+html.dui-pro-overhaul .dy-workspace-context__meta .dy-status-chip[data-indicator="results"] .dy-status-value,
+html.dui-pro-overhaul.dui-cohesive-ui .dy-workspace-context__meta .dy-status-chip[data-indicator="results"] .dy-status-value {
+  color: #f6fbff !important;
+  text-shadow: none !important;
+}
+
+/* Keep the Gateway's established online/offline treatment explicit. */
+html.dui-pro-overhaul .dy-workspace-context__meta .dy-status-chip[data-indicator="gateway"][data-state="online"] .dy-status-value,
+html.dui-pro-overhaul.dui-cohesive-ui .dy-workspace-context__meta .dy-status-chip[data-indicator="gateway"][data-state="online"] .dy-status-value {
+  color: #4ade80 !important;
+}
+
+html.dui-pro-overhaul .dy-workspace-context__meta .dy-status-chip[data-indicator="gateway"][data-state="offline"] .dy-status-value,
+html.dui-pro-overhaul.dui-cohesive-ui .dy-workspace-context__meta .dy-status-chip[data-indicator="gateway"][data-state="offline"] .dy-status-value {
+  color: #fb7185 !important;
+}
+
+/* Keep Agent Operations at the same compact height as the other workspace title bars. */
+@media (min-width: 1181px) {
+  html.dui-pro-overhaul.dui-cohesive-ui .dy-workspace-context[data-workspace="agents"] {
+    min-height: 54px !important;
+    padding: 9px 14px 9px 16px !important;
+  }
+}

@@ -10,8 +10,15 @@ import {
   saveProviderApiKey,
   type AuthProviderStatus,
 } from '../../api/providerAuth'
-import { formatModelGroupLabel, groupAvailableModels } from '../../utils/modelGrouping'
-import { resolveAgentRoutePresentation, resolveLicenseEntitlement } from '../../utils/licenseEntitlement'
+import { isSelectableModelId } from '../../utils/modelGrouping'
+import { ModelPicker } from '../models/ModelPicker'
+import {
+  AUTOMNIA_CREDITS_MODEL_ID,
+  isAutomniaCreditsModelId,
+  isCreditsOnlyEntitlement,
+  resolveAgentRoutePresentation,
+  resolveLicenseEntitlement,
+} from '../../utils/licenseEntitlement'
 import { useLicense } from '../../context/useLicense'
 
 interface AvailableModel {
@@ -44,6 +51,12 @@ const CODEX_5_3_SPARK_MODEL: AvailableModel = {
   provider: 'openai',
   name: 'Codex 5.3 Spark',
 }
+const AUTOMNIA_CREDITS_MODEL: AvailableModel = {
+  id: AUTOMNIA_CREDITS_MODEL_ID,
+  alias: 'Automnia credits',
+  provider: 'automnia-cloud',
+  name: 'Gemini 3.6 Flash',
+}
 const REASONING_EFFORT_LEVELS = ['off', 'minimal', 'low', 'medium', 'high', 'xhigh', 'max'] as const satisfies readonly ThinkingLevel[]
 const MODEL_SELECTOR_CACHE_MS = 5 * 60 * 1000
 const MODEL_SELECTOR_FETCH_TIMEOUT_MS = 8000
@@ -58,7 +71,7 @@ const isAvailableModel = (value: unknown): value is AvailableModel => {
 }
 
 const safeAvailableModels = (value: unknown): AvailableModel[] =>
-  Array.isArray(value) ? value.filter(isAvailableModel) : []
+  Array.isArray(value) ? value.filter(isAvailableModel).filter((model) => isSelectableModelId(model.id)) : []
 
 const modelOptionFromId = (modelId: string): AvailableModel | null => {
   const id = modelId.trim()
@@ -92,13 +105,21 @@ function modelBrief(modelId: string): { title: string; description: string; tone
   return null
 }
 
-const mergeSelectedModelOptions = (catalog: AvailableModel[], selectedIds: string[]) => {
+const mergeSelectedModelOptions = (catalog: AvailableModel[], selectedIds: string[], creditsOnly = false) => {
   const merged = new Map<string, AvailableModel>()
-  const seededCatalog = catalog.some((model) => model.id === CODEX_5_3_SPARK_MODEL_ID) ? catalog : [CODEX_5_3_SPARK_MODEL, ...catalog]
+  const allowedCatalog = creditsOnly ? catalog.filter((model) => isAutomniaCreditsModelId(model.id)) : catalog
+  const seededCatalog = catalog.some((model) => model.id === CODEX_5_3_SPARK_MODEL_ID)
+    ? creditsOnly
+      ? (allowedCatalog.some((model) => model.id === AUTOMNIA_CREDITS_MODEL_ID) ? allowedCatalog : [AUTOMNIA_CREDITS_MODEL, ...allowedCatalog])
+      : catalog
+    : creditsOnly
+      ? (allowedCatalog.some((model) => model.id === AUTOMNIA_CREDITS_MODEL_ID) ? allowedCatalog : [AUTOMNIA_CREDITS_MODEL, ...allowedCatalog])
+      : [CODEX_5_3_SPARK_MODEL, ...catalog]
   for (const model of seededCatalog) {
-    if (model.id.trim()) merged.set(model.id, model)
+    if (model.id.trim() && isSelectableModelId(model.id)) merged.set(model.id, model)
   }
-  for (const selectedId of selectedIds) {
+  for (const selectedId of creditsOnly ? selectedIds.filter((modelId) => isAutomniaCreditsModelId(modelId)) : selectedIds) {
+    if (!isSelectableModelId(selectedId)) continue
     const synthetic = modelOptionFromId(selectedId)
     if (synthetic && !merged.has(synthetic.id)) merged.set(synthetic.id, synthetic)
   }
@@ -138,6 +159,7 @@ export function ModelSelectorModal({
   onSave,
 }: ModelSelectorModalProps) {
   const { license } = useLicense()
+  const creditsOnly = isCreditsOnlyEntitlement(license)
   const [models, setModels] = useState<AvailableModel[]>([])
   const [loading, setLoading] = useState(false)
   const [saving, setSaving] = useState(false)
@@ -159,7 +181,10 @@ export function ModelSelectorModal({
     try {
       const models = await fetchModelSelectorModels()
       setModels(models)
-      if (!currentModel && models.length) {
+      if (creditsOnly) {
+        setSelectedPrimary(AUTOMNIA_CREDITS_MODEL_ID)
+        setSelectedFallbacks([])
+      } else if (!currentModel && models.length) {
         setSelectedPrimary(models[0].id)
       }
     } catch (error) {
@@ -168,7 +193,7 @@ export function ModelSelectorModal({
     } finally {
       setLoading(false)
     }
-  }, [currentModel])
+  }, [currentModel, creditsOnly])
 
   const upsertAuthProviderStatus = useCallback((next?: AuthProviderStatus | null) => {
     if (!next) return
@@ -184,25 +209,27 @@ export function ModelSelectorModal({
       const next = result.ok ? result.data.providers || [] : []
       setAuthProviders(next)
       setAuthModalProvider((current) => current ? next.find((entry) => entry.provider === current.provider) || current : current)
+      return next
     } catch {
       setAuthProviders([])
+      return []
     }
   }, [])
 
   useEffect(() => {
     if (!isOpen) return
-    setSelectedPrimary(currentModel)
-    setSelectedFallbacks(currentFallbacks)
+    setSelectedPrimary(creditsOnly ? AUTOMNIA_CREDITS_MODEL_ID : currentModel)
+    setSelectedFallbacks(creditsOnly ? [] : currentFallbacks)
     setThinkingEnabled(currentThinking !== 'off')
     setThinkingLevel(currentThinking === 'off' ? 'minimal' : currentThinking)
     authRefreshKeyRef.current = ''
     void fetchModels()
     void fetchAuthProviders()
-  }, [isOpen, currentModel, currentFallbacks, currentThinking, fetchModels, fetchAuthProviders])
+  }, [isOpen, currentModel, currentFallbacks, currentThinking, fetchModels, fetchAuthProviders, creditsOnly])
 
   const selectableModels = useMemo(
-    () => mergeSelectedModelOptions(models, [selectedPrimary, ...selectedFallbacks].filter(Boolean)),
-    [models, selectedPrimary, selectedFallbacks],
+    () => mergeSelectedModelOptions(models, [selectedPrimary, ...selectedFallbacks].filter(Boolean), creditsOnly),
+    [models, selectedPrimary, selectedFallbacks, creditsOnly],
   )
 
   const providerForModel = (modelId: string) =>
@@ -211,6 +238,12 @@ export function ModelSelectorModal({
   const handleSave = async () => {
     if (!selectedPrimary) {
       setStatus('Select a primary model before saving.')
+      return
+    }
+    if (creditsOnly && !isAutomniaCreditsModelId(selectedPrimary)) {
+      setSelectedPrimary(AUTOMNIA_CREDITS_MODEL_ID)
+      setSelectedFallbacks([])
+      setStatus('Starter subscriptions can use Automnia credits only.')
       return
     }
     const primaryProvider = providerForModel(selectedPrimary)
@@ -245,31 +278,22 @@ export function ModelSelectorModal({
   const primaryProviderStatus = primaryProvider
     ? effectiveAuthStatusForProvider(authProviders, primaryProvider)
     : undefined
-  const primaryProviderLabel = authLabelForProvider(primaryProvider, primaryProviderStatus)
-  const primaryProviderAuthKind = authKindForProvider(primaryProviderStatus)
   const selectedModelBrief = selectedPrimary ? modelBrief(selectedPrimary) : null
-  const primaryOAuthExpired = Boolean(
-    primaryProviderStatus?.oauth?.supported
-      && primaryProviderStatus.oauth.expiresAt
-      && primaryProviderStatus.oauth.expiresAt <= Date.now(),
-  )
   const entitlement = resolveLicenseEntitlement(license)
   const routePresentation = resolveAgentRoutePresentation(license)
   const usesHostedCredits = entitlement.isHosted
   const usesByok = entitlement.isByok
   const providerFirst = routePresentation.providerFirst
-  const modelGroups = useMemo(() => groupAvailableModels(selectableModels), [selectableModels])
-  const fallbackModelGroups = useMemo(
-    () => groupAvailableModels(selectableModels.filter((model) => model.id !== selectedPrimary)),
-    [selectableModels, selectedPrimary],
-  )
   useEffect(() => {
     if (!isOpen || !selectedPrimary || !primaryProvider) return
     if (!primaryProviderStatus?.oauth?.supported || primaryProviderStatus.configured) return
     const key = `${primaryProvider}:${selectedPrimary}`
     if (authRefreshKeyRef.current === key) return
     authRefreshKeyRef.current = key
-    void fetchAuthProviders(true)
+    void fetchAuthProviders(true).then((next) => {
+      const refreshedStatus = effectiveAuthStatusForProvider(next, primaryProvider)
+      if (refreshedStatus && !refreshedStatus.configured) setAuthModalProvider(refreshedStatus)
+    })
   }, [
     isOpen,
     selectedPrimary,
@@ -304,7 +328,7 @@ export function ModelSelectorModal({
             </button>
           </div>
 
-          {loading && !selectedPrimary && !modelGroups.length ? (
+          {loading && !selectedPrimary && !selectableModels.length ? (
             <p className="text-center text-slate-300">Loading models...</p>
           ) : (
             <>
@@ -325,43 +349,23 @@ export function ModelSelectorModal({
                     </div>
                   ) : <>
                   <p className="text-xs text-slate-300">{routePresentation.modelDescription}</p>
-                  {primaryProviderStatus && !primaryProviderStatus.configured && (
-                    <div className="rounded-lg border border-amber-400/30 bg-amber-900/30 px-3 py-2 text-xs text-amber-100">
-                      Missing {primaryProviderLabel} {primaryProviderAuthKind}. Connect it before using this model.
-                      <button
-                        type="button"
-                        onClick={() => setAuthModalProvider(primaryProviderStatus)}
-                        className="ml-2 rounded bg-amber-300/20 px-2 py-0.5 text-[11px] text-amber-100"
-                      >
-                        Connect
-                      </button>
-                    </div>
-                  )}
-                  <select
-                    value={selectedPrimary}
-                    onChange={(event) => {
-                      const next = event.target.value
+                  <ModelPicker
+                    mode="primary"
+                    models={selectableModels}
+                    selectedIds={selectedPrimary ? [selectedPrimary] : []}
+                    fallbackIds={selectedFallbacks}
+                    onToggleFallback={toggleFallback}
+                    emptyOption={{ label: 'Choose a model...', detail: 'Select a provider to browse its available models.' }}
+                    label=""
+                    providerAuthStatusFor={(provider) => effectiveAuthStatusForProvider(authProviders, provider)}
+                    onProviderAuth={(_, providerStatus) => setAuthModalProvider(providerStatus)}
+                    onSelect={(next) => {
                       setSelectedPrimary(next)
                       const provider = next ? providerForModel(next) : ''
                       const providerStatus = provider ? effectiveAuthStatusForProvider(authProviders, provider) : undefined
                       if (providerStatus && !providerStatus.configured) setAuthModalProvider(providerStatus)
                     }}
-                    className="w-full rounded-lg border border-cyan-200/20 bg-slate-950/70 px-3 py-2 text-sm text-slate-100"
-                  >
-                    <option value="" disabled>
-                      Choose a model...
-                    </option>
-                    {modelGroups.map((group) => (
-                      <optgroup key={group.key} label={formatModelGroupLabel(group)}>
-                        {group.models.map((model) => (
-                          <option key={model.id} value={model.id}>
-                            {model.alias} ({model.provider})
-                          </option>
-                        ))}
-                      </optgroup>
-                    ))}
-                  </select>
-                  {selectedPrimary && <div className="text-xs text-slate-300">{selectedPrimary}</div>}
+                  />
                   {selectedModelBrief && (
                     <div className={`rounded-xl border px-3 py-2 text-xs ${
                       selectedModelBrief.tone === 'emerald'
@@ -374,24 +378,7 @@ export function ModelSelectorModal({
                     }`}>
                       <p className="font-semibold">{selectedModelBrief.title}</p>
                       <p className="mt-0.5 text-[11px] text-slate-300">{selectedModelBrief.description}</p>
-                    </div>
-                  )}
-                  {primaryOAuthExpired && (
-                    <div className="rounded-lg border border-rose-400/30 bg-rose-950/30 px-3 py-2 text-xs text-rose-100">
-                      {primaryProviderLabel} sign-in has expired. Reconnect it before the next model call so OpenClaw does not repeatedly retry a stale refresh token.
-                      <button
-                        type="button"
-                        onClick={() => setAuthModalProvider(primaryProviderStatus || null)}
-                        className="ml-2 rounded bg-rose-300/15 px-2 py-0.5 text-[11px] font-semibold text-rose-100"
-                      >
-                        Reconnect
-                      </button>
-                    </div>
-                  )}
-                  {primaryProvider === 'google-vertex' && (
-                    <div className="inline-flex w-fit rounded-full border border-sky-300/40 bg-sky-400/10 px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.14em] text-sky-100">
-                      google-vertex
-                    </div>
+                      </div>
                   )}
                   </>}
                   {usesHostedCredits && providerFirst && <div data-model-selector-managed-route className="rounded-xl border border-emerald-300/20 bg-emerald-400/[0.05] px-3 py-2">
@@ -400,29 +387,6 @@ export function ModelSelectorModal({
                   </div>}
                 </div>
 
-                {!routePresentation.managedRoute && <div className="space-y-2">
-                  <h4 className="text-lg font-semibold text-slate-100">Additional models</h4>
-                  <p className="text-xs text-slate-300">Optional additional provider models.</p>
-                  <div className="max-h-48 space-y-2 overflow-auto rounded-lg border border-slate-100/10 bg-slate-950/55 p-2">
-                    {fallbackModelGroups.map((group) => (
-                      <div key={group.key} className="space-y-1">
-                        <div className="px-1 text-[10px] font-semibold uppercase tracking-[0.14em] text-slate-400">{formatModelGroupLabel(group)}</div>
-                        {group.models.map((model) => (
-                          <label key={model.id} className="flex items-center gap-2 text-xs text-slate-100">
-                            <input
-                              type="checkbox"
-                              checked={selectedFallbacks.includes(model.id)}
-                              onChange={() => toggleFallback(model.id)}
-                              className="h-4 w-4 accent-emerald-400"
-                            />
-                            <span className="truncate">{model.alias}</span>
-                            <span className="text-[10px] text-slate-400">{model.provider}</span>
-                          </label>
-                        ))}
-                      </div>
-                    ))}
-                  </div>
-                </div>}
               </div>
 
               <div className="mb-4 rounded-xl border border-violet-300/20 bg-violet-950/20 p-3">
@@ -458,15 +422,6 @@ export function ModelSelectorModal({
                     </button>
                   ))}
                 </div>
-              </div>
-
-              <div className="mb-4 flex flex-wrap gap-2 text-[11px]">
-                {selectedFallbacks.map((id) => (
-                  <span key={id} className="rounded-full border border-emerald-300/30 bg-emerald-900/35 px-2 py-0.5 text-emerald-100">
-                    {id.split('/').pop()}
-                  </span>
-                ))}
-                {!selectedFallbacks.length && <span className="text-slate-400">No fallbacks selected.</span>}
               </div>
 
               <div className="flex items-center justify-between">

@@ -48,6 +48,7 @@ type RuntimeStatusPluginControls = {
 
 type RuntimeStatusCronJobs = {
   active: unknown[]
+  activeCount?: number
   error?: unknown
 }
 
@@ -60,7 +61,9 @@ type RuntimeStatusDoctorDiagnostics = Record<string, unknown> & {
   recent: unknown[]
 }
 
-const MAX_CHANNEL_ACTIVITY_HISTORY = 100
+const MAX_STATUS_CHANNEL_ACTIVITY_HISTORY = 24
+const MAX_SUMMARY_CHANNEL_ACTIVITY_HISTORY = 12
+const MAX_SUMMARY_CRON_JOBS = 48
 
 export type RuntimeStatusServiceOptions = {
   openClawConfigPath: string
@@ -70,7 +73,7 @@ export type RuntimeStatusServiceOptions = {
   summaryResponseTimeoutMs: number
   fetchGatewayHealthPayload: () => Promise<RuntimeStatusGatewayHealth>
   fetchGatewayReadinessPayload: () => Promise<GatewayReadinessSummary>
-  readRuntimeGatewayLedgerSnapshot: (limit?: number) => Promise<RuntimeStatusGatewayLedgerSnapshot>
+  readRuntimeGatewayLedgerSnapshot: (limit?: number, options?: { sqlite?: boolean }) => Promise<RuntimeStatusGatewayLedgerSnapshot>
   readExternalGatewayLogEntries: (limit?: number) => Promise<GatewayLogEntry[]>
   readExternalChannelActivityEntries: (limit?: number) => Promise<GatewayLogEntry[]>
   listPluginControls: (options?: { forceRefresh?: boolean }) => Promise<RuntimeStatusPluginControls>
@@ -93,17 +96,16 @@ export type RuntimeStatusServiceOptions = {
   openAgentSessionSnapshots: (gatewayActivity?: GatewayActivitySummary) => Promise<unknown[]>
   listMissions: () => RuntimeStatusMission[]
   missionView: (mission: RuntimeStatusMission) => unknown
-  listActiveCronJobViews: (options?: { sqlite?: boolean }) => RuntimeStatusCronJobs
+  listActiveCronJobViews: (options?: { sqlite?: boolean; limit?: number }) => RuntimeStatusCronJobs
   activeRunSnapshots: () => unknown[]
   recentRunSnapshots: (limit: number) => unknown[]
+  isRuntimeMonitorEntryVisible?: (timestamp: string | null | undefined) => boolean
   runtimeVersionCheckPayload: () => unknown
   runtimeLedgerStatus: (options?: { sqlite?: boolean }) => unknown
   gatewayChatRuntimeSnapshot: () => unknown
   gatewayReadinessUnavailable: (error?: string) => GatewayReadinessSummary
   gatewayStabilityUnavailable: (source: GatewayStabilityStatus['source'], error?: string) => GatewayStabilityStatus
   cachedDoctorDiagnosticsSummary: () => RuntimeStatusDoctorDiagnostics
-  sweepOpenClawSessionLocks: (reason: string, options: { quiet?: boolean }) => Promise<unknown>
-  sweepExpiredMissionCronJobs: (reason: string) => Promise<unknown>
   redactSensitiveText: (value: string) => string
   now?: () => number
 }
@@ -170,14 +172,23 @@ function pluginSummary(plugin: RuntimeStatusPluginControlEntry, runtimeLoaded: b
 
 export function createRuntimeStatusService(options: RuntimeStatusServiceOptions) {
   const nowMs = options.now ?? (() => Date.now())
+  const isRuntimeMonitorEntryVisible = options.isRuntimeMonitorEntryVisible ?? (() => true)
   let runtimeStatusPayloadCache: { builtAt: number; payload: Record<string, unknown> } | null = null
   let runtimeStatusPayloadInFlight: Promise<Record<string, unknown>> | null = null
+  let runtimeStatusCacheGeneration = 0
+  let runtimeStatusPayloadTimedOut = false
   let runtimeSummaryPayloadCache: { builtAt: number; payload: Record<string, unknown> } | null = null
   let runtimeSummaryPayloadInFlight: Promise<Record<string, unknown>> | null = null
+  let runtimeSummaryCacheGeneration = 0
+  let runtimeSummaryPayloadTimedOut = false
 
   function invalidateCache() {
+    runtimeStatusCacheGeneration += 1
+    runtimeSummaryCacheGeneration += 1
     runtimeStatusPayloadCache = null
     runtimeSummaryPayloadCache = null
+    runtimeStatusPayloadInFlight = null
+    runtimeSummaryPayloadInFlight = null
   }
 
   function runtimeStatusFromCache(payload: Record<string, unknown>, builtAt: number): Record<string, unknown> {
@@ -277,7 +288,7 @@ export function createRuntimeStatusService(options: RuntimeStatusServiceOptions)
         logs: Array.isArray(gateway.logs) ? gateway.logs.slice(0, 12) : [],
         activity: {
           ...activity,
-          events: Array.isArray(activity.events) ? activity.events.slice(0, MAX_CHANNEL_ACTIVITY_HISTORY) : [],
+          events: Array.isArray(activity.events) ? activity.events.slice(0, MAX_SUMMARY_CHANNEL_ACTIVITY_HISTORY) : [],
         },
       },
       sessions: [],
@@ -293,7 +304,7 @@ export function createRuntimeStatusService(options: RuntimeStatusServiceOptions)
       },
       shifts: {
         activeCount: typeof shifts.activeCount === 'number' ? shifts.activeCount : activeShifts.length,
-        active: activeShifts,
+        active: activeShifts.slice(0, MAX_SUMMARY_CRON_JOBS),
         ...(shifts.error ? { error: shifts.error } : {}),
       },
       missions: {
@@ -339,11 +350,9 @@ export function createRuntimeStatusService(options: RuntimeStatusServiceOptions)
   function minimalRuntimeStatusPayload(reason: string, responseTimeoutMs: number): Record<string, unknown> {
     const gateway = options.gatewayStatusSnapshot(false)
     const activeMissions = options.listMissions().filter((mission) => mission.status === 'active')
-    // Cron state is owned by OpenClaw's durable scheduler database. Keep the
-    // fallback payload truthful for jobs created outside the Control Center;
-    // the list helper still falls back to in-memory shifts if SQLite is not
-    // available.
-    const cronJobs = options.listActiveCronJobViews()
+    // Keep fallback generation bounded: a degraded response must not reopen
+    // the durable scheduler database while the primary status build is stuck.
+    const cronJobs = options.listActiveCronJobViews({ sqlite: false })
     return {
       ok: true,
       generatedAt: new Date(nowMs()).toISOString(),
@@ -379,7 +388,7 @@ export function createRuntimeStatusService(options: RuntimeStatusServiceOptions)
         cache: { source: 'fallback', refreshedAt: nowMs(), refreshing: true },
       },
       shifts: {
-        activeCount: cronJobs.active.length,
+        activeCount: cronJobs.activeCount ?? cronJobs.active.length,
         active: cronJobs.active,
         ...(cronJobs.error ? { error: cronJobs.error } : {}),
       },
@@ -436,8 +445,6 @@ export function createRuntimeStatusService(options: RuntimeStatusServiceOptions)
 
   async function buildRuntimeStatusPayload(forcePluginRefresh: boolean): Promise<Record<string, unknown>> {
     const builtStartedAt = nowMs()
-    void options.sweepOpenClawSessionLocks('runtime status', { quiet: true }).catch(() => undefined)
-    void options.sweepExpiredMissionCronJobs('runtime status mission cron expiry sweep').catch(() => undefined)
     const [
       gatewayHealth,
       gatewayReadiness,
@@ -451,7 +458,10 @@ export function createRuntimeStatusService(options: RuntimeStatusServiceOptions)
     ] = await Promise.all([
       options.fetchGatewayHealthPayload(),
       options.fetchGatewayReadinessPayload(),
-      options.readRuntimeGatewayLedgerSnapshot(160),
+      // The live UI uses the async JSONL/in-memory side of the ledger. Durable
+      // SQLite reads remain available to the dedicated activity endpoint, but
+      // must not sit on the request path that drives the Monitor shell.
+      options.readRuntimeGatewayLedgerSnapshot(160, { sqlite: false }),
       options.readExternalGatewayLogEntries(160),
       options.readExternalChannelActivityEntries(160),
       options.listPluginControls({ forceRefresh: forcePluginRefresh }).catch((error) => ({
@@ -466,15 +476,18 @@ export function createRuntimeStatusService(options: RuntimeStatusServiceOptions)
     ])
     const probesMs = nowMs() - builtStartedAt
     const gateway = options.gatewayStatusSnapshot(gatewayHealth.healthy, null, gatewayLedgerSnapshot.restart, gatewayLedgerSnapshot.recentRestarts, gatewayStability)
-    const ledgerGatewayLogs = gatewayLedgerSnapshot.entries
+    const ledgerGatewayLogs = gatewayLedgerSnapshot.entries.filter((entry) => isRuntimeMonitorEntryVisible(entry.timestamp))
     const currentLedgerGatewayLogs = options.gatewayLogEntriesSinceCurrentStart(ledgerGatewayLogs)
-    const currentExternalGatewayLogs = options.gatewayLogEntriesSinceCurrentStart(externalGatewayLogs)
-    const currentChannelActivityLogs = options.gatewayLogEntriesSinceCurrentStart(externalChannelActivityLogs)
+    const visibleExternalGatewayLogs = externalGatewayLogs.filter((entry) => isRuntimeMonitorEntryVisible(entry.timestamp))
+    const visibleChannelActivityLogs = externalChannelActivityLogs.filter((entry) => isRuntimeMonitorEntryVisible(entry.timestamp))
+    const currentExternalGatewayLogs = options.gatewayLogEntriesSinceCurrentStart(visibleExternalGatewayLogs)
+    const currentChannelActivityLogs = options.gatewayLogEntriesSinceCurrentStart(visibleChannelActivityLogs)
     const currentGatewayLogs = options.dedupeGatewayLogEntries([...currentLedgerGatewayLogs, ...currentExternalGatewayLogs], 120)
+    const visibleGatewayLogs = gatewayLogs(gateway).filter((entry) => isRuntimeMonitorEntryVisible(entry.timestamp))
     const runtimeLoadedPluginIds = new Set(
       [
         ...loadedPluginIdsFromGatewayHealth(gatewayHealth.payload),
-        ...options.runtimeLoadedPluginIdsFromGatewayLogs([...gatewayLogs(gateway), ...currentGatewayLogs]),
+        ...options.runtimeLoadedPluginIdsFromGatewayLogs([...visibleGatewayLogs, ...currentGatewayLogs]),
       ]
         .map((value) => String(value || '').trim().toLowerCase())
         .filter(Boolean),
@@ -494,7 +507,7 @@ export function createRuntimeStatusService(options: RuntimeStatusServiceOptions)
     // The summary is what the Monitor shell renders, so it must include
     // durable OpenClaw jobs as well as Control Center-owned shifts.
     const cronJobs = options.listActiveCronJobViews()
-    gateway.logs = options.dedupeGatewayLogEntries([...gatewayLogs(gateway), ...currentGatewayLogs], 80)
+    gateway.logs = options.dedupeGatewayLogEntries([...visibleGatewayLogs, ...currentGatewayLogs], 80)
 
     return {
       ok: true,
@@ -525,7 +538,10 @@ export function createRuntimeStatusService(options: RuntimeStatusServiceOptions)
         ...gateway,
         readiness: gatewayReadiness,
         chat: options.gatewayChatRuntimeSnapshot(),
-        activity,
+        activity: {
+          ...activity,
+          events: activity.events.slice(0, MAX_STATUS_CHANNEL_ACTIVITY_HISTORY),
+        },
         stability: gatewayStability,
       },
       sessions,
@@ -541,7 +557,7 @@ export function createRuntimeStatusService(options: RuntimeStatusServiceOptions)
         ...(pluginControls.cliError ? { cliError: pluginControls.cliError } : {}),
       },
       shifts: {
-        activeCount: cronJobs.active.length,
+        activeCount: cronJobs.activeCount ?? cronJobs.active.length,
         active: cronJobs.active,
         ...(cronJobs.error ? { error: cronJobs.error } : {}),
       },
@@ -560,27 +576,31 @@ export function createRuntimeStatusService(options: RuntimeStatusServiceOptions)
     const [gatewayHealth, gatewayReadiness, gatewayLedgerSnapshot, externalChannelActivityLogs, gatewayStability, doctorDiagnostics] = await Promise.all([
       options.fetchGatewayHealthPayload(),
       options.fetchGatewayReadinessPayload(),
-      options.readRuntimeGatewayLedgerSnapshot(48),
+      options.readRuntimeGatewayLedgerSnapshot(48, { sqlite: false }),
       options.readExternalChannelActivityEntries(48),
       options.readGatewayStabilitySnapshot(8),
       options.readDoctorDiagnosticsSummary(false, { sqlite: false }),
     ])
     const gateway = options.gatewayStatusSnapshot(gatewayHealth.healthy, null, gatewayLedgerSnapshot.restart, gatewayLedgerSnapshot.recentRestarts, gatewayStability)
-    const ledgerGatewayLogs = gatewayLedgerSnapshot.entries
+    const ledgerGatewayLogs = gatewayLedgerSnapshot.entries.filter((entry) => isRuntimeMonitorEntryVisible(entry.timestamp))
     const currentLedgerGatewayLogs = options.gatewayLogEntriesSinceCurrentStart(ledgerGatewayLogs)
     const shouldReadExternalGatewayLogs = currentLedgerGatewayLogs.length === 0
     const externalGatewayLogs = shouldReadExternalGatewayLogs
       ? await options.readExternalGatewayLogEntries(48)
       : []
     const probesMs = nowMs() - builtStartedAt
-    const currentExternalGatewayLogs = options.gatewayLogEntriesSinceCurrentStart(externalGatewayLogs)
+    const currentExternalGatewayLogs = options.gatewayLogEntriesSinceCurrentStart(
+      externalGatewayLogs.filter((entry) => isRuntimeMonitorEntryVisible(entry.timestamp)),
+    )
     const currentGatewayLogs = options.dedupeGatewayLogEntries([
       ...currentLedgerGatewayLogs,
       ...currentExternalGatewayLogs,
     ], 48)
-    const currentChannelActivityLogs = options.gatewayLogEntriesSinceCurrentStart(externalChannelActivityLogs)
+    const currentChannelActivityLogs = options.gatewayLogEntriesSinceCurrentStart(
+      externalChannelActivityLogs.filter((entry) => isRuntimeMonitorEntryVisible(entry.timestamp)),
+    )
     const activity = options.summarizeGatewayActivity([...currentGatewayLogs, ...currentChannelActivityLogs])
-    const cronJobs = options.listActiveCronJobViews()
+    const cronJobs = options.listActiveCronJobViews({ limit: MAX_SUMMARY_CRON_JOBS })
     const activeMissions = options.listMissions().filter((mission) => mission.status === 'active')
     const cachedPlugins = isLooseRecord(runtimeStatusPayloadCache?.payload?.plugins)
       ? runtimeStatusPayloadCache?.payload.plugins
@@ -588,7 +608,10 @@ export function createRuntimeStatusService(options: RuntimeStatusServiceOptions)
     const pluginEnabledCount = typeof cachedPlugins?.enabledCount === 'number' ? cachedPlugins.enabledCount : 0
     const pluginTotalCount = typeof cachedPlugins?.totalCount === 'number' ? cachedPlugins.totalCount : 0
     const pluginCommunication = Array.isArray(cachedPlugins?.communication) ? cachedPlugins.communication.slice(0, 4) : []
-    gateway.logs = options.dedupeGatewayLogEntries([...gatewayLogs(gateway), ...currentGatewayLogs], 12)
+    gateway.logs = options.dedupeGatewayLogEntries([
+      ...gatewayLogs(gateway).filter((entry) => isRuntimeMonitorEntryVisible(entry.timestamp)),
+      ...currentGatewayLogs,
+    ], 12)
 
     return {
       ok: true,
@@ -619,7 +642,7 @@ export function createRuntimeStatusService(options: RuntimeStatusServiceOptions)
         stability: gatewayStability,
         activity: {
           ...activity,
-          events: activity.events.slice(0, MAX_CHANNEL_ACTIVITY_HISTORY),
+          events: activity.events.slice(0, MAX_SUMMARY_CHANNEL_ACTIVITY_HISTORY),
         },
       },
       sessions: [],
@@ -634,8 +657,8 @@ export function createRuntimeStatusService(options: RuntimeStatusServiceOptions)
         ...(cachedPlugins?.cliError ? { cliError: cachedPlugins.cliError } : {}),
       },
       shifts: {
-        activeCount: cronJobs.active.length,
-        active: cronJobs.active,
+        activeCount: cronJobs.activeCount ?? cronJobs.active.length,
+        active: cronJobs.active.slice(0, MAX_SUMMARY_CRON_JOBS),
         ...(cronJobs.error ? { error: cronJobs.error } : {}),
       },
       missions: {
@@ -656,31 +679,42 @@ export function createRuntimeStatusService(options: RuntimeStatusServiceOptions)
     if (!forcePluginRefresh && runtimeStatusPayloadCache && now - runtimeStatusPayloadCache.builtAt <= options.statusCacheMs) {
       return runtimeStatusFromCache(runtimeStatusPayloadCache.payload, runtimeStatusPayloadCache.builtAt)
     }
-    if (!forcePluginRefresh && runtimeStatusPayloadInFlight) {
+    if (runtimeStatusPayloadInFlight) {
+      if (runtimeStatusPayloadTimedOut) {
+        return fallbackRuntimeStatusPayload(
+          timeoutError('runtime status refresh', options.statusResponseTimeoutMs),
+          options.statusResponseTimeoutMs,
+        )
+      }
       try {
         const payload = await withResponseDeadline(runtimeStatusPayloadInFlight, 'runtime status refresh', options.statusResponseTimeoutMs)
         return runtimeStatusFromCache(payload, runtimeStatusPayloadCache?.builtAt || nowMs())
       } catch (error) {
         if (isRuntimeResponseTimeout(error)) {
-          runtimeStatusPayloadInFlight = null
+          runtimeStatusPayloadTimedOut = true
           return fallbackRuntimeStatusPayload(error, options.statusResponseTimeoutMs)
         }
         throw error
       }
     }
 
+    const requestGeneration = runtimeStatusCacheGeneration
     const promise = buildRuntimeStatusPayload(forcePluginRefresh).then((payload) => {
-      cacheRuntimeStatusPayload(payload)
+      if (requestGeneration === runtimeStatusCacheGeneration) cacheRuntimeStatusPayload(payload)
       return payload
     }).finally(() => {
-      if (runtimeStatusPayloadInFlight === promise) runtimeStatusPayloadInFlight = null
+      if (runtimeStatusPayloadInFlight === promise) {
+        runtimeStatusPayloadInFlight = null
+        runtimeStatusPayloadTimedOut = false
+      }
     })
-    if (!forcePluginRefresh) runtimeStatusPayloadInFlight = promise
+    runtimeStatusPayloadTimedOut = false
+    runtimeStatusPayloadInFlight = promise
     try {
       return await withResponseDeadline(promise, 'runtime status refresh', options.statusResponseTimeoutMs)
     } catch (error) {
       if (isRuntimeResponseTimeout(error)) {
-        if (runtimeStatusPayloadInFlight === promise) runtimeStatusPayloadInFlight = null
+        if (runtimeStatusPayloadInFlight === promise) runtimeStatusPayloadTimedOut = true
         return fallbackRuntimeStatusPayload(error, options.statusResponseTimeoutMs)
       }
       throw error
@@ -698,7 +732,13 @@ export function createRuntimeStatusService(options: RuntimeStatusServiceOptions)
       cacheRuntimeSummaryPayload(runtimeSummaryPayloadFromStatusPayload(runtimeStatusPayloadCache.payload, builtAt, { cached: false }), builtAt)
       return summary
     }
-    if (!forceRefresh && runtimeStatusPayloadInFlight) {
+    if (runtimeStatusPayloadInFlight) {
+      if (runtimeStatusPayloadTimedOut) {
+        return fallbackRuntimeSummaryPayload(
+          timeoutError('runtime status refresh for summary', options.summaryResponseTimeoutMs),
+          options.summaryResponseTimeoutMs,
+        )
+      }
       try {
         const payload = await withResponseDeadline(runtimeStatusPayloadInFlight, 'runtime status refresh for summary', options.summaryResponseTimeoutMs)
         const builtAt = runtimeStatusPayloadCache?.builtAt || nowMs()
@@ -707,37 +747,48 @@ export function createRuntimeStatusService(options: RuntimeStatusServiceOptions)
         return summary
       } catch (error) {
         if (isRuntimeResponseTimeout(error)) {
-          runtimeStatusPayloadInFlight = null
+          runtimeStatusPayloadTimedOut = true
           return fallbackRuntimeSummaryPayload(error, options.summaryResponseTimeoutMs)
         }
         throw error
       }
     }
-    if (!forceRefresh && runtimeSummaryPayloadInFlight) {
+    if (runtimeSummaryPayloadInFlight) {
+      if (runtimeSummaryPayloadTimedOut) {
+        return fallbackRuntimeSummaryPayload(
+          timeoutError('runtime summary refresh', options.summaryResponseTimeoutMs),
+          options.summaryResponseTimeoutMs,
+        )
+      }
       try {
         const payload = await withResponseDeadline(runtimeSummaryPayloadInFlight, 'runtime summary refresh', options.summaryResponseTimeoutMs)
         return runtimeSummaryFromCache(payload, runtimeSummaryPayloadCache?.builtAt || nowMs())
       } catch (error) {
         if (isRuntimeResponseTimeout(error)) {
-          runtimeSummaryPayloadInFlight = null
+          runtimeSummaryPayloadTimedOut = true
           return fallbackRuntimeSummaryPayload(error, options.summaryResponseTimeoutMs)
         }
         throw error
       }
     }
 
+    const requestGeneration = runtimeSummaryCacheGeneration
     const promise = buildRuntimeSummaryPayload().then((payload) => {
-      cacheRuntimeSummaryPayload(payload)
+      if (requestGeneration === runtimeSummaryCacheGeneration) cacheRuntimeSummaryPayload(payload)
       return payload
     }).finally(() => {
-      if (runtimeSummaryPayloadInFlight === promise) runtimeSummaryPayloadInFlight = null
+      if (runtimeSummaryPayloadInFlight === promise) {
+        runtimeSummaryPayloadInFlight = null
+        runtimeSummaryPayloadTimedOut = false
+      }
     })
-    if (!forceRefresh) runtimeSummaryPayloadInFlight = promise
+    runtimeSummaryPayloadTimedOut = false
+    runtimeSummaryPayloadInFlight = promise
     try {
       return await withResponseDeadline(promise, 'runtime summary refresh', options.summaryResponseTimeoutMs)
     } catch (error) {
       if (isRuntimeResponseTimeout(error)) {
-        if (runtimeSummaryPayloadInFlight === promise) runtimeSummaryPayloadInFlight = null
+        if (runtimeSummaryPayloadInFlight === promise) runtimeSummaryPayloadTimedOut = true
         return fallbackRuntimeSummaryPayload(error, options.summaryResponseTimeoutMs)
       }
       throw error

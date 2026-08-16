@@ -63,7 +63,7 @@ async function runMode(writeMode) {
     const health = await waitForHealth(baseUrl)
     assert.equal(health.ok, true)
     assert.equal(health.writeMode, writeMode)
-    assert.equal(health.commerce.planMappingCount, 12)
+    assert.equal(health.commerce.planMappingCount, 13)
     assert.equal(health.commerce.checkoutConfigured, true)
     assert.equal(health.commerce.webhookSecretsConfigured, true)
 
@@ -109,7 +109,7 @@ async function runMode(writeMode) {
       assert.equal(provisioned.records[0]?.byokAllowed, false)
       assert.equal(provisioned.records[0]?.permanentAccess, false)
       assert.equal(provisioned.records[0]?.accessType, 'subscription')
-      assert.equal(provisioned.records[0]?.usagePriority, 'automnia_first')
+      assert.equal(provisioned.records[0]?.usagePriority, 'automnia_only')
 
       const refillOrder = await sendPaidOrder('smoke-owner-refill-10m', 'AUTO-REFILL-10M')
       assert.equal(refillOrder.status, 200)
@@ -124,6 +124,18 @@ async function runMode(writeMode) {
       provisioned = await fetch(`${baseUrl}/provisioned`, { headers: { Authorization: 'Bearer local-smoke-admin-value' } }).then((response) => response.json())
       assert.equal(provisioned.records.find((record) => record.email === 'owner@example.test')?.creditBalance, 10_500_000, 'Duplicate Shopify delivery must not double-credit the wallet')
 
+      const dollarRefill = await sendPaidOrder('smoke-owner-refill-100k', 'AUTO-REFILL-100K')
+      assert.equal(dollarRefill.status, 200)
+      assert.equal((await dollarRefill.json()).action, 'topup_applied')
+      provisioned = await fetch(`${baseUrl}/provisioned`, { headers: { Authorization: 'Bearer local-smoke-admin-value' } }).then((response) => response.json())
+      assert.equal(provisioned.records.find((record) => record.email === 'owner@example.test')?.creditBalance, 10_600_000, '$1 Shopify refill must add 100,000 hosted credits')
+
+      const duplicateDollarRefill = await sendPaidOrder('smoke-owner-refill-100k', 'AUTO-REFILL-100K')
+      assert.equal(duplicateDollarRefill.status, 200)
+      assert.equal((await duplicateDollarRefill.json()).action, 'duplicate_ignored')
+      provisioned = await fetch(`${baseUrl}/provisioned`, { headers: { Authorization: 'Bearer local-smoke-admin-value' } }).then((response) => response.json())
+      assert.equal(provisioned.records.find((record) => record.email === 'owner@example.test')?.creditBalance, 10_600_000, 'Duplicate $1 Shopify delivery must not double-credit the wallet')
+
       const proOrder = await sendPaidOrder('smoke-pro', 'AUTO-SUB-PRO-MONTHLY')
       assert.equal(proOrder.status, 200)
       provisioned = await fetch(`${baseUrl}/provisioned`, { headers: { Authorization: 'Bearer local-smoke-admin-value' } }).then((response) => response.json())
@@ -131,7 +143,7 @@ async function runMode(writeMode) {
       assert.equal(provisioned.records[0]?.tier, 'pro')
       assert.equal(provisioned.records[0]?.mode, 'hosted_credits')
       assert.equal(provisioned.records[0]?.accessType, 'permanent')
-      assert.equal(provisioned.records[0]?.usagePriority, 'automnia_first')
+      assert.equal(provisioned.records[0]?.usagePriority, 'automnia_only')
 
       const starterToByokStarter = await sendPaidOrder('smoke-starter-to-byok-starter', 'AUTO-SUB-STARTER-MONTHLY', 'starter-to-byok@example.test')
       assert.equal(starterToByokStarter.status, 200)
@@ -143,7 +155,7 @@ async function runMode(writeMode) {
       assert.equal(upgradedByokRecord?.mode, 'byok')
       assert.equal(upgradedByokRecord?.permanentAccess, true)
       assert.equal(upgradedByokRecord?.creditBalance, 500000, 'Starter hosted credits must survive a BYOK upgrade')
-      assert.equal(upgradedByokRecord?.usagePriority, 'automnia_first', 'BYOK with carried-over hosted credits should default to the preserved credit route')
+      assert.equal(upgradedByokRecord?.usagePriority, 'automnia_only', 'BYOK with carried-over hosted credits should default to the preserved credit route')
 
       const byokOrder = await sendPaidOrder('smoke-byok', 'AUTO-BYOK-ONETIME', 'byok-owner@example.test')
       assert.equal(byokOrder.status, 200)
@@ -153,8 +165,14 @@ async function runMode(writeMode) {
       const byokRecord = provisioned.records.find((record) => record.email === 'byok-owner@example.test')
       assert.equal(byokRecord?.mode, 'byok')
       assert.equal(byokRecord?.permanentAccess, true)
-      assert.equal(byokRecord?.usagePriority, 'automnia_first')
+      assert.equal(byokRecord?.usagePriority, 'automnia_only')
       assert.equal(byokRecord?.creditBalance, 500000)
+
+      const byokDollarRefill = await sendPaidOrder('smoke-byok-refill-100k', 'AUTO-REFILL-100K', 'BYOK-OWNER@EXAMPLE.TEST')
+      assert.equal(byokDollarRefill.status, 200)
+      assert.equal((await byokDollarRefill.json()).action, 'topup_applied')
+      provisioned = await fetch(`${baseUrl}/provisioned`, { headers: { Authorization: 'Bearer local-smoke-admin-value' } }).then((response) => response.json())
+      assert.equal(provisioned.records.find((record) => record.email === 'byok-owner@example.test')?.creditBalance, 600000, '$1 Shopify refill must add 100,000 credits to a BYOK account')
 
       const lowerOrder = await sendPaidOrder('smoke-starter-again', 'AUTO-SUB-STARTER-MONTHLY')
       assert.equal(lowerOrder.status, 200)

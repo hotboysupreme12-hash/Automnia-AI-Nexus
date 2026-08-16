@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from 'react'
 import { apiErrorMessage, apiRequest, type ApiErrorEnvelope, type ApiRequestOptions } from '../api/client'
+import { getRuntimeMonitorClearGeneration, markRuntimeMonitorCleared } from './runtimeMonitorClear'
 
 const RUNTIME_STATUS_MIN_TIMEOUT_MS = 25_000
 const RUNTIME_STATUS_MAX_TIMEOUT_MS = 45_000
@@ -7,7 +8,10 @@ const RUNTIME_STATUS_CLIENT_CACHE_MS = 1_000
 const RUNTIME_ACTION_TIMEOUT_MS = 30_000
 const RUNTIME_DOCTOR_TIMEOUT_MS = 60_000
 const RUNTIME_CRON_SHIFT_HYDRATION_CACHE_MS = 5_000
-const CLIENT_CHANNEL_ACTIVITY_HISTORY_LIMIT = 100
+// The overview renders a small live window. Keeping a second 100-entry copy in
+// the renderer made every semantic comparison and poll process archival data
+// that belongs in the dedicated activity feed instead.
+const CLIENT_CHANNEL_ACTIVITY_HISTORY_LIMIT = 24
 
 export type GatewayLogEntry = {
   id: number
@@ -611,6 +615,17 @@ export async function stopCronShift(shiftId: string) {
   return result.data
 }
 
+export async function runCronShift(shiftId: string) {
+  const result = await apiRequest<{ shiftId: string; cronId: string; status: string }>('/api/shifts/run', {
+    method: 'POST',
+    body: { shiftId },
+    timeoutMs: 120_000,
+  })
+  if (!result.ok) throw new Error(apiErrorMessage(result.error))
+  invalidateCronShiftHydrationCache()
+  return result.data
+}
+
 export async function updateCronShift(payload: {
   shiftId: string
   name?: string
@@ -750,7 +765,7 @@ let cachedRuntimeStatus: RuntimeStatus | null = null
 let cachedRuntimeError = ''
 let cachedRuntimeStatusKey = ''
 let runtimeStatusRequest: AbortController | null = null
-let runtimeStatusRequestAbortReason: 'idle' | 'paused' | null = null
+let runtimeStatusRequestAbortReason: 'idle' | 'paused' | 'cleared' | null = null
 let runtimeStatusRefreshPending = false
 let runtimePollTimer: number | null = null
 let runtimeSubscriberId = 0
@@ -760,7 +775,7 @@ let cachedRuntimeSummaryStatus: RuntimeStatus | null = null
 let cachedRuntimeSummaryError = ''
 let cachedRuntimeSummaryStatusKey = ''
 let runtimeSummaryRequest: AbortController | null = null
-let runtimeSummaryRequestAbortReason: 'idle' | 'paused' | null = null
+let runtimeSummaryRequestAbortReason: 'idle' | 'paused' | 'cleared' | null = null
 let runtimeSummaryRefreshPending = false
 let runtimeSummaryPollTimer: number | null = null
 let runtimeSummarySubscriberId = 0
@@ -1020,6 +1035,15 @@ export async function clearRuntimeMonitor(): Promise<RuntimeMonitorClearResult> 
   })
   if (!isRuntimeMonitorClearResult(data)) throw new Error('Clear runtime monitor returned an invalid response.')
 
+  markRuntimeMonitorCleared(data.clearedAt)
+  if (runtimeStatusRequest && !runtimeStatusRequest.signal.aborted) {
+    runtimeStatusRequestAbortReason = 'cleared'
+    runtimeStatusRequest.abort()
+  }
+  if (runtimeSummaryRequest && !runtimeSummaryRequest.signal.aborted) {
+    runtimeSummaryRequestAbortReason = 'cleared'
+    runtimeSummaryRequest.abort()
+  }
   runtimeChannelActivityHistory = []
   if (cachedRuntimeStatus) {
     cachedRuntimeStatus = {
@@ -1189,6 +1213,7 @@ function abortRuntimeSummaryRequestIfIdle() {
 }
 
 async function loadRuntimeStatus(intervalMs: number, forceRefresh = false) {
+  const requestClearGeneration = getRuntimeMonitorClearGeneration()
   if (!forceRefresh && cachedRuntimeStatus) {
     const maxAgeMs = Math.min(RUNTIME_STATUS_CLIENT_CACHE_MS, Math.max(500, intervalMs))
     if (runtimeStatusAgeMs(cachedRuntimeStatus) <= maxAgeMs) {
@@ -1226,11 +1251,14 @@ async function loadRuntimeStatus(intervalMs: number, forceRefresh = false) {
     if (!isRuntimeStatusPayload(result.data)) {
       throw new Error('Runtime status response missing gateway data.')
     }
-    publishRuntimeStatusSnapshot(await hydrateRuntimeStatusCronJobs(result.data))
+    const status = await hydrateRuntimeStatusCronJobs(result.data)
+    if (requestClearGeneration !== getRuntimeMonitorClearGeneration()) return
+    publishRuntimeStatusSnapshot(status)
   } catch (loadError) {
     const idleAbort = runtimeStatusRequestAbortReason === 'idle' && controller.signal.aborted
     const pausedAbort = runtimeStatusRequestAbortReason === 'paused' && controller.signal.aborted
-    if (!idleAbort && !pausedAbort) {
+    const clearedDuringRequest = requestClearGeneration !== getRuntimeMonitorClearGeneration()
+    if (!idleAbort && !pausedAbort && !clearedDuringRequest) {
       cachedRuntimeError = loadError instanceof DOMException && (loadError.name === 'AbortError' || loadError.name === 'TimeoutError')
         ? cachedRuntimeStatus
           ? 'Runtime status timed out; showing the last snapshot.'
@@ -1251,6 +1279,7 @@ async function loadRuntimeStatus(intervalMs: number, forceRefresh = false) {
 }
 
 async function loadRuntimeSummaryStatus(intervalMs: number, forceRefresh = false) {
+  const requestClearGeneration = getRuntimeMonitorClearGeneration()
   if (!forceRefresh && cachedRuntimeSummaryStatus) {
     const maxAgeMs = Math.min(RUNTIME_STATUS_CLIENT_CACHE_MS, Math.max(500, intervalMs))
     if (runtimeStatusAgeMs(cachedRuntimeSummaryStatus) <= maxAgeMs) {
@@ -1288,6 +1317,7 @@ async function loadRuntimeSummaryStatus(intervalMs: number, forceRefresh = false
     if (!isRuntimeStatusPayload(result.data)) {
       throw new Error('Runtime summary response missing gateway data.')
     }
+    if (requestClearGeneration !== getRuntimeMonitorClearGeneration()) return
     const mergedStatus = mergeRuntimeChannelActivity(result.data)
     const nextKey = runtimeStatusSemanticKey(mergedStatus)
     if (!cachedRuntimeSummaryStatus || cachedRuntimeSummaryStatusKey !== nextKey) {
@@ -1298,7 +1328,8 @@ async function loadRuntimeSummaryStatus(intervalMs: number, forceRefresh = false
   } catch (loadError) {
     const idleAbort = runtimeSummaryRequestAbortReason === 'idle' && controller.signal.aborted
     const pausedAbort = runtimeSummaryRequestAbortReason === 'paused' && controller.signal.aborted
-    if (!idleAbort && !pausedAbort) {
+    const clearedDuringRequest = requestClearGeneration !== getRuntimeMonitorClearGeneration()
+    if (!idleAbort && !pausedAbort && !clearedDuringRequest) {
       cachedRuntimeSummaryError = loadError instanceof DOMException && (loadError.name === 'AbortError' || loadError.name === 'TimeoutError')
         ? cachedRuntimeSummaryStatus
           ? 'Runtime summary timed out; showing the last snapshot.'

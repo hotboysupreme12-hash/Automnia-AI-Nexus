@@ -22,6 +22,7 @@ import {
 import { ActionStatusBanner } from '../common/ActionStatusBanner'
 import { Badge, Button, IconButton, StatusChip } from '../ui'
 import type { BadgeTone } from '../ui'
+import { providerLogoSrc } from '../../utils/providerLogos'
 import {
   PLUGIN_FILTERS,
   pluginMatchesFilter,
@@ -150,6 +151,93 @@ function pluginInitials(plugin: PluginEntry) {
   return letters || plugin.id.slice(0, 2).toUpperCase()
 }
 
+const PLUGIN_LOGO_ASSETS: Record<string, string> = {
+  alibaba: '/icons/plugins/alibaba.png',
+  anthropic: '/icons/plugins/anthropic.png',
+  browser: '/icons/plugins/browser.png',
+  'clawrouter': '/icons/plugins/openrouter.png',
+  'cloudflare-ai-gateway': '/icons/plugins/cloudflare.png',
+  codex: '/icons/plugins/codex.png',
+  'codex-supervisor': '/icons/plugins/codex.png',
+  cohere: '/icons/providers/cohere.png',
+  'copilot-proxy': '/icons/plugins/copilot-proxy.png',
+  'github-copilot': '/icons/plugins/githubcopilot.png',
+  cerebras: '/icons/providers/cerebras.png',
+  deepgram: '/icons/plugins/deepgram.png',
+  deepseek: '/icons/plugins/deepseek.png',
+  duckduckgo: '/icons/plugins/duckduckgo.png',
+  elevenlabs: '/icons/plugins/elevenlabs.png',
+  fireworks: '/icons/providers/fireworks-ai.png',
+  'fireworks-ai': '/icons/providers/fireworks-ai.png',
+  google: '/icons/plugins/google.png',
+  groq: '/icons/providers/groq.png',
+  huggingface: '/icons/plugins/huggingface.png',
+  imessage: '/icons/plugins/imessage.png',
+  kimi: '/icons/plugins/kimi.png',
+  'kimi-coding': '/icons/plugins/kimi.png',
+  lmstudio: '/icons/plugins/lmstudio.png',
+  meta: '/icons/plugins/meta.png',
+  minimax: '/icons/plugins/minimax.png',
+  mistral: '/icons/plugins/mistral.png',
+  nvidia: '/icons/plugins/nvidia.png',
+  ollama: '/icons/plugins/ollama.png',
+  openai: '/icons/plugins/openai.png',
+  opencode: '/icons/plugins/opencode.png',
+  'opencode-go': '/icons/plugins/opencode-go.png',
+  openrouter: '/icons/plugins/openrouter.png',
+  perplexity: '/icons/plugins/perplexity.png',
+  qwen: '/icons/plugins/qwen.png',
+  qwencloud: '/icons/plugins/qwen.png',
+  'qwen-cli': '/icons/plugins/qwen.png',
+  'qwen-oauth': '/icons/plugins/qwen.png',
+  'qwen-portal': '/icons/plugins/qwen.png',
+  telegram: '/icons/plugins/telegram.png',
+  together: '/icons/providers/together.png',
+  x: '/icons/plugins/x.png',
+  xai: '/icons/plugins/x.png',
+  xiaomi: '/icons/plugins/xiaomi.png',
+}
+
+const DARK_PLUGIN_LOGO_IDS = new Set([
+  'anthropic',
+  'codex',
+  'codex-supervisor',
+  'cloudflare-ai-gateway',
+  'copilot-proxy',
+  'github-copilot',
+  'elevenlabs',
+  'kimi',
+  'kimi-coding',
+  'lmstudio',
+  'meta',
+  'ollama',
+  'opencode',
+  'opencode-go',
+  'qwen',
+  'qwen-cli',
+  'qwen-oauth',
+  'qwen-portal',
+  'x',
+  'xai',
+])
+
+function pluginLogoSrc(plugin: PluginEntry) {
+  const localLogo = PLUGIN_LOGO_ASSETS[plugin.id]
+  if (localLogo) return localLogo
+
+  const providerLogo = plugin.providers.map((provider) => providerLogoSrc(provider)).find(Boolean)
+  if (providerLogo) return providerLogo
+
+  const runtimeIcon = plugin.icon?.trim()
+  return runtimeIcon && /^(?:https?:\/\/|\/)/.test(runtimeIcon) ? runtimeIcon : ''
+}
+
+function pluginLogoTone(plugin: PluginEntry) {
+  if (DARK_PLUGIN_LOGO_IDS.has(plugin.id)) return 'light'
+  if (!PLUGIN_LOGO_ASSETS[plugin.id] && /^https:\/\/cdn\.simpleicons\.org\//i.test(plugin.icon || '')) return 'light'
+  return 'brand'
+}
+
 function pluginsWithToggle(plugins: PluginEntry[], pluginId: string, enabled: boolean) {
   return plugins.map((entry) =>
     entry.id === pluginId
@@ -269,54 +357,72 @@ function PluginRow({
   const toggleLabel = installable ? 'Install' : plugin.enabled ? 'Stop' : 'Start'
   const toggleBusyLabel = installable ? 'Installing' : plugin.enabled ? 'Stopping' : 'Starting'
   const statusState = pluginPageState(plugin)
+  const logoSrc = pluginLogoSrc(plugin)
+  const surfaceValues = [...plugin.commands, ...plugin.providers, ...plugin.channels]
+  const runtimeLabel = plugin.runtimeLoaded ? 'Loaded' : plugin.enabled ? 'Awaiting sync' : 'Standby'
+  const signalTone = plugin.needsSetup ? 'attention' : plugin.enabled ? 'healthy' : 'idle'
   return (
     <article
-      className="dy-plugin-row grid gap-3 rounded-lg border border-white/[0.06] bg-white/[0.018] px-3 py-3 transition hover:border-white/[0.10] hover:bg-white/[0.026] md:grid-cols-[minmax(0,1.4fr)_minmax(100px,0.55fr)_minmax(120px,0.6fr)_auto]"
+      className="dy-plugin-row"
+      data-plugin-state={statusState.key}
+      data-plugin-enabled={plugin.enabled ? 'true' : 'false'}
+      data-plugin-category={plugin.category}
     >
-      <div className="flex min-w-0 gap-3">
-        <div className="flex h-8 w-8 shrink-0 items-center justify-center overflow-hidden rounded-md border border-white/[0.08] bg-white/[0.035] text-[10px] font-bold text-cyan-100">
-          {plugin.icon ? (
-            <img src={plugin.icon} alt="" className="h-5 w-5 object-contain" loading="lazy" />
+      <div className="dy-plugin-card-main">
+        <div className="dy-plugin-card-icon" data-plugin-id={plugin.id} data-has-logo={logoSrc ? 'true' : 'false'} data-logo-tone={pluginLogoTone(plugin)}>
+          {logoSrc ? (
+            <img src={logoSrc} alt="" className="dy-plugin-card-logo" loading="lazy" />
           ) : (
             <span>{pluginInitials(plugin)}</span>
           )}
         </div>
-        <div className="min-w-0">
-          <div className="flex min-w-0 flex-wrap items-center gap-2">
-            <h3 className="truncate text-[13px] font-bold text-slate-100">{plugin.name}</h3>
-            <Badge className="rounded-full border px-2 py-0.5 text-[8px] font-semibold uppercase" tone={pluginStateTone(statusState.tone)} size="micro" data-plugin-state={statusState.key}>
+        <div className="dy-plugin-card-copy">
+          <div className="dy-plugin-card-heading">
+            <div className="dy-plugin-card-title-line">
+              <h3>{plugin.name}</h3>
+              <span className="dy-plugin-state-dot" data-tone={signalTone} aria-hidden="true" />
+            </div>
+            <Badge className="dy-plugin-state-badge" tone={pluginStateTone(statusState.tone)} size="micro" data-plugin-state={statusState.key}>
               {statusState.label}
             </Badge>
-            <Badge className="rounded-full border border-white/[0.06] bg-white/[0.02] px-2 py-0.5 text-[8px] font-semibold uppercase text-slate-500" tone="neutral" size="micro">
-              {plugin.category}
-            </Badge>
           </div>
-          <p className="mt-1 truncate text-[11px] text-slate-500">{plugin.id} / {plugin.origin}</p>
-          <p className="mt-1 line-clamp-1 text-[12px] text-slate-400">{plugin.description}</p>
+          <div className="dy-plugin-card-meta">
+            <span>{plugin.category}</span>
+            <span>{plugin.origin}</span>
+            <code>{plugin.id}</code>
+          </div>
+          <p className="dy-plugin-card-description">{plugin.description}</p>
+          <div className="dy-plugin-card-signal" data-tone={signalTone}>
+            <span className="dy-plugin-signal-led" aria-hidden="true" />
+            <span>{primaryGuidance}</span>
+          </div>
           {plugin.id === 'clawtalk' && <ClawTalkOperationsCard plugin={plugin} />}
         </div>
       </div>
 
-      <div className="min-w-0 text-[11px]">
-        <p className="text-slate-600">Surfaces</p>
-        <p className="truncate font-semibold text-slate-300">
-          {compactList([...plugin.commands, ...plugin.providers, ...plugin.channels], 'none')}
-        </p>
+      <div className="dy-plugin-card-stats" aria-label={`${plugin.name} runtime details`}>
+        <div className="dy-plugin-card-stat">
+          <span>Surfaces</span>
+          <strong>{compactList(surfaceValues, 'None')}</strong>
+        </div>
+        <div className="dy-plugin-card-stat">
+          <span>Runtime</span>
+          <strong>{runtimeLabel}</strong>
+        </div>
+        <div className="dy-plugin-card-stat">
+          <span>Config</span>
+          <strong>{plugin.configFields.length ? `${plugin.configFields.filter((field) => field.present).length}/${plugin.configFields.length} set` : 'No setup'}</strong>
+        </div>
       </div>
 
-      <div className="min-w-0 text-[11px]">
-        <p className={plugin.needsSetup ? 'text-amber-300/80' : 'text-slate-600'}>{plugin.needsSetup ? 'Action' : 'State'}</p>
-        <p className={`truncate font-semibold ${plugin.needsSetup ? 'text-amber-100' : 'text-slate-300'}`}>{primaryGuidance}</p>
-      </div>
-
-      <div className="dy-plugin-row-actions flex shrink-0 items-center justify-end gap-2">
+      <div className="dy-plugin-row-actions">
         {plugin.needsSetup && !installable && (
           <Button
             onClick={() => onSetup(plugin)}
             disabled={busy}
             variant="secondary"
             size="compact"
-            className="dy-plugin-row-action dy-plugin-row-setup h-8 rounded-md border border-amber-300/20 bg-amber-300/[0.06] px-3 text-[10px] font-semibold text-amber-100 transition hover:bg-amber-300/[0.11] disabled:cursor-not-allowed disabled:opacity-50"
+            className="dy-plugin-row-action dy-plugin-row-setup"
             title={`Set up ${plugin.name}`}
           >
             Setup
@@ -327,16 +433,11 @@ function PluginRow({
           disabled={busy}
           variant="secondary"
           size="compact"
-          leadingIcon={(
-            <svg aria-hidden="true" className="dy-plugin-row-action-svg" viewBox="0 0 16 16">
-              <path d="M13.2 5.7A5.4 5.4 0 0 0 3.3 4L2.2 5.8H5" />
-              <path d="M2.8 10.3A5.4 5.4 0 0 0 12.7 12l1.1-1.8H11" />
-            </svg>
-          )}
-          className="dy-plugin-row-action dy-plugin-row-refresh h-8 rounded-md border border-white/[0.08] bg-white/[0.025] px-3 text-[10px] font-semibold text-slate-300 transition hover:border-cyan-300/25 hover:text-cyan-100 disabled:cursor-not-allowed disabled:opacity-50"
+          leadingIcon={<span className="dy-plugin-action-glyph" aria-hidden="true">↻</span>}
+          className="dy-plugin-row-action dy-plugin-row-refresh"
           title={`Refresh ${plugin.name}`}
         >
-          {busyAction === 'refresh' ? 'Refreshing' : 'Refresh'}
+          {busyAction === 'refresh' ? 'Syncing' : 'Sync'}
         </Button>
         <Button
           onClick={() => installable ? onInstall(plugin) : onToggle(plugin)}
@@ -344,7 +445,7 @@ function PluginRow({
           variant={plugin.enabled ? 'danger' : 'primary'}
           size="compact"
           leadingIcon={<span className="dy-plugin-power-icon" data-state={plugin.enabled ? 'stop' : 'start'} aria-hidden="true" />}
-          className={`dy-plugin-row-action dy-plugin-row-power h-8 rounded-md border px-3 text-[10px] font-semibold transition disabled:cursor-not-allowed disabled:opacity-50 ${plugin.enabled ? 'is-stop' : 'is-start'}`}
+          className={`dy-plugin-row-action dy-plugin-row-power ${plugin.enabled ? 'is-stop' : 'is-start'}`}
           title={installable ? `Install ${plugin.installSpec}` : plugin.enabled ? `Stop and disable ${plugin.name}` : `Start ${plugin.name}`}
         >
           {busyAction === (installable ? 'install' : 'toggle') ? toggleBusyLabel : toggleLabel}
@@ -355,11 +456,8 @@ function PluginRow({
           aria-expanded={expanded}
           variant={expanded ? 'primary' : 'secondary'}
           size="compact"
-          className={`dy-plugin-row-action dy-plugin-row-manage h-8 rounded-md border px-3 text-[10px] font-semibold transition disabled:cursor-not-allowed disabled:opacity-50 ${
-            expanded
-              ? 'border-cyan-300/25 bg-cyan-300/[0.07] text-cyan-100'
-              : 'border-white/[0.08] bg-white/[0.025] text-slate-300 hover:border-white/[0.13] hover:text-slate-100'
-          }`}
+          leadingIcon={<span className="dy-plugin-manage-glyph" aria-hidden="true">•••</span>}
+          className={`dy-plugin-row-action dy-plugin-row-manage ${expanded ? 'is-open' : ''}`}
           title={`Manage ${plugin.name}`}
         >
           Manage
@@ -367,8 +465,8 @@ function PluginRow({
       </div>
 
       {expanded && (
-        <div className="md:col-span-4">
-          <div className="flex flex-wrap items-center justify-end gap-2 border-t border-white/[0.05] pt-3">
+        <div className="dy-plugin-card-detail">
+          <div className="dy-plugin-card-detail-actions">
             {installable ? (
               <Button
                 onClick={() => onInstall(plugin)}
@@ -730,9 +828,10 @@ function PluginDiscoveryPanel({
   }, [onInstalled, pin, setError, setNotice])
 
   return (
-    <section className="rounded-lg border border-white/[0.06] bg-white/[0.018] p-3">
-      <div className="grid gap-2 lg:grid-cols-[minmax(0,1fr)_auto]">
-        <div className="flex min-w-0 items-center rounded-md border border-white/[0.07] bg-black/20 transition focus-within:border-cyan-300/30">
+    <section className="dy-plugin-discovery">
+      <div className="dy-plugin-discovery-search">
+        <div className="dy-plugin-search-field">
+          <span className="dy-plugin-search-icon" aria-hidden="true">⌕</span>
           <input
             data-plugin-search="true"
             value={query}
@@ -740,8 +839,8 @@ function PluginDiscoveryPanel({
             onKeyDown={(event) => {
               if (event.key === 'Enter') void searchPlugins()
             }}
-            placeholder="Search installed plugins or /clawhub browser"
-            className="h-9 min-w-0 flex-1 border-0 bg-transparent px-3 text-[12px] text-slate-200 outline-none placeholder:text-slate-600"
+            placeholder="Search installed plugins or type /clawhub to discover"
+            className="dy-plugin-search-input"
           />
         </div>
         <Button
@@ -750,19 +849,19 @@ function PluginDiscoveryPanel({
           variant="primary"
           size="compact"
           loading={searching}
-          className="h-9 rounded-md border border-cyan-300/20 bg-cyan-300/[0.06] px-3 text-[10px] font-semibold text-cyan-100 transition hover:bg-cyan-300/[0.10] disabled:cursor-wait disabled:opacity-50"
+          className="dy-plugin-search-button"
         >
           {searching ? 'Searching' : clawHubMode ? 'Search ClawHub' : 'Filter'}
         </Button>
       </div>
 
-      <div className="mt-2 flex flex-wrap items-center gap-2">
-        <label className="flex h-8 items-center gap-2 rounded-md border border-white/[0.07] bg-black/20 px-3 text-[10px] font-semibold text-slate-400">
+      <div className="dy-plugin-discovery-controls">
+        <label className="dy-plugin-pin-toggle">
           <input
             type="checkbox"
             checked={pin}
             onChange={(event) => setPin(event.target.checked)}
-            className="h-3.5 w-3.5 rounded border-white/[0.12] bg-black/30"
+            className="dy-plugin-pin-checkbox"
           />
           Pin installs
         </label>
@@ -772,7 +871,7 @@ function PluginDiscoveryPanel({
             onClick={() => setFilter(option.id)}
             variant={filter === option.id ? 'primary' : 'secondary'}
             size="compact"
-            className={`h-8 rounded-md border px-3 text-[10px] font-semibold transition ${
+            className={`dy-plugin-filter-button ${
               filter === option.id
                 ? 'border-cyan-300/25 bg-cyan-300/[0.08] text-cyan-100'
                 : 'border-white/[0.07] bg-white/[0.025] text-slate-400 hover:border-white/[0.13] hover:bg-white/[0.04]'
@@ -781,7 +880,7 @@ function PluginDiscoveryPanel({
             {option.label}
           </Button>
         ))}
-        <span className="text-[10px] font-semibold text-slate-600">{visibleCount} shown</span>
+        <span className="dy-plugin-results-count">{visibleCount} shown</span>
       </div>
 
       {localError && (
@@ -791,7 +890,7 @@ function PluginDiscoveryPanel({
       )}
 
       {results.length > 0 && (
-        <div className="mt-3 max-h-52 overflow-y-auto rounded-md border border-white/[0.05]">
+        <div className="dy-plugin-search-results">
           {results.map((result) => (
             <div key={`${result.id}:${result.installSpec}`} className="grid gap-2 border-b border-white/[0.04] px-3 py-2 last:border-b-0 md:grid-cols-[minmax(0,1fr)_auto]">
               <div className="min-w-0">
@@ -1106,6 +1205,8 @@ export function PluginsPanel({ focusQuery = '' }: { focusQuery?: string }) {
 
   const stateSummary = summarizePluginPageStates(plugins)
   const browser = plugins.find((plugin) => plugin.id === 'browser')
+  const attentionCount = stateSummary.setup + stateSummary.missingAuth + stateSummary.failed + stateSummary.unavailable
+  const cacheLabel = pluginsPanelCache?.cache?.source === 'openclaw' ? 'LIVE REGISTRY' : 'BUNDLED REGISTRY'
   const statusMessage = compactPluginNoticeText(error || notice)
 
   return (
@@ -1113,48 +1214,68 @@ export function PluginsPanel({ focusQuery = '' }: { focusQuery?: string }) {
       data-dui-panel="plugins"
       className="dy-plugins-panel flex min-h-0 flex-col overflow-hidden rounded-2xl border border-white/[0.06] bg-[linear-gradient(180deg,#0b1425,#060b18)] shadow-2xl shadow-black/40"
     >
-      <div className="border-b border-white/[0.05] bg-white/[0.018] px-5 py-4">
-        <div className="flex flex-wrap items-center justify-between gap-4">
-          <div>
-            <h2 className="text-[18px] font-bold text-slate-100">OpenClaw Plugins</h2>
-            <p className="mt-1 text-[10px] text-slate-500/80">Search, install, enable, configure, and refresh plugin runtime surfaces.</p>
+      <div className="dy-plugins-header">
+        <div className="dy-plugins-header-top">
+          <div className="dy-plugins-header-identity">
+            <div className="dy-plugins-eyebrow">
+              <span className="dy-plugin-signal-led" data-tone="healthy" aria-hidden="true" />
+              <span>PLUGIN FABRIC</span>
+              <span className="dy-plugins-registry-label">{cacheLabel}</span>
+            </div>
+            <div className="dy-plugins-title-row">
+              <h2>Plugins</h2>
+              <span>plugins, connectors, provider channels, and runtime tools</span>
+            </div>
           </div>
-          <div className="flex flex-wrap items-center gap-2">
+          <div className="dy-plugins-header-actions">
             {browser && (
               <StatusChip
                 label="Browser"
                 value={browser.enabled ? 'on' : 'off'}
                 state={browser.enabled ? 'on' : 'off'}
                 tone={browser.enabled ? 'info' : 'neutral'}
-                className={`dy-plugin-summary-chip rounded-full border px-2.5 py-1 text-[9px] font-semibold ${
-                  browser.enabled
-                    ? 'border-cyan-300/30 bg-cyan-300/[0.10] text-cyan-100'
-                    : 'border-slate-400/25 bg-slate-500/[0.08] text-slate-300'
-                }`}
+                className="dy-plugin-summary-chip"
                 data-tone={browser.enabled ? 'browser-on' : 'browser-off'}
               />
             )}
-            <StatusChip label="Enabled" value={stateSummary.enabled} tone="success" className="dy-plugin-summary-chip rounded-full border border-emerald-300/30 bg-emerald-300/[0.10] px-2.5 py-1 text-[9px] font-semibold text-emerald-100" data-tone="success" />
-            <StatusChip label="Configured" value={stateSummary.configured} tone="info" className="dy-plugin-summary-chip rounded-full border border-cyan-300/25 bg-cyan-300/[0.08] px-2.5 py-1 text-[9px] font-semibold text-cyan-100" data-tone="configured" />
-            <StatusChip label="Missing auth" value={stateSummary.missingAuth} tone="warning" className="dy-plugin-summary-chip rounded-full border border-amber-300/30 bg-amber-300/[0.10] px-2.5 py-1 text-[9px] font-semibold text-amber-100" data-tone="warning" />
-            <StatusChip label="Unavailable" value={stateSummary.unavailable} tone="warning" className="dy-plugin-summary-chip rounded-full border border-amber-300/25 bg-amber-300/[0.07] px-2.5 py-1 text-[9px] font-semibold text-amber-100" data-tone="unavailable" />
-            <StatusChip label="Failed" value={stateSummary.failed} tone="error" className="dy-plugin-summary-chip rounded-full border border-rose-300/25 bg-rose-400/[0.07] px-2.5 py-1 text-[9px] font-semibold text-rose-100" data-tone="failed" />
-            <StatusChip label="Disabled" value={stateSummary.disabled} tone="neutral" className="dy-plugin-summary-chip rounded-full border border-slate-500/25 bg-slate-500/[0.08] px-2.5 py-1 text-[9px] font-semibold text-slate-300" data-tone="disabled" />
             <Button
               onClick={requestUpdateAllPlugins}
               disabled={updatingAll || loading}
               variant="primary"
               size="compact"
               loading={updatingAll}
-              className="h-7 rounded-md border border-cyan-300/20 bg-cyan-300/[0.07] px-3 text-[9px] font-semibold uppercase text-cyan-100 transition hover:bg-cyan-300/[0.12] disabled:cursor-wait disabled:opacity-50"
+              className="dy-plugins-update-all"
               title="Run openclaw plugins update-all and restart the embedded gateway"
             >
-              {updatingAll ? 'Updating All' : 'Update All'}
+              {updatingAll ? 'Updating' : 'Update all'}
             </Button>
           </div>
         </div>
 
-        <div className="mt-3">
+        <div className="dy-plugins-overview" aria-label="Plugin workspace summary">
+          <div className="dy-plugins-overview-cell" data-tone="neutral">
+            <span>Installed</span>
+            <strong>{plugins.length}</strong>
+            <small>registered surfaces</small>
+          </div>
+          <div className="dy-plugins-overview-cell" data-tone="healthy">
+            <span>Active</span>
+            <strong>{stateSummary.enabled}</strong>
+            <small>enabled in gateway</small>
+          </div>
+          <div className="dy-plugins-overview-cell" data-tone={attentionCount ? 'attention' : 'healthy'}>
+            <span>Attention</span>
+            <strong>{attentionCount}</strong>
+            <small>{attentionCount ? 'setup or runtime action' : 'all systems clear'}</small>
+          </div>
+          <div className="dy-plugins-overview-cell" data-tone="muted">
+            <span>Disabled</span>
+            <strong>{stateSummary.disabled}</strong>
+            <small>available to activate</small>
+          </div>
+        </div>
+
+        <div className="dy-plugins-discovery-wrap">
           <PluginDiscoveryPanel
             onInstalled={applyInstalledPayload}
             query={query}
@@ -1215,7 +1336,7 @@ export function PluginsPanel({ focusQuery = '' }: { focusQuery?: string }) {
 
       <div className="dy-plugins-scroll min-h-0 flex-1 overflow-y-auto overflow-x-hidden">
         <div className="dy-plugins-list min-h-full p-4">
-          <div className="min-w-0 space-y-3">
+          <div className="dy-plugins-card-grid">
             {setupPlugin && (
               <PluginSetupModal
                 plugin={setupPlugin}

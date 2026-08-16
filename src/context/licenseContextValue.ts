@@ -1,6 +1,12 @@
 import { createContext } from 'react'
 
-export type HostedUsagePriority = 'automnia_first' | 'provider_first' | 'byok_only'
+export type HostedUsagePriority =
+  | 'automnia_only'
+  | 'provider_first'
+  | 'automnia_first_with_provider_fallback'
+  /** Legacy values accepted while older local state is migrated. */
+  | 'automnia_first'
+  | 'byok_only'
 
 export type LicenseInfo = {
   active: boolean

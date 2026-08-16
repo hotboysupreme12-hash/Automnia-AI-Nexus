@@ -1,0 +1,79 @@
+/* Agents workspace intro ------------------------------------------------------- */
+
+html.dui-pro-overhaul .dy-workspace-context__copy--agents,
+html.dui-pro-overhaul.dui-cohesive-ui .dy-workspace-context__copy--agents {
+  align-content: center;
+}
+
+html.dui-pro-overhaul .dy-agents-workspace-description,
+html.dui-pro-overhaul.dui-cohesive-ui .dy-agents-workspace-description {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  column-gap: 8px;
+  row-gap: 7px;
+  max-width: 780px !important;
+  color: #a9c1be !important;
+}
+
+html.dui-pro-overhaul .dy-agent-intro__capability,
+html.dui-pro-overhaul.dui-cohesive-ui .dy-agent-intro__capability {
+  display: inline-flex;
+  align-items: center;
+  min-height: 28px;
+  padding: 5px 10px;
+  border: 1px solid rgba(110, 230, 215, .24);
+  border-radius: 999px;
+  background: linear-gradient(180deg, rgba(87, 218, 201, .13), rgba(87, 218, 201, .045));
+  color: #d7fffa;
+  font-size: 11px;
+  font-weight: 720;
+  letter-spacing: -.01em;
+  line-height: 1.2;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, .07), 0 8px 24px -18px rgba(87, 218, 201, .8);
+}
+
+html.dui-pro-overhaul .dy-agent-intro__capability--team,
+html.dui-pro-overhaul.dui-cohesive-ui .dy-agent-intro__capability--team {
+  border-color: rgba(167, 143, 247, .26);
+  background: linear-gradient(180deg, rgba(167, 143, 247, .14), rgba(167, 143, 247, .045));
+  color: #eee7ff;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, .07), 0 8px 24px -18px rgba(167, 143, 247, .76);
+}
+
+html.dui-pro-overhaul .dy-agent-intro__connector,
+html.dui-pro-overhaul.dui-cohesive-ui .dy-agent-intro__connector {
+  color: #718b88;
+  font-family: var(--font-mono, ui-monospace, monospace);
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: .08em;
+  text-transform: uppercase;
+}
+
+html.dui-pro-overhaul .dy-agent-intro__command,
+html.dui-pro-overhaul.dui-cohesive-ui .dy-agent-intro__command {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  margin-left: 3px;
+  color: #9db6b2;
+  font-size: 11px;
+  font-weight: 620;
+  line-height: 1.35;
+}
+
+html.dui-pro-overhaul .dy-agent-intro__command-divider,
+html.dui-pro-overhaul.dui-cohesive-ui .dy-agent-intro__command-divider {
+  color: #5ce1d0;
+  font-size: 15px;
+  line-height: 1;
+}
+
+@media (max-width: 700px) {
+  html.dui-pro-overhaul .dy-agent-intro__command,
+  html.dui-pro-overhaul.dui-cohesive-ui .dy-agent-intro__command {
+    width: 100%;
+    margin-left: 0;
+  }
+}

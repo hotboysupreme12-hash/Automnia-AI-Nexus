@@ -8,6 +8,7 @@ import {
 
 type SpeechRoutesOptions = {
   speechTranscription: SpeechTranscriptionService
+  localAiAllowed?: () => boolean
 }
 
 const SPEECH_CONTENT_TYPES = [
@@ -22,6 +23,9 @@ export function registerSpeechRoutes(app: Express, options: SpeechRoutesOptions)
     type: SPEECH_CONTENT_TYPES,
     limit: ONLINE_SPEECH_UPLOAD_LIMIT_BYTES,
   }), async (req, res) => {
+    if (options.localAiAllowed?.() === false) {
+      return apiFailure(res, 403, 'byok_not_allowed', 'Starter Subscription and credit-refill access cannot use local or external AI provider features.')
+    }
     try {
       const bytes = Buffer.isBuffer(req.body) ? req.body : Buffer.alloc(0)
       const result = await options.speechTranscription.transcribeOnline({

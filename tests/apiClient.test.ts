@@ -206,3 +206,15 @@ test('apiErrorMessage handles auth recovery, useful detail, and envelope-shaped 
   assert.equal(apiErrorMessage({ ...base, detail: '{"error":{"code":"bad_request"}}' }), 'Request failed')
   assert.equal(apiErrorMessage({ ...base, detail: '["not an envelope"]' }), 'Request failed: ["not an envelope"]')
 })
+
+test('apiErrorMessage turns browser transport failures into an actionable local-runtime message', () => {
+  const base = {
+    message: 'TypeError: Failed to fetch',
+    status: 0,
+    requestId: 'request-id',
+    url: 'http://127.0.0.1:4050/api/auth/account/google/start',
+  }
+
+  assert.match(apiErrorMessage({ ...base, code: 'network_error' }), /could not reach the local Control Center/)
+  assert.match(apiErrorMessage({ ...base, code: 'timeout' }), /took too long to respond/)
+})

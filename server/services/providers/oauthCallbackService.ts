@@ -1,6 +1,10 @@
 import { createHash, randomBytes, randomUUID } from 'node:crypto'
 import { createServer, type Server } from 'node:http'
 import type { LocalOAuthCredential } from './providerAuthService'
+import type {
+  AnthropicOAuthLoginCallbacks,
+  AnthropicOAuthLoginResult,
+} from './providerSetupService'
 
 export type GoogleOAuthClientConfig = {
   clientId: string
@@ -9,7 +13,7 @@ export type GoogleOAuthClientConfig = {
 
 // OpenClaw uses one canonical provider key, "openai", for API keys and
 // ChatGPT/Codex subscription OAuth. "openai-codex" is a repaired legacy key.
-export type OAuthProvider = 'google' | 'openai'
+export type OAuthProvider = 'google' | 'openai' | 'anthropic'
 export type OAuthSessionStatus = 'pending' | 'complete' | 'error'
 
 export type ProviderOAuthSession = {
@@ -78,6 +82,8 @@ export type OpenAICodexRefreshResult = {
   idToken?: string
 }
 
+export type AnthropicOAuthRefreshResult = AnthropicOAuthLoginResult
+
 export type OAuthCallbackServerSnapshot = {
   google: OAuthCallbackServerState
   openAiCodex: OAuthCallbackServerState
@@ -87,6 +93,12 @@ type OAuthCallbackServerState = {
   listening: boolean
   address: string | null
   port: number | null
+}
+
+type PendingAnthropicOAuthLogin = {
+  abortController: AbortController
+  resolveManualInput: (input: string) => void
+  rejectManualInput: (error: Error) => void
 }
 
 type FetchLike = typeof fetch
@@ -99,6 +111,9 @@ export type OAuthCallbackServiceOptions = {
     verifier: string,
     redirectUri?: string,
   ) => Promise<OpenAICodexTokenExchangeResult>
+  anthropicOAuthRedirectUri?: string
+  loginAnthropicOAuth?: (callbacks: AnthropicOAuthLoginCallbacks) => Promise<AnthropicOAuthLoginResult>
+  refreshAnthropicOAuthToken?: (refreshToken: string) => Promise<AnthropicOAuthRefreshResult>
   fetch?: FetchLike
   googleCallbackPort?: number
   googleAccountOAuthScopes?: string[]
@@ -234,6 +249,7 @@ export function createOAuthCallbackService(options: OAuthCallbackServiceOptions)
   let openAICodexOAuthCallbackServer: Server | null = null
   let openAICodexOAuthCallbackServerStarting: Promise<void> | null = null
   const sessionTimeouts = new Map<string, ReturnType<typeof setTimeout>>()
+  const pendingAnthropicOAuthLogins = new Map<string, PendingAnthropicOAuthLogin>()
 
   function completeAt() {
     return now().toISOString()
@@ -246,8 +262,18 @@ export function createOAuthCallbackService(options: OAuthCallbackServiceOptions)
     clearSessionTimeout(session.id)
   }
 
+  function cancelPendingAnthropicOAuthLogin(sessionId: string, reason: string) {
+    const pending = pendingAnthropicOAuthLogins.get(sessionId)
+    if (!pending) return false
+    pending.abortController.abort()
+    pending.rejectManualInput(new Error(reason))
+    pendingAnthropicOAuthLogins.delete(sessionId)
+    return true
+  }
+
   function cancelOAuthSession(session: ProviderOAuthSession, reason = 'OAuth sign-in was cancelled. Start it again when you are ready.') {
     if (session.status !== 'pending') return false
+    cancelPendingAnthropicOAuthLogin(session.id, reason)
     failSession(session, reason)
     return true
   }
@@ -267,6 +293,7 @@ export function createOAuthCallbackService(options: OAuthCallbackServiceOptions)
       session.error = `OAuth timed out after ${Math.round(sessionTimeoutMs / 1000)} seconds. Start the connection again.`
       session.completedAt = completeAt()
       sessionTimeouts.delete(session.id)
+      cancelPendingAnthropicOAuthLogin(session.id, session.error)
     }, sessionTimeoutMs)
     timer.unref?.()
     sessionTimeouts.set(session.id, timer)
@@ -286,6 +313,7 @@ export function createOAuthCallbackService(options: OAuthCallbackServiceOptions)
       session.error = `OAuth cancelled during ${reason}.`
       session.completedAt = completedAt
       clearSessionTimeout(session.id)
+      cancelPendingAnthropicOAuthLogin(session.id, session.error)
       failed += 1
     }
     return failed
@@ -419,6 +447,21 @@ export function createOAuthCallbackService(options: OAuthCallbackServiceOptions)
       scope: oauth.scope || options.openAiCodexOAuthScopes,
       ...(refreshed.accountId ? { accountId: refreshed.accountId } : {}),
       ...(refreshed.idToken ? { idToken: refreshed.idToken } : {}),
+    }
+  }
+
+  async function refreshAnthropicOAuthCredential(oauth: LocalOAuthCredential): Promise<LocalOAuthCredential> {
+    const refreshToken = oauth.refreshToken?.trim()
+    if (!refreshToken) throw new Error('Anthropic OAuth refresh token is missing. Reconnect Anthropic.')
+    if (!options.refreshAnthropicOAuthToken) throw new Error('Anthropic OAuth refresh is not available in this build.')
+
+    const refreshed = await options.refreshAnthropicOAuthToken(refreshToken)
+    return {
+      ...oauth,
+      accessToken: refreshed.access,
+      refreshToken: refreshed.refresh || oauth.refreshToken,
+      expiresAt: refreshed.expires,
+      tokenType: 'Bearer',
     }
   }
 
@@ -729,6 +772,107 @@ export function createOAuthCallbackService(options: OAuthCallbackServiceOptions)
     return { session, launched }
   }
 
+  async function startAnthropicOAuthSession(): Promise<OAuthStartResult> {
+    if (options.isShuttingDown()) throw new Error('Control Center is shutting down.')
+    if (!options.loginAnthropicOAuth) throw new Error('Anthropic OAuth is not available in this build.')
+
+    const id = randomUUID()
+    const redirectUri = options.anthropicOAuthRedirectUri || 'http://localhost:53692/callback'
+    const session: ProviderOAuthSession = {
+      id,
+      provider: 'anthropic',
+      redirectUri,
+      authorizationUrl: '',
+      status: 'pending',
+      manualInputRequired: true,
+      manualPrompt: 'Complete Anthropic sign-in in the browser. If the browser is on another machine, paste the final redirect URL here.',
+      createdAt: completeAt(),
+    }
+    oauthSessions.set(id, session)
+    armSessionTimeout(session)
+
+    let resolveAuthorization: () => void = () => undefined
+    let rejectAuthorization: (error: Error) => void = () => undefined
+    const authorizationReady = new Promise<void>((resolve, reject) => {
+      resolveAuthorization = resolve
+      rejectAuthorization = reject
+    })
+    let resolveManualInput: (input: string) => void = () => undefined
+    let rejectManualInput: (error: Error) => void = () => undefined
+    const manualInput = new Promise<string>((resolve, reject) => {
+      resolveManualInput = resolve
+      rejectManualInput = reject
+    })
+    const abortController = new AbortController()
+    pendingAnthropicOAuthLogins.set(id, { abortController, resolveManualInput, rejectManualInput })
+
+    void (async () => {
+      try {
+        const credentials = await options.loginAnthropicOAuth!({
+          onAuth: (auth) => {
+            session.authorizationUrl = auth.url
+            session.manualPrompt = auth.instructions || session.manualPrompt
+            resolveAuthorization()
+          },
+          onProgress: (message) => {
+            session.manualPrompt = message
+          },
+          onPrompt: async (prompt) => {
+            session.manualPrompt = prompt.message
+            return manualInput
+          },
+          onManualCodeInput: async () => await manualInput,
+          signal: abortController.signal,
+        })
+        const credential: LocalOAuthCredential = {
+          accessToken: credentials.access,
+          refreshToken: credentials.refresh,
+          expiresAt: credentials.expires,
+          tokenType: 'Bearer',
+        }
+        await options.persistProviderOAuth('anthropic', credential)
+        session.status = 'complete'
+        session.manualInputRequired = false
+        session.completedAt = completeAt()
+        session.result = { ...(credential.expiresAt ? { expiresAt: credential.expiresAt } : {}) }
+        clearSessionTimeout(session.id)
+        resolveAuthorization()
+      } catch (error) {
+        const message = safeErrorText(error, redactSensitiveText)
+        if (session.status === 'pending') failSession(session, message)
+        rejectAuthorization(new Error(message))
+      } finally {
+        pendingAnthropicOAuthLogins.delete(id)
+      }
+    })()
+
+    try {
+      await authorizationReady
+    } catch (error) {
+      throw new Error(session.error || safeErrorText(error, redactSensitiveText))
+    }
+    if (session.status !== 'pending' || !session.authorizationUrl) {
+      throw new Error(session.error || 'Anthropic OAuth did not return an authorization URL.')
+    }
+    if (options.isShuttingDown()) {
+      cancelOAuthSession(session, 'OAuth cancelled during Control Center shutdown.')
+      throw new Error('Control Center is shutting down.')
+    }
+    const launched = await options.openExternalAuthUrl(session.authorizationUrl)
+      .catch((error) => ({ ok: false, detail: safeErrorText(error, redactSensitiveText) }))
+    return { session, launched }
+  }
+
+  async function submitAnthropicOAuthManualInput(session: ProviderOAuthSession, input: string) {
+    if (session.provider !== 'anthropic') throw new Error('OAuth session is not an Anthropic session.')
+    if (session.status !== 'pending') throw new Error(`OAuth session is already ${session.status}.`)
+    const pending = pendingAnthropicOAuthLogins.get(session.id)
+    if (!pending) throw new Error('Anthropic OAuth login is no longer waiting for input. Start it again.')
+    session.manualInputSubmittedAt = completeAt()
+    session.manualInputRequired = false
+    pending.resolveManualInput(input)
+  }
+
   async function closeOAuthCallbackServersForShutdown(reason: string): Promise<{ closed: number; failedPendingSessions: number }> {
     const failedPendingSessions = failPendingOAuthSessionsForShutdown(reason)
     const starting = [googleOAuthCallbackServerStarting, openAICodexOAuthCallbackServerStarting].filter(Boolean) as Promise<void>[]
@@ -791,10 +935,13 @@ export function createOAuthCallbackService(options: OAuthCallbackServiceOptions)
     oauthSessions,
     parseOpenAICodexAuthorizationInput,
     refreshGoogleOAuthCredential,
+    refreshAnthropicOAuthCredential,
     refreshOpenAICodexOAuthCredential,
     startGoogleOAuthSession,
     startGoogleAccountOAuthSession,
+    startAnthropicOAuthSession,
     startOpenAICodexOAuthSession,
+    submitAnthropicOAuthManualInput,
   }
 }
 

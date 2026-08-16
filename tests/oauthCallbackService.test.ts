@@ -245,6 +245,55 @@ test('completes OpenAI Codex OAuth through a loopback-only callback listener wit
   }
 })
 
+test('completes Anthropic OAuth through the bundled OpenClaw callback flow and keeps tokens out of the session', async () => {
+  const { service, state } = createHarness({
+    anthropicOAuthRedirectUri: 'http://localhost:53692/callback',
+    loginAnthropicOAuth: async (callbacks) => {
+      callbacks.onAuth({
+        url: 'https://claude.ai/oauth/authorize?state=anthropic-state',
+        instructions: 'Complete Anthropic sign-in, then paste the redirect URL here.',
+      })
+      const input = await callbacks.onManualCodeInput!()
+      assert.equal(input, 'http://localhost:53692/callback?code=anthropic-code&state=anthropic-state')
+      return {
+        access: 'anthropic-access-secret',
+        refresh: 'anthropic-refresh-secret',
+        expires: 1782826384447,
+      }
+    },
+    refreshAnthropicOAuthToken: async (refreshToken) => ({
+      access: `anthropic-access-for-${refreshToken}`,
+      refresh: `anthropic-refresh-for-${refreshToken}`,
+      expires: 1782826384447,
+    }),
+  })
+  try {
+    const { session, launched } = await service.startAnthropicOAuthSession()
+    assert.equal(launched.ok, true)
+    assert.equal(state.openUrls[0], 'https://claude.ai/oauth/authorize?state=anthropic-state')
+    assert.equal(session.provider, 'anthropic')
+    assert.equal(session.manualInputRequired, true)
+
+    await service.submitAnthropicOAuthManualInput(
+      session,
+      'http://localhost:53692/callback?code=anthropic-code&state=anthropic-state',
+    )
+    for (let attempt = 0; attempt < 20 && session.status === 'pending'; attempt += 1) await wait(5)
+
+    assert.equal(session.status, 'complete')
+    assert.equal(session.manualInputRequired, false)
+    assert.deepEqual(session.result, { expiresAt: 1782826384447 })
+    assert.equal(state.persisted[0].provider, 'anthropic')
+    assert.equal(state.persisted[0].oauth.accessToken, 'anthropic-access-secret')
+    assert.doesNotMatch(JSON.stringify(session), /anthropic-access-secret|anthropic-refresh-secret/)
+
+    const refreshed = await service.refreshAnthropicOAuthCredential({ refreshToken: 'anthropic-refresh-secret' })
+    assert.equal(refreshed.accessToken, 'anthropic-access-for-anthropic-refresh-secret')
+  } finally {
+    await service.closeOAuthCallbackServersForShutdown('test cleanup')
+  }
+})
+
 test('marks pending OAuth sessions as timed out without closing over stale success state', async () => {
   const { service } = createHarness({ sessionTimeoutMs: 20 })
   try {

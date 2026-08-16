@@ -7,6 +7,15 @@ if (!path) throw new Error('Usage: node plan-hash.mjs <shopify-plan-mappings.jso
 const source = JSON.parse(await readFile(path, 'utf8'))
 if (!Array.isArray(source) || source.length === 0) throw new Error('Plan mappings must be a non-empty array.')
 
+function tierRank(tier) {
+  const normalized = String(tier || '').trim().toLowerCase().replace(/[\s-]+/g, '_')
+  if (normalized.includes('enterprise')) return 3
+  if (normalized.includes('pro')) return 2
+  if (normalized === 'starter' || normalized.includes('starter') || normalized === 'byok' || normalized.includes('byok')) return 1
+  if (normalized.includes('credit') || normalized.includes('refill') || normalized.includes('topup')) return 0
+  return normalized ? 1 : 0
+}
+
 const normalized = source.flatMap((candidate) => {
   if (!candidate || typeof candidate !== 'object') return []
   const tier = String(candidate.tier || '').trim()
@@ -18,8 +27,10 @@ const normalized = source.flatMap((candidate) => {
   return [{
     tier,
     mode,
+    planPriceCents: Number.isInteger(Number(candidate.planPriceCents)) && Number(candidate.planPriceCents) >= 0 ? Number(candidate.planPriceCents) : null,
     initialCredits: Math.floor(initialCredits),
     kind,
+    permanentAccess: candidate.permanentAccess === true || mode === 'byok' || tierRank(tier) >= 2,
     productIds: ids('productIds'),
     variantIds: ids('variantIds'),
     skus: ids('skus').map((sku) => sku.toLowerCase()),

@@ -1,0 +1,260 @@
+/* Conversation clarity: keep the reply primary and make live state readable at a glance. */
+
+html.dui-pro-overhaul .dy-command-console .dy-command-messages,
+html.dui-pro-overhaul.dui-cohesive-ui .dy-command-console .dy-command-messages {
+  gap: 0 !important;
+  padding: 12px 14px 16px !important;
+}
+
+html.dui-pro-overhaul .dy-command-console .dy-command-message,
+html.dui-pro-overhaul.dui-cohesive-ui .dy-command-console .dy-command-message {
+  width: 100% !important;
+  margin: 0 !important;
+  padding: 12px 2px 14px !important;
+  border: 0 !important;
+  border-bottom: 1px solid rgba(169, 197, 201, .08) !important;
+  border-radius: 0 !important;
+  background: transparent !important;
+  box-shadow: none !important;
+}
+
+html.dui-pro-overhaul .dy-command-console .dy-command-message:last-child,
+html.dui-pro-overhaul.dui-cohesive-ui .dy-command-message:last-child {
+  border-bottom-color: transparent !important;
+}
+
+html.dui-pro-overhaul .dy-command-console .dy-command-message:hover,
+html.dui-pro-overhaul.dui-cohesive-ui .dy-command-message:hover {
+  border-bottom-color: rgba(133, 222, 219, .18) !important;
+  background: rgba(255, 255, 255, .018) !important;
+}
+
+html.dui-pro-overhaul .dy-command-console .dy-command-message-header,
+html.dui-pro-overhaul.dui-cohesive-ui .dy-command-message-header {
+  margin-bottom: 7px !important;
+}
+
+html.dui-pro-overhaul .dy-command-console .dy-command-message-avatar,
+html.dui-pro-overhaul.dui-cohesive-ui .dy-command-message-avatar {
+  width: 28px !important;
+  height: 28px !important;
+  border-radius: 7px !important;
+}
+
+html.dui-pro-overhaul .dy-command-console .dy-command-agent-name,
+html.dui-pro-overhaul.dui-cohesive-ui .dy-command-agent-name {
+  font-size: 11px !important;
+}
+
+html.dui-pro-overhaul .dy-command-console .dy-command-message-status,
+html.dui-pro-overhaul.dui-cohesive-ui .dy-command-message-status {
+  min-height: 16px !important;
+  padding: 2px 5px !important;
+  border-color: transparent !important;
+  background: transparent !important;
+  color: #84aaa9 !important;
+  font-size: 7px !important;
+  font-weight: 650 !important;
+  letter-spacing: .02em !important;
+  text-transform: none !important;
+}
+
+html.dui-pro-overhaul .dy-command-console .dy-command-message-status[data-state="streaming"],
+html.dui-pro-overhaul.dui-cohesive-ui .dy-command-message-status[data-state="streaming"] {
+  color: #84e7df !important;
+}
+
+html.dui-pro-overhaul .dy-command-console .dy-command-message-status[data-state="blocked"],
+html.dui-pro-overhaul.dui-cohesive-ui .dy-command-message-status[data-state="blocked"] {
+  color: #f0a6aa !important;
+}
+
+html.dui-pro-overhaul .dy-command-console .dy-command-message-body,
+html.dui-pro-overhaul.dui-cohesive-ui .dy-command-message-body {
+  padding: 1px 0 2px !important;
+  color: #d4dfe0 !important;
+  font-size: 12px !important;
+  line-height: 1.58 !important;
+}
+
+html.dui-pro-overhaul .dy-command-console .dy-command-message-meta,
+html.dui-pro-overhaul.dui-cohesive-ui .dy-command-message-meta {
+  gap: 5px !important;
+  margin-top: 5px !important;
+  padding-top: 5px !important;
+  border-top-color: rgba(169, 197, 201, .045) !important;
+  opacity: .62;
+}
+
+html.dui-pro-overhaul .dy-command-console .dy-command-message-chip,
+html.dui-pro-overhaul.dui-cohesive-ui .dy-command-message-chip {
+  min-height: 15px !important;
+  padding: 2px 0 !important;
+  border-color: transparent !important;
+  background: transparent !important;
+  font-size: 7px !important;
+}
+
+html.dui-pro-overhaul .dy-command-console .dy-command-message-meta-group--routing,
+html.dui-pro-overhaul.dui-cohesive-ui .dy-command-message-meta-group--routing {
+  flex: 0 1 auto !important;
+  justify-content: flex-start !important;
+}
+
+html.dui-pro-overhaul .dy-command-console .dy-command-response-cta,
+html.dui-pro-overhaul.dui-cohesive-ui .dy-command-response-cta {
+  margin-top: 7px !important;
+}
+
+/* Runtime notices use the same hierarchy as agent replies. They get room to
+   breathe when they are the only live update, then compact automatically once
+   an agent reply is present so the agent remains the visual focus. */
+html.dui-pro-overhaul .dy-command-console .dy-automnia-runtime-notifications,
+html.dui-pro-overhaul.dui-cohesive-ui .dy-automnia-runtime-notifications {
+  padding: 11px 14px 13px !important;
+  border-bottom-color: rgba(126, 224, 210, .14) !important;
+  background:
+    linear-gradient(90deg, rgba(58, 185, 173, .06), transparent 42%),
+    rgba(5, 12, 14, .72) !important;
+}
+
+html.dui-pro-overhaul .dy-command-console .dy-automnia-runtime-notice,
+html.dui-pro-overhaul.dui-cohesive-ui .dy-automnia-runtime-notice {
+  grid-template-columns: 34px minmax(0, 1fr) auto !important;
+  min-height: 72px !important;
+  padding: 13px 14px !important;
+  border: 1px solid rgba(126, 224, 210, .16) !important;
+  border-radius: 12px !important;
+  background: linear-gradient(135deg, rgba(22, 38, 41, .84), rgba(8, 17, 19, .82)) !important;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, .025), 0 16px 30px -26px rgba(56, 212, 192, .7) !important;
+}
+
+html.dui-pro-overhaul .dy-command-console .dy-automnia-runtime-avatar,
+html.dui-pro-overhaul.dui-cohesive-ui .dy-automnia-runtime-avatar {
+  width: 34px !important;
+  height: 34px !important;
+  border-radius: 9px !important;
+}
+
+html.dui-pro-overhaul .dy-command-console .dy-automnia-runtime-head strong,
+html.dui-pro-overhaul.dui-cohesive-ui .dy-automnia-runtime-head strong {
+  font-size: 12px !important;
+}
+
+html.dui-pro-overhaul .dy-command-console .dy-automnia-runtime-head > span,
+html.dui-pro-overhaul.dui-cohesive-ui .dy-automnia-runtime-head > span {
+  font-size: 8px !important;
+}
+
+html.dui-pro-overhaul .dy-command-console .dy-automnia-runtime-copy p,
+html.dui-pro-overhaul.dui-cohesive-ui .dy-automnia-runtime-copy p {
+  margin: 6px 0 5px !important;
+  color: #c9d5d7 !important;
+  font-family: inherit !important;
+  font-size: 12px !important;
+  line-height: 1.58 !important;
+}
+
+html.dui-pro-overhaul .dy-command-console .dy-automnia-runtime-meta,
+html.dui-pro-overhaul.dui-cohesive-ui .dy-automnia-runtime-meta {
+  font-size: 8px !important;
+}
+
+html.dui-pro-overhaul .dy-command-console .dy-automnia-runtime-notifications[data-agent-reply-in-flight="true"],
+html.dui-pro-overhaul.dui-cohesive-ui .dy-automnia-runtime-notifications[data-agent-reply-in-flight="true"] {
+  padding: 7px 12px 8px !important;
+  background: rgba(5, 12, 14, .62) !important;
+}
+
+html.dui-pro-overhaul .dy-command-console .dy-automnia-runtime-notifications[data-agent-reply-in-flight="true"] .dy-automnia-runtime-notice,
+html.dui-pro-overhaul.dui-cohesive-ui .dy-automnia-runtime-notifications[data-agent-reply-in-flight="true"] .dy-automnia-runtime-notice {
+  grid-template-columns: 26px minmax(0, 1fr) auto !important;
+  min-height: 0 !important;
+  padding: 7px 9px !important;
+  border-color: rgba(126, 224, 210, .10) !important;
+  border-radius: 9px !important;
+  background: rgba(255, 255, 255, .018) !important;
+  box-shadow: none !important;
+}
+
+html.dui-pro-overhaul .dy-command-console .dy-automnia-runtime-notifications[data-agent-reply-in-flight="true"] .dy-automnia-runtime-avatar,
+html.dui-pro-overhaul.dui-cohesive-ui .dy-automnia-runtime-notifications[data-agent-reply-in-flight="true"] .dy-automnia-runtime-avatar {
+  width: 26px !important;
+  height: 26px !important;
+  border-radius: 7px !important;
+}
+
+html.dui-pro-overhaul .dy-command-console .dy-automnia-runtime-notifications[data-agent-reply-in-flight="true"] .dy-automnia-runtime-head strong,
+html.dui-pro-overhaul.dui-cohesive-ui .dy-automnia-runtime-notifications[data-agent-reply-in-flight="true"] .dy-automnia-runtime-head strong {
+  font-size: 10px !important;
+}
+
+html.dui-pro-overhaul .dy-command-console .dy-automnia-runtime-notifications[data-agent-reply-in-flight="true"] .dy-automnia-runtime-copy p,
+html.dui-pro-overhaul.dui-cohesive-ui .dy-automnia-runtime-notifications[data-agent-reply-in-flight="true"] .dy-automnia-runtime-copy p {
+  margin: 3px 0 !important;
+  color: #a9bcbd !important;
+  font-size: 10px !important;
+  line-height: 1.38 !important;
+}
+
+/* The profile chip is the single live-state signal: cyan means active work. */
+html.dui-pro-overhaul [data-agent-card="true"][data-agent-running="true"],
+html.dui-pro-overhaul.dui-cohesive-ui [data-agent-card="true"][data-agent-running="true"] {
+  border-color: rgba(91, 220, 255, .28) !important;
+  box-shadow:
+    0 0 0 1px rgba(91, 220, 255, .07),
+    0 16px 34px -28px rgba(36, 190, 255, .48) !important;
+}
+
+html.dui-pro-overhaul [data-agent-card="true"] .agent-card-status-pill.is-live,
+html.dui-pro-overhaul.dui-cohesive-ui [data-agent-card="true"] .agent-card-status-pill.is-live {
+  min-height: 22px !important;
+  max-width: 118px !important;
+  padding: 3px 7px !important;
+  overflow: hidden !important;
+  border-color: rgba(93, 214, 255, .42) !important;
+  border-radius: 999px !important;
+  background: rgba(5, 35, 50, .88) !important;
+  color: #b9efff !important;
+  font-size: 8px !important;
+  font-weight: 750 !important;
+  letter-spacing: .025em !important;
+  line-height: 1 !important;
+  text-overflow: ellipsis !important;
+  white-space: nowrap !important;
+}
+
+html.dui-pro-overhaul [data-agent-card="true"] .agent-card-status-pill.is-live > span,
+html.dui-pro-overhaul.dui-cohesive-ui [data-agent-card="true"] .agent-card-status-pill.is-live > span {
+  flex: 0 0 auto;
+  width: 5px !important;
+  height: 5px !important;
+  background: #61dcff !important;
+  box-shadow: 0 0 0 3px rgba(97, 220, 255, .13), 0 0 12px rgba(97, 220, 255, .88) !important;
+}
+
+html.dui-pro-overhaul [data-agent-card="true"] .agent-card-status-pill[data-status-kind="queued"],
+html.dui-pro-overhaul.dui-cohesive-ui [data-agent-card="true"] .agent-card-status-pill[data-status-kind="queued"] {
+  border-color: rgba(249, 200, 92, .36) !important;
+  background: rgba(54, 39, 10, .78) !important;
+  color: #f6d98d !important;
+}
+
+html.dui-pro-overhaul [data-agent-card="true"] .agent-card-status-pill[data-status-kind="approval"],
+html.dui-pro-overhaul.dui-cohesive-ui [data-agent-card="true"] .agent-card-status-pill[data-status-kind="approval"] {
+  border-color: rgba(244, 170, 176, .36) !important;
+  background: rgba(55, 19, 24, .78) !important;
+  color: #ffc4c9 !important;
+}
+
+@media (max-width: 560px) {
+  html.dui-pro-overhaul .dy-command-console .dy-command-messages,
+  html.dui-pro-overhaul.dui-cohesive-ui .dy-command-messages {
+    padding: 10px 11px 14px !important;
+  }
+
+  html.dui-pro-overhaul .dy-command-console .dy-command-message,
+  html.dui-pro-overhaul.dui-cohesive-ui .dy-command-message {
+    padding: 11px 1px 13px !important;
+  }
+}

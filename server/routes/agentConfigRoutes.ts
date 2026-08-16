@@ -3,6 +3,7 @@ import path from 'node:path'
 import type { Express } from 'express'
 import { z } from 'zod'
 import { apiFailure, apiSuccess } from '../controlPlaneHttp'
+import { CREDITS_ONLY_MODEL_ACCESS_MESSAGE } from '../services/license/creditsOnlyModelPolicy'
 import type { AgentConfigRoutesContext } from '../controlPlane'
 
 /**
@@ -28,6 +29,8 @@ export function registerAgentConfigRoutes(app: Express, options: AgentConfigRout
     isLegacyGenericRecruitRuntime,
     isLegacyGenericRecruitSoul,
     modelAuthProblem,
+    modelSelectionForActiveBillingRoute,
+    modelSelectionBlocked,
     normalizeAgentMdsState,
     normalizeAgentToolsConfig,
     normalizeModelWithFallback,
@@ -67,7 +70,10 @@ export function registerAgentConfigRoutes(app: Express, options: AgentConfigRout
     return apiSuccess(res, {
       agentId: target.id,
       path: agentLocalConfigPath(target.id),
-      config: local,
+      config: {
+        ...local,
+        model: modelSelectionForActiveBillingRoute?.(local.model) || local.model,
+      },
     })
   })
 
@@ -297,6 +303,11 @@ export function registerAgentConfigRoutes(app: Express, options: AgentConfigRout
       await fs.mkdir(local.memory.journalDir, { recursive: true })
     }
     if (patch.model) {
+      const requestedModels = [patch.model.primary || local.model.primary, ...(patch.model.fallbacks || local.model.fallbacks)]
+      const blockedModel = requestedModels.find((modelId) => modelSelectionBlocked?.(modelId))
+      if (blockedModel) {
+        return apiFailure(res, 403, 'byok_not_allowed', CREDITS_ONLY_MODEL_ACCESS_MESSAGE, { modelId: blockedModel })
+      }
       const authProblem = modelAuthProblem(patch.model.primary || local.model.primary)
       if (authProblem) {
         return apiFailure(res, 409, 'invalid_payload', `Missing auth for ${authProblem.provider}. Connect this provider before saving the model.`, {
@@ -359,6 +370,10 @@ export function registerAgentConfigRoutes(app: Express, options: AgentConfigRout
       local.soul = { ...local.soul, ...soulPatch }
     }
     if (patch.auth?.providers) {
+      const blockedProvider = modelSelectionBlocked?.('__provider_auth__')
+      if (blockedProvider) {
+        return apiFailure(res, 403, 'byok_not_allowed', CREDITS_ONLY_MODEL_ACCESS_MESSAGE)
+      }
       local.auth.providers = { ...local.auth.providers, ...patch.auth.providers }
     }
     if (patch.sandbox) {
@@ -406,7 +421,10 @@ export function registerAgentConfigRoutes(app: Express, options: AgentConfigRout
       return apiSuccess(res, {
         agentId: target.id,
         path: agentLocalConfigPath(target.id),
-        config: local,
+        config: {
+          ...local,
+          model: modelSelectionForActiveBillingRoute?.(local.model) || local.model,
+        },
         unchanged: true,
         modelOverrideCleanup: null,
         modelSessionReset: null,
@@ -454,7 +472,10 @@ export function registerAgentConfigRoutes(app: Express, options: AgentConfigRout
     return apiSuccess(res, {
       agentId: target.id,
       path: agentLocalConfigPath(target.id),
-      config: local,
+      config: {
+        ...local,
+        model: modelSelectionForActiveBillingRoute?.(local.model) || local.model,
+      },
       contextSessionReset,
       modelOverrideCleanup,
       modelSessionReset,
@@ -477,7 +498,7 @@ export function registerAgentConfigRoutes(app: Express, options: AgentConfigRout
         defaultsSandbox: config.agents?.defaults?.sandbox,
       })
       const model = normalizeModelWithFallback(local.model, defaults)
-      return apiSuccess(res, { model })
+      return apiSuccess(res, { model: modelSelectionForActiveBillingRoute?.(model) || model })
     } catch (error) {
       return apiFailure(res, 500, 'model_operation_failed', 'Failed to read agent model', { agentId: requestedAgent, detail: String(error) })
     }
@@ -506,6 +527,11 @@ export function registerAgentConfigRoutes(app: Express, options: AgentConfigRout
       const { config, target } = await getAgentById(requestedAgent)
       if (!target) return apiFailure(res, 404, 'agent_not_found', 'Agent not found', { agentId: requestedAgent })
       const agentId = target.id
+
+      const blockedModel = [parsed.data.primary, ...(parsed.data.fallbacks || [])].find((modelId) => modelSelectionBlocked?.(modelId))
+      if (blockedModel) {
+        return apiFailure(res, 403, 'byok_not_allowed', CREDITS_ONLY_MODEL_ACCESS_MESSAGE, { modelId: blockedModel })
+      }
 
       const local = await ensureAgentLocalConfig({
         agentId,

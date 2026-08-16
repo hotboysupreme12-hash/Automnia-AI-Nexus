@@ -92,6 +92,17 @@ function portraitSrcForAgent(agent: OpenClawAgent) {
   return agentPortraitSrc(agent.id, agent.portrait)
 }
 
+function shortModelName(modelId = '') {
+  if (!modelId) return 'Unassigned'
+  const parts = modelId.split('/').filter(Boolean)
+  return parts[parts.length - 1] || modelId
+}
+
+function shortProviderName(modelId = '') {
+  if (!modelId) return 'Unassigned'
+  return modelId.split('/').filter(Boolean)[0] || 'Unassigned'
+}
+
 interface AgentCardProps {
   agent: OpenClawAgent
   isSelected: boolean
@@ -101,17 +112,25 @@ interface AgentCardProps {
   isBusy?: boolean
   missionRunning?: boolean
   cardTheme: AgentCardTheme
-  displayMode?: 'showcase' | 'grid6' | 'grid8' | 'grid10' | 'list'
+  displayMode?: 'grid8' | 'grid10' | 'list'
+  activityStatus?: {
+    label: string
+    detail: string
+    kind: 'working' | 'queued' | 'approval' | 'reply'
+  }
 }
 
-export const AgentCard = memo(function AgentCard({ agent, isSelected, slotNumber, partyIndex, inParty, isBusy = false, missionRunning, cardTheme, displayMode = 'showcase' }: AgentCardProps) {
+export const AgentCard = memo(function AgentCard({ agent, isSelected, slotNumber, partyIndex, inParty, isBusy = false, missionRunning, cardTheme, displayMode = 'grid8', activityStatus }: AgentCardProps) {
   const selectAgent = useNexusStore((s) => s.selectAgent)
   const togglePartyMember = useNexusStore((s) => s.togglePartyMember)
   const openEditor = useNexusStore((s) => s.openEditor)
   const [failedPortraitSrc, setFailedPortraitSrc] = useState<string | null>(null)
 
+  const listMode = displayMode === 'list'
   const busy = isBusy
   const inP = Boolean(inParty)
+  const liveStatusLabel = activityStatus?.label || 'Working'
+  const liveStatusDetail = activityStatus?.detail || `${agent.name} is handling an active turn.`
   const displaySlot = slotNumber ?? (partyIndex != null ? partyIndex + 1 : 0)
   const thinkingMode = agent.runtimePolicy?.thinkingDefault && agent.runtimePolicy.thinkingDefault !== 'off'
   const portraitSrc = portraitSrcForAgent(agent)
@@ -147,10 +166,32 @@ export const AgentCard = memo(function AgentCard({ agent, isSelected, slotNumber
     selectAgent(agent.id, { toggle: true })
   }
 
-  const listMode = displayMode === 'list'
+  const handleCardPointerMove = (event: React.PointerEvent<HTMLDivElement>) => {
+    if (event.pointerType === 'touch') return
+    const bounds = event.currentTarget.getBoundingClientRect()
+    const x = Math.max(0, Math.min(100, ((event.clientX - bounds.left) / bounds.width) * 100))
+    const y = Math.max(0, Math.min(100, ((event.clientY - bounds.top) / bounds.height) * 100))
+    const maxTilt = listMode ? 1.1 : 5.5
+    const rotateX = ((50 - y) / 50) * maxTilt
+    const rotateY = ((x - 50) / 50) * maxTilt
+
+    event.currentTarget.style.setProperty('--agent-card-pointer-x', `${x}%`)
+    event.currentTarget.style.setProperty('--agent-card-pointer-y', `${y}%`)
+    event.currentTarget.style.setProperty('--agent-card-rotate-x', `${rotateX.toFixed(2)}deg`)
+    event.currentTarget.style.setProperty('--agent-card-rotate-y', `${rotateY.toFixed(2)}deg`)
+  }
+
+  const handleCardPointerLeave = (event: React.PointerEvent<HTMLDivElement>) => {
+    event.currentTarget.style.setProperty('--agent-card-pointer-x', '50%')
+    event.currentTarget.style.setProperty('--agent-card-pointer-y', '50%')
+    event.currentTarget.style.setProperty('--agent-card-rotate-x', '0deg')
+    event.currentTarget.style.setProperty('--agent-card-rotate-y', '0deg')
+  }
+
+  const simpleMode = displayMode === 'grid8'
   const denseMode = displayMode === 'grid10'
   const compactMode = displayMode === 'grid8' || denseMode
-  const cardMinHeight = listMode ? 'min-h-[124px]' : denseMode ? 'min-h-[284px]' : compactMode ? 'min-h-[310px]' : 'min-h-[390px]'
+  const cardMinHeight = listMode ? 'min-h-[124px]' : denseMode ? 'min-h-[360px]' : compactMode ? 'min-h-[310px]' : 'min-h-[390px]'
   const a = useMemo(() => deriveCardAttributes(agent), [agent])
   const topStats = useMemo(
     () => (Object.keys(a) as Array<keyof typeof a>)
@@ -168,7 +209,31 @@ export const AgentCard = memo(function AgentCard({ agent, isSelected, slotNumber
     [agent.mds.capabilities],
   )
   const statCells = topStats.slice(0, 3)
-  const visibleCapabilities = (denseMode || listMode || compactMode ? capabilities.slice(0, 1) : capabilities.slice(0, 2))
+  const visibleCapabilities = denseMode
+    ? capabilities.slice(0, 3)
+    : listMode
+      ? capabilities.slice(0, 4)
+      : compactMode
+        ? capabilities.slice(0, 1)
+        : capabilities.slice(0, 2)
+  const toolCount = agent.mds.toolAccess.length + (agent.toolsPolicy?.allow?.length || 0)
+  const heartbeatSeconds = Math.round((agent.heartbeat.tickIntervalMs || 0) / 1_000)
+  const listDetailItems = [
+    { label: 'Provider', value: shortProviderName(agent.model?.primary) },
+    { label: 'Model', value: shortModelName(agent.model?.primary) },
+    { label: 'Timing', value: heartbeatSeconds > 0 ? `${heartbeatSeconds}s` : 'off' },
+    { label: 'Tools', value: String(toolCount) },
+    { label: 'Skills', value: String(agent.unlockedSkills.length) },
+    { label: 'Sandbox', value: agent.sandbox?.mode || 'default' },
+  ]
+  const detailItems = denseMode ? [
+    { label: 'Model', value: shortModelName(agent.model?.primary) },
+    { label: 'Thinking', value: agent.runtimePolicy?.thinkingDefault || 'off' },
+    { label: 'Heartbeat', value: heartbeatSeconds > 0 ? `${heartbeatSeconds}s` : 'off' },
+    { label: 'Tools', value: String(toolCount) },
+    { label: 'Sandbox', value: agent.sandbox?.mode || 'default' },
+    { label: 'Fallbacks', value: String(agent.model?.fallbacks?.length || 0) },
+  ] : []
 
   return (
     <div
@@ -179,6 +244,7 @@ export const AgentCard = memo(function AgentCard({ agent, isSelected, slotNumber
       data-agent-display-mode={displayMode}
       data-agent-in-party={inP ? 'true' : 'false'}
       data-agent-running={busy ? 'true' : 'false'}
+      data-agent-activity={activityStatus?.kind || (busy ? 'working' : 'idle')}
       role="button"
       tabIndex={missionRunning && !inP ? -1 : 0}
       aria-pressed={isSelected}
@@ -189,40 +255,28 @@ export const AgentCard = memo(function AgentCard({ agent, isSelected, slotNumber
       onDoubleClick={handleDoubleClick}
       onContextMenu={handleContextMenu}
       onKeyDown={handleCardKeyDown}
+      onPointerMove={handleCardPointerMove}
+      onPointerLeave={handleCardPointerLeave}
       className={[
-        'agent-card-shell agent-card-pro relative flex h-full cursor-pointer border p-0 transition-all duration-300 select-none overflow-hidden group/card',
+        'agent-card-shell agent-card-pro agent-card-3d relative flex h-full cursor-pointer border p-0 select-none overflow-visible',
         listMode ? 'flex-row' : 'flex-col',
         cardMinHeight,
         'border-white/[0.12] bg-[#101214]',
-        isSelected ? 'ring-2 ring-amber-300/55 !border-amber-200/60 z-10 shadow-[0_0_44px_-18px_rgba(214,169,74,0.58),0_22px_58px_-46px_rgba(214,169,74,0.72)]' : '',
-        'hover:-translate-y-0.5 hover:z-10',
+        isSelected ? 'ring-2 ring-amber-300/55 !border-amber-200/60 z-10' : '',
       ].join(' ')}
     >
-      <div className={[
-        'pointer-events-none absolute inset-0 z-[1] opacity-90',
-        'agent-card-rarity-wash',
-      ].join(' ')} />
-      <div className="agent-card-accent-line pointer-events-none absolute inset-x-0 top-0 z-[6] h-[3px]" />
-      <div className="agent-card-grid pointer-events-none absolute inset-0 z-[1]" />
-      <div className="agent-card-foil pointer-events-none absolute inset-0 z-[2]" />
-      <div className="agent-card-inner-frame pointer-events-none absolute z-[3]" />
-
       <div className={listMode ? 'agent-card-media-wrap relative z-10 w-[136px] shrink-0 p-3 pr-0' : denseMode ? 'agent-card-media-wrap relative z-10 px-3 pt-3' : compactMode ? 'agent-card-media-wrap relative z-10 px-3.5 pt-3.5' : 'agent-card-media-wrap relative z-10 px-4 pt-4'}>
         <div className={[
-          'agent-card-media relative w-full overflow-hidden border border-white/[0.08] shadow-[0_20px_50px_-34px_rgba(0,0,0,0.92)] transition-transform duration-300',
+          'agent-card-media relative w-full overflow-hidden border border-white/[0.08]',
           listMode ? 'h-full min-h-[124px]' : denseMode ? 'aspect-[16/11]' : compactMode ? 'aspect-[16/11]' : 'aspect-[16/10]',
           'portrait-stage',
         ].join(' ')}>
-          <div className="pointer-events-none absolute inset-0 z-10 ring-1 ring-inset ring-white/[0.08]" />
-          <div className="pointer-events-none absolute inset-[5px] z-10 ring-1 ring-inset ring-white/[0.055]" />
-          <div className="portrait-corners" />
-
           {showPortrait ? (
             <div className="relative h-full w-full bg-slate-950">
               <img
                 src={portraitSrc}
                 alt={agent.name}
-                className="agent-card-portrait-img h-full w-full object-cover transition duration-500 group-hover/card:scale-[1.035]"
+                className="agent-card-portrait-img h-full w-full object-cover"
                 style={{ objectPosition: agent.portraitFocusY != null ? `center ${agent.portraitFocusY}%` : 'center 38%' }}
                 loading="lazy"
                 onError={() => setFailedPortraitSrc(portraitSrc || null)}
@@ -230,28 +284,22 @@ export const AgentCard = memo(function AgentCard({ agent, isSelected, slotNumber
             </div>
           ) : (
             <div className="agent-card-placeholder-stage flex h-full w-full items-center justify-center bg-gradient-to-br from-slate-800 via-slate-900 to-slate-950">
-              <div className="agent-card-initials flex h-20 w-20 items-center justify-center border border-white/[0.10] bg-white/[0.04] shadow-inner">
+              <div className="agent-card-initials flex h-20 w-20 items-center justify-center border border-white/[0.10] bg-white/[0.04]">
                 <span className="text-3xl font-black text-slate-300/80">{initials(agent.name)}</span>
               </div>
             </div>
           )}
 
-          <div className="agent-card-media-shade pointer-events-none absolute inset-0 z-10" />
-          <div className="agent-card-media-top absolute left-3 right-3 top-3 z-20 flex items-start justify-between gap-2">
-            <div className="flex min-w-0 flex-wrap gap-1.5">
-              <span className="agent-card-badge truncate border px-2 py-1 text-[8px] font-black uppercase leading-none">
-                {agent.rarity || 'common'}
-              </span>
-              {inP && (
-                <span className="agent-card-badge agent-card-badge-slot truncate border px-2 py-1 text-[8px] font-black uppercase leading-none">
-                  Slot {displaySlot}
-                </span>
-              )}
-            </div>
+          <div className="agent-card-media-top absolute left-3 right-3 top-3 z-20 flex items-start justify-end gap-2">
             {busy && (
-              <span className="agent-card-status-pill is-live shrink-0">
+              <span
+                className="agent-card-status-pill is-live shrink-0"
+                data-status-kind={activityStatus?.kind || 'working'}
+                title={liveStatusDetail}
+                aria-label={`${agent.name}: ${liveStatusLabel}. ${liveStatusDetail}`}
+              >
                 <span aria-hidden="true" />
-                Running
+                {liveStatusLabel}
               </span>
             )}
           </div>
@@ -267,13 +315,25 @@ export const AgentCard = memo(function AgentCard({ agent, isSelected, slotNumber
             <h3 className={`agent-card-name mt-1.5 ${listMode ? 'truncate' : 'line-clamp-2'} text-[18px] font-black leading-tight text-slate-50`}>
               {agent.name}
             </h3>
-            <p className={`${listMode ? 'line-clamp-1' : 'line-clamp-2'} agent-card-role mt-1 min-w-0 text-[11px] font-semibold leading-snug text-white/72`}>
+            <p
+              className="agent-card-role mt-1 min-w-0 truncate text-[11px] font-semibold leading-snug text-white/72"
+              title={agent.role}
+              aria-label={`Role: ${agent.role}`}
+            >
               {agent.role}
             </p>
+            <span
+              className="agent-card-badge agent-card-rarity-badge mt-2 inline-flex max-w-full items-center truncate border px-2 py-1 text-[8px] font-black uppercase leading-none"
+              aria-label={`Rarity: ${agent.rarity || 'common'}`}
+            >
+              {agent.rarity || 'common'}
+            </span>
           </div>
-          <div className="agent-card-level-pill shrink-0 border px-2.5 py-2 text-right shadow-xl backdrop-blur">
-            <p className="text-[8px] font-black uppercase leading-none text-white/45">LV</p>
-            <p className="mt-1 text-[20px] font-black leading-none text-white tabular-nums">{agent.level}</p>
+          <div className="agent-card-heading-actions flex shrink-0 items-start gap-2">
+            <div className="agent-card-level-pill shrink-0 border px-2.5 py-2 text-center">
+              <p className="text-[8px] font-black uppercase leading-none text-white/45">LV</p>
+              <p className="mt-1 text-[20px] font-black leading-none text-white tabular-nums">{agent.level}</p>
+            </div>
           </div>
         </div>
 
@@ -287,14 +347,54 @@ export const AgentCard = memo(function AgentCard({ agent, isSelected, slotNumber
         </div>
 
         <div className={listMode ? 'agent-card-tags mb-2 flex min-h-0 flex-wrap items-start gap-1 overflow-hidden' : denseMode ? 'agent-card-tags mb-2.5 flex min-h-[32px] flex-wrap items-start gap-1 overflow-hidden' : 'agent-card-tags mb-3 flex min-h-[38px] flex-wrap items-start gap-1 overflow-hidden'}>
-          <span>{BEHAVIOR_LABELS[agent.behaviorProfile] ?? 'Agent'}</span>
+          <span className="agent-card-tag agent-card-tag--behavior">{BEHAVIOR_LABELS[agent.behaviorProfile] ?? 'Agent'}</span>
           {visibleCapabilities.map((capability) => (
-            <span key={capability}>{capability}</span>
+            <span className="agent-card-tag" key={capability}>{capability}</span>
           ))}
+          {inP && displaySlot > 0 && (
+            <span className="agent-card-tag agent-card-tag--slot" aria-label={`Active party slot ${displaySlot}`}>
+              Slot {displaySlot}
+            </span>
+          )}
           {thinkingMode && !compactMode && !listMode && <span>Think {agent.runtimePolicy?.thinkingDefault}</span>}
         </div>
 
-        <div className="agent-card-actions mt-auto grid grid-cols-[1fr_auto] gap-2 border-t border-white/[0.07] pt-3">
+        {listMode && (
+          <div className="agent-card-list-details" aria-label="Agent runtime and configuration summary">
+            {listDetailItems.map((item) => (
+              <div key={item.label}>
+                <span>{item.label}</span>
+                <strong title={item.value}>{item.value}</strong>
+              </div>
+            ))}
+          </div>
+        )}
+
+        {simpleMode && (
+          <div className="agent-card-simple-meta" aria-label="Agent model and runtime summary">
+            <div className="agent-card-simple-meta__model" title={agent.model?.primary || 'No primary model assigned'}>
+              <span>Model</span>
+              <strong>{shortModelName(agent.model?.primary)}</strong>
+            </div>
+            <div className="agent-card-simple-meta__tools" title={`${toolCount} tools available`}>
+              <span>Tools</span>
+              <strong>{toolCount}</strong>
+            </div>
+          </div>
+        )}
+
+        {denseMode && (
+          <div className="agent-card-details" aria-label="Detailed agent configuration">
+            {detailItems.map((item) => (
+              <div key={item.label}>
+                <span>{item.label}</span>
+                <strong title={item.value}>{item.value}</strong>
+              </div>
+            ))}
+          </div>
+        )}
+
+        <div className={`agent-card-actions mt-auto grid gap-2 border-t border-white/[0.07] pt-3 ${listMode ? 'grid-cols-[minmax(0,1fr)_auto]' : 'grid-cols-[1fr_auto]'}`}>
           <button
             type="button"
             aria-label={inP ? `Remove ${agent.name} from active party` : `Deploy ${agent.name} to active party`}
@@ -305,15 +405,31 @@ export const AgentCard = memo(function AgentCard({ agent, isSelected, slotNumber
             <span aria-hidden="true" className="agent-card-action-icon">{inP ? '-' : '+'}</span>
             {inP ? 'Remove' : 'Deploy'}
           </button>
-          <button
-            type="button"
-            aria-label={`Edit ${agent.name}`}
-            onClick={(e) => { e.stopPropagation(); openEditor(agent.id) }}
-            className="agent-card-action-secondary inline-flex items-center justify-center border px-3 py-2 text-[9px] font-black uppercase leading-none transition-all duration-200"
-            title="Configure agent"
-          >
-            Edit
-          </button>
+          {!listMode ? (
+            <button
+              type="button"
+              aria-label={`Edit ${agent.name}`}
+              onClick={(e) => { e.stopPropagation(); openEditor(agent.id) }}
+              className="agent-card-action-secondary inline-flex items-center justify-center border px-3 py-2 text-[9px] font-black uppercase leading-none transition-all duration-200"
+              title="Configure agent"
+            >
+              Edit
+            </button>
+          ) : (
+            <button
+              type="button"
+              aria-label={`Edit ${agent.name}`}
+              title={`Edit ${agent.name}`}
+              onClick={(e) => { e.stopPropagation(); openEditor(agent.id) }}
+              className="agent-card-list-edit agent-card-action-secondary inline-flex items-center justify-center gap-1.5 border px-2.5 py-2 text-[9px] font-black uppercase leading-none transition-all duration-200"
+            >
+              <svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" className="size-3.5">
+                <path d="m4 16.5-.8 3.3 3.3-.8L17.9 7.6a2.3 2.3 0 0 0-3.3-3.3L4 16.5Z" />
+                <path d="m13.5 5.5 5 5" />
+              </svg>
+              <span>Edit</span>
+            </button>
+          )}
         </div>
       </div>
     </div>

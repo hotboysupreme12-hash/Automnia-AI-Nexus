@@ -252,6 +252,8 @@ test('reports missing credential states for API-key, OAuth, and Vertex providers
     assert.equal(anthropicStatus.configured, false)
     assert.equal(anthropicStatus.stored, false)
     assert.equal(anthropicStatus.apiKey.configured, false)
+    assert.equal(anthropicStatus.oauth.supported, true)
+    assert.equal(anthropicStatus.oauth.available, true)
 
     const deepSeekStatus = harness.service.providerAuthStatus('deepseek')
     assert.equal(deepSeekStatus.configured, true)
@@ -274,6 +276,38 @@ test('reports missing credential states for API-key, OAuth, and Vertex providers
     assert.equal(vertexStatus.stored, false)
     assert.equal(vertexStatus.gcloud.configured, false)
     assert.ok(vertexStatus.gcloud.missing.some((entry: string) => entry.includes('Install Google Cloud CLI')))
+  } finally {
+    await harness.cleanup()
+  }
+})
+
+test('exposes one shared Google OAuth connection for Vertex while requiring a project for readiness', async () => {
+  const harness = await createHarness({
+    googleVertexGcloudStatus: () => ({
+      supported: true,
+      installed: false,
+      authenticated: true,
+      configured: false,
+      missing: ['Set a Google Cloud project.'],
+    }),
+    isGoogleVertexLocalOAuthConfigured: (_env, options) => options?.probeGcloud !== true,
+  })
+  try {
+    await harness.service.persistProviderOAuth('google', {
+      accessToken: 'google-access-token',
+      refreshToken: 'google-refresh-token',
+      email: 'operator@example.test',
+      projectId: 'vertex-project',
+      expiresAt: Date.now() + 3_600_000,
+    })
+
+    const vertexStatus = harness.service.providerAuthStatus('google-vertex')
+    assert.equal(vertexStatus.oauth.supported, true)
+    assert.equal(vertexStatus.oauth.configured, true)
+    assert.equal(vertexStatus.oauth.email, 'operator@example.test')
+    assert.equal(vertexStatus.oauth.projectId, 'vertex-project')
+    assert.equal(vertexStatus.configured, true)
+    assert.doesNotMatch(JSON.stringify(vertexStatus), /google-access-token|google-refresh-token/)
   } finally {
     await harness.cleanup()
   }

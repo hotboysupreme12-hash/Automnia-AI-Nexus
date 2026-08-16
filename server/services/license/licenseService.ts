@@ -4,7 +4,13 @@ export const DEFAULT_LICENSE_API_URL = AUTOMNIA_PUBLIC_CLOUD_URL
 const ACTIVATION_TIMEOUT_MS = 10_000
 const KNOWLEDGE_TIMEOUT_MS = 45_000
 
-export type HostedUsagePriority = 'automnia_first' | 'provider_first' | 'byok_only'
+export type HostedUsagePriority =
+  | 'automnia_only'
+  | 'provider_first'
+  | 'automnia_first_with_provider_fallback'
+  /** Legacy values kept readable so existing local records can be migrated. */
+  | 'automnia_first'
+  | 'byok_only'
 
 export type LicenseStatus = {
   active: boolean
@@ -20,6 +26,22 @@ export type LicenseStatus = {
   creditBalanceUpdatedAt: string | null
   activatedAt: string | null
   verifiedAt: string | null
+}
+
+export type LicenseTrafficGate = {
+  active: boolean
+  mode: 'hosted_credits' | 'byok' | null
+  tier: string | null
+  creditsOnly: boolean
+  permanentAccess: boolean
+  providerAccessAllowed: boolean
+  localAiAllowed: boolean
+  messageTrafficAllowed: boolean
+  creditBalance: number | null
+  creditState: 'not_required' | 'available' | 'exhausted' | 'unknown'
+  blocked: boolean
+  blockCode: 'license_required' | 'credits_exhausted' | 'credit_balance_unverified' | null
+  blockMessage: string | null
 }
 
 export type SubscriptionCheckout = {
@@ -85,7 +107,11 @@ function validCheckoutUrl(value: unknown): value is string {
 }
 
 function validUsagePriority(value: unknown): value is HostedUsagePriority {
-  return value === 'automnia_first' || value === 'provider_first' || value === 'byok_only'
+  return value === 'automnia_only'
+    || value === 'provider_first'
+    || value === 'automnia_first_with_provider_fallback'
+    || value === 'automnia_first'
+    || value === 'byok_only'
 }
 
 function tierAllowsByok(tier: string | null | undefined) {
@@ -105,7 +131,7 @@ function tierRank(tier: string | null | undefined) {
 }
 
 function permanentAccessFor(record: { permanentAccess?: boolean; mode?: 'hosted_credits' | 'byok' | null; tier?: string | null }) {
-  return !isStarterSubscriptionOnly(record) && (record.permanentAccess === true || record.mode === 'byok' || tierRank(record.tier) >= 2)
+  return !creditsOnlyEntitlement(record) && (record.permanentAccess === true || record.mode === 'byok' || tierRank(record.tier) >= 2)
 }
 
 function effectiveMode(record: Pick<StoredLicense, 'mode' | 'tier'>): 'hosted_credits' | 'byok' {
@@ -118,16 +144,35 @@ function isStarterSubscriptionOnly(record: {
   planPriceCents?: number | null
 }) {
   const normalized = String(record.tier || '').trim().toLowerCase().replace(/[\s-]+/g, '_')
-  const isStarterTier = normalized === 'starter' || normalized === 'cloud_starter_subscription' || (normalized.includes('starter') && !normalized.includes('pro'))
+  const isStarterTier = normalized === 'starter'
+    || normalized === 'cloud_starter_subscription'
+    || (normalized.includes('starter') && !normalized.includes('pro'))
+    || (record.planPriceCents === 1_999 && !normalized)
   const mode = record.mode || 'hosted_credits'
   return mode === 'hosted_credits' && isStarterTier
 }
 
+function creditsOnlyEntitlement(record: {
+  mode?: 'hosted_credits' | 'byok' | null
+  tier?: string | null
+  planPriceCents?: number | null
+}) {
+  const normalized = String(record.tier || '').trim().toLowerCase().replace(/[\s-]+/g, '_')
+  const refillOnly = normalized === 'credit_pack_topup' || normalized === 'credit_refill'
+  return (record.mode || 'hosted_credits') === 'hosted_credits' && (isStarterSubscriptionOnly(record) || refillOnly)
+}
+
 function effectiveUsagePriority(record: StoredLicense, mode = effectiveMode(record)): HostedUsagePriority {
-  if (isStarterSubscriptionOnly(record)) return 'automnia_first'
+  if (creditsOnlyEntitlement(record)) return 'automnia_only'
+  // Migrate the two removed labels without allowing an old desktop setting
+  // to re-enable silent provider substitution. The old Automnia-first label
+  // is now credits-only; the old provider-only label becomes the supported
+  // provider-plus-Automnia route.
+  if (record.usagePriority === 'automnia_first') return 'automnia_only'
+  if (record.usagePriority === 'byok_only') return 'provider_first'
   return validUsagePriority(record.usagePriority)
     ? record.usagePriority
-    : mode === 'byok' && !(validCreditBalance(record.creditBalance) && record.creditBalance > 0) ? 'provider_first' : 'automnia_first'
+    : mode === 'byok' && !(validCreditBalance(record.creditBalance) && record.creditBalance > 0) ? 'provider_first' : 'automnia_only'
 }
 
 function publicStatus(record: StoredLicense | null): LicenseStatus {
@@ -155,7 +200,7 @@ function publicStatus(record: StoredLicense | null): LicenseStatus {
     tier: record.tier || null,
     mode,
     planPriceCents: validPlanPriceCents(record.planPriceCents) ? record.planPriceCents : null,
-    byokAllowed: !isStarterSubscriptionOnly(record) && (record.byokAllowed === true || tierAllowsByok(record.tier)),
+    byokAllowed: !creditsOnlyEntitlement(record) && (record.byokAllowed === true || tierAllowsByok(record.tier)),
     permanentAccess: permanentAccessFor(record),
     subscriptionStatus: record.subscriptionStatus || null,
     usagePriority: effectiveUsagePriority(record, mode),
@@ -166,6 +211,67 @@ function publicStatus(record: StoredLicense | null): LicenseStatus {
   }
 }
 
+export function resolveLicenseTrafficGate(status: LicenseStatus): LicenseTrafficGate {
+  if (!status.active || !status.mode) {
+    return {
+      active: false,
+      mode: null,
+      tier: null,
+      creditsOnly: false,
+      permanentAccess: false,
+      providerAccessAllowed: false,
+      localAiAllowed: false,
+      messageTrafficAllowed: false,
+      creditBalance: null,
+      creditState: 'unknown',
+      blocked: true,
+      blockCode: 'license_required',
+      blockMessage: 'Activate your Automnia license before sending messages or using Gateway and channel traffic.',
+    }
+  }
+
+  const creditsOnly = creditsOnlyEntitlement(status)
+  // This flag is derived from the provisioner-verified license record. It is
+  // intentionally the only permanent bypass for hosted-credit enforcement.
+  // Starter/refill records are normalized to false before reaching this gate.
+  const permanentAccess = !creditsOnly && status.permanentAccess === true
+  const providerAccessAllowed = !creditsOnly && permanentAccess
+  const localAiAllowed = !creditsOnly
+  const requiresCredits = !permanentAccess && status.mode === 'hosted_credits'
+  const creditState: LicenseTrafficGate['creditState'] = !requiresCredits
+    ? 'not_required'
+    : status.creditBalance === null
+      ? 'unknown'
+      : status.creditBalance > 0
+        ? 'available'
+        : 'exhausted'
+  const blocked = requiresCredits && creditState !== 'available'
+  const blockCode = blocked
+    ? creditState === 'exhausted' ? 'credits_exhausted' : 'credit_balance_unverified'
+    : null
+  const blockMessage = blockCode === 'credits_exhausted'
+    ? 'Automnia credits are out of tokens. Messages, Gateway traffic, channels, local AI, and cron runs are paused until your credit balance is restored.'
+    : blockCode === 'credit_balance_unverified'
+      ? 'Automnia could not verify an available credit balance. Messages, Gateway traffic, channels, local AI, and cron runs are paused until Account & License is refreshed.'
+      : null
+
+  return {
+    active: true,
+    mode: status.mode,
+    tier: status.tier,
+    creditsOnly,
+    permanentAccess,
+    providerAccessAllowed,
+    localAiAllowed,
+    messageTrafficAllowed: !blocked,
+    creditBalance: status.creditBalance,
+    creditState,
+    blocked,
+    blockCode,
+    blockMessage,
+  }
+}
+
 function storedLicense(value: unknown): StoredLicense | null {
   if (!value || typeof value !== 'object' || Array.isArray(value)) return null
   const record = value as Record<string, unknown>
@@ -173,7 +279,7 @@ function storedLicense(value: unknown): StoredLicense | null {
   const mode = record.mode === 'byok' ? 'byok' : record.mode === 'hosted_credits' ? 'hosted_credits' : null
   const tier = typeof record.tier === 'string' ? record.tier : null
   const planPriceCents = validPlanPriceCents(record.planPriceCents) ? record.planPriceCents : null
-  const starterSubscriptionOnly = isStarterSubscriptionOnly({ mode, tier, planPriceCents })
+  const creditsOnly = creditsOnlyEntitlement({ mode, tier, planPriceCents })
   return {
     active: true,
     licenseKey: record.licenseKey,
@@ -181,8 +287,8 @@ function storedLicense(value: unknown): StoredLicense | null {
     tier,
     mode,
     planPriceCents,
-    byokAllowed: !starterSubscriptionOnly && (record.byokAllowed === true || mode === 'byok' || tierAllowsByok(tier)),
-    permanentAccess: !starterSubscriptionOnly && (record.permanentAccess === true || mode === 'byok' || tierRank(tier) >= 2),
+    byokAllowed: !creditsOnly && (record.byokAllowed === true || mode === 'byok' || tierAllowsByok(tier)),
+    permanentAccess: !creditsOnly && (record.permanentAccess === true || mode === 'byok' || tierRank(tier) >= 2),
     subscriptionStatus: typeof record.subscriptionStatus === 'string' ? record.subscriptionStatus : null,
     usagePriority: validUsagePriority(record.usagePriority) ? record.usagePriority : null,
     creditBalance: validCreditBalance(record.creditBalance) ? record.creditBalance : null,
@@ -213,7 +319,7 @@ export function createLicenseService(options: LicenseServiceOptions) {
       : fallback.mode
     const tier = typeof payload.tier === 'string' ? payload.tier : fallback.tier
     const planPriceCents = validPlanPriceCents(payload.planPriceCents) ? payload.planPriceCents : fallback.planPriceCents
-    const starterSubscriptionOnly = isStarterSubscriptionOnly({ mode, tier, planPriceCents })
+    const creditsOnly = creditsOnlyEntitlement({ mode, tier, planPriceCents })
     return {
       active: true,
       licenseKey: typeof payload.canonicalLicenseKey === 'string' && payload.canonicalLicenseKey.trim()
@@ -223,21 +329,21 @@ export function createLicenseService(options: LicenseServiceOptions) {
       tier,
       mode,
       planPriceCents,
-      byokAllowed: !starterSubscriptionOnly && (payload.byokAllowed === true || fallback.byokAllowed === true || mode === 'byok' || tierAllowsByok(tier)),
-      permanentAccess: !starterSubscriptionOnly && (payload.permanentAccess === true || fallback.permanentAccess === true || mode === 'byok' || tierRank(tier) >= 2),
+      byokAllowed: !creditsOnly && (payload.byokAllowed === true || fallback.byokAllowed === true || mode === 'byok' || tierAllowsByok(tier)),
+      permanentAccess: !creditsOnly && (payload.permanentAccess === true || fallback.permanentAccess === true || mode === 'byok' || tierRank(tier) >= 2),
       subscriptionStatus: typeof payload.subscriptionStatus === 'string' ? payload.subscriptionStatus : fallback.subscriptionStatus,
       // The desktop preference is durable local state. Provisioner/account
       // payloads currently omit the user's selected route or may contain the
       // historical Automnia-first default, so never replace an explicit local
-      // choice during refresh/account reconciliation. A starter subscription
+      // choice during refresh/account reconciliation. A credits-only entitlement
       // remains the one intentional lock.
-      usagePriority: starterSubscriptionOnly
-        ? 'automnia_first'
+      usagePriority: creditsOnly
+        ? 'automnia_only'
         : validUsagePriority(fallback.usagePriority)
           ? fallback.usagePriority
           : validUsagePriority(payload.usagePriority)
             ? payload.usagePriority
-            : mode === 'byok' && !(validCreditBalance(reportedCreditBalance) && reportedCreditBalance > 0) ? 'provider_first' : 'automnia_first',
+            : mode === 'byok' && !(validCreditBalance(reportedCreditBalance) && reportedCreditBalance > 0) ? 'provider_first' : 'automnia_only',
       creditBalance: reportedCreditBalance,
       creditBalanceUpdatedAt: validCreditBalance(payload.creditBalance) ? now() : fallback.creditBalanceUpdatedAt,
       activatedAt: typeof payload.activatedAt === 'string' ? payload.activatedAt : fallback.activatedAt || now(),
@@ -324,17 +430,16 @@ export function createLicenseService(options: LicenseServiceOptions) {
 
   return {
     getStatus: (): LicenseStatus => publicStatus(current()),
+    getTrafficGate: (): LicenseTrafficGate => resolveLicenseTrafficGate(publicStatus(current())),
     isActive: () => current()?.active === true,
     // Kept server-local: never expose the license key in the browser-facing status response.
     getActiveRelayCredentials: (): { email: string; licenseKey: string; mode: 'hosted_credits'; usagePriority: HostedUsagePriority } | null => {
       const record = current()
       if (!record?.active || !record.email || !record.licenseKey) return null
       const usagePriority = effectiveUsagePriority(record)
-      // A BYOK account is provider-billed unless the user explicitly opts
-      // into Automnia-first. Provider-first must not silently become
-      // provider-then-Automnia when the account is in BYOK mode.
-      if (record.mode === 'byok' && usagePriority !== 'automnia_first') return null
-      if (usagePriority === 'byok_only') return null
+      // BYOK and higher tiers use this same hosted relay when the combined
+      // provider-plus-Automnia route is selected. The route order is explicit
+      // in usagePriority; it must not be inferred from the account mode.
       return {
         email: record.email,
         licenseKey: record.licenseKey,
@@ -343,9 +448,9 @@ export function createLicenseService(options: LicenseServiceOptions) {
       }
     },
     getUsagePriority: (): HostedUsagePriority | null => publicStatus(current()).usagePriority,
-    isUsagePriorityLocked: (): boolean => {
-      const record = current()
-      return Boolean(record?.active && isStarterSubscriptionOnly(record))
+      isUsagePriorityLocked: (): boolean => {
+        const record = current()
+        return Boolean(record?.active && creditsOnlyEntitlement(record))
     },
     activate: async ({ email, licenseKey }: { email: string; licenseKey: string }): Promise<LicenseStatus> => {
       const payload = await verifyWithProvisioner({ email, licenseKey })
@@ -371,8 +476,15 @@ export function createLicenseService(options: LicenseServiceOptions) {
     // loopback service. It is never included in the renderer-facing status.
     adoptRemoteAccount: (payload: Record<string, unknown>, licenseKey: string): LicenseStatus => {
       const existing = current()
+      // Account authentication returns the canonical key as a separate
+      // loopback-only value. Feed it through the same reconciliation path as
+      // /api/license/activate so Google sign-in cannot leave a replaced local
+      // key behind.
+      const canonicalPayload = licenseKey.trim()
+        ? { ...payload, canonicalLicenseKey: licenseKey }
+        : payload
       return store(
-        activeRecordFromPayload(payload, {
+        activeRecordFromPayload(canonicalPayload, {
           active: true,
           licenseKey,
           email: typeof payload.email === 'string' ? payload.email : existing?.email || null,
@@ -396,7 +508,7 @@ export function createLicenseService(options: LicenseServiceOptions) {
     recordHostedCreditBalance: (creditBalance: number): LicenseStatus | null => {
       if (!validCreditBalance(creditBalance)) return null
       const record = current()
-      if (!record?.active || effectiveUsagePriority(record) === 'byok_only') return null
+      if (!record?.active) return null
       return store({
         ...record,
         creditBalance,
@@ -409,7 +521,7 @@ export function createLicenseService(options: LicenseServiceOptions) {
       if (!record?.active) return publicStatus(record)
       return store({
         ...record,
-        usagePriority: isStarterSubscriptionOnly(record) ? 'automnia_first' : usagePriority,
+        usagePriority: creditsOnlyEntitlement(record) ? 'automnia_only' : usagePriority,
       }, 'The usage priority could not be saved on this device.')
     },
     refresh: async (): Promise<LicenseStatus> => {

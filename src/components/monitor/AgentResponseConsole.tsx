@@ -1,7 +1,7 @@
 import { memo, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type WheelEvent } from 'react'
 import { apiErrorMessage, apiRequest } from '../../api/client'
 import { abortRuntimeRun, restartGatewayRuntime, useRuntimeSummaryStatus } from '../../hooks/useRuntimeStatus'
-import type { GatewayStabilityStatus, RuntimeRun } from '../../hooks/useRuntimeStatus'
+import type { GatewayStabilityStatus, RuntimeRun, RuntimeStatus } from '../../hooks/useRuntimeStatus'
 import {
   makeCommandConsoleDraftStorageKey,
   readCommandConsoleDraft,
@@ -46,7 +46,7 @@ const RARITY_RING: Record<string, string> = {
   common: 'ring-white/12',
 }
 
-const AUTOMNIA_APP_ICON_SRC = '/brand/automnia-ai-nexus-app-icon.png'
+const AUTOMNIA_RUNTIME_MARK_SRC = '/brand/automnia-ai-nexus-logo-transparent-cropped.png'
 const MESSAGE_RENDER_LIMIT = 60
 const LANE_DIAGNOSTIC_WARN_MS = 10 * 60 * 1000
 const LANE_DIAGNOSTIC_STALLED_MS = 30 * 60 * 1000
@@ -140,8 +140,10 @@ function billingRouteLabel(entry: AgentResponse, hostedCreditsFirst = false): { 
   const modelId = entry.modelId?.trim().toLowerCase() || ''
   const transport = entry.transport?.trim().toLowerCase() || ''
   const selectedRoute = entry.billingRoute || (
-    entry.usagePriority === 'automnia_first'
-      ? 'automnia-first'
+    entry.usagePriority === 'automnia_only' || entry.usagePriority === 'automnia_first'
+      ? 'automnia-only'
+      : entry.usagePriority === 'automnia_first_with_provider_fallback'
+        ? 'automnia-first'
       : entry.usagePriority === 'provider_first'
         ? 'provider-first'
         : entry.usagePriority === 'byok_only'
@@ -151,8 +153,11 @@ function billingRouteLabel(entry: AgentResponse, hostedCreditsFirst = false): { 
   const balance = typeof entry.remainingCredits === 'number' && Number.isFinite(entry.remainingCredits)
     ? `${entry.remainingCredits.toLocaleString('en-US')} credits remaining`
     : 'Balance will refresh after the Automnia Cloud response is confirmed.'
+  if (selectedRoute === 'automnia-only') {
+    return { label: 'Automnia credits', title: `Automnia credits only. ${balance}`, tone: 'success' }
+  }
   if (selectedRoute === 'automnia-first') {
-    return { label: 'Automnia credits', title: `Automnia credits first. ${balance}`, tone: 'success' }
+    return { label: 'Automnia → provider', title: `Automnia credits first, with your provider as fallback. ${balance}`, tone: 'success' }
   }
   if (selectedRoute === 'provider-first') {
     return {
@@ -166,7 +171,7 @@ function billingRouteLabel(entry: AgentResponse, hostedCreditsFirst = false): { 
   }
   const hostedCredits = hostedCreditsFirst || modelId.startsWith('automnia-cloud/') || transport === 'automnia-cloud-relay'
   if (hostedCredits) {
-    return { label: 'Automnia credits', title: `Automnia credits first. ${balance}`, tone: 'success' }
+    return { label: 'Automnia credits', title: `Automnia credits only. ${balance}`, tone: 'success' }
   }
   if (modelId || transport.includes('gateway') || transport.includes('openclaw')) {
     return { label: 'Your provider', title: 'BYOK or /runtime route. The configured provider account bills this request, not Automnia hosted credits.', tone: 'info' }
@@ -208,6 +213,10 @@ function runtimeRunDisplayLabel(run: RuntimeRun) {
   if (run.agentId) return run.agentId
   if (run.command.toLowerCase().includes('gateway chat')) return 'Gateway chat'
   return 'Runtime task'
+}
+
+function isInternalGatewayStartupRun(run: RuntimeRun) {
+  return !run.agentId && /\bopenclaw\s+plugins\s+registry\s+--refresh\b/i.test(run.command)
 }
 
 function runtimeRunCommandPreview(command: string) {
@@ -265,6 +274,85 @@ function timestampMs(value?: string) {
   return Number.isFinite(parsed) ? parsed : 0
 }
 
+type GatewayStartupNotice = {
+  phase: string
+  state: 'working' | 'ready' | 'attention'
+  message: string
+  elapsedMs: number
+}
+
+const GATEWAY_STARTUP_READY_DISPLAY_MS = 15_000
+
+function buildGatewayStartupNotice(status?: RuntimeStatus | null): GatewayStartupNotice | null {
+  const gateway = status?.gateway
+  if (!gateway) return null
+
+  const timeline = gateway.startup?.timeline || []
+  const latest = timeline.at(-1)
+  const latestAt = timestampMs(latest?.timestamp)
+  const startupStartedAt = timestampMs(gateway.startup?.startedAt || gateway.lastStartedAt || undefined)
+  const elapsedMs = Math.max(
+    latest?.elapsedMs || 0,
+    startupStartedAt ? Date.now() - startupStartedAt : 0,
+  )
+  const startupInProgress = gateway.state === 'starting' ||
+    gateway.state === 'restarting' ||
+    gateway.ensureInFlight ||
+    gateway.restartScheduled ||
+    (gateway.startupGraceRemainingMs || 0) > 0
+  const recentlyReady = gateway.healthy &&
+    latest?.phase === 'healthy' &&
+    latest.status === 'completed' &&
+    latestAt > 0 &&
+    Date.now() - latestAt <= GATEWAY_STARTUP_READY_DISPLAY_MS
+
+  if (!startupInProgress && !recentlyReady) return null
+
+  if (gateway.healthy && (recentlyReady || latest?.phase === 'healthy')) {
+    return {
+      phase: 'healthy',
+      state: 'ready',
+      message: 'The Gateway is online and healthy. Your agents and channel routes are ready to use.',
+      elapsedMs,
+    }
+  }
+
+  if (latest?.status === 'failed') {
+    return {
+      phase: latest.phase || 'startup',
+      state: 'attention',
+      message: 'The Gateway needs another moment to start. I’m checking the next recovery step now.',
+      elapsedMs,
+    }
+  }
+
+  if (latest?.status === 'warning') {
+    return {
+      phase: latest.phase || 'startup',
+      state: 'attention',
+      message: 'One startup check needs attention, but I’m continuing to verify that the Gateway can serve your agents.',
+      elapsedMs,
+    }
+  }
+
+  const phase = latest?.phase || 'requested'
+  const messageByPhase: Record<string, string> = {
+    requested: 'I’m bringing the Gateway online and will keep checking it until it is ready for work.',
+    config: 'I’m checking the Gateway configuration before bringing your agents online.',
+    registry: 'I’m refreshing Gateway plugins and channel support, then I’ll verify the Gateway health.',
+    spawned: 'The Gateway process is starting. I’m waiting for it to report that it can accept work.',
+    http: 'The Gateway is listening. I’m confirming that it is ready for agent work.',
+    ready: 'The Gateway reported ready. I’m running one final health check before handing it over.',
+    prewarm: 'The Gateway is online. I’m warming the agent runtime so your first message starts smoothly.',
+  }
+  return {
+    phase,
+    state: 'working',
+    message: messageByPhase[phase] || 'I’m bringing the Gateway online and checking its health for you.',
+    elapsedMs,
+  }
+}
+
 function latestRunActivityMs(entry: AgentResponse) {
   const activityMs = (entry.activity || []).reduce((latest, event) => Math.max(latest, timestampMs(event.timestamp)), 0)
   return Math.max(
@@ -302,22 +390,6 @@ function gatewayStabilityWorkloadLabel(stability?: GatewayStabilityStatus | null
   ].filter(Boolean)
   if (parts.length) return parts.join(' / ')
   return metricLabel('max queue', stability.summary.maxQueueDepth)
-}
-
-function gatewayStabilityState(stability?: GatewayStabilityStatus | null) {
-  if (!stability) return 'pending'
-  if (!stability.available) return stability.error ? 'offline' : 'pending'
-  if (stability.summary.warningCount > 0 || (stability.summary.waiting ?? 0) > 0 || (stability.summary.queued ?? 0) > 0) return 'warning'
-  return 'healthy'
-}
-
-function gatewayStabilityHeaderLabel(stability?: GatewayStabilityStatus | null) {
-  if (!stability) return 'Diag pending'
-  if (!stability.available) return stability.error ? 'Diag offline' : 'Diag pending'
-  const waiting = Math.max(0, Math.round((stability.summary.waiting ?? 0) + (stability.summary.queued ?? 0)))
-  if (waiting > 0) return `Diag wait ${waiting}`
-  if (stability.summary.warningCount > 0) return `Diag warn ${stability.summary.warningCount}`
-  return 'Diag ok'
 }
 
 function responseStatusTone(status: 'streaming' | 'complete' | 'blocked'): BadgeTone {
@@ -448,8 +520,14 @@ function responseCta(entry: AgentResponse): ResponseCta | null {
     case 'rate_limit':
       return { label: 'Retry later', detail: 'Provider quota is limiting this turn.' }
     default:
-      return entry.ok ? null : { label: 'Check logs', detail: 'Review Monitor gateway logs before retrying.' }
+      return null
   }
+}
+
+function responseStatusLabel(status: 'streaming' | 'complete' | 'blocked') {
+  if (status === 'streaming') return 'Working'
+  if (status === 'complete') return 'Done'
+  return 'Needs attention'
 }
 
 function initials(name: string) {
@@ -511,9 +589,12 @@ const ResponseMessage = memo(function ResponseMessage({
   const avatar = meta?.portrait || ''
   const name = meta?.name || entry.agentId
   const role = meta?.role || ''
-  const displayName = runtimeNoticeActive ? 'Automnia' : name
-  const displayRole = runtimeNoticeActive ? 'Runtime task' : role
-  const displayAvatar = runtimeNoticeActive ? AUTOMNIA_APP_ICON_SRC : avatar
+  // Runtime transport describes how the agent is executing; it does not make
+  // the response a standalone Automnia message. Keep the real agent identity
+  // visible so tool activity streams under the agent that owns the run.
+  const displayName = name
+  const displayRole = role
+  const displayAvatar = avatar
   const rarity = meta?.rarity || 'common'
   const avatarRing = RARITY_RING[rarity] ?? RARITY_RING.common
   const replyText = entry.response
@@ -528,7 +609,7 @@ const ResponseMessage = memo(function ResponseMessage({
     ? `${entry.queuePosition}/${entry.queueDepth}`
     : ''
   const status = entry.streaming ? 'streaming' : entry.ok ? 'complete' : 'blocked'
-  const statusText = runtimeNoticeActive ? 'runtime' : status
+  const statusText = responseStatusLabel(status)
   const durationLabel = entry.durationMs > 0 ? `${(entry.durationMs / 1000).toFixed(1)}s` : ''
   const cta = responseCta(entry)
   const activityEvents = useMemo(
@@ -619,13 +700,13 @@ const ResponseMessage = memo(function ResponseMessage({
     >
       <div className="dy-command-message-header mb-3">
         <div className={`dy-command-message-avatar relative h-10 w-10 shrink-0 overflow-hidden rounded-xl ring-1 shadow-lg ring-offset-1 ring-offset-slate-950 ${avatarRing}`}>
-          {displayAvatar && (runtimeNoticeActive || !avatarFailed) ? (
+          {displayAvatar && !avatarFailed ? (
             <img
               src={displayAvatar}
               alt=""
               className="h-full w-full object-cover"
               onError={() => {
-                if (!runtimeNoticeActive && avatar) onPortraitFailed(entry.agentId, avatar)
+                if (avatar) onPortraitFailed(entry.agentId, avatar)
               }}
             />
           ) : (
@@ -637,14 +718,21 @@ const ResponseMessage = memo(function ResponseMessage({
         <div className="dy-command-message-identity">
           <div className="dy-command-message-title-row">
             <span className="dy-command-agent-name" title={displayName}>{displayName}</span>
-            <Badge className="dy-command-message-status" data-state={status} tone={responseStatusTone(status)} size="micro">
+            <Badge
+              className="dy-command-message-status"
+              data-state={status}
+              tone={responseStatusTone(status)}
+              size="micro"
+              aria-label={status === 'blocked' ? 'Agent response blocked' : `Agent response ${statusText}`}
+              title={status === 'blocked' ? 'Blocked' : statusText}
+            >
               {statusText}
             </Badge>
           </div>
-          {(runtimeNoticeActive || modelLabel || role) && (
+          {(modelLabel || displayRole) && (
             <p className="dy-command-agent-context">
-              {!runtimeNoticeActive && modelLabel && <span className="dy-command-message-model" title={`Model: ${modelId}`}>{modelLabel}</span>}
-              {!runtimeNoticeActive && modelLabel && role && <i aria-hidden="true">·</i>}
+              {modelLabel && <span className="dy-command-message-model" title={`Model: ${modelId}`}>{modelLabel}</span>}
+              {modelLabel && displayRole && <i aria-hidden="true">·</i>}
               {displayRole && <span className="dy-command-agent-role" title={displayRole}>{displayRole}</span>}
             </p>
           )}
@@ -887,8 +975,10 @@ export function AgentResponseConsole() {
   // sufficient monitor for Gateway work.
   const { status: runtimeSummaryStatus, refresh: refreshRuntimeSummary } = useRuntimeSummaryStatus(5000)
   const gatewayStability = runtimeSummaryStatus?.gateway.stability ?? null
-  const gatewayStabilityChipState = gatewayStabilityState(gatewayStability)
-  const gatewayStabilityChipLabel = gatewayStabilityHeaderLabel(gatewayStability)
+  const gatewayStartupNotice = useMemo(
+    () => buildGatewayStartupNotice(runtimeSummaryStatus),
+    [runtimeSummaryStatus],
+  )
   const gatewayStabilityTitleText = useMemo(() => gatewayStabilityTitle(gatewayStability), [gatewayStability])
   const agentById = useMemo(() => new Map(agents.map((agent) => [agent.id, agent])), [agents])
   const agentMetaById = useMemo(() => new Map(agents.map((agent) => [agent.id, {
@@ -945,6 +1035,14 @@ export function AgentResponseConsole() {
       .sort((left, right) => timestampMs(left.startedAt) - timestampMs(right.startedAt)),
     [runtimeSummaryStatus],
   )
+  const gatewayStartupRun = useMemo(
+    () => activeRuntimeRuns.find(isInternalGatewayStartupRun),
+    [activeRuntimeRuns],
+  )
+  const standaloneRuntimeRuns = useMemo(
+    () => activeRuntimeRuns.filter((run) => !run.agentId && !isInternalGatewayStartupRun(run)),
+    [activeRuntimeRuns],
+  )
   const queuedResponsesByAgent = useMemo(() => {
     const counts = new Map<string, number>()
     for (const entry of responses) {
@@ -990,16 +1088,13 @@ export function AgentResponseConsole() {
     }
     return diagnostics
   }, [activeResponseByAgent, busyAgents, gatewayStabilityTitleText, laneDiagnosticNow, queuedResponsesByAgent])
-  const laneDiagnostics = useMemo(() => Array.from(laneDiagnosticsByAgent.values()), [laneDiagnosticsByAgent])
   const runningSurfaceCount = activeRuntimeRuns.length || busyAgents.length
-  const busyRunLabel = activeRuntimeRuns.length
-    ? `${runningSurfaceCount} monitored Command Console ${runningSurfaceCount === 1 ? 'run' : 'runs'} running${laneDiagnostics.length ? `; ${laneDiagnostics.length} quiet lane${laneDiagnostics.length === 1 ? '' : 's'}` : ''}`
-    : `${busyAgents.length} Command Console ${busyAgents.length === 1 ? 'run' : 'runs'} running${laneDiagnostics.length ? `; ${laneDiagnostics.length} quiet lane${laneDiagnostics.length === 1 ? '' : 's'}` : ''}`
   const stopRunAriaLabel = activeRuntimeRuns.length
     ? `Stop ${runningSurfaceCount} monitored running Command Console ${runningSurfaceCount === 1 ? 'run' : 'runs'}`
     : `Stop ${busyAgents.length} running Command Console ${busyAgents.length === 1 ? 'run' : 'runs'}`
   const displayedResponses = useMemo(() => responses.slice(0, MESSAGE_RENDER_LIMIT).reverse(), [responses])
   const visibleDisplayedResponses = displayedResponses
+  const agentReplyInFlight = busyAgents.length > 0 || visibleDisplayedResponses.some((entry) => entry.streaming)
   const targetCount = selectedTargets.length || partyTargetIds.length
   const targetMode = selectedTargets.length
     ? selectedTargets.length === 1 ? 'Direct chat' : 'Multi-agent chat'
@@ -1025,10 +1120,10 @@ export function AgentResponseConsole() {
   }, [allTargetsBusy, armedTargets, hardBlockedSendReason])
   const voiceBusy = voicePhase !== 'idle'
   const canSend = Boolean(prompt.trim() || uploadedAttachment) && !isUploading && !voiceBusy && !hardBlockedSendReason
-  const composerPlaceholder = hardBlockedSendReason || queuedSendReason || 'Message…'
+  const composerPlaceholder = hardBlockedSendReason || queuedSendReason || 'Work on anything'
   const streamLabel: Record<ConsoleStreamState, string> = {
     connecting: 'Connecting',
-    live: 'Live stream',
+    live: 'Live',
     reconnecting: 'Reconnecting',
     offline: 'Stream offline',
   }
@@ -1728,49 +1823,44 @@ export function AgentResponseConsole() {
         <div className="dy-command-console__header-inner">
           <div className="dy-command-console__title-row min-w-0">
             <span className="dy-command-console__mark" aria-hidden="true">
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
-                <path d="M7.5 8.5h9M7.5 12h6M7.5 15.5h3.5" />
-                <path d="M5 4.5h14a2 2 0 0 1 2 2V17a2 2 0 0 1-2 2h-6l-4 2v-2H5a2 2 0 0 1-2-2V6.5a2 2 0 0 1 2-2Z" />
+              <svg
+                className="dy-command-console__mark-icon"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="1.7"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+              >
+                <rect x="3.5" y="4" width="17" height="16" rx="3" />
+                <path d="m7.5 9 3 3-3 3" />
+                <path d="M13.5 15h4" />
               </svg>
             </span>
             <div className="min-w-0">
-              <span className="dy-command-console__eyebrow">Command Console</span>
               <h2 className="dy-command-console__title">
                 Agent Chat
               </h2>
+              <span className="dy-command-console__eyebrow">Command Console</span>
               <p className="dy-command-console__subtitle">
                 {targetMode} · {targetCount} recipient{targetCount === 1 ? '' : 's'}{thinkingCount ? ` · ${thinkingCount} reasoning` : ''}
               </p>
+              <StatusChip
+                label="Live"
+                value={streamLabel[clawTalkStreamHealth.state]}
+                state={clawTalkStreamHealth.state}
+                tone={clawTalkStreamHealth.state === 'live' ? 'success' : clawTalkStreamHealth.state === 'offline' ? 'error' : 'warning'}
+                className="dy-command-console__live"
+                data-stream-state={clawTalkStreamHealth.state}
+                title={streamTitle}
+                live
+                showDot
+                aria-label={`ClawTalk console stream ${streamLabel[clawTalkStreamHealth.state].toLowerCase()}. ${clawTalkStreamHealth.detail}`}
+              />
             </div>
           </div>
-          <div className="dy-command-console__meta">
-            <StatusChip
-              label="Stream"
-              value={streamLabel[clawTalkStreamHealth.state]}
-              state={clawTalkStreamHealth.state}
-              tone={clawTalkStreamHealth.state === 'live' ? 'success' : clawTalkStreamHealth.state === 'offline' ? 'error' : 'warning'}
-              className="dy-command-console__pill dy-command-console__stream-pill"
-              data-stream-state={clawTalkStreamHealth.state}
-              title={streamTitle}
-              role="status"
-              live
-              showDot
-              aria-label={`ClawTalk console stream ${streamLabel[clawTalkStreamHealth.state].toLowerCase()}. ${clawTalkStreamHealth.detail}`}
-            />
-            <StatusChip
-              label="Gateway"
-              value={gatewayStabilityChipLabel}
-              state={gatewayStabilityChipState}
-              tone={gatewayStabilityChipState === 'healthy' ? 'success' : gatewayStabilityChipState === 'offline' ? 'error' : gatewayStabilityChipState === 'warning' ? 'warning' : 'neutral'}
-              className="dy-command-console__pill dy-command-console__stability-pill"
-              data-stability-state={gatewayStabilityChipState}
-              title={gatewayStabilityTitleText}
-              role="status"
-              live
-              showDot
-              aria-label={`Gateway diagnostics ${gatewayStabilityChipLabel}. ${gatewayStabilityTitleText}`}
-            />
-            {responses.length > 0 && (
+          {responses.length > 0 && (
+            <div className="dy-command-console__meta">
               <IconButton
                 onClick={clearAgentResponses}
                 className="dy-command-console__clear"
@@ -1796,8 +1886,8 @@ export function AgentResponseConsole() {
                 </svg>
                 )}
               />
-            )}
-          </div>
+            </div>
+          )}
         </div>
       </div>
 
@@ -1899,28 +1989,6 @@ export function AgentResponseConsole() {
             })}
             {(busyAgents.length > 0 || activeRuntimeRuns.length > 0) && (
               <span className="dy-command-busy ml-auto inline-flex items-center gap-1.5">
-                <span
-                  className="dy-command-busy-status inline-flex items-center gap-1.5"
-                  role="status"
-                  aria-live="polite"
-                  aria-label={busyRunLabel}
-                >
-                  <span className="dy-command-busy-dot h-1.5 w-1.5 rounded-full bg-amber-400 animate-pulse" aria-hidden="true" />
-                  <span className="dy-command-busy-count" aria-hidden="true">{runningSurfaceCount}</span>
-                  <span className="dy-command-busy-label" aria-hidden="true">running</span>
-                </span>
-                {laneDiagnostics.length > 0 && (
-                  <span
-                    className="dy-command-busy-warning"
-                    data-severity={laneDiagnostics.some((diagnostic) => diagnostic.severity === 'stalled') ? 'stalled' : 'quiet'}
-                    role="status"
-                    aria-live="polite"
-                    aria-label={`${laneDiagnostics.length} Command Console lane${laneDiagnostics.length === 1 ? '' : 's'} quiet while queued follow-ups are waiting.`}
-                    title={laneDiagnostics.map((diagnostic) => diagnostic.title).join(' ')}
-                  >
-                    {laneDiagnostics.length} quiet
-                  </span>
-                )}
                 <Button
                   className="dy-command-stop-run"
                   onClick={handleStopRunning}
@@ -1938,20 +2006,97 @@ export function AgentResponseConsole() {
         </div>
       )}
 
-      {activeRuntimeRuns.length > 0 && (
+      {(gatewayStartupNotice || standaloneRuntimeRuns.length > 0) && (
         <div
           className="dy-command-active-runs dy-automnia-runtime-notifications shrink-0 border-b border-white/[0.08] bg-black/10 px-3 py-2"
           role="status"
           aria-live="polite"
-          aria-label={`${activeRuntimeRuns.length} Automnia runtime ${activeRuntimeRuns.length === 1 ? 'task' : 'tasks'} running`}
-          data-active-runtime-runs={activeRuntimeRuns.length}
+          aria-label={gatewayStartupNotice
+            ? `Automnia Gateway startup status: ${gatewayStartupNotice.message}`
+            : `${standaloneRuntimeRuns.length} standalone Automnia runtime ${standaloneRuntimeRuns.length === 1 ? 'task' : 'tasks'} running`}
+          data-active-runtime-runs={standaloneRuntimeRuns.length}
+          data-gateway-startup-notice={gatewayStartupNotice ? 'true' : 'false'}
+          data-agent-reply-in-flight={agentReplyInFlight ? 'true' : 'false'}
         >
           <div className="mb-1.5 flex items-center justify-between gap-2 text-[10px] uppercase tracking-[0.16em] text-white/55">
             <span>Automnia runtime</span>
-            <span>{activeRuntimeRuns.length} live</span>
+            <span>{gatewayStartupNotice
+              ? `Gateway ${gatewayStartupNotice.state === 'ready' ? 'ready' : gatewayStartupNotice.state === 'attention' ? 'attention' : 'starting'}`
+              : `${standaloneRuntimeRuns.length} live`}</span>
           </div>
           <div className="space-y-1.5">
-            {activeRuntimeRuns.slice(0, 12).map((run) => {
+            {gatewayStartupNotice && (
+              <div className="dy-automnia-runtime-notice" data-gateway-startup-phase={gatewayStartupNotice.phase} data-runtime-notification-id="gateway-startup">
+                <div className="dy-automnia-runtime-avatar" aria-hidden="true">
+                  <img src={AUTOMNIA_RUNTIME_MARK_SRC} alt="" draggable={false} />
+                  <span />
+                </div>
+                <div className="dy-automnia-runtime-copy">
+                  <div className="dy-automnia-runtime-head">
+                    <strong>Automnia</strong>
+                    <span>Gateway lifecycle</span>
+                  </div>
+                  <p>{gatewayStartupNotice.message}</p>
+                  <div className="dy-automnia-runtime-meta">
+                    <span>{formatShortElapsed(gatewayStartupNotice.elapsedMs) || 'starting'} elapsed</span>
+                    <span>{gatewayStartupNotice.phase}</span>
+                  </div>
+                  {standaloneRuntimeRuns.length > 0 && (
+                    <div className="dy-automnia-runtime-tasks" aria-label="Gateway runtime tasks">
+                      <div className="dy-automnia-runtime-tasks-heading">Runtime tasks</div>
+                      {standaloneRuntimeRuns.slice(0, 12).map((run) => {
+                        const elapsedMs = Math.max(
+                          run.elapsedMs || 0,
+                          timestampMs(run.startedAt) ? Date.now() - timestampMs(run.startedAt) : 0,
+                        )
+                        const stopping = activeRunActionId === run.id || activeRunActionId === '__all__'
+                        return (
+                          <div key={run.id} className="dy-automnia-runtime-task" data-active-runtime-run-id={run.id}>
+                            <div className="dy-automnia-runtime-task-copy">
+                              <strong>OpenClaw runtime task</strong>
+                              <p title={run.command}>{runtimeRunCommandPreview(run.command)}</p>
+                              <div className="dy-automnia-runtime-meta">
+                                <span>{formatShortElapsed(elapsedMs) || 'starting'} elapsed</span>
+                              </div>
+                            </div>
+                            <Button
+                              className="dy-automnia-runtime-stop"
+                              disabled={stopping}
+                              loading={stopping}
+                              onClick={() => void stopAuthoritativeRuntimeRun(run.id)}
+                              title={`Stop ${runtimeRunDisplayLabel(run)} runtime run`}
+                              aria-label={`Stop ${runtimeRunDisplayLabel(run)} runtime run`}
+                              variant="danger"
+                              size="compact"
+                            >
+                              {stopping ? 'Stopping' : 'Stop'}
+                            </Button>
+                          </div>
+                        )
+                      })}
+                      {standaloneRuntimeRuns.length > 12 && (
+                        <div className="dy-automnia-runtime-tasks-more">+{standaloneRuntimeRuns.length - 12} more tasks are being monitored.</div>
+                      )}
+                    </div>
+                  )}
+                </div>
+                {gatewayStartupRun && (
+                  <Button
+                    className="dy-automnia-runtime-stop"
+                    disabled={activeRunActionId === gatewayStartupRun.id || activeRunActionId === '__all__'}
+                    loading={activeRunActionId === gatewayStartupRun.id || activeRunActionId === '__all__'}
+                    onClick={() => void stopAuthoritativeRuntimeRun(gatewayStartupRun.id)}
+                    title="Stop Gateway startup"
+                    aria-label="Stop Gateway startup"
+                    variant="danger"
+                    size="compact"
+                  >
+                    {activeRunActionId === gatewayStartupRun.id || activeRunActionId === '__all__' ? 'Stopping' : 'Stop'}
+                  </Button>
+                )}
+              </div>
+            )}
+            {!gatewayStartupNotice && standaloneRuntimeRuns.slice(0, 12).map((run) => {
               const elapsedMs = Math.max(
                 run.elapsedMs || 0,
                 timestampMs(run.startedAt) ? Date.now() - timestampMs(run.startedAt) : 0,
@@ -1960,20 +2105,17 @@ export function AgentResponseConsole() {
               return (
                 <div key={run.id} className="dy-automnia-runtime-notice" data-active-runtime-run-id={run.id} data-runtime-notification-id={run.id}>
                   <div className="dy-automnia-runtime-avatar" aria-hidden="true">
-                    <img src={AUTOMNIA_APP_ICON_SRC} alt="" draggable={false} />
+                    <img src={AUTOMNIA_RUNTIME_MARK_SRC} alt="" draggable={false} />
                     <span />
                   </div>
                   <div className="dy-automnia-runtime-copy">
                     <div className="dy-automnia-runtime-head">
                       <strong>Automnia</strong>
                       <span>Runtime task</span>
-                      <Badge tone="info" size="micro">running</Badge>
                     </div>
                     <p title={run.command}>{runtimeRunCommandPreview(run.command)}</p>
                     <div className="dy-automnia-runtime-meta">
                       <span>{formatShortElapsed(elapsedMs) || 'starting'} elapsed</span>
-                      {run.sessionId && <span>session {run.sessionId.slice(0, 8)}</span>}
-                      <code>{run.id.slice(0, 8)}</code>
                     </div>
                   </div>
                   <Button
@@ -1992,8 +2134,8 @@ export function AgentResponseConsole() {
               )
             })}
           </div>
-          {activeRuntimeRuns.length > 12 && (
-            <div className="mt-1 text-[10px] text-white/45">+{activeRuntimeRuns.length - 12} more active runs are being monitored.</div>
+          {standaloneRuntimeRuns.length > 12 && (
+            <div className="mt-1 text-[10px] text-white/45">+{standaloneRuntimeRuns.length - 12} more standalone runs are being monitored.</div>
           )}
         </div>
       )}
@@ -2006,7 +2148,7 @@ export function AgentResponseConsole() {
         aria-live="polite"
         aria-relevant="additions text"
         aria-label="Command console responses"
-        className="dy-command-messages min-h-0 flex-1 overflow-y-auto overflow-x-hidden space-y-3"
+        className="dy-command-messages min-h-0 flex-1 overflow-y-auto overflow-x-hidden"
         data-scroll-surface="chat-history"
         data-empty={visibleDisplayedResponses.length === 0 ? 'true' : 'false'}
       >

@@ -116,7 +116,7 @@ try {
 }
 
 try {
-  $enabledApis = @(Invoke-Gcloud -Arguments @('services', 'list', '--enabled', '--project', $ProjectId, '--format=value(config.name)') -split "`n")
+  $enabledApis = @((Invoke-Gcloud -Arguments @('services', 'list', '--enabled', '--project', $ProjectId, '--format=value(config.name)')) -split "`n")
   foreach ($api in @($config.RequiredApis)) {
     Add-VerificationCheck -Name "api:$api" -Passed ($enabledApis -contains $api) -Expected $true -Actual ($enabledApis -contains $api)
   }

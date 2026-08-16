@@ -95,6 +95,25 @@ export type OpenAICodexRefreshResult = {
   idToken?: string
 }
 
+export type AnthropicOAuthLoginResult = {
+  access: string
+  refresh: string
+  expires: number
+}
+
+export type AnthropicOAuthLoginCallbacks = {
+  onAuth: (auth: { url: string; instructions?: string }) => void
+  onProgress?: (message: string) => void
+  onPrompt: (prompt: { message: string; placeholder?: string }) => Promise<string>
+  onManualCodeInput?: () => Promise<string>
+  signal?: AbortSignal
+}
+
+type AnthropicOAuthProviderRuntime = {
+  login: (callbacks: AnthropicOAuthLoginCallbacks) => Promise<AnthropicOAuthLoginResult>
+  refreshToken: (credentials: { refresh: string }) => Promise<AnthropicOAuthLoginResult>
+}
+
 type OpenAICodexOAuthModule = {
   loginOpenAICodex: (options: {
     originator?: string
@@ -140,6 +159,7 @@ type SpawnSyncLike = (
 export type ProviderSetupServiceOptions = {
   electronResourcesPath?: () => string
   ensureLocalAuthStoreLoaded: () => Promise<unknown>
+  anthropicOAuthEnvKeys?: string[]
   existsSync?: (filePath: string) => boolean
   fetch?: typeof fetch
   getLocalProviderMode: (provider: string) => 'oauth' | 'apiKey' | undefined
@@ -152,12 +172,13 @@ export type ProviderSetupServiceOptions = {
   now?: () => number
   openClawBin?: string
   openClawStateRoot: string
-  persistProviderOAuth: (provider: 'google' | 'openai', oauth: LocalOAuthCredential) => Promise<unknown>
+  persistProviderOAuth: (provider: string, oauth: LocalOAuthCredential) => Promise<unknown>
   platform?: NodeJS.Platform
   processEnv?: NodeJS.ProcessEnv
   readFileSync?: (filePath: string, encoding: BufferEncoding) => string
   readdirSync?: typeof readdirSync
   refreshGoogleOAuthCredential: (oauth: LocalOAuthCredential) => Promise<LocalOAuthCredential>
+  refreshAnthropicOAuthCredential?: (oauth: LocalOAuthCredential) => Promise<LocalOAuthCredential>
   refreshOpenAICodexOAuthCredential: (oauth: LocalOAuthCredential) => Promise<LocalOAuthCredential>
   spawnSync?: SpawnSyncLike
   workspaceRoot: string
@@ -699,6 +720,22 @@ export function createProviderSetupService(options: ProviderSetupServiceOptions)
     return nextAccessToken ? { accessToken: nextAccessToken } : null
   }
 
+  async function resolveAnthropicOAuthForRequest(): Promise<{ accessToken: string } | null> {
+    const stored = options.getLocalProviderOAuth('anthropic') || options.localOAuthFromMainAuthProfile('anthropic') || undefined
+    if (!isOAuthCredentialUsable(stored)) return null
+
+    const accessToken = stored.accessToken?.trim()
+    const expiresAt = stored.expiresAt || 0
+    if (accessToken && (!expiresAt || expiresAt > now() + 60000)) return { accessToken }
+    if (!options.refreshAnthropicOAuthCredential) return null
+
+    const refreshed = await options.refreshAnthropicOAuthCredential(stored)
+    await options.persistProviderOAuth('anthropic', refreshed)
+    const next = options.getLocalProviderOAuth('anthropic') || refreshed
+    const nextAccessToken = next.accessToken?.trim() || refreshed.accessToken?.trim()
+    return nextAccessToken ? { accessToken: nextAccessToken } : null
+  }
+
   async function resolveGoogleVertexRequestAuth(env: Record<string, string>): Promise<ProviderRequestAuth | null> {
     const gcloudAuth = await resolveGoogleVertexGcloudAuth(env)
     if (gcloudAuth) return gcloudAuth
@@ -736,6 +773,16 @@ export function createProviderSetupService(options: ProviderSetupServiceOptions)
       if (oauth?.accessToken) return { type: 'oauth', accessToken: oauth.accessToken, source: 'local-oauth' }
     }
 
+    if (provider === 'anthropic' && localMode === 'oauth') {
+      const oauth = await resolveAnthropicOAuthForRequest().catch(() => null)
+      if (oauth?.accessToken) return { type: 'oauth', accessToken: oauth.accessToken, source: 'local-oauth' }
+    }
+
+    if (provider === 'anthropic' && localMode !== 'apiKey') {
+      const envOAuthToken = resolveEnvValue(env, options.anthropicOAuthEnvKeys || ['ANTHROPIC_OAUTH_TOKEN'])
+      if (envOAuthToken) return { type: 'oauth', accessToken: envOAuthToken, source: 'env-oauth' }
+    }
+
     const apiKey = resolveEnvValue(env, envKeys)
     if (apiKey) return { type: 'apiKey', value: apiKey, source: 'api-key' }
 
@@ -748,6 +795,11 @@ export function createProviderSetupService(options: ProviderSetupServiceOptions)
 
     if (provider === 'openai' && localMode !== 'apiKey') {
       const oauth = await resolveOpenAICodexOAuthForRequest().catch(() => null)
+      if (oauth?.accessToken) return { type: 'oauth', accessToken: oauth.accessToken, source: 'local-oauth' }
+    }
+
+    if (provider === 'anthropic' && localMode !== 'apiKey') {
+      const oauth = await resolveAnthropicOAuthForRequest().catch(() => null)
       if (oauth?.accessToken) return { type: 'oauth', accessToken: oauth.accessToken, source: 'local-oauth' }
     }
 
@@ -777,6 +829,31 @@ export function createProviderSetupService(options: ProviderSetupServiceOptions)
 
   function openAICodexOAuthModulePath() {
     return openClawDistModulePath('openai-chatgpt-oauth-flow.runtime.js')
+  }
+
+  function anthropicOAuthModulePath() {
+    for (const distDir of openClawDistDirCandidates()) {
+      try {
+        const candidates = readDir(distDir)
+          .filter((entry) => entry.startsWith('oauth-') && entry.endsWith('.js'))
+          .sort()
+        const registryCandidate = candidates.find((candidate) => {
+          try {
+            const source = readFile(path.join(distDir, candidate), 'utf-8')
+            return source.includes('getOAuthProvider') && source.includes('anthropic')
+          } catch {
+            return false
+          }
+        })
+        if (registryCandidate) return path.join(distDir, registryCandidate)
+      } catch {
+        // Keep searching the other bundled-runtime locations.
+      }
+    }
+    return path.join(
+      openClawDistDirCandidates()[0] || path.join(options.workspaceRoot, 'vendor', 'openclaw', 'dist'),
+      'oauth-runtime.js',
+    )
   }
 
   async function importOpenAICodexOAuthModule() {
@@ -825,6 +902,32 @@ export function createProviderSetupService(options: ProviderSetupServiceOptions)
   async function refreshOpenAICodexToken(refreshToken: string) {
     const oauthModule = await importOpenAICodexOAuthModule()
     return oauthModule.refreshOpenAICodexToken(refreshToken)
+  }
+
+  async function importAnthropicOAuthModule(): Promise<AnthropicOAuthProviderRuntime> {
+    const modulePath = anthropicOAuthModulePath()
+    const oauthModule = await importModule(pathToFileURL(modulePath).href)
+    const getOAuthProvider = oauthModule.getOAuthProvider ?? oauthModule.n
+    const provider = typeof getOAuthProvider === 'function'
+      ? (getOAuthProvider as (providerId: string) => unknown)('anthropic')
+      : null
+    if (!provider || typeof provider !== 'object') {
+      throw new Error(`OpenClaw OAuth runtime at ${modulePath} does not expose the Anthropic provider.`)
+    }
+    const runtime = provider as Partial<AnthropicOAuthProviderRuntime>
+    if (typeof runtime.login !== 'function' || typeof runtime.refreshToken !== 'function') {
+      throw new Error(`OpenClaw OAuth runtime at ${modulePath} does not expose the Anthropic login and refresh methods.`)
+    }
+    return runtime as AnthropicOAuthProviderRuntime
+  }
+
+  async function loginAnthropicOAuth(callbacks: AnthropicOAuthLoginCallbacks) {
+    return (await importAnthropicOAuthModule()).login(callbacks)
+  }
+
+  async function refreshAnthropicOAuthToken(refreshToken: string) {
+    if (!refreshToken.trim()) throw new Error('Anthropic OAuth refresh token is missing. Reconnect Anthropic.')
+    return (await importAnthropicOAuthModule()).refreshToken({ refresh: refreshToken })
   }
 
   function googleOAuthClientConfigFileCandidates() {
@@ -924,12 +1027,16 @@ export function createProviderSetupService(options: ProviderSetupServiceOptions)
     googleVertexSetupScript,
     googleVertexLocalOAuthProjectId,
     importOpenAICodexOAuthModule,
+    importAnthropicOAuthModule,
     isGoogleVertexConfigured,
     isGoogleVertexLocalOAuthConfigured,
     openAICodexOAuthModulePath,
+    anthropicOAuthModulePath,
     readGoogleApplicationDefaultAuthorizedUserCredential,
     readGoogleOAuthClientConfigFile,
     refreshOpenAICodexToken,
+    loginAnthropicOAuth,
+    refreshAnthropicOAuthToken,
     resolveGoogleOAuthClientConfig,
     resolveGoogleOAuthForRequest,
     resolveGoogleProjectId,
@@ -942,6 +1049,7 @@ export function createProviderSetupService(options: ProviderSetupServiceOptions)
     resolveGoogleVertexProjectIdFast,
     resolveGoogleVertexRequestAuth,
     resolveOpenAICodexOAuthForRequest,
+    resolveAnthropicOAuthForRequest,
     resolveProviderRequestAuth,
   }
 }

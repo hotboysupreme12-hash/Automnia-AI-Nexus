@@ -443,7 +443,7 @@ export interface AgentResponse {
   durationMs: number
   modelId?: string
   remainingCredits?: number
-  usagePriority?: 'automnia_first' | 'provider_first' | 'byok_only'
+  usagePriority?: 'automnia_only' | 'provider_first' | 'automnia_first_with_provider_fallback' | 'automnia_first' | 'byok_only'
   billingRoute?: 'automnia-first' | 'provider-first' | 'provider-only' | string
   fallbackUsed?: boolean
   streaming?: boolean

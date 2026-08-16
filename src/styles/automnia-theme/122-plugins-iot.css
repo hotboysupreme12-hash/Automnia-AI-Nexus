@@ -1,0 +1,839 @@
+/* Plugin fabric: a calmer IoT operations surface with clear hierarchy and local marks. */
+
+html.dui-pro-overhaul [data-dui-panel="plugins"].dy-plugins-panel {
+  --plugin-cyan: #62d9d0;
+  --plugin-cyan-soft: rgba(98, 217, 208, .11);
+  --plugin-green: #9be5ad;
+  --plugin-amber: #f1c979;
+  --plugin-red: #f18a92;
+  --plugin-ink: #080b0d;
+  --plugin-panel: #0d1214;
+  --plugin-card: #11181a;
+  --plugin-line: rgba(172, 197, 199, .13);
+  height: max(520px, calc(100dvh - 192px)) !important;
+  min-height: 0 !important;
+  overflow: hidden !important;
+  border: 1px solid rgba(154, 188, 190, .20) !important;
+  border-radius: 18px !important;
+  background:
+    radial-gradient(circle at 76% -14%, rgba(98, 217, 208, .105), transparent 32%),
+    linear-gradient(180deg, rgba(255, 255, 255, .032), rgba(255, 255, 255, .008) 34%, rgba(4, 7, 8, .82)),
+    var(--plugin-ink) !important;
+  box-shadow:
+    0 24px 70px rgba(0, 0, 0, .36),
+    inset 0 1px 0 rgba(255, 255, 255, .05) !important;
+}
+
+html.dui-pro-overhaul [data-dui-panel="plugins"] .dy-plugins-header {
+  flex: 0 0 auto !important;
+  padding: 22px 24px 18px !important;
+  border-bottom: 1px solid var(--plugin-line) !important;
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, .035), rgba(255, 255, 255, .010)),
+    rgba(9, 14, 15, .70) !important;
+}
+
+html.dui-pro-overhaul [data-dui-panel="plugins"] .dy-plugins-header-top {
+  display: flex !important;
+  align-items: flex-start !important;
+  justify-content: space-between !important;
+  gap: 22px !important;
+}
+
+html.dui-pro-overhaul [data-dui-panel="plugins"] .dy-plugins-header-identity {
+  min-width: 0 !important;
+}
+
+html.dui-pro-overhaul [data-dui-panel="plugins"] .dy-plugins-eyebrow {
+  display: flex !important;
+  align-items: center !important;
+  gap: 8px !important;
+  color: #7eaaa8 !important;
+  font-family: var(--font-mono) !important;
+  font-size: 9px !important;
+  font-weight: 700 !important;
+  letter-spacing: .17em !important;
+  text-transform: uppercase !important;
+}
+
+html.dui-pro-overhaul [data-dui-panel="plugins"] .dy-plugins-registry-label {
+  padding-left: 8px !important;
+  border-left: 1px solid rgba(172, 197, 199, .20) !important;
+  color: #5f7778 !important;
+  font-size: 8px !important;
+  letter-spacing: .11em !important;
+}
+
+html.dui-pro-overhaul [data-dui-panel="plugins"] .dy-plugins-eyebrow .dy-plugin-signal-led {
+  width: 7px !important;
+  height: 7px !important;
+  margin: 0 !important;
+  border-radius: 50% !important;
+  background: var(--plugin-cyan) !important;
+  box-shadow: 0 0 0 3px rgba(98, 217, 208, .12), 0 0 12px rgba(98, 217, 208, .52) !important;
+}
+
+html.dui-pro-overhaul [data-dui-panel="plugins"] .dy-plugins-title-row {
+  display: flex !important;
+  align-items: baseline !important;
+  gap: 14px !important;
+  margin-top: 8px !important;
+}
+
+html.dui-pro-overhaul [data-dui-panel="plugins"] .dy-plugins-title-row h2 {
+  margin: 0 !important;
+  color: #eef6f2 !important;
+  font-family: var(--font-display) !important;
+  font-size: clamp(22px, 2vw, 30px) !important;
+  font-weight: 700 !important;
+  letter-spacing: -.04em !important;
+  line-height: 1 !important;
+}
+
+html.dui-pro-overhaul [data-dui-panel="plugins"] .dy-plugins-title-row > span {
+  color: #78908f !important;
+  font-size: 11px !important;
+  font-weight: 520 !important;
+}
+
+html.dui-pro-overhaul [data-dui-panel="plugins"] .dy-plugins-header-description {
+  max-width: 640px !important;
+  margin: 9px 0 0 !important;
+  color: #879998 !important;
+  font-size: 11px !important;
+  line-height: 1.55 !important;
+}
+
+html.dui-pro-overhaul [data-dui-panel="plugins"] .dy-plugins-header-actions {
+  display: flex !important;
+  flex: 0 0 auto !important;
+  align-items: center !important;
+  gap: 8px !important;
+  padding-top: 2px !important;
+}
+
+html.dui-pro-overhaul [data-dui-panel="plugins"] .dy-plugin-summary-chip {
+  min-height: 31px !important;
+  padding: 0 11px !important;
+  border: 1px solid rgba(132, 162, 163, .19) !important;
+  border-radius: 10px !important;
+  background: rgba(255, 255, 255, .035) !important;
+  color: #b7cbca !important;
+  font-size: 9px !important;
+  font-weight: 700 !important;
+  letter-spacing: .08em !important;
+  text-transform: uppercase !important;
+}
+
+html.dui-pro-overhaul [data-dui-panel="plugins"] .dy-plugin-summary-chip[data-tone="browser-on"] {
+  border-color: rgba(98, 217, 208, .35) !important;
+  background: rgba(98, 217, 208, .09) !important;
+  color: #baf5ed !important;
+}
+
+html.dui-pro-overhaul [data-dui-panel="plugins"] .dy-plugin-summary-chip[data-tone="browser-off"] {
+  color: #849494 !important;
+}
+
+html.dui-pro-overhaul [data-dui-panel="plugins"] .dy-plugins-update-all {
+  min-height: 31px !important;
+  padding: 0 13px !important;
+  border: 1px solid rgba(98, 217, 208, .30) !important;
+  border-radius: 10px !important;
+  background: rgba(98, 217, 208, .10) !important;
+  color: #c8fff7 !important;
+  font-size: 9px !important;
+  font-weight: 760 !important;
+  letter-spacing: .06em !important;
+  text-transform: uppercase !important;
+}
+
+html.dui-pro-overhaul [data-dui-panel="plugins"] .dy-plugins-update-all:hover:not(:disabled) {
+  border-color: rgba(98, 217, 208, .55) !important;
+  background: rgba(98, 217, 208, .16) !important;
+}
+
+html.dui-pro-overhaul [data-dui-panel="plugins"] .dy-plugins-overview {
+  display: grid !important;
+  grid-template-columns: repeat(4, minmax(0, 1fr)) !important;
+  gap: 8px !important;
+  margin-top: 20px !important;
+}
+
+html.dui-pro-overhaul [data-dui-panel="plugins"] .dy-plugins-overview-cell {
+  min-width: 0 !important;
+  padding: 11px 13px !important;
+  border: 1px solid rgba(152, 178, 180, .13) !important;
+  border-radius: 12px !important;
+  background: rgba(255, 255, 255, .025) !important;
+}
+
+html.dui-pro-overhaul [data-dui-panel="plugins"] .dy-plugins-overview-cell > span,
+html.dui-pro-overhaul [data-dui-panel="plugins"] .dy-plugins-overview-cell > small {
+  display: block !important;
+  overflow: hidden !important;
+  text-overflow: ellipsis !important;
+  white-space: nowrap !important;
+}
+
+html.dui-pro-overhaul [data-dui-panel="plugins"] .dy-plugins-overview-cell > span {
+  color: #78908f !important;
+  font-family: var(--font-mono) !important;
+  font-size: 8px !important;
+  font-weight: 700 !important;
+  letter-spacing: .12em !important;
+  text-transform: uppercase !important;
+}
+
+html.dui-pro-overhaul [data-dui-panel="plugins"] .dy-plugins-overview-cell > strong {
+  display: block !important;
+  margin-top: 4px !important;
+  color: #e6f0ed !important;
+  font-family: var(--font-mono) !important;
+  font-size: 19px !important;
+  font-weight: 700 !important;
+  letter-spacing: -.04em !important;
+  line-height: 1 !important;
+}
+
+html.dui-pro-overhaul [data-dui-panel="plugins"] .dy-plugins-overview-cell > small {
+  margin-top: 5px !important;
+  color: #617574 !important;
+  font-size: 9px !important;
+  line-height: 1.3 !important;
+}
+
+html.dui-pro-overhaul [data-dui-panel="plugins"] .dy-plugins-overview-cell[data-tone="healthy"] {
+  border-color: rgba(155, 229, 173, .20) !important;
+  background: rgba(155, 229, 173, .045) !important;
+}
+
+html.dui-pro-overhaul [data-dui-panel="plugins"] .dy-plugins-overview-cell[data-tone="healthy"] > strong {
+  color: var(--plugin-green) !important;
+}
+
+html.dui-pro-overhaul [data-dui-panel="plugins"] .dy-plugins-overview-cell[data-tone="attention"] {
+  border-color: rgba(241, 201, 121, .24) !important;
+  background: rgba(241, 201, 121, .055) !important;
+}
+
+html.dui-pro-overhaul [data-dui-panel="plugins"] .dy-plugins-overview-cell[data-tone="attention"] > strong {
+  color: var(--plugin-amber) !important;
+}
+
+html.dui-pro-overhaul [data-dui-panel="plugins"] .dy-plugins-discovery-wrap {
+  margin-top: 14px !important;
+}
+
+html.dui-pro-overhaul [data-dui-panel="plugins"] .dy-plugin-discovery {
+  padding: 10px !important;
+  border: 1px solid rgba(152, 178, 180, .13) !important;
+  border-radius: 13px !important;
+  background: rgba(0, 0, 0, .16) !important;
+}
+
+html.dui-pro-overhaul [data-dui-panel="plugins"] .dy-plugin-discovery-search {
+  display: grid !important;
+  grid-template-columns: minmax(0, 1fr) auto !important;
+  gap: 8px !important;
+}
+
+html.dui-pro-overhaul [data-dui-panel="plugins"] .dy-plugin-search-field {
+  display: flex !important;
+  min-width: 0 !important;
+  align-items: center !important;
+  gap: 9px !important;
+  min-height: 38px !important;
+  padding: 0 11px !important;
+  border: 1px solid rgba(152, 178, 180, .14) !important;
+  border-radius: 10px !important;
+  background: rgba(5, 10, 11, .74) !important;
+  transition: border-color .18s ease, background .18s ease !important;
+}
+
+html.dui-pro-overhaul [data-dui-panel="plugins"] .dy-plugin-search-field:focus-within {
+  border-color: rgba(98, 217, 208, .46) !important;
+  background: rgba(10, 22, 22, .88) !important;
+  box-shadow: 0 0 0 3px rgba(98, 217, 208, .07) !important;
+}
+
+html.dui-pro-overhaul [data-dui-panel="plugins"] .dy-plugin-search-icon {
+  color: #6f9997 !important;
+  font-size: 19px !important;
+  line-height: 1 !important;
+}
+
+html.dui-pro-overhaul [data-dui-panel="plugins"] .dy-plugin-search-input {
+  width: 100% !important;
+  min-width: 0 !important;
+  height: 36px !important;
+  border: 0 !important;
+  outline: 0 !important;
+  background: transparent !important;
+  color: #dcebe7 !important;
+  font-size: 12px !important;
+}
+
+/* The field owns focus styling; don't stack the global input ring inside it. */
+html.dui-pro-overhaul.dui-cohesive-ui [data-dui-panel="plugins"] .dy-plugin-search-input:focus,
+html.dui-pro-overhaul.dui-cohesive-ui [data-dui-panel="plugins"] .dy-plugin-search-input:focus-visible {
+  border: 0 !important;
+  outline: 0 !important;
+  outline-offset: 0 !important;
+  box-shadow: none !important;
+}
+
+html.dui-pro-overhaul [data-dui-panel="plugins"] .dy-plugin-search-input::placeholder {
+  color: #5d7474 !important;
+}
+
+html.dui-pro-overhaul [data-dui-panel="plugins"] .dy-plugin-search-button {
+  min-height: 38px !important;
+  padding: 0 15px !important;
+  border: 1px solid rgba(98, 217, 208, .30) !important;
+  border-radius: 10px !important;
+  background: rgba(98, 217, 208, .09) !important;
+  color: #baf5ed !important;
+  font-size: 10px !important;
+  font-weight: 760 !important;
+}
+
+html.dui-pro-overhaul [data-dui-panel="plugins"] .dy-plugin-discovery-controls {
+  display: flex !important;
+  flex-wrap: wrap !important;
+  align-items: center !important;
+  gap: 6px !important;
+  margin-top: 9px !important;
+}
+
+html.dui-pro-overhaul [data-dui-panel="plugins"] .dy-plugin-pin-toggle,
+html.dui-pro-overhaul [data-dui-panel="plugins"] .dy-plugin-filter-button {
+  display: inline-flex !important;
+  min-height: 29px !important;
+  align-items: center !important;
+  justify-content: center !important;
+  gap: 7px !important;
+  padding: 0 10px !important;
+  border: 1px solid rgba(152, 178, 180, .13) !important;
+  border-radius: 8px !important;
+  background: rgba(255, 255, 255, .025) !important;
+  color: #829795 !important;
+  font-size: 9px !important;
+  font-weight: 720 !important;
+  letter-spacing: .03em !important;
+}
+
+html.dui-pro-overhaul [data-dui-panel="plugins"] .dy-plugin-pin-toggle {
+  cursor: pointer !important;
+}
+
+html.dui-pro-overhaul [data-dui-panel="plugins"] .dy-plugin-pin-checkbox {
+  width: 12px !important;
+  height: 12px !important;
+  margin: 0 !important;
+  accent-color: var(--plugin-cyan) !important;
+}
+
+html.dui-pro-overhaul [data-dui-panel="plugins"] .dy-plugin-filter-button[data-active="true"],
+html.dui-pro-overhaul [data-dui-panel="plugins"] .dy-plugin-filter-button[class*="bg-cyan"] {
+  border-color: rgba(98, 217, 208, .40) !important;
+  background: rgba(98, 217, 208, .12) !important;
+  color: #baf5ed !important;
+}
+
+html.dui-pro-overhaul [data-dui-panel="plugins"] .dy-plugin-results-count {
+  margin-left: auto !important;
+  color: #5f7778 !important;
+  font-family: var(--font-mono) !important;
+  font-size: 9px !important;
+  font-weight: 700 !important;
+  letter-spacing: .05em !important;
+  text-transform: uppercase !important;
+}
+
+html.dui-pro-overhaul [data-dui-panel="plugins"] .dy-plugin-search-results {
+  max-height: 220px !important;
+  margin-top: 10px !important;
+  overflow-y: auto !important;
+  border: 1px solid rgba(152, 178, 180, .12) !important;
+  border-radius: 10px !important;
+  background: rgba(0, 0, 0, .20) !important;
+}
+
+html.dui-pro-overhaul [data-dui-panel="plugins"] .dy-plugins-scroll {
+  direction: ltr !important;
+  flex: 1 1 auto !important;
+  min-height: 0 !important;
+  overflow-x: hidden !important;
+  overflow-y: auto !important;
+  scrollbar-color: rgba(98, 217, 208, .28) transparent !important;
+  scrollbar-gutter: stable !important;
+}
+
+html.dui-pro-overhaul [data-dui-panel="plugins"] .dy-plugins-list {
+  min-height: 100% !important;
+  padding: 18px 22px 24px !important;
+  direction: ltr !important;
+}
+
+html.dui-pro-overhaul [data-dui-panel="plugins"] .dy-plugin-card-grid {
+  display: grid !important;
+  grid-template-columns: repeat(auto-fit, minmax(560px, 1fr)) !important;
+  gap: 12px !important;
+  align-items: start !important;
+}
+
+html.dui-pro-overhaul [data-dui-panel="plugins"] .dy-plugin-row {
+  display: grid !important;
+  grid-template-columns: minmax(0, 1fr) minmax(165px, .64fr) auto !important;
+  grid-template-areas:
+    "main stats actions"
+    "detail detail detail" !important;
+  gap: 14px !important;
+  min-width: 0 !important;
+  padding: 15px !important;
+  border: 1px solid rgba(152, 178, 180, .15) !important;
+  border-radius: 14px !important;
+  background:
+    linear-gradient(145deg, rgba(255, 255, 255, .035), rgba(255, 255, 255, .008) 48%),
+    var(--plugin-card) !important;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, .035) !important;
+  transition: border-color .18s ease, background .18s ease, transform .18s ease, box-shadow .18s ease !important;
+}
+
+html.dui-pro-overhaul [data-dui-panel="plugins"] .dy-plugin-row:hover {
+  border-color: rgba(98, 217, 208, .32) !important;
+  background:
+    linear-gradient(145deg, rgba(98, 217, 208, .055), rgba(255, 255, 255, .012) 48%),
+    #121d1e !important;
+  box-shadow: 0 12px 28px rgba(0, 0, 0, .22), inset 0 1px 0 rgba(255, 255, 255, .05) !important;
+  transform: translateY(-1px) !important;
+}
+
+html.dui-pro-overhaul [data-dui-panel="plugins"] .dy-plugin-card-main {
+  display: grid !important;
+  grid-area: main !important;
+  grid-template-columns: 46px minmax(0, 1fr) !important;
+  gap: 12px !important;
+  min-width: 0 !important;
+}
+
+html.dui-pro-overhaul [data-dui-panel="plugins"] .dy-plugin-card-icon {
+  display: grid !important;
+  width: 46px !important;
+  height: 46px !important;
+  flex: 0 0 auto !important;
+  place-items: center !important;
+  border: 1px solid rgba(98, 217, 208, .24) !important;
+  border-radius: 13px !important;
+  background:
+    radial-gradient(circle at 28% 20%, rgba(255, 255, 255, .14), transparent 34%),
+    rgba(98, 217, 208, .08) !important;
+  color: #b9fff7 !important;
+  font-family: var(--font-mono) !important;
+  font-size: 11px !important;
+  font-weight: 800 !important;
+  letter-spacing: .02em !important;
+  overflow: hidden !important;
+}
+
+html.dui-pro-overhaul [data-dui-panel="plugins"] .dy-plugin-card-icon[data-has-logo="false"] {
+  border-color: rgba(172, 197, 199, .22) !important;
+  background: rgba(172, 197, 199, .07) !important;
+  color: #b5c6c4 !important;
+}
+
+html.dui-pro-overhaul [data-dui-panel="plugins"] .dy-plugin-card-logo {
+  width: 28px !important;
+  height: 28px !important;
+  object-fit: contain !important;
+}
+
+html.dui-pro-overhaul [data-dui-panel="plugins"] .dy-plugin-card-icon[data-logo-tone="light"] .dy-plugin-card-logo {
+  filter: invert(1) brightness(.92) !important;
+}
+
+/* OpenAI's plugin mark is black and transparent, so give it a white tile
+   and keep the original mark legible against the dark plugin workspace. */
+html.dui-pro-overhaul [data-dui-panel="plugins"] .dy-plugin-card-icon[data-plugin-id="openai"] {
+  border-color: rgba(255, 255, 255, .78) !important;
+  background: #fff !important;
+}
+
+html.dui-pro-overhaul [data-dui-panel="plugins"] .dy-plugin-card-icon[data-plugin-id="openai"] .dy-plugin-card-logo {
+  filter: none !important;
+}
+
+html.dui-pro-overhaul [data-dui-panel="plugins"] .dy-plugin-card-copy {
+  min-width: 0 !important;
+}
+
+html.dui-pro-overhaul [data-dui-panel="plugins"] .dy-plugin-card-heading {
+  display: flex !important;
+  align-items: center !important;
+  justify-content: space-between !important;
+  gap: 8px !important;
+  min-width: 0 !important;
+}
+
+html.dui-pro-overhaul [data-dui-panel="plugins"] .dy-plugin-card-title-line {
+  display: flex !important;
+  min-width: 0 !important;
+  align-items: center !important;
+  gap: 8px !important;
+}
+
+html.dui-pro-overhaul [data-dui-panel="plugins"] .dy-plugin-card-title-line h3 {
+  min-width: 0 !important;
+  margin: 0 !important;
+  overflow: hidden !important;
+  color: #e7f1ee !important;
+  font-family: var(--font-display) !important;
+  font-size: 14px !important;
+  font-weight: 680 !important;
+  letter-spacing: -.02em !important;
+  line-height: 1.15 !important;
+  text-overflow: ellipsis !important;
+  white-space: nowrap !important;
+}
+
+html.dui-pro-overhaul [data-dui-panel="plugins"] .dy-plugin-state-dot,
+html.dui-pro-overhaul [data-dui-panel="plugins"] .dy-plugin-signal-led {
+  display: inline-block !important;
+  width: 6px !important;
+  height: 6px !important;
+  flex: 0 0 auto !important;
+  border-radius: 50% !important;
+}
+
+html.dui-pro-overhaul [data-dui-panel="plugins"] .dy-plugin-state-dot[data-tone="healthy"],
+html.dui-pro-overhaul [data-dui-panel="plugins"] .dy-plugin-signal-led[data-tone="healthy"] {
+  background: var(--plugin-green) !important;
+  box-shadow: 0 0 0 3px rgba(155, 229, 173, .10) !important;
+}
+
+html.dui-pro-overhaul [data-dui-panel="plugins"] .dy-plugin-state-dot[data-tone="attention"],
+html.dui-pro-overhaul [data-dui-panel="plugins"] .dy-plugin-signal-led[data-tone="attention"] {
+  background: var(--plugin-amber) !important;
+  box-shadow: 0 0 0 3px rgba(241, 201, 121, .10) !important;
+}
+
+html.dui-pro-overhaul [data-dui-panel="plugins"] .dy-plugin-state-dot[data-tone="idle"],
+html.dui-pro-overhaul [data-dui-panel="plugins"] .dy-plugin-signal-led[data-tone="idle"] {
+  background: #788a89 !important;
+  box-shadow: 0 0 0 3px rgba(120, 138, 137, .08) !important;
+}
+
+html.dui-pro-overhaul [data-dui-panel="plugins"] .dy-plugin-state-badge {
+  flex: 0 0 auto !important;
+  padding: 4px 7px !important;
+  border-radius: 999px !important;
+  font-size: 8px !important;
+  font-weight: 760 !important;
+  letter-spacing: .06em !important;
+  text-transform: uppercase !important;
+}
+
+html.dui-pro-overhaul [data-dui-panel="plugins"] .dy-plugin-card-meta {
+  display: flex !important;
+  align-items: center !important;
+  gap: 7px !important;
+  margin-top: 7px !important;
+  overflow: hidden !important;
+  color: #6d8785 !important;
+  font-family: var(--font-mono) !important;
+  font-size: 8px !important;
+  font-weight: 650 !important;
+  letter-spacing: .06em !important;
+  text-transform: uppercase !important;
+  white-space: nowrap !important;
+}
+
+html.dui-pro-overhaul [data-dui-panel="plugins"] .dy-plugin-card-meta > span + span::before,
+html.dui-pro-overhaul [data-dui-panel="plugins"] .dy-plugin-card-meta > code::before {
+  content: '·' !important;
+  padding-right: 7px !important;
+  color: #3c5453 !important;
+}
+
+html.dui-pro-overhaul [data-dui-panel="plugins"] .dy-plugin-card-meta code {
+  overflow: hidden !important;
+  color: #58716f !important;
+  font-family: inherit !important;
+  text-overflow: ellipsis !important;
+}
+
+html.dui-pro-overhaul [data-dui-panel="plugins"] .dy-plugin-card-description {
+  display: -webkit-box !important;
+  margin: 8px 0 0 !important;
+  overflow: hidden !important;
+  color: #9aafac !important;
+  font-size: 11px !important;
+  line-height: 1.45 !important;
+  -webkit-box-orient: vertical !important;
+  -webkit-line-clamp: 2 !important;
+}
+
+html.dui-pro-overhaul [data-dui-panel="plugins"] .dy-plugin-card-signal {
+  display: flex !important;
+  min-width: 0 !important;
+  align-items: center !important;
+  gap: 7px !important;
+  margin-top: 10px !important;
+  padding: 7px 9px !important;
+  border: 1px solid rgba(152, 178, 180, .11) !important;
+  border-radius: 8px !important;
+  background: rgba(255, 255, 255, .025) !important;
+  color: #76908e !important;
+  font-family: var(--font-mono) !important;
+  font-size: 9px !important;
+  line-height: 1.3 !important;
+}
+
+html.dui-pro-overhaul [data-dui-panel="plugins"] .dy-plugin-card-signal > span:last-child {
+  min-width: 0 !important;
+  overflow: hidden !important;
+  text-overflow: ellipsis !important;
+  white-space: nowrap !important;
+}
+
+html.dui-pro-overhaul [data-dui-panel="plugins"] .dy-plugin-card-signal[data-tone="healthy"] {
+  border-color: rgba(155, 229, 173, .13) !important;
+  color: #8ab29a !important;
+}
+
+html.dui-pro-overhaul [data-dui-panel="plugins"] .dy-plugin-card-signal[data-tone="attention"] {
+  border-color: rgba(241, 201, 121, .18) !important;
+  background: rgba(241, 201, 121, .045) !important;
+  color: #c7a866 !important;
+}
+
+html.dui-pro-overhaul [data-dui-panel="plugins"] .dy-plugin-card-stats {
+  display: grid !important;
+  grid-area: stats !important;
+  align-content: start !important;
+  gap: 9px !important;
+  min-width: 0 !important;
+  padding-left: 14px !important;
+  border-left: 1px solid rgba(152, 178, 180, .12) !important;
+}
+
+html.dui-pro-overhaul [data-dui-panel="plugins"] .dy-plugin-card-stat {
+  display: grid !important;
+  min-width: 0 !important;
+  gap: 3px !important;
+}
+
+html.dui-pro-overhaul [data-dui-panel="plugins"] .dy-plugin-card-stat > span {
+  color: #607a78 !important;
+  font-family: var(--font-mono) !important;
+  font-size: 8px !important;
+  font-weight: 700 !important;
+  letter-spacing: .12em !important;
+  text-transform: uppercase !important;
+}
+
+html.dui-pro-overhaul [data-dui-panel="plugins"] .dy-plugin-card-stat > strong {
+  overflow: hidden !important;
+  color: #c0d3cf !important;
+  font-size: 10px !important;
+  font-weight: 660 !important;
+  line-height: 1.35 !important;
+  text-overflow: ellipsis !important;
+  white-space: nowrap !important;
+}
+
+html.dui-pro-overhaul [data-dui-panel="plugins"] .dy-plugin-row-actions {
+  display: flex !important;
+  grid-area: actions !important;
+  align-items: center !important;
+  justify-content: flex-end !important;
+  gap: 6px !important;
+  min-width: 0 !important;
+  flex-wrap: wrap !important;
+}
+
+html.dui-pro-overhaul [data-dui-panel="plugins"] .dy-plugin-row-action {
+  display: inline-flex !important;
+  min-width: 0 !important;
+  min-height: 30px !important;
+  align-items: center !important;
+  justify-content: center !important;
+  gap: 6px !important;
+  padding: 0 9px !important;
+  border: 1px solid rgba(152, 178, 180, .17) !important;
+  border-radius: 9px !important;
+  background: rgba(255, 255, 255, .035) !important;
+  color: #9eb3b0 !important;
+  font-size: 9px !important;
+  font-weight: 760 !important;
+  white-space: nowrap !important;
+}
+
+html.dui-pro-overhaul [data-dui-panel="plugins"] .dy-plugin-row-action:hover:not(:disabled) {
+  border-color: rgba(98, 217, 208, .34) !important;
+  color: #d7faf4 !important;
+}
+
+html.dui-pro-overhaul [data-dui-panel="plugins"] .dy-plugin-row-setup {
+  border-color: rgba(241, 201, 121, .29) !important;
+  background: rgba(241, 201, 121, .08) !important;
+  color: #f0d798 !important;
+}
+
+html.dui-pro-overhaul [data-dui-panel="plugins"] .dy-plugin-row-power.is-start {
+  border-color: rgba(155, 229, 173, .30) !important;
+  background: rgba(155, 229, 173, .09) !important;
+  color: #c3f2cd !important;
+}
+
+html.dui-pro-overhaul [data-dui-panel="plugins"] .dy-plugin-row-power.is-stop {
+  border-color: rgba(241, 138, 146, .28) !important;
+  background: rgba(241, 138, 146, .07) !important;
+  color: #ffc8cb !important;
+}
+
+html.dui-pro-overhaul [data-dui-panel="plugins"] .dy-plugin-row-manage.is-open {
+  border-color: rgba(98, 217, 208, .38) !important;
+  background: rgba(98, 217, 208, .12) !important;
+  color: #c8fff7 !important;
+}
+
+html.dui-pro-overhaul [data-dui-panel="plugins"] .dy-plugin-action-glyph {
+  font-size: 15px !important;
+  font-weight: 500 !important;
+  line-height: 1 !important;
+}
+
+html.dui-pro-overhaul [data-dui-panel="plugins"] .dy-plugin-manage-glyph {
+  display: inline-block !important;
+  font-size: 11px !important;
+  letter-spacing: 1px !important;
+  line-height: 1 !important;
+  transform: translateY(-1px) !important;
+}
+
+html.dui-pro-overhaul [data-dui-panel="plugins"] .dy-plugin-card-detail {
+  grid-area: detail !important;
+  min-width: 0 !important;
+  padding-top: 12px !important;
+  border-top: 1px solid rgba(152, 178, 180, .12) !important;
+}
+
+html.dui-pro-overhaul [data-dui-panel="plugins"] .dy-plugin-card-detail-actions {
+  display: flex !important;
+  flex-wrap: wrap !important;
+  justify-content: flex-end !important;
+  gap: 6px !important;
+}
+
+html.dui-pro-overhaul [data-dui-panel="plugins"] .dy-plugin-card-detail .dui-button {
+  min-height: 29px !important;
+  padding: 0 10px !important;
+  border-radius: 8px !important;
+  font-size: 9px !important;
+}
+
+html.dui-pro-overhaul [data-dui-panel="plugins"] .dy-plugin-clawtalk-ops[data-clawtalk-ops="inline"] {
+  margin-top: 10px !important;
+  border-color: rgba(98, 217, 208, .22) !important;
+  border-radius: 10px !important;
+  background: rgba(98, 217, 208, .045) !important;
+}
+
+html.dui-pro-overhaul [data-dui-panel="plugins"] .dy-plugin-empty-state {
+  min-height: 190px !important;
+  display: grid !important;
+  place-content: center !important;
+  padding: 30px !important;
+  border: 1px dashed rgba(152, 178, 180, .20) !important;
+  border-radius: 14px !important;
+  background: rgba(255, 255, 255, .018) !important;
+  text-align: center !important;
+}
+
+@media (max-width: 1040px) {
+  html.dui-pro-overhaul [data-dui-panel="plugins"] .dy-plugins-header-top {
+    display: grid !important;
+  }
+
+  html.dui-pro-overhaul [data-dui-panel="plugins"] .dy-plugins-header-actions {
+    justify-content: flex-start !important;
+  }
+
+  html.dui-pro-overhaul [data-dui-panel="plugins"] .dy-plugin-card-grid {
+    grid-template-columns: minmax(0, 1fr) !important;
+  }
+}
+
+@media (max-width: 760px) {
+  html.dui-pro-overhaul [data-dui-panel="plugins"] .dy-plugins-header {
+    padding: 18px 16px 15px !important;
+  }
+
+  html.dui-pro-overhaul [data-dui-panel="plugins"] .dy-plugins-overview {
+    grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+  }
+
+  html.dui-pro-overhaul [data-dui-panel="plugins"] .dy-plugin-discovery-search {
+    grid-template-columns: minmax(0, 1fr) !important;
+  }
+
+  html.dui-pro-overhaul [data-dui-panel="plugins"] .dy-plugin-search-button {
+    width: 100% !important;
+  }
+
+  html.dui-pro-overhaul [data-dui-panel="plugins"] .dy-plugins-list {
+    padding: 14px 12px 20px !important;
+  }
+
+  html.dui-pro-overhaul [data-dui-panel="plugins"] .dy-plugin-card-grid {
+    grid-template-columns: minmax(0, 1fr) !important;
+  }
+
+  html.dui-pro-overhaul [data-dui-panel="plugins"] .dy-plugin-row {
+    grid-template-columns: minmax(0, 1fr) !important;
+    grid-template-areas:
+      "main"
+      "stats"
+      "actions"
+      "detail" !important;
+  }
+
+  html.dui-pro-overhaul [data-dui-panel="plugins"] .dy-plugin-card-stats {
+    grid-template-columns: repeat(3, minmax(0, 1fr)) !important;
+    padding: 10px 0 0 !important;
+    border-top: 1px solid rgba(152, 178, 180, .12) !important;
+    border-left: 0 !important;
+  }
+
+  html.dui-pro-overhaul [data-dui-panel="plugins"] .dy-plugin-row-actions,
+  html.dui-pro-overhaul [data-dui-panel="plugins"] .dy-plugin-card-detail-actions {
+    justify-content: flex-start !important;
+  }
+}
+
+@media (max-width: 480px) {
+  html.dui-pro-overhaul [data-dui-panel="plugins"] .dy-plugins-title-row {
+    display: grid !important;
+    gap: 5px !important;
+  }
+
+  html.dui-pro-overhaul [data-dui-panel="plugins"] .dy-plugin-card-heading {
+    align-items: flex-start !important;
+  }
+
+  html.dui-pro-overhaul [data-dui-panel="plugins"] .dy-plugin-card-stats {
+    grid-template-columns: 1fr 1fr !important;
+  }
+
+  html.dui-pro-overhaul [data-dui-panel="plugins"] .dy-plugin-card-stat:last-child {
+    grid-column: 1 / -1 !important;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  html.dui-pro-overhaul [data-dui-panel="plugins"] .dy-plugin-row {
+    transition: none !important;
+  }
+}

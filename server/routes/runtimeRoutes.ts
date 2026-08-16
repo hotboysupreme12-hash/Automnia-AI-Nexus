@@ -2,10 +2,12 @@ import type { Express } from 'express'
 import { z } from 'zod'
 import { apiFailure, apiSuccess } from '../controlPlaneHttp'
 import type { RuntimeActionService } from '../services/runtime/runtimeActionService'
+import type { GatewayActivityFeed } from '../services/runtime/gatewayActivityFeedService'
 
 type RuntimeRoutesOptions = {
   getRuntimeStatusPayload: (forcePluginRefresh: boolean) => Promise<Record<string, unknown>>
   getRuntimeSummaryPayload: (forceRefresh: boolean) => Promise<Record<string, unknown>>
+  getGatewayActivityFeed: (limit?: number) => Promise<GatewayActivityFeed>
   isValidAgentId: (agentId: string) => boolean
   runtimeActions: RuntimeActionService
 }
@@ -25,6 +27,10 @@ const RuntimeGatewayChatAbortStaleSchema = z.object({
 
 const RuntimeRunAbortSchema = z.object({
   runId: z.string().trim().min(1).max(160),
+})
+
+const RuntimeActivityQuerySchema = z.object({
+  limit: z.coerce.number().int().min(1).max(100).optional().default(48),
 })
 
 export function registerRuntimeRoutes(app: Express, options: RuntimeRoutesOptions) {
@@ -120,6 +126,17 @@ export function registerRuntimeRoutes(app: Express, options: RuntimeRoutesOption
       return apiSuccess(res, await options.getRuntimeSummaryPayload(forceRefresh))
     } catch (error) {
       return apiFailure(res, 500, 'runtime_summary_failed', 'Failed to fetch runtime summary', String(error))
+    }
+  })
+
+  app.get('/api/openclaw/runtime/activity', async (req, res) => {
+    const parsed = RuntimeActivityQuerySchema.safeParse(req.query)
+    if (!parsed.success) return apiFailure(res, 400, 'invalid_payload', 'Invalid activity query', parsed.error.flatten())
+
+    try {
+      return apiSuccess(res, await options.getGatewayActivityFeed(parsed.data.limit))
+    } catch (error) {
+      return apiFailure(res, 500, 'runtime_activity_failed', 'Failed to fetch Gateway activity', String(error))
     }
   })
 }

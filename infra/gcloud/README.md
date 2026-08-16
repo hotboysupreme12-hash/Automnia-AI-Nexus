@@ -20,7 +20,7 @@ included in the sanitized corpus by `npm run publish:knowledge`.
 | `switch-traffic.ps1` | Freezes source writes, performs a final delta migration, re-verifies, moves the permanent domain, and restores the source automatically on failure. |
 | `rollback.ps1` | Freezes the active target, reverse-migrates post-cutover changes, verifies, and moves the domain back. |
 | `configure-domain.ps1` | One-time domain mapping and optional Cloud DNS record setup. |
-| `shopify-plan-mappings.json` | The nine authoritative product mappings. Google Cloud merges purchases by account email into one highest-tier entitlement and canonical license key. |
+| `shopify-plan-mappings.json` | The thirteen authoritative product mappings, including the $1 / 100,000-credit refill. Google Cloud merges purchases by account email into one highest-tier entitlement and canonical license key. |
 | `firestore.indexes.json` | The authoritative composite-index contract. It is empty because the current query plan needs no composite index. |
 | `shopify.app.toml.template` | One-time Shopify webhook migration from a project URL to the permanent Automnia URL. |
 | `service/` | Deployable Node 22 Cloud Run service for account activation/sign-in, Google linking, license activation, Shopify webhooks, credits, Vertex AI relay, and authenticated Agent Search answers. |
@@ -120,20 +120,21 @@ canonical entitlement changes but the prior non-revoked hosted-credit balances
 are preserved. Any credits granted by the new order are additive; they are not
 used to replace the previous balance. The public license response reports the
 pooled balance, and the hosted relay can use that wallet when the account’s
-usage priority is **Automnia credits first** or **provider first with Automnia
-fallback**. **BYOK only** intentionally bypasses hosted-credit charging while
-leaving the wallet intact for a later priority change.
+usage priority is **Automnia credits only** or **My provider + Automnia credits**.
+For the combined route, the account can choose whether Automnia or the connected
+provider runs first. There is no selectable provider-only route.
 
 The service keeps wallet sources separate for auditability and starts future
 deductions with the canonical upgraded entitlement, then consumes older
 non-revoked sources. Revoked records are excluded from the pool.
 
-BYOK does not force provider-first routing. If a BYOK account has a confirmed
-pooled balance—such as credits carried over from Starter—the Account & License
-selector defaults to **Automnia credits first** and remains editable for all
-three routes. A zero-balance BYOK account defaults to provider-first until a
-hosted balance is available. Only Starter Subscription is locked to Automnia
-credits.
+BYOK starts at the $29.99 tier. If a BYOK account has a confirmed pooled
+balance—such as credits carried over from Starter—the Account & License
+selector exposes **My provider + Automnia credits** and a secondary choice of
+provider-first or Automnia-first. Starter ($19.99) and credit refills remain
+locked to **Automnia credits only**; a zero balance stops the route with an
+explicit refill message. The $49.99 and $199 Enterprise tiers use the same
+combined provider-plus-Automnia controls.
 
 The lower-level commands are available for audited backup/restore operations:
 

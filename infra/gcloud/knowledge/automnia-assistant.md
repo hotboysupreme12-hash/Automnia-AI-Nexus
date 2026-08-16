@@ -48,16 +48,14 @@ Higher plans can use BYOK provider credentials and can continue local work offli
 
 The hosted relay is a Cloud Run service owned by the Automnia deployment. The desktop app sends hosted-credit requests to the relay; the relay authenticates the active license, calls the configured Google Vertex AI service identity, records usage, and returns the remaining Automnia credit balance. A relay failure should be shown as a relay or provider problem and should not silently switch a hosted-credit request to an unpaid provider.
 
-BYOK tiers can choose Automnia-credits-first, provider-first with Automnia
-fallback, or provider-only routing in Account & License. A BYOK account with a
-confirmed pooled balance—including credits carried over from Starter—defaults
-to Automnia credits first but can change the priority at any time. A zero-
-balance BYOK account defaults to provider-first until credits are added.
-Provider-only requests do not spend Automnia credits and do not delete the
-wallet; the other two routes can use the account's pooled Automnia balance.
-The selector is locked only for Starter Subscription. Purchases linked to the
-same verified email are pooled after Google or confirmed-password sign-in, so
-users do not need to manage a separate key for each purchase.
+BYOK ($29.99) and higher tiers can choose **Automnia credits only** or **My
+provider + Automnia credits** in Account & License. The combined route exposes a
+secondary order choice: provider-first with Automnia fallback or Automnia-first
+with provider fallback. There is no selectable provider-only route. Starter
+($19.99) and credit-refill purchases stay locked to Automnia credits only; a
+confirmed zero balance stops the route and tells the user to refill. Purchases
+linked to the same verified email are pooled after Google or confirmed-password
+sign-in, so users do not need to manage a separate key for each purchase.
 
 ## OpenClaw gateway and first-run migration
 

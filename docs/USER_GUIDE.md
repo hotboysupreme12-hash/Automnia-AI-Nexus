@@ -105,20 +105,24 @@ path; support can perform an account migration when ownership has been verified.
 
 | Plan | Access policy |
 | --- | --- |
-| Starter — $19.99 | Hosted Automnia subscription access through Subscription Relay. No BYOK and no permanent/offline entitlement. |
-| Pro — $29.99 | Permanent Pro access, hosted Automnia credits, and BYOK priority options. |
-| Enterprise — $49.99 or $199.99 | Permanent Enterprise access, hosted Automnia credits, and BYOK priority options. |
+| Starter — $19.99 | Hosted Automnia subscription access through Automnia credits only. No BYOK until upgrade; additional credit refills remain available. |
+| BYOK — $29.99 | Permanent BYOK access with the connected provider plus Automnia credits. Choose which route runs first. |
+| Higher tier — $49.99 | Permanent access with the connected provider plus Automnia credits. Choose which route runs first. |
+| Enterprise — $199.00 | Permanent enterprise access with the connected provider plus Automnia credits. Choose which route runs first. |
 
 When a customer owns more than one product, the account automatically uses the
 highest tier. Customers do not need to manage a separate key for each purchase.
 After the first account link, password or Google sign-in restores the account
-entitlement across devices. Starter requires online subscription verification;
-Pro and higher permanent tiers remain usable offline through a configured BYOK
-provider. BYOK is not locked to provider-first: a BYOK account with a confirmed
-pooled Automnia balance—including credits carried over from Starter—can choose
-Automnia credits first, provider first with Automnia fallback, or provider-only.
-Provider-only bypasses the hosted wallet without deleting it. Credits from
-purchases using the same verified email are pooled across the account.
+entitlement across devices. Starter requires online subscription verification and
+is locked to Automnia credits; when the confirmed balance is zero, the app stops
+and tells the user to refill. BYOK ($29.99) and higher tiers can use the
+connected provider plus a confirmed pooled Automnia balance—including credits
+carried over from Starter—and can choose either provider-first or Automnia-first
+ordering within that combined route. If Automnia-first is selected and the
+confirmed balance reaches zero, the connected provider is used. Credit refills
+add to the pooled balance.
+Credits from purchases using the same verified email are pooled across the
+account.
 
 ---
 

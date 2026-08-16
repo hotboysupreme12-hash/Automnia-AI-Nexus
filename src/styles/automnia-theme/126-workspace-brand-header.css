@@ -1,0 +1,147 @@
+/* Mark-only shell identity: the emblem replaces the full wordmark in the rail
+   and in the compact workspace context header. */
+
+html.dui-pro-overhaul .dy-human-rail-head--lockup,
+html.dui-pro-overhaul.dui-cohesive-ui .dy-human-rail-head--lockup {
+  display: grid !important;
+  place-items: center !important;
+  min-height: 142px !important;
+  padding: 12px !important;
+}
+
+html.dui-pro-overhaul .dy-human-rail-emblem,
+html.dui-pro-overhaul.dui-cohesive-ui .dy-human-rail-emblem {
+  display: block !important;
+  width: clamp(92px, 10vw, 126px) !important;
+  height: clamp(92px, 10vw, 126px) !important;
+  max-width: none !important;
+  object-fit: contain !important;
+  object-position: center !important;
+  border: 0 !important;
+  border-radius: 0 !important;
+  background: transparent !important;
+  box-shadow: none !important;
+  filter: saturate(1.12) brightness(1.06) contrast(1.03) drop-shadow(0 0 18px rgba(72, 224, 255, .28)) !important;
+}
+
+html.dui-pro-overhaul .dy-workspace-context__heading,
+html.dui-pro-overhaul.dui-cohesive-ui .dy-workspace-context__heading {
+  display: inline-flex !important;
+  flex-direction: column !important;
+  width: clamp(118px, 11vw, 154px) !important;
+  max-width: 100% !important;
+  align-items: center !important;
+  gap: 6px !important;
+  margin: 0 !important;
+  color: #f2f4f1 !important;
+  font-size: inherit !important;
+  line-height: 1 !important;
+  text-align: center !important;
+}
+
+html.dui-pro-overhaul .dy-workspace-context__brand-mark,
+html.dui-pro-overhaul.dui-cohesive-ui .dy-workspace-context__brand-mark {
+  position: relative !important;
+  display: grid !important;
+  flex: 0 1 auto !important;
+  width: clamp(118px, 11vw, 154px) !important;
+  height: clamp(118px, 11vw, 154px) !important;
+  place-items: center !important;
+  overflow: hidden !important;
+  border: 0 !important;
+  background: transparent !important;
+}
+
+html.dui-pro-overhaul .dy-workspace-context__brand-mark img,
+html.dui-pro-overhaul.dui-cohesive-ui .dy-workspace-context__brand-mark img {
+  position: static !important;
+  display: block !important;
+  width: 100% !important;
+  max-width: none !important;
+  height: 100% !important;
+  object-fit: contain !important;
+  object-position: center !important;
+  transform: none !important;
+  filter: saturate(1.1) brightness(1.06) contrast(1.03) drop-shadow(0 0 16px rgba(72, 224, 255, .22)) !important;
+}
+
+html.dui-pro-overhaul .dy-workspace-context__brand-mark,
+html.dui-pro-overhaul.dui-cohesive-ui .dy-workspace-context__brand-mark {
+  border-radius: 0 !important;
+}
+
+@media (max-width: 860px) {
+  html.dui-pro-overhaul .dy-human-rail-head--lockup,
+  html.dui-pro-overhaul.dui-cohesive-ui .dy-human-rail-head--lockup {
+    display: grid !important;
+    width: 68px !important;
+    min-width: 68px !important;
+    flex: 0 0 68px !important;
+    min-height: 0 !important;
+    height: 100% !important;
+    padding: 5px !important;
+    place-items: center !important;
+  }
+
+  html.dui-pro-overhaul .dy-human-rail-emblem,
+  html.dui-pro-overhaul.dui-cohesive-ui .dy-human-rail-emblem {
+    width: 52px !important;
+    height: 52px !important;
+  }
+}
+
+html.dui-pro-overhaul .dy-workspace-context__tab-label,
+html.dui-pro-overhaul.dui-cohesive-ui .dy-workspace-context__tab-label {
+  display: inline-block !important;
+  flex: 0 1 auto !important;
+  width: 100% !important;
+  color: #a6d6ba !important;
+  font-size: 10px !important;
+  font-weight: 760 !important;
+  letter-spacing: .1em !important;
+  line-height: 1 !important;
+  text-transform: uppercase !important;
+  text-shadow: 0 0 12px rgba(166, 214, 186, .16) !important;
+  white-space: nowrap !important;
+}
+
+@media (max-width: 520px) {
+  html.dui-pro-overhaul .dy-workspace-context__heading,
+  html.dui-pro-overhaul.dui-cohesive-ui .dy-workspace-context__heading {
+    width: clamp(104px, 35vw, 132px) !important;
+    gap: 8px !important;
+  }
+
+  html.dui-pro-overhaul .dy-workspace-context__brand-mark,
+  html.dui-pro-overhaul.dui-cohesive-ui .dy-workspace-context__brand-mark {
+    width: clamp(104px, 35vw, 132px) !important;
+    height: clamp(104px, 35vw, 132px) !important;
+  }
+
+  html.dui-pro-overhaul .dy-workspace-context__tab-label,
+  html.dui-pro-overhaul.dui-cohesive-ui .dy-workspace-context__tab-label {
+    font-size: 9px !important;
+    letter-spacing: .07em !important;
+  }
+}
+
+/* Teal navigation icon family: preserve Monitor's existing icon treatment. */
+html.dui-pro-overhaul .dy-human-nav :is(
+  button[data-tone="recruit"],
+  button[data-tone="agents"],
+  button[data-tone="missions"],
+  button[data-tone="plugins"],
+  button[data-tone="settings"],
+  button[data-tone="help"]
+) .dy-human-nav-icon-img,
+html.dui-pro-overhaul.dui-cohesive-ui .dy-human-nav :is(
+  button[data-tone="recruit"],
+  button[data-tone="agents"],
+  button[data-tone="missions"],
+  button[data-tone="plugins"],
+  button[data-tone="settings"],
+  button[data-tone="help"]
+) .dy-human-nav-icon-img {
+  opacity: .94 !important;
+  filter: none !important;
+}

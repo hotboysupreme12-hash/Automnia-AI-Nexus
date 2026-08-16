@@ -1,0 +1,57 @@
+/* Account security is intentionally text-first: keep the form content visible
+   without adding another panel or filled control surface. */
+
+html.dui-pro-overhaul [data-ui-revision="settings-v2"].dui-settings-redesign .dui-settings-account-password {
+  margin: 18px auto 4px !important;
+  padding: 10px 0 14px !important;
+  border: 0 !important;
+  border-radius: 0 !important;
+  background: transparent !important;
+  box-shadow: none !important;
+}
+
+html.dui-pro-overhaul [data-ui-revision="settings-v2"].dui-settings-redesign .dui-settings-account-password__field input {
+  min-height: 0 !important;
+  padding: 5px 0 !important;
+  border: 0 !important;
+  border-radius: 0 !important;
+  background: transparent !important;
+  box-shadow: none !important;
+}
+
+html.dui-pro-overhaul [data-ui-revision="settings-v2"].dui-settings-redesign .dui-settings-account-password__field input:focus {
+  border: 0 !important;
+  background: transparent !important;
+  box-shadow: none !important;
+  outline: 1px solid rgb(112 217 208 / .55);
+  outline-offset: 5px;
+}
+
+html.dui-pro-overhaul [data-ui-revision="settings-v2"].dui-settings-redesign .dui-settings-account-password__submit,
+html.dui-pro-overhaul [data-ui-revision="settings-v2"].dui-settings-redesign .dui-settings-account-password__connect {
+  width: auto !important;
+  min-height: 0 !important;
+  margin: 10px auto 0;
+  padding: 6px 10px;
+  border: 0 !important;
+  border-radius: 0 !important;
+  background: transparent !important;
+  color: #70d9d0 !important;
+  box-shadow: none !important;
+}
+
+html.dui-pro-overhaul [data-ui-revision="settings-v2"].dui-settings-redesign .dui-settings-account-password__submit:hover:not(:disabled),
+html.dui-pro-overhaul [data-ui-revision="settings-v2"].dui-settings-redesign .dui-settings-account-password__connect:hover:not(:disabled) {
+  transform: none;
+  filter: none;
+  background: transparent !important;
+  color: #b6fff4 !important;
+  text-decoration: underline;
+  box-shadow: none !important;
+}
+
+html.dui-pro-overhaul [data-ui-revision="settings-v2"].dui-settings-redesign .dui-settings-account-password__submit:focus-visible,
+html.dui-pro-overhaul [data-ui-revision="settings-v2"].dui-settings-redesign .dui-settings-account-password__connect:focus-visible {
+  outline: 1px solid rgb(112 217 208 / .55);
+  outline-offset: 5px;
+}

@@ -19,6 +19,12 @@ export type GatewayAgentTurnResult = {
 export type GatewayAgentTurnServiceOptions = {
   gatewayHttpPort: number
   openClawAgentTurnTimeoutFloorSeconds: number
+  trafficGate?: () => {
+    messageTrafficAllowed: boolean
+    blockMessage: string | null
+  }
+  /** Refresh the account entitlement and live hosted route after a relay billing/auth failure. */
+  reconcileBillingAccess?: () => Promise<boolean>
   isValidAgentId: (agentId: string) => boolean
   isRetiredAgentId: (agentId: string) => boolean
   streamObserver: (id?: string) => { emit: AgentTurnStreamEmitter } | null | undefined
@@ -96,6 +102,16 @@ function isStaleCodexSessionGenerationFailure(result: GatewayAgentTurnResult) {
   return /codex session generation is no longer current/iu.test(`${result.stdout}\n${result.stderr}`)
 }
 
+function isHostedBillingOrAuthFailure(result: GatewayAgentTurnResult, modelId: string) {
+  if (result.code === 0) return false
+  const detail = `${result.stdout}\n${result.stderr}`.toLowerCase()
+  const hostedModel = /^automnia-cloud\//i.test(modelId.trim()) || /automnia[- ]cloud/.test(detail)
+  if (!hostedModel) return false
+  return result.code === 401
+    || result.code === 402
+    || /billing|insufficient (?:balance|credits|quota)|credit balance|payment required|authentication_error|unauthorized|no active license|license key/.test(detail)
+}
+
 export function createGatewayAgentTurnService(options: GatewayAgentTurnServiceOptions) {
   async function runGatewayAgentTurnForStream(
     body: Record<string, unknown>,
@@ -111,6 +127,21 @@ export function createGatewayAgentTurnService(options: GatewayAgentTurnServiceOp
     const requestedTimeoutSeconds = typeof body.timeoutSeconds === 'number' ? body.timeoutSeconds : undefined
     const requestedFastMode = body.fastMode
     const requestedAttachments = Array.isArray(body.attachments) ? body.attachments : undefined
+
+    const trafficGate = options.trafficGate?.()
+    if (trafficGate && !trafficGate.messageTrafficAllowed) {
+      const message = trafficGate.blockMessage
+        || 'Automnia credits are unavailable. Restore the credit balance before sending another message.'
+      return {
+        ok: false,
+        reply: message,
+        stdout: '',
+        stderr: message,
+        code: 402,
+        failureKind: 'insufficient_credits',
+        runtimeTransport: 'gateway-chat',
+      }
+    }
 
     if (!options.isValidAgentId(agent) || options.isRetiredAgentId(agent)) {
       throw new Error('Invalid or retired agent id.')
@@ -149,7 +180,7 @@ export function createGatewayAgentTurnService(options: GatewayAgentTurnServiceOp
     emitGatewayStage('Preparing Gateway chat context.')
     const clawTalkSetupIntent = options.isClawTalkSetupIntentMessage(intentText)
     const clawTalkIntent = clawTalkSetupIntent || options.isClawTalkIntentMessage(intentText)
-    const agentPrimaryModelId = options.readAgentPrimaryModelIdSync(agent)
+    let agentPrimaryModelId = options.readAgentPrimaryModelIdSync(agent)
     const vertexCompactMode = options.isGoogleGeminiModelId(agentPrimaryModelId)
     const effectiveThinking = clawTalkIntent
       ? 'off'
@@ -226,6 +257,62 @@ export function createGatewayAgentTurnService(options: GatewayAgentTurnServiceOp
       streamObserverId,
       signal,
     })
+
+    // A stale persisted Cloud Run origin, a just-switched account, or a
+    // recently refreshed entitlement can leave one Gateway request using old
+    // billing/auth state. Reconcile once and retry in a fresh session so a
+    // transient relay 401/402 does not strand the operator. The traffic gate
+    // remains authoritative: credits-only accounts still stop explicitly at
+    // zero instead of bypassing the hosted route.
+    if (
+      isHostedBillingOrAuthFailure(result, agentPrimaryModelId)
+      && !signal.aborted
+      && options.reconcileBillingAccess
+    ) {
+      emitGatewayStage('Refreshing Automnia billing access and retrying once.', { retry: 'billing-access-recovery' })
+      const reconciled = await options.reconcileBillingAccess().catch(() => false)
+      const refreshedGate = options.trafficGate?.()
+      if (refreshedGate && !refreshedGate.messageTrafficAllowed) {
+        const message = refreshedGate.blockMessage
+          || 'Automnia credits are unavailable. Restore the credit balance before sending another message.'
+        result = { stdout: '', stderr: message, code: 402 }
+      } else if (reconciled && !signal.aborted) {
+        const staleSessionId = sessionId
+        sessionId = randomUUID()
+        options.deleteProviderConversationHistory(staleSessionId)
+        options.agentTurnSessions.set(sessionScope, sessionId)
+        agentPrimaryModelId = options.readAgentPrimaryModelIdSync(agent)
+        emitGatewayStage('Retrying your message on the refreshed billing route.', { sessionId, retry: 'billing-access-recovery' })
+        await options.appendAgentPromptDump({
+          route: routeOptions.route,
+          agent,
+          sessionId,
+          thinking: effectiveThinking,
+          fastMode: effectiveFastMode,
+          timeoutSeconds: effectiveTimeoutSeconds,
+          cwd: runCwd,
+          requestMessage: rawMessage,
+          intentMessage,
+          finalMessage: gatewayMessage,
+          note: `${routeOptions.note}; billing/auth recovery retry using a fresh Gateway session`,
+        })
+        result = await options.runGatewayChatTurn({
+          agentId: agent,
+          agentName,
+          message: gatewayMessage,
+          attachments: requestedAttachments,
+          sessionId,
+          requestedSessionKey,
+          freshSession: true,
+          thinking: effectiveThinking,
+          fastMode: effectiveFastMode,
+          timeoutMs: openClawTimeoutMs,
+          cwd: runCwd,
+          streamObserverId,
+          signal,
+        })
+      }
+    }
     if (isClawTalkRoute && isStaleCodexSessionGenerationFailure(result)) {
       const staleSessionId = sessionId
       sessionId = randomUUID()

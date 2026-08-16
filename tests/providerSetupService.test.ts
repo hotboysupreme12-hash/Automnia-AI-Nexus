@@ -19,6 +19,7 @@ type HarnessOptions = {
   now?: number
   platform?: NodeJS.Platform
   processEnv?: NodeJS.ProcessEnv
+  refreshAnthropicOAuthCredential?: ProviderSetupServiceOptions['refreshAnthropicOAuthCredential']
   spawnSync?: ProviderSetupServiceOptions['spawnSync']
 }
 
@@ -34,7 +35,7 @@ async function createHarness(options: HarnessOptions = {}) {
     ensureCalls: 0,
     localOAuth: { ...(options.localOAuth || {}) },
     modes: { ...(options.modes || {}) },
-    persisted: [] as Array<{ provider: 'google' | 'openai'; oauth: LocalOAuthCredential }>,
+    persisted: [] as Array<{ provider: 'google' | 'openai' | 'anthropic'; oauth: LocalOAuthCredential }>,
   }
 
   const service = createProviderSetupService({
@@ -64,6 +65,7 @@ async function createHarness(options: HarnessOptions = {}) {
       accessToken: 'google-refreshed-access',
       expiresAt: (options.now ?? 1_782_829_500_000) + 3_600_000,
     }),
+    refreshAnthropicOAuthCredential: options.refreshAnthropicOAuthCredential,
     refreshOpenAICodexOAuthCredential: async (oauth) => ({
       ...oauth,
       accessToken: 'codex-refreshed-access',
@@ -354,6 +356,29 @@ test('resolves provider request auth through env keys and refreshed OAuth creden
   }
 })
 
+test('resolves and refreshes Anthropic OAuth for API-compatible provider requests', async () => {
+  const harness = await createHarness({
+    localOAuth: { anthropic: { refreshToken: 'anthropic-refresh-secret', expiresAt: 1 } },
+    modes: { anthropic: 'oauth' },
+    refreshAnthropicOAuthCredential: async (oauth) => ({
+      ...oauth,
+      accessToken: 'anthropic-refreshed-access',
+      expiresAt: 1_782_829_900_000,
+    }),
+  })
+  try {
+    const auth = await harness.service.resolveProviderRequestAuth('anthropic', {}, [])
+    assert.deepEqual(auth, {
+      type: 'oauth',
+      accessToken: 'anthropic-refreshed-access',
+      source: 'local-oauth',
+    })
+    assert.equal(harness.state.persisted[0]?.provider, 'anthropic')
+  } finally {
+    await harness.cleanup()
+  }
+})
+
 test('loads OpenAI Codex OAuth runtime helpers from explicit and minified exports', async () => {
   const moduleUrls: string[] = []
   const harness = await createHarness({
@@ -401,6 +426,48 @@ test('loads OpenAI Codex OAuth runtime helpers from explicit and minified export
     assert.equal(refreshed.access, 'access-for-codex-refresh')
     assert.equal(refreshed.accountId, 'acct_refreshed')
     assert.ok(moduleUrls.every((moduleUrl) => moduleUrl.endsWith('/openai-chatgpt-oauth-flow.runtime.js')))
+  } finally {
+    await harness.cleanup()
+  }
+})
+
+test('loads Anthropic OAuth login and refresh from the bundled OpenClaw provider registry', async () => {
+  const moduleUrls: string[] = []
+  const harness = await createHarness({
+    importModule: async (moduleUrl) => {
+      moduleUrls.push(moduleUrl)
+      return {
+        n: (providerId: string) => providerId === 'anthropic'
+          ? {
+              login: async (callbacks: { onAuth: (auth: { url: string; instructions?: string }) => void }) => {
+                callbacks.onAuth({ url: 'https://claude.ai/oauth/authorize?state=test' })
+                return { access: 'anthropic-access', refresh: 'anthropic-refresh', expires: 1_782_829_900_000 }
+              },
+              refreshToken: async ({ refresh }: { refresh: string }) => ({
+                access: `anthropic-access-for-${refresh}`,
+                refresh: `anthropic-refresh-for-${refresh}`,
+                expires: 1_782_830_000_000,
+              }),
+            }
+          : undefined,
+      }
+    },
+  })
+  try {
+    const credentials = await harness.service.loginAnthropicOAuth!({
+      onAuth: () => undefined,
+      onPrompt: async () => '',
+    })
+    assert.deepEqual(credentials, {
+      access: 'anthropic-access',
+      refresh: 'anthropic-refresh',
+      expires: 1_782_829_900_000,
+    })
+
+    const refreshed = await harness.service.refreshAnthropicOAuthToken!('anthropic-refresh')
+    assert.equal(refreshed.access, 'anthropic-access-for-anthropic-refresh')
+    assert.equal(refreshed.expires, 1_782_830_000_000)
+    assert.match(moduleUrls[0], /\/oauth-[^/]+\.js$/)
   } finally {
     await harness.cleanup()
   }

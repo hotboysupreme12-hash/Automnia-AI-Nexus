@@ -46,61 +46,64 @@ html.dui-pro-overhaul.dui-cohesive-ui .dy-command-console__header::after {
 
 html.dui-pro-overhaul .dy-command-console__header-inner,
 html.dui-pro-overhaul.dui-cohesive-ui .dy-command-console__header-inner {
-  display: flex !important;
-  min-height: 72px !important;
+  position: relative !important;
+  display: grid !important;
+  min-height: 116px !important;
+  grid-template-columns: minmax(0, 1fr) minmax(0, auto) minmax(0, 1fr) !important;
   align-items: center !important;
-  justify-content: space-between !important;
-  flex-wrap: nowrap !important;
-  gap: 11px !important;
-  padding: 11px 13px 11px 14px !important;
+  gap: 12px !important;
+  padding: 17px 18px !important;
 }
 
 html.dui-pro-overhaul [data-dui-panel="command-console"].dy-command-console .dy-command-console__title-row,
 html.dui-pro-overhaul.dui-cohesive-ui [data-dui-panel="command-console"].dy-command-console .dy-command-console__title-row {
   display: flex !important;
   min-width: 0 !important;
-  flex: 1 1 auto !important;
+  grid-column: 2 !important;
+  flex: 0 1 auto !important;
   align-items: center !important;
-  gap: 10px !important;
+  justify-self: center !important;
+  gap: 12px !important;
 }
 
 html.dui-pro-overhaul [data-dui-panel="command-console"].dy-command-console .dy-command-console__title-row > div,
 html.dui-pro-overhaul.dui-cohesive-ui [data-dui-panel="command-console"].dy-command-console .dy-command-console__title-row > div {
   width: auto !important;
   min-width: 0 !important;
-  flex: 1 1 auto !important;
+  flex: 0 1 auto !important;
+  text-align: center !important;
 }
 
 html.dui-pro-overhaul .dy-command-console__mark,
 html.dui-pro-overhaul.dui-cohesive-ui .dy-command-console__mark {
   display: grid !important;
-  width: 34px !important;
-  height: 34px !important;
-  min-width: 34px !important;
+  width: 42px !important;
+  height: 42px !important;
+  min-width: 42px !important;
   place-items: center !important;
-  border: 1px solid rgb(116 214 201 / .22) !important;
-  border-radius: 10px !important;
+  border: 1px solid rgb(116 214 201 / .34) !important;
+  border-radius: 12px !important;
   background:
-    radial-gradient(circle at 35% 16%, rgb(210 255 248 / .12), transparent 45%),
-    linear-gradient(145deg, rgb(63 158 148 / .18), rgb(35 78 80 / .12)) !important;
-  color: #9aebdf !important;
-  box-shadow: inset 0 1px 0 rgb(255 255 255 / .05) !important;
+    radial-gradient(circle at 35% 16%, rgb(210 255 248 / .16), transparent 45%),
+    linear-gradient(145deg, rgb(63 158 148 / .25), rgb(35 78 80 / .16)) !important;
+  color: #79e2d0 !important;
+  box-shadow: inset 0 1px 0 rgb(255 255 255 / .06), 0 0 22px rgb(73 213 194 / .12) !important;
 }
 
-html.dui-pro-overhaul .dy-command-console__mark svg,
-html.dui-pro-overhaul.dui-cohesive-ui .dy-command-console__mark svg {
-  width: 16px !important;
-  height: 16px !important;
+html.dui-pro-overhaul .dy-command-console__mark-icon,
+html.dui-pro-overhaul.dui-cohesive-ui .dy-command-console__mark-icon {
+  width: 24px !important;
+  height: 24px !important;
 }
 
 html.dui-pro-overhaul .dy-command-console__eyebrow,
 html.dui-pro-overhaul.dui-cohesive-ui .dy-command-console__eyebrow {
   display: block;
-  margin-bottom: 2px;
-  color: #659f98;
-  font-size: 7px;
-  font-weight: 760;
-  letter-spacing: .14em;
+  margin-top: 5px;
+  color: #72cfc2;
+  font-size: 10px;
+  font-weight: 780;
+  letter-spacing: .16em;
   line-height: 1;
   text-transform: uppercase;
 }
@@ -117,35 +120,98 @@ html.dui-pro-overhaul.dui-cohesive-ui [data-dui-panel="command-console"].dy-comm
   clip: auto !important;
   clip-path: none !important;
   color: #f0f6f6 !important;
-  font-size: 14px !important;
-  font-weight: 710 !important;
-  letter-spacing: -.025em !important;
-  line-height: 1.15 !important;
+  font-size: 23px !important;
+  font-weight: 760 !important;
+  letter-spacing: -.035em !important;
+  line-height: 1.08 !important;
   text-transform: none !important;
 }
 
 html.dui-pro-overhaul [data-dui-panel="command-console"].dy-command-console .dy-command-console__subtitle,
 html.dui-pro-overhaul.dui-cohesive-ui [data-dui-panel="command-console"].dy-command-console .dy-command-console__subtitle {
   display: block !important;
-  max-width: 240px;
-  margin: 3px 0 0 !important;
+  max-width: 290px;
+  margin: 6px auto 0 !important;
   overflow: hidden;
-  color: #798c92 !important;
-  font-size: 8px !important;
-  font-weight: 520 !important;
-  line-height: 1.25 !important;
+  color: #8fa4a8 !important;
+  font-size: 11px !important;
+  font-weight: 560 !important;
+  line-height: 1.2 !important;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+html.dui-pro-overhaul .dy-command-console__live,
+html.dui-pro-overhaul.dui-cohesive-ui .dy-command-console__live {
+  display: inline-flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  gap: 6px !important;
+  min-height: 0 !important;
+  margin: 7px auto 0 !important;
+  padding: 0 !important;
+  border: 0 !important;
+  border-radius: 0 !important;
+  background: transparent !important;
+  color: #8fe2ac !important;
+  box-shadow: none !important;
+}
+
+html.dui-pro-overhaul .dy-command-console__live .dui-status-chip__label,
+html.dui-pro-overhaul.dui-cohesive-ui .dy-command-console__live .dui-status-chip__label {
+  display: none !important;
+}
+
+html.dui-pro-overhaul .dy-command-console__live .dui-status-chip__value,
+html.dui-pro-overhaul.dui-cohesive-ui .dy-command-console__live .dui-status-chip__value {
+  color: currentColor !important;
+  font-size: 10px !important;
+  font-weight: 720 !important;
+  letter-spacing: .02em !important;
+  line-height: 1 !important;
+}
+
+html.dui-pro-overhaul .dy-command-console__live .dui-status-chip__dot,
+html.dui-pro-overhaul.dui-cohesive-ui .dy-command-console__live .dui-status-chip__dot {
+  width: 7px !important;
+  height: 7px !important;
+  background: #74e2a5 !important;
+  box-shadow: 0 0 0 3px rgb(116 226 165 / .10), 0 0 10px rgb(116 226 165 / .56) !important;
+}
+
+html.dui-pro-overhaul .dy-command-console__live:is([data-stream-state="connecting"], [data-stream-state="reconnecting"]),
+html.dui-pro-overhaul.dui-cohesive-ui .dy-command-console__live:is([data-stream-state="connecting"], [data-stream-state="reconnecting"]) {
+  color: #f4c866 !important;
+}
+
+html.dui-pro-overhaul .dy-command-console__live:is([data-stream-state="connecting"], [data-stream-state="reconnecting"]) .dui-status-chip__dot,
+html.dui-pro-overhaul.dui-cohesive-ui .dy-command-console__live:is([data-stream-state="connecting"], [data-stream-state="reconnecting"]) .dui-status-chip__dot {
+  background: #f4c866 !important;
+  box-shadow: 0 0 0 3px rgb(244 200 102 / .10), 0 0 10px rgb(244 200 102 / .56) !important;
+  animation: dy-running-indicator-pulse 1.8s ease-in-out infinite;
+}
+
+html.dui-pro-overhaul .dy-command-console__live[data-stream-state="offline"],
+html.dui-pro-overhaul.dui-cohesive-ui .dy-command-console__live[data-stream-state="offline"] {
+  color: #ff9fa8 !important;
+}
+
+html.dui-pro-overhaul .dy-command-console__live[data-stream-state="offline"] .dui-status-chip__dot,
+html.dui-pro-overhaul.dui-cohesive-ui .dy-command-console__live[data-stream-state="offline"] .dui-status-chip__dot {
+  background: #ff7280 !important;
+  box-shadow: 0 0 0 3px rgb(255 114 128 / .10), 0 0 10px rgb(255 114 128 / .56) !important;
 }
 
 html.dui-pro-overhaul .dy-command-console__meta,
 html.dui-pro-overhaul.dui-cohesive-ui .dy-command-console__meta {
   display: flex !important;
+  grid-column: 3 !important;
   width: auto !important;
-  max-width: 142px !important;
+  max-width: none !important;
   flex: 0 0 auto !important;
   align-items: center !important;
   justify-content: flex-end !important;
+  justify-self: end !important;
   gap: 5px !important;
 }
 
@@ -1059,6 +1125,118 @@ html.dui-pro-overhaul.dui-cohesive-ui .dy-command-upload-preview {
     padding: 10px !important;
   }
 
+}
+
+/* Keep the centered header readable on compact windows where older shell rules
+   collapse the console title into an icon-only toolbar. */
+@media (max-width: 1180px), (max-height: 860px) {
+  html.dui-pro-overhaul.dui-cohesive-ui [data-dui-panel="command-console"].dy-command-console .dy-command-console__header,
+  html.dui-pro-overhaul.dui-cohesive-ui [data-dui-panel="command-console"].dy-command-console .dy-command-console__header-inner {
+    min-height: 104px !important;
+  }
+
+  html.dui-pro-overhaul.dui-cohesive-ui [data-dui-panel="command-console"].dy-command-console .dy-command-console__header-inner {
+    display: grid !important;
+    grid-template-columns: minmax(0, 1fr) minmax(0, auto) minmax(0, 1fr) !important;
+    align-items: center !important;
+    gap: 10px !important;
+    padding: 14px 16px !important;
+  }
+
+  html.dui-pro-overhaul.dui-cohesive-ui [data-dui-panel="command-console"].dy-command-console .dy-command-console__title-row {
+    display: flex !important;
+    grid-column: 2 !important;
+    flex: 0 1 auto !important;
+    align-items: center !important;
+    gap: 10px !important;
+  }
+
+  html.dui-pro-overhaul.dui-cohesive-ui [data-dui-panel="command-console"].dy-command-console .dy-command-console__title-row > div {
+    width: auto !important;
+    min-width: 0 !important;
+    flex: 0 1 auto !important;
+    text-align: center !important;
+  }
+
+  html.dui-pro-overhaul.dui-cohesive-ui [data-dui-panel="command-console"].dy-command-console .dy-command-console__mark {
+    width: 38px !important;
+    height: 38px !important;
+    min-width: 38px !important;
+  }
+
+  html.dui-pro-overhaul.dui-cohesive-ui [data-dui-panel="command-console"].dy-command-console .dy-command-console__mark-icon {
+    width: 22px !important;
+    height: 22px !important;
+  }
+
+  html.dui-pro-overhaul.dui-cohesive-ui [data-dui-panel="command-console"].dy-command-console .dy-command-console__title {
+    position: static !important;
+    display: block !important;
+    width: auto !important;
+    height: auto !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    overflow: visible !important;
+    clip: auto !important;
+    clip-path: none !important;
+    font-size: 20px !important;
+  }
+
+  html.dui-pro-overhaul.dui-cohesive-ui [data-dui-panel="command-console"].dy-command-console .dy-command-console__subtitle {
+    display: block !important;
+    max-width: 240px !important;
+    margin: 5px auto 0 !important;
+    font-size: 10px !important;
+  }
+
+  html.dui-pro-overhaul.dui-cohesive-ui [data-dui-panel="command-console"].dy-command-console .dy-command-console__live {
+    display: inline-flex !important;
+  }
+
+  html.dui-pro-overhaul.dui-cohesive-ui [data-dui-panel="command-console"].dy-command-console .dy-command-console__meta {
+    display: flex !important;
+    grid-column: 3 !important;
+    width: auto !important;
+    min-width: 0 !important;
+    margin-left: 0 !important;
+    justify-self: end !important;
+    justify-content: flex-end !important;
+  }
+}
+
+@media (max-width: 560px) {
+  html.dui-pro-overhaul.dui-cohesive-ui [data-dui-panel="command-console"].dy-command-console .dy-command-console__header,
+  html.dui-pro-overhaul.dui-cohesive-ui [data-dui-panel="command-console"].dy-command-console .dy-command-console__header-inner {
+    min-height: 94px !important;
+  }
+
+  html.dui-pro-overhaul.dui-cohesive-ui [data-dui-panel="command-console"].dy-command-console .dy-command-console__header-inner {
+    grid-template-columns: minmax(0, 1fr) !important;
+    padding: 12px 14px !important;
+  }
+
+  html.dui-pro-overhaul.dui-cohesive-ui [data-dui-panel="command-console"].dy-command-console .dy-command-console__title-row {
+    grid-column: 1 !important;
+  }
+
+  html.dui-pro-overhaul.dui-cohesive-ui [data-dui-panel="command-console"].dy-command-console .dy-command-console__meta {
+    position: absolute !important;
+    top: 10px !important;
+    right: 10px !important;
+    grid-column: auto !important;
+  }
+
+  html.dui-pro-overhaul.dui-cohesive-ui [data-dui-panel="command-console"].dy-command-console .dy-command-console__title-row > div {
+    max-width: calc(100vw - 96px) !important;
+  }
+
+  html.dui-pro-overhaul.dui-cohesive-ui [data-dui-panel="command-console"].dy-command-console .dy-command-console__title {
+    font-size: 18px !important;
+  }
+
+  html.dui-pro-overhaul.dui-cohesive-ui [data-dui-panel="command-console"].dy-command-console .dy-command-console__subtitle {
+    max-width: min(210px, calc(100vw - 110px)) !important;
+  }
 }
 
 html[data-dui-high-contrast="true"] .dy-command-console,

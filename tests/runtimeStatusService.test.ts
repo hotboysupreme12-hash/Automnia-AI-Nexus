@@ -7,10 +7,12 @@ import {
 
 type MutableRuntimeStatusState = {
   now: number
+  runtimeMonitorCutoffMs: number
   healthy: boolean
   hangStatus: boolean
   sessions: unknown[]
   missions: Array<{ id: string; status: string }>
+  cronJobs: Array<{ id: string; source?: string }>
   missionViewCalls: number
   cronListOptions: Array<{ sqlite?: boolean }>
   gatewayLedgerEntries: RuntimeStatusServiceOptions['readRuntimeGatewayLedgerSnapshot'] extends (limit?: number) => Promise<infer Snapshot>
@@ -65,10 +67,12 @@ function createActivity(entries: MutableRuntimeStatusState['externalGatewayLogs'
 function createService(overrides: Partial<MutableRuntimeStatusState> = {}) {
   const state: MutableRuntimeStatusState = {
     now: Date.parse('2026-06-30T12:00:00.000Z'),
+    runtimeMonitorCutoffMs: 0,
     healthy: true,
     hangStatus: false,
     sessions: [],
     missions: [{ id: 'mission-1', status: 'active' }],
+    cronJobs: [{ id: 'durable-cron', source: 'openclaw' }],
     missionViewCalls: 0,
     cronListOptions: [],
     gatewayLedgerEntries: [
@@ -201,14 +205,20 @@ function createService(overrides: Partial<MutableRuntimeStatusState> = {}) {
     },
     listActiveCronJobViews: (options) => {
       state.cronListOptions.push(options || {})
+      const active = options?.sqlite === false
+        ? [{ id: 'memory-shift' }]
+        : state.cronJobs
       return {
-        active: options?.sqlite === false
-          ? [{ id: 'memory-shift' }]
-          : [{ id: 'durable-cron', source: 'openclaw' }],
+        active: options?.limit ? active.slice(0, options.limit) : active,
+        activeCount: active.length,
       }
     },
     activeRunSnapshots: () => [{ id: 'run-active', status: 'running' }],
     recentRunSnapshots: (limit) => [{ id: 'run-recent', status: 'completed' }].slice(0, limit),
+    isRuntimeMonitorEntryVisible: (timestamp) => {
+      const entryMs = Date.parse(timestamp || '')
+      return !state.runtimeMonitorCutoffMs || (Number.isFinite(entryMs) && entryMs > state.runtimeMonitorCutoffMs)
+    },
     runtimeVersionCheckPayload: () => ({ ok: true, current: '2026.7.1-2' }),
     runtimeLedgerStatus: () => ({ ok: true, source: 'jsonl-ledger' }),
     gatewayChatRuntimeSnapshot: () => ({ enabled: true, ready: state.healthy }),
@@ -251,8 +261,6 @@ function createService(overrides: Partial<MutableRuntimeStatusState> = {}) {
       lastRunAt: null,
       cache: { source: 'cache', refreshedAt: state.now, refreshing: false },
     }),
-    sweepOpenClawSessionLocks: async () => ({ scanned: 0 }),
-    sweepExpiredMissionCronJobs: async () => ({ scanned: 0 }),
     redactSensitiveText: (value) => value.replace(/secret-[a-z0-9-]+/giu, '[redacted]'),
   })
   return { service, state, requestedLedgerLimits }
@@ -303,6 +311,63 @@ test('runtime summary includes durable OpenClaw cron jobs', async () => {
 
   assert.deepEqual(array(shifts.active), [{ id: 'durable-cron', source: 'openclaw' }])
   assert.equal(state.cronListOptions.some((options) => options.sqlite !== false), true)
+})
+
+test('runtime payloads cap Gateway overview activity and scheduled-job collections', async () => {
+  const externalChannelLogs = Array.from({ length: 30 }, (_, index) => ({
+    id: 100 + index,
+    timestamp: new Date(Date.parse('2026-06-30T11:59:59.000Z') - index * 1000).toISOString(),
+    stream: 'channel' as const,
+    message: `Gateway activity ${index + 1}`,
+    channel: 'telegram',
+    direction: 'system' as const,
+  }))
+  const cronJobs = Array.from({ length: 60 }, (_, index) => ({
+    id: `durable-cron-${index + 1}`,
+    source: 'openclaw',
+  }))
+  const { service } = createService({
+    gatewayLedgerEntries: [],
+    gatewayRestart: null,
+    externalChannelLogs,
+    cronJobs,
+  })
+
+  const summary = await service.getRuntimeSummaryPayload(true)
+  assert.equal(array(record(record(summary.gateway).activity).events).length, 12)
+  assert.equal(array(record(summary.shifts).active).length, 48)
+  assert.equal(record(summary.shifts).activeCount, 60)
+
+  const status = await service.getRuntimeStatusPayload(true)
+  assert.equal(array(record(record(status.gateway).activity).events).length, 24)
+  assert.equal(array(record(status.shifts).active).length, 60)
+})
+
+test('runtime status rejects gateway and channel rows older than the Clean Slate boundary', async () => {
+  const cutoff = Date.parse('2026-06-30T12:00:00.000Z')
+  const { service } = createService({
+    runtimeMonitorCutoffMs: cutoff,
+    gatewayLedgerEntries: [
+      { id: 1, timestamp: '2026-06-30T11:59:59.000Z', stream: 'lifecycle', message: 'old ledger row' },
+      { id: 2, timestamp: '2026-06-30T12:00:01.000Z', stream: 'lifecycle', message: 'new ledger row' },
+    ],
+    externalGatewayLogs: [
+      { id: 3, timestamp: '2026-06-30T11:59:58.000Z', stream: 'gateway', message: 'old file row' },
+      { id: 4, timestamp: '2026-06-30T12:00:02.000Z', stream: 'gateway', message: 'new file row' },
+    ],
+    externalChannelLogs: [
+      { id: 5, timestamp: '2026-06-30T11:59:57.000Z', stream: 'channel', message: 'old channel row', channel: 'telegram', direction: 'inbound' },
+      { id: 6, timestamp: '2026-06-30T12:00:03.000Z', stream: 'channel', message: 'new channel row', channel: 'telegram', direction: 'inbound' },
+    ],
+  })
+
+  const status = await service.getRuntimeStatusPayload(true)
+  const gateway = record(status.gateway)
+  const logs = array(gateway.logs)
+  const activity = record(gateway.activity)
+
+  assert.deepEqual(logs.map((entry) => record(entry).message), ['new ledger row', 'new file row'])
+  assert.deepEqual(array(activity.events).map((entry) => record(entry).message), ['new ledger row', 'new file row', 'new channel row'])
 })
 
 test('runtime summary falls back to external Gateway logs when the ledger is empty', async () => {
@@ -459,4 +524,33 @@ test('runtime status timeout falls back to the cached payload with redacted evid
   assert.equal(monitor.degraded, true)
   assert.match(String(monitor.fallbackReason), /TimeoutError: runtime status refresh timed out/)
   assert.equal(record(fallback.gateway).healthy, true)
+})
+
+test('runtime status keeps a timed-out refresh single-flight', async () => {
+  const { service, state, requestedLedgerLimits } = createService()
+  await service.getRuntimeStatusPayload(false)
+
+  state.now += 1000
+  state.hangStatus = true
+  await service.getRuntimeStatusPayload(false)
+  const requestsAfterTimeout = requestedLedgerLimits.length
+
+  const secondFallback = await service.getRuntimeStatusPayload(false)
+
+  assert.equal(record(secondFallback.monitor).fallback, true)
+  assert.equal(requestedLedgerLimits.length, requestsAfterTimeout)
+})
+
+test('invalidating runtime status drops a timed-out in-flight build before the next refresh', async () => {
+  const { service, state, requestedLedgerLimits } = createService()
+  state.hangStatus = true
+  const timedOut = await service.getRuntimeStatusPayload(true)
+  assert.equal(record(timedOut.monitor).fallback, true)
+
+  service.invalidateCache()
+  state.hangStatus = false
+  const refreshed = await service.getRuntimeStatusPayload(true)
+
+  assert.equal(record(refreshed.monitor).fallback, undefined)
+  assert.equal(requestedLedgerLimits.length, 2)
 })

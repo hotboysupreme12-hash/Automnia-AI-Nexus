@@ -46,6 +46,29 @@ function assertBuildExists() {
 function uiSmokeRuntimeStatus() {
   const now = new Date().toISOString()
   const earlier = new Date(Date.now() - 60000).toISOString()
+  const gatewayActivityEvents = Array.from({ length: 24 }, (_, index) => ({
+    id: 1000 + index,
+    timestamp: new Date(Date.now() - index * 1000).toISOString(),
+    channel: index % 2 ? 'telegram' : 'discord',
+    direction: index % 3 === 0 ? 'inbound' : index % 3 === 1 ? 'outbound' : 'system',
+    message: `UI smoke Gateway activity ${index + 1}`,
+    level: 'info',
+    source: 'ui-smoke',
+    agentId: `smoke-agent-${(index % 4) + 1}`,
+  }))
+  const cronJobs = Array.from({ length: 20 }, (_, index) => ({
+    id: `ui-smoke-job-${index + 1}`,
+    name: `UI smoke automated job ${index + 1}`,
+    agent: `smoke-agent-${(index % 4) + 1}`,
+    every: '15m',
+    durationMinutes: 60,
+    message: `Run bounded Gateway smoke job ${index + 1}.`,
+    cronId: `ui-smoke-cron-${index + 1}`,
+    startedAt: earlier,
+    nextRunAt: new Date(Date.now() + (index + 1) * 60000).toISOString(),
+    source: 'openclaw',
+    status: 'active',
+  }))
   const doctorRun = {
     id: 'ui-smoke-doctor-run',
     startedAt: earlier,
@@ -136,10 +159,10 @@ function uiSmokeRuntimeStatus() {
         active: true,
         lastEventAt: now,
         sourcePath: 'ui-smoke',
-        inboundCount: 1,
-        outboundCount: 1,
-        systemCount: 1,
-        events: [],
+        inboundCount: 8,
+        outboundCount: 8,
+        systemCount: 8,
+        events: gatewayActivityEvents,
       },
       stability: {
         available: true,
@@ -180,8 +203,8 @@ function uiSmokeRuntimeStatus() {
       cache: { source: 'ui-smoke', refreshedAt: Date.now(), refreshing: false },
     },
     shifts: {
-      activeCount: 0,
-      active: [],
+      activeCount: cronJobs.length,
+      active: cronJobs,
     },
     missions: {
       activeCount: 0,
@@ -550,12 +573,38 @@ async function inspectRecruitMarkdownEditor(window) {
     "    if (!trigger) return { present: false, reason: 'recruit-trigger-missing' }",
     "    trigger.click()",
     "    const modal = await waitFor(() => document.querySelector('[data-dui-modal=\"recruit-agent\"]'))",
+    "    if (!modal) return { present: false, reason: 'recruit-modal-missing' }",
+    "    const nextStep = async () => {",
+    "      const next = await waitFor(() => {",
+    "        const candidate = modal.querySelector('.dui-recruit-primary')",
+    "        return candidate && !candidate.disabled ? candidate : null",
+    "      }, 5000)",
+    "      if (!next) return false",
+    "      const beforeStep = modal.querySelector('.dui-recruit-wizard')?.getAttribute('data-step') || ''",
+    "      next.click()",
+    "      const advanced = await waitFor(() => (modal.querySelector('.dui-recruit-wizard')?.getAttribute('data-step') || '') !== beforeStep, 1200)",
+    "      if (!advanced && !next.disabled) next.click()",
+    "      await wait(180)",
+    "      return Boolean(advanced || (modal.querySelector('.dui-recruit-wizard')?.getAttribute('data-step') || '') !== beforeStep)",
+    "    }",
+    "    if (!await nextStep()) return { present: false, reason: 'recruit-first-step-next-missing' }",
+    "    const nameInput = modal.querySelector('input[placeholder=\"Nova Builder\"]')",
+    "    if (!nameInput) return { present: false, reason: 'recruit-name-input-missing', modalText: modal.innerText.slice(0, 260) }",
+    "    if (nameInput) {",
+    "      Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value').set.call(nameInput, 'Smoke Agent')",
+    "      nameInput.dispatchEvent(new Event('input', { bubbles: true }))",
+    "      nameInput.dispatchEvent(new Event('change', { bubbles: true }))",
+    "      nameInput.blur()",
+    "    }",
+    "    await wait(80)",
+    "    if (!await nextStep()) return { present: false, reason: 'recruit-profile-step-next-missing', modalText: modal.innerText.slice(0, 320), inputValue: nameInput.value }",
+    "    if (!await nextStep()) return { present: false, reason: 'recruit-runtime-step-next-missing', modalText: modal.innerText.slice(0, 320) }",
     "    const input = modal ? modal.querySelector('.dui-recruit-code-input') : null",
     "    const preview = modal ? modal.querySelector('.dui-recruit-code-preview') : null",
     "    const editor = modal ? modal.querySelector('.dui-recruit-code-editor') : null",
     "    const firstTab = modal ? modal.querySelector('.dui-recruit-file-tabs button[data-md-tone]') : null",
     "    if (!modal || !input || !preview || !editor || !firstTab) {",
-    "      return { present: false, reason: 'recruit-markdown-controls-missing' }",
+    "      return { present: false, reason: 'recruit-markdown-controls-missing', modalText: modal.innerText.slice(0, 420) }",
     "    }",
     "    input.focus()",
     "    await wait(120)",
@@ -756,6 +805,10 @@ async function inspectWorkspaceNavigation(window) {
     "    for (const monitorTab of monitorTabs) {",
     "      monitorTab.click()",
     "      await wait(700)",
+    "      if (monitorTab.id === 'monitor-tab-gateway' && !document.querySelector('.dy-gateway-panel .dy-gateway-event-card')) {",
+    "        document.querySelector('.dy-gateway-restart-button')?.click()",
+    "        await waitFor(() => document.querySelectorAll('.dy-gateway-panel .dy-gateway-event-card').length === 12, 5000)",
+    "      }",
     "      const controls = monitorTab.getAttribute('aria-controls')",
     "      const panel = controls ? document.getElementById(controls) : null",
     "      monitorResults.push({",
@@ -772,6 +825,13 @@ async function inspectWorkspaceNavigation(window) {
     "        gatewayRuntimeStripText: document.querySelector('.dy-gateway-summary-card')?.textContent.replace(/\\s+/g, ' ').trim() || '',",
     "        doctorFindingListPresent: Boolean(document.querySelector('.dy-doctor-finding-list')),",
     "        doctorFindingText: document.querySelector('.dy-doctor-finding-list')?.textContent.replace(/\\s+/g, ' ').trim() || '',",
+    "        gatewayActivityRowCount: document.querySelectorAll('.dy-gateway-panel .dy-gateway-event-card').length,",
+    "        gatewayCronCardCount: document.querySelectorAll('.dy-gateway-panel .dy-cron-job-card').length,",
+    "        gatewayCronPageText: document.querySelector('.dy-gateway-panel .dy-cron-pagination')?.textContent.replace(/\\s+/g, ' ').trim() || '',",
+    "        gatewayPanelAnimation: document.querySelector('.dy-gateway-panel') ? getComputedStyle(document.querySelector('.dy-gateway-panel')).animationName : '',",
+    "        gatewayPanelFilter: document.querySelector('.dy-gateway-panel') ? getComputedStyle(document.querySelector('.dy-gateway-panel')).filter : '',",
+    "        gatewayPanelBackdropFilter: document.querySelector('.dy-gateway-panel') ? getComputedStyle(document.querySelector('.dy-gateway-panel')).backdropFilter : '',",
+    "        gatewayLiveDotAnimation: document.querySelector('.dy-gateway-panel .dy-cron-active-count i') ? getComputedStyle(document.querySelector('.dy-gateway-panel .dy-cron-active-count i')).animationName : '',",
       "      })",
     "    }",
     "    return monitorResults",
@@ -1307,6 +1367,14 @@ async function inspectViewport(viewport) {
     && /Restart Gateway/.test(gatewayMonitorTab.gatewayRestartButtonText)
   const gatewayRuntimeStripRemovedOk = Boolean(gatewayMonitorTab)
     && gatewayMonitorTab.gatewayRuntimeStripPresent === false
+  const gatewayBoundedRendererOk = Boolean(gatewayMonitorTab)
+    && gatewayMonitorTab.gatewayActivityRowCount === 12
+    && gatewayMonitorTab.gatewayCronCardCount === 8
+    && /Page 1 of 3/.test(gatewayMonitorTab.gatewayCronPageText)
+    && gatewayMonitorTab.gatewayPanelAnimation === 'none'
+    && gatewayMonitorTab.gatewayPanelFilter === 'none'
+    && gatewayMonitorTab.gatewayPanelBackdropFilter === 'none'
+    && gatewayMonitorTab.gatewayLiveDotAnimation === 'none'
   const doctorStructuredFindingsOk = Boolean(gatewayMonitorTab?.doctorFindingListPresent)
     && /plugin/i.test(gatewayMonitorTab.doctorFindingText)
     && /core\/doctor\/plugin-config/.test(gatewayMonitorTab.doctorFindingText)
@@ -1404,6 +1472,7 @@ async function inspectViewport(viewport) {
     && monitorTabsOk
     && gatewayRestartButtonOk
     && gatewayRuntimeStripRemovedOk
+    && gatewayBoundedRendererOk
     && doctorStructuredFindingsOk
     && bitmap.nonBlankRatio > 0.02
 

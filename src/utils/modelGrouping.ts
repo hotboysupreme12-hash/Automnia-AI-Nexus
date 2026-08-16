@@ -11,12 +11,22 @@ export type ModelOptionGroup<T extends ModelOptionLike> = {
   models: T[]
 }
 
+const EXCLUDED_MODEL_IDS = new Set([
+  'google/gemini-3.7-flash',
+  'google-vertex/gemini-3.7-flash',
+  'google/gemini-3.7-pro',
+  'google-vertex/gemini-3.7-pro',
+])
+
+export const isSelectableModelId = (modelId: string) => !EXCLUDED_MODEL_IDS.has(modelId.trim().toLowerCase())
+
 const PROVIDER_LABELS: Record<string, string> = {
+  'automnia-cloud': 'Automnia Cloud',
   'openai-codex': 'OpenAI / Codex',
   openai: 'OpenAI / Codex',
   anthropic: 'Anthropic Claude',
   google: 'Google Gemini',
-  'google-vertex': 'Google Vertex',
+  'google-vertex': 'Google Vertex AI',
   deepseek: 'DeepSeek',
   openrouter: 'OpenRouter',
   xai: 'xAI',
@@ -145,6 +155,7 @@ export function groupAvailableModels<T extends ModelOptionLike>(models: readonly
   const groups = new Map<string, ModelOptionGroup<T>>()
 
   for (const model of models) {
+    if (!isSelectableModelId(model.id)) continue
     const key = groupKeyForModel(model)
     const existing = groups.get(key)
     if (existing) {

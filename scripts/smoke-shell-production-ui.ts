@@ -32,6 +32,8 @@ const settingsSystemImport = "@import './styles/automnia-theme/102-settings-syst
 const cronJobsSystemImport = "@import './styles/automnia-theme/103-cron-jobs-system.css';"
 const monitorLogsImport = "@import './styles/automnia-theme/109-monitor-logs.css';"
 const monitorReadableImport = "@import './styles/automnia-theme/110-monitor-readable.css';"
+const recruitWizardImport = "@import './styles/automnia-theme/111-recruit-wizard.css';"
+const agentCard3dImport = "@import './styles/automnia-theme/112-agent-card-3d.css';"
 const runtimeNoticesImport = "@import './styles/automnia-theme/113-runtime-notices.css';"
 const horizonCommandCenter = read('src/styles/automnia-theme/99-horizon-command-center.css')
 const operatorExperience = read('src/styles/automnia-theme/100-operator-experience.css')
@@ -63,16 +65,24 @@ assert.match(utilityRailBlock, /id="nexus-nav-settings"/, 'settings utility navi
 assert.match(utilityRailBlock, /aria-current=\{tab === 'settings' \? 'page' : undefined\}/, 'settings navigation should use aria-current page when active')
 assert.match(shell, /role="region"[\s\S]*aria-label=\{`\$\{activeTab\.label\} workspace`\}/, 'active workspace should be a named region')
 assert.match(shell, /id=\{`nexus-workspace-\$\{tab\}`\}/, 'workspace region should use a workspace id, not a tab id')
+assert.doesNotMatch(shell, /<div\s+key=\{tab\}/, 'workspace host must remain stable while switching tabs')
 assert.doesNotMatch(shell, /nexus-tab-/, 'shell should not expose tab-oriented workspace navigation ids')
 assert.doesNotMatch(shell, /nexus-panel-/, 'shell should not expose tab-panel-oriented workspace ids')
 assert.doesNotMatch(shell, /dy-command-header/, 'shell should not render the retired top command header')
 assert.doesNotMatch(shell, /className="dy-top-tabs/, 'shell should not render a duplicate hidden tab bar')
 assert.match(shell, /aria-keyshortcuts=\{activeCronCount && !cronStatusUnavailable \? 'Delete'/, 'cron cleanup review should be keyboard discoverable only when cron state is available')
 assert.match(shell, /event\.key !== 'Delete'/, 'cron cleanup should support the declared keyboard shortcut')
-assert.match(shell, /role="status" aria-live="polite" aria-label="Loading workspace"/, 'lazy workspace loading should be announced')
+assert.match(shell, /role="status"[\s\S]*aria-label="Refreshing workspace"/, 'lazy workspace refreshing should be announced')
+assert.match(shell, /className="[^"]*animate-spin[^"]*"/, 'lazy workspace refreshing should show a spinner')
+assert.match(shell, /<span>Refreshing<\/span>/, 'lazy workspace refreshing should show concise copy')
+assert.match(shell, /function isLazyImportFailure\(error: unknown\): boolean[\s\S]*error instanceof Error[\s\S]*unable to preload css/i, 'lazy imports should recover from Vite CSS preload failures')
 assert.match(shell, /className="dy-workspace-context" data-workspace=\{tab\}/, 'shell should expose a contextual workspace header')
 assert.match(shell, /id="automnia-workspace-title">\{activeTab\.label\}/, 'workspace context should expose the active page title')
-assert.match(shell, /<p>\{activeTab\.description\}<\/p>/, 'workspace context should explain the active operator surface')
+assert.match(
+  shell,
+  /(?:<p>\{activeTab\.description\}<\/p>|<WorkspaceDescription tab=\{tab\} description=\{activeTab\.description\} \/>)/,
+  'workspace context should explain the active operator surface',
+)
 assert.match(shell, /className="dy-workspace-context__meta"/, 'workspace context should host the static status controls')
 assert.match(shell, /aria-label="Workspace status summary"/, 'workspace status chips should remain named')
 assert.match(shell, /import \{ Button, StatusChip \} from '..\/ui'/, 'shell rail actions and workspace status chips should use local UI primitives')
@@ -116,6 +126,8 @@ assert.ok(theme.includes(settingsSystemImport), 'Settings System must remain the
 assert.ok(theme.includes(cronJobsSystemImport), 'Cron Jobs System must remain in the theme cascade')
 assert.ok(theme.includes(monitorLogsImport), 'Monitor Logs must remain in the theme cascade')
 assert.ok(theme.includes(monitorReadableImport), 'Monitor Readability must remain in the theme cascade')
+assert.ok(theme.includes(recruitWizardImport), 'Recruit Wizard must remain in the theme cascade')
+assert.ok(theme.includes(agentCard3dImport), 'Agent Card 3D must remain in the theme cascade')
 assert.ok(theme.includes(runtimeNoticesImport), 'Runtime notices must remain in the theme cascade')
 const themeLayerImports = [...theme.matchAll(/@import '\.\/styles\/automnia-theme\/(\d+)-([^']+)\.css';/g)]
 const layersAfterTypography = themeLayerImports
@@ -137,8 +149,10 @@ assert.deepEqual(layersAfterTypography, [
   { order: 108, name: 'command-console-scroll' },
   { order: 109, name: 'monitor-logs' },
   { order: 110, name: 'monitor-readable' },
+  { order: 111, name: 'recruit-wizard' },
+  { order: 112, name: 'agent-card-3d' },
   { order: 113, name: 'runtime-notices' },
-], 'global automnia theme layers after typography must remain limited to the approved shell, operator, card, settings, responsive, performance, command-console, and monitor layers')
+], 'global automnia theme layers after typography must remain limited to the approved shell, operator, card, settings, responsive, performance, command-console, monitor, and recruit layers')
 assert.doesNotMatch(theme, /99-mission-quiet-redesign/, 'mission quiet redesign should no longer be a global late layer')
 assert.ok(
   theme.indexOf(productionPolishImport) < theme.indexOf(referenceScreenshotImport),
@@ -193,7 +207,7 @@ assert.match(monitorPanel, /data-ui-revision="cron-job-v2"/, 'Active cron cards 
 assert.match(monitorPanel, /className="dy-cron-job-glyph"/, 'Active cron cards should expose a glanceable schedule glyph')
 assert.match(monitorPanel, /<span>What this run does<\/span>/, 'Active cron cards should explain the scheduled run clearly')
 assert.match(commandConsole, /import \{ Badge, Button, IconButton, StatusChip \} from '\.\.\/ui'/, 'Command Console controls and runtime chips should use local UI primitives')
-assert.match(commandConsole, /AUTOMNIA_APP_ICON_SRC = '\/brand\/automnia-ai-nexus-app-icon\.png'/, 'runtime notices should use the square Automnia app icon')
+assert.match(commandConsole, /AUTOMNIA_RUNTIME_MARK_SRC = '\/brand\/automnia-ai-nexus-logo-transparent-cropped\.png'/, 'runtime notices should use the teal Automnia brand mark')
 assert.match(commandConsole, /data-runtime-notice=\{runtimeNoticeActive \? 'true' : 'false'\}/, 'ClawTalk runtime notices should expose a stable Automnia announcement marker')
 assert.match(commandConsole, /className="dy-automnia-runtime-notice"/, 'active runtime runs should render as Automnia runtime notices')
 assert.match(commandConsole, /<strong>Automnia<\/strong>[\s\S]*<span>Runtime task<\/span>/, 'runtime notices should identify Automnia and the runtime task role')

@@ -26,13 +26,11 @@ html.dui-pro-overhaul.dui-cohesive-ui .dy-automnia-runtime-notice {
   align-items: center;
   gap: 9px;
   min-width: 0;
-  padding: 8px 9px !important;
-  border: 1px solid rgb(104 214 199 / .16) !important;
-  border-radius: 11px !important;
-  background:
-    linear-gradient(135deg, rgb(93 215 199 / .07), rgb(255 255 255 / .018) 56%),
-    rgb(10 18 20 / .80) !important;
-  box-shadow: inset 0 1px 0 rgb(255 255 255 / .035), 0 10px 24px -18px rgb(42 199 184 / .35) !important;
+  padding: 7px 0 !important;
+  border: 0 !important;
+  border-radius: 0 !important;
+  background: transparent !important;
+  box-shadow: none !important;
 }
 
 html.dui-pro-overhaul .dy-automnia-runtime-avatar,
@@ -43,10 +41,10 @@ html.dui-pro-overhaul.dui-cohesive-ui .dy-automnia-runtime-avatar {
   height: 30px;
   place-items: center;
   overflow: visible;
-  border: 1px solid rgb(126 224 210 / .28);
-  border-radius: 9px;
-  background: rgb(4 22 23 / .9);
-  box-shadow: 0 0 16px rgb(57 205 190 / .12);
+  border: 0;
+  border-radius: 7px;
+  background: transparent;
+  box-shadow: none;
 }
 
 html.dui-pro-overhaul .dy-automnia-runtime-avatar img,
@@ -55,13 +53,15 @@ html.dui-pro-overhaul.dui-cohesive-ui .dy-automnia-runtime-avatar img {
   height: 100%;
   border-radius: inherit;
   object-fit: cover;
+  object-position: left center;
 }
 
 html.dui-pro-overhaul .dy-automnia-runtime-avatar > span,
 html.dui-pro-overhaul.dui-cohesive-ui .dy-automnia-runtime-avatar > span {
   position: absolute;
+  top: -2px;
   right: -2px;
-  bottom: -2px;
+  bottom: auto;
   width: 8px;
   height: 8px;
   border: 2px solid rgb(7 14 16);
@@ -86,7 +86,7 @@ html.dui-pro-overhaul.dui-cohesive-ui .dy-automnia-runtime-head {
 
 html.dui-pro-overhaul .dy-automnia-runtime-head strong,
 html.dui-pro-overhaul.dui-cohesive-ui .dy-automnia-runtime-head strong {
-  color: #effcf8;
+  color: #a8f1e4;
   font-size: 11px;
   font-weight: 760;
 }
@@ -102,22 +102,19 @@ html.dui-pro-overhaul.dui-cohesive-ui .dy-automnia-runtime-head > span {
 
 html.dui-pro-overhaul .dy-automnia-runtime-head .dy-badge,
 html.dui-pro-overhaul.dui-cohesive-ui .dy-automnia-runtime-head .dy-badge {
-  min-height: 17px !important;
-  margin-left: auto;
-  padding-inline: 6px !important;
-  font-size: 8px !important;
+  display: none !important;
 }
 
 html.dui-pro-overhaul .dy-automnia-runtime-copy > p,
 html.dui-pro-overhaul.dui-cohesive-ui .dy-automnia-runtime-copy > p {
   margin: 5px 0 4px;
-  overflow: hidden;
   color: #d8e9e5;
   font-family: var(--font-mono, ui-monospace, monospace);
   font-size: 10px;
   line-height: 1.4;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  overflow-wrap: anywhere;
+  text-wrap: pretty;
+  white-space: normal;
 }
 
 html.dui-pro-overhaul .dy-automnia-runtime-meta,
@@ -145,12 +142,90 @@ html.dui-pro-overhaul.dui-cohesive-ui .dy-automnia-runtime-meta code {
   font-size: 8px;
 }
 
+html.dui-pro-overhaul .dy-automnia-runtime-tasks,
+html.dui-pro-overhaul.dui-cohesive-ui .dy-automnia-runtime-tasks {
+  margin-top: 9px;
+  padding-top: 8px;
+  border-top: 1px solid rgb(104 214 199 / .16);
+}
+
+html.dui-pro-overhaul .dy-automnia-runtime-tasks-heading,
+html.dui-pro-overhaul.dui-cohesive-ui .dy-automnia-runtime-tasks-heading {
+  margin-bottom: 2px;
+  color: rgb(132 211 201 / .72);
+  font-size: 8px;
+  font-weight: 760;
+  letter-spacing: .12em;
+  text-transform: uppercase;
+}
+
+html.dui-pro-overhaul .dy-automnia-runtime-task,
+html.dui-pro-overhaul.dui-cohesive-ui .dy-automnia-runtime-task {
+  display: flex;
+  min-width: 0;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 9px;
+  padding: 7px 0;
+  border-bottom: 1px solid rgb(104 214 199 / .09);
+}
+
+html.dui-pro-overhaul .dy-automnia-runtime-task:last-of-type,
+html.dui-pro-overhaul.dui-cohesive-ui .dy-automnia-runtime-task:last-of-type {
+  border-bottom: 0;
+}
+
+html.dui-pro-overhaul .dy-automnia-runtime-task-copy,
+html.dui-pro-overhaul.dui-cohesive-ui .dy-automnia-runtime-task-copy {
+  min-width: 0;
+  flex: 1 1 auto;
+}
+
+html.dui-pro-overhaul .dy-automnia-runtime-task-copy > strong,
+html.dui-pro-overhaul.dui-cohesive-ui .dy-automnia-runtime-task-copy > strong {
+  display: block;
+  color: #d4f7f0;
+  font-size: 9px;
+  font-weight: 720;
+}
+
+html.dui-pro-overhaul .dy-automnia-runtime-task-copy > p,
+html.dui-pro-overhaul.dui-cohesive-ui .dy-automnia-runtime-task-copy > p {
+  margin: 3px 0 3px;
+  color: #b9d6d1;
+  font-family: var(--font-mono, ui-monospace, monospace);
+  font-size: 9px;
+  line-height: 1.35;
+  overflow-wrap: anywhere;
+}
+
+html.dui-pro-overhaul .dy-automnia-runtime-stop,
+html.dui-pro-overhaul.dui-cohesive-ui .dy-automnia-runtime-stop {
+  flex: 0 0 auto;
+  align-self: flex-start;
+}
+
+html.dui-pro-overhaul .dy-automnia-runtime-tasks-more,
+html.dui-pro-overhaul.dui-cohesive-ui .dy-automnia-runtime-tasks-more {
+  padding-top: 5px;
+  color: rgb(216 233 229 / .48);
+  font-size: 9px;
+}
+
 html.dui-pro-overhaul .dy-command-message[data-runtime-notice="true"],
 html.dui-pro-overhaul.dui-cohesive-ui .dy-command-message[data-runtime-notice="true"] {
-  border-color: rgb(104 214 199 / .20) !important;
-  background:
-    linear-gradient(135deg, rgb(55 157 148 / .055), transparent 58%),
-    rgb(255 255 255 / .024) !important;
+  border: 0 !important;
+  border-left: 0 !important;
+  background: transparent !important;
+  box-shadow: none !important;
+  color: #c9efea !important;
+}
+
+html.dui-pro-overhaul .dy-command-message[data-runtime-notice="true"] .dy-command-message-body,
+html.dui-pro-overhaul.dui-cohesive-ui .dy-command-message[data-runtime-notice="true"] .dy-command-message-body {
+  border: 0 !important;
+  background: transparent !important;
+  color: #c9efea !important;
 }
 
 html.dui-pro-overhaul .dy-command-message[data-runtime-notice="true"] .dy-command-message-avatar,

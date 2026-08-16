@@ -1,0 +1,129 @@
+/* Detailed registry cards: give the runtime/model details enough room to stay
+   readable while preserving the collectible-card rhythm. The 3D surface
+   remains untouched. */
+
+html.dui-pro-overhaul.dui-cohesive-ui .agent-card-registry-grid--grid10 {
+  /* Let the detail view use two columns at laptop widths and three at wide
+     desktop widths instead of squeezing every card into a fixed 3-up grid. */
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 298px), 1fr)) !important;
+  gap: 14px !important;
+}
+
+html.dui-pro-overhaul.dui-cohesive-ui .agent-card-pro[data-agent-display-mode="grid10"] {
+  height: auto !important;
+  min-height: 580px !important;
+  max-height: none !important;
+}
+
+html.dui-pro-overhaul.dui-cohesive-ui .agent-card-pro[data-agent-display-mode="grid10"] .agent-card-media {
+  /* The bundled portraits are square. A square well prevents the top and
+     bottom of the face from being cut off by a wide landscape crop. */
+  aspect-ratio: 1 / 1 !important;
+  background:
+    radial-gradient(circle at 50% 18%, color-mix(in srgb, var(--agent-accent, #c8d3dc) 14%, transparent), transparent 54%),
+    #05080b !important;
+}
+
+html.dui-pro-overhaul.dui-cohesive-ui .agent-card-pro[data-agent-display-mode="grid10"] .agent-card-portrait-img {
+  /* Keep custom uploads safe too: unusual portrait ratios letterbox instead
+     of silently cropping the subject. */
+  display: block !important;
+  width: 100% !important;
+  height: 100% !important;
+  object-fit: contain !important;
+  object-position: center center !important;
+  background: #05080b !important;
+}
+
+/* This higher-specificity rule wins over the legacy cover treatment that can
+   otherwise crop detailed-view portraits after the card is resized. */
+html.dui-pro-overhaul.dui-cohesive-ui [data-agent-card="true"][data-agent-card-theme].agent-card-pro[data-agent-display-mode="grid10"] .agent-card-portrait-img {
+  object-fit: contain !important;
+  object-position: center center !important;
+}
+
+html.dui-pro-overhaul.dui-cohesive-ui .agent-card-pro[data-agent-display-mode="grid10"] .agent-card-heading {
+  min-height: 70px !important;
+  margin-bottom: 9px !important;
+  padding-bottom: 8px !important;
+}
+
+html.dui-pro-overhaul.dui-cohesive-ui .agent-card-pro[data-agent-display-mode="grid10"] .agent-card-name {
+  font-size: 18px !important;
+}
+
+html.dui-pro-overhaul.dui-cohesive-ui .agent-card-pro[data-agent-display-mode="grid10"] .agent-card-role {
+  display: -webkit-box !important;
+  overflow: hidden !important;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  white-space: normal !important;
+}
+
+html.dui-pro-overhaul.dui-cohesive-ui .agent-card-pro[data-agent-display-mode="grid10"] .agent-card-stat-matrix {
+  min-height: 0 !important;
+  margin-bottom: 9px !important;
+}
+
+html.dui-pro-overhaul.dui-cohesive-ui .agent-card-pro[data-agent-display-mode="grid10"] .agent-card-stat-matrix > div {
+  min-height: 42px !important;
+  padding: 7px 8px !important;
+}
+
+html.dui-pro-overhaul.dui-cohesive-ui .agent-card-pro[data-agent-display-mode="grid10"] .agent-card-tags {
+  min-height: 27px !important;
+  max-height: 48px !important;
+  margin-bottom: 9px !important;
+}
+
+html.dui-pro-overhaul.dui-cohesive-ui .agent-card-pro[data-agent-display-mode="grid10"] .agent-card-details {
+  display: grid !important;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 6px;
+  margin: 0 0 10px;
+}
+
+html.dui-pro-overhaul.dui-cohesive-ui .agent-card-pro[data-agent-display-mode="grid10"] .agent-card-details > div {
+  display: flex;
+  min-width: 0;
+  min-height: 28px;
+  align-items: center;
+  justify-content: space-between;
+  gap: 4px;
+  overflow: hidden;
+  border: 1px solid color-mix(in srgb, var(--agent-accent, #c8d3dc) 20%, transparent);
+  border-radius: 6px;
+  padding: 5px 7px;
+  background: rgba(0, 0, 0, .14);
+}
+
+html.dui-pro-overhaul.dui-cohesive-ui .agent-card-pro[data-agent-display-mode="grid10"] .agent-card-details span {
+  color: color-mix(in srgb, var(--agent-accent, #c8d3dc) 54%, #ffffff 35%);
+  font-family: var(--font-mono, ui-monospace, monospace);
+  font-size: 7px;
+  font-weight: 800;
+  letter-spacing: .06em;
+  text-transform: uppercase;
+}
+
+html.dui-pro-overhaul.dui-cohesive-ui .agent-card-pro[data-agent-display-mode="grid10"] .agent-card-details strong {
+  min-width: 0;
+  overflow: hidden;
+  color: #f1f4f6;
+  font-family: var(--font-mono, ui-monospace, monospace);
+  font-size: 8px;
+  font-weight: 700;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+html.dui-pro-overhaul.dui-cohesive-ui .agent-card-pro[data-agent-display-mode="grid10"] .agent-card-actions {
+  gap: 8px !important;
+  padding-top: 9px !important;
+}
+
+@media (max-width: 720px) {
+  html.dui-pro-overhaul.dui-cohesive-ui .agent-card-pro[data-agent-display-mode="grid10"] {
+    min-height: 550px !important;
+  }
+}

@@ -1,0 +1,246 @@
+/* Agent cards: one restrained 3D surface instead of stacked overlays. */
+
+html.dui-pro-overhaul .agent-card-3d,
+html.dui-pro-overhaul.dui-cohesive-ui .agent-card-3d {
+  --agent-card-pointer-x: 50%;
+  --agent-card-pointer-y: 50%;
+  --agent-card-rotate-x: 0deg;
+  --agent-card-rotate-y: 0deg;
+  position: relative !important;
+  isolation: isolate !important;
+  /* The card is the 3D stage. Its portrait and body sit on raised Z planes,
+     so the shell must not clip those planes back into the flat border. The
+     portrait viewport keeps its own overflow-hidden boundary below. */
+  overflow: visible !important;
+  /* The fast-renderer layer adds paint containment to card shells. Paint
+     containment is a hard clip, so it truncates the tilted card at its edge. */
+  contain: layout style !important;
+  perspective: 1200px;
+  transform: perspective(1200px) rotateX(var(--agent-card-rotate-x)) rotateY(var(--agent-card-rotate-y)) translateZ(0) !important;
+  transform-style: preserve-3d !important;
+  transition: transform 180ms ease, border-color 180ms ease, box-shadow 180ms ease !important;
+  will-change: transform;
+  backdrop-filter: none !important;
+  -webkit-backdrop-filter: none !important;
+  border-color: color-mix(in srgb, var(--agent-card-accent, #c8d3dc) 48%, rgba(255, 255, 255, .14)) !important;
+  background-color: var(--agent-card-mid, #11161b) !important;
+  background-image: linear-gradient(145deg, var(--agent-card-top, #172029), var(--agent-card-mid, #11161b) 58%, var(--agent-card-bottom, #080b0e)) !important;
+  box-shadow: 0 18px 38px rgba(0, 0, 0, .38), inset 0 1px 0 rgba(255, 255, 255, .07) !important;
+}
+
+html.dui-pro-overhaul .agent-card-3d::before,
+html.dui-pro-overhaul.dui-cohesive-ui .agent-card-3d::before {
+  content: "" !important;
+  position: absolute !important;
+  inset: 0 !important;
+  z-index: 1 !important;
+  display: block !important;
+  pointer-events: none !important;
+  border-radius: inherit !important;
+  background: radial-gradient(circle at var(--agent-card-pointer-x) var(--agent-card-pointer-y), color-mix(in srgb, var(--agent-card-accent, #c8d3dc) 18%, transparent), transparent 34%) !important;
+  opacity: .72 !important;
+  mix-blend-mode: screen !important;
+  transform: translateZ(2px);
+}
+
+html.dui-pro-overhaul .agent-card-3d::after,
+html.dui-pro-overhaul.dui-cohesive-ui .agent-card-3d::after {
+  content: "" !important;
+  position: absolute !important;
+  inset: 0 !important;
+  z-index: 2 !important;
+  pointer-events: none !important;
+  border: 1px solid color-mix(in srgb, var(--agent-card-accent, #c8d3dc) 32%, rgba(255, 255, 255, .12)) !important;
+  border-radius: inherit !important;
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, .025) !important;
+  transform: translateZ(4px);
+}
+
+html.dui-pro-overhaul .agent-card-3d:hover,
+html.dui-pro-overhaul.dui-cohesive-ui .agent-card-3d:hover {
+  z-index: 20 !important;
+  border-color: color-mix(in srgb, var(--agent-card-accent, #c8d3dc) 68%, rgba(255, 255, 255, .20)) !important;
+  box-shadow: 0 26px 48px rgba(0, 0, 0, .46), inset 0 1px 0 rgba(255, 255, 255, .10) !important;
+}
+
+/* The grid entry is the other paint-containment boundary around the stage.
+   Keep layout/style isolation, but let the 3D projection paint outside it. */
+html.dui-pro-overhaul .dy-agent-card-entry,
+html.dui-pro-overhaul.dui-cohesive-ui .dy-agent-card-entry {
+  overflow: visible !important;
+  contain: layout style !important;
+}
+
+html.dui-pro-overhaul .agent-card-3d > *,
+html.dui-pro-overhaul.dui-cohesive-ui .agent-card-3d > * {
+  transform-style: preserve-3d;
+}
+
+html.dui-pro-overhaul .agent-card-3d .agent-card-media-wrap,
+html.dui-pro-overhaul.dui-cohesive-ui .agent-card-3d .agent-card-media-wrap {
+  transform: translateZ(24px);
+  transition: transform 180ms ease;
+}
+
+html.dui-pro-overhaul .agent-card-3d .agent-card-body,
+html.dui-pro-overhaul.dui-cohesive-ui .agent-card-3d .agent-card-body {
+  transform: translateZ(14px);
+  transition: transform 180ms ease;
+}
+
+html.dui-pro-overhaul .agent-card-3d .agent-card-media,
+html.dui-pro-overhaul.dui-cohesive-ui .agent-card-3d .agent-card-media {
+  border-color: color-mix(in srgb, var(--agent-card-accent, #c8d3dc) 36%, rgba(255, 255, 255, .12)) !important;
+  background: #05080b !important;
+  box-shadow: 0 18px 34px rgba(0, 0, 0, .40), inset 0 1px 0 rgba(255, 255, 255, .07) !important;
+  transform: translateZ(12px);
+}
+
+html.dui-pro-overhaul .agent-card-3d .agent-card-portrait-img,
+html.dui-pro-overhaul.dui-cohesive-ui .agent-card-3d .agent-card-portrait-img {
+  filter: none !important;
+  transform: none !important;
+  transition: none !important;
+}
+
+/* Remove legacy rarity/foil/glass layers; depth now comes from the card tilt. */
+html.dui-pro-overhaul .agent-card-3d :is(.agent-card-rarity-wash, .agent-card-grid, .agent-card-foil, .agent-card-inner-frame, .portrait-corners, .agent-card-media-shade),
+html.dui-pro-overhaul.dui-cohesive-ui .agent-card-3d :is(.agent-card-rarity-wash, .agent-card-grid, .agent-card-foil, .agent-card-inner-frame, .portrait-corners, .agent-card-media-shade),
+html.dui-pro-overhaul .agent-card-3d .agent-card-media::before,
+html.dui-pro-overhaul .agent-card-3d .agent-card-media::after {
+  display: none !important;
+}
+
+html.dui-pro-overhaul .agent-card-3d :is(.agent-card-level-pill, .agent-card-stat-matrix > div, .agent-card-tags span, .agent-card-action-primary, .agent-card-action-secondary),
+html.dui-pro-overhaul.dui-cohesive-ui .agent-card-3d :is(.agent-card-level-pill, .agent-card-stat-matrix > div, .agent-card-tags span, .agent-card-action-primary, .agent-card-action-secondary) {
+  box-shadow: none !important;
+  backdrop-filter: none !important;
+  -webkit-backdrop-filter: none !important;
+}
+
+html.dui-pro-overhaul .agent-card-3d[data-agent-display-mode="list"] .agent-card-media-wrap,
+html.dui-pro-overhaul.dui-cohesive-ui .agent-card-3d[data-agent-display-mode="list"] .agent-card-media-wrap {
+  transform: translateZ(16px);
+}
+
+html.dui-pro-overhaul[data-dui-motion="reduced"] .agent-card-3d,
+html.dui-pro-overhaul.dui-cohesive-ui[data-dui-motion="reduced"] .agent-card-3d {
+  transform: none !important;
+  transition: none !important;
+  will-change: auto;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  html.dui-pro-overhaul .agent-card-3d,
+  html.dui-pro-overhaul.dui-cohesive-ui .agent-card-3d {
+    transform: none !important;
+    transition: none !important;
+    will-change: auto;
+  }
+}
+
+/* The theme file intentionally has high-specificity rules for named skins.
+   Repeat the card-only selectors here so the cleanup remains authoritative. */
+html.dui-pro-overhaul.dui-cohesive-ui [data-agent-card="true"][data-agent-card-theme].agent-card-3d {
+  transform: perspective(1200px) rotateX(var(--agent-card-rotate-x)) rotateY(var(--agent-card-rotate-y)) translateZ(0) !important;
+  border-color: color-mix(in srgb, var(--agent-card-accent, #c8d3dc) 48%, rgba(255, 255, 255, .14)) !important;
+  background-color: var(--agent-card-mid, #11161b) !important;
+  background-image: linear-gradient(145deg, var(--agent-card-top, #172029), var(--agent-card-mid, #11161b) 58%, var(--agent-card-bottom, #080b0e)) !important;
+  box-shadow: 0 18px 38px rgba(0, 0, 0, .38), inset 0 1px 0 rgba(255, 255, 255, .07) !important;
+}
+
+html.dui-pro-overhaul.dui-cohesive-ui [data-agent-card="true"][data-agent-card-theme].agent-card-3d::before {
+  background: radial-gradient(circle at var(--agent-card-pointer-x) var(--agent-card-pointer-y), color-mix(in srgb, var(--agent-card-accent, #c8d3dc) 18%, transparent), transparent 34%) !important;
+  opacity: .72 !important;
+  filter: none !important;
+  mix-blend-mode: screen !important;
+}
+
+html.dui-pro-overhaul.dui-cohesive-ui [data-agent-card="true"][data-agent-card-theme].agent-card-3d::after {
+  border: 1px solid color-mix(in srgb, var(--agent-card-accent, #c8d3dc) 32%, rgba(255, 255, 255, .12)) !important;
+  border-top: 1px solid color-mix(in srgb, var(--agent-card-accent, #c8d3dc) 32%, rgba(255, 255, 255, .12)) !important;
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, .025) !important;
+}
+
+html.dui-pro-overhaul.dui-cohesive-ui [data-agent-card="true"][data-agent-card-theme].agent-card-3d:hover {
+  z-index: 20 !important;
+  transform: perspective(1200px) rotateX(var(--agent-card-rotate-x)) rotateY(var(--agent-card-rotate-y)) translateZ(0) !important;
+  border-color: color-mix(in srgb, var(--agent-card-accent, #c8d3dc) 68%, rgba(255, 255, 255, .20)) !important;
+  box-shadow: 0 26px 48px rgba(0, 0, 0, .46), inset 0 1px 0 rgba(255, 255, 255, .10) !important;
+}
+
+html.dui-pro-overhaul.dui-cohesive-ui [data-agent-card="true"][data-agent-card-theme].agent-card-3d :is(.agent-card-rarity-wash, .agent-card-grid, .agent-card-foil, .agent-card-inner-frame, .portrait-corners, .agent-card-media-shade),
+html.dui-pro-overhaul.dui-cohesive-ui [data-agent-card="true"][data-agent-card-theme].agent-card-3d .agent-card-media::before,
+html.dui-pro-overhaul.dui-cohesive-ui [data-agent-card="true"][data-agent-card-theme].agent-card-3d .agent-card-media::after {
+  display: none !important;
+}
+
+html.dui-pro-overhaul.dui-cohesive-ui [data-agent-card="true"][data-agent-card-theme].agent-card-3d .agent-card-media {
+  background: #05080b !important;
+  box-shadow: 0 18px 34px rgba(0, 0, 0, .40), inset 0 1px 0 rgba(255, 255, 255, .07) !important;
+  transform: translateZ(12px);
+}
+
+html.dui-pro-overhaul.dui-cohesive-ui [data-agent-card="true"][data-agent-card-theme].agent-card-3d .agent-card-portrait-img,
+html.dui-pro-overhaul.dui-cohesive-ui [data-agent-card="true"][data-agent-card-theme].agent-card-3d .agent-card-media img {
+  filter: none !important;
+  transform: none !important;
+  transition: none !important;
+}
+
+html.dui-pro-overhaul[data-dui-motion="reduced"] [data-agent-card="true"][data-agent-card-theme].agent-card-3d {
+  transform: none !important;
+  transition: none !important;
+  will-change: auto;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  html.dui-pro-overhaul.dui-cohesive-ui [data-agent-card="true"][data-agent-card-theme].agent-card-3d {
+    transform: none !important;
+    transition: none !important;
+    will-change: auto;
+  }
+}
+
+/* List rows are information-dense, so keep their depth quiet and stable.
+   The larger tilt remains useful on the spacious grid cards. */
+html.dui-pro-overhaul .agent-card-3d[data-agent-display-mode="list"],
+html.dui-pro-overhaul.dui-cohesive-ui .agent-card-3d[data-agent-display-mode="list"],
+html.dui-pro-overhaul.dui-cohesive-ui [data-agent-card="true"][data-agent-card-theme].agent-card-3d[data-agent-display-mode="list"] {
+  perspective: 1800px;
+  transform: perspective(1800px) rotateX(clamp(-1.1deg, var(--agent-card-rotate-x), 1.1deg)) rotateY(clamp(-1.1deg, var(--agent-card-rotate-y), 1.1deg)) translateZ(0) !important;
+  transition: transform 240ms cubic-bezier(.22, 1, .36, 1), border-color 180ms ease, box-shadow 180ms ease !important;
+  box-shadow: 0 12px 28px rgba(0, 0, 0, .30), inset 0 1px 0 rgba(255, 255, 255, .055) !important;
+}
+
+html.dui-pro-overhaul .agent-card-3d[data-agent-display-mode="list"]:hover,
+html.dui-pro-overhaul.dui-cohesive-ui .agent-card-3d[data-agent-display-mode="list"]:hover,
+html.dui-pro-overhaul.dui-cohesive-ui [data-agent-card="true"][data-agent-card-theme].agent-card-3d[data-agent-display-mode="list"]:hover {
+  border-color: color-mix(in srgb, var(--agent-card-accent, #c8d3dc) 54%, rgba(255, 255, 255, .16)) !important;
+  box-shadow: 0 16px 34px rgba(0, 0, 0, .38), inset 0 1px 0 rgba(255, 255, 255, .075) !important;
+}
+
+html.dui-pro-overhaul .agent-card-3d[data-agent-display-mode="list"]::before,
+html.dui-pro-overhaul.dui-cohesive-ui .agent-card-3d[data-agent-display-mode="list"]::before,
+html.dui-pro-overhaul.dui-cohesive-ui [data-agent-card="true"][data-agent-card-theme].agent-card-3d[data-agent-display-mode="list"]::before {
+  background: radial-gradient(circle at 50% 0%, color-mix(in srgb, var(--agent-card-accent, #c8d3dc) 10%, transparent), transparent 48%) !important;
+  opacity: .42 !important;
+}
+
+html.dui-pro-overhaul .agent-card-3d[data-agent-display-mode="list"] .agent-card-media-wrap,
+html.dui-pro-overhaul.dui-cohesive-ui .agent-card-3d[data-agent-display-mode="list"] .agent-card-media-wrap,
+html.dui-pro-overhaul.dui-cohesive-ui [data-agent-card="true"][data-agent-card-theme].agent-card-3d[data-agent-display-mode="list"] .agent-card-media-wrap {
+  transform: translateZ(8px);
+}
+
+html.dui-pro-overhaul .agent-card-3d[data-agent-display-mode="list"] .agent-card-body,
+html.dui-pro-overhaul.dui-cohesive-ui .agent-card-3d[data-agent-display-mode="list"] .agent-card-body,
+html.dui-pro-overhaul.dui-cohesive-ui [data-agent-card="true"][data-agent-card-theme].agent-card-3d[data-agent-display-mode="list"] .agent-card-body {
+  transform: translateZ(5px);
+}
+
+html.dui-pro-overhaul .agent-card-3d[data-agent-display-mode="list"] .agent-card-media,
+html.dui-pro-overhaul.dui-cohesive-ui .agent-card-3d[data-agent-display-mode="list"] .agent-card-media,
+html.dui-pro-overhaul.dui-cohesive-ui [data-agent-card="true"][data-agent-card-theme].agent-card-3d[data-agent-display-mode="list"] .agent-card-media {
+  transform: translateZ(4px);
+}

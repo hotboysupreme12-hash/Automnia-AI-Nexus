@@ -65,6 +65,31 @@ test('runtime ledger store wraps JSONL fallback append and read helpers', async 
   })
 })
 
+test('runtime ledger store persists Gateway activity in SQLite without a JSONL mirror', async () => {
+  await withRuntimeLedgerStore('ledger-store-gateway-sqlite', async (store) => {
+    const status = store.status()
+    if (!status.sqliteAvailable) {
+      await store.appendGatewayEvent({ timestamp: '2026-06-30T12:00:00.000Z', stream: 'channel', message: 'fallback message' }, { mirrorJsonl: false })
+      assert.equal(existsSync(store.paths.gatewayEventsJsonl), true)
+      return
+    }
+
+    await store.appendGatewayEvent({
+      timestamp: '2026-06-30T12:00:00.000Z',
+      stream: 'channel',
+      channel: 'telegram',
+      direction: 'inbound',
+      message: 'SQLite message',
+    }, { mirrorJsonl: false })
+
+    assert.deepEqual(
+      (await store.readGatewayEvents<{ message: string }>(5)).map((entry) => entry.message),
+      ['SQLite message'],
+    )
+    assert.equal(existsSync(store.paths.gatewayEventsJsonl), false)
+  })
+})
+
 test('runtime ledger store owns control-center state namespace', async () => {
   await withRuntimeLedgerStore('ledger-store-state', async (store) => {
     const status = store.status()

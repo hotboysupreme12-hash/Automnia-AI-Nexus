@@ -1,0 +1,153 @@
+/*
+ * Enterprise model picker treatment.
+ *
+ * Keep the model/provider hierarchy readable without turning every option into
+ * a floating rounded card. Provider choices stay compact while model choices
+ * remain in a neat checklist below the active provider.
+ */
+
+[data-model-picker] > .rounded-xl,
+[data-model-picker] [data-model-provider-list] > .rounded-xl {
+  border-radius: 5px !important;
+  box-shadow: none !important;
+}
+
+[data-model-picker] [data-model-provider-list] {
+  gap: 5px;
+}
+
+[data-model-picker] [data-model-provider-list] > div > button {
+  min-height: 42px;
+  padding: 6px 8px;
+}
+
+[data-model-picker] [data-model-provider-list] > div > button > span:first-child {
+  border-radius: 4px !important;
+}
+
+[data-model-picker] [data-model-provider-list] [role='listbox'] {
+  border-radius: 4px !important;
+  box-shadow: 0 16px 32px rgba(0, 0, 0, .35) !important;
+}
+
+[data-model-picker] [data-model-picker-disclosure] > button {
+  background: rgba(255, 255, 255, .025) !important;
+  color: #e2e8f0 !important;
+}
+
+[data-model-picker] [data-model-provider-list] [role='listbox'] {
+  background: rgba(2, 6, 23, .82) !important;
+  color: #e2e8f0 !important;
+}
+
+[data-model-picker='primary'] [data-model-primary-menu] {
+  background: linear-gradient(180deg, rgba(13, 22, 32, .98), rgba(3, 8, 15, .98)) !important;
+  border-color: rgba(103, 232, 249, .24) !important;
+  box-shadow: 0 22px 48px rgba(0, 0, 0, .55), 0 0 0 1px rgba(255, 255, 255, .035) !important;
+  backdrop-filter: blur(18px);
+}
+
+[data-model-picker='primary'] [data-model-fallback-provider-menu] {
+  background: linear-gradient(180deg, rgba(13, 22, 32, .98), rgba(3, 8, 15, .98)) !important;
+  border-color: rgba(103, 232, 249, .24) !important;
+  box-shadow: 0 22px 48px rgba(0, 0, 0, .55), 0 0 0 1px rgba(255, 255, 255, .035) !important;
+  backdrop-filter: blur(18px);
+}
+
+[data-model-picker='primary'] [data-model-primary-trigger] {
+  border-radius: 10px !important;
+  box-shadow: none !important;
+}
+
+[data-model-picker='primary'] [data-model-fallback-provider-trigger] {
+  border-radius: 10px !important;
+  box-shadow: none !important;
+}
+
+[data-model-picker='primary'] [data-model-primary-trigger]:focus-visible {
+  outline: 2px solid rgba(103, 232, 249, .72);
+  outline-offset: 2px;
+}
+
+[data-model-picker='primary'] [data-model-primary-menu] [role='option'] {
+  min-height: 52px;
+}
+
+[data-model-picker='primary'] [data-model-primary-menu] [role='option'] > span:first-child {
+  border-radius: 8px !important;
+}
+
+[data-model-picker='primary'] [data-model-fallback-provider-menu] [role='option'] {
+  min-height: 52px;
+}
+
+[data-model-picker='primary'] [data-model-fallback-provider-menu] [role='option'] > span:first-child {
+  border-radius: 8px !important;
+}
+
+[data-model-picker='primary'] [data-provider-auth-action] {
+  white-space: nowrap;
+}
+
+[data-model-picker='primary'] [data-model-primary-menu] [role='listbox'] {
+  scrollbar-gutter: stable;
+}
+
+[data-model-picker='primary'] [data-model-primary-menu] [role='option']:focus-visible {
+  outline: 2px solid rgba(103, 232, 249, .7);
+  outline-offset: -2px;
+}
+
+[data-model-picker='primary'] [data-model-primary-models],
+[data-model-picker='primary'] [data-model-fallback-ticker] {
+  box-shadow: 0 10px 24px rgba(0, 0, 0, .14);
+}
+
+[data-model-picker='primary'] [data-model-fallback-ticker] > button:focus-visible {
+  outline: 2px solid rgba(103, 232, 249, .7);
+  outline-offset: -2px;
+}
+
+[data-model-picker] [data-model-provider-list] [role='option'] {
+  position: static !important;
+  isolation: auto !important;
+  overflow: hidden !important;
+  background: transparent !important;
+  color: #e2e8f0 !important;
+  box-shadow: none !important;
+  transform: none !important;
+}
+
+[data-model-picker] [data-model-provider-list] [role='option']:hover,
+[data-model-picker] [data-model-provider-list] [role='option'][aria-selected='true'] {
+  background: rgba(34, 211, 238, .10) !important;
+  color: #ecfeff !important;
+}
+
+[data-model-picker] [data-model-provider-list] [role='option'] > span:last-child {
+  color: inherit !important;
+}
+
+[data-dui-modal='agent-editor'] {
+  border-radius: 10px !important;
+}
+
+[data-dui-modal='agent-editor'] [data-editor-panel='model'] > .rounded-xl,
+[data-dui-modal='agent-editor'] [data-editor-panel='model'] > [data-editor-billing-route],
+[data-dui-modal='agent-editor'] [data-editor-panel='model'] > [data-editor-managed-route] {
+  border-radius: 6px !important;
+  box-shadow: none !important;
+}
+
+[data-dui-modal='agent-editor'] [data-editor-panel='model'] > .rounded-lg,
+[data-dui-modal='agent-editor'] [data-editor-panel='model'] .rounded-lg {
+  border-radius: 4px !important;
+}
+
+[data-dui-modal='agent-editor'] [data-editor-panel='model'] span.rounded-full {
+  border-radius: 3px !important;
+}
+
+[data-dui-modal='agent-editor'] [data-editor-panel='model'] > .rounded-xl {
+  padding: 10px 12px;
+}

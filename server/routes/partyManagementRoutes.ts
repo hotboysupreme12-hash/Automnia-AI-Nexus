@@ -5,6 +5,7 @@ import type { Express } from 'express'
 import { z } from 'zod'
 import { apiFailure, apiSuccess } from '../controlPlaneHttp'
 import type { PartyManagementRoutesContext } from '../controlPlane'
+import { CREDITS_ONLY_MODEL_ACCESS_MESSAGE } from '../services/license/creditsOnlyModelPolicy'
 import {
   loadAgencyAgentTemplateCatalog,
   summarizeAgencyAgentTemplate,
@@ -57,6 +58,7 @@ export function registerPartyManagementRoutes(app: Express, options: PartyManage
     isRetiredAgentId,
     isValidAgentId,
     modelAuthProblem,
+    modelSelectionBlocked,
     normalizeAgentMdsState,
     normalizeAgentToolsConfig,
     normalizeModelWithFallback,
@@ -356,6 +358,9 @@ export function registerPartyManagementRoutes(app: Express, options: PartyManage
     if (!parsed.success) return apiFailure(res, 400, 'invalid_payload', 'Invalid payload', parsed.error.flatten())
 
     const payload = parsed.data
+    if (modelSelectionBlocked?.(payload.model)) {
+      return apiFailure(res, 403, 'byok_not_allowed', CREDITS_ONLY_MODEL_ACCESS_MESSAGE, { modelId: payload.model })
+    }
     const normalizedAgentId = payload.agentId?.trim()
     if (normalizedAgentId && !/^[a-z0-9-]{3,60}$/.test(normalizedAgentId)) {
       return apiFailure(res, 400, 'invalid_payload', 'Agent ID must be 3-60 lowercase letters, numbers, and hyphens.')
@@ -532,6 +537,11 @@ export function registerPartyManagementRoutes(app: Express, options: PartyManage
     if (!parsed.success) return apiFailure(res, 400, 'invalid_payload', 'Invalid payload', parsed.error.flatten())
 
     const payload = parsed.data
+    const blockedModel = payload.model
+      && [payload.model.primary, ...(payload.model.fallbacks || [])].find((modelId) => modelId && modelSelectionBlocked?.(modelId))
+    if (blockedModel) {
+      return apiFailure(res, 403, 'byok_not_allowed', CREDITS_ONLY_MODEL_ACCESS_MESSAGE, { modelId: blockedModel })
+    }
     if (isRetiredAgentId(payload.agentId)) {
       return apiFailure(
         res,

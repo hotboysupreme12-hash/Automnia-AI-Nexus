@@ -248,7 +248,7 @@ Before installing a third-party skill, review its publisher, description, reques
 
 ### Account & License
 
-Use **Account & License** for account status, read-only account email, optional Automnia password management, plan/access/billing information, account refresh, pooled Automnia credit balance, usage priority, and the **Effective Agent Route**. The effective route applies to normal messages, runtime/work/OpenClaw activity, streamed turns, and buffered recovery. BYOK accounts with a confirmed pooled balance expose the same priority controls: Automnia credits first, provider first with Automnia fallback, or provider-only—even when the balance was carried over from Starter. Provider-only bypasses the wallet without deleting it. Starter remains locked to Automnia credits. Purchases tied to the same verified email are pooled after Google or confirmed-password sign-in.
+Use **Account & License** for account status, read-only account email, optional Automnia password management, plan/access/billing information, account refresh, pooled Automnia credit balance, usage priority, and the **Effective Agent Route**. The effective route applies to normal messages, runtime/work/OpenClaw activity, streamed turns, and buffered recovery. Starter ($19.99) and credit-refill access use Automnia credits only; when the confirmed balance is zero, the app stops and tells the user to refill. BYOK ($29.99) and higher tiers expose **My provider + Automnia credits**, with a secondary order choice of provider first or Automnia first; if Automnia is selected first and its confirmed balance is zero, the connected provider is used. Purchases tied to the same verified email are pooled after Google or confirmed-password sign-in.
 
 ### Appearance
 

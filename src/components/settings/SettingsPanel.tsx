@@ -459,7 +459,7 @@ export function SettingsPanel({ focusSection = 'account', focusRequest = 0 }: { 
     <div className="dui-settings-section" id="settings-section-workspace" role="tabpanel">
       <SectionHeader section="workspace" eyebrow="Choose how daily work is arranged" />
       <SettingsCard title="Agent registry" description="These controls update the live Agents workspace.">
-        <Field label="Default view" hint="Controls card size and agents shown per page.">
+        <Field label="Default view" hint="Simple is the 9-agent default; Detailed shows 12 cards with runtime info.">
           <select value={registryPreferences.displayMode} onChange={(event) => updateRegistryPreferences({ displayMode: event.target.value as AgentDisplayMode }, 'Registry view')}>
             {REGISTRY_DISPLAY_OPTIONS.map((option) => <option key={option.id} value={option.id}>{option.label} — {option.hint}</option>)}
           </select>
@@ -473,22 +473,16 @@ export function SettingsPanel({ focusSection = 'account', focusRequest = 0 }: { 
             ...(value || registryPreferences.overlayPreset !== 'rarity' ? {} : { overlayPreset: 'graphite-glass' as AgentOverlayPreset }),
           }, value ? 'Agent card rarity colors' : 'Shared agent card theme')}
         />
-        <Field label="Card background" hint={registryPreferences.rarityColorsEnabled ? 'By rarity is active. Turn rarity colors off to choose one theme for every card.' : 'One shared visual treatment behind every agent portrait.'}>
-          <select
-            value={registryPreferences.rarityColorsEnabled ? 'rarity' : registryPreferences.overlayPreset}
-            onChange={(event) => {
-              const nextPreset = event.target.value as AgentOverlayPreset
-              updateRegistryPreferences(
-                nextPreset === 'rarity'
-                  ? { rarityColorsEnabled: true }
-                  : { overlayPreset: nextPreset, rarityColorsEnabled: false },
-                nextPreset === 'rarity' ? 'Agent card rarity colors' : 'Agent card background',
-              )
-            }}
-          >
-            {REGISTRY_OVERLAY_OPTIONS.map((option) => <option key={option.id} value={option.id}>{option.label} — {option.hint}</option>)}
-          </select>
-        </Field>
+        {!registryPreferences.rarityColorsEnabled && (
+          <Field label="Card background" hint="One shared visual treatment behind every agent portrait.">
+            <select
+              value={registryPreferences.overlayPreset}
+              onChange={(event) => updateRegistryPreferences({ overlayPreset: event.target.value as AgentOverlayPreset }, 'Agent card background')}
+            >
+              {REGISTRY_OVERLAY_OPTIONS.map((option) => <option key={option.id} value={option.id}>{option.label} — {option.hint}</option>)}
+            </select>
+          </Field>
+        )}
         <Field label="Default sort" hint="Determines which agents appear first.">
           <select value={registryPreferences.sortKey} onChange={(event) => updateRegistryPreferences({ sortKey: event.target.value as RegistrySortKey }, 'Registry sorting')}>
             <option value="party">Party first</option><option value="level">Highest level</option><option value="name">Name A–Z</option><option value="rarity">Rarity</option>
@@ -632,10 +626,10 @@ export function SettingsPanel({ focusSection = 'account', focusRequest = 0 }: { 
     const usagePriorityLocked = entitlement.usagePriorityLocked
     const usagePriorityManaged = (hostedCredits || isByok) && !usagePriorityLocked
     const usagePriority = license?.usagePriority === 'provider_first'
-      ? byokAllowed ? 'provider_first' : 'automnia_first'
-      : license?.usagePriority === 'byok_only'
-        ? byokAllowed ? 'byok_only' : 'automnia_first'
-        : 'automnia_first'
+      ? byokAllowed ? 'provider_first' : 'automnia_only'
+      : license?.usagePriority === 'automnia_first_with_provider_fallback'
+        ? byokAllowed ? 'automnia_first_with_provider_fallback' : 'automnia_only'
+        : 'automnia_only'
     const balance = hostedCredits || isByok ? formatCreditBalance(license?.creditBalance) : 'Not applicable — provider-billed'
     const refreshAccount = async () => {
       if (accountRefreshBusy) return
@@ -661,14 +655,14 @@ export function SettingsPanel({ focusSection = 'account', focusRequest = 0 }: { 
         setCheckoutBusy(false)
       }
     }
-    const saveUsagePriority = async (nextPriority: 'automnia_first' | 'provider_first' | 'byok_only') => {
+    const saveUsagePriority = async (nextPriority: 'automnia_only' | 'provider_first' | 'automnia_first_with_provider_fallback') => {
       if (!usagePriorityManaged || usagePriorityBusy || nextPriority === usagePriority) return
       if (usagePriorityLocked) {
-        setUsagePriorityError('Starter Subscription ($19.99) stays on Automnia credits. Upgrade to Pro or higher to choose another usage priority.')
+        setUsagePriorityError('Starter Subscription ($19.99) and credit-refill access stay on Automnia credits. Upgrade to BYOK ($29.99) or higher to choose another usage priority.')
         return
       }
-      if (!byokAllowed && nextPriority !== 'automnia_first') {
-        setUsagePriorityError('Starter uses Automnia credits only. Upgrade to Pro or higher for provider priority options.')
+      if (!byokAllowed && nextPriority !== 'automnia_only') {
+        setUsagePriorityError('Starter uses Automnia credits only. Upgrade to BYOK ($29.99) or higher for provider-plus-Automnia options.')
         return
       }
       setUsagePriorityBusy(true)
@@ -677,13 +671,13 @@ export function SettingsPanel({ focusSection = 'account', focusRequest = 0 }: { 
         await setUsagePriority(nextPriority)
         setNotice({
           tone: 'success',
-          text: isByok && nextPriority !== 'automnia_first'
-          ? 'Usage priority saved and Gateway synchronized: your provider only. Automnia credits are bypassed for BYOK.'
-          : nextPriority === 'provider_first'
-              ? 'Usage priority saved and Gateway synchronized: your provider first, Automnia credits available as fallback.'
-              : nextPriority === 'byok_only'
-                ? 'Usage priority saved and Gateway synchronized: your provider only.'
-                : 'Usage priority saved and Gateway synchronized: Automnia credits first.',
+          text: nextPriority === 'provider_first'
+            ? 'Usage priority saved and Gateway synchronized: your provider first, with Automnia credits as fallback.'
+            : nextPriority === 'automnia_first_with_provider_fallback'
+              ? 'Usage priority saved and Gateway synchronized: Automnia credits first, with your provider as fallback.'
+              : usagePriorityLocked
+                ? 'Usage priority saved and Gateway synchronized: Automnia credits only.'
+                : 'Usage priority saved and Gateway synchronized: Automnia credits first, with your provider used if credits are exhausted.',
         })
       } catch (error) {
         setUsagePriorityError(error instanceof Error ? error.message : 'Could not save the usage priority.')
@@ -766,35 +760,49 @@ export function SettingsPanel({ focusSection = 'account', focusRequest = 0 }: { 
           <Field label="Account Email" hint="Registered subscriber address.">
             <input type="text" readOnly value={license?.email || 'Not reported'} style={{ fontWeight: 'bold', backgroundColor: 'rgba(255, 255, 255, 0.05)', cursor: 'not-allowed' }} />
           </Field>
-          <div className="dui-settings-account-password" style={{ marginTop: '0.75rem', display: 'grid', gap: '0.6rem' }}>
-            <strong style={{ color: '#e2e8f0' }}>
-              {!account ? 'Account password' : account.hasPassword ? 'Change account password' : account.googleLinked ? 'Create an account password' : 'Connect Google to create a password'}
-            </strong>
-            <p style={{ color: '#94a3b8', margin: 0, fontSize: '0.84rem' }}>
-              {checking || !account
-                ? 'Loading whether this account already has a password…'
-                : account.hasPassword
-                  ? account.googleLinked
-                    ? 'This account already has an Automnia password. Google sign-in remains available; enter the current password only if you want to change it.'
-                    : 'This account already has an Automnia password. Enter the current password below to choose a new one.'
-                  : account.googleLinked
-                    ? 'Google sign-in is connected. No current password is needed—create one below to enable email and password sign-in too.'
-                    : 'This account has no password yet, and Google is not connected on this device. Connect Google first; no password will be changed or removed.'}
-            </p>
+          <div className="dui-settings-account-password" aria-labelledby="account-password-title">
+            <div className="dui-settings-account-password__intro">
+              <span>Account security</span>
+              <h4 id="account-password-title">
+                {!account ? 'Account password' : account.hasPassword ? 'Change account password' : account.googleLinked ? 'Create an account password' : 'Connect Google to create a password'}
+              </h4>
+              <p>
+                {checking || !account
+                  ? 'Loading whether this account already has a password…'
+                  : account.hasPassword
+                    ? account.googleLinked
+                      ? 'This account already has an Automnia password. Google sign-in remains available; enter the current password only if you want to change it.'
+                      : 'This account already has an Automnia password. Enter the current password below to choose a new one.'
+                    : account.googleLinked
+                      ? 'Google sign-in is connected. No current password is needed—create one below to enable email and password sign-in too.'
+                      : 'This account has no password yet, and Google is not connected on this device. Connect Google first; no password will be changed or removed.'}
+              </p>
+            </div>
             {!checking && account && !account.googleLinked && !account.hasPassword && (
-              <button type="button" onClick={() => void reconnectGoogleForPassword()} disabled={googleReconnectBusy}>
+              <button className="dui-settings-account-password__connect" type="button" onClick={() => void reconnectGoogleForPassword()} disabled={googleReconnectBusy}>
                 {googleReconnectBusy ? 'Connecting Google…' : 'Connect Google securely'}
               </button>
             )}
             {!checking && account && (account.hasPassword || account.googleLinked) && <>
-              {account.hasPassword && <input type="password" value={currentPassword} onChange={(event) => setCurrentPassword(event.target.value)} placeholder="Current password" autoComplete="current-password" maxLength={128} />}
-              <input type="password" value={newPassword} onChange={(event) => setNewPassword(event.target.value)} placeholder={account.hasPassword ? 'New password — 12 to 128 characters' : 'Create a password — 12 to 128 characters'} autoComplete="new-password" minLength={12} maxLength={128} />
-              <input type="password" value={confirmNewPassword} onChange={(event) => setConfirmNewPassword(event.target.value)} placeholder="Confirm password" autoComplete="new-password" minLength={12} maxLength={128} />
-              <button type="button" onClick={() => void savePassword()} disabled={passwordChangeBusy || newPassword.length < 12 || newPassword.length > 128 || confirmNewPassword.length < 12 || confirmNewPassword.length > 128 || Boolean(account.hasPassword && currentPassword.length < 1)}>
-                {passwordChangeBusy ? 'Saving password…' : account.hasPassword ? 'Change password' : 'Create password'}
-              </button>
+              <div className="dui-settings-account-password__form">
+                {account.hasPassword && <label className="dui-settings-account-password__field">
+                  <span>Current password</span>
+                  <input type="password" value={currentPassword} onChange={(event) => setCurrentPassword(event.target.value)} placeholder="Enter your current password" autoComplete="current-password" maxLength={128} />
+                </label>}
+                <label className="dui-settings-account-password__field">
+                  <span>{account.hasPassword ? 'New password — 12 to 128 characters' : 'Create password — 12 to 128 characters'}</span>
+                  <input type="password" value={newPassword} onChange={(event) => setNewPassword(event.target.value)} placeholder="Enter a new password" autoComplete="new-password" minLength={12} maxLength={128} />
+                </label>
+                <label className="dui-settings-account-password__field">
+                  <span>Confirm password</span>
+                  <input type="password" value={confirmNewPassword} onChange={(event) => setConfirmNewPassword(event.target.value)} placeholder="Re-enter your new password" autoComplete="new-password" minLength={12} maxLength={128} />
+                </label>
+                <button className="dui-settings-account-password__submit" type="button" onClick={() => void savePassword()} disabled={passwordChangeBusy || newPassword.length < 12 || newPassword.length > 128 || confirmNewPassword.length < 12 || confirmNewPassword.length > 128 || Boolean(account.hasPassword && currentPassword.length < 1)}>
+                  {passwordChangeBusy ? 'Saving password…' : account.hasPassword ? 'Change password' : 'Create password'}
+                </button>
+              </div>
             </>}
-            {passwordChangeError && <p role="alert" style={{ color: '#fb7185', margin: 0, fontSize: '0.84rem' }}>{passwordChangeError}</p>}
+            {passwordChangeError && <p className="dui-settings-account-password__error" role="alert">{passwordChangeError}</p>}
           </div>
         </SettingsCard>
         <SettingsCard title="Plan, access & billing" description="Google Cloud confirms subscription access and reconciles hosted-credit balances after each request without interrupting the workspace.">
@@ -807,19 +815,29 @@ export function SettingsPanel({ focusSection = 'account', focusRequest = 0 }: { 
           <Field label="Access & Billing Mode" hint="Starter Subscription uses Automnia hosted credits. Higher tiers include hosted credits and provider priority controls.">
             <input type="text" readOnly value={entitlement.billingLabel} style={{ backgroundColor: 'rgba(255, 255, 255, 0.05)', cursor: 'not-allowed' }} />
           </Field>
-          <Field label="Usage Priority" hint={usagePriorityLocked ? 'Starter Subscription ($19.99) stays on Automnia credits only. A BYOK upgrade with a carried-over balance unlocks all three routes.' : hostedCredits ? 'Choose Automnia credits, your provider first, or your provider only. This preference belongs to your one Automnia account.' : isByok ? 'BYOK uses your provider without Automnia credits unless you explicitly choose Automnia credits first.' : 'Activate a permanent or hosted plan to choose a usage priority.'}>
+          <Field label="Usage Priority" hint={usagePriorityLocked ? 'Starter Subscription ($19.99) and credit-refill access stay on Automnia credits.' : hostedCredits || isByok ? 'Choose Automnia credits or My provider + Automnia credits. Higher tiers can choose which route runs first.' : 'Activate a permanent or hosted plan to choose a usage priority.'}>
             <select
-              value={usagePriorityManaged ? usagePriority : 'automnia_first'}
+              value={usagePriorityManaged ? (usagePriority === 'automnia_only' ? 'automnia_only' : 'provider_plus_automnia') : 'automnia_only'}
               disabled={!usagePriorityManaged || usagePriorityBusy || usagePriorityLocked}
-              onChange={(event) => void saveUsagePriority(event.target.value as 'automnia_first' | 'provider_first' | 'byok_only')}
+              onChange={(event) => void saveUsagePriority(event.target.value === 'automnia_only' ? 'automnia_only' : 'provider_first')}
             >
-              <option value="automnia_first">Automnia credits first</option>
-              <option value="provider_first" disabled={!byokAllowed}>My provider first + Automnia fallback{byokAllowed ? '' : ' — provider access not included'}</option>
-              <option value="byok_only" disabled={!byokAllowed}>My provider only{byokAllowed ? '' : ' — provider access not included'}</option>
+              <option value="automnia_only">Automnia credits</option>
+              <option value="provider_plus_automnia" disabled={!byokAllowed}>My provider + Automnia credits{byokAllowed ? '' : ' — provider access not included'}</option>
             </select>
-            {isByok && <small style={{ display: 'block', marginTop: '0.45rem', color: '#93c5fd' }}>
-              BYOK safety rule: Automnia credits are used only when “Automnia credits first” is selected. Both provider-only choices bypass the Automnia relay.
-            </small>}
+            {usagePriority !== 'automnia_only' && <div style={{ marginTop: '0.6rem' }}>
+              <label style={{ display: 'block', fontSize: '0.78rem', color: '#cbd5e1' }}>
+                Fallback order
+                <select
+                  value={usagePriority}
+                  disabled={usagePriorityBusy}
+                  onChange={(event) => void saveUsagePriority(event.target.value as 'provider_first' | 'automnia_first_with_provider_fallback')}
+                  style={{ display: 'block', width: '100%', marginTop: '0.3rem' }}
+                >
+                  <option value="provider_first">My provider first, Automnia credits fallback</option>
+                  <option value="automnia_first_with_provider_fallback">Automnia credits first, my provider fallback</option>
+                </select>
+              </label>
+            </div>}
           </Field>
           <Field label="Effective Agent Route" hint={hostedCredits || isByok ? 'This saved preference applies to normal messages, /runtime, /work, /openclaw, streamed turns, and buffered recovery.' : 'Activate a Cloud Subscription or BYOK license to enable agent messages.'}>
             <input type="text" readOnly value={entitlement.defaultRouteLabel} style={{ fontWeight: 'bold', backgroundColor: hostedCredits ? 'rgba(16, 185, 129, 0.10)' : isByok ? 'rgba(56, 189, 248, 0.10)' : 'rgba(255, 255, 255, 0.05)', cursor: 'not-allowed' }} />
@@ -829,7 +847,7 @@ export function SettingsPanel({ focusSection = 'account', focusRequest = 0 }: { 
               <div>
                 <span>Automnia billing</span>
                 <strong>{hostedCredits ? entitlement.tierLabel : isByok ? 'BYOK access' : 'Plan status'}</strong>
-                <small>{hostedCredits || isByok ? isByok && usagePriority !== 'automnia_first' ? 'Your connected provider is used directly; Automnia credits are bypassed.' : usagePriority === 'provider_first' ? 'Your connected provider is used first; Automnia pooled credits remain available as fallback.' : usagePriority === 'byok_only' ? 'Direct provider-billed access is forced; Automnia credits are bypassed.' : 'Automnia credits are used first, with your provider available as fallback on eligible permanent tiers.' : 'Activate a license to receive your current entitlement.'}</small>
+                <small>{hostedCredits || isByok ? usagePriority === 'provider_first' ? 'Your connected provider is used first; Automnia credits are the fallback.' : usagePriority === 'automnia_first_with_provider_fallback' ? 'Automnia credits are used first; your connected provider is the fallback.' : usagePriorityLocked ? 'Automnia credits are the available route for this account.' : 'Automnia credits are used first; your provider is used if credits are exhausted.' : 'Activate a license to receive your current entitlement.'}</small>
               </div>
               <b>{entitlement.statusLabel}</b>
             </div>
@@ -848,6 +866,9 @@ export function SettingsPanel({ focusSection = 'account', focusRequest = 0 }: { 
               </div>
             </dl>
           </section>
+          {(hostedCredits || isByok) && usagePriorityLocked && usagePriority === 'automnia_only' && license?.creditBalance === 0 && <p role="alert" style={{ margin: '0.8rem 0 0', color: '#fda4af' }}>
+            Automnia credits are unavailable because the confirmed balance is 0. Refill your credits to continue.
+          </p>}
           <section className="dui-settings-account-actions" aria-labelledby="settings-account-actions-title">
             <div className="dui-settings-account-actions__head">
               <div>
@@ -904,9 +925,9 @@ export function SettingsPanel({ focusSection = 'account', focusRequest = 0 }: { 
               </button>
             </div>
           </section>
-          {hostedCredits && <p style={{ color: '#99f6e4', margin: '0.75rem 0 0', fontSize: '0.84rem' }}>Refills add Automnia credits automatically. Google Cloud confirms payment and keeps the highest purchased tier on this same account.</p>}
+          {hostedCredits && <p style={{ color: '#99f6e4', margin: '0.75rem 0 0', fontSize: '0.84rem' }}>Refills add Automnia credits automatically when Shopify checkout uses this account email ({license?.email || 'your Automnia email'}). A different checkout email intentionally creates a separate Automnia account.</p>}
           {license?.active && <p style={{ color: '#93f6d2', margin: '0.75rem 0 0', fontSize: '0.84rem' }}>Your purchases are managed as one Automnia account. Higher-tier purchases upgrade this entitlement automatically, so you keep one account and one canonical license key.</p>}
-          {isByok && <p style={{ color: '#93c5fd', margin: '0.75rem 0 0', fontSize: '0.84rem' }}>BYOK keeps your provider connection, and any pooled Automnia credits carried over from Starter remain available. Change the route here at any time; provider-only bypasses hosted-credit charging without deleting the balance.</p>}
+          {isByok && <p style={{ color: '#93c5fd', margin: '0.75rem 0 0', fontSize: '0.84rem' }}>BYOK keeps your provider connection, and any pooled Automnia credits carried over from Starter remain available. Choose My provider + Automnia credits to select which route runs first.</p>}
           {accountRefreshError && <p role="alert" style={{ color: '#fb7185', margin: '0.75rem 0 0' }}>{accountRefreshError}</p>}
           {checkoutError && <p role="alert" style={{ color: '#fb7185', margin: '0.75rem 0 0' }}>{checkoutError}</p>}
           {usagePriorityError && <p role="alert" style={{ color: '#fb7185', margin: '0.75rem 0 0' }}>{usagePriorityError}</p>}
@@ -962,7 +983,7 @@ export function SettingsPanel({ focusSection = 'account', focusRequest = 0 }: { 
         <nav className="dui-settings-nav" aria-label="Settings categories">
           {SETTINGS_SECTIONS.map((section) => (
             <button key={section.id} type="button" role="tab" aria-selected={!normalizedSearch && activeSection === section.id} aria-controls={`settings-section-${section.id}`} data-settings-section={section.id} data-active={!normalizedSearch && activeSection === section.id ? 'true' : 'false'} onClick={() => { setActiveSection(section.id); setSearchQuery('') }}>
-              <span><SettingsGlyph name={section.id} /></span><div><strong>{section.label}</strong><small>{section.description}</small></div><b aria-hidden="true">›</b>
+              <strong>{section.label}</strong>
             </button>
           ))}
         </nav>

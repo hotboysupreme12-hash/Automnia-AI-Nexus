@@ -206,6 +206,12 @@ export function apiErrorMessage(error: ApiErrorEnvelope): string {
   if (error.code === 'auth_required') {
     return 'The local runtime session needs to reconnect. Keep Automnia open and try again, or restart the desktop app.'
   }
+  if (error.code === 'network_error') {
+    return 'Automnia could not reach the local Control Center. Keep the app open and try again. If this continues, restart Automnia.'
+  }
+  if (error.code === 'timeout') {
+    return 'The local Control Center took too long to respond. Keep Automnia open and try again.'
+  }
   const detail = error.detail?.trim()
   if (!detail || detail === error.message || looksLikeApiEnvelope(detail)) return error.message
   return `${error.message}: ${detail}`

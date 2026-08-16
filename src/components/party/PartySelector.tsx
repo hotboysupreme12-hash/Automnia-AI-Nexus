@@ -1,14 +1,15 @@
-import { useDeferredValue, useEffect, useMemo, useRef, useState } from 'react'
+import { useDeferredValue, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { AgentCard } from './AgentCard'
 import { Panel } from '../common/Panel'
 import { useNexusStore } from '../../store/nexusStore'
-import type { AgentRarity, OpenClawAgent } from '../../types/nexus'
-import { useRuntimeStatus, type RuntimeStatus } from '../../hooks/useRuntimeStatus'
+import type { AgentActivityEvent, AgentRarity, AgentResponse, OpenClawAgent } from '../../types/nexus'
+import { useRuntimeSummaryStatus, type RuntimeStatus } from '../../hooks/useRuntimeStatus'
 import {
   DEFAULT_REGISTRY_PREFERENCES,
   REGISTRY_DISPLAY_OPTIONS,
   REGISTRY_OVERLAY_OPTIONS,
   REGISTRY_PREFS_CHANGED_EVENT,
+  applyRegistryCardTheme,
   readRegistryPreferences,
   resolveAgentCardTheme,
   saveRegistryPreferences,
@@ -25,14 +26,12 @@ const DISPLAY_MODES: DisplayModeConfig[] = REGISTRY_DISPLAY_OPTIONS
 const OVERLAY_PRESETS: OverlayPresetConfig[] = REGISTRY_OVERLAY_OPTIONS
 
 const gridClassByMode: Record<AgentDisplayMode, string> = {
-  showcase: 'agent-card-registry-grid agent-card-registry-grid--showcase',
-  grid6: 'agent-card-registry-grid agent-card-registry-grid--grid6',
   grid8: 'agent-card-registry-grid agent-card-registry-grid--grid8',
   grid10: 'agent-card-registry-grid agent-card-registry-grid--grid10',
   list: 'grid grid-cols-1 gap-2',
 }
 
-const FLOW_GRID_MODES = new Set<AgentDisplayMode>(['showcase', 'grid6', 'grid8', 'grid10'])
+const FLOW_GRID_MODES = new Set<AgentDisplayMode>(['grid8', 'grid10'])
 const EXTERNAL_CHANNEL_RUNNING_WINDOW_MS = 90_000
 const CYAN_SELECT_CHEVRON_STYLE = {
   backgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='8' height='8' viewBox='0 0 24 24' fill='none' stroke='%2367e8f9' stroke-width='3' stroke-linecap='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E")`,
@@ -71,6 +70,38 @@ function activeExternalChannelAgentIds(status: RuntimeStatus | null): Set<string
     }
   }
   return active
+}
+
+type AgentCardActivityStatus = {
+  label: string
+  detail: string
+  kind: 'working' | 'queued' | 'approval' | 'reply'
+}
+
+function latestVisibleActivity(response: AgentResponse): AgentActivityEvent | undefined {
+  return [...(response.activity || [])].reverse().find((event) => {
+    const type = event.type.toLowerCase()
+    return !type.startsWith('message.final') && !type.startsWith('run.finished') && Boolean(event.label.trim())
+  })
+}
+
+function cardActivityStatus(response: AgentResponse): AgentCardActivityStatus {
+  const event = latestVisibleActivity(response)
+  const type = event?.type.toLowerCase() || ''
+  const detail = event?.label.trim() || response.progressLabel?.trim() || 'Working on the current request.'
+
+  if (response.transport === 'command-console-queue' || type.startsWith('run.queued')) {
+    return { label: 'Queued', detail, kind: 'queued' }
+  }
+  if (type.startsWith('approval.')) return { label: 'Needs approval', detail, kind: 'approval' }
+  if (type.startsWith('tool.')) return { label: 'Using tools', detail, kind: 'working' }
+  if (type.startsWith('browser.')) return { label: 'Browsing', detail, kind: 'working' }
+  if (type.startsWith('file.')) return { label: 'Editing files', detail, kind: 'working' }
+  if (type.startsWith('command.')) return { label: 'Running command', detail, kind: 'working' }
+  if (type === 'message.partial' || type.startsWith('agent.finalizing')) return { label: 'Replying', detail, kind: 'reply' }
+  if (type === 'run.model_running' || type === 'agent.working') return { label: 'Thinking', detail, kind: 'working' }
+  if (type.startsWith('run.') || type.startsWith('agent.')) return { label: 'Preparing', detail, kind: 'working' }
+  return { label: 'Working', detail, kind: 'working' }
 }
 
 const RARITY_ORDER: Record<AgentRarity, number> = {
@@ -199,8 +230,12 @@ export function PartySelector() {
   const selectedAgentIds = useNexusStore((s) => s.selectedAgentIds)
   const activePartyIds = useNexusStore((s) => s.activePartyIds)
   const busyAgentIds = useNexusStore((s) => s.busyAgentIds)
+  const agentResponses = useNexusStore((s) => s.agentResponses)
   const activeMission = useNexusStore((s) => s.activeMission)
-  const { status: runtimeStatus } = useRuntimeStatus(5000)
+  // Agent cards only need the lightweight activity/run summary. Keeping the
+  // full session/config/diagnostics payload out of this high-traffic surface
+  // prevents the registry from waking the expensive runtime status path.
+  const { status: runtimeStatus } = useRuntimeSummaryStatus(15000)
   const missionRunning = activeMission?.status === 'running'
   const registryScrollRef = useRef<HTMLDivElement | null>(null)
   const registryGridRef = useRef<HTMLDivElement | null>(null)
@@ -214,7 +249,7 @@ export function PartySelector() {
   const [overlayPreset, setOverlayPreset] = useState<AgentOverlayPreset>(prefs.overlayPreset)
   const [rarityColorsEnabled, setRarityColorsEnabled] = useState(prefs.rarityColorsEnabled)
   const [registryColumnCount, setRegistryColumnCount] = useState(1)
-  const activeDisplayMode = DISPLAY_MODES.find((mode) => mode.id === displayMode) || DISPLAY_MODES[1]
+  const activeDisplayMode = DISPLAY_MODES.find((mode) => mode.id === displayMode) || DISPLAY_MODES[0]
   const nominalPageSize = activeDisplayMode.pageSize
   const pageSize = useMemo(() => {
     if (!FLOW_GRID_MODES.has(displayMode)) return nominalPageSize
@@ -233,6 +268,14 @@ export function PartySelector() {
     ...busyAgentIds,
     ...activeExternalChannelAgentIds(runtimeStatus),
   ]), [busyAgentIds, runtimeStatus])
+  const activityStatusByAgent = useMemo(() => {
+    const next = new Map<string, AgentCardActivityStatus>()
+    for (const response of agentResponses) {
+      if (!response.streaming || next.has(response.agentId)) continue
+      next.set(response.agentId, cardActivityStatus(response))
+    }
+    return next
+  }, [agentResponses])
   const searchIndex = useMemo(() => new Map(agents.map((agent) => {
     const haystack = agentSearchText(agent)
     return [agent.id, {
@@ -326,13 +369,8 @@ export function PartySelector() {
     }
   }, [])
 
-  useEffect(() => {
-    document.documentElement.dataset.agentCardOverlay = rarityColorsEnabled ? 'rarity' : overlayPreset
-    document.documentElement.dataset.agentCardRarityColors = rarityColorsEnabled ? 'enabled' : 'disabled'
-    return () => {
-      delete document.documentElement.dataset.agentCardOverlay
-      delete document.documentElement.dataset.agentCardRarityColors
-    }
+  useLayoutEffect(() => {
+    applyRegistryCardTheme({ overlayPreset, rarityColorsEnabled })
   }, [overlayPreset, rarityColorsEnabled])
 
   useEffect(() => {
@@ -509,30 +547,23 @@ export function PartySelector() {
               ))}
             </div>
 
-            <select
-              data-agent-filter-select
-              data-agent-overlay-control
-              aria-label="Card background theme"
-              value={rarityColorsEnabled ? 'rarity' : overlayPreset}
-              onChange={(e) => {
-                const nextPreset = e.target.value as AgentOverlayPreset
-                if (nextPreset === 'rarity') {
-                  setRarityColorsEnabled(true)
-                  return
-                }
-                setOverlayPreset(nextPreset)
-                setRarityColorsEnabled(false)
-              }}
-              disabled={rarityColorsEnabled}
-              className="px-2.5 py-1.5 pr-7 text-[10px] font-semibold outline-none transition cursor-pointer appearance-none"
-              style={CYAN_SELECT_CHEVRON_STYLE}
-            >
-              {OVERLAY_PRESETS.map((preset) => (
-                <option key={preset.id} value={preset.id}>
-                  {preset.label}
-                </option>
-              ))}
-            </select>
+            {!rarityColorsEnabled && (
+              <select
+                data-agent-filter-select
+                data-agent-overlay-control
+                aria-label="Card background theme"
+                value={overlayPreset}
+                onChange={(e) => setOverlayPreset(e.target.value as AgentOverlayPreset)}
+                className="px-2.5 py-1.5 pr-7 text-[10px] font-semibold outline-none transition cursor-pointer appearance-none"
+                style={CYAN_SELECT_CHEVRON_STYLE}
+              >
+                {OVERLAY_PRESETS.map((preset) => (
+                  <option key={preset.id} value={preset.id}>
+                    {preset.label}
+                  </option>
+                ))}
+              </select>
+            )}
 
           </div>
         </div>
@@ -582,6 +613,7 @@ export function PartySelector() {
                       slotNumber={slotNumber}
                       partyIndex={inParty && slotNumber ? slotNumber - 1 : null}
                       isBusy={busyAgentSet.has(agent.id)}
+                      activityStatus={activityStatusByAgent.get(agent.id)}
                       missionRunning={missionRunning}
                       cardTheme={resolveAgentCardTheme(agent.rarity, { overlayPreset, rarityColorsEnabled })}
                       displayMode={displayMode}

@@ -1,0 +1,189 @@
+/* Recruit templates: category color is the organizing signal; template cards stay quiet. */
+
+html.dui-pro-overhaul [data-dui-modal='recruit-agent'] {
+  --recruit-template-fallback: #79c9bc;
+  --recruit-template-surface: #0d1215;
+  --recruit-template-surface-raised: #12191d;
+  --recruit-template-line: rgba(205, 218, 220, .14);
+  --recruit-template-line-strong: rgba(205, 218, 220, .24);
+}
+
+html.dui-pro-overhaul [data-dui-modal='recruit-agent'] .dui-recruit-template-panel {
+  gap: 14px !important;
+  border: 1px solid var(--recruit-template-line) !important;
+  border-radius: 14px !important;
+  background: var(--recruit-template-surface) !important;
+  box-shadow: none !important;
+  padding: 14px !important;
+}
+
+html.dui-pro-overhaul [data-dui-modal='recruit-agent'] .dui-recruit-template-search {
+  border-color: var(--recruit-template-line) !important;
+  border-radius: 10px !important;
+  background: #080d10 !important;
+  box-shadow: none !important;
+}
+
+html.dui-pro-overhaul [data-dui-modal='recruit-agent'] .dui-recruit-template-search:focus-within {
+  border-color: rgba(121, 201, 188, .46) !important;
+  box-shadow: 0 0 0 3px rgba(121, 201, 188, .08) !important;
+}
+
+html.dui-pro-overhaul [data-dui-modal='recruit-agent'] .dui-recruit-category-chips {
+  gap: 6px !important;
+}
+
+html.dui-pro-overhaul [data-dui-modal='recruit-agent'] .dui-recruit-category-chips button {
+  min-height: 31px !important;
+  border-color: color-mix(in srgb, var(--category-color, var(--recruit-template-fallback)) 36%, var(--recruit-template-line)) !important;
+  border-radius: 999px !important;
+  background: color-mix(in srgb, var(--category-color, var(--recruit-template-fallback)) 5%, #101619) !important;
+  color: #b8c6ca !important;
+  padding: 0 11px !important;
+  transition: border-color .16s ease, background-color .16s ease, color .16s ease, transform .16s ease !important;
+}
+
+html.dui-pro-overhaul [data-dui-modal='recruit-agent'] .dui-recruit-category-chips button small {
+  color: color-mix(in srgb, var(--category-color, var(--recruit-template-fallback)) 72%, #dbe6e7 28%) !important;
+}
+
+html.dui-pro-overhaul [data-dui-modal='recruit-agent'] .dui-recruit-category-chips button:hover:not(:disabled),
+html.dui-pro-overhaul [data-dui-modal='recruit-agent'] .dui-recruit-category-chips button[data-active='true'] {
+  border-color: color-mix(in srgb, var(--category-color, var(--recruit-template-fallback)) 72%, #dbe6e7 28%) !important;
+  background: color-mix(in srgb, var(--category-color, var(--recruit-template-fallback)) 14%, #101619) !important;
+  color: #f1f7f7 !important;
+  transform: translateY(-1px);
+}
+
+html.dui-pro-overhaul [data-dui-modal='recruit-agent'] .dui-recruit-template-category-grid {
+  gap: 9px !important;
+}
+
+html.dui-pro-overhaul [data-dui-modal='recruit-agent'] .dui-recruit-template-category-card {
+  min-height: 62px !important;
+  border-color: var(--recruit-template-line) !important;
+  border-left: 3px solid var(--category-color, var(--recruit-template-fallback)) !important;
+  border-radius: 10px !important;
+  background: #11181b !important;
+  color: #d8e2e4 !important;
+  box-shadow: none !important;
+  transition: border-color .16s ease, background-color .16s ease, transform .16s ease !important;
+}
+
+html.dui-pro-overhaul [data-dui-modal='recruit-agent'] .dui-recruit-template-category-card:hover:not(:disabled),
+html.dui-pro-overhaul [data-dui-modal='recruit-agent'] .dui-recruit-template-category-card:focus-visible {
+  border-color: color-mix(in srgb, var(--category-color, var(--recruit-template-fallback)) 60%, var(--recruit-template-line-strong)) !important;
+  border-left-color: var(--category-color, var(--recruit-template-fallback)) !important;
+  background: color-mix(in srgb, var(--category-color, var(--recruit-template-fallback)) 9%, #11181b) !important;
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--category-color, var(--recruit-template-fallback)) 10%, transparent) !important;
+  transform: translateY(-1px);
+}
+
+html.dui-pro-overhaul [data-dui-modal='recruit-agent'] .dui-recruit-template-category-card:disabled {
+  cursor: wait;
+  opacity: .64;
+}
+
+html.dui-pro-overhaul [data-dui-modal='recruit-agent'] .dui-recruit-template-category-mark,
+html.dui-pro-overhaul [data-dui-modal='recruit-agent'] .dui-recruit-template-group-mark {
+  background: var(--category-color, var(--recruit-template-fallback)) !important;
+  box-shadow: none !important;
+}
+
+html.dui-pro-overhaul [data-dui-modal='recruit-agent'] .dui-recruit-template-category-card b {
+  color: color-mix(in srgb, var(--category-color, var(--recruit-template-fallback)) 78%, #edf7f6 22%) !important;
+}
+
+html.dui-pro-overhaul [data-dui-modal='recruit-agent'] .dui-recruit-template-cards {
+  gap: 13px !important;
+}
+
+html.dui-pro-overhaul [data-dui-modal='recruit-agent'] .dui-recruit-template-group {
+  gap: 8px !important;
+}
+
+html.dui-pro-overhaul [data-dui-modal='recruit-agent'] .dui-recruit-template-group-head {
+  gap: 8px !important;
+  border-top-color: color-mix(in srgb, var(--category-color, var(--recruit-template-fallback)) 42%, var(--recruit-template-line)) !important;
+  color: #d8e3e5 !important;
+}
+
+html.dui-pro-overhaul [data-dui-modal='recruit-agent'] .dui-recruit-template-group-head > strong {
+  flex: 1 1 auto;
+  color: #d8e3e5 !important;
+}
+
+html.dui-pro-overhaul [data-dui-modal='recruit-agent'] .dui-recruit-template-group-mark {
+  width: 6px;
+  height: 6px;
+  flex: 0 0 auto;
+  border-radius: 999px;
+}
+
+html.dui-pro-overhaul [data-dui-modal='recruit-agent'] .dui-recruit-template-group-grid {
+  gap: 8px !important;
+}
+
+html.dui-pro-overhaul [data-dui-modal='recruit-agent'] .dui-recruit-template-card,
+html.dui-pro-overhaul [data-dui-modal='recruit-agent'] .dui-recruit-template-card-blank {
+  min-height: 88px !important;
+  border: 1px solid var(--recruit-template-line) !important;
+  border-radius: 10px !important;
+  background: var(--recruit-template-surface-raised) !important;
+  color: #d9e3e5 !important;
+  box-shadow: none !important;
+  transform: none !important;
+  transition: border-color .16s ease, background-color .16s ease, color .16s ease !important;
+}
+
+html.dui-pro-overhaul [data-dui-modal='recruit-agent'] .dui-recruit-template-card:hover:not(:disabled),
+html.dui-pro-overhaul [data-dui-modal='recruit-agent'] .dui-recruit-template-card[data-active='true'],
+html.dui-pro-overhaul [data-dui-modal='recruit-agent'] .dui-recruit-template-card:focus-visible {
+  border-color: var(--recruit-template-line-strong) !important;
+  background: #182125 !important;
+  color: #f4f8f8 !important;
+  box-shadow: 0 0 0 3px rgba(205, 218, 220, .06) !important;
+  transform: none !important;
+}
+
+html.dui-pro-overhaul [data-dui-modal='recruit-agent'] .dui-recruit-template-card-blank {
+  min-height: 56px !important;
+  border-style: dashed !important;
+  background: #0f1518 !important;
+}
+
+html.dui-pro-overhaul [data-dui-modal='recruit-agent'] .dui-recruit-template-card small,
+html.dui-pro-overhaul [data-dui-modal='recruit-agent'] .dui-recruit-template-card span {
+  color: #92a3a8 !important;
+}
+
+html.dui-pro-overhaul [data-dui-modal='recruit-agent'] .dui-recruit-template-preview:not(.is-blank) {
+  border-color: color-mix(in srgb, var(--category-color, var(--recruit-template-fallback)) 46%, var(--recruit-template-line)) !important;
+  border-left: 3px solid var(--category-color, var(--recruit-template-fallback)) !important;
+  background: #11191c !important;
+}
+
+html.dui-pro-overhaul [data-dui-modal='recruit-agent'] .dui-recruit-template-preview.is-blank {
+  border-color: var(--recruit-template-line) !important;
+  background: #111619 !important;
+}
+
+html.dui-pro-overhaul [data-dui-modal='recruit-agent'] .dui-recruit-template-meta span {
+  border-color: var(--recruit-template-line) !important;
+  background: #0b1114 !important;
+  color: #aebdc0 !important;
+}
+
+@media (max-width: 720px) {
+  html.dui-pro-overhaul [data-dui-modal='recruit-agent'] .dui-recruit-template-category-grid,
+  html.dui-pro-overhaul [data-dui-modal='recruit-agent'] .dui-recruit-template-group-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+  }
+}
+
+@media (max-width: 480px) {
+  html.dui-pro-overhaul [data-dui-modal='recruit-agent'] .dui-recruit-template-category-grid,
+  html.dui-pro-overhaul [data-dui-modal='recruit-agent'] .dui-recruit-template-group-grid {
+    grid-template-columns: minmax(0, 1fr) !important;
+  }
+}

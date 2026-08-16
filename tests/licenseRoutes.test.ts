@@ -37,7 +37,7 @@ function activeStatus(usagePriority: LicenseStatus['usagePriority']): LicenseSta
 }
 
 test('usage priority does not acknowledge until Gateway route synchronization completes', async () => {
-  let status = activeStatus('automnia_first')
+  let status = activeStatus('automnia_only')
   let resolveSynchronization!: () => void
   let markSynchronizationStarted!: () => void
   const synchronizationStarted = new Promise<void>((resolve) => { markSynchronizationStarted = resolve })
@@ -83,5 +83,39 @@ test('usage priority does not acknowledge until Gateway route synchronization co
     assert.equal(response.status, 200)
     assert.equal(payload.ok, true)
     assert.equal(payload.data.usagePriority, 'provider_first')
+  })
+})
+
+test('failed route application rolls the saved priority back to the live route', async () => {
+  let status = activeStatus('automnia_only')
+  let synchronizationCalls = 0
+  const licenseService = {
+    getStatus: () => status,
+    isUsagePriorityLocked: () => false,
+    setUsagePriority: (usagePriority: NonNullable<LicenseStatus['usagePriority']>) => {
+      status = activeStatus(usagePriority)
+      return status
+    },
+  } as unknown as LicenseService
+
+  const app = express()
+  app.use(express.json())
+  registerLicenseRoutes(app, {
+    licenseService,
+    synchronizeOpenClawBillingRoute: async () => {
+      synchronizationCalls += 1
+      if (synchronizationCalls === 1) throw new Error('Gateway route confirmation failed')
+    },
+  })
+
+  await withRouteServer(app, async (baseUrl) => {
+    const response = await fetch(`${baseUrl}/api/license/usage-priority`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ usagePriority: 'provider_first' }),
+    })
+    assert.equal(response.status, 500)
+    assert.equal(status.usagePriority, 'automnia_only')
+    assert.equal(synchronizationCalls, 2)
   })
 })

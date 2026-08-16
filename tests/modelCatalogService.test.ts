@@ -4,6 +4,8 @@ import {
   canonicalAgentModelId,
   createModelCatalogService,
   isModelSafeForOpenClawConfig,
+  MODEL_CATALOG_EXCLUDED_MODEL_IDS,
+  OPENCLAW_VERIFIED_ANTHROPIC_MODEL_IDS,
   type ModelCatalogOpenClawConfig,
 } from '../server/services/providers/modelCatalogService'
 
@@ -63,6 +65,7 @@ function createHarness(options: HarnessOptions = {}) {
 test('fallback catalog canonicalizes Codex subscription models and suppresses unavailable ids', () => {
   const { service } = createHarness()
   const fallback = service.fallbackAvailableModels()
+  const excludedModelIds = Array.from(MODEL_CATALOG_EXCLUDED_MODEL_IDS)
   const codexSpark = fallback.find((model) => model.id === 'openai/gpt-5.3-codex-spark')
   const geminiFlash = fallback.find((model) => model.id === 'google/gemini-3.6-flash')
   const vertexGeminiFlash = fallback.find((model) => model.id === 'google-vertex/gemini-3.6-flash')
@@ -71,6 +74,7 @@ test('fallback catalog canonicalizes Codex subscription models and suppresses un
   assert.equal(canonicalAgentModelId('gpt-5.3-codex-spark'), 'openai/gpt-5.3-codex-spark')
   assert.equal(codexSpark?.provider, 'openai')
   assert.equal(fallback.some((model) => model.id === 'openai/gpt-5.3-chat-latest'), false)
+  assert.ok(excludedModelIds.every((id) => !fallback.some((model) => model.id === id)))
   assert.equal(isModelSafeForOpenClawConfig('openai/gpt-5.3-chat-latest'), false)
   assert.equal(isModelSafeForOpenClawConfig('openai/gpt-5.3-codex-spark'), true)
   assert.equal(geminiFlash?.alias, 'Gemini 3.6 Flash (GA)')
@@ -79,9 +83,13 @@ test('fallback catalog canonicalizes Codex subscription models and suppresses un
   assert.equal(vertexGeminiFlash?.streaming.provider, 'google-vertex')
   assert.equal(metaMuse?.alias, 'Muse Spark 1.1 (Meta)')
   assert.equal(metaMuse?.streaming.provider, 'meta')
+  assert.ok(fallback.filter((model) => model.provider === 'anthropic').every((model) =>
+    OPENCLAW_VERIFIED_ANTHROPIC_MODEL_IDS.has(model.id.split('/')[1] || ''),
+  ))
 })
 
 test('refresh loads OpenClaw catalog and normalizes OpenRouter allowlist through the service', async () => {
+  const excludedModelIds = Array.from(MODEL_CATALOG_EXCLUDED_MODEL_IDS)
   const { service, state } = createHarness({
     config: {
       agents: { defaults: { models: {} } },
@@ -90,6 +98,11 @@ test('refresh loads OpenClaw catalog and normalizes OpenRouter allowlist through
     openClawModels: {
       models: [
         { id: 'anthropic/claude-custom', alias: 'custom', provider: 'anthropic', name: 'claude-custom' },
+        ...Array.from(MODEL_CATALOG_EXCLUDED_MODEL_IDS).map((id) => ({
+          id,
+          provider: id.split('/')[0],
+          name: id.split('/')[1],
+        })),
         { id: 'google-vertex/gemini-3.6-flash', provider: 'google-vertex', name: 'gemini-3.6-flash' },
         { id: 'openai/gpt-5.3-chat-latest', provider: 'openai', name: 'gpt-5.3-chat-latest' },
       ],
@@ -100,6 +113,7 @@ test('refresh loads OpenClaw catalog and normalizes OpenRouter allowlist through
   assert.equal(cache.source, 'openclaw')
   assert.equal(cache.models[0]?.id, 'google-vertex/gemini-3.6-flash')
   assert.ok(cache.models.some((model) => model.id === 'anthropic/claude-custom'))
+  assert.ok(excludedModelIds.every((id) => !cache.models.some((model) => model.id === id)))
   assert.equal(cache.models.some((model) => model.id === 'openai/gpt-5.3-chat-latest'), false)
   assert.equal(state.writes.length, 1)
   assert.equal(
@@ -148,19 +162,23 @@ test('configured model allowlist normalizes provider entries and skips unsafe mo
     'google/gemini-3.6-flash',
     'google-vertex/gemini-3.6-flash',
     'deepseek/deepseek-v4-flash',
+    'anthropic/claude-sonnet-5',
     'openai/gpt-5.3-chat-latest',
   ])
 
   assert.equal(typeof config.agents?.defaults?.models?.['google/gemini-3.6-flash'], 'object')
   assert.equal(typeof config.agents?.defaults?.models?.['google-vertex/gemini-3.6-flash'], 'object')
   assert.equal(typeof config.agents?.defaults?.models?.['deepseek/deepseek-v4-flash'], 'object')
+  assert.equal(typeof config.agents?.defaults?.models?.['anthropic/claude-sonnet-5'], 'object')
   assert.equal(config.agents?.defaults?.models?.['openai/gpt-5.3-chat-latest'], undefined)
   assert.equal(config.models?.providers?.google?.api, 'google-generative-ai')
   assert.equal(config.models?.providers?.['google-vertex']?.api, 'google-vertex')
   assert.equal(config.models?.providers?.deepseek?.api, 'openai-completions')
   assert.equal(config.models?.providers?.deepseek?.baseUrl, 'https://api.deepseek.com')
+  assert.equal(config.models?.providers?.anthropic?.api, 'anthropic-messages')
   assert.deepEqual(state.fastModeModelIds.sort(), [
     'deepseek/deepseek-v4-flash',
+    'anthropic/claude-sonnet-5',
     'google-vertex/gemini-3.6-flash',
     'google/gemini-3.6-flash',
   ].sort())

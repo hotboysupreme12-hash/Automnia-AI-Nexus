@@ -383,8 +383,11 @@ html.dui-pro-overhaul [data-ui-revision="settings-v2"] :is(.dui-settings-field, 
 
 html.dui-pro-overhaul [data-ui-revision="settings-v2"] .dui-settings-control {
   display: flex;
+  flex-direction: column;
   min-width: 0;
   justify-content: flex-end;
+  align-items: stretch;
+  gap: 7px;
 }
 
 html.dui-pro-overhaul [data-ui-revision="settings-v2"] .dui-settings-control > [data-dui-setting] {
@@ -1019,46 +1022,48 @@ html.dui-pro-overhaul [data-ui-revision="settings-v2"].dui-settings-redesign .du
   padding: 16px 12px;
   border-right: 1px solid var(--settings-line);
   border-bottom: 0;
-  background: linear-gradient(180deg, rgb(11 20 24 / .98), rgb(5 11 14 / .98));
-  box-shadow: 10px 0 24px rgb(0 0 0 / .12);
+  background: transparent;
+  box-shadow: none;
 }
 
 html.dui-pro-overhaul [data-ui-revision="settings-v2"].dui-settings-redesign .dui-settings-nav > button {
-  min-height: 64px;
-  grid-template-columns: 34px minmax(0, 1fr) 14px;
-  gap: 10px;
-  padding: 9px 10px;
-  border-radius: 10px;
-}
-
-html.dui-pro-overhaul [data-ui-revision="settings-v2"].dui-settings-redesign .dui-settings-nav > button > span {
-  width: 34px;
-  height: 34px;
-  border-radius: 9px;
-}
-
-html.dui-pro-overhaul [data-ui-revision="settings-v2"].dui-settings-redesign .dui-settings-nav > button b {
   display: block;
-  color: #55747a;
-  font-size: 18px;
-  font-weight: 400;
-  line-height: 1;
-  text-align: right;
+  min-height: 42px;
+  padding: 10px 12px;
+  border: 1px solid rgb(148 195 205 / .22);
+  border-radius: 7px;
+  background: transparent;
+  box-shadow: none;
+  color: #8ea3aa;
+  text-align: left;
+  transition: border-color 140ms ease, color 140ms ease;
 }
 
-html.dui-pro-overhaul [data-ui-revision="settings-v2"].dui-settings-redesign .dui-settings-nav > button[data-active="true"] b {
-  color: #9de6dc;
+html.dui-pro-overhaul [data-ui-revision="settings-v2"].dui-settings-redesign .dui-settings-nav > button:hover {
+  border-color: rgb(142 190 202 / .58);
+  background: transparent;
+  color: #c4d5dc;
+}
+
+html.dui-pro-overhaul [data-ui-revision="settings-v2"].dui-settings-redesign .dui-settings-nav > button[data-active="true"] {
+  border-color: #61d0c3;
+  background: transparent;
+  color: #e2f4f1;
+  box-shadow: none;
+}
+
+html.dui-pro-overhaul [data-ui-revision="settings-v2"].dui-settings-redesign .dui-settings-nav > button:focus-visible {
+  outline: 2px solid #61d0c3;
+  outline-offset: 2px;
 }
 
 html.dui-pro-overhaul [data-ui-revision="settings-v2"].dui-settings-redesign .dui-settings-nav > button strong {
-  font-size: 10px;
-}
-
-html.dui-pro-overhaul [data-ui-revision="settings-v2"].dui-settings-redesign .dui-settings-nav > button small {
-  max-width: 150px;
-  font-size: 8px;
-  line-height: 1.35;
-  white-space: normal;
+  display: block;
+  color: inherit;
+  font-size: 11px;
+  font-weight: 700;
+  line-height: 1.2;
+  letter-spacing: .01em;
 }
 
 html.dui-pro-overhaul [data-ui-revision="settings-v2"].dui-settings-redesign .dui-settings-content {
@@ -1147,27 +1152,136 @@ html.dui-pro-overhaul [data-ui-revision="settings-v2"].dui-settings-redesign .du
 }
 
 html.dui-pro-overhaul [data-ui-revision="settings-v2"].dui-settings-redesign .dui-settings-account-password {
-  grid-template-columns: minmax(0, 1fr) !important;
-  margin: 0 !important;
-  padding: 15px 0;
-  border-bottom: 1px solid rgb(159 194 209 / .075);
+  display: grid;
+  width: min(100%, 700px);
+  justify-items: center;
+  gap: 0;
+  margin: 18px auto 4px !important;
+  padding: 26px clamp(16px, 4vw, 44px) 30px;
+  border: 1px solid rgb(112 217 208 / .18);
+  border-radius: 16px;
+  background:
+    radial-gradient(circle at 50% 0, rgb(103 219 205 / .12), transparent 48%),
+    linear-gradient(145deg, rgb(18 34 38 / .8), rgb(7 13 17 / .72));
+  box-shadow: 0 16px 34px rgb(0 0 0 / .16), inset 0 1px 0 rgb(255 255 255 / .035);
+  text-align: center;
 }
 
-html.dui-pro-overhaul [data-ui-revision="settings-v2"].dui-settings-redesign .dui-settings-account-password > strong {
-  color: #dbe9eb !important;
+html.dui-pro-overhaul [data-ui-revision="settings-v2"].dui-settings-redesign .dui-settings-account-password__intro {
+  display: grid;
+  justify-items: center;
+  width: min(100%, 620px);
+}
+
+html.dui-pro-overhaul [data-ui-revision="settings-v2"].dui-settings-redesign .dui-settings-account-password__intro > span {
+  color: #70d9d0;
+  font-size: 8px;
+  font-weight: 820;
+  letter-spacing: .18em;
+  text-transform: uppercase;
+}
+
+html.dui-pro-overhaul [data-ui-revision="settings-v2"].dui-settings-redesign .dui-settings-account-password__intro h4 {
+  margin: 8px 0 0;
+  color: #f0f8f8;
+  font-size: clamp(18px, 2vw, 22px);
+  font-weight: 760;
+  letter-spacing: -.025em;
+  line-height: 1.15;
+}
+
+html.dui-pro-overhaul [data-ui-revision="settings-v2"].dui-settings-redesign .dui-settings-account-password__intro p {
+  max-width: 620px;
+  margin: 10px 0 0;
+  color: #91a6ac;
+  font-size: 10px;
+  line-height: 1.6;
+}
+
+html.dui-pro-overhaul [data-ui-revision="settings-v2"].dui-settings-redesign .dui-settings-account-password__form {
+  display: grid;
+  width: min(100%, 480px);
+  gap: 13px;
+  margin: 22px auto 0;
+}
+
+html.dui-pro-overhaul [data-ui-revision="settings-v2"].dui-settings-redesign .dui-settings-account-password__field {
+  display: grid;
+  justify-items: center;
+  gap: 7px;
+  margin: 0;
+  color: #c9dcde;
+  font-size: 10px;
+  font-weight: 700;
+  text-align: center;
+}
+
+html.dui-pro-overhaul [data-ui-revision="settings-v2"].dui-settings-redesign .dui-settings-account-password__field span {
+  color: #b8cccf;
+  font-size: 10px;
+  letter-spacing: .02em;
+}
+
+html.dui-pro-overhaul [data-ui-revision="settings-v2"].dui-settings-redesign .dui-settings-account-password__field input {
+  width: 100% !important;
+  min-height: 42px !important;
+  padding: 10px 13px !important;
+  border: 1px solid rgb(158 214 211 / .2) !important;
+  border-radius: 10px !important;
+  background: rgb(2 8 11 / .62) !important;
+  color: #e5f1f1 !important;
   font-size: 11px !important;
+  text-align: center;
+  box-shadow: inset 0 1px 0 rgb(255 255 255 / .025), 0 6px 16px rgb(0 0 0 / .1) !important;
 }
 
-html.dui-pro-overhaul [data-ui-revision="settings-v2"].dui-settings-redesign .dui-settings-account-password > p {
-  max-width: 680px;
-  font-size: 10px !important;
+html.dui-pro-overhaul [data-ui-revision="settings-v2"].dui-settings-redesign .dui-settings-account-password__field input::placeholder {
+  color: #6f858b;
+  opacity: 1;
+}
+
+html.dui-pro-overhaul [data-ui-revision="settings-v2"].dui-settings-redesign .dui-settings-account-password__field input:focus {
+  border-color: rgb(112 217 208 / .62) !important;
+  box-shadow: 0 0 0 4px rgb(112 217 208 / .09), inset 0 1px 0 rgb(255 255 255 / .025) !important;
+}
+
+html.dui-pro-overhaul [data-ui-revision="settings-v2"].dui-settings-redesign .dui-settings-account-password__submit,
+html.dui-pro-overhaul [data-ui-revision="settings-v2"].dui-settings-redesign .dui-settings-account-password__connect {
+  justify-self: center;
+  width: min(100%, 280px) !important;
+  min-height: 42px;
+  margin: 8px auto 0;
+  border: 1px solid rgb(112 217 208 / .4);
+  border-radius: 10px;
+  background: linear-gradient(135deg, #55c8bd, #2d928f);
+  color: #041014;
+  font-size: 10px;
+  font-weight: 820;
+  letter-spacing: .02em;
+  box-shadow: 0 10px 22px rgb(43 157 150 / .2), inset 0 1px 0 rgb(255 255 255 / .24);
+  transition: transform .18s ease, box-shadow .18s ease, filter .18s ease;
+}
+
+html.dui-pro-overhaul [data-ui-revision="settings-v2"].dui-settings-redesign .dui-settings-account-password__submit:hover:not(:disabled),
+html.dui-pro-overhaul [data-ui-revision="settings-v2"].dui-settings-redesign .dui-settings-account-password__connect:hover:not(:disabled) {
+  transform: translateY(-1px);
+  filter: brightness(1.06);
+  box-shadow: 0 13px 26px rgb(43 157 150 / .28), inset 0 1px 0 rgb(255 255 255 / .3);
+}
+
+html.dui-pro-overhaul [data-ui-revision="settings-v2"].dui-settings-redesign .dui-settings-account-password__submit:disabled,
+html.dui-pro-overhaul [data-ui-revision="settings-v2"].dui-settings-redesign .dui-settings-account-password__connect:disabled {
+  cursor: not-allowed;
+  filter: saturate(.45);
+  opacity: .58;
+}
+
+html.dui-pro-overhaul [data-ui-revision="settings-v2"].dui-settings-redesign .dui-settings-account-password__error {
+  max-width: 480px;
+  margin: 16px 0 0;
+  color: #fb7185;
+  font-size: 10px;
   line-height: 1.5;
-}
-
-html.dui-pro-overhaul [data-ui-revision="settings-v2"].dui-settings-redesign .dui-settings-account-password > input,
-html.dui-pro-overhaul [data-ui-revision="settings-v2"].dui-settings-redesign .dui-settings-account-password > button {
-  width: min(100%, 460px) !important;
-  justify-self: start;
 }
 
 html.dui-pro-overhaul [data-ui-revision="settings-v2"].dui-settings-redesign .dui-settings-account-actions {
@@ -1349,11 +1463,10 @@ html.dui-pro-overhaul [data-ui-revision="settings-v2"].dui-settings-redesign .du
     box-shadow: 0 8px 22px rgb(0 0 0 / .16);
   }
   html.dui-pro-overhaul [data-ui-revision="settings-v2"].dui-settings-redesign .dui-settings-nav > button {
-    width: 196px;
-    min-width: 196px;
-    min-height: 54px;
+    width: 160px;
+    min-width: 160px;
+    min-height: 42px;
   }
-  html.dui-pro-overhaul [data-ui-revision="settings-v2"].dui-settings-redesign .dui-settings-nav > button b { display: none; }
 }
 
 @media (max-width: 650px) {
@@ -1589,6 +1702,9 @@ html.dui-pro-overhaul [data-ui-revision="settings-v2"] .dui-activity-log__row {
   border-bottom: 1px solid rgb(255 255 255 / .055);
   background: rgb(255 255 255 / .008);
   transition: background .16s ease;
+  contain: content;
+  content-visibility: auto;
+  contain-intrinsic-size: auto 84px;
 }
 
 html.dui-pro-overhaul [data-ui-revision="settings-v2"] .dui-activity-log__row:hover { background: rgb(255 255 255 / .035); }

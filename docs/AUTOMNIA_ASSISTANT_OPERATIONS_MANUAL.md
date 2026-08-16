@@ -199,8 +199,10 @@ Use **Profile** for identity and presentation:
 - Change **Behavior** among executor, architect, auditor, researcher, and
   hybrid profiles.
 - **Inbound message leader** shows whether the agent receives unbound messages
-  by default. **Make default** or **Reapply routing** changes the default
-  inbound route, including unbound Telegram DMs when supported.
+  by default. The selected agent is labeled **Primary assistant**; choose
+  **Make default** on another agent to change the fallback inbound route,
+  including unbound Telegram DMs when supported. More-specific custom routes
+  can still send messages to other agents.
 - Review the identity/routing area before changing the default-agent status.
 - Portrait uploads and identity edits are separate from model authorization and
   tool permissions.
@@ -383,11 +385,15 @@ that affect multiple agents or delete temporary state ask for confirmation.
 - Secure checkout/plan controls, account refresh, legacy purchase linking, and
   **Log out of Automnia**.
 
-The usage choices are **Automnia credits first**, **My provider first +
-Automnia fallback**, and **My provider only** when the entitlement allows
-them. Starter remains locked to Automnia credits. The exact entitlement shown
-by the account screen wins over remembered pricing. A provider password/key is
-not the Automnia account password.
+The usage choices are **Automnia credits** or **My provider + Automnia credits**
+when the entitlement allows it. The combined choice exposes a secondary order
+selector for **My provider first** or **Automnia first**. Starter and
+credit-refill access remain locked to Automnia credits; a confirmed zero balance
+must produce an explicit refill message. BYOK and higher tiers can use the
+connected provider when Automnia credits are selected first but the confirmed
+balance is zero. The exact entitlement shown by the account screen wins over
+remembered pricing. A provider password/key is not the Automnia account
+password.
 
 For password management:
 

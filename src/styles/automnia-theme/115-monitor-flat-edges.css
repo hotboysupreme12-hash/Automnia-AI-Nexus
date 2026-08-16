@@ -1,0 +1,283 @@
+/* Monitor finish: crisp, square surfaces for an operator-console feel. */
+html.dui-pro-overhaul .app-bg.dy-monitor-focus [data-dui-panel="monitor"] :where(
+  .dy-monitor-shell,
+  .dy-monitor-card,
+  .dy-health-card,
+  .dy-monitor-tabs,
+  .dy-monitor-tabbar,
+  .dy-monitor-tab-list,
+  .dy-monitor-tools,
+  .dy-gateway-layout > *,
+  .dy-gateway-summary-card,
+  .dy-channel-activity-card,
+  .dy-cron-jobs-card,
+  .dy-gateway-log-card,
+  .dy-gateway-event-list,
+  .dy-monitor-stream-box,
+  .dy-monitor-log-box,
+  .dy-gateway-event-card,
+  .dy-gateway-activity-entry,
+  .dy-cron-job-card,
+  .dy-session-meta-chip,
+  .dy-monitor-tool-button,
+  .dy-gateway-action-button,
+  .dy-gateway-status-pill,
+  .dy-cron-status-badge,
+  .dy-cron-cadence-badge,
+  .dy-channel-activity-status,
+  .dy-channel-activity-stat,
+  .dy-channel-activity-heading-mark,
+  .dy-cron-panel-heading-mark,
+  .dy-cron-job-glyph,
+  .dy-cron-instruction-chip,
+  .dy-cron-action-button,
+  .dy-cron-empty-icon,
+  .dy-channel-activity-avatar,
+  .dy-monitor-tab-list button,
+  .dy-monitor-tools button,
+  .dy-monitor-alert,
+  [role="alert"],
+  [role="status"]
+) {
+  border-radius: 0 !important;
+}
+
+html.dui-pro-overhaul .app-bg.dy-monitor-focus [data-dui-panel="monitor"] :where(
+  button,
+  [role="button"],
+  input,
+  select,
+  textarea
+) {
+  border-radius: 0 !important;
+}
+
+/* Keep status dots round: their shape communicates live state rather than a surface edge. */
+html.dui-pro-overhaul .app-bg.dy-monitor-focus [data-dui-panel="monitor"] :where(
+  .dy-activity-dot,
+  .dy-cron-active-count i,
+  .dy-channel-activity-status i
+) {
+  border-radius: 999px !important;
+}
+
+/* Channel Traffic: show the generated mark directly beside the title. */
+html.dui-pro-overhaul.dui-cohesive-ui .app-bg.dy-monitor-focus [data-dui-panel="monitor"] .dy-channel-activity-heading {
+  align-items: center !important;
+}
+
+html.dui-pro-overhaul.dui-cohesive-ui .app-bg.dy-monitor-focus [data-dui-panel="monitor"] .dy-channel-activity-heading-mark {
+  width: 64px !important;
+  height: 64px !important;
+  flex: 0 0 64px !important;
+  border: 0 !important;
+  border-radius: 0 !important;
+  padding: 0 !important;
+  background: transparent !important;
+  box-shadow: none !important;
+  color: inherit !important;
+}
+
+html.dui-pro-overhaul.dui-cohesive-ui .app-bg.dy-monitor-focus [data-dui-panel="monitor"] .dy-channel-activity-heading-mark img {
+  width: 64px !important;
+  height: 64px !important;
+  border-radius: 0 !important;
+  object-fit: contain !important;
+}
+
+/* Scheduled Runs: keep the surface black and neutral, with the same crisp edge treatment as the live flow. */
+html.dui-pro-overhaul.dui-cohesive-ui .app-bg.dy-monitor-focus [data-dui-panel="monitor"].dy-monitor-shell .dy-cron-jobs-card {
+  border: 1px solid rgba(255, 255, 255, .12) !important;
+  border-radius: 0 !important;
+  background: #0b0c0c !important;
+  background-image: none !important;
+  box-shadow: 0 18px 42px rgba(0, 0, 0, .20), inset 0 1px 0 rgba(255, 255, 255, .04) !important;
+}
+
+html.dui-pro-overhaul.dui-cohesive-ui .app-bg.dy-monitor-focus [data-dui-panel="monitor"].dy-monitor-shell .dy-cron-panel-header {
+  border-radius: 0 !important;
+  background: #0b0c0c !important;
+  background-image: none !important;
+}
+
+html.dui-pro-overhaul.dui-cohesive-ui .app-bg.dy-monitor-focus [data-dui-panel="monitor"].dy-monitor-shell .dy-cron-panel-heading-mark,
+html.dui-pro-overhaul.dui-cohesive-ui .app-bg.dy-monitor-focus [data-dui-panel="monitor"].dy-monitor-shell .dy-cron-job-glyph,
+html.dui-pro-overhaul.dui-cohesive-ui .app-bg.dy-monitor-focus [data-dui-panel="monitor"].dy-monitor-shell .dy-cron-cadence-badge,
+html.dui-pro-overhaul.dui-cohesive-ui .app-bg.dy-monitor-focus [data-dui-panel="monitor"].dy-monitor-shell .dy-cron-status-badge,
+html.dui-pro-overhaul.dui-cohesive-ui .app-bg.dy-monitor-focus [data-dui-panel="monitor"].dy-monitor-shell .dy-cron-action-button,
+html.dui-pro-overhaul.dui-cohesive-ui .app-bg.dy-monitor-focus [data-dui-panel="monitor"].dy-monitor-shell .dy-session-meta-chip,
+html.dui-pro-overhaul.dui-cohesive-ui .app-bg.dy-monitor-focus [data-dui-panel="monitor"].dy-monitor-shell .dy-cron-instruction-chip,
+html.dui-pro-overhaul.dui-cohesive-ui .app-bg.dy-monitor-focus [data-dui-panel="monitor"].dy-monitor-shell .dy-cron-description-panel {
+  border-radius: 0 !important;
+}
+
+html.dui-pro-overhaul.dui-cohesive-ui .app-bg.dy-monitor-focus [data-dui-panel="monitor"].dy-monitor-shell .dy-cron-panel-heading-mark,
+html.dui-pro-overhaul.dui-cohesive-ui .app-bg.dy-monitor-focus [data-dui-panel="monitor"].dy-monitor-shell .dy-cron-job-glyph {
+  border-color: rgba(255, 255, 255, .13) !important;
+  background: rgba(255, 255, 255, .05) !important;
+  background-image: none !important;
+  box-shadow: none !important;
+  color: #d1d4d2 !important;
+}
+
+/* Automated Jobs: show the generated artwork directly without a tile behind it. */
+html.dui-pro-overhaul.dui-cohesive-ui .app-bg.dy-monitor-focus [data-dui-panel="monitor"].dy-monitor-shell .dy-cron-panel-heading-mark {
+  width: 64px !important;
+  height: 64px !important;
+  flex: 0 0 64px !important;
+  border: 0 !important;
+  background: transparent !important;
+  box-shadow: none !important;
+  padding: 0 !important;
+}
+
+html.dui-pro-overhaul.dui-cohesive-ui .app-bg.dy-monitor-focus [data-dui-panel="monitor"].dy-monitor-shell .dy-cron-panel-heading-mark img {
+  display: block !important;
+  width: 64px !important;
+  height: 64px !important;
+  object-fit: contain !important;
+}
+
+html.dui-pro-overhaul.dui-cohesive-ui .app-bg.dy-monitor-focus [data-dui-panel="monitor"].dy-monitor-shell .dy-cron-job-list {
+  border: 1px solid rgba(255, 255, 255, .10) !important;
+  border-radius: 0 !important;
+  background: rgba(0, 0, 0, .22) !important;
+  background-image: none !important;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, .03) !important;
+}
+
+html.dui-pro-overhaul.dui-cohesive-ui .app-bg.dy-monitor-focus [data-dui-panel="monitor"].dy-monitor-shell .dy-cron-job-card {
+  border-color: rgba(255, 255, 255, .09) !important;
+  border-radius: 0 !important;
+  background: rgba(255, 255, 255, .025) !important;
+  background-image: none !important;
+  box-shadow: none !important;
+}
+
+html.dui-pro-overhaul.dui-cohesive-ui .app-bg.dy-monitor-focus [data-dui-panel="monitor"].dy-monitor-shell .dy-cron-job-card::before {
+  border-radius: 0 !important;
+  background: rgba(255, 255, 255, .18) !important;
+  box-shadow: none !important;
+}
+
+html.dui-pro-overhaul.dui-cohesive-ui .app-bg.dy-monitor-focus [data-dui-panel="monitor"].dy-monitor-shell .dy-cron-job-card:hover {
+  border-color: rgba(255, 255, 255, .15) !important;
+  background: rgba(255, 255, 255, .04) !important;
+  background-image: none !important;
+  box-shadow: none !important;
+}
+
+html.dui-pro-overhaul.dui-cohesive-ui .app-bg.dy-monitor-focus [data-dui-panel="monitor"].dy-monitor-shell .dy-cron-jobs-card .dy-session-meta-chip,
+html.dui-pro-overhaul.dui-cohesive-ui .app-bg.dy-monitor-focus [data-dui-panel="monitor"].dy-monitor-shell .dy-cron-jobs-card .dy-cron-instruction-chip,
+html.dui-pro-overhaul.dui-cohesive-ui .app-bg.dy-monitor-focus [data-dui-panel="monitor"].dy-monitor-shell .dy-cron-jobs-card .dy-cron-description-panel {
+  border-color: rgba(255, 255, 255, .08) !important;
+  background: rgba(0, 0, 0, .22) !important;
+  background-image: none !important;
+  box-shadow: none !important;
+}
+
+/* Gateway overview static-compositor path.
+   The overview changes only when a bounded status snapshot arrives, so no
+   descendant should keep a compositor layer or animation alive between
+   updates. */
+html.dy-fast-renderer .app-bg.dy-monitor-focus [data-dui-panel="monitor"].dy-monitor-shell .dy-gateway-panel,
+html.dy-fast-renderer .app-bg.dy-monitor-focus [data-dui-panel="monitor"].dy-monitor-shell .dy-gateway-panel * {
+  animation: none !important;
+  backdrop-filter: none !important;
+  -webkit-backdrop-filter: none !important;
+  filter: none !important;
+  transition: none !important;
+  will-change: auto !important;
+}
+
+html.dy-fast-renderer .app-bg.dy-monitor-focus [data-dui-panel="monitor"].dy-monitor-shell .dy-gateway-layout {
+  contain: layout paint style;
+  isolation: isolate;
+}
+
+html.dy-fast-renderer .app-bg.dy-monitor-focus [data-dui-panel="monitor"].dy-monitor-shell :is(
+  .dy-channel-activity-card,
+  .dy-cron-jobs-card,
+  .dy-gateway-event-list,
+  .dy-cron-job-list
+) {
+  contain: layout paint style;
+  background-image: none !important;
+  box-shadow: none !important;
+}
+
+html.dy-fast-renderer .app-bg.dy-monitor-focus [data-dui-panel="monitor"].dy-monitor-shell :is(
+  .dy-gateway-event-card,
+  .dy-cron-job-card,
+  .dy-channel-activity-stat,
+  .dy-session-meta-chip,
+  .dy-cron-instruction-chip
+) {
+  contain: layout paint style;
+  box-shadow: none !important;
+}
+
+html.dy-fast-renderer .app-bg.dy-monitor-focus [data-dui-panel="monitor"].dy-monitor-shell :is(
+  .dy-cron-active-count i,
+  .dy-channel-activity-status i
+),
+html.dy-fast-renderer .app-bg.dy-monitor-focus [data-dui-panel="monitor"].dy-monitor-shell .dy-cron-job-card::before {
+  animation: none !important;
+  box-shadow: none !important;
+}
+
+html.dui-pro-overhaul .app-bg.dy-monitor-focus [data-dui-panel="monitor"] :is(
+  .dy-channel-activity-heading-mark,
+  .dy-cron-panel-heading-mark
+) {
+  display: grid !important;
+  place-items: center !important;
+  color: #a7d9d0 !important;
+  font-family: var(--font-mono) !important;
+  font-size: 13px !important;
+  font-weight: 750 !important;
+  letter-spacing: .08em !important;
+}
+
+/* Distinctive static display typography for the two Gateway overview titles. */
+html.dui-pro-overhaul .app-bg.dy-monitor-focus [data-dui-panel="monitor"] :is(
+  .dy-channel-activity-heading,
+  .dy-cron-panel-heading
+) h3 {
+  font-family: var(--font-display) !important;
+  font-size: 22px !important;
+  font-weight: 760 !important;
+  font-kerning: normal;
+  font-feature-settings: 'kern' 1, 'liga' 1, 'ss01' 1;
+  letter-spacing: -.045em !important;
+  line-height: 1.02 !important;
+}
+
+html.dui-pro-overhaul .app-bg.dy-monitor-focus [data-dui-panel="monitor"] .dy-cron-list-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+html.dui-pro-overhaul .app-bg.dy-monitor-focus [data-dui-panel="monitor"] .dy-cron-pagination {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  white-space: nowrap;
+}
+
+html.dui-pro-overhaul .app-bg.dy-monitor-focus [data-dui-panel="monitor"] .dy-cron-pagination button {
+  min-height: 28px;
+  padding: 4px 8px;
+  border: 1px solid rgba(255, 255, 255, .12) !important;
+  background: #0b0d0d !important;
+  box-shadow: none !important;
+}
+
+@media (max-width: 680px) {
+  html.dui-pro-overhaul .app-bg.dy-monitor-focus [data-dui-panel="monitor"] .dy-cron-list-footer {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+}

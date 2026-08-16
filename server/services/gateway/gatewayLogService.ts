@@ -111,6 +111,7 @@ export function createGatewayLogService(options: GatewayLogServiceOptions) {
   const rpcLogFailureNoticeMs = options.rpcLogFailureNoticeMs ?? 60_000
 
   let gatewayLogSeq = 0
+  let runtimeMonitorHistoryGeneration = 0
   const gatewayLogs: GatewayLogEntry[] = []
   let externalGatewayLogCache: { expiresAt: number; entries: GatewayLogEntry[] } | null = null
   let externalChannelActivityCache: { expiresAt: number; entries: GatewayLogEntry[] } | null = null
@@ -709,6 +710,7 @@ export function createGatewayLogService(options: GatewayLogServiceOptions) {
   }
 
   async function discoverGatewayFileLogPaths(limit = 5) {
+    const readGeneration = runtimeMonitorHistoryGeneration
     const now = nowMs()
     if (gatewayLogPathDiscoveryCache && gatewayLogPathDiscoveryCache.expiresAt > now) {
       return gatewayLogPathDiscoveryCache.paths.slice()
@@ -748,9 +750,11 @@ export function createGatewayLogService(options: GatewayLogServiceOptions) {
       const stat = await fs.stat(candidate).catch(() => null)
       if (stat?.isFile()) output.push(candidate)
     }
-    gatewayLogPathDiscoveryCache = {
-      expiresAt: now + logPathDiscoveryCacheMs,
-      paths: output,
+    if (readGeneration === runtimeMonitorHistoryGeneration) {
+      gatewayLogPathDiscoveryCache = {
+        expiresAt: now + logPathDiscoveryCacheMs,
+        paths: output,
+      }
     }
     return output
   }
@@ -801,6 +805,7 @@ export function createGatewayLogService(options: GatewayLogServiceOptions) {
   }
 
   async function readTailTextWithSignature(filePath: string, maxBytes = logTailMaxBytes) {
+    const readGeneration = runtimeMonitorHistoryGeneration
     const stat = await fs.stat(filePath).catch(() => null)
     if (!stat?.isFile() || stat.size <= 0) return null
     const statKey = gatewayLogFileStatKey(stat)
@@ -811,7 +816,9 @@ export function createGatewayLogService(options: GatewayLogServiceOptions) {
     const signature = await gatewayLogFileSignature(filePath, stat)
     if (cached?.signature === signature) {
       if (cached.statKey !== statKey) {
-        gatewayLogTailSnapshots.set(filePath, { ...cached, statKey, signature })
+        if (readGeneration === runtimeMonitorHistoryGeneration) {
+          gatewayLogTailSnapshots.set(filePath, { ...cached, statKey, signature })
+        }
       }
       return { raw: '', statKey, signature, cacheHit: true }
     }
@@ -820,6 +827,7 @@ export function createGatewayLogService(options: GatewayLogServiceOptions) {
   }
 
   async function readGatewayFileLogEntries(limit = 120): Promise<GatewayLogEntry[]> {
+    const readGeneration = runtimeMonitorHistoryGeneration
     const paths = await discoverGatewayFileLogPaths()
     const activePaths = new Set(paths)
     const entries: GatewayLogEntry[] = []
@@ -841,15 +849,19 @@ export function createGatewayLogService(options: GatewayLogServiceOptions) {
         const entry = parseGatewayFileLogLine(line, filePath, index)
         if (entry) parsedEntries.push(entry)
       })
-      gatewayLogTailSnapshots.set(filePath, {
-        statKey: snapshot.statKey,
-        signature: snapshot.signature,
-        entries: parsedEntries,
-      })
+      if (readGeneration === runtimeMonitorHistoryGeneration) {
+        gatewayLogTailSnapshots.set(filePath, {
+          statKey: snapshot.statKey,
+          signature: snapshot.signature,
+          entries: parsedEntries,
+        })
+      }
       entries.push(...parsedEntries)
     }
-    for (const cachedPath of gatewayLogTailSnapshots.keys()) {
-      if (!activePaths.has(cachedPath)) gatewayLogTailSnapshots.delete(cachedPath)
+    if (readGeneration === runtimeMonitorHistoryGeneration) {
+      for (const cachedPath of gatewayLogTailSnapshots.keys()) {
+        if (!activePaths.has(cachedPath)) gatewayLogTailSnapshots.delete(cachedPath)
+      }
     }
 
     const byKey = new Map<string, GatewayLogEntry>()
@@ -1151,11 +1163,14 @@ export function createGatewayLogService(options: GatewayLogServiceOptions) {
     if (externalGatewayLogCache && externalGatewayLogCache.expiresAt > now) {
       return externalGatewayLogCache.entries.slice(0, limit)
     }
+    const readGeneration = runtimeMonitorHistoryGeneration
     const rpcEntries = await readGatewayRpcLogEntries(limit)
     const entries = rpcEntries?.length ? rpcEntries : await readGatewayFileLogEntries(limit)
-    externalGatewayLogCache = {
-      expiresAt: now + externalLogCacheMs,
-      entries,
+    if (readGeneration === runtimeMonitorHistoryGeneration) {
+      externalGatewayLogCache = {
+        expiresAt: now + externalLogCacheMs,
+        entries,
+      }
     }
     return entries
   }
@@ -1165,15 +1180,19 @@ export function createGatewayLogService(options: GatewayLogServiceOptions) {
     if (externalChannelActivityCache && externalChannelActivityCache.expiresAt > now) {
       return externalChannelActivityCache.entries.slice(0, limit)
     }
+    const readGeneration = runtimeMonitorHistoryGeneration
     const entries = await readClawTalkChannelActivityEntries(limit)
-    externalChannelActivityCache = {
-      expiresAt: now + externalLogCacheMs,
-      entries,
+    if (readGeneration === runtimeMonitorHistoryGeneration) {
+      externalChannelActivityCache = {
+        expiresAt: now + externalLogCacheMs,
+        entries,
+      }
     }
     return entries
   }
 
   function clearRuntimeMonitorHistory() {
+    runtimeMonitorHistoryGeneration += 1
     const cleared = {
       gatewayLogs: gatewayLogs.length,
       gatewayLogTailSnapshots: gatewayLogTailSnapshots.size,

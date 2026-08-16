@@ -6,6 +6,7 @@ import {
   AGENT_CARD_RARITY_THEMES,
   REGISTRY_PREFS_CHANGED_EVENT,
   REGISTRY_PREFS_KEY,
+  applyRegistryCardTheme,
   readConsolePreferences,
   readRegistryPreferences,
   resolveAgentCardTheme,
@@ -31,6 +32,7 @@ class MemoryStorage {
 
 const storage = new MemoryStorage()
 const events = new EventTarget()
+const documentElement = { dataset: {} as Record<string, string> }
 Object.defineProperty(globalThis, 'window', {
   configurable: true,
   value: {
@@ -39,6 +41,10 @@ Object.defineProperty(globalThis, 'window', {
     addEventListener: events.addEventListener.bind(events),
     removeEventListener: events.removeEventListener.bind(events),
   },
+})
+Object.defineProperty(globalThis, 'document', {
+  configurable: true,
+  value: { documentElement },
 })
 
 test('registry preferences validate persisted values and publish live updates', () => {
@@ -64,6 +70,16 @@ test('registry preferences validate persisted values and publish live updates', 
   })
   assert.equal(resolveAgentCardTheme('rare', { overlayPreset: 'graphite-glass', rarityColorsEnabled: true }), 'blueprint-grid')
   assert.equal(resolveAgentCardTheme('legendary', { overlayPreset: 'graphite-glass', rarityColorsEnabled: false }), 'graphite-glass')
+})
+
+test('registry card theme is available before a lazy registry paint', () => {
+  applyRegistryCardTheme({ overlayPreset: 'graphite-glass', rarityColorsEnabled: true })
+  assert.equal(documentElement.dataset.agentCardOverlay, 'rarity')
+  assert.equal(documentElement.dataset.agentCardRarityColors, 'enabled')
+
+  applyRegistryCardTheme({ overlayPreset: 'blueprint-grid', rarityColorsEnabled: false })
+  assert.equal(documentElement.dataset.agentCardOverlay, 'blueprint-grid')
+  assert.equal(documentElement.dataset.agentCardRarityColors, 'disabled')
 })
 
 test('console preferences preserve defaults and clamp unsafe widths', () => {

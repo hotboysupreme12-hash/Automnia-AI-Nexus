@@ -13,10 +13,11 @@ import {
 import { useNexusStore } from '../../store/nexusStore'
 import type { AgentSkillEntry, BehaviorProfile, FastModeDefault, HeartbeatConfig, OpenClawAgent, ThinkingLevel } from '../../types/nexus'
 import { apiUrl } from '../../utils/apiUrl'
-import { formatModelChoiceLabel, formatModelGroupLabel, groupAvailableModels } from '../../utils/modelGrouping'
+import { isSelectableModelId } from '../../utils/modelGrouping'
 import { resolveAgentRoutePresentation, resolveLicenseEntitlement } from '../../utils/licenseEntitlement'
 import { agentPortraitSrc, localPortraitPathFromInput } from '../../utils/portrait'
 import { ProviderAuthModal } from '../auth/ProviderAuthModal'
+import { ModelPicker } from '../models/ModelPicker'
 import { useLicense } from '../../context/useLicense'
 
 type EditorTab = AgentEditorTab
@@ -98,7 +99,7 @@ const isAvailableModel = (value: unknown): value is AvailableModel => {
 }
 
 const safeAvailableModels = (value: unknown): AvailableModel[] =>
-  Array.isArray(value) ? value.filter(isAvailableModel) : []
+  Array.isArray(value) ? value.filter(isAvailableModel).filter((model) => isSelectableModelId(model.id)) : []
 
 const modelOptionFromId = (modelId: string): AvailableModel | null => {
   const id = modelId.trim()
@@ -115,9 +116,10 @@ const mergeSelectedModelOptions = (catalog: AvailableModel[], selectedIds: strin
     ? catalog
     : [CODEX_5_3_SPARK_MODEL, ...catalog]
   for (const model of seededCatalog) {
-    if (model.id.trim()) merged.set(model.id, model)
+    if (model.id.trim() && isSelectableModelId(model.id)) merged.set(model.id, model)
   }
   for (const selectedId of selectedIds) {
+    if (!isSelectableModelId(selectedId)) continue
     const synthetic = modelOptionFromId(selectedId)
     if (synthetic && !merged.has(synthetic.id)) merged.set(synthetic.id, synthetic)
   }
@@ -676,10 +678,9 @@ export function AgentEditorModal() {
   const providerForModel = (modelId:string)=>selectableModels.find((model)=>model.id===modelId)?.provider || (isOpenAiCodexSubscriptionModel(modelId) ? 'openai' : modelId.split('/')[0]||'')
   const authForProvider = (provider:string)=>effectiveAuthStatusForProvider(authProviders, provider)
   const maybePromptProviderAuth = (modelId:string)=>{const status=authForProvider(providerForModel(modelId));if(status&&!status.configured)setAuthModalProvider(status)}
+  const closeProviderAuthModal = useCallback(()=>{setTab('model');setAuthModalProvider(null)},[])
   const selectedPrimaryProviderForAuthRefresh = primary ? providerForModel(primary) : ''
   const selectedPrimaryAuthForRefresh = selectedPrimaryProviderForAuthRefresh ? authForProvider(selectedPrimaryProviderForAuthRefresh) : undefined
-  const modelGroups = useMemo(() => groupAvailableModels(selectableModels), [selectableModels])
-  const fallbackModelGroups = useMemo(() => groupAvailableModels(selectableModels.filter((m) => m.id !== primary)), [selectableModels, primary])
   const SvM = async (nextPrimary=primary,nextFallbacks=fallbacks) => {
     if (!agent) return
     const requestSeq=modelSaveSeqRef.current
@@ -1440,7 +1441,10 @@ export function AgentEditorModal() {
     const key=`${selectedPrimaryProviderForAuthRefresh}:${primary}`
     if(authRefreshKeyRef.current===key)return
     authRefreshKeyRef.current=key
-    void LdAuth(true)
+    void LdAuth(true).then((next)=>{
+      const refreshedStatus=effectiveAuthStatusForProvider(next,selectedPrimaryProviderForAuthRefresh)
+      if(refreshedStatus&&!refreshedStatus.configured)setAuthModalProvider(refreshedStatus)
+    })
   },[isOpen,tab,primary,selectedPrimaryProviderForAuthRefresh,selectedPrimaryAuthForRefresh?.configured,selectedPrimaryAuthForRefresh?.oauth?.supported,LdAuth])
   useEffect(()=>{if(isOpen&&agent?.id&&tab==='workspace')void LdW()},[isOpen,agent?.id,tab,LdW])
   useEffect(()=>{if(isOpen&&agent?.id&&tab==='files')void LdF()},[isOpen,agent?.id,tab,LdF])
@@ -1469,10 +1473,6 @@ export function AgentEditorModal() {
   const backendSaving = backendSaveEntries.find((entry) => entry?.phase === 'saving')
   const effectiveAutosavePhase:EditorAutosavePhase = backendFailure ? 'error' : backendSaving || autosavePhase === 'saving' ? 'saving' : autosavePhase
   const effectiveAutosaveMessage = backendFailure?.message || backendSaving?.message || autosaveMessage
-  const primaryProvider = providerForModel(primary)
-  const primaryAuth = primaryProvider ? authForProvider(primaryProvider) : undefined
-  const primaryAuthLabel = authLabelForProvider(primaryProvider, primaryAuth)
-  const primaryAuthKind = authKindForProvider(primaryAuth)
   const entitlement = resolveLicenseEntitlement(license)
   const routePresentation = resolveAgentRoutePresentation(license)
   const usesHostedCredits = entitlement.isHosted
@@ -1481,7 +1481,7 @@ export function AgentEditorModal() {
 
   return (
     <>
-      {isOpen&&(
+      {isOpen&&!authModalProvider&&(
         <div data-dui-overlay="agent-editor" data-windows={IS_WINDOWS_CLIENT?'true':'false'} className={`fixed inset-0 z-50 grid place-items-center p-3 ${IS_WINDOWS_CLIENT?'bg-[#030712]/96':'bg-[#030712]/90 backdrop-blur-xl'}`}>
           <div data-dui-modal="agent-editor" data-windows={IS_WINDOWS_CLIENT?'true':'false'} className="dy-surface-enter flex max-h-[78vh] w-full max-w-[720px] flex-col overflow-hidden rounded-2xl border border-white/[0.08] bg-gradient-to-b from-[#0b1120] to-[#060b12] shadow-2xl shadow-black/50">
 
@@ -1538,11 +1538,15 @@ export function AgentEditorModal() {
                       <div className="flex items-center justify-between gap-3">
                         <div>
                           <p className="text-[11px] font-extrabold text-cyan-100">Inbound message leader</p>
-                          <p className="mt-0.5 text-[9px] text-slate-400">{agent.isDefault?'This agent receives unbound messages by default.':'Choose this agent for unbound messages and Telegram DMs.'}</p>
+                          <p className="mt-0.5 text-[9px] text-slate-400">{agent.isDefault?'Primary assistant for unbound messages; custom routes can still target other agents.':'Choose this agent for unbound messages and Telegram DMs.'}</p>
                         </div>
-                        <button type="button" onClick={()=>void SetDefaultInboundAgent()} disabled={defaultAgentSaving} className="shrink-0 rounded-md border border-cyan-300/25 bg-cyan-400/[0.08] px-2.5 py-1.5 text-[9px] font-bold text-cyan-200 hover:bg-cyan-400/[0.14] disabled:opacity-50">
-                          {defaultAgentSaving?'Saving…':agent.isDefault?'Reapply routing':'Make default'}
-                        </button>
+                        {agent.isDefault ? (
+                          <span data-primary-assistant="true" role="status" className="shrink-0 rounded-md border border-emerald-300/25 bg-emerald-400/[0.08] px-2.5 py-1.5 text-[9px] font-bold text-emerald-200">Primary assistant</span>
+                        ) : (
+                          <button type="button" onClick={()=>void SetDefaultInboundAgent()} disabled={defaultAgentSaving} className="shrink-0 rounded-md border border-cyan-300/25 bg-cyan-400/[0.08] px-2.5 py-1.5 text-[9px] font-bold text-cyan-200 hover:bg-cyan-400/[0.14] disabled:opacity-50">
+                            {defaultAgentSaving?'Saving…':'Make default'}
+                          </button>
+                        )}
                       </div>
                       {defaultAgentStatus&&<p className="mt-2 text-[9px] text-cyan-300">{defaultAgentStatus}</p>}
                     </div>
@@ -1585,47 +1589,35 @@ export function AgentEditorModal() {
                           </div>
                           <p className="mt-2 text-[9px] text-slate-400">{routePresentation.managedRouteDescription}</p>
                         </div>
-                      ) : modelsLoading&&!primary&&!modelGroups.length?<div className="animate-pulse h-9 rounded-lg bg-white/[0.03]"/>:(
-                        <select value={primary} onChange={(e)=>{const next=e.target.value;setPrimary(next);maybePromptProviderAuth(next);scheduleModelAutosave(next,fallbacks.filter((id)=>id!==next))}} className="w-full rounded-lg border border-white/[0.08] bg-white/[0.03] px-3 py-2 text-[11px] text-slate-200 focus:outline-none focus:border-cyan-400/40">
-                          {!primary&&<option value="">Choose a model...</option>}
-                          {modelGroups.length?modelGroups.map((group) => (
-                            <optgroup key={group.key} label={formatModelGroupLabel(group)}>
-                              {group.models.map((m)=><option key={m.id} value={m.id}>{formatModelChoiceLabel(m)}</option>)}
-                            </optgroup>
-                          )):<option value={primary}>{primary||'No models available'}</option>}
-                        </select>
-                      )}
-                      {!routePresentation.managedRoute&&primaryProvider==='google-vertex'&&(
-                        <span className="mt-2 inline-flex rounded-full border border-sky-300/30 bg-sky-400/[0.08] px-2.5 py-1 text-[8px] font-bold uppercase tracking-[0.14em] text-sky-200">google-vertex</span>
-                      )}
-                      {!routePresentation.managedRoute&&primaryAuth&&(
-                        <div className={`mt-2 rounded-lg border px-3 py-2 text-[9px] ${primaryAuth.configured?'border-emerald-400/20 bg-emerald-400/[0.05] text-emerald-300':'border-amber-400/25 bg-amber-400/[0.06] text-amber-200'}`}>
-                          <div className="flex items-center justify-between gap-2">
-                            <span>{primaryAuth.configured?`${primaryAuthLabel} ${primaryAuthKind} connected.`:`${primaryAuthLabel} ${primaryAuthKind} required.`}</span>
-                            <button type="button" onClick={()=>setAuthModalProvider(primaryAuth)} className="rounded-md border border-white/10 bg-white/[0.04] px-2 py-1 text-[8px] font-bold uppercase tracking-[0.12em] text-slate-200 hover:border-cyan-300/30 hover:text-cyan-200">
-                              {primaryAuth.configured?'Update Auth':'Connect'}
-                            </button>
-                          </div>
-                        </div>
+                      ) : (
+                        <ModelPicker
+                          mode="primary"
+                          models={selectableModels}
+                          selectedIds={primary ? [primary] : []}
+                          fallbackIds={fallbacks}
+                          onToggleFallback={(modelId) => {
+                            setFallbacks((current) => {
+                              const next = current.includes(modelId)
+                                ? current.filter((id) => id !== modelId)
+                                : [...current, modelId]
+                              scheduleModelAutosave(primary, next)
+                              return next
+                            })
+                          }}
+                          emptyOption={{ label: 'Choose a model...', detail: 'Select a provider to browse its available models.' }}
+                          disabled={modelsLoading}
+                          loading={modelsLoading}
+                          label=""
+                          providerAuthStatusFor={(provider) => authForProvider(provider)}
+                          onProviderAuth={(_, providerStatus) => setAuthModalProvider(providerStatus)}
+                          onSelect={(next) => {
+                            setPrimary(next)
+                            maybePromptProviderAuth(next)
+                            scheduleModelAutosave(next, fallbacks.filter((id) => id !== next))
+                          }}
+                        />
                       )}
                     </div>
-                    {!routePresentation.managedRoute && <div>
-                      <h3 className="text-xs font-extrabold text-slate-200 mb-1">Additional models</h3>
-                      <div className="max-h-44 space-y-0.5 overflow-auto rounded-lg border border-white/[0.06] bg-white/[0.02] p-1.5">
-                        {fallbackModelGroups.map((group)=>(
-                          <div key={group.key} className="space-y-0.5">
-                            <div className="px-2.5 pb-1 pt-2 text-[8px] font-extrabold uppercase tracking-[0.14em] text-slate-500 first:pt-0">{formatModelGroupLabel(group)}</div>
-                            {group.models.map((m)=>(
-                              <label key={m.id} className="flex items-center gap-2 rounded-md px-2.5 py-2 text-[11px] text-slate-300 hover:bg-white/[0.04] cursor-pointer transition">
-                                <input type="checkbox" checked={fallbacks.includes(m.id)} onChange={()=>{setFallbacks((current)=>{const next=current.includes(m.id)?current.filter((id)=>id!==m.id):[...current,m.id];scheduleModelAutosave(primary,next);return next})}} className="rounded accent-cyan-500"/>
-                                <span className="flex-1">{m.provider} / {m.name}</span>
-                                <span className="text-[9px] text-slate-500">{m.alias}</span>
-                              </label>
-                            ))}
-                          </div>
-                        ))}
-                      </div>
-                    </div>}
                     {usesHostedCredits && providerFirst && <div data-editor-managed-route className="rounded-xl border border-emerald-400/15 bg-emerald-400/[0.04] p-3">
                       <p className="text-[11px] font-extrabold text-emerald-100">Automnia</p>
                       <p className="mt-1 text-[9px] text-slate-400">{routePresentation.managedRouteDescription}</p>
@@ -1979,7 +1971,7 @@ export function AgentEditorModal() {
           provider={authModalProvider.provider}
           envKeys={authModalProvider.envKeys}
           providerStatus={authModalProvider}
-          onClose={()=>setAuthModalProvider(null)}
+          onClose={closeProviderAuthModal}
           onSave={async(apiKey)=>{
             const result=await saveProviderApiKey(authModalProvider.provider, apiKey)
             if(!result.ok)throw new Error(apiErrorMessage(result.error))
@@ -1994,6 +1986,7 @@ export function AgentEditorModal() {
             void LdM(true)
             await retryPendingModelSave()
           }}
+          onOAuthComplete={closeProviderAuthModal}
         />
       )}
       {retireConfirmOpen&&(

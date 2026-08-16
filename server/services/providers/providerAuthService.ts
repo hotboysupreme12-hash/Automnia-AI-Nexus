@@ -85,6 +85,7 @@ type AuthProfileStateStore = {
 export type ProviderAuthCatalogEntry = {
   label?: string
   envKeys?: string[]
+  oauthEnvKeys?: string[]
   docs?: string
   apiKeyUrl?: string
   optionalAuth?: boolean
@@ -962,6 +963,8 @@ export function createProviderAuthService(options: ProviderAuthServiceOptions) {
     for (const envKey of envKeys) {
       if (process.env[envKey]) return true
     }
+    const oauthEnvKeys = options.authProviderCatalog[provider]?.oauthEnvKeys || []
+    if (oauthEnvKeys.some((envKey) => Boolean(process.env[envKey]?.trim()))) return true
     if (options.configuredProviderApiKeyMarker(provider)) return true
     const stored = authProfileProvidersFor(provider)
       .map((authProvider) => localAuthStore.providers[authProvider]?.apiKey)
@@ -975,26 +978,33 @@ export function createProviderAuthService(options: ProviderAuthServiceOptions) {
   function providerAuthStatus(provider: string, statusOptions: ProviderAuthStatusOptions = {}) {
     const catalog = options.authProviderCatalog[provider]
     const envKeys = options.authEnvMap[provider] || []
+    const oauthEnvKeys = catalog?.oauthEnvKeys || []
     const gcloud = provider === 'google-vertex' ? options.googleVertexGcloudStatus(statusOptions) : undefined
     const vertexOAuthConfigured = provider === 'google-vertex' ? options.isGoogleVertexLocalOAuthConfigured({}, statusOptions) : false
+    // Google Vertex and direct Gemini deliberately share one local Google OAuth
+    // credential. Keep the status surface provider-specific while resolving the
+    // underlying credential from the canonical Google record.
+    const oauthProvider = provider === 'google-vertex' ? 'google' : provider
     const envConfigured = envKeys.some((envKey) => Boolean(process.env[envKey]?.trim()))
+    const oauthEnvConfigured = oauthEnvKeys.some((envKey) => Boolean(process.env[envKey]?.trim()))
     const configApiKeyConfigured = Boolean(options.configuredProviderApiKeyMarker(provider))
     const sqliteStore = mainAuthProfileSqliteStore()
     const sqliteApiKeyConfigured = authProfileStoreHasProvider(sqliteStore, provider, 'apiKey')
-    const sqliteOAuthConfigured = authProfileStoreHasProvider(sqliteStore, provider, 'oauth')
+    const sqliteOAuthConfigured = authProfileStoreHasProvider(sqliteStore, oauthProvider, 'oauth')
     const subscriptionConfigured = Boolean(catalog?.subscriptionAuth && sqliteOAuthConfigured)
     const storedApiKey = authProfileProvidersFor(provider).some((authProvider) =>
       Boolean(localAuthStore.providers[authProvider]?.apiKey?.trim()),
     )
-    const local = localAuthStore.providers[provider] || {}
-    const sqliteOAuth = localOAuthFromMainAuthProfile(provider)
-    const oauthConfigured = Boolean(catalog?.oauth && (isOAuthCredentialUsable(local.oauth) || sqliteOAuthConfigured))
-    const oauthAvailability = provider === 'google'
+    const local = localAuthStore.providers[oauthProvider] || {}
+    const sqliteOAuth = localOAuthFromMainAuthProfile(oauthProvider)
+    const oauthConfigured = Boolean(catalog?.oauth && (oauthEnvConfigured || isOAuthCredentialUsable(local.oauth) || sqliteOAuthConfigured))
+    const oauthAvailability = oauthProvider === 'google'
       ? options.googleOAuthClientConfigStatus()
-      : provider === 'openai'
+      : oauthProvider === 'openai' || oauthProvider === 'anthropic'
         ? { available: true, missing: [] as string[] }
         : { available: false, missing: [] as string[] }
-    const configured = envConfigured || configApiKeyConfigured || storedApiKey || sqliteApiKeyConfigured || oauthConfigured || subscriptionConfigured || vertexOAuthConfigured || Boolean((gcloud as { configured?: unknown } | undefined)?.configured)
+    const providerOAuthConfigured = provider === 'google-vertex' ? vertexOAuthConfigured : oauthConfigured
+    const configured = envConfigured || oauthEnvConfigured || configApiKeyConfigured || storedApiKey || sqliteApiKeyConfigured || providerOAuthConfigured || subscriptionConfigured || Boolean((gcloud as { configured?: unknown } | undefined)?.configured)
     const defaultMode: AuthMode = catalog?.oauth && !envKeys.length ? 'oauth' : oauthConfigured ? 'oauth' : 'apiKey'
 
     return {
@@ -1034,7 +1044,7 @@ export function createProviderAuthService(options: ProviderAuthServiceOptions) {
             missing: oauthAvailability.missing,
             docs: catalog.oauth.docs,
             redirectUri: catalog.oauth.redirectUri,
-            projectId: provider === 'google' ? local.oauth?.projectId || sqliteOAuth?.projectId || options.resolveGoogleProjectId() || undefined : undefined,
+            projectId: oauthProvider === 'google' ? local.oauth?.projectId || sqliteOAuth?.projectId || options.resolveGoogleProjectId() || undefined : undefined,
             accountId: local.oauth?.accountId || sqliteOAuth?.accountId || undefined,
             email: local.oauth?.email || sqliteOAuth?.email || undefined,
             expiresAt: local.oauth?.expiresAt || sqliteOAuth?.expiresAt || undefined,

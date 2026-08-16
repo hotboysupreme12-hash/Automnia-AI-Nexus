@@ -5,6 +5,8 @@ export type Shift = {
   name: string
   agent: string
   every: string
+  scheduleKind?: 'every' | 'cron' | 'at'
+  scheduleLabel?: string
   durationMinutes: number
   message: string
   model?: string
@@ -18,7 +20,7 @@ export type Shift = {
   endsAt: string | null
 }
 
-export type RuntimeCronJobSummary = Omit<Shift, 'endsAt'> & {
+export type RuntimeCronJobSummary = Omit<Shift, 'endsAt' | 'scheduleKind' | 'scheduleLabel'> & {
   source: 'control-center' | 'openclaw'
   status: string
   scheduleKind?: string
@@ -42,7 +44,9 @@ export type HeartbeatRuntimeDefaults = {
 export type StartShiftPayload = {
   name: string
   agent?: string
-  every: string
+  every?: string
+  scheduleKind?: 'every' | 'cron' | 'at'
+  schedule?: string
   durationMinutes?: number
   durationValue?: number
   durationUnit?: 'minutes' | 'hours' | 'days' | 'weeks'

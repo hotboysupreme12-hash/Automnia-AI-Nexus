@@ -1,10 +1,11 @@
-import { memo, useId, useMemo, useState } from 'react'
+import { memo, useCallback, useId, useMemo, useState } from 'react'
 import { useNexusStore } from '../../store/nexusStore'
-import type { AgentOperationState, AgentResponse, MissionEvent, OpenClawAgent } from '../../types/nexus'
+import type { AgentActivityEvent, AgentOperationState, AgentResponse, MissionEvent, OpenClawAgent } from '../../types/nexus'
 import { clearRuntimeMonitor, restartGatewayRuntime, runRuntimeDoctor, stopCronShift, updateCronShift } from '../../hooks/useRuntimeStatus'
 import type { DoctorFinding, DoctorRun, GatewayChannelActivity, GatewayLogEntry, RuntimeCronJob, RuntimeMonitorClearResult, RuntimeStatus } from '../../hooks/useRuntimeStatus'
 import { agentPortraitSrc } from '../../utils/portrait'
 import { useChannelActivitySettings } from '../settings/channelActivitySettings'
+import { isRuntimeMonitorEntryVisible, useRuntimeMonitorClearCutoffMs } from '../../hooks/runtimeMonitorClear'
 import { ActionStatusBanner } from '../common/ActionStatusBanner'
 import { Badge, Button, IconButton, StatusChip } from '../ui'
 import type { BadgeTone } from '../ui'
@@ -360,11 +361,70 @@ function MonitorTabIcon({ tab }: { tab: MonitorTab }) {
 type ActivityItem =
   | { kind: 'response'; id: string; agentId: string; timestamp: string; ok: boolean; title: string; detail: string; files: string[]; failureKind?: string }
   | { kind: 'event'; id: string; agentId?: string; timestamp: string; ok: boolean; title: string; detail: string; files: string[]; eventType: MissionEvent['type']; failureKind?: string }
+  | { kind: 'agent-activity'; id: string; agentId: string; timestamp: string; ok: boolean; title: string; detail: string; files: string[]; failureKind?: string }
   | { kind: 'gateway-log'; id: string; timestamp: string; ok: boolean; title: string; detail: string; files: string[]; stream: GatewayLogEntry['stream']; level?: string; source?: string }
+
+function compactActivityValue(value: unknown, max = 180): string {
+  const text = typeof value === 'string'
+    ? value
+    : value && typeof value === 'object'
+      ? JSON.stringify(value)
+      : value === undefined || value === null
+        ? ''
+        : String(value)
+  const clean = text.replace(/\s+/g, ' ').trim()
+  return clean.length > max ? `${clean.slice(0, max - 1).trim()}…` : clean
+}
+
+function activityKindLabel(type: string): string {
+  if (type.startsWith('command.')) return 'exec'
+  if (type.startsWith('tool.')) return 'tool'
+  if (type.startsWith('browser.')) return 'browser'
+  if (type.startsWith('file.')) return 'file'
+  if (type.startsWith('run.')) return 'run'
+  if (type.startsWith('approval.')) return 'approval'
+  if (type.startsWith('agent.')) return 'agent'
+  return type.split('.')[0] || 'activity'
+}
+
+function activityDetail(event: AgentActivityEvent): string {
+  const payload = event.payload || {}
+  const toolName = compactActivityValue(payload.toolName, 96)
+  const toolAction = compactActivityValue(payload.toolAction, 96)
+  const command = compactActivityValue(payload.command, 180)
+  const input = compactActivityValue(payload.toolInput, 180)
+  const output = compactActivityValue(payload.toolOutput || payload.commandOutput, 180)
+  return [
+    event.label,
+    toolName ? `${toolName}${toolAction ? ` · ${toolAction}` : ''}` : '',
+    command ? `exec ${command}` : '',
+    input ? `input ${input}` : '',
+    output ? `output ${output}` : '',
+  ].filter(Boolean).join(' · ')
+}
+
+function isVisibleAgentActivity(event: AgentActivityEvent): boolean {
+  return !event.type.startsWith('message.') && !event.type.startsWith('gateway.')
+}
 
 function makeResponseActivity(entry: AgentResponse): ActivityItem {
   const files = extractFiles(`${entry.prompt}\n${entry.response}`)
   return { kind: 'response', id: entry.id, agentId: entry.agentId, timestamp: entry.timestamp, ok: entry.ok, title: entry.ok ? 'Completed' : 'Attention', detail: summarizeActivity(entry.response || entry.prompt), files, failureKind: entry.failureKind }
+}
+
+function makeAgentActivity(entry: AgentResponse, event: AgentActivityEvent): ActivityItem {
+  const detail = activityDetail(event)
+  return {
+    kind: 'agent-activity',
+    id: `${entry.id}:${event.id}`,
+    agentId: entry.agentId,
+    timestamp: event.timestamp,
+    ok: event.severity !== 'error',
+    title: activityKindLabel(event.type),
+    detail,
+    files: extractFiles(detail),
+    ...(event.severity === 'error' ? { failureKind: event.type.replace(/\./g, '_') } : {}),
+  }
 }
 
 function makeEventActivity(event: MissionEvent): ActivityItem {
@@ -541,7 +601,7 @@ function DoctorPanel({ run, error, persisted = false, stale = false, onDismiss }
   )
 }
 
-function CronJobCard({
+const CronJobCard = memo(function CronJobCard({
   job,
   agentById,
   onPause,
@@ -639,7 +699,7 @@ function CronJobCard({
       </div>
     </div>
   )
-}
+})
 
 function CronJobEditDialog({
   job,
@@ -954,22 +1014,34 @@ const GatewayActivityLine = memo(function GatewayActivityLine({ event }: { event
   )
 })
 
+// The Gateway overview is an operational snapshot, not an archival log. Keep
+// its mounted DOM strictly bounded; the Logs view and Settings activity feed
+// remain available for longer history.
+const GATEWAY_ACTIVITY_RENDER_LIMIT = 12
+const GATEWAY_CRON_PAGE_SIZE = 8
+const EMPTY_GATEWAY_ACTIVITY_EVENTS: GatewayChannelActivity[] = []
+
 const GatewayActivityCard = memo(function GatewayActivityCard({ activity }: { activity: RuntimeStatus['gateway']['activity'] | undefined }) {
   const { retentionLimit, autoTrim } = useChannelActivitySettings()
-  const allEvents = activity?.events || []
-  const events = autoTrim ? allEvents.slice(0, retentionLimit) : allEvents.slice(0, 100)
+  const allEvents = activity?.events || EMPTY_GATEWAY_ACTIVITY_EVENTS
+  const requestedLimit = autoTrim ? retentionLimit : 100
+  const events = useMemo(
+    () => allEvents.slice(0, Math.min(GATEWAY_ACTIVITY_RENDER_LIMIT, requestedLimit)),
+    [allEvents, requestedLimit],
+  )
+  const eventSummary = events.length < allEvents.length
+    ? `Showing the latest ${events.length} of ${allEvents.length} updates`
+    : 'Showing the latest updates'
   const lastEvent = activity?.lastEventAt ? formatRuntimeTime(activity.lastEventAt) : 'No updates yet'
   return (
     <section className="dy-monitor-card dy-channel-activity-card dy-gateway-feed-card" aria-labelledby="channel-activity-title">
       <div className="dy-channel-activity-header">
         <div className="dy-channel-activity-heading">
           <span className="dy-channel-activity-heading-mark" aria-hidden="true">
-            <img src="/icons/channel-activity-generated.png" alt="" />
+            <img src="/icons/channel-activity-header.png" alt="" width="96" height="96" decoding="async" draggable="false" />
           </span>
           <div>
-            <p className="dy-channel-activity-eyebrow">Connected message flow</p>
-            <h3 id="channel-activity-title">Live Message Flow</h3>
-            <p>Plain-language updates from your connected channels.</p>
+            <h3 id="channel-activity-title">Channel Traffic</h3>
           </div>
         </div>
         <div className="dy-channel-activity-status" data-state={activity?.active ? 'active' : 'quiet'}>
@@ -986,10 +1058,10 @@ const GatewayActivityCard = memo(function GatewayActivityCard({ activity }: { ac
       </div>
 
       <div className="dy-channel-activity-feed-head">
-        <div><strong>Latest updates</strong><span>{autoTrim ? `Showing the last ${retentionLimit} automatically` : 'Showing all available updates'}</span></div>
+        <div><strong>Latest updates</strong><span>{eventSummary}</span></div>
         <span className="dy-channel-activity-count">{events.length} {events.length === 1 ? 'update' : 'updates'}</span>
       </div>
-      <div className="dy-monitor-stream-box dy-gateway-event-list" role="log" aria-live="polite" aria-label="Latest message updates">
+      <div className={`dy-monitor-stream-box dy-gateway-event-list ${events.length ? '' : 'dy-gateway-event-list-empty'}`} role="log" aria-live="off" aria-label="Latest message updates">
         {events.map((event) => <GatewayActivityLine key={`${event.id}-${event.timestamp}`} event={event} />)}
         {!events.length && <div className="dy-monitor-empty dy-channel-activity-empty"><strong>No messages yet</strong><span>New channel messages will appear here as they arrive.</span></div>}
       </div>
@@ -1020,7 +1092,16 @@ const RuntimeGatewayPanel = memo(function RuntimeGatewayPanel({
   }, [status?.shifts?.active])
   const cronSyncError = status?.shifts?.error || ''
   const activeCronCount = status?.shifts?.activeCount ?? activeCronJobs.length
+  const cronListTruncated = activeCronCount > activeCronJobs.length
   const cronCadences = useMemo(() => Array.from(new Set(activeCronJobs.map((job) => job.every).filter(Boolean))), [activeCronJobs])
+  const [cronPage, setCronPage] = useState(0)
+  const cronPageCount = Math.max(1, Math.ceil(activeCronJobs.length / GATEWAY_CRON_PAGE_SIZE))
+  const visibleCronPage = Math.min(cronPage, cronPageCount - 1)
+  const visibleCronStart = visibleCronPage * GATEWAY_CRON_PAGE_SIZE
+  const visibleCronJobs = useMemo(
+    () => activeCronJobs.slice(visibleCronStart, visibleCronStart + GATEWAY_CRON_PAGE_SIZE),
+    [activeCronJobs, visibleCronStart],
+  )
   const activity = gateway?.activity
   const [cronCancelKey, setCronCancelKey] = useState('')
   const [cronCancelConfirm, setCronCancelConfirm] = useState(false)
@@ -1032,7 +1113,7 @@ const RuntimeGatewayPanel = memo(function RuntimeGatewayPanel({
   const cronCancelPreview = useMemo(() => {
     return activeCronJobs.slice(0, 3).map((job) => `${job.name} (${job.agent})`).join(', ')
   }, [activeCronJobs])
-  const pauseCronJob = async (job: RuntimeCronJob) => {
+  const pauseCronJob = useCallback(async (job: RuntimeCronJob) => {
     setCronCancelConfirm(false)
     setCronCancelKey(job.id)
     setActionError('')
@@ -1046,7 +1127,7 @@ const RuntimeGatewayPanel = memo(function RuntimeGatewayPanel({
     } finally {
       setCronCancelKey('')
     }
-  }
+  }, [onRefresh])
   const pauseAllCronJobs = async (jobs = activeCronJobs) => {
     if (!jobs.length || cronCancelKey === '__all__') return
     setCronCancelConfirm(false)
@@ -1079,12 +1160,12 @@ const RuntimeGatewayPanel = memo(function RuntimeGatewayPanel({
     setCronCancelConfirm(false)
     setRuntimeNotice('Scheduled runs remain active.')
   }
-  const editCronJob = (job: RuntimeCronJob) => {
+  const editCronJob = useCallback((job: RuntimeCronJob) => {
     setCronCancelConfirm(false)
     setCronEditJob(job)
     setActionError('')
     setRuntimeNotice('')
-  }
+  }, [])
   const saveCronJobEdit = async (
     job: RuntimeCronJob,
     payload: { name: string; scheduleKind: CronScheduleKind; schedule: string; message: string; messageMode: 'message' | 'system-event' },
@@ -1155,7 +1236,7 @@ const RuntimeGatewayPanel = memo(function RuntimeGatewayPanel({
           rounded="none"
           buttonRounded="none"
           actionTextClassName="text-[12px]"
-          message={`Pause all ${activeCronJobs.length} scheduled run${activeCronJobs.length === 1 ? '' : 's'}?`}
+          message={`Pause ${cronListTruncated ? 'the loaded' : 'all'} ${activeCronJobs.length} scheduled run${activeCronJobs.length === 1 ? '' : 's'}?`}
           detail={cronCancelPreview ? (
             <>
               {cronCancelPreview}
@@ -1191,12 +1272,10 @@ const RuntimeGatewayPanel = memo(function RuntimeGatewayPanel({
               <div className="dy-cron-panel-title">
                 <div className="dy-cron-panel-heading">
                   <span className="dy-cron-panel-heading-mark" aria-hidden="true">
-                    <img src="/icons/cron-jobs-generated.png" alt="" />
+                    <img src="/icons/automated-jobs-generated.png" alt="" width="96" height="96" decoding="async" draggable="false" />
                   </span>
                   <div>
-                    <p className="dy-cron-panel-eyebrow">Automated runs</p>
-                    <h3>Scheduled Runs</h3>
-                    <p>Every enabled automation, with its cadence and next run at a glance.</p>
+                    <h3>Automated Jobs</h3>
                   </div>
                 </div>
               </div>
@@ -1211,18 +1290,18 @@ const RuntimeGatewayPanel = memo(function RuntimeGatewayPanel({
                   <Button
                     disabled={cronCancelKey === '__all__'}
                     onClick={requestCancelAllCronJobs}
-                    title={`Pause all ${activeCronJobs.length} scheduled runs`}
+                    title={`Pause ${cronListTruncated ? 'the loaded' : 'all'} ${activeCronJobs.length} scheduled runs`}
                     variant="danger"
                     size="compact"
                     className="dy-cron-cancel-button rounded-none border border-rose-300/15 bg-rose-300/[0.035] px-2 py-1 text-[12px] font-semibold uppercase tracking-[0.10em] text-rose-100 transition hover:border-rose-300/30 hover:bg-rose-300/[0.07] disabled:cursor-not-allowed disabled:opacity-50"
                   >
-                    {cronCancelKey === '__all__' ? 'Pausing…' : 'Pause all'}
+                    {cronCancelKey === '__all__' ? 'Pausing…' : cronListTruncated ? 'Pause loaded' : 'Pause all'}
                   </Button>
                 )}
               </div>
             </div>
             <div className={`dy-monitor-stream-box dy-cron-job-list min-h-0 flex-1 overflow-auto rounded-none border border-white/[0.04] bg-black/25 shadow-inner shadow-black/20 ${activeCronJobs.length ? '' : 'dy-cron-stream-empty'}`}>
-              {activeCronJobs.map((job) => (
+              {visibleCronJobs.map((job) => (
                 <CronJobCard
                   key={job.id}
                   job={job}
@@ -1234,7 +1313,30 @@ const RuntimeGatewayPanel = memo(function RuntimeGatewayPanel({
               ))}
               {activeCronJobs.length > 0 && (
                 <div className="dy-cron-list-footer" aria-label="Cron job list status">
-                  Showing all {activeCronJobs.length} running {activeCronJobs.length === 1 ? 'run' : 'runs'}
+                  <span>
+                    Showing {visibleCronStart + 1}–{Math.min(visibleCronStart + visibleCronJobs.length, activeCronJobs.length)} of {activeCronJobs.length} loaded {activeCronJobs.length === 1 ? 'run' : 'runs'}{cronListTruncated ? ` · ${activeCronCount} total` : ''}
+                  </span>
+                  {cronPageCount > 1 && (
+                    <span className="dy-cron-pagination" aria-label="Scheduled run pages">
+                      <Button
+                        onClick={() => setCronPage((page) => Math.max(0, Math.min(page, cronPageCount - 1) - 1))}
+                        disabled={visibleCronPage === 0}
+                        variant="quiet"
+                        size="compact"
+                      >
+                        Previous
+                      </Button>
+                      <span>Page {visibleCronPage + 1} of {cronPageCount}</span>
+                      <Button
+                        onClick={() => setCronPage((page) => Math.min(cronPageCount - 1, page + 1))}
+                        disabled={visibleCronPage >= cronPageCount - 1}
+                        variant="quiet"
+                        size="compact"
+                      >
+                        Next
+                      </Button>
+                    </span>
+                  )}
                 </div>
               )}
               {!activeCronJobs.length && cronSyncError && (
@@ -1369,27 +1471,53 @@ const MonitorPerformancePanel = memo(function MonitorPerformancePanel({ visibleA
 const GatewayActivityPanel = memo(function GatewayActivityPanel({ agentById, gatewayLogs }: { agentById: Map<string, OpenClawAgent>; gatewayLogs: GatewayLogEntry[] }) {
   const agentResponses = useNexusStore((state) => state.agentResponses)
   const missionFeed = useNexusStore((state) => state.missionFeed)
+  const clearCutoffMs = useRuntimeMonitorClearCutoffMs()
   const [failedPortraitKeys, setFailedPortraitKeys] = useState<Set<string>>(() => new Set())
   const activity = useMemo(() => {
+    const visibleAgentResponses = agentResponses.filter((entry) => isRuntimeMonitorEntryVisible(entry.timestamp, clearCutoffMs))
+    const visibleMissionFeed = missionFeed.filter((event) => isRuntimeMonitorEntryVisible(event.timestamp, clearCutoffMs))
+    const visibleGatewayLogs = gatewayLogs.filter((entry) => isRuntimeMonitorEntryVisible(entry.timestamp, clearCutoffMs))
+    const activeAgentStartedAt = visibleAgentResponses
+      .filter((entry) => entry.streaming && entry.agentId)
+      .map((entry) => Date.parse(entry.startedAt || entry.timestamp))
+      .filter(Number.isFinite)
+      .sort((left, right) => left - right)[0]
+    const agentActivityItems = visibleAgentResponses.slice(0, 24).flatMap((entry) => {
+      const events = (entry.activity || []).filter(isVisibleAgentActivity)
+      const responseItem = !entry.streaming || events.length === 0 ? [{ item: makeResponseActivity(entry), timestampMs: Date.parse(entry.timestamp) }] : []
+      return [
+        ...responseItem,
+        ...events.map((event) => ({ item: makeAgentActivity(entry, event), timestampMs: Date.parse(event.timestamp) })),
+      ]
+    })
+    // Keep the Gateway feed useful when the workspace is idle. The runtime
+    // status can have a populated log tail even when there is no currently
+    // streaming agent; filtering to an active run in that state made the
+    // header count entries while the activity list rendered the empty state.
+    const activeGatewayLogs = Number.isFinite(activeAgentStartedAt)
+      ? visibleGatewayLogs.filter((entry) => {
+        const timestampMs = Date.parse(entry.timestamp)
+        return Number.isFinite(timestampMs) && timestampMs >= activeAgentStartedAt
+      })
+      : visibleGatewayLogs
     const items = [
-      ...agentResponses.slice(0, 24).map((entry) => ({ item: makeResponseActivity(entry), timestampMs: Date.parse(entry.timestamp) })),
-      ...missionFeed.slice(0, 24).map((event) => ({ item: makeEventActivity(event), timestampMs: Date.parse(event.timestamp) })),
-      ...gatewayLogs.slice(0, 48).map((entry) => ({ item: makeGatewayLogActivity(entry), timestampMs: Date.parse(entry.timestamp) })),
+      ...agentActivityItems,
+      ...visibleMissionFeed.slice(0, 24).filter((event) => event.agentId).map((event) => ({ item: makeEventActivity(event), timestampMs: Date.parse(event.timestamp) })),
+      ...activeGatewayLogs.slice(0, 48).map((entry) => ({ item: makeGatewayLogActivity(entry), timestampMs: Date.parse(entry.timestamp) })),
     ]
     return items
       .sort((a, b) => (Number.isFinite(b.timestampMs) ? b.timestampMs : 0) - (Number.isFinite(a.timestampMs) ? a.timestampMs : 0))
       .slice(0, 48)
       .map((entry) => entry.item)
-  }, [agentResponses, gatewayLogs, missionFeed])
+  }, [agentResponses, clearCutoffMs, gatewayLogs, missionFeed])
 
   return (
     <div className="dy-gateway-activity-list grid gap-3" role="log" aria-live="polite" aria-label="Gateway activity">
       {activity.map((item) => {
-        const agentId = item.kind === 'response' || item.kind === 'event' ? item.agentId : undefined
+        const agentId = item.kind === 'response' || item.kind === 'event' || item.kind === 'agent-activity' ? item.agentId : undefined
         const agent = agentId ? agentById.get(agentId) : undefined
         const isGatewayLog = item.kind === 'gateway-log'
         const isControlCenter = isGatewayLog || (item.kind === 'event' && !item.agentId)
-        const isWorkingStatus = item.kind === 'event' && !item.agentId && isWorkingDelegationText(item.detail)
         const portraitSrc = agent ? agentPortraitSrc(agent.id, agent.portrait) : ''
         const portraitKey = agent && portraitSrc ? `${agent.id}::${portraitSrc}` : ''
         const portraitFailed = portraitKey ? failedPortraitKeys.has(portraitKey) : false
@@ -1416,13 +1544,12 @@ const GatewayActivityPanel = memo(function GatewayActivityPanel({ agentById, gat
                 ) : (
                   <div className="flex h-full w-full items-center justify-center bg-white/[0.02] text-sm font-bold text-slate-600">{agent?.name?.charAt(0) || 'A'}</div>
                 )}
-                {item.ok && <span className="dy-activity-dot absolute right-0.5 top-0.5 h-2 w-2 rounded-full" data-tone={isGatewayLog ? 'neutral' : 'emerald'} />}
-                {isWorkingStatus && <span className="dy-activity-dot absolute right-1 top-1 h-2 w-2 rounded-full animate-pulse" data-tone="neutral" />}
+                {item.ok && !isControlCenter && <span className="dy-activity-dot absolute right-0.5 top-0.5 h-2 w-2 rounded-full" data-tone="emerald" />}
               </div>
               <div className="min-w-0 flex-1">
                 <div className="flex flex-wrap items-center gap-2">
                   <p className={`truncate text-[12px] font-bold ${isControlCenter ? 'text-slate-300' : 'text-slate-100'}`}>{isGatewayLog || isControlCenter ? 'Automnia' : agent?.name || agentId || 'Agent'}</p>
-                  {isGatewayLog && <span className="dy-gateway-activity-announcer"><img src={AUTOMNIA_LOCKUP_SRC} alt="" draggable={false} />Gateway Announcement</span>}
+                  {isGatewayLog && <span className="dy-gateway-activity-announcer">Gateway Announcement</span>}
                   <Badge className="dy-activity-status rounded-full border px-2 py-0.5 text-[11px] font-semibold uppercase tracking-[0.08em]" data-status={isControlCenter ? 'control' : item.ok ? 'ok' : 'blocked'} tone={activityStatusTone(item, isControlCenter)} size="micro">{isGatewayLog ? 'Gateway' : item.ok ? item.title : 'Blocked'}</Badge>
                   {item.kind !== 'gateway-log' && item.failureKind && (
                     <Badge className="rounded-full border border-amber-300/15 bg-amber-300/[0.04] px-2 py-0.5 text-[11px] font-semibold uppercase tracking-[0.08em] text-amber-100" tone="warning" size="micro">
@@ -1434,7 +1561,7 @@ const GatewayActivityPanel = memo(function GatewayActivityPanel({ agentById, gat
                 <p className={`mt-1.5 text-[12px] leading-relaxed ${isControlCenter ? 'text-slate-400' : 'text-slate-300/90'} ${isGatewayLog ? 'dy-gateway-activity-message' : ''}`}>{isGatewayLog ? item.detail : <LiveText text={item.detail} />}</p>
                 {isGatewayLog && (
                   <div className="dy-gateway-activity-meta mt-2 flex flex-wrap gap-1.5">
-                    <span>{item.stream}</span>
+                    <span className="dy-gateway-activity-stream" data-stream={item.stream}>{item.stream}</span>
                     {item.level && <span>{item.level}</span>}
                     {item.source && <span>{item.source}</span>}
                   </div>
@@ -1463,15 +1590,19 @@ const GatewayActivityWorkspace = memo(function GatewayActivityWorkspace({
 }) {
   const agentResponses = useNexusStore((state) => state.agentResponses)
   const missionFeed = useNexusStore((state) => state.missionFeed)
-  const visibleActivityCount = Math.min(48, agentResponses.length + missionFeed.length + gatewayLogs.length)
+  const clearCutoffMs = useRuntimeMonitorClearCutoffMs()
+  const visibleAgentResponseCount = agentResponses.filter((entry) => isRuntimeMonitorEntryVisible(entry.timestamp, clearCutoffMs)).length
+  const visibleMissionEventCount = missionFeed.filter((event) => isRuntimeMonitorEntryVisible(event.timestamp, clearCutoffMs)).length
+  const visibleGatewayLogCount = gatewayLogs.filter((entry) => isRuntimeMonitorEntryVisible(entry.timestamp, clearCutoffMs)).length
+  const visibleActivityCount = Math.min(48, visibleAgentResponseCount + visibleMissionEventCount + visibleGatewayLogCount)
 
   return (
     <div className="dy-monitor-logs-workspace" data-log-workspace="true">
       <header className="dy-monitor-logs-hero">
         <div className="dy-monitor-logs-hero__brand"><img src={AUTOMNIA_LOCKUP_SRC} alt="Automnia AI Nexus" draggable={false} /></div>
         <div className="dy-monitor-logs-hero__stats" aria-label="Gateway activity summary">
-          <div><strong>{agentResponses.length + missionFeed.length}</strong><span>agent runs</span></div>
-          <div><strong>{gatewayLogs.length}</strong><span>Gateway logs</span></div>
+          <div><strong>{visibleAgentResponseCount + visibleMissionEventCount}</strong><span>agent runs</span></div>
+          <div><strong>{visibleGatewayLogCount}</strong><span>Gateway logs</span></div>
           <div><strong>{visibleActivityCount}</strong><span>showing</span></div>
         </div>
       </header>
@@ -1584,7 +1715,7 @@ export const LiveOperationMonitor = memo(function LiveOperationMonitor({
   }
 
   return (
-    <section data-dui-panel="monitor" className="dy-monitor-shell overflow-hidden rounded-none border border-white/[0.06] bg-[linear-gradient(180deg,#101112,#080909)] shadow-2xl shadow-black/40">
+    <section data-dui-panel="monitor" data-monitor-active-tab={tab} className="dy-monitor-shell overflow-hidden rounded-none border border-white/[0.06] bg-[linear-gradient(180deg,#101112,#080909)] shadow-2xl shadow-black/40">
       <DoctorPanel run={displayedDoctorRun} error={doctorError} persisted={displayedDoctorRunPersisted} stale={displayedDoctorRunStale} onDismiss={dismissDoctorPanel} />
       {gatewayRestartError && (
         <div className="border-b border-white/[0.04] bg-black/20 px-5 py-3">
@@ -1599,13 +1730,54 @@ export const LiveOperationMonitor = memo(function LiveOperationMonitor({
       {cleanSlateResult && !cleanSlateError && (
         <div className="border-b border-white/[0.04] bg-black/20 px-5 py-3">
           <div
-            className="rounded-xl border border-cyan-300/15 bg-cyan-300/[0.035] px-4 py-3 text-[11px] leading-relaxed text-cyan-100/90"
+            className="dy-clean-slate-notice"
             role="status"
             aria-live="polite"
           >
-            <strong className="mr-1 text-slate-100">Clean Slate complete.</strong>
-            <span>{cleanSlateSummary(cleanSlateResult)}</span>
-            <p className="mt-1 text-slate-400">Monitor cache was cleared; durable OpenClaw transcripts and active Gateway work were preserved.</p>
+            <div className="dy-clean-slate-heading">
+              <span className="dy-clean-slate-check" aria-hidden="true">✓</span>
+              <div>
+                <p className="dy-clean-slate-eyebrow">Monitor maintenance</p>
+                <strong className="dy-clean-slate-title">Clean Slate complete.</strong>
+                <p className="dy-clean-slate-subtitle">The local runtime view is fresh and active work was left untouched.</p>
+              </div>
+            </div>
+
+            <div className="dy-clean-slate-metrics" aria-hidden="true">
+              <div className="dy-clean-slate-metric">
+                <strong>{cleanSlateResult.cleared.gatewayLogs}</strong>
+                <span>gateway logs</span>
+              </div>
+              <div className="dy-clean-slate-metric">
+                <strong>{cleanSlateResult.cleared.gatewayLogTailSnapshots}</strong>
+                <span>log snapshots</span>
+              </div>
+              <div className="dy-clean-slate-metric">
+                <strong>{cleanSlateResult.cleared.recentRuns}</strong>
+                <span>runtime calls</span>
+              </div>
+              <div className="dy-clean-slate-metric dy-clean-slate-metric--quiet">
+                <strong>{cleanSlateResult.activeRuns}</strong>
+                <span>active runs left running</span>
+              </div>
+            </div>
+
+            {cleanSlateResult.sessionLockCleanup && (
+              <p className="dy-clean-slate-locks" aria-hidden="true">
+                <span>Session lock sweep</span>
+                <span>{cleanSlateResult.sessionLockCleanup.scanned} scanned</span>
+                <span>{cleanSlateResult.sessionLockCleanup.removed} stale removed</span>
+                {cleanSlateResult.sessionLockCleanup.errors > 0 && <span>{cleanSlateResult.sessionLockCleanup.errors} errors</span>}
+              </p>
+            )}
+
+            <p className="dy-clean-slate-preserved">
+              <span>Preserved</span>
+              <span>Durable OpenClaw transcripts</span>
+              <span>Active Gateway work</span>
+            </p>
+
+            <span className="sr-only">{cleanSlateSummary(cleanSlateResult)} Monitor cache was cleared; durable OpenClaw transcripts and active Gateway work were preserved.</span>
           </div>
         </div>
       )}
@@ -1634,7 +1806,7 @@ export const LiveOperationMonitor = memo(function LiveOperationMonitor({
               size="compact"
               leadingIcon={<MonitorTabIcon tab={item} />}
               className={`flex-1 rounded-none px-3 py-2 text-[12px] font-semibold uppercase tracking-[0.14em] transition-all ${tab === item ? 'bg-white/[0.065] text-slate-100 shadow-[inset_0_1px_0_rgba(255,255,255,0.06)]' : 'text-slate-400 hover:text-slate-200 hover:bg-white/[0.02]'}`}>
-              {item === 'heartbeat' ? 'scheduler' : item}
+              {item === 'heartbeat' ? 'schedule' : item}
             </Button>
           ))}
           </div>

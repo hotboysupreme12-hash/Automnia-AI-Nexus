@@ -2,6 +2,7 @@ import type { Express } from 'express'
 import { z } from 'zod'
 import { apiFailure, apiSuccess } from '../controlPlaneHttp'
 import type { ProviderOAuthSession } from '../services/providers/oauthCallbackService'
+import { CREDITS_ONLY_MODEL_ACCESS_MESSAGE } from '../services/license/creditsOnlyModelPolicy'
 
 type OAuthLaunchResult = {
   ok: boolean
@@ -25,6 +26,7 @@ type ProviderAuthRoutesOptions = {
   ensureProviderAuthReady?: () => Promise<unknown>
   fallbackAvailableModels: () => unknown
   getFastAvailableModelsCatalog: (options?: { refreshStale?: boolean }) => unknown
+  anthropicOAuthRedirectUri: string
   googleOAuthRedirectUri: string
   localAuthPath: string
   oauthSessions: Pick<Map<string, ProviderOAuthSession>, 'get'>
@@ -35,22 +37,46 @@ type ProviderAuthRoutesOptions = {
     code: string,
     state?: string,
   ) => Promise<unknown>
+  submitAnthropicOAuthManualInput: (session: ProviderOAuthSession, input: string) => Promise<unknown>
   persistProviderAuth: (provider: string, apiKey: string) => Promise<unknown>
   providerAuthStatus: (provider: string, options?: { probeGcloud?: boolean }) => unknown
   refreshAvailableModelsCache: () => Promise<AvailableModelsCache>
   removeProviderAuth: (provider: string) => Promise<unknown>
   startGoogleOAuthSession: (projectId?: string) => Promise<OAuthStartResult>
+  startAnthropicOAuthSession: () => Promise<OAuthStartResult>
   startOpenAICodexOAuthSession: () => Promise<OAuthStartResult>
+  isCreditsOnlyEntitlement?: () => boolean
+  providerAccessAllowed?: () => boolean
+  creditsOnlyAvailableModels?: () => unknown
 }
 
 async function ensureProviderAuthReady(options: ProviderAuthRoutesOptions) {
   if (options.ensureProviderAuthReady) await options.ensureProviderAuthReady()
 }
 
+function canonicalOAuthProvider(provider: string) {
+  return provider === 'google-vertex' ? 'google' : provider
+}
+
+function isProviderOAuthSupported(provider: string) {
+  return provider === 'google' || provider === 'google-vertex' || provider === 'openai' || provider === 'anthropic'
+}
+
 export function registerProviderAuthRoutes(app: Express, options: ProviderAuthRoutesOptions) {
+  const providerAccessBlocked = () => options.isCreditsOnlyEntitlement?.() === true || options.providerAccessAllowed?.() === false
+  const rejectCreditsOnlyProviderAccess = (res: Parameters<typeof apiFailure>[0]) => apiFailure(
+    res,
+    403,
+    'byok_not_allowed',
+    CREDITS_ONLY_MODEL_ACCESS_MESSAGE,
+  )
+
   app.get('/api/auth/providers', async (req, res) => {
     try {
       await ensureProviderAuthReady(options)
+      if (providerAccessBlocked()) {
+        return apiSuccess(res, { providers: [], persistencePath: options.localAuthPath })
+      }
       const probeGcloud = req.query.refresh === '1' || req.query.probe === '1'
       const statusOptions = probeGcloud ? { probeGcloud: true } : {}
       const providers = Object.keys(options.authProviderCatalog).map((provider) =>
@@ -63,6 +89,7 @@ export function registerProviderAuthRoutes(app: Express, options: ProviderAuthRo
 
   app.post('/api/auth/providers/:provider', async (req, res) => {
     const { provider } = req.params
+    if (providerAccessBlocked()) return rejectCreditsOnlyProviderAccess(res)
     if (!options.authEnvMap[provider]) {
       return apiFailure(res, 400, 'auth_provider_failed', 'Unsupported provider', { provider })
     }
@@ -82,6 +109,7 @@ export function registerProviderAuthRoutes(app: Express, options: ProviderAuthRo
 
   app.delete('/api/auth/providers/:provider', async (req, res) => {
     const { provider } = req.params
+    if (providerAccessBlocked()) return rejectCreditsOnlyProviderAccess(res)
     if (!options.authEnvMap[provider]) {
       return apiFailure(res, 400, 'auth_provider_failed', 'Unsupported provider', { provider })
     }
@@ -97,8 +125,9 @@ export function registerProviderAuthRoutes(app: Express, options: ProviderAuthRo
 
   app.post('/api/auth/providers/:provider/oauth/start', async (req, res) => {
     const { provider } = req.params
-    if (provider !== 'google' && provider !== 'openai') {
-      return apiFailure(res, 400, 'oauth_operation_failed', 'OAuth is not supported for this provider in the direct model runtime.', { provider })
+    if (providerAccessBlocked()) return rejectCreditsOnlyProviderAccess(res)
+    if (!isProviderOAuthSupported(provider)) {
+      return apiFailure(res, 400, 'oauth_operation_failed', 'OAuth is not supported for this provider.', { provider })
     }
 
     const schema = z.object({
@@ -109,9 +138,12 @@ export function registerProviderAuthRoutes(app: Express, options: ProviderAuthRo
 
     try {
       await ensureProviderAuthReady(options)
-      const { session, launched } = provider === 'google'
+      const oauthProvider = canonicalOAuthProvider(provider)
+      const { session, launched } = oauthProvider === 'google'
         ? await options.startGoogleOAuthSession(parsed.data?.projectId)
-        : await options.startOpenAICodexOAuthSession()
+        : oauthProvider === 'openai'
+          ? await options.startOpenAICodexOAuthSession()
+          : await options.startAnthropicOAuthSession()
       return apiSuccess(res, {
         ok: true,
         provider,
@@ -119,7 +151,13 @@ export function registerProviderAuthRoutes(app: Express, options: ProviderAuthRo
         authorizationUrl: session.authorizationUrl,
         openedBrowser: launched.ok,
         browserDetail: launched.detail,
-        redirectUri: session.redirectUri || (provider === 'google' ? options.googleOAuthRedirectUri : options.openAiCodexOAuthRedirectUri),
+        redirectUri: session.redirectUri || (
+          oauthProvider === 'google'
+            ? options.googleOAuthRedirectUri
+            : oauthProvider === 'openai'
+              ? options.openAiCodexOAuthRedirectUri
+              : options.anthropicOAuthRedirectUri
+        ),
         projectId: session.projectId || null,
       })
     } catch (error) {
@@ -129,14 +167,15 @@ export function registerProviderAuthRoutes(app: Express, options: ProviderAuthRo
 
   app.get('/api/auth/providers/:provider/oauth/session/:sessionId', async (req, res) => {
     const { provider, sessionId } = req.params
-    if (provider !== 'google' && provider !== 'openai') {
+    if (providerAccessBlocked()) return rejectCreditsOnlyProviderAccess(res)
+    if (!isProviderOAuthSupported(provider)) {
       return apiFailure(res, 400, 'oauth_operation_failed', 'OAuth is not supported for this provider.', { provider })
     }
     try {
       await ensureProviderAuthReady(options)
       const session = options.oauthSessions.get(sessionId)
       if (!session) return apiFailure(res, 404, 'oauth_operation_failed', 'OAuth session not found', { provider, sessionId })
-      if (session.provider !== provider) return apiFailure(res, 404, 'oauth_operation_failed', 'OAuth session not found for this provider', { provider, sessionId })
+      if (session.provider !== canonicalOAuthProvider(provider)) return apiFailure(res, 404, 'oauth_operation_failed', 'OAuth session not found for this provider', { provider, sessionId })
       return apiSuccess(res, {
         ok: true,
         provider,
@@ -157,8 +196,9 @@ export function registerProviderAuthRoutes(app: Express, options: ProviderAuthRo
 
   app.post('/api/auth/providers/:provider/oauth/session/:sessionId/manual', async (req, res) => {
     const { provider, sessionId } = req.params
-    if (provider !== 'openai') {
-      return apiFailure(res, 400, 'oauth_operation_failed', 'Manual OAuth input is only supported for OpenAI Codex.', { provider })
+    if (providerAccessBlocked()) return rejectCreditsOnlyProviderAccess(res)
+    if (provider !== 'openai' && provider !== 'anthropic') {
+      return apiFailure(res, 400, 'oauth_operation_failed', 'Manual OAuth input is only supported for OpenAI Codex or Anthropic.', { provider })
     }
 
     const session = options.oauthSessions.get(sessionId)
@@ -177,6 +217,17 @@ export function registerProviderAuthRoutes(app: Express, options: ProviderAuthRo
 
     try {
       await ensureProviderAuthReady(options)
+      if (provider === 'anthropic') {
+        await options.submitAnthropicOAuthManualInput(session, parsed.data.input)
+        return apiSuccess(res, {
+          ok: true,
+          provider,
+          sessionId,
+          status: session.status,
+          result: session.result,
+          providerStatus: options.providerAuthStatus(provider),
+        })
+      }
       const { code, state } = options.parseOpenAICodexAuthorizationInput(parsed.data.input)
       await options.completeOpenAICodexOAuthSession(session, code, state)
       return apiSuccess(res, {
@@ -198,6 +249,14 @@ export function registerProviderAuthRoutes(app: Express, options: ProviderAuthRo
   app.get('/api/models/available', async (req, res) => {
     try {
       await ensureProviderAuthReady(options)
+      if (providerAccessBlocked()) {
+        return apiSuccess(res, {
+          models: options.creditsOnlyAvailableModels?.() || [],
+          source: 'credits-only',
+          refreshing: false,
+          stale: false,
+        })
+      }
       if (req.query.refresh === '1') {
         const cache = await options.refreshAvailableModelsCache()
         return apiSuccess(res, {

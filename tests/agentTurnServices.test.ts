@@ -179,6 +179,86 @@ test('gateway agent turn service resets and retries a stale Codex session for Cl
   assert.equal(events.some((entry) => entry.data.retry === 'stale-codex-session'), true)
 })
 
+test('gateway agent turn service refreshes hosted billing access and retries a relay billing failure once', async () => {
+  const events: Array<{ event: string; data: Record<string, unknown> }> = []
+  const gatewayTurns: Array<Record<string, unknown>> = []
+  const deletedSessionIds: string[] = []
+  const sessions = new Map<string, string>()
+  let reconciliations = 0
+
+  const service = createGatewayAgentTurnService({
+    gatewayHttpPort: 18789,
+    openClawAgentTurnTimeoutFloorSeconds: 60,
+    trafficGate: () => ({ messageTrafficAllowed: true, blockMessage: null }),
+    reconcileBillingAccess: async () => {
+      reconciliations += 1
+      return true
+    },
+    isValidAgentId: (agentId) => agentId === 'agent-alpha',
+    isRetiredAgentId: () => false,
+    streamObserver: () => ({ emit: (event, data) => events.push({ event, data }) }),
+    ensureOpenclawAgentRunConfigDefaults: async () => undefined,
+    readOpenclawConfig: async () => ({}),
+    ensureAgentRuntimeHealthPreflight: async () => undefined,
+    ensureAgentSandboxCompatibleWithHost: async () => undefined,
+    startGatewayHealthMonitor: () => undefined,
+    ensureGatewayRunning: async () => undefined,
+    isGatewayHealthy: async () => true,
+    isClawTalkSetupIntentMessage: () => false,
+    isClawTalkIntentMessage: () => false,
+    buildClawTalkRuntimeInstruction: (message) => message,
+    readAgentPrimaryModelIdSync: () => 'automnia-cloud/gemini-3.6-flash',
+    isGoogleGeminiModelId: () => false,
+    thinkingForOpenClawRuntimeModel: (_modelId, thinking) => thinking,
+    resolveEffectiveAgentFastMode: async () => 'auto',
+    resolveEffectiveAgentWorkTimeoutSeconds: async () => 60,
+    resolveAgentRunContext: async () => ({
+      executionWorkspace: 'C:/workspace',
+      doctrineWorkspace: 'C:/workspace/.openclaw/agents/agent-alpha',
+    }),
+    agentTurnSessionScope: (agentId, key) => `${agentId}:${key || 'default'}`,
+    agentTurnSessions: sessions,
+    deleteProviderConversationHistory: (sessionId) => deletedSessionIds.push(sessionId),
+    resolveFilenameHintsForMessage: async (message) => ({ message }),
+    getPartyMembers: async () => [{ id: 'agent-alpha', name: 'Ada' }],
+    composeAgentDoctrinePrompt: (_agentId, message) => message,
+    runCwdForContext: (context) => context.executionWorkspace,
+    agentWorkTimeoutWrapperMs: (seconds) => seconds * 1000,
+    appendAgentPromptDump: async () => undefined,
+    runGatewayChatTurn: async (payload) => {
+      gatewayTurns.push(payload)
+      if (gatewayTurns.length === 1) {
+        return {
+          stdout: '',
+          stderr: 'automnia-cloud (gemini-3.6-flash) returned a billing error — insufficient balance',
+          code: 402,
+        }
+      }
+      return { stdout: 'refreshed reply', stderr: '', code: 0 }
+    },
+    extractAgentReply: (stdout) => stdout,
+  })
+
+  const result = await service.runGatewayAgentTurnForStream({
+    agent: 'agent-alpha',
+    message: 'Use the refreshed account route.',
+    thinking: 'low',
+    sessionKey: 'console',
+  }, 'observer-1', createAbortSignal(), {
+    route: '/api/openclaw/agent-turn/stream:command-console-direct',
+    note: 'test route',
+  })
+
+  assert.equal(result.ok, true)
+  assert.equal(result.reply, 'refreshed reply')
+  assert.equal(reconciliations, 1)
+  assert.equal(gatewayTurns.length, 2)
+  assert.notEqual(gatewayTurns[0].sessionId, gatewayTurns[1].sessionId)
+  assert.equal(gatewayTurns[1].freshSession, true)
+  assert.deepEqual(deletedSessionIds, [gatewayTurns[0].sessionId])
+  assert.equal(events.some((entry) => entry.data.retry === 'billing-access-recovery'), true)
+})
+
 test('buffered agent turn service dispatches forced runtime turns directly to Gateway chat', async () => {
   const events: Array<{ event: string; data: Record<string, unknown> }> = []
   let disposed = false
@@ -262,6 +342,86 @@ test('buffered agent turn service emits sanitized buffered replies when no live 
   assert.equal(result.runtimeLogsFiltered, true)
   assert.equal(events.some((entry) => entry.event === 'delta' && entry.data.text === 'hello'), true)
   assert.equal(events.some((entry) => entry.event === 'progress' && entry.data.id === 'openclaw:finalizing'), true)
+})
+
+test('agent streaming service routes every Anthropic model through OpenClaw native tool runtime', async () => {
+  let bufferedReason: Record<string, unknown> | undefined
+  let directAnthropicCalled = false
+  const service = createAgentStreamingService({
+    streamingProviderConfig: {
+      anthropic: {
+        kind: 'anthropic-messages',
+        envKeys: ['ANTHROPIC_API_KEY'],
+        docs: 'https://docs.anthropic.com/en/api/messages',
+      },
+    },
+    isValidAgentId: (agentId) => agentId === 'agent-alpha',
+    isRetiredAgentId: () => false,
+    parseAgentRuntimeShortcut: () => null,
+    agentRuntimeShortcutReason: () => ({ code: 'runtime-shortcut', message: 'shortcut' }),
+    bufferedAgentRuntimeReason: () => null,
+    runBufferedAgentTurnForStream: async (_input, _emit, _signal, reason) => {
+      bufferedReason = reason
+      return { ok: true, reply: 'native Anthropic reply', provider: 'gateway', nativeToolLoop: true }
+    },
+    resolveAgentPrimaryModelId: async () => 'anthropic/claude-sonnet-5',
+    openAiCodexEmbeddedRuntimeReason: () => null,
+    googleGeminiEmbeddedRuntimeReason: () => null,
+    splitModelId: (modelId) => {
+      const [provider, ...rest] = modelId.split('/')
+      return { provider, model: rest.join('/') }
+    },
+    isOpenAiCodexSubscriptionModel: () => false,
+    getAgentAuthEnv: async () => ({ ANTHROPIC_API_KEY: 'anthropic-test-key' }),
+    resolveOpenAiSubscriptionRequestAuth: async () => {
+      throw new Error('not used')
+    },
+    resolveProviderRequestAuth: async () => {
+      throw new Error('Anthropic auth should be handled by OpenClaw')
+    },
+    streamingCapabilityForModel: () => ({ supported: true, provider: 'anthropic', transport: 'openclaw-native' }),
+    resolveAgentRunContext: async () => ({ executionWorkspace: 'C:/workspace', doctrineWorkspace: 'C:/workspace/.openclaw/agents/agent-alpha' }),
+    agentTurnSessionScope: (agentId, key) => `${agentId}:${key || 'default'}`,
+    agentTurnSessions: new Map<string, string>(),
+    deleteProviderConversationHistory: () => undefined,
+    resolveFilenameHintsForMessage: async (message) => ({ message, notes: [] }),
+    getPartyMembers: async () => [],
+    composeDirectProviderPrompt: (_agentId, message) => message,
+    providerConversationMessagesForRequest: () => [],
+    streamOpenAiCompatibleCompletion: async () => ({ content: '' }),
+    streamOpenAiResponsesCompletion: async () => ({ content: '' }),
+    streamOpenAICodexResponsesCompletion: async () => ({ content: '' }),
+    streamAnthropicMessage: async () => {
+      directAnthropicCalled = true
+      return { content: 'wrong path' }
+    },
+    streamGoogleVertexContent: async () => ({ content: '' }),
+    streamGeminiContent: async () => ({ content: '' }),
+    classifyFailureKind: () => undefined,
+    redactHiddenReasoningAndSecrets: (value) => value,
+    appendAgentDailyMemory: async () => undefined,
+    trimTask: (value, maxChars) => value.slice(0, maxChars),
+    cleanupDoctrineMirrorsAfterRun: async () => undefined,
+    sanitizeUserVisibleRuntimeText: (value) => value,
+    saveProviderConversationTurn: () => undefined,
+    buildDoctrineSyncReport: async () => ({ ok: true }),
+    agentRuntimeContextPayload: () => ({}),
+    providerConversationMessageCount: () => 0,
+  })
+
+  const result = await service.streamProviderAgentTurn({
+    agent: 'agent-alpha',
+    message: 'Use a tool and stream the final answer.',
+    thinking: 'low',
+  }, () => undefined, createAbortSignal())
+
+  assert.equal(result.reply, 'native Anthropic reply')
+  assert.equal(result.nativeToolLoop, true)
+  assert.deepEqual(bufferedReason, {
+    code: 'anthropic-native-openclaw-runtime',
+    message: "Anthropic agent turns use OpenClaw's native tool-capable runtime for streaming, tools, sessions, and agent actions.",
+  })
+  assert.equal(directAnthropicCalled, false)
 })
 
 test('agent runtime service uses the local runtime only when the fallback is explicitly enabled', async () => {
@@ -415,9 +575,11 @@ test('agent streaming service keeps hosted tool/runtime turns in the configured 
   const memories: string[] = []
   let streamCalled = false
   let hostedRelayActive = false
-  let hostedUsagePriority: 'automnia_first' | 'provider_first' = 'automnia_first'
+  let hostedUsagePriority: 'automnia_only' | 'provider_first' = 'automnia_only'
   let hostedBalanceRefreshes = 0
   let bufferedShouldFail = false
+  let messageTrafficBlocked = false
+  let providerAccessBlocked = false
   const bufferedMessages: string[] = []
   const bufferedInputs: Array<Record<string, unknown>> = []
 
@@ -444,6 +606,11 @@ test('agent streaming service keeps hosted tool/runtime turns in the configured 
     getHostedRelayCredentials: () => hostedRelayActive
       ? { email: 'subscriber@example.test', licenseKey: 'license-key', mode: 'hosted_credits', usagePriority: hostedUsagePriority }
       : null,
+    trafficGate: () => ({
+      messageTrafficAllowed: !messageTrafficBlocked,
+      providerAccessAllowed: !providerAccessBlocked,
+      blockMessage: messageTrafficBlocked ? 'Automnia credits are out of tokens.' : null,
+    }),
     runBufferedAgentTurnForStream: async (input) => {
       bufferedInputs.push({ ...input })
       bufferedMessages.push(String(input.message))
@@ -558,7 +725,7 @@ test('agent streaming service keeps hosted tool/runtime turns in the configured 
 
   assert.equal(hostedResult.provider, 'gateway')
   assert.equal(hostedResult.reply, 'runtime reply')
-  assert.equal(hostedResult.usagePriority, 'automnia_first')
+  assert.equal(hostedResult.usagePriority, 'automnia_only')
   assert.equal(hostedResult.billingRoute, 'openclaw-gateway-automnia-provider')
   assert.equal(hostedResult.nativeToolLoop, true)
   assert.equal(hostedResult.remainingCredits, 1234)
@@ -576,7 +743,7 @@ test('agent streaming service keeps hosted tool/runtime turns in the configured 
 
   assert.equal(runtimeResult.provider, 'gateway')
   assert.equal(runtimeResult.reply, 'runtime reply')
-  assert.equal(runtimeResult.usagePriority, 'automnia_first')
+  assert.equal(runtimeResult.usagePriority, 'automnia_only')
   assert.equal(hostedBalanceRefreshes, 2)
   assert.deepEqual(bufferedMessages, [
     'Use the browser, read and write a workspace file, then run an exec command.',
@@ -610,6 +777,34 @@ test('agent streaming service keeps hosted tool/runtime turns in the configured 
   assert.equal(providerFailureResult.usagePriority, 'provider_first')
   assert.equal(providerFailureResult.billingRoute, 'openclaw-gateway-automnia-provider')
   assert.equal(hostedBalanceRefreshes, 4)
+
+  // Exhaustion stops before Gateway dispatch. A credits-only account also
+  // cannot fall through to direct provider streaming if relay credentials are
+  // unavailable or stale.
+  messageTrafficBlocked = true
+  hostedRelayActive = true
+  const exhaustedResult = await service.streamProviderAgentTurn({
+    agent: 'agent-alpha',
+    message: 'this must not be sent',
+    thinking: 'low',
+    sessionKey: 'console',
+  }, () => undefined, createAbortSignal())
+  assert.equal(exhaustedResult.code, 402)
+  assert.equal(exhaustedResult.failureKind, 'insufficient_credits')
+  assert.match(String(exhaustedResult.reply), /out of tokens/i)
+
+  messageTrafficBlocked = false
+  providerAccessBlocked = true
+  hostedRelayActive = false
+  const providerBypassResult = await service.streamProviderAgentTurn({
+    agent: 'agent-alpha',
+    message: 'this must not use a provider fallback',
+    thinking: 'low',
+    sessionKey: 'console',
+  }, () => undefined, createAbortSignal())
+  assert.equal(providerBypassResult.code, 403)
+  assert.equal(providerBypassResult.failureKind, 'provider_forbidden')
+  assert.match(String(providerBypassResult.reply), /credits only/i)
 })
 
 test('agent streaming service dispatches Gemini 3.6 Flash through both native Google transports', async () => {

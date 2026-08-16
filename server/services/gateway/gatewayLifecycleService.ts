@@ -122,6 +122,7 @@ export type GatewayMigrationStatus = {
 export type GatewayLifecycleServiceOptions = {
   gatewayHttpPort: number
   controlCenterPort: number
+  controlCenterToken: string
   openClawConfigPath: string
   openClawStateRoot: string
   startupHealthGraceMs: number
@@ -496,6 +497,11 @@ export function createGatewayLifecycleService(options: GatewayLifecycleServiceOp
       }
       const spec = options.openClawSpawnSpec(buildGatewayRunArgs(options.gatewayHttpPort))
       const env = options.openClawProcessEnv({
+        // The Gateway is a local untrusted boundary from the billing point
+        // of view. Give injected channel runtimes the same bearer credential
+        // used by the Control Center so traffic-gate checks cannot be spoofed
+        // by an unauthenticated local request.
+        CONTROL_CENTER_TOKEN: options.controlCenterToken,
         CONTROL_CENTER_AGENT_TURN_STREAM_URL: `http://127.0.0.1:${options.controlCenterPort}/api/openclaw/agent-turn/stream`,
         CLAWTALK_CONTROL_CENTER_AGENT_TURN_STREAM_URL: `http://127.0.0.1:${options.controlCenterPort}/api/openclaw/agent-turn/stream`,
         CLAWTALK_CONTROL_CENTER_CONSOLE_FINAL_URL: `http://127.0.0.1:${options.controlCenterPort}/api/openclaw/clawtalk-console/final`,

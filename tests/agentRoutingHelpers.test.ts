@@ -163,6 +163,36 @@ test('Telegram identity replies are verified against the selected agent profile 
   assert.equal(guarded.text, 'I am Marcus Chen, Lead Alpha Hunter (agent id: hn-crypto-lead). I am the Automnia agent selected for this Telegram message.')
 })
 
+test('Telegram model callbacks are locked to Automnia credits for Starter runtime config', () => {
+  const selectionAllowed = new Function(`
+    ${TELEGRAM_AGENT_ROUTING_HELPER}
+    return telegramCreditsOnlyModelSelectionAllowed
+  `)() as (config: unknown, callback: unknown) => boolean
+
+  const starterConfig = { env: { vars: { AUTOMNIA_CREDITS_ONLY: '1' } } }
+  assert.equal(selectionAllowed(starterConfig, { type: 'select', provider: 'automnia-cloud', model: 'gemini-3.6-flash' }), true)
+  assert.equal(selectionAllowed(starterConfig, { type: 'select', provider: 'google', model: 'gemini-3.7-pro' }), false)
+  assert.equal(selectionAllowed(starterConfig, { type: 'select', provider: 'openai', model: 'gpt-5.5' }), false)
+  assert.equal(selectionAllowed({}, { type: 'select', provider: 'google', model: 'gemini-3.7-pro' }), true)
+})
+
+test('Telegram model menus expose only Automnia credits for Starter runtime config', () => {
+  const restrictModelData = new Function(`
+    ${TELEGRAM_AGENT_ROUTING_HELPER}
+    return telegramCreditsOnlyModelData
+  `)() as (config: unknown, data: { byProvider: Map<string, Set<string>>; providers: string[] }) => {
+    byProvider: Map<string, Set<string>>
+    providers: string[]
+  }
+
+  const restricted = restrictModelData(
+    { env: { vars: { AUTOMNIA_CREDITS_ONLY: '1' } } },
+    { byProvider: new Map([['google', new Set(['gemini-3.7-pro'])]]), providers: ['google'] },
+  )
+  assert.deepEqual(restricted.providers, ['automnia-cloud'])
+  assert.deepEqual(Array.from(restricted.byProvider.get('automnia-cloud') || []), ['gemini-3.6-flash'])
+})
+
 test('Telegram route construction is self-contained in the injected runtime bundle', () => {
   const routeBuilder = new Function(`
     function normalizeAccountId(value) { return String(value || 'default') }

@@ -43,6 +43,11 @@ export type AgentRuntimeServiceOptions = {
   allowLocalAgentRuntimeFallback: boolean
   controlCenterGatewayChatClient: boolean
   gatewayHttpPort: number
+  trafficGate?: () => {
+    messageTrafficAllowed: boolean
+    localAiAllowed: boolean
+    blockMessage: string | null
+  }
   runOpenClawWithGeminiToolWritePolicy: (
     agentId: string,
     message: string,
@@ -89,6 +94,19 @@ export function createAgentRuntimeService(options: AgentRuntimeServiceOptions) {
   }
 
   async function runControlCenterAgentRuntimeTurn(params: AgentRuntimeTurnParams): Promise<AgentRuntimeResult> {
+    const trafficGate = options.trafficGate?.()
+    if (trafficGate && (!trafficGate.messageTrafficAllowed || !trafficGate.localAiAllowed)) {
+      const message = trafficGate.blockMessage
+        || 'Starter Subscription and credit-refill access cannot use local AI runtime features.'
+      return {
+        stdout: '',
+        stderr: message,
+        code: trafficGate.messageTrafficAllowed ? 403 : 402,
+        failureKind: trafficGate.messageTrafficAllowed ? 'provider_forbidden' : 'insufficient_credits',
+        runtimeTransport: 'local',
+      }
+    }
+
     const run = (mode: AgentRuntimeFlagMode, extraEnv?: Record<string, string>) =>
       options.runOpenClawWithGeminiToolWritePolicy(
         params.agentId,

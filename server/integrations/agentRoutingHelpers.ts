@@ -314,6 +314,25 @@ function clawTalkControlCenterHeaders() {
     if (token) headers.Authorization = 'Bearer ' + token;
     return headers;
 }
+function resolveAutomniaTrafficGateUrl() {
+    var streamUrl = resolveClawTalkControlCenterStreamUrl();
+    return streamUrl ? streamUrl.replace(/\/agent-turn\/stream(?:\?.*)?$/, '/license/traffic-gate') : '';
+}
+async function automniaTrafficGateAllowsMessages() {
+    var url = resolveAutomniaTrafficGateUrl();
+    if (!url || typeof fetch !== 'function') return false;
+    try {
+        var response = await fetch(url, {
+            method: 'GET',
+            headers: clawTalkControlCenterHeaders()
+        });
+        var payload = await response.json();
+        var gate = payload && payload.data && typeof payload.data === 'object' ? payload.data : payload;
+        return response.ok && gate && gate.active === true && gate.messageTrafficAllowed === true;
+    } catch (unused) {
+        return false;
+    }
+}
 function resolveClawTalkControlCenterConsoleFinalUrl() {
     var url = process.env.CLAWTALK_CONTROL_CENTER_CONSOLE_FINAL_URL || '';
     url = String(url == null ? '' : url).trim();
@@ -483,6 +502,12 @@ async function runClawTalkControlCenterOrEmbeddedAgentTurn(options) {
     }
     var url = resolveClawTalkControlCenterStreamUrl();
     if (url && typeof fetch === 'function') {
+        if (!(await automniaTrafficGateAllowsMessages())) {
+            return {
+                payloads: [],
+                meta: { controlCenter: true, billingRoute: 'blocked', trafficGate: 'blocked' }
+            };
+        }
         var controller = typeof AbortController === 'function' ? new AbortController() : null;
         var timer = controller ? setTimeout(function() {
             controller.abort();
@@ -543,8 +568,52 @@ async function runClawTalkControlCenterOrEmbeddedAgentTurn(options) {
 `.trim()
 
 export const TELEGRAM_AGENT_ROUTING_HELPER = String.raw`
-var TELEGRAM_AGENT_ROUTING_PATCH_VERSION = 11;
+var TELEGRAM_AGENT_ROUTING_PATCH_VERSION = 12;
 var TELEGRAM_AGENT_ROUTE_MEMORY_KEY = '__openclawTelegramAgentRoutes';
+function resolveTelegramControlCenterStreamUrl() {
+    var url = process.env.CLAWTALK_CONTROL_CENTER_AGENT_TURN_STREAM_URL || process.env.CONTROL_CENTER_AGENT_TURN_STREAM_URL || '';
+    return String(url == null ? '' : url).trim();
+}
+function telegramControlCenterHeaders() {
+    var token = String(process.env.CLAWTALK_CONTROL_CENTER_TOKEN || process.env.CONTROL_CENTER_TOKEN || '').trim();
+    var headers = {};
+    if (token) headers.Authorization = 'Bearer ' + token;
+    return headers;
+}
+async function automniaTrafficGateAllowsMessages() {
+    var streamUrl = resolveTelegramControlCenterStreamUrl();
+    var url = streamUrl ? streamUrl.replace(/\/agent-turn\/stream(?:\?.*)?$/, '/license/traffic-gate') : '';
+    if (!url || typeof fetch !== 'function') return false;
+    try {
+        var response = await fetch(url, {
+            method: 'GET',
+            headers: telegramControlCenterHeaders()
+        });
+        var payload = await response.json();
+        var gate = payload && payload.data && typeof payload.data === 'object' ? payload.data : payload;
+        return response.ok && gate && gate.active === true && gate.messageTrafficAllowed === true;
+    } catch (unused) {
+        return false;
+    }
+}
+function telegramCreditsOnlyModelSelectionAllowed(config, callback) {
+    var vars = config && config.env && config.env.vars;
+    var creditsOnly = vars && String(vars.AUTOMNIA_CREDITS_ONLY || '') === '1';
+    if (!creditsOnly || !callback || callback.type !== 'select') return true;
+    var provider = String(callback.provider || '').trim().toLowerCase();
+    var model = String(callback.model || '').trim().toLowerCase();
+    return provider === 'automnia-cloud' && model === 'gemini-3.6-flash';
+}
+function telegramCreditsOnlyModelData(config, data) {
+    var vars = config && config.env && config.env.vars;
+    if (!vars || String(vars.AUTOMNIA_CREDITS_ONLY || '') !== '1' || !data) return data;
+    var byProvider = new Map();
+    byProvider.set('automnia-cloud', new Set(['gemini-3.6-flash']));
+    return Object.assign({}, data, {
+        byProvider: byProvider,
+        providers: ['automnia-cloud']
+    });
+}
 function resolveTelegramAgentRouteMemory() {
     var root = globalThis;
     var state = root[TELEGRAM_AGENT_ROUTE_MEMORY_KEY];

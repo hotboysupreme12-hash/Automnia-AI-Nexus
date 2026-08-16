@@ -3,6 +3,7 @@ import type { Express } from 'express'
 import { z } from 'zod'
 import { apiFailure, apiSuccess } from '../controlPlaneHttp'
 import { computeShiftDurationMinutes } from '../shiftContracts'
+import { CREDITS_ONLY_MODEL_ACCESS_MESSAGE } from '../services/license/creditsOnlyModelPolicy'
 import type {
   HeartbeatRuntimeDefaults,
   RuntimeCronJobSummary,
@@ -29,6 +30,7 @@ type ShiftRoutesOptions = {
     base: HeartbeatRuntimeDefaults,
     patch?: Partial<HeartbeatRuntimeDefaults>,
   ) => HeartbeatRuntimeDefaults
+  modelSelectionBlocked?: (modelId: string) => string | null
   readHeartbeatRuntimeDefaults: () => Promise<HeartbeatRuntimeDefaults>
   readHeartbeatRuntimePerAgent: () => Promise<HeartbeatRuntimePerAgentStore>
   runOpenClaw: (args: string[], timeoutMs?: number) => Promise<OpenClawCommandResult>
@@ -71,6 +73,7 @@ export function registerShiftRoutes(app: Express, options: ShiftRoutesOptions) {
     isValidAgentId,
     listActiveCronJobViews,
     mergeHeartbeatRuntimeDefaults,
+    modelSelectionBlocked,
     readHeartbeatRuntimeDefaults,
     readHeartbeatRuntimePerAgent,
     runOpenClaw,
@@ -89,6 +92,8 @@ export function registerShiftRoutes(app: Express, options: ShiftRoutesOptions) {
       ...shift,
       ...(patch.name ? { name: patch.name } : {}),
       ...(patch.schedule ? { every: patch.schedule } : {}),
+      ...(patch.scheduleKind ? { scheduleKind: patch.scheduleKind } : {}),
+      ...(patch.schedule ? { scheduleLabel: patch.schedule } : {}),
       ...(patch.message ? { message: patch.message } : {}),
     }
     activeShifts.set(shift.id, next)
@@ -98,7 +103,9 @@ export function registerShiftRoutes(app: Express, options: ShiftRoutesOptions) {
     const schema = z.object({
       name: z.string().min(1).max(80),
       agent: z.string().min(1).optional(),
-      every: z.string().regex(/^\d+[smhdw]$/),
+      every: z.string().regex(/^\d+[smhdw]$/).optional(),
+      scheduleKind: z.enum(['every', 'cron', 'at']).optional(),
+      schedule: z.string().min(1).max(240).optional(),
       durationMinutes: z.number().int().min(1).max(10080).optional(),
       durationValue: z.number().int().min(1).max(10080).optional(),
       durationUnit: z.enum(['minutes', 'hours', 'days', 'weeks']).optional(),
@@ -109,17 +116,33 @@ export function registerShiftRoutes(app: Express, options: ShiftRoutesOptions) {
       wake: z.enum(['now', 'next-heartbeat']).optional(),
       session: z.enum(['main', 'isolated']).optional(),
       announce: z.boolean().optional(),
+    }).superRefine((payload, context) => {
+      const kind = payload.scheduleKind || 'every'
+      const schedule = payload.schedule?.trim() || payload.every?.trim()
+      if (!schedule) {
+        context.addIssue({ code: z.ZodIssueCode.custom, path: ['schedule'], message: 'A schedule value is required' })
+        return
+      }
+      if (kind === 'every' && !/^\d+[smhdw]$/u.test(schedule)) {
+        context.addIssue({ code: z.ZodIssueCode.custom, path: ['schedule'], message: 'Use an interval like 15m, 2h, 1d, or 1w' })
+      }
     })
     const parsed = schema.safeParse(req.body)
     if (!parsed.success) return apiFailure(res, 400, 'invalid_payload', 'Invalid payload', parsed.error.flatten())
     if (parsed.data.agent && !isValidAgentId(parsed.data.agent)) {
       return apiFailure(res, 400, 'invalid_payload', 'Invalid agent id')
     }
+    if (parsed.data.model && modelSelectionBlocked?.(parsed.data.model)) {
+      return apiFailure(res, 403, 'byok_not_allowed', CREDITS_ONLY_MODEL_ACCESS_MESSAGE)
+    }
 
     try {
       const shift = await createShiftFromPayload(parsed.data)
       return apiSuccess(res, { shift })
     } catch (error) {
+      if ((error as { statusCode?: number }).statusCode === 403) {
+        return apiFailure(res, 403, 'byok_not_allowed', CREDITS_ONLY_MODEL_ACCESS_MESSAGE)
+      }
       return apiFailure(res, 502, 'shift_command_failed', 'Failed to create shift', String(error))
     }
   })
@@ -156,6 +179,8 @@ export function registerShiftRoutes(app: Express, options: ShiftRoutesOptions) {
     if (!parsed.success) return apiFailure(res, 400, 'invalid_payload', 'Invalid payload', parsed.error.flatten())
 
     const payload = parsed.data
+    const blockedModel = [payload.model, payload.leadModel, payload.workerModel].find((modelId) => modelId && modelSelectionBlocked?.(modelId))
+    if (blockedModel) return apiFailure(res, 403, 'byok_not_allowed', CREDITS_ONLY_MODEL_ACCESS_MESSAGE, { modelId: blockedModel })
     const uniqueAgents = Array.from(new Set(payload.agentIds.map((agentId) => agentId.trim()).filter(Boolean)))
     if (!uniqueAgents.length) return apiFailure(res, 400, 'invalid_payload', 'No valid agent ids supplied')
     const invalidAgent = uniqueAgents.find((agentId) => !isValidAgentId(agentId))
@@ -204,6 +229,9 @@ export function registerShiftRoutes(app: Express, options: ShiftRoutesOptions) {
         })
         shifts.push(shift)
       } catch (error) {
+        if ((error as { statusCode?: number }).statusCode === 403) {
+          return apiFailure(res, 403, 'byok_not_allowed', CREDITS_ONLY_MODEL_ACCESS_MESSAGE)
+        }
         errors.push({ agentId, error: String(error) })
       }
     }
@@ -245,7 +273,6 @@ export function registerShiftRoutes(app: Express, options: ShiftRoutesOptions) {
     const schema = z.object({ shiftId: z.string().min(1) })
     const parsed = schema.safeParse(req.body)
     if (!parsed.success) return apiFailure(res, 400, 'invalid_payload', 'Invalid payload', parsed.error.flatten())
-
     const shift = activeShifts.get(parsed.data.shiftId)
     const cronId = shift?.cronId || parsed.data.shiftId.replace(/^cron:/, '').trim()
     if (!isValidCronJobId(cronId)) {
@@ -267,6 +294,31 @@ export function registerShiftRoutes(app: Express, options: ShiftRoutesOptions) {
       return apiSuccess(res, { shiftId: parsed.data.shiftId, cronId })
     } catch (error) {
       return apiFailure(res, 502, 'shift_command_failed', 'Failed to stop shift', String(error))
+    }
+  })
+
+  app.post('/api/shifts/run', async (req, res) => {
+    const schema = z.object({ shiftId: z.string().min(1) })
+    const parsed = schema.safeParse(req.body)
+    if (!parsed.success) return apiFailure(res, 400, 'invalid_payload', 'Invalid payload', parsed.error.flatten())
+    const shift = activeShifts.get(parsed.data.shiftId)
+    const cronId = shift?.cronId || parsed.data.shiftId.replace(/^cron:/, '').trim()
+    if (!isValidCronJobId(cronId)) {
+      return apiFailure(res, 400, 'invalid_payload', 'Invalid cron job id')
+    }
+
+    try {
+      const result = await runOpenClaw(
+        ['cron', 'run', cronId, '--wait', '--expect-final', '--wait-timeout', '120s', '--timeout', '120000'],
+        120_000,
+      )
+      if (result.code !== 0) {
+        throw new Error(result.stderr || result.stdout || 'Failed to run cron job')
+      }
+      invalidateRuntimeStatusCache()
+      return apiSuccess(res, { shiftId: parsed.data.shiftId, cronId, status: 'completed' })
+    } catch (error) {
+      return apiFailure(res, 502, 'shift_operation_failed', 'Failed to run cron job', String(error))
     }
   })
 
@@ -376,6 +428,9 @@ export function registerShiftRoutes(app: Express, options: ShiftRoutesOptions) {
     })
     const parsed = schema.safeParse(req.body)
     if (!parsed.success) return apiFailure(res, 400, 'invalid_payload', 'Invalid payload', parsed.error.flatten())
+    if (parsed.data.model && modelSelectionBlocked?.(parsed.data.model)) {
+      return apiFailure(res, 403, 'byok_not_allowed', CREDITS_ONLY_MODEL_ACCESS_MESSAGE)
+    }
 
     try {
       const current = await readHeartbeatRuntimeDefaults()
@@ -418,6 +473,9 @@ export function registerShiftRoutes(app: Express, options: ShiftRoutesOptions) {
     })
     const parsed = schema.safeParse(req.body)
     if (!parsed.success) return apiFailure(res, 400, 'invalid_payload', 'Invalid payload', parsed.error.flatten())
+    if (parsed.data.model && modelSelectionBlocked?.(parsed.data.model)) {
+      return apiFailure(res, 403, 'byok_not_allowed', CREDITS_ONLY_MODEL_ACCESS_MESSAGE)
+    }
 
     try {
       const perAgent = await readHeartbeatRuntimePerAgent()

@@ -1,6 +1,6 @@
-import { useMemo, useState } from 'react'
-import { useRuntimeSummaryStatus } from '../../hooks/useRuntimeStatus'
-import type { GatewayChannelActivity, GatewayLogEntry } from '../../hooks/useRuntimeStatus'
+import { memo, useMemo, useState } from 'react'
+import type { GatewayLogEntry } from '../../hooks/useRuntimeStatus'
+import { useGatewayActivityFeed } from '../../hooks/useGatewayActivityFeed'
 import { useNexusStore } from '../../store/nexusStore'
 import type { AgentResponse, OpenClawAgent } from '../../types/nexus'
 import { agentPortraitSrc } from '../../utils/portrait'
@@ -9,9 +9,10 @@ import {
   saveChannelActivitySettings,
   useChannelActivitySettings,
 } from './channelActivitySettings'
+import { isRuntimeMonitorEntryVisible, useRuntimeMonitorClearCutoffMs } from '../../hooks/runtimeMonitorClear'
 
 const AUTOMNIA_LOGO_SRC = '/brand/automnia-ai-nexus-logo-transparent-cropped.png'
-const LOG_LIMIT = 72
+const LOG_LIMIT = 48
 
 type ActivityFilter = 'all' | 'agents' | 'automnia'
 type ActivityTone = 'active' | 'success' | 'warning' | 'error' | 'neutral'
@@ -65,12 +66,6 @@ function gatewayTone(entry: Pick<GatewayLogEntry, 'stream' | 'level' | 'message'
   return 'neutral'
 }
 
-function directionLabel(direction?: GatewayChannelActivity['direction']) {
-  if (direction === 'inbound') return 'Inbound'
-  if (direction === 'outbound') return 'Outbound'
-  return 'System'
-}
-
 function gatewayLogItem(entry: GatewayLogEntry): UnifiedActivityItem {
   const source = entry.channel ? `${entry.channel} · ${entry.stream}` : entry.stream
   return {
@@ -82,20 +77,6 @@ function gatewayLogItem(entry: GatewayLogEntry): UnifiedActivityItem {
     tone: gatewayTone(entry),
     source: 'Automnia',
     meta: source,
-  }
-}
-
-function gatewayActivityItem(entry: GatewayChannelActivity): UnifiedActivityItem {
-  return {
-    id: `gateway-activity-${entry.id}-${entry.timestamp}`,
-    kind: 'gateway',
-    timestamp: entry.timestamp,
-    title: `${directionLabel(entry.direction)} message`,
-    detail: readableChannelMessage(entry.message),
-    tone: gatewayTone({ stream: 'channel', level: entry.level, message: entry.message }),
-    source: 'Automnia',
-    meta: [entry.channel, entry.agentId].filter(Boolean).join(' · ') || 'Gateway channel',
-    agentId: entry.agentId,
   }
 }
 
@@ -136,16 +117,6 @@ function toneLabel(tone: ActivityTone) {
   return 'Event'
 }
 
-function dedupeGatewayItems(items: UnifiedActivityItem[]) {
-  const seen = new Set<string>()
-  return items.filter((item) => {
-    const key = `${timestampMs(item.timestamp)}|${item.detail.toLowerCase()}`
-    if (seen.has(key)) return false
-    seen.add(key)
-    return true
-  })
-}
-
 function ActivityAvatar({ item, agent }: { item: UnifiedActivityItem; agent?: OpenClawAgent }) {
   if (item.kind === 'gateway') {
     return <img src={AUTOMNIA_LOGO_SRC} alt="" className="dui-activity-log__avatar-image" draggable={false} />
@@ -156,25 +127,50 @@ function ActivityAvatar({ item, agent }: { item: UnifiedActivityItem; agent?: Op
     : <span className="dui-activity-log__avatar-fallback">{initials(agent?.name || item.agentId || 'Agent')}</span>
 }
 
+const ActivityLogRow = memo(function ActivityLogRow({ item, agent }: { item: UnifiedActivityItem; agent?: OpenClawAgent }) {
+  const displayName = item.kind === 'gateway' ? 'Automnia' : agent?.name || item.agentId || 'Agent'
+  return (
+    <article className="dui-activity-log__row" data-kind={item.kind} data-tone={item.tone}>
+      <div className="dui-activity-log__rail" aria-hidden="true" />
+      <div className="dui-activity-log__avatar"><ActivityAvatar item={item} agent={agent} /></div>
+      <div className="dui-activity-log__body">
+        <div className="dui-activity-log__row-head">
+          <div className="dui-activity-log__identity">
+            <strong>{displayName}</strong>
+            <span>{item.title}</span>
+            {item.automniaOrigin && <span className="dui-activity-log__origin"><img src={AUTOMNIA_LOGO_SRC} alt="" draggable={false} />Automnia</span>}
+            <em data-tone={item.tone}>{toneLabel(item.tone)}</em>
+          </div>
+          <time dateTime={item.timestamp} title={new Date(item.timestamp).toLocaleString()}>{clock(item.timestamp)} · {relativeTime(item.timestamp)}</time>
+        </div>
+        <p title={item.detail}>{item.detail}</p>
+        <div className="dui-activity-log__meta">
+          {item.source && <span>{item.kind === 'gateway' ? 'Automnia' : item.source}</span>}
+          {item.meta && <span>{item.meta}</span>}
+        </div>
+      </div>
+    </article>
+  )
+})
+
 export function SettingsActivityLog() {
   const responses = useNexusStore((state) => state.agentResponses)
   const agents = useNexusStore((state) => state.agents)
-  const { status, error, refresh } = useRuntimeSummaryStatus(8000)
+  const { feed, error, refresh } = useGatewayActivityFeed(3_000, LOG_LIMIT)
+  const clearCutoffMs = useRuntimeMonitorClearCutoffMs()
   const channelActivitySettings = useChannelActivitySettings()
   const [filter, setFilter] = useState<ActivityFilter>('all')
   const [query, setQuery] = useState('')
 
   const agentById = useMemo(() => new Map(agents.map((agent) => [agent.id, agent])), [agents])
   const gatewayItems = useMemo(() => {
-    const logs = (status?.gateway.logs || []).map(gatewayLogItem)
-    const activity = (status?.gateway.activity.events || []).map(gatewayActivityItem)
-    return dedupeGatewayItems([...logs, ...activity])
+    return (feed?.entries || []).filter((entry) => isRuntimeMonitorEntryVisible(entry.timestamp, clearCutoffMs)).map(gatewayLogItem)
       .sort((a, b) => timestampMs(b.timestamp) - timestampMs(a.timestamp))
       .slice(0, LOG_LIMIT)
-  }, [status?.gateway.activity.events, status?.gateway.logs])
+  }, [clearCutoffMs, feed?.entries])
   const agentItems = useMemo(
-    () => responses.slice(0, LOG_LIMIT).map(agentActivityItem),
-    [responses],
+    () => responses.filter((entry) => isRuntimeMonitorEntryVisible(entry.timestamp, clearCutoffMs)).slice(0, LOG_LIMIT).map(agentActivityItem),
+    [clearCutoffMs, responses],
   )
   const items = useMemo(() => {
     const normalizedQuery = query.trim().toLowerCase()
@@ -185,8 +181,7 @@ export function SettingsActivityLog() {
       .slice(0, LOG_LIMIT)
   }, [agentItems, filter, gatewayItems, query])
 
-  const gatewayHealthy = status?.gateway.healthy
-  const lastUpdated = status?.generatedAt ? `Updated ${clock(status.generatedAt)}` : error ? 'Gateway snapshot unavailable' : 'Connecting to runtime…'
+  const lastUpdated = feed?.generatedAt ? `Updated ${clock(feed.generatedAt)}` : error ? 'Activity feed unavailable' : 'Loading durable activity…'
   const filters: Array<{ id: ActivityFilter; label: string; count: number }> = [
     { id: 'all', label: 'All activity', count: agentItems.length + gatewayItems.length },
     { id: 'agents', label: 'Agent runs', count: agentItems.length },
@@ -198,28 +193,28 @@ export function SettingsActivityLog() {
       <div className="dui-activity-log__hero">
         <div className="dui-activity-log__hero-brand">
           <div className="dui-activity-log__hero-mark"><img src={AUTOMNIA_LOGO_SRC} alt="" draggable={false} /></div>
-          <p>Gateway Announcement reports agent runs and Gateway events in one live operational feed.</p>
+          <p>Gateway events are read from the local SQL ledger, so this screen stays fast while messages keep arriving.</p>
         </div>
         <div className="dui-activity-log__hero-copy">
           <span>Unified activity</span>
           <h3>Logs</h3>
         </div>
-        <div className="dui-activity-log__hero-status" data-state={gatewayHealthy === false ? 'offline' : gatewayHealthy ? 'live' : 'pending'}>
+        <div className="dui-activity-log__hero-status" data-state={error ? 'offline' : feed ? 'live' : 'pending'}>
           <i aria-hidden="true" />
-          <strong>{gatewayHealthy === false ? 'Gateway offline' : gatewayHealthy ? 'Gateway live' : 'Syncing'}</strong>
+          <strong>{error ? 'Feed reconnecting' : feed ? 'Activity feed live' : 'Syncing'}</strong>
           <small>{lastUpdated}</small>
         </div>
       </div>
 
       <section className="dui-channel-activity-preferences" aria-labelledby="channel-activity-preferences-title">
         <div className="dui-channel-activity-preferences__copy">
-          <span>Channel memory</span>
-          <strong id="channel-activity-preferences-title">Keep the feed useful</strong>
-          <p>The monitor keeps a small rolling history so a refresh never wipes the story you were following.</p>
+          <span>Channel traffic</span>
+          <strong id="channel-activity-preferences-title">Display settings</strong>
+          <p>Choose how many recent channel updates remain visible in Monitor.</p>
         </div>
         <div className="dui-channel-activity-preferences__controls">
           <label>
-            <span><strong>Keep</strong><small>Newest events visible in Monitor</small></span>
+            <span><strong>Visible updates</strong><small>Newest events shown in Channel Traffic</small></span>
             <select
               value={channelActivitySettings.retentionLimit}
               onChange={(event) => saveChannelActivitySettings({
@@ -227,7 +222,7 @@ export function SettingsActivityLog() {
                 retentionLimit: Number(event.target.value) as typeof channelActivitySettings.retentionLimit,
               })}
             >
-              {CHANNEL_ACTIVITY_RETENTION_OPTIONS.map((option) => <option key={option} value={option}>Last {option} events</option>)}
+              {CHANNEL_ACTIVITY_RETENTION_OPTIONS.map((option) => <option key={option} value={option}>Show {option} updates</option>)}
             </select>
           </label>
           <label className="dui-channel-activity-preferences__toggle">
@@ -275,32 +270,7 @@ export function SettingsActivityLog() {
           </div>
         ) : (
           <div className="dui-activity-log__list" role="log" aria-live="polite" aria-label="Agent and Automnia activity">
-            {items.map((item) => {
-              const agent = item.agentId ? agentById.get(item.agentId) : undefined
-              const displayName = item.kind === 'gateway' ? 'Automnia' : agent?.name || item.agentId || 'Agent'
-              return (
-                <article key={item.id} className="dui-activity-log__row" data-kind={item.kind} data-tone={item.tone}>
-                  <div className="dui-activity-log__rail" aria-hidden="true" />
-                  <div className="dui-activity-log__avatar"><ActivityAvatar item={item} agent={agent} /></div>
-                  <div className="dui-activity-log__body">
-                    <div className="dui-activity-log__row-head">
-                      <div className="dui-activity-log__identity">
-                        <strong>{displayName}</strong>
-                        <span>{item.title}</span>
-                        {item.automniaOrigin && <span className="dui-activity-log__origin"><img src={AUTOMNIA_LOGO_SRC} alt="" draggable={false} />Automnia</span>}
-                        <em data-tone={item.tone}>{toneLabel(item.tone)}</em>
-                      </div>
-                      <time dateTime={item.timestamp} title={new Date(item.timestamp).toLocaleString()}>{clock(item.timestamp)} · {relativeTime(item.timestamp)}</time>
-                    </div>
-                    <p title={item.detail}>{item.detail}</p>
-                    <div className="dui-activity-log__meta">
-                      {item.source && <span>{item.kind === 'gateway' ? 'Automnia' : item.source}</span>}
-                      {item.meta && <span>{item.meta}</span>}
-                    </div>
-                  </div>
-                </article>
-              )
-            })}
+            {items.map((item) => <ActivityLogRow key={item.id} item={item} agent={item.agentId ? agentById.get(item.agentId) : undefined} />)}
           </div>
         )}
       </section>

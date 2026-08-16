@@ -201,11 +201,12 @@ type AgentTurnRoutesOptions = {
   isEmptyAgentNoResponseReply(reply: string): boolean
   isGoogleGeminiModelId(modelId: string): boolean
   isHostedCreditsActive?: () => boolean
-  hostedUsagePriority?: () => 'automnia_first' | 'provider_first' | null
+  hostedUsagePriority?: () => 'automnia_only' | 'provider_first' | 'automnia_first_with_provider_fallback' | null
+  hostedCreditsOnlyBlocker?: () => string | null
   awaitBillingRouteReady?: () => Promise<void>
   billingRoutePresentation?: () => {
-    usagePriority: 'automnia_first' | 'provider_first' | 'byok_only'
-    billingRoute: 'automnia-first' | 'provider-first' | 'provider-only'
+    usagePriority: 'automnia_only' | 'provider_first' | 'automnia_first_with_provider_fallback' | 'automnia_first' | 'byok_only'
+    billingRoute: 'automnia-only' | 'automnia-first' | 'provider-first' | 'provider-only'
   } | null
   isRetiredAgentId(agent: string): boolean
   isValidAgentId(agent: string): boolean
@@ -296,6 +297,7 @@ export function registerAgentTurnRoutes(app: Express, options: AgentTurnRoutesOp
     isGoogleGeminiModelId,
     isHostedCreditsActive,
     hostedUsagePriority,
+    hostedCreditsOnlyBlocker,
     awaitBillingRouteReady,
     billingRoutePresentation,
     isRetiredAgentId,
@@ -602,6 +604,27 @@ export function registerAgentTurnRoutes(app: Express, options: AgentTurnRoutesOp
       const initialTransport = 'gateway-chat'
       const providerFirst = hostedCreditRoute && hostedUsagePriority?.() === 'provider_first'
       const cloudFirst = hostedCreditRoute && !providerFirst
+      const creditsOnlyBlocker = hostedCreditRoute ? hostedCreditsOnlyBlocker?.() : null
+      if (creditsOnlyBlocker) {
+        emit('error', {
+          ...routeMetadata(),
+          message: creditsOnlyBlocker,
+          failureKind: 'insufficient_credits',
+          transport: 'gateway-chat',
+          liveTokens: false,
+        })
+        emit('final', compactFinalSsePayload({
+          ...routeMetadata(),
+          ok: false,
+          reply: creditsOnlyBlocker,
+          stdout: '',
+          stderr: creditsOnlyBlocker,
+          code: 402,
+          failureKind: 'insufficient_credits',
+          streaming: { transport: 'gateway-chat', liveTokens: false },
+        }, liveTextStreamed))
+        return
+      }
       const gatewayRoute = hostedCreditRoute || providerFirst || parsed.data.forceOpenClawRuntime
       const hostedBrowserIntent = hostedCreditRoute
         ? await shouldRouteBrowserIntentThroughBrowserPlugin(parsed.data.intentMessage?.trim() || parsed.data.message, null)
@@ -759,6 +782,18 @@ export function registerAgentTurnRoutes(app: Express, options: AgentTurnRoutesOp
     const hostedCreditRoute = Boolean(isHostedCreditsActive?.())
     const routeMetadata = () => billingRoutePresentation?.() || {}
     if (hostedCreditRoute) {
+      const creditsOnlyBlocker = hostedCreditsOnlyBlocker?.()
+      if (creditsOnlyBlocker) {
+        return apiSuccess(res, compactHttpJsonPayload({
+          ...routeMetadata(),
+          ok: false,
+          reply: creditsOnlyBlocker,
+          stdout: '',
+          stderr: creditsOnlyBlocker,
+          code: 402,
+          failureKind: 'insufficient_credits',
+        }))
+      }
       const hostedBrowserIntent = await shouldRouteBrowserIntentThroughBrowserPlugin(message, null)
       if (hostedBrowserIntent) {
         const preflight = await checkBrowserPreflight()

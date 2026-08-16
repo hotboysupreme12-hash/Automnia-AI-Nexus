@@ -12,6 +12,8 @@ type AuthRouteOptions = {
   loginAttempts?: LoginAttemptLimiter
   sessionTokens: SessionTokenStore
   accountAuth?: AccountAuthService
+  /** Clear the active license and hosted route when the account session ends. */
+  onLogout?: () => Promise<void>
   cancelOAuthSession?: (session: ProviderOAuthSession, reason?: string) => boolean
   ensureProviderAuthReady?: () => Promise<unknown>
   getLocalProviderOAuth?: (provider: string) => LocalOAuthCredential | undefined
@@ -232,8 +234,14 @@ export function registerAuthRoutes(app: Express, options: AuthRouteOptions) {
     return apiSuccess(res, { authenticated: false, account: null })
   })
 
-  app.post('/api/auth/logout', (req, res) => {
+  app.post('/api/auth/logout', async (req, res) => {
     const revoked = options.sessionTokens.revoke(bearerToken(req))
+    try {
+      await options.onLogout?.()
+    } catch {
+      // Session revocation is still authoritative. The next account login or
+      // agent-turn recovery will reconcile the hosted route again.
+    }
     return apiSuccess(res, { revoked })
   })
 }

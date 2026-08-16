@@ -2003,42 +2003,6 @@ html.dui-pro-overhaul.dui-cohesive-ui .app-bg.dy-monitor-focus [data-dui-panel="
     margin-top: 0 !important;
   }
 
-  html.dui-pro-overhaul .app-bg.dy-monitor-focus [data-dui-panel="monitor"] .dy-gateway-layout:has(> .dy-gateway-log-card:not([data-collapsed="true"])),
-  html.dui-pro-overhaul.dui-cohesive-ui .app-bg.dy-monitor-focus [data-dui-panel="monitor"] .dy-gateway-layout:has(> .dy-gateway-log-card:not([data-collapsed="true"])) {
-    grid-template-rows: max-content minmax(var(--dy-gateway-feed-height), auto) minmax(clamp(220px, 28vh, 430px), 1fr) !important;
-  }
-
-  html.dui-pro-overhaul .app-bg.dy-monitor-focus [data-dui-panel="monitor"] .dy-gateway-layout:has(> .dy-gateway-log-card:not([data-collapsed="true"])) > .dy-gateway-log-card,
-  html.dui-pro-overhaul.dui-cohesive-ui .app-bg.dy-monitor-focus [data-dui-panel="monitor"] .dy-gateway-layout:has(> .dy-gateway-log-card:not([data-collapsed="true"])) > .dy-gateway-log-card {
-    height: 100% !important;
-    min-height: 0 !important;
-    align-self: stretch !important;
-  }
-
-  html.dui-pro-overhaul .app-bg.dy-monitor-focus [data-dui-panel="monitor"] .dy-gateway-layout:has(> .dy-gateway-log-card:not([data-collapsed="true"])) .dy-gateway-log-card .dy-monitor-log-box,
-  html.dui-pro-overhaul.dui-cohesive-ui .app-bg.dy-monitor-focus [data-dui-panel="monitor"] .dy-gateway-layout:has(> .dy-gateway-log-card:not([data-collapsed="true"])) .dy-gateway-log-card .dy-monitor-log-box {
-    min-height: 0 !important;
-    flex: 1 1 0 !important;
-  }
-}
-
-@media (max-width: 1220px) {
-  html.dui-pro-overhaul .app-bg.dy-monitor-focus [data-dui-panel="monitor"] .dy-gateway-layout:has(> .dy-gateway-log-card:not([data-collapsed="true"])),
-  html.dui-pro-overhaul.dui-cohesive-ui .app-bg.dy-monitor-focus [data-dui-panel="monitor"] .dy-gateway-layout:has(> .dy-gateway-log-card:not([data-collapsed="true"])) {
-    grid-template-rows: auto auto auto minmax(clamp(220px, 36vh, 520px), 1fr) !important;
-  }
-
-  html.dui-pro-overhaul .app-bg.dy-monitor-focus [data-dui-panel="monitor"] .dy-gateway-layout:has(> .dy-gateway-log-card:not([data-collapsed="true"])) > .dy-gateway-log-card,
-  html.dui-pro-overhaul.dui-cohesive-ui .app-bg.dy-monitor-focus [data-dui-panel="monitor"] .dy-gateway-layout:has(> .dy-gateway-log-card:not([data-collapsed="true"])) > .dy-gateway-log-card {
-    min-height: 0 !important;
-    align-self: stretch !important;
-  }
-
-  html.dui-pro-overhaul .app-bg.dy-monitor-focus [data-dui-panel="monitor"] .dy-gateway-layout:has(> .dy-gateway-log-card:not([data-collapsed="true"])) .dy-gateway-log-card .dy-monitor-log-box,
-  html.dui-pro-overhaul.dui-cohesive-ui .app-bg.dy-monitor-focus [data-dui-panel="monitor"] .dy-gateway-layout:has(> .dy-gateway-log-card:not([data-collapsed="true"])) .dy-gateway-log-card .dy-monitor-log-box {
-    min-height: 0 !important;
-    flex: 1 1 0 !important;
-  }
 }
 
 /* Match the Channel Activity and Cron empty wells so the row reads as one surface. */
@@ -2060,9 +2024,9 @@ html.dui-pro-overhaul.dui-cohesive-ui .app-bg.dy-monitor-focus [data-dui-panel="
   border-bottom: 1px solid rgba(142, 154, 164, .16) !important;
 }
 
-html.dui-pro-overhaul .app-bg.dy-monitor-focus [data-dui-panel="monitor"] .dy-channel-activity-card .dy-gateway-event-list:has(> .dy-monitor-empty:only-child),
+html.dui-pro-overhaul .app-bg.dy-monitor-focus [data-dui-panel="monitor"] .dy-channel-activity-card .dy-gateway-event-list.dy-gateway-event-list-empty,
 html.dui-pro-overhaul .app-bg.dy-monitor-focus [data-dui-panel="monitor"] .dy-cron-jobs-card .dy-monitor-stream-box.dy-cron-stream-empty,
-html.dui-pro-overhaul.dui-cohesive-ui .app-bg.dy-monitor-focus [data-dui-panel="monitor"] .dy-channel-activity-card .dy-gateway-event-list:has(> .dy-monitor-empty:only-child),
+html.dui-pro-overhaul.dui-cohesive-ui .app-bg.dy-monitor-focus [data-dui-panel="monitor"] .dy-channel-activity-card .dy-gateway-event-list.dy-gateway-event-list-empty,
 html.dui-pro-overhaul.dui-cohesive-ui .app-bg.dy-monitor-focus [data-dui-panel="monitor"] .dy-cron-jobs-card .dy-monitor-stream-box.dy-cron-stream-empty {
   display: grid !important;
   align-content: center !important;

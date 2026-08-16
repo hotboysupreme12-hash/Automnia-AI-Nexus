@@ -57,7 +57,7 @@ export function LicenseActivationModal({ onClose }: { onClose?: () => void }) {
                     {license.creditBalance !== null ? license.creditBalance.toLocaleString() : 'Balance pending confirmation'}
                   </p>
                   <p className="mt-1 text-xs text-slate-400">{providerFirst ? 'Your connected provider or OAuth account is used first. Automnia pooled credits remain available for this account.' : routePresentation.providerOnly ? 'Your connected provider is used directly. Automnia credits are bypassed.' : 'Automnia credits are available for this confirmed account and can be pooled across its email-linked purchases.'}</p>
-                  <p className="mt-1 text-xs text-slate-500">{entitlement.usagePriorityLocked ? 'Starter stays on Automnia credits.' : 'Change this priority at any time under Settings → Account &amp; License.'}</p>
+                  <p className="mt-1 text-xs text-slate-500">{entitlement.usagePriorityLocked ? 'Starter and credit-refill access stay on Automnia credits.' : 'Change this priority at any time under Settings → Account &amp; License.'}</p>
                 </div>
               ) : (
                 <div>

@@ -90,6 +90,22 @@ export type ModelCatalogServiceOptions = {
   writeOpenclawConfig: (config: ModelCatalogOpenClawConfig) => Promise<unknown>
 }
 
+// These IDs are present in the bundled OpenClaw Anthropic provider/runtime
+// and in Anthropic's current model catalog. Account-specific availability is
+// still determined by `openclaw models list`; this set only prevents fallback
+// mode from inventing or surfacing unverified Anthropic IDs.
+export const OPENCLAW_VERIFIED_ANTHROPIC_MODEL_IDS = new Set([
+  'claude-fable-5',
+  'claude-mythos-5',
+  'claude-opus-5',
+  'claude-sonnet-5',
+  'claude-haiku-4-5',
+  'claude-opus-4-8',
+  'claude-opus-4-7',
+  'claude-opus-4-6',
+  'claude-sonnet-4-6',
+])
+
 export const FALLBACK_MODELS: Array<{ id: string; alias?: string }> = [
   // Keep the local picker useful while OpenClaw is starting or the catalog is
   // temporarily unavailable. These are the current GPT-5.6 and Claude 5 IDs.
@@ -118,15 +134,14 @@ export const FALLBACK_MODELS: Array<{ id: string; alias?: string }> = [
   { id: 'openai/gpt-5.1', alias: 'gpt-5.1' },
   { id: 'anthropic/claude-fable-5', alias: 'Claude Fable 5 (flagship)' },
   { id: 'anthropic/claude-sonnet-5', alias: 'Claude Sonnet 5' },
+  { id: 'anthropic/claude-opus-5', alias: 'Claude Opus 5' },
   { id: 'anthropic/claude-opus-4-8', alias: 'Claude Opus 4.8' },
   { id: 'anthropic/claude-haiku-4-5', alias: 'Claude Haiku 4.5' },
-  { id: 'anthropic/claude-mythos-5', alias: 'Claude Mythos 5 (limited preview)' },
   { id: 'anthropic/claude-opus-4-6', alias: 'Claude Opus 4.6' },
   { id: 'anthropic/claude-sonnet-4-6', alias: 'Claude Sonnet 4.6' },
   { id: 'opencode/claude-opus-4-6', alias: 'opencode-opus' },
   { id: 'google/gemini-3.1-pro-preview', alias: 'gemini-3.1-pro' },
   { id: 'google/gemini-3.1-pro-preview-customtools', alias: 'gemini-3.1-pro-tools' },
-  { id: 'google/gemini-3.7-pro', alias: 'Gemini 3.7 Pro (GA)' },
   { id: 'google/gemini-3.7-flash', alias: 'Gemini 3.7 Flash (GA)' },
   { id: 'google/gemini-3.6-flash', alias: 'Gemini 3.6 Flash (GA)' },
   { id: 'google/gemini-3.5-flash', alias: 'gemini-3.5-flash' },
@@ -140,7 +155,6 @@ export const FALLBACK_MODELS: Array<{ id: string; alias?: string }> = [
   { id: 'google-vertex/gemini-2.5-pro', alias: 'vertex-gemini-2.5-pro' },
   { id: 'google-vertex/gemini-2.5-flash', alias: 'vertex-flash' },
   { id: 'google-vertex/gemini-2.5-flash-lite', alias: 'vertex-flash-lite' },
-  { id: 'google-vertex/gemini-3.7-pro', alias: 'Vertex Gemini 3.7 Pro (GA)' },
   { id: 'google-vertex/gemini-3.7-flash', alias: 'Vertex Gemini 3.7 Flash (GA)' },
   { id: 'google-vertex/gemini-3.6-flash', alias: 'Vertex Gemini 3.6 Flash (GA)' },
   { id: 'google-vertex/gemini-3.5-flash', alias: 'vertex-gemini-3.5-flash' },
@@ -161,6 +175,11 @@ export const FALLBACK_MODELS: Array<{ id: string; alias?: string }> = [
 export const KNOWN_UNAVAILABLE_MODEL_IDS = new Set<string>([
   'openai/gpt-5.3-chat-latest',
   'google/gemini-3.1-pro-preview-customtools',
+])
+
+export const MODEL_CATALOG_EXCLUDED_MODEL_IDS = new Set<string>([
+  'google/gemini-3.7-pro',
+  'google-vertex/gemini-3.7-pro',
 ])
 
 export const OPENCLAW_CONFIG_SUPPRESSED_MODEL_IDS = new Set([
@@ -235,7 +254,11 @@ function displayProviderForAvailableModel(model: AvailableModelInput, id: string
 
 function fallbackAvailableModels(streamingCapabilityForModel: ModelCatalogServiceOptions['streamingCapabilityForModel']): AvailableModelOutput[] {
   return FALLBACK_MODELS
-    .filter((model) => !KNOWN_UNAVAILABLE_MODEL_IDS.has(model.id))
+    .filter((model) => {
+      if (KNOWN_UNAVAILABLE_MODEL_IDS.has(model.id) || MODEL_CATALOG_EXCLUDED_MODEL_IDS.has(model.id)) return false
+      const [provider, modelId] = model.id.split('/')
+      return provider !== 'anthropic' || OPENCLAW_VERIFIED_ANTHROPIC_MODEL_IDS.has(modelId || '')
+    })
     .map((model) => ({
       id: model.id,
       alias: model.alias || model.id.split('/').pop() || model.id,
@@ -253,7 +276,7 @@ function mergeAvailableModels(
   const addModel = (model: AvailableModelInput) => {
     const id = canonicalAgentModelId(modelIdFor(model))
     if (!id) return
-    if (KNOWN_UNAVAILABLE_MODEL_IDS.has(id)) return
+    if (KNOWN_UNAVAILABLE_MODEL_IDS.has(id) || MODEL_CATALOG_EXCLUDED_MODEL_IDS.has(id)) return
     const provider = displayProviderForAvailableModel(model, id)
     const name = model.name || id.split('/').pop() || id
     const alias = model.alias || name
@@ -314,7 +337,7 @@ export function ensureConfiguredProviderModel(config: ModelCatalogOpenClawConfig
   if (!isModelSafeForOpenClawConfig(modelId)) return
   const { provider, model } = splitModelId(canonicalAgentModelId(modelId))
   if (!provider || !model) return
-  if (!['openai', 'google', 'google-vertex', 'deepseek'].includes(provider)) return
+  if (!['openai', 'anthropic', 'google', 'google-vertex', 'deepseek'].includes(provider)) return
 
   if (!config.models) config.models = {}
   if (!config.models.providers) config.models.providers = {}
@@ -322,11 +345,19 @@ export function ensureConfiguredProviderModel(config: ModelCatalogOpenClawConfig
 
   const providerConfig = config.models.providers[provider]
   if (provider === 'openai' && isOpenAiCodexSubscriptionModel(modelId)) {
-    providerConfig.agentRuntime ??= { id: 'openclaw' }
+    // OpenAI GPT models are Codex-backed when the account is authenticated
+    // with ChatGPT/Codex OAuth (and the Codex harness also supports an API-key
+    // profile as a fallback).  Leaving this unset lets OpenClaw select its
+    // native Codex runtime.  Forcing "openclaw" here sends OAuth credentials
+    // to the plain Responses API path, which only accepts an API key.
+    providerConfig.agentRuntime ??= { id: 'codex' }
   }
   if (provider === 'google') {
     if (!providerConfig.baseUrl) providerConfig.baseUrl = 'https://generativelanguage.googleapis.com/v1beta'
     providerConfig.api = 'google-generative-ai'
+  }
+  if (provider === 'anthropic') {
+    providerConfig.api = 'anthropic-messages'
   }
   if (provider === 'google-vertex') {
     providerConfig.api = 'google-vertex'
@@ -345,6 +376,8 @@ export function ensureConfiguredProviderModel(config: ModelCatalogOpenClawConfig
   const models = providerConfig.models as Array<string | { id?: unknown; model?: unknown; name?: unknown; api?: unknown }>
   const providerApi = provider === 'google'
     ? 'google-generative-ai'
+    : provider === 'anthropic'
+      ? 'anthropic-messages'
     : provider === 'google-vertex'
       ? 'google-vertex'
       : provider === 'deepseek'

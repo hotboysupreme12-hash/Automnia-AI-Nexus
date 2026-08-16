@@ -166,18 +166,17 @@ Account rules:
 
 Hosted-credit requests go through the Automnia Cloud relay. The relay verifies the active entitlement, calls the Automnia-configured model service, records usage, and returns the remaining credit balance. Hosted requests require an active subscription or available credit balance.
 
-BYOK (Bring Your Own Key) tiers are permanent access starting at the $29.99 class. BYOK does not force provider-first routing: when the account has a confirmed pooled Automnia balance—including hosted credits carried over from a Starter upgrade—the user can choose Automnia-credits-first, provider-first with Automnia fallback, or provider-only routing. Provider-only bypasses Automnia credits but does not delete the wallet. A zero-balance BYOK account defaults to provider-first until credits are added. Starter ($19.99) is hosted Automnia Subscription Relay access and stays locked to Automnia credits. Pro ($29.99) and Enterprise tiers are permanent higher-tier access with hosted Automnia credits and eligible BYOK routes. Purchases with the same verified email share one pooled balance after Google or confirmed-password sign-in. The exact current entitlement shown in Account & License wins over a remembered plan description.
+BYOK (Bring Your Own Key) starts at the $29.99 tier. BYOK and higher tiers can use **My provider + Automnia credits** and choose the order: provider-first with Automnia fallback or Automnia-first with provider fallback. There is no selectable provider-only route. Starter ($19.99) and credit-refill purchases stay locked to Automnia credits only; a confirmed zero balance must stop with a refill message. The $49.99 and $199 Enterprise tiers use the same combined route controls. Purchases with the same verified email share one pooled balance after Google or confirmed-password sign-in. The exact current entitlement shown in Account & License wins over a remembered plan description.
 
 Upgrading does not erase hosted credits earned before the upgrade. The account
 wallet includes all non-revoked hosted-credit sources for that verified email;
 the new tier grant is added to the prior wallet. This remains true when a
 Starter account moves to BYOK, Pro, Enterprise, or another hosted-credit tier.
-Automnia-credits-first and provider-first may use the pooled wallet according
-to the saved usage priority. BYOK-only bypasses hosted-credit charging but does
-not delete the wallet; changing priority later can make the preserved balance
-available again.
+Automnia credits-only and the combined route use the pooled wallet according to
+the saved usage priority. The combined route's secondary order determines
+whether the provider or Automnia runs first.
 
-Usage priority can be Automnia credits only, BYOK first with Automnia credits fallback, or BYOK only. The selector is locked only for Starter Subscription; a BYOK account with a carried-over or newly granted hosted-credit balance remains eligible to switch among all three routes. A hosted relay error must not be described as a successful provider call, and the app must not silently convert a billed hosted request into an unpaid BYOK request.
+Usage priority can be Automnia credits only or My provider + Automnia credits. The combined choice has a secondary provider-first/Automnia-first order selector. The selector is locked to Automnia credits for Starter Subscription and credit-refill access. A hosted relay error must not be described as a successful provider call, and the app must not silently convert a credits-only request into an unpaid provider request.
 
 ## Reconnect and recover the OpenClaw gateway
 
@@ -236,7 +235,7 @@ Never ask a user to paste a password, access token, license key, OAuth authoriza
 
 Hosted-credit requests use the Automnia-owned Cloud Run relay. The relay authenticates the entitlement, calls the configured Google Vertex AI service identity, records usage, and returns the remaining Automnia balance. A relay error is a relay or provider problem; it must not silently turn a billed hosted request into an unpaid provider request.
 
-BYOK requests use the provider configured by the user when provider-first or provider-only is selected. Provider-first keeps pooled Automnia credits as fallback; Automnia-first uses the pooled balance first; provider-only bypasses the balance. If a user sees a credit exhaustion message, direct them to Account and License to confirm the pooled balance, then to the secure checkout or Settings provider setup as appropriate.
+BYOK requests use the provider configured by the user when My provider + Automnia credits is selected. Provider-first keeps pooled Automnia credits as fallback; Automnia-first uses the pooled balance first and the provider as fallback. If a user sees a credit exhaustion message on the credits-only route, direct them to Account and License to confirm the pooled balance and refill it. On eligible tiers, they may instead select My provider + Automnia credits and choose the desired order.
 
 The Help Assistant itself is grounded by the private Automnia Agent Search knowledge store. It should cite or describe the relevant product area and distinguish general product guidance from machine-specific state. It can answer follow-up questions in the same conversation session, but it cannot see the user's local files, raw gateway logs, passwords, provider secrets, or Firestore records.
 

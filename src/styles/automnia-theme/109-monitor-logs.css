@@ -13,12 +13,11 @@ html.dui-pro-overhaul.dui-cohesive-ui .dy-monitor-logs-hero {
   align-items: center;
   gap: 14px;
   padding: 18px 20px;
-  border: 1px solid rgba(114, 213, 194, .20);
+  border: 1px solid rgba(255, 255, 255, .10);
   border-radius: 16px;
   background:
-    radial-gradient(circle at 0 0, rgba(114, 213, 194, .16), transparent 34%),
     linear-gradient(135deg, rgba(255, 255, 255, .045), rgba(255, 255, 255, .012)),
-    #0d1213;
+    #111416;
   box-shadow: 0 18px 42px -30px rgba(0, 0, 0, .9), inset 0 1px 0 rgba(255, 255, 255, .05);
 }
 
@@ -351,14 +350,14 @@ html.dui-pro-overhaul.dui-cohesive-ui .dy-monitor-log-surface {
 html.dui-pro-overhaul .dy-gateway-activity-entry,
 html.dui-pro-overhaul.dui-cohesive-ui .dy-gateway-activity-entry {
   border-color: rgba(255, 255, 255, .075) !important;
-  background: linear-gradient(100deg, rgba(114, 213, 194, .035), rgba(255, 255, 255, .012)) !important;
+  background: linear-gradient(100deg, rgba(255, 255, 255, .028), rgba(255, 255, 255, .012)) !important;
   transition: border-color .18s ease, background .18s ease, transform .18s ease;
 }
 
 html.dui-pro-overhaul .dy-gateway-activity-entry:hover,
 html.dui-pro-overhaul.dui-cohesive-ui .dy-gateway-activity-entry:hover {
-  border-color: rgba(114, 213, 194, .24) !important;
-  background: linear-gradient(100deg, rgba(114, 213, 194, .065), rgba(255, 255, 255, .018)) !important;
+  border-color: rgba(255, 255, 255, .16) !important;
+  background: linear-gradient(100deg, rgba(255, 255, 255, .050), rgba(255, 255, 255, .018)) !important;
   transform: translateY(-1px);
 }
 
@@ -397,15 +396,6 @@ html.dui-pro-overhaul.dui-cohesive-ui .dy-gateway-activity-announcer {
   text-transform: uppercase;
 }
 
-html.dui-pro-overhaul .dy-gateway-activity-announcer img,
-html.dui-pro-overhaul.dui-cohesive-ui .dy-gateway-activity-announcer img {
-  width: 13px;
-  height: 13px;
-  border-radius: 4px;
-  object-fit: cover;
-  object-position: left center;
-}
-
 html.dui-pro-overhaul .dy-gateway-activity-message,
 html.dui-pro-overhaul.dui-cohesive-ui .dy-gateway-activity-message {
   white-space: pre-wrap;
@@ -432,6 +422,41 @@ html.dui-pro-overhaul.dui-cohesive-ui .dy-gateway-activity-meta span {
   background: rgba(114, 213, 194, .045);
 }
 
+html.dui-pro-overhaul .dy-gateway-activity-meta .dy-gateway-activity-stream[data-stream="stdout"],
+html.dui-pro-overhaul.dui-cohesive-ui .dy-gateway-activity-meta .dy-gateway-activity-stream[data-stream="stdout"] {
+  border-color: rgba(74, 222, 128, .38);
+  background: rgba(34, 197, 94, .13);
+  color: #9bf3b5;
+}
+
+html.dui-pro-overhaul .dy-gateway-activity-meta .dy-gateway-activity-stream[data-stream="lifecycle"],
+html.dui-pro-overhaul.dui-cohesive-ui .dy-gateway-activity-meta .dy-gateway-activity-stream[data-stream="lifecycle"] {
+  border-color: rgba(45, 212, 191, .42);
+  background: rgba(20, 184, 166, .14);
+  color: #8beee1;
+}
+
+html.dui-pro-overhaul .dy-gateway-activity-meta .dy-gateway-activity-stream[data-stream="gateway"],
+html.dui-pro-overhaul.dui-cohesive-ui .dy-gateway-activity-meta .dy-gateway-activity-stream[data-stream="gateway"] {
+  border-color: rgba(125, 211, 252, .42);
+  background: rgba(14, 165, 233, .14);
+  color: #a7e4ff;
+}
+
+html.dui-pro-overhaul .dy-gateway-activity-meta .dy-gateway-activity-stream[data-stream="channel"],
+html.dui-pro-overhaul.dui-cohesive-ui .dy-gateway-activity-meta .dy-gateway-activity-stream[data-stream="channel"] {
+  border-color: rgba(167, 139, 250, .44);
+  background: rgba(139, 92, 246, .15);
+  color: #c9bcff;
+}
+
+html.dui-pro-overhaul .dy-gateway-activity-meta .dy-gateway-activity-stream[data-stream="stderr"],
+html.dui-pro-overhaul.dui-cohesive-ui .dy-gateway-activity-meta .dy-gateway-activity-stream[data-stream="stderr"] {
+  border-color: rgba(251, 113, 133, .44);
+  background: rgba(244, 63, 94, .15);
+  color: #ffc0ca;
+}
+
 @media (max-width: 780px) {
   html.dui-pro-overhaul .dy-monitor-logs-hero,
   html.dui-pro-overhaul.dui-cohesive-ui .dy-monitor-logs-hero {
@@ -454,4 +479,47 @@ html.dui-pro-overhaul.dui-cohesive-ui .dy-gateway-activity-meta span {
   html.dui-pro-overhaul.dui-cohesive-ui .dy-monitor-logs-hero__brand {
     width: 158px;
   }
+}
+
+/* Logs should sit on the same near-black field as the reference surface. Keep
+   the dark treatment scoped to the active Logs tab so the other monitor views
+   retain their own surfaces. */
+html.dui-pro-overhaul .app-bg.dy-monitor-focus [data-dui-panel="monitor"][data-monitor-active-tab="logs"].dy-monitor-shell,
+html.dui-pro-overhaul.dui-cohesive-ui [data-dui-panel="monitor"][data-monitor-active-tab="logs"].dy-monitor-shell {
+  background: #030406 !important;
+  background-image: none !important;
+}
+
+html.dui-pro-overhaul .app-bg.dy-monitor-focus [data-dui-panel="monitor"][data-monitor-active-tab="logs"] .dy-monitor-tabs,
+html.dui-pro-overhaul .app-bg.dy-monitor-focus [data-dui-panel="monitor"][data-monitor-active-tab="logs"] .dy-monitor-body,
+html.dui-pro-overhaul.dui-cohesive-ui [data-dui-panel="monitor"][data-monitor-active-tab="logs"] .dy-monitor-tabs,
+html.dui-pro-overhaul.dui-cohesive-ui [data-dui-panel="monitor"][data-monitor-active-tab="logs"] .dy-monitor-body,
+html.dui-pro-overhaul .app-bg.dy-monitor-focus [data-dui-panel="monitor"][data-monitor-active-tab="logs"] .dy-monitor-logs-workspace,
+html.dui-pro-overhaul.dui-cohesive-ui [data-dui-panel="monitor"][data-monitor-active-tab="logs"] .dy-monitor-logs-workspace {
+  background: #030406 !important;
+  background-image: none !important;
+}
+
+html.dui-pro-overhaul .app-bg.dy-monitor-focus [data-dui-panel="monitor"][data-monitor-active-tab="logs"] .dy-monitor-logs-hero,
+html.dui-pro-overhaul.dui-cohesive-ui [data-dui-panel="monitor"][data-monitor-active-tab="logs"] .dy-monitor-logs-hero {
+  background: #0b0e0f !important;
+  background-image: none !important;
+}
+
+html.dui-pro-overhaul .app-bg.dy-monitor-focus [data-dui-panel="monitor"][data-monitor-active-tab="logs"] .dy-monitor-log-surface,
+html.dui-pro-overhaul.dui-cohesive-ui [data-dui-panel="monitor"][data-monitor-active-tab="logs"] .dy-monitor-log-surface {
+  background: #080b0c !important;
+  background-image: none !important;
+}
+
+html.dui-pro-overhaul .app-bg.dy-monitor-focus [data-dui-panel="monitor"][data-monitor-active-tab="logs"] .dy-gateway-activity-entry,
+html.dui-pro-overhaul.dui-cohesive-ui [data-dui-panel="monitor"][data-monitor-active-tab="logs"] .dy-gateway-activity-entry {
+  background: #0b0f10 !important;
+  background-image: none !important;
+}
+
+html.dui-pro-overhaul .app-bg.dy-monitor-focus [data-dui-panel="monitor"][data-monitor-active-tab="logs"] .dy-gateway-activity-entry:hover,
+html.dui-pro-overhaul.dui-cohesive-ui [data-dui-panel="monitor"][data-monitor-active-tab="logs"] .dy-gateway-activity-entry:hover {
+  background: #101415 !important;
+  background-image: none !important;
 }

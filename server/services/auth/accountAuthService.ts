@@ -42,6 +42,8 @@ export type AccountAuthServiceOptions = {
   read: <T>(stateKey: string) => T | null
   write: (stateKey: string, value: unknown) => boolean
   licenseService: LicenseService
+  /** Reconcile the active license and hosted Gateway route after account auth. */
+  reconcileAccountAccess?: () => Promise<void>
   apiUrl?: string
   fetch?: typeof fetch
   now?: () => Date
@@ -171,6 +173,18 @@ export function createAccountAuthService(options: AccountAuthServiceOptions) {
     return publicAccount(identity)
   }
 
+  // Account auth can replace the canonical license key and entitlement on a
+  // device. Reconcile after the local identity is durable, but keep sign-in
+  // successful if the network is briefly unavailable; the next agent turn
+  // has its own billing-route recovery barrier.
+  const reconcileAccountAccess = async () => {
+    try {
+      await options.reconcileAccountAccess?.()
+    } catch {
+      // The authenticated account and canonical license are already saved.
+    }
+  }
+
   const remoteRequest = async (path: string, body: Record<string, unknown>) => {
     const controller = new AbortController()
     const timer = setTimeout(() => controller.abort(), ACCOUNT_REQUEST_TIMEOUT_MS)
@@ -215,7 +229,7 @@ export function createAccountAuthService(options: AccountAuthServiceOptions) {
     }
   }
 
-  const adoptRemoteAccount = (payload: Record<string, unknown>, passwordHash: string | null, previous?: LocalAccountIdentity | null) => {
+  const adoptRemoteAccount = async (payload: Record<string, unknown>, passwordHash: string | null, previous?: LocalAccountIdentity | null) => {
     const remote = accountResult(payload)
     if (!remote.email) throw new AccountAuthError('account_activation_failed', 'The account service returned an invalid account.')
     if (!remote.licenseKey) {
@@ -235,7 +249,9 @@ export function createAccountAuthService(options: AccountAuthServiceOptions) {
       lastLoginAt: now(),
     }
     options.licenseService.adoptRemoteAccount(remote.license, remote.licenseKey)
-    return saveIdentity(identity)
+    const result = saveIdentity(identity)
+    await reconcileAccountAccess()
+    return result
   }
 
   const setup = async ({ email: inputEmail, licenseKey, password }: { email: string; licenseKey: string; password: string }) => {
@@ -281,8 +297,9 @@ export function createAccountAuthService(options: AccountAuthServiceOptions) {
         }
       }
       const identity = { ...existing, passwordSet: true, updatedAt: now(), lastLoginAt: now() }
-      saveIdentity(identity)
-      return publicAccount(identity)
+      const result = saveIdentity(identity)
+      await reconcileAccountAccess()
+      return result
     }
     const payload = await remoteRequest('/api/account/login', { email, password })
     return adoptRemoteAccount(payload, await hashPassword(password), existing?.email === email ? existing : null)

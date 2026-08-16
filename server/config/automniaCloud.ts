@@ -3,7 +3,7 @@ import { spawnSync } from 'node:child_process'
 // Temporary Cloud Run origin for licensing, Shopify webhooks, and hosted-credit
 // AI. Keep this switchable until the Automnia public DNS cutover is complete.
 // Environment overrides remain available for staging and emergency recovery.
-export const AUTOMNIA_PUBLIC_CLOUD_URL = 'https://automnia-shopify-provisioner-idkndr7vfq-ue.a.run.app'
+export const AUTOMNIA_PUBLIC_CLOUD_URL = 'https://automnia-shopify-provisioner-6abxlp2t4q-ue.a.run.app'
 
 export function automniaCloudBaseUrl(override?: string) {
   const value = (override || AUTOMNIA_PUBLIC_CLOUD_URL).trim().replace(/\/+$/, '')
@@ -36,4 +36,13 @@ function persistedWindowsRelayOverride() {
 export function automniaCloudRuntimeBaseUrl(fallback?: string) {
   const processOverride = process.env.AUTOMNIA_CLOUD_RELAY_URL?.trim()
   return automniaCloudBaseUrl(processOverride || persistedWindowsRelayOverride() || fallback || AUTOMNIA_PUBLIC_CLOUD_URL)
+}
+
+/**
+ * Resolve the deployment-owned hosted-credit route. Persisted OpenClaw
+ * provider config is intentionally not an input: a previous Cloud Run origin
+ * can remain valid while serving an obsolete billing deployment.
+ */
+export function automniaCloudRouteBaseUrl() {
+  return automniaCloudRuntimeBaseUrl(AUTOMNIA_PUBLIC_CLOUD_URL)
 }

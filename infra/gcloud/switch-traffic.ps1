@@ -23,14 +23,14 @@ if (-not $SourceProjectId -and $migrationState) { $SourceProjectId = [string]$mi
 if (-not $SourceProjectId) { throw 'SourceProjectId was not supplied and no migration state identifies the current project.' }
 if ($SourceProjectId -eq $ProjectId) { throw 'Source and target projects must be different.' }
 
-# A fresh full verification must pass before the source is paused.
-& (Join-Path $PSScriptRoot 'verify.ps1') -ProjectId $ProjectId -SourceProjectId $SourceProjectId -Region $Region | Out-Null
+# The authoritative verification runs after the source is paused and the final
+# delta has been copied. A pre-freeze snapshot can drift while Shopify writes.
 
 $sourceService = Get-ServiceDescriptor -ProjectId $SourceProjectId -Region $Region -ServiceName $config.ServiceName
 $targetService = Get-ServiceDescriptor -ProjectId $ProjectId -Region $Region -ServiceName $config.ServiceName
 $sourceOriginalTraffic = @($sourceService.status.traffic)
 $targetOriginalTraffic = @($targetService.status.traffic)
-$sourceOriginalRevision = [string](@($sourceOriginalTraffic | Where-Object { $_.percent -gt 0 } | Sort-Object percent -Descending | Select-Object -First 1).revisionName)
+$sourceOriginalRevision = [string](@($sourceOriginalTraffic | Where-Object { $_ -and $_.PSObject.Properties['percent'] -and $_.percent -gt 0 -and $_.PSObject.Properties['revisionName'] } | Sort-Object percent -Descending | Select-Object -First 1).revisionName)
 $sourceMapping = Get-DomainMapping -ProjectId $SourceProjectId -Domain $config.PermanentDomain
 $targetMappingCreated = $false
 $sourceFrozen = $false
@@ -59,7 +59,7 @@ try {
   if (-not $finalVerification.Passed) { throw 'Final verification did not pass.' }
 
   $targetService = Get-ServiceDescriptor -ProjectId $ProjectId -Region $Region -ServiceName $config.ServiceName
-  $candidate = @($targetService.status.traffic | Where-Object { $_.tag -eq 'candidate' } | Select-Object -First 1)
+  $candidate = @($targetService.status.traffic | Where-Object { $_ -and $_.PSObject.Properties['tag'] -and $_.tag -eq 'candidate' } | Select-Object -First 1)
   $candidateRevision = [string]$candidate.revisionName
   if (-not $candidateRevision) { $candidateRevision = [string]$targetService.status.latestCreatedRevisionName }
   if ($PSCmdlet.ShouldProcess("$ProjectId/$candidateRevision", 'route target Cloud Run service to 100 percent')) {
@@ -129,7 +129,7 @@ try {
     if ($sourceFrozen -and $sourceOriginalRevision) {
       Invoke-Gcloud -Arguments @('run', 'services', 'update-traffic', $config.ServiceName, '--project', $SourceProjectId, '--region', $Region, '--to-revisions', "$sourceOriginalRevision=100") | Out-Null
     }
-    $targetPercentAssignments = @($targetOriginalTraffic | Where-Object { $_.percent -gt 0 -and $_.revisionName } | ForEach-Object { "$($_.revisionName)=$($_.percent)" }) -join ','
+    $targetPercentAssignments = @($targetOriginalTraffic | Where-Object { $_ -and $_.PSObject.Properties['percent'] -and $_.percent -gt 0 -and $_.PSObject.Properties['revisionName'] -and $_.revisionName } | ForEach-Object { "$($_.revisionName)=$($_.percent)" }) -join ','
     if ($targetPercentAssignments) {
       Invoke-Gcloud -Arguments @('run', 'services', 'update-traffic', $config.ServiceName, '--project', $ProjectId, '--region', $Region, '--to-revisions', $targetPercentAssignments) | Out-Null
     }

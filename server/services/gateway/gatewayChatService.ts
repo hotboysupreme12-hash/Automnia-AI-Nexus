@@ -11,6 +11,8 @@ export type GatewayChatFailureKind =
   | 'stale_lock'
   | 'disk_low'
   | 'provider_unsupported'
+  | 'provider_forbidden'
+  | 'insufficient_credits'
   | 'sandbox_unavailable'
   | 'network_error'
   | 'process_error'

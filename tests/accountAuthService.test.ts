@@ -4,10 +4,11 @@ import test from 'node:test'
 import { createAccountAuthService, AccountAuthError } from '../server/services/auth/accountAuthService'
 import type { LicenseService } from '../server/services/license/licenseService'
 
-function createHarness({ tier = 'pro', mode = 'hosted_credits', byokAllowed = true, permanentAccess = true, remoteUnavailable = false, googleSubject = 'google-subject' } = {}) {
+function createHarness({ tier = 'pro', mode = 'hosted_credits', byokAllowed = true, permanentAccess = true, remoteUnavailable = false, googleSubject = 'google-subject', reconcileAccountAccess = false } = {}) {
   const values = new Map<string, unknown>()
   const requests: Array<{ path: string; body: Record<string, unknown> }> = []
   const adoptedLicenseKeys: string[] = []
+  let reconciliationCount = 0
   let remotePassword = ''
   let remotePasswordSet = false
   const status = {
@@ -19,7 +20,7 @@ function createHarness({ tier = 'pro', mode = 'hosted_credits', byokAllowed = tr
     byokAllowed,
     permanentAccess,
     subscriptionStatus: 'active',
-    usagePriority: 'automnia_first' as const,
+    usagePriority: 'automnia_only' as const,
     creditBalance: 500,
     creditBalanceUpdatedAt: null,
     activatedAt: null,
@@ -75,6 +76,9 @@ function createHarness({ tier = 'pro', mode = 'hosted_credits', byokAllowed = tr
     read: <T>(key: string) => (values.get(key) as T | undefined) || null,
     write: (key: string, value: unknown) => { values.set(key, value); return true },
     licenseService,
+    reconcileAccountAccess: reconcileAccountAccess
+      ? async () => { reconciliationCount += 1 }
+      : undefined,
     apiUrl: 'https://provisioner.example.test',
     fetch,
     now: () => new Date('2026-08-12T12:00:00.000Z'),
@@ -88,6 +92,9 @@ function createHarness({ tier = 'pro', mode = 'hosted_credits', byokAllowed = tr
     setRemotePassword: (password: string) => {
       remotePassword = password
       remotePasswordSet = true
+    },
+    get reconciliationCount() {
+      return reconciliationCount
     },
   }
 }
@@ -119,6 +126,15 @@ test('higher-tier account sign-in works offline after first activation', async (
     () => harness.service.login({ email: 'customer@example.com', password: 'wrong password that is long' }),
     (error: unknown) => error instanceof AccountAuthError && error.code === 'invalid_credentials',
   )
+})
+
+test('account activation and re-login reconcile billing access without blocking offline login', async () => {
+  const harness = createHarness({ reconcileAccountAccess: true })
+  await harness.service.setup({ email: 'customer@example.com', licenseKey: 'AUT-TEST-ACCOUNT', password: 'correct horse battery staple' })
+  await harness.service.login({ email: 'customer@example.com', password: 'correct horse battery staple' })
+
+  assert.equal(harness.reconciliationCount, 2)
+  assert.equal(harness.requests.length, 1)
 })
 
 test('Starter subscription account sign-in revalidates online after first activation', async () => {

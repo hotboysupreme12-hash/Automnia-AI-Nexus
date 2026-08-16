@@ -80,7 +80,7 @@ try {
   }
 
   $service = Get-ServiceDescriptor -ProjectId $To -Region $Region -ServiceName $config.ServiceName
-  $candidate = @($service.status.traffic | Where-Object { $_.tag -eq 'candidate' } | Select-Object -First 1)
+  $candidate = @($service.status.traffic | Where-Object { $_ -and $_.PSObject.Properties['tag'] -and $_.tag -eq 'candidate' } | Select-Object -First 1)
   $candidateUrl = if ($candidate -and $candidate.url) { [string]$candidate.url } else { [string]$service.status.url }
   & (Join-Path $PSScriptRoot 'health.ps1') -ProjectId $To -Region $Region -BaseUrl $candidateUrl | Out-Null
 

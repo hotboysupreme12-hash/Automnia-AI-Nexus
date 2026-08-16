@@ -14,6 +14,11 @@ export function registerLicenseRoutes(app: Express, options: {
 
   app.get('/api/license/status', (_req, res) => apiSuccess(res, options.licenseService.getStatus()))
 
+  // Gateway and channel runtimes use this authenticated, server-owned
+  // decision before accepting inbound traffic. Do not derive it in the
+  // renderer or from a client-supplied model/provider value.
+  app.get('/api/license/traffic-gate', (_req, res) => apiSuccess(res, options.licenseService.getTrafficGate()))
+
   app.post('/api/license/activate', async (req, res) => {
     const parsed = z.object({
       email: z.string().trim().email().max(320),
@@ -70,24 +75,42 @@ export function registerLicenseRoutes(app: Express, options: {
 
   app.post('/api/license/usage-priority', async (req, res) => {
     const parsed = z.object({
-      usagePriority: z.enum(['automnia_first', 'provider_first', 'byok_only']),
+      usagePriority: z.enum(['automnia_only', 'provider_first', 'automnia_first_with_provider_fallback']),
     }).safeParse(req.body)
-    if (!parsed.success) return apiFailure(res, 400, 'invalid_payload', 'Choose Automnia credits first, Automnia with fallback, or BYOK only.')
+    if (!parsed.success) return apiFailure(res, 400, 'invalid_payload', 'Choose Automnia credits only, or My provider + Automnia credits with a fallback order.')
     const currentStatus = options.licenseService.getStatus()
     if (!currentStatus.active) {
       return apiFailure(res, 409, 'invalid_payload', 'Activate an Automnia license before choosing a usage priority.')
     }
-    if (options.licenseService.isUsagePriorityLocked() && parsed.data.usagePriority !== 'automnia_first') {
-      return apiFailure(res, 409, 'invalid_payload', 'Starter Subscription ($19.99) stays on Automnia credits. Upgrade to a permanent tier to choose another usage priority.')
+    if (options.licenseService.isUsagePriorityLocked() && parsed.data.usagePriority !== 'automnia_only') {
+      return apiFailure(res, 409, 'invalid_payload', 'Starter Subscription ($19.99) and credit-refill access stay on Automnia credits. Upgrade to BYOK ($29.99) or higher to choose another usage priority.')
     }
     try {
-      const status = options.licenseService.setUsagePriority(parsed.data.usagePriority)
+      options.licenseService.setUsagePriority(parsed.data.usagePriority)
       // Do not acknowledge a route change until OpenClaw has been reconciled.
       // Returning first creates a window where the next turn still uses the
       // old Automnia-first config and can debit hosted credits unexpectedly.
       await synchronizeOpenClawBillingRoute()
-      return apiSuccess(res, status)
+      // A second click can coalesce into the same route-sync pass. Return the
+      // server's current status so the renderer cannot roll back to an older
+      // response when those requests finish out of order.
+      return apiSuccess(res, options.licenseService.getStatus())
     } catch (error) {
+      // Route application is part of the setting transaction. If Gateway
+      // confirmation fails, restore the prior policy so the next turn cannot
+      // observe a persisted preference whose live route was never applied.
+      if (currentStatus.usagePriority && currentStatus.usagePriority !== parsed.data.usagePriority) {
+        const latestStatus = options.licenseService.getStatus()
+        if (latestStatus.usagePriority === parsed.data.usagePriority) {
+          try {
+            options.licenseService.setUsagePriority(currentStatus.usagePriority)
+            await synchronizeOpenClawBillingRoute()
+          } catch {
+            // Keep the original failure as the user-facing error. The route
+            // readiness barrier remains rejected until the next retry.
+          }
+        }
+      }
       const known = error instanceof LicenseServiceError ? error : null
       return apiFailure(res, 500, known?.code || 'license_service_unavailable', known?.message || 'The usage priority could not be saved.')
     }

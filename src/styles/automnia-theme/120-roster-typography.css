@@ -1,0 +1,21 @@
+/* Roster typography ----------------------------------------------------------- */
+
+/* Keep both team headings on the same display face. The registry title has
+   older theme overrides, so make the shared font explicit at the end of the
+   cascade. */
+html.dui-pro-overhaul [data-dui-panel="agent-registry"] h2,
+html.dui-pro-overhaul.dui-cohesive-ui [data-dui-panel="agent-registry"] h2,
+html.dui-pro-overhaul [data-dui-panel="active-party"] .active-party-head h3,
+html.dui-pro-overhaul.dui-cohesive-ui [data-dui-panel="active-party"] .active-party-head h3 {
+  font-family: var(--font-display) !important;
+}
+
+html.dui-pro-overhaul [data-dui-panel="agent-registry"] h2,
+html.dui-pro-overhaul.dui-cohesive-ui [data-dui-panel="agent-registry"] h2 {
+  align-self: center;
+  font-size: 14px !important;
+  font-weight: 730 !important;
+  letter-spacing: -.022em !important;
+  line-height: 1.16 !important;
+  text-transform: none !important;
+}

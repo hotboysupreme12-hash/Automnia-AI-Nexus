@@ -2,6 +2,7 @@ import { randomUUID } from 'node:crypto'
 import type { ProviderRequestAuth } from '../providers/providerSetupService'
 import type { AgentTurnStreamEmitter } from './gatewayAgentTurnService'
 import type { BufferedRuntimeReason } from './agentTurnService'
+import { CREDITS_ONLY_MODEL_ACCESS_MESSAGE } from '../license/creditsOnlyModelPolicy'
 
 export type AgentStreamingThinkingLevel = 'off' | 'minimal' | 'low' | 'medium' | 'high' | 'xhigh' | 'max'
 
@@ -54,7 +55,7 @@ export type StreamedProviderReply = {
   reasoningContent?: string
 }
 
-type HostedRelayPriority = 'automnia_first' | 'provider_first'
+type HostedRelayPriority = 'automnia_only' | 'provider_first' | 'automnia_first_with_provider_fallback'
 
 type HostedRelayCredentials = {
   email: string
@@ -64,11 +65,13 @@ type HostedRelayCredentials = {
 }
 
 type HostedRelayCandidateCredentials = Omit<HostedRelayCredentials, 'usagePriority'> & {
-  usagePriority: HostedRelayPriority | 'byok_only'
+  usagePriority: HostedRelayPriority | 'automnia_first' | 'byok_only'
 }
 
 function isHostedRelayCredentials(value: HostedRelayCandidateCredentials | null | undefined): value is HostedRelayCredentials {
-  return value?.usagePriority === 'automnia_first' || value?.usagePriority === 'provider_first'
+  return value?.usagePriority === 'automnia_only'
+    || value?.usagePriority === 'provider_first'
+    || value?.usagePriority === 'automnia_first_with_provider_fallback'
 }
 
 export type AgentStreamingServiceOptions = {
@@ -83,6 +86,11 @@ export type AgentStreamingServiceOptions = {
     intentMessage?: string,
   ) => BufferedRuntimeReason | null
   getHostedRelayCredentials?: () => HostedRelayCandidateCredentials | null
+  trafficGate?: () => {
+    messageTrafficAllowed: boolean
+    providerAccessAllowed: boolean
+    blockMessage: string | null
+  }
   runBufferedAgentTurnForStream: (
     input: Record<string, unknown>,
     emit: AgentTurnStreamEmitter,
@@ -166,7 +174,7 @@ export type AgentStreamingServiceOptions = {
   }) => Promise<StreamedProviderReply>
   streamAnthropicMessage: (params: {
     model: string
-    apiKey: string
+    auth: ProviderRequestAuth
     messages: ProviderConversationMessage[]
     thinking: AgentStreamingThinkingLevel
     signal: AbortSignal
@@ -194,6 +202,7 @@ export type AgentStreamingServiceOptions = {
    * only refreshes the local account projection for the renderer.
    */
   reconcileHostedCreditBalance?: () => Promise<{ creditBalance: number | null } | null>
+  synchronizeHostedBillingRoute?: () => Promise<void>
   classifyFailureKind: (
     message: string,
     fallback?: 'failed' | 'timeout' | 'aborted' | 'interrupted' | null,
@@ -224,6 +233,18 @@ export function createAgentStreamingService(options: AgentStreamingServiceOption
   ): Promise<Record<string, unknown>> {
     if (!options.isValidAgentId(input.agent) || options.isRetiredAgentId(input.agent)) {
       throw new Error('Invalid or retired agent id.')
+    }
+
+    const trafficGate = options.trafficGate?.()
+    if (trafficGate && !trafficGate.messageTrafficAllowed) {
+      return {
+        ok: false,
+        reply: trafficGate.blockMessage || 'Automnia credits are unavailable. Restore the credit balance before sending another message.',
+        stdout: '',
+        stderr: trafficGate.blockMessage || 'Automnia traffic gate blocked the request.',
+        code: 402,
+        failureKind: 'insufficient_credits',
+      }
     }
 
     const runtimeShortcut = options.parseAgentRuntimeShortcut(input.message)
@@ -263,6 +284,14 @@ export function createAgentStreamingService(options: AgentStreamingServiceOption
       const balance = options.reconcileHostedCreditBalance
         ? await options.reconcileHostedCreditBalance().catch(() => null)
         : null
+      // A provider-first route must stop advertising Automnia as a fallback
+      // once the confirmed wallet reaches zero. The next turn should either
+      // remain on the connected provider or, for credits-only mode, surface
+      // the explicit refill message instead of letting OpenClaw self-heal
+      // into an unintended model.
+      if (balance?.creditBalance === 0) {
+        await options.synchronizeHostedBillingRoute?.().catch(() => undefined)
+      }
       return {
         ...runtimeResult,
         usagePriority: hostedRelayCredentials.usagePriority,
@@ -271,6 +300,21 @@ export function createAgentStreamingService(options: AgentStreamingServiceOption
         ...(typeof balance?.creditBalance === 'number'
           ? { remainingCredits: balance.creditBalance, creditBalanceSynchronized: true }
           : {}),
+      }
+    }
+
+    // Credits-only accounts may use the hosted Automnia relay above, but every
+    // fallback below is either a local runtime or a directly selected
+    // provider. Keep this check before those branches so a missing/stale relay
+    // credential cannot turn into a local/provider bypass.
+    if (trafficGate && !trafficGate.providerAccessAllowed) {
+      return {
+        ok: false,
+        reply: CREDITS_ONLY_MODEL_ACCESS_MESSAGE,
+        stdout: '',
+        stderr: CREDITS_ONLY_MODEL_ACCESS_MESSAGE,
+        code: 403,
+        failureKind: 'provider_forbidden',
       }
     }
 
@@ -307,6 +351,13 @@ export function createAgentStreamingService(options: AgentStreamingServiceOption
     }
 
     const modelId = await options.resolveAgentPrimaryModelId(input.agent)
+    const { provider: resolvedModelProvider } = options.splitModelId(modelId)
+    if (resolvedModelProvider === 'anthropic') {
+      return options.runBufferedAgentTurnForStream(input, emit, signal, {
+        code: 'anthropic-native-openclaw-runtime',
+        message: 'Anthropic agent turns use OpenClaw\'s native tool-capable runtime for streaming, tools, sessions, and agent actions.',
+      })
+    }
     const openAiCodexBufferedReason = options.openAiCodexEmbeddedRuntimeReason(modelId, input.message, input.intentMessage)
     if (openAiCodexBufferedReason) {
       return options.runBufferedAgentTurnForStream(input, emit, signal, openAiCodexBufferedReason)
@@ -462,10 +513,9 @@ export function createAgentStreamingService(options: AgentStreamingServiceOption
           throw new Error('OpenAI Codex streaming requires an OpenAI Codex OAuth credential.')
         }
       } else if (providerConfig.kind === 'anthropic-messages') {
-        if (requestAuth.type !== 'apiKey') throw new Error('Anthropic streaming requires an API key credential.')
         streamedReply = await options.streamAnthropicMessage({
           model,
-          apiKey: requestAuth.value,
+          auth: requestAuth,
           messages: requestMessages,
           thinking: input.thinking,
           signal,

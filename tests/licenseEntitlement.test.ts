@@ -13,7 +13,7 @@ function license(overrides: Partial<LicenseInfo> = {}): LicenseInfo {
     planPriceCents: 1_999,
     byokAllowed: false,
     permanentAccess: false,
-    usagePriority: 'automnia_first',
+    usagePriority: 'automnia_only',
     creditBalance: 500_000,
     creditBalanceUpdatedAt: '2026-08-11T12:00:00.000Z',
     activatedAt: '2026-08-11T10:00:00.000Z',
@@ -32,8 +32,8 @@ test('presents permanent hosted tiers as their highest account access and Automn
     assert.equal(entitlement.isHosted, true)
     assert.equal(entitlement.isByok, false)
     assert.equal(entitlement.billingLabel, 'Permanent Automnia access — Credits')
-    assert.equal(entitlement.statusLabel, 'Permanent access active')
-    assert.equal(entitlement.defaultRouteLabel, 'Subscription Relay')
+    assert.equal(entitlement.statusLabel, 'Automnia credits active')
+    assert.equal(entitlement.defaultRouteLabel, 'Automnia credits only')
   }
 })
 
@@ -41,13 +41,13 @@ test('presents a hosted member provider-first preference without changing the en
   const entitlement = resolveLicenseEntitlement(license({ tier: 'pro', usagePriority: 'provider_first' }))
   assert.equal(entitlement.tierLabel, 'Pro Access')
   assert.equal(entitlement.isHosted, true)
-  assert.equal(entitlement.statusLabel, 'Provider first · relay available')
-  assert.equal(entitlement.defaultRouteLabel, 'My connected provider → Subscription Relay')
+  assert.equal(entitlement.statusLabel, 'Provider + Automnia active')
+  assert.equal(entitlement.defaultRouteLabel, 'My connected provider → Automnia credits fallback')
 })
 
 test('presents Automnia as the managed agent model for a permanent hosted tier', () => {
   const managed = resolveAgentRoutePresentation(license({ tier: 'pro', permanentAccess: true, byokAllowed: true }))
-  assert.equal(managed.routeLabel, 'Subscription Relay')
+  assert.equal(managed.routeLabel, 'Automnia credits')
   assert.equal(managed.modelLabel, 'Automnia')
   assert.equal(managed.managedRoute, true)
 
@@ -57,10 +57,22 @@ test('presents Automnia as the managed agent model for a permanent hosted tier',
   assert.equal(providerFirst.providerFirst, true)
 })
 
-test('keeps provider-only permanent-tier settings visible as provider settings', () => {
+test('shows the connected provider when a BYOK-capable Automnia balance is exhausted', () => {
+  const exhausted = license({ tier: 'pro', creditBalance: 0, byokAllowed: true, permanentAccess: true })
+  const entitlement = resolveLicenseEntitlement(exhausted)
+  assert.equal(entitlement.defaultRouteLabel, 'My connected provider — Automnia credits exhausted')
+  assert.equal(entitlement.statusLabel, 'Provider + Automnia active')
+
+  const route = resolveAgentRoutePresentation(exhausted)
+  assert.equal(route.routeLabel, 'My Provider — credits exhausted')
+  assert.equal(route.providerFirst, true)
+  assert.equal(route.managedRoute, false)
+})
+
+test('migrates legacy provider-only settings to the combined provider-plus-Automnia route', () => {
   const entitlement = resolveLicenseEntitlement(license({ tier: 'pro', usagePriority: 'byok_only' }))
-  assert.equal(entitlement.defaultRouteLabel, 'My connected provider')
-  assert.equal(resolveAgentRoutePresentation(license({ tier: 'pro', usagePriority: 'byok_only' })).providerOnly, true)
+  assert.equal(entitlement.defaultRouteLabel, 'My connected provider → Automnia credits fallback')
+  assert.equal(resolveAgentRoutePresentation(license({ tier: 'pro', usagePriority: 'byok_only' })).providerFirst, true)
 })
 
 test('keeps Starter subscription hosted and without BYOK while higher tiers allow it', () => {
@@ -68,13 +80,13 @@ test('keeps Starter subscription hosted and without BYOK while higher tiers allo
   assert.equal(isStarterSubscriptionOnly(license()), true)
   assert.equal(starter.usagePriorityLocked, true)
   assert.equal(starter.byokAllowed, false)
-  assert.equal(starter.defaultRouteLabel, 'Subscription Relay')
+  assert.equal(starter.defaultRouteLabel, 'Automnia credits only')
 
   const higherPricedStarter = resolveLicenseEntitlement(license({ planPriceCents: 2_999, usagePriority: 'provider_first' }))
   assert.equal(higherPricedStarter.usagePriorityLocked, true)
   assert.equal(higherPricedStarter.byokAllowed, false)
   assert.equal(higherPricedStarter.permanentAccess, false)
-  assert.equal(higherPricedStarter.defaultRouteLabel, 'Subscription Relay')
+  assert.equal(higherPricedStarter.defaultRouteLabel, 'Automnia credits only')
 
   for (const tier of ['pro', 'enterprise', 'custom_team']) {
     assert.equal(resolveLicenseEntitlement(license({ tier, mode: 'hosted_credits', byokAllowed: false })).byokAllowed, true, tier)
@@ -90,8 +102,8 @@ test('keeps the grandfathered BYOK entitlement permanent while exposing managed 
   assert.equal(entitlement.isByok, true)
   assert.equal(entitlement.byokAllowed, true)
   assert.equal(entitlement.usagePriorityLocked, false)
-  assert.equal(entitlement.defaultRouteLabel, 'Your connected provider / OpenClaw runtime — Automnia relay off')
-  assert.equal(entitlement.statusLabel, 'Provider-only active')
+  assert.equal(entitlement.defaultRouteLabel, 'Your connected provider → Automnia credits fallback')
+  assert.equal(entitlement.statusLabel, 'Provider + Automnia active')
 })
 
 test('presents current and legacy BYOK tiers as permanent provider-billed access', () => {
@@ -100,7 +112,7 @@ test('presents current and legacy BYOK tiers as permanent provider-billed access
     assert.equal(entitlement.tierLabel, 'BYOK Access')
     assert.equal(entitlement.isHosted, false)
     assert.equal(entitlement.isByok, true)
-    assert.equal(entitlement.statusLabel, 'Permanent access active')
+    assert.equal(entitlement.statusLabel, 'Automnia credits active')
   }
 })
 
@@ -112,6 +124,8 @@ test('presents a refill-only hosted entitlement as credits without inventing a s
     assert.equal(entitlement.isHosted, true)
     assert.equal(entitlement.isSubscription, false)
     assert.equal(entitlement.billingLabel, 'Hosted Credits — Automnia Refill Balance')
+    assert.equal(entitlement.usagePriorityLocked, true)
+    assert.equal(entitlement.defaultRouteLabel, 'Automnia credits only')
   }
 })
 

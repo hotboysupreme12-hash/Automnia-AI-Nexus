@@ -55,12 +55,16 @@ html.dui-pro-overhaul.dui-cohesive-ui .app-bg.dy-monitor-focus [data-dui-panel="
   gap: 6px !important;
   padding: 8px 10px !important;
   border-radius: 9px !important;
+  justify-items: center !important;
+  text-align: center !important;
 }
 
 html.dui-pro-overhaul .app-bg.dy-monitor-focus [data-dui-panel="monitor"] .dy-channel-activity-status strong,
 html.dui-pro-overhaul.dui-cohesive-ui .app-bg.dy-monitor-focus [data-dui-panel="monitor"] .dy-channel-activity-status strong {
-  font-size: 12px !important;
+  font-size: 13px !important;
   font-weight: 700 !important;
+  text-transform: capitalize !important;
+  text-align: center !important;
 }
 
 html.dui-pro-overhaul .app-bg.dy-monitor-focus [data-dui-panel="monitor"] .dy-channel-activity-status span,

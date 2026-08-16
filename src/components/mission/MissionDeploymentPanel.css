@@ -1235,3 +1235,118 @@ html.dui-pro-overhaul.dui-cohesive-ui [data-dui-panel="missions"] input[type="ra
     min-height: 140px !important;
   }
 }
+
+/* Keep a small active party content-sized. The right rail is allowed to align
+   with the setup column, but its agent rows should never absorb that spare
+   height through 1fr tracks. */
+html.dui-pro-overhaul.dui-cohesive-ui [data-dui-panel="missions"] .dui-mission-sidebar {
+  align-self: start !important;
+  align-content: start !important;
+  grid-template-rows: auto !important;
+  height: auto !important;
+}
+
+html.dui-pro-overhaul.dui-cohesive-ui [data-dui-panel="missions"] .dui-agents-card {
+  align-self: start !important;
+  height: auto !important;
+  min-height: 0 !important;
+  container-type: inline-size;
+}
+
+html.dui-pro-overhaul.dui-cohesive-ui [data-dui-panel="missions"] .dui-agents-card .dui-agent-list {
+  flex: 0 0 auto !important;
+  grid-auto-rows: auto !important;
+  align-content: start !important;
+  overflow: visible !important;
+}
+
+html.dui-pro-overhaul.dui-cohesive-ui [data-dui-panel="missions"] .dui-agent-row {
+  grid-template-columns: 56px minmax(0, 1fr) minmax(206px, 230px) !important;
+  min-height: 110px !important;
+  height: auto !important;
+  padding: 12px !important;
+  align-items: center !important;
+}
+
+html.dui-pro-overhaul.dui-cohesive-ui [data-dui-panel="missions"] .dui-agent-avatar {
+  width: 56px !important;
+  height: 56px !important;
+}
+
+html.dui-pro-overhaul.dui-cohesive-ui [data-dui-panel="missions"] .dui-agent-main strong {
+  font-size: 15px !important;
+  line-height: 1.2 !important;
+}
+
+html.dui-pro-overhaul.dui-cohesive-ui [data-dui-panel="missions"] .dui-agent-main p {
+  margin-top: 4px !important;
+  color: var(--mission-text-2) !important;
+  font-size: 12px !important;
+  line-height: 1.25 !important;
+  white-space: normal !important;
+}
+
+html.dui-pro-overhaul.dui-cohesive-ui [data-dui-panel="missions"] .dui-agent-main div {
+  gap: 6px !important;
+  margin-top: 8px !important;
+}
+
+html.dui-pro-overhaul.dui-cohesive-ui [data-dui-panel="missions"] .dui-agent-main div span {
+  max-width: none !important;
+  flex: 0 0 auto !important;
+  padding: 4px 7px !important;
+  font-size: var(--dy-type-micro, 11px) !important;
+  line-height: 1.15 !important;
+}
+
+html.dui-pro-overhaul.dui-cohesive-ui [data-dui-panel="missions"] .dui-agent-cadence {
+  grid-template-columns: minmax(86px, .46fr) minmax(112px, .54fr) !important;
+  gap: 8px !important;
+}
+
+html.dui-pro-overhaul.dui-cohesive-ui [data-dui-panel="missions"] .dui-agent-cadence .dui-control {
+  min-height: 40px !important;
+  font-size: 12px !important;
+}
+
+@media (min-width: 601px) and (max-width: 860px) {
+  html.dui-pro-overhaul.dui-cohesive-ui [data-dui-panel="missions"] .dui-agent-row {
+    grid-template-columns: 56px minmax(0, 1fr) minmax(206px, 230px) !important;
+  }
+
+  html.dui-pro-overhaul.dui-cohesive-ui [data-dui-panel="missions"] .dui-agent-cadence {
+    grid-column: auto !important;
+  }
+}
+
+@media (max-width: 600px) {
+  html.dui-pro-overhaul.dui-cohesive-ui [data-dui-panel="missions"] .dui-agent-row {
+    grid-template-columns: 52px minmax(0, 1fr) !important;
+    min-height: 116px !important;
+  }
+
+  html.dui-pro-overhaul.dui-cohesive-ui [data-dui-panel="missions"] .dui-agent-avatar {
+    width: 52px !important;
+    height: 52px !important;
+  }
+
+  html.dui-pro-overhaul.dui-cohesive-ui [data-dui-panel="missions"] .dui-agent-cadence {
+    grid-column: 2 / -1 !important;
+    grid-template-columns: minmax(86px, .46fr) minmax(112px, .54fr) !important;
+  }
+}
+
+/* Respond to the actual rail width as well as the viewport. On desktop the
+   sidebar can be narrow even when the window is wide, so stack controls there
+   to preserve readable agent names and cadence labels. */
+@container (max-width: 520px) {
+  html.dui-pro-overhaul.dui-cohesive-ui [data-dui-panel="missions"] .dui-agent-row {
+    grid-template-columns: 56px minmax(0, 1fr) !important;
+    min-height: 116px !important;
+  }
+
+  html.dui-pro-overhaul.dui-cohesive-ui [data-dui-panel="missions"] .dui-agent-cadence {
+    grid-column: 2 / -1 !important;
+    grid-template-columns: minmax(86px, .46fr) minmax(112px, .54fr) !important;
+  }
+}

@@ -25,21 +25,25 @@ const controlPlaneHttp = readWorkspaceFile('server/controlPlaneHttp.ts')
 const runtimeRoutes = readWorkspaceFile('server/routes/runtimeRoutes.ts')
 const gatewayLifecycleService = readWorkspaceFile('server/services/gateway/gatewayLifecycleService.ts')
 const gatewayLogService = readWorkspaceFile('server/services/gateway/gatewayLogService.ts')
+const gatewayActivityFeedService = readWorkspaceFile('server/services/runtime/gatewayActivityFeedService.ts')
 const runtimeStatusService = readWorkspaceFile('server/services/runtime/runtimeStatusService.ts')
 const runtimeActionService = readWorkspaceFile('server/services/runtime/runtimeActionService.ts')
 const runtimeHook = readWorkspaceFile('src/hooks/useRuntimeStatus.ts')
+const settingsActivityLog = readWorkspaceFile('src/components/settings/SettingsActivityLog.tsx')
+const gatewayActivityHook = readWorkspaceFile('src/hooks/useGatewayActivityFeed.ts')
 const liveMonitor = readWorkspaceFile('src/components/monitor/LiveOperationMonitor.tsx')
 const nexusShell = readWorkspaceFile('src/components/layout/NexusShell.tsx')
 const phaseKMonitorSmoke = readWorkspaceFile('scripts/smoke-phase-k-monitor-runtime-evidence.ts')
 const packageJson = JSON.parse(readWorkspaceFile('package.json')) as { scripts?: Record<string, string> }
 
-for (const code of ['runtime_status_failed', 'runtime_summary_failed']) {
+for (const code of ['runtime_status_failed', 'runtime_summary_failed', 'runtime_activity_failed']) {
   assert(controlPlaneHttp.includes(`| '${code}'`), `ApiErrorCode is missing ${code}`)
 }
 
 for (const marker of [
   "app.get('/api/openclaw/runtime/status'",
   "app.get('/api/openclaw/runtime/summary'",
+  "app.get('/api/openclaw/runtime/activity'",
 ]) {
   const block = routeBlock(runtimeRoutes, marker)
   assert(block.includes('apiSuccess(res'), `${marker} should return canonical success envelopes`)
@@ -52,6 +56,7 @@ for (const marker of [
 assert(server.includes('registerRuntimeRoutes(app, {'), 'server/index.ts should register extracted runtime routes')
 assert(server.includes('getRuntimeStatusPayload'), 'server/index.ts should inject the runtime status payload builder')
 assert(server.includes('getRuntimeSummaryPayload'), 'server/index.ts should inject the runtime summary payload builder')
+assert(server.includes('getGatewayActivityFeed'), 'server/index.ts should inject the Settings Gateway activity feed builder')
 assert(server.includes("createRuntimeStatusService"), 'server/index.ts should compose the runtime status service')
 assert(server.includes('runtimeStatusService.getRuntimeStatusPayload'), 'server/index.ts should delegate runtime status payloads to the service')
 assert(server.includes('runtimeStatusService.getRuntimeSummaryPayload'), 'server/index.ts should delegate runtime summary payloads to the service')
@@ -71,8 +76,13 @@ assert(server.includes('recentRestarts: gatewayRestartLifecycleSnapshotsFromReco
 assert(server.includes('const GATEWAY_LEDGER_SNAPSHOT_CACHE_MS'), 'runtime polling should bound Gateway ledger snapshot cache freshness')
 assert(server.includes('let gatewayLedgerSnapshotInFlight'), 'runtime polling should coalesce concurrent Gateway ledger snapshot reads')
 assert(server.includes('function readRuntimeGatewayLedgerSnapshot'), 'runtime polling should use a hot-path Gateway ledger snapshot cache')
-assert(runtimeStatusService.includes('readRuntimeGatewayLedgerSnapshot(160)'), 'full runtime status should use the cached Gateway ledger snapshot reader')
-assert(runtimeStatusService.includes('readRuntimeGatewayLedgerSnapshot(48)'), 'runtime summary should use the cached Gateway ledger snapshot reader')
+assert(runtimeStatusService.includes('readRuntimeGatewayLedgerSnapshot(160, { sqlite: false })'), 'full runtime status should use the non-blocking Gateway ledger snapshot reader')
+assert(runtimeStatusService.includes('readRuntimeGatewayLedgerSnapshot(48, { sqlite: false })'), 'runtime summary should use the non-blocking Gateway ledger snapshot reader')
+assert(runtimeStatusService.includes('MAX_SUMMARY_CHANNEL_ACTIVITY_HISTORY = 12'), 'runtime summary should keep Gateway activity payloads strictly bounded')
+assert(runtimeStatusService.includes('MAX_SUMMARY_CRON_JOBS = 48'), 'runtime summary should cap scheduled-job payloads before they reach the renderer')
+assert(runtimeStatusService.includes('listActiveCronJobViews({ limit: MAX_SUMMARY_CRON_JOBS })'), 'runtime summary should apply the scheduled-job bound inside the database read')
+assert(!runtimeStatusService.includes("sweepOpenClawSessionLocks('runtime status'"), 'runtime status should not trigger a redundant session-lock sweep')
+assert(!runtimeStatusService.includes("sweepExpiredMissionCronJobs('runtime status mission cron expiry sweep'"), 'runtime status should not trigger a redundant mission-cron sweep')
 assert(!server.includes('readGatewayLedgerSnapshot(160, { sqlite: false })'), 'full runtime status should not perform an uncached Gateway JSONL tail read')
 assert(!server.includes('readGatewayLedgerSnapshot(48, { sqlite: false })'), 'runtime summary should not perform an uncached Gateway JSONL tail read')
 assert(runtimeStatusService.includes('gatewayStatusSnapshot(gatewayHealth.healthy, null, gatewayLedgerSnapshot.restart, gatewayLedgerSnapshot.recentRestarts, gatewayStability)'), 'runtime status should hydrate restart lifecycle and stability diagnostics from the ledger snapshot')
@@ -126,6 +136,14 @@ assert(runtimeHook.includes('if (!shifts.length && (serverShifts.length > 0 || s
 assert(runtimeHook.includes('cachedRuntimeSummaryStatus = mergedStatus'), 'runtime summary polling should cache the merged summary without hydrating cron shifts with a second request')
 assert(runtimeStatusService.includes('gatewayExternalLogSource'), 'runtime summary should expose whether log tails were skipped or used as fallback')
 assert(runtimeStatusService.includes("'skipped-ledger-hot-path'"), 'runtime summary should skip external log tails when Gateway ledger evidence is already available')
+assert(runtimeRoutes.includes('getGatewayActivityFeed: (limit?: number)'), 'runtime routes should receive a bounded Gateway activity feed builder')
+assert(runtimeRoutes.includes('RuntimeActivityQuerySchema'), 'Gateway activity should validate and cap its query window')
+assert(gatewayActivityFeedService.includes('durable Gateway ledger only'), 'Settings activity should be sourced from the durable Gateway ledger')
+assert(!gatewayActivityFeedService.includes('fetchGatewayHealthPayload'), 'Settings activity must not wake Gateway health diagnostics')
+assert(!gatewayActivityFeedService.includes('readExternalGatewayLogEntries'), 'Settings activity must not re-tail external Gateway logs')
+assert(!settingsActivityLog.includes('useRuntimeSummaryStatus'), 'Settings activity must not subscribe to the general runtime summary')
+assert(settingsActivityLog.includes('useGatewayActivityFeed(3_000, LOG_LIMIT)'), 'Settings activity should use the lightweight bounded feed')
+assert(gatewayActivityHook.includes('/api/openclaw/runtime/activity?limit='), 'Settings activity should request the dedicated activity endpoint')
 assert(runtimeHook.includes('lastRestartReason?: string | null'), 'runtime status types should include the last Gateway restart reason')
 assert(runtimeHook.includes('recentRestarts?: GatewayRestartLifecycleEntry[]'), 'runtime status types should include the Gateway restart timeline')
 assert(runtimeHook.includes('export type GatewayRestartDiagnostics'), 'runtime status types should include Gateway restart diagnostics')
@@ -146,7 +164,9 @@ assert(liveMonitor.includes('RuntimeGatewayPanel status={runtimeStatus}'), 'Moni
 assert(liveMonitor.includes('GatewayActivityCard activity={activity}'), 'Monitor should render Gateway channel activity evidence')
 assert(liveMonitor.includes('const GatewayActivityWorkspace = memo(function GatewayActivityWorkspace'), 'Monitor should render the unified Gateway activity workspace')
 assert(liveMonitor.includes('<GatewayActivityPanel agentById={agentById} gatewayLogs={gatewayLogs} />'), 'Unified Gateway activity should receive Gateway log-tail evidence')
-assert(liveMonitor.includes('<h3>Scheduled Runs</h3>'), 'Monitor should render active scheduled-run evidence')
+assert(liveMonitor.includes('<h3>Automated Jobs</h3>'), 'Monitor should render active scheduled-job evidence')
+assert(liveMonitor.includes('const GATEWAY_ACTIVITY_RENDER_LIMIT = 12'), 'Gateway overview should keep its mounted activity DOM bounded')
+assert(liveMonitor.includes('const GATEWAY_CRON_PAGE_SIZE = 8'), 'Gateway overview should page scheduled jobs instead of mounting the full list')
 assert(liveMonitor.includes('DoctorPanel run={displayedDoctorRun}'), 'Monitor should render persisted Doctor runtime diagnostics')
 assert(phaseKMonitorSmoke.includes('completedItems: [122]'), 'Phase K Monitor smoke should record item 122 completion')
 assert(phaseKMonitorSmoke.includes('/api/openclaw/runtime/status?refresh=1'), 'Phase K Monitor smoke should fetch the full runtime status payload')

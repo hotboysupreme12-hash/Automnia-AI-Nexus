@@ -224,7 +224,7 @@ export function ActivePartyStrip({ toolbar }: ActivePartyStripProps) {
                   </div>
                   <div className="min-w-0 flex-1">
                     <p className="party-agent-name truncate text-[12px] font-bold tracking-[-0.01em] text-slate-100">{agent.name}</p>
-                    <p className="truncate text-[9px] font-medium text-slate-400">{agent.role}</p>
+                    <p className="truncate text-[9px] font-medium text-slate-400" title={agent.role} aria-label={`Role: ${agent.role}`}>{agent.role}</p>
                     {agent.rarity && (
                       <span className={`party-rarity-badge mt-0.5 inline-block rounded-full border px-1.5 py-px text-[7px] font-bold uppercase tracking-[0.10em] ${rarityClass}`}>
                         {agent.rarity === 'legendary' ? '★ ' : ''}{agent.rarity}{agent.rarity === 'legendary' ? ' ★' : ''}

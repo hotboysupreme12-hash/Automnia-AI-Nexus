@@ -65,7 +65,7 @@ export type OAuthSessionPayload = {
   authorizationUrl?: string
   manualInputRequired?: boolean
   manualPrompt?: string
-  result?: { email?: string; projectId?: string }
+  result?: { email?: string; accountId?: string; projectId?: string; expiresAt?: number }
   providerStatus?: AuthProviderStatus
 }
 
@@ -88,6 +88,19 @@ export const OAUTH_PROVIDER_FALLBACKS: Record<string, AuthProviderStatus> = {
       available: true,
       missing: [],
       redirectUri: 'http://localhost:1455/auth/callback',
+    },
+  },
+  anthropic: {
+    provider: 'anthropic',
+    configured: false,
+    envKeys: ['ANTHROPIC_API_KEY'],
+    label: 'Anthropic',
+    oauth: {
+      supported: true,
+      configured: false,
+      available: true,
+      missing: [],
+      redirectUri: 'http://localhost:53692/callback',
     },
   },
 }

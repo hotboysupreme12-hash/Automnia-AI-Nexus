@@ -19,7 +19,7 @@ import { Button, StatusChip } from '../ui'
 const LAZY_IMPORT_RELOAD_WINDOW_MS = 30_000
 
 function isLazyImportFailure(error: unknown): boolean {
-  return error instanceof TypeError && /failed to fetch dynamically imported module|dynamically imported module|importing a module script failed/i.test(error.message)
+  return error instanceof Error && /failed to fetch dynamically imported module|dynamically imported module|importing a module script failed|unable to preload css/i.test(error.message)
 }
 
 function recoverableLazyImport<T>(key: string, loader: () => Promise<T>): Promise<T> {
@@ -74,10 +74,10 @@ const AgentEditorModal = lazy(() => recoverableLazyImport('agent-editor-modal', 
 const RecruitAgentModal = lazy(() => recoverableLazyImport('recruit-agent-modal', () => import('../recruit/RecruitAgentModal').then((module) => ({ default: module.RecruitAgentModal }))))
 
 const AUTOMNIA_LOCKUP_SRC = '/brand/automnia-ai-nexus-logo-transparent-cropped.png'
-const AUTOMNIA_BRAND_LABEL = 'Automnia Control Center'
-const RECRUIT_ICON_SRC = '/icons/nav-recruit-flat.png'
-const SETTINGS_ICON_SRC = '/icons/nav-settings-generated.png'
-const HELP_ICON_SRC = '/icons/nav-help-generated.png'
+const AUTOMNIA_BRAND_LABEL = 'Automnia AI Nexus'
+const RECRUIT_ICON_SRC = '/icons/nav-recruit-teal.png'
+const SETTINGS_ICON_SRC = '/icons/nav-settings-teal.png'
+const HELP_ICON_SRC = '/icons/nav-help-teal.png'
 const AGENT_CONSOLE_MIN_WIDTH = 360
 const AGENT_CONSOLE_MAX_WIDTH = 760
 const AGENT_REGISTRY_MIN_WIDTH = 640
@@ -87,19 +87,28 @@ type ShellNotice = { tone: 'success' | 'warning' | 'error' | 'neutral'; message:
 
 type PrimaryWorkspace = Exclude<AppTab, 'settings'>
 
-const WORKSPACE_META: Record<AppTab, { label: string; railMeta: string; description: string; iconSrc: string; tone: string }> = {
-  agents: { label: 'Agents', railMeta: 'Roster', description: 'Assemble elite specialists, deploy on missions, and command with precision.', iconSrc: '/icons/nav-agents-flat.png', tone: 'agents' },
-  missions: { label: 'Missions', railMeta: 'Launch', description: 'Turn objectives into coordinated, scheduled, and verifiable agent work.', iconSrc: '/icons/nav-missions-flat.png', tone: 'missions' },
-  monitor: { label: 'Monitor', railMeta: 'Live ops', description: 'Inspect runtime health, active calls, sessions, cron jobs, and recovery evidence.', iconSrc: '/icons/nav-monitor-flat.png', tone: 'monitor' },
-  plugins: { label: 'Plugins', railMeta: 'Runtime', description: 'Manage providers, communication channels, tools, and reusable skills.', iconSrc: '/icons/nav-plugins-flat.png', tone: 'plugins' },
-  settings: { label: 'Settings', railMeta: 'System', description: 'Tune interface chrome, mission defaults, active-party runtime policy, and maintenance controls.', iconSrc: SETTINGS_ICON_SRC, tone: 'settings' },
+type CronCountBand = 'idle' | 'green' | 'yellow' | 'teal'
+
+function resolveCronCountBand(count: number): CronCountBand {
+  if (!Number.isFinite(count) || count <= 0) return 'idle'
+  if (count <= 5) return 'green'
+  if (count <= 8) return 'yellow'
+  return 'teal'
 }
 
-const PRIMARY_WORKSPACES: { id: PrimaryWorkspace; label: string; railMeta: string; description: string; iconSrc: string; tone: string }[] = [
-  { id: 'agents', label: 'Agents', railMeta: 'Roster', description: 'Assemble elite specialists, deploy on missions, and command with precision.', iconSrc: '/icons/nav-agents-flat.png', tone: 'agents' },
-  { id: 'missions', label: 'Missions', railMeta: 'Launch', description: 'Turn objectives into coordinated, scheduled, and verifiable agent work.', iconSrc: '/icons/nav-missions-flat.png', tone: 'missions' },
-  { id: 'monitor', label: 'Monitor', railMeta: 'Live ops', description: 'Inspect runtime health, active calls, sessions, cron jobs, and recovery evidence.', iconSrc: '/icons/nav-monitor-flat.png', tone: 'monitor' },
-  { id: 'plugins', label: 'Plugins', railMeta: 'Runtime', description: 'Manage providers, communication channels, tools, and reusable skills.', iconSrc: '/icons/nav-plugins-flat.png', tone: 'plugins' },
+const WORKSPACE_META: Record<AppTab, { label: string; railMeta: string; iconSrc: string; tone: string }> = {
+  agents: { label: 'Agents', railMeta: 'Roster', iconSrc: '/icons/nav-agents-teal.png', tone: 'agents' },
+  missions: { label: 'Missions', railMeta: 'Launch', iconSrc: '/icons/nav-missions-teal.png', tone: 'missions' },
+  monitor: { label: 'Monitor', railMeta: 'Live ops', iconSrc: '/icons/nav-monitor-teal.png', tone: 'monitor' },
+  plugins: { label: 'Plugins', railMeta: 'Runtime', iconSrc: '/icons/nav-plugins-teal.png', tone: 'plugins' },
+  settings: { label: 'Settings', railMeta: 'System', iconSrc: SETTINGS_ICON_SRC, tone: 'settings' },
+}
+
+const PRIMARY_WORKSPACES: { id: PrimaryWorkspace; label: string; railMeta: string; iconSrc: string; tone: string }[] = [
+  { id: 'agents', label: 'Agents', railMeta: 'Roster', iconSrc: '/icons/nav-agents-teal.png', tone: 'agents' },
+  { id: 'missions', label: 'Missions', railMeta: 'Launch', iconSrc: '/icons/nav-missions-teal.png', tone: 'missions' },
+  { id: 'monitor', label: 'Monitor', railMeta: 'Live ops', iconSrc: '/icons/nav-monitor-teal.png', tone: 'monitor' },
+  { id: 'plugins', label: 'Plugins', railMeta: 'Runtime', iconSrc: '/icons/nav-plugins-teal.png', tone: 'plugins' },
 ]
 
 function navIconStyle(src: string): CSSProperties {
@@ -117,11 +126,18 @@ function clampAgentConsoleWidth(value: number, workspace: HTMLElement): number {
 
 function PanelLoader() {
   return (
-    <div className="rounded-2xl border border-white/[0.06] bg-white/[0.02] p-6" role="status" aria-live="polite" aria-label="Loading workspace">
-      <div className="h-3 w-32 animate-pulse rounded-full bg-white/[0.08]" />
-      <div className="mt-4 grid gap-3">
-        <div className="h-24 animate-pulse rounded-xl bg-white/[0.04]" />
-        <div className="h-24 animate-pulse rounded-xl bg-white/[0.03]" />
+    <div
+      className="flex min-h-[calc(100dvh-220px)] items-center justify-center"
+      role="status"
+      aria-live="polite"
+      aria-label="Refreshing workspace"
+    >
+      <div className="flex flex-col items-center gap-3 text-[11px] font-semibold tracking-[0.14em] text-slate-400">
+        <span
+          className="h-7 w-7 animate-spin rounded-full border-2 border-white/10 border-t-cyan-200/80 motion-reduce:animate-none"
+          aria-hidden="true"
+        />
+        <span>Refreshing</span>
       </div>
     </div>
   )
@@ -132,7 +148,9 @@ export function NexusShell() {
   const setTab = useNexusStore((s) => s.setTab)
   const syncPartyOverview = useNexusStore((s) => s.syncPartyOverview)
   const syncMissionProjection = useNexusStore((s) => s.syncMissionProjection)
+  const agents = useNexusStore((s) => s.agents)
   const agentCount = useNexusStore((s) => s.agents.length)
+  const activePartyIds = useNexusStore((s) => s.activePartyIds)
   const activePartyCount = useNexusStore((s) => s.activePartyIds.length)
   const busyAgentCount = useNexusStore((s) => s.busyAgentIds.length)
   const responseCount = useNexusStore((s) => s.agentResponses.length)
@@ -152,6 +170,23 @@ export function NexusShell() {
   const cronJobs = runtimeStatus?.shifts?.active ?? EMPTY_RUNTIME_CRON_JOBS
   const cronStatusUnavailable = Boolean(runtimeStatus?.shifts?.error)
   const activeCronCount = runtimeStatus?.shifts?.activeCount ?? cronJobs.length
+  const cronCountBand = runtimeStatus
+    ? cronStatusUnavailable ? 'idle' : resolveCronCountBand(activeCronCount)
+    : 'idle'
+  const primaryAgent = useMemo(() => {
+    const agentsById = new Map(agents.map((agent) => [agent.id, agent]))
+    const candidateIds = [
+      missionRunning ? activeMission?.selectedAgents[0] : undefined,
+      activePartyIds.find((agentId) => agentsById.get(agentId)?.isDefault),
+      agents.find((agent) => agent.isDefault)?.id,
+      activePartyIds[0],
+      agents[0]?.id,
+    ]
+    return candidateIds
+      .filter((agentId): agentId is string => Boolean(agentId))
+      .map((agentId) => agentsById.get(agentId))
+      .find((agent) => Boolean(agent))
+  }, [activeMission, activePartyIds, agents, missionRunning])
   const workspaceState = gatewayMigration
     ? 'Gateway migration in progress'
     : tab === 'agents'
@@ -174,14 +209,14 @@ export function NexusShell() {
           ? gatewayOnline ? 'Runtime connected' : runtimeStatus ? 'Runtime offline' : 'Connecting to runtime'
           : tab === 'settings'
             ? 'Settings ready'
-            : gatewayOnline ? 'Gateway extensions online' : runtimeStatus ? 'Gateway extensions offline' : 'Checking extensions'
+            : gatewayOnline ? 'Extensions ON' : runtimeStatus ? 'Extensions OFF' : 'Checking extensions'
   const workspaceStateTone = gatewayMigration
     ? 'active'
     : tab === 'agents'
       ? busyAgentCount ? 'active' : gatewayOnline ? 'healthy' : runtimeStatus ? 'offline' : 'loading'
       : tab === 'missions'
         ? missionRunning ? 'active' : gatewayOnline ? 'healthy' : runtimeStatus ? 'offline' : 'loading'
-        : tab === 'settings'
+      : tab === 'settings'
           ? 'healthy'
           : gatewayOnline
             ? 'healthy'
@@ -548,7 +583,7 @@ export function NexusShell() {
       <div className="pointer-events-none fixed inset-0 grid-overlay" />
       <a className="dy-skip-link" href="#automnia-main">Skip to workspace</a>
 
-      <aside className="dy-human-rail fixed z-40 flex flex-col overflow-hidden" aria-label="Automnia Control Center navigation">
+      <aside className="dy-human-rail fixed z-40 flex flex-col overflow-hidden" aria-label="Automnia AI Nexus navigation">
         <div className="dy-human-rail-head dy-human-rail-head--lockup flex items-center" aria-label={AUTOMNIA_BRAND_LABEL}>
           <img
             className="dy-human-rail-app-icon"
@@ -657,8 +692,15 @@ export function NexusShell() {
         {/* Workspace header */}
         <section className="dy-workspace-context" data-workspace={tab} aria-labelledby="automnia-workspace-title">
           <div className="dy-workspace-context__copy">
-            <h1 id="automnia-workspace-title">{activeTab.label}</h1>
-            <p>{activeTab.description}</p>
+            <h1
+              id="automnia-workspace-title"
+              className="dy-workspace-context__heading"
+              aria-label={`Automnia — ${tab === 'agents' ? 'Agent Operations' : activeTab.label}`}
+            >
+              <span className="dy-workspace-context__tab-label">
+                {tab === 'agents' ? 'Agent Operations' : activeTab.label}
+              </span>
+            </h1>
           </div>
           <div className="dy-workspace-context__meta">
             <div className="dy-status-grid flex flex-wrap items-center justify-end gap-2" aria-label="Workspace status summary">
@@ -666,16 +708,20 @@ export function NexusShell() {
                 className="badge dy-status-chip"
                 data-tone="neutral"
                 data-indicator="agents"
+                data-agent-rarity={primaryAgent?.rarity ?? 'none'}
                 label="Agents"
                 value={agentCount}
+                showDot={false}
               />
               <StatusChip
                 className="badge badge--live dy-status-chip"
                 data-tone="live"
                 data-indicator="party"
+                data-party-count={Math.min(activePartyCount, 6)}
                 label="In Party"
                 value={activePartyCount}
                 tone="info"
+                showDot={false}
               />
               <StatusChip
                 className={busyAgentCount ? 'badge badge--warn dy-status-chip' : 'badge dy-status-chip'}
@@ -687,6 +733,7 @@ export function NexusShell() {
                 tone={busyAgentCount ? 'warning' : 'neutral'}
                 title={busyAgentCount ? `${busyAgentCount} agent${busyAgentCount === 1 ? '' : 's'} running` : 'No agents running'}
                 value={busyAgentCount}
+                showDot={false}
               />
               <StatusChip
                 className={gatewayMigration ? 'badge badge--warn dy-status-chip' : gatewayOnline ? 'badge badge--success dy-status-chip' : 'badge dy-status-chip'}
@@ -698,11 +745,13 @@ export function NexusShell() {
                 value={gatewayMigration ? 'MIGRATING' : gatewayOnline ? 'ON' : runtimeStatus ? 'OFF' : '...'}
                 title={gatewayMigration ? gatewayMigrationMessage : undefined}
                 live={gatewayMigration}
+                showDot={false}
               />
               <button
                 type="button"
                 className={activeCronCount && !cronStatusUnavailable ? 'badge badge--live dy-status-chip' : 'badge dy-status-chip'}
                 data-indicator="cron"
+                data-cron-band={cronCountBand}
                 data-state={cronClearBusy ? 'busy' : runtimeStatus ? cronStatusUnavailable ? 'error' : activeCronCount ? 'active' : 'idle' : 'loading'}
                 data-tone={cronStatusUnavailable ? 'warning' : activeCronCount ? 'live' : 'neutral'}
                 title={cronChipTitle}
@@ -726,13 +775,14 @@ export function NexusShell() {
                 <span className="dy-status-label">Cron</span>
               </button>
               <StatusChip
-                className={responseCount ? 'badge badge--success dy-status-chip' : 'badge dy-status-chip'}
-                data-tone={responseCount ? 'success' : 'neutral'}
+                className="badge dy-status-chip"
+                data-tone="neutral"
                 data-indicator="results"
                 label="Results"
                 state={responseCount ? 'active' : 'idle'}
-                tone={responseCount ? 'success' : 'neutral'}
+                tone="neutral"
                 value={responseCount}
+                showDot={false}
               />
               {activeMission && (
                 <StatusChip
@@ -741,11 +791,11 @@ export function NexusShell() {
                   label="Mission"
                   tone={missionRunning ? 'warning' : 'success'}
                   value={activeMission.status}
+                  showDot={false}
                 />
               )}
             </div>
             <div className="dy-workspace-context__state" data-state={workspaceStateTone} role="status" aria-live="polite">
-              <span aria-hidden="true" />
               {workspaceState}
             </div>
             {gatewayMigration ? (
@@ -785,15 +835,16 @@ export function NexusShell() {
         </section>
 
         {/* Workspace content */}
+        {/* Keep the host node stable. Each lazy workspace below has its own boundary key,
+            so React never tries to update one workspace's Suspense subtree as another. */}
         <div
-          key={tab}
           id={`nexus-workspace-${tab}`}
           role="region"
           aria-label={`${activeTab.label} workspace`}
           className="dy-tab-content dy-surface-enter"
         >
           {tab === 'agents' && (
-            <Suspense fallback={<PanelLoader />}>
+            <Suspense key="agents" fallback={<PanelLoader />}>
               <div
                 ref={setAgentsWorkspaceNode}
                 className={`dy-agents-workspace grid gap-5 ${isAgentConsoleVisible ? 'is-console-visible' : 'is-console-hidden'}`}
@@ -861,26 +912,26 @@ export function NexusShell() {
 
           {tab === 'missions' && (
             <div className="dy-mission-tab-frame grid gap-5">
-              <Suspense fallback={<PanelLoader />}>
+              <Suspense key="missions" fallback={<PanelLoader />}>
                 <MissionDeploymentPanel />
               </Suspense>
             </div>
           )}
 
           {tab === 'monitor' && (
-            <Suspense fallback={<PanelLoader />}>
+            <Suspense key="monitor" fallback={<PanelLoader />}>
               <LiveOperationMonitor status={runtimeStatus} error={runtimeError} onRefresh={refreshRuntimeStatus} />
             </Suspense>
           )}
 
           {tab === 'plugins' && (
-            <Suspense fallback={<PanelLoader />}>
+            <Suspense key="plugins" fallback={<PanelLoader />}>
               <PluginsPanel focusQuery={pluginsFocusQuery} />
             </Suspense>
           )}
 
           {tab === 'settings' && (
-            <Suspense fallback={<PanelLoader />}>
+            <Suspense key="settings" fallback={<PanelLoader />}>
               <SettingsPanel focusSection={settingsFocusSection} focusRequest={settingsFocusRequest} />
             </Suspense>
           )}

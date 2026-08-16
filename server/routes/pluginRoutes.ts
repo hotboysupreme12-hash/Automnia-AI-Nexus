@@ -55,6 +55,7 @@ type ClawTalkSetupResult = {
 
 type PluginRoutesOptions = {
   clawTalkPluginId: string
+  isCreditsOnlyEntitlement?: () => boolean
   invalidateRuntimeStatusCache: () => void
   installOpenClawPlugin: (params: {
     spec: string
@@ -339,6 +340,9 @@ export function registerPluginRoutes(app: Express, options: PluginRoutesOptions)
     })
     const parsed = schema.safeParse(req.body)
     if (!parsed.success) return apiFailure(res, 400, 'invalid_payload', 'Invalid payload', parsed.error.flatten())
+    if (options.isCreditsOnlyEntitlement?.() && Object.keys(parsed.data.providerAuth).length > 0) {
+      return apiFailure(res, 403, 'byok_not_allowed', 'Starter Subscription and credit-refill access cannot configure or use external provider credentials.')
+    }
 
     try {
       if (!await requirePluginControl(pluginId, res)) return
@@ -365,6 +369,9 @@ export function registerPluginRoutes(app: Express, options: PluginRoutesOptions)
     })
     const parsed = schema.safeParse(req.body)
     if (!parsed.success) return apiFailure(res, 400, 'invalid_payload', 'Invalid payload', parsed.error.flatten())
+    if (options.isCreditsOnlyEntitlement?.() && (parsed.data.command === 'model' || parsed.data.command === 'full')) {
+      return apiFailure(res, 403, 'byok_not_allowed', 'Starter Subscription and credit-refill access cannot configure or use external provider models.')
+    }
 
     try {
       if (parsed.data.pluginId && !await requirePluginControl(parsed.data.pluginId, res)) return

@@ -1,0 +1,138 @@
+/* Active party density ---------------------------------------------------------
+   Keep the roster rail compact while giving each slot enough room for the
+   portrait, name, role, and rarity badge to read as a real card. */
+
+html.dui-pro-overhaul.dui-cohesive-ui [data-dui-panel="active-party"] .active-party-head {
+  min-height: 48px !important;
+  padding: 8px 14px !important;
+  gap: 10px !important;
+}
+
+html.dui-pro-overhaul.dui-cohesive-ui [data-dui-panel="active-party"] .active-party-head p {
+  display: none !important;
+}
+
+html.dui-pro-overhaul.dui-cohesive-ui [data-dui-panel="active-party"] .active-party-actions {
+  gap: 6px !important;
+}
+
+html.dui-pro-overhaul.dui-cohesive-ui [data-dui-panel="active-party"] .active-party-actions :is(button, .dy-console-toggle) {
+  min-height: 32px !important;
+  padding-block: 6px !important;
+}
+
+html.dui-pro-overhaul.dui-cohesive-ui [data-dui-panel="active-party"] .active-party-grid {
+  grid-template-columns: repeat(6, minmax(0, 1fr)) !important;
+  gap: 8px !important;
+  padding: 7px 12px 9px !important;
+}
+
+html.dui-pro-overhaul.dui-cohesive-ui [data-dui-panel="active-party"] .dy-party-slot,
+html.dui-pro-overhaul.dui-cohesive-ui [data-dui-panel="active-party"] [data-slot-card] {
+  height: 96px !important;
+  min-height: 96px !important;
+  padding: 8px !important;
+}
+
+html.dui-pro-overhaul.dui-cohesive-ui [data-dui-panel="active-party"] .dy-party-slot.is-filled {
+  align-items: stretch !important;
+  justify-content: center !important;
+}
+
+html.dui-pro-overhaul.dui-cohesive-ui [data-dui-panel="active-party"] .party-slot-content {
+  height: 100% !important;
+  min-height: 78px !important;
+  gap: 11px !important;
+  padding: 8px 28px 8px 10px !important;
+}
+
+html.dui-pro-overhaul.dui-cohesive-ui [data-dui-panel="active-party"] .active-party-avatar,
+html.dui-pro-overhaul.dui-cohesive-ui [data-dui-panel="active-party"] .active-party-avatar img {
+  width: 54px !important;
+  height: 54px !important;
+}
+
+html.dui-pro-overhaul.dui-cohesive-ui [data-dui-panel="active-party"] .party-slot-content p:first-child {
+  font-size: 13px !important;
+  line-height: 1.1 !important;
+}
+
+html.dui-pro-overhaul.dui-cohesive-ui [data-dui-panel="active-party"] .party-slot-content p:nth-child(2) {
+  margin-top: 2px !important;
+  font-size: 10px !important;
+  line-height: 1.15 !important;
+}
+
+html.dui-pro-overhaul.dui-cohesive-ui [data-dui-panel="active-party"] .party-rarity-badge {
+  margin-top: 4px !important;
+  min-height: 15px !important;
+  padding: 2px 7px !important;
+  font-size: 7px !important;
+  line-height: 1.1 !important;
+}
+
+@media (max-width: 1180px) {
+  html.dui-pro-overhaul.dui-cohesive-ui [data-dui-panel="active-party"] .active-party-grid {
+    grid-template-columns: repeat(3, minmax(0, 1fr)) !important;
+  }
+}
+
+@media (max-width: 900px) {
+  html.dui-pro-overhaul.dui-cohesive-ui [data-dui-panel="active-party"] .active-party-grid {
+    display: flex !important;
+    flex-wrap: nowrap !important;
+    gap: 8px !important;
+    overflow-x: auto !important;
+    padding: 7px 10px 9px !important;
+  }
+
+  html.dui-pro-overhaul.dui-cohesive-ui [data-dui-panel="active-party"] .dy-party-slot,
+  html.dui-pro-overhaul.dui-cohesive-ui [data-dui-panel="active-party"] [data-slot-card] {
+    flex: 0 0 clamp(184px, 56vw, 240px) !important;
+    width: auto !important;
+    height: 84px !important;
+    min-height: 84px !important;
+  }
+
+  html.dui-pro-overhaul.dui-cohesive-ui [data-dui-panel="active-party"] .party-slot-content {
+    min-height: 66px !important;
+    gap: 9px !important;
+    padding: 7px 24px 7px 8px !important;
+  }
+
+  html.dui-pro-overhaul.dui-cohesive-ui [data-dui-panel="active-party"] .active-party-avatar,
+  html.dui-pro-overhaul.dui-cohesive-ui [data-dui-panel="active-party"] .active-party-avatar img {
+    width: 46px !important;
+    height: 46px !important;
+  }
+}
+
+@media (max-height: 820px) and (min-width: 901px) {
+  html.dui-pro-overhaul.dui-cohesive-ui [data-dui-panel="active-party"] .active-party-head {
+    min-height: 44px !important;
+    padding: 6px 12px !important;
+  }
+
+  html.dui-pro-overhaul.dui-cohesive-ui [data-dui-panel="active-party"] .active-party-grid {
+    gap: 7px !important;
+    padding: 6px 10px 8px !important;
+  }
+
+  html.dui-pro-overhaul.dui-cohesive-ui [data-dui-panel="active-party"] .dy-party-slot,
+  html.dui-pro-overhaul.dui-cohesive-ui [data-dui-panel="active-party"] [data-slot-card] {
+    height: 84px !important;
+    min-height: 84px !important;
+  }
+
+  html.dui-pro-overhaul.dui-cohesive-ui [data-dui-panel="active-party"] .party-slot-content {
+    min-height: 68px !important;
+    gap: 9px !important;
+    padding: 7px 26px 7px 8px !important;
+  }
+
+  html.dui-pro-overhaul.dui-cohesive-ui [data-dui-panel="active-party"] .active-party-avatar,
+  html.dui-pro-overhaul.dui-cohesive-ui [data-dui-panel="active-party"] .active-party-avatar img {
+    width: 48px !important;
+    height: 48px !important;
+  }
+}

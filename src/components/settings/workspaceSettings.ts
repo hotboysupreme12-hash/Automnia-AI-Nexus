@@ -1,7 +1,7 @@
 import type { AgentRarity } from '../../types/nexus'
 
 export type RegistrySortKey = 'party' | 'level' | 'name' | 'rarity'
-export type AgentDisplayMode = 'showcase' | 'grid6' | 'grid8' | 'grid10' | 'list'
+export type AgentDisplayMode = 'grid8' | 'grid10' | 'list'
 export type AgentOverlayPreset = 'rarity' | 'original' | 'epic-purple' | 'graphite-glass' | 'blueprint-grid'
 export type AgentCardTheme = Exclude<AgentOverlayPreset, 'rarity'>
 
@@ -21,22 +21,19 @@ export type ConsolePreferences = {
 
 export const REGISTRY_PREFS_KEY = 'automnia-agent-registry-prefs'
 export const REGISTRY_PREFS_CHANGED_EVENT = 'automnia:registry-preferences-changed'
-export const REGISTRY_PREFS_VERSION = 6
+export const REGISTRY_PREFS_VERSION = 7
 export const CONSOLE_VISIBILITY_KEY = 'automnia-agent-console-visibility'
 export const CONSOLE_WIDTH_KEY = 'automnia-agent-console-width'
 export const CONSOLE_DRAFTS_KEY = 'automnia-command-draft-persistence'
 export const CONSOLE_PREFS_CHANGED_EVENT = 'automnia:console-preferences-changed'
 
 export const REGISTRY_DISPLAY_OPTIONS: Array<{ id: AgentDisplayMode; label: string; hint: string; pageSize: number }> = [
-  { id: 'showcase', label: 'Showcase', hint: 'Large cards', pageSize: 6 },
-  { id: 'grid6', label: '6 Grid', hint: 'Balanced', pageSize: 6 },
-  { id: 'grid8', label: '9 Grid', hint: 'More agents', pageSize: 9 },
-  { id: 'grid10', label: '12 Grid', hint: 'Dense', pageSize: 12 },
+  { id: 'grid8', label: 'Simple', hint: '9 agents · balanced', pageSize: 9 },
+  { id: 'grid10', label: 'Detailed', hint: '12 agents · full card info', pageSize: 12 },
   { id: 'list', label: 'List', hint: 'Fast scanning', pageSize: 12 },
 ]
 
 export const REGISTRY_OVERLAY_OPTIONS: Array<{ id: AgentOverlayPreset; label: string; hint: string }> = [
-  { id: 'rarity', label: 'By rarity', hint: 'Legendary Original · Epic Purple · Rare Blueprint · Common Graphite' },
   { id: 'original', label: 'Original', hint: 'Cyber circuit' },
   { id: 'epic-purple', label: 'Epic Purple', hint: 'High-contrast violet' },
   { id: 'graphite-glass', label: 'Graphite', hint: 'Modern glass' },
@@ -65,6 +62,20 @@ export function resolveAgentCardTheme(rarity: AgentRarity | undefined, preferenc
   return preferences.overlayPreset === 'rarity' ? 'graphite-glass' : preferences.overlayPreset
 }
 
+/**
+ * Keep the document-level card theme in sync before the registry paints.
+ *
+ * The registry is lazy-loaded and can be remounted during a workspace refresh,
+ * so this cannot rely on an effect cleanup to own the global marker. Leaving
+ * the last valid value in place avoids briefly falling back to the saturated
+ * legacy rarity treatment while the cards are being recreated.
+ */
+export function applyRegistryCardTheme(preferences: Pick<RegistryPreferences, 'overlayPreset' | 'rarityColorsEnabled'>): void {
+  if (typeof document === 'undefined') return
+  document.documentElement.dataset.agentCardOverlay = preferences.rarityColorsEnabled ? 'rarity' : preferences.overlayPreset
+  document.documentElement.dataset.agentCardRarityColors = preferences.rarityColorsEnabled ? 'enabled' : 'disabled'
+}
+
 export const DEFAULT_CONSOLE_PREFERENCES: ConsolePreferences = {
   visible: true,
   width: 420,
@@ -72,9 +83,17 @@ export const DEFAULT_CONSOLE_PREFERENCES: ConsolePreferences = {
 }
 
 const DISPLAY_MODES = new Set(REGISTRY_DISPLAY_OPTIONS.map((option) => option.id))
-const OVERLAY_PRESETS = new Set(REGISTRY_OVERLAY_OPTIONS.map((option) => option.id))
+// Keep the removed rarity preset readable for existing saved preferences.
+const OVERLAY_PRESETS = new Set<AgentOverlayPreset>(['rarity', ...REGISTRY_OVERLAY_OPTIONS.map((option) => option.id)])
 const RARITIES = new Set<AgentRarity | 'all'>(['all', 'common', 'rare', 'epic', 'legendary'])
 const SORT_KEYS = new Set<RegistrySortKey>(['party', 'level', 'name', 'rarity'])
+
+function normalizeDisplayMode(value: unknown): AgentDisplayMode | null {
+  if (value === 'grid6' || value === 'showcase' || value === 'grid8') return 'grid8'
+  if (value === 'grid10') return 'grid10'
+  if (value === 'list') return 'list'
+  return null
+}
 
 function localStorageOrNull(): Storage | null {
   if (typeof window === 'undefined') return null
@@ -94,8 +113,9 @@ export function readRegistryPreferences(): RegistryPreferences {
       ? parsed.overlayPreset
       : DEFAULT_REGISTRY_PREFERENCES.overlayPreset
     const overlayPreset = storedOverlayPreset === 'rarity' ? 'graphite-glass' : storedOverlayPreset
+    const storedDisplayMode = normalizeDisplayMode((parsed as { displayMode?: unknown }).displayMode)
     return {
-      displayMode: parsed.displayMode && DISPLAY_MODES.has(parsed.displayMode) ? parsed.displayMode : DEFAULT_REGISTRY_PREFERENCES.displayMode,
+      displayMode: storedDisplayMode && DISPLAY_MODES.has(storedDisplayMode) ? storedDisplayMode : DEFAULT_REGISTRY_PREFERENCES.displayMode,
       overlayPreset,
       rarityColorsEnabled: typeof parsed.rarityColorsEnabled === 'boolean' ? parsed.rarityColorsEnabled : storedOverlayPreset === 'rarity',
       rarityFilter: parsed.rarityFilter && RARITIES.has(parsed.rarityFilter) ? parsed.rarityFilter : DEFAULT_REGISTRY_PREFERENCES.rarityFilter,

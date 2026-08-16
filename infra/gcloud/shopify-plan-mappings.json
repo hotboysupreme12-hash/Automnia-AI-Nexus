@@ -3,6 +3,16 @@
     "tier": "credit_refill",
     "mode": "hosted_credits",
     "kind": "topup",
+    "planPriceCents": 100,
+    "initialCredits": 100000,
+    "productIds": [],
+    "variantIds": ["47352874270889"],
+    "skus": ["AUTO-REFILL-100K"]
+  },
+  {
+    "tier": "credit_refill",
+    "mode": "hosted_credits",
+    "kind": "topup",
     "initialCredits": 500000,
     "productIds": [],
     "variantIds": ["47340005589161"],

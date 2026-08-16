@@ -46,6 +46,17 @@ try {
   assert.deepEqual(runtimeRuns.map((run) => run.id), ['run-sqlite-primary'])
   assert.equal(existsSync(runtimeRunsJsonl), false, 'SQLite-primary runtime snapshots should not mirror JSONL when SQLite writes')
 
+  await runtimeLedgerStore.appendGatewayEvent({
+    timestamp: '2026-01-01T00:00:02.000Z',
+    stream: 'channel',
+    channel: 'telegram',
+    direction: 'inbound',
+    message: 'gateway-sqlite-primary',
+  }, { mirrorJsonl: false })
+  const gatewayEvents = await runtimeLedgerStore.readGatewayEvents<{ message: string }>(5)
+  assert.deepEqual(gatewayEvents.map((event) => event.message), ['gateway-sqlite-primary'])
+  assert.equal(existsSync(path.join(tempDir, 'gateway-events.jsonl')), false, 'SQLite-primary Gateway events should not mirror JSONL when SQLite writes')
+
   const runtimeLedgerSource = readFileSync(path.join(rootDir, 'server/runtimeLedger.ts'), 'utf8')
   assert.match(runtimeLedgerSource, /CREATE TABLE IF NOT EXISTS control_center_state/)
   assert.match(runtimeLedgerSource, /PRAGMA busy_timeout = 5000/)
@@ -72,6 +83,7 @@ try {
   assert.match(serverSource, /CONTROL_CENTER_STATE_KEYS\.runtimeMonitorClear/)
   assert.match(serverSource, /runtimeLedgerStore\.appendRuntimeRun\(openClawRunLedgerPayload\(record\), \{ mirrorJsonl: false \}\)/)
   assert.doesNotMatch(serverSource, /runtimeLedgerStore\.appendRuntimeRun\(openClawRunLedgerPayload\(record\), \{ sqlite: false \}\)/)
+  assert.match(serverSource, /appendGatewayLogEntry: \(entry\) => \{\s*invalidateGatewayLedgerSnapshotCache\(\)\s*return runtimeLedgerStore\.appendGatewayEvent\(entry, \{ mirrorJsonl: false \}\)/)
 } finally {
   runtimeLedgerStore.close()
   await rm(tempDir, { recursive: true, force: true })
