@@ -63,7 +63,8 @@ import {
   parseTelegramConfigOutput,
   readTelegramSettings,
   saveTelegramSettings,
-  telegramSettingCommands,
+  telegramSettingBatchCommand,
+  telegramSettingCommandEntries,
   type TelegramSettings,
 } from './telegramSettings'
 
@@ -285,6 +286,7 @@ export function SettingsPanel({ focusSection = 'account', focusRequest = 0 }: { 
   const [telegramSaving, setTelegramSaving] = useState(false)
   const [telegramLoaded, setTelegramLoaded] = useState(false)
   const [telegramLoadError, setTelegramLoadError] = useState('')
+  const [telegramGatewaySettings, setTelegramGatewaySettings] = useState<TelegramSettings>(() => readTelegramSettings())
 
   useEffect(() => {
     setActiveSection(focusSection)
@@ -388,6 +390,7 @@ export function SettingsPanel({ focusSection = 'account', focusRequest = 0 }: { 
       if (!parsedTelegram) throw new Error('The gateway returned an unreadable Telegram configuration.')
       const next = normalizeTelegramSettings({ ...readTelegramSettings(), ...parsedTelegram, ...(parsedMessages || {}) })
       setTelegramSettings(next)
+      setTelegramGatewaySettings(next)
       saveTelegramSettings(next)
       setNotice({ tone: 'success', text: 'Telegram settings reloaded from the gateway.' })
     } catch (error) {
@@ -406,14 +409,24 @@ export function SettingsPanel({ focusSection = 'account', focusRequest = 0 }: { 
     setTelegramSaving(true)
     setTelegramLoadError('')
     try {
-      for (const command of telegramSettingCommands(next)) {
-        const payload = await runOpenClawPluginCommand(command, { refreshPlugins: false })
-        const failure = openClawCommandFailure(payload, `OpenClaw rejected: ${command}`)
-        if (failure) throw new Error(failure)
+      const changedKeys = telegramSettingCommandEntries(next)
+        .filter(({ key }) => next[key] !== telegramGatewaySettings[key])
+        .map(({ key }) => key)
+      if (!changedKeys.length) {
+        setTelegramSettings(next)
+        saveTelegramSettings(next)
+        setNotice({ tone: 'success', text: 'Telegram settings are already synchronized with the gateway.' })
+        return
       }
+      const command = telegramSettingBatchCommand(next, changedKeys)
+      setNotice({ tone: 'neutral', text: `Applying ${changedKeys.length} Telegram setting${changedKeys.length === 1 ? '' : 's'} in one gateway update…` })
+      const payload = await runOpenClawPluginCommand(command, { refreshPlugins: false })
+      const failure = openClawCommandFailure(payload, 'OpenClaw rejected the Telegram settings update.')
+      if (failure) throw new Error(failure)
       const restart = await restartPluginGateway()
       if (restart.ok === false || restart.error) throw new Error(restart.error || 'Gateway restart failed.')
       setTelegramSettings(next)
+      setTelegramGatewaySettings(next)
       saveTelegramSettings(next)
       setNotice({ tone: 'success', text: 'Telegram settings applied. Gateway restarted with the new policy.' })
     } catch (error) {

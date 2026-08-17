@@ -4,6 +4,8 @@ import {
   DEFAULT_TELEGRAM_SETTINGS,
   normalizeTelegramSettings,
   parseTelegramConfigOutput,
+  telegramSettingBatchCommand,
+  telegramSettingCommandEntries,
   telegramSettingCommands,
 } from '../src/components/settings/telegramSettings'
 
@@ -66,4 +68,15 @@ test('Telegram setting commands update only supported config paths and never inc
   assert.ok(commands.includes('config set channels.telegram.actions.poll true'))
   assert.ok(commands.includes('config set messages.ackReactionScope "group-mentions"'))
   assert.ok(commands.every((command) => !/token|secret|password|api[-_]?key/i.test(command)))
+})
+
+test('Telegram settings batch command emits one atomic config update for selected fields', () => {
+  const entries = telegramSettingCommandEntries({ ...DEFAULT_TELEGRAM_SETTINGS, poll: true })
+  const batch = telegramSettingBatchCommand({ ...DEFAULT_TELEGRAM_SETTINGS, poll: true }, ['poll', 'ackReactionScope'])
+
+  assert.equal(entries.length, 23)
+  assert.match(batch, /^config set --batch-json '/)
+  assert.match(batch, /channels\.telegram\.actions\.poll/)
+  assert.match(batch, /messages\.ackReactionScope/)
+  assert.doesNotMatch(batch, /channels\.telegram\.dmPolicy/)
 })
