@@ -13,7 +13,11 @@ test('portrait helpers import only absolute local paths', () => {
 })
 
 test('portrait helpers preserve stored relative paths as agent API portraits', () => {
-  assert.equal(agentPortraitSrc('agent-1', '.openclaw/avatars/agent-1.png'), '/api/party/avatar/agent-1')
+  assert.equal(agentPortraitSrc('agent-1', '.openclaw/avatars/agent-1.png'), '/api/party/avatar/agent-1?v=.openclaw%2Favatars%2Fagent-1.png')
+  assert.notEqual(
+    agentPortraitSrc('agent-1', '.openclaw/avatars/agent-1.png'),
+    agentPortraitSrc('agent-1', '.openclaw/avatars/agent-1-new.png'),
+  )
   assert.equal(agentPortraitSrc(undefined, '.openclaw/avatars/agent-1.png'), '')
   assert.equal(agentPortraitSrc('agent-1', 'https://example.test/avatar.png'), 'https://example.test/avatar.png')
   assert.equal(agentPortraitSrc('agent-1', '/api/party/avatar/agent-1'), '/api/party/avatar/agent-1')

@@ -59,5 +59,8 @@ export function agentPortraitSrc(agentId: string | undefined, portrait: string |
   if (isAppApiPath(value)) return apiUrl(value)
   if (isBundledPortraitAsset(value)) return value
   if (!agentId) return ''
-  return apiUrl(`/api/party/avatar/${encodeURIComponent(agentId)}`)
+  // The avatar endpoint is intentionally stable, but the underlying file can
+  // change when a user selects a new image. Include the stored portrait value
+  // as a cache-busting revision so mounted <img> elements request the update.
+  return apiUrl(`/api/party/avatar/${encodeURIComponent(agentId)}?v=${encodeURIComponent(value)}`)
 }

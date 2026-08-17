@@ -63,7 +63,7 @@ async function runMode(writeMode) {
     const health = await waitForHealth(baseUrl)
     assert.equal(health.ok, true)
     assert.equal(health.writeMode, writeMode)
-    assert.equal(health.commerce.planMappingCount, 13)
+    assert.equal(health.commerce.planMappingCount, mappings.length)
     assert.equal(health.commerce.checkoutConfigured, true)
     assert.equal(health.commerce.webhookSecretsConfigured, true)
 
@@ -81,12 +81,12 @@ async function runMode(writeMode) {
     if (writeMode === 'read_only') {
       assert.equal((await activation.json()).retryable, true)
     } else {
-      const sendPaidOrder = async (id, sku, email = 'owner@example.test') => {
+      const sendPaidOrder = async (id, sku, email = 'owner@example.test', quantity = 1) => {
         const body = JSON.stringify({
           id,
           email,
           name: `#${id}`,
-          line_items: [{ sku }],
+          line_items: [{ sku, quantity }],
         })
         const signature = createHmac('sha256', 'local-smoke-webhook-value').update(body).digest('base64')
         return fetch(`${baseUrl}/shopify/webhooks/orders-paid`, {
@@ -136,6 +136,30 @@ async function runMode(writeMode) {
       provisioned = await fetch(`${baseUrl}/provisioned`, { headers: { Authorization: 'Bearer local-smoke-admin-value' } }).then((response) => response.json())
       assert.equal(provisioned.records.find((record) => record.email === 'owner@example.test')?.creditBalance, 10_600_000, 'Duplicate $1 Shopify delivery must not double-credit the wallet')
 
+      const quantityRefill = await sendPaidOrder('smoke-owner-refill-100k-quantity-2', 'AUTO-REFILL-100K', 'owner@example.test', 2)
+      assert.equal(quantityRefill.status, 200)
+      assert.equal((await quantityRefill.json()).action, 'topup_applied')
+      provisioned = await fetch(`${baseUrl}/provisioned`, { headers: { Authorization: 'Bearer local-smoke-admin-value' } }).then((response) => response.json())
+      assert.equal(provisioned.records.find((record) => record.email === 'owner@example.test')?.creditBalance, 10_800_000, 'A quantity-2 100K refill must add 200,000 hosted credits')
+
+      const duplicateQuantityRefill = await sendPaidOrder('smoke-owner-refill-100k-quantity-2', 'AUTO-REFILL-100K', 'owner@example.test', 2)
+      assert.equal(duplicateQuantityRefill.status, 200)
+      assert.equal((await duplicateQuantityRefill.json()).action, 'duplicate_ignored')
+      provisioned = await fetch(`${baseUrl}/provisioned`, { headers: { Authorization: 'Bearer local-smoke-admin-value' } }).then((response) => response.json())
+      assert.equal(provisioned.records.find((record) => record.email === 'owner@example.test')?.creditBalance, 10_800_000, 'A duplicate quantity-2 delivery must not double-credit the wallet')
+
+      const quantityLargeRefill = await sendPaidOrder('smoke-owner-refill-10m-quantity-2', 'AUTO-REFILL-10M', 'owner@example.test', 2)
+      assert.equal(quantityLargeRefill.status, 200)
+      assert.equal((await quantityLargeRefill.json()).action, 'topup_applied')
+      provisioned = await fetch(`${baseUrl}/provisioned`, { headers: { Authorization: 'Bearer local-smoke-admin-value' } }).then((response) => response.json())
+      assert.equal(provisioned.records.find((record) => record.email === 'owner@example.test')?.creditBalance, 30_800_000, 'A quantity-2 10M refill must add 20,000,000 hosted credits')
+
+      const duplicateQuantityLargeRefill = await sendPaidOrder('smoke-owner-refill-10m-quantity-2', 'AUTO-REFILL-10M', 'owner@example.test', 2)
+      assert.equal(duplicateQuantityLargeRefill.status, 200)
+      assert.equal((await duplicateQuantityLargeRefill.json()).action, 'duplicate_ignored')
+      provisioned = await fetch(`${baseUrl}/provisioned`, { headers: { Authorization: 'Bearer local-smoke-admin-value' } }).then((response) => response.json())
+      assert.equal(provisioned.records.find((record) => record.email === 'owner@example.test')?.creditBalance, 30_800_000, 'A duplicate quantity-2 large refill must not double-credit the wallet')
+
       const proOrder = await sendPaidOrder('smoke-pro', 'AUTO-SUB-PRO-MONTHLY')
       assert.equal(proOrder.status, 200)
       provisioned = await fetch(`${baseUrl}/provisioned`, { headers: { Authorization: 'Bearer local-smoke-admin-value' } }).then((response) => response.json())
@@ -179,6 +203,11 @@ async function runMode(writeMode) {
       provisioned = await fetch(`${baseUrl}/provisioned`, { headers: { Authorization: 'Bearer local-smoke-admin-value' } }).then((response) => response.json())
       assert.equal(provisioned.count, 3)
       assert.equal(provisioned.records[0]?.tier, 'pro')
+
+      const firstOrderQuantityRefill = await sendPaidOrder('smoke-first-order-refill-100k-quantity-2', 'AUTO-REFILL-100K', 'quantity-owner@example.test', 2)
+      assert.equal(firstOrderQuantityRefill.status, 200)
+      provisioned = await fetch(`${baseUrl}/provisioned`, { headers: { Authorization: 'Bearer local-smoke-admin-value' } }).then((response) => response.json())
+      assert.equal(provisioned.records.find((record) => record.email === 'quantity-owner@example.test')?.creditBalance, 200000, 'A first order with quantity 2 must provision 200,000 hosted credits')
     }
     return { writeMode, planMappingHash: health.commerce.planMappingHash, activationStatus: activation.status }
   } finally {

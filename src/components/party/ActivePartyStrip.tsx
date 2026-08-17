@@ -64,7 +64,7 @@ export function ActivePartyStrip({ toolbar }: ActivePartyStripProps) {
   const togglePartyMember = useNexusStore((state) => state.togglePartyMember)
   const [dragOverSlot, setDragOverSlot] = useState<number | null>(null)
   const [hoverSlot, setHoverSlot] = useState<number | null>(null)
-  const [failedPortraitIds, setFailedPortraitIds] = useState<Set<string>>(() => new Set())
+  const [failedPortraitKeys, setFailedPortraitKeys] = useState<Set<string>>(() => new Set())
 
   const slots = useMemo(
     () =>
@@ -123,8 +123,9 @@ export function ActivePartyStrip({ toolbar }: ActivePartyStripProps) {
         {slots.map(({ slot, agent }) => {
           const rs = agent ? RARITY_SLOT[agent.rarity || 'common'] : null
           const rarityClass = agent?.rarity ? RARITY_BADGE[agent.rarity] ?? RARITY_BADGE.common : RARITY_BADGE.common
-          const portraitFailed = agent ? failedPortraitIds.has(agent.id) : false
           const portraitSrc = agent ? portraitSrcForAgent(agent) : ''
+          const portraitKey = agent && portraitSrc ? `${agent.id}::${portraitSrc}` : ''
+          const portraitFailed = portraitKey ? failedPortraitKeys.has(portraitKey) : false
 
           return (
             <div
@@ -209,9 +210,10 @@ export function ActivePartyStrip({ toolbar }: ActivePartyStripProps) {
                         className="h-full w-full object-cover"
                         style={agent.portraitFocusY != null ? { objectPosition: `center ${agent.portraitFocusY}%` } : { objectPosition: 'center 38%' }}
                         onError={() => {
-                          setFailedPortraitIds((current) => {
+                          if (!portraitKey) return
+                          setFailedPortraitKeys((current) => {
                             const next = new Set(current)
-                            next.add(agent.id)
+                            next.add(portraitKey)
                             return next
                           })
                         }}

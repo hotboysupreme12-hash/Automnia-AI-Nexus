@@ -490,7 +490,7 @@ function portraitFromOverview(entry: PartyOverviewAgent, existing: OpenClawAgent
     } else if (candidate.startsWith('data:') && isUsablePortrait(candidate)) {
       return candidate
     } else {
-      return partyAvatarUrl(entry.id)
+      return partyAvatarUrl(entry.id, candidate)
     }
   }
   if (existing && isUsablePortrait(existing.portrait) && !isDefaultAgentPortrait(existing.id, existing.portrait)) return existing.portrait

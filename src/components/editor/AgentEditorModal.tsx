@@ -1065,13 +1065,17 @@ export function AgentEditorModal() {
     setPortraitDraft(storedAvatar||preview)
     setPortraitPreviewSrc(preview||storedAvatar)
     setPortraitPreviewFailed(false)
-    updateAgentMeta(agent.id,{portrait:storedAvatar||preview})
-    agentConfigCache.delete(agent.id)
+    if(storedAvatar){
+      PM({portrait:storedAvatar})
+    }else{
+      updateAgentMeta(agent.id,{portrait:preview})
+      agentConfigCache.delete(agent.id)
+      setAutosavePhase('saved')
+      setAutosaveMessage('All changes saved')
+    }
     setPortraitStatus('Updated.')
-    setAutosavePhase('saved')
-    setAutosaveMessage('All changes saved')
     return true
-  },[agent,updateAgentMeta])
+  },[PM,agent,updateAgentMeta])
   const UploadPortraitFile = async (file:File)=>{
     if(!agent)return
     if(!isSupportedPortraitFile(file)){

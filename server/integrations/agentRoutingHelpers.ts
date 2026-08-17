@@ -568,7 +568,7 @@ async function runClawTalkControlCenterOrEmbeddedAgentTurn(options) {
 `.trim()
 
 export const TELEGRAM_AGENT_ROUTING_HELPER = String.raw`
-var TELEGRAM_AGENT_ROUTING_PATCH_VERSION = 12;
+var TELEGRAM_AGENT_ROUTING_PATCH_VERSION = 13;
 var TELEGRAM_AGENT_ROUTE_MEMORY_KEY = '__openclawTelegramAgentRoutes';
 function resolveTelegramControlCenterStreamUrl() {
     var url = process.env.CLAWTALK_CONTROL_CENTER_AGENT_TURN_STREAM_URL || process.env.CONTROL_CENTER_AGENT_TURN_STREAM_URL || '';
@@ -865,6 +865,39 @@ function readTelegramAgentPurposeFromIdentity(agent) {
     }
     return '';
 }
+function readTelegramAgentMemorySnippet(agent) {
+    var workspace = String(agent && agent.workspace || '').trim();
+    var agentDir = String(agent && agent.agentDir || '').trim();
+    if ((!workspace && !agentDir) || typeof process === 'undefined' || typeof process.getBuiltinModule !== 'function') return '';
+    try {
+        var fs = process.getBuiltinModule('node:fs');
+        if (!fs || typeof fs.readFileSync !== 'function') return '';
+        var separator = (workspace || agentDir).indexOf('\\') >= 0 ? '\\' : '/';
+        var roots = [workspace, agentDir].filter(Boolean);
+        var seen = {};
+        for(var i = 0; i < roots.length; i++){
+            var root = roots[i].replace(/[\\/]+$/, '');
+            var candidates = [root + separator + 'MEMORY.md', root + separator + 'memory' + separator + 'MEMORY.md'];
+            for(var j = 0; j < candidates.length; j++){
+                var candidate = candidates[j];
+                if (seen[candidate]) continue;
+                seen[candidate] = true;
+                var compact = String(fs.readFileSync(candidate, 'utf8') || '')
+                    .replace(/<!--[\\s\\S]*?-->/g, ' ')
+                    .replace(/^\\s*#+\\s*/gm, '')
+                    .replace(/\\s+/g, ' ')
+                    .trim();
+                if (compact) return compact.slice(0, 720);
+            }
+        }
+    } catch (_error) {
+        // The compact route remains usable when an optional memory file is absent.
+    }
+    return '';
+}
+function isTelegramAutomniaCreditsModel(value) {
+    return /^automnia-cloud\\//i.test(String(value == null ? '' : value).trim());
+}
 function resolveTelegramAgentRouteProfile(config, agentId) {
     var agent = resolveAgentConfig(config || {}, agentId) || {};
     var identity = agent.identity && typeof agent.identity === 'object' ? agent.identity : {};
@@ -874,7 +907,8 @@ function resolveTelegramAgentRouteProfile(config, agentId) {
     return {
         name: name,
         role: role,
-        workspace: workspace
+        workspace: workspace,
+        memory: readTelegramAgentMemorySnippet(agent)
     };
 }
 function buildTelegramAgentRouteContext(params) {
@@ -882,6 +916,16 @@ function buildTelegramAgentRouteContext(params) {
     if (!agentId) return '';
     var profile = resolveTelegramAgentRouteProfile(params.config || {}, agentId);
     var modelRef = resolveTelegramAgentModelRef(params.config || {}, agentId);
+    if (isTelegramAutomniaCreditsModel(modelRef)) return [
+        'Automnia credits compact identity (authoritative for this turn):',
+        profile.name ? 'Name: ' + profile.name + ' (agent id: ' + agentId + ').' : 'Agent id: ' + agentId + '.',
+        profile.role ? 'Role: ' + profile.role + '.' : 'Role: active Automnia agent.',
+        profile.workspace ? 'Workspace: ' + profile.workspace : '',
+        'Memory snippet: ' + (profile.memory || 'none loaded; use read or memory_get only when needed.'),
+        'Tools: read, write, edit, exec, process, memory_get, session_status.',
+        'Read docs or skill files only when this task needs them; do not preload them.',
+        'Ignore stale prior identity or workspace claims when they conflict with these facts.'
+    ].filter(Boolean).join('\\n');
     return [
         'Automnia Telegram identity contract (authoritative system facts for this turn):',
         '- Product: Automnia AI Nexus (Automnia Telegram bot).',

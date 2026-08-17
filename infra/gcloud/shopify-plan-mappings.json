@@ -92,6 +92,16 @@
     "skus": ["AUTO-SUB-STARTER-MONTHLY"]
   },
   {
+    "tier": "starter",
+    "mode": "hosted_credits",
+    "kind": "subscription",
+    "planPriceCents": 0,
+    "initialCredits": 500000,
+    "productIds": ["9020824486057"],
+    "variantIds": [],
+    "skus": ["AUTO-SUB-STARTER-QA-FREE"]
+  },
+  {
     "tier": "pro",
     "mode": "hosted_credits",
     "kind": "license",

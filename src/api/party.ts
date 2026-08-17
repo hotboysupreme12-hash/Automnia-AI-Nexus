@@ -141,8 +141,9 @@ export type AgentResourceSavePayload = {
   resourcePath?: string
 }
 
-export function partyAvatarUrl(agentId: string): string {
-  return apiUrl(`/api/party/avatar/${encodeURIComponent(agentId)}`)
+export function partyAvatarUrl(agentId: string, revision?: string): string {
+  const suffix = revision ? `?v=${encodeURIComponent(revision)}` : ''
+  return apiUrl(`/api/party/avatar/${encodeURIComponent(agentId)}${suffix}`)
 }
 
 export function fetchPartyOverview(): Promise<ApiResult<PartyOverviewPayload>> {
