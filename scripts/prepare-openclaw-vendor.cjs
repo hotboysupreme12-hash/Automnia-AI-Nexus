@@ -311,6 +311,172 @@ function ensureAutomniaRelayThoughtSignatureSupport() {
   if (!patched) throw new Error('[openclaw-vendor] Could not install Automnia Relay thought-signature compatibility patch')
 }
 
+function ensureAutomniaRelayRetrySafetySupport() {
+  const distRoot = path.join(vendorRoot, 'dist')
+  if (!fs.existsSync(distRoot)) throw new Error('[openclaw-vendor] Missing OpenClaw dist directory for Automnia Relay retry-safety patch')
+
+  const sdkOptionsPattern = /function buildOpenAISdkClientOptions\(model\) \{\n\tconst timeout = resolveOpenAISdkTimeoutMs\(model\);\n\treturn timeout === void 0 \? \{\} : \{ timeout \};\n\}/
+  const sdkOptionsReplacement = `function buildOpenAISdkClientOptions(model) {
+\tconst timeout = resolveOpenAISdkTimeoutMs(model);
+\t// Automnia Relay is a metered billing boundary. The relay owns its
+\t// bounded upstream retry policy; repeating the same OpenAI-compatible
+\t// request here can charge the upstream model more than once.
+\treturn {
+\t\t...timeout !== void 0 ? { timeout } : {},
+\t\t...(model.provider === "automnia-cloud" ? { maxRetries: 0 } : {})
+\t};
+}`
+  const headerImportPattern = /import \{ randomUUID \} from "node:crypto";/
+  const headerImportReplacement = `import { createHash, randomUUID } from "node:crypto";`
+  const headerFunctionPattern = /function buildOpenAIClientHeaders\(model, context, optionHeaders, turnHeaders, sessionId\) \{([\s\S]*?)\n\treturn resolvedHeaders;\n\}/
+  const headerFunctionReplacement = `function buildOpenAIClientHeaders(model, context, optionHeaders, turnHeaders, sessionId) {$1
+\tif (model.provider === "automnia-cloud" && !Object.keys(resolvedHeaders).some((key) => ["idempotency-key", "x-request-id"].includes(normalizeLowercaseStringOrEmpty(key)))) {
+\t\tconst requestSeed = JSON.stringify({
+\t\t\tsessionId: sessionId ?? "",
+\t\t\tmodel: model.id,
+\t\t\tsystemPrompt: context.systemPrompt ?? "",
+\t\t\tmessages: context.messages ?? []
+\t\t});
+\t\tresolvedHeaders["Idempotency-Key"] = \`automnia-\${createHash("sha256").update(requestSeed).digest("hex")}\`;
+\t}
+\treturn resolvedHeaders;
+}`
+  const completionsClientPattern = /function createOpenAICompletionsClient\(model, context, apiKey, optionHeaders\) \{\n\tconst clientConfig = buildOpenAICompletionsClientConfig\(model, context, optionHeaders\);/
+  const completionsClientReplacement = `function createOpenAICompletionsClient(model, context, apiKey, optionHeaders, sessionId) {
+\tconst clientConfig = buildOpenAICompletionsClientConfig(model, context, optionHeaders, sessionId);`
+  const completionsConfigPattern = /function buildOpenAICompletionsClientConfig\(model, context, optionHeaders\) \{\n\tconst headers = buildOpenAIClientHeaders\(model, context, optionHeaders\);/
+  const completionsConfigReplacement = `function buildOpenAICompletionsClientConfig(model, context, optionHeaders, sessionId) {
+\tconst headers = buildOpenAIClientHeaders(model, context, optionHeaders, void 0, sessionId);`
+  const completionsCallPattern = /createOpenAICompletionsClient\(model, context, options\?\.apiKey \|\| getEnvApiKey\(model\.provider\) \|\| "", options\?\.headers\)/
+  const completionsCallReplacement = `createOpenAICompletionsClient(model, context, options?.apiKey || getEnvApiKey(model.provider) || "", options?.headers, options?.sessionId)`
+
+  let sdkPatched = false
+  let headersPatched = false
+  let completionsPatched = false
+  let agentRunnerPatched = false
+  for (const name of fs.readdirSync(distRoot)) {
+    if (!name.endsWith('.js')) continue
+    const filePath = path.join(distRoot, name)
+    let source = fs.readFileSync(filePath, 'utf8')
+    let next = source
+
+    if (sdkOptionsPattern.test(next)) {
+      next = next.replace(sdkOptionsPattern, sdkOptionsReplacement)
+      sdkPatched = true
+    } else if (next.includes('...(model.provider === "automnia-cloud" ? { maxRetries: 0 } : {})')) {
+      sdkPatched = true
+    }
+
+    if (name.startsWith('openai-transport-stream-')) {
+      if (headerImportPattern.test(next)) {
+        next = next.replace(headerImportPattern, headerImportReplacement)
+        headersPatched = true
+      } else if (next.includes('createHash, randomUUID')) {
+        headersPatched = true
+      }
+      if (headerFunctionPattern.test(next)) {
+        next = next.replace(headerFunctionPattern, headerFunctionReplacement)
+        headersPatched = true
+      } else if (next.includes('resolvedHeaders["Idempotency-Key"] = `automnia-${createHash')) {
+        headersPatched = true
+      }
+      if (completionsClientPattern.test(next)) {
+        next = next.replace(completionsClientPattern, completionsClientReplacement)
+        completionsPatched = true
+      } else if (next.includes('function createOpenAICompletionsClient(model, context, apiKey, optionHeaders, sessionId)')) {
+        completionsPatched = true
+      }
+      if (completionsConfigPattern.test(next)) {
+        next = next.replace(completionsConfigPattern, completionsConfigReplacement)
+        completionsPatched = true
+      } else if (next.includes('function buildOpenAICompletionsClientConfig(model, context, optionHeaders, sessionId)')) {
+        completionsPatched = true
+      }
+      if (completionsCallPattern.test(next)) {
+        next = next.replace(completionsCallPattern, completionsCallReplacement)
+        completionsPatched = true
+      } else if (next.includes('options?.headers, options?.sessionId')) {
+        completionsPatched = true
+      }
+    }
+
+    if (name.startsWith('agent-runner.runtime-')) {
+      const transientMarker = 'const isAutomniaHostedRelay = attemptedRuntimeProvider === "automnia-cloud";'
+      if (next.includes('const isTransientHttp = isTransientHttpError(message);') && !next.includes(transientMarker)) {
+        next = next.replace(
+          'const isTransientHttp = isTransientHttpError(message);',
+          `const isTransientHttp = isTransientHttpError(message);
+\t\tconst isAutomniaHostedRelay = attemptedRuntimeProvider === "automnia-cloud";`,
+        )
+        next = next.replace(
+          'if (isTransientHttp && consumeTransientHttpRetry()) {',
+          'if (!isAutomniaHostedRelay && isTransientHttp && consumeTransientHttpRetry()) {',
+        )
+        agentRunnerPatched = true
+      } else if (next.includes('if (!isAutomniaHostedRelay && isTransientHttp && consumeTransientHttpRetry()) {')) {
+        agentRunnerPatched = true
+      }
+    }
+
+    if (next !== source) fs.writeFileSync(filePath, next)
+  }
+
+  if (!sdkPatched) throw new Error('[openclaw-vendor] Could not install Automnia Relay SDK retry guard')
+  if (!headersPatched || !completionsPatched) throw new Error('[openclaw-vendor] Could not install Automnia Relay idempotency-key patch')
+  if (!agentRunnerPatched) throw new Error('[openclaw-vendor] Could not install Automnia Relay embedded retry guard')
+}
+
+function ensureAutomniaRelayCompactContextSupport() {
+  const distRoot = path.join(vendorRoot, 'dist')
+  if (!fs.existsSync(distRoot)) throw new Error('[openclaw-vendor] Missing OpenClaw dist directory for Automnia Relay compact-context patch')
+
+  const promptMarker = 'const isAutomniaCompactPromptProvider = params.provider === "automnia-cloud";'
+  const promptPattern = /const effectivePromptMode = params\.toolsAllow\?\.length \? "minimal" : promptMode;\n\t\tconst effectiveSkillsPrompt = params\.toolsAllow\?\.length \? void 0 : skillsPrompt;/
+  const promptReplacement = `${promptMarker}\n\t\tconst effectivePromptMode = isAutomniaCompactPromptProvider || params.toolsAllow?.length ? "minimal" : promptMode;\n\t\tconst effectiveSkillsPrompt = isAutomniaCompactPromptProvider || params.toolsAllow?.length ? void 0 : skillsPrompt;`
+  const historyMarker = 'const historyLimit = params.provider === "automnia-cloud" ? 1 : getHistoryLimitFromSessionKey(params.sessionKey, params.config);'
+  const selectionHistoryPattern = /const truncated = limitHistoryTurns\(filterHeartbeatTranscriptArtifacts\(validated, heartbeatSummary\?\.ackMaxChars, heartbeatSummary\?\.prompt\), getHistoryLimitFromSessionKey\(params\.sessionKey, params\.config\)\);/
+  const selectionHistoryReplacement = `${historyMarker}\n\t\t\t\t\tconst truncated = limitHistoryTurns(filterHeartbeatTranscriptArtifacts(validated, heartbeatSummary?.ackMaxChars, heartbeatSummary?.prompt), historyLimit);`
+  const compactHistoryPattern = /const truncated = limitHistoryTurns\(session\.messages, getHistoryLimitFromSessionKey\(params\.sessionKey, params\.config\)\);/
+  const compactHistoryReplacement = `${historyMarker}\n\t\t\tconst truncated = limitHistoryTurns(session.messages, historyLimit);`
+
+  let promptPatched = false
+  let selectionHistoryPatched = false
+  let compactHistoryPatched = false
+  for (const name of fs.readdirSync(distRoot)) {
+    if (!name.endsWith('.js')) continue
+    const filePath = path.join(distRoot, name)
+    const source = fs.readFileSync(filePath, 'utf8')
+    let next = source
+
+    if (promptPattern.test(next)) {
+      next = next.replace(promptPattern, promptReplacement)
+      promptPatched = true
+    } else if (next.includes(promptMarker)) {
+      promptPatched = true
+    }
+
+    if (selectionHistoryPattern.test(next)) {
+      next = next.replace(selectionHistoryPattern, selectionHistoryReplacement)
+      selectionHistoryPatched = true
+    } else if (name.startsWith('selection-') && next.includes(historyMarker)) {
+      selectionHistoryPatched = true
+    }
+
+    if (compactHistoryPattern.test(next)) {
+      next = next.replace(compactHistoryPattern, compactHistoryReplacement)
+      compactHistoryPatched = true
+    } else if (name.startsWith('compact-') && next.includes(historyMarker)) {
+      compactHistoryPatched = true
+    }
+
+    if (next !== source) fs.writeFileSync(filePath, next)
+  }
+
+  if (!promptPatched) throw new Error('[openclaw-vendor] Could not force Automnia Relay minimal system prompt mode')
+  if (!selectionHistoryPatched) throw new Error('[openclaw-vendor] Could not cap Automnia Relay session history')
+  if (!compactHistoryPatched) throw new Error('[openclaw-vendor] Could not cap Automnia Relay compaction history')
+}
+
 function packageJsonFor(packageName) {
   return path.join(nodeModulesRoot, ...packageName.split('/'), 'package.json')
 }
@@ -410,6 +576,8 @@ async function main() {
   validateVendorSource(lock)
   const packageArtifacts = await hydratePublishedPackageArtifacts(packageJson)
   ensureAutomniaRelayThoughtSignatureSupport()
+  ensureAutomniaRelayRetrySafetySupport()
+  ensureAutomniaRelayCompactContextSupport()
 
   if (!refresh && fs.existsSync(nodeModulesRoot)) {
     const missing = validateInstalledPackages(lock)

@@ -155,6 +155,10 @@ import {
   type GatewayChannelActivity,
   type GatewayLogEntry,
 } from './services/gateway/gatewayLogService'
+import {
+  enforceAutomniaCompactionPolicy,
+  type AutomniaCompactionSettings,
+} from './services/gateway/compactionPolicy'
 import { createGatewayChatService } from './services/gateway/gatewayChatService'
 import { createBufferedAgentTurnService } from './services/agents/agentTurnService'
 import { createGatewayAgentTurnService } from './services/agents/gatewayAgentTurnService'
@@ -477,6 +481,19 @@ const RESOURCE_SEED_FILES = [
   'TOOLS.md',
 ] as const
 const SHARED_TEAM_FILES = ['TEAM_INTENTS.md', 'TEAM_STATE.md', 'TEAM_SYNC.md'] as const
+const AUTOMNIA_CREDITS_COMPACT_TOOL_ALLOWLIST = [
+  'read',
+  'write',
+  'edit',
+  'exec',
+  'process',
+  'memory_get',
+  'session_status',
+] as const
+const AUTOMNIA_CREDITS_COMPACT_MEMORY_MAX_CHARS = 720
+const AUTOMNIA_CREDITS_COMPACT_TOOL_RESULT_MAX_CHARS = 4000
+const AUTOMNIA_CREDITS_COMPACT_MEMORY_GET_MAX_CHARS = 1000
+const AUTOMNIA_CREDITS_COMPACT_POST_COMPACTION_MAX_CHARS = 800
 const SHARED_AGENT_STATE_DIR = path.join('.openclaw', 'agents')
 const AGENT_LOCAL_CONFIG_FILE = 'config.json'
 const AGENT_MDS_FILE = 'MDS.json'
@@ -1212,6 +1229,12 @@ type AgentConfigEntry = {
   model?: {
     primary?: string
     fallbacks?: string[]
+  }
+  contextLimits?: {
+    memoryGetMaxChars?: number
+    memoryGetDefaultLines?: number
+    toolResultMaxChars?: number
+    postCompactionMaxChars?: number
   }
 }
 
@@ -8600,6 +8623,15 @@ function createInitialOpenclawConfig() {
       defaults: {
         workspace: WORKSPACE_ROOT,
         model: defaultAgentModelSelection(),
+        compaction: {
+          reserveTokensFloor: 50000,
+          keepRecentTokens: 50000,
+          midTurnPrecheck: { enabled: false },
+          truncateAfterCompaction: false,
+          maxActiveTranscriptBytes: '20mb',
+          notifyUser: true,
+          memoryFlush: { enabled: false, softThresholdTokens: 4000 },
+        },
         sandbox: { mode: 'off' as const, scope: 'agent' as const, workspaceAccess: 'rw' as const },
         skipBootstrap: true,
         skipOptionalBootstrapFiles: [...OPENCLAW_OPTIONAL_BOOTSTRAP_FILES],
@@ -8677,6 +8709,13 @@ async function rememberJsonFileCache<T>(
   }
 }
 
+function enforcePersistedCompactionPolicy(config: OpenClawConfigFile) {
+  const defaults = config.agents?.defaults
+  if (!defaults) return false
+  if (!defaults.compaction) defaults.compaction = {}
+  return enforceAutomniaCompactionPolicy(defaults.compaction as AutomniaCompactionSettings)
+}
+
 async function readOpenclawConfig() {
   let raw: string
   try {
@@ -8691,6 +8730,7 @@ async function readOpenclawConfig() {
       || sanitizeOpenClawConfigAgentAvatars(cached)
       || migrateGeneratedDeepSeekDefaultsInOpenClawConfig(cached)
       || pruneRetiredAgentsFromOpenClawConfig(cached)
+      || enforcePersistedCompactionPolicy(cached)
     ) {
       await writeOpenclawConfig(cached).catch(() => undefined)
     }
@@ -8715,6 +8755,7 @@ async function readOpenclawConfig() {
         || sanitizeOpenClawConfigAgentAvatars(parsed)
         || migrateGeneratedDeepSeekDefaultsInOpenClawConfig(parsed)
         || pruneRetiredAgentsFromOpenClawConfig(parsed)
+        || enforcePersistedCompactionPolicy(parsed)
       ) {
         await writeOpenclawConfig(parsed).catch(() => undefined)
       }
@@ -8737,6 +8778,7 @@ async function readOpenclawConfig() {
       || sanitizeOpenClawConfigAgentAvatars(parsed)
       || migrateGeneratedDeepSeekDefaultsInOpenClawConfig(parsed)
       || pruneRetiredAgentsFromOpenClawConfig(parsed)
+      || enforcePersistedCompactionPolicy(parsed)
     ) {
       await writeOpenclawConfig(parsed).catch(() => undefined)
     }
@@ -9098,6 +9140,51 @@ function normalizeOpenClawConfigModelRefs(config: OpenClawConfigFile) {
   ensureGoogleVertexGlobalRouting(config)
 }
 
+function applyAutomniaCreditsCompactToolPolicy(config: OpenClawConfigFile) {
+  const current = config.tools || {}
+  const allow = [...AUTOMNIA_CREDITS_COMPACT_TOOL_ALLOWLIST]
+  config.tools = {
+    ...current,
+    byProvider: {
+      ...(current.byProvider || {}),
+      [AUTOMNIA_CREDITS_PROVIDER_ID]: {
+        ...(current.byProvider?.[AUTOMNIA_CREDITS_PROVIDER_ID] || {}),
+        allow,
+      },
+    },
+  }
+}
+
+function applyAutomniaCreditsCompactContextLimits(
+  entry: AgentConfigEntry,
+  inheritedModel?: string,
+) {
+  const usesAutomniaCredits = isAutomniaOpenClawModel(entry.model?.primary || inheritedModel)
+  const current = entry.contextLimits
+  if (usesAutomniaCredits) {
+    const next = current || {}
+    if (next.memoryGetMaxChars === undefined || next.memoryGetMaxChars > AUTOMNIA_CREDITS_COMPACT_MEMORY_GET_MAX_CHARS) {
+      next.memoryGetMaxChars = AUTOMNIA_CREDITS_COMPACT_MEMORY_GET_MAX_CHARS
+    }
+    if (next.memoryGetDefaultLines === undefined || next.memoryGetDefaultLines > 20) next.memoryGetDefaultLines = 20
+    if (next.toolResultMaxChars === undefined || next.toolResultMaxChars > AUTOMNIA_CREDITS_COMPACT_TOOL_RESULT_MAX_CHARS) {
+      next.toolResultMaxChars = AUTOMNIA_CREDITS_COMPACT_TOOL_RESULT_MAX_CHARS
+    }
+    if (next.postCompactionMaxChars === undefined || next.postCompactionMaxChars > AUTOMNIA_CREDITS_COMPACT_POST_COMPACTION_MAX_CHARS) {
+      next.postCompactionMaxChars = AUTOMNIA_CREDITS_COMPACT_POST_COMPACTION_MAX_CHARS
+    }
+    entry.contextLimits = next
+    return
+  }
+
+  if (!current) return
+  if (current.memoryGetMaxChars === AUTOMNIA_CREDITS_COMPACT_MEMORY_GET_MAX_CHARS) delete current.memoryGetMaxChars
+  if (current.memoryGetDefaultLines === 20) delete current.memoryGetDefaultLines
+  if (current.toolResultMaxChars === AUTOMNIA_CREDITS_COMPACT_TOOL_RESULT_MAX_CHARS) delete current.toolResultMaxChars
+  if (current.postCompactionMaxChars === AUTOMNIA_CREDITS_COMPACT_POST_COMPACTION_MAX_CHARS) delete current.postCompactionMaxChars
+  if (!Object.keys(current).length) delete entry.contextLimits
+}
+
 function ensureOpenclawRuntimeDefaults(config: OpenClawConfigFile) {
   pruneOpenClawLegacyConfigKeys(config)
   sanitizeOpenClawConfigAgentAvatars(config)
@@ -9163,6 +9250,18 @@ function ensureOpenclawRuntimeDefaults(config: OpenClawConfigFile) {
   if (!defaults.compaction) defaults.compaction = {}
   if (!defaults.compaction.midTurnPrecheck) defaults.compaction.midTurnPrecheck = {}
   if (!defaults.compaction.memoryFlush) defaults.compaction.memoryFlush = {}
+  const automniaDefaultCompactionSettings = defaults.compaction.reserveTokensFloor === 24000
+    && defaults.compaction.keepRecentTokens === 50000
+    && defaults.compaction.midTurnPrecheck.enabled === false
+    && defaults.compaction.truncateAfterCompaction === false
+    && defaults.compaction.maxActiveTranscriptBytes === '20mb'
+    && defaults.compaction.memoryFlush.enabled === false
+  if (automniaDefaultCompactionSettings) {
+    // Migrate the previous Automnia baseline. The exact-shape check keeps a
+    // user's independently customized compaction settings intact while
+    // repairing existing installs that still use the failing 24k floor.
+    defaults.compaction.reserveTokensFloor = 50000
+  }
   const legacyAggressiveCompactionDefaults = defaults.compaction.reserveTokensFloor === 60000
     && defaults.compaction.keepRecentTokens === 50000
     && defaults.compaction.midTurnPrecheck.enabled === true
@@ -9173,7 +9272,7 @@ function ensureOpenclawRuntimeDefaults(config: OpenClawConfigFile) {
     // Migrate the bundle previously generated by Automnia. The exact-shape
     // check keeps a user's independently customized compaction settings
     // intact while fixing existing installs that still carry the old bundle.
-    defaults.compaction.reserveTokensFloor = 24000
+    defaults.compaction.reserveTokensFloor = 50000
     defaults.compaction.midTurnPrecheck.enabled = false
     defaults.compaction.truncateAfterCompaction = false
     defaults.compaction.maxActiveTranscriptBytes = '20mb'
@@ -9181,11 +9280,9 @@ function ensureOpenclawRuntimeDefaults(config: OpenClawConfigFile) {
     if (defaults.contextLimits?.toolResultMaxChars === 10000) defaults.contextLimits.toolResultMaxChars = 16000
     if (defaults.contextLimits?.postCompactionMaxChars === 1200) defaults.contextLimits.postCompactionMaxChars = 2400
   }
-  // Keep the runtime's documented defaults as the reliability baseline. The
-  // previous values reserved 60k tokens and ran a mid-turn compaction guard,
-  // which caused the hosted relay's 45k runtime cap to compact before a turn
-  // could finish and made tool turns look like skipped messages.
-  defaults.compaction.reserveTokensFloor ??= 24000
+  enforceAutomniaCompactionPolicy(defaults.compaction as AutomniaCompactionSettings)
+  // Keep enough room for the Telegram relay to recover a compacted turn.
+  defaults.compaction.reserveTokensFloor ??= 50000
   defaults.compaction.keepRecentTokens ??= 50000
   defaults.compaction.midTurnPrecheck.enabled ??= false
   defaults.compaction.truncateAfterCompaction ??= false
@@ -9209,6 +9306,7 @@ function ensureOpenclawRuntimeDefaults(config: OpenClawConfigFile) {
     entry.fastModeDefault ??= openClawFastModeDefault(DEFAULT_OPENCLAW_FAST_MODE)
     if (entry.sandbox?.mode === 'off') entry.tools = unrestrictedAgentToolsConfig()
     applyNoBootstrapAgentConfig(entry)
+    applyAutomniaCreditsCompactContextLimits(entry, defaults.model?.primary)
   }
 
   if (!defaults.memorySearch) defaults.memorySearch = {}
@@ -9232,6 +9330,7 @@ function ensureOpenclawRuntimeDefaults(config: OpenClawConfigFile) {
   defaults.memorySearch.query.hybrid.candidateMultiplier ??= 4
 
   if (!config.tools) config.tools = {}
+  applyAutomniaCreditsCompactToolPolicy(config)
   if (!config.tools.agentToAgent) config.tools.agentToAgent = {}
   const allowedAgents = new Set((config.agents.list || []).map((entry) => entry.id).filter((id) => id && !isRetiredAgentId(id)))
   config.tools.agentToAgent.enabled ??= true
@@ -9508,6 +9607,9 @@ async function writeOpenclawConfig(config: unknown, options: { allowDuringAgentT
   // active billing contract afterward so a background config write cannot
   // silently broaden a just-selected usage policy.
   enforceActiveBillingRouteModelOrder(parsed)
+  for (const entry of parsed.agents?.list || []) {
+    applyAutomniaCreditsCompactContextLimits(entry, parsed.agents?.defaults?.model?.primary)
+  }
   await syncModelProviderTimeoutsFromAgentSettings(parsed)
   const next = {
     ...parsed,
@@ -10889,7 +10991,7 @@ async function sendClawTalkSmsWithRetry(client, logger, params) {
 
 function patchedTelegramBotRuntimeSource(source: string) {
   let next = source
-  const routingPatchVersion = 'var TELEGRAM_AGENT_ROUTING_PATCH_VERSION = 12;'
+  const routingPatchVersion = 'var TELEGRAM_AGENT_ROUTING_PATCH_VERSION = 13;'
   const routingHelperPattern = /var TELEGRAM_AGENT_ROUTING_PATCH_VERSION = \d+;[\s\S]*?\/\/#endregion telegram-agent-routing-patch/
   if (routingHelperPattern.test(next)) {
     next = next.replace(routingHelperPattern, TELEGRAM_AGENT_ROUTING_HELPER)
@@ -13783,6 +13885,54 @@ function readAgentPrimaryModelIdSync(agentId: string) {
   return ''
 }
 
+function readAutomniaCompactAgentIdentitySync(
+  agentId: string,
+  executionWorkspace?: string,
+) {
+  const config = readJsonFileSyncLoose(OPENCLAW_CONFIG_PATH) as OpenClawConfigFile | null
+  const entry = (config?.agents?.list || []).find((candidate) => candidate.id?.trim().toLowerCase() === agentId.trim().toLowerCase())
+  let local: Record<string, unknown> | null = null
+  for (const candidate of agentLocalConfigPathCandidates(agentId)) {
+    local = readJsonFileSyncLoose(candidate)
+    if (local) break
+  }
+  const localIdentity = isLooseRecord(local?.identity) ? local.identity : {}
+  const localProfile = isLooseRecord(local?.profile) ? local.profile : {}
+  const entryIdentity = isLooseRecord(entry?.identity) ? entry.identity : {}
+  const localRouting = isLooseRecord(local?.routing) ? local.routing : {}
+  return {
+    name: String(entryIdentity.name || entry?.name || localIdentity.name || agentId).trim(),
+    role: String(localProfile.role || '').trim(),
+    workspace: String(executionWorkspace || entry?.workspace || localRouting.workspace || '').trim(),
+  }
+}
+
+function readAutomniaCompactMemorySnippetSync(
+  agentId: string,
+  executionWorkspace?: string,
+  doctrineWorkspace?: string,
+) {
+  const candidates = uniqueStrings(
+    doctrineWorkspace ? path.join(doctrineWorkspace, 'MEMORY.md') : '',
+    executionWorkspace ? path.join(executionWorkspace, 'MEMORY.md') : '',
+    path.join(canonicalDoctrineRoot(agentId), 'MEMORY.md'),
+    path.join(openclawAgentFolder(agentId), 'MEMORY.md'),
+  )
+  for (const candidate of candidates) {
+    try {
+      const compact = readFileSync(candidate, 'utf-8')
+        .replace(/<!--([\s\S]*?)-->/g, ' ')
+        .replace(/^\s*#+\s*/gm, '')
+        .replace(/\s+/g, ' ')
+        .trim()
+      if (compact) return trimTask(compact, AUTOMNIA_CREDITS_COMPACT_MEMORY_MAX_CHARS)
+    } catch {
+      // A missing memory file is normal; memory_get/read remain available on demand.
+    }
+  }
+  return ''
+}
+
 function isGoogleGeminiModelId(modelId: string) {
   const { provider, model } = splitModelId(modelId)
   return (provider === 'google-vertex' || provider === 'google') && /^gemini(?:[-/]|$)/i.test(model)
@@ -13965,6 +14115,23 @@ function composeAgentDoctrinePrompt(agentId: string, message: string, executionW
       'Final reply: changed file path plus concise verification or blocker only.',
       '',
       `Compact task: ${compactTask}`,
+    ].filter(Boolean).join('\n')
+  }
+
+  if (isAutomniaOpenClawModel(readAgentPrimaryModelIdSync(agentId))) {
+    const identity = readAutomniaCompactAgentIdentitySync(agentId, executionWorkspace)
+    const memory = readAutomniaCompactMemorySnippetSync(agentId, executionWorkspace, doctrineWorkspace)
+    return [
+      'Automnia credits compact runtime context:',
+      `Name: ${identity.name || agentId}`,
+      `Role: ${identity.role || 'active Automnia agent'}`,
+      identity.workspace ? `Workspace: ${identity.workspace}` : '',
+      `Memory snippet: ${memory || 'none loaded; use memory_get or read only when needed.'}`,
+      'Tools: read, write, edit, exec, process, memory_get, session_status.',
+      'For anything else, read the relevant local docs or skill file only when this task requires it; do not preload docs or workspace files.',
+      'Keep the turn focused on the current request and keep the final reply concise.',
+      '',
+      message,
     ].filter(Boolean).join('\n')
   }
 

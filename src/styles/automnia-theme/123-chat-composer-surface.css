@@ -85,6 +85,32 @@ html.dui-pro-overhaul.dui-cohesive-ui .dy-command-console textarea.dy-command-te
   color: #f5fbfa !important;
 }
 
+/* The message text should sit directly on the composer surface. Keep every
+   interaction state transparent so older field styles cannot restore the
+   inset black rectangle while the user is typing. */
+html.dui-pro-overhaul .dy-command-console .dy-command-composer__field,
+html.dui-pro-overhaul.dui-cohesive-ui .dy-command-console .dy-command-composer__field,
+html.dui-pro-overhaul .dy-command-console .dy-command-composer__field:hover,
+html.dui-pro-overhaul.dui-cohesive-ui .dy-command-console .dy-command-composer__field:hover,
+html.dui-pro-overhaul .dy-command-console .dy-command-composer__field:focus-within,
+html.dui-pro-overhaul.dui-cohesive-ui .dy-command-console .dy-command-composer__field:focus-within,
+html.dui-pro-overhaul .dy-command-console textarea.dy-command-textarea,
+html.dui-pro-overhaul.dui-cohesive-ui .dy-command-console textarea.dy-command-textarea,
+html.dui-pro-overhaul .dy-command-console textarea.dy-command-textarea:hover,
+html.dui-pro-overhaul.dui-cohesive-ui .dy-command-console textarea.dy-command-textarea:hover,
+html.dui-pro-overhaul .dy-command-console textarea.dy-command-textarea:focus,
+html.dui-pro-overhaul.dui-cohesive-ui .dy-command-console textarea.dy-command-textarea:focus,
+html.dui-pro-overhaul .dy-command-console textarea.dy-command-textarea:focus-visible,
+html.dui-pro-overhaul.dui-cohesive-ui .dy-command-console textarea.dy-command-textarea:focus-visible {
+  border: 0 !important;
+  border-color: transparent !important;
+  background: transparent !important;
+  background-color: transparent !important;
+  background-image: none !important;
+  box-shadow: none !important;
+  outline: none !important;
+}
+
 @media (max-width: 640px) {
   html.dui-pro-overhaul .dy-command-console .dy-command-composer,
   html.dui-pro-overhaul.dui-cohesive-ui .dy-command-console .dy-command-composer {

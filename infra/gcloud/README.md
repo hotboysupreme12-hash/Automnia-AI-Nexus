@@ -20,7 +20,7 @@ included in the sanitized corpus by `npm run publish:knowledge`.
 | `switch-traffic.ps1` | Freezes source writes, performs a final delta migration, re-verifies, moves the permanent domain, and restores the source automatically on failure. |
 | `rollback.ps1` | Freezes the active target, reverse-migrates post-cutover changes, verifies, and moves the domain back. |
 | `configure-domain.ps1` | One-time domain mapping and optional Cloud DNS record setup. |
-| `shopify-plan-mappings.json` | The thirteen authoritative product mappings, including the $1 / 100,000-credit refill. Google Cloud merges purchases by account email into one highest-tier entitlement and canonical license key. |
+| `shopify-plan-mappings.json` | The authoritative product mappings, including the $1 / 100,000-credit refill and free QA license. Google Cloud merges purchases by account email into one highest-tier entitlement and canonical license key. |
 | `firestore.indexes.json` | The authoritative composite-index contract. It is empty because the current query plan needs no composite index. |
 | `shopify.app.toml.template` | One-time Shopify webhook migration from a project URL to the permanent Automnia URL. |
 | `service/` | Deployable Node 22 Cloud Run service for account activation/sign-in, Google linking, license activation, Shopify webhooks, credits, Vertex AI relay, and authenticated Agent Search answers. |

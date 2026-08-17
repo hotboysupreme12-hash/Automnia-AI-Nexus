@@ -349,13 +349,30 @@ function configuredTierForOrder(order) {
       (variantId && plan.variantIds.includes(variantId)) ||
       (sku && plan.skus.includes(sku)),
     );
-    if (configured) return configured;
+    if (configured) {
+      const quantity = Number(lineItem?.quantity);
+      return {
+        ...configured,
+        quantity: Number.isSafeInteger(quantity) && quantity > 0 ? quantity : 1,
+      };
+    }
   }
   // Once explicit maps are supplied, an unrecognised product must never grant
   // a default tier just because its title happens to contain a familiar word.
   if (planMappings.length) return null;
   const itemTitles = lineItems.map((item) => item?.title || '').join(' ');
   return legacyTierConfiguration(order?.note || '', itemTitles);
+}
+
+function creditsGrantedForTier(tierConfig) {
+  const unitCredits = Math.max(0, Number(tierConfig?.initialCredits) || 0);
+  // Shopify quantity represents multiple refill units. Subscription and
+  // upgrade products still grant one entitlement if a cart quantity is
+  // accidentally greater than one.
+  const quantity = tierConfig?.kind === 'topup' && Number.isSafeInteger(tierConfig?.quantity) && tierConfig.quantity > 0
+    ? tierConfig.quantity
+    : 1;
+  return unitCredits * quantity;
 }
 
 function publicLicense(record) {
@@ -416,7 +433,7 @@ function buildOnboardingPackage(order, licenseKey, tierConfig) {
     licenseKey,
     tier: tierConfig.tier,
     mode: tierConfig.mode,
-    initialCredits: tierConfig.initialCredits,
+    initialCredits: creditsGrantedForTier(tierConfig),
     customerName,
     customerEmail,
     telegramStartUrl,
@@ -599,7 +616,7 @@ async function updateHostedEntitlement({ record, order, tierConfig, topic, deliv
     // An upgrade changes the canonical entitlement but never resets its
     // existing hosted-credit wallet. A new plan grant is additive; separate
     // prior wallet sources remain pooled through _creditSources.
-    const grant = Math.max(0, Number(tierConfig.initialCredits) || 0);
+    const grant = creditsGrantedForTier(tierConfig);
     Object.assign(record, {
       tier: nextTier,
       mode: nextMode,
@@ -627,7 +644,7 @@ async function updateHostedEntitlement({ record, order, tierConfig, topic, deliv
     // Preserve the current wallet and add only the incoming plan grant. The
     // public response and relay wallet pool all non-revoked account sources,
     // including hosted credits earned before a BYOK or higher-tier upgrade.
-    const grant = Math.max(0, Number(tierConfig.initialCredits) || 0);
+    const grant = creditsGrantedForTier(tierConfig);
     const update = {
       tier: preserveExistingEntitlement ? current.tier : tierConfig.tier,
       mode: preserveExistingEntitlement ? current.mode : tierConfig.mode,
@@ -1827,7 +1844,7 @@ async function handlePaidOrder(order, deliveryId) {
     byokAllowed: tierConfig.mode === 'byok' || (!creditsOnlyEntitlement(tierConfig) && byokAllowedForTier(tierConfig.tier)),
     permanentAccess: planHasPermanentAccess(tierConfig),
     accessType: planHasPermanentAccess(tierConfig) ? 'permanent' : 'subscription',
-    creditBalance: tierConfig.initialCredits,
+    creditBalance: creditsGrantedForTier(tierConfig),
     licenseKey,
     onboarding: buildOnboardingPackage(order, licenseKey, tierConfig),
     status: 'provisioned',
