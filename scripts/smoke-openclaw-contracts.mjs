@@ -174,8 +174,8 @@ assertIncludes(agentTurnRoutes, 'Command accepted; opening the Gateway-backed Op
 assertIncludes(agentTurnRoutes, 'Runtime ready; dispatching through Gateway chat.', 'Command Console runtime ready progress')
 assertIncludes(nexusStore, 'commandConsoleSessionKey', 'Command Console stable session key')
 assertIncludes(nexusStore, 'forceOpenClawRuntime: true', 'Command Console forced OpenClaw runtime route')
-assertIncludes(nexusStore, "sandbox: { mode: 'all', scope: 'agent', workspaceAccess: 'rw' }", 'Newly recruited agents default to a writable per-agent sandbox')
-assertIncludes(nexusStore, "toolsPolicy: { profile: 'full', allow: [], deny: [] }", 'Newly recruited agents avoid a restrictive synthetic tool allowlist')
+assertIncludes(nexusStore, "const sandboxMode = input.sandbox?.mode || 'all'", 'Newly recruited agents default to a writable per-agent sandbox')
+assertIncludes(nexusStore, "const toolsPolicy = sandboxMode === 'off'", 'Newly recruited agents avoid a restrictive synthetic tool allowlist')
 assertIncludes(nexusStore, 'const gatewayChatMessage = options.freshSession', 'Command Console frontend plain Gateway chat message')
 assertIncludes(nexusStore, 'const outboundMessage = preferOpenClawRuntime ? gatewayChatMessage : composed', 'Command Console frontend bypasses context wrapper for Gateway chat')
 assertIncludes(nexusStore, 'if (!preferOpenClawRuntime && payload.ok !== false && isDirectToolAccessDenial', 'Command Console does not retry an already-Gateway-routed tool denial')
@@ -320,7 +320,9 @@ assertOrderedIncludes(nexusStore, [
   "if (event === 'status')",
   "if (event === 'progress')",
   "if (event === 'delta')",
-  'accumulated = data.replace === true ? text : `${accumulated}${text}`',
+  'if (data.replace === true)',
+  'accumulated = text.slice(0, MAX_LIVE_RESPONSE_TEXT_CHARS)',
+  'accumulated += text.slice(0, MAX_LIVE_RESPONSE_TEXT_CHARS - accumulated.length)',
   "if (event === 'error')",
   "if (event === 'final')",
   'onStreamComplete: streamProjector.complete',
@@ -350,7 +352,7 @@ assertIncludes(server, "from './integrations/agentRoutingHelpers'", 'control pla
 assertIncludes(routingHelpers, 'export const CLAWTALK_CORE_BRIDGE_ROUTING_HELPER', 'ClawTalk routing patch asset')
 assertIncludes(routingHelpers, 'function clawTalkControlCenterHeaders()', 'ClawTalk Control Center authenticated stream handoff')
 assertIncludes(routingHelpers, 'export const TELEGRAM_AGENT_ROUTING_HELPER', 'Telegram routing patch asset')
-assertIncludes(routingHelpers, 'TELEGRAM_AGENT_ROUTING_PATCH_VERSION = 13', 'Telegram routing patch version')
+assertIncludes(routingHelpers, 'TELEGRAM_AGENT_ROUTING_PATCH_VERSION = 14', 'Telegram routing patch version')
 assertIncludes(routingHelpers, 'function resolveTelegramAgentModelRef', 'Telegram routed agent model resolver')
 assertIncludes(routingHelpers, 'function readTelegramAgentPurposeFromIdentity', 'Telegram routed agent purpose resolver')
 assertIncludes(routingHelpers, 'Automnia Telegram identity contract', 'Telegram routed agent identity contract')
@@ -358,11 +360,13 @@ assertIncludes(routingHelpers, 'Configured primary execution model', 'Telegram r
 assertIncludes(routingHelpers, 'Never replace this identity with a generic label', 'Telegram generic identity fallback guard')
 assertIncludes(routingHelpers, 'function applyTelegramVerifiedIdentityDeliveryGuard', 'Telegram verified identity delivery guard')
 assertIncludes(routingHelpers, 'function parseTelegramAgentRouteAutoStart', 'Telegram natural-name fast route parser')
+assertIncludes(routingHelpers, 'function resolveTelegramAgentsCommandResponse', 'Telegram native /agents command integration')
+assertIncludes(server, 'const telegramAgentsCommandText = resolveTelegramAgentsCommandResponse({', 'Telegram native /agents command patch marker')
 assertIncludes(routingHelpers, "mode: 'auto'", 'Telegram natural-name routes should stay one-shot')
 assertIncludes(routingHelpers, 'function buildTelegramAgentFreshSessionKey', 'Telegram natural-name routes should use fresh sessions')
 assertIncludes(routingHelpers, "reason: parsed.mode === '/' ? 'sticky' : parsed.mode === 'auto' ? 'auto-fresh' : 'one-shot-fresh'", 'Telegram named one-shot routes should avoid stale sessions')
 assertIncludes(server, "CLAWTALK_REPAIR_SIGNATURE_VERSION = 'clawtalk-repair:v13'", 'ClawTalk repair signature version')
-assertIncludes(server, "TELEGRAM_REPAIR_SIGNATURE_VERSION = 'telegram-routing-repair:v11'", 'Telegram repair signature version')
+assertIncludes(server, "TELEGRAM_REPAIR_SIGNATURE_VERSION = 'telegram-routing-repair:v12'", 'Telegram repair signature version')
 assertIncludes(server, "entry.name.toLowerCase().includes('telegram')", 'Telegram runtime discovery accepts current ingress bundle names')
 assertIncludes(server, "const routeApplicationMarker = 'const telegramAgentRoute = resolveTelegramAgentRouteForMessage({'", 'Telegram route application patch marker')
 assertIncludes(server, "const bodyResultMarker = 'if (!bodyResult) return null;'", 'Telegram route insertion body marker')

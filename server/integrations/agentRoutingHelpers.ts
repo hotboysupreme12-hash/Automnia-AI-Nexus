@@ -568,7 +568,7 @@ async function runClawTalkControlCenterOrEmbeddedAgentTurn(options) {
 `.trim()
 
 export const TELEGRAM_AGENT_ROUTING_HELPER = String.raw`
-var TELEGRAM_AGENT_ROUTING_PATCH_VERSION = 13;
+var TELEGRAM_AGENT_ROUTING_PATCH_VERSION = 14;
 var TELEGRAM_AGENT_ROUTE_MEMORY_KEY = '__openclawTelegramAgentRoutes';
 function resolveTelegramControlCenterStreamUrl() {
     var url = process.env.CLAWTALK_CONTROL_CENTER_AGENT_TURN_STREAM_URL || process.env.CONTROL_CENTER_AGENT_TURN_STREAM_URL || '';
@@ -719,6 +719,92 @@ function buildTelegramAgentAliases(config, fallbackAgentId) {
         }),
         agentIds: agentIds
     };
+}
+function normalizeTelegramAgentCommandText(value) {
+    return normalizeTelegramAgentPurpose(value).replace(/\s+/g, ' ').trim();
+}
+function buildTelegramAgentsCommandProfile(config, agentId) {
+    var profile = resolveTelegramAgentRouteProfile(config || {}, agentId);
+    var name = normalizeTelegramAgentCommandText(profile.name || agentId) || agentId;
+    var role = normalizeTelegramAgentCommandText(profile.role || 'Active Automnia agent');
+    var model = normalizeTelegramAgentCommandText(resolveTelegramAgentModelRef(config || {}, agentId) || 'configured default');
+    return {
+        name: name,
+        role: role,
+        model: model
+    };
+}
+function telegramAgentsCommandRouteState(params) {
+    var state = resolveTelegramAgentRouteMemory();
+    var routeKey = buildTelegramAgentRouteStateKey({
+        accountId: params.accountId,
+        chatId: params.chatId,
+        isGroup: params.isGroup,
+        resolvedThreadId: params.resolvedThreadId,
+        dmThreadId: params.dmThreadId
+    });
+    var sticky = state.routes[routeKey];
+    var built = buildTelegramAgentAliases(params.cfg, params.routeAgentId);
+    if (sticky && (!sticky.agentId || !built.agentIds.has(sticky.agentId))) {
+        delete state.routes[routeKey];
+        sticky = null;
+    }
+    return {
+        state: state,
+        routeKey: routeKey,
+        sticky: sticky,
+        built: built
+    };
+}
+function buildTelegramAgentsCommandList(params, routeState) {
+    var config = params.cfg || {};
+    var list = config && config.agents && Array.isArray(config.agents.list) ? config.agents.list : [];
+    var activeAgentId = routeState.sticky && routeState.sticky.agentId || String(params.routeAgentId || '').trim();
+    var lines = ['Automnia agents available in this Telegram chat:', ''];
+    var listed = new Set();
+    for(var i = 0; i < list.length; i++){
+        var agent = list[i] || {};
+        var agentId = typeof agent.id === 'string' ? agent.id.trim() : '';
+        if (!agentId || listed.has(agentId)) continue;
+        listed.add(agentId);
+        var profile = buildTelegramAgentsCommandProfile(config, agentId);
+        var marker = agentId === activeAgentId ? '✓ ' : '• ';
+        lines.push(marker + profile.name + ' — ' + agentId);
+        lines.push('  role: ' + profile.role + ' | model: ' + profile.model);
+    }
+    if (!listed.size) lines.push('• No configured agents were found.');
+    lines.push('', 'Active: ' + (activeAgentId || 'default'));
+    lines.push('Switch: /agents <agent id or name>');
+    lines.push('Reset: /agents reset');
+    lines.push('OpenClaw thread workers: /subagents list');
+    return lines.join('\n').slice(0, 3900);
+}
+function resolveTelegramAgentsCommandResponse(params) {
+    var routeState = telegramAgentsCommandRouteState(params);
+    var rest = String(params.rawText == null ? '' : params.rawText).trim();
+    if (!rest || /^(?:list|help)$/i.test(rest)) return buildTelegramAgentsCommandList(params, routeState);
+    if (/^(?:default|main|reset|clear)$/i.test(rest)) {
+        delete routeState.state.routes[routeState.routeKey];
+        var defaultAgentId = String(params.routeAgentId || '').trim() || 'main';
+        var defaultProfile = buildTelegramAgentsCommandProfile(params.cfg || {}, defaultAgentId);
+        return 'Telegram agent reset. Future messages in this chat use ' + defaultProfile.name + ' (' + defaultAgentId + ').\n\nUse /agents to list agents.';
+    }
+    var parsed = parseTelegramAgentRoutePrefix('/' + rest, routeState.built.aliases);
+    if (parsed && routeState.built.agentIds.has(parsed.agentId) && !parsed.prompt) {
+        routeState.state.routes[routeState.routeKey] = {
+            agentId: parsed.agentId,
+            alias: parsed.alias,
+            updatedAt: new Date().toISOString()
+        };
+        var selectedProfile = buildTelegramAgentsCommandProfile(params.cfg || {}, parsed.agentId);
+        return 'Telegram agent selected: ' + selectedProfile.name + ' (' + parsed.agentId + ').\nFuture messages in this chat will stay on this agent.\n\nUse /agents to list agents or /agents reset to return to the default.';
+    }
+    var available = routeState.built.aliases.filter(function(alias) {
+        return alias.agentId && alias.display;
+    }).slice(0, 12).map(function(alias) {
+        return alias.display;
+    });
+    return 'Unknown Automnia agent "' + normalizeTelegramAgentCommandText(rest) + '".\nAvailable examples: ' + (available.join(', ') || 'none') + '.\nUse /agents to list the full roster.';
 }
 function normalizeTelegramAgentModelRef(value) {
     var text = String(value == null ? '' : value).trim();

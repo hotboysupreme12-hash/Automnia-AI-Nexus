@@ -149,7 +149,7 @@ export function pluginRequestError(error: unknown) {
   return error instanceof Error ? error.message : String(error)
 }
 
-export function runOpenClawPluginCommand(command: string): Promise<PluginApiPayload> {
+export function runOpenClawPluginCommand(command: string, options: { refreshPlugins?: boolean } = {}): Promise<PluginApiPayload> {
   return pluginApiData<PluginApiPayload>(
     '/api/openclaw/command',
     {
@@ -157,7 +157,7 @@ export function runOpenClawPluginCommand(command: string): Promise<PluginApiPayl
       body: {
         command,
         timeoutSeconds: 600,
-        refreshPlugins: true,
+        refreshPlugins: options.refreshPlugins ?? true,
       },
       timeoutMs: 620_000,
     },

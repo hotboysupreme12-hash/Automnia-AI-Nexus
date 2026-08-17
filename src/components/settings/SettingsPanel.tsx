@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import type { ReactNode } from 'react'
 import { useLicense } from '../../context/useLicense'
 import { useAuth } from '../../context/useAuth'
@@ -13,6 +13,7 @@ import {
 import { clearAllCommandConsoleDrafts } from '../../store/commandConsoleState'
 import { useNexusStore } from '../../store/nexusStore'
 import { resolveLicenseEntitlement } from '../../utils/licenseEntitlement'
+import { restartPluginGateway, runOpenClawPluginCommand } from '../../api/plugins'
 import type {
   CapabilityKey,
   CollaborationMode,
@@ -56,9 +57,18 @@ import {
   readChannelActivitySettings,
   saveChannelActivitySettings,
 } from './channelActivitySettings'
+import {
+  DEFAULT_TELEGRAM_SETTINGS,
+  normalizeTelegramSettings,
+  parseTelegramConfigOutput,
+  readTelegramSettings,
+  saveTelegramSettings,
+  telegramSettingCommands,
+  type TelegramSettings,
+} from './telegramSettings'
 
 type NoticeTone = 'neutral' | 'success' | 'warning' | 'error'
-export type SettingsSectionId = 'account' | 'appearance' | 'workspace' | 'voice' | 'missions' | 'agents' | 'logs' | 'data'
+export type SettingsSectionId = 'account' | 'appearance' | 'workspace' | 'voice' | 'missions' | 'agents' | 'telegram' | 'logs' | 'data'
 type RuntimeTargetScope = 'party' | 'selection'
 type PendingConfirmation = 'reset-all' | 'reset-runtime' | 'clear-workspace' | null
 
@@ -85,6 +95,7 @@ const SETTINGS_SECTIONS: Array<{
   { id: 'voice', label: 'Voice', description: 'Transcription and microphone', keywords: 'speech microphone local cloud online silence pause noise echo gain recording' },
   { id: 'missions', label: 'Missions', description: 'Defaults for new deployments', keywords: 'mission objective duration risk complexity collaboration evidence build test' },
   { id: 'agents', label: 'Agent runtime', description: 'Bulk heartbeat and reasoning policy', keywords: 'agent runtime heartbeat timeout thinking fast parallel recovery continuous' },
+  { id: 'telegram', label: 'Telegram', description: 'Bot commands, delivery and chat safety', keywords: 'telegram bot commands agents pairing dm group topics streaming reactions polls media history actions settings' },
   { id: 'logs', label: 'Logs', description: 'Agent runs, channels and activity memory', keywords: 'logs activity agent runs gateway events tail automnia runtime response history channel telegram sms incoming sent retain trim memory' },
   { id: 'data', label: 'Data & reset', description: 'Backup, cleanup and recovery', keywords: 'reset default backup export clear console responses simulation party data' },
 ]
@@ -138,6 +149,7 @@ function SettingsGlyph({ name }: { name: SettingsSectionId }) {
     voice: <><rect x="9" y="3" width="6" height="11" rx="3" /><path d="M5 10a7 7 0 0 0 14 0M12 17v4M8 21h8" /></>,
     missions: <><path d="m14.5 4.5 5 5-10 10-5-5 10-10Z" /><path d="m12.5 6.5 5 5M5 19l2 2" /></>,
     agents: <><circle cx="12" cy="8" r="4" /><path d="M4.5 21a7.5 7.5 0 0 1 15 0M19 4v4M17 6h4" /></>,
+    telegram: <><path d="m4 11 16-7-5 16-3-6-8-3Z" /><path d="m12 14 3-7-7 3" /></>,
     logs: <><path d="M5 5.5h14M5 12h14M5 18.5h9" /><circle cx="3.5" cy="5.5" r=".7" fill="currentColor" stroke="none" /><circle cx="3.5" cy="12" r=".7" fill="currentColor" stroke="none" /><circle cx="3.5" cy="18.5" r=".7" fill="currentColor" stroke="none" /></>,
     data: <><path d="M12 3v12M7 10l5 5 5-5" /><path d="M4 18v3h16v-3" /></>,
   }
@@ -268,6 +280,11 @@ export function SettingsPanel({ focusSection = 'account', focusRequest = 0 }: { 
   const [passwordChangeBusy, setPasswordChangeBusy] = useState(false)
   const [passwordChangeError, setPasswordChangeError] = useState('')
   const [googleReconnectBusy, setGoogleReconnectBusy] = useState(false)
+  const [telegramSettings, setTelegramSettings] = useState<TelegramSettings>(() => readTelegramSettings())
+  const [telegramLoading, setTelegramLoading] = useState(false)
+  const [telegramSaving, setTelegramSaving] = useState(false)
+  const [telegramLoaded, setTelegramLoaded] = useState(false)
+  const [telegramLoadError, setTelegramLoadError] = useState('')
 
   useEffect(() => {
     setActiveSection(focusSection)
@@ -337,6 +354,78 @@ export function SettingsPanel({ focusSection = 'account', focusRequest = 0 }: { 
   const updateRuntimeDraft = (patch: Partial<RuntimeDefaultsDraft>) => {
     setRuntimeDraft({ targetKey: runtimeTargetKey, values: { ...activeRuntimeDraft, ...patch } })
   }
+
+  const updateTelegramDraft = <Key extends keyof TelegramSettings>(key: Key, value: TelegramSettings[Key]) => {
+    setTelegramSettings((current) => {
+      const next = normalizeTelegramSettings({ ...current, [key]: value })
+      saveTelegramSettings(next)
+      return next
+    })
+  }
+
+  const openClawCommandFailure = (payload: { ok?: boolean; error?: string; command?: { output?: string; stderr?: string; code?: number } }, fallback: string) => {
+    if (payload.ok === false || payload.error || (typeof payload.command?.code === 'number' && payload.command.code !== 0)) {
+      return payload.error || payload.command?.output || payload.command?.stderr || fallback
+    }
+    return ''
+  }
+
+  const loadTelegramFromGateway = useCallback(async () => {
+    if (telegramLoading) return
+    setTelegramLoading(true)
+    setTelegramLoadError('')
+    try {
+      const [telegramPayload, messagesPayload] = await Promise.all([
+        runOpenClawPluginCommand('config get channels.telegram', { refreshPlugins: false }),
+        runOpenClawPluginCommand('config get messages', { refreshPlugins: false }),
+      ])
+      const telegramFailure = openClawCommandFailure(telegramPayload, 'Telegram configuration could not be read.')
+      const messagesFailure = openClawCommandFailure(messagesPayload, 'Telegram acknowledgement settings could not be read.')
+      if (telegramFailure) throw new Error(telegramFailure)
+      if (messagesFailure) throw new Error(messagesFailure)
+      const parsedTelegram = parseTelegramConfigOutput(telegramPayload.command?.output || '')
+      const parsedMessages = parseTelegramConfigOutput(messagesPayload.command?.output || '')
+      if (!parsedTelegram) throw new Error('The gateway returned an unreadable Telegram configuration.')
+      const next = normalizeTelegramSettings({ ...readTelegramSettings(), ...parsedTelegram, ...(parsedMessages || {}) })
+      setTelegramSettings(next)
+      saveTelegramSettings(next)
+      setNotice({ tone: 'success', text: 'Telegram settings reloaded from the gateway.' })
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Could not read Telegram settings from the gateway.'
+      setTelegramLoadError(message)
+      setNotice({ tone: 'warning', text: 'Using saved Telegram settings until the gateway is available.' })
+    } finally {
+      setTelegramLoaded(true)
+      setTelegramLoading(false)
+    }
+  }, [telegramLoading])
+
+  const applyTelegramSettings = async (settings = telegramSettings) => {
+    if (telegramSaving) return
+    const next = normalizeTelegramSettings(settings)
+    setTelegramSaving(true)
+    setTelegramLoadError('')
+    try {
+      for (const command of telegramSettingCommands(next)) {
+        const payload = await runOpenClawPluginCommand(command, { refreshPlugins: false })
+        const failure = openClawCommandFailure(payload, `OpenClaw rejected: ${command}`)
+        if (failure) throw new Error(failure)
+      }
+      const restart = await restartPluginGateway()
+      if (restart.ok === false || restart.error) throw new Error(restart.error || 'Gateway restart failed.')
+      setTelegramSettings(next)
+      saveTelegramSettings(next)
+      setNotice({ tone: 'success', text: 'Telegram settings applied. Gateway restarted with the new policy.' })
+    } catch (error) {
+      setNotice({ tone: 'error', text: `Telegram settings were only partially applied: ${error instanceof Error ? error.message : String(error)}` })
+    } finally {
+      setTelegramSaving(false)
+    }
+  }
+
+  useEffect(() => {
+    if (activeSection === 'telegram' && !telegramLoaded && !telegramLoading) void loadTelegramFromGateway()
+  }, [activeSection, telegramLoaded, telegramLoading, loadTelegramFromGateway])
 
   const applyRuntimeToTargets = (values = activeRuntimeDraft, reset = false) => {
     if (!targetIds.length) {
@@ -597,6 +686,93 @@ export function SettingsPanel({ focusSection = 'account', focusRequest = 0 }: { 
         <Field label="Fast mode"><select value={activeRuntimeDraft.fastModeDefault} onChange={(event) => updateRuntimeDraft({ fastModeDefault: event.target.value as FastModeDefault })}><option value="auto">Auto</option><option value="on">On</option><option value="off">Off</option></select></Field>
         <ToggleField label="Parallel preferred" hint="Allows independent subtasks to run together where supported." checked={activeRuntimeDraft.parallelPreferred} onChange={(parallelPreferred) => updateRuntimeDraft({ parallelPreferred })} />
         <div className="dui-settings-actions"><button type="button" className="is-primary" onClick={() => applyRuntimeToTargets()}>Apply to {targetIds.length || 0} agent{targetIds.length === 1 ? '' : 's'}</button><button type="button" onClick={() => { setRuntimeDraft({ targetKey: runtimeTargetKey, values: DEFAULT_RUNTIME_SETTINGS }); setPendingConfirmation('reset-runtime') }}>Restore runtime defaults</button></div>
+      </SettingsCard>
+    </div>
+  )
+
+  const renderTelegram = () => (
+    <div className="dui-settings-section" id="settings-section-telegram" role="tabpanel">
+      <SectionHeader section="telegram" eyebrow="Control the live Telegram gateway" />
+      <SettingsCard title="Access and commands" description="Keep private chats paired and groups allowlisted unless you intentionally run a public bot.">
+        <Field label="Native command menu" hint="Registers OpenClaw commands such as /agents with Telegram.">
+          <select value={telegramSettings.nativeCommands} onChange={(event) => updateTelegramDraft('nativeCommands', event.target.value as TelegramSettings['nativeCommands'])}>
+            <option value="auto">Auto</option><option value="on">On</option><option value="off">Off</option>
+          </select>
+        </Field>
+        <Field label="Direct-message policy" hint="Pairing is the safe default for owner-operated bots.">
+          <select value={telegramSettings.dmPolicy} onChange={(event) => updateTelegramDraft('dmPolicy', event.target.value as TelegramSettings['dmPolicy'])}>
+            <option value="pairing">Pairing</option><option value="allowlist">Allowlist</option><option value="open">Open</option><option value="disabled">Disabled</option>
+          </select>
+        </Field>
+        <Field label="Group policy" hint="Allowlist blocks unknown groups until they are explicitly configured.">
+          <select value={telegramSettings.groupPolicy} onChange={(event) => updateTelegramDraft('groupPolicy', event.target.value as TelegramSettings['groupPolicy'])}>
+            <option value="allowlist">Allowlist</option><option value="open">Open</option><option value="disabled">Disabled</option>
+          </select>
+        </Field>
+        <ToggleField label="Allow Telegram config writes" hint="Required for Telegram-triggered /config changes and group migration writes." checked={telegramSettings.configWrites} onChange={(value) => updateTelegramDraft('configWrites', value)} />
+      </SettingsCard>
+
+      <SettingsCard title="Delivery and formatting" description="Tune how the bot streams work, renders messages and handles replies.">
+        <Field label="Streaming mode" hint="Progress shows tool status while keeping the final answer clean.">
+          <select value={telegramSettings.streamingMode} onChange={(event) => updateTelegramDraft('streamingMode', event.target.value as TelegramSettings['streamingMode'])}>
+            <option value="progress">Progress</option><option value="partial">Partial answer preview</option><option value="block">Block streaming</option><option value="off">Off</option>
+          </select>
+        </Field>
+        <ToggleField label="Show tool progress" hint="Reuses the editable preview for short status updates while an agent works." checked={telegramSettings.toolProgress} onChange={(value) => updateTelegramDraft('toolProgress', value)} />
+        <ToggleField label="Link previews" hint="Let Telegram expand URLs in rich text." checked={telegramSettings.linkPreview} onChange={(value) => updateTelegramDraft('linkPreview', value)} />
+        <Field label="Reply mode" hint="Native quote replies can be useful in busy group chats.">
+          <select value={telegramSettings.replyToMode} onChange={(event) => updateTelegramDraft('replyToMode', event.target.value as TelegramSettings['replyToMode'])}>
+            <option value="off">Off</option><option value="first">Reply to first message</option><option value="all">Reply to every message</option>
+          </select>
+        </Field>
+        <Field label="Inline button scope" hint="Allowlist requires an explicit Telegram approval surface.">
+          <select value={telegramSettings.inlineButtons} onChange={(event) => updateTelegramDraft('inlineButtons', event.target.value as TelegramSettings['inlineButtons'])}>
+            <option value="allowlist">Allowlist</option><option value="dm">Direct messages</option><option value="group">Groups</option><option value="all">Every chat</option><option value="off">Off</option>
+          </select>
+        </Field>
+        <ToggleField label="Rich messages" hint="Off is most compatible with older Telegram clients." checked={telegramSettings.richMessages} onChange={(value) => updateTelegramDraft('richMessages', value)} />
+      </SettingsCard>
+
+      <SettingsCard title="History, media and recovery" description="Bound context and payload size to reduce overflow and delivery failures.">
+        <Field label="Group history messages" hint="Set 0 to disable the bounded group context window."><input type="number" min={0} max={200} value={telegramSettings.historyLimit} onChange={(event) => updateTelegramDraft('historyLimit', Number(event.target.value))} /></Field>
+        <Field label="DM history messages" hint="Keeps private chats from growing without limit."><input type="number" min={0} max={200} value={telegramSettings.dmHistoryLimit} onChange={(event) => updateTelegramDraft('dmHistoryLimit', Number(event.target.value))} /></Field>
+        <Field label="Text chunk limit" hint="Telegram-safe message size; lower it if clients reject long replies."><input type="number" min={100} max={4096} value={telegramSettings.textChunkLimit} onChange={(event) => updateTelegramDraft('textChunkLimit', Number(event.target.value))} /></Field>
+        <Field label="Media limit (MB)" hint="Caps inbound and outbound Telegram media."><input type="number" min={1} max={2000} value={telegramSettings.mediaMaxMb} onChange={(event) => updateTelegramDraft('mediaMaxMb', Number(event.target.value))} /></Field>
+        <Field label="Error replies" hint="Choose whether provider or delivery errors are sent back to the chat.">
+          <select value={telegramSettings.errorPolicy} onChange={(event) => updateTelegramDraft('errorPolicy', event.target.value as TelegramSettings['errorPolicy'])}>
+            <option value="always">Always</option><option value="once">Once per cooldown</option><option value="silent">Silent</option>
+          </select>
+        </Field>
+      </SettingsCard>
+
+      <SettingsCard title="Actions and reactions" description="Outbound actions are explicit controls. Enable only the operations your bot actually needs.">
+        <ToggleField label="Send messages to targets" hint="Allows agent tools to send a separate Telegram message." checked={telegramSettings.sendMessage} onChange={(value) => updateTelegramDraft('sendMessage', value)} />
+        <ToggleField label="Delete messages" hint="Allows agent tools to remove Telegram messages." checked={telegramSettings.deleteMessage} onChange={(value) => updateTelegramDraft('deleteMessage', value)} />
+        <ToggleField label="Reactions action" hint="Allows agents to add or remove Telegram reactions." checked={telegramSettings.reactions} onChange={(value) => updateTelegramDraft('reactions', value)} />
+        <ToggleField label="Sticker actions" hint="Enables sticker send and sticker-search actions." checked={telegramSettings.sticker} onChange={(value) => updateTelegramDraft('sticker', value)} />
+        <ToggleField label="Poll actions" hint="Enables poll creation; regular sends must also be enabled." checked={telegramSettings.poll} onChange={(value) => updateTelegramDraft('poll', value)} />
+        <Field label="Reaction notifications" hint="Receive reaction events from your own messages or every message.">
+          <select value={telegramSettings.reactionNotifications} onChange={(event) => updateTelegramDraft('reactionNotifications', event.target.value as TelegramSettings['reactionNotifications'])}>
+            <option value="own">Own messages</option><option value="all">All messages</option><option value="off">Off</option>
+          </select>
+        </Field>
+        <Field label="Reaction detail" hint="Controls how much context is included in reaction events.">
+          <select value={telegramSettings.reactionLevel} onChange={(event) => updateTelegramDraft('reactionLevel', event.target.value as TelegramSettings['reactionLevel'])}>
+            <option value="minimal">Minimal</option><option value="ack">Acknowledgement only</option><option value="extensive">Extensive</option><option value="off">Off</option>
+          </select>
+        </Field>
+        <Field label="Acknowledgement reaction scope" hint="Requires a gateway restart and defaults to group mentions only.">
+          <select value={telegramSettings.ackReactionScope} onChange={(event) => updateTelegramDraft('ackReactionScope', event.target.value as TelegramSettings['ackReactionScope'])}>
+            <option value="group-mentions">Group mentions</option><option value="direct">Direct messages</option><option value="group-all">All group messages</option><option value="all">All chats</option><option value="off">Off</option>
+          </select>
+        </Field>
+        <div className="dui-settings-actions">
+          <button type="button" onClick={() => void loadTelegramFromGateway()} disabled={telegramLoading || telegramSaving}>{telegramLoading ? 'Reloading…' : 'Reload from gateway'}</button>
+          <button type="button" onClick={() => { const next = normalizeTelegramSettings(DEFAULT_TELEGRAM_SETTINGS); setTelegramSettings(next); saveTelegramSettings(next); void applyTelegramSettings(next) }} disabled={telegramLoading || telegramSaving}>{telegramSaving ? 'Applying…' : 'Restore safe defaults'}</button>
+          <button type="button" className="is-primary" onClick={() => void applyTelegramSettings()} disabled={telegramLoading || telegramSaving}>{telegramSaving ? 'Applying and restarting…' : 'Apply Telegram settings'}</button>
+        </div>
+        {telegramLoadError && <p role="alert" style={{ color: '#fbbf24', margin: '0.7rem 0 0', fontSize: '0.82rem' }}>{telegramLoadError}</p>}
+        <p style={{ color: '#748791', margin: '0.7rem 0 0', fontSize: '0.78rem' }}>Bot tokens, allowlist IDs, webhook secrets and proxy credentials are intentionally not shown or changed here.</p>
       </SettingsCard>
     </div>
   )
@@ -943,6 +1119,7 @@ export function SettingsPanel({ focusSection = 'account', focusRequest = 0 }: { 
     if (section === 'voice') return renderVoice()
     if (section === 'missions') return renderMissions()
     if (section === 'agents') return renderAgents()
+    if (section === 'telegram') return renderTelegram()
     if (section === 'logs') return <SettingsActivityLog />
     return renderData()
   }
