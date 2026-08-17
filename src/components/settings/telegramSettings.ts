@@ -199,33 +199,56 @@ export function saveTelegramSettings(settings: TelegramSettings): void {
   window.localStorage.setItem(TELEGRAM_SETTINGS_STORAGE_KEY, JSON.stringify(normalizeTelegramSettings(settings)))
 }
 
-export function telegramSettingCommands(settings: TelegramSettings): string[] {
+type TelegramSettingKey = keyof TelegramSettings
+type TelegramSettingValue = string | number | boolean
+type TelegramSettingDefinition = {
+  key: TelegramSettingKey
+  path: string
+  read: (settings: TelegramSettings) => TelegramSettingValue
+}
+
+const TELEGRAM_SETTING_DEFINITIONS: TelegramSettingDefinition[] = [
+  { key: 'nativeCommands', path: 'channels.telegram.commands.native', read: (settings) => settings.nativeCommands === 'on' ? true : settings.nativeCommands === 'off' ? false : 'auto' },
+  { key: 'streamingMode', path: 'channels.telegram.streaming.mode', read: (settings) => settings.streamingMode },
+  { key: 'toolProgress', path: 'channels.telegram.streaming.preview.toolProgress', read: (settings) => settings.toolProgress },
+  { key: 'linkPreview', path: 'channels.telegram.linkPreview', read: (settings) => settings.linkPreview },
+  { key: 'replyToMode', path: 'channels.telegram.replyToMode', read: (settings) => settings.replyToMode },
+  { key: 'inlineButtons', path: 'channels.telegram.capabilities.inlineButtons', read: (settings) => settings.inlineButtons },
+  { key: 'richMessages', path: 'channels.telegram.richMessages', read: (settings) => settings.richMessages },
+  { key: 'dmPolicy', path: 'channels.telegram.dmPolicy', read: (settings) => settings.dmPolicy },
+  { key: 'groupPolicy', path: 'channels.telegram.groupPolicy', read: (settings) => settings.groupPolicy },
+  { key: 'historyLimit', path: 'channels.telegram.historyLimit', read: (settings) => settings.historyLimit },
+  { key: 'dmHistoryLimit', path: 'channels.telegram.dmHistoryLimit', read: (settings) => settings.dmHistoryLimit },
+  { key: 'textChunkLimit', path: 'channels.telegram.textChunkLimit', read: (settings) => settings.textChunkLimit },
+  { key: 'mediaMaxMb', path: 'channels.telegram.mediaMaxMb', read: (settings) => settings.mediaMaxMb },
+  { key: 'errorPolicy', path: 'channels.telegram.errorPolicy', read: (settings) => settings.errorPolicy },
+  { key: 'configWrites', path: 'channels.telegram.configWrites', read: (settings) => settings.configWrites },
+  { key: 'sendMessage', path: 'channels.telegram.actions.sendMessage', read: (settings) => settings.sendMessage },
+  { key: 'deleteMessage', path: 'channels.telegram.actions.deleteMessage', read: (settings) => settings.deleteMessage },
+  { key: 'reactions', path: 'channels.telegram.actions.reactions', read: (settings) => settings.reactions },
+  { key: 'sticker', path: 'channels.telegram.actions.sticker', read: (settings) => settings.sticker },
+  { key: 'poll', path: 'channels.telegram.actions.poll', read: (settings) => settings.poll },
+  { key: 'reactionNotifications', path: 'channels.telegram.reactionNotifications', read: (settings) => settings.reactionNotifications },
+  { key: 'reactionLevel', path: 'channels.telegram.reactionLevel', read: (settings) => settings.reactionLevel },
+  { key: 'ackReactionScope', path: 'messages.ackReactionScope', read: (settings) => settings.ackReactionScope },
+]
+
+export function telegramSettingCommandEntries(settings: TelegramSettings): Array<{ key: TelegramSettingKey; command: string }> {
   const normalized = normalizeTelegramSettings(settings)
   const value = (input: string | number | boolean) => JSON.stringify(input)
-  const nativeCommands: string | boolean = normalized.nativeCommands === 'on' ? true : normalized.nativeCommands === 'off' ? false : 'auto'
-  return [
-    `config set channels.telegram.commands.native ${value(nativeCommands)}`,
-    `config set channels.telegram.streaming.mode ${value(normalized.streamingMode)}`,
-    `config set channels.telegram.streaming.preview.toolProgress ${value(normalized.toolProgress)}`,
-    `config set channels.telegram.linkPreview ${value(normalized.linkPreview)}`,
-    `config set channels.telegram.replyToMode ${value(normalized.replyToMode)}`,
-    `config set channels.telegram.capabilities.inlineButtons ${value(normalized.inlineButtons)}`,
-    `config set channels.telegram.richMessages ${value(normalized.richMessages)}`,
-    `config set channels.telegram.dmPolicy ${value(normalized.dmPolicy)}`,
-    `config set channels.telegram.groupPolicy ${value(normalized.groupPolicy)}`,
-    `config set channels.telegram.historyLimit ${value(normalized.historyLimit)}`,
-    `config set channels.telegram.dmHistoryLimit ${value(normalized.dmHistoryLimit)}`,
-    `config set channels.telegram.textChunkLimit ${value(normalized.textChunkLimit)}`,
-    `config set channels.telegram.mediaMaxMb ${value(normalized.mediaMaxMb)}`,
-    `config set channels.telegram.errorPolicy ${value(normalized.errorPolicy)}`,
-    `config set channels.telegram.configWrites ${value(normalized.configWrites)}`,
-    `config set channels.telegram.actions.sendMessage ${value(normalized.sendMessage)}`,
-    `config set channels.telegram.actions.deleteMessage ${value(normalized.deleteMessage)}`,
-    `config set channels.telegram.actions.reactions ${value(normalized.reactions)}`,
-    `config set channels.telegram.actions.sticker ${value(normalized.sticker)}`,
-    `config set channels.telegram.actions.poll ${value(normalized.poll)}`,
-    `config set channels.telegram.reactionNotifications ${value(normalized.reactionNotifications)}`,
-    `config set channels.telegram.reactionLevel ${value(normalized.reactionLevel)}`,
-    `config set messages.ackReactionScope ${value(normalized.ackReactionScope)}`,
-  ]
+  return TELEGRAM_SETTING_DEFINITIONS.map(({ key, path, read }) => ({ key, command: `config set ${path} ${value(read(normalized))}` }))
+}
+
+export function telegramSettingBatchCommand(settings: TelegramSettings, keys?: readonly TelegramSettingKey[]): string {
+  const normalized = normalizeTelegramSettings(settings)
+  const allowedKeys = keys ? new Set(keys) : null
+  const batch = TELEGRAM_SETTING_DEFINITIONS
+    .filter(({ key }) => !allowedKeys || allowedKeys.has(key))
+    .map(({ path, read }) => ({ path, value: read(normalized) }))
+  const payload = JSON.stringify(batch).replace(/'/g, "'\\''")
+  return `config set --batch-json '${payload}'`
+}
+
+export function telegramSettingCommands(settings: TelegramSettings): string[] {
+  return telegramSettingCommandEntries(settings).map(({ command }) => command)
 }
