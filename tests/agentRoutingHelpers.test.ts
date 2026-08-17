@@ -133,6 +133,59 @@ test('Telegram slash routing remains sticky while at-routing is a one-shot overr
   }
 })
 
+test('Telegram native /agents lists configured agents and persists a per-chat selection', () => {
+  const commandResolver = new Function(`
+    function normalizeAccountId(value) { return String(value || 'default') }
+    function normalizeLowercaseStringOrEmpty(value) { return String(value || '').trim().toLowerCase() }
+    function resolveAgentConfig(config, agentId) {
+      return (config.agents?.list || []).find((agent) => agent.id === agentId) || {}
+    }
+    ${TELEGRAM_AGENT_ROUTING_HELPER}
+    return resolveTelegramAgentsCommandResponse
+  `)() as (params: Record<string, unknown>) => string
+
+  const routeState = globalThis as typeof globalThis & { __openclawTelegramAgentRoutes?: unknown }
+  delete routeState.__openclawTelegramAgentRoutes
+  const routingConfig = {
+    agents: {
+      defaults: { model: { primary: 'openai/gpt-5.5' } },
+      list: [
+        { id: 'hn-coordinator', identity: { name: 'Sarah Cooper', role: 'Coordinator' } },
+        { id: 'hn-architect', identity: { name: 'Elena Vasquez', role: 'Architect' }, model: { primary: 'openai/gpt-5.5' } },
+      ],
+    },
+  }
+  const base = {
+    cfg: routingConfig,
+    accountId: 'default',
+    chatId: 'telegram-chat-1',
+    resolvedThreadId: undefined,
+    dmThreadId: undefined,
+    isGroup: false,
+    routeAgentId: 'hn-coordinator',
+  }
+  try {
+    const listed = commandResolver({ ...base, rawText: '' })
+    assert.match(listed, /Sarah Cooper — hn-coordinator/)
+    assert.match(listed, /Elena Vasquez — hn-architect/)
+    assert.match(listed, /Active: hn-coordinator/)
+
+    const selected = commandResolver({ ...base, rawText: 'ElenaVasquez' })
+    assert.match(selected, /Telegram agent selected: Elena Vasquez \(hn-architect\)/)
+
+    const afterSelection = commandResolver({ ...base, rawText: '' })
+    assert.match(afterSelection, /Active: hn-architect/)
+    assert.match(afterSelection, /✓ Elena Vasquez — hn-architect/)
+
+    const reset = commandResolver({ ...base, rawText: 'reset' })
+    assert.match(reset, /Telegram agent reset/)
+    const afterReset = commandResolver({ ...base, rawText: '' })
+    assert.match(afterReset, /Active: hn-coordinator/)
+  } finally {
+    delete routeState.__openclawTelegramAgentRoutes
+  }
+})
+
 test('Telegram identity replies are verified against the selected agent profile before delivery', () => {
   const guard = new Function(`
     function normalizeAccountId(value) { return String(value || 'default') }

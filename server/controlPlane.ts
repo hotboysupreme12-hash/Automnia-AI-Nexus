@@ -10787,7 +10787,7 @@ function patchedClawTalkRuntimeSource(source: string) {
 
 
 const CLAWTALK_REPAIR_SIGNATURE_VERSION = 'clawtalk-repair:v13'
-const TELEGRAM_REPAIR_SIGNATURE_VERSION = 'telegram-routing-repair:v11'
+const TELEGRAM_REPAIR_SIGNATURE_VERSION = 'telegram-routing-repair:v12'
 const clawTalkRepairSignatureCache = new Map<string, string>()
 const telegramRepairSignatureCache = new Map<string, string>()
 
@@ -10991,7 +10991,7 @@ async function sendClawTalkSmsWithRetry(client, logger, params) {
 
 function patchedTelegramBotRuntimeSource(source: string) {
   let next = source
-  const routingPatchVersion = 'var TELEGRAM_AGENT_ROUTING_PATCH_VERSION = 13;'
+  const routingPatchVersion = 'var TELEGRAM_AGENT_ROUTING_PATCH_VERSION = 14;'
   const routingHelperPattern = /var TELEGRAM_AGENT_ROUTING_PATCH_VERSION = \d+;[\s\S]*?\/\/#endregion telegram-agent-routing-patch/
   if (routingHelperPattern.test(next)) {
     next = next.replace(routingHelperPattern, TELEGRAM_AGENT_ROUTING_HELPER)
@@ -11044,6 +11044,35 @@ function patchedTelegramBotRuntimeSource(source: string) {
       next = next.replace(bodyResultMarker, `${bodyResultMarker}\n\t${routeApplicationBlock}`)
     } else {
       console.warn('[plugins/telegram] agent route patch skipped: inbound body marker not found')
+    }
+  }
+  const nativeAgentsCommandMarker = 'const commandDefinition = findCommandByNativeName(command.name, "telegram");\n\t\t\t\tconst rawText = ctx.match?.trim() ?? "";'
+  if (!next.includes('const telegramAgentsCommandText = resolveTelegramAgentsCommandResponse({')) {
+    const nativeAgentsCommandBlock = [
+      nativeAgentsCommandMarker,
+      'if (commandDefinition?.key === "agents") {',
+      'const telegramAgentsCommandText = resolveTelegramAgentsCommandResponse({',
+      'cfg: runtimeCfg,',
+      'accountId,',
+      'chatId,',
+      'isGroup,',
+      'resolvedThreadId,',
+      'dmThreadId: threadSpec.scope === "dm" ? threadSpec.id : void 0,',
+      'routeAgentId: route.agentId,',
+      'rawText',
+      '});',
+      'await withTelegramApiErrorLogging({',
+      'operation: "sendMessage",',
+      'runtime,',
+      'fn: () => bot.api.sendMessage(chatId, telegramAgentsCommandText, threadParams)',
+      '});',
+      'return;',
+      '}',
+    ].join('\n\t\t\t\t');
+    if (next.includes(nativeAgentsCommandMarker)) {
+      next = next.replace(nativeAgentsCommandMarker, nativeAgentsCommandBlock);
+    } else {
+      console.warn('[plugins/telegram] agents command patch skipped: native command marker not found');
     }
   }
   if (next !== source && !next.includes(routeApplicationMarker)) {
