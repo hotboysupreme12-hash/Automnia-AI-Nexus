@@ -982,7 +982,7 @@ function readTelegramAgentMemorySnippet(agent) {
     return '';
 }
 function isTelegramAutomniaCreditsModel(value) {
-    return /^automnia-cloud\\//i.test(String(value == null ? '' : value).trim());
+    return /^automnia-cloud\//i.test(String(value == null ? '' : value).trim());
 }
 function resolveTelegramAgentRouteProfile(config, agentId) {
     var agent = resolveAgentConfig(config || {}, agentId) || {};

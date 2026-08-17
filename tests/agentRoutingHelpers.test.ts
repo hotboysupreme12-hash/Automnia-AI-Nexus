@@ -229,6 +229,16 @@ test('Telegram model callbacks are locked to Automnia credits for Starter runtim
   assert.equal(selectionAllowed({}, { type: 'select', provider: 'google', model: 'gemini-3.7-pro' }), true)
 })
 
+test('Telegram Automnia model detection does not leak a regex flag as a variable', () => {
+  const isAutomniaCreditsModel = new Function(`
+    ${TELEGRAM_AGENT_ROUTING_HELPER}
+    return isTelegramAutomniaCreditsModel
+  `)() as (value: unknown) => boolean
+
+  assert.equal(isAutomniaCreditsModel('automnia-cloud/gemini-3.6-flash'), true)
+  assert.equal(isAutomniaCreditsModel('openai/gpt-5.5'), false)
+})
+
 test('Telegram model menus expose only Automnia credits for Starter runtime config', () => {
   const restrictModelData = new Function(`
     ${TELEGRAM_AGENT_ROUTING_HELPER}
