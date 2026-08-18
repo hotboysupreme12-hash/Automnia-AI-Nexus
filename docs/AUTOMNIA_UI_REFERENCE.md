@@ -158,7 +158,7 @@ The Monitor has four tabs and three recovery tools in its top bar.
 | **Gateway** | Gateway health, channel activity, live runtime information, active cron jobs, and the Gateway log tail. |
 | **scheduler** | Agent heartbeat/scheduler status and cadence. |
 | **performance** | Per-agent live runtime, efficiency, stability, success, failures, and relevant mission report signals. |
-| **logs** | Recent activity and runtime event detail. |
+| **logs** | Recent agent activity. Raw Gateway diagnostics stay hidden unless an operator explicitly selects **Show internal diagnostics**. |
 
 Gateway tab controls:
 

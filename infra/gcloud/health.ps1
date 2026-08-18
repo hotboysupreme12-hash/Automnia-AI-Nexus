@@ -28,6 +28,7 @@ $checks = [ordered]@{
   planMappings = $health.commerce.planMappingsConfigured -eq $true
   planMappingHash = $health.commerce.planMappingHash -eq $expectedPlanHash
   webhookSecrets = $health.commerce.webhookSecretsConfigured -eq $true
+  emailDelivery = $health.commerce.emailDeliveryConfigured -eq $true
 }
 $passed = -not ($checks.Values -contains $false)
 $result = [pscustomobject]@{

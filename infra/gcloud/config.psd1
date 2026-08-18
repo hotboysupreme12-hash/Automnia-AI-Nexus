@@ -14,7 +14,11 @@
   KnowledgeFallbackModelVersion = 'gemini-2.5-flash/answer_gen/v1'
   PermanentBaseUrl = 'https://api.automnia.ai'
   PermanentDomain = 'api.automnia.ai'
+  ShopifyStoreDomain = 'unbkay-k3.myshopify.com'
+  ShopifyAppClientId = 'd0972d80b936c44961e9490b1d113432'
+  ShopifyApiVersion = '2026-07'
   ShopifyCheckoutUrl = 'https://unbkay-k3.myshopify.com/collections/automnia-plans-and-refills'
+  GmailSender = 'hotboysupreme2@gmail.com'
   VerificationMaxAgeMinutes = 30
   HealthTimeoutSeconds = 180
   DomainMappingTimeoutMinutes = 30
@@ -30,6 +34,7 @@
     'dns.googleapis.com'
     'discoveryengine.googleapis.com'
     'firestore.googleapis.com'
+    'gmail.googleapis.com'
     'iam.googleapis.com'
     'iamcredentials.googleapis.com'
     'run.googleapis.com'
@@ -48,10 +53,14 @@
   )
   SecretBindings = @{
     SHOPIFY_WEBHOOK_SECRETS = 'automnia-shopify-webhook-secrets'
+    SHOPIFY_ADMIN_API_TOKEN = 'automnia-shopify-admin-api-token'
+    GMAIL_OAUTH_CREDENTIALS = 'automnia-gmail-oauth-credentials'
     ADMIN_API_TOKEN = 'automnia-admin-api-token'
   }
   MigrationSecrets = @(
     'automnia-shopify-webhook-secrets'
+    'automnia-shopify-admin-api-token'
+    'automnia-gmail-oauth-credentials'
     'automnia-admin-api-token'
   )
   Collections = @(

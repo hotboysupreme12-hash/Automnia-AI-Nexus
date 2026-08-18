@@ -166,31 +166,29 @@ export function LoginModal() {
             {loading ? (isSetup ? 'Activating...' : 'Signing in...') : (isSetup ? 'Activate account' : 'Sign in')}
           </button>
 
-          {!isSetup && (
-            <>
-              <button
-                type="button"
-                onClick={handleGoogle}
-                disabled={loading}
-                className="w-full rounded-lg border border-slate-200/15 bg-white/[0.04] px-4 py-3 text-sm font-semibold text-slate-200 transition hover:bg-white/[0.08] disabled:opacity-50"
-              >
-                {googleLoading ? 'Waiting for Google...' : 'Continue with Google'}
-              </button>
-              {googleLoading && (
-                <div className="space-y-2">
-                  <button
-                    type="button"
-                    onClick={handleGoogleCancel}
-                    className="w-full rounded-lg border border-amber-300/30 bg-amber-300/[0.06] px-4 py-2 text-xs font-semibold text-amber-100 transition hover:bg-amber-300/[0.12]"
-                  >
-                    Cancel and use password
-                  </button>
-                  <p className="text-center text-xs text-slate-500">If the Google window closed or did not finish, cancel here to return to a usable login screen.</p>
-                </div>
-              )}
-              {!googleLoading && <p className="text-center text-xs text-slate-500">Your default browser will open for secure Google sign-in. Only active Automnia subscriber emails can continue.</p>}
-            </>
-          )}
+          <>
+            <button
+              type="button"
+              onClick={handleGoogle}
+              disabled={loading}
+              className="w-full rounded-lg border border-slate-200/15 bg-white/[0.04] px-4 py-3 text-sm font-semibold text-slate-200 transition hover:bg-white/[0.08] disabled:opacity-50"
+            >
+              {googleLoading ? 'Waiting for Google...' : isSetup ? 'Continue with Google to activate' : 'Continue with Google'}
+            </button>
+            {googleLoading && (
+              <div className="space-y-2">
+                <button
+                  type="button"
+                  onClick={handleGoogleCancel}
+                  className="w-full rounded-lg border border-amber-300/30 bg-amber-300/[0.06] px-4 py-2 text-xs font-semibold text-amber-100 transition hover:bg-amber-300/[0.12]"
+                >
+                  Cancel and use password
+                </button>
+                <p className="text-center text-xs text-slate-500">If the Google window closed or did not finish, cancel here to return to a usable login screen.</p>
+              </div>
+            )}
+            {!googleLoading && <p className="text-center text-xs text-slate-500">Your default browser will open for secure Google sign-in. Only active Automnia subscriber emails can continue; the Google email must match your Automnia purchase.</p>}
+          </>
 
           <div className="pt-2 text-center text-xs text-slate-400">
             <button type="button" className="text-slate-200 underline decoration-slate-500 underline-offset-4" onClick={() => { setError(''); setMode(isSetup ? 'login' : 'setup') }}>

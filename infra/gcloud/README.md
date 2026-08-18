@@ -48,6 +48,7 @@ Review `config.psd1` before the first deployment:
 - `PermanentBaseUrl` and `PermanentDomain` default to `https://api.automnia.ai` / `api.automnia.ai`.
 - `DnsProjectId` and `DnsZone` can be filled in to make DNS record changes automatic when Cloud DNS hosts the zone. Leave them blank for another DNS provider and add the returned mapping records there once.
 - `Region`, Firestore location, checkout URL, service name, API list, roles, secret names, and collection contract are centralized here.
+- `GmailSender` configures the Google account that sends the branded Automnia welcome letter, teal logo, license key, and login instructions. The `automnia-gmail-oauth-credentials` secret contains a Google OAuth desktop-client JSON credential with a refresh token and Gmail send scope. The provisioner calls Gmail API `users.messages.send` directly, so paid orders do not depend on Shopify's outstanding-invoice state. The existing Shopify Admin secret remains a migration-compatible binding but is not used for customer email delivery.
 - `KnowledgeDataStoreId` and `KnowledgeEngineId` identify the private Agent Search resources used by `/api/knowledge/answer`. Those resources must exist in a new project before the service is routed to traffic; the current production project already has them.
 
 The base domain must be purchased and verified by the operating Google account. If it is not already verified:
@@ -77,6 +78,15 @@ Copy `shopify.app.toml.template` to the private Shopify app project, preserve th
 shopify app deploy
 ```
 
+The webhook is acknowledged only after the license email is confirmed. If
+Gmail or the Gmail OAuth credential is unavailable, the handler returns a
+retryable response and keeps the delivery state pending; use the authenticated
+`/admin/email-delivery/retry` endpoint after the credential is repaired for an
+already-provisioned order.
+
+The Shopify app may retain `write_orders` for other administrative workflows,
+but customer email delivery no longer requires it.
+
 This is the only webhook change. All subscription, cancellation, refund, and billing-attempt topics then target the permanent domain.
 
 ## Deploy a new target project
@@ -87,7 +97,7 @@ Billing must already be enabled, or it can be linked explicitly:
 .\infra\gcloud\deploy.ps1 -ProjectId new-project-id -BillingAccountId 000000-000000-000000
 ```
 
-Without `-BillingAccountId`, deployment fails if billing is disabled. A new target receives cryptographically random bootstrap secret versions so Cloud Run can deploy before migration. Those bootstrap values are not switch-eligible; migration replaces them with exact copies from the source and verification compares SHA-256 fingerprints.
+Without `-BillingAccountId`, deployment fails if billing is disabled. A new target receives cryptographically random bootstrap secret versions so Cloud Run can deploy before migration. The Shopify app secret is the exception: deployment refuses to create or accept a bootstrap placeholder for `SHOPIFY_ADMIN_API_TOKEN`, because a paid order must never be acknowledged without a usable customer-email credential. Other bootstrap values are not switch-eligible; migration replaces them with exact copies from the source and verification compares SHA-256 fingerprints.
 
 To initialize the first project from explicit values, pass a local JSON file whose keys are secret resource names or environment names. The file is read locally, never printed, and should not be committed:
 

@@ -85,7 +85,7 @@ for (const dependency of ['@google-cloud/firestore', 'express', 'google-auth-lib
 const serverCloudConfig = readFileSync(path.join(root, 'server', 'config', 'automniaCloud.ts'), 'utf8')
 const rendererCloudConfig = readFileSync(path.join(root, 'src', 'config', 'gcloudConfig.ts'), 'utf8')
 for (const source of [serverCloudConfig, rendererCloudConfig]) {
-  assert.match(source, /https:\/\/automnia-shopify-provisioner-6abxlp2t4q-ue\.a\.run\.app/)
+  assert.match(source, /https:\/\/automnia-shopify-provisioner-gpz4bqizia-ue\.a\.run\.app/)
   assert.doesNotMatch(source, /api\.automnia\.ai|licenseKey|creditBalance|@gmail\.com/)
 }
 
@@ -97,7 +97,7 @@ assert.match(controlPlane, /AUTOMNIA_OPENCLAW_PROVIDER_ID = AUTOMNIA_CREDITS_PRO
 assert.match(controlPlane, /reasoning: true,\s*thinkingLevelMap: AUTOMNIA_GEMINI_36_OPENCLAW_THINKING_LEVEL_MAP,/s, 'Automnia Gemini must expose supported thinking levels to OpenClaw')
 assert.match(controlPlane, /synchronizeOpenClawBillingRouteForAgentRun/, 'agent turns must repair a stale hosted Gemini thinking profile before dispatch')
 assert.match(licenseService, /AUTOMNIA_PUBLIC_CLOUD_URL/)
-assert.match(serverCloudConfig, /automnia-shopify-provisioner-6abxlp2t4q-ue\.a\.run\.app/)
+assert.match(serverCloudConfig, /automnia-shopify-provisioner-gpz4bqizia-ue\.a\.run\.app/)
 
 const verification = readFileSync(path.join(infra, 'verify.ps1'), 'utf8')
 for (const gate of [

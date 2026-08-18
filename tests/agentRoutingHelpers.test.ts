@@ -29,6 +29,105 @@ const config = {
   },
 }
 
+test('channel traffic gates resolve to the server-owned license endpoint', () => {
+  const processStub = {
+    env: {
+      CONTROL_CENTER_AGENT_TURN_STREAM_URL: 'http://127.0.0.1:4050/api/openclaw/agent-turn/stream?source=telegram',
+    },
+  }
+  const clawTalkResolver = new Function(
+    'process',
+    `${CLAWTALK_CORE_BRIDGE_ROUTING_HELPER}\nreturn resolveAutomniaTrafficGateUrl`,
+  )(processStub) as () => string
+  const telegramResolver = new Function(
+    'process',
+    `${TELEGRAM_AGENT_ROUTING_HELPER}\nreturn resolveTelegramTrafficGateUrl`,
+  )(processStub) as () => string
+
+  const expected = 'http://127.0.0.1:4050/api/license/traffic-gate'
+  assert.equal(clawTalkResolver(), expected)
+  assert.equal(telegramResolver(), expected)
+})
+
+test('Telegram traffic gate retries transient local failures and prefers the refreshed Control Center token', async () => {
+  const calls: Array<{ url: string; authorization?: string }> = []
+  let attempts = 0
+  const fetchStub = async (url: string, options: { headers?: Record<string, string> }) => {
+    attempts += 1
+    calls.push({ url, authorization: options.headers?.Authorization })
+    if (attempts === 1) throw new Error('ECONNREFUSED')
+    return {
+      ok: true,
+      status: 200,
+      json: async () => ({ data: { active: true, messageTrafficAllowed: true } }),
+    }
+  }
+  const immediateTimer = (callback: () => void) => {
+    callback()
+    return 0
+  }
+  const statusResolver = new Function(
+    'process',
+    'fetch',
+    'setTimeout',
+    'clearTimeout',
+    `${TELEGRAM_AGENT_ROUTING_HELPER}\nreturn resolveTelegramTrafficGateStatus`,
+  )({
+    env: {
+      CONTROL_CENTER_AGENT_TURN_STREAM_URL: 'http://127.0.0.1:4050/api/openclaw/agent-turn/stream',
+      CONTROL_CENTER_TOKEN: 'fresh-control-center-token',
+      CLAWTALK_CONTROL_CENTER_TOKEN: 'stale-parent-token',
+    },
+  }, fetchStub, immediateTimer, () => undefined) as () => Promise<{ allowed: boolean; transient?: boolean }>
+
+  const result = await statusResolver()
+  assert.deepEqual(result, { allowed: true, transient: false })
+  assert.equal(attempts, 2)
+  assert.deepEqual(calls, [
+    {
+      url: 'http://127.0.0.1:4050/api/license/traffic-gate',
+      authorization: 'Bearer fresh-control-center-token',
+    },
+    {
+      url: 'http://127.0.0.1:4050/api/license/traffic-gate',
+      authorization: 'Bearer fresh-control-center-token',
+    },
+  ])
+})
+
+test('Telegram recovery delivery retries a transient Telegram send failure', async () => {
+  let sends = 0
+  const sendRecovery = new Function(
+    'withTelegramApiErrorLogging',
+    'setTimeout',
+    `${TELEGRAM_AGENT_ROUTING_HELPER}\nreturn sendTelegramRecoveryMessage`,
+  )(
+    async (params: { fn: () => Promise<void> }) => params.fn(),
+    (callback: () => void) => {
+      callback()
+      return 0
+    },
+  ) as (params: Record<string, unknown>) => Promise<boolean>
+
+  const delivered = await sendRecovery({
+    bot: {
+      api: {
+        sendMessage: async () => {
+          sends += 1
+          if (sends === 1) throw new Error('temporary Telegram transport failure')
+        },
+      },
+    },
+    runtime: {},
+    chatId: 'end-user-chat',
+    messageId: 1,
+    text: 'Automnia is still starting. Please try again in a moment.',
+  })
+
+  assert.equal(delivered, true)
+  assert.equal(sends, 2)
+})
+
 test('Telegram routes slash and at commands with compact names and compact agent ids', () => {
   const harness = routingHarness(
     TELEGRAM_AGENT_ROUTING_HELPER,

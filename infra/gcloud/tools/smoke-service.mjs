@@ -8,6 +8,11 @@ import { fileURLToPath } from 'node:url'
 
 const infraRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..')
 const serviceRoot = path.join(infraRoot, 'service')
+const welcomeEmail = await readFile(path.join(serviceRoot, 'welcomeEmail.js'), 'utf8')
+assert.match(welcomeEmail, /AUTMNIA/)
+assert.match(welcomeEmail, /AI NEXUS/)
+assert.match(welcomeEmail, /Your secure access details/)
+assert.match(welcomeEmail, /Get started in four steps/)
 const mappings = JSON.parse(await readFile(path.join(infraRoot, 'shopify-plan-mappings.json'), 'utf8'))
 const encodedMappings = Buffer.from(JSON.stringify(mappings), 'utf8').toString('base64')
 
@@ -52,6 +57,10 @@ async function runMode(writeMode) {
       MIGRATION_WRITE_MODE: writeMode,
       SHOPIFY_PLAN_MAPPINGS: encodedMappings,
       SHOPIFY_CHECKOUT_URL: 'https://example.test/automnia-checkout',
+      SHOPIFY_STORE_DOMAIN: 'unbkay-k3.myshopify.com',
+      SHOPIFY_API_VERSION: '2026-07',
+      SHOPIFY_ADMIN_API_TOKEN: 'local-smoke-shopify-admin-token',
+      AUTOMNIA_TEST_EMAIL_DELIVERY: 'stub',
       SHOPIFY_WEBHOOK_SECRETS: 'local-smoke-webhook-value',
       ADMIN_API_TOKEN: 'local-smoke-admin-value',
     },
@@ -66,6 +75,7 @@ async function runMode(writeMode) {
     assert.equal(health.commerce.planMappingCount, mappings.length)
     assert.equal(health.commerce.checkoutConfigured, true)
     assert.equal(health.commerce.webhookSecretsConfigured, true)
+    assert.equal(health.commerce.emailDeliveryConfigured, true)
 
     const ready = await fetch(`${baseUrl}/ready`).then((response) => response.json())
     assert.equal(ready.ok, true)
@@ -220,7 +230,69 @@ async function runMode(writeMode) {
   }
 }
 
+async function runUnconfiguredDeliveryCheck() {
+  const port = await unusedPort()
+  const child = spawn(process.execPath, ['server.js'], {
+    cwd: serviceRoot,
+    windowsHide: true,
+    stdio: ['ignore', 'pipe', 'pipe'],
+    env: {
+      ...process.env,
+      PORT: String(port),
+      GOOGLE_CLOUD_PROJECT: 'local-smoke',
+      LOCAL_IN_MEMORY_LICENSES: 'true',
+      MIGRATION_WRITE_MODE: 'active',
+      SHOPIFY_PLAN_MAPPINGS: encodedMappings,
+      SHOPIFY_CHECKOUT_URL: 'https://example.test/automnia-checkout',
+      SHOPIFY_STORE_DOMAIN: 'unbkay-k3.myshopify.com',
+      SHOPIFY_WEBHOOK_SECRETS: 'local-smoke-webhook-value',
+      ADMIN_API_TOKEN: 'local-smoke-admin-value',
+    },
+  })
+  let stderr = ''
+  child.stderr.on('data', (chunk) => { stderr += String(chunk) })
+  try {
+    const baseUrl = `http://127.0.0.1:${port}`
+    const health = await waitForHealth(baseUrl)
+    assert.equal(health.commerce.emailDeliveryConfigured, false)
+    const body = JSON.stringify({
+      id: 'smoke-unconfigured-email',
+      email: 'owner@example.test',
+      line_items: [{ sku: 'AUTO-SUB-STARTER-MONTHLY', quantity: 1 }],
+    })
+    const signature = createHmac('sha256', 'local-smoke-webhook-value').update(body).digest('base64')
+    const response = await fetch(`${baseUrl}/shopify/webhooks/orders-paid`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'x-shopify-hmac-sha256': signature,
+        'x-shopify-webhook-id': 'smoke-unconfigured-email',
+      },
+      body,
+    })
+    assert.equal(response.status, 503)
+    const provisioned = await fetch(`${baseUrl}/provisioned`, { headers: { Authorization: 'Bearer local-smoke-admin-value' } }).then((result) => result.json())
+    assert.equal(provisioned.count, 1)
+    assert.equal(Object.hasOwn(provisioned.records[0] || {}, 'emailDelivery'), false)
+    const retry = await fetch(`${baseUrl}/admin/email-delivery/retry`, {
+      method: 'POST',
+      headers: { Authorization: 'Bearer local-smoke-admin-value', 'Content-Type': 'application/json' },
+      body: JSON.stringify({ orderId: 'smoke-unconfigured-email' }),
+    })
+    assert.equal(retry.status, 503)
+    return { deliveryStatus: response.status, retryStatus: retry.status }
+  } finally {
+    child.kill()
+    await Promise.race([
+      new Promise((resolve) => child.once('exit', resolve)),
+      new Promise((resolve) => setTimeout(resolve, 3000)),
+    ])
+    if (child.exitCode && child.exitCode !== 0) throw new Error(`Service exited ${child.exitCode}: ${stderr}`)
+  }
+}
+
 const active = await runMode('active')
 const readOnly = await runMode('read_only')
 assert.equal(active.planMappingHash, readOnly.planMappingHash)
-console.log(JSON.stringify({ passed: true, active, readOnly }))
+const unconfiguredDelivery = await runUnconfiguredDeliveryCheck()
+console.log(JSON.stringify({ passed: true, active, readOnly, unconfiguredDelivery }))

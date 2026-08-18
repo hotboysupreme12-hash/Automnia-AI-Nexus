@@ -191,6 +191,9 @@ export function createGatewayLogService(options: GatewayLogServiceOptions) {
       || /^CoreBridge:\s+Control Center stream unavailable,\s+falling back to embedded agent:/iu.test(text)
       || /^\S{0,8}\s*res\s*\S{0,8}\s*(?:chat\.(?:history|message\.get)|logs\.tail)\b/iu.test(text)
       || /Gateway RPC completed:\s*logs\.tail\b/iu.test(text)
+      || /\bcodex agent harness session reset hook failed\b/iu.test(text)
+      || /\bagent runtime plugins pre-warmed\b/iu.test(text)
+      || /\bsendRichMessage\s+ok\b/iu.test(text)
   }
 
   function displayDurationMs(ms: number) {
@@ -1102,6 +1105,7 @@ export function createGatewayLogService(options: GatewayLogServiceOptions) {
     const message = typeof record.message === 'string' ? record.message.trim() : ''
     const stream = typeof record.stream === 'string' ? record.stream.trim().toLowerCase() : ''
     if (!timestamp || !message) return null
+    if (isGatewayInternalDiagnosticMessage(message)) return null
     if (stream !== 'stdout' && stream !== 'stderr' && stream !== 'lifecycle' && stream !== 'gateway' && stream !== 'channel') {
       return null
     }

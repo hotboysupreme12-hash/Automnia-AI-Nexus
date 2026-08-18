@@ -143,6 +143,8 @@ import {
   type GatewayLifecycleService,
   type GatewayStartupPluginRepairSummary,
 } from './services/gateway/gatewayLifecycleService'
+import { applyTelegramPluginConfigValues } from './services/plugins/telegramConfigMapping'
+import { repairInvalidTelegramDmPolicy } from './services/plugins/telegramPolicy'
 import { archiveCoveredLegacyConfigHealthState } from './services/gateway/legacyStateCleanupService'
 import {
   createGatewayDiagnosticsService,
@@ -8716,6 +8718,10 @@ function enforcePersistedCompactionPolicy(config: OpenClawConfigFile) {
   return enforceAutomniaCompactionPolicy(defaults.compaction as AutomniaCompactionSettings)
 }
 
+function repairInvalidPersistedTelegramPolicy(config: OpenClawConfigFile) {
+  return repairInvalidTelegramDmPolicy(config as unknown as Record<string, unknown>)
+}
+
 async function readOpenclawConfig() {
   let raw: string
   try {
@@ -8730,6 +8736,7 @@ async function readOpenclawConfig() {
       || sanitizeOpenClawConfigAgentAvatars(cached)
       || migrateGeneratedDeepSeekDefaultsInOpenClawConfig(cached)
       || pruneRetiredAgentsFromOpenClawConfig(cached)
+      || repairInvalidPersistedTelegramPolicy(cached)
       || enforcePersistedCompactionPolicy(cached)
     ) {
       await writeOpenclawConfig(cached).catch(() => undefined)
@@ -8755,6 +8762,7 @@ async function readOpenclawConfig() {
         || sanitizeOpenClawConfigAgentAvatars(parsed)
         || migrateGeneratedDeepSeekDefaultsInOpenClawConfig(parsed)
         || pruneRetiredAgentsFromOpenClawConfig(parsed)
+        || repairInvalidPersistedTelegramPolicy(parsed)
         || enforcePersistedCompactionPolicy(parsed)
       ) {
         await writeOpenclawConfig(parsed).catch(() => undefined)
@@ -8778,6 +8786,7 @@ async function readOpenclawConfig() {
       || sanitizeOpenClawConfigAgentAvatars(parsed)
       || migrateGeneratedDeepSeekDefaultsInOpenClawConfig(parsed)
       || pruneRetiredAgentsFromOpenClawConfig(parsed)
+      || repairInvalidPersistedTelegramPolicy(parsed)
       || enforcePersistedCompactionPolicy(parsed)
     ) {
       await writeOpenclawConfig(parsed).catch(() => undefined)
@@ -10991,7 +11000,7 @@ async function sendClawTalkSmsWithRetry(client, logger, params) {
 
 function patchedTelegramBotRuntimeSource(source: string) {
   let next = source
-  const routingPatchVersion = 'var TELEGRAM_AGENT_ROUTING_PATCH_VERSION = 14;'
+  const routingPatchVersion = 'var TELEGRAM_AGENT_ROUTING_PATCH_VERSION = 15;'
   const routingHelperPattern = /var TELEGRAM_AGENT_ROUTING_PATCH_VERSION = \d+;[\s\S]*?\/\/#endregion telegram-agent-routing-patch/
   if (routingHelperPattern.test(next)) {
     next = next.replace(routingHelperPattern, TELEGRAM_AGENT_ROUTING_HELPER)
@@ -11009,10 +11018,27 @@ function patchedTelegramBotRuntimeSource(source: string) {
     ].join('\n\t'),
   )
   const routeApplicationMarker = 'const telegramAgentRoute = resolveTelegramAgentRouteForMessage({'
+  const trafficGateRecoveryLines = [
+    'const telegramTrafficGate = await resolveTelegramTrafficGateStatus();',
+    'if (!telegramTrafficGate.allowed) {',
+    'const telegramTrafficGateMessage = telegramTrafficGate.blocked',
+    '? "Automnia is connected to Telegram, but message access is currently paused for this account. Check your Automnia license or credits, then try again."',
+    ': "Automnia is connected to Telegram and is still starting its billed message route. Keep Automnia open; the message route will retry automatically.";',
+    'await sendTelegramRecoveryMessage({',
+    'bot,',
+    'runtime,',
+    'chatId,',
+    'messageId: msg.message_id,',
+    'text: telegramTrafficGateMessage',
+    '});',
+    'return null;',
+    '}',
+  ]
+  const trafficGateRecoveryBlock = trafficGateRecoveryLines.join('\n\t')
   if (!next.includes(routeApplicationMarker)) {
     const bodyResultMarker = 'if (!bodyResult) return null;'
     const routeApplicationBlock = [
-      'if (!(await automniaTrafficGateAllowsMessages())) return null;',
+      ...trafficGateRecoveryLines,
       'const telegramAgentRoute = resolveTelegramAgentRouteForMessage({',
       'cfg: freshCfg,',
       'route,',
@@ -11045,6 +11071,44 @@ function patchedTelegramBotRuntimeSource(source: string) {
     } else {
       console.warn('[plugins/telegram] agent route patch skipped: inbound body marker not found')
     }
+  }
+  const legacyTrafficGateGuard = 'if (!(await automniaTrafficGateAllowsMessages())) return null;'
+  if (next.includes(legacyTrafficGateGuard)) {
+    next = next.replace(legacyTrafficGateGuard, trafficGateRecoveryBlock)
+  }
+  const previousVisibleTrafficGateGuard = /if \(!\(await automniaTrafficGateAllowsMessages\(\)\)\) \{[\s\S]*?return null;\n\t\}/u
+  if (next.includes('message route is not ready yet.') && previousVisibleTrafficGateGuard.test(next)) {
+    next = next.replace(previousVisibleTrafficGateGuard, trafficGateRecoveryBlock)
+  }
+  const configuredBindingFailureMarker = 'logVerbose(`telegram: configured ACP binding unavailable for ${bindingMode.binding.record.conversation.conversationId}: ${ensured.error}`);'
+  if (next.includes(configuredBindingFailureMarker) && !next.includes('conversation is still initializing.')) {
+    next = next.replace(
+      configuredBindingFailureMarker,
+      [
+        configuredBindingFailureMarker,
+        'await sendTelegramRecoveryMessage({',
+        'bot,',
+        'runtime,',
+        'chatId,',
+        'messageId: msg.message_id,',
+        'text: "Automnia received your message, but this conversation is still initializing. Keep Automnia open; the route will retry automatically."',
+        '});',
+      ].join('\n\t'),
+    )
+  }
+  const noVisibleResponseMarker = 'const hasFinalResponse = finalAnswerDelivered || sentFallback || suppressSilentReplyFallback || queuedFinal;'
+  if (next.includes(noVisibleResponseMarker) && !next.includes('No response was generated for this Telegram message.')) {
+    const noVisibleResponseBlock = [
+      'if (!sentFallback && !isRoomEvent && !suppressSilentReplyFallback && !queuedFinal && !deliverySummary.delivered) {',
+      'sentFallback = (await (telegramDeps.deliverReplies ?? deliverReplies)({',
+      'replies: [{ text: "No response was generated for this Telegram message. Please try again; Automnia stayed on the billed route." }],',
+      '...deliveryBaseOptions,',
+      'silent: false,',
+      'mediaLoader: telegramDeps.loadWebMedia',
+      '})).delivered;',
+      '}',
+    ].join('\n\t')
+    next = next.replace(noVisibleResponseMarker, `${noVisibleResponseBlock}\n\t${noVisibleResponseMarker}`)
   }
   const nativeAgentsCommandMarker = 'const commandDefinition = findCommandByNativeName(command.name, "telegram");\n\t\t\t\tconst rawText = ctx.match?.trim() ?? "";'
   if (!next.includes('const telegramAgentsCommandText = resolveTelegramAgentsCommandResponse({')) {
@@ -11804,6 +11868,9 @@ async function savePluginDirectConfig(
   if (!cleanValues.length) return
 
   const config = await readOpenclawConfig()
+  const mappedValues = id === 'telegram'
+    ? applyTelegramPluginConfigValues(config as unknown as Record<string, unknown>, cleanValues)
+    : { channelValues: [] as Array<readonly [string, string]>, pluginValues: cleanValues }
   if (!config.plugins) config.plugins = {}
   if (!config.plugins.entries) config.plugins.entries = {}
   const entry = {
@@ -11811,8 +11878,11 @@ async function savePluginDirectConfig(
     enabled: config.plugins.entries[id]?.enabled !== false,
   } as OpenClawPluginEntryConfig
   if (!isLooseRecord(entry.config)) entry.config = {}
-  for (const [key, value] of cleanValues) {
+  for (const [key] of mappedValues.channelValues) delete entry.config[key]
+  for (const [key, value] of mappedValues.pluginValues) {
     setNestedConfigString(entry.config, key, value)
+  }
+  for (const [key, value] of [...mappedValues.channelValues, ...mappedValues.pluginValues]) {
     await savePluginSecret(id, key, value)
   }
   if (id === CLAWTALK_PLUGIN_ID) {

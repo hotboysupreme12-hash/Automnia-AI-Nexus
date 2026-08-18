@@ -502,6 +502,11 @@ export function createGatewayLifecycleService(options: GatewayLifecycleServiceOp
         // used by the Control Center so traffic-gate checks cannot be spoofed
         // by an unauthenticated local request.
         CONTROL_CENTER_TOKEN: options.controlCenterToken,
+        // The injected ClawTalk and Telegram helpers prefer this alias when
+        // both names exist. Refresh it as well so a stale parent-process
+        // value cannot make the local traffic gate appear unauthorized.
+        CLAWTALK_CONTROL_CENTER_TOKEN: options.controlCenterToken,
+        CONTROL_CENTER_PORT: String(options.controlCenterPort),
         CONTROL_CENTER_AGENT_TURN_STREAM_URL: `http://127.0.0.1:${options.controlCenterPort}/api/openclaw/agent-turn/stream`,
         CLAWTALK_CONTROL_CENTER_AGENT_TURN_STREAM_URL: `http://127.0.0.1:${options.controlCenterPort}/api/openclaw/agent-turn/stream`,
         CLAWTALK_CONTROL_CENTER_CONSOLE_FINAL_URL: `http://127.0.0.1:${options.controlCenterPort}/api/openclaw/clawtalk-console/final`,

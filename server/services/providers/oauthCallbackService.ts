@@ -184,6 +184,19 @@ function safeErrorText(error: unknown, redactSensitiveText: (value: string) => s
   return redactSensitiveText(message)
 }
 
+function callbackServerStartError(error: unknown, provider: 'Google' | 'OpenAI Codex', port: number) {
+  const code = error && typeof error === 'object' && 'code' in error
+    ? String((error as { code?: unknown }).code || '')
+    : ''
+  if (code === 'EADDRINUSE') {
+    if (provider === 'Google') {
+      return `Google sign-in cannot start because local callback port ${port} is already in use. Finish or close another Google or gcloud sign-in flow, then retry.`
+    }
+    return `OpenAI Codex sign-in cannot start because local callback port ${port} is already in use. Close the other sign-in flow or restart Automnia, then retry.`
+  }
+  return error
+}
+
 async function closeLifecycleHttpServer(
   server: Server | null,
   label: string,
@@ -607,7 +620,7 @@ export function createOAuthCallbackService(options: OAuthCallbackServiceOptions)
     try {
       await ensureGoogleOAuthCallbackServer()
     } catch (error) {
-      failSession(session, error)
+      failSession(session, callbackServerStartError(error, 'Google', googleCallbackPort))
       throw new Error(session.error || 'Failed to start Google OAuth callback server.')
     }
     if (options.isShuttingDown()) {
@@ -791,7 +804,7 @@ export function createOAuthCallbackService(options: OAuthCallbackServiceOptions)
     try {
       await ensureOpenAICodexOAuthCallbackServer()
     } catch (error) {
-      failSession(session, error)
+      failSession(session, callbackServerStartError(error, 'OpenAI Codex', openAiCodexCallbackPort))
       throw new Error(session.error || 'Failed to start OpenAI Codex OAuth callback server.')
     }
     if (options.isShuttingDown()) {

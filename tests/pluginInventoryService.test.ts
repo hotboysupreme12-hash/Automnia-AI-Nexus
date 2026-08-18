@@ -484,3 +484,33 @@ test('plugin inventory reports disabled missing-config guidance for setup fields
   assert.equal(plugin?.needsSetup, false)
   assert.match(plugin?.guidance.join(' ') || '', /Enable after adding Api Key/)
 })
+
+test('plugin inventory treats the live Telegram channel credential as configured', async () => {
+  const { service } = createHarness({
+    config: {
+      channels: { telegram: { enabled: true, botToken: 'replacement-token' } },
+      plugins: { entries: { telegram: { enabled: true } } },
+    },
+    runResult: {
+      code: 0,
+      stdout: JSON.stringify({
+        plugins: [{
+          id: 'telegram',
+          name: 'telegram-plugin',
+          enabled: true,
+          channels: ['telegram'],
+          configSchema: {
+            properties: { botToken: { description: 'Telegram bot token' } },
+          },
+        }],
+      }),
+      stderr: '',
+    },
+  })
+
+  await service.refreshPluginListCache()
+  const plugin = (await service.listPluginControls()).plugins[0]
+
+  assert.equal(plugin?.configFields.find((field) => field.key === 'botToken')?.present, true)
+  assert.equal(plugin?.needsSetup, false)
+})

@@ -4,7 +4,7 @@ import crypto from 'node:crypto';
 async function run() {
   try {
     const token = execSync('gcloud auth print-access-token').toString().trim();
-    const projectId = 'groovy-iris-497718-f3';
+    const projectId = 'project-7baf4a64-1c4f-4cff-94f';
     
     const email = 'jeanmyrvil1@gmail.com';
     const randomHex = () => crypto.randomBytes(2).toString('hex').toUpperCase();

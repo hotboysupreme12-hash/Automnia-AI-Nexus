@@ -6,7 +6,7 @@ WORKDIR /app
 COPY package.json package-lock.json ./
 RUN npm ci --omit=dev --ignore-scripts
 
-COPY server.js geminiThinking.js ./
+COPY server.js geminiThinking.js welcomeEmail.js ./
 
 USER node
 EXPOSE 8080

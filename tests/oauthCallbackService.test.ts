@@ -191,6 +191,26 @@ test('cancels a pending Google account OAuth session so a closed browser can be 
   }
 })
 
+test('reports an actionable recovery message when the Google callback port is already in use', async () => {
+  const blocker = http.createServer()
+  await new Promise<void>((resolve, reject) => {
+    blocker.once('error', reject)
+    blocker.listen(0, '127.0.0.1', () => resolve())
+  })
+  const port = (blocker.address() as { port: number }).port
+  const { service, state } = createHarness({ googleCallbackPort: port })
+  try {
+    await assert.rejects(
+      () => service.startGoogleAccountOAuthSession(),
+      /Google sign-in cannot start because local callback port .* is already in use\. Finish or close another Google or gcloud sign-in flow, then retry\./,
+    )
+    assert.equal(state.openUrls.length, 0)
+  } finally {
+    await service.closeOAuthCallbackServersForShutdown('test cleanup')
+    await new Promise<void>((resolve) => blocker.close(() => resolve()))
+  }
+})
+
 test('completes OpenAI Codex manual OAuth input and stores only redacted session result fields', async () => {
   const { service, state } = createHarness()
   try {
