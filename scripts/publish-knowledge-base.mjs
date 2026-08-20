@@ -16,7 +16,7 @@ import path from 'node:path'
 import process from 'node:process'
 
 const repositoryRoot = path.resolve(new URL('.', import.meta.url).pathname, '..')
-const projectId = process.env.AUTOMNIA_KNOWLEDGE_PROJECT || 'groovy-iris-497718-f3'
+const projectId = process.env.AUTOMNIA_KNOWLEDGE_PROJECT || 'project-7baf4a64-1c4f-4cff-94f'
 const location = process.env.AUTOMNIA_KNOWLEDGE_LOCATION || 'global'
 const collection = 'default_collection'
 const dataStoreId = process.env.AUTOMNIA_KNOWLEDGE_DATA_STORE || 'automnia-knowledge'

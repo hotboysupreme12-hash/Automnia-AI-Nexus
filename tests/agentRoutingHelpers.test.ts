@@ -29,6 +29,105 @@ const config = {
   },
 }
 
+test('channel traffic gates resolve to the server-owned license endpoint', () => {
+  const processStub = {
+    env: {
+      CONTROL_CENTER_AGENT_TURN_STREAM_URL: 'http://127.0.0.1:4050/api/openclaw/agent-turn/stream?source=telegram',
+    },
+  }
+  const clawTalkResolver = new Function(
+    'process',
+    `${CLAWTALK_CORE_BRIDGE_ROUTING_HELPER}\nreturn resolveAutomniaTrafficGateUrl`,
+  )(processStub) as () => string
+  const telegramResolver = new Function(
+    'process',
+    `${TELEGRAM_AGENT_ROUTING_HELPER}\nreturn resolveTelegramTrafficGateUrl`,
+  )(processStub) as () => string
+
+  const expected = 'http://127.0.0.1:4050/api/license/traffic-gate'
+  assert.equal(clawTalkResolver(), expected)
+  assert.equal(telegramResolver(), expected)
+})
+
+test('Telegram traffic gate retries transient local failures and prefers the refreshed Control Center token', async () => {
+  const calls: Array<{ url: string; authorization?: string }> = []
+  let attempts = 0
+  const fetchStub = async (url: string, options: { headers?: Record<string, string> }) => {
+    attempts += 1
+    calls.push({ url, authorization: options.headers?.Authorization })
+    if (attempts === 1) throw new Error('ECONNREFUSED')
+    return {
+      ok: true,
+      status: 200,
+      json: async () => ({ data: { active: true, messageTrafficAllowed: true } }),
+    }
+  }
+  const immediateTimer = (callback: () => void) => {
+    callback()
+    return 0
+  }
+  const statusResolver = new Function(
+    'process',
+    'fetch',
+    'setTimeout',
+    'clearTimeout',
+    `${TELEGRAM_AGENT_ROUTING_HELPER}\nreturn resolveTelegramTrafficGateStatus`,
+  )({
+    env: {
+      CONTROL_CENTER_AGENT_TURN_STREAM_URL: 'http://127.0.0.1:4050/api/openclaw/agent-turn/stream',
+      CONTROL_CENTER_TOKEN: 'fresh-control-center-token',
+      CLAWTALK_CONTROL_CENTER_TOKEN: 'stale-parent-token',
+    },
+  }, fetchStub, immediateTimer, () => undefined) as () => Promise<{ allowed: boolean; transient?: boolean }>
+
+  const result = await statusResolver()
+  assert.deepEqual(result, { allowed: true, transient: false })
+  assert.equal(attempts, 2)
+  assert.deepEqual(calls, [
+    {
+      url: 'http://127.0.0.1:4050/api/license/traffic-gate',
+      authorization: 'Bearer fresh-control-center-token',
+    },
+    {
+      url: 'http://127.0.0.1:4050/api/license/traffic-gate',
+      authorization: 'Bearer fresh-control-center-token',
+    },
+  ])
+})
+
+test('Telegram recovery delivery retries a transient Telegram send failure', async () => {
+  let sends = 0
+  const sendRecovery = new Function(
+    'withTelegramApiErrorLogging',
+    'setTimeout',
+    `${TELEGRAM_AGENT_ROUTING_HELPER}\nreturn sendTelegramRecoveryMessage`,
+  )(
+    async (params: { fn: () => Promise<void> }) => params.fn(),
+    (callback: () => void) => {
+      callback()
+      return 0
+    },
+  ) as (params: Record<string, unknown>) => Promise<boolean>
+
+  const delivered = await sendRecovery({
+    bot: {
+      api: {
+        sendMessage: async () => {
+          sends += 1
+          if (sends === 1) throw new Error('temporary Telegram transport failure')
+        },
+      },
+    },
+    runtime: {},
+    chatId: 'end-user-chat',
+    messageId: 1,
+    text: 'Automnia is still starting. Please try again in a moment.',
+  })
+
+  assert.equal(delivered, true)
+  assert.equal(sends, 2)
+})
+
 test('Telegram routes slash and at commands with compact names and compact agent ids', () => {
   const harness = routingHarness(
     TELEGRAM_AGENT_ROUTING_HELPER,
@@ -223,10 +322,10 @@ test('Telegram model callbacks are locked to Automnia credits for Starter runtim
   `)() as (config: unknown, callback: unknown) => boolean
 
   const starterConfig = { env: { vars: { AUTOMNIA_CREDITS_ONLY: '1' } } }
-  assert.equal(selectionAllowed(starterConfig, { type: 'select', provider: 'automnia-cloud', model: 'gemini-3.6-flash' }), true)
-  assert.equal(selectionAllowed(starterConfig, { type: 'select', provider: 'google', model: 'gemini-3.7-pro' }), false)
+  assert.equal(selectionAllowed(starterConfig, { type: 'select', provider: 'automnia-cloud', model: 'gemini-3.7-flash' }), true)
+  assert.equal(selectionAllowed(starterConfig, { type: 'select', provider: 'google', model: 'gemini-2.5-pro' }), false)
   assert.equal(selectionAllowed(starterConfig, { type: 'select', provider: 'openai', model: 'gpt-5.5' }), false)
-  assert.equal(selectionAllowed({}, { type: 'select', provider: 'google', model: 'gemini-3.7-pro' }), true)
+  assert.equal(selectionAllowed({}, { type: 'select', provider: 'google', model: 'gemini-2.5-pro' }), true)
 })
 
 test('Telegram Automnia model detection does not leak a regex flag as a variable', () => {
@@ -235,7 +334,7 @@ test('Telegram Automnia model detection does not leak a regex flag as a variable
     return isTelegramAutomniaCreditsModel
   `)() as (value: unknown) => boolean
 
-  assert.equal(isAutomniaCreditsModel('automnia-cloud/gemini-3.6-flash'), true)
+  assert.equal(isAutomniaCreditsModel('automnia-cloud/gemini-3.7-flash'), true)
   assert.equal(isAutomniaCreditsModel('openai/gpt-5.5'), false)
 })
 
@@ -250,10 +349,10 @@ test('Telegram model menus expose only Automnia credits for Starter runtime conf
 
   const restricted = restrictModelData(
     { env: { vars: { AUTOMNIA_CREDITS_ONLY: '1' } } },
-    { byProvider: new Map([['google', new Set(['gemini-3.7-pro'])]]), providers: ['google'] },
+    { byProvider: new Map([['google', new Set(['gemini-2.5-pro'])]]), providers: ['google'] },
   )
   assert.deepEqual(restricted.providers, ['automnia-cloud'])
-  assert.deepEqual(Array.from(restricted.byProvider.get('automnia-cloud') || []), ['gemini-3.6-flash'])
+  assert.deepEqual(Array.from(restricted.byProvider.get('automnia-cloud') || []), ['gemini-3.7-flash'])
 })
 
 test('Telegram route construction is self-contained in the injected runtime bundle', () => {

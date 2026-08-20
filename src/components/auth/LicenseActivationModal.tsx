@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { useAuth } from '../../context/useAuth'
 import { useLicense } from '../../context/useLicense'
 import { resolveAgentRoutePresentation, resolveLicenseEntitlement } from '../../utils/licenseEntitlement'
 
@@ -6,11 +7,13 @@ const AUTOMNIA_LOCKUP_SRC = '/brand/automnia-ai-nexus-logo-transparent-cropped.p
 const AUTOMNIA_BRAND_LABEL = 'Automnia AI Nexus'
 
 export function LicenseActivationModal({ onClose }: { onClose?: () => void }) {
+  const { loginWithGoogle, cancelGoogleLogin } = useAuth()
   const { activate, license } = useLicense()
   const [email, setEmail] = useState(license?.email || '')
   const [licenseKey, setLicenseKey] = useState('')
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(false)
+  const [googleLoading, setGoogleLoading] = useState(false)
 
   const handleSubmit = async (event: React.FormEvent) => {
     event.preventDefault()
@@ -24,6 +27,28 @@ export function LicenseActivationModal({ onClose }: { onClose?: () => void }) {
     } finally {
       setLoading(false)
     }
+  }
+
+  const handleGoogle = async () => {
+    setError('')
+    setLoading(true)
+    setGoogleLoading(true)
+    try {
+      await loginWithGoogle()
+      onClose?.()
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Google sign-in failed. Please try again.')
+    } finally {
+      setLoading(false)
+      setGoogleLoading(false)
+    }
+  }
+
+  const handleGoogleCancel = () => {
+    cancelGoogleLogin()
+    setError('Google sign-in was cancelled. You can retry Google or enter your license key manually.')
+    setLoading(false)
+    setGoogleLoading(false)
   }
 
   const entitlement = resolveLicenseEntitlement(license)
@@ -80,6 +105,32 @@ export function LicenseActivationModal({ onClose }: { onClose?: () => void }) {
           <button type="submit" disabled={loading || !email.trim() || !licenseKey.trim()} className="w-full rounded-lg border border-slate-100/20 bg-[linear-gradient(180deg,rgba(214,224,228,0.18),rgba(116,132,140,0.12))] px-4 py-3 font-semibold text-slate-100 shadow-[inset_0_1px_0_rgba(255,255,255,0.10),0_18px_36px_-30px_rgba(190,206,214,0.52)] transition disabled:opacity-50">
             {loading ? 'Linking...' : license?.active ? 'Link another purchase' : 'Link Automnia purchase'}
           </button>
+          <div className="flex items-center gap-3 text-[11px] uppercase tracking-[0.18em] text-slate-600" aria-hidden="true">
+            <span className="h-px flex-1 bg-slate-200/10" />
+            <span>or</span>
+            <span className="h-px flex-1 bg-slate-200/10" />
+          </div>
+          <button
+            type="button"
+            onClick={handleGoogle}
+            disabled={loading}
+            className="w-full rounded-lg border border-slate-200/15 bg-white/[0.04] px-4 py-3 text-sm font-semibold text-slate-200 transition hover:bg-white/[0.08] disabled:opacity-50"
+          >
+            {googleLoading ? 'Waiting for Google...' : 'Continue with Google'}
+          </button>
+          {googleLoading && (
+            <div className="space-y-2">
+              <button
+                type="button"
+                onClick={handleGoogleCancel}
+                className="w-full rounded-lg border border-amber-300/30 bg-amber-300/[0.06] px-4 py-2 text-xs font-semibold text-amber-100 transition hover:bg-amber-300/[0.12]"
+              >
+                Cancel and enter key manually
+              </button>
+              <p className="text-center text-xs text-slate-500">Google verifies the purchase email and links the matching Automnia license automatically.</p>
+            </div>
+          )}
+          {!googleLoading && <p className="text-center text-xs text-slate-500">Use Google when its email matches the email used for your Automnia purchase.</p>}
           {onClose && <button type="button" onClick={onClose} className="w-full rounded-lg border border-slate-100/10 bg-slate-950/40 px-4 py-2 text-sm font-medium text-slate-300 transition hover:border-slate-100/20 hover:text-white">Keep current license</button>}
           <p className="text-center text-xs text-slate-400">
             Link a purchase once. Higher-tier purchases are merged automatically into this account and keep one canonical license key.

@@ -3,7 +3,7 @@ import { execSync } from 'node:child_process';
 async function run() {
   try {
     const token = execSync('gcloud auth print-access-token').toString().trim();
-    const projectId = 'groovy-iris-497718-f3';
+    const projectId = 'project-7baf4a64-1c4f-4cff-94f';
     const url = `https://firestore.googleapis.com/v1/projects/${projectId}/databases/(default)/documents/automnia_licenses?pageSize=1000`;
     
     console.log('Fetching licenses from Firestore...');

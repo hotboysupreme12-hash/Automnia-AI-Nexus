@@ -1911,9 +1911,22 @@ export function RecruitAgentModal({ isOpen, onClose }: { isOpen: boolean; onClos
                         <section className="dui-recruit-section dui-recruit-section-primary">
                           <SectionTitle icon="runtime" label="Runtime lane" meta={primaryModel ? 'Model selected' : 'System default'} />
                           <div className="dui-recruit-runtime-grid">
-                            <div className="dui-recruit-model-field">
-                              <ModelPicker mode="primary" models={selectableModels} selectedIds={primaryModel ? [primaryModel] : []} emptyOption={{ label: 'Use system default', detail: creditsOnly ? 'Starter subscriptions use Automnia credits only.' : 'Follow the current runtime lane.' }} label="Model" disabled={modelsLoading} loading={modelsLoading} providerAuthStatusFor={(provider) => authStatusForProvider(authProviders, provider)} onProviderAuth={(_, providerStatus) => setAuthModalProvider(providerStatus)} onSelect={handlePrimaryModelChange} />
-                              <p className="dui-recruit-section-note">{creditsOnly ? 'Starter subscriptions are locked to Automnia credits. Provider credentials and BYOK are unavailable.' : 'Leave the model blank to follow the runtime default. Provider credentials can be connected inline when a model needs them.'}</p>
+                              <div className="dui-recruit-model-field">
+                                <ModelPicker mode="primary" models={selectableModels} selectedIds={primaryModel ? [primaryModel] : []} emptyOption={{ label: 'Use system default', detail: creditsOnly ? 'Starter subscriptions use Automnia credits only.' : 'Follow the current runtime lane.' }} label="Model" disabled={modelsLoading} loading={modelsLoading} providerAuthStatusFor={(provider) => authStatusForProvider(authProviders, provider)} onProviderAuth={(_, providerStatus) => setAuthModalProvider(providerStatus)} onSelect={handlePrimaryModelChange} />
+                                {selectedProviderAuth && !selectedProviderAuth.configured && (
+                                  <div role="alert" className="dui-recruit-auth-notice">
+                                    <strong>Missing {selectedProviderAuth.label || selectedProviderAuth.provider} authentication.</strong>
+                                    <span>Connect this provider before using this model.</span>
+                                    <button
+                                      type="button"
+                                      title={`Connect ${selectedProviderAuth.label || selectedProviderAuth.provider} authentication`}
+                                      onClick={() => setAuthModalProvider(selectedProviderAuth)}
+                                    >
+                                      Connect provider
+                                    </button>
+                                  </div>
+                                )}
+                                <p className="dui-recruit-section-note">{creditsOnly ? 'Starter subscriptions are locked to Automnia credits. Provider credentials and BYOK are unavailable.' : 'Leave the model blank to follow the runtime default. Provider credentials can be connected inline when a model needs them.'}</p>
                             </div>
                             <section className="dui-recruit-policy-panel" aria-label="Agent policy settings">
                               <SectionTitle icon="policy" label="Agent policy" meta={policy.mode === 'off' ? 'Unrestricted' : 'Sandboxed'} />

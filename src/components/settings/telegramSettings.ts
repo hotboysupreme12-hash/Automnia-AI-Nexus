@@ -242,13 +242,17 @@ export function telegramSettingCommandEntries(settings: TelegramSettings): Array
 export function telegramSettingBatchCommand(settings: TelegramSettings, keys?: readonly TelegramSettingKey[]): string {
   const normalized = normalizeTelegramSettings(settings)
   const allowedKeys = keys ? new Set(keys) : null
-  const batch = TELEGRAM_SETTING_DEFINITIONS
+  const batch: Array<{ path: string; value: TelegramSettingValue | string[] }> = TELEGRAM_SETTING_DEFINITIONS
     .filter(({ key }) => !allowedKeys || allowedKeys.has(key))
     .map(({ path, read }) => ({ path, value: read(normalized) }))
+  if (normalized.dmPolicy === 'open') batch.push({ path: 'channels.telegram.allowFrom', value: ['*'] })
   const payload = JSON.stringify(batch).replace(/'/g, "'\\''")
   return `config set --batch-json '${payload}'`
 }
 
 export function telegramSettingCommands(settings: TelegramSettings): string[] {
-  return telegramSettingCommandEntries(settings).map(({ command }) => command)
+  const normalized = normalizeTelegramSettings(settings)
+  const commands = telegramSettingCommandEntries(normalized).map(({ command }) => command)
+  if (normalized.dmPolicy === 'open') commands.push('config set channels.telegram.allowFrom ["*"]')
+  return commands
 }

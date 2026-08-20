@@ -21,6 +21,8 @@ $expectedPlanHash = Get-LocalPlanMappingHash
 $checks = [ordered]@{
   service = $health.service -eq $config.ServiceName
   schemaVersion = $health.schemaVersion -eq $config.SchemaVersion
+  relayModel = $health.aiRelayModel -eq $config.AutomniaRelayModel
+  vertexLocation = $health.vertexLocation -eq $config.VertexLocation
   writeMode = $health.writeMode -eq $ExpectedWriteMode
   firestore = $health.storage -eq 'firestore'
   readiness = $ready.ok -eq $true
@@ -28,6 +30,7 @@ $checks = [ordered]@{
   planMappings = $health.commerce.planMappingsConfigured -eq $true
   planMappingHash = $health.commerce.planMappingHash -eq $expectedPlanHash
   webhookSecrets = $health.commerce.webhookSecretsConfigured -eq $true
+  emailDelivery = $health.commerce.emailDeliveryConfigured -eq $true
 }
 $passed = -not ($checks.Values -contains $false)
 $result = [pscustomobject]@{

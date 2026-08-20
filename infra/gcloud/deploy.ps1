@@ -56,7 +56,15 @@ if ($SecretValuesFile) {
 
 foreach ($binding in $config.SecretBindings.GetEnumerator()) {
   $secretName = [string]$binding.Value
-  Ensure-SecretResource -ProjectId $ProjectId -SecretName $secretName -BootstrapVersion
+  $requiresOperatorValue = [string]$binding.Key -in @('SHOPIFY_ADMIN_API_TOKEN', 'GMAIL_OAUTH_CREDENTIALS')
+  if ($requiresOperatorValue) {
+    # A random bootstrap value would make health look configured while every
+    # paid order still fails at the external provider. Require real operator
+    # credentials for both Shopify administration and Gmail delivery.
+    Ensure-SecretResource -ProjectId $ProjectId -SecretName $secretName
+  } else {
+    Ensure-SecretResource -ProjectId $ProjectId -SecretName $secretName -BootstrapVersion
+  }
   if ($providedSecrets.ContainsKey($secretName) -or $providedSecrets.ContainsKey([string]$binding.Key)) {
     $value = if ($providedSecrets.ContainsKey($secretName)) { $providedSecrets[$secretName] } else { $providedSecrets[[string]$binding.Key] }
     $temporaryDirectory = Join-Path ([IO.Path]::GetTempPath()) ('automnia-secret-input-' + [guid]::NewGuid().ToString('N'))
@@ -68,6 +76,10 @@ foreach ($binding in $config.SecretBindings.GetEnumerator()) {
     } finally {
       Remove-Item -LiteralPath $temporaryDirectory -Recurse -Force
     }
+  }
+  if ($requiresOperatorValue -and -not (Test-SecretVersion -ProjectId $ProjectId -SecretName $secretName)) {
+    $credentialDescription = if ([string]$binding.Key -eq 'GMAIL_OAUTH_CREDENTIALS') { 'Gmail OAuth credentials' } else { 'Shopify app secret' }
+    throw "Secret '$secretName' must contain $credentialDescription before deployment. Pass it through -SecretValuesFile; bootstrap placeholders are not accepted."
   }
   if ($PSCmdlet.ShouldProcess("$secretName in $ProjectId", 'grant runtime secret access')) {
     Invoke-Gcloud -Arguments @('secrets', 'add-iam-policy-binding', $secretName, '--project', $ProjectId, '--member', "serviceAccount:$serviceAccountEmail", '--role', 'roles/secretmanager.secretAccessor', '--condition=None') | Out-Null
@@ -85,7 +97,12 @@ try {
   $environmentYaml = @"
 SHOPIFY_PLAN_MAPPINGS: '$planBase64'
 SHOPIFY_CHECKOUT_URL: '$($config.ShopifyCheckoutUrl)'
+SHOPIFY_STORE_DOMAIN: '$($config.ShopifyStoreDomain)'
+SHOPIFY_APP_CLIENT_ID: '$($config.ShopifyAppClientId)'
+SHOPIFY_API_VERSION: '$($config.ShopifyApiVersion)'
+GMAIL_SENDER: '$($config.GmailSender)'
 VERTEX_LOCATION: '$($config.VertexLocation)'
+AUTOMNIA_RELAY_MODEL: '$($config.AutomniaRelayModel)'
 AUTOMNIA_SCHEMA_VERSION: '$($config.SchemaVersion)'
 AUTOMNIA_KNOWLEDGE_MODEL_VERSION: '$($config.KnowledgeModelVersion)'
 AUTOMNIA_KNOWLEDGE_FALLBACK_MODEL_VERSION: '$($config.KnowledgeFallbackModelVersion)'

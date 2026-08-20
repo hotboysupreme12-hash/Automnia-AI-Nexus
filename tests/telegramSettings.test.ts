@@ -80,3 +80,13 @@ test('Telegram settings batch command emits one atomic config update for selecte
   assert.match(batch, /messages\.ackReactionScope/)
   assert.doesNotMatch(batch, /channels\.telegram\.dmPolicy/)
 })
+
+test('Telegram open DM policy always includes its required wildcard allowlist', () => {
+  const settings = { ...DEFAULT_TELEGRAM_SETTINGS, dmPolicy: 'open' as const }
+  const commands = telegramSettingCommands(settings)
+  const batch = telegramSettingBatchCommand(settings, ['dmPolicy'])
+
+  assert.ok(commands.includes('config set channels.telegram.allowFrom ["*"]'))
+  assert.match(batch, /channels\.telegram\.allowFrom/)
+  assert.match(batch, /\["\*"\]/)
+})

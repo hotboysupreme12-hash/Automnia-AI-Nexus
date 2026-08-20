@@ -304,10 +304,17 @@ function resolveClawTalkAgentRoute(params, fallbackConfig, fallbackAgentId, logg
 }
 function resolveClawTalkControlCenterStreamUrl() {
     var url = process.env.CLAWTALK_CONTROL_CENTER_AGENT_TURN_STREAM_URL || process.env.CONTROL_CENTER_AGENT_TURN_STREAM_URL || '';
+    if (!String(url || '').trim()) {
+        var port = Number.parseInt(String(process.env.CONTROL_CENTER_PORT || process.env.AUTOMNIA_CONTROL_CENTER_PORT || '4050'), 10);
+        if (Number.isFinite(port) && port > 0 && port < 65536) url = 'http://127.0.0.1:' + String(port) + '/api/openclaw/agent-turn/stream';
+    }
     return String(url == null ? '' : url).trim();
 }
 function clawTalkControlCenterHeaders() {
-    var token = String(process.env.CLAWTALK_CONTROL_CENTER_TOKEN || process.env.CONTROL_CENTER_TOKEN || '').trim();
+    // CONTROL_CENTER_TOKEN is refreshed by the desktop supervisor on every
+    // Gateway spawn. Prefer it over the legacy alias so a stale inherited
+    // ClawTalk value cannot make the server-owned billing gate look closed.
+    var token = String(process.env.CONTROL_CENTER_TOKEN || process.env.CLAWTALK_CONTROL_CENTER_TOKEN || '').trim();
     var headers = {
         'Content-Type': 'application/json'
     };
@@ -316,22 +323,47 @@ function clawTalkControlCenterHeaders() {
 }
 function resolveAutomniaTrafficGateUrl() {
     var streamUrl = resolveClawTalkControlCenterStreamUrl();
-    return streamUrl ? streamUrl.replace(/\/agent-turn\/stream(?:\?.*)?$/, '/license/traffic-gate') : '';
+    if (!streamUrl) return '';
+    // The Control Center stream lives under /api/openclaw, while the
+    // server-owned traffic gate lives under /api/license. Replacing only the
+    // final route segment would incorrectly produce /api/openclaw/license/...
+    // and make every billed channel turn look unavailable.
+    return streamUrl
+        .replace(/\/api\/openclaw\/agent-turn\/stream(?:\?.*)?$/, '/api/license/traffic-gate')
+        .replace(/\/agent-turn\/stream(?:\?.*)?$/, '/license/traffic-gate');
 }
-async function automniaTrafficGateAllowsMessages() {
+function waitForClawTalkTrafficGateRetry(delayMs) {
+    return new Promise(function(resolve) { return setTimeout(resolve, delayMs); });
+}
+async function resolveClawTalkTrafficGateStatus() {
     var url = resolveAutomniaTrafficGateUrl();
-    if (!url || typeof fetch !== 'function') return false;
-    try {
-        var response = await fetch(url, {
-            method: 'GET',
-            headers: clawTalkControlCenterHeaders()
-        });
-        var payload = await response.json();
-        var gate = payload && payload.data && typeof payload.data === 'object' ? payload.data : payload;
-        return response.ok && gate && gate.active === true && gate.messageTrafficAllowed === true;
-    } catch (unused) {
-        return false;
+    if (!url || typeof fetch !== 'function') return { allowed: false, transient: true, reason: 'unavailable' };
+    var lastStatus = 0;
+    for(var attempt = 1; attempt <= 4; attempt++){
+        var controller = typeof AbortController === 'function' ? new AbortController() : null;
+        var timer = controller ? setTimeout(function() { return controller.abort(); }, 3000) : null;
+        try {
+            var response = await fetch(url, {
+                method: 'GET',
+                headers: clawTalkControlCenterHeaders(),
+                signal: controller ? controller.signal : undefined
+            });
+            lastStatus = Number(response.status) || 0;
+            var payload = null;
+            try { payload = await response.json(); } catch (unused) {}
+            var gate = payload && payload.data && typeof payload.data === 'object' ? payload.data : payload;
+            if (response.ok && gate && gate.active === true && gate.messageTrafficAllowed === true) return { allowed: true, transient: false };
+            if (response.ok && gate && gate.blocked === true) return { allowed: false, transient: false, blocked: true };
+        } catch (unused) {
+        } finally {
+            if (timer) clearTimeout(timer);
+        }
+        if (attempt < 4) await waitForClawTalkTrafficGateRetry(250 * Math.pow(2, attempt - 1));
     }
+    return { allowed: false, transient: true, status: lastStatus };
+}
+async function automniaTrafficGateAllowsClawTalkMessages() {
+    return (await resolveClawTalkTrafficGateStatus()).allowed === true;
 }
 function resolveClawTalkControlCenterConsoleFinalUrl() {
     var url = process.env.CLAWTALK_CONTROL_CENTER_CONSOLE_FINAL_URL || '';
@@ -502,7 +534,7 @@ async function runClawTalkControlCenterOrEmbeddedAgentTurn(options) {
     }
     var url = resolveClawTalkControlCenterStreamUrl();
     if (url && typeof fetch === 'function') {
-        if (!(await automniaTrafficGateAllowsMessages())) {
+        if (!(await automniaTrafficGateAllowsClawTalkMessages())) {
             return {
                 payloads: [],
                 meta: { controlCenter: true, billingRoute: 'blocked', trafficGate: 'blocked' }
@@ -568,33 +600,81 @@ async function runClawTalkControlCenterOrEmbeddedAgentTurn(options) {
 `.trim()
 
 export const TELEGRAM_AGENT_ROUTING_HELPER = String.raw`
-var TELEGRAM_AGENT_ROUTING_PATCH_VERSION = 14;
+var TELEGRAM_AGENT_ROUTING_PATCH_VERSION = 15;
 var TELEGRAM_AGENT_ROUTE_MEMORY_KEY = '__openclawTelegramAgentRoutes';
 function resolveTelegramControlCenterStreamUrl() {
     var url = process.env.CLAWTALK_CONTROL_CENTER_AGENT_TURN_STREAM_URL || process.env.CONTROL_CENTER_AGENT_TURN_STREAM_URL || '';
+    if (!String(url || '').trim()) {
+        var port = Number.parseInt(String(process.env.CONTROL_CENTER_PORT || process.env.AUTOMNIA_CONTROL_CENTER_PORT || '4050'), 10);
+        if (Number.isFinite(port) && port > 0 && port < 65536) url = 'http://127.0.0.1:' + String(port) + '/api/openclaw/agent-turn/stream';
+    }
     return String(url == null ? '' : url).trim();
 }
 function telegramControlCenterHeaders() {
-    var token = String(process.env.CLAWTALK_CONTROL_CENTER_TOKEN || process.env.CONTROL_CENTER_TOKEN || '').trim();
+    var token = String(process.env.CONTROL_CENTER_TOKEN || process.env.CLAWTALK_CONTROL_CENTER_TOKEN || '').trim();
     var headers = {};
     if (token) headers.Authorization = 'Bearer ' + token;
     return headers;
 }
-async function automniaTrafficGateAllowsMessages() {
+function resolveTelegramTrafficGateUrl() {
     var streamUrl = resolveTelegramControlCenterStreamUrl();
-    var url = streamUrl ? streamUrl.replace(/\/agent-turn\/stream(?:\?.*)?$/, '/license/traffic-gate') : '';
-    if (!url || typeof fetch !== 'function') return false;
-    try {
-        var response = await fetch(url, {
-            method: 'GET',
-            headers: telegramControlCenterHeaders()
-        });
-        var payload = await response.json();
-        var gate = payload && payload.data && typeof payload.data === 'object' ? payload.data : payload;
-        return response.ok && gate && gate.active === true && gate.messageTrafficAllowed === true;
-    } catch (unused) {
-        return false;
+    if (!streamUrl) return '';
+    return streamUrl
+        .replace(/\/api\/openclaw\/agent-turn\/stream(?:\?.*)?$/, '/api/license/traffic-gate')
+        .replace(/\/agent-turn\/stream(?:\?.*)?$/, '/license/traffic-gate');
+}
+function waitForTelegramTrafficGateRetry(delayMs) {
+    return new Promise(function(resolve) { return setTimeout(resolve, delayMs); });
+}
+async function resolveTelegramTrafficGateStatus() {
+    var url = resolveTelegramTrafficGateUrl();
+    if (!url || typeof fetch !== 'function') return { allowed: false, transient: true, reason: 'unavailable' };
+    var lastStatus = 0;
+    for(var attempt = 1; attempt <= 4; attempt++){
+        var controller = typeof AbortController === 'function' ? new AbortController() : null;
+        var timer = controller ? setTimeout(function() { return controller.abort(); }, 3000) : null;
+        try {
+            var response = await fetch(url, {
+                method: 'GET',
+                headers: telegramControlCenterHeaders(),
+                signal: controller ? controller.signal : undefined
+            });
+            lastStatus = Number(response.status) || 0;
+            var payload = null;
+            try { payload = await response.json(); } catch (unused) {}
+            var gate = payload && payload.data && typeof payload.data === 'object' ? payload.data : payload;
+            if (response.ok && gate && gate.active === true && gate.messageTrafficAllowed === true) return { allowed: true, transient: false };
+            if (response.ok && gate && gate.blocked === true) return { allowed: false, transient: false, blocked: true };
+        } catch (unused) {
+        } finally {
+            if (timer) clearTimeout(timer);
+        }
+        if (attempt < 4) await waitForTelegramTrafficGateRetry(250 * Math.pow(2, attempt - 1));
     }
+    return { allowed: false, transient: true, status: lastStatus };
+}
+async function automniaTrafficGateAllowsTelegramMessages() {
+    return (await resolveTelegramTrafficGateStatus()).allowed === true;
+}
+async function sendTelegramRecoveryMessage(params) {
+    var text = String(params && params.text || '').trim();
+    if (!text || !params || !params.bot || !params.bot.api) return false;
+    for(var attempt = 1; attempt <= 3; attempt++){
+        try {
+            await withTelegramApiErrorLogging({
+                operation: 'sendMessage',
+                runtime: params.runtime,
+                fn: function() { return params.bot.api.sendMessage(params.chatId, text, { reply_parameters: {
+                    message_id: params.messageId,
+                    allow_sending_without_reply: true
+                } }); }
+            });
+            return true;
+        } catch (unused) {
+            if (attempt < 3) await waitForTelegramTrafficGateRetry(250 * Math.pow(2, attempt - 1));
+        }
+    }
+    return false;
 }
 function telegramCreditsOnlyModelSelectionAllowed(config, callback) {
     var vars = config && config.env && config.env.vars;
@@ -602,13 +682,13 @@ function telegramCreditsOnlyModelSelectionAllowed(config, callback) {
     if (!creditsOnly || !callback || callback.type !== 'select') return true;
     var provider = String(callback.provider || '').trim().toLowerCase();
     var model = String(callback.model || '').trim().toLowerCase();
-    return provider === 'automnia-cloud' && model === 'gemini-3.6-flash';
+    return provider === 'automnia-cloud' && model === 'gemini-3.7-flash';
 }
 function telegramCreditsOnlyModelData(config, data) {
     var vars = config && config.env && config.env.vars;
     if (!vars || String(vars.AUTOMNIA_CREDITS_ONLY || '') !== '1' || !data) return data;
     var byProvider = new Map();
-    byProvider.set('automnia-cloud', new Set(['gemini-3.6-flash']));
+    byProvider.set('automnia-cloud', new Set(['gemini-3.7-flash']));
     return Object.assign({}, data, {
         byProvider: byProvider,
         providers: ['automnia-cloud']

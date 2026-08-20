@@ -1,12 +1,13 @@
 import crypto from 'node:crypto';
 import express from 'express';
 import { Firestore } from '@google-cloud/firestore';
-import { GoogleAuth } from 'google-auth-library';
-import { gemini36ThinkingConfigFromOpenAiRequest } from './geminiThinking.js';
+import { GoogleAuth, OAuth2Client } from 'google-auth-library';
+import { geminiThinkingConfigFromOpenAiRequest } from './geminiThinking.js';
+import { buildLicenseEmailHtml } from './welcomeEmail.js';
 
 const app = express();
 const port = process.env.PORT || 8080;
-const serviceVersion = '2.5.0';
+const serviceVersion = '2.6.0';
 const schemaVersion = '2026-08-13.4';
 const secrets = (process.env.SHOPIFY_WEBHOOK_SECRETS || process.env.SHOPIFY_WEBHOOK_SECRET || '')
   .split(',')
@@ -17,6 +18,7 @@ const writeMode = process.env.MIGRATION_WRITE_MODE === 'read_only' ? 'read_only'
 const adminApiToken = process.env.ADMIN_API_TOKEN || '';
 const gcpProjectId = process.env.GOOGLE_CLOUD_PROJECT || process.env.GCLOUD_PROJECT || 'local-development';
 const vertexLocation = process.env.VERTEX_LOCATION || 'us-central1';
+const automniaRelayModel = String(process.env.AUTOMNIA_RELAY_MODEL || 'gemini-3.7-flash').trim().toLowerCase();
 const vertexAuth = new GoogleAuth({ scopes: ['https://www.googleapis.com/auth/cloud-platform'] });
 const knowledgeServingConfig = String(process.env.AUTOMNIA_KNOWLEDGE_SERVING_CONFIG || '').trim();
 const knowledgeModelVersion = String(process.env.AUTOMNIA_KNOWLEDGE_MODEL_VERSION || 'gemini-3.1-pro-preview/answer_gen/v1').trim();
@@ -24,6 +26,15 @@ const knowledgeFallbackModelVersion = String(process.env.AUTOMNIA_KNOWLEDGE_FALL
 const vertexRetryAttempts = Math.max(1, Math.min(5, Number(process.env.VERTEX_RETRY_ATTEMPTS || 4) || 4));
 const vertexMaxOutputTokens = Math.max(512, Math.min(8192, Number(process.env.VERTEX_MAX_OUTPUT_TOKENS || 8192) || 8192));
 const checkoutUrl = configuredHttpsUrl(process.env.SHOPIFY_CHECKOUT_URL);
+const gmailSender = normalizeEmail(process.env.GMAIL_SENDER || '');
+const gmailOAuthCredentials = parseGmailOAuthCredentials(process.env.GMAIL_OAUTH_CREDENTIALS || '');
+const gmailOAuthClient = gmailOAuthCredentials
+  ? new OAuth2Client(gmailOAuthCredentials.clientId, gmailOAuthCredentials.clientSecret)
+  : null;
+if (gmailOAuthClient && gmailOAuthCredentials) gmailOAuthClient.setCredentials({ refresh_token: gmailOAuthCredentials.refreshToken });
+const testEmailDeliveryStub = useInMemoryStorage && process.env.AUTOMNIA_TEST_EMAIL_DELIVERY === 'stub';
+const gmailEmailDeliveryConfigured = testEmailDeliveryStub || Boolean(gmailSender && gmailOAuthCredentials?.refreshToken);
+const emailDeliveryLeaseMs = 5 * 60 * 1000;
 const planMappings = readPlanMappings(process.env.SHOPIFY_PLAN_MAPPINGS);
 const planMappingHash = crypto.createHash('sha256').update(JSON.stringify(planMappings)).digest('hex');
 
@@ -48,6 +59,26 @@ function normalizeEmail(value) {
 
 function normalizeKey(value) {
   return String(value || '').trim().toUpperCase();
+}
+
+function parseGmailOAuthCredentials(value) {
+  const raw = String(value || '').trim();
+  if (!raw) return null;
+  try {
+    const parsed = JSON.parse(raw);
+    const clientId = String(parsed?.client_id || parsed?.clientId || '').trim();
+    const clientSecret = String(parsed?.client_secret || parsed?.clientSecret || '').trim();
+    const refreshToken = String(parsed?.refresh_token || parsed?.refreshToken || '').trim();
+    if (!clientId || !clientSecret || !refreshToken) return null;
+    return { clientId, clientSecret, refreshToken };
+  } catch {
+    console.error(JSON.stringify({ event: 'gmail_oauth_credentials_invalid', reason: 'invalid_json' }));
+    return null;
+  }
+}
+
+function isValidMailbox(value) {
+  return /^[^@\s<>]+@[^@\s<>]+\.[^@\s<>]+$/.test(String(value || ''));
 }
 
 const ACCOUNT_PASSWORD_MIN_LENGTH = 12;
@@ -565,6 +596,14 @@ async function findLicenseByEmail(email, { hostedOnly = false } = {}) {
   return attachCreditSources(repaired, candidates);
 }
 
+async function findLicenseByOrderId(orderId) {
+  const normalizedOrderId = String(orderId || '').trim();
+  if (!normalizedOrderId) return null;
+  if (useInMemoryStorage) return provisionedCustomers.get(normalizedOrderId) || null;
+  const snapshot = await licenses.doc(normalizedOrderId).get();
+  return snapshot.exists ? { ...snapshot.data(), _ref: snapshot.ref } : null;
+}
+
 async function findHostedLicenseByEmail(email) {
   return findLicenseByEmail(email, { hostedOnly: true });
 }
@@ -866,6 +905,8 @@ app.get('/health', (_req, res) => res.status(200).json({
   writeMode,
   storage: useInMemoryStorage ? 'memory-development-only' : 'firestore',
   aiRelay: 'vertex-ai-service-account',
+  aiRelayModel: automniaRelayModel,
+  vertexLocation,
   knowledgeAssistant: knowledgeServingConfig ? 'configured' : 'disabled',
   knowledgeModelVersion,
   commerce: {
@@ -874,6 +915,9 @@ app.get('/health', (_req, res) => res.status(200).json({
     planMappingCount: planMappings.length,
     planMappingHash,
     webhookSecretsConfigured: secrets.length > 0,
+    emailDeliveryConfigured: gmailEmailDeliveryConfigured,
+    emailDeliveryAuthMode: testEmailDeliveryStub ? 'stub' : gmailEmailDeliveryConfigured ? 'gmail_api' : 'unconfigured',
+    emailDeliverySender: gmailSender || null,
   },
 }));
 
@@ -1354,9 +1398,11 @@ async function generateVertexContent(input) {
   const accessToken = await client.getAccessToken();
   if (!accessToken.token) throw new Error('Unable to obtain a Vertex AI service token.');
   // Keep chat and function/tool turns on the same reference model. The
-  // incoming OpenAI-compatible model field is metadata only: customers may
-  // not select an arbitrary Vertex model through the hosted billing proxy.
-  const targetModel = 'gemini-3.6-flash';
+  // The incoming OpenAI-compatible model field is metadata only: customers
+  // may not select an arbitrary Vertex model through the hosted billing
+  // proxy. The deployment contract selects the single billable Automnia
+  // model explicitly through AUTOMNIA_RELAY_MODEL.
+  const targetModel = automniaRelayModel;
   const vertexHost = vertexLocation === 'global' ? 'aiplatform.googleapis.com' : `${vertexLocation}-aiplatform.googleapis.com`;
   const vertexUrl = `https://${vertexHost}/v1/projects/${gcpProjectId}/locations/${vertexLocation}/publishers/google/models/${targetModel}:generateContent`;
   let apiResponse = null;
@@ -1600,7 +1646,7 @@ app.post('/v1/chat/completions', requireWritesEnabled, async (req, res) => {
     const converted = vertexContentsFromOpenAiMessages(messages);
     if (!converted.contents.length) return openAiError(res, 400, 'At least one text, tool-call, or tool-response message is required.');
     const maxOutputTokens = Math.max(128, Math.min(vertexMaxOutputTokens, Number(req.body?.max_tokens || req.body?.max_completion_tokens) || vertexMaxOutputTokens));
-    const thinkingConfig = gemini36ThinkingConfigFromOpenAiRequest(req.body);
+    const thinkingConfig = geminiThinkingConfigFromOpenAiRequest(req.body, automniaRelayModel);
     const payload = await generateVertexContent({
       ...converted,
       ...(vertexToolsFromOpenAi(req.body?.tools) ? { tools: vertexToolsFromOpenAi(req.body?.tools) } : {}),
@@ -1616,7 +1662,7 @@ app.post('/v1/chat/completions', requireWritesEnabled, async (req, res) => {
     const debit = await deductCredits(access.record, tokensUsed, requestId);
     const responseId = `chatcmpl_${crypto.randomUUID().replace(/-/g, '')}`;
     const created = Math.floor(Date.now() / 1000);
-    const model = 'gemini-3.6-flash';
+    const model = automniaRelayModel;
     const message = {
       role: 'assistant',
       content: result.text || null,
@@ -1683,7 +1729,7 @@ app.post('/api/ai/generate', requireWritesEnabled, async (req, res) => {
       });
     }
 
-    const { prompt, model = 'gemini-3.6-flash', messages } = req.body || {};
+    const { prompt, messages } = req.body || {};
     const promptText = prompt || (Array.isArray(messages) ? messages.map((m) => m.content || m.text || '').join('\n') : '');
 
     if (!promptText.trim()) {
@@ -1692,7 +1738,7 @@ app.post('/api/ai/generate', requireWritesEnabled, async (req, res) => {
 
     // Customer-controlled model IDs are never passed upstream. Vertex AI uses the Cloud Run service identity,
     // so a client device never receives a master API key.
-    const targetModel = 'gemini-3.6-flash';
+    const targetModel = automniaRelayModel;
     const client = await vertexAuth.getClient();
     const accessToken = await client.getAccessToken();
     if (!accessToken.token) throw new Error('Unable to obtain a Vertex AI service token.');
@@ -1795,6 +1841,218 @@ function customerEmailFromShopify(payload) {
   return normalizeEmail(payload?.email || payload?.customer?.email || payload?.customer_email || payload?.customerEmail);
 }
 
+function licenseEmailMessage(record) {
+  const onboarding = record?.onboarding || {};
+  const instructions = Array.isArray(onboarding.instructions) && onboarding.instructions.length
+    ? onboarding.instructions
+    : [
+      '1. Open the Automnia App or portal activation screen.',
+      '2. Enter the email address used for this purchase and the license key below.',
+      '3. After linking, sign in with your Automnia password or Google account.',
+    ];
+  return [
+    'Thank you for your Automnia purchase.',
+    '',
+    `Your Automnia license key: ${String(record?.licenseKey || '').trim()}`,
+    '',
+    ...instructions,
+    '',
+    'Keep this email private. Automnia support will never ask you to post your license key publicly.',
+  ].join('\n');
+}
+
+function encodeMimeHeader(value) {
+  const text = String(value || '').replace(/[\r\n]/g, ' ');
+  if (/^[\x20-\x7E]*$/.test(text)) return text;
+  return `=?UTF-8?B?${Buffer.from(text, 'utf8').toString('base64')}?=`;
+}
+
+function buildGmailRawMessage(record) {
+  const to = normalizeEmail(record?.email);
+  if (!isValidMailbox(to) || !isValidMailbox(gmailSender)) throw new Error('Gmail license email has an invalid sender or recipient.');
+  const boundary = `automnia-${crypto.randomBytes(12).toString('hex')}`;
+  const subject = 'Welcome to Automnia AI Nexus — your license key';
+  const message = [
+    `From: Automnia AI Nexus <${gmailSender}>`,
+    `To: ${to}`,
+    `Subject: ${encodeMimeHeader(subject)}`,
+    'MIME-Version: 1.0',
+    `Content-Type: multipart/alternative; boundary="${boundary}"`,
+    '',
+    `--${boundary}`,
+    'Content-Type: text/plain; charset=UTF-8',
+    'Content-Transfer-Encoding: 8bit',
+    '',
+    licenseEmailMessage(record),
+    '',
+    `--${boundary}`,
+    'Content-Type: text/html; charset=UTF-8',
+    'Content-Transfer-Encoding: 8bit',
+    '',
+    buildLicenseEmailHtml(record),
+    '',
+    `--${boundary}--`,
+    '',
+  ].join('\r\n');
+  return Buffer.from(message, 'utf8').toString('base64url');
+}
+
+async function parseJsonResponse(response) {
+  try {
+    return await response.json();
+  } catch {
+    return null;
+  }
+}
+
+async function getGmailAccessToken() {
+  if (!gmailOAuthClient) throw new Error('Gmail OAuth credentials are not configured.');
+  try {
+    const token = await gmailOAuthClient.getAccessToken();
+    const accessToken = typeof token === 'string' ? token : token?.token;
+    if (!accessToken) throw new Error('Gmail OAuth did not return an access token.');
+    return accessToken;
+  } catch (error) {
+    console.error(JSON.stringify({
+      event: 'gmail_oauth_refresh_failed',
+      message: String(error instanceof Error ? error.message : error).slice(0, 300),
+    }));
+    throw new Error('Gmail OAuth authorization could not be refreshed.');
+  }
+}
+
+async function sendGmailLicenseEmail(record) {
+  if (testEmailDeliveryStub) return { stubbed: true, provider: 'stub' };
+  if (!gmailEmailDeliveryConfigured) throw new Error('Gmail license email delivery is not configured.');
+
+  const response = await fetch('https://gmail.googleapis.com/gmail/v1/users/me/messages/send', {
+    method: 'POST',
+    headers: {
+      Accept: 'application/json',
+      Authorization: `Bearer ${await getGmailAccessToken()}`,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({ raw: buildGmailRawMessage(record) }),
+  });
+  const payload = await parseJsonResponse(response);
+  const errorPayload = payload?.error;
+  if (!response.ok || !payload?.id) {
+    console.error(JSON.stringify({
+      event: 'gmail_license_email_rejected',
+      orderId: record?.lastShopifyOrderId || record?.orderId || null,
+      httpStatus: response.status,
+      error: String(errorPayload?.message || 'Gmail did not confirm the sent message.').slice(0, 500),
+      reason: errorPayload?.errors?.[0]?.reason || null,
+    }));
+    throw new Error('Gmail rejected the license email delivery request.');
+  }
+  console.log(JSON.stringify({
+    event: 'gmail_license_email_sent',
+    orderId: record?.lastShopifyOrderId || record?.orderId || null,
+    messageId: String(payload.id).slice(0, 200),
+  }));
+  return { stubbed: false, provider: 'gmail_api', messageId: payload.id };
+}
+
+function deliveryLeaseIsActive(delivery) {
+  if (delivery?.status !== 'sending') return false;
+  const startedAt = Date.parse(delivery.startedAt || '') || 0;
+  return startedAt > 0 && Date.now() - startedAt < emailDeliveryLeaseMs;
+}
+
+async function claimLicenseEmailDelivery(record) {
+  const now = new Date().toISOString();
+  const attemptId = crypto.randomUUID();
+  const previous = record?.emailDelivery || {};
+  if (previous.status === 'sent') return { action: 'email_already_sent', record };
+  if (deliveryLeaseIsActive(previous)) return { action: 'email_delivery_in_progress', record };
+  const emailDelivery = {
+    status: 'sending',
+    attemptId,
+    attempts: Math.max(0, Number(previous.attempts) || 0) + 1,
+    startedAt: now,
+    lastAttemptAt: now,
+  };
+
+  if (useInMemoryStorage) {
+    Object.assign(record, { emailDelivery });
+    return { action: 'email_delivery_claimed', attemptId, record };
+  }
+
+  const licenseRef = licenses.doc(record.orderId);
+  return firestore.runTransaction(async (transaction) => {
+    const snapshot = await transaction.get(licenseRef);
+    if (!snapshot.exists) return { action: 'license_not_found', record: null };
+    const current = snapshot.data();
+    const currentDelivery = current.emailDelivery || {};
+    if (currentDelivery.status === 'sent') return { action: 'email_already_sent', record: { ...current, _ref: licenseRef } };
+    if (deliveryLeaseIsActive(currentDelivery)) return { action: 'email_delivery_in_progress', record: { ...current, _ref: licenseRef } };
+    transaction.update(licenseRef, { emailDelivery });
+    return { action: 'email_delivery_claimed', attemptId, record: { ...current, emailDelivery, _ref: licenseRef } };
+  });
+}
+
+async function finishLicenseEmailDelivery(record, attemptId) {
+  const sentAt = new Date().toISOString();
+  const emailDelivery = {
+    ...(record?.emailDelivery || {}),
+    status: 'sent',
+    sentAt,
+    lastError: null,
+  };
+  if (useInMemoryStorage) {
+    Object.assign(record, { emailDelivery });
+    return record;
+  }
+  const licenseRef = licenses.doc(record.orderId);
+  return firestore.runTransaction(async (transaction) => {
+    const snapshot = await transaction.get(licenseRef);
+    if (!snapshot.exists) return null;
+    const current = snapshot.data();
+    if (current.emailDelivery?.attemptId !== attemptId) return { ...current, _ref: licenseRef };
+    transaction.update(licenseRef, { emailDelivery });
+    return { ...current, emailDelivery, _ref: licenseRef };
+  });
+}
+
+async function failLicenseEmailDelivery(record, attemptId) {
+  const emailDelivery = {
+    ...(record?.emailDelivery || {}),
+    status: 'pending',
+    lastError: 'delivery_failed',
+    lastAttemptAt: new Date().toISOString(),
+  };
+  if (useInMemoryStorage) {
+    Object.assign(record, { emailDelivery });
+    return record;
+  }
+  const licenseRef = licenses.doc(record.orderId);
+  return firestore.runTransaction(async (transaction) => {
+    const snapshot = await transaction.get(licenseRef);
+    if (!snapshot.exists) return null;
+    const current = snapshot.data();
+    if (current.emailDelivery?.attemptId !== attemptId) return { ...current, _ref: licenseRef };
+    transaction.update(licenseRef, { emailDelivery });
+    return { ...current, emailDelivery, _ref: licenseRef };
+  });
+}
+
+async function deliverLicenseEmail(record) {
+  const claim = await claimLicenseEmailDelivery(record);
+  if (claim.action === 'email_already_sent') return claim;
+  if (claim.action === 'email_delivery_in_progress') throw new Error('License email delivery is already in progress.');
+  if (claim.action === 'license_not_found' || !claim.record) throw new Error('Provisioned license was not found for email delivery.');
+  try {
+    await sendGmailLicenseEmail(claim.record);
+  } catch (error) {
+    await failLicenseEmailDelivery(claim.record, claim.attemptId);
+    throw error;
+  }
+  const completed = await finishLicenseEmailDelivery(claim.record, claim.attemptId);
+  if (!completed) throw new Error('Provisioned license disappeared after email delivery.');
+  return { action: 'email_sent', record: completed };
+}
+
 function contractIdFromShopify(payload, { allowPayloadId = true } = {}) {
   return normalizePlanId(
     payload?.subscription_contract_id ||
@@ -1822,12 +2080,17 @@ async function handlePaidOrder(order, deliveryId) {
   const existing = await findLicenseByEmail(customerEmail);
   if (existing) {
     if (String(existing.lastShopifyOrderId || '') === orderId) {
-      return { action: 'duplicate_ignored', license: existing };
+      const delivery = await deliverLicenseEmail(existing);
+      return {
+        action: delivery.action === 'email_sent' ? 'license_delivery_recovered' : 'duplicate_ignored',
+        license: delivery.record || existing,
+      };
     }
     const updated = await updateHostedEntitlement({ record: existing, order, tierConfig, topic: 'orders/paid', deliveryId });
     if (!updated) throw new Error('The active license disappeared while applying the Shopify entitlement update.');
+    const delivery = await deliverLicenseEmail(updated);
     console.log(JSON.stringify({ event: tierConfig.kind === 'topup' ? 'credits_topped_up' : 'subscription_updated', orderId, licenseOrderId: updated.orderId, tier: updated.tier, mode: updated.mode, creditBalance: updated.creditBalance }));
-    return { action: tierConfig.kind === 'topup' ? 'topup_applied' : 'subscription_updated', license: updated };
+    return { action: tierConfig.kind === 'topup' ? 'topup_applied' : 'subscription_updated', license: delivery.record || updated };
   }
 
   const licenseKey = generateLicenseKey(tierConfig.mode === 'hosted_credits' ? 'AUT-CLOUD' : 'AUT-BYOK');
@@ -1847,6 +2110,7 @@ async function handlePaidOrder(order, deliveryId) {
     creditBalance: creditsGrantedForTier(tierConfig),
     licenseKey,
     onboarding: buildOnboardingPackage(order, licenseKey, tierConfig),
+    emailDelivery: { status: 'pending', attempts: 0 },
     status: 'provisioned',
     subscriptionStatus: planHasPermanentAccess(tierConfig) ? 'permanent' : tierConfig.kind === 'subscription' ? 'active' : null,
     subscriptionContractId: contractId || null,
@@ -1855,8 +2119,9 @@ async function handlePaidOrder(order, deliveryId) {
     updatedAt: createdAt,
   };
   const persisted = await persistProvisionedLicense(record);
-  console.log(JSON.stringify({ event: 'customer_provisioned', orderId: persisted.orderId, tier: persisted.tier, mode: persisted.mode, creditBalance: persisted.creditBalance }));
-  return { action: 'license_provisioned', license: persisted };
+  const delivery = await deliverLicenseEmail(persisted);
+  console.log(JSON.stringify({ event: 'customer_provisioned', orderId: persisted.orderId, tier: persisted.tier, mode: persisted.mode, creditBalance: persisted.creditBalance, emailDelivery: delivery.action }));
+  return { action: 'license_provisioned', license: delivery.record || persisted };
 }
 
 async function handleSubscriptionState(payload, topic, deliveryId) {
@@ -1903,7 +2168,30 @@ app.post('/shopify/webhooks/:webhookName', requireWritesEnabled, express.raw({ t
     return res.status(200).json({ ok: true, action: result.action });
   } catch (error) {
     console.error('Error processing Shopify webhook:', { topic, deliveryId, message: error instanceof Error ? error.message : String(error) });
-    return res.status(503).json({ error: 'Failed to persist Shopify entitlement update.' });
+    return res.status(503).json({ error: 'Failed to provision and deliver the Automnia license.' });
+  }
+});
+
+// Replays delivery for a persisted license after an email-provider or Shopify
+// API outage. The endpoint intentionally returns only delivery state; the
+// license key remains confined to the customer email and authenticated account
+// responses.
+app.post('/admin/email-delivery/retry', express.json({ limit: '32kb' }), requireWritesEnabled, requireAdmin, async (req, res) => {
+  const orderId = String(req.body?.orderId || '').trim();
+  if (!orderId) return res.status(400).json({ ok: false, error: 'orderId is required.' });
+  try {
+    const record = await findLicenseByOrderId(orderId);
+    if (!record) return res.status(404).json({ ok: false, error: 'Provisioned license was not found.' });
+    const delivery = await deliverLicenseEmail(record);
+    return res.status(200).json({
+      ok: true,
+      action: delivery.action,
+      orderId,
+      status: delivery.record?.emailDelivery?.status || null,
+    });
+  } catch (error) {
+    console.error('Failed to retry Automnia license email delivery:', { orderId, message: error instanceof Error ? error.message : String(error) });
+    return res.status(503).json({ ok: false, error: 'License email delivery is not complete; retry after the delivery service is ready.' });
   }
 });
 

@@ -11,17 +11,16 @@ export type ModelOptionGroup<T extends ModelOptionLike> = {
   models: T[]
 }
 
-const EXCLUDED_MODEL_IDS = new Set([
-  'google/gemini-3.7-flash',
-  'google-vertex/gemini-3.7-flash',
-  'google/gemini-3.7-pro',
-  'google-vertex/gemini-3.7-pro',
-])
+const isUnsupportedGoogleGemini37Model = (modelId: string) => {
+  const [provider = '', model = ''] = modelId.trim().toLowerCase().split('/')
+  if (!['google', 'google-vertex'].includes(provider)) return false
+  return /^gemini-3\.7(?:$|[-@])/.test(model) && !/^gemini-3\.7-flash(?:$|[-@])/.test(model)
+}
 
-export const isSelectableModelId = (modelId: string) => !EXCLUDED_MODEL_IDS.has(modelId.trim().toLowerCase())
+export const isSelectableModelId = (modelId: string) => !isUnsupportedGoogleGemini37Model(modelId)
 
 const PROVIDER_LABELS: Record<string, string> = {
-  'automnia-cloud': 'Automnia Cloud',
+  'automnia-cloud': 'Automnia',
   'openai-codex': 'OpenAI / Codex',
   openai: 'OpenAI / Codex',
   anthropic: 'Anthropic Claude',
@@ -45,6 +44,7 @@ const PROVIDER_LABELS: Record<string, string> = {
 
 const PROVIDER_ORDER = [
   'openai',
+  'automnia-cloud',
   'anthropic',
   'google',
   'google-vertex',

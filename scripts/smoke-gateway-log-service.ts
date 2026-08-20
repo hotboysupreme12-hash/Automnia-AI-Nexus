@@ -10,12 +10,40 @@ function readWorkspaceFile(relativePath: string): string {
 
 const controlPlane = readWorkspaceFile('server/controlPlane.ts')
 const gatewayLogService = readWorkspaceFile('server/services/gateway/gatewayLogService.ts')
+const gatewayActivityPresentation = readWorkspaceFile('src/utils/gatewayActivityPresentation.ts')
+const liveOperationMonitor = readWorkspaceFile('src/components/monitor/LiveOperationMonitor.tsx')
+const settingsActivityLog = readWorkspaceFile('src/components/settings/SettingsActivityLog.tsx')
 const packageJson = JSON.parse(readWorkspaceFile('package.json')) as { scripts?: Record<string, string> }
 
 assert.match(
   gatewayLogService,
   /export function createGatewayLogService/,
   'Gateway log service should expose a testable factory',
+)
+assert.match(
+  gatewayActivityPresentation,
+  /Raw Gateway output is operational evidence, not an assistant message/,
+  'Gateway activity presentation should document the diagnostic-only boundary',
+)
+assert.match(
+  liveOperationMonitor,
+  /projectGatewayLogEntriesForSurface\(/,
+  'Monitor should project Gateway rows through the activity-surface boundary',
+)
+assert.match(
+  liveOperationMonitor,
+  /Show internal diagnostics/,
+  'Monitor should require an explicit operator action before showing raw Gateway output',
+)
+assert.doesNotMatch(
+  liveOperationMonitor,
+  />Gateway Announcement</,
+  'Raw Gateway output should not be presented as a Gateway announcement',
+)
+assert.match(
+  settingsActivityLog,
+  /projectGatewayLogEntriesForSurface\([\s\S]*?'user'/,
+  'Settings activity should not merge raw Gateway diagnostics into user activity',
 )
 assert.match(
   gatewayLogService,
@@ -69,8 +97,8 @@ assert.match(
 )
 assert.match(
   controlPlane,
-  /appendGatewayLogEntry: \(entry\) => runtimeLedgerStore\.appendGatewayEvent\(entry, \{ sqlite: false \}\)/,
-  'controlPlane.ts should inject async JSONL-only Gateway log ledger mirroring',
+  /appendGatewayLogEntry: \(entry\) => \{[\s\S]*?return runtimeLedgerStore\.appendGatewayEvent\(entry, \{ mirrorJsonl: false \}\)/,
+  'controlPlane.ts should inject Gateway log ledger mirroring without a JSONL mirror',
 )
 assert.match(
   controlPlane,

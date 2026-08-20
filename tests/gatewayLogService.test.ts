@@ -127,6 +127,28 @@ test('pushGatewayLog suppresses torn Pino metadata fragments instead of renderin
   assert.equal(service.getGatewayLogs().length, 0)
 })
 
+test('pushGatewayLog keeps Gateway transport and harness diagnostics out of activity output', () => {
+  const { ledger, service } = createService()
+
+  service.pushGatewayLog('stderr', 'Codex agent harness session reset hook failed')
+  service.pushGatewayLog('stdout', 'agent runtime plugins pre-warmed in 408ms')
+  service.pushGatewayLog('stdout', 'telegram sendRichMessage ok chat=secret-phone message=4956')
+
+  assert.equal(service.getGatewayLogs().length, 0)
+  assert.equal(ledger.length, 0)
+})
+
+test('normalizeGatewayLedgerEntry drops previously persisted internal diagnostics', () => {
+  const { service } = createService()
+
+  assert.equal(service.normalizeGatewayLedgerEntry({
+    id: 7,
+    timestamp: '2026-06-30T08:01:00.000Z',
+    stream: 'stderr',
+    message: 'Codex agent harness session reset hook failed',
+  }, 0), null)
+})
+
 test('summarizes channel activity with agent ids embedded in session keys', () => {
   const { service } = createService()
 

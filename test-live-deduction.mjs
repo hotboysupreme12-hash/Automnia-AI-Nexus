@@ -3,7 +3,7 @@ import { execSync } from 'node:child_process';
 async function testDeduction() {
   try {
     const token = execSync('gcloud auth print-access-token').toString().trim();
-    const projectId = 'groovy-iris-497718-f3';
+    const projectId = 'project-7baf4a64-1c4f-4cff-94f';
     
     // First, fetch current credit balance
     const url = `https://firestore.googleapis.com/v1/projects/${projectId}/databases/(default)/documents/automnia_licenses/gcloud-test-starter-b7dfdab7f7d84602af1731d018925a3c`;

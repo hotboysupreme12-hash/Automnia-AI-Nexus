@@ -830,7 +830,10 @@ export function registerAgentTurnRoutes(app: Express, options: AgentTurnRoutesOp
     const clawTalkIntent = clawTalkSetupIntent || isClawTalkIntentMessage(intentText)
     const agentPrimaryModelId = readAgentPrimaryModelIdSync(agent)
     const vertexCompactMode = isGoogleGeminiModelId(agentPrimaryModelId)
-    const effectiveThinking = browserIntent || clawTalkIntent ? 'off' : thinkingForOpenClawRuntimeModel(agentPrimaryModelId, thinking)
+    const effectiveThinking = thinkingForOpenClawRuntimeModel(
+      agentPrimaryModelId,
+      browserIntent || clawTalkIntent ? 'off' : thinking,
+    )
     const policyTimeoutSeconds = Math.max(
       await resolveEffectiveAgentWorkTimeoutSeconds(agent, timeoutSeconds),
       OPENCLAW_AGENT_TURN_TIMEOUT_FLOOR_SECONDS,

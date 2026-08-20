@@ -6,6 +6,7 @@ import type { DoctorFinding, DoctorRun, GatewayChannelActivity, GatewayLogEntry,
 import { agentPortraitSrc } from '../../utils/portrait'
 import { useChannelActivitySettings } from '../settings/channelActivitySettings'
 import { isRuntimeMonitorEntryVisible, useRuntimeMonitorClearCutoffMs } from '../../hooks/runtimeMonitorClear'
+import { projectGatewayLogEntriesForSurface } from '../../utils/gatewayActivityPresentation'
 import { ActionStatusBanner } from '../common/ActionStatusBanner'
 import { Badge, Button, IconButton, StatusChip } from '../ui'
 import type { BadgeTone } from '../ui'
@@ -1549,7 +1550,7 @@ const GatewayActivityPanel = memo(function GatewayActivityPanel({ agentById, gat
               <div className="min-w-0 flex-1">
                 <div className="flex flex-wrap items-center gap-2">
                   <p className={`truncate text-[12px] font-bold ${isControlCenter ? 'text-slate-300' : 'text-slate-100'}`}>{isGatewayLog || isControlCenter ? 'Automnia' : agent?.name || agentId || 'Agent'}</p>
-                  {isGatewayLog && <span className="dy-gateway-activity-announcer">Gateway Announcement</span>}
+                  {isGatewayLog && <span className="dy-gateway-activity-announcer">Internal diagnostic</span>}
                   <Badge className="dy-activity-status rounded-full border px-2 py-0.5 text-[11px] font-semibold uppercase tracking-[0.08em]" data-status={isControlCenter ? 'control' : item.ok ? 'ok' : 'blocked'} tone={activityStatusTone(item, isControlCenter)} size="micro">{isGatewayLog ? 'Gateway' : item.ok ? item.title : 'Blocked'}</Badge>
                   {item.kind !== 'gateway-log' && item.failureKind && (
                     <Badge className="rounded-full border border-amber-300/15 bg-amber-300/[0.04] px-2 py-0.5 text-[11px] font-semibold uppercase tracking-[0.08em] text-amber-100" tone="warning" size="micro">
@@ -1591,10 +1592,20 @@ const GatewayActivityWorkspace = memo(function GatewayActivityWorkspace({
   const agentResponses = useNexusStore((state) => state.agentResponses)
   const missionFeed = useNexusStore((state) => state.missionFeed)
   const clearCutoffMs = useRuntimeMonitorClearCutoffMs()
+  const [showInternalDiagnostics, setShowInternalDiagnostics] = useState(false)
   const visibleAgentResponseCount = agentResponses.filter((entry) => isRuntimeMonitorEntryVisible(entry.timestamp, clearCutoffMs)).length
   const visibleMissionEventCount = missionFeed.filter((event) => isRuntimeMonitorEntryVisible(event.timestamp, clearCutoffMs)).length
-  const visibleGatewayLogCount = gatewayLogs.filter((entry) => isRuntimeMonitorEntryVisible(entry.timestamp, clearCutoffMs)).length
+  const visibleGatewayLogCount = showInternalDiagnostics
+    ? gatewayLogs.filter((entry) => isRuntimeMonitorEntryVisible(entry.timestamp, clearCutoffMs)).length
+    : 0
   const visibleActivityCount = Math.min(48, visibleAgentResponseCount + visibleMissionEventCount + visibleGatewayLogCount)
+  const projectedGatewayLogs = useMemo(
+    () => projectGatewayLogEntriesForSurface(
+      gatewayLogs.filter((entry) => isRuntimeMonitorEntryVisible(entry.timestamp, clearCutoffMs)),
+      showInternalDiagnostics ? 'operator' : 'user',
+    ),
+    [clearCutoffMs, gatewayLogs, showInternalDiagnostics],
+  )
 
   return (
     <div className="dy-monitor-logs-workspace" data-log-workspace="true">
@@ -1610,12 +1621,23 @@ const GatewayActivityWorkspace = memo(function GatewayActivityWorkspace({
       <section className="dy-monitor-log-surface" aria-labelledby="gateway-activity-title">
         <div className="dy-monitor-log-surface__head">
           <div>
-            <span>Automnia feed</span>
-            <h3 id="gateway-activity-title">Gateway Activity</h3>
+            <span>Agent feed</span>
+            <h3 id="gateway-activity-title">Agent Activity</h3>
           </div>
-          <span>{visibleActivityCount} recent</span>
+          <div className="flex flex-wrap items-center justify-end gap-2">
+            <span>{visibleActivityCount} recent</span>
+            <button
+              type="button"
+              className="dy-monitor-tool-button"
+              onClick={() => setShowInternalDiagnostics((current) => !current)}
+              aria-pressed={showInternalDiagnostics}
+              title={showInternalDiagnostics ? 'Hide raw Gateway diagnostics from this activity view.' : 'Show raw Gateway diagnostics for operator troubleshooting.'}
+            >
+              {showInternalDiagnostics ? 'Hide internal diagnostics' : 'Show internal diagnostics'}
+            </button>
+          </div>
         </div>
-        <GatewayActivityPanel agentById={agentById} gatewayLogs={gatewayLogs} />
+        <GatewayActivityPanel agentById={agentById} gatewayLogs={projectedGatewayLogs} />
       </section>
     </div>
   )

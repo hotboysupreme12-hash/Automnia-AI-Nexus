@@ -4,6 +4,7 @@ import { existsSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:
 import { tmpdir } from 'node:os'
 import path from 'node:path'
 import net from 'node:net'
+import { createRuntimeLedgerStore, runtimeLedgerPathsForStateRoot } from '../server/state/runtimeLedgerStore'
 
 const root = process.cwd()
 const CONTROL_TOKEN = 'phase-k-provider-agent'
@@ -246,6 +247,29 @@ mkdirSync(initialWorkspace, { recursive: true })
 mkdirSync(editedWorkspace, { recursive: true })
 mkdirSync(homeDir, { recursive: true })
 mkdirSync(phaseKEvidenceDir, { recursive: true })
+
+// This smoke exercises authenticated agent and workspace routes. Seed only
+// the isolated temporary ledger with a clearly synthetic BYOK entitlement so
+// the production license gate remains active and no external provisioner call
+// or real credential is needed.
+const fixtureLedger = createRuntimeLedgerStore(runtimeLedgerPathsForStateRoot(stateDir))
+fixtureLedger.writeControlCenterState('license:activation', {
+  active: true,
+  licenseKey: 'phase-k-test-license',
+  email: 'phase-k@example.test',
+  tier: 'byok',
+  mode: 'byok',
+  planPriceCents: 2999,
+  byokAllowed: true,
+  permanentAccess: true,
+  subscriptionStatus: 'active',
+  usagePriority: 'provider_first',
+  creditBalance: 1000,
+  creditBalanceUpdatedAt: new Date().toISOString(),
+  activatedAt: new Date().toISOString(),
+  verifiedAt: new Date().toISOString(),
+})
+fixtureLedger.close()
 
 const child = spawnServer(port, stateDir, workspaceRoot, homeDir)
 

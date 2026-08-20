@@ -3,7 +3,7 @@
 For the temporary deployment period, Automnia uses one Cloud Run origin for license activation, Shopify webhooks, checkout, and hosted-credit AI relay traffic:
 
 ```text
-https://automnia-shopify-provisioner-6abxlp2t4q-ue.a.run.app
+https://automnia-shopify-provisioner-gpz4bqizia-ue.a.run.app
 ```
 
 Desktop releases currently use the Cloud Run origin above. `AUTOMNIA_LICENSE_API_URL` and `AUTOMNIA_CLOUD_RELAY_URL` remain available as explicit development or emergency overrides. Move `AUTOMNIA_PUBLIC_CLOUD_URL` back to the Automnia public hostname after DNS cutover.
@@ -40,7 +40,7 @@ behavior so Agent Search and the deployed prompt stay aligned.
 
 Account activation, password sign-in, Google account linking, and password
 changes are served by this same Cloud Run service. The live origin is now on
-revision `automnia-shopify-provisioner-00048-suw` (`2.5.0` / schema
+revision `automnia-shopify-provisioner-00004-lek` (`2.5.0` / schema
 `2026-08-13.4`), which includes the authenticated knowledge route, the
 3.1-first grounded assistant, and stale-session recovery. Account
 password hashes and Google subject links are stored on the existing license

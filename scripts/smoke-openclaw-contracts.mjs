@@ -352,7 +352,7 @@ assertIncludes(server, "from './integrations/agentRoutingHelpers'", 'control pla
 assertIncludes(routingHelpers, 'export const CLAWTALK_CORE_BRIDGE_ROUTING_HELPER', 'ClawTalk routing patch asset')
 assertIncludes(routingHelpers, 'function clawTalkControlCenterHeaders()', 'ClawTalk Control Center authenticated stream handoff')
 assertIncludes(routingHelpers, 'export const TELEGRAM_AGENT_ROUTING_HELPER', 'Telegram routing patch asset')
-assertIncludes(routingHelpers, 'TELEGRAM_AGENT_ROUTING_PATCH_VERSION = 14', 'Telegram routing patch version')
+assertIncludes(routingHelpers, 'TELEGRAM_AGENT_ROUTING_PATCH_VERSION = 15', 'Telegram routing patch version')
 assertIncludes(routingHelpers, 'function resolveTelegramAgentModelRef', 'Telegram routed agent model resolver')
 assertIncludes(routingHelpers, 'function readTelegramAgentPurposeFromIdentity', 'Telegram routed agent purpose resolver')
 assertIncludes(routingHelpers, 'Automnia Telegram identity contract', 'Telegram routed agent identity contract')

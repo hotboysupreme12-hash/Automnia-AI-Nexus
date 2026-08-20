@@ -10,6 +10,7 @@ import {
   useChannelActivitySettings,
 } from './channelActivitySettings'
 import { isRuntimeMonitorEntryVisible, useRuntimeMonitorClearCutoffMs } from '../../hooks/runtimeMonitorClear'
+import { projectGatewayLogEntriesForSurface } from '../../utils/gatewayActivityPresentation'
 
 const AUTOMNIA_LOGO_SRC = '/brand/automnia-ai-nexus-logo-transparent-cropped.png'
 const LOG_LIMIT = 48
@@ -164,7 +165,11 @@ export function SettingsActivityLog() {
 
   const agentById = useMemo(() => new Map(agents.map((agent) => [agent.id, agent])), [agents])
   const gatewayItems = useMemo(() => {
-    return (feed?.entries || []).filter((entry) => isRuntimeMonitorEntryVisible(entry.timestamp, clearCutoffMs)).map(gatewayLogItem)
+    const userFacingGatewayEntries = projectGatewayLogEntriesForSurface(
+      (feed?.entries || []).filter((entry) => isRuntimeMonitorEntryVisible(entry.timestamp, clearCutoffMs)),
+      'user',
+    )
+    return userFacingGatewayEntries.map(gatewayLogItem)
       .sort((a, b) => timestampMs(b.timestamp) - timestampMs(a.timestamp))
       .slice(0, LOG_LIMIT)
   }, [clearCutoffMs, feed?.entries])
@@ -193,7 +198,7 @@ export function SettingsActivityLog() {
       <div className="dui-activity-log__hero">
         <div className="dui-activity-log__hero-brand">
           <div className="dui-activity-log__hero-mark"><img src={AUTOMNIA_LOGO_SRC} alt="" draggable={false} /></div>
-          <p>Gateway events are read from the local SQL ledger, so this screen stays fast while messages keep arriving.</p>
+          <p>Agent activity stays focused on replies. Raw Gateway diagnostics remain available from Monitor when explicitly requested.</p>
         </div>
         <div className="dui-activity-log__hero-copy">
           <span>Unified activity</span>

@@ -1,6 +1,7 @@
 import { promises as fs } from 'node:fs'
 import path from 'node:path'
 import { AUTH_ENV_MAP, AUTH_PROVIDER_CATALOG } from '../../catalogs/providerCatalog'
+import { hasTelegramChannelCredential } from './telegramConfigMapping'
 
 export const PLUGIN_ID_PATTERN = /^[a-z0-9][a-z0-9._-]{0,79}$/
 
@@ -721,6 +722,25 @@ function knownPluginConfigFields(
 ): PluginConfigField[] {
   const entryConfig = config.plugins?.entries?.[id]
   const fields = [...schemaConfigFieldsFromRaw(raw, entryConfig), ...providerConfigFieldsFromSetup(raw, providerAuthStatus)]
+
+  if (id === 'telegram') {
+    const channelConfig = isLooseRecord(config.channels) ? config.channels.telegram : undefined
+    const channelCredentialPresent = hasTelegramChannelCredential(channelConfig)
+    const existing = fields.find((field) => field.key === 'botToken' || field.key === 'tokenFile')
+    if (existing) {
+      existing.present = channelCredentialPresent || hasUsableConfigValue(pluginState.secrets?.[id]?.botToken)
+    } else {
+      fields.unshift(configFieldFromPluginConfig({
+        key: 'botToken',
+        label: 'Telegram Bot Token',
+        path: `plugins.entries.${id}.config.botToken`,
+        value: channelCredentialPresent || pluginState.secrets?.[id]?.botToken,
+        secret: true,
+        required: true,
+        help: 'Paste the Telegram BotFather token. It is applied to the Telegram channel and the gateway restarts automatically.',
+      }))
+    }
+  }
 
   if (id === 'clawtalk') {
     const existing = fields.find((field) => field.key === 'apiKey')
