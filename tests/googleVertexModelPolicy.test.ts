@@ -11,6 +11,7 @@ test('Vertex model metadata exposes the large context and safe output ceiling', 
   const provider = {
     models: [
       { id: 'gemini-3.5-flash', name: 'Gemini 3.5 Flash' },
+      { id: 'gemini-3.7-flash', name: 'Gemini 3.7 Flash', maxTokens: 102400 },
       { id: 'gemini-3.6-flash', name: 'Gemini 3.6 Flash', maxTokens: 102400 },
       { id: 'gemini-3.1-pro-preview', name: 'Gemini 3.1 Pro Preview', maxTokens: 32000 },
     ],
@@ -24,6 +25,13 @@ test('Vertex model metadata exposes the large context and safe output ceiling', 
       contextWindow: GOOGLE_VERTEX_CONTEXT_TOKENS,
       contextTokens: GOOGLE_VERTEX_CONTEXT_TOKENS,
       maxTokens: GOOGLE_VERTEX_MAX_OUTPUT_TOKENS,
+    },
+    {
+      id: 'gemini-3.7-flash',
+      name: 'Gemini 3.7 Flash',
+      maxTokens: GOOGLE_VERTEX_MAX_OUTPUT_TOKENS,
+      contextWindow: GOOGLE_VERTEX_CONTEXT_TOKENS,
+      contextTokens: GOOGLE_VERTEX_CONTEXT_TOKENS,
     },
     {
       id: 'gemini-3.6-flash',

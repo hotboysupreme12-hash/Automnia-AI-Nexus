@@ -2,7 +2,7 @@ import crypto from 'node:crypto';
 import express from 'express';
 import { Firestore } from '@google-cloud/firestore';
 import { GoogleAuth, OAuth2Client } from 'google-auth-library';
-import { gemini36ThinkingConfigFromOpenAiRequest } from './geminiThinking.js';
+import { geminiThinkingConfigFromOpenAiRequest } from './geminiThinking.js';
 import { buildLicenseEmailHtml } from './welcomeEmail.js';
 
 const app = express();
@@ -18,6 +18,7 @@ const writeMode = process.env.MIGRATION_WRITE_MODE === 'read_only' ? 'read_only'
 const adminApiToken = process.env.ADMIN_API_TOKEN || '';
 const gcpProjectId = process.env.GOOGLE_CLOUD_PROJECT || process.env.GCLOUD_PROJECT || 'local-development';
 const vertexLocation = process.env.VERTEX_LOCATION || 'us-central1';
+const automniaRelayModel = String(process.env.AUTOMNIA_RELAY_MODEL || 'gemini-3.7-flash').trim().toLowerCase();
 const vertexAuth = new GoogleAuth({ scopes: ['https://www.googleapis.com/auth/cloud-platform'] });
 const knowledgeServingConfig = String(process.env.AUTOMNIA_KNOWLEDGE_SERVING_CONFIG || '').trim();
 const knowledgeModelVersion = String(process.env.AUTOMNIA_KNOWLEDGE_MODEL_VERSION || 'gemini-3.1-pro-preview/answer_gen/v1').trim();
@@ -904,6 +905,8 @@ app.get('/health', (_req, res) => res.status(200).json({
   writeMode,
   storage: useInMemoryStorage ? 'memory-development-only' : 'firestore',
   aiRelay: 'vertex-ai-service-account',
+  aiRelayModel: automniaRelayModel,
+  vertexLocation,
   knowledgeAssistant: knowledgeServingConfig ? 'configured' : 'disabled',
   knowledgeModelVersion,
   commerce: {
@@ -1395,9 +1398,11 @@ async function generateVertexContent(input) {
   const accessToken = await client.getAccessToken();
   if (!accessToken.token) throw new Error('Unable to obtain a Vertex AI service token.');
   // Keep chat and function/tool turns on the same reference model. The
-  // incoming OpenAI-compatible model field is metadata only: customers may
-  // not select an arbitrary Vertex model through the hosted billing proxy.
-  const targetModel = 'gemini-3.6-flash';
+  // The incoming OpenAI-compatible model field is metadata only: customers
+  // may not select an arbitrary Vertex model through the hosted billing
+  // proxy. The deployment contract selects the single billable Automnia
+  // model explicitly through AUTOMNIA_RELAY_MODEL.
+  const targetModel = automniaRelayModel;
   const vertexHost = vertexLocation === 'global' ? 'aiplatform.googleapis.com' : `${vertexLocation}-aiplatform.googleapis.com`;
   const vertexUrl = `https://${vertexHost}/v1/projects/${gcpProjectId}/locations/${vertexLocation}/publishers/google/models/${targetModel}:generateContent`;
   let apiResponse = null;
@@ -1641,7 +1646,7 @@ app.post('/v1/chat/completions', requireWritesEnabled, async (req, res) => {
     const converted = vertexContentsFromOpenAiMessages(messages);
     if (!converted.contents.length) return openAiError(res, 400, 'At least one text, tool-call, or tool-response message is required.');
     const maxOutputTokens = Math.max(128, Math.min(vertexMaxOutputTokens, Number(req.body?.max_tokens || req.body?.max_completion_tokens) || vertexMaxOutputTokens));
-    const thinkingConfig = gemini36ThinkingConfigFromOpenAiRequest(req.body);
+    const thinkingConfig = geminiThinkingConfigFromOpenAiRequest(req.body, automniaRelayModel);
     const payload = await generateVertexContent({
       ...converted,
       ...(vertexToolsFromOpenAi(req.body?.tools) ? { tools: vertexToolsFromOpenAi(req.body?.tools) } : {}),
@@ -1657,7 +1662,7 @@ app.post('/v1/chat/completions', requireWritesEnabled, async (req, res) => {
     const debit = await deductCredits(access.record, tokensUsed, requestId);
     const responseId = `chatcmpl_${crypto.randomUUID().replace(/-/g, '')}`;
     const created = Math.floor(Date.now() / 1000);
-    const model = 'gemini-3.6-flash';
+    const model = automniaRelayModel;
     const message = {
       role: 'assistant',
       content: result.text || null,
@@ -1724,7 +1729,7 @@ app.post('/api/ai/generate', requireWritesEnabled, async (req, res) => {
       });
     }
 
-    const { prompt, model = 'gemini-3.6-flash', messages } = req.body || {};
+    const { prompt, messages } = req.body || {};
     const promptText = prompt || (Array.isArray(messages) ? messages.map((m) => m.content || m.text || '').join('\n') : '');
 
     if (!promptText.trim()) {
@@ -1733,7 +1738,7 @@ app.post('/api/ai/generate', requireWritesEnabled, async (req, res) => {
 
     // Customer-controlled model IDs are never passed upstream. Vertex AI uses the Cloud Run service identity,
     // so a client device never receives a master API key.
-    const targetModel = 'gemini-3.6-flash';
+    const targetModel = automniaRelayModel;
     const client = await vertexAuth.getClient();
     const accessToken = await client.getAccessToken();
     if (!accessToken.token) throw new Error('Unable to obtain a Vertex AI service token.');

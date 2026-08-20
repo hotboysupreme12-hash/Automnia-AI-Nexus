@@ -103,11 +103,15 @@ import {
   type ModelProviderConfig,
 } from './services/providers/modelCatalogService'
 import {
-  AUTOMNIA_GEMINI_36_OPENAI_REASONING_COMPAT,
-  AUTOMNIA_GEMINI_36_OPENCLAW_THINKING_LEVEL_MAP,
+  AUTOMNIA_GEMINI_37_OPENAI_REASONING_COMPAT,
+  AUTOMNIA_GEMINI_37_OPENCLAW_THINKING_LEVEL_MAP,
   thinkingForAutomniaGeminiRuntimeModel,
 } from './services/providers/automniaGeminiThinking'
 import { applyGoogleVertexModelLimits } from './services/providers/googleVertexModelPolicy'
+import {
+  googleGeminiModelDisallowsCustomSampling,
+  googleGeminiThinkingForModel,
+} from './services/providers/googleGeminiModelPolicy'
 import {
   createProviderAuthService,
   isOAuthCredentialUsable,
@@ -1809,7 +1813,7 @@ const skillRootCache = new Map<string, TimedValueCache<AgentSkillEntry[]>>()
 
 function thinkingForOpenClawRuntimeModel(modelId: string, thinking: ThinkingLevel): ThinkingLevel {
   if (isOpenAiCodexSubscriptionModel(modelId)) return 'off'
-  return thinkingForAutomniaGeminiRuntimeModel(modelId, thinking)
+  return thinkingForAutomniaGeminiRuntimeModel(modelId, googleGeminiThinkingForModel(modelId, thinking))
 }
 
 function primaryModelForOpenClawConfig(modelId: string | undefined) {
@@ -6296,10 +6300,11 @@ function geminiThinkingBudget(model: string, thinking: ThinkingLevel) {
 
 function geminiThinkingConfig(model: string, thinking: ThinkingLevel) {
   const normalized = model.toLowerCase()
-  const nativeThinking = thinking === 'xhigh' || thinking === 'max' ? 'high' : thinking
   if (/gemini-2\.5/.test(normalized)) {
     return { thinkingBudget: geminiThinkingBudget(model, thinking) }
   }
+  const effectiveThinking = googleGeminiThinkingForModel(model, thinking)
+  const nativeThinking = effectiveThinking === 'xhigh' || effectiveThinking === 'max' ? 'high' : effectiveThinking
   if (/gemini-3(?:\.\d+)?-flash/.test(normalized)) {
     return { thinkingLevel: nativeThinking === 'off' ? 'minimal' : nativeThinking }
   }
@@ -6310,17 +6315,13 @@ function geminiThinkingConfig(model: string, thinking: ThinkingLevel) {
 }
 
 /**
- * Gemini 3.6 Flash rejects custom temperature, top-p, and top-k values. The
- * usual streaming path already omits them; this guard keeps the direct Vertex
- * artifact fallback aligned with that same request contract.
+ * Gemini 3.6 and 3.7 Flash reject deprecated custom sampling parameters in
+ * the current Gemini generation contract. The usual streaming path already
+ * omits them; this guard keeps the direct Vertex artifact fallback aligned
+ * with that same request contract.
  */
 function geminiDisallowsCustomSampling(model: string) {
-  const normalized = model
-    .toLowerCase()
-    .replace(/^publishers\/google\/models\//, '')
-    .replace(/^models\//, '')
-    .trim()
-  return /^gemini-3\.6-flash(?:$|[-@])/.test(normalized)
+  return googleGeminiModelDisallowsCustomSampling(model)
 }
 
 async function streamOpenAiCompatibleCompletion(params: {
@@ -9992,14 +9993,14 @@ async function synchronizeOpenClawBillingRoute(configInput?: OpenClawConfigFile)
     },
     timeoutSeconds: 7200,
     models: [{
-      id: 'gemini-3.6-flash',
-      name: 'Automnia Cloud Credits - Gemini 3.6 Flash',
-      // Gemini 3.6 Flash supports minimal, low, medium, and high. Marking
+      id: 'gemini-3.7-flash',
+      name: 'Automnia Cloud Credits - Gemini 3.7 Flash',
+      // Gemini 3.7 Flash supports low, medium, and high. Marking
       // this false made OpenClaw reject every enabled level before the relay
       // received the request ("Use one of: off").
       reasoning: true,
-      thinkingLevelMap: AUTOMNIA_GEMINI_36_OPENCLAW_THINKING_LEVEL_MAP,
-      compat: AUTOMNIA_GEMINI_36_OPENAI_REASONING_COMPAT,
+      thinkingLevelMap: AUTOMNIA_GEMINI_37_OPENCLAW_THINKING_LEVEL_MAP,
+      compat: AUTOMNIA_GEMINI_37_OPENAI_REASONING_COMPAT,
       input: ['text', 'image'],
       contextWindow: 1_000_000,
       // Keep the hosted model's runtime cap aligned with its advertised

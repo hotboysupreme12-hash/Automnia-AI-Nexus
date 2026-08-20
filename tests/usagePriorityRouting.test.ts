@@ -5,7 +5,7 @@ import {
   withUsagePriorityChannelDefault,
 } from '../server/services/license/usagePriorityRouting'
 
-const AUTOMNIA = 'automnia-cloud/gemini-3.6-flash'
+const AUTOMNIA = 'automnia-cloud/gemini-3.7-flash'
 
 test('Telegram channel defaults mirror the selected billing route without replacing explicit chats', () => {
   const providerFirst = applyUsagePriorityModelOrder(

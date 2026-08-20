@@ -2,7 +2,7 @@ import type { LicenseInfo } from '../context/licenseContextValue'
 
 export const LICENSE_STATUS_UPDATED_EVENT = 'automnia-license-updated'
 
-export const AUTOMNIA_CREDITS_MODEL_ID = 'automnia-cloud/gemini-3.6-flash'
+export const AUTOMNIA_CREDITS_MODEL_ID = 'automnia-cloud/gemini-3.7-flash'
 
 export function isAutomniaCreditsModelId(value: string | null | undefined) {
   return value?.trim().toLowerCase() === AUTOMNIA_CREDITS_MODEL_ID

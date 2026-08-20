@@ -207,7 +207,7 @@ test('gateway agent turn service refreshes hosted billing access and retries a r
     isClawTalkSetupIntentMessage: () => false,
     isClawTalkIntentMessage: () => false,
     buildClawTalkRuntimeInstruction: (message) => message,
-    readAgentPrimaryModelIdSync: () => 'automnia-cloud/gemini-3.6-flash',
+    readAgentPrimaryModelIdSync: () => 'automnia-cloud/gemini-3.7-flash',
     isGoogleGeminiModelId: () => false,
     thinkingForOpenClawRuntimeModel: (_modelId, thinking) => thinking,
     resolveEffectiveAgentFastMode: async () => 'auto',
@@ -230,7 +230,7 @@ test('gateway agent turn service refreshes hosted billing access and retries a r
       if (gatewayTurns.length === 1) {
         return {
           stdout: '',
-          stderr: 'automnia-cloud (gemini-3.6-flash) returned a billing error — insufficient balance',
+          stderr: 'automnia-cloud (gemini-3.7-flash) returned a billing error — insufficient balance',
           code: 402,
         }
       }
@@ -807,13 +807,31 @@ test('agent streaming service keeps hosted tool/runtime turns in the configured 
   assert.match(String(providerBypassResult.reply), /credits only/i)
 })
 
-test('agent streaming service dispatches Gemini 3.6 Flash through both native Google transports', async () => {
+test('agent streaming service dispatches Gemini 3.7 and 3.6 Flash through both native Google transports', async () => {
   const providerCases: Array<{
     modelId: string
     provider: 'google' | 'google-vertex'
     kind: 'gemini-generate-content' | 'gemini-vertex-generate-content'
     auth: ProviderRequestAuth
   }> = [
+    {
+      modelId: 'google/gemini-3.7-flash',
+      provider: 'google',
+      kind: 'gemini-generate-content',
+      auth: { type: 'apiKey', value: 'gemini-test-key', source: 'test' },
+    },
+    {
+      modelId: 'google-vertex/gemini-3.7-flash',
+      provider: 'google-vertex',
+      kind: 'gemini-vertex-generate-content',
+      auth: {
+        type: 'oauth',
+        accessToken: 'vertex-test-token',
+        projectId: 'test-project',
+        location: 'global',
+        source: 'test',
+      },
+    },
     {
       modelId: 'google/gemini-3.6-flash',
       provider: 'google',
@@ -842,12 +860,12 @@ test('agent streaming service dispatches Gemini 3.6 Flash through both native Go
         google: {
           kind: 'gemini-generate-content',
           envKeys: ['GEMINI_API_KEY', 'GOOGLE_API_KEY'],
-          docs: 'https://ai.google.dev/gemini-api/docs/models/gemini-3.6-flash',
+          docs: 'https://ai.google.dev/gemini-api/docs/models/gemini-3.7-flash',
         },
         'google-vertex': {
           kind: 'gemini-vertex-generate-content',
           envKeys: ['GOOGLE_VERTEX_ACCESS_TOKEN'],
-          docs: 'https://docs.cloud.google.com/gemini-enterprise-agent-platform/models/gemini/3-6-flash',
+          docs: 'https://docs.cloud.google.com/gemini-enterprise-agent-platform/models/gemini/3-7-flash',
         },
       },
       isValidAgentId: (agentId) => agentId === 'agent-alpha',
@@ -856,7 +874,7 @@ test('agent streaming service dispatches Gemini 3.6 Flash through both native Go
       agentRuntimeShortcutReason: () => ({ code: 'runtime-shortcut', message: 'shortcut' }),
       bufferedAgentRuntimeReason: () => null,
       runBufferedAgentTurnForStream: async () => {
-        throw new Error('Gemini 3.6 should use its native direct streaming transport')
+        throw new Error('Gemini Flash should use its native direct streaming transport')
       },
       resolveAgentPrimaryModelId: async () => providerCase.modelId,
       openAiCodexEmbeddedRuntimeReason: () => null,
@@ -906,13 +924,13 @@ test('agent streaming service dispatches Gemini 3.6 Flash through both native Go
       },
       streamGoogleVertexContent: async (params) => {
         nativeCalls.push('vertex')
-        assert.equal(params.model, 'gemini-3.6-flash')
+        assert.match(params.model, /^gemini-3\.[67]-flash$/)
         assert.equal(params.auth.type, 'oauth')
         return { content: 'OK' }
       },
       streamGeminiContent: async (params) => {
         nativeCalls.push('google')
-        assert.equal(params.model, 'gemini-3.6-flash')
+        assert.match(params.model, /^gemini-3\.[67]-flash$/)
         assert.equal(params.auth.type, 'apiKey')
         return { content: 'OK' }
       },

@@ -156,9 +156,11 @@ assert(agentStreamingService.includes('nativeToolLoop: true'), 'hosted turns sho
 assert(agentStreamingService.includes('usagePriority: hostedRelayCredentials.usagePriority'), 'hosted turns should preserve the selected billing priority in their Gateway result')
 assert(agentTurnRoutes.includes("label: cloudFirst ? 'Automnia credits via Gateway' : providerFirst ? 'My provider first'"), 'stream status should label the saved subscriber priority')
 assert(licenseContext.includes("apiRequest<LicenseInfo>('/api/license/usage-priority'"), 'the renderer should persist usage priority through the protected license API')
-assert(settingsPanel.includes('<option value="automnia_first">Automnia credits first</option>'), 'Account settings should expose the Automnia credits priority')
+assert(settingsPanel.includes('<option value="automnia_only">Automnia credits</option>'), 'Account settings should expose the Automnia credits route')
+assert(settingsPanel.includes('<option value="provider_plus_automnia"'), 'Account settings should expose the provider-plus-Automnia route')
+assert(settingsPanel.includes('<option value="automnia_first_with_provider_fallback">Automnia credits first, my provider fallback</option>'), 'Account settings should expose the Automnia-first fallback order')
 assert(settingsPanel.includes('<option value="provider_first"'), 'Account settings should expose provider-first priority')
-assert(settingsPanel.includes('<option value="byok_only"'), 'Account settings should expose BYOK-only priority')
+assert(settingsPanel.includes('<option value="provider_plus_automnia"'), 'Account settings should expose the provider-plus-Automnia priority')
 assert(modelSelector.includes("routePresentation.modelLabel"), 'model selection should label the active agent route')
 assert(agentEditor.includes('data-editor-managed-route'), 'agent model settings should show the managed Automnia route')
 

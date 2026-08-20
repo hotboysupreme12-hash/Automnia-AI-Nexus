@@ -72,6 +72,8 @@ async function runMode(writeMode) {
     const health = await waitForHealth(baseUrl)
     assert.equal(health.ok, true)
     assert.equal(health.writeMode, writeMode)
+    assert.equal(health.aiRelayModel, 'gemini-3.7-flash')
+    assert.equal(health.vertexLocation, 'us-central1')
     assert.equal(health.commerce.planMappingCount, mappings.length)
     assert.equal(health.commerce.checkoutConfigured, true)
     assert.equal(health.commerce.webhookSecretsConfigured, true)
@@ -240,6 +242,7 @@ async function runUnconfiguredDeliveryCheck() {
       ...process.env,
       PORT: String(port),
       GOOGLE_CLOUD_PROJECT: 'local-smoke',
+      AUTOMNIA_RELAY_MODEL: 'gemini-3.7-flash',
       LOCAL_IN_MEMORY_LICENSES: 'true',
       MIGRATION_WRITE_MODE: 'active',
       SHOPIFY_PLAN_MAPPINGS: encodedMappings,

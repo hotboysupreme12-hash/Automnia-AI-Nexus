@@ -322,10 +322,10 @@ test('Telegram model callbacks are locked to Automnia credits for Starter runtim
   `)() as (config: unknown, callback: unknown) => boolean
 
   const starterConfig = { env: { vars: { AUTOMNIA_CREDITS_ONLY: '1' } } }
-  assert.equal(selectionAllowed(starterConfig, { type: 'select', provider: 'automnia-cloud', model: 'gemini-3.6-flash' }), true)
-  assert.equal(selectionAllowed(starterConfig, { type: 'select', provider: 'google', model: 'gemini-3.7-pro' }), false)
+  assert.equal(selectionAllowed(starterConfig, { type: 'select', provider: 'automnia-cloud', model: 'gemini-3.7-flash' }), true)
+  assert.equal(selectionAllowed(starterConfig, { type: 'select', provider: 'google', model: 'gemini-2.5-pro' }), false)
   assert.equal(selectionAllowed(starterConfig, { type: 'select', provider: 'openai', model: 'gpt-5.5' }), false)
-  assert.equal(selectionAllowed({}, { type: 'select', provider: 'google', model: 'gemini-3.7-pro' }), true)
+  assert.equal(selectionAllowed({}, { type: 'select', provider: 'google', model: 'gemini-2.5-pro' }), true)
 })
 
 test('Telegram Automnia model detection does not leak a regex flag as a variable', () => {
@@ -334,7 +334,7 @@ test('Telegram Automnia model detection does not leak a regex flag as a variable
     return isTelegramAutomniaCreditsModel
   `)() as (value: unknown) => boolean
 
-  assert.equal(isAutomniaCreditsModel('automnia-cloud/gemini-3.6-flash'), true)
+  assert.equal(isAutomniaCreditsModel('automnia-cloud/gemini-3.7-flash'), true)
   assert.equal(isAutomniaCreditsModel('openai/gpt-5.5'), false)
 })
 
@@ -349,10 +349,10 @@ test('Telegram model menus expose only Automnia credits for Starter runtime conf
 
   const restricted = restrictModelData(
     { env: { vars: { AUTOMNIA_CREDITS_ONLY: '1' } } },
-    { byProvider: new Map([['google', new Set(['gemini-3.7-pro'])]]), providers: ['google'] },
+    { byProvider: new Map([['google', new Set(['gemini-2.5-pro'])]]), providers: ['google'] },
   )
   assert.deepEqual(restricted.providers, ['automnia-cloud'])
-  assert.deepEqual(Array.from(restricted.byProvider.get('automnia-cloud') || []), ['gemini-3.6-flash'])
+  assert.deepEqual(Array.from(restricted.byProvider.get('automnia-cloud') || []), ['gemini-3.7-flash'])
 })
 
 test('Telegram route construction is self-contained in the injected runtime bundle', () => {

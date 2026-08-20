@@ -177,19 +177,19 @@ export const KNOWN_UNAVAILABLE_MODEL_IDS = new Set<string>([
   'google/gemini-3.1-pro-preview-customtools',
 ])
 
-export const MODEL_CATALOG_EXCLUDED_MODEL_IDS = new Set<string>([
-  'google/gemini-3.7-pro',
-  'google-vertex/gemini-3.7-pro',
-])
-
 export const OPENCLAW_CONFIG_SUPPRESSED_MODEL_IDS = new Set([
   'openai/gpt-5.3-chat-latest',
   'google/gemini-3.1-pro-preview-customtools',
 ])
 
 // Keep the newest production Gemini Flash release readily visible even if
-// OpenClaw is still warming up or returns a sparse catalog.
-const PINNED_MODEL_IDS = ['google-vertex/gemini-3.6-flash']
+// OpenClaw is still warming up or returns a sparse catalog. Pin both native
+// Google transports so users can choose API-key Gemini or project-scoped
+// Vertex without waiting for dynamic catalog discovery.
+const PINNED_MODEL_IDS = [
+  'google-vertex/gemini-3.7-flash',
+  'google/gemini-3.7-flash',
+]
 const OPENROUTER_PROVIDER_WILDCARD_MODEL_ID = 'openrouter/*'
 const OPENROUTER_DEEPSEEK_V4_PRO_MODEL_ID = 'openrouter/deepseek/deepseek-v4-pro'
 const OPENROUTER_DEEPSEEK_V4_FLASH_MODEL_ID = 'openrouter/deepseek/deepseek-v4-flash'
@@ -205,6 +205,12 @@ export function splitModelId(modelId: string) {
     provider: provider.trim(),
     model: (modelParts.join('/') || modelId).trim(),
   }
+}
+
+function isUnsupportedGoogleGemini37Model(modelId: string) {
+  const { provider, model } = splitModelId(modelId)
+  if (!['google', 'google-vertex'].includes(provider.toLowerCase())) return false
+  return /^gemini-3\.7(?:$|[-@])/i.test(model) && !/^gemini-3\.7-flash(?:$|[-@])/i.test(model)
 }
 
 export function isOpenAiCodexSubscriptionModelName(model: string) {
@@ -255,7 +261,7 @@ function displayProviderForAvailableModel(model: AvailableModelInput, id: string
 function fallbackAvailableModels(streamingCapabilityForModel: ModelCatalogServiceOptions['streamingCapabilityForModel']): AvailableModelOutput[] {
   return FALLBACK_MODELS
     .filter((model) => {
-      if (KNOWN_UNAVAILABLE_MODEL_IDS.has(model.id) || MODEL_CATALOG_EXCLUDED_MODEL_IDS.has(model.id)) return false
+      if (KNOWN_UNAVAILABLE_MODEL_IDS.has(model.id) || isUnsupportedGoogleGemini37Model(model.id)) return false
       const [provider, modelId] = model.id.split('/')
       return provider !== 'anthropic' || OPENCLAW_VERIFIED_ANTHROPIC_MODEL_IDS.has(modelId || '')
     })
@@ -276,7 +282,7 @@ function mergeAvailableModels(
   const addModel = (model: AvailableModelInput) => {
     const id = canonicalAgentModelId(modelIdFor(model))
     if (!id) return
-    if (KNOWN_UNAVAILABLE_MODEL_IDS.has(id) || MODEL_CATALOG_EXCLUDED_MODEL_IDS.has(id)) return
+    if (KNOWN_UNAVAILABLE_MODEL_IDS.has(id) || isUnsupportedGoogleGemini37Model(id)) return
     const provider = displayProviderForAvailableModel(model, id)
     const name = model.name || id.split('/').pop() || id
     const alias = model.alias || name
