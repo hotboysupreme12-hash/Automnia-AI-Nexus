@@ -30,12 +30,12 @@ jobs:
 
       - name: Capture complete development and build audit
         shell: bash
+        continue-on-error: true
         run: |
-          set +e
           npm audit --json > full-dependency-audit.json
-          status=$?
-          echo "Full audit exit status: $status"
-          exit 0
+
+      - name: Enforce complete dependency policy
+        run: npm run smoke:dependency-audit-clean
 
       - name: Upload complete dependency audit
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
