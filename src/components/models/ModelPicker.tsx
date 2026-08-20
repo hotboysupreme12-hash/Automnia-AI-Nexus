@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import type { AuthProviderStatus } from '../../api/providerAuth'
+import { AUTOMNIA_CREDITS_MODEL_ID } from '../../utils/licenseEntitlement'
 import { groupAvailableModels, isSelectableModelId, modelProviderLabel, type ModelOptionGroup } from '../../utils/modelGrouping'
 import { providerLogoKey, providerLogoSrc } from '../../utils/providerLogos'
 
@@ -43,6 +44,9 @@ function providerInitial(label: string) {
 
 const modelProviderKey = (model: ModelPickerModel) =>
   (model.provider?.trim() || model.id.split('/')[0] || '').toLowerCase()
+
+const isAutomniaProviderKey = (provider: string) => provider.trim().toLowerCase() === 'automnia-cloud'
+const canonicalPickerModelId = (modelId: string) => isAutomniaProviderKey(modelId.split('/')[0] || '') ? AUTOMNIA_CREDITS_MODEL_ID : modelId
 
 function ProviderLogo({ provider, label, size = 'sm' }: { provider: string; label: string; size?: 'sm' | 'md' }) {
   const [failedSrc, setFailedSrc] = useState('')
@@ -94,8 +98,10 @@ export function ModelPicker({
   )
   const pickerModels = selectableModels
   const groups = useMemo(() => groupAvailableModels(pickerModels), [pickerModels])
-  const selectedSet = useMemo(() => new Set(selectedIds.filter(Boolean)), [selectedIds])
-  const fallbackSet = useMemo(() => new Set(fallbackIds.filter(Boolean)), [fallbackIds])
+  const normalizedSelectedIds = useMemo(() => selectedIds.filter(Boolean).map(canonicalPickerModelId), [selectedIds])
+  const normalizedFallbackIds = useMemo(() => fallbackIds.filter(Boolean).map(canonicalPickerModelId), [fallbackIds])
+  const selectedSet = useMemo(() => new Set(normalizedSelectedIds), [normalizedSelectedIds])
+  const fallbackSet = useMemo(() => new Set(normalizedFallbackIds), [normalizedFallbackIds])
   const [openGroupKey, setOpenGroupKey] = useState('')
   const [isFallbacksOpen, setIsFallbacksOpen] = useState(false)
   const [primaryProviderKey, setPrimaryProviderKey] = useState('')
@@ -120,15 +126,22 @@ export function ModelPicker({
     }
   }, [openGroupKey])
   const visibleOpenGroupKey = groups.some((group) => group.key === openGroupKey) ? openGroupKey : ''
-  const primaryModelId = selectedIds.find(Boolean) || ''
+  const rawPrimaryModelId = selectedIds.find(Boolean) || ''
+  const primaryModelId = canonicalPickerModelId(rawPrimaryModelId)
+  const primaryModelProviderKey = modelProviderKey({ id: primaryModelId })
   const primaryModelGroup = groups.find((group) => group.models.some((model) => model.id === primaryModelId))
+    || groups.find((group) => group.key === primaryModelProviderKey)
   const activePrimaryGroup = groups.find((group) => group.key === primaryProviderKey) || primaryModelGroup || groups[0]
   const selectedFallbackGroup = groups.find((group) => group.models.some((model) => fallbackSet.has(model.id)))
   const activeFallbackGroup = groups.find((group) => group.key === fallbackProviderKey)
     || selectedFallbackGroup
     || groups.find((group) => group.key !== activePrimaryGroup?.key)
     || groups[0]
-  const selectedModelNames = selectedIds
+  useEffect(() => {
+    if (mode !== 'primary' || !rawPrimaryModelId || rawPrimaryModelId === primaryModelId) return
+    if (isAutomniaProviderKey(modelProviderKey({ id: rawPrimaryModelId }))) onSelect(primaryModelId)
+  }, [mode, onSelect, primaryModelId, rawPrimaryModelId])
+  const selectedModelNames = normalizedSelectedIds
     .filter(Boolean)
     .map((modelId) => modelTitle(selectableModels.find((model) => model.id === modelId) || { id: modelId }))
   const selectModel = (modelId: string) => {
@@ -142,7 +155,7 @@ export function ModelPicker({
     const primaryModels = activePrimaryGroup?.models || []
     const fallbackModels = activeFallbackGroup?.models.filter((model) => model.id !== primaryModelId) || []
     const availableFallbackModels = fallbackModels.filter((model) => !fallbackSet.has(model.id))
-    const selectedFallbackModels = fallbackIds
+    const selectedFallbackModels = normalizedFallbackIds
       .map((modelId) => pickerModels.find((model) => model.id === modelId))
       .filter((model): model is ModelPickerModel => Boolean(model))
 
@@ -157,7 +170,11 @@ export function ModelPicker({
               data-model-primary-provider-select
               value={activePrimaryGroup?.key || ''}
               disabled={disabled || loading || !groups.length}
-              onChange={(event) => setPrimaryProviderKey(event.currentTarget.value)}
+              onChange={(event) => {
+                const nextProviderKey = event.currentTarget.value
+                setPrimaryProviderKey(nextProviderKey)
+                if (isAutomniaProviderKey(nextProviderKey)) onSelect(AUTOMNIA_CREDITS_MODEL_ID)
+              }}
               className="min-h-10 min-w-0 flex-1 bg-transparent px-1 text-[11px] font-semibold text-slate-100 outline-none disabled:cursor-not-allowed disabled:opacity-50"
             >
               {!groups.length ? <option value="">Choose a provider</option> : null}
@@ -173,28 +190,39 @@ export function ModelPicker({
 
         {activePrimaryGroup && primaryModels.length ? (
           <div data-model-primary-models>
-            <label className="block">
-              <span className="mb-1.5 block px-0.5 text-[10px] font-extrabold uppercase tracking-[0.14em] text-cyan-200/75">Primary model</span>
-              <span className="flex min-h-11 items-center gap-2 rounded-lg border border-white/[0.12] bg-white/[0.025] px-2">
-                <ProviderLogo provider={activePrimaryGroup.key} label={browseProviderLabel} />
-                <select
-                  aria-label={browseProviderLabel + ' primary model'}
-                  data-model-primary-select
-                  value={primaryModels.some((model) => model.id === primaryModelId) ? primaryModelId : ''}
-                  disabled={disabled || loading}
-                  onChange={(event) => {
-                    setPrimaryProviderKey(activePrimaryGroup.key)
-                    onSelect(event.currentTarget.value)
-                  }}
-                  className="min-h-10 min-w-0 flex-1 bg-transparent px-1 text-[11px] font-semibold text-slate-100 outline-none disabled:cursor-not-allowed disabled:opacity-50"
-                >
-                  <option value="">{emptyOption?.label || 'Choose a ' + browseProviderLabel + ' model'}</option>
-                  {primaryModels.map((model) => (
-                    <option key={model.id} value={model.id}>{modelTitle(model)}</option>
-                  ))}
-                </select>
-              </span>
-            </label>
+            {isAutomniaProviderKey(activePrimaryGroup.key) ? (
+              <div data-model-primary-default>
+                <span className="mb-1.5 block px-0.5 text-[10px] font-extrabold uppercase tracking-[0.14em] text-cyan-200/75">Default model</span>
+                <div className="flex min-h-11 items-center gap-2 rounded-lg border border-emerald-300/20 bg-emerald-400/[0.05] px-2">
+                  <ProviderLogo provider={activePrimaryGroup.key} label={browseProviderLabel} />
+                  <span className="min-w-0 flex-1 text-[11px] font-semibold text-emerald-100">Gemini 3.7 Flash</span>
+                  <span className="text-[9px] font-semibold uppercase tracking-[0.1em] text-emerald-200/70">Managed by Automnia</span>
+                </div>
+              </div>
+            ) : (
+              <label className="block">
+                <span className="mb-1.5 block px-0.5 text-[10px] font-extrabold uppercase tracking-[0.14em] text-cyan-200/75">Primary model</span>
+                <span className="flex min-h-11 items-center gap-2 rounded-lg border border-white/[0.12] bg-white/[0.025] px-2">
+                  <ProviderLogo provider={activePrimaryGroup.key} label={browseProviderLabel} />
+                  <select
+                    aria-label={browseProviderLabel + ' primary model'}
+                    data-model-primary-select
+                    value={primaryModels.some((model) => model.id === primaryModelId) ? primaryModelId : ''}
+                    disabled={disabled || loading}
+                    onChange={(event) => {
+                      setPrimaryProviderKey(activePrimaryGroup.key)
+                      onSelect(event.currentTarget.value)
+                    }}
+                    className="min-h-10 min-w-0 flex-1 bg-transparent px-1 text-[11px] font-semibold text-slate-100 outline-none disabled:cursor-not-allowed disabled:opacity-50"
+                  >
+                    <option value="">{emptyOption?.label || 'Choose a ' + browseProviderLabel + ' model'}</option>
+                    {primaryModels.map((model) => (
+                      <option key={model.id} value={model.id}>{modelTitle(model)}</option>
+                    ))}
+                  </select>
+                </span>
+              </label>
+            )}
           </div>
         ) : null}
 
@@ -209,7 +237,13 @@ export function ModelPicker({
                   data-model-fallback-provider-select
                   value={activeFallbackGroup.key}
                   disabled={disabled || loading}
-                  onChange={(event) => setFallbackProviderKey(event.currentTarget.value)}
+                  onChange={(event) => {
+                    const nextProviderKey = event.currentTarget.value
+                    setFallbackProviderKey(nextProviderKey)
+                    if (isAutomniaProviderKey(nextProviderKey) && primaryModelId !== AUTOMNIA_CREDITS_MODEL_ID && !fallbackSet.has(AUTOMNIA_CREDITS_MODEL_ID)) {
+                      onToggleFallback(AUTOMNIA_CREDITS_MODEL_ID)
+                    }
+                  }}
                   className="min-h-10 min-w-0 flex-1 bg-transparent px-1 text-[11px] font-semibold text-slate-100 outline-none disabled:cursor-not-allowed disabled:opacity-50"
                 >
                   {groups.map((group) => (
@@ -220,27 +254,38 @@ export function ModelPicker({
             </label>
 
             <div data-model-fallback-models>
-              <label className="block">
-                <span className="mb-1.5 block px-0.5 text-[10px] font-extrabold uppercase tracking-[0.14em] text-cyan-200/75">Fallback model</span>
-                <span className="flex min-h-11 items-center gap-2 rounded-lg border border-white/[0.12] bg-white/[0.025] px-2">
-                  <ProviderLogo provider={activeFallbackGroup.key} label={activeFallbackGroup.label} />
-                  <select
-                    aria-label={activeFallbackGroup.label + ' fallback model'}
-                    data-model-fallback-select
-                    value=""
-                    disabled={disabled || loading || !availableFallbackModels.length}
-                    onChange={(event) => {
-                      if (event.currentTarget.value) onToggleFallback(event.currentTarget.value)
-                    }}
-                    className="min-h-10 min-w-0 flex-1 bg-transparent px-1 text-[11px] font-semibold text-slate-100 outline-none disabled:cursor-not-allowed disabled:opacity-50"
-                  >
-                    <option value="">{availableFallbackModels.length ? 'Choose a fallback model' : 'No more models for this provider'}</option>
-                    {availableFallbackModels.map((model) => (
-                      <option key={model.id} value={model.id}>{modelTitle(model)}</option>
-                    ))}
-                  </select>
-                </span>
-              </label>
+              {isAutomniaProviderKey(activeFallbackGroup.key) ? (
+                <div data-model-fallback-default>
+                  <span className="mb-1.5 block px-0.5 text-[10px] font-extrabold uppercase tracking-[0.14em] text-cyan-200/75">Default model</span>
+                  <div className="flex min-h-11 items-center gap-2 rounded-lg border border-emerald-300/20 bg-emerald-400/[0.05] px-2">
+                    <ProviderLogo provider={activeFallbackGroup.key} label={activeFallbackGroup.label} />
+                    <span className="min-w-0 flex-1 text-[11px] font-semibold text-emerald-100">Gemini 3.7 Flash</span>
+                    <span className="text-[9px] font-semibold uppercase tracking-[0.1em] text-emerald-200/70">Managed by Automnia</span>
+                  </div>
+                </div>
+              ) : (
+                <label className="block">
+                  <span className="mb-1.5 block px-0.5 text-[10px] font-extrabold uppercase tracking-[0.14em] text-cyan-200/75">Fallback model</span>
+                  <span className="flex min-h-11 items-center gap-2 rounded-lg border border-white/[0.12] bg-white/[0.025] px-2">
+                    <ProviderLogo provider={activeFallbackGroup.key} label={activeFallbackGroup.label} />
+                    <select
+                      aria-label={activeFallbackGroup.label + ' fallback model'}
+                      data-model-fallback-select
+                      value=""
+                      disabled={disabled || loading || !availableFallbackModels.length}
+                      onChange={(event) => {
+                        if (event.currentTarget.value) onToggleFallback(event.currentTarget.value)
+                      }}
+                      className="min-h-10 min-w-0 flex-1 bg-transparent px-1 text-[11px] font-semibold text-slate-100 outline-none disabled:cursor-not-allowed disabled:opacity-50"
+                    >
+                      <option value="">{availableFallbackModels.length ? 'Choose a fallback model' : 'No more models for this provider'}</option>
+                      {availableFallbackModels.map((model) => (
+                        <option key={model.id} value={model.id}>{modelTitle(model)}</option>
+                      ))}
+                    </select>
+                  </span>
+                </label>
+              )}
 
               {selectedFallbackModels.length ? (
                 <div role="list" aria-label="Selected fallback models" className="mt-1.5 space-y-0.5">

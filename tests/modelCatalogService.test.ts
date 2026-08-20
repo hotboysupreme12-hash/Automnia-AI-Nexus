@@ -69,6 +69,7 @@ test('fallback catalog canonicalizes Codex subscription models and suppresses un
   const codexSpark = fallback.find((model) => model.id === 'openai/gpt-5.3-codex-spark')
   const geminiFlash = fallback.find((model) => model.id === 'google/gemini-3.6-flash')
   const vertexGeminiFlash = fallback.find((model) => model.id === 'google-vertex/gemini-3.6-flash')
+  const automniaModel = fallback.find((model) => model.id === 'automnia-cloud/gemini-3.7-flash')
   const metaMuse = fallback.find((model) => model.id === 'meta/muse-spark-1.1')
 
   assert.equal(canonicalAgentModelId('gpt-5.3-codex-spark'), 'openai/gpt-5.3-codex-spark')
@@ -83,6 +84,9 @@ test('fallback catalog canonicalizes Codex subscription models and suppresses un
   assert.equal(geminiFlash?.alias, 'Gemini 3.6 Flash (GA)')
   assert.equal(geminiFlash?.streaming.provider, 'google')
   assert.equal(vertexGeminiFlash?.alias, 'Vertex Gemini 3.6 Flash (GA)')
+  assert.equal(automniaModel?.alias, 'Default model')
+  assert.equal(automniaModel?.provider, 'automnia-cloud')
+  assert.equal(canonicalAgentModelId('automnia-cloud/gemini-3.6-flash'), 'automnia-cloud/gemini-3.7-flash')
   assert.equal(vertexGeminiFlash?.streaming.provider, 'google-vertex')
   assert.equal(metaMuse?.alias, 'Muse Spark 1.1 (Meta)')
   assert.equal(metaMuse?.streaming.provider, 'meta')
@@ -100,6 +104,7 @@ test('refresh loads OpenClaw catalog and normalizes OpenRouter allowlist through
     openClawModels: {
       models: [
         { id: 'anthropic/claude-custom', alias: 'custom', provider: 'anthropic', name: 'claude-custom' },
+        { id: 'automnia-cloud/gemini-3.6-flash', alias: 'legacy Automnia model', provider: 'automnia-cloud', name: 'Gemini 3.6 Flash' },
         { id: 'google-vertex/gemini-3.7-flash', provider: 'google-vertex', name: 'gemini-3.7-flash' },
         { id: 'google-vertex/gemini-3.7-reasoning', provider: 'google-vertex', name: 'gemini-3.7-reasoning' },
         { id: 'google-vertex/gemini-3.6-flash', provider: 'google-vertex', name: 'gemini-3.6-flash' },
@@ -112,6 +117,9 @@ test('refresh loads OpenClaw catalog and normalizes OpenRouter allowlist through
   assert.equal(cache.source, 'openclaw')
   assert.equal(cache.models[0]?.id, 'google-vertex/gemini-3.7-flash')
   assert.ok(cache.models.some((model) => model.id === 'anthropic/claude-custom'))
+  assert.deepEqual(cache.models.filter((model) => model.provider === 'automnia-cloud').map((model) => ({ id: model.id, alias: model.alias, name: model.name })), [
+    { id: 'automnia-cloud/gemini-3.7-flash', alias: 'Default model', name: 'Gemini 3.7 Flash' },
+  ])
   assert.equal(cache.models.some((model) => model.id === 'google-vertex/gemini-3.7-reasoning'), false)
   assert.equal(cache.models.some((model) => model.id === 'openai/gpt-5.3-chat-latest'), false)
   assert.equal(state.writes.length, 1)

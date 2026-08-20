@@ -5,6 +5,7 @@ import net from 'node:net'
 import { tmpdir } from 'node:os'
 import path from 'node:path'
 import { AUTH_ENV_MAP } from '../server/catalogs/providerCatalog'
+import { createRuntimeLedgerStore, runtimeLedgerPathsForStateRoot } from '../server/state/runtimeLedgerStore'
 
 const root = process.cwd()
 const CONTROL_TOKEN = 'phase-k-missing-provider-auth'
@@ -231,9 +232,9 @@ function sourceAssertions() {
   assert.match(partyManagementRoutes, /Connect this provider before recruiting with this model/, 'recruit route must explain missing provider auth')
   assert.match(agentConsole, /case 'auth_missing':[\s\S]*label: 'Connect provider'/, 'Command Console must show a Connect provider CTA for auth_missing')
   assert.match(agentConsole, /Refresh credentials, then retry this turn\./, 'Command Console auth_missing CTA must explain the retry path')
-  assert.match(agentEditor, /Connect this provider before saving\./, 'Agent editor must explain missing auth before saving')
+  assert.match(agentEditor, /Connect this provider to finish autosave\./, 'Agent editor must explain missing auth before autosave can continue')
   assert.match(modelSelector, /Connect it before using this model\./, 'Model selector must explain missing auth before model use')
-  assert.match(recruitModal, /auth required\.[\s\S]*title=\{`Connect \$\{selectedProviderAuth\.label \|\| selectedProviderAuth\.provider\} authentication`\}/, 'Recruit modal must show a connect-provider control near missing auth')
+  assert.match(recruitModal, /Missing \{selectedProviderAuth\.label \|\| selectedProviderAuth\.provider\} authentication\.[\s\S]*title=\{`Connect \$\{selectedProviderAuth\.label \|\| selectedProviderAuth\.provider\} authentication`\}/, 'Recruit modal must show a connect-provider control near missing auth')
   assert.match(uiSmoke, /seedMissingProviderAuthCommandConsole/, 'UI smoke must exercise the missing-provider-auth Command Console path')
   assert.match(uiSmoke, /authMissingCtaText/, 'UI smoke must assert the rendered auth-missing CTA text')
   assert.equal(
@@ -252,6 +253,27 @@ const agentWorkspace = path.join(workspaceRoot, agentId)
 mkdirSync(agentWorkspace, { recursive: true })
 mkdirSync(homeDir, { recursive: true })
 mkdirSync(phaseKEvidenceDir, { recursive: true })
+
+// Keep the real license middleware enabled while making this isolated auth
+// smoke self-contained and free of external provisioner calls.
+const fixtureLedger = createRuntimeLedgerStore(runtimeLedgerPathsForStateRoot(stateDir))
+fixtureLedger.writeControlCenterState('license:activation', {
+  active: true,
+  licenseKey: 'phase-k-missing-auth-test-license',
+  email: 'phase-k-missing-auth@example.test',
+  tier: 'byok',
+  mode: 'byok',
+  planPriceCents: 2999,
+  byokAllowed: true,
+  permanentAccess: true,
+  subscriptionStatus: 'active',
+  usagePriority: 'provider_first',
+  creditBalance: 1000,
+  creditBalanceUpdatedAt: new Date().toISOString(),
+  activatedAt: new Date().toISOString(),
+  verifiedAt: new Date().toISOString(),
+})
+fixtureLedger.close()
 
 const child = spawnServer(port, stateDir, workspaceRoot, homeDir)
 

@@ -18961,9 +18961,9 @@ registerProviderAuthRoutes(app, {
   isCreditsOnlyEntitlement: () => licenseService.isUsagePriorityLocked(),
   creditsOnlyAvailableModels: () => [{
     id: AUTOMNIA_OPENCLAW_MODEL,
-    alias: 'Automnia credits',
+    alias: 'Default model',
     provider: AUTOMNIA_OPENCLAW_PROVIDER_ID,
-    name: 'Gemini 3.6 Flash',
+    name: 'Gemini 3.7 Flash',
   }],
   removeProviderAuth,
   startGoogleOAuthSession,

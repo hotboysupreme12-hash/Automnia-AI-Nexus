@@ -182,9 +182,10 @@ export function createGatewayAgentTurnService(options: GatewayAgentTurnServiceOp
     const clawTalkIntent = clawTalkSetupIntent || options.isClawTalkIntentMessage(intentText)
     let agentPrimaryModelId = options.readAgentPrimaryModelIdSync(agent)
     const vertexCompactMode = options.isGoogleGeminiModelId(agentPrimaryModelId)
-    const effectiveThinking = clawTalkIntent
-      ? 'off'
-      : options.thinkingForOpenClawRuntimeModel(agentPrimaryModelId, requestedThinking)
+    const effectiveThinking = options.thinkingForOpenClawRuntimeModel(
+      agentPrimaryModelId,
+      clawTalkIntent ? 'off' : requestedThinking,
+    )
     const effectiveFastMode = await options.resolveEffectiveAgentFastMode(agent, requestedFastMode)
     const policyTimeoutSeconds = Math.max(
       await options.resolveEffectiveAgentWorkTimeoutSeconds(agent, requestedTimeoutSeconds),

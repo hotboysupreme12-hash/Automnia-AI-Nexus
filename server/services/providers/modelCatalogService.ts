@@ -1,3 +1,5 @@
+import { AUTOMNIA_CREDITS_MODEL_ID, AUTOMNIA_CREDITS_PROVIDER_ID } from '../license/creditsOnlyModelPolicy'
+
 export type ModelCatalogOpenClawConfig = {
   agents?: {
     defaults?: {
@@ -132,6 +134,10 @@ export const FALLBACK_MODELS: Array<{ id: string; alias?: string }> = [
   { id: 'openai/gpt-4.1-mini', alias: 'gpt-4.1-mini' },
   { id: 'openai/gpt-5.2', alias: 'gpt-5.2' },
   { id: 'openai/gpt-5.1', alias: 'gpt-5.1' },
+  // Automnia is a provider-backed billing route with one managed model. Keep
+  // it in the shared catalog so provider selectors can return to hosted
+  // billing without exposing a second model choice.
+  { id: AUTOMNIA_CREDITS_MODEL_ID, alias: 'Default model' },
   { id: 'anthropic/claude-fable-5', alias: 'Claude Fable 5 (flagship)' },
   { id: 'anthropic/claude-sonnet-5', alias: 'Claude Sonnet 5' },
   { id: 'anthropic/claude-opus-5', alias: 'Claude Opus 5' },
@@ -221,6 +227,9 @@ export function canonicalAgentModelId(modelId: string | undefined) {
   const trimmed = modelId?.trim() || ''
   if (!trimmed.includes('/') && isOpenAiCodexSubscriptionModelName(trimmed)) return `openai/${trimmed}`
   const parsed = trimmed.match(/^([^/]+)\/(.+)$/)
+  if (parsed && parsed[1].trim().toLowerCase() === AUTOMNIA_CREDITS_PROVIDER_ID) {
+    return AUTOMNIA_CREDITS_MODEL_ID
+  }
   if (parsed && /^(?:openai|openai-codex|codex)$/i.test(parsed[1]) && isOpenAiCodexSubscriptionModelName(parsed[2])) {
     return `openai/${parsed[2]}`
   }
@@ -258,6 +267,10 @@ function displayProviderForAvailableModel(model: AvailableModelInput, id: string
   return model.provider || id.split('/')[0]
 }
 
+function isAutomniaCreditsModelId(modelId: string) {
+  return canonicalAgentModelId(modelId).toLowerCase() === AUTOMNIA_CREDITS_MODEL_ID
+}
+
 function fallbackAvailableModels(streamingCapabilityForModel: ModelCatalogServiceOptions['streamingCapabilityForModel']): AvailableModelOutput[] {
   return FALLBACK_MODELS
     .filter((model) => {
@@ -284,8 +297,8 @@ function mergeAvailableModels(
     if (!id) return
     if (KNOWN_UNAVAILABLE_MODEL_IDS.has(id) || isUnsupportedGoogleGemini37Model(id)) return
     const provider = displayProviderForAvailableModel(model, id)
-    const name = model.name || id.split('/').pop() || id
-    const alias = model.alias || name
+    const name = isAutomniaCreditsModelId(id) ? 'Gemini 3.7 Flash' : model.name || id.split('/').pop() || id
+    const alias = isAutomniaCreditsModelId(id) ? 'Default model' : model.alias || name
     if (!deduped.has(id)) {
       deduped.set(id, { id, alias, provider, name, streaming: streamingCapabilityForModel(id) })
     }

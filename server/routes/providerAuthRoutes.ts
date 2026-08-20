@@ -64,6 +64,7 @@ function isProviderOAuthSupported(provider: string) {
 
 export function registerProviderAuthRoutes(app: Express, options: ProviderAuthRoutesOptions) {
   const providerAccessBlocked = () => options.isCreditsOnlyEntitlement?.() === true || options.providerAccessAllowed?.() === false
+  const providerStatusHidden = () => options.isCreditsOnlyEntitlement?.() === true
   const rejectCreditsOnlyProviderAccess = (res: Parameters<typeof apiFailure>[0]) => apiFailure(
     res,
     403,
@@ -74,7 +75,12 @@ export function registerProviderAuthRoutes(app: Express, options: ProviderAuthRo
   app.get('/api/auth/providers', async (req, res) => {
     try {
       await ensureProviderAuthReady(options)
-      if (providerAccessBlocked()) {
+      // Provider status is read-only diagnostic state. It must remain visible
+      // before a license is activated so the UI can explain exactly which
+      // credential or OAuth connection is missing. Provider actions below
+      // remain gated by providerAccessBlocked(). Credits-only entitlements
+      // intentionally receive the restricted empty catalog.
+      if (providerStatusHidden()) {
         return apiSuccess(res, { providers: [], persistencePath: options.localAuthPath })
       }
       const probeGcloud = req.query.refresh === '1' || req.query.probe === '1'

@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
 
-import { groupAvailableModels, isSelectableModelId } from '../src/utils/modelGrouping'
+import { groupAvailableModels, isSelectableModelId, modelProviderLabel } from '../src/utils/modelGrouping'
 
 test('Gemini 3.7 Flash is selectable in both Google provider groups', () => {
   const models = [
@@ -23,4 +23,17 @@ test('Gemini 3.7 Flash is selectable in both Google provider groups', () => {
 test('Only Gemini 3.7 Flash is selectable for the Google 3.7 model family', () => {
   assert.equal(isSelectableModelId('google/gemini-3.7-reasoning'), false)
   assert.equal(isSelectableModelId('google-vertex/gemini-3.7-reasoning'), false)
+})
+
+test('Automnia is a provider with a managed default model', () => {
+  const groups = groupAvailableModels([
+    { id: 'openai/gpt-5.6', provider: 'openai', name: 'gpt-5.6' },
+    { id: 'automnia-cloud/gemini-3.7-flash', provider: 'automnia-cloud', name: 'Gemini 3.7 Flash' },
+  ])
+
+  assert.equal(modelProviderLabel('automnia-cloud'), 'Automnia')
+  assert.deepEqual(groups.map((group) => group.key), ['openai', 'automnia-cloud'])
+  assert.deepEqual(groups.find((group) => group.key === 'automnia-cloud')?.models.map((model) => model.id), [
+    'automnia-cloud/gemini-3.7-flash',
+  ])
 })

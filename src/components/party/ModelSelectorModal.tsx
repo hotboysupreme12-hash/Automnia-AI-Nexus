@@ -53,9 +53,9 @@ const CODEX_5_3_SPARK_MODEL: AvailableModel = {
 }
 const AUTOMNIA_CREDITS_MODEL: AvailableModel = {
   id: AUTOMNIA_CREDITS_MODEL_ID,
-  alias: 'Automnia credits',
+  alias: 'Default model',
   provider: 'automnia-cloud',
-  name: 'Gemini 3.6 Flash',
+  name: 'Gemini 3.7 Flash',
 }
 const REASONING_EFFORT_LEVELS = ['off', 'minimal', 'low', 'medium', 'high', 'xhigh', 'max'] as const satisfies readonly ThinkingLevel[]
 const MODEL_SELECTOR_CACHE_MS = 5 * 60 * 1000
@@ -379,6 +379,19 @@ export function ModelSelectorModal({
                       <p className="font-semibold">{selectedModelBrief.title}</p>
                       <p className="mt-0.5 text-[11px] text-slate-300">{selectedModelBrief.description}</p>
                       </div>
+                  )}
+                  {primaryProviderStatus && !primaryProviderStatus.configured && !creditsOnly && (
+                    <div role="alert" className="mt-3 rounded-xl border border-amber-300/30 bg-amber-400/[0.08] px-3 py-2 text-xs text-amber-100">
+                      <p className="font-semibold">Missing {authLabelForProvider(primaryProvider, primaryProviderStatus)} {authKindForProvider(primaryProviderStatus)}.</p>
+                      <p className="mt-1">Connect it before using this model.</p>
+                      <button
+                        type="button"
+                        className="mt-2 rounded-md border border-amber-200/35 bg-amber-200/[0.08] px-2.5 py-1.5 text-[11px] font-semibold text-amber-50"
+                        onClick={() => setAuthModalProvider(primaryProviderStatus)}
+                      >
+                        Connect provider
+                      </button>
+                    </div>
                   )}
                   </>}
                   {usesHostedCredits && providerFirst && <div data-model-selector-managed-route className="rounded-xl border border-emerald-300/20 bg-emerald-400/[0.05] px-3 py-2">

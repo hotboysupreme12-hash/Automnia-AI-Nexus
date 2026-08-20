@@ -20,7 +20,7 @@ const isUnsupportedGoogleGemini37Model = (modelId: string) => {
 export const isSelectableModelId = (modelId: string) => !isUnsupportedGoogleGemini37Model(modelId)
 
 const PROVIDER_LABELS: Record<string, string> = {
-  'automnia-cloud': 'Automnia Cloud',
+  'automnia-cloud': 'Automnia',
   'openai-codex': 'OpenAI / Codex',
   openai: 'OpenAI / Codex',
   anthropic: 'Anthropic Claude',
@@ -44,6 +44,7 @@ const PROVIDER_LABELS: Record<string, string> = {
 
 const PROVIDER_ORDER = [
   'openai',
+  'automnia-cloud',
   'anthropic',
   'google',
   'google-vertex',
