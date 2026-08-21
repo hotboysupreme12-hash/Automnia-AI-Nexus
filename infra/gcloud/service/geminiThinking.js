@@ -16,6 +16,11 @@ export function geminiThinkingConfigFromOpenAiRequest(requestBody, model = 'gemi
 
   const normalizedModel = String(model || '').trim().toLowerCase();
   const isGemini37Flash = /(?:^|\/)gemini-3\.7-flash(?:$|[-@])/.test(normalizedModel);
+  // Gemini 2.5 Flash uses its own thinking-budget contract rather than the
+  // Gemini 3.x thinkingLevel field. Omitting the optional thinking block keeps
+  // it usable as the last-resort hosted fallback instead of turning a
+  // compounded 429 into a deterministic upstream 400.
+  if (/(?:^|\/)gemini-2\.5-flash(?:$|[-@])/.test(normalizedModel)) return undefined;
   const nativeLevels = isGemini37Flash ? GEMINI_37_NATIVE_THINKING_LEVELS : GEMINI_36_NATIVE_THINKING_LEVELS;
   const lowestLevel = isGemini37Flash ? 'low' : 'minimal';
 

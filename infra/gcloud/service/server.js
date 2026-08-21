@@ -3,12 +3,27 @@ import express from 'express';
 import { Firestore } from '@google-cloud/firestore';
 import { GoogleAuth, OAuth2Client } from 'google-auth-library';
 import { geminiThinkingConfigFromOpenAiRequest } from './geminiThinking.js';
+import {
+  automniaRelayFallbackModels,
+  automniaRelayModel,
+  automniaRelayModels,
+  resolveAutomniaRelayModel,
+} from './relayModelPolicy.js';
+import {
+  automniaRelayTokenOptimization,
+  compactOpenAiMessages,
+  compactOpenAiTools,
+  estimateRelayTokens,
+  relayOptimizationSummary,
+  resolveRelayOutputTokenBudget,
+  AUTOMNIA_RELAY_TOKEN_OPTIMIZATION_VERSION,
+} from './tokenOptimization.js';
 import { buildLicenseEmailHtml } from './welcomeEmail.js';
 
 const app = express();
 const port = process.env.PORT || 8080;
-const serviceVersion = '2.6.0';
-const schemaVersion = '2026-08-13.4';
+const serviceVersion = '2.8.1';
+const schemaVersion = '2026-08-20.2';
 const secrets = (process.env.SHOPIFY_WEBHOOK_SECRETS || process.env.SHOPIFY_WEBHOOK_SECRET || '')
   .split(',')
   .map((value) => value.trim())
@@ -18,13 +33,12 @@ const writeMode = process.env.MIGRATION_WRITE_MODE === 'read_only' ? 'read_only'
 const adminApiToken = process.env.ADMIN_API_TOKEN || '';
 const gcpProjectId = process.env.GOOGLE_CLOUD_PROJECT || process.env.GCLOUD_PROJECT || 'local-development';
 const vertexLocation = process.env.VERTEX_LOCATION || 'us-central1';
-const automniaRelayModel = String(process.env.AUTOMNIA_RELAY_MODEL || 'gemini-3.7-flash').trim().toLowerCase();
 const vertexAuth = new GoogleAuth({ scopes: ['https://www.googleapis.com/auth/cloud-platform'] });
 const knowledgeServingConfig = String(process.env.AUTOMNIA_KNOWLEDGE_SERVING_CONFIG || '').trim();
 const knowledgeModelVersion = String(process.env.AUTOMNIA_KNOWLEDGE_MODEL_VERSION || 'gemini-3.1-pro-preview/answer_gen/v1').trim();
 const knowledgeFallbackModelVersion = String(process.env.AUTOMNIA_KNOWLEDGE_FALLBACK_MODEL_VERSION || 'gemini-2.5-flash/answer_gen/v1').trim();
-const vertexRetryAttempts = Math.max(1, Math.min(5, Number(process.env.VERTEX_RETRY_ATTEMPTS || 4) || 4));
-const vertexMaxOutputTokens = Math.max(512, Math.min(8192, Number(process.env.VERTEX_MAX_OUTPUT_TOKENS || 8192) || 8192));
+const vertexRetryAttempts = Math.max(1, Math.min(3, Number(process.env.VERTEX_RETRY_ATTEMPTS || 2) || 2));
+const vertexMaxOutputTokens = Math.max(512, Math.min(4096, Number(process.env.VERTEX_MAX_OUTPUT_TOKENS || 4096) || 4096));
 const checkoutUrl = configuredHttpsUrl(process.env.SHOPIFY_CHECKOUT_URL);
 const gmailSender = normalizeEmail(process.env.GMAIL_SENDER || '');
 const gmailOAuthCredentials = parseGmailOAuthCredentials(process.env.GMAIL_OAUTH_CREDENTIALS || '');
@@ -45,6 +59,16 @@ const licenseIndexes = firestore?.collection('automnia_license_indexes');
 const creditTopups = firestore?.collection('automnia_credit_topups');
 const creditUsage = firestore?.collection('automnia_credit_usage');
 const shopifyWebhookEvents = firestore?.collection('automnia_shopify_webhook_events');
+
+// The OpenClaw vendor sends an idempotency key for hosted requests. Keep a
+// short local response cache as the fast path, and persist the same response
+// beside the authoritative debit so a client retry after a lost HTTP response
+// does not spend Vertex tokens a second time. The cache is bounded because
+// generated answers are customer data and should not become an unbounded
+// process-local store.
+const hostedResponseCache = new Map();
+const hostedResponseCacheTtlMs = Math.max(60_000, Math.min(30 * 60_000, Number(process.env.AUTOMNIA_RELAY_RESPONSE_CACHE_TTL_MS || 10 * 60_000) || 10 * 60_000));
+const hostedResponseCacheMaxEntries = Math.max(32, Math.min(1_024, Number(process.env.AUTOMNIA_RELAY_RESPONSE_CACHE_MAX_ENTRIES || 256) || 256));
 
 app.use(['/api', '/v1'], express.json({ limit: '4mb' }));
 
@@ -789,6 +813,122 @@ function usageEventId(walletId, requestId) {
   return crypto.createHash('sha256').update(`${walletId}\u0000${requestId}`).digest('hex');
 }
 
+function hostedResponseCacheKey(record, requestId) {
+  const walletId = String(record?.email || record?.orderId || '').trim().toLowerCase();
+  return usageEventId(walletId, requestId);
+}
+
+function safeResponseCachePayload(payload) {
+  try {
+    const serialized = JSON.stringify(payload);
+    if (!serialized || serialized.length > 800_000) return null;
+    return JSON.parse(serialized);
+  } catch {
+    return null;
+  }
+}
+
+function trimHostedResponseCache() {
+  const now = Date.now();
+  for (const [key, entry] of hostedResponseCache.entries()) {
+    if (!entry || entry.expiresAt <= now) hostedResponseCache.delete(key);
+  }
+  while (hostedResponseCache.size > hostedResponseCacheMaxEntries) {
+    const oldestKey = hostedResponseCache.keys().next().value;
+    if (!oldestKey) break;
+    hostedResponseCache.delete(oldestKey);
+  }
+}
+
+async function readHostedRequestReplay(record, requestId, requestFingerprint, responseShape) {
+  const safeRequestId = String(requestId || '').trim();
+  if (!record || !safeRequestId) return null;
+  const key = hostedResponseCacheKey(record, safeRequestId);
+  trimHostedResponseCache();
+  const local = hostedResponseCache.get(key);
+  if (local) {
+    if (local.requestFingerprint && local.requestFingerprint !== requestFingerprint) return { kind: 'conflict' };
+    if (local.responseShape === responseShape && local.payload) return { kind: 'cached', payload: local.payload };
+  }
+
+  const walletId = String(record.email || record.orderId || '').trim().toLowerCase();
+  const usageRef = useInMemoryStorage
+    ? null
+    : creditUsage.doc(usageEventId(walletId, safeRequestId));
+  const usage = useInMemoryStorage
+    ? record.creditUsage?.[usageEventId(walletId, safeRequestId)] || null
+    : (await usageRef.get()).data() || null;
+  if (!usage) return null;
+  if (usage.requestFingerprint && usage.requestFingerprint !== requestFingerprint) return { kind: 'conflict' };
+  if (usage.responsePayload && usage.responseShape === responseShape) {
+    const payload = safeResponseCachePayload(usage.responsePayload);
+    if (payload) {
+      hostedResponseCache.set(key, {
+        payload,
+        requestFingerprint: usage.requestFingerprint || requestFingerprint,
+        responseShape,
+        expiresAt: Date.now() + hostedResponseCacheTtlMs,
+      });
+      return { kind: 'cached', payload };
+    }
+  }
+  // A debit exists but no replayable response was persisted. Do not silently
+  // generate and consume upstream tokens again under the same idempotency key.
+  return { kind: 'charged' };
+}
+
+async function persistHostedResponse(record, requestId, requestFingerprint, responseShape, payload) {
+  const safeRequestId = String(requestId || '').trim();
+  const cachedPayload = safeResponseCachePayload(payload);
+  if (!record || !safeRequestId || !cachedPayload) return false;
+  const key = hostedResponseCacheKey(record, safeRequestId);
+  hostedResponseCache.set(key, {
+    payload: cachedPayload,
+    requestFingerprint,
+    responseShape,
+    expiresAt: Date.now() + hostedResponseCacheTtlMs,
+  });
+  trimHostedResponseCache();
+
+  const walletId = String(record.email || record.orderId || '').trim().toLowerCase();
+  if (useInMemoryStorage) {
+    const usageId = usageEventId(walletId, safeRequestId);
+    if (record.creditUsage?.[usageId]) {
+      record.creditUsage[usageId] = {
+        ...record.creditUsage[usageId],
+        requestFingerprint,
+        responseShape,
+        responsePayload: cachedPayload,
+      };
+    }
+    return true;
+  }
+  await creditUsage.doc(usageEventId(walletId, safeRequestId)).set({
+    requestFingerprint,
+    responseShape,
+    responsePayload: cachedPayload,
+    responseCachedAt: new Date().toISOString(),
+  }, { merge: true });
+  return true;
+}
+
+function relayRequestIdentity(req, body, fallbackRequestId = true) {
+  const supplied = String(
+    req.get('idempotency-key')
+      || req.get('x-request-id')
+      || body?.requestId
+      || '',
+  ).trim().slice(0, 160);
+  return {
+    requestId: supplied || (fallbackRequestId ? crypto.randomUUID() : ''),
+    explicit: Boolean(supplied),
+  };
+}
+
+function relayRequestFingerprint(value) {
+  return crypto.createHash('sha256').update(JSON.stringify(value || null)).digest('hex');
+}
+
 async function deductCredits(recordOrOrderId, tokensUsed, requestId) {
   const safeTokensUsed = Math.max(0, Math.floor(Number(tokensUsed) || 0));
   const safeRequestId = String(requestId || '').trim().slice(0, 160);
@@ -906,6 +1046,21 @@ app.get('/health', (_req, res) => res.status(200).json({
   storage: useInMemoryStorage ? 'memory-development-only' : 'firestore',
   aiRelay: 'vertex-ai-service-account',
   aiRelayModel: automniaRelayModel,
+  aiRelayModels: automniaRelayModels,
+  aiRelayFallbackModels: automniaRelayFallbackModels,
+  tokenOptimization: {
+    version: AUTOMNIA_RELAY_TOKEN_OPTIMIZATION_VERSION,
+    maxInputTokens: automniaRelayTokenOptimization.maxInputTokens,
+    maxOutputTokens: automniaRelayTokenOptimization.maxOutputTokens,
+    textOutputTokens: automniaRelayTokenOptimization.textOutputTokens,
+    toolOutputTokens: automniaRelayTokenOptimization.toolOutputTokens,
+    maxToolTokens: automniaRelayTokenOptimization.maxToolTokens,
+    maxTools: automniaRelayTokenOptimization.maxTools,
+    maxHistoryMessages: automniaRelayTokenOptimization.maxHistoryMessages,
+    maxInlineImages: automniaRelayTokenOptimization.maxInlineImages,
+    maxInlineImageChars: automniaRelayTokenOptimization.maxInlineImageChars,
+    responseReplayCache: true,
+  },
   vertexLocation,
   knowledgeAssistant: knowledgeServingConfig ? 'configured' : 'disabled',
   knowledgeModelVersion,
@@ -1393,16 +1548,10 @@ function vertexCandidateResult(payload) {
   return { text, toolCalls, promptTokens, completionTokens, totalTokens };
 }
 
-async function generateVertexContent(input) {
+async function generateVertexContent(input, targetModel = automniaRelayModel) {
   const client = await vertexAuth.getClient();
   const accessToken = await client.getAccessToken();
   if (!accessToken.token) throw new Error('Unable to obtain a Vertex AI service token.');
-  // Keep chat and function/tool turns on the same reference model. The
-  // The incoming OpenAI-compatible model field is metadata only: customers
-  // may not select an arbitrary Vertex model through the hosted billing
-  // proxy. The deployment contract selects the single billable Automnia
-  // model explicitly through AUTOMNIA_RELAY_MODEL.
-  const targetModel = automniaRelayModel;
   const vertexHost = vertexLocation === 'global' ? 'aiplatform.googleapis.com' : `${vertexLocation}-aiplatform.googleapis.com`;
   const vertexUrl = `https://${vertexHost}/v1/projects/${gcpProjectId}/locations/${vertexLocation}/publishers/google/models/${targetModel}:generateContent`;
   let apiResponse = null;
@@ -1431,14 +1580,50 @@ async function generateVertexContent(input) {
   return apiResponse.json();
 }
 
-async function resolveHostedRelayAccess(req) {
+async function generateVertexContentWithHostedFallback(input, startingModel = automniaRelayModel, thinkingRequest) {
+  const resolvedStartingModel = resolveAutomniaRelayModel(startingModel) || automniaRelayModel;
+  const startIndex = Math.max(0, automniaRelayModels.indexOf(resolvedStartingModel));
+  let lastError = null;
+  for (const targetModel of automniaRelayModels.slice(startIndex)) {
+    try {
+      const candidateInput = thinkingRequest
+        ? {
+            ...input,
+            generationConfig: {
+              ...(input.generationConfig || {}),
+              ...(geminiThinkingConfigFromOpenAiRequest(thinkingRequest, targetModel)
+                ? { thinkingConfig: geminiThinkingConfigFromOpenAiRequest(thinkingRequest, targetModel) }
+                : {}),
+            },
+          }
+        : input;
+      if (thinkingRequest && !geminiThinkingConfigFromOpenAiRequest(thinkingRequest, targetModel)) {
+        delete candidateInput.generationConfig.thinkingConfig;
+      }
+      const payload = await generateVertexContent(candidateInput, targetModel);
+      return { payload, model: targetModel };
+    } catch (error) {
+      lastError = error;
+      if (!error?.retryable || targetModel === automniaRelayModels.at(-1)) throw error;
+      console.warn(JSON.stringify({
+        event: 'automnia_relay_model_fallback',
+        failedModel: targetModel,
+        nextModel: automniaRelayModels[automniaRelayModels.indexOf(targetModel) + 1],
+        upstreamStatus: Number(error?.status) || 503,
+      }));
+    }
+  }
+  throw lastError || new Error('Automnia hosted relay has no configured model.');
+}
+
+async function resolveHostedRelayAccess(req, { allowZeroForReplay = false } = {}) {
   const email = normalizeEmail(req.get('X-Automnia-Email'));
   const licenseKey = normalizeKey(req.get('X-Automnia-License-Key') || req.get('authorization')?.replace(/^Bearer\s+/i, ''));
   if (!email || !licenseKey) return { error: 'Both X-Automnia-Email and a license key are required for Automnia Cloud routing.', status: 401 };
   const record = await findLicense(email, licenseKey);
   if (!record) return { error: 'No active license found matching this email and key.', status: 401 };
   const credits = pooledCreditBalance(record);
-  if (credits <= 0) {
+  if (credits <= 0 && !allowZeroForReplay) {
     const usagePriority = effectiveUsagePriority(record);
     return {
       error: usagePriority === 'automnia_only'
@@ -1632,6 +1817,32 @@ function writeOpenAiSse(res, payload) {
   res.write(`data: ${JSON.stringify(payload)}\n\n`);
 }
 
+function sendOpenAiCompletionResponse(res, payload, streamRequested) {
+  if (!streamRequested) return res.status(200).json(payload);
+  const choice = payload?.choices?.[0] || {};
+  const message = choice.message || {};
+  const responseId = payload.id;
+  const created = payload.created;
+  const model = payload.model;
+  res.status(200);
+  res.set({ 'Content-Type': 'text/event-stream; charset=utf-8', 'Cache-Control': 'no-cache, no-transform', Connection: 'keep-alive', 'X-Accel-Buffering': 'no' });
+  writeOpenAiSse(res, { id: responseId, object: 'chat.completion.chunk', created, model, choices: [{ index: 0, delta: { role: 'assistant' }, finish_reason: null }] });
+  if (message.content) writeOpenAiSse(res, { id: responseId, object: 'chat.completion.chunk', created, model, choices: [{ index: 0, delta: { content: message.content }, finish_reason: null }] });
+  for (const [index, call] of (Array.isArray(message.tool_calls) ? message.tool_calls : []).entries()) {
+    writeOpenAiSse(res, { id: responseId, object: 'chat.completion.chunk', created, model, choices: [{ index: 0, delta: { tool_calls: [{ index, id: call.id, type: 'function', function: call.function }] }, finish_reason: null }] });
+  }
+  writeOpenAiSse(res, {
+    id: responseId,
+    object: 'chat.completion.chunk',
+    created,
+    model,
+    choices: [{ index: 0, delta: {}, finish_reason: choice.finish_reason || 'stop' }],
+    ...(payload.usage ? { usage: payload.usage } : {}),
+  });
+  res.write('data: [DONE]\n\n');
+  return res.end();
+}
+
 /**
  * Standards-compatible transport for OpenClaw and other OpenAI-compatible
  * clients. Credits are deducted in the same Firestore transaction used by
@@ -1640,54 +1851,71 @@ function writeOpenAiSse(res, payload) {
  */
 app.post('/v1/chat/completions', requireWritesEnabled, async (req, res) => {
   try {
-    const access = await resolveHostedRelayAccess(req);
+    const requestIdentity = relayRequestIdentity(req, req.body);
+    const access = await resolveHostedRelayAccess(req, { allowZeroForReplay: requestIdentity.explicit });
     if (access.error) return openAiError(res, access.status, access.error, access.status === 402 ? 'insufficient_quota' : 'authentication_error');
-    const messages = Array.isArray(req.body?.messages) ? req.body.messages : [];
+    const messageOptimization = compactOpenAiMessages(req.body?.messages);
+    const activeToolNames = messageOptimization.messages.flatMap((message) => [
+      ...(Array.isArray(message?.tool_calls) ? message.tool_calls : []),
+      ...(message?.function_call ? [message.function_call] : []),
+    ]).map((call) => String(call?.function?.name || call?.name || '').trim()).filter(Boolean);
+    const toolOptimization = compactOpenAiTools(req.body?.tools, { requiredToolNames: activeToolNames });
+    const messages = messageOptimization.messages;
     const converted = vertexContentsFromOpenAiMessages(messages);
     if (!converted.contents.length) return openAiError(res, 400, 'At least one text, tool-call, or tool-response message is required.');
-    const maxOutputTokens = Math.max(128, Math.min(vertexMaxOutputTokens, Number(req.body?.max_tokens || req.body?.max_completion_tokens) || vertexMaxOutputTokens));
-    const thinkingConfig = geminiThinkingConfigFromOpenAiRequest(req.body, automniaRelayModel);
-    const payload = await generateVertexContent({
+    const targetModel = resolveAutomniaRelayModel(req.body?.model);
+    if (!targetModel) return openAiError(res, 400, 'The requested model is not an enabled Automnia hosted relay model.');
+    const toolCount = toolOptimization.tools.length;
+    const outputBudget = resolveRelayOutputTokenBudget(req.body, { maxAllowed: Math.min(vertexMaxOutputTokens, automniaRelayTokenOptimization.maxOutputTokens), hasTools: toolCount > 0 && req.body?.tool_choice !== 'none' });
+    const optimization = relayOptimizationSummary(messageOptimization.stats, toolOptimization.stats, outputBudget);
+    const requestFingerprint = relayRequestFingerprint({
+      model: targetModel,
+      messages,
+      tools: toolOptimization.tools,
+      toolChoice: req.body?.tool_choice || null,
+      maxOutputTokens: outputBudget.maxOutputTokens,
+      stream: req.body?.stream === true,
+    });
+    const responseShape = req.body?.stream === true ? 'chat.completion.stream' : 'chat.completion';
+    if (requestIdentity.explicit) {
+      const replay = await readHostedRequestReplay(access.record, requestIdentity.requestId, requestFingerprint, responseShape);
+      if (replay?.kind === 'cached') return sendOpenAiCompletionResponse(res, replay.payload, req.body?.stream === true);
+      if (replay?.kind === 'conflict') return openAiError(res, 409, 'This idempotency key was already used for a different hosted request.', 'invalid_request_error', 'idempotency_key_reused');
+      if (replay?.kind === 'charged') return openAiError(res, 409, 'This hosted request was already charged but its response is no longer replayable. Retry with a new idempotency key.', 'conflict_error', 'idempotency_replay_unavailable');
+    }
+    if (access.credits <= 0) return openAiError(res, 402, 'Automnia credits are exhausted. Refill credits before sending another hosted request.', 'insufficient_quota');
+    const thinkingConfig = geminiThinkingConfigFromOpenAiRequest(req.body, targetModel);
+    const generated = await generateVertexContentWithHostedFallback({
       ...converted,
-      ...(vertexToolsFromOpenAi(req.body?.tools) ? { tools: vertexToolsFromOpenAi(req.body?.tools) } : {}),
+      ...(vertexToolsFromOpenAi(toolOptimization.tools) ? { tools: vertexToolsFromOpenAi(toolOptimization.tools) } : {}),
       ...(vertexToolConfigFromOpenAi(req.body?.tool_choice) ? { toolConfig: vertexToolConfigFromOpenAi(req.body?.tool_choice) } : {}),
       generationConfig: {
-        maxOutputTokens,
+        maxOutputTokens: outputBudget.maxOutputTokens,
         ...(thinkingConfig ? { thinkingConfig } : {}),
       },
-    });
+    }, targetModel, req.body);
+    const payload = generated.payload;
     const result = vertexCandidateResult(payload);
-    const tokensUsed = result.totalTokens || Math.ceil(JSON.stringify(messages).length / 4);
-    const requestId = String(req.get('idempotency-key') || req.get('x-request-id') || crypto.randomUUID()).trim().slice(0, 160);
-    const debit = await deductCredits(access.record, tokensUsed, requestId);
+    const tokensUsed = result.totalTokens || estimateRelayTokens({ messages, tools: toolOptimization.tools, output: result.text });
+    const debit = await deductCredits(access.record, tokensUsed, requestIdentity.requestId);
     const responseId = `chatcmpl_${crypto.randomUUID().replace(/-/g, '')}`;
     const created = Math.floor(Date.now() / 1000);
-    const model = automniaRelayModel;
+    const model = generated.model;
     const message = {
       role: 'assistant',
       content: result.text || null,
       ...(result.toolCalls.length ? { tool_calls: result.toolCalls } : {}),
     };
-    const usage = { prompt_tokens: result.promptTokens, completion_tokens: result.completionTokens, total_tokens: tokensUsed };
-    console.log(JSON.stringify({ event: 'openai_compatible_generation', orderId: access.record.orderId, tokensUsed, deductedCredits: debit.deductedCredits, remainingCredits: debit.remainingCredits, toolCalls: result.toolCalls.length, duplicateUsageRequest: debit.duplicate }));
-    if (req.body?.stream === true) {
-      res.status(200);
-      res.set({ 'Content-Type': 'text/event-stream; charset=utf-8', 'Cache-Control': 'no-cache, no-transform', Connection: 'keep-alive', 'X-Accel-Buffering': 'no' });
-      writeOpenAiSse(res, { id: responseId, object: 'chat.completion.chunk', created, model, choices: [{ index: 0, delta: { role: 'assistant' }, finish_reason: null }] });
-      if (result.text) writeOpenAiSse(res, { id: responseId, object: 'chat.completion.chunk', created, model, choices: [{ index: 0, delta: { content: result.text }, finish_reason: null }] });
-      for (const [index, call] of result.toolCalls.entries()) {
-        writeOpenAiSse(res, { id: responseId, object: 'chat.completion.chunk', created, model, choices: [{ index: 0, delta: { tool_calls: [{ index, id: call.id, type: 'function', function: call.function }] }, finish_reason: null }] });
-      }
-      writeOpenAiSse(res, { id: responseId, object: 'chat.completion.chunk', created, model, choices: [{ index: 0, delta: {}, finish_reason: result.toolCalls.length ? 'tool_calls' : 'stop' }], ...(req.body?.stream_options?.include_usage ? { usage } : {}) });
-      res.write('data: [DONE]\n\n');
-      return res.end();
-    }
-    return res.status(200).json({ id: responseId, object: 'chat.completion', created, model, choices: [{ index: 0, message, finish_reason: result.toolCalls.length ? 'tool_calls' : 'stop' }], usage, automnia: { remainingCredits: debit.remainingCredits, deductedCredits: debit.deductedCredits, tier: access.record.tier } });
+    const usage = { prompt_tokens: result.promptTokens || messageOptimization.stats.estimatedPromptTokens, completion_tokens: result.completionTokens, total_tokens: tokensUsed };
+    const completionPayload = { id: responseId, object: 'chat.completion', created, model, choices: [{ index: 0, message, finish_reason: result.toolCalls.length ? 'tool_calls' : 'stop' }], usage, automnia: { remainingCredits: debit.remainingCredits, deductedCredits: debit.deductedCredits, tier: access.record.tier, optimization } };
+    await persistHostedResponse(access.record, requestIdentity.explicit ? requestIdentity.requestId : '', requestFingerprint, responseShape, completionPayload).catch((error) => console.warn(JSON.stringify({ event: 'hosted_response_cache_write_failed', message: String(error?.message || error).slice(0, 240) })));
+    console.log(JSON.stringify({ event: 'openai_compatible_generation', orderId: access.record.orderId, tokensUsed, promptTokens: usage.prompt_tokens, completionTokens: usage.completion_tokens, deductedCredits: debit.deductedCredits, remainingCredits: debit.remainingCredits, toolCalls: result.toolCalls.length, duplicateUsageRequest: debit.duplicate, optimization }));
+    return sendOpenAiCompletionResponse(res, completionPayload, req.body?.stream === true);
   } catch (error) {
     const status = Number(error?.status) || 502;
     if (status === 429) res.set('Retry-After', '5');
     console.error('OpenAI-compatible relay error:', error);
-    return openAiError(res, status, status === 429 ? 'Automnia Cloud is temporarily busy. Retry shortly; the route did not fall back.' : 'Automnia Cloud provider request failed.', status === 429 ? 'rate_limit_error' : 'api_error');
+    return openAiError(res, status, status === 429 ? 'Automnia Cloud hosted models are temporarily busy. Retry shortly.' : 'Automnia Cloud provider request failed.', status === 429 ? 'rate_limit_error' : 'api_error');
   }
 });
 
@@ -1697,6 +1925,7 @@ app.post('/v1/chat/completions', requireWritesEnabled, async (req, res) => {
 app.post('/api/ai/generate', requireWritesEnabled, async (req, res) => {
   const email = normalizeEmail(req.body?.email || req.get('X-Automnia-Email'));
   const licenseKey = normalizeKey(req.body?.licenseKey || req.get('X-Automnia-License-Key'));
+  const requestIdentity = relayRequestIdentity(req, req.body);
 
   if (!email || !licenseKey) {
     return res.status(400).json({ ok: false, error: 'Both email and licenseKey are required for AI relay routing.' });
@@ -1710,6 +1939,28 @@ app.post('/api/ai/generate', requireWritesEnabled, async (req, res) => {
 
     const mode = record.mode || (record.tier === 'founding_beta_byok' ? 'byok' : 'hosted_credits');
     const credits = pooledCreditBalance(record);
+
+    const sourceMessages = typeof req.body?.prompt === 'string' && req.body.prompt.trim()
+      ? [{ role: 'user', content: req.body.prompt }]
+      : Array.isArray(req.body?.messages) ? req.body.messages : [];
+    const messageOptimization = compactOpenAiMessages(sourceMessages, { maxHistoryMessages: 4 });
+    const promptText = messageOptimization.messages
+      .map((message) => openAiTextContent(message.content))
+      .filter(Boolean)
+      .join('\n\n')
+      .trim();
+    const outputBudget = resolveRelayOutputTokenBudget(req.body, {
+      maxAllowed: Math.min(vertexMaxOutputTokens, automniaRelayTokenOptimization.maxOutputTokens),
+      hasTools: false,
+    });
+    const optimization = relayOptimizationSummary(messageOptimization.stats, { originalTools: 0, sentTools: 0, originalChars: 0, compactedChars: 0, estimatedToolTokens: 0, changed: false }, outputBudget);
+    const requestFingerprint = relayRequestFingerprint({ promptText, output: outputBudget.maxOutputTokens });
+    if (requestIdentity.explicit) {
+      const replay = await readHostedRequestReplay(record, requestIdentity.requestId, requestFingerprint, 'legacy.ai.generate');
+      if (replay?.kind === 'cached') return res.status(200).json(replay.payload);
+      if (replay?.kind === 'conflict') return res.status(409).json({ ok: false, error: 'This idempotency key was already used for a different hosted request.', code: 'idempotency_key_reused' });
+      if (replay?.kind === 'charged') return res.status(409).json({ ok: false, error: 'This hosted request was already charged but its response is no longer replayable. Retry with a new idempotency key.', code: 'idempotency_replay_unavailable' });
+    }
 
     // An eligible permanent/BYOK account can spend a pooled Automnia balance
     // when the local account selected an Automnia-backed route. A zero balance
@@ -1729,69 +1980,30 @@ app.post('/api/ai/generate', requireWritesEnabled, async (req, res) => {
       });
     }
 
-    const { prompt, messages } = req.body || {};
-    const promptText = prompt || (Array.isArray(messages) ? messages.map((m) => m.content || m.text || '').join('\n') : '');
-
     if (!promptText.trim()) {
       return res.status(400).json({ ok: false, error: 'Prompt or message content is required.' });
     }
 
-    // Customer-controlled model IDs are never passed upstream. Vertex AI uses the Cloud Run service identity,
-    // so a client device never receives a master API key.
-    const targetModel = automniaRelayModel;
-    const client = await vertexAuth.getClient();
-    const accessToken = await client.getAccessToken();
-    if (!accessToken.token) throw new Error('Unable to obtain a Vertex AI service token.');
-    const vertexHost = vertexLocation === 'global' ? 'aiplatform.googleapis.com' : `${vertexLocation}-aiplatform.googleapis.com`;
-    const vertexUrl = `https://${vertexHost}/v1/projects/${gcpProjectId}/locations/${vertexLocation}/publishers/google/models/${targetModel}:generateContent`;
-
-    let apiResponse = null;
-    let errText = '';
-    for (let attempt = 0; attempt < vertexRetryAttempts; attempt += 1) {
-      apiResponse = await fetch(vertexUrl, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${accessToken.token}` },
-        body: JSON.stringify({
-          contents: [{ role: 'user', parts: [{ text: promptText }] }],
-          generationConfig: { maxOutputTokens: vertexMaxOutputTokens },
-        }),
-      });
-      if (apiResponse.ok) break;
-
-      errText = await apiResponse.text().catch(() => '');
-      const canRetry = retryableVertexStatus(apiResponse.status) && attempt + 1 < vertexRetryAttempts;
-      if (!canRetry) break;
-      const retryDelayMs = vertexRetryDelayMs(apiResponse, attempt);
-      console.warn(JSON.stringify({
-        event: 'vertex_retry_scheduled',
-        upstreamStatus: apiResponse.status,
-        attempt: attempt + 1,
-        maxAttempts: vertexRetryAttempts,
-        retryDelayMs,
-      }));
-      await delay(retryDelayMs);
-    }
-
-    if (!apiResponse?.ok) {
-      const upstreamStatus = apiResponse?.status || 503;
-      const retryable = retryableVertexStatus(upstreamStatus);
-      console.error('Gemini Master API error:', errText);
-      if (upstreamStatus === 429) res.set('Retry-After', '5');
-      return res.status(upstreamStatus === 429 ? 429 : 502).json({
-        ok: false,
-        error: retryable
-          ? 'Automnia Cloud is temporarily busy. The billed route was not changed; retry shortly.'
-          : 'Upstream master AI provider error.',
-        upstreamStatus,
-        retryable,
-      });
-    }
-
-    const payload = await apiResponse.json();
+    const generated = await generateVertexContentWithHostedFallback({
+      contents: [{ role: 'user', parts: [{ text: promptText }] }],
+      generationConfig: { maxOutputTokens: outputBudget.maxOutputTokens },
+    });
+    const payload = generated.payload;
     const generatedText = payload.candidates?.[0]?.content?.parts?.[0]?.text || '';
-    const tokensUsed = payload.usageMetadata?.totalTokenCount || Math.ceil((promptText.length + generatedText.length) / 4);
-    const requestId = String(req.get('idempotency-key') || req.body?.requestId || '').trim().slice(0, 160);
-    const debit = await deductCredits(record, tokensUsed, requestId);
+    const tokensUsed = payload.usageMetadata?.totalTokenCount || estimateRelayTokens({ promptText, output: generatedText });
+    const debit = await deductCredits(record, tokensUsed, requestIdentity.requestId);
+
+    const responsePayload = {
+      ok: true,
+      mode: 'hosted_credits',
+      text: generatedText,
+      tokensUsed,
+      deductedCredits: debit.deductedCredits,
+      remainingCredits: debit.remainingCredits,
+      tier: record.tier,
+      optimization,
+    };
+    await persistHostedResponse(record, requestIdentity.explicit ? requestIdentity.requestId : '', requestFingerprint, 'legacy.ai.generate', responsePayload).catch((error) => console.warn(JSON.stringify({ event: 'hosted_response_cache_write_failed', message: String(error?.message || error).slice(0, 240) })));
 
     console.log(JSON.stringify({
       event: 'ai_relay_generation',
@@ -1801,20 +2013,19 @@ app.post('/api/ai/generate', requireWritesEnabled, async (req, res) => {
       deductedCredits: debit.deductedCredits,
       remainingCredits: debit.remainingCredits,
       duplicateUsageRequest: debit.duplicate,
+      optimization,
     }));
 
-    return res.status(200).json({
-      ok: true,
-      mode: 'hosted_credits',
-      text: generatedText,
-      tokensUsed,
-      deductedCredits: debit.deductedCredits,
-      remainingCredits: debit.remainingCredits,
-      tier: record.tier,
-    });
+    return res.status(200).json(responsePayload);
   } catch (error) {
     console.error('AI Proxy Relay error:', error);
-    return res.status(500).json({ ok: false, error: 'Internal AI proxy error.' });
+    const status = Number(error?.status) || 500;
+    if (status === 429) res.set('Retry-After', '5');
+    return res.status(status === 429 ? 429 : 500).json({
+      ok: false,
+      error: status === 429 ? 'Automnia Cloud hosted models are temporarily busy. Retry shortly.' : 'Internal AI proxy error.',
+      ...(status === 429 ? { retryable: true } : {}),
+    });
   }
 });
 

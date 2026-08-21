@@ -91,6 +91,8 @@ export function ModelPicker({
   mode = 'provider-grid',
   fallbackIds = [],
   onToggleFallback,
+  providerAuthStatusFor,
+  onProviderAuth,
 }: ModelPickerProps) {
   const selectableModels = useMemo(
     () => models.filter((model) => isSelectableModelId(model.id)),
@@ -153,6 +155,7 @@ export function ModelPicker({
   if (mode === 'primary') {
     const browseProviderLabel = activePrimaryGroup?.label || 'Choose a provider'
     const primaryModels = activePrimaryGroup?.models || []
+    const primaryProviderAuth = activePrimaryGroup && providerAuthStatusFor?.(activePrimaryGroup.key)
     const fallbackModels = activeFallbackGroup?.models.filter((model) => model.id !== primaryModelId) || []
     const availableFallbackModels = fallbackModels.filter((model) => !fallbackSet.has(model.id))
     const selectedFallbackModels = normalizedFallbackIds
@@ -184,6 +187,24 @@ export function ModelPicker({
             </select>
           </span>
         </label>
+
+        {activePrimaryGroup && primaryProviderAuth && onProviderAuth ? (
+          <div className="flex items-center justify-between gap-2 rounded-lg border border-white/[0.08] bg-white/[0.02] px-2.5 py-2" data-provider-auth-action>
+            <span className="min-w-0 truncate text-[10px] text-slate-400">
+              {primaryProviderAuth.configured ? 'Account connected' : 'Account needed'}
+            </span>
+            <button
+              type="button"
+              data-provider-auth-button
+              aria-label={`${primaryProviderAuth.configured ? 'Manage' : 'Connect'} ${browseProviderLabel} sign-in`}
+              onClick={() => onProviderAuth(activePrimaryGroup.key, primaryProviderAuth)}
+              disabled={disabled || loading}
+              className="shrink-0 rounded-md border border-cyan-200/25 bg-cyan-300/[0.08] px-2.5 py-1.5 text-[10px] font-bold text-cyan-100 transition hover:border-cyan-200/45 hover:bg-cyan-300/[0.14] disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              {primaryProviderAuth.configured ? 'Manage sign-in' : 'Connect'}
+            </button>
+          </div>
+        ) : null}
 
         {loading && !groups.length ? <div className="rounded-xl border border-white/10 bg-white/[0.03] px-3 py-4 text-xs text-slate-400">Loading models…</div> : null}
         {!loading && !groups.length ? <div className="rounded-xl border border-white/10 bg-white/[0.03] px-3 py-4 text-xs text-slate-400">No models available.</div> : null}
@@ -368,6 +389,7 @@ export function ModelPicker({
             const selectedModels = group.models.filter((model) => selectedSet.has(model.id))
             const selectedModel = selectedModels[0]
             const selectedCount = selectedModels.length
+            const providerAuth = providerAuthStatusFor?.(group.key)
             const menuId = `model-picker-menu-${group.key.replace(/[^a-z0-9]+/gi, '-')}`
             return (
               <div key={group.key} className="relative min-w-0">
@@ -390,6 +412,19 @@ export function ModelPicker({
                   </span>
                   <span aria-hidden="true" className={`text-sm leading-none transition ${isOpen ? 'rotate-180 text-cyan-200' : 'text-slate-500'}`}>⌄</span>
                 </button>
+
+                {providerAuth && onProviderAuth ? (
+                  <button
+                    type="button"
+                    data-provider-auth-button
+                    aria-label={`${providerAuth.configured ? 'Manage' : 'Connect'} ${group.label} sign-in`}
+                    onClick={() => onProviderAuth(group.key, providerAuth)}
+                    disabled={disabled || loading}
+                    className="mt-1 w-full rounded-md border border-white/[0.08] bg-white/[0.02] px-2 py-1 text-left text-[9px] font-semibold text-cyan-100 transition hover:border-cyan-200/30 hover:bg-cyan-300/[0.06] disabled:cursor-not-allowed disabled:opacity-50"
+                  >
+                    {providerAuth.configured ? 'Manage sign-in' : 'Connect provider'}
+                  </button>
+                ) : null}
 
                 {isOpen ? (
                   <div

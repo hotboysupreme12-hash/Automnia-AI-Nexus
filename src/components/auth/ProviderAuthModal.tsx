@@ -5,6 +5,7 @@ import {
   fetchProviderOAuthSession,
   startProviderOAuthSession,
   submitProviderOAuthManual,
+  updateProviderOAuthSettings,
   type AuthProviderStatus,
 } from '../../api/providerAuth'
 
@@ -155,7 +156,7 @@ export function ProviderAuthModal({ isOpen, provider, envKeys, providerStatus, o
     if (!isOpen) return
     setApiKey('')
     setApiKeyOpen(false)
-    setProjectId(activeProviderStatus?.oauth?.projectId || '')
+    setProjectId(activeProviderStatus?.oauth?.projectId || activeProviderStatus?.gcloud?.projectId || '')
     setStatus('')
     setSaving(false)
     setOauthBusy(false)
@@ -167,7 +168,7 @@ export function ProviderAuthModal({ isOpen, provider, envKeys, providerStatus, o
     setLiveProviderStatus(null)
     setCopiedCommand('')
     if (provider === 'google-vertex') void refreshProviderStatus(false)
-  }, [isOpen, provider, activeProviderStatus?.oauth?.projectId, refreshProviderStatus])
+  }, [isOpen, provider, activeProviderStatus?.oauth?.projectId, activeProviderStatus?.gcloud?.projectId, refreshProviderStatus])
 
   if (!isOpen) return null
 
@@ -304,10 +305,26 @@ export function ProviderAuthModal({ isOpen, provider, envKeys, providerStatus, o
     : /connected|ready|saved|submitted/i.test(status)
       ? 'success'
       : 'info'
-  const oauthStep = oauth?.configured ? 3 : oauthBusy || authorizationUrl ? 2 : 1
   const googleConnected = Boolean(isGoogleVertex ? gcloud?.configured || oauth?.configured : activeProviderStatus?.configured || oauth?.configured)
   const googleProject = gcloud?.projectId || oauth?.projectId || projectId
   const googleAdcSetupUrl = oauth?.docs || 'https://cloud.google.com/docs/authentication/provide-credentials-adc'
+
+  const handleProjectSave = async () => {
+    const nextProjectId = projectId.trim()
+    if (!nextProjectId || !googleConnected || !oauth?.configured) return
+    setSaving(true)
+    setStatus('')
+    try {
+      const result = await updateProviderOAuthSettings(provider, { projectId: nextProjectId })
+      if (!result.ok) throw new Error(apiErrorMessage(result.error))
+      setStatus('Project saved.')
+      await refreshProviderStatus(true)
+    } catch (error) {
+      setStatus(`Project save failed: ${error}`)
+    } finally {
+      setSaving(false)
+    }
+  }
 
   return (
     <>
@@ -329,22 +346,9 @@ export function ProviderAuthModal({ isOpen, provider, envKeys, providerStatus, o
                 <div className="flex min-w-0 items-center gap-3">
                   <BrandMark />
                   <div className="min-w-0">
-                    <div className={`mb-1 flex flex-wrap items-center gap-2 ${isGoogleProvider ? 'hidden' : ''}`}>
-                      <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-cyan-200/70">Provider connection</p>
-                      <span className="inline-flex items-center gap-1 rounded-full border border-emerald-300/20 bg-emerald-300/[0.07] px-2 py-0.5 text-[9px] font-semibold uppercase tracking-[0.12em] text-emerald-200">
-                        <ShieldCheckIcon /> Secure
-                      </span>
-                    </div>
-                    <h3 id="provider-auth-title" className="truncate font-heading text-2xl tracking-tight text-slate-50 sm:text-[1.7rem]">Connect {label}</h3>
-                    <p className={`mt-1 max-w-xl text-xs leading-5 text-slate-300 ${isGoogleProvider ? 'hidden' : ''}`}>
-                {provider === 'openai'
-                  ? 'Choose an API key or your ChatGPT / Codex subscription.'
-                  : provider === 'anthropic'
-                    ? 'Use a production API key or an existing Claude Code subscription.'
-                    : provider === 'google' || provider === 'google-vertex'
-                      ? `Connect with your ${label} account or use an API key.`
-                    : 'Store local credentials for this provider.'}
-                    </p>
+                    <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-cyan-200/70">Provider access</p>
+                    <h3 id="provider-auth-title" className="truncate font-heading text-2xl tracking-tight text-slate-50">Manage {label}</h3>
+                    <p className="mt-1 max-w-xl text-xs text-slate-400">{oauth?.configured ? 'Connected' : 'Choose a sign-in method'}</p>
                   </div>
                 </div>
                 <button
@@ -358,28 +362,9 @@ export function ProviderAuthModal({ isOpen, provider, envKeys, providerStatus, o
               </div>
 
               {(activeProviderStatus?.docs || activeProviderStatus?.apiKeyUrl) && !isGoogleProvider && (
-                <div className="mb-5 flex flex-wrap items-center gap-2">
-                  <span className="mr-1 text-[10px] font-semibold uppercase tracking-[0.14em] text-slate-500">Resources</span>
-                  {activeProviderStatus.docs && (
-                    <a
-                      href={activeProviderStatus.docs}
-                      target="_blank"
-                      rel="noreferrer"
-                      className="inline-flex items-center gap-1.5 rounded-lg border border-cyan-300/20 bg-cyan-300/[0.06] px-2.5 py-1.5 text-[10px] font-semibold text-cyan-100 transition hover:border-cyan-300/35 hover:bg-cyan-300/[0.11]"
-                    >
-                      Provider guide <ExternalLinkIcon />
-                    </a>
-                  )}
-                  {activeProviderStatus.apiKeyUrl && (
-                    <a
-                      href={activeProviderStatus.apiKeyUrl}
-                      target="_blank"
-                      rel="noreferrer"
-                      className="inline-flex items-center gap-1.5 rounded-lg border border-white/[0.10] bg-white/[0.035] px-2.5 py-1.5 text-[10px] font-semibold text-slate-300 transition hover:border-white/20 hover:bg-white/[0.07] hover:text-slate-100"
-                    >
-                      {provider === 'google' ? 'Create Gemini API key' : 'Create API key'} <ExternalLinkIcon />
-                    </a>
-                  )}
+                <div className="mb-4 flex flex-wrap gap-2">
+                  {activeProviderStatus.docs && <a href={activeProviderStatus.docs} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 rounded-lg border border-white/[0.10] bg-white/[0.03] px-2.5 py-1.5 text-[10px] font-semibold text-slate-300 hover:bg-white/[0.07]">Docs <ExternalLinkIcon /></a>}
+                  {activeProviderStatus.apiKeyUrl && <a href={activeProviderStatus.apiKeyUrl} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 rounded-lg border border-white/[0.10] bg-white/[0.03] px-2.5 py-1.5 text-[10px] font-semibold text-slate-300 hover:bg-white/[0.07]">Get API key <ExternalLinkIcon /></a>}
                 </div>
               )}
 
@@ -392,18 +377,13 @@ export function ProviderAuthModal({ isOpen, provider, envKeys, providerStatus, o
                       </span>
                       <div>
                         <div className="flex flex-wrap items-center gap-2">
-                          <p className="text-[10px] font-bold uppercase tracking-[0.16em] text-cyan-200/70">Recommended</p>
-                          <span className="rounded-full border border-cyan-200/15 bg-cyan-200/[0.06] px-2 py-0.5 text-[9px] font-semibold uppercase tracking-[0.12em] text-cyan-100">OAuth</span>
+                          <p className="text-[10px] font-bold uppercase tracking-[0.16em] text-cyan-200/70">OAuth</p>
                         </div>
                         <h4 className="mt-1 text-base font-semibold text-slate-50">
-                          {provider === 'openai' ? 'ChatGPT / Codex subscription' : provider === 'anthropic' ? 'Claude Pro / Max OAuth' : provider === 'google-vertex' ? 'Google Cloud sign-in' : `${label} account`}
+                          {provider === 'openai' ? 'ChatGPT / Codex' : provider === 'anthropic' ? 'Claude subscription' : `${label} account`}
                         </h4>
                         <p className="mt-1 max-w-lg text-xs leading-5 text-slate-300">
-                          {oauth?.configured
-                            ? `Connected${oauth.email ? ` as ${oauth.email}` : oauth.accountId ? ` as ${oauth.accountId}` : ''}. Reconnect any time to replace this session.`
-                          : provider === 'google-vertex'
-                            ? 'Sign in with Google once. Automnia reuses this local credential for Vertex AI and keeps the token in the local runtime.'
-                            : `Sign in securely with your ${label} account. Automnia keeps the credential in the local runtime.`}
+                          {oauth?.configured ? `Connected${oauth.email ? ` · ${oauth.email}` : oauth.accountId ? ` · ${oauth.accountId}` : ''}` : 'Sign in in your browser.'}
                         </p>
                       </div>
                     </div>
@@ -415,49 +395,30 @@ export function ProviderAuthModal({ isOpen, provider, envKeys, providerStatus, o
                       className="inline-flex min-h-10 shrink-0 items-center justify-center gap-2 rounded-xl border border-cyan-200/25 bg-cyan-300/[0.12] px-4 text-xs font-bold text-cyan-50 shadow-[0_10px_28px_-18px_rgba(34,211,238,0.9)] transition hover:border-cyan-200/45 hover:bg-cyan-300/[0.18] disabled:cursor-wait disabled:opacity-45"
                     >
                       {oauthBusy && <span className="size-3 animate-spin rounded-full border-2 border-cyan-100/30 border-t-cyan-100" />}
-                      {oauthBusy ? 'Opening browser...' : oauth?.configured ? 'Reconnect account' : 'Continue with OAuth'}
+                      {oauthBusy ? 'Opening…' : oauth?.configured ? 'Change login' : 'Connect'}
                       {!oauthBusy && <ArrowIcon />}
                     </button>
-                  </div>
-
-                  <div className="mt-5 grid grid-cols-3 gap-2" aria-label="OAuth sign-in steps">
-                    {[
-                      ['1', 'Open sign-in'],
-                      ['2', 'Approve access'],
-                      ['3', 'Return to Automnia'],
-                    ].map(([step, stepLabel], index) => {
-                      const active = index + 1 === oauthStep
-                      const complete = index + 1 < oauthStep
-                      return (
-                        <div key={step} className={`rounded-xl border px-2.5 py-2.5 ${active ? 'border-cyan-200/30 bg-cyan-300/[0.09]' : complete ? 'border-emerald-200/20 bg-emerald-300/[0.05]' : 'border-white/[0.08] bg-white/[0.025]'}`}>
-                          <div className={`mb-1 flex size-5 items-center justify-center rounded-full text-[9px] font-bold ${active ? 'bg-cyan-200 text-slate-950' : complete ? 'bg-emerald-300/80 text-slate-950' : 'bg-white/[0.08] text-slate-500'}`}>
-                            {complete ? '✓' : step}
-                          </div>
-                          <p className={`text-[10px] font-semibold leading-4 ${active ? 'text-cyan-100' : complete ? 'text-emerald-100' : 'text-slate-500'}`}>{stepLabel}</p>
-                        </div>
-                      )
-                    })}
                   </div>
 
                   {oauth?.configured && (
                     <div className="mt-4 grid gap-2 sm:grid-cols-2">
                       <div className={`rounded-xl border px-3 py-2.5 ${oauthState.tone === 'rose' ? 'border-rose-300/25 bg-rose-400/[0.08]' : oauthState.tone === 'amber' ? 'border-amber-300/25 bg-amber-400/[0.08]' : 'border-emerald-300/20 bg-emerald-400/[0.07]'}`}>
-                        <p className="text-[9px] font-bold uppercase tracking-[0.14em] text-slate-400">Session status</p>
+                        <p className="text-[9px] font-bold uppercase tracking-[0.14em] text-slate-400">Status</p>
                         <p className={`mt-1 text-xs font-semibold ${oauthState.tone === 'rose' ? 'text-rose-100' : oauthState.tone === 'amber' ? 'text-amber-100' : 'text-emerald-100'}`}>{oauthState.label}</p>
                       </div>
                       <div className="rounded-xl border border-white/[0.08] bg-white/[0.025] px-3 py-2.5">
-                        <p className="text-[9px] font-bold uppercase tracking-[0.14em] text-slate-400">Session lifetime</p>
+                        <p className="text-[9px] font-bold uppercase tracking-[0.14em] text-slate-400">Expires</p>
                         <p className="mt-1 text-xs font-semibold text-slate-200">{formatOAuthExpiry(oauth.expiresAt, oauth.refreshAvailable)}</p>
                       </div>
                       {oauth.email && (
                         <div className="min-w-0 rounded-xl border border-white/[0.08] bg-white/[0.025] px-3 py-2.5">
-                          <p className="text-[9px] font-bold uppercase tracking-[0.14em] text-slate-400">Signed in as</p>
+                          <p className="text-[9px] font-bold uppercase tracking-[0.14em] text-slate-400">Account</p>
                           <p className="mt-1 truncate text-xs font-semibold text-slate-200">{oauth.email}</p>
                         </div>
                       )}
                       {oauth.accountId && (
                         <div className="min-w-0 rounded-xl border border-white/[0.08] bg-white/[0.025] px-3 py-2.5">
-                          <p className="text-[9px] font-bold uppercase tracking-[0.14em] text-slate-400">Account</p>
+                          <p className="text-[9px] font-bold uppercase tracking-[0.14em] text-slate-400">ID</p>
                           <p className="mt-1 truncate text-xs font-semibold text-slate-200">{oauth.accountId}</p>
                         </div>
                       )}
@@ -490,9 +451,9 @@ export function ProviderAuthModal({ isOpen, provider, envKeys, providerStatus, o
                           {oauthBusy ? <span className="size-3 animate-spin rounded-full border-2 border-cyan-100/30 border-t-cyan-100" /> : <ShieldCheckIcon />}
                         </span>
                         <div className="min-w-0 flex-1">
-                          <p className="text-xs font-semibold text-slate-100">{oauthBusy ? 'Waiting for secure callback' : 'Continue in your browser'}</p>
+                          <p className="text-xs font-semibold text-slate-100">{oauthBusy ? 'Waiting for sign-in' : 'Continue in browser'}</p>
                           <p className="mt-1 text-[11px] leading-5 text-slate-400">
-                            {oauthBusy ? 'Finish signing in in the browser window. Automnia will detect the callback automatically.' : 'If the sign-in page did not open, use the link below to continue.'}
+                            {oauthBusy ? 'This window will update when sign-in finishes.' : 'Use the link if the browser did not open.'}
                           </p>
                         </div>
                         {authorizationUrl && (
@@ -551,23 +512,25 @@ export function ProviderAuthModal({ isOpen, provider, envKeys, providerStatus, o
                     </div>
                   )}
 
-                  {(!googleConnected || !googleProject) && (
-                    <label className="mt-4 block text-xs font-medium text-slate-200">
-                      Project ID <span className="font-normal text-slate-500">{isGoogleVertex ? '' : '(optional)'}</span>
-                      <input
-                        type="text"
-                        value={projectId}
-                        onChange={(event) => setProjectId(event.target.value)}
-                        placeholder="Project ID"
-                        className="mt-2 w-full rounded-xl border border-white/[0.09] bg-slate-950/55 px-3 py-2.5 text-sm text-slate-100 outline-none transition placeholder:text-slate-600 focus:border-cyan-200/40 focus:ring-2 focus:ring-cyan-300/[0.08]"
-                      />
-                    </label>
-                  )}
+                  <label className="mt-4 block text-xs font-medium text-slate-200">
+                    Project ID <span className="font-normal text-slate-500">{isGoogleVertex ? 'for Vertex models' : 'optional'}</span>
+                    <input
+                      type="text"
+                      value={projectId}
+                      onChange={(event) => setProjectId(event.target.value)}
+                      placeholder="my-google-project"
+                      className="mt-2 w-full rounded-xl border border-white/[0.09] bg-slate-950/55 px-3 py-2.5 text-sm text-slate-100 outline-none transition placeholder:text-slate-600 focus:border-cyan-200/40 focus:ring-2 focus:ring-cyan-300/[0.08]"
+                    />
+                  </label>
 
                   {googleConnected && (
                     <div className="mt-3 flex items-center justify-between gap-3 rounded-xl border border-emerald-300/20 bg-emerald-400/[0.06] px-3 py-2.5 text-xs">
-                      <span className="font-semibold text-emerald-100">Connected</span>
-                      <span className="truncate text-slate-300">Project: {googleProject || 'not set'}</span>
+                      <span className="min-w-0 truncate font-semibold text-emerald-100">Connected · {googleProject || 'project not set'}</span>
+                      {oauth?.configured && projectId.trim() && projectId.trim() !== googleProject && (
+                        <button type="button" onClick={() => void handleProjectSave()} disabled={saving} className="shrink-0 rounded-lg border border-emerald-200/25 bg-emerald-300/[0.08] px-2.5 py-1.5 text-[10px] font-semibold text-emerald-100 hover:bg-emerald-300/[0.14] disabled:opacity-45">
+                          {saving ? 'Saving…' : 'Save project'}
+                        </button>
+                      )}
                     </div>
                   )}
 

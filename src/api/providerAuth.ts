@@ -150,6 +150,14 @@ export function saveProviderApiKey(provider: string, apiKey: string): Promise<Ap
   })
 }
 
+export function updateProviderOAuthSettings(provider: string, settings: { projectId?: string }): Promise<ApiResult<unknown>> {
+  return apiRequest(`/api/auth/providers/${encodeURIComponent(provider)}/oauth`, {
+    method: 'PATCH',
+    body: { projectId: settings.projectId },
+    timeoutMs: 20_000,
+  })
+}
+
 export function startProviderOAuthSession(
   provider: string,
   options: { projectId?: string; timeoutMs?: number } = {},

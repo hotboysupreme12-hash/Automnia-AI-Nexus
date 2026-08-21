@@ -73,6 +73,8 @@ import {
   withUsagePriorityChannelDefault,
 } from './services/license/usagePriorityRouting'
 import {
+  AUTOMNIA_CREDITS_FALLBACK_MODEL_IDS,
+  AUTOMNIA_CREDITS_MODEL_IDS,
   AUTOMNIA_CREDITS_MODEL_ID,
   AUTOMNIA_CREDITS_PROVIDER_ID,
   CREDITS_ONLY_MODEL_ACCESS_MESSAGE,
@@ -162,6 +164,8 @@ import {
   type GatewayLogEntry,
 } from './services/gateway/gatewayLogService'
 import {
+  AUTOMNIA_COMPACTION_KEEP_RECENT_TOKENS,
+  AUTOMNIA_COMPACTION_RESERVE_TOKENS,
   enforceAutomniaCompactionPolicy,
   type AutomniaCompactionSettings,
 } from './services/gateway/compactionPolicy'
@@ -1458,9 +1462,14 @@ type OpenClawConfigFile = {
       workspace?: string
       timeoutSeconds?: number
       fastModeDefault?: OpenClawFastModeDefault
+      // Shared agent-wide prompt budget. OpenClaw clamps this to the active
+      // model's own context window, so it is safe across provider families.
+      contextTokens?: number
       modelOverride?: string
       model?: { primary?: string; fallbacks?: string[] }
       models?: Record<string, OpenClawModelAllowlistEntry>
+      imageMaxDimensionPx?: number
+      imageQuality?: 'auto' | 'efficient' | 'balanced' | 'high'
       sandbox?: AgentSandboxConfig
       skipBootstrap?: boolean
       skipOptionalBootstrapFiles?: string[]
@@ -1692,6 +1701,7 @@ const CODEX_APP_SERVER_AUTH_MARKER = 'codex-app-server'
 const OPENCLAW_AGENT_TURN_TIMEOUT_FLOOR_SECONDS = 10 * 60
 const OPENCLAW_TIMEOUT_RECOVERY_SECONDS = 15 * 60
 const MODEL_RESILIENCE_FALLBACKS: Record<string, string[]> = {
+  [AUTOMNIA_CREDITS_MODEL_ID]: [...AUTOMNIA_CREDITS_FALLBACK_MODEL_IDS],
   'openai/gpt-5.6-sol': [
     'openai/gpt-5.6-terra',
     'openai/gpt-5.6-luna',
@@ -2771,10 +2781,11 @@ type ProviderConversationState = {
 }
 
 const providerConversationHistories = new Map<string, ProviderConversationState>()
-const MAX_PROVIDER_CONVERSATION_MESSAGES = 24
-const MAX_PROVIDER_CONVERSATION_CHARS = 60_000
-const MAX_AUTOMNIA_RELAY_CONVERSATION_MESSAGES = 40
-const MAX_AUTOMNIA_RELAY_CONVERSATION_CHARS = 160_000
+// Direct-provider calls use this same bounded working set as the Gateway
+// path. Keeping a provider-specific exception here would let Luna (or any
+// future provider) replay a large transcript outside the shared policy.
+const MAX_PROVIDER_CONVERSATION_MESSAGES = 8
+const MAX_PROVIDER_CONVERSATION_CHARS = 32_000
 const MAX_PROVIDER_CONVERSATION_SESSIONS = 128
 const PROVIDER_CONVERSATION_TTL_MS = 6 * 60 * 60 * 1000
 
@@ -2796,10 +2807,8 @@ function trimProviderConversationMessages(
   return next
 }
 
-function providerConversationLimits(provider: string) {
-  return provider.trim().toLowerCase() === 'automnia-cloud'
-    ? { maxMessages: MAX_AUTOMNIA_RELAY_CONVERSATION_MESSAGES, maxChars: MAX_AUTOMNIA_RELAY_CONVERSATION_CHARS }
-    : { maxMessages: MAX_PROVIDER_CONVERSATION_MESSAGES, maxChars: MAX_PROVIDER_CONVERSATION_CHARS }
+function providerConversationLimits() {
+  return { maxMessages: MAX_PROVIDER_CONVERSATION_MESSAGES, maxChars: MAX_PROVIDER_CONVERSATION_CHARS }
 }
 
 function pruneProviderConversationHistories() {
@@ -2831,7 +2840,7 @@ function providerConversationMessagesForRequest(
     providerConversationHistories.delete(sessionId)
   }
   const history = providerConversationHistories.get(sessionId)?.messages || []
-  return trimProviderConversationMessages([...history, { role: 'user', content: userContent }], providerConversationLimits(provider))
+  return trimProviderConversationMessages([...history, { role: 'user', content: userContent }], providerConversationLimits())
 }
 
 function saveProviderConversationTurn(
@@ -2842,7 +2851,7 @@ function saveProviderConversationTurn(
   assistant: { content: string; reasoningContent?: string },
 ) {
   pruneProviderConversationHistories()
-  const limits = providerConversationLimits(provider)
+  const limits = providerConversationLimits()
   providerConversationHistories.set(sessionId, {
     sessionId,
     provider,
@@ -8340,12 +8349,15 @@ function defaultContextPruningConfig(): OpenClawContextPruningConfig {
   return {
     mode: 'cache-ttl',
     ttl: '5m',
-    keepLastAssistants: 3,
-    softTrimRatio: 0.3,
-    hardClearRatio: 0.5,
-    minPrunableToolChars: 50000,
-    tools: { deny: [...DEFAULT_CONTEXT_PRUNING_TOOL_DENY] },
-    softTrim: { maxChars: 4000, headChars: 1500, tailChars: 1500 },
+    keepLastAssistants: 2,
+    softTrimRatio: 0.25,
+    hardClearRatio: 0.4,
+    minPrunableToolChars: 8000,
+    // Browser text can be pruned safely; image blocks are protected by
+    // OpenClaw's image sanitizer. Keep canvas denied because it is primarily
+    // visual state and is not a useful token-saving target.
+    tools: { deny: ['canvas'] },
+    softTrim: { maxChars: 2000, headChars: 800, tailChars: 800 },
     hardClear: { enabled: true, placeholder: '[Old tool result content cleared]' },
   }
 }
@@ -8437,6 +8449,19 @@ function ensureContextPruningDefaults(defaults: NonNullable<NonNullable<OpenClaw
   const pruning = defaults.contextPruning
   if (pruning.mode === 'off') return
   const baseline = defaultContextPruningConfig()
+  const isLegacyAutomniaBaseline = pruning.ttl === '5m'
+    && pruning.keepLastAssistants === 3
+    && pruning.softTrimRatio === 0.3
+    && pruning.hardClearRatio === 0.5
+    && pruning.minPrunableToolChars === 50000
+    && JSON.stringify(pruning.tools?.deny || []) === JSON.stringify(DEFAULT_CONTEXT_PRUNING_TOOL_DENY)
+    && pruning.softTrim?.maxChars === 4000
+    && pruning.softTrim?.headChars === 1500
+    && pruning.softTrim?.tailChars === 1500
+  if (isLegacyAutomniaBaseline) {
+    defaults.contextPruning = defaultContextPruningConfig()
+    return
+  }
   pruning.mode ??= baseline.mode
   pruning.ttl ??= baseline.ttl
   pruning.keepLastAssistants ??= baseline.keepLastAssistants
@@ -8586,6 +8611,7 @@ function openClawOptimizationStatus(config: OpenClawConfigFile) {
       minPrunableToolChars: pruning?.minPrunableToolChars ?? null,
       toolsDeny: Array.isArray(pruning?.tools?.deny) ? pruning.tools.deny : [],
     },
+    contextTokens: normalized.agents?.defaults?.contextTokens ?? null,
     session: {
       dmScope: session?.dmScope || 'main',
       maintenanceMode: session?.maintenance?.mode || 'default',
@@ -8626,13 +8652,14 @@ function createInitialOpenclawConfig() {
       defaults: {
         workspace: WORKSPACE_ROOT,
         model: defaultAgentModelSelection(),
+        contextTokens: AUTOMNIA_OPENCLAW_CONTEXT_TOKENS,
         compaction: {
-          reserveTokensFloor: 50000,
-          keepRecentTokens: 50000,
-          midTurnPrecheck: { enabled: false },
-          truncateAfterCompaction: false,
-          maxActiveTranscriptBytes: '20mb',
-          notifyUser: true,
+          reserveTokensFloor: AUTOMNIA_COMPACTION_RESERVE_TOKENS,
+          keepRecentTokens: AUTOMNIA_COMPACTION_KEEP_RECENT_TOKENS,
+          midTurnPrecheck: { enabled: true },
+          truncateAfterCompaction: true,
+          maxActiveTranscriptBytes: '8mb',
+          notifyUser: false,
           memoryFlush: { enabled: false, softThresholdTokens: 4000 },
         },
         sandbox: { mode: 'off' as const, scope: 'agent' as const, workspaceAccess: 'rw' as const },
@@ -8644,6 +8671,8 @@ function createInitialOpenclawConfig() {
         bootstrapPromptTruncationWarning: 'off',
         startupContext: { enabled: false, applyOn: [] },
         contextPruning: defaultContextPruningConfig(),
+        imageMaxDimensionPx: 1024,
+        imageQuality: 'efficient',
       },
       list: bootstrapAgents.map((agent, index) => applyNoBootstrapAgentConfig({
         id: agent.id,
@@ -9165,34 +9194,22 @@ function applyAutomniaCreditsCompactToolPolicy(config: OpenClawConfigFile) {
   }
 }
 
-function applyAutomniaCreditsCompactContextLimits(
+function applyTokenEfficientContextLimits(
   entry: AgentConfigEntry,
-  inheritedModel?: string,
 ) {
-  const usesAutomniaCredits = isAutomniaOpenClawModel(entry.model?.primary || inheritedModel)
   const current = entry.contextLimits
-  if (usesAutomniaCredits) {
-    const next = current || {}
-    if (next.memoryGetMaxChars === undefined || next.memoryGetMaxChars > AUTOMNIA_CREDITS_COMPACT_MEMORY_GET_MAX_CHARS) {
-      next.memoryGetMaxChars = AUTOMNIA_CREDITS_COMPACT_MEMORY_GET_MAX_CHARS
-    }
-    if (next.memoryGetDefaultLines === undefined || next.memoryGetDefaultLines > 20) next.memoryGetDefaultLines = 20
-    if (next.toolResultMaxChars === undefined || next.toolResultMaxChars > AUTOMNIA_CREDITS_COMPACT_TOOL_RESULT_MAX_CHARS) {
-      next.toolResultMaxChars = AUTOMNIA_CREDITS_COMPACT_TOOL_RESULT_MAX_CHARS
-    }
-    if (next.postCompactionMaxChars === undefined || next.postCompactionMaxChars > AUTOMNIA_CREDITS_COMPACT_POST_COMPACTION_MAX_CHARS) {
-      next.postCompactionMaxChars = AUTOMNIA_CREDITS_COMPACT_POST_COMPACTION_MAX_CHARS
-    }
-    entry.contextLimits = next
-    return
+  const next = current || {}
+  if (next.memoryGetMaxChars === undefined || next.memoryGetMaxChars > AUTOMNIA_CREDITS_COMPACT_MEMORY_GET_MAX_CHARS) {
+    next.memoryGetMaxChars = AUTOMNIA_CREDITS_COMPACT_MEMORY_GET_MAX_CHARS
   }
-
-  if (!current) return
-  if (current.memoryGetMaxChars === AUTOMNIA_CREDITS_COMPACT_MEMORY_GET_MAX_CHARS) delete current.memoryGetMaxChars
-  if (current.memoryGetDefaultLines === 20) delete current.memoryGetDefaultLines
-  if (current.toolResultMaxChars === AUTOMNIA_CREDITS_COMPACT_TOOL_RESULT_MAX_CHARS) delete current.toolResultMaxChars
-  if (current.postCompactionMaxChars === AUTOMNIA_CREDITS_COMPACT_POST_COMPACTION_MAX_CHARS) delete current.postCompactionMaxChars
-  if (!Object.keys(current).length) delete entry.contextLimits
+  if (next.memoryGetDefaultLines === undefined || next.memoryGetDefaultLines > 20) next.memoryGetDefaultLines = 20
+  if (next.toolResultMaxChars === undefined || next.toolResultMaxChars > AUTOMNIA_CREDITS_COMPACT_TOOL_RESULT_MAX_CHARS) {
+    next.toolResultMaxChars = AUTOMNIA_CREDITS_COMPACT_TOOL_RESULT_MAX_CHARS
+  }
+  if (next.postCompactionMaxChars === undefined || next.postCompactionMaxChars > AUTOMNIA_CREDITS_COMPACT_POST_COMPACTION_MAX_CHARS) {
+    next.postCompactionMaxChars = AUTOMNIA_CREDITS_COMPACT_POST_COMPACTION_MAX_CHARS
+  }
+  entry.contextLimits = next
 }
 
 function ensureOpenclawRuntimeDefaults(config: OpenClawConfigFile) {
@@ -9290,14 +9307,32 @@ function ensureOpenclawRuntimeDefaults(config: OpenClawConfigFile) {
     if (defaults.contextLimits?.toolResultMaxChars === 10000) defaults.contextLimits.toolResultMaxChars = 16000
     if (defaults.contextLimits?.postCompactionMaxChars === 1200) defaults.contextLimits.postCompactionMaxChars = 2400
   }
+  const legacyLongContextCompactionDefaults = defaults.compaction.reserveTokensFloor === 50_000
+    && defaults.compaction.keepRecentTokens === 50_000
+    && defaults.compaction.midTurnPrecheck.enabled === false
+    && defaults.compaction.truncateAfterCompaction === false
+    && defaults.compaction.maxActiveTranscriptBytes === '20mb'
+    && defaults.compaction.notifyUser === true
+    && defaults.compaction.memoryFlush.enabled === false
+  if (legacyLongContextCompactionDefaults) {
+    // The previous 50k/20mb baseline kept too much transcript in every
+    // hosted tool turn. Migrate only the exact generated shape so a user's
+    // independent compaction choices remain theirs.
+    defaults.compaction.reserveTokensFloor = AUTOMNIA_COMPACTION_RESERVE_TOKENS
+    defaults.compaction.keepRecentTokens = AUTOMNIA_COMPACTION_KEEP_RECENT_TOKENS
+    defaults.compaction.midTurnPrecheck.enabled = true
+    defaults.compaction.truncateAfterCompaction = true
+    defaults.compaction.maxActiveTranscriptBytes = '8mb'
+    defaults.compaction.notifyUser = false
+  }
   enforceAutomniaCompactionPolicy(defaults.compaction as AutomniaCompactionSettings)
   // Keep enough room for the Telegram relay to recover a compacted turn.
-  defaults.compaction.reserveTokensFloor ??= 50000
-  defaults.compaction.keepRecentTokens ??= 50000
-  defaults.compaction.midTurnPrecheck.enabled ??= false
-  defaults.compaction.truncateAfterCompaction ??= false
-  defaults.compaction.maxActiveTranscriptBytes ??= '20mb'
-  defaults.compaction.notifyUser ??= true
+  defaults.compaction.reserveTokensFloor ??= AUTOMNIA_COMPACTION_RESERVE_TOKENS
+  defaults.compaction.keepRecentTokens ??= AUTOMNIA_COMPACTION_KEEP_RECENT_TOKENS
+  defaults.compaction.midTurnPrecheck.enabled ??= true
+  defaults.compaction.truncateAfterCompaction ??= true
+  defaults.compaction.maxActiveTranscriptBytes ??= '8mb'
+  defaults.compaction.notifyUser ??= false
   defaults.compaction.memoryFlush.enabled ??= false
   defaults.compaction.memoryFlush.softThresholdTokens ??= 4000
   defaults.compaction.memoryFlush.systemPrompt ??= 'Session nearing compaction. Store durable memories now.'
@@ -9305,10 +9340,26 @@ function ensureOpenclawRuntimeDefaults(config: OpenClawConfigFile) {
     'Write any lasting notes to memory/YYYY-MM-DD.md; reply with NO_REPLY if nothing to store.'
 
   if (!defaults.contextLimits) defaults.contextLimits = {}
-  defaults.contextLimits.memoryGetMaxChars ??= 8000
-  defaults.contextLimits.memoryGetDefaultLines ??= 80
-  defaults.contextLimits.toolResultMaxChars ??= 16000
-  defaults.contextLimits.postCompactionMaxChars ??= 2400
+  const legacyDefaultContextLimits = defaults.contextLimits.memoryGetMaxChars === 8000
+    && defaults.contextLimits.memoryGetDefaultLines === 80
+    && defaults.contextLimits.toolResultMaxChars === 16000
+    && defaults.contextLimits.postCompactionMaxChars === 2400
+  if (legacyDefaultContextLimits) {
+    defaults.contextLimits.memoryGetMaxChars = 4000
+    defaults.contextLimits.memoryGetDefaultLines = 40
+    defaults.contextLimits.toolResultMaxChars = 8000
+    defaults.contextLimits.postCompactionMaxChars = 1200
+  }
+  defaults.contextLimits.memoryGetMaxChars ??= 4000
+  defaults.contextLimits.memoryGetDefaultLines ??= 40
+  defaults.contextLimits.toolResultMaxChars ??= 8000
+  defaults.contextLimits.postCompactionMaxChars ??= 1200
+  const configuredContextTokens = Number(defaults.contextTokens)
+  if (!Number.isFinite(configuredContextTokens) || configuredContextTokens > AUTOMNIA_OPENCLAW_CONTEXT_TOKENS) {
+    defaults.contextTokens = AUTOMNIA_OPENCLAW_CONTEXT_TOKENS
+  }
+  defaults.imageMaxDimensionPx ??= 1024
+  defaults.imageQuality ??= 'efficient'
 
   ensureContextPruningDefaults(defaults)
 
@@ -9316,7 +9367,7 @@ function ensureOpenclawRuntimeDefaults(config: OpenClawConfigFile) {
     entry.fastModeDefault ??= openClawFastModeDefault(DEFAULT_OPENCLAW_FAST_MODE)
     if (entry.sandbox?.mode === 'off') entry.tools = unrestrictedAgentToolsConfig()
     applyNoBootstrapAgentConfig(entry)
-    applyAutomniaCreditsCompactContextLimits(entry, defaults.model?.primary)
+    applyTokenEfficientContextLimits(entry)
   }
 
   if (!defaults.memorySearch) defaults.memorySearch = {}
@@ -9618,7 +9669,7 @@ async function writeOpenclawConfig(config: unknown, options: { allowDuringAgentT
   // silently broaden a just-selected usage policy.
   enforceActiveBillingRouteModelOrder(parsed)
   for (const entry of parsed.agents?.list || []) {
-    applyAutomniaCreditsCompactContextLimits(entry, parsed.agents?.defaults?.model?.primary)
+    applyTokenEfficientContextLimits(entry)
   }
   await syncModelProviderTimeoutsFromAgentSettings(parsed)
   const next = {
@@ -9707,10 +9758,14 @@ async function writeOpenclawConfig(config: unknown, options: { allowDuringAgentT
 const AUTOMNIA_OPENCLAW_PROVIDER_ID = AUTOMNIA_CREDITS_PROVIDER_ID
 const AUTOMNIA_OPENCLAW_MODEL = AUTOMNIA_CREDITS_MODEL_ID
 const AUTOMNIA_OPENCLAW_CONTEXT_TOKENS = (() => {
-  const configured = Number(process.env.AUTOMNIA_OPENCLAW_CONTEXT_TOKENS || 256_000)
+  // Keep the working set bounded for every provider/model route. OpenClaw
+  // clamps this to a model's actual context window, while the lower shared
+  // cap makes long tool histories compact before they become six-figure
+  // prompts. An explicit environment value remains an operator escape hatch.
+  const configured = Number(process.env.AUTOMNIA_OPENCLAW_CONTEXT_TOKENS || 24_000)
   return Number.isFinite(configured)
-    ? Math.max(64_000, Math.min(1_000_000, Math.round(configured)))
-    : 256_000
+    ? Math.max(16_000, Math.min(256_000, Math.round(configured)))
+    : 24_000
 })()
 
 type OpenClawModelSelection = { primary?: string; fallbacks?: string[] }
@@ -9880,7 +9935,7 @@ function enforceActiveBillingRouteModelOrder(config: OpenClawConfigFile) {
   if (priority === 'byok_only') {
     if (config.models?.providers) delete config.models.providers[AUTOMNIA_OPENCLAW_PROVIDER_ID]
     if (config.agents.defaults.models) {
-      delete config.agents.defaults.models[AUTOMNIA_OPENCLAW_MODEL]
+      for (const modelId of AUTOMNIA_CREDITS_MODEL_IDS) delete config.agents.defaults.models[modelId]
     }
   }
 
@@ -9891,13 +9946,17 @@ function enforceActiveBillingRouteModelOrder(config: OpenClawConfigFile) {
   // upgrade. The local agent files remain the durable source for restoration.
   const creditsOnly = licenseService.isUsagePriorityLocked()
   if (creditsOnly) {
-    const existingAutomniaEntry = config.agents.defaults.models?.[AUTOMNIA_OPENCLAW_MODEL]
-    config.agents.defaults.models = {
-      [AUTOMNIA_OPENCLAW_MODEL]: {
-        ...(isLooseRecord(existingAutomniaEntry) ? existingAutomniaEntry : {}),
-        alias: 'Automnia credits',
-      },
-    }
+    const existingAutomniaEntries = AUTOMNIA_CREDITS_MODEL_IDS.reduce<Record<string, OpenClawModelAllowlistEntry>>((entries, modelId) => {
+      const existing = config.agents?.defaults?.models?.[modelId]
+      entries[modelId] = {
+        ...(isLooseRecord(existing) ? existing as OpenClawModelAllowlistEntry : {}),
+        alias: modelId === AUTOMNIA_OPENCLAW_MODEL
+          ? 'Automnia credits'
+          : `Automnia hosted fallback - ${splitModelId(modelId).model}`,
+      }
+      return entries
+    }, {})
+    config.agents.defaults.models = existingAutomniaEntries
     for (const agent of config.agents.list || []) {
       delete agent.modelOverride
       const mutableAgent = agent as AgentConfigEntry & { models?: unknown }
@@ -9959,7 +10018,7 @@ async function synchronizeOpenClawBillingRoute(configInput?: OpenClawConfigFile)
   if (!hosted) {
     delete config.models.providers[AUTOMNIA_OPENCLAW_PROVIDER_ID]
     if (config.agents.defaults.models) {
-      delete config.agents.defaults.models[AUTOMNIA_OPENCLAW_MODEL]
+      for (const modelId of AUTOMNIA_CREDITS_MODEL_IDS) delete config.agents.defaults.models[modelId]
     }
     const defaultSelection = removeAutomniaBillingModel(config.agents.defaults.model, allProviderModels)
     if (defaultSelection) config.agents.defaults.model = defaultSelection
@@ -9992,23 +10051,23 @@ async function synchronizeOpenClawBillingRoute(configInput?: OpenClawConfigFile)
       'X-Automnia-License-Key': hosted.licenseKey,
     },
     timeoutSeconds: 7200,
-    models: [{
-      id: 'gemini-3.7-flash',
-      name: 'Automnia Cloud Credits - Gemini 3.7 Flash',
-      // Gemini 3.7 Flash supports low, medium, and high. Marking
-      // this false made OpenClaw reject every enabled level before the relay
-      // received the request ("Use one of: off").
-      reasoning: true,
-      thinkingLevelMap: AUTOMNIA_GEMINI_37_OPENCLAW_THINKING_LEVEL_MAP,
-      compat: AUTOMNIA_GEMINI_37_OPENAI_REASONING_COMPAT,
-      input: ['text', 'image'],
-      contextWindow: 1_000_000,
-      // Keep the hosted model's runtime cap aligned with its advertised
-      // context window. A 45k cap caused OpenClaw to compact healthy relay
-      // sessions before long tool-oriented turns could complete.
-      contextTokens: AUTOMNIA_OPENCLAW_CONTEXT_TOKENS,
-      maxTokens: 16_384,
-    }],
+    models: AUTOMNIA_CREDITS_MODEL_IDS.map((modelId) => {
+      const bareModelId = modelId.slice(`${AUTOMNIA_OPENCLAW_PROVIDER_ID}/`.length)
+      return {
+        id: bareModelId,
+        name: `Automnia Cloud Credits - ${bareModelId}`,
+        // Keep the same OpenClaw thinking contract for every hosted candidate.
+        // The relay translates the request for the selected Vertex model and
+        // never sends a direct-provider request.
+        reasoning: true,
+        thinkingLevelMap: AUTOMNIA_GEMINI_37_OPENCLAW_THINKING_LEVEL_MAP,
+        compat: AUTOMNIA_GEMINI_37_OPENAI_REASONING_COMPAT,
+        input: ['text', 'image'],
+        contextWindow: 1_000_000,
+        contextTokens: AUTOMNIA_OPENCLAW_CONTEXT_TOKENS,
+        maxTokens: 4_096,
+      }
+    }),
   }
   // Clear any cached model override that might be forcing a legacy default (like gpt-5.5)
   // when the runtime state is in transition.
@@ -10033,9 +10092,13 @@ async function synchronizeOpenClawBillingRoute(configInput?: OpenClawConfigFile)
     ), licenseStatus.creditBalance)
   }
   if (!config.agents.defaults.models) config.agents.defaults.models = {}
-  config.agents.defaults.models[AUTOMNIA_OPENCLAW_MODEL] = {
-    alias: 'Automnia credits',
-    params: { transport: 'sse' },
+  for (const modelId of AUTOMNIA_CREDITS_MODEL_IDS) {
+    config.agents.defaults.models[modelId] = {
+      alias: modelId === AUTOMNIA_OPENCLAW_MODEL
+        ? 'Automnia credits'
+        : `Automnia hosted fallback - ${splitModelId(modelId).model}`,
+      params: { transport: 'sse' },
+    }
   }
   await writeOpenclawConfig(config, { allowDuringAgentTurn: true })
   if (licenseService.isUsagePriorityLocked()) {
@@ -18956,6 +19019,7 @@ registerProviderAuthRoutes(app, {
   parseOpenAICodexAuthorizationInput,
   completeOpenAICodexOAuthSession,
   persistProviderAuth,
+  updateProviderOAuthSettings: providerAuthService.updateProviderOAuthSettings,
   providerAuthStatus,
   refreshAvailableModelsCache,
   isCreditsOnlyEntitlement: () => licenseService.isUsagePriorityLocked(),

@@ -70,6 +70,7 @@ test('fallback catalog canonicalizes Codex subscription models and suppresses un
   const geminiFlash = fallback.find((model) => model.id === 'google/gemini-3.6-flash')
   const vertexGeminiFlash = fallback.find((model) => model.id === 'google-vertex/gemini-3.6-flash')
   const automniaModel = fallback.find((model) => model.id === 'automnia-cloud/gemini-3.7-flash')
+  const automniaFallback = fallback.find((model) => model.id === 'automnia-cloud/gemini-3.6-flash')
   const metaMuse = fallback.find((model) => model.id === 'meta/muse-spark-1.1')
 
   assert.equal(canonicalAgentModelId('gpt-5.3-codex-spark'), 'openai/gpt-5.3-codex-spark')
@@ -86,7 +87,9 @@ test('fallback catalog canonicalizes Codex subscription models and suppresses un
   assert.equal(vertexGeminiFlash?.alias, 'Vertex Gemini 3.6 Flash (GA)')
   assert.equal(automniaModel?.alias, 'Default model')
   assert.equal(automniaModel?.provider, 'automnia-cloud')
-  assert.equal(canonicalAgentModelId('automnia-cloud/gemini-3.6-flash'), 'automnia-cloud/gemini-3.7-flash')
+  assert.equal(automniaFallback?.alias, 'Automnia fallback - Gemini 3.6 Flash')
+  assert.equal(canonicalAgentModelId('automnia-cloud/gemini-3.6-flash'), 'automnia-cloud/gemini-3.6-flash')
+  assert.equal(canonicalAgentModelId('automnia-cloud/unknown-model'), 'automnia-cloud/gemini-3.7-flash')
   assert.equal(vertexGeminiFlash?.streaming.provider, 'google-vertex')
   assert.equal(metaMuse?.alias, 'Muse Spark 1.1 (Meta)')
   assert.equal(metaMuse?.streaming.provider, 'meta')
@@ -118,7 +121,9 @@ test('refresh loads OpenClaw catalog and normalizes OpenRouter allowlist through
   assert.equal(cache.models[0]?.id, 'google-vertex/gemini-3.7-flash')
   assert.ok(cache.models.some((model) => model.id === 'anthropic/claude-custom'))
   assert.deepEqual(cache.models.filter((model) => model.provider === 'automnia-cloud').map((model) => ({ id: model.id, alias: model.alias, name: model.name })), [
-    { id: 'automnia-cloud/gemini-3.7-flash', alias: 'Default model', name: 'Gemini 3.7 Flash' },
+    { id: 'automnia-cloud/gemini-3.6-flash', alias: 'legacy Automnia model', name: 'Gemini 3.6 Flash' },
+    { id: 'automnia-cloud/gemini-3.7-flash', alias: 'Default model', name: 'gemini-3.7-flash' },
+    { id: 'automnia-cloud/gemini-2.5-flash', alias: 'Automnia fallback - Gemini 2.5 Flash', name: 'gemini-2.5-flash' },
   ])
   assert.equal(cache.models.some((model) => model.id === 'google-vertex/gemini-3.7-reasoning'), false)
   assert.equal(cache.models.some((model) => model.id === 'openai/gpt-5.3-chat-latest'), false)

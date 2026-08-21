@@ -1,5 +1,5 @@
 @{
-  SchemaVersion = '2026-08-13.4'
+  SchemaVersion = '2026-08-20.2'
   Region = 'us-east1'
   FirestoreLocation = 'us-east1'
   # Automnia's Gemini 3.7 Flash relay is served through Vertex's global endpoint. Keeping this
@@ -7,6 +7,21 @@
   # endpoint from rejecting the reference model used for chat and tools.
   VertexLocation = 'global'
   AutomniaRelayModel = 'gemini-3.7-flash'
+  AutomniaRelayFallbackModels = @('gemini-3.6-flash', 'gemini-2.5-flash')
+  # Hosted-credit token budget defaults. The relay still honors an explicit
+  # caller max_tokens value, bounded by the configured maximum.
+  RelayMaxInputTokens = 8192
+  RelayMaxOutputTokens = 4096
+  RelayTextOutputTokens = 1536
+  RelayToolOutputTokens = 3072
+  RelayMaxToolTokens = 4096
+  RelayMaxTools = 32
+  RelayMaxSystemChars = 6000
+  RelayMaxMessageChars = 12000
+  RelayMaxToolResultChars = 6000
+  RelayMaxHistoryMessages = 8
+  RelayMaxInlineImages = 1
+  RelayMaxInlineImageChars = 400000
   ServiceName = 'automnia-shopify-provisioner'
   ServiceAccountName = 'automnia-provisioner'
   KnowledgeDataStoreId = 'automnia-knowledge'

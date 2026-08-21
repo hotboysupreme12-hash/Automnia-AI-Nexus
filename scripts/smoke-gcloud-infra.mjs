@@ -24,6 +24,8 @@ const requiredFiles = [
   'verify.ps1',
   'service/Dockerfile',
   'service/geminiThinking.js',
+  'service/relayModelPolicy.js',
+  'service/tokenOptimization.js',
   'service/package-lock.json',
   'service/package.json',
   'service/server.js',
@@ -72,8 +74,14 @@ assert.match(service, /tool_calls/)
 assert.doesNotMatch(service, /Runtime tool request:.*Arguments:/s)
 assert.match(service, /function pooledCreditBalance\(record\)/, 'account hosted-credit pooling must remain explicit')
 assert.match(service, /geminiThinkingConfigFromOpenAiRequest/, 'the relay must translate OpenAI-compatible thinking levels')
-assert.match(service, /automniaRelayModel/, 'the relay must expose one explicit billable Vertex model')
+assert.match(service, /automniaRelayModel/, 'the relay must expose an explicit billable Vertex primary model')
 assert.match(service, /aiRelayModel: automniaRelayModel/, 'health must report the billable Vertex model')
+assert.match(service, /generateVertexContentWithHostedFallback/, 'the hosted relay must fail over across Automnia models')
+assert.match(service, /resolveAutomniaRelayModel/, 'the hosted relay must enforce its bounded model allowlist')
+assert.match(service, /compactOpenAiMessages/, 'the hosted relay must compact conversation context before Vertex')
+assert.match(service, /compactOpenAiTools/, 'the hosted relay must compact tool schemas before Vertex')
+assert.match(service, /persistHostedResponse/, 'the hosted relay must persist idempotent responses for replay')
+assert.match(service, /resolveRelayOutputTokenBudget/, 'the hosted relay must apply an automatic output budget')
 assert.match(service, /thinkingConfig/, 'the relay must forward Gemini thinking configuration to Vertex')
 assert.match(service, /creditBalance: pooledCreditBalance\(record\)/, 'license responses must expose the pooled wallet')
 assert.match(service, /record\?\.mode === 'byok'\s*&&\s*pooledCreditBalance\(record\)\s*<=\s*0\s*\?\s*'provider_first'\s*:\s*'automnia_only'/, 'BYOK with a pooled balance must not be forced to provider-first')
@@ -122,7 +130,7 @@ assert.match(rollback, /migrate-firestore\.ps1/)
 assert.match(rollback, /verify\.ps1/)
 assert.match(rollback, /MIGRATION_WRITE_MODE=read_only/)
 
-for (const relative of ['service/server.js', 'service/geminiThinking.js', 'tools/firestore-snapshot.mjs', 'tools/live-billing-test.mjs', 'tools/plan-hash.mjs', 'tools/smoke-service.mjs']) {
+for (const relative of ['service/server.js', 'service/geminiThinking.js', 'service/relayModelPolicy.js', 'service/tokenOptimization.js', 'tools/firestore-snapshot.mjs', 'tools/live-billing-test.mjs', 'tools/plan-hash.mjs', 'tools/smoke-service.mjs']) {
   const checked = spawnSync(process.execPath, ['--check', path.join(infra, relative)], { encoding: 'utf8' })
   assert.equal(checked.status, 0, `${relative} syntax error: ${checked.stderr}`)
 }

@@ -31,6 +31,7 @@ const oauthCallbackService = readWorkspaceFile('server/services/providers/oauthC
 const providerSetupService = readWorkspaceFile('server/services/providers/providerSetupService.ts')
 const providerAuthApi = readWorkspaceFile('src/api/providerAuth.ts')
 const providerModal = readWorkspaceFile('src/components/auth/ProviderAuthModal.tsx')
+const modelPicker = readWorkspaceFile('src/components/models/ModelPicker.tsx')
 const editor = readWorkspaceFile('src/components/editor/AgentEditorModal.tsx')
 const recruit = readWorkspaceFile('src/components/recruit/RecruitAgentModal.tsx')
 const modelSelector = readWorkspaceFile('src/components/party/ModelSelectorModal.tsx')
@@ -60,6 +61,7 @@ for (const marker of [
   "app.get('/api/auth/providers'",
   "app.post('/api/auth/providers/:provider'",
   "app.delete('/api/auth/providers/:provider'",
+  "app.patch('/api/auth/providers/:provider/oauth'",
   "app.post('/api/auth/providers/:provider/oauth/start'",
   "app.get('/api/auth/providers/:provider/oauth/session/:sessionId'",
   "app.post('/api/auth/providers/:provider/oauth/session/:sessionId/manual'",
@@ -185,6 +187,10 @@ assert(providerModal.includes("setApiKey('')"), 'ProviderAuthModal should clear 
 assert(providerModal.includes('startProviderOAuthSession(provider'), 'ProviderAuthModal should start OAuth through the provider auth API module')
 assert(providerModal.includes('fetchProviderOAuthSession(provider, sessionId'), 'ProviderAuthModal should poll OAuth through the provider auth API module')
 assert(providerModal.includes('submitProviderOAuthManual(provider, manualSessionId'), 'ProviderAuthModal should submit manual OAuth codes through the provider auth API module')
+assert(providerModal.includes('updateProviderOAuthSettings(provider'), 'ProviderAuthModal should save Google OAuth project settings without another sign-in')
+assert(providerModal.includes("'Change login'"), 'ProviderAuthModal should keep a visible change-login action for configured OAuth')
+assert(modelPicker.includes('data-provider-auth-button'), 'ModelPicker should expose a provider auth action from model settings')
+assert(modelPicker.includes("'Manage sign-in'"), 'ModelPicker should expose provider auth management after configuration')
 assert(!providerModal.includes('fetchJsonWithTimeout'), 'ProviderAuthModal should not keep a legacy JSON fetch shim')
 assert(!providerModal.includes('new Response'), 'ProviderAuthModal should not synthesize Response objects for API errors')
 assert(!/\bfetch\s*\(/.test(providerModal), 'ProviderAuthModal should not bypass the canonical API client')

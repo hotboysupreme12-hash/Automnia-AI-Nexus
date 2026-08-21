@@ -51,6 +51,7 @@
   "GET /api/skills/library",
   "GET /api/skills/library/:skillId",
   "GET /api/skills/list",
+  "PATCH /api/auth/providers/:provider/oauth",
   "POST /api/auth/account/google/start",
   "POST /api/auth/account/password/change",
   "POST /api/auth/account/password/set",

@@ -4,6 +4,7 @@ import {
   applyUsagePriorityModelOrder,
   withUsagePriorityChannelDefault,
 } from '../server/services/license/usagePriorityRouting'
+import { AUTOMNIA_CREDITS_FALLBACK_MODEL_IDS } from '../server/services/license/creditsOnlyModelPolicy'
 
 const AUTOMNIA = 'automnia-cloud/gemini-3.7-flash'
 
@@ -29,6 +30,7 @@ test('Telegram channel defaults mirror the selected billing route without replac
     withUsagePriorityChannelDefault(undefined, automniaOnly),
     { '*': AUTOMNIA },
   )
+  assert.deepEqual(automniaOnly?.fallbacks, [...AUTOMNIA_CREDITS_FALLBACK_MODEL_IDS])
 })
 
 test('Automnia credits falls back to the provider when the confirmed balance is zero', () => {
@@ -52,7 +54,7 @@ test('Automnia remains primary while credits are available', () => {
     { automniaCreditBalance: 250 },
   )
 
-  assert.deepEqual(selection, { primary: AUTOMNIA })
+  assert.deepEqual(selection, { primary: AUTOMNIA, fallbacks: [...AUTOMNIA_CREDITS_FALLBACK_MODEL_IDS] })
 })
 
 test('credits-only entitlements do not gain a provider fallback at zero balance', () => {
@@ -64,7 +66,7 @@ test('credits-only entitlements do not gain a provider fallback at zero balance'
     { automniaCreditBalance: 0, allowProviderFallbackWhenCreditsExhausted: false },
   )
 
-  assert.deepEqual(selection, { primary: AUTOMNIA })
+  assert.deepEqual(selection, { primary: AUTOMNIA, fallbacks: [...AUTOMNIA_CREDITS_FALLBACK_MODEL_IDS] })
 })
 
 test('provider-first is exactly provider followed by Automnia', () => {
@@ -77,7 +79,7 @@ test('provider-first is exactly provider followed by Automnia', () => {
 
   assert.deepEqual(selection, {
     primary: 'google/gemini-2.5-pro',
-    fallbacks: [AUTOMNIA],
+    fallbacks: [AUTOMNIA, ...AUTOMNIA_CREDITS_FALLBACK_MODEL_IDS],
   })
 })
 
@@ -91,7 +93,7 @@ test('the combined route can run Automnia first with the provider as fallback', 
 
   assert.deepEqual(selection, {
     primary: AUTOMNIA,
-    fallbacks: ['google/gemini-2.5-pro'],
+    fallbacks: [...AUTOMNIA_CREDITS_FALLBACK_MODEL_IDS, 'google/gemini-2.5-pro'],
   })
 })
 
@@ -129,6 +131,6 @@ test('provider-plus-Automnia policies fail closed when no provider model is avai
   )
   assert.deepEqual(
     applyUsagePriorityModelOrder({ primary: 'google/gemini-2.5-pro' }, 'automnia_first', [], AUTOMNIA),
-    { primary: AUTOMNIA },
+    { primary: AUTOMNIA, fallbacks: [...AUTOMNIA_CREDITS_FALLBACK_MODEL_IDS] },
   )
 })

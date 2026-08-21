@@ -813,6 +813,19 @@ export function createProviderAuthService(options: ProviderAuthServiceOptions) {
     options.invalidateAvailableModelsForAuthChange()
   }
 
+  async function updateProviderOAuthSettings(provider: string, settings: { projectId?: string }) {
+    const oauthProvider = provider === 'google-vertex' ? 'google' : provider
+    await ensureLocalAuthStoreLoaded()
+    const existing = localAuthStore.providers[oauthProvider]?.oauth || localOAuthFromMainAuthProfile(oauthProvider) || undefined
+    if (!isOAuthCredentialUsable(existing)) {
+      throw new Error(`No ${oauthProvider} OAuth connection is available to update.`)
+    }
+    await persistProviderOAuth(oauthProvider, {
+      ...existing,
+      ...(settings.projectId?.trim() ? { projectId: settings.projectId.trim() } : { projectId: undefined }),
+    })
+  }
+
   async function syncStoredProviderAuthProfiles(provider: string, config: LocalProviderAuth) {
     if (config.apiKey?.trim()) {
       await writeProviderApiKeyAuthProfiles(options.openclawAgentFolder('main'), provider, config.apiKey.trim())
@@ -1108,6 +1121,7 @@ export function createProviderAuthService(options: ProviderAuthServiceOptions) {
     modelAuthProblem,
     persistProviderAuth,
     persistProviderOAuth,
+    updateProviderOAuthSettings,
     providerAuthStatus,
     removeProviderAuth,
     syncStoredProviderAuthProfiles,

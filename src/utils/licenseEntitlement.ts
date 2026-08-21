@@ -3,9 +3,18 @@ import type { LicenseInfo } from '../context/licenseContextValue'
 export const LICENSE_STATUS_UPDATED_EVENT = 'automnia-license-updated'
 
 export const AUTOMNIA_CREDITS_MODEL_ID = 'automnia-cloud/gemini-3.7-flash'
+export const AUTOMNIA_CREDITS_FALLBACK_MODEL_IDS = [
+  'automnia-cloud/gemini-3.6-flash',
+  'automnia-cloud/gemini-2.5-flash',
+] as const
+export const AUTOMNIA_CREDITS_MODEL_IDS = [
+  AUTOMNIA_CREDITS_MODEL_ID,
+  ...AUTOMNIA_CREDITS_FALLBACK_MODEL_IDS,
+] as const
 
 export function isAutomniaCreditsModelId(value: string | null | undefined) {
-  return value?.trim().toLowerCase() === AUTOMNIA_CREDITS_MODEL_ID
+  const normalized = value?.trim().toLowerCase()
+  return Boolean(normalized && AUTOMNIA_CREDITS_MODEL_IDS.includes(normalized as typeof AUTOMNIA_CREDITS_MODEL_IDS[number]))
 }
 
 export type HostedCreditBalanceUpdate = {

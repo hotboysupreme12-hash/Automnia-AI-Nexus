@@ -53,4 +53,5 @@ test('Automnia relay maps every app thinking choice to a Gemini 3.7 native level
   }
   assert.equal(geminiThinkingConfigFromOpenAiRequest({}), undefined)
   assert.equal(geminiThinkingConfigFromOpenAiRequest({ reasoning_effort: 'invalid' }, 'gemini-3.7-flash'), undefined)
+  assert.equal(geminiThinkingConfigFromOpenAiRequest({ reasoning_effort: 'high' }, 'gemini-2.5-flash'), undefined)
 })

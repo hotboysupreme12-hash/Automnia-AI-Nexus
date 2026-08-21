@@ -26,6 +26,39 @@ included in the sanitized corpus by `npm run publish:knowledge`.
 | `service/` | Deployable Node 22 Cloud Run service for account activation/sign-in, Google linking, license activation, Shopify webhooks, credits, Vertex AI relay, and authenticated Agent Search answers. |
 | `knowledge/` | Sanitized, non-secret source used by the private Automnia Agent Search data store. Never add customer data, passwords, tokens, API keys, or license keys. |
 
+## Hosted-credit token efficiency
+
+The Cloud/Credits relay applies a server-owned token-efficiency policy to every
+OpenAI-compatible request, so callers cannot accidentally bypass it by using a
+different desktop surface or an older `/api/ai/generate` client. The policy:
+
+- keeps only a bounded recent conversation window and merges system/developer
+  instructions;
+- shortens oversized user, assistant, and tool-result content with a visible
+  marker while preserving the head and tail of the result;
+- limits repeated inline images per request and rejects oversized inline image
+  payloads before they can dominate a hosted turn;
+- removes non-essential JSON Schema metadata from tool declarations while
+  preserving tool names, types, properties, enums, and required fields, then
+  applies a combined tool-schema budget so a large plugin inventory cannot
+  consume the whole prompt;
+- chooses a smaller automatic output budget (1,536 tokens for text and 3,072
+  for tool turns, with higher thinking levels still bounded by the relay cap);
+- honors an explicit caller `max_tokens`/`max_completion_tokens` value only up
+  to the relay maximum;
+- avoids the default four-attempt upstream retry fan-out by using two attempts,
+  while retaining transient recovery and model fallback;
+- replays a completed idempotent response from the local/Firestore cache rather
+  than generating and charging upstream tokens again; a charged but unreplayable
+  idempotency key fails closed instead of silently spending more tokens.
+
+The deployed limits are explicit in `config.psd1` and are passed by
+`deploy.ps1` as `AUTOMNIA_RELAY_*` environment variables. The default hosted
+request envelope is approximately 8,192 input tokens plus 4,096 tool-schema
+tokens and 4,096 output tokens. Vertex usage metadata remains authoritative for
+the debit: compaction changes the request before the model call, but the
+Firestore credit ledger charges the actual returned usage, not a local estimate.
+
 ## Prerequisites
 
 Install Google Cloud CLI and Node.js 22 or newer. Authenticate with an account that can enable services, link billing, create service accounts and secrets, grant project IAM, deploy Cloud Run from source, export/import Firestore, and manage the verified domain.

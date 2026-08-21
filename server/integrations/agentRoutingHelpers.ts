@@ -682,13 +682,13 @@ function telegramCreditsOnlyModelSelectionAllowed(config, callback) {
     if (!creditsOnly || !callback || callback.type !== 'select') return true;
     var provider = String(callback.provider || '').trim().toLowerCase();
     var model = String(callback.model || '').trim().toLowerCase();
-    return provider === 'automnia-cloud' && model === 'gemini-3.7-flash';
+    return provider === 'automnia-cloud' && new Set(['gemini-3.7-flash', 'gemini-3.6-flash', 'gemini-2.5-flash']).has(model);
 }
 function telegramCreditsOnlyModelData(config, data) {
     var vars = config && config.env && config.env.vars;
     if (!vars || String(vars.AUTOMNIA_CREDITS_ONLY || '') !== '1' || !data) return data;
     var byProvider = new Map();
-    byProvider.set('automnia-cloud', new Set(['gemini-3.7-flash']));
+    byProvider.set('automnia-cloud', new Set(['gemini-3.7-flash', 'gemini-3.6-flash', 'gemini-2.5-flash']));
     return Object.assign({}, data, {
         byProvider: byProvider,
         providers: ['automnia-cloud']

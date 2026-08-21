@@ -1,0 +1,147 @@
+/*
+ * Responsive viewport contract.
+ *
+ * The shell is intentionally desktop-first, but a 720px-tall laptop and a
+ * 4K monitor need different density decisions. Keep the shell chrome stable,
+ * let compact windows use the full content width, and cap the operational
+ * canvas on very wide displays so cards do not become oversized.
+ */
+
+html.dui-pro-overhaul,
+html.dui-pro-overhaul.dui-cohesive-ui {
+  --dy-viewport-content-max: 2600px;
+  --dy-compact-card-height: 390px;
+}
+
+/* Keep the shell edge-to-edge while preventing the actual work surface from
+   stretching across an entire 4K canvas. The header remains full width. */
+@media (min-width: 3000px) {
+  html.dui-pro-overhaul .dy-tab-content,
+  html.dui-pro-overhaul.dui-cohesive-ui .dy-tab-content {
+    width: min(100%, var(--dy-viewport-content-max)) !important;
+    max-width: var(--dy-viewport-content-max) !important;
+    margin-right: auto !important;
+  }
+}
+
+/* 720p/768p laptops and compact desktop windows have enough width for the
+   registry when chat is stacked, but not enough height for both panels to sit
+   side by side without forcing a giant scroll region. */
+@media (min-width: 901px) and (max-width: 1400px),
+       (min-width: 901px) and (max-height: 820px) {
+  html.dui-pro-overhaul .dy-agents-workspace.is-console-visible,
+  html.dui-pro-overhaul.dui-cohesive-ui .dy-agents-workspace.is-console-visible {
+    grid-template-columns: minmax(0, 1fr) !important;
+    grid-template-rows: auto auto auto !important;
+    grid-template-areas:
+      "party"
+      "registry"
+      "console" !important;
+    align-items: stretch !important;
+    overflow: visible !important;
+  }
+
+  html.dui-pro-overhaul .dy-agent-split-resizer,
+  html.dui-pro-overhaul.dui-cohesive-ui .dy-agent-split-resizer {
+    display: none !important;
+  }
+
+  html.dui-pro-overhaul .agent-registry-pane,
+  html.dui-pro-overhaul.dui-cohesive-ui .agent-registry-pane {
+    width: 100% !important;
+    min-width: 0 !important;
+    height: auto !important;
+    min-height: 0 !important;
+    max-height: none !important;
+  }
+
+  html.dui-pro-overhaul .agent-registry-pane [data-dui-panel="agent-registry"],
+  html.dui-pro-overhaul.dui-cohesive-ui .agent-registry-pane [data-dui-panel="agent-registry"] {
+    height: auto !important;
+    min-height: 0 !important;
+    max-height: none !important;
+  }
+
+  html.dui-pro-overhaul [data-agent-registry-scroll],
+  html.dui-pro-overhaul.dui-cohesive-ui [data-agent-registry-scroll] {
+    height: min(58vh, 480px) !important;
+    max-height: min(58vh, 480px) !important;
+  }
+
+  html.dui-pro-overhaul [data-agent-grid-mode="grid8"],
+  html.dui-pro-overhaul [data-agent-grid-mode="grid10"],
+  html.dui-pro-overhaul.dui-cohesive-ui [data-agent-grid-mode="grid8"],
+  html.dui-pro-overhaul.dui-cohesive-ui [data-agent-grid-mode="grid10"] {
+    grid-template-columns: repeat(3, minmax(0, 1fr)) !important;
+    justify-content: stretch !important;
+    gap: 12px !important;
+  }
+
+  html.dui-pro-overhaul .agent-card-shell.agent-card-pro[data-agent-card="true"]:not([data-agent-display-mode="list"]),
+  html.dui-pro-overhaul.dui-cohesive-ui .agent-card-shell.agent-card-pro[data-agent-card="true"]:not([data-agent-display-mode="list"]) {
+    height: var(--dy-compact-card-height) !important;
+    min-height: var(--dy-compact-card-height) !important;
+    max-height: var(--dy-compact-card-height) !important;
+  }
+
+  html.dui-pro-overhaul .agent-card-pro:not([data-agent-display-mode="list"]) .agent-card-media,
+  html.dui-pro-overhaul.dui-cohesive-ui .agent-card-pro:not([data-agent-display-mode="list"]) .agent-card-media {
+    aspect-ratio: 1.52 / 1 !important;
+  }
+
+  html.dui-pro-overhaul .agent-card-pro .agent-card-name,
+  html.dui-pro-overhaul.dui-cohesive-ui .agent-card-pro .agent-card-name {
+    font-size: clamp(16px, 1.35vw, 19px) !important;
+  }
+
+  html.dui-pro-overhaul .dy-agent-console-pane,
+  html.dui-pro-overhaul.dui-cohesive-ui .dy-agent-console-pane {
+    width: 100% !important;
+    min-width: 0 !important;
+    max-width: none !important;
+    height: min(58vh, 440px) !important;
+    min-height: 360px !important;
+    max-height: none !important;
+  }
+
+  html.dui-pro-overhaul .dy-agent-console-pane [data-chat-panel="true"],
+  html.dui-pro-overhaul.dui-cohesive-ui .dy-agent-console-pane [data-chat-panel="true"] {
+    width: 100% !important;
+    height: 100% !important;
+    min-height: 0 !important;
+    max-height: none !important;
+  }
+}
+
+@media (min-width: 901px) and (max-width: 1400px) and (min-height: 821px) {
+  html.dui-pro-overhaul,
+  html.dui-pro-overhaul.dui-cohesive-ui {
+    --dy-compact-card-height: 410px;
+  }
+}
+
+@media (min-width: 901px) and (max-height: 760px) {
+  html.dui-pro-overhaul,
+  html.dui-pro-overhaul.dui-cohesive-ui {
+    --dy-compact-card-height: 370px;
+  }
+}
+
+/* At the narrowest desktop breakpoint retain two readable card columns. The
+   existing 901–1200px rail collapse leaves these windows enough room for it. */
+@media (min-width: 901px) and (max-width: 1100px) {
+  html.dui-pro-overhaul [data-agent-grid-mode="grid8"],
+  html.dui-pro-overhaul [data-agent-grid-mode="grid10"],
+  html.dui-pro-overhaul.dui-cohesive-ui [data-agent-grid-mode="grid8"],
+  html.dui-pro-overhaul.dui-cohesive-ui [data-agent-grid-mode="grid10"] {
+    grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+  }
+}
+
+/* Phones keep the existing stacked/mobile navigation contract. */
+@media (max-width: 900px) {
+  html.dui-pro-overhaul .dy-tab-content,
+  html.dui-pro-overhaul.dui-cohesive-ui .dy-tab-content {
+    max-width: 100% !important;
+  }
+}

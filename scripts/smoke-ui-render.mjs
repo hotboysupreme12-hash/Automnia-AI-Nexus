@@ -1290,6 +1290,10 @@ async function inspectViewport(viewport) {
     const registry = agentLayout?.registryRect
     const consolePane = agentLayout?.consoleRect
     if (!party || !registry || !consolePane) return false
+    if (agentLayout.gridTemplateAreas.includes('"party" "registry" "console"')) {
+      return registry.top >= party.bottom - 4
+        && consolePane.top >= registry.bottom - 4
+    }
     if (agentLayout.viewportWidth <= 900) {
       return consolePane.top >= party.bottom - 4
         && registry.top >= consolePane.bottom - 4

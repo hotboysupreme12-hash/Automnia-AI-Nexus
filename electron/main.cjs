@@ -1,4 +1,4 @@
-const { app, BrowserWindow, Menu, Tray, dialog, ipcMain, nativeImage, shell } = require('electron')
+const { app, BrowserWindow, Menu, Tray, dialog, ipcMain, nativeImage, shell, screen } = require('electron')
 const { spawn, spawnSync } = require('node:child_process')
 const fs = require('node:fs')
 const https = require('node:https')
@@ -1701,8 +1701,15 @@ function configureTextAssistance(win) {
 }
 
 function createMainWindow() {
+  const workArea = screen.getPrimaryDisplay().workAreaSize
+  const initialWidth = Math.min(1440, Math.max(920, workArea.width - 48))
+  const initialHeight = Math.min(960, Math.max(640, workArea.height - 48))
+
   const win = new BrowserWindow({
-    width: 1440, height: 960, minWidth: 1100, minHeight: 720,
+    width: initialWidth,
+    height: initialHeight,
+    minWidth: 880,
+    minHeight: 600,
     backgroundColor: '#050607', title: 'Automnia', show: false,
     ...(resolveAppIcon() ? { icon: resolveAppIcon() } : {}),
     webPreferences: {

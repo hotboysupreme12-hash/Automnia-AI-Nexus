@@ -352,7 +352,11 @@ test('Telegram model menus expose only Automnia credits for Starter runtime conf
     { byProvider: new Map([['google', new Set(['gemini-2.5-pro'])]]), providers: ['google'] },
   )
   assert.deepEqual(restricted.providers, ['automnia-cloud'])
-  assert.deepEqual(Array.from(restricted.byProvider.get('automnia-cloud') || []), ['gemini-3.7-flash'])
+  assert.deepEqual(Array.from(restricted.byProvider.get('automnia-cloud') || []), [
+    'gemini-3.7-flash',
+    'gemini-3.6-flash',
+    'gemini-2.5-flash',
+  ])
 })
 
 test('Telegram route construction is self-contained in the injected runtime bundle', () => {

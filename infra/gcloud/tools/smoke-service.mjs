@@ -73,6 +73,8 @@ async function runMode(writeMode) {
     assert.equal(health.ok, true)
     assert.equal(health.writeMode, writeMode)
     assert.equal(health.aiRelayModel, 'gemini-3.7-flash')
+    assert.deepEqual(health.aiRelayModels, ['gemini-3.7-flash', 'gemini-3.6-flash', 'gemini-2.5-flash'])
+    assert.deepEqual(health.aiRelayFallbackModels, ['gemini-3.6-flash', 'gemini-2.5-flash'])
     assert.equal(health.vertexLocation, 'us-central1')
     assert.equal(health.commerce.planMappingCount, mappings.length)
     assert.equal(health.commerce.checkoutConfigured, true)

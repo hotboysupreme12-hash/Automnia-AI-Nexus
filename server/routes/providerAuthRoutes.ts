@@ -39,6 +39,7 @@ type ProviderAuthRoutesOptions = {
   ) => Promise<unknown>
   submitAnthropicOAuthManualInput: (session: ProviderOAuthSession, input: string) => Promise<unknown>
   persistProviderAuth: (provider: string, apiKey: string) => Promise<unknown>
+  updateProviderOAuthSettings: (provider: string, settings: { projectId?: string }) => Promise<unknown>
   providerAuthStatus: (provider: string, options?: { probeGcloud?: boolean }) => unknown
   refreshAvailableModelsCache: () => Promise<AvailableModelsCache>
   removeProviderAuth: (provider: string) => Promise<unknown>
@@ -126,6 +127,28 @@ export function registerProviderAuthRoutes(app: Express, options: ProviderAuthRo
       return apiSuccess(res, { ok: true, provider, persisted: true, persistencePath: options.localAuthPath })
     } catch (error) {
       return apiFailure(res, 500, 'auth_provider_failed', 'Failed to remove provider credentials', { provider, detail: String(error) })
+    }
+  })
+
+  app.patch('/api/auth/providers/:provider/oauth', async (req, res) => {
+    const { provider } = req.params
+    if (providerAccessBlocked()) return rejectCreditsOnlyProviderAccess(res)
+    if (provider !== 'google' && provider !== 'google-vertex') {
+      return apiFailure(res, 400, 'oauth_operation_failed', 'OAuth settings are only available for Google providers.', { provider })
+    }
+
+    const schema = z.object({
+      projectId: z.string().trim().max(256).optional(),
+    })
+    const parsed = schema.safeParse(req.body)
+    if (!parsed.success) return apiFailure(res, 400, 'invalid_payload', 'Invalid payload', parsed.error.flatten())
+
+    try {
+      await ensureProviderAuthReady(options)
+      await options.updateProviderOAuthSettings(provider, { projectId: parsed.data.projectId || undefined })
+      return apiSuccess(res, { ok: true, provider, projectId: parsed.data.projectId || null })
+    } catch (error) {
+      return apiFailure(res, 400, 'oauth_operation_failed', 'Failed to save Google OAuth settings', { provider, detail: String(error) })
     }
   })
 

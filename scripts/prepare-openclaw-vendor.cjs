@@ -428,12 +428,18 @@ function ensureAutomniaRelayRetrySafetySupport() {
 
 function ensureAutomniaRelayCompactContextSupport() {
   const distRoot = path.join(vendorRoot, 'dist')
-  if (!fs.existsSync(distRoot)) throw new Error('[openclaw-vendor] Missing OpenClaw dist directory for Automnia Relay compact-context patch')
+  if (!fs.existsSync(distRoot)) throw new Error('[openclaw-vendor] Missing OpenClaw dist directory for token-efficient context patch')
 
-  const promptMarker = 'const isAutomniaCompactPromptProvider = params.provider === "automnia-cloud";'
+  // This is intentionally provider/model agnostic. The same OpenClaw prompt
+  // surface and short rolling history should protect Luna, hosted Gemini,
+  // Anthropic, OpenRouter, and every other configured model from replaying a
+  // six-figure transcript on every turn.
+  const promptMarker = 'const isTokenEfficientPromptMode = true;'
   const promptPattern = /const effectivePromptMode = params\.toolsAllow\?\.length \? "minimal" : promptMode;\n\t\tconst effectiveSkillsPrompt = params\.toolsAllow\?\.length \? void 0 : skillsPrompt;/
-  const promptReplacement = `${promptMarker}\n\t\tconst effectivePromptMode = isAutomniaCompactPromptProvider || params.toolsAllow?.length ? "minimal" : promptMode;\n\t\tconst effectiveSkillsPrompt = isAutomniaCompactPromptProvider || params.toolsAllow?.length ? void 0 : skillsPrompt;`
-  const historyMarker = 'const historyLimit = params.provider === "automnia-cloud" ? 1 : getHistoryLimitFromSessionKey(params.sessionKey, params.config);'
+  const promptReplacement = `${promptMarker}\n\t\tconst effectivePromptMode = isTokenEfficientPromptMode || params.toolsAllow?.length ? "minimal" : promptMode;\n\t\tconst effectiveSkillsPrompt = isTokenEfficientPromptMode || params.toolsAllow?.length ? void 0 : skillsPrompt;`
+  const legacyPromptPattern = /const isAutomniaCompactPromptProvider = params\.provider === "automnia-cloud";\n\t\tconst effectivePromptMode = isAutomniaCompactPromptProvider \|\| params\.toolsAllow\?\.length \? "minimal" : promptMode;\n\t\tconst effectiveSkillsPrompt = isAutomniaCompactPromptProvider \|\| params\.toolsAllow\?\.length \? void 0 : skillsPrompt;/
+  const historyMarker = 'const historyLimit = Math.min(4, Math.max(1, getHistoryLimitFromSessionKey(params.sessionKey, params.config)));'
+  const legacyHistoryMarker = 'const historyLimit = params.provider === "automnia-cloud" ? 1 : getHistoryLimitFromSessionKey(params.sessionKey, params.config);'
   const selectionHistoryPattern = /const truncated = limitHistoryTurns\(filterHeartbeatTranscriptArtifacts\(validated, heartbeatSummary\?\.ackMaxChars, heartbeatSummary\?\.prompt\), getHistoryLimitFromSessionKey\(params\.sessionKey, params\.config\)\);/
   const selectionHistoryReplacement = `${historyMarker}\n\t\t\t\t\tconst truncated = limitHistoryTurns(filterHeartbeatTranscriptArtifacts(validated, heartbeatSummary?.ackMaxChars, heartbeatSummary?.prompt), historyLimit);`
   const compactHistoryPattern = /const truncated = limitHistoryTurns\(session\.messages, getHistoryLimitFromSessionKey\(params\.sessionKey, params\.config\)\);/
@@ -448,11 +454,20 @@ function ensureAutomniaRelayCompactContextSupport() {
     const source = fs.readFileSync(filePath, 'utf8')
     let next = source
 
-    if (promptPattern.test(next)) {
+    if (legacyPromptPattern.test(next)) {
+      next = next.replace(legacyPromptPattern, promptReplacement)
+      promptPatched = true
+    } else if (promptPattern.test(next)) {
       next = next.replace(promptPattern, promptReplacement)
       promptPatched = true
     } else if (next.includes(promptMarker)) {
       promptPatched = true
+    }
+
+    if (next.includes(legacyHistoryMarker)) {
+      next = next.replaceAll(legacyHistoryMarker, historyMarker)
+      if (name.startsWith('selection-')) selectionHistoryPatched = true
+      if (name.startsWith('compact-')) compactHistoryPatched = true
     }
 
     if (selectionHistoryPattern.test(next)) {
@@ -472,9 +487,9 @@ function ensureAutomniaRelayCompactContextSupport() {
     if (next !== source) fs.writeFileSync(filePath, next)
   }
 
-  if (!promptPatched) throw new Error('[openclaw-vendor] Could not force Automnia Relay minimal system prompt mode')
-  if (!selectionHistoryPatched) throw new Error('[openclaw-vendor] Could not cap Automnia Relay session history')
-  if (!compactHistoryPatched) throw new Error('[openclaw-vendor] Could not cap Automnia Relay compaction history')
+  if (!promptPatched) throw new Error('[openclaw-vendor] Could not force token-efficient minimal system prompt mode')
+  if (!selectionHistoryPatched) throw new Error('[openclaw-vendor] Could not cap token-efficient session history')
+  if (!compactHistoryPatched) throw new Error('[openclaw-vendor] Could not cap token-efficient compaction history')
 }
 
 function packageJsonFor(packageName) {

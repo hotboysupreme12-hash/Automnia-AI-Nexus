@@ -313,6 +313,26 @@ test('exposes one shared Google OAuth connection for Vertex while requiring a pr
   }
 })
 
+test('updates the Google OAuth Vertex project without requiring another sign-in', async () => {
+  const harness = await createHarness()
+  try {
+    await harness.service.persistProviderOAuth('google', {
+      accessToken: 'google-access-token',
+      refreshToken: 'google-refresh-token',
+      projectId: 'old-project',
+    })
+
+    await harness.service.updateProviderOAuthSettings('google-vertex', { projectId: 'new-project' })
+
+    const status = harness.service.providerAuthStatus('google')
+    assert.equal(status.oauth.projectId, 'new-project')
+    assert.equal(status.oauth.configured, true)
+    assert.doesNotMatch(JSON.stringify(status), /google-access-token|google-refresh-token/)
+  } finally {
+    await harness.cleanup()
+  }
+})
+
 test('openrouter saves enable plugin/catalog repair and missing Codex models report connect-provider status', async () => {
   const harness = await createHarness()
   try {

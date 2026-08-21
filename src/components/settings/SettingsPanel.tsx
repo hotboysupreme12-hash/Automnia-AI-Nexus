@@ -1031,6 +1031,9 @@ export function SettingsPanel({ focusSection = 'account', focusRequest = 0 }: { 
           <Field label="Effective Agent Route" hint={hostedCredits || isByok ? 'This saved preference applies to normal messages, /runtime, /work, /openclaw, streamed turns, and buffered recovery.' : 'Activate a Cloud Subscription or BYOK license to enable agent messages.'}>
             <input type="text" readOnly value={entitlement.defaultRouteLabel} style={{ fontWeight: 'bold', backgroundColor: hostedCredits ? 'rgba(16, 185, 129, 0.10)' : isByok ? 'rgba(56, 189, 248, 0.10)' : 'rgba(255, 255, 255, 0.05)', cursor: 'not-allowed' }} />
           </Field>
+          {(hostedCredits || (isByok && Number(license?.creditBalance) > 0)) && <Field label="Hosted token efficiency" hint="Automnia Cloud automatically bounds history, tool output, tool schemas, inline images and output budgets before the metered request. Vertex usage metadata remains the billing source of truth.">
+            <input type="text" readOnly value="Automatic · compact context · bounded output · safe request replay" style={{ fontWeight: 'bold', color: '#99f6e4', backgroundColor: 'rgba(16, 185, 129, 0.10)', cursor: 'not-allowed' }} />
+          </Field>}
           <section className="dui-settings-billing-summary" data-billing-mode={hostedCredits ? 'hosted' : isByok ? 'byok' : 'inactive'} aria-label="Subscription and credit summary">
             <div className="dui-settings-billing-summary__head">
               <div>

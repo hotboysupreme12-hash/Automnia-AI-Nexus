@@ -3,10 +3,12 @@
  *
  * OpenClaw subtracts the reserve from the model context window before deciding
  * whether a prompt fits. A large reserve can therefore make a long session
- * impossible to compact, even when the model itself has room for it.
+ * impossible to compact, even when the model itself has room for it. Keep the
+ * hosted path's recent tail close to its relay envelope so every new tool turn
+ * does not replay tens of thousands of old tokens.
  */
-export const AUTOMNIA_COMPACTION_RESERVE_TOKENS = 50_000
-export const AUTOMNIA_COMPACTION_KEEP_RECENT_TOKENS = 50_000
+export const AUTOMNIA_COMPACTION_RESERVE_TOKENS = 12_000
+export const AUTOMNIA_COMPACTION_KEEP_RECENT_TOKENS = 12_000
 
 export type AutomniaCompactionSettings = {
   reserveTokens?: unknown

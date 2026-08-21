@@ -1,3 +1,5 @@
+import { AUTOMNIA_CREDITS_FALLBACK_MODEL_IDS } from './creditsOnlyModelPolicy'
+
 export type UsagePriority =
   | 'automnia_only'
   | 'provider_first'
@@ -47,7 +49,16 @@ function uniqueStrings(...values: unknown[]) {
 }
 
 function isAutomniaModel(modelId: string, automniaModelId: string) {
-  return modelId.trim().toLowerCase() === automniaModelId.trim().toLowerCase()
+  const normalized = modelId.trim().toLowerCase()
+  return normalized === automniaModelId.trim().toLowerCase() || normalized.startsWith('automnia-cloud/')
+}
+
+function automniaHostedFallbacks(automniaModelId: string) {
+  // The active billing route always uses the canonical Automnia primary. Do
+  // not infer fallback IDs from a user/provider selection: that could widen a
+  // credits-only route into a direct-provider request.
+  if (!isAutomniaModel(automniaModelId, 'automnia-cloud/gemini-3.7-flash')) return []
+  return [...AUTOMNIA_CREDITS_FALLBACK_MODEL_IDS]
 }
 
 /**
@@ -80,13 +91,16 @@ export function applyUsagePriorityModelOrder(
 
     return {
       primary: automniaModelId,
+      fallbacks: automniaHostedFallbacks(automniaModelId),
     }
   }
 
   if (usagePriority === 'automnia_first_with_provider_fallback') {
+    const hostedFallbacks = automniaHostedFallbacks(automniaModelId)
+    const fallbacks = uniqueStrings(...hostedFallbacks, providerModel)
     return {
       primary: automniaModelId,
-      ...(providerModel ? { fallbacks: [providerModel] } : {}),
+      ...(fallbacks.length ? { fallbacks } : {}),
     }
   }
 
@@ -96,7 +110,9 @@ export function applyUsagePriorityModelOrder(
     return providerModel
       ? {
           primary: providerModel,
-          ...(options.automniaCreditBalance === 0 ? {} : { fallbacks: [automniaModelId] }),
+          ...(options.automniaCreditBalance === 0
+            ? {}
+            : { fallbacks: uniqueStrings(automniaModelId, ...automniaHostedFallbacks(automniaModelId)) }),
         }
       : undefined
   }
