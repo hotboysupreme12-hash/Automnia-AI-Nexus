@@ -2,21 +2,24 @@
 // into a six-figure prompt. These are request-shaping budgets, not estimates
 // used for billing; the relay still debits Vertex's authoritative usage.
 const DEFAULT_MAX_INPUT_TOKENS = 8_192;
-const DEFAULT_MAX_OUTPUT_TOKENS = 4_096;
+const DEFAULT_MAX_OUTPUT_TOKENS = 3_072;
 const DEFAULT_TEXT_OUTPUT_TOKENS = 1_536;
-const DEFAULT_TOOL_OUTPUT_TOKENS = 3_072;
+const DEFAULT_TOOL_OUTPUT_TOKENS = 2_048;
 const DEFAULT_MAX_SYSTEM_CHARS = 6_000;
 const DEFAULT_MAX_MESSAGE_CHARS = 12_000;
 const DEFAULT_MAX_TOOL_RESULT_CHARS = 6_000;
 const DEFAULT_MAX_HISTORY_MESSAGES = 8;
 const DEFAULT_MAX_INLINE_IMAGES = 1;
 const DEFAULT_MAX_INLINE_IMAGE_CHARS = 400_000;
-const DEFAULT_MAX_TOOL_TOKENS = 4_096;
-const DEFAULT_MAX_TOOLS = 32;
-const DEFAULT_MAX_TOOL_DESCRIPTION_CHARS = 180;
-const DEFAULT_MAX_SCHEMA_DESCRIPTION_CHARS = 120;
-const DEFAULT_MAX_SCHEMA_PROPERTIES = 24;
-const DEFAULT_MAX_SCHEMA_ENUM_VALUES = 16;
+// Tool names and required argument fields are capability contracts. The
+// remaining schema prose is descriptive metadata and can be aggressively
+// bounded before it reaches the hosted provider.
+const DEFAULT_MAX_TOOL_TOKENS = 2_048;
+const DEFAULT_MAX_TOOLS = 24;
+const DEFAULT_MAX_TOOL_DESCRIPTION_CHARS = 96;
+const DEFAULT_MAX_SCHEMA_DESCRIPTION_CHARS = 64;
+const DEFAULT_MAX_SCHEMA_PROPERTIES = 16;
+const DEFAULT_MAX_SCHEMA_ENUM_VALUES = 12;
 
 function boundedInteger(value, fallback, minimum, maximum) {
   const parsed = Number(value);
@@ -28,7 +31,7 @@ function environmentInteger(name, fallback, minimum, maximum) {
   return boundedInteger(process.env[name], fallback, minimum, maximum);
 }
 
-export const AUTOMNIA_RELAY_TOKEN_OPTIMIZATION_VERSION = '2026-08-20.2';
+export const AUTOMNIA_RELAY_TOKEN_OPTIMIZATION_VERSION = '2026-08-23.1';
 
 export const automniaRelayTokenOptimization = Object.freeze({
   version: AUTOMNIA_RELAY_TOKEN_OPTIMIZATION_VERSION,
@@ -144,10 +147,6 @@ function compactMessage(message, imageState, limits) {
   };
 }
 
-function messageSize(message) {
-  return JSON.stringify(message ?? '').length;
-}
-
 function preserveToolCallContext(messages, allConversationMessages) {
   const toolCallIds = new Set(
     messages
@@ -182,21 +181,27 @@ export function compactOpenAiMessages(messages, overrides = {}) {
     maxInlineImageChars: overrides.maxInlineImageChars || automniaRelayTokenOptimization.maxInlineImageChars,
   };
   const source = Array.isArray(messages) ? messages.filter((message) => message && typeof message === 'object') : [];
+  const inputLimitChars = Math.max(8_000, limits.maxInputTokens * 4);
   const systemMessages = source.filter((message) => ['system', 'developer'].includes(messageRole(message)));
   const conversationMessages = source.filter((message) => !['system', 'developer'].includes(messageRole(message)));
   const imageState = { count: 0, dropped: 0, oversized: 0, limit: limits.maxInlineImages };
   let truncatedMessages = 0;
 
-  const compactedSystem = systemMessages.length
-    ? [{
-        role: 'system',
-        content: systemMessages.map((message) => {
-          const compacted = compactMessage(message, imageState, limits);
-          truncatedMessages += Number(compacted.truncated);
-          return typeof compacted.value.content === 'string' ? compacted.value.content : JSON.stringify(compacted.value.content || '');
-        }).filter(Boolean).join('\n\n'),
-      }]
-    : [];
+  let compactedSystem = [];
+  if (systemMessages.length) {
+    const systemContent = systemMessages.map((message) => {
+      const compacted = compactMessage(message, imageState, limits);
+      truncatedMessages += Number(compacted.truncated);
+      return typeof compacted.value.content === 'string' ? compacted.value.content : JSON.stringify(compacted.value.content || '');
+    }).filter(Boolean).join('\n\n');
+    const shortenedSystem = shortenText(
+      systemContent,
+      Math.min(limits.maxSystemChars, Math.max(512, inputLimitChars - 512)),
+      '[system context shortened to conserve Automnia credits]',
+    );
+    truncatedMessages += Number(shortenedSystem.truncated);
+    compactedSystem = [{ role: 'system', content: shortenedSystem.value }];
+  }
   let conversation = conversationMessages
     .slice(-limits.maxHistoryMessages)
     .map((message) => {
@@ -205,33 +210,61 @@ export function compactOpenAiMessages(messages, overrides = {}) {
       return compacted.value;
     });
   conversation = preserveToolCallContext(conversation, conversationMessages);
-  let compacted = [...compactedSystem, ...conversation];
+  const rebuild = () => [...compactedSystem, ...conversation];
+  let compacted = rebuild();
   const originalChars = JSON.stringify(source).length;
   let removedMessages = Math.max(0, conversationMessages.length - conversation.length);
 
-  const inputLimitChars = Math.max(8_000, limits.maxInputTokens * 4);
+  // Drop older context first, while leaving the newest four messages intact
+  // whenever possible. The previous implementation performed one shortening
+  // pass only, so a large system prompt plus two large current messages could
+  // still exceed the advertised input budget.
   while (JSON.stringify(compacted).length > inputLimitChars && conversation.length > 2) {
     const removableIndex = conversation.findIndex((message, index) => index < conversation.length - 4 && messageRole(message) !== 'tool');
-    const index = removableIndex >= 0 ? removableIndex : 0;
+    const fallbackIndex = conversation.findIndex((message, index) => index < conversation.length - 4);
+    const index = removableIndex >= 0 ? removableIndex : fallbackIndex;
+    if (index < 0) break;
     conversation.splice(index, 1);
     removedMessages += 1;
-    compacted = [...compactedSystem, ...conversation];
+    compacted = rebuild();
   }
 
-  if (JSON.stringify(compacted).length > inputLimitChars) {
-    const largestIndex = conversation.reduce((largest, message, index, list) => (
-      messageSize(message) > messageSize(list[largest]) ? index : largest
-    ), 0);
-    const largest = conversation[largestIndex];
-    if (largest) {
-      const currentContent = typeof largest.content === 'string' ? largest.content : JSON.stringify(largest.content || '');
-      const shortened = shortenText(currentContent, Math.max(1_024, Math.floor(limits.maxMessageChars / 2)), '[current context shortened to fit the hosted credit budget]');
-      if (shortened.truncated) {
-        conversation[largestIndex] = { ...largest, content: shortened.value };
-        truncatedMessages += 1;
-        compacted = [...compactedSystem, ...conversation];
-      }
+  // Keep trimming the largest text payload until the serialized request is
+  // within budget. This is intentionally iterative because JSON overhead,
+  // tool-call metadata, and multiple large messages can require several
+  // reductions before the limit is actually met.
+  for (let pass = 0; JSON.stringify(compacted).length > inputLimitChars && pass < 64; pass += 1) {
+    const candidates = [];
+    if (compactedSystem[0]?.content) {
+      candidates.push({ scope: 'system', index: 0, value: String(compactedSystem[0].content), minimum: 512 });
     }
+    conversation.forEach((message, index) => {
+      const value = typeof message.content === 'string' ? message.content : JSON.stringify(message.content || '');
+      if (value) candidates.push({ scope: 'conversation', index, value, minimum: 256 });
+    });
+    const largest = candidates.sort((left, right) => right.value.length - left.value.length)[0];
+    if (!largest || largest.value.length <= largest.minimum) break;
+
+    const overBudget = JSON.stringify(compacted).length - inputLimitChars;
+    const targetLength = Math.max(
+      largest.minimum,
+      largest.value.length - Math.max(128, Math.ceil(overBudget * 1.15)),
+    );
+    const shortened = shortenText(
+      largest.value,
+      targetLength,
+      largest.scope === 'system'
+        ? '[system context shortened to fit the hosted credit budget]'
+        : '[current context shortened to fit the hosted credit budget]',
+    );
+    if (!shortened.truncated || shortened.value.length >= largest.value.length) break;
+    if (largest.scope === 'system') {
+      compactedSystem[0] = { ...compactedSystem[0], content: shortened.value };
+    } else {
+      conversation[largest.index] = { ...conversation[largest.index], content: shortened.value };
+    }
+    truncatedMessages += 1;
+    compacted = rebuild();
   }
 
   const compactedChars = JSON.stringify(compacted).length;
@@ -252,18 +285,21 @@ export function compactOpenAiMessages(messages, overrides = {}) {
   };
 }
 
-function compactJsonSchema(value, depth = 0) {
+function compactJsonSchema(value, depth = 0, overrides = {}) {
   if (!value || typeof value !== 'object' || Array.isArray(value) || depth > 12) return undefined;
+  const maxSchemaDescriptionChars = overrides.maxSchemaDescriptionChars || DEFAULT_MAX_SCHEMA_DESCRIPTION_CHARS;
+  const maxSchemaProperties = overrides.maxSchemaProperties || DEFAULT_MAX_SCHEMA_PROPERTIES;
+  const maxSchemaEnumValues = overrides.maxSchemaEnumValues || DEFAULT_MAX_SCHEMA_ENUM_VALUES;
   const schema = {};
   for (const key of ['type', 'nullable']) {
     if (value[key] !== undefined) schema[key] = value[key];
   }
-  if (Array.isArray(value.enum)) schema.enum = value.enum.slice(0, DEFAULT_MAX_SCHEMA_ENUM_VALUES);
+  if (Array.isArray(value.enum)) schema.enum = value.enum.slice(0, maxSchemaEnumValues);
   if (typeof value.description === 'string' && value.description.trim()) {
-    schema.description = shortenText(value.description, DEFAULT_MAX_SCHEMA_DESCRIPTION_CHARS).value;
+    schema.description = shortenText(value.description, maxSchemaDescriptionChars).value;
   }
   if (value.items && typeof value.items === 'object') {
-    const items = compactJsonSchema(value.items, depth + 1);
+    const items = compactJsonSchema(value.items, depth + 1, overrides);
     if (items) schema.items = items;
   }
   if (value.properties && typeof value.properties === 'object' && !Array.isArray(value.properties)) {
@@ -272,13 +308,14 @@ function compactJsonSchema(value, depth = 0) {
     const requiredNames = Array.isArray(value.required)
       ? value.required.filter((name) => typeof name === 'string' && names.includes(name))
       : [];
+    const optionalLimit = Math.max(0, maxSchemaProperties - requiredNames.length);
     const orderedNames = [
       ...requiredNames,
-      ...names.filter((name) => !requiredNames.includes(name)),
-    ].slice(0, DEFAULT_MAX_SCHEMA_PROPERTIES);
+      ...names.filter((name) => !requiredNames.includes(name)).slice(0, optionalLimit),
+    ];
     for (const name of orderedNames) {
       const property = value.properties[name];
-      const compacted = compactJsonSchema(property, depth + 1);
+      const compacted = compactJsonSchema(property, depth + 1, overrides);
       if (compacted) properties[name] = compacted;
     }
     if (Object.keys(properties).length) schema.properties = properties;
@@ -297,6 +334,10 @@ export function compactOpenAiTools(tools, overrides = {}) {
   const limits = {
     maxToolTokens: overrides.maxToolTokens || automniaRelayTokenOptimization.maxToolTokens,
     maxTools: overrides.maxTools || automniaRelayTokenOptimization.maxTools,
+    maxToolDescriptionChars: overrides.maxToolDescriptionChars || DEFAULT_MAX_TOOL_DESCRIPTION_CHARS,
+    maxSchemaDescriptionChars: overrides.maxSchemaDescriptionChars || DEFAULT_MAX_SCHEMA_DESCRIPTION_CHARS,
+    maxSchemaProperties: overrides.maxSchemaProperties || DEFAULT_MAX_SCHEMA_PROPERTIES,
+    maxSchemaEnumValues: overrides.maxSchemaEnumValues || DEFAULT_MAX_SCHEMA_ENUM_VALUES,
   };
   const requiredToolNames = new Set(
     (Array.isArray(overrides.requiredToolNames) ? overrides.requiredToolNames : [])
@@ -309,10 +350,10 @@ export function compactOpenAiTools(tools, overrides = {}) {
     if (!name) return [];
     const nextFunction = { name };
     if (typeof tool.function.description === 'string' && tool.function.description.trim()) {
-      nextFunction.description = shortenText(tool.function.description, DEFAULT_MAX_TOOL_DESCRIPTION_CHARS).value;
+      nextFunction.description = shortenText(tool.function.description, limits.maxToolDescriptionChars).value;
     }
     if (tool.function.parameters && typeof tool.function.parameters === 'object' && !Array.isArray(tool.function.parameters)) {
-      const parameters = compactJsonSchema(tool.function.parameters);
+      const parameters = compactJsonSchema(tool.function.parameters, 0, limits);
       if (parameters && Object.keys(parameters).length) nextFunction.parameters = parameters;
     }
     return [{ type: 'function', function: nextFunction }];

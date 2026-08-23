@@ -63,6 +63,7 @@ export type GatewayAgentTurnServiceOptions = {
     message: string,
     executionWorkspace: string,
     doctrineWorkspace: string,
+    continuation?: boolean,
   ) => string
   runCwdForContext: (context: GatewayAgentTurnContext) => string
   agentWorkTimeoutWrapperMs: (timeoutSeconds: number) => number
@@ -219,12 +220,23 @@ export function createGatewayAgentTurnService(options: GatewayAgentTurnServiceOp
       '',
       effectiveMessage,
     ].join('\n')
-    const gatewayMessage = options.composeAgentDoctrinePrompt(
+    let fullGatewayMessage: string | undefined
+    const getFullGatewayMessage = () => fullGatewayMessage ||= options.composeAgentDoctrinePrompt(
       agent,
       enforcedMessage,
       context.executionWorkspace,
       context.doctrineWorkspace,
+      false,
     )
+    const gatewayMessage = isFreshSession
+      ? getFullGatewayMessage()
+      : options.composeAgentDoctrinePrompt(
+          agent,
+          enforcedMessage,
+          context.executionWorkspace,
+          context.doctrineWorkspace,
+          true,
+        )
     const runCwd = options.runCwdForContext(context)
     const openClawTimeoutMs = options.agentWorkTimeoutWrapperMs(effectiveTimeoutSeconds)
 
@@ -294,13 +306,13 @@ export function createGatewayAgentTurnService(options: GatewayAgentTurnServiceOp
           cwd: runCwd,
           requestMessage: rawMessage,
           intentMessage,
-          finalMessage: gatewayMessage,
+          finalMessage: getFullGatewayMessage(),
           note: `${routeOptions.note}; billing/auth recovery retry using a fresh Gateway session`,
         })
         result = await options.runGatewayChatTurn({
           agentId: agent,
           agentName,
-          message: gatewayMessage,
+          message: getFullGatewayMessage(),
           attachments: requestedAttachments,
           sessionId,
           requestedSessionKey,
@@ -330,13 +342,13 @@ export function createGatewayAgentTurnService(options: GatewayAgentTurnServiceOp
         cwd: runCwd,
         requestMessage: rawMessage,
         intentMessage,
-        finalMessage: gatewayMessage,
+        finalMessage: getFullGatewayMessage(),
         note: `${routeOptions.note}; stale Codex session retry using a fresh Gateway session`,
       })
       result = await options.runGatewayChatTurn({
         agentId: agent,
         agentName,
-        message: gatewayMessage,
+        message: getFullGatewayMessage(),
         attachments: requestedAttachments,
         sessionId,
         requestedSessionKey,

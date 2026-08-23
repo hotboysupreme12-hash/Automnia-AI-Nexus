@@ -56,7 +56,15 @@ function redactDiagnosticPhoneLikeText(match: string): string {
 export function applyDiagnosticRedactions(value?: string): string {
   const clean = value?.trim()
   if (!clean) return ''
-  return clean
+  const protectedIsoTimestamps: string[] = []
+  const protectedValue = clean.replace(
+    /\b\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d{1,9})?(?:Z|[+-]\d{2}:?\d{2})\b/gu,
+    (match) => {
+      const index = protectedIsoTimestamps.push(match) - 1
+      return `__AUTOMNIA_SAFE_ISO_TIMESTAMP_${index}__`
+    },
+  )
+  const redacted = protectedValue
     .replace(/<\s*(?:thinking|reasoning|chain[-_\s]*of[-_\s]*thought)\b[\s\S]*?<\s*\/\s*(?:thinking|reasoning|chain[-_\s]*of[-_\s]*thought)\s*>/gi, '[hidden reasoning removed]')
     .replace(/\b(?:thinking|reasoning|chain[-_\s]*of[-_\s]*thought)\s*[:=]\s*["']?[^"'\n]{8,}/gi, 'reasoning=[redacted]')
     .replace(/\bAuthorization\s*:\s*Bearer\s+[A-Za-z0-9._~+/-]+=*/gi, 'Authorization: Bearer [redacted]')
@@ -69,6 +77,10 @@ export function applyDiagnosticRedactions(value?: string): string {
     .replace(/\b(?:[A-Za-z]:\\Users\\)[^\\\s]+/g, '%USERPROFILE%')
     .replace(/\/Users\/[^/\s]+/g, '/Users/[redacted]')
     .replace(/\bdata:[^,\s]+;base64,[A-Za-z0-9+/=]{32,}/gi, 'data:[redacted]')
+  return redacted.replace(/__AUTOMNIA_SAFE_ISO_TIMESTAMP_(\d+)__/gu, (_match, index: string) => {
+    const timestamp = protectedIsoTimestamps[Number(index)]
+    return timestamp || '[redacted-timestamp]'
+  })
 }
 
 export function redactDiagnosticText(value?: string, max = DEFAULT_DIAGNOSTIC_TEXT_LIMIT): string {

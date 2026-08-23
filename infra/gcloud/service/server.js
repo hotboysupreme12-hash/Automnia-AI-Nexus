@@ -22,8 +22,8 @@ import { buildLicenseEmailHtml } from './welcomeEmail.js';
 
 const app = express();
 const port = process.env.PORT || 8080;
-const serviceVersion = '2.8.1';
-const schemaVersion = '2026-08-20.2';
+const serviceVersion = '2.8.2';
+const schemaVersion = '2026-08-23.1';
 const secrets = (process.env.SHOPIFY_WEBHOOK_SECRETS || process.env.SHOPIFY_WEBHOOK_SECRET || '')
   .split(',')
   .map((value) => value.trim())

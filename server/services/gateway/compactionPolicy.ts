@@ -17,6 +17,36 @@ export type AutomniaCompactionSettings = {
   [key: string]: unknown
 }
 
+/**
+ * Repair the exact compact-but-unbounded baseline emitted by an older bundle.
+ * The shape check is deliberately strict so an operator's custom compaction
+ * choices are not silently overwritten during startup.
+ */
+export function migrateAutomniaCompactBaseline(settings: AutomniaCompactionSettings) {
+  const midTurnPrecheck = settings.midTurnPrecheck
+  const memoryFlush = settings.memoryFlush
+  if (
+    settings.reserveTokensFloor !== AUTOMNIA_COMPACTION_RESERVE_TOKENS
+    || settings.keepRecentTokens !== AUTOMNIA_COMPACTION_KEEP_RECENT_TOKENS
+    || !midTurnPrecheck || typeof midTurnPrecheck !== 'object'
+    || (midTurnPrecheck as { enabled?: unknown }).enabled !== false
+    || settings.truncateAfterCompaction !== false
+    || settings.maxActiveTranscriptBytes !== '20mb'
+    || settings.notifyUser !== true
+    || !memoryFlush || typeof memoryFlush !== 'object'
+    || (memoryFlush as { enabled?: unknown }).enabled !== false
+  ) return false
+
+  const mutableMidTurnPrecheck = midTurnPrecheck as { enabled?: unknown }
+  const mutableMemoryFlush = memoryFlush as { enabled?: unknown }
+  mutableMidTurnPrecheck.enabled = true
+  mutableMemoryFlush.enabled = false
+  settings.truncateAfterCompaction = true
+  settings.maxActiveTranscriptBytes = '8mb'
+  settings.notifyUser = false
+  return true
+}
+
 function asFiniteNonNegativeInteger(value: unknown) {
   if (typeof value !== 'number' || !Number.isFinite(value) || value < 0) return null
   return Math.round(value)

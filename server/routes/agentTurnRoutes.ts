@@ -177,7 +177,13 @@ type AgentTurnRoutesOptions = {
   compactClawTalkConsoleValue(value: string, maxChars?: number): string
   compactFinalSsePayload(payload: Record<string, unknown>, liveTextStreamed: boolean): Record<string, unknown>
   compactHttpJsonPayload(payload: Record<string, unknown>): Record<string, unknown>
-  composeAgentDoctrinePrompt(agent: string, message: string, executionWorkspace: string, doctrineWorkspace: string): string
+  composeAgentDoctrinePrompt(
+    agent: string,
+    message: string,
+    executionWorkspace: string,
+    doctrineWorkspace: string,
+    continuation?: boolean,
+  ): string
   delayMs(ms: number): Promise<unknown>
   detectHostActionRequest(message: string): HostActionRequest | null
   emitClawTalkConsoleFrame(event: string, context: ClawTalkConsoleMirrorContext, payload: Record<string, unknown>): boolean
@@ -430,8 +436,20 @@ export function registerAgentTurnRoutes(app: Express, options: AgentTurnRoutesOp
     if (clawTalkMirror) rememberClawTalkConsoleMirror(clawTalkMirror)
     let closed = false
     let liveTextStreamed = false
+    const heartbeat = setInterval(() => {
+      if (closed) return
+      try {
+        writeSseEvent(res, 'heartbeat', { at: new Date().toISOString() })
+      } catch {
+        // The client can disconnect between the closed check and the write.
+        closed = true
+        abortController.abort()
+      }
+    }, 15_000)
+    heartbeat.unref?.()
     res.on('close', () => {
       closed = true
+      clearInterval(heartbeat)
       abortController.abort()
     })
     const emit: StreamEmitter = (event, data) => {
@@ -726,6 +744,7 @@ export function registerAgentTurnRoutes(app: Express, options: AgentTurnRoutesOp
         streaming: { transport: failureTransport, liveTokens: false },
       }, liveTextStreamed))
     } finally {
+      clearInterval(heartbeat)
       if (!closed) res.end()
     }
   })
@@ -991,7 +1010,23 @@ export function registerAgentTurnRoutes(app: Express, options: AgentTurnRoutesOp
       effectiveMessage,
     ].join('\n')
 
-    const composedPrompt = composeAgentDoctrinePrompt(agent, enforcedMessage, context.executionWorkspace, context.doctrineWorkspace)
+    let fullComposedPrompt: string | undefined
+    const getFullComposedPrompt = () => fullComposedPrompt ||= composeAgentDoctrinePrompt(
+      agent,
+      enforcedMessage,
+      context.executionWorkspace,
+      context.doctrineWorkspace,
+      false,
+    )
+    const composedPrompt = isFreshSession
+      ? getFullComposedPrompt()
+      : composeAgentDoctrinePrompt(
+          agent,
+          enforcedMessage,
+          context.executionWorkspace,
+          context.doctrineWorkspace,
+          true,
+        )
     const turnMessage = isFreshSession ? `/new ${composedPrompt}` : composedPrompt
     const runCwd = runCwdForContext(context)
     await appendAgentPromptDump({
@@ -1057,6 +1092,7 @@ export function registerAgentTurnRoutes(app: Express, options: AgentTurnRoutesOp
         recoveryInstruction,
         context.executionWorkspace,
         context.doctrineWorkspace,
+        true,
       )
       await appendAgentPromptDump({
         route: '/api/openclaw/agent-turn',
@@ -1135,7 +1171,7 @@ export function registerAgentTurnRoutes(app: Express, options: AgentTurnRoutesOp
           '--session-id',
           retrySessionId,
           '--message',
-          `/new ${composedPrompt}`,
+          `/new ${getFullComposedPrompt()}`,
           '--thinking',
           effectiveThinking,
           '--timeout',

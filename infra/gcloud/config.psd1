@@ -1,5 +1,5 @@
 @{
-  SchemaVersion = '2026-08-20.2'
+  SchemaVersion = '2026-08-23.1'
   Region = 'us-east1'
   FirestoreLocation = 'us-east1'
   # Automnia's Gemini 3.7 Flash relay is served through Vertex's global endpoint. Keeping this
@@ -11,11 +11,11 @@
   # Hosted-credit token budget defaults. The relay still honors an explicit
   # caller max_tokens value, bounded by the configured maximum.
   RelayMaxInputTokens = 8192
-  RelayMaxOutputTokens = 4096
+  RelayMaxOutputTokens = 3072
   RelayTextOutputTokens = 1536
-  RelayToolOutputTokens = 3072
-  RelayMaxToolTokens = 4096
-  RelayMaxTools = 32
+  RelayToolOutputTokens = 2048
+  RelayMaxToolTokens = 2048
+  RelayMaxTools = 24
   RelayMaxSystemChars = 6000
   RelayMaxMessageChars = 12000
   RelayMaxToolResultChars = 6000

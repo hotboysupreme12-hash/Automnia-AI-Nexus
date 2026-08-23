@@ -42,8 +42,9 @@ different desktop surface or an older `/api/ai/generate` client. The policy:
   preserving tool names, types, properties, enums, and required fields, then
   applies a combined tool-schema budget so a large plugin inventory cannot
   consume the whole prompt;
-- chooses a smaller automatic output budget (1,536 tokens for text and 3,072
-  for tool turns, with higher thinking levels still bounded by the relay cap);
+- chooses a smaller automatic output budget (1,536 tokens for text and 2,048
+  for tool turns, with higher thinking levels still bounded by the 3,072-token
+  relay cap);
 - honors an explicit caller `max_tokens`/`max_completion_tokens` value only up
   to the relay maximum;
 - avoids the default four-attempt upstream retry fan-out by using two attempts,
@@ -54,8 +55,8 @@ different desktop surface or an older `/api/ai/generate` client. The policy:
 
 The deployed limits are explicit in `config.psd1` and are passed by
 `deploy.ps1` as `AUTOMNIA_RELAY_*` environment variables. The default hosted
-request envelope is approximately 8,192 input tokens plus 4,096 tool-schema
-tokens and 4,096 output tokens. Vertex usage metadata remains authoritative for
+request envelope is approximately 8,192 input tokens plus 2,048 tool-schema
+tokens and 3,072 output tokens. Vertex usage metadata remains authoritative for
 the debit: compaction changes the request before the model call, but the
 Firestore credit ledger charges the actual returned usage, not a local estimate.
 

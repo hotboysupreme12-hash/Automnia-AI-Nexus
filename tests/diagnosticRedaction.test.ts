@@ -12,3 +12,11 @@ test('diagnostics redact credentials and personal identifiers', () => {
 
   assert.deepEqual(safeDiagnosticPayload({ agentId: 'agent-a', password: 'bad', ok: true }), { agentId: 'agent-a', ok: true })
 })
+
+test('diagnostics preserve ISO timestamps while redacting phone-like values', () => {
+  const timestamp = '2026-08-22T16:35:41.000Z'
+  const redacted = applyDiagnosticRedactions(`tool returned ${timestamp}; contact +1 (404) 555-1212`)
+
+  assert.match(redacted, new RegExp(timestamp.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')))
+  assert.match(redacted, /\[redacted-phone\]/)
+})

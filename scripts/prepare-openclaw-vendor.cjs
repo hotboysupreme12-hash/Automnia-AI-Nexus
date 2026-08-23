@@ -492,6 +492,66 @@ function ensureAutomniaRelayCompactContextSupport() {
   if (!compactHistoryPatched) throw new Error('[openclaw-vendor] Could not cap token-efficient compaction history')
 }
 
+function ensureAutomniaRelayPayloadCompactionSupport() {
+  const distRoot = path.join(vendorRoot, 'dist')
+  if (!fs.existsSync(distRoot)) throw new Error('[openclaw-vendor] Missing OpenClaw dist directory for token-efficient provider payload patch')
+
+  // The hosted relay performs a second safety compaction, but shrinking
+  // descriptive schema metadata before the request leaves less JSON to parse,
+  // transmit, and count on every provider call. Tool names and required fields
+  // remain intact; only descriptions, enum hints, and optional properties are
+  // bounded. This patch is source-driven so a vendor refresh cannot silently
+  // remove the optimization.
+  const payloadMarker = 'function compactAutomniaRelayToolSchemas(tools) {'
+  const payloadHelper = String.raw`function compactAutomniaRelaySchema(value, depth = 0) {
+	if (!value || typeof value !== "object" || Array.isArray(value) || depth > 8) return value;
+	const schema = {};
+	for (const key of ["type", "nullable", "additionalProperties"]) if (value[key] !== void 0) schema[key] = value[key];
+	if (Array.isArray(value.enum)) schema.enum = value.enum.slice(0, 12);
+	if (typeof value.description === "string" && value.description.trim()) schema.description = value.description.trim().slice(0, 64);
+	if (value.items && typeof value.items === "object") schema.items = compactAutomniaRelaySchema(value.items, depth + 1);
+	for (const branch of ["anyOf", "oneOf", "allOf"]) if (Array.isArray(value[branch])) schema[branch] = value[branch].slice(0, 8).map((entry) => compactAutomniaRelaySchema(entry, depth + 1));
+	if (value.properties && typeof value.properties === "object" && !Array.isArray(value.properties)) {
+		const names = Object.keys(value.properties);
+		const required = Array.isArray(value.required) ? value.required.filter((name) => typeof name === "string" && names.includes(name)) : [];
+		const ordered = [...required, ...names.filter((name) => !required.includes(name)).slice(0, Math.max(0, 16 - required.length))];
+		schema.properties = {};
+		for (const name of ordered) schema.properties[name] = compactAutomniaRelaySchema(value.properties[name], depth + 1);
+		if (required.length > 0) schema.required = required;
+	}
+	return schema;
+}
+function compactAutomniaRelayToolSchemas(tools) {
+	if (!Array.isArray(tools)) return tools;
+	return tools.map((tool) => {
+		if (!tool || typeof tool !== "object" || !tool.function || typeof tool.function !== "object") return tool;
+		const fn = { ...tool.function };
+		if (typeof fn.description === "string") fn.description = fn.description.trim().slice(0, 96);
+		if (fn.parameters && typeof fn.parameters === "object" && !Array.isArray(fn.parameters)) fn.parameters = compactAutomniaRelaySchema(fn.parameters);
+		return { ...tool, function: fn };
+	});
+}`
+  const convertToolsPattern = /function convertTools\(tools, compat, model\) \{\n\tconst projection = projectOpenAITools\(tools\);/
+  const convertToolsReplacement = `${payloadHelper}\nfunction convertTools(tools, compat, model) {\n\tconst sourceTools = model.provider === "automnia-cloud" ? compactAutomniaRelayToolSchemas(tools) : tools;\n\tconst projection = projectOpenAITools(sourceTools);`
+
+  let patched = false
+  for (const name of fs.readdirSync(distRoot)) {
+    if (!name.endsWith('.js')) continue
+    const filePath = path.join(distRoot, name)
+    const source = fs.readFileSync(filePath, 'utf8')
+    let next = source
+    if (convertToolsPattern.test(next)) {
+      next = next.replace(convertToolsPattern, convertToolsReplacement)
+      patched = true
+    } else if (next.includes(payloadMarker)) {
+      patched = true
+    }
+    if (next !== source) fs.writeFileSync(filePath, next)
+  }
+
+  if (!patched) throw new Error('[openclaw-vendor] Could not install Automnia Relay provider payload compaction patch')
+}
+
 function packageJsonFor(packageName) {
   return path.join(nodeModulesRoot, ...packageName.split('/'), 'package.json')
 }
@@ -593,6 +653,7 @@ async function main() {
   ensureAutomniaRelayThoughtSignatureSupport()
   ensureAutomniaRelayRetrySafetySupport()
   ensureAutomniaRelayCompactContextSupport()
+  ensureAutomniaRelayPayloadCompactionSupport()
 
   if (!refresh && fs.existsSync(nodeModulesRoot)) {
     const missing = validateInstalledPackages(lock)
