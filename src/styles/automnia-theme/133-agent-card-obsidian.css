@@ -1,0 +1,185 @@
+/* Shared obsidian agent cards -------------------------------------------------
+   Rarity should help identify an agent without recolouring the entire card.
+   Keep every card on the same black surface, then let the rarity trim, badge,
+   and a quiet top wash carry the difference. */
+
+html.dui-pro-overhaul.dui-cohesive-ui .agent-card-shell.agent-card-pro[data-agent-card="true"][data-agent-rarity] {
+  --agent-card-rarity: #b8c2cd;
+  --agent-card-rarity-rgb: 184, 194, 205;
+  --agent-card-accent: var(--agent-card-rarity) !important;
+  --agent-card-accent-rgb: var(--agent-card-rarity-rgb) !important;
+  --agent-card-obsidian-top: #14181d;
+  --agent-card-obsidian-mid: #0b0f13;
+  --agent-card-obsidian-bottom: #06080b;
+  --agent-card-neutral-panel: rgba(9, 12, 16, .88);
+  border-color: color-mix(in srgb, var(--agent-card-rarity) 56%, rgba(255, 255, 255, .12)) !important;
+  background-color: var(--agent-card-obsidian-mid) !important;
+  background-image:
+    radial-gradient(ellipse 90% 38% at 50% 0%, rgba(var(--agent-card-rarity-rgb), .055), transparent 72%),
+    linear-gradient(145deg, var(--agent-card-obsidian-top), var(--agent-card-obsidian-mid) 56%, var(--agent-card-obsidian-bottom)) !important;
+  box-shadow:
+    0 20px 50px rgba(0, 0, 0, .48),
+    0 0 28px -22px rgba(var(--agent-card-rarity-rgb), .32),
+    inset 0 1px 0 rgba(255, 255, 255, .065) !important;
+}
+
+html.dui-pro-overhaul.dui-cohesive-ui .agent-card-shell.agent-card-pro[data-agent-card="true"][data-agent-rarity]:hover {
+  border-color: color-mix(in srgb, var(--agent-card-rarity) 70%, rgba(255, 255, 255, .16)) !important;
+  background-image:
+    radial-gradient(ellipse 90% 42% at 50% 0%, rgba(var(--agent-card-rarity-rgb), .075), transparent 72%),
+    linear-gradient(145deg, #15191f, var(--agent-card-obsidian-mid) 56%, var(--agent-card-obsidian-bottom)) !important;
+  box-shadow:
+    0 26px 52px rgba(0, 0, 0, .54),
+    0 0 34px -20px rgba(var(--agent-card-rarity-rgb), .36),
+    inset 0 1px 0 rgba(255, 255, 255, .085) !important;
+}
+
+/* Keep the card body quiet. The portrait remains the visual focus; rarity is
+   limited to a barely-there tint instead of a full-card artwork overlay. */
+html.dui-pro-overhaul.dui-cohesive-ui .agent-card-shell.agent-card-pro[data-agent-card="true"][data-agent-rarity]::before {
+  display: block !important;
+  background: linear-gradient(180deg, rgba(var(--agent-card-rarity-rgb), .05), transparent 28%, rgba(0, 0, 0, .14)) !important;
+  opacity: .82 !important;
+  mix-blend-mode: normal !important;
+  filter: none !important;
+  transform: translateZ(2px);
+}
+
+html.dui-pro-overhaul.dui-cohesive-ui .agent-card-shell.agent-card-pro[data-agent-card="true"][data-agent-rarity]::after {
+  border-color: color-mix(in srgb, var(--agent-card-rarity) 24%, rgba(255, 255, 255, .12)) !important;
+  border-top-color: color-mix(in srgb, var(--agent-card-rarity) 62%, rgba(255, 255, 255, .16)) !important;
+  box-shadow:
+    inset 0 0 0 1px rgba(255, 255, 255, .022),
+    inset 0 1px 0 rgba(var(--agent-card-rarity-rgb), .11) !important;
+}
+
+/* Keep the information surfaces neutral too. Rarity only peeks through as a
+   hairline and a quiet wash, which keeps the registry calm at a glance. */
+html.dui-pro-overhaul.dui-cohesive-ui .agent-card-shell.agent-card-pro[data-agent-card="true"][data-agent-rarity] :is(
+  .agent-card-level-pill,
+  .agent-card-stat-matrix > div,
+  .agent-card-tags span,
+  .agent-card-action-primary,
+  .agent-card-action-secondary
+) {
+  border-color: rgba(255, 255, 255, .105) !important;
+  background:
+    linear-gradient(180deg, rgba(var(--agent-card-rarity-rgb), .028), rgba(255, 255, 255, .006)),
+    var(--agent-card-neutral-panel) !important;
+  color: rgba(232, 237, 241, .82) !important;
+  box-shadow: none !important;
+  backdrop-filter: none !important;
+  -webkit-backdrop-filter: none !important;
+}
+
+html.dui-pro-overhaul.dui-cohesive-ui .agent-card-shell.agent-card-pro[data-agent-card="true"][data-agent-rarity] .agent-card-name {
+  color: #f4f6f8 !important;
+}
+
+html.dui-pro-overhaul.dui-cohesive-ui .agent-card-shell.agent-card-pro[data-agent-card="true"][data-agent-rarity] .agent-card-class {
+  color: rgba(214, 221, 228, .68) !important;
+}
+
+html.dui-pro-overhaul.dui-cohesive-ui .agent-card-shell.agent-card-pro[data-agent-card="true"][data-agent-rarity] .agent-card-role {
+  color: rgba(235, 239, 242, .72) !important;
+}
+
+html.dui-pro-overhaul.dui-cohesive-ui .agent-card-shell.agent-card-pro[data-agent-card="true"][data-agent-rarity] .agent-card-rarity-badge {
+  border-color: color-mix(in srgb, var(--agent-card-rarity) 64%, rgba(255, 255, 255, .16)) !important;
+  background: rgba(var(--agent-card-rarity-rgb), .12) !important;
+  color: var(--agent-card-rarity) !important;
+  box-shadow: 0 10px 24px -18px rgba(var(--agent-card-rarity-rgb), .56) !important;
+}
+
+html.dui-pro-overhaul.dui-cohesive-ui .agent-card-shell.agent-card-pro[data-agent-card="true"][data-agent-rarity="legendary"] {
+  --agent-card-rarity: #d9ae5e;
+  --agent-card-rarity-rgb: 217, 174, 94;
+}
+
+html.dui-pro-overhaul.dui-cohesive-ui .agent-card-shell.agent-card-pro[data-agent-card="true"][data-agent-rarity="epic"] {
+  --agent-card-rarity: #b495d9;
+  --agent-card-rarity-rgb: 180, 149, 217;
+}
+
+html.dui-pro-overhaul.dui-cohesive-ui .agent-card-shell.agent-card-pro[data-agent-card="true"][data-agent-rarity="rare"] {
+  --agent-card-rarity: #74bdc5;
+  --agent-card-rarity-rgb: 116, 189, 197;
+}
+
+html.dui-pro-overhaul.dui-cohesive-ui .agent-card-shell.agent-card-pro[data-agent-card="true"][data-agent-rarity="common"] {
+  --agent-card-rarity: #aeb9c4;
+  --agent-card-rarity-rgb: 174, 185, 196;
+}
+
+/* Original is the neutral default. Its card shell deliberately ignores the
+   rarity palette at rest, so a mixed roster reads as one composed system.
+   Rarity remains available on the badge and is introduced gently on hover. */
+html.dui-pro-overhaul.dui-cohesive-ui .agent-card-shell.agent-card-pro[data-agent-card="true"][data-agent-card-theme="original"] {
+  --agent-card-original-accent: #b9c4cf;
+  --agent-card-original-accent-rgb: 185, 196, 207;
+  --agent-card-accent: var(--agent-card-original-accent) !important;
+  --agent-card-accent-rgb: var(--agent-card-original-accent-rgb) !important;
+  --agent-card-obsidian-top: #161a1f;
+  --agent-card-obsidian-mid: #0c1014;
+  --agent-card-obsidian-bottom: #06080b;
+  --agent-card-neutral-panel: rgba(9, 12, 16, .90);
+  border-color: rgba(185, 196, 207, .24) !important;
+  background-color: var(--agent-card-obsidian-mid) !important;
+  background-image:
+    linear-gradient(135deg, transparent 0 18%, rgba(185, 196, 207, .045) 18.2% 18.8%, transparent 19% 62%, rgba(185, 196, 207, .022) 62.2% 62.7%, transparent 63%),
+    linear-gradient(145deg, var(--agent-card-obsidian-top), var(--agent-card-obsidian-mid) 56%, var(--agent-card-obsidian-bottom)) !important;
+  box-shadow:
+    0 20px 50px rgba(0, 0, 0, .50),
+    inset 0 1px 0 rgba(255, 255, 255, .065) !important;
+}
+
+html.dui-pro-overhaul.dui-cohesive-ui .agent-card-shell.agent-card-pro[data-agent-card="true"][data-agent-card-theme="original"]:hover {
+  border-color: color-mix(in srgb, var(--agent-card-rarity) 36%, #59636c) !important;
+  background-image:
+    linear-gradient(135deg, transparent 0 18%, rgba(185, 196, 207, .06) 18.2% 18.8%, transparent 19% 62%, rgba(185, 196, 207, .03) 62.2% 62.7%, transparent 63%),
+    linear-gradient(145deg, #181d23, var(--agent-card-obsidian-mid) 56%, var(--agent-card-obsidian-bottom)) !important;
+  box-shadow:
+    0 26px 52px rgba(0, 0, 0, .56),
+    0 0 30px -24px rgba(var(--agent-card-rarity-rgb), .42),
+    inset 0 1px 0 rgba(255, 255, 255, .085) !important;
+}
+
+html.dui-pro-overhaul.dui-cohesive-ui .agent-card-shell.agent-card-pro[data-agent-card="true"][data-agent-card-theme="original"]::before {
+  background: linear-gradient(180deg, rgba(255, 255, 255, .025), transparent 28%, rgba(0, 0, 0, .16)) !important;
+  opacity: .78 !important;
+}
+
+html.dui-pro-overhaul.dui-cohesive-ui .agent-card-shell.agent-card-pro[data-agent-card="true"][data-agent-card-theme="original"]::after {
+  border-color: rgba(185, 196, 207, .14) !important;
+  border-top-color: rgba(255, 255, 255, .18) !important;
+  box-shadow:
+    inset 0 0 0 1px rgba(255, 255, 255, .022),
+    inset 0 1px 0 rgba(255, 255, 255, .045) !important;
+}
+
+html.dui-pro-overhaul.dui-cohesive-ui .agent-card-shell.agent-card-pro[data-agent-card="true"][data-agent-card-theme="original"] :is(
+  .agent-card-level-pill,
+  .agent-card-stat-matrix > div,
+  .agent-card-tags span,
+  .agent-card-action-primary,
+  .agent-card-action-secondary
+) {
+  border-color: rgba(255, 255, 255, .105) !important;
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, .018), rgba(255, 255, 255, .006)),
+    var(--agent-card-neutral-panel) !important;
+  color: rgba(232, 237, 241, .82) !important;
+}
+
+html.dui-pro-overhaul.dui-cohesive-ui .agent-card-shell.agent-card-pro[data-agent-card="true"][data-agent-card-theme="original"][data-agent-rarity] .agent-card-rarity-badge {
+  border-color: color-mix(in srgb, var(--agent-card-rarity) 48%, rgba(255, 255, 255, .16)) !important;
+  background: rgba(var(--agent-card-rarity-rgb), .075) !important;
+  color: color-mix(in srgb, var(--agent-card-rarity) 82%, #ffffff) !important;
+  box-shadow: none !important;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  html.dui-pro-overhaul.dui-cohesive-ui .agent-card-shell.agent-card-pro[data-agent-card="true"][data-agent-rarity]::before {
+    opacity: .64 !important;
+  }
+}

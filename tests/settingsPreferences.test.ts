@@ -63,12 +63,12 @@ test('registry preferences validate persisted values and publish live updates', 
   assert.equal(changed, true)
   assert.deepEqual(readRegistryPreferences(), { displayMode: 'list', overlayPreset: 'blueprint-grid', rarityColorsEnabled: true, rarityFilter: 'epic', sortKey: 'name' })
   assert.deepEqual(AGENT_CARD_RARITY_THEMES, {
-    legendary: 'original',
-    epic: 'epic-purple',
-    rare: 'blueprint-grid',
+    legendary: 'graphite-glass',
+    epic: 'graphite-glass',
+    rare: 'graphite-glass',
     common: 'graphite-glass',
   })
-  assert.equal(resolveAgentCardTheme('rare', { overlayPreset: 'graphite-glass', rarityColorsEnabled: true }), 'blueprint-grid')
+  assert.equal(resolveAgentCardTheme('rare', { overlayPreset: 'graphite-glass', rarityColorsEnabled: true }), 'graphite-glass')
   assert.equal(resolveAgentCardTheme('legendary', { overlayPreset: 'graphite-glass', rarityColorsEnabled: false }), 'graphite-glass')
 })
 

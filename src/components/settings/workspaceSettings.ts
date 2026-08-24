@@ -49,9 +49,12 @@ export const DEFAULT_REGISTRY_PREFERENCES: RegistryPreferences = {
 }
 
 export const AGENT_CARD_RARITY_THEMES: Record<AgentRarity, AgentCardTheme> = {
-  legendary: 'original',
-  epic: 'epic-purple',
-  rare: 'blueprint-grid',
+  // Rarity mode keeps the card shell consistent. The final obsidian layer
+  // reads the data-agent-rarity marker for the restrained accent instead of
+  // swapping in a full saturated theme per card.
+  legendary: 'graphite-glass',
+  epic: 'graphite-glass',
+  rare: 'graphite-glass',
   common: 'graphite-glass',
 }
 

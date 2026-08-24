@@ -21,19 +21,19 @@ html.dui-pro-overhaul.dui-cohesive-ui [data-agent-card-theme] {
 }
 
 html.dui-pro-overhaul.dui-cohesive-ui [data-agent-card-theme="original"] {
-  --selected-card-accent: #e8ad4f;
-  --selected-card-accent-rgb: 232, 173, 79;
-  --selected-card-top: #291b09;
-  --selected-card-mid: #171006;
-  --selected-card-bottom: #080604;
-  --selected-card-panel: rgba(23, 15, 5, .86);
-  --selected-card-panel-hover: rgba(38, 25, 8, .94);
-  --selected-card-overlay: url("/card-overlays/original.png");
+  --selected-card-accent: #b9c4cf;
+  --selected-card-accent-rgb: 185, 196, 207;
+  --selected-card-top: #161a1f;
+  --selected-card-mid: #0c1014;
+  --selected-card-bottom: #06080b;
+  --selected-card-panel: rgba(9, 12, 16, .88);
+  --selected-card-panel-hover: rgba(15, 19, 24, .94);
+  --selected-card-overlay: none;
   --selected-card-overlay-opacity: .52;
-  --selected-card-overlay-filter: saturate(1.14) contrast(1.18) brightness(.98);
+  --selected-card-overlay-filter: none;
   --selected-card-pattern:
-    linear-gradient(135deg, transparent 0 18%, rgba(232, 173, 79, .15) 18.2% 18.8%, transparent 19% 62%, rgba(232, 173, 79, .08) 62.2% 62.7%, transparent 63%),
-    radial-gradient(circle at 82% 15%, rgba(232, 173, 79, .20), transparent 28%);
+    linear-gradient(135deg, transparent 0 18%, rgba(185, 196, 207, .05) 18.2% 18.8%, transparent 19% 62%, rgba(185, 196, 207, .025) 62.2% 62.7%, transparent 63%),
+    radial-gradient(circle at 82% 15%, rgba(185, 196, 207, .06), transparent 28%);
 }
 
 html.dui-pro-overhaul.dui-cohesive-ui [data-agent-card-theme="graphite-glass"] {
@@ -305,16 +305,16 @@ html.dui-pro-overhaul.dui-cohesive-ui [data-agent-card-theme]:not([data-agent-ca
 /* Rarity colors use the three approved card skins only. The card itself owns
    the resolved theme so rarity mode can mix skins in one registry page. */
 html.dui-pro-overhaul.dui-cohesive-ui [data-agent-card][data-agent-card-theme="original"] {
-  --agent-card-accent: #e8ad4f;
-  --agent-card-accent-rgb: 232, 173, 79;
-  --agent-card-top: #291b09;
-  --agent-card-mid: #171006;
-  --agent-card-bottom: #080604;
-  --agent-card-panel: rgba(23, 15, 5, .88);
-  --agent-card-overlay: url("/card-overlays/original.png");
+  --agent-card-accent: #b9c4cf;
+  --agent-card-accent-rgb: 185, 196, 207;
+  --agent-card-top: #161a1f;
+  --agent-card-mid: #0c1014;
+  --agent-card-bottom: #06080b;
+  --agent-card-panel: rgba(9, 12, 16, .88);
+  --agent-card-overlay: none;
   --agent-card-pattern:
-    linear-gradient(135deg, transparent 0 18%, rgba(232, 173, 79, .15) 18.2% 18.8%, transparent 19% 62%, rgba(232, 173, 79, .08) 62.2% 62.7%, transparent 63%),
-    radial-gradient(circle at 82% 15%, rgba(232, 173, 79, .20), transparent 28%);
+    linear-gradient(135deg, transparent 0 18%, rgba(185, 196, 207, .05) 18.2% 18.8%, transparent 19% 62%, rgba(185, 196, 207, .025) 62.2% 62.7%, transparent 63%),
+    radial-gradient(circle at 82% 15%, rgba(185, 196, 207, .06), transparent 28%);
 }
 
 html.dui-pro-overhaul.dui-cohesive-ui [data-agent-card][data-agent-card-theme="epic-purple"] {

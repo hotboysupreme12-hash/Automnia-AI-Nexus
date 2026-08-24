@@ -568,7 +568,7 @@ export function SettingsPanel({ focusSection = 'account', focusRequest = 0 }: { 
         </Field>
         <ToggleField
           label="Use rarity colors"
-          hint="Legendary uses Original, Epic uses Purple, Rare uses Blueprint and Common uses Graphite."
+          hint="Rarity changes the trim and badge while cards stay on a calm obsidian surface."
           checked={registryPreferences.rarityColorsEnabled}
           onChange={(value) => updateRegistryPreferences({
             rarityColorsEnabled: value,
