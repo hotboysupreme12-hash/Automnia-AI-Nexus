@@ -9,13 +9,16 @@ const path = require('node:path')
 
 // A packaged Windows app can be launched from a short-lived shell (including
 // the branded launcher). Once that parent closes, writing diagnostic output to
-// its inherited console handle can raise EPIPE asynchronously. Logging must
-// never crash the desktop main process or surface an error dialog to the user.
+// its inherited console handle can fail asynchronously with more than one
+// stream error code. Logging must never crash the desktop main process or
+// surface an error dialog to the user.
 function guardMainProcessOutputStream(stream) {
   if (!stream?.on) return
-  stream.on('error', (error) => {
-    if (error?.code === 'EPIPE' || error?.code === 'ERR_STREAM_DESTROYED') return
-    setImmediate(() => { throw error })
+  stream.on('error', () => {
+    // The console is an optional diagnostic sink for a GUI app. If its
+    // inherited pipe disappears, discard that write failure and keep the
+    // desktop process alive. Do not log here: writing to the same broken
+    // stream would recurse into another error.
   })
 }
 
@@ -66,6 +69,9 @@ const BUNDLED_NPM_TOOLCHAIN_ROOT = path.join(process.resourcesPath || '', 'toolc
 const MIN_NPM_NODE_MAJOR = 22
 const MIN_NPM_NODE_MINOR = 19
 const WINDOWS_RENDERER_STABILITY = process.platform === 'win32' && process.env.AUTOMNIA_WINDOWS_RENDERER_STABILITY !== '0'
+// Keep hardware acceleration enabled by default for the normal desktop
+// experience. If a machine has a driver-specific Chromium/GPU failure, the
+// existing safe-renderer flags provide a deliberate software-rendering mode.
 const WINDOWS_DISABLE_GPU = process.platform === 'win32' && (
   process.env.AUTOMNIA_WINDOWS_DISABLE_GPU === '1' ||
   process.env.AUTOMNIA_WINDOWS_SAFE_RENDERER === '1'
@@ -90,6 +96,7 @@ const TRAY_ENABLED = process.env.AUTOMNIA_DISABLE_TRAY !== '1' &&
 process.env.OPENCLAW_SUPPRESS_EXTENSION_API_WARNING = process.env.OPENCLAW_SUPPRESS_EXTENSION_API_WARNING || '1'
 if (WINDOWS_DISABLE_GPU) {
   app.disableHardwareAcceleration()
+  console.warn('[automnia] Windows hardware acceleration disabled for renderer stability')
 }
 if (WINDOWS_DIAGNOSTIC_SINGLE_PROCESS) {
   console.warn('[automnia] unsafe Electron single-process diagnostic mode is enabled for this development run only.')
@@ -2134,8 +2141,9 @@ async function runElectronE2eScreenshotCapture(win) {
             navId + ' aria-current'
           );
           const expectedWorkspaceLabel = workspaceMode === 'agent-editor' ? 'Agents' : ${JSON.stringify(workspace.label)};
+          const expectedWorkspaceTitle = expectedWorkspaceLabel === 'Agents' ? 'Agent Operations' : expectedWorkspaceLabel;
           await waitFor(
-            () => document.querySelector('#automnia-workspace-title')?.textContent?.trim() === expectedWorkspaceLabel,
+            () => document.querySelector('#automnia-workspace-title')?.textContent?.trim() === expectedWorkspaceTitle,
             navId + ' title'
           );
           await waitFor(
@@ -2256,8 +2264,9 @@ async function runElectronE2eRendererJourney(win) {
           () => button.getAttribute('aria-current') === 'page',
           label + ' navigation state',
         );
+        const expectedWorkspaceTitle = label === 'Agents' ? 'Agent Operations' : label;
         await waitFor(
-          () => document.querySelector('#automnia-workspace-title')?.textContent?.trim() === label,
+          () => document.querySelector('#automnia-workspace-title')?.textContent?.trim() === expectedWorkspaceTitle,
           label + ' workspace title',
         );
         await waitFor(
