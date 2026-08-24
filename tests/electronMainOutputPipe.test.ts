@@ -17,5 +17,15 @@ test('Windows desktop keeps hardware acceleration by default with an explicit sa
   assert.match(electronMain, /const WINDOWS_DISABLE_GPU = process\.platform === 'win32'/)
   assert.match(electronMain, /AUTOMNIA_WINDOWS_DISABLE_GPU === '1'/)
   assert.match(electronMain, /AUTOMNIA_WINDOWS_SAFE_RENDERER === '1'/)
+  assert.match(electronMain, /AUTOMNIA_WINDOWS_FORCE_GPU !== '1'/)
   assert.match(electronMain, /app\.disableHardwareAcceleration\(\)/)
+})
+
+test('Windows desktop records and recovers from an unexpected GPU child-process failure', () => {
+  assert.match(electronMain, /desktop-lifecycle\.jsonl/)
+  assert.match(electronMain, /app\.on\('child-process-gone'/)
+  assert.match(electronMain, /diagnostic\.type === 'GPU'/)
+  assert.match(electronMain, /writeWindowsGpuRecoveryState\(diagnostic\)/)
+  assert.match(electronMain, /app\.relaunch\(\{ args: process\.argv\.slice\(1\) \}\)/)
+  assert.match(electronMain, /renderer-process-gone/)
 })

@@ -60,6 +60,10 @@ const isDev = !detectPackagedRuntime()
 const HOME_DIR = process.env.USERPROFILE || process.env.HOME || app.getPath('home')
 const AUTOMNIA_USER_DATA_DIR = path.resolve(process.env.AUTOMNIA_USER_DATA_DIR || path.join(HOME_DIR, '.automnia-control-center'))
 app.setPath('userData', AUTOMNIA_USER_DATA_DIR)
+const DESKTOP_DIAGNOSTICS_DIR = path.join(AUTOMNIA_USER_DATA_DIR, 'diagnostics')
+const DESKTOP_DIAGNOSTICS_LOG_PATH = path.join(DESKTOP_DIAGNOSTICS_DIR, 'desktop-lifecycle.jsonl')
+const WINDOWS_GPU_RECOVERY_STATE_PATH = path.join(AUTOMNIA_USER_DATA_DIR, 'windows-gpu-recovery.json')
+const WINDOWS_GPU_RECOVERY_TTL_MS = 24 * 60 * 60 * 1000
 const CONTROL_CENTER_TOKEN_FILE = path.resolve(
   process.env.AUTOMNIA_CONTROL_CENTER_TOKEN_FILE || path.join(AUTOMNIA_USER_DATA_DIR, 'auth', 'control-center-token.json'),
 )
@@ -69,12 +73,71 @@ const BUNDLED_NPM_TOOLCHAIN_ROOT = path.join(process.resourcesPath || '', 'toolc
 const MIN_NPM_NODE_MAJOR = 22
 const MIN_NPM_NODE_MINOR = 19
 const WINDOWS_RENDERER_STABILITY = process.platform === 'win32' && process.env.AUTOMNIA_WINDOWS_RENDERER_STABILITY !== '0'
-// Keep hardware acceleration enabled by default for the normal desktop
-// experience. If a machine has a driver-specific Chromium/GPU failure, the
-// existing safe-renderer flags provide a deliberate software-rendering mode.
-const WINDOWS_DISABLE_GPU = process.platform === 'win32' && (
+function readWindowsGpuRecoveryState() {
+  try {
+    const state = JSON.parse(fs.readFileSync(WINDOWS_GPU_RECOVERY_STATE_PATH, 'utf8'))
+    const observedAt = Date.parse(state?.observedAt || '')
+    if (!Number.isFinite(observedAt)) return null
+    const age = Date.now() - observedAt
+    if (age < 0 || age > WINDOWS_GPU_RECOVERY_TTL_MS) return null
+    return state
+  } catch {
+    return null
+  }
+}
+
+function writeWindowsGpuRecoveryState(details) {
+  const tempPath = `${WINDOWS_GPU_RECOVERY_STATE_PATH}.${process.pid}.tmp`
+  try {
+    fs.mkdirSync(path.dirname(WINDOWS_GPU_RECOVERY_STATE_PATH), { recursive: true })
+    fs.writeFileSync(tempPath, JSON.stringify({
+      observedAt: new Date().toISOString(),
+      reason: details?.reason || 'unknown',
+      exitCode: Number.isFinite(details?.exitCode) ? details.exitCode : null,
+      type: details?.type || 'GPU',
+    }, null, 2) + '\n', { encoding: 'utf8', mode: 0o600 })
+    fs.renameSync(tempPath, WINDOWS_GPU_RECOVERY_STATE_PATH)
+  } catch {
+    try { fs.rmSync(tempPath, { force: true }) } catch {}
+  }
+}
+
+function appendDesktopDiagnostic(event, details = {}) {
+  const payload = {
+    at: new Date().toISOString(),
+    event,
+    pid: process.pid,
+    details,
+  }
+  try {
+    fs.mkdirSync(DESKTOP_DIAGNOSTICS_DIR, { recursive: true })
+    if (fs.existsSync(DESKTOP_DIAGNOSTICS_LOG_PATH) && fs.statSync(DESKTOP_DIAGNOSTICS_LOG_PATH).size > 512 * 1024) {
+      const existing = fs.readFileSync(DESKTOP_DIAGNOSTICS_LOG_PATH, 'utf8')
+      fs.writeFileSync(DESKTOP_DIAGNOSTICS_LOG_PATH, existing.slice(-256 * 1024), 'utf8')
+    }
+    fs.appendFileSync(DESKTOP_DIAGNOSTICS_LOG_PATH, `${JSON.stringify(payload)}\n`, 'utf8')
+  } catch {
+    // Crash diagnostics must never become another crash source.
+  }
+}
+
+const WINDOWS_EXPLICIT_DISABLE_GPU = process.platform === 'win32' && (
   process.env.AUTOMNIA_WINDOWS_DISABLE_GPU === '1' ||
   process.env.AUTOMNIA_WINDOWS_SAFE_RENDERER === '1'
+)
+const WINDOWS_ADAPTIVE_GPU_FALLBACK = process.platform === 'win32' &&
+  process.env.AUTOMNIA_WINDOWS_FORCE_GPU !== '1' &&
+  Boolean(readWindowsGpuRecoveryState())
+// Keep hardware acceleration enabled by default for the normal desktop
+// experience. If a machine has a driver-specific Chromium/GPU failure, the
+// explicit safe-renderer flags provide a deliberate software-rendering mode.
+// After Electron reports an actual GPU child-process failure, the next launch
+// uses software rendering for 24 hours so the desktop can recover instead of
+// repeatedly reopening into the same driver failure. AUTOMNIA_WINDOWS_FORCE_GPU=1
+// bypasses only this adaptive fallback for troubleshooting.
+const WINDOWS_DISABLE_GPU = process.platform === 'win32' && (
+  WINDOWS_EXPLICIT_DISABLE_GPU ||
+  WINDOWS_ADAPTIVE_GPU_FALLBACK
 )
 const WINDOWS_DIAGNOSTIC_SINGLE_PROCESS = process.platform === 'win32' &&
   isDev &&
@@ -96,7 +159,11 @@ const TRAY_ENABLED = process.env.AUTOMNIA_DISABLE_TRAY !== '1' &&
 process.env.OPENCLAW_SUPPRESS_EXTENSION_API_WARNING = process.env.OPENCLAW_SUPPRESS_EXTENSION_API_WARNING || '1'
 if (WINDOWS_DISABLE_GPU) {
   app.disableHardwareAcceleration()
-  console.warn('[automnia] Windows hardware acceleration disabled for renderer stability')
+  console.warn(
+    WINDOWS_ADAPTIVE_GPU_FALLBACK
+      ? '[automnia] Windows hardware acceleration disabled after a recent GPU-process failure; use AUTOMNIA_WINDOWS_FORCE_GPU=1 to override'
+      : '[automnia] Windows hardware acceleration disabled for renderer stability',
+  )
 }
 if (WINDOWS_DIAGNOSTIC_SINGLE_PROCESS) {
   console.warn('[automnia] unsafe Electron single-process diagnostic mode is enabled for this development run only.')
@@ -133,9 +200,60 @@ let serverRestartAttempts = 0
 let controlCenterLaunchToken = ''
 let lastTrayMenuSnapshot = []
 let serverStartupOutputTail = ''
+let gpuRecoveryRelaunchRequested = false
 const SERVER_RESTART_BASE_DELAY_MS = 1000
 const SERVER_RESTART_MAX_DELAY_MS = 10_000
 const SERVER_STARTUP_OUTPUT_TAIL_MAX_CHARS = 12_000
+
+appendDesktopDiagnostic('process-start', {
+  hardwareAcceleration: !WINDOWS_DISABLE_GPU,
+  adaptiveGpuFallback: WINDOWS_ADAPTIVE_GPU_FALLBACK,
+  explicitGpuDisable: WINDOWS_EXPLICIT_DISABLE_GPU,
+})
+
+process.on('uncaughtExceptionMonitor', (error, origin) => {
+  appendDesktopDiagnostic('uncaught-exception', {
+    origin,
+    message: error?.message || String(error),
+    stack: error?.stack || null,
+  })
+})
+
+app.on('child-process-gone', (_event, details) => {
+  const diagnostic = {
+    type: details?.type || 'Unknown',
+    name: details?.name || null,
+    serviceName: details?.serviceName || null,
+    reason: details?.reason || 'unknown',
+    exitCode: Number.isFinite(details?.exitCode) ? details.exitCode : null,
+  }
+  appendDesktopDiagnostic('child-process-gone', diagnostic)
+
+  const gpuFailure = process.platform === 'win32' &&
+    diagnostic.type === 'GPU' &&
+    !['clean-exit', 'killed'].includes(diagnostic.reason)
+  if (!gpuFailure || WINDOWS_DISABLE_GPU || gpuRecoveryRelaunchRequested || isQuitting) return
+
+  writeWindowsGpuRecoveryState(diagnostic)
+  appendDesktopDiagnostic('gpu-recovery-scheduled', diagnostic)
+  gpuRecoveryRelaunchRequested = true
+  process.env.AUTOMNIA_WINDOWS_DISABLE_GPU = '1'
+  process.env.AUTOMNIA_WINDOWS_SAFE_RENDERER = '1'
+  setTimeout(() => {
+    if (isQuitting) return
+    isQuitting = true
+    try {
+      app.relaunch({ args: process.argv.slice(1) })
+      appendDesktopDiagnostic('gpu-recovery-relaunch', { mode: 'software' })
+    } catch (error) {
+      appendDesktopDiagnostic('gpu-recovery-relaunch-failed', {
+        message: error?.message || String(error),
+        stack: error?.stack || null,
+      })
+    }
+    app.quit()
+  }, 250)
+})
 
 function logE2e(message) {
   if (!ELECTRON_E2E) return
@@ -1746,9 +1864,14 @@ function createMainWindow() {
   let e2eAppRehydrationStarted = false
 
   win.on('unresponsive', () => {
+    appendDesktopDiagnostic('renderer-unresponsive')
     console.warn('[automnia] renderer became unresponsive')
   })
   win.webContents.on('render-process-gone', (_event, details) => {
+    appendDesktopDiagnostic('renderer-process-gone', {
+      reason: details?.reason || 'unknown',
+      exitCode: Number.isFinite(details?.exitCode) ? details.exitCode : null,
+    })
     console.error('[automnia] renderer process gone:', details)
     logE2e(`renderer-process-gone:${details?.reason || 'unknown'}`)
     e2eRendererGone = true
@@ -2659,6 +2782,10 @@ app.on('second-instance', () => {
 })
 
 app.on('before-quit', (event) => {
+  appendDesktopDiagnostic('app-quit-requested', {
+    gpuRecoveryRelaunchRequested,
+    startupFailed,
+  })
   isQuitting = true
   if (quitCleanupComplete || startupFailed) return
   event.preventDefault()
