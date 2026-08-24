@@ -165,6 +165,7 @@ import {
 } from './services/gateway/gatewayLogService'
 import {
   AUTOMNIA_COMPACTION_KEEP_RECENT_TOKENS,
+  AUTOMNIA_OPENCLAW_CONTEXT_TOKENS_DEFAULT,
   AUTOMNIA_COMPACTION_RESERVE_TOKENS,
   enforceAutomniaCompactionPolicy,
   migrateAutomniaCompactBaseline,
@@ -8758,7 +8759,9 @@ function enforcePersistedCompactionPolicy(config: OpenClawConfigFile) {
   const defaults = config.agents?.defaults
   if (!defaults) return false
   if (!defaults.compaction) defaults.compaction = {}
-  return enforceAutomniaCompactionPolicy(defaults.compaction as AutomniaCompactionSettings)
+  const settings = defaults.compaction as AutomniaCompactionSettings
+  const migrated = migrateAutomniaCompactBaseline(settings)
+  return migrated || enforceAutomniaCompactionPolicy(settings)
 }
 
 function repairInvalidPersistedTelegramPolicy(config: OpenClawConfigFile) {
@@ -9369,7 +9372,22 @@ function ensureOpenclawRuntimeDefaults(config: OpenClawConfigFile) {
   defaults.contextLimits.toolResultMaxChars ??= 8000
   defaults.contextLimits.postCompactionMaxChars ??= 1200
   const configuredContextTokens = Number(defaults.contextTokens)
-  if (!Number.isFinite(configuredContextTokens) || configuredContextTokens > AUTOMNIA_OPENCLAW_CONTEXT_TOKENS) {
+  const hasExplicitContextTokenOverride = Boolean(process.env.AUTOMNIA_OPENCLAW_CONTEXT_TOKENS?.trim())
+  const legacyAutomniaContextBaseline = !hasExplicitContextTokenOverride && configuredContextTokens === 24_000
+  if (legacyAutomniaContextBaseline) {
+    // 24k was the previous token-saving baseline. It leaves OpenClaw's
+    // documented 20k recovery reserve no usable prompt budget, so migrate
+    // only that exact default while preserving explicit operator overrides.
+    defaults.contextTokens = AUTOMNIA_OPENCLAW_CONTEXT_TOKENS
+    for (const provider of Object.values(config.models?.providers || {})) {
+      if (!provider || !Array.isArray(provider.models)) continue
+      provider.models = provider.models.map((model) => (
+        model && typeof model === 'object' && !Array.isArray(model) && (model as Record<string, unknown>).contextTokens === 24_000
+          ? { ...(model as Record<string, unknown>), contextTokens: AUTOMNIA_OPENCLAW_CONTEXT_TOKENS }
+          : model
+      ))
+    }
+  } else if (!Number.isFinite(configuredContextTokens) || configuredContextTokens > AUTOMNIA_OPENCLAW_CONTEXT_TOKENS) {
     defaults.contextTokens = AUTOMNIA_OPENCLAW_CONTEXT_TOKENS
   }
   defaults.imageMaxDimensionPx ??= 1024
@@ -9776,10 +9794,10 @@ const AUTOMNIA_OPENCLAW_CONTEXT_TOKENS = (() => {
   // clamps this to a model's actual context window, while the lower shared
   // cap makes long tool histories compact before they become six-figure
   // prompts. An explicit environment value remains an operator escape hatch.
-  const configured = Number(process.env.AUTOMNIA_OPENCLAW_CONTEXT_TOKENS || 24_000)
+  const configured = Number(process.env.AUTOMNIA_OPENCLAW_CONTEXT_TOKENS || AUTOMNIA_OPENCLAW_CONTEXT_TOKENS_DEFAULT)
   return Number.isFinite(configured)
     ? Math.max(16_000, Math.min(256_000, Math.round(configured)))
-    : 24_000
+    : AUTOMNIA_OPENCLAW_CONTEXT_TOKENS_DEFAULT
 })()
 
 type OpenClawModelSelection = { primary?: string; fallbacks?: string[] }

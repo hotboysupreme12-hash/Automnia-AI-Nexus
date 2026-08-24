@@ -3,12 +3,14 @@
  *
  * OpenClaw subtracts the reserve from the model context window before deciding
  * whether a prompt fits. A large reserve can therefore make a long session
- * impossible to compact, even when the model itself has room for it. Keep the
- * hosted path's recent tail close to its relay envelope so every new tool turn
- * does not replay tens of thousands of old tokens.
+ * impossible to compact, even when the model itself has room for it. Keep a
+ * real recovery reserve and a working context large enough for tool turns so
+ * the native Codex compactor is not forced to recover from an already-full
+ * session.
  */
-export const AUTOMNIA_COMPACTION_RESERVE_TOKENS = 12_000
-export const AUTOMNIA_COMPACTION_KEEP_RECENT_TOKENS = 12_000
+export const AUTOMNIA_OPENCLAW_CONTEXT_TOKENS_DEFAULT = 64_000
+export const AUTOMNIA_COMPACTION_RESERVE_TOKENS = 20_000
+export const AUTOMNIA_COMPACTION_KEEP_RECENT_TOKENS = 20_000
 
 export type AutomniaCompactionSettings = {
   reserveTokens?: unknown
@@ -25,6 +27,21 @@ export type AutomniaCompactionSettings = {
 export function migrateAutomniaCompactBaseline(settings: AutomniaCompactionSettings) {
   const midTurnPrecheck = settings.midTurnPrecheck
   const memoryFlush = settings.memoryFlush
+  const legacyTokenEfficientBaseline = settings.reserveTokensFloor === 12_000
+    && settings.keepRecentTokens === 12_000
+    && midTurnPrecheck && typeof midTurnPrecheck === 'object'
+    && (midTurnPrecheck as { enabled?: unknown }).enabled === true
+    && settings.truncateAfterCompaction === true
+    && settings.maxActiveTranscriptBytes === '8mb'
+    && settings.notifyUser === false
+    && memoryFlush && typeof memoryFlush === 'object'
+    && (memoryFlush as { enabled?: unknown }).enabled === false
+  if (legacyTokenEfficientBaseline) {
+    settings.reserveTokensFloor = AUTOMNIA_COMPACTION_RESERVE_TOKENS
+    settings.keepRecentTokens = AUTOMNIA_COMPACTION_KEEP_RECENT_TOKENS
+    return true
+  }
+
   if (
     settings.reserveTokensFloor !== AUTOMNIA_COMPACTION_RESERVE_TOKENS
     || settings.keepRecentTokens !== AUTOMNIA_COMPACTION_KEEP_RECENT_TOKENS

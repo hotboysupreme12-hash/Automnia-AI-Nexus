@@ -2,10 +2,17 @@ import assert from 'node:assert/strict'
 import test from 'node:test'
 import {
   AUTOMNIA_COMPACTION_KEEP_RECENT_TOKENS,
+  AUTOMNIA_OPENCLAW_CONTEXT_TOKENS_DEFAULT,
   AUTOMNIA_COMPACTION_RESERVE_TOKENS,
   enforceAutomniaCompactionPolicy,
   migrateAutomniaCompactBaseline,
 } from '../server/services/gateway/compactionPolicy'
+
+test('leaves enough working context for the native compaction reserve', () => {
+  assert.equal(AUTOMNIA_COMPACTION_RESERVE_TOKENS, 20_000)
+  assert.equal(AUTOMNIA_COMPACTION_KEEP_RECENT_TOKENS, 20_000)
+  assert.ok(AUTOMNIA_OPENCLAW_CONTEXT_TOKENS_DEFAULT >= AUTOMNIA_COMPACTION_RESERVE_TOKENS * 2)
+})
 
 test('caps oversized compaction settings that starve 200k-context prompts', () => {
   const settings = {
@@ -35,6 +42,22 @@ test('does not rewrite an already safe configuration', () => {
   }
 
   assert.equal(enforceAutomniaCompactionPolicy(settings), false)
+})
+
+test('migrates the prior token-efficient 12k baseline to the native recovery reserve', () => {
+  const settings = {
+    reserveTokensFloor: 12_000,
+    keepRecentTokens: 12_000,
+    midTurnPrecheck: { enabled: true },
+    truncateAfterCompaction: true,
+    maxActiveTranscriptBytes: '8mb',
+    notifyUser: false,
+    memoryFlush: { enabled: false },
+  }
+
+  assert.equal(migrateAutomniaCompactBaseline(settings), true)
+  assert.equal(settings.reserveTokensFloor, AUTOMNIA_COMPACTION_RESERVE_TOKENS)
+  assert.equal(settings.keepRecentTokens, AUTOMNIA_COMPACTION_KEEP_RECENT_TOKENS)
 })
 
 test('migrates the older compact-but-unbounded baseline', () => {
