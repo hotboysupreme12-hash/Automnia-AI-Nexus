@@ -21,7 +21,7 @@ export type Shift = {
 }
 
 export type RuntimeCronJobSummary = Omit<Shift, 'endsAt' | 'scheduleKind' | 'scheduleLabel'> & {
-  source: 'control-center' | 'openclaw'
+  source: 'control-center' | 'openclaw' | 'system-cron'
   status: string
   scheduleKind?: string
   scheduleLabel?: string

@@ -101,6 +101,7 @@ function formatCronSource(value: string | null | undefined): string {
   const normalized = value?.trim().toLowerCase()
   if (normalized === 'control-center') return 'Automnia schedule'
   if (normalized === 'openclaw') return 'OpenClaw schedule'
+  if (normalized === 'system-cron') return 'System crontab'
   return value?.trim() ? value.trim().replace(/[-_]+/g, ' ').replace(/\b\w/g, (char) => char.toUpperCase()) : 'Connected schedule'
 }
 
@@ -629,38 +630,40 @@ const CronJobCard = memo(function CronJobCard({
       className="dy-cron-job-card relative flex min-h-16 flex-col gap-2 px-3 py-2.5 text-[12px] leading-tight transition"
       data-state={status}
       data-ui-revision="cron-job-v2"
-      title={`OpenClaw cron ${job.cronId}`}
+      title={`${formatCronSource(job.source)} ${job.cronId}`}
     >
-      <div className="dy-cron-job-actions absolute right-3 top-3 inline-flex items-center gap-1">
-        <IconButton
-          onClick={() => onEdit(job)}
-          title={`Edit schedule for ${job.name}`}
-          aria-label={`Edit schedule for ${job.name}`}
-          size="compact"
-          variant="quiet"
-          className="dy-cron-action-button dy-cron-edit-button inline-flex items-center justify-center"
-          icon={(
-          <svg aria-hidden="true" viewBox="0 0 24 24">
-            <path d="M4 20h4.4L18.9 9.5a2.1 2.1 0 0 0 0-3l-1.4-1.4a2.1 2.1 0 0 0-3 0L4 15.6V20Z" />
-            <path d="m13.6 6 4.4 4.4" />
-          </svg>
-          )}
-        />
-        <IconButton
-          disabled={pausing}
-          onClick={() => onPause(job)}
-          title={`Pause ${job.name}`}
-          aria-label={`Pause scheduled run ${job.name}`}
-          size="compact"
-          variant="danger"
-          className="dy-cron-action-button dy-cron-pause-button inline-flex items-center justify-center disabled:cursor-not-allowed disabled:opacity-50"
-          icon={(
-          <svg aria-hidden="true" viewBox="0 0 24 24">
-            <path d="M7 7h10v10H7Z" />
-          </svg>
-          )}
-        />
-      </div>
+      {job.source !== 'system-cron' && (
+        <div className="dy-cron-job-actions absolute right-3 top-3 inline-flex items-center gap-1">
+          <IconButton
+            onClick={() => onEdit(job)}
+            title={`Edit schedule for ${job.name}`}
+            aria-label={`Edit schedule for ${job.name}`}
+            size="compact"
+            variant="quiet"
+            className="dy-cron-action-button dy-cron-edit-button inline-flex items-center justify-center"
+            icon={(
+            <svg aria-hidden="true" viewBox="0 0 24 24">
+              <path d="M4 20h4.4L18.9 9.5a2.1 2.1 0 0 0 0-3l-1.4-1.4a2.1 2.1 0 0 0-3 0L4 15.6V20Z" />
+              <path d="m13.6 6 4.4 4.4" />
+            </svg>
+            )}
+          />
+          <IconButton
+            disabled={pausing}
+            onClick={() => onPause(job)}
+            title={`Pause ${job.name}`}
+            aria-label={`Pause scheduled run ${job.name}`}
+            size="compact"
+            variant="danger"
+            className="dy-cron-action-button dy-cron-pause-button inline-flex items-center justify-center disabled:cursor-not-allowed disabled:opacity-50"
+            icon={(
+            <svg aria-hidden="true" viewBox="0 0 24 24">
+              <path d="M7 7h10v10H7Z" />
+            </svg>
+            )}
+          />
+        </div>
+      )}
 
       <div className="dy-cron-job-header min-w-0 pr-16">
         <span className="dy-cron-job-glyph" aria-hidden="true">
@@ -1093,6 +1096,7 @@ const RuntimeGatewayPanel = memo(function RuntimeGatewayPanel({
   }, [status?.shifts?.active])
   const cronSyncError = status?.shifts?.error || ''
   const activeCronCount = status?.shifts?.activeCount ?? activeCronJobs.length
+  const manageableCronJobs = useMemo(() => activeCronJobs.filter((job) => job.source !== 'system-cron'), [activeCronJobs])
   const cronListTruncated = activeCronCount > activeCronJobs.length
   const cronCadences = useMemo(() => Array.from(new Set(activeCronJobs.map((job) => job.every).filter(Boolean))), [activeCronJobs])
   const [cronPage, setCronPage] = useState(0)
@@ -1112,9 +1116,13 @@ const RuntimeGatewayPanel = memo(function RuntimeGatewayPanel({
   const [runtimeNotice, setRuntimeNotice] = useState('')
   const localSessionNeedsReconnect = /\bauth(?:entication)?(?:\s+required)?\b|\bauth_required\b|\blocal runtime session needs to reconnect\b/i.test(error)
   const cronCancelPreview = useMemo(() => {
-    return activeCronJobs.slice(0, 3).map((job) => `${job.name} (${job.agent})`).join(', ')
-  }, [activeCronJobs])
+    return manageableCronJobs.slice(0, 3).map((job) => `${job.name} (${job.agent})`).join(', ')
+  }, [manageableCronJobs])
   const pauseCronJob = useCallback(async (job: RuntimeCronJob) => {
+    if (job.source === 'system-cron') {
+      setRuntimeNotice('System crontab jobs must be managed outside OpenClaw.')
+      return
+    }
     setCronCancelConfirm(false)
     setCronCancelKey(job.id)
     setActionError('')
@@ -1129,7 +1137,7 @@ const RuntimeGatewayPanel = memo(function RuntimeGatewayPanel({
       setCronCancelKey('')
     }
   }, [onRefresh])
-  const pauseAllCronJobs = async (jobs = activeCronJobs) => {
+  const pauseAllCronJobs = async (jobs = manageableCronJobs) => {
     if (!jobs.length || cronCancelKey === '__all__') return
     setCronCancelConfirm(false)
     setCronCancelKey('__all__')
@@ -1148,14 +1156,14 @@ const RuntimeGatewayPanel = memo(function RuntimeGatewayPanel({
     }
   }
   const requestCancelAllCronJobs = () => {
-    if (!activeCronJobs.length || cronCancelKey === '__all__') return
+    if (!manageableCronJobs.length || cronCancelKey === '__all__') return
     setActionError('')
     setRuntimeNotice('')
-    if (activeCronJobs.length > 1) {
+    if (manageableCronJobs.length > 1) {
       setCronCancelConfirm(true)
       return
     }
-    void pauseAllCronJobs(activeCronJobs)
+    void pauseAllCronJobs(manageableCronJobs)
   }
   const keepCronJobsScheduled = () => {
     setCronCancelConfirm(false)
@@ -1231,25 +1239,25 @@ const RuntimeGatewayPanel = memo(function RuntimeGatewayPanel({
           {runtimeNotice}
         </div>
       )}
-      {cronCancelConfirm && activeCronJobs.length > 0 && (
+      {cronCancelConfirm && manageableCronJobs.length > 0 && (
         <ActionStatusBanner
           className="dy-monitor-alert px-4 text-[11px] leading-relaxed"
           rounded="none"
           buttonRounded="none"
           actionTextClassName="text-[12px]"
-          message={`Pause ${cronListTruncated ? 'the loaded' : 'all'} ${activeCronJobs.length} scheduled run${activeCronJobs.length === 1 ? '' : 's'}?`}
+          message={`Pause ${cronListTruncated ? 'the loaded' : 'all'} ${manageableCronJobs.length} scheduled run${manageableCronJobs.length === 1 ? '' : 's'}?`}
           detail={cronCancelPreview ? (
             <>
               {cronCancelPreview}
-              {activeCronJobs.length > 3 ? ` +${activeCronJobs.length - 3} more` : ''}
+              {manageableCronJobs.length > 3 ? ` +${manageableCronJobs.length - 3} more` : ''}
             </>
           ) : undefined}
-          detailTitle={activeCronJobs.map((job) => `${job.name} (${job.agent})`).join(', ')}
+          detailTitle={manageableCronJobs.map((job) => `${job.name} (${job.agent})`).join(', ')}
           confirmLabel="Pause jobs"
-          confirmAriaLabel={`Pause ${activeCronJobs.length} scheduled run${activeCronJobs.length === 1 ? '' : 's'}`}
+          confirmAriaLabel={`Pause ${manageableCronJobs.length} scheduled run${manageableCronJobs.length === 1 ? '' : 's'}`}
           cancelAriaLabel="Keep scheduled runs active"
           busy={cronCancelKey === '__all__'}
-          onConfirm={() => void pauseAllCronJobs(activeCronJobs)}
+          onConfirm={() => void pauseAllCronJobs(manageableCronJobs)}
           onCancel={keepCronJobsScheduled}
         />
       )}
@@ -1287,11 +1295,11 @@ const RuntimeGatewayPanel = memo(function RuntimeGatewayPanel({
                     {cronCadences.slice(0, 2).map(formatCronCadence).join(' · ')}
                   </span>
                 )}
-                {activeCronJobs.length > 0 && (
+                {manageableCronJobs.length > 0 && (
                   <Button
                     disabled={cronCancelKey === '__all__'}
                     onClick={requestCancelAllCronJobs}
-                    title={`Pause ${cronListTruncated ? 'the loaded' : 'all'} ${activeCronJobs.length} scheduled runs`}
+                    title={`Pause ${cronListTruncated ? 'the loaded' : 'all'} ${manageableCronJobs.length} scheduled runs`}
                     variant="danger"
                     size="compact"
                     className="dy-cron-cancel-button rounded-none border border-rose-300/15 bg-rose-300/[0.035] px-2 py-1 text-[12px] font-semibold uppercase tracking-[0.10em] text-rose-100 transition hover:border-rose-300/30 hover:bg-rose-300/[0.07] disabled:cursor-not-allowed disabled:opacity-50"

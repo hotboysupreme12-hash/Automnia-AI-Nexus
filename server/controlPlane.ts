@@ -183,6 +183,7 @@ import {
 } from './services/runtime/runtimeStatusService'
 import { createGatewayActivityFeedService } from './services/runtime/gatewayActivityFeedService'
 import { createRuntimeActionService } from './services/runtime/runtimeActionService'
+import { createSystemCronService } from './services/runtime/systemCronService'
 import { ensurePrimaryAgentSelection } from './services/agents/primaryAgentSelectionService'
 import { recoverMalformedCodexBindingSidecars } from './services/runtime/codexSidecarRecoveryService'
 import { createBrowserPreflightService } from './services/browser/browserPreflightService'
@@ -500,6 +501,7 @@ const AUTOMNIA_CREDITS_COMPACT_TOOL_ALLOWLIST = [
   'edit',
   'exec',
   'process',
+  'cron',
   'memory_get',
   'session_status',
 ] as const
@@ -3617,6 +3619,7 @@ let gatewayLedgerSnapshotCache: { builtAt: number; limit: number; sqlite: boolea
 let gatewayLedgerSnapshotInFlight: { limit: number; sqlite: boolean; promise: Promise<GatewayLedgerSnapshot> } | null = null
 let gatewayLedgerSnapshotGeneration = 0
 const runtimeStatusServiceRef: { current?: RuntimeStatusService } = {}
+const systemCronService = createSystemCronService({ redactSensitiveText })
 
 function invalidateRuntimeStatusCache() {
   runtimeStatusServiceRef.current?.invalidateCache()
@@ -10224,6 +10227,10 @@ async function ensureGatewayStartupPluginDefaults(repairSummary: GatewayStartupP
   if (!config) return
   const before = JSON.stringify({ gateway: config.gateway || {}, plugins: config.plugins || {}, tools: config.tools || {} })
   ensureGatewayConfigDefaults(config)
+  // Existing installs can reach gateway startup with a persisted config that
+  // predates the hosted-tool policy. Keep the Automnia cron tool available
+  // after an upgrade instead of making the agent fall back to host `crontab`.
+  applyAutomniaCreditsCompactToolPolicy(config)
   ensureClawTalkBundledPluginDefaults(config)
   await ensureClawTalkApiKeyMaterial(config)
   const [
@@ -14333,7 +14340,8 @@ function composeAgentDoctrinePrompt(
       `Role: ${identity.role || 'active Automnia agent'}`,
       identity.workspace ? `Workspace: ${identity.workspace}` : '',
       `Memory snippet: ${memory || 'none loaded; use memory_get or read only when needed.'}`,
-      'Tools: read, write, edit, exec, process, memory_get, session_status.',
+      'Tools: read, write, edit, exec, process, cron, memory_get, session_status.',
+      'For recurring work, use the Automnia/OpenClaw cron tool so the job is owned by Automnia and appears in Monitor. Do not edit the host crontab or claim a schedule without the cron tool result.',
       'For anything else, read the relevant local docs or skill file only when this task requires it; do not preload docs or workspace files.',
       'Preserve ISO-8601 timestamps, UUIDs, and numeric measurements exactly; they are not phone numbers.',
       'Keep the turn focused on the current request and keep the final reply concise.',
@@ -14350,6 +14358,7 @@ function composeAgentDoctrinePrompt(
       ? 'Startup: Doctrine files are available, but for Google Vertex Gemini read only files needed for this turn.'
       : 'Answer directly from the active conversation when enough context is already available. Do not read every doctrine, workspace, or team file just to begin a turn.',
     'Use tools whenever live state, an external action, or evidence is needed. Tool availability is not limited by the response speed or reasoning level.',
+    'For recurring work, use the Automnia/OpenClaw cron tool so the job is owned by Automnia and appears in Monitor. Do not edit the host crontab or claim a schedule without the cron tool result.',
     'Before changing workspace files, read the applicable AGENTS.md and only the files relevant to the requested change. Read doctrine, MDS.json, or an enabled SKILL.md only when it is relevant to the request.',
     `Shared skill root: ${SHARED_SKILLS_ROOT}. Never use ~/skills for Control Center skills; if MDS lists an absolute SKILL.md path, read that exact path.`,
     vertexCompactDirective,
@@ -16434,16 +16443,17 @@ function cronRowToRuntimeCronJob(row: Record<string, unknown>, shift?: Shift): R
   }
 }
 
-function listActiveCronJobsFromStateDb(limit?: number): { active: RuntimeCronJobSummary[]; activeCount: number } {
+function listActiveCronJobsFromStateDb(limit?: number, systemCronJobs = systemCronService.listJobs()): { active: RuntimeCronJobSummary[]; activeCount: number } {
   const inMemoryJobs = Array.from(activeShifts.values()).map(shiftToRuntimeCronJob)
+  const fallbackJobs = [...inMemoryJobs, ...systemCronJobs]
   const normalizedLimit = Number.isFinite(limit)
     ? Math.max(1, Math.min(500, Math.round(limit as number)))
     : null
   const dbPath = cronStateDbPath()
   if (!existsSync(dbPath)) {
     return {
-      active: normalizedLimit ? inMemoryJobs.slice(0, normalizedLimit) : inMemoryJobs,
-      activeCount: inMemoryJobs.length,
+      active: normalizedLimit ? fallbackJobs.slice(0, normalizedLimit) : fallbackJobs,
+      activeCount: fallbackJobs.length,
     }
   }
   let db: SqliteDatabase | null = null
@@ -16451,8 +16461,8 @@ function listActiveCronJobsFromStateDb(limit?: number): { active: RuntimeCronJob
     const sqlite = optionalRequire('node:sqlite') as SqliteModule
     if (!sqlite?.DatabaseSync) {
       return {
-        active: normalizedLimit ? inMemoryJobs.slice(0, normalizedLimit) : inMemoryJobs,
-        activeCount: inMemoryJobs.length,
+        active: normalizedLimit ? fallbackJobs.slice(0, normalizedLimit) : fallbackJobs,
+        activeCount: fallbackJobs.length,
       }
     }
     db = new sqlite.DatabaseSync(dbPath, { readOnly: true })
@@ -16504,6 +16514,9 @@ function listActiveCronJobsFromStateDb(limit?: number): { active: RuntimeCronJob
     for (const job of inMemoryJobs) {
       if (!jobsByCronId.has(job.cronId)) jobsByCronId.set(job.cronId, job)
     }
+    for (const job of systemCronJobs) {
+      if (!jobsByCronId.has(job.cronId)) jobsByCronId.set(job.cronId, job)
+    }
 
     const active = Array.from(jobsByCronId.values())
       .sort((left, right) => {
@@ -16516,7 +16529,7 @@ function listActiveCronJobsFromStateDb(limit?: number): { active: RuntimeCronJob
     return {
       active: normalizedLimit ? active.slice(0, normalizedLimit) : active,
       activeCount: normalizedLimit && persistedCount !== null
-        ? Math.max(persistedCount, active.length)
+        ? Math.max(persistedCount + systemCronJobs.length, active.length)
         : active.length,
     }
   } finally {
@@ -16530,21 +16543,23 @@ function listActiveCronJobsFromStateDb(limit?: number): { active: RuntimeCronJob
 
 function listActiveCronJobViews(options: { sqlite?: boolean; limit?: number } = {}): { active: RuntimeCronJobSummary[]; activeCount: number; error?: string } {
   const inMemoryJobs = Array.from(activeShifts.values()).map(shiftToRuntimeCronJob)
+  const systemCronJobs = systemCronService.listJobs()
+  const fallbackJobs = [...inMemoryJobs, ...systemCronJobs]
   const normalizedLimit = Number.isFinite(options.limit)
     ? Math.max(1, Math.min(500, Math.round(options.limit as number)))
     : null
   if (options.sqlite === false) {
     return {
-      active: normalizedLimit ? inMemoryJobs.slice(0, normalizedLimit) : inMemoryJobs,
-      activeCount: inMemoryJobs.length,
+      active: normalizedLimit ? fallbackJobs.slice(0, normalizedLimit) : fallbackJobs,
+      activeCount: fallbackJobs.length,
     }
   }
   try {
-    return listActiveCronJobsFromStateDb(normalizedLimit || undefined)
+    return listActiveCronJobsFromStateDb(normalizedLimit || undefined, systemCronJobs)
   } catch (error) {
     return {
-      active: normalizedLimit ? inMemoryJobs.slice(0, normalizedLimit) : inMemoryJobs,
-      activeCount: inMemoryJobs.length,
+      active: normalizedLimit ? fallbackJobs.slice(0, normalizedLimit) : fallbackJobs,
+      activeCount: fallbackJobs.length,
       error: redactSensitiveText(String(error)),
     }
   }

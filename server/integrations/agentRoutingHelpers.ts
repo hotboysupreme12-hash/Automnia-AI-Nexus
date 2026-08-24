@@ -1088,7 +1088,8 @@ function buildTelegramAgentRouteContext(params) {
         profile.role ? 'Role: ' + profile.role + '.' : 'Role: active Automnia agent.',
         profile.workspace ? 'Workspace: ' + profile.workspace : '',
         'Memory snippet: ' + (profile.memory || 'none loaded; use read or memory_get only when needed.'),
-        'Tools: read, write, edit, exec, process, memory_get, session_status.',
+        'Tools: read, write, edit, exec, process, cron, memory_get, session_status.',
+        'For recurring work, use the Automnia/OpenClaw cron tool so the job is owned by Automnia and appears in Monitor. Do not edit the host crontab or claim a schedule without the cron tool result.',
         'Read docs or skill files only when this task needs them; do not preload them.',
         'Ignore stale prior identity or workspace claims when they conflict with these facts.'
     ].filter(Boolean).join('\\n');

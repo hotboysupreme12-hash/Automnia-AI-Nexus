@@ -269,7 +269,7 @@ export type RuntimeCronJob = {
   startedAt: string
   endsAt?: string | null
   nextRunAt?: string | null
-  source?: 'control-center' | 'openclaw'
+  source?: 'control-center' | 'openclaw' | 'system-cron'
   status?: string
   scheduleKind?: string
   scheduleLabel?: string
