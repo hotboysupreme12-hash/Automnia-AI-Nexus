@@ -62,6 +62,50 @@ export function normalizeNexusSelection(
   return { selectedAgentId: id, selectedAgentIds: ids }
 }
 
+/**
+ * Toggle one valid agent in the chat selection while keeping the primary
+ * selection and the ordered multi-selection in sync.
+ */
+export function toggleNexusSelection(
+  agents: Array<Pick<OpenClawAgent, 'id'>>,
+  selectedAgentId: unknown,
+  selectedAgentIds: unknown,
+  agentId: string,
+): Pick<NexusUiState, 'selectedAgentId' | 'selectedAgentIds'> {
+  const current = normalizeNexusSelection(agents, selectedAgentId, selectedAgentIds)
+  if (!current.selectedAgentIds.includes(agentId) && !agents.some((agent) => agent.id === agentId)) {
+    return current
+  }
+
+  const nextIds = current.selectedAgentIds.includes(agentId)
+    ? current.selectedAgentIds.filter((id) => id !== agentId)
+    : [...current.selectedAgentIds, agentId]
+
+  return {
+    selectedAgentId: nextIds.length
+      ? nextIds.includes(agentId) ? agentId : nextIds[nextIds.length - 1]
+      : null,
+    selectedAgentIds: nextIds,
+  }
+}
+
+/** Remove an agent from chat selection without ever adding it as a side effect. */
+export function removeNexusSelection(
+  agents: Array<Pick<OpenClawAgent, 'id'>>,
+  selectedAgentId: unknown,
+  selectedAgentIds: unknown,
+  agentId: string,
+): Pick<NexusUiState, 'selectedAgentId' | 'selectedAgentIds'> {
+  const current = normalizeNexusSelection(agents, selectedAgentId, selectedAgentIds)
+  if (!current.selectedAgentIds.includes(agentId)) return current
+
+  const nextIds = current.selectedAgentIds.filter((id) => id !== agentId)
+  return {
+    selectedAgentId: nextIds.length ? nextIds[nextIds.length - 1] : null,
+    selectedAgentIds: nextIds,
+  }
+}
+
 export function makeNexusUiState(
   agents: Array<Pick<OpenClawAgent, 'id'>>,
   options: { tab?: AppTab; selectedAgentId?: unknown; selectedAgentIds?: unknown } = {},

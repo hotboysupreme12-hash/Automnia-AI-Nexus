@@ -144,26 +144,16 @@ export const AgentCard = memo(function AgentCard({ agent, isSelected, slotNumber
     event.dataTransfer.effectAllowed = 'copyMove'
   }
 
-  const handleCardClick = () => {
+  const handleCardClick = (event: React.MouseEvent<HTMLDivElement>) => {
+    // A double click emits two click events. Treat it as one selection action;
+    // party membership is controlled by the explicit Deploy/Remove button.
+    if (event.detail > 1) return
     selectAgent(agent.id, { toggle: true })
-  }
-
-  const handleDoubleClick = () => {
-    togglePartyMember(agent.id)
   }
 
   const handleContextMenu = (e: React.MouseEvent) => {
     e.preventDefault()
     openEditor(agent.id)
-  }
-
-  const handleCardKeyDown = (e: React.KeyboardEvent<HTMLDivElement>) => {
-    if (e.defaultPrevented) return
-    if (e.key !== 'Enter' && e.key !== ' ') return
-    const target = e.target as HTMLElement
-    if (target.closest('button, input, select, textarea, a')) return
-    e.preventDefault()
-    selectAgent(agent.id, { toggle: true })
   }
 
   const handleCardPointerMove = (event: React.PointerEvent<HTMLDivElement>) => {
@@ -245,16 +235,13 @@ export const AgentCard = memo(function AgentCard({ agent, isSelected, slotNumber
       data-agent-in-party={inP ? 'true' : 'false'}
       data-agent-running={busy ? 'true' : 'false'}
       data-agent-activity={activityStatus?.kind || (busy ? 'working' : 'idle')}
-      role="button"
-      tabIndex={missionRunning && !inP ? -1 : 0}
-      aria-pressed={isSelected}
-      aria-label={`${agent.name}, ${agent.role}. ${inP ? `In party slot ${displaySlot}.` : 'Not in party.'} Press Enter to select.`}
+      data-agent-selected={isSelected ? 'true' : 'false'}
+      role="group"
+      aria-label={`${agent.name}, ${agent.role}. ${inP ? `In party slot ${displaySlot}.` : 'Not in party.'} ${isSelected ? 'Selected for Agent Chat.' : 'Not selected for Agent Chat.'}`}
       draggable={!missionRunning}
       onDragStart={handleDragStart}
       onClick={handleCardClick}
-      onDoubleClick={handleDoubleClick}
       onContextMenu={handleContextMenu}
-      onKeyDown={handleCardKeyDown}
       onPointerMove={handleCardPointerMove}
       onPointerLeave={handleCardPointerLeave}
       className={[
@@ -394,7 +381,7 @@ export const AgentCard = memo(function AgentCard({ agent, isSelected, slotNumber
           </div>
         )}
 
-        <div className={`agent-card-actions mt-auto grid gap-2 border-t border-white/[0.07] pt-3 ${listMode ? 'grid-cols-[minmax(0,1fr)_auto]' : 'grid-cols-[1fr_auto]'}`}>
+        <div className="agent-card-actions mt-auto grid grid-cols-[minmax(0,1fr)_auto_auto] gap-2 border-t border-white/[0.07] pt-3">
           <button
             type="button"
             aria-label={inP ? `Remove ${agent.name} from active party` : `Deploy ${agent.name} to active party`}
@@ -404,6 +391,17 @@ export const AgentCard = memo(function AgentCard({ agent, isSelected, slotNumber
           >
             <span aria-hidden="true" className="agent-card-action-icon">{inP ? '-' : '+'}</span>
             {inP ? 'Remove' : 'Deploy'}
+          </button>
+          <button
+            type="button"
+            aria-label={isSelected ? `Remove ${agent.name} from Agent Chat` : `Add ${agent.name} to Agent Chat`}
+            aria-pressed={isSelected}
+            onClick={(event) => { event.stopPropagation(); selectAgent(agent.id, { toggle: true }) }}
+            className={`agent-card-action-chat inline-flex items-center justify-center gap-1.5 border px-3 py-2 text-[9px] font-black uppercase leading-none transition-all duration-200 ${isSelected ? 'is-selected' : ''}`}
+            title={isSelected ? 'Remove from Agent Chat' : 'Add to Agent Chat'}
+          >
+            <span aria-hidden="true">{isSelected ? '✓' : '+'}</span>
+            Chat
           </button>
           {!listMode ? (
             <button

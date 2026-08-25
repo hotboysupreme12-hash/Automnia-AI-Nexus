@@ -7,6 +7,8 @@ import { listCronShifts, stopCronShift, useRuntimeSummaryStatus } from '../../ho
 import type { RuntimeCronJob } from '../../hooks/useRuntimeStatus'
 import { ActionStatusBanner } from '../common/ActionStatusBanner'
 import { HelpAssistantPanel, type HelpNavigationTarget } from '../help/HelpAssistantPanel'
+import { ActivePartyStrip } from '../party/ActivePartyStrip'
+import { PartySelector } from '../party/PartySelector'
 import { applyStoredUiSettings } from '../settings/uiSettings'
 import {
   CONSOLE_PREFS_CHANGED_EVENT,
@@ -60,11 +62,13 @@ function recoverableLazyImport<T>(key: string, loader: () => Promise<T>): Promis
     })
 }
 
-// Status polling updates the shell independently from the active workspace.
-// Memoized lazy boundaries prevent those small header changes from walking the
-// entire registry, console, monitor, plugin, or settings subtree.
-const PartySelector = memo(lazy(() => recoverableLazyImport('party-selector', () => import('../party/PartySelector').then((module) => ({ default: module.PartySelector })))))
-const ActivePartyStrip = memo(lazy(() => recoverableLazyImport('active-party-strip', () => import('../party/ActivePartyStrip').then((module) => ({ default: module.ActivePartyStrip })))))
+const StableActivePartyStrip = memo(ActivePartyStrip)
+const StablePartySelector = memo(PartySelector)
+
+// The Agents workspace is the default landing surface. Keep its two critical
+// panels in the initial module graph so a slow or temporarily unavailable
+// dynamic chunk cannot leave the first screen parked on the Suspense loader.
+// Secondary workspaces stay lazy to keep their cost out of the default path.
 const MissionDeploymentPanel = memo(lazy(() => recoverableLazyImport('mission-deployment-panel', () => import('../mission/MissionDeploymentPanel').then((module) => ({ default: module.MissionDeploymentPanel })))))
 const AgentResponseConsole = memo(lazy(() => recoverableLazyImport('agent-response-console', () => import('../monitor/AgentResponseConsole').then((module) => ({ default: module.AgentResponseConsole })))))
 const LiveOperationMonitor = memo(lazy(() => recoverableLazyImport('live-operation-monitor', () => import('../monitor/LiveOperationMonitor').then((module) => ({ default: module.LiveOperationMonitor })))))
@@ -835,8 +839,8 @@ export function NexusShell() {
         </section>
 
         {/* Workspace content */}
-        {/* Keep the host node stable. Each lazy workspace below has its own boundary key,
-            so React never tries to update one workspace's Suspense subtree as another. */}
+        {/* Keep the host node stable. Deferred workspaces each have their own
+            boundary key, so React never updates one workspace's Suspense subtree as another. */}
         <div
           id={`nexus-workspace-${tab}`}
           role="region"
@@ -844,70 +848,70 @@ export function NexusShell() {
           className="dy-tab-content dy-surface-enter"
         >
           {tab === 'agents' && (
-            <Suspense key="agents" fallback={<PanelLoader />}>
-              <div
-                ref={setAgentsWorkspaceNode}
-                className={`dy-agents-workspace grid gap-5 ${isAgentConsoleVisible ? 'is-console-visible' : 'is-console-hidden'}`}
-                data-console-visible={isAgentConsoleVisible ? 'true' : 'false'}
-                data-agent-split-resizing={isAgentSplitResizing ? 'true' : 'false'}
-                style={agentWorkspaceStyle}
-              >
-                <div className="dy-active-party-pane min-w-0">
-                  <ActivePartyStrip
-                    toolbar={
-                      <Button
-                        variant="quiet"
-                        size="compact"
-                        className="dy-console-toggle"
-                        aria-pressed={isAgentConsoleVisible}
-                        aria-label={isAgentConsoleVisible ? 'Hide command console' : 'Show command console'}
-                        title={isAgentConsoleVisible ? 'Hide command console' : 'Show command console'}
-                        leadingIcon={(
-                          <span className="dy-console-toggle__icon" aria-hidden="true">
-                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
-                              <rect x="3.5" y="4.5" width="17" height="15" rx="2.5" />
-                              <path d="M14.5 5.5v13" />
-                              {isAgentConsoleVisible ? <path d="m17 9-3 3 3 3" /> : <path d="m12 9 3 3-3 3" />}
-                            </svg>
-                          </span>
-                        )}
-                        onClick={() => {
-                          setAgentConsoleVisible((visible) => !visible)
-                        }}
-                      >
-                        <span className="dy-console-toggle__label">{isAgentConsoleVisible ? 'Hide console' : 'Show console'}</span>
-                      </Button>
-                    }
-                  />
-                </div>
-                <div ref={setAgentRegistryPaneNode} className="agent-registry-pane min-h-0">
-                  <PartySelector />
-                </div>
-                {isAgentConsoleVisible && (
-                  <div
-                    className="dy-agent-split-resizer"
-                    role="separator"
-                    aria-orientation="vertical"
-                    aria-label="Resize agent registry and command console"
-                    aria-valuemin={AGENT_CONSOLE_MIN_WIDTH}
-                    aria-valuemax={AGENT_CONSOLE_MAX_WIDTH}
-                    aria-valuenow={agentConsoleWidth ?? undefined}
-                    tabIndex={0}
-                    title="Drag the Agent Registry edge to resize"
-                    style={{ '--dy-agent-split-resizer-width': `${AGENT_SPLIT_HANDLE_WIDTH}px` } as CSSProperties}
-                    onPointerDown={handleAgentSplitPointerDown}
-                    onKeyDown={handleAgentSplitKeyDown}
-                  >
-                    <span aria-hidden="true" />
-                  </div>
-                )}
-                {isAgentConsoleVisible && (
-                  <div className="dy-agent-console-pane min-h-0">
-                    <AgentResponseConsole />
-                  </div>
-                )}
+            <div
+              ref={setAgentsWorkspaceNode}
+              className={`dy-agents-workspace grid gap-5 ${isAgentConsoleVisible ? 'is-console-visible' : 'is-console-hidden'}`}
+              data-console-visible={isAgentConsoleVisible ? 'true' : 'false'}
+              data-agent-split-resizing={isAgentSplitResizing ? 'true' : 'false'}
+              style={agentWorkspaceStyle}
+            >
+              <div className="dy-active-party-pane min-w-0">
+                <StableActivePartyStrip
+                  toolbar={
+                    <Button
+                      variant="quiet"
+                      size="compact"
+                      className="dy-console-toggle"
+                      aria-pressed={isAgentConsoleVisible}
+                      aria-label={isAgentConsoleVisible ? 'Hide command console' : 'Show command console'}
+                      title={isAgentConsoleVisible ? 'Hide command console' : 'Show command console'}
+                      leadingIcon={(
+                        <span className="dy-console-toggle__icon" aria-hidden="true">
+                          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+                            <rect x="3.5" y="4.5" width="17" height="15" rx="2.5" />
+                            <path d="M14.5 5.5v13" />
+                            {isAgentConsoleVisible ? <path d="m17 9-3 3 3 3" /> : <path d="m12 9 3 3-3 3" />}
+                          </svg>
+                        </span>
+                      )}
+                      onClick={() => {
+                        setAgentConsoleVisible((visible) => !visible)
+                      }}
+                    >
+                      <span className="dy-console-toggle__label">{isAgentConsoleVisible ? 'Hide console' : 'Show console'}</span>
+                    </Button>
+                  }
+                />
               </div>
-            </Suspense>
+              <div ref={setAgentRegistryPaneNode} className="agent-registry-pane min-h-0">
+                <StablePartySelector />
+              </div>
+              {isAgentConsoleVisible && (
+                <div
+                  className="dy-agent-split-resizer"
+                  role="separator"
+                  aria-orientation="vertical"
+                  aria-label="Resize agent registry and command console"
+                  aria-valuemin={AGENT_CONSOLE_MIN_WIDTH}
+                  aria-valuemax={AGENT_CONSOLE_MAX_WIDTH}
+                  aria-valuenow={agentConsoleWidth ?? undefined}
+                  tabIndex={0}
+                  title="Drag the Agent Registry edge to resize"
+                  style={{ '--dy-agent-split-resizer-width': `${AGENT_SPLIT_HANDLE_WIDTH}px` } as CSSProperties}
+                  onPointerDown={handleAgentSplitPointerDown}
+                  onKeyDown={handleAgentSplitKeyDown}
+                >
+                  <span aria-hidden="true" />
+                </div>
+              )}
+              {isAgentConsoleVisible && (
+                <div className="dy-agent-console-pane min-h-0">
+                  <Suspense fallback={<PanelLoader />}>
+                    <AgentResponseConsole />
+                  </Suspense>
+                </div>
+              )}
+            </div>
           )}
 
           {tab === 'missions' && (

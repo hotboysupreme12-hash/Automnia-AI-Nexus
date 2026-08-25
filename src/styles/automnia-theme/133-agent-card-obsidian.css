@@ -60,7 +60,8 @@ html.dui-pro-overhaul.dui-cohesive-ui .agent-card-shell.agent-card-pro[data-agen
   .agent-card-stat-matrix > div,
   .agent-card-tags span,
   .agent-card-action-primary,
-  .agent-card-action-secondary
+  .agent-card-action-secondary,
+  .agent-card-action-chat
 ) {
   border-color: rgba(255, 255, 255, .105) !important;
   background:
@@ -70,6 +71,20 @@ html.dui-pro-overhaul.dui-cohesive-ui .agent-card-shell.agent-card-pro[data-agen
   box-shadow: none !important;
   backdrop-filter: none !important;
   -webkit-backdrop-filter: none !important;
+}
+
+html.dui-pro-overhaul.dui-cohesive-ui .agent-card-shell.agent-card-pro[data-agent-card="true"][data-agent-rarity] .agent-card-action-chat {
+  border-color: color-mix(in srgb, var(--agent-card-rarity) 42%, rgba(255, 255, 255, .13)) !important;
+  color: color-mix(in srgb, var(--agent-card-rarity) 68%, #ffffff) !important;
+}
+
+html.dui-pro-overhaul.dui-cohesive-ui .agent-card-shell.agent-card-pro[data-agent-card="true"][data-agent-rarity] .agent-card-action-chat.is-selected {
+  border-color: color-mix(in srgb, var(--agent-card-rarity) 72%, rgba(255, 255, 255, .18)) !important;
+  background:
+    linear-gradient(180deg, color-mix(in srgb, var(--agent-card-rarity) 22%, transparent), rgba(255, 255, 255, .012)),
+    color-mix(in srgb, var(--agent-card-rarity) 10%, var(--agent-card-neutral-panel)) !important;
+  color: #ffffff !important;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, .08) !important;
 }
 
 html.dui-pro-overhaul.dui-cohesive-ui .agent-card-shell.agent-card-pro[data-agent-card="true"][data-agent-rarity] .agent-card-name {

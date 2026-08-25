@@ -41,6 +41,8 @@ import {
 import {
   makeNexusUiState,
   normalizeNexusSelection,
+  removeNexusSelection,
+  toggleNexusSelection,
   type AgentEditorTab,
   type AppTab,
   type NexusUiState,
@@ -726,6 +728,7 @@ interface NexusState extends NexusAgentConfigState, NexusMissionState, NexusUiSt
   recruitAgent: (input: RecruitAgentInput) => Promise<RecruitAgentResult>
   retireAgent: (agentId: string) => Promise<void>
   selectAgent: (agentId: string, options?: { toggle?: boolean }) => void
+  removeAgentFromSelection: (agentId: string) => void
   clearSelectedAgents: () => void
   togglePartyMember: (agentId: string) => void
   reorderPartyMembers: (fromIndex: number, toIndex: number) => void
@@ -3059,11 +3062,9 @@ export const useNexusStore = create<NexusState>()(
         selectAgent: (aid, opts) => set((s) => {
           if (isRetiredAgentId(aid) || !s.agents.some((agent) => agent.id === aid)) return s
           if (!opts?.toggle) return { selectedAgentId: aid, selectedAgentIds: [aid] }
-          const already = s.selectedAgentIds.includes(aid)
-          const next = (already ? s.selectedAgentIds.filter((id) => id !== aid) : [...s.selectedAgentIds, aid])
-            .filter((id) => !isRetiredAgentId(id) && s.agents.some((agent) => agent.id === id))
-          return { selectedAgentId: next.length ? (next.includes(aid) ? aid : next[next.length - 1]) : null, selectedAgentIds: next }
+          return toggleNexusSelection(s.agents, s.selectedAgentId, s.selectedAgentIds, aid)
         }),
+        removeAgentFromSelection: (aid) => set((s) => removeNexusSelection(s.agents, s.selectedAgentId, s.selectedAgentIds, aid)),
         clearSelectedAgents: () => set({ selectedAgentId: null, selectedAgentIds: [] }),
         togglePartyMember: (aid) => set((s) => {
           if (isRetiredAgentId(aid) || !s.agents.some((agent) => agent.id === aid)) return s

@@ -27,7 +27,7 @@ import {
   mergeMissionState,
   partializeMissionState,
 } from '../src/store/missionState'
-import { makeNexusUiState, normalizeNexusSelection, resolveAgentEditorId } from '../src/store/nexusUiState'
+import { makeNexusUiState, normalizeNexusSelection, removeNexusSelection, resolveAgentEditorId, toggleNexusSelection } from '../src/store/nexusUiState'
 import {
   configSaveEntry,
   makeRuntimeProjectionState,
@@ -160,6 +160,25 @@ test('nexus UI state owns only shell selection and editor state', () => {
   assert.equal(uiState.selectedAgentId, 'beta')
   assert.equal(uiState.isEditorOpen, false)
   assert.equal(uiState.editorTab, 'profile')
+})
+
+test('chat selection toggles are deterministic and explicit removal never re-adds a party agent', () => {
+  assert.deepEqual(
+    toggleNexusSelection(agents, 'alpha', ['alpha'], 'beta'),
+    { selectedAgentId: 'beta', selectedAgentIds: ['alpha', 'beta'] },
+  )
+  assert.deepEqual(
+    toggleNexusSelection(agents, 'beta', ['alpha', 'beta'], 'beta'),
+    { selectedAgentId: 'alpha', selectedAgentIds: ['alpha'] },
+  )
+  assert.deepEqual(
+    removeNexusSelection(agents, 'alpha', ['alpha', 'beta'], 'beta'),
+    { selectedAgentId: 'alpha', selectedAgentIds: ['alpha'] },
+  )
+  assert.deepEqual(
+    removeNexusSelection(agents, 'alpha', ['alpha'], 'missing'),
+    { selectedAgentId: 'alpha', selectedAgentIds: ['alpha'] },
+  )
 })
 
 test('help editor targets prefer selection, then party order, then visible registry order', () => {

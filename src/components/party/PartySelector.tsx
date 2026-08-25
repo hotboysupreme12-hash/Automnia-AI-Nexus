@@ -264,6 +264,10 @@ export function PartySelector() {
     [activePartyIds],
   )
   const selectedAgentSet = useMemo(() => new Set(selectedAgentIds), [selectedAgentIds])
+  const validSelectedAgentCount = useMemo(
+    () => selectedAgentIds.filter((agentId) => agents.some((agent) => agent.id === agentId)).length,
+    [agents, selectedAgentIds],
+  )
   const busyAgentSet = useMemo(() => new Set([
     ...busyAgentIds,
     ...activeExternalChannelAgentIds(runtimeStatus),
@@ -579,6 +583,11 @@ export function PartySelector() {
               {rarityFilter !== 'all' && <>{filtered.length}/{agents.length} shown · </>}
             </>
           )}
+          <span data-agent-selection-status className="ml-2 text-cyan-100/60">
+            {validSelectedAgentCount
+              ? `${validSelectedAgentCount} selected for Agent Chat`
+              : 'Select agents with Chat to address them directly.'}
+          </span>
         </p>
 
         {/* Empty state */}

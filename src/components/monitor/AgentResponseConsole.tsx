@@ -798,7 +798,7 @@ export function AgentResponseConsole() {
   const stopActiveAgentRuns = useNexusStore((s) => s.stopActiveAgentRuns)
   const cancelQueuedCommandConsoleFollowup = useNexusStore((s) => s.cancelQueuedCommandConsoleFollowup)
   const ingestClawTalkConsoleEvent = useNexusStore((s) => s.ingestClawTalkConsoleEvent)
-  const selectAgent = useNexusStore((s) => s.selectAgent)
+  const removeAgentFromSelection = useNexusStore((s) => s.removeAgentFromSelection)
   const clearAgentResponses = useNexusStore((s) => s.clearAgentResponses)
   const missionRunning = useNexusStore((s) => s.activeMission?.status === 'running')
   const hostedCreditsFirst = resolveLicenseEntitlement(license).isHosted
@@ -867,8 +867,8 @@ export function AgentResponseConsole() {
   )
   const basePartyTargetIds = confirmedPartyIds.length ? confirmedPartyIds : activePartyIds
   const partyTargetIds = useMemo(
-    () => basePartyTargetIds.filter((id) => !chatRemovedPartyIds.includes(id)),
-    [basePartyTargetIds, chatRemovedPartyIds],
+    () => basePartyTargetIds.filter((id) => agentById.has(id) && !chatRemovedPartyIds.includes(id)),
+    [agentById, basePartyTargetIds, chatRemovedPartyIds],
   )
 
   useEffect(() => {
@@ -879,10 +879,10 @@ export function AgentResponseConsole() {
   }, [basePartyTargetIds])
 
   const draftRouteKey = useMemo(() => {
-    if (selectedAgentIds.length === 1) return `direct:${selectedAgentIds[0]}`
-    if (selectedAgentIds.length > 1) return `selected:${[...selectedAgentIds].sort().join(',')}`
+    if (selectedTargets.length === 1) return `direct:${selectedTargets[0].id}`
+    if (selectedTargets.length > 1) return `selected:${selectedTargets.map((agent) => agent.id).sort().join(',')}`
     return `party:${[...partyTargetIds].sort().join(',')}`
-  }, [partyTargetIds, selectedAgentIds])
+  }, [partyTargetIds, selectedTargets])
   const draftStorageKey = makeCommandConsoleDraftStorageKey(draftRouteKey)
   const [promptDraft, setPromptDraft] = useState<CommandConsoleDraft>(() => ({
     storageKey: draftStorageKey,
@@ -906,6 +906,13 @@ export function AgentResponseConsole() {
       .filter((run) => run.status === 'running')
       .sort((left, right) => timestampMs(left.startedAt) - timestampMs(right.startedAt)),
     [runtimeSummaryStatus],
+  )
+  const busyTargetIds = useMemo(
+    () => new Set([
+      ...busyAgentIds,
+      ...activeRuntimeRuns.map((run) => run.agentId).filter((id): id is string => Boolean(id)),
+    ]),
+    [activeRuntimeRuns, busyAgentIds],
   )
   const gatewayStartupRun = useMemo(
     () => activeRuntimeRuns.find(isInternalGatewayStartupRun),
@@ -967,24 +974,24 @@ export function AgentResponseConsole() {
   const displayedResponses = useMemo(() => responses.slice(0, MESSAGE_RENDER_LIMIT).reverse(), [responses])
   const visibleDisplayedResponses = displayedResponses
   const agentReplyInFlight = busyAgents.length > 0 || visibleDisplayedResponses.some((entry) => entry.streaming)
-  const targetCount = selectedTargets.length || partyTargetIds.length
   const targetMode = selectedTargets.length
     ? selectedTargets.length === 1 ? 'Direct chat' : 'Multi-agent chat'
     : 'Party chat'
   const armedTargets = selectedTargets.length
     ? selectedTargets
     : partyTargetIds.map((id) => agentById.get(id)).filter((a): a is OpenClawAgent => Boolean(a))
+  const targetCount = armedTargets.length
   const thinkingCount = armedTargets.filter((agent) => agent.runtimePolicy?.thinkingDefault && agent.runtimePolicy.thinkingDefault !== 'off').length
   const runnableArmedTargets = useMemo(
-    () => armedTargets.filter((agent) => !busyAgentIds.includes(agent.id)),
-    [armedTargets, busyAgentIds],
+    () => armedTargets.filter((agent) => !busyTargetIds.has(agent.id)),
+    [armedTargets, busyTargetIds],
   )
-  const allTargetsBusy = targetCount > 0 && armedTargets.length > 0 && runnableArmedTargets.length === 0
+  const allTargetsBusy = armedTargets.length > 0 && runnableArmedTargets.length === 0
   const hardBlockedSendReason = useMemo(() => {
-    if (targetCount === 0) return 'Select an agent'
-    if (!armedTargets.length) return 'No available agents are currently armed for this message.'
-    return ''
-  }, [armedTargets.length, targetCount])
+    return targetCount === 0
+      ? 'Select an agent for Agent Chat or add one to the active party.'
+      : ''
+  }, [targetCount])
   const queuedSendReason = useMemo(() => {
     if (hardBlockedSendReason || !allTargetsBusy) return ''
     if (armedTargets.length === 1) return agentBusyMessage(armedTargets[0])
@@ -1668,18 +1675,11 @@ export function AgentResponseConsole() {
   }
 
   const removeAgentFromChat = (agentId: string) => {
-    if (selectedTargets.length) {
-      if (basePartyTargetIds.includes(agentId)) hidePartyTargetFromChat(agentId)
-      selectAgent(agentId, { toggle: true })
+    if (selectedAgentIds.includes(agentId)) {
+      removeAgentFromSelection(agentId)
       return
     }
     hidePartyTargetFromChat(agentId)
-  }
-
-  const handleTargetKeyDown = (event: React.KeyboardEvent<HTMLSpanElement>, agentId: string) => {
-    if (event.key !== 'Enter' && event.key !== ' ') return
-    event.preventDefault()
-    removeAgentFromChat(agentId)
   }
 
   return (
@@ -1789,11 +1789,7 @@ export function AgentResponseConsole() {
                     e.dataTransfer.setData('text/agent-id', agent.id)
                     e.dataTransfer.effectAllowed = 'copyMove'
                   }}
-                  onClick={() => removeAgentFromChat(agent.id)}
-                  onKeyDown={(event) => handleTargetKeyDown(event, agent.id)}
-                  role="button"
-                  tabIndex={0}
-                  title={`${laneDiagnostic ? `${laneDiagnostic.title} ` : ''}${queuedForAgent ? `${queuedForAgent} queued Command Console follow-up${queuedForAgent === 1 ? '' : 's'}. ` : ''}Remove ${agent.name} from chat`}
+                  title={`${laneDiagnostic ? `${laneDiagnostic.title} ` : ''}${queuedForAgent ? `${queuedForAgent} queued Command Console follow-up${queuedForAgent === 1 ? '' : 's'}. ` : ''}${selectedTargets.length ? 'Selected chat target.' : 'Party chat target.'}`}
                   data-lane-diagnostic={laneDiagnostic?.severity || undefined}
                   data-agent-rarity={rarity}
                   data-target-mode={selectedTargets.length ? 'selected' : inParty ? 'party' : 'armed'}
