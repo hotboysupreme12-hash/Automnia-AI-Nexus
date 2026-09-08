@@ -4,6 +4,7 @@ import { useNexusStore } from '../../store/nexusStore'
 import type { CapabilityKey, CollaborationMode, DurationMode, DurationUnit } from '../../types/nexus'
 import { agentPortraitSrc } from '../../utils/portrait'
 import { Badge, Button, StatusChip } from '../ui'
+import { MISSION_GLYPH_ASSETS } from './missionIconAssets'
 import type { MissionGlyph } from './missionIconAssets'
 import './MissionDeploymentPanel.css'
 import { MissionTemplates } from './MissionTemplates'
@@ -194,6 +195,23 @@ function glyphShape(icon: MissionGlyph) {
 }
 
 export function MissionGlyphIcon({ icon, className = 'dui-flat-glyph' }: { icon: MissionGlyph; className?: string }) {
+  const asset = MISSION_GLYPH_ASSETS[icon]
+
+  if (asset) {
+    return (
+      <img
+        src={asset}
+        alt=""
+        aria-hidden="true"
+        draggable={false}
+        width={48}
+        height={48}
+        loading="eager"
+        decoding="async"
+        className={`dui-mission-glyph ${className}`}
+      />
+    )
+  }
   return (
     <svg
       viewBox="0 0 48 48"
@@ -207,8 +225,7 @@ export function MissionGlyphIcon({ icon, className = 'dui-flat-glyph' }: { icon:
 }
 
 function FlatGlyph({ icon }: { icon: MissionGlyph }) {
-  // Inline vector glyphs avoid fetching and synchronously decoding fifteen
-  // separate PNGs whenever the mission workspace opens.
+  // Use the authored mission assets so presets and option controls share one icon language.
   return <MissionGlyphIcon icon={icon} className="dui-flat-glyph" />
 }
 
