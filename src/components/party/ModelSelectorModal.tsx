@@ -1,4 +1,7 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useId, useMemo, useRef, useState } from 'react'
+import { useDialogFocus } from '../ui/Dialog'
+import { Button } from '../ui/Button'
+import { FormFeedback } from '../ui/FormFeedback'
 import { ProviderAuthModal } from '../auth/ProviderAuthModal'
 import type { ThinkingLevel } from '../../types/nexus'
 import { apiErrorMessage, apiRequest } from '../../api/client'
@@ -14,6 +17,7 @@ import { isSelectableModelId } from '../../utils/modelGrouping'
 import { ModelPicker } from '../models/ModelPicker'
 import {
   AUTOMNIA_CREDITS_MODEL_ID,
+  automniaRelayModelLabel,
   isAutomniaCreditsModelId,
   isCreditsOnlyEntitlement,
   resolveAgentRoutePresentation,
@@ -53,9 +57,9 @@ const CODEX_5_3_SPARK_MODEL: AvailableModel = {
 }
 const AUTOMNIA_CREDITS_MODEL: AvailableModel = {
   id: AUTOMNIA_CREDITS_MODEL_ID,
-  alias: 'Default model',
+  alias: 'Automnia Balanced',
   provider: 'automnia-cloud',
-  name: 'Gemini 3.7 Flash',
+  name: 'Automnia Balanced',
 }
 const REASONING_EFFORT_LEVELS = ['off', 'minimal', 'low', 'medium', 'high', 'xhigh', 'max'] as const satisfies readonly ThinkingLevel[]
 const MODEL_SELECTOR_CACHE_MS = 5 * 60 * 1000
@@ -79,7 +83,8 @@ const modelOptionFromId = (modelId: string): AvailableModel | null => {
   const [rawProvider = '', ...modelParts] = id.split('/')
   const provider = isOpenAiCodexSubscriptionModel(id) ? 'openai' : rawProvider || 'model'
   const name = modelParts.join('/') || id
-  return { id, alias: name, provider, name }
+  const managedName = provider.toLowerCase() === 'automnia-cloud' ? automniaRelayModelLabel(id) : name
+  return { id, alias: managedName, provider, name: managedName }
 }
 
 function modelBrief(modelId: string): { title: string; description: string; tone: string } | null {
@@ -162,8 +167,13 @@ export function ModelSelectorModal({
   const creditsOnly = isCreditsOnlyEntitlement(license)
   const [models, setModels] = useState<AvailableModel[]>([])
   const [loading, setLoading] = useState(false)
+  const dialogId = useId()
+  const dialogRootRef = useRef<HTMLDivElement>(null)
+  const dialogPanelRef = useRef<HTMLDivElement>(null)
   const [saving, setSaving] = useState(false)
   const [status, setStatus] = useState('')
+  const [statusTone, setStatusTone] = useState<'error' | 'success' | 'info'>('error')
+  const saveCloseTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const [selectedPrimary, setSelectedPrimary] = useState(currentModel)
   const [selectedFallbacks, setSelectedFallbacks] = useState<string[]>([])
   const [thinkingEnabled, setThinkingEnabled] = useState(currentThinking !== 'off')
@@ -235,7 +245,12 @@ export function ModelSelectorModal({
   const providerForModel = (modelId: string) =>
     selectableModels.find((model) => model.id === modelId)?.provider || (isOpenAiCodexSubscriptionModel(modelId) ? 'openai' : modelId.split('/')[0] || '')
 
+  useEffect(() => () => { if (saveCloseTimerRef.current) clearTimeout(saveCloseTimerRef.current) }, [isOpen])
+
   const handleSave = async () => {
+    if (saving) return
+    if (saveCloseTimerRef.current) clearTimeout(saveCloseTimerRef.current)
+    setStatusTone('error')
     if (!selectedPrimary) {
       setStatus('Select a primary model before saving.')
       return
@@ -257,8 +272,9 @@ export function ModelSelectorModal({
     setStatus('')
     try {
       await onSave(selectedPrimary, selectedFallbacks, thinkingEnabled ? thinkingLevel : 'off')
+      setStatusTone('success')
       setStatus('Model configuration saved')
-      setTimeout(onClose, 1200)
+      saveCloseTimerRef.current = setTimeout(onClose, 1200)
     } catch (error) {
       setStatus(`Failed to save: ${error}`)
     } finally {
@@ -304,17 +320,19 @@ export function ModelSelectorModal({
   ])
   const selectedThinking: ThinkingLevel = thinkingEnabled ? thinkingLevel : 'off'
 
+  useDialogFocus({ open: isOpen, rootRef: dialogRootRef, panelRef: dialogPanelRef, onClose, preventClose: saving })
   if (!isOpen) return null
 
   return (
     <>
       <div
-        className="fixed inset-0 z-50 grid place-items-center bg-slate-950/80 p-4 backdrop-blur-md"
+        ref={dialogRootRef}
+        className="dui-modal-backdrop fixed inset-0 z-50 grid place-items-center bg-slate-950/80 p-4 backdrop-blur-md"
       >
-        <div className="dy-surface-enter max-h-[90vh] w-full max-w-3xl overflow-auto rounded-2xl border border-cyan-200/45 bg-gradient-to-b from-blue-900/90 to-slate-950/95 p-5 shadow-glow">
+        <div ref={dialogPanelRef} role="dialog" aria-modal="true" aria-labelledby={`${dialogId}-title`} tabIndex={-1} className="dui-modal-surface dy-surface-enter max-h-[90dvh] w-full max-w-3xl overflow-auto rounded-2xl border p-5">
           <div className="mb-4 flex items-center justify-between">
             <div>
-              <h3 className="font-heading text-3xl text-slate-100">Configure Model</h3>
+              <h3 id={`${dialogId}-title`} className="font-heading text-3xl text-slate-100">Configure Model</h3>
               <p className="text-sm text-cyan-100">
                 {agentName} ({agentId})
               </p>
@@ -416,6 +434,7 @@ export function ModelSelectorModal({
                   {REASONING_EFFORT_LEVELS.map((level) => (
                     <button
                       key={level}
+                      aria-pressed={selectedThinking === level}
                       type="button"
                       onClick={() => {
                         if (level === 'off') {
@@ -437,16 +456,17 @@ export function ModelSelectorModal({
                 </div>
               </div>
 
-              <div className="flex items-center justify-between">
-                <p className="text-xs text-cyan-100">{status}</p>
-                <button
+              <div className="flex flex-wrap items-center justify-between gap-3">
+                <FormFeedback tone={statusTone}>{status}</FormFeedback>
+                <Button
                   type="button"
                   onClick={handleSave}
-                  disabled={saving || !selectedPrimary}
-                  className="rounded-lg bg-cyan-700/40 px-4 py-2 text-sm text-cyan-100 disabled:opacity-50"
+                  disabled={!selectedPrimary}
+                  loading={saving}
+                  variant="primary"
                 >
-                  {saving ? 'Saving...' : 'Save Configuration'}
-                </button>
+                  Save Configuration
+                </Button>
               </div>
             </>
           )}

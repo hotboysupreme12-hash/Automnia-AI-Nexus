@@ -7,6 +7,8 @@ import {
   automniaRelayFallbackModels,
   automniaRelayModel,
   automniaRelayModels,
+  automniaRelayModelsForRequest,
+  automniaRelaySelectableModels,
   resolveAutomniaRelayModel,
 } from './relayModelPolicy.js';
 import {
@@ -40,14 +42,18 @@ const knowledgeFallbackModelVersion = String(process.env.AUTOMNIA_KNOWLEDGE_FALL
 const vertexRetryAttempts = Math.max(1, Math.min(3, Number(process.env.VERTEX_RETRY_ATTEMPTS || 2) || 2));
 const vertexMaxOutputTokens = Math.max(512, Math.min(4096, Number(process.env.VERTEX_MAX_OUTPUT_TOKENS || 4096) || 4096));
 const checkoutUrl = configuredHttpsUrl(process.env.SHOPIFY_CHECKOUT_URL);
-const gmailSender = normalizeEmail(process.env.GMAIL_SENDER || '');
+const emailProvider = String(process.env.EMAIL_PROVIDER || (process.env.MICROSOFT_GRAPH_MAIL_CREDENTIALS ? 'microsoft_graph' : 'gmail')).trim().toLowerCase();
+const emailSender = normalizeEmail(process.env.EMAIL_SENDER || process.env.GMAIL_SENDER || '');
 const gmailOAuthCredentials = parseGmailOAuthCredentials(process.env.GMAIL_OAUTH_CREDENTIALS || '');
+const microsoftGraphMailCredentials = parseMicrosoftGraphMailCredentials(process.env.MICROSOFT_GRAPH_MAIL_CREDENTIALS || '');
 const gmailOAuthClient = gmailOAuthCredentials
   ? new OAuth2Client(gmailOAuthCredentials.clientId, gmailOAuthCredentials.clientSecret)
   : null;
 if (gmailOAuthClient && gmailOAuthCredentials) gmailOAuthClient.setCredentials({ refresh_token: gmailOAuthCredentials.refreshToken });
 const testEmailDeliveryStub = useInMemoryStorage && process.env.AUTOMNIA_TEST_EMAIL_DELIVERY === 'stub';
-const gmailEmailDeliveryConfigured = testEmailDeliveryStub || Boolean(gmailSender && gmailOAuthCredentials?.refreshToken);
+const emailDeliveryConfigured = testEmailDeliveryStub || (emailProvider === 'microsoft_graph'
+  ? Boolean(emailSender && microsoftGraphMailCredentials?.tenantId && microsoftGraphMailCredentials?.clientId && microsoftGraphMailCredentials?.clientSecret)
+  : Boolean(emailSender && gmailOAuthCredentials?.refreshToken));
 const emailDeliveryLeaseMs = 5 * 60 * 1000;
 const planMappings = readPlanMappings(process.env.SHOPIFY_PLAN_MAPPINGS);
 const planMappingHash = crypto.createHash('sha256').update(JSON.stringify(planMappings)).digest('hex');
@@ -97,6 +103,22 @@ function parseGmailOAuthCredentials(value) {
     return { clientId, clientSecret, refreshToken };
   } catch {
     console.error(JSON.stringify({ event: 'gmail_oauth_credentials_invalid', reason: 'invalid_json' }));
+    return null;
+  }
+}
+
+function parseMicrosoftGraphMailCredentials(value) {
+  const raw = String(value || '').trim();
+  if (!raw) return null;
+  try {
+    const parsed = JSON.parse(raw);
+    const tenantId = String(parsed?.tenant_id || parsed?.tenantId || '').trim();
+    const clientId = String(parsed?.client_id || parsed?.clientId || '').trim();
+    const clientSecret = String(parsed?.client_secret || parsed?.clientSecret || '').trim();
+    if (!tenantId || !clientId || !clientSecret) return null;
+    return { tenantId, clientId, clientSecret };
+  } catch {
+    console.error(JSON.stringify({ event: 'microsoft_graph_credentials_invalid', reason: 'invalid_json' }));
     return null;
   }
 }
@@ -1047,6 +1069,7 @@ app.get('/health', (_req, res) => res.status(200).json({
   aiRelay: 'vertex-ai-service-account',
   aiRelayModel: automniaRelayModel,
   aiRelayModels: automniaRelayModels,
+  aiRelaySelectableModels: automniaRelaySelectableModels,
   aiRelayFallbackModels: automniaRelayFallbackModels,
   tokenOptimization: {
     version: AUTOMNIA_RELAY_TOKEN_OPTIMIZATION_VERSION,
@@ -1070,9 +1093,10 @@ app.get('/health', (_req, res) => res.status(200).json({
     planMappingCount: planMappings.length,
     planMappingHash,
     webhookSecretsConfigured: secrets.length > 0,
-    emailDeliveryConfigured: gmailEmailDeliveryConfigured,
-    emailDeliveryAuthMode: testEmailDeliveryStub ? 'stub' : gmailEmailDeliveryConfigured ? 'gmail_api' : 'unconfigured',
-    emailDeliverySender: gmailSender || null,
+    emailDeliveryConfigured,
+    emailDeliveryAuthMode: testEmailDeliveryStub ? 'stub' : emailDeliveryConfigured ? `${emailProvider}_api` : 'unconfigured',
+    emailDeliveryProvider: emailProvider,
+    emailDeliverySender: emailSender || null,
   },
 }));
 
@@ -1582,9 +1606,10 @@ async function generateVertexContent(input, targetModel = automniaRelayModel) {
 
 async function generateVertexContentWithHostedFallback(input, startingModel = automniaRelayModel, thinkingRequest) {
   const resolvedStartingModel = resolveAutomniaRelayModel(startingModel) || automniaRelayModel;
-  const startIndex = Math.max(0, automniaRelayModels.indexOf(resolvedStartingModel));
+  const relayModels = automniaRelayModelsForRequest(resolvedStartingModel);
+  if (!relayModels.length) throw new Error('Automnia hosted relay has no enabled model for this request.');
   let lastError = null;
-  for (const targetModel of automniaRelayModels.slice(startIndex)) {
+  for (const targetModel of relayModels) {
     try {
       const candidateInput = thinkingRequest
         ? {
@@ -1604,11 +1629,11 @@ async function generateVertexContentWithHostedFallback(input, startingModel = au
       return { payload, model: targetModel };
     } catch (error) {
       lastError = error;
-      if (!error?.retryable || targetModel === automniaRelayModels.at(-1)) throw error;
+      if (!error?.retryable || targetModel === relayModels.at(-1)) throw error;
       console.warn(JSON.stringify({
         event: 'automnia_relay_model_fallback',
         failedModel: targetModel,
-        nextModel: automniaRelayModels[automniaRelayModels.indexOf(targetModel) + 1],
+        nextModel: relayModels[relayModels.indexOf(targetModel) + 1],
         upstreamStatus: Number(error?.status) || 503,
       }));
     }
@@ -2080,11 +2105,11 @@ function encodeMimeHeader(value) {
 
 function buildGmailRawMessage(record) {
   const to = normalizeEmail(record?.email);
-  if (!isValidMailbox(to) || !isValidMailbox(gmailSender)) throw new Error('Gmail license email has an invalid sender or recipient.');
+  if (!isValidMailbox(to) || !isValidMailbox(emailSender)) throw new Error('Gmail license email has an invalid sender or recipient.');
   const boundary = `automnia-${crypto.randomBytes(12).toString('hex')}`;
   const subject = 'Welcome to Automnia AI Nexus — your license key';
   const message = [
-    `From: Automnia AI Nexus <${gmailSender}>`,
+    `From: Automnia AI Nexus <${emailSender}>`,
     `To: ${to}`,
     `Subject: ${encodeMimeHeader(subject)}`,
     'MIME-Version: 1.0',
@@ -2134,7 +2159,7 @@ async function getGmailAccessToken() {
 
 async function sendGmailLicenseEmail(record) {
   if (testEmailDeliveryStub) return { stubbed: true, provider: 'stub' };
-  if (!gmailEmailDeliveryConfigured) throw new Error('Gmail license email delivery is not configured.');
+  if (!emailDeliveryConfigured || emailProvider !== 'gmail') throw new Error('Gmail license email delivery is not configured.');
 
   const response = await fetch('https://gmail.googleapis.com/gmail/v1/users/me/messages/send', {
     method: 'POST',
@@ -2163,6 +2188,60 @@ async function sendGmailLicenseEmail(record) {
     messageId: String(payload.id).slice(0, 200),
   }));
   return { stubbed: false, provider: 'gmail_api', messageId: payload.id };
+}
+
+async function getMicrosoftGraphAccessToken() {
+  if (!microsoftGraphMailCredentials) throw new Error('Microsoft Graph mail credentials are not configured.');
+  const tokenResponse = await fetch(`https://login.microsoftonline.com/${encodeURIComponent(microsoftGraphMailCredentials.tenantId)}/oauth2/v2.0/token`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/x-www-form-urlencoded', Accept: 'application/json' },
+    body: new URLSearchParams({
+      client_id: microsoftGraphMailCredentials.clientId,
+      client_secret: microsoftGraphMailCredentials.clientSecret,
+      scope: 'https://graph.microsoft.com/.default',
+      grant_type: 'client_credentials',
+    }),
+  });
+  const payload = await parseJsonResponse(tokenResponse);
+  if (!tokenResponse.ok || !payload?.access_token) {
+    console.error(JSON.stringify({ event: 'microsoft_graph_token_failed', httpStatus: tokenResponse.status, error: String(payload?.error_description || payload?.error || 'Microsoft Graph token request failed').slice(0, 500) }));
+    throw new Error('Microsoft Graph authorization could not be obtained.');
+  }
+  return payload.access_token;
+}
+
+async function sendMicrosoftGraphLicenseEmail(record) {
+  if (testEmailDeliveryStub) return { stubbed: true, provider: 'stub' };
+  if (!emailDeliveryConfigured || emailProvider !== 'microsoft_graph') throw new Error('Microsoft Graph email delivery is not configured.');
+  const to = normalizeEmail(record?.email);
+  if (!isValidMailbox(to) || !isValidMailbox(emailSender)) throw new Error('Microsoft Graph license email has an invalid sender or recipient.');
+  const response = await fetch(`https://graph.microsoft.com/v1.0/users/${encodeURIComponent(emailSender)}/sendMail`, {
+    method: 'POST',
+    headers: { Accept: 'application/json', Authorization: `Bearer ${await getMicrosoftGraphAccessToken()}`, 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      message: {
+        subject: 'Welcome to Automnia AI Nexus — your license key',
+        body: { contentType: 'HTML', content: buildLicenseEmailHtml(record) },
+        toRecipients: [{ emailAddress: { address: to } }],
+      },
+        saveToSentItems: true,
+    }),
+  });
+  if (!response.ok) {
+    const payload = await parseJsonResponse(response);
+    console.error(JSON.stringify({ event: 'microsoft_graph_license_email_rejected', orderId: record?.lastShopifyOrderId || record?.orderId || null, httpStatus: response.status, error: String(payload?.error?.message || 'Microsoft Graph rejected the email.').slice(0, 500) }));
+    throw new Error('Microsoft Graph rejected the license email delivery request.');
+  }
+  // Graph returns 202 when Exchange accepts the submission into its transport
+  // pipeline. That is not proof that the recipient mailbox accepted delivery;
+  // a later NDR can still be generated by Exchange Online.
+  console.log(JSON.stringify({ event: 'microsoft_graph_license_email_accepted', orderId: record?.lastShopifyOrderId || record?.orderId || null }));
+  return { stubbed: false, provider: 'microsoft_graph' };
+}
+
+async function sendLicenseEmail(record) {
+  if (emailProvider === 'microsoft_graph') return sendMicrosoftGraphLicenseEmail(record);
+  return sendGmailLicenseEmail(record);
 }
 
 function deliveryLeaseIsActive(delivery) {
@@ -2254,7 +2333,7 @@ async function deliverLicenseEmail(record) {
   if (claim.action === 'email_delivery_in_progress') throw new Error('License email delivery is already in progress.');
   if (claim.action === 'license_not_found' || !claim.record) throw new Error('Provisioned license was not found for email delivery.');
   try {
-    await sendGmailLicenseEmail(claim.record);
+    await sendLicenseEmail(claim.record);
   } catch (error) {
     await failLicenseEmailDelivery(claim.record, claim.attemptId);
     throw error;

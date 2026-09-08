@@ -554,3 +554,22 @@ test('invalidating runtime status drops a timed-out in-flight build before the n
   assert.equal(record(refreshed.monitor).fallback, undefined)
   assert.equal(requestedLedgerLimits.length, 2)
 })
+
+test('runtime status recovers from a hung refresh after cooldown without explicit invalidation', async () => {
+  const { service, state, requestedLedgerLimits } = createService({ hangStatus: true })
+  assert.equal(record((await service.getRuntimeStatusPayload(false)).monitor).fallback, true)
+  state.hangStatus = false
+  state.now += 1001
+  const refreshed = await service.getRuntimeStatusPayload(false)
+  assert.equal(record(refreshed.monitor).fallback, undefined)
+  assert.equal(requestedLedgerLimits.length, 2)
+})
+
+test('runtime summary recovers from its own hung refresh and forced refresh bypasses cooldown', async () => {
+  const { service, state, requestedLedgerLimits } = createService({ hangStatus: true })
+  assert.equal(record((await service.getRuntimeSummaryPayload(false)).monitor).fallback, true)
+  state.hangStatus = false
+  const refreshed = await service.getRuntimeSummaryPayload(true)
+  assert.equal(record(refreshed.monitor).fallback, undefined)
+  assert.equal(requestedLedgerLimits.length, 2)
+})

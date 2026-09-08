@@ -17,7 +17,7 @@ export type SystemCronServiceOptions = {
 }
 
 function isCronField(value: string): boolean {
-  return /^[\w*/?,\-]+$/u.test(value)
+  return /^[\w*/?,-]+$/u.test(value)
 }
 
 function cleanComment(value: string): string {

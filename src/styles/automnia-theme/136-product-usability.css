@@ -1,0 +1,33 @@
+/* Shared product affordances, without changing workspace-specific artwork. */
+:root {
+  --dui-radius-control: .5rem;
+  --dui-radius-panel: .875rem;
+  --dui-radius-dialog: 1rem;
+  --dui-status-success: #86efac;
+  --dui-status-warning: #fcd34d;
+  --dui-status-error: #fda4af;
+}
+.dui-first-success { margin-block: .75rem; border: 1px solid rgb(255 255 255 / .13); border-radius: var(--dui-radius-panel); padding: .75rem 1rem; background: #111519; }
+.dui-first-success summary { cursor: pointer; color: #e2e8f0; font-weight: 600; font-size: .875rem; }
+.dui-first-success summary > span { margin-inline-start: .75rem; color: #aab7c7; font-weight: 400; }
+.dui-first-success ol { display: flex; flex-wrap: wrap; gap: .5rem 1.25rem; padding: .75rem 0 0; list-style: none; }
+.dui-first-success li { display: flex; align-items: center; gap: .5rem; font-size: .875rem; color: #b7c2d1; }
+.dui-first-success li[data-complete=true] > span:first-child { color: var(--dui-status-success); }
+.dui-first-success li button { min-height: 2.5rem; text-align: start; text-decoration: underline; text-underline-offset: .2em; }
+.dui-navigation-tooltip { position: fixed; z-index: 10000; width: max-content; max-width: min(200px, calc(100vw - 16px)); padding: .65rem .8rem; color: #f1f5f9; background: #20262e; border: 1px solid #697789; border-radius: var(--dui-radius-control); box-shadow: 0 4px 16px #0008; pointer-events: none; font-size: .875rem; }
+.dui-empty-state { padding: 1.25rem; text-align: center; border: 1px solid rgb(255 255 255 / .13); border-radius: var(--dui-radius-panel); background: rgb(255 255 255 / .025); }
+.dui-empty-state > strong { display: block; color: #e2e8f0; font-size: .9375rem; }
+.dui-empty-state > p { margin-top: .5rem; color: #aebdce; font-size: .875rem; line-height: 1.6; }
+.dui-empty-state__actions { margin-top: .75rem; display: flex; justify-content: center; flex-wrap: wrap; gap: .5rem; }
+.dui-settings-panel [data-search-match=true] { outline: 2px solid #8ac9cd; outline-offset: 3px; border-radius: .5rem; }
+.dui-settings-panel [data-search-section=false] { display: none; }
+.dui-settings-panel [data-setting-label] { scroll-margin-block: 5rem; }
+.dui-document-surface { font-family: var(--font-mono, monospace); font-size: .875rem; line-height: 1.65; tab-size: 2; white-space: pre-wrap; overflow-wrap: anywhere; max-width: 100%; overflow-x: auto; background: #111519; color: #ced8e4; padding: 1rem; border-radius: var(--dui-radius-control); border: 1px solid #ffffff20; }
+@media (max-width: 600px) {
+  .dui-first-success summary > span { display: block; margin: .25rem 0 0; }
+  .dui-first-success ol { display: grid; }
+}
+@media (forced-colors: active) {
+  .dui-navigation-tooltip, .dui-first-success, .dui-empty-state, .dui-document-surface { color: CanvasText; background: Canvas; border-color: CanvasText; }
+  .dui-settings-panel [data-search-match=true] { outline-color: Highlight; }
+}

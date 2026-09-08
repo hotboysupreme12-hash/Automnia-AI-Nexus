@@ -1,6 +1,6 @@
 import { randomUUID } from 'node:crypto'
 import path from 'node:path'
-import { promises as fs } from 'node:fs'
+import { readSessionLinesReverse } from './sessionEvidenceService'
 import { missionTimerDelayMs } from './missionStateService'
 import type {
   Mission,
@@ -164,20 +164,6 @@ function stringAtAnyPath(value: unknown, paths: string[][]): string {
     if (typeof candidate === 'string' && candidate.trim()) return candidate.trim()
   }
   return ''
-}
-
-function uniqueStrings(...items: Array<unknown>): string[] {
-  const out = new Set<string>()
-  for (const item of items) {
-    if (Array.isArray(item)) {
-      for (const nested of item) {
-        if (typeof nested === 'string' && nested.trim()) out.add(nested.trim())
-      }
-    } else if (typeof item === 'string' && item.trim()) {
-      out.add(item.trim())
-    }
-  }
-  return Array.from(out)
 }
 
 export function parseCronIdFromOutput(stdout: string) {
@@ -637,67 +623,40 @@ export function createMissionSchedulerService(options: MissionSchedulerServiceOp
     )
   }
 
-  async function agentSessionCandidateFiles(agentId: string, sessionId: string, startedAt?: string | null): Promise<string[]> {
-    const sessionDir = path.join(options.openClawAgentsRoot, agentId, 'sessions')
-    const candidates: string[] = []
-    if (sessionId) candidates.push(path.join(sessionDir, `${sessionId}.jsonl`))
-    if (!candidates.length) {
-      const startedMs = startedAt ? Date.parse(startedAt) : 0
-      const entries = await fs.readdir(sessionDir, { withFileTypes: true }).catch(() => [])
-      const recent = await Promise.all(entries
-        .filter((entry) => entry.isFile() && /^[0-9a-f-]+\.jsonl$/i.test(entry.name))
-        .map(async (entry) => {
-          const file = path.join(sessionDir, entry.name)
-          const stat = await fs.stat(file).catch(() => null)
-          return stat ? { file, mtimeMs: stat.mtimeMs } : null
-        }))
-      candidates.push(...recent
-        .filter((entry): entry is { file: string; mtimeMs: number } => Boolean(entry && (!startedMs || entry.mtimeMs >= startedMs - 30000)))
-        .sort((left, right) => right.mtimeMs - left.mtimeMs)
-        .slice(0, 4)
-        .map((entry) => entry.file))
-    }
-    return uniqueStrings(...candidates)
-  }
-
-  async function readLatestAgentSessionFinalReply(agentId: string, sessionId: string, startedAt?: string | null): Promise<string> {
-    for (const file of await agentSessionCandidateFiles(agentId, sessionId, startedAt)) {
-      const raw = await fs.readFile(file, 'utf-8').catch(() => '')
-      if (!raw.trim()) continue
-      const lines = raw.trim().split(/\r?\n/)
-      for (let index = lines.length - 1; index >= 0; index -= 1) {
+  async function readCurrentSessionEvidence(agentId: string, sessionId: string, startedAt?: string | null) {
+    const evidence = { finalReply: '', progress: '', timestamp: null as string | null }
+    const startedMs = startedAt ? Date.parse(startedAt) : NaN
+    // A nearby file or undated answer is not proof of this invocation. Also
+    // constrain runtime-supplied identifiers before resolving filesystem paths.
+    if (!/^[a-z0-9][a-z0-9_-]{0,160}$/i.test(sessionId) || !Number.isFinite(startedMs)) return evidence
+    const file = path.join(options.openClawAgentsRoot, agentId, 'sessions', `${sessionId}.jsonl`)
+    try {
+      for await (const line of readSessionLinesReverse(file)) {
         try {
-          const parsed = JSON.parse(lines[index]) as { type?: unknown; message?: { role?: unknown; content?: unknown }; payload?: unknown }
+          const parsed = JSON.parse(line) as { type?: unknown; timestamp?: unknown; message?: { role?: unknown; content?: unknown; isError?: unknown; timestamp?: unknown } }
           const message = parsed.message
-          if (parsed.type !== 'message' || message?.role !== 'assistant') continue
+          if (parsed.type !== 'message' || !message) continue
+          const timestamp = parsed.timestamp ?? message.timestamp
+          const messageMs = typeof timestamp === 'number' ? timestamp : typeof timestamp === 'string' ? Date.parse(timestamp) : NaN
+          if (!Number.isFinite(messageMs) || messageMs < startedMs) continue
           const text = textFromAgentSessionContent(message.content)
-          if (isCredibleMissionCronFinalReply(options.stripAnsi, text)) return text
+          if (message.role === 'assistant' && isCredibleMissionCronFinalReply(options.stripAnsi, text)) {
+            evidence.finalReply = text
+            evidence.timestamp = new Date(messageMs).toISOString()
+            break
+          }
+          if (!evidence.progress && message.role === 'toolResult' && message.isError !== true) {
+            evidence.progress = missionCronProgressEvidenceSummary(options.stripAnsi, options.trimTask, text)
+            if (evidence.progress) evidence.timestamp = new Date(messageMs).toISOString()
+          }
         } catch {
-          // Keep scanning older session lines.
+          // A partially written or malformed row must not hide earlier evidence.
         }
       }
+    } catch {
+      // Missing or unreadable evidence retains the original runtime failure.
     }
-    return ''
-  }
-
-  async function readLatestAgentSessionProgressEvidence(agentId: string, sessionId: string, startedAt?: string | null): Promise<string> {
-    for (const file of await agentSessionCandidateFiles(agentId, sessionId, startedAt)) {
-      const raw = await fs.readFile(file, 'utf-8').catch(() => '')
-      if (!raw.trim()) continue
-      const lines = raw.trim().split(/\r?\n/)
-      for (let index = lines.length - 1; index >= 0; index -= 1) {
-        try {
-          const parsed = JSON.parse(lines[index]) as { type?: unknown; message?: { role?: unknown; content?: unknown; isError?: unknown } }
-          const message = parsed.message
-          if (parsed.type !== 'message' || message?.role !== 'toolResult' || message.isError === true) continue
-          const summary = missionCronProgressEvidenceSummary(options.stripAnsi, options.trimTask, textFromAgentSessionContent(message.content))
-          if (summary) return summary
-        } catch {
-          // Keep scanning older session lines.
-        }
-      }
-    }
-    return ''
+    return evidence
   }
 
   async function createMissionCronJob(params: {
@@ -1010,12 +969,13 @@ export function createMissionSchedulerService(options: MissionSchedulerServiceOp
     job.sessionId = cronRunReference.sessionId
     job.sessionKey = cronRunReference.sessionKey
     const cronRunSessionId = cronRunReference.sessionId || ''
-    const recoveredReply = exitOk || rawCredibleReply
-      ? ''
-      : await readLatestAgentSessionFinalReply(job.agentId, cronRunSessionId, job.startedAt)
-    const progressEvidence = exitOk || rawCredibleReply || recoveredReply || !isRecoverableMissionCronProviderRateLimit(options.stripAnsi, result.stdout, result.stderr)
-      ? ''
-      : await readLatestAgentSessionProgressEvidence(job.agentId, cronRunSessionId, job.startedAt)
+    const sessionEvidence = exitOk || rawCredibleReply
+      ? null
+      : await readCurrentSessionEvidence(job.agentId, cronRunSessionId, job.startedAt)
+    const recoveredReply = sessionEvidence?.finalReply || ''
+    const progressEvidence = !recoveredReply && isRecoverableMissionCronProviderRateLimit(options.stripAnsi, result.stdout, result.stderr)
+      ? sessionEvidence?.progress || ''
+      : ''
     const extractedReply = recoveredReply || rawExtractedReply
     const ok = exitOk || rawCredibleReply || Boolean(recoveredReply) || Boolean(progressEvidence)
     const combinedOutput = options.stripAnsi(`${result.stderr || ''}\n${result.stdout || ''}`).trim()
@@ -1045,6 +1005,8 @@ export function createMissionSchedulerService(options: MissionSchedulerServiceOp
         cronRunId: job.cronRunId,
         sessionId: job.sessionId,
         sessionKey: job.sessionKey,
+        evidenceSource: recoveredReply ? 'session-final' : progressEvidence ? 'session-tool-result' : 'runtime-output',
+        ...(recoveredReply || progressEvidence ? { evidenceTimestamp: sessionEvidence?.timestamp, runStartedAt: job.startedAt } : {}),
       },
     })
     await options.appendAgentDailyMemory(job.agentId, `[mission:${mission.id}] cron ${job.role} round ${job.round} ${ok ? 'completed' : 'failed'} | ${options.trimTask(summary, 200)}`).catch((error) => {
@@ -1377,7 +1339,7 @@ export function createMissionSchedulerService(options: MissionSchedulerServiceOp
         cleanup,
       },
     })
-    options.recordMissionReport(mission)
+    await options.recordMissionReport(mission)
     await options.writeTeamSyncSnapshot({
       missionId: mission.id,
       title: mission.title,
@@ -1420,7 +1382,7 @@ export function createMissionSchedulerService(options: MissionSchedulerServiceOp
         cleanup,
       },
     })
-    options.recordMissionReport(mission)
+    await options.recordMissionReport(mission)
     await options.writeTeamSyncSnapshot({
       missionId: mission.id,
       title: mission.title,

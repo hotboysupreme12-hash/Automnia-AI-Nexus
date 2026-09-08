@@ -1,6 +1,7 @@
 import { memo, useMemo, useState } from 'react'
 import type { GatewayLogEntry } from '../../hooks/useRuntimeStatus'
 import { useGatewayActivityFeed } from '../../hooks/useGatewayActivityFeed'
+import { runOutcomeLabel } from '../../utils/runOutcome'
 import { useNexusStore } from '../../store/nexusStore'
 import type { AgentResponse, OpenClawAgent } from '../../types/nexus'
 import { agentPortraitSrc } from '../../utils/portrait'
@@ -29,6 +30,7 @@ type UnifiedActivityItem = {
   source?: string
   meta?: string
   automniaOrigin?: boolean
+  outcome?: string
 }
 
 function timestampMs(value: string | undefined) {
@@ -96,7 +98,8 @@ function agentActivityItem(entry: AgentResponse): UnifiedActivityItem {
     id: `agent-${entry.id}`,
     kind: 'agent',
     timestamp: entry.timestamp,
-    title: entry.streaming ? 'Agent running' : entry.ok ? 'Agent response' : 'Agent run blocked',
+    title: entry.streaming ? 'Agent running' : entry.ok ? 'Agent response' : `Agent run ${runOutcomeLabel(entry).toLowerCase()}`,
+    outcome: runOutcomeLabel(entry),
     detail,
     tone: agentTone(entry),
     agentId: entry.agentId,
@@ -113,7 +116,7 @@ function initials(name: string) {
 function toneLabel(tone: ActivityTone) {
   if (tone === 'active') return 'Live'
   if (tone === 'success') return 'Complete'
-  if (tone === 'error') return 'Blocked'
+  if (tone === 'error') return 'Error'
   if (tone === 'warning') return 'Warning'
   return 'Event'
 }
@@ -140,7 +143,7 @@ const ActivityLogRow = memo(function ActivityLogRow({ item, agent }: { item: Uni
             <strong>{displayName}</strong>
             <span>{item.title}</span>
             {item.automniaOrigin && <span className="dui-activity-log__origin"><img src={AUTOMNIA_LOGO_SRC} alt="" draggable={false} />Automnia</span>}
-            <em data-tone={item.tone}>{toneLabel(item.tone)}</em>
+            <em data-tone={item.tone}>{item.outcome || toneLabel(item.tone)}</em>
           </div>
           <time dateTime={item.timestamp} title={new Date(item.timestamp).toLocaleString()}>{clock(item.timestamp)} · {relativeTime(item.timestamp)}</time>
         </div>
@@ -155,6 +158,7 @@ const ActivityLogRow = memo(function ActivityLogRow({ item, agent }: { item: Uni
 })
 
 export function SettingsActivityLog() {
+  const setTab = useNexusStore((state) => state.setTab)
   const responses = useNexusStore((state) => state.agentResponses)
   const agents = useNexusStore((state) => state.agents)
   const { feed, error, refresh } = useGatewayActivityFeed(3_000, LOG_LIMIT)
@@ -181,11 +185,13 @@ export function SettingsActivityLog() {
     const normalizedQuery = query.trim().toLowerCase()
     return [...agentItems, ...gatewayItems]
       .filter((item) => filter === 'all' || (filter === 'agents' ? item.kind === 'agent' : item.kind === 'gateway'))
-      .filter((item) => !normalizedQuery || `${item.title} ${item.detail} ${item.source || ''} ${item.meta || ''}`.toLowerCase().includes(normalizedQuery))
+      .filter((item) => !normalizedQuery || `${item.title} ${item.detail} ${item.source || ''} ${item.meta || ''} ${agentById.get(item.agentId || '')?.name || ''}`.toLowerCase().includes(normalizedQuery))
       .sort((a, b) => timestampMs(b.timestamp) - timestampMs(a.timestamp))
       .slice(0, LOG_LIMIT)
-  }, [agentItems, filter, gatewayItems, query])
+  }, [agentById, agentItems, filter, gatewayItems, query])
 
+  const loadedTimes = [...agentItems, ...gatewayItems].map((item) => timestampMs(item.timestamp)).filter((value) => value > 0)
+  const loadedWindow = loadedTimes.length ? `${new Date(Math.min(...loadedTimes)).toLocaleString()} – ${new Date(Math.max(...loadedTimes)).toLocaleString()}` : 'No timestamped activity loaded'
   const lastUpdated = feed?.generatedAt ? `Updated ${clock(feed.generatedAt)}` : error ? 'Activity feed unavailable' : 'Loading durable activity…'
   const filters: Array<{ id: ActivityFilter; label: string; count: number }> = [
     { id: 'all', label: 'All activity', count: agentItems.length + gatewayItems.length },
@@ -248,6 +254,7 @@ export function SettingsActivityLog() {
         <div><span>Visible now</span><strong>{items.length}</strong></div>
       </div>
 
+      <p className="mb-3 text-sm text-slate-400">Search covers {agentItems.length + gatewayItems.length} loaded events (up to {LOG_LIMIT} per source), showing at most {LOG_LIMIT} matches. {loadedWindow}. <button type="button" className="underline text-cyan-200" onClick={() => setTab('monitor')}>Open Monitor for retained run history and diagnostics</button></p>
       <section className="dui-activity-log__card" aria-label="Unified activity log">
         <div className="dui-activity-log__toolbar">
           <div className="dui-activity-log__filters" role="tablist" aria-label="Log source">
@@ -270,8 +277,8 @@ export function SettingsActivityLog() {
         {!items.length ? (
           <div className="dui-activity-log__empty">
             <img src={AUTOMNIA_LOGO_SRC} alt="" draggable={false} />
-            <strong>{query || filter !== 'all' ? 'No matching activity' : 'No activity yet'}</strong>
-            <span>{query || filter !== 'all' ? 'Try another filter or search term.' : 'New agent responses and gateway events will appear here.'}</span>
+            <strong>{query || filter !== 'all' ? 'No match in loaded activity' : 'No activity yet'}</strong>
+            <span>{query || filter !== 'all' ? 'Try another filter or open Monitor to inspect older retained runs.' : 'New agent responses and gateway events will appear here.'}</span>
           </div>
         ) : (
           <div className="dui-activity-log__list" role="log" aria-live="polite" aria-label="Agent and Automnia activity">

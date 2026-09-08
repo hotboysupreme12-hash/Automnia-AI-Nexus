@@ -177,10 +177,42 @@ export function createRuntimeStatusService(options: RuntimeStatusServiceOptions)
   let runtimeStatusPayloadInFlight: Promise<Record<string, unknown>> | null = null
   let runtimeStatusCacheGeneration = 0
   let runtimeStatusPayloadTimedOut = false
+  let runtimeStatusRetryAt = 0
   let runtimeSummaryPayloadCache: { builtAt: number; payload: Record<string, unknown> } | null = null
   let runtimeSummaryPayloadInFlight: Promise<Record<string, unknown>> | null = null
   let runtimeSummaryCacheGeneration = 0
   let runtimeSummaryPayloadTimedOut = false
+  let runtimeSummaryRetryAt = 0
+
+  function markStatusRefreshTimedOut() {
+    if (!runtimeStatusPayloadTimedOut) {
+      runtimeStatusRetryAt = nowMs() + Math.max(1000, options.statusCacheMs, options.statusResponseTimeoutMs)
+    }
+    runtimeStatusPayloadTimedOut = true
+  }
+
+  function markSummaryRefreshTimedOut() {
+    if (!runtimeSummaryPayloadTimedOut) {
+      runtimeSummaryRetryAt = nowMs() + Math.max(1000, options.summaryCacheMs, options.summaryResponseTimeoutMs)
+    }
+    runtimeSummaryPayloadTimedOut = true
+  }
+
+  function retireTimedOutRefreshes(forceRefresh: boolean) {
+    // A probe can fail to settle even after its response deadline. Retire that
+    // generation after a cooldown so one failed dependency cannot pin Monitor
+    // forever, while ordinary polling still shares a single refresh attempt.
+    if (runtimeStatusPayloadTimedOut && (forceRefresh || nowMs() >= runtimeStatusRetryAt)) {
+      runtimeStatusCacheGeneration += 1
+      runtimeStatusPayloadInFlight = null
+      runtimeStatusPayloadTimedOut = false
+    }
+    if (runtimeSummaryPayloadTimedOut && (forceRefresh || nowMs() >= runtimeSummaryRetryAt)) {
+      runtimeSummaryCacheGeneration += 1
+      runtimeSummaryPayloadInFlight = null
+      runtimeSummaryPayloadTimedOut = false
+    }
+  }
 
   function invalidateCache() {
     runtimeStatusCacheGeneration += 1
@@ -189,6 +221,8 @@ export function createRuntimeStatusService(options: RuntimeStatusServiceOptions)
     runtimeSummaryPayloadCache = null
     runtimeStatusPayloadInFlight = null
     runtimeSummaryPayloadInFlight = null
+    runtimeStatusPayloadTimedOut = false
+    runtimeSummaryPayloadTimedOut = false
   }
 
   function runtimeStatusFromCache(payload: Record<string, unknown>, builtAt: number): Record<string, unknown> {
@@ -675,6 +709,7 @@ export function createRuntimeStatusService(options: RuntimeStatusServiceOptions)
   }
 
   async function getRuntimeStatusPayload(forcePluginRefresh: boolean): Promise<Record<string, unknown>> {
+    retireTimedOutRefreshes(forcePluginRefresh)
     const now = nowMs()
     if (!forcePluginRefresh && runtimeStatusPayloadCache && now - runtimeStatusPayloadCache.builtAt <= options.statusCacheMs) {
       return runtimeStatusFromCache(runtimeStatusPayloadCache.payload, runtimeStatusPayloadCache.builtAt)
@@ -691,7 +726,7 @@ export function createRuntimeStatusService(options: RuntimeStatusServiceOptions)
         return runtimeStatusFromCache(payload, runtimeStatusPayloadCache?.builtAt || nowMs())
       } catch (error) {
         if (isRuntimeResponseTimeout(error)) {
-          runtimeStatusPayloadTimedOut = true
+          markStatusRefreshTimedOut()
           return fallbackRuntimeStatusPayload(error, options.statusResponseTimeoutMs)
         }
         throw error
@@ -714,7 +749,7 @@ export function createRuntimeStatusService(options: RuntimeStatusServiceOptions)
       return await withResponseDeadline(promise, 'runtime status refresh', options.statusResponseTimeoutMs)
     } catch (error) {
       if (isRuntimeResponseTimeout(error)) {
-        if (runtimeStatusPayloadInFlight === promise) runtimeStatusPayloadTimedOut = true
+        if (runtimeStatusPayloadInFlight === promise) markStatusRefreshTimedOut()
         return fallbackRuntimeStatusPayload(error, options.statusResponseTimeoutMs)
       }
       throw error
@@ -722,6 +757,7 @@ export function createRuntimeStatusService(options: RuntimeStatusServiceOptions)
   }
 
   async function getRuntimeSummaryPayload(forceRefresh: boolean): Promise<Record<string, unknown>> {
+    retireTimedOutRefreshes(forceRefresh)
     const now = nowMs()
     if (!forceRefresh && runtimeSummaryPayloadCache && now - runtimeSummaryPayloadCache.builtAt <= options.summaryCacheMs) {
       return runtimeSummaryFromCache(runtimeSummaryPayloadCache.payload, runtimeSummaryPayloadCache.builtAt)
@@ -747,7 +783,7 @@ export function createRuntimeStatusService(options: RuntimeStatusServiceOptions)
         return summary
       } catch (error) {
         if (isRuntimeResponseTimeout(error)) {
-          runtimeStatusPayloadTimedOut = true
+          markStatusRefreshTimedOut()
           return fallbackRuntimeSummaryPayload(error, options.summaryResponseTimeoutMs)
         }
         throw error
@@ -765,7 +801,7 @@ export function createRuntimeStatusService(options: RuntimeStatusServiceOptions)
         return runtimeSummaryFromCache(payload, runtimeSummaryPayloadCache?.builtAt || nowMs())
       } catch (error) {
         if (isRuntimeResponseTimeout(error)) {
-          runtimeSummaryPayloadTimedOut = true
+          markSummaryRefreshTimedOut()
           return fallbackRuntimeSummaryPayload(error, options.summaryResponseTimeoutMs)
         }
         throw error
@@ -788,7 +824,7 @@ export function createRuntimeStatusService(options: RuntimeStatusServiceOptions)
       return await withResponseDeadline(promise, 'runtime summary refresh', options.summaryResponseTimeoutMs)
     } catch (error) {
       if (isRuntimeResponseTimeout(error)) {
-        if (runtimeSummaryPayloadInFlight === promise) runtimeSummaryPayloadTimedOut = true
+        if (runtimeSummaryPayloadInFlight === promise) markSummaryRefreshTimedOut()
         return fallbackRuntimeSummaryPayload(error, options.summaryResponseTimeoutMs)
       }
       throw error

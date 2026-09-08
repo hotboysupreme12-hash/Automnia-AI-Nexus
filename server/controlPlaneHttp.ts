@@ -44,6 +44,7 @@ export type ApiErrorCode =
   | 'control_file_operation_failed'
   | 'doctor_operation_failed'
   | 'filesystem_operation_failed'
+  | 'resource_conflict'
   | 'file_upload_failed'
   | 'folder_list_failed'
   | 'folder_picker_failed'

@@ -963,37 +963,6 @@ html.dui-pro-overhaul.dui-cohesive-ui [data-dui-panel="settings"].dui-settings-p
   margin: clamp(16px, 2vw, 28px) !important;
 }
 
-html.dui-pro-overhaul .dui-settings-hero,
-html.dui-pro-overhaul.dui-cohesive-ui .dui-settings-hero {
-  padding: clamp(22px, 3vw, 34px) !important;
-  border: 1px solid var(--horizon-line) !important;
-  border-radius: var(--horizon-radius-lg) !important;
-  background:
-    radial-gradient(circle at 90% 15%, rgba(114, 213, 194, .1), transparent 20rem),
-    linear-gradient(130deg, rgba(255, 255, 255, .038), rgba(255, 255, 255, .012)),
-    var(--horizon-panel-solid) !important;
-  box-shadow: var(--horizon-shadow-card) !important;
-}
-
-html.dui-pro-overhaul .dui-settings-hero > div > span,
-html.dui-pro-overhaul.dui-cohesive-ui .dui-settings-hero > div > span {
-  color: var(--horizon-text-faint) !important;
-  font-size: var(--dy-type-micro, 11px) !important;
-  letter-spacing: .14em !important;
-}
-
-html.dui-pro-overhaul .dui-settings-hero h2,
-html.dui-pro-overhaul.dui-cohesive-ui .dui-settings-hero h2 {
-  color: var(--horizon-text) !important;
-  font-size: clamp(22px, 2vw, 28px) !important;
-  letter-spacing: -.045em !important;
-}
-
-html.dui-pro-overhaul .dui-settings-hero p,
-html.dui-pro-overhaul.dui-cohesive-ui .dui-settings-hero p {
-  color: var(--horizon-text-muted) !important;
-}
-
 html.dui-pro-overhaul .dui-settings-status,
 html.dui-pro-overhaul.dui-cohesive-ui .dui-settings-status {
   border-color: rgba(114, 213, 194, .22) !important;
@@ -1034,9 +1003,7 @@ html.dui-pro-overhaul.dui-cohesive-ui .dui-settings-field > span strong {
 }
 
 html.dui-pro-overhaul .dui-settings-field > span small,
-html.dui-pro-overhaul.dui-cohesive-ui .dui-settings-field > span small,
-html.dui-pro-overhaul .dui-settings-note,
-html.dui-pro-overhaul.dui-cohesive-ui .dui-settings-note {
+html.dui-pro-overhaul.dui-cohesive-ui .dui-settings-field > span small {
   color: var(--horizon-text-faint) !important;
 }
 
@@ -1249,11 +1216,6 @@ html.dui-pro-overhaul.dui-cohesive-ui .dui-login-brand + p {
   html.dui-pro-overhaul.dui-cohesive-ui .dy-monitor-tab-list .dui-button {
     min-width: calc(50% - 2px);
     flex: 1 1 calc(50% - 2px) !important;
-  }
-
-  html.dui-pro-overhaul .dui-settings-hero,
-  html.dui-pro-overhaul.dui-cohesive-ui .dui-settings-hero {
-    padding: 20px !important;
   }
 }
 
@@ -1685,13 +1647,6 @@ html.dui-pro-overhaul.dui-cohesive-ui .dy-command-console__mark {
   border-radius: 9px !important;
   background: rgb(102 174 231 / .09) !important;
   color: #86c6f2 !important;
-}
-
-html.dui-pro-overhaul .dy-command-console__stat,
-html.dui-pro-overhaul.dui-cohesive-ui .dy-command-console__stat {
-  border-color: var(--horizon-line-subtle) !important;
-  border-radius: 8px !important;
-  background: rgb(255 255 255 / .025) !important;
 }
 
 html.dui-pro-overhaul .dy-command-target-bar,

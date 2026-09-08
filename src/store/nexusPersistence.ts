@@ -26,26 +26,49 @@ export type NexusPersistenceMergeState =
 
 type VersionedPersistedState<TState> = Partial<TState> & { _version?: number }
 
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value)
+}
+
+function isReadablePayload(value: unknown): value is Record<string, unknown> {
+  if (!isRecord(value) || !Number.isInteger(value._version)) return false
+  const version = value._version as number
+  if (version < MIN_NEXUS_PERSISTED_VERSION || version > NEXUS_PERSISTED_VERSION) return false
+  for (const key of ['agents', 'missionHistory', 'missionReports']) {
+    const items = value[key]
+    if (items !== undefined && (!Array.isArray(items) || !items.every(isRecord))) return false
+  }
+  for (const key of ['activePartyIds', 'confirmedPartyIds', 'retiredAgentIds']) {
+    const ids = value[key]
+    if (ids !== undefined && (!Array.isArray(ids) || !ids.every((id) => typeof id === 'string'))) return false
+  }
+  return value.missionDraft === undefined || isRecord(value.missionDraft)
+}
+
 export function mergeNexusPersistedState<TState extends NexusPersistenceMergeState>(
   persisted: unknown,
   current: TState,
 ): TState {
+  if (!isReadablePayload(persisted)) return current
   const data = persisted as VersionedPersistedState<TState>
-  if (!data._version || data._version < MIN_NEXUS_PERSISTED_VERSION) {
-    return current
-  }
 
-  const agentConfig = mergeAgentConfigState(data)
-  const missionState = mergeMissionState(data, current)
-  const selection = normalizeNexusSelection(agentConfig.agents)
-  return {
-    ...current,
-    ...data,
-    ...agentConfig,
-    ...selection,
-    ...missionState,
-    ...preserveRuntimeProjectionState(current),
-    ...preserveCommandConsoleResponseState(current),
+  try {
+    const agentConfig = mergeAgentConfigState(data)
+    const missionState = mergeMissionState(data, current)
+    const selection = normalizeNexusSelection(agentConfig.agents)
+    // Only restore owned data fields. Stored JSON must never replace actions,
+    // shell state, or other live properties added to the store in the future.
+    return {
+      ...current,
+      ...agentConfig,
+      ...selection,
+      ...missionState,
+      ...preserveRuntimeProjectionState(current),
+      ...preserveCommandConsoleResponseState(current),
+    }
+  } catch {
+    // A damaged nested agent must not prevent the entire desktop from opening.
+    return current
   }
 }
 

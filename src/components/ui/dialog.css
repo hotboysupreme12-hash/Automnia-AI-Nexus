@@ -1,0 +1,64 @@
+.dui-dialog-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 90;
+  display: grid;
+  align-items: center;
+  justify-items: center;
+  overflow: auto;
+  padding: max(12px, env(safe-area-inset-top)) max(12px, env(safe-area-inset-right)) max(12px, env(safe-area-inset-bottom)) max(12px, env(safe-area-inset-left));
+  background: rgba(0, 0, 0, .72);
+}
+.dui-dialog {
+  display: flex;
+  flex-direction: column;
+  width: min(100%, 720px);
+  max-height: calc(100dvh - 32px);
+  min-width: 0;
+  overflow: hidden;
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-xl);
+  background: var(--surface-1);
+  color: var(--text-primary);
+  box-shadow: var(--shadow-panel);
+}
+.dui-dialog__header, .dui-dialog__footer {
+  display: flex;
+  flex: 0 0 auto;
+  align-items: start;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 16px;
+}
+.dui-dialog__header { border-bottom: 1px solid var(--border-soft); }
+.dui-dialog__header h2 { margin: 0; font-size: 18px; font-weight: 650; }
+.dui-dialog__header p { margin: 6px 0 0; font-size: 13px; color: var(--text-muted); }
+.dui-dialog__close { flex: 0 0 36px; min-height: 36px; border: 1px solid var(--border-default); border-radius: var(--control-radius); font-size: 24px; }
+.dui-dialog__body { min-height: 0; overflow: auto; padding: 16px; }
+.dui-dialog__footer { flex-wrap: wrap; justify-content: flex-end; border-top: 1px solid var(--border-soft); }
+@media (pointer: coarse) { .dui-dialog__close { flex-basis: 44px; min-height: 44px; } }
+
+.dui-modal-backdrop {
+  overflow: auto;
+  padding: max(12px, env(safe-area-inset-top)) max(12px, env(safe-area-inset-right)) max(12px, env(safe-area-inset-bottom)) max(12px, env(safe-area-inset-left));
+}
+
+html.dui-pro-overhaul .dui-modal-surface {
+  background: linear-gradient(var(--dui-form-bg-2, #13171c), var(--dui-form-bg, #090b0e)), #090b0e !important;
+  border-color: var(--dui-form-border, var(--border-default)) !important;
+  border-radius: var(--radius-xl) !important;
+  box-shadow: var(--shadow-panel) !important;
+}
+
+html.dui-pro-overhaul .model-picker-popover {
+  background: linear-gradient(var(--dui-form-bg, #101317), var(--dui-form-bg, #101317)), #090b0e !important;
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-panel);
+  overscroll-behavior: contain;
+  scrollbar-gutter: stable;
+}
+
+@media (pointer: coarse) {
+  html.dui-pro-overhaul :where(.dui-button, .dui-icon-button, [data-editor-tab], .model-picker-popover [role="option"]) { min-height: 44px; }
+  html.dui-pro-overhaul .model-picker-popover [role="option"] { padding-block: 12px; }
+}

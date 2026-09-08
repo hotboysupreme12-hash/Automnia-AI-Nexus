@@ -5,7 +5,8 @@ param(
   [string]$FirestoreLocation,
   [string]$BillingAccountId,
   [string]$SecretValuesFile,
-  [switch]$RouteImmediately
+  [switch]$RouteImmediately,
+  [switch]$SkipGmail
 )
 
 . (Join-Path $PSScriptRoot 'Common.ps1')
@@ -14,7 +15,7 @@ if (-not $Region) { $Region = $config.Region }
 if (-not $FirestoreLocation) { $FirestoreLocation = $config.FirestoreLocation }
 if ($WhatIfPreference) {
   $PSCmdlet.ShouldProcess("$ProjectId/$Region/$($config.ServiceName)", 'plan complete Automnia Cloud deployment') | Out-Null
-  return [pscustomobject]@{ WhatIf = $true; ProjectId = $ProjectId; Region = $Region; ServiceName = $config.ServiceName }
+  return [pscustomobject]@{ WhatIf = $true; ProjectId = $ProjectId; Region = $Region; ServiceName = $config.ServiceName; SkipGmail = [bool]$SkipGmail }
 }
 
 Assert-GcloudSession | Out-Null
@@ -54,9 +55,9 @@ if ($SecretValuesFile) {
   foreach ($property in $provided.PSObject.Properties) { $providedSecrets[[string]$property.Name] = [string]$property.Value }
 }
 
-foreach ($binding in $config.SecretBindings.GetEnumerator()) {
+foreach ($binding in @($config.SecretBindings.GetEnumerator())) {
   $secretName = [string]$binding.Value
-  $requiresOperatorValue = [string]$binding.Key -in @('SHOPIFY_ADMIN_API_TOKEN', 'GMAIL_OAUTH_CREDENTIALS')
+  $requiresOperatorValue = [string]$binding.Key -in @('SHOPIFY_ADMIN_API_TOKEN', 'MICROSOFT_GRAPH_MAIL_CREDENTIALS')
   if ($requiresOperatorValue) {
     # A random bootstrap value would make health look configured while every
     # paid order still fails at the external provider. Require real operator
@@ -78,7 +79,7 @@ foreach ($binding in $config.SecretBindings.GetEnumerator()) {
     }
   }
   if ($requiresOperatorValue -and -not (Test-SecretVersion -ProjectId $ProjectId -SecretName $secretName)) {
-    $credentialDescription = if ([string]$binding.Key -eq 'GMAIL_OAUTH_CREDENTIALS') { 'Gmail OAuth credentials' } else { 'Shopify app secret' }
+    $credentialDescription = if ([string]$binding.Key -eq 'MICROSOFT_GRAPH_MAIL_CREDENTIALS') { 'Microsoft Graph mail credentials' } else { 'Shopify app secret' }
     throw "Secret '$secretName' must contain $credentialDescription before deployment. Pass it through -SecretValuesFile; bootstrap placeholders are not accepted."
   }
   if ($PSCmdlet.ShouldProcess("$secretName in $ProjectId", 'grant runtime secret access')) {
@@ -100,10 +101,12 @@ SHOPIFY_CHECKOUT_URL: '$($config.ShopifyCheckoutUrl)'
 SHOPIFY_STORE_DOMAIN: '$($config.ShopifyStoreDomain)'
 SHOPIFY_APP_CLIENT_ID: '$($config.ShopifyAppClientId)'
 SHOPIFY_API_VERSION: '$($config.ShopifyApiVersion)'
-GMAIL_SENDER: '$($config.GmailSender)'
+EMAIL_PROVIDER: '$($config.EmailProvider)'
+EMAIL_SENDER: '$($config.EmailSender)'
 VERTEX_LOCATION: '$($config.VertexLocation)'
 AUTOMNIA_RELAY_MODEL: '$($config.AutomniaRelayModel)'
 AUTOMNIA_RELAY_FALLBACK_MODELS: '$([string]::Join(',', [string[]]$config.AutomniaRelayFallbackModels))'
+AUTOMNIA_RELAY_SELECTABLE_MODELS: '$([string]::Join(',', [string[]]$config.AutomniaRelaySelectableModels))'
 AUTOMNIA_RELAY_MAX_INPUT_TOKENS: '$($config.RelayMaxInputTokens)'
 AUTOMNIA_RELAY_MAX_OUTPUT_TOKENS: '$($config.RelayMaxOutputTokens)'
 AUTOMNIA_RELAY_TEXT_OUTPUT_TOKENS: '$($config.RelayTextOutputTokens)'
@@ -162,7 +165,7 @@ if ($service.status -and $service.status.PSObject.Properties['traffic'] -and $se
   $candidateTraffic = @($service.status.traffic | Where-Object { $_ -and $_.PSObject.Properties['tag'] -and $_.tag -eq 'candidate' } | Select-Object -First 1)
 }
 $candidateUrl = if ($candidateTraffic -and $candidateTraffic.url) { [string]$candidateTraffic.url } else { [string]$service.status.url }
-$health = & (Join-Path $PSScriptRoot 'health.ps1') -ProjectId $ProjectId -Region $Region -BaseUrl $candidateUrl
+$health = & (Join-Path $PSScriptRoot 'health.ps1') -ProjectId $ProjectId -Region $Region -BaseUrl $candidateUrl -SkipGmail:$SkipGmail
 $timestamp = [DateTimeOffset]::UtcNow.ToString('yyyyMMddTHHmmssZ')
 $state = [ordered]@{
   kind = 'automnia-gcloud-deployment'
@@ -178,6 +181,7 @@ $state = [ordered]@{
   planMappingHash = Get-LocalPlanMappingHash
   permanentBaseUrl = $config.PermanentBaseUrl
   routedImmediately = [bool]$RouteImmediately
+  gmailSkipped = [bool]$SkipGmail
   passed = $health.Passed
 }
 $statePath = Write-StateJson -Name "deploy-$ProjectId-$timestamp.json" -Value $state

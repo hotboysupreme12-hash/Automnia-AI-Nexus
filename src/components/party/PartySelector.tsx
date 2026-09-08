@@ -1,8 +1,11 @@
+import { useRememberedState } from '../../hooks/useRememberedState'
+import { createAgentActivitySelector } from '../../store/agentActivitySelector'
+import { boundedEditDistance } from '../../utils/searchDistance'
 import { useDeferredValue, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { AgentCard } from './AgentCard'
 import { Panel } from '../common/Panel'
 import { useNexusStore } from '../../store/nexusStore'
-import type { AgentActivityEvent, AgentRarity, AgentResponse, OpenClawAgent } from '../../types/nexus'
+import type { AgentRarity, OpenClawAgent } from '../../types/nexus'
 import { useRuntimeSummaryStatus, type RuntimeStatus } from '../../hooks/useRuntimeStatus'
 import {
   DEFAULT_REGISTRY_PREFERENCES,
@@ -72,38 +75,6 @@ function activeExternalChannelAgentIds(status: RuntimeStatus | null): Set<string
   return active
 }
 
-type AgentCardActivityStatus = {
-  label: string
-  detail: string
-  kind: 'working' | 'queued' | 'approval' | 'reply'
-}
-
-function latestVisibleActivity(response: AgentResponse): AgentActivityEvent | undefined {
-  return [...(response.activity || [])].reverse().find((event) => {
-    const type = event.type.toLowerCase()
-    return !type.startsWith('message.final') && !type.startsWith('run.finished') && Boolean(event.label.trim())
-  })
-}
-
-function cardActivityStatus(response: AgentResponse): AgentCardActivityStatus {
-  const event = latestVisibleActivity(response)
-  const type = event?.type.toLowerCase() || ''
-  const detail = event?.label.trim() || response.progressLabel?.trim() || 'Working on the current request.'
-
-  if (response.transport === 'command-console-queue' || type.startsWith('run.queued')) {
-    return { label: 'Queued', detail, kind: 'queued' }
-  }
-  if (type.startsWith('approval.')) return { label: 'Needs approval', detail, kind: 'approval' }
-  if (type.startsWith('tool.')) return { label: 'Using tools', detail, kind: 'working' }
-  if (type.startsWith('browser.')) return { label: 'Browsing', detail, kind: 'working' }
-  if (type.startsWith('file.')) return { label: 'Editing files', detail, kind: 'working' }
-  if (type.startsWith('command.')) return { label: 'Running command', detail, kind: 'working' }
-  if (type === 'message.partial' || type.startsWith('agent.finalizing')) return { label: 'Replying', detail, kind: 'reply' }
-  if (type === 'run.model_running' || type === 'agent.working') return { label: 'Thinking', detail, kind: 'working' }
-  if (type.startsWith('run.') || type.startsWith('agent.')) return { label: 'Preparing', detail, kind: 'working' }
-  return { label: 'Working', detail, kind: 'working' }
-}
-
 const RARITY_ORDER: Record<AgentRarity, number> = {
   legendary: 0,
   epic: 1,
@@ -159,23 +130,6 @@ const AGENT_INTENT_TAGS: Record<string, string[]> = {
   'hn-architect': ['architecture', 'planning', 'research', 'strategy', 'coordination'],
 }
 
-function levenshteinDistance(a: string, b: string): number {
-  if (a === b) return 0
-  if (!a.length) return b.length
-  if (!b.length) return a.length
-  const prev = Array.from({ length: b.length + 1 }, (_, i) => i)
-  const curr = Array.from({ length: b.length + 1 }, () => 0)
-  for (let i = 1; i <= a.length; i += 1) {
-    curr[0] = i
-    for (let j = 1; j <= b.length; j += 1) {
-      const cost = a[i - 1] === b[j - 1] ? 0 : 1
-      curr[j] = Math.min(curr[j - 1] + 1, prev[j] + 1, prev[j - 1] + cost)
-    }
-    for (let j = 0; j <= b.length; j += 1) prev[j] = curr[j]
-  }
-  return prev[b.length]
-}
-
 function normalizeSearchTokens(query: string): string[] {
   return query
     .toLowerCase()
@@ -189,7 +143,7 @@ function expandIntentTokens(tokens: string[]): string[] {
   for (const token of tokens) {
     for (const candidate of INTENT_KEYWORDS[token] || []) expanded.add(candidate)
     for (const [key, values] of Object.entries(INTENT_KEYWORDS)) {
-      if (levenshteinDistance(token, key) <= (token.length <= 5 ? 1 : 2)) {
+      if (boundedEditDistance(token, key, token.length <= 5 ? 1 : 2) <= (token.length <= 5 ? 1 : 2)) {
         expanded.add(key)
         values.forEach((value) => expanded.add(value))
       }
@@ -198,10 +152,8 @@ function expandIntentTokens(tokens: string[]): string[] {
   return Array.from(expanded)
 }
 
-function scoreAgentForSearch(agent: OpenClawAgent, query: string, index?: AgentSearchIndex): number {
-  const tokens = normalizeSearchTokens(query)
+function scoreAgentForSearch(agent: OpenClawAgent, tokens: string[], expanded: string[], index?: AgentSearchIndex): number {
   if (!tokens.length) return 1
-  const expanded = expandIntentTokens(tokens)
   const haystack = index?.haystack ?? agentSearchText(agent)
   const hayWords = index?.hayWords ?? haystack.split(/\s+/).filter(Boolean)
   const tags = (index?.tags ?? AGENT_INTENT_TAGS[agent.id]) || []
@@ -210,7 +162,7 @@ function scoreAgentForSearch(agent: OpenClawAgent, query: string, index?: AgentS
   for (const token of tokens) {
     if (haystack.includes(token)) score += 12
     if (tags.some((tag) => tag.includes(token) || token.includes(tag))) score += 16
-    if (hayWords.some((word) => levenshteinDistance(token, word) <= (token.length <= 5 ? 1 : 2))) score += 8
+    if (hayWords.some((word) => boundedEditDistance(token, word, token.length <= 5 ? 1 : 2) <= (token.length <= 5 ? 1 : 2))) score += 8
   }
 
   for (const token of expanded) {
@@ -230,7 +182,8 @@ export function PartySelector() {
   const selectedAgentIds = useNexusStore((s) => s.selectedAgentIds)
   const activePartyIds = useNexusStore((s) => s.activePartyIds)
   const busyAgentIds = useNexusStore((s) => s.busyAgentIds)
-  const agentResponses = useNexusStore((s) => s.agentResponses)
+  const activitySelector = useMemo(() => createAgentActivitySelector(), [])
+  const activityStatusByAgent = useNexusStore(activitySelector)
   const activeMission = useNexusStore((s) => s.activeMission)
   // Agent cards only need the lightweight activity/run summary. Keeping the
   // full session/config/diagnostics payload out of this high-traffic surface
@@ -240,8 +193,8 @@ export function PartySelector() {
   const registryScrollRef = useRef<HTMLDivElement | null>(null)
   const registryGridRef = useRef<HTMLDivElement | null>(null)
   const prefs = useMemo(() => readRegistryPreferences(), [])
-  const [pageIndex, setPageIndex] = useState(0)
-  const [searchQuery, setSearchQuery] = useState('')
+  const [pageIndex, setPageIndex] = useRememberedState('roster-page', 0)
+  const [searchQuery, setSearchQuery] = useRememberedState('roster-search', '')
   const deferredSearchQuery = useDeferredValue(searchQuery)
   const [sortKey, setSortKey] = useState<SortKey>(prefs.sortKey || 'party')
   const [rarityFilter, setRarityFilter] = useState<AgentRarity | 'all'>(prefs.rarityFilter || 'all')
@@ -272,14 +225,6 @@ export function PartySelector() {
     ...busyAgentIds,
     ...activeExternalChannelAgentIds(runtimeStatus),
   ]), [busyAgentIds, runtimeStatus])
-  const activityStatusByAgent = useMemo(() => {
-    const next = new Map<string, AgentCardActivityStatus>()
-    for (const response of agentResponses) {
-      if (!response.streaming || next.has(response.agentId)) continue
-      next.set(response.agentId, cardActivityStatus(response))
-    }
-    return next
-  }, [agentResponses])
   const searchIndex = useMemo(() => new Map(agents.map((agent) => {
     const haystack = agentSearchText(agent)
     return [agent.id, {
@@ -293,12 +238,14 @@ export function PartySelector() {
     let list = [...agents]
     const searchScores = new Map<string, number>()
     const query = deferredSearchQuery.trim()
+    const tokens = normalizeSearchTokens(query)
+    const expanded = expandIntentTokens(tokens)
 
     // Search — intent-aware weighted matching with typo tolerance.
     if (query) {
       list = list
         .map((agent) => {
-          const score = scoreAgentForSearch(agent, query, searchIndex.get(agent.id))
+          const score = scoreAgentForSearch(agent, tokens, expanded, searchIndex.get(agent.id))
           searchScores.set(agent.id, score)
           return agent
         })
@@ -416,11 +363,15 @@ export function PartySelector() {
     }
   }, [displayMode, filtered.length])
 
+  const previousSearchOptions = useRef([searchQuery, sortKey, rarityFilter].join('|'))
   // Reset to page 0 when the result set changes; display-size changes keep the current page.
   useEffect(() => {
+    const key = [searchQuery, sortKey, rarityFilter].join('|')
+    if (previousSearchOptions.current === key) return
+    previousSearchOptions.current = key
     const timer = window.setTimeout(() => setPageIndex(0), 0)
     return () => window.clearTimeout(timer)
-  }, [searchQuery, sortKey, rarityFilter])
+  }, [searchQuery, sortKey, rarityFilter, setPageIndex])
   useEffect(() => {
     if (registryScrollRef.current) registryScrollRef.current.scrollTop = 0
   }, [safePage, searchQuery, sortKey, rarityFilter, displayMode])
@@ -428,7 +379,7 @@ export function PartySelector() {
     if (pageIndex < totalPages) return
     const timer = window.setTimeout(() => setPageIndex(Math.max(0, totalPages - 1)), 0)
     return () => window.clearTimeout(timer)
-  }, [totalPages, pageIndex])
+  }, [totalPages, pageIndex, setPageIndex])
 
   return (
     <div
@@ -537,6 +488,7 @@ export function PartySelector() {
                   key={mode.id}
                   data-agent-view-choice
                   data-active={displayMode === mode.id ? 'true' : undefined}
+                  aria-pressed={displayMode === mode.id}
                   type="button"
                   title={mode.hint}
                   onClick={() => setDisplayMode(mode.id)}
@@ -599,6 +551,7 @@ export function PartySelector() {
           <div
             ref={registryScrollRef}
             data-agent-registry-scroll
+            data-workspace-scroll="agent-registry"
             className="-m-2 min-h-0 overflow-y-auto overflow-x-hidden p-2"
             style={{
               height: 'min(78vh, max(560px, calc(100vh - 260px)))',

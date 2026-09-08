@@ -1,5 +1,6 @@
 import type { AgentActivityEvent, AgentResponse, AgentTurnAttachment } from '../types/nexus'
 import { readConsolePreferences } from '../components/settings/workspaceSettings'
+import { forgetRememberedState } from '../hooks/useRememberedState'
 
 export const COMMAND_CONSOLE_DRAFT_PREFIX = 'automnia:command-draft:'
 export const MAX_COMMAND_CONSOLE_RESPONSES = 80
@@ -84,6 +85,9 @@ export function writeCommandConsoleDraft(storageKey: string, value: string, stor
 }
 
 export function clearAllCommandConsoleDrafts(storage: CommandConsoleDraftStorage | null = browserDraftStorage()): number {
+  const attachments = forgetRememberedState('console-attachment-drafts') as Record<string, { preview: string }[]> | undefined
+  for (const entry of Object.values(attachments || {}).flat()) if (entry.preview) URL.revokeObjectURL(entry.preview)
+  if (typeof window !== 'undefined') window.dispatchEvent(new Event('automnia:console-drafts-cleared'))
   if (!storage) return 0
   let removed = 0
   try {

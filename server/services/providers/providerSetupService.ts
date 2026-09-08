@@ -2,7 +2,7 @@ import { existsSync, readdirSync, readFileSync } from 'node:fs'
 import { homedir } from 'node:os'
 import path from 'node:path'
 import { pathToFileURL } from 'node:url'
-import { spawnSync } from 'node:child_process'
+import { execFile, spawnSync } from 'node:child_process'
 import type { LocalOAuthCredential } from './providerAuthService'
 
 export const GOOGLE_VERTEX_PROJECT_ID_KEYS = ['GOOGLE_VERTEX_PROJECT_ID', 'GOOGLE_CLOUD_PROJECT', 'GOOGLE_PROJECT_ID', 'GCP_PROJECT', 'GCLOUD_PROJECT']
@@ -181,6 +181,9 @@ export type ProviderSetupServiceOptions = {
   refreshAnthropicOAuthCredential?: (oauth: LocalOAuthCredential) => Promise<LocalOAuthCredential>
   refreshOpenAICodexOAuthCredential: (oauth: LocalOAuthCredential) => Promise<LocalOAuthCredential>
   spawnSync?: SpawnSyncLike
+  runCommand?: (command: string, args: readonly string[], options: {
+    timeout: number; env: NodeJS.ProcessEnv; signal?: AbortSignal; windowsHide: boolean
+  }) => Promise<SpawnSyncResultLike>
   workspaceRoot: string
 }
 
@@ -263,6 +266,44 @@ export function createProviderSetupService(options: ProviderSetupServiceOptions)
   let googleVertexGcloudStatusCache: { value: GoogleVertexGcloudStatus; expiresAt: number } | null = null
   let googleVertexAccessTokenCache: { value: string; expiresAt: number } | null = null
   let googleVertexGcloudCommandCache: string | null = null
+  const gcloudRequests = new Map<string, Promise<{ stdout: string; stderr: string; code: number }>>()
+  const gcloudResults = new Map<string, { value: { stdout: string; stderr: string; code: number }; expiresAt: number }>()
+  const adcRequests = new Map<string, Promise<{ accessToken: string; source: 'application-default' } | null>>()
+  let adcTokenCache: { key: string; accessToken: string; expiresAt: number } | null = null
+  const oauthRefreshes = new Map<string, Promise<LocalOAuthCredential | undefined>>()
+
+  function currentOAuth(provider: string) {
+    return options.getLocalProviderOAuth(provider) || options.localOAuthFromMainAuthProfile(provider) || undefined
+  }
+
+  function oauthIdentity(credential: LocalOAuthCredential | undefined) {
+    return JSON.stringify(credential ? [credential.accountId, credential.email, credential.accessToken, credential.refreshToken, credential.expiresAt, credential.projectId] : null)
+  }
+
+  async function refreshOAuthOnce(
+    provider: string,
+    credential: LocalOAuthCredential,
+    refresh: (oauth: LocalOAuthCredential) => Promise<LocalOAuthCredential>,
+  ): Promise<LocalOAuthCredential | undefined> {
+    const identity = oauthIdentity(credential)
+    const key = `${provider}:${identity}`
+    const existing = oauthRefreshes.get(key)
+    if (existing) return existing
+    const pending = (async () => {
+      const refreshed = await refresh({ ...credential })
+      // A reconnect, account switch, or logout while refreshing supersedes it.
+      const current = currentOAuth(provider)
+      if (oauthIdentity(current) !== identity) return current
+      await options.persistProviderOAuth(provider, refreshed)
+      return currentOAuth(provider) || refreshed
+    })()
+    oauthRefreshes.set(key, pending)
+    try {
+      return await pending
+    } finally {
+      if (oauthRefreshes.get(key) === pending) oauthRefreshes.delete(key)
+    }
+  }
 
   function resolveEnvValue(env: Record<string, string | undefined>, keys: string[]) {
     for (const key of keys) {
@@ -390,6 +431,73 @@ export function createProviderSetupService(options: ProviderSetupServiceOptions)
     return missingResult || { stdout: '', stderr: 'gcloud was not found.', code: 1 }
   }
 
+  async function runGcloudAsync(args: string[], timeoutMs = 8000, signal?: AbortSignal): Promise<{ stdout: string; stderr: string; code: number }> {
+    signal?.throwIfAborted()
+    const key = JSON.stringify(args)
+    const cached = gcloudResults.get(key)
+    if (cached && cached.expiresAt > now()) return cached.value
+    if (!signal && gcloudRequests.has(key)) return gcloudRequests.get(key)!
+    const pending = (async () => {
+      const commands = uniqueStrings(googleVertexGcloudCommandCache, 'gcloud', ...googleVertexGcloudCommandCandidates())
+      let last = { stdout: '', stderr: 'gcloud was not found.', code: 1 }
+      for (const command of commands) {
+        signal?.throwIfAborted()
+        const env = { ...processEnv }
+        if (platformPath.isAbsolute(command)) {
+          env.PATH = prependPathEntry(env.PATH, platformPath.dirname(command))
+          env.Path = prependPathEntry(env.Path, platformPath.dirname(command))
+        }
+        const spec = shelllessSpawnSpecForCommand(command, args, platform, env, { wrapWindowsPathLookup: true })
+        const commandOptions = { timeout: timeoutMs, env, signal, windowsHide: true }
+        const result = options.runCommand
+          ? await options.runCommand(spec.command, spec.args, commandOptions)
+          : options.spawnSync
+            ? options.spawnSync(spec.command, spec.args, { ...commandOptions, encoding: 'utf-8', shell: false })
+            : await new Promise<SpawnSyncResultLike>((resolve) => {
+              execFile(spec.command, [...spec.args], { ...commandOptions, encoding: 'utf-8', maxBuffer: 1024 * 1024 }, (error, stdout, stderr) => {
+                resolve({ stdout, stderr, status: error ? 1 : 0, ...(error ? { error } : {}) })
+              })
+            })
+        signal?.throwIfAborted()
+        last = {
+          stdout: spawnResultText(result.stdout).trim(),
+          stderr: [spawnResultText(result.stderr).trim(), result.error ? String(result.error) : ''].filter(Boolean).join('\n'),
+          code: typeof result.status === 'number' ? result.status : 1,
+        }
+        if (!isMissingGcloudCommand(last)) {
+          googleVertexGcloudCommandCache = command
+          break
+        }
+        if (googleVertexGcloudCommandCache === command) googleVertexGcloudCommandCache = null
+      }
+      const tokenCommand = args.includes('print-access-token')
+      gcloudResults.set(key, { value: last, expiresAt: now() + (last.code === 0 ? tokenCommand ? GOOGLE_VERTEX_ACCESS_TOKEN_CACHE_MS : 15_000 : 2_000) })
+      return last
+    })()
+    if (!signal) gcloudRequests.set(key, pending)
+    try {
+      return await pending
+    } finally {
+      if (gcloudRequests.get(key) === pending) gcloudRequests.delete(key)
+    }
+  }
+
+  async function resolveGoogleVertexProjectIdAsync(env: Record<string, string | undefined> = {}, signal?: AbortSignal) {
+    const available = resolveGoogleVertexProjectIdFast(env)
+    if (available) return available
+    const result = await runGcloudAsync(['config', 'get-value', 'project', '--quiet'], 5000, signal)
+    return result.code === 0 ? cleanGcloudConfigValue(result.stdout) : ''
+  }
+
+  async function resolveGoogleVertexGcloudAccessTokenAsync(includeApplicationDefault = true, signal?: AbortSignal) {
+    if (includeApplicationDefault) {
+      const adc = await runGcloudAsync(['auth', 'application-default', 'print-access-token', '--quiet'], 10000, signal)
+      if (adc.code === 0 && adc.stdout) return { accessToken: adc.stdout, source: 'application-default' as const }
+    }
+    const account = await runGcloudAsync(['auth', 'print-access-token', '--quiet'], 10000, signal)
+    return account.code === 0 && account.stdout ? { accessToken: account.stdout, source: 'gcloud' as const } : null
+  }
+
   function resolveGoogleVertexProjectId(env: Record<string, string | undefined> = {}) {
     const fromEnv = resolveEnvValue(env, googleVertexProjectIdKeys)
     if (fromEnv) return fromEnv
@@ -507,30 +615,48 @@ export function createProviderSetupService(options: ProviderSetupServiceOptions)
     return null
   }
 
-  async function resolveGoogleVertexApplicationDefaultAuth(): Promise<{
+  async function resolveGoogleVertexApplicationDefaultAuth(signal?: AbortSignal): Promise<{
     accessToken: string
     source: 'application-default'
   } | null> {
+    signal?.throwIfAborted()
     const credential = readGoogleApplicationDefaultAuthorizedUserCredential()
     if (!credential) return null
-
+    const key = JSON.stringify(credential)
+    if (adcTokenCache?.key === key && adcTokenCache.expiresAt > now()) {
+      return { accessToken: adcTokenCache.accessToken, source: 'application-default' }
+    }
+    if (!signal && adcRequests.has(key)) return adcRequests.get(key)!
+    const pending = (async () => {
+      try {
+        const response = await fetch('https://oauth2.googleapis.com/token', {
+          method: 'POST',
+          signal: signal ? AbortSignal.any([signal, AbortSignal.timeout(10000)]) : AbortSignal.timeout(10000),
+          headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+          body: new URLSearchParams({
+            client_id: credential.clientId,
+            client_secret: credential.clientSecret,
+            refresh_token: credential.refreshToken,
+            grant_type: 'refresh_token',
+          }).toString(),
+        })
+        if (!response.ok) return null
+        const payload = await response.json() as { access_token?: unknown; expires_in?: unknown }
+        const accessToken = typeof payload.access_token === 'string' ? payload.access_token.trim() : ''
+        if (!accessToken) return null
+        const lifetime = typeof payload.expires_in === 'number' && Number.isFinite(payload.expires_in) ? Math.max(0, payload.expires_in * 1000 - 60000) : GOOGLE_VERTEX_ACCESS_TOKEN_CACHE_MS
+        adcTokenCache = { key, accessToken, expiresAt: now() + Math.min(lifetime, GOOGLE_VERTEX_ACCESS_TOKEN_CACHE_MS) }
+        return { accessToken, source: 'application-default' as const }
+      } catch (error) {
+        if (signal?.aborted) throw error
+        return null
+      }
+    })()
+    if (!signal) adcRequests.set(key, pending)
     try {
-      const response = await fetch('https://oauth2.googleapis.com/token', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-        body: new URLSearchParams({
-          client_id: credential.clientId,
-          client_secret: credential.clientSecret,
-          refresh_token: credential.refreshToken,
-          grant_type: 'refresh_token',
-        }).toString(),
-      })
-      if (!response.ok) return null
-      const payload = await response.json() as { access_token?: unknown }
-      const accessToken = typeof payload.access_token === 'string' ? payload.access_token.trim() : ''
-      return accessToken ? { accessToken, source: 'application-default' } : null
-    } catch {
-      return null
+      return await pending
+    } finally {
+      if (adcRequests.get(key) === pending) adcRequests.delete(key)
     }
   }
 
@@ -661,23 +787,23 @@ export function createProviderSetupService(options: ProviderSetupServiceOptions)
     return googleVertexGcloudStatus(statusOptions).configured || isGoogleVertexLocalOAuthConfigured({}, statusOptions)
   }
 
-  async function resolveGoogleVertexGcloudAuth(env: Record<string, string>): Promise<ProviderRequestAuth | null> {
+  async function resolveGoogleVertexGcloudAuth(env: Record<string, string>, signal?: AbortSignal): Promise<ProviderRequestAuth | null> {
     const envToken = resolveEnvValue(env, GOOGLE_VERTEX_ACCESS_TOKEN_KEYS)
-    const projectId = resolveGoogleVertexProjectId(env)
+    const projectId = await resolveGoogleVertexProjectIdAsync(env, signal)
     const location = resolveGoogleVertexLocation(env)
     if (envToken && projectId) {
       return { type: 'oauth', accessToken: envToken, projectId, location, source: 'env-token' }
     }
 
     const hasLocalAdc = Boolean(readGoogleApplicationDefaultAuthorizedUserCredential())
-    const applicationDefault = await resolveGoogleVertexApplicationDefaultAuth()
+    const applicationDefault = await resolveGoogleVertexApplicationDefaultAuth(signal)
     if (applicationDefault && projectId) {
       return { type: 'oauth', accessToken: applicationDefault.accessToken, projectId, location, source: applicationDefault.source }
     }
 
-    const version = runGcloud(['--version'], 5000)
+    const version = await runGcloudAsync(['--version'], 5000, signal)
     if (version.code !== 0) return null
-    const credential = resolveGoogleVertexGcloudAccessToken({ includeApplicationDefault: !hasLocalAdc })
+    const credential = await resolveGoogleVertexGcloudAccessTokenAsync(!hasLocalAdc, signal)
     if (!credential || !projectId) return null
     return { type: 'oauth', accessToken: credential.accessToken, projectId, location, source: credential.source }
   }
@@ -694,13 +820,9 @@ export function createProviderSetupService(options: ProviderSetupServiceOptions)
       }
     }
 
-    const refreshed = await options.refreshGoogleOAuthCredential(stored)
-    await options.persistProviderOAuth('google', refreshed)
-    const next = options.getLocalProviderOAuth('google') || refreshed
-    return {
-      accessToken: next.accessToken?.trim() || refreshed.accessToken?.trim() || '',
-      ...(next.projectId ? { projectId: next.projectId } : {}),
-    }
+    const next = await refreshOAuthOnce('google', stored, options.refreshGoogleOAuthCredential)
+    const accessToken = next?.accessToken?.trim()
+    return accessToken ? { accessToken, ...(next?.projectId ? { projectId: next.projectId } : {}) } : null
   }
 
   async function resolveOpenAICodexOAuthForRequest(): Promise<{ accessToken: string } | null> {
@@ -713,10 +835,8 @@ export function createProviderSetupService(options: ProviderSetupServiceOptions)
       return { accessToken }
     }
 
-    const refreshed = await options.refreshOpenAICodexOAuthCredential(stored)
-    await options.persistProviderOAuth('openai', refreshed)
-    const next = options.getLocalProviderOAuth('openai') || refreshed
-    const nextAccessToken = next.accessToken?.trim() || refreshed.accessToken?.trim()
+    const next = await refreshOAuthOnce('openai', stored, options.refreshOpenAICodexOAuthCredential)
+    const nextAccessToken = next?.accessToken?.trim()
     return nextAccessToken ? { accessToken: nextAccessToken } : null
   }
 
@@ -729,19 +849,17 @@ export function createProviderSetupService(options: ProviderSetupServiceOptions)
     if (accessToken && (!expiresAt || expiresAt > now() + 60000)) return { accessToken }
     if (!options.refreshAnthropicOAuthCredential) return null
 
-    const refreshed = await options.refreshAnthropicOAuthCredential(stored)
-    await options.persistProviderOAuth('anthropic', refreshed)
-    const next = options.getLocalProviderOAuth('anthropic') || refreshed
-    const nextAccessToken = next.accessToken?.trim() || refreshed.accessToken?.trim()
+    const next = await refreshOAuthOnce('anthropic', stored, options.refreshAnthropicOAuthCredential)
+    const nextAccessToken = next?.accessToken?.trim()
     return nextAccessToken ? { accessToken: nextAccessToken } : null
   }
 
-  async function resolveGoogleVertexRequestAuth(env: Record<string, string>): Promise<ProviderRequestAuth | null> {
-    const gcloudAuth = await resolveGoogleVertexGcloudAuth(env)
+  async function resolveGoogleVertexRequestAuth(env: Record<string, string>, signal?: AbortSignal): Promise<ProviderRequestAuth | null> {
+    const gcloudAuth = await resolveGoogleVertexGcloudAuth(env, signal)
     if (gcloudAuth) return gcloudAuth
 
     const oauth = await resolveGoogleOAuthForRequest().catch(() => null)
-    const projectId = googleVertexLocalOAuthProjectId(env)
+    const projectId = await resolveGoogleVertexProjectIdAsync(env, signal)
     const location = resolveGoogleVertexLocation(env)
     if (oauth?.accessToken && projectId) {
       return { type: 'oauth', accessToken: oauth.accessToken, projectId, location, source: 'local-google-oauth' }
@@ -754,10 +872,11 @@ export function createProviderSetupService(options: ProviderSetupServiceOptions)
     provider: string,
     env: Record<string, string>,
     envKeys: string[],
+    signal?: AbortSignal,
   ): Promise<ProviderRequestAuth | null> {
     await options.ensureLocalAuthStoreLoaded().catch(() => undefined)
     if (provider === 'google-vertex') {
-      return resolveGoogleVertexRequestAuth(env)
+      return resolveGoogleVertexRequestAuth(env, signal)
     }
 
     const localMode = options.getLocalProviderMode(provider)

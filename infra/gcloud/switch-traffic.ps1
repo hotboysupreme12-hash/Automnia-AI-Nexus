@@ -4,7 +4,8 @@ param(
   [ValidatePattern('^[a-z][a-z0-9-]{4,28}[a-z0-9]$')][string]$SourceProjectId,
   [string]$Region,
   [string]$DnsProjectId,
-  [string]$DnsZone
+  [string]$DnsZone,
+  [switch]$SkipGmail
 )
 
 . (Join-Path $PSScriptRoot 'Common.ps1')
@@ -50,12 +51,15 @@ try {
     $sourceFrozen = $true
   }
   $sourceUrl = Get-ServiceUrl -ProjectId $SourceProjectId -Region $Region -ServiceName $config.ServiceName
-  & (Join-Path $PSScriptRoot 'health.ps1') -ProjectId $SourceProjectId -Region $Region -BaseUrl $sourceUrl -ExpectedWriteMode read_only | Out-Null
+  $sourceHealth = Wait-HttpJson -Url "$($sourceUrl.TrimEnd('/'))/health" -TimeoutSeconds $config.HealthTimeoutSeconds
+  if ($sourceHealth.service -ne $config.ServiceName -or $sourceHealth.writeMode -ne 'read_only') {
+    throw "Source service did not confirm read-only mode during cutover: $($sourceHealth | ConvertTo-Json -Compress)"
+  }
 
   # Close the race between the earlier bulk copy and cutover. Shopify receives
   # retryable 503 responses while this final delta is exported and imported.
-  & (Join-Path $PSScriptRoot 'migrate-firestore.ps1') -From $SourceProjectId -To $ProjectId -Region $Region -AllowNonEmptyTarget | Out-Null
-  $finalVerification = & (Join-Path $PSScriptRoot 'verify.ps1') -ProjectId $ProjectId -SourceProjectId $SourceProjectId -Region $Region
+  & (Join-Path $PSScriptRoot 'migrate-firestore.ps1') -From $SourceProjectId -To $ProjectId -Region $Region -AllowNonEmptyTarget -SkipGmail:$SkipGmail | Out-Null
+  $finalVerification = & (Join-Path $PSScriptRoot 'verify.ps1') -ProjectId $ProjectId -SourceProjectId $SourceProjectId -Region $Region -SkipGmail:$SkipGmail
   if (-not $finalVerification.Passed) { throw 'Final verification did not pass.' }
 
   $targetService = Get-ServiceDescriptor -ProjectId $ProjectId -Region $Region -ServiceName $config.ServiceName
@@ -66,7 +70,7 @@ try {
     Invoke-Gcloud -Arguments @('run', 'services', 'update-traffic', $config.ServiceName, '--project', $ProjectId, '--region', $Region, '--to-revisions', "$candidateRevision=100", '--update-tags', "candidate=$candidateRevision") | Out-Null
   }
   $targetUrl = Get-ServiceUrl -ProjectId $ProjectId -Region $Region -ServiceName $config.ServiceName
-  & (Join-Path $PSScriptRoot 'health.ps1') -ProjectId $ProjectId -Region $Region -BaseUrl $targetUrl | Out-Null
+  & (Join-Path $PSScriptRoot 'health.ps1') -ProjectId $ProjectId -Region $Region -BaseUrl $targetUrl -SkipGmail:$SkipGmail | Out-Null
 
   if ($sourceMapping -and $PSCmdlet.ShouldProcess("$SourceProjectId/$($config.PermanentDomain)", 'remove current domain mapping')) {
     Remove-DomainMapping -ProjectId $SourceProjectId -Domain $config.PermanentDomain
@@ -92,7 +96,7 @@ try {
   }
 
   Wait-DomainMappingReady -ProjectId $ProjectId -Domain $config.PermanentDomain -TimeoutMinutes $config.DomainMappingTimeoutMinutes | Out-Null
-  & (Join-Path $PSScriptRoot 'health.ps1') -ProjectId $ProjectId -Region $Region -BaseUrl $config.PermanentBaseUrl -TimeoutSeconds ($config.DomainMappingTimeoutMinutes * 60) | Out-Null
+  & (Join-Path $PSScriptRoot 'health.ps1') -ProjectId $ProjectId -Region $Region -BaseUrl $config.PermanentBaseUrl -TimeoutSeconds ($config.DomainMappingTimeoutMinutes * 60) -SkipGmail:$SkipGmail | Out-Null
 
   $state = [ordered]@{
     kind = 'automnia-traffic-switch'

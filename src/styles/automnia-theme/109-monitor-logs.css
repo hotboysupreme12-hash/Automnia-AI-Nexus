@@ -21,59 +21,6 @@ html.dui-pro-overhaul.dui-cohesive-ui .dy-monitor-logs-hero {
   box-shadow: 0 18px 42px -30px rgba(0, 0, 0, .9), inset 0 1px 0 rgba(255, 255, 255, .05);
 }
 
-html.dui-pro-overhaul .dy-monitor-logs-hero__mark,
-html.dui-pro-overhaul.dui-cohesive-ui .dy-monitor-logs-hero__mark {
-  display: grid;
-  width: 50px;
-  height: 50px;
-  place-items: center;
-  overflow: hidden;
-  border: 1px solid rgba(137, 231, 218, .30);
-  border-radius: 15px;
-  background: rgba(4, 18, 19, .75);
-  box-shadow: 0 0 28px rgba(114, 213, 194, .13);
-}
-
-html.dui-pro-overhaul .dy-monitor-logs-hero__mark img,
-html.dui-pro-overhaul.dui-cohesive-ui .dy-monitor-logs-hero__mark img {
-  width: 100%;
-  height: 100%;
-  object-fit: cover;
-}
-
-html.dui-pro-overhaul .dy-monitor-logs-hero__copy,
-html.dui-pro-overhaul.dui-cohesive-ui .dy-monitor-logs-hero__copy {
-  min-width: 0;
-}
-
-html.dui-pro-overhaul .dy-monitor-logs-hero__copy > span,
-html.dui-pro-overhaul.dui-cohesive-ui .dy-monitor-logs-hero__copy > span {
-  color: #8de7d3;
-  font-size: 9px;
-  font-weight: 800;
-  letter-spacing: .16em;
-  text-transform: uppercase;
-}
-
-html.dui-pro-overhaul .dy-monitor-logs-hero__copy h2,
-html.dui-pro-overhaul.dui-cohesive-ui .dy-monitor-logs-hero__copy h2 {
-  margin: 3px 0 4px;
-  color: #f1fbf8;
-  font-family: var(--font-display);
-  font-size: 22px;
-  font-weight: 720;
-  letter-spacing: -.04em;
-  line-height: 1;
-}
-
-html.dui-pro-overhaul .dy-monitor-logs-hero__copy p,
-html.dui-pro-overhaul.dui-cohesive-ui .dy-monitor-logs-hero__copy p {
-  margin: 0;
-  color: #8fa3a3;
-  font-size: 11px;
-  line-height: 1.45;
-}
-
 html.dui-pro-overhaul .dy-monitor-logs-hero__stats,
 html.dui-pro-overhaul.dui-cohesive-ui .dy-monitor-logs-hero__stats {
   display: flex;
@@ -95,6 +42,8 @@ html.dui-pro-overhaul.dui-cohesive-ui .dy-monitor-logs-hero__stats > div {
 
 html.dui-pro-overhaul .dy-monitor-logs-hero__stats strong,
 html.dui-pro-overhaul.dui-cohesive-ui .dy-monitor-logs-hero__stats strong {
+  font-variant-numeric: tabular-nums;
+  min-inline-size: 3ch;
   color: #a8eee0;
   font-family: var(--font-display);
   font-size: 18px;
@@ -108,14 +57,6 @@ html.dui-pro-overhaul.dui-cohesive-ui .dy-monitor-logs-hero__stats span {
   font-weight: 750;
   letter-spacing: .08em;
   text-transform: uppercase;
-}
-
-html.dui-pro-overhaul .dy-monitor-logs-grid,
-html.dui-pro-overhaul.dui-cohesive-ui .dy-monitor-logs-grid {
-  display: grid;
-  grid-template-columns: minmax(0, 1.1fr) minmax(360px, .9fr);
-  align-items: start;
-  gap: 14px;
 }
 
 html.dui-pro-overhaul .dy-monitor-log-surface,
@@ -177,95 +118,6 @@ html.dui-pro-overhaul.dui-cohesive-ui .dy-monitor-log-surface > .grid > div {
   border-color: rgba(255, 255, 255, .075) !important;
   border-radius: 11px !important;
   background: rgba(255, 255, 255, .018) !important;
-}
-
-html.dui-pro-overhaul .dy-gateway-log-card,
-html.dui-pro-overhaul.dui-cohesive-ui .dy-gateway-log-card {
-  grid-area: auto !important;
-  min-width: 0;
-  padding: 14px !important;
-  border: 1px solid rgba(114, 213, 194, .18) !important;
-  border-radius: 16px !important;
-  background:
-    radial-gradient(circle at 100% 0, rgba(114, 213, 194, .08), transparent 42%),
-    linear-gradient(180deg, rgba(255, 255, 255, .035), rgba(255, 255, 255, .012)),
-    #0a0f10 !important;
-  box-shadow: 0 18px 42px -30px rgba(0, 0, 0, .9), inset 0 1px 0 rgba(255, 255, 255, .04) !important;
-}
-
-html.dui-pro-overhaul .dy-gateway-log-heading,
-html.dui-pro-overhaul.dui-cohesive-ui .dy-gateway-log-heading {
-  display: flex;
-  min-width: 0;
-  align-items: center;
-  gap: 9px;
-}
-
-html.dui-pro-overhaul .dy-gateway-log-brand,
-html.dui-pro-overhaul.dui-cohesive-ui .dy-gateway-log-brand {
-  display: grid;
-  width: 30px;
-  height: 30px;
-  flex: 0 0 30px;
-  place-items: center;
-  overflow: hidden;
-  border: 1px solid rgba(114, 213, 194, .25);
-  border-radius: 9px;
-  background: rgba(114, 213, 194, .07);
-}
-
-html.dui-pro-overhaul .dy-gateway-log-brand img,
-html.dui-pro-overhaul.dui-cohesive-ui .dy-gateway-log-brand img {
-  width: 100%;
-  height: 100%;
-  object-fit: cover;
-}
-
-html.dui-pro-overhaul .dy-gateway-log-announcer,
-html.dui-pro-overhaul.dui-cohesive-ui .dy-gateway-log-announcer {
-  margin: 0 0 3px;
-  color: #8de7d3;
-  font-size: 8px;
-  font-weight: 800;
-  letter-spacing: .13em;
-  line-height: 1;
-  text-transform: uppercase;
-}
-
-html.dui-pro-overhaul .dy-gateway-log-title,
-html.dui-pro-overhaul.dui-cohesive-ui .dy-gateway-log-title {
-  margin: 0;
-  color: #eff8f6 !important;
-  font-size: 13px !important;
-  letter-spacing: -.01em;
-}
-
-html.dui-pro-overhaul .dy-gateway-log-controls > span,
-html.dui-pro-overhaul.dui-cohesive-ui .dy-gateway-log-controls > span {
-  color: #6e8583 !important;
-  font-family: var(--font-mono);
-  font-size: 9px !important;
-  letter-spacing: .04em !important;
-}
-
-html.dui-pro-overhaul .dy-gateway-log-card[data-collapsed="true"] .dy-gateway-log-header,
-html.dui-pro-overhaul.dui-cohesive-ui .dy-gateway-log-card[data-collapsed="true"] .dy-gateway-log-header {
-  margin-bottom: 0 !important;
-}
-
-html.dui-pro-overhaul .dy-monitor-log-box,
-html.dui-pro-overhaul.dui-cohesive-ui .dy-monitor-log-box {
-  max-height: min(58vh, 620px);
-  border: 1px solid rgba(255, 255, 255, .08) !important;
-  border-radius: 11px !important;
-  background: rgba(0, 0, 0, .26) !important;
-}
-
-@media (max-width: 980px) {
-  html.dui-pro-overhaul .dy-monitor-logs-grid,
-  html.dui-pro-overhaul.dui-cohesive-ui .dy-monitor-logs-grid {
-    grid-template-columns: minmax(0, 1fr);
-  }
 }
 
 @media (max-width: 650px) {
@@ -335,11 +187,6 @@ html.dui-pro-overhaul.dui-cohesive-ui .dy-monitor-logs-hero__brand img {
   height: auto;
   object-fit: contain;
   filter: drop-shadow(0 0 16px rgba(114, 213, 194, .14));
-}
-
-html.dui-pro-overhaul .dy-monitor-logs-grid,
-html.dui-pro-overhaul.dui-cohesive-ui .dy-monitor-logs-grid {
-  display: block;
 }
 
 html.dui-pro-overhaul .dy-monitor-log-surface,

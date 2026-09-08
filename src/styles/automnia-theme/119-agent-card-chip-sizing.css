@@ -1,5 +1,5 @@
-/* Agent card tags: align the behavior chip with its capability chips. */
-html.dui-pro-overhaul.dui-cohesive-ui .agent-card-pro:not([data-agent-display-mode="list"]) .agent-card-tag {
+/* Keep the behavior chip compact while allowing the class chip to show a useful name. */
+html.dui-pro-overhaul.dui-cohesive-ui .agent-card-pro:not([data-agent-display-mode="list"]) .agent-card-tag:not(.agent-card-tag--class) {
   display: inline-flex !important;
   width: 56px !important;
   min-width: 56px !important;
@@ -12,6 +12,21 @@ html.dui-pro-overhaul.dui-cohesive-ui .agent-card-pro:not([data-agent-display-mo
   overflow: hidden;
   text-align: center;
   text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+html.dui-pro-overhaul.dui-cohesive-ui .agent-card-pro .agent-card-tag--class {
+  display: inline-flex !important;
+  width: auto !important;
+  min-width: 0 !important;
+  max-width: min(220px, 100%);
+  flex: 0 1 auto;
+  align-items: center !important;
+  justify-content: flex-start;
+  padding: 0 8px !important;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  text-transform: none !important;
   white-space: nowrap;
 }
 
@@ -57,13 +72,6 @@ html.dui-pro-overhaul.dui-cohesive-ui .agent-card-shell.agent-card-pro[data-agen
   background: rgba(214, 222, 229, .10) !important;
   background-image: none !important;
   color: #d6dee5 !important;
-}
-
-/* The active slot belongs with the registry metadata, beside behavior and capabilities. */
-html.dui-pro-overhaul.dui-cohesive-ui .agent-card-pro:not([data-agent-display-mode="list"]) .agent-card-tag--slot {
-  border-color: color-mix(in srgb, var(--agent-card-theme-accent, var(--agent-accent, #c8d3dc)) 40%, rgba(255, 255, 255, .09)) !important;
-  color: color-mix(in srgb, var(--agent-card-theme-accent, var(--agent-accent, #c8d3dc)) 76%, #ffffff 24%) !important;
-  background: color-mix(in srgb, var(--agent-card-theme-accent, var(--agent-accent, #c8d3dc)) 9%, rgba(7, 13, 20, .62)) !important;
 }
 
 /* Keep the Simple card scan-friendly while making the active model explicit. */
@@ -114,4 +122,13 @@ html.dui-pro-overhaul.dui-cohesive-ui .agent-card-pro[data-agent-display-mode="g
 html.dui-pro-overhaul.dui-cohesive-ui .agent-card-pro[data-agent-display-mode="grid8"] .agent-card-simple-meta__tools {
   min-width: 54px;
   justify-content: space-between;
+}
+
+/* Model IDs are implementation details; card labels should read like names. */
+html.dui-pro-overhaul.dui-cohesive-ui .agent-card-pro .agent-card-model-value {
+  font-family: var(--font-display, ui-sans-serif, sans-serif) !important;
+  font-size: 10px;
+  font-weight: 720 !important;
+  letter-spacing: .01em;
+  text-transform: none !important;
 }

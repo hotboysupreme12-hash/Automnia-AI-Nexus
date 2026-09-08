@@ -1,0 +1,5 @@
+.dui-form-feedback { display: flex; align-items: start; gap: 8px; min-width: 0; margin: 0; padding: 10px 12px; border: 1px solid var(--border-default); border-radius: var(--radius-md); background: var(--surface-2); color: var(--text-secondary); font-size: 13px; line-height: 1.5; overflow-wrap: anywhere; }
+.dui-form-feedback > span:first-child { flex: 0 0 18px; text-align: center; font-weight: 800; }
+.dui-form-feedback[data-tone="error"] { border-color: color-mix(in srgb, var(--accent-red) 38%, transparent); color: #fecdd3; }
+.dui-form-feedback[data-tone="success"] { border-color: color-mix(in srgb, var(--accent-green) 38%, transparent); color: #bbf7d0; }
+@media (forced-colors: active) { .dui-form-feedback { background: Canvas; color: CanvasText !important; border-color: CanvasText !important; } }

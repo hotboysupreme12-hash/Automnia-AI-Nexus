@@ -5,7 +5,8 @@ param(
   [string]$Region,
   [string]$BucketName,
   [switch]$AllowNonEmptyTarget,
-  [switch]$SkipSecretCopy
+  [switch]$SkipSecretCopy,
+  [switch]$SkipGmail
 )
 
 . (Join-Path $PSScriptRoot 'Common.ps1')
@@ -14,7 +15,7 @@ if (-not $Region) { $Region = $config.Region }
 if ($From -eq $To) { throw 'Source and target projects must be different.' }
 if ($WhatIfPreference) {
   $PSCmdlet.ShouldProcess("$From -> $To", 'plan Firestore and Secret Manager migration') | Out-Null
-  return [pscustomobject]@{ WhatIf = $true; From = $From; To = $To; Region = $Region }
+  return [pscustomobject]@{ WhatIf = $true; From = $From; To = $To; Region = $Region; SkipGmail = [bool]$SkipGmail }
 }
 
 Assert-GcloudSession | Out-Null
@@ -22,6 +23,8 @@ $sourceProject = Assert-ProjectExists -ProjectId $From
 $targetProject = Assert-ProjectExists -ProjectId $To
 $targetService = Get-ServiceDescriptor -ProjectId $To -Region $Region -ServiceName $config.ServiceName
 if (-not $targetService) { throw "Deploy the target first with .\deploy.ps1 -ProjectId $To" }
+$migrationSecretNames = @($config.MigrationSecrets | Where-Object { -not ($SkipGmail -and $_ -eq 'automnia-gmail-oauth-credentials') })
+$secretBindings = @($config.SecretBindings.GetEnumerator() | Where-Object { -not ($SkipGmail -and [string]$_.Key -eq 'GMAIL_OAUTH_CREDENTIALS') })
 
 $sourceBefore = Get-FirestoreSnapshot -ProjectId $From
 $targetBefore = Get-FirestoreSnapshot -ProjectId $To
@@ -55,10 +58,10 @@ try {
 
   $secretResults = @()
   if (-not $SkipSecretCopy) {
-    foreach ($secretName in @($config.MigrationSecrets)) {
+    foreach ($secretName in $migrationSecretNames) {
       $secretResults += Copy-SecretLatestVersion -FromProjectId $From -ToProjectId $To -SecretName $secretName
     }
-    $secretFlags = @($config.SecretBindings.GetEnumerator() | ForEach-Object { "$($_.Key)=$($_.Value):latest" }) -join ','
+    $secretFlags = @($secretBindings | ForEach-Object { "$($_.Key)=$($_.Value):latest" }) -join ','
     Invoke-Gcloud -Arguments @(
       'run', 'services', 'update', $config.ServiceName,
       '--project', $To,
@@ -82,7 +85,7 @@ try {
   $service = Get-ServiceDescriptor -ProjectId $To -Region $Region -ServiceName $config.ServiceName
   $candidate = @($service.status.traffic | Where-Object { $_ -and $_.PSObject.Properties['tag'] -and $_.tag -eq 'candidate' } | Select-Object -First 1)
   $candidateUrl = if ($candidate -and $candidate.url) { [string]$candidate.url } else { [string]$service.status.url }
-  & (Join-Path $PSScriptRoot 'health.ps1') -ProjectId $To -Region $Region -BaseUrl $candidateUrl | Out-Null
+  & (Join-Path $PSScriptRoot 'health.ps1') -ProjectId $To -Region $Region -BaseUrl $candidateUrl -SkipGmail:$SkipGmail | Out-Null
 
   $state = [ordered]@{
     kind = 'automnia-firestore-migration'
@@ -100,6 +103,7 @@ try {
     candidateRevision = [string]$service.status.latestCreatedRevisionName
     secrets = $secretResults
     secretCopySkipped = [bool]$SkipSecretCopy
+    gmailSecretSkipped = [bool]$SkipGmail
     passed = $dataMatched -and -not $SkipSecretCopy
   }
   $statePath = Write-StateJson -Name "migration-$From-to-$To-$timestamp.json" -Value $state

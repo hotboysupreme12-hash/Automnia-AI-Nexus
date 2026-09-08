@@ -472,6 +472,7 @@ export interface AgentTurnAttachment {
   mimeType: string
   size: number
   kind: 'image' | 'file'
+  delivery?: 'inline' | 'workspace'
 }
 
 export interface RuntimeTickInput {

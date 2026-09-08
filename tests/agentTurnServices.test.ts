@@ -1110,3 +1110,35 @@ test('gateway agent turn service rejects cancellation before dispatch', async ()
     { name: 'AbortError' },
   )
 })
+
+test('an accepted or uncertain Gateway chat turn is never replayed through the CLI', async () => {
+  for (const gatewayDispatchState of ['accepted', 'uncertain']) {
+    let toolExecutions = 0
+    let cliExecutions = 0
+    const service = createAgentRuntimeService({
+      controlCenterGatewayAgentSessions: true, forceLocalAgentRuntime: false,
+      allowLocalAgentRuntimeFallback: true, controlCenterGatewayChatClient: true, gatewayHttpPort: 18789,
+      runOpenClawWithGeminiToolWritePolicy: async () => {
+        cliExecutions += 1
+        return { stdout: '', stderr: '', code: 0 }
+      },
+      withAgentRuntimeFlags: (args) => args,
+      ensureGatewayRunning: async () => undefined, startGatewayHealthMonitor: () => undefined,
+      isGatewayHealthy: async () => true,
+      runControlCenterGatewayChatTurn: async () => {
+        toolExecutions += 1
+        throw Object.assign(new Error('connection lost after send'), { gatewayDispatchState, gatewayRunId: 'original-run' })
+      },
+      classifyFailureKind: () => 'gateway_disconnect', redactSensitiveText: (value) => value,
+    })
+    const result = await service.runControlCenterAgentRuntimeTurn({
+      agentId: 'worker', message: 'perform one tool action', context: { executionWorkspace: '/tmp', doctrineWorkspace: '/tmp' },
+      args: ['agent'], timeoutMs: 1000, cwd: '/tmp',
+      gatewayChat: { enabled: true, sessionId: 'session', thinking: 'low', message: 'perform one tool action' },
+    })
+    assert.equal(toolExecutions, 1)
+    assert.equal(cliExecutions, 0)
+    assert.equal(result.failureKind, 'interrupted')
+    assert.equal(result.controlCenterRunId, 'original-run')
+  }
+})

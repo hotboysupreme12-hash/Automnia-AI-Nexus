@@ -8,6 +8,9 @@
   VertexLocation = 'global'
   AutomniaRelayModel = 'gemini-3.7-flash'
   AutomniaRelayFallbackModels = @('gemini-3.6-flash', 'gemini-2.5-flash')
+  # Models exposed to customer clients. The primary/fallback chain above is
+  # still the only operational chain used after a request is accepted.
+  AutomniaRelaySelectableModels = @('gemini-3.8-flash', 'gemini-3.7-flash', 'gemini-3.6-flash', 'gemini-2.5-flash')
   # Hosted-credit token budget defaults. The relay still honors an explicit
   # caller max_tokens value, bounded by the configured maximum.
   RelayMaxInputTokens = 8192
@@ -28,13 +31,16 @@
   KnowledgeEngineId = 'automnia-assistant-grounded'
   KnowledgeModelVersion = 'gemini-3.1-pro-preview/answer_gen/v1'
   KnowledgeFallbackModelVersion = 'gemini-2.5-flash/answer_gen/v1'
-  PermanentBaseUrl = 'https://api.automnia.ai'
-  PermanentDomain = 'api.automnia.ai'
-  ShopifyStoreDomain = 'unbkay-k3.myshopify.com'
+  PermanentBaseUrl = 'https://api.automnia.app'
+  PermanentDomain = 'api.automnia.app'
+  ShopifyStoreDomain = 'automnia.app'
   ShopifyAppClientId = 'd0972d80b936c44961e9490b1d113432'
   ShopifyApiVersion = '2026-07'
-  ShopifyCheckoutUrl = 'https://unbkay-k3.myshopify.com/collections/automnia-plans-and-refills'
-  GmailSender = 'hotboysupreme2@gmail.com'
+  ShopifyCheckoutUrl = 'https://automnia.app/collections/automnia-plans-and-refills'
+  EmailProvider = 'microsoft_graph'
+  # Set this to the licensed Microsoft 365 mailbox that will send customer
+  # license emails, for example licenses@automnia.app.
+  EmailSender = 'support@automnia.app'
   VerificationMaxAgeMinutes = 30
   HealthTimeoutSeconds = 180
   DomainMappingTimeoutMinutes = 30
@@ -70,13 +76,13 @@
   SecretBindings = @{
     SHOPIFY_WEBHOOK_SECRETS = 'automnia-shopify-webhook-secrets'
     SHOPIFY_ADMIN_API_TOKEN = 'automnia-shopify-admin-api-token'
-    GMAIL_OAUTH_CREDENTIALS = 'automnia-gmail-oauth-credentials'
+    MICROSOFT_GRAPH_MAIL_CREDENTIALS = 'automnia-microsoft-graph-mail-credentials'
     ADMIN_API_TOKEN = 'automnia-admin-api-token'
   }
   MigrationSecrets = @(
     'automnia-shopify-webhook-secrets'
     'automnia-shopify-admin-api-token'
-    'automnia-gmail-oauth-credentials'
+    'automnia-microsoft-graph-mail-credentials'
     'automnia-admin-api-token'
   )
   Collections = @(

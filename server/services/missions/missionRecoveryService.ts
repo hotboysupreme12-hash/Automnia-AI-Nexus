@@ -318,30 +318,57 @@ export function createMissionRecoveryService(options: MissionRecoveryServiceOpti
       )
     }
 
-    const details: MissionGatewaySessionReconciliationDetail[] = []
-    for (const job of candidates) {
-      const runtimeStatus = runtimeStatuses.get(job.id) || 'unknown'
-      if (!job.sessionKey) {
-        details.push(missionGatewaySessionDetail(job, 'not-checked', runtimeStatus, 'No durable Gateway session key was recorded for this job.'))
-        continue
-      }
-      try {
-        const payload = await state.client.request('sessions.describe', { key: job.sessionKey }, { timeoutMs: 3_000 })
-        if (isLooseRecord(payload) && payload.ok === false) {
-          const errorText = typeof payload.error === 'string' ? payload.error : 'sessions.describe returned ok=false'
-          details.push(missionGatewaySessionDetail(job, gatewayErrorLooksNotFound(errorText) ? 'missing' : 'unavailable', runtimeStatus, errorText))
+    const details: MissionGatewaySessionReconciliationDetail[] = new Array(candidates.length)
+    const sessionLookups = new Map<string, Promise<{ status: MissionGatewaySessionReconciliationStatus; detail?: string }>>()
+    const deadline = Date.now() + 10_000
+    let adapterTimedOut = false
+    let nextIndex = 0
+    async function describeSession(sessionKey: string): Promise<{ status: MissionGatewaySessionReconciliationStatus; detail?: string }> {
+      const shared = sessionLookups.get(sessionKey)
+      if (shared) return shared
+      const pending = (async () => {
+        const remaining = deadline - Date.now()
+        if (remaining <= 0 || adapterTimedOut) return { status: 'unavailable' as const, detail: 'Session recovery deadline reached; retry reconciliation.' }
+        const timeoutMs = Math.min(3_000, remaining)
+        let timer: NodeJS.Timeout | undefined
+        try {
+          // The outer deadline also covers adapters that fail to honor timeoutMs.
+          const payload = await Promise.race([
+            state.client.request('sessions.describe', { key: sessionKey }, { timeoutMs }),
+            new Promise<never>((_resolve, reject) => { timer = setTimeout(() => {
+              // An adapter ignoring its timeout may still hold a request slot.
+              // Leave queued sessions retryable rather than increasing load.
+              adapterTimedOut = true
+              reject(new Error('Session recovery timed out.'))
+            }, timeoutMs) }),
+          ])
+          if (isLooseRecord(payload) && payload.ok === false) {
+            const detail = typeof payload.error === 'string' ? payload.error : 'sessions.describe returned ok=false'
+            return { status: gatewayErrorLooksNotFound(detail) ? 'missing' as const : 'unavailable' as const, detail }
+          }
+          return { status: 'verified' as const }
+        } catch (error) {
+          return { status: gatewayErrorLooksNotFound(error) ? 'missing' as const : 'unavailable' as const, detail: String(error) }
+        } finally {
+          if (timer) clearTimeout(timer)
+        }
+      })()
+      sessionLookups.set(sessionKey, pending)
+      return pending
+    }
+    await Promise.all(Array.from({ length: Math.min(4, candidates.length) }, async () => {
+      while (nextIndex < candidates.length) {
+        const index = nextIndex++
+        const job = candidates[index]
+        const runtimeStatus = runtimeStatuses.get(job.id) || 'unknown'
+        if (!job.sessionKey) {
+          details[index] = missionGatewaySessionDetail(job, 'not-checked', runtimeStatus, 'No durable Gateway session key was recorded for this job.')
           continue
         }
-        details.push(missionGatewaySessionDetail(job, 'verified', runtimeStatus))
-      } catch (error) {
-        details.push(missionGatewaySessionDetail(
-          job,
-          gatewayErrorLooksNotFound(error) ? 'missing' : 'unavailable',
-          runtimeStatus,
-          String(error),
-        ))
+        const result = await describeSession(job.sessionKey)
+        details[index] = missionGatewaySessionDetail(job, result.status, runtimeStatus, result.detail)
       }
-    }
+    }))
 
     return summarizeMissionGatewaySessionReconciliation(details, details.every((detail) => detail.gatewayStatus !== 'unavailable'))
   }

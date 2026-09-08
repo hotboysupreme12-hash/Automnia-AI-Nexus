@@ -123,7 +123,7 @@ for (const fragment of [
   'apiRequest<FolderPickerSessionPayload>(`/api/party/folder-picker/${encodeURIComponent(d.sessionId)}`',
   'apiRequest<AgentResourceListPayload>(`/api/party/resources/${encodeURIComponent(agentId)}`',
   'apiRequest<AgentResourceContentPayload>(`/api/party/resources/${encodeURIComponent(agentId)}/${encodeURIComponent(f)}`',
-  'apiRequest<AgentResourceSavePayload>(`/api/party/resources/${encodeURIComponent(agent.id)}/${encodeURIComponent(file)}`',
+  'apiRequest<AgentResourceSavePayload>(`/api/party/resources/${encodeURIComponent(savingAgentId)}/${encodeURIComponent(file)}`',
 ]) {
   assert(editorModal.includes(fragment), `AgentEditorModal is missing API-client fragment ${fragment}`)
 }

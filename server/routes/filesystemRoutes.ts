@@ -4,6 +4,7 @@ import path from 'node:path'
 import { z } from 'zod'
 import { apiFailure, apiSuccess } from '../controlPlaneHttp'
 import type { PickerSessionService } from '../services/filesystem/pickerSessionService'
+import { ControlFileConflict, controlFileRevision, writeAtomicControlFile } from '../services/filesystem/atomicControlFile'
 
 type AgentIdentity = {
   name?: string
@@ -158,6 +159,7 @@ export function registerFilesystemRoutes(app: Express, options: FilesystemRoutes
         file,
         resourcePath: filePath,
         content,
+        revision: controlFileRevision(content),
       })
     } catch (error) {
       const status = (error as NodeJS.ErrnoException)?.code === 'ENOENT' ? 404 : 500
@@ -175,7 +177,7 @@ export function registerFilesystemRoutes(app: Express, options: FilesystemRoutes
     const { agentId, file } = req.params
     if (!options.isValidAgentId(agentId)) return apiFailure(res, 400, 'invalid_payload', 'Invalid agent id.')
     if (!options.isMarkdownResourceFile(file)) return apiFailure(res, 400, 'invalid_payload', 'Resource file not allowed.')
-    const schema = z.object({ content: z.string() })
+    const schema = z.object({ content: z.string().max(2_000_000), expectedRevision: z.string().regex(/^[a-f0-9]{64}$/).optional() })
     const parsed = schema.safeParse(req.body)
     if (!parsed.success) return apiFailure(res, 400, 'invalid_payload', 'Invalid payload', parsed.error.flatten())
 
@@ -184,7 +186,7 @@ export function registerFilesystemRoutes(app: Express, options: FilesystemRoutes
       if (!context) return apiFailure(res, 404, 'agent_not_found', `Agent not found: ${agentId}`)
       await fs.mkdir(context.canonicalWorkspace, { recursive: true })
       const filePath = options.canonicalResourcePath(agentId, file)
-      await fs.writeFile(filePath, parsed.data.content, 'utf-8')
+      const revision = await writeAtomicControlFile(filePath, parsed.data.content, parsed.data.expectedRevision)
       const persisted = await fs.readFile(filePath, 'utf-8')
       if (persisted !== parsed.data.content) {
         return apiFailure(
@@ -243,8 +245,10 @@ export function registerFilesystemRoutes(app: Express, options: FilesystemRoutes
         doctrineWorkspace: context.doctrineWorkspace,
         file,
         resourcePath: filePath,
+        revision,
       })
     } catch (error) {
+      if (error instanceof ControlFileConflict) return apiFailure(res, 409, 'resource_conflict', error.message)
       return apiFailure(res, 500, 'filesystem_operation_failed', 'Failed to update resource file', String(error))
     }
   })

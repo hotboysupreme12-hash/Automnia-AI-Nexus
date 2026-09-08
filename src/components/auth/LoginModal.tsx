@@ -1,4 +1,6 @@
 import { useState } from 'react'
+import { Button } from '../ui/Button'
+import { FormFeedback } from '../ui/FormFeedback'
 import { useAuth } from '../../context/useAuth'
 
 const AUTOMNIA_LOCKUP_SRC = '/brand/automnia-ai-nexus-logo-transparent-cropped.png'
@@ -156,15 +158,17 @@ export function LoginModal() {
             </div>
           )}
 
-          {error && <div className="rounded-lg border border-red-400/30 bg-red-900/40 px-4 py-2 text-sm text-red-100">{error}</div>}
+          <FormFeedback>{error}</FormFeedback>
 
-          <button
+          <Button
             type="submit"
+            loading={loading && !googleLoading}
+            variant="primary"
             disabled={loading || !email.trim() || !password}
             className="w-full rounded-lg border border-slate-100/20 bg-[linear-gradient(180deg,rgba(214,224,228,0.18),rgba(116,132,140,0.12))] px-4 py-3 font-semibold text-slate-100 shadow-[inset_0_1px_0_rgba(255,255,255,0.10),0_18px_36px_-30px_rgba(190,206,214,0.52)] transition disabled:opacity-50"
           >
-            {loading ? (isSetup ? 'Activating...' : 'Signing in...') : (isSetup ? 'Activate account' : 'Sign in')}
-          </button>
+            {isSetup ? 'Activate account' : 'Sign in'}
+          </Button>
 
           <>
             <button

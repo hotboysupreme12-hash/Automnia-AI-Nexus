@@ -120,6 +120,17 @@ function Wait-HttpJson {
       $lastError = "Endpoint returned ok=$($response.ok)."
     } catch {
       $lastError = $_.Exception.Message
+      $curl = Get-Command curl -CommandType Application -ErrorAction SilentlyContinue
+      if ($curl) {
+        try {
+          $raw = (& $curl.Source '--http1.1' '--fail-with-body' '--silent' '--show-error' '--max-time' '15' '--header' 'Accept: application/json' $Url 2>$null) -join "`n"
+          $fallback = $raw | ConvertFrom-Json
+          if ($fallback.ok -eq $true) { return $fallback }
+          $lastError = "Endpoint returned ok=$($fallback.ok)."
+        } catch {
+          $lastError = $_.Exception.Message
+        }
+      }
     }
     Start-Sleep -Seconds $IntervalSeconds
   }
@@ -358,8 +369,9 @@ function Get-DomainMapping {
     [Parameter(Mandatory)][string]$Domain
   )
   $token = Get-GoogleAccessToken
+  $region = (Get-AutomniaConfig).Region
   $encodedDomain = [Uri]::EscapeDataString($Domain)
-  $uri = "https://run.googleapis.com/apis/domains.cloudrun.com/v1/namespaces/$ProjectId/domainmappings/$encodedDomain"
+  $uri = "https://$region-run.googleapis.com/apis/domains.cloudrun.com/v1/namespaces/$ProjectId/domainmappings/$encodedDomain"
   try {
     Invoke-RestMethod -Method Get -Uri $uri -Headers @{ Authorization = "Bearer $token"; Accept = 'application/json' }
   } catch {
@@ -375,8 +387,9 @@ function Remove-DomainMapping {
   )
   if (-not (Get-DomainMapping -ProjectId $ProjectId -Domain $Domain)) { return }
   $token = Get-GoogleAccessToken
+  $region = (Get-AutomniaConfig).Region
   $encodedDomain = [Uri]::EscapeDataString($Domain)
-  $uri = "https://run.googleapis.com/apis/domains.cloudrun.com/v1/namespaces/$ProjectId/domainmappings/$encodedDomain"
+  $uri = "https://$region-run.googleapis.com/apis/domains.cloudrun.com/v1/namespaces/$ProjectId/domainmappings/$encodedDomain"
   Invoke-RestMethod -Method Delete -Uri $uri -Headers @{ Authorization = "Bearer $token"; Accept = 'application/json' } | Out-Null
 }
 
@@ -387,7 +400,8 @@ function New-DomainMapping {
     [Parameter(Mandatory)][string]$ServiceName
   )
   $token = Get-GoogleAccessToken
-  $uri = "https://run.googleapis.com/apis/domains.cloudrun.com/v1/namespaces/$ProjectId/domainmappings"
+  $region = (Get-AutomniaConfig).Region
+  $uri = "https://$region-run.googleapis.com/apis/domains.cloudrun.com/v1/namespaces/$ProjectId/domainmappings"
   $body = @{
     apiVersion = 'domains.cloudrun.com/v1'
     kind = 'DomainMapping'
@@ -409,7 +423,13 @@ function Wait-DomainMappingReady {
     $mapping = Get-DomainMapping -ProjectId $ProjectId -Domain $Domain
     if ($mapping) {
       $ready = $mapping.status.conditions | Where-Object { $_.type -eq 'Ready' } | Select-Object -First 1
-      $lastState = if ($ready) { "$($ready.status): $($ready.message)" } else { 'Ready condition pending' }
+      if ($ready) {
+        $readyStatus = [string](Get-ObjectPropertyValue $ready 'status')
+        $readyMessage = [string](Get-ObjectPropertyValue $ready 'message')
+        $lastState = if ($readyMessage) { "$readyStatus`: $readyMessage" } else { $readyStatus }
+      } else {
+        $lastState = 'Ready condition pending'
+      }
       if ($ready.status -eq 'True') { return $mapping }
     }
     Start-Sleep -Seconds 10

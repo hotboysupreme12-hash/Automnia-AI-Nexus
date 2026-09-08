@@ -1,4 +1,7 @@
-import { useState } from 'react'
+import { useId, useRef, useState } from 'react'
+import { useDialogFocus } from '../ui/Dialog'
+import { Button } from '../ui/Button'
+import { FormFeedback } from '../ui/FormFeedback'
 import { useAuth } from '../../context/useAuth'
 import { useLicense } from '../../context/useLicense'
 import { resolveAgentRoutePresentation, resolveLicenseEntitlement } from '../../utils/licenseEntitlement'
@@ -7,6 +10,9 @@ const AUTOMNIA_LOCKUP_SRC = '/brand/automnia-ai-nexus-logo-transparent-cropped.p
 const AUTOMNIA_BRAND_LABEL = 'Automnia AI Nexus'
 
 export function LicenseActivationModal({ onClose }: { onClose?: () => void }) {
+  const dialogId = useId()
+  const rootRef = useRef<HTMLDivElement>(null)
+  const panelRef = useRef<HTMLDivElement>(null)
   const { loginWithGoogle, cancelGoogleLogin } = useAuth()
   const { activate, license } = useLicense()
   const [email, setEmail] = useState(license?.email || '')
@@ -14,6 +20,7 @@ export function LicenseActivationModal({ onClose }: { onClose?: () => void }) {
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(false)
   const [googleLoading, setGoogleLoading] = useState(false)
+  useDialogFocus({ open: true, rootRef, panelRef, onClose: () => onClose?.(), preventClose: loading || !onClose })
 
   const handleSubmit = async (event: React.FormEvent) => {
     event.preventDefault()
@@ -57,13 +64,13 @@ export function LicenseActivationModal({ onClose }: { onClose?: () => void }) {
   const hasManagedCredits = isCloudCredits || entitlement.isByok
   const providerFirst = routePresentation.providerFirst
   return (
-    <div className="dui-auth-screen fixed inset-0 z-50 grid place-items-center bg-[radial-gradient(circle_at_18%_10%,rgba(160,176,184,0.10),transparent_28%),linear-gradient(160deg,#030303_0%,#101214_48%,#050505_100%)] px-4">
-      <div className="dui-auth-card dy-surface-enter w-full max-w-md rounded-2xl border border-slate-200/15 bg-[linear-gradient(180deg,rgba(20,23,25,0.96),rgba(6,7,8,0.96))] p-8 shadow-[0_30px_80px_-48px_rgba(160,176,184,0.28),inset_0_1px_0_rgba(255,255,255,0.08)]">
+    <div ref={rootRef} className="dui-auth-screen fixed inset-0 z-50 grid place-items-center bg-[radial-gradient(circle_at_18%_10%,rgba(160,176,184,0.10),transparent_28%),linear-gradient(160deg,#030303_0%,#101214_48%,#050505_100%)] px-4">
+      <div ref={panelRef} role="dialog" aria-modal="true" aria-labelledby={`${dialogId}-title`} tabIndex={-1} className="dui-auth-card dy-surface-enter w-full max-w-md rounded-2xl border border-slate-200/15 bg-[linear-gradient(180deg,rgba(20,23,25,0.96),rgba(6,7,8,0.96))] p-8 shadow-[0_30px_80px_-48px_rgba(160,176,184,0.28),inset_0_1px_0_rgba(255,255,255,0.08)]">
         <div className="mb-6 text-center">
           <div className="dui-login-brand mx-auto flex w-full max-w-[360px] items-center justify-center" aria-label={AUTOMNIA_BRAND_LABEL}>
             <img src={AUTOMNIA_LOCKUP_SRC} alt={AUTOMNIA_BRAND_LABEL} className="dui-login-logo-lockup" draggable={false} />
           </div>
-          <p className="mt-3 text-sm text-slate-300">Automnia AI Nexus License & Billing Route</p>
+          <h2 id={`${dialogId}-title`} className="mt-3 text-sm text-slate-300">Automnia AI Nexus License & Billing Route</h2>
         </div>
 
         {license?.active && (
@@ -101,10 +108,10 @@ export function LicenseActivationModal({ onClose }: { onClose?: () => void }) {
           <label className="block text-sm text-slate-200">License key
             <input value={licenseKey} onChange={(event) => setLicenseKey(event.target.value.toUpperCase())} placeholder="AUT-XXXX-XXXX-XXXX" autoComplete="off" spellCheck={false} className="mt-2 w-full rounded-lg bg-slate-950/70 px-4 py-3 font-mono text-slate-100 placeholder-slate-500" required />
           </label>
-          {error && <div className="rounded-lg border border-red-400/30 bg-red-900/40 px-4 py-2 text-sm text-red-100">{error}</div>}
-          <button type="submit" disabled={loading || !email.trim() || !licenseKey.trim()} className="w-full rounded-lg border border-slate-100/20 bg-[linear-gradient(180deg,rgba(214,224,228,0.18),rgba(116,132,140,0.12))] px-4 py-3 font-semibold text-slate-100 shadow-[inset_0_1px_0_rgba(255,255,255,0.10),0_18px_36px_-30px_rgba(190,206,214,0.52)] transition disabled:opacity-50">
-            {loading ? 'Linking...' : license?.active ? 'Link another purchase' : 'Link Automnia purchase'}
-          </button>
+          <FormFeedback>{error}</FormFeedback>
+          <Button type="submit" loading={loading && !googleLoading} variant="primary" disabled={loading || !email.trim() || !licenseKey.trim()} className="w-full rounded-lg border border-slate-100/20 bg-[linear-gradient(180deg,rgba(214,224,228,0.18),rgba(116,132,140,0.12))] px-4 py-3 font-semibold text-slate-100 shadow-[inset_0_1px_0_rgba(255,255,255,0.10),0_18px_36px_-30px_rgba(190,206,214,0.52)] transition disabled:opacity-50">
+            {license?.active ? 'Link another purchase' : 'Link Automnia purchase'}
+          </Button>
           <div className="flex items-center gap-3 text-[11px] uppercase tracking-[0.18em] text-slate-600" aria-hidden="true">
             <span className="h-px flex-1 bg-slate-200/10" />
             <span>or</span>

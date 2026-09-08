@@ -1,6 +1,8 @@
+import { readPreferenceValue, savePreferenceEntries } from '../components/settings/preferenceStorage'
 export type SpeechTranscriptionMode = 'local' | 'online'
 
 export type SpeechSettings = {
+  microphoneDeviceId?: string
   mode: SpeechTranscriptionMode
   autoStop: boolean
   pauseDurationMs: number
@@ -14,6 +16,7 @@ export const SPEECH_SETTINGS_STORAGE_KEY = 'automnia-speech-settings-v1'
 export const SPEECH_SETTINGS_CHANGED_EVENT = 'automnia:speech-settings-changed'
 
 export const DEFAULT_SPEECH_SETTINGS: SpeechSettings = {
+  microphoneDeviceId: '',
   mode: 'local',
   autoStop: true,
   pauseDurationMs: 1_150,
@@ -35,8 +38,9 @@ function booleanSetting(value: unknown, fallback: boolean): boolean {
 export function readSpeechSettings(): SpeechSettings {
   if (typeof window === 'undefined') return DEFAULT_SPEECH_SETTINGS
   try {
-    const parsed = JSON.parse(window.localStorage.getItem(SPEECH_SETTINGS_STORAGE_KEY) || '{}') as Partial<SpeechSettings>
+    const parsed = JSON.parse(readPreferenceValue(SPEECH_SETTINGS_STORAGE_KEY) || '{}') as Partial<SpeechSettings>
     return {
+      microphoneDeviceId: typeof parsed.microphoneDeviceId === 'string' ? parsed.microphoneDeviceId.slice(0, 512) : '',
       mode: parsed.mode === 'online' ? 'online' : 'local',
       autoStop: booleanSetting(parsed.autoStop, DEFAULT_SPEECH_SETTINGS.autoStop),
       pauseDurationMs: boundedNumber(parsed.pauseDurationMs, DEFAULT_SPEECH_SETTINGS.pauseDurationMs, 600, 3_000),
@@ -53,6 +57,7 @@ export function readSpeechSettings(): SpeechSettings {
 export function saveSpeechSettings(settings: SpeechSettings): void {
   if (typeof window === 'undefined') return
   const normalized: SpeechSettings = {
+    microphoneDeviceId: typeof settings.microphoneDeviceId === 'string' ? settings.microphoneDeviceId.slice(0, 512) : '',
     mode: settings.mode === 'online' ? 'online' : 'local',
     autoStop: Boolean(settings.autoStop),
     pauseDurationMs: boundedNumber(settings.pauseDurationMs, DEFAULT_SPEECH_SETTINGS.pauseDurationMs, 600, 3_000),
@@ -61,6 +66,6 @@ export function saveSpeechSettings(settings: SpeechSettings): void {
     echoCancellation: Boolean(settings.echoCancellation),
     autoGainControl: Boolean(settings.autoGainControl),
   }
-  window.localStorage.setItem(SPEECH_SETTINGS_STORAGE_KEY, JSON.stringify(normalized))
+  savePreferenceEntries([[SPEECH_SETTINGS_STORAGE_KEY, JSON.stringify(normalized)]])
   window.dispatchEvent(new CustomEvent<SpeechSettings>(SPEECH_SETTINGS_CHANGED_EVENT, { detail: normalized }))
 }

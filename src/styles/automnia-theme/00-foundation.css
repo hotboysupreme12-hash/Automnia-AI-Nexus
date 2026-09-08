@@ -37,19 +37,6 @@
 }
 
 /* Final Gateway resize and flat-panel polish pass. */
-html.dui-pro-overhaul .brand-lockup.dy-logo-fixed {
-  flex: 1 1 520px !important;
-  min-width: min(100%, 320px) !important;
-  max-width: 920px !important;
-}
-
-html.dui-pro-overhaul .brand-lockup.dy-logo-fixed .dy-logo-lockup {
-  width: min(100%, 760px) !important;
-  height: clamp(84px, 9vw, 138px) !important;
-  object-fit: contain !important;
-  object-position: left center !important;
-  filter: saturate(1.08) contrast(1.05) drop-shadow(0 0 18px rgba(72, 224, 255, .18));
-}
 
 html.dui-pro-overhaul .dui-login-logo-lockup {
   max-width: min(100%, 390px) !important;
@@ -108,7 +95,7 @@ html.dui-pro-overhaul .app-bg.dy-monitor-focus [data-dui-panel="monitor"].dy-mon
   box-shadow: 0 20px 70px rgba(0, 0, 0, .46) !important;
 }
 
-html.dui-pro-overhaul .app-bg.dy-monitor-focus .dy-monitor-header,
+
 html.dui-pro-overhaul .app-bg.dy-monitor-focus .dy-monitor-tabs,
 html.dui-pro-overhaul .app-bg.dy-monitor-focus .dy-monitor-body {
   background: var(--dui-gateway-bg) !important;
@@ -157,20 +144,12 @@ html.dui-pro-overhaul .app-bg.dy-monitor-focus .dy-gateway-layout {
   align-items: stretch !important;
 }
 
-html.dui-pro-overhaul .app-bg.dy-monitor-focus .dy-gateway-summary-card {
-  grid-area: summary !important;
-}
-
 html.dui-pro-overhaul .app-bg.dy-monitor-focus .dy-channel-activity-card {
   grid-area: activity !important;
 }
 
 html.dui-pro-overhaul .app-bg.dy-monitor-focus .dy-cron-jobs-card {
   grid-area: jobs !important;
-}
-
-html.dui-pro-overhaul .app-bg.dy-monitor-focus .dy-gateway-log-card {
-  grid-area: log !important;
 }
 
 html.dui-pro-overhaul .app-bg.dy-monitor-focus .dy-monitor-shell :is(
@@ -213,24 +192,6 @@ html.dui-pro-overhaul .app-bg.dy-monitor-focus .dy-monitor-shell :is(
   .dy-channel-activity-stat
 ) {
   border-radius: 0 !important;
-}
-
-html.dui-pro-overhaul .app-bg.dy-monitor-focus .dy-runtime-compact-grid {
-  grid-template-columns: repeat(auto-fit, minmax(172px, 1fr)) !important;
-  gap: 8px !important;
-}
-
-html.dui-pro-overhaul .app-bg.dy-monitor-focus .dy-runtime-cluster {
-  padding: 10px !important;
-}
-
-html.dui-pro-overhaul .app-bg.dy-monitor-focus .dy-runtime-cluster-items {
-  gap: 6px !important;
-}
-
-html.dui-pro-overhaul .app-bg.dy-monitor-focus .dy-runtime-datum {
-  min-height: 44px !important;
-  padding: 8px !important;
 }
 
 html.dui-pro-overhaul .app-bg.dy-monitor-focus .dy-cron-jobs-card .dy-monitor-stream-box {
@@ -297,11 +258,6 @@ html.dui-pro-overhaul .app-bg.dy-monitor-focus .dy-channel-activity-card .dy-gat
   height: clamp(320px, 45vh, 680px) !important;
 }
 
-html.dui-pro-overhaul .app-bg.dy-monitor-focus .dy-gateway-log-card .dy-monitor-log-box {
-  min-height: clamp(220px, 28vh, 440px) !important;
-  background: var(--dui-bg) !important;
-}
-
 html.dui-pro-overhaul .dy-plugins-panel {
   background: #030406 !important;
 }
@@ -326,9 +282,6 @@ html.dui-pro-overhaul .dy-plugins-panel .dy-plugin-row-actions {
 }
 
 @media (max-width: 760px) {
-  html.dui-pro-overhaul .brand-lockup.dy-logo-fixed .dy-logo-lockup {
-    height: clamp(70px, 22vw, 108px) !important;
-  }
 
   html.dui-pro-overhaul .app-bg.dy-monitor-focus .dy-monitor-tabbar,
   html.dui-pro-overhaul .app-bg.dy-monitor-focus .dy-monitor-tab-list {
@@ -518,22 +471,6 @@ html.dui-pro-overhaul .app-bg.dy-monitor-focus [data-dui-panel="monitor"] :is(.d
   color: var(--dy-final-glass-text) !important;
 }
 
-html.dui-pro-overhaul .app-bg.dy-monitor-focus [data-dui-panel="monitor"] .dy-health-card[data-tone="emerald"] {
-  color: var(--dy-final-green) !important;
-}
-
-html.dui-pro-overhaul .app-bg.dy-monitor-focus [data-dui-panel="monitor"] .dy-health-card[data-tone="amber"] {
-  color: var(--dy-final-amber) !important;
-}
-
-html.dui-pro-overhaul .app-bg.dy-monitor-focus [data-dui-panel="monitor"] .dy-health-card[data-tone="rose"] {
-  color: var(--dy-final-rose) !important;
-}
-
-html.dui-pro-overhaul .app-bg.dy-monitor-focus [data-dui-panel="monitor"] .dy-health-value {
-  text-shadow: none !important;
-}
-
 html.dui-pro-overhaul .dy-command-console .dy-command-message {
   border-width: 1px !important;
   border-left-width: 1px !important;
@@ -639,37 +576,8 @@ html.dui-pro-overhaul .app-bg.dy-monitor-focus [data-dui-panel="monitor"] .dy-mo
   border-radius: 8px !important;
 }
 
-html.dui-pro-overhaul .app-bg.dy-monitor-focus [data-dui-panel="monitor"] .dy-monitor-health-grid .dy-health-card,
-html.dui-pro-overhaul .app-bg.dy-monitor-focus [data-dui-panel="monitor"] .dy-monitor-health-grid .dy-health-card[data-tone="cyan"],
-html.dui-pro-overhaul .app-bg.dy-monitor-focus [data-dui-panel="monitor"] .dy-monitor-health-grid .dy-health-card[data-tone="emerald"],
-html.dui-pro-overhaul .app-bg.dy-monitor-focus [data-dui-panel="monitor"] .dy-monitor-health-grid .dy-health-card[data-tone="amber"],
-html.dui-pro-overhaul .app-bg.dy-monitor-focus [data-dui-panel="monitor"] .dy-monitor-health-grid .dy-health-card[data-tone="rose"] {
-  border-color: rgba(226, 232, 238, .14) !important;
-  border-radius: 8px !important;
-  background:
-    linear-gradient(180deg, rgba(255, 255, 255, .044), rgba(255, 255, 255, .010)),
-    rgba(17, 19, 22, .66) !important;
-}
-
-html.dui-pro-overhaul .app-bg.dy-monitor-focus [data-dui-panel="monitor"] .dy-monitor-health-grid .dy-health-card[data-tone="cyan"] {
-  color: #b7c2ca !important;
-}
-
-html.dui-pro-overhaul .app-bg.dy-monitor-focus [data-dui-panel="monitor"] .dy-monitor-health-grid .dy-health-card[data-tone="emerald"] {
-  color: var(--dy-eof-green) !important;
-}
-
-html.dui-pro-overhaul .app-bg.dy-monitor-focus [data-dui-panel="monitor"] .dy-monitor-health-grid .dy-health-card[data-tone="amber"] {
-  color: var(--dy-eof-amber) !important;
-}
-
-html.dui-pro-overhaul .app-bg.dy-monitor-focus [data-dui-panel="monitor"] .dy-monitor-health-grid .dy-health-card[data-tone="rose"] {
-  color: var(--dy-eof-rose) !important;
-}
-
 html.dui-pro-overhaul .app-bg.dy-monitor-focus [data-dui-panel="monitor"] .dy-channel-activity-card .dy-gateway-event-list,
-html.dui-pro-overhaul .app-bg.dy-monitor-focus [data-dui-panel="monitor"] .dy-cron-jobs-card .dy-monitor-stream-box,
-html.dui-pro-overhaul .app-bg.dy-monitor-focus [data-dui-panel="monitor"] .dy-gateway-log-card .dy-monitor-log-box {
+html.dui-pro-overhaul .app-bg.dy-monitor-focus [data-dui-panel="monitor"] .dy-cron-jobs-card .dy-monitor-stream-box {
   border-color: rgba(226, 232, 238, .12) !important;
   border-radius: 7px !important;
   background:
@@ -722,7 +630,7 @@ html.dui-pro-overhaul .app-bg.dy-monitor-focus [data-dui-panel="monitor"].dy-mon
   -webkit-backdrop-filter: blur(18px) saturate(1.06) !important;
 }
 
-html.dui-pro-overhaul .app-bg.dy-monitor-focus .dy-monitor-header,
+
 html.dui-pro-overhaul .app-bg.dy-monitor-focus .dy-monitor-tabs,
 html.dui-pro-overhaul .app-bg.dy-monitor-focus .dy-monitor-body {
   background:
@@ -730,7 +638,7 @@ html.dui-pro-overhaul .app-bg.dy-monitor-focus .dy-monitor-body {
     rgba(11, 12, 14, .42) !important;
 }
 
-html.dui-pro-overhaul .app-bg.dy-monitor-focus .dy-monitor-header,
+
 html.dui-pro-overhaul .app-bg.dy-monitor-focus .dy-monitor-tabs {
   border-color: rgba(226, 232, 238, .10) !important;
   backdrop-filter: blur(14px) saturate(1.04) !important;
@@ -916,19 +824,14 @@ html.dui-pro-overhaul .app-bg.dy-monitor-focus .dy-monitor-shell :is(.dy-gateway
   color: #f7f9fa !important;
 }
 
-html.dui-pro-overhaul .app-bg.dy-monitor-focus .dy-runtime-cluster::before {
-  background: linear-gradient(90deg, color-mix(in srgb, var(--dy-runtime-accent, #aeb6bc), white 8%), transparent 74%) !important;
-  opacity: .72 !important;
-}
 
-html.dui-pro-overhaul .app-bg.dy-monitor-focus .dy-runtime-cluster > p,
 html.dui-pro-overhaul .app-bg.dy-monitor-focus .dy-gateway-event-message,
 html.dui-pro-overhaul .app-bg.dy-monitor-focus .dy-cron-job-card p:first-child {
   color: var(--dy-monitor-text) !important;
   letter-spacing: 0 !important;
 }
 
-html.dui-pro-overhaul .app-bg.dy-monitor-focus .dy-runtime-datum span,
+
 html.dui-pro-overhaul .app-bg.dy-monitor-focus .dy-gateway-event-time,
 html.dui-pro-overhaul .app-bg.dy-monitor-focus .dy-gateway-event-source,
 html.dui-pro-overhaul .app-bg.dy-monitor-focus .dy-cron-job-card p:nth-child(2) {
@@ -936,36 +839,9 @@ html.dui-pro-overhaul .app-bg.dy-monitor-focus .dy-cron-job-card p:nth-child(2) 
   letter-spacing: 0 !important;
 }
 
-html.dui-pro-overhaul .app-bg.dy-monitor-focus .dy-runtime-datum strong,
+
 html.dui-pro-overhaul .app-bg.dy-monitor-focus .dy-session-meta-chip strong {
   color: var(--dy-monitor-text) !important;
-}
-
-html.dui-pro-overhaul .app-bg.dy-monitor-focus .dy-monitor-health-grid .dy-health-card {
-  min-height: 74px !important;
-  border-color: rgba(226, 232, 238, .145) !important;
-  color: #b7c2ca !important;
-}
-
-html.dui-pro-overhaul .app-bg.dy-monitor-focus .dy-health-card[data-tone="emerald"] {
-  color: var(--dy-monitor-emerald) !important;
-}
-
-html.dui-pro-overhaul .app-bg.dy-monitor-focus .dy-health-card[data-tone="amber"] {
-  color: var(--dy-monitor-amber) !important;
-}
-
-html.dui-pro-overhaul .app-bg.dy-monitor-focus .dy-health-card[data-tone="rose"] {
-  color: var(--dy-monitor-rose) !important;
-}
-
-html.dui-pro-overhaul .app-bg.dy-monitor-focus .dy-health-label {
-  color: color-mix(in srgb, currentColor, #d8dee3 34%) !important;
-}
-
-html.dui-pro-overhaul .app-bg.dy-monitor-focus .dy-health-value {
-  color: color-mix(in srgb, currentColor, white 58%) !important;
-  text-shadow: none !important;
 }
 
 html.dui-pro-overhaul .app-bg.dy-monitor-focus .dy-monitor-gauge-track {
@@ -1171,8 +1047,7 @@ html.dui-pro-overhaul .dy-command-message-body {
   font-size: 12px !important;
 }
 
-html.dui-pro-overhaul .dy-command-response-cta,
-html.dui-pro-overhaul .dy-command-progress-draft {
+html.dui-pro-overhaul .dy-command-response-cta {
   border-radius: 7px !important;
   background:
     linear-gradient(180deg, rgba(255, 255, 255, .030), rgba(255, 255, 255, .008)),
@@ -1398,20 +1273,12 @@ html.dui-pro-overhaul .app-bg.dy-monitor-focus .dy-gateway-layout {
   gap: 14px !important;
 }
 
-html.dui-pro-overhaul .app-bg.dy-monitor-focus .dy-gateway-summary-card {
-  grid-area: summary !important;
-}
-
 html.dui-pro-overhaul .app-bg.dy-monitor-focus .dy-cron-jobs-card {
   grid-area: jobs !important;
 }
 
 html.dui-pro-overhaul .app-bg.dy-monitor-focus .dy-channel-activity-card {
   grid-area: activity !important;
-}
-
-html.dui-pro-overhaul .app-bg.dy-monitor-focus .dy-gateway-log-card {
-  grid-area: log !important;
 }
 
 html.dui-pro-overhaul .app-bg.dy-monitor-focus .dy-monitor-shell :is(.dy-gateway-summary-card, .dy-channel-activity-card, .dy-cron-jobs-card, .dy-gateway-log-card, .dy-health-card, .dy-runtime-cluster, .dy-runtime-datum, .dy-monitor-stream-box, .dy-monitor-log-box, .dy-gateway-event-list, .dy-gateway-event-card, .dy-gateway-activity-line, .dy-cron-job-card, .dy-session-meta-chip, .dy-cron-instruction-chip, .dy-monitor-alert, .dy-monitor-empty) {
@@ -1428,18 +1295,10 @@ html.dui-pro-overhaul .app-bg.dy-monitor-focus .dy-monitor-shell :is(.dy-gateway
   -webkit-backdrop-filter: blur(18px) saturate(1.12) !important;
 }
 
-html.dui-pro-overhaul .app-bg.dy-monitor-focus .dy-runtime-compact-grid {
-  grid-template-columns: repeat(auto-fit, minmax(min(100%, 170px), 1fr)) !important;
-}
-
 html.dui-pro-overhaul .app-bg.dy-monitor-focus .dy-channel-activity-card .dy-gateway-event-list,
 html.dui-pro-overhaul .app-bg.dy-monitor-focus .dy-cron-jobs-card .dy-monitor-stream-box {
   min-height: clamp(220px, 34vh, 440px) !important;
   height: auto !important;
-}
-
-html.dui-pro-overhaul .app-bg.dy-monitor-focus .dy-gateway-log-card .dy-monitor-log-box {
-  min-height: clamp(180px, 26vh, 380px) !important;
 }
 
 @media (max-width: 1320px) {
@@ -1485,7 +1344,6 @@ html.dui-pro-overhaul .app-bg.dy-monitor-focus {
 }
 
 html.dui-pro-overhaul .app-bg.dy-monitor-focus [data-dui-panel="monitor"].dy-monitor-shell,
-html.dui-pro-overhaul .app-bg.dy-monitor-focus .dy-monitor-header,
 html.dui-pro-overhaul .app-bg.dy-monitor-focus .dy-monitor-tabs,
 html.dui-pro-overhaul .app-bg.dy-monitor-focus .dy-monitor-body,
 html.dui-pro-overhaul .app-bg.dy-monitor-focus .dy-monitor-tab-list,
@@ -1596,18 +1454,10 @@ html.dui-pro-overhaul .app-bg.dy-monitor-focus .dy-monitor-shell :is(.dy-gateway
   -webkit-backdrop-filter: blur(18px) saturate(1.12) !important;
 }
 
-html.dui-pro-overhaul .app-bg.dy-monitor-focus .dy-runtime-compact-grid {
-  grid-template-columns: repeat(auto-fit, minmax(min(100%, 170px), 1fr)) !important;
-}
-
 html.dui-pro-overhaul .app-bg.dy-monitor-focus .dy-channel-activity-card .dy-gateway-event-list,
 html.dui-pro-overhaul .app-bg.dy-monitor-focus .dy-cron-jobs-card .dy-monitor-stream-box {
   min-height: clamp(220px, 34vh, 440px) !important;
   height: auto !important;
-}
-
-html.dui-pro-overhaul .app-bg.dy-monitor-focus .dy-gateway-log-card .dy-monitor-log-box {
-  min-height: clamp(180px, 26vh, 380px) !important;
 }
 
 @media (max-width: 1180px) {
@@ -1698,10 +1548,6 @@ html.dui-pro-overhaul .app-bg > .mx-auto {
   padding: 18px 18px 32px calc(var(--dui-rail) + 30px) !important;
 }
 
-html.dui-pro-overhaul .app-bg > .mx-auto:has([data-dui-panel="missions"].dy-missions-panel) {
-  padding-bottom: 16px !important;
-}
-
 .dy-human-rail {
   top: 18px;
   bottom: 18px;
@@ -1729,16 +1575,8 @@ html.dui-pro-overhaul .app-bg > .mx-auto:has([data-dui-panel="missions"].dy-miss
   filter: saturate(1.08) brightness(1.08) contrast(1.04);
 }
 
-.dy-human-rail-title strong {
-  color: var(--dui-text);
-  font-size: 17px;
-  font-weight: 850;
-  line-height: 1.05;
-}
 
-.dy-human-rail-title span,
-.dy-human-nav-copy span,
-.dy-human-appearance-button span:last-child {
+.dy-human-nav-copy span {
   color: var(--dui-muted);
   font-size: 10px;
   font-weight: 800;
@@ -1750,8 +1588,7 @@ html.dui-pro-overhaul .app-bg > .mx-auto:has([data-dui-panel="missions"].dy-miss
   padding: 12px;
 }
 
-.dy-human-nav button,
-.dy-human-appearance-button {
+.dy-human-nav button {
   position: relative;
   min-height: 54px;
   padding: 10px 12px;
@@ -1788,8 +1625,7 @@ html.dui-pro-overhaul .app-bg > .mx-auto:has([data-dui-panel="missions"].dy-miss
   transition: opacity 150ms ease-out;
 }
 
-.dy-human-nav button:hover,
-.dy-human-appearance-button:hover {
+.dy-human-nav button:hover {
   border-color: rgba(184, 188, 190, .2);
   background:
     linear-gradient(180deg, rgba(255, 255, 255, .035), transparent 36px),
@@ -1874,8 +1710,7 @@ html.dui-pro-overhaul .app-bg > .mx-auto:has([data-dui-panel="missions"].dy-miss
   transform: scale(1.04);
 }
 
-.dy-human-nav-copy strong,
-.dy-human-appearance-button span:first-child {
+.dy-human-nav-copy strong {
   color: var(--dui-text);
   font-size: 13px;
   font-weight: 820;
@@ -1894,13 +1729,6 @@ html.dui-pro-overhaul .app-bg > .mx-auto:has([data-dui-panel="missions"].dy-miss
 .dy-human-rail-bottom {
   padding: 12px;
   border-top: 1px solid var(--dui-line);
-}
-
-.dy-human-appearance-button {
-  min-height: 44px;
-  padding: 10px 12px;
-  border-color: var(--dui-line);
-  background: var(--dui-panel-2);
 }
 
 html.dui-pro-overhaul header.relative.mb-7 {
@@ -1924,51 +1752,6 @@ html.dui-pro-overhaul header.relative.mb-7::before,
 html.dui-pro-overhaul header.relative.mb-7::after,
 html.dui-pro-overhaul header.relative.mb-7 > .pointer-events-none {
   display: none !important;
-}
-
-.brand-lockup.dy-logo-fixed {
-  min-height: 52px !important;
-  min-width: min(520px, 44vw) !important;
-  max-width: min(620px, 52vw) !important;
-  gap: 0 !important;
-}
-
-.brand-lockup.dy-logo-fixed .dy-logo-lockup {
-  display: block;
-  width: 100% !important;
-  max-width: 620px !important;
-  height: clamp(46px, 5.2vw, 74px) !important;
-  object-fit: contain;
-  object-position: left center;
-  filter: saturate(1.05) brightness(1.04) contrast(1.02);
-  transform: translateZ(0);
-}
-
-.brand-lockup.dy-logo-fixed .dy-logo-mark {
-  width: 42px !important;
-  height: 42px !important;
-  border: 1px solid var(--dui-line-strong) !important;
-  border-radius: var(--dui-r) !important;
-  background: var(--dui-panel-2) !important;
-  box-shadow: none !important;
-  filter: saturate(1.08) brightness(1.08) contrast(1.04);
-}
-
-.brand-lockup.dy-logo-fixed .dy-logo-word {
-  margin: 0;
-  color: var(--dui-text) !important;
-  font-size: 34px !important;
-  font-weight: 850 !important;
-  line-height: 1 !important;
-  text-shadow: none !important;
-}
-
-.brand-lockup.dy-logo-fixed .dy-logo-subtitle {
-  margin-top: 2px !important;
-  color: var(--dui-muted) !important;
-  font-size: 11px !important;
-  font-weight: 750 !important;
-  text-transform: uppercase;
 }
 
 html.dui-pro-overhaul .dui-login-logo-lockup {
@@ -2146,226 +1929,9 @@ html.dui-pro-overhaul [data-dui-panel="plugins"].dy-plugins-panel {
   overflow: hidden !important;
 }
 
-html.dui-pro-overhaul [data-dui-panel="missions"].dy-missions-panel {
-  height: max(560px, calc(100dvh - 120px)) !important;
-  min-height: 0 !important;
-  overflow: hidden !important;
-  border-radius: 12px !important;
-  border-color: rgba(184, 188, 190, .12) !important;
-  background:
-    linear-gradient(180deg, rgba(14, 20, 30, .96), rgba(6, 10, 18, .98)) !important;
-  box-shadow: 0 24px 64px rgba(0, 0, 0, .34), inset 0 1px 0 rgba(255, 255, 255, .045) !important;
-}
-
-html.dui-pro-overhaul .dy-missions-header {
-  background:
-    linear-gradient(180deg, rgba(255, 255, 255, .030), rgba(255, 255, 255, .012)) !important;
-  backdrop-filter: blur(18px) saturate(1.04) !important;
-  -webkit-backdrop-filter: blur(18px) saturate(1.04) !important;
-}
-
-html.dui-pro-overhaul .dy-missions-body {
-  flex: 1 1 auto !important;
-  min-height: 0 !important;
-  overflow-y: auto !important;
-  overflow-x: hidden !important;
-  scrollbar-color: rgba(200, 206, 216, .22) transparent;
-  scrollbar-gutter: stable;
-  scrollbar-width: thin;
-}
-
-html.dui-pro-overhaul .dy-mission-card,
-html.dui-pro-overhaul .dy-mission-history {
-  border: 1px solid rgba(184, 188, 190, .105) !important;
-  border-radius: 12px !important;
-  background:
-    linear-gradient(180deg, rgba(255, 255, 255, .036), rgba(255, 255, 255, .014)) !important;
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, .040) !important;
-  backdrop-filter: blur(16px) saturate(1.04) !important;
-  -webkit-backdrop-filter: blur(16px) saturate(1.04) !important;
-}
-
-html.dui-pro-overhaul .dy-objective-card {
-  border-color: rgba(59, 130, 246, .18) !important;
-  background:
-    linear-gradient(180deg, rgba(37, 99, 235, .070), rgba(30, 64, 175, .024)) !important;
-}
-
-html.dui-pro-overhaul .dy-mission-proof-grid {
-  border-color: rgba(59, 130, 246, .16) !important;
-  background:
-    linear-gradient(180deg, rgba(37, 99, 235, .060), rgba(30, 64, 175, .024)) !important;
-}
-
-html.dui-pro-overhaul .dy-dispatch-card {
-  border-color: rgba(59, 130, 246, .16) !important;
-  background:
-    linear-gradient(180deg, rgba(37, 99, 235, .060), rgba(255, 255, 255, .012)) !important;
-}
-
-html.dui-pro-overhaul .dy-heartbeat-card {
-  border-color: rgba(59, 130, 246, .17) !important;
-  background:
-    linear-gradient(180deg, rgba(37, 99, 235, .064), rgba(30, 64, 175, .024)) !important;
-}
-
-@media (min-width: 1280px) {
-  html.dui-pro-overhaul .dy-mission-sidebar > .dy-mission-card,
-  html.dui-pro-overhaul .dy-mission-sidebar > .dy-mission-action {
-    display: block !important;
-    width: calc(100% - 14px) !important;
-    margin-left: auto !important;
-  }
-}
-
 html.dui-pro-overhaul [data-dui-panel="missions"],
-html.dui-pro-overhaul [data-dui-panel="missions"] *,
-html.dui-pro-overhaul .dy-mission-history,
-html.dui-pro-overhaul .dy-mission-history * {
+html.dui-pro-overhaul [data-dui-panel="missions"] * {
   letter-spacing: 0 !important;
-}
-
-html.dui-pro-overhaul .dy-mission-control {
-  border-color: rgba(184, 188, 190, .115) !important;
-  background: rgba(3, 8, 14, .34) !important;
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, .035) !important;
-}
-
-html.dui-pro-overhaul .dy-mission-control:focus {
-  border-color: rgba(96, 165, 250, .42) !important;
-  background: rgba(7, 16, 26, .54) !important;
-  box-shadow: 0 0 0 1px rgba(59, 130, 246, .16), inset 0 1px 0 rgba(255, 255, 255, .05) !important;
-}
-
-html.dui-pro-overhaul .dy-mission-textarea {
-  line-height: 1.55 !important;
-}
-
-html.dui-pro-overhaul .dy-mission-option {
-  border-color: rgba(184, 188, 190, .095) !important;
-  background: rgba(255, 255, 255, .018) !important;
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, .025) !important;
-}
-
-html.dui-pro-overhaul .dy-mission-option:hover {
-  border-color: rgba(184, 188, 190, .18) !important;
-  background: rgba(255, 255, 255, .035) !important;
-}
-
-html.dui-pro-overhaul .dy-mission-option[aria-pressed="true"],
-html.dui-pro-overhaul .dy-mission-option.is-active {
-  border-color: rgba(34, 211, 238, .30) !important;
-  background: rgba(34, 211, 238, .075) !important;
-}
-
-html.dui-pro-overhaul .dy-collab-mode-option[aria-pressed="true"],
-html.dui-pro-overhaul .dy-collab-mode-option.is-active {
-  border-color: rgba(34, 211, 238, .48) !important;
-  background:
-    linear-gradient(180deg, rgba(34, 211, 238, .145), rgba(34, 211, 238, .070)) !important;
-  box-shadow:
-    0 0 0 1px rgba(34, 211, 238, .16),
-    0 10px 26px rgba(34, 211, 238, .10),
-    inset 0 1px 0 rgba(255, 255, 255, .08) !important;
-  color: rgb(207, 250, 254) !important;
-}
-
-html.dui-pro-overhaul .dy-collab-mode-option[aria-pressed="true"] span:last-child,
-html.dui-pro-overhaul .dy-collab-mode-option.is-active span:last-child {
-  color: rgba(165, 243, 252, .86) !important;
-  opacity: 1 !important;
-}
-
-html.dui-pro-overhaul .dy-mission-pill {
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, .045) !important;
-}
-
-html.dui-pro-overhaul .dy-mission-note,
-html.dui-pro-overhaul .dy-mission-mini-stat,
-html.dui-pro-overhaul .dy-mission-metric,
-html.dui-pro-overhaul .dy-agent-loadout-row,
-html.dui-pro-overhaul .dy-mission-history-item {
-  background: rgba(3, 8, 14, .26) !important;
-  border-color: rgba(184, 188, 190, .085) !important;
-}
-
-html.dui-pro-overhaul .dy-mission-secondary,
-html.dui-pro-overhaul .dy-mission-action {
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, .040) !important;
-}
-
-html.dui-pro-overhaul .dy-heartbeat-apply {
-  border-color: rgba(59, 130, 246, .30) !important;
-  background:
-    linear-gradient(180deg, rgba(59, 130, 246, .105), rgba(30, 64, 175, .055)) !important;
-  color: #dbeafe !important;
-}
-
-html.dui-pro-overhaul .dy-heartbeat-apply:hover {
-  border-color: rgba(96, 165, 250, .42) !important;
-  background:
-    linear-gradient(180deg, rgba(59, 130, 246, .145), rgba(30, 64, 175, .075)) !important;
-  color: #eff6ff !important;
-}
-
-html.dui-pro-overhaul [data-dui-panel="missions"] .dy-blue-accent-text {
-  color: #bfdbfe !important;
-}
-
-html.dui-pro-overhaul [data-dui-panel="missions"] .dy-blue-accent-chip {
-  border-color: rgba(96, 165, 250, .28) !important;
-  background:
-    linear-gradient(180deg, rgba(59, 130, 246, .105), rgba(30, 64, 175, .045)) !important;
-  color: #bfdbfe !important;
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, .055) !important;
-}
-
-html.dui-pro-overhaul .dy-mission-templates .dy-template-grid {
-  display: grid !important;
-  grid-template-columns: repeat(auto-fit, minmax(132px, 1fr)) !important;
-  gap: 1px !important;
-  overflow: hidden !important;
-  border: 1px solid rgba(184, 188, 190, .085) !important;
-  border-radius: 10px !important;
-  background: rgba(184, 188, 190, .085) !important;
-}
-
-html.dui-pro-overhaul .dy-mission-templates .dy-template-option {
-  min-height: 66px !important;
-  display: flex !important;
-  align-items: center !important;
-  gap: 10px !important;
-  padding: 10px !important;
-  border-radius: 0 !important;
-  background: rgba(6, 10, 18, .70) !important;
-  transition: background .16s ease, color .16s ease !important;
-}
-
-html.dui-pro-overhaul .dy-mission-templates .dy-template-option:hover,
-html.dui-pro-overhaul .dy-mission-templates .dy-template-option.is-active {
-  background: rgba(34, 211, 238, .070) !important;
-}
-
-html.dui-pro-overhaul .dy-mission-templates .dy-template-art {
-  width: 38px !important;
-  height: 38px !important;
-  flex: 0 0 auto !important;
-  object-fit: contain !important;
-  opacity: .90 !important;
-}
-
-html.dui-pro-overhaul .dy-mission-templates .dy-template-copy {
-  min-width: 0 !important;
-}
-
-@media (max-width: 760px) {
-  html.dui-pro-overhaul [data-dui-panel="missions"].dy-missions-panel {
-    height: max(560px, calc(100dvh - 96px)) !important;
-  }
-
-  html.dui-pro-overhaul .dy-missions-body {
-    padding: 14px !important;
-  }
 }
 
 html.dui-pro-overhaul .dy-plugins-scroll {
@@ -2396,17 +1962,6 @@ html.dui-pro-overhaul .dy-plugin-row-action {
   justify-content: center;
   gap: 7px;
   white-space: nowrap;
-}
-
-html.dui-pro-overhaul .dy-plugin-row-action-svg {
-  width: 13px;
-  height: 13px;
-  flex: 0 0 auto;
-  fill: none;
-  stroke: currentColor;
-  stroke-linecap: square;
-  stroke-linejoin: miter;
-  stroke-width: 1.45;
 }
 
 html.dui-pro-overhaul .dy-plugin-row-power.is-stop {
@@ -2617,8 +2172,7 @@ html.dui-pro-overhaul ::-webkit-scrollbar-thumb {
     font-size: 11px;
   }
 
-  .dy-human-nav-copy span,
-  .dy-human-rail-title span {
+  .dy-human-nav-copy span {
     display: none;
   }
 
@@ -2740,7 +2294,7 @@ html.dui-pro-overhaul [data-chat-panel] > * {
   z-index: 1;
 }
 
-html.dui-pro-overhaul .brand-lockup.dy-logo-fixed .dy-logo-mark,
+
 html.dui-pro-overhaul .dy-human-rail-head img {
   border-color: rgba(120, 231, 245, .24) !important;
   background:
@@ -2750,17 +2304,6 @@ html.dui-pro-overhaul .dy-human-rail-head img {
     inset 0 1px 0 rgba(255, 255, 255, .08),
     0 0 0 1px rgba(120, 231, 245, .035),
     0 12px 28px -24px rgba(120, 231, 245, .88) !important;
-}
-
-html.dui-pro-overhaul .brand-lockup.dy-logo-fixed .dy-logo-word {
-  font-size: 36px !important;
-  font-weight: 900 !important;
-}
-
-html.dui-pro-overhaul .brand-lockup.dy-logo-fixed .dy-logo-subtitle {
-  color: #a7b0b8 !important;
-  font-size: 10.5px !important;
-  letter-spacing: .13em !important;
 }
 
 html.dui-pro-overhaul header .badge {
@@ -2803,8 +2346,7 @@ html.dui-pro-overhaul .dy-human-nav {
   gap: 8px;
 }
 
-html.dui-pro-overhaul .dy-human-nav button,
-html.dui-pro-overhaul .dy-human-appearance-button {
+html.dui-pro-overhaul .dy-human-nav button {
   border-color: rgba(214, 219, 224, .08);
   background:
     linear-gradient(180deg, rgba(255, 255, 255, .024), transparent 36px),

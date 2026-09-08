@@ -1350,3 +1350,23 @@ html.dui-pro-overhaul.dui-cohesive-ui [data-dui-panel="missions"] .dui-agent-cad
     grid-template-columns: minmax(86px, .46fr) minmax(112px, .54fr) !important;
   }
 }
+
+.dui-readiness-checklist {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 10px;
+  margin: 6px 0 0;
+  padding: 0;
+  list-style: none;
+  font-size: 11px;
+  line-height: 1.4;
+  color: var(--text-secondary);
+}
+.dui-readiness-checklist [data-ready="false"] {
+  color: var(--accent-yellow);
+}
+.dui-objective-hint {
+  margin: 6px 0 0;
+  font-size: 11px;
+  color: var(--text-muted);
+}

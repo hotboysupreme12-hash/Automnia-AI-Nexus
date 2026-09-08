@@ -8,49 +8,52 @@ html.dui-pro-overhaul.dui-cohesive-ui .agent-card-shell.agent-card-pro[data-agen
   --agent-card-rarity-rgb: 184, 194, 205;
   --agent-card-accent: var(--agent-card-rarity) !important;
   --agent-card-accent-rgb: var(--agent-card-rarity-rgb) !important;
-  --agent-card-obsidian-top: #14181d;
-  --agent-card-obsidian-mid: #0b0f13;
-  --agent-card-obsidian-bottom: #06080b;
-  --agent-card-neutral-panel: rgba(9, 12, 16, .88);
+  --agent-card-obsidian-top: #0d1115;
+  --agent-card-obsidian-mid: #080b0f;
+  --agent-card-obsidian-bottom: #05070a;
+  --agent-card-neutral-panel: rgba(7, 10, 14, .94);
   border-color: color-mix(in srgb, var(--agent-card-rarity) 56%, rgba(255, 255, 255, .12)) !important;
   background-color: var(--agent-card-obsidian-mid) !important;
   background-image:
-    radial-gradient(ellipse 90% 38% at 50% 0%, rgba(var(--agent-card-rarity-rgb), .055), transparent 72%),
-    linear-gradient(145deg, var(--agent-card-obsidian-top), var(--agent-card-obsidian-mid) 56%, var(--agent-card-obsidian-bottom)) !important;
+    linear-gradient(180deg, rgba(1, 3, 6, .58), rgba(1, 3, 6, .76)),
+    url('/card-overlays/professional-obsidian.png'),
+    linear-gradient(180deg, var(--agent-card-obsidian-top), var(--agent-card-obsidian-mid) 42%, var(--agent-card-obsidian-bottom)) !important;
+  background-size: auto, 520px 520px, auto !important;
+  background-repeat: no-repeat, repeat, no-repeat !important;
+  background-position: center, center, center !important;
   box-shadow:
-    0 20px 50px rgba(0, 0, 0, .48),
-    0 0 28px -22px rgba(var(--agent-card-rarity-rgb), .32),
-    inset 0 1px 0 rgba(255, 255, 255, .065) !important;
+    0 18px 38px rgba(0, 0, 0, .52),
+    inset 0 1px 0 rgba(255, 255, 255, .045) !important;
 }
 
 html.dui-pro-overhaul.dui-cohesive-ui .agent-card-shell.agent-card-pro[data-agent-card="true"][data-agent-rarity]:hover {
   border-color: color-mix(in srgb, var(--agent-card-rarity) 70%, rgba(255, 255, 255, .16)) !important;
   background-image:
-    radial-gradient(ellipse 90% 42% at 50% 0%, rgba(var(--agent-card-rarity-rgb), .075), transparent 72%),
-    linear-gradient(145deg, #15191f, var(--agent-card-obsidian-mid) 56%, var(--agent-card-obsidian-bottom)) !important;
+    linear-gradient(180deg, rgba(1, 3, 6, .48), rgba(1, 3, 6, .68)),
+    url('/card-overlays/professional-obsidian.png'),
+    linear-gradient(180deg, #11151a, var(--agent-card-obsidian-mid) 42%, var(--agent-card-obsidian-bottom)) !important;
   box-shadow:
-    0 26px 52px rgba(0, 0, 0, .54),
-    0 0 34px -20px rgba(var(--agent-card-rarity-rgb), .36),
-    inset 0 1px 0 rgba(255, 255, 255, .085) !important;
+    0 22px 42px rgba(0, 0, 0, .58),
+    inset 0 1px 0 rgba(255, 255, 255, .06) !important;
 }
 
 /* Keep the card body quiet. The portrait remains the visual focus; rarity is
    limited to a barely-there tint instead of a full-card artwork overlay. */
 html.dui-pro-overhaul.dui-cohesive-ui .agent-card-shell.agent-card-pro[data-agent-card="true"][data-agent-rarity]::before {
   display: block !important;
-  background: linear-gradient(180deg, rgba(var(--agent-card-rarity-rgb), .05), transparent 28%, rgba(0, 0, 0, .14)) !important;
-  opacity: .82 !important;
+  background: linear-gradient(180deg, rgba(255, 255, 255, .018), transparent 22%, rgba(0, 0, 0, .20)) !important;
+  opacity: .9 !important;
   mix-blend-mode: normal !important;
   filter: none !important;
   transform: translateZ(2px);
 }
 
 html.dui-pro-overhaul.dui-cohesive-ui .agent-card-shell.agent-card-pro[data-agent-card="true"][data-agent-rarity]::after {
-  border-color: color-mix(in srgb, var(--agent-card-rarity) 24%, rgba(255, 255, 255, .12)) !important;
-  border-top-color: color-mix(in srgb, var(--agent-card-rarity) 62%, rgba(255, 255, 255, .16)) !important;
+  border-color: color-mix(in srgb, var(--agent-card-rarity) 18%, rgba(255, 255, 255, .10)) !important;
+  border-top-color: color-mix(in srgb, var(--agent-card-rarity) 42%, rgba(255, 255, 255, .13)) !important;
   box-shadow:
     inset 0 0 0 1px rgba(255, 255, 255, .022),
-    inset 0 1px 0 rgba(var(--agent-card-rarity-rgb), .11) !important;
+    inset 0 1px 0 rgba(255, 255, 255, .035) !important;
 }
 
 /* Keep the information surfaces neutral too. Rarity only peeks through as a
@@ -134,42 +137,46 @@ html.dui-pro-overhaul.dui-cohesive-ui .agent-card-shell.agent-card-pro[data-agen
   --agent-card-original-accent-rgb: 185, 196, 207;
   --agent-card-accent: var(--agent-card-original-accent) !important;
   --agent-card-accent-rgb: var(--agent-card-original-accent-rgb) !important;
-  --agent-card-obsidian-top: #161a1f;
-  --agent-card-obsidian-mid: #0c1014;
-  --agent-card-obsidian-bottom: #06080b;
-  --agent-card-neutral-panel: rgba(9, 12, 16, .90);
-  border-color: rgba(185, 196, 207, .24) !important;
+  --agent-card-obsidian-top: #0f1318;
+  --agent-card-obsidian-mid: #090c10;
+  --agent-card-obsidian-bottom: #05070a;
+  --agent-card-neutral-panel: rgba(7, 10, 14, .95);
+  border-color: rgba(185, 196, 207, .18) !important;
   background-color: var(--agent-card-obsidian-mid) !important;
   background-image:
-    linear-gradient(135deg, transparent 0 18%, rgba(185, 196, 207, .045) 18.2% 18.8%, transparent 19% 62%, rgba(185, 196, 207, .022) 62.2% 62.7%, transparent 63%),
-    linear-gradient(145deg, var(--agent-card-obsidian-top), var(--agent-card-obsidian-mid) 56%, var(--agent-card-obsidian-bottom)) !important;
+    linear-gradient(180deg, rgba(1, 3, 6, .60), rgba(1, 3, 6, .78)),
+    url('/card-overlays/professional-obsidian.png'),
+    linear-gradient(180deg, var(--agent-card-obsidian-top), var(--agent-card-obsidian-mid) 42%, var(--agent-card-obsidian-bottom)) !important;
+  background-size: auto, 520px 520px, auto !important;
+  background-repeat: no-repeat, repeat, no-repeat !important;
+  background-position: center, center, center !important;
   box-shadow:
-    0 20px 50px rgba(0, 0, 0, .50),
-    inset 0 1px 0 rgba(255, 255, 255, .065) !important;
+    0 18px 38px rgba(0, 0, 0, .54),
+    inset 0 1px 0 rgba(255, 255, 255, .045) !important;
 }
 
 html.dui-pro-overhaul.dui-cohesive-ui .agent-card-shell.agent-card-pro[data-agent-card="true"][data-agent-card-theme="original"]:hover {
   border-color: color-mix(in srgb, var(--agent-card-rarity) 36%, #59636c) !important;
   background-image:
-    linear-gradient(135deg, transparent 0 18%, rgba(185, 196, 207, .06) 18.2% 18.8%, transparent 19% 62%, rgba(185, 196, 207, .03) 62.2% 62.7%, transparent 63%),
-    linear-gradient(145deg, #181d23, var(--agent-card-obsidian-mid) 56%, var(--agent-card-obsidian-bottom)) !important;
+    linear-gradient(180deg, rgba(1, 3, 6, .50), rgba(1, 3, 6, .70)),
+    url('/card-overlays/professional-obsidian.png'),
+    linear-gradient(180deg, #12171c, var(--agent-card-obsidian-mid) 42%, var(--agent-card-obsidian-bottom)) !important;
   box-shadow:
-    0 26px 52px rgba(0, 0, 0, .56),
-    0 0 30px -24px rgba(var(--agent-card-rarity-rgb), .42),
-    inset 0 1px 0 rgba(255, 255, 255, .085) !important;
+    0 22px 42px rgba(0, 0, 0, .60),
+    inset 0 1px 0 rgba(255, 255, 255, .06) !important;
 }
 
 html.dui-pro-overhaul.dui-cohesive-ui .agent-card-shell.agent-card-pro[data-agent-card="true"][data-agent-card-theme="original"]::before {
-  background: linear-gradient(180deg, rgba(255, 255, 255, .025), transparent 28%, rgba(0, 0, 0, .16)) !important;
-  opacity: .78 !important;
+  background: linear-gradient(180deg, rgba(255, 255, 255, .018), transparent 22%, rgba(0, 0, 0, .20)) !important;
+  opacity: .9 !important;
 }
 
 html.dui-pro-overhaul.dui-cohesive-ui .agent-card-shell.agent-card-pro[data-agent-card="true"][data-agent-card-theme="original"]::after {
-  border-color: rgba(185, 196, 207, .14) !important;
-  border-top-color: rgba(255, 255, 255, .18) !important;
+  border-color: rgba(185, 196, 207, .11) !important;
+  border-top-color: rgba(255, 255, 255, .13) !important;
   box-shadow:
     inset 0 0 0 1px rgba(255, 255, 255, .022),
-    inset 0 1px 0 rgba(255, 255, 255, .045) !important;
+    inset 0 1px 0 rgba(255, 255, 255, .035) !important;
 }
 
 html.dui-pro-overhaul.dui-cohesive-ui .agent-card-shell.agent-card-pro[data-agent-card="true"][data-agent-card-theme="original"] :is(
@@ -197,4 +204,22 @@ html.dui-pro-overhaul.dui-cohesive-ui .agent-card-shell.agent-card-pro[data-agen
   html.dui-pro-overhaul.dui-cohesive-ui .agent-card-shell.agent-card-pro[data-agent-card="true"][data-agent-rarity]::before {
     opacity: .64 !important;
   }
+}
+
+/* Final surface lock: keep legacy card skins from reintroducing a gray wash
+   or decorative diagonal pattern over the professional obsidian surface. */
+html.dui-pro-overhaul.dui-cohesive-ui .agent-card-shell.agent-card-pro[data-agent-card="true"][data-agent-card-theme] {
+  background-color: #030507 !important;
+  background-image:
+    linear-gradient(180deg, rgba(0, 2, 5, .68), rgba(0, 2, 5, .84)),
+    url('/card-overlays/professional-obsidian.png') !important;
+  background-size: auto, 420px 420px !important;
+  background-repeat: no-repeat, repeat !important;
+  background-position: center, center !important;
+}
+
+html.dui-pro-overhaul.dui-cohesive-ui .agent-card-shell.agent-card-pro[data-agent-card="true"][data-agent-card-theme]::before {
+  background: linear-gradient(180deg, rgba(255, 255, 255, .012), transparent 20%, rgba(0, 0, 0, .24)) !important;
+  opacity: 1 !important;
+  mix-blend-mode: normal !important;
 }

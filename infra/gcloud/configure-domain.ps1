@@ -4,7 +4,8 @@ param(
   [string]$Region,
   [string]$DnsProjectId,
   [string]$DnsZone,
-  [switch]$ExternalDnsReady
+  [switch]$ExternalDnsReady,
+  [switch]$SkipGmail
 )
 
 . (Join-Path $PSScriptRoot 'Common.ps1')
@@ -26,11 +27,11 @@ if ($DnsProjectId -and $DnsZone) {
     Invoke-Gcloud -Arguments @('services', 'enable', 'dns.googleapis.com', '--project', $DnsProjectId) | Out-Null
   }
 }
-& (Join-Path $PSScriptRoot 'health.ps1') -ProjectId $ProjectId -Region $Region | Out-Null
+& (Join-Path $PSScriptRoot 'health.ps1') -ProjectId $ProjectId -Region $Region -SkipGmail:$SkipGmail | Out-Null
 
 $labels = $config.PermanentDomain.Split('.')
 $baseDomain = if ($labels.Count -gt 2) { ($labels[($labels.Count - 2)..($labels.Count - 1)] -join '.') } else { $config.PermanentDomain }
-$verified = @(Invoke-Gcloud -Arguments @('domains', 'list-user-verified', '--format=value(id)') -split "`n")
+$verified = @((Invoke-Gcloud -Arguments @('domains', 'list-user-verified', '--format=value(id)')) -split "`n")
 if ($verified -notcontains $baseDomain -and $verified -notcontains $config.PermanentDomain) {
   throw "Domain ownership is not verified for '$baseDomain'. Run: gcloud domains verify $baseDomain"
 }

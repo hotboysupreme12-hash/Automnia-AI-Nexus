@@ -1,3 +1,4 @@
+import { CONVERSATION_TRUNCATION_MARKER } from './conversationBudgetService'
 import { randomUUID } from 'node:crypto'
 import type { ProviderRequestAuth } from '../providers/providerSetupService'
 import type { AgentTurnStreamEmitter } from './gatewayAgentTurnService'
@@ -120,6 +121,7 @@ export type AgentStreamingServiceOptions = {
     provider: string,
     env: Record<string, string>,
     envKeys: string[],
+    signal?: AbortSignal,
   ) => Promise<ProviderRequestAuth | null>
   anthropicSubscriptionAvailable?: () => boolean
   streamingCapabilityForModel: (modelId: string) => Record<string, unknown>
@@ -225,6 +227,41 @@ export type AgentStreamingServiceOptions = {
 }
 
 export function createAgentStreamingService(options: AgentStreamingServiceOptions) {
+  const conversationTurns = new Map<string, Promise<void>>()
+
+  async function acquireConversationTurn(scope: string, signal: AbortSignal, emit: AgentTurnStreamEmitter) {
+    signal.throwIfAborted()
+    const previous = conversationTurns.get(scope)
+    let release!: () => void
+    const completed = new Promise<void>((resolve) => { release = resolve })
+    const tail = (previous || Promise.resolve()).then(() => completed)
+    conversationTurns.set(scope, tail)
+    void tail.then(() => {
+      if (conversationTurns.get(scope) === tail) conversationTurns.delete(scope)
+    })
+    let onAbort: (() => void) | undefined
+    try {
+      if (previous) {
+        emit('status', { mode: 'progress', label: 'Queued', message: 'Waiting for the previous answer in this conversation.' })
+        await Promise.race([
+          previous,
+          new Promise<never>((_resolve, reject) => {
+            onAbort = () => reject(signal.reason || Object.assign(new Error('Queued turn cancelled'), { name: 'AbortError' }))
+            signal.addEventListener('abort', onAbort, { once: true })
+            if (signal.aborted) onAbort()
+          }),
+        ])
+      }
+      signal.throwIfAborted()
+      return release
+    } catch (error) {
+      release()
+      throw error
+    } finally {
+      if (onAbort) signal.removeEventListener('abort', onAbort)
+    }
+  }
+
   async function streamProviderAgentTurn(
     input: AgentStreamingInput,
     emit: AgentTurnStreamEmitter,
@@ -389,7 +426,7 @@ export function createAgentStreamingService(options: AgentStreamingServiceOption
     }
     const requestAuth: ProviderRequestAuth | null = openAiSubscriptionAuth
       ? openAiSubscriptionAuth.requestAuth
-      : await options.resolveProviderRequestAuth(provider, envOverrides, providerConfig.envKeys)
+      : await options.resolveProviderRequestAuth(provider, envOverrides, providerConfig.envKeys, signal)
     const capability = options.streamingCapabilityForModel(modelId)
     if (!requestAuth && provider === 'anthropic' && options.anthropicSubscriptionAvailable?.()) {
       return options.runBufferedAgentTurnForStream(input, emit, signal, {
@@ -430,176 +467,197 @@ export function createAgentStreamingService(options: AgentStreamingServiceOption
       }
     }
 
-    const context = await options.resolveAgentRunContext(input.agent)
     const sessionScope = options.agentTurnSessionScope(input.agent, input.sessionKey)
-    const wantsFreshSession = /^\s*\/new\b/i.test(input.message)
-    const cleanedMessage = wantsFreshSession ? input.message.replace(/^\s*\/new\b\s*/i, '') : input.message
-    const filenameResolution = await options.resolveFilenameHintsForMessage(cleanedMessage, context.executionWorkspace)
-    const effectiveMessage = filenameResolution.message
-    const previousSessionId = options.agentTurnSessions.get(sessionScope)
-    const sessionId = wantsFreshSession ? randomUUID() : previousSessionId || randomUUID()
-    if (wantsFreshSession && previousSessionId) options.deleteProviderConversationHistory(previousSessionId)
-    options.agentTurnSessions.set(sessionScope, sessionId)
-    const party = await options.getPartyMembers().catch(() => [])
-    const self = party.find((member) => member.id === input.agent)
-    const identityLine = self?.name ? `You are ${self.name} (${input.agent}).` : `You are ${input.agent}.`
-    const enforcedMessage = [
-      identityLine,
-      'Do not claim to be any other person or agent.',
-      'If any prior persona conflicts with this identity, discard it now.',
-      '',
-      effectiveMessage,
-    ].join('\n')
-    const composedPrompt = options.composeDirectProviderPrompt(input.agent, enforcedMessage, context.executionWorkspace)
-    const requestMessages = options.providerConversationMessagesForRequest(sessionId, provider, modelId, composedPrompt)
-    const effectiveStreamingKind: StreamingProviderKind =
-      provider === 'openai' && requestAuth.type === 'oauth'
-        ? 'openai-codex-responses'
-        : providerConfig.kind
-    const streamingTransport: StreamingProviderKind =
-      effectiveStreamingKind === 'openai-codex-responses' && requestAuth.type === 'apiKey'
-        ? 'openai-responses'
-        : effectiveStreamingKind
-
-    emit('start', {
-      transport: streamingTransport,
-      provider,
-      model,
-      modelId,
-      sessionId,
-      conversationMessages: requestMessages.length,
-      capability,
-      runtimeContext: options.agentRuntimeContextPayload(input.agent, context),
-    })
-
-    let streamedReply: StreamedProviderReply = { content: '' }
+    const releaseConversationTurn = await acquireConversationTurn(sessionScope, signal, emit)
     try {
-      if (providerConfig.kind === 'openai-compatible') {
-        if (requestAuth.type !== 'apiKey') throw new Error(`${provider} streaming requires an API key credential.`)
-        streamedReply = await options.streamOpenAiCompatibleCompletion({
-          provider,
-          model,
-          endpoint: providerConfig.endpoint || '',
-          apiKey: requestAuth.value,
-          messages: requestMessages,
-          thinking: input.thinking,
-          signal,
-          emit,
-        })
-      } else if (effectiveStreamingKind === 'openai-responses') {
-        if (requestAuth.type !== 'apiKey') throw new Error('OpenAI Responses streaming requires an API key credential.')
-        streamedReply = await options.streamOpenAiResponsesCompletion({
-          provider,
-          model,
-          endpoint: providerConfig.endpoint || 'https://api.openai.com/v1/responses',
-          apiKey: requestAuth.value,
-          messages: requestMessages,
-          thinking: input.thinking,
-          signal,
-          emit,
-        })
-      } else if (effectiveStreamingKind === 'openai-codex-responses') {
-        if (requestAuth.type === 'oauth') {
-          streamedReply = await options.streamOpenAICodexResponsesCompletion({
+      const context = await options.resolveAgentRunContext(input.agent)
+      const wantsFreshSession = /^\s*\/new\b/i.test(input.message)
+      const cleanedMessage = wantsFreshSession ? input.message.replace(/^\s*\/new\b\s*/i, '') : input.message
+      const filenameResolution = await options.resolveFilenameHintsForMessage(cleanedMessage, context.executionWorkspace)
+      const effectiveMessage = filenameResolution.message
+      const previousSessionId = options.agentTurnSessions.get(sessionScope)
+      const sessionId = wantsFreshSession ? randomUUID() : previousSessionId || randomUUID()
+      if (wantsFreshSession && previousSessionId) options.deleteProviderConversationHistory(previousSessionId)
+      options.agentTurnSessions.set(sessionScope, sessionId)
+      const party = await options.getPartyMembers().catch(() => [])
+      const self = party.find((member) => member.id === input.agent)
+      const identityLine = self?.name ? `You are ${self.name} (${input.agent}).` : `You are ${input.agent}.`
+      const enforcedMessage = [
+        identityLine,
+        'Do not claim to be any other person or agent.',
+        'If any prior persona conflicts with this identity, discard it now.',
+        '',
+        effectiveMessage,
+      ].join('\n')
+      const composedPrompt = options.composeDirectProviderPrompt(input.agent, enforcedMessage, context.executionWorkspace)
+      const requestMessages = options.providerConversationMessagesForRequest(sessionId, provider, modelId, composedPrompt)
+      if (requestMessages.some((message) => message.content.includes(CONVERSATION_TRUNCATION_MARKER))) {
+        emit('status', { mode: 'progress', label: 'Context shortened', message: 'Long conversation content was shortened to fit. The beginning and end were retained.' })
+      }
+      const effectiveStreamingKind: StreamingProviderKind =
+        provider === 'openai' && requestAuth.type === 'oauth'
+          ? 'openai-codex-responses'
+          : providerConfig.kind
+      const streamingTransport: StreamingProviderKind =
+        effectiveStreamingKind === 'openai-codex-responses' && requestAuth.type === 'apiKey'
+          ? 'openai-responses'
+          : effectiveStreamingKind
+
+      emit('start', {
+        transport: streamingTransport,
+        provider,
+        model,
+        modelId,
+        sessionId,
+        conversationMessages: requestMessages.length,
+        capability,
+        runtimeContext: options.agentRuntimeContextPayload(input.agent, context),
+      })
+
+      let streamedReply: StreamedProviderReply = { content: '' }
+      try {
+        if (providerConfig.kind === 'openai-compatible') {
+          if (requestAuth.type !== 'apiKey') throw new Error(`${provider} streaming requires an API key credential.`)
+          streamedReply = await options.streamOpenAiCompatibleCompletion({
+            provider,
             model,
-            accessToken: requestAuth.accessToken,
+            endpoint: providerConfig.endpoint || '',
+            apiKey: requestAuth.value,
             messages: requestMessages,
             thinking: input.thinking,
-            sessionId,
+            signal,
+            emit,
+          })
+        } else if (effectiveStreamingKind === 'openai-responses') {
+          if (requestAuth.type !== 'apiKey') throw new Error('OpenAI Responses streaming requires an API key credential.')
+          streamedReply = await options.streamOpenAiResponsesCompletion({
+            provider,
+            model,
+            endpoint: providerConfig.endpoint || 'https://api.openai.com/v1/responses',
+            apiKey: requestAuth.value,
+            messages: requestMessages,
+            thinking: input.thinking,
+            signal,
+            emit,
+          })
+        } else if (effectiveStreamingKind === 'openai-codex-responses') {
+          if (requestAuth.type === 'oauth') {
+            streamedReply = await options.streamOpenAICodexResponsesCompletion({
+              model,
+              accessToken: requestAuth.accessToken,
+              messages: requestMessages,
+              thinking: input.thinking,
+              sessionId,
+              signal,
+              emit,
+            })
+          } else {
+            throw new Error('OpenAI Codex streaming requires an OpenAI Codex OAuth credential.')
+          }
+        } else if (providerConfig.kind === 'anthropic-messages') {
+          streamedReply = await options.streamAnthropicMessage({
+            model,
+            auth: requestAuth,
+            messages: requestMessages,
+            thinking: input.thinking,
+            signal,
+            emit,
+          })
+        } else if (providerConfig.kind === 'gemini-vertex-generate-content') {
+          streamedReply = await options.streamGoogleVertexContent({
+            model,
+            auth: requestAuth,
+            messages: requestMessages,
+            thinking: input.thinking,
             signal,
             emit,
           })
         } else {
-          throw new Error('OpenAI Codex streaming requires an OpenAI Codex OAuth credential.')
+          streamedReply = await options.streamGeminiContent({
+            model,
+            auth: requestAuth,
+            messages: requestMessages,
+            thinking: input.thinking,
+            signal,
+            emit,
+          })
         }
-      } else if (providerConfig.kind === 'anthropic-messages') {
-        streamedReply = await options.streamAnthropicMessage({
+      } catch (error) {
+        const failure = options.redactHiddenReasoningAndSecrets(String(error))
+        const failureKind = options.classifyFailureKind(failure, 'failed') || 'unknown'
+        await options.appendAgentDailyMemory(
+          input.agent,
+          `[turn] failed streaming | prompt: ${options.trimTask(input.message, 120)} | outcome: ${options.trimTask(failure, 220)}`,
+        ).catch(() => undefined)
+        return {
+          ok: false,
+          reply: failure,
+          stdout: '',
+          stderr: failure,
+          code: 1,
+          failureKind,
+          modelId,
+          provider,
           model,
-          auth: requestAuth,
-          messages: requestMessages,
-          thinking: input.thinking,
-          signal,
-          emit,
-        })
-      } else if (providerConfig.kind === 'gemini-vertex-generate-content') {
-        streamedReply = await options.streamGoogleVertexContent({
-          model,
-          auth: requestAuth,
-          messages: requestMessages,
-          thinking: input.thinking,
-          signal,
-          emit,
-        })
-      } else {
-        streamedReply = await options.streamGeminiContent({
-          model,
-          auth: requestAuth,
-          messages: requestMessages,
-          thinking: input.thinking,
-          signal,
-          emit,
+          runtimeContext: options.agentRuntimeContextPayload(input.agent, context),
+          streaming: {
+            ...capability,
+            configured: true,
+            liveTokens: true,
+          },
+        }
+      }
+
+      const finalReply = options.sanitizeUserVisibleRuntimeText(streamedReply.content).trim() || 'No response returned.'
+      options.saveProviderConversationTurn(sessionId, provider, modelId, requestMessages, {
+        content: finalReply,
+        reasoningContent: streamedReply.reasoningContent,
+      })
+      const maintenanceIssues: Array<{ step: string; message: string }> = []
+      const recordMaintenanceIssue = (step: string, error: unknown) => {
+        maintenanceIssues.push({
+          step,
+          message: options.trimTask(options.redactHiddenReasoningAndSecrets(String(error)), 300),
         })
       }
-    } catch (error) {
-      const failure = options.redactHiddenReasoningAndSecrets(String(error))
-      const failureKind = options.classifyFailureKind(failure, 'failed') || 'unknown'
-      await options.appendAgentDailyMemory(
-        input.agent,
-        `[turn] failed streaming | prompt: ${options.trimTask(input.message, 120)} | outcome: ${options.trimTask(failure, 220)}`,
-      ).catch(() => undefined)
+      await options.cleanupDoctrineMirrorsAfterRun(input.agent, context.executionWorkspace)
+        .catch((error) => recordMaintenanceIssue('doctrine-cleanup', error))
+
+      const [, doctrineSync] = await Promise.all([
+        options.appendAgentDailyMemory(
+          input.agent,
+          `[turn] completed streaming | prompt: ${options.trimTask(input.message, 120)}${
+            filenameResolution.notes.length ? ` | resolved: ${options.trimTask(filenameResolution.notes.join('; '), 120)}` : ''
+          } | outcome: ${options.trimTask(finalReply, 220)}`,
+        ).catch((error) => recordMaintenanceIssue('daily-memory', error)),
+        options.buildDoctrineSyncReport(input.agent, context.executionWorkspace).catch((error) => {
+          recordMaintenanceIssue('doctrine-report', error)
+          return { ok: false, unavailable: true }
+        }),
+      ])
+
       return {
-        ok: false,
-        reply: failure,
+        ok: true,
+        reply: finalReply,
         stdout: '',
-        stderr: failure,
-        code: 1,
-        failureKind,
+        stderr: '',
+        code: 0,
         modelId,
         provider,
         model,
+        doctrineSync,
+        ...(maintenanceIssues.length ? { maintenance: { ok: false, issues: maintenanceIssues } } : {}),
         runtimeContext: options.agentRuntimeContextPayload(input.agent, context),
         streaming: {
           ...capability,
           configured: true,
           liveTokens: true,
+          sessionId,
+          conversationMessages: options.providerConversationMessageCount(sessionId) || requestMessages.length + 1,
         },
       }
-    }
-
-    await options.cleanupDoctrineMirrorsAfterRun(input.agent, context.executionWorkspace)
-
-    const finalReply = options.sanitizeUserVisibleRuntimeText(streamedReply.content).trim() || 'No response returned.'
-    options.saveProviderConversationTurn(sessionId, provider, modelId, requestMessages, {
-      content: finalReply,
-      reasoningContent: streamedReply.reasoningContent,
-    })
-    await options.appendAgentDailyMemory(
-      input.agent,
-      `[turn] completed streaming | prompt: ${options.trimTask(input.message, 120)}${
-        filenameResolution.notes.length ? ` | resolved: ${options.trimTask(filenameResolution.notes.join('; '), 120)}` : ''
-      } | outcome: ${options.trimTask(finalReply, 220)}`,
-    )
-
-    const doctrineSync = await options.buildDoctrineSyncReport(input.agent, context.executionWorkspace)
-
-    return {
-      ok: true,
-      reply: finalReply,
-      stdout: '',
-      stderr: '',
-      code: 0,
-      modelId,
-      provider,
-      model,
-      doctrineSync,
-      runtimeContext: options.agentRuntimeContextPayload(input.agent, context),
-      streaming: {
-        ...capability,
-        configured: true,
-        liveTokens: true,
-        sessionId,
-        conversationMessages: options.providerConversationMessageCount(sessionId) || requestMessages.length + 1,
-      },
+    } finally {
+      releaseConversationTurn()
     }
   }
 

@@ -1,4 +1,5 @@
 import { Component, type ErrorInfo, type ReactNode } from 'react'
+import { applyDiagnosticRedactions } from '../../utils/diagnosticRedaction'
 import './AppErrorBoundary.css'
 
 const CRASH_EVENTS_KEY = 'automnia.renderer.crash.events'
@@ -38,6 +39,7 @@ interface AppErrorBoundaryState {
   error: SerializableRendererError | null
   guard: RendererCrashSnapshot
   componentStack?: string
+  backgroundError?: SerializableRendererError | null
 }
 
 const emptyGuard: RendererCrashSnapshot = {
@@ -57,9 +59,10 @@ function rendererSessionStorage(): Storage | null {
 }
 
 function trimmedErrorDetail(value: string): string {
-  return value.length > MAX_ERROR_DETAIL_LENGTH
-    ? `${value.slice(0, MAX_ERROR_DETAIL_LENGTH)}...`
-    : value
+  const redacted = applyDiagnosticRedactions(value)
+  return redacted.length > MAX_ERROR_DETAIL_LENGTH
+    ? `${redacted.slice(0, MAX_ERROR_DETAIL_LENGTH)}...`
+    : redacted
 }
 
 function describeUnknownError(value: unknown): string {
@@ -76,8 +79,8 @@ function normalizeRendererError(value: unknown, source: RendererErrorSource): Se
   const timestamp = Date.now()
   if (value instanceof Error) {
     return {
-      name: value.name || 'Error',
-      message: value.message || 'Unknown renderer error',
+      name: trimmedErrorDetail(value.name || 'Error'),
+      message: trimmedErrorDetail(value.message || 'Unknown renderer error'),
       source,
       timestamp,
       stack: value.stack ? trimmedErrorDetail(value.stack) : undefined,
@@ -104,7 +107,7 @@ function readCrashEvents(now = Date.now()): number[] {
       .filter((timestamp) => now - timestamp <= CRASH_WINDOW_MS)
       .slice(-MAX_RECORDED_EVENTS)
   } catch {
-    storage.removeItem(CRASH_EVENTS_KEY)
+    try { storage.removeItem(CRASH_EVENTS_KEY) } catch { /* Recovery remains available without storage. */ }
     return []
   }
 }
@@ -124,7 +127,7 @@ function recordRendererCrash(now = Date.now()): RendererCrashSnapshot {
     try {
       storage.setItem(CRASH_EVENTS_KEY, JSON.stringify(events))
     } catch {
-      storage.removeItem(CRASH_EVENTS_KEY)
+      try { storage.removeItem(CRASH_EVENTS_KEY) } catch { /* Recovery remains available without storage. */ }
     }
   }
   return crashSnapshot(events)
@@ -137,7 +140,7 @@ function dispatchRecordedRendererError(detail: RecordedRendererErrorEvent): void
 export function clearRendererCrashGuard(): void {
   const storage = rendererSessionStorage()
   if (!storage) return
-  storage.removeItem(CRASH_EVENTS_KEY)
+  try { storage.removeItem(CRASH_EVENTS_KEY) } catch { /* Recovery remains available without storage. */ }
 }
 
 export function installGlobalRendererErrorHandlers(): void {
@@ -146,13 +149,13 @@ export function installGlobalRendererErrorHandlers(): void {
 
   window.addEventListener('error', (event) => {
     const error = normalizeRendererError(event.error || event.message, 'window-error')
-    const guard = recordRendererCrash(error.timestamp)
+    const guard = crashSnapshot(readCrashEvents(error.timestamp))
     dispatchRecordedRendererError({ error, guard })
   })
 
   window.addEventListener('unhandledrejection', (event) => {
     const error = normalizeRendererError(event.reason, 'unhandled-rejection')
-    const guard = recordRendererCrash(error.timestamp)
+    const guard = crashSnapshot(readCrashEvents(error.timestamp))
     dispatchRecordedRendererError({ error, guard })
   })
 }
@@ -180,7 +183,7 @@ export class AppErrorBoundary extends Component<AppErrorBoundaryProps, AppErrorB
     this.setState({
       error: normalizedError,
       guard: recordRendererCrash(normalizedError.timestamp),
-      componentStack: errorInfo.componentStack || undefined,
+      componentStack: errorInfo.componentStack ? trimmedErrorDetail(errorInfo.componentStack) : undefined,
     })
   }
 
@@ -192,12 +195,9 @@ export class AppErrorBoundary extends Component<AppErrorBoundaryProps, AppErrorB
     const detail = (event as CustomEvent<RecordedRendererErrorEvent>).detail
     if (!detail?.error) return
 
-    this.setState({
-      hasError: true,
-      error: detail.error,
-      guard: detail.guard,
-      componentStack: undefined,
-    })
+    // An asynchronous task can fail while React is still usable. Keep the
+    // workspace and its drafts mounted; only render failures replace the shell.
+    this.setState({ backgroundError: detail.error })
   }
 
   private handleRetry = (): void => {
@@ -207,6 +207,7 @@ export class AppErrorBoundary extends Component<AppErrorBoundaryProps, AppErrorB
       error: null,
       guard: emptyGuard,
       componentStack: undefined,
+      backgroundError: null,
     })
   }
 
@@ -231,11 +232,20 @@ export class AppErrorBoundary extends Component<AppErrorBoundaryProps, AppErrorB
     ]
     if (error.stack) lines.push('', error.stack)
     if (componentStack) lines.push('', 'React component stack:', componentStack)
-    return lines.join('\n')
+    return applyDiagnosticRedactions(lines.join('\n'))
   }
 
   render(): ReactNode {
-    if (!this.state.hasError) return this.props.children
+    if (!this.state.hasError) return <>
+      {this.state.backgroundError && <aside role="alert" className="fixed bottom-4 left-4 right-4 z-[1000] mx-auto max-w-2xl rounded-xl border border-amber-400/30 bg-slate-950 p-4 text-[13px] text-slate-100 shadow-xl">
+        <div className="flex items-start justify-between gap-3">
+          <p>A background action failed. Your workspace is still available. Retry the affected action when ready.</p>
+          <button type="button" className="shrink-0 rounded border border-white/20 px-3 py-2" onClick={() => this.setState({ backgroundError: null })}>Dismiss</button>
+        </div>
+        <details className="mt-2"><summary>Diagnostic details</summary><pre className="mt-2 max-h-40 overflow-auto whitespace-pre-wrap break-words">{trimmedErrorDetail(this.state.backgroundError.message)}</pre></details>
+      </aside>}
+      {this.props.children}
+    </>
 
     const { error, guard } = this.state
     const title = guard.crashLoopDetected

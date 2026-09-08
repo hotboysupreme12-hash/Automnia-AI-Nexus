@@ -1,12 +1,12 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useId, useMemo, useState } from 'react'
 import type { CSSProperties } from 'react'
 import { useNexusStore } from '../../store/nexusStore'
 import type { CapabilityKey, CollaborationMode, DurationMode, DurationUnit } from '../../types/nexus'
 import { agentPortraitSrc } from '../../utils/portrait'
 import { Badge, Button, StatusChip } from '../ui'
-import { MISSION_PRESET_ASSETS } from './missionIconAssets'
 import type { MissionGlyph } from './missionIconAssets'
 import './MissionDeploymentPanel.css'
+import { MissionTemplates } from './MissionTemplates'
 
 type HeartbeatUnit = 'seconds' | 'minutes' | 'hours'
 type MissionAccent = 'code' | 'plan' | 'research' | 'command' | 'memory' | 'relay'
@@ -193,7 +193,7 @@ function glyphShape(icon: MissionGlyph) {
   }
 }
 
-export function MissionGlyphIcon({ icon, className }: { icon: MissionGlyph; className: string }) {
+export function MissionGlyphIcon({ icon, className = 'dui-flat-glyph' }: { icon: MissionGlyph; className?: string }) {
   return (
     <svg
       viewBox="0 0 48 48"
@@ -253,13 +253,13 @@ const DURATION_MODES: Array<{ id: DurationMode; label: string; hint: string; ico
 
 const PRESETS: Array<{
   label: string; title: string; missionType: CapabilityKey; collaborationMode: CollaborationMode
-  complexity: number; riskTolerance: number; description: string; asset: string; accent: MissionAccent
+  complexity: number; riskTolerance: number; description: string; icon: MissionGlyph; accent: MissionAccent
 }> = [
-  { label: 'Code Sweep', title: 'Critical Code Sweep', missionType: 'codeGeneration', collaborationMode: 'parallel', complexity: 72, riskTolerance: 32, description: 'Audit for bugs, performance issues, broken flows, and safe fixes.', asset: MISSION_PRESET_ASSETS.codeSweep, accent: 'code' },
-  { label: 'Mission Plan', title: 'Mission Plan', missionType: 'planning', collaborationMode: 'specialist', complexity: 58, riskTolerance: 24, description: 'Break objective into owned lanes, risks, and concrete next actions.', asset: MISSION_PRESET_ASSETS.missionPlan, accent: 'plan' },
-  { label: 'Research Map', title: 'Research Map', missionType: 'research', collaborationMode: 'swarm', complexity: 64, riskTolerance: 18, description: 'Map facts, missing evidence, contradictions, and next documents needed.', asset: MISSION_PRESET_ASSETS.researchMap, accent: 'research' },
-  { label: 'Launch Push', title: 'Launch Push', missionType: 'orchestration', collaborationMode: 'hierarchical', complexity: 82, riskTolerance: 42, description: 'Commander delegates implementation, verification, and polish lanes, then synthesizes release status.', asset: MISSION_PRESET_ASSETS.launchPush, accent: 'command' },
-  { label: 'Command Ops', title: 'Commander Delegation Run', missionType: 'orchestration', collaborationMode: 'hierarchical', complexity: 76, riskTolerance: 28, description: 'Lead agent assigns owned lanes, tracks blockers, routes handoffs, and keeps TEAM_SYNC current until completion.', asset: MISSION_PRESET_ASSETS.commandOps, accent: 'command' },
+  { label: 'Code Sweep', title: 'Critical Code Sweep', missionType: 'codeGeneration', collaborationMode: 'parallel', complexity: 72, riskTolerance: 32, description: 'Audit for bugs, performance issues, broken flows, and safe fixes.', icon: 'code', accent: 'code' },
+  { label: 'Mission Plan', title: 'Mission Plan', missionType: 'planning', collaborationMode: 'specialist', complexity: 58, riskTolerance: 24, description: 'Break objective into owned lanes, risks, and concrete next actions.', icon: 'plan', accent: 'plan' },
+  { label: 'Research Map', title: 'Research Map', missionType: 'research', collaborationMode: 'swarm', complexity: 64, riskTolerance: 18, description: 'Map facts, missing evidence, contradictions, and next documents needed.', icon: 'research', accent: 'research' },
+  { label: 'Launch Push', title: 'Launch Push', missionType: 'orchestration', collaborationMode: 'hierarchical', complexity: 82, riskTolerance: 42, description: 'Commander delegates implementation, verification, and polish lanes, then synthesizes release status.', icon: 'launch', accent: 'command' },
+  { label: 'Command Ops', title: 'Commander Delegation Run', missionType: 'orchestration', collaborationMode: 'hierarchical', complexity: 76, riskTolerance: 28, description: 'Lead agent assigns owned lanes, tracks blockers, routes handoffs, and keeps TEAM_SYNC current until completion.', icon: 'command', accent: 'command' },
 ]
 
 const PRESET_OBJECTIVES = new Set(PRESETS.map((preset) => preset.description.trim()))
@@ -315,6 +315,7 @@ function formatNextMissionRun(nextRoundAt: string | null | undefined): string {
 }
 
 export function MissionDeploymentPanel() {
+  const fieldId = useId()
   const agents = useNexusStore((s) => s.agents)
   const missionDraft = useNexusStore((s) => s.missionDraft)
   const activePartyIds = useNexusStore((s) => s.activePartyIds)
@@ -371,9 +372,10 @@ export function MissionDeploymentPanel() {
       : `${activeMission?.scheduler?.status || 'preparing'} / cycle ${activeMission?.scheduler?.round ?? 0}`
   const currentType = MISSION_TYPES.find((type) => type.id === missionDraft.missionType) || MISSION_TYPES[0]
   const currentMode = COLLAB_MODES.find((mode) => mode.id === missionDraft.collaborationMode) || COLLAB_MODES[0]
-  const activePreset = PRESETS.find(
+  const matchingPreset = PRESETS.find(
     (preset) => preset.title === missionDraft.title && preset.missionType === missionDraft.missionType,
   )
+  const activePreset = matchingPreset && matchingPreset.collaborationMode === missionDraft.collaborationMode && matchingPreset.complexity === missionDraft.complexity && matchingPreset.riskTolerance === missionDraft.riskTolerance && matchingPreset.description === missionDraft.description ? matchingPreset : undefined
   const missionDisplayName = missionDraft.title.trim() || 'Custom setup'
   const objectiveCue = !objectiveLength
     ? 'Needs objective'
@@ -421,17 +423,23 @@ export function MissionDeploymentPanel() {
   }
 
   return (
-    <div className="dui-mission-wrap">
-      <section data-dui-panel="missions" className="dui-mission-screen">
+    <div className="dui-mission-wrap dui-missions-polished">
+      <header className="dui-missions-page-head">
+        <div><span>Mission control</span><h2>Missions</h2><p>Define the outcome. Assemble your team. Put your agents to work.</p></div>
+        <div className="dui-missions-page-status" data-active={missionRunning || missionLaunchPending}>
+          <i aria-hidden="true" />{missionLaunchPending ? 'Launching mission' : missionRunning ? 'Mission active' : 'New mission'}
+        </div>
+      </header>
+      <section data-dui-panel="missions" className="dui-mission-screen dui-mission-polished">
         <div className="dui-mission-stage">
-          <main className="dui-mission-main dui-mission-main--organized">
+          <div className="dui-mission-main dui-mission-main--organized">
             <div className="dui-card dui-template-card dui-template-card--organized">
               <div className="dui-section-head">
                 <div>
-                  <span>Mission Presets</span>
-                  <strong>{activePreset?.label || missionDisplayName}</strong>
+                  <span>Quick start</span>
+                  <strong>Start with a template</strong>
                 </div>
-                <p>Preset shapes</p>
+                <div className="flex flex-wrap items-center gap-2"><p>{activePreset?.label || (matchingPreset ? `${matchingPreset.label} · Customized` : missionDisplayName)}</p><MissionTemplates /></div>
               </div>
               <div className="dui-template-strip">
                 {PRESETS.map((preset) => (
@@ -444,17 +452,7 @@ export function MissionDeploymentPanel() {
                     className={`dui-template-tile ${activePreset?.label === preset.label ? 'is-active' : ''}`}
                   >
                     <span className="dui-template-art">
-                      <img
-                        src={preset.asset}
-                        alt=""
-                        aria-hidden="true"
-                        draggable={false}
-                        width={72}
-                        height={72}
-                        loading="eager"
-                        decoding="async"
-                        className="dui-template-icon"
-                      />
+                      <FlatGlyph icon={preset.icon} />
                     </span>
                     <span className="dui-template-copy">
                       <strong>{preset.label}</strong>
@@ -468,8 +466,8 @@ export function MissionDeploymentPanel() {
             <div className="dui-card dui-mission-config-card">
               <div className="dui-section-head">
                 <div>
-                  <span>Mission Setup</span>
-                  <strong>{currentMode.label} / {currentType.label}</strong>
+                  <span>01 / Configuration</span>
+                  <strong>Shape your mission</strong>
                 </div>
                 <p>{currentMode.hint}</p>
               </div>
@@ -488,12 +486,13 @@ export function MissionDeploymentPanel() {
               )}
               <div className="dui-mission-config-grid">
                 <div className="dui-field dui-mission-title-field">
-                  <label>Mission title</label>
+                  <label htmlFor={`${fieldId}-title`}>Mission title</label>
                   <input
+                    id={`${fieldId}-title`}
                     type="text"
                     value={missionDraft.title}
                     onChange={(e) => updateMissionDraft({ title: e.target.value })}
-                    placeholder="Name the operation"
+                    placeholder="Give your mission a clear name"
                     className="dui-control"
                   />
                 </div>
@@ -501,7 +500,7 @@ export function MissionDeploymentPanel() {
                 <div className="dui-mission-choice-group dui-mission-choice-group--mode">
                   <div className="dui-choice-head">
                     <div>
-                      <span>Dispatch mode</span>
+                      <span>How your team works</span>
                       <strong>{currentMode.label}</strong>
                     </div>
                     <p>{currentMode.hint}</p>
@@ -564,14 +563,89 @@ export function MissionDeploymentPanel() {
             </div>
             </div>
 
-          </main>
+            <section className="dui-card dui-mission-bottom-objective">
+              <div className="dui-section-head">
+                <div>
+                  <span>02 / Objective</span>
+                  <strong>What does success look like?</strong>
+                </div>
+              </div>
+              <textarea
+                id={`${fieldId}-objective`}
+                aria-label="Mission objective"
+                aria-describedby={`${fieldId}-objective-hint`}
+                value={missionDraft.description}
+                rows={4}
+                onChange={(e) => updateMissionDraft({ description: e.target.value })}
+                placeholder="Describe the outcome, key requirements, and what your team should deliver…"
+                className="dui-control dui-textarea"
+              />
+              <p id={`${fieldId}-objective-hint`} className="dui-objective-hint"><span>{objectiveCue} · At least 20 characters.</span><span>{missionDraft.description.trim().length} characters</span></p>
+            </section>
+
+            <section className="dui-card dui-mission-bottom-cron">
+              <div className="dui-section-head compact">
+                <div>
+                  <span>03 / Schedule</span>
+                  <strong>{selectedHeartbeat ? `Run now · then ${selectedHeartbeat.mixed ? `${formatHeartbeat(selectedHeartbeat.min)}-${formatHeartbeat(selectedHeartbeat.max)}` : formatHeartbeat(selectedHeartbeat.min)}` : 'Set a cadence'}</strong>
+                </div>
+                <p>{missionDraft.durationMode}</p>
+              </div>
+              <div className="dui-cadence-grid">
+                <input aria-label="Party cadence interval" type="number" inputMode="numeric" min={1} value={heartbeatValue} onChange={(e) => setHeartbeatValue(Number(e.target.value))} className="dui-control dui-cadence-number" />
+                <select aria-label="Party cadence unit" value={heartbeatUnit} onChange={(e) => setHeartbeatUnit(e.target.value as HeartbeatUnit)} className="dui-control dui-cadence-unit">
+                  <option value="seconds">Seconds</option>
+                  <option value="minutes">Minutes</option>
+                  <option value="hours">Hours</option>
+                </select>
+                <Button type="button" onClick={applyHeartbeatToParty} disabled={!selectedAgents.length || missionRunning} className="dui-secondary-button" variant="secondary" size="compact">
+                  Apply Cadence
+                </Button>
+              </div>
+              <p className="dui-mission-schedule-note">Deploy starts the first cycle immediately. The cadence controls later cycles only.</p>
+
+              <div className="dui-loadout-head">
+                <span>Team capacity</span>
+                <div className="dui-avatar-stack">
+                  {effectiveAgents.slice(0, 6).map((agent) => {
+                    const portraitSrc = agentPortraitSrc(agent.id, agent.portrait)
+                    const portraitKey = `${agent.id}::${portraitSrc}`
+                    const portraitFailed = portraitSrc ? failedPortraitKeys.has(portraitKey) : false
+                    return (
+                      <div key={agent.id}>
+                        {portraitSrc && !portraitFailed ? (
+                          <img
+                            src={portraitSrc}
+                            alt=""
+                            onError={() => setFailedPortraitKeys((current) => new Set(current).add(portraitKey))}
+                          />
+                        ) : <span>{agent.name.charAt(0)}</span>}
+                      </div>
+                    )
+                  })}
+                </div>
+              </div>
+              <div className="dui-meter-grid">
+                {([
+                  ['Complexity', missionDraft.complexity, 'complexity'] as const,
+                  ['Risk', missionDraft.riskTolerance, 'risk'] as const,
+                  ['Lanes', Math.min(100, effectiveAgents.length * 17), 'complexity'] as const,
+                ]).map(([label, value, kind]) => (
+                  <div key={label} className="dui-meter" data-tone={label === 'Lanes' ? 'cool' : gaugeTone(value, kind)}>
+                    <div><span>{label}</span><strong>{label === 'Lanes' ? effectiveAgents.length : `${value}%`}</strong></div>
+                    <div className="dui-progress-track"><div className="dui-progress-fill" style={{ width: `${value}%` }} /></div>
+                  </div>
+                ))}
+              </div>
+            </section>
+          </div>
 
           <aside className="dui-mission-sidebar">
             <div className="dui-card dui-agents-card">
               <div className="dui-section-head">
                 <div>
-                  <span>Agents</span>
-                  <strong>{effectiveAgents.length || 0} ready</strong>
+                  <span>Your team</span>
+                  <strong>{effectiveAgents.length || 0} agent{effectiveAgents.length === 1 ? '' : 's'} ready</strong>
                 </div>
                 <p>{missionLaunchPending ? 'Launching now' : missionRunning ? activeMission.scheduler?.status === 'running' ? 'Agents running' : 'Schedule active' : 'Standing by'}</p>
               </div>
@@ -614,6 +688,7 @@ export function MissionDeploymentPanel() {
                       <div className="dui-agent-cadence">
                         <input
                           type="number"
+                          aria-label={`${agent.name} cadence interval`}
                           inputMode="numeric"
                           min={1}
                           value={heartbeat.value}
@@ -622,6 +697,7 @@ export function MissionDeploymentPanel() {
                           className="dui-control dui-cadence-number"
                         />
                         <select
+                          aria-label={`${agent.name} cadence unit`}
                           value={heartbeat.unit}
                           disabled={missionRunning}
                           onChange={(e) => applyHeartbeatToAgent(agent.id, heartbeat.value, e.target.value as HeartbeatUnit)}
@@ -635,96 +711,21 @@ export function MissionDeploymentPanel() {
                     </div>
                   )
                 })}
-                {!selectedAgents.length && <div className="dui-empty-state">Add agents from the registry first.</div>}
+                {!selectedAgents.length && <div className="dui-empty-state"><MissionGlyphIcon icon="command" /><strong>Every mission starts with a team</strong><p>Add agents to your active party from the Agents tab. They’ll appear here, ready to deploy.</p></div>}
               </div>
             </div>
-          </aside>
-
-          <div className="dui-card dui-mission-bottom-card">
-            <section className="dui-mission-bottom-objective">
-              <div className="dui-section-head">
-                <div>
-                  <span>Objective</span>
-                  <strong>{objectiveCue}</strong>
-                </div>
-              </div>
-              <textarea
-                value={missionDraft.description}
-                rows={4}
-                onChange={(e) => updateMissionDraft({ description: e.target.value })}
-                placeholder="What should the active party accomplish?"
-                className="dui-control dui-textarea"
-              />
-            </section>
-
-            <section className="dui-mission-bottom-cron">
-              <div className="dui-section-head compact">
-                <div>
-                  <span>Mission Cron</span>
-                  <strong>{selectedHeartbeat ? `Run now · then ${selectedHeartbeat.mixed ? `${formatHeartbeat(selectedHeartbeat.min)}-${formatHeartbeat(selectedHeartbeat.max)}` : formatHeartbeat(selectedHeartbeat.min)}` : 'Set a cadence'}</strong>
-                </div>
-                <p>{missionDraft.durationMode}</p>
-              </div>
-              <div className="dui-cadence-grid">
-                <input type="number" inputMode="numeric" min={1} value={heartbeatValue} onChange={(e) => setHeartbeatValue(Number(e.target.value))} className="dui-control dui-cadence-number" />
-                <select value={heartbeatUnit} onChange={(e) => setHeartbeatUnit(e.target.value as HeartbeatUnit)} className="dui-control dui-cadence-unit">
-                  <option value="seconds">Seconds</option>
-                  <option value="minutes">Minutes</option>
-                  <option value="hours">Hours</option>
-                </select>
-                <Button type="button" onClick={applyHeartbeatToParty} disabled={!selectedAgents.length || missionRunning} className="dui-secondary-button" variant="secondary" size="compact">
-                  Apply Cadence
-                </Button>
-              </div>
-              <p className="dui-mission-schedule-note">Deploy starts the first cycle immediately. The cadence controls later cycles only.</p>
-
-              <div className="dui-loadout-head">
-                <span>Active Loadout</span>
-                <div className="dui-avatar-stack">
-                  {effectiveAgents.slice(0, 6).map((agent) => {
-                    const portraitSrc = agentPortraitSrc(agent.id, agent.portrait)
-                    const portraitKey = `${agent.id}::${portraitSrc}`
-                    const portraitFailed = portraitSrc ? failedPortraitKeys.has(portraitKey) : false
-                    return (
-                      <div key={agent.id}>
-                        {portraitSrc && !portraitFailed ? (
-                          <img
-                            src={portraitSrc}
-                            alt=""
-                            onError={() => setFailedPortraitKeys((current) => new Set(current).add(portraitKey))}
-                          />
-                        ) : <span>{agent.name.charAt(0)}</span>}
-                      </div>
-                    )
-                  })}
-                </div>
-              </div>
-              <div className="dui-meter-grid">
-                {([
-                  ['Complexity', missionDraft.complexity, 'complexity'] as const,
-                  ['Risk', missionDraft.riskTolerance, 'risk'] as const,
-                  ['Lanes', Math.min(100, effectiveAgents.length * 17), 'complexity'] as const,
-                ]).map(([label, value, kind]) => (
-                  <div key={label} className="dui-meter" data-tone={label === 'Lanes' ? 'cool' : gaugeTone(value, kind)}>
-                    <div><span>{label}</span><strong>{label === 'Lanes' ? effectiveAgents.length : `${value}%`}</strong></div>
-                    <div className="dui-progress-track"><div className="dui-progress-fill" style={{ width: `${value}%` }} /></div>
-                  </div>
-                ))}
-              </div>
-            </section>
-
-            <section className="dui-mission-bottom-tuning">
+            <section className="dui-card dui-mission-bottom-tuning">
               <div className="dui-section-head dui-section-head--dispatch">
                 <div>
-                  <span>Dispatch Mode</span>
-                  <strong>{currentMode.label}</strong>
+                  <span>04 / Review & launch</span>
+                  <strong>Review your mission</strong>
                 </div>
-                <div className="dui-readiness-mini" data-tone={readinessState} aria-label={`Launch readiness ${readinessScore}%`}>
+                <div className="dui-readiness-mini" data-tone={readinessState}>
                   <div className="dui-readiness-mini-head">
-                    <span>Launch readiness</span>
+                    <span>Form readiness</span>
                     <strong>{readinessScore}%</strong>
                   </div>
-                  <div className="dui-progress-track">
+                  <div className="dui-progress-track" role="meter" aria-label="Mission form readiness" aria-valuemin={0} aria-valuemax={100} aria-valuenow={readinessScore}>
                     <div className="dui-progress-fill" style={{ width: `${readinessScore}%` }} />
                   </div>
                   <div className="dui-readiness-mini-checks" aria-hidden="true">
@@ -732,9 +733,17 @@ export function MissionDeploymentPanel() {
                       <i key={check.label} className={check.ready ? 'is-ready' : 'is-missing'} title={check.label} />
                     ))}
                   </div>
+                  <ul className="dui-readiness-checklist">
+                    {checks.map((check) => <li key={check.label} data-ready={check.ready}><span aria-hidden="true">{check.ready ? '✓' : '○'}</span> {check.label}: {check.ready ? 'ready' : <button type="button" className="underline underline-offset-2" onClick={() => {
+                      if (check.label === 'Party') { useNexusStore.getState().setTab('agents'); return }
+                      const control = document.getElementById(`${fieldId}-${check.label === 'Title' ? 'title' : 'objective'}`)
+                      control?.scrollIntoView({ block: 'center', behavior: 'instant' }); control?.focus({ preventScroll: true })
+                    }}>Add {check.label.toLowerCase()}</button>}</li>)}
+                  </ul>
                 </div>
               </div>
               <p className="dui-dispatch-copy">{currentMode.detail}</p>
+              <p className="text-[12px] text-slate-400">Form readiness checks your inputs. Provider access and agent runtime are checked when you launch.</p>
               <div className="dui-stat-grid">
                 <div><span>Eligible</span><strong>{effectiveAgents.length}</strong></div>
                 <div><span>Fit</span><strong>{capabilityCoverage}%</strong></div>
@@ -750,6 +759,8 @@ export function MissionDeploymentPanel() {
                     <span>{label}<strong>{value}%</strong></span>
                     <input
                       type="range"
+                      aria-label={label}
+                      aria-valuetext={`${value}%`}
                       className="dy-colored-range"
                       min={1}
                       max={100}
@@ -762,7 +773,7 @@ export function MissionDeploymentPanel() {
               </div>
 
               <div className="dui-action-grid">
-                <Button type="button" onClick={() => setShowTiming((v) => !v)} className="dui-secondary-button" variant="secondary" size="compact">
+                <Button type="button" aria-expanded={showTiming} aria-controls={`${fieldId}-timing`} onClick={() => setShowTiming((v) => !v)} className="dui-secondary-button" variant="secondary" size="compact">
                   Timing <span>{missionDraft.durationMode}</span>
                 </Button>
                 <Button
@@ -778,7 +789,7 @@ export function MissionDeploymentPanel() {
               </div>
 
               {showTiming && (
-                <div className="dui-timing-panel dy-surface-enter">
+                <div id={`${fieldId}-timing`} className="dui-timing-panel dy-surface-enter">
                   <div className="dui-duration-grid">
                     {DURATION_MODES.map((mode) => (
                       <button
@@ -802,8 +813,8 @@ export function MissionDeploymentPanel() {
                   </div>
                   {missionDraft.durationMode === 'timed' && (
                     <div className="dui-timed-row">
-                      <input type="number" min={1} value={missionDraft.durationValue} onChange={(e) => updateMissionDraft({ durationValue: Number(e.target.value) })} className="dui-control" />
-                      <select value={missionDraft.durationUnit} onChange={(e) => updateMissionDraft({ durationUnit: e.target.value as DurationUnit })} className="dui-control">
+                      <input aria-label="Mission duration" type="number" min={1} value={missionDraft.durationValue} onChange={(e) => updateMissionDraft({ durationValue: Number(e.target.value) })} className="dui-control" />
+                      <select aria-label="Mission duration unit" value={missionDraft.durationUnit} onChange={(e) => updateMissionDraft({ durationUnit: e.target.value as DurationUnit })} className="dui-control">
                         <option value="hours">Hours</option>
                         <option value="days">Days</option>
                         <option value="weeks">Weeks</option>
@@ -819,7 +830,9 @@ export function MissionDeploymentPanel() {
                 </Button>
               )}
             </section>
-          </div>
+          </aside>
+
+
         </div>
       </section>
 

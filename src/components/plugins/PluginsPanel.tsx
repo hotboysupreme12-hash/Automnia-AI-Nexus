@@ -1,3 +1,4 @@
+import { useRememberedState } from '../../hooks/useRememberedState'
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import {
   fetchPlugins,
@@ -831,17 +832,22 @@ function PluginDiscoveryPanel({
 
   return (
     <section className="dy-plugin-discovery">
+      <div className="mb-3 flex flex-wrap gap-2" role="group" aria-label="Plugin search scope">
+        <Button size="compact" variant="quiet" aria-pressed={!clawHubMode} onClick={() => { if (clawHubMode) setQuery(clawHubQuery) }}>Installed plugins</Button>
+        <Button size="compact" variant="quiet" aria-pressed={clawHubMode} onClick={() => { if (!clawHubMode) setQuery(`/clawhub ${query}`) }}>ClawHub catalog</Button>
+      </div>
       <div className="dy-plugin-discovery-search">
         <div className="dy-plugin-search-field">
           <span className="dy-plugin-search-icon" aria-hidden="true">⌕</span>
           <input
             data-plugin-search="true"
+            aria-label={clawHubMode ? 'Search ClawHub catalog' : 'Filter installed plugins'}
             value={query}
             onChange={(event) => setQuery(event.target.value)}
             onKeyDown={(event) => {
               if (event.key === 'Enter') void searchPlugins()
             }}
-            placeholder="Search installed plugins or type /clawhub to discover"
+            placeholder={clawHubMode ? 'Search ClawHub catalog' : 'Filter installed plugins'}
             className="dy-plugin-search-input"
           />
         </div>
@@ -924,7 +930,7 @@ function PluginDiscoveryPanel({
 
 export function PluginsPanel({ focusQuery = '' }: { focusQuery?: string }) {
   const [plugins, setPlugins] = useState<PluginEntry[]>(() => pluginsPanelCache?.plugins || [])
-  const [query, setQuery] = useState('')
+  const [query, setQuery] = useRememberedState('plugins-query', '')
   const [filter, setFilter] = useState<PluginFilter>(() => readPluginFilter())
   const [loading, setLoading] = useState(() => !pluginsPanelCache)
   const [error, setError] = useState('')
@@ -933,7 +939,7 @@ export function PluginsPanel({ focusQuery = '' }: { focusQuery?: string }) {
   const [updatingId, setUpdatingId] = useState<string | null>(null)
   const [refreshingId, setRefreshingId] = useState<string | null>(null)
   const [setupPlugin, setSetupPlugin] = useState<PluginEntry | null>(null)
-  const [expandedPluginId, setExpandedPluginId] = useState<string | null>(null)
+  const [expandedPluginId, setExpandedPluginId] = useRememberedState<string | null>('plugins-expanded', null)
   const [busyPluginAction, setBusyPluginAction] = useState<{ id: string; action: PluginBusyAction } | null>(null)
   const [inspectState, setInspectState] = useState<PluginInspectState | null>(null)
   const [uninstallConfirmPlugin, setUninstallConfirmPlugin] = useState<PluginEntry | null>(null)
@@ -951,7 +957,7 @@ export function PluginsPanel({ focusQuery = '' }: { focusQuery?: string }) {
     window.requestAnimationFrame(() => {
       document.querySelector<HTMLInputElement>('[data-plugin-search]')?.focus()
     })
-  }, [focusQuery])
+  }, [focusQuery, setQuery])
 
   const applyPayload = useCallback((payload: PluginApiPayload) => {
     if (Array.isArray(payload.plugins)) {
@@ -1074,7 +1080,7 @@ export function PluginsPanel({ focusQuery = '' }: { focusQuery?: string }) {
 
   const managePlugin = useCallback((plugin: PluginEntry) => {
     setExpandedPluginId((current) => current === plugin.id ? null : plugin.id)
-  }, [])
+  }, [setExpandedPluginId])
 
   const updatePlugin = useCallback(async (plugin: PluginEntry) => {
     setBusyPluginAction({ id: plugin.id, action: 'update' })
@@ -1166,14 +1172,14 @@ export function PluginsPanel({ focusQuery = '' }: { focusQuery?: string }) {
     } finally {
       setBusyPluginAction(null)
     }
-  }, [applyPayload])
+  }, [applyPayload, setExpandedPluginId])
 
   const requestUninstallPlugin = useCallback((plugin: PluginEntry) => {
     setError('')
     setNotice(`Review before uninstalling ${plugin.name}.`)
     setUninstallConfirmPlugin(plugin)
     setExpandedPluginId(plugin.id)
-  }, [])
+  }, [setExpandedPluginId])
 
   const keepPluginInstalled = useCallback(() => {
     if (uninstallConfirmPlugin) setNotice(`${uninstallConfirmPlugin.name} kept installed.`)
@@ -1336,7 +1342,7 @@ export function PluginsPanel({ focusQuery = '' }: { focusQuery?: string }) {
         )}
       </div>
 
-      <div className="dy-plugins-scroll min-h-0 flex-1 overflow-y-auto overflow-x-hidden">
+      <div data-workspace-scroll="plugins" className="dy-plugins-scroll min-h-0 flex-1 overflow-y-auto overflow-x-hidden">
         <div className="dy-plugins-list min-h-full p-4">
           <div className="dy-plugins-card-grid">
             {setupPlugin && (

@@ -1,8 +1,9 @@
 import { createRequire } from 'node:module'
 import path from 'node:path'
-import { chmodSync, existsSync, mkdirSync, readFileSync, statSync } from 'node:fs'
+import { chmodSync, createReadStream, existsSync, mkdirSync, readFileSync, statSync } from 'node:fs'
 import { promises as fs } from 'node:fs'
 import { createHash, randomUUID } from 'node:crypto'
+import { reconcileLedgerRecords } from './services/filesystem/ledgerReconciliation'
 
 type SqliteStatement = {
   all: (...params: unknown[]) => Array<Record<string, unknown>>
@@ -40,6 +41,7 @@ type LedgerAppendOptions = {
 
 type LedgerReadOptions = {
   sqlite?: boolean
+  missionId?: string
 }
 
 type ControlCenterStateWriteOptions = {
@@ -69,10 +71,21 @@ const LEDGER_TAIL_MAX_BYTES = 512 * 1024
 let paths: LedgerPaths | null = null
 let database: SqliteDatabase | null = null
 let sqliteUnavailableReason = ''
+let sqliteWriteWarning = ''
 let legacyImportWarning = ''
 let jsonlTailDiagnostic: JsonlTailDiagnostic | null = null
 let legacyImportTimer: NodeJS.Timeout | null = null
 let legacyImportScheduled = false
+const preparedStatements = new WeakMap<SqliteDatabase, Map<string, SqliteStatement>>()
+const appendQueues = new Map<string, Promise<void>>()
+
+function preparedStatement(db: SqliteDatabase, sql: string) {
+  let cache = preparedStatements.get(db)
+  if (!cache) { cache = new Map(); preparedStatements.set(db, cache) }
+  let statement = cache.get(sql)
+  if (!statement) { statement = db.prepare(sql); cache.set(sql, statement) }
+  return statement
+}
 
 export function configureRuntimeLedger(input: Omit<LedgerPaths, 'sqlite'> & { sqlite?: string }) {
   const nextPaths = {
@@ -82,6 +95,7 @@ export function configureRuntimeLedger(input: Omit<LedgerPaths, 'sqlite'> & { sq
   if (database && paths?.sqlite !== nextPaths.sqlite) closeRuntimeLedger()
   paths = nextPaths
   sqliteUnavailableReason = ''
+  sqliteWriteWarning = ''
   legacyImportWarning = ''
   jsonlTailDiagnostic = null
   if (legacyImportTimer) clearTimeout(legacyImportTimer)
@@ -119,10 +133,17 @@ async function readJsonlLedgerTail<T>(ledger: string, filePath: string, limit: n
     const handle = await fs.open(filePath, 'r')
     try {
       const buffer = Buffer.alloc(stat.size - start)
-      await handle.read(buffer, 0, buffer.length, start)
-      let text = buffer.toString('utf-8')
+      let bytesRead = 0
+      while (bytesRead < buffer.length) {
+        const read = await handle.read(buffer, bytesRead, buffer.length - bytesRead, start + bytesRead)
+        if (!read.bytesRead) break
+        bytesRead += read.bytesRead
+      }
+      let text = buffer.subarray(0, bytesRead).toString('utf-8')
       let discardedPartialLine = false
-      if (start > 0) {
+      const previousByte = Buffer.alloc(1)
+      if (start > 0) await handle.read(previousByte, 0, 1, start - 1)
+      if (start > 0 && previousByte[0] !== 10) {
         const firstNewlineIndex = text.search(/\r?\n/)
         if (firstNewlineIndex === -1) {
           recordJsonlTailDiagnostic({
@@ -186,6 +207,62 @@ async function readJsonlLedgerTail<T>(ledger: string, filePath: string, limit: n
   }
 }
 
+async function readMissionJsonlLedgerTail<T>(ledger: string, filePath: string, limit: number, missionId?: string): Promise<T[]> {
+  if (!missionId) return readJsonlLedgerTail<T>(ledger, filePath, limit)
+  const normalizedLimit = Math.max(1, Math.min(2000, Math.round(Number.isFinite(limit) ? limit : 1)))
+  let handle: Awaited<ReturnType<typeof fs.open>> | undefined
+  let malformedRows = 0
+  let offset = 0
+  try {
+    handle = await fs.open(filePath, 'r')
+    offset = (await handle.stat()).size
+    let partialLine = Buffer.alloc(0)
+    const newest: T[] = []
+    const accept = (line: Buffer) => {
+      const text = line.toString('utf-8').trim()
+      if (!text) return
+      try {
+        const record = JSON.parse(text) as Record<string, unknown> | null
+        if (record && record.missionId === missionId) newest.push(record as T)
+      } catch {
+        malformedRows += 1
+      }
+    }
+    // Search backwards in bounded chunks. A busy unrelated mission must not
+    // displace this mission's history from either the row or byte tail limit.
+    while (offset > 0 && newest.length < normalizedLimit) {
+      const start = Math.max(0, offset - LEDGER_TAIL_MAX_BYTES)
+      const chunk = Buffer.alloc(offset - start)
+      const { bytesRead } = await handle.read(chunk, 0, chunk.length, start)
+      const data = Buffer.concat([chunk.subarray(0, bytesRead), partialLine])
+      let end = data.length
+      while (end > 0 && newest.length < normalizedLimit) {
+        const newline = data.lastIndexOf(0x0a, end - 1)
+        if (newline < 0) break
+        accept(data.subarray(newline + 1, end))
+        end = newline
+      }
+      partialLine = data.subarray(0, end)
+      offset = start
+      if (offset === 0 && newest.length < normalizedLimit) accept(partialLine)
+    }
+    recordJsonlTailDiagnostic(malformedRows ? {
+      ledger, filePath, startOffset: offset, malformedRows, discardedPartialLine: false,
+      message: `Skipped ${malformedRows} malformed JSONL row(s) while reading ${ledger} for mission ${missionId}.`,
+    } : null)
+    return newest.reverse()
+  } catch (error) {
+    const nodeError = error as NodeJS.ErrnoException
+    if (nodeError.code !== 'ENOENT') recordJsonlTailDiagnostic({
+      ledger, filePath, startOffset: offset, malformedRows, discardedPartialLine: false,
+      message: `Failed to read JSONL ledger ${ledger}: ${nodeError.message || String(error)}`,
+    })
+    return []
+  } finally {
+    await handle?.close()
+  }
+}
+
 function openDatabase() {
   if (database) return database
   if (sqliteUnavailableReason) return null
@@ -239,9 +316,6 @@ function openDatabase() {
         created_at_ms INTEGER NOT NULL,
         payload_json TEXT NOT NULL
       );
-      CREATE UNIQUE INDEX IF NOT EXISTS idx_gateway_events_source_key
-        ON gateway_events(source_key)
-        WHERE source_key IS NOT NULL;
       CREATE INDEX IF NOT EXISTS idx_gateway_events_recent
         ON gateway_events(timestamp, created_at_ms);
 
@@ -351,10 +425,26 @@ function openDatabase() {
       CREATE INDEX IF NOT EXISTS idx_agency_agent_templates_search
         ON agency_agent_templates(name, description, division_label);
     `)
+    // Older installations predate source_key. Inspect the schema before
+    // creating its index; creating the index first prevents those databases
+    // from opening and never reaches the migration.
+    database.exec('BEGIN IMMEDIATE;')
     try {
-      database.exec('ALTER TABLE gateway_events ADD COLUMN source_key TEXT;')
-    } catch {
-      // Existing databases already have the legacy import key column.
+      const columns = database.prepare('PRAGMA table_info(gateway_events)').all()
+      if (!columns.some((column) => column.name === 'source_key')) {
+        database.exec('ALTER TABLE gateway_events ADD COLUMN source_key TEXT;')
+      }
+      database.exec(`
+        CREATE UNIQUE INDEX IF NOT EXISTS idx_gateway_events_source_key
+          ON gateway_events(source_key)
+          WHERE source_key IS NOT NULL;
+        CREATE INDEX IF NOT EXISTS idx_mission_reports_mission_recent
+          ON mission_reports(mission_id, generated_at, created_at_ms);
+        COMMIT;
+      `)
+    } catch (error) {
+      database.exec('ROLLBACK;')
+      throw error
     }
     return database
   } catch (error) {
@@ -402,7 +492,7 @@ function insertSqliteLedgerInto(
   const payload = JSON.stringify(value)
   const createdAtMs = options.createdAtMs ?? Date.now()
   if (kind === 'runtime_run') {
-    db.prepare(`
+    preparedStatement(db, `
       INSERT OR REPLACE INTO runtime_runs
         (id, started_at, ended_at, status, agent_id, session_id, created_at_ms, payload_json)
       VALUES (?, ?, ?, ?, ?, ?, ?, ?)
@@ -420,7 +510,7 @@ function insertSqliteLedgerInto(
   }
 
   if (kind === 'gateway_event') {
-    db.prepare(`
+    preparedStatement(db, `
       INSERT OR IGNORE INTO gateway_events
         (source_key, timestamp, stream, channel, direction, message, created_at_ms, payload_json)
       VALUES (?, ?, ?, ?, ?, ?, ?, ?)
@@ -438,7 +528,7 @@ function insertSqliteLedgerInto(
   }
 
   if (kind === 'mission_record') {
-    db.prepare(`
+    preparedStatement(db, `
       INSERT OR REPLACE INTO mission_records
         (mission_id, status, lifecycle_state, updated_at, created_at_ms, payload_json)
       VALUES (?, ?, ?, ?, ?, ?)
@@ -454,7 +544,7 @@ function insertSqliteLedgerInto(
   }
 
   if (kind === 'mission_event') {
-    db.prepare(`
+    preparedStatement(db, `
       INSERT OR IGNORE INTO mission_events
         (id, mission_id, timestamp, actor, previous_state, next_state, event_type, idempotency_key, created_at_ms, payload_json)
       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
@@ -474,7 +564,7 @@ function insertSqliteLedgerInto(
   }
 
   if (kind === 'mission_report') {
-    db.prepare(`
+    preparedStatement(db, `
       INSERT OR REPLACE INTO mission_reports
         (id, mission_id, generated_at, created_at_ms, payload_json)
       VALUES (?, ?, ?, ?, ?)
@@ -488,7 +578,7 @@ function insertSqliteLedgerInto(
     return true
   }
 
-  db.prepare(`
+  preparedStatement(db, `
     INSERT OR REPLACE INTO diagnostic_runs
       (id, started_at, ended_at, ok, created_at_ms, payload_json)
     VALUES (?, ?, ?, ?, ?, ?)
@@ -506,11 +596,19 @@ function insertSqliteLedgerInto(
 function insertSqliteLedger(kind: LedgerKind, value: Record<string, unknown>) {
   const db = openDatabase()
   if (!db) return false
-  return insertSqliteLedgerInto(db, kind, value)
+  try {
+    return insertSqliteLedgerInto(db, kind, value, {
+      sourceKey: kind === 'gateway_event' ? sourceKeyForJsonlLine('gateway-events', JSON.stringify(value)) : undefined,
+    })
+  } catch (error) {
+    const reason = error instanceof Error ? error.message : String(error)
+    sqliteWriteWarning = `SQLite ${kind} write failed; using JSONL fallback: ${reason}`
+    return false
+  }
 }
 
 function legacyImportIsCurrent(db: SqliteDatabase, ledger: string, sourceSize: number, sourceMtimeMs: number) {
-  const row = db.prepare(`
+  const row = preparedStatement(db, `
     SELECT source_size, source_mtime_ms
     FROM ledger_imports
     WHERE ledger = ?
@@ -519,7 +617,7 @@ function legacyImportIsCurrent(db: SqliteDatabase, ledger: string, sourceSize: n
 }
 
 function markLegacyImportCurrent(db: SqliteDatabase, ledger: string, sourceSize: number, sourceMtimeMs: number) {
-  db.prepare(`
+  preparedStatement(db, `
     INSERT OR REPLACE INTO ledger_imports
       (ledger, imported_at, source_size, source_mtime_ms)
     VALUES (?, ?, ?, ?)
@@ -627,7 +725,7 @@ export function readControlCenterState<T>(
   const db = options.sqlite === false ? null : openDatabase()
   if (!db) return null
   try {
-    const row = db.prepare(`
+    const row = preparedStatement(db, `
       SELECT payload_json
       FROM control_center_state
       WHERE namespace = ? AND state_key = ?
@@ -660,7 +758,7 @@ export function writeControlCenterState(
   if (!payload) return false
   try {
     const now = new Date()
-    db.prepare(`
+    preparedStatement(db, `
       INSERT INTO control_center_state
         (namespace, state_key, updated_at, updated_at_ms, source_path, payload_json)
       VALUES (?, ?, ?, ?, ?, ?)
@@ -691,7 +789,7 @@ export function deleteControlCenterState(
   const db = options.sqlite === false ? null : openDatabase()
   if (!db) return false
   try {
-    db.prepare(`
+    preparedStatement(db, `
       DELETE FROM control_center_state
       WHERE namespace = ? AND state_key = ?
     `).run(
@@ -733,7 +831,7 @@ export function writeAgencyAgentTemplateCatalog(
 
   try {
     db.exec('BEGIN IMMEDIATE;')
-    db.prepare(`
+    preparedStatement(db, `
       INSERT INTO agency_agent_template_catalogs
         (id, schema_version, source_json, divisions_json, template_count, updated_at, updated_at_ms)
       VALUES ('current', ?, ?, ?, ?, ?, ?)
@@ -752,9 +850,9 @@ export function writeAgencyAgentTemplateCatalog(
       now.toISOString(),
       now.getTime(),
     )
-    db.prepare('DELETE FROM agency_agent_templates').run()
+    preparedStatement(db, 'DELETE FROM agency_agent_templates').run()
 
-    const insert = db.prepare(`
+    const insert = preparedStatement(db, `
       INSERT INTO agency_agent_templates
         (
           id, slug, name, description, division, division_label, color, relative_path, source_url,
@@ -807,13 +905,13 @@ export function readAgencyAgentTemplateCatalog<T>(options: LedgerReadOptions = {
   const db = options.sqlite === false ? null : openDatabase()
   if (!db) return null
   try {
-    const meta = db.prepare(`
+    const meta = preparedStatement(db, `
       SELECT schema_version, source_json, divisions_json
       FROM agency_agent_template_catalogs
       WHERE id = 'current'
     `).get?.()
     if (!meta || Number(meta.schema_version) !== 1) return null
-    const rows = db.prepare(`
+    const rows = preparedStatement(db, `
       SELECT payload_json
       FROM agency_agent_templates
       ORDER BY sort_index ASC, division ASC, name ASC
@@ -831,11 +929,14 @@ export function readAgencyAgentTemplateCatalog<T>(options: LedgerReadOptions = {
 }
 
 async function appendLedger(kind: LedgerKind, value: Record<string, unknown>, jsonlPath: string, options: LedgerAppendOptions = {}) {
-  await fs.mkdir(configuredPaths().directory, { recursive: true })
-  const wroteSqlite = options.sqlite === false ? false : insertSqliteLedger(kind, value)
-  if (!wroteSqlite || options.mirrorJsonl !== false) {
-    await appendJsonlLedger(jsonlPath, value)
-  }
+  const snapshot = JSON.parse(JSON.stringify(value)) as Record<string, unknown>
+  const queued = (appendQueues.get(jsonlPath) || Promise.resolve()).catch(() => undefined).then(async () => {
+    await fs.mkdir(path.dirname(jsonlPath), { recursive: true })
+    const wroteSqlite = options.sqlite === false ? false : insertSqliteLedger(kind, snapshot)
+    if (!wroteSqlite || options.mirrorJsonl !== false) await appendJsonlLedger(jsonlPath, snapshot)
+  })
+  appendQueues.set(jsonlPath, queued)
+  try { await queued } finally { if (appendQueues.get(jsonlPath) === queued) appendQueues.delete(jsonlPath) }
 }
 
 export async function appendRuntimeRunLedger(value: Record<string, unknown>, options?: LedgerAppendOptions) {
@@ -866,14 +967,19 @@ export async function readRuntimeRunLedgerTail<T>(limit: number, options: Ledger
   const currentPaths = configuredPaths()
   const db = options.sqlite === false ? null : openDatabase()
   if (db) {
-    const rows = db.prepare(`
+    try {
+    const rows = preparedStatement(db, `
       SELECT payload_json
       FROM runtime_runs
       ORDER BY COALESCE(ended_at, started_at) DESC, created_at_ms DESC
       LIMIT ?
     `).all(Math.max(1, Math.min(500, Math.round(limit))))
     const records = parsePayloadRows<T>(rows).reverse()
-    if (records.length) return records
+    const fallback = await readJsonlLedgerTail<T>('runtime-runs', currentPaths.runtimeRunsJsonl, limit)
+    return reconcileLedgerRecords(records, fallback, limit, 'id')
+    } catch (error) {
+      sqliteWriteWarning = `SQLite read failed; using JSONL fallback: ${error instanceof Error ? error.message : String(error)}`
+    }
   }
 
   return readJsonlLedgerTail<T>('runtime-runs', currentPaths.runtimeRunsJsonl, limit)
@@ -883,14 +989,19 @@ export async function readGatewayEventLedgerTail<T>(limit: number, options: Ledg
   const currentPaths = configuredPaths()
   const db = options.sqlite === false ? null : openDatabase()
   if (db) {
-    const rows = db.prepare(`
+    try {
+    const rows = preparedStatement(db, `
       SELECT payload_json
       FROM gateway_events
       ORDER BY timestamp DESC, created_at_ms DESC, rowid DESC
       LIMIT ?
     `).all(Math.max(1, Math.min(1000, Math.round(limit))))
     const records = parsePayloadRows<T>(rows).reverse()
-    if (records.length) return records
+    const fallback = await readJsonlLedgerTail<T>('gateway-events', currentPaths.gatewayEventsJsonl, limit)
+    return reconcileLedgerRecords(records, fallback, limit, 'id')
+    } catch (error) {
+      sqliteWriteWarning = `SQLite read failed; using JSONL fallback: ${error instanceof Error ? error.message : String(error)}`
+    }
   }
 
   return readJsonlLedgerTail<T>('gateway-events', currentPaths.gatewayEventsJsonl, limit)
@@ -900,14 +1011,19 @@ export async function readDiagnosticRunLedgerTail<T>(limit: number, options: Led
   const currentPaths = configuredPaths()
   const db = options.sqlite === false ? null : openDatabase()
   if (db) {
-    const rows = db.prepare(`
+    try {
+    const rows = preparedStatement(db, `
       SELECT payload_json
       FROM diagnostic_runs
       ORDER BY COALESCE(ended_at, started_at) DESC, created_at_ms DESC
       LIMIT ?
     `).all(Math.max(1, Math.min(500, Math.round(limit))))
     const records = parsePayloadRows<T>(rows).reverse()
-    if (records.length) return records
+    const fallback = await readJsonlLedgerTail<T>('diagnostic-runs', currentPaths.diagnosticRunsJsonl, limit)
+    return reconcileLedgerRecords(records, fallback, limit, 'id')
+    } catch (error) {
+      sqliteWriteWarning = `SQLite read failed; using JSONL fallback: ${error instanceof Error ? error.message : String(error)}`
+    }
   }
 
   return readJsonlLedgerTail<T>('diagnostic-runs', currentPaths.diagnosticRunsJsonl, limit)
@@ -917,51 +1033,109 @@ export async function readMissionRecordLedgerTail<T>(limit: number, options: Led
   const currentPaths = configuredPaths()
   const db = options.sqlite === false ? null : openDatabase()
   if (db) {
-    const rows = db.prepare(`
+    try {
+    const rows = preparedStatement(db, `
       SELECT payload_json
       FROM mission_records
+      ${options.missionId ? 'WHERE mission_id = ?' : ''}
       ORDER BY updated_at DESC, created_at_ms DESC
       LIMIT ?
-    `).all(Math.max(1, Math.min(1000, Math.round(limit))))
+    `).all(...(options.missionId ? [options.missionId] : []), normalizedTailLimit(limit))
     const records = parsePayloadRows<T>(rows).reverse()
-    if (records.length) return records
+    const fallback = await readMissionJsonlLedgerTail<T>('mission-records', currentPaths.missionRecordsJsonl, limit, options.missionId)
+    return reconcileLedgerRecords(records, fallback, limit, 'missionId')
+    } catch (error) {
+      sqliteWriteWarning = `SQLite read failed; using JSONL fallback: ${error instanceof Error ? error.message : String(error)}`
+    }
   }
 
-  return readJsonlLedgerTail<T>('mission-records', currentPaths.missionRecordsJsonl, limit)
+  return readMissionJsonlLedgerTail<T>('mission-records', currentPaths.missionRecordsJsonl, limit, options.missionId)
 }
 
 export async function readMissionEventLedgerTail<T>(limit: number, options: LedgerReadOptions = {}): Promise<T[]> {
   const currentPaths = configuredPaths()
   const db = options.sqlite === false ? null : openDatabase()
   if (db) {
-    const rows = db.prepare(`
+    try {
+    const rows = preparedStatement(db, `
       SELECT payload_json
       FROM mission_events
+      ${options.missionId ? 'WHERE mission_id = ?' : ''}
       ORDER BY timestamp DESC, created_at_ms DESC
       LIMIT ?
-    `).all(Math.max(1, Math.min(2000, Math.round(limit))))
+    `).all(...(options.missionId ? [options.missionId] : []), Math.max(1, Math.min(2000, Math.round(Number.isFinite(limit) ? limit : 1))))
     const records = parsePayloadRows<T>(rows).reverse()
-    if (records.length) return records
+    const fallback = await readMissionJsonlLedgerTail<T>('mission-events', currentPaths.missionEventsJsonl, limit, options.missionId)
+    return reconcileLedgerRecords(records, fallback, limit, 'id')
+    } catch (error) {
+      sqliteWriteWarning = `SQLite read failed; using JSONL fallback: ${error instanceof Error ? error.message : String(error)}`
+    }
   }
 
-  return readJsonlLedgerTail<T>('mission-events', currentPaths.missionEventsJsonl, limit)
+  return readMissionJsonlLedgerTail<T>('mission-events', currentPaths.missionEventsJsonl, limit, options.missionId)
+}
+
+/** Complete evidence for a single report, independent of the bounded live feed. */
+export async function readAllMissionEvents<T>(missionId: string): Promise<T[]> {
+  const currentPaths = configuredPaths()
+  await appendQueues.get(currentPaths.missionEventsJsonl)
+  const records: T[] = []
+  const db = openDatabase()
+  if (db) {
+    const maximum = Number(preparedStatement(db, 'SELECT MAX(rowid) AS last FROM mission_events WHERE mission_id = ?').get?.(missionId)?.last || 0)
+    let cursor = 0
+    while (cursor < maximum) {
+      const rows = preparedStatement(db, 'SELECT rowid AS cursor, payload_json FROM mission_events WHERE mission_id = ? AND rowid > ? AND rowid <= ? ORDER BY rowid LIMIT 500').all(missionId, cursor, maximum)
+      if (!rows.length) break
+      for (const row of rows) records.push(JSON.parse(String(row.payload_json)) as T)
+      cursor = Number(rows.at(-1)?.cursor)
+      // Never hold a transaction or monopolize the event loop across batches.
+      await new Promise<void>((resolve) => setImmediate(resolve))
+    }
+  }
+  const fallback: T[] = []
+  const input = createReadStream(currentPaths.missionEventsJsonl, { encoding: 'utf8', highWaterMark: 64 * 1024 })
+  let pending = ''
+  const accept = (line: string) => {
+    if (!line.trim()) return
+    const value = JSON.parse(line) as Record<string, unknown>
+    if (value && value.missionId === missionId) fallback.push(value as T)
+  }
+  try {
+    for await (const chunk of input) {
+      pending += chunk
+      let end = pending.indexOf('\n')
+      while (end >= 0) { accept(pending.slice(0, end)); pending = pending.slice(end + 1); end = pending.indexOf('\n') }
+      if (pending.length > 2 * 1024 * 1024) throw new Error('Mission evidence contains an oversized record; report generation paused.')
+    }
+    accept(pending)
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error
+  } finally { input.destroy() }
+  return reconcileLedgerRecords(records, fallback, Number.MAX_SAFE_INTEGER)
 }
 
 export async function readMissionReportLedgerTail<T>(limit: number, options: LedgerReadOptions = {}): Promise<T[]> {
   const currentPaths = configuredPaths()
   const db = options.sqlite === false ? null : openDatabase()
   if (db) {
-    const rows = db.prepare(`
+    try {
+    const rows = preparedStatement(db, `
       SELECT payload_json
       FROM mission_reports
+      ${options.missionId ? 'WHERE mission_id = ?' : ''}
       ORDER BY generated_at DESC, created_at_ms DESC
       LIMIT ?
-    `).all(Math.max(1, Math.min(1000, Math.round(limit))))
+    `).all(...(options.missionId ? [options.missionId] : []), normalizedTailLimit(limit))
     const records = parsePayloadRows<T>(rows).reverse()
-    if (records.length) return records
+    const fallback = await readMissionJsonlLedgerTail<T>('mission-reports', currentPaths.missionReportsJsonl, limit, options.missionId)
+    return reconcileLedgerRecords(records, fallback, limit, 'id')
+    } catch (error) {
+      sqliteWriteWarning = `SQLite read failed; using JSONL fallback: ${error instanceof Error ? error.message : String(error)}`
+    }
   }
 
-  return readJsonlLedgerTail<T>('mission-reports', currentPaths.missionReportsJsonl, limit)
+  return readMissionJsonlLedgerTail<T>('mission-reports', currentPaths.missionReportsJsonl, limit, options.missionId)
 }
 
 export function runtimeLedgerStatus(options: LedgerReadOptions = {}) {
@@ -971,6 +1145,7 @@ export function runtimeLedgerStatus(options: LedgerReadOptions = {}) {
     sqlitePath: currentPaths.sqlite,
     sqliteAvailable: skipSqlite ? false : Boolean(openDatabase()),
     fallback: skipSqlite ? 'skipped for non-blocking status snapshot' : sqliteUnavailableReason || null,
+    sqliteWriteWarning: sqliteWriteWarning || null,
     legacyImportWarning: legacyImportWarning || null,
     jsonlTailDiagnostic,
   }
@@ -978,6 +1153,7 @@ export function runtimeLedgerStatus(options: LedgerReadOptions = {}) {
 
 export function closeRuntimeLedger() {
   try {
+    if (database) preparedStatements.delete(database)
     database?.close?.()
   } catch {
     // Ignore close errors during app shutdown.

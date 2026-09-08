@@ -364,3 +364,26 @@ test('reconcileMissionGatewaySessions classifies missing Gateway sessions withou
   assert.equal(mission.scheduler.jobs[0]?.status, 'created')
   assert.equal(state.gatewayRequests[0]?.method, 'sessions.describe')
 })
+
+test('recovery bounds concurrent requests and deduplicates shared Gateway sessions', async () => {
+  let active = 0
+  let peak = 0
+  const requests: string[] = []
+  const { service } = createHarness({
+    ensureGatewayClient: async () => ({ client: { request: async (_method, params) => {
+      active += 1
+      peak = Math.max(peak, active)
+      requests.push(String(params?.key))
+      await new Promise((resolve) => setTimeout(resolve, 5))
+      active -= 1
+      return { ok: true }
+    } } }),
+  })
+  const mission = makeMission()
+  mission.scheduler.jobs = Array.from({ length: 20 }, (_, index) => makeJob({ id: `job-${index}`, sessionKey: `session-${index % 10}`, status: 'running' }))
+  const result = await service.reconcileMissionGatewaySessions(mission)
+  assert.equal(requests.length, 10)
+  assert.equal(peak, 4)
+  assert.equal(result.verified, 20)
+  assert.deepEqual(result.details.map((detail) => detail.jobId), mission.scheduler.jobs.map((job) => job.id))
+})

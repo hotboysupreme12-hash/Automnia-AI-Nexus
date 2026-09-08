@@ -1,15 +1,15 @@
 import { spawn } from 'node:child_process'
 import { createServer } from 'node:http'
 import { createRequire } from 'node:module'
-import { createReadStream, existsSync, mkdirSync, writeFileSync } from 'node:fs'
+import { createReadStream, existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { stat } from 'node:fs/promises'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 
 const require = createRequire(import.meta.url)
 const repoRoot = path.resolve(fileURLToPath(new URL('..', import.meta.url)))
-const distDir = path.join(repoRoot, 'dist')
-const outputDir = path.join(repoRoot, 'output', 'playwright')
+const distDir = path.resolve(process.env.AUTOMNIA_UI_SMOKE_DIST_DIR || path.join(repoRoot, 'dist'))
+const outputDir = path.resolve(process.env.AUTOMNIA_UI_SMOKE_OUTPUT_DIR || path.join(repoRoot, 'output', 'playwright'))
 const tmpDir = path.join(repoRoot, '.tmp')
 const runnerAppDir = path.join(tmpDir, 'ui-smoke-electron-app')
 const runnerPath = path.join(runnerAppDir, 'main.cjs')
@@ -1061,7 +1061,7 @@ async function seedRedactedFailedCommandConsole(window) {
     "    await waitFor(() => !sendButton.disabled, 3000)",
     "    if (sendButton.disabled) return { attempted: false, reason: 'send-button-stayed-disabled' }",
     "    sendButton.click()",
-    "    const cta = await waitFor(() => Array.from(commandConsole.querySelectorAll('.dy-command-response-cta')).find((element) => /Reset gateway/.test(element.textContent || '')), 5000)",
+    "    const cta = await waitFor(() => Array.from(commandConsole.querySelectorAll('.dy-command-response-cta')).find((element) => /Restart gateway/.test(element.textContent || '')), 5000)",
     "    const message = cta ? cta.closest('.dy-command-message') : null",
     "    const failureChip = message ? Array.from(message.querySelectorAll('.dy-command-message-chip.is-warning')).find((element) => /gateway disconnect/i.test(element.textContent || '')) : null",
     "    const body = message ? message.querySelector('.dy-command-message-body') : null",
@@ -1222,6 +1222,22 @@ async function inspectViewport(viewport) {
 
   await window.loadURL(targetUrl)
   await new Promise((resolve) => setTimeout(resolve, 1200))
+  // Use the actual sign-in form against the isolated fixture API. Desktop launch
+  // tokens no longer sign users into their Automnia account automatically.
+  await window.webContents.executeJavaScript([
+    "(async () => {",
+    "    const email = document.querySelector('input[type=\"email\"]')",
+    "    const password = document.querySelector('input[type=\"password\"]')",
+    "    if (!email || !password) return",
+    "    const setValue = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value').set",
+    "    setValue.call(email, 'ui-smoke@example.com'); email.dispatchEvent(new Event('input', { bubbles: true }))",
+    "    setValue.call(password, 'fixture-password-only'); password.dispatchEvent(new Event('input', { bubbles: true }))",
+    "    await new Promise((resolve) => setTimeout(resolve, 100))",
+    "    const submit = Array.from(document.querySelectorAll('button')).find((button) => button.textContent.trim() === 'Sign in')",
+    "    submit?.click()",
+    "  })()"
+  ].join('\n'))
+  await new Promise((resolve) => setTimeout(resolve, 1200))
   const commandConsoleStopSeed = await seedRunningCommandConsole(window)
 
   const inspectScript = [
@@ -1260,6 +1276,7 @@ async function inspectViewport(viewport) {
   const recruitMarkdown = await inspectRecruitMarkdownEditor(window)
   const helpAssistant = await inspectHelpAssistant(window)
 
+  await new Promise((resolve) => setTimeout(resolve, 250))
   const image = await window.webContents.capturePage()
   const screenshotPath = path.join(outputDir, 'ui-smoke-' + viewport.label + '.png')
   fs.writeFileSync(screenshotPath, image.toPNG())
@@ -1431,8 +1448,8 @@ async function inspectViewport(viewport) {
     && commandConsoleMissingProviderAuth.authMissingCtaRect?.height > 0
     && commandConsoleRedactedFailure.attempted
     && commandConsoleRedactedFailure.redactedFailureCtaPresent
-    && /Reset gateway/.test(commandConsoleRedactedFailure.redactedFailureCtaText)
-    && /Gateway is unavailable\. Reset it, then retry\./.test(commandConsoleRedactedFailure.redactedFailureCtaText)
+    && /Restart gateway/.test(commandConsoleRedactedFailure.redactedFailureCtaText)
+    && /Gateway is unavailable\. Restart it, then retry\./.test(commandConsoleRedactedFailure.redactedFailureCtaText)
     && /gateway disconnect/i.test(commandConsoleRedactedFailure.redactedFailureFailureChipText)
     && /Gateway transport error: simulated Command Console failure\./.test(commandConsoleRedactedFailure.redactedFailureBodyText)
     && commandConsoleRedactedFailure.redactedFailureMarkersPresent
@@ -1513,7 +1530,8 @@ app.whenReady().then(async () => {
     checkedAt: new Date().toISOString(),
     results,
   }
-  console.log(JSON.stringify(payload, null, 2))
+  fs.writeFileSync(path.join(outputDir, 'ui-smoke-results.json'), JSON.stringify(payload, null, 2))
+  console.log(JSON.stringify({ ok: payload.ok, report: path.join(outputDir, 'ui-smoke-results.json') }))
   app.exit(payload.ok ? 0 : 1)
 }).catch((error) => {
   console.error(error && error.stack ? error.stack : String(error))
@@ -1559,6 +1577,8 @@ function runElectronSmoke(url) {
         } catch {}
       }
 
+      const reportPath = path.join(outputDir, 'ui-smoke-results.json')
+      if (existsSync(reportPath)) { try { payload = JSON.parse(readFileSync(reportPath, 'utf8')) } catch {} }
       if (payload) console.log(JSON.stringify(payload, null, 2))
       if (code !== 0) {
         reject(new Error(`Electron UI smoke failed with exit code ${code}.`))

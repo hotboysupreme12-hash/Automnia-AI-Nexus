@@ -6,6 +6,7 @@ const http = require('node:http')
 const { randomBytes } = require('node:crypto')
 const { assertTrustedHttpsUrl, parseSha256Manifest, sha256File } = require('./runtime-download-security.cjs')
 const path = require('node:path')
+const { restoreWindowPlacement, restoreZoom } = require('./window-placement.cjs')
 
 // A packaged Windows app can be launched from a short-lived shell (including
 // the branded launcher). Once that parent closes, writing diagnostic output to
@@ -510,7 +511,7 @@ function packagedOpenClawRuntimeStamp(root) {
   }
 }
 
-function ensureWritablePackagedOpenClawRuntime(bundledRuntime) {
+async function ensureWritablePackagedOpenClawRuntime(bundledRuntime) {
   if (
     isDev ||
     !bundledRuntime ||
@@ -534,32 +535,32 @@ function ensureWritablePackagedOpenClawRuntime(bundledRuntime) {
   const parent = path.dirname(targetRoot)
   const tempRoot = path.join(parent, `.${path.basename(targetRoot)}.tmp-${process.pid}-${Date.now()}`)
   try {
-    fs.rmSync(tempRoot, { recursive: true, force: true })
-    fs.mkdirSync(parent, { recursive: true })
-    fs.mkdirSync(tempRoot, { recursive: true })
-    for (const entry of fs.readdirSync(bundledRoot, { withFileTypes: true })) {
+    await fs.promises.rm(tempRoot, { recursive: true, force: true })
+    await fs.promises.mkdir(parent, { recursive: true })
+    await fs.promises.mkdir(tempRoot, { recursive: true })
+    for (const entry of await fs.promises.readdir(bundledRoot, { withFileTypes: true })) {
       const source = path.join(bundledRoot, entry.name)
       const target = path.join(tempRoot, entry.name)
       if (entry.name === 'dist') {
-        fs.cpSync(source, target, { recursive: true, force: true })
+        await fs.promises.cp(source, target, { recursive: true, force: true })
       } else {
-        fs.symlinkSync(source, target, entry.isDirectory() ? 'dir' : 'file')
+        await fs.promises.symlink(source, target, entry.isDirectory() ? 'dir' : 'file')
       }
     }
     for (const candidate of openClawRuntimeCandidatesForDir(tempRoot)) {
       if (!fs.existsSync(candidate)) continue
       try {
-        fs.chmodSync(candidate, 0o755)
+        await fs.promises.chmod(candidate, 0o755)
       } catch {}
     }
-    fs.writeFileSync(path.join(tempRoot, '.automnia-runtime-ready'), `${new Date().toISOString()}\n`, 'utf8')
-    fs.rmSync(targetRoot, { recursive: true, force: true })
-    fs.renameSync(tempRoot, targetRoot)
+    await fs.promises.writeFile(path.join(tempRoot, '.automnia-runtime-ready'), `${new Date().toISOString()}\n`, 'utf8')
+    await fs.promises.rm(targetRoot, { recursive: true, force: true })
+    await fs.promises.rename(tempRoot, targetRoot)
     console.log(`[automnia] hydrated writable OpenClaw runtime -> ${targetRoot}`)
     return targetRuntime
   } catch (error) {
     try {
-      fs.rmSync(tempRoot, { recursive: true, force: true })
+      await fs.promises.rm(tempRoot, { recursive: true, force: true })
     } catch {}
     console.warn('[automnia] writable OpenClaw runtime hydration failed:', error?.message || error)
     return bundledRuntime
@@ -582,7 +583,7 @@ function releaseOpenClawRuntimeCandidates(root) {
   return candidates
 }
 
-function resolveOpenClawRuntime() {
+async function resolveOpenClawRuntime() {
   const root = appRoot()
   const candidates = process.platform === 'win32'
     ? [
@@ -1825,17 +1826,63 @@ function configureTextAssistance(win) {
   })
 }
 
+function presentMainWindow(win) {
+  if (isQuitting || !win || win.isDestroyed()) return
+
+  win.setSkipTaskbar(false)
+  if (win.isMinimized()) win.restore()
+
+  // On macOS, focusing the BrowserWindow is not sufficient when the app was
+  // launched from Finder, the Dock, or a shell that is still frontmost. In
+  // that state Chromium can finish its first frame without presenting it
+  // until the app loses and regains focus. Activate the app before showing the
+  // window so the first renderer frame is presented immediately.
+  if (process.platform === 'darwin') app.focus({ steal: true })
+  win.show()
+
+  // The initial ready-to-show path used to show the window without activating
+  // it. That left the renderer waiting for a later focus/visibility change on
+  // some macOS launches, making the app appear frozen until the user switched
+  // away and back.
+  win.focus()
+  if (!win.webContents.isDestroyed()) {
+    win.webContents.focus()
+    // Electron exposes invalidate() on macOS to request a full WebContents
+    // repaint. It is a no-op on platforms where the method is unavailable.
+    win.webContents.invalidate?.()
+  }
+
+  // Let macOS finish presenting the native window, then re-assert focus so
+  // the renderer receives its first real focus/paint cycle.
+  setTimeout(() => {
+    if (isQuitting || win.isDestroyed()) return
+    if (process.platform === 'darwin') app.focus({ steal: true })
+    win.focus()
+    if (!win.webContents.isDestroyed()) {
+      win.webContents.focus()
+      win.webContents.invalidate?.()
+    }
+  }, 0)
+}
+
 function createMainWindow() {
-  const workArea = screen.getPrimaryDisplay().workAreaSize
-  const initialWidth = Math.min(1440, Math.max(920, workArea.width - 48))
-  const initialHeight = Math.min(960, Math.max(640, workArea.height - 48))
+  const stateFile = path.join(app.getPath('userData'), 'window-placement.json')
+  let savedWindowState = {}
+  if (!ELECTRON_E2E) {
+    try { savedWindowState = JSON.parse(fs.readFileSync(stateFile, 'utf8')) || {} } catch { /* First launch or damaged preferences use visible defaults. */ }
+  }
+  const placement = restoreWindowPlacement(savedWindowState, screen.getAllDisplays(), screen.getPrimaryDisplay().id)
+  const initialZoom = restoreZoom(savedWindowState.zoom, DEFAULT_RENDERER_ZOOM_FACTOR)
 
   const win = new BrowserWindow({
-    width: initialWidth,
-    height: initialHeight,
-    minWidth: 880,
-    minHeight: 600,
+    x: placement.x,
+    y: placement.y,
+    width: placement.width,
+    height: placement.height,
+    minWidth: placement.minWidth,
+    minHeight: placement.minHeight,
     backgroundColor: '#050607', title: 'Automnia', show: false,
+    paintWhenInitiallyHidden: true,
     ...(resolveAppIcon() ? { icon: resolveAppIcon() } : {}),
     webPreferences: {
       preload: path.join(__dirname, 'preload.cjs'),
@@ -1851,6 +1898,56 @@ function createMainWindow() {
   })
 
   mainWindow = win
+  let saveTimer = null
+  let writeQueue = Promise.resolve()
+  const savePlacement = () => {
+    if (saveTimer) clearTimeout(saveTimer)
+    saveTimer = null
+    if (ELECTRON_E2E || win.isDestroyed() || win.webContents.isDestroyed()) return
+    const value = JSON.stringify({ version: 1, bounds: win.getNormalBounds(), maximized: win.isMaximized(), zoom: win.webContents.getZoomFactor() })
+    writeQueue = writeQueue.then(async () => {
+      await fs.promises.mkdir(path.dirname(stateFile), { recursive: true })
+      const temporary = `${stateFile}.${process.pid}.tmp`
+      await fs.promises.writeFile(temporary, value, { mode: 0o600 })
+      await fs.promises.rename(temporary, stateFile)
+    }).catch(() => { /* Window preference failures must not interrupt the workspace. */ })
+  }
+  const schedulePlacementSave = () => {
+    if (saveTimer) clearTimeout(saveTimer)
+    saveTimer = setTimeout(savePlacement, 300)
+  }
+  win.on('move', schedulePlacementSave)
+  win.on('resize', schedulePlacementSave)
+  win.on('maximize', schedulePlacementSave)
+  win.on('unmaximize', schedulePlacementSave)
+  win.on('close', savePlacement)
+  const changeZoom = (direction) => {
+    const current = win.webContents.getZoomFactor()
+    win.webContents.setZoomFactor(direction === 'reset' ? 1 : Math.min(2, Math.max(0.5, current * (direction === 'in' ? 1.1 : 1 / 1.1))))
+    schedulePlacementSave()
+  }
+  win.webContents.on('zoom-changed', (_event, direction) => changeZoom(direction))
+  win.webContents.on('before-input-event', (event, input) => {
+    if (input.type !== 'keyDown' || !(input.control || input.meta) || input.alt) return
+    const key = input.key.toLowerCase()
+    if (!['+', '=', '-', '0'].includes(key)) return
+    event.preventDefault()
+    changeZoom(key === '0' ? 'reset' : key === '-' ? 'out' : 'in')
+  })
+  const accommodateDisplays = () => {
+    if (win.isDestroyed()) return
+    const next = restoreWindowPlacement({ bounds: win.getNormalBounds() }, screen.getAllDisplays(), screen.getPrimaryDisplay().id)
+    win.setMinimumSize(next.minWidth, next.minHeight)
+    if (!win.isMaximized() && !win.isFullScreen()) win.setBounds({ x: next.x, y: next.y, width: next.width, height: next.height })
+    schedulePlacementSave()
+  }
+  screen.on('display-removed', accommodateDisplays)
+  screen.on('display-metrics-changed', accommodateDisplays)
+  win.on('closed', () => {
+    if (saveTimer) clearTimeout(saveTimer)
+    screen.removeListener('display-removed', accommodateDisplays)
+    screen.removeListener('display-metrics-changed', accommodateDisplays)
+  })
   configureRendererPermissionPolicy(win)
   configureTextAssistance(win)
   let e2eRendererLoadCount = 0
@@ -2032,8 +2129,11 @@ function createMainWindow() {
     // Keep the full command console and agent registry visible on ordinary
     // laptop displays. Screenshot E2E runs explicitly restore 100% before
     // capturing their contract viewports.
-    if (!ELECTRON_E2E) void win.webContents.setZoomFactor(DEFAULT_RENDERER_ZOOM_FACTOR)
-    if (!isQuitting) win.show()
+    if (!ELECTRON_E2E) {
+      win.webContents.setZoomFactor(initialZoom)
+      if (placement.maximized) win.maximize()
+    }
+    presentMainWindow(win)
   })
   win.loadURL(`http://127.0.0.1:${APP_PORT}`)
   return win
@@ -2045,10 +2145,7 @@ function openFrontend() {
     mainWindow = createMainWindow()
     return
   }
-  mainWindow.setSkipTaskbar(false)
-  if (mainWindow.isMinimized()) mainWindow.restore()
-  mainWindow.show()
-  mainWindow.focus()
+  presentMainWindow(mainWindow)
   updateTrayMenu()
 }
 
@@ -2686,7 +2783,7 @@ app.whenReady().then(async () => {
     const staticDir = resolveStaticDir()
     const openclawStateDir = resolveOpenClawHomeDir()
     const workspaceRoot = process.env.CONTROL_CENTER_WORKSPACE_ROOT || path.join(openclawStateDir, 'workspace')
-    const openclawRuntime = resolveOpenClawRuntime()
+    const openclawRuntime = await resolveOpenClawRuntime()
 
     fs.mkdirSync(openclawStateDir, { recursive: true })
     fs.mkdirSync(workspaceRoot, { recursive: true })

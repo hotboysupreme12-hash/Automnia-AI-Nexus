@@ -1,7 +1,12 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { apiErrorMessage, apiRequest, type ApiRequestOptions } from '../../api/client'
+import { isShiftStartResponse, isShiftListResponse, isShiftBatchResponse } from '../../api/responseValidation'
 import { useNexusStore } from '../../store/nexusStore'
 import { ActionStatusBanner } from '../common/ActionStatusBanner'
+import { stopScheduledTaskBatch } from './schedulerBatch'
+import { createSerialSaveQueue } from './serialSaveQueue'
+import { useRememberedState } from '../../hooks/useRememberedState'
+import { scheduleRequestKey, settleScheduleRequest } from './scheduleRequestKey'
 
 type ThinkingLevel = 'off' | 'minimal' | 'low' | 'medium' | 'high' | 'xhigh' | 'max'
 type WakeMode = 'now' | 'next-heartbeat'
@@ -54,6 +59,10 @@ type ShiftStartResponse = {
 type ShiftBatchStartResponse = {
   batchId: string
   managedTeamSync: boolean
+  outcome?: 'partial' | 'complete'
+  unstartedAgentIds?: string[]
+  unconfirmedAgentIds?: string[]
+  orchestration?: { status: string; detail: string | null; affectedShiftIds: string[] }
   runId: string
   leadAgent: string
   startedCount: number
@@ -63,7 +72,8 @@ type ShiftBatchStartResponse = {
 }
 
 async function schedulerApiData<T>(path: string, options: ApiRequestOptions | undefined, fallbackMessage: string): Promise<T> {
-  const result = await apiRequest<T>(path, { cache: 'no-store', ...(options || {}) })
+  const validate = path === '/api/shifts/start' ? isShiftStartResponse : path === '/api/shifts/start-batch' ? isShiftBatchResponse : path === '/api/shifts' ? isShiftListResponse : undefined
+  const result = await apiRequest<T>(path, { cache: 'no-store', validate, ...(options || {}) })
   if (!result.ok) throw new Error(apiErrorMessage(result.error) || fallbackMessage)
   return result.data
 }
@@ -141,7 +151,9 @@ export function HeartbeatSchedulerPanel() {
     leadAgent: 'auto-highest-level',
   })
   const defaultsDirtyRef = useRef(false)
-  const defaultsHydratingRef = useRef(false)
+  const defaultsRevisionRef = useRef(0)
+  const defaultsLoadRequestRef = useRef(0)
+  const defaultsSaveQueueRef = useRef(createSerialSaveQueue())
   const defaultsSaveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
   const [cadenceValue, setCadenceValue] = useState(30)
@@ -160,11 +172,16 @@ export function HeartbeatSchedulerPanel() {
   const [status, setStatus] = useState('')
   const [stopConfirmShifts, setStopConfirmShifts] = useState<ShiftSummary[]>([])
   const [busy, setBusy] = useState(false)
+  const [failedStopShifts, setFailedStopShifts] = useState<ShiftSummary[]>([])
+  const [teamRetry, setTeamRetry] = useRememberedState<Array<{ agentId: string; payload: Record<string, unknown> }>>('schedule-team-retry', [])
+  const [loadedDefaultsScope, setLoadedDefaultsScope] = useState('')
 
   const resolveScopeAgent = useCallback(() => {
     if (scope !== 'agent') return undefined
     return agentId || partyAgents[0]?.id
   }, [agentId, partyAgents, scope])
+  const defaultsScope = scope === 'agent' ? agentId || partyAgents[0]?.id || 'global' : 'global'
+  const defaultsReady = loadedDefaultsScope === defaultsScope
   const stopConfirmPreview = useMemo(
     () => stopConfirmShifts.slice(0, 3).map((shift) => `${shift.name} (${shift.agent})`).join(', '),
     [stopConfirmShifts],
@@ -173,6 +190,7 @@ export function HeartbeatSchedulerPanel() {
 
   const patchDefaults = useCallback((patch: Partial<HeartbeatDefaults>) => {
     defaultsDirtyRef.current = true
+    defaultsRevisionRef.current += 1
     setDefaults((prev) => ({ ...prev, ...patch }))
   }, [])
 
@@ -184,11 +202,13 @@ export function HeartbeatSchedulerPanel() {
   const loadDefaults = useCallback(async () => {
     const scopedAgent = resolveScopeAgent()
     const url = scopedAgent ? `/api/shifts/defaults/${scopedAgent}` : '/api/shifts/defaults'
-    defaultsHydratingRef.current = true
+    const requestId = ++defaultsLoadRequestRef.current
+    const revision = ++defaultsRevisionRef.current
     try {
       const payload = await schedulerApiData<ShiftDefaultsResponse>(url, { timeoutMs: 20_000 }, 'Failed to load cron defaults.')
+      if (requestId !== defaultsLoadRequestRef.current || revision !== defaultsRevisionRef.current) return
       const source = scopedAgent ? payload.resolved : payload.defaults
-      if (!source) return
+      if (!source) throw new Error('The scheduler returned no defaults for this scope.')
 
       setDefaults((prev) => ({
         ...prev,
@@ -201,10 +221,9 @@ export function HeartbeatSchedulerPanel() {
         leadAgent: source.leadAgent || prev.leadAgent,
       }))
       defaultsDirtyRef.current = false
+      setLoadedDefaultsScope(scopedAgent || 'global')
     } catch (error) {
-      setStatus(`Load failed: ${schedulerErrorMessage(error)}`)
-    } finally {
-      defaultsHydratingRef.current = false
+      if (requestId === defaultsLoadRequestRef.current) setStatus(`Load failed: ${schedulerErrorMessage(error)}`)
     }
   }, [resolveScopeAgent])
 
@@ -229,10 +248,13 @@ export function HeartbeatSchedulerPanel() {
 
   useEffect(() => {
     void loadDefaults()
-    void refreshShifts()
+    void refreshShifts().catch((error) => setStatus(`Load failed: ${schedulerErrorMessage(error)}`))
+    return () => { defaultsLoadRequestRef.current += 1 }
   }, [loadDefaults, refreshShifts])
 
   const saveDefaults = useCallback(async (options?: { silent?: boolean }) => {
+    if (!defaultsReady) return
+    const revision = defaultsRevisionRef.current
     if (!options?.silent) setBusy(true)
     if (!options?.silent) setStatus('Saving cron defaults...')
     try {
@@ -249,27 +271,32 @@ export function HeartbeatSchedulerPanel() {
           }
         : defaults
 
-      await schedulerApiData<ShiftDefaultsResponse>(url, {
+      await defaultsSaveQueueRef.current(() => schedulerApiData<ShiftDefaultsResponse>(url, {
         method: 'POST',
         body: payload,
         timeoutMs: 20_000,
-      }, 'Failed to save defaults.')
-      defaultsDirtyRef.current = false
-      if (!options?.silent) setStatus(`Saved ${scopedAgent ? `${scopedAgent} cron` : 'global cron'} defaults.`)
+      }, 'Failed to save defaults.'))
+      if (revision === defaultsRevisionRef.current) {
+        defaultsDirtyRef.current = false
+        setStatus(`Saved ${scopedAgent ? `${scopedAgent} cron` : 'global cron'} defaults.`)
+      }
     } catch (error) {
-      setStatus(`${options?.silent ? 'Autosave' : 'Save'} failed: ${schedulerErrorMessage(error)}`)
+      if (revision === defaultsRevisionRef.current) setStatus(`${options?.silent ? 'Autosave' : 'Save'} failed: ${schedulerErrorMessage(error)}`)
     } finally {
       if (!options?.silent) setBusy(false)
     }
-  }, [defaults, resolveScopeAgent])
+  }, [defaults, defaultsReady, resolveScopeAgent])
 
   useEffect(() => {
-    if (!defaultsDirtyRef.current || defaultsHydratingRef.current) return
+    if (!defaultsDirtyRef.current || !defaultsReady) return
     if (defaultsSaveTimerRef.current) clearTimeout(defaultsSaveTimerRef.current)
     defaultsSaveTimerRef.current = setTimeout(() => {
       void saveDefaults({ silent: true })
     }, 600)
-  }, [defaults, saveDefaults])
+    return () => {
+      if (defaultsSaveTimerRef.current) clearTimeout(defaultsSaveTimerRef.current)
+    }
+  }, [defaults, defaultsReady, saveDefaults])
 
   const startShift = async () => {
     setBusy(true)
@@ -292,11 +319,13 @@ export function HeartbeatSchedulerPanel() {
         announce: defaults.announce,
       }
 
+      const requestKey = await scheduleRequestKey('single', payload)
       const out = await schedulerApiData<ShiftStartResponse>('/api/shifts/start', {
         method: 'POST',
-        body: payload,
+        body: { ...payload, idempotencyKey: requestKey },
         timeoutMs: 95_000,
       }, 'Failed to start shift.')
+      settleScheduleRequest(requestKey)
       setStatus(`Started cron shift ${out.shift?.name || ''} (${out.shift?.agent || 'auto'}).`)
       await refreshShifts()
     } catch (error) {
@@ -349,18 +378,60 @@ export function HeartbeatSchedulerPanel() {
         announce: defaults.announce,
       }
 
+      const requestKey = await scheduleRequestKey('team', payload)
       const out = await schedulerApiData<ShiftBatchStartResponse>('/api/shifts/start-batch', {
         method: 'POST',
-        body: payload,
+        body: { ...payload, idempotencyKey: requestKey },
         timeoutMs: 120_000,
       }, 'Failed to start team workflow.')
-      setStatus(`Started ${out.startedCount || 0} cron job(s); ${out.failedCount || 0} failed.`)
+      if (out.outcome !== 'partial') settleScheduleRequest(requestKey)
+      setTeamRetry((out.unstartedAgentIds || []).map((agentId) => ({
+        agentId,
+        payload: {
+          idempotencyKey: `${requestKey}:${agentId}`,
+          name: `${payload.namePrefix}-${agentId}`.slice(0, 80), agent: agentId,
+          every: agentId === effectiveLead ? leadEvery : workerEvery,
+          durationValue: payload.durationValue, durationUnit: payload.durationUnit,
+          message: agentId === effectiveLead ? leadMessage : workerMessage,
+          model: payload.model, thinking: payload.thinking, timeoutSeconds: payload.timeoutSeconds,
+          wake: payload.wake, session: agentId === effectiveLead ? payload.session : 'isolated', announce: payload.announce,
+        },
+      })))
+      setStatus([
+        `Started ${out.startedCount || 0} scheduled job(s); ${out.failedCount || 0} failed.`,
+        out.unstartedAgentIds?.length ? `Unstarted agents: ${out.unstartedAgentIds.join(', ')}. Retry only these agents to avoid duplicate jobs.` : '',
+        out.orchestration?.detail || '',
+        out.unconfirmedAgentIds?.length ? `Creation is unconfirmed for ${out.unconfirmedAgentIds.join(', ')}. Check Runtime Monitor before retrying these agents.` : '',
+        out.outcome === 'partial' && out.shifts.length ? `Created jobs: ${out.shifts.map((shift) => shift.id).join(', ')}.` : '',
+      ].filter(Boolean).join(' '))
       await refreshShifts()
     } catch (error) {
       setStatus(`Team start failed: ${schedulerErrorMessage(error)}`)
     } finally {
       setBusy(false)
     }
+  }
+
+  const retryUnstartedTeamJobs = async () => {
+    if (busy || !teamRetry.length) return
+    setBusy(true)
+    const remaining: typeof teamRetry = []
+    const unconfirmed: string[] = []
+    let started = 0
+    try {
+      for (const task of teamRetry) {
+        const result = await apiRequest<ShiftStartResponse>('/api/shifts/start', { method: 'POST', body: task.payload, timeoutMs: 95_000, validate: isShiftStartResponse })
+        if (result.ok) started += 1
+        else if ([400, 401, 403, 422].includes(result.status)) remaining.push(task)
+        else unconfirmed.push(task.agentId)
+      }
+      setTeamRetry(remaining)
+      setStatus([
+        `Started ${started} previously unstarted job(s); ${remaining.length} remain unstarted.`,
+        unconfirmed.length ? `Creation is unconfirmed for ${unconfirmed.join(', ')}. These agents were removed from retry. Check Runtime Monitor before creating another job.` : '',
+      ].filter(Boolean).join(' '))
+      try { await refreshShifts() } catch { setStatus((current) => `${current} Job list refresh failed; refresh Runtime Monitor to check the latest jobs.`) }
+    } finally { setBusy(false) }
   }
 
   const stopShift = async (shiftId: string) => {
@@ -384,21 +455,19 @@ export function HeartbeatSchedulerPanel() {
 
   const stopShiftBatch = async (targetShifts: ShiftSummary[], scopedAgent: string | undefined) => {
     setBusy(true)
+    setFailedStopShifts([])
     setStatus('Stopping cron shift(s)...')
     try {
-      for (const shift of targetShifts) {
-        await schedulerApiData<{ shiftId: string; cronId: string }>('/api/shifts/stop', {
+      const result = await stopScheduledTaskBatch(targetShifts, (shift) =>
+        schedulerApiData<{ shiftId: string; cronId: string }>('/api/shifts/stop', {
           method: 'POST',
           body: { shiftId: shift.id },
           timeoutMs: 45_000,
-        }, `Failed stopping shift ${shift.id}`)
-      }
-
-      setStatus(
-        scopedAgent
-          ? `Stopped ${targetShifts.length} cron shift(s) for ${scopedAgent}.`
-          : `Stopped ${targetShifts.length} active cron shift(s).`,
-      )
+        }, `Failed stopping shift ${shift.id}`))
+      setFailedStopShifts(result.failed.map(({ task }) => task))
+      setStatus(result.failed.length
+        ? `Stopped ${result.stopped.length} of ${targetShifts.length} scheduled tasks. Failed: ${result.failed.map(({ task, message }) => `${task.name}: ${message}`).join('; ')}`
+        : `Stopped ${result.stopped.length} scheduled task${result.stopped.length === 1 ? '' : 's'}${scopedAgent ? ` for ${scopedAgent}` : ''}.`)
       await refreshShifts()
     } catch (error) {
       setStatus(`Stop failed: ${schedulerErrorMessage(error)}`)
@@ -483,6 +552,7 @@ export function HeartbeatSchedulerPanel() {
         <label className="text-xs text-slate-300">
           Model
           <input
+            disabled={!defaultsReady}
             value={defaults.model}
             onChange={(event) => patchDefaults({ model: event.target.value })}
             className="mt-1 w-full rounded-lg border border-white/15 bg-slate-950/70 px-2 py-2 text-sm text-slate-100"
@@ -492,6 +562,7 @@ export function HeartbeatSchedulerPanel() {
         <label className="text-xs text-slate-300">
           Thinking
           <select
+            disabled={!defaultsReady}
             value={defaults.thinking}
             onChange={(event) => patchDefaults({ thinking: event.target.value as ThinkingLevel })}
             className="mt-1 w-full rounded-lg border border-white/15 bg-slate-950/70 px-2 py-2 text-sm text-slate-100"
@@ -510,6 +581,7 @@ export function HeartbeatSchedulerPanel() {
             type="number"
             min={30}
             max={7200}
+            disabled={!defaultsReady}
             value={defaults.timeoutSeconds}
             onChange={(event) => patchDefaults({ timeoutSeconds: Math.max(30, Number(event.target.value) || 30) })}
             className="mt-1 w-full rounded-lg border border-white/15 bg-slate-950/70 px-2 py-2 text-sm text-slate-100"
@@ -519,6 +591,7 @@ export function HeartbeatSchedulerPanel() {
         <label className="text-xs text-slate-300">
           Cron wake policy
           <select
+            disabled={!defaultsReady}
             value={defaults.wake}
             onChange={(event) => patchDefaults({ wake: event.target.value as WakeMode })}
             className="mt-1 w-full rounded-lg border border-white/15 bg-slate-950/70 px-2 py-2 text-sm text-slate-100"
@@ -531,6 +604,7 @@ export function HeartbeatSchedulerPanel() {
         <label className="text-xs text-slate-300">
           Session
           <select
+            disabled={!defaultsReady}
             value={defaults.session}
             onChange={(event) => patchDefaults({ session: event.target.value as SessionMode })}
             className="mt-1 w-full rounded-lg border border-white/15 bg-slate-950/70 px-2 py-2 text-sm text-slate-100"
@@ -544,6 +618,7 @@ export function HeartbeatSchedulerPanel() {
           <label className="text-xs text-slate-300">
             Lead Agent Policy
             <input
+              disabled={!defaultsReady}
               value={defaults.leadAgent}
               onChange={(event) => patchDefaults({ leadAgent: event.target.value })}
               placeholder="auto-highest-level or hn-coordinator"
@@ -558,6 +633,7 @@ export function HeartbeatSchedulerPanel() {
           id="announce-heartbeat"
           type="checkbox"
           checked={defaults.announce}
+          disabled={!defaultsReady}
           onChange={(event) => patchDefaults({ announce: event.target.checked })}
         />
         <label htmlFor="announce-heartbeat" className="text-xs text-slate-300">
@@ -773,7 +849,7 @@ export function HeartbeatSchedulerPanel() {
         </button>
         <button
           type="button"
-          disabled={busy || !partyAgents.length}
+          disabled={busy || !partyAgents.length || teamRetry.length > 0}
           onClick={() => void startTeamWorkflow()}
           className="rounded-md border border-violet-300/40 bg-violet-900/30 px-3 py-2 text-xs uppercase tracking-[0.16em] text-violet-100"
         >
@@ -788,6 +864,12 @@ export function HeartbeatSchedulerPanel() {
           Stop Cron
         </button>
       </div>
+
+      {teamRetry.length > 0 && <div className="mt-3 flex flex-wrap items-center gap-3 rounded border border-amber-300/20 p-3 text-sm text-amber-100">
+        <span>Unstarted jobs: {teamRetry.map((task) => task.agentId).join(', ')}</span>
+        <button type="button" disabled={busy} onClick={() => void retryUnstartedTeamJobs()} className="rounded border border-amber-200/30 px-3 py-2">Retry only unstarted jobs</button>
+        <button type="button" disabled={busy} onClick={() => setTeamRetry([])} className="rounded px-3 py-2 underline">Keep partial workflow</button>
+      </div>}
 
       {stopConfirmShifts.length > 0 && (
         <ActionStatusBanner
@@ -815,6 +897,7 @@ export function HeartbeatSchedulerPanel() {
           {status}
         </p>
       ) : null}
+      {failedStopShifts.length > 0 && <button type="button" disabled={busy} onClick={() => void stopShiftBatch(failedStopShifts, undefined)} className="mt-2 rounded border border-rose-300/40 px-3 py-2 text-sm text-rose-100">Retry {failedStopShifts.length} failed stop{failedStopShifts.length === 1 ? '' : 's'}</button>}
 
       <div className="mt-4 rounded-xl border border-white/10 bg-slate-950/40 p-3">
         <p className="mb-2 text-xs uppercase tracking-[0.2em] text-cyan-100/80">Active Cron Jobs</p>
@@ -826,6 +909,7 @@ export function HeartbeatSchedulerPanel() {
                   <p className="font-semibold text-slate-100">{shift.name}</p>
                   <button
                     type="button"
+                    disabled={busy}
                     onClick={() => void stopShift(shift.id)}
                     className="rounded border border-rose-300/40 bg-rose-900/25 px-2 py-1 text-[10px] uppercase tracking-[0.14em] text-rose-100"
                   >

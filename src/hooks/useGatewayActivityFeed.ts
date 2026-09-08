@@ -35,20 +35,22 @@ function feedKey(feed: GatewayActivityFeed) {
 export function useGatewayActivityFeed(intervalMs = 3_000, limit = 48) {
   const clearCutoffMs = useRuntimeMonitorClearCutoffMs()
   const [snapshot, setSnapshot] = useState<GatewayActivityFeedSnapshot>({ feed: null, error: '' })
-  const inFlight = useRef(false)
+  const inFlight = useRef<AbortController | null>(null)
   const latestKey = useRef('')
 
   const refresh = useCallback(async () => {
     if (inFlight.current) return
     const requestClearGeneration = getRuntimeMonitorClearGeneration()
-    inFlight.current = true
+    const controller = new AbortController()
+    inFlight.current = controller
     try {
       const result = await apiRequest<GatewayActivityFeed>(`/api/openclaw/runtime/activity?limit=${Math.max(1, Math.min(100, Math.round(limit)))}`, {
         cache: 'no-store',
         timeoutMs: 3_500,
+        signal: controller.signal,
       })
       if (!result.ok) throw new Error(apiErrorMessage(result.error))
-      if (requestClearGeneration !== getRuntimeMonitorClearGeneration()) return
+      if (controller.signal.aborted || requestClearGeneration !== getRuntimeMonitorClearGeneration()) return
 
       const nextKey = feedKey(result.data)
       setSnapshot((previous) => {
@@ -57,11 +59,11 @@ export function useGatewayActivityFeed(intervalMs = 3_000, limit = 48) {
         return feedUnchanged && !previous.error ? previous : { feed: result.data, error: '' }
       })
     } catch (error) {
-      if (requestClearGeneration !== getRuntimeMonitorClearGeneration()) return
+      if (controller.signal.aborted || requestClearGeneration !== getRuntimeMonitorClearGeneration()) return
       const message = error instanceof Error ? error.message : String(error)
       setSnapshot((previous) => previous.error === message ? previous : { ...previous, error: message })
     } finally {
-      inFlight.current = false
+      if (inFlight.current === controller) inFlight.current = null
     }
   }, [limit])
 
@@ -73,19 +75,23 @@ export function useGatewayActivityFeed(intervalMs = 3_000, limit = 48) {
   useEffect(() => {
     let disposed = false
     const refreshWhenVisible = () => {
-      if (disposed || document.hidden) return
+      if (disposed || document.hidden || !document.hasFocus()) return
       void refresh()
     }
 
     refreshWhenVisible()
     const timer = window.setInterval(refreshWhenVisible, Math.max(1_000, intervalMs))
     document.addEventListener('visibilitychange', refreshWhenVisible)
+    window.addEventListener('focus', refreshWhenVisible)
     return () => {
       disposed = true
+      inFlight.current?.abort()
+      inFlight.current = null
       window.clearInterval(timer)
       document.removeEventListener('visibilitychange', refreshWhenVisible)
+      window.removeEventListener('focus', refreshWhenVisible)
     }
-  }, [intervalMs, refresh])
+  }, [intervalMs, refresh, clearCutoffMs])
 
   return { feed: snapshot.feed, error: snapshot.error, refresh }
 }

@@ -104,6 +104,7 @@ test('speech settings migrate old records and normalize every functional control
     autoGainControl: false,
   })
   assert.deepEqual(readSpeechSettings(), {
+    microphoneDeviceId: '',
     mode: 'local',
     autoStop: false,
     pauseDurationMs: 3_000,

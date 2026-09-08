@@ -24,6 +24,7 @@ export type ApiRequestOptions = Omit<RequestInit, 'body' | 'headers'> & {
   timeoutMs?: number
   requestId?: string
   authToken?: string | null
+  validate?: (value: unknown) => boolean
 }
 
 function randomRequestId(): string {
@@ -147,7 +148,14 @@ export async function apiRequest<T = unknown>(path: string, options: ApiRequestO
     const { payload, text } = await readResponsePayload(response)
     const payloadFailure = isExplicitFailurePayload(payload)
     if (response.ok && !payloadFailure) {
-      return { ok: true, data: successPayloadData(payload) as T, status: response.status, requestId: responseRequestId, response }
+      const data = successPayloadData(payload)
+      let valid = true
+      try { valid = !options.validate || options.validate(data) } catch { valid = false }
+      if (!valid) return {
+        ok: false, status: response.status, requestId: responseRequestId, response,
+        error: { code: 'invalid_response', message: 'The runtime returned an incomplete or incompatible response. Refresh to check the latest state before trying the action again.', status: response.status, requestId: responseRequestId, url },
+      }
+      return { ok: true, data: data as T, status: response.status, requestId: responseRequestId, response }
     }
 
     const payloadError = payloadErrorMessage(payload)

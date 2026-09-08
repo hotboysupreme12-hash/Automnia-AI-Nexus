@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict'
-import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises'
+import { chmod, mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises'
 import os from 'node:os'
 import path from 'node:path'
 import test from 'node:test'
@@ -20,7 +20,10 @@ type HarnessOptions = {
   platform?: NodeJS.Platform
   processEnv?: NodeJS.ProcessEnv
   refreshAnthropicOAuthCredential?: ProviderSetupServiceOptions['refreshAnthropicOAuthCredential']
+  refreshGoogleOAuthCredential?: ProviderSetupServiceOptions['refreshGoogleOAuthCredential']
+  refreshOpenAICodexOAuthCredential?: ProviderSetupServiceOptions['refreshOpenAICodexOAuthCredential']
   spawnSync?: ProviderSetupServiceOptions['spawnSync']
+  runCommand?: ProviderSetupServiceOptions['runCommand']
 }
 
 async function createHarness(options: HarnessOptions = {}) {
@@ -60,18 +63,19 @@ async function createHarness(options: HarnessOptions = {}) {
       state.persisted.push({ provider, oauth })
     },
     processEnv: options.processEnv || {},
-    refreshGoogleOAuthCredential: async (oauth) => ({
+    refreshGoogleOAuthCredential: options.refreshGoogleOAuthCredential || (async (oauth) => ({
       ...oauth,
       accessToken: 'google-refreshed-access',
       expiresAt: (options.now ?? 1_782_829_500_000) + 3_600_000,
-    }),
+    })),
     refreshAnthropicOAuthCredential: options.refreshAnthropicOAuthCredential,
-    refreshOpenAICodexOAuthCredential: async (oauth) => ({
+    refreshOpenAICodexOAuthCredential: options.refreshOpenAICodexOAuthCredential || (async (oauth) => ({
       ...oauth,
       accessToken: 'codex-refreshed-access',
       expiresAt: (options.now ?? 1_782_829_500_000) + 3_600_000,
-    }),
+    })),
     spawnSync: options.spawnSync,
+    runCommand: options.runCommand,
     workspaceRoot,
   })
 
@@ -470,5 +474,101 @@ test('loads Anthropic OAuth login and refresh from the bundled OpenClaw provider
     assert.match(moduleUrls[0], /\/oauth-[^/]+\.js$/)
   } finally {
     await harness.cleanup()
+  }
+})
+
+for (const provider of ['google', 'openai', 'anthropic'] as const) {
+  test(`${provider} shares concurrent OAuth refreshes and permits retry after failure`, async () => {
+    let calls = 0
+    let fail = true
+    const refresh = async (oauth: LocalOAuthCredential) => {
+      calls += 1
+      await new Promise((resolve) => setTimeout(resolve, 10))
+      if (fail) throw new Error('temporary refresh failure')
+      return { ...oauth, accessToken: 'fresh-token', expiresAt: 9_999_999_999_999 }
+    }
+    const harness = await createHarness({
+      localOAuth: { [provider]: { accessToken: 'expired', refreshToken: 'refresh', expiresAt: 1 } },
+      refreshGoogleOAuthCredential: refresh,
+      refreshOpenAICodexOAuthCredential: refresh,
+      refreshAnthropicOAuthCredential: refresh,
+    })
+    try {
+      const resolve = provider === 'google' ? harness.service.resolveGoogleOAuthForRequest
+        : provider === 'openai' ? harness.service.resolveOpenAICodexOAuthForRequest : harness.service.resolveAnthropicOAuthForRequest
+      const failed = await Promise.allSettled(Array.from({ length: 12 }, () => resolve()))
+      assert.equal(failed.every((result) => result.status === 'rejected'), true)
+      assert.equal(calls, 1)
+      fail = false
+      const results = await Promise.all(Array.from({ length: 12 }, () => resolve()))
+      assert.equal(calls, 2)
+      assert.equal(harness.state.persisted.length, 1)
+      assert.equal(results.every((result) => result?.accessToken === 'fresh-token'), true)
+    } finally {
+      await harness.cleanup()
+    }
+  })
+}
+
+test('OAuth refresh cannot replace a newly reconnected account', async () => {
+  let finishRefresh!: (credential: LocalOAuthCredential) => void
+  const harness = await createHarness({
+    localOAuth: { google: { accessToken: 'old', refreshToken: 'old-refresh', expiresAt: 1 } },
+    refreshGoogleOAuthCredential: () => new Promise((resolve) => { finishRefresh = resolve }),
+  })
+  try {
+    const pending = harness.service.resolveGoogleOAuthForRequest()
+    harness.state.localOAuth.google = { accessToken: 'reconnected', accountId: 'new-account', expiresAt: 9_999_999_999_999 }
+    finishRefresh({ accessToken: 'obsolete-refresh', expiresAt: 9_999_999_999_999 })
+    assert.equal((await pending)?.accessToken, 'reconnected')
+    assert.equal(harness.state.persisted.length, 0)
+  } finally {
+    await harness.cleanup()
+  }
+})
+
+test('concurrent gcloud auth probes share async work without blocking timers', async () => {
+  let commands = 0
+  let heartbeat = false
+  const harness = await createHarness({
+    processEnv: { GOOGLE_CLOUD_PROJECT: 'async-project' },
+    runCommand: async (_command, args) => {
+      commands += 1
+      await new Promise((resolve) => setTimeout(resolve, 20))
+      return { status: 0, stdout: args.includes('--version') ? 'Cloud SDK' : 'async-token' }
+    },
+  })
+  try {
+    setTimeout(() => { heartbeat = true }, 0)
+    const results = await Promise.all(Array.from({ length: 10 }, () => harness.service.resolveGoogleVertexRequestAuth({})))
+    assert.equal(heartbeat, true)
+    assert.equal(commands, 2)
+    assert.equal(results.every((auth) => auth?.type === 'oauth' && auth.accessToken === 'async-token'), true)
+    await harness.service.resolveGoogleVertexRequestAuth({})
+    assert.equal(commands, 2)
+  } finally {
+    await harness.cleanup()
+  }
+})
+
+test('aborting gcloud request resolution terminates a slow subprocess promptly', async () => {
+  if (process.platform === 'win32') return
+  const home = await mkdtemp(path.join(os.tmpdir(), 'async-gcloud-'))
+  const sdkBin = path.join(home, 'google-cloud-sdk', 'bin')
+  await mkdir(sdkBin, { recursive: true })
+  const command = path.join(sdkBin, 'gcloud')
+  await writeFile(command, '#!/bin/sh\nexec /bin/sleep 10\n')
+  await chmod(command, 0o700)
+  const harness = await createHarness({ platform: process.platform, processEnv: { HOME: home, PATH: sdkBin, GOOGLE_CLOUD_PROJECT: 'cancel-project' } })
+  try {
+    const controller = new AbortController()
+    const pending = harness.service.resolveGoogleVertexRequestAuth({}, controller.signal)
+    const timer = setTimeout(() => controller.abort(), 50)
+    await assert.rejects(pending, { name: 'AbortError' })
+    clearTimeout(timer)
+    assert.equal(controller.signal.aborted, true)
+  } finally {
+    await harness.cleanup()
+    await rm(home, { recursive: true, force: true })
   }
 })

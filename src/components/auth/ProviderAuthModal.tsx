@@ -1,4 +1,5 @@
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
+import { useDialogFocus } from '../ui/Dialog'
 import { apiErrorMessage } from '../../api/client'
 import {
   fetchProviderAuthStatuses,
@@ -104,6 +105,8 @@ export function ProviderAuthModal({ isOpen, provider, envKeys, providerStatus, o
   const [apiKeyOpen, setApiKeyOpen] = useState(false)
   const [projectId, setProjectId] = useState('')
   const [status, setStatus] = useState('')
+  const dialogRootRef = useRef<HTMLDivElement>(null)
+  const dialogPanelRef = useRef<HTMLDivElement>(null)
   const [saving, setSaving] = useState(false)
   const [oauthBusy, setOauthBusy] = useState(false)
   const [authorizationUrl, setAuthorizationUrl] = useState('')
@@ -170,6 +173,7 @@ export function ProviderAuthModal({ isOpen, provider, envKeys, providerStatus, o
     if (provider === 'google-vertex') void refreshProviderStatus(false)
   }, [isOpen, provider, activeProviderStatus?.oauth?.projectId, activeProviderStatus?.gcloud?.projectId, refreshProviderStatus])
 
+  useDialogFocus({ open: isOpen, rootRef: dialogRootRef, panelRef: dialogPanelRef, onClose, preventClose: saving })
   if (!isOpen) return null
 
   const oauth = activeProviderStatus?.oauth
@@ -329,14 +333,17 @@ export function ProviderAuthModal({ isOpen, provider, envKeys, providerStatus, o
   return (
     <>
       <div
+        ref={dialogRootRef}
         className="fixed inset-0 z-[60] overflow-y-auto bg-[#02050b]/88 p-4 backdrop-blur-md sm:p-6"
       >
         <div className="flex min-h-full items-center justify-center">
           <div
+            ref={dialogPanelRef}
+            tabIndex={-1}
             role="dialog"
             aria-modal="true"
             aria-labelledby="provider-auth-title"
-            className="dy-surface-enter relative my-4 max-h-[calc(100vh-2rem)] w-full max-w-2xl overflow-y-auto rounded-[1.75rem] border border-white/[0.12] bg-[linear-gradient(145deg,rgba(17,31,52,0.98),rgba(5,9,17,0.99)_58%,rgba(4,7,12,0.99))] p-5 shadow-[0_36px_100px_-44px_rgba(34,211,238,0.38),0_18px_60px_-30px_rgba(0,0,0,0.95)] sm:p-7"
+            className="dui-modal-surface dy-surface-enter relative my-4 max-h-[calc(100dvh-2rem)] w-full max-w-2xl overflow-y-auto rounded-[1.75rem] border border-white/[0.12] bg-[linear-gradient(145deg,rgba(17,31,52,0.98),rgba(5,9,17,0.99)_58%,rgba(4,7,12,0.99))] p-5 shadow-[0_36px_100px_-44px_rgba(34,211,238,0.38),0_18px_60px_-30px_rgba(0,0,0,0.95)] sm:p-7"
           >
             <div className="pointer-events-none absolute -right-24 -top-28 size-72 rounded-full bg-cyan-400/[0.08] blur-3xl" />
             <div className="pointer-events-none absolute -bottom-32 -left-24 size-64 rounded-full bg-blue-500/[0.07] blur-3xl" />

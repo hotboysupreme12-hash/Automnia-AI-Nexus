@@ -204,16 +204,6 @@ html.dui-pro-overhaul [data-dui-modal="recruit-agent"] .dui-recruit-file-tabs::-
   background: rgba(160, 178, 188, .44);
 }
 
-html.dui-pro-overhaul [data-dui-modal="recruit-agent"] .dui-recruit-layout {
-  display: grid !important;
-  grid-template-columns: minmax(350px, 430px) minmax(0, 1fr) !important;
-  align-items: stretch !important;
-  gap: 16px !important;
-  height: max-content !important;
-  min-height: max-content !important;
-  overflow: visible !important;
-}
-
 html.dui-pro-overhaul [data-dui-modal="recruit-agent"] .dui-recruit-form {
   display: grid !important;
   min-width: 0 !important;
@@ -320,14 +310,12 @@ html.dui-pro-overhaul [data-dui-modal="recruit-agent"] .dui-recruit-section-icon
 }
 
 html.dui-pro-overhaul [data-dui-modal="recruit-agent"] .dui-recruit-grid,
-html.dui-pro-overhaul [data-dui-modal="recruit-agent"] .dui-recruit-basics-stack,
 html.dui-pro-overhaul [data-dui-modal="recruit-agent"] .dui-recruit-settings-content {
   display: grid !important;
   gap: 12px !important;
 }
 
-html.dui-pro-overhaul [data-dui-modal="recruit-agent"] .dui-recruit-grid.two,
-html.dui-pro-overhaul [data-dui-modal="recruit-agent"] .dui-recruit-template-grid {
+html.dui-pro-overhaul [data-dui-modal="recruit-agent"] .dui-recruit-grid.two {
   grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
 }
 
@@ -390,8 +378,7 @@ html.dui-pro-overhaul [data-dui-modal="recruit-agent"] .dui-recruit-file-add inp
 }
 
 html.dui-pro-overhaul [data-dui-modal="recruit-agent"] .dui-recruit-style-settings .dui-recruit-field input,
-html.dui-pro-overhaul [data-dui-modal="recruit-agent"] .dui-recruit-style-settings .dui-recruit-choice-trigger,
-html.dui-pro-overhaul [data-dui-modal="recruit-agent"] .dui-recruit-style-settings .dui-recruit-static-value {
+html.dui-pro-overhaul [data-dui-modal="recruit-agent"] .dui-recruit-style-settings .dui-recruit-choice-trigger {
   min-height: 34px !important;
   padding-right: 9px !important;
   padding-left: 9px !important;
@@ -425,8 +412,7 @@ html.dui-pro-overhaul [data-dui-modal="recruit-agent"] .dui-recruit-choice-field
   z-index: 40;
 }
 
-html.dui-pro-overhaul [data-dui-modal="recruit-agent"] .dui-recruit-choice-trigger,
-html.dui-pro-overhaul [data-dui-modal="recruit-agent"] .dui-recruit-static-value {
+html.dui-pro-overhaul [data-dui-modal="recruit-agent"] .dui-recruit-choice-trigger {
   display: flex !important;
   width: 100% !important;
   min-height: 40px !important;
@@ -531,13 +517,6 @@ html.dui-pro-overhaul [data-dui-modal="recruit-agent"] .dui-recruit-choice-menu 
 html.dui-pro-overhaul [data-dui-modal="recruit-agent"] .dui-recruit-choice-menu button small {
   color: #91a0a9 !important;
   font-size: 10px !important;
-}
-
-html.dui-pro-overhaul [data-dui-modal="recruit-agent"] .dui-recruit-static-value {
-  justify-content: flex-start !important;
-  color: #cdd8de !important;
-  font-size: 13px !important;
-  font-weight: 680 !important;
 }
 
 html.dui-pro-overhaul [data-dui-modal="recruit-agent"] .dui-recruit-model-field {
@@ -1203,51 +1182,7 @@ html.dui-pro-overhaul [data-dui-modal="recruit-agent"] .dui-recruit-files {
   padding: 14px !important;
 }
 
-html.dui-pro-overhaul [data-dui-modal="recruit-agent"] .dui-recruit-file-summary {
-  display: grid !important;
-  align-content: start !important;
-  gap: 13px !important;
-}
 
-html.dui-pro-overhaul [data-dui-modal="recruit-agent"] .dui-recruit-file-summary-card {
-  display: grid !important;
-  gap: 8px !important;
-  border: 1px solid rgba(216, 226, 233, .12) !important;
-  border-radius: 8px !important;
-  background:
-    linear-gradient(180deg, rgba(53, 213, 206, .075), rgba(255, 255, 255, .008)),
-    var(--dui-recruit-panel-2) !important;
-  padding: 18px !important;
-}
-
-html.dui-pro-overhaul [data-dui-modal="recruit-agent"] .dui-recruit-file-summary-kicker {
-  width: fit-content !important;
-  border: 1px solid rgba(117, 226, 165, .26) !important;
-  border-radius: 999px !important;
-  background: rgba(117, 226, 165, .10) !important;
-  color: #bcf8d4 !important;
-  padding: 4px 8px !important;
-  font-size: 11px !important;
-  font-weight: 760 !important;
-  line-height: 1 !important;
-}
-
-html.dui-pro-overhaul [data-dui-modal="recruit-agent"] .dui-recruit-file-summary-card strong {
-  color: #f4fafb !important;
-  font-size: 22px !important;
-  font-weight: 800 !important;
-  line-height: 1.12 !important;
-}
-
-html.dui-pro-overhaul [data-dui-modal="recruit-agent"] .dui-recruit-file-summary-card p {
-  max-width: 560px;
-  margin: 0 !important;
-  color: #9aa8b1 !important;
-  font-size: 13px !important;
-  line-height: 1.45 !important;
-}
-
-html.dui-pro-overhaul [data-dui-modal="recruit-agent"] .dui-recruit-file-pills,
 html.dui-pro-overhaul [data-dui-modal="recruit-agent"] .dui-recruit-file-tabs {
   display: flex !important;
   min-width: 0 !important;
@@ -1255,7 +1190,7 @@ html.dui-pro-overhaul [data-dui-modal="recruit-agent"] .dui-recruit-file-tabs {
   gap: 8px !important;
 }
 
-html.dui-pro-overhaul [data-dui-modal="recruit-agent"] .dui-recruit-file-pills span,
+
 html.dui-pro-overhaul [data-dui-modal="recruit-agent"] .dui-recruit-file-tabs button {
   display: inline-flex !important;
   max-width: 100%;
@@ -1286,8 +1221,7 @@ html.dui-pro-overhaul [data-dui-modal="recruit-agent"] .dui-recruit-file-tabs bu
   color: #f4ffff !important;
 }
 
-html.dui-pro-overhaul [data-dui-modal="recruit-agent"] .dui-recruit-file-customize,
-html.dui-pro-overhaul [data-dui-modal="recruit-agent"] .dui-recruit-file-hide,
+
 html.dui-pro-overhaul [data-dui-modal="recruit-agent"] .dui-recruit-file-add button,
 html.dui-pro-overhaul [data-dui-modal="recruit-agent"] .dui-recruit-secondary,
 html.dui-pro-overhaul [data-dui-modal="recruit-agent"] .dui-recruit-primary,
@@ -1306,8 +1240,7 @@ html.dui-pro-overhaul [data-dui-modal="recruit-agent"] .dui-recruit-auto-button 
   text-transform: none !important;
 }
 
-html.dui-pro-overhaul [data-dui-modal="recruit-agent"] .dui-recruit-file-customize,
-html.dui-pro-overhaul [data-dui-modal="recruit-agent"] .dui-recruit-file-hide,
+
 html.dui-pro-overhaul [data-dui-modal="recruit-agent"] .dui-recruit-file-add button,
 html.dui-pro-overhaul [data-dui-modal="recruit-agent"] .dui-recruit-secondary {
   border: 1px solid rgba(216, 226, 233, .16) !important;
@@ -1316,10 +1249,6 @@ html.dui-pro-overhaul [data-dui-modal="recruit-agent"] .dui-recruit-secondary {
     var(--dui-recruit-panel-3) !important;
   color: #eef5f6 !important;
   box-shadow: inset 0 1px 0 rgba(255, 255, 255, .040) !important;
-}
-
-html.dui-pro-overhaul [data-dui-modal="recruit-agent"] .dui-recruit-file-customize {
-  width: fit-content !important;
 }
 
 html.dui-pro-overhaul [data-dui-modal="recruit-agent"] .dui-recruit-primary,
@@ -1493,11 +1422,6 @@ html.dui-pro-overhaul [data-dui-modal="recruit-agent"] .dui-recruit-auto-indicat
     min-height: 100% !important;
   }
 
-  html.dui-pro-overhaul [data-dui-modal="recruit-agent"][data-markdown-editor="open"] .dui-recruit-layout {
-    grid-template-columns: minmax(340px, 420px) minmax(0, 1fr) !important;
-    align-items: stretch !important;
-  }
-
   html.dui-pro-overhaul [data-dui-modal="recruit-agent"][data-markdown-editor="open"] .dui-recruit-side {
     align-self: stretch !important;
     height: 100% !important;
@@ -1539,10 +1463,6 @@ html.dui-pro-overhaul [data-dui-modal="recruit-agent"] .dui-recruit-auto-indicat
   html.dui-pro-overhaul [data-dui-modal="recruit-agent"] .dui-recruit-close {
     grid-column: 2;
     grid-row: 1;
-  }
-
-  html.dui-pro-overhaul [data-dui-modal="recruit-agent"] .dui-recruit-layout {
-    grid-template-columns: minmax(0, 1fr) !important;
   }
 }
 
@@ -1588,7 +1508,6 @@ html.dui-pro-overhaul [data-dui-modal="recruit-agent"] .dui-recruit-auto-indicat
   html.dui-pro-overhaul [data-dui-modal="recruit-agent"] .dui-recruit-grid.two,
   html.dui-pro-overhaul [data-dui-modal="recruit-agent"] .dui-recruit-grid.three,
   html.dui-pro-overhaul [data-dui-modal="recruit-agent"] .dui-recruit-settings-content,
-  html.dui-pro-overhaul [data-dui-modal="recruit-agent"] .dui-recruit-template-grid,
   html.dui-pro-overhaul [data-dui-modal="recruit-agent"] .dui-recruit-file-toolbar,
   html.dui-pro-overhaul [data-dui-modal="recruit-agent"] .dui-recruit-capability-grid {
     grid-template-columns: minmax(0, 1fr) !important;

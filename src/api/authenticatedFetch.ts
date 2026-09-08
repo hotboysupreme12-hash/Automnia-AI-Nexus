@@ -55,6 +55,10 @@ async function fetchWithSessionRecovery(
   })
   if (firstResponse.status !== 401 || isSessionBootstrapRequest(input)) return firstResponse
   if (isAuthExplicitlySignedOut()) return firstResponse
+  // A fresh renderer with no account token must stay at the login/license
+  // gate. Session recovery is only valid for an already-authenticated user
+  // whose existing session expired while the app was running.
+  if (!readAuthToken()) return firstResponse
 
   const refreshedToken = await recoverDesktopControlCenterSession()
   if (!refreshedToken) return firstResponse

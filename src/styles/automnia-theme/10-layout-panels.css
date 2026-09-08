@@ -462,14 +462,6 @@ html.dui-pro-overhaul .dui-recruit-footer {
   background: rgba(255, 255, 255, .014);
 }
 
-html.dui-pro-overhaul .dui-recruit-eyebrow {
-  margin: 0 0 5px;
-  color: #8edce5 !important;
-  font-size: 10px;
-  font-weight: 850;
-  text-transform: uppercase;
-}
-
 html.dui-pro-overhaul .dui-recruit-header h2 {
   margin: 0;
   font-size: clamp(22px, 2.5vw, 30px);
@@ -477,8 +469,7 @@ html.dui-pro-overhaul .dui-recruit-header h2 {
   line-height: 1;
 }
 
-html.dui-pro-overhaul .dui-recruit-copy,
-html.dui-pro-overhaul .dui-recruit-preview-note {
+html.dui-pro-overhaul .dui-recruit-copy {
   margin: 8px 0 0;
   color: var(--dui-muted) !important;
   font-size: 12px;
@@ -506,20 +497,11 @@ html.dui-pro-overhaul .dui-recruit-body {
   padding: 16px;
 }
 
-html.dui-pro-overhaul .dui-recruit-layout {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(280px, 340px);
-  gap: 14px;
-  align-items: start;
-}
-
-html.dui-pro-overhaul .dui-recruit-form,
-html.dui-pro-overhaul .dui-recruit-preview {
+html.dui-pro-overhaul .dui-recruit-form {
   min-width: 0;
 }
 
-html.dui-pro-overhaul .dui-recruit-section,
-html.dui-pro-overhaul .dui-recruit-preview {
+html.dui-pro-overhaul .dui-recruit-section {
   border: 1px solid rgba(184, 188, 190, .13);
   border-radius: var(--dui-r);
   background:
@@ -580,8 +562,7 @@ html.dui-pro-overhaul .dui-recruit-field {
   min-width: 0;
 }
 
-html.dui-pro-overhaul .dui-recruit-field > span,
-html.dui-pro-overhaul .dui-recruit-preview-block > span {
+html.dui-pro-overhaul .dui-recruit-field > span {
   color: #a7adb2 !important;
   font-size: 10px;
   font-weight: 850;
@@ -697,151 +678,6 @@ html.dui-pro-overhaul .dui-recruit-toggle {
   align-items: center;
   margin-top: 10px;
   padding: 10px;
-}
-
-html.dui-pro-overhaul .dui-recruit-preview {
-  position: sticky;
-  top: 12px;
-  padding: 12px;
-}
-
-html.dui-pro-overhaul .dui-recruit-preview-card {
-  position: relative;
-  min-height: 250px;
-  overflow: hidden;
-  border: 1px solid rgba(120, 231, 245, .22);
-  border-radius: var(--dui-r);
-  background:
-    linear-gradient(180deg, rgba(120, 231, 245, .08), transparent 34%),
-    radial-gradient(circle at 50% 10%, rgba(231, 189, 84, .13), transparent 42%),
-    #080a0c;
-}
-
-html.dui-pro-overhaul .dui-recruit-preview-card::before {
-  content: "";
-  position: absolute;
-  inset: 0 0 auto;
-  height: 3px;
-  background: linear-gradient(90deg, #78e7f5, #e7bd54);
-}
-
-html.dui-pro-overhaul .dui-recruit-preview-portrait {
-  display: grid;
-  width: 100%;
-  height: 154px;
-  place-items: center;
-  overflow: hidden;
-  border-bottom: 1px solid rgba(184, 188, 190, .12);
-  background: linear-gradient(135deg, #171b1f, #080a0c);
-}
-
-html.dui-pro-overhaul .dui-recruit-preview-portrait img {
-  width: 100%;
-  height: 100%;
-  object-fit: cover;
-}
-
-html.dui-pro-overhaul .dui-recruit-preview-portrait span {
-  display: grid;
-  width: 76px;
-  height: 76px;
-  place-items: center;
-  border: 1px solid rgba(184, 188, 190, .18);
-  border-radius: 50%;
-  background: rgba(255, 255, 255, .035);
-  color: #cfd4d7 !important;
-  font-size: 36px;
-  font-weight: 950;
-}
-
-html.dui-pro-overhaul .dui-recruit-preview-meta {
-  padding: 12px;
-}
-
-html.dui-pro-overhaul .dui-recruit-preview-meta span {
-  color: #9decf5 !important;
-  font-size: 10px;
-  font-weight: 900;
-  text-transform: uppercase;
-}
-
-html.dui-pro-overhaul .dui-recruit-preview-meta h3 {
-  margin: 6px 0 0;
-  font-size: 19px;
-  font-weight: 950;
-  line-height: 1.05;
-}
-
-html.dui-pro-overhaul .dui-recruit-preview-meta p {
-  margin: 5px 0 0;
-  color: var(--dui-muted) !important;
-  font-size: 11px;
-  font-weight: 750;
-}
-
-html.dui-pro-overhaul .dui-recruit-preview-stat {
-  position: absolute;
-  right: 10px;
-  bottom: 10px;
-  min-width: 58px;
-  padding: 7px 8px;
-  border: 1px solid rgba(184, 188, 190, .14);
-  border-radius: var(--dui-r);
-  background: rgba(6, 8, 10, .82);
-  text-align: right;
-}
-
-html.dui-pro-overhaul .dui-recruit-preview-stat span {
-  display: block;
-  color: var(--dui-muted) !important;
-  font-size: 9px;
-  font-weight: 850;
-  text-transform: uppercase;
-}
-
-html.dui-pro-overhaul .dui-recruit-preview-stat strong {
-  display: block;
-  margin-top: 2px;
-  color: var(--dui-text);
-  font-size: 20px;
-  font-weight: 950;
-  line-height: 1;
-}
-
-html.dui-pro-overhaul .dui-recruit-preview-block {
-  margin-top: 10px;
-  padding: 10px;
-  border: 1px solid rgba(184, 188, 190, .11);
-  border-radius: var(--dui-r);
-  background: rgba(255, 255, 255, .012);
-}
-
-html.dui-pro-overhaul .dui-recruit-preview-block strong,
-html.dui-pro-overhaul .dui-recruit-preview-block p {
-  display: block;
-  margin: 5px 0 0;
-  color: var(--dui-text-2) !important;
-  font-size: 12px;
-  font-weight: 800;
-  overflow-wrap: anywhere;
-}
-
-html.dui-pro-overhaul .dui-recruit-preview-chips {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 6px;
-  margin-top: 10px;
-}
-
-html.dui-pro-overhaul .dui-recruit-preview-chips span {
-  min-height: 24px;
-  padding: 6px 8px;
-  border: 1px solid rgba(120, 231, 245, .18);
-  border-radius: 6px;
-  background: rgba(120, 231, 245, .055);
-  color: #c7f7fb !important;
-  font-size: 10px;
-  font-weight: 850;
 }
 
 html.dui-pro-overhaul .dui-recruit-footer p {
@@ -1302,16 +1138,12 @@ html.dui-pro-overhaul .agent-card-pro .agent-card-action-secondary {
 }
 
 @media (max-width: 980px) {
-  html.dui-pro-overhaul .dui-recruit-layout,
+  
   html.dui-pro-overhaul .dui-recruit-grid.two,
   html.dui-pro-overhaul .dui-recruit-grid.three,
   html.dui-pro-overhaul .dui-recruit-behaviors,
   html.dui-pro-overhaul .dui-recruit-capability-grid {
     grid-template-columns: 1fr;
-  }
-
-  html.dui-pro-overhaul .dui-recruit-preview {
-    position: static;
   }
 }
 
@@ -1381,12 +1213,6 @@ html.dui-pro-overhaul .dui-recruit-close {
 
 html.dui-pro-overhaul .dui-recruit-body {
   padding: 10px !important;
-}
-
-html.dui-pro-overhaul .dui-recruit-layout {
-  grid-template-columns: minmax(360px, .9fr) minmax(420px, 1.1fr) !important;
-  gap: 10px !important;
-  align-items: stretch !important;
 }
 
 html.dui-pro-overhaul .dui-recruit-form {
@@ -1480,8 +1306,7 @@ html.dui-pro-overhaul .dui-recruit-field > span {
 
 html.dui-pro-overhaul .dui-recruit-field input,
 html.dui-pro-overhaul .dui-recruit-field select,
-html.dui-pro-overhaul .dui-recruit-file-add input,
-html.dui-pro-overhaul .dui-recruit-md-editor textarea {
+html.dui-pro-overhaul .dui-recruit-file-add input {
   border-radius: var(--dui-recruit-control-radius) !important;
   border-color: rgba(214, 219, 224, .13) !important;
   background: #0b0d0f !important;
@@ -1496,11 +1321,6 @@ html.dui-pro-overhaul .dui-recruit-file-add input {
   padding: 0 9px !important;
   font-size: 12px !important;
   line-height: 31px !important;
-}
-
-html.dui-pro-overhaul .dui-recruit-basics-stack {
-  display: grid;
-  gap: 7px;
 }
 
 html.dui-pro-overhaul .dui-recruit-avatar-row {
@@ -1713,31 +1533,6 @@ html.dui-pro-overhaul .dui-recruit-file-add button {
   padding: 0 10px !important;
 }
 
-html.dui-pro-overhaul .dui-recruit-md-editor {
-  display: grid;
-  min-height: 0;
-  gap: 7px;
-  margin-top: 10px;
-}
-
-html.dui-pro-overhaul .dui-recruit-md-editor > span {
-  color: #c7ced4 !important;
-  font-size: 11px;
-  font-weight: 900;
-}
-
-html.dui-pro-overhaul .dui-recruit-md-editor textarea {
-  width: 100%;
-  min-height: 340px;
-  height: 100%;
-  resize: vertical;
-  padding: 10px !important;
-  font-family: var(--dui-font-mono);
-  font-size: 12px !important;
-  font-weight: 500 !important;
-  line-height: 1.55;
-}
-
 html.dui-pro-overhaul .dui-recruit-footer {
   min-height: 54px;
   padding: 9px 12px !important;
@@ -1753,9 +1548,6 @@ html.dui-pro-overhaul .dui-recruit-primary {
 }
 
 @media (max-width: 1040px) {
-  html.dui-pro-overhaul .dui-recruit-layout {
-    grid-template-columns: 1fr !important;
-  }
 
   html.dui-pro-overhaul .dui-recruit-files {
     grid-template-rows: auto auto minmax(300px, 1fr);
@@ -1885,15 +1677,6 @@ html.dui-pro-overhaul .dui-recruit-body {
   min-height: 0;
   padding: 0 14px 10px !important;
   overflow: hidden !important;
-}
-
-html.dui-pro-overhaul .dui-recruit-layout {
-  display: grid !important;
-  height: 100%;
-  min-height: 0;
-  grid-template-columns: 560px minmax(0, 1fr) !important;
-  gap: 10px !important;
-  align-items: stretch !important;
 }
 
 html.dui-pro-overhaul .dui-recruit-form {
@@ -2067,18 +1850,6 @@ html.dui-pro-overhaul .dui-recruit-field small:not([data-tone]) {
   line-height: 1.25 !important;
 }
 
-html.dui-pro-overhaul .dui-recruit-basics-stack {
-  display: grid;
-  gap: 14px;
-}
-
-html.dui-pro-overhaul .dui-recruit-template-grid {
-  display: grid;
-  grid-template-columns: minmax(0, .85fr) minmax(0, 1.15fr);
-  gap: 11px;
-  min-width: 0;
-}
-
 html.dui-pro-overhaul .dui-recruit-template-preview {
   display: grid;
   gap: 7px;
@@ -2125,12 +1896,6 @@ html.dui-pro-overhaul .dui-recruit-template-meta span {
   padding: 5px 7px;
   text-overflow: ellipsis;
   white-space: nowrap;
-}
-
-@media (max-width: 720px) {
-  html.dui-pro-overhaul .dui-recruit-template-grid {
-    grid-template-columns: minmax(0, 1fr);
-  }
 }
 
 html.dui-pro-overhaul .dui-recruit-avatar-row {
@@ -2738,10 +2503,6 @@ html.dui-pro-overhaul .dui-recruit-file-tabs button {
     width: min(1180px, calc(100vw - 32px)) !important;
   }
 
-  html.dui-pro-overhaul .dui-recruit-layout {
-    grid-template-columns: 518px minmax(0, 1fr) !important;
-  }
-
 }
 
 @media (max-width: 1100px) {
@@ -2752,11 +2513,6 @@ html.dui-pro-overhaul .dui-recruit-file-tabs button {
   html.dui-pro-overhaul .dui-recruit-header {
     grid-template-columns: minmax(0, 1fr) 46px;
     min-height: auto !important;
-  }
-
-  html.dui-pro-overhaul .dui-recruit-layout {
-    grid-template-columns: 1fr !important;
-    overflow-y: auto;
   }
 
   html.dui-pro-overhaul .dui-recruit-form {
@@ -2825,83 +2581,12 @@ html.dui-pro-overhaul .dui-recruit-file-tabs button {
 }
 
 /* Brand command header: keeps the original radar identity, but gives it a sharper product-grade lockup. */
-html.dui-pro-overhaul .dy-command-header.relative.mb-7 {
-  position: sticky !important;
-  top: 0 !important;
-  z-index: 35 !important;
-  min-height: 88px !important;
-  margin: 0 0 16px !important;
-  padding: 13px 16px !important;
-  overflow: hidden !important;
-  border-color: rgba(255, 214, 107, .2) !important;
-  border-radius: 12px !important;
-  background:
-    linear-gradient(90deg, rgba(255, 214, 107, .078), transparent 33%),
-    linear-gradient(180deg, rgba(255, 255, 255, .052), rgba(255, 255, 255, .012) 46%, rgba(0, 0, 0, .16)),
-    #0b0d0f !important;
-  box-shadow:
-    inset 0 1px 0 rgba(255, 255, 255, .075),
-    inset 0 -1px 0 rgba(255, 214, 107, .06),
-    0 18px 46px rgba(0, 0, 0, .36),
-    0 0 38px rgba(243, 189, 62, .055) !important;
-}
 
-html.dui-pro-overhaul .dy-command-header.relative.mb-7::before,
-html.dui-pro-overhaul .dy-command-header.relative.mb-7::after {
-  content: "";
-  display: block !important;
-  position: absolute;
-  pointer-events: none;
-}
 
-html.dui-pro-overhaul .dy-command-header.relative.mb-7::before {
-  inset: 0;
-  background:
-    linear-gradient(90deg, rgba(255, 214, 107, .14), transparent 22%, transparent 78%, rgba(255, 214, 107, .06)),
-    repeating-linear-gradient(90deg, rgba(255, 255, 255, .026) 0 1px, transparent 1px 64px);
-  opacity: .42;
-}
-
-html.dui-pro-overhaul .dy-command-header.relative.mb-7::after {
-  left: 16px;
-  right: 16px;
-  bottom: 0;
-  height: 1px;
-  border-radius: 999px;
-  background: linear-gradient(90deg, transparent, rgba(255, 214, 107, .72), rgba(255, 255, 255, .18), transparent);
-  opacity: .74;
-}
-
-html.dui-pro-overhaul .dy-command-header > .pointer-events-none {
-  display: none !important;
-}
-
-html.dui-pro-overhaul .dy-command-header-inner {
-  min-height: 60px;
-  gap: 18px !important;
-}
-
-html.dui-pro-overhaul .brand-lockup.dy-logo-fixed {
-  min-height: 60px !important;
-  min-width: min(420px, 100%) !important;
-  gap: 14px !important;
-}
-
-html.dui-pro-overhaul .brand-lockup.dy-logo-fixed .dy-logo-mark,
 html.dui-pro-overhaul .dy-human-rail-head img {
   object-fit: cover;
   border-color: rgba(255, 214, 107, .3) !important;
   background: #07090a !important;
-}
-
-html.dui-pro-overhaul .brand-lockup.dy-logo-fixed .dy-logo-mark {
-  width: 58px !important;
-  height: 58px !important;
-  border-radius: 14px !important;
-  box-shadow:
-    inset 0 1px 0 rgba(255, 255, 255, .12),
-    0 0 0 1px rgba(255, 214, 107, .07),
-    0 18px 34px -23px rgba(255, 214, 107, .92) !important;
 }
 
 html.dui-pro-overhaul .dy-human-rail-head img {
@@ -2909,22 +2594,6 @@ html.dui-pro-overhaul .dy-human-rail-head img {
   box-shadow:
     inset 0 1px 0 rgba(255, 255, 255, .1),
     0 10px 24px -18px rgba(255, 214, 107, .75);
-}
-
-html.dui-pro-overhaul .brand-lockup.dy-logo-fixed .dy-logo-word {
-  font-size: clamp(34px, 3vw, 42px) !important;
-  font-weight: 950 !important;
-  line-height: .92 !important;
-  color: #f8fbfc !important;
-  text-shadow: 0 0 18px rgba(255, 214, 107, .1) !important;
-}
-
-html.dui-pro-overhaul .brand-lockup.dy-logo-fixed .dy-logo-subtitle {
-  margin-top: 6px !important;
-  color: #aeb9bf !important;
-  font-size: 10px !important;
-  font-weight: 850 !important;
-  text-transform: uppercase;
 }
 
 html.dui-pro-overhaul .dy-status-grid {
@@ -2994,11 +2663,6 @@ html.dui-pro-overhaul .dui-login-brand img {
 }
 
 @media (max-width: 760px) {
-  html.dui-pro-overhaul .dy-command-header.relative.mb-7 {
-    position: static !important;
-    min-height: 74px !important;
-    margin-top: 10px !important;
-  }
 
   html.dui-pro-overhaul .dy-status-grid {
     width: 100%;

@@ -100,6 +100,28 @@ function makePersistenceMergeState(): NexusPersistenceMergeState {
   }
 }
 
+test('hydration tolerates corrupt storage and refuses unsupported future schemas', () => {
+  const current = makePersistenceMergeState()
+  for (const payload of [null, [], 'broken', 4, { _version: NEXUS_PERSISTED_VERSION + 1 },
+    { _version: NEXUS_PERSISTED_VERSION, agents: {} },
+    { _version: NEXUS_PERSISTED_VERSION, agents: [null] },
+    { _version: NEXUS_PERSISTED_VERSION, agents: [{ id: 'broken-custom' }] },
+    { _version: NEXUS_PERSISTED_VERSION, missionHistory: 'invalid' }]) {
+    assert.equal(mergeNexusPersistedState(payload, current), current)
+  }
+})
+
+test('hydration cannot replace live actions or inject unknown store fields', () => {
+  const action = () => 'live'
+  const current = { ...makePersistenceMergeState(), setTab: action, tab: 'agents' }
+  const merged = mergeNexusPersistedState({
+    ...partializeNexusPersistedState(current), setTab: null, tab: 'settings', unexpected: true,
+  }, current)
+  assert.equal(merged.setTab, action)
+  assert.equal(merged.tab, 'agents')
+  assert.equal('unexpected' in merged, false)
+})
+
 function makeMissionRun(id: string, status: MissionRun['status'] = 'completed'): MissionRun {
   const missionState = makeMissionState()
   return {

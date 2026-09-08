@@ -1,6 +1,20 @@
+import { withUploadCapacity } from './uploadCapacity'
 import { createHash, randomUUID } from 'node:crypto'
-import { promises as fs } from 'node:fs'
+import { constants, promises as fs } from 'node:fs'
 import path from 'node:path'
+import type { FileHandle } from 'node:fs/promises'
+
+async function readBounded(handle: FileHandle, limit: number) {
+  const buffer = Buffer.alloc(limit + 1)
+  let offset = 0
+  while (offset < buffer.length) {
+    const { bytesRead } = await handle.read(buffer, offset, buffer.length - offset, offset)
+    if (!bytesRead) break
+    offset += bytesRead
+  }
+  if (offset > limit) throw new Error('Attachment exceeded its recorded size.')
+  return buffer.subarray(0, offset)
+}
 
 export const COMMAND_CONSOLE_UPLOAD_LIMIT_BYTES = 25 * 1024 * 1024
 export const COMMAND_CONSOLE_GATEWAY_IMAGE_LIMIT_BYTES = 6 * 1024 * 1024
@@ -85,11 +99,14 @@ export type CommandConsoleUploadAttachment = {
   mimeType: string
   size: number
   kind: 'image' | 'file'
+  delivery?: 'inline' | 'workspace'
 }
 
 export type CommandConsoleUploadServiceOptions = {
   uploadsDir: string
   approvedRootDir?: string
+  storageLimitBytes?: number
+  storageFileLimit?: number
   uploadLimitBytes?: number
   imageInlineLimitBytes?: number
   fileInlineLimitBytes?: number
@@ -299,19 +316,33 @@ export function createCommandConsoleUploadService(options: CommandConsoleUploadS
     const kind = COMMAND_CONSOLE_IMAGE_ATTACHMENT_MIME_TYPES.has(resolvedMimeType) ? 'image' : 'file'
     const digest = createHash('sha256').update(bytes).digest('hex').slice(0, 16)
     const uploadId = randomId()
+    if (!/^[a-zA-Z0-9_-]{1,100}$/.test(uploadId)) throw new Error('Could not allocate an upload identifier.')
     const uploadPath = path.join(uploadsDir, `${now().toString(36)}-${digest}-${safeName}`)
     const resolvedUploadDir = path.resolve(uploadsDir)
     const resolvedUploadPath = path.resolve(uploadPath)
     if (!isPathUnder(resolvedUploadDir, resolvedUploadPath)) throw new Error('Upload path resolved outside the upload directory.')
+    await fs.mkdir(resolvedUploadDir, { recursive: true })
+    await assertUploadWriteRoot(resolvedUploadDir)
+    return withUploadCapacity(resolvedUploadDir, bytes.length, { bytes: options.storageLimitBytes ?? 2 * 1024 * 1024 * 1024, files: options.storageFileLimit ?? 2000 }, async () => {
+    await assertUploadWriteRoot(resolvedUploadDir)
     await writeUploadFile(resolvedUploadPath, bytes)
-    return {
+    const attachment: CommandConsoleUploadAttachment = {
       id: uploadId,
       name: safeName,
       path: resolvedUploadPath,
       mimeType: resolvedMimeType || 'application/octet-stream',
       size: bytes.length,
       kind,
+      delivery: bytes.length <= (kind === 'image' ? imageInlineLimitBytes : fileInlineLimitBytes) ? 'inline' : 'workspace',
     }
+    try {
+      await writeUploadFile(path.join(path.resolve(uploadsDir), `${uploadId}.upload.json`), Buffer.from(JSON.stringify({ version: 1, attachment, createdAt: now(), sha256: createHash('sha256').update(bytes).digest('hex') })))
+    } catch (error) {
+      await fs.unlink(resolvedUploadPath).catch(() => undefined)
+      throw error
+    }
+    return attachment
+    })
   }
 
   function normalizeAttachment(value: unknown): CommandConsoleUploadAttachment | null {
@@ -345,15 +376,47 @@ export function createCommandConsoleUploadService(options: CommandConsoleUploadS
   }
 
   async function gatewayAttachmentsFromTurnAttachments(attachments: unknown[] | undefined) {
-    const normalized = (attachments || []).map(normalizeAttachment).filter((entry): entry is CommandConsoleUploadAttachment => Boolean(entry))
+    if ((attachments?.length || 0) > 8) throw new Error('Attach at most 8 files to one message.')
     const gatewayAttachments: Record<string, unknown>[] = []
-    for (const attachment of normalized) {
+    let inlineBytes = 0
+    const seen = new Set<string>()
+    for (const input of attachments || []) {
+      const id = isLooseRecord(input) && typeof input.id === 'string' ? input.id : ''
+      if (!/^[a-zA-Z0-9_-]{1,100}$/.test(id)) throw new Error('An attachment is invalid. Remove it and upload the file again.')
+      if (seen.has(id)) continue
+      seen.add(id)
+      let record: { attachment: CommandConsoleUploadAttachment; sha256: string }
+      try {
+        const manifestPath = path.join(path.resolve(uploadsDir), `${id}.upload.json`)
+        const realManifest = await resolveAttachmentReadPath({ path: manifestPath } as CommandConsoleUploadAttachment)
+        if (!realManifest) throw new Error('missing')
+        const handle = await fs.open(realManifest, constants.O_RDONLY | (constants.O_NOFOLLOW || 0))
+        try {
+          const stat = await handle.stat()
+          if (!stat.isFile() || stat.size > 16_384) throw new Error('invalid')
+          const raw = JSON.parse((await readBounded(handle, 16_384)).toString('utf8'))
+          const attachment = normalizeAttachment(raw.attachment)
+          if (raw.version !== 1 || attachment?.id !== id || !/^[a-f0-9]{64}$/.test(raw.sha256 || '')) throw new Error('invalid')
+          record = { attachment, sha256: raw.sha256 }
+        } finally { await handle.close() }
+      } catch { throw new Error('An attachment record is unavailable. Remove it and upload the file again.') }
+      const { attachment } = record
       const inlineLimit = attachment.kind === 'image' ? imageInlineLimitBytes : fileInlineLimitBytes
-      if (attachment.size > inlineLimit) continue
       const readPath = await resolveAttachmentReadPath(attachment)
-      if (!readPath) continue
-      const bytes = await fs.readFile(readPath)
-      if (bytes.length > inlineLimit) continue
+      if (!readPath) throw new Error(`Attachment ${attachment.name} is unavailable. Upload it again.`)
+      const handle = await fs.open(readPath, constants.O_RDONLY | (constants.O_NOFOLLOW || 0))
+      let bytes: Buffer
+      try {
+        const stat = await handle.stat()
+        if (!stat.isFile() || stat.size !== attachment.size) throw new Error(`Attachment ${attachment.name} changed on disk. Upload it again.`)
+        if (stat.size > inlineLimit) continue
+        if (inlineBytes + stat.size > 24 * 1024 * 1024) throw new Error('These attachments exceed the combined 24 MB inline limit. Send them in separate messages.')
+        // A bounded read also limits memory if another process grows the file after stat.
+        bytes = await readBounded(handle, stat.size)
+        if (bytes.length !== stat.size) throw new Error(`Attachment ${attachment.name} changed on disk. Upload it again.`)
+        if (createHash('sha256').update(bytes).digest('hex') !== record.sha256) throw new Error(`Attachment ${attachment.name} changed on disk. Upload it again.`)
+      } finally { await handle.close() }
+      inlineBytes += bytes.length
       gatewayAttachments.push({
         type: attachment.kind === 'image' ? 'image' : 'file',
         mimeType: attachment.mimeType,

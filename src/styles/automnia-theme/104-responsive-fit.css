@@ -99,11 +99,7 @@ html.dui-pro-overhaul.dui-cohesive-ui [data-dui-modal="recruit-agent"] .dui-recr
   }
 
   html.dui-pro-overhaul .dy-human-nav-copy,
-  html.dui-pro-overhaul .dy-operator-copy,
-  html.dui-pro-overhaul .dy-operator-menu,
-  html.dui-pro-overhaul.dui-cohesive-ui .dy-human-nav-copy,
-  html.dui-pro-overhaul.dui-cohesive-ui .dy-operator-copy,
-  html.dui-pro-overhaul.dui-cohesive-ui .dy-operator-menu {
+  html.dui-pro-overhaul.dui-cohesive-ui .dy-human-nav-copy {
     display: none !important;
   }
 

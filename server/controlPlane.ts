@@ -1,6 +1,11 @@
+import { createIdempotentShiftService, type PreparedShift } from './services/runtime/idempotentShiftService'
+import { ConfigEditConflict, configSnapshot, mergeConfigEdit, rememberConfigSnapshot } from './services/filesystem/configMerge'
+import { writeBoundedSseEvent } from './services/agents/downstreamSse'
 // No new domain logic goes here. Keep this file to dependency wiring and
 // temporary composition glue; new backend behavior must declare and use its
 // target service folder from docs/BETA_CODEBASE_SPLIT_PLAN.md.
+import { boundConversationMessages } from './services/agents/conversationBudgetService'
+import { readCompatibleSseCompletion, readUpstreamSse } from './services/agents/upstreamSseService'
 import express from 'express'
 import { createHash, randomBytes, randomUUID } from 'node:crypto'
 import { chmodSync, existsSync, mkdirSync, readdirSync, readFileSync, statSync, writeFileSync, promises as fs } from 'node:fs'
@@ -77,6 +82,8 @@ import {
   AUTOMNIA_CREDITS_MODEL_IDS,
   AUTOMNIA_CREDITS_MODEL_ID,
   AUTOMNIA_CREDITS_PROVIDER_ID,
+  AUTOMNIA_RELAY_MODEL_IDS,
+  AUTOMNIA_RELAY_MODEL_LABELS,
   CREDITS_ONLY_MODEL_ACCESS_MESSAGE,
   creditsOnlyModelSelection,
   isAutomniaCreditsModelId,
@@ -352,7 +359,6 @@ const DEFAULT_OPENCLAW_FAST_AUTO_ON_SECONDS = 60
 const FAST_MODE_MODEL_PARAM_PROVIDERS = new Set(['openai', 'openai-codex', 'anthropic', 'xai', 'minimax'])
 const MAX_RUNTIME_OUTPUT_CHARS = 1_200_000
 const MAX_LOCAL_JSON_RESPONSE_CHARS = 1_200_000
-const UPSTREAM_SSE_BUFFER_LIMIT_CHARS = 1_000_000
 const FOLDER_PICKER_TIMEOUT_MS = (() => {
   const configured = Number(process.env.CONTROL_CENTER_FOLDER_PICKER_TIMEOUT_MS || 60000)
   return Number.isFinite(configured) && configured >= 5000 ? configured : 60000
@@ -1719,6 +1725,12 @@ const MODEL_RESILIENCE_FALLBACKS: Record<string, string[]> = {
     'openai/gpt-5.6-terra',
     'openai/gpt-5.6-sol',
   ],
+  'google/gemini-3.8-flash': [
+    'google/gemini-3.7-flash',
+    'google/gemini-3.6-flash',
+    'google/gemini-3.5-flash',
+    'google/gemini-3.1-flash-lite',
+  ],
   'google/gemini-3.7-flash': [
     'google/gemini-3.6-flash',
     'google/gemini-3.5-flash',
@@ -1729,6 +1741,12 @@ const MODEL_RESILIENCE_FALLBACKS: Record<string, string[]> = {
     'google/gemini-3.1-flash-lite',
     'google/gemini-2.5-flash',
     'google/gemini-2.5-flash-lite',
+  ],
+  'google-vertex/gemini-3.8-flash': [
+    'google-vertex/gemini-3.7-flash',
+    'google-vertex/gemini-3.6-flash',
+    'google-vertex/gemini-3.5-flash',
+    'google-vertex/gemini-3.1-flash-lite',
   ],
   'google-vertex/gemini-3.7-flash': [
     'google-vertex/gemini-3.6-flash',
@@ -2514,9 +2532,10 @@ const missionReportService = createMissionReportService({
   appendMissionReport: (report) => runtimeLedgerStore.appendMissionReport(report),
   missionFeed,
   missions,
-  readMissionEvents: (limit) => runtimeLedgerStore.readMissionEvents(limit),
-  readMissionRecords: (limit) => runtimeLedgerStore.readMissionRecords(limit),
-  readMissionReports: (limit) => runtimeLedgerStore.readMissionReports(limit),
+  readMissionEvents: (limit, options) => runtimeLedgerStore.readMissionEvents(limit, options),
+  readAllMissionEvents: (missionId) => runtimeLedgerStore.readAllMissionEvents(missionId),
+  readMissionRecords: (limit, options) => runtimeLedgerStore.readMissionRecords(limit, options),
+  readMissionReports: (limit, options) => runtimeLedgerStore.readMissionReports(limit, options),
 })
 const buildMissionLifecycleProjection = missionReportService.buildMissionLifecycleProjection
 const buildReconciledMissionLifecycleProjection: typeof buildMissionLifecycleProjection = async (projectionOptions) => {
@@ -2794,22 +2813,11 @@ const MAX_PROVIDER_CONVERSATION_CHARS = 32_000
 const MAX_PROVIDER_CONVERSATION_SESSIONS = 128
 const PROVIDER_CONVERSATION_TTL_MS = 6 * 60 * 60 * 1000
 
-function providerConversationChars(messages: ProviderConversationMessage[]) {
-  return messages.reduce((total, message) => total + message.content.length + (message.reasoningContent?.length || 0), 0)
-}
-
 function trimProviderConversationMessages(
   messages: ProviderConversationMessage[],
   limits: { maxMessages?: number; maxChars?: number } = {},
 ) {
-  const maxMessages = limits.maxMessages || MAX_PROVIDER_CONVERSATION_MESSAGES
-  const maxChars = limits.maxChars || MAX_PROVIDER_CONVERSATION_CHARS
-  let next = messages.filter((message) => message.content.trim() || message.reasoningContent?.trim())
-  if (next.length > maxMessages) next = next.slice(-maxMessages)
-  while (next.length > 2 && providerConversationChars(next) > maxChars) {
-    next = next.slice(2)
-  }
-  return next
+  return boundConversationMessages(messages, limits.maxMessages ?? MAX_PROVIDER_CONVERSATION_MESSAGES, limits.maxChars ?? MAX_PROVIDER_CONVERSATION_CHARS)
 }
 
 function providerConversationLimits() {
@@ -5866,8 +5874,7 @@ async function openExternalAuthUrl(url: string) {
 }
 
 function writeSseEvent(res: { write: (chunk: string) => unknown }, event: string, data: Record<string, unknown>) {
-  res.write(`event: ${event}\n`)
-  res.write(`data: ${JSON.stringify(data)}\n\n`)
+  writeBoundedSseEvent(res, event, data)
 }
 
 function splitTextForSse(text: string, chunkSize = SSE_DELTA_CHUNK_CHARS) {
@@ -6067,58 +6074,6 @@ function emitClawTalkConsoleFrame(event: string, context: ClawTalkConsoleMirrorC
     }
   }
   return true
-}
-
-function parseSseFrames(buffer: string): { frames: Array<{ event?: string; data: string }>; rest: string } {
-  const normalized = buffer.replace(/\r\n/g, '\n')
-  const frames: Array<{ event?: string; data: string }> = []
-  let cursor = 0
-  while (true) {
-    const boundary = normalized.indexOf('\n\n', cursor)
-    if (boundary === -1) break
-    const rawFrame = normalized.slice(cursor, boundary)
-    cursor = boundary + 2
-    const dataLines: string[] = []
-    let event: string | undefined
-    for (const line of rawFrame.split('\n')) {
-      if (line.startsWith('event:')) event = line.slice(6).trim()
-      if (line.startsWith('data:')) dataLines.push(line.slice(5).trimStart())
-    }
-    if (dataLines.length) frames.push({ event, data: dataLines.join('\n') })
-  }
-  return { frames, rest: normalized.slice(cursor) }
-}
-
-async function readUpstreamSse(
-  response: globalThis.Response,
-  onFrame: (frame: { event?: string; data: string }) => void | false,
-) {
-  if (!response.body) throw new Error('Streaming response did not include a body.')
-  const reader = response.body.getReader()
-  const decoder = new TextDecoder()
-  let buffer = ''
-  while (true) {
-    const { done, value } = await reader.read()
-    if (done) break
-    buffer += decoder.decode(value, { stream: true })
-    if (buffer.length > UPSTREAM_SSE_BUFFER_LIMIT_CHARS) {
-      await reader.cancel().catch(() => undefined)
-      throw new Error(`Streaming response frame exceeded ${UPSTREAM_SSE_BUFFER_LIMIT_CHARS} chars without an SSE boundary.`)
-    }
-    const parsed = parseSseFrames(buffer)
-    buffer = parsed.rest
-    for (const frame of parsed.frames) {
-      if (onFrame(frame) === false) {
-        await reader.cancel().catch(() => undefined)
-        return
-      }
-    }
-  }
-  buffer += decoder.decode()
-  const parsed = parseSseFrames(`${buffer}\n\n`)
-  for (const frame of parsed.frames) {
-    if (onFrame(frame) === false) return
-  }
 }
 
 async function assertUpstreamOk(response: globalThis.Response, provider: string) {
@@ -6376,25 +6331,9 @@ async function streamOpenAiCompatibleCompletion(params: {
     signal: directProviderRequestSignal(params.signal),
   })
   await assertUpstreamOk(upstream, params.provider)
-  let reply = ''
-  let reasoningContent = ''
-  await readUpstreamSse(upstream, (frame) => {
-    if (frame.data === '[DONE]') return
-    try {
-      const payload = JSON.parse(frame.data) as {
-        choices?: Array<{ delta?: { content?: string | null; reasoning_content?: string | null } }>
-      }
-      const reasoning = payload.choices?.[0]?.delta?.reasoning_content || ''
-      if (reasoning) reasoningContent += reasoning
-      const text = payload.choices?.[0]?.delta?.content || ''
-      if (!text) return
-      reply += text
-      params.emit('delta', { text: redactHiddenReasoningAndSecrets(text) })
-    } catch {
-      // Ignore malformed upstream frames; provider streams can include keepalive noise.
-    }
+  return readCompatibleSseCompletion(upstream, (text) => {
+    params.emit('delta', { text: redactHiddenReasoningAndSecrets(text) })
   })
-  return { content: reply, reasoningContent: reasoningContent || undefined }
 }
 
 async function streamOpenAiResponsesCompletion(params: {
@@ -8780,14 +8719,15 @@ async function readOpenclawConfig() {
       (text) => JSON.parse(text) as OpenClawConfigFile,
       (entry) => { openclawConfigCache = entry },
     )
-    if (
-      ensurePrimaryAgentSelection(cached, isRetiredAgentId)
-      || sanitizeOpenClawConfigAgentAvatars(cached)
-      || migrateGeneratedDeepSeekDefaultsInOpenClawConfig(cached)
-      || pruneRetiredAgentsFromOpenClawConfig(cached)
-      || repairInvalidPersistedTelegramPolicy(cached)
-      || enforcePersistedCompactionPolicy(cached)
-    ) {
+    rememberConfigSnapshot(cached)
+    if ([
+      ensurePrimaryAgentSelection(cached, isRetiredAgentId),
+      sanitizeOpenClawConfigAgentAvatars(cached),
+      migrateGeneratedDeepSeekDefaultsInOpenClawConfig(cached),
+      pruneRetiredAgentsFromOpenClawConfig(cached),
+      repairInvalidPersistedTelegramPolicy(cached),
+      enforcePersistedCompactionPolicy(cached),
+    ].some(Boolean)) {
       await writeOpenclawConfig(cached).catch(() => undefined)
     }
     return cached
@@ -8805,15 +8745,15 @@ async function readOpenclawConfig() {
   let lastError: unknown
   for (let attempt = 0; attempt < 2; attempt += 1) {
     try {
-      const parsed = JSON.parse(raw.replace(/^\uFEFF/, '')) as OpenClawConfigFile
-      if (
-        ensurePrimaryAgentSelection(parsed, isRetiredAgentId)
-        || sanitizeOpenClawConfigAgentAvatars(parsed)
-        || migrateGeneratedDeepSeekDefaultsInOpenClawConfig(parsed)
-        || pruneRetiredAgentsFromOpenClawConfig(parsed)
-        || repairInvalidPersistedTelegramPolicy(parsed)
-        || enforcePersistedCompactionPolicy(parsed)
-      ) {
+      const parsed = rememberConfigSnapshot(JSON.parse(raw.replace(/^\uFEFF/, '')) as OpenClawConfigFile)
+      if ([
+        ensurePrimaryAgentSelection(parsed, isRetiredAgentId),
+        sanitizeOpenClawConfigAgentAvatars(parsed),
+        migrateGeneratedDeepSeekDefaultsInOpenClawConfig(parsed),
+        pruneRetiredAgentsFromOpenClawConfig(parsed),
+        repairInvalidPersistedTelegramPolicy(parsed),
+        enforcePersistedCompactionPolicy(parsed),
+      ].some(Boolean)) {
         await writeOpenclawConfig(parsed).catch(() => undefined)
       }
       await rememberJsonFileCache(OPENCLAW_CONFIG_PATH, parsed, (entry) => { openclawConfigCache = entry })
@@ -8829,15 +8769,15 @@ async function readOpenclawConfig() {
 
   try {
     const fallbackRaw = await fs.readFile(`${OPENCLAW_CONFIG_PATH}.last-good`, 'utf-8')
-    const parsed = JSON.parse(fallbackRaw.replace(/^\uFEFF/, '')) as OpenClawConfigFile
-    if (
-      ensurePrimaryAgentSelection(parsed, isRetiredAgentId)
-      || sanitizeOpenClawConfigAgentAvatars(parsed)
-      || migrateGeneratedDeepSeekDefaultsInOpenClawConfig(parsed)
-      || pruneRetiredAgentsFromOpenClawConfig(parsed)
-      || repairInvalidPersistedTelegramPolicy(parsed)
-      || enforcePersistedCompactionPolicy(parsed)
-    ) {
+    const parsed = rememberConfigSnapshot(JSON.parse(fallbackRaw.replace(/^\uFEFF/, '')) as OpenClawConfigFile)
+    if ([
+      ensurePrimaryAgentSelection(parsed, isRetiredAgentId),
+      sanitizeOpenClawConfigAgentAvatars(parsed),
+      migrateGeneratedDeepSeekDefaultsInOpenClawConfig(parsed),
+      pruneRetiredAgentsFromOpenClawConfig(parsed),
+      repairInvalidPersistedTelegramPolicy(parsed),
+      enforcePersistedCompactionPolicy(parsed),
+    ].some(Boolean)) {
       await writeOpenclawConfig(parsed).catch(() => undefined)
     }
     await rememberJsonFileCache(OPENCLAW_CONFIG_PATH, parsed, (entry) => { openclawConfigCache = entry })
@@ -9697,90 +9637,95 @@ async function writeOpenclawConfig(config: unknown, options: { allowDuringAgentT
     console.info('[config] writeOpenclawConfig suppressed: agent turn in progress')
     return
   }
-  const parsed = (config || {}) as OpenClawConfigFile
-  ensureOpenclawRuntimeDefaults(parsed)
-  // The generic OpenClaw normalizer adds resilience fallbacks. Re-apply the
-  // active billing contract afterward so a background config write cannot
-  // silently broaden a just-selected usage policy.
-  enforceActiveBillingRouteModelOrder(parsed)
-  for (const entry of parsed.agents?.list || []) {
-    applyTokenEfficientContextLimits(entry)
-  }
-  await syncModelProviderTimeoutsFromAgentSettings(parsed)
-  const next = {
-    ...parsed,
-    agents: parsed.agents
-      ? {
-          ...parsed.agents,
-          list: (parsed.agents.list || []).filter((entry) => !isRetiredAgentId(entry.id)).map((entry) => {
-            const safeEntry = { ...(entry as Record<string, unknown>) }
-            delete safeEntry.executionWorkspace
-            delete safeEntry.heartbeat
-            delete safeEntry.runtime
-            const agentId = typeof safeEntry.id === 'string' ? safeEntry.id : undefined
-            const workspace = agentConfigWorkspaceForAvatar(
-              agentId,
-              typeof safeEntry.workspace === 'string' ? safeEntry.workspace : undefined,
-              parsed.agents?.defaults?.workspace,
-            )
-            if (safeEntry.identity !== undefined) {
-              safeEntry.identity = sanitizeLooseIdentityForOpenClaw(safeEntry.identity, workspace)
-              if (isLooseRecord(safeEntry.identity) && !Object.keys(safeEntry.identity).length) {
-                delete safeEntry.identity
-              }
-            }
-            return safeEntry
-          }),
-        }
-      : parsed.agents,
-  }
-  // Create a version of the config for comparison that excludes dynamic metadata fields
-  // (like lastTouchedAt, lastTouchedVersion, updatedAt) using a true deep clone to prevent unnecessary restarts.
-  const stripDynamicConfigFieldsForComparison = (cfg: unknown) => {
-    if (!cfg || typeof cfg !== 'object') return cfg
-    const cloned = JSON.parse(JSON.stringify(cfg)) as Record<string, unknown>
-    if (cloned.meta && typeof cloned.meta === 'object' && !Array.isArray(cloned.meta)) {
-      const meta = cloned.meta as Record<string, unknown>
-      delete meta.lastTouchedAt
-      delete meta.lastTouchedVersion
-      delete meta.lastTouchedBy
-      delete meta.updatedAt
-      delete meta.createdAt
-      if (Object.keys(meta).length === 0) delete cloned.meta
-    }
-    return cloned
-  }
-
-  const compareNext = stripDynamicConfigFieldsForComparison(next)
-  const serializedCompare = `${JSON.stringify(compareNext, null, 2)}\n`
-
-  const serialized = `${JSON.stringify(next, null, 2)}\n`
-
+  const desired = cloneJson((config || {}) as OpenClawConfigFile)
+  const base = config && typeof config === 'object' ? configSnapshot(config) : undefined
   const write = async () => {
     await fs.mkdir(path.dirname(OPENCLAW_CONFIG_PATH), { recursive: true })
-    try {
-      const current = await readTextFileWithLockRetry(OPENCLAW_CONFIG_PATH)
-      const currentConfig = JSON.parse(current)
-      const compareCurrent = stripDynamicConfigFieldsForComparison(currentConfig)
-      const serializedCurrentCompare = `${JSON.stringify(compareCurrent, null, 2)}\n`
-      if (serializedCurrentCompare === serializedCompare) return
-    } catch (error) {
-      if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error
-    }
-    const tempPath = path.join(path.dirname(OPENCLAW_CONFIG_PATH), `.openclaw.${randomUUID()}.tmp`)
-    try {
-      await writeTextFileWithLockRetry(tempPath, serialized)
-      await renameWithLockRetry(tempPath, OPENCLAW_CONFIG_PATH)
-    } finally {
-      await fs.unlink(tempPath).catch(() => undefined)
-    }
-  }
+    for (let attempt = 0; attempt < 3; attempt++) {
+      const readCurrent = () => readTextFileWithLockRetry(OPENCLAW_CONFIG_PATH).catch((error) => {
+        if ((error as NodeJS.ErrnoException).code === 'ENOENT') return null
+        throw error
+      })
+      const current = await readCurrent()
+      const currentConfig = current === null ? undefined : JSON.parse(current.replace(/^\uFEFF/, '')) as OpenClawConfigFile
+      if (currentConfig !== undefined && base === undefined && JSON.stringify(currentConfig) !== JSON.stringify(desired)) throw new ConfigEditConflict()
+      const parsed = cloneJson((currentConfig === undefined ? desired : mergeConfigEdit(base, desired, currentConfig)) as OpenClawConfigFile)
+      ensureOpenclawRuntimeDefaults(parsed)
+      // The generic OpenClaw normalizer adds resilience fallbacks. Re-apply the
+      // active billing contract afterward so a background config write cannot
+      // silently broaden a just-selected usage policy.
+      enforceActiveBillingRouteModelOrder(parsed)
+      for (const entry of parsed.agents?.list || []) {
+        applyTokenEfficientContextLimits(entry)
+      }
+      await syncModelProviderTimeoutsFromAgentSettings(parsed)
+      const next = {
+        ...parsed,
+        agents: parsed.agents
+          ? {
+              ...parsed.agents,
+              list: (parsed.agents.list || []).filter((entry) => !isRetiredAgentId(entry.id)).map((entry) => {
+                const safeEntry = { ...(entry as Record<string, unknown>) }
+                delete safeEntry.executionWorkspace
+                delete safeEntry.heartbeat
+                delete safeEntry.runtime
+                const agentId = typeof safeEntry.id === 'string' ? safeEntry.id : undefined
+                const workspace = agentConfigWorkspaceForAvatar(
+                  agentId,
+                  typeof safeEntry.workspace === 'string' ? safeEntry.workspace : undefined,
+                  parsed.agents?.defaults?.workspace,
+                )
+                if (safeEntry.identity !== undefined) {
+                  safeEntry.identity = sanitizeLooseIdentityForOpenClaw(safeEntry.identity, workspace)
+                  if (isLooseRecord(safeEntry.identity) && !Object.keys(safeEntry.identity).length) {
+                    delete safeEntry.identity
+                  }
+                }
+                return safeEntry
+              }),
+            }
+          : parsed.agents,
+      }
+      // Create a version of the config for comparison that excludes dynamic metadata fields
+      // (like lastTouchedAt, lastTouchedVersion, updatedAt) using a true deep clone to prevent unnecessary restarts.
+      const stripDynamicConfigFieldsForComparison = (cfg: unknown) => {
+        if (!cfg || typeof cfg !== 'object') return cfg
+        const cloned = JSON.parse(JSON.stringify(cfg)) as Record<string, unknown>
+        if (cloned.meta && typeof cloned.meta === 'object' && !Array.isArray(cloned.meta)) {
+          const meta = cloned.meta as Record<string, unknown>
+          delete meta.lastTouchedAt
+          delete meta.lastTouchedVersion
+          delete meta.lastTouchedBy
+          delete meta.updatedAt
+          delete meta.createdAt
+          if (Object.keys(meta).length === 0) delete cloned.meta
+        }
+        return cloned
+      }
 
+      const serialized = `${JSON.stringify(next, null, 2)}\n`
+      const unchanged = JSON.stringify(stripDynamicConfigFieldsForComparison(currentConfig)) === JSON.stringify(stripDynamicConfigFieldsForComparison(next))
+      if (await readCurrent() !== current) continue
+      if (!unchanged) {
+        const tempPath = path.join(path.dirname(OPENCLAW_CONFIG_PATH), `.openclaw.${randomUUID()}.tmp`)
+        try {
+          await writeTextFileWithLockRetry(tempPath, serialized)
+          // An external editor can change the file while normalization awaits.
+          // Rebase again instead of renaming an older revision over that edit.
+          if (await readCurrent() !== current) continue
+          await renameWithLockRetry(tempPath, OPENCLAW_CONFIG_PATH)
+        } finally { await fs.unlink(tempPath).catch(() => undefined) }
+      }
+      modelCatalogService.invalidateAvailableModels()
+      // Do not associate our value with an external editor's newer stat tuple.
+      openclawConfigCache = null
+      if (config && typeof config === 'object') rememberConfigSnapshot(config, desired)
+      return
+    }
+    throw new ConfigEditConflict()
+  }
   openclawConfigWriteChain = openclawConfigWriteChain.then(write, write)
-  return openclawConfigWriteChain.then(async () => {
-    modelCatalogService.invalidateAvailableModels()
-    await rememberJsonFileCache(OPENCLAW_CONFIG_PATH, next as OpenClawConfigFile, (entry) => { openclawConfigCache = entry })
-  })
+  return openclawConfigWriteChain
 }
 
 // OpenClaw owns channel ingress, session routing, tool execution, and reply
@@ -9792,6 +9737,10 @@ async function writeOpenclawConfig(config: unknown, options: { allowDuringAgentT
 // a direct provider as the active model after a hosted plan is selected.
 const AUTOMNIA_OPENCLAW_PROVIDER_ID = AUTOMNIA_CREDITS_PROVIDER_ID
 const AUTOMNIA_OPENCLAW_MODEL = AUTOMNIA_CREDITS_MODEL_ID
+const AUTOMNIA_HOSTED_MODEL_IDS = Array.from(new Set([
+  ...AUTOMNIA_RELAY_MODEL_IDS,
+  ...AUTOMNIA_CREDITS_FALLBACK_MODEL_IDS,
+]))
 const AUTOMNIA_OPENCLAW_CONTEXT_TOKENS = (() => {
   // Keep the working set bounded for every provider/model route. OpenClaw
   // clamps this to a model's actual context window, while the lower shared
@@ -9970,7 +9919,7 @@ function enforceActiveBillingRouteModelOrder(config: OpenClawConfigFile) {
   if (priority === 'byok_only') {
     if (config.models?.providers) delete config.models.providers[AUTOMNIA_OPENCLAW_PROVIDER_ID]
     if (config.agents.defaults.models) {
-      for (const modelId of AUTOMNIA_CREDITS_MODEL_IDS) delete config.agents.defaults.models[modelId]
+      for (const modelId of AUTOMNIA_HOSTED_MODEL_IDS) delete config.agents.defaults.models[modelId]
     }
   }
 
@@ -9985,9 +9934,8 @@ function enforceActiveBillingRouteModelOrder(config: OpenClawConfigFile) {
       const existing = config.agents?.defaults?.models?.[modelId]
       entries[modelId] = {
         ...(isLooseRecord(existing) ? existing as OpenClawModelAllowlistEntry : {}),
-        alias: modelId === AUTOMNIA_OPENCLAW_MODEL
-          ? 'Automnia credits'
-          : `Automnia hosted fallback - ${splitModelId(modelId).model}`,
+        alias: AUTOMNIA_RELAY_MODEL_LABELS[modelId]
+          || (modelId === AUTOMNIA_OPENCLAW_MODEL ? 'Automnia credits' : 'Automnia hosted class'),
       }
       return entries
     }, {})
@@ -10053,7 +10001,7 @@ async function synchronizeOpenClawBillingRoute(configInput?: OpenClawConfigFile)
   if (!hosted) {
     delete config.models.providers[AUTOMNIA_OPENCLAW_PROVIDER_ID]
     if (config.agents.defaults.models) {
-      for (const modelId of AUTOMNIA_CREDITS_MODEL_IDS) delete config.agents.defaults.models[modelId]
+      for (const modelId of AUTOMNIA_HOSTED_MODEL_IDS) delete config.agents.defaults.models[modelId]
     }
     const defaultSelection = removeAutomniaBillingModel(config.agents.defaults.model, allProviderModels)
     if (defaultSelection) config.agents.defaults.model = defaultSelection
@@ -10086,11 +10034,11 @@ async function synchronizeOpenClawBillingRoute(configInput?: OpenClawConfigFile)
       'X-Automnia-License-Key': hosted.licenseKey,
     },
     timeoutSeconds: 7200,
-    models: AUTOMNIA_CREDITS_MODEL_IDS.map((modelId) => {
+    models: AUTOMNIA_HOSTED_MODEL_IDS.map((modelId) => {
       const bareModelId = modelId.slice(`${AUTOMNIA_OPENCLAW_PROVIDER_ID}/`.length)
       return {
         id: bareModelId,
-        name: `Automnia Cloud Credits - ${bareModelId}`,
+        name: AUTOMNIA_RELAY_MODEL_LABELS[modelId] || 'Automnia hosted class',
         // Keep the same OpenClaw thinking contract for every hosted candidate.
         // The relay translates the request for the selected Vertex model and
         // never sends a direct-provider request.
@@ -10129,11 +10077,13 @@ async function synchronizeOpenClawBillingRoute(configInput?: OpenClawConfigFile)
     ), licenseStatus.creditBalance)
   }
   if (!config.agents.defaults.models) config.agents.defaults.models = {}
-  for (const modelId of AUTOMNIA_CREDITS_MODEL_IDS) {
+  const modelIdsForConfig = licenseService.isUsagePriorityLocked()
+    ? AUTOMNIA_CREDITS_MODEL_IDS
+    : AUTOMNIA_HOSTED_MODEL_IDS
+  for (const modelId of modelIdsForConfig) {
     config.agents.defaults.models[modelId] = {
-      alias: modelId === AUTOMNIA_OPENCLAW_MODEL
-        ? 'Automnia credits'
-        : `Automnia hosted fallback - ${splitModelId(modelId).model}`,
+      alias: AUTOMNIA_RELAY_MODEL_LABELS[modelId]
+        || (modelId === AUTOMNIA_OPENCLAW_MODEL ? 'Automnia credits' : 'Automnia hosted class'),
       params: { transport: 'sse' },
     }
   }
@@ -15549,7 +15499,7 @@ async function generateGoogleVertexArtifactContent(params: {
   envOverrides: Record<string, string>
   signal: AbortSignal
 }) {
-  const auth = await resolveProviderRequestAuth('google-vertex', params.envOverrides, GOOGLE_VERTEX_ACCESS_TOKEN_KEYS)
+  const auth = await resolveProviderRequestAuth('google-vertex', params.envOverrides, GOOGLE_VERTEX_ACCESS_TOKEN_KEYS, params.signal)
   if (!auth || auth.type !== 'oauth') {
     throw new Error('Google Vertex fallback requires gcloud or a Google access token.')
   }
@@ -18180,7 +18130,7 @@ async function generateRecruitAutoForgeMarkdown(input: {
   }
   const requestAuth: ProviderRequestAuth | null = openAiSubscriptionAuth
     ? openAiSubscriptionAuth.requestAuth
-    : await resolveProviderRequestAuth(provider, envOverrides, providerConfig.envKeys)
+    : await resolveProviderRequestAuth(provider, envOverrides, providerConfig.envKeys, input.signal)
 
   if (!requestAuth) {
     const error = new Error(`No usable credential is configured for ${provider}. Connect the provider or set the required environment key before using Auto Forge.`)
@@ -18527,7 +18477,7 @@ registerMissionRoutes(app, {
   buildMissionLifecycleProjection: buildReconciledMissionLifecycleProjection,
   listMissionReports,
   missionStateService,
-  readMissionEvents: (limit) => runtimeLedgerStore.readMissionEvents<MissionLifecycleEvent>(limit).catch(() => []),
+  readMissionEvents: (limit, options) => runtimeLedgerStore.readMissionEvents<MissionLifecycleEvent>(limit, options).catch(() => []),
 })
 
 const gatewayAgentTurnService = createGatewayAgentTurnService({
@@ -18913,7 +18863,7 @@ registerClawTalkConsoleRoutes(app, {
 registerBrowserRoutes(app, { checkBrowserPreflight })
 
 
-async function createShiftFromPayload(input: StartShiftPayload): Promise<Shift> {
+async function prepareShiftFromPayload(input: StartShiftPayload): Promise<PreparedShift> {
   const { name, message } = input
   const scheduleKind = input.scheduleKind || 'every'
   const schedule = (input.schedule || input.every || '').trim()
@@ -19007,19 +18957,6 @@ async function createShiftFromPayload(input: StartShiftPayload): Promise<Shift> 
     '--json',
   ]
 
-  const cronResult = await runOpenClaw(cronArgs, 90000)
-  if (cronResult.code !== 0) throw new Error(cronResult.stderr || cronResult.stdout || 'Failed to create cron job')
-
-  let cronId = ''
-  try {
-    const raw = JSON.parse(cronResult.stdout)
-    cronId = raw?.id || raw?.job?.id || ''
-  } catch {
-    const possible = cronResult.stdout.match(/[a-f0-9-]{12,}/i)
-    cronId = possible?.[0] || ''
-  }
-  if (!cronId) throw new Error(`Cron job created but id was not parsed: ${cronResult.stdout}`)
-
   const shift: Shift = {
     id: shiftId,
     name,
@@ -19035,15 +18972,52 @@ async function createShiftFromPayload(input: StartShiftPayload): Promise<Shift> 
     wake: resolvedWake,
     session: resolvedSession,
     announce: resolvedAnnounce,
-    cronId,
+    cronId: '',
     startedAt,
     endsAt,
   }
 
-  activeShifts.set(shift.id, shift)
-  armShiftExpiryTimer(shift)
-  invalidateRuntimeStatusCache()
-  return shift
+  return { shift, args: cronArgs }
+}
+
+const shiftCreationService = createIdempotentShiftService({
+  directory: path.join(OPENCLAW_STATE_ROOT, 'control-center', 'shift-requests'),
+  prepare: prepareShiftFromPayload,
+  dispatch: async (prepared) => {
+  const cronResult = await runOpenClaw(prepared.args, 90000)
+  if (cronResult.code !== 0) throw new Error(cronResult.stderr || cronResult.stdout || 'Failed to create cron job')
+
+  let cronId = ''
+  try {
+    const raw = JSON.parse(cronResult.stdout)
+    cronId = raw?.id || raw?.job?.id || ''
+  } catch {
+    const possible = cronResult.stdout.match(/[a-f0-9-]{12,}/i)
+    cronId = possible?.[0] || ''
+  }
+  if (!cronId) throw new Error(`Cron job created but id was not parsed: ${cronResult.stdout}`)
+
+    return cronId
+  },
+  reconcile: async (prepared) => {
+    const result = await runOpenClaw(['cron', 'list', '--all', '--json'], 20_000)
+    if (result.code !== 0) throw new Error('Could not check existing jobs.')
+    const payload = JSON.parse(result.stdout)
+    const jobs = Array.isArray(payload) ? payload : payload.jobs
+    if (!Array.isArray(jobs)) throw new Error('Invalid scheduled-job registry.')
+    const marker = `control-center shift=${prepared.shift.id} `
+    const matches = jobs.filter((job) => typeof job?.description === 'string' && job.description.startsWith(marker))
+    return matches.length === 1 && typeof matches[0].id === 'string' ? matches[0].id : null
+  },
+  activate: (shift) => {
+    activeShifts.set(shift.id, shift)
+    armShiftExpiryTimer(shift)
+    invalidateRuntimeStatusCache()
+  },
+})
+
+function createShiftFromPayload(input: StartShiftPayload): Promise<Shift> {
+  return shiftCreationService.create(input)
 }
 
 registerShiftRoutes(app, {
@@ -19084,9 +19058,9 @@ registerProviderAuthRoutes(app, {
   isCreditsOnlyEntitlement: () => licenseService.isUsagePriorityLocked(),
   creditsOnlyAvailableModels: () => [{
     id: AUTOMNIA_OPENCLAW_MODEL,
-    alias: 'Default model',
+    alias: AUTOMNIA_RELAY_MODEL_LABELS[AUTOMNIA_OPENCLAW_MODEL],
     provider: AUTOMNIA_OPENCLAW_PROVIDER_ID,
-    name: 'Gemini 3.7 Flash',
+    name: AUTOMNIA_RELAY_MODEL_LABELS[AUTOMNIA_OPENCLAW_MODEL],
   }],
   removeProviderAuth,
   startGoogleOAuthSession,

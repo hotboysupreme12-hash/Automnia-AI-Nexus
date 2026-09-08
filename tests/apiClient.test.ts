@@ -41,6 +41,19 @@ Object.defineProperty(globalThis, 'window', {
 
 const { apiErrorMessage, apiRequest } = await import('../src/api/client')
 
+test('invalid successful responses become a safe contract failure without automatic retries', async () => {
+  queueFetchResult(new Response(JSON.stringify({ ok: true, data: { private: 'never display this' } }), { status: 200 }))
+  const before = fetchCalls.length
+  const result = await apiRequest('/api/shifts/start', { method: 'POST', validate: (value) => Boolean(value && typeof value === 'object' && 'shift' in value) })
+  assert.equal(result.ok, false)
+  if (result.ok) return
+  assert.equal(result.error.code, 'invalid_response')
+  assert.equal(result.error.status, 200)
+  assert.equal(result.error.detail, undefined)
+  assert.doesNotMatch(result.error.message, /private|never display/)
+  assert.equal(fetchCalls.length, before + 1)
+})
+
 test('structured API failures keep login errors human-readable', async () => {
   queueFetchResult(new Response(responseBody, {
     status: 400,

@@ -1,0 +1,2860 @@
+{
+  "date": "2026-09-07",
+  "repository": "/Users/jeanmyrvil/Desktop/Automnia/Automnia-AI-Nexus",
+  "scope": "User authorized implementation of all 180 audit items on 2026-09-07. Work is tracked individually; planned and partial items are not complete. Evidence reflects the pre-change audit and line positions may shift as implementation proceeds.",
+  "items": [
+    {
+      "category": "performance",
+      "id": "P01",
+      "title": "Release a timed-out runtime refresh and cancel its underlying probes.",
+      "priority": "P1",
+      "effort": "M",
+      "kind": "Confirmed",
+      "evidence": [
+        "server/services/runtime/runtimeStatusService.ts:125"
+      ],
+      "benefit": "the Monitor can recover from one wedged dependency without restarting the app.",
+      "acceptance": "inject a never-settling probe, expire deadline, restore probe, and verify a subsequent refresh returns new data while the stale result cannot overwrite it.",
+      "details": "`server/services/runtime/runtimeStatusService.ts:125` races a promise against a timer without cancellation; `:682` and `:735` keep returning fallback while a hung in-flight build stays registered. The in-flight slot only clears when the original promise settles (`:705`, `:779`). Pass a build-scoped AbortSignal to probes, retire timed-out generations, and permit a fresh attempt with backoff. **Benefit:** the Monitor can recover from one wedged dependency without restarting the app. **Accept:** inject a never-settling probe, expire deadline, restore probe, and verify a subsequent refresh returns new data while the stale result cannot overwrite it.",
+      "status": "partial",
+      "implementation": "Hung refresh generations retire and fresh attempts recover. Physical cancellation across every probe adapter remains."
+    },
+    {
+      "category": "performance",
+      "id": "P02",
+      "title": "Run every configuration migration in one pass.",
+      "priority": "P1",
+      "effort": "S",
+      "kind": "Confirmed",
+      "evidence": [
+        "server/controlPlane.ts:8786"
+      ],
+      "benefit": "one read produces a fully repaired config and avoids repeated write/restart cycles.",
+      "acceptance": "a fixture requiring avatar cleanup, retired-agent pruning, Telegram repair, and compaction repair receives all repairs on its first read; second read performs no write.",
+      "details": "`server/controlPlane.ts:8786` (`readOpenclawConfig`) combines mutating repair helpers with `||`; the first helper returning true prevents subsequent repairs from executing. The fallback parse path repeats this pattern at `:8812`. Evaluate each helper, accumulate a changed flag, then write once. **Benefit:** one read produces a fully repaired config and avoids repeated write/restart cycles. **Accept:** a fixture requiring avatar cleanup, retired-agent pruning, Telegram repair, and compaction repair receives all repairs on its first read; second read performs no write.",
+      "status": "complete",
+      "implementation": "All configuration repair helpers run before the changed flag is evaluated."
+    },
+    {
+      "category": "performance",
+      "id": "P03",
+      "title": "Serialize configuration read/modify/write transactions, not just final file writes.",
+      "priority": "P1",
+      "effort": "M",
+      "kind": "Confirmed",
+      "evidence": [
+        "server/controlPlane.ts:9756"
+      ],
+      "benefit": "concurrent model/plugin/agent edits survive.",
+      "acceptance": "interleave two updates from the same initial revision and confirm both changes persist, including after external config modification.",
+      "details": "`server/controlPlane.ts:9756` serializes an already-built whole config; `:9781` queues only the final write. Callers such as `:14811` read a clone and later replace the config at `:14837`. Concurrent unrelated edits can therefore overwrite one another even though renames are atomic. Provide an updater callback inside the queue or compare-and-swap config revision. **Benefit:** concurrent model/plugin/agent edits survive. **Accept:** interleave two updates from the same initial revision and confirm both changes persist, including after external config modification.",
+      "status": "partial",
+      "implementation": "Configuration snapshots support three-way merge inside the write queue, rebasing unrelated concurrent/external edits and rejecting same-field conflicts. Four merge regressions pass. Complete route-level and external-editor integration coverage remains."
+    },
+    {
+      "category": "performance",
+      "id": "P04",
+      "title": "Require recovered mission output to belong to the current run.",
+      "priority": "P1",
+      "effort": "M",
+      "kind": "Confirmed",
+      "evidence": [
+        "server/services/missions/missionSchedulerService.ts:663"
+      ],
+      "benefit": "failed work cannot inherit success from earlier work.",
+      "acceptance": "a session contains an old successful answer followed by a current failed run; recovery must retain failure unless new run-specific evidence exists.",
+      "details": "`server/services/missions/missionSchedulerService.ts:663` scans session history for any credible assistant reply; `:674` does not check message timestamp/run identity. `startedAt` only affects file discovery when no session ID exists (`:640`). A failed run can be marked successful from an older final reply at `:1013\u20131020`. Filter by run identity/start boundary and record evidence provenance. **Benefit:** failed work cannot inherit success from earlier work. **Accept:** a session contains an old successful answer followed by a current failed run; recovery must retain failure unless new run-specific evidence exists.",
+      "status": "complete",
+      "implementation": "Mission recovery requires current-run timestamp/provenance; scheduler regression fixtures pass."
+    },
+    {
+      "category": "performance",
+      "id": "P05",
+      "title": "Keep successful agent answers successful when post-run maintenance fails.",
+      "priority": "P1",
+      "effort": "M",
+      "kind": "Confirmed",
+      "evidence": [
+        "server/services/agents/agentStreamingService.ts:569"
+      ],
+      "benefit": "users receive completed work promptly and do not unnecessarily rerun paid turns.",
+      "acceptance": "inject permission errors into each maintenance operation; final answer remains `ok:true`, history is saved, and a maintenance issue is visible.",
+      "details": "`server/services/agents/agentStreamingService.ts:569`, `:576`, and `:583` await doctrine cleanup, daily-memory append, and doctrine report building after the provider has completed; these operations are outside the provider catch block and can throw instead of returning the successful answer. Separate durable answer finalization from maintenance, give maintenance its own status/retry queue. **Benefit:** users receive completed work promptly and do not unnecessarily rerun paid turns. **Accept:** inject permission errors into each maintenance operation; final answer remains `ok:true`, history is saved, and a maintenance issue is visible.",
+      "status": "complete",
+      "implementation": "Post-response maintenance errors are recorded separately from a successful provider answer."
+    },
+    {
+      "category": "performance",
+      "id": "P06",
+      "title": "Order direct-provider turns per conversation.",
+      "priority": "P1",
+      "effort": "M",
+      "kind": "Confirmed",
+      "evidence": [
+        "server/services/agents/agentStreamingService.ts:439",
+        "server/controlPlane.ts:2862"
+      ],
+      "benefit": "overlapping sends cannot silently lose conversation context.",
+      "acceptance": "start A and B for one session and finish B first; both turns remain correctly ordered or B is explicitly queued; different sessions still run concurrently.",
+      "details": "`server/services/agents/agentStreamingService.ts:439\u2013454` reads the current session/history before an awaited provider request; `:572` later saves the request snapshot as new history. `server/controlPlane.ts:2862` replaces the entire history. Two simultaneous requests can each omit the other and last completion wins. Queue by session scope or enforce a revision with explicit branching. **Benefit:** overlapping sends cannot silently lose conversation context. **Accept:** start A and B for one session and finish B first; both turns remain correctly ordered or B is explicitly queued; different sessions still run concurrently.",
+      "status": "complete",
+      "implementation": "Direct-provider conversation turns serialize; concurrency regression tests pass."
+    },
+    {
+      "category": "performance",
+      "id": "P07",
+      "title": "Make mission state/event persistence ordered and durably acknowledged.",
+      "priority": "P1",
+      "effort": "L",
+      "kind": "Confirmed",
+      "evidence": [
+        "server/services/missions/missionStateService.ts:431",
+        "server/runtimeLedger.ts:834"
+      ],
+      "benefit": "crash recovery observes the latest real lifecycle rather than a stale or half-persisted one.",
+      "acceptance": "delay early writes, complete later writes first, then restart; newest sequence wins and every acknowledged transition has matching event evidence.",
+      "details": "`server/services/missions/missionStateService.ts:431` and `:438` fire-and-forget independent ledger writes; transitions change memory then return at `:454\u2013467`. `server/runtimeLedger.ts:834` awaits mkdir before replacing records, so separate appends have no ordering guarantee. Use a per-mission sequence and an atomic event+snapshot commit; flush critical lifecycle writes before launch/stop acknowledgement and shutdown. **Benefit:** crash recovery observes the latest real lifecycle rather than a stale or half-persisted one. **Accept:** delay early writes, complete later writes first, then restart; newest sequence wins and every acknowledged transition has matching event evidence.",
+      "status": "partial",
+      "implementation": "Per-ledger append ordering and immutable snapshots are implemented and tested. End-to-end durable acknowledgement in mission lifecycle callers remains."
+    },
+    {
+      "category": "performance",
+      "id": "P08",
+      "title": "Fall back to JSONL when an already-open SQLite write fails.",
+      "priority": "P1",
+      "effort": "M",
+      "kind": "Confirmed",
+      "evidence": [
+        "server/runtimeLedger.ts:833"
+      ],
+      "benefit": "lock/disk/database errors do not silently drop the only record of a completed run.",
+      "acceptance": "force a SQLITE_BUSY/write error after opening the DB; the event is recoverable from fallback storage and the degraded state is reported without duplicate replay.",
+      "details": "`server/runtimeLedger.ts:833\u2013838` falls back only when insert returns false. SQL statement errors propagate from `:506\u2013509`, bypassing JSONL even though callers often swallow append failures. Catch operational SQLite errors, record degraded persistence, and safely append/reconcile fallback records. **Benefit:** lock/disk/database errors do not silently drop the only record of a completed run. **Accept:** force a SQLITE_BUSY/write error after opening the DB; the event is recoverable from fallback storage and the degraded state is reported without duplicate replay.",
+      "status": "complete",
+      "implementation": "SQLite write errors after opening fall back to JSONL even with mirroring disabled. Scoped readers reconcile both stores by stable IDs; injected SQL failure, replay, and restart tests pass."
+    },
+    {
+      "category": "performance",
+      "id": "P09",
+      "title": "Build mission reports from complete mission evidence.",
+      "priority": "P2",
+      "effort": "M",
+      "kind": "Confirmed",
+      "evidence": [
+        "server/services/missions/missionReportService.ts:386",
+        "server/services/missions/missionStateService.ts:413"
+      ],
+      "benefit": "long missions retain accurate retries, interventions, failures, and verification evidence.",
+      "acceptance": "a mission with more than 300 events reports the same totals before and after restart and does not lose its early verification failure.",
+      "details": "`server/services/missions/missionReportService.ts:386` defaults to the live feed; `:480` uses that default when recording a report. The global feed is capped at 300 in `server/services/missions/missionStateService.ts:413\u2013415`. Read all applicable durable mission events or maintain durable counters. **Benefit:** long missions retain accurate retries, interventions, failures, and verification evidence. **Accept:** a mission with more than 300 events reports the same totals before and after restart and does not lose its early verification failure.",
+      "status": "complete",
+      "implementation": "Mission reports await full mission evidence using paged SQLite reads and streaming JSONL reconciliation. Tests retain early failures, retries and operator evidence beyond 2,400 events and after restart."
+    },
+    {
+      "category": "performance",
+      "id": "P10",
+      "title": "Filter mission history in SQL before applying limits.",
+      "priority": "P2",
+      "effort": "M",
+      "kind": "Confirmed",
+      "evidence": [
+        "server/services/missions/missionReportService.ts:507",
+        "server/runtimeLedger.ts:285"
+      ],
+      "benefit": "old mission detail remains complete while fetching less unrelated data.",
+      "acceptance": "place the requested mission beyond the newest 1,000 global events/100 reports and verify its own paginated history is still retrievable.",
+      "details": "`server/services/missions/missionReportService.ts:507\u2013518` reads global capped histories and only then filters by mission ID. A valid older mission can have empty details because newer missions occupy the cap. Add mission-scoped record/event/report queries and cursor pagination; `server/runtimeLedger.ts:285` already has a mission-prefixed event index. **Benefit:** old mission detail remains complete while fetching less unrelated data. **Accept:** place the requested mission beyond the newest 1,000 global events/100 reports and verify its own paginated history is still retrievable.",
+      "status": "complete",
+      "implementation": "Mission-scoped SQL filters precede limits, with scoped JSONL fallback."
+    },
+    {
+      "category": "performance",
+      "id": "P11",
+      "title": "Preserve a complete JSONL row at an exact tail boundary.",
+      "priority": "P2",
+      "effort": "S",
+      "kind": "Confirmed",
+      "evidence": [
+        "server/runtimeLedger.ts:125",
+        "server/services/gateway/gatewayLogService.ts:799"
+      ],
+      "benefit": "bounded reads do not silently drop a valid first row.",
+      "acceptance": "construct a ledger whose 512 KiB boundary starts exactly at a complete row and verify the row is retained; a genuinely partial row is discarded.",
+      "details": "`server/runtimeLedger.ts:125\u2013140` always discards the first row when `start > 0`, even if the tail offset is already just after a newline. Check the preceding byte, as the gateway log reader already does in `server/services/gateway/gatewayLogService.ts:799\u2013804`. **Benefit:** bounded reads do not silently drop a valid first row. **Accept:** construct a ledger whose 512 KiB boundary starts exactly at a complete row and verify the row is retained; a genuinely partial row is discarded.",
+      "status": "complete",
+      "implementation": "Tail reads inspect the preceding byte and preserve complete boundary rows; regression fixture passes."
+    },
+    {
+      "category": "performance",
+      "id": "P12",
+      "title": "Respect HTTP backpressure for streamed answers and console mirrors.",
+      "priority": "P2",
+      "effort": "M",
+      "kind": "Confirmed",
+      "evidence": [
+        "server/controlPlane.ts:5870",
+        "server/routes/agentTurnRoutes.ts:455"
+      ],
+      "benefit": "slow/background clients cannot create growing server output buffers or stall other clients.",
+      "acceptance": "throttle a client while streaming a large answer; queued bytes stay below a defined ceiling, final event ordering is preserved, and other clients remain responsive.",
+      "details": "`server/controlPlane.ts:5870\u20135872` ignores both `res.write()` return values. `server/routes/agentTurnRoutes.ts:455\u2013472` keeps emitting chunks, and console mirrors fan out through the same writer. Introduce per-client bounded queues, `drain` handling, and coalesced deltas. **Benefit:** slow/background clients cannot create growing server output buffers or stall other clients. **Accept:** throttle a client while streaming a large answer; queued bytes stay below a defined ceiling, final event ordering is preserved, and other clients remain responsive.",
+      "status": "complete",
+      "implementation": "Downstream SSE consumers disconnect at 1 MiB queued output or 15 seconds without drain; direct responses and ClawTalk mirrors use the bounded writer."
+    },
+    {
+      "category": "performance",
+      "id": "P13",
+      "title": "Finish and release upstream SSE readers on every terminal path.",
+      "priority": "P2",
+      "effort": "S",
+      "kind": "Confirmed",
+      "evidence": [
+        "server/controlPlane.ts:6094"
+      ],
+      "benefit": "final completion is not delayed by an upstream connection left open after `[DONE]`; resources are reclaimed.",
+      "acceptance": "send `[DONE]` but keep the socket open; the turn must finish promptly. Throw from a frame handler and verify the reader is cancelled/unlocked.",
+      "details": "`server/controlPlane.ts:6094` acquires a reader without a `finally/releaseLock`; callback errors can bypass cancel. OpenAI-compatible `[DONE]` returns undefined at `:6384`, so the reader waits for EOF instead of taking its supported `false` early-stop path (`:6113`). Cancel on terminal signals and release the lock on success/error/abort. **Benefit:** final completion is not delayed by an upstream connection left open after `[DONE]`; resources are reclaimed. **Accept:** send `[DONE]` but keep the socket open; the turn must finish promptly. Throw from a frame handler and verify the reader is cancelled/unlocked.",
+      "status": "complete",
+      "implementation": "Upstream SSE readers release on terminal, abort, error, and truncated stream paths."
+    },
+    {
+      "category": "performance",
+      "id": "P14",
+      "title": "Enforce the transcript budget on the final one or two messages too.",
+      "priority": "P2",
+      "effort": "S",
+      "kind": "Confirmed",
+      "evidence": [
+        "server/controlPlane.ts:2809"
+      ],
+      "benefit": "one large request/answer cannot defeat the advertised conversation working-set limit.",
+      "acceptance": "a single 100,000-character user message and a large reply remain within the configured outbound budget while preserving an explicit user-visible truncation/attachment policy.",
+      "details": "`server/controlPlane.ts:2809\u20132813` stops trimming when two messages remain, regardless of the 32,000-character budget at `:2795`. Apply a token-aware limit to the retained newest message pair and expose truncation/context handling. **Benefit:** one large request/answer cannot defeat the advertised conversation working-set limit. **Accept:** a single 100,000-character user message and a large reply remain within the configured outbound budget while preserving an explicit user-visible truncation/attachment policy.",
+      "status": "complete",
+      "implementation": "Final oversized history pairs obey the conversation character budget, with truncation context."
+    },
+    {
+      "category": "performance",
+      "id": "P15",
+      "title": "Bound cumulative direct-provider response and reasoning buffers.",
+      "priority": "P2",
+      "effort": "M",
+      "kind": "Confirmed",
+      "evidence": [
+        "server/controlPlane.ts:6381"
+      ],
+      "benefit": "many small valid frames cannot grow memory without bound.",
+      "acceptance": "stream enough small frames to exceed the budget; memory remains bounded, upstream is cancelled, and saved content has an explicit truncation marker.",
+      "details": "`server/controlPlane.ts:6381\u20136393` concatenates all reply/reasoning text without a total cap. The SSE frame cap at `:6106` only bounds one unfinished frame; downstream final compaction occurs after accumulation. Add cumulative limits or spool large outputs, and stop upstream generation with an explicit limit result. **Benefit:** many small valid frames cannot grow memory without bound. **Accept:** stream enough small frames to exceed the budget; memory remains bounded, upstream is cancelled, and saved content has an explicit truncation marker.",
+      "status": "partial",
+      "implementation": "Raw upstream and compatible-provider buffers are bounded. Audit the SDK Codex streaming path."
+    },
+    {
+      "category": "performance",
+      "id": "P16",
+      "title": "Distinguish upstream stream errors and premature EOF from successful empty replies.",
+      "priority": "P2",
+      "effort": "M",
+      "kind": "Confirmed",
+      "evidence": [
+        "server/controlPlane.ts:6383",
+        "server/services/agents/agentStreamingService.ts:571"
+      ],
+      "benefit": "provider failures produce actionable retry/error state instead of false success.",
+      "acceptance": "HTTP 200 followed by an error frame, malformed-only frames, or EOF before any answer must yield a classified failure; normal keepalives remain harmless.",
+      "details": "`server/controlPlane.ts:6383\u20136397` handles only `choices.delta` and ignores other JSON frames; `server/services/agents/agentStreamingService.ts:571` converts empty content to \u201cNo response returned\u201d and later returns `ok:true` at `:585`. Parse provider error/finish frames explicitly and require a recognized completion or credible output policy. **Benefit:** provider failures produce actionable retry/error state instead of false success. **Accept:** HTTP 200 followed by an error frame, malformed-only frames, or EOF before any answer must yield a classified failure; normal keepalives remain harmless.",
+      "status": "partial",
+      "implementation": "Compatible-provider error/empty/EOF classification is tested. Align every remaining provider adapter."
+    },
+    {
+      "category": "performance",
+      "id": "P17",
+      "title": "Reconcile accepted Gateway work before falling back to another transport.",
+      "priority": "P1",
+      "effort": "L",
+      "kind": "Confirmed risky path",
+      "evidence": [
+        "server/services/agents/agentRuntimeService.ts:140"
+      ],
+      "benefit": "avoids duplicate tool actions and duplicate provider work after ambiguous network failures.",
+      "acceptance": "Gateway accepts a tool-running turn then disconnects before its reply; fallback reconnects to that run or resolves its status, and the test tool executes exactly once.",
+      "details": "`server/services/agents/agentRuntimeService.ts:140\u2013159` catches any Gateway chat error and dispatches the original work again through the CLI. A disconnect after acceptance can leave the original work running, so a second dispatch is unsafe without a shared dispatch identity/status lookup. Carry an idempotency key across transports and query the original run before retrying. **Benefit:** avoids duplicate tool actions and duplicate provider work after ambiguous network failures. **Accept:** Gateway accepts a tool-running turn then disconnects before its reply; fallback reconnects to that run or resolves its status, and the test tool executes exactly once.",
+      "status": "partial",
+      "implementation": "Accepted or uncertain Gateway chat dispatch cannot be resubmitted through CLI fallback. Dispatch regressions pass. Reconnection reconciliation and the remaining CLI-to-local fallback path remain."
+    },
+    {
+      "category": "performance",
+      "id": "P18",
+      "title": "Move synchronous SQLite work off the HTTP event loop.",
+      "priority": "P2",
+      "effort": "L",
+      "kind": "Profile proposal",
+      "evidence": [
+        "server/runtimeLedger.ts:207"
+      ],
+      "benefit": "storage contention cannot block stream heartbeats, cancellations, and health requests.",
+      "acceptance": "measure event-loop delay and endpoint p95 while a DB lock is held; those endpoints continue serving within an agreed target while storage reports delay.",
+      "details": "`server/runtimeLedger.ts:207\u2013216` uses `DatabaseSync` with a 5-second busy timeout; all reads/writes execute synchronously despite exported async wrappers. Use a dedicated worker with bounded requests and prioritized live operations. Existing Monitor snapshots deliberately skip SQLite, but other writes/read routes still share the process. **Benefit:** storage contention cannot block stream heartbeats, cancellations, and health requests. **Accept:** measure event-loop delay and endpoint p95 while a DB lock is held; those endpoints continue serving within an agreed target while storage reports delay.",
+      "status": "planned"
+    },
+    {
+      "category": "performance",
+      "id": "P19",
+      "title": "Make legacy ledger migration incremental and resumable.",
+      "priority": "P2",
+      "effort": "L",
+      "kind": "Profile proposal",
+      "evidence": [
+        "server/runtimeLedger.ts:529"
+      ],
+      "benefit": "migration work scales with newly appended data rather than all history, with recovery after interruption.",
+      "acceptance": "import a large fixture, append a small tail, restart migration, and verify only the new tail is processed; interruption resumes without missing/duplicate rows.",
+      "details": "`server/runtimeLedger.ts:529\u2013555` rereads the entire JSONL file and reprocesses every row whenever its size/mtime changes. `:589\u2013593` merely defers this work until after startup. Persist an import byte offset/fingerprint, stream bounded batches, and yield/checkpoint progress. **Benefit:** migration work scales with newly appended data rather than all history, with recovery after interruption. **Accept:** import a large fixture, append a small tail, restart migration, and verify only the new tail is processed; interruption resumes without missing/duplicate rows.",
+      "status": "planned"
+    },
+    {
+      "category": "performance",
+      "id": "P20",
+      "title": "Reuse prepared SQLite statements for hot ledger operations.",
+      "priority": "P3",
+      "effort": "S",
+      "kind": "Profile proposal",
+      "evidence": [
+        "server/runtimeLedger.ts:405"
+      ],
+      "benefit": "reduces SQL preparation/allocation during rapid event writes.",
+      "acceptance": "statement preparation count stays constant across a repeated append/read workload; benchmark CPU and latency before/after without changing order or payloads.",
+      "details": "`server/runtimeLedger.ts:405`, `:423`, `:441`, `:457`, and `:869` prepare the same SQL per invocation. Cache statements per database instance and discard them on close/reconfigure. **Benefit:** reduces SQL preparation/allocation during rapid event writes. **Accept:** statement preparation count stays constant across a repeated append/read workload; benchmark CPU and latency before/after without changing order or payloads.",
+      "status": "complete",
+      "implementation": "Prepared SQLite statements are cached per connection; 20 writes prepare once, and closing recreates the statement."
+    },
+    {
+      "category": "performance",
+      "id": "P21",
+      "title": "Add a bounded retention policy for durable runtime telemetry.",
+      "priority": "P2",
+      "effort": "M",
+      "kind": "Profile proposal",
+      "evidence": [
+        "server/runtimeLedger.ts:97"
+      ],
+      "benefit": "long-running installations do not accumulate unlimited diagnostic data and ever-larger backups.",
+      "acceptance": "simulate the retention horizon and verify log/database size stabilizes, recent events remain queryable, and retained mission evidence is unchanged.",
+      "details": "`server/runtimeLedger.ts:97\u2013100` appends JSONL indefinitely; event table insertion at `:422\u2013437` also accumulates indefinitely, with no prune/rotation path in this module. Keep mission/report evidence under a separate policy, rotate ordinary telemetry, and compact/checkpoint storage in the background. **Benefit:** long-running installations do not accumulate unlimited diagnostic data and ever-larger backups. **Accept:** simulate the retention horizon and verify log/database size stabilizes, recent events remain queryable, and retained mission evidence is unchanged.",
+      "status": "planned"
+    },
+    {
+      "category": "performance",
+      "id": "P22",
+      "title": "Tail session evidence once instead of reading entire transcripts twice.",
+      "priority": "P2",
+      "effort": "M",
+      "kind": "Profile proposal",
+      "evidence": [
+        "server/services/missions/missionSchedulerService.ts:665"
+      ],
+      "benefit": "recovery remains responsive for long agent sessions.",
+      "acceptance": "recover evidence near the end of a large fixture while reading a bounded suffix; if evidence is older, pagination finds it correctly and respects the current-run boundary from item 4.",
+      "details": "`server/services/missions/missionSchedulerService.ts:665` and `:685` read full session JSONL files; `:1015\u20131018` can invoke both scans on one recovery. Implement a shared reverse/tail scanner returning final and tool evidence, continuing backward only as needed. **Benefit:** recovery remains responsive for long agent sessions. **Accept:** recover evidence near the end of a large fixture while reading a bounded suffix; if evidence is older, pagination finds it correctly and respects the current-run boundary from item 4.",
+      "status": "complete",
+      "implementation": "Session evidence uses one bounded reverse scan instead of repeated complete transcript reads."
+    },
+    {
+      "category": "performance",
+      "id": "P23",
+      "title": "Apply a resource-aware concurrency limit to mission dispatch.",
+      "priority": "P2",
+      "effort": "M",
+      "kind": "Profile proposal",
+      "evidence": [
+        "server/services/missions/missionSchedulerService.ts:1137"
+      ],
+      "benefit": "large parties do not flood processes, provider connections, and memory; small foreground turns retain capacity.",
+      "acceptance": "a large party never exceeds configured active work, queued work stops on cancellation, and hierarchical/sequential ordering remains correct.",
+      "details": "`server/services/missions/missionSchedulerService.ts:1137` starts all cron setups concurrently; `:1282`, `:1290`, and `:1556` run all workers concurrently. Add separate setup/run semaphores scoped by provider/runtime capacity and cancellable queues. **Benefit:** large parties do not flood processes, provider connections, and memory; small foreground turns retain capacity. **Accept:** a large party never exceeds configured active work, queued work stops on cancellation, and hierarchical/sequential ordering remains correct.",
+      "status": "planned"
+    },
+    {
+      "category": "performance",
+      "id": "P24",
+      "title": "Publish Team Sync snapshots atomically and in generation order.",
+      "priority": "P2",
+      "effort": "M",
+      "kind": "Confirmed",
+      "evidence": [
+        "server/services/missions/missionTeamSyncService.ts:98"
+      ],
+      "benefit": "agents always read a complete current coordination snapshot.",
+      "acceptance": "continuously read while two snapshots publish with reversed I/O delays; every observed file is complete, the final file is the newest generation, and initialization never overwrites an existing file.",
+      "details": "`server/services/missions/missionTeamSyncService.ts:98\u2013104` writes the shared coordination file directly and has no write queue. Readers can observe truncated content, and concurrent snapshots can finish out of order. Write a temp file and rename, with a per-mission/target generation queue; use exclusive creation in `ensureTeamSyncFile` at `:32\u201335`. **Benefit:** agents always read a complete current coordination snapshot. **Accept:** continuously read while two snapshots publish with reversed I/O delays; every observed file is complete, the final file is the newest generation, and initialization never overwrites an existing file.",
+      "status": "complete",
+      "implementation": "Team Sync publishes through queued atomic renames and exclusive initialization."
+    },
+    {
+      "category": "performance",
+      "id": "P25",
+      "title": "Track result coverage in gateway log caches.",
+      "priority": "P2",
+      "effort": "S",
+      "kind": "Confirmed",
+      "evidence": [
+        "server/services/gateway/gatewayLogService.ts:1167"
+      ],
+      "benefit": "Monitor detail consistently receives the requested amount of available history.",
+      "acceptance": "call a small limit then a larger limit without changing files; larger call returns all available requested entries.",
+      "details": "`server/services/gateway/gatewayLogService.ts:1167\u20131168` and `:1184\u20131185` reuse whatever limit populated the TTL cache. The per-file cache at `:840\u2013841` likewise reuses entries parsed using a prior smaller limit at `:851`. A 48-row summary read can prevent a following 160-row detail read from filling its requested history. Cache to a canonical maximum or track coverage and refill when requested coverage increases. **Benefit:** Monitor detail consistently receives the requested amount of available history. **Accept:** call a small limit then a larger limit without changing files; larger call returns all available requested entries.",
+      "status": "complete",
+      "implementation": "Gateway log cache records requested coverage and refreshes when a larger bounded tail is requested; coverage regressions pass."
+    },
+    {
+      "category": "performance",
+      "id": "P26",
+      "title": "Share in-flight log refreshes across callers.",
+      "priority": "P3",
+      "effort": "S",
+      "kind": "Profile proposal",
+      "evidence": [
+        "server/services/gateway/gatewayLogService.ts:715"
+      ],
+      "benefit": "concurrent summary/status/activity requests perform one refresh rather than duplicate I/O.",
+      "acceptance": "issue concurrent cold reads and count one `logs.tail`/discovery pass; errors clear the in-flight slot and Monitor-clear generations cannot repopulate old entries.",
+      "details": "`server/services/gateway/gatewayLogService.ts:715\u2013723` and `:1165\u20131177` cache completed data but have no in-flight promise; simultaneous cold/expired calls repeat discovery, RPC, and file work. Introduce one refresh promise per source/coverage generation. **Benefit:** concurrent summary/status/activity requests perform one refresh rather than duplicate I/O. **Accept:** issue concurrent cold reads and count one `logs.tail`/discovery pass; errors clear the in-flight slot and Monitor-clear generations cannot repopulate old entries.",
+      "status": "complete",
+      "implementation": "Concurrent Gateway log readers share a single in-flight refresh; coalescing and coverage regressions pass."
+    },
+    {
+      "category": "performance",
+      "id": "P27",
+      "title": "Parse newly appended log bytes rather than repeatedly parsing whole tails.",
+      "priority": "P3",
+      "effort": "M",
+      "kind": "Profile proposal",
+      "evidence": [
+        "server/services/gateway/gatewayLogService.ts:819"
+      ],
+      "benefit": "active logging costs track new log bytes instead of repeatedly parsing the same history.",
+      "acceptance": "append one line to a large file and read only the delta; rotation, same-name replacement, CRLF splits, and partial UTF-8 lines remain correct.",
+      "details": "`server/services/gateway/gatewayLogService.ts:819\u2013829` rereads the bounded tail whenever size changes; `:988\u2013998` does the same for ClawTalk on refresh. Maintain an offset, partial-line buffer, file identity, and bounded parsed ring, resetting on truncate/rotation. **Benefit:** active logging costs track new log bytes instead of repeatedly parsing the same history. **Accept:** append one line to a large file and read only the delta; rotation, same-name replacement, CRLF splits, and partial UTF-8 lines remain correct.",
+      "status": "planned"
+    },
+    {
+      "category": "performance",
+      "id": "P28",
+      "title": "Reconcile independent recovered sessions with bounded parallelism.",
+      "priority": "P2",
+      "effort": "M",
+      "kind": "Profile proposal",
+      "evidence": [
+        "server/services/missions/missionRecoveryService.ts:321"
+      ],
+      "benefit": "one slow session does not serially delay every recovered job.",
+      "acceptance": "multiple timed-out sessions finish within the agreed overall budget, request concurrency remains capped, and the result for every candidate is preserved.",
+      "details": "`server/services/missions/missionRecoveryService.ts:321\u2013344` awaits each `sessions.describe` sequentially with a 3-second timeout. Use a small concurrency pool, deduplicate repeated session keys, and enforce an overall recovery budget while retaining per-session results. **Benefit:** one slow session does not serially delay every recovered job. **Accept:** multiple timed-out sessions finish within the agreed overall budget, request concurrency remains capped, and the result for every candidate is preserved.",
+      "status": "complete",
+      "implementation": "Recovery reconciliation uses bounded parallel workers with an overall deadline."
+    },
+    {
+      "category": "performance",
+      "id": "P29",
+      "title": "Replace synchronous gcloud subprocess probes on request paths.",
+      "priority": "P2",
+      "effort": "M",
+      "kind": "Confirmed blocking path",
+      "evidence": [
+        "server/services/providers/providerSetupService.ts:256"
+      ],
+      "benefit": "slow gcloud/auth refresh cannot freeze all server requests.",
+      "acceptance": "use a deliberately slow fake gcloud executable; status/abort/stream-heartbeat requests still run while auth probing is pending and cancellation terminates the child.",
+      "details": "`server/services/providers/providerSetupService.ts:256` defaults to `spawnSync`; `:345\u2013359` uses it with multi-second timeouts. The async auth resolver calls `runGcloud(['--version'],5000)` at `:678`, so being inside an async function does not prevent event-loop blocking. Use async subprocesses, share cached/in-flight credential probes, and cancel them with the request deadline. **Benefit:** slow gcloud/auth refresh cannot freeze all server requests. **Accept:** use a deliberately slow fake gcloud executable; status/abort/stream-heartbeat requests still run while auth probing is pending and cancellation terminates the child.",
+      "status": "partial",
+      "implementation": "Request-time gcloud/ADC probes are async, cached, coalesced and abortable. Legacy synchronous status/environment projections remain."
+    },
+    {
+      "category": "performance",
+      "id": "P30",
+      "title": "Single-flight OAuth refreshes per provider/account.",
+      "priority": "P2",
+      "effort": "M",
+      "kind": "Confirmed redundant/racy path",
+      "evidence": [
+        "server/services/providers/providerSetupService.ts:685"
+      ],
+      "benefit": "avoids token-refresh bursts and stale rotated-token writes.",
+      "acceptance": "many concurrent requests with one expired token perform one refresh and all receive the same valid credential; a failed refresh clears the single-flight slot for a later retry.",
+      "details": "`server/services/providers/providerSetupService.ts:685\u2013720` checks token expiry then awaits a refresh and persist; concurrent requests can all refresh the same old credential before any writes back. Anthropic repeats the pattern at `:723\u2013735`. Coalesce refreshes by credential identity and guard persistence against an older refresh replacing a newer credential. **Benefit:** avoids token-refresh bursts and stale rotated-token writes. **Accept:** many concurrent requests with one expired token perform one refresh and all receive the same valid credential; a failed refresh clears the single-flight slot for a later retry.",
+      "status": "complete",
+      "implementation": "OAuth refresh is shared per provider/account and cannot overwrite a newly reconnected account."
+    },
+    {
+      "category": "performance",
+      "id": "P31",
+      "title": "Consolidate the shipped theme cascade",
+      "kind": "Code finding / optimization",
+      "priority": "P1",
+      "effort": "L",
+      "evidence": [
+        "src/automnia-app-theme.css:1"
+      ],
+      "benefit": "Fresh build ships 1,763,113 CSS bytes, exceeding the existing 1,650,000 limit; replace obsolete overlapping rules with owned component rules.",
+      "acceptance": "Fresh build passes unchanged CSS budgets and responsive screenshots retain intended appearance.",
+      "status": "partial",
+      "implementation": "Removed 1,660 unreachable selectors and about 244 KB of source CSS from older layers while preserving dynamic classes and compatibility fallbacks. Latest checked bundle CSS is 1,708,103 bytes; CSS and total interactive JS remain over existing budgets."
+    },
+    {
+      "category": "performance",
+      "id": "P32",
+      "title": "Move optional help code out of the initial module graph",
+      "kind": "Code finding / optimization",
+      "priority": "P2",
+      "effort": "S",
+      "evidence": [
+        "src/components/layout/NexusShell.tsx:9"
+      ],
+      "benefit": "HelpAssistantPanel and its content/styles load eagerly although Help is optional; load on demand and prefetch on user intent.",
+      "acceptance": "Initial entry shrinks; first Help open has a meaningful fallback and retry.",
+      "status": "complete",
+      "implementation": "Help is a separate lazy chunk, loaded on demand."
+    },
+    {
+      "category": "performance",
+      "id": "P33",
+      "title": "Defer JSON serialization and skip identical durable writes",
+      "kind": "Code finding / optimization",
+      "priority": "P1",
+      "effort": "M",
+      "evidence": [
+        "src/store/nexusStore.ts:150"
+      ],
+      "benefit": "Existing storage debounce receives already-stringified state; buffer the object and serialize once per bounded interval.",
+      "acceptance": "100 transient updates produce one serialization/write and continuous updates still periodically flush.",
+      "status": "complete",
+      "implementation": "JSON storage serializes a buffered snapshot once per interval, skips identical durable strings, and preserves the previous saved value on quota failure."
+    },
+    {
+      "category": "performance",
+      "id": "P34",
+      "title": "Coalesce command draft writes",
+      "kind": "Code finding / optimization",
+      "priority": "P2",
+      "effort": "S",
+      "evidence": [
+        "src/components/monitor/AgentResponseConsole.tsx:896"
+      ],
+      "benefit": "Typing writes the entire draft to synchronous localStorage on every change; use a short bounded buffer with route-change/pagehide flush.",
+      "acceptance": "Rapid typing remains responsive and switching recipient or closing preserves final draft.",
+      "status": "complete",
+      "implementation": "Draft writes buffer typing and flush on route changes, page hide, and unload."
+    },
+    {
+      "category": "performance",
+      "id": "P35",
+      "title": "Batch ClawTalk text deltas before publishing renderer state",
+      "kind": "Code finding / optimization",
+      "priority": "P2",
+      "effort": "M",
+      "evidence": [
+        "src/store/nexusStore.ts:3492"
+      ],
+      "benefit": "Each frame clones response and runtime state; buffer text per run and flush at a controlled cadence, flushing terminal frames immediately.",
+      "acceptance": "Burst input preserves exact text/order with substantially fewer store commits.",
+      "status": "complete",
+      "implementation": "ClawTalk token deltas coalesce for 48 ms with bounded buffers. Start/final/error events flush preceding text. Burst, replacement, lane-order and cleanup regressions pass."
+    },
+    {
+      "category": "performance",
+      "id": "P36",
+      "title": "Reduce repeated scans of response history",
+      "kind": "Code finding / optimization",
+      "priority": "P2",
+      "effort": "M",
+      "evidence": [
+        "src/store/nexusStore.ts:3518"
+      ],
+      "benefit": "ClawTalk and direct turn paths repeatedly find/map the response array; maintain indexed updates without invalidating unrelated entries.",
+      "acceptance": "Large multi-agent fixtures preserve order and update only changed entries.",
+      "status": "complete",
+      "implementation": "History activity indexes use one pass, queue positions use a map, and immutable response search text is cached in a WeakMap. An 800-entry fixture verifies ordering, identity, queue counts and changed-text search."
+    },
+    {
+      "category": "performance",
+      "id": "P37",
+      "title": "Isolate composer keystroke state from transcript rendering",
+      "kind": "Code finding / optimization",
+      "priority": "P2",
+      "effort": "M",
+      "evidence": [
+        "src/components/monitor/AgentResponseConsole.tsx:789"
+      ],
+      "benefit": "One large component owns draft, microphone, response list and diagnostics; give composer its own boundary while retaining existing memoized messages.",
+      "acceptance": "Typing and voice level changes do not rerender the transcript subtree.",
+      "status": "complete",
+      "implementation": "Transcript mapping is behind a memo boundary with stable response, metadata and callback props. Composer text and voice meter state no longer rebuild its message subtree."
+    },
+    {
+      "category": "performance",
+      "id": "P38",
+      "title": "Subscribe registry cards to activity summaries",
+      "kind": "Code finding / optimization",
+      "priority": "P2",
+      "effort": "M",
+      "evidence": [
+        "src/components/party/PartySelector.tsx:233"
+      ],
+      "benefit": "Roster subscribes to full responses just to derive activity; provide stable per-agent activity summaries.",
+      "acceptance": "Streaming answer text does not recompute an unchanged roster activity map.",
+      "status": "complete",
+      "implementation": "Roster activity selectors retain identity when only streamed answer text changes; regression test verifies it."
+    },
+    {
+      "category": "performance",
+      "id": "P39",
+      "title": "Expand search intent once per query",
+      "kind": "Code finding / optimization",
+      "priority": "P2",
+      "effort": "S",
+      "evidence": [
+        "src/components/party/PartySelector.tsx:201"
+      ],
+      "benefit": "Token normalization and fuzzy intent expansion run separately for every agent even though search already uses deferred values and an index.",
+      "acceptance": "Ranking is identical and expansion executes once per deferred query.",
+      "status": "complete",
+      "implementation": "Search intent expansion happens once per query."
+    },
+    {
+      "category": "performance",
+      "id": "P40",
+      "title": "Bound typo-distance computation",
+      "kind": "Code finding / optimization",
+      "priority": "P2",
+      "effort": "S",
+      "evidence": [
+        "src/components/party/PartySelector.tsx:162"
+      ],
+      "benefit": "Levenshtein allocates full rows and compares long unequal words despite a small match threshold; reject length gaps and stop rows above threshold.",
+      "acceptance": "Known typo matches remain identical; adversarial long searches finish without long UI tasks.",
+      "status": "complete",
+      "implementation": "Typo distance rejects impossible lengths and stops outside a bounded edit band."
+    },
+    {
+      "category": "performance",
+      "id": "P41",
+      "title": "Avoid emitting operational log lines for each text delta",
+      "kind": "Code finding / optimization",
+      "priority": "P2",
+      "effort": "S",
+      "evidence": [
+        "src/store/nexusStore.ts:3605"
+      ],
+      "benefit": "Every ClawTalk delta appends a formatted log line although it is answer text, creating repetitive allocation and monitor churn.",
+      "acceptance": "Start/progress/final/error remain logged while text deltas only update the answer.",
+      "status": "complete",
+      "implementation": "ClawTalk token deltas no longer create operational log lines."
+    },
+    {
+      "category": "performance",
+      "id": "P42",
+      "title": "Use real elapsed time for ClawTalk uptime",
+      "kind": "Code finding / optimization",
+      "priority": "P1",
+      "effort": "S",
+      "evidence": [
+        "src/store/nexusStore.ts:3609"
+      ],
+      "benefit": "Uptime advances by 1,000ms for each incoming frame; token frequency therefore distorts activity metrics.",
+      "acceptance": "A one-second burst of 100 frames reports approximately one second, not 100 seconds.",
+      "status": "complete",
+      "implementation": "ClawTalk uptime uses elapsed time rather than increments per event."
+    },
+    {
+      "category": "performance",
+      "id": "P43",
+      "title": "Release an idle local speech worker",
+      "kind": "Code finding / optimization",
+      "priority": "P2",
+      "effort": "M",
+      "evidence": [
+        "src/speech/localSpeechClient.ts:23"
+      ],
+      "benefit": "The worker/model stays alive indefinitely after first use; release after an idle grace period with no requests, recreating on demand.",
+      "acceptance": "Worker is reused for consecutive dictations and released after idle without interrupting active recognition.",
+      "status": "complete",
+      "implementation": "Local speech workers release after two idle minutes and restart when needed."
+    },
+    {
+      "category": "performance",
+      "id": "P44",
+      "title": "Cancel obsolete activity-feed requests",
+      "kind": "Code finding / optimization",
+      "priority": "P2",
+      "effort": "S",
+      "evidence": [
+        "src/hooks/useGatewayActivityFeed.ts:41"
+      ],
+      "benefit": "Unmount stops timers but leaves the fetch active; abort when the consumer closes or changes its query.",
+      "acceptance": "Closing Settings cancels its request and obsolete responses cannot update a reopened query.",
+      "status": "complete",
+      "implementation": "Activity fetches abort on unmount, changed query limits, or monitor clearing; stale results are ignored."
+    },
+    {
+      "category": "performance",
+      "id": "P45",
+      "title": "Continue local runtime monitoring without internet",
+      "kind": "Code finding / optimization",
+      "priority": "P1",
+      "effort": "S",
+      "evidence": [
+        "src/hooks/useRuntimeStatus.ts:1092"
+      ],
+      "benefit": "navigator.onLine currently suppresses even loopback API polling; distinguish local reachability from internet access.",
+      "acceptance": "A local runtime continues updating while the machine has no network route.",
+      "status": "complete",
+      "implementation": "Loopback runtime polling continues when the internet is offline."
+    },
+    {
+      "category": "performance",
+      "id": "P46",
+      "title": "Track successful fetch age independently from semantic changes",
+      "kind": "Code finding / optimization",
+      "priority": "P2",
+      "effort": "S",
+      "evidence": [
+        "src/hooks/useRuntimeStatus.ts:1366"
+      ],
+      "benefit": "When semantic data is unchanged, the old generatedAt remains in cached status; use a separate successful-fetch timestamp for cache eligibility.",
+      "acceptance": "Unchanged responses refresh cache freshness without unnecessary React updates.",
+      "status": "complete",
+      "implementation": "Successful fetch receipt time is recorded separately from semantic snapshot changes."
+    },
+    {
+      "category": "performance",
+      "id": "P47",
+      "title": "Unify hidden-window work policy",
+      "kind": "Code finding / optimization",
+      "priority": "P2",
+      "effort": "M",
+      "evidence": [
+        "electron/main.cjs:1888"
+      ],
+      "benefit": "Electron disables background throttling; shared status has a focus guard but activity feed checks only document.hidden. Propagate actual visibility/focus and keep runtime execution server-owned.",
+      "acceptance": "Minimized and unfocused windows pause nonessential rendering/polling while server missions continue.",
+      "status": "partial",
+      "implementation": "Settings activity and shared runtime polling now honor focus/visibility. Audit all hidden-window timers and Electron background work."
+    },
+    {
+      "category": "performance",
+      "id": "P48",
+      "title": "Coalesce split-pane CSS writes to animation frames",
+      "kind": "Code finding / optimization",
+      "priority": "P3",
+      "effort": "S",
+      "evidence": [
+        "src/components/layout/NexusShell.tsx:394"
+      ],
+      "benefit": "Dragging already avoids React and commits preferences once, but writes layout CSS on every pointer event; publish only the latest coordinate each frame.",
+      "acceptance": "High-rate pointer input results in at most one CSS width update per frame and final width persists.",
+      "status": "complete",
+      "implementation": "Splitter styles update at most once per animation frame and commit final width on release."
+    },
+    {
+      "category": "performance",
+      "id": "P49",
+      "title": "Serve appropriately sized portrait variants",
+      "kind": "Code finding / optimization",
+      "priority": "P2",
+      "effort": "M",
+      "evidence": [
+        "src/components/party/AgentCard.tsx:190"
+      ],
+      "benefit": "Lazy loading exists; cards and tiny party avatars can additionally select bounded image derivatives by rendered size and pixel density.",
+      "acceptance": "Small avatars avoid full portrait downloads and decode memory drops without blurry high-DPI cards.",
+      "status": "planned"
+    },
+    {
+      "category": "performance",
+      "id": "P50",
+      "title": "Move optional writable-runtime copying off the Electron main thread",
+      "kind": "Code finding / optimization",
+      "priority": "P2",
+      "effort": "M",
+      "evidence": [
+        "electron/main.cjs:513"
+      ],
+      "benefit": "The opt-in non-Windows writable-runtime setup performs recursive synchronous copy; run it asynchronously with staging and progress.",
+      "acceptance": "Large first-copy fixture keeps desktop window responsive and ready marker appears only after complete copy.",
+      "status": "complete",
+      "implementation": "Optional writable-runtime provisioning uses asynchronous filesystem copying; Electron type and window-placement checks pass."
+    },
+    {
+      "category": "smoothness",
+      "id": "S01",
+      "title": "Keep each workspace view state when navigating",
+      "kind": "Interaction enhancement",
+      "priority": "P2",
+      "effort": "M",
+      "evidence": [
+        "src/components/layout/NexusShell.tsx:255"
+      ],
+      "benefit": "Persist filters, selected subtab and local form state per workspace without keeping background polling active.",
+      "acceptance": "Leave filtered Monitor, visit Agents, return to the same filter/subtab.",
+      "status": "partial",
+      "implementation": "Roster search/page, settings section/search, plugin query/expansion, monitor tab/page, report selection and Help state survive workspace unmounts. Remaining editor/view state and full navigation matrix need verification."
+    },
+    {
+      "category": "smoothness",
+      "id": "S02",
+      "title": "Restore each workspace scroll position",
+      "kind": "Interaction enhancement",
+      "priority": "P2",
+      "effort": "M",
+      "evidence": [
+        "src/components/layout/NexusShell.tsx:255"
+      ],
+      "benefit": "Switching large workspaces should return to the previous reading location.",
+      "acceptance": "Scroll a long workspace, navigate away/back, and recover its position without jumping after content loads.",
+      "status": "partial",
+      "implementation": "Per-workspace window and nested registry/settings/plugin scroll positions are captured, frozen before navigation, and restored while lazy layout settles. User input takes control. Browser navigation validation remains incomplete because the live preview lost authentication."
+    },
+    {
+      "category": "smoothness",
+      "id": "S03",
+      "title": "Use panel-shaped loading placeholders",
+      "kind": "Interaction enhancement",
+      "priority": "P2",
+      "effort": "M",
+      "evidence": [
+        "src/components/layout/NexusShell.tsx:134"
+      ],
+      "benefit": "The generic Refreshing spinner replaces each lazy workspace; reserve matching header/content space.",
+      "acceptance": "Slow chunk loading preserves surrounding geometry and announces the loading state.",
+      "status": "complete",
+      "implementation": "Destination-shaped loading placeholders replace the generic spinner."
+    },
+    {
+      "category": "smoothness",
+      "id": "S04",
+      "title": "Prefetch likely next panels on navigation intent",
+      "kind": "Interaction enhancement",
+      "priority": "P2",
+      "effort": "M",
+      "evidence": [
+        "src/components/layout/NexusShell.tsx:75"
+      ],
+      "benefit": "Secondary panels already lazy-load; warm their chunk on pointer intent or keyboard focus using the same cached loader.",
+      "acceptance": "First navigation after hover/focus reuses one request and does not fetch every panel at startup.",
+      "status": "complete",
+      "implementation": "Navigation focus/hover prefetches the corresponding lazy panel."
+    },
+    {
+      "category": "smoothness",
+      "id": "S05",
+      "title": "Focus chat when its lazy component actually mounts",
+      "kind": "Interaction enhancement",
+      "priority": "P2",
+      "effort": "M",
+      "evidence": [
+        "src/components/layout/NexusShell.tsx:500"
+      ],
+      "benefit": "Current focus loop stops after 12 animation frames and can miss slow chunk loads; use an explicit mount-ready signal.",
+      "acceptance": "Open chat through Help with a delayed chunk; composer receives focus once without stealing later user focus.",
+      "status": "complete",
+      "implementation": "Console focus waits for its mount-ready event instead of retrying a fixed number of frames."
+    },
+    {
+      "category": "smoothness",
+      "id": "S06",
+      "title": "Show freshness beside cached runtime state",
+      "kind": "Interaction enhancement",
+      "priority": "P2",
+      "effort": "M",
+      "evidence": [
+        "src/hooks/useRuntimeStatus.ts:1378"
+      ],
+      "benefit": "Cached data is retained on failure; consistently display last successful observation age and a refresh action.",
+      "acceptance": "A stale snapshot cannot be mistaken for current health and refreshing does not blank useful data.",
+      "status": "partial",
+      "implementation": "Runtime freshness uses receipt and source-snapshot age, displays cached-state age, and offers refresh. The age timer pauses when hidden. Complete stale/error browser scenarios remain."
+    },
+    {
+      "category": "smoothness",
+      "id": "S07",
+      "title": "Recover a connected but silent event stream",
+      "kind": "Interaction enhancement",
+      "priority": "P2",
+      "effort": "M",
+      "evidence": [
+        "src/components/monitor/AgentResponseConsole.tsx:1108"
+      ],
+      "benefit": "The stream read can wait indefinitely without an idle heartbeat watchdog.",
+      "acceptance": "A stalled connection reconnects after its heartbeat grace period with a visible recoverable state.",
+      "status": "complete",
+      "implementation": "A silent SSE connection aborts after 45 seconds without bytes and reconnects."
+    },
+    {
+      "category": "smoothness",
+      "id": "S08",
+      "title": "Resume event delivery from the last acknowledged cursor",
+      "kind": "Interaction enhancement",
+      "priority": "P2",
+      "effort": "M",
+      "evidence": [
+        "src/components/monitor/AgentResponseConsole.tsx:1084"
+      ],
+      "benefit": "Reconnect rebuilds a connection without a client cursor; extend the existing stream protocol to replay missed events.",
+      "acceptance": "Disconnect during a run, reconnect, and observe every event exactly once.",
+      "status": "complete",
+      "implementation": "Reconnect sends the last acknowledged event ID; the server replays only newer retained events and reports an expired cursor."
+    },
+    {
+      "category": "smoothness",
+      "id": "S09",
+      "title": "Use jittered reconnect backoff and reset after stable service",
+      "kind": "Interaction enhancement",
+      "priority": "P2",
+      "effort": "M",
+      "evidence": [
+        "src/components/monitor/AgentResponseConsole.tsx:1131"
+      ],
+      "benefit": "Linear retry delays synchronize multiple clients and reset as soon as headers arrive.",
+      "acceptance": "Repeated immediate disconnects back off; a stable connection restores the initial retry policy.",
+      "status": "complete",
+      "implementation": "Reconnect backoff includes jitter and resets after a stable connection period."
+    },
+    {
+      "category": "smoothness",
+      "id": "S10",
+      "title": "Expose jump-to-latest and unread response count",
+      "kind": "Interaction enhancement",
+      "priority": "P2",
+      "effort": "M",
+      "evidence": [
+        "src/components/monitor/AgentResponseConsole.tsx:1180"
+      ],
+      "benefit": "Auto-follow already stops away from the bottom; give the reader an explicit return path.",
+      "acceptance": "Read an older response while new replies arrive, then return to latest with one action.",
+      "status": "complete",
+      "implementation": "Conversation exposes jump-to-latest and unread response count."
+    },
+    {
+      "category": "smoothness",
+      "id": "S11",
+      "title": "Preserve the transcript anchor when older responses are revealed",
+      "kind": "Interaction enhancement",
+      "priority": "P2",
+      "effort": "M",
+      "evidence": [
+        "src/components/monitor/AgentResponseConsole.tsx:977"
+      ],
+      "benefit": "The console renders only 60 of 80 retained responses; offer older messages without shifting the current reading anchor.",
+      "acceptance": "Load older messages and keep the current top-visible message at the same pixel offset.",
+      "status": "complete",
+      "implementation": "Revealing older retained responses preserves the scroll anchor."
+    },
+    {
+      "category": "smoothness",
+      "id": "S12",
+      "title": "Maintain attachment state per recipient draft",
+      "kind": "Interaction enhancement",
+      "priority": "P2",
+      "effort": "M",
+      "evidence": [
+        "src/components/monitor/AgentResponseConsole.tsx:884"
+      ],
+      "benefit": "Text drafts are scoped by route; attachment ownership should switch together with the corresponding text draft.",
+      "acceptance": "Switch recipients with an attachment and return to the correct draft without sending it to another route.",
+      "status": "partial",
+      "implementation": "Attachment drafts are retained separately per recipient/workspace session, including uploaded results and per-file retry state; clearing drafts aborts uploads and revokes previews. File-upload and recipient-switch browser QA remains."
+    },
+    {
+      "category": "smoothness",
+      "id": "S13",
+      "title": "Make canceled voice processing settle immediately",
+      "kind": "Interaction enhancement",
+      "priority": "P2",
+      "effort": "M",
+      "evidence": [
+        "src/speech/localSpeechClient.ts:67"
+      ],
+      "benefit": "Recognition requests lack AbortSignal/deadline handling; expose cancel and settle pending work even if the worker stalls.",
+      "acceptance": "Cancel a stalled dictation and immediately return to usable typing controls.",
+      "status": "complete",
+      "implementation": "Speech requests accept AbortSignal and a deadline; cancellation settles immediately."
+    },
+    {
+      "category": "smoothness",
+      "id": "S14",
+      "title": "Keep recorded audio available for a transcription retry",
+      "kind": "Interaction enhancement",
+      "priority": "P2",
+      "effort": "M",
+      "evidence": [
+        "src/components/monitor/AgentResponseConsole.tsx:1265"
+      ],
+      "benefit": "A transient recognition failure should allow retrying the same recording within the current session.",
+      "acceptance": "Retry after a simulated transient error without recording again; explicitly discard clears the recording.",
+      "status": "complete",
+      "implementation": "Failed or cancelled transcription retains the recording in memory for explicit retry or discard."
+    },
+    {
+      "category": "smoothness",
+      "id": "S15",
+      "title": "Show determinate local speech setup progress",
+      "kind": "Interaction enhancement",
+      "priority": "P2",
+      "effort": "M",
+      "evidence": [
+        "src/speech/localSpeechClient.ts:1"
+      ],
+      "benefit": "Progress events exist; expose download/preparation progress separately from recording and recognition.",
+      "acceptance": "First use clearly distinguishes listening, downloading, preparing and transcribing; ready state settles once.",
+      "status": "complete",
+      "implementation": "Speech model preparation exposes determinate progress when supplied by the worker."
+    },
+    {
+      "category": "smoothness",
+      "id": "S16",
+      "title": "Preserve textarea scrolling during autosizing",
+      "kind": "Interaction enhancement",
+      "priority": "P2",
+      "effort": "M",
+      "evidence": [
+        "src/components/monitor/AgentResponseConsole.tsx:1209"
+      ],
+      "benefit": "Autosizing resets height to auto and rereads layout; keep selection and scroll position stable when the editor reaches its height cap.",
+      "acceptance": "Typing/pasting a long draft keeps caret visible without bouncing the entire workspace.",
+      "status": "complete",
+      "implementation": "Composer autosizing preserves its scroll offset and accounts for the visual viewport."
+    },
+    {
+      "category": "smoothness",
+      "id": "S17",
+      "title": "Use consistent pending states for long actions",
+      "kind": "Interaction enhancement",
+      "priority": "P2",
+      "effort": "M",
+      "evidence": [
+        "src/components/common/ActionStatusBanner.tsx:1"
+      ],
+      "benefit": "Show operation-specific progress and disable duplicate invocation until a clear completion or failure.",
+      "acceptance": "Repeated clicks during a pending mutation cannot launch duplicate requests and failure restores controls.",
+      "status": "planned"
+    },
+    {
+      "category": "smoothness",
+      "id": "S18",
+      "title": "Restore focus to the initiating control after overlays close",
+      "kind": "Interaction enhancement",
+      "priority": "P2",
+      "effort": "M",
+      "evidence": [
+        "src/components/layout/NexusShell.tsx:238"
+      ],
+      "benefit": "Dialog cleanup should return the operator to the exact trigger or a safe nearby replacement.",
+      "acceptance": "Close Recruit/Help/editor by keyboard and continue navigation from the initiating action.",
+      "status": "partial",
+      "implementation": "Shared focus lifecycle adopted by editor, recruitment, model/auth/help and new dialogs. Complete nested-dialog and remaining overlay audit."
+    },
+    {
+      "category": "smoothness",
+      "id": "S19",
+      "title": "Keep useful content during background refresh",
+      "kind": "Interaction enhancement",
+      "priority": "P2",
+      "effort": "M",
+      "evidence": [
+        "src/hooks/useGatewayActivityFeed.ts:37"
+      ],
+      "benefit": "Treat initial loading and refreshing as distinct states across lists; retain prior rows while refreshing with stale indication.",
+      "acceptance": "A refresh never collapses a populated list or loses keyboard position.",
+      "status": "planned"
+    },
+    {
+      "category": "smoothness",
+      "id": "S20",
+      "title": "Reveal the actionable first validation error",
+      "kind": "Interaction enhancement",
+      "priority": "P2",
+      "effort": "M",
+      "evidence": [
+        "src/components/mission/MissionDeploymentPanel.tsx:491"
+      ],
+      "benefit": "Failed form submission should scroll/focus the first invalid field and retain all other values.",
+      "acceptance": "Submit an incomplete long form from its footer and land on the invalid field with a clear explanation.",
+      "status": "partial",
+      "implementation": "Mission readiness links focus missing title/objective inputs or open agent selection. Extend to remaining forms."
+    },
+    {
+      "category": "responsive",
+      "id": "UI01",
+      "title": "Repair the roster filter cascade",
+      "kind": "fix",
+      "priority": "P1",
+      "effort": "M",
+      "evidence": [
+        "src/styles/automnia-theme/90-reference-screenshot.css:4811",
+        "src/styles/automnia-theme/100-operator-experience.css:2241"
+      ],
+      "benefit": "Parent preview at 390px found sort/rarity/theme selectors and List beyond the visible panel, despite no document overflow",
+      "acceptance": "Verify every filter's bounding box is inside its panel at 320/390/768px and while resizing the console.",
+      "details": "Repair the roster filter cascade. `src/styles/automnia-theme/90-reference-screenshot.css:4811` applies a high-specificity `minmax(260px,1fr) auto !important`; its container override at `:4909` drops the cohesive class, and the later mobile `1fr` at `src/styles/automnia-theme/100-operator-experience.css:2241` lacks `!important`. Consolidate into one responsive rule using `minmax(0,1fr)`.",
+      "status": "partial",
+      "implementation": "Roster toolbar cascade repaired and checked at 390px. Remaining 320px/zoom/splitter matrix pending."
+    },
+    {
+      "category": "responsive",
+      "id": "UI02",
+      "title": "Rebuild the compact header's status layout as a single owned grid, resetting inherited alignment and track sizing",
+      "kind": "fix",
+      "priority": "P1",
+      "effort": "M",
+      "evidence": [
+        "src/styles/automnia-theme/90-reference-screenshot.css:562",
+        "src/styles/automnia-theme/106-responsive-ux.css:162"
+      ],
+      "benefit": "Parent 390\u00d7844 preview showed tiny empty-looking status boxes consuming roughly 300px vertically",
+      "acceptance": "Verify actual label/value visibility and header height at 320\u2013600px, enlarged text, and all loading/offline states; do not rely solely on document scrollWidth.",
+      "details": "Rebuild the compact header's status layout as a single owned grid, resetting inherited alignment and track sizing. Legacy `justify-items:end!important` at `src/styles/automnia-theme/90-reference-screenshot.css:562` and six 78px tracks at `:582` coexist with mobile overrides at `src/styles/automnia-theme/106-responsive-ux.css:162`.",
+      "status": "partial",
+      "implementation": "Compact status grid repaired and checked at 390px. Enlarged-text and remaining status matrix pending."
+    },
+    {
+      "category": "responsive",
+      "id": "UI03",
+      "title": "Keep Settings and Help discoverable in compact navigation: use an explicit overflow menu or labeled compact layout, with overflow affordances and active-item reveal",
+      "kind": "fix",
+      "priority": "P1",
+      "effort": "M",
+      "evidence": [
+        "src/styles/automnia-theme/106-responsive-ux.css:93"
+      ],
+      "benefit": "Parent preview placed Settings at x361\u2013419 and Help at x419\u2013477 in a 390px viewport",
+      "acceptance": "Horizontal scrolling exists; the improvement is discoverability and guaranteed keyboard/touch access. Verify all seven destinations can be found and activated without guessing a hidden swipe.",
+      "details": "Keep Settings and Help discoverable in compact navigation: use an explicit overflow menu or labeled compact layout, with overflow affordances and active-item reveal. Current 58px fixed items and hidden scrollbar are defined at `src/styles/automnia-theme/106-responsive-ux.css:93` and `:118`.",
+      "status": "partial",
+      "implementation": "All navigation destinations are visible in checked compact layout. Complete keyboard/touch and screen-size matrix."
+    },
+    {
+      "category": "responsive",
+      "id": "UI04",
+      "title": "Keep the composer within reach on short laptops by offering a compact party summary and chat-first stacked layout",
+      "kind": "fix",
+      "priority": "P1",
+      "effort": "M",
+      "evidence": [
+        "src/styles/automnia-theme/132-responsive-viewport.css:30"
+      ],
+      "benefit": "Parent 1024\u00d7768 preview showed two party rows plus registry before chat",
+      "acceptance": "Verify a focused command can be entered without first scrolling through the roster at 1024\u00d7768, 1366\u00d7768, and 200% zoom.",
+      "details": "Keep the composer within reach on short laptops by offering a compact party summary and chat-first stacked layout. `src/styles/automnia-theme/132-responsive-viewport.css:30` forces party \u2192 registry \u2192 console at <=1400px or <=820px height; the registry consumes up to 480px at `:65`.",
+      "status": "partial",
+      "implementation": "Compact stacked layout prioritizes chat. Verify short laptops and 200% scaling."
+    },
+    {
+      "category": "responsive",
+      "id": "UI05",
+      "title": "Introduce a shared modal focus lifecycle: save invoker, focus first meaningful element, trap Tab, inert background, and restore focus",
+      "kind": "fix",
+      "priority": "P1",
+      "effort": "M",
+      "evidence": [
+        "src/components/help/HelpAssistantPanel.tsx:371",
+        "src/components/auth/ProviderAuthModal.tsx:336",
+        "src/components/monitor/LiveOperationMonitor.tsx:746"
+      ],
+      "benefit": "Prevent keyboard users from landing behind overlays",
+      "acceptance": "Verify Tab/Shift+Tab remain inside each modal and focus returns to the originating control, including provider auth opened from an editor.",
+      "details": "Introduce a shared modal focus lifecycle: save invoker, focus first meaningful element, trap Tab, inert background, and restore focus. Help only sets overflow and initial focus at `src/components/help/HelpAssistantPanel.tsx:371`; provider/cron dialogs at `src/components/auth/ProviderAuthModal.tsx:336` and `src/components/monitor/LiveOperationMonitor.tsx:746` declare modality without corresponding focus containment.",
+      "status": "partial",
+      "implementation": "Shared dialog focus trap, inert background and invoker restoration implemented. Complete nested auth/overlay interaction checks."
+    },
+    {
+      "category": "responsive",
+      "id": "UI06",
+      "title": "Give agent/model editors correct dialog semantics and a shared close-key contract",
+      "kind": "fix",
+      "priority": "P1",
+      "effort": "S",
+      "evidence": [
+        "src/components/editor/AgentEditorModal.tsx:1490",
+        "src/components/party/ModelSelectorModal.tsx:314"
+      ],
+      "benefit": "Screen readers identify the current task and keyboard closing respects saves",
+      "acceptance": "Verify announced titles, nested-modal Escape behavior, and autosave completion before editor closure.",
+      "details": "Give agent/model editors correct dialog semantics and a shared close-key contract. `src/components/editor/AgentEditorModal.tsx:1490` and `src/components/party/ModelSelectorModal.tsx:314` are anonymous divs; Escape handling is absent in these components. Route Escape through the existing autosave-flush close handler, not a raw state toggle.",
+      "status": "partial",
+      "implementation": "Editor/model dialogs have titles and close-key handling. File autosave failures now keep the editor open; finish interaction QA."
+    },
+    {
+      "category": "responsive",
+      "id": "UI07",
+      "title": "Make party removal reachable without hover",
+      "kind": "fix",
+      "priority": "P1",
+      "effort": "S",
+      "evidence": [
+        "src/components/party/ActivePartyStrip.tsx:187"
+      ],
+      "benefit": "Keyboard and touch users can remove any selected member",
+      "acceptance": "Verify removal with keyboard only and on a touch simulator without synthetic hover.",
+      "details": "Make party removal reachable without hover. `src/components/party/ActivePartyStrip.tsx:187` assigns the remove button `tabIndex=-1` unless `hoverSlot` is set by mouse events. Keep it in the tab sequence and reveal it on focus-within/coarse pointers.",
+      "status": "partial",
+      "implementation": "Party removal is exposed to focus/touch; complete touch matrix."
+    },
+    {
+      "category": "responsive",
+      "id": "UI08",
+      "title": "Add accessible party reordering controls beside existing HTML drag-and-drop",
+      "kind": "fix",
+      "priority": "P2",
+      "effort": "M",
+      "evidence": [
+        "src/components/party/ActivePartyStrip.tsx:198"
+      ],
+      "benefit": "Party order can be managed with touch, switch input, and keyboard",
+      "acceptance": "Validate first/last slots, mission-locked state, and equivalent resulting order across input methods.",
+      "details": "Add accessible party reordering controls beside existing HTML drag-and-drop. `src/components/party/ActivePartyStrip.tsx:198` is draggable, with drop routing at `:147`, but has no keyboard/touch reorder action. Offer move left/right or a slot picker and announce the new position.",
+      "status": "partial",
+      "implementation": "Party reorder controls added alongside drag/drop; complete mission-lock and edge-slot checks."
+    },
+    {
+      "category": "responsive",
+      "id": "UI09",
+      "title": "Complete tab semantics and navigation in agent settings and recruit files",
+      "kind": "fix",
+      "priority": "P2",
+      "effort": "M",
+      "evidence": [
+        "src/components/editor/AgentEditorModal.tsx:1510",
+        "src/components/recruit/RecruitAgentModal.tsx:1955"
+      ],
+      "benefit": "Long tab rows become efficient for keyboard users",
+      "acceptance": "Verify one tab stop per group, matching panel labels, arrow navigation, and scrolling the selected tab into view.",
+      "details": "Complete tab semantics and navigation in agent settings and recruit files. Editor buttons at `src/components/editor/AgentEditorModal.tsx:1510` only expose `data-active`; recruit file tabs at `src/components/recruit/RecruitAgentModal.tsx:1955` use ARIA tabs without roving focus or Arrow/Home/End handlers.",
+      "status": "partial",
+      "implementation": "Editor/recruit tabs support roving Arrow/Home/End navigation; complete assistive-technology QA."
+    },
+    {
+      "category": "responsive",
+      "id": "UI10",
+      "title": "Complete custom model-listbox keyboard interaction",
+      "kind": "fix",
+      "priority": "P2",
+      "effort": "M",
+      "evidence": [
+        "src/components/models/ModelPicker.tsx:398"
+      ],
+      "benefit": "Hundreds of models can be selected predictably without tabbing through each option",
+      "acceptance": "Validate opening focus, selection, typeahead, disabled states, and focus return.",
+      "details": "Complete custom model-listbox keyboard interaction. `src/components/models/ModelPicker.tsx:398` opens a listbox; options at `:443` have selection semantics but no active-option Arrow/Home/End/typeahead behavior. Existing Escape dismissal should remain.",
+      "status": "partial",
+      "implementation": "Model menus support keyboard selection, typeahead and disabled options; complete multi-dialog QA."
+    },
+    {
+      "category": "responsive",
+      "id": "UI11",
+      "title": "Position model menus relative to available viewport space using a portal/popover with collision handling",
+      "kind": "fix",
+      "priority": "P2",
+      "effort": "M",
+      "evidence": [
+        "src/components/models/ModelPicker.tsx:435"
+      ],
+      "benefit": "Prevent menus from being clipped by scrolling/overflow ancestors near the lower edge",
+      "acceptance": "Validate bottom/right-edge triggers in all modals at 390px, 768px, and 200% zoom.",
+      "details": "Position model menus relative to available viewport space using a portal/popover with collision handling. `src/components/models/ModelPicker.tsx:435` always places an absolute menu below the trigger with a 288px cap inside modal scrollers.",
+      "status": "partial",
+      "implementation": "Model menus portal into available viewport space; complete 390px/768px/zoom collision matrix."
+    },
+    {
+      "category": "responsive",
+      "id": "UI12",
+      "title": "Generate instance-unique model-picker IDs with useId",
+      "kind": "fix",
+      "priority": "P2",
+      "effort": "S",
+      "evidence": [
+        "src/components/models/ModelPicker.tsx:346"
+      ],
+      "benefit": "Multiple picker instances or layered dialogs keep aria-controls connected to the correct popup",
+      "acceptance": "Validate two identical-provider pickers mounted simultaneously with unique IDs and correct accessibility relationships.",
+      "details": "Generate instance-unique model-picker IDs with useId. `src/components/models/ModelPicker.tsx:346` hardcodes the fallback panel ID and `:393` derives menu IDs only from provider name.",
+      "status": "partial",
+      "implementation": "Model picker instance IDs use useId; verify concurrent identical-provider instances."
+    },
+    {
+      "category": "responsive",
+      "id": "UI13",
+      "title": "Associate all mission labels and units with their inputs using the existing Field primitive",
+      "kind": "fix",
+      "priority": "P1",
+      "effort": "S",
+      "evidence": [
+        "src/components/mission/MissionDeploymentPanel.tsx:491"
+      ],
+      "benefit": "Voice control and screen readers can distinguish title, interval, and interval units",
+      "acceptance": "Verify label clicking focuses its field and accessibility names remain meaningful without placeholder text.",
+      "details": "Associate all mission labels and units with their inputs using the existing Field primitive. Mission title has a sibling label without htmlFor at `src/components/mission/MissionDeploymentPanel.tsx:491`; cadence input/select at `:669` are unlabeled.",
+      "status": "partial",
+      "implementation": "Mission inputs gained associated labels/names; audit remaining units and all fields."
+    },
+    {
+      "category": "responsive",
+      "id": "UI14",
+      "title": "Expose launch readiness as a named meter plus a textual checklist of missing requirements",
+      "kind": "fix",
+      "priority": "P2",
+      "effort": "S",
+      "evidence": [
+        "src/components/mission/MissionDeploymentPanel.tsx:722"
+      ],
+      "benefit": "Users understand why launch is blocked without relying on color or hover",
+      "acceptance": "Verify all requirements and changing readiness are accessible by touch and screen reader.",
+      "details": "Expose launch readiness as a named meter plus a textual checklist of missing requirements. The progress bar is visual divs at `src/components/mission/MissionDeploymentPanel.tsx:722`, while individual checks are `aria-hidden` title-only dots at `:730`.",
+      "status": "partial",
+      "implementation": "Form readiness is a named meter with a checklist and links to missing inputs; screen-reader QA remains."
+    },
+    {
+      "category": "responsive",
+      "id": "UI15",
+      "title": "Add selection semantics to view and effort controls",
+      "kind": "fix",
+      "priority": "P2",
+      "effort": "S",
+      "evidence": [
+        "src/components/party/PartySelector.tsx:538",
+        "src/components/party/ModelSelectorModal.tsx:417"
+      ],
+      "benefit": "Assistive technology can report the selected list/grid mode and effort",
+      "acceptance": "Validate one selected value and the same result after reload.",
+      "details": "Add selection semantics to view and effort controls. Roster view buttons at `src/components/party/PartySelector.tsx:538` use data-active only; effort buttons at `src/components/party/ModelSelectorModal.tsx:417` use selected CSS only. Use aria-pressed or a radio group.",
+      "status": "partial",
+      "implementation": "Roster view, mission choice and model controls expose selected/pressed state. Complete selection-control accessibility matrix remains."
+    },
+    {
+      "category": "responsive",
+      "id": "UI16",
+      "title": "Extend authentication scroll accommodation to short wide windows, not only narrow phones",
+      "kind": "fix",
+      "priority": "P1",
+      "effort": "S",
+      "evidence": [
+        "src/styles/automnia-theme/106-responsive-ux.css:328",
+        "src/components/auth/LoginModal.tsx:84"
+      ],
+      "benefit": "Account setup remains reachable in landscape and split-screen windows",
+      "acceptance": "Verify the full setup form, error message, submit, and footer at 880\u00d7600 and 1024\u00d7600, as well as 200% text zoom.",
+      "details": "Extend authentication scroll accommodation to short wide windows, not only narrow phones. `src/styles/automnia-theme/106-responsive-ux.css:328` enables auth scrolling only below 520px; `src/components/auth/LoginModal.tsx:84` remains a centered fixed viewport elsewhere.",
+      "status": "partial",
+      "implementation": "Shared/auth overlay sizing accommodates short viewports; complete short-wide setup test."
+    },
+    {
+      "category": "responsive",
+      "id": "UI17",
+      "title": "Make overlay sizing follow dynamic/visual viewport height and safe areas",
+      "kind": "fix",
+      "priority": "P2",
+      "effort": "S",
+      "evidence": [
+        "src/components/auth/ProviderAuthModal.tsx:339",
+        "src/components/party/ModelSelectorModal.tsx:314",
+        "src/components/monitor/LiveOperationMonitor.tsx:749"
+      ],
+      "benefit": "Browser toolbars and virtual keyboards no longer cover focused fields or save controls",
+      "acceptance": "Verify open keyboards, orientation changes, and a short Electron window.",
+      "details": "Make overlay sizing follow dynamic/visual viewport height and safe areas. Provider auth uses `100vh` at `src/components/auth/ProviderAuthModal.tsx:339`; model configuration uses `90vh` at `src/components/party/ModelSelectorModal.tsx:314`; cron uses `86vh` at `src/components/monitor/LiveOperationMonitor.tsx:749`.",
+      "status": "partial",
+      "implementation": "Shared dialog safe-area and dynamic-height sizing implemented; software keyboard/orientation checks remain."
+    },
+    {
+      "category": "responsive",
+      "id": "UI18",
+      "title": "Align reading/tab order with the mobile visual order",
+      "kind": "fix",
+      "priority": "P2",
+      "effort": "M",
+      "evidence": [
+        "src/components/layout/NexusShell.tsx:886",
+        "src/styles/automnia-theme/104-responsive-fit.css:160"
+      ],
+      "benefit": "Keyboard traversal matches what a user sees",
+      "acceptance": "Validate tab and screen-reader order after switching between desktop and mobile breakpoints without losing the current draft.",
+      "details": "Align reading/tab order with the mobile visual order. Shell DOM is registry then console at `src/components/layout/NexusShell.tsx:886`; mobile CSS visually moves console above registry at `src/styles/automnia-theme/104-responsive-fit.css:160`.",
+      "status": "partial",
+      "implementation": "Pane DOM order follows the computed grid layout so mobile reading/tab order matches chat-before-registry placement while desktop order follows its columns. Mobile DOM order checked; full responsive/assistive-technology matrix remains."
+    },
+    {
+      "category": "responsive",
+      "id": "UI19",
+      "title": "Allow agent cards to grow with content and user text settings rather than fixing min/max height together",
+      "kind": "fix",
+      "priority": "P2",
+      "effort": "M",
+      "evidence": [
+        "src/styles/automnia-theme/132-responsive-viewport.css:80",
+        "src/components/party/AgentCard.tsx:226"
+      ],
+      "benefit": "Long roles, localization, and larger fonts keep actions visible",
+      "acceptance": "Validate long names, long model IDs, 200% text scaling, and each simple/detailed/theme mode.",
+      "details": "Allow agent cards to grow with content and user text settings rather than fixing min/max height together. `src/styles/automnia-theme/132-responsive-viewport.css:80` fixes card height to 370\u2013410px while names may take two lines at `src/components/party/AgentCard.tsx:226`.",
+      "status": "partial",
+      "implementation": "Authoritative responsive card sizing permits height to grow with content instead of fixing matching minimum/maximum heights. Enlarged-text and action visibility visual checks remain."
+    },
+    {
+      "category": "responsive",
+      "id": "UI20",
+      "title": "Make roster column selection depend on available panel width and minimum readable card width",
+      "kind": "fix",
+      "priority": "P2",
+      "effort": "M",
+      "evidence": [
+        "src/styles/automnia-theme/132-responsive-viewport.css:71"
+      ],
+      "benefit": "Cards stay usable in narrow split panes on otherwise wide monitors",
+      "acceptance": "Validate live splitter movement and all density/display modes, rather than only full-window breakpoints.",
+      "details": "Make roster column selection depend on available panel width and minimum readable card width. `src/styles/automnia-theme/132-responsive-viewport.css:71` forces three columns, then two at `:132`, based on window dimensions. Preserve existing registry container support while extending it to the final viewport rules.",
+      "status": "partial",
+      "implementation": "Roster columns use panel width and minimum readable rem widths with auto-fill instead of viewport-only fixed counts. Split-pane and multi-viewport visual checks remain."
+    },
+    {
+      "category": "responsive",
+      "id": "UI21",
+      "title": "Add visible names/tooltips to icon-only collapsed desktop navigation",
+      "kind": "fix",
+      "priority": "P2",
+      "effort": "S",
+      "evidence": [
+        "src/styles/automnia-theme/104-responsive-fit.css:101",
+        "src/components/layout/NexusShell.tsx:627"
+      ],
+      "benefit": "New users can identify custom pictograms with mouse or keyboard",
+      "acceptance": "Verify label visibility without covering the next action, including Settings and Help.",
+      "details": "Add visible names/tooltips to icon-only collapsed desktop navigation. `src/styles/automnia-theme/104-responsive-fit.css:101` hides rail text between 901\u20131200px; buttons at `src/components/layout/NexusShell.tsx:627` provide aria-labels but no visible hover/focus explanation.",
+      "status": "partial",
+      "implementation": "Collapsed navigation has portal tooltips for keyboard focus and pointer hover, including Recruit, Settings and Help. Tooltip placement is viewport-clamped and dismissed on Escape, scroll, resize or blur. Multi-viewport tooltip collision verification remains."
+    },
+    {
+      "category": "responsive",
+      "id": "UI22",
+      "title": "Include top safe-area height in the main content offset",
+      "kind": "fix",
+      "priority": "P2",
+      "effort": "S",
+      "evidence": [
+        "src/styles/automnia-theme/106-responsive-ux.css:41"
+      ],
+      "benefit": "Notched/mobile landscape screens keep the first heading below the navigation",
+      "acceptance": "Validate nonzero safe-area insets and both orientations.",
+      "details": "Include top safe-area height in the main content offset. Nav top uses `max(8px,env(safe-area-inset-top))` at `src/styles/automnia-theme/106-responsive-ux.css:41`, while main padding uses a fixed nav-height-plus-14px token at `:12` and `:36`.",
+      "status": "partial",
+      "implementation": "Compact shell accounts for top safe area; physical inset/orientation QA remains."
+    },
+    {
+      "category": "responsive",
+      "id": "UI23",
+      "title": "Add a coarse-pointer target-size override to shared controls and compact party actions",
+      "kind": "fix",
+      "priority": "P2",
+      "effort": "M",
+      "evidence": [
+        "src/styles/tokens.css:41",
+        "src/styles/automnia-theme/128-active-party-density.css:19"
+      ],
+      "benefit": "Touch laptops/tablets get forgiving targets without changing desktop density",
+      "acceptance": "Validate at least 44px hit areas, no overlaps, and continued scrolling on touch.",
+      "details": "Add a coarse-pointer target-size override to shared controls and compact party actions. Tokens currently use 32/36px at `src/styles/tokens.css:41`; party toolbar forcibly uses 32px at `src/styles/automnia-theme/128-active-party-density.css:19`.",
+      "status": "partial",
+      "implementation": "Shared controls and compact party actions have a coarse-pointer target-size override. Real touch-device matrix remains."
+    },
+    {
+      "category": "responsive",
+      "id": "UI24",
+      "title": "Extend Windows forced-color support beyond focus rings",
+      "kind": "fix",
+      "priority": "P2",
+      "effort": "M",
+      "evidence": [
+        "src/styles/accessibility.css:64"
+      ],
+      "benefit": "High-contrast users can distinguish selected, disabled, and destructive controls",
+      "acceptance": "Validate actual forced-color mode, including native select arrows and selected party/chat states.",
+      "details": "Extend Windows forced-color support beyond focus rings. `src/styles/accessibility.css:64` only defines forced-color focus styling; selections, status borders, custom select chevrons, and pictogram navigation rely on authored colors/assets.",
+      "status": "partial",
+      "implementation": "Forced-color rules cover controls, surfaces, selection and status distinctions. Windows high-contrast validation remains."
+    },
+    {
+      "category": "responsive",
+      "id": "UI25",
+      "title": "Restore a readable minimum text scale for operational status metadata",
+      "kind": "fix",
+      "priority": "P1",
+      "effort": "M",
+      "evidence": [
+        "src/styles/automnia-theme/124-chat-status-clarity.css:56",
+        "src/styles/automnia-theme/128-active-party-density.css:70"
+      ],
+      "benefit": "HiDPI and lower-acuity users can read status without magnifying the whole app",
+      "acceptance": "Verify computed sizes and representative output at 100%, 125%, 200%, plus the app's default zoom.",
+      "details": "Restore a readable minimum text scale for operational status metadata. `src/styles/automnia-theme/124-chat-status-clarity.css:56` sets response status to 7px and `:95` does the same to metadata chips; party rarity is 7px at `src/styles/automnia-theme/128-active-party-density.css:70`. Use relative-size tokens and hide optional metadata before shrinking essential state text.",
+      "status": "partial",
+      "implementation": "Console font-size smoke passes after raising undersized metadata. Complete computed-size review at all zoom levels."
+    },
+    {
+      "category": "responsive",
+      "id": "UI26",
+      "title": "Synchronize splitter accessibility values with the actual clamped range",
+      "kind": "fix",
+      "priority": "P2",
+      "effort": "S",
+      "evidence": [
+        "src/components/layout/NexusShell.tsx:895"
+      ],
+      "benefit": "Screen readers announce real current and maximum widths",
+      "acceptance": "Verify initial default width, resizing, Home/End, and window shrink/grow with all ARIA values matching measured geometry.",
+      "details": "Synchronize splitter accessibility values with the actual clamped range. `src/components/layout/NexusShell.tsx:895` advertises a fixed 360\u2013760px range and may omit aria-valuenow, while `:122` clamps against workspace width.",
+      "status": "partial",
+      "implementation": "Splitter minimum, maximum and current ARIA values track the clamped available range. Multi-size keyboard validation remains."
+    },
+    {
+      "category": "responsive",
+      "id": "UI27",
+      "title": "Preserve the user's preferred scale and restore it at startup instead of always applying the default zoom",
+      "kind": "fix",
+      "priority": "P2",
+      "effort": "M",
+      "evidence": [
+        "electron/main.cjs:2075"
+      ],
+      "benefit": "Scale preferences survive restarts and moving between different-DPI displays",
+      "acceptance": "Validate retained zoom after restart, browser-style zoom commands, and a 100% fallback if preferences are invalid.",
+      "details": "Preserve the user's preferred scale and restore it at startup instead of always applying the default zoom. `electron/main.cjs:2075` resets the renderer's zoom in ready-to-show.",
+      "status": "partial",
+      "implementation": "Window zoom persists, with Ctrl/Cmd +/-/0 and wheel changes. Pure preference validation passes; packaged restart QA remains."
+    },
+    {
+      "category": "responsive",
+      "id": "UI28",
+      "title": "Remember window bounds/display and re-clamp them to the available monitor after setup changes",
+      "kind": "fix",
+      "priority": "P2",
+      "effort": "M",
+      "evidence": [
+        "electron/main.cjs:1868"
+      ],
+      "benefit": "The app reopens where users work and remains recoverable after unplugging a monitor",
+      "acceptance": "Verify secondary portrait/ultrawide display, 720p work area, docking/undocking, and previously maximized windows.",
+      "details": "Remember window bounds/display and re-clamp them to the available monitor after setup changes. `electron/main.cjs:1868` calculates startup size only from the primary display and uses fixed minimums at `:1875`.",
+      "status": "partial",
+      "implementation": "Window bounds/display/maximized state persist and re-clamp on display changes. Geometry tests pass; physical docking QA remains."
+    },
+    {
+      "category": "responsive",
+      "id": "UI29",
+      "title": "Make full truncated names/model details available by focus/tap, not only title hover",
+      "kind": "fix",
+      "priority": "P2",
+      "effort": "S",
+      "evidence": [
+        "src/components/party/AgentCard.tsx:269",
+        "src/components/models/ModelPicker.tsx:452"
+      ],
+      "benefit": "Long identifiers remain distinguishable on compact cards",
+      "acceptance": "Validate two models differing only in their suffix, screen reader output, and a touch detail popover.",
+      "details": "Make full truncated names/model details available by focus/tap, not only title hover. `src/components/party/AgentCard.tsx:269` and `src/components/models/ModelPicker.tsx:452` truncate operational values; titles do not provide reliable touch discovery.",
+      "status": "partial",
+      "implementation": "Full model labels wrap in menus. Complete focused/touch details for all truncated surfaces."
+    },
+    {
+      "category": "responsive",
+      "id": "UI30",
+      "title": "Announce streaming progress at useful boundaries, separately from token updates",
+      "kind": "fix",
+      "priority": "P2",
+      "effort": "M",
+      "evidence": [
+        "src/components/monitor/AgentResponseConsole.tsx:663"
+      ],
+      "benefit": "Screen readers are not repeatedly interrupted by growing text",
+      "acceptance": "Validate a multi-agent stream: concise status transitions and completion announcement, with the full response available for normal reading.",
+      "details": "Announce streaming progress at useful boundaries, separately from token updates. `src/components/monitor/AgentResponseConsole.tsx:663` places aria-live directly on the changing response paragraph.",
+      "status": "partial",
+      "implementation": "Response status announcements occur at useful lifecycle boundaries separately from token text. Screen-reader announcement QA remains."
+    },
+    {
+      "category": "appearance",
+      "id": "V01",
+      "title": "Unify navigation artwork into one optically balanced icon family",
+      "kind": "enhancement",
+      "priority": "P2",
+      "effort": "M",
+      "evidence": [
+        "src/components/layout/NexusShell.tsx:80"
+      ],
+      "benefit": "Consistent silhouettes, stroke weight, and visual size make the rail cleaner at multiple scales",
+      "acceptance": "Review a single icon contact sheet at 24/32/40px and 1\u00d7/2\u00d7 density.",
+      "details": "Unify navigation artwork into one optically balanced icon family. The rail uses independent PNG assets at `src/components/layout/NexusShell.tsx:80` and `:103`, while adjacent console controls use stroke SVG at `:870`.",
+      "status": "planned"
+    },
+    {
+      "category": "appearance",
+      "id": "V02",
+      "title": "Establish a clearer primary/secondary action hierarchy on agent cards",
+      "kind": "enhancement",
+      "priority": "P2",
+      "effort": "S",
+      "evidence": [
+        "src/styles/automnia-theme/133-agent-card-obsidian.css:58"
+      ],
+      "benefit": "The main action becomes recognizable immediately; secondary configuration recedes",
+      "acceptance": "Review selected/unselected/busy cards across all rarity colors.",
+      "details": "Establish a clearer primary/secondary action hierarchy on agent cards. `src/styles/automnia-theme/133-agent-card-obsidian.css:58` assigns tags, stats, primary action, secondary action, and chat the same neutral surfaces.",
+      "status": "planned"
+    },
+    {
+      "category": "appearance",
+      "id": "V03",
+      "title": "Use a stable selection accent for Chat instead of varying selection with rarity",
+      "kind": "enhancement",
+      "priority": "P2",
+      "effort": "S",
+      "evidence": [
+        "src/styles/automnia-theme/133-agent-card-obsidian.css:81"
+      ],
+      "benefit": "Functional selection reads consistently across a mixed roster while rarity remains on its badge",
+      "acceptance": "Compare mixed-rarity selected cards in color and grayscale.",
+      "details": "Use a stable selection accent for Chat instead of varying selection with rarity. Selected chat uses `--agent-card-rarity` at `src/styles/automnia-theme/133-agent-card-obsidian.css:81`.",
+      "status": "planned"
+    },
+    {
+      "category": "appearance",
+      "id": "V04",
+      "title": "Reserve semantic colors for runtime meaning and simplify decorative count colors",
+      "kind": "enhancement",
+      "priority": "P2",
+      "effort": "M",
+      "evidence": [
+        "src/styles/automnia-theme/127-workspace-status-colors.css:29"
+      ],
+      "benefit": "Online/warning/error stand out against quieter counts; users see a coherent status language",
+      "acceptance": "Review every header state together, including offline and failed.",
+      "details": "Reserve semantic colors for runtime meaning and simplify decorative count colors. `src/styles/automnia-theme/127-workspace-status-colors.css:29` changes party count through several hues, and roster count follows a primary agent's rarity at `:8`.",
+      "status": "planned"
+    },
+    {
+      "category": "appearance",
+      "id": "V05",
+      "title": "Move overlay surfaces to the same graphite/obsidian token family",
+      "kind": "enhancement",
+      "priority": "P2",
+      "effort": "M",
+      "evidence": [
+        "src/components/party/ModelSelectorModal.tsx:314",
+        "src/components/auth/ProviderAuthModal.tsx:339"
+      ],
+      "benefit": "Dialogs look like part of the current shell and honor existing form-chrome preferences",
+      "acceptance": "Review all overlays under graphite, warm, and obsidian settings.",
+      "details": "Move overlay surfaces to the same graphite/obsidian token family. Model configuration still specifies a blue-gradient shell at `src/components/party/ModelSelectorModal.tsx:314`; provider auth uses another hardcoded blue gradient at `src/components/auth/ProviderAuthModal.tsx:339`.",
+      "status": "partial",
+      "implementation": "Shared dialog/auth surfaces use common surface tokens. Review every theme/overlay combination."
+    },
+    {
+      "category": "appearance",
+      "id": "V06",
+      "title": "Consolidate corner radii into semantic overlay/panel/control levels",
+      "kind": "enhancement",
+      "priority": "P3",
+      "effort": "M",
+      "evidence": [
+        "src/components/auth/ProviderAuthModal.tsx:339",
+        "src/styles/automnia-theme/117-model-picker-flat.css:28",
+        "src/styles/tokens.css:28"
+      ],
+      "benefit": "Consistent nested corners reduce visual fragmentation",
+      "acceptance": "Compare all shared surfaces at the same zoom after token adoption.",
+      "details": "Consolidate corner radii into semantic overlay/panel/control levels. Provider auth uses a 1.75rem radius at `src/components/auth/ProviderAuthModal.tsx:339`, model picker menus force 4px at `src/styles/automnia-theme/117-model-picker-flat.css:28`, and token radii live at `src/styles/tokens.css:28`.",
+      "status": "planned"
+    },
+    {
+      "category": "appearance",
+      "id": "V07",
+      "title": "Apply a restrained elevation hierarchy, with stronger shadows only on floating content",
+      "kind": "enhancement",
+      "priority": "P3",
+      "effort": "M",
+      "evidence": [
+        "src/styles/automnia-theme/133-agent-card-obsidian.css:20"
+      ],
+      "benefit": "Dense rosters feel less visually heavy, while menus and dialogs retain clear depth",
+      "acceptance": "Review 12-card grids and overlapping menus in default/reduced-glow modes.",
+      "details": "Apply a restrained elevation hierarchy, with stronger shadows only on floating content. Cards hardcode 20\u201352px shadows at `src/styles/automnia-theme/133-agent-card-obsidian.css:20` and `:31`; help and provider overlays define their own large stacks.",
+      "status": "planned"
+    },
+    {
+      "category": "appearance",
+      "id": "V08",
+      "title": "Make model popovers opaque enough that underlying content cannot compete with option text",
+      "kind": "enhancement",
+      "priority": "P2",
+      "effort": "S",
+      "evidence": [
+        "src/styles/automnia-theme/117-model-picker-flat.css:38"
+      ],
+      "benefit": "Cleaner reading over patterned cards and bright controls",
+      "acceptance": "Review long menus above high-contrast background fixtures and all accent modes.",
+      "details": "Make model popovers opaque enough that underlying content cannot compete with option text. `src/styles/automnia-theme/117-model-picker-flat.css:38` forces an 82% opaque listbox surface.",
+      "status": "partial",
+      "implementation": "Model popovers have opaque surfaces; complete contrasting-background review."
+    },
+    {
+      "category": "appearance",
+      "id": "V09",
+      "title": "Replace the generic centered workspace spinner with shaped loading placeholders for the destination surface",
+      "kind": "enhancement",
+      "priority": "P2",
+      "effort": "M",
+      "evidence": [
+        "src/components/layout/NexusShell.tsx:131"
+      ],
+      "benefit": "Loading looks intentional and preserves the expected panel hierarchy",
+      "acceptance": "Review slow-network transitions into Missions, Monitor, Plugins, and Settings without invented progress percentages.",
+      "details": "Replace the generic centered workspace spinner with shaped loading placeholders for the destination surface. `src/components/layout/NexusShell.tsx:131` uses the same large Refreshing loader for every lazy panel.",
+      "status": "complete",
+      "implementation": "Loading placeholders reflect console, settings, monitoring and card-based destinations."
+    },
+    {
+      "category": "appearance",
+      "id": "V10",
+      "title": "Design a shared avatar fallback treatment using consistent initials, typography, and neutral background",
+      "kind": "enhancement",
+      "priority": "P3",
+      "effort": "M",
+      "evidence": [
+        "src/components/editor/AgentEditorModal.tsx:1497",
+        "src/components/monitor/AgentResponseConsole.tsx:606",
+        "src/components/party/ActivePartyStrip.tsx:222"
+      ],
+      "benefit": "Missing portraits look deliberate and identities stay recognizable across surfaces",
+      "acceptance": "Review absent/broken portraits, duplicate initials, and very long names.",
+      "details": "Design a shared avatar fallback treatment using consistent initials, typography, and neutral background. Agent editor uses one letter at `src/components/editor/AgentEditorModal.tsx:1497`; chat uses initials at `src/components/monitor/AgentResponseConsole.tsx:606`; party uses its own initials box at `src/components/party/ActivePartyStrip.tsx:222`.",
+      "status": "partial",
+      "implementation": "Agent cards, party slots, chat identities and editor portraits share a neutral initials fallback. Unicode/empty-name tests pass; missing-image visual matrix remains."
+    },
+    {
+      "category": "appearance",
+      "id": "V11",
+      "title": "Improve response typography with safe structured Markdown for headings, lists, inline code, and code blocks",
+      "kind": "enhancement",
+      "priority": "P2",
+      "effort": "M",
+      "evidence": [
+        "src/components/monitor/AgentResponseConsole.tsx:660"
+      ],
+      "benefit": "Agent output becomes easier to scan and technical content appears composed",
+      "acceptance": "Validate sanitized links/content, code overflow, nested lists, and streaming stability.",
+      "details": "Improve response typography with safe structured Markdown for headings, lists, inline code, and code blocks. `src/components/monitor/AgentResponseConsole.tsx:660` renders the response as one whitespace-preserving paragraph.",
+      "status": "partial",
+      "implementation": "Completed responses render escaped structured Markdown with safe links and bounded parsing, while streaming stays plain text. URL regressions pass; full typography and accessibility visual review remains."
+    },
+    {
+      "category": "appearance",
+      "id": "V12",
+      "title": "Reduce repeated uppercase labels and excessive letter spacing in data-dense areas",
+      "kind": "enhancement",
+      "priority": "P3",
+      "effort": "S",
+      "evidence": [
+        "src/components/models/ModelPicker.tsx:168",
+        "src/components/editor/AgentEditorModal.tsx:1512"
+      ],
+      "benefit": "Sentence-case labels and a consistent hierarchy create calmer forms",
+      "acceptance": "Review a complete editor screen with title, section, label, hint, and value styles together.",
+      "details": "Reduce repeated uppercase labels and excessive letter spacing in data-dense areas. For example model provider headings at `src/components/models/ModelPicker.tsx:168` use uppercase 0.14em tracking, and editor tabs at `src/components/editor/AgentEditorModal.tsx:1512` use uppercase 0.1em.",
+      "status": "planned"
+    },
+    {
+      "category": "appearance",
+      "id": "V13",
+      "title": "Style editor identity metadata as a secondary expandable detail rather than a dense inline ID/level/rarity string",
+      "kind": "enhancement",
+      "priority": "P3",
+      "effort": "S",
+      "evidence": [
+        "src/components/editor/AgentEditorModal.tsx:1502",
+        "src/components/party/ModelSelectorModal.tsx:319"
+      ],
+      "benefit": "The identity header feels cleaner while IDs remain easy to reveal/copy",
+      "acceptance": "Review long IDs and two similarly named agents.",
+      "details": "Style editor identity metadata as a secondary expandable detail rather than a dense inline ID/level/rarity string. `src/components/editor/AgentEditorModal.tsx:1502` places all of it beneath the name; model setup repeats agent ID at `src/components/party/ModelSelectorModal.tsx:319`.",
+      "status": "partial",
+      "implementation": "Editor identity details are secondary expandable metadata with selectable wrapping IDs. Visual and enlarged-text checks remain."
+    },
+    {
+      "category": "appearance",
+      "id": "V14",
+      "title": "Align headline metric typography with tabular numerals and predictable widths",
+      "kind": "enhancement",
+      "priority": "P3",
+      "effort": "S",
+      "evidence": [
+        "src/styles/automnia-theme/109-monitor-logs.css:96",
+        "src/components/party/AgentCard.tsx:246"
+      ],
+      "benefit": "Changing counts look steadier and are easier to compare",
+      "acceptance": "Review transitions 9\u219210\u2192100 and mixed-duration values.",
+      "details": "Align headline metric typography with tabular numerals and predictable widths. Log hero metrics at `src/styles/automnia-theme/109-monitor-logs.css:96` use display type without tabular-number styling, unlike agent levels already using tabular nums at `src/components/party/AgentCard.tsx:246`.",
+      "status": "partial",
+      "implementation": "Shared numeric status chips use tabular numerals and stable minimum widths. Metric layout review across varying counts remains."
+    },
+    {
+      "category": "appearance",
+      "id": "V15",
+      "title": "Give empty/no-match plugin and model states a shared visual pattern: compact icon, useful headline, single next action",
+      "kind": "enhancement",
+      "priority": "P2",
+      "effort": "M",
+      "evidence": [
+        "src/components/plugins/PluginsPanel.tsx:1395",
+        "src/components/models/ModelPicker.tsx:382"
+      ],
+      "benefit": "Empty screens look finished and guide the eye toward recovery",
+      "acceptance": "Review true-empty, filtered-empty, loading, and failed-loading as distinct states.",
+      "details": "Give empty/no-match plugin and model states a shared visual pattern: compact icon, useful headline, single next action. Plugins currently show a generic string at `src/components/plugins/PluginsPanel.tsx:1395`; model picker has bare loading/empty boxes at `src/components/models/ModelPicker.tsx:382`.",
+      "status": "planned"
+    },
+    {
+      "category": "appearance",
+      "id": "V16",
+      "title": "Visually group roster tools by purpose: search/filter, view, and appearance",
+      "kind": "enhancement",
+      "priority": "P3",
+      "effort": "S",
+      "evidence": [
+        "src/components/party/PartySelector.tsx:504"
+      ],
+      "benefit": "A small separator/label hierarchy reduces toolbar noise while keeping current functions",
+      "acceptance": "Review the desktop toolbar and compact stacked version after R01.",
+      "details": "Visually group roster tools by purpose: search/filter, view, and appearance. All controls are currently peers in the same flex group at `src/components/party/PartySelector.tsx:504`, with theme after view at `:554`.",
+      "status": "planned"
+    },
+    {
+      "category": "appearance",
+      "id": "V17",
+      "title": "Reduce decorative scaffolding in the agent intro and give the actual workspace title stronger visual priority",
+      "kind": "enhancement",
+      "priority": "P3",
+      "effort": "S",
+      "evidence": [
+        "src/styles/automnia-theme/125-agents-workspace-copy.css:19"
+      ],
+      "benefit": "The header reads as a clear title and concise description instead of several competing controls",
+      "acceptance": "Compare the intro alongside real clickable status actions.",
+      "details": "Reduce decorative scaffolding in the agent intro and give the actual workspace title stronger visual priority. `src/styles/automnia-theme/125-agents-workspace-copy.css:19` turns capability phrases into bordered gradient pills, with separate connector/command styling at `:44` and `:54`.",
+      "status": "planned"
+    },
+    {
+      "category": "appearance",
+      "id": "V18",
+      "title": "Normalize button progress visuals across raw-button callers using the existing Button loading treatment",
+      "kind": "enhancement",
+      "priority": "P2",
+      "effort": "S",
+      "evidence": [
+        "src/components/ui/Button.tsx:42",
+        "src/components/party/ModelSelectorModal.tsx:448",
+        "src/components/auth/LoginModal.tsx:166"
+      ],
+      "benefit": "Waiting states look consistent and button widths stay stable",
+      "acceptance": "Review idle/loading/success/error transitions without layout jumps.",
+      "details": "Normalize button progress visuals across raw-button callers using the existing Button loading treatment. The primitive supports a spinner and aria-busy at `src/components/ui/Button.tsx:42`; model save uses only text replacement at `src/components/party/ModelSelectorModal.tsx:448`, while auth uses another pattern at `src/components/auth/LoginModal.tsx:166`.",
+      "status": "partial",
+      "implementation": "Auth and shared form actions use consistent loading buttons; audit remaining raw buttons."
+    },
+    {
+      "category": "appearance",
+      "id": "V19",
+      "title": "Standardize form-success/error appearance and placement",
+      "kind": "enhancement",
+      "priority": "P3",
+      "effort": "S",
+      "evidence": [
+        "src/components/party/ModelSelectorModal.tsx:441",
+        "src/components/auth/LoginModal.tsx:159"
+      ],
+      "benefit": "Feedback has a dependable visual hierarchy and errors cannot look like neutral success",
+      "acceptance": "Review long and short messages, retry state, and high-contrast settings.",
+      "details": "Standardize form-success/error appearance and placement. Model save renders status as a cyan paragraph at `src/components/party/ModelSelectorModal.tsx:441`, including failures set at `:263`; login errors use a different red panel at `src/components/auth/LoginModal.tsx:159`.",
+      "status": "partial",
+      "implementation": "Shared FormFeedback primitive added and adopted in auth forms; complete cross-form adoption."
+    },
+    {
+      "category": "appearance",
+      "id": "V20",
+      "title": "Provide a coherent document/technical-content skin for the recruit Markdown editor and response code blocks, sharing code font, syntax palette, gutter treatment, and selection colors",
+      "kind": "enhancement",
+      "priority": "P3",
+      "effort": "M",
+      "evidence": [
+        "src/components/recruit/RecruitAgentModal.tsx:1955",
+        "src/index.css:10"
+      ],
+      "benefit": "Writing agent instructions and reading generated technical output feel like one product",
+      "acceptance": "Review syntax colors under all form chromes, long lines, selected text, and reduced-motion/high-contrast modes.",
+      "details": "Provide a coherent document/technical-content skin for the recruit Markdown editor and response code blocks, sharing code font, syntax palette, gutter treatment, and selection colors. Recruit defines its own code-preview/gutter/status composition at `src/components/recruit/RecruitAgentModal.tsx:1955`; font/selection baselines exist at `src/index.css:10` and `:88`.",
+      "status": "partial",
+      "implementation": "Saved mission JSON uses a shared readable technical-document surface and response Markdown renders saved answers. Fixed stale recruit-editor CSS selectors after dynamic accessible IDs changed; transparent editing overlay passes desktop/wide/mobile visual QA. Unifying all syntax palettes and form-chrome variants remains."
+    },
+    {
+      "category": "qol",
+      "id": "Q01",
+      "title": "Save and switch named teams",
+      "kind": "New feature",
+      "priority": "P2",
+      "effort": "M",
+      "evidence": [
+        "src/components/party/ActivePartyStrip.tsx:98",
+        "src/store/nexusStore.ts:3629"
+      ],
+      "benefit": "The party strip supports arranging and confirming one active team. Named team presets would remove repeated roster assembly.",
+      "acceptance": "Saving two ordered teams and reopening the app preserves both; switching checks missing agents and restores order without clearing chats.",
+      "status": "complete",
+      "implementation": "Named local teams support saving, loading valid members in order, removal, and mission lock checks."
+    },
+    {
+      "category": "qol",
+      "id": "Q02",
+      "title": "Save personal mission templates",
+      "kind": "New feature",
+      "priority": "P2",
+      "effort": "M",
+      "evidence": [
+        "src/components/mission/MissionDeploymentPanel.tsx:384"
+      ],
+      "benefit": "Built-in presets already preserve a custom objective. Let users save a complete named template containing objective, evidence, timing and collaboration choices.",
+      "acceptance": "A custom template can be created, edited, duplicated and used after restart with all selected fields restored.",
+      "status": "complete",
+      "implementation": "Named mission templates can be saved, loaded for editing, updated, duplicated, and removed; validation strips execution state."
+    },
+    {
+      "category": "qol",
+      "id": "Q03",
+      "title": "Create a fresh mission from a past run",
+      "kind": "New feature",
+      "priority": "P2",
+      "effort": "M",
+      "evidence": [
+        "src/components/monitor/MissionReportPanel.tsx:61"
+      ],
+      "benefit": "History currently displays past missions as plain rows. A Run again action would reuse the useful configuration without copying terminal state.",
+      "acceptance": "Run again opens an editable draft with prior objective/settings and current agent availability, and deploys under a new mission ID.",
+      "status": "complete",
+      "implementation": "A retained mission can open as a fresh editable draft with currently available agents and no copied run ID."
+    },
+    {
+      "category": "qol",
+      "id": "Q04",
+      "title": "Browse every retained mission report",
+      "kind": "Existing workflow gap",
+      "priority": "P2",
+      "effort": "M",
+      "evidence": [
+        "src/components/monitor/MissionReportPanel.tsx:17"
+      ],
+      "benefit": "The report panel always selects missionReports[0]. A report picker would make earlier evidence and outcomes usable.",
+      "acceptance": "Selecting a historical mission displays its matching report and clearly identifies missing reports without showing the latest unrelated report.",
+      "status": "complete",
+      "implementation": "Report selection covers retained mission history with on-demand loading and retry."
+    },
+    {
+      "category": "qol",
+      "id": "Q05",
+      "title": "Search conversation history by text and agent",
+      "kind": "New feature",
+      "priority": "P2",
+      "effort": "M",
+      "evidence": [
+        "src/components/monitor/AgentResponseConsole.tsx:2046"
+      ],
+      "benefit": "The console displays response rows with no conversation search control. Searching would make previous instructions and answers retrievable.",
+      "acceptance": "Search supports agent, date and status filters, highlights matches, and jumps to the selected message with its surrounding context.",
+      "status": "complete",
+      "implementation": "Retained conversation search matches prompt, response, and agent name."
+    },
+    {
+      "category": "qol",
+      "id": "Q06",
+      "title": "Copy and export complete responses",
+      "kind": "New feature",
+      "priority": "P2",
+      "effort": "S",
+      "evidence": [
+        "src/components/monitor/AgentResponseConsole.tsx:663",
+        "src/components/monitor/AgentResponseConsole.tsx:754"
+      ],
+      "benefit": "Responses currently render plain text and restart/cancel actions. Dedicated copy and transcript export would avoid selecting long nested scroll regions manually.",
+      "acceptance": "Copy preserves the full response including line breaks; transcript export includes role, agent and timestamp and does not silently truncate text.",
+      "status": "complete",
+      "implementation": "Individual responses copy as plain text and visible conversations export as JSON."
+    },
+    {
+      "category": "qol",
+      "id": "Q07",
+      "title": "Keep a reusable prompt library",
+      "kind": "New feature",
+      "priority": "P3",
+      "effort": "M",
+      "evidence": [
+        "src/components/monitor/AgentResponseConsole.tsx:1534",
+        "src/components/monitor/AgentResponseConsole.tsx:2150"
+      ],
+      "benefit": "A searchable set of named prompt snippets would reduce repeated typing while retaining the existing per-route drafts.",
+      "acceptance": "Insert a snippet with named variables into the current draft, preview resolved text, and save edited snippets without sending them automatically.",
+      "status": "complete",
+      "implementation": "Saved prompt library persists up to 30 named drafts and supports insertion and removal."
+    },
+    {
+      "category": "qol",
+      "id": "Q08",
+      "title": "Edit and reorder queued follow-ups",
+      "kind": "New feature",
+      "priority": "P2",
+      "effort": "M",
+      "evidence": [
+        "src/components/monitor/AgentResponseConsole.tsx:567",
+        "src/components/monitor/AgentResponseConsole.tsx:1153"
+      ],
+      "benefit": "Queue positions and cancellation already exist. Editing or reordering queued turns would let users refine pending work before it starts.",
+      "acceptance": "Only unstarted turns can be edited/reordered; server-confirmed queue positions update and attempts to edit a started turn explain the conflict.",
+      "status": "partial",
+      "implementation": "Waiting renderer follow-ups can be edited or moved within their agent queue. Dispatch prompts are rebuilt with existing routing context and attachments, and edits after release explain the conflict. Server-owned queue migration and live race QA remain."
+    },
+    {
+      "category": "qol",
+      "id": "Q09",
+      "title": "Attach several files by drop or paste",
+      "kind": "New feature",
+      "priority": "P2",
+      "effort": "M",
+      "evidence": [
+        "src/components/monitor/AgentResponseConsole.tsx:1616",
+        "src/components/monitor/AgentResponseConsole.tsx:2172"
+      ],
+      "benefit": "The input consumes files[0] and holds one attachment. A multi-file tray with paste/drop support would enable comparison tasks in one turn.",
+      "acceptance": "Select, drop or paste multiple supported files; each has its own preview/remove control, and a failed upload can be retried without losing successful files.",
+      "status": "partial",
+      "implementation": "Composer accepts multiple files by input, drop or paste, with eight-file, per-file and total draft-memory bounds, individual previews/removal, and retry of failed uploads. Browser file-picker and provider delivery QA remains."
+    },
+    {
+      "category": "qol",
+      "id": "Q10",
+      "title": "Collect output files in a mission artifact shelf",
+      "kind": "New feature",
+      "priority": "P2",
+      "effort": "L",
+      "evidence": [
+        "src/components/monitor/AgentResponseConsole.tsx:679",
+        "src/components/monitor/MissionReportPanel.tsx:35"
+      ],
+      "benefit": "Results are presented as text and evidence counters. An artifact shelf would make produced files easy to find and open after a run.",
+      "acceptance": "Produced artifacts show filename, creating run and availability; users can open/reveal them, and moved or deleted files get a recoverable missing-file state.",
+      "status": "planned"
+    },
+    {
+      "category": "qol",
+      "id": "Q11",
+      "title": "Save named workspace profiles",
+      "kind": "New feature",
+      "priority": "P3",
+      "effort": "M",
+      "evidence": [
+        "src/components/settings/workspaceSettings.ts:158",
+        "src/components/party/PartySelector.tsx:354"
+      ],
+      "benefit": "Console width/visibility and registry preferences already persist individually. Profiles would switch these together for writing, monitoring or roster work.",
+      "acceptance": "Two named profiles restore their own console and registry preferences; a profile can be updated, renamed and removed independently.",
+      "status": "partial",
+      "implementation": "Named local workspace profiles capture appearance, registry and console layout, support apply, rename, update-to-current, removal and undo. Restore writes related keys as one rollback-capable transaction and preserves draft retention. Recovery and duplicate-name tests pass; full multi-profile browser workflow verification remains."
+    },
+    {
+      "category": "qol",
+      "id": "Q12",
+      "title": "Add a searchable command palette",
+      "kind": "New feature",
+      "priority": "P2",
+      "effort": "M",
+      "evidence": [
+        "src/components/layout/NexusShell.tsx:475"
+      ],
+      "benefit": "Alt-number workspace shortcuts already exist. A palette would expose navigation, agent selection and contextual actions without requiring shortcut memorization.",
+      "acceptance": "A keyboard shortcut opens a searchable palette; unavailable actions show a reason, and opening it from a text field preserves the draft.",
+      "status": "complete",
+      "implementation": "Searchable command palette routes to workspaces and settings; keyboard navigation and Ctrl/Cmd+K included."
+    },
+    {
+      "category": "qol",
+      "id": "Q13",
+      "title": "Favorite models and show recent selections",
+      "kind": "New feature",
+      "priority": "P3",
+      "effort": "S",
+      "evidence": [
+        "src/components/models/ModelPicker.tsx:108",
+        "src/components/models/ModelPicker.tsx:236"
+      ],
+      "benefit": "Provider grouping and fallbacks exist. Favorites and recents would reduce searching through long provider model lists.",
+      "acceptance": "Favorite and recent models appear in stable lists; unavailable or entitlement-blocked entries remain labeled and cannot be selected accidentally.",
+      "status": "complete",
+      "implementation": "Shared model pickers expose favorites and eight recent selections. Persisted lists are bounded; unavailable models remain labeled and disabled. Preference and rendered-option regressions pass."
+    },
+    {
+      "category": "qol",
+      "id": "Q14",
+      "title": "Import preferences and export a backup file",
+      "kind": "Existing workflow gap",
+      "priority": "P2",
+      "effort": "M",
+      "evidence": [
+        "src/components/settings/SettingsPanel.tsx:508",
+        "src/components/settings/SettingsPanel.tsx:796"
+      ],
+      "benefit": "Clipboard backup already exists, but the UI has no restore counterpart. A validated file round trip would make those backups practical.",
+      "acceptance": "Export a versioned JSON file, preview recognized fields on import, apply the selected fields, and reject unsupported/corrupt files without changing settings.",
+      "status": "complete",
+      "implementation": "Versioned preference files export/import with validation and a preview of selected groups."
+    },
+    {
+      "category": "qol",
+      "id": "Q15",
+      "title": "Choose and test the microphone",
+      "kind": "New feature",
+      "priority": "P2",
+      "effort": "M",
+      "evidence": [
+        "src/components/settings/SettingsPanel.tsx:635"
+      ],
+      "benefit": "Voice settings cover noise suppression, echo cancellation and gain, but do not let users choose or test a specific microphone.",
+      "acceptance": "Users can select an available microphone and run a local level/playback test; unplugging it explains the fallback device and preserves the preference.",
+      "status": "complete",
+      "implementation": "Voice settings select and locally test a microphone; recording falls back explicitly when the selected device disappears."
+    },
+    {
+      "category": "qol",
+      "id": "Q16",
+      "title": "Preview a schedule and skip its next occurrence",
+      "kind": "New feature",
+      "priority": "P2",
+      "effort": "M",
+      "evidence": [
+        "src/components/monitor/HeartbeatSchedulerPanel.tsx:279",
+        "src/components/monitor/LiveOperationMonitor.tsx:109",
+        "src/components/monitor/LiveOperationMonitor.tsx:1121"
+      ],
+      "benefit": "Pause controls and next-run display already exist. Previewing the next five occurrences before launch and skipping one occurrence would improve scheduling confidence.",
+      "acceptance": "Preview displays timezone and five fire times from the actual scheduler rules; Skip next skips exactly one occurrence and resumes the original cadence.",
+      "status": "planned"
+    },
+    {
+      "category": "qol",
+      "id": "Q17",
+      "title": "Notify on completion or required attention",
+      "kind": "New feature",
+      "priority": "P2",
+      "effort": "M",
+      "evidence": [
+        "src/components/layout/NexusShell.tsx:159",
+        "src/components/monitor/AgentResponseConsole.tsx:570"
+      ],
+      "benefit": "Run status is visible in the app. Configurable desktop completion/failure notifications would let users work elsewhere without monitoring the window.",
+      "acceptance": "Notification preferences support failures-only and quiet hours; one terminal event produces one notification whose click opens the correct run.",
+      "status": "partial",
+      "implementation": "Opt-in background completion/attention notifications observe transitions without polling, suppress repeat terminal updates and keep message content private. Permission controls are in Workspace settings. Failures-only mode, quiet hours and navigation to the exact run remain."
+    },
+    {
+      "category": "qol",
+      "id": "Q18",
+      "title": "Bookmark important runs and answers",
+      "kind": "New feature",
+      "priority": "P3",
+      "effort": "M",
+      "evidence": [
+        "src/components/settings/SettingsActivityLog.tsx:180",
+        "src/components/monitor/AgentResponseConsole.tsx:525"
+      ],
+      "benefit": "The activity feed is transiently ordered and capped. Bookmarks would retain a direct route to decisions and useful answers.",
+      "acceptance": "Bookmark a response or run, add a short note, and reopen it after restart; deleting an underlying record leaves an explicit unavailable entry.",
+      "status": "partial",
+      "implementation": "Response and mission report bookmarks retain local snapshots with notes, search, export, undo removal and explicit missing-original notices. Bounded schema recovery tests pass. Cross-restart browser workflow verification remains."
+    },
+    {
+      "category": "qol",
+      "id": "Q19",
+      "title": "Clone an existing custom agent",
+      "kind": "New feature",
+      "priority": "P2",
+      "effort": "M",
+      "evidence": [
+        "src/components/recruit/RecruitAgentModal.tsx:389",
+        "src/components/recruit/RecruitAgentModal.tsx:739"
+      ],
+      "benefit": "Recruit already supports agency templates and a clean slate. Cloning a user's tuned agent would preserve useful policy work when creating a specialist variant.",
+      "acceptance": "Clone opens the recruit draft with a unique ID/name and chosen profile/policy/files; sessions, live state and credentials are not copied as independent secrets.",
+      "status": "planned"
+    },
+    {
+      "category": "qol",
+      "id": "Q20",
+      "title": "Add a guided first-success checklist",
+      "kind": "New feature",
+      "priority": "P2",
+      "effort": "M",
+      "evidence": [
+        "src/App.tsx:20",
+        "src/components/help/HelpAssistantPanel.tsx:474"
+      ],
+      "benefit": "Authentication gates and help playbooks exist. A resumable setup checklist would connect sign-in, provider, agent and first verified result.",
+      "acceptance": "Checklist items reflect actual configured state, deep-link to each setup step, resume after restart and finish after a small successful test run.",
+      "status": "partial",
+      "implementation": "Persistent first-success guide reflects agent/model/team/finished-response state and links to setup steps. It stays collapsed for an existing team. Live provider configuration and completion browser verification remain."
+    },
+    {
+      "category": "product-polish",
+      "id": "F01",
+      "title": "Use accurate run outcome labels",
+      "kind": "Existing behavior gap",
+      "priority": "P2",
+      "effort": "S",
+      "evidence": [
+        "src/components/monitor/AgentResponseConsole.tsx:570",
+        "src/components/settings/SettingsActivityLog.tsx:99"
+      ],
+      "benefit": "Every non-OK completed response becomes Blocked, even though failureKind exists. Distinct failed, cancelled, timed-out and blocked labels explain what happened.",
+      "acceptance": "Representative outcomes display the same meaningful label in console and activity log, with a suitable next action for each.",
+      "status": "complete",
+      "implementation": "Shared outcome labels distinguish complete, failed, blocked, cancelled and timed-out runs in chat and activity."
+    },
+    {
+      "category": "product-polish",
+      "id": "F02",
+      "title": "Label the restart action precisely",
+      "kind": "Existing copy gap",
+      "priority": "P2",
+      "effort": "S",
+      "evidence": [
+        "src/components/monitor/AgentResponseConsole.tsx:760"
+      ],
+      "benefit": "The gateway restart button is labeled Reset, which obscures its scope and suggests data reset.",
+      "acceptance": "The action consistently says Restart gateway/Restarting and explains affected running work using actual runtime behavior.",
+      "status": "complete",
+      "implementation": "Gateway action explicitly says Restart gateway."
+    },
+    {
+      "category": "product-polish",
+      "id": "F03",
+      "title": "Separate gateway availability from extension health",
+      "kind": "Existing state-copy gap",
+      "priority": "P2",
+      "effort": "S",
+      "evidence": [
+        "src/components/layout/NexusShell.tsx:170",
+        "src/components/layout/NexusShell.tsx:216"
+      ],
+      "benefit": "The Plugins workspace says Extensions ON/OFF from gateway process/health alone, so its summary can imply all plugins are running.",
+      "acceptance": "Gateway state and extension readiness are separately labeled and derived from their authoritative fields; a failed plugin cannot appear covered by an all-healthy claim.",
+      "status": "complete",
+      "implementation": "Plugin workspace status names gateway availability rather than claiming all extensions are healthy."
+    },
+    {
+      "category": "product-polish",
+      "id": "F04",
+      "title": "Mark modified presets as customized",
+      "kind": "Existing state-copy gap",
+      "priority": "P2",
+      "effort": "S",
+      "evidence": [
+        "src/components/mission/MissionDeploymentPanel.tsx:374"
+      ],
+      "benefit": "A preset is considered active based only on title and mission type, even after its other preset values change.",
+      "acceptance": "Changing collaboration, risk or complexity marks the preset Customized; restoring all preset values restores its active label.",
+      "status": "complete",
+      "implementation": "Changed built-in mission preset fields display Customized."
+    },
+    {
+      "category": "product-polish",
+      "id": "F05",
+      "title": "Explain report metrics and missing values",
+      "kind": "Existing copy gap",
+      "priority": "P2",
+      "effort": "S",
+      "evidence": [
+        "src/components/monitor/MissionReportPanel.tsx:4",
+        "src/components/monitor/MissionReportPanel.tsx:25"
+      ],
+      "benefit": "Efficiency, Soul Drift and Scheduler Stability have no units or interpretation, and all missing values say Unavailable.",
+      "acceptance": "Each metric states its unit, interpretation and evidence source; unavailable metrics state whether evidence is pending, unsupported or absent.",
+      "status": "complete",
+      "implementation": "Report metrics explain estimates and show unavailable measurements clearly."
+    },
+    {
+      "category": "product-polish",
+      "id": "F06",
+      "title": "Show agent names in mission history",
+      "kind": "Existing presentation gap",
+      "priority": "P2",
+      "effort": "S",
+      "evidence": [
+        "src/components/monitor/MissionReportPanel.tsx:65"
+      ],
+      "benefit": "History joins raw selectedAgents IDs and internal collaboration names, making otherwise familiar work harder to recognize.",
+      "acceptance": "Rows resolve current names and human collaboration labels, retaining IDs in a details affordance and falling back clearly for deleted agents.",
+      "status": "complete",
+      "implementation": "Mission history/report rows resolve retained agent IDs to current names."
+    },
+    {
+      "category": "product-polish",
+      "id": "F07",
+      "title": "Use one scheduling vocabulary",
+      "kind": "Existing consistency gap",
+      "priority": "P3",
+      "effort": "S",
+      "evidence": [
+        "src/components/monitor/HeartbeatSchedulerPanel.tsx:276",
+        "src/components/monitor/HeartbeatSchedulerPanel.tsx:772",
+        "src/components/monitor/LiveOperationMonitor.tsx:1132"
+      ],
+      "benefit": "The same workflow is described as cron, shift, heartbeat and scheduled run across controls. Stable terms would make setup and support easier.",
+      "acceptance": "A glossary maps real different concepts; controls use Scheduled task for scheduled jobs and reserve Heartbeat for its distinct agent mechanism.",
+      "status": "planned"
+    },
+    {
+      "category": "product-polish",
+      "id": "F08",
+      "title": "Identify the report currently on screen",
+      "kind": "Existing presentation gap",
+      "priority": "P2",
+      "effort": "S",
+      "evidence": [
+        "src/components/monitor/MissionReportPanel.tsx:21"
+      ],
+      "benefit": "The report begins with metrics under a generic heading and does not identify the latest mission or generation time.",
+      "acceptance": "The report header includes mission title, final outcome and generated timestamp, so screenshots and exported views retain context.",
+      "status": "complete",
+      "implementation": "Report screen identifies its mission and generation timestamp."
+    },
+    {
+      "category": "product-polish",
+      "id": "F09",
+      "title": "Make evidence identifiers inspectable",
+      "kind": "Existing presentation gap",
+      "priority": "P2",
+      "effort": "S",
+      "evidence": [
+        "src/components/monitor/MissionReportPanel.tsx:8",
+        "src/components/monitor/MissionReportPanel.tsx:47"
+      ],
+      "benefit": "shortIds permanently abbreviates IDs in the displayed report without a way to retrieve their full values.",
+      "acceptance": "Every shortened run/session ID has a full-value reveal/copy control and opens the corresponding evidence when retained.",
+      "status": "complete",
+      "implementation": "Evidence identifiers expand and copy without losing full values."
+    },
+    {
+      "category": "product-polish",
+      "id": "F10",
+      "title": "Turn an empty model list into a setup path",
+      "kind": "Existing workflow gap",
+      "priority": "P2",
+      "effort": "S",
+      "evidence": [
+        "src/components/models/ModelPicker.tsx:215"
+      ],
+      "benefit": "No models available offers no distinction between a missing account, catalog failure and a genuinely empty result.",
+      "acceptance": "The empty state uses catalog/auth/entitlement evidence to offer Connect provider, Refresh models or a clearly explained limitation.",
+      "status": "partial",
+      "implementation": "Shared empty-model guidance opens Account setup from both model-picker modes. More specific catalog/auth/entitlement diagnosis and in-place refresh actions remain."
+    },
+    {
+      "category": "product-polish",
+      "id": "F11",
+      "title": "Offer agent selection from the empty console",
+      "kind": "Existing workflow gap",
+      "priority": "P2",
+      "effort": "S",
+      "evidence": [
+        "src/components/monitor/AgentResponseConsole.tsx:2042"
+      ],
+      "benefit": "No agent selected is informative but leaves the user to find the selection workflow.",
+      "acceptance": "The empty state includes Choose an agent and Recruit an agent actions, selecting/focusing the resulting target without losing the current draft.",
+      "status": "complete",
+      "implementation": "Empty chat offers Choose an agent and focuses the registry search."
+    },
+    {
+      "category": "product-polish",
+      "id": "F12",
+      "title": "Describe mission readiness as form readiness",
+      "kind": "Existing state-copy gap",
+      "priority": "P2",
+      "effort": "S",
+      "evidence": [
+        "src/components/mission/MissionDeploymentPanel.tsx:357"
+      ],
+      "benefit": "The readiness percentage checks only party, title and objective; 100% does not establish runtime, model or auth availability.",
+      "acceptance": "The current meter explicitly says Form complete, with runtime/provider readiness shown separately or a precise launch-preflight result.",
+      "status": "complete",
+      "implementation": "Mission readiness is labelled as form readiness, with runtime checks explained separately."
+    },
+    {
+      "category": "product-polish",
+      "id": "F13",
+      "title": "Show mixed values when editing several agents",
+      "kind": "Existing workflow gap",
+      "priority": "P2",
+      "effort": "M",
+      "evidence": [
+        "src/components/settings/SettingsPanel.tsx:303"
+      ],
+      "benefit": "Bulk runtime settings show the first target agent's defaults, making different existing values across the selected set easy to miss.",
+      "acceptance": "Fields show Mixed when targets differ; only explicitly changed fields apply unless the user selects an explicit replace-all policy.",
+      "status": "complete",
+      "implementation": "Bulk runtime settings expose mixed values and preserve untouched differences."
+    },
+    {
+      "category": "product-polish",
+      "id": "F14",
+      "title": "Point settings search to the matching control",
+      "kind": "Existing discoverability gap",
+      "priority": "P3",
+      "effort": "M",
+      "evidence": [
+        "src/components/settings/SettingsPanel.tsx:307"
+      ],
+      "benefit": "Settings search currently filters complete sections by section keywords. Matching exact controls would reduce scanning through large sections.",
+      "acceptance": "Searching a control label returns its label and section; selecting it reveals and focuses that control with a temporary highlight.",
+      "status": "partial",
+      "implementation": "Settings search indexes rendered control labels and hints across categories, returns control/section shortcuts, focuses the matching input and highlights results. Full keyboard/browser verification and time-limited focus highlighting remain."
+    },
+    {
+      "category": "product-polish",
+      "id": "F15",
+      "title": "Make the help availability label truthful",
+      "kind": "Existing state-copy gap",
+      "priority": "P2",
+      "effort": "S",
+      "evidence": [
+        "src/components/help/HelpAssistantPanel.tsx:456",
+        "src/components/help/HelpAssistantPanel.tsx:410"
+      ],
+      "benefit": "Grounded reasoning online is hard-coded even before a request succeeds and while requests may be failing.",
+      "acceptance": "The label uses unknown/connecting/available/unavailable states from actual help service checks or recent requests and displays the last successful check.",
+      "status": "complete",
+      "implementation": "Help status reflects current request state and no longer claims it is always online."
+    },
+    {
+      "category": "product-polish",
+      "id": "F16",
+      "title": "Make failed help answers easy to retry",
+      "kind": "Existing workflow gap",
+      "priority": "P2",
+      "effort": "S",
+      "evidence": [
+        "src/components/help/HelpAssistantPanel.tsx:424"
+      ],
+      "benefit": "A failed answer is inserted as an assistant response and also stored as a global error, while the original draft is cleared.",
+      "acceptance": "One clear failed-response state preserves the original question and offers Retry or Edit question without duplicating the error text.",
+      "status": "complete",
+      "implementation": "Help failures retain the question and offer an explicit retry without duplicating the user turn."
+    },
+    {
+      "category": "product-polish",
+      "id": "F17",
+      "title": "Expose plugin search scope explicitly",
+      "kind": "Existing discoverability gap",
+      "priority": "P2",
+      "effort": "S",
+      "evidence": [
+        "src/components/plugins/PluginsPanel.tsx:783"
+      ],
+      "benefit": "Searching the marketplace requires a /clawhub prefix; ordinary text only filters installed plugins. An explicit scope choice would reduce hidden syntax.",
+      "acceptance": "Installed and Marketplace scopes are visible, preserve their separate queries, and label counts according to the chosen scope.",
+      "status": "complete",
+      "implementation": "Plugin search scope has explicit Installed plugins and ClawHub catalog controls."
+    },
+    {
+      "category": "product-polish",
+      "id": "F18",
+      "title": "Keep speech progress language task-focused",
+      "kind": "Existing copy gap",
+      "priority": "P3",
+      "effort": "S",
+      "evidence": [
+        "src/components/monitor/AgentResponseConsole.tsx:1274"
+      ],
+      "benefit": "Voice progress exposes off-the-UI-thread and CPU/GPU implementation details during normal dictation.",
+      "acceptance": "Primary messages say Preparing audio, Downloading model or Transcribing; backend details remain available in a details view.",
+      "status": "complete",
+      "implementation": "Speech progress uses recording/transcription language."
+    },
+    {
+      "category": "product-polish",
+      "id": "F19",
+      "title": "Use evidence-based voice mode descriptions",
+      "kind": "Existing copy gap",
+      "priority": "P3",
+      "effort": "S",
+      "evidence": [
+        "src/components/settings/SettingsPanel.tsx:616",
+        "src/components/monitor/AgentResponseConsole.tsx:1331"
+      ],
+      "benefit": "Cloud voice is described as highest accuracy and online accuracy without task-specific measurement. Mode descriptions should communicate actual behavior.",
+      "acceptance": "Cloud/local labels explain processing location, network need and provider; comparative quality claims are shown only when measured and scoped.",
+      "status": "complete",
+      "implementation": "Voice descriptions remove unsupported accuracy claims."
+    },
+    {
+      "category": "product-polish",
+      "id": "F20",
+      "title": "Explain the activity search window",
+      "kind": "Existing state-copy gap",
+      "priority": "P2",
+      "effort": "S",
+      "evidence": [
+        "src/components/settings/SettingsActivityLog.tsx:16",
+        "src/components/settings/SettingsActivityLog.tsx:184"
+      ],
+      "benefit": "Search applies after each source is capped at 48 items. A no-results state can be mistaken for a search across all retained history.",
+      "acceptance": "The feed states the loaded date/count window and distinguishes No match in loaded activity from No activity; a route to older history is explicit.",
+      "status": "complete",
+      "implementation": "Activity search explains its retained count/date window and links to Monitor."
+    },
+    {
+      "category": "robustness",
+      "id": "B01",
+      "title": "Migrate SQLite columns before creating dependent indexes",
+      "kind": "Verified defect; reproduced",
+      "priority": "P1",
+      "effort": "S",
+      "evidence": [
+        "server/runtimeLedger.ts:242",
+        "server/runtimeLedger.ts:355"
+      ],
+      "benefit": "The source_key index is created before ALTER adds source_key. An old gateway_events table triggers no such column: source_key, disabling SQLite initialization.",
+      "acceptance": "An upgrade test starts with the legacy table, migrates it transactionally, retains rows, creates the index and opens successfully on a second run.",
+      "status": "complete",
+      "implementation": "SQLite migrations add legacy columns before creating dependent indexes; upgrade/reopen test passes."
+    },
+    {
+      "category": "robustness",
+      "id": "B02",
+      "title": "Validate persisted renderer state before merging",
+      "kind": "Verified boundary gap",
+      "priority": "P1",
+      "effort": "M",
+      "evidence": [
+        "src/store/nexusPersistence.ts:33",
+        "src/store/nexusPersistence.ts:43"
+      ],
+      "benefit": "The unknown payload is dereferenced without a null guard, accepts future versions, and spreads arbitrary persisted keys into live state.",
+      "acceptance": "Null, arrays, malformed nested records and future versions cannot crash or overwrite store actions; supported versions migrate through explicit validated fields.",
+      "status": "partial",
+      "implementation": "Persisted store merge rejects malformed/future roots and cannot replace store actions. Full nested mission schemas remain."
+    },
+    {
+      "category": "robustness",
+      "id": "B03",
+      "title": "Handle preference storage failures without crashing",
+      "kind": "Verified boundary gap",
+      "priority": "P1",
+      "effort": "M",
+      "evidence": [
+        "src/components/settings/workspaceSettings.ts:140",
+        "src/components/settings/workspaceSettings.ts:166",
+        "src/components/settings/uiSettings.ts:64",
+        "src/speech/speechSettings.ts:64"
+      ],
+      "benefit": "Preference writers perform unguarded setItem calls, including a three-key console update. Quota/security failures can throw or leave a partial saved configuration.",
+      "acceptance": "Denied/quota-full storage preserves usable in-memory settings, reports that saving failed, and never presents a partially written configuration as saved.",
+      "status": "complete",
+      "implementation": "Preference writes use coherent in-memory fallback, rollback partial storage writes, and report failure."
+    },
+    {
+      "category": "robustness",
+      "id": "B04",
+      "title": "Write control files atomically",
+      "kind": "Verified integrity gap",
+      "priority": "P1",
+      "effort": "M",
+      "evidence": [
+        "server/services/controlFilesService.ts:67"
+      ],
+      "benefit": "writeFile directly overwrites instruction and memory files; interruption during writing can leave a truncated file.",
+      "acceptance": "Write a same-directory temporary file, sync and atomically replace; fault-injection before replacement leaves the full old file and successful saves leave the full new file.",
+      "status": "partial",
+      "implementation": "Canonical agent Markdown files use atomic flushed temp-file replacement; audit remaining control-file writers."
+    },
+    {
+      "category": "robustness",
+      "id": "B05",
+      "title": "Detect concurrent edits to agent control files",
+      "kind": "New integrity protection",
+      "priority": "P1",
+      "effort": "M",
+      "evidence": [
+        "server/routes/commandConsoleFileRoutes.ts:73",
+        "server/services/controlFilesService.ts:67"
+      ],
+      "benefit": "PUT accepts only content and performs an unconditional overwrite, so editor and agent writes can silently replace each other.",
+      "acceptance": "Reads return a revision/hash; stale conditional writes receive a conflict with current content, and an explicit merge can be saved safely.",
+      "status": "partial",
+      "implementation": "Revision-aware atomic saves detect stale/concurrent edits; editor preserves conflicting drafts for comparison. Complete browser conflict workflow QA."
+    },
+    {
+      "category": "robustness",
+      "id": "B06",
+      "title": "Report failed backend session clearing",
+      "kind": "Verified behavior gap",
+      "priority": "P1",
+      "effort": "M",
+      "evidence": [
+        "src/store/nexusStore.ts:3615",
+        "src/components/settings/SettingsPanel.tsx:801"
+      ],
+      "benefit": "Clear responses resets local state immediately while backend clear failures only go to console.warn. The AI may retain a session the UI implies was reset.",
+      "acceptance": "The operation returns an outcome and reconciles session IDs; backend failure is visible with retry and the app never silently reuses the supposedly cleared session.",
+      "status": "partial",
+      "implementation": "Session clearing returns an outcome, preserves history on failure, and exposes retry. Complete mocked-backend end-to-end validation."
+    },
+    {
+      "category": "robustness",
+      "id": "B07",
+      "title": "Inspect fulfilled failures in Stop all",
+      "kind": "Verified defect",
+      "priority": "P1",
+      "effort": "S",
+      "evidence": [
+        "src/components/monitor/AgentResponseConsole.tsx:1657",
+        "src/components/monitor/AgentResponseConsole.tsx:1640"
+      ],
+      "benefit": "Bulk stopping checks only rejected promises, while single-stop correctly inspects stopped/found. A fulfilled {stopped:false,found:true} can be hidden.",
+      "acceptance": "Every target is reported stopped, already finished or failed; a fulfilled stop failure remains visible with its run ID and retry action.",
+      "status": "complete",
+      "implementation": "Stop all counts fulfilled responses that report stopped:false as failures."
+    },
+    {
+      "category": "robustness",
+      "id": "B08",
+      "title": "Continue batch stopping after individual failures",
+      "kind": "Verified behavior gap",
+      "priority": "P1",
+      "effort": "S",
+      "evidence": [
+        "src/components/monitor/HeartbeatSchedulerPanel.tsx:389"
+      ],
+      "benefit": "The first failed stop exits the loop, leaving all later scheduled jobs running without an individual result.",
+      "acceptance": "A failing first job does not prevent later jobs from being stopped; results identify successes/failures and retry targets only failed jobs.",
+      "status": "complete",
+      "implementation": "Batch job stopping continues through individual failures and aggregates results."
+    },
+    {
+      "category": "robustness",
+      "id": "B09",
+      "title": "Await and aggregate bulk runtime saves",
+      "kind": "Verified behavior gap",
+      "priority": "P1",
+      "effort": "M",
+      "evidence": [
+        "src/components/settings/SettingsPanel.tsx:448",
+        "src/components/settings/SettingsPanel.tsx:463",
+        "src/store/nexusStore.ts:3665",
+        "src/store/nexusStore.ts:3697"
+      ],
+      "benefit": "Bulk Apply announces success before async heartbeat/runtime persistence settles; its setters return void.",
+      "acceptance": "Apply remains pending until all writes resolve, shows per-agent partial failures and reports success only when the backend has confirmed each requested change.",
+      "status": "complete",
+      "implementation": "Bulk runtime settings await one combined heartbeat/runtime save per agent and aggregate outcomes."
+    },
+    {
+      "category": "robustness",
+      "id": "B10",
+      "title": "Version and serialize cron-default autosaves",
+      "kind": "Verified race opportunity",
+      "priority": "P1",
+      "effort": "M",
+      "evidence": [
+        "src/components/monitor/HeartbeatSchedulerPanel.tsx:235",
+        "src/components/monitor/HeartbeatSchedulerPanel.tsx:257",
+        "src/components/monitor/HeartbeatSchedulerPanel.tsx:269"
+      ],
+      "benefit": "The debounced saver can overlap slow requests and any completion clears a shared dirty flag, allowing an older save to mask newer edits.",
+      "acceptance": "Delay/reorder two writes in a test; only the newest revision becomes saved, dirty status persists until that revision is acknowledged, and stale responses cannot overwrite it.",
+      "status": "complete",
+      "implementation": "Cron default autosaves use a serialized save queue and version-aware state."
+    },
+    {
+      "category": "robustness",
+      "id": "B11",
+      "title": "Validate successful API response schemas",
+      "kind": "Verified boundary gap",
+      "priority": "P1",
+      "effort": "M",
+      "evidence": [
+        "src/api/client.ts:149"
+      ],
+      "benefit": "The shared client casts any HTTP-success payload to T, including malformed JSON text or a changed response shape; consumers may fail far from the request.",
+      "acceptance": "Endpoint decoders reject HTML, missing required fields and wrong types as a structured invalid_response error before updating state, while intentionally bodyless responses still work.",
+      "status": "partial",
+      "implementation": "API client can validate successful response contracts and returns a safe invalid_response failure without retry. Uploads and scheduler lists/start/batch responses use validators; remaining API surfaces and deeper schemas remain."
+    },
+    {
+      "category": "robustness",
+      "id": "B12",
+      "title": "Expose attachments that could not be delivered inline",
+      "kind": "Verified behavior gap",
+      "priority": "P2",
+      "effort": "M",
+      "evidence": [
+        "server/services/filesystem/commandConsoleUploadService.ts:350"
+      ],
+      "benefit": "Oversized or missing attachments are silently skipped by gatewayAttachmentsFromTurnAttachments; only a textual path may remain in the prompt.",
+      "acceptance": "The response reports which files were delivered inline, are local-reference-only or are unavailable; routing blocks or explains unsupported remote access instead of implying full delivery.",
+      "status": "partial",
+      "implementation": "Upload records disclose inline versus workspace-only delivery, and the composer explains oversized files. Missing/changed records fail visibly before Gateway dispatch. Complete per-response delivery summaries and all-transport handling remain."
+    },
+    {
+      "category": "robustness",
+      "id": "B13",
+      "title": "Bound retained attachment storage",
+      "kind": "New integrity protection",
+      "priority": "P2",
+      "effort": "M",
+      "evidence": [
+        "server/services/filesystem/commandConsoleUploadService.ts:290"
+      ],
+      "benefit": "Uploads have a per-file limit but persist under timestamped paths without retention or aggregate disk budgeting in this service.",
+      "acceptance": "Enforce a configurable total budget/free-space floor; clean only unreferenced expired uploads and keep files referenced by retained or active runs.",
+      "status": "partial",
+      "implementation": "Upload admission now enforces configurable total byte/file budgets with a bounded shared process queue. Defaults are 2 GiB and 2,000 files including metadata; existing uploads are preserved. Concurrent admission and byte-budget regression tests pass. Free-space floor, cross-process reservations and reference-aware expiration remain."
+    },
+    {
+      "category": "robustness",
+      "id": "B14",
+      "title": "Resolve attachment metadata from server-owned records",
+      "kind": "New integrity protection",
+      "priority": "P2",
+      "effort": "M",
+      "evidence": [
+        "server/services/filesystem/commandConsoleUploadService.ts:317",
+        "server/services/filesystem/commandConsoleUploadService.ts:357"
+      ],
+      "benefit": "Later turns provide attachment path, MIME, kind and size as client metadata; containment is checked but metadata is not resolved from the issued ID.",
+      "acceptance": "Store upload records by ID with digest/size/type; turns reference IDs, changed bytes or forged metadata are rejected, and valid existing records remain readable.",
+      "status": "complete",
+      "implementation": "Uploads have private server-owned ID records with digest, size and type. Inline reads ignore forged client metadata, reject changed bytes and symlink escapes, and remain bounded. Registered uploads work after service restart. Older uploads without records require re-upload."
+    },
+    {
+      "category": "robustness",
+      "id": "B15",
+      "title": "Redact renderer crash details consistently",
+      "kind": "Verified privacy gap",
+      "priority": "P1",
+      "effort": "S",
+      "evidence": [
+        "src/components/system/AppErrorBoundary.tsx:75",
+        "src/components/system/AppErrorBoundary.tsx:222"
+      ],
+      "benefit": "The error boundary stores raw Error.message/stack and renders them, unlike the API client's diagnostic redaction path.",
+      "acceptance": "Synthetic errors containing token/key/password values are redacted from displayed/copied diagnostics while safe source, timestamp and useful stack frames remain.",
+      "status": "complete",
+      "implementation": "Renderer crash messages, names, stacks and diagnostics use the shared redactor."
+    },
+    {
+      "category": "robustness",
+      "id": "B16",
+      "title": "Keep nonfatal async errors from replacing the whole app",
+      "kind": "Existing recovery gap",
+      "priority": "P2",
+      "effort": "M",
+      "evidence": [
+        "src/components/system/AppErrorBoundary.tsx:147",
+        "src/components/system/AppErrorBoundary.tsx:195"
+      ],
+      "benefit": "Every window error or unhandled rejection sets hasError and replaces the complete workspace, even when React rendering remains healthy.",
+      "acceptance": "An isolated failed async action yields scoped recovery and diagnostics while active work remains usable; actual render failures still enter the crash boundary.",
+      "status": "complete",
+      "implementation": "Nonfatal async errors display a dismissible notice while leaving the workspace mounted."
+    },
+    {
+      "category": "robustness",
+      "id": "B17",
+      "title": "Bring critical execution paths into coverage gates",
+      "kind": "Verified QA gap",
+      "priority": "P2",
+      "effort": "M",
+      "evidence": [
+        "scripts/run-unit-tests.mjs:23"
+      ],
+      "benefit": "Coverage thresholds exclude all routes, agent/gateway/provider services and runtimeLedger, so a high reported percentage does not cover core orchestration.",
+      "acceptance": "Remove broad exclusions incrementally, publish per-module coverage, and require behavioral tests for scheduling, persistence, gateway failure and billing-route branches before raising the gate.",
+      "status": "planned"
+    },
+    {
+      "category": "robustness",
+      "id": "B18",
+      "title": "Make scheduled-task creation idempotent",
+      "kind": "Verified API gap",
+      "priority": "P1",
+      "effort": "M",
+      "evidence": [
+        "server/routes/shiftRoutes.ts:102",
+        "server/routes/shiftRoutes.ts:140",
+        "server/routes/shiftRoutes.ts:239"
+      ],
+      "benefit": "Start routes create fresh jobs on each request and do not expose durable idempotency keys. A timeout followed by retry can duplicate recurring work.",
+      "acceptance": "Retried single/batch requests with one idempotency key return the original job IDs after a lost response or server restart; a new key creates genuinely new jobs.",
+      "status": "partial",
+      "implementation": "Scheduled-job creation journals request IDs before dispatch, coalesces concurrent requests, reconciles lost acknowledgements by durable shift ID, and retains completed receipts across restart. Renderer retries preserve hashed request keys; batch children get stable keys. Tests cover concurrent/restart/reconciliation/truncated receipts. Whole-batch payload identity and coordination replay validation remain."
+    },
+    {
+      "category": "robustness",
+      "id": "B19",
+      "title": "Surface managed team-sync startup failures",
+      "kind": "Verified defect",
+      "priority": "P1",
+      "effort": "S",
+      "evidence": [
+        "server/routes/shiftRoutes.ts:243",
+        "server/routes/shiftRoutes.ts:253",
+        "server/routes/shiftRoutes.ts:258"
+      ],
+      "benefit": "Managed orchestrator startup rejection is swallowed, yet the response still says managedTeamSync is enabled while jobs may already be running.",
+      "acceptance": "A failed orchestrator start returns a degraded/failed orchestration outcome with affected job IDs, and policy explicitly pauses or preserves those jobs with a recoverable action.",
+      "status": "complete",
+      "implementation": "Managed team startup failure returns an explicit orchestration outcome and the IDs of preserved jobs. Failure injection verifies managed mode is never reported running after rejection."
+    },
+    {
+      "category": "robustness",
+      "id": "B20",
+      "title": "Return partial job creation when entitlement changes mid-batch",
+      "kind": "Verified behavior gap",
+      "priority": "P1",
+      "effort": "M",
+      "evidence": [
+        "server/routes/shiftRoutes.ts:210",
+        "server/routes/shiftRoutes.ts:232"
+      ],
+      "benefit": "A mid-loop 403 returns immediately even if earlier shifts started; the caller loses the batch's partial-success details and may retry the whole set.",
+      "acceptance": "Force the second create to fail with 403: the response identifies the already-created jobs and unstarted agents, and retry/cleanup never duplicates or abandons them.",
+      "status": "complete",
+      "implementation": "Entitlement loss mid-batch preserves created job IDs and lists all unstarted agents. The UI retries only known unstarted jobs; ambiguous retry outcomes require checking Monitor. Batch failure tests pass."
+    }
+  ],
+  "verification": {
+    "date": "2026-09-07",
+    "fullUnitSuite": "520/520 passed, including SQL fallback/replay, complete report evidence, upload ownership, API contracts, text batching and scheduler idempotency.",
+    "typecheck": "All application/server/Electron TypeScript checks passed before the latest scroll and responsive-CSS adjustments; final rerun in progress.",
+    "lint": "Full ESLint passes; final rerun will include the latest visual adjustments.",
+    "productionBuild": "Vite production build succeeds. Latest measured entry JS 457,019 bytes, CSS 1,708,103 bytes, total interactive JS 1,019,062 bytes. CSS and total JS exceed existing budgets; limits were not raised.",
+    "smokes": "Config-save, shell, interactive controls, contrast, font sizes, ledger, report and shift contracts pass. Filesystem smoke updated for captured save-agent identity; rerun in progress.",
+    "browser": "Earlier compact preview checked at 390px with no horizontal overflow and DOM reading order matching mobile placement. Live preview subsequently returned to sign-in; isolated fixture-based visual checks are being prepared.",
+    "limitations": [
+      "The full 180-item roadmap is not complete; partial and planned items remain explicit.",
+      "No paid provider turns or production mission launches were performed.",
+      "Older attachment files without server-owned upload records need to be uploaded again.",
+      "Packaged restart, microphone hardware, forced-color, multi-display and complete interaction QA remain."
+    ]
+  }
+}

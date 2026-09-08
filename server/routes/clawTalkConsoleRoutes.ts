@@ -2,6 +2,7 @@ import type { Express } from 'express'
 import { randomUUID } from 'node:crypto'
 import { z } from 'zod'
 import { apiFailure, apiSuccess } from '../controlPlaneHttp'
+import { replayAfterCursor } from '../services/agents/eventReplay'
 
 type SseWritable = {
   write: (chunk: string) => unknown
@@ -39,13 +40,23 @@ type ClawTalkConsoleRoutesOptions = {
 }
 
 export function registerClawTalkConsoleRoutes(app: Express, options: ClawTalkConsoleRoutesOptions) {
-  app.get('/api/openclaw/clawtalk-console/stream', (_req, res) => {
+  app.get('/api/openclaw/clawtalk-console/stream', (req, res) => {
     options.initializeSseResponse(res)
     const clientId = randomUUID()
-    const client = { write: (chunk: string) => res.write(chunk), closed: false }
+    const client = {
+      write: (chunk: string) => res.write(chunk),
+      get writableLength() { return res.writableLength },
+      get destroyed() { return res.destroyed },
+      destroy: (error?: Error) => res.destroy(error),
+      once: (event: 'drain' | 'close', listener: () => void) => res.once(event, listener),
+      removeListener: (event: 'drain' | 'close', listener: () => void) => res.removeListener(event, listener),
+      closed: false,
+    }
     options.clawTalkConsoleClients.set(clientId, client)
 
-    for (const event of [...options.clawTalkConsoleEvents].reverse()) {
+    const replay = replayAfterCursor(options.clawTalkConsoleEvents, req.get('Last-Event-ID')?.slice(0, 200))
+    if (replay.gap) options.writeSseEvent(res, 'replay-gap', { event: 'replay-gap', message: 'Some earlier live events are no longer retained. The latest available events follow.' })
+    for (const event of replay.events) {
       const eventName = typeof event.event === 'string' && event.event.trim() ? event.event.trim() : 'message'
       options.writeSseEvent(res, eventName, event)
     }

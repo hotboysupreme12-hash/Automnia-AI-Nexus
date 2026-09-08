@@ -1,7 +1,9 @@
+import { AvatarFallback } from '../ui/AvatarFallback'
 import { useMemo, useState, type ReactNode } from 'react'
 import { useNexusStore } from '../../store/nexusStore'
 import type { OpenClawAgent } from '../../types/nexus'
 import { agentPortraitSrc } from '../../utils/portrait'
+import { TeamPresets } from './TeamPresets'
 
 const PARTY_SLOT_COUNT = 6
 
@@ -39,12 +41,7 @@ const RARITY_BADGE: Record<string, string> = {
   common: 'border-white/12 bg-[#171717] text-slate-300',
 }
 
-function initials(name: string) {
-  const parts = name.trim().split(/\s+/).filter(Boolean)
-  if (!parts.length) return 'AI'
-  if (parts.length === 1) return parts[0].slice(0, 2).toUpperCase()
-  return `${parts[0][0]}${parts[parts.length - 1][0]}`.toUpperCase()
-}
+
 
 function portraitSrcForAgent(agent: OpenClawAgent) {
   return agentPortraitSrc(agent.id, agent.portrait)
@@ -64,6 +61,7 @@ export function ActivePartyStrip({ toolbar }: ActivePartyStripProps) {
   const togglePartyMember = useNexusStore((state) => state.togglePartyMember)
   const [dragOverSlot, setDragOverSlot] = useState<number | null>(null)
   const [hoverSlot, setHoverSlot] = useState<number | null>(null)
+  const [partyAnnouncement, setPartyAnnouncement] = useState('')
   const [failedPortraitKeys, setFailedPortraitKeys] = useState<Set<string>>(() => new Set())
 
   const slots = useMemo(
@@ -88,6 +86,7 @@ export function ActivePartyStrip({ toolbar }: ActivePartyStripProps) {
       data-dui-panel="active-party"
       className="overflow-hidden rounded-xl border border-white/[0.08] bg-[linear-gradient(180deg,rgba(15,23,42,0.72),rgba(2,6,23,0.92))] shadow-2xl shadow-black/25"
     >
+      <p className="sr-only" role="status" aria-live="polite">{partyAnnouncement}</p>
       <div className="active-party-head flex flex-wrap items-center justify-between gap-3 border-b border-white/[0.06] bg-white/[0.02] px-4 py-3">
         <div>
           <h3 className="text-[13px] font-bold tracking-[-0.01em] text-slate-100">Active Party</h3>
@@ -95,8 +94,9 @@ export function ActivePartyStrip({ toolbar }: ActivePartyStripProps) {
             Drag agents to add / reorder slots
           </p>
         </div>
-        <div className="active-party-actions flex items-center gap-2">
+        <div className="active-party-actions flex flex-wrap items-center gap-2">
           {toolbar && <div className="active-party-toolbar">{toolbar}</div>}
+          <TeamPresets />
           <button
             type="button"
             onClick={clearAll}
@@ -148,6 +148,7 @@ export function ActivePartyStrip({ toolbar }: ActivePartyStripProps) {
                 event.preventDefault()
                 event.stopPropagation()
                 setDragOverSlot(null)
+                if (missionRunning) return
                 const fromPartyIndex = event.dataTransfer.getData('text/party-index')
                 const agentId = event.dataTransfer.getData('text/agent-id')
                 if (fromPartyIndex) {
@@ -182,14 +183,31 @@ export function ActivePartyStrip({ toolbar }: ActivePartyStripProps) {
                   onClick={(event) => {
                     event.stopPropagation()
                     togglePartyMember(agent.id)
+                    setPartyAnnouncement(`${agent.name} removed from the active party.`)
                   }}
                   aria-label={`Remove ${agent.name}`}
-                  tabIndex={hoverSlot === slot ? 0 : -1}
                   className="party-slot-remove"
                   title={`Remove ${agent.name}`}
                 >
                   x
                 </button>
+              )}
+
+              {agent && activePartyIds.length > 1 && (
+                <select
+                  className="party-slot-position"
+                  value={slot}
+                  disabled={missionRunning}
+                  aria-label={`Move ${agent.name} to a party slot`}
+                  title={`Move ${agent.name} to a party slot`}
+                  onChange={(event) => {
+                    const nextSlot = Number(event.currentTarget.value)
+                    reorderPartyMembers(slot, nextSlot)
+                    setPartyAnnouncement(`${agent.name} moved to slot ${nextSlot + 1}.`)
+                  }}
+                >
+                  {activePartyIds.map((id, index) => <option key={id} value={index}>{index + 1}</option>)}
+                </select>
               )}
 
               {agent ? (
@@ -219,9 +237,7 @@ export function ActivePartyStrip({ toolbar }: ActivePartyStripProps) {
                         }}
                       />
                     ) : (
-                      <div className="grid h-full w-full place-items-center text-sm font-black text-slate-500">
-                        {initials(agent.name)}
-                      </div>
+                      <AvatarFallback name={agent.name} />
                     )}
                   </div>
                   <div className="min-w-0 flex-1">

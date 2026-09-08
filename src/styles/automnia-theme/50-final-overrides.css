@@ -9,9 +9,6 @@ html.dui-pro-overhaul .dui-mission-stage {
 }
 
 @media (max-width: 1180px) {
-  html.dui-pro-overhaul .dy-command-header-inner {
-    grid-template-columns: minmax(0, 1fr) !important;
-  }
 
   html.dui-pro-overhaul .dui-mission-stage {
     grid-template-columns: minmax(0, 1fr) !important;
@@ -27,11 +24,6 @@ html.dui-pro-overhaul .dy-human-rail {
   z-index: 50 !important;
 }
 
-html.dui-pro-overhaul .dy-top-tabs,
-html.dui-pro-overhaul .dy-header-nav {
-  display: none !important;
-}
-
 html.dui-pro-overhaul .app-bg > .dy-app-main {
   width: 100% !important;
   max-width: none !important;
@@ -40,14 +32,6 @@ html.dui-pro-overhaul .app-bg > .dy-app-main {
   padding-right: 0 !important;
   padding-bottom: 24px !important;
   padding-left: calc(var(--dui-rail, 224px) - 1px) !important;
-}
-
-html.dui-pro-overhaul .dy-command-header.relative.mb-7 {
-  margin: 0 0 14px !important;
-}
-
-html.dui-pro-overhaul .dy-command-header-inner {
-  max-width: none !important;
 }
 
 html.dui-pro-overhaul .dy-tab-content,
@@ -64,14 +48,9 @@ html.dui-pro-overhaul .dui-mission-wrap {
 
 /* Monitor focus guard: keep the top metric row and segmented controls from
    flex-shrinking under the full-height gateway layout. */
-html.dui-pro-overhaul .app-bg.dy-monitor-focus .dy-monitor-header,
+
 html.dui-pro-overhaul .app-bg.dy-monitor-focus .dy-monitor-tabs {
   flex: 0 0 auto !important;
-}
-
-html.dui-pro-overhaul .app-bg.dy-monitor-focus .dy-monitor-header {
-  min-height: 78px !important;
-  overflow: visible !important;
 }
 
 html.dui-pro-overhaul .app-bg.dy-monitor-focus .dy-monitor-body {
@@ -104,14 +83,14 @@ html.dui-pro-overhaul [data-dui-panel="monitor"].dy-monitor-shell {
     #090a0b !important;
 }
 
-html.dui-pro-overhaul [data-dui-panel="monitor"] .dy-monitor-header,
+
 html.dui-pro-overhaul [data-dui-panel="monitor"] .dy-monitor-tabs {
   background:
     linear-gradient(180deg, rgba(255, 255, 255, .018), rgba(255, 255, 255, .005)),
     rgba(0, 0, 0, .12) !important;
 }
 
-html.dui-pro-overhaul [data-dui-panel="monitor"] .dy-health-card:not([data-tone="rose"]),
+
 html.dui-pro-overhaul [data-dui-panel="monitor"] .dy-monitor-gauge:not([data-tone="rose"]) {
   --dy-gauge-start: #737d84;
   --dy-gauge-mid: #9aa3aa;
@@ -121,36 +100,12 @@ html.dui-pro-overhaul [data-dui-panel="monitor"] .dy-monitor-gauge:not([data-ton
   color: var(--ops-neutral) !important;
 }
 
-html.dui-pro-overhaul [data-dui-panel="monitor"] .dy-health-card:not([data-tone="rose"]) {
-  border-color: var(--ops-neutral-border) !important;
-  background:
-    linear-gradient(180deg, rgba(255, 255, 255, .032), rgba(255, 255, 255, .007)),
-    rgba(17, 18, 19, .86) !important;
-  box-shadow:
-    inset 0 1px 0 rgba(255, 255, 255, .040),
-    0 14px 34px rgba(0, 0, 0, .20) !important;
-}
 
-html.dui-pro-overhaul [data-dui-panel="monitor"] .dy-health-card:not([data-tone="rose"]) .dy-health-label {
-  color: #8f989f !important;
-}
-
-html.dui-pro-overhaul [data-dui-panel="monitor"] .dy-health-card:not([data-tone="rose"]) .dy-health-value {
-  color: #e1e4e6 !important;
-  text-shadow: none !important;
-}
-
-html.dui-pro-overhaul [data-dui-panel="monitor"] .dy-health-card:not([data-tone="rose"]) .dy-health-sparkline {
-  color: #9da5aa !important;
-  opacity: .72 !important;
-}
-
-html.dui-pro-overhaul [data-dui-panel="monitor"] .dy-gauge-fill,
 html.dui-pro-overhaul [data-dui-panel="monitor"] .dy-monitor-gauge-fill {
   box-shadow: 0 0 10px var(--dy-gauge-glow), inset 0 1px 0 rgba(255, 255, 255, .22) !important;
 }
 
-html.dui-pro-overhaul [data-dui-panel="monitor"] .dy-gateway-summary-card,
+
 html.dui-pro-overhaul [data-dui-panel="monitor"] .dy-monitor-stream-box {
   background:
     linear-gradient(180deg, rgba(255, 255, 255, .027), rgba(255, 255, 255, .007)),
@@ -174,29 +129,6 @@ html.dui-pro-overhaul .app-bg.dy-monitor-focus [data-dui-panel="monitor"] .dy-mo
   background:
     linear-gradient(180deg, rgba(255, 255, 255, .040), rgba(255, 255, 255, .010)) !important;
   color: #e4e6e6 !important;
-}
-
-html.dui-pro-overhaul [data-dui-panel="monitor"] .dy-gateway-plugin-row[data-state="enabled"],
-html.dui-pro-overhaul [data-dui-panel="monitor"] .dy-gateway-plugin-row[data-state="stopped"] {
-  border-color: rgba(184, 188, 190, .12) !important;
-  background:
-    linear-gradient(90deg, rgba(255, 255, 255, .026), rgba(255, 255, 255, .007)),
-    rgba(13, 14, 15, .58) !important;
-}
-
-html.dui-pro-overhaul [data-dui-panel="monitor"] .dy-gateway-plugin-row[data-state="stopped"] .dy-plugin-action button {
-  border-color: rgba(184, 188, 190, .24) !important;
-  background: rgba(184, 188, 190, .070) !important;
-  color: #d3d7da !important;
-}
-
-html.dui-pro-overhaul [data-dui-panel="monitor"] .dy-runtime-call-icon,
-html.dui-pro-overhaul [data-dui-panel="monitor"] .dy-runtime-call-card[data-status="running"] .dy-runtime-call-icon {
-  color: #aeb6bc !important;
-}
-
-html.dui-pro-overhaul [data-dui-panel="monitor"] .dy-session-empty-icon {
-  color: #aeb6bc !important;
 }
 
 html.dui-pro-overhaul [data-dui-panel="monitor"] :is(
@@ -507,91 +439,6 @@ html.dui-pro-overhaul [data-dui-modal="recruit-agent"] .dui-recruit-form .dui-re
 
 /* Monitor health accents: keep the top status cards readable while the monitor
    surface stays graphite. */
-html.dui-pro-overhaul [data-dui-panel="monitor"] .dy-monitor-health-grid .dy-health-card {
-  --dy-health-accent: #aeb6bc;
-  --dy-health-soft: rgba(184, 188, 190, .075);
-  --dy-health-border: rgba(184, 188, 190, .24);
-  --dy-gauge-start: color-mix(in srgb, var(--dy-health-accent), #111315 38%);
-  --dy-gauge-mid: var(--dy-health-accent);
-  --dy-gauge-end: color-mix(in srgb, var(--dy-health-accent), #f7f7f7 22%);
-  --dy-gauge-text: color-mix(in srgb, var(--dy-health-accent), #ffffff 48%);
-  --dy-gauge-glow: color-mix(in srgb, var(--dy-health-accent), transparent 72%);
-  border-color: var(--dy-health-border) !important;
-  background:
-    linear-gradient(180deg, var(--dy-health-soft), rgba(255, 255, 255, .007)),
-    rgba(17, 18, 19, .86) !important;
-  color: var(--dy-health-accent) !important;
-}
-
-html.dui-pro-overhaul [data-dui-panel="monitor"] .dy-monitor-health-grid .dy-health-card:nth-child(1) {
-  --dy-health-accent: #d6a94a;
-  --dy-health-soft: rgba(214, 169, 74, .085);
-  --dy-health-border: rgba(214, 169, 74, .32);
-}
-
-html.dui-pro-overhaul [data-dui-panel="monitor"] .dy-monitor-health-grid .dy-health-card:nth-child(2) {
-  --dy-health-accent: #73d38c;
-  --dy-health-soft: rgba(115, 211, 140, .070);
-  --dy-health-border: rgba(115, 211, 140, .28);
-}
-
-html.dui-pro-overhaul [data-dui-panel="monitor"] .dy-monitor-health-grid .dy-health-card:nth-child(3) {
-  --dy-health-accent: #b895d6;
-  --dy-health-soft: rgba(184, 149, 214, .075);
-  --dy-health-border: rgba(184, 149, 214, .28);
-}
-
-html.dui-pro-overhaul [data-dui-panel="monitor"] .dy-monitor-health-grid .dy-health-card:nth-child(4) {
-  --dy-health-accent: #ff8f8c;
-  --dy-health-soft: rgba(255, 107, 104, .070);
-  --dy-health-border: rgba(255, 107, 104, .28);
-}
-
-html.dui-pro-overhaul [data-dui-panel="monitor"] .dy-monitor-health-grid .dy-health-icon,
-html.dui-pro-overhaul [data-dui-panel="monitor"] .dy-monitor-health-grid .dy-health-sparkline {
-  color: var(--dy-health-accent) !important;
-}
-
-html.dui-pro-overhaul [data-dui-panel="monitor"] .dy-monitor-health-grid .dy-health-label {
-  color: color-mix(in srgb, var(--dy-health-accent), #d8dcdf 38%) !important;
-}
-
-html.dui-pro-overhaul [data-dui-panel="monitor"] .dy-monitor-health-grid .dy-health-value {
-  color: color-mix(in srgb, var(--dy-health-accent), #ffffff 52%) !important;
-  text-shadow: 0 0 12px color-mix(in srgb, var(--dy-health-accent), transparent 78%) !important;
-}
-
-html.dui-pro-overhaul .app-bg.dy-monitor-focus [data-dui-panel="monitor"] .dy-monitor-health-grid .dy-health-card,
-html.dui-pro-overhaul [data-dui-panel="monitor"] .dy-monitor-health-grid .dy-health-card {
-  border-color: var(--dy-health-border) !important;
-  background:
-    linear-gradient(180deg, var(--dy-health-soft), rgba(255, 255, 255, .007)),
-    rgba(17, 18, 19, .86) !important;
-  color: var(--dy-health-accent) !important;
-}
-
-html.dui-pro-overhaul .app-bg.dy-monitor-focus [data-dui-panel="monitor"] .dy-monitor-health-grid .dy-health-card .dy-health-icon,
-html.dui-pro-overhaul .app-bg.dy-monitor-focus [data-dui-panel="monitor"] .dy-monitor-health-grid .dy-health-card .dy-health-sparkline,
-html.dui-pro-overhaul [data-dui-panel="monitor"] .dy-monitor-health-grid .dy-health-card .dy-health-icon,
-html.dui-pro-overhaul [data-dui-panel="monitor"] .dy-monitor-health-grid .dy-health-card .dy-health-sparkline {
-  color: var(--dy-health-accent) !important;
-}
-
-html.dui-pro-overhaul .app-bg.dy-monitor-focus [data-dui-panel="monitor"] .dy-monitor-health-grid .dy-health-card .dy-health-sparkline :is(.dy-health-sparkline-line, polyline),
-html.dui-pro-overhaul [data-dui-panel="monitor"] .dy-monitor-health-grid .dy-health-card .dy-health-sparkline :is(.dy-health-sparkline-line, polyline) {
-  stroke: var(--dy-health-accent) !important;
-}
-
-html.dui-pro-overhaul .app-bg.dy-monitor-focus [data-dui-panel="monitor"] .dy-monitor-health-grid .dy-health-card .dy-health-label,
-html.dui-pro-overhaul [data-dui-panel="monitor"] .dy-monitor-health-grid .dy-health-card .dy-health-label {
-  color: color-mix(in srgb, var(--dy-health-accent), #d8dcdf 38%) !important;
-}
-
-html.dui-pro-overhaul .app-bg.dy-monitor-focus [data-dui-panel="monitor"] .dy-monitor-health-grid .dy-health-card .dy-health-value,
-html.dui-pro-overhaul [data-dui-panel="monitor"] .dy-monitor-health-grid .dy-health-card .dy-health-value {
-  color: color-mix(in srgb, var(--dy-health-accent), #ffffff 52%) !important;
-  text-shadow: 0 0 12px color-mix(in srgb, var(--dy-health-accent), transparent 78%) !important;
-}
 
 /* Monitor flat slate pass: square, dense, dark glass with color only where it
    communicates health. This intentionally wins over all earlier rounded/card
@@ -622,15 +469,6 @@ html.dui-pro-overhaul .app-bg.dy-monitor-focus [data-dui-panel="monitor"].dy-mon
 html.dui-pro-overhaul .app-bg.dy-monitor-focus [data-dui-panel="monitor"].dy-monitor-shell {
   background: transparent !important;
   color: #cbd1d4 !important;
-}
-
-html.dui-pro-overhaul .app-bg.dy-monitor-focus .dy-monitor-header {
-  min-height: 0 !important;
-  padding: 2px 0 4px !important;
-}
-
-html.dui-pro-overhaul .app-bg.dy-monitor-focus .dy-monitor-health-grid {
-  gap: 4px !important;
 }
 
 html.dui-pro-overhaul .app-bg.dy-monitor-focus .dy-monitor-tabs {
@@ -677,15 +515,9 @@ html.dui-pro-overhaul .app-bg.dy-monitor-focus .dy-monitor-tab-list button::afte
 }
 
 html.dui-pro-overhaul .app-bg.dy-monitor-focus .dy-monitor-shell .dy-monitor-card,
-html.dui-pro-overhaul .app-bg.dy-monitor-focus .dy-monitor-shell .dy-health-card,
 html.dui-pro-overhaul .app-bg.dy-monitor-focus .dy-monitor-stream-box,
-html.dui-pro-overhaul .app-bg.dy-monitor-focus .dy-monitor-log-box,
-html.dui-pro-overhaul .app-bg.dy-monitor-focus .dy-runtime-meta-item,
-html.dui-pro-overhaul .app-bg.dy-monitor-focus .dy-gateway-plugin-row,
 html.dui-pro-overhaul .app-bg.dy-monitor-focus .dy-gateway-event-card,
-html.dui-pro-overhaul .app-bg.dy-monitor-focus .dy-runtime-call-card,
-html.dui-pro-overhaul .app-bg.dy-monitor-focus .dy-cron-job-card,
-html.dui-pro-overhaul .app-bg.dy-monitor-focus .dy-runtime-session-card {
+html.dui-pro-overhaul .app-bg.dy-monitor-focus .dy-cron-job-card {
   border-color: rgba(184, 188, 190, .16) !important;
   background:
     linear-gradient(180deg, rgba(255, 255, 255, .026), rgba(255, 255, 255, .007)),
@@ -696,74 +528,11 @@ html.dui-pro-overhaul .app-bg.dy-monitor-focus .dy-runtime-session-card {
     0 10px 28px rgba(0, 0, 0, .18) !important;
 }
 
-html.dui-pro-overhaul .app-bg.dy-monitor-focus .dy-monitor-stream-box,
-html.dui-pro-overhaul .app-bg.dy-monitor-focus .dy-monitor-log-box {
+html.dui-pro-overhaul .app-bg.dy-monitor-focus .dy-monitor-stream-box {
   background:
     linear-gradient(180deg, rgba(255, 255, 255, .014), rgba(255, 255, 255, .004)),
     #050606 !important;
   box-shadow: inset 0 1px 0 rgba(255, 255, 255, .018) !important;
-}
-
-html.dui-pro-overhaul .app-bg.dy-monitor-focus .dy-monitor-health-grid .dy-health-card {
-  min-height: 58px !important;
-  padding: 8px 12px !important;
-  --dy-health-accent: #aeb6bc;
-  --dy-health-soft: rgba(184, 188, 190, .060);
-  --dy-health-border: rgba(184, 188, 190, .24);
-  --dy-gauge-start: color-mix(in srgb, var(--dy-health-accent), #050606 26%);
-  --dy-gauge-mid: var(--dy-health-accent);
-  --dy-gauge-end: color-mix(in srgb, var(--dy-health-accent), white 28%);
-  --dy-gauge-text: color-mix(in srgb, var(--dy-health-accent), white 56%);
-  --dy-gauge-glow: color-mix(in srgb, var(--dy-health-accent), transparent 72%);
-  border-color: var(--dy-health-border) !important;
-  background:
-    linear-gradient(180deg, var(--dy-health-soft), rgba(255, 255, 255, .006)),
-    rgba(14, 15, 16, .94) !important;
-  color: var(--dy-health-accent) !important;
-}
-
-html.dui-pro-overhaul .app-bg.dy-monitor-focus .dy-monitor-health-grid .dy-health-card:nth-child(1) {
-  --dy-health-accent: #38bdf8;
-  --dy-health-soft: rgba(56, 189, 248, .075);
-  --dy-health-border: rgba(56, 189, 248, .26);
-}
-
-html.dui-pro-overhaul .app-bg.dy-monitor-focus .dy-monitor-health-grid .dy-health-card:nth-child(2) {
-  --dy-health-accent: #34d399;
-  --dy-health-soft: rgba(52, 211, 153, .070);
-  --dy-health-border: rgba(52, 211, 153, .24);
-}
-
-html.dui-pro-overhaul .app-bg.dy-monitor-focus .dy-monitor-health-grid .dy-health-card:nth-child(3) {
-  --dy-health-accent: #f6c75a;
-  --dy-health-soft: rgba(246, 199, 90, .070);
-  --dy-health-border: rgba(246, 199, 90, .24);
-}
-
-html.dui-pro-overhaul .app-bg.dy-monitor-focus .dy-monitor-health-grid .dy-health-card:nth-child(4) {
-  --dy-health-accent: #ff8f8c;
-  --dy-health-soft: rgba(255, 143, 140, .060);
-  --dy-health-border: rgba(255, 143, 140, .24);
-}
-
-html.dui-pro-overhaul .app-bg.dy-monitor-focus .dy-health-icon,
-html.dui-pro-overhaul .app-bg.dy-monitor-focus .dy-health-sparkline,
-html.dui-pro-overhaul .app-bg.dy-monitor-focus .dy-health-sparkline :is(.dy-health-sparkline-line, .dy-health-sparkline-dot, polyline) {
-  color: var(--dy-health-accent) !important;
-  stroke: var(--dy-health-accent) !important;
-}
-
-html.dui-pro-overhaul .app-bg.dy-monitor-focus .dy-health-sparkline .dy-health-sparkline-dot {
-  fill: var(--dy-health-accent) !important;
-}
-
-html.dui-pro-overhaul .app-bg.dy-monitor-focus .dy-health-label {
-  color: color-mix(in srgb, var(--dy-health-accent), #d8dcdf 34%) !important;
-}
-
-html.dui-pro-overhaul .app-bg.dy-monitor-focus .dy-health-value {
-  color: color-mix(in srgb, var(--dy-health-accent), white 56%) !important;
-  text-shadow: 0 0 10px color-mix(in srgb, var(--dy-health-accent), transparent 78%) !important;
 }
 
 html.dui-pro-overhaul .app-bg.dy-monitor-focus .dy-monitor-gauge[data-tone="cyan"] {
@@ -807,26 +576,14 @@ html.dui-pro-overhaul .app-bg.dy-monitor-focus .dy-monitor-gauge-fill {
   box-shadow: 0 0 10px var(--dy-gauge-glow) !important;
 }
 
-html.dui-pro-overhaul .app-bg.dy-monitor-focus .dy-gateway-plugin-card,
+
 html.dui-pro-overhaul .app-bg.dy-monitor-focus .dy-cron-jobs-card,
-html.dui-pro-overhaul .app-bg.dy-monitor-focus .dy-open-sessions-card,
-html.dui-pro-overhaul .app-bg.dy-monitor-focus .dy-gateway-summary-card,
-html.dui-pro-overhaul .app-bg.dy-monitor-focus .dy-channel-activity-card,
-html.dui-pro-overhaul .app-bg.dy-monitor-focus .dy-runtime-ledger-card,
-html.dui-pro-overhaul .app-bg.dy-monitor-focus .dy-gateway-log-card {
+html.dui-pro-overhaul .app-bg.dy-monitor-focus .dy-channel-activity-card {
   padding: 12px !important;
 }
 
-html.dui-pro-overhaul .app-bg.dy-monitor-focus .dy-gateway-plugin-row {
-  min-height: 54px !important;
-  gap: 10px !important;
-  border-right: 0 !important;
-  border-left: 0 !important;
-}
 
-html.dui-pro-overhaul .app-bg.dy-monitor-focus .dy-plugin-surface-list > .grid,
-html.dui-pro-overhaul .app-bg.dy-monitor-focus .dy-gateway-event-list,
-html.dui-pro-overhaul .app-bg.dy-monitor-focus .dy-runtime-call-list {
+html.dui-pro-overhaul .app-bg.dy-monitor-focus .dy-gateway-event-list {
   gap: 0 !important;
 }
 
@@ -852,121 +609,12 @@ html.dui-pro-overhaul .app-bg.dy-monitor-focus .dy-channel-activity-card {
   min-height: 296px !important;
 }
 
-html.dui-pro-overhaul .app-bg.dy-monitor-focus .dy-gateway-event-card + .dy-gateway-event-card,
-html.dui-pro-overhaul .app-bg.dy-monitor-focus .dy-runtime-call-card + .dy-runtime-call-card,
-html.dui-pro-overhaul .app-bg.dy-monitor-focus .dy-gateway-plugin-row + .dy-gateway-plugin-row {
+html.dui-pro-overhaul .app-bg.dy-monitor-focus .dy-gateway-event-card + .dy-gateway-event-card {
   border-top: 0 !important;
 }
 
 /* Gateway runtime compaction: keep controls visible while giving channel traffic
    the dominant read area. */
-html.dui-pro-overhaul .dy-runtime-compact-grid,
-html.dui-pro-overhaul .app-bg.dy-monitor-focus .dy-runtime-compact-grid {
-  display: grid !important;
-  grid-template-columns: repeat(4, minmax(0, 1fr)) !important;
-  gap: 6px !important;
-  margin-top: 10px !important;
-}
-
-html.dui-pro-overhaul .dy-runtime-cluster,
-html.dui-pro-overhaul .app-bg.dy-monitor-focus .dy-runtime-cluster {
-  --dy-runtime-accent: #aeb6bc;
-  --dy-runtime-soft: rgba(184, 188, 190, .060);
-  position: relative;
-  min-height: 70px !important;
-  overflow: hidden;
-  border-color: rgba(184, 188, 190, .14) !important;
-  background:
-    linear-gradient(180deg, var(--dy-runtime-soft), rgba(255, 255, 255, .006)),
-    rgba(8, 9, 10, .62) !important;
-  padding: 8px 9px !important;
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, .035) !important;
-}
-
-html.dui-pro-overhaul .dy-runtime-cluster[data-tone="emerald"],
-html.dui-pro-overhaul .app-bg.dy-monitor-focus .dy-runtime-cluster[data-tone="emerald"] {
-  --dy-runtime-accent: #8ee6ae;
-  --dy-runtime-soft: rgba(52, 211, 153, .075);
-}
-
-html.dui-pro-overhaul .dy-runtime-cluster[data-tone="amber"],
-html.dui-pro-overhaul .app-bg.dy-monitor-focus .dy-runtime-cluster[data-tone="amber"] {
-  --dy-runtime-accent: #f6d06c;
-  --dy-runtime-soft: rgba(246, 199, 90, .075);
-}
-
-html.dui-pro-overhaul .dy-runtime-cluster[data-tone="rose"],
-html.dui-pro-overhaul .app-bg.dy-monitor-focus .dy-runtime-cluster[data-tone="rose"] {
-  --dy-runtime-accent: #ff9b98;
-  --dy-runtime-soft: rgba(255, 143, 140, .070);
-}
-
-html.dui-pro-overhaul .dy-runtime-cluster::before,
-html.dui-pro-overhaul .app-bg.dy-monitor-focus .dy-runtime-cluster::before {
-  content: "";
-  position: absolute;
-  inset: 0 0 auto;
-  height: 2px;
-  background: linear-gradient(90deg, var(--dy-runtime-accent), transparent 72%);
-  opacity: .85;
-}
-
-html.dui-pro-overhaul .dy-runtime-cluster > p,
-html.dui-pro-overhaul .app-bg.dy-monitor-focus .dy-runtime-cluster > p {
-  color: color-mix(in srgb, var(--dy-runtime-accent), #d8dcdf 18%) !important;
-  font-size: 8px !important;
-  font-weight: 850 !important;
-  letter-spacing: .08em !important;
-  line-height: 1 !important;
-  text-transform: uppercase;
-}
-
-html.dui-pro-overhaul .dy-runtime-cluster-items,
-html.dui-pro-overhaul .app-bg.dy-monitor-focus .dy-runtime-cluster-items {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 5px 8px;
-  margin-top: 8px;
-}
-
-html.dui-pro-overhaul .dy-runtime-datum-wide,
-html.dui-pro-overhaul .app-bg.dy-monitor-focus .dy-runtime-datum-wide {
-  grid-column: 1 / -1;
-}
-
-html.dui-pro-overhaul .dy-runtime-datum span,
-html.dui-pro-overhaul .app-bg.dy-monitor-focus .dy-runtime-datum span {
-  display: block;
-  overflow: hidden;
-  color: #69757d !important;
-  font-size: 7px !important;
-  font-weight: 820 !important;
-  letter-spacing: .06em !important;
-  line-height: 1 !important;
-  text-overflow: ellipsis;
-  text-transform: uppercase;
-  white-space: nowrap;
-}
-
-html.dui-pro-overhaul .dy-runtime-datum strong,
-html.dui-pro-overhaul .app-bg.dy-monitor-focus .dy-runtime-datum strong {
-  display: block;
-  overflow: hidden;
-  margin-top: 3px !important;
-  color: #edf1f3 !important;
-  font-size: 10px !important;
-  font-weight: 760 !important;
-  letter-spacing: 0 !important;
-  line-height: 1.1 !important;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-html.dui-pro-overhaul .dy-gateway-summary-card,
-html.dui-pro-overhaul .app-bg.dy-monitor-focus .dy-gateway-summary-card {
-  height: auto !important;
-  min-height: 0 !important;
-}
 
 html.dui-pro-overhaul .app-bg.dy-monitor-focus .dy-gateway-layout {
   grid-template-columns: minmax(0, 1.56fr) minmax(380px, .68fr) !important;
@@ -1052,16 +700,6 @@ html.dui-pro-overhaul .app-bg.dy-monitor-focus .dy-channel-activity-card .dy-gat
 html.dui-pro-overhaul .dy-channel-activity-card .dy-gateway-event-card:hover,
 html.dui-pro-overhaul .app-bg.dy-monitor-focus .dy-channel-activity-card .dy-gateway-event-card:hover {
   background: rgba(255, 255, 255, .025) !important;
-}
-
-html.dui-pro-overhaul .dy-gateway-direction-marker,
-html.dui-pro-overhaul .app-bg.dy-monitor-focus .dy-gateway-direction-marker {
-  width: 7px;
-  height: 7px;
-  margin-top: 5px;
-  border-radius: 2px;
-  background: var(--dy-channel-accent);
-  box-shadow: 0 0 10px color-mix(in srgb, var(--dy-channel-accent), transparent 62%);
 }
 
 html.dui-pro-overhaul .dy-gateway-activity-copy,
@@ -1282,24 +920,10 @@ html.dui-pro-overhaul .app-bg.dy-monitor-focus .dy-cron-jobs-card .dy-session-me
   font-weight: 720 !important;
 }
 
-@media (max-width: 1180px) {
-  html.dui-pro-overhaul .dy-runtime-compact-grid,
-  html.dui-pro-overhaul .app-bg.dy-monitor-focus .dy-runtime-compact-grid {
-    grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
-  }
-}
-
 @media (max-width: 1080px) {
   html.dui-pro-overhaul .app-bg.dy-monitor-focus .dy-gateway-layout {
     grid-template-columns: minmax(0, 1fr) !important;
     grid-template-rows: none !important;
-  }
-}
-
-@media (max-width: 640px) {
-  html.dui-pro-overhaul .dy-runtime-compact-grid,
-  html.dui-pro-overhaul .app-bg.dy-monitor-focus .dy-runtime-compact-grid {
-    grid-template-columns: minmax(0, 1fr) !important;
   }
 }
 
@@ -1644,25 +1268,6 @@ html.dui-pro-overhaul [data-dui-modal="recruit-agent"] .dui-recruit-form .dui-re
   color: #eef6ff !important;
 }
 
-html.dui-pro-overhaul .brand-lockup.dy-logo-fixed {
-  min-width: min(520px, 44vw) !important;
-  max-width: min(620px, 52vw) !important;
-  min-height: 52px !important;
-}
-
-html.dui-pro-overhaul .brand-lockup.dy-logo-fixed .dy-logo-lockup {
-  display: block !important;
-  width: 100% !important;
-  max-width: 620px !important;
-  height: clamp(46px, 5.2vw, 74px) !important;
-  border: 0 !important;
-  border-radius: 0 !important;
-  background: transparent !important;
-  object-fit: contain !important;
-  object-position: left center !important;
-  box-shadow: none !important;
-}
-
 html.dui-pro-overhaul .dui-login-brand .dui-login-logo-lockup {
   display: block !important;
   width: min(100%, 360px) !important;
@@ -1723,17 +1328,13 @@ html.dui-pro-overhaul .app-bg.dy-monitor-focus [data-dui-panel="monitor"].dy-mon
   -webkit-backdrop-filter: blur(18px) saturate(1.08) !important;
 }
 
-html.dui-pro-overhaul .app-bg.dy-monitor-focus .dy-monitor-header,
+
 html.dui-pro-overhaul .app-bg.dy-monitor-focus .dy-monitor-tabs {
   background:
     linear-gradient(180deg, rgba(255, 255, 255, .030), rgba(255, 255, 255, .006)),
     rgba(13, 14, 16, .48) !important;
   backdrop-filter: blur(14px) saturate(1.04) !important;
   -webkit-backdrop-filter: blur(14px) saturate(1.04) !important;
-}
-
-html.dui-pro-overhaul .app-bg.dy-monitor-focus .dy-monitor-header {
-  padding: 8px !important;
 }
 
 html.dui-pro-overhaul .app-bg.dy-monitor-focus .dy-monitor-tabs {
@@ -1788,11 +1389,9 @@ html.dui-pro-overhaul .app-bg.dy-monitor-focus .dy-monitor-tool-button:hover {
     0 0 18px rgba(56, 189, 248, .12) !important;
 }
 
-html.dui-pro-overhaul .app-bg.dy-monitor-focus .dy-monitor-health-grid .dy-health-card,
+
 html.dui-pro-overhaul .app-bg.dy-monitor-focus .dy-monitor-shell .dy-monitor-card,
-html.dui-pro-overhaul .app-bg.dy-monitor-focus .dy-runtime-cluster,
-html.dui-pro-overhaul .app-bg.dy-monitor-focus .dy-monitor-stream-box,
-html.dui-pro-overhaul .app-bg.dy-monitor-focus .dy-monitor-log-box {
+html.dui-pro-overhaul .app-bg.dy-monitor-focus .dy-monitor-stream-box {
   border-color: var(--dy-glass-border) !important;
   border-radius: var(--dy-gateway-radius) !important;
   background:
@@ -1842,59 +1441,16 @@ html.dui-pro-overhaul .app-bg.dy-monitor-focus :is(.dy-gateway-summary-card, .dy
   z-index: 1;
 }
 
-html.dui-pro-overhaul .app-bg.dy-monitor-focus .dy-monitor-shell .dy-monitor-card > div:first-child p:first-child,
-html.dui-pro-overhaul .app-bg.dy-monitor-focus .dy-gateway-summary-card > div:first-child p:first-child {
+html.dui-pro-overhaul .app-bg.dy-monitor-focus .dy-monitor-shell .dy-monitor-card > div:first-child p:first-child {
   color: var(--dy-glass-text) !important;
   text-shadow: 0 1px 0 rgba(0, 0, 0, .42) !important;
 }
 
-html.dui-pro-overhaul .app-bg.dy-monitor-focus .dy-monitor-shell .dy-monitor-card > div:first-child p:nth-child(2),
-html.dui-pro-overhaul .app-bg.dy-monitor-focus .dy-gateway-summary-card > div:first-child p:nth-child(2) {
+html.dui-pro-overhaul .app-bg.dy-monitor-focus .dy-monitor-shell .dy-monitor-card > div:first-child p:nth-child(2) {
   color: var(--dy-glass-muted) !important;
 }
 
-html.dui-pro-overhaul .app-bg.dy-monitor-focus .dy-runtime-cluster {
-  --dy-runtime-soft: rgba(255, 255, 255, .020);
-  min-height: 72px !important;
-  background:
-    linear-gradient(180deg, rgba(255, 255, 255, .040), rgba(255, 255, 255, .010)),
-    rgba(10, 11, 13, .56) !important;
-  box-shadow:
-    inset 0 1px 0 rgba(255, 255, 255, .045),
-    inset 0 0 0 1px rgba(0, 0, 0, .22) !important;
-}
 
-html.dui-pro-overhaul .app-bg.dy-monitor-focus .dy-runtime-cluster[data-tone="emerald"] {
-  --dy-runtime-accent: var(--dy-glass-emerald);
-}
-
-html.dui-pro-overhaul .app-bg.dy-monitor-focus .dy-runtime-cluster[data-tone="amber"] {
-  --dy-runtime-accent: var(--dy-glass-amber);
-}
-
-html.dui-pro-overhaul .app-bg.dy-monitor-focus .dy-runtime-cluster[data-tone="rose"] {
-  --dy-runtime-accent: var(--dy-glass-rose);
-}
-
-html.dui-pro-overhaul .app-bg.dy-monitor-focus .dy-runtime-cluster::before {
-  height: 1px;
-  background: linear-gradient(90deg, color-mix(in srgb, var(--dy-runtime-accent), white 10%), transparent 74%);
-  opacity: .92;
-}
-
-html.dui-pro-overhaul .app-bg.dy-monitor-focus .dy-runtime-cluster > p {
-  color: color-mix(in srgb, var(--dy-runtime-accent), #dce3e8 48%) !important;
-}
-
-html.dui-pro-overhaul .app-bg.dy-monitor-focus .dy-runtime-datum span {
-  color: var(--dy-glass-faint) !important;
-}
-
-html.dui-pro-overhaul .app-bg.dy-monitor-focus .dy-runtime-datum strong {
-  color: var(--dy-glass-text) !important;
-}
-
-html.dui-pro-overhaul .app-bg.dy-monitor-focus .dy-gateway-status-pill,
 html.dui-pro-overhaul .app-bg.dy-monitor-focus .dy-channel-activity-stat,
 html.dui-pro-overhaul .app-bg.dy-monitor-focus .dy-cron-status-badge,
 html.dui-pro-overhaul .app-bg.dy-monitor-focus .dy-cron-cadence-badge {
@@ -1907,22 +1463,17 @@ html.dui-pro-overhaul .app-bg.dy-monitor-focus .dy-cron-cadence-badge {
   box-shadow: inset 0 1px 0 rgba(255, 255, 255, .045) !important;
 }
 
-html.dui-pro-overhaul .app-bg.dy-monitor-focus .dy-gateway-status-pill[data-tone="emerald"],
+
 html.dui-pro-overhaul .app-bg.dy-monitor-focus .dy-channel-activity-stat[data-state="active"],
 html.dui-pro-overhaul .app-bg.dy-monitor-focus .dy-channel-activity-stat[data-direction="outbound"] {
   border-color: rgba(165, 239, 194, .28) !important;
   color: var(--dy-glass-emerald) !important;
 }
 
-html.dui-pro-overhaul .app-bg.dy-monitor-focus .dy-gateway-status-pill[data-tone="amber"],
+
 html.dui-pro-overhaul .app-bg.dy-monitor-focus .dy-channel-activity-stat[data-direction="system"] {
   border-color: rgba(245, 217, 129, .28) !important;
   color: var(--dy-glass-amber) !important;
-}
-
-html.dui-pro-overhaul .app-bg.dy-monitor-focus .dy-gateway-status-pill[data-tone="rose"] {
-  border-color: rgba(255, 170, 168, .30) !important;
-  color: var(--dy-glass-rose) !important;
 }
 
 html.dui-pro-overhaul .app-bg.dy-monitor-focus .dy-channel-activity-stat[data-direction="inbound"] {
@@ -1930,7 +1481,7 @@ html.dui-pro-overhaul .app-bg.dy-monitor-focus .dy-channel-activity-stat[data-di
   color: var(--dy-glass-cyan) !important;
 }
 
-html.dui-pro-overhaul .app-bg.dy-monitor-focus .dy-gateway-action-button,
+
 html.dui-pro-overhaul .app-bg.dy-monitor-focus .dy-cron-cancel-button {
   min-height: 28px !important;
   border-color: rgba(226, 232, 238, .18) !important;
@@ -1942,18 +1493,13 @@ html.dui-pro-overhaul .app-bg.dy-monitor-focus .dy-cron-cancel-button {
   box-shadow: inset 0 1px 0 rgba(255, 255, 255, .045) !important;
 }
 
-html.dui-pro-overhaul .app-bg.dy-monitor-focus .dy-gateway-action-button[data-tone="cyan"] {
-  border-color: rgba(149, 220, 255, .24) !important;
-  color: #d9f3ff !important;
-}
 
-html.dui-pro-overhaul .app-bg.dy-monitor-focus .dy-gateway-action-button[data-tone="rose"],
 html.dui-pro-overhaul .app-bg.dy-monitor-focus .dy-cron-cancel-button {
   border-color: rgba(255, 170, 168, .22) !important;
   color: #ffd8d6 !important;
 }
 
-html.dui-pro-overhaul .app-bg.dy-monitor-focus .dy-gateway-action-button:hover,
+
 html.dui-pro-overhaul .app-bg.dy-monitor-focus .dy-cron-cancel-button:hover {
   border-color: rgba(255, 255, 255, .38) !important;
   background:
@@ -1963,7 +1509,6 @@ html.dui-pro-overhaul .app-bg.dy-monitor-focus .dy-cron-cancel-button:hover {
 }
 
 html.dui-pro-overhaul .app-bg.dy-monitor-focus .dy-monitor-stream-box,
-html.dui-pro-overhaul .app-bg.dy-monitor-focus .dy-monitor-log-box,
 html.dui-pro-overhaul .app-bg.dy-monitor-focus .dy-channel-activity-card .dy-gateway-event-list,
 html.dui-pro-overhaul .app-bg.dy-monitor-focus .dy-cron-jobs-card .dy-monitor-stream-box {
   border-color: rgba(226, 232, 238, .12) !important;
@@ -1999,16 +1544,8 @@ html.dui-pro-overhaul .app-bg.dy-monitor-focus .dy-cron-job-card:hover {
     rgba(24, 26, 29, .50) !important;
 }
 
-html.dui-pro-overhaul .app-bg.dy-monitor-focus .dy-gateway-direction-marker {
-  border-radius: 2px !important;
-  box-shadow:
-    0 0 12px color-mix(in srgb, var(--dy-channel-accent), transparent 58%),
-    0 0 0 1px rgba(255, 255, 255, .10) !important;
-}
-
 html.dui-pro-overhaul .app-bg.dy-monitor-focus .dy-gateway-event-time,
-html.dui-pro-overhaul .app-bg.dy-monitor-focus .dy-cron-job-card p:nth-child(2),
-html.dui-pro-overhaul .app-bg.dy-monitor-focus .dy-gateway-log-card .dy-monitor-log-box p span:first-child {
+html.dui-pro-overhaul .app-bg.dy-monitor-focus .dy-cron-job-card p:nth-child(2) {
   color: var(--dy-glass-muted) !important;
 }
 
@@ -2021,26 +1558,8 @@ html.dui-pro-overhaul .app-bg.dy-monitor-focus .dy-cron-job-card p:first-child {
   color: var(--dy-glass-text) !important;
 }
 
-html.dui-pro-overhaul .app-bg.dy-monitor-focus .dy-gateway-log-card .dy-monitor-log-box {
-  color: #aab4bc !important;
-}
-
-html.dui-pro-overhaul .app-bg.dy-monitor-focus .dy-gateway-log-card .dy-monitor-log-box p {
-  color: #9fa9b1 !important;
-}
-
 html.dui-pro-overhaul .app-bg.dy-monitor-focus .dy-session-empty-state {
   color: #87919a !important;
-}
-
-html.dui-pro-overhaul .app-bg.dy-monitor-focus .dy-session-empty-icon {
-  border-color: rgba(226, 232, 238, .20) !important;
-  border-radius: 8px !important;
-  background:
-    linear-gradient(180deg, rgba(255, 255, 255, .044), rgba(255, 255, 255, .008)),
-    rgba(14, 15, 17, .44) !important;
-  color: #c5ced5 !important;
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, .038) !important;
 }
 
 html.dui-pro-overhaul .app-bg.dy-monitor-focus .dy-monitor-shell :is(.dy-gateway-summary-card, .dy-channel-activity-card, .dy-cron-jobs-card, .dy-gateway-log-card) {
@@ -2086,11 +1605,6 @@ html.dui-pro-overhaul .app-bg.dy-monitor-focus .dy-monitor-shell :is(.dy-channel
   padding-bottom: 10px !important;
 }
 
-html.dui-pro-overhaul .app-bg.dy-monitor-focus .dy-monitor-shell .dy-gateway-log-card[data-collapsed="true"] > div:first-child {
-  border-bottom: 0 !important;
-  padding-bottom: 0 !important;
-}
-
 html.dui-pro-overhaul .app-bg.dy-monitor-focus .dy-monitor-shell :is(.dy-channel-activity-card, .dy-cron-jobs-card, .dy-gateway-log-card) :is(.dy-monitor-stream-box, .dy-monitor-log-box, .dy-gateway-event-list) {
   border-color: rgba(245, 247, 248, .16) !important;
   border-radius: 4px !important;
@@ -2113,15 +1627,6 @@ html.dui-pro-overhaul .app-bg.dy-monitor-focus .dy-monitor-shell .dy-cron-job-ca
 html.dui-pro-overhaul .app-bg.dy-monitor-focus .dy-monitor-shell .dy-channel-activity-card .dy-gateway-event-card:hover,
 html.dui-pro-overhaul .app-bg.dy-monitor-focus .dy-monitor-shell .dy-cron-job-card:hover {
   background: rgba(255, 255, 255, .038) !important;
-}
-
-html.dui-pro-overhaul .app-bg.dy-monitor-focus .dy-monitor-shell .dy-gateway-direction-marker {
-  width: 7px !important;
-  height: 7px !important;
-  border: 1px solid rgba(255, 255, 255, .74) !important;
-  border-radius: 1px !important;
-  background: #e7ecef !important;
-  box-shadow: none !important;
 }
 
 html.dui-pro-overhaul .app-bg.dy-monitor-focus .dy-monitor-shell .dy-gateway-direction-label,
@@ -2210,11 +1715,6 @@ html.dui-pro-overhaul .app-bg.dy-monitor-focus .dy-monitor-shell .dy-cron-jobs-c
   line-height: 1.35 !important;
 }
 
-html.dui-pro-overhaul .app-bg.dy-monitor-focus .dy-monitor-shell .dy-gateway-log-card .dy-monitor-log-box {
-  max-height: 280px !important;
-  color: #b7c0c6 !important;
-}
-
 /* Keep compact activity indicators color-coded against the monochrome shell. */
 html.dui-pro-overhaul .app-bg.dy-monitor-focus .dy-monitor-shell .dy-channel-activity-card .dy-gateway-event-card[data-direction="inbound"] {
   --dy-channel-accent: #38bdf8 !important;
@@ -2226,14 +1726,6 @@ html.dui-pro-overhaul .app-bg.dy-monitor-focus .dy-monitor-shell .dy-channel-act
 
 html.dui-pro-overhaul .app-bg.dy-monitor-focus .dy-monitor-shell .dy-channel-activity-card .dy-gateway-event-card[data-direction="system"] {
   --dy-channel-accent: #f6c75a !important;
-}
-
-html.dui-pro-overhaul .app-bg.dy-monitor-focus .dy-monitor-shell .dy-gateway-direction-marker {
-  border-color: color-mix(in srgb, var(--dy-channel-accent), white 18%) !important;
-  background: var(--dy-channel-accent) !important;
-  box-shadow:
-    0 0 10px color-mix(in srgb, var(--dy-channel-accent), transparent 58%),
-    0 0 0 1px rgba(255, 255, 255, .08) !important;
 }
 
 html.dui-pro-overhaul .app-bg.dy-monitor-focus .dy-monitor-shell .dy-gateway-direction-label {
@@ -2266,93 +1758,6 @@ html.dui-pro-overhaul .app-bg.dy-monitor-focus .dy-monitor-shell .dy-cron-job-ca
 }
 
 /* Gateway runtime: monochrome terminal shell with color retained only for state highlights. */
-html.dui-pro-overhaul .app-bg.dy-monitor-focus .dy-monitor-shell .dy-gateway-summary-card {
-  border-color: rgba(245, 247, 248, .24) !important;
-  border-radius: 8px !important;
-  background:
-    linear-gradient(180deg, rgba(255, 255, 255, .020), rgba(255, 255, 255, .004)),
-    #030303 !important;
-  color: #e8ecef !important;
-  box-shadow:
-    inset 0 1px 0 rgba(255, 255, 255, .050),
-    inset 0 0 0 1px rgba(0, 0, 0, .86),
-    0 18px 46px rgba(0, 0, 0, .46) !important;
-}
-
-html.dui-pro-overhaul .app-bg.dy-monitor-focus .dy-monitor-shell .dy-gateway-summary-card::before {
-  opacity: 0 !important;
-}
-
-html.dui-pro-overhaul .app-bg.dy-monitor-focus .dy-monitor-shell .dy-gateway-summary-card > div:first-child {
-  border-bottom: 1px solid rgba(245, 247, 248, .12) !important;
-  padding-bottom: 10px !important;
-}
-
-html.dui-pro-overhaul .app-bg.dy-monitor-focus .dy-monitor-shell .dy-runtime-cluster {
-  --dy-runtime-accent: #dfe4e7;
-  border-color: rgba(245, 247, 248, .13) !important;
-  border-radius: 4px !important;
-  background: #050505 !important;
-  box-shadow:
-    inset 0 1px 0 rgba(255, 255, 255, .026),
-    inset 0 0 0 1px rgba(255, 255, 255, .014) !important;
-}
-
-html.dui-pro-overhaul .app-bg.dy-monitor-focus .dy-monitor-shell .dy-runtime-cluster[data-tone="cyan"] {
-  --dy-runtime-accent: #7dd3fc;
-}
-
-html.dui-pro-overhaul .app-bg.dy-monitor-focus .dy-monitor-shell .dy-runtime-cluster[data-tone="emerald"] {
-  --dy-runtime-accent: #86efac;
-}
-
-html.dui-pro-overhaul .app-bg.dy-monitor-focus .dy-monitor-shell .dy-runtime-cluster[data-tone="amber"] {
-  --dy-runtime-accent: #fde68a;
-}
-
-html.dui-pro-overhaul .app-bg.dy-monitor-focus .dy-monitor-shell .dy-runtime-cluster[data-tone="rose"] {
-  --dy-runtime-accent: #fca5a5;
-}
-
-html.dui-pro-overhaul .app-bg.dy-monitor-focus .dy-monitor-shell .dy-runtime-cluster::before {
-  height: 1px !important;
-  background: linear-gradient(90deg, var(--dy-runtime-accent), transparent 72%) !important;
-  opacity: .92 !important;
-}
-
-html.dui-pro-overhaul .app-bg.dy-monitor-focus .dy-monitor-shell .dy-runtime-cluster > p {
-  color: var(--dy-runtime-accent) !important;
-  letter-spacing: 0 !important;
-}
-
-html.dui-pro-overhaul .app-bg.dy-monitor-focus .dy-monitor-shell .dy-runtime-datum span {
-  color: #858d93 !important;
-}
-
-html.dui-pro-overhaul .app-bg.dy-monitor-focus .dy-monitor-shell .dy-runtime-datum strong {
-  color: #eef2f4 !important;
-}
-
-html.dui-pro-overhaul .app-bg.dy-monitor-focus .dy-monitor-shell .dy-gateway-status-pill {
-  background: #050505 !important;
-  box-shadow: none !important;
-}
-
-html.dui-pro-overhaul .app-bg.dy-monitor-focus .dy-monitor-shell .dy-gateway-action-button[data-tone="cyan"] {
-  border-color: rgba(125, 211, 252, .34) !important;
-  border-radius: 2px !important;
-  background: #020202 !important;
-  color: #bae6fd !important;
-  box-shadow: none !important;
-}
-
-html.dui-pro-overhaul .app-bg.dy-monitor-focus .dy-monitor-shell .dy-gateway-action-button[data-tone="rose"] {
-  border-color: rgba(248, 113, 113, .42) !important;
-  border-radius: 2px !important;
-  background: #120406 !important;
-  color: #fecaca !important;
-  box-shadow: none !important;
-}
 
 /* Red cancel actions and tighter readable cron instruction rows. */
 html.dui-pro-overhaul .app-bg.dy-monitor-focus .dy-monitor-shell .dy-cron-cancel-button {
@@ -2455,61 +1860,15 @@ html.dui-pro-overhaul .app-bg.dy-monitor-focus .dy-monitor-shell .dy-gateway-lay
   grid-template-rows: min-content minmax(300px, 1fr) minmax(210px, .72fr) minmax(190px, min(36vh, 440px)) !important;
 }
 
-html.dui-pro-overhaul .app-bg.dy-monitor-focus .dy-monitor-shell .dy-gateway-log-card {
-  min-height: 54px !important;
-  max-width: 100% !important;
-}
-
-html.dui-pro-overhaul .app-bg.dy-monitor-focus .dy-monitor-shell .dy-gateway-log-card:not([data-collapsed="true"]) {
-  min-height: clamp(220px, 30vh, 460px) !important;
-  resize: vertical;
-}
-
-html.dui-pro-overhaul .app-bg.dy-monitor-focus .dy-monitor-shell .dy-gateway-log-header {
-  min-width: 0;
-  flex-wrap: wrap;
-  row-gap: 6px;
-}
-
-html.dui-pro-overhaul .app-bg.dy-monitor-focus .dy-monitor-shell .dy-gateway-log-title {
-  min-width: 0;
-  flex: 1 1 130px;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-html.dui-pro-overhaul .app-bg.dy-monitor-focus .dy-monitor-shell .dy-gateway-log-controls {
-  flex: 0 1 auto;
-  min-width: max-content;
-}
-
-html.dui-pro-overhaul .app-bg.dy-monitor-focus .dy-monitor-shell .dy-gateway-log-card .dy-monitor-log-box {
-  flex: 1 1 auto !important;
-  min-height: clamp(150px, 22vh, 360px) !important;
-  max-height: none !important;
-  resize: vertical;
-  overflow: auto !important;
-  scrollbar-gutter: stable;
-}
-
 @media (min-width: 1500px) {
   html.dui-pro-overhaul .app-bg.dy-monitor-focus .dy-monitor-shell .dy-gateway-layout {
     grid-template-rows: min-content minmax(320px, 1fr) minmax(220px, .68fr) minmax(240px, min(40vh, 560px)) !important;
-  }
-
-  html.dui-pro-overhaul .app-bg.dy-monitor-focus .dy-monitor-shell .dy-gateway-log-card:not([data-collapsed="true"]) {
-    min-height: clamp(260px, 34vh, 560px) !important;
   }
 }
 
 @media (max-width: 1180px) {
   html.dui-pro-overhaul .app-bg.dy-monitor-focus .dy-monitor-shell .dy-gateway-layout {
     grid-template-rows: none !important;
-  }
-
-  html.dui-pro-overhaul .app-bg.dy-monitor-focus .dy-monitor-shell .dy-gateway-log-card:not([data-collapsed="true"]) {
-    min-height: clamp(220px, 38vh, 520px) !important;
   }
 }
 
@@ -2541,26 +1900,6 @@ html.dui-pro-overhaul .app-bg.dy-monitor-focus .dy-monitor-shell :is(.dy-gateway
   max-height: none !important;
 }
 
-html.dui-pro-overhaul .app-bg.dy-monitor-focus .dy-monitor-shell .dy-gateway-summary-card {
-  min-height: max-content !important;
-}
-
-html.dui-pro-overhaul .app-bg.dy-monitor-focus .dy-monitor-shell .dy-runtime-compact-grid {
-  grid-template-columns: repeat(auto-fit, minmax(min(100%, 132px), 1fr)) !important;
-}
-
-html.dui-pro-overhaul .app-bg.dy-monitor-focus .dy-monitor-shell .dy-runtime-cluster,
-html.dui-pro-overhaul .app-bg.dy-monitor-focus .dy-monitor-shell .dy-runtime-datum,
-html.dui-pro-overhaul .app-bg.dy-monitor-focus .dy-monitor-shell .dy-runtime-datum strong {
-  min-width: 0 !important;
-}
-
-html.dui-pro-overhaul .app-bg.dy-monitor-focus .dy-monitor-shell .dy-runtime-datum strong {
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
 html.dui-pro-overhaul .app-bg.dy-monitor-focus .dy-monitor-shell .dy-channel-activity-card .dy-gateway-event-list {
   height: clamp(220px, 34vh, 420px) !important;
   min-height: 180px !important;
@@ -2587,23 +1926,15 @@ html.dui-pro-overhaul .app-bg.dy-monitor-focus .dy-monitor-shell .dy-cron-jobs-c
     align-items: start !important;
   }
 
-  html.dui-pro-overhaul .app-bg.dy-monitor-focus .dy-monitor-shell .dy-gateway-summary-card,
+  
   html.dui-pro-overhaul .app-bg.dy-monitor-focus .dy-monitor-shell .dy-cron-jobs-card,
-  html.dui-pro-overhaul .app-bg.dy-monitor-focus .dy-monitor-shell .dy-channel-activity-card,
-  html.dui-pro-overhaul .app-bg.dy-monitor-focus .dy-monitor-shell .dy-gateway-log-card {
+  html.dui-pro-overhaul .app-bg.dy-monitor-focus .dy-monitor-shell .dy-channel-activity-card {
     align-self: start !important;
     overflow: visible !important;
   }
 }
 
 @media (max-width: 980px) {
-  html.dui-pro-overhaul .app-bg.dy-monitor-focus .dy-monitor-header {
-    padding-top: 6px !important;
-  }
-
-  html.dui-pro-overhaul .app-bg.dy-monitor-focus .dy-monitor-health-grid {
-    grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
-  }
 
   html.dui-pro-overhaul .app-bg.dy-monitor-focus .dy-monitor-tabbar {
     grid-template-columns: minmax(0, 1fr) !important;
@@ -2640,13 +1971,13 @@ html.dui-pro-overhaul .app-bg.dy-monitor-focus .dy-monitor-shell .dy-cron-jobs-c
     padding: 4px 6px 10px !important;
   }
 
-  html.dui-pro-overhaul .app-bg.dy-monitor-focus .dy-monitor-health-grid,
+  
   html.dui-pro-overhaul .app-bg.dy-monitor-focus .dy-monitor-tab-list,
   html.dui-pro-overhaul .app-bg.dy-monitor-focus .dy-monitor-tools {
     grid-template-columns: minmax(0, 1fr) !important;
   }
 
-  html.dui-pro-overhaul .app-bg.dy-monitor-focus .dy-monitor-shell .dy-runtime-compact-grid,
+  
   html.dui-pro-overhaul .app-bg.dy-monitor-focus .dy-monitor-shell .dy-cron-job-card > div:last-child {
     grid-template-columns: minmax(0, 1fr) !important;
   }
@@ -2669,19 +2000,6 @@ html.dui-pro-overhaul .app-bg.dy-monitor-focus .dy-monitor-shell .dy-cron-jobs-c
 }
 
 /* Terminal Gateway polish overrides: flat, dark, and resize-safe. */
-html.dui-pro-overhaul .brand-lockup.dy-logo-fixed {
-  flex: 1 1 520px !important;
-  min-width: min(100%, 320px) !important;
-  max-width: 920px !important;
-}
-
-html.dui-pro-overhaul .brand-lockup.dy-logo-fixed .dy-logo-lockup {
-  width: min(100%, 760px) !important;
-  height: clamp(84px, 9vw, 138px) !important;
-  object-fit: contain !important;
-  object-position: left center !important;
-  filter: saturate(1.08) contrast(1.05) drop-shadow(0 0 18px rgba(72, 224, 255, .18));
-}
 
 html.dui-pro-overhaul .dui-login-logo-lockup {
   max-width: min(100%, 390px) !important;
@@ -2733,7 +2051,7 @@ html.dui-pro-overhaul .app-bg.dy-monitor-focus [data-dui-panel="monitor"].dy-mon
   box-shadow: 0 20px 70px rgba(0, 0, 0, .46) !important;
 }
 
-html.dui-pro-overhaul .app-bg.dy-monitor-focus .dy-monitor-header,
+
 html.dui-pro-overhaul .app-bg.dy-monitor-focus .dy-monitor-tabs,
 html.dui-pro-overhaul .app-bg.dy-monitor-focus .dy-monitor-body {
   background: var(--dui-gateway-bg) !important;
@@ -2779,20 +2097,12 @@ html.dui-pro-overhaul .app-bg.dy-monitor-focus .dy-gateway-layout {
   align-items: stretch !important;
 }
 
-html.dui-pro-overhaul .app-bg.dy-monitor-focus .dy-gateway-summary-card {
-  grid-area: summary !important;
-}
-
 html.dui-pro-overhaul .app-bg.dy-monitor-focus .dy-channel-activity-card {
   grid-area: activity !important;
 }
 
 html.dui-pro-overhaul .app-bg.dy-monitor-focus .dy-cron-jobs-card {
   grid-area: jobs !important;
-}
-
-html.dui-pro-overhaul .app-bg.dy-monitor-focus .dy-gateway-log-card {
-  grid-area: log !important;
 }
 
 html.dui-pro-overhaul .app-bg.dy-monitor-focus .dy-monitor-shell :is(.dy-monitor-card, .dy-gateway-summary-card, .dy-channel-activity-card, .dy-cron-jobs-card, .dy-gateway-log-card, .dy-health-card, .dy-runtime-cluster, .dy-runtime-datum, .dy-monitor-stream-box, .dy-monitor-log-box, .dy-gateway-event-list, .dy-gateway-event-card, .dy-gateway-activity-line, .dy-cron-job-card, .dy-session-meta-chip, .dy-cron-instruction-chip, .dy-monitor-alert, .dy-monitor-empty) {
@@ -2803,20 +2113,6 @@ html.dui-pro-overhaul .app-bg.dy-monitor-focus .dy-monitor-shell :is(.dy-monitor
 
 html.dui-pro-overhaul .app-bg.dy-monitor-focus .dy-monitor-shell :is(button, input, select, .dy-monitor-tab-list, .dy-monitor-tab-list button, .dy-monitor-tool-button, .dy-cron-cancel-button, .dy-gateway-action-button, .dy-gateway-status-pill, .dy-cron-status-badge, .dy-cron-cadence-badge, .dy-channel-activity-stat) {
   border-radius: 0 !important;
-}
-
-html.dui-pro-overhaul .app-bg.dy-monitor-focus .dy-runtime-compact-grid {
-  grid-template-columns: repeat(auto-fit, minmax(172px, 1fr)) !important;
-  gap: 8px !important;
-}
-
-html.dui-pro-overhaul .app-bg.dy-monitor-focus .dy-runtime-cluster,
-html.dui-pro-overhaul .app-bg.dy-monitor-focus .dy-runtime-datum {
-  padding: 10px !important;
-}
-
-html.dui-pro-overhaul .app-bg.dy-monitor-focus .dy-runtime-datum {
-  min-height: 42px !important;
 }
 
 html.dui-pro-overhaul .app-bg.dy-monitor-focus .dy-cron-jobs-card .dy-monitor-stream-box {
@@ -2883,11 +2179,6 @@ html.dui-pro-overhaul .app-bg.dy-monitor-focus .dy-channel-activity-card .dy-gat
   height: clamp(320px, 45vh, 680px) !important;
 }
 
-html.dui-pro-overhaul .app-bg.dy-monitor-focus .dy-gateway-log-card .dy-monitor-log-box {
-  min-height: clamp(220px, 28vh, 440px) !important;
-  background: #030405 !important;
-}
-
 html.dui-pro-overhaul .dy-plugins-panel {
   background: #030406 !important;
 }
@@ -2912,9 +2203,6 @@ html.dui-pro-overhaul .dy-plugins-panel .dy-plugin-row-actions {
 }
 
 @media (max-width: 760px) {
-  html.dui-pro-overhaul .brand-lockup.dy-logo-fixed .dy-logo-lockup {
-    height: clamp(70px, 22vw, 108px) !important;
-  }
 
   html.dui-pro-overhaul .app-bg.dy-monitor-focus .dy-monitor-tabbar,
   html.dui-pro-overhaul .app-bg.dy-monitor-focus .dy-monitor-tab-list,
@@ -2925,35 +2213,6 @@ html.dui-pro-overhaul .dy-plugins-panel .dy-plugin-row-actions {
 }
 
 /* True final rail brand override: keep the sidebar header icon-only. */
-html.dui-pro-overhaul .dy-human-rail-head--icon-only {
-  min-height: 116px !important;
-  justify-content: center !important;
-  padding: 14px 12px 12px !important;
-}
-
-html.dui-pro-overhaul .dy-human-rail-head--icon-only img {
-  width: clamp(74px, 7.4vw, 92px) !important;
-  height: clamp(74px, 7.4vw, 92px) !important;
-  max-width: 92px !important;
-  max-height: 92px !important;
-  object-fit: contain !important;
-  background: transparent !important;
-  border: 0 !important;
-  border-radius: 0 !important;
-  box-shadow: none !important;
-}
-
-@media (max-width: 720px) {
-  html.dui-pro-overhaul .dy-human-rail-head--icon-only {
-    min-height: 88px !important;
-    padding: 10px !important;
-  }
-
-  html.dui-pro-overhaul .dy-human-rail-head--icon-only img {
-    width: 62px !important;
-    height: 62px !important;
-  }
-}
 
 /* Command console: keep header controls clear of the sticky app chrome. */
 @media (min-width: 1181px) {
@@ -2973,13 +2232,8 @@ html.dui-pro-overhaul .dy-command-targets {
   min-height: 39px !important;
 }
 
-html.dui-pro-overhaul .dy-command-target-label {
-  display: inline-flex !important;
-  align-items: center !important;
-}
-
 /* Active agent-run indicators: visible enough to catch the eye without dominating the shell. */
-html.dui-pro-overhaul .dy-command-header .badge.dy-status-chip[data-status-kind="running-agents"][data-state="active"],
+
 html.dui-pro-overhaul header .badge.dy-status-chip[data-status-kind="running-agents"][data-state="active"],
 html.dui-pro-overhaul .dy-command-busy {
   position: relative !important;
@@ -2996,9 +2250,8 @@ html.dui-pro-overhaul .dy-command-busy {
     0 12px 24px -18px rgba(250, 190, 55, .72) !important;
 }
 
-html.dui-pro-overhaul .dy-command-header .badge.dy-status-chip[data-status-kind="running-agents"][data-state="active"]::before,
-html.dui-pro-overhaul header .badge.dy-status-chip[data-status-kind="running-agents"][data-state="active"]::before,
-html.dui-pro-overhaul .dy-command-busy-dot {
+
+html.dui-pro-overhaul header .badge.dy-status-chip[data-status-kind="running-agents"][data-state="active"]::before {
   background: #f6c858 !important;
   border-color: rgba(255, 239, 176, .72) !important;
   box-shadow:
@@ -3008,13 +2261,13 @@ html.dui-pro-overhaul .dy-command-busy-dot {
   animation: dy-running-indicator-pulse 1.8s ease-in-out infinite;
 }
 
-html.dui-pro-overhaul .dy-command-header .badge.dy-status-chip[data-status-kind="running-agents"][data-state="active"] .dy-status-value,
+
 html.dui-pro-overhaul header .badge.dy-status-chip[data-status-kind="running-agents"][data-state="active"] .dy-status-value {
   color: #fff7d6 !important;
   text-shadow: 0 0 8px rgba(246, 200, 88, .32) !important;
 }
 
-html.dui-pro-overhaul .dy-command-header .badge.dy-status-chip[data-status-kind="running-agents"][data-state="active"] .dy-status-label,
+
 html.dui-pro-overhaul header .badge.dy-status-chip[data-status-kind="running-agents"][data-state="active"] .dy-status-label {
   color: #f2d184 !important;
 }
@@ -3054,137 +2307,8 @@ html.dui-pro-overhaul .dy-command-stop-run:focus-visible {
 }
 
 @media (prefers-reduced-motion: reduce) {
-  html.dui-pro-overhaul .dy-command-header .badge.dy-status-chip[data-status-kind="running-agents"][data-state="active"]::before,
-  html.dui-pro-overhaul header .badge.dy-status-chip[data-status-kind="running-agents"][data-state="active"]::before,
-  html.dui-pro-overhaul .dy-command-busy-dot {
-    animation: none !important;
-  }
-}
-
-html.dui-pro-overhaul .dy-command-console__stream-pill {
-  position: relative !important;
-  isolation: isolate !important;
-  min-width: 104px !important;
-  justify-content: flex-start !important;
-  transition:
-    border-color 160ms ease-out,
-    color 160ms ease-out,
-    background-color 160ms ease-out,
-    box-shadow 160ms ease-out !important;
-}
-
-html.dui-pro-overhaul .dy-command-console__stream-pill > span {
-  flex: 0 0 auto !important;
-}
-
-html.dui-pro-overhaul .dy-command-console__stream-pill[data-stream-state="live"] {
-  border-color: rgba(116, 226, 165, .34) !important;
-  background:
-    radial-gradient(circle at 15px 50%, rgba(116, 226, 165, .18), transparent 28px),
-    linear-gradient(180deg, rgba(116, 226, 165, .105), rgba(35, 112, 73, .026)),
-    #101611 !important;
-  color: #c9f8dc !important;
-}
-
-html.dui-pro-overhaul .dy-command-console__stream-pill[data-stream-state="live"] > span {
-  background: #74e2a5 !important;
-  box-shadow: 0 0 10px rgba(116, 226, 165, .52) !important;
-}
-
-html.dui-pro-overhaul .dy-command-console__stream-pill[data-stream-state="connecting"],
-html.dui-pro-overhaul .dy-command-console__stream-pill[data-stream-state="reconnecting"] {
-  border-color: rgba(244, 200, 102, .42) !important;
-  background:
-    radial-gradient(circle at 15px 50%, rgba(244, 200, 102, .19), transparent 28px),
-    linear-gradient(180deg, rgba(244, 200, 102, .120), rgba(126, 87, 26, .036)),
-    #16130e !important;
-  color: #ffe4a6 !important;
-}
-
-html.dui-pro-overhaul .dy-command-console__stream-pill[data-stream-state="connecting"] > span,
-html.dui-pro-overhaul .dy-command-console__stream-pill[data-stream-state="reconnecting"] > span {
-  background: #f4c866 !important;
-  box-shadow: 0 0 10px rgba(244, 200, 102, .58) !important;
-  animation: dy-running-indicator-pulse 1.8s ease-in-out infinite;
-}
-
-html.dui-pro-overhaul .dy-command-console__stream-pill[data-stream-state="offline"] {
-  border-color: rgba(255, 114, 128, .42) !important;
-  background:
-    radial-gradient(circle at 15px 50%, rgba(255, 114, 128, .18), transparent 28px),
-    linear-gradient(180deg, rgba(255, 114, 128, .110), rgba(95, 31, 41, .035)),
-    #160f12 !important;
-  color: #ffd0d5 !important;
-}
-
-html.dui-pro-overhaul .dy-command-console__stream-pill[data-stream-state="offline"] > span {
-  background: #ff7280 !important;
-  box-shadow: 0 0 10px rgba(255, 114, 128, .52) !important;
-}
-
-html.dui-pro-overhaul .dy-command-console__stability-pill {
-  position: relative !important;
-  isolation: isolate !important;
-  min-width: 86px !important;
-  justify-content: flex-start !important;
-  transition:
-    border-color 160ms ease-out,
-    color 160ms ease-out,
-    background-color 160ms ease-out,
-    box-shadow 160ms ease-out !important;
-}
-
-html.dui-pro-overhaul .dy-command-console__stability-pill > span {
-  flex: 0 0 auto !important;
-}
-
-html.dui-pro-overhaul .dy-command-console__stability-pill[data-stability-state="healthy"] {
-  border-color: rgba(116, 226, 165, .30) !important;
-  background:
-    radial-gradient(circle at 15px 50%, rgba(116, 226, 165, .15), transparent 28px),
-    linear-gradient(180deg, rgba(116, 226, 165, .090), rgba(35, 112, 73, .022)),
-    #101611 !important;
-  color: #c9f8dc !important;
-}
-
-html.dui-pro-overhaul .dy-command-console__stability-pill[data-stability-state="healthy"] > span {
-  background: #74e2a5 !important;
-  box-shadow: 0 0 10px rgba(116, 226, 165, .46) !important;
-}
-
-html.dui-pro-overhaul .dy-command-console__stability-pill[data-stability-state="warning"],
-html.dui-pro-overhaul .dy-command-console__stability-pill[data-stability-state="pending"] {
-  border-color: rgba(244, 200, 102, .40) !important;
-  background:
-    radial-gradient(circle at 15px 50%, rgba(244, 200, 102, .17), transparent 28px),
-    linear-gradient(180deg, rgba(244, 200, 102, .105), rgba(126, 87, 26, .034)),
-    #16130e !important;
-  color: #ffe4a6 !important;
-}
-
-html.dui-pro-overhaul .dy-command-console__stability-pill[data-stability-state="warning"] > span,
-html.dui-pro-overhaul .dy-command-console__stability-pill[data-stability-state="pending"] > span {
-  background: #f4c866 !important;
-  box-shadow: 0 0 10px rgba(244, 200, 102, .52) !important;
-}
-
-html.dui-pro-overhaul .dy-command-console__stability-pill[data-stability-state="offline"] {
-  border-color: rgba(255, 114, 128, .42) !important;
-  background:
-    radial-gradient(circle at 15px 50%, rgba(255, 114, 128, .18), transparent 28px),
-    linear-gradient(180deg, rgba(255, 114, 128, .110), rgba(95, 31, 41, .035)),
-    #160f12 !important;
-  color: #ffd0d5 !important;
-}
-
-html.dui-pro-overhaul .dy-command-console__stability-pill[data-stability-state="offline"] > span {
-  background: #ff7280 !important;
-  box-shadow: 0 0 10px rgba(255, 114, 128, .52) !important;
-}
-
-@media (prefers-reduced-motion: reduce) {
-  html.dui-pro-overhaul .dy-command-console__stream-pill[data-stream-state="connecting"] > span,
-  html.dui-pro-overhaul .dy-command-console__stream-pill[data-stream-state="reconnecting"] > span {
+  
+  html.dui-pro-overhaul header .badge.dy-status-chip[data-status-kind="running-agents"][data-state="active"]::before {
     animation: none !important;
   }
 }
@@ -3250,40 +2374,15 @@ html.dui-pro-overhaul .dy-command-console__stability-pill[data-stability-state="
     overflow: hidden !important;
   }
 
-  html.dui-pro-overhaul.dui-cohesive-ui [data-dui-panel="command-console"].dy-command-console .dy-command-console__stat,
-  html.dui-pro-overhaul.dui-cohesive-ui [data-dui-panel="command-console"].dy-command-console .dy-command-console__pill,
+  
   html.dui-pro-overhaul.dui-cohesive-ui [data-dui-panel="command-console"].dy-command-console .dy-command-console__clear {
     min-height: 26px !important;
-  }
-
-  html.dui-pro-overhaul.dui-cohesive-ui [data-dui-panel="command-console"].dy-command-console .dy-command-console__stat {
-    padding: 0 8px !important;
-  }
-
-  html.dui-pro-overhaul.dui-cohesive-ui [data-dui-panel="command-console"].dy-command-console .dy-command-console__pill {
-    min-width: 0 !important;
-    padding: 0 8px !important;
-    margin-left: 0 !important;
-    white-space: nowrap !important;
-  }
-
-  html.dui-pro-overhaul.dui-cohesive-ui [data-dui-panel="command-console"].dy-command-console .dy-command-console__stream-pill,
-  html.dui-pro-overhaul.dui-cohesive-ui [data-dui-panel="command-console"].dy-command-console .dy-command-console__stability-pill {
-    min-width: 0 !important;
   }
 }
 
 @media (max-width: 520px) {
   html.dui-pro-overhaul.dui-cohesive-ui [data-dui-panel="command-console"].dy-command-console .dy-command-console__meta {
     gap: 5px !important;
-  }
-
-  html.dui-pro-overhaul.dui-cohesive-ui [data-dui-panel="command-console"].dy-command-console .dy-command-console__stat span {
-    display: none !important;
-  }
-
-  html.dui-pro-overhaul.dui-cohesive-ui [data-dui-panel="command-console"].dy-command-console .dy-command-console__pill {
-    padding: 0 7px !important;
   }
 }
 
@@ -3316,7 +2415,7 @@ html.dui-pro-overhaul .app-bg.dy-monitor-focus [data-dui-panel="monitor"].dy-mon
   -webkit-backdrop-filter: blur(18px) saturate(1.06) !important;
 }
 
-html.dui-pro-overhaul .app-bg.dy-monitor-focus [data-dui-panel="monitor"] .dy-monitor-header,
+
 html.dui-pro-overhaul .app-bg.dy-monitor-focus [data-dui-panel="monitor"] .dy-monitor-tabs,
 html.dui-pro-overhaul .app-bg.dy-monitor-focus [data-dui-panel="monitor"] .dy-monitor-body {
   background:
@@ -3368,13 +2467,8 @@ html.dui-pro-overhaul .app-bg.dy-monitor-focus [data-dui-panel="monitor"] .dy-mo
 }
 
 html.dui-pro-overhaul .app-bg.dy-monitor-focus [data-dui-panel="monitor"] .dy-monitor-card,
-html.dui-pro-overhaul .app-bg.dy-monitor-focus [data-dui-panel="monitor"] .dy-gateway-summary-card,
 html.dui-pro-overhaul .app-bg.dy-monitor-focus [data-dui-panel="monitor"] .dy-channel-activity-card,
-html.dui-pro-overhaul .app-bg.dy-monitor-focus [data-dui-panel="monitor"] .dy-cron-jobs-card,
-html.dui-pro-overhaul .app-bg.dy-monitor-focus [data-dui-panel="monitor"] .dy-gateway-log-card,
-html.dui-pro-overhaul .app-bg.dy-monitor-focus [data-dui-panel="monitor"] .dy-health-card,
-html.dui-pro-overhaul .app-bg.dy-monitor-focus [data-dui-panel="monitor"] .dy-runtime-cluster,
-html.dui-pro-overhaul .app-bg.dy-monitor-focus [data-dui-panel="monitor"] .dy-runtime-datum {
+html.dui-pro-overhaul .app-bg.dy-monitor-focus [data-dui-panel="monitor"] .dy-cron-jobs-card {
   border-color: var(--dy-eof-glass-line) !important;
   border-radius: 8px !important;
   background:
@@ -3389,18 +2483,15 @@ html.dui-pro-overhaul .app-bg.dy-monitor-focus [data-dui-panel="monitor"] .dy-ru
   -webkit-backdrop-filter: blur(15px) saturate(1.04) !important;
 }
 
-html.dui-pro-overhaul .app-bg.dy-monitor-focus [data-dui-panel="monitor"] .dy-gateway-summary-card::before,
+
 html.dui-pro-overhaul .app-bg.dy-monitor-focus [data-dui-panel="monitor"] .dy-channel-activity-card::before,
-html.dui-pro-overhaul .app-bg.dy-monitor-focus [data-dui-panel="monitor"] .dy-cron-jobs-card::before,
-html.dui-pro-overhaul .app-bg.dy-monitor-focus [data-dui-panel="monitor"] .dy-gateway-log-card::before {
+html.dui-pro-overhaul .app-bg.dy-monitor-focus [data-dui-panel="monitor"] .dy-cron-jobs-card::before {
   opacity: .45 !important;
   background: linear-gradient(180deg, rgba(255, 255, 255, .055), rgba(255, 255, 255, 0)) !important;
 }
 
 html.dui-pro-overhaul .app-bg.dy-monitor-focus [data-dui-panel="monitor"] .dy-monitor-stream-box,
-html.dui-pro-overhaul .app-bg.dy-monitor-focus [data-dui-panel="monitor"] .dy-monitor-log-box,
-html.dui-pro-overhaul .app-bg.dy-monitor-focus [data-dui-panel="monitor"] .dy-gateway-event-list,
-html.dui-pro-overhaul .app-bg.dy-monitor-focus [data-dui-panel="monitor"] .dy-plugin-surface-list {
+html.dui-pro-overhaul .app-bg.dy-monitor-focus [data-dui-panel="monitor"] .dy-gateway-event-list {
   border-color: rgba(226, 232, 238, .12) !important;
   border-radius: 7px !important;
   background:
@@ -3413,10 +2504,7 @@ html.dui-pro-overhaul .app-bg.dy-monitor-focus [data-dui-panel="monitor"] .dy-pl
 
 html.dui-pro-overhaul .app-bg.dy-monitor-focus [data-dui-panel="monitor"] .dy-gateway-event-card,
 html.dui-pro-overhaul .app-bg.dy-monitor-focus [data-dui-panel="monitor"] .dy-cron-job-card,
-html.dui-pro-overhaul .app-bg.dy-monitor-focus [data-dui-panel="monitor"] .dy-gateway-activity-line,
-html.dui-pro-overhaul .app-bg.dy-monitor-focus [data-dui-panel="monitor"] .dy-runtime-session-card,
-html.dui-pro-overhaul .app-bg.dy-monitor-focus [data-dui-panel="monitor"] .dy-gateway-plugin-row,
-html.dui-pro-overhaul .app-bg.dy-monitor-focus [data-dui-panel="monitor"] .dy-runtime-call-card {
+html.dui-pro-overhaul .app-bg.dy-monitor-focus [data-dui-panel="monitor"] .dy-gateway-activity-line {
   border-color: rgba(226, 232, 238, .095) !important;
   border-radius: 7px !important;
   background:
@@ -3428,7 +2516,6 @@ html.dui-pro-overhaul .app-bg.dy-monitor-focus [data-dui-panel="monitor"] .dy-ru
 }
 
 html.dui-pro-overhaul .app-bg.dy-monitor-focus [data-dui-panel="monitor"] .dy-channel-activity-stat,
-html.dui-pro-overhaul .app-bg.dy-monitor-focus [data-dui-panel="monitor"] .dy-gateway-status-pill,
 html.dui-pro-overhaul .app-bg.dy-monitor-focus [data-dui-panel="monitor"] .dy-cron-status-badge,
 html.dui-pro-overhaul .app-bg.dy-monitor-focus [data-dui-panel="monitor"] .dy-cron-cadence-badge,
 html.dui-pro-overhaul .app-bg.dy-monitor-focus [data-dui-panel="monitor"] .dy-session-meta-chip {
@@ -3444,34 +2531,29 @@ html.dui-pro-overhaul .app-bg.dy-monitor-focus [data-dui-panel="monitor"] .dy-se
 }
 
 html.dui-pro-overhaul .app-bg.dy-monitor-focus [data-dui-panel="monitor"] .dy-channel-activity-stat[data-state="active"],
-html.dui-pro-overhaul .app-bg.dy-monitor-focus [data-dui-panel="monitor"] .dy-cron-status-badge[data-state="active"],
-html.dui-pro-overhaul .app-bg.dy-monitor-focus [data-dui-panel="monitor"] .dy-gateway-status-pill[data-tone="emerald"] {
+html.dui-pro-overhaul .app-bg.dy-monitor-focus [data-dui-panel="monitor"] .dy-cron-status-badge[data-state="active"] {
   border-color: rgba(169, 230, 191, .30) !important;
   color: var(--dy-eof-green) !important;
 }
 
-html.dui-pro-overhaul .app-bg.dy-monitor-focus [data-dui-panel="monitor"] .dy-channel-activity-stat[data-direction="inbound"],
-html.dui-pro-overhaul .app-bg.dy-monitor-focus [data-dui-panel="monitor"] .dy-gateway-action-button[data-tone="cyan"] {
+html.dui-pro-overhaul .app-bg.dy-monitor-focus [data-dui-panel="monitor"] .dy-channel-activity-stat[data-direction="inbound"] {
   border-color: rgba(158, 216, 236, .30) !important;
   color: var(--dy-eof-cyan) !important;
 }
 
-html.dui-pro-overhaul .app-bg.dy-monitor-focus [data-dui-panel="monitor"] .dy-channel-activity-stat[data-direction="system"],
-html.dui-pro-overhaul .app-bg.dy-monitor-focus [data-dui-panel="monitor"] .dy-gateway-status-pill[data-tone="amber"] {
+html.dui-pro-overhaul .app-bg.dy-monitor-focus [data-dui-panel="monitor"] .dy-channel-activity-stat[data-direction="system"] {
   border-color: rgba(240, 213, 139, .30) !important;
   color: var(--dy-eof-amber) !important;
 }
 
-html.dui-pro-overhaul .app-bg.dy-monitor-focus [data-dui-panel="monitor"] .dy-gateway-status-pill[data-tone="rose"],
-html.dui-pro-overhaul .app-bg.dy-monitor-focus [data-dui-panel="monitor"] .dy-gateway-action-button[data-tone="rose"],
+
 html.dui-pro-overhaul .app-bg.dy-monitor-focus [data-dui-panel="monitor"] .dy-cron-cancel-button {
   border-color: rgba(239, 166, 164, .32) !important;
   color: var(--dy-eof-rose) !important;
 }
 
-html.dui-pro-overhaul .app-bg.dy-monitor-focus [data-dui-panel="monitor"] .dy-gateway-action-button,
-html.dui-pro-overhaul .app-bg.dy-monitor-focus [data-dui-panel="monitor"] .dy-cron-cancel-button,
-html.dui-pro-overhaul .app-bg.dy-monitor-focus [data-dui-panel="monitor"] .dy-gateway-log-toggle {
+
+html.dui-pro-overhaul .app-bg.dy-monitor-focus [data-dui-panel="monitor"] .dy-cron-cancel-button {
   border-radius: 7px !important;
   background:
     linear-gradient(180deg, rgba(255, 255, 255, .044), rgba(255, 255, 255, .010)),
@@ -3481,14 +2563,14 @@ html.dui-pro-overhaul .app-bg.dy-monitor-focus [data-dui-panel="monitor"] .dy-ga
   box-shadow: inset 0 1px 0 rgba(255, 255, 255, .040) !important;
 }
 
-html.dui-pro-overhaul .app-bg.dy-monitor-focus [data-dui-panel="monitor"] .dy-runtime-cluster > p,
+
 html.dui-pro-overhaul .app-bg.dy-monitor-focus [data-dui-panel="monitor"] .dy-gateway-event-message,
 html.dui-pro-overhaul .app-bg.dy-monitor-focus [data-dui-panel="monitor"] .dy-cron-job-card p:first-child {
   color: var(--dy-eof-glass-text) !important;
   letter-spacing: 0 !important;
 }
 
-html.dui-pro-overhaul .app-bg.dy-monitor-focus [data-dui-panel="monitor"] .dy-runtime-datum span,
+
 html.dui-pro-overhaul .app-bg.dy-monitor-focus [data-dui-panel="monitor"] .dy-gateway-event-time,
 html.dui-pro-overhaul .app-bg.dy-monitor-focus [data-dui-panel="monitor"] .dy-gateway-event-source,
 html.dui-pro-overhaul .app-bg.dy-monitor-focus [data-dui-panel="monitor"] .dy-cron-job-card p:nth-child(2) {
@@ -3496,25 +2578,9 @@ html.dui-pro-overhaul .app-bg.dy-monitor-focus [data-dui-panel="monitor"] .dy-cr
   letter-spacing: 0 !important;
 }
 
-html.dui-pro-overhaul .app-bg.dy-monitor-focus [data-dui-panel="monitor"] .dy-runtime-datum strong,
+
 html.dui-pro-overhaul .app-bg.dy-monitor-focus [data-dui-panel="monitor"] .dy-session-meta-chip strong {
   color: var(--dy-eof-glass-text) !important;
-}
-
-html.dui-pro-overhaul .app-bg.dy-monitor-focus [data-dui-panel="monitor"] .dy-health-card[data-tone="emerald"] {
-  color: var(--dy-eof-green) !important;
-}
-
-html.dui-pro-overhaul .app-bg.dy-monitor-focus [data-dui-panel="monitor"] .dy-health-card[data-tone="amber"] {
-  color: var(--dy-eof-amber) !important;
-}
-
-html.dui-pro-overhaul .app-bg.dy-monitor-focus [data-dui-panel="monitor"] .dy-health-card[data-tone="rose"] {
-  color: var(--dy-eof-rose) !important;
-}
-
-html.dui-pro-overhaul .app-bg.dy-monitor-focus [data-dui-panel="monitor"] .dy-health-value {
-  text-shadow: none !important;
 }
 
 html.dui-pro-overhaul .dy-command-console .dy-command-message {
@@ -3651,8 +2717,7 @@ html.dui-pro-overhaul .dy-command-console .dy-command-target-chip[data-lane-diag
     0 10px 24px -24px rgba(0, 0, 0, .85) !important;
 }
 
-html.dui-pro-overhaul .dy-command-console .dy-command-target-stale,
-html.dui-pro-overhaul .dy-command-console .dy-command-busy-warning {
+html.dui-pro-overhaul .dy-command-console .dy-command-target-stale {
   display: inline-flex !important;
   min-height: 18px !important;
   max-width: 98px !important;
@@ -3672,8 +2737,7 @@ html.dui-pro-overhaul .dy-command-console .dy-command-busy-warning {
   white-space: nowrap !important;
 }
 
-html.dui-pro-overhaul .dy-command-console .dy-command-target-stale[data-severity="stalled"],
-html.dui-pro-overhaul .dy-command-console .dy-command-busy-warning[data-severity="stalled"] {
+html.dui-pro-overhaul .dy-command-console .dy-command-target-stale[data-severity="stalled"] {
   border-color: rgba(248, 113, 113, .34) !important;
   background: rgba(248, 113, 113, .105) !important;
   color: #fecaca !important;
@@ -3827,7 +2891,6 @@ html.dui-pro-overhaul .app-bg.dy-monitor-focus [data-dui-panel="monitor"].dy-mon
 /* Absolute EOF monitor stream correction. */
 html.dui-pro-overhaul .app-bg.dy-monitor-focus [data-dui-panel="monitor"].dy-monitor-shell .dy-channel-activity-card .dy-gateway-event-list,
 html.dui-pro-overhaul .app-bg.dy-monitor-focus [data-dui-panel="monitor"].dy-monitor-shell .dy-cron-jobs-card .dy-monitor-stream-box,
-html.dui-pro-overhaul .app-bg.dy-monitor-focus [data-dui-panel="monitor"].dy-monitor-shell .dy-gateway-log-card .dy-monitor-log-box,
 html.dui-pro-overhaul .app-bg.dy-monitor-focus [data-dui-panel="monitor"].dy-monitor-shell .dy-monitor-stream-box {
   border-color: rgba(226, 232, 238, .12) !important;
   border-radius: 7px !important;
@@ -3869,7 +2932,7 @@ html.dui-pro-overhaul .app-bg.dy-monitor-focus [data-dui-panel="monitor"].dy-mon
   -webkit-backdrop-filter: blur(18px) saturate(1.04) !important;
 }
 
-html.dui-pro-overhaul .app-bg.dy-monitor-focus [data-dui-panel="monitor"] .dy-monitor-header,
+
 html.dui-pro-overhaul .app-bg.dy-monitor-focus [data-dui-panel="monitor"] .dy-monitor-tabs {
   flex: 0 0 auto !important;
   border-color: var(--dy-monitor-graphite-line-soft) !important;
@@ -3949,10 +3012,6 @@ html.dui-pro-overhaul .app-bg.dy-monitor-focus [data-dui-panel="monitor"] .dy-ga
   z-index: auto !important;
 }
 
-html.dui-pro-overhaul .app-bg.dy-monitor-focus [data-dui-panel="monitor"] .dy-gateway-summary-card {
-  grid-area: summary !important;
-}
-
 html.dui-pro-overhaul .app-bg.dy-monitor-focus [data-dui-panel="monitor"] .dy-channel-activity-card {
   grid-area: activity !important;
 }
@@ -3961,18 +3020,9 @@ html.dui-pro-overhaul .app-bg.dy-monitor-focus [data-dui-panel="monitor"] .dy-cr
   grid-area: jobs !important;
 }
 
-html.dui-pro-overhaul .app-bg.dy-monitor-focus [data-dui-panel="monitor"] .dy-gateway-log-card {
-  grid-area: log !important;
-}
-
 html.dui-pro-overhaul .app-bg.dy-monitor-focus [data-dui-panel="monitor"] .dy-monitor-card,
-html.dui-pro-overhaul .app-bg.dy-monitor-focus [data-dui-panel="monitor"] .dy-gateway-summary-card,
 html.dui-pro-overhaul .app-bg.dy-monitor-focus [data-dui-panel="monitor"] .dy-channel-activity-card,
-html.dui-pro-overhaul .app-bg.dy-monitor-focus [data-dui-panel="monitor"] .dy-cron-jobs-card,
-html.dui-pro-overhaul .app-bg.dy-monitor-focus [data-dui-panel="monitor"] .dy-gateway-log-card,
-html.dui-pro-overhaul .app-bg.dy-monitor-focus [data-dui-panel="monitor"] .dy-health-card,
-html.dui-pro-overhaul .app-bg.dy-monitor-focus [data-dui-panel="monitor"] .dy-runtime-cluster,
-html.dui-pro-overhaul .app-bg.dy-monitor-focus [data-dui-panel="monitor"] .dy-runtime-datum {
+html.dui-pro-overhaul .app-bg.dy-monitor-focus [data-dui-panel="monitor"] .dy-cron-jobs-card {
   border-color: var(--dy-monitor-graphite-line) !important;
   border-radius: 5px !important;
   background:
@@ -3986,18 +3036,15 @@ html.dui-pro-overhaul .app-bg.dy-monitor-focus [data-dui-panel="monitor"] .dy-ru
   -webkit-backdrop-filter: blur(14px) saturate(1.03) !important;
 }
 
-html.dui-pro-overhaul .app-bg.dy-monitor-focus [data-dui-panel="monitor"] .dy-gateway-summary-card::before,
+
 html.dui-pro-overhaul .app-bg.dy-monitor-focus [data-dui-panel="monitor"] .dy-channel-activity-card::before,
-html.dui-pro-overhaul .app-bg.dy-monitor-focus [data-dui-panel="monitor"] .dy-cron-jobs-card::before,
-html.dui-pro-overhaul .app-bg.dy-monitor-focus [data-dui-panel="monitor"] .dy-gateway-log-card::before {
+html.dui-pro-overhaul .app-bg.dy-monitor-focus [data-dui-panel="monitor"] .dy-cron-jobs-card::before {
   opacity: .32 !important;
   background: linear-gradient(180deg, rgba(255, 255, 255, .048), rgba(255, 255, 255, 0)) !important;
 }
 
 html.dui-pro-overhaul .app-bg.dy-monitor-focus [data-dui-panel="monitor"] .dy-monitor-stream-box,
-html.dui-pro-overhaul .app-bg.dy-monitor-focus [data-dui-panel="monitor"] .dy-monitor-log-box,
-html.dui-pro-overhaul .app-bg.dy-monitor-focus [data-dui-panel="monitor"] .dy-gateway-event-list,
-html.dui-pro-overhaul .app-bg.dy-monitor-focus [data-dui-panel="monitor"] .dy-plugin-surface-list {
+html.dui-pro-overhaul .app-bg.dy-monitor-focus [data-dui-panel="monitor"] .dy-gateway-event-list {
   border-color: var(--dy-monitor-graphite-line-soft) !important;
   border-radius: 4px !important;
   background:
@@ -4032,35 +3079,9 @@ html.dui-pro-overhaul .app-bg.dy-monitor-focus [data-dui-panel="monitor"] .dy-cr
   scrollbar-gutter: stable;
 }
 
-html.dui-pro-overhaul .app-bg.dy-monitor-focus [data-dui-panel="monitor"] .dy-gateway-log-card {
-  width: 100% !important;
-  align-self: end !important;
-  overflow: hidden !important;
-  margin: 0 !important;
-}
-
-html.dui-pro-overhaul .app-bg.dy-monitor-focus [data-dui-panel="monitor"] .dy-gateway-log-card[data-collapsed="true"] {
-  height: 58px !important;
-  min-height: 58px !important;
-}
-
-html.dui-pro-overhaul .app-bg.dy-monitor-focus [data-dui-panel="monitor"] .dy-gateway-log-card:not([data-collapsed="true"]) {
-  min-height: clamp(230px, 30vh, 430px) !important;
-  resize: vertical;
-}
-
-html.dui-pro-overhaul .app-bg.dy-monitor-focus [data-dui-panel="monitor"] .dy-gateway-log-card .dy-monitor-log-box {
-  min-height: clamp(170px, 22vh, 330px) !important;
-  flex: 1 1 auto !important;
-  overflow: auto !important;
-}
-
 html.dui-pro-overhaul .app-bg.dy-monitor-focus [data-dui-panel="monitor"] .dy-gateway-event-card,
 html.dui-pro-overhaul .app-bg.dy-monitor-focus [data-dui-panel="monitor"] .dy-cron-job-card,
-html.dui-pro-overhaul .app-bg.dy-monitor-focus [data-dui-panel="monitor"] .dy-gateway-activity-line,
-html.dui-pro-overhaul .app-bg.dy-monitor-focus [data-dui-panel="monitor"] .dy-runtime-session-card,
-html.dui-pro-overhaul .app-bg.dy-monitor-focus [data-dui-panel="monitor"] .dy-gateway-plugin-row,
-html.dui-pro-overhaul .app-bg.dy-monitor-focus [data-dui-panel="monitor"] .dy-runtime-call-card {
+html.dui-pro-overhaul .app-bg.dy-monitor-focus [data-dui-panel="monitor"] .dy-gateway-activity-line {
   border-color: rgba(142, 154, 164, .15) !important;
   border-radius: 4px !important;
   background:
@@ -4073,73 +3094,6 @@ html.dui-pro-overhaul .app-bg.dy-monitor-focus [data-dui-panel="monitor"] .dy-ru
 html.dui-pro-overhaul .app-bg.dy-monitor-focus [data-dui-panel="monitor"] .dy-cron-job-card {
   gap: 9px !important;
   padding: 12px !important;
-}
-
-html.dui-pro-overhaul .app-bg.dy-monitor-focus [data-dui-panel="monitor"] .dy-runtime-session-card {
-  padding: 10px 12px !important;
-}
-
-html.dui-pro-overhaul .app-bg.dy-monitor-focus [data-dui-panel="monitor"] .dy-runtime-session-card[data-state="running"],
-html.dui-pro-overhaul .app-bg.dy-monitor-focus [data-dui-panel="monitor"] .dy-runtime-session-card[data-state="gateway"],
-html.dui-pro-overhaul .app-bg.dy-monitor-focus [data-dui-panel="monitor"] .dy-runtime-session-state[data-state="running"],
-html.dui-pro-overhaul .app-bg.dy-monitor-focus [data-dui-panel="monitor"] .dy-runtime-session-state[data-state="gateway"] {
-  border-color: rgba(52, 211, 153, .26) !important;
-  color: #a7f3d0 !important;
-}
-
-html.dui-pro-overhaul .app-bg.dy-monitor-focus [data-dui-panel="monitor"] .dy-runtime-session-card[data-state="missing"],
-html.dui-pro-overhaul .app-bg.dy-monitor-focus [data-dui-panel="monitor"] .dy-runtime-session-state[data-state="missing"] {
-  border-color: rgba(251, 191, 36, .24) !important;
-  color: #fde68a !important;
-}
-
-html.dui-pro-overhaul .app-bg.dy-monitor-focus [data-dui-panel="monitor"] .dy-runtime-session-card[data-state="locked"],
-html.dui-pro-overhaul .app-bg.dy-monitor-focus [data-dui-panel="monitor"] .dy-runtime-session-state[data-state="locked"] {
-  border-color: rgba(251, 191, 36, .26) !important;
-  color: #fde68a !important;
-}
-
-html.dui-pro-overhaul .app-bg.dy-monitor-focus [data-dui-panel="monitor"] .dy-runtime-session-card[data-state="stale-lock"],
-html.dui-pro-overhaul .app-bg.dy-monitor-focus [data-dui-panel="monitor"] .dy-runtime-session-state[data-state="stale-lock"] {
-  border-color: rgba(244, 114, 182, .28) !important;
-  color: #fbcfe8 !important;
-}
-
-html.dui-pro-overhaul .app-bg.dy-monitor-focus [data-dui-panel="monitor"] .dy-runtime-session-lock {
-  display: grid !important;
-  grid-template-columns: max-content minmax(0, 1fr) !important;
-  align-items: center !important;
-  gap: 8px !important;
-  overflow: hidden !important;
-  border-color: rgba(251, 191, 36, .18) !important;
-  background: rgba(251, 191, 36, .045) !important;
-  color: #fde68a !important;
-}
-
-html.dui-pro-overhaul .app-bg.dy-monitor-focus [data-dui-panel="monitor"] .dy-runtime-session-lock[data-removable="true"] {
-  border-color: rgba(244, 114, 182, .22) !important;
-  background: rgba(244, 114, 182, .050) !important;
-  color: #fbcfe8 !important;
-}
-
-html.dui-pro-overhaul .app-bg.dy-monitor-focus [data-dui-panel="monitor"] .dy-runtime-session-lock[data-stale="false"] {
-  border-color: rgba(125, 211, 252, .18) !important;
-  background: rgba(125, 211, 252, .040) !important;
-  color: #bae6fd !important;
-}
-
-html.dui-pro-overhaul .app-bg.dy-monitor-focus [data-dui-panel="monitor"] .dy-runtime-session-lock span,
-html.dui-pro-overhaul .app-bg.dy-monitor-focus [data-dui-panel="monitor"] .dy-runtime-session-lock strong {
-  min-width: 0 !important;
-  overflow: hidden !important;
-  text-overflow: ellipsis !important;
-  white-space: nowrap !important;
-}
-
-html.dui-pro-overhaul .app-bg.dy-monitor-focus [data-dui-panel="monitor"] .dy-runtime-session-lock strong {
-  color: inherit !important;
-  font-weight: 700 !important;
-  text-align: right !important;
 }
 
 html.dui-pro-overhaul .app-bg.dy-monitor-focus [data-dui-panel="monitor"] .dy-cron-job-header {
@@ -4224,12 +3178,9 @@ html.dui-pro-overhaul .app-bg.dy-monitor-focus [data-dui-panel="monitor"] .dy-cr
 }
 
 html.dui-pro-overhaul .app-bg.dy-monitor-focus [data-dui-panel="monitor"] .dy-channel-activity-stat,
-html.dui-pro-overhaul .app-bg.dy-monitor-focus [data-dui-panel="monitor"] .dy-gateway-status-pill,
 html.dui-pro-overhaul .app-bg.dy-monitor-focus [data-dui-panel="monitor"] .dy-cron-status-badge,
 html.dui-pro-overhaul .app-bg.dy-monitor-focus [data-dui-panel="monitor"] .dy-cron-cadence-badge,
-html.dui-pro-overhaul .app-bg.dy-monitor-focus [data-dui-panel="monitor"] .dy-gateway-action-button,
-html.dui-pro-overhaul .app-bg.dy-monitor-focus [data-dui-panel="monitor"] .dy-cron-cancel-button,
-html.dui-pro-overhaul .app-bg.dy-monitor-focus [data-dui-panel="monitor"] .dy-gateway-log-toggle {
+html.dui-pro-overhaul .app-bg.dy-monitor-focus [data-dui-panel="monitor"] .dy-cron-cancel-button {
   border-radius: 3px !important;
   letter-spacing: 0 !important;
 }
@@ -4282,12 +3233,9 @@ html.dui-pro-overhaul .app-bg.dy-monitor-focus [data-dui-panel="monitor"].dy-mon
 html.dui-pro-overhaul .app-bg.dy-monitor-focus [data-dui-panel="monitor"] *,
 html.dui-pro-overhaul .app-bg.dy-monitor-focus [data-dui-panel="monitor"] *::before,
 html.dui-pro-overhaul .app-bg.dy-monitor-focus [data-dui-panel="monitor"] *::after,
-html.dui-pro-overhaul .app-bg.dy-monitor-focus [data-dui-panel="monitor"].dy-monitor-shell .dy-monitor-health-grid .dy-health-card,
-html.dui-pro-overhaul .app-bg.dy-monitor-focus [data-dui-panel="monitor"].dy-monitor-shell .dy-monitor-health-grid .dy-health-card[data-tone],
 html.dui-pro-overhaul .app-bg.dy-monitor-focus [data-dui-panel="monitor"].dy-monitor-shell .dy-channel-activity-card .dy-gateway-event-list,
 html.dui-pro-overhaul .app-bg.dy-monitor-focus [data-dui-panel="monitor"].dy-monitor-shell .dy-channel-activity-card .dy-monitor-stream-box,
 html.dui-pro-overhaul .app-bg.dy-monitor-focus [data-dui-panel="monitor"].dy-monitor-shell .dy-cron-jobs-card .dy-monitor-stream-box,
-html.dui-pro-overhaul .app-bg.dy-monitor-focus [data-dui-panel="monitor"].dy-monitor-shell .dy-gateway-log-card .dy-monitor-log-box,
 html.dui-pro-overhaul .app-bg.dy-monitor-focus [data-dui-panel="monitor"].dy-monitor-shell :is(.dy-health-card, .dy-monitor-card, .dy-gateway-summary-card, .dy-channel-activity-card, .dy-cron-jobs-card, .dy-gateway-log-card, .dy-health-card, .dy-runtime-cluster, .dy-runtime-datum, .dy-monitor-stream-box, .dy-monitor-log-box, .dy-gateway-event-list, .dy-gateway-event-card, .dy-gateway-activity-line, .dy-cron-job-card, .dy-runtime-session-card, .dy-gateway-plugin-row, .dy-runtime-call-card, .dy-session-meta-chip, .dy-cron-instruction-chip, .dy-monitor-alert, .dy-monitor-empty, .dy-monitor-tab-list, .dy-monitor-tab-list button, .dy-monitor-tools, .dy-monitor-tool-button, .dy-channel-activity-stat, .dy-gateway-status-pill, .dy-cron-status-badge, .dy-cron-cadence-badge, .dy-gateway-action-button, .dy-cron-cancel-button, .dy-gateway-log-toggle, .dy-monitor-gauge-track, .dy-monitor-gauge-fill, .dy-gateway-direction-marker, button, input, select),
 html.dui-pro-overhaul .app-bg.dy-monitor-focus [data-dui-panel="monitor"].dy-monitor-shell :is(.dy-health-card, .dy-monitor-card, .dy-gateway-summary-card, .dy-channel-activity-card, .dy-cron-jobs-card, .dy-gateway-log-card, .dy-health-card, .dy-runtime-cluster, .dy-runtime-datum, .dy-monitor-stream-box, .dy-monitor-log-box, .dy-gateway-event-list, .dy-gateway-event-card, .dy-gateway-activity-line, .dy-cron-job-card, .dy-runtime-session-card, .dy-gateway-plugin-row, .dy-runtime-call-card, .dy-session-meta-chip, .dy-cron-instruction-chip, .dy-monitor-alert, .dy-monitor-empty, .dy-monitor-tab-list, .dy-monitor-tab-list button, .dy-monitor-tools, .dy-monitor-tool-button, .dy-channel-activity-stat, .dy-gateway-status-pill, .dy-cron-status-badge, .dy-cron-cadence-badge, .dy-gateway-action-button, .dy-cron-cancel-button, .dy-gateway-log-toggle, .dy-monitor-gauge-track, .dy-monitor-gauge-fill, .dy-gateway-direction-marker, button, input, select)::before,
 html.dui-pro-overhaul .app-bg.dy-monitor-focus [data-dui-panel="monitor"].dy-monitor-shell :is(.dy-health-card, .dy-monitor-card, .dy-gateway-summary-card, .dy-channel-activity-card, .dy-cron-jobs-card, .dy-gateway-log-card, .dy-health-card, .dy-runtime-cluster, .dy-runtime-datum, .dy-monitor-stream-box, .dy-monitor-log-box, .dy-gateway-event-list, .dy-gateway-event-card, .dy-gateway-activity-line, .dy-cron-job-card, .dy-runtime-session-card, .dy-gateway-plugin-row, .dy-runtime-call-card, .dy-session-meta-chip, .dy-cron-instruction-chip, .dy-monitor-alert, .dy-monitor-empty, .dy-monitor-tab-list, .dy-monitor-tab-list button, .dy-monitor-tools, .dy-monitor-tool-button, .dy-channel-activity-stat, .dy-gateway-status-pill, .dy-cron-status-badge, .dy-cron-cadence-badge, .dy-gateway-action-button, .dy-cron-cancel-button, .dy-gateway-log-toggle, .dy-monitor-gauge-track, .dy-monitor-gauge-fill, .dy-gateway-direction-marker, button, input, select)::after,
@@ -4296,10 +3244,6 @@ html.dui-pro-overhaul [data-dui-panel="plugins"].dy-plugins-panel *,
 html.dui-pro-overhaul [data-dui-panel="plugins"].dy-plugins-panel *::before,
 html.dui-pro-overhaul [data-dui-panel="plugins"].dy-plugins-panel *::after {
   border-radius: 0 !important;
-}
-
-html.dui-pro-overhaul .dy-tab-panel-hidden {
-  display: none !important;
 }
 
 html.dui-pro-overhaul .app-bg.dy-monitor-focus [data-dui-panel="monitor"] .dy-cron-job-actions {
@@ -4432,16 +3376,6 @@ html.dui-pro-overhaul .dy-channel-activity-heading-mark img {
   height: 100%;
   object-fit: contain;
   border-radius: inherit;
-}
-
-html.dui-pro-overhaul .dy-channel-activity-eyebrow {
-  margin: 0 0 5px !important;
-  color: #8de7d3 !important;
-  font-size: 10px !important;
-  font-weight: 800 !important;
-  letter-spacing: .12em !important;
-  line-height: 1 !important;
-  text-transform: uppercase;
 }
 
 html.dui-pro-overhaul .dy-channel-activity-heading h3 {
@@ -4768,17 +3702,6 @@ html.dui-pro-overhaul .app-bg.dy-monitor-focus [data-dui-panel="monitor"] .dy-cr
   stroke-linecap: square;
   stroke-linejoin: miter;
   stroke-width: 1.4;
-}
-
-html.dui-pro-overhaul .dy-cron-panel-eyebrow,
-html.dui-pro-overhaul .app-bg.dy-monitor-focus [data-dui-panel="monitor"] .dy-cron-panel-eyebrow {
-  margin: 0 0 4px !important;
-  color: #8de7d3 !important;
-  font-size: 9px !important;
-  font-weight: 800 !important;
-  letter-spacing: .16em !important;
-  line-height: 1 !important;
-  text-transform: uppercase !important;
 }
 
 html.dui-pro-overhaul .dy-cron-panel-title h3,

@@ -46,6 +46,7 @@ export type GatewayLogClient = {
 type GatewayLogFilesystem = Pick<typeof nodeFs, 'stat' | 'readdir' | 'open'>
 
 type GatewayLogTailSnapshot = {
+  coverage: number
   statKey: string
   signature: string
   entries: GatewayLogEntry[]
@@ -113,8 +114,10 @@ export function createGatewayLogService(options: GatewayLogServiceOptions) {
   let gatewayLogSeq = 0
   let runtimeMonitorHistoryGeneration = 0
   const gatewayLogs: GatewayLogEntry[] = []
-  let externalGatewayLogCache: { expiresAt: number; entries: GatewayLogEntry[] } | null = null
-  let externalChannelActivityCache: { expiresAt: number; entries: GatewayLogEntry[] } | null = null
+  let externalGatewayLogCache: { expiresAt: number; coverage: number; entries: GatewayLogEntry[] } | null = null
+  let gatewayReadInFlight: { coverage: number; generation: number; promise: Promise<GatewayLogEntry[]> } | null = null
+  let externalChannelActivityCache: { expiresAt: number; coverage: number; entries: GatewayLogEntry[] } | null = null
+  let channelReadInFlight: { coverage: number; generation: number; promise: Promise<GatewayLogEntry[]> } | null = null
   let gatewayLogPathDiscoveryCache: { expiresAt: number; paths: string[] } | null = null
   let gatewayRpcLogFailureNotifiedAt = 0
   const gatewayLogTailSnapshots = new Map<string, GatewayLogTailSnapshot>()
@@ -807,17 +810,17 @@ export function createGatewayLogService(options: GatewayLogServiceOptions) {
     }
   }
 
-  async function readTailTextWithSignature(filePath: string, maxBytes = logTailMaxBytes) {
+  async function readTailTextWithSignature(filePath: string, maxBytes = logTailMaxBytes, minimumCoverage = 0) {
     const readGeneration = runtimeMonitorHistoryGeneration
     const stat = await fs.stat(filePath).catch(() => null)
     if (!stat?.isFile() || stat.size <= 0) return null
     const statKey = gatewayLogFileStatKey(stat)
     const cached = gatewayLogTailSnapshots.get(filePath)
-    if (cached?.statKey === statKey) {
+    if (cached && cached.coverage >= minimumCoverage && cached.statKey === statKey) {
       return { raw: '', statKey, signature: cached.signature, cacheHit: true }
     }
     const signature = await gatewayLogFileSignature(filePath, stat)
-    if (cached?.signature === signature) {
+    if (cached && cached.coverage >= minimumCoverage && cached.signature === signature) {
       if (cached.statKey !== statKey) {
         if (readGeneration === runtimeMonitorHistoryGeneration) {
           gatewayLogTailSnapshots.set(filePath, { ...cached, statKey, signature })
@@ -835,7 +838,7 @@ export function createGatewayLogService(options: GatewayLogServiceOptions) {
     const activePaths = new Set(paths)
     const entries: GatewayLogEntry[] = []
     for (const filePath of paths) {
-      const snapshot = await readTailTextWithSignature(filePath).catch(() => null)
+      const snapshot = await readTailTextWithSignature(filePath, logTailMaxBytes, limit).catch(() => null)
       const cached = gatewayLogTailSnapshots.get(filePath)
       if (cached && snapshot?.cacheHit && cached.signature === snapshot.signature) {
         entries.push(...cached.entries)
@@ -854,6 +857,7 @@ export function createGatewayLogService(options: GatewayLogServiceOptions) {
       })
       if (readGeneration === runtimeMonitorHistoryGeneration) {
         gatewayLogTailSnapshots.set(filePath, {
+          coverage: limit,
           statKey: snapshot.statKey,
           signature: snapshot.signature,
           entries: parsedEntries,
@@ -1162,37 +1166,41 @@ export function createGatewayLogService(options: GatewayLogServiceOptions) {
     if (gatewayLogs.length > logLimit) gatewayLogs.length = logLimit
   }
 
-  async function readExternalGatewayLogEntries(limit = 80): Promise<GatewayLogEntry[]> {
-    const now = nowMs()
-    if (externalGatewayLogCache && externalGatewayLogCache.expiresAt > now) {
-      return externalGatewayLogCache.entries.slice(0, limit)
+  async function readExternalGatewayLogEntries(requestedLimit = 80): Promise<GatewayLogEntry[]> {
+    const limit = Math.max(1, Math.min(1000, Math.round(requestedLimit) || 1))
+    if (externalGatewayLogCache && externalGatewayLogCache.expiresAt > nowMs() && externalGatewayLogCache.coverage >= limit) return externalGatewayLogCache.entries.slice(0, limit)
+    if (gatewayReadInFlight?.generation === runtimeMonitorHistoryGeneration) {
+      if (gatewayReadInFlight.coverage >= limit) return gatewayReadInFlight.promise.then((entries) => entries.slice(0, limit))
+      await gatewayReadInFlight.promise
+      return readExternalGatewayLogEntries(limit)
     }
     const readGeneration = runtimeMonitorHistoryGeneration
-    const rpcEntries = await readGatewayRpcLogEntries(limit)
-    const entries = rpcEntries?.length ? rpcEntries : await readGatewayFileLogEntries(limit)
-    if (readGeneration === runtimeMonitorHistoryGeneration) {
-      externalGatewayLogCache = {
-        expiresAt: now + externalLogCacheMs,
-        entries,
-      }
-    }
-    return entries
+    const promise = (async () => {
+      const rpcEntries = await readGatewayRpcLogEntries(limit)
+      const entries = rpcEntries?.length ? rpcEntries : await readGatewayFileLogEntries(limit)
+      if (readGeneration === runtimeMonitorHistoryGeneration) externalGatewayLogCache = { expiresAt: nowMs() + externalLogCacheMs, coverage: limit, entries }
+      return entries
+    })()
+    gatewayReadInFlight = { coverage: limit, generation: readGeneration, promise }
+    try { return await promise } finally { if (gatewayReadInFlight?.promise === promise) gatewayReadInFlight = null }
   }
 
-  async function readExternalChannelActivityEntries(limit = 80): Promise<GatewayLogEntry[]> {
-    const now = nowMs()
-    if (externalChannelActivityCache && externalChannelActivityCache.expiresAt > now) {
-      return externalChannelActivityCache.entries.slice(0, limit)
+  async function readExternalChannelActivityEntries(requestedLimit = 80): Promise<GatewayLogEntry[]> {
+    const limit = Math.max(1, Math.min(1000, Math.round(requestedLimit) || 1))
+    if (externalChannelActivityCache && externalChannelActivityCache.expiresAt > nowMs() && externalChannelActivityCache.coverage >= limit) return externalChannelActivityCache.entries.slice(0, limit)
+    if (channelReadInFlight?.generation === runtimeMonitorHistoryGeneration) {
+      if (channelReadInFlight.coverage >= limit) return channelReadInFlight.promise.then((entries) => entries.slice(0, limit))
+      await channelReadInFlight.promise
+      return readExternalChannelActivityEntries(limit)
     }
     const readGeneration = runtimeMonitorHistoryGeneration
-    const entries = await readClawTalkChannelActivityEntries(limit)
-    if (readGeneration === runtimeMonitorHistoryGeneration) {
-      externalChannelActivityCache = {
-        expiresAt: now + externalLogCacheMs,
-        entries,
-      }
-    }
-    return entries
+    const promise = (async () => {
+      const entries = await readClawTalkChannelActivityEntries(limit)
+      if (readGeneration === runtimeMonitorHistoryGeneration) externalChannelActivityCache = { expiresAt: nowMs() + externalLogCacheMs, coverage: limit, entries }
+      return entries
+    })()
+    channelReadInFlight = { coverage: limit, generation: readGeneration, promise }
+    try { return await promise } finally { if (channelReadInFlight?.promise === promise) channelReadInFlight = null }
   }
 
   function clearRuntimeMonitorHistory() {
@@ -1205,6 +1213,8 @@ export function createGatewayLogService(options: GatewayLogServiceOptions) {
     gatewayLogTailSnapshots.clear()
     externalGatewayLogCache = null
     externalChannelActivityCache = null
+    gatewayReadInFlight = null
+    channelReadInFlight = null
     gatewayLogPathDiscoveryCache = null
     return cleared
   }

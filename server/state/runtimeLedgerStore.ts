@@ -15,6 +15,7 @@ import {
   readDiagnosticRunLedgerTail,
   readGatewayEventLedgerTail,
   readMissionEventLedgerTail,
+  readAllMissionEvents,
   readMissionRecordLedgerTail,
   readMissionReportLedgerTail,
   readRuntimeRunLedgerTail,
@@ -42,6 +43,7 @@ export type RuntimeLedgerAppendOptions = {
 
 export type RuntimeLedgerReadOptions = {
   sqlite?: boolean
+  missionId?: string
 }
 
 export const CONTROL_CENTER_STATE_KEYS = {
@@ -114,6 +116,7 @@ export function createRuntimeLedgerStore(paths: RuntimeLedgerStorePaths) {
       readMissionRecordLedgerTail<T>(limit, options),
     readMissionEvents: <T>(limit: number, options?: RuntimeLedgerReadOptions) =>
       readMissionEventLedgerTail<T>(limit, options),
+    readAllMissionEvents: <T>(missionId: string) => readAllMissionEvents<T>(missionId),
     readMissionReports: <T>(limit: number, options?: RuntimeLedgerReadOptions) =>
       readMissionReportLedgerTail<T>(limit, options),
     readControlCenterState: <T>(stateKey: string, options?: RuntimeLedgerReadOptions) =>

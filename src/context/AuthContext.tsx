@@ -10,11 +10,8 @@ import {
   subscribeAuthToken,
   writeAuthToken,
 } from '../api/authTokenStore'
-import { hasDesktopControlCenterSessionBootstrap, recoverDesktopControlCenterSession } from '../api/desktopSessionRecovery'
 import { AuthContext, type AccountInfo } from './authContextValue'
 
-const DESKTOP_BOOTSTRAP_ATTEMPTS = 4
-const DESKTOP_BOOTSTRAP_RETRY_MS = 450
 const AUTH_STATUS_TIMEOUT_MS = 4_500
 const GOOGLE_LOGIN_POLL_ATTEMPTS = 600
 const GOOGLE_LOGIN_POLL_INTERVAL_MS = 1_000
@@ -28,16 +25,6 @@ type GoogleLoginAttempt = {
 
 function sleep(ms: number) {
   return new Promise((resolve) => window.setTimeout(resolve, ms))
-}
-
-async function bootstrapDesktopSession(isCancelled: () => boolean): Promise<string | null> {
-  for (let attempt = 0; attempt < DESKTOP_BOOTSTRAP_ATTEMPTS; attempt += 1) {
-    if (isCancelled() || isAuthExplicitlySignedOut()) return null
-    const sessionToken = await recoverDesktopControlCenterSession().catch(() => null)
-    if (sessionToken || isCancelled() || isAuthExplicitlySignedOut()) return sessionToken
-    await sleep(DESKTOP_BOOTSTRAP_RETRY_MS * (attempt + 1))
-  }
-  return null
 }
 
 async function ensureGoogleLicenseWasImported(sessionToken: string): Promise<void> {
@@ -55,7 +42,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [token, setToken] = useState<string | null>(() => readAuthToken())
   const [isAuthenticated, setIsAuthenticated] = useState(() => Boolean(readAuthToken()))
   const [account, setAccount] = useState<AccountInfo | null>(null)
-  const [checking, setChecking] = useState(() => !readAuthToken() && hasDesktopControlCenterSessionBootstrap())
+  const [checking, setChecking] = useState(false)
   const authEpochRef = useRef(0)
   const googleLoginAttemptRef = useRef<GoogleLoginAttempt | null>(null)
 
@@ -86,31 +73,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     if (!token) {
-      if (isAuthExplicitlySignedOut() || !hasDesktopControlCenterSessionBootstrap()) {
-        return
-      }
-      let cancelled = false
-      Promise.resolve()
-        .then(async () => {
-          if (!cancelled) setChecking(true)
-          const sessionToken = await bootstrapDesktopSession(() => cancelled)
-          if (!sessionToken || cancelled) return false
-          if (!cancelled) completeLogin(sessionToken, null, { epoch: authEpochRef.current })
-          return true
-        })
-        .catch(() => {
-          if (!cancelled) {
-            clearAuthToken()
-            setToken(null)
-            setIsAuthenticated(false)
-          }
-        })
-        .finally(() => {
-          if (!cancelled) setChecking(false)
-        })
-      return () => {
-        cancelled = true
-      }
+      setChecking(false)
+      return
     }
 
     const controller = new AbortController()

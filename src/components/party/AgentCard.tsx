@@ -1,7 +1,7 @@
-import { memo, useMemo, useState } from 'react'
+import { AvatarFallback } from '../ui/AvatarFallback'
+import { memo, useState } from 'react'
 import type { OpenClawAgent } from '../../types/nexus'
 import { useNexusStore } from '../../store/nexusStore'
-import { clampAgentStat, deriveLevelScaledAttributes } from '../../engine/AgentStatScaling'
 import { agentPortraitSrc } from '../../utils/portrait'
 import type { AgentCardTheme } from '../settings/workspaceSettings'
 
@@ -13,89 +13,36 @@ const BEHAVIOR_LABELS: Record<string, string> = {
   hybrid: 'Hybrid',
 }
 
-const ATTRIBUTE_LABELS: Record<string, string> = {
-  intelligence: 'INT',
-  speed: 'SPD',
-  precision: 'PREC',
-  creativity: 'CRE',
-  stability: 'STAB',
-  compute: 'CPU',
-  parallelism: 'PAR',
-}
 
-const CAPABILITY_LABELS: Record<string, string> = {
-  codeGeneration: 'Code',
-  planning: 'Planning',
-  research: 'Research',
-  orchestration: 'Orchestration',
-  memoryManagement: 'Memory',
-}
-
-function modelTier(modelId = '') {
-  const id = modelId.toLowerCase()
-  if (id.includes('gpt-5') || id.includes('opus') || id.includes('pro') || id.includes('o3')) return 92
-  if (id.includes('gpt-4') || id.includes('sonnet') || id.includes('deepseek') || id.includes('gemini')) return 82
-  if (id.includes('flash') || id.includes('mini') || id.includes('nano') || id.includes('haiku')) return 66
-  return 72
-}
-
-function deriveConfiguredAttributePotential(agent: OpenClawAgent): OpenClawAgent['attributes'] {
-  const primary = agent.model?.primary || ''
-  const fallbackCount = agent.model?.fallbacks?.length || 0
-  const tier = modelTier(primary)
-  const thinking = agent.runtimePolicy?.thinkingDefault || 'off'
-  const thinkingBoost = thinking === 'high' ? 12 : thinking === 'medium' ? 8 : thinking === 'low' ? 4 : thinking === 'minimal' ? 2 : 0
-  const timeout = agent.runtimePolicy?.timeoutSeconds || 90
-  const tick = agent.heartbeat.tickIntervalMs || 30000
-  const idle = agent.heartbeat.idleTimeoutMs || 60000
-  const fastWake = clampAgentStat(100 - Math.log10(Math.max(1000, tick)) * 14)
-  const idleRoom = clampAgentStat(Math.log10(Math.max(5000, idle)) * 18)
-  const capabilityCount = Object.values(agent.mds.capabilities).filter(Boolean).length
-  const toolCount = agent.mds.toolAccess.length + (agent.toolsPolicy?.allow?.length || 0)
-  const sandboxPenalty = agent.sandbox?.mode === 'all' ? 3 : agent.sandbox?.mode === 'non-main' ? 1 : 0
-
-  return {
-    intelligence: clampAgentStat(tier + thinkingBoost + fallbackCount * 2),
-    speed: clampAgentStat(fastWake + (thinking === 'off' ? 10 : thinking === 'minimal' ? 5 : -thinkingBoost) - sandboxPenalty),
-    precision: clampAgentStat(tier * 0.62 + thinkingBoost * 2.1 + idleRoom * 0.22 + (agent.heartbeat.recoveryMode ? 5 : 0)),
-    creativity: clampAgentStat(58 + thinkingBoost * 1.8 + capabilityCount * 4 + (agent.behaviorProfile === 'researcher' ? 8 : 0)),
-    stability: clampAgentStat(58 + idleRoom * 0.32 + (agent.heartbeat.recoveryMode ? 14 : 0) + (agent.heartbeat.continuous ? 4 : 0) - sandboxPenalty),
-    compute: clampAgentStat(tier * 0.72 + Math.min(18, timeout / 120) + fallbackCount * 3 + toolCount),
-    parallelism: clampAgentStat(42 + capabilityCount * 8 + fallbackCount * 5 + (agent.runtimePolicy?.parallelPreferred ? 12 : 0)),
-  }
-}
-
-function hasGenericBaseAttributes(agent: OpenClawAgent): boolean {
-  const values = Object.values(agent.attributes).filter(Number.isFinite)
-  if (values.length < 4) return true
-  const average = values.reduce((sum, value) => sum + value, 0) / values.length
-  const spread = Math.max(...values) - Math.min(...values)
-  return spread <= 8 && average >= 45 && average <= 72
-}
-
-function deriveCardAttributes(agent: OpenClawAgent): OpenClawAgent['attributes'] {
-  return deriveLevelScaledAttributes(
-    agent,
-    deriveConfiguredAttributePotential(agent),
-    hasGenericBaseAttributes(agent) ? 0.76 : 0.36,
-  )
-}
-
-function initials(name: string) {
-  const parts = name.trim().split(/\s+/).filter(Boolean)
-  if (!parts.length) return 'AI'
-  if (parts.length === 1) return parts[0].slice(0, 2).toUpperCase()
-  return `${parts[0][0]}${parts[parts.length - 1][0]}`.toUpperCase()
-}
 
 function portraitSrcForAgent(agent: OpenClawAgent) {
   return agentPortraitSrc(agent.id, agent.portrait)
 }
 
-function shortModelName(modelId = '') {
+function formatModelName(modelId = '') {
   if (!modelId) return 'Unassigned'
   const parts = modelId.split('/').filter(Boolean)
-  return parts[parts.length - 1] || modelId
+  const model = parts[parts.length - 1] || modelId
+  const friendlyModel = model
+    .replace(/(\d+)-(\d+)(?=-|$)/g, '$1.$2')
+    .replace(/[-_:@]+/g, ' ')
+
+  return friendlyModel
+    .split(/\s+/)
+    .filter(Boolean)
+    .map((part) => {
+      const normalized = part.toLowerCase()
+      if (normalized === 'gpt') return 'GPT'
+      if (normalized === 'gemini') return 'Gemini'
+      if (normalized === 'claude') return 'Claude'
+      if (normalized === 'llama') return 'Llama'
+      if (/^o\d+$/i.test(part)) return part.toUpperCase()
+      if (/^\d+(?:\.\d+)?[a-z]+$/i.test(part)) {
+        return part.replace(/[a-z]+$/i, (suffix) => suffix.toUpperCase())
+      }
+      return `${part.slice(0, 1).toUpperCase()}${part.slice(1).toLowerCase()}`
+    })
+    .join(' ')
 }
 
 function shortProviderName(modelId = '') {
@@ -182,42 +129,18 @@ export const AgentCard = memo(function AgentCard({ agent, isSelected, slotNumber
   const denseMode = displayMode === 'grid10'
   const compactMode = displayMode === 'grid8' || denseMode
   const cardMinHeight = listMode ? 'min-h-[124px]' : denseMode ? 'min-h-[360px]' : compactMode ? 'min-h-[310px]' : 'min-h-[390px]'
-  const a = useMemo(() => deriveCardAttributes(agent), [agent])
-  const topStats = useMemo(
-    () => (Object.keys(a) as Array<keyof typeof a>)
-      .slice(0, 6)
-      .map((key) => ({ key, value: a[key] }))
-      .sort((left, right) => right.value - left.value)
-      .slice(0, 3),
-    [a],
-  )
-  const capabilities = useMemo(
-    () => Object.entries(agent.mds.capabilities)
-      .filter(([, enabled]) => enabled)
-      .map(([key]) => CAPABILITY_LABELS[key] || key)
-      .slice(0, 4),
-    [agent.mds.capabilities],
-  )
-  const statCells = topStats.slice(0, 3)
-  const visibleCapabilities = denseMode
-    ? capabilities.slice(0, 3)
-    : listMode
-      ? capabilities.slice(0, 4)
-      : compactMode
-        ? capabilities.slice(0, 1)
-        : capabilities.slice(0, 2)
   const toolCount = agent.mds.toolAccess.length + (agent.toolsPolicy?.allow?.length || 0)
   const heartbeatSeconds = Math.round((agent.heartbeat.tickIntervalMs || 0) / 1_000)
   const listDetailItems = [
     { label: 'Provider', value: shortProviderName(agent.model?.primary) },
-    { label: 'Model', value: shortModelName(agent.model?.primary) },
+    { label: 'Model', value: formatModelName(agent.model?.primary) },
     { label: 'Timing', value: heartbeatSeconds > 0 ? `${heartbeatSeconds}s` : 'off' },
     { label: 'Tools', value: String(toolCount) },
     { label: 'Skills', value: String(agent.unlockedSkills.length) },
     { label: 'Sandbox', value: agent.sandbox?.mode || 'default' },
   ]
   const detailItems = denseMode ? [
-    { label: 'Model', value: shortModelName(agent.model?.primary) },
+    { label: 'Model', value: formatModelName(agent.model?.primary) },
     { label: 'Thinking', value: agent.runtimePolicy?.thinkingDefault || 'off' },
     { label: 'Heartbeat', value: heartbeatSeconds > 0 ? `${heartbeatSeconds}s` : 'off' },
     { label: 'Tools', value: String(toolCount) },
@@ -270,11 +193,7 @@ export const AgentCard = memo(function AgentCard({ agent, isSelected, slotNumber
               />
             </div>
           ) : (
-            <div className="agent-card-placeholder-stage flex h-full w-full items-center justify-center bg-gradient-to-br from-slate-800 via-slate-900 to-slate-950">
-              <div className="agent-card-initials flex h-20 w-20 items-center justify-center border border-white/[0.10] bg-white/[0.04]">
-                <span className="text-3xl font-black text-slate-300/80">{initials(agent.name)}</span>
-              </div>
-            </div>
+            <AvatarFallback name={agent.name} large />
           )}
 
           <div className="agent-card-media-top absolute left-3 right-3 top-3 z-20 flex items-start justify-end gap-2">
@@ -296,9 +215,6 @@ export const AgentCard = memo(function AgentCard({ agent, isSelected, slotNumber
       <div className={listMode ? 'agent-card-body relative z-10 flex min-w-0 flex-1 flex-col p-3' : denseMode ? 'agent-card-body relative z-10 flex flex-1 flex-col p-3 pt-2.5' : compactMode ? 'agent-card-body relative z-10 flex flex-1 flex-col p-3.5 pt-3' : 'agent-card-body relative z-10 flex flex-1 flex-col p-4 pt-3.5'}>
         <div className="agent-card-heading mb-3 flex items-start justify-between gap-3">
           <div className="min-w-0 flex-1">
-            <p className="agent-card-class truncate text-[9px] font-extrabold uppercase leading-none text-white/45">
-              {agent.className}
-            </p>
             <h3 className={`agent-card-name mt-1.5 ${listMode ? 'truncate' : 'line-clamp-2'} text-[18px] font-black leading-tight text-slate-50`}>
               {agent.name}
             </h3>
@@ -324,25 +240,11 @@ export const AgentCard = memo(function AgentCard({ agent, isSelected, slotNumber
           </div>
         </div>
 
-        <div className={listMode ? 'agent-card-stat-matrix agent-card-stat-matrix--list mb-2 grid grid-cols-3 gap-1.5' : 'agent-card-stat-matrix mb-3 grid grid-cols-3 gap-1.5'}>
-          {statCells.map(({ key, value }) => (
-            <div key={key}>
-              <span>{ATTRIBUTE_LABELS[key] || key}</span>
-              <strong>{value}</strong>
-            </div>
-          ))}
-        </div>
-
         <div className={listMode ? 'agent-card-tags mb-2 flex min-h-0 flex-wrap items-start gap-1 overflow-hidden' : denseMode ? 'agent-card-tags mb-2.5 flex min-h-[32px] flex-wrap items-start gap-1 overflow-hidden' : 'agent-card-tags mb-3 flex min-h-[38px] flex-wrap items-start gap-1 overflow-hidden'}>
           <span className="agent-card-tag agent-card-tag--behavior">{BEHAVIOR_LABELS[agent.behaviorProfile] ?? 'Agent'}</span>
-          {visibleCapabilities.map((capability) => (
-            <span className="agent-card-tag" key={capability}>{capability}</span>
-          ))}
-          {inP && displaySlot > 0 && (
-            <span className="agent-card-tag agent-card-tag--slot" aria-label={`Active party slot ${displaySlot}`}>
-              Slot {displaySlot}
-            </span>
-          )}
+          <span className="agent-card-tag agent-card-tag--class" title={agent.className} aria-label={`Class: ${agent.className}`}>
+            {agent.className}
+          </span>
           {thinkingMode && !compactMode && !listMode && <span>Think {agent.runtimePolicy?.thinkingDefault}</span>}
         </div>
 
@@ -351,7 +253,7 @@ export const AgentCard = memo(function AgentCard({ agent, isSelected, slotNumber
             {listDetailItems.map((item) => (
               <div key={item.label}>
                 <span>{item.label}</span>
-                <strong title={item.value}>{item.value}</strong>
+                <strong className={item.label === 'Model' ? 'agent-card-model-value' : undefined} title={item.value}>{item.value}</strong>
               </div>
             ))}
           </div>
@@ -361,7 +263,7 @@ export const AgentCard = memo(function AgentCard({ agent, isSelected, slotNumber
           <div className="agent-card-simple-meta" aria-label="Agent model and runtime summary">
             <div className="agent-card-simple-meta__model" title={agent.model?.primary || 'No primary model assigned'}>
               <span>Model</span>
-              <strong>{shortModelName(agent.model?.primary)}</strong>
+              <strong className="agent-card-model-value">{formatModelName(agent.model?.primary)}</strong>
             </div>
             <div className="agent-card-simple-meta__tools" title={`${toolCount} tools available`}>
               <span>Tools</span>
@@ -375,7 +277,7 @@ export const AgentCard = memo(function AgentCard({ agent, isSelected, slotNumber
             {detailItems.map((item) => (
               <div key={item.label}>
                 <span>{item.label}</span>
-                <strong title={item.value}>{item.value}</strong>
+                <strong className={item.label === 'Model' ? 'agent-card-model-value' : undefined} title={item.value}>{item.value}</strong>
               </div>
             ))}
           </div>
@@ -400,7 +302,6 @@ export const AgentCard = memo(function AgentCard({ agent, isSelected, slotNumber
             className={`agent-card-action-chat inline-flex items-center justify-center gap-1.5 border px-3 py-2 text-[9px] font-black uppercase leading-none transition-all duration-200 ${isSelected ? 'is-selected' : ''}`}
             title={isSelected ? 'Remove from Agent Chat' : 'Add to Agent Chat'}
           >
-            <span aria-hidden="true">{isSelected ? '✓' : '+'}</span>
             Chat
           </button>
           {!listMode ? (

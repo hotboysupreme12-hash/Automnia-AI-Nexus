@@ -277,7 +277,7 @@ html.dui-pro-overhaul.dui-cohesive-ui .dy-human-nav-copy span {
   font-weight: 650 !important;
 }
 
-html.dui-pro-overhaul.dui-cohesive-ui .dy-command-header.relative.mb-7,
+
 html.dui-pro-overhaul.dui-cohesive-ui header.relative.mb-7 {
   min-height: 88px !important;
   margin: 0 0 12px !important;
@@ -289,33 +289,6 @@ html.dui-pro-overhaul.dui-cohesive-ui header.relative.mb-7 {
     linear-gradient(180deg, rgba(255, 255, 255, .04), rgba(255, 255, 255, .01)),
     #0b1320 !important;
   box-shadow: var(--dui-shadow-soft) !important;
-}
-
-html.dui-pro-overhaul.dui-cohesive-ui .dy-command-header::before,
-html.dui-pro-overhaul.dui-cohesive-ui .dy-command-header::after {
-  display: none !important;
-}
-
-html.dui-pro-overhaul.dui-cohesive-ui .dy-command-header-inner {
-  min-height: 60px !important;
-  display: grid !important;
-  grid-template-columns: minmax(220px, 1fr) auto !important;
-  align-items: center !important;
-  gap: 16px !important;
-}
-
-html.dui-pro-overhaul.dui-cohesive-ui .brand-lockup.dy-logo-fixed {
-  flex: 1 1 auto !important;
-  min-width: 0 !important;
-  max-width: 520px !important;
-}
-
-html.dui-pro-overhaul.dui-cohesive-ui .brand-lockup.dy-logo-fixed .dy-logo-lockup {
-  width: min(100%, 430px) !important;
-  height: 58px !important;
-  object-fit: contain !important;
-  object-position: left center !important;
-  filter: saturate(1.04) contrast(1.04) drop-shadow(0 10px 22px rgba(0, 0, 0, .30)) !important;
 }
 
 html.dui-pro-overhaul.dui-cohesive-ui .dy-status-grid {
@@ -361,10 +334,6 @@ html.dui-pro-overhaul.dui-cohesive-ui .dy-status-label {
   color: var(--dui-muted) !important;
   font-weight: 700 !important;
   text-transform: none !important;
-}
-
-html.dui-pro-overhaul.dui-cohesive-ui .dy-top-tabs {
-  display: none !important;
 }
 
 html.dui-pro-overhaul.dui-cohesive-ui .dy-tab-content {
@@ -979,8 +948,6 @@ html.dui-pro-overhaul.dui-cohesive-ui .dy-command-console__header {
 }
 
 html.dui-pro-overhaul.dui-cohesive-ui .dy-command-console__mark,
-html.dui-pro-overhaul.dui-cohesive-ui .dy-command-console__stat,
-html.dui-pro-overhaul.dui-cohesive-ui .dy-command-console__pill,
 html.dui-pro-overhaul.dui-cohesive-ui .dy-command-target-chip,
 html.dui-pro-overhaul.dui-cohesive-ui .dy-command-busy,
 html.dui-pro-overhaul.dui-cohesive-ui .dy-command-message-chip {
@@ -1063,7 +1030,7 @@ html.dui-pro-overhaul.dui-cohesive-ui .app-bg.dy-monitor-focus {
     linear-gradient(135deg, #05070c 0%, #0a0d17 48%, #070b12 100%) !important;
 }
 
-html.dui-pro-overhaul.dui-cohesive-ui .dy-monitor-header,
+
 html.dui-pro-overhaul.dui-cohesive-ui .dy-monitor-tabs {
   border-color: var(--dui-line-soft) !important;
   background:
@@ -1074,61 +1041,6 @@ html.dui-pro-overhaul.dui-cohesive-ui .dy-monitor-tabs {
 html.dui-pro-overhaul.dui-cohesive-ui .dy-monitor-body {
   background: #081018 !important;
   padding: 12px !important;
-}
-
-html.dui-pro-overhaul.dui-cohesive-ui .dy-monitor-health-grid {
-  gap: 10px !important;
-}
-
-html.dui-pro-overhaul.dui-cohesive-ui .dy-monitor-health-grid .dy-health-card {
-  --dy-health-accent: var(--dui-cyan);
-  display: grid !important;
-  grid-template-columns: 36px minmax(96px, 132px) minmax(120px, 1fr) !important;
-  min-height: 78px !important;
-  align-items: center !important;
-  gap: 12px !important;
-  border-radius: var(--dui-radius) !important;
-  border-color: color-mix(in srgb, var(--dy-health-accent) 34%, rgba(255, 255, 255, .12)) !important;
-  background:
-    linear-gradient(180deg, color-mix(in srgb, var(--dy-health-accent) 11%, rgba(255, 255, 255, .026)), rgba(255, 255, 255, .008)),
-    #101824 !important;
-  color: var(--dy-health-accent) !important;
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, .04) !important;
-}
-
-html.dui-pro-overhaul.dui-cohesive-ui .dy-monitor-health-grid .dy-health-card:nth-child(1) {
-  --dy-health-accent: var(--dui-cyan);
-}
-
-html.dui-pro-overhaul.dui-cohesive-ui .dy-monitor-health-grid .dy-health-card:nth-child(2) {
-  --dy-health-accent: var(--dui-lime);
-}
-
-html.dui-pro-overhaul.dui-cohesive-ui .dy-monitor-health-grid .dy-health-card:nth-child(3) {
-  --dy-health-accent: var(--dui-violet);
-}
-
-html.dui-pro-overhaul.dui-cohesive-ui .dy-monitor-health-grid .dy-health-card:nth-child(4) {
-  --dy-health-accent: var(--dui-rose);
-}
-
-html.dui-pro-overhaul.dui-cohesive-ui .dy-health-label {
-  color: color-mix(in srgb, var(--dy-health-accent) 42%, #a8b6c0) !important;
-  font-size: 10px !important;
-  font-weight: 760 !important;
-  text-transform: none !important;
-}
-
-html.dui-pro-overhaul.dui-cohesive-ui .dy-health-value {
-  color: var(--dui-text) !important;
-  font-size: 22px !important;
-  font-weight: 820 !important;
-  text-shadow: none !important;
-}
-
-html.dui-pro-overhaul.dui-cohesive-ui .dy-health-sparkline {
-  color: var(--dy-health-accent) !important;
-  opacity: .82 !important;
 }
 
 html.dui-pro-overhaul.dui-cohesive-ui .dy-monitor-tabbar {
@@ -1181,20 +1093,12 @@ html.dui-pro-overhaul.dui-cohesive-ui .app-bg.dy-monitor-focus .dy-gateway-layou
   overflow: visible !important;
 }
 
-html.dui-pro-overhaul.dui-cohesive-ui .dy-gateway-summary-card {
-  grid-area: summary !important;
-}
-
 html.dui-pro-overhaul.dui-cohesive-ui .dy-channel-activity-card {
   grid-area: activity !important;
 }
 
 html.dui-pro-overhaul.dui-cohesive-ui .dy-cron-jobs-card {
   grid-area: jobs !important;
-}
-
-html.dui-pro-overhaul.dui-cohesive-ui .dy-gateway-log-card {
-  grid-area: log !important;
 }
 
 html.dui-pro-overhaul.dui-cohesive-ui .dy-monitor-shell :is(
@@ -1242,21 +1146,12 @@ html.dui-pro-overhaul.dui-cohesive-ui .dy-monitor-shell :is(
 }
 
 html.dui-pro-overhaul.dui-cohesive-ui .dy-monitor-stream-box,
-html.dui-pro-overhaul.dui-cohesive-ui .dy-monitor-log-box,
 html.dui-pro-overhaul.dui-cohesive-ui .dy-gateway-event-list {
   background: #080f17 !important;
 }
 
-html.dui-pro-overhaul.dui-cohesive-ui .dy-runtime-stat-grid,
-html.dui-pro-overhaul.dui-cohesive-ui .dy-runtime-meta-grid {
-  gap: 8px !important;
-  border: 0 !important;
-}
 
-html.dui-pro-overhaul.dui-cohesive-ui .dy-runtime-stat,
-html.dui-pro-overhaul.dui-cohesive-ui .dy-runtime-meta-item,
 html.dui-pro-overhaul.dui-cohesive-ui .dy-channel-activity-stat,
-html.dui-pro-overhaul.dui-cohesive-ui .dy-gateway-status-pill,
 html.dui-pro-overhaul.dui-cohesive-ui .dy-cron-status-badge,
 html.dui-pro-overhaul.dui-cohesive-ui .dy-cron-cadence-badge {
   border-radius: var(--dui-radius-sm) !important;
@@ -1265,25 +1160,25 @@ html.dui-pro-overhaul.dui-cohesive-ui .dy-cron-cadence-badge {
   color: #c7d5df !important;
 }
 
-html.dui-pro-overhaul.dui-cohesive-ui .dy-gateway-action-button[data-tone="cyan"],
+
 html.dui-pro-overhaul.dui-cohesive-ui .dy-channel-activity-stat[data-direction="inbound"] {
   border-color: rgba(99, 217, 232, .28) !important;
   color: #c9f8ff !important;
 }
 
-html.dui-pro-overhaul.dui-cohesive-ui .dy-gateway-status-pill[data-tone="emerald"],
+
 html.dui-pro-overhaul.dui-cohesive-ui .dy-channel-activity-stat[data-state="active"] {
   border-color: rgba(116, 226, 165, .28) !important;
   color: #d4f9e2 !important;
 }
 
-html.dui-pro-overhaul.dui-cohesive-ui .dy-gateway-status-pill[data-tone="amber"],
+
 html.dui-pro-overhaul.dui-cohesive-ui .dy-channel-activity-stat[data-direction="system"] {
   border-color: rgba(244, 200, 102, .30) !important;
   color: #ffe5aa !important;
 }
 
-html.dui-pro-overhaul.dui-cohesive-ui .dy-gateway-status-pill[data-tone="rose"],
+
 html.dui-pro-overhaul.dui-cohesive-ui .dy-cron-cancel-button {
   border-color: rgba(255, 114, 128, .32) !important;
   color: #ffd2d7 !important;
@@ -1360,15 +1255,11 @@ html.dui-pro-overhaul.dui-cohesive-ui [data-dui-panel="missions"].dui-mission-sc
   box-shadow: var(--dui-shadow) !important;
 }
 
-html.dui-pro-overhaul.dui-cohesive-ui .dui-mission-hero,
+
 html.dui-pro-overhaul.dui-cohesive-ui .dui-mission-main,
 html.dui-pro-overhaul.dui-cohesive-ui .dui-mission-sidebar,
 html.dui-pro-overhaul.dui-cohesive-ui .dui-mission-history,
-html.dui-pro-overhaul.dui-cohesive-ui [data-dui-panel="missions"] .dui-card,
-html.dui-pro-overhaul.dui-cohesive-ui [data-dui-panel="missions"] .dui-readiness-card,
-html.dui-pro-overhaul.dui-cohesive-ui [data-dui-panel="missions"] .dui-hero-stats,
-html.dui-pro-overhaul.dui-cohesive-ui .dy-template-rail,
-html.dui-pro-overhaul.dui-cohesive-ui .dy-launch-control-card {
+html.dui-pro-overhaul.dui-cohesive-ui [data-dui-panel="missions"] .dui-card {
   border-radius: var(--dui-radius) !important;
   border-color: rgba(185, 198, 204, .10) !important;
   background: #030406 !important;
@@ -1441,11 +1332,6 @@ html.dui-pro-overhaul.dui-cohesive-ui .dui-option-art::before {
   border-radius: 11px !important;
 }
 
-html.dui-pro-overhaul.dui-cohesive-ui .dui-template-icon {
-  width: 44px !important;
-  height: 44px !important;
-}
-
 html.dui-pro-overhaul.dui-cohesive-ui .dui-flat-glyph {
   width: 38px !important;
   height: 38px !important;
@@ -1482,28 +1368,6 @@ html.dui-pro-overhaul.dui-cohesive-ui .dui-option[aria-pressed="true"] .dui-opti
     0 0 14px rgba(var(--dui-option-rgb), .13) !important;
 }
 
-html.dui-pro-overhaul.dui-cohesive-ui .dy-template-grid {
-  gap: 8px !important;
-  padding: 8px !important;
-  background: transparent !important;
-}
-
-html.dui-pro-overhaul.dui-cohesive-ui .dy-template-option {
-  min-height: 88px !important;
-  border: 1px solid var(--dui-line-soft) !important;
-  border-radius: var(--dui-radius-sm) !important;
-  background: #0b121b !important;
-  padding: 9px !important;
-}
-
-html.dui-pro-overhaul.dui-cohesive-ui .dy-template-option:hover,
-html.dui-pro-overhaul.dui-cohesive-ui .dy-template-option.is-active {
-  border-color: rgba(243, 93, 187, .36) !important;
-  background:
-    linear-gradient(180deg, rgba(243, 93, 187, .09), rgba(255, 255, 255, .010)),
-    #141a27 !important;
-}
-
 html.dui-pro-overhaul.dui-cohesive-ui .dy-colored-range {
   accent-color: var(--dui-pink) !important;
 }
@@ -1526,7 +1390,6 @@ html.dui-pro-overhaul.dui-cohesive-ui .dui-recruit-backdrop {
 }
 
 html.dui-pro-overhaul.dui-cohesive-ui .dui-recruit-form .dui-recruit-section,
-html.dui-pro-overhaul.dui-cohesive-ui .dui-recruit-preview,
 html.dui-pro-overhaul.dui-cohesive-ui [data-editor-panel] > div,
 html.dui-pro-overhaul.dui-cohesive-ui [data-editor-card] {
   border-radius: var(--dui-radius) !important;
@@ -1667,19 +1530,8 @@ html.dui-pro-overhaul.dui-cohesive-ui .dy-agents-workspace {
   align-items: stretch !important;
 }
 
-html.dui-pro-overhaul.dui-cohesive-ui .dy-agents-view-controls {
-  display: flex !important;
-  grid-area: controls !important;
-  justify-content: flex-end !important;
-  min-width: 0 !important;
-}
-
 html.dui-pro-overhaul.dui-cohesive-ui .dy-active-party-pane {
   grid-area: party !important;
-  min-width: 0 !important;
-}
-
-html.dui-pro-overhaul.dui-cohesive-ui .dy-agents-main-column {
   min-width: 0 !important;
 }
 
@@ -1757,8 +1609,6 @@ html.dui-pro-overhaul.dui-cohesive-ui .dy-human-nav-icon-img {
 
 html.dui-pro-overhaul.dui-cohesive-ui .dy-status-chip,
 html.dui-pro-overhaul.dui-cohesive-ui .dy-command-console__mark,
-html.dui-pro-overhaul.dui-cohesive-ui .dy-command-console__stat,
-html.dui-pro-overhaul.dui-cohesive-ui .dy-command-console__pill,
 html.dui-pro-overhaul.dui-cohesive-ui .dy-command-target-chip,
 html.dui-pro-overhaul.dui-cohesive-ui [data-agent-view-toggle],
 html.dui-pro-overhaul.dui-cohesive-ui [data-agent-control],
@@ -1927,7 +1777,6 @@ html.dui-pro-overhaul.dui-cohesive-ui .grid-overlay {
 }
 
 html.dui-pro-overhaul.dui-cohesive-ui .dy-human-rail,
-html.dui-pro-overhaul.dui-cohesive-ui .dy-command-header.relative.mb-7,
 html.dui-pro-overhaul.dui-cohesive-ui :is([data-dui-panel], [data-chat-panel="true"], .glass-card, .dy-monitor-card, .dy-plugins-panel, .dui-mission-screen) {
   background:
     linear-gradient(180deg, rgba(255, 255, 255, .030), rgba(255, 255, 255, .006) 52%, rgba(0, 0, 0, .14)),
@@ -1935,10 +1784,9 @@ html.dui-pro-overhaul.dui-cohesive-ui :is([data-dui-panel], [data-chat-panel="tr
   border-color: rgba(196, 205, 212, .16) !important;
 }
 
-html.dui-pro-overhaul.dui-cohesive-ui .brand-lockup.dy-logo-fixed .dy-logo-lockup,
+
 html.dui-pro-overhaul.dui-cohesive-ui .dy-human-rail img,
-html.dui-pro-overhaul.dui-cohesive-ui .dy-human-nav-icon-img,
-html.dui-pro-overhaul.dui-cohesive-ui .dy-status-dot {
+html.dui-pro-overhaul.dui-cohesive-ui .dy-human-nav-icon-img {
   filter: grayscale(.62) saturate(.42) brightness(1.02) contrast(.96) !important;
 }
 
@@ -1989,43 +1837,13 @@ html.dui-pro-overhaul.dui-cohesive-ui .app-bg.dy-monitor-focus [data-dui-panel="
   box-shadow: var(--dui-shadow) !important;
 }
 
-html.dui-pro-overhaul.dui-cohesive-ui .dy-monitor-header,
+
 html.dui-pro-overhaul.dui-cohesive-ui .dy-monitor-tabs,
 html.dui-pro-overhaul.dui-cohesive-ui .dy-monitor-body {
   background:
     linear-gradient(180deg, rgba(255, 255, 255, .026), rgba(255, 255, 255, .006)),
     #0d1117 !important;
   border-color: rgba(196, 205, 212, .10) !important;
-}
-
-html.dui-pro-overhaul.dui-cohesive-ui .dy-monitor-health-grid .dy-health-card,
-html.dui-pro-overhaul.dui-cohesive-ui .dy-monitor-health-grid .dy-health-card:nth-child(n) {
-  --dy-health-accent: #c9d0d5 !important;
-  border-color: rgba(198, 207, 214, .16) !important;
-  background:
-    linear-gradient(180deg, rgba(255, 255, 255, .032), rgba(255, 255, 255, .006)),
-    #151b23 !important;
-  color: #d4dade !important;
-}
-
-html.dui-pro-overhaul.dui-cohesive-ui .dy-health-icon,
-html.dui-pro-overhaul.dui-cohesive-ui .dy-health-label,
-html.dui-pro-overhaul.dui-cohesive-ui .dy-health-sparkline {
-  color: #aeb7be !important;
-}
-
-html.dui-pro-overhaul.dui-cohesive-ui .dy-health-sparkline-grid {
-  stroke: rgba(198, 207, 214, .10) !important;
-}
-
-html.dui-pro-overhaul.dui-cohesive-ui .dy-health-sparkline-line,
-html.dui-pro-overhaul.dui-cohesive-ui .dy-health-sparkline-dot {
-  stroke: #c8d0d6 !important;
-  fill: #c8d0d6 !important;
-}
-
-html.dui-pro-overhaul.dui-cohesive-ui .dy-health-sparkline-area {
-  opacity: .16 !important;
 }
 
 html.dui-pro-overhaul.dui-cohesive-ui .dy-monitor-tab-list,
@@ -2426,10 +2244,9 @@ html.dui-pro-overhaul.dui-cohesive-ui {
   --dui-focus: 0 0 0 3px rgba(240, 186, 99, .18);
 }
 
-html.dui-pro-overhaul.dui-cohesive-ui .brand-lockup.dy-logo-fixed .dy-logo-lockup,
+
 html.dui-pro-overhaul.dui-cohesive-ui .dy-human-rail img,
-html.dui-pro-overhaul.dui-cohesive-ui .dy-human-nav-icon-img,
-html.dui-pro-overhaul.dui-cohesive-ui .dy-status-dot {
+html.dui-pro-overhaul.dui-cohesive-ui .dy-human-nav-icon-img {
   filter: saturate(1.08) brightness(1.04) contrast(1.01) !important;
 }
 
@@ -2524,37 +2341,6 @@ html.dui-pro-overhaul.dui-cohesive-ui [class*="bg-cyan"] {
   background-color: rgba(142, 232, 189, .075) !important;
 }
 
-html.dui-pro-overhaul.dui-cohesive-ui .dy-monitor-health-grid .dy-health-card:nth-child(1) {
-  --dy-health-accent: #f0ba63 !important;
-  border-color: rgba(240, 186, 99, .24) !important;
-}
-
-html.dui-pro-overhaul.dui-cohesive-ui .dy-monitor-health-grid .dy-health-card:nth-child(2) {
-  --dy-health-accent: #7be0b3 !important;
-  border-color: rgba(123, 224, 179, .22) !important;
-}
-
-html.dui-pro-overhaul.dui-cohesive-ui .dy-monitor-health-grid .dy-health-card:nth-child(3) {
-  --dy-health-accent: #a68cff !important;
-  border-color: rgba(166, 140, 255, .22) !important;
-}
-
-html.dui-pro-overhaul.dui-cohesive-ui .dy-monitor-health-grid .dy-health-card:nth-child(4) {
-  --dy-health-accent: #ee6aaa !important;
-  border-color: rgba(238, 106, 170, .22) !important;
-}
-
-html.dui-pro-overhaul.dui-cohesive-ui .dy-health-card .dy-health-icon,
-html.dui-pro-overhaul.dui-cohesive-ui .dy-health-card .dy-health-sparkline {
-  color: var(--dy-health-accent) !important;
-}
-
-html.dui-pro-overhaul.dui-cohesive-ui .dy-health-card .dy-health-sparkline-line,
-html.dui-pro-overhaul.dui-cohesive-ui .dy-health-card .dy-health-sparkline-dot {
-  stroke: var(--dy-health-accent) !important;
-  fill: var(--dy-health-accent) !important;
-}
-
 html.dui-pro-overhaul.dui-cohesive-ui .dy-monitor-tab-list button[data-active="true"],
 html.dui-pro-overhaul.dui-cohesive-ui .dy-monitor-tool-button:hover {
   border-color: rgba(240, 186, 99, .30) !important;
@@ -2567,17 +2353,7 @@ html.dui-pro-overhaul.dui-cohesive-ui .dy-monitor-gauge-fill {
   background: linear-gradient(90deg, #f0ba63, #7be0b3 58%, #a68cff) !important;
 }
 
-html.dui-pro-overhaul.dui-cohesive-ui .app-bg.dy-monitor-focus [data-dui-panel="monitor"].dy-monitor-shell .dy-gateway-action-button,
-html.dui-pro-overhaul.dui-cohesive-ui .app-bg.dy-monitor-focus [data-dui-panel="monitor"].dy-monitor-shell .dy-gateway-action-button[class*="cyan"] {
-  border-color: rgba(123, 224, 179, .26) !important;
-  background:
-    linear-gradient(180deg, rgba(123, 224, 179, .10), rgba(255, 255, 255, .010)),
-    #111820 !important;
-  color: #a7f0cc !important;
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, .04) !important;
-}
 
-html.dui-pro-overhaul.dui-cohesive-ui .app-bg.dy-monitor-focus [data-dui-panel="monitor"].dy-monitor-shell .dy-gateway-action-button[class*="rose"],
 html.dui-pro-overhaul.dui-cohesive-ui .app-bg.dy-monitor-focus [data-dui-panel="monitor"].dy-monitor-shell .dy-cron-cancel-button {
   border-color: rgba(239, 116, 128, .28) !important;
   background:
@@ -2595,50 +2371,6 @@ html.dui-pro-overhaul.dui-cohesive-ui .app-bg.dy-monitor-focus [data-dui-panel="
   box-shadow:
     inset 0 -2px 0 rgba(240, 186, 99, .82),
     inset 0 1px 0 rgba(255, 255, 255, .06) !important;
-}
-
-html.dui-pro-overhaul.dui-cohesive-ui .app-bg.dy-monitor-focus [data-dui-panel="monitor"].dy-monitor-shell .dy-monitor-health-grid .dy-health-card:nth-child(1) {
-  --dy-health-accent: #f0ba63 !important;
-  border-color: rgba(240, 186, 99, .30) !important;
-  background:
-    linear-gradient(180deg, rgba(240, 186, 99, .080), rgba(255, 255, 255, .010)),
-    #151b23 !important;
-}
-
-html.dui-pro-overhaul.dui-cohesive-ui .app-bg.dy-monitor-focus [data-dui-panel="monitor"].dy-monitor-shell .dy-monitor-health-grid .dy-health-card:nth-child(2) {
-  --dy-health-accent: #7be0b3 !important;
-  border-color: rgba(123, 224, 179, .28) !important;
-  background:
-    linear-gradient(180deg, rgba(123, 224, 179, .070), rgba(255, 255, 255, .010)),
-    #151b23 !important;
-}
-
-html.dui-pro-overhaul.dui-cohesive-ui .app-bg.dy-monitor-focus [data-dui-panel="monitor"].dy-monitor-shell .dy-monitor-health-grid .dy-health-card:nth-child(3) {
-  --dy-health-accent: #a68cff !important;
-  border-color: rgba(166, 140, 255, .28) !important;
-  background:
-    linear-gradient(180deg, rgba(166, 140, 255, .070), rgba(255, 255, 255, .010)),
-    #151b23 !important;
-}
-
-html.dui-pro-overhaul.dui-cohesive-ui .app-bg.dy-monitor-focus [data-dui-panel="monitor"].dy-monitor-shell .dy-monitor-health-grid .dy-health-card:nth-child(4) {
-  --dy-health-accent: #ee6aaa !important;
-  border-color: rgba(238, 106, 170, .28) !important;
-  background:
-    linear-gradient(180deg, rgba(238, 106, 170, .070), rgba(255, 255, 255, .010)),
-    #151b23 !important;
-}
-
-html.dui-pro-overhaul.dui-cohesive-ui .app-bg.dy-monitor-focus [data-dui-panel="monitor"].dy-monitor-shell .dy-health-card .dy-health-icon,
-html.dui-pro-overhaul.dui-cohesive-ui .app-bg.dy-monitor-focus [data-dui-panel="monitor"].dy-monitor-shell .dy-health-card .dy-health-sparkline,
-html.dui-pro-overhaul.dui-cohesive-ui .app-bg.dy-monitor-focus [data-dui-panel="monitor"].dy-monitor-shell .dy-health-card .dy-health-value {
-  color: var(--dy-health-accent) !important;
-}
-
-html.dui-pro-overhaul.dui-cohesive-ui .app-bg.dy-monitor-focus [data-dui-panel="monitor"].dy-monitor-shell .dy-health-card .dy-health-sparkline-line,
-html.dui-pro-overhaul.dui-cohesive-ui .app-bg.dy-monitor-focus [data-dui-panel="monitor"].dy-monitor-shell .dy-health-card .dy-health-sparkline-dot {
-  stroke: var(--dy-health-accent) !important;
-  fill: var(--dy-health-accent) !important;
 }
 
 @media (min-width: 1180px) {
@@ -2679,10 +2411,9 @@ html.dui-pro-overhaul.dui-cohesive-ui .app-bg.dy-monitor-focus [data-dui-panel="
     min-height: 480px !important;
   }
 
-  html.dui-pro-overhaul.dui-cohesive-ui .dy-gateway-summary-card,
+  
   html.dui-pro-overhaul.dui-cohesive-ui .dy-channel-activity-card,
-  html.dui-pro-overhaul.dui-cohesive-ui .dy-cron-jobs-card,
-  html.dui-pro-overhaul.dui-cohesive-ui .dy-gateway-log-card {
+  html.dui-pro-overhaul.dui-cohesive-ui .dy-cron-jobs-card {
     grid-area: auto !important;
   }
 }
@@ -2734,31 +2465,12 @@ html.dui-pro-overhaul.dui-cohesive-ui .app-bg.dy-monitor-focus [data-dui-panel="
     display: none !important;
   }
 
-  html.dui-pro-overhaul.dui-cohesive-ui .dy-command-header-inner {
-    grid-template-columns: minmax(0, 1fr) !important;
-  }
-
   html.dui-pro-overhaul.dui-cohesive-ui .dy-status-grid {
     justify-content: flex-start !important;
-  }
-
-  html.dui-pro-overhaul.dui-cohesive-ui .dy-monitor-health-grid .dy-health-card {
-    grid-template-columns: 32px minmax(0, 1fr) !important;
-  }
-
-  html.dui-pro-overhaul.dui-cohesive-ui .dy-health-sparkline {
-    display: none !important;
   }
 }
 
 @media (max-width: 640px) {
-  html.dui-pro-overhaul.dui-cohesive-ui .dy-command-header.relative.mb-7 {
-    padding: 12px !important;
-  }
-
-  html.dui-pro-overhaul.dui-cohesive-ui .brand-lockup.dy-logo-fixed .dy-logo-lockup {
-    height: 46px !important;
-  }
 
   html.dui-pro-overhaul.dui-cohesive-ui [data-dui-panel="active-party"] .active-party-grid {
     grid-template-columns: minmax(0, 1fr) !important;
@@ -2996,7 +2708,6 @@ html.dui-pro-overhaul.dui-cohesive-ui .grid-overlay {
 }
 
 html.dui-pro-overhaul.dui-cohesive-ui .dy-human-rail,
-html.dui-pro-overhaul.dui-cohesive-ui .dy-command-header.relative.mb-7,
 html.dui-pro-overhaul.dui-cohesive-ui header.relative.mb-7,
 html.dui-pro-overhaul.dui-cohesive-ui :is(
   [data-dui-panel],
@@ -3018,7 +2729,6 @@ html.dui-pro-overhaul.dui-cohesive-ui :is(
 }
 
 html.dui-pro-overhaul.dui-cohesive-ui .dy-human-rail-head,
-html.dui-pro-overhaul.dui-cohesive-ui .dy-command-header.relative.mb-7,
 html.dui-pro-overhaul.dui-cohesive-ui [data-dui-panel="agent-registry"] > div:first-child,
 html.dui-pro-overhaul.dui-cohesive-ui [data-dui-panel="active-party"] .active-party-head,
 html.dui-pro-overhaul.dui-cohesive-ui .dy-command-console__header,
@@ -3217,8 +2927,6 @@ html.dui-pro-overhaul.dui-cohesive-ui .dy-command-messages,
 html.dui-pro-overhaul.dui-cohesive-ui .dy-command-message,
 html.dui-pro-overhaul.dui-cohesive-ui .dy-command-message-body,
 html.dui-pro-overhaul.dui-cohesive-ui .dy-command-console__mark,
-html.dui-pro-overhaul.dui-cohesive-ui .dy-command-console__stat,
-html.dui-pro-overhaul.dui-cohesive-ui .dy-command-console__pill,
 html.dui-pro-overhaul.dui-cohesive-ui .dy-command-target-chip,
 html.dui-pro-overhaul.dui-cohesive-ui .dy-command-busy,
 html.dui-pro-overhaul.dui-cohesive-ui .dy-command-message-chip,
@@ -3607,43 +3315,6 @@ html.dui-pro-overhaul.dui-cohesive-ui .app-bg.dy-monitor-focus [data-dui-panel="
   filter: none !important;
 }
 
-html.dui-pro-overhaul.dui-cohesive-ui [data-dui-panel="monitor"] .dy-monitor-health-grid .dy-health-card,
-html.dui-pro-overhaul.dui-cohesive-ui [data-dui-panel="monitor"] .dy-monitor-health-grid .dy-health-card[data-tone],
-html.dui-pro-overhaul.dui-cohesive-ui [data-dui-panel="monitor"] .dy-monitor-health-grid .dy-health-card:nth-child(n),
-html.dui-pro-overhaul.dui-cohesive-ui .app-bg.dy-monitor-focus [data-dui-panel="monitor"].dy-monitor-shell .dy-monitor-health-grid .dy-health-card,
-html.dui-pro-overhaul.dui-cohesive-ui .app-bg.dy-monitor-focus [data-dui-panel="monitor"].dy-monitor-shell .dy-monitor-health-grid .dy-health-card[data-tone],
-html.dui-pro-overhaul.dui-cohesive-ui .app-bg.dy-monitor-focus [data-dui-panel="monitor"].dy-monitor-shell .dy-monitor-health-grid .dy-health-card:nth-child(n) {
-  --dy-health-accent: #c8cbcc !important;
-  border-color: var(--dy-monitor-gray-line) !important;
-  background: var(--dy-monitor-gray-card) !important;
-  background-image: none !important;
-  color: var(--dy-monitor-gray-copy) !important;
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, .030) !important;
-}
-
-html.dui-pro-overhaul.dui-cohesive-ui [data-dui-panel="monitor"] :where(.dy-health-icon, .dy-health-label, .dy-health-value, .dy-health-sparkline),
-html.dui-pro-overhaul.dui-cohesive-ui .app-bg.dy-monitor-focus [data-dui-panel="monitor"].dy-monitor-shell :where(.dy-health-icon, .dy-health-label, .dy-health-value, .dy-health-sparkline) {
-  color: #d3d6d7 !important;
-  text-shadow: none !important;
-}
-
-html.dui-pro-overhaul.dui-cohesive-ui [data-dui-panel="monitor"] :where(.dy-health-sparkline-line, .dy-health-sparkline-dot, .dy-health-sparkline polyline),
-html.dui-pro-overhaul.dui-cohesive-ui .app-bg.dy-monitor-focus [data-dui-panel="monitor"].dy-monitor-shell :where(.dy-health-sparkline-line, .dy-health-sparkline-dot, .dy-health-sparkline polyline) {
-  stroke: #c8cbcc !important;
-  fill: #c8cbcc !important;
-  filter: none !important;
-}
-
-html.dui-pro-overhaul.dui-cohesive-ui [data-dui-panel="monitor"] .dy-health-sparkline-grid,
-html.dui-pro-overhaul.dui-cohesive-ui .app-bg.dy-monitor-focus [data-dui-panel="monitor"].dy-monitor-shell .dy-health-sparkline-grid {
-  stroke: rgba(214, 214, 214, .18) !important;
-}
-
-html.dui-pro-overhaul.dui-cohesive-ui [data-dui-panel="monitor"] .dy-health-sparkline-area,
-html.dui-pro-overhaul.dui-cohesive-ui .app-bg.dy-monitor-focus [data-dui-panel="monitor"].dy-monitor-shell .dy-health-sparkline-area {
-  opacity: .36 !important;
-}
-
 html.dui-pro-overhaul.dui-cohesive-ui [data-dui-panel="monitor"] :where(
   .dy-monitor-card,
   .dy-gateway-summary-card,
@@ -3729,19 +3400,6 @@ html.dui-pro-overhaul.dui-cohesive-ui .app-bg.dy-monitor-focus [data-dui-panel="
   box-shadow: inset 0 1px 0 rgba(255, 255, 255, .030) !important;
 }
 
-html.dui-pro-overhaul.dui-cohesive-ui .app-bg.dy-monitor-focus [data-dui-panel="monitor"].dy-monitor-shell .dy-gateway-action-button,
-html.dui-pro-overhaul.dui-cohesive-ui .app-bg.dy-monitor-focus [data-dui-panel="monitor"].dy-monitor-shell .dy-gateway-action-button[class*="cyan"],
-html.dui-pro-overhaul.dui-cohesive-ui .app-bg.dy-monitor-focus [data-dui-panel="monitor"].dy-monitor-shell .dy-gateway-action-button[class*="rose"],
-html.dui-pro-overhaul.dui-cohesive-ui [data-dui-panel="monitor"] .dy-gateway-action-button,
-html.dui-pro-overhaul.dui-cohesive-ui [data-dui-panel="monitor"] .dy-gateway-action-button[class*="cyan"],
-html.dui-pro-overhaul.dui-cohesive-ui [data-dui-panel="monitor"] .dy-gateway-action-button[class*="rose"] {
-  border-color: var(--dy-monitor-gray-line) !important;
-  background: var(--dy-monitor-gray-control) !important;
-  background-image: none !important;
-  color: var(--dy-monitor-gray-copy) !important;
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, .030) !important;
-}
-
 html.dui-pro-overhaul.dui-cohesive-ui [data-dui-panel="monitor"] :where(.dy-gateway-action-button, .dy-cron-cancel-button, .dy-gateway-log-toggle, .dy-monitor-tool-button):hover:not(:disabled),
 html.dui-pro-overhaul.dui-cohesive-ui .app-bg.dy-monitor-focus [data-dui-panel="monitor"].dy-monitor-shell :where(.dy-gateway-action-button, .dy-cron-cancel-button, .dy-gateway-log-toggle, .dy-monitor-tool-button):hover:not(:disabled) {
   border-color: var(--dy-monitor-gray-line-strong) !important;
@@ -3775,8 +3433,7 @@ html.dui-pro-overhaul.dui-cohesive-ui .app-bg.dy-monitor-focus .dy-human-nav but
   --dy-nav-accent-rgb: 166, 140, 255 !important;
 }
 
-html.dui-pro-overhaul.dui-cohesive-ui .dy-human-nav button[data-tone="plugins"],
-html.dui-pro-overhaul.dui-cohesive-ui .app-bg.dy-plugins-focus .dy-human-nav button[data-tone="plugins"] {
+html.dui-pro-overhaul.dui-cohesive-ui .dy-human-nav button[data-tone="plugins"] {
   --dy-nav-accent: #ee6aaa !important;
   --dy-nav-accent-rgb: 238, 106, 170 !important;
 }
@@ -3785,72 +3442,15 @@ html.dui-pro-overhaul.dui-cohesive-ui .dy-human-nav button[data-tone="monitor"] 
 html.dui-pro-overhaul.dui-cohesive-ui .dy-human-nav button[data-tone="plugins"] .dy-human-nav-icon-img,
 html.dui-pro-overhaul.dui-cohesive-ui .app-bg.dy-monitor-focus .dy-human-nav button[data-tone="monitor"] .dy-human-nav-icon-img,
 html.dui-pro-overhaul.dui-cohesive-ui .app-bg.dy-monitor-focus .dy-human-nav button[data-tone="monitor"].is-active .dy-human-nav-icon-img,
-html.dui-pro-overhaul.dui-cohesive-ui .app-bg.dy-monitor-focus .dy-human-nav button[data-tone="monitor"][aria-current="page"] .dy-human-nav-icon-img,
-html.dui-pro-overhaul.dui-cohesive-ui .app-bg.dy-plugins-focus .dy-human-nav button[data-tone="plugins"] .dy-human-nav-icon-img,
-html.dui-pro-overhaul.dui-cohesive-ui .app-bg.dy-plugins-focus .dy-human-nav button[data-tone="plugins"].is-active .dy-human-nav-icon-img,
-html.dui-pro-overhaul.dui-cohesive-ui .app-bg.dy-plugins-focus .dy-human-nav button[data-tone="plugins"][aria-current="page"] .dy-human-nav-icon-img {
+html.dui-pro-overhaul.dui-cohesive-ui .app-bg.dy-monitor-focus .dy-human-nav button[data-tone="monitor"][aria-current="page"] .dy-human-nav-icon-img {
   filter: saturate(1.22) brightness(1.12) contrast(1.06) drop-shadow(0 0 8px rgba(var(--dy-nav-accent-rgb), .42)) !important;
   opacity: 1 !important;
 }
 
 html.dui-pro-overhaul.dui-cohesive-ui .app-bg.dy-monitor-focus .dy-human-nav button[data-tone="monitor"] .dy-human-nav-icon,
 html.dui-pro-overhaul.dui-cohesive-ui .app-bg.dy-monitor-focus .dy-human-nav button[data-tone="monitor"].is-active .dy-human-nav-icon,
-html.dui-pro-overhaul.dui-cohesive-ui .app-bg.dy-monitor-focus .dy-human-nav button[data-tone="monitor"][aria-current="page"] .dy-human-nav-icon,
-html.dui-pro-overhaul.dui-cohesive-ui .app-bg.dy-plugins-focus .dy-human-nav button[data-tone="plugins"] .dy-human-nav-icon,
-html.dui-pro-overhaul.dui-cohesive-ui .app-bg.dy-plugins-focus .dy-human-nav button[data-tone="plugins"].is-active .dy-human-nav-icon,
-html.dui-pro-overhaul.dui-cohesive-ui .app-bg.dy-plugins-focus .dy-human-nav button[data-tone="plugins"][aria-current="page"] .dy-human-nav-icon {
+html.dui-pro-overhaul.dui-cohesive-ui .app-bg.dy-monitor-focus .dy-human-nav button[data-tone="monitor"][aria-current="page"] .dy-human-nav-icon {
   color: color-mix(in srgb, var(--dy-nav-accent) 82%, #ffffff) !important;
-}
-
-html.dui-pro-overhaul.dui-cohesive-ui .app-bg.dy-monitor-focus [data-dui-panel="monitor"].dy-monitor-shell .dy-monitor-health-grid .dy-health-card:nth-child(1),
-html.dui-pro-overhaul.dui-cohesive-ui [data-dui-panel="monitor"] .dy-monitor-health-grid .dy-health-card:nth-child(1) {
-  --dy-health-accent: #f0ba63 !important;
-  --dy-health-accent-rgb: 240, 186, 99 !important;
-}
-
-html.dui-pro-overhaul.dui-cohesive-ui .app-bg.dy-monitor-focus [data-dui-panel="monitor"].dy-monitor-shell .dy-monitor-health-grid .dy-health-card:nth-child(2),
-html.dui-pro-overhaul.dui-cohesive-ui [data-dui-panel="monitor"] .dy-monitor-health-grid .dy-health-card:nth-child(2) {
-  --dy-health-accent: #7be0b3 !important;
-  --dy-health-accent-rgb: 123, 224, 179 !important;
-}
-
-html.dui-pro-overhaul.dui-cohesive-ui .app-bg.dy-monitor-focus [data-dui-panel="monitor"].dy-monitor-shell .dy-monitor-health-grid .dy-health-card:nth-child(3),
-html.dui-pro-overhaul.dui-cohesive-ui [data-dui-panel="monitor"] .dy-monitor-health-grid .dy-health-card:nth-child(3) {
-  --dy-health-accent: #a68cff !important;
-  --dy-health-accent-rgb: 166, 140, 255 !important;
-}
-
-html.dui-pro-overhaul.dui-cohesive-ui .app-bg.dy-monitor-focus [data-dui-panel="monitor"].dy-monitor-shell .dy-monitor-health-grid .dy-health-card:nth-child(4),
-html.dui-pro-overhaul.dui-cohesive-ui [data-dui-panel="monitor"] .dy-monitor-health-grid .dy-health-card:nth-child(4) {
-  --dy-health-accent: #ee6aaa !important;
-  --dy-health-accent-rgb: 238, 106, 170 !important;
-}
-
-html.dui-pro-overhaul.dui-cohesive-ui .app-bg.dy-monitor-focus [data-dui-panel="monitor"].dy-monitor-shell .dy-monitor-health-grid .dy-health-card,
-html.dui-pro-overhaul.dui-cohesive-ui [data-dui-panel="monitor"] .dy-monitor-health-grid .dy-health-card {
-  border-color: rgba(var(--dy-health-accent-rgb), .30) !important;
-  background:
-    linear-gradient(180deg, rgba(var(--dy-health-accent-rgb), .075), rgba(255, 255, 255, .010)),
-    var(--dy-monitor-gray-card) !important;
-  color: var(--dy-monitor-gray-copy) !important;
-}
-
-html.dui-pro-overhaul.dui-cohesive-ui .app-bg.dy-monitor-focus [data-dui-panel="monitor"].dy-monitor-shell .dy-health-card :where(.dy-health-icon, .dy-health-value, .dy-health-sparkline),
-html.dui-pro-overhaul.dui-cohesive-ui [data-dui-panel="monitor"] .dy-health-card :where(.dy-health-icon, .dy-health-value, .dy-health-sparkline) {
-  color: var(--dy-health-accent) !important;
-  text-shadow: none !important;
-}
-
-html.dui-pro-overhaul.dui-cohesive-ui .app-bg.dy-monitor-focus [data-dui-panel="monitor"].dy-monitor-shell .dy-health-card :where(.dy-health-sparkline-line, .dy-health-sparkline-dot),
-html.dui-pro-overhaul.dui-cohesive-ui [data-dui-panel="monitor"] .dy-health-card :where(.dy-health-sparkline-line, .dy-health-sparkline-dot) {
-  stroke: var(--dy-health-accent) !important;
-  fill: var(--dy-health-accent) !important;
-  filter: drop-shadow(0 0 5px rgba(var(--dy-health-accent-rgb), .26)) !important;
-}
-
-html.dui-pro-overhaul.dui-cohesive-ui .app-bg.dy-monitor-focus [data-dui-panel="monitor"].dy-monitor-shell .dy-health-card .dy-health-sparkline-grid,
-html.dui-pro-overhaul.dui-cohesive-ui [data-dui-panel="monitor"] .dy-health-card .dy-health-sparkline-grid {
-  stroke: rgba(var(--dy-health-accent-rgb), .20) !important;
 }
 
 html.dui-pro-overhaul.dui-cohesive-ui .app-bg.dy-monitor-focus [data-dui-panel="monitor"].dy-monitor-shell .dy-monitor-tab-list button,
@@ -3893,34 +3493,7 @@ html.dui-pro-overhaul.dui-cohesive-ui [data-dui-panel="monitor"] .dy-monitor-tab
   filter: drop-shadow(0 0 5px rgba(var(--dy-monitor-tab-accent-rgb), .42)) !important;
 }
 
-html.dui-pro-overhaul.dui-cohesive-ui .app-bg.dy-monitor-focus [data-dui-panel="monitor"].dy-monitor-shell .dy-gateway-status-pill[data-tone="emerald"] {
-  border-color: rgba(123, 224, 179, .28) !important;
-  background: rgba(123, 224, 179, .075) !important;
-  color: #b9f7d7 !important;
-}
 
-html.dui-pro-overhaul.dui-cohesive-ui .app-bg.dy-monitor-focus [data-dui-panel="monitor"].dy-monitor-shell .dy-gateway-status-pill[data-tone="amber"] {
-  border-color: rgba(240, 186, 99, .30) !important;
-  background: rgba(240, 186, 99, .075) !important;
-  color: #ffe0a6 !important;
-}
-
-html.dui-pro-overhaul.dui-cohesive-ui .app-bg.dy-monitor-focus [data-dui-panel="monitor"].dy-monitor-shell .dy-gateway-status-pill[data-tone="rose"] {
-  border-color: rgba(238, 106, 170, .28) !important;
-  background: rgba(238, 106, 170, .070) !important;
-  color: #ffb5d6 !important;
-}
-
-html.dui-pro-overhaul.dui-cohesive-ui .app-bg.dy-monitor-focus [data-dui-panel="monitor"].dy-monitor-shell .dy-gateway-action-button,
-html.dui-pro-overhaul.dui-cohesive-ui .app-bg.dy-monitor-focus [data-dui-panel="monitor"].dy-monitor-shell .dy-gateway-action-button[class*="cyan"] {
-  border-color: rgba(123, 224, 179, .26) !important;
-  background:
-    linear-gradient(180deg, rgba(123, 224, 179, .10), rgba(255, 255, 255, .010)),
-    var(--dy-monitor-gray-control) !important;
-  color: #a7f0cc !important;
-}
-
-html.dui-pro-overhaul.dui-cohesive-ui .app-bg.dy-monitor-focus [data-dui-panel="monitor"].dy-monitor-shell .dy-gateway-action-button[class*="rose"],
 html.dui-pro-overhaul.dui-cohesive-ui .app-bg.dy-monitor-focus [data-dui-panel="monitor"].dy-monitor-shell .dy-cron-cancel-button {
   border-color: rgba(239, 116, 128, .28) !important;
   background:
@@ -3932,23 +3505,6 @@ html.dui-pro-overhaul.dui-cohesive-ui .app-bg.dy-monitor-focus [data-dui-panel="
 html.dui-pro-overhaul.dui-cohesive-ui .app-bg.dy-monitor-focus [data-dui-panel="monitor"].dy-monitor-shell .dy-monitor-gauge-fill,
 html.dui-pro-overhaul.dui-cohesive-ui [data-dui-panel="monitor"] .dy-monitor-gauge-fill {
   background: linear-gradient(90deg, #f0ba63, #7be0b3 58%, #a68cff) !important;
-}
-
-html.dui-pro-overhaul.dui-cohesive-ui .app-bg.dy-monitor-focus [data-dui-panel="monitor"].dy-monitor-shell .dy-gateway-direction-marker,
-html.dui-pro-overhaul.dui-cohesive-ui [data-dui-panel="monitor"] .dy-gateway-direction-marker {
-  background: linear-gradient(180deg, #93c5fd, #7be0b3) !important;
-}
-
-html.dui-pro-overhaul.dui-cohesive-ui .app-bg.dy-monitor-focus [data-dui-panel="monitor"].dy-monitor-shell .dy-monitor-health-grid .dy-health-card:nth-child(n),
-html.dui-pro-overhaul.dui-cohesive-ui .app-bg.dy-monitor-focus [data-dui-panel="monitor"].dy-monitor-shell .dy-monitor-health-grid .dy-health-card[data-tone],
-html.dui-pro-overhaul.dui-cohesive-ui [data-dui-panel="monitor"] .dy-monitor-health-grid .dy-health-card:nth-child(n),
-html.dui-pro-overhaul.dui-cohesive-ui [data-dui-panel="monitor"] .dy-monitor-health-grid .dy-health-card[data-tone] {
-  border-color: rgba(var(--dy-health-accent-rgb), .30) !important;
-  background:
-    linear-gradient(180deg, rgba(var(--dy-health-accent-rgb), .075), rgba(255, 255, 255, .010)),
-    var(--dy-monitor-gray-card) !important;
-  background-image:
-    linear-gradient(180deg, rgba(var(--dy-health-accent-rgb), .075), rgba(255, 255, 255, .010)) !important;
 }
 
 html.dui-pro-overhaul.dui-cohesive-ui .app-bg.dy-monitor-focus [data-dui-panel="monitor"].dy-monitor-shell .dy-monitor-tab-list button[data-active="true"] svg,
@@ -4747,7 +4303,6 @@ html.dui-pro-overhaul.dui-cohesive-ui [data-dui-panel] {
 }
 
 html.dui-pro-overhaul.dui-cohesive-ui .dui-mission-screen,
-html.dui-pro-overhaul.dui-cohesive-ui .dui-monitor-screen,
 html.dui-pro-overhaul.dui-cohesive-ui .dui-mission-wrap {
   background: #030406 !important;
 }
@@ -4802,10 +4357,4 @@ html.dui-pro-overhaul.dui-cohesive-ui .agent-card-status-pill.is-live {
 html.dui-pro-overhaul.dui-cohesive-ui .agent-card-status-pill.is-live > span {
   background: #5eead4 !important;
   box-shadow: 0 0 0 3px rgba(94, 234, 212, .13), 0 0 12px rgba(94, 234, 212, .9) !important;
-}
-
-html.dui-pro-overhaul.dui-cohesive-ui .dy-gateway-log-message {
-  min-width: 0 !important;
-  overflow-wrap: anywhere !important;
-  word-break: break-word !important;
 }

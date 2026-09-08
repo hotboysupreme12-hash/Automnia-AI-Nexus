@@ -13,6 +13,24 @@ html.dui-pro-overhaul.dui-cohesive-ui {
   --dy-compact-card-height: 390px;
 }
 
+/* Column count follows the actual registry pane, including a resized split. */
+html.dui-pro-overhaul.dui-cohesive-ui [data-dui-panel="agent-registry"] [data-agent-grid-mode]:not([data-agent-grid-mode="list"]) {
+  --agent-readable-width: 17rem;
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, var(--agent-readable-width)), 1fr)) !important;
+  align-items: stretch !important;
+}
+
+html.dui-pro-overhaul.dui-cohesive-ui [data-dui-panel="agent-registry"] [data-agent-grid-mode="grid10"] {
+  --agent-readable-width: 15rem;
+}
+
+/* Text scaling and long names can grow a card without clipping its actions. */
+html.dui-pro-overhaul.dui-cohesive-ui [data-dui-panel="agent-registry"] .agent-card-shell.agent-card-pro[data-agent-card="true"]:not([data-agent-display-mode="list"]) {
+  height: auto !important;
+  min-height: min-content !important;
+  max-height: none !important;
+}
+
 /* Keep the shell edge-to-edge while preventing the actual work surface from
    stretching across an entire 4K canvas. The header remains full width. */
 @media (min-width: 3000px) {
@@ -79,9 +97,9 @@ html.dui-pro-overhaul.dui-cohesive-ui {
 
   html.dui-pro-overhaul .agent-card-shell.agent-card-pro[data-agent-card="true"]:not([data-agent-display-mode="list"]),
   html.dui-pro-overhaul.dui-cohesive-ui .agent-card-shell.agent-card-pro[data-agent-card="true"]:not([data-agent-display-mode="list"]) {
-    height: var(--dy-compact-card-height) !important;
+    height: auto !important;
     min-height: var(--dy-compact-card-height) !important;
-    max-height: var(--dy-compact-card-height) !important;
+    max-height: none !important;
   }
 
   html.dui-pro-overhaul .agent-card-pro:not([data-agent-display-mode="list"]) .agent-card-media,

@@ -1,3 +1,4 @@
+import { readPreferenceValue, savePreferenceEntries } from './preferenceStorage'
 import { useEffect, useState } from 'react'
 
 export const CHANNEL_ACTIVITY_SETTINGS_STORAGE_KEY = 'automnia-channel-activity-settings-v1'
@@ -23,7 +24,7 @@ function isRetentionLimit(value: unknown): value is ChannelActivityRetention {
 export function readChannelActivitySettings(): ChannelActivitySettings {
   if (typeof window === 'undefined') return DEFAULT_CHANNEL_ACTIVITY_SETTINGS
   try {
-    const raw = window.localStorage.getItem(CHANNEL_ACTIVITY_SETTINGS_STORAGE_KEY)
+    const raw = readPreferenceValue(CHANNEL_ACTIVITY_SETTINGS_STORAGE_KEY)
     if (!raw) return DEFAULT_CHANNEL_ACTIVITY_SETTINGS
     const parsed = JSON.parse(raw) as Partial<ChannelActivitySettings>
     return {
@@ -37,7 +38,7 @@ export function readChannelActivitySettings(): ChannelActivitySettings {
 
 export function saveChannelActivitySettings(settings: ChannelActivitySettings): void {
   if (typeof window === 'undefined') return
-  window.localStorage.setItem(CHANNEL_ACTIVITY_SETTINGS_STORAGE_KEY, JSON.stringify(settings))
+  savePreferenceEntries([[CHANNEL_ACTIVITY_SETTINGS_STORAGE_KEY, JSON.stringify(settings)]])
   window.dispatchEvent(new Event(CHANNEL_ACTIVITY_SETTINGS_EVENT))
 }
 

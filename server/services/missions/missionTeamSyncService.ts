@@ -1,5 +1,6 @@
 import { promises as fs } from 'node:fs'
 import path from 'node:path'
+import { randomUUID } from 'node:crypto'
 
 import type { TeamSyncAssignment } from './missionStateService'
 
@@ -28,11 +29,13 @@ export type MissionTeamSyncServiceOptions = {
 
 export function createMissionTeamSyncService(options: MissionTeamSyncServiceOptions) {
   const now = () => options.now?.() || new Date()
+  let snapshotQueue: Promise<void> = Promise.resolve()
 
   async function ensureTeamSyncFile(filePath: string) {
-    if (await options.fileExists(filePath)) return
     await fs.mkdir(path.dirname(filePath), { recursive: true })
-    await fs.writeFile(filePath, '# TEAM_SYNC\n\n## Activity Log\n', 'utf-8')
+    await fs.writeFile(filePath, '# TEAM_SYNC\n\n## Activity Log\n', { encoding: 'utf-8', flag: 'wx' }).catch((error: NodeJS.ErrnoException) => {
+      if (error.code !== 'EEXIST') throw error
+    })
   }
 
   function teamSyncMarkdown(params: TeamSyncSnapshotParams) {
@@ -97,11 +100,26 @@ export function createMissionTeamSyncService(options: MissionTeamSyncServiceOpti
 
   async function writeTeamSyncSnapshot(params: TeamSyncSnapshotParams) {
     const markdown = teamSyncMarkdown(params)
-    const targets = await snapshotTargetPaths(params)
-    for (const filePath of targets) {
-      await fs.mkdir(path.dirname(filePath), { recursive: true })
-      await fs.writeFile(filePath, markdown, 'utf-8')
-    }
+    const snapshot = { ...params, assignments: params.assignments.map((entry) => ({ ...entry })), activity: [...params.activity] }
+    // Queue before resolving paths: a slow older lookup must not publish after
+    // a newer generation, including when missions share coordination targets.
+    const pending = snapshotQueue.then(async () => {
+      const targets = await snapshotTargetPaths(snapshot)
+      const results = await Promise.allSettled(targets.map(async (filePath) => {
+        await fs.mkdir(path.dirname(filePath), { recursive: true })
+        const temporary = `${filePath}.${randomUUID()}.tmp`
+        try {
+          await fs.writeFile(temporary, markdown, { encoding: 'utf-8', flag: 'wx' })
+          await fs.rename(temporary, filePath)
+        } finally {
+          await fs.rm(temporary, { force: true }).catch(() => undefined)
+        }
+      }))
+      const failed = results.find((result) => result.status === 'rejected')
+      if (failed?.status === 'rejected') throw failed.reason
+    })
+    snapshotQueue = pending.catch(() => undefined)
+    return pending
   }
 
   return {

@@ -1,5 +1,9 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { AvatarFallback } from '../ui/AvatarFallback'
+import { createSerialSaveQueue } from '../monitor/serialSaveQueue'
+import { useCallback, useEffect, useId, useMemo, useRef, useState } from 'react'
 import type { CSSProperties } from 'react'
+import { useDialogFocus } from '../ui/Dialog'
+import { navigateTabList } from '../ui/tabNavigation'
 import { apiErrorMessage, apiRequest, type ApiResult } from '../../api/client'
 import type { AgentEditorTab } from '../../store/nexusUiState'
 import {
@@ -54,8 +58,8 @@ type DesktopDirectoryPickerPayload = { ok?:boolean; path?:string|null; cancelled
 type FolderListPayload = { base?:string; folders?:string[] }
 type FolderPickerSessionPayload = { sessionId?:string; status?:'pending'|'selected'|'cancelled'|'error'; path?:string|null; cancelled?:boolean; detail?:string }
 type AgentResourceListPayload = { files?:string[] }
-type AgentResourceContentPayload = { content?:string }
-type AgentResourceSavePayload = { file?:string; resourcePath?:string }
+type AgentResourceContentPayload = { content?:string; revision?:string }
+type AgentResourceSavePayload = { file?:string; resourcePath?:string; revision?:string }
 
 declare global {
   interface Window {
@@ -345,6 +349,11 @@ function mergeAgentConfigPatch(left: AgentConfigPatch, right: AgentConfigPatch):
 }
 
 export function AgentEditorModal() {
+  const dialogId = useId()
+  const dialogRootRef = useRef<HTMLDivElement>(null)
+  const dialogPanelRef = useRef<HTMLDivElement>(null)
+  const retireRootRef = useRef<HTMLDivElement>(null)
+  const retirePanelRef = useRef<HTMLDivElement>(null)
   const { license } = useLicense()
   const isOpen = useNexusStore((s)=>s.isEditorOpen)
   const closeEditor = useNexusStore((s)=>s.closeEditor)
@@ -440,6 +449,10 @@ export function AgentEditorModal() {
   const [rsaving,setRsaving] = useState(false)
   const resourceSaveTimerRef = useRef<number|null>(null)
   const resourceDirtyRef = useRef(false)
+  const resourceRevisionsRef = useRef(new Map<string, string>())
+  const resourceSaveQueueRef = useRef(createSerialSaveQueue())
+  const resourceEditVersionRef = useRef(0)
+  const [resourceConflict, setResourceConflict] = useState<AgentResourceContentPayload | null>(null)
   const [retireConfirmOpen,setRetireConfirmOpen] = useState(false)
   const [retiring,setRetiring] = useState(false)
 
@@ -588,7 +601,7 @@ export function AgentEditorModal() {
       if(policySaveTimerRef.current){window.clearTimeout(policySaveTimerRef.current);policySaveTimerRef.current=null;await SvP()}
       if(workspaceSaveTimerRef.current){window.clearTimeout(workspaceSaveTimerRef.current);workspaceSaveTimerRef.current=null;await SvW(wsPath)}
       if(resourceSaveTimerRef.current){window.clearTimeout(resourceSaveTimerRef.current);resourceSaveTimerRef.current=null}
-      if(resourceDirtyRef.current)await SvF(rcontent,rfile)
+      if(resourceDirtyRef.current&&!(await SvF(rcontent,rfile)))return
       await flushPendingConfigPatch()
       if(agent&&heartbeatDraftRef.current)await saveHeartbeatConfig(agent.id,heartbeatDraftRef.current)
       closeEditor()
@@ -1304,45 +1317,58 @@ export function AgentEditorModal() {
     try{
       const result=await apiRequest<AgentResourceContentPayload>(`/api/party/resources/${encodeURIComponent(agentId)}/${encodeURIComponent(f)}`,{timeoutMs:15000})
       if(seq!==fileContentSeqRef.current)return
-      if(result.ok){setRcontent(result.data.content||'');resourceDirtyRef.current=false}
-      else{setRcontent('');setRstatus(apiErrorMessage(result.error)||`Could not load ${f}.`)}
+      if(result.ok){
+        if(resourceDirtyRef.current){setResourceConflict(result.data);setRstatus('Review the version on disk. Your draft is preserved.')}
+        else {setRcontent(result.data.content||'');resourceDirtyRef.current=false;setResourceConflict(null);if(result.data.revision)resourceRevisionsRef.current.set(`${agentId}/${f}`,result.data.revision)}
+      }
+      else{if(!resourceDirtyRef.current)setRcontent('');setRstatus(apiErrorMessage(result.error)||`Could not load ${f}.`)}
     }catch(e){
       if(seq===fileContentSeqRef.current){
-        setRcontent('')
+        if(!resourceDirtyRef.current)setRcontent('')
         setRstatus(isAbortError(e)?`${f} timed out. Try Reload.`:`Could not load ${f}: ${errorMessage(e)}`)
       }
     }finally{
       if(seq===fileContentSeqRef.current)setRcontentLoading(false)
     }
   },[agent?.id])
-  const SvF = async (content=rcontent,file=rfile)=>{
-    if(!agent||!file)return
-    setRsaving(true)
-    setRstatus(`Saving ${file}…`)
-    setAutosavePhase('saving')
-    setAutosaveMessage(`Saving ${file}…`)
-    try{
-      const result=await apiRequest<AgentResourceSavePayload>(`/api/party/resources/${encodeURIComponent(agent.id)}/${encodeURIComponent(file)}`,{method:'PUT',timeoutMs:20000,body:{content}})
-      if(result.ok){
-        resourceDirtyRef.current=false
-        setRstatus(`${file} saved automatically.`)
-        setAutosavePhase('saved')
-        setAutosaveMessage('All changes saved')
-      }else{
-        const message=apiErrorMessage(result.error)
-        setRstatus(`Autosave failed: ${message}`)
-        setAutosavePhase('error')
-        setAutosaveMessage(`${file} autosave failed: ${message}`)
-      }
-    }catch(e){
-      const message=errorMessage(e)
-      setRstatus(`Autosave failed: ${message}`)
-      setAutosavePhase('error')
-      setAutosaveMessage(`${file} autosave failed: ${message}`)
-    }finally{setRsaving(false)}
+  const SvF = (content=rcontent,file=rfile):Promise<boolean>=>{
+    const savingAgentId=agent?.id
+    if(!savingAgentId||!file)return Promise.resolve(false)
+    const requestSequence=fileContentSeqRef.current
+    const editVersion=resourceEditVersionRef.current
+    const coordinate=`${savingAgentId}/${file}`
+    return resourceSaveQueueRef.current(async ()=>{
+      const isCurrent=()=>requestSequence===fileContentSeqRef.current
+      if(isCurrent()){setRsaving(true);setRstatus(`Saving ${file}…`);setAutosavePhase('saving');setAutosaveMessage(`Saving ${file}…`)}
+      try{
+        const result=await apiRequest<AgentResourceSavePayload>(`/api/party/resources/${encodeURIComponent(savingAgentId)}/${encodeURIComponent(file)}`,{method:'PUT',timeoutMs:20000,body:{content,expectedRevision:resourceRevisionsRef.current.get(coordinate)}})
+        if(result.ok){
+          if(result.data.revision)resourceRevisionsRef.current.set(coordinate,result.data.revision)
+          if(isCurrent()){
+            if(editVersion===resourceEditVersionRef.current)resourceDirtyRef.current=false
+            setResourceConflict(null);setRstatus(`${file} saved automatically.`);setAutosavePhase('saved');setAutosaveMessage('All changes saved')
+          }
+          return true
+        }
+        if(result.status===409){
+          const current=await apiRequest<AgentResourceContentPayload>(`/api/party/resources/${encodeURIComponent(savingAgentId)}/${encodeURIComponent(file)}`,{timeoutMs:15000})
+          if(current.ok&&isCurrent())setResourceConflict(current.data)
+        }
+        if(isCurrent()){
+          const message=apiErrorMessage(result.error)
+          setRstatus(`Autosave failed: ${message}`);setAutosavePhase('error');setAutosaveMessage(`${file} autosave failed: ${message}`)
+        }
+        return false
+      }catch(e){
+        if(isCurrent()){const message=errorMessage(e);setRstatus(`Autosave failed: ${message}`);setAutosavePhase('error');setAutosaveMessage(`${file} autosave failed: ${message}`)}
+        return false
+      }finally{if(isCurrent())setRsaving(false)}
+    })
   }
   const ScheduleResourceAutosave = (content:string)=>{
     resourceDirtyRef.current=true
+    resourceEditVersionRef.current+=1
+    if(resourceConflict){setRstatus('Resolve the file conflict below before autosave can continue.');return}
     if(resourceSaveTimerRef.current)window.clearTimeout(resourceSaveTimerRef.current)
     setRstatus('Waiting to save…')
     setAutosavePhase('saving')
@@ -1356,7 +1382,7 @@ export function AgentEditorModal() {
   const SelectResourceFile = async (file:string)=>{
     if(file===rfile)return
     if(resourceSaveTimerRef.current){window.clearTimeout(resourceSaveTimerRef.current);resourceSaveTimerRef.current=null}
-    if(resourceDirtyRef.current)await SvF(rcontent,rfile)
+    if(resourceDirtyRef.current&&!(await SvF(rcontent,rfile)))return
     setRfile(file)
   }
   const RetireAgent = useCallback(async ()=>{
@@ -1418,6 +1444,7 @@ export function AgentEditorModal() {
     setRfiles([])
     setRcontent('')
     setRstatus('')
+    setResourceConflict(null)
     resourceDirtyRef.current=false
     setRloading(false)
     setRcontentLoading(false)
@@ -1457,6 +1484,9 @@ export function AgentEditorModal() {
   useEffect(()=>{setPortraitPreviewFailed(false)},[pSrc])
   useEffect(()=>()=>{void flushPendingConfigPatch().catch(()=>{})},[flushPendingConfigPatch])
 
+  useDialogFocus({ open: isOpen && Boolean(agent), rootRef: dialogRootRef, panelRef: dialogPanelRef, onClose: () => { void closeWithHeartbeatFlush() } })
+  useDialogFocus({ open: retireConfirmOpen, rootRef: retireRootRef, panelRef: retirePanelRef, onClose: () => setRetireConfirmOpen(false), preventClose: retiring })
+
   if(!agent)return null
 
   const heartbeatSaveStatus = agentConfigSaveStatus?.heartbeat
@@ -1485,9 +1515,9 @@ export function AgentEditorModal() {
 
   return (
     <>
-      {isOpen&&!authModalProvider&&(
-        <div data-dui-overlay="agent-editor" data-windows={IS_WINDOWS_CLIENT?'true':'false'} className={`fixed inset-0 z-50 grid place-items-center p-3 ${IS_WINDOWS_CLIENT?'bg-[#030712]/96':'bg-[#030712]/90 backdrop-blur-xl'}`}>
-          <div data-dui-modal="agent-editor" data-windows={IS_WINDOWS_CLIENT?'true':'false'} className="dy-surface-enter flex max-h-[78vh] w-full max-w-[720px] flex-col overflow-hidden rounded-2xl border border-white/[0.08] bg-gradient-to-b from-[#0b1120] to-[#060b12] shadow-2xl shadow-black/50">
+      {isOpen&&(
+        <div ref={dialogRootRef} data-dui-overlay="agent-editor" data-windows={IS_WINDOWS_CLIENT?'true':'false'} className={`fixed inset-0 z-50 grid place-items-center p-3 ${IS_WINDOWS_CLIENT?'bg-[#030712]/96':'bg-[#030712]/90 backdrop-blur-xl'}`}>
+          <div ref={dialogPanelRef} role="dialog" aria-modal="true" aria-labelledby={`${dialogId}-title`} tabIndex={-1} data-dui-modal="agent-editor" data-windows={IS_WINDOWS_CLIENT?'true':'false'} className="dy-surface-enter flex max-h-[78vh] w-full max-w-[720px] flex-col overflow-hidden rounded-2xl border border-white/[0.08] bg-gradient-to-b from-[#0b1120] to-[#060b12] shadow-2xl shadow-black/50">
 
             {/* HEADER */}
             <div data-editor-header className="shrink-0 border-b border-white/[0.06] bg-white/[0.015] px-5 py-3">
@@ -1497,9 +1527,16 @@ export function AgentEditorModal() {
                     {showPortraitPreview?<img src={pSrc} alt="" className="h-full w-full object-cover" onError={()=>setPortraitPreviewFailed(true)}/>:<div className="flex h-full w-full items-center justify-center bg-white/[0.03] text-lg font-black text-slate-600">{agent.name.charAt(0)}</div>}
                     <div className="pointer-events-none absolute inset-0 rounded-full bg-gradient-to-b from-white/10 to-transparent"/>
                   </div>
-                  <div>
-                    <h2 className="text-sm font-extrabold text-white tracking-tight">{agent.name}</h2>
-                    <p className="text-[9px] font-medium text-slate-500">{agent.id} · Lv.{agent.level} · <span className="capitalize">{agent.rarity}</span></p>
+                  <div className="min-w-0">
+                    <h2 id={`${dialogId}-title`} className="text-sm font-extrabold text-white tracking-tight">{agent.name}</h2>
+                    <details className="mt-1 text-xs text-slate-400">
+                      <summary className="cursor-pointer rounded focus-visible:outline focus-visible:outline-2 focus-visible:outline-cyan-300">Agent details</summary>
+                      <dl className="mt-2 grid min-w-0 grid-cols-[auto_minmax(0,1fr)] gap-x-3 gap-y-1">
+                        <dt>ID</dt><dd className="select-all break-all font-mono text-slate-200">{agent.id}</dd>
+                        <dt>Level</dt><dd className="tabular-nums">{agent.level}</dd>
+                        <dt>Rarity</dt><dd className="capitalize">{agent.rarity}</dd>
+                      </dl>
+                    </details>
                   </div>
                 </div>
                 <div data-editor-header-actions>
@@ -1507,9 +1544,9 @@ export function AgentEditorModal() {
                   <button type="button" data-editor-action="done" onClick={()=>void closeWithHeartbeatFlush()} title="Close agent settings after pending autosaves finish" aria-label="Close agent settings" className="rounded-lg border border-white/[0.08] bg-white/[0.03] px-3 py-1.5 text-[9px] font-bold uppercase tracking-[0.14em] text-slate-400 transition hover:border-white/20 hover:text-white">Done</button>
                 </div>
               </div>
-              <div data-editor-tabs className="mt-3 flex gap-0.5 rounded-lg border border-white/[0.06] bg-white/[0.02] p-0.5">
+              <div data-editor-tabs role="tablist" aria-label="Agent settings" className="mt-3 flex gap-0.5 rounded-lg border border-white/[0.06] bg-white/[0.02] p-0.5">
                 {EDITOR_TABS.map((t)=>(
-                  <button type="button" key={t} data-editor-tab data-active={tab===t?'true':'false'} onClick={()=>setTab(t)} title={EDITOR_TAB_HELP[t]} aria-label={EDITOR_TAB_LABEL[t]} className={`flex-1 rounded-md px-1.5 py-2 text-[9px] font-bold uppercase tracking-[0.1em] transition-all ${tab===t?'bg-gradient-to-r from-cyan-500/20 to-blue-500/15 text-cyan-200 shadow-[inset_0_1px_0_rgba(255,255,255,0.05)] border border-cyan-400/20':'text-slate-600 hover:text-slate-400'}`}>
+                  <button type="button" key={t} role="tab" id={`${dialogId}-tab-${t}`} aria-controls={`${dialogId}-panel`} aria-selected={tab===t} tabIndex={tab===t?0:-1} onKeyDown={(event)=>navigateTabList(event, EDITOR_TABS, t, setTab)} data-editor-tab data-active={tab===t?'true':'false'} onClick={()=>setTab(t)} title={EDITOR_TAB_HELP[t]} aria-label={EDITOR_TAB_LABEL[t]} className={`flex-1 rounded-md px-1.5 py-2 text-[11px] font-semibold transition-all ${tab===t?'bg-gradient-to-r from-cyan-500/20 to-blue-500/15 text-cyan-200 shadow-[inset_0_1px_0_rgba(255,255,255,0.05)] border border-cyan-400/20':'text-slate-400 hover:text-slate-200'}`}>
                     <span className="mr-0.5">{ICON[t]}</span>{t}
                   </button>
                 ))}
@@ -1517,14 +1554,14 @@ export function AgentEditorModal() {
             </div>
 
             {/* BODY */}
-            <div data-editor-body className="flex-1 overflow-auto p-4">
+            <div data-editor-body role="tabpanel" id={`${dialogId}-panel`} aria-labelledby={`${dialogId}-tab-${tab}`} tabIndex={0} className="flex-1 overflow-auto p-4">
               <div data-editor-content className="mx-auto max-w-md">
                 {/* PROFILE */}
                 {tab==='profile'&&(
                   <div data-editor-panel="profile" className="space-y-4">
                     <div data-editor-card="portrait" className="flex items-center gap-4">
                       <button type="button" data-editor-portrait onClick={()=>void PickPortrait()} disabled={portraitPicking} title="Upload a new portrait image" aria-label="Upload a new portrait image" className="group relative h-32 w-32 shrink-0 overflow-hidden rounded-full ring-2 ring-white/15 transition hover:ring-cyan-400/40 disabled:opacity-60">
-                        {showPortraitPreview?<img src={pSrc} alt="" className="h-full w-full object-cover" onError={()=>setPortraitPreviewFailed(true)}/>:<div className="flex h-full w-full items-center justify-center bg-white/[0.03] text-4xl font-black text-slate-700">{agent.name.charAt(0)}</div>}
+                        {showPortraitPreview?<img src={pSrc} alt="" className="h-full w-full object-cover" onError={()=>setPortraitPreviewFailed(true)}/>:<AvatarFallback name={agent.name} large />}
                         <div className="absolute inset-0 flex items-end justify-center rounded-full bg-gradient-to-t from-black/70 to-transparent opacity-0 transition group-hover:opacity-100"><span className="pb-1.5 text-[9px] font-bold text-white">Change</span></div>
                       </button>
                       <input ref={portraitRef} type="file" accept="image/*" className="hidden" onChange={(e)=>{const f=e.target.files?.[0];e.currentTarget.value='';if(f)void UploadPortraitFile(f)}}/>
@@ -1956,6 +1993,14 @@ export function AgentEditorModal() {
                         <button type="button" key={f} onClick={()=>void SelectResourceFile(f)} className={`rounded-md px-2.5 py-1.5 text-[9px] font-bold uppercase tracking-[0.08em] transition ${f===rfile?'bg-cyan-400/[0.08] text-cyan-200 border border-cyan-400/20':'bg-white/[0.02] text-slate-500 hover:text-slate-300 border border-white/[0.05]'}`}>{f}</button>
                       ))}
                     </div>
+                    {resourceConflict&&<section className="space-y-3 rounded-lg border border-amber-300/30 p-3" role="alert">
+                      <p className="text-sm text-amber-100">This file changed on disk. Your draft remains in the editor below.</p>
+                      <details><summary className="cursor-pointer text-sm">Review the version on disk</summary><pre className="mt-2 max-h-52 overflow-auto whitespace-pre-wrap break-words text-xs">{resourceConflict.content||'(Empty file)'}</pre></details>
+                      <div className="flex flex-wrap gap-2">
+                        <button type="button" disabled={rsaving||!resourceConflict.revision} className="rounded border border-white/20 px-3 py-2 text-xs" onClick={()=>{if(resourceConflict.revision)resourceRevisionsRef.current.set(`${agentId}/${rfile}`,resourceConflict.revision);void SvF()}}>Save my draft over this version</button>
+                        <button type="button" disabled={rsaving} className="rounded border border-white/20 px-3 py-2 text-xs" onClick={()=>{setRcontent(resourceConflict.content||'');if(resourceConflict.revision)resourceRevisionsRef.current.set(`${agentId}/${rfile}`,resourceConflict.revision);resourceDirtyRef.current=false;setResourceConflict(null);setRstatus('Using the reviewed version from disk.')}}>Discard my draft and use disk version</button>
+                      </div>
+                    </section>}
                     <textarea value={rcontent} onChange={(e)=>{const next=e.target.value;setRcontent(next);ScheduleResourceAutosave(next)}} spellCheck readOnly={rloading||rcontentLoading} placeholder={rcontentLoading?`Loading ${rfile}...`:rloading?'Loading agent files...':'Select a markdown file.'} className="h-64 w-full rounded-lg border border-white/[0.08] bg-white/[0.02] p-3 font-mono text-[11px] text-slate-300 leading-relaxed resize-y placeholder:text-slate-600 focus:outline-none focus:border-cyan-400/30"/>
                     <div className="flex flex-wrap items-center gap-2">
                       <button type="button" onClick={()=>void LdFC(rfile)} disabled={rloading||rcontentLoading||!rfile} title={`Reload ${rfile || 'selected file'}`} className="rounded-lg border border-white/[0.08] bg-white/[0.03] px-3 py-2 text-[9px] font-bold uppercase tracking-[0.12em] text-slate-400 hover:border-white/20 disabled:opacity-40">{rcontentLoading?'Loading...':'Reload'}</button>
@@ -1995,7 +2040,7 @@ export function AgentEditorModal() {
       )}
       {retireConfirmOpen&&(
         <div className="fixed inset-0 z-[80] flex items-center justify-center bg-black/70 p-4 backdrop-blur-sm">
-          <div role="dialog" aria-modal="true" aria-labelledby="retire-agent-title" className="dy-surface-enter w-full max-w-md rounded-lg border border-red-400/20 bg-[#111417] p-5 shadow-2xl shadow-black/50">
+          <div ref={retirePanelRef} tabIndex={-1} role="alertdialog" aria-modal="true" aria-labelledby="retire-agent-title" className="dy-surface-enter w-full max-w-md rounded-lg border border-red-400/20 bg-[#111417] p-5 shadow-2xl shadow-black/50">
             <p id="retire-agent-title" className="text-[11px] font-bold uppercase tracking-[0.16em] text-red-300">Retire agent</p>
             <p className="mt-3 text-sm font-semibold text-slate-100">Are you sure you would like to retire this agent?</p>
             <p className="mt-2 text-[11px] leading-relaxed text-slate-400">You will permanently delete {agent.name}, including its OpenClaw customizations, profile, sessions, and agent state. The workspace folder will not be deleted.</p>

@@ -652,7 +652,7 @@ export function createMissionStateService(options: MissionStateServiceOptions) {
         idempotencyKey: `${mission.id}:scheduled->failed`,
         evidence: { error: errorDetail },
       })
-      options.recordMissionReport(mission)
+      await options.recordMissionReport(mission)
       options.missions.delete(mission.id)
       return {
         ok: false,
@@ -734,7 +734,7 @@ export function createMissionStateService(options: MissionStateServiceOptions) {
         cleanup,
       },
     })
-    options.recordMissionReport(mission)
+    await options.recordMissionReport(mission)
     await options.writeTeamSyncSnapshot({
       missionId: mission.id,
       title: mission.title,

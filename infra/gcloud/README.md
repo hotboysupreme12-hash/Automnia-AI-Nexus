@@ -79,10 +79,10 @@ The deployer still needs its own Cloud Run source-developer, Service Usage consu
 
 Review `config.psd1` before the first deployment:
 
-- `PermanentBaseUrl` and `PermanentDomain` default to `https://api.automnia.ai` / `api.automnia.ai`.
+- `PermanentBaseUrl` and `PermanentDomain` default to `https://api.automnia.app` / `api.automnia.app`.
 - `DnsProjectId` and `DnsZone` can be filled in to make DNS record changes automatic when Cloud DNS hosts the zone. Leave them blank for another DNS provider and add the returned mapping records there once.
 - `Region`, Firestore location, checkout URL, service name, API list, roles, secret names, and collection contract are centralized here.
-- `GmailSender` configures the Google account that sends the branded Automnia welcome letter, teal logo, license key, and login instructions. The `automnia-gmail-oauth-credentials` secret contains a Google OAuth desktop-client JSON credential with a refresh token and Gmail send scope. The provisioner calls Gmail API `users.messages.send` directly, so paid orders do not depend on Shopify's outstanding-invoice state. The existing Shopify Admin secret remains a migration-compatible binding but is not used for customer email delivery.
+- `EmailProvider` and `EmailSender` configure the account that sends the branded Automnia welcome letter, teal logo, license key, and login instructions. Microsoft 365 is the default provider: the `automnia-microsoft-graph-mail-credentials` secret contains JSON with `tenant_id`, `client_id`, and `client_secret` for an Entra app granted Microsoft Graph `Mail.Send` application permission with admin consent. The provisioner calls Graph `users/{sender}/sendMail` directly, so paid orders do not depend on Shopify's outstanding-invoice state. Gmail OAuth remains supported for legacy deployments through the corresponding Gmail environment variables and secret binding.
 - `KnowledgeDataStoreId` and `KnowledgeEngineId` identify the private Agent Search resources used by `/api/knowledge/answer`. Those resources must exist in a new project before the service is routed to traffic; the current production project already has them.
 
 The base domain must be purchased and verified by the operating Google account. If it is not already verified:

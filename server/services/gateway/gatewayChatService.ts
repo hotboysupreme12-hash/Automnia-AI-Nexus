@@ -1487,7 +1487,10 @@ export function createGatewayChatService<RunRecord>(options: GatewayChatServiceO
         code: 1,
         failureKind: params.signal?.aborted ? 'aborted' : options.classifyFailureKind(stderr, 'failed'),
       })
-      throw shapedError
+      // Sending may have reached the Gateway even when its acknowledgement
+      // was lost. Preserve the dispatch identity so callers cannot replay the
+      // same tool-running message through a different transport.
+      throw Object.assign(shapedError, { gatewayDispatchState: 'uncertain', gatewayRunId: runId, gatewaySessionKey: sessionKey })
     }
 
     if (options.toolsEffectiveDiagnostic) {
@@ -1579,7 +1582,7 @@ export function createGatewayChatService<RunRecord>(options: GatewayChatServiceO
         code: 1,
         failureKind: status === 'aborted' ? 'aborted' : status === 'timeout' ? 'timeout' : options.classifyFailureKind(text, 'failed'),
       })
-      throw shapedError
+      throw Object.assign(shapedError, { gatewayDispatchState: 'accepted', gatewayRunId: runId, gatewaySessionKey: sessionKey })
     }
   }
 

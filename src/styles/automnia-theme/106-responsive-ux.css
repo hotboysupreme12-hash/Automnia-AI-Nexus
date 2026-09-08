@@ -9,7 +9,7 @@
 html.dui-pro-overhaul,
 html.dui-pro-overhaul.dui-cohesive-ui {
   --dy-mobile-nav-height: 62px;
-  --dy-mobile-content-inset: calc(var(--dy-mobile-nav-height) + 14px);
+  --dy-mobile-content-inset: calc(var(--dy-mobile-nav-height) + max(8px, env(safe-area-inset-top)) + 8px);
 }
 
 html.dui-pro-overhaul :where(.dy-human-rail-navigation, .dy-workspace-context, .dy-workspace-context__copy, .dy-workspace-context__meta, .dy-tab-content, .dy-agents-workspace, [data-dui-panel], [data-chat-panel="true"], [data-dui-modal]) {
@@ -98,12 +98,13 @@ html.dui-pro-overhaul :where(.dy-human-rail-navigation, .dy-workspace-context, .
     align-items: stretch !important;
     overflow-x: auto !important;
     overscroll-behavior-x: contain;
-    scrollbar-width: none;
+    scrollbar-width: thin;
+    scrollbar-color: #788b8b transparent;
   }
 
   html.dui-pro-overhaul .dy-human-rail-navigation::-webkit-scrollbar,
   html.dui-pro-overhaul.dui-cohesive-ui .dy-human-rail-navigation::-webkit-scrollbar {
-    display: none;
+    height: 3px;
   }
 
   html.dui-pro-overhaul .dy-human-rail-navigation > .dy-human-nav,
@@ -150,8 +151,8 @@ html.dui-pro-overhaul :where(.dy-human-rail-navigation, .dy-workspace-context, .
     border-radius: 9px !important;
   }
 
-  html.dui-pro-overhaul .dy-workspace-context,
-  html.dui-pro-overhaul.dui-cohesive-ui .dy-workspace-context {
+  html.dui-pro-overhaul .dy-workspace-context[data-workspace],
+  html.dui-pro-overhaul.dui-cohesive-ui .dy-workspace-context[data-workspace] {
     display: grid !important;
     grid-template-columns: minmax(0, 1fr) !important;
     gap: 12px !important;
@@ -159,29 +160,40 @@ html.dui-pro-overhaul :where(.dy-human-rail-navigation, .dy-workspace-context, .
     padding: 14px 12px !important;
   }
 
-  html.dui-pro-overhaul .dy-workspace-context__meta,
-  html.dui-pro-overhaul.dui-cohesive-ui .dy-workspace-context__meta {
+  html.dui-pro-overhaul .dy-workspace-context[data-workspace] .dy-workspace-context__meta,
+  html.dui-pro-overhaul.dui-cohesive-ui .dy-workspace-context[data-workspace] .dy-workspace-context__meta {
     display: grid !important;
     grid-template-columns: minmax(0, 1fr) !important;
     gap: 9px !important;
     min-width: 0 !important;
+    width: 100% !important;
+    max-width: none !important;
+    justify-items: stretch !important;
   }
 
-  html.dui-pro-overhaul .dy-status-grid,
-  html.dui-pro-overhaul.dui-cohesive-ui .dy-status-grid {
+  html.dui-pro-overhaul .dy-workspace-context[data-workspace] .dy-workspace-context__meta .dy-status-grid,
+  html.dui-pro-overhaul.dui-cohesive-ui .dy-workspace-context[data-workspace] .dy-workspace-context__meta .dy-status-grid {
     display: grid !important;
     width: 100% !important;
     grid-template-columns: repeat(3, minmax(0, 1fr)) !important;
     gap: 6px !important;
+    min-height: 0 !important;
+    overflow: visible !important;
+    justify-items: stretch !important;
   }
 
-  html.dui-pro-overhaul .dy-workspace-context .dy-status-chip,
-  html.dui-pro-overhaul.dui-cohesive-ui .dy-workspace-context .dy-status-chip {
+  html.dui-pro-overhaul .dy-workspace-context[data-workspace] .dy-workspace-context__meta .badge.dy-status-chip,
+  html.dui-pro-overhaul.dui-cohesive-ui .dy-workspace-context[data-workspace] .dy-workspace-context__meta .badge.dy-status-chip {
     min-width: 0 !important;
     width: 100% !important;
     overflow: hidden !important;
     justify-content: flex-start !important;
     padding-inline: 9px !important;
+    height: auto !important;
+    min-height: 36px !important;
+    max-height: none !important;
+    flex-wrap: wrap !important;
+    gap: 4px !important;
   }
 
   html.dui-pro-overhaul .dy-workspace-context__state,
@@ -215,6 +227,23 @@ html.dui-pro-overhaul :where(.dy-human-rail-navigation, .dy-workspace-context, .
 }
 
 @media (max-width: 600px) {
+  html.dui-pro-overhaul.dui-cohesive-ui .dy-human-rail-head {
+    display: none !important;
+  }
+
+  html.dui-pro-overhaul.dui-cohesive-ui .dy-human-nav :is(button, .dy-human-nav-action, .dy-human-nav-utility) {
+    width: auto !important;
+    min-width: 40px !important;
+    flex: 1 1 0 !important;
+    padding-inline: 2px !important;
+  }
+
+  html.dui-pro-overhaul.dui-cohesive-ui .dy-human-nav-icon {
+    width: 28px !important;
+    height: 28px !important;
+    min-width: 28px !important;
+  }
+
   html.dui-pro-overhaul .dy-status-grid,
   html.dui-pro-overhaul.dui-cohesive-ui .dy-status-grid {
     grid-template-columns: repeat(3, minmax(0, 1fr)) !important;
@@ -223,12 +252,34 @@ html.dui-pro-overhaul :where(.dy-human-rail-navigation, .dy-workspace-context, .
   html.dui-pro-overhaul .dy-workspace-context .dy-status-chip,
   html.dui-pro-overhaul.dui-cohesive-ui .dy-workspace-context .dy-status-chip {
     padding-inline: 7px !important;
-    font-size: 9px !important;
+    font-size: 11px !important;
   }
 
   html.dui-pro-overhaul .agent-card-registry-grid,
   html.dui-pro-overhaul.dui-cohesive-ui .agent-card-registry-grid {
     grid-template-columns: minmax(0, 1fr) !important;
+  }
+}
+
+@container agent-registry (max-width: 520px) {
+  html.dui-pro-overhaul.dui-cohesive-ui [data-dui-panel="agent-registry"] [data-agent-filter-controls] {
+    display: grid !important;
+    width: 100%;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  html.dui-pro-overhaul.dui-cohesive-ui [data-dui-panel="agent-registry"] [data-agent-filter-controls] > * {
+    min-width: 0 !important;
+    max-width: 100%;
+  }
+
+  html.dui-pro-overhaul.dui-cohesive-ui [data-dui-panel="agent-registry"] [data-agent-view-switch] {
+    grid-column: 1 / -1;
+    display: flex;
+  }
+
+  html.dui-pro-overhaul.dui-cohesive-ui [data-dui-panel="agent-registry"] [data-agent-view-choice] {
+    flex: 1 1 0;
   }
 }
 
@@ -325,7 +376,7 @@ html.dui-pro-overhaul :where(.dy-human-rail-navigation, .dy-workspace-context, .
   }
 }
 
-@media (max-width: 520px) {
+@media (max-width: 520px), (max-height: 760px) {
   html.dui-pro-overhaul .dui-auth-screen,
   html.dui-pro-overhaul.dui-cohesive-ui .dui-auth-screen {
     align-items: flex-start !important;
@@ -363,5 +414,48 @@ html.dui-pro-overhaul :where(.dy-human-rail-navigation, .dy-workspace-context, .
     display: block;
     width: 100%;
     line-height: 1.35;
+  }
+}
+
+/* Pointer targets grow with the input device, including compact desktop layouts. */
+@media (pointer: coarse) {
+  html.dui-pro-overhaul.dui-cohesive-ui :is(.dui-button, .dui-icon-button, [data-party-action], [data-slot-card] button) {
+    min-width: 44px !important;
+    min-height: 44px !important;
+  }
+  html.dui-pro-overhaul.dui-cohesive-ui :is(.dui-input, .dui-select, .dui-control) {
+    min-height: 44px;
+  }
+  html.dui-pro-overhaul.dui-cohesive-ui .active-party-actions {
+    flex-wrap: wrap !important;
+    gap: 8px !important;
+  }
+}
+
+@media (forced-colors: active) {
+  html.dui-pro-overhaul.dui-cohesive-ui :is(.dui-dialog, .dui-help-panel, [data-dui-modal], .dy-command-message-body) {
+    background: Canvas !important;
+    color: CanvasText !important;
+    border: 1px solid CanvasText !important;
+    box-shadow: none !important;
+  }
+  html.dui-pro-overhaul.dui-cohesive-ui :is(.dui-button, .dui-icon-button, [data-agent-card] button, [data-slot-card] button, input, select, textarea) {
+    background: Canvas !important;
+    color: CanvasText !important;
+    border-color: ButtonText !important;
+    box-shadow: none !important;
+    forced-color-adjust: auto;
+  }
+  html.dui-pro-overhaul.dui-cohesive-ui :is(button[aria-pressed="true"], [role="option"][aria-selected="true"], [role="tab"][aria-selected="true"], [aria-current="page"]) {
+    outline: 2px solid Highlight !important;
+    outline-offset: -3px;
+  }
+  html.dui-pro-overhaul.dui-cohesive-ui :is(button:disabled, input:disabled, select:disabled) {
+    color: GrayText !important;
+    border-color: GrayText !important;
+  }
+  html.dui-pro-overhaul.dui-cohesive-ui [role="separator"] {
+    background: ButtonFace !important;
+    border: 1px solid ButtonText !important;
   }
 }

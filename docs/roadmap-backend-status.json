@@ -1,0 +1,22 @@
+{
+  "updatedAt": "2026-09-07",
+  "audit": "/Users/jeanmyrvil/Desktop/Automnia/audit-performance-notes.md",
+  "completed": ["P02", "P05", "P06", "P10", "P13"],
+  "partial": {
+    "P01": "Runtime status/summary retire hung refresh generations after cooldown or forced refresh; physical cancellation across every underlying probe adapter remains.",
+    "P15": "All raw upstream SSE streams have a cumulative safety cap; OpenAI-compatible content/reasoning have a combined 256k cap. SDK Codex stream bounding remains.",
+    "P16": "OpenAI-compatible error frames, empty answers, and premature EOF produce failures. Equivalent terminal classification for other direct providers remains."
+  },
+  "verified": [
+    "Server TypeScript check passes.",
+    "Targeted ESLint passes for modified services, routes, state adapter and tests.",
+    "Runtime status and agent service regressions pass, including 5 new maintenance/concurrency tests and 2 timeout recovery tests.",
+    "14 mission report/ledger regression tests pass, including scoped reads beyond unrelated global row/byte limits.",
+    "9 upstream SSE regression tests pass."
+  ],
+  "inProgress": ["P04", "P29", "P30"],
+  "notes": [
+    "P10 includes service projections, state/controlPlane adapters, and existing mission report/events routes; runtimeLedger implementation supplied by product_robustness agent.",
+    "Existing user edits were preserved. No paid provider calls or live agent turns were dispatched."
+  ]
+}

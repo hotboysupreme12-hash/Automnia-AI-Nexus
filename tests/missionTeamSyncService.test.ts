@@ -158,3 +158,45 @@ test('writeTeamSyncSnapshot mirrors legacy workspace-root snapshots when canonic
     await rm(root, { recursive: true, force: true })
   }
 })
+
+test('concurrent Team Sync publishers preserve invocation order and immutable snapshots', async () => {
+  let first = true
+  let release!: () => void
+  const harness = await createHarness({
+    canonicalDoctrineOnly: false,
+    resolveAgentWorkspaces: async () => {
+      if (first) {
+        first = false
+        await new Promise<void>((resolve) => { release = resolve })
+      }
+      return new Map()
+    },
+  })
+  try {
+    const params = { missionId: 'ordered', title: 'Older generation', mode: 'instant', status: 'active', assignments: makeAssignments(), activity: ['old'] }
+    const older = harness.service.writeTeamSyncSnapshot(params)
+    await new Promise((resolve) => setImmediate(resolve))
+    const newer = harness.service.writeTeamSyncSnapshot({ ...params, title: 'Newest generation', activity: ['new'] })
+    params.title = 'mutated after dispatch'
+    release()
+    await Promise.all([older, newer])
+    const content = await readFile(path.join(harness.root, 'workspace-root', 'TEAM_SYNC.md'), 'utf8')
+    assert.match(content, /Title: Newest generation/)
+    assert.match(content, /## Coordination Rules/)
+    assert.doesNotMatch(content, /mutated after dispatch/)
+  } finally {
+    await rm(harness.root, { recursive: true, force: true })
+  }
+})
+
+test('concurrent Team Sync initializers cannot erase existing activity', async () => {
+  const harness = await createHarness({ fileExists: async () => false })
+  try {
+    const target = path.join(harness.root, 'TEAM_SYNC.md')
+    await writeFile(target, 'existing durable activity')
+    await Promise.all(Array.from({ length: 20 }, () => harness.service.ensureTeamSyncFile(target)))
+    assert.equal(await readFile(target, 'utf8'), 'existing durable activity')
+  } finally {
+    await rm(harness.root, { recursive: true, force: true })
+  }
+})

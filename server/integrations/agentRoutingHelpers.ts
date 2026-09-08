@@ -1064,6 +1064,18 @@ function readTelegramAgentMemorySnippet(agent) {
 function isTelegramAutomniaCreditsModel(value) {
     return /^automnia-cloud\//i.test(String(value == null ? '' : value).trim());
 }
+function telegramAutomniaModelLabel(value) {
+    var normalized = String(value == null ? '' : value).trim().toLowerCase();
+    if (/^automnia-cloud\/gemini-3\.8-flash(?:$|[-@])/i.test(normalized)) return 'Automnia Prime';
+    if (/^automnia-cloud\/gemini-3\.7-flash(?:$|[-@])/i.test(normalized)) return 'Automnia Balanced';
+    if (/^automnia-cloud\/gemini-3\.6-flash(?:$|[-@])/i.test(normalized)) return 'Automnia Swift';
+    if (/^automnia-cloud\/gemini-2\.5-flash(?:$|[-@])/i.test(normalized)) return 'Automnia Classic';
+    return 'Automnia hosted class';
+}
+function telegramDisplayModelRef(value) {
+    var normalized = String(value == null ? '' : value).trim();
+    return /^automnia-cloud\//i.test(normalized) ? telegramAutomniaModelLabel(normalized) : normalized;
+}
 function resolveTelegramAgentRouteProfile(config, agentId) {
     var agent = resolveAgentConfig(config || {}, agentId) || {};
     var identity = agent.identity && typeof agent.identity === 'object' ? agent.identity : {};
@@ -1098,13 +1110,13 @@ function buildTelegramAgentRouteContext(params) {
         '- Product: Automnia AI Nexus (Automnia Telegram bot).',
         profile.name ? '- Active Automnia agent: ' + profile.name + ' (agent id: ' + agentId + ').' : '- Active Automnia agent id: ' + agentId + '.',
         profile.role ? '- Assigned role: ' + profile.role + '.' : '',
-        modelRef ? '- Configured primary execution model: ' + modelRef + '.' : '- Configured primary execution model: unavailable from the active route configuration.',
+        modelRef ? '- Configured primary execution model: ' + telegramDisplayModelRef(modelRef) + '.' : '- Configured primary execution model: unavailable from the active route configuration.',
         profile.workspace ? '- Active execution workspace: ' + profile.workspace : '',
         params.sessionKey ? '- Active Telegram session key: ' + String(params.sessionKey) : '',
         '- These are runtime routing facts, not optional persona suggestions.',
         '- If prior chat history names another agent or workspace, ignore that stale context.',
         '- Never replace this identity with a generic label such as Codex, an OpenClaw personal agent, or GPT-5 when the route facts name an Automnia agent.',
-        '- If asked who you are, begin with the active Automnia agent name, assigned role when present, and agent id. If asked for the model, state the configured primary execution model above exactly, including its provider/model id. If a runtime status explicitly reports a fallback model, name that fallback instead.',
+        '- If asked who you are, begin with the active Automnia agent name, assigned role when present, and agent id. If asked for the model, state the configured primary execution model above exactly. If a runtime status explicitly reports a fallback model, name that fallback instead.',
         '- The Telegram delivery layer verifies direct identity and model questions against these routing facts. Do not contradict that verified response.'
     ].filter(Boolean).join('\n');
 }

@@ -10,10 +10,22 @@ const maximumDocuments = Number(process.env.AUTOMNIA_MAX_SNAPSHOT_DOCUMENTS || 1
 const encodeFirestorePath = (value) => value.split('/').map((segment) => encodeURIComponent(segment)).join('/')
 
 async function requestJson(url, options = {}) {
-  const response = await fetch(url, { ...options, headers: { ...headers, ...(options.headers || {}) } })
-  const payload = await response.json().catch(() => null)
-  if (!response.ok) throw new Error(`Firestore request failed (${response.status}): ${JSON.stringify(payload)}`)
-  return payload || {}
+  const maxAttempts = 5
+  for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
+    try {
+      const response = await fetch(url, { ...options, headers: { ...headers, ...(options.headers || {}) } })
+      const payload = await response.json().catch(() => null)
+      if (response.ok) return payload || {}
+      const retryable = response.status === 429 || response.status >= 500
+      if (!retryable || attempt === maxAttempts) {
+        throw new Error(`Firestore request failed (${response.status}): ${JSON.stringify(payload)}`)
+      }
+    } catch (error) {
+      if (attempt === maxAttempts) throw error
+    }
+    await new Promise((resolve) => setTimeout(resolve, 500 * (2 ** (attempt - 1))))
+  }
+  throw new Error('Firestore request retry loop exited unexpectedly.')
 }
 
 async function listCollectionIds(parentPath = '') {

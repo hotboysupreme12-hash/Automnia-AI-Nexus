@@ -1,3 +1,4 @@
+import { readPreferenceValue, savePreferenceEntries } from './preferenceStorage'
 export const TELEGRAM_SETTINGS_STORAGE_KEY = 'automnia-telegram-settings-v1'
 
 export type TelegramNativeCommands = 'auto' | 'on' | 'off'
@@ -187,7 +188,7 @@ export function parseTelegramConfigOutput(output: string): Partial<TelegramSetti
 export function readTelegramSettings(): TelegramSettings {
   if (typeof window === 'undefined') return DEFAULT_TELEGRAM_SETTINGS
   try {
-    const raw = window.localStorage.getItem(TELEGRAM_SETTINGS_STORAGE_KEY)
+    const raw = readPreferenceValue(TELEGRAM_SETTINGS_STORAGE_KEY)
     return normalizeTelegramSettings(raw ? JSON.parse(raw) as Partial<TelegramSettings> : null)
   } catch {
     return DEFAULT_TELEGRAM_SETTINGS
@@ -196,7 +197,7 @@ export function readTelegramSettings(): TelegramSettings {
 
 export function saveTelegramSettings(settings: TelegramSettings): void {
   if (typeof window === 'undefined') return
-  window.localStorage.setItem(TELEGRAM_SETTINGS_STORAGE_KEY, JSON.stringify(normalizeTelegramSettings(settings)))
+  savePreferenceEntries([[TELEGRAM_SETTINGS_STORAGE_KEY, JSON.stringify(normalizeTelegramSettings(settings))]])
 }
 
 type TelegramSettingKey = keyof TelegramSettings

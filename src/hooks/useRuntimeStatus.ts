@@ -1,3 +1,4 @@
+import { apiUrl } from '../utils/apiUrl'
 import { useCallback, useEffect, useState } from 'react'
 import { apiErrorMessage, apiRequest, type ApiErrorEnvelope, type ApiRequestOptions } from '../api/client'
 import { getRuntimeMonitorClearGeneration, markRuntimeMonitorCleared } from './runtimeMonitorClear'
@@ -994,6 +995,8 @@ function publishRuntimeStatusSnapshot(status: RuntimeStatus) {
     cachedRuntimeSummaryStatusKey = nextKey
   }
   cachedRuntimeSummaryError = ''
+  if (cachedRuntimeStatus) markRuntimeReceipt(cachedRuntimeStatus, status)
+  if (cachedRuntimeSummaryStatus) markRuntimeReceipt(cachedRuntimeSummaryStatus, status)
   notifyRuntimeSummarySubscribers()
 }
 
@@ -1095,11 +1098,31 @@ function runtimePollingAllowed() {
   // not spend CPU polling a live monitor that the operator cannot currently
   // see; focus/visibility listeners will trigger a refresh when it returns.
   const focused = typeof document === 'undefined' || typeof document.hasFocus !== 'function' || document.hasFocus()
-  const online = typeof navigator === 'undefined' || navigator.onLine !== false
+  const localApi = typeof window !== 'undefined' && ['127.0.0.1', 'localhost', '[::1]'].includes(new URL(apiUrl('/api'), window.location.href).hostname)
+  const online = localApi || typeof navigator === 'undefined' || navigator.onLine !== false
   return visible && focused && online
 }
 
+const runtimeReceivedAt = new WeakMap<RuntimeStatus, number>()
+const runtimeSnapshotAt = new WeakMap<RuntimeStatus, number>()
+
+function markRuntimeReceipt(target: RuntimeStatus, response: RuntimeStatus) {
+  const now = Date.now()
+  runtimeReceivedAt.set(target, now)
+  const generated = Date.parse(response.generatedAt)
+  const age = response.monitor?.cacheAgeMs
+  runtimeSnapshotAt.set(target, typeof age === 'number' && Number.isFinite(age) ? now - Math.max(0, age) : Number.isFinite(generated) ? generated : now)
+}
+
+export function runtimeSnapshotAgeMs(status: RuntimeStatus | null, now = Date.now()) {
+  if (!status) return Number.POSITIVE_INFINITY
+  const snapshotAt = runtimeSnapshotAt.get(status) ?? Date.parse(status.generatedAt)
+  return Number.isFinite(snapshotAt) ? Math.max(0, now - snapshotAt) : Number.POSITIVE_INFINITY
+}
+
 function runtimeStatusAgeMs(status: RuntimeStatus | null) {
+  const receivedAt = status ? runtimeReceivedAt.get(status) : undefined
+  if (receivedAt !== undefined) return Math.max(0, Date.now() - receivedAt)
   const generatedAtMs = status?.generatedAt ? Date.parse(status.generatedAt) : NaN
   return Number.isFinite(generatedAtMs) ? Math.max(0, Date.now() - generatedAtMs) : Number.POSITIVE_INFINITY
 }
@@ -1369,6 +1392,7 @@ async function loadRuntimeSummaryStatus(intervalMs: number, forceRefresh = false
       cachedRuntimeSummaryStatus = mergedStatus
       cachedRuntimeSummaryStatusKey = nextKey
     }
+    if (cachedRuntimeSummaryStatus) markRuntimeReceipt(cachedRuntimeSummaryStatus, result.data)
     cachedRuntimeSummaryError = ''
   } catch (loadError) {
     const idleAbort = runtimeSummaryRequestAbortReason === 'idle' && controller.signal.aborted

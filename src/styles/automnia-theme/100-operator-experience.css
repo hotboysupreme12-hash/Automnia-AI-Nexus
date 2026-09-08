@@ -559,18 +559,6 @@ html.dui-pro-overhaul.dui-cohesive-ui .dy-command-console__meta {
   gap: 6px !important;
 }
 
-html.dui-pro-overhaul :is(.dy-command-console__stat, .dy-command-console__pill),
-html.dui-pro-overhaul.dui-cohesive-ui :is(.dy-command-console__stat, .dy-command-console__pill) {
-  min-height: 25px;
-  padding: 3px 7px !important;
-  border: 1px solid rgb(156 205 239 / .15) !important;
-  border-radius: 7px !important;
-  background: rgb(3 8 13 / .44) !important;
-  color: #b6d4e9 !important;
-  font-size: var(--dy-type-micro, 11px) !important;
-  box-shadow: var(--operator-inset) !important;
-}
-
 html.dui-pro-overhaul .dy-command-console__clear,
 html.dui-pro-overhaul.dui-cohesive-ui .dy-command-console__clear {
   min-height: 26px !important;
@@ -585,14 +573,6 @@ html.dui-pro-overhaul.dui-cohesive-ui .dy-command-target-bar {
   padding: 8px 13px !important;
   border-bottom: 1px solid rgb(147 201 237 / .10) !important;
   background: rgb(7 12 16 / .78) !important;
-}
-
-html.dui-pro-overhaul .dy-command-target-label,
-html.dui-pro-overhaul.dui-cohesive-ui .dy-command-target-label {
-  color: #80b9e3 !important;
-  font-size: var(--dy-type-micro, 11px) !important;
-  font-weight: 700 !important;
-  letter-spacing: .065em !important;
 }
 
 html.dui-pro-overhaul .dy-command-target-chip,
@@ -668,12 +648,6 @@ html.dui-pro-overhaul.dui-cohesive-ui .dy-command-idle-hint__title {
   color: #dceeff !important;
   font-size: 13px !important;
   font-weight: 730 !important;
-}
-
-html.dui-pro-overhaul :is(.dy-command-idle-hint__target, .dy-command-idle-hint__stream),
-html.dui-pro-overhaul.dui-cohesive-ui :is(.dy-command-idle-hint__target, .dy-command-idle-hint__stream) {
-  color: var(--operator-muted) !important;
-  font-size: var(--dy-type-micro, 11px) !important;
 }
 
 html.dui-pro-overhaul .dy-command-message,
@@ -1387,14 +1361,6 @@ html.dui-pro-overhaul.dui-cohesive-ui [data-dui-panel="monitor"] .dy-gateway-eve
   background: rgb(96 217 203 / .048) !important;
 }
 
-html.dui-pro-overhaul [data-dui-panel="monitor"] .dy-gateway-direction-marker,
-html.dui-pro-overhaul.dui-cohesive-ui [data-dui-panel="monitor"] .dy-gateway-direction-marker {
-  width: 7px !important;
-  height: 7px !important;
-  border-radius: 999px !important;
-  box-shadow: 0 0 0 3px rgb(96 217 203 / .09);
-}
-
 html.dui-pro-overhaul [data-dui-panel="monitor"] :is(.dy-gateway-direction-label, .dy-gateway-event-time, .dy-gateway-event-source),
 html.dui-pro-overhaul.dui-cohesive-ui [data-dui-panel="monitor"] :is(.dy-gateway-direction-label, .dy-gateway-event-time, .dy-gateway-event-source) {
   font-size: var(--dy-type-micro, 11px) !important;
@@ -1472,26 +1438,6 @@ html.dui-pro-overhaul [data-dui-panel="monitor"] .dy-session-meta-chip > strong,
 html.dui-pro-overhaul.dui-cohesive-ui [data-dui-panel="monitor"] .dy-session-meta-chip > strong {
   color: #cde4de !important;
   font-size: var(--dy-type-micro, 11px) !important;
-}
-
-html.dui-pro-overhaul [data-dui-panel="monitor"] .dy-monitor-log-box,
-html.dui-pro-overhaul.dui-cohesive-ui [data-dui-panel="monitor"] .dy-monitor-log-box {
-  padding: 10px !important;
-  border-radius: 9px !important;
-  color: #a9bdb8 !important;
-  font-size: var(--dy-type-micro, 11px) !important;
-  line-height: 1.6 !important;
-}
-
-html.dui-pro-overhaul [data-dui-panel="monitor"] .dy-gateway-log-line,
-html.dui-pro-overhaul.dui-cohesive-ui [data-dui-panel="monitor"] .dy-gateway-log-line {
-  padding: 3px 5px;
-  border-radius: 4px;
-}
-
-html.dui-pro-overhaul [data-dui-panel="monitor"] .dy-gateway-log-line:hover,
-html.dui-pro-overhaul.dui-cohesive-ui [data-dui-panel="monitor"] .dy-gateway-log-line:hover {
-  background: rgb(96 217 203 / .055);
 }
 
 /* Mission planning: make decisions and consequences legible --------------------- */
@@ -1670,13 +1616,6 @@ html.dui-pro-overhaul.dui-cohesive-ui [data-dui-panel="missions"] .dui-mission-s
 html.dui-pro-overhaul [data-dui-panel="missions"] .dui-mission-sidebar .dui-card,
 html.dui-pro-overhaul.dui-cohesive-ui [data-dui-panel="missions"] .dui-mission-sidebar .dui-card {
   padding: 13px !important;
-}
-
-html.dui-pro-overhaul [data-dui-panel="missions"] .dui-mission-bottom-card,
-html.dui-pro-overhaul.dui-cohesive-ui [data-dui-panel="missions"] .dui-mission-bottom-card {
-  display: grid;
-  gap: 14px;
-  padding: 15px !important;
 }
 
 html.dui-pro-overhaul [data-dui-panel="missions"] :is(.dui-mission-bottom-objective, .dui-mission-bottom-cron, .dui-mission-bottom-tuning),
@@ -2521,14 +2460,14 @@ html.dui-pro-overhaul.dui-cohesive-ui [data-dui-modal="recruit-agent"][data-mark
    field hover/focus colors must not turn that textarea opaque, or the preview
    disappears while the user is typing. File tabs already render a real document
    icon, so retire the older decorative dot that became a fourth grid child. */
-html.dui-pro-overhaul [data-dui-modal="recruit-agent"] #recruit-markdown-editor-panel textarea.dui-recruit-code-input,
-html.dui-pro-overhaul [data-dui-modal="recruit-agent"] #recruit-markdown-editor-panel textarea.dui-recruit-code-input:hover:not(:disabled),
-html.dui-pro-overhaul [data-dui-modal="recruit-agent"] #recruit-markdown-editor-panel textarea.dui-recruit-code-input:focus,
-html.dui-pro-overhaul [data-dui-modal="recruit-agent"] #recruit-markdown-editor-panel textarea.dui-recruit-code-input:focus-visible,
-html.dui-pro-overhaul.dui-cohesive-ui [data-dui-modal="recruit-agent"] #recruit-markdown-editor-panel textarea.dui-recruit-code-input,
-html.dui-pro-overhaul.dui-cohesive-ui [data-dui-modal="recruit-agent"] #recruit-markdown-editor-panel textarea.dui-recruit-code-input:hover:not(:disabled),
-html.dui-pro-overhaul.dui-cohesive-ui [data-dui-modal="recruit-agent"] #recruit-markdown-editor-panel textarea.dui-recruit-code-input:focus,
-html.dui-pro-overhaul.dui-cohesive-ui [data-dui-modal="recruit-agent"] #recruit-markdown-editor-panel textarea.dui-recruit-code-input:focus-visible {
+html.dui-pro-overhaul [data-dui-modal="recruit-agent"] :is(#recruit-markdown-editor-panel, [data-recruit-markdown-editor="true"]) textarea.dui-recruit-code-input,
+html.dui-pro-overhaul [data-dui-modal="recruit-agent"] :is(#recruit-markdown-editor-panel, [data-recruit-markdown-editor="true"]) textarea.dui-recruit-code-input:hover:not(:disabled),
+html.dui-pro-overhaul [data-dui-modal="recruit-agent"] :is(#recruit-markdown-editor-panel, [data-recruit-markdown-editor="true"]) textarea.dui-recruit-code-input:focus,
+html.dui-pro-overhaul [data-dui-modal="recruit-agent"] :is(#recruit-markdown-editor-panel, [data-recruit-markdown-editor="true"]) textarea.dui-recruit-code-input:focus-visible,
+html.dui-pro-overhaul.dui-cohesive-ui [data-dui-modal="recruit-agent"] :is(#recruit-markdown-editor-panel, [data-recruit-markdown-editor="true"]) textarea.dui-recruit-code-input,
+html.dui-pro-overhaul.dui-cohesive-ui [data-dui-modal="recruit-agent"] :is(#recruit-markdown-editor-panel, [data-recruit-markdown-editor="true"]) textarea.dui-recruit-code-input:hover:not(:disabled),
+html.dui-pro-overhaul.dui-cohesive-ui [data-dui-modal="recruit-agent"] :is(#recruit-markdown-editor-panel, [data-recruit-markdown-editor="true"]) textarea.dui-recruit-code-input:focus,
+html.dui-pro-overhaul.dui-cohesive-ui [data-dui-modal="recruit-agent"] :is(#recruit-markdown-editor-panel, [data-recruit-markdown-editor="true"]) textarea.dui-recruit-code-input:focus-visible {
   border: 0 !important;
   outline: 0 !important;
   background: transparent !important;
@@ -2539,14 +2478,14 @@ html.dui-pro-overhaul.dui-cohesive-ui [data-dui-modal="recruit-agent"] #recruit-
   -webkit-text-fill-color: transparent !important;
 }
 
-html.dui-pro-overhaul [data-dui-modal="recruit-agent"] #recruit-markdown-editor-panel.dui-recruit-code-editor.is-plain-text textarea.dui-recruit-code-input,
-html.dui-pro-overhaul [data-dui-modal="recruit-agent"] #recruit-markdown-editor-panel.dui-recruit-code-editor.is-plain-text textarea.dui-recruit-code-input:hover:not(:disabled),
-html.dui-pro-overhaul [data-dui-modal="recruit-agent"] #recruit-markdown-editor-panel.dui-recruit-code-editor.is-plain-text textarea.dui-recruit-code-input:focus,
-html.dui-pro-overhaul [data-dui-modal="recruit-agent"] #recruit-markdown-editor-panel.dui-recruit-code-editor.is-plain-text textarea.dui-recruit-code-input:focus-visible,
-html.dui-pro-overhaul.dui-cohesive-ui [data-dui-modal="recruit-agent"] #recruit-markdown-editor-panel.dui-recruit-code-editor.is-plain-text textarea.dui-recruit-code-input,
-html.dui-pro-overhaul.dui-cohesive-ui [data-dui-modal="recruit-agent"] #recruit-markdown-editor-panel.dui-recruit-code-editor.is-plain-text textarea.dui-recruit-code-input:hover:not(:disabled),
-html.dui-pro-overhaul.dui-cohesive-ui [data-dui-modal="recruit-agent"] #recruit-markdown-editor-panel.dui-recruit-code-editor.is-plain-text textarea.dui-recruit-code-input:focus,
-html.dui-pro-overhaul.dui-cohesive-ui [data-dui-modal="recruit-agent"] #recruit-markdown-editor-panel.dui-recruit-code-editor.is-plain-text textarea.dui-recruit-code-input:focus-visible {
+html.dui-pro-overhaul [data-dui-modal="recruit-agent"] :is(#recruit-markdown-editor-panel, [data-recruit-markdown-editor="true"]).dui-recruit-code-editor.is-plain-text textarea.dui-recruit-code-input,
+html.dui-pro-overhaul [data-dui-modal="recruit-agent"] :is(#recruit-markdown-editor-panel, [data-recruit-markdown-editor="true"]).dui-recruit-code-editor.is-plain-text textarea.dui-recruit-code-input:hover:not(:disabled),
+html.dui-pro-overhaul [data-dui-modal="recruit-agent"] :is(#recruit-markdown-editor-panel, [data-recruit-markdown-editor="true"]).dui-recruit-code-editor.is-plain-text textarea.dui-recruit-code-input:focus,
+html.dui-pro-overhaul [data-dui-modal="recruit-agent"] :is(#recruit-markdown-editor-panel, [data-recruit-markdown-editor="true"]).dui-recruit-code-editor.is-plain-text textarea.dui-recruit-code-input:focus-visible,
+html.dui-pro-overhaul.dui-cohesive-ui [data-dui-modal="recruit-agent"] :is(#recruit-markdown-editor-panel, [data-recruit-markdown-editor="true"]).dui-recruit-code-editor.is-plain-text textarea.dui-recruit-code-input,
+html.dui-pro-overhaul.dui-cohesive-ui [data-dui-modal="recruit-agent"] :is(#recruit-markdown-editor-panel, [data-recruit-markdown-editor="true"]).dui-recruit-code-editor.is-plain-text textarea.dui-recruit-code-input:hover:not(:disabled),
+html.dui-pro-overhaul.dui-cohesive-ui [data-dui-modal="recruit-agent"] :is(#recruit-markdown-editor-panel, [data-recruit-markdown-editor="true"]).dui-recruit-code-editor.is-plain-text textarea.dui-recruit-code-input:focus,
+html.dui-pro-overhaul.dui-cohesive-ui [data-dui-modal="recruit-agent"] :is(#recruit-markdown-editor-panel, [data-recruit-markdown-editor="true"]).dui-recruit-code-editor.is-plain-text textarea.dui-recruit-code-input:focus-visible {
   color: #e8eef0 !important;
   -webkit-text-fill-color: #e8eef0 !important;
 }
@@ -2559,12 +2498,6 @@ html.dui-pro-overhaul.dui-cohesive-ui [data-dui-modal="recruit-agent"] .dui-recr
 /* Recruit profile controls must retain enough inline space for readable values.
    The previous compact three-column profile grid reduced the Class field and
    its menu to roughly 80px, which clipped both field values and menu options. */
-@media (min-width: 1041px) {
-  html.dui-pro-overhaul [data-dui-modal="recruit-agent"][data-markdown-editor="open"] .dui-recruit-layout,
-  html.dui-pro-overhaul.dui-cohesive-ui [data-dui-modal="recruit-agent"][data-markdown-editor="open"] .dui-recruit-layout {
-    grid-template-columns: minmax(460px, 500px) minmax(0, 1fr) !important;
-  }
-}
 
 html.dui-pro-overhaul [data-dui-modal="recruit-agent"] .dui-recruit-style-settings .dui-recruit-settings-overview,
 html.dui-pro-overhaul.dui-cohesive-ui [data-dui-modal="recruit-agent"] .dui-recruit-style-settings .dui-recruit-settings-overview {
@@ -2616,12 +2549,12 @@ html.dui-pro-overhaul.dui-cohesive-ui [data-dui-modal="recruit-agent"] .dui-recr
 /* The textarea owns selection and caret placement while this preview is shown
    underneath it. Keep their glyph metrics identical: token weight changes make
    wrapped lines and click positions diverge from the native textarea. */
-html.dui-pro-overhaul [data-dui-modal="recruit-agent"] #recruit-markdown-editor-panel .dui-recruit-code-preview,
-html.dui-pro-overhaul [data-dui-modal="recruit-agent"] #recruit-markdown-editor-panel .dui-recruit-code-preview *,
-html.dui-pro-overhaul [data-dui-modal="recruit-agent"] #recruit-markdown-editor-panel textarea.dui-recruit-code-input,
-html.dui-pro-overhaul.dui-cohesive-ui [data-dui-modal="recruit-agent"] #recruit-markdown-editor-panel .dui-recruit-code-preview,
-html.dui-pro-overhaul.dui-cohesive-ui [data-dui-modal="recruit-agent"] #recruit-markdown-editor-panel .dui-recruit-code-preview *,
-html.dui-pro-overhaul.dui-cohesive-ui [data-dui-modal="recruit-agent"] #recruit-markdown-editor-panel textarea.dui-recruit-code-input {
+html.dui-pro-overhaul [data-dui-modal="recruit-agent"] :is(#recruit-markdown-editor-panel, [data-recruit-markdown-editor="true"]) .dui-recruit-code-preview,
+html.dui-pro-overhaul [data-dui-modal="recruit-agent"] :is(#recruit-markdown-editor-panel, [data-recruit-markdown-editor="true"]) .dui-recruit-code-preview *,
+html.dui-pro-overhaul [data-dui-modal="recruit-agent"] :is(#recruit-markdown-editor-panel, [data-recruit-markdown-editor="true"]) textarea.dui-recruit-code-input,
+html.dui-pro-overhaul.dui-cohesive-ui [data-dui-modal="recruit-agent"] :is(#recruit-markdown-editor-panel, [data-recruit-markdown-editor="true"]) .dui-recruit-code-preview,
+html.dui-pro-overhaul.dui-cohesive-ui [data-dui-modal="recruit-agent"] :is(#recruit-markdown-editor-panel, [data-recruit-markdown-editor="true"]) .dui-recruit-code-preview *,
+html.dui-pro-overhaul.dui-cohesive-ui [data-dui-modal="recruit-agent"] :is(#recruit-markdown-editor-panel, [data-recruit-markdown-editor="true"]) textarea.dui-recruit-code-input {
   font-family: var(--dui-font-mono, var(--font-mono)) !important;
   font-size: 16px !important;
   font-weight: 520 !important;

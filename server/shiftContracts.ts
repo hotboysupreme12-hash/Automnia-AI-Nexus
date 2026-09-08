@@ -42,6 +42,7 @@ export type HeartbeatRuntimeDefaults = {
 }
 
 export type StartShiftPayload = {
+  idempotencyKey?: string
   name: string
   agent?: string
   every?: string

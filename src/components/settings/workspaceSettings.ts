@@ -1,3 +1,4 @@
+import { readPreferenceValue, savePreferenceEntries } from './preferenceStorage'
 import type { AgentRarity } from '../../types/nexus'
 
 export type RegistrySortKey = 'party' | 'level' | 'name' | 'rarity'
@@ -98,20 +99,9 @@ function normalizeDisplayMode(value: unknown): AgentDisplayMode | null {
   return null
 }
 
-function localStorageOrNull(): Storage | null {
-  if (typeof window === 'undefined') return null
-  try {
-    return window.localStorage
-  } catch {
-    return null
-  }
-}
-
 export function readRegistryPreferences(): RegistryPreferences {
-  const storage = localStorageOrNull()
-  if (!storage) return DEFAULT_REGISTRY_PREFERENCES
   try {
-    const parsed = JSON.parse(storage.getItem(REGISTRY_PREFS_KEY) || '{}') as Partial<RegistryPreferences>
+    const parsed = JSON.parse(readPreferenceValue(REGISTRY_PREFS_KEY) || '{}') as Partial<RegistryPreferences>
     const storedOverlayPreset = parsed.overlayPreset && OVERLAY_PRESETS.has(parsed.overlayPreset)
       ? parsed.overlayPreset
       : DEFAULT_REGISTRY_PREFERENCES.overlayPreset
@@ -130,41 +120,33 @@ export function readRegistryPreferences(): RegistryPreferences {
 }
 
 export function saveRegistryPreferences(preferences: RegistryPreferences): void {
-  const storage = localStorageOrNull()
-  if (!storage) return
   const normalized: RegistryPreferences = {
     ...preferences,
     overlayPreset: preferences.overlayPreset === 'rarity' ? 'graphite-glass' : preferences.overlayPreset,
     rarityColorsEnabled: Boolean(preferences.rarityColorsEnabled),
   }
-  storage.setItem(REGISTRY_PREFS_KEY, JSON.stringify({ ...normalized, overlayPresetVersion: REGISTRY_PREFS_VERSION }))
-  window.dispatchEvent(new CustomEvent<RegistryPreferences>(REGISTRY_PREFS_CHANGED_EVENT, { detail: normalized }))
+  savePreferenceEntries([[REGISTRY_PREFS_KEY, JSON.stringify({ ...normalized, overlayPresetVersion: REGISTRY_PREFS_VERSION })]])
+  if (typeof window !== 'undefined') window.dispatchEvent(new CustomEvent<RegistryPreferences>(REGISTRY_PREFS_CHANGED_EVENT, { detail: normalized }))
 }
 
 export function readConsolePreferences(): ConsolePreferences {
-  const storage = localStorageOrNull()
-  if (!storage) return DEFAULT_CONSOLE_PREFERENCES
-  const storedWidth = Number(storage.getItem(CONSOLE_WIDTH_KEY))
+  const storedWidth = Number(readPreferenceValue(CONSOLE_WIDTH_KEY))
   const width = Number.isFinite(storedWidth) && storedWidth > 0
     ? Math.max(360, Math.min(760, Math.round(storedWidth)))
     : DEFAULT_CONSOLE_PREFERENCES.width
   return {
-    visible: storage.getItem(CONSOLE_VISIBILITY_KEY) !== 'hidden',
+    visible: readPreferenceValue(CONSOLE_VISIBILITY_KEY) !== 'hidden',
     width,
-    rememberDrafts: storage.getItem(CONSOLE_DRAFTS_KEY) !== 'off',
+    rememberDrafts: readPreferenceValue(CONSOLE_DRAFTS_KEY) !== 'off',
   }
 }
 
 export function saveConsolePreferences(preferences: ConsolePreferences): void {
-  const storage = localStorageOrNull()
-  if (!storage) return
   const normalized: ConsolePreferences = {
     visible: Boolean(preferences.visible),
     width: Math.max(360, Math.min(760, Math.round(preferences.width))),
     rememberDrafts: Boolean(preferences.rememberDrafts),
   }
-  storage.setItem(CONSOLE_VISIBILITY_KEY, normalized.visible ? 'visible' : 'hidden')
-  storage.setItem(CONSOLE_WIDTH_KEY, String(normalized.width))
-  storage.setItem(CONSOLE_DRAFTS_KEY, normalized.rememberDrafts ? 'on' : 'off')
-  window.dispatchEvent(new CustomEvent<ConsolePreferences>(CONSOLE_PREFS_CHANGED_EVENT, { detail: normalized }))
+  savePreferenceEntries([[CONSOLE_VISIBILITY_KEY, normalized.visible ? 'visible' : 'hidden'], [CONSOLE_WIDTH_KEY, String(normalized.width)], [CONSOLE_DRAFTS_KEY, normalized.rememberDrafts ? 'on' : 'off']])
+  if (typeof window !== 'undefined') window.dispatchEvent(new CustomEvent<ConsolePreferences>(CONSOLE_PREFS_CHANGED_EVENT, { detail: normalized }))
 }

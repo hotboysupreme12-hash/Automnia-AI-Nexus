@@ -83,9 +83,10 @@ export type MissionReportServiceOptions = {
   missions: Map<string, Mission>
   now?: () => Date
   persistWarning?: (message: string, error: unknown) => void
-  readMissionEvents: <T>(limit: number) => Promise<T[]>
-  readMissionRecords: <T>(limit: number) => Promise<T[]>
-  readMissionReports: <T>(limit: number) => Promise<T[]>
+  readMissionEvents: <T>(limit: number, options?: { missionId?: string }) => Promise<T[]>
+  readAllMissionEvents?: <T>(missionId: string) => Promise<T[]>
+  readMissionRecords: <T>(limit: number, options?: { missionId?: string }) => Promise<T[]>
+  readMissionReports: <T>(limit: number, options?: { missionId?: string }) => Promise<T[]>
 }
 
 function defaultPersistWarning(message: string, error: unknown) {
@@ -362,8 +363,8 @@ export function createMissionReportService(options: MissionReportServiceOptions)
       .slice(0, Math.max(1, Math.min(300, Math.round(limit))))
   }
 
-  async function listMissionRecordsForProjection(limit = 500) {
-    const records = await options.readMissionRecords<MissionRecordSnapshot>(limit).catch(() => [])
+  async function listMissionRecordsForProjection(limit = 500, missionId?: string | null) {
+    const records = await options.readMissionRecords<MissionRecordSnapshot>(limit, missionId ? { missionId } : undefined).catch(() => [])
     const latestByMission = new Map<string, Mission>()
     let durableRecordCount = 0
     for (const record of records) {
@@ -373,6 +374,7 @@ export function createMissionReportService(options: MissionReportServiceOptions)
       durableRecordCount += 1
     }
     for (const mission of options.missions.values()) {
+      if (missionId && mission.id !== missionId) continue
       latestByMission.set(mission.id, mission)
     }
     return {
@@ -477,20 +479,35 @@ export function createMissionReportService(options: MissionReportServiceOptions)
     }
   }
 
-  function recordMissionReport(mission: Mission) {
-    const report = buildMissionReport(mission)
-    missionReports.set(mission.id, report)
-    void options.appendMissionReport(report).catch((error) => {
-      warn('[missions] failed to append mission report ledger:', error)
-    })
-    return report
+  async function recordMissionReport(mission: Mission) {
+    const snapshot = structuredClone(mission)
+    const live = options.missionFeed.filter((event) => event.missionId === mission.id)
+    try {
+      const durable = options.readAllMissionEvents
+        ? await options.readAllMissionEvents<MissionLifecycleEvent>(mission.id)
+        : await options.readMissionEvents<MissionLifecycleEvent>(Number.MAX_SAFE_INTEGER, { missionId: mission.id })
+      const byId = new Map(live.map((event) => [event.id, event]))
+      for (const event of durable) {
+        const feedEvent = missionFeedEventFromLifecycleEvent(event, isoNow())
+        if (feedEvent) byId.set(feedEvent.id, feedEvent)
+      }
+      const report = buildMissionReport(snapshot, [...byId.values()])
+      await options.appendMissionReport(report)
+      missionReports.set(mission.id, report)
+      return report
+    } catch (error) {
+      warn('[missions] failed to build or persist complete mission report:', error)
+      return null
+    }
   }
 
-  async function listMissionReports(limit = 80): Promise<BackendMissionReport[]> {
-    const persisted = await options.readMissionReports<BackendMissionReport>(limit).catch(() => [])
+  async function listMissionReports(limit = 80, missionId?: string | null): Promise<BackendMissionReport[]> {
+    const persisted = await options.readMissionReports<BackendMissionReport>(limit, missionId ? { missionId } : undefined).catch(() => [])
     const byMission = new Map<string, BackendMissionReport>()
     for (const report of persisted) byMission.set(report.missionId, report)
-    for (const report of missionReports.values()) byMission.set(report.missionId, report)
+    for (const report of missionReports.values()) {
+      if (!missionId || report.missionId === missionId) byMission.set(report.missionId, report)
+    }
     return Array.from(byMission.values())
       .sort((a, b) => Date.parse(b.generatedAt) - Date.parse(a.generatedAt))
       .slice(0, limit)
@@ -505,9 +522,9 @@ export function createMissionReportService(options: MissionReportServiceOptions)
   } = {}): Promise<MissionLifecycleProjection> {
     const missionId = optionsArg.missionId?.trim() || null
     const [recordProjection, events, reports] = await Promise.all([
-      listMissionRecordsForProjection(optionsArg.missionLimit || 500),
-      options.readMissionEvents<MissionLifecycleEvent>(optionsArg.eventLimit || 1000).catch(() => []),
-      listMissionReports(optionsArg.reportLimit || 100),
+      listMissionRecordsForProjection(optionsArg.missionLimit || 500, missionId),
+      options.readMissionEvents<MissionLifecycleEvent>(optionsArg.eventLimit || 1000, missionId ? { missionId } : undefined).catch(() => []),
+      listMissionReports(optionsArg.reportLimit || 100, missionId),
     ])
     const projectedMissions = missionId
       ? recordProjection.missions.filter((mission) => mission.id === missionId)

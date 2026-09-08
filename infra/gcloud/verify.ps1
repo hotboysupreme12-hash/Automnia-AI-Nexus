@@ -3,7 +3,8 @@ param(
   [Parameter(Mandatory)][ValidatePattern('^[a-z][a-z0-9-]{4,28}[a-z0-9]$')][string]$ProjectId,
   [ValidatePattern('^[a-z][a-z0-9-]{4,28}[a-z0-9]$')][string]$SourceProjectId,
   [string]$Region,
-  [string]$CandidateUrl
+  [string]$CandidateUrl,
+  [switch]$SkipGmail
 )
 
 . (Join-Path $PSScriptRoot 'Common.ps1')
@@ -102,7 +103,7 @@ try {
   foreach ($entry in @($service.spec.template.spec.containers[0].env)) {
     if ($entry.PSObject.Properties.Name -contains 'valueFrom' -and $entry.valueFrom.secretKeyRef) { $secretBindings[[string]$entry.name] = [string]$entry.valueFrom.secretKeyRef.name }
   }
-  foreach ($binding in $config.SecretBindings.GetEnumerator()) {
+  foreach ($binding in @($config.SecretBindings.GetEnumerator())) {
     Add-VerificationCheck -Name "secret-binding:$($binding.Key)" -Passed ($secretBindings[[string]$binding.Key] -eq [string]$binding.Value) -Expected ([string]$binding.Value) -Actual $secretBindings[[string]$binding.Key]
   }
 
@@ -125,7 +126,7 @@ try {
 }
 
 try {
-  $health = & (Join-Path $PSScriptRoot 'health.ps1') -ProjectId $ProjectId -Region $Region -BaseUrl $CandidateUrl
+  $health = & (Join-Path $PSScriptRoot 'health.ps1') -ProjectId $ProjectId -Region $Region -BaseUrl $CandidateUrl -SkipGmail:$SkipGmail
   Add-VerificationCheck -Name 'cloud-run-health' -Passed $health.Passed -Expected $true -Actual $health.Passed
 } catch {
   Add-VerificationCheck -Name 'cloud-run-health' -Passed $false -Expected $true -Actual $_.Exception.Message
@@ -169,6 +170,7 @@ $report = [ordered]@{
   region = $Region
   candidateUrl = $CandidateUrl
   permanentBaseUrl = $config.PermanentBaseUrl
+  gmailSkipped = [bool]$SkipGmail
   sourceSnapshot = $sourceSnapshot
   targetSnapshot = $targetSnapshot
   secretFingerprints = $secretFingerprints

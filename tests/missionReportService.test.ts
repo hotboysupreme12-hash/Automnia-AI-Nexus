@@ -48,9 +48,12 @@ function createHarness() {
     missions,
     now: () => new Date('2026-06-30T12:06:00.000Z'),
     persistWarning: () => undefined,
-    readMissionEvents: async <T>() => persistedEvents as T[],
-    readMissionRecords: async <T>() => persistedRecords as T[],
-    readMissionReports: async <T>() => persistedReports as T[],
+    readMissionEvents: async <T>(limit: number, options?: { missionId?: string }) => persistedEvents
+      .filter((event) => !options?.missionId || event.missionId === options.missionId).slice(-limit) as T[],
+    readMissionRecords: async <T>(limit: number, options?: { missionId?: string }) => persistedRecords
+      .filter((record) => !options?.missionId || record.missionId === options.missionId).slice(-limit) as T[],
+    readMissionReports: async <T>(limit: number, options?: { missionId?: string }) => persistedReports
+      .filter((report) => !options?.missionId || report.missionId === options.missionId).slice(-limit) as T[],
   })
   return {
     appendedReports,
@@ -62,6 +65,26 @@ function createHarness() {
     service,
   }
 }
+
+test('mission detail scopes durable reads before global limits exclude older missions', async () => {
+  const { service, persistedRecords, persistedEvents, persistedReports } = createHarness()
+  for (const id of ['old-mission', 'newer-mission']) {
+    const mission = createMission({ id })
+    persistedRecords.push({ ...mission, missionId: id, updatedAt: mission.createdAt, persistedAt: mission.createdAt, persistReason: 'fixture' })
+    persistedReports.push(service.buildMissionReport(mission))
+    persistedEvents.push({
+      id: `${id}-event`, missionId: id, timestamp: mission.createdAt, at: mission.createdAt,
+      type: 'mission_completed', message: `${id} completed`, actor: 'scheduler',
+      previousState: 'running', nextState: 'completed', idempotencyKey: `${id}:completed`,
+    })
+  }
+  const result = await service.buildMissionLifecycleProjection({
+    missionId: 'old-mission', missionLimit: 1, eventLimit: 1, reportLimit: 1,
+  })
+  assert.equal(result.missions.length, 1)
+  assert.equal(result.events[0]?.missionId, 'old-mission')
+  assert.equal(result.reports[0]?.missionId, 'old-mission')
+})
 
 test('buildMissionReport preserves runtime-backed cron/session evidence and confidence metrics', () => {
   const { missionFeed, service } = createHarness()
@@ -265,12 +288,12 @@ test('recordMissionReport and lifecycle projection merge memory reports with dur
     generatedAt: '2026-06-30T11:01:00.000Z',
   })
 
-  const recorded = service.recordMissionReport(memoryMission)
+  const recorded = await service.recordMissionReport(memoryMission)
   const reports = await service.listMissionReports(10)
   const projection = await service.buildMissionLifecycleProjection({ missionLimit: 10, eventLimit: 10, feedLimit: 10, reportLimit: 10 })
 
   assert.equal(appendedReports.length, 1)
-  assert.equal(recorded.missionId, 'memory-mission')
+  assert.equal(recorded?.missionId, 'memory-mission')
   assert.deepEqual(reports.map((report) => report.missionId), ['memory-mission', 'durable-mission'])
   assert.deepEqual(projection.missions.map((mission) => mission.id), ['memory-mission', 'durable-mission'])
   assert.equal(projection.reports.length, 2)
@@ -279,4 +302,24 @@ test('recordMissionReport and lifecycle projection merge memory reports with dur
   assert.equal(projection.projection.source, 'memory+ledger')
   assert.equal(projection.projection.durableRecordCount, 1)
   assert.equal(projection.projection.memoryRecordCount, 1)
+})
+
+test('recorded reports retain early evidence after the live feed has rotated and after restart', async () => {
+  const harness = createHarness()
+  const mission = createMission()
+  const events = Array.from({ length: 2405 }, (_, index): MissionLifecycleEvent => ({
+    id: `event-${index}`, missionId: mission.id, timestamp: new Date(Date.parse(mission.createdAt) + index).toISOString(),
+    type: 'agent_update', message: index === 0 ? 'Verification failed' : index < 6 ? 'Retry attempt' : 'Progress update',
+    actor: index === 0 ? 'operator' : 'scheduler', previousState: 'running', nextState: 'running', idempotencyKey: `event-${index}`,
+  }))
+  harness.persistedEvents.push(...events)
+  harness.missionFeed.push(...events.slice(-300).map((event) => ({ ...event, at: event.timestamp })))
+  const before = await harness.service.recordMissionReport(mission)
+  assert.equal(before?.evidence.verificationFailures, 1)
+  assert.equal(before?.evidence.retryCount, 5)
+  assert.equal(before?.evidence.humanInterventions, 1)
+  const restarted = createHarness()
+  restarted.persistedEvents.push(...events)
+  const after = await restarted.service.recordMissionReport(mission)
+  assert.deepEqual(after?.evidence, before?.evidence)
 })

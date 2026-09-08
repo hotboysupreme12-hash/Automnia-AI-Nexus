@@ -1,3 +1,4 @@
+import { readPreferenceValue, savePreferenceEntries } from './preferenceStorage'
 export type UiAccentMode = 'no-blue' | 'reference' | 'ember' | 'green'
 export type UiFormChrome = 'graphite' | 'obsidian' | 'warm'
 export type UiDensity = 'compact' | 'comfortable' | 'spacious'
@@ -39,7 +40,7 @@ function isBoolean(value: unknown): value is boolean {
 export function readUiSettings(): AutomniaUiSettings {
   if (typeof window === 'undefined') return DEFAULT_UI_SETTINGS
   try {
-    const raw = window.localStorage.getItem(UI_SETTINGS_STORAGE_KEY)
+    const raw = readPreferenceValue(UI_SETTINGS_STORAGE_KEY)
     if (!raw) return DEFAULT_UI_SETTINGS
     const parsed = JSON.parse(raw) as Partial<AutomniaUiSettings>
     const controlGlow = isBoolean(parsed.controlGlow) ? parsed.controlGlow : DEFAULT_UI_SETTINGS.controlGlow
@@ -61,7 +62,7 @@ export function readUiSettings(): AutomniaUiSettings {
 
 export function saveUiSettings(settings: AutomniaUiSettings): void {
   if (typeof window === 'undefined') return
-  window.localStorage.setItem(UI_SETTINGS_STORAGE_KEY, JSON.stringify(settings))
+  savePreferenceEntries([[UI_SETTINGS_STORAGE_KEY, JSON.stringify(settings)]])
 }
 
 export function applyUiSettings(settings: AutomniaUiSettings): void {

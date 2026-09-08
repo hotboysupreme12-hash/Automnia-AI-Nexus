@@ -1,7 +1,9 @@
 import { useEffect, useRef, useState } from 'react'
+import { useDialogFocus } from '../ui/Dialog'
 import type { ReactNode } from 'react'
 import { apiErrorMessage, apiRequest } from '../../api/client'
 import './HelpAssistantPanel.css'
+import { useRememberedState } from '../../hooks/useRememberedState'
 
 export type HelpNavigationTarget =
   | 'recruit'
@@ -360,28 +362,25 @@ function TopicIcon({ name }: { name: HelpTopic['icon'] }) {
 }
 
 export function HelpAssistantPanel({ isOpen, onClose, onNavigate }: HelpAssistantPanelProps) {
-  const [messages, setMessages] = useState<ChatMessage[]>([])
-  const [draft, setDraft] = useState('')
+  const dialogRootRef = useRef<HTMLDivElement>(null)
+  const dialogPanelRef = useRef<HTMLElement>(null)
+  const [messages, setMessages] = useRememberedState<ChatMessage[]>('help-messages', [])
+  const [draft, setDraft] = useRememberedState('help-draft', '')
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState('')
-  const [sessionName, setSessionName] = useState<string | null>(null)
+  const [sessionName, setSessionName] = useRememberedState<string | null>('help-session', null)
+  const [failedQuestion, setFailedQuestion] = useState('')
+  const requestRef = useRef<AbortController | null>(null)
+  useEffect(() => () => requestRef.current?.abort(), [])
   const inputRef = useRef<HTMLTextAreaElement | null>(null)
   const transcriptRef = useRef<HTMLDivElement | null>(null)
 
+  useDialogFocus({ open: isOpen, rootRef: dialogRootRef, panelRef: dialogPanelRef, onClose })
   useEffect(() => {
     if (!isOpen) return
-    const handleKeyDown = (event: KeyboardEvent) => {
-      if (event.key === 'Escape') onClose()
-    }
-    const previousOverflow = document.body.style.overflow
-    document.body.style.overflow = 'hidden'
-    window.addEventListener('keydown', handleKeyDown)
-    window.setTimeout(() => inputRef.current?.focus(), 0)
-    return () => {
-      document.body.style.overflow = previousOverflow
-      window.removeEventListener('keydown', handleKeyDown)
-    }
-  }, [isOpen, onClose])
+    const timer = window.setTimeout(() => inputRef.current?.focus(), 0)
+    return () => window.clearTimeout(timer)
+  }, [isOpen])
 
   useEffect(() => {
     const transcript = transcriptRef.current
@@ -394,51 +393,54 @@ export function HelpAssistantPanel({ isOpen, onClose, onNavigate }: HelpAssistan
     setMessages([])
     setDraft('')
     setError('')
+    setFailedQuestion('')
     setSessionName(null)
     window.setTimeout(() => inputRef.current?.focus(), 0)
   }
 
-  const askQuestion = async (question = draft) => {
+  const askQuestion = async (question = draft, retry = false) => {
     const query = question.trim()
     if (!query || busy) return
-    setMessages((current) => [...current, { id: newMessageId(), role: 'user', text: query }])
+    if (!retry) setMessages((current) => [...current, { id: newMessageId(), role: 'user', text: query }])
     setDraft('')
     setError('')
     if (inputRef.current) inputRef.current.style.height = ''
     setBusy(true)
+    const controller = new AbortController()
+    requestRef.current = controller
     try {
       const result = await apiRequest<KnowledgeAnswer>('/api/knowledge/answer', {
         method: 'POST',
         body: { query, ...(sessionName ? { sessionName } : {}) },
         timeoutMs: 45_000,
+        signal: controller.signal,
       })
       if (!result.ok) throw new Error(apiErrorMessage(result.error))
       const answer = result.data.answerText?.trim()
       if (!answer) throw new Error('The assistant did not find a grounded answer. Try asking the question another way.')
       if (result.data.sessionName) setSessionName(result.data.sessionName)
+      setFailedQuestion('')
       setMessages((current) => [...current, {
         id: newMessageId(),
         role: 'assistant',
         text: answer,
       }])
     } catch (requestError) {
+      if (controller.signal.aborted) return
       const message = requestError instanceof Error ? requestError.message : 'Could not reach Automnia Assistant.'
       setError(message)
-      setMessages((current) => [...current, {
-        id: newMessageId(),
-        role: 'assistant',
-        text: `I couldn’t complete that answer. ${message}`,
-      }])
+      setFailedQuestion(query)
+      setDraft((current) => current || query)
     } finally {
-      setBusy(false)
+      if (requestRef.current === controller) { requestRef.current = null; setBusy(false) }
     }
   }
 
   const hasConversation = messages.length > 0
 
   return (
-    <div className="dui-help-overlay" role="presentation">
-      <section className="dui-help-panel" role="dialog" aria-modal="true" aria-labelledby="automnia-help-title">
+    <div ref={dialogRootRef} className="dui-help-overlay" role="presentation">
+      <section ref={dialogPanelRef} tabIndex={-1} className="dui-help-panel" role="dialog" aria-modal="true" aria-labelledby="automnia-help-title">
         <header className="dui-help-panel__header">
           <div className="dui-help-panel__title">
             <span className="dui-help-panel__glyph" aria-hidden="true">
@@ -453,7 +455,7 @@ export function HelpAssistantPanel({ isOpen, onClose, onNavigate }: HelpAssistan
             </div>
           </div>
           <div className="dui-help-panel__actions">
-            <span className="dui-help-panel__status"><i aria-hidden="true" /> Grounded reasoning online</span>
+            <span className="dui-help-panel__status"><i aria-hidden="true" /> {busy ? 'Searching product knowledge' : error ? 'Answer unavailable' : 'Product guide'}</span>
             <button type="button" className="dui-help-panel__new" onClick={resetConversation} disabled={busy || !hasConversation}>
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
                 <path d="M12 5v14M5 12h14" />
@@ -532,7 +534,7 @@ export function HelpAssistantPanel({ isOpen, onClose, onNavigate }: HelpAssistan
             </div>
 
             <div className="dui-help-composer-dock">
-              {error && <p className="dui-help-error" role="alert">{error}</p>}
+              {error && <div className="dui-help-error" role="alert"><p>{error}</p>{failedQuestion && <button type="button" disabled={busy} className="mt-2 rounded border border-current px-3 py-2" onClick={() => void askQuestion(failedQuestion, true)}>Retry this question</button>}</div>}
               <div className="dui-help-composer" role="group" aria-label="Send a question to Automnia Assistant">
                 <textarea
                   ref={inputRef}

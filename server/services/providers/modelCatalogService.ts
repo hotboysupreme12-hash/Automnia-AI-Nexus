@@ -2,7 +2,10 @@ import {
   AUTOMNIA_CREDITS_FALLBACK_MODEL_IDS,
   AUTOMNIA_CREDITS_MODEL_ID,
   AUTOMNIA_CREDITS_PROVIDER_ID,
+  AUTOMNIA_RELAY_MODEL_IDS,
+  AUTOMNIA_RELAY_MODEL_LABELS,
   isAutomniaCreditsModelId as isAutomniaCreditsModelPolicyId,
+  isAutomniaRelayModelId as isAutomniaRelayModelPolicyId,
 } from '../license/creditsOnlyModelPolicy'
 
 export type ModelCatalogOpenClawConfig = {
@@ -142,9 +145,10 @@ export const FALLBACK_MODELS: Array<{ id: string; alias?: string }> = [
   // Automnia is a provider-backed billing route. Keep its bounded hosted
   // fallback chain in the shared catalog so the Gateway can fail over without
   // ever leaving the hosted credits boundary.
-  { id: AUTOMNIA_CREDITS_MODEL_ID, alias: 'Default model' },
-  { id: AUTOMNIA_CREDITS_FALLBACK_MODEL_IDS[0], alias: 'Automnia fallback - Gemini 3.6 Flash' },
-  { id: AUTOMNIA_CREDITS_FALLBACK_MODEL_IDS[1], alias: 'Automnia fallback - Gemini 2.5 Flash' },
+  { id: AUTOMNIA_RELAY_MODEL_IDS[0], alias: AUTOMNIA_RELAY_MODEL_LABELS[AUTOMNIA_RELAY_MODEL_IDS[0]] },
+  { id: AUTOMNIA_CREDITS_MODEL_ID, alias: AUTOMNIA_RELAY_MODEL_LABELS[AUTOMNIA_CREDITS_MODEL_ID] },
+  { id: AUTOMNIA_RELAY_MODEL_IDS[2], alias: AUTOMNIA_RELAY_MODEL_LABELS[AUTOMNIA_RELAY_MODEL_IDS[2]] },
+  { id: AUTOMNIA_CREDITS_FALLBACK_MODEL_IDS[1], alias: 'Automnia Classic' },
   { id: 'anthropic/claude-fable-5', alias: 'Claude Fable 5 (flagship)' },
   { id: 'anthropic/claude-sonnet-5', alias: 'Claude Sonnet 5' },
   { id: 'anthropic/claude-opus-5', alias: 'Claude Opus 5' },
@@ -155,6 +159,7 @@ export const FALLBACK_MODELS: Array<{ id: string; alias?: string }> = [
   { id: 'opencode/claude-opus-4-6', alias: 'opencode-opus' },
   { id: 'google/gemini-3.1-pro-preview', alias: 'gemini-3.1-pro' },
   { id: 'google/gemini-3.1-pro-preview-customtools', alias: 'gemini-3.1-pro-tools' },
+  { id: 'google/gemini-3.8-flash', alias: 'Gemini 3.8 Flash (GA)' },
   { id: 'google/gemini-3.7-flash', alias: 'Gemini 3.7 Flash (GA)' },
   { id: 'google/gemini-3.6-flash', alias: 'Gemini 3.6 Flash (GA)' },
   { id: 'google/gemini-3.5-flash', alias: 'gemini-3.5-flash' },
@@ -168,6 +173,7 @@ export const FALLBACK_MODELS: Array<{ id: string; alias?: string }> = [
   { id: 'google-vertex/gemini-2.5-pro', alias: 'vertex-gemini-2.5-pro' },
   { id: 'google-vertex/gemini-2.5-flash', alias: 'vertex-flash' },
   { id: 'google-vertex/gemini-2.5-flash-lite', alias: 'vertex-flash-lite' },
+  { id: 'google-vertex/gemini-3.8-flash', alias: 'Vertex Gemini 3.8 Flash (GA)' },
   { id: 'google-vertex/gemini-3.7-flash', alias: 'Vertex Gemini 3.7 Flash (GA)' },
   { id: 'google-vertex/gemini-3.6-flash', alias: 'Vertex Gemini 3.6 Flash (GA)' },
   { id: 'google-vertex/gemini-3.5-flash', alias: 'vertex-gemini-3.5-flash' },
@@ -200,6 +206,8 @@ export const OPENCLAW_CONFIG_SUPPRESSED_MODEL_IDS = new Set([
 // Google transports so users can choose API-key Gemini or project-scoped
 // Vertex without waiting for dynamic catalog discovery.
 const PINNED_MODEL_IDS = [
+  'google-vertex/gemini-3.8-flash',
+  'google/gemini-3.8-flash',
   'google-vertex/gemini-3.7-flash',
   'google/gemini-3.7-flash',
 ]
@@ -226,6 +234,14 @@ function isUnsupportedGoogleGemini37Model(modelId: string) {
   return /^gemini-3\.7(?:$|[-@])/i.test(model) && !/^gemini-3\.7-flash(?:$|[-@])/i.test(model)
 }
 
+function automniaRelayModelLabel(modelId: string) {
+  const normalized = modelId.trim().toLowerCase()
+  const mapped = AUTOMNIA_RELAY_MODEL_LABELS[normalized]
+  if (mapped) return mapped
+  if (!normalized.startsWith(`${AUTOMNIA_CREDITS_PROVIDER_ID}/`)) return ''
+  return 'Automnia hosted class'
+}
+
 export function isOpenAiCodexSubscriptionModelName(model: string) {
   return /^gpt-5(?:\.\d+)?(?:-[a-z0-9][a-z0-9.-]*)?$/i.test(model.trim())
 }
@@ -236,7 +252,9 @@ export function canonicalAgentModelId(modelId: string | undefined) {
   const parsed = trimmed.match(/^([^/]+)\/(.+)$/)
   if (parsed && parsed[1].trim().toLowerCase() === AUTOMNIA_CREDITS_PROVIDER_ID) {
     const candidate = `${AUTOMNIA_CREDITS_PROVIDER_ID}/${parsed[2].trim().toLowerCase()}`
-    return isAutomniaCreditsModelPolicyId(candidate) ? candidate : AUTOMNIA_CREDITS_MODEL_ID
+    return isAutomniaCreditsModelPolicyId(candidate) || isAutomniaRelayModelPolicyId(candidate)
+      ? candidate
+      : AUTOMNIA_CREDITS_MODEL_ID
   }
   if (parsed && /^(?:openai|openai-codex|codex)$/i.test(parsed[1]) && isOpenAiCodexSubscriptionModelName(parsed[2])) {
     return `openai/${parsed[2]}`
@@ -284,9 +302,9 @@ function fallbackAvailableModels(streamingCapabilityForModel: ModelCatalogServic
     })
     .map((model) => ({
       id: model.id,
-      alias: model.alias || model.id.split('/').pop() || model.id,
+      alias: automniaRelayModelLabel(model.id) || model.alias || model.id.split('/').pop() || model.id,
       provider: displayProviderForAvailableModel(model, model.id),
-      name: model.id.split('/').pop() || model.id,
+      name: automniaRelayModelLabel(model.id) || model.id.split('/').pop() || model.id,
       streaming: streamingCapabilityForModel(model.id),
     }))
 }
@@ -302,8 +320,9 @@ function mergeAvailableModels(
     if (KNOWN_UNAVAILABLE_MODEL_IDS.has(id) || isUnsupportedGoogleGemini37Model(id)) return
     const provider = displayProviderForAvailableModel(model, id)
     const fallbackEntry = FALLBACK_MODELS.find((entry) => entry.id === id)
-    const name = model.name || id.split('/').pop() || id
-    const alias = model.alias || fallbackEntry?.alias || name
+    const managedLabel = automniaRelayModelLabel(id)
+    const name = managedLabel || model.name || id.split('/').pop() || id
+    const alias = managedLabel || model.alias || fallbackEntry?.alias || name
     if (!deduped.has(id)) {
       deduped.set(id, { id, alias, provider, name, streaming: streamingCapabilityForModel(id) })
     }

@@ -111,61 +111,8 @@ html.dui-pro-overhaul.dui-cohesive-ui .app-bg > .dy-app-main {
   margin: 0 !important;
 }
 
-html.dui-pro-overhaul.dui-cohesive-ui .dy-command-header.relative.mb-7 {
-  min-height: 84px !important;
-  margin-bottom: 14px !important;
-  padding: 14px 18px !important;
-  border-color: rgba(157, 183, 196, .14) !important;
-  border-radius: 20px !important;
-  background:
-    linear-gradient(115deg, rgba(14, 23, 34, .96), rgba(8, 14, 23, .94) 58%, rgba(7, 12, 20, .98)) !important;
-  box-shadow:
-    0 24px 54px -42px rgba(86, 222, 235, .45),
-    inset 0 1px 0 rgba(255, 255, 255, .055) !important;
-}
-
-html.dui-pro-overhaul.dui-cohesive-ui .dy-command-header-inner {
-  display: grid !important;
-  grid-template-columns: minmax(250px, .72fr) minmax(0, 1.28fr) !important;
-  align-items: center !important;
-  gap: 16px !important;
-}
-
-html.dui-pro-overhaul.dui-cohesive-ui .brand-lockup.dy-logo-fixed {
-  min-width: 0 !important;
-}
-
-html.dui-pro-overhaul.dui-cohesive-ui .brand-lockup.dy-logo-fixed .dy-logo-lockup {
-  width: min(100%, 420px) !important;
-  height: 48px !important;
-}
-
 html.dui-pro-overhaul.dui-cohesive-ui .dy-status-grid {
   gap: 6px !important;
-}
-
-html.dui-pro-overhaul.dui-cohesive-ui .dy-command-header .badge.dy-status-chip {
-  min-height: 32px !important;
-  padding: 5px 10px !important;
-  border-color: rgba(161, 187, 199, .14) !important;
-  border-radius: 10px !important;
-  background:
-    linear-gradient(180deg, rgba(255, 255, 255, .04), rgba(255, 255, 255, .012)),
-    rgba(10, 17, 27, .86) !important;
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, .035) !important;
-}
-
-html.dui-pro-overhaul.dui-cohesive-ui .dy-command-header .dy-status-value {
-  font-size: 11px !important;
-  line-height: 1 !important;
-  letter-spacing: .01em !important;
-}
-
-html.dui-pro-overhaul.dui-cohesive-ui .dy-command-header .dy-status-label {
-  font-size: 8px !important;
-  line-height: 1 !important;
-  letter-spacing: .11em !important;
-  opacity: .72 !important;
 }
 
 html.dui-pro-overhaul.dui-cohesive-ui .dy-workspace-context {
@@ -219,17 +166,6 @@ html.dui-pro-overhaul.dui-cohesive-ui .dy-workspace-context[data-workspace="plug
 
 html.dui-pro-overhaul.dui-cohesive-ui .dy-workspace-context__copy {
   min-width: 0;
-}
-
-html.dui-pro-overhaul.dui-cohesive-ui .dy-workspace-context__eyebrow {
-  display: block;
-  margin-bottom: 4px;
-  color: rgba(var(--dy-workspace-rgb), .92);
-  font-size: 8px;
-  font-weight: 850;
-  letter-spacing: .18em;
-  line-height: 1;
-  text-transform: uppercase;
 }
 
 html.dui-pro-overhaul.dui-cohesive-ui .dy-workspace-context h1 {
@@ -384,18 +320,6 @@ html.dui-pro-overhaul.dui-cohesive-ui .dy-workspace-context__notice {
 }
 
 @media (max-width: 1180px) {
-  html.dui-pro-overhaul.dui-cohesive-ui .dy-command-header-inner {
-    grid-template-columns: minmax(0, 1fr) !important;
-    gap: 10px !important;
-  }
-
-  html.dui-pro-overhaul.dui-cohesive-ui .brand-lockup.dy-logo-fixed {
-    max-width: 410px !important;
-  }
-
-  html.dui-pro-overhaul.dui-cohesive-ui .brand-lockup.dy-logo-fixed .dy-logo-lockup {
-    height: 50px !important;
-  }
 
   html.dui-pro-overhaul.dui-cohesive-ui .dy-status-grid {
     width: 100% !important;
@@ -500,15 +424,10 @@ html.dui-pro-overhaul.dui-cohesive-ui .dy-workspace-context__notice {
     display: none !important;
   }
 
-  html.dui-pro-overhaul.dui-cohesive-ui .dy-command-header.relative.mb-7,
+  
   html.dui-pro-overhaul.dui-cohesive-ui header.relative.mb-7 {
     min-height: 0 !important;
     padding: 10px 12px !important;
-  }
-
-  html.dui-pro-overhaul.dui-cohesive-ui .brand-lockup.dy-logo-fixed .dy-logo-lockup {
-    width: min(100%, 330px) !important;
-    height: 44px !important;
   }
 
   html.dui-pro-overhaul.dui-cohesive-ui .dy-workspace-context {

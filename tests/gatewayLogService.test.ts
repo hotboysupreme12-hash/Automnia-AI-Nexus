@@ -190,6 +190,31 @@ test('readExternalGatewayLogEntries prefers logs.tail RPC entries', async () => 
   assert.equal(entries.some((entry) => /secret-/.test(entry.message)), false)
 })
 
+test('larger log requests expand cache coverage and concurrent reads share the RPC', async () => {
+  let calls = 0
+  const lines = Array.from({ length: 50 }, (_, index) => JSON.stringify({ time: new Date(fixedNow + index * 1000).toISOString(), message: `Log ${index}` }))
+  const { service } = createService({ client: { request: async () => { calls += 1; await new Promise((resolve) => setTimeout(resolve, 5)); return { lines } } } })
+  const first = await Promise.all([service.readExternalGatewayLogEntries(5), service.readExternalGatewayLogEntries(5), service.readExternalGatewayLogEntries(3)])
+  assert.equal(calls, 1)
+  assert.deepEqual(first.map((entries) => entries.length), [5, 5, 3])
+  const expanded = await Promise.all([service.readExternalGatewayLogEntries(20), service.readExternalGatewayLogEntries(15)])
+  assert.equal(calls, 2)
+  assert.deepEqual(expanded.map((entries) => entries.length), [20, 15])
+  assert.equal((await service.readExternalGatewayLogEntries(10)).length, 10)
+  assert.equal(calls, 2)
+})
+
+test('unchanged file snapshots expand after a smaller initial log request', async () => {
+  const root = await mkdtemp(path.join(tmpdir(), 'automnia-log-coverage-'))
+  try {
+    const logPath = path.join(root, 'gateway.log')
+    await writeFile(logPath, Array.from({ length: 80 }, (_, index) => JSON.stringify({ time: new Date(fixedNow + index * 1000).toISOString(), message: `Log ${index}` })).join('\n'))
+    const { service } = createService({ logPath, stateRoot: root, nativeStateRoot: root })
+    assert.equal((await service.readGatewayFileLogEntries(3)).length, 3)
+    assert.equal((await service.readGatewayFileLogEntries(40)).length, 40)
+  } finally { await rm(root, { recursive: true, force: true }) }
+})
+
 test('readExternalGatewayLogEntries falls back to file tails and redacts RPC failure logs', async () => {
   const root = await mkdtemp(path.join(tmpdir(), 'automnia-gateway-log-'))
   try {

@@ -67,8 +67,62 @@ html.dui-pro-overhaul.dui-cohesive-ui [data-dui-panel="active-party"] .party-rar
   margin-top: 4px !important;
   min-height: 15px !important;
   padding: 2px 7px !important;
-  font-size: 7px !important;
+  font-size: 11px !important;
   line-height: 1.1 !important;
+}
+
+html.dui-pro-overhaul.dui-cohesive-ui [data-dui-panel="active-party"] .party-slot-remove {
+  opacity: 1 !important;
+  pointer-events: auto !important;
+}
+
+html.dui-pro-overhaul.dui-cohesive-ui [data-dui-panel="active-party"] .party-slot-position {
+  position: absolute;
+  z-index: 5;
+  right: 4px;
+  bottom: 4px;
+  width: 32px;
+  min-width: 32px;
+  min-height: 28px;
+  padding: 0;
+  border: 1px solid rgba(160, 176, 188, .22);
+  border-radius: 5px;
+  appearance: none;
+  -webkit-appearance: none;
+  background: #090d10;
+  color: #d8e1e6;
+  font-size: 11px;
+  font-weight: 700;
+  line-height: 1;
+  text-align: center;
+  text-align-last: center;
+  cursor: pointer;
+}
+
+html.dui-pro-overhaul.dui-cohesive-ui [data-dui-panel="active-party"] .party-slot-position:hover,
+html.dui-pro-overhaul.dui-cohesive-ui [data-dui-panel="active-party"] .party-slot-position:focus-visible {
+  border-color: rgba(176, 205, 216, .48);
+  background: #0e1519;
+  outline: none;
+}
+
+html.dui-pro-overhaul.dui-cohesive-ui [data-dui-panel="active-party"] .dy-party-slot:has(.party-slot-position) .party-slot-content {
+  padding-right: 42px !important;
+}
+
+html.dui-pro-overhaul.dui-cohesive-ui [data-dui-panel="active-party"] .dy-party-slot:has(.party-slot-position)::before,
+html.dui-pro-overhaul.dui-cohesive-ui [data-dui-panel="active-party"] .dy-party-slot:has(.party-slot-position)::after {
+  display: none !important;
+}
+
+@media (pointer: coarse) {
+  html.dui-pro-overhaul.dui-cohesive-ui [data-dui-panel="active-party"] .dy-party-slot:has(.party-slot-position) {
+    min-height: 104px !important;
+  }
+  html.dui-pro-overhaul.dui-cohesive-ui [data-dui-panel="active-party"] :is(.party-slot-remove, .party-slot-position) {
+    min-width: 44px !important;
+    min-height: 44px !important;
+  }
 }
 
 @media (max-width: 1180px) {

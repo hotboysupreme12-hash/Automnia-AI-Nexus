@@ -3,6 +3,17 @@ import type { LicenseInfo } from '../context/licenseContextValue'
 export const LICENSE_STATUS_UPDATED_EVENT = 'automnia-license-updated'
 
 export const AUTOMNIA_CREDITS_MODEL_ID = 'automnia-cloud/gemini-3.7-flash'
+export const AUTOMNIA_RELAY_MODEL_IDS = [
+  'automnia-cloud/gemini-3.8-flash',
+  AUTOMNIA_CREDITS_MODEL_ID,
+  'automnia-cloud/gemini-3.6-flash',
+] as const
+export const AUTOMNIA_RELAY_MODEL_LABELS: Record<string, string> = {
+  'automnia-cloud/gemini-3.8-flash': 'Automnia Prime',
+  [AUTOMNIA_CREDITS_MODEL_ID]: 'Automnia Balanced',
+  'automnia-cloud/gemini-3.6-flash': 'Automnia Swift',
+  'automnia-cloud/gemini-2.5-flash': 'Automnia Classic',
+}
 export const AUTOMNIA_CREDITS_FALLBACK_MODEL_IDS = [
   'automnia-cloud/gemini-3.6-flash',
   'automnia-cloud/gemini-2.5-flash',
@@ -15,6 +26,11 @@ export const AUTOMNIA_CREDITS_MODEL_IDS = [
 export function isAutomniaCreditsModelId(value: string | null | undefined) {
   const normalized = value?.trim().toLowerCase()
   return Boolean(normalized && AUTOMNIA_CREDITS_MODEL_IDS.includes(normalized as typeof AUTOMNIA_CREDITS_MODEL_IDS[number]))
+}
+
+export function automniaRelayModelLabel(value: string | null | undefined, fallback = 'Automnia hosted class') {
+  const normalized = value?.trim().toLowerCase() || ''
+  return AUTOMNIA_RELAY_MODEL_LABELS[normalized] || fallback
 }
 
 export type HostedCreditBalanceUpdate = {

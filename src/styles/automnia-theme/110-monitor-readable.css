@@ -23,15 +23,6 @@ html.dui-pro-overhaul.dui-cohesive-ui .app-bg.dy-monitor-focus [data-dui-panel="
   padding: 18px !important;
 }
 
-html.dui-pro-overhaul .app-bg.dy-monitor-focus [data-dui-panel="monitor"] .dy-channel-activity-eyebrow,
-html.dui-pro-overhaul.dui-cohesive-ui .app-bg.dy-monitor-focus [data-dui-panel="monitor"] .dy-channel-activity-eyebrow {
-  margin-bottom: 5px !important;
-  color: #86d9cc !important;
-  font-size: 12px !important;
-  font-weight: 650 !important;
-  line-height: 1.3 !important;
-}
-
 html.dui-pro-overhaul .app-bg.dy-monitor-focus [data-dui-panel="monitor"] .dy-channel-activity-heading h3,
 html.dui-pro-overhaul.dui-cohesive-ui .app-bg.dy-monitor-focus [data-dui-panel="monitor"] .dy-channel-activity-heading h3 {
   color: #f3f7f5 !important;
@@ -222,15 +213,6 @@ html.dui-pro-overhaul.dui-cohesive-ui .app-bg.dy-monitor-focus [data-dui-panel="
 html.dui-pro-overhaul .app-bg.dy-monitor-focus [data-dui-panel="monitor"] .dy-cron-jobs-card,
 html.dui-pro-overhaul.dui-cohesive-ui .app-bg.dy-monitor-focus [data-dui-panel="monitor"] .dy-cron-jobs-card {
   padding: 18px !important;
-}
-
-html.dui-pro-overhaul .app-bg.dy-monitor-focus [data-dui-panel="monitor"] .dy-cron-panel-eyebrow,
-html.dui-pro-overhaul.dui-cohesive-ui .app-bg.dy-monitor-focus [data-dui-panel="monitor"] .dy-cron-panel-eyebrow {
-  margin-bottom: 5px !important;
-  color: #86d9cc !important;
-  font-size: 12px !important;
-  font-weight: 650 !important;
-  line-height: 1.3 !important;
 }
 
 html.dui-pro-overhaul .app-bg.dy-monitor-focus [data-dui-panel="monitor"] .dy-cron-panel-heading h3,

@@ -67,10 +67,11 @@ test('command console upload service strips traversal segments from upload sourc
 
 test('command console upload service accepts supported extension and MIME fallback upload types', async (t) => {
   const uploadsDir = await createTempUploadsRoot(t)
+  let uploadIndex = 0
   const service = createCommandConsoleUploadService({
     uploadsDir,
     now: () => 1_717_171_717_000,
-    randomId: () => 'upload-id',
+    randomId: () => `upload-id-${++uploadIndex}`,
   })
 
   const image = await service.persistUpload(PNG_BYTES, 'Screenshot.PNG', 'application/octet-stream')
@@ -142,7 +143,7 @@ test('command console upload service enforces upload persistence size limits at 
     service.persistUpload(Buffer.from('12345', 'utf-8'), 'too-large.txt', 'text/plain'),
     /smaller than 4 bytes/,
   )
-  assert.deepEqual((await fs.readdir(uploadsDir)).sort(), [path.basename(exactLimit.path)])
+  assert.deepEqual((await fs.readdir(uploadsDir)).sort(), ['boundary-upload.upload.json', path.basename(exactLimit.path)].sort())
 })
 
 test('command console upload service normalizes attachment metadata without allowing root escapes', async (t) => {
@@ -266,111 +267,50 @@ test('command console upload service rejects upload persistence when containment
   )
 })
 
-test('command console upload service builds Gateway attachment payloads and skips oversized inline files', async (t) => {
+test('Gateway reads only server-owned upload metadata, including after restart', async (t) => {
   const uploadsDir = await createTempUploadsRoot(t)
-  const smallPath = path.join(uploadsDir, 'small.txt')
-  const bigPath = path.join(uploadsDir, 'big.txt')
-  await fs.mkdir(uploadsDir, { recursive: true })
-  await fs.writeFile(smallPath, 'abc', 'utf-8')
-  await fs.writeFile(bigPath, 'abcd', 'utf-8')
   const service = createCommandConsoleUploadService({ uploadsDir, fileInlineLimitBytes: 3 })
-
-  const attachments = await service.gatewayAttachmentsFromTurnAttachments([
-    { id: 'small', name: 'small.txt', path: smallPath, mimeType: 'text/plain', size: 3, kind: 'file' },
-    { id: 'big', name: 'big.txt', path: bigPath, mimeType: 'text/plain', size: 4, kind: 'file' },
-    { id: 'outside', name: 'outside.txt', path: path.join(path.dirname(uploadsDir), 'outside.txt'), mimeType: 'text/plain', size: 1, kind: 'file' },
+  const small = await service.persistUpload(Buffer.from('abc'), 'small.txt', 'text/plain')
+  const big = await service.persistUpload(Buffer.from('abcd'), 'big.txt', 'text/plain')
+  assert.equal(big.delivery, 'workspace')
+  const restarted = createCommandConsoleUploadService({ uploadsDir, fileInlineLimitBytes: 3 })
+  const attachments = await restarted.gatewayAttachmentsFromTurnAttachments([
+    { ...small, name: 'spoofed.png', kind: 'image', mimeType: 'image/png', size: 1, path: '/etc/passwd' },
+    { id: big.id },
   ])
-
-  assert.deepEqual(attachments, [{
-    type: 'file',
-    mimeType: 'text/plain',
-    fileName: 'small.txt',
-    content: Buffer.from('abc', 'utf-8').toString('base64'),
-    name: 'small.txt',
-  }])
+  assert.deepEqual(attachments, [{ type: 'file', mimeType: 'text/plain', fileName: 'small.txt', content: Buffer.from('abc').toString('base64'), name: 'small.txt' }])
+  await assert.rejects(restarted.gatewayAttachmentsFromTurnAttachments([{ id: 'unknown', path: small.path }]), /record is unavailable/)
+  await assert.rejects(restarted.gatewayAttachmentsFromTurnAttachments([{ id: '../escape' }]), /invalid/)
 })
 
-test('command console upload service enforces Gateway inline attachment size limits for files and images', async (t) => {
+test('Gateway inline limits use actual server metadata and reject changed content', async (t) => {
   const uploadsDir = await createTempUploadsRoot(t)
-  await fs.mkdir(uploadsDir, { recursive: true })
-  const fileAtLimitPath = path.join(uploadsDir, 'file-at-limit.txt')
-  const fileDeclaredTooLargePath = path.join(uploadsDir, 'file-declared-too-large.txt')
-  const fileActualTooLargePath = path.join(uploadsDir, 'file-actual-too-large.txt')
-  const imageAtLimitPath = path.join(uploadsDir, 'image-at-limit.png')
-  const imageDeclaredTooLargePath = path.join(uploadsDir, 'image-declared-too-large.png')
-  await fs.writeFile(fileAtLimitPath, 'abcd', 'utf-8')
-  await fs.writeFile(fileDeclaredTooLargePath, 'abc', 'utf-8')
-  await fs.writeFile(fileActualTooLargePath, 'abcde', 'utf-8')
-  await fs.writeFile(imageAtLimitPath, Buffer.from([0x01, 0x02, 0x03]))
-  await fs.writeFile(imageDeclaredTooLargePath, Buffer.from([0x04, 0x05]))
-  const service = createCommandConsoleUploadService({
-    uploadsDir,
-    fileInlineLimitBytes: 4,
-    imageInlineLimitBytes: 3,
-  })
-
-  const attachments = await service.gatewayAttachmentsFromTurnAttachments([
-    { id: 'file-at-limit', name: 'file-at-limit.txt', path: fileAtLimitPath, mimeType: 'text/plain', size: 4, kind: 'file' },
-    { id: 'file-declared-too-large', name: 'file-declared-too-large.txt', path: fileDeclaredTooLargePath, mimeType: 'text/plain', size: 5, kind: 'file' },
-    { id: 'file-actual-too-large', name: 'file-actual-too-large.txt', path: fileActualTooLargePath, mimeType: 'text/plain', size: 4, kind: 'file' },
-    { id: 'image-at-limit', name: 'image-at-limit.png', path: imageAtLimitPath, mimeType: 'image/png', size: 3, kind: 'image' },
-    { id: 'image-declared-too-large', name: 'image-declared-too-large.png', path: imageDeclaredTooLargePath, mimeType: 'image/png', size: 4, kind: 'image' },
-  ])
-
-  assert.deepEqual(attachments, [
-    {
-      type: 'file',
-      mimeType: 'text/plain',
-      fileName: 'file-at-limit.txt',
-      content: Buffer.from('abcd', 'utf-8').toString('base64'),
-      name: 'file-at-limit.txt',
-    },
-    {
-      type: 'image',
-      mimeType: 'image/png',
-      fileName: 'image-at-limit.png',
-      content: Buffer.from([0x01, 0x02, 0x03]).toString('base64'),
-      name: 'image-at-limit.png',
-    },
-  ])
+  const service = createCommandConsoleUploadService({ uploadsDir, fileInlineLimitBytes: 4, imageInlineLimitBytes: 8 })
+  const file = await service.persistUpload(Buffer.from('abcd'), 'file.txt', 'text/plain')
+  const big = await service.persistUpload(Buffer.from('abcde'), 'big.txt', 'text/plain')
+  const png = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a])
+  const image = await service.persistUpload(png, 'image.png', 'image/png')
+  const attachments = await service.gatewayAttachmentsFromTurnAttachments([file, { ...big, size: 1 }, image])
+  assert.equal(attachments.length, 2)
+  assert.equal(attachments[1].type, 'image')
+  assert.equal(attachments[1].content, png.toString('base64'))
+  await fs.writeFile(file.path, 'diff')
+  await assert.rejects(service.gatewayAttachmentsFromTurnAttachments([file]), /changed on disk/)
+  await fs.writeFile(file.path, 'much larger than the original')
+  await assert.rejects(service.gatewayAttachmentsFromTurnAttachments([file]), /changed on disk/)
 })
 
-test('command console upload service skips symlinked attachment escapes before inline Gateway reads', async (t) => {
+test('Gateway rejects symlink escapes even for an existing registered upload', async (t) => {
   const root = await createTempUploadsRoot(t)
   const uploadsDir = path.join(root, 'uploads')
+  const service = createCommandConsoleUploadService({ uploadsDir })
+  const attachment = await service.persistUpload(Buffer.from('abc'), 'file.txt', 'text/plain')
   const outsidePath = path.join(root, 'secret.txt')
-  const linkPath = path.join(uploadsDir, 'linked-secret.txt')
-  await fs.mkdir(uploadsDir, { recursive: true })
-  await fs.writeFile(outsidePath, 'external secret', 'utf-8')
-  try {
-    await fs.symlink(outsidePath, linkPath, 'file')
-  } catch (error) {
-    const code = (error as NodeJS.ErrnoException).code
-    if (code === 'EPERM' || code === 'EACCES' || code === 'ENOTSUP' || code === 'EINVAL') {
-      t.skip(`filesystem symlinks are unavailable in this environment: ${code}`)
-      return
-    }
+  await fs.writeFile(outsidePath, 'abc')
+  await fs.unlink(attachment.path)
+  try { await fs.symlink(outsidePath, attachment.path, 'file') } catch (error) {
+    if (['EPERM', 'EACCES', 'ENOTSUP', 'EINVAL'].includes((error as NodeJS.ErrnoException).code || '')) { t.skip('Filesystem symlinks unavailable'); return }
     throw error
   }
-
-  const service = createCommandConsoleUploadService({ uploadsDir })
-
-  assert.notEqual(service.normalizeAttachment({
-    id: 'linked',
-    name: 'linked-secret.txt',
-    path: linkPath,
-    mimeType: 'text/plain',
-    size: 'external secret'.length,
-    kind: 'file',
-  }), null)
-  assert.deepEqual(await service.gatewayAttachmentsFromTurnAttachments([
-    {
-      id: 'linked',
-      name: 'linked-secret.txt',
-      path: linkPath,
-      mimeType: 'text/plain',
-      size: 'external secret'.length,
-      kind: 'file',
-    },
-  ]), [])
+  await assert.rejects(service.gatewayAttachmentsFromTurnAttachments([attachment]), /unavailable/)
 })

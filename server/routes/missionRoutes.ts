@@ -12,9 +12,9 @@ type MissionRoutesOptions = {
     feedLimit?: number
     reportLimit?: number
   }) => Promise<MissionLifecycleProjection>
-  listMissionReports: (limit?: number) => Promise<BackendMissionReport[]>
+  listMissionReports: (limit?: number, missionId?: string | null) => Promise<BackendMissionReport[]>
   missionStateService: Pick<MissionStateService, 'startMission' | 'stopMission'>
-  readMissionEvents: (limit: number) => Promise<MissionLifecycleEvent[]>
+  readMissionEvents: (limit: number, options?: { missionId?: string }) => Promise<MissionLifecycleEvent[]>
 }
 
 export function registerMissionRoutes(app: Express, options: MissionRoutesOptions) {
@@ -60,14 +60,14 @@ export function registerMissionRoutes(app: Express, options: MissionRoutesOption
   app.get('/api/missions/:missionId/events', async (req, res) => {
     const missionId = req.params.missionId?.trim()
     if (!missionId) return apiFailure(res, 400, 'invalid_payload', 'Mission id is required')
-    const events = await options.readMissionEvents(1000)
+    const events = await options.readMissionEvents(1000, { missionId })
     return apiSuccess(res, { missionId, events: events.filter((event) => event.missionId === missionId) })
   })
 
   app.get('/api/missions/:missionId/report', async (req, res) => {
     const missionId = req.params.missionId?.trim()
     if (!missionId) return apiFailure(res, 400, 'invalid_payload', 'Mission id is required')
-    const reports = await options.listMissionReports(200)
+    const reports = await options.listMissionReports(1, missionId)
     const report = reports.find((entry) => entry.missionId === missionId) || null
     if (!report) return apiFailure(res, 404, 'mission_report_not_found', 'Mission report not found')
     return apiSuccess(res, { missionId, report })

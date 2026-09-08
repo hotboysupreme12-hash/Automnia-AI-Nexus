@@ -1,12 +1,16 @@
 # Automnia Google Cloud deployment and migration guide
 
-For the temporary deployment period, Automnia uses one Cloud Run origin for license activation, Shopify webhooks, checkout, and hosted-credit AI relay traffic:
+Automnia uses a dedicated Cloud Run-backed API origin for license activation,
+Shopify webhooks, checkout, and hosted-credit AI relay traffic:
 
 ```text
-https://automnia-shopify-provisioner-gpz4bqizia-ue.a.run.app
+https://api.automnia.app
 ```
 
-Desktop releases currently use the Cloud Run origin above. `AUTOMNIA_LICENSE_API_URL` and `AUTOMNIA_CLOUD_RELAY_URL` remain available as explicit development or emergency overrides. Move `AUTOMNIA_PUBLIC_CLOUD_URL` back to the Automnia public hostname after DNS cutover.
+Desktop releases use the API origin above. `AUTOMNIA_LICENSE_API_URL` and
+`AUTOMNIA_CLOUD_RELAY_URL` remain available as explicit development or
+emergency overrides. The Shopify storefront and checkout remain on
+`https://automnia.app`.
 
 ## Automnia knowledge assistant
 
@@ -96,4 +100,8 @@ It freezes the current target, reverse-migrates new balances and billing events 
 
 ## Customer-facing data boundary
 
-The renderer contains only the temporary Cloud Run origin needed for this deployment. Secret Manager names, customer emails, license keys, and default balances are server-owned. Account and credit values shown in the app come from the authenticated provisioner response and its local server-side cache; they are not editable defaults compiled into the UI.
+The renderer contains only the public API origin needed for this deployment.
+Secret Manager names, customer emails, license keys, and default balances are
+server-owned. Account and credit values shown in the app come from the
+authenticated provisioner response and its local server-side cache; they are
+not editable defaults compiled into the UI.

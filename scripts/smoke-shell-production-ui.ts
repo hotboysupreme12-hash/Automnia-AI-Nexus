@@ -74,17 +74,14 @@ assert.doesNotMatch(shell, /dy-command-header/, 'shell should not render the ret
 assert.doesNotMatch(shell, /className="dy-top-tabs/, 'shell should not render a duplicate hidden tab bar')
 assert.match(shell, /aria-keyshortcuts=\{activeCronCount && !cronStatusUnavailable \? 'Delete'/, 'cron cleanup review should be keyboard discoverable only when cron state is available')
 assert.match(shell, /event\.key !== 'Delete'/, 'cron cleanup should support the declared keyboard shortcut')
-assert.match(shell, /role="status"[\s\S]*aria-label="Refreshing workspace"/, 'lazy workspace refreshing should be announced')
-assert.match(shell, /className="[^"]*animate-spin[^"]*"/, 'lazy workspace refreshing should show a spinner')
-assert.match(shell, /<span>Refreshing<\/span>/, 'lazy workspace refreshing should show concise copy')
+assert.match(shell, /role="status"[\s\S]*aria-label=\{`Loading \$\{workspace\}`\}/, 'lazy workspace loading should announce its destination')
+assert.match(shell, /animate-pulse motion-reduce:animate-none/, 'lazy workspace placeholders must honor reduced motion')
+assert.match(shell, /Loading \{workspace\}\. Your workspace will appear here\./, 'lazy workspace loading should explain the pending destination')
 assert.match(shell, /function isLazyImportFailure\(error: unknown\): boolean[\s\S]*error instanceof Error[\s\S]*unable to preload css/i, 'lazy imports should recover from Vite CSS preload failures')
 assert.match(shell, /className="dy-workspace-context" data-workspace=\{tab\}/, 'shell should expose a contextual workspace header')
-assert.match(shell, /id="automnia-workspace-title">\{activeTab\.label\}/, 'workspace context should expose the active page title')
-assert.match(
-  shell,
-  /(?:<p>\{activeTab\.description\}<\/p>|<WorkspaceDescription tab=\{tab\} description=\{activeTab\.description\} \/>)/,
-  'workspace context should explain the active operator surface',
-)
+assert.match(shell, /id="automnia-workspace-title"[\s\S]*activeTab\.label/, 'workspace context should expose the active page title')
+assert.match(shell, /aria-label=\{`Automnia — /, 'workspace title should retain its accessible app context')
+
 assert.match(shell, /className="dy-workspace-context__meta"/, 'workspace context should host the static status controls')
 assert.match(shell, /aria-label="Workspace status summary"/, 'workspace status chips should remain named')
 assert.match(shell, /import \{ Button, StatusChip \} from '..\/ui'/, 'shell rail actions and workspace status chips should use local UI primitives')
@@ -131,6 +128,7 @@ assert.ok(theme.includes(monitorReadableImport), 'Monitor Readability must remai
 assert.ok(theme.includes(recruitWizardImport), 'Recruit Wizard must remain in the theme cascade')
 assert.ok(theme.includes(agentCard3dImport), 'Agent Card 3D must remain in the theme cascade')
 assert.ok(theme.includes(runtimeNoticesImport), 'Runtime notices must remain in the theme cascade')
+assert.ok(theme.includes(responsiveViewportImport), 'Responsive viewport accommodations must remain in the theme cascade')
 assert.ok(theme.includes(obsidianAgentCardsImport), 'Obsidian agent card treatment must remain in the theme cascade')
 const themeLayerImports = [...theme.matchAll(/@import '\.\/styles\/automnia-theme\/(\d+)-([^']+)\.css';/g)]
 const layersAfterTypography = themeLayerImports
@@ -155,8 +153,27 @@ assert.deepEqual(layersAfterTypography, [
   { order: 111, name: 'recruit-wizard' },
   { order: 112, name: 'agent-card-3d' },
   { order: 113, name: 'runtime-notices' },
+  { order: 115, name: 'monitor-flat-edges' },
+  { order: 116, name: 'detailed-agent-card-density' },
+  { order: 117, name: 'model-picker-flat' },
+  { order: 118, name: 'template-color-accent' },
+  { order: 119, name: 'agent-card-chip-sizing' },
+  { order: 120, name: 'roster-typography' },
+  { order: 121, name: 'agent-list-view' },
+  { order: 122, name: 'plugins-iot' },
+  { order: 123, name: 'chat-composer-surface' },
+  { order: 124, name: 'chat-status-clarity' },
+  { order: 125, name: 'agents-workspace-copy' },
+  { order: 127, name: 'workspace-status-colors' },
+  { order: 128, name: 'active-party-density' },
+  { order: 129, name: 'account-security-flat' },
+  { order: 130, name: 'recruit-template-system' },
+  { order: 131, name: 'agent-card-theme-final' },
   { order: 132, name: 'responsive-viewport' },
   { order: 133, name: 'agent-card-obsidian' },
+  { order: 134, name: 'settings-missions-polish' },
+  { order: 135, name: 'agent-card-surface' },
+  { order: 136, name: 'product-usability' },
 ], 'global automnia theme layers after typography must remain limited to the approved shell, operator, card, settings, responsive, performance, command-console, monitor, and recruit layers')
 assert.doesNotMatch(theme, /99-mission-quiet-redesign/, 'mission quiet redesign should no longer be a global late layer')
 assert.ok(
@@ -176,7 +193,9 @@ assert.ok(theme.indexOf(operatorExperienceImport) < theme.indexOf(agentCardTheme
 assert.ok(theme.indexOf(agentCardThemesImport) < theme.indexOf(settingsSystemImport), 'Agent Card Themes must load before the scoped Settings System')
 assert.ok(theme.indexOf(settingsSystemImport) < theme.indexOf(cronJobsSystemImport), 'Settings System must load before the scoped Cron Jobs System')
 assert.ok(theme.indexOf(monitorLogsImport) < theme.indexOf(monitorReadableImport), 'Monitor Logs must load before Monitor Readability')
-assert.ok(theme.trimEnd().endsWith(obsidianAgentCardsImport), 'Obsidian agent card constraints must load last in the theme cascade')
+assert.ok(theme.includes(obsidianAgentCardsImport), 'Obsidian agent card constraints must remain in the cascade')
+assert.ok(theme.trimEnd().endsWith("@import './styles/automnia-theme/136-product-usability.css';"), 'Shared usability affordances must follow the workspace themes')
+assert.doesNotMatch(read('src/styles/automnia-theme/136-product-usability.css'), /\.dy-agent-card/, 'Shared affordances must preserve the final agent card artwork')
 assert.match(operatorExperience, /\.dui-recruit-code-editor:focus-within[\s\S]*#071012 !important/, 'focused recruit Markdown editing must retain its dedicated contrast treatment')
 assert.match(horizonCommandCenter, /Each destination has a dedicated hue/, 'navigation selection should document the workspace identity system')
 for (const [tone, accent] of [

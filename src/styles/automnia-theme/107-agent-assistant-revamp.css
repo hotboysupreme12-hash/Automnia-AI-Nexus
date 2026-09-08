@@ -215,42 +215,6 @@ html.dui-pro-overhaul.dui-cohesive-ui .dy-command-console__meta {
   gap: 5px !important;
 }
 
-html.dui-pro-overhaul .dy-command-console__pill,
-html.dui-pro-overhaul.dui-cohesive-ui .dy-command-console__pill {
-  max-width: 88px !important;
-  min-height: 26px !important;
-  padding: 3px 7px !important;
-  border-color: rgb(162 199 202 / .10) !important;
-  border-radius: 8px !important;
-  background: rgb(255 255 255 / .025) !important;
-  box-shadow: none !important;
-}
-
-html.dui-pro-overhaul .dy-command-console__stability-pill,
-html.dui-pro-overhaul.dui-cohesive-ui .dy-command-console__stability-pill {
-  width: 27px !important;
-  min-width: 27px !important;
-  max-width: 27px !important;
-  justify-content: center !important;
-  padding: 0 !important;
-}
-
-html.dui-pro-overhaul .dy-command-console__stability-pill .dui-status-chip__value,
-html.dui-pro-overhaul.dui-cohesive-ui .dy-command-console__stability-pill .dui-status-chip__value {
-  position: absolute !important;
-  width: 1px !important;
-  height: 1px !important;
-  margin: -1px !important;
-  overflow: hidden !important;
-  clip: rect(0 0 0 0) !important;
-  clip-path: inset(50%) !important;
-}
-
-html.dui-pro-overhaul .dy-command-console__pill .dui-status-chip__label,
-html.dui-pro-overhaul.dui-cohesive-ui .dy-command-console__pill .dui-status-chip__label {
-  display: none !important;
-}
-
 html.dui-pro-overhaul .dy-command-console__clear,
 html.dui-pro-overhaul.dui-cohesive-ui .dy-command-console__clear {
   width: 28px !important;
@@ -1041,11 +1005,6 @@ html.dui-pro-overhaul.dui-cohesive-ui .dy-command-upload-preview {
     justify-content: flex-end !important;
     padding-left: 0;
   }
-
-  html.dui-pro-overhaul .dy-command-console__stability-pill,
-  html.dui-pro-overhaul.dui-cohesive-ui .dy-command-console__stability-pill {
-    display: none !important;
-  }
 }
 
 @media (max-width: 900px) {
@@ -1088,11 +1047,6 @@ html.dui-pro-overhaul.dui-cohesive-ui .dy-command-upload-preview {
   html.dui-pro-overhaul .dy-command-console__subtitle,
   html.dui-pro-overhaul.dui-cohesive-ui .dy-command-console__subtitle {
     max-width: 190px;
-  }
-
-  html.dui-pro-overhaul .dy-command-console__stability-pill,
-  html.dui-pro-overhaul.dui-cohesive-ui .dy-command-console__stability-pill {
-    display: none !important;
   }
 
   html.dui-pro-overhaul .dy-command-messages,

@@ -40,7 +40,7 @@ export function StatusChip({
       {showDot ? <span className="dui-status-chip__dot" aria-hidden="true" /> : null}
       {icon ? <span className="dui-status-chip__icon" aria-hidden="true">{icon}</span> : null}
       <span className="dui-status-chip__label dy-status-label">{label}</span>
-      <span className="dui-status-chip__value dy-status-value">{visibleValue}</span>
+      <span className="dui-status-chip__value dy-status-value tabular-nums" style={typeof visibleValue === 'number' ? { minWidth: '3ch', textAlign: 'right' } : undefined}>{visibleValue}</span>
     </span>
   )
 }

@@ -255,31 +255,6 @@ html.dui-pro-overhaul .dy-command-console .dy-command-busy-status {
   color: #dfe7e9 !important;
 }
 
-html.dui-pro-overhaul .dy-command-console .dy-command-busy-dot {
-  width: 5px !important;
-  height: 5px !important;
-  border: 0 !important;
-  background: #7fd8b6 !important;
-  box-shadow: 0 0 8px rgba(127, 216, 182, .55) !important;
-}
-
-html.dui-pro-overhaul .dy-command-console .dy-command-busy-count,
-html.dui-pro-overhaul .dy-command-console .dy-command-busy-label {
-  background: transparent !important;
-  box-shadow: none !important;
-  color: inherit !important;
-  font-size: var(--dy-type-caption) !important;
-  font-weight: 760 !important;
-  line-height: 1 !important;
-  text-transform: none !important;
-}
-
-html.dui-pro-overhaul .dy-command-console .dy-command-busy-warning {
-  align-self: center !important;
-  margin-left: 6px !important;
-  margin-right: 5px !important;
-}
-
 html.dui-pro-overhaul .dy-command-console .dy-command-stop-run {
   display: inline-flex !important;
   min-width: 48px !important;
@@ -354,18 +329,12 @@ html.dui-pro-overhaul .dy-human-nav-copy strong {
   line-height: 1.12 !important;
 }
 
-html.dui-pro-overhaul .dy-human-nav-copy span,
-html.dui-pro-overhaul .dy-operator-copy span {
+html.dui-pro-overhaul .dy-human-nav-copy span {
   color: #9aabc0 !important;
   font-size: var(--dy-type-caption) !important;
   font-weight: 640 !important;
   line-height: 1.2 !important;
   text-transform: none !important;
-}
-
-html.dui-pro-overhaul .dy-operator-copy strong {
-  font-size: var(--dy-type-control) !important;
-  line-height: 1.18 !important;
 }
 
 html.dui-pro-overhaul .dy-workspace-context h1 {
@@ -384,8 +353,7 @@ html.dui-pro-overhaul .dy-workspace-context p {
   line-height: var(--dy-leading-copy) !important;
 }
 
-html.dui-pro-overhaul .dy-workspace-context__eyebrow,
-html.dui-pro-overhaul .dui-kicker,
+
 html.dui-pro-overhaul .dui-section-head span,
 html.dui-pro-overhaul .dui-choice-head span,
 html.dui-pro-overhaul .dy-workspace-context__state,
@@ -1256,29 +1224,6 @@ html.dui-pro-overhaul [data-dui-panel="missions"] .dui-agents-card .dui-agent-li
   overflow: auto !important;
 }
 
-html.dui-pro-overhaul [data-dui-panel="missions"] .dui-mission-bottom-card {
-  grid-column: 1 / -1 !important;
-  display: grid !important;
-  width: 100% !important;
-  grid-template-columns: minmax(360px, 1.25fr) minmax(300px, .9fr) minmax(320px, 1fr) !important;
-  gap: 10px !important;
-  align-items: stretch !important;
-  padding: 12px !important;
-}
-
-html.dui-pro-overhaul [data-dui-panel="missions"] .dui-mission-bottom-card > section {
-  display: flex !important;
-  min-width: 0 !important;
-  min-height: 0 !important;
-  flex-direction: column !important;
-  border: 1px solid rgba(80, 132, 168, .14) !important;
-  border-radius: 8px !important;
-  background:
-    linear-gradient(180deg, rgba(255, 255, 255, .024), rgba(255, 255, 255, .004)),
-    rgba(4, 12, 20, .44) !important;
-  padding: 10px !important;
-}
-
 html.dui-pro-overhaul [data-dui-panel="missions"] .dui-mission-bottom-objective .dui-textarea {
   flex: 1 1 auto !important;
   min-height: 104px !important;
@@ -1477,14 +1422,7 @@ html.dui-pro-overhaul [data-dui-panel="missions"] .dui-mission-bottom-tuning .du
   padding-top: 14px !important;
 }
 
-html.dui-pro-overhaul [data-dui-panel="missions"] .dui-mission-bottom-card .dui-timing-panel {
-  margin-top: 12px !important;
-}
-
 @container dui-mission-stage (max-width: 1240px) {
-  html.dui-pro-overhaul [data-dui-panel="missions"] .dui-mission-bottom-card {
-    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) !important;
-  }
 
   html.dui-pro-overhaul [data-dui-panel="missions"] .dui-mission-bottom-objective {
     grid-column: 1 / -1 !important;
@@ -1502,9 +1440,6 @@ html.dui-pro-overhaul [data-dui-panel="missions"] .dui-mission-bottom-card .dui-
 }
 
 @media (max-width: 1500px) {
-  html.dui-pro-overhaul [data-dui-panel="missions"] .dui-mission-bottom-card {
-    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) !important;
-  }
 
   html.dui-pro-overhaul [data-dui-panel="missions"] .dui-mission-bottom-objective {
     grid-column: 1 / -1 !important;
@@ -1518,11 +1453,8 @@ html.dui-pro-overhaul [data-dui-panel="missions"] .dui-mission-bottom-card .dui-
 }
 
 @container dui-mission-stage (max-width: 1080px) {
-  html.dui-pro-overhaul [data-dui-panel="missions"] .dui-mission-bottom-card,
-  html.dui-pro-overhaul [data-dui-panel="missions"] .dui-mission-bottom-cron .dui-cadence-grid,
-  html.dui-pro-overhaul [data-dui-panel="missions"] .dui-mission-bottom-card .dui-meter-grid,
-  html.dui-pro-overhaul [data-dui-panel="missions"] .dui-mission-bottom-card .dui-stat-grid,
-  html.dui-pro-overhaul [data-dui-panel="missions"] .dui-mission-bottom-card .dui-action-grid {
+  
+  html.dui-pro-overhaul [data-dui-panel="missions"] .dui-mission-bottom-cron .dui-cadence-grid {
     grid-template-columns: minmax(0, 1fr) !important;
   }
 
@@ -1538,11 +1470,8 @@ html.dui-pro-overhaul [data-dui-panel="missions"] .dui-mission-bottom-card .dui-
 }
 
 @media (max-width: 1320px) {
-  html.dui-pro-overhaul [data-dui-panel="missions"] .dui-mission-bottom-card,
-  html.dui-pro-overhaul [data-dui-panel="missions"] .dui-mission-bottom-cron .dui-cadence-grid,
-  html.dui-pro-overhaul [data-dui-panel="missions"] .dui-mission-bottom-card .dui-meter-grid,
-  html.dui-pro-overhaul [data-dui-panel="missions"] .dui-mission-bottom-card .dui-stat-grid,
-  html.dui-pro-overhaul [data-dui-panel="missions"] .dui-mission-bottom-card .dui-action-grid {
+  
+  html.dui-pro-overhaul [data-dui-panel="missions"] .dui-mission-bottom-cron .dui-cadence-grid {
     grid-template-columns: minmax(0, 1fr) !important;
   }
 
@@ -1568,11 +1497,8 @@ html.dui-pro-overhaul [data-dui-panel="missions"] .dui-mission-bottom-card .dui-
     width: 100% !important;
   }
 
-  html.dui-pro-overhaul [data-dui-panel="missions"] .dui-mission-bottom-card,
-  html.dui-pro-overhaul [data-dui-panel="missions"] .dui-mission-bottom-cron .dui-cadence-grid,
-  html.dui-pro-overhaul [data-dui-panel="missions"] .dui-mission-bottom-card .dui-meter-grid,
-  html.dui-pro-overhaul [data-dui-panel="missions"] .dui-mission-bottom-card .dui-stat-grid,
-  html.dui-pro-overhaul [data-dui-panel="missions"] .dui-mission-bottom-card .dui-action-grid {
+  
+  html.dui-pro-overhaul [data-dui-panel="missions"] .dui-mission-bottom-cron .dui-cadence-grid {
     grid-template-columns: minmax(0, 1fr) !important;
   }
 }
@@ -1735,8 +1661,7 @@ html.dui-pro-overhaul [data-dui-modal="recruit-agent"] .dui-recruit-template-car
   color: #f3f4f5 !important;
 }
 
-html.dui-pro-overhaul [data-dui-modal="recruit-agent"] .dui-recruit-template-card-blank,
-html.dui-pro-overhaul [data-dui-modal="recruit-agent"] .dui-recruit-file-summary-card {
+html.dui-pro-overhaul [data-dui-modal="recruit-agent"] .dui-recruit-template-card-blank {
   border-color: rgba(198, 202, 205, .15) !important;
   background:
     linear-gradient(180deg, rgba(255, 255, 255, .038), rgba(255, 255, 255, .006)),
@@ -1777,7 +1702,6 @@ html.dui-pro-overhaul [data-dui-modal="recruit-agent"] .dui-recruit-file-tabs bu
 }
 
 html.dui-pro-overhaul [data-dui-modal="recruit-agent"] .dui-recruit-personality-depth em,
-html.dui-pro-overhaul [data-dui-modal="recruit-agent"] .dui-recruit-file-summary-kicker,
 html.dui-pro-overhaul [data-dui-modal="recruit-agent"] .dui-recruit-auto-indicator {
   border-color: rgba(198, 202, 205, .24) !important;
   background: rgba(255, 255, 255, .045) !important;

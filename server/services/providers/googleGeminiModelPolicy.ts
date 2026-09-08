@@ -20,6 +20,10 @@ export function isGoogleGemini37FlashModel(model: string) {
   return /^gemini-3\.7-flash(?:$|[-@])/.test(normalizedGoogleGeminiModel(model))
 }
 
+export function isGoogleGemini38FlashModel(model: string) {
+  return /^gemini-3\.8-flash(?:$|[-@])/.test(normalizedGoogleGeminiModel(model))
+}
+
 /**
  * Gemini 3.7 Flash supports LOW, MEDIUM, and HIGH thinking levels. The app's
  * broader thinking selector includes OFF and MINIMAL, so use LOW as the
@@ -30,7 +34,7 @@ export function googleGeminiThinkingForModel(
   model: string,
   thinking: GoogleGeminiThinkingLevel,
 ): GoogleGeminiThinkingLevel {
-  if (!isGoogleGemini37FlashModel(model)) return thinking
+  if (!isGoogleGemini37FlashModel(model) && !isGoogleGemini38FlashModel(model)) return thinking
   if (thinking === 'off' || thinking === 'minimal') return 'low'
   if (thinking === 'xhigh' || thinking === 'max') return 'high'
   return thinking
@@ -38,10 +42,10 @@ export function googleGeminiThinkingForModel(
 
 /**
  * Google documents temperature/top-p/top-k as deprecated for the Gemini 3.6
- * and 3.7 Flash migration contract. The normal streaming requests already
+ * 3.7, and 3.8 Flash migration contract. The normal streaming requests already
  * omit them; direct artifact generation uses this predicate too.
  */
 export function googleGeminiModelDisallowsCustomSampling(model: string) {
   const normalized = normalizedGoogleGeminiModel(model)
-  return /^gemini-(?:3\.6|3\.7)-flash(?:$|[-@])/.test(normalized)
+  return /^gemini-(?:3\.6|3\.7|3\.8)-flash(?:$|[-@])/.test(normalized)
 }

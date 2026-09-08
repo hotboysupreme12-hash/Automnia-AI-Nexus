@@ -1,5 +1,8 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
+import { mkdtemp, mkdir, writeFile, rm } from 'node:fs/promises'
+import { tmpdir } from 'node:os'
+import path from 'node:path'
 
 import {
   createMissionSchedulerService,
@@ -48,6 +51,7 @@ function makeAssignments(party: string[], task = 'Initial mission task'): TeamSy
 function createHarness(overrides: Partial<{
   runOpenClaw: (args: string[]) => Promise<MissionSchedulerOpenClawResult>
   extractAgentReply: (stdout: string, stderr: string) => string
+  openClawAgentsRoot: string
 }> = {}) {
   const state = {
     activeShifts: new Map<string, unknown>(),
@@ -91,7 +95,7 @@ function createHarness(overrides: Partial<{
     missionTimers,
     missions,
     now: () => new Date('2026-06-30T12:00:00.000Z'),
-    openClawAgentsRoot: process.cwd(),
+    openClawAgentsRoot: overrides.openClawAgentsRoot || process.cwd(),
     openClawErrorResult: (error) => ({ stdout: '', stderr: String(error), code: 1 }),
     persistMissionRecord: (_mission, reason) => {
       state.persisted.push(reason)
@@ -169,6 +173,38 @@ function createHarness(overrides: Partial<{
     missionRunControllers,
     missionTimers,
   }
+}
+
+for (const entryTimestamp of ['2026-06-30T11:59:59.000Z', '2026-06-30T12:00:01.000Z', undefined]) {
+  test(`failed cron run recovers only dated current-session output (${entryTimestamp || 'undated'})`, async () => {
+    const root = await mkdtemp(path.join(tmpdir(), 'automnia-mission-evidence-'))
+    try {
+      const sessionId = '12345678-1234-1234-1234-123456789abc'
+      await mkdir(path.join(root, 'agent-a', 'sessions'), { recursive: true })
+      await writeFile(path.join(root, 'agent-a', 'sessions', `${sessionId}.jsonl`), JSON.stringify({
+        type: 'message', timestamp: entryTimestamp,
+        message: { role: 'assistant', content: [{ type: 'text', text: 'Changed files: report.md. Verification: all acceptance checks passed.' }] },
+      }) + '\n')
+      const { service, missions, state } = createHarness({
+        openClawAgentsRoot: root,
+        extractAgentReply: () => '',
+        runOpenClaw: async (args) => args[1] === 'add'
+          ? { stdout: '{"id":"cron-fixture"}', stderr: '', code: 0 }
+          : { stdout: JSON.stringify({ sessionId }), stderr: 'connection failed', code: 1 },
+      })
+      const mission = makeMission()
+      missions.set(mission.id, mission)
+      const job = await service.createMissionCronJob({ mission, agentId: 'agent-a', role: 'leader', round: 1 })
+      const result = await service.runMissionCronJob(job)
+      assert.equal(result.ok, entryTimestamp === '2026-06-30T12:00:01.000Z')
+      if (result.ok) {
+        assert.equal(state.events.at(-1)?.evidence?.evidenceSource, 'session-final')
+        assert.equal(state.events.at(-1)?.evidence?.evidenceTimestamp, entryTimestamp)
+      }
+    } finally {
+      await rm(root, { recursive: true, force: true })
+    }
+  })
 }
 
 async function waitUntil(predicate: () => boolean, timeoutMs = 250) {

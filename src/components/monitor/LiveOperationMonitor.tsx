@@ -1,3 +1,4 @@
+import { useRememberedState } from '../../hooks/useRememberedState'
 import { memo, useCallback, useId, useMemo, useState } from 'react'
 import { useNexusStore } from '../../store/nexusStore'
 import type { AgentActivityEvent, AgentOperationState, AgentResponse, MissionEvent, OpenClawAgent } from '../../types/nexus'
@@ -1099,7 +1100,7 @@ const RuntimeGatewayPanel = memo(function RuntimeGatewayPanel({
   const manageableCronJobs = useMemo(() => activeCronJobs.filter((job) => job.source !== 'system-cron'), [activeCronJobs])
   const cronListTruncated = activeCronCount > activeCronJobs.length
   const cronCadences = useMemo(() => Array.from(new Set(activeCronJobs.map((job) => job.every).filter(Boolean))), [activeCronJobs])
-  const [cronPage, setCronPage] = useState(0)
+  const [cronPage, setCronPage] = useRememberedState('monitor-cron-page', 0)
   const cronPageCount = Math.max(1, Math.ceil(activeCronJobs.length / GATEWAY_CRON_PAGE_SIZE))
   const visibleCronPage = Math.min(cronPage, cronPageCount - 1)
   const visibleCronStart = visibleCronPage * GATEWAY_CRON_PAGE_SIZE
@@ -1663,7 +1664,7 @@ export const LiveOperationMonitor = memo(function LiveOperationMonitor({
   const activePartyIds = useNexusStore((state) => state.activePartyIds)
   const agents = useNexusStore((state) => state.agents)
   const resetSimulation = useNexusStore((state) => state.resetSimulation)
-  const [tab, setTab] = useState<MonitorTab>('gateway')
+  const [tab, setTab] = useRememberedState<MonitorTab>('monitor-tab', 'gateway')
   const [doctorRun, setDoctorRun] = useState<DoctorRun | null>(null)
   const [doctorError, setDoctorError] = useState('')
   const [doctorBusy, setDoctorBusy] = useState(false)

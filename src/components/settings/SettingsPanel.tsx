@@ -1,4 +1,8 @@
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { NotificationSettings } from './NotificationSettings'
+import { WorkspaceProfiles } from './WorkspaceProfilesPanel'
+import { SettingsSearchMatches } from './SettingsSearchMatches'
+import { useRememberedState } from '../../hooks/useRememberedState'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type { ReactNode } from 'react'
 import { useLicense } from '../../context/useLicense'
 import { useAuth } from '../../context/useAuth'
@@ -25,7 +29,6 @@ import type {
 } from '../../types/nexus'
 import {
   DEFAULT_UI_SETTINGS,
-  UI_SETTINGS_STORAGE_KEY,
   applyUiSettings,
   readUiSettings,
   saveUiSettings,
@@ -51,8 +54,12 @@ import {
   type RegistrySortKey,
 } from './workspaceSettings'
 import { SettingsActivityLog } from './SettingsActivityLog'
+import { buildRuntimePolicyPatch, mixedRuntimeFields, type RuntimeDefaultsDraft } from './runtimePolicyDraft'
+import { MicrophoneSettings } from './MicrophoneSettings'
+import { lastPreferenceSaveResult, PREFERENCE_STORAGE_STATUS_EVENT } from './preferenceStorage'
+import { MAX_PREFERENCES_BACKUP_BYTES, parsePreferencesBackup, serializePreferencesBackup, PREFERENCE_GROUP_LABELS, type PreferenceGroup, type PreferencesBackup } from './preferencesBackup'
+import { Button, Dialog } from '../ui'
 import {
-  CHANNEL_ACTIVITY_SETTINGS_STORAGE_KEY,
   DEFAULT_CHANNEL_ACTIVITY_SETTINGS,
   readChannelActivitySettings,
   saveChannelActivitySettings,
@@ -73,32 +80,21 @@ export type SettingsSectionId = 'account' | 'appearance' | 'workspace' | 'voice'
 type RuntimeTargetScope = 'party' | 'selection'
 type PendingConfirmation = 'reset-all' | 'reset-runtime' | 'clear-workspace' | null
 
-type RuntimeDefaultsDraft = {
-  heartbeatSeconds: number
-  idleTimeoutSeconds: number
-  continuous: boolean
-  recoveryMode: boolean
-  timeoutMinutes: number
-  thinkingDefault: ThinkingLevel
-  fastModeDefault: FastModeDefault
-  parallelPreferred: boolean
-}
-
 const SETTINGS_SECTIONS: Array<{
   id: SettingsSectionId
   label: string
   description: string
   keywords: string
 }> = [
-  { id: 'account', label: 'Account & License', description: 'License key, credits and account details', keywords: 'account license credits key email tier balance provider oauth usage priority automnia fallback' },
-  { id: 'appearance', label: 'Appearance', description: 'Theme, density and accessibility', keywords: 'theme color accent contrast glow motion forms scrollbar interface display' },
-  { id: 'workspace', label: 'Workspace', description: 'Registry and command console', keywords: 'agents registry cards grid list sort filter console width drafts layout' },
-  { id: 'voice', label: 'Voice', description: 'Transcription and microphone', keywords: 'speech microphone local cloud online silence pause noise echo gain recording' },
-  { id: 'missions', label: 'Missions', description: 'Defaults for new deployments', keywords: 'mission objective duration risk complexity collaboration evidence build test' },
-  { id: 'agents', label: 'Agent runtime', description: 'Bulk heartbeat and reasoning policy', keywords: 'agent runtime heartbeat timeout thinking fast parallel recovery continuous' },
-  { id: 'telegram', label: 'Telegram', description: 'Bot commands, delivery and chat safety', keywords: 'telegram bot commands agents pairing dm group topics streaming reactions polls media history actions settings' },
-  { id: 'logs', label: 'Logs', description: 'Agent runs, channels and activity memory', keywords: 'logs activity agent runs gateway events tail automnia runtime response history channel telegram sms incoming sent retain trim memory' },
-  { id: 'data', label: 'Data & reset', description: 'Backup, cleanup and recovery', keywords: 'reset default backup export clear console responses simulation party data' },
+  { id: 'account', label: 'Account & License', description: 'Profile, security and billing', keywords: 'account license credits key email tier balance provider oauth usage priority automnia fallback' },
+  { id: 'appearance', label: 'Appearance', description: 'Theme and accessibility', keywords: 'theme color accent contrast glow motion forms scrollbar interface display' },
+  { id: 'workspace', label: 'Workspace', description: 'Registry and console', keywords: 'agents registry cards grid list sort filter console width drafts layout' },
+  { id: 'voice', label: 'Voice', description: 'Microphone and transcription', keywords: 'speech microphone local cloud online silence pause noise echo gain recording' },
+  { id: 'missions', label: 'Missions', description: 'Deployment defaults', keywords: 'mission objective duration risk complexity collaboration evidence build test' },
+  { id: 'agents', label: 'Agent runtime', description: 'Heartbeat and reasoning', keywords: 'agent runtime heartbeat timeout thinking fast parallel recovery continuous' },
+  { id: 'telegram', label: 'Telegram', description: 'Bot commands and delivery', keywords: 'telegram bot commands agents pairing dm group topics streaming reactions polls media history actions settings' },
+  { id: 'logs', label: 'Logs', description: 'Activity and history', keywords: 'logs activity agent runs gateway events tail automnia runtime response history channel telegram sms incoming sent retain trim memory' },
+  { id: 'data', label: 'Data & reset', description: 'Backup and recovery', keywords: 'reset default backup export clear console responses simulation party data' },
 ]
 
 const DEFAULT_RUNTIME_SETTINGS: RuntimeDefaultsDraft = {
@@ -187,7 +183,7 @@ function SettingsCard({ title, description, children }: { title: string; descrip
 
 function Field({ label, hint, children }: { label: string; hint?: string; children: ReactNode }) {
   return (
-    <label className="dui-settings-field">
+    <label className="dui-settings-field" data-setting-label={label} data-setting-hint={hint}>
       <span><strong>{label}</strong>{hint && <small>{hint}</small>}</span>
       <div className="dui-settings-control">{children}</div>
     </label>
@@ -196,18 +192,18 @@ function Field({ label, hint, children }: { label: string; hint?: string; childr
 
 function SettingGroup({ label, hint, children }: { label: string; hint?: string; children: ReactNode }) {
   return (
-    <div className="dui-settings-field">
+    <div className="dui-settings-field" data-setting-label={label} data-setting-hint={hint}>
       <span><strong>{label}</strong>{hint && <small>{hint}</small>}</span>
       <div className="dui-settings-control">{children}</div>
     </div>
   )
 }
 
-function ToggleField({ label, hint, checked, disabled, onChange }: { label: string; hint?: string; checked: boolean; disabled?: boolean; onChange: (checked: boolean) => void }) {
+function ToggleField({ label, hint, checked, mixed, disabled, onChange }: { label: string; hint?: string; checked: boolean; mixed?: boolean; disabled?: boolean; onChange: (checked: boolean) => void }) {
   return (
-    <label className="dui-settings-toggle" data-disabled={disabled ? 'true' : 'false'}>
+    <label className="dui-settings-toggle" data-setting-label={label} data-setting-hint={hint} data-disabled={disabled ? 'true' : 'false'}>
       <span><strong>{label}</strong>{hint && <small>{hint}</small>}</span>
-      <input type="checkbox" checked={checked} disabled={disabled} onChange={(event) => onChange(event.target.checked)} />
+      <input ref={(element) => { if (element) element.indeterminate = Boolean(mixed) }} type="checkbox" aria-checked={mixed ? 'mixed' : checked} checked={checked} disabled={disabled} onChange={(event) => onChange(event.target.checked)} />
       <i aria-hidden="true" />
     </label>
   )
@@ -252,6 +248,7 @@ export function SettingsPanel({ focusSection = 'account', focusRequest = 0 }: { 
   const updateMissionDraft = useNexusStore((state) => state.updateMissionDraft)
   const updateHeartbeat = useNexusStore((state) => state.updateHeartbeat)
   const updateAgentRuntimePolicy = useNexusStore((state) => state.updateAgentRuntimePolicy)
+  const saveAgentPolicies = useNexusStore((state) => state.saveAgentPolicies)
   const clearAgentResponses = useNexusStore((state) => state.clearAgentResponses)
   const clearAll = useNexusStore((state) => state.clearAll)
   const resetMission = useNexusStore((state) => state.resetMission)
@@ -260,8 +257,8 @@ export function SettingsPanel({ focusSection = 'account', focusRequest = 0 }: { 
   const selectAgent = useNexusStore((state) => state.selectAgent)
   const clearSelectedAgents = useNexusStore((state) => state.clearSelectedAgents)
 
-  const [activeSection, setActiveSection] = useState<SettingsSectionId>(focusSection)
-  const [searchQuery, setSearchQuery] = useState('')
+  const [activeSection, setActiveSection] = useRememberedState<SettingsSectionId>('settings-section', focusSection)
+  const [searchQuery, setSearchQuery] = useRememberedState('settings-search', '')
   const [uiSettings, setUiSettings] = useState<AutomniaUiSettings>(() => readUiSettings())
   const [speechSettings, setSpeechSettings] = useState<SpeechSettings>(() => readSpeechSettings())
   const [registryPreferences, setRegistryPreferences] = useState<RegistryPreferences>(() => readRegistryPreferences())
@@ -275,6 +272,7 @@ export function SettingsPanel({ focusSection = 'account', focusRequest = 0 }: { 
   const [checkoutError, setCheckoutError] = useState('')
   const [usagePriorityBusy, setUsagePriorityBusy] = useState(false)
   const [usagePriorityError, setUsagePriorityError] = useState('')
+  const [runtimeSaveBusy, setRuntimeSaveBusy] = useState(false)
   const [currentPassword, setCurrentPassword] = useState('')
   const [newPassword, setNewPassword] = useState('')
   const [confirmNewPassword, setConfirmNewPassword] = useState('')
@@ -286,12 +284,20 @@ export function SettingsPanel({ focusSection = 'account', focusRequest = 0 }: { 
   const [telegramSaving, setTelegramSaving] = useState(false)
   const [telegramLoaded, setTelegramLoaded] = useState(false)
   const [telegramLoadError, setTelegramLoadError] = useState('')
+  const settingsRoot = useRef<HTMLElement>(null)
+  const backupInputRef = useRef<HTMLInputElement>(null)
+  const [backupPreview, setBackupPreview] = useState<PreferencesBackup | null>(null)
+  const [backupGroups, setBackupGroups] = useState<PreferenceGroup[]>([])
+  const [backupReading, setBackupReading] = useState(false)
   const [telegramGatewaySettings, setTelegramGatewaySettings] = useState<TelegramSettings>(() => readTelegramSettings())
 
+  const [appliedFocusRequest, setAppliedFocusRequest] = useRememberedState('settings-focus-request', -1)
   useEffect(() => {
+    if (appliedFocusRequest === focusRequest) return
     setActiveSection(focusSection)
     setSearchQuery('')
-  }, [focusSection, focusRequest])
+    setAppliedFocusRequest(focusRequest)
+  }, [focusSection, focusRequest, appliedFocusRequest, setAppliedFocusRequest, setActiveSection, setSearchQuery])
 
   const partyTargetIds = useMemo(() => activePartyIds.filter((id) => agents.some((agent) => agent.id === id)), [activePartyIds, agents])
   const selectedTargetIds = useMemo(() => selectedAgentIds.filter((id) => agents.some((agent) => agent.id === id)), [agents, selectedAgentIds])
@@ -300,24 +306,36 @@ export function SettingsPanel({ focusSection = 'account', focusRequest = 0 }: { 
     () => targetIds.map((id) => agents.find((agent) => agent.id === id)).filter((agent): agent is OpenClawAgent => Boolean(agent)),
     [agents, targetIds],
   )
-  const runtimeTargetKey = targetAgents[0]?.id || ''
-  const [runtimeDraft, setRuntimeDraft] = useState(() => ({ targetKey: runtimeTargetKey, values: defaultRuntimeDraft(targetAgents[0]) }))
+  const runtimeTargetKey = targetAgents.map((agent) => agent.id).join('|')
+  const [runtimeDraft, setRuntimeDraft] = useState(() => ({ targetKey: runtimeTargetKey, values: defaultRuntimeDraft(targetAgents[0]), changedKeys: [] as Array<keyof RuntimeDefaultsDraft> }))
   const activeRuntimeDraft = runtimeDraft.targetKey === runtimeTargetKey ? runtimeDraft.values : defaultRuntimeDraft(targetAgents[0])
+
+  const runtimeChangedKeys = runtimeDraft.targetKey === runtimeTargetKey ? runtimeDraft.changedKeys : []
+  const runtimeMixedFields = mixedRuntimeFields(targetAgents.map(defaultRuntimeDraft))
+  const runtimeFieldMixed = (key: keyof RuntimeDefaultsDraft) => runtimeMixedFields.has(key) && !runtimeChangedKeys.includes(key)
+  const runtimeHint = (key: keyof RuntimeDefaultsDraft, hint = '') => `${runtimeFieldMixed(key) ? 'Mixed across selected agents. ' : ''}${hint}`
 
   const normalizedSearch = searchQuery.trim().toLowerCase()
   const visibleSections = normalizedSearch
-    ? SETTINGS_SECTIONS.filter((section) => `${section.label} ${section.description} ${section.keywords}`.toLowerCase().includes(normalizedSearch)).map((section) => section.id)
+    ? SETTINGS_SECTIONS.map((section) => section.id)
     : [activeSection]
 
-  const announceSaved = (label: string) => setNotice({ tone: 'success', text: `${label} saved and applied.` })
+  useEffect(() => {
+    const storageStatus = () => { const result = lastPreferenceSaveResult(); if (!result.ok) setNotice({ tone: 'warning', text: result.message }) }
+    window.addEventListener(PREFERENCE_STORAGE_STATUS_EVENT, storageStatus)
+    return () => window.removeEventListener(PREFERENCE_STORAGE_STATUS_EVENT, storageStatus)
+  }, [])
+
+  const announceSaved = (label: string) => {
+    const result = lastPreferenceSaveResult()
+    setNotice(result.ok ? { tone: 'success', text: `${label} saved and applied.` } : { tone: 'warning', text: result.message })
+  }
 
   const updateUiSettings = (patch: Partial<AutomniaUiSettings>, label: string) => {
-    setUiSettings((current) => {
-      const next = { ...current, ...patch }
-      saveUiSettings(next)
-      applyUiSettings(next)
-      return next
-    })
+    const next = { ...uiSettings, ...patch }
+    saveUiSettings(next)
+    applyUiSettings(next)
+    setUiSettings(next)
     announceSaved(label)
   }
 
@@ -326,43 +344,35 @@ export function SettingsPanel({ focusSection = 'account', focusRequest = 0 }: { 
   }
 
   const updateSpeechSettings = (patch: Partial<SpeechSettings>, label: string) => {
-    setSpeechSettings((current) => {
-      const next = { ...current, ...patch }
-      saveSpeechSettings(next)
-      return next
-    })
+    const next = { ...speechSettings, ...patch }
+    saveSpeechSettings(next)
+    setSpeechSettings(next)
     announceSaved(label)
   }
 
   const updateRegistryPreferences = (patch: Partial<RegistryPreferences>, label: string) => {
-    setRegistryPreferences((current) => {
-      const next = { ...current, ...patch }
-      saveRegistryPreferences(next)
-      return next
-    })
+    const next = { ...registryPreferences, ...patch }
+    saveRegistryPreferences(next)
+    setRegistryPreferences(next)
     announceSaved(label)
   }
 
   const updateConsolePreferences = (patch: Partial<ConsolePreferences>, label: string) => {
-    setConsolePreferences((current) => {
-      const next = { ...current, ...patch }
-      saveConsolePreferences(next)
-      if (patch.rememberDrafts === false) clearAllCommandConsoleDrafts()
-      return next
-    })
+    const next = { ...consolePreferences, ...patch }
+    saveConsolePreferences(next)
+    setConsolePreferences(next)
+    if (patch.rememberDrafts === false) clearAllCommandConsoleDrafts()
     announceSaved(label)
   }
 
   const updateRuntimeDraft = (patch: Partial<RuntimeDefaultsDraft>) => {
-    setRuntimeDraft({ targetKey: runtimeTargetKey, values: { ...activeRuntimeDraft, ...patch } })
+    setRuntimeDraft({ targetKey: runtimeTargetKey, values: { ...activeRuntimeDraft, ...patch }, changedKeys: [...new Set([...runtimeChangedKeys, ...Object.keys(patch) as Array<keyof RuntimeDefaultsDraft>])] })
   }
 
   const updateTelegramDraft = <Key extends keyof TelegramSettings>(key: Key, value: TelegramSettings[Key]) => {
-    setTelegramSettings((current) => {
-      const next = normalizeTelegramSettings({ ...current, [key]: value })
-      saveTelegramSettings(next)
-      return next
-    })
+    const next = normalizeTelegramSettings({ ...telegramSettings, [key]: value })
+    saveTelegramSettings(next)
+    setTelegramSettings(next)
   }
 
   const openClawCommandFailure = (payload: { ok?: boolean; error?: string; command?: { output?: string; stderr?: string; code?: number } }, fallback: string) => {
@@ -440,27 +450,36 @@ export function SettingsPanel({ focusSection = 'account', focusRequest = 0 }: { 
     if (activeSection === 'telegram' && !telegramLoaded && !telegramLoading) void loadTelegramFromGateway()
   }, [activeSection, telegramLoaded, telegramLoading, loadTelegramFromGateway])
 
-  const applyRuntimeToTargets = (values = activeRuntimeDraft, reset = false) => {
+  const applyRuntimeToTargets = async (values = activeRuntimeDraft, reset = false) => {
+    if (runtimeSaveBusy) return
     if (!targetIds.length) {
       setNotice({ tone: 'warning', text: `No ${targetScope === 'party' ? 'party' : 'selected'} agents are available to update.` })
       return
     }
-    for (const id of targetIds) {
-      updateHeartbeat(id, {
-        tickIntervalMs: Math.max(5, Math.round(values.heartbeatSeconds)) * 1_000,
-        idleTimeoutMs: Math.max(5, Math.round(values.idleTimeoutSeconds)) * 1_000,
-        continuous: values.continuous,
-        recoveryMode: values.recoveryMode,
-      })
-      updateAgentRuntimePolicy(id, {
-        timeoutSeconds: Math.max(1, Math.round(values.timeoutMinutes)) * 60,
-        thinkingDefault: values.thinkingDefault,
-        fastModeDefault: values.fastModeDefault,
-        parallelPreferred: values.parallelPreferred,
-      })
+    if (![values.heartbeatSeconds, values.idleTimeoutSeconds, values.timeoutMinutes].every(Number.isFinite)) {
+      setNotice({ tone: 'warning', text: 'Enter valid numeric values for heartbeat, idle timeout and work timeout.' })
+      return
     }
+    const keys = reset ? Object.keys(values) as Array<keyof RuntimeDefaultsDraft> : runtimeChangedKeys
+    if (!keys.length) { setNotice({ tone: 'neutral', text: 'Change a field before applying a runtime policy.' }); return }
+    const patch = buildRuntimePolicyPatch(values, keys)
+    const targets = targetAgents.map((agent) => ({ id: agent.id, name: agent.name }))
+    setRuntimeSaveBusy(true)
     setPendingConfirmation(null)
-    setNotice({ tone: 'success', text: `${reset ? 'Default runtime restored for' : 'Runtime policy applied to'} ${targetIds.length} agent${targetIds.length === 1 ? '' : 's'}.` })
+    setNotice({ tone: 'neutral', text: `Saving runtime policy for ${targets.length} agent${targets.length === 1 ? '' : 's'}…` })
+    const results = await Promise.allSettled(targets.map(async ({ id }) => {
+      if (Object.keys(patch.heartbeat).length) updateHeartbeat(id, patch.heartbeat, { persist: false })
+      if (Object.keys(patch.runtimePolicy).length) updateAgentRuntimePolicy(id, patch.runtimePolicy, { persist: false })
+      const result = await saveAgentPolicies(id)
+      if (!result.ok) throw new Error(result.message)
+    }))
+    const failures = results.flatMap((result, index) => result.status === 'rejected'
+      ? [`${targets[index].name}: ${result.reason instanceof Error ? result.reason.message : String(result.reason)}`]
+      : [])
+    setRuntimeSaveBusy(false)
+    setNotice(failures.length
+      ? { tone: 'error', text: `Saved ${targets.length - failures.length} of ${targets.length} agents. Not saved: ${failures.join('; ')}. Review the policy and apply again to retry.` }
+      : { tone: 'success', text: `${reset ? 'Default runtime restored for' : 'Runtime policy saved for'} ${targets.length} agent${targets.length === 1 ? '' : 's'}.` })
   }
 
   const toggleRuntimeTarget = (agentId: string) => {
@@ -499,31 +518,67 @@ export function SettingsPanel({ focusSection = 'account', focusRequest = 0 }: { 
     setConsolePreferences(DEFAULT_CONSOLE_PREFERENCES)
     setSpeechSettings(DEFAULT_SPEECH_SETTINGS)
     clearAllCommandConsoleDrafts()
-    window.localStorage.removeItem('automnia-monitor-doctor-dismissed-run')
+    try { window.localStorage.removeItem('automnia-monitor-doctor-dismissed-run') } catch { /* Retain a usable workspace when storage is blocked. */ }
     resetMission()
     setPendingConfirmation(null)
-    setNotice({ tone: 'success', text: 'All app preferences and mission defaults were restored. Agents, credentials, plugins, and files were kept.' })
+    setNotice(lastPreferenceSaveResult().ok ? { tone: 'success', text: 'All app preferences and mission defaults were restored. Agents, credentials, plugins, and files were kept.' } : { tone: 'warning', text: lastPreferenceSaveResult().message })
   }
 
+  const createSettingsBackup = () => serializePreferencesBackup({ appearance: uiSettings, activity: readChannelActivitySettings(), voice: speechSettings, registry: registryPreferences, console: consolePreferences, mission: missionDraft })
+
   const copySettingsBackup = async () => {
+    try { await navigator.clipboard.writeText(createSettingsBackup()); setNotice({ tone: 'success', text: 'Settings backup copied to the clipboard.' }) }
+    catch (error) { setNotice({ tone: 'error', text: `Could not copy the backup. ${error instanceof Error ? error.message : 'Try downloading it instead.'}` }) }
+  }
+
+  const downloadSettingsBackup = () => {
     try {
-      await navigator.clipboard.writeText(JSON.stringify({
-        version: 1,
-        [UI_SETTINGS_STORAGE_KEY]: uiSettings,
-        [CHANNEL_ACTIVITY_SETTINGS_STORAGE_KEY]: readChannelActivitySettings(),
-        speech: speechSettings,
-        registry: registryPreferences,
-        console: consolePreferences,
-        mission: missionDraft,
-      }, null, 2))
-      setNotice({ tone: 'success', text: 'Settings backup copied to the clipboard.' })
-    } catch {
-      setNotice({ tone: 'error', text: 'Could not copy the backup. Check clipboard permission and try again.' })
+      const url = URL.createObjectURL(new Blob([createSettingsBackup()], { type: 'application/json' }))
+      const link = document.createElement('a')
+      link.href = url
+      link.download = `automnia-preferences-${new Date().toISOString().slice(0, 10)}.json`
+      link.click()
+      window.setTimeout(() => URL.revokeObjectURL(url), 1_000)
+      setNotice({ tone: 'success', text: 'Preferences backup download started.' })
+    } catch (error) { setNotice({ tone: 'error', text: `Could not export preferences: ${error instanceof Error ? error.message : String(error)}` }) }
+  }
+
+  const previewSettingsBackup = async (file?: File) => {
+    if (!file) return
+    setBackupPreview(null)
+    setBackupReading(true)
+    try {
+      if (file.size > MAX_PREFERENCES_BACKUP_BYTES) throw new Error('Choose a preferences backup smaller than 1 MB.')
+      const preview = parsePreferencesBackup(await file.text())
+      setBackupPreview(preview)
+      setBackupGroups(Object.keys(preview) as PreferenceGroup[])
+      setNotice({ tone: 'neutral', text: 'Backup validated. Review the fields and select which groups to restore.' })
+    } catch (error) { setNotice({ tone: 'error', text: `${error instanceof Error ? error.message : 'Could not read this backup.'} No settings were changed.` }) }
+    finally { setBackupReading(false) }
+  }
+
+  const applySettingsBackup = () => {
+    if (!backupPreview || !backupGroups.length) return
+    const failures: string[] = []
+    for (const group of backupGroups) {
+      const values = backupPreview[group]
+      if (!values) continue
+      switch (group) {
+        case 'appearance': { const value = backupPreview.appearance!; saveUiSettings(value); applyUiSettings(value); setUiSettings(value); break }
+        case 'voice': { const value = backupPreview.voice!; saveSpeechSettings(value); setSpeechSettings(value); break }
+        case 'registry': { const value = backupPreview.registry!; saveRegistryPreferences(value); setRegistryPreferences(value); break }
+        case 'console': { const value = backupPreview.console!; saveConsolePreferences(value); setConsolePreferences(value); if (!value.rememberDrafts) clearAllCommandConsoleDrafts(); break }
+        case 'activity': saveChannelActivitySettings(backupPreview.activity!); break
+        case 'mission': updateMissionDraft(backupPreview.mission!); break
+      }
+      if (!lastPreferenceSaveResult().ok && group !== 'mission') failures.push(PREFERENCE_GROUP_LABELS[group])
     }
+    setBackupPreview(null)
+    setNotice(failures.length ? { tone: 'warning', text: `Preferences applied for this session. Could not save: ${failures.join(', ')}. Keep your backup before closing the app.` } : { tone: 'success', text: `Restored ${backupGroups.length} preference group${backupGroups.length === 1 ? '' : 's'}.` })
   }
 
   const renderAppearance = () => (
-    <div className="dui-settings-section" id="settings-section-appearance" role="tabpanel">
+    <div className="dui-settings-section" id="settings-section-appearance">
       <SectionHeader section="appearance" eyebrow="Personalize Automnia" />
       <SettingsCard title="Color and surfaces" description="Applied live across every workspace.">
         <Field label="Accent mode" hint="Changes active controls, status color and highlights.">
@@ -558,8 +613,10 @@ export function SettingsPanel({ focusSection = 'account', focusRequest = 0 }: { 
   )
 
   const renderWorkspace = () => (
-    <div className="dui-settings-section" id="settings-section-workspace" role="tabpanel">
+    <div className="dui-settings-section" id="settings-section-workspace">
       <SectionHeader section="workspace" eyebrow="Choose how daily work is arranged" />
+      <WorkspaceProfiles onApply={() => { setUiSettings(readUiSettings()); setRegistryPreferences(readRegistryPreferences()); setConsolePreferences(readConsolePreferences()) }} />
+      <SettingsCard title="Notifications" description="Choose when Automnia should get your attention."><NotificationSettings /></SettingsCard>
       <SettingsCard title="Agent registry" description="These controls update the live Agents workspace.">
         <Field label="Default view" hint="Simple is the 9-agent default; Detailed shows 12 cards with runtime info.">
           <select value={registryPreferences.displayMode} onChange={(event) => updateRegistryPreferences({ displayMode: event.target.value as AgentDisplayMode }, 'Registry view')}>
@@ -608,12 +665,12 @@ export function SettingsPanel({ focusSection = 'account', focusRequest = 0 }: { 
   )
 
   const renderVoice = () => (
-    <div className="dui-settings-section" id="settings-section-voice" role="tabpanel">
+    <div className="dui-settings-section" id="settings-section-voice">
       <SectionHeader section="voice" eyebrow="Fast dictation with explicit privacy controls" />
       <SettingsCard title="Transcription engine" description="Local stays on-device after its one-time model download. Cloud uses the configured OpenAI provider.">
         <SettingGroup label="Provider" hint="The microphone button uses this selection immediately.">
           <div className="dui-settings-voice-mode" role="group" aria-label="Voice transcription provider" data-mode={speechSettings.mode}>
-            {([{ id: 'local', label: 'Local', detail: 'Private · on-device' }, { id: 'online', label: 'Cloud', detail: 'OpenAI · highest accuracy' }] as Array<{ id: SpeechTranscriptionMode; label: string; detail: string }>).map((option) => (
+            {([{ id: 'local', label: 'Local', detail: 'On-device · offline after setup' }, { id: 'online', label: 'Cloud', detail: 'OpenAI · internet required' }] as Array<{ id: SpeechTranscriptionMode; label: string; detail: string }>).map((option) => (
               <button key={option.id} type="button" aria-pressed={speechSettings.mode === option.id} onClick={() => updateSpeechSettings({ mode: option.id }, 'Voice provider')}>
                 <span><strong>{option.label}</strong><small>{option.detail}</small></span>
               </button>
@@ -632,6 +689,7 @@ export function SettingsPanel({ focusSection = 'account', focusRequest = 0 }: { 
           </select>
         </Field>
       </SettingsCard>
+      <SettingsCard title="Microphone device and test" description="Record a short local sample and check playback before dictating."><MicrophoneSettings settings={speechSettings} onChange={(microphoneDeviceId) => updateSpeechSettings({ microphoneDeviceId }, 'Microphone selection')} /></SettingsCard>
       <SettingsCard title="Microphone processing" description="Browser-level audio cleanup applied before local or cloud transcription.">
         <ToggleField label="Noise suppression" hint="Reduces fans, room noise and steady background sound." checked={speechSettings.noiseSuppression} onChange={(value) => updateSpeechSettings({ noiseSuppression: value }, 'Noise suppression')} />
         <ToggleField label="Echo cancellation" hint="Reduces speaker audio feeding back into the microphone." checked={speechSettings.echoCancellation} onChange={(value) => updateSpeechSettings({ echoCancellation: value }, 'Echo cancellation')} />
@@ -644,7 +702,7 @@ export function SettingsPanel({ focusSection = 'account', focusRequest = 0 }: { 
   const renderMissions = () => {
     const requirements = missionDraft.requiredEvidence || DEFAULT_MISSION_DRAFT.requiredEvidence || []
     return (
-      <div className="dui-settings-section" id="settings-section-missions" role="tabpanel">
+      <div className="dui-settings-section" id="settings-section-missions">
         <SectionHeader section="missions" eyebrow="Define a reliable starting point" />
         <SettingsCard title="Next mission defaults" description="Changes appear immediately in the Missions workspace.">
           <Field label="Mission title"><input value={missionDraft.title} onChange={(event) => updateMissionDraft({ title: event.target.value })} /></Field>
@@ -669,9 +727,9 @@ export function SettingsPanel({ focusSection = 'account', focusRequest = 0 }: { 
   }
 
   const renderAgents = () => (
-    <div className="dui-settings-section" id="settings-section-agents" role="tabpanel">
+    <div className="dui-settings-section" id="settings-section-agents">
       <SectionHeader section="agents" eyebrow="Bulk policy with an explicit target" />
-      <SettingsCard title="Target agents" description="Bulk settings use Apply intentionally so an accidental slider movement cannot overwrite an entire party.">
+      <SettingsCard title="Target agents" description="Only fields you explicitly change are applied. Mixed values remain unchanged until edited; Restore runtime defaults replaces every field.">
         <div className="dui-settings-targeting" data-target-scope={targetScope}>
           <div className="dui-settings-targeting__head">
             <div><span>Apply to</span><strong>{targetIds.length ? `${targetIds.length} agent${targetIds.length === 1 ? '' : 's'}` : 'No target selected'}</strong></div>
@@ -688,23 +746,23 @@ export function SettingsPanel({ focusSection = 'account', focusRequest = 0 }: { 
         </div>
       </SettingsCard>
       <SettingsCard title="Heartbeat and recovery" description="Controls when agents wake and how they recover from interruptions.">
-        <Field label="Heartbeat cadence" hint="Seconds between runtime pulses."><input type="number" min={5} max={1800} value={activeRuntimeDraft.heartbeatSeconds} onChange={(event) => updateRuntimeDraft({ heartbeatSeconds: Number(event.target.value) })} /></Field>
-        <Field label="Idle timeout" hint="Seconds before an inactive agent yields its loop."><input type="number" min={5} max={1800} value={activeRuntimeDraft.idleTimeoutSeconds} onChange={(event) => updateRuntimeDraft({ idleTimeoutSeconds: Number(event.target.value) })} /></Field>
-        <ToggleField label="Continuous heartbeat" hint="Keeps the runtime loop active between ticks." checked={activeRuntimeDraft.continuous} onChange={(continuous) => updateRuntimeDraft({ continuous })} />
-        <ToggleField label="Automatic recovery" hint="Retries after a recoverable runtime failure." checked={activeRuntimeDraft.recoveryMode} onChange={(recoveryMode) => updateRuntimeDraft({ recoveryMode })} />
+        <Field label="Heartbeat cadence" hint={runtimeHint('heartbeatSeconds', 'Seconds between runtime pulses.')}><input type="number" min={5} max={1800} placeholder={runtimeFieldMixed('heartbeatSeconds') ? 'Mixed' : undefined} value={runtimeFieldMixed('heartbeatSeconds') ? '' : activeRuntimeDraft.heartbeatSeconds} onChange={(event) => updateRuntimeDraft({ heartbeatSeconds: Number(event.target.value) })} /></Field>
+        <Field label="Idle timeout" hint={runtimeHint('idleTimeoutSeconds', 'Seconds before an inactive agent yields its loop.')}><input type="number" min={5} max={1800} placeholder={runtimeFieldMixed('idleTimeoutSeconds') ? 'Mixed' : undefined} value={runtimeFieldMixed('idleTimeoutSeconds') ? '' : activeRuntimeDraft.idleTimeoutSeconds} onChange={(event) => updateRuntimeDraft({ idleTimeoutSeconds: Number(event.target.value) })} /></Field>
+        <ToggleField label="Continuous heartbeat" hint={runtimeHint('continuous', 'Keeps the runtime loop active between ticks.')} mixed={runtimeFieldMixed('continuous')} checked={activeRuntimeDraft.continuous} onChange={(continuous) => updateRuntimeDraft({ continuous })} />
+        <ToggleField label="Automatic recovery" hint={runtimeHint('recoveryMode', 'Retries after a recoverable runtime failure.')} mixed={runtimeFieldMixed('recoveryMode')} checked={activeRuntimeDraft.recoveryMode} onChange={(recoveryMode) => updateRuntimeDraft({ recoveryMode })} />
       </SettingsCard>
       <SettingsCard title="Reasoning and execution" description="Defaults used for future turns by the targeted agents.">
-        <Field label="Work timeout" hint="Maximum minutes for an agent turn."><input type="number" min={1} max={120} value={activeRuntimeDraft.timeoutMinutes} onChange={(event) => updateRuntimeDraft({ timeoutMinutes: Number(event.target.value) })} /></Field>
-        <Field label="Thinking default"><select value={activeRuntimeDraft.thinkingDefault} onChange={(event) => updateRuntimeDraft({ thinkingDefault: event.target.value as ThinkingLevel })}><option value="off">Off</option><option value="minimal">Minimal</option><option value="low">Low</option><option value="medium">Medium</option><option value="high">High</option><option value="xhigh">Extra high</option><option value="max">Maximum</option></select></Field>
-        <Field label="Fast mode"><select value={activeRuntimeDraft.fastModeDefault} onChange={(event) => updateRuntimeDraft({ fastModeDefault: event.target.value as FastModeDefault })}><option value="auto">Auto</option><option value="on">On</option><option value="off">Off</option></select></Field>
-        <ToggleField label="Parallel preferred" hint="Allows independent subtasks to run together where supported." checked={activeRuntimeDraft.parallelPreferred} onChange={(parallelPreferred) => updateRuntimeDraft({ parallelPreferred })} />
-        <div className="dui-settings-actions"><button type="button" className="is-primary" onClick={() => applyRuntimeToTargets()}>Apply to {targetIds.length || 0} agent{targetIds.length === 1 ? '' : 's'}</button><button type="button" onClick={() => { setRuntimeDraft({ targetKey: runtimeTargetKey, values: DEFAULT_RUNTIME_SETTINGS }); setPendingConfirmation('reset-runtime') }}>Restore runtime defaults</button></div>
+        <Field label="Work timeout" hint={runtimeHint('timeoutMinutes', 'Maximum minutes for an agent turn.')}><input type="number" min={1} max={120} placeholder={runtimeFieldMixed('timeoutMinutes') ? 'Mixed' : undefined} value={runtimeFieldMixed('timeoutMinutes') ? '' : activeRuntimeDraft.timeoutMinutes} onChange={(event) => updateRuntimeDraft({ timeoutMinutes: Number(event.target.value) })} /></Field>
+        <Field label="Thinking default" hint={runtimeHint('thinkingDefault')}><select value={runtimeFieldMixed('thinkingDefault') ? '' : activeRuntimeDraft.thinkingDefault} onChange={(event) => updateRuntimeDraft({ thinkingDefault: event.target.value as ThinkingLevel })}>{runtimeFieldMixed('thinkingDefault') && <option value="" disabled>Mixed — leave unchanged</option>}<option value="off">Off</option><option value="minimal">Minimal</option><option value="low">Low</option><option value="medium">Medium</option><option value="high">High</option><option value="xhigh">Extra high</option><option value="max">Maximum</option></select></Field>
+        <Field label="Fast mode" hint={runtimeHint('fastModeDefault')}><select value={runtimeFieldMixed('fastModeDefault') ? '' : activeRuntimeDraft.fastModeDefault} onChange={(event) => updateRuntimeDraft({ fastModeDefault: event.target.value as FastModeDefault })}>{runtimeFieldMixed('fastModeDefault') && <option value="" disabled>Mixed — leave unchanged</option>}<option value="auto">Auto</option><option value="on">On</option><option value="off">Off</option></select></Field>
+        <ToggleField label="Parallel preferred" hint={runtimeHint('parallelPreferred', 'Allows independent subtasks to run together where supported.')} mixed={runtimeFieldMixed('parallelPreferred')} checked={activeRuntimeDraft.parallelPreferred} onChange={(parallelPreferred) => updateRuntimeDraft({ parallelPreferred })} />
+        <div className="dui-settings-actions"><button type="button" className="is-primary" disabled={runtimeSaveBusy || !targetIds.length || !runtimeChangedKeys.length} onClick={() => void applyRuntimeToTargets()}>{runtimeSaveBusy ? 'Saving runtime policy…' : `Apply to ${targetIds.length} agent${targetIds.length === 1 ? '' : 's'}`}</button><button type="button" disabled={runtimeSaveBusy || !targetIds.length} onClick={() => { setRuntimeDraft({ targetKey: runtimeTargetKey, values: DEFAULT_RUNTIME_SETTINGS, changedKeys: Object.keys(DEFAULT_RUNTIME_SETTINGS) as Array<keyof RuntimeDefaultsDraft> }); setPendingConfirmation('reset-runtime') }}>Restore runtime defaults</button></div>
       </SettingsCard>
     </div>
   )
 
   const renderTelegram = () => (
-    <div className="dui-settings-section" id="settings-section-telegram" role="tabpanel">
+    <div className="dui-settings-section" id="settings-section-telegram">
       <SectionHeader section="telegram" eyebrow="Control the live Telegram gateway" />
       <SettingsCard title="Access and commands" description="Keep private chats paired and groups allowlisted unless you intentionally run a public bot.">
         <Field label="Native command menu" hint="Registers OpenClaw commands such as /agents with Telegram.">
@@ -791,14 +849,19 @@ export function SettingsPanel({ focusSection = 'account', focusRequest = 0 }: { 
   )
 
   const renderData = () => (
-    <div className="dui-settings-section" id="settings-section-data" role="tabpanel">
+    <div className="dui-settings-section" id="settings-section-data">
       <SectionHeader section="data" eyebrow="Back up, clean up and recover safely" />
-      <SettingsCard title="Settings backup" description="Copies non-secret preferences and the current mission draft. Credentials are never included.">
+      <SettingsCard title="Settings backup" description="Back up appearance, workspace, voice, activity and the current mission draft. Provider and account credential stores are excluded.">
         <div className="dui-settings-metrics"><div><span>Agents</span><strong>{agents.length}</strong></div><div><span>Party</span><strong>{activePartyIds.length}</strong></div><div><span>Responses</span><strong>{responseCount}</strong></div></div>
-        <div className="dui-settings-actions"><button type="button" onClick={() => void copySettingsBackup()}>Copy settings backup</button></div>
+        <div className="dui-settings-actions"><button type="button" onClick={downloadSettingsBackup}>Download backup</button><button type="button" onClick={() => void copySettingsBackup()}>Copy settings backup</button><button type="button" disabled={backupReading} onClick={() => backupInputRef.current?.click()}>{backupReading ? 'Reading backup…' : 'Import backup'}</button><input ref={backupInputRef} type="file" accept=".json,application/json" hidden onChange={(event) => { void previewSettingsBackup(event.target.files?.[0]); event.target.value = '' }} /></div>
+        {backupPreview && <div className="mt-4 space-y-3 rounded-lg border border-white/15 p-3">
+          <p className="text-sm text-slate-200">Select preference groups to restore. Existing values in these groups will be replaced.</p>
+          {(Object.keys(backupPreview) as PreferenceGroup[]).map((group) => <div key={group} className="rounded border border-white/10 p-3"><label className="flex items-center gap-2 text-sm text-slate-200"><input type="checkbox" checked={backupGroups.includes(group)} onChange={(event) => setBackupGroups((current) => event.target.checked ? [...current, group] : current.filter((value) => value !== group))} />{PREFERENCE_GROUP_LABELS[group]}</label><details className="mt-2 text-xs text-slate-400"><summary>Preview recognized fields</summary><pre className="mt-2 max-h-48 overflow-auto whitespace-pre-wrap break-all">{JSON.stringify(backupPreview[group], null, 2)}</pre></details></div>)}
+          <div className="dui-settings-actions"><button type="button" disabled={!backupGroups.length} onClick={applySettingsBackup}>Restore selected preferences</button><button type="button" onClick={() => setBackupPreview(null)}>Cancel import</button></div>
+        </div>}
       </SettingsCard>
       <SettingsCard title="Cleanup" description="Clear temporary interface state without deleting agents or credentials.">
-        <div className="dui-settings-actions dui-settings-actions--stack"><button type="button" onClick={() => { const count = clearAllCommandConsoleDrafts(); setNotice({ tone: 'success', text: `Cleared ${count} stored command draft${count === 1 ? '' : 's'}.` }) }}>Clear command drafts</button><button type="button" onClick={() => { clearAgentResponses(); setNotice({ tone: 'success', text: 'Command console responses cleared.' }) }}>Clear console responses</button><button type="button" onClick={() => { resetSimulation(); setNotice({ tone: 'success', text: 'Runtime simulation state reset.' }) }}>Reset runtime simulation</button></div>
+        <div className="dui-settings-actions dui-settings-actions--stack"><button type="button" onClick={() => { const count = clearAllCommandConsoleDrafts(); setNotice({ tone: 'success', text: `Cleared ${count} stored command draft${count === 1 ? '' : 's'}.` }) }}>Clear command drafts</button><button type="button" onClick={async () => { setNotice({ tone: 'neutral', text: 'Clearing AI sessions…' }); const result = await clearAgentResponses(); setNotice({ tone: result.ok ? 'success' : 'error', text: result.message }) }}>Clear console responses</button><button type="button" onClick={() => { resetSimulation(); setNotice({ tone: 'success', text: 'Runtime simulation state reset.' }) }}>Reset runtime simulation</button></div>
       </SettingsCard>
       <SettingsCard title="Recovery" description="Restore known-good defaults while preserving valuable data.">
         <div className="dui-settings-recovery"><strong>Reset all app preferences</strong><p>Restores appearance, workspace, voice and mission defaults. Agents, provider credentials, plugins, workspaces and files are kept.</p><button type="button" onClick={() => setPendingConfirmation('reset-all')}>Reset all preferences</button></div>
@@ -931,7 +994,7 @@ export function SettingsPanel({ focusSection = 'account', focusRequest = 0 }: { 
     }
 
     return (
-      <div className="dui-settings-section" id="settings-section-account" role="tabpanel">
+      <div className="dui-settings-section" id="settings-section-account">
         <SectionHeader section="account" eyebrow="Automnia AI Nexus Plan, Access & Billing" />
         <div className="dui-settings-account-hero">
           <div>
@@ -945,7 +1008,7 @@ export function SettingsPanel({ focusSection = 'account', focusRequest = 0 }: { 
             <small>{entitlement.tierLabel} · {entitlement.billingLabel}</small>
           </div>
         </div>
-        <SettingsCard title="Profile & security" description="Your email is read-only. Manage the optional Automnia password here without interrupting the current session.">
+        <SettingsCard title="Profile & security" description="Manage your account details and sign-in preferences.">
           <Field label="Account Email" hint="Registered subscriber address.">
             <input type="text" readOnly value={license?.email || 'Not reported'} style={{ fontWeight: 'bold', backgroundColor: 'rgba(255, 255, 255, 0.05)', cursor: 'not-allowed' }} />
           </Field>
@@ -994,7 +1057,7 @@ export function SettingsPanel({ focusSection = 'account', focusRequest = 0 }: { 
             {passwordChangeError && <p className="dui-settings-account-password__error" role="alert">{passwordChangeError}</p>}
           </div>
         </SettingsCard>
-        <SettingsCard title="Plan, access & billing" description="Google Cloud confirms subscription access and reconciles hosted-credit balances after each request without interrupting the workspace.">
+        <SettingsCard title="Plan, access & billing" description="Review your plan, credit balance, and billing preferences.">
           <Field label="License Authorization" hint="The license key remains server-local and is never revealed in the app.">
             <input type="text" readOnly value={license?.active ? 'Active — stored securely on this device' : 'No active license'} style={{ backgroundColor: 'rgba(255, 255, 255, 0.05)', cursor: 'not-allowed' }} />
           </Field>
@@ -1148,43 +1211,45 @@ export function SettingsPanel({ focusSection = 'account', focusRequest = 0 }: { 
 
   const confirmPendingAction = () => {
     if (pendingConfirmation === 'reset-all') resetAllSettings()
-    else if (pendingConfirmation === 'reset-runtime') applyRuntimeToTargets(DEFAULT_RUNTIME_SETTINGS, true)
+    else if (pendingConfirmation === 'reset-runtime') void applyRuntimeToTargets(DEFAULT_RUNTIME_SETTINGS, true)
     else if (pendingConfirmation === 'clear-workspace') {
-      clearAll()
       setPendingConfirmation(null)
-      setNotice({ tone: 'success', text: 'Active party and command responses cleared.' })
+      setNotice({ tone: 'neutral', text: 'Clearing party and AI sessions…' })
+      void clearAll().then((result) => setNotice({ tone: result.ok ? 'success' : 'error', text: result.message }))
     }
   }
 
   return (
-    <section data-dui-panel="settings" data-ui-revision="settings-v2" className="dui-settings-panel dui-settings-redesign">
+    <section ref={settingsRoot} data-dui-panel="settings" data-ui-revision="settings-v2" className="dui-settings-panel dui-settings-redesign dui-settings-polished">
       <header className="dui-settings-topbar">
-        <div><span>Automnia</span><h2>Settings</h2><p>Everything here is functional, persistent and safe to change.</p></div>
+        <div><span>Workspace preferences</span><h2>Settings</h2><p>Make Automnia work the way you do.</p></div>
         <label className="dui-settings-search"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="7" /><path d="m16 16 4 4" /></svg><input type="search" value={searchQuery} onChange={(event) => setSearchQuery(event.target.value)} placeholder="Search settings…" aria-label="Search settings" />{searchQuery && <button type="button" onClick={() => setSearchQuery('')} aria-label="Clear settings search">×</button>}</label>
       </header>
 
       {notice.text && <div className="dui-settings-status" data-tone={notice.tone} role="status" aria-live="polite"><i aria-hidden="true" /><span>{notice.text}</span></div>}
 
-      {pendingConfirmation && (
-        <div className="dui-settings-confirm" role="alertdialog" aria-modal="true" aria-labelledby="settings-confirm-title">
-          <div><strong id="settings-confirm-title">{confirmationCopy[pendingConfirmation].title}</strong><p>{confirmationCopy[pendingConfirmation].text}</p></div>
-          <div><button type="button" onClick={() => setPendingConfirmation(null)}>Cancel</button><button type="button" className="is-danger" onClick={confirmPendingAction}>{confirmationCopy[pendingConfirmation].action}</button></div>
-        </div>
-      )}
+      <Dialog open={pendingConfirmation !== null} role="alertdialog" onClose={() => setPendingConfirmation(null)} title={pendingConfirmation ? confirmationCopy[pendingConfirmation].title : ''} description={pendingConfirmation ? confirmationCopy[pendingConfirmation].text : ''} footer={<>
+        <Button variant="secondary" onClick={() => setPendingConfirmation(null)}>Cancel</Button>
+        <Button variant="danger" onClick={confirmPendingAction}>{pendingConfirmation ? confirmationCopy[pendingConfirmation].action : 'Confirm'}</Button>
+      </>}>{null}</Dialog>
 
       <div className="dui-settings-layout">
         <nav className="dui-settings-nav" aria-label="Settings categories">
+          <p className="dui-settings-nav-label">Preferences</p>
           {SETTINGS_SECTIONS.map((section) => (
-            <button key={section.id} type="button" role="tab" aria-selected={!normalizedSearch && activeSection === section.id} aria-controls={`settings-section-${section.id}`} data-settings-section={section.id} data-active={!normalizedSearch && activeSection === section.id ? 'true' : 'false'} onClick={() => { setActiveSection(section.id); setSearchQuery('') }}>
-              <strong>{section.label}</strong>
+            <button key={section.id} type="button" aria-current={!normalizedSearch && activeSection === section.id ? 'page' : undefined} aria-controls={`settings-section-${section.id}`} data-settings-section={section.id} data-active={!normalizedSearch && activeSection === section.id ? 'true' : 'false'} onClick={() => { setActiveSection(section.id); setSearchQuery('') }}>
+              <span aria-hidden="true"><SettingsGlyph name={section.id} /></span>
+              <div><strong>{section.label}</strong><small>{section.description}</small></div>
+              <b aria-hidden="true">›</b>
             </button>
           ))}
         </nav>
 
-        <main className="dui-settings-content">
-          {normalizedSearch && <div className="dui-settings-results"><strong>{visibleSections.length} matching categor{visibleSections.length === 1 ? 'y' : 'ies'}</strong><span>Results for “{searchQuery.trim()}”</span></div>}
-          {visibleSections.length ? visibleSections.map((section) => <div key={section}>{renderSection(section)}</div>) : <div className="dui-settings-empty"><SettingsGlyph name="appearance" /><strong>No settings found</strong><span>Try “voice”, “console”, “mission”, “contrast” or “runtime”.</span><button type="button" onClick={() => setSearchQuery('')}>Clear search</button></div>}
-        </main>
+        <div data-workspace-scroll="settings" className="dui-settings-content">
+          {normalizedSearch && <div className="dui-settings-results"><strong>Search all settings</strong><span>Results for “{searchQuery.trim()}”</span></div>}
+          <SettingsSearchMatches query={searchQuery} root={settingsRoot} />
+          {visibleSections.length ? visibleSections.map((section) => <div key={section} data-search-section-name={section} data-search-section-keywords={SETTINGS_SECTIONS.find((entry) => entry.id === section)?.keywords}>{renderSection(section)}</div>) : <div className="dui-settings-empty"><SettingsGlyph name="appearance" /><strong>No settings found</strong><span>Try “voice”, “console”, “mission”, “contrast” or “runtime”.</span><button type="button" onClick={() => setSearchQuery('')}>Clear search</button></div>}
+        </div>
       </div>
     </section>
   )

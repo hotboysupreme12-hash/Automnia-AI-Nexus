@@ -154,6 +154,18 @@ export function createAgentRuntimeService(options: AgentRuntimeServiceOptions) {
           } catch (error) {
             if (params.signal?.aborted) throw error
             gatewayFallbackDetail = options.redactSensitiveText(String(error).trim() || 'gateway chat client failed')
+            const dispatched = error as { gatewayDispatchState?: string; gatewayRunId?: string }
+            if (dispatched?.gatewayDispatchState === 'uncertain' || dispatched?.gatewayDispatchState === 'accepted') {
+              return {
+                stdout: '',
+                stderr: 'The Gateway connection was interrupted after this request was sent. Its outcome is not confirmed. Check this run in Runtime Monitor before retrying; it may still be running.',
+                code: 503,
+                failureKind: 'interrupted',
+                runtimeTransport: 'gateway-chat',
+                controlCenterRunId: dispatched.gatewayRunId,
+                gatewayFallbackDetail,
+              }
+            }
           }
         }
         const gateway = await run('gateway')

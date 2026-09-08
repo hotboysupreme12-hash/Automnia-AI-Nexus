@@ -1,4 +1,4 @@
-import { randomUUID } from 'node:crypto'
+import { createHash, randomUUID } from 'node:crypto'
 import type { Express } from 'express'
 import { z } from 'zod'
 import { apiFailure, apiSuccess } from '../controlPlaneHttp'
@@ -101,6 +101,7 @@ export function registerShiftRoutes(app: Express, options: ShiftRoutesOptions) {
 
   app.post('/api/shifts/start', async (req, res) => {
     const schema = z.object({
+      idempotencyKey: z.string().min(8).max(200).optional(),
       name: z.string().min(1).max(80),
       agent: z.string().min(1).optional(),
       every: z.string().regex(/^\d+[smhdw]$/).optional(),
@@ -140,6 +141,7 @@ export function registerShiftRoutes(app: Express, options: ShiftRoutesOptions) {
       const shift = await createShiftFromPayload(parsed.data)
       return apiSuccess(res, { shift })
     } catch (error) {
+      if ((error as { statusCode?: number }).statusCode === 409) return apiFailure(res, 409, 'resource_conflict', error instanceof Error ? error.message : 'Job creation is unconfirmed. Check Runtime Monitor.')
       if ((error as { statusCode?: number }).statusCode === 403) {
         return apiFailure(res, 403, 'byok_not_allowed', CREDITS_ONLY_MODEL_ACCESS_MESSAGE)
       }
@@ -149,6 +151,7 @@ export function registerShiftRoutes(app: Express, options: ShiftRoutesOptions) {
 
   app.post('/api/shifts/start-batch', async (req, res) => {
     const schema = z.object({
+      idempotencyKey: z.string().min(8).max(200).optional(),
       namePrefix: z.string().min(1).max(80).optional(),
       agentIds: z.array(z.string().min(1)).min(1).max(20),
       leadAgent: z.string().min(1).optional(),
@@ -206,6 +209,8 @@ export function registerShiftRoutes(app: Express, options: ShiftRoutesOptions) {
 
     const shifts: Shift[] = []
     const errors: Array<{ agentId: string; error: string }> = []
+    let entitlementBlocked = false
+    const unstartedAgentIds: string[] = []
 
     for (const agentId of uniqueAgents) {
       const isLead = agentId === leadAgent
@@ -213,6 +218,7 @@ export function registerShiftRoutes(app: Express, options: ShiftRoutesOptions) {
       const shiftName = `${namePrefix}-${agentId}`.slice(0, 80)
       try {
         const shift = await createShiftFromPayload({
+          ...(payload.idempotencyKey ? { idempotencyKey: `${payload.idempotencyKey}:${agentId}` } : {}),
           name: shiftName,
           agent: agentId,
           every: isLead ? leadEvery : workerEvery,
@@ -230,17 +236,27 @@ export function registerShiftRoutes(app: Express, options: ShiftRoutesOptions) {
         shifts.push(shift)
       } catch (error) {
         if ((error as { statusCode?: number }).statusCode === 403) {
-          return apiFailure(res, 403, 'byok_not_allowed', CREDITS_ONLY_MODEL_ACCESS_MESSAGE)
+          entitlementBlocked = true
+          // Preserve the already-created IDs, and stop creating jobs once
+          // entitlement changes. The client can retry only these unstarted agents.
+          for (const unstarted of uniqueAgents.slice(uniqueAgents.indexOf(agentId))) {
+            errors.push({ agentId: unstarted, error: CREDITS_ONLY_MODEL_ACCESS_MESSAGE })
+            unstartedAgentIds.push(unstarted)
+          }
+          break
         }
         errors.push({ agentId, error: String(error) })
       }
     }
 
-    const batchId = randomUUID()
+    const batchId = payload.idempotencyKey ? createHash('sha256').update(payload.idempotencyKey).digest('hex').slice(0, 32) : randomUUID()
     const managedEnabled = payload.managedTeamSync === true
-    const effectiveRunId = (payload.runId || '').trim() || `batch-${Date.now()}`
+    let managedStarted = false
+    let orchestrationDetail = ''
+    const effectiveRunId = (payload.runId || '').trim() || `batch-${batchId}`
     const targetFile = (payload.targetFile || 'collab-site-7m.html').trim()
-    if (managedEnabled && shifts.length) {
+    if (managedEnabled && shifts.length && !errors.length) {
+      try {
       await startManagedTeamSyncOrchestrator({
         batchId,
         runId: effectiveRunId,
@@ -250,12 +266,28 @@ export function registerShiftRoutes(app: Express, options: ShiftRoutesOptions) {
         durationMinutes: computeShiftDurationMinutes(payload),
         leadEvery,
         workerEvery,
-      }).catch(() => undefined)
+      })
+      managedStarted = true
+      } catch {
+        orchestrationDetail = 'Team coordination failed to start. Created scheduled jobs remain active; review or stop the listed jobs in Runtime Monitor before retrying coordination.'
+      }
+    } else if (managedEnabled && errors.length) {
+      orchestrationDetail = 'Team coordination did not start because some scheduled jobs could not be created. Created jobs remain active; review or stop the listed jobs in Runtime Monitor.'
     }
 
     const batchPayload = {
       batchId,
-      managedTeamSync: managedEnabled,
+      managedTeamSync: managedStarted,
+      outcome: errors.length || orchestrationDetail ? 'partial' : 'complete',
+      orchestration: {
+        requested: managedEnabled,
+        status: managedStarted ? 'running' : managedEnabled ? 'not_started' : 'not_requested',
+        jobPolicy: 'preserve-created-jobs',
+        affectedShiftIds: shifts.map((shift) => shift.id),
+        detail: orchestrationDetail || null,
+      },
+      unstartedAgentIds,
+      unconfirmedAgentIds: errors.map((entry) => entry.agentId).filter((agentId) => !unstartedAgentIds.includes(agentId)),
       runId: effectiveRunId,
       leadAgent,
       startedCount: shifts.length,
@@ -264,6 +296,7 @@ export function registerShiftRoutes(app: Express, options: ShiftRoutesOptions) {
       errors,
     }
     if (!shifts.length) {
+      if (entitlementBlocked) return apiFailure(res, 403, 'byok_not_allowed', CREDITS_ONLY_MODEL_ACCESS_MESSAGE, batchPayload)
       return apiFailure(res, 502, 'shift_command_failed', 'Failed to start team workflow', batchPayload)
     }
     return apiSuccess(res, batchPayload)

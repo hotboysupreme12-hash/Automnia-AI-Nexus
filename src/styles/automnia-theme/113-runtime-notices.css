@@ -100,11 +100,6 @@ html.dui-pro-overhaul.dui-cohesive-ui .dy-automnia-runtime-head > span {
   white-space: nowrap;
 }
 
-html.dui-pro-overhaul .dy-automnia-runtime-head .dy-badge,
-html.dui-pro-overhaul.dui-cohesive-ui .dy-automnia-runtime-head .dy-badge {
-  display: none !important;
-}
-
 html.dui-pro-overhaul .dy-automnia-runtime-copy > p,
 html.dui-pro-overhaul.dui-cohesive-ui .dy-automnia-runtime-copy > p {
   margin: 5px 0 4px;

@@ -318,6 +318,8 @@ test('runTurn redacts Gateway send failures before recording or throwing them', 
       assert.equal(error instanceof Error, true)
       assert.equal(String((error as Error).message).includes('secret-send-token'), false)
       assert.equal(String((error as Error).message).includes('[redacted]'), true)
+      assert.equal((error as { gatewayDispatchState?: string }).gatewayDispatchState, 'uncertain')
+      assert.equal(typeof (error as { gatewayRunId?: string }).gatewayRunId, 'string')
       return true
     },
   )

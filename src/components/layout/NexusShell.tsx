@@ -1,4 +1,7 @@
-import { lazy, memo, Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { BackgroundNotifications } from './BackgroundNotifications'
+import { FirstSuccessGuide } from './FirstSuccessGuide'
+import { NavigationTooltip } from './NavigationTooltip'
+import { lazy, memo, Suspense, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import type { CSSProperties, KeyboardEvent, PointerEvent } from 'react'
 import { useNexusStore } from '../../store/nexusStore'
 import type { AppTab } from '../../store/nexusStore'
@@ -6,7 +9,9 @@ import { resolveAgentEditorId, type AgentEditorTab } from '../../store/nexusUiSt
 import { listCronShifts, stopCronShift, useRuntimeSummaryStatus } from '../../hooks/useRuntimeStatus'
 import type { RuntimeCronJob } from '../../hooks/useRuntimeStatus'
 import { ActionStatusBanner } from '../common/ActionStatusBanner'
-import { HelpAssistantPanel, type HelpNavigationTarget } from '../help/HelpAssistantPanel'
+import { RuntimeFreshness } from './RuntimeFreshness'
+import { useWorkspaceScroll } from '../../hooks/useWorkspaceScroll'
+import type { HelpNavigationTarget } from '../help/HelpAssistantPanel'
 import { ActivePartyStrip } from '../party/ActivePartyStrip'
 import { PartySelector } from '../party/PartySelector'
 import { applyStoredUiSettings } from '../settings/uiSettings'
@@ -76,6 +81,20 @@ const PluginsPanel = memo(lazy(() => recoverableLazyImport('plugins-panel', () =
 const SettingsPanel = memo(lazy(() => recoverableLazyImport('settings-panel', () => import('../settings/SettingsPanel').then((module) => ({ default: module.SettingsPanel })))))
 const AgentEditorModal = lazy(() => recoverableLazyImport('agent-editor-modal', () => import('../editor/AgentEditorModal').then((module) => ({ default: module.AgentEditorModal }))))
 const RecruitAgentModal = lazy(() => recoverableLazyImport('recruit-agent-modal', () => import('../recruit/RecruitAgentModal').then((module) => ({ default: module.RecruitAgentModal }))))
+const HelpAssistantPanel = lazy(() => recoverableLazyImport('help-assistant', () => import('../help/HelpAssistantPanel').then((module) => ({ default: module.HelpAssistantPanel }))))
+const CommandPalette = lazy(() => recoverableLazyImport('command-palette', () => import('./CommandPalette').then((module) => ({ default: module.CommandPalette }))))
+
+function prefetchWorkspace(tab: AppTab) {
+  const load = {
+    agents: () => import('../monitor/AgentResponseConsole'),
+    missions: () => import('../mission/MissionDeploymentPanel'),
+    monitor: () => import('../monitor/LiveOperationMonitor'),
+    plugins: () => import('../plugins/PluginsPanel'),
+    settings: () => import('../settings/SettingsPanel'),
+  }[tab]
+  void load().catch(() => undefined)
+}
+
 
 const AUTOMNIA_LOCKUP_SRC = '/brand/automnia-ai-nexus-logo-transparent-cropped.png'
 const AUTOMNIA_BRAND_LABEL = 'Automnia AI Nexus'
@@ -128,20 +147,24 @@ function clampAgentConsoleWidth(value: number, workspace: HTMLElement): number {
   return Math.round(Math.min(maxWidth, Math.max(AGENT_CONSOLE_MIN_WIDTH, value)))
 }
 
-function PanelLoader() {
+function PanelLoader({ workspace = 'console' }: { workspace?: AppTab | 'console' }) {
   return (
     <div
-      className="flex min-h-[calc(100dvh-220px)] items-center justify-center"
+      className="min-h-[280px] rounded-xl border border-white/10 p-4 sm:p-6"
       role="status"
       aria-live="polite"
-      aria-label="Refreshing workspace"
+      aria-label={`Loading ${workspace}`}
     >
-      <div className="flex flex-col items-center gap-3 text-[11px] font-semibold tracking-[0.14em] text-slate-400">
-        <span
-          className="h-7 w-7 animate-spin rounded-full border-2 border-white/10 border-t-cyan-200/80 motion-reduce:animate-none"
-          aria-hidden="true"
-        />
-        <span>Refreshing</span>
+      <span className="sr-only">Loading {workspace}. Your workspace will appear here.</span>
+      <div aria-hidden="true" className="space-y-4 animate-pulse motion-reduce:animate-none">
+        <div className="h-5 w-40 rounded bg-white/10" />
+        <div className="h-10 rounded-lg bg-white/5" />
+        <div className={`grid gap-3 ${workspace === 'plugins' || workspace === 'missions' ? 'sm:grid-cols-2 lg:grid-cols-3' : ''}`}>
+          {Array.from({ length: workspace === 'console' ? 2 : 3 }, (_, index) => <div key={index} className="space-y-3 rounded-lg border border-white/5 p-4">
+            <div className="h-3 w-2/3 rounded bg-white/10" /><div className="h-3 w-full rounded bg-white/5" /><div className="h-3 w-4/5 rounded bg-white/5" />
+          </div>)}
+        </div>
+        {workspace === 'console' && <div className="h-16 rounded-lg border border-white/10 bg-white/5" />}
       </div>
     </div>
   )
@@ -149,6 +172,8 @@ function PanelLoader() {
 
 export function NexusShell() {
   const tab = useNexusStore((s) => s.tab)
+  const workspaceScrollRoot = useRef<HTMLDivElement>(null)
+  useWorkspaceScroll(tab, workspaceScrollRoot)
   const setTab = useNexusStore((s) => s.setTab)
   const syncPartyOverview = useNexusStore((s) => s.syncPartyOverview)
   const syncMissionProjection = useNexusStore((s) => s.syncMissionProjection)
@@ -213,7 +238,7 @@ export function NexusShell() {
           ? gatewayOnline ? 'Runtime connected' : runtimeStatus ? 'Runtime offline' : 'Connecting to runtime'
           : tab === 'settings'
             ? 'Settings ready'
-            : gatewayOnline ? 'Extensions ON' : runtimeStatus ? 'Extensions OFF' : 'Checking extensions'
+            : gatewayOnline ? 'Gateway connected · inspect extension status below' : runtimeStatus ? 'Gateway offline' : 'Checking gateway'
   const workspaceStateTone = gatewayMigration
     ? 'active'
     : tab === 'agents'
@@ -237,6 +262,23 @@ export function NexusShell() {
     : 'Loading cron jobs...'
   const [isRecruitOpen, setRecruitOpen] = useState(false)
   const [isHelpOpen, setHelpOpen] = useState(false)
+  const [isCommandPaletteOpen, setCommandPaletteOpen] = useState(false)
+  const [storageWarning, setStorageWarning] = useState(false)
+  const [clearFailure, setClearFailure] = useState<{ message: string; party: boolean } | null>(null)
+  const [retryClearBusy, setRetryClearBusy] = useState(false)
+  useEffect(() => {
+    const report = (event: Event) => {
+      const outcome = (event as CustomEvent<{ ok: boolean; message: string; party: boolean }>).detail
+      if (outcome) setClearFailure(outcome.ok ? null : outcome)
+    }
+    window.addEventListener('automnia:console-clear-result', report)
+    return () => window.removeEventListener('automnia:console-clear-result', report)
+  }, [])
+  useEffect(() => {
+    const warn = () => setStorageWarning(true)
+    window.addEventListener('automnia:persistence-warning', warn)
+    return () => window.removeEventListener('automnia:persistence-warning', warn)
+  }, [])
   const [pluginsFocusQuery, setPluginsFocusQuery] = useState('')
   const [settingsFocusSection, setSettingsFocusSection] = useState<'account' | 'appearance' | 'workspace' | 'voice' | 'missions' | 'agents' | 'data'>('account')
   const [settingsFocusRequest, setSettingsFocusRequest] = useState(0)
@@ -248,13 +290,16 @@ export function NexusShell() {
   const [isAgentConsoleVisible, setAgentConsoleVisible] = useState(() => readConsolePreferences().visible)
   const [agentConsoleWidth, setAgentConsoleWidth] = useState<number | null>(() => readConsolePreferences().width)
   const [isAgentSplitResizing, setAgentSplitResizing] = useState(false)
+  const [splitMetrics, setSplitMetrics] = useState({ width: AGENT_CONSOLE_MIN_WIDTH, max: AGENT_CONSOLE_MAX_WIDTH })
   const [agentsWorkspaceNode, setAgentsWorkspaceNode] = useState<HTMLDivElement | null>(null)
+  const [consoleFirst, setConsoleFirst] = useState(false)
   const [agentRegistryPaneNode, setAgentRegistryPaneNode] = useState<HTMLDivElement | null>(null)
   const pendingTabRef = useRef<AppTab | null>(null)
   const tabFrameRef = useRef<number | null>(null)
   const selectTab = useCallback((nextTab: AppTab) => {
     const currentTab = useNexusStore.getState().tab
     if (nextTab === currentTab && pendingTabRef.current == null) return
+    if (typeof window !== 'undefined') window.dispatchEvent(new Event('automnia:workspace-leaving'))
     pendingTabRef.current = nextTab
     if (tabFrameRef.current != null) return
 
@@ -271,7 +316,7 @@ export function NexusShell() {
       tabFrameRef.current = null
       const targetTab = pendingTabRef.current
       pendingTabRef.current = null
-      if (!targetTab || targetTab === useNexusStore.getState().tab) return
+      if (!targetTab || targetTab === useNexusStore.getState().tab) { window.dispatchEvent(new Event('automnia:workspace-staying')); return }
       setTab(targetTab)
     })
   }, [setTab])
@@ -320,6 +365,16 @@ export function NexusShell() {
       selectTab(target)
     }
   }, [closeHelp, selectTab])
+  useEffect(() => {
+    const navigate = (event: Event) => {
+      if (!(event instanceof CustomEvent) || event.detail !== 'settings-account') return
+      useNexusStore.getState().closeEditor()
+      setRecruitOpen(false)
+      navigateFromHelp('settings-account')
+    }
+    window.addEventListener('automnia:navigate', navigate)
+    return () => window.removeEventListener('automnia:navigate', navigate)
+  }, [navigateFromHelp])
   useEffect(() => () => {
     if (tabFrameRef.current != null && typeof window !== 'undefined') window.cancelAnimationFrame(tabFrameRef.current)
   }, [])
@@ -390,15 +445,24 @@ export function NexusShell() {
     const maxFromWorkspace = workspaceRect.width - AGENT_REGISTRY_MIN_WIDTH - gap
     const pointerMaxWidth = Math.max(AGENT_CONSOLE_MIN_WIDTH, Math.min(AGENT_CONSOLE_MAX_WIDTH, maxFromWorkspace))
     let nextWidth = currentAgentConsoleWidth(workspace)
+    let paintFrame: number | null = null
+    const paintWidth = () => {
+      paintFrame = null
+      workspace.style.setProperty('--dy-command-console-width', `${nextWidth}px`)
+      splitter.setAttribute('aria-valuenow', String(nextWidth))
+      splitter.setAttribute('aria-valuetext', `${nextWidth} pixels`)
+    }
 
     const resizeToPointer = (clientX: number) => {
       const rawWidth = workspaceRect.right - clientX - gap
       nextWidth = Math.round(Math.min(pointerMaxWidth, Math.max(AGENT_CONSOLE_MIN_WIDTH, rawWidth)))
       // Keep pointer movement off React's render path. State and persistence
       // are committed once when the drag finishes.
-      workspace.style.setProperty('--dy-command-console-width', `${nextWidth}px`)
+      if (paintFrame === null) paintFrame = window.requestAnimationFrame(paintWidth)
     }
     const stopResize = () => {
+      if (paintFrame !== null) window.cancelAnimationFrame(paintFrame)
+      paintWidth()
       setAgentSplitResizing(false)
       document.documentElement.classList.remove('dy-agent-split-resizing')
       window.removeEventListener('pointermove', handlePointerMove)
@@ -467,6 +531,12 @@ export function NexusShell() {
   }, [])
   useEffect(() => {
     const handleWorkspaceShortcut = (event: globalThis.KeyboardEvent) => {
+      if ((event.ctrlKey || event.metaKey) && !event.altKey && !event.shiftKey && event.key.toLowerCase() === 'k' && !event.defaultPrevented) {
+        if (document.querySelector('[aria-modal="true"]')) return
+        event.preventDefault()
+        setCommandPaletteOpen(true)
+        return
+      }
       if (!event.altKey || event.ctrlKey || event.metaKey || event.shiftKey || event.defaultPrevented) return
       const target = event.target as HTMLElement | null
       const tagName = target?.tagName
@@ -499,27 +569,38 @@ export function NexusShell() {
   }, [isAgentConsoleVisible])
   useEffect(() => {
     if (!focusCommandConsole || tab !== 'agents' || !isAgentConsoleVisible) return
-    let frameId = 0
-    let attempts = 0
     const focusConsole = () => {
       const textarea = document.querySelector<HTMLTextAreaElement>('.dy-command-textarea')
-      if (textarea) {
-        textarea.focus()
-        setFocusCommandConsole(false)
-        return
-      }
-      attempts += 1
-      if (attempts < 12) frameId = window.requestAnimationFrame(focusConsole)
+      if (!textarea) return
+      textarea.focus({ preventScroll: true })
+      setFocusCommandConsole(false)
     }
-    frameId = window.requestAnimationFrame(focusConsole)
-    return () => window.cancelAnimationFrame(frameId)
+    window.addEventListener('automnia:console-ready', focusConsole)
+    focusConsole()
+    return () => window.removeEventListener('automnia:console-ready', focusConsole)
   }, [focusCommandConsole, isAgentConsoleVisible, tab])
+  useLayoutEffect(() => {
+    if (!agentsWorkspaceNode) return
+    const synchronizeOrder = () => {
+      const rows = window.getComputedStyle(agentsWorkspaceNode).gridTemplateAreas.match(/"[^"]+"/g) || []
+      const consoleRow = rows.findIndex((row) => row.includes('console'))
+      const registryRow = rows.findIndex((row) => row.includes('registry'))
+      setConsoleFirst(consoleRow >= 0 && registryRow >= 0 && consoleRow < registryRow)
+    }
+    synchronizeOrder()
+    const observer = new ResizeObserver(synchronizeOrder)
+    observer.observe(agentsWorkspaceNode)
+    window.addEventListener('resize', synchronizeOrder)
+    return () => { observer.disconnect(); window.removeEventListener('resize', synchronizeOrder) }
+  }, [agentsWorkspaceNode, isAgentConsoleVisible])
   useEffect(() => {
-    if (tab !== 'agents' || !isAgentConsoleVisible || !agentsWorkspaceNode || !agentConsoleWidth) return
+    if (tab !== 'agents' || !isAgentConsoleVisible || !agentsWorkspaceNode) return
 
     const clampSavedWidth = () => {
-      const clamped = clampAgentConsoleWidth(agentConsoleWidth, agentsWorkspaceNode)
-      if (clamped !== agentConsoleWidth) setAgentConsoleWidth(clamped)
+      const clamped = currentAgentConsoleWidth(agentsWorkspaceNode)
+      const max = clampAgentConsoleWidth(AGENT_CONSOLE_MAX_WIDTH, agentsWorkspaceNode)
+      setSplitMetrics((previous) => previous.width === clamped && previous.max === max ? previous : { width: clamped, max })
+      if (agentConsoleWidth !== null && clamped !== agentConsoleWidth) setAgentConsoleWidth(clamped)
     }
 
     clampSavedWidth()
@@ -531,7 +612,7 @@ export function NexusShell() {
     const observer = new ResizeObserver(clampSavedWidth)
     observer.observe(agentsWorkspaceNode)
     return () => observer.disconnect()
-  }, [agentConsoleWidth, agentsWorkspaceNode, isAgentConsoleVisible, tab])
+  }, [agentConsoleWidth, agentsWorkspaceNode, isAgentConsoleVisible, tab, currentAgentConsoleWidth])
   useEffect(() => {
     if (tab !== 'agents') return
     const workspace = agentsWorkspaceNode
@@ -582,6 +663,33 @@ export function NexusShell() {
       observer.disconnect()
     }
   }, [agentRegistryPaneNode, agentsWorkspaceNode, isAgentConsoleVisible, tab])
+  const agentPanes = {
+    registry: (<div key="registry" ref={setAgentRegistryPaneNode} className="agent-registry-pane min-h-0">
+                <StablePartySelector />
+              </div>),
+    split: isAgentConsoleVisible ? (<div key="split"
+                  className="dy-agent-split-resizer"
+                  role="separator"
+                  aria-orientation="vertical"
+                  aria-label="Resize agent registry and command console"
+                  aria-valuemin={AGENT_CONSOLE_MIN_WIDTH}
+                  aria-valuemax={splitMetrics.max}
+                  aria-valuenow={splitMetrics.width}
+                  aria-valuetext={`${splitMetrics.width} pixels`}
+                  tabIndex={0}
+                  title="Drag the Agent Registry edge to resize"
+                  style={{ '--dy-agent-split-resizer-width': `${AGENT_SPLIT_HANDLE_WIDTH}px` } as CSSProperties}
+                  onPointerDown={handleAgentSplitPointerDown}
+                  onKeyDown={handleAgentSplitKeyDown}
+                >
+                  <span aria-hidden="true" />
+                </div>) : null,
+    console: isAgentConsoleVisible ? (<div key="console" className="dy-agent-console-pane min-h-0">
+                  <Suspense fallback={<PanelLoader />}>
+                    <AgentResponseConsole />
+                  </Suspense>
+                </div>) : null,
+  }
   return (
     <div className={`app-bg relative min-h-screen text-[var(--text-1)] ${tab === 'monitor' ? 'dy-monitor-focus' : ''} ${isEditorOpen ? 'dy-editor-open' : ''}`}>
       <div className="pointer-events-none fixed inset-0 grid-overlay" />
@@ -610,7 +718,7 @@ export function NexusShell() {
             variant="quiet"
             className="dy-human-nav-action flex items-center gap-3 text-left"
             data-tone="recruit"
-            aria-label="Recruit a new agent"
+            data-nav-label="Recruit a new agent" aria-label="Recruit a new agent"
             onClick={() => setRecruitOpen(true)}
             leadingIcon={(
               <span className="dy-human-nav-icon" style={navIconStyle(RECRUIT_ICON_SRC)}>
@@ -628,8 +736,10 @@ export function NexusShell() {
               key={t.id}
               id={`nexus-nav-${t.id}`}
               variant="quiet"
+              onPointerEnter={() => prefetchWorkspace(t.id)}
+              onFocus={() => prefetchWorkspace(t.id)}
               onClick={() => selectTab(t.id)}
-              aria-label={`${t.label} ${t.railMeta}`}
+              data-nav-label={t.label} aria-label={`${t.label} ${t.railMeta}`}
               aria-current={tab === t.id ? 'page' : undefined}
               data-tone={t.tone}
               className={`flex items-center gap-3 text-left ${tab === t.id ? 'is-active' : ''}`}
@@ -654,8 +764,10 @@ export function NexusShell() {
               variant="quiet"
               data-tone="settings"
               className={`dy-human-nav-utility flex items-center gap-3 text-left ${tab === 'settings' ? 'is-active' : ''}`}
-              aria-label="Open runtime settings"
+              data-nav-label="Settings" aria-label="Open runtime settings"
               aria-current={tab === 'settings' ? 'page' : undefined}
+              onPointerEnter={() => prefetchWorkspace('settings')}
+              onFocus={() => prefetchWorkspace('settings')}
               onClick={() => selectTab('settings')}
               leadingIcon={(
                 <span className="dy-human-nav-icon dy-human-nav-icon--settings" aria-hidden="true">
@@ -672,7 +784,7 @@ export function NexusShell() {
               variant="quiet"
               data-tone="help"
               className="dy-human-nav-utility flex items-center gap-3 text-left"
-              aria-label="Open Automnia Assistant help"
+              data-nav-label="Help" aria-label="Open Automnia Assistant help"
               onClick={() => setHelpOpen(true)}
               leadingIcon={(
                 <span className="dy-human-nav-icon dy-human-nav-icon--help" aria-hidden="true">
@@ -705,6 +817,7 @@ export function NexusShell() {
                 {tab === 'agents' ? 'Agent Operations' : activeTab.label}
               </span>
             </h1>
+            <Button variant="quiet" size="compact" onClick={() => setCommandPaletteOpen(true)} aria-keyshortcuts="Control+k Meta+k" title="Find a command (Ctrl/⌘ K)">Find a command</Button>
           </div>
           <div className="dy-workspace-context__meta">
             <div className="dy-status-grid flex flex-wrap items-center justify-end gap-2" aria-label="Workspace status summary">
@@ -802,6 +915,7 @@ export function NexusShell() {
             <div className="dy-workspace-context__state" data-state={workspaceStateTone} role="status" aria-live="polite">
               {workspaceState}
             </div>
+            <RuntimeFreshness status={runtimeStatus} error={runtimeError} onRefresh={refreshRuntimeStatus} />
             {gatewayMigration ? (
               <ActionStatusBanner
                 className="dy-workspace-context__notice dy-gateway-migration-notice mt-3 w-full text-left text-[11px] leading-relaxed"
@@ -838,11 +952,21 @@ export function NexusShell() {
           )}
         </section>
 
+        <NavigationTooltip />
+        <BackgroundNotifications />
+        {tab === 'agents' && <FirstSuccessGuide onNavigate={navigateFromHelp} />}
+        {storageWarning && <ActionStatusBanner tone="warning" message="Local preferences could not be saved." detail="Your previous saved copy is preserved. Free storage space before closing the app." />}
+        {clearFailure && <ActionStatusBanner tone="error" message={clearFailure.message} confirmLabel="Retry clearing sessions" confirmBusyLabel="Clearing sessions" busy={retryClearBusy} onConfirm={() => {
+          setRetryClearBusy(true)
+          const action = clearFailure.party ? useNexusStore.getState().clearAll : useNexusStore.getState().clearAgentResponses
+          void action().finally(() => setRetryClearBusy(false))
+        }} />}
         {/* Workspace content */}
         {/* Keep the host node stable. Deferred workspaces each have their own
             boundary key, so React never updates one workspace's Suspense subtree as another. */}
         <div
           id={`nexus-workspace-${tab}`}
+          ref={workspaceScrollRoot}
           role="region"
           aria-label={`${activeTab.label} workspace`}
           className="dy-tab-content dy-surface-enter"
@@ -883,59 +1007,32 @@ export function NexusShell() {
                   }
                 />
               </div>
-              <div ref={setAgentRegistryPaneNode} className="agent-registry-pane min-h-0">
-                <StablePartySelector />
-              </div>
-              {isAgentConsoleVisible && (
-                <div
-                  className="dy-agent-split-resizer"
-                  role="separator"
-                  aria-orientation="vertical"
-                  aria-label="Resize agent registry and command console"
-                  aria-valuemin={AGENT_CONSOLE_MIN_WIDTH}
-                  aria-valuemax={AGENT_CONSOLE_MAX_WIDTH}
-                  aria-valuenow={agentConsoleWidth ?? undefined}
-                  tabIndex={0}
-                  title="Drag the Agent Registry edge to resize"
-                  style={{ '--dy-agent-split-resizer-width': `${AGENT_SPLIT_HANDLE_WIDTH}px` } as CSSProperties}
-                  onPointerDown={handleAgentSplitPointerDown}
-                  onKeyDown={handleAgentSplitKeyDown}
-                >
-                  <span aria-hidden="true" />
-                </div>
-              )}
-              {isAgentConsoleVisible && (
-                <div className="dy-agent-console-pane min-h-0">
-                  <Suspense fallback={<PanelLoader />}>
-                    <AgentResponseConsole />
-                  </Suspense>
-                </div>
-              )}
+              {(consoleFirst ? ['console', 'registry', 'split'] as const : ['registry', 'split', 'console'] as const).map((pane) => agentPanes[pane])}
             </div>
           )}
 
           {tab === 'missions' && (
             <div className="dy-mission-tab-frame grid gap-5">
-              <Suspense key="missions" fallback={<PanelLoader />}>
+              <Suspense key="missions" fallback={<PanelLoader workspace="missions" />}>
                 <MissionDeploymentPanel />
               </Suspense>
             </div>
           )}
 
           {tab === 'monitor' && (
-            <Suspense key="monitor" fallback={<PanelLoader />}>
+            <Suspense key="monitor" fallback={<PanelLoader workspace="monitor" />}>
               <LiveOperationMonitor status={runtimeStatus} error={runtimeError} onRefresh={refreshRuntimeStatus} />
             </Suspense>
           )}
 
           {tab === 'plugins' && (
-            <Suspense key="plugins" fallback={<PanelLoader />}>
+            <Suspense key="plugins" fallback={<PanelLoader workspace="plugins" />}>
               <PluginsPanel focusQuery={pluginsFocusQuery} />
             </Suspense>
           )}
 
           {tab === 'settings' && (
-            <Suspense key="settings" fallback={<PanelLoader />}>
+            <Suspense key="settings" fallback={<PanelLoader workspace="settings" />}>
               <SettingsPanel focusSection={settingsFocusSection} focusRequest={settingsFocusRequest} />
             </Suspense>
           )}
@@ -947,7 +1044,8 @@ export function NexusShell() {
         {isEditorOpen && <AgentEditorModal />}
         {isRecruitOpen && <RecruitAgentModal isOpen={isRecruitOpen} onClose={() => setRecruitOpen(false)} />}
       </Suspense>
-      <HelpAssistantPanel isOpen={isHelpOpen} onClose={closeHelp} onNavigate={navigateFromHelp} />
+      {isHelpOpen && <Suspense fallback={<PanelLoader />}><HelpAssistantPanel isOpen onClose={closeHelp} onNavigate={navigateFromHelp} /></Suspense>}
+      {isCommandPaletteOpen && <Suspense fallback={null}><CommandPalette onClose={() => setCommandPaletteOpen(false)} onNavigate={navigateFromHelp} /></Suspense>}
     </div>
   )
 }

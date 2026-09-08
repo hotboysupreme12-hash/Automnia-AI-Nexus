@@ -1,9 +1,27 @@
 import { LOCAL_TRANSCRIPTION_SAMPLE_RATE } from './audioProcessing'
+import type { SpeechSettings } from './speechSettings'
 
 export { LOCAL_TRANSCRIPTION_SAMPLE_RATE, prepareAudioForSpeechRecognition } from './audioProcessing'
 export type { PreparedSpeechAudio } from './audioProcessing'
 
 export const MAX_VOICE_RECORDING_MS = 2 * 60 * 1000
+
+export async function requestSpeechMicrophone(settings: SpeechSettings, mediaDevices = navigator.mediaDevices): Promise<{ stream: MediaStream; usedFallback: boolean }> {
+  if (!mediaDevices?.getUserMedia) throw new Error('Microphone recording is not available on this device.')
+  const audio: MediaTrackConstraints = {
+    noiseSuppression: settings.noiseSuppression,
+    echoCancellation: settings.echoCancellation,
+    autoGainControl: settings.autoGainControl,
+    ...(settings.microphoneDeviceId ? { deviceId: { exact: settings.microphoneDeviceId } } : {}),
+  }
+  try { return { stream: await mediaDevices.getUserMedia({ audio }), usedFallback: false } }
+  catch (error) {
+    const name = error instanceof Error ? error.name : ''
+    if (!settings.microphoneDeviceId || !['NotFoundError', 'OverconstrainedError', 'DevicesNotFoundError'].includes(name)) throw error
+    delete audio.deviceId
+    return { stream: await mediaDevices.getUserMedia({ audio }), usedFallback: true }
+  }
+}
 
 const RECORDING_MIME_TYPES = [
   'audio/webm;codecs=opus',
