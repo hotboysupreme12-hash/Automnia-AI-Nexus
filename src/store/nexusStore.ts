@@ -614,6 +614,7 @@ export type RecruitAgentInput = {
   capabilities: Partial<Record<CapabilityKey, boolean>>
   sandbox?: OpenClawAgent['sandbox']
   toolsPolicy?: OpenClawAgent['toolsPolicy']
+  commandAccess?: 'ask' | 'full'
   addToParty?: boolean
   templateId?: string
   templateName?: string

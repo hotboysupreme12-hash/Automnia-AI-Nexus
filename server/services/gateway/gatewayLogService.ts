@@ -208,6 +208,7 @@ export function createGatewayLogService(options: GatewayLogServiceOptions) {
       || /^CoreBridge:\s+Control Center stream unavailable,\s+falling back to embedded agent:/iu.test(text)
       || /^\S{0,8}\s*res\s*\S{0,8}\s*(?:chat\.(?:history|message\.get)|logs\.tail)\b/iu.test(text)
       || /Gateway RPC completed:\s*logs\.tail\b/iu.test(text)
+      || /Gateway RPC completed:\s*exec\.approvals?\.(?:get|list)\b/iu.test(text)
       || /\bcodex agent harness session reset hook failed\b/iu.test(text)
       || /\bagent runtime plugins pre-warmed\b/iu.test(text)
       || /\bsendRichMessage\s+ok\b/iu.test(text)

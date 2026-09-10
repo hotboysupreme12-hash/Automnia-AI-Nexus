@@ -1,6 +1,12 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
 
+test('on-demand discovery controls survive a small relay budget', () => {
+  const names = ['tool_search', 'tool_describe', 'tool_call']
+  const tools = names.map(name => ({ type: 'function', function: { name, parameters: { type: 'object' } } }))
+  assert.deepEqual(compactOpenAiTools(tools, { maxTools: 1 }).tools.map(t => t.function.name), names)
+})
+
 test('tool budget retains authorized execution tools without inventing missing tools', () => {
   const tools = ['search_one', 'search_two', 'exec', 'process', 'read', 'write', 'edit'].map((name) => ({ type: 'function', function: { name, parameters: { type: 'object' } } }))
   const result = compactOpenAiTools(tools, { maxTools: 1 })
@@ -19,6 +25,12 @@ test('large scheduler schema cannot crowd exec out of Agent Chat', () => {
   assert.ok(result.tools.some((tool) => tool.function.name === 'exec'))
   assert.ok(result.tools.some((tool) => tool.function.name === 'process'))
   assert.ok(result.stats.estimatedToolTokens > 1024, 'soft token budget must yield to authorized execution tools')
+})
+
+test('critical authorized tools survive a tiny relay budget', () => {
+  const names = ['exec', 'process', 'read', 'write', 'edit', 'apply_patch', 'browser', 'web_search', 'web_fetch', 'automations', 'cron', 'session_status', 'sessions_spawn', 'sessions_send', 'memory_search', 'memory_get', 'message', 'computer', 'terminal', 'ask_user', 'secrets', 'skill_workshop', 'conversations_turn', 'agents_wait']
+  const tools = names.map((name) => ({ type: 'function', function: { name, parameters: { type: 'object' } } }))
+  assert.deepEqual(compactOpenAiTools(tools, { maxTools: 1, maxToolTokens: 1024 }).tools.map((tool) => tool.function.name), names)
 })
 
 import {

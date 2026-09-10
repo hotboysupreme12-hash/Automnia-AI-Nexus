@@ -1010,7 +1010,12 @@ function appOwnershipRoots() {
 
 function isAppOwnedCommand(commandLine) {
   const command = normalizeForMatch(commandLine)
-  return appOwnershipRoots().some((root) => command.includes(root))
+  // Dev launches can appear in `ps` as the relative command
+  // `node dist-server/index.cjs`, so there is no absolute workspace root to
+  // match. It is still an Automnia-managed helper and should be recoverable
+  // on the next desktop launch instead of producing a false port collision.
+  const relativeAutomniaServer = /(?:^|\s)node\s+dist-server\/index\.cjs(?:\s|$)/.test(command)
+  return relativeAutomniaServer || appOwnershipRoots().some((root) => command.includes(root))
 }
 
 function isManagedHelperCommand(commandLine) {

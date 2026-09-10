@@ -138,6 +138,16 @@ test('pushGatewayLog keeps Gateway transport and harness diagnostics out of acti
   assert.equal(ledger.length, 0)
 })
 
+test('pushGatewayLog suppresses routine approval polling diagnostics', () => {
+  const { ledger, service } = createService()
+
+  service.pushGatewayLog('stdout', 'Gateway RPC completed: exec.approval.list (229ms).')
+  service.pushGatewayLog('stdout', 'Gateway RPC completed: exec.approvals.get (94ms).')
+
+  assert.equal(service.getGatewayLogs().length, 0)
+  assert.equal(ledger.length, 0)
+})
+
 test('normalizeGatewayLedgerEntry drops previously persisted internal diagnostics', () => {
   const { service } = createService()
 

@@ -266,8 +266,8 @@ export function createBufferedAgentTurnService(options: BufferedAgentTurnService
       ok: finalOk,
       failureKind: typeof payload.failureKind === 'string' ? payload.failureKind : undefined,
     })
-    if (reply && !gatewayStream.observer.textStreamed) {
-      emit('delta', { text: options.redactHiddenReasoningAndSecrets(reply), buffered: true, transport: 'buffered-openclaw' })
+    if (reply && (!gatewayStream.observer.textStreamed || payload.contextOverflowRecovered === true)) {
+      emit('delta', { text: options.redactHiddenReasoningAndSecrets(reply), replace: payload.contextOverflowRecovered === true, buffered: true, transport: 'buffered-openclaw' })
     }
     const liveGatewayStream = gatewayStream.observer.textStreamed && payload.runtimeTransport === 'gateway-chat'
     const failureKind = payload.failureKind || (!response.ok || payload.ok === false

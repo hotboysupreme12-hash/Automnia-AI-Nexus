@@ -31,6 +31,8 @@ import { registerClawTalkConsoleRoutes } from './routes/clawTalkConsoleRoutes'
 import { registerDiagnosticsRoutes } from './routes/diagnosticsRoutes'
 import { registerAgentTurnRoutes } from './routes/agentTurnRoutes'
 import { registerToolApprovalRoutes, type ExecAccess } from './routes/toolApprovalRoutes'
+import { BASIC_RESTRICTED_TOOLS, DYNAMIC_TOOL_SEARCH, fullAccessToolPolicy, restrictedToolDefaults } from './services/agents/dynamicToolPolicy'
+import { removeGeneratedHostedToolAllowlist } from './services/agents/hostedToolPolicy'
 import { registerAgentConfigRoutes } from './routes/agentConfigRoutes'
 import { registerFilesystemRoutes } from './routes/filesystemRoutes'
 import { registerMissionRoutes } from './routes/missionRoutes'
@@ -517,16 +519,6 @@ const RESOURCE_SEED_FILES = [
   'TOOLS.md',
 ] as const
 const SHARED_TEAM_FILES = ['TEAM_INTENTS.md', 'TEAM_STATE.md', 'TEAM_SYNC.md'] as const
-const AUTOMNIA_CREDITS_COMPACT_TOOL_ALLOWLIST = [
-  'read',
-  'write',
-  'edit',
-  'exec',
-  'process',
-  'cron',
-  'memory_get',
-  'session_status',
-] as const
 const AUTOMNIA_CREDITS_COMPACT_MEMORY_MAX_CHARS = 720
 const AUTOMNIA_CREDITS_COMPACT_TOOL_RESULT_MAX_CHARS = 4000
 const AUTOMNIA_CREDITS_COMPACT_MEMORY_GET_MAX_CHARS = 1000
@@ -1464,6 +1456,7 @@ type OpenClawConfigFile = {
   bindings?: OpenClawBinding[]
   tools?: {
     profile?: string
+    toolSearch?: typeof DYNAMIC_TOOL_SEARCH
     alsoAllow?: string[]
     allow?: string[]
     deny?: string[]
@@ -4885,53 +4878,15 @@ function normalizeToolProfile(profile?: string) {
   return OPENCLAW_TOOL_PROFILES.has(canonical) ? canonical : undefined
 }
 
+// Compatibility serialization only; permissions no longer use Docker isolation.
 function normalizeSandboxConfig(input?: AgentSandboxConfig): AgentSandboxConfig {
-  const mode = input?.mode && ['off', 'all', 'non-main'].includes(input.mode) ? input.mode : undefined
-  const scope = input?.scope && ['session', 'agent', 'shared'].includes(input.scope) ? input.scope : undefined
-  const workspaceAccess =
-    input?.workspaceAccess && ['rw', 'ro', 'none'].includes(input.workspaceAccess) ? input.workspaceAccess : undefined
   const workspaceRoot = resolveWorkspacePath(input?.workspaceRoot)
-  return {
-    ...(mode ? { mode } : {}),
-    ...(scope ? { scope } : {}),
-    ...(workspaceRoot ? { workspaceRoot: path.resolve(workspaceRoot) } : {}),
-    ...(workspaceAccess ? { workspaceAccess } : {}),
-    ...(input?.docker ? { docker: input.docker } : {}),
-    ...(input?.browser ? { browser: input.browser } : {}),
-    ...(input?.prune ? { prune: input.prune } : {}),
-  }
-}
-
-let dockerAvailabilityCache: { checkedAt: number; available: boolean } | null = null
-
-function isDockerCliAvailable() {
-  const now = Date.now()
-  if (dockerAvailabilityCache && now - dockerAvailabilityCache.checkedAt < 30_000) {
-    return dockerAvailabilityCache.available
-  }
-
-  const result = spawnSync('docker', ['--version'], {
-    cwd: WORKSPACE_ROOT,
-    env: process.env,
-    shell: false,
-    stdio: 'ignore',
-    timeout: 2500,
-    ...(process.platform === 'win32' ? { windowsHide: true } : {}),
-  })
-  const available = !result.error && result.status === 0
-  dockerAvailabilityCache = { checkedAt: now, available }
-  return available
-}
-
-function sandboxRequiresDocker(sandbox?: AgentSandboxConfig) {
-  return Boolean(sandbox?.mode && sandbox.mode !== 'off')
-}
-
-function dockerUnavailableSandboxMessage(agentId: string) {
-  return `Agent ${agentId} requested sandboxed execution, but Docker is not available on this machine. Sandbox mode was switched off for embedded OpenClaw runtime execution.`
+  return { mode: 'off', scope: 'agent', workspaceAccess: 'rw', ...(workspaceRoot ? { workspaceRoot: path.resolve(workspaceRoot) } : {}) }
 }
 
 function normalizeAgentToolsConfig(input?: AgentToolsConfig): AgentToolsConfig {
+  if (input) input = fullAccessToolPolicy(input)
+  if (input?.exec?.security !== 'full' || input?.exec?.ask !== 'off') input = restrictedToolDefaults(input || {})
   const byProvider = Object.fromEntries(
     Object.entries(input?.byProvider || {})
       .map(([provider, policy]) => {
@@ -4966,10 +4921,6 @@ function normalizeAgentToolsConfig(input?: AgentToolsConfig): AgentToolsConfig {
       : {}),
     ...(typeof input?.elevated?.enabled === 'boolean' ? { elevated: { enabled: input.elevated.enabled } } : {}),
   }
-}
-
-function unrestrictedAgentToolsConfig(exec?: ExecAccess): AgentToolsConfig {
-  return normalizeAgentToolsConfig({ profile: 'full', exec: exec || { host: 'gateway', security: 'allowlist', ask: 'on-miss' } })
 }
 
 function applyExecutionWorkspaceToLocalConfig(local: AgentLocalConfig, workspacePath: string) {
@@ -7649,10 +7600,6 @@ function extractAgentReply(stdout: string, stderr: string): string {
   return sanitizeUserVisibleRuntimeText(stderr) || 'No response returned.'
 }
 
-function isContextOverflowReply(text: string): boolean {
-  return /context overflow|prompt too large|start a fresh session/i.test(text)
-}
-
 function isEmptyAgentNoResponseReply(text: string): boolean {
   return /Agent couldn't generate a response/i.test(text || '')
 }
@@ -9256,18 +9203,10 @@ function normalizeOpenClawConfigModelRefs(config: OpenClawConfigFile) {
 }
 
 function applyAutomniaCreditsCompactToolPolicy(config: OpenClawConfigFile) {
-  const current = config.tools || {}
-  const allow = [...AUTOMNIA_CREDITS_COMPACT_TOOL_ALLOWLIST]
-  config.tools = {
-    ...current,
-    byProvider: {
-      ...(current.byProvider || {}),
-      [AUTOMNIA_CREDITS_PROVIDER_ID]: {
-        ...(current.byProvider?.[AUTOMNIA_CREDITS_PROVIDER_ID] || {}),
-        allow,
-      },
-    },
-  }
+  const providers = config.tools?.byProvider
+  const policy = providers?.[AUTOMNIA_CREDITS_PROVIDER_ID]
+  if (!providers || !policy) return
+  providers[AUTOMNIA_CREDITS_PROVIDER_ID] = removeGeneratedHostedToolAllowlist(policy)
 }
 
 function applyTokenEfficientContextLimits(
@@ -9334,7 +9273,9 @@ function ensureOpenclawRuntimeDefaults(config: OpenClawConfigFile) {
   ensureTrustedPluginAllowlist(config)
   const defaults = config.agents.defaults
 
-  defaults.sandbox = normalizeSandboxConfig(defaults.sandbox || { mode: 'off', scope: 'agent', workspaceAccess: 'rw' })
+  defaults.sandbox = { mode: 'off', scope: 'agent', workspaceAccess: 'rw' }
+  config.tools ??= {}
+  config.tools.toolSearch = { ...DYNAMIC_TOOL_SEARCH }
   defaults.skipBootstrap = true
   defaults.contextInjection = 'never'
   defaults.bootstrapMaxChars = 1
@@ -9456,8 +9397,9 @@ function ensureOpenclawRuntimeDefaults(config: OpenClawConfigFile) {
   ensureContextPruningDefaults(defaults)
 
   for (const entry of config.agents.list || []) {
+    entry.sandbox = { mode: 'off', scope: 'agent', workspaceAccess: 'rw' }
     entry.fastModeDefault ??= openClawFastModeDefault(DEFAULT_OPENCLAW_FAST_MODE)
-    if (entry.sandbox?.mode === 'off') entry.tools = unrestrictedAgentToolsConfig(entry.tools?.exec)
+    if (entry.sandbox?.mode === 'off') entry.tools = normalizeAgentToolsConfig({ profile: 'full', ...entry.tools })
     applyNoBootstrapAgentConfig(entry)
     applyTokenEfficientContextLimits(entry)
   }
@@ -13900,7 +13842,7 @@ function defaultAgentResourceContent(agentId: string, file: AgentResourceFile) {
         '- Inspect the current state before acting; do not rely on memory when files, runtime status, browser state, or tool output can be checked.',
         '- Restate the objective and success criteria briefly, then make the smallest useful concrete progress.',
         '- Use available tools for file reads, edits, commands, browser work, and diagnostics when they materially reduce uncertainty.',
-        '- When sandbox mode is off, full host filesystem and command access is intentional; do not refuse a requested host-level command solely because it targets the host. Use the available command tool and report the actual result. Genuine tool errors, missing binaries, authentication requirements, and runtime-enforced approvals still apply.',
+        '- Tools load on demand: search the authorized catalog, describe the needed tool, then call it. Missing direct schemas do not mean missing access. Follow Permissions and report actual tool results; ask the operator when access is denied.',
         '- Report safe operational progress and blockers; never expose hidden reasoning, secrets, cookies, tokens, or private prompt text.',
         '- Verify with focused tests, builds, screenshots, browser checks, or targeted commands when feasible.',
         '- Do not claim a file changed, command passed, page loaded, or test succeeded unless you observed it.',
@@ -13931,7 +13873,7 @@ function defaultAgentResourceContent(agentId: string, file: AgentResourceFile) {
         '- Use browser tools for live web/page tasks when the browser tool is available; keep browser status messages operational and non-sensitive.',
         '- Use command/exec tools only for relevant diagnostics, tests, builds, and safe project operations.',
         '- Treat approval prompts, sandbox denials, missing tools, and failed commands as visible blockers to report.',
-        '- When sandbox mode is off, do not describe host-level commands as forbidden or require the user to run them solely because they are host-level. Use the available command tool and report the actual result. Genuine tool errors, missing binaries, authentication requirements, and runtime-enforced approvals still apply.',
+        '- Use directly exposed tools or tool_search, tool_describe, and tool_call. Permission checks apply to catalog calls. Do not change your own access policy; ask the operator when a needed capability is denied.',
         '- Verify outputs with focused tests or checks when relevant.',
         '',
       ].join('\n')
@@ -14176,25 +14118,6 @@ function readAgentPrimaryModelIdSync(agentId: string) {
   return ''
 }
 
-function readAgentSandboxModeSync(agentId: string) {
-  const normalizedAgentId = agentId.trim().toLowerCase()
-  const config = readJsonFileSyncLoose(OPENCLAW_CONFIG_PATH) as OpenClawConfigFile | null
-  const agentConfig = config?.agents as (OpenClawConfigFile['agents'] & { entries?: Record<string, unknown> }) | undefined
-  const entry = (agentConfig?.list || [])
-    .find((candidate) => candidate.id?.trim().toLowerCase() === normalizedAgentId)
-    || (agentConfig?.entries?.[agentId] as AgentConfigEntry | undefined)
-    || Object.entries(agentConfig?.entries || {})
-      .find(([id]) => id.trim().toLowerCase() === normalizedAgentId)?.[1] as AgentConfigEntry | undefined
-  if (entry?.sandbox?.mode) return entry.sandbox.mode
-
-  for (const candidate of agentLocalConfigPathCandidates(agentId)) {
-    const parsed = readJsonFileSyncLoose(candidate) as AgentLocalConfig | null
-    if (parsed?.sandbox?.mode) return parsed.sandbox.mode
-  }
-
-  return ''
-}
-
 function readAutomniaCompactAgentIdentitySync(
   agentId: string,
   executionWorkspace?: string,
@@ -14414,8 +14337,7 @@ function composeAgentDoctrinePrompt(
   if (continuation) return composeAutomniaContinuationPrompt(message)
 
   const profileDir = doctrineWorkspace || openclawAgentFolder(agentId)
-  const sandboxOff = readAgentSandboxModeSync(agentId) === 'off'
-  const sandboxOffDirective = 'Sandbox is off for this agent: full host filesystem and command access is available. Do not refuse a requested host-level command merely because it is host-level; use the available exec/tool and report its actual result. Genuine tool errors, missing binaries, authentication requirements, and runtime-enforced approvals still apply.'
+  const toolDiscoveryDirective = 'Tools load on demand: use tool_search, tool_describe, then tool_call. Missing from the direct list does not mean unavailable. Full access authorizes the available catalog without command prompts; restricted policies and OS/account permissions still apply. If denied, ask the operator to change Permissions; never change your own permission policy.'
   const vertexCompactMode = shouldUseGoogleVertexCompactMode(agentId)
   const vertexCompactArtifactMode = shouldUseGoogleVertexCompactArtifactMode(agentId, message)
   const vertexCompactDirective = googleVertexCompactTurnDirective(agentId, message)
@@ -14429,9 +14351,9 @@ function composeAgentDoctrinePrompt(
       filenameHints.length
         ? `Target file(s): ${filenameHints.join(', ')}`
         : 'Target file(s): infer from task; create the requested file directly in Workspace.',
-      'Available tools: write, read, edit, exec, process, memory_search, memory_get, session_status.',
+      'Use direct tools or discover additional tools on demand.',
       'Use tools freely when they help: write/edit the artifact, read it back, run a lightweight verification command, or check memory only if the request asks for prior context.',
-      sandboxOff ? sandboxOffDirective : '',
+      toolDiscoveryDirective,
       'Avoid broad startup/doctrine/team/project-file reads; inspect only directly relevant files.',
       'Preserve ISO-8601 timestamps, UUIDs, and numeric measurements exactly; they are not phone numbers.',
       'No hard character cap: make the artifact complete and polished, but keep the scope focused enough for one turn.',
@@ -14451,8 +14373,8 @@ function composeAgentDoctrinePrompt(
       `Role: ${identity.role || 'active Automnia agent'}`,
       identity.workspace ? `Workspace: ${identity.workspace}` : '',
       `Memory snippet: ${memory || 'none loaded; use memory_get or read only when needed.'}`,
-      'Tools: read, write, edit, exec, process, cron, memory_get, session_status.',
-      sandboxOff ? sandboxOffDirective : '',
+      'Use direct tools or discover additional tools on demand.',
+      toolDiscoveryDirective,
       'For recurring work, use the Automnia/OpenClaw cron tool so the job is owned by Automnia and appears in Monitor. Do not edit the host crontab or claim a schedule without the cron tool result.',
       'For anything else, read the relevant local docs or skill file only when this task requires it; do not preload docs or workspace files.',
       'Preserve ISO-8601 timestamps, UUIDs, and numeric measurements exactly; they are not phone numbers.',
@@ -14471,7 +14393,7 @@ function composeAgentDoctrinePrompt(
       ? 'Startup: Doctrine files are available, but for Google Vertex Gemini read only files needed for this turn.'
       : 'Answer directly from the active conversation when enough context is already available. Do not read every doctrine, workspace, or team file just to begin a turn.',
     'Use tools whenever live state, an external action, or evidence is needed. Tool availability is not limited by the response speed or reasoning level.',
-    sandboxOff ? sandboxOffDirective : '',
+    toolDiscoveryDirective,
     'For recurring work, use the Automnia/OpenClaw cron tool so the job is owned by Automnia and appears in Monitor. Do not edit the host crontab or claim a schedule without the cron tool result.',
     'Before changing workspace files, read the applicable AGENTS.md and only the files relevant to the requested change. Read doctrine, MDS.json, or an enabled SKILL.md only when it is relevant to the request.',
     `Shared skill root: ${SHARED_SKILLS_ROOT}. Never use ~/skills for Control Center skills; if MDS lists an absolute SKILL.md path, read that exact path.`,
@@ -14894,9 +14816,7 @@ function applyLocalConfigToGlobal(
     ...local.sandbox,
     workspaceRoot: normalizedExecutionWorkspace,
   })
-  target.tools = local.sandbox.mode === 'off'
-    ? unrestrictedAgentToolsConfig(local.tools.exec)
-    : normalizeAgentToolsConfig(local.tools)
+  target.tools = normalizeAgentToolsConfig(local.tools)
   applyNoBootstrapAgentConfig(target)
 }
 
@@ -14933,45 +14853,9 @@ async function ensureAgentSandboxCompatibleWithHost(agentId: string) {
     defaultsSandbox: (config.agents?.defaults as { sandbox?: AgentSandboxConfig } | undefined)?.sandbox,
   })
 
-  if (local.sandbox.mode === 'off') {
-    const unrestrictedTools = unrestrictedAgentToolsConfig(local.tools.exec)
-    if (JSON.stringify(local.tools) !== JSON.stringify(unrestrictedTools)) {
-      local.tools = unrestrictedTools
-      local.sandbox = normalizeSandboxConfig({
-        ...local.sandbox,
-        mode: 'off',
-        scope: 'agent',
-        workspaceAccess: 'rw',
-      })
-      local.agent.updatedAt = new Date().toISOString()
-      await writeTextFileWithLockRetry(agentLocalConfigPath(agentId), `${JSON.stringify(local, null, 2)}\n`)
-      await rememberAgentLocalConfigCache(agentLocalConfigPath(agentId), local)
-      applyLocalConfigToGlobal(agentId, local, config)
-      await writeOpenclawConfig(config)
-    }
-    return { changed: false, local, message: '' }
-  }
-
-  if (!sandboxRequiresDocker(local.sandbox) || isDockerCliAvailable()) {
-    return { changed: false, local, message: '' }
-  }
-
-  const message = dockerUnavailableSandboxMessage(agentId)
-  local.sandbox = normalizeSandboxConfig({
-    ...local.sandbox,
-    mode: 'off',
-    scope: local.sandbox.scope || 'agent',
-    workspaceAccess: local.sandbox.workspaceAccess || 'rw',
-  })
-  local.tools = unrestrictedAgentToolsConfig()
-  applyExecutionWorkspaceToLocalConfig(local, local.routing.workspace)
-  local.agent.updatedAt = new Date().toISOString()
-  await writeTextFileWithLockRetry(agentLocalConfigPath(agentId), `${JSON.stringify(local, null, 2)}\n`)
-  await rememberAgentLocalConfigCache(agentLocalConfigPath(agentId), local)
-  await syncAgentDerivedFiles(agentId, local)
   applyLocalConfigToGlobal(agentId, local, config)
   await writeOpenclawConfig(config)
-  return { changed: true, local, message }
+  return { changed: false, local, message: '' }
 }
 
 async function syncAllAgentLocalConfigs() {
@@ -18937,7 +18821,7 @@ registerToolApprovalRoutes(app, {
     if (!entry) throw new Error('Agent not found.')
     const local = await ensureAgentLocalConfig({ agentId, entry })
     local.sandbox = normalizeSandboxConfig({ ...local.sandbox, mode: 'off', scope: 'agent', workspaceAccess: 'rw' })
-    local.tools = unrestrictedAgentToolsConfig(exec)
+    local.tools = normalizeAgentToolsConfig({ ...local.tools, profile: 'full', exec })
     local.agent.updatedAt = new Date().toISOString()
     await writeTextFileWithLockRetry(agentLocalConfigPath(agentId), `${JSON.stringify(local, null, 2)}\n`)
     await rememberAgentLocalConfigCache(agentLocalConfigPath(agentId), local)
@@ -19001,7 +18885,6 @@ registerAgentTurnRoutes(app, {
   isBrowserServiceReadyOnlyReply,
   isClawTalkIntentMessage,
   isClawTalkSetupIntentMessage,
-  isContextOverflowReply,
   isEmptyAgentNoResponseReply,
   isGoogleGeminiModelId,
   isHostedCreditsActive: () => {

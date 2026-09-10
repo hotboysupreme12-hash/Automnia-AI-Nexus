@@ -346,7 +346,19 @@ export function compactOpenAiTools(tools, overrides = {}) {
   );
   // Preserve core execution tools that the host already authorized. Budget
   // trimming must not silently turn an execution agent into a text-only one.
-  for (const name of ['exec', 'process', 'read', 'write', 'edit', 'browser']) requiredToolNames.add(name);
+  for (const name of [
+    'tool_search', 'tool_describe', 'tool_call', 'tool_search_code',
+    'exec', 'process', 'read', 'write', 'edit', 'apply_patch',
+    'browser', 'web_search', 'web_fetch', 'image', 'canvas',
+    'automations', 'cron', 'session_status', 'sessions_list',
+    'sessions_history', 'sessions_send', 'sessions_spawn', 'subagents',
+    'agents_list', 'memory_search', 'memory_get', 'message',
+    'ask_user', 'computer', 'terminal', 'gateway', 'openclaw',
+    'nodes', 'mobile_ui', 'portal', 'secrets', 'skill_workshop',
+    'conversations_send', 'conversations_turn', 'conversations_list',
+    'sessions', 'sessions_search', 'sessions_yield', 'agents_wait',
+    'create_goal', 'get_goal', 'update_goal', 'dashboard', 'progress_card', 'tts',
+  ]) requiredToolNames.add(name);
   const candidates = source.flatMap((tool) => {
     if (!tool || typeof tool !== 'object' || tool.type !== 'function' || !tool.function || typeof tool.function !== 'object') return [];
     const name = String(tool.function.name || '').trim();

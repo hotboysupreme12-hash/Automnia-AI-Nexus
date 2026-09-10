@@ -1,4 +1,5 @@
 import { AvatarFallback } from '../ui/AvatarFallback'
+import { AgentToolPicker } from './AgentToolPicker'
 import { createSerialSaveQueue } from '../monitor/serialSaveQueue'
 import { useCallback, useEffect, useId, useMemo, useRef, useState } from 'react'
 import type { CSSProperties } from 'react'
@@ -34,9 +35,9 @@ import { useLicense } from '../../context/useLicense'
 type EditorTab = AgentEditorTab
 type AgentMetaPatch = Partial<Pick<OpenClawAgent, 'name'|'portrait'|'className'|'role'|'level'|'behaviorProfile'|'workspace'>>
 type HeartbeatPatch = Partial<HeartbeatConfig>
-type SandboxMode = NonNullable<NonNullable<OpenClawAgent['sandbox']>['mode']>
-type SandboxScope = NonNullable<NonNullable<OpenClawAgent['sandbox']>['scope']>
-type SandboxAccess = NonNullable<NonNullable<OpenClawAgent['sandbox']>['workspaceAccess']>
+
+
+
 
 interface AvailableModel { id:string; alias:string; provider:string; name:string }
 type AgentConfigPayload = {
@@ -59,7 +60,7 @@ type AgentConfigPatch = {
 }
 type AgentConfigDirtySection = 'profile'|'model'|'runtime'|'heartbeat'|'policy'
 type ApplyAgentConfigOptions = { skipDirty?: boolean }
-type PolicyDraft = { mode:SandboxMode; scope:SandboxScope; access:SandboxAccess; allow:string; deny:string }
+type PolicyDraft = { allow:string; deny:string }
 type EditorAutosavePhase = 'saved'|'saving'|'error'
 type DesktopDirectoryPickerPayload = { ok?:boolean; path?:string|null; cancelled?:boolean; error?:string; detail?:string }
 type FolderListPayload = { base?:string; folders?:string[] }
@@ -205,9 +206,9 @@ const EDITOR_TAB_HELP: Record<EditorTab,string> = {
 }
 const REASONING_EFFORT_LEVELS = ['off', 'minimal', 'low', 'medium', 'high', 'xhigh', 'max'] as const satisfies readonly ThinkingLevel[]
 const BEHAVIOR_OPTIONS = ['executor','architect','auditor','researcher','hybrid'] as const satisfies readonly BehaviorProfile[]
-const SANDBOX_MODE_OPTIONS = ['off','all','non-main'] as const
-const SANDBOX_SCOPE_OPTIONS = ['session','agent','shared'] as const
-const SANDBOX_ACCESS_OPTIONS = ['rw','ro','none'] as const
+
+
+
 
 const isOption = <T extends string>(value: string, options: readonly T[]): value is T =>
   (options as readonly string[]).includes(value)
@@ -435,13 +436,15 @@ export function AgentEditorModal() {
   const fileListSeqRef = useRef(0)
   const fileContentSeqRef = useRef(0)
 
-  const [sbMode,setSbMode] = useState<SandboxMode>('all')
+
   const [toolAccess,setToolAccess] = useState('')
-  const [sbScope,setSbScope] = useState<SandboxScope>('agent')
-  const [sbAccess,setSbAccess] = useState<SandboxAccess>('rw')
+
+
   const [tAllow,setTAllow] = useState(''); const [tDeny,setTDeny] = useState('')
   const [ps,setPs] = useState(false); const [psStatus,setPsStatus] = useState('')
   const policySaveTimerRef = useRef<number|null>(null)
+  const policySaveQueueRef = useRef<Promise<void>>(Promise.resolve())
+  const policyRevisionRef = useRef(0)
 
   const [wsPath,setWsPath] = useState(''); const [wsFolders,setWsFolders] = useState<string[]>([])
   const [wsLoading,setWsLoading] = useState(false); const [wsSaving,setWsSaving] = useState(false)
@@ -615,7 +618,7 @@ export function AgentEditorModal() {
       if(portraitSaveTimerRef.current){window.clearTimeout(portraitSaveTimerRef.current);portraitSaveTimerRef.current=null;await CommitPortraitDraft()}
       if(modelSaveTimerRef.current){window.clearTimeout(modelSaveTimerRef.current);modelSaveTimerRef.current=null;await SvM(primary,fallbacks)}
       else if(pendingModelSaveRef.current?.agentId===agent?.id){await retryPendingModelSave()}
-      if(policySaveTimerRef.current){window.clearTimeout(policySaveTimerRef.current);policySaveTimerRef.current=null;await SvP()}
+      await flushPolicySave()
       if(workspaceSaveTimerRef.current){window.clearTimeout(workspaceSaveTimerRef.current);workspaceSaveTimerRef.current=null;await SvW(wsPath)}
       if(resourceSaveTimerRef.current){window.clearTimeout(resourceSaveTimerRef.current);resourceSaveTimerRef.current=null}
       if(resourceDirtyRef.current&&!(await SvF(rcontent,rfile)))return
@@ -826,10 +829,6 @@ export function AgentEditorModal() {
   const applyAgentConfigPayload = useCallback((agentId:string,config:AgentConfigPayload,options:ApplyAgentConfigOptions={})=>{
     const shouldApply = (section:AgentConfigDirtySection) => !options.skipDirty || !dirtyConfigSectionsRef.current.has(section)
     if(shouldApply('policy')){
-      const sb=config.sandbox||{}
-      setSbMode(sb.mode||'all')
-      setSbScope(sb.scope||'agent')
-      setSbAccess(sb.workspaceAccess||'rw')
       const t=config.tools||{}
       setToolAccess(t.exec?.security === 'full' && t.exec?.ask === 'off' ? 'full' : t.exec?.ask ? 'ask' : '')
       setTAllow((t.allow||[]).join(', '))
@@ -875,57 +874,53 @@ export function AgentEditorModal() {
       applyAgentConfigPayload(agentId,result.data.config)
     }
   },[agent?.id,applyAgentConfigPayload])
-  const SvP = async (draft:PolicyDraft={mode:sbMode,scope:sbScope,access:sbAccess,allow:tAllow,deny:tDeny}) => {
+  const SvP = (draft:PolicyDraft={allow:tAllow,deny:tDeny}) => {
+    const revision = policyRevisionRef.current
+    const save = async () => {
     if (!agent) return
     setPs(true)
     setPsStatus('Saving policy…')
     setAutosavePhase('saving')
     setAutosaveMessage('Saving policy settings…')
-    const sandboxOff = draft.mode === 'off'
+
     try {
       const result = await apiRequest<{ok?:boolean;error?:string}>(`/api/party/agent/${encodeURIComponent(agent.id)}/config`, {
         method: 'POST',
         timeoutMs: 18000,
         body: {
-          sandbox: {
-            mode: draft.mode,
-            scope: sandboxOff ? 'agent' : draft.scope,
-            workspaceAccess: sandboxOff ? 'rw' : draft.access,
-          },
-          tools: sandboxOff
-            ? { profile: 'full', allow: [], deny: [] }
-            : { profile: 'full', allow: csv(draft.allow), deny: csv(draft.deny) },
+
+          tools: { profile: 'full', allow: csv(draft.allow), deny: csv(draft.deny), alsoAllow: [] },
         },
       })
       if (result.ok) {
-        if (sandboxOff) {
-          setSbScope('agent')
-          setSbAccess('rw')
-          setTAllow('')
-          setTDeny('')
-        }
+
         agentConfigCache.delete(agent.id)
-        clearConfigDirty('policy')
+        if (revision === policyRevisionRef.current) clearConfigDirty('policy')
         setAutosavePhase('saved')
         setAutosaveMessage('All changes saved')
       }else{
-        setAutosavePhase('error')
-        setAutosaveMessage(`Policy autosave failed: ${apiErrorMessage(result.error)}`)
+        throw new Error(apiErrorMessage(result.error))
       }
-      setPsStatus(result.ok ? (sandboxOff ? 'Saved · sandbox off with full tool access.' : 'Policy saved.') : `Autosave failed: ${apiErrorMessage(result.error)}`)
+      setPsStatus('Saved · tool changes apply to the next message.')
     } catch (e) {
       const message=errorMessage(e)
       setPsStatus(`Autosave failed: ${message}`)
       setAutosavePhase('error')
       setAutosaveMessage(`Policy autosave failed: ${message}`)
+      throw e
     } finally {
       setPs(false)
     }
+    }
+    const pending = policySaveQueueRef.current.catch(() => undefined).then(save)
+    policySaveQueueRef.current = pending
+    return pending
   }
 
   const schedulePolicyAutosave = (patch:Partial<PolicyDraft>) => {
     if(!agent)return
-    const next:PolicyDraft={mode:sbMode,scope:sbScope,access:sbAccess,allow:tAllow,deny:tDeny,...patch}
+    policyRevisionRef.current += 1
+    const next:PolicyDraft={allow:tAllow,deny:tDeny,...patch}
     markConfigDirty(agent.id,'policy')
     if(policySaveTimerRef.current)window.clearTimeout(policySaveTimerRef.current)
     setPsStatus('Waiting to save…')
@@ -933,8 +928,19 @@ export function AgentEditorModal() {
     setAutosaveMessage('Waiting to save policy…')
     policySaveTimerRef.current=window.setTimeout(()=>{
       policySaveTimerRef.current=null
-      void SvP(next)
+      void SvP(next).catch(() => undefined)
     },EDITOR_PATCH_DEBOUNCE_MS)
+  }
+
+  const flushPolicySave = async () => {
+    if(policySaveTimerRef.current){window.clearTimeout(policySaveTimerRef.current);policySaveTimerRef.current=null;await SvP()}
+    else {
+      try { await policySaveQueueRef.current } catch { await SvP() }
+    }
+  }
+  const changeEditorTab = (next:EditorTab) => {
+    if(tab !== 'policy') { setTab(next); return }
+    void flushPolicySave().then(() => setTab(next)).catch(() => undefined)
   }
 
   const LdW = useCallback(async ()=>{
@@ -1570,7 +1576,7 @@ export function AgentEditorModal() {
               </div>
               <div data-editor-tabs role="tablist" aria-label="Agent settings" className="mt-3 flex gap-0.5 rounded-lg border border-white/[0.06] bg-white/[0.02] p-0.5">
                 {EDITOR_TABS.map((t)=>(
-                  <button type="button" key={t} role="tab" id={`${dialogId}-tab-${t}`} aria-controls={`${dialogId}-panel`} aria-selected={tab===t} tabIndex={tab===t?0:-1} onKeyDown={(event)=>navigateTabList(event, EDITOR_TABS, t, setTab)} data-editor-tab data-active={tab===t?'true':'false'} onClick={()=>setTab(t)} title={EDITOR_TAB_HELP[t]} aria-label={EDITOR_TAB_LABEL[t]} className={`flex-1 rounded-md px-1.5 py-2 text-[11px] font-semibold transition-all ${tab===t?'bg-gradient-to-r from-cyan-500/20 to-blue-500/15 text-cyan-200 shadow-[inset_0_1px_0_rgba(255,255,255,0.05)] border border-cyan-400/20':'text-slate-400 hover:text-slate-200'}`}>
+                  <button type="button" key={t} role="tab" id={`${dialogId}-tab-${t}`} aria-controls={`${dialogId}-panel`} aria-selected={tab===t} tabIndex={tab===t?0:-1} onKeyDown={(event)=>navigateTabList(event, EDITOR_TABS, t, changeEditorTab)} data-editor-tab data-active={tab===t?'true':'false'} onClick={()=>changeEditorTab(t)} title={EDITOR_TAB_HELP[t]} aria-label={EDITOR_TAB_LABEL[t]} className={`flex-1 rounded-md px-1.5 py-2 text-[11px] font-semibold transition-all ${tab===t?'bg-gradient-to-r from-cyan-500/20 to-blue-500/15 text-cyan-200 shadow-[inset_0_1px_0_rgba(255,255,255,0.05)] border border-cyan-400/20':'text-slate-400 hover:text-slate-200'}`}>
                     {EDITOR_TAB_LABEL[t]}
                   </button>
                 ))}
@@ -1872,10 +1878,11 @@ export function AgentEditorModal() {
                 {/* POLICY */}
                 {tab==='policy'&&(
                   <div data-editor-panel="policy" className="space-y-4">
-                    <label className="block text-sm">Command permissions
+                    <label className="block text-sm">Permissions
                       <select value={toolAccess} disabled={ps} className="ml-3 rounded bg-slate-900 p-2" onChange={async (event) => {
                         const mode = event.target.value
                         if (!agent || !mode) return
+                        try { await flushPolicySave() } catch { return }
                         setPs(true)
                         setPsStatus('Saving command permissions…')
                         const result = await apiRequest(`/api/party/agent/${encodeURIComponent(agent.id)}/tool-access`, { method: 'POST', body: { mode }, timeoutMs: 20000 })
@@ -1885,21 +1892,12 @@ export function AgentEditorModal() {
                       }}>
                         <option value="" disabled>Use current configuration</option>
                         <option value="ask">Ask for approval</option>
-                        <option value="full">Full access — no command prompts</option>
+                        <option value="full">Full access — tools on demand</option>
                       </select>
                     </label>
-                    <h3 className="text-xs font-extrabold text-slate-200">Sandbox</h3>
-                    <div className="grid gap-2.5 sm:grid-cols-3">
-                      {[{l:'Mode',v:sbMode,s:(x:string)=>{if(isOption(x,SANDBOX_MODE_OPTIONS)){setSbMode(x);schedulePolicyAutosave({mode:x})}},o:SANDBOX_MODE_OPTIONS},
-                        {l:'Scope',v:sbScope,s:(x:string)=>{if(isOption(x,SANDBOX_SCOPE_OPTIONS)){setSbScope(x);schedulePolicyAutosave({scope:x})}},o:SANDBOX_SCOPE_OPTIONS},
-                        {l:'Access',v:sbAccess,s:(x:string)=>{if(isOption(x,SANDBOX_ACCESS_OPTIONS)){setSbAccess(x);schedulePolicyAutosave({access:x})}},o:SANDBOX_ACCESS_OPTIONS},
-                      ].map((f)=>(
-                        <div key={f.l} className="space-y-1">
-                          <label htmlFor={`${dialogId}-${f.l}`} className="block text-[9px] font-bold uppercase tracking-[0.12em] text-slate-500">{f.l}</label>
-                          <select id={`${dialogId}-${f.l}`} value={f.v} onChange={(e)=>f.s(e.target.value)} className="w-full rounded-lg border border-white/[0.08] bg-white/[0.03] px-2.5 py-2 text-[11px] text-slate-200 focus:outline-none focus:border-cyan-400/40">{f.o.map((o)=><option key={o} value={o}>{o}</option>)}</select>
-                        </div>
-                      ))}
-                    </div>
+                    <p className="text-xs text-slate-400">Tools load on demand. Full access grants the available catalog and host commands without approval prompts. OS permissions and service logins still apply.</p>
+                    {toolAccess !== 'full' && <>
+                    <AgentToolPicker key={agent.id} agentId={agent.id} allow={tAllow} deny={tDeny} onChange={(allow,deny)=>{setTAllow(allow);setTDeny(deny);schedulePolicyAutosave({allow,deny})}} />
                     <div className="grid gap-3 sm:grid-cols-2">
                       <div className="space-y-1">
                         <label className="block text-[9px] font-bold uppercase tracking-[0.12em] text-slate-500">Allow</label>
@@ -1910,6 +1908,7 @@ export function AgentEditorModal() {
                         <input type="text" value={tDeny} onChange={(e)=>{const next=e.target.value;setTDeny(next);schedulePolicyAutosave({deny:next})}} placeholder="exec, browser" className="w-full rounded-lg border border-white/[0.08] bg-white/[0.03] px-3 py-2 text-[11px] text-slate-200 placeholder:text-slate-600 focus:outline-none focus:border-cyan-400/40"/>
                       </div>
                     </div>
+                    </>}
                     {psStatus && <div data-editor-autosave="section" data-phase={psStatus.toLowerCase().includes('fail')?'error':ps?'saving':'saved'} role={psStatus.toLowerCase().includes('fail')?'alert':'status'} aria-live="polite"><i aria-hidden="true" /><span>{psStatus}</span></div>}
                   </div>
                 )}

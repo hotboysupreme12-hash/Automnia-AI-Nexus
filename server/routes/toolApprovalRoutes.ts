@@ -13,9 +13,26 @@ export function registerToolApprovalRoutes(app: Express, options: {
   resetAgentContext: (agentId: string) => unknown | Promise<unknown>
   validAgent: (agentId: string) => boolean | Promise<boolean>
 }) {
+  app.get('/api/party/agent/:agentId/tool-catalog', async (req, res) => {
+    const agentId = String(req.params.agentId)
+    if (!await options.validAgent(agentId)) return apiFailure(res, 404, 'agent_not_found', 'Agent not found.')
+    try {
+      const catalog = await options.request('tools.catalog', { agentId, includePlugins: true })
+      return apiSuccess(res, { catalog })
+    } catch {
+      return apiFailure(res, 503, 'runtime_status_failed', 'Tool catalog unavailable. Retry when the gateway is ready.')
+    }
+  })
   app.get('/api/tool-approvals', async (_req, res) => {
     const pending = await options.request('exec.approval.list', {})
-    return apiSuccess(res, { pending: Array.isArray(pending) ? pending : [] })
+    const snapshot = await options.request('exec.approvals.get', {}) as { file?: { agents?: Record<string, { security?: string; ask?: string }> } }
+    const agents = snapshot.file?.agents || {}
+    const visible = (Array.isArray(pending) ? pending : []).filter((item) => {
+      const agentId = (item as { request?: { agentId?: unknown } })?.request?.agentId
+      const policy = typeof agentId === 'string' ? agents[agentId] : undefined
+      return !(policy?.security === 'full' && policy.ask === 'off')
+    })
+    return apiSuccess(res, { pending: visible })
   })
   app.post('/api/tool-approvals/:id/resolve', async (req, res) => {
     const parsed = z.object({ decision: z.enum(['allow-once', 'allow-always', 'deny']) }).safeParse(req.body)

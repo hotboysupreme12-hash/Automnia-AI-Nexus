@@ -1,4 +1,5 @@
 import { randomUUID } from 'node:crypto'
+import { CONTEXT_OVERFLOW_CONTINUATION, isContextOverflowResult } from './contextOverflowRecovery'
 import { gatewayChatAbortError } from '../gateway/gatewayChatService'
 
 export type AgentTurnThinkingLevel = 'off' | 'minimal' | 'low' | 'medium' | 'high' | 'xhigh' | 'max'
@@ -414,14 +415,42 @@ export function createGatewayAgentTurnService(options: GatewayAgentTurnServiceOp
         signal,
       })
     }
-    const reply = options.extractAgentReply(result.stdout, result.stderr)
-    const ok = result.code === 0
+    let reply = options.extractAgentReply(result.stdout, result.stderr)
+    if (isContextOverflowResult(result, reply) && !signal.aborted) {
+      const staleSessionId = sessionId
+      sessionId = randomUUID()
+      options.deleteProviderConversationHistory(staleSessionId)
+      options.agentTurnSessions.set(sessionScope, sessionId)
+      const recoveryMessage = `${CONTEXT_OVERFLOW_CONTINUATION}\n\n${getFullGatewayMessage()}`
+      emitGatewayStage('Recovering from the context limit and continuing your request.', { sessionId, retry: 'context-overflow' })
+      await options.appendAgentPromptDump({
+        route: routeOptions.route, agent, sessionId, thinking: effectiveThinking,
+        fastMode: effectiveFastMode, timeoutSeconds: effectiveTimeoutSeconds,
+        cwd: runCwd, requestMessage: rawMessage, intentMessage,
+        finalMessage: recoveryMessage,
+        note: `${routeOptions.note}; context overflow recovery using a fresh Gateway session`,
+      })
+      if (signal.aborted) throw gatewayChatAbortError('gateway agent run aborted before context recovery')
+      result = await options.runGatewayChatTurn({
+        agentId: agent, agentName, message: recoveryMessage,
+        attachments: requestedAttachments, sessionId, requestedSessionKey,
+        freshSession: true, thinking: effectiveThinking, fastMode: effectiveFastMode,
+        timeoutMs: openClawTimeoutMs, cwd: runCwd, streamObserverId, signal,
+      })
+      reply = options.extractAgentReply(result.stdout, result.stderr)
+      // The first attempt may already have streamed the overflow message.
+      // Replace it so the console does not prepend that failure to the reply.
+      if (reply) streamObserver?.emit('delta', { text: reply, replace: true, transport: 'gateway-chat' })
+    }
+    const contextOverflow = isContextOverflowResult(result, reply)
+    const ok = result.code === 0 && !contextOverflow
     return {
       ok,
       reply: reply || (ok ? 'No response returned.' : result.stderr || 'Agent turn failed.'),
       stdout: result.stdout,
       stderr: result.stderr,
-      code: result.code,
+      code: contextOverflow ? (result.code || 1) : result.code,
+      ...(contextOverflow ? { failureKind: 'context_overflow' } : {}),
       modelId: agentPrimaryModelId,
       runtimeTransport: 'gateway-chat',
       sessionId,

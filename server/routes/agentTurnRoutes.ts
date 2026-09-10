@@ -4,6 +4,7 @@ import { writeFileSync } from 'node:fs'
 import path from 'node:path'
 import { z } from 'zod'
 import { apiFailure, apiSuccess } from '../controlPlaneHttp'
+import { CONTEXT_OVERFLOW_CONTINUATION, isContextOverflowResult } from '../services/agents/contextOverflowRecovery'
 
 type ThinkingLevel = 'off' | 'minimal' | 'low' | 'medium' | 'high' | 'xhigh' | 'max'
 type StreamEmitter = (event: string, data: Record<string, unknown>) => void
@@ -205,7 +206,6 @@ type AgentTurnRoutesOptions = {
   isBrowserServiceReadyOnlyReply(reply: string): boolean
   isClawTalkIntentMessage(message: string): boolean
   isClawTalkSetupIntentMessage(message: string): boolean
-  isContextOverflowReply(reply: string): boolean
   isEmptyAgentNoResponseReply(reply: string): boolean
   isGoogleGeminiModelId(modelId: string): boolean
   isHostedCreditsActive?: () => boolean
@@ -306,7 +306,6 @@ export function registerAgentTurnRoutes(app: Express, options: AgentTurnRoutesOp
     isBrowserServiceReadyOnlyReply,
     isClawTalkIntentMessage,
     isClawTalkSetupIntentMessage,
-    isContextOverflowReply,
     isEmptyAgentNoResponseReply,
     isGoogleGeminiModelId,
     isHostedCreditsActive,
@@ -1179,8 +1178,11 @@ export function registerAgentTurnRoutes(app: Express, options: AgentTurnRoutesOp
       reply = extractAgentReply(result.stdout, result.stderr)
     }
 
+    let contextOverflowRecovered = false
     // If the session context is bloated, retry once with a fresh session + /new.
-    if (result.code === 0 && isContextOverflowReply(reply)) {
+    if (isContextOverflowResult(result, reply) && !requestAbortController.signal.aborted) {
+      const recoveryPrompt = `${CONTEXT_OVERFLOW_CONTINUATION}\n\n${getFullComposedPrompt()}`
+      providerConversationHistories.delete(sessionId)
       const retrySessionId = randomUUID()
       agentTurnSessions.set(sessionScope, retrySessionId)
       sessionId = retrySessionId
@@ -1195,7 +1197,7 @@ export function registerAgentTurnRoutes(app: Express, options: AgentTurnRoutesOp
           '--session-id',
           retrySessionId,
           '--message',
-          `/new ${getFullComposedPrompt()}`,
+          `/new ${recoveryPrompt}`,
           '--thinking',
           effectiveThinking,
           '--timeout',
@@ -1213,13 +1215,14 @@ export function registerAgentTurnRoutes(app: Express, options: AgentTurnRoutesOp
           requestedSessionKey: parsed.data.sessionKey,
           freshSession: true,
           thinking: effectiveThinking,
-          message: composedPrompt,
+          message: recoveryPrompt,
           attachments: parsed.data.attachments,
           streamObserverId: parsed.data.gatewayStreamObserverId,
         },
       }).catch(openClawErrorResult)
       result = retry
       reply = extractAgentReply(retry.stdout, retry.stderr)
+      contextOverflowRecovered = true
     }
 
     if (result.code === 0 && browserIntent && isBrowserServiceReadyOnlyReply(reply)) {
@@ -1426,6 +1429,10 @@ export function registerAgentTurnRoutes(app: Express, options: AgentTurnRoutesOp
       reply = withRuntimeTimeoutResumeAdvice(reply, agent, sessionId)
     }
 
+    if (isContextOverflowResult(result, reply)) {
+      result = { ...result, code: result.code || 1, failureKind: 'context_overflow' }
+    }
+
     await cleanupDoctrineMirrorsAfterRun(agent, context.executionWorkspace)
 
     await appendAgentDailyMemory(
@@ -1458,6 +1465,7 @@ export function registerAgentTurnRoutes(app: Express, options: AgentTurnRoutesOp
       stdout: result.stdout,
       stderr: result.stderr,
       code: result.code,
+      ...(contextOverflowRecovered ? { contextOverflowRecovered: true } : {}),
       ...(failureKind ? { failureKind } : {}),
       ...(result.runtimeTransport ? { runtimeTransport: result.runtimeTransport } : {}),
       ...(result.gatewayFallbackDetail ? { gatewayFallbackDetail: result.gatewayFallbackDetail } : {}),

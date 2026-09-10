@@ -26,6 +26,9 @@ test('approvals validate decisions, preserve other agents, and synchronize host 
   const post = (path: string, body: unknown) => fetch(base + path, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) })
   try {
     assert.equal((await fetch(base + '/api/tool-approvals')).status, 200)
+    assert.equal((await fetch(base + '/api/party/agent/missing/tool-catalog')).status, 404)
+    assert.equal((await fetch(base + '/api/party/agent/brandon/tool-catalog')).status, 200)
+    assert.deepEqual(calls.at(-1), { method: 'tools.catalog', params: { agentId: 'brandon', includePlugins: true } })
     assert.equal((await post('/api/tool-approvals/pending-1/resolve', { decision: 'arbitrary' })).status, 400)
     assert.equal(calls.some((c) => c.method === 'exec.approval.resolve'), false)
     for (const decision of ['allow-once', 'allow-always', 'deny']) {

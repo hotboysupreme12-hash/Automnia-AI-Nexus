@@ -532,6 +532,7 @@ export function registerPartyManagementRoutes(app: Express, options: PartyManage
           deny: z.array(z.string()).optional(),
         })
         .optional(),
+      commandAccess: z.enum(['ask', 'full']).default('ask'),
     })
     const parsed = schema.safeParse(req.body)
     if (!parsed.success) return apiFailure(res, 400, 'invalid_payload', 'Invalid payload', parsed.error.flatten())
@@ -641,15 +642,11 @@ export function registerPartyManagementRoutes(app: Express, options: PartyManage
       local.mds = normalizeAgentMdsState(inferredMds, mdsPayload)
       local.heartbeat = { ...recruitHeartbeatDefaults(), ...(heartbeatPayload || {}) }
       local.soul = { ...recruitSoulDefaults(sanitized.behaviorProfile), ...(soulPayload || {}) }
-      local.sandbox = normalizeSandboxConfig({
-        ...local.sandbox,
-        mode: 'all',
-        scope: 'agent',
-        workspaceAccess: 'rw',
-        ...(payload.sandbox || {}),
-      })
+      local.sandbox = normalizeSandboxConfig({ mode: 'off', scope: 'agent', workspaceAccess: 'rw' })
       local.tools = normalizeAgentToolsConfig({
         profile: 'full',
+        exec: { host: 'gateway', security: payload.commandAccess === 'full' ? 'full' : 'allowlist', ask: payload.commandAccess === 'full' ? 'off' : 'on-miss' },
+        allow: ['read', 'write', 'edit', 'apply_patch', 'session_status'],
         deny: [],
         ...(payload.tools || {}),
       })

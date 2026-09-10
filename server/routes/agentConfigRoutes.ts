@@ -228,6 +228,7 @@ export function registerAgentConfigRoutes(app: Express, options: AgentConfigRout
       tools: z
         .object({
           profile: z.string().optional(),
+          alsoAllow: z.array(z.string()).optional(),
           allow: z.array(z.string()).optional(),
           deny: z.array(z.string()).optional(),
           byProvider: z
@@ -412,7 +413,7 @@ export function registerAgentConfigRoutes(app: Express, options: AgentConfigRout
         scope: 'agent',
         workspaceAccess: 'rw',
       })
-      local.tools = normalizeAgentToolsConfig({ profile: 'full', ...(local.tools.exec ? { exec: local.tools.exec } : {}) })
+      local.tools = normalizeAgentToolsConfig({ profile: 'full', ...local.tools })
     }
 
     applyExecutionWorkspaceToLocalConfig(local, local.routing.workspace)

@@ -18,7 +18,7 @@ import {
 } from '../../api/providerAuth'
 import { useNexusStore } from '../../store/nexusStore'
 import type { RecruitAgentInput } from '../../store/nexusStore'
-import type { BehaviorProfile, CapabilityKey, OpenClawAgent } from '../../types/nexus'
+import type { BehaviorProfile, CapabilityKey } from '../../types/nexus'
 import { isSelectableModelId } from '../../utils/modelGrouping'
 import { AUTOMNIA_CREDITS_MODEL_ID, isAutomniaCreditsModelId, isCreditsOnlyEntitlement } from '../../utils/licenseEntitlement'
 import { agentPortraitSrc, localPortraitPathFromInput } from '../../utils/portrait'
@@ -294,42 +294,23 @@ const CAPABILITY_OPTIONS: Array<{ key: CapabilityKey; label: string; detail: str
   { key: 'memoryManagement', label: 'Memory', detail: 'Record continuity' },
 ]
 
-type RecruitSandboxMode = Exclude<NonNullable<OpenClawAgent['sandbox']>['mode'], undefined>
-type RecruitSandboxScope = Exclude<NonNullable<OpenClawAgent['sandbox']>['scope'], undefined>
-type RecruitFileAccess = Exclude<NonNullable<OpenClawAgent['sandbox']>['workspaceAccess'], undefined>
+type RecruitCommandAccess = 'ask' | 'full'
 
 type RecruitPolicyDraft = {
-  mode: RecruitSandboxMode
-  scope: RecruitSandboxScope
-  access: RecruitFileAccess
+  mode: RecruitCommandAccess
   allow: string
   deny: string
 }
 
 const DEFAULT_RECRUIT_POLICY: RecruitPolicyDraft = {
-  mode: 'all',
-  scope: 'agent',
-  access: 'rw',
-  allow: '',
+  mode: 'ask',
+  allow: 'read, write, edit, apply_patch, session_status',
   deny: '',
 }
 
 const POLICY_MODE_OPTIONS: RecruitChoiceOption[] = [
-  { value: 'all', label: 'Sandbox all work', detail: 'Run every turn inside the sandbox.' },
-  { value: 'non-main', label: 'Sandbox non-main', detail: 'Keep the main session outside the sandbox.' },
-  { value: 'off', label: 'Sandbox off', detail: 'Use full runtime and tool access.' },
-]
-
-const POLICY_SCOPE_OPTIONS: RecruitChoiceOption[] = [
-  { value: 'agent', label: 'Agent', detail: 'Isolated policy for this agent.' },
-  { value: 'session', label: 'Session', detail: 'Apply restrictions per active session.' },
-  { value: 'shared', label: 'Shared', detail: 'Share the policy across sessions.' },
-]
-
-const POLICY_ACCESS_OPTIONS: RecruitChoiceOption[] = [
-  { value: 'rw', label: 'Read and write', detail: 'Allow the agent to update files.' },
-  { value: 'ro', label: 'Read only', detail: 'Allow inspection without file changes.' },
-  { value: 'none', label: 'No file access', detail: 'Block file access for this agent.' },
+  { value: 'ask', label: 'Ask for approval', detail: 'Show a prompt when command access is needed.' },
+  { value: 'full', label: 'Full access', detail: 'Run authorized commands without approval prompts.' },
 ]
 
 const DEFAULT_CAPABILITIES: Record<CapabilityKey, boolean> = {
@@ -1724,12 +1705,9 @@ export function RecruitAgentModal({ isOpen, onClose }: { isOpen: boolean; onClos
       level,
       primaryModel: primaryModel.trim() || undefined,
       capabilities,
-      sandbox: {
-        mode: policy.mode,
-        scope: policy.mode === 'off' ? 'agent' : policy.scope,
-        workspaceAccess: policy.mode === 'off' ? 'rw' : policy.access,
-      },
-      toolsPolicy: policy.mode === 'off'
+      commandAccess: policy.mode,
+      sandbox: { mode: 'off', scope: 'agent', workspaceAccess: 'rw' },
+      toolsPolicy: policy.mode === 'full'
         ? { profile: 'full', allow: [], deny: [] }
         : { profile: 'full', allow: policyToolList(policy.allow), deny: policyToolList(policy.deny) },
       addToParty,
@@ -1948,23 +1926,21 @@ export function RecruitAgentModal({ isOpen, onClose }: { isOpen: boolean; onClos
                                 <p className="dui-recruit-section-note">{creditsOnly ? 'Starter subscriptions are locked to Automnia credits. Provider credentials and BYOK are unavailable.' : 'Leave the model blank to follow the runtime default. Provider credentials can be connected inline when a model needs them.'}</p>
                             </div>
                             <section className="dui-recruit-policy-panel" aria-label="Agent policy settings">
-                              <SectionTitle icon="policy" label="Agent policy" meta={policy.mode === 'off' ? 'Unrestricted' : 'Sandboxed'} />
-                              <p className="dui-recruit-policy-intro">Set the safety boundary this agent will use from its first mission.</p>
+                              <SectionTitle icon="policy" label="Permissions" meta={policy.mode === 'full' ? 'Full access' : 'Approval required'} />
+                              <p className="dui-recruit-policy-intro">New agents start with basic tools and ask before running commands. You can change this later in Permissions.</p>
                               <div className="dui-recruit-grid two dui-recruit-policy-grid">
-                                <RecruitChoiceField label="Sandbox mode" value={policy.mode} options={POLICY_MODE_OPTIONS} placeholder="Choose mode" onChange={(value) => setPolicy((current) => ({ ...current, mode: value as RecruitSandboxMode }))} />
-                                <RecruitChoiceField label="Policy scope" value={policy.scope} options={POLICY_SCOPE_OPTIONS} placeholder="Choose scope" disabled={policy.mode === 'off'} onChange={(value) => setPolicy((current) => ({ ...current, scope: value as RecruitSandboxScope }))} />
-                                <RecruitChoiceField label="File access" value={policy.mode === 'off' ? 'rw' : policy.access} options={POLICY_ACCESS_OPTIONS} placeholder="Choose access" disabled={policy.mode === 'off'} onChange={(value) => setPolicy((current) => ({ ...current, access: value as RecruitFileAccess }))} />
+                                <RecruitChoiceField label="Command access" value={policy.mode} options={POLICY_MODE_OPTIONS} placeholder="Choose access" onChange={(value) => setPolicy((current) => ({ ...current, mode: value as RecruitCommandAccess }))} />
                               </div>
                               <div className="dui-recruit-policy-tools">
-                                <label className="dui-recruit-field"><span>Allow tools</span><input value={policy.allow} disabled={policy.mode === 'off'} onChange={(event) => setPolicy((current) => ({ ...current, allow: event.target.value }))} placeholder="filesystem, shell" /></label>
-                                <label className="dui-recruit-field"><span>Deny tools</span><input value={policy.deny} disabled={policy.mode === 'off'} onChange={(event) => setPolicy((current) => ({ ...current, deny: event.target.value }))} placeholder="exec, browser" /></label>
+                                <label className="dui-recruit-field"><span>Enabled tools</span><input value={policy.allow} onChange={(event) => setPolicy((current) => ({ ...current, allow: event.target.value }))} placeholder="read, write, edit" /></label>
+                                <label className="dui-recruit-field"><span>Blocked tools</span><input value={policy.deny} onChange={(event) => setPolicy((current) => ({ ...current, deny: event.target.value }))} placeholder="browser, automations" /></label>
                               </div>
-                              <p className="dui-recruit-section-note">{policy.mode === 'off' ? 'Sandbox is off, so the agent starts with full tool access and read/write file access.' : 'Use commas or new lines to tune the tool allowlist and denylist. Blank lists follow the runtime defaults.'}</p>
+                              <p className="dui-recruit-section-note">Tool selections are saved with the agent. Full access removes command prompts; it does not bypass OS permissions or service authentication.</p>
                             </section>
                           </div>
                         </section>
                         <section className="dui-recruit-section"><SectionTitle icon="capabilities" label="Capabilities and party" meta={`${enabledCapabilities.length} enabled`} /><div className="dui-recruit-capability-grid">{CAPABILITY_OPTIONS.map((option) => <label key={option.key} className="dui-recruit-capability" title={option.detail}><input type="checkbox" aria-label={`${option.label}. ${option.detail}`} checked={capabilities[option.key]} onChange={(event) => setCapabilities((current) => ({ ...current, [option.key]: event.target.checked }))} /><span><strong>{option.label}</strong><small>{option.detail}</small></span></label>)}</div><label className="dui-recruit-toggle"><input type="checkbox" checked={addToParty} disabled={!partyRoom} onChange={(event) => setAddToParty(event.target.checked)} /><span>{partyRoom ? 'Add to active party' : 'Active party is full'}</span></label></section>
-                        <div className="dui-recruit-lane-summary"><span><small>Template</small><strong>{selectedTemplate?.name || 'Blank defaults'}</strong></span><span><small>Policy</small><strong>{policy.mode === 'off' ? 'Unrestricted' : `${policy.access === 'rw' ? 'Read/write' : policy.access === 'ro' ? 'Read only' : 'No files'} sandbox`}</strong></span><span><small>Files ready</small><strong>{fileOrder.length} markdown files</strong></span></div>
+                        <div className="dui-recruit-lane-summary"><span><small>Template</small><strong>{selectedTemplate?.name || 'Blank defaults'}</strong></span><span><small>Permissions</small><strong>{policy.mode === 'full' ? 'Full access' : 'Ask for approval'}</strong></span><span><small>Files ready</small><strong>{fileOrder.length} markdown files</strong></span></div>
                       </div>
                     )}
 
