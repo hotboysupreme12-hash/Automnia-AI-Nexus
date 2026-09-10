@@ -5,7 +5,7 @@ import path from 'node:path'
 const root = process.cwd()
 
 function readWorkspaceFile(relativePath: string): string {
-  return readFileSync(path.join(root, relativePath), 'utf8')
+  return readFileSync(path.join(root, relativePath), 'utf8').replace(/\r\n/g, '\n')
 }
 
 const controlPlane = readWorkspaceFile('server/controlPlane.ts')

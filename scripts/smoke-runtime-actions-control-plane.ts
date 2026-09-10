@@ -4,7 +4,7 @@ import path from 'node:path'
 const root = process.cwd()
 
 function readWorkspaceFile(relativePath: string): string {
-  return readFileSync(path.join(root, relativePath), 'utf8')
+  return readFileSync(path.join(root, relativePath), 'utf8').replace(/\r\n/g, '\n')
 }
 
 function assert(condition: unknown, message: string): asserts condition {

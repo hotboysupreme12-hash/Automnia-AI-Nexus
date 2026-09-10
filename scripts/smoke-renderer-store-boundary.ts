@@ -10,7 +10,7 @@ const NEXUS_STORE_MAX_API_REQUEST_CALLS = 0
 const NEXUS_STORE_MAX_API_PATH_LINES = 0
 
 function readWorkspaceFile(relativePath: string): string {
-  return readFileSync(path.join(root, relativePath), 'utf8')
+  return readFileSync(path.join(root, relativePath), 'utf8').replace(/\r\n/g, '\n')
 }
 
 const store = readWorkspaceFile('src/store/nexusStore.ts')
