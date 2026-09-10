@@ -75,9 +75,9 @@ function killPackagedElectronProcesses() {
   if (process.platform !== 'win32') return
   const script = [
     '$ErrorActionPreference = "SilentlyContinue"',
-    `$target = ${powerShellSingleQuote(electronRuntimePath)}`,
+    `$targets = @(${powerShellSingleQuote(electronRuntimePath)}, ${powerShellSingleQuote(launcherPath)})`,
     'Get-CimInstance Win32_Process |',
-    '  Where-Object { $_.ExecutablePath -eq $target } |',
+    '  Where-Object { $targets -contains $_.ExecutablePath } |',
     '  ForEach-Object { taskkill.exe /pid $_.ProcessId /t /f | Out-Null }',
   ].join('; ')
   spawnSync('powershell.exe', ['-NoProfile', '-NonInteractive', '-ExecutionPolicy', 'Bypass', '-Command', script], {
