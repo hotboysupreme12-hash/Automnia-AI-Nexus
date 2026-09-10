@@ -87,6 +87,13 @@ function killPackagedElectronProcesses() {
   })
 }
 
+function terminatePackagedLauncher(launcher: ReturnType<typeof spawn>) {
+  if (process.platform === 'win32') {
+    killPackagedElectronProcesses()
+  }
+  launcher.kill()
+}
+
 async function removeTempRootWithWindowsRetries(tempRootPath: string) {
   const attempts = process.platform === 'win32' ? 12 : 2
   let lastError: unknown
@@ -178,7 +185,7 @@ try {
 
   const launcherStatus = await new Promise<number | null>((resolve, reject) => {
     const timeout = setTimeout(() => {
-      launcher.kill()
+      terminatePackagedLauncher(launcher)
       reject(new Error(`packaged launcher did not exit within ${launcherExitTimeoutMs / 1000}s\n${launcherOutput}`))
     }, launcherExitTimeoutMs)
     launcher.once('error', reject)
