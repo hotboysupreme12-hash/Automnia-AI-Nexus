@@ -31,7 +31,7 @@ import { registerClawTalkConsoleRoutes } from './routes/clawTalkConsoleRoutes'
 import { registerDiagnosticsRoutes } from './routes/diagnosticsRoutes'
 import { registerAgentTurnRoutes } from './routes/agentTurnRoutes'
 import { registerToolApprovalRoutes, type ExecAccess } from './routes/toolApprovalRoutes'
-import { BASIC_RESTRICTED_TOOLS, DYNAMIC_TOOL_SEARCH, fullAccessToolPolicy, restrictedToolDefaults } from './services/agents/dynamicToolPolicy'
+import { DYNAMIC_TOOL_SEARCH, fullAccessToolPolicy, restrictedToolDefaults } from './services/agents/dynamicToolPolicy'
 import { removeGeneratedHostedToolAllowlist } from './services/agents/hostedToolPolicy'
 import { registerAgentConfigRoutes } from './routes/agentConfigRoutes'
 import { registerFilesystemRoutes } from './routes/filesystemRoutes'
@@ -18812,6 +18812,7 @@ const synchronizeBillingRouteWithGateway = () => {
 }
 
 registerToolApprovalRoutes(app, {
+  interruptAgent: (agentId) => gatewayChatService.interruptAgent(agentId),
   request: async (method, params) => (await gatewayChatService.ensureClient()).client.request(method, params),
   validAgent: async (id) => isValidAgentId(id) && !isRetiredAgentId(id) && Boolean((await readOpenclawConfig()).agents?.list?.some((entry) => entry.id === id)),
   resetAgentContext: (agentId) => resetAgentTurnSessionsForAgentContextChange(agentId, 'command permissions changed'),

@@ -756,17 +756,10 @@ export function createGatewayLifecycleService(options: GatewayLifecycleServiceOp
         return
       }
       recordGatewayStartupEvent('config', 'completed', 'OpenClaw config is valid')
-      recordGatewayStartupEvent('registry', 'started', 'Refreshing plugin registry before startup')
-      await options.refreshOpenClawPluginRegistry('gateway-startup').then((result) => {
-        if (result.code === 0) {
-          recordGatewayStartupEvent('registry', 'completed', 'Plugin registry refresh completed')
-        } else {
-          recordGatewayStartupEvent('registry', 'warning', `Plugin registry refresh exited ${result.code}`)
-        }
-      }).catch((error) => {
-        log.warn('[plugins] registry refresh before gateway startup failed:', error)
-        recordGatewayStartupEvent('registry', 'warning', `Plugin registry refresh failed: ${String(error)}`)
-      })
+      // OpenClaw reads its persisted cold registry during normal startup.
+      // --refresh is a repair operation: launching a second CLI here repeats
+      // runtime initialization and delays the Gateway (up to the CLI timeout).
+      // Manifest repairs above and plugin install/config flows own refreshes.
       recordGatewayStartupEvent('spawned', 'started', 'Spawning Gateway process')
       const { pid } = await spawnGateway()
       recordGatewayStartupEvent('spawned', 'completed', `Gateway process spawned with pid ${pid}`, { pid })

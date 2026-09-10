@@ -224,3 +224,34 @@ test('scans original Agency folder layout and plain markdown templates', async (
   assert.equal(spatial?.description, 'Native visionOS spatial computing and SwiftUI volumetric interfaces.')
   assert(spatial?.documents.find((entry) => entry.file === 'AGENCY_SOURCE.md')?.content.includes('# visionOS Spatial Engineer'))
 })
+
+for (const cache of ['sqlite', 'state', 'disk'] as const) {
+  test(`normalizes legacy template references from ${cache} without source files`, async () => {
+    const catalog = await scanAgencyAgentTemplateCatalog(await makeAgencyTemplateFixture())
+    const legacyUrl = 'https://github.com/msitarzewski/agency-agents/blob/main/engineering/frontend-developer.md'
+    catalog.source.repository = 'msitarzewski/agency-agents'
+    catalog.templates[0].sourceUrl = legacyUrl
+    catalog.templates[0].sourceMarkdown = `Source: ${legacyUrl}`
+    catalog.templates[0].documents = [{
+      file: 'AGENTS.md',
+      content: `Source: msitarzewski/agency-agents/engineering/frontend-developer.md\n${legacyUrl}\nKeep this custom instruction.`,
+    }]
+    const root = await mkdtemp(path.join(os.tmpdir(), 'agency-legacy-cache-'))
+    const stateFilePath = path.join(root, 'catalog.json')
+    if (cache === 'disk') await writeFile(stateFilePath, JSON.stringify(catalog))
+    const result = await loadAgencyAgentTemplateCatalog({
+      sourceRoot: path.join(root, 'missing-source'),
+      stateKey: 'agents:agency-templates',
+      stateFilePath,
+      readTemplateCatalog: () => cache === 'sqlite' ? catalog : null,
+      readState: () => (cache === 'state' ? catalog : null) as never,
+      writeState: () => true,
+    })
+    assert.equal(result.source.repository, 'Automnia Agent Templates')
+    assert.equal(result.templates[0].sourceUrl,
+      'https://github.com/hotboysupreme12-hash/Automnia-AI-Nexus/blob/main/templates/automnia-agents/engineering/frontend-developer.md')
+    assert.doesNotMatch(JSON.stringify(result), /msitarzewski/i)
+    assert.match(result.templates[0].documents[0].content, /Keep this custom instruction/)
+    assert.match(result.templates[0].documents[0].content, /Source: templates\/automnia-agents\/engineering\/frontend-developer.md/)
+  })
+}

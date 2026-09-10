@@ -31,8 +31,10 @@ export function ToolApprovals() {
         const access = await apiRequest(`/api/party/agent/${encodeURIComponent(current.request.agentId)}/tool-access`, { method: 'POST', body: { mode: 'full' } })
         if (!access.ok) throw new Error(apiErrorMessage(access.error))
       }
-      const result = await apiRequest(`/api/tool-approvals/${encodeURIComponent(current.id)}/resolve`, { method: 'POST', body: { decision } })
-      if (!result.ok) throw new Error(apiErrorMessage(result.error))
+      if (!full) {
+        const result = await apiRequest(`/api/tool-approvals/${encodeURIComponent(current.id)}/resolve`, { method: 'POST', body: { decision } })
+        if (!result.ok) throw new Error(apiErrorMessage(result.error))
+      }
       setPending((items) => items.filter((item) => item.id !== current.id))
     } catch (e) { setError(e instanceof Error ? e.message : 'Try request again.') }
     finally { setBusy(false) }
@@ -56,6 +58,7 @@ export function ToolApprovals() {
         {current.request.agentId && <button className="col-span-2 rounded-lg border border-cyan-300/30 bg-cyan-300/[0.08] px-3 py-2.5 text-xs font-semibold text-cyan-200 transition hover:bg-cyan-300/[0.14] disabled:opacity-50" disabled={busy} onClick={() => void resolve('allow-once', true)}>Grant Full access for this agent</button>}
         <button className="col-span-2 rounded-lg border border-white/[0.07] px-3 py-2 text-xs text-slate-500 transition hover:border-red-300/30 hover:text-red-200 disabled:opacity-50" disabled={busy} onClick={() => void resolve('deny')}>Deny</button>
       </div>
+      {current.request.agentId && <p className="text-xs leading-5 text-slate-400">Changing to Full access stops this turn safely. Send your request again to continue with the new permissions.</p>}
       {error && <p role="alert" className="mt-3 text-sm text-red-300">{error}</p>}
     </div>
   </section>

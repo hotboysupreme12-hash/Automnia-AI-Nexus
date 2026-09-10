@@ -59,7 +59,7 @@ type FrontmatterParseResult = {
 }
 
 const AGENCY_REPOSITORY = 'Automnia Agent Templates'
-const AGENCY_REPOSITORY_URL = 'https://github.com/hotboysupreme12-hash/Automnia-AI-Nexus/tree/main/templates/automnia-agents'
+const AGENCY_REPOSITORY_URL = 'https://github.com/hotboysupreme12-hash/Automnia-AI-Nexus/blob/main/templates/automnia-agents'
 
 const FALLBACK_DIVISION_COLORS: Record<string, string> = {
   academic: '#8B5CF6',
@@ -115,7 +115,10 @@ function cleanString(value: unknown, fallback = '') {
 }
 
 function sanitizeAutomniaTemplateText(value: string) {
-  return value.replace(/msitarzewski/gi, 'Automnia')
+  return value
+    .replace(/https:\/\/github\.com\/msitarzewski\/agency-agents\/blob\/main\//gi, `${AGENCY_REPOSITORY_URL}/`)
+    .replace(/msitarzewski\/agency-agents/gi, 'templates/automnia-agents')
+    .replace(/msitarzewski/gi, 'Automnia')
 }
 
 function stripQuotes(value: string) {
@@ -419,7 +422,7 @@ function buildDocuments(input: {
 }) {
   const split = splitAgencyBody(input.body)
   const identityTitle = input.emoji ? `${input.emoji} ${input.name}` : input.name
-  const sourceLine = `Source: ${AGENCY_REPOSITORY}/${input.relativePath}`
+  const sourceLine = `Source: templates/automnia-agents/${input.relativePath}`
   const capabilityLines = Object.entries(input.defaults.capabilities)
     .map(([capability, enabled]) => `- ${capability}: ${enabled ? 'enabled' : 'disabled'}`)
   return [
@@ -446,7 +449,7 @@ function buildDocuments(input: {
         `# TOOLS.md - ${input.name}`,
         '',
         `Division: ${input.divisionLabel}`,
-        `Template source: ${AGENCY_REPOSITORY}/${input.relativePath}`,
+        `Template source: templates/automnia-agents/${input.relativePath}`,
         '',
         '## Automnia Runtime Tool Access',
         ...input.tools.map((tool) => `- ${tool}`),
@@ -474,12 +477,12 @@ function buildDocuments(input: {
         '## Startup Contract',
         '1. Read IDENTITY.md and SOUL.md first.',
         '2. Use AGENTS.md for the operating workflow and deliverables.',
-        `3. Treat ${SOURCE_DOC_FILE} as the original upstream template reference.`,
+        `3. Treat ${SOURCE_DOC_FILE} as the copied Automnia template reference.`,
         '4. Use TOOLS.md for allowed tools and service expectations.',
         '5. Keep MEMORY.md updated with durable discoveries.',
         '',
         `Template: ${input.name}`,
-        `Source: ${AGENCY_REPOSITORY}/${input.relativePath}`,
+        `Source: templates/automnia-agents/${input.relativePath}`,
         '',
       ].join('\n')),
     },
@@ -504,7 +507,7 @@ function buildDocuments(input: {
       content: sanitizeAutomniaTemplateText([
         `# ${SOURCE_DOC_FILE} - ${input.name}`,
         '',
-        `Original source: ${AGENCY_REPOSITORY}/${input.relativePath}`,
+        `Template source: templates/automnia-agents/${input.relativePath}`,
         '',
         input.sourceMarkdown.trim(),
         '',
@@ -514,7 +517,7 @@ function buildDocuments(input: {
 }
 
 function sourceUrlFor(relativePath: string) {
-  return `${AGENCY_REPOSITORY_URL}/blob/main/${relativePath.split('/').map(encodeURIComponent).join('/')}`
+  return `${AGENCY_REPOSITORY_URL}/${relativePath.split('/').map(encodeURIComponent).join('/')}`
 }
 
 async function readGitHead(sourceRoot: string) {
@@ -618,7 +621,20 @@ function normalizeTemplateCatalog(value: unknown): AgencyAgentTemplateCatalog | 
   if (!value || typeof value !== 'object' || Array.isArray(value)) return null
   const catalog = value as Partial<AgencyAgentTemplateCatalog>
   if (catalog.schemaVersion !== 1 || !Array.isArray(catalog.templates)) return null
-  return catalog as AgencyAgentTemplateCatalog
+  const normalized = catalog as AgencyAgentTemplateCatalog
+  return {
+    ...normalized,
+    source: { ...normalized.source, repository: AGENCY_REPOSITORY },
+    templates: normalized.templates.map((template) => ({
+      ...template,
+      sourceUrl: sourceUrlFor(template.relativePath),
+      sourceMarkdown: sanitizeAutomniaTemplateText(template.sourceMarkdown),
+      documents: template.documents.map((document) => ({
+        ...document,
+        content: sanitizeAutomniaTemplateText(document.content),
+      })),
+    })),
+  }
 }
 
 function catalogMatchesSource(catalog: AgencyAgentTemplateCatalog | null, sourceAvailable: boolean, sourceCommit: string | null) {

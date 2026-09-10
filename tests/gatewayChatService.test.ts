@@ -47,6 +47,8 @@ function createHarness(options: {
   attachments?: Record<string, unknown>[]
   now?: () => number
   deltaText?: string
+  execStartupTimeoutMs?: number
+  pendingApprovals?: unknown[]
 } = {}) {
   const requests: RequestLog[] = []
   const finishes: FinishLog[] = []
@@ -98,6 +100,7 @@ function createHarness(options: {
     readyTimeoutMs: 100,
     requestTimeoutMs: 100,
     finalExtraTimeoutMs: 25,
+    execStartupTimeoutMs: options.execStartupTimeoutMs,
     clientFactory: (createdOptions) => {
       clientOptions = createdOptions
       const client: GatewayClientLike = {
@@ -144,6 +147,7 @@ function createHarness(options: {
             return options.messageGet ?? { ok: true, message: { text: 'Full final' } }
           }
           if (method === 'chat.abort') return { ok: true }
+          if (method === 'exec.approval.list') return options.pendingApprovals ?? []
           throw new Error(`unexpected method ${method}`)
         },
       }
@@ -169,6 +173,40 @@ function createHarness(options: {
       return healthChecks
     },
   }
+}
+
+test('orphaned exec startup is stopped without replaying the turn', async () => {
+  const harness = createHarness({ suppressFinal: true, execStartupTimeoutMs: 15 })
+  const run = harness.service.runTurn({ agentId: 'brandon', message: 'list files', sessionId: 'stalled', thinking: 'off', timeoutMs: 1000, cwd: process.cwd() })
+  const rejected = assert.rejects(run, /Command startup timed out/)
+  await waitUntil(() => harness.requests.some((r) => r.method === 'chat.send'))
+  const send = harness.requests.find((r) => r.method === 'chat.send')!.params as { idempotencyKey: string }
+  harness.clientOptions?.onEvent?.({ event: 'agent', payload: { runId: send.idempotencyKey, stream: 'tool', data: { phase: 'start', name: 'exec', toolCallId: 'stuck' } } })
+  await rejected
+  assert.equal(harness.requests.filter((r) => r.method === 'chat.send').length, 1)
+  assert.equal(harness.requests.filter((r) => r.method === 'chat.abort').length, 1)
+  assert.equal(harness.finishes.at(-1)?.status, 'timeout')
+  harness.service.stopClient('test complete')
+})
+
+for (const kind of ['approval', 'process-progress'] as const) {
+  test(`exec startup guard preserves ${kind}`, async () => {
+    const harness = createHarness({ suppressFinal: true, execStartupTimeoutMs: 15,
+      pendingApprovals: kind === 'approval' ? [{ request: { agentId: 'brandon' } }] : [] })
+    const run = harness.service.runTurn({ agentId: 'brandon', message: 'list files', sessionId: kind, thinking: 'off', timeoutMs: 1000, cwd: process.cwd() })
+    const rejected = assert.rejects(run, /Permissions changed/)
+    await waitUntil(() => harness.requests.some((r) => r.method === 'chat.send'))
+    const send = harness.requests.find((r) => r.method === 'chat.send')!.params as { idempotencyKey: string }
+    const emit = (phase: string) => harness.clientOptions?.onEvent?.({ event: 'agent', payload: { runId: send.idempotencyKey, stream: 'tool', data: { phase, name: 'exec', toolCallId: 'active' } } })
+    emit('start')
+    if (kind === 'process-progress') emit('update')
+    await new Promise((resolve) => setTimeout(resolve, 40))
+    assert.equal(harness.requests.some((r) => r.method === 'chat.abort'), false)
+    assert.equal(await harness.service.interruptAgent('someone-else'), 0)
+    assert.equal(await harness.service.interruptAgent('brandon'), 1)
+    await rejected
+    harness.service.stopClient('test complete')
+  })
 }
 
 test('runTurn sends Gateway chat payloads and uses a visible terminal reply without a history round trip', async () => {

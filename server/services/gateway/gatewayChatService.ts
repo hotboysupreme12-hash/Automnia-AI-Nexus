@@ -117,6 +117,7 @@ type GatewayChatRunWaiter = {
   sessionKey: string
   startedAt: number
   toolEvents: unknown[]
+  execStartupTimers: Map<string, NodeJS.Timeout>
   streamObserverId?: string
   streamedText: string
   resolve: (payload: Record<string, unknown>) => void
@@ -172,6 +173,7 @@ export type GatewayChatServiceOptions<RunRecord> = {
   readyTimeoutMs?: number
   requestTimeoutMs?: number
   finalExtraTimeoutMs?: number
+  execStartupTimeoutMs?: number
   historyLimit?: number
   historyMaxChars?: number
   messageGetMaxChars?: number
@@ -1037,6 +1039,42 @@ export function createGatewayChatService<RunRecord>(options: GatewayChatServiceO
     const waiter = gatewayChatRunWaiters.get(runId)
     if (!waiter) return
     if (eventName === 'session.tool' || eventName === 'agent') {
+      const data = isLooseRecord(payload.data) ? payload.data : payload
+      const toolId = typeof data.toolCallId === 'string' ? data.toolCallId : ''
+      const toolName = data.name ?? data.toolName
+      if (toolId && toolName === 'exec') {
+        const prior = waiter.execStartupTimers.get(toolId)
+        if (prior) clearTimeout(prior)
+        waiter.execStartupTimers.delete(toolId)
+        if (data.phase === 'start' || data.state === 'started') {
+          const check = async () => {
+            if (gatewayChatRunWaiters.get(runId) !== waiter || !waiter.execStartupTimers.has(toolId)) return
+            try {
+              const client = gatewayClientState?.ready ? gatewayClientState.client : null
+              if (!client) throw new Error('Gateway unavailable')
+              const pending = await client.request('exec.approval.list', {}, { timeoutMs: 5_000 })
+              if (!Array.isArray(pending)) throw new Error('Approval state unavailable')
+              if (gatewayChatRunWaiters.get(runId) !== waiter || !waiter.execStartupTimers.has(toolId)) return
+              const waitingForApproval = pending.some((item) => isLooseRecord(item) && isLooseRecord(item.request)
+                && (item.request.sessionKey === waiter.sessionKey || item.request.agentId === waiter.agentId))
+              if (!waitingForApproval) {
+                const reason = 'Command startup timed out without process progress or a pending approval. The run was stopped; review its last action before retrying. No command was automatically replayed.'
+                requestGatewayChatAbort(client, waiter.sessionKey, runId, reason)
+                options.pushGatewayLog('stderr', reason)
+                rejectGatewayChatWaiter(runId, new Error(reason))
+                return
+              }
+            } catch {
+              // An unavailable approval service is not evidence of a stuck
+              // command. Retry the check without granting or replaying it.
+            }
+            if (gatewayChatRunWaiters.get(runId) === waiter && waiter.execStartupTimers.has(toolId)) {
+              waiter.execStartupTimers.set(toolId, setTimeout(() => void check(), 30_000))
+            }
+          }
+          waiter.execStartupTimers.set(toolId, setTimeout(() => void check(), options.execStartupTimeoutMs ?? 180_000))
+        }
+      }
       waiter.toolEvents.push(payload)
       if (waiter.toolEvents.length > MAX_GATEWAY_CHAT_TOOL_EVENTS) {
         waiter.toolEvents.splice(0, waiter.toolEvents.length - MAX_GATEWAY_CHAT_TOOL_EVENTS)
@@ -1385,6 +1423,7 @@ export function createGatewayChatService<RunRecord>(options: GatewayChatServiceO
         sessionKey: params.sessionKey,
         startedAt: nowMs(),
         toolEvents: [],
+        execStartupTimers: new Map(),
         streamObserverId: params.streamObserverId,
         streamedText: '',
         timer,
@@ -1404,6 +1443,8 @@ export function createGatewayChatService<RunRecord>(options: GatewayChatServiceO
       }
       const cleanup = () => {
         clearTimeout(timer)
+        for (const startupTimer of waiter.execStartupTimers.values()) clearTimeout(startupTimer)
+        waiter.execStartupTimers.clear()
         params.signal?.removeEventListener('abort', onAbort)
       }
       params.signal?.addEventListener('abort', onAbort, { once: true })
@@ -1605,6 +1646,16 @@ export function createGatewayChatService<RunRecord>(options: GatewayChatServiceO
   }
 
   return {
+    async interruptAgent(agentId: string) {
+      const waiters = [...gatewayChatRunWaiters.values()].filter((waiter) => waiter.agentId === agentId)
+      if (!waiters.length) return 0
+      const state = await ensureClient()
+      for (const waiter of waiters) {
+        await state.client.request('chat.abort', { sessionKey: waiter.sessionKey, runId: waiter.runId }, { timeoutMs: 10_000 })
+        rejectGatewayChatWaiter(waiter.runId, gatewayChatAbortError('Permissions changed. This turn was stopped before applying the new policy. Send your request again to continue; commands were not automatically replayed.'))
+      }
+      return waiters.length
+    },
     abortRun,
     abortStaleWaiters,
     ensureClient,

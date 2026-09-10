@@ -340,12 +340,22 @@ test('ensureGatewayRunning passes startup repair results into defaults without d
 
   assert.equal(harness.clawTalkRepairCalls, 1)
   assert.equal(harness.telegramRepairCalls, 1)
-  assert.deepEqual(harness.registryRefreshReasons, ['clawtalk-startup-repair', 'gateway-startup'])
+  assert.deepEqual(harness.registryRefreshReasons, ['clawtalk-startup-repair'])
   assert.deepEqual(harness.startupRepairSummaries[0], {
     repairedClawTalkManifests: ['clawtalk-root'],
     repairedTelegramRuntimes: ['telegram-runtime'],
     clawTalkRegistryRefreshed: true,
   })
+})
+
+test('normal startup spawns without rebuilding the persisted plugin registry', async () => {
+  const harness = createHarness({ healthSequence: [false, false, true] })
+
+  await harness.service.ensureGatewayRunning()
+  harness.service.stopGatewayHealthMonitor()
+
+  assert.equal(harness.spawnCalls, 1)
+  assert.deepEqual(harness.registryRefreshReasons, [])
 })
 
 test('ensureGatewayRunning does not spawn over a stale listener that remains busy after release fails', async () => {

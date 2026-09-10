@@ -10,6 +10,7 @@ export function execAccessForMode(mode: 'ask' | 'full'): ExecAccess {
 export function registerToolApprovalRoutes(app: Express, options: {
   request: (method: string, params: Record<string, unknown>) => Promise<unknown>
   configure: (agentId: string, access: ExecAccess) => Promise<void>
+  interruptAgent: (agentId: string) => Promise<unknown>
   resetAgentContext: (agentId: string) => unknown | Promise<unknown>
   validAgent: (agentId: string) => boolean | Promise<boolean>
 }) {
@@ -27,11 +28,17 @@ export function registerToolApprovalRoutes(app: Express, options: {
     const pending = await options.request('exec.approval.list', {})
     const snapshot = await options.request('exec.approvals.get', {}) as { file?: { agents?: Record<string, { security?: string; ask?: string }> } }
     const agents = snapshot.file?.agents || {}
-    const visible = (Array.isArray(pending) ? pending : []).filter((item) => {
+    const visible = []
+    for (const item of (Array.isArray(pending) ? pending : [])) {
       const agentId = (item as { request?: { agentId?: unknown } })?.request?.agentId
       const policy = typeof agentId === 'string' ? agents[agentId] : undefined
-      return !(policy?.security === 'full' && policy.ask === 'off')
-    })
+      if (policy?.security === 'full' && policy.ask === 'off') {
+        // An old turn can retain Ask policy after Full access is saved. Do
+        // not hide a live waiter: cancel its stale authorization explicitly.
+        // Never replay the command or bypass the runtime's policy snapshot.
+        await options.request('exec.approval.resolve', { id: item.id, decision: 'deny' })
+      } else visible.push(item)
+    }
     return apiSuccess(res, { pending: visible })
   })
   app.post('/api/tool-approvals/:id/resolve', async (req, res) => {
@@ -45,6 +52,10 @@ export function registerToolApprovalRoutes(app: Express, options: {
     const agentId = String(req.params.agentId)
     if (!parsed.success || !await options.validAgent(agentId)) return apiFailure(res, 400, 'invalid_payload', 'Choose an agent and access mode.')
     const access = execAccessForMode(parsed.data.mode)
+    // Stop turns built with the old policy BEFORE mutating the approval
+    // snapshot. Otherwise an approved command fails revalidation and its
+    // retry still carries stale execution/tool definitions.
+    const interrupted = await options.interruptAgent(agentId)
     // Keep the host approval policy and agent policy in agreement. The hash
     // prevents overwriting a concurrent approval/allowlist update.
     const snapshot = await options.request('exec.approvals.get', {}) as {
@@ -61,6 +72,6 @@ export function registerToolApprovalRoutes(app: Express, options: {
     // cached session after changing access so the very next turn observes the
     // new command policy instead of inheriting the previous tool set.
     const contextReset = await options.resetAgentContext(agentId)
-    return apiSuccess(res, { mode: parsed.data.mode, contextReset })
+    return apiSuccess(res, { mode: parsed.data.mode, contextReset, interrupted })
   })
 }
