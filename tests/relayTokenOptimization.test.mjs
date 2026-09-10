@@ -1,6 +1,14 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
 
+test('tool budget retains authorized execution tools without inventing missing tools', () => {
+  const tools = ['search_one', 'search_two', 'exec', 'process', 'read', 'write', 'edit'].map((name) => ({ type: 'function', function: { name, parameters: { type: 'object' } } }))
+  const result = compactOpenAiTools(tools, { maxTools: 1 })
+  const names = result.tools.map((tool) => tool.function.name)
+  for (const name of ['exec', 'process', 'read', 'write', 'edit']) assert.ok(names.includes(name))
+  assert.equal(names.includes('browser'), false)
+})
+
 import {
   automniaRelayTokenOptimization,
   compactOpenAiMessages,

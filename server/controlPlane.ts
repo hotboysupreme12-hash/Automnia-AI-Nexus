@@ -30,6 +30,7 @@ import { ConsoleRunSnapshots } from './services/agents/consoleRunSnapshots'
 import { registerClawTalkConsoleRoutes } from './routes/clawTalkConsoleRoutes'
 import { registerDiagnosticsRoutes } from './routes/diagnosticsRoutes'
 import { registerAgentTurnRoutes } from './routes/agentTurnRoutes'
+import { registerToolApprovalRoutes, type ExecAccess } from './routes/toolApprovalRoutes'
 import { registerAgentConfigRoutes } from './routes/agentConfigRoutes'
 import { registerFilesystemRoutes } from './routes/filesystemRoutes'
 import { registerMissionRoutes } from './routes/missionRoutes'
@@ -1301,6 +1302,7 @@ type ProviderToolPolicy = {
 }
 
 type AgentToolsConfig = {
+  exec?: ExecAccess
   profile?: string
   alsoAllow?: string[]
   allow?: string[]
@@ -4950,6 +4952,7 @@ function normalizeAgentToolsConfig(input?: AgentToolsConfig): AgentToolsConfig {
   )
 
   return {
+    ...(input?.exec ? { exec: input.exec } : {}),
     ...(normalizeToolProfile(input?.profile) ? { profile: normalizeToolProfile(input?.profile) } : {}),
     ...(normalizeStringList(input?.alsoAllow) ? { alsoAllow: normalizeStringList(input?.alsoAllow) } : {}),
     ...(normalizeStringList(input?.allow) ? { allow: normalizeStringList(input?.allow) } : {}),
@@ -4969,8 +4972,8 @@ function normalizeAgentToolsConfig(input?: AgentToolsConfig): AgentToolsConfig {
   }
 }
 
-function unrestrictedAgentToolsConfig(): AgentToolsConfig {
-  return normalizeAgentToolsConfig({ profile: 'full' })
+function unrestrictedAgentToolsConfig(exec?: ExecAccess): AgentToolsConfig {
+  return normalizeAgentToolsConfig({ profile: 'full', exec: exec || { host: 'gateway', security: 'allowlist', ask: 'on-miss' } })
 }
 
 function applyExecutionWorkspaceToLocalConfig(local: AgentLocalConfig, workspacePath: string) {
@@ -9458,7 +9461,7 @@ function ensureOpenclawRuntimeDefaults(config: OpenClawConfigFile) {
 
   for (const entry of config.agents.list || []) {
     entry.fastModeDefault ??= openClawFastModeDefault(DEFAULT_OPENCLAW_FAST_MODE)
-    if (entry.sandbox?.mode === 'off') entry.tools = unrestrictedAgentToolsConfig()
+    if (entry.sandbox?.mode === 'off') entry.tools = unrestrictedAgentToolsConfig(entry.tools?.exec)
     applyNoBootstrapAgentConfig(entry)
     applyTokenEfficientContextLimits(entry)
   }
@@ -14896,7 +14899,7 @@ function applyLocalConfigToGlobal(
     workspaceRoot: normalizedExecutionWorkspace,
   })
   target.tools = local.sandbox.mode === 'off'
-    ? unrestrictedAgentToolsConfig()
+    ? unrestrictedAgentToolsConfig(local.tools.exec)
     : normalizeAgentToolsConfig(local.tools)
   applyNoBootstrapAgentConfig(target)
 }
@@ -14935,7 +14938,7 @@ async function ensureAgentSandboxCompatibleWithHost(agentId: string) {
   })
 
   if (local.sandbox.mode === 'off') {
-    const unrestrictedTools = unrestrictedAgentToolsConfig()
+    const unrestrictedTools = unrestrictedAgentToolsConfig(local.tools.exec)
     if (JSON.stringify(local.tools) !== JSON.stringify(unrestrictedTools)) {
       local.tools = unrestrictedTools
       local.sandbox = normalizeSandboxConfig({
@@ -18927,6 +18930,24 @@ const synchronizeBillingRouteWithGateway = () => {
   }
   return billingRouteSyncLoop || Promise.resolve()
 }
+
+registerToolApprovalRoutes(app, {
+  request: async (method, params) => (await gatewayChatService.ensureClient()).client.request(method, params),
+  validAgent: async (id) => isValidAgentId(id) && !isRetiredAgentId(id) && Boolean((await readOpenclawConfig()).agents?.list?.some((entry) => entry.id === id)),
+  configure: async (agentId, exec) => {
+    const config = await readOpenclawConfig()
+    const entry = config.agents?.list?.find((agent) => agent.id === agentId)
+    if (!entry) throw new Error('Agent not found.')
+    const local = await ensureAgentLocalConfig({ agentId, entry })
+    local.sandbox = normalizeSandboxConfig({ ...local.sandbox, mode: 'off', scope: 'agent', workspaceAccess: 'rw' })
+    local.tools = unrestrictedAgentToolsConfig(exec)
+    local.agent.updatedAt = new Date().toISOString()
+    await writeTextFileWithLockRetry(agentLocalConfigPath(agentId), `${JSON.stringify(local, null, 2)}\n`)
+    await rememberAgentLocalConfigCache(agentLocalConfigPath(agentId), local)
+    applyLocalConfigToGlobal(agentId, local, config)
+    await writeOpenclawConfig(config)
+  },
+})
 
 registerAgentTurnRoutes(app, {
   clearConsoleRecovery(agentId) {

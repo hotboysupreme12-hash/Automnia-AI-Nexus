@@ -52,6 +52,7 @@
   "GET /api/skills/library",
   "GET /api/skills/library/:skillId",
   "GET /api/skills/list",
+  "GET /api/tool-approvals",
   "PATCH /api/auth/providers/:provider/oauth",
   "POST /api/auth/account/google/start",
   "POST /api/auth/account/password/change",
@@ -90,6 +91,7 @@
   "POST /api/party/agent-to-agent",
   "POST /api/party/agent/:agentId/config",
   "POST /api/party/agent/:agentId/model",
+  "POST /api/party/agent/:agentId/tool-access",
   "POST /api/party/avatar-path/:agentId",
   "POST /api/party/avatar-picker/start",
   "POST /api/party/avatar-upload/:agentId",
@@ -129,6 +131,7 @@
   "POST /api/skills/learn",
   "POST /api/speech/transcribe",
   "POST /api/team-sync/append",
+  "POST /api/tool-approvals/:id/resolve",
   "PUT /api/files/:file",
   "PUT /api/party/profile/:agentId",
   "PUT /api/party/resources/:agentId/:file"

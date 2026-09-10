@@ -41,7 +41,7 @@ type SandboxAccess = NonNullable<NonNullable<OpenClawAgent['sandbox']>['workspac
 interface AvailableModel { id:string; alias:string; provider:string; name:string }
 type AgentConfigPayload = {
   sandbox?:OpenClawAgent['sandbox']
-  tools?:{allow?:string[];deny?:string[]}
+  tools?:{allow?:string[];deny?:string[];exec?:{security?:string;ask?:string}}
   model?:OpenClawAgent['model']
   heartbeat?:HeartbeatConfig
   runtime?:{thinkingDefault?:ThinkingLevel;timeoutSeconds?:number;parallelPreferred?:boolean;fastModeDefault?:FastModeDefault}
@@ -436,6 +436,7 @@ export function AgentEditorModal() {
   const fileContentSeqRef = useRef(0)
 
   const [sbMode,setSbMode] = useState<SandboxMode>('all')
+  const [toolAccess,setToolAccess] = useState('')
   const [sbScope,setSbScope] = useState<SandboxScope>('agent')
   const [sbAccess,setSbAccess] = useState<SandboxAccess>('rw')
   const [tAllow,setTAllow] = useState(''); const [tDeny,setTDeny] = useState('')
@@ -830,6 +831,7 @@ export function AgentEditorModal() {
       setSbScope(sb.scope||'agent')
       setSbAccess(sb.workspaceAccess||'rw')
       const t=config.tools||{}
+      setToolAccess(t.exec?.security === 'full' && t.exec?.ask === 'off' ? 'full' : t.exec?.ask ? 'ask' : '')
       setTAllow((t.allow||[]).join(', '))
       setTDeny((t.deny||[]).join(', '))
     }
@@ -1870,6 +1872,22 @@ export function AgentEditorModal() {
                 {/* POLICY */}
                 {tab==='policy'&&(
                   <div data-editor-panel="policy" className="space-y-4">
+                    <label className="block text-sm">Command permissions
+                      <select value={toolAccess} disabled={ps} className="ml-3 rounded bg-slate-900 p-2" onChange={async (event) => {
+                        const mode = event.target.value
+                        if (!agent || !mode) return
+                        setPs(true)
+                        setPsStatus('Saving command permissions…')
+                        const result = await apiRequest(`/api/party/agent/${encodeURIComponent(agent.id)}/tool-access`, { method: 'POST', body: { mode }, timeoutMs: 20000 })
+                        if (result.ok) { agentConfigCache.delete(agent.id); await LdP(true) }
+                        setPsStatus(result.ok ? 'Command permissions saved.' : `Save failed: ${apiErrorMessage(result.error)}`)
+                        setPs(false)
+                      }}>
+                        <option value="" disabled>Use current configuration</option>
+                        <option value="ask">Ask for approval</option>
+                        <option value="full">Full access — no command prompts</option>
+                      </select>
+                    </label>
                     <h3 className="text-xs font-extrabold text-slate-200">Sandbox</h3>
                     <div className="grid gap-2.5 sm:grid-cols-3">
                       {[{l:'Mode',v:sbMode,s:(x:string)=>{if(isOption(x,SANDBOX_MODE_OPTIONS)){setSbMode(x);schedulePolicyAutosave({mode:x})}},o:SANDBOX_MODE_OPTIONS},

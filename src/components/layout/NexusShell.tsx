@@ -1,4 +1,5 @@
 import { BackgroundNotifications } from './BackgroundNotifications'
+import { ToolApprovals } from './ToolApprovals'
 import { FirstSuccessGuide } from './FirstSuccessGuide'
 import { NavigationTooltip } from './NavigationTooltip'
 import { lazy, memo, Suspense, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
@@ -655,6 +656,7 @@ export function NexusShell() {
   }
   return (
     <div className={`app-bg relative min-h-screen text-[var(--text-1)] ${tab === 'monitor' ? 'dy-monitor-focus' : ''} ${isEditorOpen ? 'dy-editor-open' : ''}`}>
+      <ToolApprovals />
       <div className="pointer-events-none fixed inset-0 grid-overlay" />
       <a className="dy-skip-link" href="#automnia-main">Skip to workspace</a>
 

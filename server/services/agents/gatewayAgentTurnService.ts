@@ -114,7 +114,10 @@ function isHostedBillingOrAuthFailure(result: GatewayAgentTurnResult, modelId: s
 }
 
 function isGatewayNoReplyResult(result: GatewayAgentTurnResult) {
-  return result.code !== 0 && /without a visible assistant transcript/i.test(`${result.stdout}\n${result.stderr}`)
+  if (result.code === 0 || !/without a visible assistant transcript/i.test(`${result.stdout}\n${result.stderr}`)) return false
+  // A missing answer does not prove commands were not executed. Replay only
+  // when the Gateway explicitly reports no tool activity.
+  try { return JSON.parse(result.stdout).toolEventCount === 0 } catch { return false }
 }
 
 export function createGatewayAgentTurnService(options: GatewayAgentTurnServiceOptions) {
@@ -283,9 +286,8 @@ export function createGatewayAgentTurnService(options: GatewayAgentTurnServiceOp
     // A Gateway run can complete successfully at the transport layer while
     // returning no visible assistant message (for example after a stale or
     // partially persisted conversation transcript). Recover once with a
-    // fresh session. This is safe for the specific no-reply result because
-    // Gateway has not produced a user-visible answer or a replayable result;
-    // accepted/uncertain dispatch errors still propagate without retrying.
+    // fresh session only when no tool activity occurred. Accepted/uncertain
+    // dispatch errors and runs with tool activity are never replayed here.
     if (isGatewayNoReplyResult(result) && !signal.aborted) {
       const staleSessionId = sessionId
       sessionId = randomUUID()

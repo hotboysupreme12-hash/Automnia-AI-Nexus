@@ -344,6 +344,9 @@ export function compactOpenAiTools(tools, overrides = {}) {
       .map((name) => String(name || '').trim())
       .filter(Boolean),
   );
+  // Preserve core execution tools that the host already authorized. Budget
+  // trimming must not silently turn an execution agent into a text-only one.
+  for (const name of ['exec', 'process', 'read', 'write', 'edit', 'browser']) requiredToolNames.add(name);
   const candidates = source.flatMap((tool) => {
     if (!tool || typeof tool !== 'object' || tool.type !== 'function' || !tool.function || typeof tool.function !== 'object') return [];
     const name = String(tool.function.name || '').trim();

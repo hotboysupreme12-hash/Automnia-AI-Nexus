@@ -46,6 +46,7 @@ function createHarness(options: {
   sendError?: Error
   attachments?: Record<string, unknown>[]
   now?: () => number
+  deltaText?: string
 } = {}) {
   const requests: RequestLog[] = []
   const finishes: FinishLog[] = []
@@ -119,7 +120,7 @@ function createHarness(options: {
                 })
                 createdOptions.onEvent?.({
                   event: 'chat',
-                  payload: { runId, state: 'delta', deltaText: 'Live ' },
+                  payload: { runId, state: 'delta', deltaText: options.deltaText ?? 'Live ' },
                 })
                 createdOptions.onEvent?.({
                   event: 'chat',
@@ -445,4 +446,26 @@ test('gatewayPayloadChatState normalizes Gateway terminal and delta states', () 
   assert.equal(gatewayPayloadChatState({ phase: 'failed' }), 'error')
   assert.equal(gatewayPayloadChatState({ canceled: true }), 'aborted')
   assert.equal(gatewayPayloadChatState({ status: 'working' }), '')
+})
+
+test('a streamed reply survives an empty terminal event and unavailable history without an observer', async () => {
+  const harness = createHarness({ history: { messages: [] }, messageGet: { message: {} } })
+  const result = await harness.service.runTurn({
+    agentId: 'agent-stream', message: 'hello', sessionId: 'stream-session', thinking: 'low', timeoutMs: 100, cwd: process.cwd(),
+  })
+  assert.equal(result.code, 0)
+  assert.equal(JSON.parse(result.stdout).text, 'Live')
+  assert.ok(harness.clientOptions?.caps.includes('exec-approvals'))
+  assert.ok(harness.clientOptions?.scopes.includes('operator.approvals'))
+})
+
+test('Gateway failure placeholders are failures, not successful replies or stale previous answers', async () => {
+  const placeholder = 'The agent run failed before producing a reply.'
+  const harness = createHarness({ deltaText: '', history: { messages: [
+    { role: 'assistant', text: 'Old response' }, { role: 'user', text: 'New task' }, { role: 'assistant', text: placeholder },
+  ] }, messageGet: { message: { text: placeholder } }, finalPayload: (runId) => ({ runId, state: 'final', message: { text: placeholder } }) })
+  const result = await harness.service.runTurn({ agentId: 'brandon', message: 'New task', sessionId: 'failed-session', thinking: 'low', timeoutMs: 100, cwd: process.cwd() })
+  assert.equal(result.code, 1)
+  assert.equal(JSON.parse(result.stdout).text, '')
+  assert.match(result.stderr, /without a visible assistant transcript/)
 })

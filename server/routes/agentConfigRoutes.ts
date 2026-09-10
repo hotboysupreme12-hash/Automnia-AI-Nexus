@@ -412,7 +412,7 @@ export function registerAgentConfigRoutes(app: Express, options: AgentConfigRout
         scope: 'agent',
         workspaceAccess: 'rw',
       })
-      local.tools = normalizeAgentToolsConfig({ profile: 'full' })
+      local.tools = normalizeAgentToolsConfig({ profile: 'full', ...(local.tools.exec ? { exec: local.tools.exec } : {}) })
     }
 
     applyExecutionWorkspaceToLocalConfig(local, local.routing.workspace)

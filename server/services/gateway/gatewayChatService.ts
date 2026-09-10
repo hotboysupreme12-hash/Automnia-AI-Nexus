@@ -493,7 +493,7 @@ function isGatewayHistoryPlaceholder(text: string) {
 
 function isVisibleGatewayAssistantText(text: string) {
   const clean = text.trim()
-  return Boolean(clean) && !/^(?:NO_REPLY|no_reply|HEARTBEAT_OK)$/u.test(clean)
+  return Boolean(clean) && !/^(?:NO_REPLY|no_reply|HEARTBEAT_OK|The agent run failed before producing a reply\.)$/u.test(clean)
 }
 
 function isGatewayProtocolStatusText(text: string) {
@@ -915,9 +915,9 @@ export function createGatewayChatService<RunRecord>(options: GatewayChatServiceO
   }
 
   function emitGatewayChatDelta(waiter: GatewayChatRunWaiter, payload: Record<string, unknown>) {
+    const delta = gatewayChatDeltaFromPayload(waiter, payload)
     const observer = streamObserver(waiter.streamObserverId)
     if (!observer) return
-    const delta = gatewayChatDeltaFromPayload(waiter, payload)
     if (!delta.text) return
     observer.textStreamed = true
     observer.emit('delta', {
@@ -1051,7 +1051,7 @@ export function createGatewayChatService<RunRecord>(options: GatewayChatServiceO
       return
     }
     if (!state) return
-    if (state === 'final') emitGatewayChatDelta(waiter, payload)
+    if (state === 'final' && isVisibleGatewayAssistantText(gatewayChatMessageText(payload.message)) && !isGatewayProtocolStatusText(gatewayChatMessageText(payload.message))) emitGatewayChatDelta(waiter, payload)
     gatewayChatRunWaiters.delete(runId)
     clearTimeout(waiter.timer)
     waiter.resolve(payload)
@@ -1175,8 +1175,8 @@ export function createGatewayChatService<RunRecord>(options: GatewayChatServiceO
       platform: process.platform,
       mode: 'backend',
       role: 'operator',
-      scopes: ['operator.admin', 'operator.read', 'operator.write', 'operator.talk.secrets'],
-      caps: ['tool-events'],
+      scopes: ['operator.admin', 'operator.read', 'operator.write', 'operator.approvals', 'operator.talk.secrets'],
+      caps: ['tool-events', 'exec-approvals'],
       deviceIdentity: null,
       instanceId: randomUUID(),
       minProtocol: 4,
@@ -1304,6 +1304,7 @@ export function createGatewayChatService<RunRecord>(options: GatewayChatServiceO
     for (const message of [...history.messages].reverse()) {
       if (!isLooseRecord(message)) continue
       const role = typeof message.role === 'string' ? message.role.trim().toLowerCase() : ''
+      if (role === 'user') break
       if (role !== 'assistant') continue
       const text = gatewayChatMessageText(message)
       if (isVisibleGatewayAssistantText(text)) {
@@ -1356,7 +1357,7 @@ export function createGatewayChatService<RunRecord>(options: GatewayChatServiceO
     timeoutMs: number
     streamObserverId?: string
     signal?: AbortSignal
-  }): Promise<{ payload: Record<string, unknown>; toolEvents: unknown[] }> {
+  }): Promise<{ payload: Record<string, unknown>; toolEvents: unknown[]; streamedText: string }> {
     if (params.signal?.aborted) {
       return Promise.reject(Object.assign(new Error('gateway chat run aborted'), { name: 'AbortError' }))
     }
@@ -1380,7 +1381,7 @@ export function createGatewayChatService<RunRecord>(options: GatewayChatServiceO
         timer,
         resolve: (payload) => {
           cleanup()
-          resolve({ payload, toolEvents: waiter.toolEvents })
+          resolve({ payload, toolEvents: waiter.toolEvents, streamedText: waiter.streamedText })
         },
         reject: (error) => {
           cleanup()
@@ -1529,11 +1530,14 @@ export function createGatewayChatService<RunRecord>(options: GatewayChatServiceO
             signal: params.signal,
           })
         : ''
-      const historyText = fullHistoryText || historyReply.text
+      const candidateHistoryText = fullHistoryText || historyReply.text
+      const historyText = isVisibleGatewayAssistantText(candidateHistoryText) ? candidateHistoryText : ''
       const finalTextLooksLikeStatus = !historyText && isGatewayProtocolStatusText(finalText)
-      const finalReplyText = finalTextLooksLikeStatus ? '' : finalText
+      const finalReplyText = finalTextLooksLikeStatus || !isVisibleGatewayAssistantText(finalText) ? '' : finalText
       const errorMessage = typeof finalPayload.errorMessage === 'string' ? options.redactSensitiveText(finalPayload.errorMessage) : ''
-      const reply = options.redactSensitiveText(options.sanitizeUserVisibleRuntimeText(historyText || finalReplyText || (finalState === 'error' ? errorMessage : '')))
+      const streamedReply = finalState === 'final' && isVisibleGatewayAssistantText(final.streamedText) && !isGatewayProtocolStatusText(final.streamedText)
+        ? final.streamedText : ''
+      const reply = options.redactSensitiveText(options.sanitizeUserVisibleRuntimeText(historyText || finalReplyText || streamedReply || (finalState === 'error' ? errorMessage : '')))
       const completedWithoutAssistant = finalState === 'final' && !reply
       const ok = finalState !== 'error' && finalState !== 'aborted' && !completedWithoutAssistant
       const stderr = ok
