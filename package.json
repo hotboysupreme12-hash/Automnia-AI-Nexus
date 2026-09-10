@@ -203,6 +203,10 @@
         "to": "openclaw"
       },
       {
+        "from": "templates/automnia-agents",
+        "to": "automnia-agents"
+      },
+      {
         "from": "vendor/agency-agents",
         "to": "agency-agents"
       },

@@ -25,20 +25,20 @@ Object.defineProperty(globalThis, 'window', {
 })
 const store = await import('../src/api/authTokenStore')
 
-test('auth token storage migrates legacy persistence into session scope', () => {
+test('auth token storage persists sessions across desktop launches', () => {
   store.clearAuthToken()
-  localStorage.setItem('control-center-token', 'legacy-session')
+  sessionStorage.setItem('control-center-token', 'legacy-session')
   assert.equal(store.readAuthToken(), 'legacy-session')
-  assert.equal(localStorage.getItem('control-center-token'), null)
-  assert.equal(sessionStorage.getItem('control-center-token'), 'legacy-session')
+  assert.equal(localStorage.getItem('control-center-token'), 'legacy-session')
 
   store.writeAuthToken('  new-session  ')
   assert.equal(store.readAuthToken(), 'new-session')
+  assert.equal(localStorage.getItem('control-center-token'), 'new-session')
   assert.equal(sessionStorage.getItem('control-center-token'), 'new-session')
-  assert.equal(localStorage.getItem('control-center-token'), null)
 
   store.clearAuthToken()
   assert.equal(store.readAuthToken(), null)
+  assert.equal(localStorage.getItem('control-center-token'), null)
   assert.equal(sessionStorage.getItem('control-center-token'), null)
 })
 

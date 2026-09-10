@@ -1158,9 +1158,12 @@ export const useNexusStore = create<NexusState>()(
         )
       }
       const hasGwClosed = (t: string) => { const v = t.toLowerCase(); return v.includes('gateway closed') || v.includes('no close frame') }
+      const normalizeGatewayUnavailable = (text: string) => /(?:error:\s*)?gateway not healthy on port \d+/i.test(text)
+        ? 'Try request again.'
+        : text
 
       const summarizeFail = (raw: string) => {
-        const t = strip(raw); if (!t) return null
+        const t = normalizeGatewayUnavailable(strip(raw)); if (!t) return null
         if (hasDockerFail(t)) return ['Runtime sandbox failed: Docker image/runtime is not ready.', 'Auto-retry switched this agent to sandbox mode off.', 'Agent Settings -> Execution Policy -> Sandbox Mode: off'].join('\n')
         if (hasGwClosed(t)) return ['Gateway connection dropped.', 'Restart OpenClaw gateway and retry.', 'Tip: openclaw gateway --allow-unconfigured'].join('\n')
         return null
@@ -1205,11 +1208,11 @@ export const useNexusStore = create<NexusState>()(
           return parts.length ? parts.join(': ') : JSON.stringify(safeDiagnosticPayload(record))
         }
         const replyText = textFromUnknown(p.reply)
-        if (replyText) return strip(replyText)
+        if (replyText) return normalizeGatewayUnavailable(strip(replyText))
         const errorText = textFromUnknown(p.error)
         if (errorText) {
           const detailText = textFromUnknown(p.detail)
-          return strip(`${errorText}${detailText ? `\n${detailText}` : ''}`)
+          return normalizeGatewayUnavailable(strip(`${errorText}${detailText ? `\n${detailText}` : ''}`))
         }
         const raw = strip(p.stdout || p.stderr || ''); if (!raw) return 'No response.'
         const s = summarizeFail(raw); if (s) return s
@@ -1225,7 +1228,7 @@ export const useNexusStore = create<NexusState>()(
         if (!lines.length) return 'No response.'
         const extracted: string[] = []
         for (const l of lines) { try { const e = parseNested(JSON.parse(l.replace(/,$/, ''))); if (e) extracted.push(e) } catch { if (!/^"?[a-zA-Z0-9_]+"?\s*:/.test(l.replace(/,$/, ''))) extracted.push(l.replace(/,$/, '').replace(/^"|"$/g, '').trim()) } }
-        return strip(extracted.join('\n')) || 'No response.'
+        return normalizeGatewayUnavailable(strip(extracted.join('\n'))) || 'No response.'
       }
       const isRuntimeNoticeTransport = (transport?: string) => {
         const clean = transport?.trim().toLowerCase()
@@ -2119,21 +2122,19 @@ export const useNexusStore = create<NexusState>()(
             }
             if (event === 'error') {
               captureStreamMeta(data)
-              const message = typeof data.message === 'string'
-                ? redactActivityText(data.message, 2000)
-                : 'Streaming request failed.'
-              lastStreamError = message
-              ensureLiveStarted(message)
-              addLiveProgressLine(redactActivityText(message, 160) || 'Runtime reported a blocker.', {
+              const displayMessage = 'Try request again.'
+              lastStreamError = displayMessage
+              ensureLiveStarted(displayMessage)
+              addLiveProgressLine(redactActivityText(displayMessage, 160) || 'Runtime reported a blocker.', {
                 label: 'Blocked',
-                activityType: activityTypeForOperationalText(message, 'error'),
+                activityType: activityTypeForOperationalText(displayMessage, 'error'),
                 rawSource: 'control-center.sse.error',
                 severity: 'error',
                 payload: streamPayload(data),
                 refresh: true,
               })
-              const failureKind = typeof data.failureKind === 'string' ? data.failureKind : inferFailureKind(message)
-              upsertLiveResponse(message, false, Date.now() - start, false, liveResponseModelId, failureKind)
+              const failureKind = typeof data.failureKind === 'string' ? data.failureKind : inferFailureKind(displayMessage)
+              upsertLiveResponse(displayMessage, false, Date.now() - start, false, liveResponseModelId, failureKind)
               return
             }
             if (event === 'final') {
@@ -2362,16 +2363,8 @@ export const useNexusStore = create<NexusState>()(
             payload = turn.payload
           }
           const ok = !!payload.ok && turn.responseOk
-          const evidenceLines = Array.isArray(payload.teamSyncEvidence) ? payload.teamSyncEvidence.filter(Boolean).slice(-5) : []
-          const outputBase = extractOutput(payload)
-          const output = !ok && evidenceLines.length
-            ? [
-                outputBase,
-                '',
-                'TEAM_SYNC evidence captured before block:',
-                ...evidenceLines.map((line) => `- ${compactLine(line, 220)}`),
-              ].join('\n')
-            : outputBase
+          const outputBase = ok ? extractOutput(payload) : 'Try request again.'
+          const output = outputBase
           if (turn.streamed) {
             liveResponseModelId = modelIdFromTurnPayload(payload) || liveResponseModelId
             liveTransport = transportFromTurnPayload(payload) || liveTransport
@@ -2444,7 +2437,7 @@ export const useNexusStore = create<NexusState>()(
                 'The Gateway may have restarted while this turn was opening. Reset Gateway, then retry.',
                 `Detail: ${compactLine(message, 700)}`,
               ].join('\n')
-            : message
+            : 'Try request again.'
           if (liveResponseCreated) {
             finalizeLiveResponse(output, false, Date.now() - start, cancelledByOperator ? 'aborted' : inferFailureKind(output, timedOut))
           } else {

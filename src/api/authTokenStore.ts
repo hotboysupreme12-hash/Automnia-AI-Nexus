@@ -23,6 +23,9 @@ function browserStorage(kind: 'local' | 'session'): Storage | null {
   }
 }
 
+// Account sessions must survive an Electron process restart. The server-issued
+// token is still short-lived, and explicit logout removes it from both stores.
+
 function storageRead(storage: Storage | null): string | null {
   try {
     return storage?.getItem(CONTROL_CENTER_TOKEN_KEY) ?? null
@@ -77,22 +80,21 @@ export function readAuthToken(): string | null {
   }
   if (memoryToken) return memoryToken
 
+  const local = browserStorage('local')
+  const localToken = normalizeToken(storageRead(local))
+  if (localToken) {
+    memoryToken = localToken
+    return localToken
+  }
+
   const session = browserStorage('session')
   const sessionToken = normalizeToken(storageRead(session))
   if (sessionToken) {
     memoryToken = sessionToken
+    // Migrate sessions created by builds that only used sessionStorage so the
+    // user is not prompted again after the next restart.
+    storageWrite(local, sessionToken)
     return sessionToken
-  }
-
-  // One-time migration from older builds that persisted bearer sessions across
-  // browser restarts. New sessions are tab/process scoped instead.
-  const local = browserStorage('local')
-  const legacyToken = normalizeToken(storageRead(local))
-  if (legacyToken) {
-    memoryToken = legacyToken
-    storageWrite(session, legacyToken)
-    storageRemove(local)
-    return legacyToken
   }
 
   return null
@@ -126,8 +128,8 @@ export function clearAuthSignedOut(): void {
 export function writeAuthToken(value: string): void {
   const token = normalizeToken(value)
   memoryToken = token
+  storageWrite(browserStorage('local'), token)
   storageWrite(browserStorage('session'), token)
-  storageRemove(browserStorage('local'))
   notifyTokenListeners(token)
 }
 

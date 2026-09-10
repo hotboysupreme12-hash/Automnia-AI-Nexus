@@ -162,10 +162,15 @@ export function createGatewayAgentTurnService(options: GatewayAgentTurnServiceOp
     const isClawTalkRoute = /\bclawtalk\b/i.test(routeOptions.route)
     emitGatewayStage(isClawTalkRoute ? 'Checking ClawTalk runtime requirements.' : 'Checking Gateway runtime configuration.')
     await options.ensureOpenclawAgentRunConfigDefaults()
+    // Resolve the agent's persisted sandbox policy before the first Gateway
+    // dispatch on every route. Without this check, a newly created agent can
+    // reach OpenClaw with its default Docker-backed sandbox, fail its first
+    // message when Docker is unavailable, and only then be corrected by the
+    // retry path.
+    await options.ensureAgentSandboxCompatibleWithHost(agent)
     if (isClawTalkRoute) {
       const runtimeConfig = await options.readOpenclawConfig()
       await options.ensureAgentRuntimeHealthPreflight(agent, runtimeConfig)
-      await options.ensureAgentSandboxCompatibleWithHost(agent)
     }
 
     if (signal.aborted) throw gatewayChatAbortError('gateway agent run aborted before Gateway health check')

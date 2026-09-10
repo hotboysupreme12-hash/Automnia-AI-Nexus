@@ -320,9 +320,12 @@ function isBundledOpenClawPath(value: string | undefined) {
 function defaultAgencyAgentTemplateSourceRoot() {
   const electronResourcesPath = getElectronResourcesPath()
   const candidates = [
+    path.join(WORKSPACE_ROOT, 'templates', 'automnia-agents'),
+    path.resolve(process.cwd(), 'templates', 'automnia-agents'),
     path.join(WORKSPACE_ROOT, 'vendor', 'agency-agents'),
     path.resolve(process.cwd(), 'vendor', 'agency-agents'),
     path.resolve(process.cwd(), 'resources', 'agency-agents'),
+    electronResourcesPath ? path.join(electronResourcesPath, 'automnia-agents') : '',
     electronResourcesPath ? path.join(electronResourcesPath, 'agency-agents') : '',
   ].filter(Boolean)
   return candidates.find((candidate) => existsSync(candidate)) || path.join(WORKSPACE_ROOT, 'vendor', 'agency-agents')

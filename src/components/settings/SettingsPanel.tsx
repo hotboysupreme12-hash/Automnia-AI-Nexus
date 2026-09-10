@@ -17,7 +17,6 @@ import {
 import { clearAllCommandConsoleDrafts } from '../../store/commandConsoleState'
 import { useNexusStore } from '../../store/nexusStore'
 import { resolveLicenseEntitlement } from '../../utils/licenseEntitlement'
-import { formatUsageRemaining } from '../../utils/usageRemaining'
 import { restartPluginGateway, runOpenClawPluginCommand } from '../../api/plugins'
 import type {
   CapabilityKey,
@@ -220,6 +219,10 @@ function SegmentedControl<T extends string>({ value, options, label, onChange }:
   )
 }
 
+
+function formatCreditBalance(value: number | null | undefined) {
+  return typeof value === 'number' && Number.isFinite(value) ? `${value.toLocaleString('en-US')} credits` : 'Awaiting a confirmed balance'
+}
 
 function formatAccountTimestamp(value: string | null | undefined) {
   if (!value) return 'Not reported yet'
@@ -891,7 +894,7 @@ export function SettingsPanel({ focusSection = 'account', focusRequest = 0 }: { 
       : license?.usagePriority === 'automnia_first_with_provider_fallback'
         ? byokAllowed ? 'automnia_first_with_provider_fallback' : 'automnia_only'
         : 'automnia_only'
-    const balance = hostedCredits || isByok ? formatUsageRemaining(license?.creditBalance, license?.creditUsageBaseline) : 'Not applicable — provider-billed'
+    const balance = hostedCredits || isByok ? formatCreditBalance(license?.creditBalance) : 'Not applicable — provider-billed'
     const refreshAccount = async () => {
       if (accountRefreshBusy) return
       setAccountRefreshBusy(true)

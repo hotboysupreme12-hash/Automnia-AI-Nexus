@@ -1686,6 +1686,15 @@ export function RecruitAgentModal({ isOpen, onClose }: { isOpen: boolean; onClos
 
   const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault()
+    // The wizard's final action is intentionally gated behind the Operating
+    // Files review step. This also protects against an implicit form submit
+    // from an input or browser keyboard shortcut on an earlier step.
+    if (currentStep !== 4) {
+      setCurrentStep(4)
+      setStatusTone('neutral')
+      setStatus('Review the operating files before recruiting this agent.')
+      return
+    }
     const draft = readTextDrafts()
     const submitName = draft.name.trim()
     const submitId = draft.agentId.trim()

@@ -58,8 +58,8 @@ type FrontmatterParseResult = {
   sourceMarkdown: string
 }
 
-const AGENCY_REPOSITORY = 'msitarzewski/agency-agents'
-const AGENCY_REPOSITORY_URL = `https://github.com/${AGENCY_REPOSITORY}`
+const AGENCY_REPOSITORY = 'Automnia Agent Templates'
+const AGENCY_REPOSITORY_URL = 'https://github.com/hotboysupreme12-hash/Automnia-AI-Nexus/tree/main/templates/automnia-agents'
 
 const FALLBACK_DIVISION_COLORS: Record<string, string> = {
   academic: '#8B5CF6',
@@ -112,6 +112,10 @@ const NON_TEMPLATE_DIRECTORIES = new Set([
 
 function cleanString(value: unknown, fallback = '') {
   return typeof value === 'string' ? value.trim() : fallback
+}
+
+function sanitizeAutomniaTemplateText(value: string) {
+  return value.replace(/msitarzewski/gi, 'Automnia')
 }
 
 function stripQuotes(value: string) {
@@ -425,20 +429,20 @@ function buildDocuments(input: {
     },
     {
       file: 'SOUL.md',
-      content: ensureDocumentHeading('SOUL.md', input.name, split.soul, [
+      content: sanitizeAutomniaTemplateText(ensureDocumentHeading('SOUL.md', input.name, split.soul, [
         `You are ${input.name}.`,
         input.description,
         '',
         sourceLine,
-      ].join('\n')),
+      ].join('\n'))),
     },
     {
       file: 'AGENTS.md',
-      content: ensureDocumentHeading('AGENTS.md', input.name, split.agents, input.body || input.description),
+      content: sanitizeAutomniaTemplateText(ensureDocumentHeading('AGENTS.md', input.name, split.agents, input.body || input.description)),
     },
     {
       file: 'TOOLS.md',
-      content: [
+      content: sanitizeAutomniaTemplateText([
         `# TOOLS.md - ${input.name}`,
         '',
         `Division: ${input.divisionLabel}`,
@@ -460,11 +464,11 @@ function buildDocuments(input: {
         '- Agency Agents source markdown',
         '- Control Center template catalog state',
         '',
-      ].join('\n'),
+      ].join('\n')),
     },
     {
       file: 'BOOTSTRAP.md',
-      content: [
+      content: sanitizeAutomniaTemplateText([
         `# BOOTSTRAP.md - ${input.name}`,
         '',
         '## Startup Contract',
@@ -477,34 +481,34 @@ function buildDocuments(input: {
         `Template: ${input.name}`,
         `Source: ${AGENCY_REPOSITORY}/${input.relativePath}`,
         '',
-      ].join('\n'),
+      ].join('\n')),
     },
     {
       file: 'USER.md',
-      content: `# USER.md - ${input.name}\n\nUse the ${input.name} specialty when it fits the user's request. Keep answers concrete, evidence-backed, and scoped to the task.\n`,
+      content: sanitizeAutomniaTemplateText(`# USER.md - ${input.name}\n\nUse the ${input.name} specialty when it fits the user's request. Keep answers concrete, evidence-backed, and scoped to the task.\n`),
     },
     {
       file: 'HEARTBEAT.md',
-      content: `# HEARTBEAT.md - ${input.name}\n\nOn heartbeat, report current objective, useful progress, blockers, and the next action for this ${input.defaults.behaviorProfile} lane.\n`,
+      content: sanitizeAutomniaTemplateText(`# HEARTBEAT.md - ${input.name}\n\nOn heartbeat, report current objective, useful progress, blockers, and the next action for this ${input.defaults.behaviorProfile} lane.\n`),
     },
     {
       file: 'MEMORY.md',
-      content: `# MEMORY.md - ${input.name}\n\n## Durable Notes\n- Recruited from the ${AGENCY_REPOSITORY} template at ${input.relativePath}.\n`,
+      content: sanitizeAutomniaTemplateText(`# MEMORY.md - ${input.name}\n\n## Durable Notes\n- Recruited from the ${AGENCY_REPOSITORY} template at ${input.relativePath}.\n`),
     },
     {
       file: 'MISSION_PROMPT.md',
-      content: `# MISSION_PROMPT.md - ${input.name}\n\nDefault mission frame: ${input.description}\n\nUse the original Agency source in ${SOURCE_DOC_FILE} when a task needs the full persona details.\n`,
+      content: sanitizeAutomniaTemplateText(`# MISSION_PROMPT.md - ${input.name}\n\nDefault mission frame: ${input.description}\n\nUse ${SOURCE_DOC_FILE} when a task needs the full persona details.\n`),
     },
     {
       file: SOURCE_DOC_FILE,
-      content: [
+      content: sanitizeAutomniaTemplateText([
         `# ${SOURCE_DOC_FILE} - ${input.name}`,
         '',
         `Original source: ${AGENCY_REPOSITORY}/${input.relativePath}`,
         '',
         input.sourceMarkdown.trim(),
         '',
-      ].join('\n'),
+      ].join('\n')),
     },
   ]
 }
