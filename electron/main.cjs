@@ -9,6 +9,7 @@ const path = require('node:path')
 const { createMicrophonePermissions } = require('./microphone-permissions.cjs')
 const microphonePermissions = createMicrophonePermissions({ platform: process.platform, systemPreferences, shell })
 const { restoreWindowPlacement, restoreZoom } = require('./window-placement.cjs')
+const { bindWindowFocus, presentWindow } = require('./window-focus.cjs')
 
 // A packaged Windows app can be launched from a short-lived shell (including
 // the branded launcher). Once that parent closes, writing diagnostic output to
@@ -1410,6 +1411,51 @@ function waitForControlServer(timeoutMs = CONTROL_SERVER_STARTUP_TIMEOUT_MS) {
       retryTimer = setTimeout(check, 250)
       retryTimer.unref?.()
     }
+    const checkUiShell = () => {
+      if (settled) return
+      const req = http.request({
+        hostname: '127.0.0.1',
+        port: APP_PORT,
+        path: '/',
+        method: 'GET',
+        timeout: 1000,
+        headers: { Accept: 'text/html' },
+      }, (res) => {
+        let body = ''
+        res.setEncoding('utf8')
+        res.on('data', (chunk) => {
+          // The shell is small, but cap this defensively if a stale service
+          // answers the probe with an unexpectedly large response.
+          if (body.length < 64 * 1024) body += chunk
+        })
+        res.on('end', () => {
+          const contentType = String(res.headers['content-type'] || '').toLowerCase()
+          const isUiShell = res.statusCode >= 200 && res.statusCode < 300 &&
+            contentType.includes('text/html') &&
+            body.includes('id="root"') &&
+            body.includes('<script')
+          if (isUiShell) {
+            finish(resolve)
+            return
+          }
+          if (Date.now() - startedAt >= timeoutMs) {
+            finish(reject, new Error(`Control Center UI shell did not become ready on port ${APP_PORT}: HTTP ${res.statusCode || 'unknown'}`))
+            return
+          }
+          retry()
+        })
+      })
+      req.on('timeout', () => req.destroy(new Error('control center UI probe timed out')))
+      req.on('error', () => {
+        if (Date.now() - startedAt >= timeoutMs) {
+          finish(reject, new Error(`Control Center UI shell did not become ready on port ${APP_PORT}.`))
+          return
+        }
+        retry()
+      })
+      req.end()
+    }
+
     const check = () => {
       if (settled) return
       const req = http.request({
@@ -1424,7 +1470,10 @@ function waitForControlServer(timeoutMs = CONTROL_SERVER_STARTUP_TIMEOUT_MS) {
       }, (res) => {
         res.resume()
         if (res.statusCode && res.statusCode >= 200 && res.statusCode < 300) {
-          finish(resolve)
+          // /api/ready can be served by an older/stale local process. Verify
+          // the document Electron is about to display as well, otherwise the
+          // app can open successfully into a plain-text "Not found" page.
+          checkUiShell()
           return
         }
         if (Date.now() - startedAt >= timeoutMs) {
@@ -1851,42 +1900,8 @@ function configureTextAssistance(win) {
 }
 
 function presentMainWindow(win) {
-  if (isQuitting || !win || win.isDestroyed()) return
-
-  win.setSkipTaskbar(false)
-  if (win.isMinimized()) win.restore()
-
-  // On macOS, focusing the BrowserWindow is not sufficient when the app was
-  // launched from Finder, the Dock, or a shell that is still frontmost. In
-  // that state Chromium can finish its first frame without presenting it
-  // until the app loses and regains focus. Activate the app before showing the
-  // window so the first renderer frame is presented immediately.
-  if (process.platform === 'darwin') app.focus({ steal: true })
-  win.show()
-
-  // The initial ready-to-show path used to show the window without activating
-  // it. That left the renderer waiting for a later focus/visibility change on
-  // some macOS launches, making the app appear frozen until the user switched
-  // away and back.
-  win.focus()
-  if (!win.webContents.isDestroyed()) {
-    win.webContents.focus()
-    // Electron exposes invalidate() on macOS to request a full WebContents
-    // repaint. It is a no-op on platforms where the method is unavailable.
-    win.webContents.invalidate?.()
-  }
-
-  // Let macOS finish presenting the native window, then re-assert focus so
-  // the renderer receives its first real focus/paint cycle.
-  setTimeout(() => {
-    if (isQuitting || win.isDestroyed()) return
-    if (process.platform === 'darwin') app.focus({ steal: true })
-    win.focus()
-    if (!win.webContents.isDestroyed()) {
-      win.webContents.focus()
-      win.webContents.invalidate?.()
-    }
-  }, 0)
+  if (isQuitting) return
+  presentWindow(win, app)
 }
 
 function createMainWindow() {
@@ -1907,6 +1922,7 @@ function createMainWindow() {
     minHeight: placement.minHeight,
     backgroundColor: '#050607', title: 'Automnia', show: false,
     paintWhenInitiallyHidden: true,
+    acceptFirstMouse: true,
     ...(resolveAppIcon() ? { icon: resolveAppIcon() } : {}),
     webPreferences: {
       preload: path.join(__dirname, 'preload.cjs'),
@@ -1921,6 +1937,7 @@ function createMainWindow() {
     },
   })
 
+  bindWindowFocus(win)
   mainWindow = win
   let saveTimer = null
   let writeQueue = Promise.resolve()

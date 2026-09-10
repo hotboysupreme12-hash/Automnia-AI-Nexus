@@ -1991,10 +1991,18 @@ export function RecruitAgentModal({ isOpen, onClose }: { isOpen: boolean; onClos
                   <button type="button" className="dui-recruit-secondary" onClick={currentStep === 1 ? onClose : goToPreviousRecruitStep} disabled={submitting || autoForging} title={currentStep === 1 ? 'Cancel recruitment' : 'Go to the previous step'}>
                     {currentStep === 1 ? 'Cancel' : 'Back'}
                   </button>
-                  <button type={currentStep === 4 ? 'submit' : 'button'} className="dui-recruit-primary" disabled={currentStep === 4 ? !canSubmit : submitting || autoForging || templateApplying} onClick={currentStep === 4 ? undefined : goToNextRecruitStep} title={currentStep === 4 ? 'Create this agent and bootstrap files' : 'Continue to the next step'}>
-                    {currentStep === 4 ? (submitting ? 'Creating...' : 'Recruit Agent') : 'Continue'}
-                    <RecruitIcon type={currentStep === 4 ? 'rocket' : 'chevron'} />
-                  </button>
+                  {/* Keep distinct DOM buttons so Continue cannot become a submit button during its click. */}
+                  {currentStep === 4 ? (
+                    <button key="recruit" type="submit" className="dui-recruit-primary" disabled={!canSubmit} title="Create this agent and bootstrap files">
+                      {submitting ? 'Creating...' : 'Recruit Agent'}
+                      <RecruitIcon type="rocket" />
+                    </button>
+                  ) : (
+                    <button key="continue" type="button" className="dui-recruit-primary" disabled={submitting || autoForging || templateApplying} onClick={goToNextRecruitStep} title="Continue to the next step">
+                      Continue
+                      <RecruitIcon type="chevron" />
+                    </button>
+                  )}
                 </div>
               </div>
             </form>
