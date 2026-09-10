@@ -886,6 +886,8 @@ const CHANNEL_DISPLAY_NAMES: Record<string, string> = {
   whatsapp: 'WhatsApp',
 }
 
+const INTERNAL_GATEWAY_CHANNELS = new Set(['agent', 'chat', 'control-ui', 'cron', 'gateway', 'internal', 'tui', 'webchat'])
+
 function gatewayActivityToken(text: string, key: string): string {
   const match = text.match(new RegExp(`\\b${key}=("[^"]*"|\\S+)`, 'iu'))
   return match?.[1]?.replace(/^"|"$/g, '').trim() || ''
@@ -1031,7 +1033,9 @@ const GatewayActivityCard = memo(function GatewayActivityCard({ activity }: { ac
   const allEvents = activity?.events || EMPTY_GATEWAY_ACTIVITY_EVENTS
   const requestedLimit = autoTrim ? retentionLimit : 100
   const events = useMemo(
-    () => allEvents.slice(0, Math.min(GATEWAY_ACTIVITY_RENDER_LIMIT, requestedLimit)),
+    () => allEvents
+      .filter((event) => !INTERNAL_GATEWAY_CHANNELS.has(event.channel.trim().toLowerCase()))
+      .slice(0, Math.min(GATEWAY_ACTIVITY_RENDER_LIMIT, requestedLimit)),
     [allEvents, requestedLimit],
   )
   const eventSummary = events.length < allEvents.length
@@ -1060,7 +1064,7 @@ const GatewayActivityCard = memo(function GatewayActivityCard({ activity }: { ac
       <div className="dy-channel-activity-stats" aria-label="Message flow summary">
         <div className="dy-channel-activity-stat" data-direction="inbound"><span>Received</span><strong>{activity?.inboundCount || 0}</strong><small>incoming messages</small></div>
         <div className="dy-channel-activity-stat" data-direction="outbound"><span>Delivered</span><strong>{activity?.outboundCount || 0}</strong><small>outgoing messages</small></div>
-        <div className="dy-channel-activity-stat" data-direction="system"><span>Received</span><strong>{events.length}</strong><small>{events.length === 1 ? 'message' : 'messages'}</small></div>
+        <div className="dy-channel-activity-stat" data-direction="system"><span>Updates</span><strong>{events.length}</strong><small>{events.length === 1 ? 'update' : 'updates'}</small></div>
       </div>
 
       <div className="dy-channel-activity-feed-head">

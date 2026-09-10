@@ -39,6 +39,20 @@ export type GatewayActivitySummary = {
 
 const MAX_CHANNEL_ACTIVITY_HISTORY = 100
 
+// These are Gateway-internal chat surfaces, not external messaging channels.
+// WebChat/Control UI activity is already represented by the agent response
+// stream and must not leak into the Channel Traffic operational feed.
+const INTERNAL_GATEWAY_CHANNELS = new Set([
+  'agent',
+  'chat',
+  'control-ui',
+  'cron',
+  'gateway',
+  'internal',
+  'tui',
+  'webchat',
+])
+
 export type GatewayLogClient = {
   request: (method: string, params?: unknown, options?: { timeoutMs?: number | null; signal?: AbortSignal }) => Promise<unknown>
 }
@@ -530,6 +544,10 @@ export function createGatewayLogService(options: GatewayLogServiceOptions) {
     return cleaned
   }
 
+  function isInternalGatewayChannel(value: string) {
+    return INTERNAL_GATEWAY_CHANNELS.has(value.trim().toLowerCase())
+  }
+
   function gatewayChannelFromSubsystem(value: string) {
     const cleaned = value.trim().toLowerCase()
     if (!cleaned) return ''
@@ -555,10 +573,11 @@ export function createGatewayLogService(options: GatewayLogServiceOptions) {
     for (const key of ['channel', 'channelId', 'provider', 'platform', 'surface', 'pluginId']) {
       const field = objectStringField(value, key)
       const normalized = field ? normalizeGatewayChannelName(field) : ''
-      if (normalized) return normalized
+      if (normalized && !isInternalGatewayChannel(normalized)) return normalized
     }
     const metaChannel = nestedMetaStringField(value, 'channel') || nestedMetaStringField(value, 'subsystem')
-    return gatewayChannelFromSubsystem(subsystem) || gatewayChannelFromSubsystem(metaChannel) || gatewayChannelFromMessage(message)
+    const resolved = gatewayChannelFromSubsystem(subsystem) || gatewayChannelFromSubsystem(metaChannel) || gatewayChannelFromMessage(message)
+    return isInternalGatewayChannel(resolved) ? '' : resolved
   }
 
   function subsystemFromLogObject(value: Record<string, unknown>) {
@@ -1019,6 +1038,7 @@ export function createGatewayLogService(options: GatewayLogServiceOptions) {
   function isGatewayChannelActivity(entry: GatewayLogEntry) {
     const direction = entry.direction || gatewayActivityDirection(entry.message)
     if (direction !== 'inbound' && direction !== 'outbound') return false
+    if (isInternalGatewayChannel(entry.channel || '') || /\b(?:control[- ]?ui|tui|webchat)\b/iu.test(entry.message)) return false
     return Boolean(entry.channel || gatewayChannelFromMessage(entry.message) || entry.stream === 'channel')
       && gatewayActivityLooksLikeChannelMessage(entry.message)
   }

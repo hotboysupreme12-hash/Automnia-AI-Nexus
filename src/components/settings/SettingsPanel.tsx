@@ -650,7 +650,7 @@ export function SettingsPanel({ focusSection = 'account', focusRequest = 0 }: { 
         </Field>
         <Field label="Rarity filter" hint="Persist a focused registry or show the full roster.">
           <select value={registryPreferences.rarityFilter} onChange={(event) => updateRegistryPreferences({ rarityFilter: event.target.value as RegistryPreferences['rarityFilter'] }, 'Registry filter')}>
-            <option value="all">All rarities</option><option value="legendary">Legendary</option><option value="epic">Epic</option><option value="rare">Rare</option><option value="common">Common</option>
+            <option value="all">All</option><option value="legendary">Legendary</option><option value="epic">Epic</option><option value="rare">Rare</option><option value="common">Common</option>
           </select>
         </Field>
       </SettingsCard>

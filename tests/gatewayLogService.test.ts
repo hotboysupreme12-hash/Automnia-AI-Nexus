@@ -158,6 +158,30 @@ test('summarizes channel activity with agent ids embedded in session keys', () =
   assert.equal(summary.events[0]?.agentId, 'hn-architect')
 })
 
+test('keeps WebChat and other internal surfaces out of Channel Traffic', () => {
+  const { service } = createService()
+  const summary = service.summarizeGatewayActivity([
+    {
+      id: 1,
+      timestamp: '2026-06-30T08:03:00.000Z',
+      stream: 'channel',
+      channel: 'webchat',
+      direction: 'inbound',
+      message: 'message processed: channel=webchat outcome=error duration=33412ms',
+    },
+    {
+      id: 2,
+      timestamp: '2026-06-30T08:04:00.000Z',
+      stream: 'channel',
+      channel: 'telegram',
+      direction: 'inbound',
+      message: 'message processed: channel=telegram outcome=ok inbound',
+    },
+  ])
+
+  assert.deepEqual(summary.events.map((event) => event.channel), ['telegram'])
+})
+
 test('readExternalGatewayLogEntries prefers logs.tail RPC entries', async () => {
   const requests: Array<{ method: string; params: unknown; timeoutMs?: number | null }> = []
   const { service } = createService({

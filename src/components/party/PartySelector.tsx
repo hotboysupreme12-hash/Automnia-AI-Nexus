@@ -472,7 +472,7 @@ export function PartySelector() {
               className="px-2.5 py-1.5 pr-7 text-[10px] font-semibold outline-none transition cursor-pointer appearance-none"
               style={CYAN_SELECT_CHEVRON_STYLE}
             >
-              <option value="all">All rarities</option>
+              <option value="all">All</option>
               <option value="legendary">Legendary</option>
               <option value="epic">Epic</option>
               <option value="rare">Rare</option>
