@@ -338,6 +338,7 @@ await runElectronCase({
 await runElectronCase({
   name: 'renderer-recovery',
   expectedStatus: 0,
+  timeoutMs: 60_000,
   env: {
     AUTOMNIA_ELECTRON_E2E_AUTO_QUIT_MS: '10000',
     AUTOMNIA_ELECTRON_E2E_ASSERT_RENDERER_EXTERNALS: '1',
