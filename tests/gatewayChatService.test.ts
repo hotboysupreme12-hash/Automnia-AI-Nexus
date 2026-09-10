@@ -195,8 +195,8 @@ test('runTurn sends Gateway chat payloads and uses a visible terminal reply with
 
   const send = harness.requests.find((request) => request.method === 'chat.send')
   assert.ok(send)
-  assert.equal(harness.ensuredGateway, 0, 'healthy Gateway should not be started again')
-  assert.equal(harness.healthChecks, 1)
+  assert.ok(harness.ensuredGateway >= 1, 'first message should complete the Gateway prewarm barrier')
+  assert.ok(harness.healthChecks >= 1)
   assert.equal(harness.clientOptions?.clientName, 'gateway-client')
   assert.equal(harness.clientOptions?.mode, 'backend')
   assert.ok(harness.clientOptions?.scopes.includes('operator.talk.secrets'))
@@ -277,6 +277,20 @@ test('runTurn isolates fresh Gateway chat turns from stable requested session ke
     isRecord(send.params) && send.params.sessionKey,
     'agent:agent-fresh:control-center:console:fresh:fresh-session-1',
   )
+  for (const [sessionId, freshSession] of [
+    ['fresh-session-1', false],
+    ['permission-reset-2', true],
+    ['permission-reset-2', false],
+  ] as const) {
+    await harness.service.runTurn({
+      agentId: 'agent-fresh', message: 'follow up', sessionId,
+      requestedSessionKey: 'control-center:console', freshSession,
+      thinking: 'off', timeoutMs: 1000, cwd: process.cwd(),
+    })
+    const latest = harness.requests.findLast((request) => request.method === 'chat.send')!
+    assert.equal(isRecord(latest.params) && latest.params.sessionKey,
+      `agent:agent-fresh:control-center:console:fresh:${sessionId}`)
+  }
 })
 
 test('runTurn aborts pending Gateway chat when the request signal is cancelled', async () => {

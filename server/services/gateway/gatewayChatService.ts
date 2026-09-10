@@ -1319,11 +1319,20 @@ export function createGatewayChatService<RunRecord>(options: GatewayChatServiceO
     return { text: '', messageId: '', placeholder: false }
   }
 
+  const requestedSessionGenerations = new Map<string, { sessionId: string; key: string }>()
+
   function gatewayChatSessionKey(agentId: string, sessionId: string, requestedSessionKey?: string | null, freshSession = false) {
     const requested = requestedSessionKey?.trim()
     if (requested) {
       const base = requested.startsWith('agent:') ? requested : `agent:${agentId}:${requested}`
-      return freshSession ? `${base}:fresh:${sessionId}` : base
+      const current = requestedSessionGenerations.get(base)
+      if (current?.sessionId === sessionId) return current.key
+      // A reset changes the generation, not just the first message's route.
+      // Keep follow-ups on that generation so stale tool/persona history
+      // cannot return after a permission change or /new.
+      const key = freshSession || current ? `${base}:fresh:${sessionId}` : base
+      requestedSessionGenerations.set(base, { sessionId, key })
+      return key
     }
     return `agent:${agentId}:control-center:${sessionId}`
   }
@@ -1417,6 +1426,11 @@ export function createGatewayChatService<RunRecord>(options: GatewayChatServiceO
     streamObserverId?: string
     signal?: AbortSignal
   }): Promise<GatewayChatTurnResult> {
+    // Startup prewarming is also a turn barrier. The UI can become
+    // interactive before the background startup task finishes; the first
+    // message must join that same promise instead of triggering lifecycle
+    // work for the first time after the user has already sent a message.
+    await prewarm('first-message')
     const state = await ensureClient(params.signal)
     const runId = randomUUID()
     const agentName = params.agentName?.trim() || params.agentId

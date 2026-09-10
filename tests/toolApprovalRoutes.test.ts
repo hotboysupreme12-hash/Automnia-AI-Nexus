@@ -12,6 +12,7 @@ test('approvals validate decisions, preserve other agents, and synchronize host 
   registerToolApprovalRoutes(app, {
     validAgent: (id) => id === 'brandon',
     configure: async (agentId, access) => { calls.push({ method: 'configure', params: { agentId, access } }) },
+    resetAgentContext: async (agentId) => { calls.push({ method: 'reset-agent-context', params: { agentId } }); return { sessions: 1, histories: 1 } },
     request: async (method, params) => {
       calls.push({ method, params })
       if (method === 'exec.approval.list') return [{ id: 'pending-1', request: { agentId: 'brandon', command: 'pwd' } }]
@@ -42,7 +43,8 @@ test('approvals validate decisions, preserve other agents, and synchronize host 
       assert.deepEqual(file.agents.other, { security: 'deny' })
       assert.deepEqual(file.agents.brandon.allowlist, [{ pattern: '/usr/bin/pwd' }])
       assert.equal(file.agents.brandon.ask, mode === 'full' ? 'off' : 'on-miss')
-      assert.deepEqual(calls.at(-1)?.params, { agentId: 'brandon', access: { host: 'gateway', security: mode === 'full' ? 'full' : 'allowlist', ask: mode === 'full' ? 'off' : 'on-miss' } })
+      assert.deepEqual(calls.at(-2)?.params, { agentId: 'brandon', access: { host: 'gateway', security: mode === 'full' ? 'full' : 'allowlist', ask: mode === 'full' ? 'off' : 'on-miss' } })
+      assert.deepEqual(calls.at(-1)?.params, { agentId: 'brandon' })
     }
   } finally { await new Promise<void>((resolve) => server.close(() => resolve())) }
 })

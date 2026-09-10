@@ -10,6 +10,7 @@ export function execAccessForMode(mode: 'ask' | 'full'): ExecAccess {
 export function registerToolApprovalRoutes(app: Express, options: {
   request: (method: string, params: Record<string, unknown>) => Promise<unknown>
   configure: (agentId: string, access: ExecAccess) => Promise<void>
+  resetAgentContext: (agentId: string) => unknown | Promise<unknown>
   validAgent: (agentId: string) => boolean | Promise<boolean>
 }) {
   app.get('/api/tool-approvals', async (_req, res) => {
@@ -39,6 +40,10 @@ export function registerToolApprovalRoutes(app: Express, options: {
       } } },
     })
     await options.configure(agentId, access)
-    return apiSuccess(res, { mode: parsed.data.mode })
+    // Tool availability is part of the agent turn context. Invalidate the
+    // cached session after changing access so the very next turn observes the
+    // new command policy instead of inheriting the previous tool set.
+    const contextReset = await options.resetAgentContext(agentId)
+    return apiSuccess(res, { mode: parsed.data.mode, contextReset })
   })
 }

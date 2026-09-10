@@ -543,7 +543,7 @@ const CONTROL_CENTER_GATEWAY_CHAT_CLIENT = !/^(0|false|no)$/i.test(
   process.env.CONTROL_CENTER_GATEWAY_CHAT_CLIENT || (CONTROL_CENTER_GATEWAY_AGENT_SESSIONS ? '1' : ''),
 )
 const CONTROL_CENTER_GATEWAY_PREWARM_ON_STARTUP = /^(1|true|yes)$/i.test(
-  process.env.CONTROL_CENTER_GATEWAY_PREWARM_ON_STARTUP || '',
+  process.env.CONTROL_CENTER_GATEWAY_PREWARM_ON_STARTUP || '1',
 )
 const CONTROL_CENTER_GATEWAY_TOOLS_EFFECTIVE_DIAGNOSTIC = /^(1|true|yes)$/i.test(
   process.env.CONTROL_CENTER_GATEWAY_TOOLS_EFFECTIVE_DIAGNOSTIC || '',
@@ -3788,10 +3788,6 @@ function ensureControlCenterGatewayClient(signal?: AbortSignal) {
 
 function prewarmControlCenterGatewayAgentRuntime(reason = 'startup') {
   return gatewayChatService.prewarm(reason)
-}
-
-function scheduleControlCenterGatewayAgentRuntimePrewarm(reason = 'startup', delayMs = 1500) {
-  gatewayChatService.schedulePrewarm(reason, delayMs)
 }
 
 function runControlCenterGatewayChatTurn(params: {
@@ -18934,6 +18930,7 @@ const synchronizeBillingRouteWithGateway = () => {
 registerToolApprovalRoutes(app, {
   request: async (method, params) => (await gatewayChatService.ensureClient()).client.request(method, params),
   validAgent: async (id) => isValidAgentId(id) && !isRetiredAgentId(id) && Boolean((await readOpenclawConfig()).agents?.list?.some((entry) => entry.id === id)),
+  resetAgentContext: (agentId) => resetAgentTurnSessionsForAgentContextChange(agentId, 'command permissions changed'),
   configure: async (agentId, exec) => {
     const config = await readOpenclawConfig()
     const entry = config.agents?.list?.find((agent) => agent.id === agentId)
@@ -18945,7 +18942,7 @@ registerToolApprovalRoutes(app, {
     await writeTextFileWithLockRetry(agentLocalConfigPath(agentId), `${JSON.stringify(local, null, 2)}\n`)
     await rememberAgentLocalConfigCache(agentLocalConfigPath(agentId), local)
     applyLocalConfigToGlobal(agentId, local, config)
-    await writeOpenclawConfig(config)
+    await writeOpenclawConfig(config, { allowDuringAgentTurn: true })
   },
 })
 
@@ -19534,16 +19531,18 @@ controlServer = app.listen(PORT, '127.0.0.1', () => {
     })
   if (AUTO_START_GATEWAY) {
     if (gatewayAutostartTimer) clearTimeout(gatewayAutostartTimer)
-    gatewayAutostartTimer = setTimeout(() => {
-      gatewayAutostartTimer = null
-      if (shuttingDown) return
-      void ensureGatewayRunning()
-    }, 1000)
-    gatewayAutostartTimer.unref?.()
     startGatewayHealthMonitor()
     if (CONTROL_CENTER_GATEWAY_PREWARM_ON_STARTUP) {
-      scheduleControlCenterGatewayAgentRuntimePrewarm('startup')
+      // Start the complete Gateway lifecycle immediately. The chat service
+      // joins this in-flight prewarm if a user sends before it finishes.
+      void prewarmControlCenterGatewayAgentRuntime('startup')
     } else {
+      gatewayAutostartTimer = setTimeout(() => {
+        gatewayAutostartTimer = null
+        if (shuttingDown) return
+        void ensureGatewayRunning()
+      }, 0)
+      gatewayAutostartTimer.unref?.()
       console.log('[gateway] control center chat prewarm skipped at startup; gateway client will connect lazily.')
     }
   } else {

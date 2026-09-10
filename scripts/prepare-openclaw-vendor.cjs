@@ -4,6 +4,7 @@ const fs = require('node:fs')
 const https = require('node:https')
 const { tmpdir } = require('node:os')
 const path = require('node:path')
+const { ensureRelayThoughtSignatureReplay } = require('./lib/relay-thought-signature-patch.cjs')
 
 const root = path.resolve(__dirname, '..')
 const vendorRoot = path.resolve(process.env.AUTOMNIA_OPENCLAW_VENDOR_ROOT || path.join(root, 'vendor', 'openclaw'))
@@ -291,9 +292,9 @@ async function hydratePublishedPackageArtifacts(packageJson) {
 }
 
 function ensureAutomniaRelayThoughtSignatureSupport() {
-  // OpenClaw 2026.9.2 changed the bundled transport layout and carries the
-  // compatible reasoning/replay path in its current runtime. The source
-  // injection below is retained for older pinned cores only.
+  // OpenClaw 2026.9.2 moved the serializer into @openclaw/ai. Its replay
+  // patch runs after dependency validation/installation below. Keep this
+  // older transport injection for older pinned cores only.
   if (readJson(packageJsonPath).version === '2026.9.2') return
   const distRoot = path.join(vendorRoot, 'dist')
   if (!fs.existsSync(distRoot)) throw new Error('[openclaw-vendor] Missing OpenClaw dist directory for Automnia Relay compatibility patch')
@@ -667,10 +668,12 @@ async function main() {
     const missing = validateInstalledPackages(lock)
     const metadata = readMetadata()
     if (missing.length === 0 && metadataMatches(metadata, packageJson, shrinkwrapSha256)) {
+      if (packageJson.version === '2026.9.2') ensureRelayThoughtSignatureReplay(vendorRoot)
       console.log(`[openclaw-vendor] OpenClaw ${packageJson.version} production dependencies already prepared`)
       return
     }
     if (missing.length === 0) {
+      if (packageJson.version === '2026.9.2') ensureRelayThoughtSignatureReplay(vendorRoot)
       writeMetadata(packageJson, shrinkwrapSha256, 'validated-existing-node-modules', packageArtifacts)
       console.log(`[openclaw-vendor] validated existing OpenClaw ${packageJson.version} production dependencies`)
       return
@@ -685,6 +688,7 @@ async function main() {
     throw new Error(`[openclaw-vendor] npm ci completed but runtime dependencies are still missing: ${missing.join(', ')}`)
   }
   writeMetadata(packageJson, shrinkwrapSha256, installMode, packageArtifacts)
+  if (packageJson.version === '2026.9.2') ensureRelayThoughtSignatureReplay(vendorRoot)
   console.log(`[openclaw-vendor] prepared OpenClaw ${packageJson.version} production dependencies`)
 }
 

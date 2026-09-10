@@ -384,6 +384,7 @@ export function compactOpenAiTools(tools, overrides = {}) {
       compactedChars: serializedCompactedChars,
       estimatedToolTokens: estimateRelayTokens(compacted),
       droppedTools: Math.max(0, candidates.length - compacted.length),
+      sentToolNames: compacted.map((tool) => tool.function.name),
       maxToolTokens: limits.maxToolTokens,
       changed: originalChars !== serializedCompactedChars,
     },

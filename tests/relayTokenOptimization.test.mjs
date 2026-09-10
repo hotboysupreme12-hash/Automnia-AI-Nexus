@@ -9,6 +9,18 @@ test('tool budget retains authorized execution tools without inventing missing t
   assert.equal(names.includes('browser'), false)
 })
 
+test('large scheduler schema cannot crowd exec out of Agent Chat', () => {
+  const tools = ['automations', 'session_status', 'read', 'write', 'edit', 'apply_patch', 'exec', 'process'].map((name) => ({
+    type: 'function', function: { name, parameters: { type: 'object', properties: name === 'automations'
+      ? Object.fromEntries(Array.from({ length: 16 }, (_, index) => [`option_${index}`, { type: 'string', enum: Array.from({ length: 12 }, (_, n) => `scheduler-option-${n}-${'x'.repeat(200)}`) }]))
+      : { command: { type: 'string' } } } },
+  }))
+  const result = compactOpenAiTools(tools, { maxToolTokens: 1024 })
+  assert.ok(result.tools.some((tool) => tool.function.name === 'exec'))
+  assert.ok(result.tools.some((tool) => tool.function.name === 'process'))
+  assert.ok(result.stats.estimatedToolTokens > 1024, 'soft token budget must yield to authorized execution tools')
+})
+
 import {
   automniaRelayTokenOptimization,
   compactOpenAiMessages,

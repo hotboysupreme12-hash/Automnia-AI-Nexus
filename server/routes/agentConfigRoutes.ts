@@ -451,10 +451,11 @@ export function registerAgentConfigRoutes(app: Express, options: AgentConfigRout
     }
 
     applyLocalConfigToGlobal(target.id, local, config)
-    await writeOpenclawConfig(config)
+    await writeOpenclawConfig(config, { allowDuringAgentTurn: Boolean(patch.tools || patch.sandbox) })
     const shouldResetContextSession = Boolean(
       needsDerivedFileSync ||
       patch.tools ||
+      patch.sandbox ||
       patch.auth ||
       (currentDisplayName && currentDisplayName !== previousDisplayName),
     )
