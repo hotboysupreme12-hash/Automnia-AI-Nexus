@@ -936,6 +936,7 @@ export function NexusShell() {
         >
           {tab === 'agents' && (
             <div
+              key="agents"
               ref={setAgentsWorkspaceNode}
               className={`dy-agents-workspace grid gap-5 ${isAgentConsoleVisible ? 'is-console-visible' : 'is-console-hidden'}`}
               data-console-visible={isAgentConsoleVisible ? 'true' : 'false'}
@@ -975,7 +976,7 @@ export function NexusShell() {
           )}
 
           {tab === 'missions' && (
-            <div className="dy-mission-tab-frame grid gap-5">
+            <div key="missions" className="dy-mission-tab-frame grid gap-5">
               <Suspense key="missions" fallback={<PanelLoader workspace="missions" />}>
                 <MissionDeploymentPanel />
               </Suspense>

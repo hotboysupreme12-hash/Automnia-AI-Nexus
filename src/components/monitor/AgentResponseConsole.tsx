@@ -2,7 +2,7 @@ import { useAgentVoiceStore } from '../../speech/agentVoiceStore'
 import { AvatarFallback } from '../ui/AvatarFallback'
 import { useRememberedState } from '../../hooks/useRememberedState'
 import { memo, useCallback, useDeferredValue, useEffect, useLayoutEffect, useMemo, useRef, useState, type WheelEvent } from 'react'
-import { indexResponseActivity, responseMatchesQuery } from '../../store/responseHistoryIndex'
+import { indexResponseActivity, selectResponseHistory } from '../../store/responseHistoryIndex'
 import { ResponseMarkdown } from './ResponseMarkdown'
 import { QueuedFollowupControls } from './QueuedFollowupControls'
 import { apiErrorMessage, apiRequest } from '../../api/client'
@@ -1116,12 +1116,14 @@ export function AgentResponseConsole() {
     ? `Stop ${runningSurfaceCount} monitored running Command Console ${runningSurfaceCount === 1 ? 'run' : 'runs'}`
     : `Stop ${busyAgents.length} running Command Console ${busyAgents.length === 1 ? 'run' : 'runs'}`
   const deferredResponseQuery = useDeferredValue(responseQuery)
-  const displayedResponses = useMemo(() => {
-    const query = deferredResponseQuery.trim().toLocaleLowerCase()
-    const matching = query ? responses.filter((entry) => responseMatchesQuery(entry, query, agentById.get(entry.agentId)?.name || entry.agentId)) : responses.slice(0, responseLimit)
-    return [...matching].reverse()
-  }, [responses, deferredResponseQuery, responseLimit, agentById])
-  const visibleDisplayedResponses = displayedResponses
+  const responseHistory = useMemo(() => selectResponseHistory(
+    responses,
+    deferredResponseQuery,
+    (agentId) => agentById.get(agentId)?.name || agentId,
+    responseLimit,
+  ), [responses, deferredResponseQuery, responseLimit, agentById])
+  const visibleDisplayedResponses = responseHistory.entries
+  const hiddenResponseCount = responseHistory.total - visibleDisplayedResponses.length
   const agentReplyInFlight = busyAgents.length > 0 || visibleDisplayedResponses.some((entry) => entry.streaming)
   const targetMode = selectedTargets.length
     ? selectedTargets.length === 1 ? 'Direct chat' : 'Multi-agent chat'
@@ -2292,7 +2294,7 @@ export function AgentResponseConsole() {
 
       {/* Messages area */}
       {responses.length > 0 && <div className="dy-chat-history-tools flex min-w-0 shrink-0 flex-wrap gap-2 px-3 py-2">
-        <input type="search" aria-label="Search retained conversation" placeholder="Search conversation" value={responseQuery} onChange={(event) => setResponseQuery(event.target.value)} className="min-w-0 flex-1 rounded border border-white/15 bg-transparent px-2 py-2 text-[12px]" />
+        <input type="search" aria-label="Search retained conversation" placeholder="Search conversation" value={responseQuery} onChange={(event) => { setResponseQuery(event.target.value); setResponseLimit(MESSAGE_RENDER_LIMIT) }} className="min-w-0 flex-1 rounded border border-white/15 bg-transparent px-2 py-2 text-[12px]" />
         <Button size="compact" variant="quiet" onClick={() => {
           const blob = new Blob([JSON.stringify({ exportedAt: new Date().toISOString(), responses: visibleDisplayedResponses }, null, 2)], { type: 'application/json' })
           const url = URL.createObjectURL(blob)
@@ -2314,13 +2316,13 @@ export function AgentResponseConsole() {
         data-scroll-surface="chat-history"
         data-empty={visibleDisplayedResponses.length === 0 ? 'true' : 'false'}
       >
-        {!responseQuery && responseLimit < responses.length && <Button size="compact" variant="quiet" onClick={() => {
+        {hiddenResponseCount > 0 && <Button size="compact" variant="quiet" onClick={() => {
           const list = listRef.current
           if (list) olderResponseAnchor.current = { height: list.scrollHeight, top: list.scrollTop }
           stickToBottomRef.current = false
           setFollowingLatest(false)
-          setResponseLimit(responses.length)
-        }}>Show {responses.length - responseLimit} older messages</Button>}
+          setResponseLimit((current) => current + MESSAGE_RENDER_LIMIT)
+        }}>Show {Math.min(MESSAGE_RENDER_LIMIT, hiddenResponseCount)} older {deferredResponseQuery.trim() ? 'matches' : 'messages'} ({hiddenResponseCount} remaining)</Button>}
         {responseQuery && visibleDisplayedResponses.length === 0 && <p role="status" className="p-3 text-[13px]">No retained messages match this search.</p>}
         {visibleDisplayedResponses.length === 0 && !responseQuery && (
           <div className="dy-command-idle-hint" aria-label="Command console is standing by">

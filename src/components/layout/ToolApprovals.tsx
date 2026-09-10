@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import { startForegroundPolling } from '../../utils/foregroundPolling'
 import { apiRequest, apiErrorMessage } from '../../api/client'
 import { useNexusStore } from '../../store/nexusStore'
 
@@ -9,18 +10,20 @@ export function ToolApprovals() {
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState('')
   const agents = useNexusStore((s) => s.agents)
-  useEffect(() => {
-    let stopped = false
-    let timer: ReturnType<typeof setTimeout>
-    const poll = async () => {
-      const result = await apiRequest<{ pending: Approval[] }>('/api/tool-approvals', { timeoutMs: 5000 })
-      if (stopped) return
-      if (result.ok) setPending(result.data.pending.filter((item) => item.expiresAtMs > Date.now()))
-      timer = setTimeout(() => void poll(), 2000)
-    }
-    void poll()
-    return () => { stopped = true; clearTimeout(timer) }
-  }, [])
+  useEffect(() => startForegroundPolling(async (signal) => {
+    const result = await apiRequest<{ pending: Approval[] }>('/api/tool-approvals', { timeoutMs: 5000, signal })
+    if (!result.ok || signal.aborted) return
+    const next = result.data.pending.filter((item) => item.expiresAtMs > Date.now())
+    setPending((previous) => {
+      const unchanged = previous.length === next.length && previous.every((item, index) => {
+        const other = next[index]
+        return item.id === other.id && item.expiresAtMs === other.expiresAtMs
+          && item.request.agentId === other.request.agentId
+          && item.request.command === other.request.command && item.request.cwd === other.request.cwd
+      })
+      return unchanged ? previous : next
+    })
+  }, 2000), [])
   const current = pending[0]
   if (!current) return null
   const resolve = async (decision: 'allow-once' | 'allow-always' | 'deny', full = false) => {

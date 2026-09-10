@@ -26,7 +26,20 @@ export function useWorkspaceScroll(workspace: string, rootRef: RefObject<HTMLEle
       if (restoring || leaving) return
       for (const [key, element] of surfaces()) saved.set(key, { top: element.scrollTop, left: element.scrollLeft })
     }
+    // Scroll events from the console used to scan every workspace surface and
+    // read all their offsets. Only the surface that moved needs to be recorded.
+    const recordScroll = (event: Event) => {
+      if (restoring || leaving) return
+      const target = event.target
+      if (target === document || target === page || target === window) {
+        saved.set('window', { top: page.scrollTop, left: page.scrollLeft })
+      } else if (target instanceof HTMLElement && root.contains(target)) {
+        const key = target.dataset.workspaceScroll
+        if (key) saved.set(key, { top: target.scrollTop, left: target.scrollLeft })
+      }
+    }
     const takeControl = () => {
+      if (!restoring) return
       restoring = false
       window.clearTimeout(settleTimer)
       page.style.overflowAnchor = originalAnchor
@@ -47,7 +60,7 @@ export function useWorkspaceScroll(workspace: string, rootRef: RefObject<HTMLEle
       if (ready) settleTimer = window.setTimeout(takeControl, 250)
     }
     const keyControl = (event: KeyboardEvent) => { if (['ArrowDown', 'ArrowUp', 'PageDown', 'PageUp', 'Home', 'End', ' '].includes(event.key)) takeControl() }
-    const freeze = () => { takeControl(); leaving = true }
+    const freeze = () => { takeControl(); record(); leaving = true }
     const resume = () => { leaving = false; record() }
     restore()
     const observer = new MutationObserver(restore)
@@ -55,7 +68,7 @@ export function useWorkspaceScroll(workspace: string, rootRef: RefObject<HTMLEle
     const resize = new ResizeObserver(restore)
     resize.observe(root)
     const timeout = window.setTimeout(() => { takeControl(); observer.disconnect(); resize.disconnect() }, 3000)
-    window.addEventListener('scroll', record, true)
+    window.addEventListener('scroll', recordScroll, { capture: true, passive: true })
     window.addEventListener('wheel', takeControl, { passive: true })
     window.addEventListener('touchstart', takeControl, { passive: true })
     window.addEventListener('pointerdown', takeControl, { passive: true })
@@ -68,7 +81,7 @@ export function useWorkspaceScroll(workspace: string, rootRef: RefObject<HTMLEle
       window.clearTimeout(timeout)
       window.clearTimeout(settleTimer)
       page.style.overflowAnchor = originalAnchor
-      window.removeEventListener('scroll', record, true)
+      window.removeEventListener('scroll', recordScroll, true)
       window.removeEventListener('wheel', takeControl)
       window.removeEventListener('touchstart', takeControl)
       window.removeEventListener('pointerdown', takeControl)

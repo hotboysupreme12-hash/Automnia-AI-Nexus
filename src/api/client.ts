@@ -140,9 +140,8 @@ export async function apiRequest<T = unknown>(path: string, options: ApiRequestO
 
   const timeoutMs = Math.max(1, options.timeoutMs ?? DEFAULT_TIMEOUT_MS)
   const { signal, dispose } = composeSignal(options.signal ?? undefined, timeoutMs)
-  const body = requestBodyAndHeaders(options.body, headers)
-
   try {
+    const body = requestBodyAndHeaders(options.body, headers)
     const response = await fetchControlCenterWithAuth(url, { ...options, body, headers, signal })
     const responseRequestId = response.headers.get('x-request-id') || response.headers.get('x-control-center-request-id') || requestId
     const { payload, text } = await readResponsePayload(response)
@@ -184,7 +183,10 @@ export async function apiRequest<T = unknown>(path: string, options: ApiRequestO
     }
   } catch (error) {
     const aborted = signal.aborted || (error instanceof DOMException && error.name === 'AbortError')
-    const timeout = error instanceof DOMException && error.name === 'TimeoutError'
+    // Reading an aborted response body can throw AbortError even when our
+    // deadline caused it. Preserve the originating reason for useful UI errors.
+    const reason = signal.aborted ? signal.reason : error
+    const timeout = reason instanceof DOMException && reason.name === 'TimeoutError'
     const message = timeout
       ? `Request timed out after ${timeoutMs}ms`
       : aborted

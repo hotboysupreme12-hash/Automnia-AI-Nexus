@@ -50,6 +50,19 @@ function headersWithBearer(input: RequestInfo | URL, init?: RequestInit): Header
   return headers
 }
 
+/** Cancel this caller's wait without cancelling recovery shared by other requests. */
+async function waitForSessionRecovery(signal?: AbortSignal | null): Promise<string | null> {
+  signal?.throwIfAborted()
+  if (!signal) return recoverDesktopControlCenterSession()
+  return new Promise((resolve, reject) => {
+    const onAbort = () => reject(signal.reason)
+    signal.addEventListener('abort', onAbort, { once: true })
+    void recoverDesktopControlCenterSession().then(resolve, reject).finally(() => {
+      signal.removeEventListener('abort', onAbort)
+    })
+  })
+}
+
 async function fetchWithSessionRecovery(
   fetchImpl: typeof window.fetch,
   input: RequestInfo | URL,
@@ -69,9 +82,13 @@ async function fetchWithSessionRecovery(
   // whose existing session expired while the app was running.
   if (!readAuthToken()) return firstResponse
 
-  const refreshedToken = await recoverDesktopControlCenterSession()
+  const signal = init?.signal ?? (input instanceof Request ? input.signal : undefined)
+  const refreshedToken = await waitForSessionRecovery(signal)
   if (!refreshedToken) return firstResponse
 
+  signal?.throwIfAborted()
+  // The rejected body is no longer needed once a retry will replace it.
+  void firstResponse.body?.cancel().catch(() => {})
   const retryHeaders = headersWithBearer(retryInput, init)
   retryHeaders.set('Authorization', `Bearer ${refreshedToken}`)
   return fetchImpl(retryInput, {

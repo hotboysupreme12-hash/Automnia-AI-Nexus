@@ -24,3 +24,22 @@ export function indexResponseActivity(responses: AgentResponse[]) {
   }
   return { queuedResponsesByAgent, activeResponseByAgent, queuedResponseCount }
 }
+
+/** Keep DOM work bounded even when a query matches the entire retained history. */
+export function selectResponseHistory(
+  responses: AgentResponse[],
+  query: string,
+  agentNameFor: (agentId: string) => string,
+  limit: number,
+) {
+  const normalizedQuery = query.trim().toLocaleLowerCase()
+  if (!normalizedQuery) return { entries: responses.slice(0, limit).reverse(), total: responses.length }
+  const entries: AgentResponse[] = []
+  let total = 0
+  for (const entry of responses) {
+    if (!responseMatchesQuery(entry, normalizedQuery, agentNameFor(entry.agentId))) continue
+    total += 1
+    if (entries.length < limit) entries.push(entry)
+  }
+  return { entries: entries.reverse(), total }
+}

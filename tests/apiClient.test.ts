@@ -231,3 +231,25 @@ test('apiErrorMessage turns browser transport failures into an actionable local-
   assert.match(apiErrorMessage({ ...base, code: 'network_error' }), /could not reach the local Control Center/)
   assert.match(apiErrorMessage({ ...base, code: 'timeout' }), /took too long to respond/)
 })
+
+test('body-stream AbortError retains the timeout that actually caused it', async () => {
+  queueFetchResult(async (_input, init) => new Response(new ReadableStream({
+    start(controller) {
+      init?.signal?.addEventListener('abort', () => {
+        controller.error(new DOMException('Body aborted', 'AbortError'))
+      }, { once: true })
+    },
+  })))
+  const result = await apiRequest('/api/slow-body', { timeoutMs: 5 })
+  assert.equal(result.ok, false)
+  if (!result.ok) assert.equal(result.error.code, 'timeout')
+})
+
+test('unserializable request bodies return a failure without leaking a deadline timer', async () => {
+  const body: Record<string, unknown> = {}
+  body.self = body
+  const before = fetchCalls.length
+  const result = await apiRequest('/api/body', { method: 'POST', body })
+  assert.equal(result.ok, false)
+  assert.equal(fetchCalls.length, before)
+})

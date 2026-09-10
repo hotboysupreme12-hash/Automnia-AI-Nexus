@@ -1,7 +1,7 @@
 import { spawn } from 'node:child_process'
 import { createServer } from 'node:http'
 import { createRequire } from 'node:module'
-import { createReadStream, existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
+import { createReadStream, existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { stat } from 'node:fs/promises'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
@@ -11,7 +11,8 @@ const repoRoot = path.resolve(fileURLToPath(new URL('..', import.meta.url)))
 const distDir = path.resolve(process.env.AUTOMNIA_UI_SMOKE_DIST_DIR || path.join(repoRoot, 'dist'))
 const outputDir = path.resolve(process.env.AUTOMNIA_UI_SMOKE_OUTPUT_DIR || path.join(repoRoot, 'output', 'playwright'))
 const tmpDir = path.join(repoRoot, '.tmp')
-const runnerAppDir = path.join(tmpDir, 'ui-smoke-electron-app')
+// Concurrent smoke runs must not overwrite each other's preload and fixture URL.
+const runnerAppDir = path.join(tmpDir, `ui-smoke-electron-app-${process.pid}`)
 const runnerPath = path.join(runnerAppDir, 'main.cjs')
 const runnerPreloadPath = path.join(runnerAppDir, 'preload.cjs')
 const electronPath = require('electron')
@@ -1619,4 +1620,5 @@ try {
   await runElectronSmoke(url)
 } finally {
   await new Promise((resolve) => server.close(resolve))
+  rmSync(runnerAppDir, { recursive: true, force: true })
 }

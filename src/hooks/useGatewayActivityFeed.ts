@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
+import { reconcileGatewayActivityFeed, type GatewayActivityFeedSnapshot } from './gatewayActivityFeedState'
 import { apiErrorMessage, apiRequest } from '../api/client'
 import type { GatewayLogEntry } from './useRuntimeStatus'
 import { getRuntimeMonitorClearGeneration, useRuntimeMonitorClearCutoffMs } from './runtimeMonitorClear'
@@ -7,24 +8,6 @@ export type GatewayActivityFeed = {
   generatedAt: string
   storage: 'durable-ledger'
   entries: GatewayLogEntry[]
-}
-
-type GatewayActivityFeedSnapshot = {
-  feed: GatewayActivityFeed | null
-  error: string
-}
-
-function feedKey(feed: GatewayActivityFeed) {
-  return feed.entries.map((entry) => [
-    entry.id,
-    entry.timestamp,
-    entry.stream,
-    entry.message,
-    entry.level || '',
-    entry.source || '',
-    entry.channel || '',
-    entry.direction || '',
-  ].join('|')).join('^')
 }
 
 /**
@@ -36,7 +19,6 @@ export function useGatewayActivityFeed(intervalMs = 3_000, limit = 48) {
   const clearCutoffMs = useRuntimeMonitorClearCutoffMs()
   const [snapshot, setSnapshot] = useState<GatewayActivityFeedSnapshot>({ feed: null, error: '' })
   const inFlight = useRef<AbortController | null>(null)
-  const latestKey = useRef('')
 
   const refresh = useCallback(async () => {
     if (inFlight.current) return
@@ -52,12 +34,7 @@ export function useGatewayActivityFeed(intervalMs = 3_000, limit = 48) {
       if (!result.ok) throw new Error(apiErrorMessage(result.error))
       if (controller.signal.aborted || requestClearGeneration !== getRuntimeMonitorClearGeneration()) return
 
-      const nextKey = feedKey(result.data)
-      setSnapshot((previous) => {
-        const feedUnchanged = previous.feed !== null && latestKey.current === nextKey
-        latestKey.current = nextKey
-        return feedUnchanged && !previous.error ? previous : { feed: result.data, error: '' }
-      })
+      setSnapshot((previous) => reconcileGatewayActivityFeed(previous, result.data))
     } catch (error) {
       if (controller.signal.aborted || requestClearGeneration !== getRuntimeMonitorClearGeneration()) return
       const message = error instanceof Error ? error.message : String(error)
@@ -68,7 +45,6 @@ export function useGatewayActivityFeed(intervalMs = 3_000, limit = 48) {
   }, [limit])
 
   useEffect(() => {
-    latestKey.current = ''
     setSnapshot({ feed: null, error: '' })
   }, [clearCutoffMs])
 

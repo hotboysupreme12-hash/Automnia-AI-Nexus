@@ -154,3 +154,28 @@ test('unauthenticated status without a saved session stays at the login gate', a
     statusEndpoint = false
   }
 })
+
+test('cancelling a recovery wait returns promptly without cancelling other requests or retrying the cancelled action', async () => {
+  authTokens.writeAuthToken('expired-cancellation-test')
+  let releaseBootstrap!: (token: string) => void
+  bootstrapResponse = new Promise<string>((resolve) => { releaseBootstrap = resolve })
+  const callsBefore = bootstrapCalls
+  const controller = new AbortController()
+  const cancelled = fetchControlCenterWithAuth('/api/cancelled-action', { signal: controller.signal })
+  const surviving = fetchControlCenterWithAuth('/api/surviving-action')
+  try {
+    for (let attempt = 0; attempt < 20 && bootstrapCalls === callsBefore; attempt += 1) await Promise.resolve()
+    assert.equal(bootstrapCalls, callsBefore + 1)
+    const rejected = assert.rejects(cancelled, { name: 'AbortError' })
+    controller.abort()
+    await rejected
+    releaseBootstrap('renewed-session')
+    assert.equal((await surviving).status, 200)
+    assert.equal(requests.filter((request) => request.url === '/api/cancelled-action').length, 1)
+    assert.equal(bootstrapCalls, callsBefore + 1)
+  } finally {
+    releaseBootstrap('renewed-session')
+    bootstrapResponse = 'renewed-session'
+    authTokens.clearAuthToken()
+  }
+})
