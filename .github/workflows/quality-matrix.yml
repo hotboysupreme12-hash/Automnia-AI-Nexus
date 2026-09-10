@@ -41,6 +41,9 @@ jobs:
       - name: Install locked dependencies
         run: npm ci
 
+      - name: Prepare vendored OpenClaw dependencies
+        run: npm run prepare:openclaw-vendor
+
       - name: Audit production dependencies
         run: npm run audit:dependencies
 
