@@ -7,7 +7,9 @@ const { DatabaseSync } = require('node:sqlite')
 const source = fs.readFileSync(require('node:path').join(__dirname, '../server/controlPlane.ts'), 'utf8')
 function load(name, context = {}) {
   const start = source.indexOf(`function ${name}(`)
-  const end = source.indexOf('\n}\n', start) + 2
+  const closing = /\r?\n}\r?\n/.exec(source.slice(start))
+  if (start < 0 || !closing) throw new Error(`Unable to extract ${name} from controlPlane.ts`)
+  const end = start + closing.index + closing[0].indexOf('}') + 1
   return vm.runInNewContext(ts.transpile(source.slice(start, end)) + `\n${name}`, context)
 }
 test('projection removes retired per-agent limits on repeated saves without losing supported limits', () => {
