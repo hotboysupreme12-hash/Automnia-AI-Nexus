@@ -2,7 +2,7 @@ import { createBufferedAgentTurnService } from '../server/services/agents/agentT
 import assert from 'node:assert/strict'
 import test from 'node:test'
 import { createGatewayAgentTurnService } from '../server/services/agents/gatewayAgentTurnService'
-import { isContextOverflowResult } from '../server/services/agents/contextOverflowRecovery'
+import { buildContextOverflowContinuationPrompt, isContextOverflowResult } from '../server/services/agents/contextOverflowRecovery'
 const createAbortSignal = () => new AbortController().signal
 
 for (const code of [0, 1, 400]) test(`gateway automatically recovers context overflow with exit code ${code}`, async () => {
@@ -150,6 +150,14 @@ test('context detection ignores echoed errors and generic new-session advice', (
   for (const reply of ['You can start a fresh session.', 'I fixed context overflow recovery.']) {
     assert.equal(isContextOverflowResult({ code: 0, stdout: 'context_length_exceeded', stderr: '' }, reply), false)
   }
+})
+
+test('context recovery does not resend an oversized doctrine prompt', () => {
+  const prompt = buildContextOverflowContinuationPrompt('DOCTRINE '.repeat(20_000), 'Finish the SEO audit and save the report.', 2_400)
+  assert.ok(prompt.length <= 2_400)
+  assert.match(prompt, /Finish the SEO audit and save the report/)
+  assert.match(prompt, /durable workspace and runtime state/)
+  assert.doesNotMatch(prompt, /DOCTRINE DOCTRINE DOCTRINE DOCTRINE DOCTRINE DOCTRINE DOCTRINE DOCTRINE/)
 })
 
 test('buffered agent turn service replaces already streamed overflow text after recovery', async () => {

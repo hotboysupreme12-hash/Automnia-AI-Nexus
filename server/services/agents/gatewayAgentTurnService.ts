@@ -1,5 +1,5 @@
 import { randomUUID } from 'node:crypto'
-import { CONTEXT_OVERFLOW_CONTINUATION, isContextOverflowResult } from './contextOverflowRecovery'
+import { buildContextOverflowContinuationPrompt, isContextOverflowResult } from './contextOverflowRecovery'
 import { gatewayChatAbortError } from '../gateway/gatewayChatService'
 
 export type AgentTurnThinkingLevel = 'off' | 'minimal' | 'low' | 'medium' | 'high' | 'xhigh' | 'max'
@@ -422,7 +422,7 @@ export function createGatewayAgentTurnService(options: GatewayAgentTurnServiceOp
       sessionId = randomUUID()
       options.deleteProviderConversationHistory(staleSessionId)
       options.agentTurnSessions.set(sessionScope, sessionId)
-      const recoveryMessage = `${CONTEXT_OVERFLOW_CONTINUATION}\n\n${getFullGatewayMessage()}`
+      const recoveryMessage = buildContextOverflowContinuationPrompt(getFullGatewayMessage(), effectiveMessage)
       emitGatewayStage('Recovering from the context limit and continuing your request.', { sessionId, retry: 'context-overflow' })
       await options.appendAgentPromptDump({
         route: routeOptions.route, agent, sessionId, thinking: effectiveThinking,

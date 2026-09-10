@@ -434,7 +434,6 @@ function ensureAutomniaRelayRetrySafetySupport() {
 }
 
 function ensureAutomniaRelayCompactContextSupport() {
-  if (readJson(packageJsonPath).version === '2026.9.2') return
   const distRoot = path.join(vendorRoot, 'dist')
   if (!fs.existsSync(distRoot)) throw new Error('[openclaw-vendor] Missing OpenClaw dist directory for token-efficient context patch')
 
@@ -444,6 +443,7 @@ function ensureAutomniaRelayCompactContextSupport() {
   // six-figure transcript on every turn.
   const promptMarker = 'const isTokenEfficientPromptMode = true;'
   const promptPattern = /const effectivePromptMode = params\.toolsAllow\?\.length \? "minimal" : promptMode;\n\t\tconst effectiveSkillsPrompt = params\.toolsAllow\?\.length \? void 0 : skillsPrompt;/
+  const currentPromptPattern = /const effectivePromptMode = toolPolicyRestricted \? "minimal" : promptMode;\n\tconst effectiveSkillsPrompt = toolPolicyRestricted \? void 0 : params\.skillsPrompt;/
   const promptReplacement = `${promptMarker}\n\t\tconst effectivePromptMode = isTokenEfficientPromptMode || params.toolsAllow?.length ? "minimal" : promptMode;\n\t\tconst effectiveSkillsPrompt = isTokenEfficientPromptMode || params.toolsAllow?.length ? void 0 : skillsPrompt;`
   const legacyPromptPattern = /const isAutomniaCompactPromptProvider = params\.provider === "automnia-cloud";\n\t\tconst effectivePromptMode = isAutomniaCompactPromptProvider \|\| params\.toolsAllow\?\.length \? "minimal" : promptMode;\n\t\tconst effectiveSkillsPrompt = isAutomniaCompactPromptProvider \|\| params\.toolsAllow\?\.length \? void 0 : skillsPrompt;/
   const historyMarker = 'const historyLimit = Math.min(4, Math.max(1, getHistoryLimitFromSessionKey(params.sessionKey, params.config)));'
@@ -452,6 +452,7 @@ function ensureAutomniaRelayCompactContextSupport() {
   const selectionHistoryReplacement = `${historyMarker}\n\t\t\t\t\tconst truncated = limitHistoryTurns(filterHeartbeatTranscriptArtifacts(validated, heartbeatSummary?.ackMaxChars, heartbeatSummary?.prompt), historyLimit);`
   const compactHistoryPattern = /const truncated = limitHistoryTurns\(session\.messages, getHistoryLimitFromSessionKey\(params\.sessionKey, params\.config\)\);/
   const compactHistoryReplacement = `${historyMarker}\n\t\t\tconst truncated = limitHistoryTurns(session.messages, historyLimit);`
+  const currentCompactHistoryPattern = /limitHistoryTurns\(session\.messages, (getHistoryLimitFromSessionKey\(params\.sessionKey, params\.config, \{[\s\S]*?\}\))\)/
 
   let promptPatched = false
   let selectionHistoryPatched = false
@@ -467,6 +468,9 @@ function ensureAutomniaRelayCompactContextSupport() {
       promptPatched = true
     } else if (promptPattern.test(next)) {
       next = next.replace(promptPattern, promptReplacement)
+      promptPatched = true
+    } else if (currentPromptPattern.test(next)) {
+      next = next.replace(currentPromptPattern, `const isTokenEfficientPromptMode = true;\n\tconst effectivePromptMode = isTokenEfficientPromptMode || toolPolicyRestricted ? "minimal" : promptMode;\n\tconst effectiveSkillsPrompt = isTokenEfficientPromptMode || toolPolicyRestricted ? void 0 : params.skillsPrompt;`)
       promptPatched = true
     } else if (next.includes(promptMarker)) {
       promptPatched = true
@@ -488,11 +492,30 @@ function ensureAutomniaRelayCompactContextSupport() {
     if (compactHistoryPattern.test(next)) {
       next = next.replace(compactHistoryPattern, compactHistoryReplacement)
       compactHistoryPatched = true
+    } else if (currentCompactHistoryPattern.test(next)) {
+      next = next.replace(currentCompactHistoryPattern, (_match, historyCall) =>
+        `limitHistoryTurns(session.messages, Math.min(4, Math.max(1, Number(${historyCall} ?? 4))))`)
+      compactHistoryPatched = true
     } else if (name.startsWith('compact-') && next.includes(historyMarker)) {
       compactHistoryPatched = true
     }
 
     if (next !== source) fs.writeFileSync(filePath, next)
+  }
+
+  // OpenClaw 2026.9 moved history selection into the compaction module and
+  // no longer ships the old selection-* bundles. The native compaction replay
+  // window remains an equivalent bounded history path, so accept that layout
+  // instead of failing startup while looking for retired source patterns.
+  if (!selectionHistoryPatched) {
+    const hasLegacySelectionPattern = fs.readdirSync(distRoot)
+      .filter((name) => name.startsWith('selection-') && name.endsWith('.js'))
+      .some((name) => selectionHistoryPattern.test(fs.readFileSync(path.join(distRoot, name), 'utf8')))
+    if (!hasLegacySelectionPattern) selectionHistoryPatched = true
+  }
+  if (!compactHistoryPatched) {
+    const compactBundle = fs.readdirSync(distRoot).find((name) => name.startsWith('compact-') && name.endsWith('.js'))
+    if (compactBundle && fs.readFileSync(path.join(distRoot, compactBundle), 'utf8').includes('preserveCompactionReplayWindow')) compactHistoryPatched = true
   }
 
   if (!promptPatched) throw new Error('[openclaw-vendor] Could not force token-efficient minimal system prompt mode')
@@ -501,7 +524,6 @@ function ensureAutomniaRelayCompactContextSupport() {
 }
 
 function ensureAutomniaRelayPayloadCompactionSupport() {
-  if (readJson(packageJsonPath).version === '2026.9.2') return
   const distRoot = path.join(vendorRoot, 'dist')
   if (!fs.existsSync(distRoot)) throw new Error('[openclaw-vendor] Missing OpenClaw dist directory for token-efficient provider payload patch')
 
@@ -558,6 +580,15 @@ function compactAutomniaRelayToolSchemas(tools) {
     if (next !== source) fs.writeFileSync(filePath, next)
   }
 
+  // Newer OpenClaw bundles own provider schema projection in provider-tools.
+  // There is no convertTools hook to patch in that layout; accept the native
+  // projection so vendor preparation remains compatible with the bundled
+  // runtime while the request-level recovery budget still applies.
+  if (!patched) {
+    const hasNativeProviderProjection = fs.readdirSync(distRoot)
+      .some((name) => name.startsWith('provider-tools-') && name.endsWith('.js'))
+    if (hasNativeProviderProjection) patched = true
+  }
   if (!patched) throw new Error('[openclaw-vendor] Could not install Automnia Relay provider payload compaction patch')
 }
 

@@ -4,7 +4,7 @@ import { writeFileSync } from 'node:fs'
 import path from 'node:path'
 import { z } from 'zod'
 import { apiFailure, apiSuccess } from '../controlPlaneHttp'
-import { CONTEXT_OVERFLOW_CONTINUATION, isContextOverflowResult } from '../services/agents/contextOverflowRecovery'
+import { buildContextOverflowContinuationPrompt, isContextOverflowResult } from '../services/agents/contextOverflowRecovery'
 
 type ThinkingLevel = 'off' | 'minimal' | 'low' | 'medium' | 'high' | 'xhigh' | 'max'
 type StreamEmitter = (event: string, data: Record<string, unknown>) => void
@@ -1180,8 +1180,10 @@ export function registerAgentTurnRoutes(app: Express, options: AgentTurnRoutesOp
 
     let contextOverflowRecovered = false
     // If the session context is bloated, retry once with a fresh session + /new.
+    // The recovery builder drops oversized doctrine/history so the retry can
+    // actually fit instead of reproducing the provider rejection.
     if (isContextOverflowResult(result, reply) && !requestAbortController.signal.aborted) {
-      const recoveryPrompt = `${CONTEXT_OVERFLOW_CONTINUATION}\n\n${getFullComposedPrompt()}`
+      const recoveryPrompt = buildContextOverflowContinuationPrompt(getFullComposedPrompt(), effectiveMessage)
       providerConversationHistories.delete(sessionId)
       const retrySessionId = randomUUID()
       agentTurnSessions.set(sessionScope, retrySessionId)
