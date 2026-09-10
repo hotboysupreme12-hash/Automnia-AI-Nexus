@@ -113,6 +113,10 @@ function isHostedBillingOrAuthFailure(result: GatewayAgentTurnResult, modelId: s
     || /billing|insufficient (?:balance|credits|quota)|credit balance|payment required|authentication_error|unauthorized|no active license|license key/.test(detail)
 }
 
+function isGatewayNoReplyResult(result: GatewayAgentTurnResult) {
+  return result.code !== 0 && /without a visible assistant transcript/i.test(`${result.stdout}\n${result.stderr}`)
+}
+
 export function createGatewayAgentTurnService(options: GatewayAgentTurnServiceOptions) {
   async function runGatewayAgentTurnForStream(
     body: Record<string, unknown>,
@@ -275,6 +279,48 @@ export function createGatewayAgentTurnService(options: GatewayAgentTurnServiceOp
       streamObserverId,
       signal,
     })
+
+    // A Gateway run can complete successfully at the transport layer while
+    // returning no visible assistant message (for example after a stale or
+    // partially persisted conversation transcript). Recover once with a
+    // fresh session. This is safe for the specific no-reply result because
+    // Gateway has not produced a user-visible answer or a replayable result;
+    // accepted/uncertain dispatch errors still propagate without retrying.
+    if (isGatewayNoReplyResult(result) && !signal.aborted) {
+      const staleSessionId = sessionId
+      sessionId = randomUUID()
+      options.deleteProviderConversationHistory(staleSessionId)
+      options.agentTurnSessions.set(sessionScope, sessionId)
+      emitGatewayStage('Resetting the conversation and retrying for a visible reply.', { sessionId, retry: 'no-visible-reply' })
+      await options.appendAgentPromptDump({
+        route: routeOptions.route,
+        agent,
+        sessionId,
+        thinking: effectiveThinking,
+        fastMode: effectiveFastMode,
+        timeoutSeconds: effectiveTimeoutSeconds,
+        cwd: runCwd,
+        requestMessage: rawMessage,
+        intentMessage,
+        finalMessage: getFullGatewayMessage(),
+        note: `${routeOptions.note}; no visible Gateway reply retry using a fresh session`,
+      })
+      result = await options.runGatewayChatTurn({
+        agentId: agent,
+        agentName,
+        message: getFullGatewayMessage(),
+        attachments: requestedAttachments,
+        sessionId,
+        requestedSessionKey,
+        freshSession: true,
+        thinking: effectiveThinking,
+        fastMode: effectiveFastMode,
+        timeoutMs: openClawTimeoutMs,
+        cwd: runCwd,
+        streamObserverId,
+        signal,
+      })
+    }
 
     // A stale persisted Cloud Run origin, a just-switched account, or a
     // recently refreshed entitlement can leave one Gateway request using old
