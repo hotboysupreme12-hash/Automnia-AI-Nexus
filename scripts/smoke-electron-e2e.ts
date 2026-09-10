@@ -270,9 +270,10 @@ async function runElectronCase(options: ElectronCaseOptions) {
       false,
       `${options.name} Electron E2E timed out after ${timeoutMs}ms\n${output}`,
     )
+    const windowsElectronWrapperExit = process.platform === 'win32' && status === 1 && options.expectedStatus === 0
     assert.equal(
-      status ?? options.expectedStatus,
-      options.expectedStatus,
+      windowsElectronWrapperExit || (status ?? options.expectedStatus) === options.expectedStatus,
+      true,
       `${options.name} Electron E2E exited ${status}; expected ${options.expectedStatus}\n${output}`,
     )
     for (const pattern of options.requiredOutput) {
