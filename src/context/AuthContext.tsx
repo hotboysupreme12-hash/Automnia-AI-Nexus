@@ -12,6 +12,7 @@ import {
   writeAuthToken,
 } from '../api/authTokenStore'
 import { AuthContext, type AccountInfo } from './authContextValue'
+import { useNexusStore } from '../store/nexusStore'
 
 const AUTH_STATUS_TIMEOUT_MS = 4_500
 const GOOGLE_LOGIN_POLL_ATTEMPTS = 600
@@ -233,6 +234,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const skipDesktopSessionBootstrap = () => {
     authEpochRef.current += 1
+    useNexusStore.getState().resetForNewSession()
     markAuthSignedOut()
     setToken(null)
     setIsAuthenticated(false)
@@ -265,6 +267,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     const activeGoogleLogin = googleLoginAttemptRef.current
     if (activeGoogleLogin) cancelGoogleLoginAttempt(activeGoogleLogin, 'Google sign-in was cancelled because the session was closed.')
     authEpochRef.current += 1
+    useNexusStore.getState().resetForNewSession()
     markAuthSignedOut()
     setToken(null)
     setIsAuthenticated(false)

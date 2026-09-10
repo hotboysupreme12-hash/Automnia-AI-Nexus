@@ -85,6 +85,7 @@ import {
   makeCommandConsoleResponseState,
   queueProgressLines,
   removeCommandConsoleDraftsForAgent,
+  clearAllCommandConsoleDrafts,
   upsertCommandConsoleResponse,
   type CommandConsoleQueuedFollowup,
   type NexusCommandConsoleResponseState,
@@ -725,6 +726,7 @@ interface NexusState extends NexusAgentConfigState, NexusMissionState, NexusUiSt
 
   resetMission: () => void
   resetSimulation: () => void
+  resetForNewSession: () => void
 }
 
 /* ------------------------------------------------------------------ */
@@ -1024,6 +1026,7 @@ const agentWorkingTimers = new Map<string, ReturnType<typeof setInterval>>()
 const lastAgentTurnStartedAt = new Map<string, number>()
 const activeAgentTurnControllers = new Map<string, Set<AbortController>>()
 const operatorCancelledAgentTurns = new Set<string>()
+let commandConsoleSessionGeneration = 0
 let cycleToCommanderFn: (() => void) | null = null
 let dispatchNextWorkerCycleFn: (() => void) | null = null
 let refreshLoopDelegationsFn: ((commanderId: string, commanderOutput: string) => void) | null = null
@@ -1715,6 +1718,7 @@ export const useNexusStore = create<NexusState>()(
       /* ---- agent prompt runner ---- */
       const runAgentPrompt = async (aid: string, prompt: string, options: PromptRunOptions = {}) => {
         const trimmed = prompt.trim(); if (!trimmed) return
+        const runSessionGeneration = commandConsoleSessionGeneration
         if (get().busyAgentIds.includes(aid)) return
         setAgentBusy(aid, true)
         const start = Date.now()
@@ -1815,6 +1819,7 @@ export const useNexusStore = create<NexusState>()(
           }
         }
         const upsertLiveResponse = (response: string, ok = true, dur = Date.now() - start, streaming = true, modelId = liveResponseModelId, failureKind?: string) => {
+          if (runSessionGeneration !== commandConsoleSessionGeneration) return
           liveResponseCreated = true
           if (response) liveResponseText = response.slice(0, MAX_LIVE_RESPONSE_TEXT_CHARS)
           const visibleResponse = response ? response.slice(0, MAX_LIVE_RESPONSE_TEXT_CHARS) : liveResponseText
@@ -1917,6 +1922,7 @@ export const useNexusStore = create<NexusState>()(
           refresh: true,
         })
         const finalizeLiveResponse = (response: string, ok: boolean, dur = Date.now() - start, failureKindOverride?: string) => {
+          if (runSessionGeneration !== commandConsoleSessionGeneration) return
           const ts = new Date().toISOString()
           const seconds = Math.round(dur / 1000)
           const summary = compactLine(response || (ok ? 'completed' : 'blocked'), 160)
@@ -2423,6 +2429,7 @@ export const useNexusStore = create<NexusState>()(
           }
           return { ok, output, payload, streamed: turn.streamed }
         } catch (e) {
+          if (runSessionGeneration !== commandConsoleSessionGeneration) return { ok: false, output: 'Session closed.' }
           const message = String(e)
           const cancelledByOperator = operatorCancelledAgentTurns.has(aid)
           const timedOut = !cancelledByOperator && /aborterror|operation was aborted|signal is aborted/i.test(message)
@@ -3971,6 +3978,42 @@ export const useNexusStore = create<NexusState>()(
             const selected = normalizeNexusSelection(s.agents, s.selectedAgentId, s.selectedAgentIds)
             return { ...makeRuntimeProjectionState(s.agents), ...makeCommandConsoleResponseState(), missionHistory: [], missionReports: [], coordinationMessages: [], coordinationDelegations: [], coordinationWorkspace: [], ...selected }
           })
+        },
+        resetForNewSession: () => {
+          commandConsoleSessionGeneration += 1
+          clearAllContinuousTimers()
+          clearMissionBackendPollTimer()
+          clearAllCommandConsoleDrafts()
+          clearQueuedCommandConsoleFollowups()
+          if (commanderCycleRetryTimer) clearTimeout(commanderCycleRetryTimer)
+          commanderCycleRetryTimer = null
+          pendingWorkerCycle.clear()
+          cycleToCommanderFn = null
+          dispatchNextWorkerCycleFn = null
+          refreshLoopDelegationsFn = null
+          abortActiveAgentTurns([...activeAgentTurnControllers.keys()])
+          activeAgentTurnControllers.clear()
+          operatorCancelledAgentTurns.clear()
+          const activeMissionId = get().activeMission?.id
+          if (activeMissionId) coordinationBus?.destroySession(activeMissionId)
+          set((s) => ({
+            ...makeRuntimeProjectionState(s.agents),
+            ...makeCommandConsoleResponseState(),
+            activePartyIds: [],
+            confirmedPartyIds: [],
+            selectedAgentId: null,
+            selectedAgentIds: [],
+            isEditorOpen: false,
+            editingAgentId: null,
+            editorTab: 'profile',
+            missionDraft: { ...DEFAULT_MISSION_DRAFT },
+            activeMission: null,
+            missionHistory: [],
+            missionReports: [],
+            coordinationMessages: [],
+            coordinationDelegations: [],
+            coordinationWorkspace: [],
+          }))
         },
       }
     },
