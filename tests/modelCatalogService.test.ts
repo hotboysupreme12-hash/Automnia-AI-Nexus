@@ -96,7 +96,7 @@ test('fallback catalog canonicalizes Codex subscription models and suppresses un
   assert.equal(automniaFallback?.alias, 'Automnia Swift')
   assert.equal(automnia38Model?.name, 'Automnia Prime')
   assert.equal(canonicalAgentModelId('automnia-cloud/gemini-3.6-flash'), 'automnia-cloud/gemini-3.6-flash')
-  assert.equal(canonicalAgentModelId('automnia-cloud/unknown-model'), 'automnia-cloud/gemini-3.7-flash')
+  assert.equal(canonicalAgentModelId('automnia-cloud/unknown-model'), 'automnia-cloud/gemini-3.8-flash')
   assert.equal(vertexGeminiFlash?.streaming.provider, 'google-vertex')
   assert.equal(metaMuse?.alias, 'Muse Spark 1.1 (Meta)')
   assert.equal(metaMuse?.streaming.provider, 'meta')

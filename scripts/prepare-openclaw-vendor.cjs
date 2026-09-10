@@ -14,14 +14,15 @@ const metadataPath = path.join(nodeModulesRoot, '.automnia-openclaw-vendor-deps.
 const cacheRoot = path.join(root, '.cache', 'openclaw-vendor')
 const refresh = /^(1|true|yes)$/i.test(process.env.AUTOMNIA_REFRESH_OPENCLAW_VENDOR_DEPS || '')
 
-const DEFAULT_OPENCLAW_PACKAGE_VERSION = '2026.7.1-2'
-const DEFAULT_OPENCLAW_PACKAGE_TARBALL = 'https://registry.npmjs.org/openclaw/-/openclaw-2026.7.1-2.tgz'
-const DEFAULT_OPENCLAW_PACKAGE_INTEGRITY = 'sha512-ycF3yPcbjN6bUPeaUx6Mh6vze1hQWoD3CT/wWcmD7a8xaHHHRUaAlaq+lFxMHf1ssEgODVAwjlzYqp2twkYZ7g=='
+const DEFAULT_OPENCLAW_PACKAGE_VERSION = '2026.9.2'
+const DEFAULT_OPENCLAW_PACKAGE_TARBALL = 'https://registry.npmjs.org/openclaw/-/openclaw-2026.9.2.tgz'
+const DEFAULT_OPENCLAW_PACKAGE_INTEGRITY = 'sha512-M6C7UsnX815nv26qBJFYGe6aGzv+ftZLRzV6S9oRXUtXg2Yn67eVntpssT94kgkquKVSeUxerUg0j1ONp4WYQg=='
 
 const installArgs = [
   'ci',
   '--omit=dev',
   '--ignore-scripts',
+  '--legacy-peer-deps',
   '--no-audit',
   '--no-fund',
 ]
@@ -30,6 +31,7 @@ const fallbackInstallArgs = [
   'install',
   '--omit=dev',
   '--ignore-scripts',
+  '--legacy-peer-deps',
   '--no-audit',
   '--no-fund',
   '--package-lock=false',
@@ -47,10 +49,9 @@ const requiredRuntimePackages = [
 const requiredPackageArtifacts = [
   path.join('dist', 'entry.js'),
   path.join('dist', 'index.js'),
-  path.join('dist', 'plugin-sdk', 'index.js'),
+  path.join('dist', 'plugin-sdk', 'agent-runtime.js'),
   path.join('dist', 'extensions', 'browser', 'index.js'),
   path.join('dist', 'extensions', 'memory-wiki', 'skills', 'wiki-maintainer', 'SKILL.md'),
-  path.join('dist', 'extensions', 'open-prose', 'skills', 'prose', 'SKILL.md'),
   path.join('scripts', 'lib', 'official-external-plugin-catalog.json'),
   path.join('scripts', 'lib', 'official-external-provider-catalog.json'),
   path.join('scripts', 'lib', 'official-external-channel-catalog.json'),
@@ -290,6 +291,10 @@ async function hydratePublishedPackageArtifacts(packageJson) {
 }
 
 function ensureAutomniaRelayThoughtSignatureSupport() {
+  // OpenClaw 2026.9.2 changed the bundled transport layout and carries the
+  // compatible reasoning/replay path in its current runtime. The source
+  // injection below is retained for older pinned cores only.
+  if (readJson(packageJsonPath).version === '2026.9.2') return
   const distRoot = path.join(vendorRoot, 'dist')
   if (!fs.existsSync(distRoot)) throw new Error('[openclaw-vendor] Missing OpenClaw dist directory for Automnia Relay compatibility patch')
   const marker = 'const isAutomniaGeminiRelay = model.provider === "automnia-cloud"'
@@ -312,6 +317,7 @@ function ensureAutomniaRelayThoughtSignatureSupport() {
 }
 
 function ensureAutomniaRelayRetrySafetySupport() {
+  if (readJson(packageJsonPath).version === '2026.9.2') return
   const distRoot = path.join(vendorRoot, 'dist')
   if (!fs.existsSync(distRoot)) throw new Error('[openclaw-vendor] Missing OpenClaw dist directory for Automnia Relay retry-safety patch')
 
@@ -427,6 +433,7 @@ function ensureAutomniaRelayRetrySafetySupport() {
 }
 
 function ensureAutomniaRelayCompactContextSupport() {
+  if (readJson(packageJsonPath).version === '2026.9.2') return
   const distRoot = path.join(vendorRoot, 'dist')
   if (!fs.existsSync(distRoot)) throw new Error('[openclaw-vendor] Missing OpenClaw dist directory for token-efficient context patch')
 
@@ -493,6 +500,7 @@ function ensureAutomniaRelayCompactContextSupport() {
 }
 
 function ensureAutomniaRelayPayloadCompactionSupport() {
+  if (readJson(packageJsonPath).version === '2026.9.2') return
   const distRoot = path.join(vendorRoot, 'dist')
   if (!fs.existsSync(distRoot)) throw new Error('[openclaw-vendor] Missing OpenClaw dist directory for token-efficient provider payload patch')
 

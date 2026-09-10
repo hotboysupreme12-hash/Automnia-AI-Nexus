@@ -26,6 +26,7 @@ export type RuntimeCronJobSummary = Omit<Shift, 'endsAt' | 'scheduleKind' | 'sch
   scheduleKind?: string
   scheduleLabel?: string
   payloadKind?: string
+  systemOwned?: boolean
   nextRunAt?: string | null
   endsAt?: string | null
   lastError?: string | null

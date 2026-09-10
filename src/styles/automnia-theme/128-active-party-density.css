@@ -81,15 +81,15 @@ html.dui-pro-overhaul.dui-cohesive-ui [data-dui-panel="active-party"] .party-slo
   z-index: 5;
   right: 4px;
   bottom: 4px;
-  width: 32px;
-  min-width: 32px;
-  min-height: 28px;
+  width: 16px;
+  min-width: 16px;
+  min-height: 20px;
   padding: 0;
-  border: 1px solid rgba(160, 176, 188, .22);
-  border-radius: 5px;
+  border: 0;
+  border-radius: 0;
   appearance: none;
   -webkit-appearance: none;
-  background: #090d10;
+  background: transparent;
   color: #d8e1e6;
   font-size: 11px;
   font-weight: 700;
@@ -101,13 +101,14 @@ html.dui-pro-overhaul.dui-cohesive-ui [data-dui-panel="active-party"] .party-slo
 
 html.dui-pro-overhaul.dui-cohesive-ui [data-dui-panel="active-party"] .party-slot-position:hover,
 html.dui-pro-overhaul.dui-cohesive-ui [data-dui-panel="active-party"] .party-slot-position:focus-visible {
-  border-color: rgba(176, 205, 216, .48);
-  background: #0e1519;
-  outline: none;
+  border: 0;
+  background: transparent;
+  outline: 1px solid rgba(176, 205, 216, .48);
+  outline-offset: 2px;
 }
 
 html.dui-pro-overhaul.dui-cohesive-ui [data-dui-panel="active-party"] .dy-party-slot:has(.party-slot-position) .party-slot-content {
-  padding-right: 42px !important;
+  padding-right: 28px !important;
 }
 
 html.dui-pro-overhaul.dui-cohesive-ui [data-dui-panel="active-party"] .dy-party-slot:has(.party-slot-position)::before,

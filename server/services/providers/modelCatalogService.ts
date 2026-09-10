@@ -146,7 +146,7 @@ export const FALLBACK_MODELS: Array<{ id: string; alias?: string }> = [
   // fallback chain in the shared catalog so the Gateway can fail over without
   // ever leaving the hosted credits boundary.
   { id: AUTOMNIA_RELAY_MODEL_IDS[0], alias: AUTOMNIA_RELAY_MODEL_LABELS[AUTOMNIA_RELAY_MODEL_IDS[0]] },
-  { id: AUTOMNIA_CREDITS_MODEL_ID, alias: AUTOMNIA_RELAY_MODEL_LABELS[AUTOMNIA_CREDITS_MODEL_ID] },
+  { id: AUTOMNIA_RELAY_MODEL_IDS[1], alias: AUTOMNIA_RELAY_MODEL_LABELS[AUTOMNIA_RELAY_MODEL_IDS[1]] },
   { id: AUTOMNIA_RELAY_MODEL_IDS[2], alias: AUTOMNIA_RELAY_MODEL_LABELS[AUTOMNIA_RELAY_MODEL_IDS[2]] },
   { id: AUTOMNIA_CREDITS_FALLBACK_MODEL_IDS[1], alias: 'Automnia Classic' },
   { id: 'anthropic/claude-fable-5', alias: 'Claude Fable 5 (flagship)' },

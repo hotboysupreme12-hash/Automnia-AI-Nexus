@@ -3,17 +3,17 @@
 import { pipeline } from '@huggingface/transformers'
 import { prepareAudioForSpeechRecognition } from './audioProcessing'
 
-const MODEL_ID = 'onnx-community/whisper-tiny.en'
+const MODEL_ID = 'onnx-community/whisper-base'
 
 type SpeechBackend = 'webgpu' | 'wasm'
 type ProgressInfo = { status: string; progress?: number }
-type SpeechPipeline = (
+type SpeechPipeline = ((
   audio: Float32Array,
-  options: { chunk_length_s?: number; stride_length_s?: number; max_new_tokens?: number },
-) => Promise<{ text: string } | Array<{ text: string }>>
+  options: { chunk_length_s?: number; stride_length_s?: number; max_new_tokens?: number; language?: string; task?: string },
+) => Promise<{ text: string } | Array<{ text: string }>>) & { dispose?: () => Promise<unknown> }
 type WorkerRequest =
   | { type: 'prepare'; requestId: string }
-  | { type: 'transcribe'; requestId: string; audio: ArrayBuffer }
+  | { type: 'transcribe'; requestId: string; audio: ArrayBuffer; language?: string }
 
 const workerScope = self as DedicatedWorkerGlobalScope
 let backend: SpeechBackend = 'wasm'
@@ -49,13 +49,13 @@ async function createTranscriber(requestId: string, preferredBackend: SpeechBack
     const transcriber = await pipeline('automatic-speech-recognition', MODEL_ID, {
       device: 'webgpu',
       dtype: {
-        encoder_model: 'fp16',
-        decoder_model_merged: 'q4',
+        encoder_model: 'fp32',
+        decoder_model_merged: 'q8',
       },
       progress_callback,
     }) as SpeechPipeline
     post(requestId, { type: 'progress', phase: 'loading', progress: 100, backend: preferredBackend })
-    await transcriber(new Float32Array(16_000), { max_new_tokens: 1 })
+    await transcriber(new Float32Array(16_000), { max_new_tokens: 1, language: 'en', task: 'transcribe' })
     post(requestId, { type: 'progress', phase: 'ready', backend: preferredBackend })
     return transcriber
   }
@@ -63,10 +63,13 @@ async function createTranscriber(requestId: string, preferredBackend: SpeechBack
   const transcriber = await pipeline('automatic-speech-recognition', MODEL_ID, {
     device: 'wasm',
     dtype: 'q8',
+    // ORT 1.27's extended QDQ optimizer rejects Whisper's merged embeddings.
+    // Keep quantized weights, but avoid that incompatible graph rewrite.
+    session_options: { graphOptimizationLevel: 'basic' },
     progress_callback,
   }) as SpeechPipeline
   post(requestId, { type: 'progress', phase: 'loading', progress: 100, backend: preferredBackend })
-  await transcriber(new Float32Array(16_000), { max_new_tokens: 1 })
+  await transcriber(new Float32Array(16_000), { max_new_tokens: 1, language: 'en', task: 'transcribe' })
   post(requestId, { type: 'progress', phase: 'ready', backend: preferredBackend })
   return transcriber
 }
@@ -87,26 +90,47 @@ function loadTranscriber(requestId: string) {
   return transcriberPromise
 }
 
+// ONNX sessions share decoder state; never run two recordings concurrently.
+let requestQueue = Promise.resolve()
 workerScope.addEventListener('message', (event: MessageEvent<WorkerRequest>) => {
   const request = event.data
-  void (async () => {
+  requestQueue = requestQueue.then(async () => {
     try {
-      const transcriberPromise = loadTranscriber(request.requestId)
       if (request.type === 'prepare') {
-        await transcriberPromise
+        await loadTranscriber(request.requestId)
         post(request.requestId, { type: 'prepared', backend })
         return
       }
 
       post(request.requestId, { type: 'progress', phase: 'processing', backend })
       const preparedAudio = prepareAudioForSpeechRecognition(new Float32Array(request.audio)).audio
-      const transcriber = await transcriberPromise
+      const transcriber = await loadTranscriber(request.requestId)
       post(request.requestId, { type: 'progress', phase: 'transcribing', backend })
-      const output = await transcriber(preparedAudio, {
-        chunk_length_s: 15,
-        stride_length_s: 3,
-        max_new_tokens: 96,
-      })
+      const generationOptions = {
+        chunk_length_s: 30,
+        stride_length_s: 5,
+        max_new_tokens: 440,
+        task: 'transcribe',
+        // Transformers.js currently defaults to English; detection is not implemented.
+        language: request.language || 'en',
+      }
+      let output
+      try {
+        output = await transcriber(preparedAudio, generationOptions)
+      } catch (error) {
+        if (backend !== 'webgpu') throw error
+        // Device loss and unsupported GPU kernels can happen after warmup.
+        await transcriber.dispose?.().catch(() => undefined)
+        backend = 'wasm'
+        transcriberPromise = null
+        transcriberPromise = createTranscriber(request.requestId, 'wasm').catch((loadError) => {
+          transcriberPromise = null
+          throw loadError
+        })
+        const fallback = await transcriberPromise
+        post(request.requestId, { type: 'progress', phase: 'transcribing', backend })
+        output = await fallback(preparedAudio, generationOptions)
+      }
       const text = Array.isArray(output) ? output.map((entry) => entry.text).join(' ') : output.text
       post(request.requestId, { type: 'result', text: text.trim(), backend })
     } catch (error) {
@@ -115,5 +139,5 @@ workerScope.addEventListener('message', (event: MessageEvent<WorkerRequest>) => 
         message: error instanceof Error ? error.message : 'Local transcription failed.',
       })
     }
-  })()
+  })
 })

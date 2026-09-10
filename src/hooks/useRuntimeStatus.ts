@@ -275,6 +275,7 @@ export type RuntimeCronJob = {
   scheduleKind?: string
   scheduleLabel?: string
   payloadKind?: string
+  systemOwned?: boolean
   lastError?: string | null
 }
 

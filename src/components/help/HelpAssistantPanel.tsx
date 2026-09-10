@@ -61,7 +61,7 @@ const HELP_TOPICS: HelpTopic[] = [
   {
     icon: 'agent',
     title: 'Customize an agent',
-    question: 'How do I customize an Automnia agent for a specific role? Give me the agent-first prompt, every Agent Editor tab, autosave behavior, safe permissions, a test, and the exact manual path.',
+    question: 'How do I customize an Automnia agent for a specific role? Give me the agent-first prompt, every Agent Editor tab, how changes are saved, safe permissions, a test, and the exact manual path.',
   },
   {
     icon: 'mail',

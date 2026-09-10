@@ -60,7 +60,7 @@ const modelProviderKey = (model: ModelPickerModel) =>
 
 const isAutomniaProviderKey = (provider: string) => provider.trim().toLowerCase() === 'automnia-cloud'
 
-function ProviderLogo({ provider, label, size = 'sm' }: { provider: string; label: string; size?: 'sm' | 'md' }) {
+export function ProviderLogo({ provider, label, size = 'sm' }: { provider: string; label: string; size?: 'sm' | 'md' }) {
   const [failedSrc, setFailedSrc] = useState('')
   const logoKey = providerLogoKey(provider)
   const src = providerLogoSrc(provider)

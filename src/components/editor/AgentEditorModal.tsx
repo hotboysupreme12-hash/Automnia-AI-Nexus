@@ -18,10 +18,17 @@ import { useNexusStore } from '../../store/nexusStore'
 import type { AgentSkillEntry, BehaviorProfile, FastModeDefault, HeartbeatConfig, OpenClawAgent, ThinkingLevel } from '../../types/nexus'
 import { apiUrl } from '../../utils/apiUrl'
 import { isSelectableModelId } from '../../utils/modelGrouping'
-import { resolveAgentRoutePresentation, resolveLicenseEntitlement } from '../../utils/licenseEntitlement'
+import {
+  AUTOMNIA_RELAY_MODEL_IDS,
+  AUTOMNIA_RELAY_MODEL_LABELS,
+  isAutomniaCreditsModelId,
+  isAutomniaCreditsModelSelectionRoute,
+  resolveAgentRoutePresentation,
+  resolveLicenseEntitlement,
+} from '../../utils/licenseEntitlement'
 import { agentPortraitSrc, localPortraitPathFromInput } from '../../utils/portrait'
 import { ProviderAuthModal } from '../auth/ProviderAuthModal'
-import { ModelPicker } from '../models/ModelPicker'
+import { AgentModelPicker } from '../models/AgentModelPicker'
 import { useLicense } from '../../context/useLicense'
 
 type EditorTab = AgentEditorTab
@@ -85,6 +92,13 @@ const CODEX_5_3_SPARK_MODEL: AvailableModel = {
   provider: 'openai',
   name: 'Codex 5.3 Spark',
 }
+const AUTOMNIA_MODEL_OPTIONS: AvailableModel[] = AUTOMNIA_RELAY_MODEL_IDS.map((id) => ({
+  id,
+  alias: AUTOMNIA_RELAY_MODEL_LABELS[id],
+  provider: 'automnia-cloud',
+  name: AUTOMNIA_RELAY_MODEL_LABELS[id],
+}))
+const AUTOMNIA_MODEL_IDS = new Set<string>(AUTOMNIA_RELAY_MODEL_IDS)
 let modelsCache: TimedEditorCache<AvailableModel[]> | null = null
 let modelsRequest: Promise<AvailableModel[]> | null = null
 let authProvidersCache: TimedEditorCache<AuthProviderStatus[]> | null = null
@@ -170,26 +184,25 @@ function clawHubSkillReference(skill: ClawHubSkillResult) {
   return owner ? `@${owner}/${skill.slug}` : skill.slug
 }
 
-const ICON: Record<EditorTab,string> = { profile:'ID', model:'AI', heartbeat:'HB', policy:'SC', workspace:'WS', skills:'SK', files:'MD' }
+const EDITOR_TABS: EditorTab[] = ['profile', 'model', 'heartbeat', 'policy', 'workspace', 'skills', 'files']
 const EDITOR_TAB_LABEL: Record<EditorTab,string> = {
   profile: 'Profile',
   model: 'Model',
-  heartbeat: 'Heartbeat scheduler',
-  policy: 'Policy sandbox',
+  heartbeat: 'Schedule',
+  policy: 'Permissions',
   workspace: 'Workspace',
   skills: 'Skills',
   files: 'Agent files',
 }
 const EDITOR_TAB_HELP: Record<EditorTab,string> = {
-  profile: 'Edit identity, portrait, class, role, level, and behavior.',
-  model: 'Choose the primary model, fallbacks, reasoning effort, and work timeout.',
-  heartbeat: 'Tune cron cadence, idle timeout, loop mode, and recovery.',
-  policy: 'Set sandbox mode, scope, workspace access, and allowed tools.',
+  profile: 'Set your agent’s identity, role, and working style.',
+  model: 'Choose a model and adjust how deeply and how long your agent works.',
+  heartbeat: 'Control how often your agent wakes up and how it recovers from interruptions.',
+  policy: 'Manage isolation, workspace access, and the tools your agent can use.',
   workspace: 'Browse and assign the agent workspace directory.',
   skills: 'Search, install, update, and enable agent skills.',
   files: 'View and edit the agent markdown resource files.',
 }
-const EDITOR_TABS = Object.keys(ICON) as EditorTab[]
 const REASONING_EFFORT_LEVELS = ['off', 'minimal', 'low', 'medium', 'high', 'xhigh', 'max'] as const satisfies readonly ThinkingLevel[]
 const BEHAVIOR_OPTIONS = ['executor','architect','auditor','researcher','hybrid'] as const satisfies readonly BehaviorProfile[]
 const SANDBOX_MODE_OPTIONS = ['off','all','non-main'] as const
@@ -355,6 +368,9 @@ export function AgentEditorModal() {
   const retireRootRef = useRef<HTMLDivElement>(null)
   const retirePanelRef = useRef<HTMLDivElement>(null)
   const { license } = useLicense()
+  const entitlement = resolveLicenseEntitlement(license)
+  const routePresentation = resolveAgentRoutePresentation(license)
+  const automniaCreditsOnlyRoute = isAutomniaCreditsModelSelectionRoute(license)
   const isOpen = useNexusStore((s)=>s.isEditorOpen)
   const closeEditor = useNexusStore((s)=>s.closeEditor)
   const editingAgentId = useNexusStore((s)=>s.editingAgentId)
@@ -384,7 +400,7 @@ export function AgentEditorModal() {
   const [defaultAgentSaving,setDefaultAgentSaving] = useState(false)
   const [defaultAgentStatus,setDefaultAgentStatus] = useState('')
   const [autosavePhase,setAutosavePhase] = useState<EditorAutosavePhase>('saved')
-  const [autosaveMessage,setAutosaveMessage] = useState('All changes save automatically')
+  const [autosaveMessage,setAutosaveMessage] = useState('')
   const portraitRef = useRef<HTMLInputElement|null>(null)
   const portraitSaveTimerRef = useRef<number|null>(null)
 
@@ -687,7 +703,15 @@ export function AgentEditorModal() {
     }
   },[])
   const selectedModelIds = useMemo(() => [primary, ...fallbacks].filter(Boolean), [primary, fallbacks])
-  const selectableModels = useMemo(() => mergeSelectedModelOptions(models, selectedModelIds), [models, selectedModelIds])
+  const selectableModels = useMemo(() => {
+    if (!automniaCreditsOnlyRoute) return mergeSelectedModelOptions(models, selectedModelIds)
+    const routeModels = [
+      ...AUTOMNIA_MODEL_OPTIONS,
+      ...models.filter((model) => AUTOMNIA_MODEL_IDS.has(model.id)),
+    ]
+    const routeSelectedModelIds = selectedModelIds.filter((modelId) => isAutomniaCreditsModelId(modelId))
+    return mergeSelectedModelOptions(routeModels, routeSelectedModelIds)
+  }, [automniaCreditsOnlyRoute, models, selectedModelIds])
   const providerForModel = (modelId:string)=>selectableModels.find((model)=>model.id===modelId)?.provider || (isOpenAiCodexSubscriptionModel(modelId) ? 'openai' : modelId.split('/')[0]||'')
   const authForProvider = (provider:string)=>effectiveAuthStatusForProvider(authProviders, provider)
   const maybePromptProviderAuth = (modelId:string)=>{const status=authForProvider(providerForModel(modelId));if(status&&!status.configured)setAuthModalProvider(status)}
@@ -758,7 +782,7 @@ export function AgentEditorModal() {
       pendingModelSaveRef.current=null
       agentConfigCache.delete(agent.id)
       clearConfigDirty('model')
-      setMsStatus('Model saved automatically.')
+      setMsStatus('Model saved.')
       setAutosavePhase('saved')
       setAutosaveMessage('All changes saved')
     } catch (e) {
@@ -886,7 +910,7 @@ export function AgentEditorModal() {
         setAutosavePhase('error')
         setAutosaveMessage(`Policy autosave failed: ${apiErrorMessage(result.error)}`)
       }
-      setPsStatus(result.ok ? (sandboxOff ? 'Saved automatically · sandbox off with full tool access.' : 'Policy saved automatically.') : `Autosave failed: ${apiErrorMessage(result.error)}`)
+      setPsStatus(result.ok ? (sandboxOff ? 'Saved · sandbox off with full tool access.' : 'Policy saved.') : `Autosave failed: ${apiErrorMessage(result.error)}`)
     } catch (e) {
       const message=errorMessage(e)
       setPsStatus(`Autosave failed: ${message}`)
@@ -1038,7 +1062,7 @@ export function AgentEditorModal() {
         const finalPath=d.workspace||normalizedPath
         setWsPath(finalPath)
         updateAgentMeta(agent.id,{workspace:finalPath})
-        setWsStatus(`Saved automatically: ${finalPath}`)
+        setWsStatus(`Saved: ${finalPath}`)
         setAutosavePhase('saved')
         setAutosaveMessage('All changes saved')
         void Br(finalPath)
@@ -1346,7 +1370,7 @@ export function AgentEditorModal() {
           if(result.data.revision)resourceRevisionsRef.current.set(coordinate,result.data.revision)
           if(isCurrent()){
             if(editVersion===resourceEditVersionRef.current)resourceDirtyRef.current=false
-            setResourceConflict(null);setRstatus(`${file} saved automatically.`);setAutosavePhase('saved');setAutosaveMessage('All changes saved')
+            setResourceConflict(null);setRstatus(`${file} saved.`);setAutosavePhase('saved');setAutosaveMessage('All changes saved')
           }
           return true
         }
@@ -1423,7 +1447,7 @@ export function AgentEditorModal() {
     setDefaultAgentStatus('')
     setDefaultAgentSaving(false)
     setAutosavePhase('saved')
-    setAutosaveMessage('All changes save automatically')
+    setAutosaveMessage('')
     setTick(currentAgent.heartbeat.tickIntervalMs)
     setIdle(currentAgent.heartbeat.idleTimeoutMs)
     setCont(currentAgent.heartbeat.continuous)
@@ -1498,7 +1522,7 @@ export function AgentEditorModal() {
     : 'text-emerald-400/70'
   const heartbeatSaveStatusText = heartbeatSaveStatus?.phase === 'saved'
     ? 'Saved to backend.'
-    : heartbeatSaveStatus?.message || 'Changes save automatically'
+    : heartbeatSaveStatus?.message || ''
   const runtimeStoreStatusText = runtimeSaveStatus?.phase === 'failed' || runtimeSaveStatus?.phase === 'saving'
     ? runtimeSaveStatus.message
     : ''
@@ -1507,17 +1531,14 @@ export function AgentEditorModal() {
   const backendSaving = backendSaveEntries.find((entry) => entry?.phase === 'saving')
   const effectiveAutosavePhase:EditorAutosavePhase = backendFailure ? 'error' : backendSaving || autosavePhase === 'saving' ? 'saving' : autosavePhase
   const effectiveAutosaveMessage = backendFailure?.message || backendSaving?.message || autosaveMessage
-  const entitlement = resolveLicenseEntitlement(license)
-  const routePresentation = resolveAgentRoutePresentation(license)
   const usesHostedCredits = entitlement.isHosted
-  const usesByok = entitlement.isByok
   const providerFirst = routePresentation.providerFirst
 
   return (
     <>
       {isOpen&&(
         <div ref={dialogRootRef} data-dui-overlay="agent-editor" data-windows={IS_WINDOWS_CLIENT?'true':'false'} className={`fixed inset-0 z-50 grid place-items-center p-3 ${IS_WINDOWS_CLIENT?'bg-[#030712]/96':'bg-[#030712]/90 backdrop-blur-xl'}`}>
-          <div ref={dialogPanelRef} role="dialog" aria-modal="true" aria-labelledby={`${dialogId}-title`} tabIndex={-1} data-dui-modal="agent-editor" data-windows={IS_WINDOWS_CLIENT?'true':'false'} className="dy-surface-enter flex max-h-[78vh] w-full max-w-[720px] flex-col overflow-hidden rounded-2xl border border-white/[0.08] bg-gradient-to-b from-[#0b1120] to-[#060b12] shadow-2xl shadow-black/50">
+          <div ref={dialogPanelRef} role="dialog" aria-modal="true" aria-labelledby={`${dialogId}-title`} tabIndex={-1} data-dui-modal="agent-editor" data-windows={IS_WINDOWS_CLIENT?'true':'false'} className="agent-settings-refresh dy-surface-enter flex max-h-[78vh] w-full max-w-[720px] flex-col overflow-hidden rounded-2xl border border-white/[0.08] bg-gradient-to-b from-[#0b1120] to-[#060b12] shadow-2xl shadow-black/50">
 
             {/* HEADER */}
             <div data-editor-header className="shrink-0 border-b border-white/[0.06] bg-white/[0.015] px-5 py-3">
@@ -1528,6 +1549,7 @@ export function AgentEditorModal() {
                     <div className="pointer-events-none absolute inset-0 rounded-full bg-gradient-to-b from-white/10 to-transparent"/>
                   </div>
                   <div className="min-w-0">
+                    <p data-editor-eyebrow>Agent settings</p>
                     <h2 id={`${dialogId}-title`} className="text-sm font-extrabold text-white tracking-tight">{agent.name}</h2>
                     <details className="mt-1 text-xs text-slate-400">
                       <summary className="cursor-pointer rounded focus-visible:outline focus-visible:outline-2 focus-visible:outline-cyan-300">Agent details</summary>
@@ -1547,7 +1569,7 @@ export function AgentEditorModal() {
               <div data-editor-tabs role="tablist" aria-label="Agent settings" className="mt-3 flex gap-0.5 rounded-lg border border-white/[0.06] bg-white/[0.02] p-0.5">
                 {EDITOR_TABS.map((t)=>(
                   <button type="button" key={t} role="tab" id={`${dialogId}-tab-${t}`} aria-controls={`${dialogId}-panel`} aria-selected={tab===t} tabIndex={tab===t?0:-1} onKeyDown={(event)=>navigateTabList(event, EDITOR_TABS, t, setTab)} data-editor-tab data-active={tab===t?'true':'false'} onClick={()=>setTab(t)} title={EDITOR_TAB_HELP[t]} aria-label={EDITOR_TAB_LABEL[t]} className={`flex-1 rounded-md px-1.5 py-2 text-[11px] font-semibold transition-all ${tab===t?'bg-gradient-to-r from-cyan-500/20 to-blue-500/15 text-cyan-200 shadow-[inset_0_1px_0_rgba(255,255,255,0.05)] border border-cyan-400/20':'text-slate-400 hover:text-slate-200'}`}>
-                    <span className="mr-0.5">{ICON[t]}</span>{t}
+                    {EDITOR_TAB_LABEL[t]}
                   </button>
                 ))}
               </div>
@@ -1556,6 +1578,10 @@ export function AgentEditorModal() {
             {/* BODY */}
             <div data-editor-body role="tabpanel" id={`${dialogId}-panel`} aria-labelledby={`${dialogId}-tab-${tab}`} tabIndex={0} className="flex-1 overflow-auto p-4">
               <div data-editor-content className="mx-auto max-w-md">
+                <div data-editor-section-heading>
+                  <h3>{EDITOR_TAB_LABEL[tab]}</h3>
+                  <p>{EDITOR_TAB_HELP[tab]}</p>
+                </div>
                 {/* PROFILE */}
                 {tab==='profile'&&(
                   <div data-editor-panel="profile" className="space-y-4">
@@ -1565,8 +1591,9 @@ export function AgentEditorModal() {
                         <div className="absolute inset-0 flex items-end justify-center rounded-full bg-gradient-to-t from-black/70 to-transparent opacity-0 transition group-hover:opacity-100"><span className="pb-1.5 text-[9px] font-bold text-white">Change</span></div>
                       </button>
                       <input ref={portraitRef} type="file" accept="image/*" className="hidden" onChange={(e)=>{const f=e.target.files?.[0];e.currentTarget.value='';if(f)void UploadPortraitFile(f)}}/>
-                      <div className="flex-1 space-y-2">
-                        <input type="text" value={portraitDraft} onChange={(e)=>{const next=e.target.value;setPortraitDraft(next);setPortraitPreviewSrc('');setPortraitPreviewFailed(false);SchedulePortraitAutosave(next)}} onBlur={()=>{if(portraitSaveTimerRef.current){window.clearTimeout(portraitSaveTimerRef.current);portraitSaveTimerRef.current=null}void CommitPortraitDraft()}} onKeyDown={(e)=>{if(e.key==='Enter')e.currentTarget.blur()}} placeholder="Portrait URL or path" className="w-full rounded-lg border border-white/[0.08] bg-white/[0.03] px-3 py-2 text-[11px] text-slate-200 placeholder:text-slate-600 focus:outline-none focus:border-cyan-400/40"/>
+                      <div className="min-w-0 flex-1 space-y-2">
+                        <label htmlFor={`${dialogId}-portrait`}>Profile image</label>
+                        <input id={`${dialogId}-portrait`} type="text" value={portraitDraft} onChange={(e)=>{const next=e.target.value;setPortraitDraft(next);setPortraitPreviewSrc('');setPortraitPreviewFailed(false);SchedulePortraitAutosave(next)}} onBlur={()=>{if(portraitSaveTimerRef.current){window.clearTimeout(portraitSaveTimerRef.current);portraitSaveTimerRef.current=null}void CommitPortraitDraft()}} onKeyDown={(e)=>{if(e.key==='Enter')e.currentTarget.blur()}} placeholder="Portrait URL or path" className="w-full rounded-lg border border-white/[0.08] bg-white/[0.03] px-3 py-2 text-[11px] text-slate-200 placeholder:text-slate-600 focus:outline-none focus:border-cyan-400/40"/>
                         <div className="flex gap-1.5">
                           <button type="button" onClick={()=>void PickPortrait()} disabled={portraitPicking} title="Choose a portrait image file" className="rounded-md border border-cyan-400/20 bg-cyan-400/[0.05] px-3 py-1.5 text-[9px] font-bold text-cyan-300 hover:bg-cyan-400/[0.1] disabled:opacity-40">{portraitPicking?'Opening...':'Browse'}</button>
                           <button type="button" onClick={()=>{setPortraitDraft('');setPortraitPreviewSrc('');setPortraitPreviewFailed(false);PM({portrait:''});setPortraitStatus('Cleared.')}} title="Remove the current portrait" className="rounded-md border border-white/[0.08] bg-white/[0.03] px-3 py-1.5 text-[9px] font-bold text-slate-400 hover:border-white/20">Clear</button>
@@ -1599,15 +1626,15 @@ export function AgentEditorModal() {
                         {l:'Level',v:levelDraft,s:(v:string)=>{setLevelDraft(v);const next=parseInt(v,10);if(next>0&&next<100)PM({level:next})},b:()=>commitProfileDraft('level'),p:'1-99'},
                       ].map((f)=>(
                         <div key={f.l} className="space-y-1">
-                          <label className="block text-[9px] font-bold uppercase tracking-[0.12em] text-slate-500">{f.l}</label>
-                          <input type="text" value={f.v} onChange={(e)=>f.s(e.target.value)} onBlur={f.b} onKeyDown={(e)=>{if(e.key==='Enter')e.currentTarget.blur()}} placeholder={f.p} className="w-full rounded-lg border border-white/[0.08] bg-white/[0.03] px-3 py-2 text-[11px] text-slate-200 placeholder:text-slate-600 focus:outline-none focus:border-cyan-400/40"/>
+                          <label htmlFor={`${dialogId}-${f.l}`} className="block text-[9px] font-bold uppercase tracking-[0.12em] text-slate-500">{f.l}</label>
+                          <input id={`${dialogId}-${f.l}`} type="text" value={f.v} onChange={(e)=>f.s(e.target.value)} onBlur={f.b} onKeyDown={(e)=>{if(e.key==='Enter')e.currentTarget.blur()}} placeholder={f.p} className="w-full rounded-lg border border-white/[0.08] bg-white/[0.03] px-3 py-2 text-[11px] text-slate-200 placeholder:text-slate-600 focus:outline-none focus:border-cyan-400/40"/>
                         </div>
                       ))}
                     </div>
                     <div className="space-y-1">
-                      <label className="block text-[9px] font-bold uppercase tracking-[0.12em] text-slate-500">Behavior</label>
+                      <label className="block text-[9px] font-bold uppercase tracking-[0.12em] text-slate-500">Working style</label>
                       <select value={agent.behaviorProfile} onChange={(e)=>{const next=e.target.value;if(isOption(next,BEHAVIOR_OPTIONS))PM({behaviorProfile:next})}} className="w-full rounded-lg border border-white/[0.08] bg-white/[0.03] px-3 py-2 text-[11px] text-slate-200 focus:outline-none focus:border-cyan-400/40">
-                        <option value="executor">⚡ executor</option><option value="architect">🏗️ architect</option><option value="auditor">🛡️ auditor</option><option value="researcher">🔬 researcher</option><option value="hybrid">🎭 hybrid</option>
+                        <option value="executor">Executor</option><option value="architect">Architect</option><option value="auditor">Auditor</option><option value="researcher">Researcher</option><option value="hybrid">Hybrid</option>
                       </select>
                     </div>
                   </div>
@@ -1616,12 +1643,7 @@ export function AgentEditorModal() {
                 {/* MODEL */}
                 {tab==='model'&&(
                   <div data-editor-panel="model" className="space-y-4">
-                    <div data-editor-billing-route={usesHostedCredits ? routePresentation.providerOnly ? 'provider-only' : providerFirst ? 'provider-first' : 'automnia-first' : usesByok ? 'byok' : 'unconfigured'} className={`rounded-xl border p-3 ${usesHostedCredits ? 'border-emerald-400/20 bg-emerald-400/[0.05]' : usesByok ? 'border-sky-400/20 bg-sky-400/[0.05]' : 'border-white/[0.08] bg-white/[0.02]'}`}>
-                      <p className={`text-[11px] font-extrabold ${usesHostedCredits ? 'text-emerald-200' : usesByok ? 'text-sky-200' : 'text-slate-300'}`}>{usesHostedCredits ? `${entitlement.tierLabel} — ${routePresentation.routeLabel}` : usesByok ? `${entitlement.tierLabel} — ${routePresentation.routeLabel}` : 'License route not configured'}</p>
-                      <p className="mt-1 text-[9px] text-slate-400">{routePresentation.modelDescription}</p>
-                    </div>
                     <div>
-                      <h3 className="text-xs font-extrabold text-slate-200 mb-1">{routePresentation.modelLabel}</h3>
                       {routePresentation.managedRoute ? (
                         <div data-editor-managed-route className="rounded-lg border border-emerald-400/20 bg-emerald-400/[0.05] px-3 py-3">
                           <div className="flex items-center justify-between gap-3">
@@ -1631,8 +1653,7 @@ export function AgentEditorModal() {
                           <p className="mt-2 text-[9px] text-slate-400">{routePresentation.managedRouteDescription}</p>
                         </div>
                       ) : (
-                        <ModelPicker
-                          mode="primary"
+                        <AgentModelPicker
                           models={selectableModels}
                           selectedIds={primary ? [primary] : []}
                           fallbackIds={fallbacks}
@@ -1645,14 +1666,13 @@ export function AgentEditorModal() {
                               return next
                             })
                           }}
-                          emptyOption={{ label: 'Choose a model...', detail: 'Select a provider to browse its available models.' }}
                           disabled={modelsLoading}
                           loading={modelsLoading}
-                          label=""
                           providerAuthStatusFor={(provider) => authForProvider(provider)}
                           onProviderAuth={(_, providerStatus) => setAuthModalProvider(providerStatus)}
                           onSelect={(next) => {
                             setPrimary(next)
+                            setFallbacks(current => current.filter(id => id !== next))
                             maybePromptProviderAuth(next)
                             scheduleModelAutosave(next, fallbacks.filter((id) => id !== next))
                           }}
@@ -1667,7 +1687,7 @@ export function AgentEditorModal() {
                       <div className="flex items-center justify-between gap-3">
                         <div>
                           <p className="text-[11px] font-extrabold text-violet-100">Reasoning Effort</p>
-                          <p className="mt-0.5 text-[9px] text-slate-500">Provider-native effort for this agent.</p>
+                          <p className="mt-0.5 text-[9px] text-slate-500">Higher effort gives the model more time to reason.</p>
                         </div>
                         <span className="rounded-full border border-violet-400/20 bg-violet-400/[0.06] px-2.5 py-0.5 text-[9px] font-extrabold capitalize text-violet-200">{thinkingOn?thinkingLevel:'off'}</span>
                       </div>
@@ -1691,15 +1711,17 @@ export function AgentEditorModal() {
                         })}
                       </div>
                     </div>
+                    <details data-model-advanced>
+                      <summary>Advanced settings <span>Work timeout · {formatDuration(runtimeTimeoutSeconds*1000)}</span></summary>
                     <div className="rounded-xl border border-amber-400/15 bg-amber-400/[0.04] p-3">
                       <div className="mb-2 flex items-center justify-between gap-3">
                         <div>
                           <p className="text-[11px] font-extrabold text-amber-100">Work Timeout</p>
-                          <p className="mt-0.5 text-[9px] text-slate-500">Idle detector allowance for real agent turns.</p>
+                          <p className="mt-0.5 text-[9px] text-slate-500">Maximum time allowed for an agent turn.</p>
                         </div>
                         <span className="rounded-full border border-amber-400/20 bg-amber-400/[0.06] px-2.5 py-0.5 text-[9px] font-extrabold tabular-nums text-amber-200">{formatDuration(runtimeTimeoutSeconds*1000)}</span>
                       </div>
-                      <input type="range" min={30} max={7200} step={30} value={runtimeTimeoutSeconds}
+                      <input aria-label="Work timeout" type="range" min={30} max={7200} step={30} value={runtimeTimeoutSeconds}
                         onChange={(e)=>{const value=Number(e.target.value);markConfigDirty(agent.id,'runtime');setRuntimeTimeoutSeconds(value);PR({timeoutSeconds:value})}}
                         onPointerUp={(e)=>PR({timeoutSeconds:Number(e.currentTarget.value)})}
                         onKeyUp={(e)=>PR({timeoutSeconds:Number(e.currentTarget.value)})}
@@ -1725,9 +1747,10 @@ export function AgentEditorModal() {
                         })}
                       </div>
                     </div>
-                    <div data-editor-autosave="section" data-phase={(msStatus||runtimeStoreStatusText).toLowerCase().includes('fail')?'error':ms?'saving':'saved'} role={(msStatus||runtimeStoreStatusText).toLowerCase().includes('fail')?'alert':'status'} aria-live="polite">
-                      <i aria-hidden="true" /><span>{msStatus||runtimeStoreStatusText||'Model and reasoning changes save automatically.'}</span>
-                    </div>
+                    </details>
+                    {(msStatus||runtimeStoreStatusText) && <div data-editor-autosave="section" data-phase={(msStatus||runtimeStoreStatusText).toLowerCase().includes('fail')?'error':ms?'saving':'saved'} role={(msStatus||runtimeStoreStatusText).toLowerCase().includes('fail')?'alert':'status'} aria-live="polite">
+                      <i aria-hidden="true" /><span>{msStatus||runtimeStoreStatusText}</span>
+                    </div>}
                   </div>
                 )}
 
@@ -1737,8 +1760,8 @@ export function AgentEditorModal() {
                     {/* Leader auto-detect badge */}
                     {partySlotIndex===0?(
                       <div className="rounded-xl border border-amber-400/30 bg-gradient-to-r from-amber-400/[0.08] to-amber-300/[0.04] px-4 py-3">
-                        <p className="text-[10px] font-extrabold uppercase tracking-[0.14em] text-amber-200">★ Party Leader — Spot 1</p>
-                        <p className="mt-0.5 text-[9px] text-amber-300/70">Auto-detected. Heartbeat runs first; orchestrates team.</p>
+                        <p className="text-[10px] font-extrabold uppercase tracking-[0.14em] text-amber-200">Team leader</p>
+                        <p className="mt-0.5 text-[9px] text-amber-300/70">This agent wakes first and coordinates the team.</p>
                       </div>
                     ):partySlotIndex<=0?(
                       <div className="rounded-xl border border-white/[0.08] bg-white/[0.02] px-4 py-3">
@@ -1753,7 +1776,7 @@ export function AgentEditorModal() {
                         <label className="text-[9px] font-bold uppercase tracking-[0.14em] text-slate-500">Wake Interval</label>
                         <span className="rounded-full border border-cyan-400/20 bg-cyan-400/[0.06] px-2.5 py-0.5 text-[9px] font-extrabold tabular-nums text-cyan-200">{formatDuration(tick)}</span>
                       </div>
-                      <input type="range" min={1000} max={1800000} step={1000} value={tick}
+                      <input aria-label="Wake interval" type="range" min={1000} max={1800000} step={1000} value={tick}
                         onChange={(e)=>{const value=Number(e.target.value);markConfigDirty(agent.id,'heartbeat');setTick(value);PH({tickIntervalMs:value})}}
                         onPointerUp={(e)=>PH({tickIntervalMs:Number(e.currentTarget.value)})}
                         onKeyUp={(e)=>PH({tickIntervalMs:Number(e.currentTarget.value)})}
@@ -1771,7 +1794,7 @@ export function AgentEditorModal() {
                         <label className="text-[9px] font-bold uppercase tracking-[0.14em] text-slate-500">Idle Timeout</label>
                         <span className="rounded-full border border-cyan-400/20 bg-cyan-400/[0.06] px-2.5 py-0.5 text-[9px] font-extrabold tabular-nums text-cyan-200">{formatDuration(idle)}</span>
                       </div>
-                      <input type="range" min={5000} max={1800000} step={5000} value={idle}
+                      <input aria-label="Idle timeout" type="range" min={5000} max={1800000} step={5000} value={idle}
                         onChange={(e)=>{const value=Number(e.target.value);markConfigDirty(agent.id,'heartbeat');setIdle(value);PH({idleTimeoutMs:value})}}
                         onPointerUp={(e)=>PH({idleTimeoutMs:Number(e.currentTarget.value)})}
                         onKeyUp={(e)=>PH({idleTimeoutMs:Number(e.currentTarget.value)})}
@@ -1785,8 +1808,8 @@ export function AgentEditorModal() {
 
                     {/* Mode toggles */}
                     <div className="grid gap-2 sm:grid-cols-2">
-                      {[{l:'Continuous',v:cont,s:(b:boolean)=>{markConfigDirty(agent.id,'heartbeat');setCont(b);PH({continuous:b})},h:'Stays awake between ticks',icon:'🔄'},
-                        {l:'Auto-Recovery',v:rec,s:(b:boolean)=>{markConfigDirty(agent.id,'heartbeat');setRec(b);PH({recoveryMode:b})},h:'Retry on failure',icon:'🛟'},
+                      {[{l:'Continuous',v:cont,s:(b:boolean)=>{markConfigDirty(agent.id,'heartbeat');setCont(b);PH({continuous:b})},h:'Stays awake between ticks'},
+                        {l:'Auto-Recovery',v:rec,s:(b:boolean)=>{markConfigDirty(agent.id,'heartbeat');setRec(b);PH({recoveryMode:b})},h:'Retry on failure'},
                       ].map((f)=>(
                         <label
                           key={f.l}
@@ -1794,25 +1817,25 @@ export function AgentEditorModal() {
                           data-selected={f.v ? 'true' : 'false'}
                           className="flex items-center gap-3 rounded-xl border border-white/[0.06] bg-white/[0.02] px-4 py-3 cursor-pointer hover:border-cyan-400/20 transition group"
                         >
-                          <span className="text-lg">{f.icon}</span>
+
                           <div className="flex-1"><p className="text-[11px] font-bold text-slate-200">{f.l}</p><p className="text-[8px] text-slate-500">{f.h}</p></div>
                           <div className={`dy-agent-editor-switch-track relative h-6 w-11 rounded-full transition-colors ${f.v?'bg-cyan-500/80':'bg-slate-700/80'}`}>
                             <div className={`dy-agent-editor-switch-thumb absolute top-0.5 left-0.5 h-5 w-5 rounded-full bg-white shadow-md transition-transform ${f.v?'translate-x-5':''}`} />
                           </div>
-                          <input type="checkbox" checked={f.v} onChange={(e)=>f.s(e.target.checked)} className="hidden" />
+                          <input type="checkbox" checked={f.v} onChange={(e)=>f.s(e.target.checked)} className="sr-only" />
                         </label>
                       ))}
                     </div>
 
                     {/* Quick presets */}
                     <div>
-                      <p className="text-[9px] font-bold uppercase tracking-[0.14em] text-slate-600 mb-2">Quick Set</p>
+                      <p className="text-[9px] font-bold uppercase tracking-[0.14em] text-slate-600 mb-2">Schedule presets</p>
                       <div className="grid grid-cols-5 gap-1.5">
-                        {[{l:'⚡ Fast',h:{tickIntervalMs:2000,idleTimeoutMs:15000,continuous:true,recoveryMode:false}},
-                          {l:'🎯 Norm',h:{tickIntervalMs:4200,idleTimeoutMs:40000,continuous:false,recoveryMode:true}},
-                          {l:'🧠 Deep',h:{tickIntervalMs:7000,idleTimeoutMs:90000,continuous:false,recoveryMode:true}},
-                          {l:'🔁 Loop',h:{tickIntervalMs:3000,idleTimeoutMs:20000,continuous:true,recoveryMode:true}},
-                          {l:'🏗️ Build',h:{tickIntervalMs:900000,idleTimeoutMs:780000,continuous:true,recoveryMode:true}},
+                        {[{l:'Fast',h:{tickIntervalMs:2000,idleTimeoutMs:15000,continuous:true,recoveryMode:false}},
+                          {l:'Standard',h:{tickIntervalMs:4200,idleTimeoutMs:40000,continuous:false,recoveryMode:true}},
+                          {l:'Deep work',h:{tickIntervalMs:7000,idleTimeoutMs:90000,continuous:false,recoveryMode:true}},
+                          {l:'Loop',h:{tickIntervalMs:3000,idleTimeoutMs:20000,continuous:true,recoveryMode:true}},
+                          {l:'Build',h:{tickIntervalMs:900000,idleTimeoutMs:780000,continuous:true,recoveryMode:true}},
                         ].map((p)=>{
                           const selected = tick===p.h.tickIntervalMs&&idle===p.h.idleTimeoutMs&&cont===p.h.continuous&&rec===p.h.recoveryMode
                           return (
@@ -1854,8 +1877,8 @@ export function AgentEditorModal() {
                         {l:'Access',v:sbAccess,s:(x:string)=>{if(isOption(x,SANDBOX_ACCESS_OPTIONS)){setSbAccess(x);schedulePolicyAutosave({access:x})}},o:SANDBOX_ACCESS_OPTIONS},
                       ].map((f)=>(
                         <div key={f.l} className="space-y-1">
-                          <label className="block text-[9px] font-bold uppercase tracking-[0.12em] text-slate-500">{f.l}</label>
-                          <select value={f.v} onChange={(e)=>f.s(e.target.value)} className="w-full rounded-lg border border-white/[0.08] bg-white/[0.03] px-2.5 py-2 text-[11px] text-slate-200 focus:outline-none focus:border-cyan-400/40">{f.o.map((o)=><option key={o} value={o}>{o}</option>)}</select>
+                          <label htmlFor={`${dialogId}-${f.l}`} className="block text-[9px] font-bold uppercase tracking-[0.12em] text-slate-500">{f.l}</label>
+                          <select id={`${dialogId}-${f.l}`} value={f.v} onChange={(e)=>f.s(e.target.value)} className="w-full rounded-lg border border-white/[0.08] bg-white/[0.03] px-2.5 py-2 text-[11px] text-slate-200 focus:outline-none focus:border-cyan-400/40">{f.o.map((o)=><option key={o} value={o}>{o}</option>)}</select>
                         </div>
                       ))}
                     </div>
@@ -1869,7 +1892,7 @@ export function AgentEditorModal() {
                         <input type="text" value={tDeny} onChange={(e)=>{const next=e.target.value;setTDeny(next);schedulePolicyAutosave({deny:next})}} placeholder="exec, browser" className="w-full rounded-lg border border-white/[0.08] bg-white/[0.03] px-3 py-2 text-[11px] text-slate-200 placeholder:text-slate-600 focus:outline-none focus:border-cyan-400/40"/>
                       </div>
                     </div>
-                    <div data-editor-autosave="section" data-phase={psStatus.toLowerCase().includes('fail')?'error':ps?'saving':'saved'} role={psStatus.toLowerCase().includes('fail')?'alert':'status'} aria-live="polite"><i aria-hidden="true" /><span>{psStatus||'Sandbox and tool policy changes save automatically.'}</span></div>
+                    {psStatus && <div data-editor-autosave="section" data-phase={psStatus.toLowerCase().includes('fail')?'error':ps?'saving':'saved'} role={psStatus.toLowerCase().includes('fail')?'alert':'status'} aria-live="polite"><i aria-hidden="true" /><span>{psStatus}</span></div>}
                   </div>
                 )}
 
@@ -1895,12 +1918,12 @@ export function AgentEditorModal() {
                       {wsFolders.length>0&&(
                         <div className="max-h-40 overflow-auto rounded-lg border border-white/[0.06] bg-white/[0.02] p-1 space-y-0.5">
                           {wsFolders.map((f)=>(
-                            <button type="button" key={f} onClick={()=>{setWsPath(f);void Br(f);scheduleWorkspaceAutosave(f)}} className="w-full text-left rounded-md px-2.5 py-1.5 text-[11px] text-cyan-300 font-mono truncate hover:bg-cyan-400/[0.06]">📁 {f}</button>
+                            <button type="button" key={f} onClick={()=>{setWsPath(f);void Br(f);scheduleWorkspaceAutosave(f)}} className="w-full text-left rounded-md px-2.5 py-1.5 text-[11px] text-cyan-300 font-mono truncate hover:bg-cyan-400/[0.06]">{f}</button>
                           ))}
                         </div>
                       )}
                     </div>
-                    <div data-editor-autosave="section" data-phase={workspaceStatusIsError(wsStatus)?'error':wsSaving?'saving':'saved'} role={workspaceStatusIsError(wsStatus)?'alert':'status'} aria-live="polite"><i aria-hidden="true" /><span>{wsStatus||'Workspace path changes save automatically.'}</span></div>
+                    {wsStatus && <div data-editor-autosave="section" data-phase={workspaceStatusIsError(wsStatus)?'error':wsSaving?'saving':'saved'} role={workspaceStatusIsError(wsStatus)?'alert':'status'} aria-live="polite"><i aria-hidden="true" /><span>{wsStatus}</span></div>}
                   </div>
                 )}
 
@@ -2001,10 +2024,10 @@ export function AgentEditorModal() {
                         <button type="button" disabled={rsaving} className="rounded border border-white/20 px-3 py-2 text-xs" onClick={()=>{setRcontent(resourceConflict.content||'');if(resourceConflict.revision)resourceRevisionsRef.current.set(`${agentId}/${rfile}`,resourceConflict.revision);resourceDirtyRef.current=false;setResourceConflict(null);setRstatus('Using the reviewed version from disk.')}}>Discard my draft and use disk version</button>
                       </div>
                     </section>}
-                    <textarea value={rcontent} onChange={(e)=>{const next=e.target.value;setRcontent(next);ScheduleResourceAutosave(next)}} spellCheck readOnly={rloading||rcontentLoading} placeholder={rcontentLoading?`Loading ${rfile}...`:rloading?'Loading agent files...':'Select a markdown file.'} className="h-64 w-full rounded-lg border border-white/[0.08] bg-white/[0.02] p-3 font-mono text-[11px] text-slate-300 leading-relaxed resize-y placeholder:text-slate-600 focus:outline-none focus:border-cyan-400/30"/>
+                    <textarea aria-label={`${rfile} content`} value={rcontent} onChange={(e)=>{const next=e.target.value;setRcontent(next);ScheduleResourceAutosave(next)}} spellCheck readOnly={rloading||rcontentLoading} placeholder={rcontentLoading?`Loading ${rfile}...`:rloading?'Loading agent files...':'Select a markdown file.'} className="h-64 w-full rounded-lg border border-white/[0.08] bg-white/[0.02] p-3 font-mono text-[11px] text-slate-300 leading-relaxed resize-y placeholder:text-slate-600 focus:outline-none focus:border-cyan-400/30"/>
                     <div className="flex flex-wrap items-center gap-2">
                       <button type="button" onClick={()=>void LdFC(rfile)} disabled={rloading||rcontentLoading||!rfile} title={`Reload ${rfile || 'selected file'}`} className="rounded-lg border border-white/[0.08] bg-white/[0.03] px-3 py-2 text-[9px] font-bold uppercase tracking-[0.12em] text-slate-400 hover:border-white/20 disabled:opacity-40">{rcontentLoading?'Loading...':'Reload'}</button>
-                      <div data-editor-autosave="section" data-phase={rstatus.toLowerCase().includes('fail')?'error':rsaving?'saving':'saved'} role={rstatus.toLowerCase().includes('fail')?'alert':'status'} aria-live="polite"><i aria-hidden="true" /><span>{rstatus||(rcontentLoading?`Loading ${rfile}…`:rloading?'Loading files…':`${rfile} saves automatically.`)}</span></div>
+                      {(rstatus || rcontentLoading || rloading) && <div data-editor-autosave="section" data-phase={rstatus.toLowerCase().includes('fail')?'error':rsaving?'saving':'saved'} role={rstatus.toLowerCase().includes('fail')?'alert':'status'} aria-live="polite"><i aria-hidden="true" /><span>{rstatus || (rcontentLoading ? `Loading ${rfile}…` : 'Loading files…')}</span></div>}
                       <button type="button" onClick={()=>setRetireConfirmOpen(true)} disabled={retiring} title={`Retire ${agent.name}`} className="ml-auto rounded-lg border border-red-400/40 bg-red-500/[0.10] px-4 py-2 text-[9px] font-bold uppercase tracking-[0.12em] text-red-200 transition hover:border-red-300/70 hover:bg-red-500/[0.18] disabled:opacity-40">{retiring?'Retiring...':'Retire'}</button>
                     </div>
                   </div>

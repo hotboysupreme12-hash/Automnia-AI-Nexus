@@ -10,7 +10,6 @@ import { useRuntimeSummaryStatus, type RuntimeStatus } from '../../hooks/useRunt
 import {
   DEFAULT_REGISTRY_PREFERENCES,
   REGISTRY_DISPLAY_OPTIONS,
-  REGISTRY_OVERLAY_OPTIONS,
   REGISTRY_PREFS_CHANGED_EVENT,
   applyRegistryCardTheme,
   readRegistryPreferences,
@@ -23,10 +22,8 @@ import {
 } from '../settings/workspaceSettings'
 
 type DisplayModeConfig = { id: AgentDisplayMode; label: string; pageSize: number; hint: string }
-type OverlayPresetConfig = { id: AgentOverlayPreset; label: string; hint: string }
 
 const DISPLAY_MODES: DisplayModeConfig[] = REGISTRY_DISPLAY_OPTIONS
-const OVERLAY_PRESETS: OverlayPresetConfig[] = REGISTRY_OVERLAY_OPTIONS
 
 const gridClassByMode: Record<AgentDisplayMode, string> = {
   grid8: 'agent-card-registry-grid agent-card-registry-grid--grid8',
@@ -503,24 +500,6 @@ export function PartySelector() {
               ))}
             </div>
 
-            {!rarityColorsEnabled && (
-              <select
-                data-agent-filter-select
-                data-agent-overlay-control
-                aria-label="Card background theme"
-                value={overlayPreset}
-                onChange={(e) => setOverlayPreset(e.target.value as AgentOverlayPreset)}
-                className="px-2.5 py-1.5 pr-7 text-[10px] font-semibold outline-none transition cursor-pointer appearance-none"
-                style={CYAN_SELECT_CHEVRON_STYLE}
-              >
-                {OVERLAY_PRESETS.map((preset) => (
-                  <option key={preset.id} value={preset.id}>
-                    {preset.label}
-                  </option>
-                ))}
-              </select>
-            )}
-
           </div>
         </div>
 
@@ -535,11 +514,11 @@ export function PartySelector() {
               {rarityFilter !== 'all' && <>{filtered.length}/{agents.length} shown · </>}
             </>
           )}
-          <span data-agent-selection-status className="ml-2 text-cyan-100/60">
-            {validSelectedAgentCount
-              ? `${validSelectedAgentCount} selected for Agent Chat`
-              : 'Select agents with Chat to address them directly.'}
-          </span>
+          {validSelectedAgentCount > 0 && (
+            <span data-agent-selection-status className="ml-2 text-cyan-100/60">
+              {validSelectedAgentCount} selected for Agent Chat
+            </span>
+          )}
         </p>
 
         {/* Empty state */}

@@ -1,4 +1,4 @@
-const { app, BrowserWindow, Menu, Tray, dialog, ipcMain, nativeImage, shell, screen } = require('electron')
+const { app, BrowserWindow, Menu, Tray, dialog, ipcMain, nativeImage, shell, screen, systemPreferences } = require('electron')
 const { spawn, spawnSync } = require('node:child_process')
 const fs = require('node:fs')
 const https = require('node:https')
@@ -6,6 +6,8 @@ const http = require('node:http')
 const { randomBytes } = require('node:crypto')
 const { assertTrustedHttpsUrl, parseSha256Manifest, sha256File } = require('./runtime-download-security.cjs')
 const path = require('node:path')
+const { createMicrophonePermissions } = require('./microphone-permissions.cjs')
+const microphonePermissions = createMicrophonePermissions({ platform: process.platform, systemPreferences, shell })
 const { restoreWindowPlacement, restoreZoom } = require('./window-placement.cjs')
 
 // A packaged Windows app can be launched from a short-lived shell (including
@@ -426,6 +428,15 @@ function resolveDirectoryPickerStartPath(startPath) {
   } catch {}
   return app.getPath('documents')
 }
+
+ipcMain.handle('automnia:microphone-request', async (event) => {
+  if (!isTrustedRendererSender(event)) throw new Error('Untrusted renderer origin')
+  return microphonePermissions.request()
+})
+ipcMain.handle('automnia:microphone-settings', async (event) => {
+  if (!isTrustedRendererSender(event)) return false
+  return microphonePermissions.openSettings()
+})
 
 ipcMain.handle('automnia:pick-directory', async (event, input = {}) => {
   try {
@@ -1749,7 +1760,10 @@ function configureRendererPermissionPolicy(win) {
     isTrustedAudioCapture(webContents, permission, requestingOrigin, details)
   ))
   rendererSession.setPermissionRequestHandler((webContents, permission, callback, details) => {
-    callback(isTrustedAudioCapture(webContents, permission, details?.requestingUrl, details))
+    if (!isTrustedAudioCapture(webContents, permission, details?.requestingUrl, details)) { callback(false); return }
+    void microphonePermissions.request().then((result) => {
+      callback(result.status !== 'denied' && result.status !== 'restricted')
+    }).catch(() => callback(false))
   })
   if (typeof rendererSession.setDevicePermissionHandler === 'function') {
     rendererSession.setDevicePermissionHandler(() => false)

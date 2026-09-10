@@ -26,6 +26,7 @@ import { apiFailure, installControlPlaneErrorHandler, installControlPlaneHttp } 
 import { registerAuthRoutes } from './routes/authRoutes'
 import { registerLicenseRoutes } from './routes/licenseRoutes'
 import { registerCommandConsoleFileRoutes } from './routes/commandConsoleFileRoutes'
+import { ConsoleRunSnapshots } from './services/agents/consoleRunSnapshots'
 import { registerClawTalkConsoleRoutes } from './routes/clawTalkConsoleRoutes'
 import { registerDiagnosticsRoutes } from './routes/diagnosticsRoutes'
 import { registerAgentTurnRoutes } from './routes/agentTurnRoutes'
@@ -183,7 +184,7 @@ import { createBufferedAgentTurnService } from './services/agents/agentTurnServi
 import { createGatewayAgentTurnService } from './services/agents/gatewayAgentTurnService'
 import { createAgentRuntimeService } from './services/agents/agentRuntimeService'
 import { createAgentStreamingService } from './services/agents/agentStreamingService'
-import { composeAutomniaContinuationPrompt } from './services/agents/promptEfficiencyPolicy'
+import { AUTOMNIA_PRODUCT_IDENTITY, composeAutomniaContinuationPrompt } from './services/agents/promptEfficiencyPolicy'
 import {
   createRuntimeStatusService,
   type RuntimeStatusService,
@@ -246,9 +247,20 @@ const PORT = Number(process.env.CONTROL_CENTER_PORT || 4050)
 const CONFIGURED_AUTH_TOKEN = process.env.CONTROL_CENTER_TOKEN?.trim()
 const AUTH_TOKEN = CONFIGURED_AUTH_TOKEN || randomBytes(32).toString('base64url')
 const AUTH_TOKEN_SOURCE = CONFIGURED_AUTH_TOKEN ? 'environment' : 'generated'
+const CONTROL_CENTER_SESSION_STORE_PATH = path.resolve(
+  process.env.CONTROL_CENTER_SESSION_STORE_PATH?.trim()
+    || path.join(
+      process.env.OPENCLAW_STATE_DIR?.trim()
+        || process.env.OPENCLAW_HOME?.trim()
+        || path.join(process.env.USERPROFILE || process.env.HOME || process.cwd(), '.openclaw'),
+      'control-center',
+      'sessions.json',
+    ),
+)
 const sessionTokens = createSessionTokenStore({
   ttlMs: Number(process.env.CONTROL_CENTER_SESSION_TTL_MS || 12 * 60 * 60 * 1000),
   maxSessions: Number(process.env.CONTROL_CENTER_MAX_SESSIONS || 64),
+  persistPath: CONTROL_CENTER_SESSION_STORE_PATH,
 })
 const loginAttempts = createLoginAttemptLimiter({
   windowMs: Number(process.env.CONTROL_CENTER_LOGIN_WINDOW_MS || 60_000),
@@ -353,7 +365,7 @@ const CODEX_LEGACY_AGENT_PROFILE_ROOT = path.join(HOME_DIR, '.codex', 'agent-pro
 const LOCAL_AUTH_PATH = path.join(OPENCLAW_STATE_ROOT, 'local-auth.json')
 const CONTROL_CENTER_LEDGER_PATHS = runtimeLedgerPathsForStateRoot(OPENCLAW_STATE_ROOT)
 const RUNTIME_MONITOR_CLEAR_MARKER_PATH = runtimeMonitorClearMarkerPath(CONTROL_CENTER_LEDGER_PATHS)
-const RECOMMENDED_OPENCLAW_VERSION = '2026.7.1-2'
+const RECOMMENDED_OPENCLAW_VERSION = '2026.9.2'
 const DEFAULT_OPENCLAW_FAST_MODE = 'auto'
 const DEFAULT_OPENCLAW_FAST_AUTO_ON_SECONDS = 60
 const FAST_MODE_MODEL_PARAM_PROVIDERS = new Set(['openai', 'openai-codex', 'anthropic', 'xai', 'minimax'])
@@ -3865,6 +3877,84 @@ function isInvalidOpenClawConfigText(value: string) {
     || /\bagents\.list\.\d+:\s*Invalid input\b/i.test(value)
 }
 
+/**
+ * Keep Automnia's richer runtime policy in memory while projecting only the
+ * fields understood by the bundled OpenClaw schema to disk. OpenClaw 2026.9
+ * retired several older tuning knobs and renamed agents.list to entries;
+ * persisting those knobs makes every later Gateway restart fail validation.
+ */
+function projectConfigForOpenClaw2026_9_2(config: OpenClawConfigFile) {
+  if (resolvedOpenClawRuntimeInfo().version !== '2026.9.2') return
+  const gateway = config.gateway as Record<string, unknown> | undefined
+  if (gateway) {
+    for (const key of ['handshakeTimeoutMs', 'channelHealthCheckMinutes', 'channelStaleEventThresholdMinutes', 'channelMaxRestartsPerHour']) delete gateway[key]
+    const reload = gateway.reload as Record<string, unknown> | undefined
+    if (reload) {
+      delete reload.debounceMs
+      delete reload.deferralTimeoutMs
+    }
+  }
+  const memory = config.memory as Record<string, unknown> | undefined
+  if (memory) {
+    delete memory.backend
+    delete memory.qmd
+  }
+  const skillsLoad = config.skills?.load as Record<string, unknown> | undefined
+  if (skillsLoad) delete skillsLoad.watchDebounceMs
+  if (config.plugins) delete (config.plugins as Record<string, unknown>).bundledDiscovery
+  const models = config.models as Record<string, unknown> | undefined
+  if (models) delete models.pricing
+  const defaults = config.agents?.defaults as Record<string, unknown> | undefined
+  if (defaults) {
+    delete defaults.contextTokens
+    delete defaults.bootstrapPromptTruncationWarning
+    delete defaults.memorySearch
+    const compaction = defaults.compaction as Record<string, unknown> | undefined
+    if (compaction) {
+      delete compaction.reserveTokensFloor
+      delete compaction.truncateAfterCompaction
+      const memoryFlush = compaction.memoryFlush as Record<string, unknown> | undefined
+      if (memoryFlush) {
+        delete memoryFlush.systemPrompt
+        delete memoryFlush.prompt
+      }
+    }
+    const pruning = defaults.contextPruning as Record<string, unknown> | undefined
+    if (pruning) {
+      for (const key of ['keepLastAssistants', 'softTrimRatio', 'hardClearRatio', 'minPrunableToolChars', 'softTrim']) delete pruning[key]
+    }
+    const contextLimits = defaults.contextLimits as Record<string, unknown> | undefined
+    if (contextLimits) {
+      delete contextLimits.memoryGetDefaultLines
+      delete contextLimits.toolResultMaxChars
+    }
+  }
+  const agents = config.agents as Record<string, unknown> | undefined
+  if (agents && Array.isArray(agents.list)) {
+    const entries = isLooseRecord(agents.entries) ? agents.entries as Record<string, unknown> : {}
+    for (const entry of agents.list) {
+      if (!isLooseRecord(entry) || typeof entry.id !== 'string') continue
+      const { id, ...agentConfig } = entry
+      entries[id] = { ...(isLooseRecord(entries[id]) ? entries[id] : {}), ...agentConfig }
+    }
+    agents.entries = entries
+    delete agents.list
+  }
+  if (isLooseRecord(agents?.entries)) {
+    for (const entry of Object.values(agents.entries)) {
+      if (!isLooseRecord(entry)) continue
+      if (agents.ownership === 'explicit') delete entry.default
+      if (!isLooseRecord(entry.contextLimits)) continue
+      delete entry.contextLimits.memoryGetDefaultLines
+      delete entry.contextLimits.toolResultMaxChars
+    }
+  }
+  for (const provider of Object.values(config.models?.providers || {})) {
+    if (!isLooseRecord(provider) || !Array.isArray(provider.models)) continue
+    for (const model of provider.models) if (isLooseRecord(model)) delete model.pricing
+  }
+}
+
 async function promoteValidatedOpenClawConfigLastGood(reason: string) {
   try {
     const raw = await readTextFileWithLockRetry(OPENCLAW_CONFIG_PATH)
@@ -5975,6 +6065,7 @@ function initializeSseResponse(res: {
 const CLAWTALK_CONSOLE_EVENT_LIMIT = 200
 
 type ClawTalkConsoleMirrorContext = {
+  responseId?: string
   clawTalkRunId: string
   agentId: string
   sessionKey: string
@@ -5983,6 +6074,7 @@ type ClawTalkConsoleMirrorContext = {
   updatedAt?: number
 }
 
+const consoleRunSnapshots = new ConsoleRunSnapshots()
 const clawTalkConsoleEvents: Array<Record<string, unknown>> = []
 const clawTalkConsoleClients = new Map<string, { write: (chunk: string) => unknown; closed: boolean }>()
 const clawTalkConsoleMirrorsBySessionKey = new Map<string, ClawTalkConsoleMirrorContext>()
@@ -6000,6 +6092,7 @@ function normalizeClawTalkConsoleFrame(event: string, context: ClawTalkConsoleMi
     source: 'clawtalk',
     event,
     clawTalkRunId: context.clawTalkRunId,
+    ...(context.responseId ? { responseId: context.responseId } : {}),
     agentId: context.agentId,
     sessionKey: context.sessionKey,
     prompt: context.prompt,
@@ -6008,7 +6101,14 @@ function normalizeClawTalkConsoleFrame(event: string, context: ClawTalkConsoleMi
   }
   for (const field of ['text', 'reply', 'message', 'error', 'detail']) {
     const value = normalized[field]
-    if (typeof value === 'string') normalized[field] = compactClawTalkConsoleValue(value)
+    if (typeof value === 'string') {
+      const visible = compactClawTalkConsoleValue(value)
+      // Tokens may consist solely of whitespace; trimming each delta joins words
+      // and destroys Markdown indentation in a recovered reply.
+      normalized[field] = event === 'delta' && field === 'text'
+        ? /^\s*$/.test(value) ? value : visible ? `${value.match(/^\s*/)?.[0] || ''}${visible}${value.match(/\s*$/)?.[0] || ''}` : ''
+        : visible
+    }
   }
   return normalized
 }
@@ -6055,7 +6155,7 @@ function emitClawTalkConsoleFrame(event: string, context: ClawTalkConsoleMirrorC
     String(data.reply || data.text).trim().length > 0
   if (event === 'final' && context.terminalEmitted && !finalOverride) return false
   context.updatedAt = Date.now()
-  const payload = normalizeClawTalkConsoleFrame(event, context, data)
+  const payload = consoleRunSnapshots.record(normalizeClawTalkConsoleFrame(event, context, data))
   if (event === 'final') context.terminalEmitted = true
   clawTalkConsoleEvents.unshift(payload)
   if (clawTalkConsoleEvents.length > CLAWTALK_CONSOLE_EVENT_LIMIT) {
@@ -8710,13 +8810,28 @@ function repairInvalidPersistedTelegramPolicy(config: OpenClawConfigFile) {
   return repairInvalidTelegramDmPolicy(config as unknown as Record<string, unknown>)
 }
 
+function hydrateOpenClawAgentEntries(config: OpenClawConfigFile) {
+  const agents = config.agents as Record<string, unknown> | undefined
+  if (!agents || !isLooseRecord(agents.entries)) return config
+  // The disk schema uses entries; Automnia's services use a list. Keep one
+  // authoritative in-memory representation so edits and deletions round-trip.
+  const legacy = Array.isArray(agents.list) ? agents.list : []
+  const entries = new Map(legacy.filter(isLooseRecord).map((entry) => [entry.id, entry]))
+  for (const [id, entry] of Object.entries(agents.entries)) {
+    if (isLooseRecord(entry)) entries.set(id, { ...entry, id })
+  }
+  agents.list = Array.from(entries.values())
+  delete agents.entries
+  return config
+}
+
 async function readOpenclawConfig() {
   let raw: string
   try {
     const cached = await readCachedJsonFile(
       OPENCLAW_CONFIG_PATH,
       openclawConfigCache,
-      (text) => JSON.parse(text) as OpenClawConfigFile,
+      (text) => hydrateOpenClawAgentEntries(JSON.parse(text) as OpenClawConfigFile),
       (entry) => { openclawConfigCache = entry },
     )
     rememberConfigSnapshot(cached)
@@ -8745,7 +8860,7 @@ async function readOpenclawConfig() {
   let lastError: unknown
   for (let attempt = 0; attempt < 2; attempt += 1) {
     try {
-      const parsed = rememberConfigSnapshot(JSON.parse(raw.replace(/^\uFEFF/, '')) as OpenClawConfigFile)
+      const parsed = rememberConfigSnapshot(hydrateOpenClawAgentEntries(JSON.parse(raw.replace(/^\uFEFF/, '')) as OpenClawConfigFile))
       if ([
         ensurePrimaryAgentSelection(parsed, isRetiredAgentId),
         sanitizeOpenClawConfigAgentAvatars(parsed),
@@ -8769,7 +8884,7 @@ async function readOpenclawConfig() {
 
   try {
     const fallbackRaw = await fs.readFile(`${OPENCLAW_CONFIG_PATH}.last-good`, 'utf-8')
-    const parsed = rememberConfigSnapshot(JSON.parse(fallbackRaw.replace(/^\uFEFF/, '')) as OpenClawConfigFile)
+    const parsed = rememberConfigSnapshot(hydrateOpenClawAgentEntries(JSON.parse(fallbackRaw.replace(/^\uFEFF/, '')) as OpenClawConfigFile))
     if ([
       ensurePrimaryAgentSelection(parsed, isRetiredAgentId),
       sanitizeOpenClawConfigAgentAvatars(parsed),
@@ -9647,7 +9762,7 @@ async function writeOpenclawConfig(config: unknown, options: { allowDuringAgentT
         throw error
       })
       const current = await readCurrent()
-      const currentConfig = current === null ? undefined : JSON.parse(current.replace(/^\uFEFF/, '')) as OpenClawConfigFile
+      const currentConfig = current === null ? undefined : hydrateOpenClawAgentEntries(JSON.parse(current.replace(/^\uFEFF/, '')) as OpenClawConfigFile)
       if (currentConfig !== undefined && base === undefined && JSON.stringify(currentConfig) !== JSON.stringify(desired)) throw new ConfigEditConflict()
       const parsed = cloneJson((currentConfig === undefined ? desired : mergeConfigEdit(base, desired, currentConfig)) as OpenClawConfigFile)
       ensureOpenclawRuntimeDefaults(parsed)
@@ -9686,6 +9801,7 @@ async function writeOpenclawConfig(config: unknown, options: { allowDuringAgentT
             }
           : parsed.agents,
       }
+      projectConfigForOpenClaw2026_9_2(next as unknown as OpenClawConfigFile)
       // Create a version of the config for comparison that excludes dynamic metadata fields
       // (like lastTouchedAt, lastTouchedVersion, updatedAt) using a true deep clone to prevent unnecessary restarts.
       const stripDynamicConfigFieldsForComparison = (cfg: unknown) => {
@@ -9771,7 +9887,12 @@ function isAutomniaOpenClawModel(value: unknown) {
 }
 
 function modelSelectionForActiveBillingRoute(selection: OpenClawModelSelection) {
-  return licenseService.isUsagePriorityLocked() ? creditsOnlyModelSelection() : selection
+  if (!licenseService.isUsagePriorityLocked()) return selection
+  const primary = isAutomniaCreditsModelId(selection?.primary) ? selection.primary : AUTOMNIA_OPENCLAW_MODEL
+  const fallbacks = uniqueStrings(
+    ...(Array.isArray(selection?.fallbacks) ? selection.fallbacks : []),
+  ).filter((modelId) => isAutomniaCreditsModelId(modelId) && modelId !== primary)
+  return { primary, ...(fallbacks.length ? { fallbacks } : {}) }
 }
 
 function modelSelectionBlocked(modelId: string) {
@@ -10008,7 +10129,7 @@ async function synchronizeOpenClawBillingRoute(configInput?: OpenClawConfigFile)
     else delete config.agents.defaults.model
     clearAutomniaTelegramBillingDefaultModel(config)
     for (const agent of config.agents.list || []) {
-      const selection = removeAutomniaBillingModel(agent.model, uniqueStrings(
+      const selection = removeAutomniaBillingModel(localModels.get(agent.id) || agent.model, uniqueStrings(
         ...nonAutomniaOpenClawModels(localModels.get(agent.id)),
         ...allProviderModels,
       ))
@@ -10062,8 +10183,17 @@ async function synchronizeOpenClawBillingRoute(configInput?: OpenClawConfigFile)
   }
 
   const priority = hosted.usagePriority
+  const primaryAgent = config.agents.list?.find((agent) => agent.default)
+    || config.agents.list?.[0]
+  const primaryLocalModel = primaryAgent ? localModels.get(primaryAgent.id) : undefined
+  // The hosted gateway default follows the primary agent's durable tier,
+  // rather than retaining a generated default from an older release.
+  const gatewaySelection = isAutomniaCreditsModelId(config.agents.defaults.model?.primary)
+    && isAutomniaCreditsModelId(primaryLocalModel?.primary)
+    ? primaryLocalModel
+    : config.agents.defaults.model
   const defaultSelection = applyAutomniaBillingModelOrder(
-    config.agents.defaults.model,
+    gatewaySelection,
     priority,
     allProviderModels,
     licenseStatus.creditBalance,
@@ -10071,7 +10201,10 @@ async function synchronizeOpenClawBillingRoute(configInput?: OpenClawConfigFile)
   config.agents.defaults.model = defaultSelection
   setTelegramBillingDefaultModel(config, defaultSelection?.primary)
   for (const agent of config.agents.list || []) {
-    agent.model = applyAutomniaBillingModelOrder(agent.model, priority, uniqueStrings(
+    // Agent-local settings are authoritative. The global agent entry is a
+    // projection and may still contain the previous hosted tier (for example
+    // Balanced 3.7 after a user selected Prime 3.8).
+    agent.model = applyAutomniaBillingModelOrder(localModels.get(agent.id) || agent.model, priority, uniqueStrings(
       ...nonAutomniaOpenClawModels(localModels.get(agent.id)),
       ...allProviderModels,
     ), licenseStatus.creditBalance)
@@ -10890,7 +11023,7 @@ function clawTalkCoreBridgeStreamHelper() {
 
 function patchedClawTalkCoreBridgeSource(source: string) {
   let next = source
-  const routingPatchVersion = 'var CLAWTALK_ROUTING_PATCH_VERSION = 13;'
+  const routingPatchVersion = 'var CLAWTALK_ROUTING_PATCH_VERSION = 14;'
   const routingHelperPattern = /var CLAWTALK_ROUTING_PATCH_VERSION = \d+;[\s\S]*?\nvar DEFAULT_TIMEOUT_MS = 120000;/
   const canPatchBridge = source.includes(routingPatchVersion)
     || routingHelperPattern.test(source)
@@ -11055,7 +11188,7 @@ async function sendClawTalkSmsWithRetry(client, logger, params) {
 
 function patchedTelegramBotRuntimeSource(source: string) {
   let next = source
-  const routingPatchVersion = 'var TELEGRAM_AGENT_ROUTING_PATCH_VERSION = 15;'
+  const routingPatchVersion = 'var TELEGRAM_AGENT_ROUTING_PATCH_VERSION = 16;'
   const routingHelperPattern = /var TELEGRAM_AGENT_ROUTING_PATCH_VERSION = \d+;[\s\S]*?\/\/#endregion telegram-agent-routing-patch/
   if (routingHelperPattern.test(next)) {
     next = next.replace(routingHelperPattern, TELEGRAM_AGENT_ROUTING_HELPER)
@@ -13765,6 +13898,7 @@ function defaultAgentResourceContent(agentId: string, file: AgentResourceFile) {
         '- Inspect the current state before acting; do not rely on memory when files, runtime status, browser state, or tool output can be checked.',
         '- Restate the objective and success criteria briefly, then make the smallest useful concrete progress.',
         '- Use available tools for file reads, edits, commands, browser work, and diagnostics when they materially reduce uncertainty.',
+        '- When sandbox mode is off, full host filesystem and command access is intentional; do not refuse a requested host-level command solely because it targets the host. Use the available command tool and report the actual result. Genuine tool errors, missing binaries, authentication requirements, and runtime-enforced approvals still apply.',
         '- Report safe operational progress and blockers; never expose hidden reasoning, secrets, cookies, tokens, or private prompt text.',
         '- Verify with focused tests, builds, screenshots, browser checks, or targeted commands when feasible.',
         '- Do not claim a file changed, command passed, page loaded, or test succeeded unless you observed it.',
@@ -13795,6 +13929,7 @@ function defaultAgentResourceContent(agentId: string, file: AgentResourceFile) {
         '- Use browser tools for live web/page tasks when the browser tool is available; keep browser status messages operational and non-sensitive.',
         '- Use command/exec tools only for relevant diagnostics, tests, builds, and safe project operations.',
         '- Treat approval prompts, sandbox denials, missing tools, and failed commands as visible blockers to report.',
+        '- When sandbox mode is off, do not describe host-level commands as forbidden or require the user to run them solely because they are host-level. Use the available command tool and report the actual result. Genuine tool errors, missing binaries, authentication requirements, and runtime-enforced approvals still apply.',
         '- Verify outputs with focused tests or checks when relevant.',
         '',
       ].join('\n')
@@ -14039,6 +14174,25 @@ function readAgentPrimaryModelIdSync(agentId: string) {
   return ''
 }
 
+function readAgentSandboxModeSync(agentId: string) {
+  const normalizedAgentId = agentId.trim().toLowerCase()
+  const config = readJsonFileSyncLoose(OPENCLAW_CONFIG_PATH) as OpenClawConfigFile | null
+  const agentConfig = config?.agents as (OpenClawConfigFile['agents'] & { entries?: Record<string, unknown> }) | undefined
+  const entry = (agentConfig?.list || [])
+    .find((candidate) => candidate.id?.trim().toLowerCase() === normalizedAgentId)
+    || (agentConfig?.entries?.[agentId] as AgentConfigEntry | undefined)
+    || Object.entries(agentConfig?.entries || {})
+      .find(([id]) => id.trim().toLowerCase() === normalizedAgentId)?.[1] as AgentConfigEntry | undefined
+  if (entry?.sandbox?.mode) return entry.sandbox.mode
+
+  for (const candidate of agentLocalConfigPathCandidates(agentId)) {
+    const parsed = readJsonFileSyncLoose(candidate) as AgentLocalConfig | null
+    if (parsed?.sandbox?.mode) return parsed.sandbox.mode
+  }
+
+  return ''
+}
+
 function readAutomniaCompactAgentIdentitySync(
   agentId: string,
   executionWorkspace?: string,
@@ -14258,6 +14412,8 @@ function composeAgentDoctrinePrompt(
   if (continuation) return composeAutomniaContinuationPrompt(message)
 
   const profileDir = doctrineWorkspace || openclawAgentFolder(agentId)
+  const sandboxOff = readAgentSandboxModeSync(agentId) === 'off'
+  const sandboxOffDirective = 'Sandbox is off for this agent: full host filesystem and command access is available. Do not refuse a requested host-level command merely because it is host-level; use the available exec/tool and report its actual result. Genuine tool errors, missing binaries, authentication requirements, and runtime-enforced approvals still apply.'
   const vertexCompactMode = shouldUseGoogleVertexCompactMode(agentId)
   const vertexCompactArtifactMode = shouldUseGoogleVertexCompactArtifactMode(agentId, message)
   const vertexCompactDirective = googleVertexCompactTurnDirective(agentId, message)
@@ -14266,12 +14422,14 @@ function composeAgentDoctrinePrompt(
     const compactTask = compactGoogleGeminiArtifactTask(message, filenameHints)
     return [
       'Google Vertex Gemini compact tool-write turn.',
+      AUTOMNIA_PRODUCT_IDENTITY,
       executionWorkspace ? `Workspace: ${executionWorkspace}` : '',
       filenameHints.length
         ? `Target file(s): ${filenameHints.join(', ')}`
         : 'Target file(s): infer from task; create the requested file directly in Workspace.',
       'Available tools: write, read, edit, exec, process, memory_search, memory_get, session_status.',
       'Use tools freely when they help: write/edit the artifact, read it back, run a lightweight verification command, or check memory only if the request asks for prior context.',
+      sandboxOff ? sandboxOffDirective : '',
       'Avoid broad startup/doctrine/team/project-file reads; inspect only directly relevant files.',
       'Preserve ISO-8601 timestamps, UUIDs, and numeric measurements exactly; they are not phone numbers.',
       'No hard character cap: make the artifact complete and polished, but keep the scope focused enough for one turn.',
@@ -14286,11 +14444,13 @@ function composeAgentDoctrinePrompt(
     const memory = readAutomniaCompactMemorySnippetSync(agentId, executionWorkspace, doctrineWorkspace)
     return [
       'Automnia credits compact runtime context:',
+      AUTOMNIA_PRODUCT_IDENTITY,
       `Name: ${identity.name || agentId}`,
       `Role: ${identity.role || 'active Automnia agent'}`,
       identity.workspace ? `Workspace: ${identity.workspace}` : '',
       `Memory snippet: ${memory || 'none loaded; use memory_get or read only when needed.'}`,
       'Tools: read, write, edit, exec, process, cron, memory_get, session_status.',
+      sandboxOff ? sandboxOffDirective : '',
       'For recurring work, use the Automnia/OpenClaw cron tool so the job is owned by Automnia and appears in Monitor. Do not edit the host crontab or claim a schedule without the cron tool result.',
       'For anything else, read the relevant local docs or skill file only when this task requires it; do not preload docs or workspace files.',
       'Preserve ISO-8601 timestamps, UUIDs, and numeric measurements exactly; they are not phone numbers.',
@@ -14302,12 +14462,14 @@ function composeAgentDoctrinePrompt(
 
   return [
     'Interactive runtime context:',
+    AUTOMNIA_PRODUCT_IDENTITY,
     `- Doctrine folder: ${profileDir}`,
     executionWorkspace ? `- Workspace folder: ${executionWorkspace}` : '',
     vertexCompactMode
       ? 'Startup: Doctrine files are available, but for Google Vertex Gemini read only files needed for this turn.'
       : 'Answer directly from the active conversation when enough context is already available. Do not read every doctrine, workspace, or team file just to begin a turn.',
     'Use tools whenever live state, an external action, or evidence is needed. Tool availability is not limited by the response speed or reasoning level.',
+    sandboxOff ? sandboxOffDirective : '',
     'For recurring work, use the Automnia/OpenClaw cron tool so the job is owned by Automnia and appears in Monitor. Do not edit the host crontab or claim a schedule without the cron tool result.',
     'Before changing workspace files, read the applicable AGENTS.md and only the files relevant to the requested change. Read doctrine, MDS.json, or an enabled SKILL.md only when it is relevant to the request.',
     `Shared skill root: ${SHARED_SKILLS_ROOT}. Never use ~/skills for Control Center skills; if MDS lists an absolute SKILL.md path, read that exact path.`,
@@ -14331,6 +14493,7 @@ function composeAgentDoctrinePrompt(
 
 function composeDirectProviderPrompt(agentId: string, message: string, executionWorkspace?: string) {
   return [
+    AUTOMNIA_PRODUCT_IDENTITY,
     `You are ${agentId}.`,
     executionWorkspace ? `Current execution workspace: ${executionWorkspace}` : '',
     'Answer the user directly and concisely using the information already present in the conversation.',
@@ -16014,6 +16177,37 @@ function cronStateDbPath() {
   return path.join(OPENCLAW_STATE_ROOT, 'state', 'openclaw.sqlite')
 }
 
+function cronJobsPayloadMessageColumn(db: SqliteDatabase) {
+  // OpenClaw has shipped cron schemas both with a normalized payload_message
+  // column and with the payload only inside job_json. Keep reads compatible
+  // with both versions; the JSON fallback is already handled by
+  // cronPayloadMessage().
+  const columns = db.prepare('PRAGMA table_info(cron_jobs)').all()
+  const hasPayloadMessage = columns.some((column) => column.name === 'payload_message')
+  return {
+    select: hasPayloadMessage ? 'payload_message' : 'NULL AS payload_message',
+    missionPredicate: hasPayloadMessage ? " OR payload_message LIKE '%Mission ID:%'" : '',
+    controlCenterPredicate: hasPayloadMessage ? " OR payload_message LIKE '%Mission ID:%' OR payload_message LIKE '%control-center shift=%'" : '',
+  }
+}
+
+function cronJobsCompatibleSource(db: SqliteDatabase) {
+  const columns = new Set(db.prepare('PRAGMA table_info(cron_jobs)').all().map((row) => row.name))
+  const fields: Record<string, string> = {
+    created_at_ms: 'createdAtMs', schedule_kind: 'schedule.kind', schedule_expr: 'schedule.expr',
+    schedule_tz: 'schedule.tz', every_ms: 'schedule.everyMs', at: 'schedule.at',
+    session_target: 'sessionTarget', wake_mode: 'wakeMode', payload_model: 'payload.model',
+    payload_thinking: 'payload.thinking', payload_timeout_seconds: 'payload.timeoutSeconds',
+    delivery_mode: 'delivery.mode',
+  }
+  const projections = Object.entries(fields).filter(([column]) => !columns.has(column))
+    .map(([column, field]) => `json_extract(job_json, '$.${field}') AS ${column}`)
+  for (const [column, field] of Object.entries({ running_at_ms: 'runningAtMs', last_run_at_ms: 'lastRunAtMs', last_run_status: 'lastRunStatus', last_error: 'lastError', next_run_at_ms: 'nextRunAtMs' })) {
+    if (!columns.has(column)) projections.push(`json_extract(${columns.has('state_json') ? 'state_json' : 'job_json'}, '$.${columns.has('state_json') ? '' : 'state.'}${field}') AS ${column}`)
+  }
+  return projections.length ? `(SELECT *, ${projections.join(', ')} FROM cron_jobs)` : 'cron_jobs'
+}
+
 function cleanCronString(value: unknown) {
   return typeof value === 'string' ? value.trim() : ''
 }
@@ -16091,6 +16285,11 @@ function cronPayloadMessage(row: Record<string, unknown>) {
   return ''
 }
 
+function cronDeclarationKey(row: Record<string, unknown>) {
+  const job = parseCronJobJson(row)
+  return cleanCronString(job?.declarationKey)
+}
+
 function cronRowDescription(row: Record<string, unknown>) {
   const direct = cleanCronString(row.description)
   if (direct) return direct
@@ -16163,20 +16362,21 @@ function listMissionCronRuntimeSnapshotsFromStateDb(): MissionCronRuntimeSnapsho
     const sqlite = optionalRequire('node:sqlite') as SqliteModule
     if (!sqlite?.DatabaseSync) return []
     db = new sqlite.DatabaseSync(dbPath, { readOnly: true })
+    const payloadMessageColumn = cronJobsPayloadMessageColumn(db)
     const rows = db.prepare(`
       SELECT
         job_id,
         description,
-        payload_message,
+        ${payloadMessageColumn.select},
         running_at_ms,
         last_run_at_ms,
         last_run_status,
         last_error,
         next_run_at_ms,
         job_json
-      FROM cron_jobs
+      FROM ${cronJobsCompatibleSource(db)}
       WHERE description LIKE '%control-center mission=%'
-        OR payload_message LIKE '%Mission ID:%'
+        ${payloadMessageColumn.missionPredicate}
         OR job_json LIKE '%control-center mission=%'
         OR job_json LIKE '%Mission ID:%'
       LIMIT 1000
@@ -16224,16 +16424,17 @@ function listMissionCronReconciliationSnapshotFromStateDb(): MissionCronReconcil
     const sqlite = optionalRequire('node:sqlite') as SqliteModule
     if (!sqlite?.DatabaseSync) return unavailableMissionCronReconciliationSnapshot('node:sqlite DatabaseSync is unavailable')
     db = new sqlite.DatabaseSync(dbPath, { readOnly: true })
+    const payloadMessageColumn = cronJobsPayloadMessageColumn(db)
     const rows = db.prepare(`
       SELECT
         job_id,
         description,
         enabled,
-        payload_message,
+        ${payloadMessageColumn.select},
         job_json
       FROM cron_jobs
       WHERE description LIKE '%control-center mission=%'
-        OR payload_message LIKE '%Mission ID:%'
+        ${payloadMessageColumn.missionPredicate}
         OR job_json LIKE '%control-center mission=%'
         OR job_json LIKE '%Mission ID:%'
       LIMIT 1000
@@ -16272,19 +16473,19 @@ function listActiveControlCenterCronExpiryRowsFromStateDb(): ControlCenterCronEx
     const sqlite = optionalRequire('node:sqlite') as SqliteModule
     if (!sqlite?.DatabaseSync) return []
     db = new sqlite.DatabaseSync(dbPath, { readOnly: true })
+    const payloadMessageColumn = cronJobsPayloadMessageColumn(db)
     const rows = db.prepare(`
       SELECT
         job_id,
         description,
-        payload_message,
+        ${payloadMessageColumn.select},
         job_json
       FROM cron_jobs
       WHERE enabled = 1
         AND (
           description LIKE '%control-center mission=%'
           OR description LIKE '%control-center shift=%'
-          OR payload_message LIKE '%Mission ID:%'
-          OR payload_message LIKE '%control-center shift=%'
+          ${payloadMessageColumn.controlCenterPredicate}
           OR job_json LIKE '%control-center mission=%'
           OR job_json LIKE '%control-center shift=%'
           OR job_json LIKE '%Mission ID:%'
@@ -16367,6 +16568,8 @@ function cronRowToRuntimeCronJob(row: Record<string, unknown>, shift?: Shift): R
   const createdAt = cronIsoFromMs(row.created_at_ms) || new Date().toISOString()
   const scheduleLabel = cronScheduleLabel(row)
   const timeoutSeconds = cleanCronNumber(row.payload_timeout_seconds)
+  const declarationKey = cronDeclarationKey(row)
+  const payloadKind = cleanCronString(row.payload_kind)
   return {
     id: shift?.id || `cron:${cronId}`,
     cronId,
@@ -16388,7 +16591,10 @@ function cronRowToRuntimeCronJob(row: Record<string, unknown>, shift?: Shift): R
     nextRunAt,
     scheduleKind: cleanCronString(row.schedule_kind) || undefined,
     scheduleLabel,
-    payloadKind: cleanCronString(row.payload_kind) || undefined,
+    payloadKind: payloadKind || undefined,
+    systemOwned: declarationKey.startsWith('heartbeat:')
+      || declarationKey.startsWith('skill-collection-review:')
+      || declarationKey.startsWith('memory-core:'),
     lastError: row.last_error ? redactSensitiveText(String(row.last_error)) : null,
   }
 }
@@ -16416,6 +16622,7 @@ function listActiveCronJobsFromStateDb(limit?: number, systemCronJobs = systemCr
       }
     }
     db = new sqlite.DatabaseSync(dbPath, { readOnly: true })
+    const payloadMessageColumn = cronJobsPayloadMessageColumn(db)
     const rowsStatement = db.prepare(`
       SELECT
         job_id,
@@ -16432,7 +16639,7 @@ function listActiveCronJobsFromStateDb(limit?: number, systemCronJobs = systemCr
         session_target,
         wake_mode,
         payload_kind,
-        payload_message,
+        ${payloadMessageColumn.select},
         payload_model,
         payload_thinking,
         payload_timeout_seconds,
@@ -16442,15 +16649,12 @@ function listActiveCronJobsFromStateDb(limit?: number, systemCronJobs = systemCr
         last_run_status,
         last_error,
         job_json
-      FROM cron_jobs
+      FROM ${cronJobsCompatibleSource(db)}
       WHERE enabled = 1
       ORDER BY COALESCE(next_run_at_ms, running_at_ms, created_at_ms) ASC, name ASC
       ${normalizedLimit ? 'LIMIT ?' : ''}
     `)
     const rows = normalizedLimit ? rowsStatement.all(normalizedLimit) : rowsStatement.all()
-    const countRow = normalizedLimit
-      ? db.prepare('SELECT COUNT(*) AS active_count FROM cron_jobs WHERE enabled = 1').get?.()
-      : null
     const shiftsByCronId = new Map(Array.from(activeShifts.values()).map((shift) => [shift.cronId, shift]))
     const jobsByCronId = new Map<string, RuntimeCronJobSummary>()
     for (const row of rows) {
@@ -16475,12 +16679,10 @@ function listActiveCronJobsFromStateDb(limit?: number, systemCronJobs = systemCr
         return (Number.isFinite(leftTime) ? leftTime : Number.MAX_SAFE_INTEGER)
           - (Number.isFinite(rightTime) ? rightTime : Number.MAX_SAFE_INTEGER)
       })
-    const persistedCount = cleanCronNumber(countRow?.active_count)
+      .filter((job) => job.systemOwned !== true)
     return {
       active: normalizedLimit ? active.slice(0, normalizedLimit) : active,
-      activeCount: normalizedLimit && persistedCount !== null
-        ? Math.max(persistedCount + systemCronJobs.length, active.length)
-        : active.length,
+      activeCount: active.length,
     }
   } finally {
     try {
@@ -16553,6 +16755,7 @@ function listRehydratableControlCenterShiftsFromStateDb(): Shift[] {
     const sqlite = optionalRequire('node:sqlite') as SqliteModule
     if (!sqlite?.DatabaseSync) return []
     db = new sqlite.DatabaseSync(dbPath, { readOnly: true })
+    const payloadMessageColumn = cronJobsPayloadMessageColumn(db)
     const rows = db.prepare(`
       SELECT
         job_id,
@@ -16565,7 +16768,7 @@ function listRehydratableControlCenterShiftsFromStateDb(): Shift[] {
         every_ms,
         session_target,
         wake_mode,
-        payload_message,
+        ${payloadMessageColumn.select},
         payload_model,
         payload_thinking,
         payload_timeout_seconds,
@@ -16575,7 +16778,7 @@ function listRehydratableControlCenterShiftsFromStateDb(): Shift[] {
       WHERE enabled = 1
         AND (
           description LIKE '%control-center shift=%'
-          OR payload_message LIKE '%control-center shift=%'
+          ${payloadMessageColumn.controlCenterPredicate.replace(" OR payload_message LIKE '%Mission ID:%'", '')}
           OR job_json LIKE '%control-center shift=%'
         )
       LIMIT 500
@@ -18723,6 +18926,12 @@ const synchronizeBillingRouteWithGateway = () => {
 }
 
 registerAgentTurnRoutes(app, {
+  clearConsoleRecovery(agentId) {
+    consoleRunSnapshots.clear(agentId)
+    for (let i = clawTalkConsoleEvents.length - 1; i >= 0; i--) {
+      if (!agentId || clawTalkConsoleEvents[i].agentId === agentId) clawTalkConsoleEvents.splice(i, 1)
+    }
+  },
   AUTH_TOKEN,
   CONTROL_CENTER_AGENT_TURN_STREAM_SMOKE_MOCK,
   ENABLE_HOST_ACTION_SHORTCUTS,
@@ -18835,6 +19044,7 @@ registerAgentTurnRoutes(app, {
 })
 
 registerClawTalkConsoleRoutes(app, {
+  getRunSnapshots: () => consoleRunSnapshots.values(),
   clawTalkConsoleClients,
   clawTalkConsoleEvents,
   initializeSseResponse,
@@ -19032,6 +19242,32 @@ registerShiftRoutes(app, {
   readHeartbeatRuntimeDefaults,
   readHeartbeatRuntimePerAgent,
   runOpenClaw,
+  stopSystemOwnedCronJob: async (cronId) => {
+    const result = await runOpenClaw(['cron', 'get', cronId, '--json'], 20_000)
+    if (result.code !== 0) throw new Error(result.stderr || result.stdout || 'Could not inspect system-owned monitor job')
+    type SystemOwnedCronJob = { declarationKey?: string; payload?: { kind?: string } }
+    let job: SystemOwnedCronJob
+    try { job = JSON.parse(result.stdout) as SystemOwnedCronJob } catch { throw new Error('Could not inspect system-owned monitor job') }
+
+    const declarationKey = job?.declarationKey || ''
+    let configPath: string
+    let configValue: string
+    if (job?.payload?.kind === 'heartbeat' || declarationKey.startsWith('heartbeat:')) {
+      configPath = 'agents.defaults.heartbeat.every'
+      configValue = JSON.stringify('0m')
+    } else if (declarationKey.startsWith('skill-collection-review:') || job?.payload?.kind === 'skillCollectionReview') {
+      configPath = 'skills.workshop.autonomous.mode'
+      configValue = JSON.stringify('off')
+    } else if (declarationKey.startsWith('memory-core:')) {
+      configPath = 'plugins.entries.memory-core.config.dreaming.enabled'
+      configValue = 'false'
+    } else {
+      throw new Error('This system-owned monitor has no supported pause setting.')
+    }
+
+    const update = await runOpenClaw(['config', 'set', configPath, configValue, '--strict-json'], 45_000)
+    if (update.code !== 0) throw new Error(update.stderr || update.stdout || `Failed to disable ${configPath}`)
+  },
   startManagedTeamSyncOrchestrator,
   sweepExpiredMissionCronJobs,
   writeHeartbeatRuntimeDefaults,
@@ -19056,12 +19292,12 @@ registerProviderAuthRoutes(app, {
   providerAuthStatus,
   refreshAvailableModelsCache,
   isCreditsOnlyEntitlement: () => licenseService.isUsagePriorityLocked(),
-  creditsOnlyAvailableModels: () => [{
-    id: AUTOMNIA_OPENCLAW_MODEL,
-    alias: AUTOMNIA_RELAY_MODEL_LABELS[AUTOMNIA_OPENCLAW_MODEL],
+  creditsOnlyAvailableModels: () => AUTOMNIA_CREDITS_MODEL_IDS.map((id) => ({
+    id,
+    alias: AUTOMNIA_RELAY_MODEL_LABELS[id] || 'Automnia hosted class',
     provider: AUTOMNIA_OPENCLAW_PROVIDER_ID,
-    name: AUTOMNIA_RELAY_MODEL_LABELS[AUTOMNIA_OPENCLAW_MODEL],
-  }],
+    name: AUTOMNIA_RELAY_MODEL_LABELS[id] || 'Automnia hosted class',
+  })),
   removeProviderAuth,
   startGoogleOAuthSession,
   startAnthropicOAuthSession,

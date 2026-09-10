@@ -63,13 +63,23 @@ test('registry preferences validate persisted values and publish live updates', 
   assert.equal(changed, true)
   assert.deepEqual(readRegistryPreferences(), { displayMode: 'list', overlayPreset: 'blueprint-grid', rarityColorsEnabled: true, rarityFilter: 'epic', sortKey: 'name' })
   assert.deepEqual(AGENT_CARD_RARITY_THEMES, {
-    legendary: 'graphite-glass',
-    epic: 'graphite-glass',
-    rare: 'graphite-glass',
-    common: 'graphite-glass',
+    legendary: 'original',
+    epic: 'original',
+    rare: 'original',
+    common: 'original',
   })
-  assert.equal(resolveAgentCardTheme('rare', { overlayPreset: 'graphite-glass', rarityColorsEnabled: true }), 'graphite-glass')
+  assert.equal(resolveAgentCardTheme('rare', { overlayPreset: 'graphite-glass', rarityColorsEnabled: true }), 'original')
   assert.equal(resolveAgentCardTheme('legendary', { overlayPreset: 'graphite-glass', rarityColorsEnabled: false }), 'graphite-glass')
+})
+
+test('registry defaults and legacy Graphite preferences use Original while new choices persist', () => {
+  storage.clear()
+  assert.deepEqual(readRegistryPreferences(), DEFAULT_REGISTRY_PREFERENCES)
+  assert.equal(readRegistryPreferences().overlayPreset, 'original')
+  storage.setItem(REGISTRY_PREFS_KEY, JSON.stringify({ overlayPreset: 'graphite-glass', overlayPresetVersion: 7, rarityColorsEnabled: false }))
+  assert.equal(readRegistryPreferences().overlayPreset, 'original')
+  saveRegistryPreferences({ ...DEFAULT_REGISTRY_PREFERENCES, overlayPreset: 'graphite-glass', rarityColorsEnabled: false })
+  assert.equal(readRegistryPreferences().overlayPreset, 'graphite-glass')
 })
 
 test('registry card theme is available before a lazy registry paint', () => {
@@ -104,6 +114,8 @@ test('speech settings migrate old records and normalize every functional control
     autoGainControl: false,
   })
   assert.deepEqual(readSpeechSettings(), {
+    language: '',
+    vocabulary: '',
     microphoneDeviceId: '',
     mode: 'local',
     autoStop: false,

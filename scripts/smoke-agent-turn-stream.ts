@@ -288,6 +288,54 @@ async function main() {
     assert.equal(abortMarker.runId, abortStatus.runId)
     assert.equal(abortMarker.sessionKey, 'agent:hn-architect:control-center:smoke-abort')
     assert.equal(abortMarker.transport, 'gateway-chat')
+
+    // A recoverable UI request detaches without cancelling its backend work.
+    rmSync(abortMarkerPath)
+    const responseId = '11111111-1111-4111-8111-111111111111'
+    const detached = await fetch(`http://127.0.0.1:${port}/api/openclaw/agent-turn/stream`, {
+      method: 'POST', headers: streamHeaders('abort'),
+      body: JSON.stringify({ agent: 'hn-architect', message: 'Continue across refresh', responseId }),
+    })
+    await readFirstSseFrame(detached)
+    await waitForFile(abortMarkerPath, 8000)
+    assert.equal(JSON.parse(readFileSync(abortMarkerPath, 'utf-8')).aborted, false)
+    const recovered = await fetch(`http://127.0.0.1:${port}/api/openclaw/clawtalk-console/stream`, {
+      headers: { Authorization: `Bearer ${smokeAuthToken}` },
+    })
+    const recoveredFrame = await readFirstSseFrame(recovered)
+    const restored = JSON.parse(recoveredFrame.data)
+    assert.equal(restored.responseId, responseId)
+    assert.equal(restored.snapshot, true)
+    assert.equal(restored.prompt, 'Continue across refresh')
+
+    const completed = await fetch(`http://127.0.0.1:${port}/api/openclaw/agent-turn/stream`, {
+      method: 'POST', headers: streamHeaders('1'),
+      body: JSON.stringify({ agent: 'hn-architect', message: 'Continue across refresh', responseId }),
+    })
+    await readSseFrames(completed)
+    const finalRecovery = await fetch(`http://127.0.0.1:${port}/api/openclaw/clawtalk-console/stream`, {
+      headers: { Authorization: `Bearer ${smokeAuthToken}`, 'Last-Event-ID': 'expired-cursor' },
+    })
+    const finalRecoveredFrame = await readFirstSseFrame(finalRecovery)
+    const finalRestored = JSON.parse(finalRecoveredFrame.data)
+    assert.equal(finalRestored.responseId, responseId)
+    assert.equal(finalRestored.event, 'final')
+    assert.equal(finalRestored.text, 'Mock gateway reply complete.')
+
+    rmSync(abortMarkerPath)
+    const stoppable = await fetch(`http://127.0.0.1:${port}/api/openclaw/agent-turn/stream`, {
+      method: 'POST', headers: streamHeaders('abort'),
+      body: JSON.stringify({ agent: 'hn-architect', message: 'Stop explicitly', responseId }),
+    })
+    await readFirstSseFrame(stoppable)
+    const stopped = await fetch(`http://127.0.0.1:${port}/api/openclaw/agent-turn/${responseId}`, {
+      method: 'DELETE', headers: streamHeaders(),
+    })
+    assert.equal(stopped.ok, true)
+    await waitForFile(abortMarkerPath)
+    assert.equal(JSON.parse(readFileSync(abortMarkerPath, 'utf-8')).aborted, true)
+
+
   } finally {
     child.kill('SIGTERM')
     await new Promise((resolve) => {

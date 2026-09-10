@@ -1,11 +1,11 @@
 /* Final agent-card surface authority. Keep this after every legacy skin so
    the registry cannot fall back to gray glass or diagonal card patterns. */
-html.dui-pro-overhaul.dui-cohesive-ui .agent-card-shell.agent-card-pro[data-agent-card="true"] {
+html.dui-pro-overhaul.dui-cohesive-ui .agent-card-shell.agent-card-pro[data-agent-card="true"][data-agent-card-theme][data-agent-rarity] {
   --agent-card-pattern: none !important;
   --agent-card-overlay-image: url('/card-overlays/professional-obsidian.png') !important;
   background-color: #030507 !important;
   background-image:
-    linear-gradient(180deg, rgba(0, 1, 3, .48), rgba(0, 1, 3, .68)),
+    linear-gradient(180deg, rgba(0, 1, 3, .44), rgba(0, 1, 3, .64)),
     url('/card-overlays/professional-obsidian.png') !important;
   background-size: auto, 420px 420px !important;
   background-repeat: no-repeat, repeat !important;
@@ -17,7 +17,7 @@ html.dui-pro-overhaul.dui-cohesive-ui .agent-card-shell.agent-card-pro[data-agen
 }
 
 /* Hover changes only the rarity emphasis; it must not reveal a second skin. */
-html.dui-pro-overhaul.dui-cohesive-ui .agent-card-shell.agent-card-pro[data-agent-card="true"]:hover {
+html.dui-pro-overhaul.dui-cohesive-ui .agent-card-shell.agent-card-pro[data-agent-card="true"][data-agent-card-theme][data-agent-rarity]:hover {
   background-color: #030507 !important;
   background-image:
     linear-gradient(180deg, rgba(0, 1, 3, .44), rgba(0, 1, 3, .64)),
@@ -31,13 +31,13 @@ html.dui-pro-overhaul.dui-cohesive-ui .agent-card-shell.agent-card-pro[data-agen
     inset 0 1px 0 rgba(255, 255, 255, .055) !important;
 }
 
-html.dui-pro-overhaul.dui-cohesive-ui .agent-card-shell.agent-card-pro[data-agent-card="true"]::before {
+html.dui-pro-overhaul.dui-cohesive-ui .agent-card-shell.agent-card-pro[data-agent-card="true"][data-agent-card-theme][data-agent-rarity]::before {
   background: linear-gradient(180deg, rgba(255, 255, 255, .01), transparent 18%, rgba(0, 0, 0, .30)) !important;
   opacity: 1 !important;
   mix-blend-mode: normal !important;
 }
 
-html.dui-pro-overhaul.dui-cohesive-ui .agent-card-shell.agent-card-pro[data-agent-card="true"]::after {
+html.dui-pro-overhaul.dui-cohesive-ui .agent-card-shell.agent-card-pro[data-agent-card="true"][data-agent-card-theme][data-agent-rarity]::after {
   border-color: rgba(146, 160, 171, .16) !important;
   border-top-color: rgba(201, 214, 224, .22) !important;
 }

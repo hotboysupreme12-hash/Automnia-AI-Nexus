@@ -214,8 +214,25 @@ html.dui-pro-overhaul.dui-cohesive-ui .dy-workspace-context[data-workspace="miss
   box-shadow: 0 0 0 3px rgba(244, 200, 102, .10) !important;
 }
 
-html.dui-pro-overhaul.dui-cohesive-ui .dy-mission-tab-frame {
+html.dui-pro-overhaul.dui-cohesive-ui #nexus-workspace-missions,
+html.dui-pro-overhaul.dui-cohesive-ui #nexus-workspace-missions .dy-mission-tab-frame {
+  width: 100% !important;
+  max-width: none !important;
+  min-width: 0 !important;
+  margin-inline: 0 !important;
+  padding-inline: 0 !important;
   gap: 0 !important;
+}
+
+/* Own the full-width contract here as well as in the shared theme: this
+   stylesheet loads with the mission workspace, including in desktop builds. */
+html.dui-pro-overhaul.dui-cohesive-ui #nexus-workspace-missions .dui-mission-wrap.dui-missions-polished {
+  box-sizing: border-box !important;
+  width: 100% !important;
+  max-width: none !important;
+  min-width: 0 !important;
+  margin-inline: 0 !important;
+  padding-inline: 12px !important;
 }
 
 html.dui-pro-overhaul.dui-cohesive-ui [data-dui-panel="missions"].dui-mission-screen {

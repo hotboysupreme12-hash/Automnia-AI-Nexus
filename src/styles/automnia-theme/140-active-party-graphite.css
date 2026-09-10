@@ -1,0 +1,80 @@
+/* Active party graphite surface ---------------------------------------------
+   Keep the party rail neutral and close to the black/gray reference surface.
+   Accent colors remain reserved for actions, drag states, and rarity cues. */
+
+html.dui-pro-overhaul.dui-cohesive-ui [data-dui-panel="active-party"] {
+  background:
+    #0b0b0c !important;
+  border-color: rgba(255, 255, 255, .10) !important;
+  box-shadow: none !important;
+}
+
+html.dui-pro-overhaul.dui-cohesive-ui [data-dui-panel="active-party"] .active-party-head {
+  background:
+    #111112 !important;
+  border-bottom-color: rgba(190, 198, 204, .12) !important;
+}
+
+html.dui-pro-overhaul.dui-cohesive-ui [data-dui-panel="active-party"] .active-party-grid {
+  background: #0b0b0c !important;
+}
+
+html.dui-pro-overhaul.dui-cohesive-ui [data-dui-panel="active-party"] [data-slot-card],
+html.dui-pro-overhaul.dui-cohesive-ui [data-dui-panel="active-party"] .dy-party-slot,
+html.dui-pro-overhaul.dui-cohesive-ui [data-dui-panel="active-party"] .dy-party-slot.is-filled,
+html.dui-pro-overhaul.dui-cohesive-ui [data-dui-panel="active-party"] .dy-party-slot.is-empty {
+  background:
+    #151516 !important;
+  border-color: rgba(190, 198, 204, .18) !important;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, .045) !important;
+}
+
+html.dui-pro-overhaul.dui-cohesive-ui [data-dui-panel="active-party"] [data-slot-card] .party-slot-content {
+  background: transparent !important;
+  border-color: rgba(220, 225, 229, .09) !important;
+}
+
+html.dui-pro-overhaul.dui-cohesive-ui [data-dui-panel="active-party"] [data-slot-card][data-slot-state="empty"] {
+  background:
+    #121213 !important;
+  border-color: rgba(190, 198, 204, .15) !important;
+}
+
+html.dui-pro-overhaul.dui-cohesive-ui [data-dui-panel="active-party"] .party-slot-position {
+  background: transparent !important;
+  border: 0 !important;
+  box-shadow: none !important;
+}
+
+/* Slot order should read as a plain number, not a badge or box. */
+html.dui-pro-overhaul [data-dui-panel="active-party"] .dy-party-slot.is-filled::before {
+  content: attr(data-dy-slot-number) !important;
+  padding: 0 !important;
+  border: 0 !important;
+  border-radius: 0 !important;
+  background: transparent !important;
+  box-shadow: none !important;
+  backdrop-filter: none !important;
+  -webkit-backdrop-filter: none !important;
+}
+
+html.dui-pro-overhaul.dui-cohesive-ui [data-dui-panel="active-party"] .active-party-head h3,
+html.dui-pro-overhaul.dui-cohesive-ui [data-dui-panel="active-party"] .party-agent-name {
+  color: #e2e5e8 !important;
+}
+
+html.dui-pro-overhaul.dui-cohesive-ui [data-dui-panel="active-party"]::before,
+html.dui-pro-overhaul.dui-cohesive-ui [data-dui-panel="active-party"]::after {
+  display: none !important;
+}
+
+html.dui-pro-overhaul.dui-cohesive-ui [data-dui-panel="active-party"] .active-party-actions :is(button, .dy-console-toggle) {
+  background: #19191b !important;
+  border-color: rgba(255, 255, 255, .12) !important;
+  box-shadow: none !important;
+}
+
+html.dui-pro-overhaul.dui-cohesive-ui [data-dui-panel="active-party"] .active-party-actions :is(button, .dy-console-toggle):hover:not(:disabled) {
+  background: #242426 !important;
+  border-color: rgba(255, 255, 255, .22) !important;
+}

@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import type { ReactNode } from 'react'
 import { apiErrorMessage, apiRequest } from '../api/client'
+import { authStatusDecision } from '../api/authStatus'
 import {
   clearAuthSignedOut,
   clearAuthToken,
@@ -86,8 +87,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       timeoutMs: AUTH_STATUS_TIMEOUT_MS,
     })
       .then((result) => {
-        if (controller.signal.aborted || authCheckEpoch !== authEpochRef.current) return
-        const authenticated = result.ok && result.data.authenticated
+        if (controller.signal.aborted || authCheckEpoch !== authEpochRef.current || readAuthToken() !== token) return
+        const decision = authStatusDecision(result)
+        // A server restart, proxy error, or timeout says nothing about whether
+        // the saved session is valid. Keep it available for the next request.
+        if (decision === 'unavailable') return
+        const authenticated = decision === 'authenticated'
         setIsAuthenticated(authenticated)
         setAccount(authenticated && result.ok ? result.data.account || null : null)
         if (!authenticated) {
@@ -95,11 +100,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           setToken(null)
         }
       })
-      .catch((error: unknown) => {
-        if ((error instanceof DOMException && error.name === 'AbortError') || authCheckEpoch !== authEpochRef.current) return
-        setIsAuthenticated(false)
-        clearAuthToken()
-        setToken(null)
+      .catch(() => {
+        // Transport failures must not sign the user out. Explicit rejections
+        // are handled above once the server can validate the session.
       })
       .finally(() => {
         if (!controller.signal.aborted) setChecking(false)

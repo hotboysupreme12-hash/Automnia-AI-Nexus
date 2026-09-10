@@ -1,9 +1,7 @@
-import { BookmarkButton, Bookmarks } from '../bookmarks/Bookmarks'
 import { AvatarFallback } from '../ui/AvatarFallback'
 import { useRememberedState } from '../../hooks/useRememberedState'
 import { memo, useCallback, useDeferredValue, useEffect, useLayoutEffect, useMemo, useRef, useState, type WheelEvent } from 'react'
 import { indexResponseActivity, responseMatchesQuery } from '../../store/responseHistoryIndex'
-import { PromptLibrary } from './PromptLibrary'
 import { ResponseMarkdown } from './ResponseMarkdown'
 import { QueuedFollowupControls } from './QueuedFollowupControls'
 import { apiErrorMessage, apiRequest } from '../../api/client'
@@ -44,6 +42,8 @@ import {
   type SpeechSettings,
   type SpeechTranscriptionMode,
 } from '../../speech/speechSettings'
+import { encodeSpeechWav, prepareAudioForSpeechRecognition } from '../../speech/audioProcessing'
+import { openMicrophoneSettings } from '../../speech/microphonePermissions'
 import { monitorVoiceActivity } from '../../speech/voiceActivity'
 import { Badge, Button, IconButton, StatusChip } from '../ui'
 import type { BadgeTone } from '../ui'
@@ -57,6 +57,8 @@ const RARITY_RING: Record<string, string> = {
 
 const AUTOMNIA_RUNTIME_MARK_SRC = '/brand/automnia-ai-nexus-logo-transparent-cropped.png'
 const MESSAGE_RENDER_LIMIT = 60
+const PROMPT_HISTORY_STORAGE_KEY = 'automnia:command-console-prompt-history'
+const MAX_PROMPT_HISTORY = 80
 const LANE_DIAGNOSTIC_WARN_MS = 10 * 60 * 1000
 const LANE_DIAGNOSTIC_STALLED_MS = 30 * 60 * 1000
 const LANE_DIAGNOSTIC_TICK_MS = 30 * 1000
@@ -71,6 +73,26 @@ const COMMAND_CONSOLE_ACCEPTED_FILE_TYPES = [
   '.php', '.rb', '.sh', '.bash', '.zsh', '.ps1', '.sql', '.toml', '.ini', '.env',
   '.mp3', '.wav', '.m4a', '.aac', '.ogg', '.oga', '.flac', '.opus',
 ].join(',')
+
+function readPromptHistory(): string[] {
+  if (typeof window === 'undefined') return []
+  try {
+    const parsed: unknown = JSON.parse(window.localStorage.getItem(PROMPT_HISTORY_STORAGE_KEY) || '[]')
+    return Array.isArray(parsed)
+      ? parsed.filter((entry): entry is string => typeof entry === 'string' && Boolean(entry.trim())).slice(0, MAX_PROMPT_HISTORY)
+      : []
+  } catch {
+    return []
+  }
+}
+
+function writePromptHistory(history: string[]): void {
+  try {
+    window.localStorage.setItem(PROMPT_HISTORY_STORAGE_KEY, JSON.stringify(history.slice(0, MAX_PROMPT_HISTORY)))
+  } catch {
+    // Prompt history is a convenience; sending must not depend on storage.
+  }
+}
 
 type PendingAttachmentKind = 'image' | 'audio' | 'document' | 'spreadsheet' | 'presentation' | 'code' | 'data' | 'file'
 
@@ -542,7 +564,6 @@ const ResponseMessage = memo(function ResponseMessage({
   actionBusy: boolean
   hostedCreditsFirst: boolean
 }) {
-  const [copyState, setCopyState] = useState('')
   const runtimeNoticeActive = Boolean(entry.streaming && (entry.runtimeNoticeActive || isRuntimeNoticeTransport(entry.transport)))
   const avatar = meta?.portrait || ''
   const name = meta?.name || entry.agentId
@@ -675,10 +696,10 @@ const ResponseMessage = memo(function ResponseMessage({
                   </span>
                 </span>
               ) : (
-                <>
-                  {entry.streaming ? displayText : <ResponseMarkdown text={displayText} />}
+                <div className="dy-command-response-markdown">
+                  <ResponseMarkdown text={displayText} />
                   {entry.streaming && <span className="ml-0.5 inline-block h-3 w-1 animate-pulse rounded-sm bg-cyan-300/70 align-[-2px]" />}
-                </>
+                </div>
               )}
             </div>
           </div>
@@ -690,15 +711,10 @@ const ResponseMessage = memo(function ResponseMessage({
         </div>
       )}
 
-      {entry.response && <div className="flex flex-wrap items-center gap-2 py-2">
-        <Button size="compact" variant="quiet" aria-label={`Copy response from ${name}`} onClick={() => {
-          void Promise.resolve().then(() => navigator.clipboard.writeText(entry.response)).then(() => setCopyState('Copied'), () => setCopyState('Copy failed. Select the response text to copy it.'))
-        }}>Copy response</Button>
-        {!entry.streaming && <BookmarkButton kind="response" sourceId={entry.id} title={`Response from ${name}`} text={entry.response} />}
-        {copyState && <span role="status" className="text-[12px]">{copyState}</span>}
-      </div>}
       <span className="sr-only" role="status" aria-live="polite" aria-atomic="true">{name}: {statusText}.</span>
       {entry.transport === 'command-console-queue' && <QueuedFollowupControls id={entry.id} position={entry.queuePosition || 0} depth={entry.queueDepth || 0} />}
+      <details className="dy-chat-response-details">
+        <summary>Response details</summary>
       <div className="dy-command-message-meta" aria-label="Response details">
         {(firstTokenLabel || (durationLabel && entry.streaming)) && (
           <div className="dy-command-message-meta-group dy-command-message-meta-group--performance" aria-label="Performance">
@@ -759,6 +775,8 @@ const ResponseMessage = memo(function ResponseMessage({
           </div>
         )}
       </div>
+
+      </details>
 
       {cta && (
         <div className="dy-command-response-cta">
@@ -882,7 +900,7 @@ export function AgentResponseConsole() {
   const [laneDiagnosticNow, setLaneDiagnosticNow] = useState(() => Date.now())
   const [clawTalkStreamHealth, setClawTalkStreamHealth] = useState<ConsoleStreamHealth>(() => ({
     state: 'connecting',
-    detail: 'Connecting to ClawTalk console stream.',
+    detail: 'Restoring conversation and live agent activity.',
     retries: 0,
   }))
   const [failedPortraitKeys, setFailedPortraitKeys] = useState<Set<string>>(() => new Set())
@@ -957,6 +975,19 @@ export function AgentResponseConsole() {
   }))
   const storedPromptDraft = useMemo(() => readCommandConsoleDraft(draftStorageKey), [draftStorageKey])
   const prompt = promptDraft.storageKey === draftStorageKey ? promptDraft.value : storedPromptDraft
+  const [storedPromptHistory, setStoredPromptHistory] = useState<string[]>(readPromptHistory)
+  const promptHistory = useMemo(() => {
+    const seen = new Set<string>()
+    const history: string[] = []
+    for (const value of [...responses.map((entry) => entry.prompt), ...storedPromptHistory]) {
+      const trimmed = value.trim()
+      if (!trimmed || seen.has(trimmed)) continue
+      seen.add(trimmed)
+      history.push(trimmed)
+    }
+    return history
+  }, [responses, storedPromptHistory])
+  const promptHistoryIndexRef = useRef(-1)
   const pendingDraftWrite = useRef<{ key: string; value: string } | null>(null)
   const draftWriteTimer = useRef<number | undefined>(undefined)
   const flushDraftWrite = useCallback(() => {
@@ -983,6 +1014,30 @@ export function AgentResponseConsole() {
     if (!value.trim()) flushDraftWrite()
     else if (draftWriteTimer.current === undefined) draftWriteTimer.current = window.setTimeout(flushDraftWrite, 160)
   }, [draftStorageKey, flushDraftWrite])
+  const resetPromptHistory = () => {
+    promptHistoryIndexRef.current = -1
+  }
+  useEffect(() => {
+    resetPromptHistory()
+  }, [draftStorageKey])
+  const restorePromptHistoryEntry = (value: string) => {
+    setPrompt(value)
+    window.requestAnimationFrame(() => {
+      const textarea = textareaRef.current
+      if (!textarea) return
+      textarea.focus({ preventScroll: true })
+      textarea.setSelectionRange(value.length, value.length)
+    })
+  }
+  const rememberPrompt = (value: string) => {
+    const trimmed = value.trim()
+    if (!trimmed) return
+    setStoredPromptHistory((current) => {
+      const next = [trimmed, ...current.filter((entry) => entry !== trimmed)].slice(0, MAX_PROMPT_HISTORY)
+      writePromptHistory(next)
+      return next
+    })
+  }
   useEffect(() => {
     const clear = () => {
       window.clearTimeout(draftWriteTimer.current)
@@ -997,8 +1052,12 @@ export function AgentResponseConsole() {
   promptRef.current = prompt
 
   const busyAgents = useMemo(
-    () => busyAgentIds.map((id) => agentById.get(id)).filter((a): a is OpenClawAgent => Boolean(a)),
-    [agentById, busyAgentIds],
+    () => [...new Set([
+      ...busyAgentIds,
+      ...responses.filter((entry) => entry.streaming && entry.transport !== 'command-console-queue').map((entry) => entry.agentId),
+      ...(runtimeSummaryStatus?.activeRuns || []).filter((run) => run.status === 'running').flatMap((run) => run.agentId ? [run.agentId] : []),
+    ])].map((id) => agentById.get(id)).filter((a): a is OpenClawAgent => Boolean(a)),
+    [agentById, busyAgentIds, responses, runtimeSummaryStatus],
   )
   const activeRuntimeRuns = useMemo(
     () => (runtimeSummaryStatus?.activeRuns || [])
@@ -1084,7 +1143,7 @@ export function AgentResponseConsole() {
   }, [allTargetsBusy, armedTargets, hardBlockedSendReason])
   const voiceBusy = voicePhase !== 'idle'
   const canSend = Boolean(prompt.trim() || uploadedAttachments.length) && !isUploading && !voiceBusy && !hardBlockedSendReason
-  const composerPlaceholder = hardBlockedSendReason || queuedSendReason || 'Work on anything'
+  const composerPlaceholder = hardBlockedSendReason || queuedSendReason || 'Message your agent…'
   const streamLabel: Record<ConsoleStreamState, string> = {
     connecting: 'Connecting',
     live: 'Live',
@@ -1182,7 +1241,7 @@ export function AgentResponseConsole() {
 
           setClawTalkStreamHealth({
             state: 'live',
-            detail: 'ClawTalk console stream connected.',
+            detail: 'Conversation synced. Live agent activity connected.',
             retries,
           })
 
@@ -1426,21 +1485,29 @@ export function AgentResponseConsole() {
         setVoiceStatus('Preparing audio for on-device transcription')
         const audio = await decodeAudioToMono16Khz(blob)
         if (controller.signal.aborted) return
-        const result = await transcribeAudioLocally(audio, localSpeechProgress, { signal: controller.signal })
+        const result = await transcribeAudioLocally(audio, localSpeechProgress, { signal: controller.signal, language: speechSettings.language })
         if (!voiceMountedRef.current || controller.signal.aborted) return
         appendVoiceTranscript(result.text)
         setRetryRecording(null)
         settleVoiceStatus(`Transcript added · local ${result.backend === 'webgpu' ? 'GPU' : 'CPU'}`)
       } else {
+        setVoiceStatus('Preparing audio for accurate transcription')
+        const audio = await decodeAudioToMono16Khz(blob)
+        if (controller.signal.aborted) return
+        const upload = encodeSpeechWav(prepareAudioForSpeechRecognition(audio).audio)
         setVoiceStatus('Transcribing securely with OpenAI')
         const result = await apiRequest<OnlineSpeechTranscriptionPayload>(
-          `/api/speech/transcribe?filename=${encodeURIComponent(voiceRecordingFileName(blob.type))}`,
+          `/api/speech/transcribe?filename=${encodeURIComponent(voiceRecordingFileName(upload.type))}`,
           {
             method: 'POST',
-            timeoutMs: 90_000,
+            timeoutMs: 130_000,
             signal: controller.signal,
-            headers: { 'Content-Type': blob.type || 'audio/webm' },
-            body: blob,
+            headers: {
+              'Content-Type': upload.type,
+              'X-Speech-Language': speechSettings.language || '',
+              'X-Speech-Vocabulary': encodeURIComponent(speechSettings.vocabulary || ''),
+            },
+            body: upload,
           },
         )
         if (!result.ok) throw new Error(apiErrorMessage(result.error))
@@ -1464,7 +1531,7 @@ export function AgentResponseConsole() {
         setSpeechProgress(undefined)
       }
     }
-  }, [appendVoiceTranscript, localSpeechProgress, settleVoiceStatus])
+  }, [appendVoiceTranscript, localSpeechProgress, settleVoiceStatus, speechSettings.language, speechSettings.vocabulary])
 
   const stopVoiceRecording = useCallback(() => {
     const recorder = mediaRecorderRef.current
@@ -1499,7 +1566,7 @@ export function AgentResponseConsole() {
       recordingChunksRef.current = []
       recordingDiscardReasonRef.current = ''
       const mimeType = preferredRecordingMimeType()
-      const recorder = new MediaRecorder(stream, mimeType ? { mimeType, audioBitsPerSecond: 64_000 } : undefined)
+      const recorder = new MediaRecorder(stream, mimeType ? { mimeType, audioBitsPerSecond: 128_000 } : undefined)
       mediaRecorderRef.current = recorder
       const recordingMode = speechMode
       const recordingSettings = speechSettings
@@ -1565,7 +1632,7 @@ export function AgentResponseConsole() {
           },
           onNoSpeech: () => {
             if (!voiceMountedRef.current || recorder.state !== 'recording') return
-            recordingDiscardReasonRef.current = 'No speech was detected. Check the selected microphone and try again.'
+            setVoiceStatus('Checking the recording for quiet speech')
             stopVoiceRecording()
           },
         }, {
@@ -1707,6 +1774,7 @@ export function AgentResponseConsole() {
     const msg = buildMessage(draftPrompt, attachments)
     setIsUploading(false)
     stickToBottomRef.current = true
+    if (selectedTargets.length || partyTargetIds.length) rememberPrompt(draftPrompt)
     if (selectedTargets.length === 1) {
       clearInput()
       await sendPromptToAgent(selectedTargets[0].id, msg, attachments)
@@ -1850,6 +1918,7 @@ export function AgentResponseConsole() {
     <section
       data-dui-panel="command-console"
       data-chat-panel="true"
+      data-chat-design="modern"
       className="dy-command-console flex min-h-0 flex-col overflow-hidden"
       onWheel={handleConsoleWheel}
     >
@@ -1877,10 +1946,10 @@ export function AgentResponseConsole() {
               <h2 className="dy-command-console__title">
                 Agent Chat
               </h2>
-              <span className="dy-command-console__eyebrow">Command Console</span>
               <p className="dy-command-console__subtitle">
                 {targetMode} · {targetCount} recipient{targetCount === 1 ? '' : 's'}{thinkingCount ? ` · ${thinkingCount} reasoning` : ''}
               </p>
+              <div className="dy-chat-connection">
               <StatusChip
                 label="Live"
                 value={streamLabel[clawTalkStreamHealth.state]}
@@ -1893,6 +1962,7 @@ export function AgentResponseConsole() {
                 showDot
                 aria-label={`ClawTalk console stream ${streamLabel[clawTalkStreamHealth.state].toLowerCase()}. ${clawTalkStreamHealth.detail}`}
               />
+              </div>
             </div>
           </div>
           {responses.length > 0 && (
@@ -1930,6 +2000,7 @@ export function AgentResponseConsole() {
       {/* Target bar */}
       {(selectedTargets.length > 0 || partyTargetIds.length > 0 || busyAgents.length > 0) && (
         <div className={`dy-command-target-bar shrink-0 ${selectedTargets.length ? 'is-selected-mode' : 'is-party-mode'}`}>
+          <span className="dy-chat-recipient-label">To</span>
           <div className="dy-command-targets">
             {armedTargets.map((agent) => {
               const inParty = activePartyIds.includes(agent.id)
@@ -2181,7 +2252,7 @@ export function AgentResponseConsole() {
       )}
 
       {/* Messages area */}
-      {responses.length > 0 && <div className="flex min-w-0 shrink-0 flex-wrap gap-2 px-3 py-2">
+      {responses.length > 0 && <div className="dy-chat-history-tools flex min-w-0 shrink-0 flex-wrap gap-2 px-3 py-2">
         <input type="search" aria-label="Search retained conversation" placeholder="Search conversation" value={responseQuery} onChange={(event) => setResponseQuery(event.target.value)} className="min-w-0 flex-1 rounded border border-white/15 bg-transparent px-2 py-2 text-[12px]" />
         <Button size="compact" variant="quiet" onClick={() => {
           const blob = new Blob([JSON.stringify({ exportedAt: new Date().toISOString(), responses: visibleDisplayedResponses }, null, 2)], { type: 'application/json' })
@@ -2220,8 +2291,8 @@ export function AgentResponseConsole() {
                 <path d="M5 4.5h14a2 2 0 0 1 2 2V17a2 2 0 0 1-2 2h-6l-4 2v-2H5a2 2 0 0 1-2-2V6.5a2 2 0 0 1 2-2Z" />
               </svg>
             </span>
-            <p className="dy-command-idle-hint__title">{targetCount ? 'Send a message' : 'No agent selected'}</p>
-            {targetCount > 0 && <p className="dy-command-idle-hint__copy">Ask a question or delegate a task.</p>}
+            <p className="dy-command-idle-hint__title">{targetCount ? 'What can we help with?' : 'No agent selected'}</p>
+            {targetCount > 0 && <p className="dy-command-idle-hint__copy">Ask a question, share a file, or delegate a task.</p>}
             {targetCount === 0 && <Button variant="quiet" size="compact" onClick={() => {
               const search = document.querySelector<HTMLInputElement>('input[aria-label="Search agents"]')
               search?.scrollIntoView({ block: 'center', behavior: 'instant' })
@@ -2247,6 +2318,7 @@ export function AgentResponseConsole() {
       {voiceError && (
         <div className="dy-command-voice-error shrink-0" role="alert">
           {voiceError}
+          {/microphone.*(blocked|access)|permission/i.test(voiceError) && <button type="button" onClick={() => { void openMicrophoneSettings().then(setVoiceError).catch((error) => setVoiceError(friendlyMicrophoneError(error))) }}>Open microphone permissions</button>}
         </div>
       )}
       {voicePhase === 'processing' && <div className="flex shrink-0 flex-wrap items-center gap-2 px-3 py-2">
@@ -2273,8 +2345,6 @@ export function AgentResponseConsole() {
         onDrop={(event) => { if (event.dataTransfer.files.length) { event.preventDefault(); addAttachments(Array.from(event.dataTransfer.files)) } }}
         onPaste={(event) => { if (event.clipboardData.files.length) { event.preventDefault(); addAttachments(Array.from(event.clipboardData.files)) } }}
       >
-        <Bookmarks />
-        <PromptLibrary draft={prompt} onInsert={(text) => setPrompt(prompt.trim() ? `${prompt}\n\n${text}` : text)} />
         <div
           className="dy-command-composer__row"
           data-has-draft={prompt.trim() ? 'true' : 'false'}
@@ -2340,8 +2410,19 @@ export function AgentResponseConsole() {
               value={prompt}
               disabled={isUploading}
               aria-label="Command console message"
-              onChange={(e) => setPrompt(e.target.value)}
+              onChange={(e) => {
+                resetPromptHistory()
+                setPrompt(e.target.value)
+              }}
               onKeyDown={(e) => {
+                if ((e.ctrlKey || e.metaKey) && !e.altKey && !e.shiftKey && e.key.toLowerCase() === 'z' && promptHistory.length) {
+                  e.preventDefault()
+                  e.stopPropagation()
+                  const nextIndex = Math.min(promptHistoryIndexRef.current + 1, promptHistory.length - 1)
+                  promptHistoryIndexRef.current = nextIndex
+                  restorePromptHistoryEntry(promptHistory[nextIndex])
+                  return
+                }
                 if (e.key === 'Enter' && !e.shiftKey) {
                   e.preventDefault()
                   void handleSend()
@@ -2455,6 +2536,7 @@ export function AgentResponseConsole() {
             </div>
           </div>
         </div>
+        <p className="dy-chat-composer-hint">Enter to send <span aria-hidden="true">·</span> Shift + Enter for a new line</p>
       </div>
     </section>
   )

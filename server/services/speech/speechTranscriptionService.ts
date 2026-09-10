@@ -1,4 +1,4 @@
-export const ONLINE_SPEECH_MODEL = 'gpt-4o-mini-transcribe'
+export const ONLINE_SPEECH_MODEL = 'gpt-transcribe'
 export const ONLINE_SPEECH_UPLOAD_LIMIT_BYTES = 25 * 1024 * 1024
 
 export type SpeechTranscriptionService = ReturnType<typeof createSpeechTranscriptionService>
@@ -45,10 +45,10 @@ async function upstreamErrorMessage(response: Response) {
 export function createSpeechTranscriptionService(options: SpeechTranscriptionServiceOptions) {
   const fetchImpl = options.fetch ?? fetch
 
-  async function transcribeOnline(input: { bytes: Buffer; mimeType: string; fileName?: string }) {
+  async function transcribeOnline(input: { bytes: Buffer; mimeType: string; fileName?: string; language?: string; vocabulary?: string; signal?: AbortSignal }) {
     if (!input.bytes.length) throw new SpeechTranscriptionError('The voice recording was empty.', 400)
     if (input.bytes.length > ONLINE_SPEECH_UPLOAD_LIMIT_BYTES) {
-      throw new SpeechTranscriptionError('The voice recording is too large. Keep voice input under two minutes.', 413)
+      throw new SpeechTranscriptionError('The voice recording is too large. Use a shorter recording (maximum upload: 25 MB).', 413)
     }
 
     const apiKey = (await options.resolveOpenAiApiKey()).trim()
@@ -60,13 +60,17 @@ export function createSpeechTranscriptionService(options: SpeechTranscriptionSer
     const form = new FormData()
     form.set('model', ONLINE_SPEECH_MODEL)
     form.set('response_format', 'json')
+    if (input.language && /^[a-z]{2}$/.test(input.language)) form.append('languages[]', input.language)
+    const keywords = (input.vocabulary || '').slice(0, 1000).split(/[,\n]/)
+      .map((term) => term.replace(/[<>\r\n]/g, '').trim()).filter(Boolean).slice(0, 50)
+    for (const keyword of new Set(keywords)) form.append('keywords[]', keyword)
     form.set('file', new Blob([new Uint8Array(input.bytes)], { type: mimeType }), audioFileName(mimeType, input.fileName))
 
     const response = await fetchImpl('https://api.openai.com/v1/audio/transcriptions', {
       method: 'POST',
       headers: { Authorization: `Bearer ${apiKey}` },
       body: form,
-      signal: AbortSignal.timeout(90_000),
+      signal: input.signal ? AbortSignal.any([input.signal, AbortSignal.timeout(120_000)]) : AbortSignal.timeout(120_000),
     })
     if (!response.ok) {
       throw new SpeechTranscriptionError(await upstreamErrorMessage(response), response.status >= 400 && response.status < 500 ? response.status : 502)

@@ -1,5 +1,5 @@
-const DEFAULT_END_OF_SPEECH_SILENCE_MS = 1_150
-const NO_SPEECH_TIMEOUT_MS = 8_000
+const DEFAULT_END_OF_SPEECH_SILENCE_MS = 1_800
+const NO_SPEECH_TIMEOUT_MS = 15_000
 const MIN_VOICE_ACTIVITY_MS = 220
 const ANALYSIS_INTERVAL_MS = 45
 
@@ -29,7 +29,7 @@ export function monitorVoiceActivity(
 
   const samples = new Float32Array(analyser.fftSize)
   const startedAt = performance.now()
-  let noiseFloor = 0.004
+  let noiseFloor = 0.001
   let speechStartedAt = 0
   let lastSpeechAt = 0
   let consecutiveSpeechFrames = 0
@@ -54,7 +54,7 @@ export function monitorVoiceActivity(
     for (const sample of samples) sumSquares += sample * sample
     const level = Math.sqrt(sumSquares / samples.length)
     const now = performance.now()
-    const threshold = Math.max(0.011, Math.min(0.05, noiseFloor * 3.2))
+    const threshold = Math.max(0.003, Math.min(0.03, noiseFloor * 2.4))
     const speechFrame = level >= threshold
     callbacks.onLevel?.(Math.max(0, Math.min(1, (level - noiseFloor) / 0.075)))
 

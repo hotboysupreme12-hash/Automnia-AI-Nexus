@@ -7,7 +7,7 @@
  */
 
 export const CLAWTALK_CORE_BRIDGE_ROUTING_HELPER = String.raw`
-var CLAWTALK_ROUTING_PATCH_VERSION = 13;
+var CLAWTALK_ROUTING_PATCH_VERSION = 14;
 function resolveClawTalkStateRoot() {
     var root = process.env.OPENCLAW_STATE_ROOT || process.env.OPENCLAW_STATE_DIR || process.env.OPENCLAW_HOME || '';
     if (!root) {
@@ -86,11 +86,21 @@ function addClawTalkNameAliases(aliases, seen, name, agentId) {
         if (tokens[i].length > 1) addClawTalkAgentAlias(aliases, seen, tokens[i], agentId);
     }
 }
+function listClawTalkAgentConfigs(config) {
+    var agents = config && config.agents;
+    if (!agents || typeof agents !== 'object') return [];
+    if (Array.isArray(agents.list)) return agents.list;
+    if (agents.entries && typeof agents.entries === 'object') return Object.keys(agents.entries).map(function(id) {
+        var entry = agents.entries[id];
+        return entry && typeof entry === 'object' ? Object.assign({ id: id }, entry) : { id: id };
+    });
+    return [];
+}
 function buildClawTalkAgentAliases(config, fallbackAgentId) {
     var aliases = [];
     var seen = new Set();
     var agentIds = new Set();
-    var list = config && config.agents && Array.isArray(config.agents.list) ? config.agents.list : [];
+    var list = listClawTalkAgentConfigs(config);
     for(var i = 0; i < list.length; i++){
         var id = typeof list[i].id === 'string' ? list[i].id.trim() : '';
         if (id) agentIds.add(id);
@@ -133,7 +143,7 @@ function modelRefFromClawTalkModelSelection(selection) {
 function findClawTalkAgentConfig(config, agentId) {
     var wanted = String(agentId || '').trim().toLowerCase();
     if (!wanted) return null;
-    var list = config && config.agents && Array.isArray(config.agents.list) ? config.agents.list : [];
+    var list = listClawTalkAgentConfigs(config);
     for(var i = 0; i < list.length; i++){
         var entry = list[i] || {};
         if (String(entry.id || '').trim().toLowerCase() === wanted) return entry;
@@ -600,7 +610,7 @@ async function runClawTalkControlCenterOrEmbeddedAgentTurn(options) {
 `.trim()
 
 export const TELEGRAM_AGENT_ROUTING_HELPER = String.raw`
-var TELEGRAM_AGENT_ROUTING_PATCH_VERSION = 15;
+var TELEGRAM_AGENT_ROUTING_PATCH_VERSION = 16;
 var TELEGRAM_AGENT_ROUTE_MEMORY_KEY = '__openclawTelegramAgentRoutes';
 function resolveTelegramControlCenterStreamUrl() {
     var url = process.env.CLAWTALK_CONTROL_CENTER_AGENT_TURN_STREAM_URL || process.env.CONTROL_CENTER_AGENT_TURN_STREAM_URL || '';
@@ -682,13 +692,13 @@ function telegramCreditsOnlyModelSelectionAllowed(config, callback) {
     if (!creditsOnly || !callback || callback.type !== 'select') return true;
     var provider = String(callback.provider || '').trim().toLowerCase();
     var model = String(callback.model || '').trim().toLowerCase();
-    return provider === 'automnia-cloud' && new Set(['gemini-3.7-flash', 'gemini-3.6-flash', 'gemini-2.5-flash']).has(model);
+    return provider === 'automnia-cloud' && new Set(['gemini-3.8-flash', 'gemini-3.7-flash', 'gemini-3.6-flash', 'gemini-2.5-flash']).has(model);
 }
 function telegramCreditsOnlyModelData(config, data) {
     var vars = config && config.env && config.env.vars;
     if (!vars || String(vars.AUTOMNIA_CREDITS_ONLY || '') !== '1' || !data) return data;
     var byProvider = new Map();
-    byProvider.set('automnia-cloud', new Set(['gemini-3.7-flash', 'gemini-3.6-flash', 'gemini-2.5-flash']));
+    byProvider.set('automnia-cloud', new Set(['gemini-3.8-flash', 'gemini-3.7-flash', 'gemini-3.6-flash', 'gemini-2.5-flash']));
     return Object.assign({}, data, {
         byProvider: byProvider,
         providers: ['automnia-cloud']
@@ -768,11 +778,21 @@ function addTelegramAgentNameAliases(aliases, seen, name, agentId) {
         if (tokens[i].length > 1) addTelegramAgentAlias(aliases, seen, tokens[i], agentId);
     }
 }
+function listTelegramAgentConfigs(config) {
+    var agents = config && config.agents;
+    if (!agents || typeof agents !== 'object') return [];
+    if (Array.isArray(agents.list)) return agents.list;
+    if (agents.entries && typeof agents.entries === 'object') return Object.keys(agents.entries).map(function(id) {
+        var entry = agents.entries[id];
+        return entry && typeof entry === 'object' ? Object.assign({ id: id }, entry) : { id: id };
+    });
+    return [];
+}
 function buildTelegramAgentAliases(config, fallbackAgentId) {
     var aliases = [];
     var seen = new Set();
     var agentIds = new Set();
-    var list = config && config.agents && Array.isArray(config.agents.list) ? config.agents.list : [];
+    var list = listTelegramAgentConfigs(config);
     for(var i = 0; i < list.length; i++){
         var id = typeof list[i].id === 'string' ? list[i].id.trim() : '';
         if (id) agentIds.add(id);
@@ -838,8 +858,11 @@ function telegramAgentsCommandRouteState(params) {
 }
 function buildTelegramAgentsCommandList(params, routeState) {
     var config = params.cfg || {};
-    var list = config && config.agents && Array.isArray(config.agents.list) ? config.agents.list : [];
+    var list = listTelegramAgentConfigs(config);
     var activeAgentId = routeState.sticky && routeState.sticky.agentId || String(params.routeAgentId || '').trim();
+    if (activeAgentId && !list.some(function(agent) { return String(agent && agent.id || '').trim().toLowerCase() === activeAgentId.toLowerCase(); })) {
+        list = list.concat([{ id: activeAgentId }]);
+    }
     var lines = ['Automnia agents available in this Telegram chat:', ''];
     var listed = new Set();
     for(var i = 0; i < list.length; i++){

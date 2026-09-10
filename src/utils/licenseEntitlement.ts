@@ -1,4 +1,5 @@
 import type { LicenseInfo } from '../context/licenseContextValue'
+import { usageBaseline } from './usageRemaining'
 
 export const LICENSE_STATUS_UPDATED_EVENT = 'automnia-license-updated'
 
@@ -19,6 +20,7 @@ export const AUTOMNIA_CREDITS_FALLBACK_MODEL_IDS = [
   'automnia-cloud/gemini-2.5-flash',
 ] as const
 export const AUTOMNIA_CREDITS_MODEL_IDS = [
+  'automnia-cloud/gemini-3.8-flash',
   AUTOMNIA_CREDITS_MODEL_ID,
   ...AUTOMNIA_CREDITS_FALLBACK_MODEL_IDS,
 ] as const
@@ -295,7 +297,9 @@ export function resolveAgentRoutePresentation(license: LicenseInfo | null | unde
           : entitlement.isByok
             ? 'The Automnia credits-only route is active.'
             : 'Automnia credits-only route · model selection is managed automatically.',
-      managedRoute: !providerFirst && !providerOnly && !selectedAutomniaFirstWithFallback,
+      // Automnia credits remain the billing route, but active tiers can
+      // choose which named Automnia model runs for the agent.
+      managedRoute: false,
       providerFirst,
       providerOnly,
     }
@@ -324,6 +328,12 @@ export function resolveAgentRoutePresentation(license: LicenseInfo | null | unde
   }
 }
 
+export function isAutomniaCreditsModelSelectionRoute(license: LicenseInfo | null | undefined) {
+  const entitlement = resolveLicenseEntitlement(license)
+  if (!entitlement.active || (!entitlement.isHosted && !entitlement.isByok)) return false
+  return resolveAgentRoutePresentation(license).routeLabel === 'Automnia credits'
+}
+
 export function mergeHostedCreditBalance(
   license: LicenseInfo | null,
   creditBalance: number,
@@ -335,6 +345,7 @@ export function mergeHostedCreditBalance(
   return {
     ...license,
     creditBalance,
+    creditUsageBaseline: usageBaseline(creditBalance, license.creditBalance, license.creditUsageBaseline),
     creditBalanceUpdatedAt,
   }
 }

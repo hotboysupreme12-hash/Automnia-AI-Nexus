@@ -22,7 +22,7 @@ export type ConsolePreferences = {
 
 export const REGISTRY_PREFS_KEY = 'automnia-agent-registry-prefs'
 export const REGISTRY_PREFS_CHANGED_EVENT = 'automnia:registry-preferences-changed'
-export const REGISTRY_PREFS_VERSION = 7
+export const REGISTRY_PREFS_VERSION = 8
 export const CONSOLE_VISIBILITY_KEY = 'automnia-agent-console-visibility'
 export const CONSOLE_WIDTH_KEY = 'automnia-agent-console-width'
 export const CONSOLE_DRAFTS_KEY = 'automnia-command-draft-persistence'
@@ -35,7 +35,7 @@ export const REGISTRY_DISPLAY_OPTIONS: Array<{ id: AgentDisplayMode; label: stri
 ]
 
 export const REGISTRY_OVERLAY_OPTIONS: Array<{ id: AgentOverlayPreset; label: string; hint: string }> = [
-  { id: 'original', label: 'Original', hint: 'Cyber circuit' },
+  { id: 'original', label: 'Original', hint: 'Dark obsidian' },
   { id: 'epic-purple', label: 'Epic Purple', hint: 'High-contrast violet' },
   { id: 'graphite-glass', label: 'Graphite', hint: 'Modern glass' },
   { id: 'blueprint-grid', label: 'Blueprint', hint: 'Technical grid' },
@@ -43,7 +43,7 @@ export const REGISTRY_OVERLAY_OPTIONS: Array<{ id: AgentOverlayPreset; label: st
 
 export const DEFAULT_REGISTRY_PREFERENCES: RegistryPreferences = {
   displayMode: 'grid8',
-  overlayPreset: 'graphite-glass',
+  overlayPreset: 'original',
   rarityColorsEnabled: true,
   rarityFilter: 'all',
   sortKey: 'party',
@@ -53,17 +53,17 @@ export const AGENT_CARD_RARITY_THEMES: Record<AgentRarity, AgentCardTheme> = {
   // Rarity mode keeps the card shell consistent. The final obsidian layer
   // reads the data-agent-rarity marker for the restrained accent instead of
   // swapping in a full saturated theme per card.
-  legendary: 'graphite-glass',
-  epic: 'graphite-glass',
-  rare: 'graphite-glass',
-  common: 'graphite-glass',
+  legendary: 'original',
+  epic: 'original',
+  rare: 'original',
+  common: 'original',
 }
 
 export function resolveAgentCardTheme(rarity: AgentRarity | undefined, preferences: Pick<RegistryPreferences, 'overlayPreset' | 'rarityColorsEnabled'>): AgentCardTheme {
   if (preferences.rarityColorsEnabled) {
     return AGENT_CARD_RARITY_THEMES[rarity || 'common']
   }
-  return preferences.overlayPreset === 'rarity' ? 'graphite-glass' : preferences.overlayPreset
+  return preferences.overlayPreset === 'rarity' ? 'original' : preferences.overlayPreset
 }
 
 /**
@@ -101,16 +101,17 @@ function normalizeDisplayMode(value: unknown): AgentDisplayMode | null {
 
 export function readRegistryPreferences(): RegistryPreferences {
   try {
-    const parsed = JSON.parse(readPreferenceValue(REGISTRY_PREFS_KEY) || '{}') as Partial<RegistryPreferences>
+    const parsed = JSON.parse(readPreferenceValue(REGISTRY_PREFS_KEY) || '{}') as Partial<RegistryPreferences> & { overlayPresetVersion?: number }
     const storedOverlayPreset = parsed.overlayPreset && OVERLAY_PRESETS.has(parsed.overlayPreset)
       ? parsed.overlayPreset
       : DEFAULT_REGISTRY_PREFERENCES.overlayPreset
-    const overlayPreset = storedOverlayPreset === 'rarity' ? 'graphite-glass' : storedOverlayPreset
+    const legacyDefault = storedOverlayPreset === 'graphite-glass' && (parsed.overlayPresetVersion ?? 0) < REGISTRY_PREFS_VERSION
+    const overlayPreset = storedOverlayPreset === 'rarity' || legacyDefault ? 'original' : storedOverlayPreset
     const storedDisplayMode = normalizeDisplayMode((parsed as { displayMode?: unknown }).displayMode)
     return {
       displayMode: storedDisplayMode && DISPLAY_MODES.has(storedDisplayMode) ? storedDisplayMode : DEFAULT_REGISTRY_PREFERENCES.displayMode,
       overlayPreset,
-      rarityColorsEnabled: typeof parsed.rarityColorsEnabled === 'boolean' ? parsed.rarityColorsEnabled : storedOverlayPreset === 'rarity',
+      rarityColorsEnabled: typeof parsed.rarityColorsEnabled === 'boolean' ? parsed.rarityColorsEnabled : parsed.overlayPreset ? storedOverlayPreset === 'rarity' : DEFAULT_REGISTRY_PREFERENCES.rarityColorsEnabled,
       rarityFilter: parsed.rarityFilter && RARITIES.has(parsed.rarityFilter) ? parsed.rarityFilter : DEFAULT_REGISTRY_PREFERENCES.rarityFilter,
       sortKey: parsed.sortKey && SORT_KEYS.has(parsed.sortKey) ? parsed.sortKey : DEFAULT_REGISTRY_PREFERENCES.sortKey,
     }
@@ -122,7 +123,7 @@ export function readRegistryPreferences(): RegistryPreferences {
 export function saveRegistryPreferences(preferences: RegistryPreferences): void {
   const normalized: RegistryPreferences = {
     ...preferences,
-    overlayPreset: preferences.overlayPreset === 'rarity' ? 'graphite-glass' : preferences.overlayPreset,
+    overlayPreset: preferences.overlayPreset === 'rarity' ? 'original' : preferences.overlayPreset,
     rarityColorsEnabled: Boolean(preferences.rarityColorsEnabled),
   }
   savePreferenceEntries([[REGISTRY_PREFS_KEY, JSON.stringify({ ...normalized, overlayPresetVersion: REGISTRY_PREFS_VERSION })]])

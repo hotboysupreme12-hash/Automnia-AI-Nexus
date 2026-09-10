@@ -15,6 +15,7 @@ import {
   transportFromTurnPayload,
 } from './agentTurnProjection'
 import {
+  cancelRecoverableAgentTurn,
   clearAgentTurnSessions,
   preflightAgentRuntime as requestAgentRuntimePreflight,
   prewarmAgentTurn,
@@ -143,6 +144,8 @@ const MISSION_THINKING: ThinkingLevel = 'minimal'
 const FAST_TIMEOUT_SECONDS = 90
 const MISSION_DEFAULT_TIMEOUT_SECONDS = 12 * 60
 const WORKING_STATUS_INTERVAL_MS = 60 * 1000
+const locallyObservedResponseIds = new Set<string>()
+const localResponseAgents = new Map<string, string>()
 const seenClawTalkConsoleEventIds = new Set<string>()
 const TEAMMATE_MEMORY_REPLY_LIMIT = 10
 const TEAMMATE_MEMORY_LINE_MAX = 180
@@ -624,6 +627,10 @@ export type RecruitAgentResult = {
 }
 
 type ClawTalkConsoleEvent = {
+  responseId?: string
+  progressText?: string
+  snapshot?: boolean
+  startedAt?: string
   id?: string
   source?: string
   event?: string
@@ -1061,6 +1068,9 @@ function abortActiveAgentTurns(agentIds: string[]): number {
     const controllers = activeAgentTurnControllers.get(agentId)
     if (!controllers?.size) continue
     operatorCancelledAgentTurns.add(agentId)
+    for (const [responseId, owner] of localResponseAgents) {
+      if (owner === agentId) void cancelRecoverableAgentTurn(responseId)
+    }
     for (const controller of [...controllers]) {
       if (controller.signal.aborted) continue
       controller.abort()
@@ -1973,6 +1983,7 @@ export const useNexusStore = create<NexusState>()(
         const createControlStreamProjector = () => {
           let accumulated = ''
           let finalPayload: AT | null = null
+          let lastStreamError = ''
           let liveStarted = false
           const ensureLiveStarted = (placeholder = '') => {
             if (liveStarted) return
@@ -2111,6 +2122,7 @@ export const useNexusStore = create<NexusState>()(
               const message = typeof data.message === 'string'
                 ? redactActivityText(data.message, 2000)
                 : 'Streaming request failed.'
+              lastStreamError = message
               ensureLiveStarted(message)
               addLiveProgressLine(redactActivityText(message, 160) || 'Runtime reported a blocker.', {
                 label: 'Blocked',
@@ -2150,7 +2162,12 @@ export const useNexusStore = create<NexusState>()(
             }
           }
           const complete = (res: Response): { payload: AT; responseOk: boolean; streamed: boolean } => {
-            const payload: AT = finalPayload || { ok: false, reply: accumulated || 'Streaming response ended without a final payload.', code: 1 }
+            const payload: AT = finalPayload || {
+              ok: false,
+              reply: accumulated || lastStreamError || 'Streaming response ended without a final payload.',
+              stderr: lastStreamError,
+              code: 1,
+            }
             const finalText = accumulated || extractOutput(payload)
             liveResponseModelId = modelIdFromTurnPayload(payload) || liveResponseModelId
             liveTransport = transportFromTurnPayload(payload) || liveTransport
@@ -2223,9 +2240,13 @@ export const useNexusStore = create<NexusState>()(
           const requestTimeoutMs = 6 * 60 * 60 * 1000
           const timer = window.setTimeout(() => controller.abort(), requestTimeoutMs)
           try {
+            locallyObservedResponseIds.add(liveResponseId)
+            localResponseAgents.set(liveResponseId, aid)
             const streamProjector = createControlStreamProjector()
             return await sendStreamingAgentTurn(
               {
+                responseId: liveResponseId,
+                displayPrompt: visiblePrompt,
                 agent: aid,
                 message: msg,
                 intentMessage,
@@ -2252,6 +2273,8 @@ export const useNexusStore = create<NexusState>()(
             // surface one actionable failure and wait for an explicit retry.
             const streamFailure = requestErrorMessage(streamError).toLowerCase()
             const gatewayFailure = /gateway|openclaw|websocket|socket hang up/.test(streamFailure)
+            // Only an explicit unsupported endpoint proves that no turn was accepted.
+            if (!/\b(?:404|405)\b/.test(streamFailure)) throw streamError
             if (controller.signal.aborted || forceOpenClawRuntime || liveResponseCreated || gatewayFailure) throw streamError
             try {
               return await postJson(msg, forceOpenClawRuntime)
@@ -2263,6 +2286,8 @@ export const useNexusStore = create<NexusState>()(
               ].join('\n'))
             }
           } finally {
+            locallyObservedResponseIds.delete(liveResponseId)
+            localResponseAgents.delete(liveResponseId)
             releaseController()
             window.clearTimeout(timer)
           }
@@ -2730,34 +2755,35 @@ export const useNexusStore = create<NexusState>()(
           const runId = frame.clawTalkRunId?.trim() || frame.runId?.trim() || frame.sessionKey?.trim() || frame.id?.trim()
           const agentId = frame.agentId?.trim() || 'main'
           if (!runId) return
-          const responseId = `clawtalk:${runId}`
+          const responseId = frame.responseId || `clawtalk:${runId}`
+          if (locallyObservedResponseIds.has(responseId)) return
           const now = new Date().toISOString()
           const ts = frame.timestamp && !Number.isNaN(new Date(frame.timestamp).getTime()) ? frame.timestamp : now
           const rawText = [frame.text, frame.reply, frame.message, frame.error, frame.detail]
             .find((value) => typeof value === 'string' && (eventName === 'delta' || value.trim())) || ''
           const text = eventName === 'delta' ? rawText : rawText.trim()
           const prompt = frame.prompt?.trim() || 'ClawTalk message'
-          const progressText = eventName === 'delta' || eventName === 'final' ? '' : text
+          const progressText = frame.snapshot ? frame.progressText || '' : eventName === 'delta' || eventName === 'final' ? '' : text
           const modelId = frame.modelId?.trim() || (frame.provider && frame.model ? `${frame.provider}/${frame.model}` : frame.model?.trim() || '')
 
           set((s) => {
             const existing = s.agentResponses.find((entry) => entry.id === responseId)
             const isTerminal = eventName === 'final' || eventName === 'error'
-            if (existing?.streaming === false && !isTerminal) return s
-            const startedAt = existing?.startedAt || ts
+            if (existing?.streaming === false && !isTerminal && existing.ok) return s
+            const startedAt = existing?.startedAt || frame.startedAt || ts
             const startedMs = new Date(startedAt).getTime()
             const elapsedMs = Number.isFinite(startedMs) ? Math.max(0, Date.now() - startedMs) : existing?.durationMs || 0
             const progressLines = existing?.progressLines ? [...existing.progressLines] : []
             if (progressText) {
               const cleanProgress = redactActivityText(progressText, PROGRESS_DRAFT_MAX_LINE_CHARS)
-              if (cleanProgress) {
+              if (cleanProgress && progressLines.at(-1) !== cleanProgress) {
                 progressLines.push(cleanProgress)
                 while (progressLines.length > PROGRESS_DRAFT_MAX_LINES) progressLines.shift()
               }
             }
 
             const ok = eventName === 'error' ? false : isTerminal ? frame.ok !== false : existing?.ok ?? true
-            const response = eventName === 'delta'
+            const response = frame.snapshot ? frame.text || '' : eventName === 'delta'
               ? frame.replace
                 ? text
                 : `${existing?.response || ''}${text}`

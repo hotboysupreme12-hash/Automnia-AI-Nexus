@@ -6,6 +6,7 @@ import {
   type HostedCreditBalanceUpdate,
 } from '../utils/licenseEntitlement'
 import { useAuth } from './useAuth'
+import { usageBaseline } from '../utils/usageRemaining'
 import { LicenseContext, type HostedUsagePriority, type LicenseInfo } from './licenseContextValue'
 
 const EMPTY_LICENSE: LicenseInfo = {
@@ -22,6 +23,22 @@ const EMPTY_LICENSE: LicenseInfo = {
   creditBalanceUpdatedAt: null,
   activatedAt: null,
   verifiedAt: null,
+}
+
+// Older running servers return the confirmed balance without its starting value.
+// Keep an account-scoped baseline across refreshes until the server supplies it.
+function withUsageBaseline(license: LicenseInfo): LicenseInfo {
+  if (!license.active || !license.email) return license
+  const key = `automnia.usage-baseline.v1:${license.email.toLowerCase()}:${license.activatedAt || ''}`
+  let previous: { balance?: number; baseline?: number } = {}
+  try { previous = JSON.parse(localStorage.getItem(key) || '{}') || {} } catch { /* Storage may be unavailable. */ }
+  const baseline = typeof license.creditUsageBaseline === 'number' && Number.isFinite(license.creditUsageBaseline)
+    ? license.creditUsageBaseline
+    : usageBaseline(license.creditBalance, previous.balance, previous.baseline)
+  try {
+    if (license.creditBalance !== null) localStorage.setItem(key, JSON.stringify({ balance: license.creditBalance, baseline }))
+  } catch { /* The current session can still display its confirmed balance. */ }
+  return { ...license, creditUsageBaseline: baseline }
 }
 
 export function LicenseProvider({ children }: { children: ReactNode }) {
@@ -47,7 +64,7 @@ export function LicenseProvider({ children }: { children: ReactNode }) {
       const result = await apiRequest<LicenseInfo>('/api/license/status', { signal, timeoutMs: 8_000 })
       const next = result.ok ? result.data : EMPTY_LICENSE
       if (!signal?.aborted && sequence === statusReadSequenceRef.current && (result.ok || clearOnError)) {
-        setLicense(next)
+        setLicense(withUsageBaseline(next))
       }
       return next
     } catch (error) {
@@ -59,12 +76,33 @@ export function LicenseProvider({ children }: { children: ReactNode }) {
   }, [])
 
   useEffect(() => {
+    if (license) withUsageBaseline(license)
+  }, [license])
+
+  useEffect(() => {
     if (!isAuthenticated || !token) return
 
     const controller = new AbortController()
     void readLocalStatus({ signal: controller.signal, blocking: true, clearOnError: true })
       .catch(() => undefined)
     return () => controller.abort()
+  }, [isAuthenticated, readLocalStatus, token])
+
+  useEffect(() => {
+    if (!isAuthenticated || !token) return
+    const controller = new AbortController()
+    const reconcile = () => {
+      if (document.visibilityState === 'visible') {
+        void readLocalStatus({ signal: controller.signal }).catch(() => undefined)
+      }
+    }
+    const interval = window.setInterval(reconcile, 15_000)
+    window.addEventListener('focus', reconcile)
+    return () => {
+      controller.abort()
+      window.clearInterval(interval)
+      window.removeEventListener('focus', reconcile)
+    }
   }, [isAuthenticated, readLocalStatus, token])
 
   useEffect(() => {
@@ -105,7 +143,7 @@ export function LicenseProvider({ children }: { children: ReactNode }) {
       body: { email, licenseKey },
     })
     if (!result.ok) throw new Error(apiErrorMessage(result.error))
-    setLicense(result.data)
+    setLicense(withUsageBaseline(result.data))
   }, [])
 
   const refresh = useCallback(async () => {
@@ -119,7 +157,7 @@ export function LicenseProvider({ children }: { children: ReactNode }) {
     })
     if (!result.ok) throw new Error(apiErrorMessage(result.error))
     
-    setLicense(result.data)
+    setLicense(withUsageBaseline(result.data))
     setLicenseActivationRequested(false)
     return result.data
   }, [])
@@ -133,7 +171,7 @@ export function LicenseProvider({ children }: { children: ReactNode }) {
       body: { usagePriority },
     })
     if (!result.ok) throw new Error(apiErrorMessage(result.error))
-    setLicense(result.data)
+    setLicense(withUsageBaseline(result.data))
     return result.data
   }, [])
 

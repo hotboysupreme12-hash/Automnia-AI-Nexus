@@ -19,6 +19,8 @@ export function FirstSuccessGuide({ onNavigate }: { onNavigate: (target: HelpNav
     savePreferenceEntries([[KEY, 'complete']])
   }, [hasSuccess, saved])
   const complete = hasSuccess || saved === 'complete'
+  if (complete) return null
+
   const steps: Array<{ label: string; done: boolean; target: HelpNavigationTarget }> = [
     { label: 'Choose an agent', done: hasAgent, target: 'recruit' },
     { label: 'Choose its model', done: hasModel, target: 'agent-editor-model' },

@@ -12,11 +12,15 @@ const localStorage = new MemoryStorage()
 const sessionStorage = new MemoryStorage()
 let bootstrapCalls = 0
 let bootstrapResponse: string | Promise<string> = 'renewed-session'
+let statusEndpoint = false
 const requests: Array<{ authorization: string | null; url: string }> = []
 
 const nativeFetch = async (input: RequestInfo | URL, init?: RequestInit) => {
   const headers = new Headers(init?.headers)
   requests.push({ authorization: headers.get('Authorization'), url: String(input) })
+  if (statusEndpoint && String(input).endsWith('/api/auth/status')) {
+    return Response.json({ ok: true, data: { authenticated: headers.get('Authorization') === 'Bearer renewed-session' } })
+  }
   if (headers.get('Authorization') !== 'Bearer renewed-session') {
     return new Response(JSON.stringify({ ok: false, error: { code: 'auth_required', message: 'Authentication required' } }), { status: 401 })
   }
@@ -117,4 +121,36 @@ test('logout wins when desktop session recovery was already in flight', async ()
   bootstrapResponse = 'renewed-session'
   authTokens.clearAuthSignedOut()
   authTokens.clearAuthToken()
+})
+
+test('a 200 unauthenticated status renews the session before the next agent turn', async () => {
+  statusEndpoint = true
+  authTokens.writeAuthToken('expired-status-session')
+  const callsBefore = bootstrapCalls
+  try {
+    const response = await window.fetch('/api/auth/status')
+    assert.deepEqual(await response.json(), { ok: true, data: { authenticated: true } })
+    assert.equal(bootstrapCalls, callsBefore + 1)
+    for (let turn = 0; turn < 2; turn += 1) {
+      const result = await fetchControlCenterWithAuth('/api/openclaw/agent-turn/stream', { method: 'POST', body: '{}' })
+      assert.equal(result.status, 200)
+    }
+    assert.equal(bootstrapCalls, callsBefore + 1)
+  } finally {
+    statusEndpoint = false
+    authTokens.clearAuthToken()
+  }
+})
+
+test('unauthenticated status without a saved session stays at the login gate', async () => {
+  statusEndpoint = true
+  authTokens.clearAuthToken()
+  const callsBefore = bootstrapCalls
+  try {
+    const response = await window.fetch('/api/auth/status')
+    assert.deepEqual(await response.json(), { ok: true, data: { authenticated: false } })
+    assert.equal(bootstrapCalls, callsBefore)
+  } finally {
+    statusEndpoint = false
+  }
 })

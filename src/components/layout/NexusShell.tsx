@@ -9,7 +9,6 @@ import { resolveAgentEditorId, type AgentEditorTab } from '../../store/nexusUiSt
 import { listCronShifts, stopCronShift, useRuntimeSummaryStatus } from '../../hooks/useRuntimeStatus'
 import type { RuntimeCronJob } from '../../hooks/useRuntimeStatus'
 import { ActionStatusBanner } from '../common/ActionStatusBanner'
-import { RuntimeFreshness } from './RuntimeFreshness'
 import { useWorkspaceScroll } from '../../hooks/useWorkspaceScroll'
 import type { HelpNavigationTarget } from '../help/HelpAssistantPanel'
 import { ActivePartyStrip } from '../party/ActivePartyStrip'
@@ -216,42 +215,6 @@ export function NexusShell() {
       .map((agentId) => agentsById.get(agentId))
       .find((agent) => Boolean(agent))
   }, [activeMission, activePartyIds, agents, missionRunning])
-  const workspaceState = gatewayMigration
-    ? 'Gateway migration in progress'
-    : tab === 'agents'
-      ? busyAgentCount
-        ? `${busyAgentCount} agent${busyAgentCount === 1 ? '' : 's'} active`
-        : gatewayOnline
-          ? 'Ready for commands'
-          : runtimeStatus
-            ? 'Runtime offline'
-            : 'Connecting to runtime'
-      : tab === 'missions'
-        ? missionRunning
-          ? 'Mission in progress'
-          : gatewayOnline
-            ? 'Ready to deploy'
-            : runtimeStatus
-              ? 'Runtime offline'
-              : 'Connecting to runtime'
-        : tab === 'monitor'
-          ? gatewayOnline ? 'Runtime connected' : runtimeStatus ? 'Runtime offline' : 'Connecting to runtime'
-          : tab === 'settings'
-            ? 'Settings ready'
-            : gatewayOnline ? 'Gateway connected · inspect extension status below' : runtimeStatus ? 'Gateway offline' : 'Checking gateway'
-  const workspaceStateTone = gatewayMigration
-    ? 'active'
-    : tab === 'agents'
-      ? busyAgentCount ? 'active' : gatewayOnline ? 'healthy' : runtimeStatus ? 'offline' : 'loading'
-      : tab === 'missions'
-        ? missionRunning ? 'active' : gatewayOnline ? 'healthy' : runtimeStatus ? 'offline' : 'loading'
-      : tab === 'settings'
-          ? 'healthy'
-          : gatewayOnline
-            ? 'healthy'
-            : runtimeStatus
-              ? 'offline'
-              : 'loading'
   const cronJobSummary = useMemo(() => cronJobs.slice(0, 4).map((job) => `${job.name} (${job.agent})`).join(', '), [cronJobs])
   const cronChipTitle = runtimeStatus
     ? cronStatusUnavailable
@@ -806,19 +769,7 @@ export function NexusShell() {
 
       <main id="automnia-main" tabIndex={-1} className="dy-app-main mx-auto max-w-[1680px] px-4 py-6 sm:px-6 sm:py-8">
         {/* Workspace header */}
-        <section className="dy-workspace-context" data-workspace={tab} aria-labelledby="automnia-workspace-title">
-          <div className="dy-workspace-context__copy">
-            <h1
-              id="automnia-workspace-title"
-              className="dy-workspace-context__heading"
-              aria-label={`Automnia — ${tab === 'agents' ? 'Agent Operations' : activeTab.label}`}
-            >
-              <span className="dy-workspace-context__tab-label">
-                {tab === 'agents' ? 'Agent Operations' : activeTab.label}
-              </span>
-            </h1>
-            <Button variant="quiet" size="compact" onClick={() => setCommandPaletteOpen(true)} aria-keyshortcuts="Control+k Meta+k" title="Find a command (Ctrl/⌘ K)">Find a command</Button>
-          </div>
+        <section className="dy-workspace-context" data-workspace={tab} aria-label={`${activeTab.label} workspace status`}>
           <div className="dy-workspace-context__meta">
             <div className="dy-status-grid flex flex-wrap items-center justify-end gap-2" aria-label="Workspace status summary">
               <StatusChip
@@ -912,10 +863,15 @@ export function NexusShell() {
                 />
               )}
             </div>
-            <div className="dy-workspace-context__state" data-state={workspaceStateTone} role="status" aria-live="polite">
-              {workspaceState}
-            </div>
-            <RuntimeFreshness status={runtimeStatus} error={runtimeError} onRefresh={refreshRuntimeStatus} />
+            <Button
+              variant="quiet"
+              size="compact"
+              onClick={() => setCommandPaletteOpen(true)}
+              aria-keyshortcuts="Control+k Meta+k"
+              title="Quick Links (Ctrl/⌘ K)"
+            >
+              Quick Links
+            </Button>
             {gatewayMigration ? (
               <ActionStatusBanner
                 className="dy-workspace-context__notice dy-gateway-migration-notice mt-3 w-full text-left text-[11px] leading-relaxed"

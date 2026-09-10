@@ -1,4 +1,5 @@
 import { AUTOMNIA_PUBLIC_CLOUD_URL, automniaCloudBaseUrl, automniaCloudRuntimeBaseUrl } from '../../config/automniaCloud'
+import { usageBaseline } from '../../../src/utils/usageRemaining'
 
 export const DEFAULT_LICENSE_API_URL = AUTOMNIA_PUBLIC_CLOUD_URL
 const ACTIVATION_TIMEOUT_MS = 10_000
@@ -23,6 +24,7 @@ export type LicenseStatus = {
   subscriptionStatus: string | null
   usagePriority: HostedUsagePriority | null
   creditBalance: number | null
+  creditUsageBaseline?: number | null
   creditBalanceUpdatedAt: string | null
   activatedAt: string | null
   verifiedAt: string | null
@@ -206,6 +208,7 @@ function publicStatus(record: StoredLicense | null): LicenseStatus {
     usagePriority: effectiveUsagePriority(record, mode),
     creditBalance: validCreditBalance(record.creditBalance) ? record.creditBalance : null,
     creditBalanceUpdatedAt: record.creditBalanceUpdatedAt || null,
+    creditUsageBaseline: usageBaseline(record.creditBalance, record.creditBalance, record.creditUsageBaseline),
     activatedAt: record.activatedAt || null,
     verifiedAt: record.verifiedAt || null,
   }
@@ -293,6 +296,7 @@ function storedLicense(value: unknown): StoredLicense | null {
     usagePriority: validUsagePriority(record.usagePriority) ? record.usagePriority : null,
     creditBalance: validCreditBalance(record.creditBalance) ? record.creditBalance : null,
     creditBalanceUpdatedAt: typeof record.creditBalanceUpdatedAt === 'string' ? record.creditBalanceUpdatedAt : null,
+    creditUsageBaseline: usageBaseline(validCreditBalance(record.creditBalance) ? record.creditBalance : null, null, validCreditBalance(record.creditUsageBaseline) ? record.creditUsageBaseline : null),
     activatedAt: typeof record.activatedAt === 'string' ? record.activatedAt : null,
     verifiedAt: typeof record.verifiedAt === 'string' ? record.verifiedAt : null,
   }
@@ -303,7 +307,14 @@ export function createLicenseService(options: LicenseServiceOptions) {
   const apiBaseUrl = licenseApiBaseUrl(options.apiUrl)
   const request = options.fetch || globalThis.fetch
   const now = () => (options.now ? options.now() : new Date()).toISOString()
-  const current = () => storedLicense(options.read<StoredLicense>(stateKey))
+  const current = () => {
+    const record = storedLicense(options.read<StoredLicense>(stateKey))
+    const allocation = options.read<{ email: string; activatedAt: string | null; baseline: number }>('license:usage-allocation')
+    if (record && allocation && allocation.email === record.email && allocation.activatedAt === record.activatedAt && validCreditBalance(allocation.baseline)) {
+      record.creditUsageBaseline = allocation.baseline
+    }
+    return record
+  }
 
   const store = (record: StoredLicense, errorMessage: string) => {
     if (!options.write(stateKey, record)) {
@@ -345,6 +356,7 @@ export function createLicenseService(options: LicenseServiceOptions) {
             ? payload.usagePriority
             : mode === 'byok' && !(validCreditBalance(reportedCreditBalance) && reportedCreditBalance > 0) ? 'provider_first' : 'automnia_only',
       creditBalance: reportedCreditBalance,
+      creditUsageBaseline: usageBaseline(reportedCreditBalance, fallback.creditBalance, fallback.creditUsageBaseline),
       creditBalanceUpdatedAt: validCreditBalance(payload.creditBalance) ? now() : fallback.creditBalanceUpdatedAt,
       activatedAt: typeof payload.activatedAt === 'string' ? payload.activatedAt : fallback.activatedAt || now(),
       verifiedAt: now(),
@@ -512,6 +524,7 @@ export function createLicenseService(options: LicenseServiceOptions) {
       return store({
         ...record,
         creditBalance,
+        creditUsageBaseline: usageBaseline(creditBalance, record.creditBalance, record.creditUsageBaseline),
         creditBalanceUpdatedAt: now(),
         verifiedAt: now(),
       }, 'The provider charged this request, but the local credit balance could not be saved. Refresh Account & License to reconcile it.')

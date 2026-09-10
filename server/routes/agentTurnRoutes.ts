@@ -18,6 +18,7 @@ type AgentRuntimePreflightCheck = {
 }
 
 type ClawTalkConsoleMirrorContext = {
+  responseId?: string
   clawTalkRunId: string
   agentId: string
   sessionKey: string
@@ -174,6 +175,7 @@ type AgentTurnRoutesOptions = {
   cleanupDoctrineMirrorsAfterRun(agent: string, workspace: string): Promise<unknown>
   cleanupOpenClawSessionLocks(options: { agentId?: string; all?: boolean; minAgeMs: number; reason: string }): Promise<{ scanned: number; removed: unknown[]; errors: unknown[] }>
   clearAgentTurnSessions(agent?: string): { sessions: number; histories: number }
+  clearConsoleRecovery?: (agentId?: string) => void
   compactClawTalkConsoleValue(value: string, maxChars?: number): string
   compactFinalSsePayload(payload: Record<string, unknown>, liveTextStreamed: boolean): Record<string, unknown>
   compactHttpJsonPayload(payload: Record<string, unknown>): Record<string, unknown>
@@ -249,6 +251,12 @@ type AgentTurnRoutesOptions = {
 }
 
 export function registerAgentTurnRoutes(app: Express, options: AgentTurnRoutesOptions) {
+  const recoverableTurns = new Map<string, AbortController>()
+  app.delete('/api/openclaw/agent-turn/:responseId', (req, res) => {
+    const controller = recoverableTurns.get(String(req.params.responseId))
+    controller?.abort()
+    return apiSuccess(res, { stopped: Boolean(controller) })
+  })
   const {
     AUTH_TOKEN,
     CONTROL_CENTER_AGENT_TURN_STREAM_SMOKE_MOCK,
@@ -387,6 +395,7 @@ export function registerAgentTurnRoutes(app: Express, options: AgentTurnRoutesOp
     const agent = parsed.data?.agent?.trim()
     try {
       const cleared = clearAgentTurnSessions(agent || undefined)
+      options.clearConsoleRecovery?.(agent || undefined)
       const lockCleanup = await cleanupOpenClawSessionLocks({
         agentId: agent || undefined,
         all: !agent,
@@ -413,6 +422,7 @@ export function registerAgentTurnRoutes(app: Express, options: AgentTurnRoutesOp
       message: z.string().min(1),
       intentMessage: z.string().optional(),
       displayPrompt: z.string().optional(),
+      responseId: z.string().uuid().optional(),
       source: z.enum(['clawtalk']).optional(),
       sessionKey: z.string().min(1).optional(),
       thinking: z.enum(['off', 'minimal', 'low', 'medium', 'high', 'xhigh', 'max']).default('low'),
@@ -425,11 +435,13 @@ export function registerAgentTurnRoutes(app: Express, options: AgentTurnRoutesOp
 
     initializeSseResponse(res)
     const abortController = new AbortController()
-    const clawTalkMirror = parsed.data.source === 'clawtalk'
+    if (parsed.data.responseId) recoverableTurns.set(parsed.data.responseId, abortController)
+    const clawTalkMirror = parsed.data.source === 'clawtalk' || parsed.data.responseId
       ? {
+          responseId: parsed.data.responseId,
           clawTalkRunId: randomUUID(),
           agentId: parsed.data.agent.trim(),
-          sessionKey: parsed.data.sessionKey?.trim() || `clawtalk:${parsed.data.agent.trim()}`,
+          sessionKey: parsed.data.sessionKey?.trim() || (parsed.data.responseId ? `console:${parsed.data.responseId}` : `clawtalk:${parsed.data.agent.trim()}`),
           prompt: compactClawTalkConsoleValue(parsed.data.displayPrompt || parsed.data.intentMessage || parsed.data.message, 4000),
         } satisfies ClawTalkConsoleMirrorContext
       : null
@@ -443,15 +455,27 @@ export function registerAgentTurnRoutes(app: Express, options: AgentTurnRoutesOp
       } catch {
         // The client can disconnect between the closed check and the write.
         closed = true
-        abortController.abort()
+        if (!parsed.data.responseId) abortController.abort()
       }
     }, 15_000)
     heartbeat.unref?.()
     res.on('close', () => {
       closed = true
       clearInterval(heartbeat)
-      abortController.abort()
+      // A renderer disconnect detaches its observer; explicit runtime Stop owns cancellation.
+      if (!parsed.data.responseId) abortController.abort()
     })
+    const writeObserver: StreamEmitter = (event, data) => {
+      if (closed) return
+      try {
+        writeSseEvent(res, event, data)
+        res.flushHeaders?.()
+      } catch (error) {
+        closed = true
+        clearInterval(heartbeat)
+        if (!parsed.data.responseId) throw error
+      }
+    }
     const emit: StreamEmitter = (event, data) => {
       if (event === 'delta' && typeof data.text === 'string') {
         const text = data.text
@@ -462,15 +486,14 @@ export function registerAgentTurnRoutes(app: Express, options: AgentTurnRoutesOp
             const chunkPayload = { ...data, text: chunk, chunked: true }
             if (clawTalkMirror) emitClawTalkConsoleFrame(event, clawTalkMirror, chunkPayload)
             if (closed) continue
-            writeSseEvent(res, event, chunkPayload)
+            writeObserver(event, chunkPayload)
           }
           return
         }
       }
       if (clawTalkMirror) emitClawTalkConsoleFrame(event, clawTalkMirror, data)
       if (closed) return
-      writeSseEvent(res, event, data)
-      res.flushHeaders?.()
+      writeObserver(event, data)
     }
 
     const routeMetadata = () => billingRoutePresentation?.() || {}
@@ -744,6 +767,7 @@ export function registerAgentTurnRoutes(app: Express, options: AgentTurnRoutesOp
         streaming: { transport: failureTransport, liveTokens: false },
       }, liveTextStreamed))
     } finally {
+      if (parsed.data.responseId) recoverableTurns.delete(parsed.data.responseId)
       clearInterval(heartbeat)
       if (!closed) res.end()
     }

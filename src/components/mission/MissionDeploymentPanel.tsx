@@ -4,7 +4,7 @@ import { useNexusStore } from '../../store/nexusStore'
 import type { CapabilityKey, CollaborationMode, DurationMode, DurationUnit } from '../../types/nexus'
 import { agentPortraitSrc } from '../../utils/portrait'
 import { Badge, Button, StatusChip } from '../ui'
-import type { MissionGlyph } from './missionIconAssets'
+import { MISSION_GLYPH_ASSETS, MISSION_PRESET_ASSETS, type MissionGlyph } from './missionIconAssets'
 import './MissionDeploymentPanel.css'
 import { MissionTemplates } from './MissionTemplates'
 
@@ -32,183 +32,19 @@ function accentVars(accent: MissionAccent): CSSProperties {
   } as CSSProperties
 }
 
-function glyphShape(icon: MissionGlyph) {
-  switch (icon) {
-    case 'code':
-      return (
-        <>
-          <path className="dui-mission-glyph__line" d="M18.5 15.5 10.5 24l8 8.5" />
-          <path className="dui-mission-glyph__line" d="M29.5 15.5 37.5 24l-8 8.5" />
-          <path className="dui-mission-glyph__soft" d="M27 12.5 21 35.5" />
-          <path className="dui-mission-glyph__soft" d="M14 38h11" />
-          <path className="dui-mission-glyph__soft" d="M29 38h7" />
-          <circle className="dui-mission-glyph__dot" cx="12" cy="10" r="2" />
-          <circle className="dui-mission-glyph__dot" cx="19" cy="10" r="2" />
-        </>
-      )
-    case 'plan':
-      return (
-        <>
-          <rect className="dui-mission-glyph__panel" x="13" y="12" width="22" height="28" rx="4" />
-          <path className="dui-mission-glyph__line" d="M19 17h10" />
-          <path className="dui-mission-glyph__line" d="M19 24h13" />
-          <path className="dui-mission-glyph__line" d="M19 31h10" />
-          <path className="dui-mission-glyph__soft" d="m14.5 24 2 2 4-5" />
-          <path className="dui-mission-glyph__soft" d="m14.5 31 2 2 4-5" />
-          <rect className="dui-mission-glyph__solid" x="19" y="8" width="10" height="6" rx="2" />
-        </>
-      )
-    case 'research':
-      return (
-        <>
-          <path className="dui-mission-glyph__soft" d="m13 28 7-5 7 4 8-10" />
-          <circle className="dui-mission-glyph__dot" cx="13" cy="28" r="2.2" />
-          <circle className="dui-mission-glyph__dot" cx="20" cy="23" r="2.2" />
-          <circle className="dui-mission-glyph__dot" cx="27" cy="27" r="2.2" />
-          <circle className="dui-mission-glyph__dot" cx="35" cy="17" r="2.2" />
-          <circle className="dui-mission-glyph__line" cx="23" cy="24" r="9" />
-          <path className="dui-mission-glyph__line" d="m30 31 7 7" />
-        </>
-      )
-    case 'launch':
-      return (
-        <>
-          <path className="dui-mission-glyph__panel" d="M25 9c5 3 8 8 8 15l-7 7h-4l-5-5v-4l8-13Z" />
-          <circle className="dui-mission-glyph__dot" cx="27" cy="19" r="3" />
-          <path className="dui-mission-glyph__line" d="M17 22h-5l5-7" />
-          <path className="dui-mission-glyph__line" d="M26 31v5l7-5" />
-          <path className="dui-mission-glyph__solid" d="M18 31c-3 1-5 3-6 6 4-1 6-3 7-6h-1Z" />
-        </>
-      )
-    case 'command':
-      return (
-        <>
-          <path className="dui-mission-glyph__soft" d="M14 14h20v20H14z" />
-          <path className="dui-mission-glyph__soft" d="M14 24h20M24 14v20" />
-          <path className="dui-mission-glyph__solid" d="m24 17 2.2 4.6 5 1-3.6 3.6.8 5-4.4-2.4-4.4 2.4.8-5-3.6-3.6 5-1L24 17Z" />
-          <circle className="dui-mission-glyph__dot" cx="14" cy="14" r="2.8" />
-          <circle className="dui-mission-glyph__dot" cx="34" cy="14" r="2.8" />
-          <circle className="dui-mission-glyph__dot" cx="14" cy="34" r="2.8" />
-          <circle className="dui-mission-glyph__dot" cx="34" cy="34" r="2.8" />
-        </>
-      )
-    case 'build':
-      return (
-        <>
-          <path className="dui-mission-glyph__line" d="m14 35 13-13" />
-          <path className="dui-mission-glyph__line" d="m11 32 5 5" />
-          <path className="dui-mission-glyph__panel" d="M26 13c4-3 8-2 11 1l-7 2 2 5-5 2-4-4 3-6Z" />
-          <path className="dui-mission-glyph__soft" d="M27 35h11M31 30h7" />
-          <circle className="dui-mission-glyph__dot" cx="15" cy="33" r="2" />
-        </>
-      )
-    case 'memory':
-      return (
-        <>
-          <path className="dui-mission-glyph__panel" d="M13 14c0-4 22-4 22 0v20c0 4-22 4-22 0V14Z" />
-          <path className="dui-mission-glyph__line" d="M13 14c0 4 22 4 22 0" />
-          <path className="dui-mission-glyph__soft" d="M13 21c0 4 22 4 22 0M13 28c0 4 22 4 22 0M13 35c0 4 22 4 22 0" />
-        </>
-      )
-    case 'parallel':
-      return (
-        <>
-          <path className="dui-mission-glyph__line" d="M11 14h20" />
-          <path className="dui-mission-glyph__line" d="M11 24h25" />
-          <path className="dui-mission-glyph__line" d="M11 34h20" />
-          <path className="dui-mission-glyph__line" d="m31 10 5 4-5 4" />
-          <path className="dui-mission-glyph__line" d="m36 20 5 4-5 4" />
-          <path className="dui-mission-glyph__line" d="m31 30 5 4-5 4" />
-          <circle className="dui-mission-glyph__dot" cx="11" cy="14" r="2" />
-          <circle className="dui-mission-glyph__dot" cx="11" cy="24" r="2" />
-          <circle className="dui-mission-glyph__dot" cx="11" cy="34" r="2" />
-        </>
-      )
-    case 'specialist':
-      return (
-        <>
-          <circle className="dui-mission-glyph__soft" cx="24" cy="24" r="15" />
-          <circle className="dui-mission-glyph__line" cx="24" cy="24" r="9" />
-          <circle className="dui-mission-glyph__solid" cx="24" cy="24" r="4" />
-          <path className="dui-mission-glyph__line" d="M24 7v8M24 33v8M7 24h8M33 24h8" />
-        </>
-      )
-    case 'relay':
-      return (
-        <>
-          <path className="dui-mission-glyph__line" d="M14 17h13c5 0 8 3 8 7s-3 7-8 7H16" />
-          <path className="dui-mission-glyph__line" d="m16 25-6 6 6 6" />
-          <path className="dui-mission-glyph__line" d="m32 11 6 6-6 6" />
-          <circle className="dui-mission-glyph__dot" cx="14" cy="17" r="2.4" />
-          <circle className="dui-mission-glyph__dot" cx="35" cy="31" r="2.4" />
-        </>
-      )
-    case 'swarm':
-      return (
-        <>
-          <path className="dui-mission-glyph__soft" d="M15 16 24 24l10-10M24 24l-8 9m8-9 9 8m-18 1h18" />
-          <circle className="dui-mission-glyph__dot" cx="15" cy="16" r="4" />
-          <circle className="dui-mission-glyph__dot" cx="34" cy="14" r="4" />
-          <circle className="dui-mission-glyph__solid" cx="24" cy="24" r="5" />
-          <circle className="dui-mission-glyph__dot" cx="16" cy="33" r="4" />
-          <circle className="dui-mission-glyph__dot" cx="33" cy="32" r="4" />
-        </>
-      )
-    case 'strike':
-      return (
-        <>
-          <path className="dui-mission-glyph__soft" d="M28 8 15 26h9l-4 14 13-19h-9l4-13Z" />
-          <path className="dui-mission-glyph__solid" d="M28 8 15 26h9l-4 14 13-19h-9l4-13Z" />
-        </>
-      )
-    case 'shift':
-      return (
-        <>
-          <path className="dui-mission-glyph__panel" d="M15 10h18M15 38h18M17 10c0 9 14 9 14 14S17 29 17 38M31 10c0 9-14 9-14 14s14 5 14 14" />
-          <path className="dui-mission-glyph__soft" d="M20 18h8M20 30h8" />
-          <circle className="dui-mission-glyph__dot" cx="24" cy="24" r="2.5" />
-        </>
-      )
-    case 'loop':
-      return (
-        <>
-          <path className="dui-mission-glyph__line" d="M34 18a12 12 0 0 0-21 4" />
-          <path className="dui-mission-glyph__line" d="m34 11 1 8-8-1" />
-          <path className="dui-mission-glyph__line" d="M14 30a12 12 0 0 0 21-4" />
-          <path className="dui-mission-glyph__line" d="m14 37-1-8 8 1" />
-          <circle className="dui-mission-glyph__solid" cx="24" cy="24" r="3" />
-        </>
-      )
-    case 'watch':
-      return (
-        <>
-          <path className="dui-mission-glyph__panel" d="M8 24s6-10 16-10 16 10 16 10-6 10-16 10S8 24 8 24Z" />
-          <circle className="dui-mission-glyph__line" cx="24" cy="24" r="6" />
-          <circle className="dui-mission-glyph__solid" cx="24" cy="24" r="2.7" />
-          <path className="dui-mission-glyph__soft" d="M24 9v-3M24 42v-3M39 24h3M6 24h3" />
-        </>
-      )
-    default:
-      return null
-  }
-}
-
 export function MissionGlyphIcon({ icon, className = 'dui-flat-glyph' }: { icon: MissionGlyph; className?: string }) {
   return (
-    <svg
-      viewBox="0 0 48 48"
+    <img
+      src={MISSION_GLYPH_ASSETS[icon]}
+      alt=""
       aria-hidden="true"
-      focusable="false"
+      decoding="async"
       className={`dui-mission-glyph ${className}`}
-    >
-      {glyphShape(icon)}
-    </svg>
+    />
   )
 }
 
 function FlatGlyph({ icon }: { icon: MissionGlyph }) {
-  // Inline vector glyphs avoid fetching and synchronously decoding fifteen
-  // separate PNGs whenever the mission workspace opens.
   return <MissionGlyphIcon icon={icon} className="dui-flat-glyph" />
 }
 
@@ -253,13 +89,13 @@ const DURATION_MODES: Array<{ id: DurationMode; label: string; hint: string; ico
 
 const PRESETS: Array<{
   label: string; title: string; missionType: CapabilityKey; collaborationMode: CollaborationMode
-  complexity: number; riskTolerance: number; description: string; icon: MissionGlyph; accent: MissionAccent
+  complexity: number; riskTolerance: number; description: string; asset: string; accent: MissionAccent
 }> = [
-  { label: 'Code Sweep', title: 'Critical Code Sweep', missionType: 'codeGeneration', collaborationMode: 'parallel', complexity: 72, riskTolerance: 32, description: 'Audit for bugs, performance issues, broken flows, and safe fixes.', icon: 'code', accent: 'code' },
-  { label: 'Mission Plan', title: 'Mission Plan', missionType: 'planning', collaborationMode: 'specialist', complexity: 58, riskTolerance: 24, description: 'Break objective into owned lanes, risks, and concrete next actions.', icon: 'plan', accent: 'plan' },
-  { label: 'Research Map', title: 'Research Map', missionType: 'research', collaborationMode: 'swarm', complexity: 64, riskTolerance: 18, description: 'Map facts, missing evidence, contradictions, and next documents needed.', icon: 'research', accent: 'research' },
-  { label: 'Launch Push', title: 'Launch Push', missionType: 'orchestration', collaborationMode: 'hierarchical', complexity: 82, riskTolerance: 42, description: 'Commander delegates implementation, verification, and polish lanes, then synthesizes release status.', icon: 'launch', accent: 'command' },
-  { label: 'Command Ops', title: 'Commander Delegation Run', missionType: 'orchestration', collaborationMode: 'hierarchical', complexity: 76, riskTolerance: 28, description: 'Lead agent assigns owned lanes, tracks blockers, routes handoffs, and keeps TEAM_SYNC current until completion.', icon: 'command', accent: 'command' },
+  { label: 'Code Sweep', title: 'Critical Code Sweep', missionType: 'codeGeneration', collaborationMode: 'parallel', complexity: 72, riskTolerance: 32, description: 'Audit for bugs, performance issues, broken flows, and safe fixes.', asset: MISSION_PRESET_ASSETS.codeSweep, accent: 'code' },
+  { label: 'Mission Plan', title: 'Mission Plan', missionType: 'planning', collaborationMode: 'specialist', complexity: 58, riskTolerance: 24, description: 'Break objective into owned lanes, risks, and concrete next actions.', asset: MISSION_PRESET_ASSETS.missionPlan, accent: 'plan' },
+  { label: 'Research Map', title: 'Research Map', missionType: 'research', collaborationMode: 'swarm', complexity: 64, riskTolerance: 18, description: 'Map facts, missing evidence, contradictions, and next documents needed.', asset: MISSION_PRESET_ASSETS.researchMap, accent: 'research' },
+  { label: 'Launch Push', title: 'Launch Push', missionType: 'orchestration', collaborationMode: 'hierarchical', complexity: 82, riskTolerance: 42, description: 'Commander delegates implementation, verification, and polish lanes, then synthesizes release status.', asset: MISSION_PRESET_ASSETS.launchPush, accent: 'command' },
+  { label: 'Command Ops', title: 'Commander Delegation Run', missionType: 'orchestration', collaborationMode: 'hierarchical', complexity: 76, riskTolerance: 28, description: 'Lead agent assigns owned lanes, tracks blockers, routes handoffs, and keeps TEAM_SYNC current until completion.', asset: MISSION_PRESET_ASSETS.commandOps, accent: 'command' },
 ]
 
 const PRESET_OBJECTIVES = new Set(PRESETS.map((preset) => preset.description.trim()))
@@ -331,6 +167,7 @@ export function MissionDeploymentPanel() {
   const stopMission = useNexusStore((s) => s.stopMission)
 
   const [showTiming, setShowTiming] = useState(false)
+  const [showHistory, setShowHistory] = useState(false)
   const [heartbeatValue, setHeartbeatValue] = useState(30)
   const [heartbeatUnit, setHeartbeatUnit] = useState<HeartbeatUnit>('seconds')
   const [failedPortraitKeys, setFailedPortraitKeys] = useState<Set<string>>(() => new Set())
@@ -426,8 +263,13 @@ export function MissionDeploymentPanel() {
     <div className="dui-mission-wrap dui-missions-polished">
       <header className="dui-missions-page-head">
         <div><span>Mission control</span><h2>Missions</h2><p>Define the outcome. Assemble your team. Put your agents to work.</p></div>
+        <div className="dui-missions-page-actions">
+          <Button type="button" variant="secondary" size="compact" aria-expanded={showHistory} aria-controls={`${fieldId}-history`} onClick={() => setShowHistory((value) => !value)}>
+            {showHistory ? 'Hide recent jobs' : 'Recent jobs'} ({missionHistory.length})
+          </Button>
         <div className="dui-missions-page-status" data-active={missionRunning || missionLaunchPending}>
           <i aria-hidden="true" />{missionLaunchPending ? 'Launching mission' : missionRunning ? 'Mission active' : 'New mission'}
+        </div>
         </div>
       </header>
       <section data-dui-panel="missions" className="dui-mission-screen dui-mission-polished">
@@ -452,7 +294,7 @@ export function MissionDeploymentPanel() {
                     className={`dui-template-tile ${activePreset?.label === preset.label ? 'is-active' : ''}`}
                   >
                     <span className="dui-template-art">
-                      <FlatGlyph icon={preset.icon} />
+                      <img src={preset.asset} alt="" aria-hidden="true" decoding="async" className="dui-template-icon" />
                     </span>
                     <span className="dui-template-copy">
                       <strong>{preset.label}</strong>
@@ -582,62 +424,6 @@ export function MissionDeploymentPanel() {
               />
               <p id={`${fieldId}-objective-hint`} className="dui-objective-hint"><span>{objectiveCue} · At least 20 characters.</span><span>{missionDraft.description.trim().length} characters</span></p>
             </section>
-
-            <section className="dui-card dui-mission-bottom-cron">
-              <div className="dui-section-head compact">
-                <div>
-                  <span>03 / Schedule</span>
-                  <strong>{selectedHeartbeat ? `Run now · then ${selectedHeartbeat.mixed ? `${formatHeartbeat(selectedHeartbeat.min)}-${formatHeartbeat(selectedHeartbeat.max)}` : formatHeartbeat(selectedHeartbeat.min)}` : 'Set a cadence'}</strong>
-                </div>
-                <p>{missionDraft.durationMode}</p>
-              </div>
-              <div className="dui-cadence-grid">
-                <input aria-label="Party cadence interval" type="number" inputMode="numeric" min={1} value={heartbeatValue} onChange={(e) => setHeartbeatValue(Number(e.target.value))} className="dui-control dui-cadence-number" />
-                <select aria-label="Party cadence unit" value={heartbeatUnit} onChange={(e) => setHeartbeatUnit(e.target.value as HeartbeatUnit)} className="dui-control dui-cadence-unit">
-                  <option value="seconds">Seconds</option>
-                  <option value="minutes">Minutes</option>
-                  <option value="hours">Hours</option>
-                </select>
-                <Button type="button" onClick={applyHeartbeatToParty} disabled={!selectedAgents.length || missionRunning} className="dui-secondary-button" variant="secondary" size="compact">
-                  Apply Cadence
-                </Button>
-              </div>
-              <p className="dui-mission-schedule-note">Deploy starts the first cycle immediately. The cadence controls later cycles only.</p>
-
-              <div className="dui-loadout-head">
-                <span>Team capacity</span>
-                <div className="dui-avatar-stack">
-                  {effectiveAgents.slice(0, 6).map((agent) => {
-                    const portraitSrc = agentPortraitSrc(agent.id, agent.portrait)
-                    const portraitKey = `${agent.id}::${portraitSrc}`
-                    const portraitFailed = portraitSrc ? failedPortraitKeys.has(portraitKey) : false
-                    return (
-                      <div key={agent.id}>
-                        {portraitSrc && !portraitFailed ? (
-                          <img
-                            src={portraitSrc}
-                            alt=""
-                            onError={() => setFailedPortraitKeys((current) => new Set(current).add(portraitKey))}
-                          />
-                        ) : <span>{agent.name.charAt(0)}</span>}
-                      </div>
-                    )
-                  })}
-                </div>
-              </div>
-              <div className="dui-meter-grid">
-                {([
-                  ['Complexity', missionDraft.complexity, 'complexity'] as const,
-                  ['Risk', missionDraft.riskTolerance, 'risk'] as const,
-                  ['Lanes', Math.min(100, effectiveAgents.length * 17), 'complexity'] as const,
-                ]).map(([label, value, kind]) => (
-                  <div key={label} className="dui-meter" data-tone={label === 'Lanes' ? 'cool' : gaugeTone(value, kind)}>
-                    <div><span>{label}</span><strong>{label === 'Lanes' ? effectiveAgents.length : `${value}%`}</strong></div>
-                    <div className="dui-progress-track"><div className="dui-progress-fill" style={{ width: `${value}%` }} /></div>
-                  </div>
-                ))}
-              </div>
-            </section>
           </div>
 
           <aside className="dui-mission-sidebar">
@@ -717,7 +503,7 @@ export function MissionDeploymentPanel() {
             <section className="dui-card dui-mission-bottom-tuning">
               <div className="dui-section-head dui-section-head--dispatch">
                 <div>
-                  <span>04 / Review & launch</span>
+                  <span>03 / Review & launch</span>
                   <strong>Review your mission</strong>
                 </div>
                 <div className="dui-readiness-mini" data-tone={readinessState}>
@@ -790,6 +576,61 @@ export function MissionDeploymentPanel() {
 
               {showTiming && (
                 <div id={`${fieldId}-timing`} className="dui-timing-panel dy-surface-enter">
+                  <section className="dui-mission-bottom-cron">
+                    <div className="dui-section-head compact">
+                      <div>
+                        <span>Schedule</span>
+                        <strong>{selectedHeartbeat ? `Run now · then ${selectedHeartbeat.mixed ? `${formatHeartbeat(selectedHeartbeat.min)}-${formatHeartbeat(selectedHeartbeat.max)}` : formatHeartbeat(selectedHeartbeat.min)}` : 'Set a cadence'}</strong>
+                      </div>
+                      <p>{missionDraft.durationMode}</p>
+                    </div>
+                    <div className="dui-cadence-grid">
+                      <input aria-label="Party cadence interval" type="number" inputMode="numeric" min={1} value={heartbeatValue} onChange={(e) => setHeartbeatValue(Number(e.target.value))} className="dui-control dui-cadence-number" />
+                      <select aria-label="Party cadence unit" value={heartbeatUnit} onChange={(e) => setHeartbeatUnit(e.target.value as HeartbeatUnit)} className="dui-control dui-cadence-unit">
+                        <option value="seconds">Seconds</option>
+                        <option value="minutes">Minutes</option>
+                        <option value="hours">Hours</option>
+                      </select>
+                      <Button type="button" onClick={applyHeartbeatToParty} disabled={!selectedAgents.length || missionRunning} className="dui-secondary-button" variant="secondary" size="compact">
+                        Apply Cadence
+                      </Button>
+                    </div>
+                    <p className="dui-mission-schedule-note">Deploy starts the first cycle immediately. The cadence controls later cycles only.</p>
+
+                    <div className="dui-loadout-head">
+                      <span>Team capacity</span>
+                      <div className="dui-avatar-stack">
+                        {effectiveAgents.slice(0, 6).map((agent) => {
+                          const portraitSrc = agentPortraitSrc(agent.id, agent.portrait)
+                          const portraitKey = `${agent.id}::${portraitSrc}`
+                          const portraitFailed = portraitSrc ? failedPortraitKeys.has(portraitKey) : false
+                          return (
+                            <div key={agent.id}>
+                              {portraitSrc && !portraitFailed ? (
+                                <img
+                                  src={portraitSrc}
+                                  alt=""
+                                  onError={() => setFailedPortraitKeys((current) => new Set(current).add(portraitKey))}
+                                />
+                              ) : <span>{agent.name.charAt(0)}</span>}
+                            </div>
+                          )
+                        })}
+                      </div>
+                    </div>
+                    <div className="dui-meter-grid">
+                      {([
+                        ['Complexity', missionDraft.complexity, 'complexity'] as const,
+                        ['Risk', missionDraft.riskTolerance, 'risk'] as const,
+                        ['Lanes', Math.min(100, effectiveAgents.length * 17), 'complexity'] as const,
+                      ]).map(([label, value, kind]) => (
+                        <div key={label} className="dui-meter" data-tone={label === 'Lanes' ? 'cool' : gaugeTone(value, kind)}>
+                          <div><span>{label}</span><strong>{label === 'Lanes' ? effectiveAgents.length : `${value}%`}</strong></div>
+                          <div className="dui-progress-track"><div className="dui-progress-fill" style={{ width: `${value}%` }} /></div>
+                        </div>
+                      ))}
+                    </div>
+                  </section>
                   <div className="dui-duration-grid">
                     {DURATION_MODES.map((mode) => (
                       <button
@@ -836,15 +677,16 @@ export function MissionDeploymentPanel() {
         </div>
       </section>
 
-      {missionHistory.length > 0 && (
-        <section className="dui-mission-history">
+      {showHistory && (
+        <section id={`${fieldId}-history`} className="dui-mission-history" aria-label="Recent jobs">
           <div className="dui-section-head">
             <div>
-              <span>Mission History</span>
+              <span>Recent jobs</span>
               <strong>{missionHistory.length} runs</strong>
             </div>
-            <p>Recent</p>
+            <Button type="button" variant="secondary" size="compact" onClick={() => setShowHistory(false)}>Hide recent jobs</Button>
           </div>
+          {missionHistory.length === 0 && <p>No recent jobs yet.</p>}
           <div className="dui-history-grid">
             {missionHistory.slice(0, 9).map((mission) => (
               <div key={mission.id} className="dui-history-item">

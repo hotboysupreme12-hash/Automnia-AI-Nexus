@@ -2,7 +2,7 @@ import assert from 'node:assert/strict'
 import test from 'node:test'
 
 import type { LicenseInfo } from '../src/context/licenseContextValue'
-import { isStarterSubscriptionOnly, mergeHostedCreditBalance, resolveAgentRoutePresentation, resolveLicenseEntitlement } from '../src/utils/licenseEntitlement'
+import { isAutomniaCreditsModelSelectionRoute, isStarterSubscriptionOnly, mergeHostedCreditBalance, resolveAgentRoutePresentation, resolveLicenseEntitlement } from '../src/utils/licenseEntitlement'
 
 function license(overrides: Partial<LicenseInfo> = {}): LicenseInfo {
   return {
@@ -45,16 +45,22 @@ test('presents a hosted member provider-first preference without changing the en
   assert.equal(entitlement.defaultRouteLabel, 'My connected provider → Automnia credits fallback')
 })
 
-test('presents Automnia as the managed agent model for a permanent hosted tier', () => {
+test('lets active Automnia-credit tiers choose their hosted agent model', () => {
   const managed = resolveAgentRoutePresentation(license({ tier: 'pro', permanentAccess: true, byokAllowed: true }))
   assert.equal(managed.routeLabel, 'Automnia credits')
   assert.equal(managed.modelLabel, 'Automnia')
-  assert.equal(managed.managedRoute, true)
+  assert.equal(managed.managedRoute, false)
 
   const providerFirst = resolveAgentRoutePresentation(license({ tier: 'pro', permanentAccess: true, byokAllowed: true, usagePriority: 'provider_first' }))
   assert.equal(providerFirst.modelLabel, 'Primary Provider Model')
   assert.equal(providerFirst.managedRoute, false)
   assert.equal(providerFirst.providerFirst, true)
+})
+
+test('exposes the Automnia model picker for Starter credits too', () => {
+  assert.equal(isAutomniaCreditsModelSelectionRoute(license()), true)
+  assert.equal(isAutomniaCreditsModelSelectionRoute(license({ tier: 'enterprise', permanentAccess: true, byokAllowed: true })), true)
+  assert.equal(isAutomniaCreditsModelSelectionRoute(license({ tier: 'pro', usagePriority: 'provider_first', byokAllowed: true })), false)
 })
 
 test('shows the connected provider when a BYOK-capable Automnia balance is exhausted', () => {

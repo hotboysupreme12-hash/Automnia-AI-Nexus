@@ -1,4 +1,7 @@
-import { AUTOMNIA_CREDITS_FALLBACK_MODEL_IDS } from './creditsOnlyModelPolicy'
+import {
+  AUTOMNIA_CREDITS_FALLBACK_MODEL_IDS,
+  isAutomniaCreditsModelId,
+} from './creditsOnlyModelPolicy'
 
 export type UsagePriority =
   | 'automnia_only'
@@ -53,12 +56,17 @@ function isAutomniaModel(modelId: string, automniaModelId: string) {
   return normalized === automniaModelId.trim().toLowerCase() || normalized.startsWith('automnia-cloud/')
 }
 
-function automniaHostedFallbacks(automniaModelId: string) {
-  // The active billing route always uses the canonical Automnia primary. Do
-  // not infer fallback IDs from a user/provider selection: that could widen a
+function automniaHostedFallbacks(automniaModelId: string, selectedPrimary?: string) {
+  // Keep the fallback chain inside the Automnia-hosted boundary. Never infer
+  // fallback IDs from a user/provider selection: that could widen a
   // credits-only route into a direct-provider request.
   if (!isAutomniaModel(automniaModelId, 'automnia-cloud/gemini-3.7-flash')) return []
-  return [...AUTOMNIA_CREDITS_FALLBACK_MODEL_IDS]
+  return [...AUTOMNIA_CREDITS_FALLBACK_MODEL_IDS].filter((modelId) => modelId !== selectedPrimary)
+}
+
+function selectedAutomniaModel(selection: UsagePriorityModelSelection | undefined, automniaModelId: string) {
+  const requested = typeof selection?.primary === 'string' ? selection.primary.trim() : ''
+  return isAutomniaCreditsModelId(requested) ? requested : automniaModelId
 }
 
 /**
@@ -90,16 +98,17 @@ export function applyUsagePriorityModelOrder(
     }
 
     return {
-      primary: automniaModelId,
-      fallbacks: automniaHostedFallbacks(automniaModelId),
+      primary: selectedAutomniaModel(selection, automniaModelId),
+      fallbacks: automniaHostedFallbacks(automniaModelId, selectedAutomniaModel(selection, automniaModelId)),
     }
   }
 
   if (usagePriority === 'automnia_first_with_provider_fallback') {
-    const hostedFallbacks = automniaHostedFallbacks(automniaModelId)
+    const primary = selectedAutomniaModel(selection, automniaModelId)
+    const hostedFallbacks = automniaHostedFallbacks(automniaModelId, primary)
     const fallbacks = uniqueStrings(...hostedFallbacks, providerModel)
     return {
-      primary: automniaModelId,
+      primary,
       ...(fallbacks.length ? { fallbacks } : {}),
     }
   }

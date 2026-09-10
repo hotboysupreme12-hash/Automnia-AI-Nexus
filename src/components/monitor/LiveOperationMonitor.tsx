@@ -1050,9 +1050,10 @@ const GatewayActivityCard = memo(function GatewayActivityCard({ activity }: { ac
           </div>
         </div>
         <div className="dy-channel-activity-status" data-state={activity?.active ? 'active' : 'quiet'}>
-          <i aria-hidden="true" />
-          <strong>{activity?.active ? 'Streaming' : 'Idle'}</strong>
-          <span>Last update: {lastEvent}</span>
+          <div className="dy-channel-activity-status-copy">
+            <strong>{activity?.active ? 'Streaming' : 'Idle'}</strong>
+            <span>Last update: {lastEvent}</span>
+          </div>
         </div>
       </div>
 
@@ -1089,6 +1090,9 @@ const RuntimeGatewayPanel = memo(function RuntimeGatewayPanel({
   const activeCronJobs = useMemo(() => {
     const seen = new Set<string>()
     return (status?.shifts?.active || []).filter((job) => {
+      // The server omits these rows, but keep the renderer defensive while an
+      // older status response is still in flight during a gateway refresh.
+      if (job.systemOwned === true) return false
       const key = job.cronId || job.id
       if (seen.has(key)) return false
       seen.add(key)

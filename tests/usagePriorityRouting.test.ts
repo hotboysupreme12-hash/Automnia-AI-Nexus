@@ -57,6 +57,18 @@ test('Automnia remains primary while credits are available', () => {
   assert.deepEqual(selection, { primary: AUTOMNIA, fallbacks: [...AUTOMNIA_CREDITS_FALLBACK_MODEL_IDS] })
 })
 
+test('Automnia credits preserve a user-selected hosted model', () => {
+  const selection = applyUsagePriorityModelOrder(
+    { primary: 'automnia-cloud/gemini-3.8-flash' },
+    'automnia_only',
+    [],
+    AUTOMNIA,
+    { automniaCreditBalance: 250 },
+  )
+
+  assert.equal(selection?.primary, 'automnia-cloud/gemini-3.8-flash')
+})
+
 test('credits-only entitlements do not gain a provider fallback at zero balance', () => {
   const selection = applyUsagePriorityModelOrder(
     { primary: 'google/gemini-2.5-pro', fallbacks: [AUTOMNIA] },

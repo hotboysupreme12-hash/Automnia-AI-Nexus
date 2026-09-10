@@ -1,8 +1,8 @@
 export const LOCAL_TRANSCRIPTION_SAMPLE_RATE = 16_000
 
 const SPEECH_FRAME_MS = 20
-const SPEECH_PADDING_MS = 240
-const MIN_VOICED_AUDIO_MS = 160
+const SPEECH_PADDING_MS = 400
+const MIN_VOICED_AUDIO_MS = 100
 
 export type PreparedSpeechAudio = {
   audio: Float32Array
@@ -60,7 +60,10 @@ export function prepareAudioForSpeechRecognition(
 
   const orderedLevels = [...frameLevels].sort((left, right) => left - right)
   const noiseFloor = orderedLevels[Math.floor(orderedLevels.length * 0.2)] || 0
-  let voiceThreshold = Math.max(0.006, Math.min(0.04, noiseFloor * 2.8))
+  // A recording can begin mid-sentence, with no noise-only frames. Do not
+  // mistake continuous speech for the noise floor and reject the entire clip.
+  const upperLevel = orderedLevels[Math.floor(orderedLevels.length * 0.9)] || 0
+  let voiceThreshold = Math.max(0.0015, Math.min(0.025, noiseFloor * 2.8, upperLevel * 0.35))
   let voicedFrames = findVoicedFrameRange(frameLevels, voiceThreshold)
 
   if (!voicedFrames.count && peak >= 0.018) {
@@ -69,7 +72,7 @@ export function prepareAudioForSpeechRecognition(
   }
 
   const voicedMs = voicedFrames.count * SPEECH_FRAME_MS
-  if (peak < 0.008 || voicedMs < MIN_VOICED_AUDIO_MS) {
+  if (peak < 0.003 || voicedMs < MIN_VOICED_AUDIO_MS) {
     throw new Error('The microphone did not capture clear speech. Check the selected input and speak a little closer.')
   }
 
@@ -93,4 +96,25 @@ export function prepareAudioForSpeechRecognition(
   }
 
   return { audio: normalized, gain, peak, voicedMs }
+}
+
+/** A portable upload format, including browsers that record Ogg/Opus. */
+export function encodeSpeechWav(audio: Float32Array): Blob {
+  const buffer = new ArrayBuffer(44 + audio.length * 2)
+  const view = new DataView(buffer)
+  const tag = (offset: number, text: string) => {
+    for (let index = 0; index < text.length; index++) view.setUint8(offset + index, text.charCodeAt(index))
+  }
+  tag(0, 'RIFF'); view.setUint32(4, buffer.byteLength - 8, true)
+  tag(8, 'WAVE'); tag(12, 'fmt '); view.setUint32(16, 16, true)
+  view.setUint16(20, 1, true); view.setUint16(22, 1, true)
+  view.setUint32(24, LOCAL_TRANSCRIPTION_SAMPLE_RATE, true)
+  view.setUint32(28, LOCAL_TRANSCRIPTION_SAMPLE_RATE * 2, true)
+  view.setUint16(32, 2, true); view.setUint16(34, 16, true)
+  tag(36, 'data'); view.setUint32(40, audio.length * 2, true)
+  for (let index = 0; index < audio.length; index++) {
+    const sample = Number.isFinite(audio[index]) ? Math.max(-1, Math.min(1, audio[index])) : 0
+    view.setInt16(44 + index * 2, Math.round(sample * (sample < 0 ? 32768 : 32767)), true)
+  }
+  return new Blob([buffer], { type: 'audio/wav' })
 }

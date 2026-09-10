@@ -68,3 +68,37 @@ test('online speech transcription does not leak upstream response bodies for non
     (error: unknown) => error instanceof SpeechTranscriptionError && error.statusCode === 502 && !error.message.includes('internal body'),
   )
 })
+
+test('accuracy model receives bounded language and literal vocabulary hints', async () => {
+  const service = createSpeechTranscriptionService({
+    resolveOpenAiApiKey: async () => 'test-key',
+    fetch: async (_input, init) => {
+      const form = init?.body as FormData
+      assert.equal(form.get('model'), 'gpt-transcribe')
+      assert.deepEqual(form.getAll('languages[]'), ['fr'])
+      assert.equal(form.has('language'), false)
+      assert.deepEqual(form.getAll('keywords[]'), ['Automnia', 'Jean', 'OpenClaw'])
+      return Response.json({ text: 'Bonjour Jean.' })
+    },
+  })
+  await service.transcribeOnline({ bytes: Buffer.from('audio'), mimeType: 'audio/webm', language: 'fr', vocabulary: 'Automnia, Jean, <OpenClaw>, Jean' })
+})
+
+test('empty and oversized recordings never reach the provider', async () => {
+  const service = createSpeechTranscriptionService({ resolveOpenAiApiKey: async () => { throw new Error('must validate first') } })
+  await assert.rejects(service.transcribeOnline({ bytes: Buffer.alloc(0), mimeType: 'audio/wav' }), { statusCode: 400 })
+  await assert.rejects(service.transcribeOnline({ bytes: Buffer.alloc(25 * 1024 * 1024 + 1), mimeType: 'audio/wav' }), { statusCode: 413 })
+})
+
+test('cancellation reaches the upstream transcription request', async () => {
+  const controller = new AbortController()
+  const service = createSpeechTranscriptionService({
+    resolveOpenAiApiKey: async () => 'test-key',
+    fetch: async (_url, init) => {
+      controller.abort()
+      assert.equal(init?.signal?.aborted, true)
+      throw new DOMException('Canceled', 'AbortError')
+    },
+  })
+  await assert.rejects(service.transcribeOnline({ bytes: Buffer.from('audio'), mimeType: 'audio/webm', signal: controller.signal }), { name: 'AbortError' })
+})

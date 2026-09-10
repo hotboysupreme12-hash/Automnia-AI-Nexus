@@ -2,6 +2,8 @@ import { readPreferenceValue, savePreferenceEntries } from '../components/settin
 export type SpeechTranscriptionMode = 'local' | 'online'
 
 export type SpeechSettings = {
+  language?: string
+  vocabulary?: string
   microphoneDeviceId?: string
   mode: SpeechTranscriptionMode
   autoStop: boolean
@@ -16,10 +18,12 @@ export const SPEECH_SETTINGS_STORAGE_KEY = 'automnia-speech-settings-v1'
 export const SPEECH_SETTINGS_CHANGED_EVENT = 'automnia:speech-settings-changed'
 
 export const DEFAULT_SPEECH_SETTINGS: SpeechSettings = {
+  language: '',
+  vocabulary: '',
   microphoneDeviceId: '',
   mode: 'local',
   autoStop: true,
-  pauseDurationMs: 1_150,
+  pauseDurationMs: 1_800,
   maxRecordingSeconds: 120,
   noiseSuppression: true,
   echoCancellation: true,
@@ -40,6 +44,8 @@ export function readSpeechSettings(): SpeechSettings {
   try {
     const parsed = JSON.parse(readPreferenceValue(SPEECH_SETTINGS_STORAGE_KEY) || '{}') as Partial<SpeechSettings>
     return {
+      language: typeof parsed.language === 'string' && /^[a-z]{2}$/.test(parsed.language) ? parsed.language : '',
+      vocabulary: typeof parsed.vocabulary === 'string' ? parsed.vocabulary.slice(0, 1000) : '',
       microphoneDeviceId: typeof parsed.microphoneDeviceId === 'string' ? parsed.microphoneDeviceId.slice(0, 512) : '',
       mode: parsed.mode === 'online' ? 'online' : 'local',
       autoStop: booleanSetting(parsed.autoStop, DEFAULT_SPEECH_SETTINGS.autoStop),
@@ -57,6 +63,8 @@ export function readSpeechSettings(): SpeechSettings {
 export function saveSpeechSettings(settings: SpeechSettings): void {
   if (typeof window === 'undefined') return
   const normalized: SpeechSettings = {
+    language: typeof settings.language === 'string' && /^[a-z]{2}$/.test(settings.language) ? settings.language : '',
+    vocabulary: typeof settings.vocabulary === 'string' ? settings.vocabulary.slice(0, 1000) : '',
     microphoneDeviceId: typeof settings.microphoneDeviceId === 'string' ? settings.microphoneDeviceId.slice(0, 512) : '',
     mode: settings.mode === 'online' ? 'online' : 'local',
     autoStop: Boolean(settings.autoStop),

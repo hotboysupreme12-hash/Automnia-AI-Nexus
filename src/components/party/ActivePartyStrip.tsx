@@ -212,7 +212,7 @@ export function ActivePartyStrip({ toolbar }: ActivePartyStripProps) {
 
               {agent ? (
                 <div
-                  className="party-slot-content pointer-events-auto flex w-full items-center gap-3 rounded-lg bg-[#121212] px-3 py-2.5 ring-1 ring-white/[0.06]"
+                  className="party-slot-content pointer-events-auto flex w-full items-center gap-3 rounded-lg px-3 py-2.5 ring-1 ring-white/[0.06]"
                   draggable={!missionRunning}
                   onDragStart={(event) => {
                     event.dataTransfer.setData('text/party-index', String(slot))

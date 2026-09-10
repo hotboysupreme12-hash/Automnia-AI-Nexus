@@ -1,0 +1,90 @@
+/* A solid near-black canvas behind the workspace panels. */
+html.dui-pro-overhaul.dui-cohesive-ui .app-bg,
+html.dui-pro-overhaul.dui-cohesive-ui .dy-app-main,
+html.dui-pro-overhaul.dui-cohesive-ui .dy-tab-content,
+html.dui-pro-overhaul.dui-cohesive-ui .dy-agents-workspace {
+  background: #050505 !important;
+}
+
+html.dui-pro-overhaul.dui-cohesive-ui .app-bg::before,
+html.dui-pro-overhaul.dui-cohesive-ui .app-bg::after,
+html.dui-pro-overhaul.dui-cohesive-ui .grid-overlay {
+  display: none !important;
+}
+
+html.dui-pro-overhaul.dui-cohesive-ui .dy-human-rail {
+  background: #080808 !important;
+}
+
+/* Keep transcript messages visually stable when the pointer passes over them. */
+html.dui-pro-overhaul.dui-cohesive-ui .dy-command-console[data-chat-panel="true"] .dy-command-message:hover {
+  background: transparent !important;
+}
+
+/* The chat is the primary working surface on narrow windows. Let it start
+   directly at the navigation rail instead of inheriting the shell's outer
+   gutter, so the two surfaces read as one connected frame. */
+@media (max-width: 900px) {
+  html.dui-pro-overhaul.dui-cohesive-ui .app-bg > .dy-app-main {
+    padding-left: var(--dui-rail) !important;
+  }
+
+  html.dui-pro-overhaul.dui-cohesive-ui .dy-agent-console-pane {
+    margin-left: calc(-1 * var(--dui-shell-gutter, 0px)) !important;
+    width: calc(100% + var(--dui-shell-gutter, 0px)) !important;
+  }
+}
+
+/* Keep the Agent Registry title row transparent; retain its text and controls. */
+html.dui-pro-overhaul [data-dui-panel="agent-registry"] > div:first-child,
+html.dui-pro-overhaul.dui-cohesive-ui [data-dui-panel="agent-registry"] > div:first-child {
+  background: transparent !important;
+  background-image: none !important;
+  box-shadow: none !important;
+}
+
+/* Keep send as an icon action instead of a filled button tile. */
+html.dui-pro-overhaul.dui-cohesive-ui .dy-command-console[data-chat-panel="true"][data-chat-design="modern"] .dy-command-send {
+  background: transparent !important;
+  border: 0 !important;
+  box-shadow: none !important;
+  color: #aeb6c3 !important;
+}
+
+html.dui-pro-overhaul.dui-cohesive-ui .dy-command-console[data-chat-panel="true"][data-chat-design="modern"] .dy-command-send:hover:not(:disabled),
+html.dui-pro-overhaul.dui-cohesive-ui .dy-command-console[data-chat-panel="true"][data-chat-design="modern"] .dy-command-send:focus-visible {
+  background: transparent !important;
+  color: #f0f1f4 !important;
+  box-shadow: none !important;
+}
+
+html.dui-pro-overhaul.dui-cohesive-ui .dy-command-console[data-chat-panel="true"][data-chat-design="modern"] .dy-command-send:disabled {
+  background: transparent !important;
+  color: #747e8d !important;
+  opacity: 1 !important;
+}
+
+/* Join chat to the registry rail; keep the drag target over the shared edge. */
+@media (min-width: 1401px) and (min-height: 821px) {
+  html.dui-pro-overhaul.dui-cohesive-ui .dy-agents-workspace.is-console-visible {
+    grid-template-columns: minmax(0, 1fr) 0 minmax(360px, var(--dy-command-console-width)) !important;
+    column-gap: 0 !important;
+  }
+
+  html.dui-pro-overhaul.dui-cohesive-ui .dy-agent-split-resizer {
+    grid-area: split !important;
+    justify-self: center !important;
+    margin: 0 !important;
+  }
+
+  html.dui-pro-overhaul.dui-cohesive-ui .dy-command-console[data-chat-panel="true"][data-chat-design="modern"] {
+    border-top-left-radius: 0 !important;
+    border-bottom-left-radius: 0 !important;
+  }
+}
+
+@media (min-width: 2000px) and (min-height: 821px) {
+  html.dui-pro-overhaul.dui-cohesive-ui .dy-agents-workspace.is-console-visible {
+    grid-template-columns: minmax(0, 1fr) 0 minmax(clamp(410px, 20vw, 760px), var(--dy-command-console-width)) !important;
+  }
+}

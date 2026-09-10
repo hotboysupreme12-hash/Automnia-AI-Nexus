@@ -1,19 +1,18 @@
 export const AUTOMNIA_CREDITS_PROVIDER_ID = 'automnia-cloud'
-export const AUTOMNIA_CREDITS_MODEL_ID = `${AUTOMNIA_CREDITS_PROVIDER_ID}/gemini-3.7-flash`
+export const AUTOMNIA_CREDITS_MODEL_ID = `${AUTOMNIA_CREDITS_PROVIDER_ID}/gemini-3.8-flash`
 
-// The relay can serve these named Automnia tiers for accounts that are
-// allowed to choose a hosted model explicitly. The credits-only route below
-// intentionally remains narrower: it always starts on 3.7 and only falls
-// back to the lower-cost hosted candidates.
+// The relay can serve these named Automnia tiers for accounts using hosted
+// credits. Credits users may choose any of the named Automnia tiers; the
+// fallback chain remains bounded to Automnia-hosted candidates.
 export const AUTOMNIA_RELAY_MODEL_IDS = [
-  `${AUTOMNIA_CREDITS_PROVIDER_ID}/gemini-3.8-flash`,
   AUTOMNIA_CREDITS_MODEL_ID,
+  `${AUTOMNIA_CREDITS_PROVIDER_ID}/gemini-3.7-flash`,
   `${AUTOMNIA_CREDITS_PROVIDER_ID}/gemini-3.6-flash`,
 ] as const
 
 export const AUTOMNIA_RELAY_MODEL_LABELS: Record<string, string> = {
   [`${AUTOMNIA_CREDITS_PROVIDER_ID}/gemini-3.8-flash`]: 'Automnia Prime',
-  [AUTOMNIA_CREDITS_MODEL_ID]: 'Automnia Balanced',
+  [`${AUTOMNIA_CREDITS_PROVIDER_ID}/gemini-3.7-flash`]: 'Automnia Balanced',
   [`${AUTOMNIA_CREDITS_PROVIDER_ID}/gemini-3.6-flash`]: 'Automnia Swift',
   [`${AUTOMNIA_CREDITS_PROVIDER_ID}/gemini-2.5-flash`]: 'Automnia Classic',
 }
@@ -27,6 +26,7 @@ export const AUTOMNIA_CREDITS_FALLBACK_MODEL_IDS = [
 ] as const
 export const AUTOMNIA_CREDITS_MODEL_IDS = [
   AUTOMNIA_CREDITS_MODEL_ID,
+  `${AUTOMNIA_CREDITS_PROVIDER_ID}/gemini-3.7-flash`,
   ...AUTOMNIA_CREDITS_FALLBACK_MODEL_IDS,
 ] as const
 

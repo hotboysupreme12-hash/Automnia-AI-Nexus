@@ -3,25 +3,24 @@
  *
  * The shell is intentionally desktop-first, but a 720px-tall laptop and a
  * 4K monitor need different density decisions. Keep the shell chrome stable,
- * let compact windows use the full content width, and cap the operational
- * canvas on very wide displays so cards do not become oversized.
+ * let every zoom level use the full content width, and keep card rows
+ * responsive to the actual registry pane.
  */
 
 html.dui-pro-overhaul,
 html.dui-pro-overhaul.dui-cohesive-ui {
-  --dy-viewport-content-max: 2600px;
   --dy-compact-card-height: 390px;
 }
 
 /* Column count follows the actual registry pane, including a resized split. */
 html.dui-pro-overhaul.dui-cohesive-ui [data-dui-panel="agent-registry"] [data-agent-grid-mode]:not([data-agent-grid-mode="list"]) {
-  --agent-readable-width: 17rem;
+  --agent-readable-width: clamp(17rem, 13vw, 26rem);
   grid-template-columns: repeat(auto-fill, minmax(min(100%, var(--agent-readable-width)), 1fr)) !important;
   align-items: stretch !important;
 }
 
 html.dui-pro-overhaul.dui-cohesive-ui [data-dui-panel="agent-registry"] [data-agent-grid-mode="grid10"] {
-  --agent-readable-width: 15rem;
+  --agent-readable-width: clamp(15rem, 11vw, 22rem);
 }
 
 /* Text scaling and long names can grow a card without clipping its actions. */
@@ -31,14 +30,41 @@ html.dui-pro-overhaul.dui-cohesive-ui [data-dui-panel="agent-registry"] .agent-c
   max-height: none !important;
 }
 
-/* Keep the shell edge-to-edge while preventing the actual work surface from
-   stretching across an entire 4K canvas. The header remains full width. */
-@media (min-width: 3000px) {
-  html.dui-pro-overhaul .dy-tab-content,
-  html.dui-pro-overhaul.dui-cohesive-ui .dy-tab-content {
-    width: min(100%, var(--dy-viewport-content-max)) !important;
-    max-width: var(--dy-viewport-content-max) !important;
-    margin-right: auto !important;
+/* Zooming out increases the CSS viewport width. Do not cap the workspace at
+   that breakpoint: the registry and chat should still reach the window edge. */
+html.dui-pro-overhaul .dy-tab-content,
+html.dui-pro-overhaul.dui-cohesive-ui .dy-tab-content {
+  width: 100% !important;
+  max-width: none !important;
+}
+
+/* Card wrappers fill their grid row even when one agent's tags wrap. */
+html.dui-pro-overhaul.dui-cohesive-ui [data-dui-panel="agent-registry"] [data-agent-grid-mode]:not([data-agent-grid-mode="list"]) > .dy-agent-card-entry {
+  display: flex;
+  min-width: 0;
+  align-items: stretch;
+}
+
+html.dui-pro-overhaul.dui-cohesive-ui [data-dui-panel="agent-registry"] .dy-agent-card-entry > .agent-card-shell:not([data-agent-display-mode="list"]) {
+  flex: 1 1 0;
+  min-width: 0;
+}
+
+/* Old 16px role caps clip the larger typography used by the final theme. */
+html.dui-pro-overhaul.dui-cohesive-ui [data-dui-panel="agent-registry"] .agent-card-pro .agent-card-role {
+  max-height: none !important;
+  min-height: 1.42em;
+  line-height: 1.42 !important;
+}
+
+html.dui-pro-overhaul.dui-cohesive-ui [data-dui-panel="agent-registry"] .agent-card-pro .agent-card-level-pill {
+  position: static !important;
+}
+
+/* Wide CSS viewports need room for chat as well as additional card columns. */
+@media (min-width: 2000px) and (min-height: 821px) {
+  html.dui-pro-overhaul.dui-cohesive-ui .dy-agents-workspace.is-console-visible {
+    grid-template-columns: minmax(0, 1fr) minmax(12px, 18px) minmax(clamp(410px, 20vw, 760px), var(--dy-command-console-width)) !important;
   }
 }
 

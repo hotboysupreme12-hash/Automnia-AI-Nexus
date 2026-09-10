@@ -1,5 +1,8 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
+import { mkdtempSync, readFileSync, rmSync } from 'node:fs'
+import os from 'node:os'
+import path from 'node:path'
 import { createSessionTokenStore, secureTokenEqual } from '../server/sessionTokenStore'
 
 test('session tokens expire, revoke, evict, clear, and compare safely', () => {
@@ -25,4 +28,25 @@ test('session tokens expire, revoke, evict, clear, and compare safely', () => {
   assert.equal(secureTokenEqual('abc', 'abc'), true)
   assert.equal(secureTokenEqual('abc', 'abcd'), false)
   assert.equal(secureTokenEqual('', 'abc'), false)
+})
+
+test('session tokens survive a Control Center process restart without persisting raw tokens', () => {
+  const temporaryDirectory = mkdtempSync(path.join(os.tmpdir(), 'automnia-session-store-'))
+  const persistPath = path.join(temporaryDirectory, 'control-center', 'sessions.json')
+  try {
+    const firstStore = createSessionTokenStore({ persistPath, ttlMs: 60_000, now: () => 10_000 })
+    const issued = firstStore.issue()
+
+    const restartedStore = createSessionTokenStore({ persistPath, ttlMs: 60_000, now: () => 10_000 })
+    assert.equal(restartedStore.has(issued.token), true)
+    assert.equal(restartedStore.revoke(issued.token), true)
+
+    const persistedState = readFileSync(persistPath, 'utf8')
+    assert.doesNotMatch(persistedState, new RegExp(issued.token))
+
+    const secondRestartStore = createSessionTokenStore({ persistPath, ttlMs: 60_000, now: () => 10_000 })
+    assert.equal(secondRestartStore.has(issued.token), false)
+  } finally {
+    rmSync(temporaryDirectory, { recursive: true, force: true })
+  }
 })

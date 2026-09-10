@@ -17,6 +17,7 @@ import {
 import { clearAllCommandConsoleDrafts } from '../../store/commandConsoleState'
 import { useNexusStore } from '../../store/nexusStore'
 import { resolveLicenseEntitlement } from '../../utils/licenseEntitlement'
+import { formatUsageRemaining } from '../../utils/usageRemaining'
 import { restartPluginGateway, runOpenClawPluginCommand } from '../../api/plugins'
 import type {
   CapabilityKey,
@@ -219,9 +220,6 @@ function SegmentedControl<T extends string>({ value, options, label, onChange }:
   )
 }
 
-function formatCreditBalance(value: number | null | undefined) {
-  return typeof value === 'number' && Number.isFinite(value) ? `${value.toLocaleString('en-US')} credits` : 'Awaiting a confirmed balance'
-}
 
 function formatAccountTimestamp(value: string | null | undefined) {
   if (!value) return 'Not reported yet'
@@ -629,7 +627,7 @@ export function SettingsPanel({ focusSection = 'account', focusRequest = 0 }: { 
           checked={registryPreferences.rarityColorsEnabled}
           onChange={(value) => updateRegistryPreferences({
             rarityColorsEnabled: value,
-            ...(value || registryPreferences.overlayPreset !== 'rarity' ? {} : { overlayPreset: 'graphite-glass' as AgentOverlayPreset }),
+            ...(value || registryPreferences.overlayPreset !== 'rarity' ? {} : { overlayPreset: 'original' as AgentOverlayPreset }),
           }, value ? 'Agent card rarity colors' : 'Shared agent card theme')}
         />
         {!registryPreferences.rarityColorsEnabled && (
@@ -677,6 +675,17 @@ export function SettingsPanel({ focusSection = 'account', focusRequest = 0 }: { 
             ))}
           </div>
         </SettingGroup>
+      </SettingsCard>
+      <SettingsCard title="Recognition accuracy" description="Local uses multilingual Whisper Base. Cloud uses OpenAI GPT-Transcribe and requires an API key; audio is sent to OpenAI and API usage is billed.">
+        <Field label="Spoken language" hint="Choose your language for local recognition. Cloud can also detect it automatically.">
+          <select value={speechSettings.language || ''} onChange={(event) => updateSpeechSettings({ language: event.target.value }, 'Spoken language')}>
+            <option value="">Default · English locally, automatic in cloud</option>
+            {Object.entries({ en: 'English', es: 'Spanish', fr: 'French', de: 'German', pt: 'Portuguese', it: 'Italian', ht: 'Haitian Creole', ja: 'Japanese', ko: 'Korean', zh: 'Chinese', ar: 'Arabic', hi: 'Hindi', ru: 'Russian', uk: 'Ukrainian' }).map(([code, label]) => <option key={code} value={code}>{label}</option>)}
+          </select>
+        </Field>
+        <Field label="Names and vocabulary for cloud dictation" hint="Comma-separated names, products, and technical terms you actually use. Leave blank for general dictation.">
+          <textarea rows={3} maxLength={1000} value={speechSettings.vocabulary || ''} onChange={(event) => updateSpeechSettings({ vocabulary: event.target.value }, 'Dictation vocabulary')} placeholder="Automnia, OpenClaw, Jean" />
+        </Field>
       </SettingsCard>
       <SettingsCard title="Recording behavior" description="Tune responsiveness without changing the transcription model.">
         <ToggleField label="Stop after a pause" hint="Automatically transcribes when speech ends; turn off for manual stop only." checked={speechSettings.autoStop} onChange={(value) => updateSpeechSettings({ autoStop: value }, 'Automatic pause detection')} />
@@ -882,7 +891,7 @@ export function SettingsPanel({ focusSection = 'account', focusRequest = 0 }: { 
       : license?.usagePriority === 'automnia_first_with_provider_fallback'
         ? byokAllowed ? 'automnia_first_with_provider_fallback' : 'automnia_only'
         : 'automnia_only'
-    const balance = hostedCredits || isByok ? formatCreditBalance(license?.creditBalance) : 'Not applicable — provider-billed'
+    const balance = hostedCredits || isByok ? formatUsageRemaining(license?.creditBalance, license?.creditUsageBaseline) : 'Not applicable — provider-billed'
     const refreshAccount = async () => {
       if (accountRefreshBusy) return
       setAccountRefreshBusy(true)
@@ -1112,11 +1121,11 @@ export function SettingsPanel({ focusSection = 'account', focusRequest = 0 }: { 
                 <dd title={license?.tier || undefined}>{entitlement.tierLabel}</dd>
               </div>
               <div>
-                <dt>Confirmed balance</dt>
+                <dt>Usage remaining</dt>
                 <dd data-balance="true">{balance}</dd>
               </div>
               <div>
-                <dt>Balance updated</dt>
+                <dt>Usage updated</dt>
                 <dd>{hostedCredits || isByok ? formatAccountTimestamp(license?.creditBalanceUpdatedAt) : 'Not applicable — provider-billed'}</dd>
               </div>
             </dl>

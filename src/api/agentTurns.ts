@@ -64,6 +64,8 @@ export type AgentTurnPayload = {
 }
 
 export type AgentTurnRequest = {
+  responseId?: string
+  displayPrompt?: string
   agent: string
   message: string
   intentMessage?: string
@@ -203,4 +205,8 @@ export function clearAgentTurnSessions(): Promise<ApiResult<AgentTurnSessionClea
     timeoutMs: 20_000,
     body: {},
   })
+}
+
+export function cancelRecoverableAgentTurn(responseId: string) {
+  return apiRequest(`/api/openclaw/agent-turn/${encodeURIComponent(responseId)}`, { method: 'DELETE' })
 }

@@ -54,3 +54,13 @@
 @import './styles/automnia-theme/134-settings-missions-polish.css';
 @import './styles/automnia-theme/135-agent-card-surface.css';
 @import './styles/automnia-theme/136-product-usability.css';
+
+@import './styles/automnia-theme/137-agent-settings.css';
+@import './styles/automnia-theme/138-agent-card-modern.css';
+
+@import './styles/automnia-theme/139-agent-chat-modern.css';
+@import './styles/automnia-theme/140-active-party-graphite.css';
+@import './styles/automnia-theme/141-flat-workspace-canvas.css';
+
+@import './styles/automnia-theme/142-missions-viewport.css';
+@import './styles/automnia-theme/143-workspace-status-alignment.css';

@@ -1,0 +1,374 @@
+/* A scoped important layer takes precedence over legacy theme overrides. */
+@layer agent-settings {
+/* Agent settings: scoped presentation only;
+  shared model picker and save behavior stay intact. */
+html body [data-dui-modal="agent-editor"].agent-settings-refresh {
+  width: min(960px, 100%) !important;
+  max-width: 960px !important;
+  height: min(820px, calc(100dvh - 48px)) !important;
+  max-height: calc(100dvh - 48px) !important;
+  border: 1px solid #30363e !important;
+  border-radius: 16px !important;
+  background: #15181d !important;
+  box-shadow: 0 24px 90px #0008 !important;
+  color: #e6e9ed !important;
+  color-scheme: dark !important;
+}
+
+html body [data-dui-modal="agent-editor"].agent-settings-refresh [data-editor-header] {
+  padding: 22px 28px 0 !important;
+  background: #15181d !important;
+  border-bottom: 1px solid #30363e !important;
+}
+
+html body [data-dui-modal="agent-editor"].agent-settings-refresh [data-editor-header] > .flex {
+  gap: 16px !important;
+  align-items: flex-start !important;
+}
+
+html body [data-dui-modal="agent-editor"].agent-settings-refresh [data-editor-header] > .flex > .flex {
+  min-width: 0 !important;
+}
+
+html body [data-dui-modal="agent-editor"].agent-settings-refresh [data-editor-header] h2 {
+  font-size: 17px !important;
+  font-weight: 600 !important;
+  line-height: 1.4 !important;
+  overflow-wrap: anywhere !important;
+}
+
+html body [data-dui-modal="agent-editor"].agent-settings-refresh [data-editor-eyebrow] {
+  margin: 0 0 3px !important;
+  font-size: 12px !important;
+  font-weight: 500 !important;
+  color: #a2aab6 !important;
+  letter-spacing: 0 !important;
+}
+
+html body [data-dui-modal="agent-editor"].agent-settings-refresh [data-editor-avatar] {
+  width: 42px !important;
+  height: 42px !important;
+  border-radius: 10px !important;
+  box-shadow: none !important;
+}
+
+html body [data-dui-modal="agent-editor"].agent-settings-refresh [data-editor-header-actions] {
+  display: flex !important;
+  align-items: center !important;
+  gap: 16px !important;
+  flex-wrap: wrap !important;
+  justify-content: flex-end !important;
+}
+
+html body [data-dui-modal="agent-editor"].agent-settings-refresh [data-editor-autosave] {
+  font-size: 12px !important;
+  line-height: 1.5 !important;
+  letter-spacing: 0 !important;
+  text-transform: none !important;
+  color: #9faaa9 !important;
+}
+
+html body [data-dui-modal="agent-editor"].agent-settings-refresh [data-editor-autosave][data-phase="error"] {
+  color: #fda4af !important;
+}
+
+html body [data-dui-modal="agent-editor"].agent-settings-refresh [data-editor-autosave][data-phase="saving"] {
+  color: #e7c38b !important;
+}
+
+html body [data-dui-modal="agent-editor"].agent-settings-refresh [data-editor-action="done"] {
+  min-height: 38px !important;
+  padding: 8px 18px !important;
+  border: 1px solid #d8e3e3 !important;
+  border-radius: 7px !important;
+  background: #d8e3e3 !important;
+  color: #172224 !important;
+  font-size: 13px !important;
+  font-weight: 600 !important;
+  letter-spacing: 0 !important;
+  text-transform: none !important;
+}
+
+html body [data-dui-modal="agent-editor"].agent-settings-refresh [data-editor-tabs] {
+  display: flex !important;
+  flex-wrap: nowrap !important;
+  gap: 22px !important;
+  margin-top: 22px !important;
+  padding: 0 !important;
+  overflow-x: auto !important;
+  border: 0 !important;
+  border-radius: 0 !important;
+  background: transparent !important;
+  scrollbar-width: thin !important;
+}
+
+html body [data-dui-modal="agent-editor"].agent-settings-refresh [data-editor-tab] {
+  flex: 0 0 auto !important;
+  min-height: 46px !important;
+  padding: 10px 0 !important;
+  border: 0 !important;
+  border-bottom: 2px solid transparent !important;
+  border-radius: 0 !important;
+  background: transparent !important;
+  box-shadow: none !important;
+  color: #a2aab6 !important;
+  font-size: 13px !important;
+  font-weight: 500 !important;
+  letter-spacing: 0 !important;
+  text-transform: none !important;
+  white-space: nowrap !important;
+}
+
+html body [data-dui-modal="agent-editor"].agent-settings-refresh [data-editor-tab][data-active="true"] {
+  background: transparent !important;
+  border-color: #aecfca !important;
+  color: #f0f5f4 !important;
+  box-shadow: none !important;
+}
+
+html body [data-dui-modal="agent-editor"].agent-settings-refresh [data-editor-tab]:hover {
+  color: #fff !important;
+  background: transparent !important;
+}
+
+html body [data-dui-modal="agent-editor"].agent-settings-refresh [data-editor-body] {
+  min-height: 0 !important;
+  padding: 30px 36px 40px !important;
+  background: #111418 !important;
+  overscroll-behavior: contain !important;
+  scrollbar-gutter: stable !important;
+}
+
+html body [data-dui-modal="agent-editor"].agent-settings-refresh [data-editor-content] {
+  width: 100% !important;
+  max-width: 800px !important;
+  min-width: 0 !important;
+}
+
+html body [data-dui-modal="agent-editor"].agent-settings-refresh [data-editor-section-heading] {
+  margin-bottom: 26px !important;
+}
+
+html body [data-dui-modal="agent-editor"].agent-settings-refresh [data-editor-section-heading] h3 {
+  margin: 0 0 6px !important;
+  font-size: 23px !important;
+  line-height: 1.3 !important;
+  font-weight: 600 !important;
+  letter-spacing: -.025em !important;
+  color: #f0f2f5 !important;
+}
+
+html body [data-dui-modal="agent-editor"].agent-settings-refresh [data-editor-section-heading] p {
+  max-width: 62ch !important;
+  font-size: 13px !important;
+  line-height: 1.7 !important;
+  color: #a2aab6 !important;
+}
+
+html body [data-dui-modal="agent-editor"].agent-settings-refresh [data-editor-panel] {
+  min-width: 0 !important;
+  font-size: 13px !important;
+  line-height: 1.6 !important;
+}
+
+html body [data-dui-modal="agent-editor"].agent-settings-refresh [data-editor-panel] > * + * {
+  margin-top: 20px !important;
+}
+
+html body [data-dui-modal="agent-editor"].agent-settings-refresh [data-editor-panel] :is(p, small, span, label, button, input, select, textarea, strong) {
+  font-size: 13px !important;
+  letter-spacing: normal !important;
+  text-transform: none !important;
+}
+
+html body [data-dui-modal="agent-editor"].agent-settings-refresh [data-editor-panel] :is(p, small) {
+  line-height: 1.65 !important;
+  color: #aab2bd !important;
+}
+
+html body [data-dui-modal="agent-editor"].agent-settings-refresh [data-editor-panel] :is(h3, label) {
+  font-weight: 500 !important;
+  color: #e1e5eb !important;
+}
+
+html body [data-dui-modal="agent-editor"].agent-settings-refresh [data-editor-panel] h3 {
+  font-size: 14px !important;
+  margin-bottom: 10px !important;
+}
+
+html body [data-dui-modal="agent-editor"].agent-settings-refresh [data-editor-panel] :is(.font-bold, .font-extrabold) {
+  font-weight: 600 !important;
+}
+
+html body [data-dui-modal="agent-editor"].agent-settings-refresh [data-editor-panel] > :is(.border, [data-editor-card]),
+html body [data-dui-modal="agent-editor"].agent-settings-refresh [data-editor-panel] > .grid > label {
+  padding: 20px !important;
+  border: 1px solid #30363e !important;
+  border-radius: 10px !important;
+  background: #191d23 !important;
+  background-image: none !important;
+  box-shadow: none !important;
+}
+
+html body [data-dui-modal="agent-editor"].agent-settings-refresh [data-editor-panel] > .grid {
+  gap: 18px !important;
+}
+
+html body [data-dui-modal="agent-editor"].agent-settings-refresh [data-editor-panel] label.block {
+  margin-bottom: 7px !important;
+}
+
+html body [data-dui-modal="agent-editor"].agent-settings-refresh [data-editor-panel] :where(input:not([type="range"]):not([type="checkbox"]):not([type="file"]), select, textarea) {
+  min-width: 0 !important;
+  min-height: 42px !important;
+  border: 1px solid #3b434e !important;
+  border-radius: 7px !important;
+  padding: 10px 12px !important;
+  background: #11151a !important;
+  color: #e5e9ef !important;
+  box-shadow: none !important;
+  line-height: 1.5 !important;
+}
+
+html body [data-dui-modal="agent-editor"].agent-settings-refresh [data-editor-panel] :is(input, textarea)::placeholder {
+  color: #8893a3 !important;
+}
+
+html body [data-dui-modal="agent-editor"].agent-settings-refresh [data-editor-panel] button {
+  min-height: 36px !important;
+  border-radius: 7px !important;
+  box-shadow: none !important;
+  transform: none !important;
+}
+
+html body [data-dui-modal="agent-editor"].agent-settings-refresh [data-editor-panel] button:disabled {
+  opacity: .5 !important;
+  cursor: not-allowed !important;
+}
+
+html body [data-dui-modal="agent-editor"].agent-settings-refresh :is(button, input, select, textarea, summary):focus-visible {
+  outline: 2px solid #a9d4cd !important;
+  outline-offset: 3px !important;
+}
+
+html body [data-dui-modal="agent-editor"].agent-settings-refresh [data-editor-toggle]:focus-within {
+  outline: 2px solid #a9d4cd !important;
+  outline-offset: 3px !important;
+}
+
+html body [data-dui-modal="agent-editor"].agent-settings-refresh [data-editor-portrait] {
+  width: 80px !important;
+  height: 80px !important;
+  border-radius: 12px !important;
+  box-shadow: none !important;
+}
+
+html body [data-dui-modal="agent-editor"].agent-settings-refresh [data-editor-preset] {
+  min-height: 38px !important;
+  padding: 8px !important;
+  border: 1px solid #3b434e !important;
+  background: #1c2229 !important;
+  color: #bec6d1 !important;
+}
+
+html body [data-dui-modal="agent-editor"].agent-settings-refresh [data-editor-preset][data-selected="true"] {
+  border-color: #a1c2bc !important;
+  background: #293c3c !important;
+  color: #e6f4f0 !important;
+}
+
+html body [data-dui-modal="agent-editor"].agent-settings-refresh .grid:has(> [data-editor-preset="reasoning"]) {
+  grid-template-columns: repeat(7, minmax(0, 1fr)) !important;
+  gap: 6px !important;
+}
+
+html body [data-dui-modal="agent-editor"].agent-settings-refresh .dy-agent-range {
+  min-height: 6px !important;
+  height: 6px !important;
+  margin-block: 16px !important;
+  --dy-range-start: #87b5ac !important;
+  --dy-range-end: #afccc6 !important;
+  --dy-range-glow: transparent !important;
+  accent-color: #a8c9c1 !important;
+}
+
+html body [data-dui-modal="agent-editor"].agent-settings-refresh [data-editor-panel="files"] textarea {
+  min-height: 330px !important;
+  background: #101318 !important;
+  color: #dbe1ea !important;
+  border-color: #3b434e !important;
+  line-height: 1.75 !important;
+}
+
+html body [data-dui-modal="agent-editor"].agent-settings-refresh [data-editor-panel="skills"] > .flex {
+  gap: 12px !important;
+  flex-wrap: wrap !important;
+}
+
+html body [data-dui-modal="agent-editor"].agent-settings-refresh [data-editor-panel="skills"] .text-slate-700 {
+  color: #98a3b3 !important;
+}
+
+html body [data-dui-modal="agent-editor"].agent-settings-refresh [data-model-picker] :is(strong, span) {
+  letter-spacing: normal !important;
+  text-transform: none !important;
+}
+
+html body [data-dui-modal="agent-editor"].agent-settings-refresh [data-model-picker] label > span:has(select) {
+  background: #11151a !important;
+  border-color: #3b434e !important;
+  border-radius: 7px !important;
+}
+
+html body [data-dui-modal="agent-editor"].agent-settings-refresh [data-model-picker] label > span > select {
+  border: 0 !important;
+  background: transparent !important;
+}
+
+@media (max-width: 640px) {
+html body [data-dui-modal="agent-editor"].agent-settings-refresh { height: calc(100dvh - 16px) !important;
+  max-height: calc(100dvh - 16px) !important;
+  border-radius: 12px !important;
+  }
+html body [data-dui-modal="agent-editor"].agent-settings-refresh [data-editor-header] { padding: 16px 16px 0 !important;
+  }
+html body [data-dui-modal="agent-editor"].agent-settings-refresh [data-editor-header] > .flex { flex-wrap: wrap !important;
+  }
+html body [data-dui-modal="agent-editor"].agent-settings-refresh [data-editor-header-actions] { width: 100% !important;
+  justify-content: space-between !important;
+  }
+html body [data-dui-modal="agent-editor"].agent-settings-refresh [data-editor-tabs] { gap: 20px !important;
+  margin-top: 12px !important;
+  }
+html body [data-dui-modal="agent-editor"].agent-settings-refresh [data-editor-body] { padding: 24px 16px !important;
+  }
+html body [data-dui-modal="agent-editor"].agent-settings-refresh [data-editor-panel] > :is(.border, [data-editor-card]) { padding: 16px !important;
+  }
+html body [data-dui-modal="agent-editor"].agent-settings-refresh [data-editor-card="inbound-routing"] > .flex { flex-wrap: wrap !important;
+  }
+html body [data-dui-modal="agent-editor"].agent-settings-refresh .grid:has(> [data-editor-preset]) { grid-template-columns: repeat(auto-fit, minmax(72px, 1fr)) !important;
+  }
+html body [data-dui-modal="agent-editor"].agent-settings-refresh [data-editor-panel] .sm\:grid-cols-3 { grid-template-columns: 1fr !important;
+  }
+}
+
+html body [data-dui-modal="agent-editor"].agent-settings-refresh [data-editor-tab]::before,
+html body [data-dui-modal="agent-editor"].agent-settings-refresh [data-editor-tab]::after {
+  content: none !important;
+}
+html body [data-dui-modal="agent-editor"].agent-settings-refresh [data-editor-panel] > div:has(> h3) {
+  padding: 20px !important;
+  border: 1px solid #30363e !important;
+  border-radius: 10px !important;
+  background: #191d23 !important;
+  box-shadow: none !important;
+}
+html body [data-dui-modal="agent-editor"].agent-settings-refresh [data-model-picker] label {
+  background: transparent !important;
+}
+html body [data-dui-modal="agent-editor"].agent-settings-refresh [data-editor-autosave="global"] span {
+  max-width: none !important;
+  font-weight: 400 !important;
+}
+
+}

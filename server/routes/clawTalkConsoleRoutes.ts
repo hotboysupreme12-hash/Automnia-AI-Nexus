@@ -30,6 +30,7 @@ type ClawTalkConsoleFinalInput = {
 }
 
 type ClawTalkConsoleRoutesOptions = {
+  getRunSnapshots?: () => Array<Record<string, unknown>>
   clawTalkConsoleClients: Map<string, ClawTalkConsoleClient>
   clawTalkConsoleEvents: Array<Record<string, unknown>>
   initializeSseResponse: (res: SseResponse) => void
@@ -55,8 +56,10 @@ export function registerClawTalkConsoleRoutes(app: Express, options: ClawTalkCon
     options.clawTalkConsoleClients.set(clientId, client)
 
     const replay = replayAfterCursor(options.clawTalkConsoleEvents, req.get('Last-Event-ID')?.slice(0, 200))
-    if (replay.gap) options.writeSseEvent(res, 'replay-gap', { event: 'replay-gap', message: 'Some earlier live events are no longer retained. The latest available events follow.' })
-    for (const event of replay.events) {
+    // Complete snapshots recover quiet runs and token prefixes evicted from the event ring.
+    const snapshots = options.getRunSnapshots?.()
+    const recovery = (!req.get('Last-Event-ID') || replay.gap) && snapshots
+    for (const event of recovery || replay.events) {
       const eventName = typeof event.event === 'string' && event.event.trim() ? event.event.trim() : 'message'
       options.writeSseEvent(res, eventName, event)
     }

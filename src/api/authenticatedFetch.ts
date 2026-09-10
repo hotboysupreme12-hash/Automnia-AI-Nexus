@@ -32,6 +32,15 @@ function isSessionBootstrapRequest(input: RequestInfo | URL): boolean {
   }
 }
 
+async function isRejectedSession(input: RequestInfo | URL, response: Response): Promise<boolean> {
+  if (response.status === 401) return true
+  // The public status endpoint returns 200 even when its bearer has expired.
+  // Inspect a clone so the caller can still consume the original response.
+  if (!response.ok || new URL(requestUrl(input), window.location.href).pathname !== '/api/auth/status') return false
+  const payload = await response.clone().json().catch(() => null)
+  return payload?.ok === true && payload?.data?.authenticated === false
+}
+
 function headersWithBearer(input: RequestInfo | URL, init?: RequestInit): Headers {
   const headers = new Headers(init?.headers || (input instanceof Request ? input.headers : undefined))
   if (!headers.has('Authorization')) {
@@ -53,7 +62,7 @@ async function fetchWithSessionRecovery(
     ...(init || {}),
     headers: headersWithBearer(input, init),
   })
-  if (firstResponse.status !== 401 || isSessionBootstrapRequest(input)) return firstResponse
+  if (isSessionBootstrapRequest(input) || !await isRejectedSession(input, firstResponse)) return firstResponse
   if (isAuthExplicitlySignedOut()) return firstResponse
   // A fresh renderer with no account token must stay at the login/license
   // gate. Session recovery is only valid for an already-authenticated user

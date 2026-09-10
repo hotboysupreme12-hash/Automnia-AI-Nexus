@@ -1,0 +1,144 @@
+/* Keep this editor-specific surface above the legacy global theme. */
+@layer agent-settings {
+  html body [data-editor-panel="model"] .agent-model-settings {
+    display: grid !important;
+    gap: 18px !important;
+    min-width: 0 !important;
+  }
+  html body [data-editor-panel="model"] .agent-model-settings :is(.amp-primary, .amp-backups) {
+    border: 1px solid #30363e !important;
+    border-radius: 10px !important;
+    background: #191d23 !important;
+    padding: 20px !important;
+  }
+  html body [data-editor-panel="model"] .agent-model-settings .amp-row {
+    display: flex !important;
+    align-items: center !important;
+    gap: 12px !important;
+    min-width: 0 !important;
+  }
+  html body [data-editor-panel="model"] .agent-model-settings h3 {
+    margin: 0 !important;
+    font-size: 13px !important;
+    font-weight: 500 !important;
+  }
+  html body [data-editor-panel="model"] .agent-model-settings .amp-caption {
+    margin-left: auto !important;
+    color: #9da7b5 !important;
+    font-size: 12px !important;
+  }
+  html body [data-editor-panel="model"] .agent-model-settings .amp-selection {
+    margin: 20px 0 12px !important;
+  }
+  html body [data-editor-panel="model"] .agent-model-settings .amp-model-name {
+    display: grid !important;
+    flex: 1 !important;
+    min-width: 0 !important;
+    gap: 3px !important;
+    text-align: left !important;
+  }
+  html body [data-editor-panel="model"] .agent-model-settings .amp-model-name strong {
+    color: #edf1f5 !important;
+    font-weight: 600 !important;
+    overflow-wrap: anywhere !important;
+    line-height: 1.5 !important;
+  }
+  html body [data-editor-panel="model"] .agent-model-settings .amp-selection strong {
+    font-size: 19px !important;
+    letter-spacing: -.02em !important;
+  }
+  html body [data-editor-panel="model"] .agent-model-settings small {
+    display: block !important;
+    color: #9da7b5 !important;
+    font-size: 12px !important;
+    font-weight: 400 !important;
+    line-height: 1.6 !important;
+  }
+  html body [data-editor-panel="model"] .agent-model-settings button {
+    padding: 8px 12px !important;
+    border: 1px solid #3a434e !important;
+    background: transparent !important;
+    color: #d6dde5 !important;
+    min-height: 38px !important;
+    font-size: 12px !important;
+    font-weight: 500 !important;
+  }
+  html body [data-editor-panel="model"] .agent-model-settings button:hover:not(:disabled) {
+    background: #273039 !important;
+    color: #fff !important;
+  }
+  html body [data-editor-panel="model"] .agent-model-settings .amp-change {
+    background: #d8e3e3 !important;
+    border-color: #d8e3e3 !important;
+    color: #172224 !important;
+    flex-shrink: 0 !important;
+  }
+  html body [data-editor-panel="model"] .agent-model-settings .amp-secondary-actions {
+    flex-wrap: wrap !important;
+    gap: 4px 16px !important;
+  }
+  html body [data-editor-panel="model"] .agent-model-settings .amp-secondary-actions button {
+    border: 0 !important;
+    color: #a6b4be !important;
+    padding-inline: 0 !important;
+  }
+  html body [data-editor-panel="model"] :is(.amp-backups, [data-model-advanced]) > summary {
+    display: flex !important;
+    align-items: center !important;
+    justify-content: space-between !important;
+    gap: 16px !important;
+    cursor: pointer !important;
+    list-style: none !important;
+    min-height: 40px !important;
+    color: #dce3eb !important;
+    font-size: 13px !important;
+  }
+  html body [data-editor-panel="model"] :is(.amp-backups, [data-model-advanced]) > summary::-webkit-details-marker { display: none !important; }
+  html body [data-editor-panel="model"] .amp-backups[open] .amp-chevron { transform: rotate(90deg) !important; }
+  html body [data-editor-panel="model"] .amp-backup-body { padding-top: 16px !important; }
+  html body [data-editor-panel="model"] .amp-backup-body > p { margin-bottom: 14px !important; }
+  html body [data-editor-panel="model"] .amp-backup-body ol { padding: 0 !important; margin: 0 0 16px !important; }
+  html body [data-editor-panel="model"] .amp-backup-body li { padding: 12px 0 !important; border-bottom: 1px solid #30363e !important; }
+  html body [data-editor-panel="model"] .amp-order { color: #9da7b5 !important; font-variant-numeric: tabular-nums !important; }
+  html body [data-editor-panel="model"] .amp-chooser {
+    margin-top: 18px !important;
+    padding-top: 18px !important;
+    border-top: 1px solid #343d46 !important;
+  }
+  html body [data-editor-panel="model"] .amp-chooser-heading { justify-content: space-between !important; margin-bottom: 12px !important; }
+  html body [data-editor-panel="model"] .amp-chooser input[type="search"] { width: 100% !important; min-width: 0 !important; }
+  html body [data-editor-panel="model"] .agent-model-settings .amp-filters { gap: 6px !important; flex-wrap: wrap !important; margin: 12px 0 !important; }
+  html body [data-editor-panel="model"] .agent-model-settings .amp-filters button { border-color: transparent !important; padding: 6px 10px !important; }
+  html body [data-editor-panel="model"] .agent-model-settings .amp-filters button[aria-pressed="true"] { border-color: #587971 !important; background: #293c3c !important; color: #e6f4f0 !important; }
+  html body [data-editor-panel="model"] .amp-filters > span { color: #9da7b5 !important; margin-left: auto !important; font-size: 12px !important; }
+  html body [data-editor-panel="model"] .agent-model-settings .amp-provider-chips { display: flex !important; align-items: center !important; gap: 7px !important; flex-wrap: wrap !important; margin: 2px 0 14px !important; }
+  html body [data-editor-panel="model"] .agent-model-settings .amp-provider-chip { display: inline-flex !important; align-items: center !important; gap: 6px !important; min-height: 32px !important; padding: 6px 10px !important; border: 1px solid #38414b !important; border-radius: 999px !important; background: #20252c !important; color: #b7c0ca !important; font-size: 11px !important; white-space: nowrap !important; }
+  html body [data-editor-panel="model"] .agent-model-settings .amp-provider-chip [data-provider-logo] { width: 18px !important; height: 18px !important; border: 0 !important; background: transparent !important; box-shadow: none !important; }
+  html body [data-editor-panel="model"] .agent-model-settings .amp-provider-chip[aria-pressed="true"] { border-color: #7c9d96 !important; background: #2c3a3a !important; color: #eef7f3 !important; }
+  html body [data-editor-panel="model"] .amp-results { max-height: 310px !important; overflow-y: auto !important; overscroll-behavior: contain !important; scrollbar-gutter: stable !important; }
+  html body [data-editor-panel="model"] .agent-model-settings .amp-result {
+    display: flex !important;
+    align-items: center !important;
+    gap: 12px !important;
+    width: 100% !important;
+    min-height: 62px !important;
+    padding: 10px !important;
+    border: 0 !important;
+    border-bottom: 1px solid #30363e !important;
+    border-radius: 0 !important;
+  }
+  html body [data-editor-panel="model"] .amp-result-state { color: #a7c8c1 !important; font-size: 12px !important; }
+  html body [data-editor-panel="model"] .amp-empty { padding: 16px 4px !important; }
+  html body [data-editor-panel="model"] [data-model-advanced] { border-top: 1px solid #30363e !important; padding-top: 12px !important; }
+  html body [data-editor-panel="model"] [data-model-advanced] > summary > span { color: #9da7b5 !important; font-size: 12px !important; }
+  html body [data-editor-panel="model"] [data-model-advanced] > div { margin-top: 12px !important; padding: 18px !important; background: #191d23 !important; border: 1px solid #30363e !important; border-radius: 10px !important; }
+  html body [data-editor-panel="model"] [data-model-advanced] > summary::after { content: '+' !important; color: #a7c8c1 !important; }
+  html body [data-editor-panel="model"] [data-model-advanced][open] > summary::after { content: '−' !important; }
+  @media (max-width: 520px) {
+    html body [data-editor-panel="model"] .agent-model-settings :is(.amp-primary, .amp-backups) { padding: 16px !important; }
+    html body [data-editor-panel="model"] .agent-model-settings .amp-primary > .amp-row:first-child { flex-wrap: wrap !important; gap: 4px !important; }
+    html body [data-editor-panel="model"] .agent-model-settings .amp-caption { margin-left: 0 !important; width: 100% !important; }
+    html body [data-editor-panel="model"] .agent-model-settings .amp-selection { flex-wrap: wrap !important; }
+    html body [data-editor-panel="model"] .agent-model-settings .amp-change { width: 100% !important; margin-top: 8px !important; }
+  }
+}

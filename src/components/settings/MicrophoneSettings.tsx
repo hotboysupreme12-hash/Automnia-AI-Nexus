@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { friendlyMicrophoneError, preferredRecordingMimeType, requestSpeechMicrophone } from '../../speech/audioCapture'
+import { openMicrophoneSettings } from '../../speech/microphonePermissions'
 import type { SpeechSettings } from '../../speech/speechSettings'
 
 export function MicrophoneSettings({ settings, onChange }: { settings: SpeechSettings; onChange: (deviceId: string) => void }) {
@@ -99,7 +100,7 @@ export function MicrophoneSettings({ settings, onChange }: { settings: SpeechSet
       </select>
     </div></label>
     {missing && <p className="text-sm text-amber-200">The saved microphone is unavailable or needs permission. Voice recording will use the system default when the device cannot be opened.</p>}
-    <div className="dui-settings-actions"><button type="button" disabled={requesting || !navigator.mediaDevices?.getUserMedia} onClick={() => running ? stopRef.current() : void test()}>{requesting ? 'Waiting for microphone…' : running ? 'Stop test' : 'Test microphone'}</button><button type="button" onClick={() => void refresh()}>Refresh devices</button></div>
+    <div className="dui-settings-actions"><button type="button" disabled={requesting || !navigator.mediaDevices?.getUserMedia} onClick={() => running ? stopRef.current() : void test()}>{requesting ? 'Waiting for microphone…' : running ? 'Stop test' : 'Test microphone'}</button><button type="button" onClick={() => void refresh()}>Refresh devices</button><button type="button" onClick={() => { void openMicrophoneSettings().then(setNotice).catch((error) => setNotice(friendlyMicrophoneError(error))) }}>Microphone permissions</button></div>
     {running && <label className="flex flex-wrap items-center gap-3 text-sm text-slate-300">Input level <meter className="min-w-0 flex-1" min={0} max={100} value={level} aria-label="Microphone input level" /></label>}
     {notice && <p role="status" className="text-sm text-slate-300">{notice}</p>}
     {playbackUrl && <audio className="w-full" controls src={playbackUrl} aria-label="Local microphone test playback" />}

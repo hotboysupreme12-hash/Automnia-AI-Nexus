@@ -1,6 +1,7 @@
 [
   "DELETE /api/auth/account/google/session/:sessionId",
   "DELETE /api/auth/providers/:provider",
+  "DELETE /api/openclaw/agent-turn/:responseId",
   "DELETE /api/party/agent/:agentId",
   "DELETE /api/plugins/setup-terminal/:sessionId",
   "GET /api/auth/account/google/session/:sessionId",

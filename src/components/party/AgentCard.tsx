@@ -79,7 +79,6 @@ export const AgentCard = memo(function AgentCard({ agent, isSelected, slotNumber
   const liveStatusLabel = activityStatus?.label || 'Working'
   const liveStatusDetail = activityStatus?.detail || `${agent.name} is handling an active turn.`
   const displaySlot = slotNumber ?? (partyIndex != null ? partyIndex + 1 : 0)
-  const thinkingMode = agent.runtimePolicy?.thinkingDefault && agent.runtimePolicy.thinkingDefault !== 'off'
   const portraitSrc = portraitSrcForAgent(agent)
   const showPortrait = Boolean(portraitSrc && failedPortraitSrc !== portraitSrc)
 
@@ -104,7 +103,7 @@ export const AgentCard = memo(function AgentCard({ agent, isSelected, slotNumber
   }
 
   const handleCardPointerMove = (event: React.PointerEvent<HTMLDivElement>) => {
-    if (event.pointerType === 'touch') return
+    if (event.pointerType === 'touch' || window.matchMedia('(prefers-reduced-motion: reduce)').matches) return
     const bounds = event.currentTarget.getBoundingClientRect()
     const x = Math.max(0, Math.min(100, ((event.clientX - bounds.left) / bounds.width) * 100))
     const y = Math.max(0, Math.min(100, ((event.clientY - bounds.top) / bounds.height) * 100))
@@ -129,21 +128,20 @@ export const AgentCard = memo(function AgentCard({ agent, isSelected, slotNumber
   const denseMode = displayMode === 'grid10'
   const compactMode = displayMode === 'grid8' || denseMode
   const cardMinHeight = listMode ? 'min-h-[124px]' : denseMode ? 'min-h-[360px]' : compactMode ? 'min-h-[310px]' : 'min-h-[390px]'
-  const toolCount = agent.mds.toolAccess.length + (agent.toolsPolicy?.allow?.length || 0)
+  const skillCount = agent.unlockedSkills.length
   const heartbeatSeconds = Math.round((agent.heartbeat.tickIntervalMs || 0) / 1_000)
   const listDetailItems = [
     { label: 'Provider', value: shortProviderName(agent.model?.primary) },
     { label: 'Model', value: formatModelName(agent.model?.primary) },
     { label: 'Timing', value: heartbeatSeconds > 0 ? `${heartbeatSeconds}s` : 'off' },
-    { label: 'Tools', value: String(toolCount) },
-    { label: 'Skills', value: String(agent.unlockedSkills.length) },
+    { label: 'Skills', value: String(skillCount) },
     { label: 'Sandbox', value: agent.sandbox?.mode || 'default' },
   ]
   const detailItems = denseMode ? [
     { label: 'Model', value: formatModelName(agent.model?.primary) },
     { label: 'Thinking', value: agent.runtimePolicy?.thinkingDefault || 'off' },
     { label: 'Heartbeat', value: heartbeatSeconds > 0 ? `${heartbeatSeconds}s` : 'off' },
-    { label: 'Tools', value: String(toolCount) },
+    { label: 'Skills', value: String(skillCount) },
     { label: 'Sandbox', value: agent.sandbox?.mode || 'default' },
     { label: 'Fallbacks', value: String(agent.model?.fallbacks?.length || 0) },
   ] : []
@@ -168,7 +166,7 @@ export const AgentCard = memo(function AgentCard({ agent, isSelected, slotNumber
       onPointerMove={handleCardPointerMove}
       onPointerLeave={handleCardPointerLeave}
       className={[
-        'agent-card-shell agent-card-pro agent-card-3d relative flex h-full cursor-pointer border p-0 select-none overflow-visible',
+        'agent-card-shell agent-card-pro agent-card-3d agent-card-modern relative flex h-full cursor-pointer border p-0 select-none overflow-visible',
         listMode ? 'flex-row' : 'flex-col',
         cardMinHeight,
         'border-white/[0.12] bg-[#101214]',
@@ -196,6 +194,7 @@ export const AgentCard = memo(function AgentCard({ agent, isSelected, slotNumber
             <AvatarFallback name={agent.name} large />
           )}
 
+          <div className="agent-card-portrait-shade" aria-hidden="true" />
           <div className="agent-card-media-top absolute left-3 right-3 top-3 z-20 flex items-start justify-end gap-2">
             {busy && (
               <span
@@ -215,6 +214,7 @@ export const AgentCard = memo(function AgentCard({ agent, isSelected, slotNumber
       <div className={listMode ? 'agent-card-body relative z-10 flex min-w-0 flex-1 flex-col p-3' : denseMode ? 'agent-card-body relative z-10 flex flex-1 flex-col p-3 pt-2.5' : compactMode ? 'agent-card-body relative z-10 flex flex-1 flex-col p-3.5 pt-3' : 'agent-card-body relative z-10 flex flex-1 flex-col p-4 pt-3.5'}>
         <div className="agent-card-heading mb-3 flex items-start justify-between gap-3">
           <div className="min-w-0 flex-1">
+            <span className="agent-card-kicker">{BEHAVIOR_LABELS[agent.behaviorProfile] ?? 'Agent'} · {agent.className}</span>
             <h3 className={`agent-card-name mt-1.5 ${listMode ? 'truncate' : 'line-clamp-2'} text-[18px] font-black leading-tight text-slate-50`}>
               {agent.name}
             </h3>
@@ -225,27 +225,7 @@ export const AgentCard = memo(function AgentCard({ agent, isSelected, slotNumber
             >
               {agent.role}
             </p>
-            <span
-              className="agent-card-badge agent-card-rarity-badge mt-2 inline-flex max-w-full items-center truncate border px-2 py-1 text-[8px] font-black uppercase leading-none"
-              aria-label={`Rarity: ${agent.rarity || 'common'}`}
-            >
-              {agent.rarity || 'common'}
-            </span>
           </div>
-          <div className="agent-card-heading-actions flex shrink-0 items-start gap-2">
-            <div className="agent-card-level-pill shrink-0 border px-2.5 py-2 text-center">
-              <p className="text-[8px] font-black uppercase leading-none text-white/45">LV</p>
-              <p className="mt-1 text-[20px] font-black leading-none text-white tabular-nums">{agent.level}</p>
-            </div>
-          </div>
-        </div>
-
-        <div className={listMode ? 'agent-card-tags mb-2 flex min-h-0 flex-wrap items-start gap-1 overflow-hidden' : denseMode ? 'agent-card-tags mb-2.5 flex min-h-[32px] flex-wrap items-start gap-1 overflow-hidden' : 'agent-card-tags mb-3 flex min-h-[38px] flex-wrap items-start gap-1 overflow-hidden'}>
-          <span className="agent-card-tag agent-card-tag--behavior">{BEHAVIOR_LABELS[agent.behaviorProfile] ?? 'Agent'}</span>
-          <span className="agent-card-tag agent-card-tag--class" title={agent.className} aria-label={`Class: ${agent.className}`}>
-            {agent.className}
-          </span>
-          {thinkingMode && !compactMode && !listMode && <span>Think {agent.runtimePolicy?.thinkingDefault}</span>}
         </div>
 
         {listMode && (
@@ -265,9 +245,9 @@ export const AgentCard = memo(function AgentCard({ agent, isSelected, slotNumber
               <span>Model</span>
               <strong className="agent-card-model-value">{formatModelName(agent.model?.primary)}</strong>
             </div>
-            <div className="agent-card-simple-meta__tools" title={`${toolCount} tools available`}>
-              <span>Tools</span>
-              <strong>{toolCount}</strong>
+            <div className="agent-card-simple-meta__tools" title={`${skillCount} enabled skills`}>
+              <span>Skills</span>
+              <strong>{skillCount}</strong>
             </div>
           </div>
         )}

@@ -34,6 +34,7 @@ type ShiftRoutesOptions = {
   readHeartbeatRuntimeDefaults: () => Promise<HeartbeatRuntimeDefaults>
   readHeartbeatRuntimePerAgent: () => Promise<HeartbeatRuntimePerAgentStore>
   runOpenClaw: (args: string[], timeoutMs?: number) => Promise<OpenClawCommandResult>
+  stopSystemOwnedCronJob?: (cronId: string) => Promise<void>
   startManagedTeamSyncOrchestrator: (input: {
     batchId: string
     runId: string
@@ -77,6 +78,7 @@ export function registerShiftRoutes(app: Express, options: ShiftRoutesOptions) {
     readHeartbeatRuntimeDefaults,
     readHeartbeatRuntimePerAgent,
     runOpenClaw,
+    stopSystemOwnedCronJob,
     startManagedTeamSyncOrchestrator,
     sweepExpiredMissionCronJobs,
     writeHeartbeatRuntimeDefaults,
@@ -313,8 +315,15 @@ export function registerShiftRoutes(app: Express, options: ShiftRoutesOptions) {
     }
 
     try {
-      const result = await runOpenClaw(['cron', 'disable', cronId], 45000)
-      if (result.code !== 0) {
+      const listedJob = listActiveCronJobViews().active.find((job) => job.cronId === cronId)
+      const result = listedJob?.systemOwned
+        ? null
+        : await runOpenClaw(['cron', 'disable', cronId], 45000)
+      if (listedJob?.systemOwned) {
+        if (!stopSystemOwnedCronJob) throw new Error('System-owned monitor jobs cannot be stopped by this runtime.')
+        await stopSystemOwnedCronJob(cronId)
+      }
+      if (result && result.code !== 0) {
         throw new Error(result.stderr || result.stdout || 'Failed to disable cron job')
       }
       if (shift) {

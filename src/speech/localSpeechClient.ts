@@ -6,7 +6,7 @@ export type LocalSpeechProgress = {
 
 type WorkerRequest =
   | { type: 'prepare'; requestId: string }
-  | { type: 'transcribe'; requestId: string; audio: ArrayBuffer }
+  | { type: 'transcribe'; requestId: string; audio: ArrayBuffer; language?: string }
 
 type WorkerResponse =
   | ({ type: 'progress'; requestId: string } & LocalSpeechProgress)
@@ -21,7 +21,7 @@ type PendingRequest = {
   cleanup: () => void
 }
 
-export type LocalSpeechRequestOptions = { signal?: AbortSignal; timeoutMs?: number }
+export type LocalSpeechRequestOptions = { signal?: AbortSignal; timeoutMs?: number; language?: string }
 
 let worker: Worker | null = null
 let requestSequence = 0
@@ -99,7 +99,7 @@ function runWorkerRequest(
       scheduleIdleRelease()
     }
     const onAbort = () => cancel(new DOMException('Speech processing canceled.', 'AbortError'))
-    const timer = setTimeout(() => cancel(new DOMException('Local speech took too long. Retry the recording.', 'TimeoutError')), options.timeoutMs ?? 180_000)
+    const timer = setTimeout(() => cancel(new DOMException('Local speech took too long. Retry the recording.', 'TimeoutError')), options.timeoutMs ?? 600_000)
     const cleanup = () => {
       clearTimeout(timer)
       options.signal?.removeEventListener('abort', onAbort)
@@ -129,5 +129,5 @@ export function transcribeAudioLocally(
   const transferableAudio = canTransferDirectly
     ? audio.buffer as ArrayBuffer
     : new Float32Array(audio).buffer
-  return runWorkerRequest({ type: 'transcribe', requestId: nextRequestId(), audio: transferableAudio }, onProgress, options)
+  return runWorkerRequest({ type: 'transcribe', requestId: nextRequestId(), audio: transferableAudio, language: options?.language }, onProgress, options)
 }

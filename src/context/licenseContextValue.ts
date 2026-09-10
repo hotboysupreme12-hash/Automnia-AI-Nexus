@@ -19,6 +19,7 @@ export type LicenseInfo = {
   subscriptionStatus: string | null
   usagePriority: HostedUsagePriority | null
   creditBalance: number | null
+  creditUsageBaseline?: number | null
   creditBalanceUpdatedAt: string | null
   activatedAt: string | null
   verifiedAt: string | null

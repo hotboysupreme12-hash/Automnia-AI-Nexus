@@ -1,0 +1,16 @@
+/* The title-free shelf has one control group, anchored at its right edge. */
+#automnia-main .dy-workspace-context[data-workspace] {
+  display: flex !important;
+  justify-content: flex-end !important;
+}
+
+#automnia-main .dy-workspace-context[data-workspace] > .dy-workspace-context__meta {
+  display: flex !important;
+  flex-direction: row !important;
+  flex-wrap: wrap !important;
+  flex: 0 1 auto !important;
+  width: auto !important;
+  max-width: 100% !important;
+  margin-left: auto !important;
+  justify-content: flex-end !important;
+}

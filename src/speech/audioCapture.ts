@@ -1,3 +1,4 @@
+import { ensureMicrophonePermission, microphonePermissionHelp } from './microphonePermissions'
 import { LOCAL_TRANSCRIPTION_SAMPLE_RATE } from './audioProcessing'
 import type { SpeechSettings } from './speechSettings'
 
@@ -8,7 +9,9 @@ export const MAX_VOICE_RECORDING_MS = 2 * 60 * 1000
 
 export async function requestSpeechMicrophone(settings: SpeechSettings, mediaDevices = navigator.mediaDevices): Promise<{ stream: MediaStream; usedFallback: boolean }> {
   if (!mediaDevices?.getUserMedia) throw new Error('Microphone recording is not available on this device.')
+  await ensureMicrophonePermission()
   const audio: MediaTrackConstraints = {
+    channelCount: { ideal: 1 },
     noiseSuppression: settings.noiseSuppression,
     echoCancellation: settings.echoCancellation,
     autoGainControl: settings.autoGainControl,
@@ -44,9 +47,9 @@ export function voiceRecordingFileName(mimeType: string): string {
 }
 
 export function friendlyMicrophoneError(error: unknown): string {
-  const name = error instanceof DOMException ? error.name : ''
+  const name = error instanceof Error ? error.name : ''
   if (name === 'NotAllowedError' || name === 'SecurityError') {
-    return 'Microphone access is blocked. Allow microphone access for Automnia, then try again.'
+    return microphonePermissionHelp()
   }
   if (name === 'NotFoundError' || name === 'DevicesNotFoundError') {
     return 'No microphone was found. Connect one or select an input device in system settings.'

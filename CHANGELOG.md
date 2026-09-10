@@ -29,7 +29,7 @@
 
 ### Reliability and recovery
 
-- Upgraded the vendored OpenClaw runtime to `2026.7.1-2` and the bundled Codex plugin to its latest compatible stable release, `2026.7.1-1`.
+- Upgraded the vendored OpenClaw runtime to `2026.9.2` so config and state schema support stay aligned with the current Automnia integration.
 - Preserved the current OpenClaw official external plugin/provider/channel catalogs in fallback plugin discovery.
 - Surfaced plugin icon, package, install spec, and channel image metadata through runtime status and the Plugins panel.
 - Added checksummed OpenClaw state backup, verification, atomic restore, and rollback retention.

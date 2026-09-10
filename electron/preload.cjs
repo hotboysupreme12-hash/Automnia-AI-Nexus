@@ -1,6 +1,8 @@
 const { contextBridge, ipcRenderer, webUtils } = require('electron')
 
 contextBridge.exposeInMainWorld('automniaDesktop', {
+  requestMicrophoneAccess: () => ipcRenderer.invoke('automnia:microphone-request'),
+  openMicrophoneSettings: () => ipcRenderer.invoke('automnia:microphone-settings'),
   getPathForFile: (file) => {
     if (!file) return ''
     if (webUtils && typeof webUtils.getPathForFile === 'function') {

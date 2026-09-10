@@ -17,9 +17,11 @@ import { isSelectableModelId } from '../../utils/modelGrouping'
 import { ModelPicker } from '../models/ModelPicker'
 import {
   AUTOMNIA_CREDITS_MODEL_ID,
+  AUTOMNIA_RELAY_MODEL_IDS,
+  AUTOMNIA_RELAY_MODEL_LABELS,
   automniaRelayModelLabel,
   isAutomniaCreditsModelId,
-  isCreditsOnlyEntitlement,
+  isAutomniaCreditsModelSelectionRoute,
   resolveAgentRoutePresentation,
   resolveLicenseEntitlement,
 } from '../../utils/licenseEntitlement'
@@ -55,12 +57,12 @@ const CODEX_5_3_SPARK_MODEL: AvailableModel = {
   provider: 'openai',
   name: 'Codex 5.3 Spark',
 }
-const AUTOMNIA_CREDITS_MODEL: AvailableModel = {
-  id: AUTOMNIA_CREDITS_MODEL_ID,
-  alias: 'Automnia Balanced',
+const AUTOMNIA_MODEL_OPTIONS: AvailableModel[] = AUTOMNIA_RELAY_MODEL_IDS.map((id) => ({
+  id,
+  alias: AUTOMNIA_RELAY_MODEL_LABELS[id],
   provider: 'automnia-cloud',
-  name: 'Automnia Balanced',
-}
+  name: AUTOMNIA_RELAY_MODEL_LABELS[id],
+}))
 const REASONING_EFFORT_LEVELS = ['off', 'minimal', 'low', 'medium', 'high', 'xhigh', 'max'] as const satisfies readonly ThinkingLevel[]
 const MODEL_SELECTOR_CACHE_MS = 5 * 60 * 1000
 const MODEL_SELECTOR_FETCH_TIMEOUT_MS = 8000
@@ -112,13 +114,13 @@ function modelBrief(modelId: string): { title: string; description: string; tone
 
 const mergeSelectedModelOptions = (catalog: AvailableModel[], selectedIds: string[], creditsOnly = false) => {
   const merged = new Map<string, AvailableModel>()
-  const allowedCatalog = creditsOnly ? catalog.filter((model) => isAutomniaCreditsModelId(model.id)) : catalog
-  const seededCatalog = catalog.some((model) => model.id === CODEX_5_3_SPARK_MODEL_ID)
-    ? creditsOnly
-      ? (allowedCatalog.some((model) => model.id === AUTOMNIA_CREDITS_MODEL_ID) ? allowedCatalog : [AUTOMNIA_CREDITS_MODEL, ...allowedCatalog])
-      : catalog
-    : creditsOnly
-      ? (allowedCatalog.some((model) => model.id === AUTOMNIA_CREDITS_MODEL_ID) ? allowedCatalog : [AUTOMNIA_CREDITS_MODEL, ...allowedCatalog])
+  const allowedCatalog = creditsOnly
+    ? [...AUTOMNIA_MODEL_OPTIONS, ...catalog.filter((model) => isAutomniaCreditsModelId(model.id))]
+    : catalog
+  const seededCatalog = creditsOnly
+    ? allowedCatalog
+    : catalog.some((model) => model.id === CODEX_5_3_SPARK_MODEL_ID)
+      ? catalog
       : [CODEX_5_3_SPARK_MODEL, ...catalog]
   for (const model of seededCatalog) {
     if (model.id.trim() && isSelectableModelId(model.id)) merged.set(model.id, model)
@@ -164,7 +166,7 @@ export function ModelSelectorModal({
   onSave,
 }: ModelSelectorModalProps) {
   const { license } = useLicense()
-  const creditsOnly = isCreditsOnlyEntitlement(license)
+  const creditsOnly = isAutomniaCreditsModelSelectionRoute(license)
   const [models, setModels] = useState<AvailableModel[]>([])
   const [loading, setLoading] = useState(false)
   const dialogId = useId()
@@ -192,8 +194,8 @@ export function ModelSelectorModal({
       const models = await fetchModelSelectorModels()
       setModels(models)
       if (creditsOnly) {
-        setSelectedPrimary(AUTOMNIA_CREDITS_MODEL_ID)
-        setSelectedFallbacks([])
+        setSelectedPrimary(isAutomniaCreditsModelId(currentModel) ? currentModel : AUTOMNIA_CREDITS_MODEL_ID)
+        setSelectedFallbacks(currentFallbacks.filter((modelId) => isAutomniaCreditsModelId(modelId)))
       } else if (!currentModel && models.length) {
         setSelectedPrimary(models[0].id)
       }
@@ -203,7 +205,7 @@ export function ModelSelectorModal({
     } finally {
       setLoading(false)
     }
-  }, [currentModel, creditsOnly])
+  }, [currentFallbacks, currentModel, creditsOnly])
 
   const upsertAuthProviderStatus = useCallback((next?: AuthProviderStatus | null) => {
     if (!next) return
@@ -228,8 +230,8 @@ export function ModelSelectorModal({
 
   useEffect(() => {
     if (!isOpen) return
-    setSelectedPrimary(creditsOnly ? AUTOMNIA_CREDITS_MODEL_ID : currentModel)
-    setSelectedFallbacks(creditsOnly ? [] : currentFallbacks)
+    setSelectedPrimary(creditsOnly && !isAutomniaCreditsModelId(currentModel) ? AUTOMNIA_CREDITS_MODEL_ID : currentModel)
+    setSelectedFallbacks(creditsOnly ? currentFallbacks.filter((modelId) => isAutomniaCreditsModelId(modelId)) : currentFallbacks)
     setThinkingEnabled(currentThinking !== 'off')
     setThinkingLevel(currentThinking === 'off' ? 'minimal' : currentThinking)
     authRefreshKeyRef.current = ''

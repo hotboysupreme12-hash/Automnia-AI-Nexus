@@ -2726,7 +2726,7 @@ html.dui-pro-overhaul [data-dui-panel="active-party"] .dy-party-slot.is-filled::
 }
 
 html.dui-pro-overhaul [data-dui-panel="active-party"] .dy-party-slot.is-filled::before {
-  content: "Slot " attr(data-dy-slot-number) !important;
+  content: attr(data-dy-slot-number) !important;
   position: absolute !important;
   display: inline-flex !important;
   width: auto !important;
@@ -2738,20 +2738,18 @@ html.dui-pro-overhaul [data-dui-panel="active-party"] .dy-party-slot.is-filled::
   bottom: 8px !important;
   left: auto !important;
   z-index: 5 !important;
-  padding: 3px 7px !important;
-  border: 1px solid rgba(164, 188, 202, .30) !important;
-  border-radius: 999px !important;
-  background: linear-gradient(180deg, rgba(164, 188, 202, .12), rgba(164, 188, 202, .03)), rgba(7, 8, 9, .58) !important;
+  padding: 0 !important;
+  border: 0 !important;
+  border-radius: 0 !important;
+  background: transparent !important;
   color: rgba(191, 209, 221, .92) !important;
   font-size: 8px !important;
   font-weight: 900 !important;
   line-height: 1 !important;
-  box-shadow:
-    inset 0 1px 0 rgba(255, 255, 255, .06),
-    0 0 10px -2px rgba(164, 188, 202, .58) !important;
+  box-shadow: none !important;
   text-shadow: 0 0 9px rgba(164, 188, 202, .58) !important;
-  backdrop-filter: blur(10px) !important;
-  -webkit-backdrop-filter: blur(10px) !important;
+  backdrop-filter: none !important;
+  -webkit-backdrop-filter: none !important;
 }
 
 html.dui-pro-overhaul [data-dui-panel="active-party"] .dy-party-slot.is-filled > [draggable="true"] {

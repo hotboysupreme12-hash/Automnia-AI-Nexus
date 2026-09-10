@@ -263,7 +263,7 @@ export function installControlPlaneHttp(app: Express, options: ControlPlaneHttpO
     origin(origin, callback) {
       callback(null, isAllowedControlCenterOrigin(origin, options.port, options.frontendPort) ? origin || true : false)
     },
-    allowedHeaders: ['Content-Type', 'Authorization', 'X-Request-Id', 'X-Control-Center-Request-Id'],
+    allowedHeaders: ['Content-Type', 'Authorization', 'X-Request-Id', 'X-Control-Center-Request-Id', 'X-Speech-Language', 'X-Speech-Vocabulary'],
     exposedHeaders: ['X-Request-Id'],
     methods: ['GET', 'HEAD', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
   }))

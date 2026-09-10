@@ -3399,21 +3399,19 @@ html.dui-pro-overhaul .dy-channel-activity-status {
   display: grid;
   min-width: 82px;
   flex: 0 0 auto;
-  grid-template-columns: 8px auto;
   align-items: center;
-  column-gap: 7px;
   padding: 8px 10px;
   border: 1px solid rgba(255, 255, 255, .10);
   border-radius: 12px;
   background: rgba(0, 0, 0, .18);
 }
 
-html.dui-pro-overhaul .dy-channel-activity-status i {
-  width: 7px;
-  height: 7px;
-  grid-row: span 2;
-  border-radius: 99px;
-  background: #878b8d;
+html.dui-pro-overhaul .dy-channel-activity-status-copy {
+  display: grid;
+  justify-items: center;
+  gap: 4px;
+  min-width: 0;
+  text-align: center;
 }
 
 html.dui-pro-overhaul .dy-channel-activity-status strong {
@@ -3434,11 +3432,6 @@ html.dui-pro-overhaul .dy-channel-activity-status span {
 html.dui-pro-overhaul .dy-channel-activity-status[data-state="active"] {
   border-color: rgba(101, 211, 190, .24);
   background: rgba(101, 211, 190, .07);
-}
-
-html.dui-pro-overhaul .dy-channel-activity-status[data-state="active"] i {
-  background: #65d3be;
-  box-shadow: 0 0 0 4px rgba(101, 211, 190, .10), 0 0 12px rgba(101, 211, 190, .60);
 }
 
 html.dui-pro-overhaul .dy-channel-activity-status[data-state="active"] strong { color: #a9f1e1 !important; }
