@@ -206,7 +206,7 @@ assertIncludes(nexusStore, 'return await sendStreamingAgentTurn', 'Command Conso
 assertIncludes(agentTurnsApi, "fetchControlCenterWithAuth(apiUrl('/api/openclaw/agent-turn/stream')", 'Command Console stream transport uses the authenticated renderer API helper')
 assertIncludes(nexusStore, 'stopActiveAgentRuns', 'Command Console stop active runs action')
 assertIncludes(nexusStore, 'cancelled: cancelledByOperator', 'Command Console returns operator cancellation state')
-assertIncludes(nexusStore, 'if (result?.cancelled) break', 'Command Console stops queued sequential lanes after cancel')
+assertIncludes(read('src/store/agentChatDispatch.ts'), 'if (result?.cancelled) break', 'Command Console stops queued sequential lanes after cancel')
 assertIncludes(partyManagementRoutes, "mode: 'all'", 'Recruit API persists sandboxed execution by default')
 assertNotIncludes(partyManagementRoutes, 'allow: inferredMds.toolAccess', 'Recruit API does not treat capability labels as OpenClaw tool ids')
 assertIncludes(agentConfigRoutes, "if (local.sandbox.mode === 'off')", 'Agent config expands an explicit sandbox-off policy')

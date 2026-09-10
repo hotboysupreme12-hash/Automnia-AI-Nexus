@@ -3,6 +3,7 @@ import test from 'node:test'
 import {
   AUTOMNIA_CONTINUATION_PROMPT_PREFIX,
   AUTOMNIA_PRODUCT_IDENTITY,
+  AUTOMNIA_TASK_EXECUTION_POLICY,
   composeAutomniaContinuationPrompt,
 } from '../server/services/agents/promptEfficiencyPolicy'
 
@@ -14,7 +15,8 @@ test('continuation prompts preserve the runtime contract with a small stable pre
   assert.match(prompt, /same tools and permissions/)
   assert.match(prompt, /ISO-8601 timestamps/)
   assert.match(prompt, new RegExp(`${message.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}$`))
-  assert.ok(AUTOMNIA_CONTINUATION_PROMPT_PREFIX.length < 1000)
+  assert.ok(AUTOMNIA_CONTINUATION_PROMPT_PREFIX.length < 2400)
+  assert.ok(prompt.includes(AUTOMNIA_TASK_EXECUTION_POLICY))
   assert.ok(prompt.startsWith(AUTOMNIA_PRODUCT_IDENTITY))
   assert.match(prompt, /You are an Automnia agent working inside Automnia/)
 })

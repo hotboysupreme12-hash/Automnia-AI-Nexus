@@ -1,3 +1,4 @@
+import { useAgentVoiceStore } from '../../speech/agentVoiceStore'
 import { AvatarFallback } from '../ui/AvatarFallback'
 import { useRememberedState } from '../../hooks/useRememberedState'
 import { memo, useCallback, useDeferredValue, useEffect, useLayoutEffect, useMemo, useRef, useState, type WheelEvent } from 'react'
@@ -889,11 +890,15 @@ export function AgentResponseConsole() {
   const [activeRunActionId, setActiveRunActionId] = useState('')
   const [speechSettings, setSpeechSettings] = useState<SpeechSettings>(() => readSpeechSettings())
   const speechMode = speechSettings.mode
-  const [voicePhase, setVoicePhase] = useState<VoiceInputPhase>('idle')
+  const [voicePhase, setVoicePhaseState] = useState<VoiceInputPhase>('idle')
+  const setVoicePhase = useCallback((phase: VoiceInputPhase) => {
+    useAgentVoiceStore.setState({ phase })
+    setVoicePhaseState(phase)
+  }, [])
   const [voiceStatus, setVoiceStatus] = useState('')
   const [voiceError, setVoiceError] = useState('')
   const voiceRequestRef = useRef<AbortController | null>(null)
-  const [retryRecording, setRetryRecording] = useState<{ blob: Blob; mode: SpeechTranscriptionMode } | null>(null)
+  const [retryRecording, setRetryRecording] = useState<{ blob: Blob; mode: SpeechTranscriptionMode; agentId?: string } | null>(null)
   const [speechProgress, setSpeechProgress] = useState<number | undefined>(undefined)
   const [recordingSeconds, setRecordingSeconds] = useState(0)
   const [chatRemovedPartyIds, setChatRemovedPartyIds] = useState<string[]>([])
@@ -1472,12 +1477,26 @@ export function AgentResponseConsole() {
     }, 4_000)
   }, [])
 
-  const transcribeVoiceBlob = useCallback(async (blob: Blob, mode: SpeechTranscriptionMode) => {
+  const deliverVoiceTranscript = useCallback((transcript: string, agentId?: string) => {
+    if (!agentId) { appendVoiceTranscript(transcript); return }
+    const text = transcript.trim()
+    if (!text) throw new Error('No speech was recognized. Please try again.')
+    if (!useNexusStore.getState().agents.some((agent) => agent.id === agentId)) {
+      throw new Error('This agent is no longer available. Your recording is saved for retry.')
+    }
+    // The send action owns execution and queuing; recording can end immediately.
+    void sendPromptToAgent(agentId, text).catch((error: unknown) => {
+      if (voiceMountedRef.current) setVoiceError(`Could not send voice message: ${error instanceof Error ? error.message : String(error)}`)
+    })
+  }, [appendVoiceTranscript, sendPromptToAgent])
+
+  const transcribeVoiceBlob = useCallback(async (blob: Blob, mode: SpeechTranscriptionMode, agentId?: string) => {
     if (!voiceMountedRef.current) return
     voiceRequestRef.current?.abort()
     const controller = new AbortController()
     voiceRequestRef.current = controller
-    setRetryRecording({ blob, mode })
+    setRetryRecording({ blob, mode, agentId })
+    useAgentVoiceStore.setState({ agentId: agentId ?? null })
     setVoicePhase('processing')
     setVoiceError('')
     try {
@@ -1487,9 +1506,9 @@ export function AgentResponseConsole() {
         if (controller.signal.aborted) return
         const result = await transcribeAudioLocally(audio, localSpeechProgress, { signal: controller.signal, language: speechSettings.language })
         if (!voiceMountedRef.current || controller.signal.aborted) return
-        appendVoiceTranscript(result.text)
+        deliverVoiceTranscript(result.text, agentId)
         setRetryRecording(null)
-        settleVoiceStatus(`Transcript added · local ${result.backend === 'webgpu' ? 'GPU' : 'CPU'}`)
+        settleVoiceStatus(agentId ? 'Voice message sent to agent' : `Transcript added · local ${result.backend === 'webgpu' ? 'GPU' : 'CPU'}`)
       } else {
         setVoiceStatus('Preparing audio for accurate transcription')
         const audio = await decodeAudioToMono16Khz(blob)
@@ -1512,9 +1531,9 @@ export function AgentResponseConsole() {
         )
         if (!result.ok) throw new Error(apiErrorMessage(result.error))
         if (!voiceMountedRef.current || controller.signal.aborted) return
-        appendVoiceTranscript(result.data.text)
+        deliverVoiceTranscript(result.data.text, agentId)
         setRetryRecording(null)
-        settleVoiceStatus('Transcript added · online accuracy')
+        settleVoiceStatus(agentId ? 'Voice message sent to agent' : 'Transcript added · online accuracy')
       }
     } catch (error) {
       if (!voiceMountedRef.current || controller.signal.aborted) return
@@ -1531,7 +1550,7 @@ export function AgentResponseConsole() {
         setSpeechProgress(undefined)
       }
     }
-  }, [appendVoiceTranscript, localSpeechProgress, settleVoiceStatus, speechSettings.language, speechSettings.vocabulary])
+  }, [deliverVoiceTranscript, localSpeechProgress, settleVoiceStatus, speechSettings.language, speechSettings.vocabulary, setVoicePhase])
 
   const stopVoiceRecording = useCallback(() => {
     const recorder = mediaRecorderRef.current
@@ -1541,9 +1560,10 @@ export function AgentResponseConsole() {
     recorder.stop()
   }, [clearVoiceTimers])
 
-  const startVoiceRecording = useCallback(async () => {
+  const startVoiceRecording = useCallback(async (agentId?: string) => {
     if (voicePhase !== 'idle') return
     if (!navigator.mediaDevices?.getUserMedia || typeof MediaRecorder === 'undefined') {
+      useAgentVoiceStore.getState().reset()
       setVoiceError('Voice input is not supported by this browser or desktop runtime.')
       return
     }
@@ -1551,6 +1571,8 @@ export function AgentResponseConsole() {
     if (voiceStatusClearRef.current !== null) window.clearTimeout(voiceStatusClearRef.current)
     voiceStatusClearRef.current = null
     setVoiceError('')
+    setRetryRecording(null)
+    useAgentVoiceStore.setState({ agentId: agentId ?? null })
     setVoiceStatus('Requesting microphone access')
     setVoicePhase('requesting')
 
@@ -1603,7 +1625,7 @@ export function AgentResponseConsole() {
           setVoicePhase('idle')
           return
         }
-        void transcribeVoiceBlob(blob, recordingMode)
+        void transcribeVoiceBlob(blob, recordingMode, agentId)
       }, { once: true })
 
       recorder.start(250)
@@ -1632,11 +1654,12 @@ export function AgentResponseConsole() {
           },
           onNoSpeech: () => {
             if (!voiceMountedRef.current || recorder.state !== 'recording') return
+            if (agentId) recordingDiscardReasonRef.current = 'No speech detected. Click Chat to try again.'
             setVoiceStatus('Checking the recording for quiet speech')
             stopVoiceRecording()
           },
         }, {
-          autoStop: recordingSettings.autoStop,
+          autoStop: agentId ? true : recordingSettings.autoStop,
           pauseDurationMs: recordingSettings.pauseDurationMs,
         })
       } catch {
@@ -1657,7 +1680,23 @@ export function AgentResponseConsole() {
       setVoiceStatus('')
       setVoicePhase('idle')
     }
-  }, [clearVoiceTimers, localSpeechProgress, speechMode, speechSettings, stopMicrophoneTracks, stopVoiceRecording, transcribeVoiceBlob, voicePhase])
+  }, [clearVoiceTimers, localSpeechProgress, speechMode, speechSettings, stopMicrophoneTracks, stopVoiceRecording, transcribeVoiceBlob, voicePhase, setVoicePhase])
+
+  const pendingVoiceAgentId = useAgentVoiceStore((s) => s.pendingAgentId)
+  const voiceStopRequested = useAgentVoiceStore((s) => s.stopRequested)
+  useEffect(() => {
+    if (!pendingVoiceAgentId || voicePhase !== 'idle' || useAgentVoiceStore.getState().pendingAgentId !== pendingVoiceAgentId) return
+    useAgentVoiceStore.setState({ pendingAgentId: null })
+    void startVoiceRecording(pendingVoiceAgentId)
+  }, [pendingVoiceAgentId, startVoiceRecording, voicePhase])
+
+  useEffect(() => {
+    if (!voiceStopRequested) return
+    useAgentVoiceStore.setState({ stopRequested: false })
+    stopVoiceRecording()
+  }, [voiceStopRequested, stopVoiceRecording])
+
+  useEffect(() => () => useAgentVoiceStore.getState().reset(), [])
 
   const buildMessage = (draftPrompt: string, attachments: AgentTurnAttachment[]): string => {
     const base = draftPrompt.trim() || 'Analyze the attached file.'
@@ -2330,7 +2369,7 @@ export function AgentResponseConsole() {
         }}>Cancel transcription</Button>
       </div>}
       {retryRecording && voicePhase === 'idle' && <div className="flex shrink-0 flex-wrap gap-2 px-3 py-2">
-        <Button size="compact" onClick={() => void transcribeVoiceBlob(retryRecording.blob, retryRecording.mode)}>Retry recording</Button>
+        <Button size="compact" onClick={() => void transcribeVoiceBlob(retryRecording.blob, retryRecording.mode, retryRecording.agentId)}>Retry recording</Button>
         <Button size="compact" variant="quiet" onClick={() => { setRetryRecording(null); setVoiceError(''); setVoiceStatus('Recording discarded.') }}>Discard recording</Button>
       </div>}
       {/* Input area */}

@@ -1,7 +1,7 @@
 import { parsePreferencesBackup, serializePreferencesBackup, type PreferencesBackup } from './preferencesBackup'
 import { readPreferenceValue, savePreferenceEntries } from './preferenceStorage'
 import { applyUiSettings, readUiSettings, UI_SETTINGS_STORAGE_KEY } from './uiSettings'
-import { applyRegistryCardTheme, CONSOLE_PREFS_CHANGED_EVENT, CONSOLE_VISIBILITY_KEY, CONSOLE_WIDTH_KEY, readConsolePreferences, readRegistryPreferences, REGISTRY_PREFS_CHANGED_EVENT, REGISTRY_PREFS_KEY, REGISTRY_PREFS_VERSION } from './workspaceSettings'
+import { applyRegistryCardTheme, CONSOLE_PREFS_CHANGED_EVENT, CONSOLE_PARALLEL_CHAT_KEY, CONSOLE_VISIBILITY_KEY, CONSOLE_WIDTH_KEY, readConsolePreferences, readRegistryPreferences, REGISTRY_PREFS_CHANGED_EVENT, REGISTRY_PREFS_KEY, REGISTRY_PREFS_VERSION } from './workspaceSettings'
 
 export type WorkspaceProfile = { id: string; name: string; preferences: PreferencesBackup }
 const KEY = 'automnia-workspace-profiles-v1'
@@ -35,6 +35,7 @@ export function applyWorkspaceProfile(preferences: PreferencesBackup) {
   const result = savePreferenceEntries([
     [UI_SETTINGS_STORAGE_KEY, JSON.stringify(values.appearance)],
     [REGISTRY_PREFS_KEY, JSON.stringify({ ...values.registry, overlayPresetVersion: REGISTRY_PREFS_VERSION })],
+    [CONSOLE_PARALLEL_CHAT_KEY, values.console.parallelAgentChat ? 'on' : 'off'],
     [CONSOLE_VISIBILITY_KEY, values.console.visible ? 'visible' : 'hidden'],
     [CONSOLE_WIDTH_KEY, String(values.console.width)],
   ])

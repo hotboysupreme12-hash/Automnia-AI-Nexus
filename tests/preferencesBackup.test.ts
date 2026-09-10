@@ -18,3 +18,12 @@ test('legacy clipboard backups migrate only explicit preferences and strip unkno
   assert.deepEqual(parsePreferencesBackup(JSON.stringify({ version: 1, [UI_SETTINGS_STORAGE_KEY]: { ...DEFAULT_UI_SETTINGS, apiKey: 'excluded' }, unexpected: 'excluded' })), { appearance: DEFAULT_UI_SETTINGS })
   assert.throws(() => parsePreferencesBackup('{"version":1,"credentials":{"key":"excluded"}}'), /No recognized/)
 })
+
+
+test('older console backups keep parallel chat off and an explicit on value survives export', () => {
+  const legacy = { visible: true, width: 420, rememberDrafts: true }
+  const backup = JSON.stringify({ format: 'automnia-preferences', version: 2, preferences: { console: legacy } })
+  assert.equal(parsePreferencesBackup(backup).console?.parallelAgentChat, false)
+  const values = { console: { ...DEFAULT_CONSOLE_PREFERENCES, parallelAgentChat: true } }
+  assert.deepEqual(parsePreferencesBackup(serializePreferencesBackup(values)), values)
+})

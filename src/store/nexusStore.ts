@@ -1,3 +1,5 @@
+import { dispatchAgentChat } from './agentChatDispatch'
+import { readConsolePreferences } from '../components/settings/workspaceSettings'
 import { createTextEventBatcher } from './textEventBatcher'
 import { create } from 'zustand'
 import { persist } from 'zustand/middleware'
@@ -3467,6 +3469,20 @@ export const useNexusStore = create<NexusState>()(
           }
           const useCoordination = shouldUseAdHocCoordinationForPrompt(normalized, laneAgents)
           const adHoc = useCoordination ? startAdHocCoordination(normalized, laneAgents) : null
+          if (queuedLaneAgents.length) {
+            queueCommandConsoleFollowups(
+              queuedLaneAgents,
+              normalized,
+              attachments,
+              selectedQueueOptions,
+              'selected',
+              (agent, _index, updatedPrompt) => {
+                if (!useCoordination) return updatedPrompt
+                const allIndex = Math.max(0, allLaneAgents.findIndex((entry) => entry.id === agent.id))
+                return buildParallelLanePrompt(agent, updatedPrompt, allLaneAgents, allIndex)
+              },
+            )
+          }
           const contextAgentIds = allContextAgentIds
           if (useCoordination) {
             await Promise.allSettled(laneAgents.map((agent, index) =>
@@ -3483,8 +3499,8 @@ export const useNexusStore = create<NexusState>()(
               }),
             ))
           } else {
-            for (const agent of laneAgents) {
-              const result = await runAgentPrompt(agent.id, normalized, {
+            await dispatchAgentChat(laneAgents, readConsolePreferences().parallelAgentChat, (agent) =>
+              runAgentPrompt(agent.id, normalized, {
                 displayPrompt: normalized,
                 includeRecentContext: true,
                 freshSession: explicitFreshSession,
@@ -3494,25 +3510,11 @@ export const useNexusStore = create<NexusState>()(
                 sessionKey: commandConsoleSessionKey(agent.id),
                 forceOpenClawRuntime: true,
                 contextAgentIds,
-              })
-              if (result?.cancelled) break
-            }
-          }
-          if (useCoordination) finishAdHocCoordination(adHoc?.id || null, `Ad hoc coordination completed for ${laneAgents.length} selected lanes`)
-          if (queuedLaneAgents.length) {
-            queueCommandConsoleFollowups(
-              queuedLaneAgents,
-              normalized,
-              attachments,
-              selectedQueueOptions,
-              'selected',
-              (agent, _index, updatedPrompt) => {
-                if (!useCoordination) return updatedPrompt
-                const allIndex = Math.max(0, allLaneAgents.findIndex((entry) => entry.id === agent.id))
-                return buildParallelLanePrompt(agent, updatedPrompt, allLaneAgents, allIndex)
-              },
+              }),
             )
           }
+          if (useCoordination) finishAdHocCoordination(adHoc?.id || null, `Ad hoc coordination completed for ${laneAgents.length} selected lanes`)
+
         },
         sendPromptToActiveParty: async (prompt, attachments) => {
           if (consoleClearPromise) await consoleClearPromise
@@ -3543,6 +3545,20 @@ export const useNexusStore = create<NexusState>()(
           }
           const useCoordination = shouldUseAdHocCoordinationForPrompt(normalized, laneAgents)
           const adHoc = useCoordination ? startAdHocCoordination(normalized, laneAgents) : null
+          if (queuedLaneAgents.length) {
+            queueCommandConsoleFollowups(
+              queuedLaneAgents,
+              normalized,
+              attachments,
+              partyQueueOptions,
+              'party',
+              (agent, _index, updatedPrompt) => {
+                if (!useCoordination) return updatedPrompt
+                const allIndex = Math.max(0, allLaneAgents.findIndex((entry) => entry.id === agent.id))
+                return buildParallelLanePrompt(agent, updatedPrompt, allLaneAgents, allIndex)
+              },
+            )
+          }
           const contextAgentIds = allContextAgentIds
           if (useCoordination) {
             await Promise.allSettled(laneAgents.map((agent, index) =>
@@ -3559,8 +3575,8 @@ export const useNexusStore = create<NexusState>()(
               }),
             ))
           } else {
-            for (const agent of laneAgents) {
-              const result = await runAgentPrompt(agent.id, normalized, {
+            await dispatchAgentChat(laneAgents, readConsolePreferences().parallelAgentChat, (agent) =>
+              runAgentPrompt(agent.id, normalized, {
                 displayPrompt: normalized,
                 includeRecentContext: true,
                 freshSession: explicitFreshSession,
@@ -3570,25 +3586,11 @@ export const useNexusStore = create<NexusState>()(
                 sessionKey: commandConsoleSessionKey(agent.id),
                 forceOpenClawRuntime: true,
                 contextAgentIds,
-              })
-              if (result?.cancelled) break
-            }
-          }
-          if (useCoordination) finishAdHocCoordination(adHoc?.id || null, `Ad hoc coordination completed for ${laneAgents.length} party lanes`)
-          if (queuedLaneAgents.length) {
-            queueCommandConsoleFollowups(
-              queuedLaneAgents,
-              normalized,
-              attachments,
-              partyQueueOptions,
-              'party',
-              (agent, _index, updatedPrompt) => {
-                if (!useCoordination) return updatedPrompt
-                const allIndex = Math.max(0, allLaneAgents.findIndex((entry) => entry.id === agent.id))
-                return buildParallelLanePrompt(agent, updatedPrompt, allLaneAgents, allIndex)
-              },
+              }),
             )
           }
+          if (useCoordination) finishAdHocCoordination(adHoc?.id || null, `Ad hoc coordination completed for ${laneAgents.length} party lanes`)
+
         },
         stopActiveAgentRuns: (agentIds) => {
           const targets = (agentIds?.length ? agentIds : get().busyAgentIds)

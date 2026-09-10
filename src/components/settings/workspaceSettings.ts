@@ -17,6 +17,7 @@ export type RegistryPreferences = {
 export type ConsolePreferences = {
   visible: boolean
   width: number
+  parallelAgentChat: boolean
   rememberDrafts: boolean
 }
 
@@ -25,6 +26,7 @@ export const REGISTRY_PREFS_CHANGED_EVENT = 'automnia:registry-preferences-chang
 export const REGISTRY_PREFS_VERSION = 8
 export const CONSOLE_VISIBILITY_KEY = 'automnia-agent-console-visibility'
 export const CONSOLE_WIDTH_KEY = 'automnia-agent-console-width'
+export const CONSOLE_PARALLEL_CHAT_KEY = 'automnia-agent-chat-parallel'
 export const CONSOLE_DRAFTS_KEY = 'automnia-command-draft-persistence'
 export const CONSOLE_PREFS_CHANGED_EVENT = 'automnia:console-preferences-changed'
 
@@ -83,6 +85,7 @@ export function applyRegistryCardTheme(preferences: Pick<RegistryPreferences, 'o
 export const DEFAULT_CONSOLE_PREFERENCES: ConsolePreferences = {
   visible: true,
   width: 420,
+  parallelAgentChat: false,
   rememberDrafts: true,
 }
 
@@ -138,6 +141,7 @@ export function readConsolePreferences(): ConsolePreferences {
   return {
     visible: readPreferenceValue(CONSOLE_VISIBILITY_KEY) !== 'hidden',
     width,
+    parallelAgentChat: readPreferenceValue(CONSOLE_PARALLEL_CHAT_KEY) === 'on',
     rememberDrafts: readPreferenceValue(CONSOLE_DRAFTS_KEY) !== 'off',
   }
 }
@@ -146,8 +150,9 @@ export function saveConsolePreferences(preferences: ConsolePreferences): void {
   const normalized: ConsolePreferences = {
     visible: Boolean(preferences.visible),
     width: Math.max(360, Math.min(760, Math.round(preferences.width))),
+    parallelAgentChat: preferences.parallelAgentChat !== false,
     rememberDrafts: Boolean(preferences.rememberDrafts),
   }
-  savePreferenceEntries([[CONSOLE_VISIBILITY_KEY, normalized.visible ? 'visible' : 'hidden'], [CONSOLE_WIDTH_KEY, String(normalized.width)], [CONSOLE_DRAFTS_KEY, normalized.rememberDrafts ? 'on' : 'off']])
+  savePreferenceEntries([[CONSOLE_PARALLEL_CHAT_KEY, normalized.parallelAgentChat ? 'on' : 'off'], [CONSOLE_VISIBILITY_KEY, normalized.visible ? 'visible' : 'hidden'], [CONSOLE_WIDTH_KEY, String(normalized.width)], [CONSOLE_DRAFTS_KEY, normalized.rememberDrafts ? 'on' : 'off']])
   if (typeof window !== 'undefined') window.dispatchEvent(new CustomEvent<ConsolePreferences>(CONSOLE_PREFS_CHANGED_EVENT, { detail: normalized }))
 }

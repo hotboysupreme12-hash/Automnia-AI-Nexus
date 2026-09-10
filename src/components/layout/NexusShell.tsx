@@ -1,3 +1,4 @@
+import { useAgentVoiceStore } from '../../speech/agentVoiceStore'
 import { BackgroundNotifications } from './BackgroundNotifications'
 import { ToolApprovals } from './ToolApprovals'
 import { FirstSuccessGuide } from './FirstSuccessGuide'
@@ -251,6 +252,10 @@ export function NexusShell() {
   const [cronClearBusy, setCronClearBusy] = useState(false)
   const [cronClearTargets, setCronClearTargets] = useState<RuntimeCronJob[]>([])
   const [cronNotice, setCronNotice] = useState<ShellNotice | null>(null)
+  const pendingVoiceAgentId = useAgentVoiceStore((s) => s.pendingAgentId)
+  useEffect(() => {
+    if (pendingVoiceAgentId) setAgentConsoleVisible(true)
+  }, [pendingVoiceAgentId])
   const [isAgentConsoleVisible, setAgentConsoleVisible] = useState(() => readConsolePreferences().visible)
   const [agentConsoleWidth, setAgentConsoleWidth] = useState<number | null>(() => readConsolePreferences().width)
   const [isAgentSplitResizing, setAgentSplitResizing] = useState(false)

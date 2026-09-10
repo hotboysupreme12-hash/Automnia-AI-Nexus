@@ -187,7 +187,7 @@ import { createBufferedAgentTurnService } from './services/agents/agentTurnServi
 import { createGatewayAgentTurnService } from './services/agents/gatewayAgentTurnService'
 import { createAgentRuntimeService } from './services/agents/agentRuntimeService'
 import { createAgentStreamingService } from './services/agents/agentStreamingService'
-import { AUTOMNIA_PRODUCT_IDENTITY, composeAutomniaContinuationPrompt } from './services/agents/promptEfficiencyPolicy'
+import { AUTOMNIA_PRODUCT_IDENTITY, AUTOMNIA_TASK_EXECUTION_POLICY, composeAutomniaContinuationPrompt } from './services/agents/promptEfficiencyPolicy'
 import {
   createRuntimeStatusService,
   type RuntimeStatusService,
@@ -14347,6 +14347,7 @@ function composeAgentDoctrinePrompt(
     return [
       'Google Vertex Gemini compact tool-write turn.',
       AUTOMNIA_PRODUCT_IDENTITY,
+      AUTOMNIA_TASK_EXECUTION_POLICY,
       executionWorkspace ? `Workspace: ${executionWorkspace}` : '',
       filenameHints.length
         ? `Target file(s): ${filenameHints.join(', ')}`
@@ -14369,6 +14370,7 @@ function composeAgentDoctrinePrompt(
     return [
       'Automnia credits compact runtime context:',
       AUTOMNIA_PRODUCT_IDENTITY,
+      AUTOMNIA_TASK_EXECUTION_POLICY,
       `Name: ${identity.name || agentId}`,
       `Role: ${identity.role || 'active Automnia agent'}`,
       identity.workspace ? `Workspace: ${identity.workspace}` : '',
@@ -14387,6 +14389,7 @@ function composeAgentDoctrinePrompt(
   return [
     'Interactive runtime context:',
     AUTOMNIA_PRODUCT_IDENTITY,
+    AUTOMNIA_TASK_EXECUTION_POLICY,
     `- Doctrine folder: ${profileDir}`,
     executionWorkspace ? `- Workspace folder: ${executionWorkspace}` : '',
     vertexCompactMode

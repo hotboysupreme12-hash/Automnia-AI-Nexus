@@ -195,7 +195,6 @@ export function createGatewayAgentTurnService(options: GatewayAgentTurnServiceOp
     const clawTalkSetupIntent = options.isClawTalkSetupIntentMessage(intentText)
     const clawTalkIntent = clawTalkSetupIntent || options.isClawTalkIntentMessage(intentText)
     let agentPrimaryModelId = options.readAgentPrimaryModelIdSync(agent)
-    const vertexCompactMode = options.isGoogleGeminiModelId(agentPrimaryModelId)
     const effectiveThinking = options.thinkingForOpenClawRuntimeModel(
       agentPrimaryModelId,
       clawTalkIntent ? 'off' : requestedThinking,
@@ -210,7 +209,9 @@ export function createGatewayAgentTurnService(options: GatewayAgentTurnServiceOp
     const context = await options.resolveAgentRunContext(agent)
     const sessionScope = options.agentTurnSessionScope(agent, requestedSessionKey)
     const explicitFreshSession = /^\s*\/new\b/i.test(rawMessage)
-    const wantsFreshSession = explicitFreshSession || vertexCompactMode
+    // Compact prompts must not erase the conversation on every Gemini turn.
+    // Explicit /new and the recovery paths below own session resets.
+    const wantsFreshSession = explicitFreshSession
     const cleanedMessage = explicitFreshSession ? rawMessage.replace(/^\s*\/new\b\s*/i, '') : rawMessage
     const filenameResolution = await options.resolveFilenameHintsForMessage(cleanedMessage, context.executionWorkspace)
     let effectiveMessage = filenameResolution.message

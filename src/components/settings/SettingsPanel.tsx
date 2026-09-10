@@ -91,7 +91,7 @@ const SETTINGS_SECTIONS: Array<{
   { id: 'workspace', label: 'Workspace', description: 'Registry and console', keywords: 'agents registry cards grid list sort filter console width drafts layout' },
   { id: 'voice', label: 'Voice', description: 'Microphone and transcription', keywords: 'speech microphone local cloud online silence pause noise echo gain recording' },
   { id: 'missions', label: 'Missions', description: 'Deployment defaults', keywords: 'mission objective duration risk complexity collaboration evidence build test' },
-  { id: 'agents', label: 'Agent runtime', description: 'Heartbeat and reasoning', keywords: 'agent runtime heartbeat timeout thinking fast parallel recovery continuous' },
+  { id: 'agents', label: 'Agent runtime', description: 'Parallel chat and reasoning', keywords: 'agent runtime heartbeat timeout thinking fast parallel concurrency simultaneous chat commands sequential recovery continuous' },
   { id: 'telegram', label: 'Telegram', description: 'Bot commands and delivery', keywords: 'telegram bot commands agents pairing dm group topics streaming reactions polls media history actions settings' },
   { id: 'logs', label: 'Logs', description: 'Activity and history', keywords: 'logs activity agent runs gateway events tail automnia runtime response history channel telegram sms incoming sent retain trim memory' },
   { id: 'data', label: 'Data & reset', description: 'Backup and recovery', keywords: 'reset default backup export clear console responses simulation party data' },
@@ -740,7 +740,10 @@ export function SettingsPanel({ focusSection = 'account', focusRequest = 0 }: { 
 
   const renderAgents = () => (
     <div className="dui-settings-section" id="settings-section-agents">
-      <SectionHeader section="agents" eyebrow="Bulk policy with an explicit target" />
+      <SectionHeader section="agents" eyebrow="Chat execution and agent policies" />
+      <SettingsCard title="Agent Chat execution" description="Applies immediately to new chat commands, including transcribed voice messages.">
+        <ToggleField label="Run Agent Chat in parallel" hint="Start commands for different agents together without waiting for earlier agents to finish. Turn off to run ordinary multi-agent messages in order. Follow-ups to a busy agent still queue for that agent." checked={consolePreferences.parallelAgentChat} onChange={(value) => updateConsolePreferences({ parallelAgentChat: value }, 'Parallel Agent Chat')} />
+      </SettingsCard>
       <SettingsCard title="Target agents" description="Only fields you explicitly change are applied. Mixed values remain unchanged until edited; Restore runtime defaults replaces every field.">
         <div className="dui-settings-targeting" data-target-scope={targetScope}>
           <div className="dui-settings-targeting__head">

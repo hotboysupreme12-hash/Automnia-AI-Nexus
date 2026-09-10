@@ -95,8 +95,8 @@ test('registry card theme is available before a lazy registry paint', () => {
 test('console preferences preserve defaults and clamp unsafe widths', () => {
   storage.clear()
   assert.deepEqual(readConsolePreferences(), DEFAULT_CONSOLE_PREFERENCES)
-  saveConsolePreferences({ visible: false, width: 9_000, rememberDrafts: false })
-  assert.deepEqual(readConsolePreferences(), { visible: false, width: 760, rememberDrafts: false })
+  saveConsolePreferences({ visible: false, width: 9_000, rememberDrafts: false, parallelAgentChat: false })
+  assert.deepEqual(readConsolePreferences(), { visible: false, width: 760, rememberDrafts: false, parallelAgentChat: false })
 })
 
 test('speech settings migrate old records and normalize every functional control', () => {

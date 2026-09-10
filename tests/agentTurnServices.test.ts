@@ -17,12 +17,15 @@ function createAbortedSignal() {
   return controller.signal
 }
 
-test('gateway agent turn service prepares a Gateway chat turn with identity and session metadata', async () => {
+for (const modelId of ['openai:gpt-test', 'google/gemini-3.7-flash']) {
+test(`gateway agent turn service preserves ${modelId} conversation until explicit /new`, async () => {
   const events: Array<{ event: string; data: Record<string, unknown> }> = []
   const promptDumps: Record<string, unknown>[] = []
   let capturedGatewayTurn: Record<string, unknown> | null = null
   let healthMonitorStarts = 0
   let runtimeConfigChecks = 0
+  const deletedSessionIds: string[] = []
+  const continuationFlags: boolean[] = []
   const sessions = new Map<string, string>()
 
   const service = createGatewayAgentTurnService({
@@ -45,8 +48,8 @@ test('gateway agent turn service prepares a Gateway chat turn with identity and 
     isClawTalkSetupIntentMessage: () => false,
     isClawTalkIntentMessage: () => false,
     buildClawTalkRuntimeInstruction: (message) => message,
-    readAgentPrimaryModelIdSync: () => 'openai:gpt-test',
-    isGoogleGeminiModelId: () => false,
+    readAgentPrimaryModelIdSync: () => modelId,
+    isGoogleGeminiModelId: (id) => id.includes('gemini'),
     thinkingForOpenClawRuntimeModel: (_modelId, thinking) => thinking,
     resolveEffectiveAgentFastMode: async () => 'auto',
     resolveEffectiveAgentWorkTimeoutSeconds: async () => 15,
@@ -56,10 +59,13 @@ test('gateway agent turn service prepares a Gateway chat turn with identity and 
     }),
     agentTurnSessionScope: (agentId, key) => `${agentId}:${key || 'default'}`,
     agentTurnSessions: sessions,
-    deleteProviderConversationHistory: () => undefined,
+    deleteProviderConversationHistory: (id) => { deletedSessionIds.push(id) },
     resolveFilenameHintsForMessage: async (message) => ({ message: `${message} resolved` }),
     getPartyMembers: async () => [{ id: 'agent-alpha', name: 'Ada' }],
-    composeAgentDoctrinePrompt: (_agentId, message) => `doctrine:\n${message}`,
+    composeAgentDoctrinePrompt: (_agentId, message, _workspace, _doctrine, continuation = false) => {
+      continuationFlags.push(continuation)
+      return `doctrine:\n${message}`
+    },
     runCwdForContext: (context) => context.executionWorkspace,
     agentWorkTimeoutWrapperMs: (seconds) => seconds * 1000,
     appendAgentPromptDump: async (payload) => {
@@ -104,7 +110,30 @@ test('gateway agent turn service prepares a Gateway chat turn with identity and 
   assert.match(String(capturedGatewayTurn?.message), /You are Ada \(agent-alpha\)\./)
   assert.match(String(capturedGatewayTurn?.message), /inspect logs resolved/)
   assert.equal(events.some((entry) => entry.event === 'progress' && entry.data.text === 'Connecting Gateway chat client.'), true)
+
+  const initialSessionId = sessions.get('agent-alpha:console')
+  const runFollowup = (message: string, sessionKey = 'console') => service.runGatewayAgentTurnForStream({
+    agent: 'agent-alpha', message, sessionKey,
+  }, 'observer-1', createAbortSignal(), { route: 'test', note: 'continuity regression' })
+
+  await runFollowup('go ahead')
+  assert.equal(sessions.get('agent-alpha:console'), initialSessionId)
+  assert.equal(capturedGatewayTurn?.freshSession, false)
+  assert.deepEqual(continuationFlags, [false, true])
+  assert.deepEqual(deletedSessionIds, [])
+
+  await runFollowup('different chat', 'other-console')
+  assert.notEqual(sessions.get('agent-alpha:other-console'), initialSessionId)
+  assert.equal(capturedGatewayTurn?.freshSession, true)
+
+  await runFollowup('/new inspect another project')
+  assert.notEqual(sessions.get('agent-alpha:console'), initialSessionId)
+  assert.equal(capturedGatewayTurn?.freshSession, true)
+  assert.deepEqual(deletedSessionIds, [initialSessionId])
+  assert.match(String(capturedGatewayTurn?.message), /inspect another project/)
+  assert.doesNotMatch(String(capturedGatewayTurn?.message), /\/new/)
 })
+}
 
 test('gateway agent turn service resets and retries a stale Codex session for ClawTalk once', async () => {
   const events: Array<{ event: string; data: Record<string, unknown> }> = []
