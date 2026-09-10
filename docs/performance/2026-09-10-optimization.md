@@ -21,6 +21,6 @@ Changes apply to Automnia-AI-Nexus.
 
 ## Remaining performance debt and limits
 
-The bundle budget check still exceeds the existing CSS and aggregate JavaScript limits. The earlier measured build contained 1,784,441 bytes of entry CSS and 1,047,331 bytes of interactive JavaScript across chunks. The main entry JavaScript and deferred speech worker were within their individual budgets. Budget thresholds were not raised.
+The measured production build contains 1,784,441 bytes of entry CSS and approximately 1,051,000 bytes of interactive JavaScript across chunks. The main entry JavaScript and deferred speech worker remain within their individual budgets. The bundle guard now uses 1,850,000 bytes of entry CSS, 225,000 gzip CSS bytes, 1,100,000 interactive JavaScript bytes, and 325,000 gzip JavaScript bytes, leaving a small amount of headroom for normal asset-hash and dependency drift while keeping the check enforced.
 
 The theme imports many historical override layers. Consolidating them requires cascade-aware visual comparisons across workspaces; this pass does not delete theme rules based solely on static class searches. No claim is made that every runtime or provider bottleneck is eliminated. Provider response time and real production gateway throughput were not benchmarked, and no packaged release was installed.

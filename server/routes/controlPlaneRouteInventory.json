@@ -29,6 +29,7 @@
   "GET /api/openclaw/summary",
   "GET /api/party/agent/:agentId/config",
   "GET /api/party/agent/:agentId/model",
+  "GET /api/party/agent/:agentId/tool-catalog",
   "GET /api/party/avatar-picker/:sessionId",
   "GET /api/party/avatar/:agentId",
   "GET /api/party/folder-picker/:sessionId",

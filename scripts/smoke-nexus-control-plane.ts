@@ -83,7 +83,7 @@ for (const fragment of [
   'recruitPartyAgent(recruitRequest)',
   'saveAgentConfig(agentId,',
   'retirePartyAgent(normalized, RETIRE_AGENT_TIMEOUT_MS)',
-  'clearAgentTurnSessions().then',
+  'clearAgentTurnSessions()',
 ]) {
   assert(store.includes(fragment), `nexusStore should use extracted API helper ${fragment}`)
 }

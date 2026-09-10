@@ -209,6 +209,7 @@ async function main() {
       usagePriority: 'provider_first',
       creditBalance: 0,
       creditBalanceUpdatedAt: null,
+      creditUsageBaseline: 0,
       activatedAt: seededAt,
       verifiedAt: seededAt,
     }), true, 'integration fixture must persist an active license before the server starts')
@@ -294,6 +295,7 @@ async function main() {
       usagePriority: 'provider_first',
       creditBalance: 0,
       creditBalanceUpdatedAt: null,
+      creditUsageBaseline: 0,
       activatedAt: seededAt,
       verifiedAt: seededAt,
     })

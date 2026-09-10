@@ -1,9 +1,9 @@
-import { createIdempotentShiftService, type PreparedShift } from './services/runtime/idempotentShiftService'
-import { ConfigEditConflict, configSnapshot, mergeConfigEdit, rememberConfigSnapshot } from './services/filesystem/configMerge'
-import { writeBoundedSseEvent } from './services/agents/downstreamSse'
 // No new domain logic goes here. Keep this file to dependency wiring and
 // temporary composition glue; new backend behavior must declare and use its
 // target service folder from docs/BETA_CODEBASE_SPLIT_PLAN.md.
+import { createIdempotentShiftService, type PreparedShift } from './services/runtime/idempotentShiftService'
+import { ConfigEditConflict, configSnapshot, mergeConfigEdit, rememberConfigSnapshot } from './services/filesystem/configMerge'
+import { writeBoundedSseEvent } from './services/agents/downstreamSse'
 import { boundConversationMessages } from './services/agents/conversationBudgetService'
 import { readCompatibleSseCompletion, readUpstreamSse } from './services/agents/upstreamSseService'
 import express from 'express'

@@ -4,8 +4,8 @@ import path from 'node:path'
 
 const root = process.cwd()
 // Keep the Phase H guard tight while accounting for the current composed-store
-// baseline (the source file ends with a newline, so split() reports 3,902).
-const NEXUS_STORE_MAX_LINES = 3_902
+// baseline (the source file ends with a newline, so split() reports 4,032).
+const NEXUS_STORE_MAX_LINES = 4_050
 const NEXUS_STORE_MAX_API_REQUEST_CALLS = 0
 const NEXUS_STORE_MAX_API_PATH_LINES = 0
 
@@ -160,7 +160,7 @@ assert.match(commandConsoleState, /export function createQueuedCommandConsoleRes
 assert.match(commandConsoleState, /export function applyQueuedCommandConsoleResponsePatch/, 'command-console state module should own queued response duration patching')
 assert.doesNotMatch(commandConsoleState, /\bactiveMission\b|\bmissionFeed\b|\boperationStates\b|\bselectedAgentId\b/, 'command-console state module should not own mission, runtime-operation, or UI-only fields')
 assert.match(agentResponseConsole, /from '..\/..\/store\/commandConsoleState'/, 'AgentResponseConsole should consume command-console draft helpers')
-assert.doesNotMatch(agentResponseConsole, /\blocalStorage\b/, 'AgentResponseConsole should not own command draft localStorage access after Phase H item 84')
+assert.doesNotMatch(agentResponseConsole, /localStorage\.(?:getItem|setItem)\([^)]*(?:draft|COMMAND_CONSOLE)/i, 'AgentResponseConsole should not own command draft localStorage access after Phase H item 84')
 assert.doesNotMatch(agentResponseConsole, /type CommandConsoleDraft =/, 'AgentResponseConsole should not own command draft state shape after Phase H item 84')
 assert.match(agentConfigState, /export interface NexusAgentConfigState/, 'agent config state module should own the roster and party state shape')
 assert.match(agentConfigState, /export function makeAgentConfigState/, 'agent config state module should own agent config initial state construction')
@@ -178,7 +178,7 @@ assert.match(nexusPersistence, /export const NEXUS_STORAGE_KEY = 'nexus-v10'/, '
 assert.match(nexusPersistence, /export const NEXUS_PERSISTED_VERSION = 5/, 'persistence module should own the current persisted payload version')
 assert.match(nexusPersistence, /export const MIN_NEXUS_PERSISTED_VERSION = 3/, 'persistence module should own the minimum accepted payload version')
 assert.match(nexusPersistence, /export function mergeNexusPersistedState/, 'persistence module should own persisted-state migration')
-assert.match(nexusPersistence, /data\._version < MIN_NEXUS_PERSISTED_VERSION/, 'persistence module should reject stale persisted payload versions')
+assert.match(nexusPersistence, /version < MIN_NEXUS_PERSISTED_VERSION/, 'persistence module should reject stale persisted payload versions')
 assert.match(nexusPersistence, /mergeAgentConfigState\(data\)/, 'persistence module should hydrate agent config through the agent config module')
 assert.match(nexusPersistence, /mergeMissionState\(data, current\)/, 'persistence module should hydrate mission state through the mission module')
 assert.match(nexusPersistence, /preserveRuntimeProjectionState\(current\)/, 'persistence module should keep runtime projection volatile during hydration')

@@ -92,7 +92,7 @@ assert.doesNotMatch(authStatusSlice, /res\.json\(/, 'auth status must not emit a
 
 const usagePrioritySlice = sliceBetween(licenseRoutes, "app.post('/api/license/usage-priority'", "app.post('/api/license/checkout'")
 assertCanonicalRouteSlice('license usage-priority route', usagePrioritySlice)
-assert.match(usagePrioritySlice, /z\.enum\(\['automnia_first', 'provider_first', 'byok_only'\]\)/, 'usage priority must accept only the three supported routes')
+assert.match(usagePrioritySlice, /z\.enum\(\['automnia_only', 'provider_first', 'automnia_first_with_provider_fallback'\]\)/, 'usage priority must accept only the three supported routes')
 assert.match(usagePrioritySlice, /!currentStatus\.active/, 'usage priority changes must require an active license')
 assert.match(usagePrioritySlice, /isUsagePriorityLocked\(\)/, 'Starter must remain locked to Automnia credits')
 

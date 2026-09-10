@@ -118,11 +118,11 @@ assert(clawTalkRegistrationBlock.includes('resolveClawTalkConsoleMirrorContext')
 assert(clawTalkRegistrationBlock.includes("emitClawTalkConsoleFrame('final'"), 'ClawTalk route registration should preserve final frame emission')
 
 assert(clawTalkStreamConsoleBlock.includes('options.initializeSseResponse(res)'), 'ClawTalk console stream should remain an SSE endpoint')
-assert(clawTalkStreamConsoleBlock.includes('[...options.clawTalkConsoleEvents].reverse()'), 'ClawTalk console stream should replay buffered events')
+assert(clawTalkStreamConsoleBlock.includes('replayAfterCursor(options.clawTalkConsoleEvents'), 'ClawTalk console stream should replay buffered events')
 assert(clawTalkStreamConsoleBlock.includes("options.writeSseEvent(res, 'heartbeat'"), 'ClawTalk console stream should emit heartbeat events')
 assert(consolePanel.includes("import { createSseFrameParser } from '../../utils/sseStream'"), 'Command Console should parse authenticated ClawTalk SSE fetches')
 assert(consolePanel.includes("fetchControlCenterWithAuth(apiUrl('/api/openclaw/clawtalk-console/stream')"), 'Command Console should use the authenticated fetch helper for the ClawTalk SSE stream')
-assert(consolePanel.includes("headers: { Accept: 'text/event-stream' }"), 'Command Console should request ClawTalk SSE with an event-stream Accept header')
+assert(consolePanel.includes("Accept: 'text/event-stream'"), 'Command Console should request ClawTalk SSE with an event-stream Accept header')
 assert(consolePanel.includes('response.body.getReader()'), 'Command Console should read ClawTalk SSE frames from the fetch response body')
 assert(!consolePanel.includes('new EventSource('), 'Command Console should not use EventSource because it cannot send Authorization headers')
 

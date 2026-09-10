@@ -56,10 +56,10 @@ export function ToolApprovals() {
       </div>
       {current.request.cwd && <p className="break-all text-xs text-slate-400"><span className="font-semibold text-slate-300">Working folder:</span> {current.request.cwd}</p>}
       <div className="grid grid-cols-2 gap-2">
-        <button className="rounded-lg bg-cyan-400 px-3 py-2.5 text-xs font-bold text-slate-950 transition hover:bg-cyan-300 disabled:opacity-50" disabled={busy} onClick={() => void resolve('allow-once')}>Allow once</button>
-        <button className="rounded-lg border border-white/10 bg-white/[0.06] px-3 py-2.5 text-xs font-semibold text-slate-200 transition hover:bg-white/10 disabled:opacity-50" disabled={busy} onClick={() => void resolve('allow-always')}>Always allow command</button>
-        {current.request.agentId && <button className="col-span-2 rounded-lg border border-cyan-300/30 bg-cyan-300/[0.08] px-3 py-2.5 text-xs font-semibold text-cyan-200 transition hover:bg-cyan-300/[0.14] disabled:opacity-50" disabled={busy} onClick={() => void resolve('allow-once', true)}>Grant Full access for this agent</button>}
-        <button className="col-span-2 rounded-lg border border-white/[0.07] px-3 py-2 text-xs text-slate-500 transition hover:border-red-300/30 hover:text-red-200 disabled:opacity-50" disabled={busy} onClick={() => void resolve('deny')}>Deny</button>
+        <button type="button" className="rounded-lg bg-cyan-400 px-3 py-2.5 text-xs font-bold text-slate-950 transition hover:bg-cyan-300 disabled:opacity-50" disabled={busy} onClick={() => void resolve('allow-once')}>Allow once</button>
+        <button type="button" className="rounded-lg border border-white/10 bg-white/[0.06] px-3 py-2.5 text-xs font-semibold text-slate-200 transition hover:bg-white/10 disabled:opacity-50" disabled={busy} onClick={() => void resolve('allow-always')}>Always allow command</button>
+        {current.request.agentId && <button type="button" className="col-span-2 rounded-lg border border-cyan-300/30 bg-cyan-300/[0.08] px-3 py-2.5 text-xs font-semibold text-cyan-200 transition hover:bg-cyan-300/[0.14] disabled:opacity-50" disabled={busy} onClick={() => void resolve('allow-once', true)}>Grant Full access for this agent</button>}
+        <button type="button" className="col-span-2 rounded-lg border border-white/[0.07] px-3 py-2 text-xs text-slate-500 transition hover:border-red-300/30 hover:text-red-200 disabled:opacity-50" disabled={busy} onClick={() => void resolve('deny')}>Deny</button>
       </div>
       {current.request.agentId && <p className="text-xs leading-5 text-slate-400">Changing to Full access stops this turn safely. Send your request again to continue with the new permissions.</p>}
       {error && <p role="alert" className="mt-3 text-sm text-red-300">{error}</p>}

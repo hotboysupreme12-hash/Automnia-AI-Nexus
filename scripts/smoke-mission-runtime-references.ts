@@ -36,9 +36,9 @@ assert.match(typesSource, /cronRunIds\?: string\[\]/)
 assert.match(typesSource, /sessionIds\?: string\[\]/)
 assert.match(typesSource, /sessionKeys\?: string\[\]/)
 
-assert.match(reportPanelSource, /Runtime runs:/)
-assert.match(reportPanelSource, /Cron runs:/)
-assert.match(reportPanelSource, /Sessions:/)
+assert.match(reportPanelSource, /label="Runtime runs"/)
+assert.match(reportPanelSource, /label="Cron runs"/)
+assert.match(reportPanelSource, /label="Sessions"/)
 
 const scripts = packageJson.scripts || {}
 assert.equal(typeof scripts['smoke:mission-runtime-references'], 'string')

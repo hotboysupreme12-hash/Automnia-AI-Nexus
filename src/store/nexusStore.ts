@@ -172,7 +172,7 @@ const bufferedNexusStorage = createBufferedJsonStorage<NexusPersistedPayload>(
     if (typeof window !== 'undefined') window.dispatchEvent(new CustomEvent('automnia:persistence-warning'))
   },
 )
-if (typeof window !== 'undefined') {
+if (typeof window !== 'undefined' && typeof document !== 'undefined') {
   window.addEventListener('pagehide', bufferedNexusStorage.flush)
   window.addEventListener('beforeunload', bufferedNexusStorage.flush)
   document.addEventListener('visibilitychange', () => {

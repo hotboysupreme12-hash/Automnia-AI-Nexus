@@ -88,13 +88,13 @@ assert.match(
 
 assert.match(
   providerModal,
-  /<h3[^>]*>Connect \{label\}<\/h3>/,
-  'provider auth modal must title the path as connecting the provider',
+  /<h3[^>]*>Manage \{label\}<\/h3>/,
+  'provider auth modal must title the provider access path',
 )
 assert.match(
   providerModal,
-  /Connect with your \$\{label\} account/,
-  'provider auth modal must explain OAuth as a provider connection action',
+  /Sign in in your browser\./,
+  'provider auth modal must explain OAuth as a browser sign-in action',
 )
 assert.match(
   providerModal,

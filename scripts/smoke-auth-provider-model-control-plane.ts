@@ -215,7 +215,7 @@ assert(!editor.includes(staleCodexSparkId), 'AgentEditorModal should not expose 
 assert(modelCatalogService.includes("{ id: 'openai/gpt-5.3-codex-spark', alias: 'gpt-5.3-codex-spark' }"), 'Fallback model catalog should expose Codex 5.3 Spark for save/reload consistency')
 assert(modelSelector.includes("const CODEX_5_3_SPARK_MODEL_ID = 'openai/gpt-5.3-codex-spark'"), 'ModelSelectorModal should seed the canonical Codex 5.3 Spark model id')
 assert(modelSelector.includes("name: 'Codex 5.3 Spark'"), 'ModelSelectorModal should label the seeded Codex model as 5.3 Spark')
-assert(modelSelector.includes('const seededCatalog = catalog.some((model) => model.id === CODEX_5_3_SPARK_MODEL_ID)'), 'ModelSelectorModal should keep Codex 5.3 Spark in the selectable catalog')
+assert(modelSelector.includes('catalog.some((model) => model.id === CODEX_5_3_SPARK_MODEL_ID)'), 'ModelSelectorModal should keep Codex 5.3 Spark in the selectable catalog')
 assert(providerAuthApi.includes('export function effectiveAuthStatusForProvider'), 'renderer provider auth API should own effective provider auth status for Codex subscription models')
 assert(providerAuthApi.includes("const canonicalProvider = provider === 'openai-codex' || provider === 'codex' ? 'openai' : provider"), 'renderer provider auth API should migrate legacy Codex labels to the canonical OpenAI auth route')
 assert(editor.includes('configLoadSeqRef.current += 1'), 'AgentEditorModal model save should invalidate stale config loads before applying the save result')

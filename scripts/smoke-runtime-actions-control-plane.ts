@@ -152,7 +152,7 @@ assert(
 )
 assert(runtimeHook.includes('async function runtimeActionRequest<T>'), 'runtime actions should use a shared apiRequest wrapper')
 assert(!runtimeHook.includes('fetchJsonWithTimeout'), 'useRuntimeStatus should not keep a bespoke JSON fetch helper')
-assert(!runtimeHook.includes('apiUrl('), 'useRuntimeStatus should not build raw API URLs for JSON actions')
+assert(!runtimeHook.includes("apiUrl('/api/openclaw"), 'useRuntimeStatus should not build raw API URLs for JSON actions')
 assert(!/\bfetch\s*\(/.test(runtimeHook), 'useRuntimeStatus should not use direct fetch')
 
 for (const fragment of [

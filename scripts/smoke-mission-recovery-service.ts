@@ -22,8 +22,8 @@ assert.match(missionRecoveryService, /\basync function hydrateMissionRecordsFrom
 assert.match(missionRecoveryService, /options\.rehydrateRecurringMissionShifts\(mission, cronState\)/, 'mission recovery should delegate recurring shift projection through the scheduler service boundary')
 assert.match(missionRecoveryService, /options\.armRehydratedMissionTimer\(mission, assignments, activity\)/, 'mission recovery should delegate recovered timer arming through the scheduler service boundary')
 assert.match(missionRecoveryService, /idempotencyKey: `\$\{mission\.id\}:gateway-session-reconciled:\$\{options\.controlCenterStartedAtMs\}`/, 'Gateway reconciliation events should remain idempotent across one startup')
-assert.match(missionRecoveryService, /client\.request\('sessions\.describe', \{ key: job\.sessionKey \}, \{ timeoutMs: 3_000 \}\)/, 'Gateway session reconciliation should verify durable session references')
-assert.match(missionRecoveryService, /gatewayErrorLooksNotFound\(error\) \? 'missing' : 'unavailable'/, 'Gateway session reconciliation should classify missing sessions separately from unavailable Gateway')
+assert.match(missionRecoveryService, /client\.request\('sessions\.describe', \{ key: sessionKey \}, \{ timeoutMs \}\)/, 'Gateway session reconciliation should verify durable session references')
+assert.match(missionRecoveryService, /gatewayErrorLooksNotFound\((?:error|detail)\)\s*\?\s*'missing'(?:\s+as const)?\s*:\s*'unavailable'/, 'Gateway session reconciliation should classify missing sessions separately from unavailable Gateway')
 
 assert.match(controlPlane, /from '\.\/services\/missions\/missionRecoveryService'/, 'controlPlane.ts should import the mission recovery service boundary')
 assert.match(controlPlane, /createMissionRecoveryService\(\{/, 'controlPlane.ts should compose the mission recovery service')

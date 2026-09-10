@@ -174,6 +174,13 @@ assert.deepEqual(layersAfterTypography, [
   { order: 134, name: 'settings-missions-polish' },
   { order: 135, name: 'agent-card-surface' },
   { order: 136, name: 'product-usability' },
+  { order: 137, name: 'agent-settings' },
+  { order: 138, name: 'agent-card-modern' },
+  { order: 139, name: 'agent-chat-modern' },
+  { order: 140, name: 'active-party-graphite' },
+  { order: 141, name: 'flat-workspace-canvas' },
+  { order: 142, name: 'missions-viewport' },
+  { order: 143, name: 'workspace-status-alignment' },
 ], 'global automnia theme layers after typography must remain limited to the approved shell, operator, card, settings, responsive, performance, command-console, monitor, and recruit layers')
 assert.doesNotMatch(theme, /99-mission-quiet-redesign/, 'mission quiet redesign should no longer be a global late layer')
 assert.ok(
@@ -194,7 +201,7 @@ assert.ok(theme.indexOf(agentCardThemesImport) < theme.indexOf(settingsSystemImp
 assert.ok(theme.indexOf(settingsSystemImport) < theme.indexOf(cronJobsSystemImport), 'Settings System must load before the scoped Cron Jobs System')
 assert.ok(theme.indexOf(monitorLogsImport) < theme.indexOf(monitorReadableImport), 'Monitor Logs must load before Monitor Readability')
 assert.ok(theme.includes(obsidianAgentCardsImport), 'Obsidian agent card constraints must remain in the cascade')
-assert.ok(theme.trimEnd().endsWith("@import './styles/automnia-theme/136-product-usability.css';"), 'Shared usability affordances must follow the workspace themes')
+assert.ok(theme.trimEnd().endsWith("@import './styles/automnia-theme/143-workspace-status-alignment.css';"), 'Workspace status alignment must remain the final shared theme layer')
 assert.doesNotMatch(read('src/styles/automnia-theme/136-product-usability.css'), /\.dy-agent-card/, 'Shared affordances must preserve the final agent card artwork')
 assert.match(operatorExperience, /\.dui-recruit-code-editor:focus-within[\s\S]*#071012 !important/, 'focused recruit Markdown editing must retain its dedicated contrast treatment')
 assert.match(horizonCommandCenter, /Each destination has a dedicated hue/, 'navigation selection should document the workspace identity system')
