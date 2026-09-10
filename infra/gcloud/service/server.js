@@ -3,6 +3,7 @@ import express from 'express';
 import { Firestore } from '@google-cloud/firestore';
 import { GoogleAuth, OAuth2Client } from 'google-auth-library';
 import { geminiThinkingConfigFromOpenAiRequest } from './geminiThinking.js';
+import { groupVertexToolResponses } from './vertexToolTurns.js';
 import {
   automniaRelayFallbackModels,
   automniaRelayModel,
@@ -1470,7 +1471,7 @@ function vertexContentsFromOpenAiMessages(messages) {
   }
 
   return {
-    contents,
+    contents: groupVertexToolResponses(contents),
     ...(systemParts.length ? { systemInstruction: { parts: systemParts } } : {}),
   };
 }

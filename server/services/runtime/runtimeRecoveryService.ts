@@ -111,25 +111,28 @@ export function createRuntimeRecoveryService(options: RuntimeRecoveryServiceOpti
       options.clearShutdownPinnedTimers()
       options.stopGatewayHealthMonitor()
       options.stopMissionCronExpirySweep()
-      await options.persistAllMissionRecords(`${reason}:snapshot-before-shutdown`)
-      const sessions = options.clearAgentTurnSessions()
-      const terminatedRuns = await options.terminateAllOpenClawRunsNow(reason)
-      options.stopControlCenterGatewayClient(reason)
-      const pluginSetupTerminals = options.stopAllPluginSetupTerminalSessions(reason)
-      const oauthCallbackServers = await options.closeOAuthCallbackServersForShutdown(reason)
-      const gateway = await options.stopGatewayRuntime(reason).catch((error) => {
-        options.pushGatewayLog('lifecycle', `${reason}: gateway shutdown warning: ${String(error)}`)
-        return null
-      })
-      const lockCleanup = await options.sweepOpenClawSessionLocks(reason, {
+      // A failed save or one broken cleanup must not strand other resources.
+      const attempt = async <T>(label: string, action: () => T | Promise<T>, fallback: T): Promise<T> => {
+        try {
+          return await action()
+        } catch (error) {
+          options.pushGatewayLog('lifecycle', `${reason}: ${label} warning: ${String(error)}`)
+          return fallback
+        }
+      }
+      await attempt('mission snapshot', () => options.persistAllMissionRecords(`${reason}:snapshot-before-shutdown`), null)
+      const sessions = await attempt('session cleanup', () => options.clearAgentTurnSessions(), null)
+      const terminatedRuns = await attempt('run termination', () => options.terminateAllOpenClawRunsNow(reason), [])
+      await attempt('gateway client cleanup', () => options.stopControlCenterGatewayClient(reason), undefined)
+      const pluginSetupTerminals = await attempt('plugin terminal cleanup', () => options.stopAllPluginSetupTerminalSessions(reason), 0)
+      const oauthCallbackServers = await attempt('OAuth cleanup', () => options.closeOAuthCallbackServersForShutdown(reason), null)
+      const gateway = await attempt('gateway shutdown', () => options.stopGatewayRuntime(reason), null)
+      const lockCleanup = await attempt<SessionLockCleanupResult | null>('session lock cleanup', () => options.sweepOpenClawSessionLocks(reason, {
         minIntervalMs: 0,
         minAgeMs: 0,
-      }).catch((error) => {
-        options.pushGatewayLog('lifecycle', `${reason}: session lock cleanup warning: ${String(error)}`)
-        return null
-      })
-      options.clearBrowserProbeCache()
-      options.closeRuntimeLedger()
+      }), null)
+      await attempt('browser cache cleanup', () => options.clearBrowserProbeCache(), undefined)
+      await attempt('ledger close', () => options.closeRuntimeLedger(), undefined)
       return {
         sessions,
         terminatedRuns,

@@ -226,3 +226,15 @@ test('processExitCleanup performs synchronous best-effort runtime cleanup', () =
   assert.equal(state.missionCronStops, 1)
   assert.equal(state.ledgerCloses, 1)
 })
+
+
+test('failed mission snapshot still stops workers, terminals, OAuth and gateway', async () => {
+  const { service, state } = createHarness({ onPersist: () => { throw new Error('disk full') } })
+  await service.shutdownControlCenterRuntime('desktop quit')
+  assert.deepEqual(state.terminatedNowReasons, ['desktop quit'])
+  assert.deepEqual(state.pluginTerminalStops, ['desktop quit'])
+  assert.deepEqual(state.oauthShutdownReasons, ['desktop quit'])
+  assert.deepEqual(state.gatewayStopReasons, ['desktop quit'])
+  assert.equal(state.ledgerCloses, 1)
+  assert.match(state.logs[0].message, /mission snapshot warning/)
+})

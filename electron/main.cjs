@@ -1511,6 +1511,7 @@ function scheduleControlServerRestart(reason) {
 }
 
 function startControlServerProcess(serverEntry) {
+  if (isQuitting) throw new Error('Desktop is shutting down')
   if (serverProcess?.pid && serverProcess.exitCode === null && !serverProcess.killed) {
     return serverProcess
   }
@@ -1624,7 +1625,8 @@ async function stopControlServerProcess(reason = 'control server cleanup') {
     } catch {
       try { child.kill('SIGTERM') } catch {}
     }
-    if (await waitForProcessExit(child, 4000)) return
+    // The group may still contain workers after its leader exits.
+    await waitForProcessExit(child, 4000)
     try {
       process.kill(-pid, 'SIGKILL')
     } catch {
@@ -1696,8 +1698,11 @@ async function stopRuntimeCompletelyForQuit() {
   } catch (err) {
     appendGatewayLog('lifecycle', `runtime shutdown API failed: ${err?.message || err}`)
   }
-  if (!runtimeShutdownOk) await stopGatewayCompletely()
-  await stopControlServerProcess('desktop quit')
+  try {
+    if (!runtimeShutdownOk) await stopGatewayCompletely()
+  } finally {
+    await stopControlServerProcess('desktop quit')
+  }
 }
 
 async function resetGateway() {
@@ -2794,7 +2799,7 @@ async function runElectronE2eTraySelfTest(win) {
 
 app.whenReady().then(async () => {
   if (!hasSingleInstanceLock) return
-  if (startingUp || startupFailed) return
+  if (startingUp || startupFailed || isQuitting) return
   startingUp = true
 
   try {
@@ -2833,6 +2838,7 @@ app.whenReady().then(async () => {
     // Keep backend work out of Electron's main process so the desktop UI stays responsive.
     const serverChild = startControlServerProcess(serverEntry)
     await waitForSpawnedControlServer(serverChild)
+    if (isQuitting) return
     serverRestartAttempts = 0
 
     console.log('[automnia] server ready on port', APP_PORT)
@@ -2903,7 +2909,7 @@ app.on('before-quit', (event) => {
     startupFailed,
   })
   isQuitting = true
-  if (quitCleanupComplete || startupFailed) return
+  if (quitCleanupComplete || !hasSingleInstanceLock) return
   event.preventDefault()
   void performQuitCleanup().finally(() => {
     if (ELECTRON_E2E) {
@@ -2922,3 +2928,8 @@ app.on('window-all-closed', () => {
   // Keep the desktop process alive so the tray can restore the UI or stop the gateway.
   if (!TRAY_ENABLED) app.quit()
 })
+
+// Terminal/session termination must use the same cleanup as an explicit Quit.
+for (const signal of ['SIGTERM', 'SIGINT', 'SIGHUP']) {
+  process.on(signal, () => app.quit())
+}

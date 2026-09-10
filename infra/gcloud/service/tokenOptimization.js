@@ -31,7 +31,7 @@ function environmentInteger(name, fallback, minimum, maximum) {
   return boundedInteger(process.env[name], fallback, minimum, maximum);
 }
 
-export const AUTOMNIA_RELAY_TOKEN_OPTIMIZATION_VERSION = '2026-08-23.1';
+export const AUTOMNIA_RELAY_TOKEN_OPTIMIZATION_VERSION = '2026-09-10.3';
 
 export const automniaRelayTokenOptimization = Object.freeze({
   version: AUTOMNIA_RELAY_TOKEN_OPTIMIZATION_VERSION,
@@ -147,27 +147,21 @@ function compactMessage(message, imageState, limits) {
   };
 }
 
-function preserveToolCallContext(messages, allConversationMessages) {
-  const toolCallIds = new Set(
-    messages
-      .filter((message) => messageRole(message) === 'tool')
-      .map((message) => String(message?.tool_call_id || '').trim())
-      .filter(Boolean),
-  );
-  if (!toolCallIds.size) return messages;
-  const existingCallIds = new Set(
-    messages
-      .flatMap((message) => Array.isArray(message?.tool_calls) ? message.tool_calls : [])
-      .map((call) => String(call?.id || '').trim())
-      .filter(Boolean),
-  );
-  const missing = new Set([...toolCallIds].filter((id) => !existingCallIds.has(id)));
-  if (!missing.size) return messages;
-  const predecessors = allConversationMessages.filter((message) => {
-    if (messageRole(message) !== 'assistant' || !Array.isArray(message?.tool_calls)) return false;
-    return message.tool_calls.some((call) => missing.has(String(call?.id || '').trim()));
-  });
-  return [...predecessors.slice(-2), ...messages];
+function conversationUnits(messages) {
+  const units = [];
+  for (const message of messages) {
+    const previous = units.at(-1);
+    const first = previous?.[0];
+    const toolResult = messageRole(message) === 'tool' || messageRole(message) === 'function';
+    // A parallel tool batch is indivisible: never trim its call separately
+    // from its results, or retain a result without the preceding call.
+    if (toolResult && messageRole(first) === 'assistant' && (first.tool_calls?.length || first.function_call)) {
+      previous.push(message);
+    } else {
+      units.push([message]);
+    }
+  }
+  return units;
 }
 
 export function compactOpenAiMessages(messages, overrides = {}) {
@@ -202,30 +196,50 @@ export function compactOpenAiMessages(messages, overrides = {}) {
     truncatedMessages += Number(shortenedSystem.truncated);
     compactedSystem = [{ role: 'system', content: shortenedSystem.value }];
   }
-  let conversation = conversationMessages
-    .slice(-limits.maxHistoryMessages)
-    .map((message) => {
-      const compacted = compactMessage(message, imageState, limits);
-      truncatedMessages += Number(compacted.truncated);
-      return compacted.value;
-    });
-  conversation = preserveToolCallContext(conversation, conversationMessages);
+  const allUnits = conversationUnits(conversationMessages);
+  // Raw message windows can contain only tools after four round trips. Keep
+  // recent user instructions even then, including the context for "go ahead".
+  const userUnits = allUnits.filter(unit => messageRole(unit[0]) === 'user').slice(-3);
+  const protectedUnits = new Set(userUnits);
+  // The current task includes its completed steps, not just its instruction.
+  // Dropping early reads makes the model repeat them indefinitely. Preserve
+  // this whole turn and compact result text to fit the budget instead.
+  const activeTurnStart = userUnits.length ? allUnits.indexOf(userUnits.at(-1)) : allUnits.length;
+  for (const unit of allUnits.slice(activeTurnStart)) protectedUnits.add(unit);
+  for (const unit of allUnits.slice(-2)) protectedUnits.add(unit);
+  const selectedUnits = new Set(protectedUnits);
+  for (const unit of userUnits) {
+    const preceding = allUnits[allUnits.indexOf(unit) - 1];
+    if (preceding?.length === 1 && messageRole(preceding[0]) === 'assistant' && !preceding[0].tool_calls?.length && !preceding[0].function_call) {
+      selectedUnits.add(preceding);
+    }
+  }
+  let recentCount = 0;
+  for (let index = allUnits.length - 1; index >= 0 && recentCount < limits.maxHistoryMessages; index -= 1) {
+    selectedUnits.add(allUnits[index]);
+    recentCount += allUnits[index].length;
+  }
+  const keptUnits = allUnits.filter(unit => selectedUnits.has(unit));
+  const protectedMessages = new Set();
+  let conversation = keptUnits.flatMap(unit => unit.map((message) => {
+    const compacted = compactMessage(message, imageState, limits);
+    truncatedMessages += Number(compacted.truncated);
+    if (protectedUnits.has(unit)) protectedMessages.add(compacted.value);
+    return compacted.value;
+  }));
   const rebuild = () => [...compactedSystem, ...conversation];
   let compacted = rebuild();
   const originalChars = JSON.stringify(source).length;
   let removedMessages = Math.max(0, conversationMessages.length - conversation.length);
 
-  // Drop older context first, while leaving the newest four messages intact
-  // whenever possible. The previous implementation performed one shortening
-  // pass only, so a large system prompt plus two large current messages could
-  // still exceed the advertised input budget.
+  // Drop old exchanges atomically, retaining the instructions and newest
+  // exchange. Shorten their text below if those alone exceed the budget.
   while (JSON.stringify(compacted).length > inputLimitChars && conversation.length > 2) {
-    const removableIndex = conversation.findIndex((message, index) => index < conversation.length - 4 && messageRole(message) !== 'tool');
-    const fallbackIndex = conversation.findIndex((message, index) => index < conversation.length - 4);
-    const index = removableIndex >= 0 ? removableIndex : fallbackIndex;
-    if (index < 0) break;
-    conversation.splice(index, 1);
-    removedMessages += 1;
+    const removable = conversationUnits(conversation).find(unit => !unit.some(message => protectedMessages.has(message)));
+    if (!removable) break;
+    const removed = new Set(removable);
+    conversation = conversation.filter(message => !removed.has(message));
+    removedMessages += removable.length;
     compacted = rebuild();
   }
 

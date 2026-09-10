@@ -41,6 +41,57 @@ import {
   resolveRelayOutputTokenBudget,
 } from '../infra/gcloud/service/tokenOptimization.js'
 
+function toolExchanges(count, content = 'observed file content') {
+  return Array.from({ length: count }, (_, index) => [
+    { role: 'assistant', content: '', tool_calls: [{ id: `read_${index}`, type: 'function', function: { name: 'read', arguments: '{"path":"theme.liquid"}' } }] },
+    { role: 'tool', tool_call_id: `read_${index}`, content },
+  ]).flat()
+}
+
+function assertPairedTools(messages) {
+  for (const [index, message] of messages.entries()) {
+    if (message.role !== 'assistant' || !message.tool_calls?.length) continue
+    const results = []
+    for (let next = index + 1; messages[next]?.role === 'tool'; next += 1) results.push(messages[next].tool_call_id)
+    assert.deepEqual(results.sort(), message.tool_calls.map(call => call.id).sort())
+  }
+  for (const [index, message] of messages.entries()) {
+    if (message.role !== 'tool') continue
+    assert.ok(messages.slice(0, index).some(prior => prior.tool_calls?.some(call => call.id === message.tool_call_id)))
+  }
+}
+
+test('long tool runs retain the task and the authorization that a short follow-up refers to', () => {
+  const result = compactOpenAiMessages([
+    { role: 'system', content: 'Work on the requested files.' },
+    { role: 'user', content: 'Optimize metadata and schema in the Shopify theme. Work locally; do not publish.' },
+    { role: 'assistant', content: 'I will inspect meta-tags.liquid and update the local theme.' },
+    { role: 'user', content: 'Go ahead with those changes.' },
+    ...toolExchanges(20),
+  ])
+  const users = result.messages.filter(message => message.role === 'user')
+  assert.equal(users.length, 2)
+  assert.match(users[0].content, /Optimize metadata.*do not publish/)
+  assert.match(users[1].content, /Go ahead/)
+  assert.equal(result.messages.filter(message => message.role === 'tool').length, 20, 'completed steps must remain visible so the model does not repeat them')
+  assertPairedTools(result.messages)
+})
+
+test('budget pressure cannot delete the active request or orphan parallel tool results', () => {
+  const calls = ['a', 'b', 'c', 'd'].map(id => ({ id, type: 'function', function: { name: 'read', arguments: '{"path":"README.md"}' } }))
+  const result = compactOpenAiMessages([
+    { role: 'system', content: 'guidance '.repeat(2000) },
+    { role: 'user', content: 'Fix the canonical tag and verify it. Do not publish.' },
+    ...toolExchanges(10, 'large tool output '.repeat(1000)),
+    { role: 'assistant', content: '', tool_calls: calls },
+    ...calls.map(call => ({ role: 'tool', tool_call_id: call.id, content: 'more output '.repeat(1000) })),
+  ], { maxInputTokens: 2000, maxHistoryMessages: 2 })
+  assert.match(result.messages.find(message => message.role === 'user')?.content || '', /Fix the canonical tag.*Do not publish/)
+  assertPairedTools(result.messages)
+  assert.equal(result.messages.filter(message => message.role === 'tool').length, 14)
+  assert.ok(JSON.stringify(result.messages).length <= 8000)
+})
+
 test('hosted relay compacts history, tool output, and repeated inline images while preserving the active turn', () => {
   const huge = 'x'.repeat(30_000)
   const messages = [

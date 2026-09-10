@@ -4525,8 +4525,7 @@ function handleControlCenterShutdown(signalName: 'SIGTERM' | 'SIGINT' | 'SIGHUP'
     clearInterval(desktopParentWatchdogTimer)
     desktopParentWatchdogTimer = null
   }
-  if (shuttingDown && signalName !== 'process exit') {
-    if (!signalShutdownInFlight) return
+  if (signalShutdownInFlight && signalName !== 'process exit') {
     console.warn(`[control-center] ${signalName} received while shutdown is still in progress; forcing exit.`)
     process.exit(1)
   }

@@ -32,8 +32,10 @@ The Cloud/Credits relay applies a server-owned token-efficiency policy to every
 OpenAI-compatible request, so callers cannot accidentally bypass it by using a
 different desktop surface or an older `/api/ai/generate` client. The policy:
 
-- keeps only a bounded recent conversation window and merges system/developer
-  instructions;
+- keeps a bounded recent conversation window, pins the latest three user
+  instructions through long tool runs, preserves the current turn's completed
+  tool steps by shortening results instead of dropping them, and merges
+  system/developer instructions;
 - shortens oversized user, assistant, and tool-result content with a visible
   marker while preserving the head and tail of the result;
 - limits repeated inline images per request and rejects oversized inline image
