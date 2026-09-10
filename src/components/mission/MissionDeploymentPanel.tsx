@@ -33,6 +33,24 @@ function accentVars(accent: MissionAccent): CSSProperties {
 }
 
 export function MissionGlyphIcon({ icon, className = 'dui-flat-glyph' }: { icon: MissionGlyph; className?: string }) {
+  const asset = MISSION_GLYPH_ASSETS[icon]
+
+  if (asset) {
+    return (
+      <img
+        src={asset}
+        alt=""
+        aria-hidden="true"
+        draggable={false}
+        width={48}
+        height={48}
+        loading="eager"
+        decoding="async"
+        className={`dui-mission-glyph ${className}`}
+      />
+    )
+  }
+
   return (
     <img
       src={MISSION_GLYPH_ASSETS[icon]}
@@ -45,6 +63,7 @@ export function MissionGlyphIcon({ icon, className = 'dui-flat-glyph' }: { icon:
 }
 
 function FlatGlyph({ icon }: { icon: MissionGlyph }) {
+  // Use the authored mission assets so presets and option controls share one icon language.
   return <MissionGlyphIcon icon={icon} className="dui-flat-glyph" />
 }
 
