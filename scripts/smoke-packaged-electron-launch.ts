@@ -177,16 +177,16 @@ try {
     cwd: launcherCwd,
     env,
     windowsHide: true,
-    stdio: ['ignore', 'pipe', 'pipe'],
+    // Do not let descendant Electron processes inherit CI's stdout/stderr
+    // handles; on Windows that can keep the PowerShell pipeline open after
+    // the packaged launcher has completed its smoke-test work.
+    stdio: ['ignore', 'ignore', 'ignore'],
   })
-  let launcherOutput = ''
-  launcher.stdout?.on('data', (chunk: Buffer) => { launcherOutput += chunk.toString('utf8') })
-  launcher.stderr?.on('data', (chunk: Buffer) => { launcherOutput += chunk.toString('utf8') })
 
   const launcherStatus = await new Promise<number | null>((resolve, reject) => {
     const timeout = setTimeout(() => {
       terminatePackagedLauncher(launcher)
-      reject(new Error(`packaged launcher did not exit within ${launcherExitTimeoutMs / 1000}s\n${launcherOutput}`))
+      reject(new Error(`packaged launcher did not exit within ${launcherExitTimeoutMs / 1000}s`))
     }, launcherExitTimeoutMs)
     launcher.once('error', reject)
     launcher.once('exit', (code) => {
