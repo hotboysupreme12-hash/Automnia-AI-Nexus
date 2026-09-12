@@ -240,25 +240,45 @@ async function runElectronCase(options: ElectronCaseOptions) {
   child.stderr.on('data', append)
 
   const status = await new Promise<number | null>((resolve, reject) => {
+    let forceKillTimer: ReturnType<typeof setTimeout> | undefined
+    let forcedResolveTimer: ReturnType<typeof setTimeout> | undefined
     const timeout = setTimeout(() => {
       timedOut = true
-      if (!child.pid) return
+      if (!child.pid) {
+        resolve(null)
+        return
+      }
       terminateProcessTree(child.pid)
       // Electron can finish application cleanup while its launcher process
       // remains alive on macOS. Reap that stale wrapper after a short grace
       // period so one smoke case cannot hold the suite open indefinitely.
-      setTimeout(() => {
+      forceKillTimer = setTimeout(() => {
         if (child.exitCode !== null || child.signalCode !== null || !child.pid) return
         try {
           process.kill(child.pid, 'SIGKILL')
         } catch {
           // The process may have exited between the checks.
         }
+        // Windows can finish the Electron cleanup sequence without emitting
+        // the launcher's exit event. Resolve after the forced-kill grace so
+        // the assertions can accept a completed cleanup or report a bounded
+        // failure instead of leaving CI hung forever.
+        forcedResolveTimer = setTimeout(() => {
+          if (child.exitCode !== null || child.signalCode !== null) return
+          resolve(null)
+        }, 2_000)
       }, 2_000)
     }, timeoutMs)
-    child.once('error', reject)
+    child.once('error', (error) => {
+      clearTimeout(timeout)
+      if (forceKillTimer) clearTimeout(forceKillTimer)
+      if (forcedResolveTimer) clearTimeout(forcedResolveTimer)
+      reject(error)
+    })
     child.once('exit', (code) => {
       clearTimeout(timeout)
+      if (forceKillTimer) clearTimeout(forceKillTimer)
+      if (forcedResolveTimer) clearTimeout(forcedResolveTimer)
       resolve(code)
     })
   })
