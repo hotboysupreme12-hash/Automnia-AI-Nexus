@@ -106,6 +106,9 @@ const unsignedDirectoryPackage = requestedArgs.includes('--unsigned') || process
 const forwardedArgs = requestedArgs.filter((arg) => arg !== '--unsigned')
 const hasPublishMode = forwardedArgs.some((arg, index) => arg === '--publish' || arg.startsWith('--publish=') || forwardedArgs[index - 1] === '--publish')
 const publishArgs = hasPublishMode ? [] : ['--publish', 'never']
+const windowsInstallerAppOutDirArgs = process.platform === 'win32' && forwardedArgs.includes('--win') && !forwardedArgs.includes('--dir')
+  ? ['--config.directories.appOutDir=release/win-installer-unpacked']
+  : []
 const signingOverrideArgs = unsignedDirectoryPackage
   ? [
       '--config.win.signAndEditExecutable=false',
@@ -334,7 +337,7 @@ function killGeneratedWindowsPackageProcesses(target) {
 function cleanGeneratedWindowsPackage() {
   if (process.platform !== 'win32') return
 
-  const target = path.resolve(root, 'release', 'win-unpacked')
+  const target = path.resolve(root, 'release', forwardedArgs.includes('--dir') ? 'win-unpacked' : 'win-installer-unpacked')
   const rootWithSeparator = root.endsWith(path.sep) ? root : `${root}${path.sep}`
   if (target === root || !target.startsWith(rootWithSeparator)) {
     throw new Error(`Refusing to clean package output outside the project: ${target}`)
@@ -416,7 +419,7 @@ if (vendorPrep.status !== 0) {
 
 cleanGeneratedWindowsPackage()
 
-const child = spawn(command, [electronBuilderCli, ...forwardedArgs, ...publishArgs, ...signingOverrideArgs], {
+const child = spawn(command, [electronBuilderCli, ...forwardedArgs, ...publishArgs, ...signingOverrideArgs, ...windowsInstallerAppOutDirArgs], {
   cwd: root,
   stdio: 'inherit',
   shell: false,
