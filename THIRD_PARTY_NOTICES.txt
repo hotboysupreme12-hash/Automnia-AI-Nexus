@@ -251,57 +251,57 @@ node_modules/@humanwhocodes/retry@0.4.3
   License: Apache-2.0
 node_modules/@img/colour@1.1.0
   License: MIT
-node_modules/@img/sharp-darwin-arm64@0.35.3
+node_modules/@img/sharp-darwin-arm64@0.35.4
   License: Apache-2.0
-node_modules/@img/sharp-darwin-x64@0.35.3
+node_modules/@img/sharp-darwin-x64@0.35.4
   License: Apache-2.0
-node_modules/@img/sharp-freebsd-wasm32@0.35.3
+node_modules/@img/sharp-freebsd-wasm32@0.35.4
   License: Apache-2.0
-node_modules/@img/sharp-libvips-darwin-arm64@1.3.2
+node_modules/@img/sharp-libvips-darwin-arm64@1.3.3
   License: LGPL-3.0-or-later
-node_modules/@img/sharp-libvips-darwin-x64@1.3.2
+node_modules/@img/sharp-libvips-darwin-x64@1.3.3
   License: LGPL-3.0-or-later
-node_modules/@img/sharp-libvips-linux-arm@1.3.2
+node_modules/@img/sharp-libvips-linux-arm@1.3.3
   License: LGPL-3.0-or-later
-node_modules/@img/sharp-libvips-linux-arm64@1.3.2
+node_modules/@img/sharp-libvips-linux-arm64@1.3.3
   License: LGPL-3.0-or-later
-node_modules/@img/sharp-libvips-linux-ppc64@1.3.2
+node_modules/@img/sharp-libvips-linux-ppc64@1.3.3
   License: LGPL-3.0-or-later
-node_modules/@img/sharp-libvips-linux-riscv64@1.3.2
+node_modules/@img/sharp-libvips-linux-riscv64@1.3.3
   License: LGPL-3.0-or-later
-node_modules/@img/sharp-libvips-linux-s390x@1.3.2
+node_modules/@img/sharp-libvips-linux-s390x@1.3.3
   License: LGPL-3.0-or-later
-node_modules/@img/sharp-libvips-linux-x64@1.3.2
+node_modules/@img/sharp-libvips-linux-x64@1.3.3
   License: LGPL-3.0-or-later
-node_modules/@img/sharp-libvips-linuxmusl-arm64@1.3.2
+node_modules/@img/sharp-libvips-linuxmusl-arm64@1.3.3
   License: LGPL-3.0-or-later
-node_modules/@img/sharp-libvips-linuxmusl-x64@1.3.2
+node_modules/@img/sharp-libvips-linuxmusl-x64@1.3.3
   License: LGPL-3.0-or-later
-node_modules/@img/sharp-linux-arm@0.35.3
+node_modules/@img/sharp-linux-arm@0.35.4
   License: Apache-2.0
-node_modules/@img/sharp-linux-arm64@0.35.3
+node_modules/@img/sharp-linux-arm64@0.35.4
   License: Apache-2.0
-node_modules/@img/sharp-linux-ppc64@0.35.3
+node_modules/@img/sharp-linux-ppc64@0.35.4
   License: Apache-2.0
-node_modules/@img/sharp-linux-riscv64@0.35.3
+node_modules/@img/sharp-linux-riscv64@0.35.4
   License: Apache-2.0
-node_modules/@img/sharp-linux-s390x@0.35.3
+node_modules/@img/sharp-linux-s390x@0.35.4
   License: Apache-2.0
-node_modules/@img/sharp-linux-x64@0.35.3
+node_modules/@img/sharp-linux-x64@0.35.4
   License: Apache-2.0
-node_modules/@img/sharp-linuxmusl-arm64@0.35.3
+node_modules/@img/sharp-linuxmusl-arm64@0.35.4
   License: Apache-2.0
-node_modules/@img/sharp-linuxmusl-x64@0.35.3
+node_modules/@img/sharp-linuxmusl-x64@0.35.4
   License: Apache-2.0
-node_modules/@img/sharp-wasm32@0.35.3
+node_modules/@img/sharp-wasm32@0.35.4
   License: Apache-2.0 AND LGPL-3.0-or-later AND MIT
-node_modules/@img/sharp-webcontainers-wasm32@0.35.3
+node_modules/@img/sharp-webcontainers-wasm32@0.35.4
   License: Apache-2.0
-node_modules/@img/sharp-win32-arm64@0.35.3
+node_modules/@img/sharp-win32-arm64@0.35.4
   License: Apache-2.0 AND LGPL-3.0-or-later
-node_modules/@img/sharp-win32-ia32@0.35.3
+node_modules/@img/sharp-win32-ia32@0.35.4
   License: Apache-2.0 AND LGPL-3.0-or-later
-node_modules/@img/sharp-win32-x64@0.35.3
+node_modules/@img/sharp-win32-x64@0.35.4
   License: Apache-2.0 AND LGPL-3.0-or-later
 node_modules/@isaacs/fs-minipass@4.0.1
   License: ISC
@@ -485,7 +485,7 @@ node_modules/@typescript-eslint/visitor-keys@8.62.1
   License: MIT
 node_modules/@vitejs/plugin-react@5.2.0
   License: MIT
-node_modules/@xmldom/xmldom@0.8.14
+node_modules/@xmldom/xmldom@0.8.15
   License: MIT
 node_modules/abbrev@4.0.0
   License: ISC
@@ -495,7 +495,7 @@ node_modules/acorn-jsx@5.3.2
   License: MIT
 node_modules/acorn@8.17.0
   License: MIT
-node_modules/adm-zip@0.6.0
+node_modules/adm-zip@0.6.1
   License: MIT
 node_modules/agent-base@7.1.4
   License: MIT
@@ -535,7 +535,7 @@ node_modules/balanced-match@4.0.4
   License: MIT
 node_modules/base64-js@1.5.1
   License: MIT
-node_modules/baseline-browser-mapping@2.10.40
+node_modules/baseline-browser-mapping@2.11.22
   License: Apache-2.0
 node_modules/binary-extensions@2.3.0
   License: MIT
@@ -549,7 +549,7 @@ node_modules/brace-expansion@5.0.9
   License: MIT
 node_modules/braces@3.0.3
   License: MIT
-node_modules/browserslist@4.28.4
+node_modules/browserslist@4.28.9
   License: MIT
 node_modules/buffer-from@1.1.2
   License: MIT
@@ -573,7 +573,7 @@ node_modules/callsites@3.1.0
   License: MIT
 node_modules/camelcase-css@2.0.1
   License: MIT
-node_modules/caniuse-lite@1.0.30001800
+node_modules/caniuse-lite@1.0.30001810
   License: CC-BY-4.0
 node_modules/chalk@4.1.2
   License: MIT
@@ -671,7 +671,7 @@ node_modules/electron-builder@26.15.3
   License: MIT
 node_modules/electron-publish@26.15.3
   License: MIT
-node_modules/electron-to-chromium@1.5.383
+node_modules/electron-to-chromium@1.5.427
   License: ISC
 node_modules/electron-winstaller@5.4.0
   License: MIT
@@ -739,7 +739,7 @@ node_modules/fast-json-stable-stringify@2.1.0
   License: MIT
 node_modules/fast-levenshtein@2.0.6
   License: MIT
-node_modules/fast-uri@3.1.5
+node_modules/fast-uri@3.1.7
   License: BSD-3-Clause
 node_modules/fastq@1.20.1
   License: ISC
@@ -871,11 +871,11 @@ node_modules/jake@10.9.4
   License: Apache-2.0
 node_modules/jiti@2.7.0
   License: MIT
-node_modules/joi@18.2.3
+node_modules/joi@18.2.9
   License: BSD-3-Clause
 node_modules/js-tokens@4.0.0
   License: MIT
-node_modules/js-yaml@4.3.1
+node_modules/js-yaml@4.3.2
   License: MIT
 node_modules/jsesc@3.1.0
   License: MIT
@@ -969,7 +969,7 @@ node_modules/node-int64@0.4.0
   License: MIT
 node_modules/node-pty@1.2.0-beta.14
   License: MIT
-node_modules/node-releases@2.0.50
+node_modules/node-releases@2.0.55
   License: MIT
 node_modules/nopt@9.0.0
   License: ISC
@@ -989,9 +989,9 @@ node_modules/on-finished@2.4.1
   License: MIT
 node_modules/once@1.4.0
   License: ISC
-node_modules/onnxruntime-common@1.27.0
+node_modules/onnxruntime-common@1.29.0
   License: MIT
-node_modules/onnxruntime-node@1.27.0
+node_modules/onnxruntime-node@1.29.0
   License: MIT
 node_modules/onnxruntime-web@1.26.0-dev.20260416-b7804b056c
   License: MIT
@@ -1075,7 +1075,7 @@ node_modules/pvtsutils@1.3.6
   License: MIT
 node_modules/pvutils@1.2.0
   License: MIT
-node_modules/qs@6.15.3
+node_modules/qs@6.16.0
   License: BSD-3-Clause
 node_modules/queue-microtask@1.2.3
   License: MIT
@@ -1151,7 +1151,7 @@ node_modules/serve-static@2.2.1
   License: MIT
 node_modules/setprototypeof@1.2.0
   License: ISC
-node_modules/sharp@0.35.3
+node_modules/sharp@0.35.4
   License: Apache-2.0
 node_modules/shebang-command@2.0.0
   License: MIT
@@ -1255,7 +1255,7 @@ node_modules/unpipe@1.0.0
   License: MIT
 node_modules/unzipper@0.12.5
   License: MIT
-node_modules/update-browserslist-db@1.2.3
+node_modules/update-browserslist-db@1.3.3
   License: MIT
 node_modules/uri-js@4.4.1
   License: BSD-2-Clause

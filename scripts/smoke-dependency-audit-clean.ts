@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict'
 import { spawnSync } from 'node:child_process'
+import path from 'node:path'
 
 type AuditMetadata = {
   vulnerabilities?: Record<string, number>
@@ -38,10 +39,10 @@ function parseAuditJson(label: string, stdout: string, stderr: string): AuditRep
   }
 }
 
-function runAudit(label: string, args: string[]) {
+function runAudit(label: string, args: string[], cwd: string) {
   const invocation = getNpmInvocation(args)
   const result = spawnSync(invocation.command, invocation.args, {
-    cwd: process.cwd(),
+    cwd,
     encoding: 'utf8',
     env: process.env,
     shell: invocation.shell,
@@ -61,7 +62,14 @@ function runAudit(label: string, args: string[]) {
   return counts
 }
 
-const full = runAudit('full', [])
-const production = runAudit('production-only', ['--omit=dev'])
+const root = process.cwd()
+const service = path.join(root, 'infra', 'gcloud', 'service')
+const full = runAudit('root full', [], root)
+const production = runAudit('root production-only', ['--omit=dev'], root)
+const serviceFull = runAudit('gcloud service full', [], service)
+const serviceProduction = runAudit('gcloud service production-only', ['--omit=dev'], service)
 
-console.log(`dependency audit clean: full=${full.total || 0}, production=${production.total || 0}`)
+console.log(
+  `dependency audit clean: root full=${full.total || 0}, root production=${production.total || 0}, ` +
+  `gcloud service full=${serviceFull.total || 0}, gcloud service production=${serviceProduction.total || 0}`,
+)

@@ -32,7 +32,8 @@ jobs:
         shell: bash
         continue-on-error: true
         run: |
-          npm audit --json > full-dependency-audit.json
+          npm audit --json > full-dependency-audit.json || true
+          npm --prefix infra/gcloud/service audit --json > gcloud-service-dependency-audit.json || true
 
       - name: Enforce complete dependency policy
         run: npm run smoke:dependency-audit-clean
@@ -41,6 +42,8 @@ jobs:
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         with:
           name: automnia-full-dependency-audit
-          path: full-dependency-audit.json
+          path: |
+            full-dependency-audit.json
+            gcloud-service-dependency-audit.json
           if-no-files-found: error
           retention-days: 30
