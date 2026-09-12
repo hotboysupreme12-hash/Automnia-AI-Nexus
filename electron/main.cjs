@@ -2501,34 +2501,14 @@ async function runElectronE2eScreenshotCapture(win) {
     win.show()
     win.focus()
   }
-  await withElectronE2eTimeout(win.webContents.executeJavaScript(`
-    (async () => {
-      const wait = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
-      const waitFor = async (predicate, label, timeoutMs = 15000) => {
-        const startedAt = Date.now();
-        while (Date.now() - startedAt < timeoutMs) {
-          const value = predicate();
-          if (value) return value;
-          await wait(60);
-        }
-        throw new Error('Timed out waiting for ' + label);
-      };
-      await waitFor(
-        () => document.querySelector('nav[aria-label="Primary navigation"]'),
-        'primary navigation'
-      );
-      return true;
-    })()
-  `, true), 'initial renderer readiness')
-  await waitForElectronE2e(() => !win.isDestroyed() && !win.webContents.isLoading(), 'renderer screenshot readiness', 15000)
-  await sleep(500)
-  await win.webContents.setZoomFactor(1)
 
   if (process.platform === 'win32') {
     // Windows hosted runners can leave renderer-side executeJavaScript calls
     // pending after the packaged shell is ready. Capture each viewport once
     // through DevTools, then materialize the required surface matrix so the
     // artifact contract remains deterministic without a renderer deadlock.
+    await waitForElectronE2e(() => !win.isDestroyed() && !win.webContents.isLoading(), 'Windows screenshot readiness', 15000)
+    await win.webContents.setZoomFactor(1)
     for (const viewport of viewports) {
       if (win.isDestroyed()) break
       win.setMinimumSize(Math.min(viewport.width, 320), Math.min(viewport.height, 560))
@@ -2551,6 +2531,29 @@ async function runElectronE2eScreenshotCapture(win) {
     logE2e(`screenshots-ok:${captured.length}`)
     return
   }
+
+  await withElectronE2eTimeout(win.webContents.executeJavaScript(`
+    (async () => {
+      const wait = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+      const waitFor = async (predicate, label, timeoutMs = 15000) => {
+        const startedAt = Date.now();
+        while (Date.now() - startedAt < timeoutMs) {
+          const value = predicate();
+          if (value) return value;
+          await wait(60);
+        }
+        throw new Error('Timed out waiting for ' + label);
+      };
+      await waitFor(
+        () => document.querySelector('nav[aria-label="Primary navigation"]'),
+        'primary navigation'
+      );
+      return true;
+    })()
+  `, true), 'initial renderer readiness')
+  await waitForElectronE2e(() => !win.isDestroyed() && !win.webContents.isLoading(), 'renderer screenshot readiness', 15000)
+  await sleep(500)
+  await win.webContents.setZoomFactor(1)
 
   for (const viewport of viewports) {
     if (win.isDestroyed()) break
