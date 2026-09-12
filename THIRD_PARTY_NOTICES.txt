@@ -525,7 +525,7 @@ node_modules/asynckit@0.4.0
   License: MIT
 node_modules/at-least-node@1.0.0
   License: ISC
-node_modules/autoprefixer@10.5.2
+node_modules/autoprefixer@10.6.0
   License: MIT
 node_modules/aws4@1.13.2
   License: MIT
@@ -707,7 +707,7 @@ node_modules/escape-string-regexp@4.0.0
   License: MIT
 node_modules/eslint-plugin-react-hooks@7.0.1
   License: MIT
-node_modules/eslint-plugin-react-refresh@0.4.26
+node_modules/eslint-plugin-react-refresh@0.5.6
   License: MIT
 node_modules/eslint-scope@8.4.0
   License: BSD-2-Clause
@@ -967,7 +967,7 @@ node_modules/node-gyp@12.4.0
   License: MIT
 node_modules/node-int64@0.4.0
   License: MIT
-node_modules/node-pty@1.2.0-beta.14
+node_modules/node-pty@1.2.0-beta.15
   License: MIT
 node_modules/node-releases@2.0.55
   License: MIT
@@ -1295,7 +1295,7 @@ node_modules/zod-validation-error@4.0.2
   License: MIT
 node_modules/zod@4.4.3
   License: MIT
-node_modules/zustand@5.0.14
+node_modules/zustand@5.0.15
   License: MIT
 onnxruntime-common@1.24.0-dev.20251116-b39e144322
   License: MIT

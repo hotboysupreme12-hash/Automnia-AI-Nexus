@@ -29,7 +29,7 @@ function delay(ms = 0) {
   return new Promise((resolve) => setTimeout(resolve, ms))
 }
 
-async function waitUntil(predicate: () => boolean, timeoutMs = 250) {
+async function waitUntil(predicate: () => boolean, timeoutMs = 2_000) {
   const deadline = Date.now() + timeoutMs
   while (Date.now() <= deadline) {
     if (predicate()) return

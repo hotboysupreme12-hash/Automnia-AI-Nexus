@@ -137,12 +137,15 @@ function dispatchRecordedRendererError(detail: RecordedRendererErrorEvent): void
   window.dispatchEvent(new CustomEvent<RecordedRendererErrorEvent>(RENDERER_ERROR_EVENT, { detail }))
 }
 
-export function clearRendererCrashGuard(): void {
+function clearRendererCrashGuard(): void {
   const storage = rendererSessionStorage()
   if (!storage) return
   try { storage.removeItem(CRASH_EVENTS_KEY) } catch { /* Recovery remains available without storage. */ }
 }
 
+// Bootstrap installs these listeners once before React mounts. Keeping them
+// beside the crash normalizer avoids exposing renderer error details elsewhere.
+// eslint-disable-next-line react-refresh/only-export-components
 export function installGlobalRendererErrorHandlers(): void {
   if (globalRendererErrorHandlersInstalled || typeof window === 'undefined') return
   globalRendererErrorHandlersInstalled = true
