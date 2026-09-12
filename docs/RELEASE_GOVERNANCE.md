@@ -4,7 +4,7 @@ Automnia AI is stable for Windows, macOS, and Linux.
 
 ## Validation record
 
-Release records should point to the hosted validation run, the package artifact, the screenshot artifact, and the release notes for the build.
+Release records should point to the hosted validation run, the package artifact, and the release notes for the build. Packaged screenshots are optional visual-review evidence and are not a blocking CI requirement.
 
 ## Branch Protection
 
@@ -17,10 +17,9 @@ Do not call a build public-beta ready until hosted `Control Plane CI / Hardened 
 The evaluated commit should include these hosted artifacts:
 
 - `automnia-release-evidence`
-- `automnia-packaged-beta-screenshots`
 - `automnia-windows-installer-candidate`
 
-Local tests are useful developer evidence, but they do not replace hosted packaging, packaged launch, release validation, screenshot capture, and artifact upload.
+Local tests are useful developer evidence, but they do not replace hosted packaging, packaged launch, release validation, and artifact upload.
 
 ## Release Signing
 
@@ -43,4 +42,4 @@ Keep the public docs focused on these files:
 
 ## Visual baseline
 
-Use the packaged screenshots for Agents, Missions, Monitor, Plugins, Settings, and Agent Editor as the visual baseline for each reviewed build.
+When visual review is needed, use the optional packaged screenshot capture for Agents, Missions, Monitor, Plugins, Settings, and Agent Editor as the baseline for the reviewed build. Run it explicitly with `npm run capture:packaged-beta-screenshots` after packaging.

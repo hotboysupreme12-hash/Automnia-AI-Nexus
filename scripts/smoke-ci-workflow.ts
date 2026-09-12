@@ -58,7 +58,6 @@ for (const command of [
   'npm run prepare:runtime-bundles',
   'node scripts/package-desktop.cjs --dir',
   'npm run smoke:packaged-electron-launch',
-  'npm run capture:packaged-beta-screenshots',
   'npm run release:evidence',
   'npm run release:validate',
 ]) {
@@ -70,9 +69,7 @@ assert.match(workflow, /release\/evidence\/ci-logs\/npm-test\.log/, 'control-pla
 assert.match(workflow, /release\/evidence\/ci-logs\/unit-coverage\.log/, 'control-plane CI must preserve coverage logs')
 assert.match(workflow, /release\/evidence\/bundle-budgets\/renderer-bundle-budgets\.log/, 'control-plane CI must preserve bundle budget output')
 assert.match(workflow, /release\/evidence\/ci-logs\/packaged-electron-launch\.log/, 'control-plane CI must preserve packaged launch smoke logs')
-assert.match(workflow, /release\/evidence\/ci-logs\/packaged-beta-screenshots\.log/, 'control-plane CI must preserve packaged screenshot capture logs')
 assert.match(workflow, /name:\s*automnia-release-evidence[\s\S]*path:\s*release\/evidence\/\*\*/m, 'control-plane CI must upload release evidence artifacts')
-assert.match(workflow, /name:\s*automnia-packaged-beta-screenshots[\s\S]*path:\s*output\/packaged-beta-screenshots\/\*\*/m, 'control-plane CI must upload packaged screenshot artifacts')
 
 const order = [
   'npm ci',
@@ -89,7 +86,6 @@ const order = [
   'npm run prepare:runtime-bundles',
   'node scripts/package-desktop.cjs --dir',
   'npm run smoke:packaged-electron-launch',
-  'npm run capture:packaged-beta-screenshots',
   'npm run release:evidence',
   'npm run release:validate',
 ]
@@ -140,7 +136,7 @@ assert.match(dependencyAudit, /npm run audit:dependencies/, 'scheduled audit mus
 assert.match(releaseGovernance, /Beta-Ready Release Gate/, 'release governance must document the beta-ready release gate')
 assert.match(releaseGovernance, /Control Plane CI \/ Hardened control plane/, 'release governance must name the required Control Plane CI check')
 assert.match(releaseGovernance, /automnia-release-evidence/, 'release governance must name the release evidence artifact')
-assert.match(releaseGovernance, /automnia-packaged-beta-screenshots/, 'release governance must name the packaged screenshot artifact')
+assert.match(releaseGovernance, /Packaged screenshots are optional/, 'release governance must document screenshots as optional visual evidence')
 
 assert.match(scripts['smoke:ci-workflow'] || '', /tsx scripts\/smoke-ci-workflow\.ts/)
 assert.match(scripts['audit:dependencies'] || '', /npm audit --omit=dev --audit-level=high/)

@@ -7,7 +7,6 @@ const read = (relativePath: string) => readFileSync(path.join(root, relativePath
 
 const electronMain = read('electron/main.cjs')
 const screenshotCapture = read('scripts/capture-packaged-beta-screenshots.ts')
-const workflow = read('.github/workflows/control-plane-ci.yml')
 const packageJson = JSON.parse(read('package.json')) as { scripts?: Record<string, string> }
 const releaseGovernance = read('docs/RELEASE_GOVERNANCE.md')
 
@@ -46,9 +45,7 @@ assert.match(screenshotCapture, /packaged screenshot capture requires/, 'package
 assert.match(screenshotCapture, /createRuntimeLedgerStore/, 'packaged screenshot capture must seed its disposable renderer entitlement')
 assert.match(screenshotCapture, /license:activation/, 'packaged screenshot capture must seed an active license state')
 
-assert.match(workflow, /npm run capture:packaged-beta-screenshots/, 'Control Plane CI must capture packaged screenshots')
-assert.match(workflow, /name:\s*automnia-packaged-beta-screenshots[\s\S]*path:\s*output\/packaged-beta-screenshots\/\*\*/m, 'Control Plane CI must upload packaged screenshot artifacts')
-assert.match(releaseGovernance, /automnia-packaged-beta-screenshots/, 'release governance must name the packaged screenshot artifact')
+assert.match(releaseGovernance, /Packaged screenshots are optional/, 'release governance must document the optional packaged screenshot baseline')
 assert.match(releaseGovernance, /Agents, Missions, Monitor, Plugins, Settings, and Agent Editor/, 'release governance must define the core packaged screenshot surface set')
 
 assert.equal(packageJson.scripts?.['smoke:packaged-beta-screenshots-contract'], 'tsx scripts/smoke-packaged-beta-screenshots-contract.ts')

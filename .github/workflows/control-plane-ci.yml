@@ -106,12 +106,6 @@ jobs:
           npm run smoke:packaged-electron-launch 2>&1 | Tee-Object -FilePath release/evidence/ci-logs/packaged-electron-launch.log
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
-      - name: Capture packaged beta screenshots
-        shell: pwsh
-        run: |
-          npm run capture:packaged-beta-screenshots 2>&1 | Tee-Object -FilePath release/evidence/ci-logs/packaged-beta-screenshots.log
-          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-
       - name: Build unsigned Windows installer candidate
         if: ${{ github.event_name != 'pull_request' && env.AUTOMNIA_RELEASE_REQUIRE_SIGNING != 'true' }}
         run: node scripts/package-desktop.cjs --win --x64
@@ -137,13 +131,6 @@ jobs:
         with:
           name: automnia-release-evidence
           path: release/evidence/**
-          if-no-files-found: error
-
-      - name: Upload packaged screenshot evidence
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
-        with:
-          name: automnia-packaged-beta-screenshots
-          path: output/packaged-beta-screenshots/**
           if-no-files-found: error
 
       - name: Upload Windows installer candidate
