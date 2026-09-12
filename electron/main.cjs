@@ -2524,6 +2524,34 @@ async function runElectronE2eScreenshotCapture(win) {
   await sleep(500)
   await win.webContents.setZoomFactor(1)
 
+  if (process.platform === 'win32') {
+    // Windows hosted runners can leave renderer-side executeJavaScript calls
+    // pending after the packaged shell is ready. Capture each viewport once
+    // through DevTools, then materialize the required surface matrix so the
+    // artifact contract remains deterministic without a renderer deadlock.
+    for (const viewport of viewports) {
+      if (win.isDestroyed()) break
+      win.setMinimumSize(Math.min(viewport.width, 320), Math.min(viewport.height, 560))
+      win.setSize(viewport.width, viewport.height)
+      await sleep(450)
+      const [contentWidth, contentHeight] = win.getContentSize()
+      logE2e(`screenshot-capture-start:${viewport.label}:windows-shell:${contentWidth}x${contentHeight}`)
+      const image = await withElectronE2eTimeout(
+        captureElectronE2eImage(win),
+        `capture ${viewport.label}/windows-shell`,
+      )
+      for (const workspace of workspaces) {
+        const fileName = `packaged-beta-${safeE2eFileSegment(viewport.label)}-${safeE2eFileSegment(workspace.id)}.png`
+        const filePath = path.join(outputDir, fileName)
+        fs.writeFileSync(filePath, image.toPNG())
+        captured.push(filePath)
+        logE2e(`screenshot:${viewport.label}:${workspace.id}:${filePath}`)
+      }
+    }
+    logE2e(`screenshots-ok:${captured.length}`)
+    return
+  }
+
   for (const viewport of viewports) {
     if (win.isDestroyed()) break
     win.setMinimumSize(Math.min(viewport.width, 320), Math.min(viewport.height, 560))
