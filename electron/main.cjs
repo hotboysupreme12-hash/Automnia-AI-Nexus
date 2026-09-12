@@ -2496,7 +2496,6 @@ async function runElectronE2eScreenshotCapture(win) {
     if (win.isDestroyed()) break
     win.setMinimumSize(Math.min(viewport.width, 320), Math.min(viewport.height, 560))
     win.setSize(viewport.width, viewport.height)
-    win.center()
     await sleep(450)
 
     for (const workspace of workspaces) {
@@ -2581,7 +2580,14 @@ async function runElectronE2eScreenshotCapture(win) {
       assertElectronE2e(state?.bodyTextLength > 120, `${workspace.id} screenshot must render page text`)
       assertElectronE2e(Boolean(state?.focusRing), `${workspace.id} screenshot should resolve focus ring token`)
 
-      const image = await win.webContents.capturePage()
+      const [contentWidth, contentHeight] = win.getContentSize()
+      logE2e(`screenshot-capture-start:${viewport.label}:${workspace.id}:${contentWidth}x${contentHeight}`)
+      const image = await win.webContents.capturePage({
+        x: 0,
+        y: 0,
+        width: contentWidth,
+        height: contentHeight,
+      })
       const fileName = `packaged-beta-${safeE2eFileSegment(viewport.label)}-${safeE2eFileSegment(workspace.id)}.png`
       const filePath = path.join(outputDir, fileName)
       fs.writeFileSync(filePath, image.toPNG())
