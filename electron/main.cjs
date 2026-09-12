@@ -2470,6 +2470,35 @@ async function runElectronE2eScreenshotCapture(win) {
     win.show()
     win.focus()
   }
+  const e2eAuthToken = JSON.stringify(String(process.env.CONTROL_CENTER_TOKEN || ''))
+  await win.webContents.executeJavaScript(`
+    (async () => {
+      const wait = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+      const waitFor = async (predicate, label, timeoutMs = 15000) => {
+        const startedAt = Date.now();
+        while (Date.now() - startedAt < timeoutMs) {
+          const value = predicate();
+          if (value) return value;
+          await wait(60);
+        }
+        throw new Error('Timed out waiting for ' + label);
+      };
+      if (!document.querySelector('nav[aria-label="Primary navigation"]')) {
+        const token = ${e2eAuthToken};
+        if (!token) throw new Error('E2E control-center token is missing');
+        localStorage.setItem('control-center-token', token);
+        sessionStorage.removeItem('control-center-token');
+        sessionStorage.removeItem('control-center-signed-out');
+        localStorage.removeItem('control-center-signed-out');
+        location.reload();
+      }
+      await waitFor(
+        () => document.querySelector('nav[aria-label="Primary navigation"]'),
+        'primary navigation'
+      );
+      return true;
+    })()
+  `, true)
   await waitForElectronE2e(() => !win.isDestroyed() && !win.webContents.isLoading(), 'renderer screenshot readiness', 15000)
   await sleep(500)
   await win.webContents.setZoomFactor(1)
