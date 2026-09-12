@@ -41,6 +41,15 @@ const shopifyStoreDomain = String(process.env.SHOPIFY_STORE_DOMAIN || '').trim()
 const shopifyAdminStoreDomain = String(shopifyAdminCredential?.storeDomain || shopifyStoreDomain).trim();
 const shopifyApiVersion = String(process.env.SHOPIFY_API_VERSION || '2026-07').trim();
 let shopifyAccessTokenCache = null;
+const billingRetryAudience = String(process.env.AUTOMNIA_BILLING_RETRY_AUDIENCE || 'https://api.automnia.app').trim();
+const BILLING_RETRY_DELAY_MS = 24 * 60 * 60 * 1000;
+const BILLING_RETRY_MAX_ATTEMPTS = 2;
+const retryableBillingErrorCodes = new Set([
+  'INSUFFICIENT_FUNDS',
+  'PAYMENT_PROVIDER_ERROR',
+  'PROCESSING_ERROR',
+  'TRANSIENT_ERROR',
+]);
 const gcpProjectId = process.env.GOOGLE_CLOUD_PROJECT || process.env.GCLOUD_PROJECT || 'local-development';
 const vertexLocation = process.env.VERTEX_LOCATION || 'us-central1';
 const vertexAuth = new GoogleAuth({ scopes: ['https://www.googleapis.com/auth/cloud-platform'] });
@@ -1068,7 +1077,17 @@ async function updateHostedEntitlement({ record, order, tierConfig, topic, deliv
   });
 }
 
-async function updateShopifyState({ record, topic, deliveryId, subscriptionContractId, subscriptionStatus, paymentStatus, nextBillingAt }) {
+function billingFailureCodeFromShopify(payload) {
+  return String(payload?.error_code || payload?.errorCode || '').trim().toUpperCase().slice(0, 120);
+}
+
+function billingRetryAtFor({ topic, failureCode, retryCount, now }) {
+  if (topic !== 'subscription_billing_attempts/failure') return null;
+  if (!retryableBillingErrorCodes.has(failureCode) || retryCount >= BILLING_RETRY_MAX_ATTEMPTS) return null;
+  return new Date(Date.parse(now) + BILLING_RETRY_DELAY_MS).toISOString();
+}
+
+async function updateShopifyState({ record, topic, deliveryId, subscriptionContractId, subscriptionStatus, paymentStatus, nextBillingAt, billingFailureCode }) {
   const eventId = webhookEventId(topic, deliveryId, `${subscriptionContractId || record.orderId}:${subscriptionStatus || paymentStatus || 'state'}`);
   const now = new Date().toISOString();
   const trialStillOpen = trialEndTimestamp(record) > Date.now() && !record.trialConvertedAt;
@@ -1076,11 +1095,26 @@ async function updateShopifyState({ record, topic, deliveryId, subscriptionContr
   const effectiveStatus = trialStillOpen && requestedStatus === 'active' && topic !== 'subscription_billing_attempts/success'
     ? 'trialing'
     : subscriptionStatus;
+  const failureCode = String(billingFailureCode || '').trim().toUpperCase().slice(0, 120);
+  const retryCount = safeNonNegativeInteger(record.billingRetryCount);
+  const nextBillingRetryAt = billingRetryAtFor({ topic, failureCode, retryCount, now });
   const update = {
     ...(subscriptionContractId ? { subscriptionContractId } : {}),
     ...(effectiveStatus ? { subscriptionStatus: effectiveStatus } : {}),
     ...(paymentStatus ? { paymentStatus } : {}),
     ...(nextBillingAt ? { nextBillingAt } : {}),
+    ...(topic === 'subscription_billing_attempts/failure' ? {
+      paymentStatus: 'payment_failed',
+      billingFailureCode: failureCode || null,
+      billingFailureAt: now,
+      billingRetryAt: nextBillingRetryAt,
+    } : {}),
+    ...(topic === 'subscription_billing_attempts/success' ? {
+      paymentStatus: 'paid',
+      billingRetryAt: null,
+      billingRetryCount: 0,
+      billingFailureCode: null,
+    } : {}),
     ...(topic === 'subscription_billing_attempts/success' && record.trialEndsAt ? { trialConvertedAt: now } : {}),
     updatedAt: now,
   };
@@ -1411,6 +1445,17 @@ function requireAdmin(req, res, next) {
     return res.status(404).json({ error: 'Not found' });
   }
   return next();
+}
+
+async function requireSchedulerIdentity(req, res, next) {
+  const supplied = req.get('authorization')?.replace(/^Bearer\s+/i, '').trim() || '';
+  if (!supplied || !billingRetryAudience) return res.status(401).json({ ok: false, error: 'Unauthorized.' });
+  try {
+    await new OAuth2Client().verifyIdToken({ idToken: supplied, audience: billingRetryAudience });
+    return next();
+  } catch {
+    return res.status(401).json({ ok: false, error: 'Unauthorized.' });
+  }
 }
 
 function requireWritesEnabled(_req, res, next) {
