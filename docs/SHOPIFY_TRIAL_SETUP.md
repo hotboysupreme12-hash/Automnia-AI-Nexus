@@ -1,8 +1,9 @@
 # Three-day Shopify trial
 
-Automnia's trial is a storefront subscription trial backed by Shopify selling
-plans and enforced by the Cloud Run provisioner. It is not Shopify App Billing's
-trial for installing an app in a merchant admin.
+Automnia's trial is a storefront subscription trial for Starter only, backed by
+Shopify selling plans and enforced by the Cloud Run provisioner. Pro and
+Enterprise remain unchanged. It is not Shopify App Billing's trial for
+installing an app in a merchant admin.
 
 ## Shopify setup
 
