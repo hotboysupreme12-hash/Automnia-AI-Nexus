@@ -1,5 +1,6 @@
 import { AUTOMNIA_PUBLIC_CLOUD_URL, automniaCloudBaseUrl, automniaCloudRuntimeBaseUrl } from '../../config/automniaCloud'
 import { usageBaseline } from '../../../src/utils/usageRemaining'
+import { AUTOMNIA_BILLING_UNIT_VERSION, AUTOMNIA_TOKENS_PER_CREDIT } from '../../../src/utils/creditDisplay'
 
 export const DEFAULT_LICENSE_API_URL = AUTOMNIA_PUBLIC_CLOUD_URL
 const ACTIVATION_TIMEOUT_MS = 10_000
@@ -26,6 +27,8 @@ export type LicenseStatus = {
   creditBalance: number | null
   creditUsageBaseline?: number | null
   creditBalanceUpdatedAt: string | null
+  billingUnitVersion?: number
+  tokensPerCredit?: number
   activatedAt: string | null
   verifiedAt: string | null
 }
@@ -192,6 +195,8 @@ function publicStatus(record: StoredLicense | null): LicenseStatus {
       usagePriority: null,
       creditBalance: null,
       creditBalanceUpdatedAt: null,
+      billingUnitVersion: AUTOMNIA_BILLING_UNIT_VERSION,
+      tokensPerCredit: AUTOMNIA_TOKENS_PER_CREDIT,
       activatedAt: null,
       verifiedAt: null,
     }
@@ -209,7 +214,14 @@ function publicStatus(record: StoredLicense | null): LicenseStatus {
     usagePriority: effectiveUsagePriority(record, mode),
     creditBalance: validCreditBalance(record.creditBalance) ? record.creditBalance : null,
     creditBalanceUpdatedAt: record.creditBalanceUpdatedAt || null,
-    creditUsageBaseline: usageBaseline(record.creditBalance, record.creditBalance, record.creditUsageBaseline),
+    ...(record.billingUnitVersion === AUTOMNIA_BILLING_UNIT_VERSION
+      ? { billingUnitVersion: AUTOMNIA_BILLING_UNIT_VERSION, tokensPerCredit: AUTOMNIA_TOKENS_PER_CREDIT }
+      : {}),
+    // A baseline without billing-unit metadata may be a raw-token baseline
+    // from the pre-conversion desktop. Do not feed it into credit math.
+    creditUsageBaseline: record.billingUnitVersion === AUTOMNIA_BILLING_UNIT_VERSION
+      ? usageBaseline(record.creditBalance, record.creditBalance, record.creditUsageBaseline)
+      : null,
     activatedAt: record.activatedAt || null,
     verifiedAt: record.verifiedAt || null,
   }
@@ -284,6 +296,9 @@ function storedLicense(value: unknown): StoredLicense | null {
   const tier = typeof record.tier === 'string' ? record.tier : null
   const planPriceCents = validPlanPriceCents(record.planPriceCents) ? record.planPriceCents : null
   const creditsOnly = creditsOnlyEntitlement({ mode, tier, planPriceCents })
+  const billingUnitVersion = Number(record.billingUnitVersion) === AUTOMNIA_BILLING_UNIT_VERSION
+    ? AUTOMNIA_BILLING_UNIT_VERSION
+    : undefined
   return {
     active: true,
     licenseKey: record.licenseKey,
@@ -297,7 +312,12 @@ function storedLicense(value: unknown): StoredLicense | null {
     usagePriority: validUsagePriority(record.usagePriority) ? record.usagePriority : null,
     creditBalance: validCreditBalance(record.creditBalance) ? record.creditBalance : null,
     creditBalanceUpdatedAt: typeof record.creditBalanceUpdatedAt === 'string' ? record.creditBalanceUpdatedAt : null,
-    creditUsageBaseline: usageBaseline(validCreditBalance(record.creditBalance) ? record.creditBalance : null, null, validCreditBalance(record.creditUsageBaseline) ? record.creditUsageBaseline : null),
+    creditUsageBaseline: billingUnitVersion === AUTOMNIA_BILLING_UNIT_VERSION
+      ? usageBaseline(validCreditBalance(record.creditBalance) ? record.creditBalance : null, null, validCreditBalance(record.creditUsageBaseline) ? record.creditUsageBaseline : null)
+      : null,
+    ...(billingUnitVersion === AUTOMNIA_BILLING_UNIT_VERSION
+      ? { billingUnitVersion, tokensPerCredit: AUTOMNIA_TOKENS_PER_CREDIT }
+      : {}),
     activatedAt: typeof record.activatedAt === 'string' ? record.activatedAt : null,
     verifiedAt: typeof record.verifiedAt === 'string' ? record.verifiedAt : null,
   }
@@ -310,8 +330,8 @@ export function createLicenseService(options: LicenseServiceOptions) {
   const now = () => (options.now ? options.now() : new Date()).toISOString()
   const current = () => {
     const record = storedLicense(options.read<StoredLicense>(stateKey))
-    const allocation = options.read<{ email: string; activatedAt: string | null; baseline: number }>('license:usage-allocation')
-    if (record && allocation && allocation.email === record.email && allocation.activatedAt === record.activatedAt && validCreditBalance(allocation.baseline)) {
+    const allocation = options.read<{ email: string; activatedAt: string | null; baseline: number; billingUnitVersion?: number }>('license:usage-allocation')
+    if (record && allocation && allocation.billingUnitVersion === AUTOMNIA_BILLING_UNIT_VERSION && allocation.email === record.email && allocation.activatedAt === record.activatedAt && validCreditBalance(allocation.baseline)) {
       record.creditUsageBaseline = allocation.baseline
     }
     return record
@@ -326,6 +346,11 @@ export function createLicenseService(options: LicenseServiceOptions) {
 
   const activeRecordFromPayload = (payload: Record<string, unknown>, fallback: StoredLicense): StoredLicense => {
     const reportedCreditBalance = validCreditBalance(payload.creditBalance) ? payload.creditBalance : fallback.creditBalance
+    const billingUnitVersion = Number(payload.billingUnitVersion) === AUTOMNIA_BILLING_UNIT_VERSION
+      ? AUTOMNIA_BILLING_UNIT_VERSION
+      : Number(fallback.billingUnitVersion) === AUTOMNIA_BILLING_UNIT_VERSION
+        ? AUTOMNIA_BILLING_UNIT_VERSION
+        : undefined
     const mode = payload.mode === 'byok' || payload.mode === 'hosted_credits'
       ? payload.mode
       : fallback.mode
@@ -357,7 +382,12 @@ export function createLicenseService(options: LicenseServiceOptions) {
             ? payload.usagePriority
             : mode === 'byok' && !(validCreditBalance(reportedCreditBalance) && reportedCreditBalance > 0) ? 'provider_first' : 'automnia_only',
       creditBalance: reportedCreditBalance,
-      creditUsageBaseline: usageBaseline(reportedCreditBalance, fallback.creditBalance, fallback.creditUsageBaseline),
+      creditUsageBaseline: billingUnitVersion === AUTOMNIA_BILLING_UNIT_VERSION
+        ? usageBaseline(reportedCreditBalance, fallback.creditBalance, fallback.creditUsageBaseline)
+        : null,
+      ...(billingUnitVersion === AUTOMNIA_BILLING_UNIT_VERSION
+        ? { billingUnitVersion, tokensPerCredit: AUTOMNIA_TOKENS_PER_CREDIT }
+        : {}),
       creditBalanceUpdatedAt: validCreditBalance(payload.creditBalance) ? now() : fallback.creditBalanceUpdatedAt,
       activatedAt: typeof payload.activatedAt === 'string' ? payload.activatedAt : fallback.activatedAt || now(),
       verifiedAt: now(),
@@ -525,6 +555,8 @@ export function createLicenseService(options: LicenseServiceOptions) {
       return store({
         ...record,
         creditBalance,
+        billingUnitVersion: AUTOMNIA_BILLING_UNIT_VERSION,
+        tokensPerCredit: AUTOMNIA_TOKENS_PER_CREDIT,
         creditUsageBaseline: usageBaseline(creditBalance, record.creditBalance, record.creditUsageBaseline),
         creditBalanceUpdatedAt: now(),
         verifiedAt: now(),

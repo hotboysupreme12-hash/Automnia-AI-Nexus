@@ -670,6 +670,8 @@ function publicLicense(record) {
     accessType: recordHasPermanentAccess(record) ? 'permanent' : 'subscription',
     usagePriority: effectiveUsagePriority(record),
     creditBalance: pooledCreditBalance(record),
+    billingUnitVersion: 2,
+    tokensPerCredit: TOKENS_PER_CREDIT,
     status: record.status,
     subscriptionStatus: record.subscriptionStatus || null,
     active: isEntitlementActive(record),

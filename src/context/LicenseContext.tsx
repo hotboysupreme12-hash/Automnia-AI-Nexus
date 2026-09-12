@@ -7,6 +7,7 @@ import {
 } from '../utils/licenseEntitlement'
 import { useAuth } from './useAuth'
 import { usageBaseline } from '../utils/usageRemaining'
+import { AUTOMNIA_BILLING_UNIT_VERSION } from '../utils/creditDisplay'
 import { LicenseContext, type HostedUsagePriority, type LicenseInfo } from './licenseContextValue'
 
 const EMPTY_LICENSE: LicenseInfo = {
@@ -29,10 +30,13 @@ const EMPTY_LICENSE: LicenseInfo = {
 // Keep an account-scoped baseline across refreshes until the server supplies it.
 function withUsageBaseline(license: LicenseInfo): LicenseInfo {
   if (!license.active || !license.email) return license
-  const key = `automnia.usage-baseline.v1:${license.email.toLowerCase()}:${license.activatedAt || ''}`
+  // v1 baselines were allowed to contain raw token counts. A new key forces
+  // the first post-conversion read to establish a baseline in compact credits.
+  const key = `automnia.usage-baseline.v2:${license.email.toLowerCase()}:${license.activatedAt || ''}`
   let previous: { balance?: number; baseline?: number } = {}
   try { previous = JSON.parse(localStorage.getItem(key) || '{}') || {} } catch { /* Storage may be unavailable. */ }
-  const baseline = typeof license.creditUsageBaseline === 'number' && Number.isFinite(license.creditUsageBaseline)
+  const baseline = license.billingUnitVersion === AUTOMNIA_BILLING_UNIT_VERSION
+    && typeof license.creditUsageBaseline === 'number' && Number.isFinite(license.creditUsageBaseline)
     ? license.creditUsageBaseline
     : usageBaseline(license.creditBalance, previous.balance, previous.baseline)
   try {

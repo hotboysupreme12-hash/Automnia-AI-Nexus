@@ -21,6 +21,9 @@ export type LicenseInfo = {
   creditBalance: number | null
   creditUsageBaseline?: number | null
   creditBalanceUpdatedAt: string | null
+  /** The API balance is always the compact display projection, never raw tokens. */
+  billingUnitVersion?: number
+  tokensPerCredit?: number
   activatedAt: string | null
   verifiedAt: string | null
 }
