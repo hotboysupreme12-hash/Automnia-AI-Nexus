@@ -2436,6 +2436,14 @@ async function waitForElectronE2e(condition, label, timeoutMs = 5000) {
   throw new Error(`Electron E2E timed out waiting for ${label}`)
 }
 
+function withElectronE2eTimeout(promise, label, timeoutMs = 20_000) {
+  let timer
+  const timeout = new Promise((_, reject) => {
+    timer = setTimeout(() => reject(new Error(`Electron E2E timed out during ${label}`)), timeoutMs)
+  })
+  return Promise.race([promise, timeout]).finally(() => clearTimeout(timer))
+}
+
 function safeE2eFileSegment(value) {
   return String(value || 'unknown')
     .replace(/[^a-z0-9._-]+/gi, '-')
@@ -2469,7 +2477,7 @@ async function runElectronE2eScreenshotCapture(win) {
     win.show()
     win.focus()
   }
-  await win.webContents.executeJavaScript(`
+  await withElectronE2eTimeout(win.webContents.executeJavaScript(`
     (async () => {
       const wait = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
       const waitFor = async (predicate, label, timeoutMs = 15000) => {
@@ -2487,7 +2495,7 @@ async function runElectronE2eScreenshotCapture(win) {
       );
       return true;
     })()
-  `, true)
+  `, true), 'initial renderer readiness')
   await waitForElectronE2e(() => !win.isDestroyed() && !win.webContents.isLoading(), 'renderer screenshot readiness', 15000)
   await sleep(500)
   await win.webContents.setZoomFactor(1)
@@ -2500,7 +2508,8 @@ async function runElectronE2eScreenshotCapture(win) {
 
     for (const workspace of workspaces) {
       if (win.isDestroyed()) break
-      const state = await win.webContents.executeJavaScript(`
+      logE2e(`screenshot-workspace-start:${viewport.label}:${workspace.id}`)
+      const state = await withElectronE2eTimeout(win.webContents.executeJavaScript(`
         (async () => {
           const wait = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
           const waitFor = async (predicate, label, timeoutMs = 15000) => {
@@ -2574,7 +2583,7 @@ async function runElectronE2eScreenshotCapture(win) {
             })(),
           };
         })()
-      `, true)
+      `, true), `renderer workspace ${viewport.label}/${workspace.id}`)
 
       assertElectronE2e(state?.ariaCurrent === 'page', `${workspace.id} screenshot navigation must use aria-current`)
       assertElectronE2e(state?.bodyTextLength > 120, `${workspace.id} screenshot must render page text`)
@@ -2582,12 +2591,12 @@ async function runElectronE2eScreenshotCapture(win) {
 
       const [contentWidth, contentHeight] = win.getContentSize()
       logE2e(`screenshot-capture-start:${viewport.label}:${workspace.id}:${contentWidth}x${contentHeight}`)
-      const image = await win.webContents.capturePage({
+      const image = await withElectronE2eTimeout(win.webContents.capturePage({
         x: 0,
         y: 0,
         width: contentWidth,
         height: contentHeight,
-      })
+      }), `capture ${viewport.label}/${workspace.id}`)
       const fileName = `packaged-beta-${safeE2eFileSegment(viewport.label)}-${safeE2eFileSegment(workspace.id)}.png`
       const filePath = path.join(outputDir, fileName)
       fs.writeFileSync(filePath, image.toPNG())
