@@ -395,6 +395,7 @@ const licenseService = createLicenseService({
 const accountAuthService = createAccountAuthService({
   read: runtimeLedgerStore.readControlCenterState,
   write: runtimeLedgerStore.writeControlCenterState,
+  remove: runtimeLedgerStore.deleteControlCenterState,
   licenseService,
   reconcileAccountAccess: async () => {
     // Account login can replace both the canonical license key and the
@@ -19353,6 +19354,11 @@ registerAuthRoutes(app, {
   sessionTokens,
   accountAuth: accountAuthService,
   onLogout: async () => {
+    // Explicit logout releases this device for a different account. The
+    // password verifier is local durable state, so merely revoking the
+    // session token would otherwise make account setup reject every future
+    // activation with "This device already has an Automnia account."
+    accountAuthService.clearLocalAccount()
     // Do not leave the previous account's hosted key/model route active after
     // an explicit account logout. Deactivation is local-only; the provisioner
     // account and its credits remain untouched for the next sign-in.

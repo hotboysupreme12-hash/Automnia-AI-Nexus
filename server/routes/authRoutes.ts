@@ -235,9 +235,14 @@ export function registerAuthRoutes(app: Express, options: AuthRouteOptions) {
   })
 
   app.post('/api/auth/logout', async (req, res) => {
-    const revoked = options.sessionTokens.revoke(bearerToken(req))
+    const token = bearerToken(req)
+    const revoked = options.sessionTokens.revoke(token)
+    const isLaunchToken = secureTokenEqual(token, options.authToken)
     try {
-      await options.onLogout?.()
+      // Only an authenticated logout may clear the local account/license.
+      // The auth routes are public so that signed-out users can reach setup;
+      // an unauthenticated POST must not log the current user out for them.
+      if (revoked || isLaunchToken) await options.onLogout?.()
     } catch {
       // Session revocation is still authoritative. The next account login or
       // agent-turn recovery will reconcile the hosted route again.

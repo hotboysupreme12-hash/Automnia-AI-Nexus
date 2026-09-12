@@ -41,6 +41,7 @@ export class AccountAuthError extends Error {
 export type AccountAuthServiceOptions = {
   read: <T>(stateKey: string) => T | null
   write: (stateKey: string, value: unknown) => boolean
+  remove?: (stateKey: string) => boolean
   licenseService: LicenseService
   /** Reconcile the active license and hosted Gateway route after account auth. */
   reconcileAccountAccess?: () => Promise<void>
@@ -357,6 +358,16 @@ export function createAccountAuthService(options: AccountAuthServiceOptions) {
     return result
   }
 
+  const clearLocalAccount = () => {
+    lastGoogleAccessToken = null
+    const cleared = options.remove
+      ? options.remove(stateKey)
+      : options.write(stateKey, null)
+    if (!cleared) {
+      throw new AccountAuthError('account_service_unavailable', 'The local account could not be cleared securely.')
+    }
+  }
+
   return {
     getStatus: () => {
       const identity = current()
@@ -368,6 +379,7 @@ export function createAccountAuthService(options: AccountAuthServiceOptions) {
     loginWithGoogle,
     changePassword,
     setPassword,
+    clearLocalAccount,
   }
 }
 

@@ -114,6 +114,17 @@ test('first activation creates a local password verifier without storing the pas
   assert.equal(JSON.stringify(stored).includes('correct horse battery staple'), false)
 })
 
+test('explicit logout clears the local account binding so another account can be activated', async () => {
+  const harness = createHarness()
+  await harness.service.setup({ email: 'first@example.com', licenseKey: 'AUT-FIRST', password: 'correct horse battery staple' })
+
+  harness.service.clearLocalAccount()
+
+  const result = await harness.service.setup({ email: 'second@example.com', licenseKey: 'AUT-SECOND', password: 'another correct battery phrase' })
+  assert.equal(result.account.email, 'second@example.com')
+  assert.equal((harness.values.get('account:identity') as Record<string, unknown>).email, 'second@example.com')
+})
+
 test('higher-tier account sign-in works offline after first activation', async () => {
   const harness = createHarness()
   await harness.service.setup({ email: 'customer@example.com', licenseKey: 'AUT-TEST-ACCOUNT', password: 'correct horse battery staple' })
