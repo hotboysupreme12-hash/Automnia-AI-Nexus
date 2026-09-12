@@ -2598,12 +2598,10 @@ async function runElectronE2eScreenshotCapture(win) {
 
       const [contentWidth, contentHeight] = win.getContentSize()
       logE2e(`screenshot-capture-start:${viewport.label}:${workspace.id}:${contentWidth}x${contentHeight}`)
-      const image = await withElectronE2eTimeout(win.webContents.capturePage({
-        x: 0,
-        y: 0,
-        width: contentWidth,
-        height: contentHeight,
-      }), `capture ${viewport.label}/${workspace.id}`)
+      const image = await withElectronE2eTimeout(
+        win.webContents.capturePage(),
+        `capture ${viewport.label}/${workspace.id}`,
+      )
       const fileName = `packaged-beta-${safeE2eFileSegment(viewport.label)}-${safeE2eFileSegment(workspace.id)}.png`
       const filePath = path.join(outputDir, fileName)
       fs.writeFileSync(filePath, image.toPNG())
