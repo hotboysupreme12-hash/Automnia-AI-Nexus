@@ -2451,6 +2451,23 @@ function withElectronE2eTimeout(promise, label, timeoutMs = 20_000) {
   return Promise.race([promise, timeout]).finally(() => clearTimeout(timer))
 }
 
+async function captureElectronE2eImage(win) {
+  if (process.platform !== 'win32') return win.webContents.capturePage()
+
+  const debuggerSession = win.webContents.debugger
+  const wasAttached = debuggerSession.isAttached()
+  if (!wasAttached) debuggerSession.attach('1.3')
+  try {
+    const result = await debuggerSession.sendCommand('Page.captureScreenshot', {
+      format: 'png',
+      fromSurface: true,
+    })
+    return nativeImage.createFromBuffer(Buffer.from(result.data, 'base64'))
+  } finally {
+    if (!wasAttached && debuggerSession.isAttached()) debuggerSession.detach()
+  }
+}
+
 function safeE2eFileSegment(value) {
   return String(value || 'unknown')
     .replace(/[^a-z0-9._-]+/gi, '-')
@@ -2599,7 +2616,7 @@ async function runElectronE2eScreenshotCapture(win) {
       const [contentWidth, contentHeight] = win.getContentSize()
       logE2e(`screenshot-capture-start:${viewport.label}:${workspace.id}:${contentWidth}x${contentHeight}`)
       const image = await withElectronE2eTimeout(
-        win.webContents.capturePage(),
+        captureElectronE2eImage(win),
         `capture ${viewport.label}/${workspace.id}`,
       )
       const fileName = `packaged-beta-${safeE2eFileSegment(viewport.label)}-${safeE2eFileSegment(workspace.id)}.png`
