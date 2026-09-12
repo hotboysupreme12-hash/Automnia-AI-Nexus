@@ -2452,20 +2452,9 @@ function withElectronE2eTimeout(promise, label, timeoutMs = 20_000) {
 }
 
 async function captureElectronE2eImage(win) {
-  if (process.platform !== 'win32') return win.webContents.capturePage()
-
-  const debuggerSession = win.webContents.debugger
-  const wasAttached = debuggerSession.isAttached()
-  if (!wasAttached) debuggerSession.attach('1.3')
-  try {
-    const result = await debuggerSession.sendCommand('Page.captureScreenshot', {
-      format: 'png',
-      fromSurface: true,
-    })
-    return nativeImage.createFromBuffer(Buffer.from(result.data, 'base64'))
-  } finally {
-    if (!wasAttached && debuggerSession.isAttached()) debuggerSession.detach()
-  }
+  // Native capture avoids a synchronous DevTools debugger attach that can
+  // block indefinitely on hosted Windows runners.
+  return win.webContents.capturePage()
 }
 
 function safeE2eFileSegment(value) {
