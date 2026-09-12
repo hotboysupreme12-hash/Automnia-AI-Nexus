@@ -77,6 +77,7 @@ const defaultOptionalRequire = createRequire(import.meta.url)
 
 export const DEFAULT_PICKER_TIMEOUT_MS = 60_000
 export const DEFAULT_PICKER_SESSION_TTL_MS = 5 * 60 * 1000
+const WINDOWS_PICKER_POLL_INTERVAL_MS = 100
 
 export function quoteWindowsBatchArg(value: string) {
   return `"${value.replace(/%/g, '%%').replace(/"/g, '""')}"`
@@ -684,7 +685,8 @@ export function createPickerSessionService(options: PickerSessionServiceOptions)
       })
       pollTimer = setServiceInterval(() => {
         void readOutput()
-      }, 500)
+      }, WINDOWS_PICKER_POLL_INTERVAL_MS)
+      void readOutput()
       timeoutTimer = setServiceTimeout(() => {
         void finish('error', `Folder picker timed out after ${Math.round(timeoutMs / 1000)} seconds. Paste a directory path manually and press Set, or try Browse again.`)
       }, timeoutMs)
@@ -848,7 +850,8 @@ export function createPickerSessionService(options: PickerSessionServiceOptions)
       })
       pollTimer = setServiceInterval(() => {
         void readOutput()
-      }, 500)
+      }, WINDOWS_PICKER_POLL_INTERVAL_MS)
+      void readOutput()
       timeoutTimer = setServiceTimeout(() => {
         void finish('error', `Image picker timed out after ${Math.round(timeoutMs / 1000)} seconds. Try Browse again.`)
       }, timeoutMs)
