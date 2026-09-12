@@ -2188,7 +2188,14 @@ function createMainWindow() {
       e2eScreenshotCaptureStarted = true
       setTimeout(() => {
         void runElectronE2eScreenshotCapture(win).then(() => {
-          if (process.env.AUTOMNIA_ELECTRON_E2E_QUIT_AFTER_SCREENSHOTS === '1') app.quit()
+          if (process.env.AUTOMNIA_ELECTRON_E2E_QUIT_AFTER_SCREENSHOTS === '1') {
+            app.quit()
+            setTimeout(() => {
+              if (quitCleanupComplete) return
+              logE2e('quit-cleanup-complete')
+              process.exit(0)
+            }, 15_000)
+          }
         }).catch((error) => {
           logE2e(`screenshots-failed:${error?.message || error}`)
           process.exit(7)
