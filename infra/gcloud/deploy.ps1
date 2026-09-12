@@ -112,6 +112,7 @@ try {
 SHOPIFY_PLAN_MAPPINGS: '$planBase64'
 SHOPIFY_CHECKOUT_URL: '$($config.ShopifyCheckoutUrl)'
 AUTOMNIA_DOWNLOAD_BASE_URL: '$($config.PermanentBaseUrl)'
+AUTOMNIA_BILLING_RETRY_AUDIENCE: '$($config.PermanentBaseUrl)'
 INSTALLER_BUCKET: '$installerBucket'
 INSTALLER_SIGNED_URL_MINUTES: '$($config.InstallerSignedUrlMinutes)'
 INSTALLER_WINDOWS_X64_OBJECT: '$($config.InstallerWindowsX64Object)'
@@ -188,6 +189,27 @@ if ($service.status -and $service.status.PSObject.Properties['traffic'] -and $se
 }
 $candidateUrl = if ($candidateTraffic -and $candidateTraffic.url) { [string]$candidateTraffic.url } else { [string]$service.status.url }
 $health = & (Join-Path $PSScriptRoot 'health.ps1') -ProjectId $ProjectId -Region $Region -BaseUrl $candidateUrl -SkipGmail:$SkipGmail
+if ($PSCmdlet.ShouldProcess("$ProjectId/$Region/$($config.BillingRetryJobName)", 'configure Shopify billing retry scheduler')) {
+  $retryJobName = [string]$config.BillingRetryJobName
+  $retryJobUri = "$($config.PermanentBaseUrl.TrimEnd('/'))/admin/shopify/billing-retries"
+  $retryJob = Invoke-Gcloud -Arguments @('scheduler', 'jobs', 'describe', $retryJobName, '--project', $ProjectId, '--location', $Region, '--format=value(name)') -AllowFailure
+  $retryJobArguments = @(
+    '--project', $ProjectId,
+    '--location', $Region,
+    '--schedule', [string]$config.BillingRetrySchedule,
+    '--uri', $retryJobUri,
+    '--http-method', 'POST',
+    '--attempt-deadline', '300s',
+    '--max-retry-attempts', '2',
+    '--oidc-service-account-email', $serviceAccountEmail,
+    '--oidc-token-audience', [string]$config.PermanentBaseUrl
+  )
+  if ($retryJob.ExitCode -ne 0) {
+    Invoke-Gcloud -Arguments (@('scheduler', 'jobs', 'create', 'http', $retryJobName) + $retryJobArguments) | Out-Null
+  } else {
+    Invoke-Gcloud -Arguments (@('scheduler', 'jobs', 'update', 'http', $retryJobName) + $retryJobArguments) | Out-Null
+  }
+}
 $timestamp = [DateTimeOffset]::UtcNow.ToString('yyyyMMddTHHmmssZ')
 $state = [ordered]@{
   kind = 'automnia-gcloud-deployment'

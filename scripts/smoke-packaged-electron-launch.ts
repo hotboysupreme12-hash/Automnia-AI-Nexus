@@ -194,7 +194,7 @@ try {
       resolve(code)
     })
   })
-  assert.equal(launcherStatus, 0, `packaged launcher exited ${launcherStatus}\n${launcherOutput}`)
+  assert.equal(launcherStatus, 0, `packaged launcher exited ${launcherStatus}`)
 
   await waitForLogPatterns(logPath, [
     /\[automnia-e2e\] port-cleanup-skipped/,

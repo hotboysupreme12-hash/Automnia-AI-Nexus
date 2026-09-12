@@ -1,5 +1,5 @@
 @{
-  SchemaVersion = '2026-09-12.3'
+  SchemaVersion = '2026-09-12.5'
   Region = 'us-east1'
   FirestoreLocation = 'us-east1'
   # Automnia's Gemini 3.7 Flash relay is served through Vertex's global endpoint. Keeping this
@@ -36,6 +36,8 @@
   KnowledgeFallbackModelVersion = 'gemini-2.5-flash/answer_gen/v1'
   PermanentBaseUrl = 'https://api.automnia.app'
   PermanentDomain = 'api.automnia.app'
+  BillingRetrySchedule = '*/15 * * * *'
+  BillingRetryJobName = 'automnia-shopify-billing-retry'
   # Private, uniformly-access-controlled GCS bucket for customer installers.
   # Leave blank to derive "$ProjectId-automnia-installers" during deployment.
   InstallerBucket = ''
@@ -65,6 +67,7 @@
     'cloudbilling.googleapis.com'
     'cloudbuild.googleapis.com'
     'cloudresourcemanager.googleapis.com'
+    'cloudscheduler.googleapis.com'
     'dns.googleapis.com'
     'discoveryengine.googleapis.com'
     'firestore.googleapis.com'

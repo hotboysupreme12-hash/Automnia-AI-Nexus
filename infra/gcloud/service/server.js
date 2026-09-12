@@ -26,8 +26,8 @@ import { buildLicenseEmailHtml } from './welcomeEmail.js';
 
 const app = express();
 const port = process.env.PORT || 8080;
-const serviceVersion = '2.10.1';
-const schemaVersion = '2026-09-12.3';
+const serviceVersion = '2.10.3';
+const schemaVersion = '2026-09-12.5';
 const secrets = (process.env.SHOPIFY_WEBHOOK_SECRETS || process.env.SHOPIFY_WEBHOOK_SECRET || '')
   .split(',')
   .map((value) => value.trim())
@@ -43,7 +43,8 @@ const shopifyApiVersion = String(process.env.SHOPIFY_API_VERSION || '2026-07').t
 let shopifyAccessTokenCache = null;
 const billingRetryAudience = String(process.env.AUTOMNIA_BILLING_RETRY_AUDIENCE || 'https://api.automnia.app').trim();
 const BILLING_RETRY_DELAY_MS = 24 * 60 * 60 * 1000;
-const BILLING_RETRY_MAX_ATTEMPTS = 2;
+const BILLING_RETRY_MAX_ATTEMPTS = 3;
+const BILLING_ATTEMPT_CLAIM_TIMEOUT_MS = 30 * 60 * 1000;
 const retryableBillingErrorCodes = new Set([
   'INSUFFICIENT_FUNDS',
   'PAYMENT_PROVIDER_ERROR',
@@ -767,6 +768,10 @@ function publicLicense(record) {
     trialEndsAt: record.trialEndsAt || null,
     nextBillingAt: record.nextBillingAt || null,
     trialConvertedAt: record.trialConvertedAt || null,
+    paymentStatus: record.paymentStatus || null,
+    billingFailureCode: record.billingFailureCode || null,
+    billingRetryAt: record.billingRetryAt || null,
+    billingRetryCount: safeNonNegativeInteger(record.billingRetryCount),
     createdAt: record.createdAt,
     updatedAt: record.updatedAt || null,
     activatedAt: record.activatedAt || null,
@@ -1087,6 +1092,290 @@ function billingRetryAtFor({ topic, failureCode, retryCount, now }) {
   return new Date(Date.parse(now) + BILLING_RETRY_DELAY_MS).toISOString();
 }
 
+async function claimBillingRetry(record, now) {
+  const retryAt = Date.parse(record?.billingRetryAt || '');
+  if (!record || !record.subscriptionContractId || record.subscriptionStatus !== 'payment_failed'
+    || !Number.isFinite(retryAt) || retryAt > Date.parse(now)
+    || !retryableBillingErrorCodes.has(String(record.billingFailureCode || '').toUpperCase())
+    || safeNonNegativeInteger(record.billingRetryCount) >= BILLING_RETRY_MAX_ATTEMPTS) return null;
+  const nextAttempt = safeNonNegativeInteger(record.billingRetryCount) + 1;
+  const idempotencyKey = crypto.createHash('sha256')
+    .update(`automnia-billing-retry:${record.subscriptionContractId}:${nextAttempt}`)
+    .digest('hex');
+  if (useInMemoryStorage) {
+    if (record.subscriptionStatus !== 'payment_failed') return null;
+    Object.assign(record, { billingRetryCount: nextAttempt, billingRetryAt: null, billingRetryLastAttemptAt: now, billingRetryIdempotencyKey: idempotencyKey, updatedAt: now });
+    return { ...record, billingRetryAttemptNumber: nextAttempt, billingRetryIdempotencyKey: idempotencyKey };
+  }
+  const licenseRef = record._ref || licenses.doc(record.orderId);
+  return firestore.runTransaction(async (transaction) => {
+    const snapshot = await transaction.get(licenseRef);
+    if (!snapshot.exists) return null;
+    const current = snapshot.data();
+    const currentRetryAt = Date.parse(current.billingRetryAt || '');
+    if (current.subscriptionStatus !== 'payment_failed'
+      || !Number.isFinite(currentRetryAt) || currentRetryAt > Date.parse(now)
+      || safeNonNegativeInteger(current.billingRetryCount) >= BILLING_RETRY_MAX_ATTEMPTS
+      || !retryableBillingErrorCodes.has(String(current.billingFailureCode || '').toUpperCase())) return null;
+    const currentAttemptNumber = safeNonNegativeInteger(current.billingRetryCount) + 1;
+    const currentIdempotencyKey = crypto.createHash('sha256')
+      .update(`automnia-billing-retry:${current.subscriptionContractId}:${currentAttemptNumber}`)
+      .digest('hex');
+    transaction.update(licenseRef, {
+      billingRetryCount: currentAttemptNumber,
+      billingRetryAt: null,
+      billingRetryLastAttemptAt: now,
+      billingRetryIdempotencyKey: currentIdempotencyKey,
+      updatedAt: now,
+    });
+    return { ...current, billingRetryAttemptNumber: currentAttemptNumber, billingRetryIdempotencyKey: currentIdempotencyKey };
+  });
+}
+
+async function rescheduleBillingRetry(record, now) {
+  if (!record?.subscriptionContractId || safeNonNegativeInteger(record.billingRetryCount) >= BILLING_RETRY_MAX_ATTEMPTS) return;
+  const retryAt = new Date(Date.parse(now) + BILLING_RETRY_DELAY_MS).toISOString();
+  if (useInMemoryStorage) {
+    if (record.subscriptionStatus === 'payment_failed') Object.assign(record, { billingRetryAt: retryAt, updatedAt: now });
+    return;
+  }
+  const licenseRef = record._ref || licenses.doc(record.orderId);
+  await firestore.runTransaction(async (transaction) => {
+    const snapshot = await transaction.get(licenseRef);
+    if (!snapshot.exists || snapshot.get('subscriptionStatus') !== 'payment_failed') return;
+    transaction.update(licenseRef, { billingRetryAt: retryAt, updatedAt: now });
+  });
+}
+
+async function createSubscriptionBillingAttempt(record, idempotencyKey) {
+  const billingCycleIndex = Number.isInteger(Number(record?.billingCycleIndex)) && Number(record.billingCycleIndex) >= 1
+    ? Number(record.billingCycleIndex)
+    : null;
+  const billingCycleSelector = billingCycleIndex ? `billingCycleSelector:{index:${billingCycleIndex}},` : '';
+  const mutation = `mutation CreateSubscriptionBillingAttempt($contractId:ID!,$idempotencyKey:String!) {
+    subscriptionBillingAttemptCreate(subscriptionContractId:$contractId, subscriptionBillingAttemptInput:{${billingCycleSelector}
+      idempotencyKey:$idempotencyKey,
+      actor:PARTNER,
+      paymentProcessingPolicy:FAIL_UNLESS_VALID_PAYMENT_METHOD
+    }) {
+      subscriptionBillingAttempt { id state { __typename } }
+      userErrors { field message code }
+    }
+  }`;
+  const body = await shopifyAdminGraphql(mutation, {
+    contractId: /^gid:\/\/shopify\/SubscriptionContract\//i.test(String(record.subscriptionContractId))
+      ? String(record.subscriptionContractId)
+      : `gid://shopify/SubscriptionContract/${normalizeShopifyContractId(record.subscriptionContractId)}`,
+    idempotencyKey,
+  });
+  const result = body?.data?.subscriptionBillingAttemptCreate;
+  if (Array.isArray(result?.userErrors) && result.userErrors.length) {
+    const firstError = result.userErrors[0] || {};
+    const errorCode = String(firstError.code || 'BILLING_ATTEMPT_REJECTED').trim().toUpperCase().slice(0, 120);
+    console.warn(JSON.stringify({ event: 'shopify_billing_attempt_rejected', contractId: normalizeShopifyContractId(record.subscriptionContractId), errorCode, errorCount: result.userErrors.length }));
+    return { accepted: false, errorCode };
+  }
+  if (!result?.subscriptionBillingAttempt) throw new Error('Shopify did not return the billing retry attempt.');
+  return { accepted: true, attemptId: result.subscriptionBillingAttempt.id || null };
+}
+
+function initialBillingAttemptKey(contractId) {
+  return crypto.createHash('sha256')
+    .update(`automnia-billing-initial:${contractId}`)
+    .digest('hex');
+}
+
+function recurringBillingAttemptKey(contractId, billingAt) {
+  return crypto.createHash('sha256')
+    .update(`automnia-billing-recurring:${contractId}:${billingAt}`)
+    .digest('hex');
+}
+
+function billingAttemptClaimAvailable(claimedAt, nowTimestamp) {
+  if (!claimedAt) return true;
+  const claimedTimestamp = Date.parse(String(claimedAt));
+  return Number.isFinite(claimedTimestamp) && nowTimestamp - claimedTimestamp >= BILLING_ATTEMPT_CLAIM_TIMEOUT_MS;
+}
+
+async function claimDueSubscriptionBillingAttempt(record, now) {
+  if (!record?.subscriptionContractId) return null;
+  const trialEndsAt = Date.parse(record.trialEndsAt || '');
+  const nextBillingAt = Date.parse(record.nextBillingAt || '');
+  const nowTimestamp = Date.parse(now);
+  const isInitial = Number.isFinite(trialEndsAt)
+    && trialEndsAt <= nowTimestamp
+    && !record.trialConvertedAt
+    && ['trialing', 'active'].includes(String(record.subscriptionStatus || '').toLowerCase())
+    && !record.billingAttemptDispatchedAt;
+  const isRecurring = Number.isFinite(nextBillingAt)
+    && nextBillingAt <= nowTimestamp
+    && record.trialConvertedAt
+    && String(record.subscriptionStatus || '').toLowerCase() === 'active'
+    && String(record.billingAttemptDispatchedFor || '') !== String(record.nextBillingAt || '');
+  if (!isInitial && !isRecurring) return null;
+  const billingAt = isInitial ? record.trialEndsAt : record.nextBillingAt;
+  const mode = isInitial ? 'initial' : 'recurring';
+  const idempotencyKey = isInitial
+    ? initialBillingAttemptKey(record.subscriptionContractId)
+    : recurringBillingAttemptKey(record.subscriptionContractId, billingAt);
+  const claim = {
+    billingAttemptMode: mode,
+    billingAttemptFor: billingAt,
+    billingCycleIndex: isInitial ? 1 : null,
+    billingAttemptIdempotencyKey: idempotencyKey,
+    billingAttemptClaimedAt: now,
+    updatedAt: now,
+  };
+  if (useInMemoryStorage) {
+    if (isInitial && record.billingAttemptDispatchedAt) return null;
+    if (isRecurring && String(record.billingAttemptDispatchedFor || '') === String(record.nextBillingAt || '')) return null;
+    Object.assign(record, claim);
+    return { ...record, ...claim };
+  }
+  const licenseRef = record._ref || licenses.doc(record.orderId);
+  return firestore.runTransaction(async (transaction) => {
+    const snapshot = await transaction.get(licenseRef);
+    if (!snapshot.exists) return null;
+    const current = snapshot.data();
+    const currentTrialEndsAt = Date.parse(current.trialEndsAt || '');
+    const currentNextBillingAt = Date.parse(current.nextBillingAt || '');
+    const currentIsInitial = Number.isFinite(currentTrialEndsAt)
+      && currentTrialEndsAt <= nowTimestamp
+      && !current.trialConvertedAt
+      && ['trialing', 'active'].includes(String(current.subscriptionStatus || '').toLowerCase())
+      && !current.billingAttemptDispatchedAt
+      && billingAttemptClaimAvailable(current.billingAttemptClaimedAt, nowTimestamp);
+    const currentIsRecurring = Number.isFinite(currentNextBillingAt)
+      && currentNextBillingAt <= nowTimestamp
+      && current.trialConvertedAt
+      && String(current.subscriptionStatus || '').toLowerCase() === 'active'
+      && String(current.billingAttemptDispatchedFor || '') !== String(current.nextBillingAt || '')
+      && billingAttemptClaimAvailable(current.billingAttemptClaimedAt, nowTimestamp);
+    if (!currentIsInitial && !currentIsRecurring) return null;
+    const currentMode = currentIsInitial ? 'initial' : 'recurring';
+    const currentBillingAt = currentIsInitial ? current.trialEndsAt : current.nextBillingAt;
+    const currentKey = currentIsInitial
+      ? initialBillingAttemptKey(current.subscriptionContractId)
+      : recurringBillingAttemptKey(current.subscriptionContractId, currentBillingAt);
+    const currentClaim = {
+      billingAttemptMode: currentMode,
+      billingAttemptFor: currentBillingAt,
+      billingCycleIndex: currentIsInitial ? 1 : null,
+      billingAttemptIdempotencyKey: currentKey,
+      billingAttemptClaimedAt: now,
+      updatedAt: now,
+    };
+    transaction.update(licenseRef, currentClaim);
+    return { ...current, _ref: licenseRef, ...currentClaim };
+  });
+}
+
+async function finalizeBillingAttemptDispatch(record, now, attemptId) {
+  const update = {
+    billingAttemptDispatchedAt: now,
+    billingAttemptDispatchedFor: record.billingAttemptFor || null,
+    billingAttemptId: attemptId || null,
+    billingAttemptClaimedAt: null,
+    updatedAt: now,
+  };
+  if (useInMemoryStorage) {
+    Object.assign(record, update);
+    return;
+  }
+  const licenseRef = record._ref || licenses.doc(record.orderId);
+  await licenseRef.update(update);
+}
+
+async function releaseBillingAttemptClaim(record, now) {
+  const update = { billingAttemptClaimedAt: null, updatedAt: now };
+  if (useInMemoryStorage) {
+    Object.assign(record, update);
+    return;
+  }
+  const licenseRef = record._ref || licenses.doc(record.orderId);
+  await licenseRef.update(update);
+}
+
+async function recordBillingAttemptFailure(record, errorCode, now) {
+  const failureCode = String(errorCode || 'BILLING_ATTEMPT_REJECTED').trim().toUpperCase().slice(0, 120);
+  const retryCount = safeNonNegativeInteger(record.billingRetryCount);
+  const retryAt = retryableBillingErrorCodes.has(failureCode) && retryCount < BILLING_RETRY_MAX_ATTEMPTS
+    ? new Date(Date.parse(now) + BILLING_RETRY_DELAY_MS).toISOString()
+    : null;
+  const update = {
+    subscriptionStatus: 'payment_failed',
+    paymentStatus: 'payment_failed',
+    billingFailureCode: failureCode,
+    billingFailureAt: now,
+    billingRetryAt: retryAt,
+    billingAttemptClaimedAt: null,
+    updatedAt: now,
+  };
+  if (useInMemoryStorage) {
+    Object.assign(record, update);
+    return;
+  }
+  const licenseRef = record._ref || licenses.doc(record.orderId);
+  await licenseRef.update(update);
+}
+
+async function processDueSubscriptionBillingAttempts() {
+  const now = new Date().toISOString();
+  if (useInMemoryStorage) return { scanned: 0, attempted: 0, accepted: 0, rejected: 0 };
+  const [trialSnapshot, recurringSnapshot] = await Promise.all([
+    licenses.where('trialEndsAt', '<=', now).limit(100).get(),
+    licenses.where('nextBillingAt', '<=', now).limit(100).get(),
+  ]);
+  const documents = new Map();
+  for (const document of [...trialSnapshot.docs, ...recurringSnapshot.docs]) documents.set(document.id, document);
+  let attempted = 0;
+  let accepted = 0;
+  let rejected = 0;
+  for (const document of documents.values()) {
+    const record = { ...document.data(), _ref: document.ref };
+    const claimed = await claimDueSubscriptionBillingAttempt(record, now);
+    if (!claimed) continue;
+    attempted += 1;
+    try {
+      const result = await createSubscriptionBillingAttempt(claimed, claimed.billingAttemptIdempotencyKey);
+      if (result.accepted) {
+        accepted += 1;
+        await finalizeBillingAttemptDispatch(claimed, now, result.attemptId);
+      } else {
+        rejected += 1;
+        await recordBillingAttemptFailure(claimed, result.errorCode, now);
+      }
+    } catch (error) {
+      console.error(JSON.stringify({ event: 'shopify_billing_attempt_dispatch_failed', contractId: normalizeShopifyContractId(claimed.subscriptionContractId), message: String(error?.message || error).slice(0, 240) }));
+      await releaseBillingAttemptClaim(claimed, now);
+    }
+  }
+  return { scanned: documents.size, attempted, accepted, rejected };
+}
+
+async function processDueBillingRetries() {
+  const now = new Date().toISOString();
+  if (useInMemoryStorage) return { scanned: 0, attempted: 0, accepted: 0 };
+  const snapshot = await licenses.where('billingRetryAt', '<=', now).limit(100).get();
+  let attempted = 0;
+  let accepted = 0;
+  for (const document of snapshot.docs) {
+    const record = { ...document.data(), _ref: document.ref };
+    const claimed = await claimBillingRetry(record, now);
+    if (!claimed) continue;
+    attempted += 1;
+    try {
+      const result = await createSubscriptionBillingAttempt(claimed, claimed.billingRetryIdempotencyKey);
+      if (result.accepted) accepted += 1;
+      else await rescheduleBillingRetry(claimed, now);
+    } catch (error) {
+      console.error(JSON.stringify({ event: 'shopify_billing_retry_dispatch_failed', contractId: normalizeShopifyContractId(claimed.subscriptionContractId), message: String(error?.message || error).slice(0, 240) }));
+      await rescheduleBillingRetry(claimed, now);
+    }
+  }
+  return { scanned: snapshot.size, attempted, accepted };
+}
+
 async function updateShopifyState({ record, topic, deliveryId, subscriptionContractId, subscriptionStatus, paymentStatus, nextBillingAt, billingFailureCode }) {
   const eventId = webhookEventId(topic, deliveryId, `${subscriptionContractId || record.orderId}:${subscriptionStatus || paymentStatus || 'state'}`);
   const now = new Date().toISOString();
@@ -1098,24 +1387,33 @@ async function updateShopifyState({ record, topic, deliveryId, subscriptionContr
   const failureCode = String(billingFailureCode || '').trim().toUpperCase().slice(0, 120);
   const retryCount = safeNonNegativeInteger(record.billingRetryCount);
   const nextBillingRetryAt = billingRetryAtFor({ topic, failureCode, retryCount, now });
+  const suppliedNextBillingAt = Date.parse(String(nextBillingAt || '')) > Date.parse(now) ? nextBillingAt : null;
+  const effectiveNextBillingAt = suppliedNextBillingAt
+    || (topic === 'subscription_billing_attempts/success'
+      ? nextMonthlyBillingDate(record.nextBillingAt || record.trialEndsAt || now)
+      : null);
   const update = {
     ...(subscriptionContractId ? { subscriptionContractId } : {}),
     ...(effectiveStatus ? { subscriptionStatus: effectiveStatus } : {}),
     ...(paymentStatus ? { paymentStatus } : {}),
-    ...(nextBillingAt ? { nextBillingAt } : {}),
+    ...(effectiveNextBillingAt ? { nextBillingAt: effectiveNextBillingAt } : {}),
     ...(topic === 'subscription_billing_attempts/failure' ? {
       paymentStatus: 'payment_failed',
       billingFailureCode: failureCode || null,
       billingFailureAt: now,
       billingRetryAt: nextBillingRetryAt,
+      billingAttemptClaimedAt: null,
     } : {}),
     ...(topic === 'subscription_billing_attempts/success' ? {
       paymentStatus: 'paid',
       billingRetryAt: null,
       billingRetryCount: 0,
       billingFailureCode: null,
+      billingAttemptClaimedAt: null,
+      billingAttemptDispatchedFor: null,
+      billingCycleIndex: null,
     } : {}),
-    ...(topic === 'subscription_billing_attempts/success' && record.trialEndsAt ? { trialConvertedAt: now } : {}),
+    ...(topic === 'subscription_billing_attempts/success' && record.trialEndsAt ? { trialConvertedAt: record.trialConvertedAt || now } : {}),
     updatedAt: now,
   };
   if (useInMemoryStorage) {
@@ -2856,6 +3154,30 @@ function shopifyDateFromPayload(payload, ...keys) {
   return null;
 }
 
+function nextMonthlyBillingDate(value) {
+  const timestamp = Date.parse(String(value || ''));
+  if (!Number.isFinite(timestamp)) return null;
+  const date = new Date(timestamp);
+  const dayOfMonth = date.getUTCDate();
+  date.setUTCDate(1);
+  date.setUTCMonth(date.getUTCMonth() + 1);
+  const lastDayOfNextMonth = new Date(Date.UTC(date.getUTCFullYear(), date.getUTCMonth() + 1, 0)).getUTCDate();
+  date.setUTCDate(Math.min(dayOfMonth, lastDayOfNextMonth));
+  return date.toISOString();
+}
+
+async function fetchShopifyContractNextBillingDate(contractId) {
+  if (!contractId) return null;
+  const contractGid = /^gid:\/\/shopify\/SubscriptionContract\//i.test(String(contractId))
+    ? String(contractId)
+    : `gid://shopify/SubscriptionContract/${normalizeShopifyContractId(contractId)}`;
+  const query = `query GetSubscriptionContractNextBillingDate($id:ID!) {
+    subscriptionContract(id:$id) { nextBillingDate }
+  }`;
+  const body = await shopifyAdminGraphql(query, { id: contractGid });
+  return shopifyDateFromPayload(body?.data?.subscriptionContract, 'nextBillingDate');
+}
+
 function trialWindowFor(tierConfig, order, contractPayload) {
   const trialDays = Number.isInteger(Number(tierConfig?.trialDays)) ? Number(tierConfig.trialDays) : 0;
   const sellingPlanId = normalizePlanId(tierConfig?.sellingPlanId);
@@ -3084,8 +3406,23 @@ async function handleSubscriptionState(payload, topic, deliveryId) {
                 : topic.endsWith('/challenged') ? 'payment_challenged'
                   : null
   );
-  const nextBillingAt = shopifyDateFromPayload(payload, 'next_billing_date', 'nextBillingDate');
-  const updated = await updateShopifyState({ record, topic, deliveryId, subscriptionContractId: contractId || record.subscriptionContractId || null, subscriptionStatus, nextBillingAt });
+  let nextBillingAt = shopifyDateFromPayload(payload, 'next_billing_date', 'nextBillingDate');
+  if (topic === 'subscription_billing_attempts/success' && !nextBillingAt && contractId) {
+    try {
+      nextBillingAt = await fetchShopifyContractNextBillingDate(contractId);
+    } catch (error) {
+      console.warn(JSON.stringify({ event: 'shopify_next_billing_date_lookup_failed', contractId, message: String(error?.message || error).slice(0, 240) }));
+    }
+  }
+  const updated = await updateShopifyState({
+    record,
+    topic,
+    deliveryId,
+    subscriptionContractId: contractId || record.subscriptionContractId || null,
+    subscriptionStatus,
+    nextBillingAt,
+    billingFailureCode: billingFailureCodeFromShopify(payload),
+  });
   return { action: 'subscription_state_updated', license: updated };
 }
 
@@ -3123,6 +3460,22 @@ app.post('/shopify/webhooks/:webhookName', requireWritesEnabled, express.raw({ t
   } catch (error) {
     console.error('Error processing Shopify webhook:', { topic, deliveryId, message: error instanceof Error ? error.message : String(error) });
     return res.status(503).json({ error: 'Failed to provision and deliver the Automnia license.' });
+  }
+});
+
+// Cloud Scheduler invokes this endpoint with a Google-signed OIDC token. The
+// handler dispatches due normal subscription billing cycles, then retries only
+// records explicitly marked retryable by Shopify's billing-failure webhook.
+app.post('/admin/shopify/billing-retries', requireWritesEnabled, requireSchedulerIdentity, express.json({ limit: '8kb' }), async (_req, res) => {
+  try {
+    const [billingAttempts, billingRetries] = await Promise.all([
+      processDueSubscriptionBillingAttempts(),
+      processDueBillingRetries(),
+    ]);
+    return res.status(200).json({ ok: true, billingAttempts, billingRetries });
+  } catch (error) {
+    console.error('Failed to process Shopify billing retries:', { message: error instanceof Error ? error.message : String(error) });
+    return res.status(503).json({ ok: false, retryable: true, error: 'Billing retry processing is temporarily unavailable.' });
   }
 });
 
