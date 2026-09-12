@@ -223,7 +223,7 @@ assert(
 assert(
   licenseEntitlement.includes("starter: 'Starter Subscription'")
     && licenseEntitlement.includes("pro: 'Pro Access'")
-    && licenseEntitlement.includes("enterprise: 'Enterprise Access'")
+    && licenseEntitlement.includes("enterprise: 'Pro Access (legacy)'")
     && licenseEntitlement.includes("credit_pack_topup: 'Hosted Credit Refill'")
     && licenseEntitlement.includes("tierLabel: 'BYOK Access'"),
   'license entitlement presentation should cover every published plan and permanent BYOK access',

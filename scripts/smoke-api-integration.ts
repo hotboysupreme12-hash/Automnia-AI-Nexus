@@ -210,6 +210,8 @@ async function main() {
       creditBalance: 0,
       creditBalanceUpdatedAt: null,
       creditUsageBaseline: 0,
+      billingUnitVersion: 2,
+      tokensPerCredit: 1_000,
       activatedAt: seededAt,
       verifiedAt: seededAt,
     }), true, 'integration fixture must persist an active license before the server starts')
@@ -296,6 +298,8 @@ async function main() {
       creditBalance: 0,
       creditBalanceUpdatedAt: null,
       creditUsageBaseline: 0,
+      billingUnitVersion: 2,
+      tokensPerCredit: 1_000,
       activatedAt: seededAt,
       verifiedAt: seededAt,
     })
