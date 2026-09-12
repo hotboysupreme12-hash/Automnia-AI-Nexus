@@ -91,7 +91,7 @@ jobs:
         with:
           name: automnia-windows-public-release
           path: |
-            release/*Setup*.exe
+            release/win-installer/*Setup*.exe
             release/updates/**
             release/evidence/**
           if-no-files-found: error
