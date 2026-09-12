@@ -74,8 +74,8 @@ const HOSTED_TIER_LABELS: Record<string, string> = {
   cloud_starter_subscription: 'Starter Legacy Access',
   pro: 'Pro Access',
   pro_tier: 'Pro Access',
-  enterprise: 'Enterprise Access',
-  enterprise_tier: 'Enterprise Access',
+  enterprise: 'Pro Access (legacy)',
+  enterprise_tier: 'Pro Access (legacy)',
   credit_pack_topup: 'Hosted Credit Refill',
   credit_refill: 'Hosted Credit Refill',
 }

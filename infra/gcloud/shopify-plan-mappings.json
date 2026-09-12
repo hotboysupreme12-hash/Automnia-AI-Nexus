@@ -86,7 +86,7 @@
     "mode": "hosted_credits",
     "kind": "subscription",
     "planPriceCents": 1999,
-    "initialCredits": 500000,
+    "initialCredits": 200000,
     "productIds": ["9017938215081"],
     "variantIds": ["47340005851305"],
     "skus": ["AUTO-SUB-STARTER-MONTHLY"]
@@ -96,7 +96,7 @@
     "mode": "hosted_credits",
     "kind": "subscription",
     "planPriceCents": 0,
-    "initialCredits": 500000,
+    "initialCredits": 200000,
     "productIds": ["9020824486057"],
     "variantIds": [],
     "skus": ["AUTO-SUB-STARTER-QA-FREE"]
@@ -107,30 +107,9 @@
     "kind": "license",
     "planPriceCents": 2999,
     "permanentAccess": true,
-    "initialCredits": 2000000,
+    "initialCredits": 400000,
     "productIds": ["9017938182313"],
     "variantIds": ["47340005818537"],
     "skus": ["AUTO-SUB-PRO-MONTHLY"]
-  },
-  {
-    "tier": "enterprise",
-    "mode": "hosted_credits",
-    "kind": "license",
-    "permanentAccess": true,
-    "initialCredits": 10000000,
-    "productIds": ["9017938280617"],
-    "variantIds": ["47340005916841"],
-    "skus": ["AUTO-SUB-ENTERPRISE-MONTHLY"]
-  },
-  {
-    "tier": "byok",
-    "mode": "byok",
-    "permanentAccess": true,
-    "kind": "license",
-    "planPriceCents": 2999,
-    "initialCredits": 0,
-    "productIds": ["9017938247849"],
-    "variantIds": ["47340005884073"],
-    "skus": ["AUTO-BYOK-ONETIME"]
   }
 ]

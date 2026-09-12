@@ -142,3 +142,28 @@ for (const operation of ['cleanupDoctrineMirrorsAfterRun', 'appendAgentDailyMemo
     assert.doesNotMatch(maintenance.issues[0].message, /secret-value/)
   })
 }
+
+test('direct provider streaming compacts and retries an overflow once', async () => {
+  const attempts: string[] = []
+  const events: Array<{ event: string; data: Record<string, unknown> }> = []
+  const { service } = fixture({
+    composeDirectProviderPrompt: (_agent, message) => `DOCTRINE\n${message}`,
+    streamOpenAiCompatibleCompletion: async ({ messages }) => {
+      attempts.push(messages.at(-1)?.content || '')
+      if (attempts.length === 1) throw new Error('context_length_exceeded: prompt too large for the model')
+      return { content: 'continued after compaction' }
+    },
+  })
+
+  const result = await service.streamProviderAgentTurn(
+    { agent: 'agent', message: 'Finish the SEO audit and save the report.', thinking: 'off' },
+    (event, data) => events.push({ event, data }),
+    new AbortController().signal,
+  )
+
+  assert.equal(result.ok, true)
+  assert.equal(result.reply, 'continued after compaction')
+  assert.equal(attempts.length, 2)
+  assert.match(attempts[1], /Finish the SEO audit and save the report/)
+  assert.ok(events.some((entry) => entry.event === 'status' && entry.data.retry === 'context-overflow'))
+})

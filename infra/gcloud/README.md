@@ -26,6 +26,9 @@ included in the sanitized corpus by `npm run publish:knowledge`.
 | `service/` | Deployable Node 22 Cloud Run service for account activation/sign-in, Google linking, license activation, Shopify webhooks, credits, Vertex AI relay, and authenticated Agent Search answers. |
 | `knowledge/` | Sanitized, non-secret source used by the private Automnia Agent Search data store. Never add customer data, passwords, tokens, API keys, or license keys. |
 
+Installer distribution is documented in
+[`../../docs/SHOPIFY_INSTALLER_DELIVERY.md`](../../docs/SHOPIFY_INSTALLER_DELIVERY.md).
+
 ## Hosted-credit token efficiency
 
 The Cloud/Credits relay applies a server-owned token-efficiency policy to every
@@ -161,7 +164,7 @@ The target must be empty by default. `-AllowNonEmptyTarget` is reserved for the 
 ### Hosted-credit wallet behavior during upgrades
 
 An account’s hosted credits are an email-level pooled wallet. When a Starter
-account upgrades to BYOK, Pro, Enterprise, or another eligible tier, the
+account upgrades to Pro, the
 canonical entitlement changes but the prior non-revoked hosted-credit balances
 are preserved. Any credits granted by the new order are additive; they are not
 used to replace the previous balance. The public license response reports the
@@ -174,13 +177,13 @@ The service keeps wallet sources separate for auditability and starts future
 deductions with the canonical upgraded entitlement, then consumes older
 non-revoked sources. Revoked records are excluded from the pool.
 
-BYOK starts at the $29.99 tier. If a BYOK account has a confirmed pooled
+Pro includes connected-provider access. If a Pro account has a confirmed pooled
 balance—such as credits carried over from Starter—the Account & License
 selector exposes **My provider + Automnia credits** and a secondary choice of
-provider-first or Automnia-first. Starter ($19.99) and credit refills remain
-locked to **Automnia credits only**; a zero balance stops the route with an
-explicit refill message. The $49.99 and $199 Enterprise tiers use the same
-combined provider-plus-Automnia controls.
+provider-first or Automnia-first. Starter and credit refills remain locked to
+**Automnia credits only**; a zero balance stops the route with an explicit
+refill message. Pro is the only higher tier and contains the complete
+provider-plus-Automnia controls formerly associated with Enterprise.
 
 The lower-level commands are available for audited backup/restore operations:
 

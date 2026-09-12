@@ -9,6 +9,7 @@ for (const code of [0, 1, 400]) test(`gateway automatically recovers context ove
   const events: Array<{ event: string; data: Record<string, unknown> }> = []
   const gatewayTurns: Array<Record<string, unknown>> = []
   const deletedSessionIds: string[] = []
+  let compactCalls = 0
   const sessions = new Map<string, string>([['agent-alpha:clawtalk:sms:example', 'existing-session']])
 
   const service = createGatewayAgentTurnService({
@@ -56,6 +57,10 @@ for (const code of [0, 1, 400]) test(`gateway automatically recovers context ove
       }
       return { stdout: 'fresh reply', stderr: '', code: 0 }
     },
+    compactGatewayChatSession: async () => {
+      compactCalls += 1
+      return { ok: true, compacted: true }
+    },
     extractAgentReply: (stdout) => stdout,
   })
 
@@ -79,11 +84,12 @@ for (const code of [0, 1, 400]) test(`gateway automatically recovers context ove
   assert.equal(result.reply, 'fresh reply')
   assert.ok(events.some((entry) => entry.event === 'delta' && entry.data.replace === true && entry.data.text === 'fresh reply'))
   assert.equal(gatewayTurns.length, 2)
-  assert.notEqual(gatewayTurns[0].sessionId, gatewayTurns[1].sessionId)
-  assert.equal(gatewayTurns[1].freshSession, true)
-  assert.deepEqual(deletedSessionIds, [gatewayTurns[0].sessionId])
+  assert.equal(gatewayTurns[0].sessionId, gatewayTurns[1].sessionId)
+  assert.equal(gatewayTurns[1].freshSession, false)
+  assert.equal(compactCalls, 1)
+  assert.deepEqual(deletedSessionIds, [])
   assert.equal(sessions.get('agent-alpha:clawtalk:sms:example'), gatewayTurns[1].sessionId)
-  assert.equal(events.some((entry) => entry.data.retry === 'context-overflow'), true)
+  assert.equal(events.some((entry) => entry.data.retry === 'context-compaction'), true)
 })
 
 for (const scenario of ['exhausted', 'cancel', 'unrelated']) test(`context recovery is bounded: ${scenario}`, async () => {

@@ -25,7 +25,7 @@ function license(overrides: Partial<LicenseInfo> = {}): LicenseInfo {
 test('presents permanent hosted tiers as their highest account access and Automnia credit route', () => {
   for (const [tier, expected] of [
     ['pro', 'Pro Access'],
-    ['enterprise', 'Enterprise Access'],
+    ['enterprise', 'Pro Access (legacy)'],
   ] as const) {
     const entitlement = resolveLicenseEntitlement(license({ tier }))
     assert.equal(entitlement.tierLabel, expected)

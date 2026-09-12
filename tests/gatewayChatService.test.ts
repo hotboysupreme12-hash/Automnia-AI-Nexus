@@ -49,6 +49,7 @@ function createHarness(options: {
   deltaText?: string
   execStartupTimeoutMs?: number
   pendingApprovals?: unknown[]
+  compactResult?: unknown
 } = {}) {
   const requests: RequestLog[] = []
   const finishes: FinishLog[] = []
@@ -112,6 +113,7 @@ function createHarness(options: {
         },
         request: async (method, params, requestOptions) => {
           requests.push({ method, params, timeoutMs: requestOptions?.timeoutMs })
+          if (method === 'sessions.compact') return options.compactResult ?? { ok: true, compacted: true }
           if (method === 'chat.send') {
             if (options.sendError) throw options.sendError
             const runId = isRecord(params) && typeof params.idempotencyKey === 'string' ? params.idempotencyKey : ''
@@ -174,6 +176,22 @@ function createHarness(options: {
     },
   }
 }
+
+test('compactSession uses the canonical Gateway session key', async () => {
+  const harness = createHarness({ compactResult: { ok: true, compacted: true, result: { tokensBefore: 100, tokensAfter: 40 } } })
+  const result = await harness.service.compactSession({
+    agentId: 'agent-alpha',
+    sessionId: 'session-compact',
+    requestedSessionKey: 'control-center:console',
+  })
+
+  assert.equal(result.ok, true)
+  assert.equal(result.compacted, true)
+  const request = harness.requests.find((entry) => entry.method === 'sessions.compact')
+  assert.equal(isRecord(request?.params) && request.params.key, 'agent:agent-alpha:control-center:console')
+  assert.equal(isRecord(request?.params) && request.params.agentId, 'agent-alpha')
+  harness.service.stopClient('test complete')
+})
 
 test('orphaned exec startup is stopped without replaying the turn', async () => {
   const harness = createHarness({ suppressFinal: true, execStartupTimeoutMs: 15 })

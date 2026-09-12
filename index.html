@@ -8,7 +8,45 @@
     <title>Automnia AI Nexus</title>
   </head>
   <body>
-    <div id="root"></div>
+    <div id="root">
+      <div class="automnia-boot-splash" role="status" aria-live="polite">
+        <div class="automnia-boot-splash__mark" aria-hidden="true">A</div>
+        <div>
+          <p class="automnia-boot-splash__title">Automnia AI Nexus</p>
+          <p class="automnia-boot-splash__status">Starting workspace...</p>
+        </div>
+      </div>
+    </div>
+    <style>
+      html, body { min-height: 100%; margin: 0; background: #080b0f; }
+      .automnia-boot-splash {
+        box-sizing: border-box;
+        min-height: 100vh;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        gap: 14px;
+        padding: 32px;
+        color: #f4f7fb;
+        background: #080b0f;
+        font: 14px/1.5 system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      }
+      .automnia-boot-splash__mark {
+        display: grid;
+        width: 38px;
+        height: 38px;
+        place-items: center;
+        border: 1px solid rgba(214, 169, 74, 0.55);
+        border-radius: 10px;
+        color: #f1d88e;
+        background: rgba(214, 169, 74, 0.1);
+        font-weight: 800;
+      }
+      .automnia-boot-splash__title,
+      .automnia-boot-splash__status { margin: 0; }
+      .automnia-boot-splash__title { font-weight: 700; }
+      .automnia-boot-splash__status { color: #a49c8f; font-size: 12px; }
+    </style>
     <script type="module" src="/src/main.tsx"></script>
   </body>
 </html>

@@ -1394,6 +1394,26 @@ export function createGatewayChatService<RunRecord>(options: GatewayChatServiceO
     return isVisibleGatewayAssistantText(text) && !isGatewayHistoryPlaceholder(text) ? text : ''
   }
 
+  async function compactSession(params: {
+    agentId: string
+    sessionId: string
+    requestedSessionKey?: string
+    signal?: AbortSignal
+  }) {
+    const state = await ensureClient(params.signal)
+    const sessionKey = gatewayChatSessionKey(params.agentId, params.sessionId, params.requestedSessionKey)
+    const response = await state.client.request('sessions.compact', {
+      key: sessionKey,
+      agentId: params.agentId,
+    }, { timeoutMs: 30_000, signal: params.signal })
+    return {
+      ok: isLooseRecord(response) && response.ok === true,
+      compacted: isLooseRecord(response) && response.compacted === true,
+      reason: isLooseRecord(response) && typeof response.reason === 'string' ? response.reason : '',
+      sessionKey,
+    }
+  }
+
   function waitForGatewayChatRun(params: {
     client: GatewayClientLike
     runId: string
@@ -1669,6 +1689,7 @@ export function createGatewayChatService<RunRecord>(options: GatewayChatServiceO
     runTurn,
     runtimeSnapshot,
     schedulePrewarm,
+    compactSession,
     stopClient,
     streamObserver,
   }

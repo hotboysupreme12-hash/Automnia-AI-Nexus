@@ -125,8 +125,9 @@ function tierAllowsByok(tier: string | null | undefined) {
 
 function tierRank(tier: string | null | undefined) {
   const normalized = String(tier || '').trim().toLowerCase().replace(/[\s-]+/g, '_')
-  if (normalized.includes('enterprise')) return 3
-  if (normalized.includes('pro')) return 2
+  // The two-plan catalog makes Pro the highest entitlement. Enterprise is
+  // retained here solely so existing customers keep equivalent access.
+  if (normalized.includes('enterprise') || normalized.includes('pro')) return 3
   if (normalized === 'starter' || normalized.includes('starter') || normalized === 'byok' || normalized.includes('byok')) return 1
   if (normalized.includes('credit') || normalized.includes('refill') || normalized.includes('topup')) return 0
   return normalized ? 1 : 0

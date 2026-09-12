@@ -42,20 +42,20 @@ secret in chat.
 
 On first activation, a user can create an Automnia account password. The password is stored as a one-way password verifier by the hosted account service; Automnia does not display or recover the original password. Users can sign in and out with their Automnia account credentials, and Google sign-in can be linked when it is available.
 
-Higher plans can use BYOK provider credentials and can continue local work offline when the user has configured a supported provider. Hosted-credit plans use the Automnia Cloud relay and require an active subscription or credit balance. A Starter plan requires online entitlement verification and does not include BYOK access. Never put passwords, access tokens, API keys, or private customer data into support questions or documentation.
+Pro can use connected provider credentials and can continue local work offline when the user has configured a supported provider. Hosted-credit plans use the Automnia Cloud relay and require an active subscription or credit balance. Starter includes 200,000 credits, requires online entitlement verification, and does not include provider access; Pro includes 400,000 credits and the complete advanced capability set. Never put passwords, access tokens, API keys, or private customer data into support questions or documentation.
 
 ## Hosted Automnia Cloud relay
 
 The hosted relay is a Cloud Run service owned by the Automnia deployment. The desktop app sends hosted-credit requests to the relay; the relay authenticates the active license, calls the configured Google Vertex AI service identity, records usage, and returns the remaining Automnia credit balance. A relay failure should be shown as a relay or provider problem and should not silently switch a hosted-credit request to an unpaid provider.
 
-BYOK ($29.99) and higher tiers can choose **Automnia credits only** or **My
-provider + Automnia credits** in Account & License. The combined route exposes a
-secondary order choice: provider-first with Automnia fallback or Automnia-first
-with provider fallback. There is no selectable provider-only route. Starter
-($19.99) and credit-refill purchases stay locked to Automnia credits only; a
-confirmed zero balance stops the route and tells the user to refill. Purchases
-linked to the same verified email are pooled after Google or confirmed-password
-sign-in, so users do not need to manage a separate key for each purchase.
+Pro can choose **Automnia credits only** or **My provider + Automnia credits**
+in Account & License. The combined route exposes a secondary order choice:
+provider-first with Automnia fallback or Automnia-first with provider fallback.
+There is no selectable provider-only route. Starter and credit-refill purchases
+stay locked to Automnia credits only; a confirmed zero balance stops the route
+and tells the user to refill. Purchases linked to the same verified email are
+pooled after Google or confirmed-password sign-in, so users do not need to
+manage a separate key for each purchase.
 
 ## OpenClaw gateway and first-run migration
 

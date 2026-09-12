@@ -1,6 +1,7 @@
 import crypto from 'node:crypto';
 import express from 'express';
 import { Firestore } from '@google-cloud/firestore';
+import { Storage } from '@google-cloud/storage';
 import { GoogleAuth, OAuth2Client } from 'google-auth-library';
 import { geminiThinkingConfigFromOpenAiRequest } from './geminiThinking.js';
 import { groupVertexToolResponses } from './vertexToolTurns.js';
@@ -43,6 +44,16 @@ const knowledgeFallbackModelVersion = String(process.env.AUTOMNIA_KNOWLEDGE_FALL
 const vertexRetryAttempts = Math.max(1, Math.min(3, Number(process.env.VERTEX_RETRY_ATTEMPTS || 2) || 2));
 const vertexMaxOutputTokens = Math.max(512, Math.min(4096, Number(process.env.VERTEX_MAX_OUTPUT_TOKENS || 4096) || 4096));
 const checkoutUrl = configuredHttpsUrl(process.env.SHOPIFY_CHECKOUT_URL);
+const downloadBaseUrl = configuredHttpsUrl(process.env.AUTOMNIA_DOWNLOAD_BASE_URL || process.env.AUTOMNIA_PUBLIC_BASE_URL || '');
+const installerBucketName = String(process.env.INSTALLER_BUCKET || '').trim();
+const installerSignedUrlMinutes = Math.max(1, Math.min(60, Number(process.env.INSTALLER_SIGNED_URL_MINUTES || 10) || 10));
+const installerObjects = Object.freeze({
+  'windows-x64': String(process.env.INSTALLER_WINDOWS_X64_OBJECT || '').trim(),
+  'macos-arm64': String(process.env.INSTALLER_MACOS_ARM64_OBJECT || '').trim(),
+  'macos-x64': String(process.env.INSTALLER_MACOS_X64_OBJECT || '').trim(),
+  'linux-appimage-x64': String(process.env.INSTALLER_LINUX_APPIMAGE_X64_OBJECT || '').trim(),
+  'linux-deb-x64': String(process.env.INSTALLER_LINUX_DEB_X64_OBJECT || '').trim(),
+});
 const emailProvider = String(process.env.EMAIL_PROVIDER || (process.env.MICROSOFT_GRAPH_MAIL_CREDENTIALS ? 'microsoft_graph' : 'gmail')).trim().toLowerCase();
 const emailSender = normalizeEmail(process.env.EMAIL_SENDER || process.env.GMAIL_SENDER || '');
 const gmailOAuthCredentials = parseGmailOAuthCredentials(process.env.GMAIL_OAUTH_CREDENTIALS || '');
@@ -66,6 +77,7 @@ const licenseIndexes = firestore?.collection('automnia_license_indexes');
 const creditTopups = firestore?.collection('automnia_credit_topups');
 const creditUsage = firestore?.collection('automnia_credit_usage');
 const shopifyWebhookEvents = firestore?.collection('automnia_shopify_webhook_events');
+const installerStorage = installerBucketName ? new Storage({ projectId: process.env.GOOGLE_CLOUD_PROJECT || undefined }) : null;
 
 // The OpenClaw vendor sends an idempotency key for hosted requests. Keep a
 // short local response cache as the fast path, and persist the same response
@@ -145,8 +157,9 @@ function byokAllowedForTier(tier) {
 
 function tierRank(tier) {
   const normalized = String(tier || '').trim().toLowerCase().replace(/[\s-]+/g, '_');
-  if (normalized.includes('enterprise')) return 3;
-  if (normalized.includes('pro')) return 2;
+  // Pro is the top sellable tier. Keep Enterprise records at this rank so
+  // existing customers retain their access after the catalog consolidation.
+  if (normalized.includes('enterprise') || normalized.includes('pro')) return 3;
   if (normalized === 'starter' || normalized.includes('starter') || normalized === 'byok' || normalized.includes('byok')) return 1;
   if (normalized.includes('credit') || normalized.includes('refill') || normalized.includes('topup')) return 0;
   return normalized ? 1 : 0;
@@ -356,6 +369,84 @@ function configuredHttpsUrl(value) {
   }
 }
 
+function escapeHtml(value) {
+  return String(value ?? '')
+    .replaceAll('&', '&amp;')
+    .replaceAll('<', '&lt;')
+    .replaceAll('>', '&gt;')
+    .replaceAll('"', '&quot;')
+    .replaceAll("'", '&#39;');
+}
+
+function installerPortalConfigured() {
+  return Boolean(downloadBaseUrl && installerBucketName && Object.values(installerObjects).some(Boolean));
+}
+
+function newDownloadAccess() {
+  const token = crypto.randomBytes(32).toString('base64url');
+  return { token, tokenHash: crypto.createHash('sha256').update(token).digest('hex') };
+}
+
+function downloadPortalUrl(orderId, token) {
+  if (!downloadBaseUrl || !orderId || !token) return null;
+  const url = new URL('/download', downloadBaseUrl);
+  url.searchParams.set('o', String(orderId));
+  url.searchParams.set('t', token);
+  return url.toString();
+}
+
+function hasInstallerAccess(record) {
+  if (!record || record.status === 'revoked') return false;
+  return recordHasPermanentAccess(record) || String(record.subscriptionStatus || '').trim().toLowerCase() === 'active';
+}
+
+function validDownloadToken(record, supplied) {
+  const expected = String(record?.downloadTokenHash || '');
+  const actual = crypto.createHash('sha256').update(String(supplied || '')).digest('hex');
+  return expected.length === actual.length && expected.length > 0 && crypto.timingSafeEqual(Buffer.from(expected), Buffer.from(actual));
+}
+
+async function downloadRecordFromRequest(req) {
+  const orderId = String(req.query?.o || '').trim();
+  const token = String(req.query?.t || '').trim();
+  if (!orderId || !token || token.length > 256) return null;
+  const record = await findLicenseByOrderId(orderId);
+  return record && validDownloadToken(record, token) ? record : null;
+}
+
+function installerOptions(availablePlatforms = null) {
+  return [
+    ['macos-arm64', 'macOS — Apple silicon', 'M1, M2, M3, and newer Macs'],
+    ['macos-x64', 'macOS — Intel', 'Intel-based Macs'],
+    ['windows-x64', 'Windows', 'Windows 10 or 11, 64-bit'],
+    ['linux-appimage-x64', 'Linux AppImage', 'Most 64-bit Linux distributions'],
+    ['linux-deb-x64', 'Linux .deb', 'Ubuntu, Debian, and compatible distributions'],
+  ].filter(([id]) => installerObjects[id] && (!availablePlatforms || availablePlatforms.has(id)))
+    .map(([id, label, description]) => ({ id, label, description }));
+}
+
+async function publishedInstallerPlatforms() {
+  if (!installerStorage) return new Set();
+  const checks = await Promise.all(Object.entries(installerObjects).map(async ([platform, objectName]) => {
+    if (!objectName) return null;
+    const [exists] = await installerStorage.bucket(installerBucketName).file(objectName).exists();
+    return exists ? platform : null;
+  }));
+  return new Set(checks.filter(Boolean));
+}
+
+function downloadPage(record, query, availablePlatforms) {
+  const safeOrder = escapeHtml(record.orderName || record.orderId);
+  const links = installerOptions(availablePlatforms).map((option) => {
+    const url = new URL('/download/installer', downloadBaseUrl);
+    url.searchParams.set('o', query.o);
+    url.searchParams.set('t', query.t);
+    url.searchParams.set('platform', option.id);
+    return `<a class="download" data-platform="${escapeHtml(option.id)}" href="${escapeHtml(url.toString())}"><strong>${escapeHtml(option.label)}</strong><small>${escapeHtml(option.description)}</small></a>`;
+  }).join('');
+  return `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Download Automnia</title><meta name="referrer" content="no-referrer"><style>body{margin:0;background:#081016;color:#e5edf5;font:16px -apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif}.wrap{max-width:680px;margin:0 auto;padding:64px 20px}h1{margin:0 0 10px;font-size:32px}p{color:#a7b7c7;line-height:1.55}.card{margin-top:28px;padding:24px;border:1px solid #28404a;border-radius:16px;background:#101b24}.download{display:block;margin:12px 0;padding:17px 18px;border:1px solid #3d6871;border-radius:12px;background:#102d31;color:#eafffb;text-decoration:none}.download:hover{background:#164248}.download strong,.download small{display:block}.download small{margin-top:5px;color:#a7c7c7}.note{font-size:13px}</style></head><body><main class="wrap"><h1>Download Automnia AI Nexus</h1><p>Your Automnia access is active for order ${safeOrder}. Choose your installer below.</p><section class="card">${links || '<p>Installers are being published. Please contact Automnia support.</p>'}</section><p class="note">Each installer link is generated just for this download and expires shortly. Return to this page whenever you need a fresh download while your subscription remains active.</p></main><script>const ua=navigator.userAgent||'';const target=/Windows/i.test(ua)?'windows-x64':/Mac/i.test(ua)?'macos-arm64':/Linux/i.test(ua)?'linux-appimage-x64':'';const el=target&&document.querySelector('[data-platform="'+target+'"]');if(el)el.style.outline='2px solid #77ebd7';</script></body></html>`;
+}
+
 function normalizePlanId(value) {
   return String(value || '').trim();
 }
@@ -408,10 +499,10 @@ function legacyTierConfiguration(tierName, itemTitles = '') {
     return { tier: 'credit_pack_topup', mode: 'hosted_credits', initialCredits: 1_000_000, kind: 'topup' };
   }
   if (normalizedTier.includes('cloud') || normalizedTitles.includes('cloud') || normalizedTitles.includes('hosting')) {
-    return { tier: 'cloud_starter_subscription', mode: 'hosted_credits', planPriceCents: 1_999, initialCredits: 2_500_000, kind: 'subscription' };
+    return { tier: 'cloud_starter_subscription', mode: 'hosted_credits', planPriceCents: 1_999, initialCredits: 200_000, kind: 'subscription' };
   }
   if (normalizedTier.includes('pro') || normalizedTitles.includes('pro')) {
-    return { tier: 'pro_tier', mode: 'hosted_credits', initialCredits: 5_000_000, kind: 'subscription' };
+    return { tier: 'pro_tier', mode: 'hosted_credits', initialCredits: 400_000, kind: 'subscription', permanentAccess: true };
   }
   return { tier: 'founding_beta_byok', mode: 'byok', initialCredits: 0, kind: 'license' };
 }
@@ -1098,6 +1189,9 @@ app.get('/health', (_req, res) => res.status(200).json({
     emailDeliveryAuthMode: testEmailDeliveryStub ? 'stub' : emailDeliveryConfigured ? `${emailProvider}_api` : 'unconfigured',
     emailDeliveryProvider: emailProvider,
     emailDeliverySender: emailSender || null,
+    installerPortalConfigured: installerPortalConfigured(),
+    installerBucketConfigured: Boolean(installerBucketName),
+    installerPlatforms: Object.keys(installerObjects).filter((platform) => installerObjects[platform]),
   },
 }));
 
@@ -1126,6 +1220,59 @@ app.get('/api/commerce/status', (_req, res) => res.status(200).json({
 app.get('/api/commerce/checkout', (_req, res) => {
   if (!checkoutUrl) return res.status(404).json({ ok: false, error: 'Shopify checkout has not been configured by the Automnia billing service.' });
   return res.status(200).json({ ok: true, checkoutUrl });
+});
+
+// The durable customer link points here, never at Cloud Storage. A valid
+// entitlement is checked again before the page or an installer redirect is
+// served, so a GCS URL can remain deliberately short-lived.
+app.get('/download', async (req, res) => {
+  if (!installerPortalConfigured()) return res.status(503).send('Downloads are not configured yet.');
+  try {
+    const record = await downloadRecordFromRequest(req);
+    if (!record) return res.status(404).send('This download link is invalid.');
+    if (!hasInstallerAccess(record)) return res.status(403).send('This subscription is not currently eligible for downloads.');
+    res.set({
+      'Cache-Control': 'no-store, private',
+      'Content-Security-Policy': "default-src 'self'; style-src 'unsafe-inline'; script-src 'unsafe-inline'; base-uri 'none'; frame-ancestors 'none'",
+      'Referrer-Policy': 'no-referrer',
+      'X-Content-Type-Options': 'nosniff',
+    });
+    const availablePlatforms = await publishedInstallerPlatforms();
+    return res.status(200).type('html').send(downloadPage(record, { o: String(req.query.o), t: String(req.query.t) }, availablePlatforms));
+  } catch (error) {
+    console.error(JSON.stringify({ event: 'download_portal_failed', message: String(error?.message || error).slice(0, 300) }));
+    return res.status(503).send('Downloads are temporarily unavailable. Please retry shortly.');
+  }
+});
+
+app.get('/download/installer', async (req, res) => {
+  if (!installerPortalConfigured() || !installerStorage) return res.status(503).send('Downloads are not configured yet.');
+  const platform = String(req.query?.platform || '').trim();
+  const objectName = installerObjects[platform];
+  if (!objectName) return res.status(404).send('That installer is not available.');
+  try {
+    const record = await downloadRecordFromRequest(req);
+    if (!record) return res.status(404).send('This download link is invalid.');
+    if (!hasInstallerAccess(record)) return res.status(403).send('This subscription is not currently eligible for downloads.');
+    const file = installerStorage.bucket(installerBucketName).file(objectName);
+    const [exists] = await file.exists();
+    if (!exists) {
+      console.error(JSON.stringify({ event: 'installer_object_missing', platform, objectName }));
+      return res.status(503).send('That installer is being published. Please retry shortly.');
+    }
+    const filename = objectName.split('/').pop().replace(/[^A-Za-z0-9._ -]/g, '_') || 'Automnia-installer';
+    const [signedUrl] = await file.getSignedUrl({
+      version: 'v4',
+      action: 'read',
+      expires: Date.now() + installerSignedUrlMinutes * 60 * 1000,
+      responseDisposition: `attachment; filename="${filename}"`,
+    });
+    res.set({ 'Cache-Control': 'no-store, private', 'Referrer-Policy': 'no-referrer' });
+    return res.redirect(302, signedUrl);
+  } catch (error) {
+    console.error(JSON.stringify({ event: 'installer_signed_url_failed', platform, message: String(error?.message || error).slice(0, 300) }));
+    return res.status(503).send('Downloads are temporarily unavailable. Please retry shortly.');
+  }
 });
 
 app.get('/provisioned', requireAdmin, async (_req, res) => {
@@ -2091,6 +2238,7 @@ function licenseEmailMessage(record) {
     'Thank you for your Automnia purchase.',
     '',
     `Your Automnia license key: ${String(record?.licenseKey || '').trim()}`,
+    ...(record?.downloadAccessUrl ? ['', `Download Automnia: ${record.downloadAccessUrl}`] : []),
     '',
     ...instructions,
     '',
@@ -2400,6 +2548,13 @@ async function handlePaidOrder(order, deliveryId) {
     accessType: planHasPermanentAccess(tierConfig) ? 'permanent' : 'subscription',
     creditBalance: creditsGrantedForTier(tierConfig),
     licenseKey,
+    ...(() => {
+      const downloadAccess = newDownloadAccess();
+      return {
+        downloadTokenHash: downloadAccess.tokenHash,
+        downloadAccessUrl: downloadPortalUrl(orderId, downloadAccess.token),
+      };
+    })(),
     onboarding: buildOnboardingPackage(order, licenseKey, tierConfig),
     emailDelivery: { status: 'pending', attempts: 0 },
     status: 'provisioned',

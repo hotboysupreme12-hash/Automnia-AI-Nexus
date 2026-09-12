@@ -166,12 +166,12 @@ Account rules:
 
 Hosted-credit requests go through the Automnia Cloud relay. The relay verifies the active entitlement, calls the Automnia-configured model service, records usage, and returns the remaining credit balance. Hosted requests require an active subscription or available credit balance.
 
-BYOK (Bring Your Own Key) starts at the $29.99 tier. BYOK and higher tiers can use **My provider + Automnia credits** and choose the order: provider-first with Automnia fallback or Automnia-first with provider fallback. There is no selectable provider-only route. Starter ($19.99) and credit-refill purchases stay locked to Automnia credits only; a confirmed zero balance must stop with a refill message. The $49.99 and $199 Enterprise tiers use the same combined route controls. Purchases with the same verified email share one pooled balance after Google or confirmed-password sign-in. The exact current entitlement shown in Account & License wins over a remembered plan description.
+Pro includes connected-provider access and can use **My provider + Automnia credits** with the order set to provider-first with Automnia fallback or Automnia-first with provider fallback. There is no selectable provider-only route. Starter and credit-refill purchases stay locked to Automnia credits only; a confirmed zero balance must stop with a refill message. Pro is the sole advanced plan and includes every capability formerly offered in Enterprise. Purchases with the same verified email share one pooled balance after Google or confirmed-password sign-in. The exact current entitlement shown in Account & License wins over a remembered plan description.
 
 Upgrading does not erase hosted credits earned before the upgrade. The account
 wallet includes all non-revoked hosted-credit sources for that verified email;
 the new tier grant is added to the prior wallet. This remains true when a
-Starter account moves to BYOK, Pro, Enterprise, or another hosted-credit tier.
+Starter account moves to Pro.
 Automnia credits-only and the combined route use the pooled wallet according to
 the saved usage priority. The combined route's secondary order determines
 whether the provider or Automnia runs first.
@@ -227,7 +227,7 @@ When a response depends on local state, direct the user to Monitor, Settings, Do
 
 The first-run flow lets a user link an Automnia purchase and create an account password. The hosted account service stores only a one-way password verifier. Automnia does not display, recover, or use the original password as an access token. A user can sign in and out with the account credentials, and Google sign-in can be linked when that option is enabled for the account.
 
-The password is not a substitute for a provider API key. Hosted-credit requests still require a valid Automnia entitlement and are sent through the Automnia Cloud relay. Starter ($19.99) is hosted Automnia Subscription Relay access and does not include BYOK. Pro ($29.99) and Enterprise tiers are permanent higher-tier access with hosted credits and eligible BYOK routes. If the account screen shows a different entitlement, trust the account screen and do not infer a price.
+The password is not a substitute for a provider API key. Hosted-credit requests still require a valid Automnia entitlement and are sent through the Automnia Cloud relay. Starter is hosted Automnia Subscription Relay access with 200,000 credits and does not include provider access. Pro includes 400,000 credits, complete advanced access, and eligible connected-provider routes. If the account screen shows a different entitlement, trust the account screen and do not infer a price.
 
 Never ask a user to paste a password, access token, license key, OAuth authorization code, API key, customer email list, or private workspace file into the Help Assistant. Tell the user to use Settings, the secure sign-in flow, or the provider connection control instead.
 

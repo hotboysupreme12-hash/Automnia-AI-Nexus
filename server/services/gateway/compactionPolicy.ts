@@ -4,11 +4,11 @@
  * OpenClaw subtracts the reserve from the model context window before deciding
  * whether a prompt fits. A large reserve can therefore make a long session
  * impossible to compact, even when the model itself has room for it. Keep a
- * real recovery reserve and a working context large enough for tool turns so
- * the native Codex compactor is not forced to recover from an already-full
- * session.
+ * real recovery reserve while allowing the configured model catalog to expose
+ * its full context window; OpenClaw still clamps each request to the model's
+ * actual provider limit.
  */
-export const AUTOMNIA_OPENCLAW_CONTEXT_TOKENS_DEFAULT = 64_000
+export const AUTOMNIA_OPENCLAW_CONTEXT_TOKENS_DEFAULT = 1_048_576
 export const AUTOMNIA_COMPACTION_RESERVE_TOKENS = 20_000
 export const AUTOMNIA_COMPACTION_KEEP_RECENT_TOKENS = 20_000
 

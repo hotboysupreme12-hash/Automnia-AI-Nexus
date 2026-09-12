@@ -13,6 +13,7 @@
   },
   "dependencies": {
     "@google-cloud/firestore": "^8.7.1",
+    "@google-cloud/storage": "^7.16.0",
     "express": "^4.21.2",
     "google-auth-library": "^10.9.1"
   }

@@ -33,6 +33,15 @@
   KnowledgeFallbackModelVersion = 'gemini-2.5-flash/answer_gen/v1'
   PermanentBaseUrl = 'https://api.automnia.app'
   PermanentDomain = 'api.automnia.app'
+  # Private, uniformly-access-controlled GCS bucket for customer installers.
+  # Leave blank to derive "$ProjectId-automnia-installers" during deployment.
+  InstallerBucket = ''
+  InstallerSignedUrlMinutes = 10
+  InstallerWindowsX64Object = 'releases/current/windows/Automnia-Setup-x64.exe'
+  InstallerMacosArm64Object = 'releases/current/macos/Automnia-AI-Nexus-arm64.dmg'
+  InstallerMacosX64Object = 'releases/current/macos/Automnia-AI-Nexus-x64.dmg'
+  InstallerLinuxAppImageX64Object = 'releases/current/linux/Automnia-AI-Nexus-x86_64.AppImage'
+  InstallerLinuxDebX64Object = 'releases/current/linux/Automnia-AI-Nexus-x86_64.deb'
   ShopifyStoreDomain = 'automnia.app'
   ShopifyAppClientId = 'd0972d80b936c44961e9490b1d113432'
   ShopifyApiVersion = '2026-07'

@@ -96,6 +96,12 @@ export type GatewayAgentTurnServiceOptions = {
     streamObserverId: string
     signal: AbortSignal
   }) => Promise<GatewayAgentTurnResult>
+  compactGatewayChatSession?: (params: {
+    agentId: string
+    sessionId: string
+    requestedSessionKey?: string
+    signal: AbortSignal
+  }) => Promise<{ ok: boolean; compacted: boolean; reason?: string }>
   extractAgentReply: (stdout: string, stderr: string) => string
 }
 
@@ -418,30 +424,65 @@ export function createGatewayAgentTurnService(options: GatewayAgentTurnServiceOp
     }
     let reply = options.extractAgentReply(result.stdout, result.stderr)
     if (isContextOverflowResult(result, reply) && !signal.aborted) {
-      const staleSessionId = sessionId
-      sessionId = randomUUID()
-      options.deleteProviderConversationHistory(staleSessionId)
-      options.agentTurnSessions.set(sessionScope, sessionId)
       const recoveryMessage = buildContextOverflowContinuationPrompt(getFullGatewayMessage(), effectiveMessage)
-      emitGatewayStage('Recovering from the context limit and continuing your request.', { sessionId, retry: 'context-overflow' })
-      await options.appendAgentPromptDump({
-        route: routeOptions.route, agent, sessionId, thinking: effectiveThinking,
-        fastMode: effectiveFastMode, timeoutSeconds: effectiveTimeoutSeconds,
-        cwd: runCwd, requestMessage: rawMessage, intentMessage,
-        finalMessage: recoveryMessage,
-        note: `${routeOptions.note}; context overflow recovery using a fresh Gateway session`,
-      })
-      if (signal.aborted) throw gatewayChatAbortError('gateway agent run aborted before context recovery')
-      result = await options.runGatewayChatTurn({
-        agentId: agent, agentName, message: recoveryMessage,
-        attachments: requestedAttachments, sessionId, requestedSessionKey,
-        freshSession: true, thinking: effectiveThinking, fastMode: effectiveFastMode,
-        timeoutMs: openClawTimeoutMs, cwd: runCwd, streamObserverId, signal,
-      })
-      reply = options.extractAgentReply(result.stdout, result.stderr)
-      // The first attempt may already have streamed the overflow message.
-      // Replace it so the console does not prepend that failure to the reply.
-      if (reply) streamObserver?.emit('delta', { text: reply, replace: true, transport: 'gateway-chat' })
+      let compactedInPlace = false
+
+      // Prefer OpenClaw's native compactor so the model keeps its durable
+      // session and the failed request is summarized instead of replayed.
+      if (options.compactGatewayChatSession) {
+        emitGatewayStage('Compacting context and continuing your request.', { sessionId, retry: 'context-compaction' })
+        const compaction = await options.compactGatewayChatSession({
+          agentId: agent,
+          sessionId,
+          requestedSessionKey,
+          signal,
+        }).catch(() => null)
+        if (compaction?.ok && compaction.compacted && !signal.aborted) {
+          compactedInPlace = true
+          await options.appendAgentPromptDump({
+            route: routeOptions.route, agent, sessionId, thinking: effectiveThinking,
+            fastMode: effectiveFastMode, timeoutSeconds: effectiveTimeoutSeconds,
+            cwd: runCwd, requestMessage: rawMessage, intentMessage,
+            finalMessage: recoveryMessage,
+            note: `${routeOptions.note}; native Gateway session compaction recovery`,
+          })
+          result = await options.runGatewayChatTurn({
+            agentId: agent, agentName, message: recoveryMessage,
+            attachments: requestedAttachments, sessionId, requestedSessionKey,
+            freshSession: false, thinking: effectiveThinking, fastMode: effectiveFastMode,
+            timeoutMs: openClawTimeoutMs, cwd: runCwd, streamObserverId, signal,
+          })
+          reply = options.extractAgentReply(result.stdout, result.stderr)
+          if (reply) streamObserver?.emit('delta', { text: reply, replace: true, transport: 'gateway-chat' })
+        }
+      }
+
+      // If native compaction is unavailable, reports a no-op, or the compacted
+      // session still cannot accept the continuation, isolate the request in a
+      // bounded fresh session as the final one-time recovery.
+      if (!compactedInPlace || isContextOverflowResult(result, reply)) {
+        const staleSessionId = sessionId
+        sessionId = randomUUID()
+        options.deleteProviderConversationHistory(staleSessionId)
+        options.agentTurnSessions.set(sessionScope, sessionId)
+        emitGatewayStage('Resetting the conversation and continuing your request.', { sessionId, retry: 'context-overflow' })
+        await options.appendAgentPromptDump({
+          route: routeOptions.route, agent, sessionId, thinking: effectiveThinking,
+          fastMode: effectiveFastMode, timeoutSeconds: effectiveTimeoutSeconds,
+          cwd: runCwd, requestMessage: rawMessage, intentMessage,
+          finalMessage: recoveryMessage,
+          note: `${routeOptions.note}; bounded fresh-session context overflow recovery`,
+        })
+        if (signal.aborted) throw gatewayChatAbortError('gateway agent run aborted before context recovery')
+        result = await options.runGatewayChatTurn({
+          agentId: agent, agentName, message: recoveryMessage,
+          attachments: requestedAttachments, sessionId, requestedSessionKey,
+          freshSession: true, thinking: effectiveThinking, fastMode: effectiveFastMode,
+          timeoutMs: openClawTimeoutMs, cwd: runCwd, streamObserverId, signal,
+        })
+        reply = options.extractAgentReply(result.stdout, result.stderr)
+        if (reply) streamObserver?.emit('delta', { text: reply, replace: true, transport: 'gateway-chat' })
+      }
     }
     const contextOverflow = isContextOverflowResult(result, reply)
     const ok = result.code === 0 && !contextOverflow

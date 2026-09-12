@@ -9373,17 +9373,27 @@ function ensureOpenclawRuntimeDefaults(config: OpenClawConfigFile) {
   defaults.contextLimits.postCompactionMaxChars ??= 1200
   const configuredContextTokens = Number(defaults.contextTokens)
   const hasExplicitContextTokenOverride = Boolean(process.env.AUTOMNIA_OPENCLAW_CONTEXT_TOKENS?.trim())
-  const legacyAutomniaContextBaseline = !hasExplicitContextTokenOverride && configuredContextTokens === 24_000
+  const legacyAutomniaContextBaseline = !hasExplicitContextTokenOverride
+    && (configuredContextTokens === 24_000 || configuredContextTokens === 64_000)
   if (legacyAutomniaContextBaseline) {
-    // 24k was the previous token-saving baseline. It leaves OpenClaw's
-    // documented 20k recovery reserve no usable prompt budget, so migrate
-    // only that exact default while preserving explicit operator overrides.
+    // 24k and 64k were generated token-saving baselines. Migrate only those
+    // known defaults, preserving an explicit operator override and allowing
+    // million-token models to use their advertised context window.
     defaults.contextTokens = AUTOMNIA_OPENCLAW_CONTEXT_TOKENS
     for (const provider of Object.values(config.models?.providers || {})) {
       if (!provider || !Array.isArray(provider.models)) continue
       provider.models = provider.models.map((model) => (
-        model && typeof model === 'object' && !Array.isArray(model) && (model as Record<string, unknown>).contextTokens === 24_000
-          ? { ...(model as Record<string, unknown>), contextTokens: AUTOMNIA_OPENCLAW_CONTEXT_TOKENS }
+        model && typeof model === 'object' && !Array.isArray(model)
+          && ((model as Record<string, unknown>).contextTokens === 24_000 || (model as Record<string, unknown>).contextTokens === 64_000)
+          ? {
+            ...(model as Record<string, unknown>),
+            contextTokens: Math.min(
+              AUTOMNIA_OPENCLAW_CONTEXT_TOKENS,
+              Number((model as Record<string, unknown>).contextWindow) > 0
+                ? Number((model as Record<string, unknown>).contextWindow)
+                : AUTOMNIA_OPENCLAW_CONTEXT_TOKENS,
+            ),
+          }
           : model
       ))
     }
@@ -9801,13 +9811,13 @@ const AUTOMNIA_HOSTED_MODEL_IDS = Array.from(new Set([
   ...AUTOMNIA_CREDITS_FALLBACK_MODEL_IDS,
 ]))
 const AUTOMNIA_OPENCLAW_CONTEXT_TOKENS = (() => {
-  // Keep the working set bounded for every provider/model route. OpenClaw
-  // clamps this to a model's actual context window, while the lower shared
-  // cap makes long tool histories compact before they become six-figure
-  // prompts. An explicit environment value remains an operator escape hatch.
+  // Expose the provider's advertised context ceiling to OpenClaw. OpenClaw
+  // clamps this to each model's actual context window, and native compaction
+  // handles long histories when the model approaches that ceiling. An
+  // explicit environment value remains an operator escape hatch.
   const configured = Number(process.env.AUTOMNIA_OPENCLAW_CONTEXT_TOKENS || AUTOMNIA_OPENCLAW_CONTEXT_TOKENS_DEFAULT)
   return Number.isFinite(configured)
-    ? Math.max(16_000, Math.min(256_000, Math.round(configured)))
+    ? Math.max(16_000, Math.min(1_048_576, Math.round(configured)))
     : AUTOMNIA_OPENCLAW_CONTEXT_TOKENS_DEFAULT
 })()
 
@@ -18621,6 +18631,8 @@ const gatewayAgentTurnService = createGatewayAgentTurnService({
   agentWorkTimeoutWrapperMs,
   appendAgentPromptDump,
   runGatewayChatTurn: runControlCenterGatewayChatTurn,
+  compactGatewayChatSession: ({ agentId, sessionId, requestedSessionKey, signal }) =>
+    gatewayChatService.compactSession({ agentId, sessionId, requestedSessionKey, signal }),
   extractAgentReply,
 })
 

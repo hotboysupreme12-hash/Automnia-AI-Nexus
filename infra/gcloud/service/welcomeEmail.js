@@ -6,18 +6,28 @@ function escapeHtml(value) {
     .replaceAll('"', '&quot;')
     .replaceAll("'", '&#39;');
 }
-const automniaTealLogo = `
-  <svg width="64" height="64" viewBox="0 0 64 64" role="img" aria-label="Automnia AI Nexus" xmlns="http://www.w3.org/2000/svg">
-    <defs>
-      <linearGradient id="automnia-teal" x1="8" y1="8" x2="56" y2="56" gradientUnits="userSpaceOnUse">
-        <stop stop-color="#6BE7D4"/>
-        <stop offset="1" stop-color="#0D9488"/>
-      </linearGradient>
-    </defs>
-    <rect x="2" y="2" width="60" height="60" rx="16" fill="#0B1118" stroke="#4CC7B8" stroke-width="2"/>
-    <path d="M16 45 29.5 15h5L48 45h-7.2l-2.8-7.1H26L23.2 45H16Zm12.4-13.2h7.2L32 22.6l-3.6 9.2Z" fill="url(#automnia-teal)"/>
-    <circle cx="32" cy="49" r="2.5" fill="#6BE7D4"/>
-  </svg>`;
+// AUTMNIA AI NEXUS email lockup is the same brand asset served by the Shopify
+// storefront and used in the app UI. Keeping it on the public storefront gives
+// email clients a stable, cacheable image URL instead of relying on an inline
+// SVG or a local asset.
+const automniaLogoUrl = 'https://automnia.app/cdn/shop/t/3/assets/automnia-ai-nexus-logo.png';
+const automniaAppUrl = 'https://automnia.app';
+
+const brand = Object.freeze({
+  ink: '#030913',
+  canvas: '#07111E',
+  // Sampled from the supplied Automnia lockup: bright hyper-teal on the
+  // exact #07111E app surface. Use one accent family so the email matches
+  // the logo instead of introducing a separate blue.
+  cyan: '#2EFCE6',
+  blue: '#2EFCE6',
+  text: '#DCE8F5',
+  muted: '#A7B5C8',
+  lightCanvas: '#F5F9FD',
+  lightPanel: '#FFFFFF',
+  lightText: '#132238',
+  lightMuted: '#52657C',
+});
 
 function accessDescription(record) {
   if (record?.mode === 'byok') return 'BYOK access is active. You can connect your own provider from Automnia Settings.';
@@ -43,42 +53,50 @@ export function buildLicenseEmailHtml(record) {
   const licenseKey = escapeHtml(record?.licenseKey || '');
   const tier = escapeHtml(record?.tier || 'Automnia access');
   const access = escapeHtml(accessDescription(record));
+  const downloadAccessUrl = String(record?.downloadAccessUrl || '').trim();
+  const greeting = name === 'there' ? 'Welcome to Automnia.' : `Welcome, ${name}.`;
+  const downloadSection = downloadAccessUrl
+    ? `<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="margin:26px 0 0;border:1px solid #B9D8F1;border-radius:14px;background:#EEF7FF;"><tr><td style="padding:22px 22px 20px;"><div style="margin:0 0 8px;color:${brand.blue};font-size:11px;font-weight:800;letter-spacing:.14em;text-transform:uppercase;">Your secure download</div><p style="margin:0 0 16px;color:${brand.lightMuted};font-size:14px;line-height:1.6;">Use this private page whenever you need an installer. It checks your active access and creates a fresh, short-lived download link.</p><a href="${escapeHtml(downloadAccessUrl)}" style="display:inline-block;padding:13px 18px;border-radius:8px;background:${brand.ink};color:${brand.cyan};font-size:14px;font-weight:800;text-decoration:none;">Download Automnia <span aria-hidden="true">→</span></a></td></tr></table>`
+    : '';
   const instructions = onboardingInstructions(record)
-    .map((instruction) => `<li style="margin:0 0 10px 0;color:#475569;line-height:1.55;">${escapeHtml(String(instruction).replace(/^\d+\.\s*/, ''))}</li>`)
+    .map((instruction, index) => `<tr><td valign="top" style="padding:0 12px 14px 0;"><div style="width:26px;height:26px;border-radius:50%;background:${brand.ink};color:${brand.cyan};font-size:12px;font-weight:800;line-height:26px;text-align:center;">${index + 1}</div></td><td valign="top" style="padding:2px 0 14px;color:${brand.lightMuted};font-size:14px;line-height:1.55;">${escapeHtml(String(instruction).replace(/^\d+\.\s*/, ''))}</td></tr>`)
     .join('');
 
   return `<!doctype html>
 <html lang="en">
-  <head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"></head>
-  <body style="margin:0;padding:0;background:#081016;color:#D5E2F2;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Arial,sans-serif;">
-    <div style="width:100%;padding:28px 12px;background:linear-gradient(145deg,#081016 0%,#101B24 55%,#071014 100%);">
-      <div style="max-width:640px;margin:0 auto;background:#F8FAFC;border:1px solid #20313D;border-radius:18px;overflow:hidden;box-shadow:0 18px 45px rgba(0,0,0,.35);">
-        <div style="padding:30px 28px 24px;text-align:center;background:linear-gradient(145deg,#0B1118,#15232D);border-bottom:3px solid #4CC7B8;">
-          ${automniaTealLogo}
-          <div style="margin-top:12px;color:#FFFFFF;font-size:25px;font-weight:800;letter-spacing:.06em;">AUTMNIA <span style="color:#6BE7D4;">AI NEXUS</span></div>
-          <div style="margin-top:7px;color:#94A3B8;font-size:11px;font-weight:700;letter-spacing:.16em;text-transform:uppercase;">Your intelligent command center</div>
-        </div>
-        <div style="padding:12px 20px;text-align:center;background:linear-gradient(90deg,#0D9488,#10B981,#4CC7B8);color:#061014;font-size:13px;font-weight:800;letter-spacing:.08em;text-transform:uppercase;">Welcome — your Automnia access is ready</div>
-        <div style="padding:34px 30px 30px;">
-          <h1 style="margin:0 0 14px;color:#0F172A;font-size:25px;line-height:1.25;">Welcome, ${name}.</h1>
-          <p style="margin:0 0 18px;color:#475569;font-size:15px;line-height:1.65;">Thank you for choosing Automnia AI Nexus. Your purchase has been provisioned and your account is ready to link.</p>
-          <div style="margin:24px 0;padding:22px;border:1px solid #99E6DA;border-left:5px solid #0D9488;border-radius:12px;background:#ECFEFA;">
-            <div style="margin-bottom:13px;color:#0F766E;font-size:12px;font-weight:800;letter-spacing:.1em;text-transform:uppercase;">Your secure access details</div>
-            <div style="margin:10px 0;color:#334155;font-size:14px;"><strong>Purchase email:</strong> ${email}</div>
-            <div style="margin:10px 0;color:#334155;font-size:14px;"><strong>Plan:</strong> ${tier}</div>
-            <div style="margin-top:16px;padding:13px 15px;border-radius:8px;background:#0B1118;color:#6BE7D4;font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:17px;font-weight:800;letter-spacing:.08em;word-break:break-word;">${licenseKey}</div>
-            <div style="margin-top:12px;color:#475569;font-size:13px;line-height:1.5;">${access}</div>
-          </div>
-          <h2 style="margin:28px 0 12px;color:#0F172A;font-size:18px;">Get started in four steps</h2>
-          <ol style="margin:0;padding-left:24px;">${instructions}</ol>
-          <div style="margin-top:26px;padding:17px 18px;border-radius:10px;background:#F1F5F9;color:#475569;font-size:13px;line-height:1.6;">
-            <strong style="color:#0F172A;">Keep this message private.</strong> Automnia support will never ask you to publish your license key. Use the same purchase email whenever you sign in or link an upgrade.
-          </div>
-          <p style="margin:26px 0 0;color:#64748B;font-size:13px;line-height:1.6;">We are glad to have you with us.<br><strong style="color:#0F172A;">The Automnia AI Nexus team</strong></p>
-        </div>
-        <div style="padding:18px 30px;background:#0B1118;color:#94A3B8;font-size:11px;line-height:1.5;text-align:center;">Automnia AI Nexus · Secure account activation · Please retain this email for your records</div>
-      </div>
-    </div>
+  <head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="color-scheme" content="light dark"><title>Your Automnia access is ready</title></head>
+  <body style="margin:0;padding:0;background:${brand.ink};color:${brand.text};font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Arial,sans-serif;-webkit-font-smoothing:antialiased;">
+    <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="background:${brand.ink};">
+      <tr><td align="center" style="padding:34px 12px 42px;background:${brand.ink};">
+        <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="max-width:640px;border:1px solid #1D3950;border-radius:18px;overflow:hidden;background:${brand.lightPanel};">
+          <tr><td align="center" style="padding:34px 30px 30px;background:${brand.canvas};border-bottom:1px solid #1D3950;">
+            <a href="${automniaAppUrl}" style="display:inline-block;text-decoration:none;"><img src="${automniaLogoUrl}" width="300" alt="Automnia AI Nexus" style="display:block;width:300px;max-width:100%;height:auto;border:0;outline:none;text-decoration:none;"></a>
+            <div style="margin-top:18px;color:${brand.muted};font-size:11px;font-weight:800;letter-spacing:.18em;text-transform:uppercase;">Your intelligent command center</div>
+          </td></tr>
+          <tr><td style="padding:14px 24px;text-align:center;background:${brand.cyan};color:${brand.ink};font-size:12px;font-weight:900;letter-spacing:.12em;text-transform:uppercase;">Access provisioned · Ready to activate</td></tr>
+          <tr><td style="padding:38px 34px 30px;background:${brand.lightCanvas};">
+            <h1 style="margin:0 0 12px;color:${brand.lightText};font-size:28px;line-height:1.2;letter-spacing:-.02em;">${greeting}</h1>
+            <p style="margin:0 0 26px;color:${brand.lightMuted};font-size:15px;line-height:1.7;">Thank you for choosing Automnia AI Nexus. Your purchase has been provisioned and your account is ready to link.</p>
+            <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="border:1px solid #A9D4F2;border-radius:15px;background:${brand.lightPanel};">
+              <tr><td style="padding:24px 24px 22px;border-left:4px solid ${brand.cyan};">
+                <div style="margin:0 0 16px;color:${brand.blue};font-size:11px;font-weight:900;letter-spacing:.15em;text-transform:uppercase;">Your secure access details</div>
+                <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0">
+                  <tr><td style="padding:0 0 10px;color:${brand.lightMuted};font-size:13px;line-height:1.5;"><strong style="color:${brand.lightText};">Purchase email</strong><br>${email}</td></tr>
+                  <tr><td style="padding:0;color:${brand.lightMuted};font-size:13px;line-height:1.5;"><strong style="color:${brand.lightText};">Plan</strong><br>${tier}</td></tr>
+                  <tr><td style="padding:18px 0 0;"><div style="padding:16px 17px;border:1px solid #2B5D78;border-radius:10px;background:${brand.ink};color:${brand.cyan};font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:17px;font-weight:900;letter-spacing:.08em;line-height:1.45;word-break:break-word;">${licenseKey}</div></td></tr>
+                  <tr><td style="padding:12px 0 0;color:${brand.lightMuted};font-size:13px;line-height:1.6;">${access}</td></tr>
+                </table>
+              </td></tr>
+            </table>
+            <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="margin-top:30px;"><tr><td style="padding:0 0 7px;color:${brand.blue};font-size:11px;font-weight:900;letter-spacing:.15em;text-transform:uppercase;">Get started in four steps</td></tr><tr><td style="padding:0 0 12px;color:${brand.lightText};font-size:19px;font-weight:850;line-height:1.3;">Activate your access</td></tr>${instructions}</table>
+            ${downloadSection}
+            <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="margin-top:8px;border-radius:12px;background:#EAF2F9;"><tr><td style="padding:17px 18px;color:${brand.lightMuted};font-size:13px;line-height:1.65;"><strong style="color:${brand.lightText};">Keep this message private.</strong> Automnia support will never ask you to publish your license key. Use the same purchase email whenever you sign in or link an upgrade.</td></tr></table>
+            <p style="margin:28px 0 0;color:${brand.lightMuted};font-size:13px;line-height:1.65;">We are glad to have you with us.<br><strong style="color:${brand.lightText};">The Automnia AI Nexus team</strong></p>
+          </td></tr>
+          <tr><td style="padding:25px 30px;text-align:center;background:${brand.canvas};border-top:1px solid #1D3950;color:${brand.muted};font-size:11px;line-height:1.7;">Automnia AI Nexus<br><a href="mailto:support@automnia.app" style="color:${brand.cyan};text-decoration:none;">support@automnia.app</a> · Secure account activation</td></tr>
+        </table>
+      </td></tr>
+    </table>
   </body>
 </html>`;
 }

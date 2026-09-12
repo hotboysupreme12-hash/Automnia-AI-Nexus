@@ -4,6 +4,7 @@ import type { ProviderRequestAuth } from '../providers/providerSetupService'
 import type { AgentTurnStreamEmitter } from './gatewayAgentTurnService'
 import type { BufferedRuntimeReason } from './agentTurnService'
 import { CREDITS_ONLY_MODEL_ACCESS_MESSAGE } from '../license/creditsOnlyModelPolicy'
+import { buildContextOverflowContinuationPrompt, isContextOverflowResult } from './contextOverflowRecovery'
 
 export type AgentStreamingThinkingLevel = 'off' | 'minimal' | 'low' | 'medium' | 'high' | 'xhigh' | 'max'
 
@@ -476,7 +477,7 @@ export function createAgentStreamingService(options: AgentStreamingServiceOption
       const filenameResolution = await options.resolveFilenameHintsForMessage(cleanedMessage, context.executionWorkspace)
       const effectiveMessage = filenameResolution.message
       const previousSessionId = options.agentTurnSessions.get(sessionScope)
-      const sessionId = wantsFreshSession ? randomUUID() : previousSessionId || randomUUID()
+      let sessionId = wantsFreshSession ? randomUUID() : previousSessionId || randomUUID()
       if (wantsFreshSession && previousSessionId) options.deleteProviderConversationHistory(previousSessionId)
       options.agentTurnSessions.set(sessionScope, sessionId)
       const party = await options.getPartyMembers().catch(() => [])
@@ -490,7 +491,7 @@ export function createAgentStreamingService(options: AgentStreamingServiceOption
         effectiveMessage,
       ].join('\n')
       const composedPrompt = options.composeDirectProviderPrompt(input.agent, enforcedMessage, context.executionWorkspace)
-      const requestMessages = options.providerConversationMessagesForRequest(sessionId, provider, modelId, composedPrompt)
+      let requestMessages = options.providerConversationMessagesForRequest(sessionId, provider, modelId, composedPrompt)
       if (requestMessages.some((message) => message.content.includes(CONVERSATION_TRUNCATION_MARKER))) {
         emit('status', { mode: 'progress', label: 'Context shortened', message: 'Long conversation content was shortened to fit. The beginning and end were retained.' })
       }
@@ -514,97 +515,79 @@ export function createAgentStreamingService(options: AgentStreamingServiceOption
         runtimeContext: options.agentRuntimeContextPayload(input.agent, context),
       })
 
-      let streamedReply: StreamedProviderReply = { content: '' }
-      try {
+      const runProviderCompletion = (messages: ProviderConversationMessage[]) => {
         if (providerConfig.kind === 'openai-compatible') {
           if (requestAuth.type !== 'apiKey') throw new Error(`${provider} streaming requires an API key credential.`)
-          streamedReply = await options.streamOpenAiCompatibleCompletion({
-            provider,
-            model,
-            endpoint: providerConfig.endpoint || '',
-            apiKey: requestAuth.value,
-            messages: requestMessages,
-            thinking: input.thinking,
-            signal,
-            emit,
-          })
-        } else if (effectiveStreamingKind === 'openai-responses') {
-          if (requestAuth.type !== 'apiKey') throw new Error('OpenAI Responses streaming requires an API key credential.')
-          streamedReply = await options.streamOpenAiResponsesCompletion({
-            provider,
-            model,
-            endpoint: providerConfig.endpoint || 'https://api.openai.com/v1/responses',
-            apiKey: requestAuth.value,
-            messages: requestMessages,
-            thinking: input.thinking,
-            signal,
-            emit,
-          })
-        } else if (effectiveStreamingKind === 'openai-codex-responses') {
-          if (requestAuth.type === 'oauth') {
-            streamedReply = await options.streamOpenAICodexResponsesCompletion({
-              model,
-              accessToken: requestAuth.accessToken,
-              messages: requestMessages,
-              thinking: input.thinking,
-              sessionId,
-              signal,
-              emit,
-            })
-          } else {
-            throw new Error('OpenAI Codex streaming requires an OpenAI Codex OAuth credential.')
-          }
-        } else if (providerConfig.kind === 'anthropic-messages') {
-          streamedReply = await options.streamAnthropicMessage({
-            model,
-            auth: requestAuth,
-            messages: requestMessages,
-            thinking: input.thinking,
-            signal,
-            emit,
-          })
-        } else if (providerConfig.kind === 'gemini-vertex-generate-content') {
-          streamedReply = await options.streamGoogleVertexContent({
-            model,
-            auth: requestAuth,
-            messages: requestMessages,
-            thinking: input.thinking,
-            signal,
-            emit,
-          })
-        } else {
-          streamedReply = await options.streamGeminiContent({
-            model,
-            auth: requestAuth,
-            messages: requestMessages,
-            thinking: input.thinking,
-            signal,
-            emit,
-          })
+          return options.streamOpenAiCompatibleCompletion({ provider, model, endpoint: providerConfig.endpoint || '', apiKey: requestAuth.value, messages, thinking: input.thinking, signal, emit })
         }
+        if (effectiveStreamingKind === 'openai-responses') {
+          if (requestAuth.type !== 'apiKey') throw new Error('OpenAI Responses streaming requires an API key credential.')
+          return options.streamOpenAiResponsesCompletion({ provider, model, endpoint: providerConfig.endpoint || 'https://api.openai.com/v1/responses', apiKey: requestAuth.value, messages, thinking: input.thinking, signal, emit })
+        }
+        if (effectiveStreamingKind === 'openai-codex-responses') {
+          if (requestAuth.type !== 'oauth') throw new Error('OpenAI Codex streaming requires an OpenAI Codex OAuth credential.')
+          return options.streamOpenAICodexResponsesCompletion({ model, accessToken: requestAuth.accessToken, messages, thinking: input.thinking, sessionId, signal, emit })
+        }
+        if (providerConfig.kind === 'anthropic-messages') {
+          return options.streamAnthropicMessage({ model, auth: requestAuth, messages, thinking: input.thinking, signal, emit })
+        }
+        if (providerConfig.kind === 'gemini-vertex-generate-content') {
+          return options.streamGoogleVertexContent({ model, auth: requestAuth, messages, thinking: input.thinking, signal, emit })
+        }
+        return options.streamGeminiContent({ model, auth: requestAuth, messages, thinking: input.thinking, signal, emit })
+      }
+
+      let streamedReply: StreamedProviderReply = { content: '' }
+      let failure = ''
+      try {
+        streamedReply = await runProviderCompletion(requestMessages)
       } catch (error) {
-        const failure = options.redactHiddenReasoningAndSecrets(String(error))
-        const failureKind = options.classifyFailureKind(failure, 'failed') || 'unknown'
-        await options.appendAgentDailyMemory(
-          input.agent,
-          `[turn] failed streaming | prompt: ${options.trimTask(input.message, 120)} | outcome: ${options.trimTask(failure, 220)}`,
-        ).catch(() => undefined)
-        return {
-          ok: false,
-          reply: failure,
-          stdout: '',
-          stderr: failure,
-          code: 1,
-          failureKind,
-          modelId,
-          provider,
-          model,
-          runtimeContext: options.agentRuntimeContextPayload(input.agent, context),
-          streaming: {
-            ...capability,
-            configured: true,
-            liveTokens: true,
-          },
+        failure = options.redactHiddenReasoningAndSecrets(String(error))
+        if (isContextOverflowResult({ code: 1, stdout: '', stderr: failure }, failure) && !signal.aborted) {
+          const retrySessionId = randomUUID()
+          options.deleteProviderConversationHistory(sessionId)
+          sessionId = retrySessionId
+          options.agentTurnSessions.set(sessionScope, sessionId)
+          const recoveryPrompt = buildContextOverflowContinuationPrompt(composedPrompt, effectiveMessage)
+          requestMessages = options.providerConversationMessagesForRequest(sessionId, provider, modelId, recoveryPrompt)
+          emit('status', {
+            mode: 'progress',
+            label: 'Context compacted',
+            message: 'The provider context limit was reached; compacting and continuing your request.',
+            retry: 'context-overflow',
+            sessionId,
+          })
+          try {
+            streamedReply = await runProviderCompletion(requestMessages)
+            failure = ''
+            if (streamedReply.content) emit('delta', { text: streamedReply.content, replace: true, transport: 'provider-stream' })
+          } catch (retryError) {
+            failure = options.redactHiddenReasoningAndSecrets(String(retryError))
+          }
+        }
+        if (failure) {
+          const failureKind = options.classifyFailureKind(failure, 'failed') || 'unknown'
+          await options.appendAgentDailyMemory(
+            input.agent,
+            `[turn] failed streaming | prompt: ${options.trimTask(input.message, 120)} | outcome: ${options.trimTask(failure, 220)}`,
+          ).catch(() => undefined)
+          return {
+            ok: false,
+            reply: failure,
+            stdout: '',
+            stderr: failure,
+            code: 1,
+            failureKind,
+            modelId,
+            provider,
+            model,
+            runtimeContext: options.agentRuntimeContextPayload(input.agent, context),
+            streaming: {
+              ...capability,
+              configured: true,
+              liveTokens: true,
+            },
+          }
         }
       }
 

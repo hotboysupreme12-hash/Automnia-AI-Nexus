@@ -38,16 +38,20 @@ const requiredFiles = [
 for (const relative of requiredFiles) assert.equal(existsSync(path.join(infra, relative)), true, `missing ${relative}`)
 
 const mappings = JSON.parse(readFileSync(path.join(infra, 'shopify-plan-mappings.json'), 'utf8'))
-assert.equal(mappings.length, 14, 'the production catalog has fourteen mappings')
+assert.equal(mappings.length, 12, 'the production catalog contains credit refills plus the two sellable plans')
 assert.deepEqual(
   Object.fromEntries(mappings.filter((entry) => entry.kind === 'subscription' && entry.tier === 'starter').map((entry) => [entry.tier, entry.initialCredits])),
-  { starter: 500000 },
+  { starter: 200000 },
 )
+assert.deepEqual(
+  Object.fromEntries(mappings.filter((entry) => entry.tier === 'pro').map((entry) => [entry.tier, entry.initialCredits])),
+  { pro: 400000 },
+)
+assert.deepEqual([...new Set(mappings.filter((entry) => entry.kind !== 'topup').map((entry) => entry.tier))].sort(), ['pro', 'starter'], 'Starter and Pro are the only sellable plans')
 const configuredVariantIds = mappings.flatMap((entry) => entry.variantIds).filter(Boolean)
 assert.equal(new Set(configuredVariantIds).size, configuredVariantIds.length, 'configured variant IDs must be unique')
-assert.equal(new Set(mappings.flatMap((entry) => entry.skus)).size, 14, 'SKUs must be unique')
+assert.equal(new Set(mappings.flatMap((entry) => entry.skus)).size, 12, 'SKUs must be unique')
 assert.equal(mappings.filter((entry) => entry.kind === 'topup').length, 9)
-assert.equal(mappings.find((entry) => entry.mode === 'byok')?.initialCredits, 0)
 
 const indexConfig = JSON.parse(readFileSync(path.join(infra, 'firestore.indexes.json'), 'utf8'))
 assert.ok(Array.isArray(indexConfig.indexes))

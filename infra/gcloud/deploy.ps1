@@ -23,6 +23,7 @@ $project = Assert-ProjectExists -ProjectId $ProjectId
 $projectNumber = [string]$project.projectNumber
 $serviceAccountEmail = "$($config.ServiceAccountName)@$ProjectId.iam.gserviceaccount.com"
 $computeServiceAccount = "$projectNumber-compute@developer.gserviceaccount.com"
+$installerBucket = if ([string]::IsNullOrWhiteSpace([string]$config.InstallerBucket)) { "$ProjectId-automnia-installers" } else { [string]$config.InstallerBucket }
 
 if ($BillingAccountId -and $PSCmdlet.ShouldProcess($ProjectId, "link billing account $BillingAccountId")) {
   Invoke-Gcloud -Arguments @('billing', 'projects', 'link', $ProjectId, '--billing-account', $BillingAccountId) | Out-Null
@@ -43,6 +44,18 @@ foreach ($role in @($config.RuntimeRoles)) {
   if ($PSCmdlet.ShouldProcess("$serviceAccountEmail in $ProjectId", "grant $role")) {
     Invoke-Gcloud -Arguments @('projects', 'add-iam-policy-binding', $ProjectId, '--member', "serviceAccount:$serviceAccountEmail", '--role', $role, '--condition=None') | Out-Null
   }
+}
+if ($PSCmdlet.ShouldProcess($installerBucket, 'create private customer-installer Cloud Storage bucket if missing')) {
+  $bucket = Invoke-Gcloud -Arguments @('storage', 'buckets', 'describe', "gs://$installerBucket", '--project', $ProjectId) -AllowFailure
+  if ($bucket.ExitCode -ne 0) {
+    Invoke-Gcloud -Arguments @('storage', 'buckets', 'create', "gs://$installerBucket", '--project', $ProjectId, '--location', $Region, '--uniform-bucket-level-access') | Out-Null
+  }
+  Invoke-Gcloud -Arguments @('storage', 'buckets', 'update', "gs://$installerBucket", '--public-access-prevention') | Out-Null
+  Invoke-Gcloud -Arguments @('storage', 'buckets', 'add-iam-policy-binding', "gs://$installerBucket", '--member', "serviceAccount:$serviceAccountEmail", '--role', 'roles/storage.objectViewer') | Out-Null
+}
+# Cloud Storage V4 URLs use IAM signBlob when Cloud Run has no local key.
+if ($PSCmdlet.ShouldProcess($serviceAccountEmail, 'allow the runtime identity to sign its installer download URLs')) {
+  Invoke-Gcloud -Arguments @('iam', 'service-accounts', 'add-iam-policy-binding', $serviceAccountEmail, '--project', $ProjectId, '--member', "serviceAccount:$serviceAccountEmail", '--role', 'roles/iam.serviceAccountTokenCreator') | Out-Null
 }
 if ($PSCmdlet.ShouldProcess("$computeServiceAccount in $ProjectId", 'grant Cloud Run source-build role')) {
   Invoke-Gcloud -Arguments @('projects', 'add-iam-policy-binding', $ProjectId, '--member', "serviceAccount:$computeServiceAccount", '--role', 'roles/run.builder', '--condition=None') | Out-Null
@@ -98,6 +111,14 @@ try {
   $environmentYaml = @"
 SHOPIFY_PLAN_MAPPINGS: '$planBase64'
 SHOPIFY_CHECKOUT_URL: '$($config.ShopifyCheckoutUrl)'
+AUTOMNIA_DOWNLOAD_BASE_URL: '$($config.PermanentBaseUrl)'
+INSTALLER_BUCKET: '$installerBucket'
+INSTALLER_SIGNED_URL_MINUTES: '$($config.InstallerSignedUrlMinutes)'
+INSTALLER_WINDOWS_X64_OBJECT: '$($config.InstallerWindowsX64Object)'
+INSTALLER_MACOS_ARM64_OBJECT: '$($config.InstallerMacosArm64Object)'
+INSTALLER_MACOS_X64_OBJECT: '$($config.InstallerMacosX64Object)'
+INSTALLER_LINUX_APPIMAGE_X64_OBJECT: '$($config.InstallerLinuxAppImageX64Object)'
+INSTALLER_LINUX_DEB_X64_OBJECT: '$($config.InstallerLinuxDebX64Object)'
 SHOPIFY_STORE_DOMAIN: '$($config.ShopifyStoreDomain)'
 SHOPIFY_APP_CLIENT_ID: '$($config.ShopifyAppClientId)'
 SHOPIFY_API_VERSION: '$($config.ShopifyApiVersion)'

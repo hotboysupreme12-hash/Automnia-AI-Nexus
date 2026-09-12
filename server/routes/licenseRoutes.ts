@@ -83,7 +83,7 @@ export function registerLicenseRoutes(app: Express, options: {
       return apiFailure(res, 409, 'invalid_payload', 'Activate an Automnia license before choosing a usage priority.')
     }
     if (options.licenseService.isUsagePriorityLocked() && parsed.data.usagePriority !== 'automnia_only') {
-      return apiFailure(res, 409, 'invalid_payload', 'Starter Subscription ($19.99) and credit-refill access stay on Automnia credits. Upgrade to BYOK ($29.99) or higher to choose another usage priority.')
+      return apiFailure(res, 409, 'invalid_payload', 'Starter and credit-refill access stay on Automnia credits. Upgrade to Pro to choose another usage priority.')
     }
     try {
       options.licenseService.setUsagePriority(parsed.data.usagePriority)

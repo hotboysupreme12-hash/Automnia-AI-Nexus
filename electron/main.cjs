@@ -208,6 +208,12 @@ let gpuRecoveryRelaunchRequested = false
 const SERVER_RESTART_BASE_DELAY_MS = 1000
 const SERVER_RESTART_MAX_DELAY_MS = 10_000
 const SERVER_STARTUP_OUTPUT_TAIL_MAX_CHARS = 12_000
+const RENDERER_LOAD_TIMEOUT_MS = Math.max(
+  10_000,
+  Number(process.env.AUTOMNIA_RENDERER_LOAD_TIMEOUT_MS || 30_000) || 30_000,
+)
+const RENDERER_LOAD_RETRY_DELAY_MS = 750
+const MAX_RENDERER_LOAD_RETRIES = 3
 
 appendDesktopDiagnostic('process-start', {
   hardwareAcceleration: !WINDOWS_DISABLE_GPU,
@@ -2000,6 +2006,69 @@ function createMainWindow() {
   let e2eScreenshotCaptureStarted = false
   let e2eDesktopBootstrapStarted = false
   let e2eAppRehydrationStarted = false
+  let rendererLoadTimer = null
+  let rendererRecoveryTimer = null
+  let rendererLoadRetryCount = 0
+  let rendererRecoveryPageActive = false
+
+  const clearRendererLoadTimer = () => {
+    if (!rendererLoadTimer) return
+    clearTimeout(rendererLoadTimer)
+    rendererLoadTimer = null
+  }
+
+  const presentLoadedRenderer = (reason) => {
+    if (isQuitting || win.isDestroyed()) return
+    if (!ELECTRON_E2E) {
+      win.webContents.setZoomFactor(initialZoom)
+      if (placement.maximized && !win.isMaximized()) win.maximize()
+    }
+    if (!win.isVisible()) {
+      appendDesktopDiagnostic('renderer-presented', { reason })
+    }
+    presentMainWindow(win)
+  }
+
+  const loadRendererRecoveryPage = (message) => {
+    if (isQuitting || win.isDestroyed()) return
+    rendererRecoveryPageActive = true
+    const safeMessage = String(message || 'The workspace did not finish loading.')
+      .replace(/[&<>"']/g, (character) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[character])
+    const recoveryHtml = `<!doctype html><html><head><meta charset="utf-8"><title>Automnia recovery</title><style>body{margin:0;min-height:100vh;display:grid;place-items:center;background:#080b0f;color:#f4f7fb;font:14px/1.5 system-ui,sans-serif}main{width:min(620px,calc(100% - 48px));padding:28px;border:1px solid #334155;border-radius:12px;background:#111720}h1{margin:0 0 12px;font-size:22px}p{color:#c8d2dc}button{padding:9px 14px;border:1px solid #d6a94a;border-radius:7px;color:#f1d88e;background:#2b2416;font:inherit;font-weight:700;cursor:pointer}</style></head><body><main role="alert"><h1>Automnia is recovering</h1><p>${safeMessage}</p><button onclick="location.href=${JSON.stringify(controlCenterOrigin())}">Retry Console</button></main></body></html>`
+    void win.loadURL(`data:text/html;charset=utf-8,${encodeURIComponent(recoveryHtml)}`).catch((error) => {
+      appendDesktopDiagnostic('renderer-recovery-page-failed', { message: error?.message || String(error) })
+    })
+  }
+
+  const scheduleRendererLoad = (reason) => {
+    if (isQuitting || win.isDestroyed() || rendererRecoveryTimer) return
+    if (rendererLoadRetryCount >= MAX_RENDERER_LOAD_RETRIES) {
+      appendDesktopDiagnostic('renderer-load-exhausted', { reason, retries: rendererLoadRetryCount })
+      loadRendererRecoveryPage(`The desktop view could not load after ${rendererLoadRetryCount} attempts. Try again when the local Control Center is available.`)
+      presentLoadedRenderer('renderer-load-exhausted')
+      return
+    }
+    rendererLoadRetryCount += 1
+    appendDesktopDiagnostic('renderer-load-retry-scheduled', {
+      reason,
+      retry: rendererLoadRetryCount,
+    })
+    rendererRecoveryTimer = setTimeout(() => {
+      rendererRecoveryTimer = null
+      if (isQuitting || win.isDestroyed()) return
+      rendererRecoveryPageActive = false
+      clearRendererLoadTimer()
+      void win.loadURL(controlCenterOrigin()).catch((error) => {
+        appendDesktopDiagnostic('renderer-load-rejected', { message: error?.message || String(error) })
+        scheduleRendererLoad('loadURL rejected')
+      })
+      rendererLoadTimer = setTimeout(() => {
+        rendererLoadTimer = null
+        if (win.isDestroyed() || !win.webContents.isLoading()) return
+        scheduleRendererLoad('renderer load watchdog timed out')
+      }, RENDERER_LOAD_TIMEOUT_MS)
+    }, RENDERER_LOAD_RETRY_DELAY_MS)
+  }
 
   win.on('unresponsive', () => {
     appendDesktopDiagnostic('renderer-unresponsive')
@@ -2014,11 +2083,35 @@ function createMainWindow() {
     logE2e(`renderer-process-gone:${details?.reason || 'unknown'}`)
     e2eRendererGone = true
     if (isQuitting || win.isDestroyed()) return
-    setTimeout(() => {
-      if (!win.isDestroyed()) win.reload()
-    }, 750)
+    scheduleRendererLoad(`renderer process gone: ${details?.reason || 'unknown'}`)
+  })
+  win.webContents.on('did-start-loading', () => {
+    rendererRecoveryPageActive = false
+    clearRendererLoadTimer()
+    rendererLoadTimer = setTimeout(() => {
+      rendererLoadTimer = null
+      if (win.isDestroyed() || !win.webContents.isLoading()) return
+      scheduleRendererLoad('renderer load watchdog timed out')
+    }, RENDERER_LOAD_TIMEOUT_MS)
+  })
+  win.webContents.on('did-fail-load', (_event, errorCode, errorDescription, validatedURL, isMainFrame) => {
+    if (!isMainFrame || errorCode === -3 || rendererRecoveryPageActive) return
+    clearRendererLoadTimer()
+    appendDesktopDiagnostic('renderer-load-failed', {
+      errorCode,
+      errorDescription,
+      url: validatedURL,
+    })
+    scheduleRendererLoad(`${errorDescription || 'renderer load failed'} (${errorCode})`)
   })
   win.webContents.on('did-finish-load', () => {
+    clearRendererLoadTimer()
+    if (!rendererRecoveryPageActive) {
+      rendererLoadRetryCount = 0
+      presentLoadedRenderer('did-finish-load')
+    } else {
+      presentLoadedRenderer('recovery-page')
+    }
     if (!ELECTRON_E2E) return
     e2eRendererLoadCount += 1
     logE2e(`renderer-load:${e2eRendererLoadCount}`)
@@ -2168,19 +2261,25 @@ function createMainWindow() {
   win.on('hide', updateTrayMenu)
   win.on('closed', () => {
     if (mainWindow === win) mainWindow = null
+    clearRendererLoadTimer()
+    if (rendererRecoveryTimer) clearTimeout(rendererRecoveryTimer)
+    rendererRecoveryTimer = null
     updateTrayMenu()
   })
   win.once('ready-to-show', () => {
-    // Keep the full command console and agent registry visible on ordinary
-    // laptop displays. Screenshot E2E runs explicitly restore 100% before
-    // capturing their contract viewports.
-    if (!ELECTRON_E2E) {
-      win.webContents.setZoomFactor(initialZoom)
-      if (placement.maximized) win.maximize()
-    }
-    presentMainWindow(win)
+    // did-finish-load is the normal presentation path. Keep this fallback
+    // because some Electron/GPU combinations delay the first-paint event.
+    presentLoadedRenderer('ready-to-show')
   })
-  win.loadURL(`http://127.0.0.1:${APP_PORT}`)
+  void win.loadURL(controlCenterOrigin()).catch((error) => {
+    appendDesktopDiagnostic('renderer-load-rejected', { message: error?.message || String(error) })
+    scheduleRendererLoad('initial loadURL rejected')
+  })
+  rendererLoadTimer = setTimeout(() => {
+    rendererLoadTimer = null
+    if (win.isDestroyed() || !win.webContents.isLoading()) return
+    scheduleRendererLoad('initial renderer load watchdog timed out')
+  }, RENDERER_LOAD_TIMEOUT_MS)
   return win
 }
 

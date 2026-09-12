@@ -898,6 +898,7 @@ export function SettingsPanel({ focusSection = 'account', focusRequest = 0 }: { 
         ? byokAllowed ? 'automnia_first_with_provider_fallback' : 'automnia_only'
         : 'automnia_only'
     const balance = hostedCredits || isByok ? formatCreditBalance(license?.creditBalance) : 'Not applicable — provider-billed'
+    const isProPlan = /(?:^|[_-])(pro|enterprise)(?:$|[_-])/.test((license?.tier || '').toLowerCase())
     const refreshAccount = async () => {
       if (accountRefreshBusy) return
       setAccountRefreshBusy(true)
@@ -925,11 +926,11 @@ export function SettingsPanel({ focusSection = 'account', focusRequest = 0 }: { 
     const saveUsagePriority = async (nextPriority: 'automnia_only' | 'provider_first' | 'automnia_first_with_provider_fallback') => {
       if (!usagePriorityManaged || usagePriorityBusy || nextPriority === usagePriority) return
       if (usagePriorityLocked) {
-        setUsagePriorityError('Starter Subscription ($19.99) and credit-refill access stay on Automnia credits. Upgrade to BYOK ($29.99) or higher to choose another usage priority.')
+        setUsagePriorityError('Starter and credit-refill access stay on Automnia credits. Upgrade to Pro to choose another usage priority.')
         return
       }
       if (!byokAllowed && nextPriority !== 'automnia_only') {
-        setUsagePriorityError('Starter uses Automnia credits only. Upgrade to BYOK ($29.99) or higher for provider-plus-Automnia options.')
+        setUsagePriorityError('Starter uses Automnia credits only. Upgrade to Pro for provider-plus-Automnia options.')
         return
       }
       setUsagePriorityBusy(true)
@@ -1072,6 +1073,41 @@ export function SettingsPanel({ focusSection = 'account', focusRequest = 0 }: { 
             {passwordChangeError && <p className="dui-settings-account-password__error" role="alert">{passwordChangeError}</p>}
           </div>
         </SettingsCard>
+        <SettingsCard title="Two plans. A clear path forward." description="Credits are the simple unit of value—no oversized token totals to decode.">
+          <section className="dui-plan-catalog" aria-label="Automnia plan comparison">
+            <article className={`dui-plan-card${!isProPlan && license?.active ? ' is-current' : ''}`}>
+              <div className="dui-plan-card__head">
+                <div><span>STARTER</span><h4>Build your momentum</h4></div>
+                {!isProPlan && license?.active && <b>Current plan</b>}
+              </div>
+              <strong className="dui-plan-card__credits">200,000 <small>credits</small></strong>
+              <p>Everything you need to explore, build, and run core Automnia workflows.</p>
+              <ul>
+                <li>Automnia hosted models</li>
+                <li>Essential agents and workflows</li>
+                <li>Secure cloud execution</li>
+                <li>Credits-only, simple billing</li>
+              </ul>
+              <button type="button" onClick={() => void openCheckout()} disabled={checkoutBusy}>{checkoutBusy ? 'Opening checkout…' : 'Choose Starter'}</button>
+            </article>
+            <article className={`dui-plan-card is-pro${isProPlan ? ' is-current' : ''}`}>
+              <div className="dui-plan-card__head">
+                <div><span>MOST CAPABLE</span><h4>Pro</h4></div>
+                {isProPlan ? <b>Current plan</b> : <b>Full access</b>}
+              </div>
+              <strong className="dui-plan-card__credits">400,000 <small>credits</small></strong>
+              <p>All of Automnia’s highest-level capabilities, consolidated into one decisive plan.</p>
+              <ul>
+                <li>Everything in Starter</li>
+                <li>All Automnia models and advanced workflows</li>
+                <li>Bring your own provider + smart fallback routing</li>
+                <li>Offline-capable provider access and priority controls</li>
+              </ul>
+              <button type="button" onClick={() => void openCheckout()} disabled={checkoutBusy}>{checkoutBusy ? 'Opening checkout…' : isProPlan ? 'Manage Pro' : 'Upgrade to Pro'}</button>
+            </article>
+          </section>
+          <p className="dui-plan-catalog__note">Pro includes every capability that was previously available in Enterprise. Legacy Enterprise access remains fully honored.</p>
+        </SettingsCard>
         <SettingsCard title="Plan, access & billing" description="Review your plan, credit balance, and billing preferences.">
           <Field label="License Authorization" hint="The license key remains server-local and is never revealed in the app.">
             <input type="text" readOnly value={license?.active ? 'Active — stored securely on this device' : 'No active license'} style={{ backgroundColor: 'rgba(255, 255, 255, 0.05)', cursor: 'not-allowed' }} />
@@ -1079,10 +1115,10 @@ export function SettingsPanel({ focusSection = 'account', focusRequest = 0 }: { 
           <Field label="Plan or Access Tier" hint="The exact entitlement activated for this account.">
             <input type="text" readOnly value={entitlement.tierLabel} style={{ fontWeight: 'bold', backgroundColor: 'rgba(255, 255, 255, 0.05)', cursor: 'not-allowed' }} />
           </Field>
-          <Field label="Access & Billing Mode" hint="Starter Subscription uses Automnia hosted credits. Higher tiers include hosted credits and provider priority controls.">
+          <Field label="Access & Billing Mode" hint="Starter uses Automnia hosted credits. Pro adds the complete provider and priority-control toolkit.">
             <input type="text" readOnly value={entitlement.billingLabel} style={{ backgroundColor: 'rgba(255, 255, 255, 0.05)', cursor: 'not-allowed' }} />
           </Field>
-          <Field label="Usage Priority" hint={usagePriorityLocked ? 'Starter Subscription ($19.99) and credit-refill access stay on Automnia credits.' : hostedCredits || isByok ? 'Choose Automnia credits or My provider + Automnia credits. Higher tiers can choose which route runs first.' : 'Activate a permanent or hosted plan to choose a usage priority.'}>
+          <Field label="Usage Priority" hint={usagePriorityLocked ? 'Starter and credit-refill access stay on Automnia credits.' : hostedCredits || isByok ? 'Pro can choose Automnia credits or My provider + Automnia credits, including the route order.' : 'Activate Starter or Pro to choose a usage priority.'}>
             <select
               value={usagePriorityManaged ? (usagePriority === 'automnia_only' ? 'automnia_only' : 'provider_plus_automnia') : 'automnia_only'}
               disabled={!usagePriorityManaged || usagePriorityBusy || usagePriorityLocked}
