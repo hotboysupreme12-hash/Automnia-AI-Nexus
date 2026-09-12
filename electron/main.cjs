@@ -1942,6 +1942,19 @@ function createMainWindow() {
       spellcheck: true,
     },
   })
+  if (ELECTRON_E2E && process.env.AUTOMNIA_ELECTRON_E2E_SCREENSHOT_DIR) {
+    const e2eAuthToken = JSON.stringify(String(process.env.CONTROL_CENTER_TOKEN || ''))
+    void win.webContents.addScriptToEvaluateOnNewDocument(`
+      (() => {
+        const token = ${e2eAuthToken};
+        if (!token) return;
+        localStorage.setItem('control-center-token', token);
+        sessionStorage.removeItem('control-center-token');
+        sessionStorage.removeItem('control-center-signed-out');
+        localStorage.removeItem('control-center-signed-out');
+      })();
+    `)
+  }
 
   bindWindowFocus(win)
   mainWindow = win
