@@ -17,6 +17,7 @@ import {
 import { clearAllCommandConsoleDrafts } from '../../store/commandConsoleState'
 import { useNexusStore } from '../../store/nexusStore'
 import { resolveLicenseEntitlement } from '../../utils/licenseEntitlement'
+import { formatAutomniaCredits } from '../../utils/creditDisplay'
 import { restartPluginGateway, runOpenClawPluginCommand } from '../../api/plugins'
 import type {
   CapabilityKey,
@@ -221,7 +222,7 @@ function SegmentedControl<T extends string>({ value, options, label, onChange }:
 
 
 function formatCreditBalance(value: number | null | undefined) {
-  return typeof value === 'number' && Number.isFinite(value) ? `${value.toLocaleString('en-US')} credits` : 'Awaiting a confirmed balance'
+  return formatAutomniaCredits(value)
 }
 
 function formatAccountTimestamp(value: string | null | undefined) {
@@ -899,6 +900,8 @@ export function SettingsPanel({ focusSection = 'account', focusRequest = 0 }: { 
         : 'automnia_only'
     const balance = hostedCredits || isByok ? formatCreditBalance(license?.creditBalance) : 'Not applicable — provider-billed'
     const isProPlan = /(?:^|[_-])(pro|enterprise)(?:$|[_-])/.test((license?.tier || '').toLowerCase())
+    const isCurrentStarterPlan = license?.active === true && !isProPlan
+    const isCurrentProPlan = license?.active === true && isProPlan
     const refreshAccount = async () => {
       if (accountRefreshBusy) return
       setAccountRefreshBusy(true)
@@ -1075,12 +1078,12 @@ export function SettingsPanel({ focusSection = 'account', focusRequest = 0 }: { 
         </SettingsCard>
         <SettingsCard title="Two plans. A clear path forward." description="Credits are the simple unit of value—no oversized token totals to decode.">
           <section className="dui-plan-catalog" aria-label="Automnia plan comparison">
-            <article className={`dui-plan-card${!isProPlan && license?.active ? ' is-current' : ''}`}>
+            <article className={`dui-plan-card${isCurrentStarterPlan ? ' is-current' : ''}`}>
               <div className="dui-plan-card__head">
                 <div><span>STARTER</span><h4>Build your momentum</h4></div>
-                {!isProPlan && license?.active && <b>Current plan</b>}
+                {isCurrentStarterPlan && <b>Current plan</b>}
               </div>
-              <strong className="dui-plan-card__credits">200,000 <small>credits</small></strong>
+              <strong className="dui-plan-card__credits">200 <small>credits</small></strong>
               <p>Everything you need to explore, build, and run core Automnia workflows.</p>
               <ul>
                 <li>Automnia hosted models</li>
@@ -1088,14 +1091,14 @@ export function SettingsPanel({ focusSection = 'account', focusRequest = 0 }: { 
                 <li>Secure cloud execution</li>
                 <li>Credits-only, simple billing</li>
               </ul>
-              <button type="button" onClick={() => void openCheckout()} disabled={checkoutBusy}>{checkoutBusy ? 'Opening checkout…' : 'Choose Starter'}</button>
+              {!isCurrentStarterPlan && <button type="button" onClick={() => void openCheckout()} disabled={checkoutBusy}>{checkoutBusy ? 'Opening checkout…' : 'Choose Starter'}</button>}
             </article>
-            <article className={`dui-plan-card is-pro${isProPlan ? ' is-current' : ''}`}>
+            <article className={`dui-plan-card is-pro${isCurrentProPlan ? ' is-current' : ''}`}>
               <div className="dui-plan-card__head">
                 <div><span>MOST CAPABLE</span><h4>Pro</h4></div>
-                {isProPlan ? <b>Current plan</b> : <b>Full access</b>}
+                {isCurrentProPlan ? <b>Current plan</b> : <b>Full access</b>}
               </div>
-              <strong className="dui-plan-card__credits">400,000 <small>credits</small></strong>
+              <strong className="dui-plan-card__credits">400 <small>credits</small></strong>
               <p>All of Automnia’s highest-level capabilities, consolidated into one decisive plan.</p>
               <ul>
                 <li>Everything in Starter</li>
@@ -1103,7 +1106,7 @@ export function SettingsPanel({ focusSection = 'account', focusRequest = 0 }: { 
                 <li>Bring your own provider + smart fallback routing</li>
                 <li>Offline-capable provider access and priority controls</li>
               </ul>
-              <button type="button" onClick={() => void openCheckout()} disabled={checkoutBusy}>{checkoutBusy ? 'Opening checkout…' : isProPlan ? 'Manage Pro' : 'Upgrade to Pro'}</button>
+              {!isCurrentProPlan && <button type="button" onClick={() => void openCheckout()} disabled={checkoutBusy}>{checkoutBusy ? 'Opening checkout…' : 'Upgrade to Pro'}</button>}
             </article>
           </section>
           <p className="dui-plan-catalog__note">Pro includes every capability that was previously available in Enterprise. Legacy Enterprise access remains fully honored.</p>

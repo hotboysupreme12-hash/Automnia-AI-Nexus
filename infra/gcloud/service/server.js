@@ -26,8 +26,8 @@ import { buildLicenseEmailHtml } from './welcomeEmail.js';
 
 const app = express();
 const port = process.env.PORT || 8080;
-const serviceVersion = '2.8.2';
-const schemaVersion = '2026-08-23.1';
+const serviceVersion = '2.9.0';
+const schemaVersion = '2026-09-12.1';
 const secrets = (process.env.SHOPIFY_WEBHOOK_SECRETS || process.env.SHOPIFY_WEBHOOK_SECRET || '')
   .split(',')
   .map((value) => value.trim())
@@ -35,6 +35,9 @@ const secrets = (process.env.SHOPIFY_WEBHOOK_SECRETS || process.env.SHOPIFY_WEBH
 const useInMemoryStorage = process.env.LOCAL_IN_MEMORY_LICENSES === 'true';
 const writeMode = process.env.MIGRATION_WRITE_MODE === 'read_only' ? 'read_only' : 'active';
 const adminApiToken = process.env.ADMIN_API_TOKEN || '';
+const shopifyAdminApiToken = process.env.SHOPIFY_ADMIN_API_TOKEN || '';
+const shopifyStoreDomain = String(process.env.SHOPIFY_STORE_DOMAIN || '').trim();
+const shopifyApiVersion = String(process.env.SHOPIFY_API_VERSION || '2026-07').trim();
 const gcpProjectId = process.env.GOOGLE_CLOUD_PROJECT || process.env.GCLOUD_PROJECT || 'local-development';
 const vertexLocation = process.env.VERTEX_LOCATION || 'us-central1';
 const vertexAuth = new GoogleAuth({ scopes: ['https://www.googleapis.com/auth/cloud-platform'] });
@@ -67,6 +70,12 @@ const emailDeliveryConfigured = testEmailDeliveryStub || (emailProvider === 'mic
   ? Boolean(emailSender && microsoftGraphMailCredentials?.tenantId && microsoftGraphMailCredentials?.clientId && microsoftGraphMailCredentials?.clientSecret)
   : Boolean(emailSender && gmailOAuthCredentials?.refreshToken));
 const emailDeliveryLeaseMs = 5 * 60 * 1000;
+// Vertex meters raw tokens. Automnia exposes a smaller, friendlier credit
+// balance to customers while keeping token precision in the server ledger.
+// One credit is intentionally fixed at 1,000 tokens so plan grants such as
+// 20,000,000 tokens are shown as 20,000 credits without changing their value.
+const TOKENS_PER_CREDIT = Math.max(1, Math.floor(Number(process.env.AUTOMNIA_TOKENS_PER_CREDIT || 1_000) || 1_000));
+const CREDIT_DISPLAY_DECIMALS = 3;
 const planMappings = readPlanMappings(process.env.SHOPIFY_PLAN_MAPPINGS);
 const planMappingHash = crypto.createHash('sha256').update(JSON.stringify(planMappings)).digest('hex');
 
@@ -102,6 +111,40 @@ function normalizeEmail(value) {
 
 function normalizeKey(value) {
   return String(value || '').trim().toUpperCase();
+}
+
+function safeNonNegativeInteger(value) {
+  const number = Number(value);
+  return Number.isFinite(number) && number >= 0 ? Math.floor(number) : 0;
+}
+
+function roundCreditDisplay(value) {
+  const factor = 10 ** CREDIT_DISPLAY_DECIMALS;
+  return Math.round((Math.max(0, Number(value) || 0) + Number.EPSILON) * factor) / factor;
+}
+
+function tokensToCredits(tokens) {
+  return roundCreditDisplay(safeNonNegativeInteger(tokens) / TOKENS_PER_CREDIT);
+}
+
+function tokenBalanceForSource(source) {
+  if (source && Number.isFinite(Number(source.tokenBalance)) && Number(source.tokenBalance) >= 0) {
+    return safeNonNegativeInteger(source.tokenBalance);
+  }
+  // Before the conversion rollout, `creditBalance` was actually the raw
+  // token balance. Treat it as legacy tokens once, rather than multiplying an
+  // already-existing wallet by the new display ratio.
+  return safeNonNegativeInteger(source?.creditBalance);
+}
+
+function materializeTokenBalance(source, tokenBalance) {
+  const safeTokens = safeNonNegativeInteger(tokenBalance);
+  return {
+    tokenBalance: safeTokens,
+    // Keep this field as a readable Firestore projection for older operators
+    // and migration tools. Customer/API responses use publicLicense().
+    creditBalance: tokensToCredits(safeTokens),
+  };
 }
 
 function parseGmailOAuthCredentials(value) {
@@ -173,6 +216,23 @@ function recordHasPermanentAccess(record) {
   return creditsOnlyEntitlement(record) ? false : record?.permanentAccess === true || record?.mode === 'byok' || tierRank(record?.tier) >= 2;
 }
 
+function trialEndTimestamp(record) {
+  const value = Date.parse(record?.trialEndsAt || '');
+  return Number.isFinite(value) ? value : 0;
+}
+
+function isEntitlementActive(record, now = Date.now()) {
+  if (!record || record.status === 'revoked') return false;
+  if (recordHasPermanentAccess(record)) return true;
+  const status = String(record.subscriptionStatus || '').trim().toLowerCase();
+  if (status === 'trialing') return trialEndTimestamp(record) > now;
+  if (status !== 'active') return false;
+  // A trial must not remain usable after its scheduled first billing date if
+  // Shopify has not confirmed a successful charge yet.
+  if (trialEndTimestamp(record) > 0 && !record.trialConvertedAt && trialEndTimestamp(record) <= now) return false;
+  return true;
+}
+
 function starterSubscriptionOnly(record) {
   const normalized = String(record?.tier || '').trim().toLowerCase().replace(/[\s-]+/g, '_');
   const isStarterTier = normalized === 'starter' || normalized === 'cloud_starter_subscription' || (normalized.includes('starter') && !normalized.includes('pro'));
@@ -232,7 +292,11 @@ function creditSourcesFor(record) {
 }
 
 function pooledCreditBalance(record) {
-  return creditSourcesFor(record).reduce((total, source) => total + Math.max(0, Number(source.creditBalance) || 0), 0);
+  return tokensToCredits(pooledTokenBalance(record));
+}
+
+function pooledTokenBalance(record) {
+  return creditSourcesFor(record).reduce((total, source) => total + tokenBalanceForSource(source), 0);
 }
 
 function bestLicense(records) {
@@ -369,6 +433,47 @@ function configuredHttpsUrl(value) {
   }
 }
 
+function shopifyAdminConfigured() {
+  return Boolean(shopifyAdminApiToken && shopifyStoreDomain && shopifyApiVersion);
+}
+
+function shopifyNumericId(value) {
+  const raw = String(value || '').trim();
+  if (!raw) return '';
+  const gidMatch = raw.match(/\/(\d+)$/);
+  return gidMatch ? gidMatch[1] : raw.replace(/[^0-9]/g, '');
+}
+
+async function fetchShopifyOriginOrder(payload) {
+  if (payload?.origin_order && typeof payload.origin_order === 'object') return payload.origin_order;
+  const orderId = shopifyNumericId(
+    payload?.origin_order_id ||
+    payload?.originOrderId ||
+    payload?.admin_graphql_api_origin_order_id,
+  );
+  if (!orderId) return null;
+  if (!shopifyAdminConfigured()) {
+    throw new Error('Shopify Admin API credentials are required to resolve a subscription contract origin order.');
+  }
+  const url = `https://${shopifyStoreDomain}/admin/api/${encodeURIComponent(shopifyApiVersion)}/orders/${encodeURIComponent(orderId)}.json?status=any`;
+  const response = await fetch(url, {
+    headers: {
+      Accept: 'application/json',
+      'X-Shopify-Access-Token': shopifyAdminApiToken,
+    },
+  });
+  const body = await response.json().catch(() => null);
+  if (!response.ok || !body?.order) {
+    console.error(JSON.stringify({
+      event: 'shopify_origin_order_lookup_failed',
+      orderId,
+      httpStatus: response.status,
+    }));
+    throw new Error('Shopify did not return the subscription origin order.');
+  }
+  return body.order;
+}
+
 function escapeHtml(value) {
   return String(value ?? '')
     .replaceAll('&', '&amp;')
@@ -396,8 +501,7 @@ function downloadPortalUrl(orderId, token) {
 }
 
 function hasInstallerAccess(record) {
-  if (!record || record.status === 'revoked') return false;
-  return recordHasPermanentAccess(record) || String(record.subscriptionStatus || '').trim().toLowerCase() === 'active';
+  return isEntitlementActive(record);
 }
 
 function validDownloadToken(record, supplied) {
@@ -467,9 +571,12 @@ function readPlanMappings(value) {
       if (!candidate || typeof candidate !== 'object') return [];
       const tier = String(candidate.tier || '').trim();
       const mode = candidate.mode === 'byok' ? 'byok' : candidate.mode === 'hosted_credits' ? 'hosted_credits' : null;
-      const initialCredits = Number(candidate.initialCredits);
+      // New mappings name the metered grant explicitly. Older deployed
+      // mappings used initialCredits for raw tokens, so read that field as a
+      // legacy token grant during the transition.
+      const initialTokens = Number(candidate.initialTokens ?? candidate.initialCredits);
       const kind = candidate.kind === 'topup' ? 'topup' : candidate.kind === 'subscription' ? 'subscription' : 'license';
-      if (!tier || !mode || !Number.isFinite(initialCredits) || initialCredits < 0) return [];
+      if (!tier || !mode || !Number.isFinite(initialTokens) || initialTokens < 0) return [];
       const ids = (field) => Array.isArray(candidate[field])
         ? candidate[field].map(normalizePlanId).filter(Boolean)
         : [];
@@ -477,11 +584,14 @@ function readPlanMappings(value) {
         tier,
         mode,
         planPriceCents: Number.isInteger(Number(candidate.planPriceCents)) && Number(candidate.planPriceCents) >= 0 ? Number(candidate.planPriceCents) : null,
-        initialCredits: Math.floor(initialCredits),
+        initialTokens: Math.floor(initialTokens),
+        initialCredits: tokensToCredits(initialTokens),
         kind,
         permanentAccess: candidate.permanentAccess === true || mode === 'byok' || tierRank(tier) >= 2,
+        trialDays: Number.isInteger(Number(candidate.trialDays)) && Number(candidate.trialDays) > 0 ? Number(candidate.trialDays) : 0,
         productIds: ids('productIds'),
         variantIds: ids('variantIds'),
+        sellingPlanIds: ids('sellingPlanIds'),
         skus: ids('skus').map((sku) => sku.toLowerCase()),
       }];
     });
@@ -496,15 +606,15 @@ function legacyTierConfiguration(tierName, itemTitles = '') {
   const normalizedTitles = String(itemTitles || '').toLowerCase();
 
   if (normalizedTitles.includes('topup') || normalizedTitles.includes('credit pack') || normalizedTitles.includes('1m tokens')) {
-    return { tier: 'credit_pack_topup', mode: 'hosted_credits', initialCredits: 1_000_000, kind: 'topup' };
+    return { tier: 'credit_pack_topup', mode: 'hosted_credits', initialTokens: 1_000_000, kind: 'topup' };
   }
   if (normalizedTier.includes('cloud') || normalizedTitles.includes('cloud') || normalizedTitles.includes('hosting')) {
-    return { tier: 'cloud_starter_subscription', mode: 'hosted_credits', planPriceCents: 1_999, initialCredits: 200_000, kind: 'subscription' };
+    return { tier: 'cloud_starter_subscription', mode: 'hosted_credits', planPriceCents: 1_999, initialTokens: 200_000, kind: 'subscription' };
   }
   if (normalizedTier.includes('pro') || normalizedTitles.includes('pro')) {
-    return { tier: 'pro_tier', mode: 'hosted_credits', initialCredits: 400_000, kind: 'subscription', permanentAccess: true };
+    return { tier: 'pro_tier', mode: 'hosted_credits', initialTokens: 400_000, kind: 'subscription', permanentAccess: true };
   }
-  return { tier: 'founding_beta_byok', mode: 'byok', initialCredits: 0, kind: 'license' };
+  return { tier: 'founding_beta_byok', mode: 'byok', initialTokens: 0, kind: 'license' };
 }
 
 function configuredTierForOrder(order) {
@@ -512,16 +622,19 @@ function configuredTierForOrder(order) {
   for (const lineItem of lineItems) {
     const productId = normalizePlanId(lineItem?.product_id);
     const variantId = normalizePlanId(lineItem?.variant_id);
+    const sellingPlanId = normalizePlanId(lineItem?.selling_plan_id || lineItem?.sellingPlanId);
     const sku = String(lineItem?.sku || '').trim().toLowerCase();
     const configured = planMappings.find((plan) =>
       (productId && plan.productIds.includes(productId)) ||
       (variantId && plan.variantIds.includes(variantId)) ||
+      (sellingPlanId && plan.sellingPlanIds.includes(sellingPlanId)) ||
       (sku && plan.skus.includes(sku)),
     );
     if (configured) {
       const quantity = Number(lineItem?.quantity);
       return {
         ...configured,
+        sellingPlanId: sellingPlanId || null,
         quantity: Number.isSafeInteger(quantity) && quantity > 0 ? quantity : 1,
       };
     }
@@ -533,15 +646,15 @@ function configuredTierForOrder(order) {
   return legacyTierConfiguration(order?.note || '', itemTitles);
 }
 
-function creditsGrantedForTier(tierConfig) {
-  const unitCredits = Math.max(0, Number(tierConfig?.initialCredits) || 0);
+function tokensGrantedForTier(tierConfig) {
+  const unitTokens = safeNonNegativeInteger(tierConfig?.initialTokens ?? tierConfig?.initialCredits);
   // Shopify quantity represents multiple refill units. Subscription and
   // upgrade products still grant one entitlement if a cart quantity is
   // accidentally greater than one.
   const quantity = tierConfig?.kind === 'topup' && Number.isSafeInteger(tierConfig?.quantity) && tierConfig.quantity > 0
     ? tierConfig.quantity
     : 1;
-  return unitCredits * quantity;
+  return unitTokens * quantity;
 }
 
 function publicLicense(record) {
@@ -559,6 +672,12 @@ function publicLicense(record) {
     creditBalance: pooledCreditBalance(record),
     status: record.status,
     subscriptionStatus: record.subscriptionStatus || null,
+    active: isEntitlementActive(record),
+    trialDays: Number.isInteger(Number(record.trialDays)) ? Number(record.trialDays) : 0,
+    trialStartedAt: record.trialStartedAt || null,
+    trialEndsAt: record.trialEndsAt || null,
+    nextBillingAt: record.nextBillingAt || null,
+    trialConvertedAt: record.trialConvertedAt || null,
     createdAt: record.createdAt,
     updatedAt: record.updatedAt || null,
     activatedAt: record.activatedAt || null,
@@ -602,7 +721,8 @@ function buildOnboardingPackage(order, licenseKey, tierConfig) {
     licenseKey,
     tier: tierConfig.tier,
     mode: tierConfig.mode,
-    initialCredits: creditsGrantedForTier(tierConfig),
+    initialTokens: tokensGrantedForTier(tierConfig),
+    initialCredits: tokensToCredits(tokensGrantedForTier(tierConfig)),
     customerName,
     customerEmail,
     telegramStartUrl,
@@ -610,7 +730,8 @@ function buildOnboardingPackage(order, licenseKey, tierConfig) {
       '1. Open the Automnia App or portal activation screen.',
       `2. Enter your checkout email (${customerEmail}) and license key (${licenseKey}) once to link the account.`,
       `3. Access: ${planHasPermanentAccess(tierConfig) ? 'Permanent access tied to this Automnia account.' : tierConfig.mode === 'hosted_credits' ? 'Automnia Cloud credits.' : 'BYOK (Bring Your Own API Keys).'}`,
-      '4. After linking, sign in with your password or Google account. Future upgrades merge automatically into this same account and key.',
+      ...(tierConfig.trialDays > 0 ? [`4. Your free trial lasts ${tierConfig.trialDays} days. Shopify will bill the saved payment method after the trial unless you cancel before then.`] : []),
+      `${tierConfig.trialDays > 0 ? 5 : 4}. After linking, sign in with your password or Google account. Future upgrades merge automatically into this same account and key.`,
     ],
   };
 }
@@ -645,7 +766,7 @@ async function findLicense(email, licenseKey) {
     // becomes the one canonical, highest-tier account entitlement.
     const allCandidates = Array.from(provisionedCustomers.values()).filter((record) =>
       normalizeEmail(record.email) === normalizedEmail);
-    const candidates = allCandidates.filter((record) => record.status !== 'revoked');
+    const candidates = allCandidates.filter((record) => isEntitlementActive(record));
     // Older desktop installs can still hold a license key that was replaced
     // by a newer canonical entitlement. The exact email + exact legacy key is
     // still required; once proved, return the active canonical account so the
@@ -657,7 +778,7 @@ async function findLicense(email, licenseKey) {
     }
     const canonical = await mergeAccountIdentityIntoCanonical(bestLicense(candidates), candidates) || keyMatch;
     const repaired = await restoreLegacyPermanentEntitlement(canonical, allCandidates);
-    return attachCreditSources(repaired, candidates);
+    return repaired && isEntitlementActive(repaired) ? attachCreditSources(repaired, candidates) : null;
   }
 
   const indexSnapshot = await licenseIndexes.doc(licenseIndexId(normalizedEmail, normalizedKey)).get();
@@ -692,7 +813,7 @@ async function findLicense(email, licenseKey) {
   const snapshot = await licenses.where('email', '==', normalizedEmail).limit(50).get();
   const allCandidates = snapshot.docs
     .map((document) => ({ ...document.data(), _ref: document.ref }));
-  const candidates = allCandidates.filter((candidate) => candidate.status !== 'revoked');
+  const candidates = allCandidates.filter((candidate) => isEntitlementActive(candidate));
   if (record.status === 'revoked') {
     const canonical = await mergeAccountIdentityIntoCanonical(bestLicense(candidates), candidates);
     const repaired = await restoreLegacyPermanentEntitlement(canonical, allCandidates);
@@ -700,7 +821,7 @@ async function findLicense(email, licenseKey) {
   }
   const canonical = await mergeAccountIdentityIntoCanonical(bestLicense(candidates) || record, candidates) || record;
   const repaired = await restoreLegacyPermanentEntitlement(canonical, allCandidates);
-  return attachCreditSources(repaired, candidates);
+  return repaired && isEntitlementActive(repaired) ? attachCreditSources(repaired, candidates) : null;
 }
 
 function sortNewestLicense(records) {
@@ -718,20 +839,31 @@ async function findLicenseByEmail(email, { hostedOnly = false } = {}) {
     const allCandidates = Array.from(provisionedCustomers.values())
       .filter((record) => normalizeEmail(record.email) === normalizedEmail);
     const candidates = allCandidates
-      .filter((record) => (!hostedOnly || record.mode === 'hosted_credits') && record.status !== 'revoked');
+      .filter((record) => (!hostedOnly || record.mode === 'hosted_credits') && isEntitlementActive(record));
     const canonical = await mergeAccountIdentityIntoCanonical(bestLicense(candidates), candidates);
     const repaired = await restoreLegacyPermanentEntitlement(canonical, allCandidates);
-    return attachCreditSources(repaired, candidates);
+    return repaired && isEntitlementActive(repaired) ? attachCreditSources(repaired, candidates) : null;
   }
 
   const snapshot = await licenses.where('email', '==', normalizedEmail).get();
   const allCandidates = snapshot.docs
     .map((document) => ({ ...document.data(), _ref: document.ref }));
   const candidates = allCandidates
-    .filter((record) => (!hostedOnly || record.mode === 'hosted_credits') && record.status !== 'revoked');
+    .filter((record) => (!hostedOnly || record.mode === 'hosted_credits') && isEntitlementActive(record));
   const canonical = await mergeAccountIdentityIntoCanonical(bestLicense(candidates), candidates);
   const repaired = await restoreLegacyPermanentEntitlement(canonical, allCandidates);
-  return attachCreditSources(repaired, candidates);
+  return repaired && isEntitlementActive(repaired) ? attachCreditSources(repaired, candidates) : null;
+}
+
+async function findAnyLicenseByEmail(email) {
+  const normalizedEmail = normalizeEmail(email);
+  if (!normalizedEmail) return [];
+  if (useInMemoryStorage) {
+    return Array.from(provisionedCustomers.values())
+      .filter((record) => normalizeEmail(record.email) === normalizedEmail);
+  }
+  const snapshot = await licenses.where('email', '==', normalizedEmail).limit(50).get();
+  return snapshot.docs.map((document) => ({ ...document.data(), _ref: document.ref }));
 }
 
 async function findLicenseByOrderId(orderId) {
@@ -793,7 +925,8 @@ async function updateHostedEntitlement({ record, order, tierConfig, topic, deliv
     // An upgrade changes the canonical entitlement but never resets its
     // existing hosted-credit wallet. A new plan grant is additive; separate
     // prior wallet sources remain pooled through _creditSources.
-    const grant = creditsGrantedForTier(tierConfig);
+    const grant = tokensGrantedForTier(tierConfig);
+    const nextTokenBalance = tokenBalanceForSource(record) + grant;
     Object.assign(record, {
       tier: nextTier,
       mode: nextMode,
@@ -801,8 +934,9 @@ async function updateHostedEntitlement({ record, order, tierConfig, topic, deliv
       byokAllowed: nextByokAllowed,
       permanentAccess: nextPermanentAccess,
       accessType: nextPermanentAccess ? 'permanent' : 'subscription',
-      creditBalance: (record.creditBalance || 0) + grant,
+      ...materializeTokenBalance(record, nextTokenBalance),
       subscriptionStatus: nextSubscriptionStatus,
+      ...(record.trialEndsAt ? { trialConvertedAt: record.trialConvertedAt || now } : {}),
       subscriptionContractId: contractId || record.subscriptionContractId || null,
       lastShopifyOrderId: orderId,
       lastWebhookEventId: eventId,
@@ -821,7 +955,8 @@ async function updateHostedEntitlement({ record, order, tierConfig, topic, deliv
     // Preserve the current wallet and add only the incoming plan grant. The
     // public response and relay wallet pool all non-revoked account sources,
     // including hosted credits earned before a BYOK or higher-tier upgrade.
-    const grant = creditsGrantedForTier(tierConfig);
+    const grant = tokensGrantedForTier(tierConfig);
+    const nextTokenBalance = tokenBalanceForSource(current) + grant;
     const update = {
       tier: preserveExistingEntitlement ? current.tier : tierConfig.tier,
       mode: preserveExistingEntitlement ? current.mode : tierConfig.mode,
@@ -829,11 +964,12 @@ async function updateHostedEntitlement({ record, order, tierConfig, topic, deliv
       byokAllowed: nextMode === 'byok' || (!creditsOnlyEntitlement({ tier: nextTier, mode: nextMode, planPriceCents: nextPlanPriceCents }) && (current.byokAllowed === true || byokAllowedForTier(nextTier))),
       permanentAccess: recordHasPermanentAccess(current) || planHasPermanentAccess(tierConfig),
       accessType: (recordHasPermanentAccess(current) || planHasPermanentAccess(tierConfig)) ? 'permanent' : 'subscription',
-      creditBalance: (current.creditBalance || 0) + grant,
+      ...materializeTokenBalance(current, nextTokenBalance),
       subscriptionStatus: (recordHasPermanentAccess(current) || planHasPermanentAccess(tierConfig))
         ? 'permanent'
         : tierConfig.kind === 'subscription' ? 'active' : current.subscriptionStatus || null,
       subscriptionContractId: contractId || current.subscriptionContractId || null,
+      ...(current.trialEndsAt ? { trialConvertedAt: current.trialConvertedAt || now } : {}),
       lastShopifyOrderId: orderId,
       updatedAt: now,
     };
@@ -844,20 +980,28 @@ async function updateHostedEntitlement({ record, order, tierConfig, topic, deliv
       orderId,
       licenseOrderId: current.orderId,
       tier: update.tier,
-      creditsGranted: grant,
+      tokensGranted: grant,
+      creditsGranted: tokensToCredits(grant),
       createdAt: now,
     });
     return { ...current, ...update };
   });
 }
 
-async function updateShopifyState({ record, topic, deliveryId, subscriptionContractId, subscriptionStatus, paymentStatus }) {
+async function updateShopifyState({ record, topic, deliveryId, subscriptionContractId, subscriptionStatus, paymentStatus, nextBillingAt }) {
   const eventId = webhookEventId(topic, deliveryId, `${subscriptionContractId || record.orderId}:${subscriptionStatus || paymentStatus || 'state'}`);
   const now = new Date().toISOString();
+  const trialStillOpen = trialEndTimestamp(record) > Date.now() && !record.trialConvertedAt;
+  const requestedStatus = String(subscriptionStatus || '').trim().toLowerCase();
+  const effectiveStatus = trialStillOpen && requestedStatus === 'active' && topic !== 'subscription_billing_attempts/success'
+    ? 'trialing'
+    : subscriptionStatus;
   const update = {
     ...(subscriptionContractId ? { subscriptionContractId } : {}),
-    ...(subscriptionStatus ? { subscriptionStatus } : {}),
+    ...(effectiveStatus ? { subscriptionStatus: effectiveStatus } : {}),
     ...(paymentStatus ? { paymentStatus } : {}),
+    ...(nextBillingAt ? { nextBillingAt } : {}),
+    ...(topic === 'subscription_billing_attempts/success' && record.trialEndsAt ? { trialConvertedAt: now } : {}),
     updatedAt: now,
   };
   if (useInMemoryStorage) {
@@ -878,7 +1022,7 @@ async function updateShopifyState({ record, topic, deliveryId, subscriptionContr
       deliveryId: deliveryId || null,
       licenseOrderId: current.orderId,
       subscriptionContractId: subscriptionContractId || current.subscriptionContractId || null,
-      subscriptionStatus: subscriptionStatus || null,
+      subscriptionStatus: effectiveStatus || null,
       paymentStatus: paymentStatus || null,
       createdAt: now,
     });
@@ -897,12 +1041,12 @@ async function activateLicense(record, deviceId) {
   return { ...record, ...update };
 }
 
-async function applyCreditTopUp(orderId, email, credits) {
+async function applyCreditTopUp(orderId, email, tokens) {
   const normalizedEmail = normalizeEmail(email);
   if (useInMemoryStorage) {
     const existing = Array.from(provisionedCustomers.values()).find((record) => record.email === normalizedEmail && record.mode === 'hosted_credits');
     if (!existing) return null;
-    existing.creditBalance = (existing.creditBalance || 0) + credits;
+    Object.assign(existing, materializeTokenBalance(existing, tokenBalanceForSource(existing) + safeNonNegativeInteger(tokens)));
     return existing;
   }
 
@@ -916,10 +1060,11 @@ async function applyCreditTopUp(orderId, email, credits) {
     if (!snapshot.exists) return null;
     const record = snapshot.data();
     if (applied.exists) return record;
-    const creditBalance = (record.creditBalance || 0) + credits;
-    transaction.update(licenseRef, { creditBalance, updatedAt: new Date().toISOString() });
-    transaction.create(topUpRef, { orderId, email: normalizedEmail, credits, licenseOrderId: record.orderId, createdAt: new Date().toISOString() });
-    return { ...record, creditBalance };
+    const nextTokenBalance = tokenBalanceForSource(record) + safeNonNegativeInteger(tokens);
+    const balance = materializeTokenBalance(record, nextTokenBalance);
+    transaction.update(licenseRef, { ...balance, updatedAt: new Date().toISOString() });
+    transaction.create(topUpRef, { orderId, email: normalizedEmail, tokensGranted: safeNonNegativeInteger(tokens), creditsGranted: tokensToCredits(tokens), licenseOrderId: record.orderId, createdAt: new Date().toISOString() });
+    return { ...record, ...balance };
   });
 }
 
@@ -942,6 +1087,28 @@ function safeResponseCachePayload(payload) {
   }
 }
 
+function normalizeHostedReplayPayload(payload) {
+  if (!payload || typeof payload !== 'object') return payload;
+  // Responses written by this rollout already contain compact credit values.
+  if (Number(payload.billingUnitVersion) === 2 || Number(payload.automnia?.billingUnitVersion) === 2) return payload;
+  // A pre-rollout cached response used raw token counts in these fields. Keep
+  // idempotent retries safe without recharging or returning the old display
+  // unit to the desktop.
+  const next = { ...payload };
+  if (Number.isFinite(Number(next.remainingCredits))) next.remainingCredits = tokensToCredits(next.remainingCredits);
+  if (Number.isFinite(Number(next.deductedCredits))) next.deductedCredits = tokensToCredits(next.deductedCredits);
+  if (next.automnia && typeof next.automnia === 'object') {
+    next.automnia = {
+      ...next.automnia,
+      ...(Number.isFinite(Number(next.automnia.remainingCredits)) ? { remainingCredits: tokensToCredits(next.automnia.remainingCredits) } : {}),
+      ...(Number.isFinite(Number(next.automnia.deductedCredits)) ? { deductedCredits: tokensToCredits(next.automnia.deductedCredits) } : {}),
+      billingUnitVersion: 2,
+      tokensPerCredit: TOKENS_PER_CREDIT,
+    };
+  }
+  return next;
+}
+
 function trimHostedResponseCache() {
   const now = Date.now();
   for (const [key, entry] of hostedResponseCache.entries()) {
@@ -962,7 +1129,7 @@ async function readHostedRequestReplay(record, requestId, requestFingerprint, re
   const local = hostedResponseCache.get(key);
   if (local) {
     if (local.requestFingerprint && local.requestFingerprint !== requestFingerprint) return { kind: 'conflict' };
-    if (local.responseShape === responseShape && local.payload) return { kind: 'cached', payload: local.payload };
+    if (local.responseShape === responseShape && local.payload) return { kind: 'cached', payload: normalizeHostedReplayPayload(local.payload) };
   }
 
   const walletId = String(record.email || record.orderId || '').trim().toLowerCase();
@@ -975,7 +1142,7 @@ async function readHostedRequestReplay(record, requestId, requestFingerprint, re
   if (!usage) return null;
   if (usage.requestFingerprint && usage.requestFingerprint !== requestFingerprint) return { kind: 'conflict' };
   if (usage.responsePayload && usage.responseShape === responseShape) {
-    const payload = safeResponseCachePayload(usage.responsePayload);
+    const payload = normalizeHostedReplayPayload(safeResponseCachePayload(usage.responsePayload));
     if (payload) {
       hostedResponseCache.set(key, {
         payload,
@@ -1055,31 +1222,41 @@ async function deductCredits(recordOrOrderId, tokensUsed, requestId) {
   if (useInMemoryStorage) {
     if (!canonical || !sources.length) return { remainingCredits: 0, deductedCredits: 0, duplicate: false };
     const usageId = safeRequestId ? usageEventId(walletId, safeRequestId) : null;
-    if (usageId && canonical.creditUsage?.[usageId]) return { ...canonical.creditUsage[usageId], duplicate: true };
+    if (usageId && canonical.creditUsage?.[usageId]) {
+      const usage = canonical.creditUsage[usageId];
+      return {
+        ...usage,
+        remainingCredits: usage.billingUnitVersion === 2 ? tokensToCredits(usage.remainingTokens) : tokensToCredits(usage.remainingCredits),
+        deductedCredits: usage.billingUnitVersion === 2 ? tokensToCredits(usage.deductedTokens) : tokensToCredits(usage.deductedCredits),
+        duplicate: true,
+      };
+    }
     let remainingToDeduct = safeTokensUsed;
-    let deductedCredits = 0;
+    let deductedTokens = 0;
     const allocations = [];
     for (const source of sources) {
-      const current = Math.max(0, Number(source.creditBalance) || 0);
+      const current = tokenBalanceForSource(source);
       const deducted = Math.min(current, remainingToDeduct);
       if (deducted > 0) {
-        source.creditBalance = current - deducted;
+        Object.assign(source, materializeTokenBalance(source, current - deducted));
         source.updatedAt = new Date().toISOString();
-        deductedCredits += deducted;
+        deductedTokens += deducted;
         remainingToDeduct -= deducted;
-        allocations.push({ orderId: source.orderId, deductedCredits: deducted });
+        allocations.push({ orderId: source.orderId, deductedTokens: deducted, deductedCredits: tokensToCredits(deducted) });
       }
       if (remainingToDeduct <= 0) break;
     }
-    const remainingCredits = pooledCreditBalance(canonical);
+    const remainingTokens = pooledTokenBalance(canonical);
+    const remainingCredits = tokensToCredits(remainingTokens);
+    const deductedCredits = tokensToCredits(deductedTokens);
     canonical.updatedAt = new Date().toISOString();
     if (usageId) {
       canonical.creditUsage = {
         ...(canonical.creditUsage || {}),
-        [usageId]: { remainingCredits, deductedCredits, allocations },
+        [usageId]: { billingUnitVersion: 2, remainingTokens, remainingCredits, deductedTokens, deductedCredits, allocations },
       };
     }
-    return { remainingCredits, deductedCredits, duplicate: false };
+    return { remainingTokens, remainingCredits, deductedTokens, deductedCredits, duplicate: false };
   }
 
   if (!canonical || !sources.length) return { remainingCredits: 0, deductedCredits: 0, duplicate: false };
@@ -1092,43 +1269,59 @@ async function deductCredits(recordOrOrderId, tokensUsed, requestId) {
     ]);
     if (!sourceSnapshots.some((snapshot) => snapshot.exists)) return { remainingCredits: 0, deductedCredits: 0, duplicate: false };
     if (usageSnapshot?.exists) {
+      const usageVersion = Number(usageSnapshot.get('billingUnitVersion')) || 1;
+      const storedRemainingTokens = usageVersion === 2
+        ? usageSnapshot.get('remainingTokens')
+        : usageSnapshot.get('remainingCredits');
+      const storedDeductedTokens = usageVersion === 2
+        ? usageSnapshot.get('deductedTokens')
+        : usageSnapshot.get('deductedCredits');
       return {
-        remainingCredits: Math.max(0, Number(usageSnapshot.get('remainingCredits')) || 0),
-        deductedCredits: Math.max(0, Number(usageSnapshot.get('deductedCredits')) || 0),
+        remainingTokens: safeNonNegativeInteger(storedRemainingTokens),
+        remainingCredits: tokensToCredits(storedRemainingTokens),
+        deductedTokens: safeNonNegativeInteger(storedDeductedTokens),
+        deductedCredits: tokensToCredits(storedDeductedTokens),
         duplicate: true,
       };
     }
     const updatedAt = new Date().toISOString();
     let remainingToDeduct = safeTokensUsed;
-    let deductedCredits = 0;
+    let deductedTokens = 0;
     const allocations = [];
-    let remainingCredits = 0;
+    let remainingTokens = 0;
     sourceSnapshots.forEach((snapshot, index) => {
       if (!snapshot.exists) return;
-      const current = Math.max(0, Number(snapshot.get('creditBalance')) || 0);
+      const current = Number.isFinite(Number(snapshot.get('tokenBalance')))
+        ? safeNonNegativeInteger(snapshot.get('tokenBalance'))
+        : safeNonNegativeInteger(snapshot.get('creditBalance'));
       const deducted = Math.min(current, remainingToDeduct);
       const nextBalance = current - deducted;
-      remainingCredits += nextBalance;
+      remainingTokens += nextBalance;
       if (deducted > 0) {
-        deductedCredits += deducted;
+        deductedTokens += deducted;
         remainingToDeduct -= deducted;
-        transaction.update(sourceRefs[index], { creditBalance: nextBalance, updatedAt });
-        allocations.push({ orderId: sources[index].orderId, deductedCredits: deducted });
+        transaction.update(sourceRefs[index], { ...materializeTokenBalance(sources[index], nextBalance), updatedAt });
+        allocations.push({ orderId: sources[index].orderId, deductedTokens: deducted, deductedCredits: tokensToCredits(deducted) });
       }
     });
+    const remainingCredits = tokensToCredits(remainingTokens);
+    const deductedCredits = tokensToCredits(deductedTokens);
     if (usageRef) {
       transaction.create(usageRef, {
         orderId,
         walletId,
         requestId: safeRequestId,
         tokensUsed: safeTokensUsed,
+        billingUnitVersion: 2,
+        remainingTokens,
+        deductedTokens,
         deductedCredits,
         remainingCredits,
         allocations,
         createdAt: updatedAt,
       });
     }
-    return { remainingCredits, deductedCredits, duplicate: false };
+    return { remainingTokens, remainingCredits, deductedTokens, deductedCredits, duplicate: false };
   });
 }
 
@@ -1176,11 +1369,21 @@ app.get('/health', (_req, res) => res.status(200).json({
     maxInlineImageChars: automniaRelayTokenOptimization.maxInlineImageChars,
     responseReplayCache: true,
   },
+  billing: {
+    accountingUnit: 'tokens',
+    displayUnit: 'credits',
+    tokensPerCredit: TOKENS_PER_CREDIT,
+    displayDecimals: CREDIT_DISPLAY_DECIMALS,
+    billingUnitVersion: 2,
+  },
   vertexLocation,
   knowledgeAssistant: knowledgeServingConfig ? 'configured' : 'disabled',
   knowledgeModelVersion,
   commerce: {
     checkoutConfigured: Boolean(checkoutUrl),
+    shopifyAdminConfigured: shopifyAdminConfigured(),
+    shopifyStoreDomain: shopifyStoreDomain || null,
+    shopifyApiVersion,
     planMappingsConfigured: planMappings.length > 0,
     planMappingCount: planMappings.length,
     planMappingHash,
@@ -2080,7 +2283,7 @@ app.post('/v1/chat/completions', requireWritesEnabled, async (req, res) => {
       ...(result.toolCalls.length ? { tool_calls: result.toolCalls } : {}),
     };
     const usage = { prompt_tokens: result.promptTokens || messageOptimization.stats.estimatedPromptTokens, completion_tokens: result.completionTokens, total_tokens: tokensUsed };
-    const completionPayload = { id: responseId, object: 'chat.completion', created, model, choices: [{ index: 0, message, finish_reason: result.toolCalls.length ? 'tool_calls' : 'stop' }], usage, automnia: { remainingCredits: debit.remainingCredits, deductedCredits: debit.deductedCredits, tier: access.record.tier, optimization } };
+    const completionPayload = { id: responseId, object: 'chat.completion', created, model, choices: [{ index: 0, message, finish_reason: result.toolCalls.length ? 'tool_calls' : 'stop' }], usage, automnia: { billingUnitVersion: 2, tokensPerCredit: TOKENS_PER_CREDIT, remainingCredits: debit.remainingCredits, deductedCredits: debit.deductedCredits, tier: access.record.tier, optimization } };
     await persistHostedResponse(access.record, requestIdentity.explicit ? requestIdentity.requestId : '', requestFingerprint, responseShape, completionPayload).catch((error) => console.warn(JSON.stringify({ event: 'hosted_response_cache_write_failed', message: String(error?.message || error).slice(0, 240) })));
     console.log(JSON.stringify({ event: 'openai_compatible_generation', orderId: access.record.orderId, tokensUsed, promptTokens: usage.prompt_tokens, completionTokens: usage.completion_tokens, deductedCredits: debit.deductedCredits, remainingCredits: debit.remainingCredits, toolCalls: result.toolCalls.length, duplicateUsageRequest: debit.duplicate, optimization }));
     return sendOpenAiCompletionResponse(res, completionPayload, req.body?.stream === true);
@@ -2169,6 +2372,8 @@ app.post('/api/ai/generate', requireWritesEnabled, async (req, res) => {
     const responsePayload = {
       ok: true,
       mode: 'hosted_credits',
+      billingUnitVersion: 2,
+      tokensPerCredit: TOKENS_PER_CREDIT,
       text: generatedText,
       tokensUsed,
       deductedCredits: debit.deductedCredits,
@@ -2209,8 +2414,12 @@ const shopifyWebhookTopics = {
   'subscription-contracts-create': 'subscription_contracts/create',
   'subscription-contracts-update': 'subscription_contracts/update',
   'subscription-contracts-cancel': 'subscription_contracts/cancel',
+  'subscription-contracts-expire': 'subscription_contracts/expire',
+  'subscription-contracts-fail': 'subscription_contracts/fail',
+  'subscription-contracts-pause': 'subscription_contracts/pause',
   'subscription-billing-attempts-success': 'subscription_billing_attempts/success',
   'subscription-billing-attempts-failure': 'subscription_billing_attempts/failure',
+  'subscription-billing-attempts-challenged': 'subscription_billing_attempts/challenged',
 };
 
 function hasValidShopifySignature(rawBody, received) {
@@ -2492,8 +2701,14 @@ async function deliverLicenseEmail(record) {
   return { action: 'email_sent', record: completed };
 }
 
+function normalizeShopifyContractId(value) {
+  const raw = normalizePlanId(value);
+  const gidMatch = raw.match(/^gid:\/\/shopify\/SubscriptionContract\/(\d+)$/i);
+  return gidMatch ? gidMatch[1] : raw;
+}
+
 function contractIdFromShopify(payload, { allowPayloadId = true } = {}) {
-  return normalizePlanId(
+  return normalizeShopifyContractId(
     payload?.subscription_contract_id ||
     payload?.subscriptionContractId ||
     payload?.contract_id ||
@@ -2506,7 +2721,52 @@ function contractStatusFromShopify(payload) {
   return String(payload?.status || payload?.subscription_contract?.status || '').trim().toLowerCase() || null;
 }
 
-async function handlePaidOrder(order, deliveryId) {
+function shopifyDateFromPayload(payload, ...keys) {
+  for (const key of keys) {
+    const value = payload?.[key];
+    if (!value) continue;
+    const timestamp = Date.parse(String(value));
+    if (Number.isFinite(timestamp)) return new Date(timestamp).toISOString();
+  }
+  return null;
+}
+
+function trialWindowFor(tierConfig, order, contractPayload) {
+  const trialDays = Number.isInteger(Number(tierConfig?.trialDays)) ? Number(tierConfig.trialDays) : 0;
+  const sellingPlanId = normalizePlanId(tierConfig?.sellingPlanId);
+  if (trialDays <= 0 || !sellingPlanId) return null;
+  if (Array.isArray(tierConfig.sellingPlanIds) && tierConfig.sellingPlanIds.length && !tierConfig.sellingPlanIds.includes(sellingPlanId)) return null;
+
+  const startedAt = shopifyDateFromPayload(order, 'created_at', 'createdAt')
+    || shopifyDateFromPayload(contractPayload, 'created_at', 'createdAt')
+    || new Date().toISOString();
+  const expectedEnd = new Date(Date.parse(startedAt) + trialDays * 24 * 60 * 60 * 1000);
+  const nextBillingAt = shopifyDateFromPayload(contractPayload, 'next_billing_date', 'nextBillingDate');
+  if (nextBillingAt) {
+    // Shopify's contract date is authoritative. Reject a mapping when the
+    // store's selling plan is not actually configured for the promised trial;
+    // otherwise a normal monthly contract could accidentally receive access
+    // for three days without the checkout configuration matching our copy.
+    const driftHours = Math.abs(Date.parse(nextBillingAt) - expectedEnd.getTime()) / (60 * 60 * 1000);
+    if (driftHours > 36) {
+      console.error(JSON.stringify({ event: 'shopify_trial_configuration_mismatch', trialDays, expectedEnd: expectedEnd.toISOString(), nextBillingAt }));
+      return { invalid: true, trialDays, startedAt, nextBillingAt };
+    }
+  }
+  return {
+    trialDays,
+    startedAt,
+    endsAt: nextBillingAt || expectedEnd.toISOString(),
+    nextBillingAt: nextBillingAt || expectedEnd.toISOString(),
+  };
+}
+
+function orderPaymentConfirmed(order) {
+  const financialStatus = String(order?.financial_status || order?.financialStatus || '').trim().toLowerCase();
+  return financialStatus === 'paid' || financialStatus === 'partially_paid';
+}
+
+async function handlePaidOrder(order, deliveryId, trialWindow = null) {
   const orderId = String(order?.id || '').trim();
   const customerEmail = customerEmailFromShopify(order);
   const tierConfig = configuredTierForOrder(order);
@@ -2528,7 +2788,7 @@ async function handlePaidOrder(order, deliveryId) {
     const updated = await updateHostedEntitlement({ record: existing, order, tierConfig, topic: 'orders/paid', deliveryId });
     if (!updated) throw new Error('The active license disappeared while applying the Shopify entitlement update.');
     const delivery = await deliverLicenseEmail(updated);
-    console.log(JSON.stringify({ event: tierConfig.kind === 'topup' ? 'credits_topped_up' : 'subscription_updated', orderId, licenseOrderId: updated.orderId, tier: updated.tier, mode: updated.mode, creditBalance: updated.creditBalance }));
+    console.log(JSON.stringify({ event: tierConfig.kind === 'topup' ? 'credits_topped_up' : 'subscription_updated', orderId, licenseOrderId: updated.orderId, tier: updated.tier, mode: updated.mode, creditBalance: pooledCreditBalance(updated), tokenBalance: pooledTokenBalance(updated) }));
     return { action: tierConfig.kind === 'topup' ? 'topup_applied' : 'subscription_updated', license: delivery.record || updated };
   }
 
@@ -2546,7 +2806,7 @@ async function handlePaidOrder(order, deliveryId) {
     byokAllowed: tierConfig.mode === 'byok' || (!creditsOnlyEntitlement(tierConfig) && byokAllowedForTier(tierConfig.tier)),
     permanentAccess: planHasPermanentAccess(tierConfig),
     accessType: planHasPermanentAccess(tierConfig) ? 'permanent' : 'subscription',
-    creditBalance: creditsGrantedForTier(tierConfig),
+    ...materializeTokenBalance(null, tokensGrantedForTier(tierConfig)),
     licenseKey,
     ...(() => {
       const downloadAccess = newDownloadAccess();
@@ -2558,16 +2818,67 @@ async function handlePaidOrder(order, deliveryId) {
     onboarding: buildOnboardingPackage(order, licenseKey, tierConfig),
     emailDelivery: { status: 'pending', attempts: 0 },
     status: 'provisioned',
-    subscriptionStatus: planHasPermanentAccess(tierConfig) ? 'permanent' : tierConfig.kind === 'subscription' ? 'active' : null,
+    subscriptionStatus: planHasPermanentAccess(tierConfig) ? 'permanent' : trialWindow ? 'trialing' : tierConfig.kind === 'subscription' ? 'active' : null,
     subscriptionContractId: contractId || null,
+    ...(trialWindow ? {
+      trialDays: trialWindow.trialDays,
+      trialStartedAt: trialWindow.startedAt,
+      trialEndsAt: trialWindow.endsAt,
+      nextBillingAt: trialWindow.nextBillingAt,
+    } : {}),
     lastShopifyOrderId: orderId,
     createdAt,
     updatedAt: createdAt,
   };
   const persisted = await persistProvisionedLicense(record);
   const delivery = await deliverLicenseEmail(persisted);
-  console.log(JSON.stringify({ event: 'customer_provisioned', orderId: persisted.orderId, tier: persisted.tier, mode: persisted.mode, creditBalance: persisted.creditBalance, emailDelivery: delivery.action }));
+  console.log(JSON.stringify({ event: 'customer_provisioned', orderId: persisted.orderId, tier: persisted.tier, mode: persisted.mode, creditBalance: pooledCreditBalance(persisted), tokenBalance: tokenBalanceForSource(persisted), emailDelivery: delivery.action }));
   return { action: 'license_provisioned', license: delivery.record || persisted };
+}
+
+async function handleSubscriptionContractCreated(payload, deliveryId) {
+  const contractId = contractIdFromShopify(payload, { allowPayloadId: true });
+  if (!contractId) throw new Error('Subscription contract webhook is missing a contract ID.');
+  const existingContract = await findLicenseBySubscriptionId(contractId);
+  if (existingContract) return { action: 'subscription_contract_already_linked', license: existingContract };
+
+  // Shopify's subscription contract webhook is the reliable signal that a
+  // selling-plan purchase created a contract, but the webhook does not carry
+  // the product line needed to resolve our plan map. Read the origin order
+  // from Shopify Admin, then provision only after the order and selling plan
+  // have both been verified.
+  const order = await fetchShopifyOriginOrder(payload);
+  if (!order) throw new Error('Subscription contract webhook is missing its origin order.');
+  const tierConfig = configuredTierForOrder(order);
+  if (!tierConfig || tierConfig.kind !== 'subscription') {
+    console.warn(JSON.stringify({ event: 'subscription_contract_ignored', contractId, reason: 'unmapped_plan' }));
+    return { action: 'subscription_contract_ignored' };
+  }
+  const trialWindow = trialWindowFor(tierConfig, order, payload);
+  if (trialWindow?.invalid) return { action: 'trial_configuration_mismatch' };
+
+  if (trialWindow) {
+    const priorRecords = await findAnyLicenseByEmail(customerEmailFromShopify(order));
+    if (priorRecords.some((record) => record.trialStartedAt || Number(record.trialDays) > 0)) {
+      // Do not silently grant a second trial to the same checkout email. The
+      // later paid order/billing-success event can still activate a legitimate
+      // subscription for this customer.
+      console.warn(JSON.stringify({ event: 'subscription_trial_rejected', contractId, reason: 'trial_already_used' }));
+      return { action: 'trial_already_used' };
+    }
+    const result = await handlePaidOrder({
+      ...order,
+      id: String(order.id || shopifyNumericId(payload.origin_order_id)),
+      subscription_contract_id: contractId,
+    }, deliveryId, trialWindow);
+    return { ...result, action: result.action === 'license_provisioned' ? 'trial_provisioned' : result.action };
+  }
+
+  // A contract-create event can arrive before orders/paid. It is safe to use
+  // as a fallback only when Shopify confirms payment; a non-trial unpaid
+  // contract must remain locked until the payment webhook arrives.
+  if (orderPaymentConfirmed(order)) return handlePaidOrder(order, deliveryId);
+  return { action: 'subscription_contract_waiting_for_payment' };
 }
 
 async function handleSubscriptionState(payload, topic, deliveryId) {
@@ -2578,8 +2889,18 @@ async function handleSubscriptionState(payload, topic, deliveryId) {
     console.warn(JSON.stringify({ event: 'subscription_state_ignored', topic, contractId: contractId || null, reason: 'license_not_found' }));
     return { action: 'ignored' };
   }
-  const subscriptionStatus = contractStatusFromShopify(payload) || (topic.endsWith('/cancel') ? 'cancelled' : topic.endsWith('/success') ? 'active' : topic.endsWith('/failure') ? 'payment_failed' : null);
-  const updated = await updateShopifyState({ record, topic, deliveryId, subscriptionContractId: contractId || record.subscriptionContractId || null, subscriptionStatus });
+  const subscriptionStatus = (topic.startsWith('subscription_contracts/') ? contractStatusFromShopify(payload) : null) || (
+    topic.endsWith('/cancel') ? 'cancelled'
+      : topic.endsWith('/expire') ? 'expired'
+        : topic.endsWith('/fail') ? 'failed'
+          : topic.endsWith('/pause') ? 'paused'
+            : topic.endsWith('/success') ? 'active'
+              : topic.endsWith('/failure') ? 'payment_failed'
+                : topic.endsWith('/challenged') ? 'payment_challenged'
+                  : null
+  );
+  const nextBillingAt = shopifyDateFromPayload(payload, 'next_billing_date', 'nextBillingDate');
+  const updated = await updateShopifyState({ record, topic, deliveryId, subscriptionContractId: contractId || record.subscriptionContractId || null, subscriptionStatus, nextBillingAt });
   return { action: 'subscription_state_updated', license: updated };
 }
 
@@ -2608,6 +2929,8 @@ app.post('/shopify/webhooks/:webhookName', requireWritesEnabled, express.raw({ t
     const payload = JSON.parse(req.body.toString('utf8'));
     const result = topic === 'orders/paid'
       ? await handlePaidOrder(payload, deliveryId)
+      : topic === 'subscription_contracts/create'
+        ? await handleSubscriptionContractCreated(payload, deliveryId)
       : topic.startsWith('subscription_contracts/') || topic.startsWith('subscription_billing_attempts/')
         ? await handleSubscriptionState(payload, topic, deliveryId)
         : await handlePaymentState(payload, topic, deliveryId);

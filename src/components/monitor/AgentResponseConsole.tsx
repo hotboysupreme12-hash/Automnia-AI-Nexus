@@ -25,6 +25,7 @@ import { agentPortraitSrc } from '../../utils/portrait'
 import { runOutcomeLabel } from '../../utils/runOutcome'
 import { createSseFrameParser } from '../../utils/sseStream'
 import { automniaRelayModelLabel, resolveLicenseEntitlement } from '../../utils/licenseEntitlement'
+import { formatAutomniaCredits } from '../../utils/creditDisplay'
 import {
   decodeAudioToMono16Khz,
   friendlyMicrophoneError,
@@ -186,7 +187,7 @@ function billingRouteLabel(entry: AgentResponse, hostedCreditsFirst = false): { 
           : ''
   )
   const balance = typeof entry.remainingCredits === 'number' && Number.isFinite(entry.remainingCredits)
-    ? `${entry.remainingCredits.toLocaleString('en-US')} credits remaining`
+    ? `${formatAutomniaCredits(entry.remainingCredits)} remaining`
     : 'Balance will refresh after the Automnia Cloud response is confirmed.'
   if (selectedRoute === 'automnia-only') {
     return { label: 'Automnia credits', title: `Automnia credits only. ${balance}`, tone: 'success' }
@@ -599,7 +600,7 @@ const ResponseMessage = memo(function ResponseMessage({
   const runtimeTitle = [
     durationLabel ? `Total runtime: ${durationLabel}` : '',
     firstTokenLabel ? `First output: ${firstTokenLabel}` : '',
-    entry.tokenCountEstimate && entry.tokenCountEstimate > 0 ? `Approximate output: ${entry.tokenCountEstimate} tokens` : '',
+    entry.tokenCountEstimate && entry.tokenCountEstimate > 0 ? 'Usage metered in Automnia credits' : '',
     transport ? `Transport: ${transport}` : '',
   ].filter(Boolean).join(' / ')
   const clockTitle = `${messageTimestampTitle(entry.timestamp)} / ${timeAgo(entry.timestamp)}`

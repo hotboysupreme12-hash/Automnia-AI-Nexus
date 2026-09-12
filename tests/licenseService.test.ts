@@ -367,7 +367,7 @@ test('traffic gate keeps Starter/refill accounts on Automnia and blocks exhauste
   const exhausted = resolveLicenseTrafficGate(gateStatus({ creditBalance: 0 }))
   assert.equal(exhausted.blocked, true)
   assert.equal(exhausted.blockCode, 'credits_exhausted')
-  assert.match(exhausted.blockMessage || '', /out of tokens/i)
+  assert.match(exhausted.blockMessage || '', /credits are exhausted/i)
 
   const unverified = resolveLicenseTrafficGate(gateStatus({ creditBalance: null }))
   assert.equal(unverified.blocked, true)

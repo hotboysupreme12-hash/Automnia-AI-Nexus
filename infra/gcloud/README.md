@@ -20,7 +20,7 @@ included in the sanitized corpus by `npm run publish:knowledge`.
 | `switch-traffic.ps1` | Freezes source writes, performs a final delta migration, re-verifies, moves the permanent domain, and restores the source automatically on failure. |
 | `rollback.ps1` | Freezes the active target, reverse-migrates post-cutover changes, verifies, and moves the domain back. |
 | `configure-domain.ps1` | One-time domain mapping and optional Cloud DNS record setup. |
-| `shopify-plan-mappings.json` | The authoritative product mappings, including the $1 / 100,000-credit refill and free QA license. Google Cloud merges purchases by account email into one highest-tier entitlement and canonical license key. |
+| `shopify-plan-mappings.json` | The authoritative product mappings. Product grants are stored as raw `initialTokens`; the app displays them as compact credits at 1,000 tokens per credit. Google Cloud merges purchases by account email into one highest-tier entitlement and canonical license key. |
 | `firestore.indexes.json` | The authoritative composite-index contract. It is empty because the current query plan needs no composite index. |
 | `shopify.app.toml.template` | One-time Shopify webhook migration from a project URL to the permanent Automnia URL. |
 | `service/` | Deployable Node 22 Cloud Run service for account activation/sign-in, Google linking, license activation, Shopify webhooks, credits, Vertex AI relay, and authenticated Agent Search answers. |
@@ -28,8 +28,26 @@ included in the sanitized corpus by `npm run publish:knowledge`.
 
 Installer distribution is documented in
 [`../../docs/SHOPIFY_INSTALLER_DELIVERY.md`](../../docs/SHOPIFY_INSTALLER_DELIVERY.md).
+The three-day Starter selling-plan trial is documented in
+[`../../docs/SHOPIFY_TRIAL_SETUP.md`](../../docs/SHOPIFY_TRIAL_SETUP.md).
 
 ## Hosted-credit token efficiency
+
+### Token accounting and customer credits
+
+Vertex AI usage remains the authoritative metered quantity. Cloud Run stores
+that quantity as an integer `tokenBalance` and converts it to the customer
+facing `creditBalance` projection using **1,000 tokens = 1 Automnia credit**.
+For example, a 20,000,000-token Shopify grant is shown as 20,000 credits; a
+10,000,000-token grant is shown as 10,000 credits; and a 1,000,000-token
+grant is shown as 1,000 credits. Usage debits subtract the actual returned
+token count and update both the token ledger and the compact balance.
+
+The service accepts old plan maps that used `initialCredits` and old license
+documents that only have `creditBalance`; during the transition those values
+are interpreted as their historical raw-token balance. New grants and usage
+records carry `billingUnitVersion: 2`, `tokenBalance`, `tokensGranted`, or
+`deductedTokens` so audits can distinguish accounting from display units.
 
 The Cloud/Credits relay applies a server-owned token-efficiency policy to every
 OpenAI-compatible request, so callers cannot accidentally bypass it by using a

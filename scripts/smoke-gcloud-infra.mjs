@@ -38,13 +38,16 @@ const requiredFiles = [
 for (const relative of requiredFiles) assert.equal(existsSync(path.join(infra, relative)), true, `missing ${relative}`)
 
 const mappings = JSON.parse(readFileSync(path.join(infra, 'shopify-plan-mappings.json'), 'utf8'))
+const config = readFileSync(path.join(infra, 'config.psd1'), 'utf8')
+assert.match(config, /TokensPerCredit\s*=\s*1000/, 'gcloud config must keep the 1,000-token credit ratio explicit')
 assert.equal(mappings.length, 12, 'the production catalog contains credit refills plus the two sellable plans')
+assert.equal(mappings.every((entry) => Number.isSafeInteger(entry.initialTokens) && entry.initialTokens >= 0), true, 'Shopify grants must be declared in raw tokens')
 assert.deepEqual(
-  Object.fromEntries(mappings.filter((entry) => entry.kind === 'subscription' && entry.tier === 'starter').map((entry) => [entry.tier, entry.initialCredits])),
+  Object.fromEntries(mappings.filter((entry) => entry.kind === 'subscription' && entry.tier === 'starter').map((entry) => [entry.tier, entry.initialTokens])),
   { starter: 200000 },
 )
 assert.deepEqual(
-  Object.fromEntries(mappings.filter((entry) => entry.tier === 'pro').map((entry) => [entry.tier, entry.initialCredits])),
+  Object.fromEntries(mappings.filter((entry) => entry.tier === 'pro').map((entry) => [entry.tier, entry.initialTokens])),
   { pro: 400000 },
 )
 assert.deepEqual([...new Set(mappings.filter((entry) => entry.kind !== 'topup').map((entry) => entry.tier))].sort(), ['pro', 'starter'], 'Starter and Pro are the only sellable plans')
@@ -77,6 +80,8 @@ assert.match(service, /thought_signature/)
 assert.match(service, /tool_calls/)
 assert.doesNotMatch(service, /Runtime tool request:.*Arguments:/s)
 assert.match(service, /function pooledCreditBalance\(record\)/, 'account hosted-credit pooling must remain explicit')
+assert.match(service, /const TOKENS_PER_CREDIT/, 'hosted billing must have an explicit token-to-credit ratio')
+assert.match(service, /function tokensToCredits\(tokens\)/, 'hosted billing must convert token usage into display credits')
 assert.match(service, /geminiThinkingConfigFromOpenAiRequest/, 'the relay must translate OpenAI-compatible thinking levels')
 assert.match(service, /automniaRelayModel/, 'the relay must expose an explicit billable Vertex primary model')
 assert.match(service, /aiRelayModel: automniaRelayModel/, 'health must report the billable Vertex model')
@@ -89,7 +94,7 @@ assert.match(service, /resolveRelayOutputTokenBudget/, 'the hosted relay must ap
 assert.match(service, /thinkingConfig/, 'the relay must forward Gemini thinking configuration to Vertex')
 assert.match(service, /creditBalance: pooledCreditBalance\(record\)/, 'license responses must expose the pooled wallet')
 assert.match(service, /record\?\.mode === 'byok'\s*&&\s*pooledCreditBalance\(record\)\s*<=\s*0\s*\?\s*'provider_first'\s*:\s*'automnia_only'/, 'BYOK with a pooled balance must not be forced to provider-first')
-assert.match(service, /creditBalance: \(record\.creditBalance \|\| 0\) \+ grant/, 'upgrades must add new credits without resetting the current wallet')
+assert.match(service, /tokenBalanceForSource\(record\) \+ grant/, 'upgrades must add new tokens without resetting the current wallet')
 assert.match(service, /for \(const candidate of \[record, \.\.\.candidates\]\)/, 'the canonical upgraded entitlement must remain first in wallet allocation')
 assert.match(service, /creditSourcesFor\(canonical\)/, 'relay deductions must use every non-revoked wallet source')
 

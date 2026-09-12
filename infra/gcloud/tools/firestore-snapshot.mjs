@@ -95,12 +95,41 @@ records.sort((left, right) => left.path.localeCompare(right.path))
 
 const licenseRecords = records.filter((record) => record.path.split('/').length === 2 && record.path.startsWith('automnia_licenses/'))
 const activeLicenses = licenseRecords.filter((record) => fieldValue(record.fields, 'status') !== 'revoked')
-const sumIntegerField = (items, field) => items.reduce((total, record) => {
-  const value = record.fields?.[field]
+const numberFromFirestore = (value) => {
+  if (!value) return null
+  if ('integerValue' in value) return Number(value.integerValue)
+  if ('doubleValue' in value) return Number(value.doubleValue)
+  return null
+}
+
+const sumTopupCredits = (items) => items.reduce((total, record) => {
+  const current = numberFromFirestore(record.fields?.creditsGranted)
+  if (current !== null && Number.isFinite(current)) return total + current
+  const legacyTokens = numberFromFirestore(record.fields?.credits)
+  return legacyTokens === null || !Number.isFinite(legacyTokens) ? total : total + legacyTokens / 1_000
+}, 0)
+
+// Three decimal places preserve the compact credit projection without
+// allowing a floating-point sum to change migration comparisons.
+const scaledCreditTotal = (items, field) => items.reduce((total, record) => {
+  const value = numberFromFirestore(record.fields?.[field])
+  return value === null || !Number.isFinite(value) ? total : total + BigInt(Math.round(value * 1000))
+}, 0n)
+
+const formatScaledCredits = (scaled) => {
+  const sign = scaled < 0n ? '-' : ''
+  const absolute = scaled < 0n ? -scaled : scaled
+  const whole = absolute / 1000n
+  const fraction = (absolute % 1000n).toString().padStart(3, '0').replace(/0+$/, '')
+  return `${sign}${whole.toString()}${fraction ? `.${fraction}` : ''}`
+}
+
+const sumTokenBalances = (items) => items.reduce((total, record) => {
+  const value = record.fields?.tokenBalance || record.fields?.creditBalance
   if (!value) return total
   if ('integerValue' in value) return total + BigInt(value.integerValue)
   if ('doubleValue' in value && Number.isSafeInteger(Number(value.doubleValue))) return total + BigInt(Number(value.doubleValue))
-  throw new Error(`Expected ${record.path}.${field} to be an integer credit value.`)
+  throw new Error(`Expected ${record.path}.tokenBalance to be an integer token value.`)
 }, 0n).toString()
 
 const collectionSummary = Object.fromEntries([...collectionCounts.entries()].sort(([left], [right]) => left.localeCompare(right)))
@@ -113,9 +142,10 @@ const summary = {
   collections: collectionSummary,
   customerCount: licenseRecords.length,
   activeCustomerCount: activeLicenses.length,
-  creditBalanceTotal: sumIntegerField(licenseRecords, 'creditBalance'),
-  creditTopupTotal: sumIntegerField(records.filter((record) => record.path.startsWith('automnia_credit_topups/')), 'credits'),
-  creditDeductedTotal: sumIntegerField(records.filter((record) => record.path.startsWith('automnia_credit_usage/')), 'deductedCredits'),
+  tokenBalanceTotal: sumTokenBalances(licenseRecords),
+  creditBalanceTotal: formatScaledCredits(BigInt(sumTokenBalances(licenseRecords))),
+  creditTopupTotal: sumTopupCredits(records.filter((record) => record.path.startsWith('automnia_credit_topups/'))),
+  creditDeductedTotal: formatScaledCredits(scaledCreditTotal(records.filter((record) => record.path.startsWith('automnia_credit_usage/')), 'deductedCredits')),
   globalHash,
 }
 

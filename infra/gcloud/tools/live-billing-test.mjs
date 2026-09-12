@@ -36,6 +36,7 @@ try {
     licenseKey: value(document.fields, 'licenseKey'),
     tier: value(document.fields, 'tier'),
     mode: value(document.fields, 'mode'),
+    tokenBalance: value(document.fields, 'tokenBalance'),
     creditBalance: value(document.fields, 'creditBalance'),
     status: value(document.fields, 'status'),
   }))
@@ -45,7 +46,9 @@ try {
     const expectedMode = canary.mode === 'byok' || canary.mode === 'hosted_credits'
       ? canary.mode
       : canary.tier === 'founding_beta_byok' ? 'byok' : 'hosted_credits'
-    const expectedCreditBalance = Number.isFinite(canary.creditBalance) ? Number(canary.creditBalance) : 0
+    const tokensPerCredit = Number(health.payload?.billing?.tokensPerCredit) || 1_000
+    const rawTokenBalance = Number.isFinite(canary.tokenBalance) ? Number(canary.tokenBalance) : Number(canary.creditBalance)
+    const expectedCreditBalance = Number.isFinite(rawTokenBalance) ? Math.round((rawTokenBalance / tokensPerCredit) * 1000) / 1000 : 0
     const verified = await jsonRequest(`${baseUrl}/api/verify`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', Accept: 'application/json' },

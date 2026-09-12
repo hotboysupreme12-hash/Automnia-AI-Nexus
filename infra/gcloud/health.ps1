@@ -20,12 +20,14 @@ $ready = Wait-HttpJson -Url "$BaseUrl/ready" -TimeoutSeconds $TimeoutSeconds
 $expectedPlanHash = Get-LocalPlanMappingHash
 $expectedSelectableModels = @($config.AutomniaRelaySelectableModels | ForEach-Object { ([string]$_).Trim().ToLowerInvariant() } | Where-Object { $_ } | Sort-Object -Unique)
 $actualSelectableModels = @((Get-ObjectPropertyValue $health 'aiRelaySelectableModels') | ForEach-Object { ([string]$_).Trim().ToLowerInvariant() } | Where-Object { $_ } | Sort-Object -Unique)
+$billing = Get-ObjectPropertyValue $health 'billing'
 
 $checks = [ordered]@{
   service = $health.service -eq $config.ServiceName
   schemaVersion = $health.schemaVersion -eq $config.SchemaVersion
   relayModel = $health.aiRelayModel -eq $config.AutomniaRelayModel
   relaySelectableModels = (($expectedSelectableModels | ConvertTo-Json -Compress) -eq ($actualSelectableModels | ConvertTo-Json -Compress))
+  tokensPerCredit = [int](Get-ObjectPropertyValue $billing 'tokensPerCredit') -eq [int]$config.TokensPerCredit
   emailProvider = ([string](Get-ObjectPropertyValue (Get-ObjectPropertyValue $health 'commerce') 'emailDeliveryProvider')) -eq $config.EmailProvider
   vertexLocation = $health.vertexLocation -eq $config.VertexLocation
   writeMode = $health.writeMode -eq $ExpectedWriteMode

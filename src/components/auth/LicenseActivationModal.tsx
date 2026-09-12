@@ -5,6 +5,7 @@ import { FormFeedback } from '../ui/FormFeedback'
 import { useAuth } from '../../context/useAuth'
 import { useLicense } from '../../context/useLicense'
 import { resolveAgentRoutePresentation, resolveLicenseEntitlement } from '../../utils/licenseEntitlement'
+import { formatAutomniaCredits } from '../../utils/creditDisplay'
 
 const AUTOMNIA_LOCKUP_SRC = '/brand/automnia-ai-nexus-logo-transparent-cropped.png'
 const AUTOMNIA_BRAND_LABEL = 'Automnia AI Nexus'
@@ -86,7 +87,7 @@ export function LicenseActivationModal({ onClose }: { onClose?: () => void }) {
                 <div>
                   <p className="text-xs font-medium text-emerald-300">{entitlement.tierLabel} — {routePresentation.routeLabel}</p>
                   <p className="mt-1 font-mono text-lg font-bold text-white">
-                    {license.creditBalance !== null ? license.creditBalance.toLocaleString() : 'Balance pending confirmation'}
+                    {license.creditBalance !== null ? formatAutomniaCredits(license.creditBalance, '') : 'Balance pending confirmation'}
                   </p>
                   <p className="mt-1 text-xs text-slate-400">{providerFirst ? 'Your connected provider or OAuth account is used first. Automnia pooled credits remain available for this account.' : routePresentation.providerOnly ? 'Your connected provider is used directly. Automnia credits are bypassed.' : 'Automnia credits are available for this confirmed account and can be pooled across its email-linked purchases.'}</p>
                   <p className="mt-1 text-xs text-slate-500">{entitlement.usagePriorityLocked ? 'Starter and credit-refill access stay on Automnia credits.' : 'Change this priority at any time under Settings → Account &amp; License.'}</p>

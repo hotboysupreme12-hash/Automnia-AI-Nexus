@@ -105,8 +105,8 @@ path; support can perform an account migration when ownership has been verified.
 
 | Plan | Access policy |
 | --- | --- |
-| Starter | 200,000 Automnia credits for essential hosted models, agents, and workflows. This straightforward plan uses Automnia credits only. |
-| Pro | 400,000 Automnia credits plus every advanced capability formerly offered in Enterprise: all Automnia models and workflows, provider connections, offline-capable provider access, and configurable provider/credit fallback routing. |
+| Starter | 200 Automnia credits backed by 200,000 hosted tokens for essential hosted models, agents, and workflows. This straightforward plan uses Automnia credits only. |
+| Pro | 400 Automnia credits backed by 400,000 hosted tokens plus every advanced capability formerly offered in Enterprise: all Automnia models and workflows, provider connections, offline-capable provider access, and configurable provider/credit fallback routing. |
 
 When a customer owns more than one product, the account automatically uses the
 highest tier. Customers do not need to manage a separate key for each purchase.

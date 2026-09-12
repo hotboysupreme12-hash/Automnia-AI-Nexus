@@ -42,9 +42,25 @@ topics = ["subscription_contracts/cancel"]
 uri = "https://api.automnia.app/shopify/webhooks/subscription-contracts-cancel"
 
 [[webhooks.subscriptions]]
+topics = ["subscription_contracts/expire"]
+uri = "https://api.automnia.app/shopify/webhooks/subscription-contracts-expire"
+
+[[webhooks.subscriptions]]
+topics = ["subscription_contracts/fail"]
+uri = "https://api.automnia.app/shopify/webhooks/subscription-contracts-fail"
+
+[[webhooks.subscriptions]]
+topics = ["subscription_contracts/pause"]
+uri = "https://api.automnia.app/shopify/webhooks/subscription-contracts-pause"
+
+[[webhooks.subscriptions]]
 topics = ["subscription_billing_attempts/success"]
 uri = "https://api.automnia.app/shopify/webhooks/subscription-billing-attempts-success"
 
 [[webhooks.subscriptions]]
 topics = ["subscription_billing_attempts/failure"]
 uri = "https://api.automnia.app/shopify/webhooks/subscription-billing-attempts-failure"
+
+[[webhooks.subscriptions]]
+topics = ["subscription_billing_attempts/challenged"]
+uri = "https://api.automnia.app/shopify/webhooks/subscription-billing-attempts-challenged"

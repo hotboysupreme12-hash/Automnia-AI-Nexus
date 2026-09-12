@@ -42,7 +42,7 @@ secret in chat.
 
 On first activation, a user can create an Automnia account password. The password is stored as a one-way password verifier by the hosted account service; Automnia does not display or recover the original password. Users can sign in and out with their Automnia account credentials, and Google sign-in can be linked when it is available.
 
-Pro can use connected provider credentials and can continue local work offline when the user has configured a supported provider. Hosted-credit plans use the Automnia Cloud relay and require an active subscription or credit balance. Starter includes 200,000 credits, requires online entitlement verification, and does not include provider access; Pro includes 400,000 credits and the complete advanced capability set. Never put passwords, access tokens, API keys, or private customer data into support questions or documentation.
+Pro can use connected provider credentials and can continue local work offline when the user has configured a supported provider. Hosted-credit plans use the Automnia Cloud relay and require an active subscription or credit balance. Starter includes 200 credits backed by 200,000 hosted tokens, requires online entitlement verification, and does not include provider access; Pro includes 400 credits backed by 400,000 hosted tokens and the complete advanced capability set. Never put passwords, access tokens, API keys, or private customer data into support questions or documentation.
 
 ## Hosted Automnia Cloud relay
 

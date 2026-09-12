@@ -33,12 +33,28 @@ api_version = "2026-07"
   topics = [ "subscription_contracts/cancel" ]
 
   [[webhooks.subscriptions]]
+  uri = "https://api.automnia.app/shopify/webhooks/subscription-contracts-expire"
+  topics = [ "subscription_contracts/expire" ]
+
+  [[webhooks.subscriptions]]
+  uri = "https://api.automnia.app/shopify/webhooks/subscription-contracts-fail"
+  topics = [ "subscription_contracts/fail" ]
+
+  [[webhooks.subscriptions]]
+  uri = "https://api.automnia.app/shopify/webhooks/subscription-contracts-pause"
+  topics = [ "subscription_contracts/pause" ]
+
+  [[webhooks.subscriptions]]
   uri = "https://api.automnia.app/shopify/webhooks/subscription-billing-attempts-success"
   topics = [ "subscription_billing_attempts/success" ]
 
   [[webhooks.subscriptions]]
   uri = "https://api.automnia.app/shopify/webhooks/subscription-billing-attempts-failure"
   topics = [ "subscription_billing_attempts/failure" ]
+
+  [[webhooks.subscriptions]]
+  uri = "https://api.automnia.app/shopify/webhooks/subscription-billing-attempts-challenged"
+  topics = [ "subscription_billing_attempts/challenged" ]
 
 [access_scopes]
 # Learn more at https://shopify.dev/docs/apps/tools/cli/configuration#access_scopes

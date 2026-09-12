@@ -4,7 +4,7 @@
     "mode": "hosted_credits",
     "kind": "topup",
     "planPriceCents": 100,
-    "initialCredits": 100000,
+    "initialTokens": 100000,
     "productIds": [],
     "variantIds": ["47352874270889"],
     "skus": ["AUTO-REFILL-100K"]
@@ -13,7 +13,7 @@
     "tier": "credit_refill",
     "mode": "hosted_credits",
     "kind": "topup",
-    "initialCredits": 500000,
+    "initialTokens": 500000,
     "productIds": [],
     "variantIds": ["47340005589161"],
     "skus": ["AUTO-REFILL-500K"]
@@ -22,7 +22,7 @@
     "tier": "credit_refill",
     "mode": "hosted_credits",
     "kind": "topup",
-    "initialCredits": 1000000,
+    "initialTokens": 1000000,
     "productIds": [],
     "variantIds": ["47340005621929"],
     "skus": ["AUTO-REFILL-1M"]
@@ -31,7 +31,7 @@
     "tier": "credit_refill",
     "mode": "hosted_credits",
     "kind": "topup",
-    "initialCredits": 2500000,
+    "initialTokens": 2500000,
     "productIds": [],
     "variantIds": ["47340005654697"],
     "skus": ["AUTO-REFILL-2500K"]
@@ -40,7 +40,7 @@
     "tier": "credit_refill",
     "mode": "hosted_credits",
     "kind": "topup",
-    "initialCredits": 5000000,
+    "initialTokens": 5000000,
     "productIds": [],
     "variantIds": ["47340005687465"],
     "skus": ["AUTO-REFILL-5M"]
@@ -49,7 +49,7 @@
     "tier": "credit_refill",
     "mode": "hosted_credits",
     "kind": "topup",
-    "initialCredits": 10000000,
+    "initialTokens": 10000000,
     "productIds": [],
     "variantIds": ["47340005720233"],
     "skus": ["AUTO-REFILL-10M"]
@@ -58,7 +58,7 @@
     "tier": "credit_refill",
     "mode": "hosted_credits",
     "kind": "topup",
-    "initialCredits": 1000000,
+    "initialTokens": 1000000,
     "productIds": ["9020233089193"],
     "variantIds": ["47350394388649"],
     "skus": ["AUTO-REFILL-FREE-1M"]
@@ -67,7 +67,7 @@
     "tier": "credit_refill",
     "mode": "hosted_credits",
     "kind": "topup",
-    "initialCredits": 5000000,
+    "initialTokens": 5000000,
     "productIds": ["9020233154729"],
     "variantIds": ["47350394454185"],
     "skus": ["AUTO-REFILL-FREE-5M"]
@@ -76,7 +76,7 @@
     "tier": "credit_refill",
     "mode": "hosted_credits",
     "kind": "topup",
-    "initialCredits": 10000000,
+    "initialTokens": 10000000,
     "productIds": ["9020233187497"],
     "variantIds": ["47350394486953"],
     "skus": ["AUTO-REFILL-FREE-10M"]
@@ -86,7 +86,8 @@
     "mode": "hosted_credits",
     "kind": "subscription",
     "planPriceCents": 1999,
-    "initialCredits": 200000,
+    "trialDays": 3,
+    "initialTokens": 200000,
     "productIds": ["9017938215081"],
     "variantIds": ["47340005851305"],
     "skus": ["AUTO-SUB-STARTER-MONTHLY"]
@@ -96,7 +97,7 @@
     "mode": "hosted_credits",
     "kind": "subscription",
     "planPriceCents": 0,
-    "initialCredits": 200000,
+    "initialTokens": 200000,
     "productIds": ["9020824486057"],
     "variantIds": [],
     "skus": ["AUTO-SUB-STARTER-QA-FREE"]
@@ -107,7 +108,7 @@
     "kind": "license",
     "planPriceCents": 2999,
     "permanentAccess": true,
-    "initialCredits": 400000,
+    "initialTokens": 400000,
     "productIds": ["9017938182313"],
     "variantIds": ["47340005818537"],
     "skus": ["AUTO-SUB-PRO-MONTHLY"]

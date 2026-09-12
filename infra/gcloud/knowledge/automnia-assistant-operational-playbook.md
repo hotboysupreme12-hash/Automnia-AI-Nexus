@@ -227,7 +227,7 @@ When a response depends on local state, direct the user to Monitor, Settings, Do
 
 The first-run flow lets a user link an Automnia purchase and create an account password. The hosted account service stores only a one-way password verifier. Automnia does not display, recover, or use the original password as an access token. A user can sign in and out with the account credentials, and Google sign-in can be linked when that option is enabled for the account.
 
-The password is not a substitute for a provider API key. Hosted-credit requests still require a valid Automnia entitlement and are sent through the Automnia Cloud relay. Starter is hosted Automnia Subscription Relay access with 200,000 credits and does not include provider access. Pro includes 400,000 credits, complete advanced access, and eligible connected-provider routes. If the account screen shows a different entitlement, trust the account screen and do not infer a price.
+The password is not a substitute for a provider API key. Hosted-credit requests still require a valid Automnia entitlement and are sent through the Automnia Cloud relay. Starter is hosted Automnia Subscription Relay access with 200 credits backed by 200,000 hosted tokens and does not include provider access. Pro includes 400 credits backed by 400,000 hosted tokens, complete advanced access, and eligible connected-provider routes. If the account screen shows a different entitlement, trust the account screen and do not infer a price.
 
 Never ask a user to paste a password, access token, license key, OAuth authorization code, API key, customer email list, or private workspace file into the Help Assistant. Tell the user to use Settings, the secure sign-in flow, or the provider connection control instead.
 

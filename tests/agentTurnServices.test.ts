@@ -638,7 +638,7 @@ test('agent streaming service keeps hosted tool/runtime turns in the configured 
     trafficGate: () => ({
       messageTrafficAllowed: !messageTrafficBlocked,
       providerAccessAllowed: !providerAccessBlocked,
-      blockMessage: messageTrafficBlocked ? 'Automnia credits are out of tokens.' : null,
+      blockMessage: messageTrafficBlocked ? 'Automnia credits are exhausted.' : null,
     }),
     runBufferedAgentTurnForStream: async (input) => {
       bufferedInputs.push({ ...input })
@@ -820,7 +820,7 @@ test('agent streaming service keeps hosted tool/runtime turns in the configured 
   }, () => undefined, createAbortSignal())
   assert.equal(exhaustedResult.code, 402)
   assert.equal(exhaustedResult.failureKind, 'insufficient_credits')
-  assert.match(String(exhaustedResult.reply), /out of tokens/i)
+  assert.match(String(exhaustedResult.reply), /credits are exhausted/i)
 
   messageTrafficBlocked = false
   providerAccessBlocked = true
