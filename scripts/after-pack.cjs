@@ -80,7 +80,11 @@ function copyDirectorySync(source, target, label) {
     throw new Error(`[afterPack] ${label} copy failed via robocopy (${status}):\n${result.stdout || ''}\n${result.stderr || ''}`)
   }
 
-  fs.cpSync(source, target, { recursive: true })
+  // Keep the original link layout long enough to normalize Unix shims below.
+  // Node's bin/npm is a relative symlink in the official archive; copying it
+  // as a regular file leaves npm-cli.js at bin/npm, where its ../lib/cli.js
+  // import resolves to the wrong location.
+  fs.cpSync(source, target, { recursive: true, verbatimSymlinks: true })
   materializeAbsoluteSymlinks(target)
 }
 
@@ -137,7 +141,48 @@ function copyBundledNodeToolchain(root, resourcesDir) {
   }
 
   copyDirectorySync(source, target, 'Node/npm toolchain')
+  normalizeUnixNodeShims(target)
   console.log(`[afterPack] bundled Node/npm toolchain -> ${target}`)
+}
+
+function normalizeUnixNodeShims(root) {
+  if (process.platform === 'win32') return
+
+  const nodeDirs = fs.readdirSync(root, { withFileTypes: true })
+    .filter((entry) => entry.isDirectory() && /^node-v\d+\.\d+\.\d+-(?:darwin|linux)-(?:x64|arm64)$/.test(entry.name))
+    .map((entry) => path.join(root, entry.name))
+
+  for (const nodeDir of nodeDirs) {
+    const binDir = path.join(nodeDir, 'bin')
+    const nodeBin = path.join(binDir, 'node')
+    if (!fs.existsSync(nodeBin)) continue
+
+    for (const [name, relativeCli] of [
+      ['npm', '../lib/node_modules/npm/bin/npm-cli.js'],
+      ['npx', '../lib/node_modules/npm/bin/npx-cli.js'],
+      ['corepack', '../lib/node_modules/corepack/dist/corepack.js'],
+    ]) {
+      const cli = path.join(binDir, relativeCli)
+      const shim = path.join(binDir, name)
+      if (!fs.existsSync(cli)) continue
+      fs.rmSync(shim, { recursive: true, force: true })
+      fs.writeFileSync(shim, [
+        '#!/usr/bin/env sh',
+        'DIR="$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)"',
+        `exec "${'${NODE_EXE:-$DIR/node}'}" "$DIR/${relativeCli}" "$@"`,
+        '',
+      ].join('\n'))
+      fs.chmodSync(shim, 0o755)
+    }
+
+    const npmBin = path.join(binDir, 'npm')
+    const npmCli = path.join(binDir, '../lib/node_modules/npm/bin/npm-cli.js')
+    const npmShim = fs.existsSync(npmBin) ? fs.readFileSync(npmBin, 'utf8') : ''
+    if (!fs.existsSync(npmCli) || !npmShim.includes('../lib/node_modules/npm/bin/npm-cli.js')) {
+      throw new Error(`[afterPack] Bundled npm shim is incomplete in ${nodeDir}`)
+    }
+    console.log(`[afterPack] normalized bundled npm shim -> ${npmBin}`)
+  }
 }
 
 function copyBundledCodexPlugin(root, resourcesDir) {

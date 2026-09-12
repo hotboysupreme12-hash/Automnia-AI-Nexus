@@ -353,6 +353,35 @@ function cleanGeneratedWindowsDirPackage() {
   }
 }
 
+function validatePackagedMacToolchain() {
+  if (process.platform !== 'darwin') return
+
+  const pkg = packageJson()
+  const productName = pkg.build?.productName || pkg.productName || pkg.name
+  const appPath = findBuiltMacApp(productName)
+  if (!appPath) throw new Error('[package-desktop] Could not find the packaged macOS app for toolchain validation.')
+
+  const toolchainRoot = path.join(appPath, 'Contents', 'Resources', 'toolchains', 'node')
+  const nodeDir = fs.readdirSync(toolchainRoot, { withFileTypes: true })
+    .filter((entry) => entry.isDirectory() && /^node-v\d+\.\d+\.\d+-darwin-(?:x64|arm64)$/.test(entry.name))
+    .map((entry) => path.join(toolchainRoot, entry.name))[0]
+  if (!nodeDir) throw new Error(`[package-desktop] Packaged macOS app is missing its Node.js toolchain: ${toolchainRoot}`)
+
+  const nodeBin = path.join(nodeDir, 'bin', 'node')
+  const npmBin = path.join(nodeDir, 'bin', 'npm')
+  const npmCli = path.join(nodeDir, 'lib', 'node_modules', 'npm', 'bin', 'npm-cli.js')
+  if (!fs.existsSync(nodeBin) || !fs.existsSync(npmBin) || !fs.existsSync(npmCli)) {
+    throw new Error(`[package-desktop] Packaged macOS Node/npm toolchain is incomplete: ${nodeDir}`)
+  }
+
+  const npmShim = fs.readFileSync(npmBin, 'utf8')
+  if (!npmShim.includes('../lib/node_modules/npm/bin/npm-cli.js')) {
+    throw new Error(`[package-desktop] Packaged macOS npm shim still points at the broken Node archive layout: ${npmBin}`)
+  }
+
+  console.log(`[package-desktop] validated packaged macOS Node/npm files -> ${nodeDir}`)
+}
+
 const vendorPrep = spawnSync(command, [openClawVendorPrep], {
   cwd: root,
   stdio: 'inherit',
@@ -393,6 +422,7 @@ child.on('exit', (code, signal) => {
   if (signal) process.kill(process.pid, signal)
   if (code !== 0) process.exit(code ?? 1)
   try {
+    validatePackagedMacToolchain()
     ensureMacDmgLaunchable()
   } catch (error) {
     console.error(error instanceof Error ? error.message : String(error))
