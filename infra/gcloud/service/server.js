@@ -26,8 +26,8 @@ import { buildLicenseEmailHtml } from './welcomeEmail.js';
 
 const app = express();
 const port = process.env.PORT || 8080;
-const serviceVersion = '2.9.0';
-const schemaVersion = '2026-09-12.1';
+const serviceVersion = '2.10.0';
+const schemaVersion = '2026-09-12.2';
 const secrets = (process.env.SHOPIFY_WEBHOOK_SECRETS || process.env.SHOPIFY_WEBHOOK_SECRET || '')
   .split(',')
   .map((value) => value.trim())
@@ -36,8 +36,10 @@ const useInMemoryStorage = process.env.LOCAL_IN_MEMORY_LICENSES === 'true';
 const writeMode = process.env.MIGRATION_WRITE_MODE === 'read_only' ? 'read_only' : 'active';
 const adminApiToken = process.env.ADMIN_API_TOKEN || '';
 const shopifyAdminApiToken = process.env.SHOPIFY_ADMIN_API_TOKEN || '';
+const shopifyAdminCredential = parseShopifyAdminCredential(shopifyAdminApiToken);
 const shopifyStoreDomain = String(process.env.SHOPIFY_STORE_DOMAIN || '').trim();
 const shopifyApiVersion = String(process.env.SHOPIFY_API_VERSION || '2026-07').trim();
+let shopifyAccessTokenCache = null;
 const gcpProjectId = process.env.GOOGLE_CLOUD_PROJECT || process.env.GCLOUD_PROJECT || 'local-development';
 const vertexLocation = process.env.VERTEX_LOCATION || 'us-central1';
 const vertexAuth = new GoogleAuth({ scopes: ['https://www.googleapis.com/auth/cloud-platform'] });
@@ -433,8 +435,55 @@ function configuredHttpsUrl(value) {
   }
 }
 
+function parseShopifyAdminCredential(value) {
+  const raw = String(value || '').trim();
+  if (!raw) return null;
+  try {
+    const parsed = JSON.parse(raw);
+    if (!parsed || typeof parsed !== 'object') return { accessToken: raw };
+    const clientId = String(parsed.client_id || parsed.clientId || '').trim();
+    const clientSecret = String(parsed.client_secret || parsed.clientSecret || '').trim();
+    const accessToken = String(parsed.access_token || parsed.accessToken || '').trim();
+    if (clientId && clientSecret) return { clientId, clientSecret };
+    if (accessToken) return { accessToken };
+  } catch {
+    // A legacy secret may still be a raw Admin API access token.
+  }
+  return { accessToken: raw };
+}
+
 function shopifyAdminConfigured() {
-  return Boolean(shopifyAdminApiToken && shopifyStoreDomain && shopifyApiVersion);
+  return Boolean(shopifyAdminCredential && shopifyStoreDomain && shopifyApiVersion);
+}
+
+async function shopifyAdminAccessToken() {
+  if (!shopifyAdminConfigured()) return '';
+  if (shopifyAdminCredential.accessToken) return shopifyAdminCredential.accessToken;
+  const now = Date.now();
+  if (shopifyAccessTokenCache && shopifyAccessTokenCache.expiresAt > now + 5 * 60 * 1000) {
+    return shopifyAccessTokenCache.accessToken;
+  }
+  const response = await fetch(`https://${shopifyStoreDomain}/admin/oauth/access_token`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/x-www-form-urlencoded', Accept: 'application/json' },
+    body: new URLSearchParams({
+      grant_type: 'client_credentials',
+      client_id: shopifyAdminCredential.clientId,
+      client_secret: shopifyAdminCredential.clientSecret,
+    }),
+  });
+  const body = await response.json().catch(() => null);
+  const accessToken = String(body?.access_token || '').trim();
+  if (!response.ok || !accessToken) {
+    console.error(JSON.stringify({ event: 'shopify_admin_token_refresh_failed', httpStatus: response.status }));
+    throw new Error('Shopify Admin API token refresh failed.');
+  }
+  const expiresInSeconds = Number(body?.expires_in);
+  shopifyAccessTokenCache = {
+    accessToken,
+    expiresAt: now + (Number.isFinite(expiresInSeconds) ? expiresInSeconds * 1000 : 23 * 60 * 60 * 1000),
+  };
+  return accessToken;
 }
 
 function shopifyNumericId(value) {
@@ -455,11 +504,12 @@ async function fetchShopifyOriginOrder(payload) {
   if (!shopifyAdminConfigured()) {
     throw new Error('Shopify Admin API credentials are required to resolve a subscription contract origin order.');
   }
+  const accessToken = await shopifyAdminAccessToken();
   const url = `https://${shopifyStoreDomain}/admin/api/${encodeURIComponent(shopifyApiVersion)}/orders/${encodeURIComponent(orderId)}.json?status=any`;
   const response = await fetch(url, {
     headers: {
       Accept: 'application/json',
-      'X-Shopify-Access-Token': shopifyAdminApiToken,
+      'X-Shopify-Access-Token': accessToken,
     },
   });
   const body = await response.json().catch(() => null);
@@ -472,6 +522,32 @@ async function fetchShopifyOriginOrder(payload) {
     throw new Error('Shopify did not return the subscription origin order.');
   }
   return body.order;
+}
+
+async function shopifyAdminGraphql(query, variables = {}) {
+  if (!shopifyAdminConfigured()) {
+    throw new Error('Shopify Admin API credentials are required for subscription management.');
+  }
+  const accessToken = await shopifyAdminAccessToken();
+  const response = await fetch(`https://${shopifyStoreDomain}/admin/api/${encodeURIComponent(shopifyApiVersion)}/graphql.json`, {
+    method: 'POST',
+    headers: {
+      Accept: 'application/json',
+      'Content-Type': 'application/json',
+      'X-Shopify-Access-Token': accessToken,
+    },
+    body: JSON.stringify({ query, variables }),
+  });
+  const body = await response.json().catch(() => null);
+  if (!response.ok || !body || (Array.isArray(body.errors) && body.errors.length)) {
+    console.error(JSON.stringify({
+      event: 'shopify_admin_graphql_failed',
+      httpStatus: response.status,
+      errorCount: Array.isArray(body?.errors) ? body.errors.length : 0,
+    }));
+    throw new Error('Shopify Admin API subscription request failed.');
+  }
+  return body;
 }
 
 function escapeHtml(value) {
@@ -2743,24 +2819,37 @@ function trialWindowFor(tierConfig, order, contractPayload) {
     || shopifyDateFromPayload(contractPayload, 'created_at', 'createdAt')
     || new Date().toISOString();
   const expectedEnd = new Date(Date.parse(startedAt) + trialDays * 24 * 60 * 60 * 1000);
-  const nextBillingAt = shopifyDateFromPayload(contractPayload, 'next_billing_date', 'nextBillingDate');
-  if (nextBillingAt) {
-    // Shopify's contract date is authoritative. Reject a mapping when the
-    // store's selling plan is not actually configured for the promised trial;
-    // otherwise a normal monthly contract could accidentally receive access
-    // for three days without the checkout configuration matching our copy.
-    const driftHours = Math.abs(Date.parse(nextBillingAt) - expectedEnd.getTime()) / (60 * 60 * 1000);
-    if (driftHours > 36) {
-      console.error(JSON.stringify({ event: 'shopify_trial_configuration_mismatch', trialDays, expectedEnd: expectedEnd.toISOString(), nextBillingAt }));
-      return { invalid: true, trialDays, startedAt, nextBillingAt };
-    }
-  }
   return {
     trialDays,
     startedAt,
-    endsAt: nextBillingAt || expectedEnd.toISOString(),
-    nextBillingAt: nextBillingAt || expectedEnd.toISOString(),
+    endsAt: expectedEnd.toISOString(),
+    nextBillingAt: expectedEnd.toISOString(),
   };
+}
+
+async function scheduleStarterTrialBilling(contractId, billingDate) {
+  const mutation = `mutation ScheduleStarterTrial($billingCycleInput:SubscriptionBillingCycleInput!, $input:SubscriptionBillingCycleScheduleEditInput!) {
+    subscriptionBillingCycleScheduleEdit(billingCycleInput:$billingCycleInput, input:$input) {
+      billingCycle { cycleIndex billingAttemptExpectedDate }
+      userErrors { field message code }
+    }
+  }`;
+  const body = await shopifyAdminGraphql(mutation, {
+    billingCycleInput: {
+      contractId: /^gid:\/\/shopify\/SubscriptionContract\//i.test(String(contractId))
+        ? String(contractId)
+        : `gid://shopify/SubscriptionContract/${normalizeShopifyContractId(contractId)}`,
+      selector: { index: 1 },
+    },
+    input: { billingDate, reason: 'DEV_INITIATED' },
+  });
+  const result = body?.data?.subscriptionBillingCycleScheduleEdit;
+  if (Array.isArray(result?.userErrors) && result.userErrors.length) {
+    console.error(JSON.stringify({ event: 'shopify_trial_billing_schedule_failed', contractId: normalizeShopifyContractId(contractId), errorCount: result.userErrors.length }));
+    throw new Error('Shopify rejected the Starter trial billing schedule.');
+  }
+  if (!result?.billingCycle) throw new Error('Shopify did not return the Starter trial billing cycle.');
+  return result.billingCycle;
 }
 
 function orderPaymentConfirmed(order) {
