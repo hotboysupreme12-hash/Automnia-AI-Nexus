@@ -2471,6 +2471,28 @@ async function runElectronE2eScreenshotCapture(win) {
     win.focus()
   }
   const e2eAuthToken = JSON.stringify(String(process.env.CONTROL_CENTER_TOKEN || ''))
+  const needsAuthReload = await win.webContents.executeJavaScript(`
+    (() => {
+      if (document.querySelector('nav[aria-label="Primary navigation"]')) return false;
+      const token = ${e2eAuthToken};
+      if (!token) throw new Error('E2E control-center token is missing');
+      localStorage.setItem('control-center-token', token);
+      sessionStorage.removeItem('control-center-token');
+      sessionStorage.removeItem('control-center-signed-out');
+      localStorage.removeItem('control-center-signed-out');
+      return true;
+    })()
+  `, true)
+  if (needsAuthReload) {
+    await new Promise((resolve, reject) => {
+      const timeout = setTimeout(() => reject(new Error('Timed out waiting for authenticated renderer reload')), 15000)
+      win.webContents.once('did-finish-load', () => {
+        clearTimeout(timeout)
+        resolve()
+      })
+      win.webContents.reload()
+    })
+  }
   await win.webContents.executeJavaScript(`
     (async () => {
       const wait = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
@@ -2483,15 +2505,6 @@ async function runElectronE2eScreenshotCapture(win) {
         }
         throw new Error('Timed out waiting for ' + label);
       };
-      if (!document.querySelector('nav[aria-label="Primary navigation"]')) {
-        const token = ${e2eAuthToken};
-        if (!token) throw new Error('E2E control-center token is missing');
-        localStorage.setItem('control-center-token', token);
-        sessionStorage.removeItem('control-center-token');
-        sessionStorage.removeItem('control-center-signed-out');
-        localStorage.removeItem('control-center-signed-out');
-        location.reload();
-      }
       await waitFor(
         () => document.querySelector('nav[aria-label="Primary navigation"]'),
         'primary navigation'
