@@ -1,5 +1,5 @@
 @{
-  SchemaVersion = '2026-09-12.1'
+  SchemaVersion = '2026-09-12.3'
   Region = 'us-east1'
   FirestoreLocation = 'us-east1'
   # Automnia's Gemini 3.7 Flash relay is served through Vertex's global endpoint. Keeping this
@@ -45,7 +45,7 @@
   InstallerMacosX64Object = 'releases/current/macos/Automnia-AI-Nexus-x64.dmg'
   InstallerLinuxAppImageX64Object = 'releases/current/linux/Automnia-AI-Nexus-x86_64.AppImage'
   InstallerLinuxDebX64Object = 'releases/current/linux/Automnia-AI-Nexus-x86_64.deb'
-  ShopifyStoreDomain = 'automnia.app'
+  ShopifyStoreDomain = 'unbkay-k3.myshopify.com'
   ShopifyAppClientId = 'd0972d80b936c44961e9490b1d113432'
   ShopifyApiVersion = '2026-07'
   ShopifyCheckoutUrl = 'https://automnia.app/collections/automnia-plans-and-refills'

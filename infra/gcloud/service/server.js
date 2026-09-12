@@ -26,8 +26,8 @@ import { buildLicenseEmailHtml } from './welcomeEmail.js';
 
 const app = express();
 const port = process.env.PORT || 8080;
-const serviceVersion = '2.10.0';
-const schemaVersion = '2026-09-12.2';
+const serviceVersion = '2.10.1';
+const schemaVersion = '2026-09-12.3';
 const secrets = (process.env.SHOPIFY_WEBHOOK_SECRETS || process.env.SHOPIFY_WEBHOOK_SECRET || '')
   .split(',')
   .map((value) => value.trim())
@@ -38,6 +38,7 @@ const adminApiToken = process.env.ADMIN_API_TOKEN || '';
 const shopifyAdminApiToken = process.env.SHOPIFY_ADMIN_API_TOKEN || '';
 const shopifyAdminCredential = parseShopifyAdminCredential(shopifyAdminApiToken);
 const shopifyStoreDomain = String(process.env.SHOPIFY_STORE_DOMAIN || '').trim();
+const shopifyAdminStoreDomain = String(shopifyAdminCredential?.storeDomain || shopifyStoreDomain).trim();
 const shopifyApiVersion = String(process.env.SHOPIFY_API_VERSION || '2026-07').trim();
 let shopifyAccessTokenCache = null;
 const gcpProjectId = process.env.GOOGLE_CLOUD_PROJECT || process.env.GCLOUD_PROJECT || 'local-development';
@@ -444,7 +445,8 @@ function parseShopifyAdminCredential(value) {
     const clientId = String(parsed.client_id || parsed.clientId || '').trim();
     const clientSecret = String(parsed.client_secret || parsed.clientSecret || '').trim();
     const accessToken = String(parsed.access_token || parsed.accessToken || '').trim();
-    if (clientId && clientSecret) return { clientId, clientSecret };
+    const storeDomain = String(parsed.store_domain || parsed.storeDomain || '').trim();
+    if (clientId && clientSecret) return { clientId, clientSecret, storeDomain };
     if (accessToken) return { accessToken };
   } catch {
     // A legacy secret may still be a raw Admin API access token.
@@ -453,7 +455,7 @@ function parseShopifyAdminCredential(value) {
 }
 
 function shopifyAdminConfigured() {
-  return Boolean(shopifyAdminCredential && shopifyStoreDomain && shopifyApiVersion);
+  return Boolean(shopifyAdminCredential && shopifyAdminStoreDomain && shopifyApiVersion);
 }
 
 async function shopifyAdminAccessToken() {
@@ -463,7 +465,7 @@ async function shopifyAdminAccessToken() {
   if (shopifyAccessTokenCache && shopifyAccessTokenCache.expiresAt > now + 5 * 60 * 1000) {
     return shopifyAccessTokenCache.accessToken;
   }
-  const response = await fetch(`https://${shopifyStoreDomain}/admin/oauth/access_token`, {
+  const response = await fetch(`https://${shopifyAdminStoreDomain}/admin/oauth/access_token`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/x-www-form-urlencoded', Accept: 'application/json' },
     body: new URLSearchParams({
@@ -505,7 +507,7 @@ async function fetchShopifyOriginOrder(payload) {
     throw new Error('Shopify Admin API credentials are required to resolve a subscription contract origin order.');
   }
   const accessToken = await shopifyAdminAccessToken();
-  const url = `https://${shopifyStoreDomain}/admin/api/${encodeURIComponent(shopifyApiVersion)}/orders/${encodeURIComponent(orderId)}.json?status=any`;
+  const url = `https://${shopifyAdminStoreDomain}/admin/api/${encodeURIComponent(shopifyApiVersion)}/orders/${encodeURIComponent(orderId)}.json?status=any`;
   const response = await fetch(url, {
     headers: {
       Accept: 'application/json',
@@ -529,7 +531,7 @@ async function shopifyAdminGraphql(query, variables = {}) {
     throw new Error('Shopify Admin API credentials are required for subscription management.');
   }
   const accessToken = await shopifyAdminAccessToken();
-  const response = await fetch(`https://${shopifyStoreDomain}/admin/api/${encodeURIComponent(shopifyApiVersion)}/graphql.json`, {
+  const response = await fetch(`https://${shopifyAdminStoreDomain}/admin/api/${encodeURIComponent(shopifyApiVersion)}/graphql.json`, {
     method: 'POST',
     headers: {
       Accept: 'application/json',
@@ -2852,6 +2854,48 @@ async function scheduleStarterTrialBilling(contractId, billingDate) {
   return result.billingCycle;
 }
 
+async function setStarterContractRecurringPrice(contractId, tierConfig) {
+  const targetPrice = Number(tierConfig?.planPriceCents) / 100;
+  if (!Number.isFinite(targetPrice) || targetPrice <= 0) throw new Error('Starter trial mapping is missing its recurring price.');
+  const contractGid = /^gid:\/\/shopify\/SubscriptionContract\//i.test(String(contractId))
+    ? String(contractId)
+    : `gid://shopify/SubscriptionContract/${normalizeShopifyContractId(contractId)}`;
+  const contractQuery = `query GetSubscriptionContractLines($id:ID!) {
+    subscriptionContract(id:$id) {
+      lines(first:50) { nodes { id variantId currentPrice { amount currencyCode } } }
+    }
+  }`;
+  const contractBody = await shopifyAdminGraphql(contractQuery, { id: contractGid });
+  const lines = contractBody?.data?.subscriptionContract?.lines?.nodes || [];
+  const targetVariantIds = new Set((tierConfig.variantIds || []).map(shopifyNumericId).filter(Boolean));
+  const targetLines = lines.filter((line) => targetVariantIds.has(shopifyNumericId(line?.variantId)));
+  if (!targetLines.length) throw new Error('Shopify subscription contract has no mapped Starter line.');
+
+  const mutation = `mutation SetStarterRecurringPrice($contractId:ID!,$lineId:ID!,$variantId:ID!,$currentPrice:Decimal!) {
+    subscriptionContractProductChange(subscriptionContractId:$contractId, lineId:$lineId, input:{productVariantId:$variantId, currentPrice:$currentPrice}) {
+      lineUpdated { id currentPrice { amount currencyCode } variantId }
+      userErrors { field message code }
+    }
+  }`;
+  for (const line of targetLines) {
+    const currentPrice = Number(line?.currentPrice?.amount);
+    if (Number.isFinite(currentPrice) && Math.abs(currentPrice - targetPrice) < 0.005) continue;
+    const body = await shopifyAdminGraphql(mutation, {
+      contractId: contractGid,
+      lineId: line.id,
+      variantId: line.variantId,
+      currentPrice: targetPrice.toFixed(2),
+    });
+    const result = body?.data?.subscriptionContractProductChange;
+    if (Array.isArray(result?.userErrors) && result.userErrors.length) {
+      console.error(JSON.stringify({ event: 'shopify_starter_price_update_failed', contractId: normalizeShopifyContractId(contractId), errorCount: result.userErrors.length }));
+      throw new Error('Shopify rejected the Starter recurring price update.');
+    }
+    if (!result?.lineUpdated) throw new Error('Shopify did not return the updated Starter subscription line.');
+  }
+  return { updatedLines: targetLines.length, price: targetPrice };
+}
+
 function orderPaymentConfirmed(order) {
   const financialStatus = String(order?.financial_status || order?.financialStatus || '').trim().toLowerCase();
   return financialStatus === 'paid' || financialStatus === 'partially_paid';
@@ -2946,9 +2990,14 @@ async function handleSubscriptionContractCreated(payload, deliveryId) {
     return { action: 'subscription_contract_ignored' };
   }
   const trialWindow = trialWindowFor(tierConfig, order, payload);
-  if (trialWindow?.invalid) return { action: 'trial_configuration_mismatch' };
 
   if (trialWindow) {
+    // Shopify selling plans support the free initial price, while the exact
+    // three-day interval is applied to the first billing cycle on the
+    // contract. This keeps access and the real Shopify charge on the same
+    // server-calculated date.
+    await scheduleStarterTrialBilling(contractId, trialWindow.nextBillingAt);
+    await setStarterContractRecurringPrice(contractId, tierConfig);
     const priorRecords = await findAnyLicenseByEmail(customerEmailFromShopify(order));
     if (priorRecords.some((record) => record.trialStartedAt || Number(record.trialDays) > 0)) {
       // Do not silently grant a second trial to the same checkout email. The
