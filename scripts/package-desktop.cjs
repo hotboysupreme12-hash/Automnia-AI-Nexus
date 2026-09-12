@@ -310,8 +310,29 @@ function ensureMacDmgLaunchable() {
   repairMacDmg(dmgPath, appPath, productName)
 }
 
-function cleanGeneratedWindowsDirPackage() {
-  if (process.platform !== 'win32' || !forwardedArgs.includes('--dir')) return
+function powerShellSingleQuote(value) {
+  return `'${value.replace(/'/g, "''")}'`
+}
+
+function killGeneratedWindowsPackageProcesses(target) {
+  if (process.platform !== 'win32') return
+
+  const script = [
+    '$ErrorActionPreference = "SilentlyContinue"',
+    `$target = ${powerShellSingleQuote(target)}`,
+    'Get-CimInstance Win32_Process |',
+    '  Where-Object { $_.ExecutablePath -and $_.ExecutablePath.StartsWith($target, [System.StringComparison]::OrdinalIgnoreCase) } |',
+    '  ForEach-Object { taskkill.exe /pid $_.ProcessId /t /f | Out-Null }',
+  ].join('; ')
+  spawnSync('powershell.exe', ['-NoProfile', '-NonInteractive', '-ExecutionPolicy', 'Bypass', '-Command', script], {
+    stdio: 'ignore',
+    windowsHide: true,
+    timeout: 15_000,
+  })
+}
+
+function cleanGeneratedWindowsPackage() {
+  if (process.platform !== 'win32') return
 
   const target = path.resolve(root, 'release', 'win-unpacked')
   const rootWithSeparator = root.endsWith(path.sep) ? root : `${root}${path.sep}`
@@ -320,6 +341,7 @@ function cleanGeneratedWindowsDirPackage() {
   }
   if (!fs.existsSync(target)) return
 
+  killGeneratedWindowsPackageProcesses(target)
   try {
     fs.rmSync(target, {
       recursive: true,
@@ -392,7 +414,7 @@ if (vendorPrep.status !== 0) {
   process.exit(vendorPrep.status ?? 1)
 }
 
-cleanGeneratedWindowsDirPackage()
+cleanGeneratedWindowsPackage()
 
 const child = spawn(command, [electronBuilderCli, ...forwardedArgs, ...publishArgs, ...signingOverrideArgs], {
   cwd: root,

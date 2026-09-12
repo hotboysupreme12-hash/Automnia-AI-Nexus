@@ -155,6 +155,8 @@ assert.match(testCiScript, /npm run smoke:ci-workflow/, 'test:ci must finish wit
 
 assert.match(electronE2eSmoke, /renderer-journey/, 'Electron E2E must exercise rendered primary navigation')
 assert.match(packageDesktop, /prepare-openclaw-vendor\.cjs/, 'desktop packaging must prepare vendored OpenClaw dependencies when invoked directly')
+assert.match(packageDesktop, /killGeneratedWindowsPackageProcesses/, 'Windows packaging must stop packaged child processes before replacing output')
+assert.match(packageDesktop, /StartsWith\(\$target/, 'Windows packaging cleanup must be scoped to the generated package directory')
 assert.match(secretScanner, /private-key/, 'secret scan must detect private key material')
 assert.match(secretScanner, /github-token/, 'secret scan must detect GitHub tokens')
 assert.match(secretScanner, /allowlist\\s\+secret/, 'secret scan must support explicit allowlist markers')
