@@ -444,9 +444,7 @@ export function HelpAssistantPanel({ isOpen, onClose, onNavigate }: HelpAssistan
         <header className="dui-help-panel__header">
           <div className="dui-help-panel__title">
             <span className="dui-help-panel__glyph" aria-hidden="true">
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.65" strokeLinecap="round" strokeLinejoin="round">
-                <path d="M12 3.25 13.45 8a4 4 0 0 0 2.65 2.65L20.75 12l-4.65 1.35a4 4 0 0 0-2.65 2.65L12 20.75 10.55 16a4 4 0 0 0-2.65-2.65L3.25 12l4.65-1.35A4 4 0 0 0 10.55 8L12 3.25Z" />
-              </svg>
+              <img src="/icons/nav-help-teal.png" alt="" draggable={false} />
             </span>
             <div>
               <span>Product support</span>

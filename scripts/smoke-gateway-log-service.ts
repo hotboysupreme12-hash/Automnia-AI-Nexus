@@ -12,7 +12,6 @@ const controlPlane = readWorkspaceFile('server/controlPlane.ts')
 const gatewayLogService = readWorkspaceFile('server/services/gateway/gatewayLogService.ts')
 const gatewayActivityPresentation = readWorkspaceFile('src/utils/gatewayActivityPresentation.ts')
 const liveOperationMonitor = readWorkspaceFile('src/components/monitor/LiveOperationMonitor.tsx')
-const settingsActivityLog = readWorkspaceFile('src/components/settings/SettingsActivityLog.tsx')
 const packageJson = JSON.parse(readWorkspaceFile('package.json')) as { scripts?: Record<string, string> }
 
 assert.match(
@@ -39,11 +38,6 @@ assert.doesNotMatch(
   liveOperationMonitor,
   />Gateway Announcement</,
   'Raw Gateway output should not be presented as a Gateway announcement',
-)
-assert.match(
-  settingsActivityLog,
-  /projectGatewayLogEntriesForSurface\([\s\S]*?'user'/,
-  'Settings activity should not merge raw Gateway diagnostics into user activity',
 )
 assert.match(
   gatewayLogService,

@@ -11,7 +11,6 @@ import { resolveAgentEditorId, type AgentEditorTab } from '../../store/nexusUiSt
 import { listCronShifts, stopCronShift, useRuntimeSummaryStatus } from '../../hooks/useRuntimeStatus'
 import type { RuntimeCronJob } from '../../hooks/useRuntimeStatus'
 import { ActionStatusBanner } from '../common/ActionStatusBanner'
-import { RuntimeFreshness } from './RuntimeFreshness'
 import { useWorkspaceScroll } from '../../hooks/useWorkspaceScroll'
 import type { HelpNavigationTarget } from '../help/HelpAssistantPanel'
 import { ActivePartyStrip } from '../party/ActivePartyStrip'
@@ -921,7 +920,6 @@ export function NexusShell() {
             <div className="dy-workspace-context__state" data-state={workspaceStateTone} role="status" aria-live="polite">
               {workspaceState}
             </div>
-            <RuntimeFreshness status={runtimeStatus} error={runtimeError} onRefresh={refreshRuntimeStatus} />
             <Button
               variant="quiet"
               size="compact"
