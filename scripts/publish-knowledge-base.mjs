@@ -16,7 +16,10 @@ import path from 'node:path'
 import process from 'node:process'
 
 const repositoryRoot = path.resolve(new URL('.', import.meta.url).pathname, '..')
-const projectId = process.env.AUTOMNIA_KNOWLEDGE_PROJECT || 'project-7baf4a64-1c4f-4cff-94f'
+// Keep the default aligned with the project used by infra/gcloud/config.psd1.
+// A publish pointed at an old/unavailable project leaves the live corpus
+// pending even when Cloud Run itself is healthy.
+const projectId = process.env.AUTOMNIA_KNOWLEDGE_PROJECT || 'project-60131eab-441a-4cc5-a71'
 const location = process.env.AUTOMNIA_KNOWLEDGE_LOCATION || 'global'
 const collection = 'default_collection'
 const dataStoreId = process.env.AUTOMNIA_KNOWLEDGE_DATA_STORE || 'automnia-knowledge'
