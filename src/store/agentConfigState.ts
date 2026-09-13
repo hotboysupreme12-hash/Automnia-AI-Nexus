@@ -87,6 +87,13 @@ export function rememberRetiredAgentId(agentId: string): string[] {
   return retiredAgentIdsForStore()
 }
 
+/** A retired id can be used again for a fresh agent incarnation. */
+export function clearRetiredAgentId(agentId: string): string[] {
+  const id = normalizeRetiredAgentId(agentId)
+  if (/^[a-z0-9-]+$/.test(id)) RETIRED_AGENT_IDS.delete(id)
+  return retiredAgentIdsForStore()
+}
+
 export function retiredAgentIdsForStore(): string[] {
   return [...RETIRED_AGENT_IDS]
     .filter((id) => !BUILTIN_RETIRED_AGENT_IDS.has(id))

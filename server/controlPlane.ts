@@ -13649,6 +13649,29 @@ async function rememberRetiredAgentId(agentId: string) {
   return true
 }
 
+/** A retired id can be used again for a fresh agent incarnation. */
+async function clearRetiredAgentId(agentId: string) {
+  const normalized = normalizeRetiredAgentId(agentId)
+  if (!isValidAgentId(normalized) || !RETIRED_AGENT_IDS.has(normalized)) return false
+
+  // Clear memory first so the current recruitment cannot be pruned by the
+  // config writer, even if persistence of the ledger is unavailable.
+  RETIRED_AGENT_IDS.delete(normalized)
+  const ids = [...RETIRED_AGENT_IDS]
+    .filter((id) => !BUILTIN_RETIRED_AGENT_IDS.has(id))
+    .sort((a, b) => a.localeCompare(b))
+  try {
+    if (writeControlCenterStateRecord(CONTROL_CENTER_STATE_KEYS.retiredAgentIds, { ids }, RETIRED_AGENT_IDS_PATH)) return true
+    await fs.mkdir(path.dirname(RETIRED_AGENT_IDS_PATH), { recursive: true })
+    await writeTextFileWithLockRetry(RETIRED_AGENT_IDS_PATH, `${JSON.stringify({ ids }, null, 2)}\n`)
+  } catch (error) {
+    // The marker is already cleared in memory. Never turn a stale ledger into
+    // a recruitment failure; the next successful state write can repair it.
+    console.warn(`[retirement] unable to persist cleared marker for ${normalized}: ${String(error)}`)
+  }
+  return true
+}
+
 traceControlCenterStartup('loading durable startup state')
 loadRetiredAgentIdsFromDisk()
 traceControlCenterStartup('durable startup state loaded')
@@ -18373,6 +18396,7 @@ export type PartyManagementRoutesContext = {
   isLegacyGenericRecruitSoul: typeof isLegacyGenericRecruitSoul
   isOpenAiCodexSubscriptionModel: typeof isOpenAiCodexSubscriptionModel
   isRetiredAgentId: typeof isRetiredAgentId
+  clearRetiredAgentId: typeof clearRetiredAgentId
   isValidAgentId: typeof isValidAgentId
   modelAuthProblem: typeof modelAuthProblem
   modelSelectionBlocked: typeof modelSelectionBlocked
@@ -18455,6 +18479,7 @@ const partyManagementRoutesContext: PartyManagementRoutesContext = {
   isLegacyGenericRecruitSoul,
   isOpenAiCodexSubscriptionModel,
   isRetiredAgentId,
+  clearRetiredAgentId,
   isValidAgentId,
   modelAuthProblem,
   modelSelectionBlocked,

@@ -543,14 +543,10 @@ export function registerPartyManagementRoutes(app: Express, options: PartyManage
     if (blockedModel) {
       return apiFailure(res, 403, 'byok_not_allowed', CREDITS_ONLY_MODEL_ACCESS_MESSAGE, { modelId: blockedModel })
     }
-    if (isRetiredAgentId(payload.agentId)) {
-      return apiFailure(
-        res,
-        409,
-        'recruit_failed',
-        'Roster is locked to Elena Vasquez, Sarah Cooper, and Marcus Chen. Retired agents cannot be recruited.',
-      )
-    }
+    // Retirement is lifecycle history, not an id reservation. A new recruit
+    // starts a fresh incarnation and clears any stale marker before config is
+    // read or written.
+    await options.clearRetiredAgentId(payload.agentId)
     try {
       const config = await readOpenclawConfig()
       const profiles = await readPartyProfiles()

@@ -57,6 +57,7 @@ import {
   getSeedAgents,
   isDefaultAgentPortrait,
   isRetiredAgentId,
+  clearRetiredAgentId,
   isUsablePortrait,
   makeAgentConfigState,
   rememberRetiredAgentId,
@@ -850,7 +851,7 @@ function makeRecruitAgentDraft(input: RecruitAgentInput): OpenClawAgent {
 
   return withComputedRuntime({
     ...template,
-    id: input.agentId.trim(),
+    id: input.agentId.trim().toLowerCase(),
     name: input.name.trim(),
     workspace: input.workspace?.trim() || '',
     sandbox,
@@ -2980,13 +2981,14 @@ export const useNexusStore = create<NexusState>()(
           const agentId = draft.id
           const warnings: string[] = []
           const current = get()
-          if (isRetiredAgentId(agentId)) throw new Error('Roster is locked to Elena Vasquez, Sarah Cooper, and Marcus Chen. Retired agents cannot be recruited.')
           if (!/^[a-z0-9-]{3,60}$/.test(agentId)) {
             throw new Error('Agent ID must be 3-60 characters using lowercase letters, numbers, and hyphens.')
           }
           if (current.agents.some((agent) => agent.id === agentId)) {
             throw new Error(`Agent ID already exists: ${agentId}`)
           }
+          // Retirement is lifecycle history, not an id reservation.
+          const retiredAgentIds = clearRetiredAgentId(agentId)
 
           const profileStats = recruitProfileStats(draft)
           const enabledCapabilityKeys = Object.entries(draft.mds.capabilities)
@@ -3042,6 +3044,7 @@ export const useNexusStore = create<NexusState>()(
             const confirmedPartyIds = shouldAddToParty && confirmedWasSynced ? activePartyIds : s.confirmedPartyIds.filter((id) => id !== agentId)
             return {
               agents: [draft, ...withoutAgent],
+              retiredAgentIds,
               activePartyIds,
               confirmedPartyIds,
               selectedAgentId: agentId,

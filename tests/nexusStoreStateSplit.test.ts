@@ -13,6 +13,7 @@ import {
   partializeAgentConfigState,
   rememberRetiredAgentId,
   rememberRetiredAgentIds,
+  clearRetiredAgentId,
   resolveDefaultTemplateAgentId,
   sameOrderedIds,
   sanitizeAgentForPersistentStore,
@@ -416,6 +417,9 @@ test('agent config helpers normalize retired ids, parties, portraits, and persis
   assert.deepEqual(rememberRetiredAgentIds([' Phase-J-Retired ', 42, 'bad id']), ['phase-j-retired'])
   assert.deepEqual(rememberRetiredAgentId('phase-j-second-retired'), ['phase-j-retired', 'phase-j-second-retired'])
   assert.equal(isRetiredAgentId('PHASE-J-RETIRED'), true)
+  clearRetiredAgentId('PHASE-J-RETIRED')
+  assert.equal(isRetiredAgentId('PHASE-J-RETIRED'), false)
+  rememberRetiredAgentId('phase-j-retired')
   assert.equal(isRetiredAgentId('hn-commander'), true)
   assert.equal(isRetiredAgentId(customAgent.id), false)
   assert.equal(isRetiredAgentId(first.id), false)
