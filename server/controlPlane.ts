@@ -3724,7 +3724,7 @@ function isGatewayInternalDiagnosticMessage(value: string) {
 
 const gatewayChatService = createGatewayChatService({
   gatewayHttpPort: GATEWAY_HTTP_PORT,
-  clientVersion: '0.0.6',
+  clientVersion: '1.0.0',
   gatewayAgentSessionsEnabled: CONTROL_CENTER_GATEWAY_AGENT_SESSIONS,
   gatewayChatClientEnabled: CONTROL_CENTER_GATEWAY_CHAT_CLIENT,
   forceLocalAgentRuntime: FORCE_LOCAL_AGENT_RUNTIME,

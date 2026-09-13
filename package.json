@@ -1,7 +1,7 @@
 {
   "name": "automnia-ai-nexus",
   "private": true,
-  "version": "0.0.6",
+  "version": "1.0.0",
   "description": "Standalone Automnia AI Nexus OpenClaw control center desktop app.",
   "author": {
     "name": "Automnia AI"

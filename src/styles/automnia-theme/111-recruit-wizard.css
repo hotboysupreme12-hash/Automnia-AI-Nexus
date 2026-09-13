@@ -10,9 +10,9 @@ html.dui-pro-overhaul .dui-recruit-backdrop {
 }
 
 html.dui-pro-overhaul [data-dui-modal="recruit-agent"] {
-  --recruit-accent: #d6a94a;
-  --recruit-accent-bright: #efcf83;
-  --recruit-accent-rgb: 214 169 74;
+  --recruit-accent: #20d4c8;
+  --recruit-accent-bright: #8ceae4;
+  --recruit-accent-rgb: 32 212 200;
   --recruit-good: #75c89a;
   --recruit-text: #f3f4f2;
   --recruit-text-soft: #c5cbc9;
@@ -118,7 +118,7 @@ html.dui-pro-overhaul [data-dui-modal="recruit-agent"] .dui-recruit-step-rail > 
   border-color: rgb(var(--recruit-accent-rgb) / .44) !important;
   background: rgb(var(--recruit-accent-rgb) / .075) !important;
   color: var(--recruit-text) !important;
-  box-shadow: inset 0 -2px 0 var(--recruit-accent) !important;
+  box-shadow: none !important;
 }
 
 html.dui-pro-overhaul [data-dui-modal="recruit-agent"] .dui-recruit-step-rail > button[data-state="done"] {
@@ -565,6 +565,57 @@ html.dui-pro-overhaul [data-dui-modal="recruit-agent"] .dui-recruit-portrait-pre
   border-radius: 12px !important;
   background: rgb(var(--recruit-accent-rgb) / .075) !important;
   box-shadow: none !important;
+  cursor: pointer !important;
+  padding: 0 !important;
+  overflow: hidden !important;
+}
+
+html.dui-pro-overhaul [data-dui-modal="recruit-agent"] .dui-recruit-portrait-preview:hover {
+  border-color: rgb(var(--recruit-accent-rgb) / .58) !important;
+  background: rgb(var(--recruit-accent-rgb) / .12) !important;
+}
+
+html.dui-pro-overhaul [data-dui-modal="recruit-agent"] .dui-recruit-avatar-actions {
+  display: grid !important;
+  min-width: 0 !important;
+  gap: 6px !important;
+}
+
+html.dui-pro-overhaul [data-dui-modal="recruit-agent"] .dui-recruit-avatar-actions > span {
+  color: var(--recruit-text-soft) !important;
+  font-size: 11px !important;
+  font-weight: 650 !important;
+}
+
+html.dui-pro-overhaul [data-dui-modal="recruit-agent"] .dui-recruit-avatar-actions > div {
+  display: flex !important;
+  flex-wrap: wrap !important;
+  gap: 7px !important;
+}
+
+html.dui-pro-overhaul [data-dui-modal="recruit-agent"] :is(.dui-recruit-avatar-browse, .dui-recruit-avatar-clear) {
+  min-height: 28px !important;
+  border: 1px solid var(--recruit-line) !important;
+  border-radius: 7px !important;
+  background: rgb(255 255 255 / .025) !important;
+  color: var(--recruit-text-soft) !important;
+  padding: 0 9px !important;
+  font-size: 9px !important;
+  font-weight: 650 !important;
+}
+
+html.dui-pro-overhaul [data-dui-modal="recruit-agent"] .dui-recruit-avatar-browse {
+  border-color: rgb(var(--recruit-accent-rgb) / .30) !important;
+  background: rgb(var(--recruit-accent-rgb) / .07) !important;
+  color: var(--recruit-accent-bright) !important;
+}
+
+html.dui-pro-overhaul [data-dui-modal="recruit-agent"] .dui-recruit-avatar-actions small {
+  overflow: hidden !important;
+  color: var(--recruit-muted) !important;
+  font-size: 9px !important;
+  text-overflow: ellipsis !important;
+  white-space: nowrap !important;
 }
 
 html.dui-pro-overhaul [data-dui-modal="recruit-agent"] .dui-recruit-portrait-preview span { color: var(--recruit-accent-bright) !important; font-size: 23px !important; }
@@ -809,6 +860,7 @@ html.dui-pro-overhaul [data-dui-modal="recruit-agent"] .dui-recruit-file-tabs {
 }
 
 html.dui-pro-overhaul [data-dui-modal="recruit-agent"] .dui-recruit-file-tabs button[data-md-tone] {
+  --md-file-accent: 32 212 200 !important;
   display: inline-grid !important;
   min-width: max-content !important;
   min-height: 38px !important;
@@ -829,7 +881,7 @@ html.dui-pro-overhaul [data-dui-modal="recruit-agent"] .dui-recruit-file-tabs bu
   border-color: rgb(var(--md-file-accent) / .44) !important;
   background: rgb(var(--md-file-accent) / .075) !important;
   color: var(--recruit-text) !important;
-  box-shadow: inset 0 -2px 0 rgb(var(--md-file-accent)) !important;
+  box-shadow: none !important;
 }
 
 html.dui-pro-overhaul [data-dui-modal="recruit-agent"] .dui-recruit-file-tab__type {
@@ -862,7 +914,7 @@ html.dui-pro-overhaul.dui-cohesive-ui [data-dui-modal="recruit-agent"][data-mark
   min-height: 300px !important;
   grid-template-rows: minmax(0, 1fr) 38px !important;
   overflow: hidden !important;
-  border: 1px solid rgb(var(--markdown-accent, 214 169 74) / .24) !important;
+  border: 1px solid rgb(var(--markdown-accent, 32 212 200) / .24) !important;
   border-radius: 12px !important;
   background: #07090a !important;
   box-shadow: none !important;
@@ -1023,7 +1075,7 @@ html.dui-pro-overhaul .dui-dialog-backdrop:has(.dui-recruit-editor-dialog) {
 }
 
 html.dui-pro-overhaul .dui-recruit-editor-dialog {
-  --markdown-accent: 214 169 74;
+  --markdown-accent: 32 212 200;
   width: min(1180px, 100%) !important;
   height: min(820px, calc(100dvh - 56px)) !important;
   max-height: calc(100dvh - 56px) !important;
@@ -1052,7 +1104,7 @@ html.dui-pro-overhaul .dui-recruit-editor-dialog-title {
 }
 
 html.dui-pro-overhaul .dui-recruit-editor-dialog-title small {
-  color: #efcf83 !important;
+  color: #8ceae4 !important;
   font-size: 8px !important;
   font-weight: 760 !important;
   letter-spacing: .15em !important;

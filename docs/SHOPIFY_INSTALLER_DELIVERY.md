@@ -68,7 +68,7 @@ npm run dist:mac -- --arm64
 ```
 
 The packaged file is expected under `release/` and is named from the app
-version, for example `Automnia AI Nexus-0.0.6-arm64.dmg`. Rename/copy it only
+version, for example `Automnia AI Nexus-1.0.0-arm64.dmg`. Rename/copy it only
 at upload time; the bucket object name stays stable. This project deliberately
 does not sign or notarize the package in this flow.
 
@@ -76,7 +76,7 @@ Upload a release only after it has been locally tested. Replace each stable
 object atomically by uploading to the configured exact destination:
 
 ```bash
-gcloud storage cp "release/Automnia AI Nexus-0.0.6-arm64.dmg" \
+gcloud storage cp "release/Automnia AI Nexus-1.0.0-arm64.dmg" \
   "gs://YOUR_PROJECT_ID-automnia-installers/releases/current/macos/Automnia-AI-Nexus-arm64.dmg"
 gcloud storage cp "PATH/Automnia-Setup-x64.exe" \
   "gs://YOUR_PROJECT_ID-automnia-installers/releases/current/windows/Automnia-Setup-x64.exe"
@@ -89,9 +89,9 @@ gcloud storage cp "PATH/Automnia-AI-Nexus-x86_64.deb" \
 For the current macOS releases in this repository, the stable uploads are:
 
 ```bash
-gcloud storage cp "release/Automnia AI Nexus-0.0.6-arm64.dmg" \
+gcloud storage cp "release/Automnia AI Nexus-1.0.0-arm64.dmg" \
   "gs://YOUR_PROJECT_ID-automnia-installers/releases/current/macos/Automnia-AI-Nexus-arm64.dmg"
-gcloud storage cp "release/Automnia AI Nexus-0.0.6-x64.dmg" \
+gcloud storage cp "release/Automnia AI Nexus-1.0.0-x64.dmg" \
   "gs://YOUR_PROJECT_ID-automnia-installers/releases/current/macos/Automnia-AI-Nexus-x64.dmg"
 ```
 

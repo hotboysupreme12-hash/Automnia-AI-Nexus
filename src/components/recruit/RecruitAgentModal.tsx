@@ -21,7 +21,6 @@ import type { RecruitAgentInput } from '../../store/nexusStore'
 import type { BehaviorProfile, CapabilityKey } from '../../types/nexus'
 import { isSelectableModelId } from '../../utils/modelGrouping'
 import { AUTOMNIA_CREDITS_MODEL_ID, isAutomniaCreditsModelId, isCreditsOnlyEntitlement } from '../../utils/licenseEntitlement'
-import { agentPortraitSrc, localPortraitPathFromInput } from '../../utils/portrait'
 import { ProviderAuthModal } from '../auth/ProviderAuthModal'
 import { ModelPicker } from '../models/ModelPicker'
 import { useLicense } from '../../context/useLicense'
@@ -41,6 +40,11 @@ type AutoForgeApiResponse = {
   provider?: string
   personalityDepth?: number
   files?: Array<{ file: string; content: string }>
+}
+
+type AvatarUploadResponse = {
+  avatar?: string | null
+  previewUrl?: string | null
 }
 
 const RECRUIT_LOOKUP_CACHE_MS = 5 * 60 * 1000
@@ -352,7 +356,9 @@ const AGENCY_TEMPLATE_CATEGORY_ORDER = [
   'specialized',
 ]
 
-const DEFAULT_RECRUIT_TEMPLATE_DIVISION = 'support'
+// Start unfiltered. A search is always global, and choosing a category is an
+// intentional way to narrow the catalog rather than an invisible constraint.
+const DEFAULT_RECRUIT_TEMPLATE_DIVISION = ''
 
 const PERSONALITY_DEPTH_OPTIONS = [
   { value: 1, label: 'Basic', detail: 'Lean' },
@@ -369,10 +375,10 @@ const TAB_INSERT = '  '
 type RecruitWizardStep = 1 | 2 | 3 | 4
 
 const RECRUIT_WIZARD_STEPS: Array<{ id: RecruitWizardStep; number: string; label: string; eyebrow: string; title: string; copy: string }> = [
-  { id: 1, number: '01', label: 'Starting point', eyebrow: 'Step 1 of 4 · Choose a starting point', title: 'Start with a point of view.', copy: 'Pick a focused agency template or begin with a clean slate. You can shape every detail before the agent joins your roster.' },
-  { id: 2, number: '02', label: 'Agent identity', eyebrow: 'Step 2 of 4 · Shape the agent', title: 'Give this agent a clear identity.', copy: 'A good recruit knows what they are here to do. Set the name, working style, and personality depth in one calm pass.' },
-  { id: 3, number: '03', label: 'Runtime lane', eyebrow: 'Step 3 of 4 · Set the mission lane', title: 'Decide how the work gets done.', copy: 'Choose the model, agent policy, capabilities, and party placement. System defaults are always a safe starting point.' },
-  { id: 4, number: '04', label: 'Operating files', eyebrow: 'Step 4 of 4 · Review and recruit', title: 'Give them a playbook.', copy: 'Review the durable markdown files that travel with this agent. Edit them directly or let Auto Forge draft a richer operating voice.' },
+  { id: 1, number: '01', label: 'Template', eyebrow: 'Step 1 of 4', title: 'Choose a starting point.', copy: 'Use a focused template or begin clean.' },
+  { id: 2, number: '02', label: 'Identity', eyebrow: 'Step 2 of 4', title: 'Define the agent.', copy: 'Set its name, profile picture, role, and working style.' },
+  { id: 3, number: '03', label: 'Runtime', eyebrow: 'Step 3 of 4', title: 'Set the operating lane.', copy: 'Choose the model, permissions, and capabilities.' },
+  { id: 4, number: '04', label: 'Review', eyebrow: 'Step 4 of 4', title: 'Review and recruit.', copy: 'Check the operating files before adding the agent.' },
 ]
 
 const CLASS_OPTIONS = Array.from(new Set(BEHAVIOR_OPTIONS.map((option) => option.className)))
@@ -923,6 +929,7 @@ export function RecruitAgentModal({ isOpen, onClose }: { isOpen: boolean; onClos
   const recruitFormRef = useRef<HTMLDivElement | null>(null)
   const recruitSideRef = useRef<HTMLDivElement | null>(null)
   const recruitFilesRef = useRef<HTMLElement | null>(null)
+  const avatarInputRef = useRef<HTMLInputElement | null>(null)
   const authRefreshKeyRef = useRef('')
   const templateRequestIdRef = useRef(0)
 
@@ -935,7 +942,8 @@ export function RecruitAgentModal({ isOpen, onClose }: { isOpen: boolean; onClos
   const [level, setLevel] = useState(18)
   const [personalityDepth, setPersonalityDepth] = useState(DEFAULT_PERSONALITY_DEPTH)
   const [policy, setPolicy] = useState<RecruitPolicyDraft>({ ...DEFAULT_RECRUIT_POLICY })
-  const [avatar, setAvatar] = useState('')
+  const [avatarFile, setAvatarFile] = useState<File | null>(null)
+  const [avatarPreviewSrc, setAvatarPreviewSrc] = useState('')
   const [avatarPreviewFailed, setAvatarPreviewFailed] = useState(false)
   const [primaryModel, setPrimaryModel] = useState('')
   const [capabilities, setCapabilities] = useState<Record<CapabilityKey, boolean>>({ ...DEFAULT_CAPABILITIES })
@@ -1025,7 +1033,11 @@ export function RecruitAgentModal({ isOpen, onClose }: { isOpen: boolean; onClos
       .sort((a, b) => compareTemplateCategories(a.sample, b.sample))
   }, [searchedTemplates])
   const templateGroups = useMemo(() => {
-    const visibleTemplates = selectedTemplateDivision
+    // Search is a global catalog search. A selected category remains available
+    // when the query is cleared, but never hides a matching template.
+    const visibleTemplates = normalizedTemplateSearch
+      ? searchedTemplates
+      : selectedTemplateDivision
       ? searchedTemplates.filter((template) => template.division === selectedTemplateDivision)
       : searchedTemplates
     const groups = new Map<string, { division: string; label: string; templates: RecruitAgentTemplateSummary[]; sample: RecruitAgentTemplateSummary }>()
@@ -1048,7 +1060,7 @@ export function RecruitAgentModal({ isOpen, onClose }: { isOpen: boolean; onClos
         templates: group.templates.slice().sort((a, b) => a.name.localeCompare(b.name)),
       }))
       .sort((a, b) => compareTemplateCategories(a.sample, b.sample))
-  }, [searchedTemplates, selectedTemplateDivision])
+  }, [normalizedTemplateSearch, searchedTemplates, selectedTemplateDivision])
   const selectedTemplateCategory = selectedTemplateDivision
     ? templateCategories.find((category) => category.division === selectedTemplateDivision)
     : undefined
@@ -1081,8 +1093,6 @@ export function RecruitAgentModal({ isOpen, onClose }: { isOpen: boolean; onClos
     : primaryModel.trim()
   const canAutoForge = Boolean(autoForgeVisible && primaryModel.trim() && !autoForging && !submitting && !templateApplying)
   const canSubmit = Boolean(trimmedName && trimmedId && !idError && !submitting && !autoForging)
-  const avatarValue = avatar.trim()
-  const avatarPreviewSrc = avatarValue && !localPortraitPathFromInput(avatarValue) ? agentPortraitSrc(undefined, avatarValue) : ''
   const canPreviewAvatar = Boolean(avatarPreviewSrc && !avatarPreviewFailed)
   const activeMarkdownContent = safeString(resourceFiles[activeFile])
   const deferredMarkdownContent = useDeferredValue(activeMarkdownContent)
@@ -1099,11 +1109,21 @@ export function RecruitAgentModal({ isOpen, onClose }: { isOpen: boolean; onClos
   const activeMarkdownTone = markdownFileTone(activeFile)
   const activeWizardStep = RECRUIT_WIZARD_STEPS[currentStep - 1]
 
-  const readTextDrafts = useCallback(() => ({ name, agentId, avatar, role, newFileName }), [agentId, avatar, name, newFileName, role])
+  const readTextDrafts = useCallback(() => ({ name, agentId, role, newFileName }), [agentId, name, newFileName, role])
 
   useEffect(() => {
     setAvatarPreviewFailed(false)
-  }, [avatarValue])
+  }, [avatarPreviewSrc])
+
+  useEffect(() => {
+    if (!avatarFile) {
+      setAvatarPreviewSrc('')
+      return
+    }
+    const previewUrl = URL.createObjectURL(avatarFile)
+    setAvatarPreviewSrc(previewUrl)
+    return () => URL.revokeObjectURL(previewUrl)
+  }, [avatarFile])
 
   const buildDefaults = (files = fileOrder, draft?: Partial<ReturnType<typeof readTextDrafts>>) => markdownDefaults({
     name: (draft?.name ?? trimmedName).trim(),
@@ -1127,7 +1147,8 @@ export function RecruitAgentModal({ isOpen, onClose }: { isOpen: boolean; onClos
     setLevel(18)
     setPersonalityDepth(DEFAULT_PERSONALITY_DEPTH)
     setPolicy({ ...DEFAULT_RECRUIT_POLICY })
-    setAvatar('')
+    setAvatarFile(null)
+    setAvatarPreviewSrc('')
     setPrimaryModel('')
     setCapabilities({ ...DEFAULT_CAPABILITIES })
     setAddToParty(activePartyIds.length < 6)
@@ -1287,6 +1308,28 @@ export function RecruitAgentModal({ isOpen, onClose }: { isOpen: boolean; onClos
       research: next === 'researcher' || current.research,
       orchestration: next === 'architect' || current.orchestration,
     }))
+  }
+
+  const handleAvatarFileChange = (file?: File) => {
+    if (!file) return
+    if (!file.type.startsWith('image/')) {
+      setStatusTone('error')
+      setStatus('Choose an image file for the profile picture.')
+      return
+    }
+    setAvatarFile(file)
+    setAvatarPreviewFailed(false)
+  }
+
+  const uploadRecruitAvatar = async (agentId: string, file: File) => {
+    const result = await apiRequest<AvatarUploadResponse>(`/api/party/avatar-upload/${encodeURIComponent(agentId)}?filename=${encodeURIComponent(file.name || 'avatar')}`, {
+      method: 'POST',
+      timeoutMs: 90_000,
+      headers: { 'Content-Type': file.type || 'application/octet-stream' },
+      body: file,
+    })
+    if (!result.ok) throw new Error(apiErrorMessage(result.error))
+    await useNexusStore.getState().syncPartyOverview().catch(() => undefined)
   }
 
   const syncEditorScroll = useCallback(() => {
@@ -1624,7 +1667,6 @@ export function RecruitAgentModal({ isOpen, onClose }: { isOpen: boolean; onClos
     const submitName = draft.name.trim()
     const submitId = draft.agentId.trim()
     const submitRole = draft.role.trim()
-    const submitAvatar = draft.avatar.trim()
     const submitInvalidId = Boolean(submitId && !/^[a-z0-9-]{3,60}$/.test(submitId))
     const submitDuplicateId = Boolean(submitId && existingIds.has(submitId))
     if (!submitName || !submitId || submitInvalidId || submitDuplicateId || submitting || autoForging) return
@@ -1642,7 +1684,6 @@ export function RecruitAgentModal({ isOpen, onClose }: { isOpen: boolean; onClos
     const payload: RecruitAgentInput = {
       agentId: submitId,
       name: submitName,
-      avatar: submitAvatar || undefined,
       className: className.trim() || selectedBehavior.className,
       role: submitRole || selectedBehavior.role,
       behaviorProfile,
@@ -1667,9 +1708,18 @@ export function RecruitAgentModal({ isOpen, onClose }: { isOpen: boolean; onClos
 
     try {
       const result = await recruitAgent(payload)
-      setStatusTone(result.warnings.length ? 'neutral' : 'success')
-      setStatus(result.warnings.length ? `Created ${result.agentId}. ${result.warnings.join(' ')}` : `Created ${result.agentId} with ${fileOrder.length} markdown files.`)
-      window.setTimeout(onClose, result.warnings.length ? 1500 : 800)
+      let avatarWarning = ''
+      if (avatarFile) {
+        try {
+          await uploadRecruitAvatar(result.agentId, avatarFile)
+        } catch (error) {
+          avatarWarning = ` The profile picture could not be saved: ${error instanceof Error ? error.message : String(error)}`
+        }
+      }
+      const warnings = [...result.warnings, ...(avatarWarning ? [avatarWarning] : [])]
+      setStatusTone(warnings.length ? 'neutral' : 'success')
+      setStatus(warnings.length ? `Created ${result.agentId}. ${warnings.join(' ')}` : `Created ${result.agentId} with ${fileOrder.length} markdown files.`)
+      window.setTimeout(onClose, warnings.length ? 1500 : 800)
     } catch (error) {
       setStatusTone('error')
       setStatus(error instanceof Error ? error.message : String(error))
@@ -1774,7 +1824,7 @@ export function RecruitAgentModal({ isOpen, onClose }: { isOpen: boolean; onClos
                 <div className="dui-recruit-title-block">
                   <span className="dui-recruit-header-eyebrow">Automnia</span>
                   <h2 id="recruit-agent-title">Recruit agent</h2>
-                  <p className="dui-recruit-copy">Build a focused operator in four clear steps.</p>
+                  <p className="dui-recruit-copy">Create a focused agent.</p>
                 </div>
                 <div className="dui-recruit-step-rail" aria-label="Recruit setup progress">
                   {RECRUIT_WIZARD_STEPS.map((step) => (
@@ -1827,7 +1877,7 @@ export function RecruitAgentModal({ isOpen, onClose }: { isOpen: boolean; onClos
                           </div>
                             <div className="dui-recruit-category-chips" aria-label="Template categories">
                               {templateCategories.map((category) => (
-                              <button key={category.division} type="button" data-active={selectedTemplateDivision === category.division} style={{ '--category-color': category.color } as CSSProperties} disabled={templatesLoading || templateApplying || submitting || autoForging} onClick={() => handleTemplateDivisionChange(category.division)}>
+                              <button key={category.division} type="button" data-active={!trimmedTemplateSearch && selectedTemplateDivision === category.division} style={{ '--category-color': category.color } as CSSProperties} disabled={templatesLoading || templateApplying || submitting || autoForging} onClick={() => handleTemplateDivisionChange(category.division)}>
                                 {category.label} <small>{category.count}</small>
                               </button>
                             ))}
@@ -1889,8 +1939,15 @@ export function RecruitAgentModal({ isOpen, onClose }: { isOpen: boolean; onClos
                             <label className="dui-recruit-field"><span>Agent ID</span><input type="text" value={agentId} onChange={(event) => { setIdTouched(true); setAgentId(normalizeAgentIdInput(event.target.value)) }} placeholder="nova-builder" maxLength={60} required />{idError && <small data-tone="error">{idError}</small>}</label>
                           </div>
                           <div className="dui-recruit-avatar-row">
-                            <div className="dui-recruit-portrait-preview" aria-label="Selected profile picture preview">{canPreviewAvatar ? <img src={avatarPreviewSrc} alt="" onError={() => setAvatarPreviewFailed(true)} /> : <span>{trimmedName.charAt(0).toUpperCase() || 'A'}</span>}</div>
-                            <label className="dui-recruit-field dui-recruit-avatar-field"><span>Avatar</span><input type="text" value={avatar} onChange={(event) => setAvatar(event.target.value)} placeholder="Optional URL, /agents/name.jpg, or local path" /></label>
+                            <button type="button" className="dui-recruit-portrait-preview" onClick={() => avatarInputRef.current?.click()} aria-label="Choose profile picture" title="Choose profile picture">
+                              {canPreviewAvatar ? <img src={avatarPreviewSrc} alt="" onError={() => setAvatarPreviewFailed(true)} /> : <span>{trimmedName.charAt(0).toUpperCase() || 'A'}</span>}
+                            </button>
+                            <input ref={avatarInputRef} type="file" accept="image/*" className="sr-only" onChange={(event) => { const file = event.currentTarget.files?.[0]; event.currentTarget.value = ''; handleAvatarFileChange(file) }} />
+                            <div className="dui-recruit-avatar-actions">
+                              <span>Profile picture</span>
+                              <div><button type="button" className="dui-recruit-avatar-browse" onClick={() => avatarInputRef.current?.click()}>{avatarFile ? 'Replace image' : 'Choose image'}</button>{avatarFile ? <button type="button" className="dui-recruit-avatar-clear" onClick={() => setAvatarFile(null)}>Clear</button> : null}</div>
+                              <small>{avatarFile?.name || 'Optional — saved when this agent is recruited.'}</small>
+                            </div>
                           </div>
                         </section>
 
