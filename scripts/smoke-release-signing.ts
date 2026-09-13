@@ -39,7 +39,7 @@ assert.match(scripts['release:sign'] || '', /node scripts\/sign-release-evidence
 assert.match(scripts['smoke:release-signing'] || '', /tsx scripts\/smoke-release-signing\.ts/, 'package scripts must expose release signing smoke coverage')
 assert.match(scripts['test:ci'] || '', /npm run smoke:release-signing/, 'test:ci must include release signing smoke coverage')
 assert.match(workflowSource, /AUTOMNIA_RELEASE_SIGNING_ENABLED/, 'branch CI must expose an explicit optional evidence-signing switch')
-assert.match(publicReleaseSource, /workflow_dispatch:/, 'dedicated public-release CI must allow manual qualification runs')
+assert.doesNotMatch(publicReleaseSource, /workflow_dispatch:/, 'dedicated public-release CI must remain tag-only so releases require a protected version tag')
 assert.match(publicReleaseSource, /tags:\s*\n\s*- 'v\*'/, 'dedicated public-release CI must run for version tags')
 assert.match(publicReleaseSource, /AUTOMNIA_RELEASE_REQUIRE_SIGNING:\s*'1'/, 'public-release CI must fail closed without release signing')
 assert.match(publicReleaseSource, /AUTOMNIA_RELEASE_SIGNING_PRIVATE_KEY_PEM/, 'public-release CI must use the configured release-signing private-key secret')
