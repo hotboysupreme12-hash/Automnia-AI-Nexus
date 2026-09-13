@@ -1125,7 +1125,6 @@ export function SettingsPanel({ focusSection = 'account', focusRequest = 0 }: { 
                 {!isCurrentProPlan && <button type="button" onClick={() => void openCheckout()} disabled={checkoutBusy}>{checkoutBusy ? 'Opening checkout…' : 'Upgrade to Pro'}</button>}
               </article>
             </section>
-            <p className="dui-plan-catalog__note">Pro includes every capability that was previously available in Enterprise. Legacy Enterprise access remains fully honored.</p>
           </SettingsCard>
         </div>
         <SettingsCard className="dui-settings-account-billing" title="Plan, access & billing" description="Review your plan, credit balance, and billing preferences.">

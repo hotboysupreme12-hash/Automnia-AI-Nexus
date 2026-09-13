@@ -1076,9 +1076,8 @@ export function RecruitAgentModal({ isOpen, onClose }: { isOpen: boolean; onClos
       : selectedTemplateDivision
         ? `${selectedTemplateCategory?.label || 'Category'}: ${visibleTemplateCount} templates`
       : templates.length
-        ? `${templateCategories.length} organized categories`
-      : 'blank'
-  const browsingTemplateCategories = !selectedTemplateDivision && !trimmedTemplateSearch
+        ? `${visibleTemplateCount} templates`
+        : 'blank'
   const selectedProvider = primaryModel
     ? isOpenAiCodexSubscriptionModel(primaryModel)
       ? 'openai'
@@ -1421,7 +1420,7 @@ export function RecruitAgentModal({ isOpen, onClose }: { isOpen: boolean; onClos
     setStatusTone('neutral')
     setStatus(nextDivision
       ? `Showing ${category?.count || 0} ${category?.label || 'category'} templates.`
-      : `Showing ${templateCategories.length} organized template categories.`)
+      : `Showing all ${visibleTemplateCount} templates.`)
   }
 
   const handleTemplateSelect = async (nextTemplateId: string) => {
@@ -1882,28 +1881,15 @@ export function RecruitAgentModal({ isOpen, onClose }: { isOpen: boolean; onClos
                               </button>
                             ))}
                           </div>
-                          {browsingTemplateCategories && !templatesLoading && !templatesError ? (
-                            <div className="dui-recruit-template-category-grid" aria-label="Template category overview">
-                              {templateCategories.map((category) => (
-                                <button key={category.division} type="button" className="dui-recruit-template-category-card" style={{ '--category-color': category.color } as CSSProperties} disabled={templatesLoading || templateApplying || submitting || autoForging} onClick={() => handleTemplateDivisionChange(category.division)}>
-                                  <span className="dui-recruit-template-category-mark" style={{ '--category-color': category.color } as CSSProperties} />
-                                  <span><strong>{category.label}</strong><small>{category.count} ready-to-use profiles</small></span>
-                                  <b aria-hidden="true">→</b>
-                                </button>
-                              ))}
-                            </div>
-                          ) : null}
                           <div className="dui-recruit-template-cards" aria-label="Agent templates">
-                            {!browsingTemplateCategories ? (
-                              <button type="button" className="dui-recruit-template-card dui-recruit-template-card-blank" data-active={!selectedTemplateId} disabled={templateApplying || submitting || autoForging} onClick={() => handleTemplateSelect('')}>
-                                <strong>Blank recruit defaults</strong>
-                                <small>Clean starter agent with prepared markdown.</small>
-                              </button>
-                            ) : null}
+                            <button type="button" className="dui-recruit-template-card dui-recruit-template-card-blank" data-active={!selectedTemplateId} disabled={templateApplying || submitting || autoForging} onClick={() => handleTemplateSelect('')}>
+                              <strong>Blank recruit defaults</strong>
+                              <small>Clean starter agent with prepared markdown.</small>
+                            </button>
                             {templatesError ? <p className="dui-recruit-template-empty" data-tone="error">{templatesError}</p> : null}
                             {!templatesError && templatesLoading ? <p className="dui-recruit-template-empty">Loading templates...</p> : null}
                             {!templatesError && !templatesLoading && visibleTemplateSummaries.length === 0 ? <p className="dui-recruit-template-empty">{trimmedTemplateSearch ? 'No matching templates found.' : 'No templates found for this category.'}</p> : null}
-                            {!browsingTemplateCategories && templateGroups.map((group) => (
+                            {templateGroups.map((group) => (
                               <section key={group.division} className="dui-recruit-template-group" style={{ '--category-color': group.sample.color } as CSSProperties}>
                                 <div className="dui-recruit-template-group-head"><span className="dui-recruit-template-group-mark" aria-hidden="true" /><strong>{group.label}</strong><small>{group.templates.length}</small></div>
                                 <div className="dui-recruit-template-group-grid">

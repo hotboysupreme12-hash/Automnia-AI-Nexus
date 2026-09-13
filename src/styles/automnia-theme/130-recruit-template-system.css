@@ -1,4 +1,4 @@
-/* Recruit templates: neutral categories and a restrained brand-teal active state. */
+/* Recruit templates: compact category-color filters and quiet template cards. */
 
 html.dui-pro-overhaul [data-dui-modal='recruit-agent'] {
   --recruit-template-fallback: #20d4c8;
@@ -35,23 +35,23 @@ html.dui-pro-overhaul [data-dui-modal='recruit-agent'] .dui-recruit-category-chi
 
 html.dui-pro-overhaul [data-dui-modal='recruit-agent'] .dui-recruit-category-chips button {
   min-height: 31px !important;
-  border-color: var(--recruit-template-line) !important;
+  border-color: color-mix(in srgb, var(--category-color, var(--recruit-template-fallback)) 36%, var(--recruit-template-line)) !important;
   border-radius: 999px !important;
-  background: #101619 !important;
+  background: color-mix(in srgb, var(--category-color, var(--recruit-template-fallback)) 6%, #101619) !important;
   color: #b8c6ca !important;
   padding: 0 11px !important;
   transition: border-color .16s ease, background-color .16s ease, color .16s ease, transform .16s ease !important;
 }
 
 html.dui-pro-overhaul [data-dui-modal='recruit-agent'] .dui-recruit-category-chips button small {
-  color: #7f9298 !important;
+  color: color-mix(in srgb, var(--category-color, var(--recruit-template-fallback)) 72%, #dbe6e7 28%) !important;
 }
 
 html.dui-pro-overhaul [data-dui-modal='recruit-agent'] .dui-recruit-category-chips button:hover:not(:disabled),
 html.dui-pro-overhaul [data-dui-modal='recruit-agent'] .dui-recruit-category-chips button[data-active='true'] {
-  border-color: rgb(32 212 200 / .48) !important;
-  background: rgb(32 212 200 / .08) !important;
-  color: #dffcf9 !important;
+  border-color: color-mix(in srgb, var(--category-color, var(--recruit-template-fallback)) 72%, #dbe6e7 28%) !important;
+  background: color-mix(in srgb, var(--category-color, var(--recruit-template-fallback)) 14%, #101619) !important;
+  color: #f1f7f7 !important;
   transform: none !important;
 }
 
